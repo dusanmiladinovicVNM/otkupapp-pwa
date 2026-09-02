@@ -51,7 +51,7 @@ Attribute VB_Name = "modScrFakture"
 '=====================================================================
 Option Explicit
 
-Public Const SCRFAK_BUILD As String = "v6-ui-176"
+Public Const SCRFAK_BUILD As String = "v6-ui-189"
 
 ' Visina zone. Manja je od agro zone jer ovaj ekran ima JEDNO polje (kupac) --
 ' sve ostalo bira mreza, a ne unos.
@@ -75,10 +75,18 @@ Private Const FK_KORPA_N  As Long = 4
 ' Ispod ove sirine bi polje i dugmad ostali pretesni, pa traka nestaje.
 Private Const FK_POLJA_MIN As Single = 460
 
-' Kljucevi lista
+' Kljucevi lista. GOTOVA (v6-ui-189): fakturisanje GOTOVE ROBE -- prerade
+' (GP palete) se fakturisu istom korpom, ali NE mesaju sa prijemnicama
+' (jedna faktura = jedna vrsta robe); kolicina je NetoIzlazKg prerade, a
+' CENU unosi operater u polje zone (gotova roba nema evidentiranu cenu
+' nigde u podacima -- izvedena cena bi bila izmisljanje). Upis radi
+' modUtovar.CreateUtovarSaFakturom_TX (krug 5: utovar + faktura); time
+' fakturom gotovog proizvoda kroz PODATKOVNU vezu (stavka nosi PreradaID).
 Private Const FK_ZAFAKT  As String = "ZAFAKT"
 Private Const FK_FAKTURE As String = "FAKTURE"
 Private Const FK_SEF     As String = "SEF"
+Private Const FK_GP      As String = "GOTOVA"
+Private Const FK_UTOVARI As String = "UTOVARI"   ' krug 5: pregled utovarnih lista
 
 ' SKRIVENA KOLONA IDENTITETA. Prioritet 4, a LayoutGrid crta do 3 -- vrednost
 ' postoji u modelu, celija se nikad ne pravi. Identitet ide U RED, ne pored
@@ -93,6 +101,10 @@ Private Const FK_ZAF_KOL_ID As Long = 10
 Private Const FK_ZAF_KOL_DOST As Long = 11
 Private Const FK_FAK_KOL_ID As Long = 8
 Private Const FK_SEF_KOL_ID As Long = 8
+' GP lista: identitet i dostupnost, isti obrazac kao ZAFAKT.
+Private Const FK_GP_KOL_ID As Long = 9
+Private Const FK_UT_KOL_ID As Long = 9
+Private Const FK_GP_KOL_DOST As Long = 10
 
 Private mLista As String            ' FK_ZAFAKT | FK_FAKTURE | FK_SEF
 
@@ -147,6 +159,8 @@ End Function
 Public Function Scr_Liste() As Variant
     Scr_Liste = Array( _
         FK_ZAFAKT & "|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108", _
+        FK_GP & "|OTKUI_SEG_FK_GP|OTKUI_GRID_TITLE_FK_GP|100", _
+        FK_UTOVARI & "|OTKUI_SEG_FK_UTOVARI|OTKUI_GRID_TITLE_FK_UTOVARI|84", _
         FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64", _
         FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44")
 End Function
@@ -179,6 +193,18 @@ End Function
 Public Function FkCipoviZaListu(ByVal kljuc As String) As String
     Select Case kljuc
         Case FK_ZAFAKT
+            FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
+                                "ceka:OTKUI_CIPF_CEKA:104|" & _
+                                "fakt:OTKUI_CIPF_FAKT:96"
+        Case FK_GP
+            ' Ista tri cipa i ISTO pravilo (FkCipPrijemnica nad "dostupna")
+            ' -- ceka = jos nije fakturisana, fakt = vec jeste.
+            FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
+                                "ceka:OTKUI_CIPF_CEKA:104|" & _
+                                "fakt:OTKUI_CIPF_FAKT:96"
+        Case FK_UTOVARI
+            ' ceka = jos nije fakturisan (osloboden stornom fakture),
+            ' fakt = nosi aktivnu fakturu -- isto FkCipPrijemnica pravilo.
             FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
                                 "ceka:OTKUI_CIPF_CEKA:104|" & _
                                 "fakt:OTKUI_CIPF_FAKT:96"
@@ -261,9 +287,19 @@ End Function
 ' Radnje PO KLJUCU LISTE -- isti razlog kao FkCipoviZaListu.
 Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
     Select Case kljuc
-        Case FK_ZAFAKT
+        Case FK_ZAFAKT, FK_GP
             FkRadnjeZaListu = "fkadd:OTKUI_BTN_FK_DODAJ:132:soft:1|" & _
                          "fkdel:OTKUI_BTN_FK_UKLONI:124:ghost:1"
+        Case FK_UTOVARI
+            ' Utovarna lista IDE SA ROBOM -- stampa po redu; storno samo
+            ' nefakturisanog (writer kapija odbija ostale s razlogom).
+            ' "Fakturisi" (revizija #6 t.1): nova faktura nad POSTOJECIM
+            ' nefakturisanim utovarom (posle storna fakture) -- nov
+            ' utovar bi tvrdio da je roba izasla dva puta.
+            FkRadnjeZaListu = "utprint:OTKUI_BTN_UT_STAMPAJ:132:soft:1|" & _
+                         "utprevoz:OTKUI_BTN_UT_PREVOZ:132:ghost:1|" & _
+                         "utfak:OTKUI_BTN_UT_FAKTURISI:124:primary:1|" & _
+                         "utstorno:OTKUI_BTN_UT_STORNO:96:danger:1"
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _
                          "fkstat:OTKUI_BTN_FK_STATUS:132:soft:1"
@@ -340,6 +376,7 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     Select Case tag
         Case "scrFkIzradi": ObradiKlik = IzradiFakturu()
         Case "scrFkOcisti": ObradiKlik = IsprazniKorpu()
+        Case "scrFkUtNovi": ObradiKlik = IzradiUtovar()
     End Select
 End Function
 
@@ -360,6 +397,11 @@ Private Function ObradiPromenu(ByVal tag As String) As Boolean
             ' gde, sto izgleda kao da izbor kupca ne radi. Agrohemija ovo
             ' nema jer nijedna njena lista ne zavisi od polja zone.
             modOtkupUI.RefreshFromData
+        Case "scrFkUtVozT"
+            ' Izbor vozaca iz predloga povlaci registraciju i prevoznika
+            ' (samo u prazna polja). Radi tek kad se tekst RAZRESI u
+            ' stavku liste -- kucanje slobodnog imena ne dira nista.
+            DopuniIzVozaca
     End Select
 End Function
 
@@ -410,6 +452,10 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
         Case "fkadd":    RadnjaNadRedom = DodajRedUKorpu(red)
         Case "fkdel":    RadnjaNadRedom = UkloniRedIzKorpe(red)
         Case "fkprint":  RadnjaNadRedom = StampajFakturu(red)
+        Case "utprint":  RadnjaNadRedom = StampajUtovar(red)
+        Case "utstorno": RadnjaNadRedom = StornirajUtovar(red)
+        Case "utprevoz": RadnjaNadRedom = SacuvajPrevoz(red)
+        Case "utfak":    RadnjaNadRedom = FakturisiUtovar(red)
         Case "fkstat":   RadnjaNadRedom = OsveziStatusFakture(red)
         Case "sfsend":   RadnjaNadRedom = SefPosalji(red)
         Case "sfstat":   RadnjaNadRedom = SefOsvezi(red)
@@ -463,11 +509,40 @@ Private Function UKorpi(ByVal prijemnicaID As String) As Long
     If mKorpa Is Nothing Then Exit Function
     If Len(prijemnicaID) = 0 Then Exit Function
     For i = 1 To mKorpa.count
-        If CStr(mKorpa(i)("prijemnicaID")) = prijemnicaID Then
-            UKorpi = i
-            Exit Function
+        If mKorpa(i).Exists("prijemnicaID") Then
+            If CStr(mKorpa(i)("prijemnicaID")) = prijemnicaID Then
+                UKorpi = i
+                Exit Function
+            End If
         End If
     Next i
+End Function
+
+' GP par UKorpi-ja: stavka gotove robe se u korpi kljuca po PreradaID.
+Private Function UKorpiGP(ByVal preradaID As String) As Long
+    Dim i As Long
+    If mKorpa Is Nothing Then Exit Function
+    If Len(preradaID) = 0 Then Exit Function
+    For i = 1 To mKorpa.count
+        If mKorpa(i).Exists("preradaID") Then
+            If CStr(mKorpa(i)("preradaID")) = preradaID Then
+                UKorpiGP = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Vrsta robe u korpi: "" = prazna, "PRJ" = prijemnice, "GP" = gotova
+' roba. Jedna faktura nosi JEDNU vrstu -- mesanje odbijaju FkDodaj*.
+Private Function KorpaTip() As String
+    If mKorpa Is Nothing Then Exit Function
+    If mKorpa.count = 0 Then Exit Function
+    If mKorpa(1).Exists("preradaID") Then
+        KorpaTip = "GP"
+    Else
+        KorpaTip = "PRJ"
+    End If
 End Function
 
 ' Dodavanje ide preko ID-a, a sve ostale vrednosti reda stizu iz mreze -- iz
@@ -489,6 +564,10 @@ Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
         FkDodaj = Poruka("OTKUI_ERR_FK_VEC_U_KORPI")
         Exit Function
     End If
+    If KorpaTip() = "GP" Then
+        FkDodaj = Poruka("OTKUI_ERR_FK_MESANJE")
+        Exit Function
+    End If
     Set red = CreateObject("Scripting.Dictionary")
     red("prijemnicaID") = prijemnicaID
     red("broj") = broj
@@ -496,6 +575,50 @@ Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
     red("cena") = cena
     red("vrednost") = kolicina * cena
     Korpa().Add red
+End Function
+
+' GP par FkDodaj-a. CENU unosi operater (polje zone) -- gotova roba nema
+' evidentiranu cenu; writer u modUtovar je iznova validira pod TX.
+Public Function FkDodajGP(ByVal preradaID As String, ByVal broj As String, _
+                          ByVal kolicina As Double, ByVal cena As Double, _
+                          ByVal dostupna As Boolean) As String
+    Dim red As Object
+    If Len(Trim$(preradaID)) = 0 Then
+        FkDodajGP = Poruka("OTKUI_ERR_FK_DVOSMISLEN")
+        Exit Function
+    End If
+    If Not dostupna Then
+        FkDodajGP = Poruka("OTKUI_ERR_FK_NIJE_DOSTUPNA")
+        Exit Function
+    End If
+    If UKorpiGP(preradaID) > 0 Then
+        FkDodajGP = Poruka("OTKUI_ERR_FK_VEC_U_KORPI")
+        Exit Function
+    End If
+    If KorpaTip() = "PRJ" Then
+        FkDodajGP = Poruka("OTKUI_ERR_FK_MESANJE")
+        Exit Function
+    End If
+    If cena <= 0 Then
+        FkDodajGP = Poruka("OTKUI_ERR_FK_CENA_GP")
+        Exit Function
+    End If
+    Set red = CreateObject("Scripting.Dictionary")
+    red("preradaID") = preradaID
+    red("broj") = broj
+    red("kolicina") = kolicina
+    red("cena") = cena
+    red("vrednost") = kolicina * cena
+    Korpa().Add red
+End Function
+
+' GP par FkUkloni-ja.
+Public Function FkUkloniGP(ByVal preradaID As String) As Boolean
+    Dim i As Long
+    i = UKorpiGP(preradaID)
+    If i = 0 Then Exit Function
+    Korpa().Remove i
+    FkUkloniGP = True
 End Function
 
 ' Uklanjanje po IDENTITETU, ne po prikazu. Vraca True kad je nesto izbaceno.
@@ -518,6 +641,35 @@ End Function
 
 Private Function DodajRedUKorpu(ByVal red As Long) As Boolean
     Dim iD As String, greska As String
+
+    ' GP lista (krug 5): default kolicina = CELO stanje reda (95% posla
+    ' je cela paleta -- advisor UX), a polje "Kolicina za utovar"
+    ' dozvoljava parcijalnu prodaju (500 od 1.000 kg). Vise od stanja
+    ' ne moze -- writer je ista brana, ovo je rana poruka.
+    If Scr_Lista() = FK_GP Then
+        iD = IdReda(red, FK_GP_KOL_ID)
+        If Len(iD) = 0 Then Exit Function
+        Dim naStanju As Double, kol As Double
+        naStanju = RedD(red, 5)
+        kol = UnetaKolicinaGP()
+        If kol <= 0 Then kol = naStanju
+        If kol > naStanju + 0.0001 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KOL_GP"), True
+            Exit Function
+        End If
+        greska = FkDodajGP(iD, Trim$(CStr(modOtkupUI.GridCell(red, 1))), _
+                           kol, UnetaCenaGP(), _
+                           Len(Trim$(CStr(modOtkupUI.GridCell(red, FK_GP_KOL_DOST)))) > 0)
+        If Len(greska) > 0 Then
+            modOtkupUI.ShowToast greska, True
+            Exit Function
+        End If
+        KorpaPromenjena
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_DODATO"), False
+        DodajRedUKorpu = True
+        Exit Function
+    End If
+
     If Scr_Lista() <> FK_ZAFAKT Then Exit Function
     iD = IdReda(red, FK_ZAF_KOL_ID)
     If Len(iD) = 0 Then Exit Function
@@ -533,8 +685,47 @@ Private Function DodajRedUKorpu(ByVal red As Long) As Boolean
     DodajRedUKorpu = True
 End Function
 
+' Cena gotove robe iz polja zone; 0 kad polje ne postoji ili je prazno
+' (FkDodajGP tada odbija porukom).
+Private Function UnetaCenaGP() As Double
+    Dim c As Object, t As String
+    On Error Resume Next
+    Set c = Kontrola("scrFkCenaGP")
+    If c Is Nothing Then Exit Function
+    t = Trim$(CStr(c.text))
+    If Len(t) = 0 Then Exit Function
+    If Not IsNumeric(t) Then Exit Function
+    UnetaCenaGP = CDbl(t)
+End Function
+
+' Kolicina za utovar (krug 5, parcijalna prodaja); 0 = "celo stanje"
+' (default -- operater najcesce prodaje celu paletu).
+Private Function UnetaKolicinaGP() As Double
+    Dim c As Object, t As String
+    On Error Resume Next
+    Set c = Kontrola("scrFkKolGP")
+    If c Is Nothing Then Exit Function
+    t = Trim$(CStr(c.text))
+    If Len(t) = 0 Then Exit Function
+    If Not IsNumeric(t) Then Exit Function
+    UnetaKolicinaGP = CDbl(t)
+End Function
+
 Private Function UkloniRedIzKorpe(ByVal red As Long) As Boolean
     Dim iD As String
+
+    If Scr_Lista() = FK_GP Then
+        iD = IdReda(red, FK_GP_KOL_ID)
+        If Len(iD) = 0 Then Exit Function
+        If Not FkUkloniGP(iD) Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_NIJE_U_KORPI"), True
+            Exit Function
+        End If
+        KorpaPromenjena
+        UkloniRedIzKorpe = True
+        Exit Function
+    End If
+
     If Scr_Lista() <> FK_ZAFAKT Then Exit Function
     iD = IdReda(red, FK_ZAF_KOL_ID)
     If Len(iD) = 0 Then Exit Function
@@ -610,15 +801,27 @@ Private Function IzradiFakturu() As Boolean
               "  " & ChrW(183) & "  " & Format$(zbir, "#,##0") & " RSD", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
 
-    ' Stavka nosi SAMO PrijemnicaID. CreateFaktura svaku drugu vrednost iznova
-    ' izvodi iz tblPrijemnica i eksplicitno veruje samo stavka(0) -- dodatna
-    ' polja bi bila mrtav teret koji navodi da se u njih veruje.
+    ' Stavka nosi SAMO identitet (+ cenu za GP). CreateFaktura* svaku
+    ' drugu vrednost iznova izvodi iz tabele i veruje samo njoj --
+    ' dodatna polja bi bila mrtav teret koji navodi da se u njih veruje.
+    ' GP korpa nosi i CENU: nju je uneo operater i ona JESTE ulaz upisa.
     Set stavke = New Collection
-    For i = 1 To mKorpa.count
-        stavke.Add Array(CStr(mKorpa(i)("prijemnicaID")))
-    Next i
-
-    fakturaID = modFaktura.CreateFaktura_TX(kupID, stavke)
+    If KorpaTip() = "GP" Then
+        ' Krug 5: GP prodaja ide kroz UTOVARNU LISTU (fizicka isporuka)
+        ' -- stavka nosi i KOLICINU (parcijalna prodaja), writer pravi
+        ' utovar + fakturu u jednoj transakciji (1 utovar = 1 faktura).
+        For i = 1 To mKorpa.count
+            stavke.Add Array(CStr(mKorpa(i)("preradaID")), _
+                             CDbl(mKorpa(i)("kolicina")), _
+                             CDbl(mKorpa(i)("cena")))
+        Next i
+        fakturaID = modUtovar.CreateUtovarSaFakturom_TX(kupID, stavke)
+    Else
+        For i = 1 To mKorpa.count
+            stavke.Add Array(CStr(mKorpa(i)("prijemnicaID")))
+        Next i
+        fakturaID = modFaktura.CreateFaktura_TX(kupID, stavke)
+    End If
 
     If Len(fakturaID) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_IZRADA"), True
@@ -633,6 +836,62 @@ Private Function IzradiFakturu() As Boolean
     If Len(brojFakture) = 0 Then brojFakture = fakturaID
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_IZRADJENA") & " " & brojFakture, False
     IzradiFakturu = True
+End Function
+
+' SAMO UTOVAR iz GP korpe (model B, revizija #9): fizicka isporuka
+' danas, fakturisanje kasnije radnjom "Fakturisi" na listi Utovari.
+' Cena je i dalje OBAVEZNA (dogovorena pri prodaji, ide na stavku).
+Private Function IzradiUtovar() As Boolean
+    Dim kupID As String, stavke As Collection, i As Long
+    Dim utovarID As String, brojUt As String
+
+    ' Redosled kapija (smoke #12): PRVO prazna korpa -- prazna korpa
+    ' nema tip, pa je "korpa nosi prijemnice" na prazno bila pogresna
+    ' poruka operateru.
+    kupID = IzabraniKupacID()
+    If Len(kupID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_NEMA_KUPCA"), True
+        Exit Function
+    End If
+    If mKorpa Is Nothing Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KORPA_PRAZNA"), True
+        Exit Function
+    End If
+    If mKorpa.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KORPA_PRAZNA"), True
+        Exit Function
+    End If
+    If KorpaTip() <> "GP" Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR_PRJ"), True
+        Exit Function
+    End If
+
+    If MsgBox(Poruka("OTKUI_ASK_FK_UTOVAR") & vbCrLf & vbCrLf & _
+              KupacNaziv() & vbCrLf & _
+              mKorpa.count & " " & Poruka("OTKUI_LBL_AG_KORPA_STAVKI"), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+
+    Set stavke = New Collection
+    For i = 1 To mKorpa.count
+        stavke.Add Array(CStr(mKorpa(i)("preradaID")), _
+                         CDbl(mKorpa(i)("kolicina")), _
+                         CDbl(mKorpa(i)("cena")))
+    Next i
+    utovarID = modUtovar.CreateUtovar_TX(kupID, stavke)
+
+    If Len(utovarID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR"), True
+        Exit Function
+    End If
+
+    Set mKorpa = New Collection
+    Scr_ResetCache
+    KorpaPromenjena
+
+    brojUt = NzToText(LookupValue(TBL_UTOVAR, COL_UT_ID, utovarID, COL_UT_BROJ)) & _
+             "/" & NzToText(LookupValue(TBL_UTOVAR, COL_UT_ID, utovarID, COL_UT_GODINA))
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_UTOVAR") & " " & brojUt, False
+    IzradiUtovar = True
 End Function
 
 Private Function StampajFakturu(ByVal red As Long) As Boolean
@@ -772,6 +1031,8 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Select Case Scr_Lista()
         Case FK_FAKTURE: Scr_Rows = RedoviFakture(filter, q): Exit Function
         Case FK_SEF:     Scr_Rows = RedoviSEF(filter, q): Exit Function
+        Case FK_GP:      Scr_Rows = RedoviGP(filter, q): Exit Function
+        Case FK_UTOVARI: Scr_Rows = RedoviUtovara(filter, q): Exit Function
     End Select
     Scr_Rows = RedoviPrijemnice(filter, q)
 End Function
@@ -782,6 +1043,8 @@ Public Function FkKoloneZaListu(ByVal kljuc As String) As Variant
     Select Case kljuc
         Case FK_FAKTURE: FkKoloneZaListu = FaktureKolone()
         Case FK_SEF:     FkKoloneZaListu = SEFKolone()
+        Case FK_GP:      FkKoloneZaListu = GPKolone()
+        Case FK_UTOVARI: FkKoloneZaListu = UtovariKolone()
         Case Else:       FkKoloneZaListu = PrijemniceKolone()
     End Select
 End Function
@@ -862,6 +1125,257 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrFakture.RedoviPrijemnice[" & mStep & "]", Err.description
+End Function
+
+'------------------------------------------------- LISTA: GOTOVA ROBA
+Private Function GPKolone() As Variant
+    ' Broj | korpa-kvacica | Proizvod | Datum | NA STANJU kg | Kutije |
+    ' Kese | Faktura | [PreradaID] | [Dostupna]. Krug 5: kolona kg je
+    ' NA STANJU (proizvedeno - utovareno) -- to operater prodaje;
+    ' parcijalna prodaja kroz polje "Kolicina za utovar".
+    GPKolone = Array( _
+        "OTKUI_HD_BROJ||txt|76|1", _
+        "OTKUI_HD_OZN||txt|32|1", _
+        "OTKUI_HDF_TIPGP||txt|150|1", _
+        "OTKUI_HD_DATUM||date|74|1", _
+        "OTKUI_HDF_NASTANJU||num|92|1", _
+        "OTKUI_HDF_KUTIJE||num|64|3", _
+        "OTKUI_HDF_KESE||num|60|3", _
+        "OTKUI_HDF_FAKTURA||txt|0|1", _
+        "OTKUI_HDF_PREID||txt|1|4", _
+        "OTKUI_HDF_DOSTUPNA||txt|1|4")
+End Function
+
+' Citac (modFaktura.GetGPZaFakturisanjeForGrid) vraca 1-bazirano:
+'   1 PreradaID | 2 Broj | 3 TipGP | 4 Datum | 5 NetoIzlazKg | 6 Kutije
+'   7 Kese | 8 Dostupna | 9 BrojFakture
+Private Function RedoviGP(ByVal filter As String, ByVal q As String) As Variant
+    Dim src As Variant, i As Long, n As Long, outA() As Variant
+    Dim hay As String, iD As String, dostupna As Boolean
+    Dim zbirKg As Double
+    On Error GoTo EH
+    mStep = "gotova"
+
+    src = modFaktura.GetGPZaFakturisanjeForGrid()
+    If Not IsArray(src) Then
+        RedoviGP = PrazanRezultat(GPKolone())
+        Exit Function
+    End If
+
+    ReDim outA(1 To UBound(src, 1), 1 To 10)
+    For i = 1 To UBound(src, 1)
+        iD = Trim$(CStr(src(i, 1)))
+        dostupna = CBool(src(i, 8))
+        If Not FkCipPrijemnica(filter, dostupna) Then GoTo Sledeci
+        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 3)) & "|" & CStr(src(i, 9))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        n = n + 1
+        outA(n, 1) = CStr(src(i, 2))
+        outA(n, 2) = IIf(UKorpiGP(iD) > 0, ChrW(10003), "")
+        outA(n, 3) = CStr(src(i, 3))
+        outA(n, 4) = src(i, 4)
+        outA(n, 5) = CDbl(src(i, 5))
+        outA(n, 6) = CDbl(src(i, 6))
+        outA(n, 7) = CDbl(src(i, 7))
+        outA(n, 8) = CStr(src(i, 9))
+        outA(n, 9) = iD
+        outA(n, 10) = IIf(dostupna, "1", "")
+        zbirKg = zbirKg + CDbl(src(i, 5))
+Sledeci:
+    Next i
+
+    mStep = "OK"
+    RedoviGP = Array(GPKolone(), outA, n, zbirKg, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrFakture.RedoviGP[" & mStep & "]", Err.description
+End Function
+
+'------------------------------------------------------ LISTA: UTOVARI
+' Krug 5: pregled utovarnih lista -- broj, datum, kupac, roba, kg,
+' faktura; identitet UtovarID u prio-4 koloni (radnje: stampa/storno).
+Private Function UtovariKolone() As Variant
+    UtovariKolone = Array( _
+        "OTKUI_HD_BROJ||txt|72|1", _
+        "OTKUI_HD_DATUM||date|74|1", _
+        "OTKUI_HDS_KUPAC||txt|130|1", _
+        "OTKUI_HDU_ROBA||txt|104|1", _
+        "OTKUI_HD_KG||kg|80|1", _
+        "OTKUI_HDF_FAKTURA||txt|0|1", _
+        "OTKUI_HDU_PREVOZNIK||txt|110|2", _
+        "OTKUI_HDU_REG||txt|90|2", _
+        "OTKUI_HDU_ID||txt|1|4")
+End Function
+
+Private Function RedoviUtovara(ByVal filter As String, ByVal q As String) As Variant
+    Dim src As Variant, i As Long, n As Long, outA() As Variant
+    Dim hay As String, nefakturisan As Boolean, zbirKg As Double
+    On Error GoTo EH
+    mStep = "utovari"
+
+    src = modUtovar.GetUtovariForGrid()
+    If Not IsArray(src) Then
+        RedoviUtovara = PrazanRezultat(UtovariKolone())
+        Exit Function
+    End If
+
+    ReDim outA(1 To UBound(src, 1), 1 To 9)
+    For i = 1 To UBound(src, 1)
+        ' "ceka" cip pusta NEFAKTURISANE (oslobodjene stornom fakture)
+        ' -- isto FkCipPrijemnica pravilo nad "dostupna".
+        nefakturisan = (Len(Trim$(CStr(src(i, 7)))) = 0)
+        If Not FkCipPrijemnica(filter, nefakturisan) Then GoTo Sledeci
+        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _
+              CStr(src(i, 5)) & "|" & CStr(src(i, 7))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        n = n + 1
+        outA(n, 1) = CStr(src(i, 2))
+        outA(n, 2) = src(i, 3)
+        outA(n, 3) = CStr(src(i, 4))
+        outA(n, 4) = CStr(src(i, 5))
+        outA(n, 5) = CDbl(src(i, 6))
+        outA(n, 6) = CStr(src(i, 7))
+        outA(n, 7) = CStr(src(i, 8))
+        outA(n, 8) = CStr(src(i, 9))
+        outA(n, 9) = CStr(src(i, 1))
+        zbirKg = zbirKg + CDbl(src(i, 6))
+Sledeci:
+    Next i
+
+    mStep = "OK"
+    RedoviUtovara = Array(UtovariKolone(), outA, n, zbirKg, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrFakture.RedoviUtovara[" & mStep & "]", Err.description
+End Function
+
+' Stampa utovarne liste po redu (rezim iz CFG_UTOVAR_PRINT_MODE).
+Private Function StampajUtovar(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    modUtovar.PrintUtovar iD
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STAMPA"), False
+    StampajUtovar = True
+End Function
+
+' Krug 5d: upis podataka prevoza nad izabranim redom -- vrednosti iz
+' 8 polja zone (vidljiva samo na listi UTOVARI). Prazno polje NE dira
+' postojecu vrednost, crtica "-" brise (writer semantika).
+Private Function SacuvajPrevoz(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    If modUtovar.UpdateUtovarPrevoz_TX(iD, _
+            PrevozPolje("scrFkUtPrev"), PrevozPolje("scrFkUtVoz"), _
+            PrevozPolje("scrFkUtReg"), PrevozPolje("scrFkUtPlo"), _
+            PrevozPolje("scrFkUtTemp"), PrevozPolje("scrFkUtMesto"), _
+            PrevozPolje("scrFkUtPo"), PrevozPolje("scrFkUtNap"), _
+            PrevozPolje("scrFkUtDat"), PrevozPolje("scrFkUtVre")) Then
+        ' Sifarnik uci sacuvanu kombinaciju pa se predlozi odmah
+        ' osveze -- sledeci utovar istog prevoznika je izbor, ne unos.
+        modUtovar.UpsertPrevoznikVozac PrevozPolje("scrFkUtPrev"), _
+            PrevozPolje("scrFkUtVoz"), PrevozPolje("scrFkUtReg")
+        mCombosPunjeni = False
+        PuniCombos
+        ' Polja se PRAZNE posle upisa (smoke 5d): uz semantiku "prazno
+        ' ne dira" zaostala vrednost bi se prepisala na SLEDECI izabran
+        ' red cim se klikne Sacuvaj prevoz.
+        OcistiPrevozPolja
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_PREVOZ"), False
+        SacuvajPrevoz = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_PREVOZ"), True
+    End If
+End Function
+
+Private Function PrevozPolje(ByVal nm As String) As String
+    Dim c As Object
+    On Error Resume Next
+    Set c = Kontrola(nm)
+    If c Is Nothing Then Exit Function
+    PrevozPolje = Trim$(CStr(c.text))
+End Function
+
+' Isprazni svih 8 prevoz polja (posle upisa). mFill gard: brisanje
+' vozaca inace okine Change -> DopuniIzVozaca usred ciscenja.
+Private Sub OcistiPrevozPolja()
+    Dim nm As Variant, c As Object
+    On Error Resume Next
+    mFill = True
+    For Each nm In Array("scrFkUtPrev", "scrFkUtVoz", "scrFkUtReg", _
+                         "scrFkUtPlo", "scrFkUtTemp", "scrFkUtMesto", _
+                         "scrFkUtPo", "scrFkUtNap", "scrFkUtDat", _
+                         "scrFkUtVre")
+        Set c = Kontrola(CStr(nm))
+        If Not c Is Nothing Then c.text = ""
+    Next nm
+    mFill = False
+End Sub
+
+' Storno utovara po redu -- potvrda pa StornoUtovar_TX (kapija u
+' writeru odbija fakturisan utovar s razlogom).
+Private Function StornirajUtovar(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    If MsgBox(Poruka("OTKUI_ASK_UT_STORNO") & vbCrLf & vbCrLf & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 4))), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+    If modStorno.StornoUtovar_TX(iD) Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STORNO"), False
+        StornirajUtovar = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_STORNO"), True
+    End If
+End Function
+
+' Nova faktura iz POSTOJECEG nefakturisanog utovara (revizija #6 t.1):
+' lifecycle posle storna GP fakture -- roba je fizicki otisla jednom,
+' fakturise se ISTI utovar, ne novi. Kapije i cene (iz poslednje
+' stornirane fakture) su u writeru.
+Private Function FakturisiUtovar(ByVal red As Long) As Boolean
+    Dim iD As String, fakturaID As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    ' Vec fakturisan red (kolona 6 mreze nosi broj fakture) -- jasna
+    ' poruka odmah, bez writera.
+    If Len(Trim$(CStr(modOtkupUI.GridCell(red, 6)))) > 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK_VEC"), True
+        Exit Function
+    End If
+    If MsgBox(Poruka("OTKUI_ASK_UT_FAK") & vbCrLf & vbCrLf & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 4))), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+    ' Korekcija cene (revizija #8): pogresna cena NE sme da trazi
+    ' storno fizickog utovara -- ista roba, nova faktura, nova cena.
+    ' Prazno/Cancel = cene iz prethodne fakture (tehnicki storno).
+    Dim cenaTxt As String, novaCena As Double
+    cenaTxt = Trim$(InputBox(Poruka("OTKUI_ASK_UT_FAK_CENA"), APP_NAME))
+    novaCena = 0
+    If Len(cenaTxt) > 0 Then
+        If Not IsNumeric(cenaTxt) Or CDbl(cenaTxt) <= 0 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK_CENA"), True
+            Exit Function
+        End If
+        novaCena = CDbl(cenaTxt)
+    End If
+    fakturaID = modUtovar.CreateFakturaIzUtovara_TX(iD, novaCena)
+    If Len(fakturaID) > 0 Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_FAK"), False
+        FakturisiUtovar = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK"), True
+    End If
 End Function
 
 '------------------------------------------------------ LISTA: FAKTURE
@@ -1030,6 +1544,49 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrFkKup", Poruka("OTKUI_FLD_FK_KUPAC"), "cmb", "", _
                          1, False, False, "FK"
 
+    ' CENA GOTOVE ROBE (v6-ui-189): vidljivo SAMO na listi GOTOVA --
+    ' operater je unosi PRE dodavanja prerade u korpu (gotova roba nema
+    ' evidentiranu cenu, prodajna se odredjuje pri fakturisanju).
+    modOtkupUI.NewFieldG z, "scrFkCenaGP", Poruka("OTKUI_FLD_FK_CENAGP"), "txt", "", _
+                         1, True, False, "FK"
+    ' KOLICINA ZA UTOVAR (krug 5): prazno = celo stanje (najcesci
+    ' slucaj); upisana vrednost = parcijalna prodaja sa palete.
+    modOtkupUI.NewFieldG z, "scrFkKolGP", Poruka("OTKUI_FLD_FK_KOLGP"), "txt", "", _
+                         1, True, False, "FK"
+
+    ' PODACI PREVOZA (krug 5d): 8 polja vidljivih SAMO na listi
+    ' UTOVARI; radnja "Sacuvaj prevoz" ih upisuje u izabrani red
+    ' (prazno = ne diraj, "-" = obrisi). Idu na stampani obrazac.
+    ' isNum MORA biti False: True upisuje polje u mNumTag registar pa
+    ' FilterKeyPress guta svako slovo (smoke 5d -- "ne mogu da kucam").
+    ' Prevoznik i vozac su COMBO sa predlozima iz tblPrevoznici
+    ' (eksterni sifarnik, auto-uci se iz "Sacuvaj prevoz" -- NIJE
+    ' tblVozaci, to su vozaci firme za otkup). Slobodan unos i dalje
+    ' radi: combo prima kucanje kao i tekst polje.
+    modOtkupUI.NewFieldG z, "scrFkUtPrev", Poruka("OTKUI_FLD_UT_PREVOZNIK"), "cmb", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtVoz", Poruka("OTKUI_FLD_UT_VOZAC"), "cmb", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtReg", Poruka("OTKUI_FLD_UT_REG"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtPlo", Poruka("OTKUI_FLD_UT_PLOMBA"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtTemp", Poruka("OTKUI_FLD_UT_TEMP"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtMesto", Poruka("OTKUI_FLD_UT_MESTO"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtPo", Poruka("OTKUI_FLD_UT_PO"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtNap", Poruka("OTKUI_FLD_UT_NAPOMENA"), "txt", "", _
+                         1, False, False, "FK"
+    ' Datum/vreme utovara su EDITABILNI (revizija #6 P1): default
+    ' nastaju pri izradi, ali stvaran utovar moze biti drugog dana --
+    ' a DatumUtovara je SEF datum isporuke. Prazno = ne diraj.
+    modOtkupUI.NewFieldG z, "scrFkUtDat", Poruka("OTKUI_FLD_UT_DATUM"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtVre", Poruka("OTKUI_FLD_UT_VREME"), "txt", "", _
+                         1, False, False, "FK"
+
     ' BROJA FAKTURE OVDE NEMA, i to je namerno. Broj dodeljuje transakcija
     ' (CreateFaktura sam zove GenerateBrojFakture), operater ga ne bira. Polje
     ' sa "predlogom" koji transakcija ignorise bilo bi prikaz koji se garantovano
@@ -1043,6 +1600,11 @@ Public Sub Scr_Build(ByVal z As Object)
                   164, FK_BTN_H, "primary"
     modUiKit.BtnV z, "scrFkOcisti", Poruka("OTKUI_BTN_FK_OCISTI"), PAD + 172, FK_Y_BTN, _
                   132, FK_BTN_H, "ghost"
+    ' Model B (revizija #9): GP korpa moze da napravi SAMO utovar --
+    ' magacin stampa listu danas, "Fakturisi" ide kasnije sa liste
+    ' Utovari. "Izradi fakturu" ostaje brzi put (utovar+faktura odmah).
+    modUiKit.BtnV z, "scrFkUtNovi", Poruka("OTKUI_BTN_FK_UTOVAR"), PAD + 312, FK_Y_BTN, _
+                  148, FK_BTN_H, "soft"
 
     modUiKit.NewLbl z, "fkLnB", "", 0, FK_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
@@ -1067,7 +1629,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     ' Desna traka (korpa) uzima svoje, polje i dugmad dele OSTATAK. Na uskom
     ' ekranu traka nestaje -- bolje bez trake nego sa dugmadima koja se ne vide.
     wPolja = w - FK_KORPA_W - PAD
-    korpaVidi = (wPolja >= FK_POLJA_MIN)
+    ' Na listi UTOVARI korpa nema smisla (radnje idu po redu, ne kroz
+    ' korpu), a njen naslov "STAVKE FAKTURE" se sudarao sa redom od 10
+    ' prevoz polja (smoke: "SNAPOMENA" = S + NAPOMENA preko njega).
+    korpaVidi = (wPolja >= FK_POLJA_MIN) And (Scr_Lista() <> FK_UTOVARI)
     If Not korpaVidi Then wPolja = w
     kxK = w - FK_KORPA_W
 
@@ -1091,12 +1656,50 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     Next i
 
     PoljeX z, "scrFkKup", PAD, FK_FLD_W, FK_Y_LBL
+    ' Cena i kolicina GP stoje desno od kupca, samo na listi GOTOVA
+    ' (isti obrazac kontekstne vidljivosti kao scrSlAuto).
+    PoljeX z, "scrFkCenaGP", PAD + FK_FLD_W + 12, 150, FK_Y_LBL
+    z.Controls("scrFkCenaGP").Visible = (Scr_Lista() = FK_GP)
+    PoljeX z, "scrFkKolGP", PAD + FK_FLD_W + 174, 150, FK_Y_LBL
+    z.Controls("scrFkKolGP").Visible = (Scr_Lista() = FK_GP)
+
+    ' Prevoz polja (krug 5d) -- jedan red, samo na listi UTOVARI;
+    ' na toj listi se kupac/cena/kolicina polja sakrivaju pa je ceo
+    ' red slobodan.
+    Dim utVidi As Boolean, utX As Single
+    utVidi = (Scr_Lista() = FK_UTOVARI)
+    z.Controls("scrFkKup").Visible = Not utVidi
+    utX = PAD
+    PoljeX z, "scrFkUtDat", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtVre", utX, 56, FK_Y_LBL: utX = utX + 68
+    PoljeX z, "scrFkUtPrev", utX, 120, FK_Y_LBL: utX = utX + 132
+    PoljeX z, "scrFkUtVoz", utX, 110, FK_Y_LBL: utX = utX + 122
+    PoljeX z, "scrFkUtReg", utX, 90, FK_Y_LBL: utX = utX + 102
+    PoljeX z, "scrFkUtPlo", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtTemp", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtMesto", utX, 140, FK_Y_LBL: utX = utX + 152
+    PoljeX z, "scrFkUtPo", utX, 100, FK_Y_LBL: utX = utX + 112
+    PoljeX z, "scrFkUtNap", utX, 130, FK_Y_LBL
+    z.Controls("scrFkUtDat").Visible = utVidi
+    z.Controls("scrFkUtVre").Visible = utVidi
+    z.Controls("scrFkUtPrev").Visible = utVidi
+    z.Controls("scrFkUtVoz").Visible = utVidi
+    z.Controls("scrFkUtReg").Visible = utVidi
+    z.Controls("scrFkUtPlo").Visible = utVidi
+    z.Controls("scrFkUtTemp").Visible = utVidi
+    z.Controls("scrFkUtMesto").Visible = utVidi
+    z.Controls("scrFkUtPo").Visible = utVidi
+    z.Controls("scrFkUtNap").Visible = utVidi
 
     ' Objasnjenje se zaustavlja pred trakom -- Label ne prelama, samo istece.
     z.Controls("fkHint").width = wPolja - PAD * 2
 
     modUiKit.MoveBtn z, "scrFkIzradi", PAD, FK_Y_BTN
     modUiKit.MoveBtn z, "scrFkOcisti", PAD + 172, FK_Y_BTN
+    ' "Napravi utovar" samo na listi GOTOVA (model B): tamo korpa nosi
+    ' GP stavke sa cenom; na ostalim listama dugme nema smisla.
+    modUiKit.MoveBtn z, "scrFkUtNovi", PAD + 312, FK_Y_BTN
+    z.Controls("scrFkUtNovi").Visible = (Scr_Lista() = FK_GP)
 
     z.Controls("fkLnB").width = w
 End Sub
@@ -1156,6 +1759,12 @@ Private Sub PuniCombos()
         CB.List(CB.ListCount - 1, 1) = CStr(k)
     Next k
 
+    ' Predlozi prevoza iz sifarnika tblPrevoznici (smoke 5d). Prevoznik
+    ' combo: distinct nazivi. Vozac combo nosi i skrivene kolone
+    ' (registracija, prevoznik) -- izbor vozaca dopunjava ta polja.
+    mStep = "prevoz"
+    PuniPrevozCombos z
+
     mCombosPunjeni = True
     mFill = False
     Exit Sub
@@ -1165,6 +1774,77 @@ EH:
     ' nije povezano" -- isto kao u modOtkupUI.FillCombos.
     Debug.Print "modScrFakture.PuniCombos PAO na koraku [" & mStep & "]: " & _
                 Err.Number & " " & Err.description
+End Sub
+
+' Combo predlozi prevoza iz tblPrevoznici (smoke 5d). Sifarnik je
+' ZASEBAN od tblVozaci: ovo su eksterni prevoznici i njihovi vozaci,
+' vozaci firme (otkup) se ovde ne pojavljuju -- i obrnuto.
+Private Sub PuniPrevozCombos(ByVal z As Object)
+    Dim CB As Object, cbV As Object, d As Variant, i As Long
+    Dim cNaz As Long, cVoz As Long, cReg As Long, cAkt As Long
+    Dim vid As Object, k As String, akt As String
+
+    Set CB = z.Controls("scrFkUtPrev").Controls("scrFkUtPrevT")
+    Set cbV = z.Controls("scrFkUtVoz").Controls("scrFkUtVozT")
+    CB.Clear
+    CB.ColumnCount = 1
+    cbV.Clear
+    cbV.ColumnCount = 3
+    cbV.ColumnWidths = "140 pt;0 pt;0 pt"
+    cbV.BoundColumn = 1
+    cbV.TextColumn = 1
+
+    If GetTable(TBL_PREVOZNICI) Is Nothing Then Exit Sub
+    d = GetTableData(TBL_PREVOZNICI)
+    If Not IsArray(d) Then Exit Sub
+    cNaz = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_NAZIV)
+    cVoz = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_VOZAC)
+    cReg = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_REG)
+    cAkt = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_AKTIVAN)
+    If cNaz = 0 Or cVoz = 0 Then Exit Sub
+
+    Set vid = CreateObject("Scripting.Dictionary")
+    vid.CompareMode = vbTextCompare
+    For i = 1 To UBound(d, 1)
+        If cAkt > 0 Then akt = Trim$(CStr(nz(d(i, cAkt)))) Else akt = ""
+        If Len(akt) = 0 Or StrComp(akt, "Aktivan", vbTextCompare) = 0 Then
+            k = Trim$(CStr(nz(d(i, cNaz))))
+            If Len(k) > 0 And Not vid.Exists(k) Then
+                vid.Add k, True
+                CB.AddItem k
+            End If
+            k = Trim$(CStr(nz(d(i, cVoz))))
+            If Len(k) > 0 Then
+                cbV.AddItem k
+                If cReg > 0 Then _
+                    cbV.List(cbV.ListCount - 1, 1) = Trim$(CStr(nz(d(i, cReg))))
+                cbV.List(cbV.ListCount - 1, 2) = Trim$(CStr(nz(d(i, cNaz))))
+            End If
+        End If
+    Next i
+End Sub
+
+' Izbor vozaca iz predloga dopunjava registraciju i prevoznika --
+' SAMO prazna polja (operater koji je vec nesto ukucao ostaje gazda).
+Private Sub DopuniIzVozaca()
+    Dim z As Object, cbV As Object, i As Long, t As String
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    Set cbV = z.Controls("scrFkUtVoz").Controls("scrFkUtVozT")
+    t = Trim$(CStr(cbV.text))
+    If Len(t) = 0 Then Exit Sub
+    For i = 0 To cbV.ListCount - 1
+        If StrComp(Trim$(CStr(cbV.List(i, 0))), t, vbTextCompare) = 0 Then
+            If Len(PrevozPolje("scrFkUtReg")) = 0 Then _
+                z.Controls("scrFkUtReg").Controls("scrFkUtRegT").text = _
+                    Trim$(CStr(cbV.List(i, 1)))
+            If Len(PrevozPolje("scrFkUtPrev")) = 0 Then _
+                z.Controls("scrFkUtPrev").Controls("scrFkUtPrevT").text = _
+                    Trim$(CStr(cbV.List(i, 2)))
+            Exit Sub
+        End If
+    Next i
 End Sub
 
 Private Function IzabraniKupacID() As String
@@ -1249,8 +1929,16 @@ End Function
 '---------------------------------------------------------- BROJKE
 Private Sub OsveziObjasnjenje(ByVal z As Object)
     On Error Resume Next
-    If Len(IzabraniKupacID()) = 0 Then
+    ' Lista UTOVARI ide PRVA: kupac polje je tamo skriveno (i prazno),
+    ' pa bi kupac-grana prikazala hint o prijemnicama (smoke 5d nalaz).
+    If Scr_Lista() = FK_UTOVARI Then
+        z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_UT")
+    ElseIf Len(IzabraniKupacID()) = 0 Then
         z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_KUPAC")
+    ElseIf Scr_Lista() = FK_GP Then
+        ' Smoke 5c: label polja kolicine je skracen, pravilo "prazno =
+        ' celo stanje" objasnjava hint linija.
+        z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_GP")
     Else
         z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT")
     End If
@@ -1357,6 +2045,23 @@ Public Function Scr_FkUkloniStavkuTest(ByVal prijemnicaID As String) As Boolean
     If Not IsTestMode() Then Exit Function
     Scr_FkUkloniStavkuTest = FkUkloni(prijemnicaID)
     If Scr_FkUkloniStavkuTest Then KorpaPromenjena
+End Function
+
+' GP par korpa seam-a (v6-ui-189) -- ista kapija test rezima.
+Public Function Scr_FkKorpaTestDodajGP(ByVal preradaID As String, _
+                                       ByVal broj As String, _
+                                       ByVal kolicina As Double, _
+                                       ByVal cena As Double, _
+                                       ByVal dostupna As Boolean) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_FkKorpaTestDodajGP = FkDodajGP(preradaID, broj, kolicina, cena, dostupna)
+    If Len(Scr_FkKorpaTestDodajGP) = 0 Then KorpaPromenjena
+End Function
+
+Public Function Scr_FkUkloniStavkuGPTest(ByVal preradaID As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_FkUkloniStavkuGPTest = FkUkloniGP(preradaID)
+    If Scr_FkUkloniStavkuGPTest Then KorpaPromenjena
 End Function
 
 ' Identitet i-te stavke korpe (1-bazirano).

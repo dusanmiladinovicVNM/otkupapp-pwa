@@ -379,7 +379,188 @@ EH:
               "Source=" & errSrc & " | " & errDesc
 End Function
 
-Private Function GenerateBrojFakture() As String
+' GP lista za ekran Fakturisanje: NESTORNIRANE prerade. 1-bazirano:
+'   1 PreradaID | 2 Broj (b/g) | 3 TipGP | 4 Datum | 5 NetoIzlazKg
+'   6 Kutije | 7 Kese | 8 Dostupna (nije fakturisana) | 9 BrojFakture
+' GetColumnIndex za GP kolone fakturisanosti: sveska PRE EnsureSchema
+' nadogradnje ih nema -- tada su sve prerade "dostupne" a broj fakture
+' prazan, sto je i stvarno stanje te sveske.
+Public Function GetGPZaFakturisanjeForGrid() As Variant
+    Const SRC As String = "GetGPZaFakturisanjeForGrid"
+    On Error GoTo EH
+
+    Dim pd As Variant
+    pd = GetTableData(TBL_PRERADA)
+    If IsEmpty(pd) Then Exit Function
+
+    Dim cId As Long, cBroj As Long, cGod As Long, cTip As Long
+    Dim cDat As Long, cNeto As Long, cKut As Long, cKes As Long
+    Dim cStorno As Long
+    cId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+    cGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+    cTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+    cDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
+    cNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+    cKut = RequireColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE, SRC)
+    cKes = RequireColumnIndex(TBL_PRERADA, COL_PRE_KESE, SRC)
+    cStorno = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, SRC)
+    ' Tipovi pakovanja (revizija #13): kapacitet iz sifarnika po tipu.
+    Dim cTipKGp As Long, cTipSGp As Long
+    cTipKGp = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KUTIJE)
+    cTipSGp = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KESE)
+
+    ' P1 (revizija #248): dupli PreradaID (korupcija) ne sme da izgleda
+    ' kao normalan red -- isti guard kao prijemnice/fakture: identitet
+    ' se prazni pa radnja nema nad cim da radi (fail-closed u UI).
+    Dim brojac As Object: Set brojac = BrojacIdova(TBL_PRERADA, COL_PRE_ID)
+    ' Krug 5: stanje i prodaja zive na UTOVARNIM stavkama -- ista mapa
+    ' koju koriste writer i storno kapija (jedno pravilo).
+    Dim utovareno As Object: Set utovareno = modUtovar.UtovarenoPoPreradi()
+
+    ' Mapa AKTIVNIH faktura za prikaz broja -- PRE petlje (par. 23.11/S5).
+    Dim fakBroj As Object: Set fakBroj = CreateObject("Scripting.Dictionary")
+    fakBroj.CompareMode = vbTextCompare
+    Dim fd As Variant, cFId As Long, cFBr As Long
+    fd = GetTableData(TBL_FAKTURE)
+    If IsArray(fd) Then fd = ExcludeStornirano(fd, TBL_FAKTURE)
+    If IsArray(fd) Then
+        cFId = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+        cFBr = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+        Dim j As Long
+        For j = 1 To UBound(fd, 1)
+            If Not fakBroj.Exists(Trim$(CStr(nz(fd(j, cFId))))) Then _
+                fakBroj.Add Trim$(CStr(nz(fd(j, cFId)))), Trim$(CStr(nz(fd(j, cFBr))))
+        Next j
+    End If
+
+    ' Fakture po preradi (preko UTOVARA): preradaID -> dict brojeva
+    ' aktivnih faktura validno fakturisanih utovara. Parcijalna prodaja
+    ' legalno daje VISE faktura po preradi -- prikaz "N fakt.".
+    Dim preFakture As Object: Set preFakture = CreateObject("Scripting.Dictionary")
+    preFakture.CompareMode = vbTextCompare
+    If Not GetTable(TBL_UTOVAR) Is Nothing Then
+        Dim utFak As Object: Set utFak = CreateObject("Scripting.Dictionary")
+        utFak.CompareMode = vbTextCompare
+        Dim utD As Variant, cUtId As Long, cUtFakt As Long, cUtFid As Long
+        utD = GetTableData(TBL_UTOVAR)
+        If IsArray(utD) Then utD = ExcludeStornirano(utD, TBL_UTOVAR)
+        If IsArray(utD) Then
+            cUtId = RequireColumnIndex(TBL_UTOVAR, COL_UT_ID, SRC)
+            cUtFakt = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)
+            cUtFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+            For j = 1 To UBound(utD, 1)
+                If UCase$(Trim$(CStr(nz(utD(j, cUtFakt))))) = "DA" _
+                   And fakBroj.Exists(Trim$(CStr(nz(utD(j, cUtFid))))) Then
+                    utFak(Trim$(CStr(nz(utD(j, cUtId))))) = _
+                        CStr(fakBroj(Trim$(CStr(nz(utD(j, cUtFid))))))
+                End If
+            Next j
+        End If
+        Dim usD As Variant, cUsUt As Long, cUsPre As Long, preK As String
+        usD = GetTableData(TBL_UTOVAR_STAVKE)
+        If IsArray(usD) Then usD = ExcludeStornirano(usD, TBL_UTOVAR_STAVKE)
+        If IsArray(usD) Then
+            cUsUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+            cUsPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+            For j = 1 To UBound(usD, 1)
+                If utFak.Exists(Trim$(CStr(nz(usD(j, cUsUt))))) Then
+                    preK = Trim$(CStr(nz(usD(j, cUsPre))))
+                    If Len(preK) > 0 Then
+                        If Not preFakture.Exists(preK) Then _
+                            preFakture.Add preK, CreateObject("Scripting.Dictionary")
+                        preFakture(preK)(CStr(utFak(Trim$(CStr(nz(usD(j, cUsUt))))))) = True
+                    End If
+                End If
+            Next j
+        End If
+    End If
+
+    Dim outA() As Variant, i As Long, n As Long
+    Dim preID As String, naStanju As Double
+    ReDim outA(1 To UBound(pd, 1), 1 To 9)
+    For i = 1 To UBound(pd, 1)
+        If UCase$(Trim$(CStr(nz(pd(i, cStorno))))) = "DA" Then GoTo Sledeci
+        preID = Trim$(CStr(nz(pd(i, cId))))
+        n = n + 1
+        outA(n, 1) = IdIliPrazno(brojac, preID)
+        outA(n, 2) = Trim$(CStr(nz(pd(i, cBroj)))) & "/" & _
+                     Trim$(CStr(nz(pd(i, cGod))))
+        outA(n, 3) = Trim$(CStr(nz(pd(i, cTip))))
+        outA(n, 4) = pd(i, cDat)
+        ' R5 (spoljna revizija #248): NIKAD Val(CStr(...)) za kolicine --
+        ' nz radi CStr, pa 50.5 na srpskom locale-u postane "50,5" i Val
+        ' procita 50: grid/korpa pokazu jedno, writer upise drugo.
+        ' Kolona 5 = NA STANJU (proizvedeno - aktivno utovareno): to je
+        ' kolicina koju operater PRODAJE (krug 5, parcijalna prodaja).
+        naStanju = 0#
+        If IsNumeric(pd(i, cNeto)) Then naStanju = CDbl(pd(i, cNeto))
+        If utovareno.Exists(preID) Then naStanju = naStanju - CDbl(utovareno(preID))
+        If naStanju < 0 Then naStanju = 0#
+        outA(n, 5) = naStanju
+        ' Pakovanja NA STANJU, ne pun lot (operaterov nalaz posle
+        ' smoke-a: roba se smanji, a kutije/kese ne). Kapacitet
+        ' pakovanja je IZVEDEN iz samog lota (neto/broj = npr. 10 kg
+        ' po kutiji -- pakovanje je uniformno), pa je broj CELIH
+        ' pakovanja na stanju prosta deoba (modUtovar.PakovanjaZaKg).
+        outA(n, 6) = 0#
+        outA(n, 7) = 0#
+        Dim lotNetoGp As Double
+        lotNetoGp = 0#
+        If IsNumeric(pd(i, cNeto)) Then lotNetoGp = CDbl(pd(i, cNeto))
+        Dim tipKGp As String, tipSGp As String
+        tipKGp = "": tipSGp = ""
+        If cTipKGp > 0 Then tipKGp = Trim$(CStr(nz(pd(i, cTipKGp))))
+        If cTipSGp > 0 Then tipSGp = Trim$(CStr(nz(pd(i, cTipSGp))))
+        If IsNumeric(pd(i, cKut)) Then _
+            outA(n, 6) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
+                                                 CDbl(pd(i, cKut)), False, _
+                                                 "KUT", tipKGp)
+        If IsNumeric(pd(i, cKes)) Then _
+            outA(n, 7) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
+                                                 CDbl(pd(i, cKes)), False, _
+                                                 "KES", tipSGp)
+        ' Krug 5 contract: dostupna = ima robe na stanju AND imenovan
+        ' proizvod AND jednoznacan identitet. Marker na preradi vise ne
+        ' postoji -- prodaju broje utovarne stavke.
+        outA(n, 8) = (naStanju > 0.0001) _
+                     And Len(Trim$(CStr(nz(pd(i, cTip))))) > 0 _
+                     And Len(preID) > 0 And CStr(outA(n, 1)) = preID
+        outA(n, 9) = ""
+        If preFakture.Exists(preID) Then
+            If preFakture(preID).count = 1 Then
+                Dim fk As Variant
+                For Each fk In preFakture(preID).keys
+                    outA(n, 9) = CStr(fk)
+                Next fk
+            Else
+                outA(n, 9) = CStr(preFakture(preID).count) & " fakt."
+            End If
+        End If
+Sledeci:
+    Next i
+    If n = 0 Then Exit Function
+
+    ' Isecanje na n redova radi pozivalac po n koji dobija? Ne -- vrati
+    ' tacno n (obrazac IzvIseci nije ovde; ekran cita UBound).
+    Dim res() As Variant, r As Long, c As Long
+    ReDim res(1 To n, 1 To 9)
+    For r = 1 To n
+        For c = 1 To 9
+            res(r, c) = outA(r, c)
+        Next c
+    Next r
+    GetGPZaFakturisanjeForGrid = res
+    Exit Function
+
+EH:
+    LogErr "modFaktura.GetGPZaFakturisanjeForGrid"
+End Function
+
+
+' Public od kruga 5: modUtovar.CreateUtovarSaFakturom pravi GP fakturu
+' -- Private bi cross-module pao na compile (NzS klasa zamke).
+Public Function GenerateBrojFakture() As String
     On Error GoTo EH
 
     Dim data As Variant
@@ -489,18 +670,57 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     colStKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, "PrintFaktura")
     colStCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, "PrintFaktura")
 
+    ' R1 (revizija #248): GP stavka nosi PreradaID/BrojPrerade a
+    ' prijemnicka polja su joj prazna -- bez ove grane bi GP faktura na
+    ' papiru imala prazan "Broj prijemnice" i prazan "Klasa", bez imena
+    ' proizvoda. GP kolone se citaju MEKO (sveska pre nadogradnje nema
+    ' GP kolone ni GP fakture, pa je stari put netaknut).
+    Dim colStPreID As Long, colStBrPre As Long
+    colStPreID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    colStBrPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE)
+
+    ' Tip gotovog proizvoda po PreradaID -- mapa PRE petlje (S5).
+    Dim gpTip As Object: Set gpTip = CreateObject("Scripting.Dictionary")
+    gpTip.CompareMode = vbTextCompare
+    If colStPreID > 0 Then
+        Dim gpD As Variant, cGpId As Long, cGpTip As Long, g As Long
+        gpD = GetTableData(TBL_PRERADA)
+        If IsArray(gpD) Then
+            cGpId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, "PrintFaktura")
+            cGpTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, "PrintFaktura")
+            For g = 1 To UBound(gpD, 1)
+                If Not gpTip.Exists(Trim$(CStr(nz(gpD(g, cGpId))))) Then _
+                    gpTip.Add Trim$(CStr(nz(gpD(g, cGpId)))), Trim$(CStr(nz(gpD(g, cGpTip))))
+            Next g
+        End If
+    End If
+
     Dim stavke() As Variant
     ReDim stavke(1 To UBound(stavkeData, 1), 1 To 5)
     Dim outRow As Long, j As Long
     Dim kolicina As Double, cena As Double
+    Dim preID As String, gpFaktura As Boolean
     For j = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(j, colStFakID))) = fakturaID Then
             outRow = outRow + 1
             kolicina = 0: cena = 0
             If IsNumeric(stavkeData(j, colStKol)) Then kolicina = CDbl(stavkeData(j, colStKol))
             If IsNumeric(stavkeData(j, colStCena)) Then cena = CDbl(stavkeData(j, colStCena))
-            stavke(outRow, 1) = stavkeData(j, colStBrojPrij)
-            stavke(outRow, 2) = stavkeData(j, colStKlasa)
+            preID = ""
+            If colStPreID > 0 Then preID = Trim$(CStr(nz(stavkeData(j, colStPreID))))
+            If Len(preID) > 0 Then
+                ' GP: dokument = broj prerade, proizvod = TipGotovogProizvoda.
+                gpFaktura = True
+                stavke(outRow, 1) = stavkeData(j, colStBrPre)
+                If gpTip.Exists(preID) Then
+                    stavke(outRow, 2) = CStr(gpTip(preID))
+                Else
+                    stavke(outRow, 2) = ""
+                End If
+            Else
+                stavke(outRow, 1) = stavkeData(j, colStBrojPrij)
+                stavke(outRow, 2) = stavkeData(j, colStKlasa)
+            End If
             stavke(outRow, 3) = kolicina
             stavke(outRow, 4) = cena
             stavke(outRow, 5) = kolicina * cena
@@ -517,7 +737,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
     Dim ws As Worksheet
     Set ws = FillFakturaSablon(CStr(data(fRow, colFakBroj)), data(fRow, colFakDatum), _
-                               kupacNaziv, stavke, outRow, ukupno)
+                               kupacNaziv, stavke, outRow, ukupno, gpFaktura)
     If ws Is Nothing Then Exit Sub
 
     Dim mode As String

@@ -28,6 +28,13 @@ Private Const STORNO_DA As String = "Da"
 Private Const STATUS_STORNIRANO As String = "Stornirano"
 Private Const ERR_STORNO_BASE As Long = vbObjectError + 2400
 
+' TEST SEAM (R3 revizije #248, rollback dokaz): namerna greska POSLE
+' cross-table upisa u StornoFaktura -- jedini nacin da test dokaze da
+' TX snapshot pokriva SVE tabele koje storno pise (tblPrerada je GP
+' release). Tvrdo gejtovano: setter radi samo u test rezimu, flag je
+' u produkciji uvek False.
+Private mTestFailPosleRelease As Boolean
+
 ' ============================================================
 ' OTKUP
 ' ============================================================
@@ -905,6 +912,16 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
+    ' R3/krug 5 (revizija #248): GP grana oslobadja UTOVAR
+    ' (ReleaseUtovarFromFaktura pise tblUtovar) -- bez snapshota bi
+    ' pukli rollback vratio fakturu u aktivnu, a utovar bi OSTAO
+    ' slobodan za novo fakturisanje = dvostruka prodaja iste isporuke.
+    ' USLOVNO (B3): stariji workbook legitimno NEMA tblUtovar, a
+    ' storno obicne sveze fakture tamo mora da radi -- isti meki
+    ' ugovor kao GetColumnIndex kapije u ostatku GP integracije.
+    If Not GetTable(TBL_UTOVAR) Is Nothing Then
+        tx.AddTableSnapshot TBL_UTOVAR
+    End If
 
     If Not StornoFaktura(fakturaID) Then
         Err.Raise ERR_STORNO_BASE + 5, SRC, _
@@ -944,6 +961,12 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
     StornoFakturaStavkeAndReleasePrijemnice fakturaID
+    ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
+    ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
+    If mTestFailPosleRelease Then
+        Err.Raise ERR_STORNO_BASE + 52, SRC, _
+                  "TEST: namerna greska posle release-a (rollback dokaz)"
+    End If
     ResetNovacFakturaLink fakturaID
 
     StornoFaktura = True
@@ -952,6 +975,13 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
 EH:
     LogAndReraise SRC
 End Function
+
+' Pali/gasi namernu gresku (v. mTestFailPosleRelease) -- van test
+' rezima ne radi nista, pa produkcioni put ne moze da je upali.
+Public Sub StornoTestFailPosleRelease(ByVal fail As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mTestFailPosleRelease = fail
+End Sub
 
 ' ============================================================
 ' NOVAC
@@ -1676,6 +1706,95 @@ EH:
 End Function
 
 ' ============================================================
+' UTOVAR (krug 5): storno utovarne liste VRACA robu na stanje.
+' Kapija: fakturisan utovar se ne stornira -- prvo storno fakture
+' (koji ga oslobadja), pa storno utovara. Stavke se markiraju zajedno
+' sa headerom (utovar je jedan dokument).
+' ============================================================
+
+Public Function StornoUtovar_TX(ByVal utovarID As String) As Boolean
+    Const SRC As String = "StornoUtovar_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    tx.AddTableSnapshot TBL_UTOVAR_STAVKE
+
+    If Not StornoUtovar(utovarID) Then
+        Err.Raise ERR_STORNO_BASE + 54, SRC, _
+                  "StornoUtovar nije uspeo. UtovarID=" & utovarID
+    End If
+
+    tx.CommitTx
+
+    StornoUtovar_TX = True
+    MonitorStornoSuccess SRC, "Utovar", utovarID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Utovar", utovarID, tx
+    StornoUtovar_TX = False
+End Function
+
+Public Function StornoUtovar(ByVal utovarID As String) As Boolean
+    Const SRC As String = "StornoUtovar"
+
+    On Error GoTo EH
+
+    Dim rowUt As Long
+    rowUt = RequireStornoAllowed(TBL_UTOVAR, utovarID, COL_UT_ID, SRC)
+
+    Dim d As Variant
+    d = GetTableData(TBL_UTOVAR)
+    Dim cFakt As Long, cFid As Long
+    cFakt = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)
+    cFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+    If UCase$(Trim$(CStr(nz(d(rowUt, cFakt))))) = "DA" _
+       Or Len(Trim$(CStr(nz(d(rowUt, cFid))))) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 55, SRC, _
+                  "Utovar je fakturisan -- prvo storniraj fakturu. UtovarID=" & utovarID
+    End If
+
+    ' Revizija #10 B2: header marker nije dovoljan -- AKTIVNA faktura-
+    ' stavka koja tvrdi ovaj utovar znaci da finansijski dokument i
+    ' dalje prodaje bas ovu robu; storno bi je vratio na stanje =
+    ' dupla zaliha. Isto kanonsko pravilo kao CreateFakturaIzUtovara.
+    If modUtovar.AktivnihFstZaUtovar(utovarID) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 56, SRC, _
+                  "Aktivna faktura-stavka tvrdi ovaj utovar -- podaci su " & _
+                  "neusaglaseni, storno utovara je blokiran. UtovarID=" & utovarID
+    End If
+
+    MarkRowStornirano TBL_UTOVAR, rowUt, SRC
+
+    Dim s As Variant, r As Long
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If Not IsEmpty(s) Then
+        Dim sUt As Long, sSt As Long
+        sUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+        sSt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_STORNIRANO, SRC)
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(s(r, sUt))) = Trim$(utovarID) _
+               And Not IsStorniranoValue(s(r, sSt)) Then
+                MarkRowStornirano TBL_UTOVAR_STAVKE, r, SRC
+            End If
+        Next r
+    End If
+
+    StornoUtovar = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' ============================================================
 ' PRERADA
 ' ============================================================
 
@@ -1717,6 +1836,16 @@ Public Function StornoPrerada(ByVal preradaID As String) As Boolean
 
     Dim rowPre As Long
     rowPre = RequireStornoAllowed(TBL_PRERADA, preradaID, COL_PRE_ID, SRC)
+
+    ' Krug 5: prodaja zivi na UTOVARNOJ LISTI, ne na markeru prerade.
+    ' Prerada sa aktivnim utovarenim stavkama se NE stornira (roba je
+    ' fizicki isporucena) -- prvo storno fakture pa storno utovara,
+    ' tek onda prerada. Fail-closed umesto orphan kaskade.
+    If UtovarenoKgPrerade(preradaID) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 53, SRC, _
+                  "Prerada ima aktivne utovarene stavke -- prvo storniraj " & _
+                  "utovar (i njegovu fakturu). PreradaID=" & preradaID
+    End If
 
     MarkRowStornirano TBL_PRERADA, rowPre, SRC
 
@@ -1846,6 +1975,19 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
 
     Dim i As Long
 
+    ' GP grana (krug 5): stavka gotove robe nosi UTOVAR umesto
+    ' prijemnice -- storno fakture OSLOBADJA utovar (reset markera),
+    ' roba ostaje utovarena dok se i utovar ne stornira zasebno.
+    ' GetColumnIndex, ne Require: na svesci PRE EnsureSchema nadogradnje
+    ' kolona ne postoji, a storno svezih faktura tamo mora da radi.
+    Dim colUtID As Long
+    colUtID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    ' Release JEDNOM po utovaru (revizija #11 P1): faktura sa vise
+    ' stavki istog utovara bi drugim/trecim pozivom pravila lazne
+    ' "tvrdi drugu fakturu" warninge na potpuno validnom stornu.
+    Dim relUt As Object: Set relUt = CreateObject("Scripting.Dictionary")
+    relUt.CompareMode = vbTextCompare
+
     For i = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
             MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
@@ -1856,8 +1998,59 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
             If Len(prijID) > 0 Then
                 ReleasePrijemnicaFromFaktura prijID, fakturaID
             End If
+
+            If colUtID > 0 Then
+                Dim utID As String
+                utID = Trim$(CStr(nz(stavkeData(i, colUtID))))
+                If Len(utID) > 0 Then
+                    If Not relUt.Exists(utID) Then
+                        relUt.Add utID, True
+                        ReleaseUtovarFromFaktura utID, fakturaID
+                    End If
+                End If
+            End If
         End If
     Next i
+End Sub
+
+' GP par ReleasePrijemnicaFromFaktura (krug 5): storno GP fakture
+' oslobadja UTOVAR -- fail-closed na dupli ID, isti obrazac.
+Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
+                                     ByVal fakturaID As String)
+    Const SRC As String = "ReleaseUtovarFromFaktura"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, utovarID)
+
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 51, SRC, _
+                  "Dupla UtovarID vrednost: " & utovarID
+    End If
+
+    Dim rowUt As Long
+    rowUt = CLng(rows(1))
+
+    ' Revizija #10 B3: utovar se oslobadja SAMO ako tvrdi bas fakturu
+    ' koja se stornira. Korumpirana stavka tudje fakture ne sme da
+    ' "oslobodi" utovar validne fakture -- resetom markera bi unistila
+    ' vezu FAK-B iako se stornira FAK-A. Neusaglasenost se NE popravlja
+    ' ovde (storno tekuce fakture mora da prodje) -- loguje se, a lanac
+    ' je prijavljuje kao "faktura neusaglasena".
+    Dim d As Variant, tvrdi As String
+    d = GetTableData(TBL_UTOVAR)
+    tvrdi = Trim$(CStr(nz(d(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)))))
+    If StrComp(tvrdi, Trim$(fakturaID), vbTextCompare) <> 0 Then
+        LogWarn SRC, "Utovar " & utovarID & " tvrdi fakturu '" & tvrdi & _
+                     "', ne '" & Trim$(fakturaID) & _
+                     "' -- marker se NE dira (neusaglasena stavka)."
+        Exit Sub
+    End If
+
+    RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURISANO, "", SRC
+    RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURA_ID, "", SRC
 End Sub
 
 Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
@@ -1900,6 +2093,7 @@ Private Sub MarkFakturaOrphaned(ByVal fakturaID As String, _
     RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_OSIROCENO_OD, _
                       prijemnicaID, SRC
 End Sub
+
 
 Private Sub MarkFakturaStavkeOrphaned(ByVal fakturaID As String, _
                                       ByVal prijemnicaID As String)

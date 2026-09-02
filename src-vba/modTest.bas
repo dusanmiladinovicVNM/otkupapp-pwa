@@ -401,9 +401,16 @@ Public Sub RunAllTests()
     RunOne 157
     RunOne 158
     RunOne 159
+    ' 160-161 (GP grana) su takodje cista citanja (korpa je in-memory).
+    RunOne 160
+    RunOne 161
     RunOne 124
     RunOne 125
     RunOne 126
+    ' 162 MUTIRA (CreateFakturaGP_TX + StornoFaktura_TX nad potrosnim
+    ' vozilom PRE-GP-W1) -- ide POSLE svih citanja, poslednji.
+    RunOne 162
+    RunOne 163
 
     SetTestMode prevMode
     WriteResultFile
@@ -597,6 +604,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 157: TestName = "T_Sled_MeteSledljivosti"
         Case 158: TestName = "T_Sled_DokumentiPonuda"
         Case 159: TestName = "T_Ljuska_PopupTekstTraka"
+        Case 160: TestName = "T_Sled_GpLanacIStanja"
+        Case 161: TestName = "T_Fak_GpListaIKorpa"
+        Case 162: TestName = "T_FakturaGP_WriterKapijeIStorno"
+        Case 163: TestName = "T_UtovarB_SledIStornoKapije"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -764,6 +775,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 157: T_Sled_MeteSledljivosti
         Case 158: T_Sled_DokumentiPonuda
         Case 159: T_Ljuska_PopupTekstTraka
+        Case 160: T_Sled_GpLanacIStanja
+        Case 161: T_Fak_GpListaIKorpa
+        Case 162: T_FakturaGP_WriterKapijeIStorno
+        Case 163: T_UtovarB_SledIStornoKapije
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6253,8 +6268,15 @@ Private Sub T_Fak_UgovorEkrana()
     liste = modScrFakture.Scr_Liste()
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-    AssertEq UBound(liste) + 1, 3, _
-             "tri liste, i kad SEF nije podesen"
+    AssertEq UBound(liste) + 1, 5, _
+             "pet lista (krug 5: + Utovari), i kad SEF nije podesen"
+    ' GP lista postoji i drzi drugo mesto (odmah uz ZAFAKT -- obe su
+    ' "roba za fakturisanje", pa stoje jedna uz drugu); utovari odmah
+    ' iza (tok robe: roba -> isporuka -> faktura).
+    AssertEq Split(CStr(liste(1)), "|")(0), "GOTOVA", _
+             "druga lista je GOTOVA (gotova roba)"
+    AssertEq Split(CStr(liste(2)), "|")(0), "UTOVARI", _
+             "treca lista je UTOVARI (fizicke isporuke)"
     ' Ekran koji stoji na SEF listi tu i ostaje -- nema uslovnog vracanja.
     modScrFakture.Scr_FkListaTestSet "SEF"
     AssertEq modScrFakture.Scr_Lista(), "SEF", _
@@ -6263,8 +6285,8 @@ Private Sub T_Fak_UgovorEkrana()
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|ZAFAKT|FAKTURE|SEF", _
-             "redosled i kljucevi lista -- prijemnice su prve, one su posao"
+    AssertEq kljucevi, "|ZAFAKT|GOTOVA|UTOVARI|FAKTURE|SEF", _
+             "redosled i kljucevi lista -- roba za fakturisanje prva (PRJ pa GP)"
 
     ' RADNJE PO LISTI. Citaju se po KLJUCU, ne kroz Scr_Lista: Scr_Lista je
     ' gate-ovana SEF konfiguracijom, a fixture je donor-zavisan (tblConfig se
@@ -6677,6 +6699,673 @@ Private Sub T_Fak_GreskaNePreziviLogErr()
              "opis greske NIJE prazan -- Err je citan PRE LogErr-a"
     AssertEq (InStr(d3, "FAK-NE-POSTOJI") > 0), True, _
              "opis imenuje fakturu koje nema, ne neku drugu gresku"
+End Sub
+
+' 161. GP LISTA I KORPA (krug 5): read-model gotove robe -- kolona 5
+' je NA STANJU (proizvedeno - aktivno utovareno; parcijalna prodaja je
+' legalna), dostupnost = ima robe + imenovan proizvod + jednoznacan
+' identitet; korpa NE mesa vrste robe i GP stavka bez cene ne ulazi.
+Private Sub T_Fak_GpListaIKorpa()
+    Dim gp As Variant, i As Long
+    Dim rW1 As Long, rG As Long, imaX As Boolean
+    Dim rWL As Long, rDup As Long, rWT As Long, rSB As Long
+    Dim rP As Long, rOV As Long
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    AssertEq IsArray(gp), True, "GP read-model nad fixture-om postoji"
+    For i = 1 To UBound(gp, 1)
+        Select Case CStr(gp(i, 1))
+            Case "PRE-GP-W1": rW1 = i
+            Case "PRE-SLED-G": rG = i
+            Case "PRE-GP-X": imaX = True
+            Case "PRE-GP-WL": rWL = i
+            Case "PRE-GP-WT": rWT = i
+            Case "PRE-GP-SB": rSB = i
+            Case "PRE-SLED-P": rP = i
+            Case "PRE-GP-OV": rOV = i
+        End Select
+        If CStr(gp(i, 2)) = "131/2026" Then rDup = i
+    Next i
+    AssertEq (rW1 > 0), True, "neutovarena prerada je u listi"
+    AssertEq imaX, False, "stornirana prerada NIJE u listi"
+    AssertEq (rG > 0), True, "prodata prerada ostaje vidljiva (istorija)"
+    AssertEq CBool(gp(rW1, 8)), True, "neutovarena je dostupna"
+    AssertEq CStr(gp(rW1, 9)), "", "neutovarena nema broj fakture"
+    AssertEq CBool(gp(rG, 8)), False, "cela prodata NIJE dostupna (0 na stanju)"
+    AssertEq CStr(gp(rG, 9)), "9/2026", "prodata nosi broj fakture SVOG utovara"
+    AssertEq CStr(gp(rW1, 2)), "71/2026", "prikazni broj je broj/godina"
+    ' R5 (revizija #248): kolicina je DECIMALNA -- Val("50,5") na
+    ' srpskom locale-u cita 50, pa bi grid/korpa lagali writer.
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(50.5, "0.00"), _
+             "decimalan izlaz kg prezivi read-model (Val mina)"
+    ' Krug 5: PARCIJALNO prodata prerada je i dalje dostupna sa
+    ' OSTATKOM na stanju -- kolona 5 je stanje, ne proizvodnja.
+    AssertEq (rP > 0), True, "vozilo: delimicno prodata je u listi"
+    AssertEq Format$(CDbl(gp(rP, 5)), "0.00"), Format$(70#, "0.00"), _
+             "na stanju = proizvedeno - utovareno (120 - 50)"
+    AssertEq CBool(gp(rP, 8)), True, "delimicno prodata je dostupna za ostatak"
+    AssertEq CStr(gp(rP, 9)), "12/2026", "delimicno prodata nosi broj fakture"
+    ' Prekomerno utovarena: stanje 0 -> nedostupna (i prijavljena na
+    ' NEPOTPUNIMA -- test 160).
+    AssertEq CBool(gp(rOV, 8)), False, "prekomerno utovarena nije dostupna"
+    ' Krug 4 P1: bez imena proizvoda nije dostupna.
+    AssertEq CBool(gp(rWT, 8)), False, "prazan tip proizvoda -> nije dostupna"
+    ' Siroce FST stavka (SB) NE trosi stanje -- roba nije utovarena,
+    ' stanje broje SAMO utovarne stavke; neusaglasenost prijavljuje
+    ' NEPOTPUNI lista (test 160), a prodaja ostatka je legalna.
+    AssertEq CBool(gp(rSB, 8)), True, "siroce-stavka ne trosi stanje (nije isporucena)"
+    ' P1: dupli PreradaID (korupcija) prazni identitet.
+    AssertEq (rDup > 0), True, "vozilo: dupli id red je u listi"
+    AssertEq CStr(gp(rDup, 1)), "", "dupli PreradaID prazni identitet"
+
+    ' --- LISTA UTOVARI (krug 5b): pregled fizickih isporuka -- broj,
+    ' kupac, roba, kg i faktura po utovaru; UI vidljivost dokumenta.
+    Dim uv As Variant, rUtG As Long, rUtOV As Long
+    uv = modUtovar.GetUtovariForGrid()
+    AssertEq IsArray(uv), True, "utovari read-model postoji"
+    For i = 1 To UBound(uv, 1)
+        Select Case CStr(uv(i, 1))
+            Case "UT-SLED-G": rUtG = i
+            Case "UT-GP-OV": rUtOV = i
+        End Select
+    Next i
+    AssertEq (rUtG > 0), True, "utovar G lanca je u listi"
+    AssertEq CStr(uv(rUtG, 5)), "51/2026", "utovar nosi robu (broj prerade)"
+    AssertEq Format$(CDbl(uv(rUtG, 6)), "0.00"), Format$(64#, "0.00"), _
+             "utovar nosi ukupne kg"
+    AssertEq CStr(uv(rUtG, 7)), "9/2026", "fakturisan utovar nosi broj fakture"
+    AssertEq (rUtOV > 0), True, "nefakturisan utovar je u listi"
+    AssertEq CStr(uv(rUtOV, 7)), "", "nefakturisan utovar nema broj fakture"
+    ' Krug 5d: prevoz je VIDLJIV u listi (prevoznik + registracija).
+    AssertEq CStr(uv(rUtG, 8)), "Test prevoz DOO", "lista nosi prevoznika"
+    AssertEq CStr(uv(rUtG, 9)), "BG-123-AB", "lista nosi registraciju"
+
+    ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
+    modScrFakture.Scr_FkKorpaTestReset
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 0, True), _
+             Poruka("OTKUI_ERR_FK_CENA_GP"), "GP bez cene ne ulazi u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "odbijena stavka ne menja korpu"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 0, False), _
+             Poruka("OTKUI_ERR_FK_NIJE_DOSTUPNA"), "nedostupna GP stavka ne ulazi"
+
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True), _
+             "", "dostupna GP stavka sa cenom ulazi"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "korpa ima jednu GP stavku"
+    AssertEq Format$(modScrFakture.FkZbirKorpe(), "0.00"), Format$(50.5 * 120#, "0.00"), _
+             "vrednost GP stavke = kg * uneta cena"
+    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True)) > 0), _
+             True, "ista prerada ne moze dvaput u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
+             Poruka("OTKUI_ERR_FK_MESANJE"), "prijemnica ne ulazi u GP korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "odbijeno mesanje ne menja korpu"
+
+    AssertEq modScrFakture.Scr_FkUkloniStavkuGPTest("PRE-GP-W1"), True, _
+             "GP stavka se uklanja po identitetu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "korpa je prazna"
+
+    ' Obrnut smer: PRJ korpa odbija GP stavku istom porukom.
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
+             "", "preduslov: prijemnica je usla u praznu korpu"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True), _
+             Poruka("OTKUI_ERR_FK_MESANJE"), "GP stavka ne ulazi u PRJ korpu"
+    modScrFakture.Scr_FkKorpaTestReset
+End Sub
+
+' 162. UTOVAR + GP FAKTURA WRITER I STORNO SIMETRIJA (MUTIRAJUCI --
+' ide POSLEDNJI u RunAll). Krug 5 grain: writer pravi UTOVAR + fakturu
+' u jednoj TX (1 utovar = 1 faktura); kolicina <= na stanju
+' (parcijalna prodaja legalna); prerada se NE zakljucava markerom.
+' Storno: faktura oslobadja utovar; utovar (nefakturisan) vraca robu
+' na stanje; prerada sa aktivnim utovarom se ne stornira.
+Private Sub T_FakturaGP_WriterKapijeIStorno()
+    Dim s As Collection, fid As String
+
+    ' --- Kapije (svaka na svom vozilu; TX vraca "" posle rollback-a).
+    Set s = New Collection
+    s.Add Array("PRE-GP-X", 10#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "stornirana prerada se ne prodaje"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W0", 1#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "prerada bez izlaza (0 kg na stanju) se ne prodaje"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 10#, 0#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "cena 0 ne prolazi (cena je obavezan unos operatera)"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 0#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "kolicina 0 ne prolazi"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 60#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "kolicina preko stanja (60 > 50.5) ne prolazi"
+    Set s = New Collection
+    s.Add Array("PRE-NEMA-OVAKVE", 10#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "nepostojeca prerada se ne prodaje"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 10#, 100#)
+    s.Add Array("PRE-GP-W1", 10#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "dupla prerada u istoj listi ne prolazi"
+    Set s = New Collection
+    s.Add Array("PRE-GP-WT", 10#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "prazan TipGotovogProizvoda se ne prodaje"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 10#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX("KUP-NEMA-OVAKVOG", s), "", _
+             "nepostojeci kupac se ne fakturise"
+    AssertEq Format$(modUtovar.UtovarenoKgPrerade("PRE-GP-W1"), "0.00"), _
+             Format$(0#, "0.00"), _
+             "posle odbijenih pokusaja nista nije utovareno (rollback)"
+
+    ' --- Uspeh 1 (PARCIJALNO): 20 od 50.5 kg po ceni 120.
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 20#, 120#)
+    fid = modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s)
+    AssertEq (Len(fid) > 0), True, "parcijalna GP prodaja je izradjena"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, _
+             COL_FAK_IZNOS), 0)), "0.00"), Format$(20 * 120#, "0.00"), _
+             "iznos fakture = UTOVARENA kolicina x cena"
+
+    ' Stavka PO IMENU: PreradaID + BrojPrerade + UtovarID puni.
+    Dim fs As Variant, i As Long, rSt As Long
+    Dim cFsFak As Long, cFsPre As Long, cFsBrPre As Long, cFsPrj As Long
+    Dim cFsUt As Long, cFsKol As Long
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    cFsFak = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
+    cFsPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    cFsBrPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE)
+    cFsPrj = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID)
+    cFsUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    cFsKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
+    For i = 1 To UBound(fs, 1)
+        If Trim$(CStr(nz(fs(i, cFsFak)))) = fid Then rSt = i
+    Next i
+    AssertEq (rSt > 0), True, "faktura ima stavku"
+    AssertEq Trim$(CStr(nz(fs(rSt, cFsPre)))), "PRE-GP-W1", _
+             "stavka nosi PreradaID (izvor robe)"
+    AssertEq Trim$(CStr(nz(fs(rSt, cFsBrPre)))), "71/2026", _
+             "stavka nosi broj prerade"
+    AssertEq (Len(Trim$(CStr(nz(fs(rSt, cFsUt))))) > 0), True, _
+             "stavka nosi UtovarID (canonical prodajna veza)"
+    AssertEq Trim$(CStr(nz(fs(rSt, cFsPrj)))), "", _
+             "GP stavka NEMA prijemnicu (druga vrsta robe)"
+    AssertEq Format$(CDbl(nz(fs(rSt, cFsKol), 0)), "0.00"), _
+             Format$(20#, "0.00"), "stavka nosi UTOVARENU kolicinu"
+
+    Dim utID As String
+    utID = Trim$(CStr(nz(fs(rSt, cFsUt))))
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_FAKTURISANO)))), "Da", "utovar je markiran svojom fakturom"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_FAKTURA_ID)))), fid, "utovar pamti SVOJU fakturu"
+
+    ' --- R2: SEF DTO -- naziv, izvor i DATUM UTOVARA kao isporuka.
+    Dim dto As clsSEFInvoiceSnapshot, ln As clsSEFLine
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid)
+    AssertEq dto.lines.count, 1, "GP faktura ima jednu SEF liniju"
+    Set ln = dto.lines(1)
+    AssertEq ln.preradaID, "PRE-GP-W1", "SEF linija nosi PreradaID (source identity)"
+    AssertEq ln.prijemnicaID, "", "SEF GP linija nema prijemnicu"
+    AssertEq (InStr(ln.naziv, "Rinfuz") > 0), True, "SEF naziv nosi tip gotovog proizvoda"
+    AssertEq (InStr(ln.naziv, "71/2026") > 0), True, "SEF naziv nosi broj prerade"
+    AssertEq Format$(ln.kolicina, "0.00"), Format$(20#, "0.00"), _
+             "SEF kolicina je utovarena kolicina"
+    AssertEq Format$(dto.DeliveryDate, "yyyy-mm-dd"), Format$(Date, "yyyy-mm-dd"), _
+             "datum isporuke GP = DATUM UTOVARA (ne datum prerade)"
+    Dim xml As String
+    xml = modSEFMapper.SerializeUBLInvoice(dto)
+    AssertEq (InStr(xml, "<cbc:ID>PRE-GP-W1</cbc:ID>") > 0), True, _
+             "UBL SellersItemIdentification = PreradaID (stabilni GP ID)"
+    AssertEq (InStr(xml, "Rinfuz") > 0), True, "UBL nosi naziv proizvoda"
+
+    ' --- R1: stampa GP fakture -- proizvod i broj prerade, ne prazna
+    ' prijemnicka polja. FAKTURA_PRINT_MODE=OFF u fixture-u: sablon se
+    ' puni, izlaza nema.
+    modFaktura.PrintFaktura fid
+    Dim wsF As Worksheet, scRow As Long
+    Set wsF = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    scRow = wsF.Range("FakStavkaStart").row
+    AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prerade", _
+             "GP heder: dokument je prerada"
+    AssertEq CStr(wsF.cells(scRow - 1, 3).value), "Proizvod", _
+             "GP heder: proizvod umesto klase"
+    AssertEq CStr(wsF.cells(scRow, 2).value), "71/2026", _
+             "GP stavka nosi broj prerade"
+    AssertEq CStr(wsF.cells(scRow, 3).value), "Rinfuz", _
+             "GP stavka nosi ime proizvoda"
+    ' Sablon je PERZISTENTAN: sveza stampa mora da VRATI svoje hedere.
+    Dim svezeStavke(1 To 1, 1 To 5) As Variant
+    svezeStavke(1, 1) = "1/150326": svezeStavke(1, 2) = "I"
+    svezeStavke(1, 3) = 1#: svezeStavke(1, 4) = 1#: svezeStavke(1, 5) = 1#
+    modPrint.FillFakturaSablon "T-GP-HDR", DateSerial(2026, 3, 15), "K", _
+                               svezeStavke, 1, 1#
+    AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prijemnice", _
+             "sveza stampa vraca prijemnicki heder"
+
+    ' --- Krug 5d: PODACI PREVOZA -- upis nad utovarom (prazno = ne
+    ' diraj, "-" = obrisi) pa PROFESIONALAN obrazac.
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "Hladni transport DOO", _
+             "Marko Markovic", "NS-555-CC", "PL-9001", "-18 C", _
+             "Novi Sad, rampa 3", "PO-1234", "pazljivo"), True, _
+             "podaci prevoza se upisuju"
+    ' Prazno polje NE dira postojecu vrednost; "-" brise.
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "", "", "", "-", _
+             "", "", "", ""), True, "dopuna prevoza prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_PREVOZNIK)))), "Hladni transport DOO", _
+             "prazno polje ne dira postojecu vrednost"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_PLOMBA)))), "", "crtica brise polje"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "", "", "", "PL-9002", _
+             "", "", "", ""), True, "nova plomba se upisuje"
+
+    ' --- Krug 5b/5d: STAMPA UTOVARNE LISTE -- pun obrazac
+    ' (UTOVAR_PRINT_MODE=OFF u fixture-u: sablon se puni, izlaza nema).
+    modUtovar.PrintUtovar utID
+    Dim wsU As Worksheet, usRow As Long
+    Set wsU = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
+    usRow = wsU.Range("UtStavkaStart").row
+    AssertEq (Len(CStr(wsU.Range("UtBroj").value)) > 0), True, _
+             "utovarna lista nosi svoj broj"
+    AssertEq CStr(wsU.Range("UtKupac").value), "Test kupac 2", _
+             "utovarna lista nosi kupca"
+    AssertEq (Len(CStr(wsU.Range("UtVreme").value)) > 0), True, _
+             "obrazac nosi vreme utovara"
+    AssertEq (Len(CStr(wsU.Range("UtFaktura").value)) > 0), True, _
+             "obrazac nosi broj fakture"
+    AssertEq CStr(wsU.Range("UtMestoIst").value), "Novi Sad, rampa 3", _
+             "obrazac nosi mesto istovara"
+    AssertEq CStr(wsU.Range("UtPoBroj").value), "PO-1234", _
+             "obrazac nosi PO broj kupca"
+    AssertEq CStr(wsU.Range("UtPrevoznik").value), "Hladni transport DOO", _
+             "obrazac nosi prevoznika"
+    AssertEq CStr(wsU.Range("UtRegistracija").value), "NS-555-CC", _
+             "obrazac nosi registraciju"
+    AssertEq CStr(wsU.Range("UtPlomba").value), "PL-9002", _
+             "obrazac nosi plombu"
+    AssertEq CStr(wsU.Range("UtTempRezim").value), "-18 C", _
+             "obrazac nosi temperaturni rezim"
+    AssertEq CStr(wsU.cells(usRow, 2).value), "71/2026", _
+             "stavka liste nosi broj prerade"
+    AssertEq CStr(wsU.cells(usRow, 3).value), "Rinfuz", _
+             "stavka liste nosi proizvod"
+    ' Rok trajanja = datum proizvodnje + N meseci iz Podesavanja (24).
+    AssertEq Format$(CDate(wsU.cells(usRow, 4).value), "yyyy-mm-dd"), _
+             "2026-03-15", "stavka nosi datum proizvodnje"
+    AssertEq Format$(CDate(wsU.cells(usRow, 5).value), "yyyy-mm-dd"), _
+             "2028-03-15", "rok trajanja = proizvodnja + 24 meseca"
+    AssertEq CStr(wsU.cells(usRow, 7).value), "deo", _
+             "parcijalni utovar je oznacen kao deo palete"
+    AssertEq Format$(CDbl(wsU.cells(usRow, 8).value), "0.00"), _
+             Format$(20#, "0.00"), "stavka liste nosi utovarene NETO kg"
+    ' Revizija #11 P1: parcijala NEMA izmeren bruto -- procena se ne
+    ' stampa (transportni dokument radije prazan nego priblizan).
+    AssertEq Trim$(CStr(wsU.cells(usRow, 9).value)), "", _
+             "parcijala bez izmerenog bruta ne stampa procenu"
+
+    ' --- Read-model: parcijalno prodata je i dalje dostupna (30.5).
+    Dim gp As Variant, rW1 As Long
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(30.5, "0.00"), _
+             "na stanju posle parcijalne prodaje = 50.5 - 20"
+    AssertEq CBool(gp(rW1, 8)), True, "ostatak je dostupan za novu prodaju"
+
+    ' --- Uspeh 2: OSTATAK (30.5 kg) drugom cenom -> stanje 0.
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 30.5, 130#)
+    Dim fid2 As String
+    fid2 = modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s)
+    AssertEq (Len(fid2) > 0), True, "prodaja ostatka je izradjena"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq CBool(gp(rW1, 8)), False, "rasprodata prerada nije dostupna"
+    AssertEq CStr(gp(rW1, 9)), "2 fakt.", _
+             "dve fakture po preradi su LEGALNE (parcijalna prodaja)"
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 1#, 100#)
+    AssertEq modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s), "", _
+             "preko rasprodatog stanja se ne prodaje"
+
+    ' --- Prerada sa aktivnim utovarom se NE stornira (fail-closed).
+    AssertEq modStorno.StornoPrerada_TX("PRE-GP-W1"), False, _
+             "prerada sa aktivnim utovarom se ne stornira"
+
+    ' --- R3: rollback je ATOMARAN preko SVIH tabela koje storno pise.
+    modStorno.StornoTestFailPosleRelease True
+    AssertEq modStorno.StornoFaktura_TX(fid2), False, _
+             "namerna greska posle release-a obara storno"
+    modStorno.StornoTestFailPosleRelease False
+    Dim utID2 As String
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    rSt = 0
+    For i = 1 To UBound(fs, 1)
+        If Trim$(CStr(nz(fs(i, cFsFak)))) = fid2 Then rSt = i
+    Next i
+    utID2 = Trim$(CStr(nz(fs(rSt, cFsUt))))
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURISANO)))), "Da", _
+             "rollback VRACA marker utovara (bez snapshota = dvostruka prodaja)"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid2, _
+             COL_STORNIRANO)))), "", "rollback vraca fakturu u aktivnu"
+
+    ' --- Pravi storno: faktura -> utovar oslobodjen ali roba JOS
+    ' utovarena; storno UTOVARA vraca robu na stanje.
+    AssertEq modStorno.StornoFaktura_TX(fid2), True, "pravi storno fakture prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURISANO)))), "", "storno fakture oslobadja utovar"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq CBool(gp(rW1, 8)), False, _
+             "roba je JOS utovarena -- storno fakture ne vraca stanje"
+
+    ' --- Revizija #7 B2: "nefakturisan" utovar sa AKTIVNOM faktura-
+    ' stavkom je kontradikcija -- re-fakturisanje preko nje bi bilo
+    ' dupla prodaja. Rogue aktivna FST pa pokusaj.
+    Dim rowRog As Long
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-1", fid, "", 30.5, 100#, "", "", "", ""))
+    AssertEq (rowRog > 0), True, "rogue FST upisana"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-GP-W1", "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      utID2, "T162"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX(utID2), "", _
+             "nefakturisan utovar sa aktivnom FST se ne fakturise ponovo"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T162"
+
+    ' --- Revizija #6/#7 B1 lifecycle: nova faktura iz ISTOG utovara --
+    ' roba je fizicki izasla JEDNOM, ne pravi se nov utovar.
+    Dim fid3 As String, datPre As String
+    datPre = Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd")
+    fid3 = modUtovar.CreateFakturaIzUtovara_TX(utID2)
+    AssertEq (Len(fid3) > 0), True, "ponovna faktura iz istog utovara prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURISANO)))), "Da", "utovar je opet markiran fakturisanim"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURA_ID)))), fid3, "utovar pamti NOVU fakturu"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), datPre, _
+             "datum utovara ostaje originalan posle ponovne fakture"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(0#, "0.00"), _
+             "ponovna faktura NE dira stanje (roba izasla jednom)"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX(utID2), "", _
+             "fakturisan utovar se ne fakturise ponovo"
+
+    ' --- Revizija #7 B3: SEF kolicinski dokaz 1:1. Korupcija drzi
+    ' UKUPAN IZNOS istim (25 kg x 122 = 30.5 kg x 100 = 3050) da
+    ' kontrola totala ne bi bila druga brana -- kolicinska kapija mora
+    ' da bude JEDINA koja ovo obara (pouka 4: vozilo bez druge odbrane).
+    Dim fs3 As Variant, rowF3 As Long
+    fs3 = GetTableData(TBL_FAKTURA_STAVKE)
+    rowF3 = 0
+    For i = 1 To UBound(fs3, 1)
+        If Trim$(CStr(nz(fs3(i, GetColumnIndex(TBL_FAKTURA_STAVKE, _
+           COL_FS_FAKTURA_ID))))) = fid3 Then rowF3 = i
+    Next i
+    AssertEq (rowF3 > 0), True, "stavka ponovljene fakture postoji"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_KOLICINA, 25, "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_CENA, 122, "T162"
+    Dim sefErr As Long
+    sefErr = 0
+    On Error Resume Next
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid3)
+    sefErr = Err.Number
+    On Error GoTo 0
+    AssertEq (sefErr <> 0), True, _
+             "SEF blokira GP fakturu cija kolicina ne odgovara utovaru"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_KOLICINA, 30.5, "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_CENA, 100, "T162"
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid3)
+    AssertEq (Not dto Is Nothing), True, _
+             "sa ispravnom kolicinom SEF DTO opet prolazi"
+
+    ' --- Revizija #7 B1: datum utovara je PORESKI podatak -- posle
+    ' stvarnog SEF slanja se zakljucava; transportni tekst ostaje slobodan.
+    Dim rowFk3 As Long
+    rowFk3 = 0
+    Dim fkAll As Variant
+    fkAll = GetTableData(TBL_FAKTURE)
+    For i = 1 To UBound(fkAll, 1)
+        If Trim$(CStr(nz(fkAll(i, GetColumnIndex(TBL_FAKTURE, COL_FAK_ID))))) = fid3 Then rowFk3 = i
+    Next i
+    RequireUpdateCell TBL_FAKTURE, rowFk3, "SEFWorkflowState", WF_SEF_SENT, "T162"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "", "", _
+             "", "", "", CStr(DateSerial(2026, 6, 1)), ""), False, _
+             "datum utovara je zakljucan posle SEF slanja"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "PL-LOCK", _
+             "", "", "", "", "", ""), True, _
+             "transportni tekst je editabilan i posle SEF slanja"
+    RequireUpdateCell TBL_FAKTURE, rowFk3, "SEFWorkflowState", _
+                      WF_LOCAL_FINALIZED, "T162"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "", "", _
+             "", "", "", CStr(DateSerial(2026, 6, 2)), ""), True, _
+             "datum je editabilan dok faktura nije stvarno poslata"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), "2026-06-02", _
+             "korigovan datum utovara je upisan"
+
+    ' --- Revizija #8: KOREKCIJA CENE bez storna fizickog utovara --
+    ' isti aktivni utovar, nova faktura sa novom cenom (stara 100).
+    AssertEq modStorno.StornoFaktura_TX(fid3), True, _
+             "storno ponovljene fakture prolazi"
+    Dim fid4 As String
+    fid4 = modUtovar.CreateFakturaIzUtovara_TX(utID2, 150)
+    AssertEq (Len(fid4) > 0), True, _
+             "korekcija cene: nova faktura iz ISTOG utovara"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid4, _
+             COL_FAK_IZNOS), 0)), "0.00"), Format$(30.5 * 150, "0.00"), _
+             "iznos korigovane fakture = kolicina x NOVA cena"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), "2026-06-02", _
+             "korekcija cene ne dira datum utovara"
+
+    ' Ocisti: storno korigovane fakture pa originalni tok (storno utovara).
+    AssertEq modStorno.StornoFaktura_TX(fid4), True, _
+             "storno korigovane fakture prolazi"
+    AssertEq modStorno.StornoUtovar_TX(utID2), True, "storno utovara prolazi"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(30.5, "0.00"), _
+             "storno utovara vraca robu na stanje"
+    AssertEq CBool(gp(rW1, 8)), True, "prerada je opet dostupna"
+    ' Stavke storniranog utovara su i SAME stornirane -- aktivna stavka
+    ' na mrtvom utovaru bi bila vecna "neusaglasena veza" na NEPOTPUNIMA
+    ' (stanje vraca vec header, ali higijena stavki ima svoju tvrdnju).
+    Dim us2 As Variant, cUsUt2 As Long, cUsSt2 As Long
+    Dim aktivnihNaMrtvom As Long
+    us2 = GetTableData(TBL_UTOVAR_STAVKE)
+    cUsUt2 = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID)
+    cUsSt2 = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_STORNIRANO)
+    For i = 1 To UBound(us2, 1)
+        If Trim$(CStr(nz(us2(i, cUsUt2)))) = utID2 Then
+            If UCase$(Trim$(CStr(nz(us2(i, cUsSt2))))) <> "DA" Then _
+                aktivnihNaMrtvom = aktivnihNaMrtvom + 1
+        End If
+    Next i
+    AssertEq aktivnihNaMrtvom, 0, "stavke storniranog utovara su stornirane"
+
+    ' Fakturisan utovar se ne stornira direktno (prvo faktura).
+    AssertEq modStorno.StornoUtovar_TX(utID), False, _
+             "fakturisan utovar se ne stornira pre storna fakture"
+
+    ' --- Model B (revizija #9): utovar BEZ fakture, fakturisanje
+    ' kasnije. Dogovorena cena putuje na utovarnoj stavci (CenaKg) i
+    ' odatle je cita CreateFakturaIzUtovara kad nema FST istorije.
+    Dim stB As Collection, utB As String, fidB As String
+    Set stB = New Collection
+    stB.Add Array("PRE-GP-W1", 5, 120)
+    utB = modUtovar.CreateUtovar_TX(FX_KUPAC2, stB)
+    AssertEq (Len(utB) > 0), True, "utovar bez fakture se pravi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utB, _
+             COL_UT_FAKTURISANO)))), "", "B-utovar nije markiran fakturisanim"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utB, _
+             COL_UT_FAKTURA_ID)))), "", "B-utovar nema FakturaID"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_UTOVAR_STAVKE, COL_UTS_ID, _
+             utB & "-01", COL_UTS_CENA), 0)), "0.00"), Format$(120#, "0.00"), _
+             "dogovorena cena je na utovarnoj stavci"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(25.5, "0.00"), _
+             "utovar bez fakture skida robu sa stanja"
+    fidB = modUtovar.CreateFakturaIzUtovara_TX(utB)
+    AssertEq (Len(fidB) > 0), True, _
+             "fakturisanje B-utovara kasnije prolazi (cena sa stavke)"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURA_STAVKE, _
+             COL_FS_FAKTURA_ID, fidB, COL_FS_CENA), 0)), "0.00"), _
+             Format$(120#, "0.00"), "faktura nosi cenu sa utovarne stavke"
+    ' Ocisti: storno fakture pa utovara -- stanje se vraca na 30.5.
+    AssertEq modStorno.StornoFaktura_TX(fidB), True, "storno B-fakture prolazi"
+    AssertEq modStorno.StornoUtovar_TX(utB), True, "storno B-utovara prolazi"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(30.5, "0.00"), _
+             "stanje se vraca posle storna B-lanca"
+
+    ' Migracija starih GP faktura je UKLONJENA (revizija #12) -- stari
+    ' model nikad nije deploy-ovan, a rutina je izmisljala datum
+    ' fizickog utovara iz datuma fakture. SB vozilo (aktivna GP stavka
+    ' bez utovara) ostaje u fixture-u: sledljivost ga prijavljuje kao
+    ' neusaglasenost (siroce), sto pokrivaju T_Sled tvrdnje.
+End Sub
+
+' ============================================================
+' 163 -- MODEL B (revizija #10): lanac razume utovar bez fakture
+' (stanje + finalni kupac iz utovara), a storno kapije ne veruju
+' samo header markeru. MUTIRA (rogue FST, nove fakture) -- poslednji.
+' Vozilo: U lanac u fixture-u (120 proizvedeno / 50 utovareno /
+' 0 fakturisano, UT-SLED-U bez markera).
+' ============================================================
+Private Sub T_UtovarB_SledIStornoKapije()
+    Dim lanac As Variant, r As Long
+
+    ' --- Revizija #13 P1: PakovanjaZaKg racunica. Kapacitet: sifarnik
+    ' po tipu ima prednost, pa lot fallback (neto/broj); dokument
+    ' (samoTacno) samo celobrojan umnozak, grid floor celih pakovanja.
+    AssertEq CLng(modUtovar.PakovanjaZaKg(500, 1000, 100, True, "KUT", "")), 50&, _
+             "lot fallback: 500 kg uz 10 kg/kutiji = 50 kutija"
+    AssertEq IsEmpty(modUtovar.PakovanjaZaKg(505, 1000, 100, True, "KUT", "")), True, _
+             "dokument ne nosi aproksimaciju (505 kg nije umnozak)"
+    AssertEq CLng(modUtovar.PakovanjaZaKg(505, 1000, 100, False, "KUT", "")), 50&, _
+             "grid: 505 kg = 50 CELIH pakovanja na stanju"
+    ' (RowExists je Private u modBusinessFlowProTests -- LookupValue.)
+    If Len(Trim$(CStr(nz(LookupValue(TBL_KUTIJE, COL_KUT_TIP, "TEST-K7", _
+        COL_KUT_TIP), "")))) = 0 Then _
+        AppendRow TBL_KUTIJE, Array("TEST-K7", 7, "Aktivan")
+    AssertEq CLng(modUtovar.PakovanjaZaKg(490, 1000, 100, True, "KUT", "TEST-K7")), 70&, _
+             "sifarnik po tipu ima prednost nad lot fallback-om (7 kg/kutiji)"
+
+    ' --- B1: stanje i kupac PRE fakture.
+    lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
+    r = SledNadjiRed(lanac, "OTK-SLED-U")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-U"
+    AssertEq CStr(lanac(r, 14)), "", "U lanac je potpun (bez oznake)"
+    AssertEq CStr(lanac(r, 30)), SLED_ST_DELIM_UTOVAR, _
+             "roba fizicki otisla bez fakture = delimicno utovareno"
+    AssertEq CStr(lanac(r, 12)), "", "U jos nema fakturu"
+    AssertEq CStr(lanac(r, 13)), "Test kupac 2", _
+             "finalni kupac dolazi iz UTOVARA i pre fakture"
+
+    ' --- B2: aktivna FST na "nefakturisanom" utovaru = kontradikcija;
+    ' header marker sam nije dovoljan ni za storno ni za re-fakturu.
+    Dim rowRog As Long
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-B2", "FAK-SLED-GP4", "", 50, 100#, "", "", "", ""))
+    AssertEq (rowRog > 0), True, "rogue FST upisana"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-SLED-U", "T163"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      "UT-SLED-U", "T163"
+    AssertEq modStorno.StornoUtovar_TX("UT-SLED-U"), False, _
+             "aktivna FST blokira storno utovara i bez header markera"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U"), "", _
+             "aktivna FST blokira re-fakturisanje"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T163"
+
+    ' --- B3: storno fakture sa korumpiranom stavkom NE oslobadja tudj
+    ' utovar. UT-SLED-U se prvo legalno fakturise (cena sa stavke).
+    Dim fidU As String, fidX As String, utX As String
+    fidU = modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U")
+    AssertEq (Len(fidU) > 0), True, "B-utovar se fakturise (cena sa stavke)"
+
+    ' --- Revizija #11 B1: kupac utovara = kupac fakture. Korumpiraj
+    ' kupca fakture -> SEF mora da blokira; vrati.
+    Dim rowFkU As Long, fkAllU As Variant
+    fkAllU = GetTableData(TBL_FAKTURE)
+    rowFkU = 0
+    Dim fkI As Long
+    For fkI = 1 To UBound(fkAllU, 1)
+        If Trim$(CStr(nz(fkAllU(fkI, GetColumnIndex(TBL_FAKTURE, COL_FAK_ID))))) = fidU Then rowFkU = fkI
+    Next fkI
+    RequireUpdateCell TBL_FAKTURE, rowFkU, COL_FAK_KUPAC, "KUP-TEST-1", "T163"
+    Dim dtoU As clsSEFInvoiceSnapshot, sefErrU As Long
+    sefErrU = 0
+    On Error Resume Next
+    Set dtoU = modSEFMapper.BuildSEFInvoiceDto(fidU)
+    sefErrU = Err.Number
+    On Error GoTo 0
+    AssertEq (sefErrU <> 0), True, _
+             "SEF blokira fakturu ciji kupac nije kupac utovara"
+    RequireUpdateCell TBL_FAKTURE, rowFkU, COL_FAK_KUPAC, "KUP-TEST-2", "T163"
+    Set dtoU = modSEFMapper.BuildSEFInvoiceDto(fidU)
+    AssertEq (Not dtoU Is Nothing), True, _
+             "sa istim kupcem SEF DTO prolazi"
+    Dim stX As Collection
+    Set stX = New Collection
+    stX.Add Array("PRE-SLED-U", 5, 100)
+    utX = modUtovar.CreateUtovar_TX(FX_KUPAC2, stX)
+    AssertEq (Len(utX) > 0), True, "zrtveni utovar se pravi"
+    fidX = modUtovar.CreateFakturaIzUtovara_TX(utX)
+    AssertEq (Len(fidX) > 0), True, "zrtvena faktura se pravi"
+    ' Korumpirana stavka: aktivna FST na fidX tvrdi UT-SLED-U, koji
+    ' tvrdi fidU -- storno fidX ne sme da mu resetuje marker.
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-B3", fidX, "", 1, 100#, "", "", "", ""))
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-SLED-U", "T163"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      "UT-SLED-U", "T163"
+    AssertEq modStorno.StornoFaktura_TX(fidX), True, _
+             "storno zrtvene fakture prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, "UT-SLED-U", _
+             COL_UT_FAKTURA_ID)))), fidU, _
+             "korumpirana stavka tudje fakture NE oslobadja utovar"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utX, _
+             COL_UT_FAKTURISANO)))), "", "svoj utovar JESTE oslobodjen"
+
+    ' --- Ocisti: fixture stanje nazad (U nefakturisan, utX storniran).
+    AssertEq modStorno.StornoFaktura_TX(fidU), True, "storno fidU prolazi"
+    AssertEq modStorno.StornoUtovar_TX(utX), True, _
+             "storno zrtvenog utovara prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, "UT-SLED-U", _
+             COL_UT_FAKTURISANO)))), "", "UT-SLED-U je opet nefakturisan"
 End Sub
 
 
@@ -11544,7 +12233,9 @@ Private Sub T_Sled_IdentitetURedu_NeCrtaSe()
     redovi = d(1)
     r = SledNadjiGridRed(redovi, n, 2, "S1/TEST")
     AssertEq (r > 0), True, "mreza nosi red S1/TEST"
-    AssertEq CStr(redovi(r, 11)), "OTK|OTK-SLED-1", _
+    ' GP grana (v6-ui-189): identitet je pomeren na kolonu 14 (11-13 su
+    ' Palete / Prerada-GP / Stanje).
+    AssertEq CStr(redovi(r, 14)), "OTK|OTK-SLED-1", _
              "identitet reda je OTK| kljuc, ne prikaz"
 
     ' NEPOTPUNI: red kg razlike nosi vrstu i ID karike (ruta stampe);
@@ -11872,6 +12563,197 @@ Private Sub T_Sled_DokumentiPonuda()
     ' mina bi na njemu i pukla -- ovaj red cuva i ugovor i zivot).
     AssertEq imaB, True, "dokument sa nevalidnim datumom ostaje vidljiv"
     AssertEq imaPre, True, "prerada je u ponudi (preradni list)"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 160. GP GRANA LANCA (krug 5 grain): kolone 28-30 su PROJEKCIJA
+' postojecih veza (paletna stavka po BROJU zbirne, prerada join-om
+' PaletaID); PRODAJU broje UTOVARNE stavke + FST dokaz -- rucni prolaz
+' kroz tabele mora dati isto sto i Report. Stanja: najdalja karika,
+' parcijalna prodaja = "delimicno prodato". Dvosmislen broj =
+' fail-closed. Neusaglasenosti (mrtva faktura, marker bez dokaza,
+' stale veza, prekomerni utovar, stavka-siroce) = "faktura
+' neusaglasena" + NEPOTPUNI.
+Private Sub T_Sled_GpLanacIStanja()
+    Dim lanac As Variant, problemi As Variant, r As Long, i As Long
+    lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
+    problemi = modIzvestaj.ReportSledljivostProblemi(IzvOdD(), IzvDoD())
+    AssertEq IsArray(lanac), True, "lanac izvestaj postoji"
+
+    ' --- RUCNI PROLAZ za G lanac: broj zbirne -> paleta -> prerada ->
+    ' utovar -> GP faktura, iskljucivo GetTableData + GetColumnIndex.
+    Dim st As Variant, cStPal As Long, cStZbr As Long, rucniPalID As String
+    st = ExcludeStornirano(GetTableData(TBL_PALETA_STAVKA), TBL_PALETA_STAVKA)
+    cStPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    cStZbr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    For i = 1 To UBound(st, 1)
+        If Trim$(CStr(st(i, cStZbr))) = "ZB-TEST-SLG" Then _
+            rucniPalID = Trim$(CStr(st(i, cStPal)))
+    Next i
+    AssertEq (Len(rucniPalID) > 0), True, "vozilo: G zbirna ima paletnu stavku"
+
+    Dim pal As Variant, cPalId As Long, cPalBroj As Long, cPalGod As Long
+    Dim rucniPalBroj As String
+    pal = ExcludeStornirano(GetTableData(TBL_PALETA), TBL_PALETA)
+    cPalId = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    cPalBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    cPalGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+    For i = 1 To UBound(pal, 1)
+        If Trim$(CStr(pal(i, cPalId))) = rucniPalID Then _
+            rucniPalBroj = Trim$(CStr(pal(i, cPalBroj))) & "/" & Trim$(CStr(pal(i, cPalGod)))
+    Next i
+
+    Dim prs As Variant, cPrsPre As Long, cPrsPal As Long, rucniPreID As String
+    prs = ExcludeStornirano(GetTableData(TBL_PRERADA_STAVKA), TBL_PRERADA_STAVKA)
+    cPrsPre = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID)
+    cPrsPal = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID)
+    For i = 1 To UBound(prs, 1)
+        If Trim$(CStr(prs(i, cPrsPal))) = rucniPalID Then _
+            rucniPreID = Trim$(CStr(prs(i, cPrsPre)))
+    Next i
+    AssertEq (Len(rucniPreID) > 0), True, "vozilo: G paleta ima preradnu stavku"
+
+    Dim pre As Variant, cPreId As Long, cPreBroj As Long, cPreGod As Long
+    Dim rucniPreBroj As String
+    pre = ExcludeStornirano(GetTableData(TBL_PRERADA), TBL_PRERADA)
+    cPreId = GetColumnIndex(TBL_PRERADA, COL_PRE_ID)
+    cPreBroj = GetColumnIndex(TBL_PRERADA, COL_PRE_BROJ)
+    cPreGod = GetColumnIndex(TBL_PRERADA, COL_PRE_GODINA)
+    For i = 1 To UBound(pre, 1)
+        If Trim$(CStr(pre(i, cPreId))) = rucniPreID Then _
+            rucniPreBroj = Trim$(CStr(pre(i, cPreBroj))) & "/" & Trim$(CStr(pre(i, cPreGod)))
+    Next i
+
+    ' Krug 5: prodajna veza ide kroz UTOVARNU stavku -> utovar -> fakturu.
+    Dim uts As Variant, cUtsUt As Long, cUtsPre As Long, rucniUtID As String
+    uts = ExcludeStornirano(GetTableData(TBL_UTOVAR_STAVKE), TBL_UTOVAR_STAVKE)
+    cUtsUt = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID)
+    cUtsPre = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID)
+    For i = 1 To UBound(uts, 1)
+        If Trim$(CStr(uts(i, cUtsPre))) = rucniPreID Then _
+            rucniUtID = Trim$(CStr(uts(i, cUtsUt)))
+    Next i
+    AssertEq (Len(rucniUtID) > 0), True, "vozilo: G prerada ima utovarnu stavku"
+
+    Dim rucniGpFakID As String
+    rucniGpFakID = Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, rucniUtID, COL_UT_FAKTURA_ID))))
+    Dim rucniGpFakBroj As String
+    rucniGpFakBroj = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, rucniGpFakID, COL_FAK_BROJ))))
+    AssertEq (Len(rucniGpFakBroj) > 0), True, "vozilo: GP faktura G lanca je aktivna"
+    ' Finalni kupac (B1): sa GP fakture, kroz tblKupci.
+    Dim rucniGpKupID As String, rucniGpKupac As String
+    rucniGpKupID = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, rucniGpFakID, COL_FAK_KUPAC))))
+    rucniGpKupac = Trim$(CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, rucniGpKupID, COL_KUP_NAZIV))))
+    AssertEq (Len(rucniGpKupac) > 0), True, "vozilo: GP faktura ima kupca sa nazivom"
+
+    ' --- G: cela prerada utovarena i fakturisana -> prodato GP.
+    r = SledNadjiRed(lanac, "OTK-SLED-G")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-G"
+    AssertEq CStr(lanac(r, 14)), "", "G lanac je potpun (bez oznake)"
+    AssertEq CStr(lanac(r, 28)), rucniPalBroj, "kolona paleta = rucni prolaz"
+    AssertEq CStr(lanac(r, 29)), rucniPreBroj, _
+             "kolona gotovog proizvoda nosi SAMO preradu"
+    AssertEq CStr(lanac(r, 12)), rucniGpFakBroj, _
+             "zavrsna GP faktura zauzima kolonu Faktura"
+    AssertEq CStr(lanac(r, 13)), rucniGpKupac, _
+             "kolona Kupac nosi FINALNOG kupca sa GP fakture"
+    AssertEq CStr(lanac(r, 30)), SLED_ST_PRODATO_GP, "stanje G = prodato GP"
+    AssertEq (InStr(CStr(lanac(r, 27)), rucniPalBroj) > 0), True, _
+             "refs nose broj palete"
+    AssertEq (InStr(CStr(lanac(r, 27)), rucniPreBroj) > 0), True, _
+             "refs nose broj prerade"
+    AssertEq (InStr(CStr(lanac(r, 27)), rucniGpFakBroj) > 0), True, _
+             "refs nose broj GP fakture"
+    AssertEq (InStr(CStr(lanac(r, 27)), rucniGpKupac) > 0), True, _
+             "refs nose finalnog kupca"
+
+    ' --- P (krug 5): DELIMICNA prodaja -- 50 od 120 kg utovareno i
+    ' validno fakturisano, ostatak na stanju. Istina umesto binarne.
+    r = SledNadjiRed(lanac, "OTK-SLED-P")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-P"
+    AssertEq CStr(lanac(r, 14)), "", "P lanac je potpun (bez oznake)"
+    AssertEq CStr(lanac(r, 29)), "181/2026", "P nosi svoju preradu"
+    AssertEq CStr(lanac(r, 12)), "12/2026", "P nosi fakturu delimicne prodaje"
+    AssertEq CStr(lanac(r, 30)), SLED_ST_DELIMICNO, _
+             "stanje P = delimicno prodato (50 od 120 kg)"
+
+    ' --- H: sveza paleta bez prerade i fakture = u hladnjaci.
+    r = SledNadjiRed(lanac, "OTK-SLED-H")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-H"
+    AssertEq CStr(lanac(r, 14)), "", "H lanac je potpun (bez oznake)"
+    AssertEq (Len(CStr(lanac(r, 28))) > 0), True, "H nosi broj palete"
+    AssertEq CStr(lanac(r, 29)), "", "H nema preradu"
+    AssertEq CStr(lanac(r, 30)), SLED_ST_HLADNJACA, "stanje H = u hladnjaci"
+
+    ' --- K: utovar tvrdi Da na nepostojecu fakturu -> neusaglaseno;
+    ' stanje se NE pise preko oznake.
+    r = SledNadjiRed(lanac, "OTK-SLED-K")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-K"
+    AssertEq CStr(lanac(r, 14)), SLED_OZN_FAK_NEISPRAVNA, _
+             "kontradiktorna prodajna veza obara kariku"
+    AssertEq CStr(lanac(r, 30)), "", "red sa oznakom nema stanje"
+
+    ' --- Postojeca vozila: najdalja karika po prioritetu.
+    r = SledNadjiRed(lanac, "OTK-SLED-1")
+    AssertEq CStr(lanac(r, 30)), SLED_ST_PRODATO_SVEZE, _
+             "SLED lanac (fakturisan svez): prodato svezo"
+    r = SledNadjiRed(lanac, "OTK-SLED-N")
+    AssertEq CStr(lanac(r, 30)), SLED_ST_PRERADJENO, _
+             "SLN lanac (prerada bez utovara): preradjeno"
+
+    ' --- D: dvosmislen broj = fail-closed, GP karike se NE pripisuju.
+    r = SledNadjiRed(lanac, "OTK-SLED-D")
+    AssertEq CStr(lanac(r, 28)), "", "dvosmislen broj: bez paleta"
+    AssertEq CStr(lanac(r, 29)), "", "dvosmislen broj: bez prerada"
+    AssertEq CStr(lanac(r, 30)), "", "dvosmislen broj: bez stanja"
+
+    ' --- NEPOTPUNI (krug 5 klase): utovari sa neusaglasenim markerima
+    ' PO UTOVARU; prerade za prekomerni utovar / lose veze / siroce.
+    Dim imaK As Boolean, imaG As Boolean
+    Dim imaB2 As Boolean, imaWL As Boolean, imaWM As Boolean
+    Dim imaOV As Boolean, imaSB As Boolean
+    For i = 1 To UBound(problemi, 1)
+        If CStr(problemi(i, 1)) = SLEDP_FAK_NEISPRAVNA Then
+            If CStr(problemi(i, 7)) = SLED_DOK_UTOVAR Then
+                If CStr(problemi(i, 8)) = "UT-SLED-K" Then imaK = True
+                If CStr(problemi(i, 8)) = "UT-GP-WL" Then imaWL = True
+                If CStr(problemi(i, 8)) = "UT-GP-WM" Then imaWM = True
+            ElseIf CStr(problemi(i, 7)) = SLED_DOK_PRERADA Then
+                If CStr(problemi(i, 8)) = "PRE-SLED-G" Then imaG = True
+                If CStr(problemi(i, 8)) = "PRE-GP-B2" Then imaB2 = True
+                If CStr(problemi(i, 8)) = "PRE-GP-OV" Then imaOV = True
+                If CStr(problemi(i, 8)) = "PRE-GP-SB" Then imaSB = True
+            End If
+        End If
+    Next i
+    AssertEq imaK, True, "utovar sa mrtvom fakturom je problem (DokTip Utovar)"
+    AssertEq imaG, False, "validno prodata prerada NIJE problem"
+    AssertEq imaWL, True, "zaostao FakturaID bez markera na utovaru je problem"
+    AssertEq imaWM, True, "utovar Fakturisano=Da bez FakturaID je problem"
+    AssertEq imaB2, True, "utovar-faktura bez FST stavke = neusaglasena prerada"
+    AssertEq imaOV, True, "utovareno preko proizvedenog je problem"
+    AssertEq imaSB, True, "prodajna stavka bez utovara (siroce) je problem"
+
+    ' --- SMER NAZAD na ekranu: broj GP fakture i broj palete nalaze
+    ' otkupni blok G lanca; grid kolone 8-13 nose GP karike.
+    Dim d As Variant, n As Long, redovi As Variant
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", rucniGpFakBroj)
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (SledNadjiGridRed(redovi, n, 2, "S8/TEST") > 0), True, _
+             "nazad od GP fakture stize do otkupnog bloka"
+    d = modScrSledljivost.Scr_Rows("sve", rucniPalBroj)
+    n = CLng(d(2))
+    redovi = d(1)
+    r = SledNadjiGridRed(redovi, n, 2, "S8/TEST")
+    AssertEq (r > 0), True, "nazad od broja palete stize do otkupnog bloka"
+    AssertEq CStr(redovi(r, 8)), rucniPalBroj, "grid kolona 8 = pal. sveze robe"
+    AssertEq CStr(redovi(r, 9)), rucniPreBroj, "grid kolona 9 = gotov proizvod"
+    AssertEq CStr(redovi(r, 10)), rucniGpFakBroj, "grid kolona 10 = zavrsna faktura"
+    AssertEq CStr(redovi(r, 11)), rucniGpKupac, "grid kolona 11 = finalni kupac"
+    AssertEq CStr(redovi(r, 13)), SLED_ST_PRODATO_GP, "grid kolona 13 = stanje"
     modScrSledljivost.Scr_SlTestReset
 End Sub
 

@@ -1155,7 +1155,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRFK_SUB", "Prijemnice kupca u fakturu, naplata i elektronske fakture"
     UpsertRow lo, existing, "OTKUI_SCRFK_LISTA", "Prijemnice"
     UpsertRow lo, existing, "OTKUI_SCRFK_CAP", "Fakturisanje"
-    UpsertRow lo, existing, "OTKUI_SEG_FK_ZAFAKT", "Za fakturisanje"
+    ' Smoke GP-1: uz "Gotova roba" prvi prekidac mora biti VRSTA robe,
+    ' ne radnja -- par cipova imenuje robu (sveza/gotova), ne proces.
+    UpsertRow lo, existing, "OTKUI_SEG_FK_ZAFAKT", "Sve" & ChrW(382) & "a roba"
     UpsertRow lo, existing, "OTKUI_SEG_FK_FAKTURE", "Fakture"
     UpsertRow lo, existing, "OTKUI_SEG_FK_SEF", "SEF"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_ZAFAKT", "Prijemnice kupca"
@@ -1530,6 +1532,15 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDS_PROBLEM", "PROBLEM"
     UpsertRow lo, existing, "OTKUI_HDS_NOSILAC", "NOSILAC"
     UpsertRow lo, existing, "OTKUI_HDS_DETALJ", "DETALJ"
+    ' GP grana lanca (v6-ui-189): nastavak posle prijemnice. Smoke GP-1:
+    ' operaterov recnik -- "paleta sveze robe" / "paleta gotovog
+    ' proizvoda" (prerada = gotova paleta), ne interni "prerada/GP".
+    ' Revizija #248/B1: vrednosti kolone su PRERADE (finalni prodajni
+    ' lot -- roba upakovana u kese/kutije), ne posebne "GP palete";
+    ' "PAL. GOTOVOG PROIZV." je sugerisao identitet koji ne postoji.
+    UpsertRow lo, existing, "OTKUI_HDS_PALETE", "PAL. SVE" & ChrW(381) & "E ROBE"
+    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "GOTOV PROIZVOD"
+    UpsertRow lo, existing, "OTKUI_HDS_STANJE", "STANJE"
     UpsertRow lo, existing, "OTKUI_BTN_SL_LANACPDF", "Lanac (PDF)"
     UpsertRow lo, existing, "OTKUI_KPI_SL_POTPUN", "Potpuni lanci"
     UpsertRow lo, existing, "OTKUI_KPI_SL_PROBLEMI", "Nepotpune karike"
@@ -1593,6 +1604,79 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SLPDF_DATSTAMPE", "Datum " & ChrW(353) & "tampe:"
     UpsertRow lo, existing, "OTKUI_SLPDF_POTPIS", "Potpis:"
     UpsertRow lo, existing, "OTKUI_SLPDF_PECAT", "Pe" & ChrW(269) & "at:"
+    ' --- Fakturisanje gotove robe (v6-ui-189, GP grana) ---
+    UpsertRow lo, existing, "OTKUI_SEG_FK_GP", "Gotova roba"
+    ' Smoke 5c: naslov mreze se sece pored prekidaca -- kratko ime,
+    ' kontekst vec nosi segment dugme.
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_GP", "Gotova roba"
+    UpsertRow lo, existing, "OTKUI_HDF_TIPGP", "PROIZVOD"
+    ' Revizija #12 smoke: kolone sada pokazuju cele pakete NA STANJU
+    ' (kapacitet izveden iz lota: neto/broj), pa "LOT" sufiks vise ne
+    ' vazi -- roba se smanji, smanje se i kutije/kese.
+    UpsertRow lo, existing, "OTKUI_HDF_KUTIJE", "KUTIJE"
+    UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE"
+    UpsertRow lo, existing, "OTKUI_HDF_PREID", "PRE ID"
+    UpsertRow lo, existing, "OTKUI_FLD_FK_CENAGP", "Cena gotove robe (RSD/kg)"
+    ' Krug 5 (utovarna lista, parcijalna prodaja):
+    ' Smoke 5c: label se sece na sirinu polja -- kratko, a "prazno =
+    ' sve" objasnjava hint linija (OTKUI_LBL_FK_HINT_GP).
+    UpsertRow lo, existing, "OTKUI_FLD_FK_KOLGP", "Kol. za utovar (kg)"
+    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_GP", "Prazna koli" & ChrW(269) & "ina = celo stanje palete; upisana = parcijalna prodaja. Cena je obavezna."
+    UpsertRow lo, existing, "OTKUI_ERR_FK_KOL_GP", ChrW(10007) & " Koli" & ChrW(269) & "ina za utovar prelazi stanje palete"
+    UpsertRow lo, existing, "OTKUI_HDF_NASTANJU", "NA STANJU (kg)"
+    ' Lista UTOVARI + stampani obrazac utovarne liste (krug 5b).
+    UpsertRow lo, existing, "OTKUI_SEG_FK_UTOVARI", "Utovari"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_UTOVARI", "Utovarne liste"
+    UpsertRow lo, existing, "OTKUI_HDU_ROBA", "ROBA"
+    UpsertRow lo, existing, "OTKUI_HDU_ID", "UT ID"
+    UpsertRow lo, existing, "OTKUI_BTN_UT_STAMPAJ", "Utovarna lista"
+    UpsertRow lo, existing, "OTKUI_BTN_UT_STORNO", "Storniraj"
+    UpsertRow lo, existing, "OTKUI_MSG_UT_STAMPA", ChrW(10003) & " Utovarna lista je poslata na " & ChrW(353) & "tampu"
+    UpsertRow lo, existing, "OTKUI_ASK_UT_STORNO", "Stornirati utovar? Roba se vra" & ChrW(263) & "a na stanje."
+    UpsertRow lo, existing, "OTKUI_MSG_UT_STORNO", ChrW(10003) & " Utovar je storniran " & ChrW(8212) & " roba je vra" & ChrW(263) & "ena na stanje"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_STORNO", ChrW(10007) & " Storno utovara nije uspeo " & ChrW(8212) & " fakturisan utovar prvo trazi storno fakture"
+    ' Krug 5d: podaci prevoza (profesionalna utovarna lista).
+    UpsertRow lo, existing, "OTKUI_HDU_PREVOZNIK", "PREVOZNIK"
+    UpsertRow lo, existing, "OTKUI_HDU_REG", "REG."
+    UpsertRow lo, existing, "OTKUI_BTN_UT_PREVOZ", "Sa" & ChrW(269) & "uvaj prevoz"
+    UpsertRow lo, existing, "OTKUI_MSG_UT_PREVOZ", ChrW(10003) & " Podaci prevoza su sa" & ChrW(269) & "uvani"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_PREVOZ", ChrW(10007) & " Upis podataka prevoza nije uspeo"
+    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_UT", "Izaberi red utovara, popuni prevoz pa 'Sa" & ChrW(269) & "uvaj prevoz'. Prazno polje ne dira upisano, crtica '-' bri" & ChrW(353) & "e."
+    ' Revizija #6: nova faktura iz postojeceg utovara + editabilan
+    ' datum/vreme utovara (SEF datum isporuke).
+    ' "Fakturisi" (model B, revizija #9): radnja pokriva PRVO
+    ' fakturisanje utovara napravljenog bez fakture (cena sa stavke),
+    ' ponavljanje posle storna (cene prethodne fakture) i korekciju
+    ' cene (unos u dijalogu) -- generican naziv je tacan za sva tri.
+    UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Fakturi" & ChrW(353) & "i"
+    ' Revizija #8: pogresna cena NIKAD ne trazi storno fizickog
+    ' utovara -- isti utovar dobija novu fakturu sa novom cenom.
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Izraditi fakturu iz ovog utovara? Roba ostaje utovarena, datum utovara se ne menja."
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK_CENA", "Nova cena (RSD/kg) za korekciju. Prazno = cena iz prethodne fakture, odnosno dogovorena cena sa utovara."
+    UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_CENA", ChrW(10007) & " Cena mora biti broj ve" & ChrW(263) & "i od nule"
+    UpsertRow lo, existing, "OTKUI_MSG_UT_FAK", ChrW(10003) & " Nova faktura iz utovara je izra" & ChrW(273) & "ena"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_FAK", ChrW(10007) & " Izrada fakture iz utovara nije uspela"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_VEC", ChrW(10007) & " Utovar je ve" & ChrW(263) & " fakturisan -- prvo storno fakture"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_DATUM", "Datum utovara"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_VREME", "Vreme"
+    ' Model B (revizija #9): utovar bez fakture iz GP korpe.
+    UpsertRow lo, existing, "OTKUI_BTN_FK_UTOVAR", "Napravi utovar"
+    UpsertRow lo, existing, "OTKUI_ASK_FK_UTOVAR", "Napraviti UTOVAR bez fakture? Roba se skida sa stanja, utovarna lista moze odmah da se " & ChrW(353) & "tampa; fakturisanje ide kasnije radnjom 'Fakturi" & ChrW(353) & "i' na listi Utovari."
+    UpsertRow lo, existing, "OTKUI_MSG_FK_UTOVAR", ChrW(10003) & " Utovar je napravljen:"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_UTOVAR", ChrW(10007) & " Izrada utovara nije uspela"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_UTOVAR_PRJ", ChrW(10007) & " Utovar va" & ChrW(382) & "i samo za gotovu robu -- korpa nosi prijemnice"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PREVOZNIK", "Prevoznik"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_VOZAC", "Voza" & ChrW(269)
+    UpsertRow lo, existing, "OTKUI_FLD_UT_REG", "Registracija"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PLOMBA", "Plomba"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_TEMP", "Temp. re" & ChrW(382) & "im"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_MESTO", "Mesto istovara"
+    ' "PO broj" umesto "Narudzbenica (PO)": labela je bila sira od
+    ' svog polja (100pt) pa se sekla/preklapala (smoke 5d).
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PO", "PO broj"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_NAPOMENA", "Napomena"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
     UpsertRow lo, existing, "OTKUI_SL_META_NEJASNA", "Zbirna " & ChrW(8212) & " nejasan vlasnik"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DVOSMISLENA", ChrW(10007) & " Broj zbirne dele razli" & ChrW(269) & "iti vlasnici " & ChrW(8212) & " sledljivost po tom broju bi me" & ChrW(353) & "ala tokove (v. Nepotpune)"

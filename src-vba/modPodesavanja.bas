@@ -79,6 +79,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
     CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRERADA_SLEDLJIVOST_DETALJ", "Detaljni prikaz sledljivosti (paletni list got. proizvoda)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "GP_ROK_TRAJANJA_MESECI", "Rok trajanja got. proizvoda (meseci, default za nove lotove)", "text"
     CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
@@ -99,6 +100,12 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "PRERADA_PRINT_MODE", "Paletni list got. proizvoda", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "OM_IZDAVANJE_PRINT_MODE", "Revers ambala" & ChrW(382) & "e (izdavanje/povrat)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "FAKTURA_PRINT_MODE", "Faktura", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "UTOVAR_PRINT_MODE", "Utovarna lista", "list:PDF;PRINT;PREVIEW;OFF"
+    ' Rok trajanja NIJE stampa opcija (revizija #13): default za
+    ' SNAPSHOT DatumIsteka koji nastaje pri preradi -- zato zivi u
+    ' "Otkup / dokumenta". Kapaciteti kutija/kesa NE idu ovde: vec
+    ' postoje kao sifarnici tblKutije/tblKese (tip -> kg, Maticni
+    ' podaci) -- prerada nosi tip, racunica cita sifarnik.
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_AMB_PRINT_MODE", "Kartica ambala" & ChrW(382) & "e", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"

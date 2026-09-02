@@ -951,10 +951,18 @@ Public Sub EnsurePaletniListSchema()
         Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
 
     EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
-        Array(COL_VGP_TIP, "Aktivan")
+        Array(COL_VGP_TIP, "Aktivan", COL_VGP_ROK)
 
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
+
+    ' GP grana (fakturisanje gotove robe, krug 5): stavka fakture nosi
+    ' preradu i utovar; prodaja se prati kroz UTOVARNU LISTU (fizicka
+    ' isporuka), ne markerom na preradi. Idempotentno, kao sve ovde.
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
+    EnsureUtovarSchemaCore
 
     EnsureCenovnikSchema
 
@@ -1094,7 +1102,8 @@ Private Function AuditableTables() As Variant
         TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, _
         TBL_PARCELE, TBL_ARTIKLI, TBL_MAGACIN, TBL_CENOVNIK, TBL_KORISNICI, _
         TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
-        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT)
+        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT, _
+        TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI)
 End Function
 
 ' ============================================================
@@ -1132,11 +1141,64 @@ End Sub
 ' EnsureColumnOnTable je no-op kad kolona postoji (cena posle prvog heal-a
 ' zanemarljiva). Ovde idu SAMO sigurne, idempotentne izmene bez backfill-a.
 ' ============================================================
+' Utovarna lista (krug 5 revizije #248): dokument fizicke isporuke GP
+' robe -- prodajni grain je UTOVAR STAVKA (prerada + kg), ne marker na
+' preradi. Idempotentno (EnsureDataTable); zove se iz
+' EnsurePaletniListSchema i iz EnsureRuntimeSchema (self-heal).
+Public Sub EnsureUtovarSchemaCore()
+    EnsureDataTable TBL_UTOVAR, "Utovar", _
+        Array(COL_UT_ID, COL_UT_BROJ, COL_UT_GODINA, COL_UT_DATUM, _
+              COL_UT_KUPAC, COL_UT_FAKTURISANO, COL_UT_FAKTURA_ID, _
+              COL_UT_NAPOMENA, COL_STORNIRANO, _
+              COL_UT_PREVOZNIK, COL_UT_VOZAC, COL_UT_REGISTRACIJA, _
+              COL_UT_PLOMBA, COL_UT_TEMP_REZIM, COL_UT_MESTO_ISTOVARA, _
+              COL_UT_VREME, COL_UT_PO_BROJ)
+    EnsureDataTable TBL_UTOVAR_STAVKE, "UtovarStavke", _
+        Array(COL_UTS_ID, COL_UTS_UTOVAR_ID, COL_UTS_PRERADA_ID, _
+              COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO, _
+              COL_UTS_KUTIJE, COL_UTS_KESE, COL_UTS_CENA)
+    ' Sifarnik prevoznika (smoke 5d): maticni podaci, bez storna --
+    ' auto-uci se iz "Sacuvaj prevoz" i puni combo predloge.
+    EnsureDataTable TBL_PREVOZNICI, "Prevoznici", _
+        Array(COL_PRV_ID, COL_PRV_NAZIV, COL_PRV_VOZAC, COL_PRV_REG, _
+              COL_PRV_AKTIVAN)
+End Sub
+
 Public Sub EnsureRuntimeSchema()
     On Error Resume Next
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
+
+    ' GP fakturisanje (v6-ui-189, krug 5 revizije #248): klijent koji
+    ' dobije nov kod self-update-om mora dobiti i semu -- inace GP
+    ' writer pada na RequireColumnIndex cim operater proba funkciju.
+    ' Append-only i idempotentno, bas klasa izmena za runtime self-heal
+    ' (EnsureDataTable postojecoj tabeli samo dopunjava kolone).
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
+    EnsureUtovarSchemaCore
+    ' Rok trajanja po vrsti GP (revizija #9) -- self-heal posle update-a.
+    EnsureColumnOnTable TBL_VRSTA_GP, COL_VGP_ROK
+    ' Snapshot roka NA LOTU (revizija #13 B2) -- novi lotovi ga pisu.
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_ROK
+    ' Audit kolone i za NOVE tabele na self-update putu (revizija #10
+    ' P1): EnsureUtovarSchemaCore pravi tabele BEZ audit kolona, a
+    ' StampRowAudit je no-op kad ih nema -- klijent koji dobije nov kod
+    ' bi pravio utovare bez ko/kada traga do rucnog EnsureAuditColumns.
+    ' Ciljano na tri nove tabele (no-op kad kolone postoje), ne pun
+    ' EnsureAuditColumnsCore na svakom startu.
+    Dim audT As Variant, audI As Long
+    audT = Array(TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI)
+    For audI = 0 To 2
+        If Not GetTable(CStr(audT(audI))) Is Nothing Then
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_CREATED_AT
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_CREATED_BY
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_MODIFIED_AT
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_MODIFIED_BY
+        End If
+    Next audI
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
 
@@ -1218,6 +1280,13 @@ End Sub
 ' jednokratno; idempotentno (samo prazne). Efikasno: dict OtpremnicaID->Broj u
 ' jednom prolazu. NE ide u EnsureRuntimeSchema (skup po startu).
 ' ============================================================
+' Migracija starih GP faktura u utovare je UKLONJENA (revizija #12):
+' stari GP model nikad nije deploy-ovan, a rutina je iz finansijskog
+' dokumenta izvodila DATUM FIZICKOG utovara (traceability cinjenica se
+' ne izmislja) i nije bila transakciona. Ako se backfill ikad stvarno
+' zatreba: zasebna migracija u kojoj operater EKSPLICITNO unosi stvarni
+' datum utovara, uz clsTransaction po celoj fakturi.
+
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE

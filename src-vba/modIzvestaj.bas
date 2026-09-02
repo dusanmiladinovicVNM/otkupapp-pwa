@@ -73,6 +73,25 @@ Public Const SLED_OZN_ZBIRNA_NEMA As String = "zbirna ne postoji"
 ' je fakturisana, a veza ne pokazuje na postojecu aktivnu fakturu.
 Public Const SLED_OZN_FAK_NEISPRAVNA As String = "faktura neusaglasena"
 Public Const SLED_OZN_KG As String = "kg razlika"
+
+' Stanje reda LANCA (kolona 30, GP grana) -- NAJDALJA dostignuta karika
+' toka robe. Pise se SAMO kad je red bez oznake (potpun lanac) i kad je
+' broj zbirne jednoznacan (nVl = 1); dvosmislen broj ne sme da pripise
+' tudje palete (isti fail-closed kao mete, krug 8 R3). Redosled provere:
+' GP faktura > prerada > sveza faktura > paleta > otvoren tok.
+Public Const SLED_ST_PRODATO_GP As String = "prodato GP"
+' Krug 5 (parcijalna prodaja): deo proizvedene robe je validno
+' utovaren i fakturisan, deo je jos na stanju.
+Public Const SLED_ST_DELIMICNO As String = "delimicno prodato"
+' Model B (revizija #10 B1): utovar je samostalan dogadjaj -- roba je
+' FIZICKI otisla i pre fakture, pa lanac to mora reci (ne "preradjeno"
+' dok kamion vozi robu kupcu).
+Public Const SLED_ST_UTOVARENO As String = "utovareno / ceka fakturu"
+Public Const SLED_ST_DELIM_UTOVAR As String = "delimicno utovareno"
+Public Const SLED_ST_PRERADJENO As String = "preradjeno"
+Public Const SLED_ST_PRODATO_SVEZE As String = "prodato svezo"
+Public Const SLED_ST_HLADNJACA As String = "u hladnjaci"
+Public Const SLED_ST_OTVOREN As String = "otvoren tok"
 Public Const SLED_OZN_BEZ_PARCELE As String = "bez parcele"
 
 ' Klase problema u ReportSledljivostProblemi (kolona 1). ASCII kodovi;
@@ -99,6 +118,14 @@ Public Const SLEDM_NEJASNA As String = "ZBIRNA-NEJASNA"
 ' nema svoju stampu, pa vrsta postoji da radnja ume da ODBIJE s razlogom
 ' (legacy Case Else obrazac) -- ne da bi se stampalo.
 Public Const SLED_DOK_ZBIRNA As String = "Zbirna"
+
+' Vrsta karike "prerada" (GP grana): NEPOTPUNI red kontradiktorne
+' prerade nosi je kao DokTip, a radnja stampe rutira na preradni list
+' (ExportPreradaPDF -- ista ruta kao meta PRERADA).
+Public Const SLED_DOK_PRERADA As String = "Prerada"
+' Vrsta karike "utovar" (krug 5): utovarna lista jos nema stampu --
+' radnja ODBIJA s razlogom (isti obrazac kao zbirna).
+Public Const SLED_DOK_UTOVAR As String = "Utovar"
 
 ' Prag poredjenja kg niz lanac -- ISTA vrednost kao (privatni)
 ' modDokumentInvariant.EPS_KG: dva mesta, jedan prag (par. 12.4 "prag je
@@ -4364,6 +4391,414 @@ Private Function SledFakMapa() As Object
     Next i
 End Function
 
+' GP karike lanca (Faza 1; krug 5 grain) -- pet mapa jednim prolazom
+' kroz cetiri tabele, iskljucivo AKTIVNI redovi. Ista podatkovna
+' pravila kao ReportSledljivostMete: paleta se vezuje BROJEM zbirne sa
+' paletne stavke, prerada join-om PaletaID sa preradne stavke; PRODAJU
+' broje UTOVARNE stavke (v. SledUtovarPoPreradi), ne marker na preradi.
+'   palPoBroju:  UCase(brojZbirne) -> dict(paletaID -> True)
+'   palBrojevi:  paletaID  -> "31/2026" (prikazni broj)
+'   prePoPaleti: paletaID  -> dict(preradaID -> True)
+'   preBrojevi:  preradaID -> "41/2026"
+'   preNeto:     preradaID -> PROIZVEDENO kg (NetoIzlazKg)
+Private Sub SledGpMape(ByRef palPoBroju As Object, ByRef palBrojevi As Object, _
+                       ByRef prePoPaleti As Object, ByRef preBrojevi As Object, _
+                       ByRef preNeto As Object)
+    Const SRC As String = "modIzvestaj.SledGpMape"
+    Set palPoBroju = CreateObject("Scripting.Dictionary")
+    palPoBroju.CompareMode = vbTextCompare
+    Set palBrojevi = CreateObject("Scripting.Dictionary")
+    palBrojevi.CompareMode = vbTextCompare
+    Set prePoPaleti = CreateObject("Scripting.Dictionary")
+    prePoPaleti.CompareMode = vbTextCompare
+    Set preBrojevi = CreateObject("Scripting.Dictionary")
+    preBrojevi.CompareMode = vbTextCompare
+    Set preNeto = CreateObject("Scripting.Dictionary")
+    preNeto.CompareMode = vbTextCompare
+
+    Dim d As Variant, i As Long, k As String
+
+    ' 1) Aktivne palete -- prikazni brojevi.
+    d = GetTableData(TBL_PALETA)
+    If IsArray(d) Then d = ExcludeStornirano(d, TBL_PALETA)
+    If IsArray(d) Then
+        Dim cPalId As Long, cPalBroj As Long, cPalGod As Long
+        cPalId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC)
+        cPalBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, SRC)
+        cPalGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, SRC)
+        For i = 1 To UBound(d, 1)
+            k = Trim$(SledTxt(d(i, cPalId)))
+            If Len(k) > 0 Then
+                If Not palBrojevi.Exists(k) Then _
+                    palBrojevi.Add k, SledTxt(d(i, cPalBroj)) & "/" & SledTxt(d(i, cPalGod))
+            End If
+        Next i
+    End If
+
+    ' 2) Aktivne paletne stavke -> palete po broju zbirne. Stavka cija
+    ' paleta nije aktivna se preskace (paleta je stornirana).
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(d) Then d = ExcludeStornirano(d, TBL_PALETA_STAVKA)
+    If IsArray(d) Then
+        Dim cStPal As Long, cStZbr As Long, palID As String
+        cStPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        cStZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
+        For i = 1 To UBound(d, 1)
+            k = UCase$(Trim$(SledTxt(d(i, cStZbr))))
+            palID = Trim$(SledTxt(d(i, cStPal)))
+            If Len(k) > 0 And palBrojevi.Exists(palID) Then
+                If Not palPoBroju.Exists(k) Then _
+                    palPoBroju.Add k, CreateObject("Scripting.Dictionary")
+                palPoBroju(k)(palID) = True
+            End If
+        Next i
+    End If
+
+    ' 3) Aktivne prerade -- brojevi + PROIZVEDENO kg (krug 5: prodaju
+    ' broje utovarne stavke, marker na preradi vise ne postoji).
+    d = GetTableData(TBL_PRERADA)
+    If IsArray(d) Then d = ExcludeStornirano(d, TBL_PRERADA)
+    If IsArray(d) Then
+        Dim cPreId As Long, cPreBroj As Long, cPreGod As Long
+        Dim cPreNetoI As Long
+        cPreId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+        cPreBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+        cPreGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+        cPreNetoI = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+        For i = 1 To UBound(d, 1)
+            k = Trim$(SledTxt(d(i, cPreId)))
+            If Len(k) > 0 Then
+                If Not preBrojevi.Exists(k) Then _
+                    preBrojevi.Add k, SledTxt(d(i, cPreBroj)) & "/" & SledTxt(d(i, cPreGod))
+                If Not preNeto.Exists(k) Then preNeto.Add k, SledDbl(d(i, cPreNetoI))
+            End If
+        Next i
+    End If
+
+    ' 4) Aktivne preradne stavke -> prerade po paleti (kanonski join je
+    ' PaletaID, kao modIntegritet D2). Stavka mrtve prerade se preskace.
+    d = GetTableData(TBL_PRERADA_STAVKA)
+    If IsArray(d) Then d = ExcludeStornirano(d, TBL_PRERADA_STAVKA)
+    If IsArray(d) Then
+        Dim cPrsPre As Long, cPrsPal As Long, preID As String
+        cPrsPre = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, SRC)
+        cPrsPal = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, SRC)
+        For i = 1 To UBound(d, 1)
+            k = Trim$(SledTxt(d(i, cPrsPal)))
+            preID = Trim$(SledTxt(d(i, cPrsPre)))
+            If Len(k) > 0 And preBrojevi.Exists(preID) Then
+                If Not prePoPaleti.Exists(k) Then _
+                    prePoPaleti.Add k, CreateObject("Scripting.Dictionary")
+                prePoPaleti(k)(preID) = True
+            End If
+        Next i
+    End If
+End Sub
+
+' Krug 5: prodajno stanje po preradi iz UTOVARNIH stavki + kanonski
+' dokaz kroz stavke fakture (FST.UtovarID). Jedan prolaz kroz
+' tblUtovar/tblUtovarStavke/tblFakturaStavke; meko -- sveska pre
+' nadogradnje nema tabele -> prazna mapa. Vraca dict:
+'   preradaID -> Array(
+'     0 utovarenoKg    aktivne stavke AKTIVNIH utovara
+'     1 fakturisanoKg  deo toga na utovarima sa VALIDNOM fakturom:
+'                      Fakturisano=Da + FakturaID aktivan + bar jedna
+'                      aktivna FST stavka tog utovara (dokaz)
+'     2 lose           bar jedna neusaglasenost: marker bez fakture/
+'                      dokaza, stale FakturaID bez markera, aktivna
+'                      utovar stavka na STORNIRAN utovar, aktivna GP
+'                      FST stavka bez validnog utovara
+'     3 fakBrojevi     pipe dedup ("9/2026|10/2026")
+'     4 kupIDs         pipe dedup finalnih kupaca
+'     5 utBrojevi      pipe brojeva utovara (SearchRefs) )
+' Prekomerni utovar (utovareno > PROIZVEDENO) proverava pozivalac --
+' on ima preNeto mapu.
+Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
+                                     ByVal fakKupci As Object) As Object
+    Const SRC As String = "modIzvestaj.SledUtovarPoPreradi"
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set SledUtovarPoPreradi = res
+
+    If GetTable(TBL_UTOVAR) Is Nothing Then Exit Function
+    If GetTable(TBL_UTOVAR_STAVKE) Is Nothing Then Exit Function
+
+    Dim i As Long, k As String
+
+    ' FST dokaz: broj aktivnih stavki fakture po utovaru + siroce
+    ' (aktivna GP stavka bez utovara) po preradi.
+    Dim fstPoUtovaru As Object: Set fstPoUtovaru = CreateObject("Scripting.Dictionary")
+    fstPoUtovaru.CompareMode = vbTextCompare
+    ' Dokaz na GRAIN-u stavke (revizije #6/#8): kljuc je
+    ' "UtovarID|FakturaID|PreradaID" -> zbir kg aktivnih FST. Bez
+    ' FakturaID u kljucu bi aktivna FST TUDJE fakture (U1|FAK-2)
+    ' "dokazala" prodaju fakture FAK-1 koja tu robu uopste ne nosi.
+    Dim fstPar As Object: Set fstPar = CreateObject("Scripting.Dictionary")
+    fstPar.CompareMode = vbTextCompare
+    ' Par utovar+prerada svih aktivnih FST -- za detekciju stavke
+    ' fakture ciju preradu utovar UOPSTE nema (visak, revizija #8).
+    Dim fstParUP As Object: Set fstParUP = CreateObject("Scripting.Dictionary")
+    fstParUP.CompareMode = vbTextCompare
+    ' 1 utovar = 1 faktura: prva vidjena faktura po utovaru + marker
+    ' mesanja -- aktivne FST dva razlicita FakturaID na istom utovaru
+    ' su same po sebi neusaglasenost.
+    Dim utFakPrva As Object: Set utFakPrva = CreateObject("Scripting.Dictionary")
+    utFakPrva.CompareMode = vbTextCompare
+    Dim utFakMix As Object: Set utFakMix = CreateObject("Scripting.Dictionary")
+    utFakMix.CompareMode = vbTextCompare
+    Dim fstSiroce As Object: Set fstSiroce = CreateObject("Scripting.Dictionary")
+    fstSiroce.CompareMode = vbTextCompare
+    Dim colFsPre As Long, colFsUt As Long, colFsSt As Long, colFsOs As Long
+    Dim colFsKol As Long, colFsFak As Long
+    colFsPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    colFsUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    colFsKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
+    colFsFak = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
+    If colFsPre > 0 And colFsUt > 0 Then
+        Dim fs As Variant
+        fs = GetTableData(TBL_FAKTURA_STAVKE)
+        If IsArray(fs) Then
+            colFsSt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO)
+            colFsOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+            For i = 1 To UBound(fs, 1)
+                k = Trim$(SledTxt(fs(i, colFsPre)))
+                If Len(k) > 0 Then
+                    If colFsSt > 0 Then
+                        If UCase$(Trim$(SledTxt(fs(i, colFsSt)))) = "DA" Then GoTo DaljeFst
+                    End If
+                    If colFsOs > 0 Then
+                        If Len(Trim$(SledTxt(fs(i, colFsOs)))) > 0 Then GoTo DaljeFst
+                    End If
+                    Dim utK As String, fakK As String
+                    utK = Trim$(SledTxt(fs(i, colFsUt)))
+                    fakK = ""
+                    If colFsFak > 0 Then fakK = Trim$(SledTxt(fs(i, colFsFak)))
+                    If Len(utK) = 0 Then
+                        fstSiroce(k) = True
+                    Else
+                        If fstPoUtovaru.Exists(utK) Then
+                            fstPoUtovaru(utK) = CLng(fstPoUtovaru(utK)) + 1
+                        Else
+                            fstPoUtovaru.Add utK, 1
+                        End If
+                        If utFakPrva.Exists(utK) Then
+                            If StrComp(CStr(utFakPrva(utK)), fakK, vbTextCompare) <> 0 Then _
+                                utFakMix(utK) = True
+                        Else
+                            utFakPrva.Add utK, fakK
+                        End If
+                        fstParUP(utK & "|" & k) = True
+                        Dim parK As String
+                        parK = utK & "|" & fakK & "|" & k
+                        If colFsKol > 0 Then
+                            If fstPar.Exists(parK) Then
+                                fstPar(parK) = CDbl(fstPar(parK)) + SledDbl(fs(i, colFsKol))
+                            Else
+                                fstPar.Add parK, SledDbl(fs(i, colFsKol))
+                            End If
+                        End If
+                    End If
+                End If
+DaljeFst:
+            Next i
+        End If
+    End If
+
+    ' Utovari: aktivni -> info (validna faktura / neusaglasen); mapa
+    ' SVIH utovara (i storniranih) da bi se stavka-siroce prepoznala.
+    Dim utValid As Object: Set utValid = CreateObject("Scripting.Dictionary")
+    utValid.CompareMode = vbTextCompare
+    Dim utLose As Object: Set utLose = CreateObject("Scripting.Dictionary")
+    utLose.CompareMode = vbTextCompare
+    ' Model B (revizija #10 B1): kupac AKTIVNOG utovara -- finalni
+    ' kupac postoji cim postoji utovar, i pre fakture.
+    Dim utKupci As Object: Set utKupci = CreateObject("Scripting.Dictionary")
+    utKupci.CompareMode = vbTextCompare
+    Dim utAktivan As Object: Set utAktivan = CreateObject("Scripting.Dictionary")
+    utAktivan.CompareMode = vbTextCompare
+    Dim ut As Variant
+    ut = GetTableData(TBL_UTOVAR)
+    If IsArray(ut) Then
+        Dim cUId As Long, cUBr As Long, cUFakt As Long, cUFid As Long, cUSt As Long
+        cUId = RequireColumnIndex(TBL_UTOVAR, COL_UT_ID, SRC)
+        cUBr = RequireColumnIndex(TBL_UTOVAR, COL_UT_BROJ, SRC)
+        cUFakt = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)
+        cUFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+        cUSt = RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)
+        Dim cUKup As Long
+        cUKup = RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)
+        Dim fid As String, fakt As String
+        For i = 1 To UBound(ut, 1)
+            k = Trim$(SledTxt(ut(i, cUId)))
+            If Len(k) = 0 Then GoTo DaljeUt
+            If UCase$(Trim$(SledTxt(ut(i, cUSt)))) = "DA" Then GoTo DaljeUt
+            utAktivan(k) = SledTxt(ut(i, cUBr))
+            utKupci(k) = Trim$(SledTxt(ut(i, cUKup)))
+            fakt = Trim$(SledTxt(ut(i, cUFakt)))
+            fid = Trim$(SledTxt(ut(i, cUFid)))
+            If fakt = "Da" Then
+                If Len(fid) > 0 And fakMapa.Exists(fid) _
+                   And fstPoUtovaru.Exists(k) _
+                   And Not utFakMix.Exists(k) _
+                   And StrComp(CStr(utFakPrva(k)), fid, vbTextCompare) = 0 Then
+                    ' Revizija #8: FST dokaz mora nositi BAS header
+                    ' fakturu -- aktivna stavka tudje fakture na ovom
+                    ' utovaru (ili mesavina faktura) nije dokaz nego
+                    ' neusaglasenost.
+                    Dim kupID As String
+                    kupID = ""
+                    If fakKupci.Exists(fid) Then kupID = CStr(fakKupci(fid))
+                    ' Revizija #11 B1: kupac FIZICKOG dokumenta mora
+                    ' biti kupac FAKTURE -- faktura kupcu B za robu
+                    ' koja je po utovarnoj listi otisla kupcu A nije
+                    ' "2 kup." nego neusaglasenost (isti invariant
+                    ' kao SEF kapija).
+                    If Len(kupID) > 0 _
+                       And StrComp(kupID, Trim$(CStr(utKupci(k))), vbTextCompare) <> 0 Then
+                        utLose(k) = True
+                    Else
+                        utValid(k) = Array(Trim$(CStr(fakMapa(fid))), kupID, fid)
+                    End If
+                Else
+                    ' Marker bez aktivne fakture, bez FST dokaza, ili
+                    ' sa FST tudje fakture.
+                    utLose(k) = True
+                End If
+            ElseIf Len(fid) > 0 Then
+                ' Stale veza: FakturaID bez markera.
+                utLose(k) = True
+            ElseIf fstPoUtovaru.Exists(k) Then
+                ' Revizija #7 B2: "nefakturisan" utovar (bez markera i
+                ' bez FakturaID) sa AKTIVNOM faktura-stavkom -- finansijski
+                ' dokument tvrdi prodaju koju utovar porice.
+                utLose(k) = True
+            End If
+DaljeUt:
+        Next i
+    End If
+
+    ' Stavke: agregacija po preradi.
+    Dim s As Variant
+    ' Parovi utovar+prerada koje utovar STVARNO nosi -- za detekciju
+    ' FST viska (revizija #8: stavka fakture za preradu koje na
+    ' utovaru nema).
+    Dim uPair As Object: Set uPair = CreateObject("Scripting.Dictionary")
+    uPair.CompareMode = vbTextCompare
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then s = Empty
+    If IsArray(s) Then
+        Dim cSId As Long, cSUt As Long, cSPre As Long, cSKol As Long, cSSt As Long
+        cSUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+        cSPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+        cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+        cSSt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_STORNIRANO, SRC)
+        Dim v As Variant, kol As Double, utID As String
+        For i = 1 To UBound(s, 1)
+            If UCase$(Trim$(SledTxt(s(i, cSSt)))) = "DA" Then GoTo DaljeSt
+            k = Trim$(SledTxt(s(i, cSPre)))
+            If Len(k) = 0 Then GoTo DaljeSt
+            utID = Trim$(SledTxt(s(i, cSUt)))
+            kol = SledDbl(s(i, cSKol))
+            uPair(utID & "|" & k) = True
+            If Not res.Exists(k) Then res.Add k, Array(0#, 0#, False, "", "", "")
+            v = res(k)
+            If Not utAktivan.Exists(utID) Then
+                ' Aktivna stavka na storniran/nepostojeci utovar.
+                v(2) = True
+            Else
+                v(0) = CDbl(v(0)) + kol
+                If InStr("|" & CStr(v(5)) & "|", "|" & CStr(utAktivan(utID)) & "|") = 0 Then _
+                    v(5) = CStr(v(5)) & "|" & CStr(utAktivan(utID))
+                ' Model B (revizija #10 B1): finalni kupac dolazi iz
+                ' UTOVARA cim on postoji -- faktura ga samo potvrdjuje.
+                If utKupci.Exists(utID) Then
+                    If Len(CStr(utKupci(utID))) > 0 Then
+                        If InStr("|" & CStr(v(4)) & "|", "|" & CStr(utKupci(utID)) & "|") = 0 Then _
+                            v(4) = CStr(v(4)) & "|" & CStr(utKupci(utID))
+                    End If
+                End If
+                If utValid.Exists(utID) Then
+                    ' Dokaz PO STAVCI (revizije #6/#8): za bas ovaj par
+                    ' utovar+prerada mora postojati aktivna FST BAS TE
+                    ' fakture (header FakturaID) sa ISTOM kolicinom --
+                    ' validan header ne dokazuje stavku koju njegova
+                    ' faktura ne nosi (ANY-vs-ALL / tudja faktura).
+                    Dim uv As Variant, parKey As String
+                    uv = utValid(utID)
+                    parKey = utID & "|" & CStr(uv(2)) & "|" & k
+                    If fstPar.Exists(parKey) And _
+                       Abs(SledDbl(fstPar(parKey)) - kol) <= 0.0001 Then
+                        v(1) = CDbl(v(1)) + kol
+                        If InStr("|" & CStr(v(3)) & "|", "|" & CStr(uv(0)) & "|") = 0 Then _
+                            v(3) = CStr(v(3)) & "|" & CStr(uv(0))
+                        If Len(CStr(uv(1))) > 0 Then
+                            If InStr("|" & CStr(v(4)) & "|", "|" & CStr(uv(1)) & "|") = 0 Then _
+                                v(4) = CStr(v(4)) & "|" & CStr(uv(1))
+                        End If
+                    Else
+                        ' Fakturisan utovar cija faktura NE dokazuje ovu
+                        ' stavku (nema FST para ili kolicina ne odgovara).
+                        v(2) = True
+                    End If
+                ElseIf utLose.Exists(utID) Then
+                    v(2) = True
+                End If
+            End If
+            res(k) = v
+DaljeSt:
+        Next i
+    End If
+
+    ' FST siroce: prodajna stavka bez utovara = neusaglasenost prerade.
+    Dim sk As Variant
+    For Each sk In fstSiroce.keys
+        If Not res.Exists(CStr(sk)) Then res.Add CStr(sk), Array(0#, 0#, False, "", "", "")
+        Dim vs As Variant
+        vs = res(CStr(sk))
+        vs(2) = True
+        res(CStr(sk)) = vs
+    Next sk
+
+    ' FST visak (revizija #8): aktivna stavka fakture za par
+    ' utovar+prerada koji na utovaru NE postoji -- faktura tvrdi robu
+    ' koju utovarna lista ne nosi.
+    Dim delovi() As String
+    For Each sk In fstParUP.keys
+        If Not uPair.Exists(CStr(sk)) Then
+            delovi = Split(CStr(sk), "|")
+            If UBound(delovi) >= 1 Then
+                If Not res.Exists(delovi(1)) Then _
+                    res.Add delovi(1), Array(0#, 0#, False, "", "", "")
+                vs = res(delovi(1))
+                vs(2) = True
+                res(delovi(1)) = vs
+            End If
+        End If
+    Next sk
+End Function
+
+' Kupac po AKTIVNOJ fakturi (B1 revizije #248): zavrsna GP faktura
+' donosi FINALNOG kupca u kolonu Kupac -- ne odrediste prijema.
+Private Function SledFakKupci() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cKup As Long, iD As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set SledFakKupci = d
+    src = GetTableData(TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    src = ExcludeStornirano(src, TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    cId = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+    cKup = GetColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC)
+    For i = 1 To UBound(src, 1)
+        iD = Trim$(SledTxt(src(i, cId)))
+        If Len(iD) > 0 Then
+            If Not d.Exists(iD) Then d.Add iD, Trim$(SledTxt(src(i, cKup)))
+        End If
+    Next i
+End Function
+
 ' Broj RAZLICITIH aktivnih vlasnika (vozac+kupac) koji dele broj zbirne
 ' (krug 8 R3). 0 = broj ne postoji medju aktivnima. Isto vlasnicko
 ' pravilo kao BuildManjakDict, bez gradnje celog recnika.
@@ -4479,7 +4914,7 @@ End Function
 ' LANAC. Zrno = JEDAN nestorniran otkupni list u [datumOd, datumDo];
 ' kolone su razresene karike NAPRED (i podaci za projekciju PO PARCELI).
 '
-' Returns: 2D Array (1..N, 1..27) ili Empty:
+' Returns: 2D Array (1..N, 1..30) ili Empty:
 '   1  Datum otkupa             14 Oznaka ("" = potpun lanac)
 '   2  BrojDokumenta            15 OtkupID
 '   3  KooperantID              16 OtpremnicaID
@@ -4496,7 +4931,29 @@ End Function
 '   27 SearchRefs (krug 8 R2): SVI brojevi prijemnica i faktura reda,
 '      pipe-spojeni -- prikaz "N prij."/"N fakt." guta pojedinacne
 '      brojeve, a pretraga unazad ih mora naci. Ne prikazuje se; ide u
-'      haystack LANAC i PARCELE.
+'      haystack LANAC i PARCELE. GP grana dodaje i brojeve paleta,
+'      prerada i GP faktura reda (isti princip: prikaz guta brojeve).
+'   28 Palete (broj/"N pal.") -- SVEZA karika: paletne stavke ciji
+'      BrojZbirne = zbirna reda (podatkovna veza, kao mete).
+'   29 Gotov proizvod (broj prerade/"N pre.") -- prerade nad tim
+'      paletama (join PaletaID). SAMO prerada: zavrsna GP faktura i
+'      finalni kupac idu u kolone 12/13 (B1 revizije #248).
+'   30 Stanje (SLED_ST_*) -- najdalja dostignuta karika; "" kad red
+'      nosi oznaku ili je broj zbirne dvosmislen (nVl > 1, fail-closed).
+'
+' Zavrsna GP faktura PREUZIMA kolone 12 (Faktura) i 13 (Kupac): lanac
+' se vizuelno zavrsava PRODAJOM (finalni kupac sa fakture), ne
+' odredistem prijema. Vise zavrsnih faktura/kupaca -> "N fakt."/"N kup."
+' + svi brojevi/nazivi u SearchRefs (nikakvo pogadjanje).
+'
+' Kanonski GP contract (B2): "prodato GP" = Fakturisano=Da AND
+' FakturaID aktivan AND TACNO JEDNA aktivna FakturaStavka (PreradaID,
+' FakturaID) -- veza ISKLJUCIVO iz podataka, marker bez stavke je
+' "faktura neusaglasena" (lanac se ne izmislja). Stale FakturaID uz
+' Fakturisano=Ne je ista klasa neusaglasenosti.
+'
+' Kolone 28-30 se pripisuju SAMO uz nVl = 1: paleta vezuje BROJ zbirne
+' (nema vozaca), pa bi dvosmislen broj sabrao tudje tokove.
 '
 ' Oznaka (14) je PRVA prekinuta/visesmislena karika (SLED_OZN_* /
 ' IZV_VLASNIK_NEJASAN / IZV_NEMA_PRIJEMA); potpun lanac kome kg curi na
@@ -4546,6 +5003,15 @@ Public Function ReportSledljivostLanac(ByVal datumOd As Date, _
     ' Mapa AKTIVNIH faktura (krug 8 R1): BuildLookupDict ne iskljucuje
     ' stornirane, pa je stale veza na storniranu fakturu izgledala validno.
     Dim fakMapa As Object: Set fakMapa = SledFakMapa()
+    ' GP karike (Faza 1): cetiri mape jednim prolazom kroz palete/prerade
+    ' -- LookupValue po redu bi bio S5 regres.
+    Dim palPoBroju As Object, palBrojevi As Object
+    Dim prePoPaleti As Object, preBrojevi As Object, preNeto As Object
+    SledGpMape palPoBroju, palBrojevi, prePoPaleti, preBrojevi, preNeto
+    ' B1/B2: dokaz prodajne veze (stavke) + finalni kupac sa fakture.
+    Dim fakKupci As Object: Set fakKupci = SledFakKupci()
+    ' Krug 5: prodaja po preradi iz UTOVARNIH stavki (grain).
+    Dim utPoPre As Object: Set utPoPre = SledUtovarPoPreradi(fakMapa, fakKupci)
 
     ' Zbir kg AKTIVNIH otpremnica po (broj, klasa) -- za karicni kg test
     ' otpremnice -> zbirna (validan samo uz #V = 1, inace se ne racuna).
@@ -4578,7 +5044,7 @@ PreskociBroj:
     If n = 0 Then Exit Function
 
     Dim result() As Variant
-    ReDim result(1 To n, 1 To 27)
+    ReDim result(1 To n, 1 To 30)
 
     Dim r As Long
     Dim otpID As String, brZbr As String, blokZbr As String
@@ -4590,6 +5056,15 @@ PreskociBroj:
     Dim prijC As Collection, fakture As Object
     Dim prikazPrij As String, prikazFak As String
     Dim kg1 As Boolean, kg2 As Boolean
+    Dim stanje As String, svezeFak As Boolean
+    ' GP recnici se prave JEDNOM, po redu se samo prazne (RemoveAll):
+    ' CreateObject po redu otkupa je na velikoj svesci bio desetine
+    ' hiljada COM kreacija -- glavni deo laga prvog otvaranja (GP-1).
+    Dim preD As Object, gpFakD As Object
+    Set preD = CreateObject("Scripting.Dictionary")
+    preD.CompareMode = vbTextCompare
+    Set gpFakD = CreateObject("Scripting.Dictionary")
+    gpFakD.CompareMode = vbTextCompare
 
     For i = 1 To UBound(otkupData, 1)
         If IsDate(otkupData(i, cOtkDat)) Then
@@ -4643,6 +5118,14 @@ PreskociBroj:
         result(r, 24) = ""
         result(r, 25) = Empty
         result(r, 26) = Empty
+        result(r, 28) = ""
+        result(r, 29) = ""
+        result(r, 30) = ""
+        stanje = ""
+        svezeFak = False
+        ' Reset po redu (B1): kupacID se puni samo za razresen vlasnicki
+        ' kljuc -- stale vrednost iz proslog reda bi usla u "N kup." racun.
+        kupacID = ""
 
         If Len(otpID) = 0 Then
             oznaka = SLED_OZN_NEPOVEZAN
@@ -4764,6 +5247,7 @@ PreskociBroj:
                             prikazFak = CStr(fakture.count) & " fakt."
                         End If
                         result(r, 12) = prikazFak
+                        svezeFak = (fakture.count > 0)
                     End If
 
                     ' Kupac iz RAZRESENOG vlasnika (broj|vozac|kupac).
@@ -4777,6 +5261,195 @@ PreskociBroj:
                             Else
                                 result(r, 13) = kupacID
                             End If
+                        End If
+                    End If
+
+                    ' --- karike 6-7 (GP grana): palete -> prerade -> GP
+                    ' faktura. SAMO uz nVl = 1: paleta vezuje BROJ zbirne
+                    ' (nema vozaca), dvosmislen broj bi sabrao tudje
+                    ' tokove (fail-closed kao mete, krug 8 R3).
+                    If nVl = 1 Then
+                        Dim palD As Object
+                        Dim gpRefs As String, gpLose As Boolean
+                        Dim pk As Variant, prK As Variant
+                        Dim palPrikaz As String, prePrikaz As String
+                        Dim gpFakPrikaz As String
+                        Dim nPalR As Long
+                        preD.RemoveAll
+                        gpFakD.RemoveAll
+                        gpRefs = ""
+                        gpLose = False
+                        palPrikaz = ""
+                        prePrikaz = ""
+                        gpFakPrikaz = ""
+                        nPalR = 0
+
+                        If palPoBroju.Exists(UCase$(brZbr)) Then
+                            Set palD = palPoBroju(UCase$(brZbr))
+                            nPalR = palD.count
+                            For Each pk In palD.keys
+                                palPrikaz = CStr(palBrojevi(CStr(pk)))
+                                gpRefs = gpRefs & "|" & palPrikaz
+                                If prePoPaleti.Exists(CStr(pk)) Then
+                                    For Each prK In prePoPaleti(CStr(pk)).keys
+                                        preD(CStr(prK)) = True
+                                    Next prK
+                                End If
+                            Next pk
+                            If nPalR = 1 Then
+                                result(r, 28) = palPrikaz
+                            Else
+                                result(r, 28) = CStr(nPalR) & " pal."
+                            End If
+                        End If
+
+                        ' Krug 5 grain: prodaju broje UTOVARNE stavke.
+                        ' Po preradi: utovarenoKg / fakturisanoKg (validno:
+                        ' utovar Fakturisano=Da + aktivna faktura + FST
+                        ' dokaz) / neusaglasenosti (v. SledUtovarPoPreradi)
+                        ' + prekomerni utovar (utovareno > proizvedeno).
+                        ' Parcijalna prodaja je LEGALNA -- vise faktura po
+                        ' preradi nije kvar nego "N fakt.".
+                        Dim gpKupNaziv As String, utV As Variant
+                        Dim gpKup As Object
+                        Set gpKup = CreateObject("Scripting.Dictionary")
+                        gpKup.CompareMode = vbTextCompare
+                        gpKupNaziv = ""
+                        Dim allSold As Boolean, anySold As Boolean
+                        Dim anyLoaded As Boolean, allLoaded As Boolean
+                        allSold = (preD.count > 0)
+                        anySold = False
+                        ' Model B: utovareno se prati ODVOJENO od
+                        ' fakturisanog -- roba moze biti fizicki
+                        ' otisla a faktura jos ne postoji.
+                        allLoaded = (preD.count > 0)
+                        anyLoaded = False
+                        For Each prK In preD.keys
+                            prePrikaz = CStr(preBrojevi(CStr(prK)))
+                            gpRefs = gpRefs & "|" & prePrikaz
+                            If utPoPre.Exists(CStr(prK)) Then
+                                utV = utPoPre(CStr(prK))
+                                If CBool(utV(2)) Then gpLose = True
+                                If preNeto.Exists(CStr(prK)) Then
+                                    If CDbl(utV(0)) > CDbl(preNeto(CStr(prK))) + SLED_EPS_KG Then
+                                        ' Utovareno vise nego proizvedeno --
+                                        ' podaci tvrde prodaju robe koje nema.
+                                        gpLose = True
+                                    End If
+                                End If
+                                If CDbl(utV(1)) > 0 Then anySold = True
+                                If CDbl(utV(0)) > 0 Then anyLoaded = True
+                                If preNeto.Exists(CStr(prK)) Then
+                                    If CDbl(utV(1)) < CDbl(preNeto(CStr(prK))) - SLED_EPS_KG _
+                                       Or CDbl(preNeto(CStr(prK))) <= 0 Then allSold = False
+                                    If CDbl(utV(0)) < CDbl(preNeto(CStr(prK))) - SLED_EPS_KG _
+                                       Or CDbl(preNeto(CStr(prK))) <= 0 Then allLoaded = False
+                                Else
+                                    allSold = False
+                                    allLoaded = False
+                                End If
+                                Dim pdel As Variant, pi As Long
+                                pdel = Split(CStr(utV(3)), "|")
+                                For pi = 0 To UBound(pdel)
+                                    If Len(pdel(pi)) > 0 Then
+                                        gpFakD(CStr(pdel(pi))) = True
+                                        gpFakPrikaz = CStr(pdel(pi))
+                                        gpRefs = gpRefs & "|" & CStr(pdel(pi))
+                                    End If
+                                Next pi
+                                pdel = Split(CStr(utV(4)), "|")
+                                For pi = 0 To UBound(pdel)
+                                    If Len(pdel(pi)) > 0 Then
+                                        Dim gpKupID As String
+                                        gpKupID = CStr(pdel(pi))
+                                        If kupMapa.Exists(gpKupID) Then
+                                            gpKup(gpKupID) = Trim$(CStr(kupMapa(gpKupID)))
+                                        Else
+                                            gpKup(gpKupID) = gpKupID
+                                        End If
+                                        gpKupNaziv = CStr(gpKup(gpKupID))
+                                        gpRefs = gpRefs & "|" & gpKupNaziv
+                                    End If
+                                Next pi
+                                pdel = Split(CStr(utV(5)), "|")
+                                For pi = 0 To UBound(pdel)
+                                    If Len(pdel(pi)) > 0 Then gpRefs = gpRefs & "|" & CStr(pdel(pi))
+                                Next pi
+                            Else
+                                allSold = False
+                                allLoaded = False
+                            End If
+                        Next prK
+                        ' Kolona 29 = SAMO prerada (B1): faktura i kupac su
+                        ' zasebne karike i imaju svoje kolone.
+                        If preD.count = 1 Then
+                            result(r, 29) = prePrikaz
+                        ElseIf preD.count > 1 Then
+                            result(r, 29) = CStr(preD.count) & " pre."
+                        End If
+
+                        ' B1: zavrsna GP faktura ZAUZIMA kolone Faktura i
+                        ' Kupac -- lanac se vizuelno zavrsava prodajom, ne
+                        ' odredistem prijema. Vise zavrsnih faktura/kupaca
+                        ' se NE pogadja: "N fakt."/"N kup." + refs.
+                        If gpFakD.count > 0 Then
+                            If fakture.count = 0 And gpFakD.count = 1 Then
+                                result(r, 12) = gpFakPrikaz
+                            Else
+                                result(r, 12) = CStr(fakture.count + gpFakD.count) & " fakt."
+                            End If
+                        End If
+                        ' Kupac se pise i BEZ zavrsne fakture (revizija
+                        ' #10 B1): aktivan utovar vec nosi finalnog
+                        ' kupca -- faktura ga kasnije samo potvrdjuje.
+                        If gpKup.count > 0 Then
+                            Dim nKup As Long
+                            nKup = gpKup.count
+                            If fakture.count > 0 And Len(kupacID) > 0 Then
+                                If Not gpKup.Exists(kupacID) Then nKup = nKup + 1
+                            End If
+                            If nKup > 1 Then
+                                result(r, 13) = CStr(nKup) & " kup."
+                            ElseIf fakture.count = 0 And gpKup.count = 1 Then
+                                result(r, 13) = gpKupNaziv
+                            End If
+                        End If
+
+                        If gpLose And Len(oznaka) = 0 Then oznaka = SLED_OZN_FAK_NEISPRAVNA
+
+                        ' Refs: prikazi "N pal."/"N pre." gutaju brojeve,
+                        ' pretraga unazad ih mora naci (princip R2).
+                        If Len(gpRefs) > 0 Then
+                            If Len(SledTxt(result(r, 27))) > 0 Then
+                                result(r, 27) = SledTxt(result(r, 27)) & gpRefs
+                            Else
+                                result(r, 27) = Mid$(gpRefs, 2)
+                            End If
+                        End If
+
+                        ' Stanje = najdalja dostignuta karika; upisuje se
+                        ' na kraju reda SAMO ako je red bez oznake. Krug 5:
+                        ' parcijalna prodaja daje "delimicno prodato" --
+                        ' istina umesto binarne (advisor primer: 500 od
+                        ' 1.000 kg utovareno i fakturisano).
+                        If anySold And allSold Then
+                            stanje = SLED_ST_PRODATO_GP
+                        ElseIf anySold Then
+                            stanje = SLED_ST_DELIMICNO
+                        ElseIf anyLoaded And allLoaded Then
+                            ' Model B: sve fizicki otislo, faktura ceka.
+                            stanje = SLED_ST_UTOVARENO
+                        ElseIf anyLoaded Then
+                            stanje = SLED_ST_DELIM_UTOVAR
+                        ElseIf preD.count > 0 Then
+                            stanje = SLED_ST_PRERADJENO
+                        ElseIf svezeFak Then
+                            stanje = SLED_ST_PRODATO_SVEZE
+                        ElseIf nPalR > 0 Then
+                            stanje = SLED_ST_HLADNJACA
+                        Else
+                            ' Red bez oznake garantuje da prijem postoji.
+                            stanje = SLED_ST_OTVOREN
                         End If
                     End If
                 End If
@@ -4804,6 +5477,7 @@ PreskociBroj:
                 If kg1 Or kg2 Then oznaka = SLED_OZN_KG
         End Select
         result(r, 14) = oznaka
+        If Len(oznaka) = 0 Then result(r, 30) = stanje
 Sledeci:
     Next i
 
@@ -5127,6 +5801,112 @@ SledeciZbr:
             End If
 SledeciPrj:
         Next i
+    End If
+
+    ' --- UTOVARI (krug 5): dokument fizicke isporuke -- neusaglasen
+    ' marker/faktura/dokaz se prijavljuje PO UTOVARU; prerade se
+    ' prijavljuju za prekomerni utovar, stavku na mrtav utovar i
+    ' prodajnu stavku fakture bez utovara (SledUtovarPoPreradi lose).
+    ' Meko: sveska pre nadogradnje nema tabele i prolaz cuti.
+    If Not GetTable(TBL_UTOVAR) Is Nothing Then
+        Dim fakMapaG As Object
+        If fakMapaP Is Nothing Then
+            Set fakMapaG = SledFakMapa()
+        Else
+            Set fakMapaG = fakMapaP
+        End If
+        Dim fakKupciP As Object: Set fakKupciP = SledFakKupci()
+        Dim utPoPreP As Object
+        Set utPoPreP = SledUtovarPoPreradi(fakMapaG, fakKupciP)
+
+        Dim utD As Variant
+        utD = GetTableData(TBL_UTOVAR)
+        If IsArray(utD) Then utD = ExcludeStornirano(utD, TBL_UTOVAR)
+        If IsArray(utD) Then
+            Dim cQId As Long, cQBr As Long, cQDat As Long
+            Dim cQFakt As Long, cQFid As Long, cQKup As Long
+            cQId = RequireColumnIndex(TBL_UTOVAR, COL_UT_ID, SRC)
+            cQBr = RequireColumnIndex(TBL_UTOVAR, COL_UT_BROJ, SRC)
+            cQDat = RequireColumnIndex(TBL_UTOVAR, COL_UT_DATUM, SRC)
+            cQFakt = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)
+            cQFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+            cQKup = RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)
+            Dim qFid As String, qNaziv As String
+            For i = 1 To UBound(utD, 1)
+                If IsDate(utD(i, cQDat)) Then
+                    dSer = Int(CDbl(CDate(utD(i, cQDat))))
+                    If dSer < odN Or dSer > doN Then GoTo SledeciUt
+                End If
+                qFid = Trim$(SledTxt(utD(i, cQFid)))
+                If kupMapa.Exists(SledTxt(utD(i, cQKup))) Then
+                    qNaziv = Trim$(CStr(kupMapa(SledTxt(utD(i, cQKup)))))
+                Else
+                    qNaziv = SledTxt(utD(i, cQKup))
+                End If
+                If SledTxt(utD(i, cQFakt)) = "Da" Then
+                    If Len(qFid) = 0 Then
+                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, utD(i, cQDat), _
+                                       SledTxt(utD(i, cQBr)), qNaziv, Empty, _
+                                       "Fakturisano=Da bez FakturaID (utovar)", _
+                                       SLED_DOK_UTOVAR, SledTxt(utD(i, cQId)), "")
+                    ElseIf Not fakMapaG.Exists(qFid) Then
+                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, utD(i, cQDat), _
+                                       SledTxt(utD(i, cQBr)), qNaziv, Empty, _
+                                       "FakturaID " & qFid & _
+                                       " nije medju aktivnim fakturama (utovar)", _
+                                       SLED_DOK_UTOVAR, SledTxt(utD(i, cQId)), "")
+                    End If
+                ElseIf Len(qFid) > 0 Then
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, utD(i, cQDat), _
+                                   SledTxt(utD(i, cQBr)), qNaziv, Empty, _
+                                   "zaostao FakturaID " & qFid & _
+                                   " bez Fakturisano=Da (utovar)", _
+                                   SLED_DOK_UTOVAR, SledTxt(utD(i, cQId)), "")
+                End If
+SledeciUt:
+            Next i
+        End If
+
+        ' Prerade: prekomerni utovar / neusaglasene prodajne veze.
+        Dim preData As Variant
+        preData = GetTableData(TBL_PRERADA)
+        If IsArray(preData) Then preData = ExcludeStornirano(preData, TBL_PRERADA)
+        If IsArray(preData) Then
+            Dim cGId As Long, cGBr As Long, cGGod As Long, cGDat As Long
+            Dim cGNeto As Long
+            cGId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+            cGBr = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+            cGGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+            cGDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
+            cGNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+            Dim utVp As Variant
+            For i = 1 To UBound(preData, 1)
+                If IsDate(preData(i, cGDat)) Then
+                    dSer = Int(CDbl(CDate(preData(i, cGDat))))
+                    If dSer < odN Or dSer > doN Then GoTo SledeciPre
+                End If
+                If Not utPoPreP.Exists(SledTxt(preData(i, cGId))) Then GoTo SledeciPre
+                utVp = utPoPreP(SledTxt(preData(i, cGId)))
+                If CDbl(utVp(0)) > SledDbl(preData(i, cGNeto)) + SLED_EPS_KG Then
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                   SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                   "", SledDbl(preData(i, cGNeto)), _
+                                   "utovareno " & Format$(CDbl(utVp(0)), "#,##0.##") & _
+                                   " kg prelazi proizvedeno " & _
+                                   Format$(SledDbl(preData(i, cGNeto)), "#,##0.##") & " kg", _
+                                   SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                End If
+                If CBool(utVp(2)) Then
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                   SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                   "", SledDbl(preData(i, cGNeto)), _
+                                   "prodajne veze prerade nisu usaglasene " & _
+                                   "(utovar/faktura/stavka -- v. utovare)", _
+                                   SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                End If
+SledeciPre:
+            Next i
+        End If
     End If
 
     If rows.count = 0 Then Exit Function

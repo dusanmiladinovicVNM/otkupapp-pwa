@@ -305,6 +305,9 @@ Public Const COL_KUT_TEZINA As String = "TezinaKg"
 Public Const COL_KES_TIP As String = "TipKese"
 Public Const COL_KES_TEZINA As String = "TezinaKg"
 Public Const COL_VGP_TIP As String = "TipGotovogProizvoda"
+' Rok trajanja PO VRSTI gotovog proizvoda (meseci od datuma prerade).
+' Prazno = globalni default GP_ROK_TRAJANJA_MESECI iz Podesavanja.
+Public Const COL_VGP_ROK As String = "RokMeseci"
 
 ' tblCenovnik (cene po proizvodu -- append-only istorija)
 ' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
@@ -344,6 +347,70 @@ Public Const COL_PRE_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PRE_TIP_KUTIJE As String = "TipKutije"
 Public Const COL_PRE_TIP_KESE As String = "TipKese"
 Public Const COL_PRE_TIP_GP As String = "TipGotovogProizvoda"
+' SNAPSHOT roka trajanja NA LOTU (revizija #13 B2): nastaje pri
+' preradi po TADASNJEM pravilu (vrsta -> RokMeseci, pa globalni CFG);
+' od tada je istorijska cinjenica lota -- kasnija promena podesavanja
+' NE sme da promeni rok na reprintu starog dokumenta.
+Public Const COL_PRE_ROK As String = "DatumIsteka"
+
+' UTOVARNA LISTA (krug 5 revizije #248): dokument FIZICKE isporuke GP
+' robe. Prerada je proizvodni lot (koliko je PROIZVEDENO); utovar
+' skida robu sa stanja (koliko je ISPORUCENO, kome i KADA -- taj datum
+' ide na SEF); faktura finansijski prati utovar (v1: 1 utovar = 1 GP
+' faktura). Prerada se NE zakljucava jednom fakturom: parcijalna
+' prodaja (500 kg od 2.000) je legalna, "na stanju" = NetoIzlazKg -
+' SUM aktivnih utovarenih kg.
+Public Const TBL_UTOVAR As String = "tblUtovar"
+Public Const TBL_UTOVAR_STAVKE As String = "tblUtovarStavke"
+Public Const COL_UT_ID As String = "UtovarID"
+Public Const COL_UT_BROJ As String = "BrojUtovara"
+Public Const COL_UT_GODINA As String = "Godina"
+Public Const COL_UT_DATUM As String = "DatumUtovara"
+Public Const COL_UT_KUPAC As String = "KupacID"
+Public Const COL_UT_FAKTURISANO As String = "Fakturisano"
+Public Const COL_UT_FAKTURA_ID As String = "FakturaID"
+Public Const COL_UT_NAPOMENA As String = "Napomena"
+' Krug 5d (profesionalna utovarna lista): podaci PREVOZA i isporuke --
+' unos na listi Utovari, prikaz na stampanom obrascu. Temperaturni
+' rezim i plomba su odbrana kod reklamacija smrznute robe.
+Public Const COL_UT_PREVOZNIK As String = "Prevoznik"
+Public Const COL_UT_VOZAC As String = "Vozac"
+Public Const COL_UT_REGISTRACIJA As String = "Registracija"
+Public Const COL_UT_PLOMBA As String = "Plomba"
+Public Const COL_UT_TEMP_REZIM As String = "TemperaturniRezim"
+Public Const COL_UT_MESTO_ISTOVARA As String = "MestoIstovara"
+Public Const COL_UT_VREME As String = "VremeUtovara"
+Public Const COL_UT_PO_BROJ As String = "BrojNarudzbenice"
+' Sifarnik prevoznika (smoke 5d): red = kombinacija prevoznik + vozac
+' (+ registracija). Auto-uci se iz "Sacuvaj prevoz" -- puni combo
+' predloge na listi Utovari da se ponovljeni unos ne kuca iznova.
+Public Const TBL_PREVOZNICI As String = "tblPrevoznici"
+Public Const COL_PRV_ID As String = "PrevoznikID"
+Public Const COL_PRV_NAZIV As String = "Naziv"
+Public Const COL_PRV_VOZAC As String = "Vozac"
+Public Const COL_PRV_REG As String = "Registracija"
+Public Const COL_PRV_AKTIVAN As String = "Aktivan"
+Public Const COL_UTS_ID As String = "UtovarStavkaID"
+Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
+Public Const COL_UTS_PRERADA_ID As String = "PreradaID"
+Public Const COL_UTS_BROJ_PRERADE As String = "BrojPrerade"
+Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
+' Pakovanja STVARNO utovarena (revizija #6 t.4): puni se samo kad je
+' broj dokaziv (cela paleta, ili jedina vrsta pakovanja celobrojno);
+' prazno = nepoznato, obrazac tada ne izmislja broj.
+Public Const COL_UTS_KUTIJE As String = "BrojKutija"
+Public Const COL_UTS_KESE As String = "BrojKesa"
+' Dogovorena prodajna cena po stavci (model B, revizija #9): unosi se
+' pri izradi utovara -- "Fakturisi" kasnije cita cenu ODAVDE kad
+' utovar jos nema istoriju faktura.
+Public Const COL_UTS_CENA As String = "CenaKg"
+' Stampani obrazac utovarne liste (ide sa robom) + rezim stampe.
+Public Const WS_UTOVAR_SABLON As String = "UtovarSablon"
+Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
+' Rok trajanja gotovog proizvoda = datum prerade + N meseci (poslovna
+' postavka; smrznuto voce standardno 24). Obrazac ga IZVODI -- posebna
+' kolona po preradi je buduci korak ako se pojavi potreba po lotu.
+Public Const CFG_GP_ROK_MESECI As String = "GP_ROK_TRAJANJA_MESECI"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
@@ -573,6 +640,14 @@ Public Const COL_FS_KOLICINA As String = "Kolicina"
 Public Const COL_FS_CENA As String = "Cena"
 Public Const COL_FS_KLASA As String = "Klasa"
 Public Const COL_FS_BROJ_PRIJEMNICE As String = "BrojPrijemnice"
+' GP grana (fakturisanje gotove robe): stavka nosi PRERADU umesto
+' prijemnice -- podatkovna veza kojom se lanac sledljivosti zavrsava
+' fakturom gotovog proizvoda (bez nje bi zavrsna karika bila pogadjanje).
+Public Const COL_FS_PRERADA_ID As String = "PreradaID"
+Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
+' Krug 5: stavka GP fakture nastaje IZ utovarne stavke -- UtovarID je
+' canonical veza faktura <-> fizicka isporuka (SEF datum, storno).
+Public Const COL_FS_UTOVAR_ID As String = "UtovarID"
 
 ' --- Typen Ambalaze ---
 Public Const AMB_12_1 As String = "12/1"

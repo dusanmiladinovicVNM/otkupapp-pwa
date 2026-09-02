@@ -6826,3 +6826,269 @@ ijedne izmišljene veze.
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
   i smoke nad pravim podacima (checklista u PR-u).
+
+---
+
+## vba-v2.91.0 — 2026-09-01
+
+### Sledljivost: lanac se više ne završava na prijemnici (GP grana)
+
+- **Tri nove kolone na listi LANAC — „Palete", „Prerada / GP" i
+  „Stanje".** Lanac sada prati robu i POSLE prijemnice: na koje je
+  palete legla (paletna stavka vezuje broj zbirne), da li je prerađena
+  (preradna stavka vezuje paletu) i da li je gotov proizvod fakturisan.
+  Jedna validno fakturisana prerada prikazuje i broj završne fakture
+  („51/2026 → 9/2026") — krug je zatvoren fakturom gotove robe.
+- **Kolona „Stanje" kaže dokle je roba stigla:** „prodato GP",
+  „preradjeno", „prodato svezo", „u hladnjaci" ili „otvoren tok" —
+  najdalja dostignuta karika. Red sa oznakom kvara stanje ne dobija
+  (prvo se popravlja kvar).
+- **Sve po podatkovnim vezama, ništa pogađanjem:** GP faktura se čita
+  isključivo iz `tblPrerada.FakturaID` — „isti artikal + isti datum +
+  isti kupac" NIJE veza i ne crta se. Dvosmislen broj zbirne ne
+  pripisuje ničije palete (isti fail-closed kao mete).
+- **Prerada koja tvrdi „fakturisano" bez validne aktivne fakture** je
+  ista klasa kvara kao takva prijemnica: oznaka „faktura neusaglasena"
+  na lancu + red na NEPOTPUNIMA (štampa vodi na preradni list).
+- Pretraga unazad sada nalazi i brojeve paleta, prerada i GP faktura
+  (prikazi „N pal."/„N pre." ih ne gutaju).
+
+### Fakturisanje: nova lista „Gotova roba"
+
+- **Četvrta lista na ekranu Fakturisanje: prerade (gotov proizvod)
+  spremne za fakturisanje** — broj, proizvod, izlaz kg, kutije/kese,
+  dostupnost i broj fakture za već prodate. Čipovi sve/čeka/fakturisano.
+- **Cena gotove robe je unos operatera** (polje „Cena gotove robe
+  (RSD/kg)" vidljivo samo na toj listi): gotova roba nema evidentiranu
+  cenu nigde u podacima, pa se prodajna cena određuje pri fakturisanju.
+  Bez cene stavka ne ulazi u korpu.
+- **Jedna faktura nosi jednu vrstu robe:** korpa ne meša prijemnice i
+  gotovu robu (obe strane odbijaju uz jasnu poruku) — sveža i GP
+  faktura su različiti dokumenti sa različitim izvorima vrednosti.
+- **Novi writer `CreateFakturaGP_TX`** (transakcioni, kapije u bazi):
+  prerada mora postojati, ne sme biti stornirana ni već fakturisana,
+  izlaz > 0 kg, cena > 0. Stavka fakture nosi `PreradaID` + broj
+  prerade (podatkovna veza za sledljivost); prerada se markira
+  `Fakturisano=Da` + `FakturaID` — isti obrazac kao prijemnice.
+- **Storno simetrija:** storno GP fakture oslobađa prerade (opet su
+  dostupne za fakturisanje); storno prerade orphan-uje njenu fakturu —
+  ista pravila kao kod svežih.
+- Šema: `tblFakturaStavke` + `PreradaID`/`BrojPrerade`, `tblPrerada` +
+  `Fakturisano`/`FakturaID` (dodaje `EnsurePaletniListSchema` na
+  startu, kolone na kraj tabela — postojeći pozicijski upisi netaknuti).
+
+### Posle prvog smoke-a (GP-1)
+
+- Prekidači na Fakturisanju: **„Sveža roba" / „Gotova roba"** (par
+  imenuje robu, ne proces); hederi lanca u operaterovom rečniku:
+  „PAL. SVEŽE ROBE" / „PAL. GOTOVOG PROIZV.".
+- Kolone LANAC prate tok robe: prijem → dve paletne kolone → faktura →
+  kupac → oznaka → **stanje na kraju**.
+- Lag prvog otvaranja Sledljivosti smanjen (rečnici GP sekcije se više
+  ne prave po redu — na velikoj svesci desetine hiljada COM kreacija);
+  za merenje na pravim podacima: `Alt+F8 → Diag_SlPerf`.
+
+### GP faktura je first-class (spoljna revizija, R1–R5)
+
+- **Štampa:** GP faktura na papiru nosi broj prerade i naziv proizvoda
+  („Broj prerade" / „Proizvod" hederi) — više nema praznih prijemničkih
+  polja.
+- **SEF:** GP faktura može na SEF — stavka nosi preradu kao izvor
+  (naziv = tip gotovog proizvoda + broj prerade, stabilni ID u UBL-u,
+  datum isporuke = datum prerade); poreski tretman isti kao sveža roba
+  (potvrđena odluka). Meša-nje izvora u istoj stavci je fail-closed.
+- **Storno je atomaran:** rollback sada vraća SVE tabele koje storno
+  piše (i preradu kod storna fakture, i fakturu kod storna prerade) —
+  dokazano namernom greškom usred storna u testu.
+- **Nadogradnja bez ručnog koraka:** četiri GP kolone se dodaju
+  automatski na startu (runtime self-heal) — klijent koji dobije novu
+  verziju koda ne mora ništa ručno da pokreće.
+- **Decimalne količine bezbedne na srpskom locale-u:** čitanje izlaza
+  prerade više ne ide kroz `Val` (50,5 kg se više ne seče na 50).
+- Potvrđen poslovni model: **jedna prerada = ceo prodajni lot** —
+  prodaje se u celosti, jednom kupcu, na jednoj fakturi.
+
+### Finalni lanac do kupca (revizija, krug 3)
+
+- **Lanac se sada vizuelno završava prodajom:** završna GP faktura
+  ulazi u kolonu FAKTURA, a kolona KUPAC pokazuje **finalnog kupca sa
+  te fakture** (ne više odredište prijema). Kolona gotove robe nosi
+  samo broj prerade; heder je „GOTOV PROIZVOD".
+- **„Prodato GP" se dokazuje podatkom, ne markerom:** važi samo kad
+  faktura STVARNO sadrži tu preradu (tačno jedna aktivna stavka).
+  Marker bez stavke, zaostala veza ili višak stavki → „faktura
+  neusaglasena" na lancu i NEPOTPUNIMA.
+- **Nova faktura ne može da pregazi staru vezu:** prerada sa zaostalim
+  `FakturaID` (i bez markera) nije dostupna za fakturisanje dok se
+  veza ne raspetlja.
+- **Faktura mora imenovati proizvod:** prazan tip gotovog proizvoda
+  se ne fakturiše.
+- Dupli ID prerade (korupcija) više ne izgleda kao normalan red u
+  listi; storno svežih faktura radi i na starim sveskama bez tabele
+  prerada.
+- **Dvostruka prodaja se vidi:** ista prerada sa stavkama na dve
+  fakture, kao i stavka fakture bez markera na preradi, prijavljuju se
+  kao „faktura neusaglasena" — „prodato GP" važi samo kad je stavka
+  te fakture JEDINA aktivna stavka te prerade.
+- Prerada bez upisanog tipa proizvoda se u listi više ne nudi kao
+  dostupna; writer proverava i da kupac postoji u šifarniku.
+
+### UTOVARNA LISTA — pravi prodajni tok (krug 5)
+
+- **Nov dokument: utovarna lista** — fizička isporuka gotove robe
+  (datum utovara, kupac, stavke prerada + kg). GP faktura se pravi IZ
+  utovara (jedna lista = jedna faktura, ista transakcija); **datum
+  isporuke na SEF-u je datum utovara**, ne datum prerade. Štampani
+  obrazac utovarne liste stiže kao sledeći korak — podaci već postoje.
+- **Parcijalna prodaja:** sa palete od 1.000 kg može se prodati i 500
+  — lista „Gotova roba" pokazuje „NA STANJU (kg)" (proizvedeno minus
+  utovareno), polje „Količina za utovar" (prazno = sve) određuje
+  koliko ide kupcu, ostatak ostaje dostupan. Lanac tada kaže
+  **„delimicno prodato"** — istina umesto binarnog zaključavanja.
+- Prerada se više NIKAD ne zaključava jednom fakturom; više faktura po
+  preradi je legalno („N fakt." u prikazu). Prodaja preko stanja je
+  nemoguća (writer i ekran dele isto pravilo).
+- Storno: fakture oslobađa utovar (roba ostaje isporučena); storno
+  utovara vraća robu na stanje; prerada sa isporučenom robom se ne
+  stornira dok se utovar ne raspetlja.
+- **Lista „Utovari" na ekranu Fakturisanje:** svaki utovar se vidi
+  (broj, datum, kupac, roba, kg, faktura), filtrira (čeka/fakturisan)
+  i ima dve radnje — **štampa utovarne liste** i **storno** (sa
+  potvrdom; fakturisan utovar prvo traži storno fakture).
+- **Štampani obrazac „UTOVARNA LISTA"** — dokument koji ide sa robom:
+  broj, datum utovara, kupac, stavke (broj prerade, proizvod,
+  pakovanje, kg), UKUPNO i potpisi „Robu predao/preuzeo". Ista štampa
+  dostupna i sa NEPOTPUNIH na Sledljivosti.
+- Režim štampe utovarne liste u **Podešavanja → Štampa** (PDF /
+  štampač / pregled / isključeno), default PDF.
+
+### Profesionalna utovarna lista: prevoz, lot, rok trajanja, bruto
+
+- **Podaci prevoza na utovaru:** prevoznik, vozač, registracija,
+  plomba, temperaturni režim, mesto istovara i PO broj kupca
+  (narudžbenica) — unose se na listi Utovari (8 polja + radnja
+  „Sačuvaj prevoz" po redu). Prazno polje ne dira ranije uneto,
+  „-" briše; mreža pokazuje kolone PREVOZNIK i REG.
+- **Obrazac je pun logistički dokument (9 kolona):** vreme utovara
+  (upisano automatski pri izradi), broj fakture, blok PREVOZ, po
+  stavci lot + datum proizvodnje + **rok trajanja** (datum prerade +
+  `GP_ROK_TRAJANJA_MESECI` iz Podešavanja, default 24) + oznaka palete
+  („1" cela / „deo") + **neto i bruto kg** (parcijala nosi srazmeran
+  bruto), zbir „UKUPNO · paleta: N [+ M deo]", napomena i tri potpisa
+  sa pečat-linijama (predao / vozač / preuzeo).
+
+### Zatvoren GP lifecycle (revizija #6)
+
+- **„Fakturiši“ na listi Utovari:** posle storna GP fakture ISTI
+  utovar (roba je fizički otišla jednom) dobija novu fakturu — cene se
+  preuzimaju iz prethodne stornirane fakture, stanje se ne dira,
+  datum utovara ostaje originalan.
+- **SEF blok za GP bez utovara:** GP stavka bez validnog utovara
+  (postoji, aktivan, markiran baš tom fakturom) više nikad ne odlazi
+  na SEF sa datumom fakture — slanje se blokira s jasnom porukom.
+- **Sledljivost dokazuje po stavci:** količina prerade računa se kao
+  fakturisana samo kad postoji stavka fakture za baš taj utovar, tu
+  preradu i tu količinu.
+- **Pakovanja na utovarnoj listi:** dokument nosi broj kutija/kesa
+  koji je stvarno ušao u kamion; kod parcijalnog utovara broj se
+  upisuje samo kad je izračunljiv (npr. 500 kg / 10 kg = 50), inače
+  ostaje prazan — nikad pogrešan broj na transportnom dokumentu.
+- Datum i vreme utovara su editabilni pre SEF slanja (lista Utovari);
+  utovar tabele ušle u audit (CreatedBy/ModifiedBy); migracija starih
+  GP faktura numeriše utovare po godini fakture.
+
+### Tri stroge granice (revizija #7)
+
+- **Datum utovara se zaključava kad faktura ode na SEF** — to je
+  poreski datum isporuke; lokalna promena posle slanja razišla bi se
+  od poslatog dokumenta. Podaci prevoza ostaju izmenjivi.
+- **„Ponovi fakturu"** (novo ime radnje) odbija utovar koji već nosi
+  aktivne stavke fakture — kontradiktorno stanje se prijavljuje i na
+  sledljivosti umesto da napravi duplu prodaju.
+- **SEF šalje samo količine koje se poklapaju sa utovarom** — faktura
+  od 400 kg nad utovarnom listom od 500 kg se blokira, u oba smera.
+
+### Dokaz vezan za fakturu + korekcija cene (revizija #8)
+
+- **Sledljivost dokazuje prodaju samo stavkom BAŠ TE fakture** —
+  aktivna stavka tuđe fakture na utovaru, mešavina faktura na istom
+  utovaru, ili stavka za robu koje na utovaru nema, sve je „faktura
+  neusaglasena" (isti fail-closed kao SEF).
+- **Pogrešna cena se ispravlja bez diranja utovara:** „Ponovi
+  fakturu" pita za novu cenu (prazno = prethodne cene); roba i datum
+  utovara ostaju netaknuti — fizička isporuka se nikad ne poništava
+  zbog cene. Utovar sa više prerada za sada odbija korekciju (jedna
+  cena po utovaru).
+
+### Utovar pre fakture — model B (revizija #9)
+
+- **„Napravi utovar" na listi Gotova roba:** magacin danas napravi i
+  odštampa utovarnu listu (roba se skida sa stanja, dogovorena cena se
+  pamti na stavci), a računovodstvo fakturiše kasnije radnjom
+  „Fakturiši" na listi Utovari. „Izradi fakturu" ostaje brzi put —
+  utovar i faktura odjednom, kao do sada.
+- **Radnja „Fakturiši"** sada pokriva sve tri situacije: prvo
+  fakturisanje utovara, ponavljanje posle storna i korekciju cene.
+- **Rok trajanja po vrsti proizvoda:** kolona „RokMeseci" u šifarniku
+  vrsta gotovih proizvoda (Matični podaci); prazno = globalna
+  postavka. Utovarna lista računa rok po stavci.
+
+### Lanac razume utovar bez fakture (revizija #10)
+
+- **Nova stanja sledljivosti:** „delimično utovareno" i „utovareno /
+  čeka fakturu" — roba koja je fizički otišla vidi se na lancu i pre
+  fakture, sa pravim finalnim kupcem iz utovara (ne više „prerađeno"
+  dok kamion vozi robu).
+- **Storno utovara** odbija i utovar bez markera ako neka aktivna
+  faktura-stavka tvrdi tu robu (dupla zaliha); **storno fakture**
+  oslobađa samo utovar koji tvrdi baš tu fakturu — korumpirani podaci
+  ne mogu da pokvare tuđu validnu fakturu.
+- Audit kolone (ko/kada) na utovar tabelama nastaju automatski i na
+  self-update putu.
+
+### Kupac fizičkog dokumenta = kupac fakture (revizija #11)
+
+- SEF odbija GP fakturu čiji kupac nije kupac utovarne liste;
+  sledljivost isti raskorak prijavljuje kao „faktura neusaglasena" —
+  roba koja je otišla kupcu A ne može se fakturisati kupcu B.
+- Parcijalni utovar više ne štampa procenjeni bruto — bruto stoji samo
+  kad je stvarno izmeren (cela paleta); stvarni unos bruta po stavci
+  je budući rad.
+- Storno fakture sa više stavki istog utovara više ne pravi lažne
+  warninge u logu.
+
+### Pakovanja, rok trajanja i završne granice (revizije #12–#13)
+
+- **Kutije/kese prate stanje:** lista Gotova roba pokazuje broj CELIH
+  pakovanja na stanju (kapacitet iz šifarnika kutija/kesa po tipu sa
+  prerade, ili izveden iz samog lota — neto ÷ broj); parcijalni utovar
+  na utovarnoj listi dobija stvarna pakovanja (500 kg = 50 kutija i
+  50 kesa), i na reprintu starijih utovara.
+- **Rok trajanja pripada lotu:** `DatumIsteka` se upisuje na preradu
+  u trenutku nastanka lota po tadašnjem pravilu (vrsta → rok, pa
+  globalna postavka u „Otkup / dokumenta"); kasnija promena
+  podešavanja ne menja rok na već izdatim dokumentima.
+- **Datum/vreme utovara zaključani čim dokument postoji na SEF-u**
+  (po SEF DocumentId dokazu, ne samo po stanju).
+- **UKUPNO BRUTO** na utovarnoj listi se štampa samo kad je bruto
+  izmeren za sve stavke — delimičan zbir se ne prikazuje kao ukupan.
+- **Prodaja se blokira nad oštećenim podacima:** aktivna utovarna
+  stavka bez validne količine ili headera zaustavlja dalju prodaju te
+  prerade dok se integritet ne popravi.
+
+### Verifikacija
+
+- Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;
+  GP lista + pravila korpe; writer kapije + storno simetrija —
+  mutirajući, ide poslednji) + **7 novih namernih kvarova** (stanje
+  placebo, kontradikcija ćuti, progutani brojevi, dupla prodaja, storno
+  ne oslobađa, mešanje korpe u oba smera) — svaki obara tačno svoj
+  imenovani test (dvosmerni dokaz). Krug 5d dodaje još dve (prazno
+  polje prevoza pregazi vrednost; rok trajanja = datum proizvodnje) —
+  ukupno 378 sabotaža u katalogu.
+- Fixture: tri nova lanca (prodato GP / u hladnjači / kontradikcija) +
+  potrošne prerade za writer test; generator sada ume da doda nove
+  kolone koje donor nema (`ENSURE_COLS` — fixture je sveska POSLE
+  nadogradnje šeme).
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
+  i smoke nad pravim podacima (checklista u PR-u).

@@ -2949,17 +2949,22 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     Dim preID As String: preID = GetNextID(TBL_PRERADA, COL_PRE_ID, "PRE-")
     Dim brPre As Long: brPre = GenerateBrojPrerade()
 
+    ' DatumIsteka = SNAPSHOT roka PO TADASNJEM pravilu (revizija #13
+    ' B2): rok pripada LOTU -- kasnija promena RokMeseci u sifarniku/
+    ' Podesavanjima NE sme da promeni rok na reprintu starog dokumenta.
     PalAppendRow TBL_PRERADA, _
         Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
               COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
               COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
               COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
-              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO), _
+              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO, _
+              COL_PRE_ROK), _
         Array(preID, brPre, Year(Date), Date, _
               netoUlaz, netoIzlazKg, brojKutija, brojKesa, _
               tezinaPaleteKg, brutoKg, tezinaAmbalazeKg, _
               tipKutije, tipKese, tipGotovogProizvoda, _
-              napomena, Now, "")
+              napomena, Now, "", _
+              modUtovar.RokIstekaZaTip(tipGotovogProizvoda, Date))
 
     Dim k As Variant
     For Each k In palRows.keys

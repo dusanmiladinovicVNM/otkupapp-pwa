@@ -5489,3 +5489,645 @@ ionako obavezne (`TraceByZbirna` ih tako tretira).
   nefakturisane prijemnice, a povezivanje ide kroz polje „Otpremnica za
   povezivanje" (izbor reda ga puni, „Poveži…" čita izbor — InputBox-a
   više nigde nema).
+
+## 25. Sledljivost GP lanac + fakturisanje gotove robe (`v6-ui-189`)
+
+Nastavak §24 po planu Faza 1 + Faza 2 (dogovor posle merge-a #246):
+lanac se produžava POSLE prijemnice (paleta → prerada → GP faktura), a
+ekran Fakturisanje dobija fakturisanje gotove robe — time završna
+faktura zatvara i hladnjača-tok, kroz podatkovnu vezu.
+
+### 25.1 Faza 1 — LANAC kolone 28–30 (čista projekcija)
+
+- `ReportSledljivostLanac` 27 → 30 kolona: 28 „Palete", 29
+  „Prerada / GP", 30 „Stanje". `SledGpMape` gradi pet mapa JEDNIM
+  prolazom kroz `tblPaleta(Stavka)`/`tblPrerada(Stavka)` pre petlje
+  (S5 pravilo — nijedan `LookupValue` po redu).
+- Iste podatkovne veze kao mete (§24.2 E): paletna stavka vezuje BROJ
+  zbirne, prerada join `PaletaID`, GP faktura **isključivo**
+  `tblPrerada.FakturaID`. Heuristika „isti artikal + datum + kupac ≈
+  ta faktura" je izmišljanje sledljivosti i ZABRANJENA (advisor uslov).
+- Fail-closed: `nVl > 1` (dvosmislen broj) ne pripisuje ništa — kolone
+  28–30 prazne; pripisivanje po broju bez vozača bi sabralo tuđe tokove.
+- Prerada `Fakturisano=Da` bez validne aktivne fakture = ista klasa
+  kvara kao prijemnica (krug 9): oznaka `faktura neusaglasena`; na
+  NEPOTPUNIMA red `FAKTURA-VEZA-NEISPRAVNA` sa `DokTip=Prerada`
+  (nova konstanta `SLED_DOK_PRERADA`; ruta štampe → `ExportPreradaPDF`,
+  ista kao meta PRERADA). `Fakturisano=Ne`/prazno je legitiman tok.
+- Stanje (kol. 30, `SLED_ST_*`): najdalja dostignuta karika po
+  prioritetu GP faktura > prerada > sveža faktura > paleta > otvoren
+  tok; piše se SAMO kad red nema oznaku. „Otvoren tok" nema fixture
+  vozilo — ne tvrdi se testom (zapisano, svesno).
+- SearchRefs (kol. 27) += brojevi paleta/prerada/GP faktura (princip
+  R2 — prikaz „N pal."/„N pre." guta brojeve). Haystack LANAC += kol.
+  30 (pretraga po stanju).
+- Ekran: LANAC 11 → 14 kolona (ref pomeren 11 → 14 u `OsveziDetalj` i
+  `StampajDokumentReda`); hederi `OTKUI_HDS_PALETE/PRERADAGP/STANJE`.
+  Brojevi paleta/prerada su sada u haystacku, pa fixture brojevi tih
+  dokumenata moraju da se završavaju na 0/1 i budu daleko od
+  `GenerateBroj*` sekvence — substring pretraga inače guta brojeve
+  faktura (`38/2026` sadrži `8/2026`; naučeno padom `T_Sled_KesPretragaIHint`).
+  PDF dokument lanca (šablon iz kruga 6) NIJE širen GP karikama u ovom
+  krugu — ekran ih nosi; širenje šablona po smoke potrebi.
+
+### 25.2 Faza 2 — šema, writer, ekran Fakturisanje
+
+- Šema (`EnsurePaletniListSchema`, kolone na KRAJ tabela):
+  `tblFakturaStavke.PreradaID/BrojPrerade`,
+  `tblPrerada.Fakturisano/FakturaID`. Postojeći pozicijski `AppendRow`
+  upisi (header 21 / stavka 9) netaknuti; GP identitet ide PO IMENU
+  (`RequireUpdateCell` posle `AppendRow`).
+- `modFaktura.CreateFakturaGP_TX(kupacID, stavke)` — stavka =
+  `Array(preradaID, cena)`; kapije 1731–1745 u BASE writeru pod TX
+  (postoji/jedinstvena/nije stornirana/nije već fakturisana/izlaz > 0/
+  cena > 0; pre-validacija SVIH stavki pre ijednog upisa). Cena je
+  UNOS OPERATERA — GP nema evidentiranu cenu nigde (legacy nema GP
+  prodaju; „izvedena" cena bi bila izmišljanje). Prerada se markira
+  `Fakturisano=Da + FakturaID` — isti obrazac kao prijemnica, pa storno
+  i sledljivost rade istim pravilima.
+- `GetGPZaFakturisanjeForGrid` (1..9) — GP kolone čita meko
+  (`GetColumnIndex`): sveska pre nadogradnje = niko nije fakturisan.
+- Storno simetrija (`modStorno`): storno fakture →
+  `ReleasePreradaFromFaktura` (reset markera; fail-closed na dupli ID);
+  storno prerade → `MarkFakturaOrphaned` + `MarkFakturaStavkeOrphanedGP`
+  (postojeći `MarkFakturaStavkeOrphaned` filtrira po `PrijemnicaID` pa
+  bi za GP bio no-op). `GetColumnIndex` + guard svuda u storno putu —
+  sveska pre nadogradnje ne sme da pukne.
+- Ekran `modScrFakture` (`v6-ui-189`): četvrta lista `GOTOVA` (druga po
+  redu, uz ZAFAKT), čipovi sve/čeka/fakturisano, kolone GP mreže
+  (identitet `PreradaID` prio 4), polje `scrFkCenaGP` vidljivo samo na
+  GOTOVA. Korpa: `KorpaTip()` (""/"PRJ"/"GP" po prvoj stavci) — mešanje
+  odbijaju OBE strane (`OTKUI_ERR_FK_MESANJE`); GP stavka bez cene ne
+  ulazi (`OTKUI_ERR_FK_CENA_GP`); `IzradiFakturu` rutira po tipu korpe
+  (GP → `CreateFakturaGP_TX`, ostalo → `CreateFaktura_TX`). Test
+  seam-ovi `Scr_FkKorpaTestDodajGP`/`Scr_FkUkloniStavkuGPTest` (gate
+  `IsTestMode`).
+
+### 25.3 Fixture i verifikacija
+
+- `make_fixture`: **`ENSURE_COLS`** — generator dodaje kolone koje
+  donor nema (sejanje ide PO IMENU pa bi red sa novom kolonom oborio
+  build; fixture = sveska POSLE nadogradnje šeme). U potpisu.
+- Tri nova lanca: G (prodato GP — `PRE-SLED-G` → aktivna `9/2026`),
+  H (u hladnjači — sveža `PAL-SLED-H`), K (kontradikcija —
+  `PRE-SLED-K` → mrtav `FAK-NEMA-GP`); potrošne prerade `PRE-GP-W1`
+  (writer uspeh, mutira se poslednja), `PRE-GP-X` (stornirana),
+  `PRE-GP-W0` (0 kg).
+- Testovi 160–162 (sva tri registra; 160–161 read-only pre mutirajućih
+  124–126, 162 MUTIRA i ide poslednji): `T_Sled_GpLanacIStanja` (ručni
+  prolaz kroz tabele = Report; stanja; fail-closed D; problemi;
+  smer nazad), `T_Fak_GpListaIKorpa` (read-model; korpa pravila u oba
+  smera), `T_FakturaGP_WriterKapijeIStorno` (svih 6 kapija + rollback
+  dokaz + stavka po imenu + storno oslobađa). `T_Fak_UgovorEkrana`
+  ažuriran (3 → 4 liste, GOTOVA druga).
+- 7 novih sabotaža (`sledljivost-gp-stanje-placebo`,
+  `sledljivost-gp-kontradikcija-cuti`, `sledljivost-gp-refs-progutani`,
+  `faktura-gp-dupla-prodaja`, `storno-gp-ne-oslobadja`,
+  `fakture-gp-korpa-mesa-u-prj/-u-gp`) — katalog 360; dva stara sidra
+  ažurirana (kolone/haystack pomereni), `fakture-sef-lista-uslovna`
+  tvrdnja prati novi tekst.
+- `who_writes` ažuran (modFaktura piše `tblPrerada` od Commit A).
+- **Ručna kapija operatera:** Compile + smoke checklista u PR-u
+  (lanac kolone i stanja na pravim podacima, GP lista, izrada i storno
+  GP fakture, mešanje korpe).
+
+### 25.4 Smoke GP-1: nalazi operatera (ispravke u istom PR-u)
+
+- **Prekidači lista Fakturisanja imenuju ROBU, ne proces:** „Za
+  fakturisanje" uz „Gotova roba" je bio nespojiv par — prvi je
+  preimenovan u **„Sveža roba"** (`OTKUI_SEG_FK_ZAFAKT`; ključ i lista
+  ostaju `ZAFAKT`).
+- **Hederi GP kolona u operaterovom rečniku:** „PAL. SVEŽE ROBE" /
+  „PAL. GOTOVOG PROIZV." umesto internih „PALETE" / „PRERADA / GP"
+  (prerada = paleta gotovog proizvoda).
+- **Kolone LANAC prate tok robe:** posle prijemnice idu dve paletne
+  kolone, pa faktura i kupac; oznaka pretposlednja, **stanje
+  poslednje** (zaključak reda). Grid raspored: Datum | Br. dok |
+  Kooperant | Kg | Otpremnica | Zbirna | Prijem | Pal. sveže | Pal.
+  gotovog | Faktura | Kupac | Oznaka | Stanje | [ref]. SRC kolone
+  reporta (1–30) se NE menjaju — samo mrežni raspored (`UpisiRed`).
+- **„Prvi put laguje" (lag prvog otvaranja):** GP sekcija lanca je
+  pravila **dva `CreateObject("Scripting.Dictionary")` po redu
+  otkupa** — na velikoj svesci desetine hiljada COM kreacija u jednom
+  punjenju snimka (kasniji ulasci su keš hit, zato „na dalje je OK").
+  Rečnici se sada prave jednom pre petlje i prazne `RemoveAll`-om po
+  redu; `SledFakMapa` se u problemima gradi jednom (prijemnički i GP
+  prolaz dele mapu). Za merenje na pravoj svesci isporučen
+  **`Diag_SlPerf`** (Alt+F8 → Immediate): ms po read-modelu pod istim
+  TableCache uslovima kao ekran — brojke presuđuju, ne nagađanje.
+
+### 25.5 Spoljna revizija #248 (R1–R6): GP faktura kao first-class
+
+Verdikt revizije: core i data-model dobri, ali GP faktura nije bila
+first-class kroz Print/SEF/storno/deployment. Sve tvrdnje proverene u
+kodu — svih pet tehničkih je stajalo. Potvrđene poslovne odluke
+operatera: **1 prerada = ceo prodajni lot** (prodaje se u celosti;
+zrno se ne spušta) i **GP ima isti poreski tretman kao sveža roba**.
+
+- **R1 Print:** `PrintFaktura` GP grana (meke kolone) — GP stavka na
+  papiru nosi **broj prerade + TipGotovogProizvoda** umesto praznih
+  prijemničkih polja; `FillFakturaSablon` dobio `gp` parametar i piše
+  hedere kolona 2/3 na SVAKOM renderu („Broj prerade"/„Proizvod" ↔
+  „Broj prijemnice"/„Klasa") jer je šablon perzistentan.
+- **R2 SEF:** `BuildSEFInvoiceDto` polimorfni izvor stavke — tačno
+  jedan od `PrijemnicaID`/`PreradaID`, fail-closed na nijedan ili oba.
+  GP linija: naziv = TipGotovogProizvoda + „po preradi N", UBL
+  `SellersItemIdentification` = `PreradaID` (stabilni source ID),
+  datum isporuke = **datum prerade**. `clsSEFLine` +preradaID/
+  brojPrerade; porez nepromenjen (ista stopa za sve linije).
+- **R3 Storno atomarnost:** `StornoFaktura_TX` snapshot **+tblPrerada**
+  (release grana je piše — bez snapshota bi pukli rollback ostavio
+  preradu slobodnu = dvostruka prodaja); `StornoPrerada_TX` snapshot
+  **+tblFakture/tblFakturaStavke** (orphan grana). Rollback dokaz kroz
+  test seam `StornoTestFailPosleRelease` (gejtovan `IsTestMode`) —
+  namerna greška posle release-a, tvrdi se da rollback vraća SVE.
+- **R4 Runtime šema:** četiri GP kolone dodate u `EnsureRuntimeSchema`
+  (svaki start) — klijent koji dobije kod self-update-om dobija i
+  kolone; ručni Admin korak više nije preduslov.
+- **R5 Locale:** `CDbl(Val(nz(...)))` u GP read-modelu zamenjen
+  `IsNumeric/CDbl` obrascem — `Val("50,5")` na srpskom locale-u čita
+  50, pa bi grid/korpa pokazali jedno a writer upisao drugo. Fixture
+  `PRE-GP-W1` sada ima decimalan izlaz (50.5).
+- Fixture: `tblKupci` se sada SEJE (2 test kupca sa PIB-om — SEF DTO
+  ih traži), pin `SELLER_NAME`/`SELLER_PIB`/`FAKTURA_PRINT_MODE=OFF`.
+- Test 162 proširen: SEF DTO + UBL tvrdnje, print tvrdnje (GP hederi i
+  stavka + povratak svežih hedera), rollback atomarnost; 4 nove
+  sabotaže (katalog 364). Smoke ciklus revizije: GP faktura → PDF →
+  SEF payload → storno → prerada dostupna → lanac „preradjeno".
+- Odloženo (P1 revizije, svesno): oznaka „mešovit tok" kad potomci
+  jedne zbirne imaju više završnih stanja — stanje je dokumentovano
+  kao „najdalja karika".
+
+### 25.6 Spoljna revizija #248, krug 3 (B1–B3 + 2×P1): finalni lanac
+
+Verdikt kruga: tehnički GP tok zatvoren, ali vizuelni lanac nije
+stizao do finalnog kupca i „prodato" se tvrdilo markerom umesto
+podatkom. Potvrđeno ranije: prerada = finalni lot (kese/kutije),
+posle nje nema proizvodnih karika.
+
+- **B1 — GP faktura zauzima kolone Faktura i Kupac:** kolona 29 nosi
+  SAMO preradu (heder „GOTOV PROIZVOD" — „PAL. GOTOVOG PROIZV." je
+  sugerisao identitet koji ne postoji); završna GP faktura ide u
+  kolonu 12, a **finalni kupac sa fakture** u kolonu 13 (do tada je
+  uz prodatu robu stajalo odredište prijema — „Hladnjača"). Više
+  završnih faktura/kupaca → „N fakt."/„N kup." + brojevi i nazivi u
+  SearchRefs. Red evoluira: `103/2026 | 55/2026 | [prazno] |
+  Hladnjača | preradjeno` → `103/2026 | 55/2026 | 91/2026 | Metro |
+  prodato GP`.
+- **B2 — kanonski GP invoice-link contract:** VALIDNO PRODATO =
+  `Fakturisano=Da` **AND** `FakturaID` aktivan **AND** tačno JEDNA
+  aktivna `FakturaStavka(PreradaID, FakturaID)` — `FakturaStavka.
+  PreradaID` je time postao ono zbog čega je uveden: **dokaz** prodajne
+  veze, ne dekoracija. Marker bez stavke / višak stavki / stale
+  `FakturaID` uz `Fakturisano=Ne` → „faktura neusaglasena" (lanac +
+  NEPOTPUNI). DOSTUPNO za novu fakturu = nije fakturisana AND veza
+  prazna AND nema aktivne stavke — writer (`CreateFakturaGP` kapije
+  1748/1749) i grid dele isti contract (`GPAktivneStavkePoPreradi`).
+- **B3 — uslovni snapshot:** `StornoFaktura_TX` snapshotuje
+  `tblPrerada` samo ako tabela postoji — stariji workbook bez Prerade
+  ponovo može da stornira običnu svežu fakturu (isti meki ugovor kao
+  `GetColumnIndex` kapije).
+- **P1 — proizvod je writer invariant:** prazan `TipGotovogProizvoda`
+  ne prolazi u fakturu (kapija 1750) — print bez imena robe i SEF
+  fallback „Gotov proizvod" su bili fail-open.
+- **P1 — dupli `PreradaID` guard u gridu:** `BrojacIdova`/`IdIliPrazno`
+  (isti obrazac kao prijemnice/fakture) — korupcija prazni identitet
+  umesto generičke greške tek pri izradi.
+- Fixture: `FST-SLED-GP` stavka (dokaz za G lanac), `FAK-SLED-GP2`
+  (aktivna bez stavke), vozila `PRE-GP-B2`/`PRE-GP-WL`/`PRE-GP-WT`/
+  `PRE-GP-DUP×2`; +6 sabotaža (katalog 370).
+
+### 25.7 Spoljna revizija #248, krug 4: totalCount — contract kompletan
+
+Krug 3 je proveravao samo PAR (`preradaID|fakturaID`), što ne vidi
+dve rupe: **istu preradu sa aktivnom stavkom na DRUGOJ fakturi**
+(dvostruka prodaja koju bi lanac prikazao kao uredno „prodato GP") i
+**stavku bez markera** (writer vidi prodajnu vezu i odbija novu
+prodaju, a Sledljivost je tvrdila da veze nema). Grain potvrđen još
+jednom: 1 prerada = cela se prodaje jednom kupcu na jednoj fakturi.
+
+- `SledGpStavkeMapa` sada nosi i **`#T|preradaID` total ključ**;
+  validno „prodato GP" = pair(P|F)=1 **AND total(P)=1**. Lanac i
+  problemi dele mapu; problemi dobili grane „stavke na više faktura
+  (dvostruka prodaja)" i „aktivna stavka bez markera na preradi";
+  lanac obe klase vodi u „faktura neusaglasena".
+- Writer/grid su total već pokrivali (`GPAktivneStavkePoPreradi` je
+  po preradi) — dokazna strana je sada ista.
+- P1: grid `Dostupna` traži i neprazan `TipGotovogProizvoda` (UI ne
+  sme da kaže „može" pa writer „ne može"); P1: writer proverava da
+  kupac postoji tačno jednom u `tblKupci` (kapija 1751 — GP nema
+  prijemnicu za implicitnu proveru vlasništva).
+- Vozila: `PRE-GP-2F` + stavke na `FAK-SLED-GP3/GP4` (par uredan,
+  total=2), `PRE-GP-SB` + stavka bez markera. +4 sabotaže (katalog
+  374; peta — „total ključ mrtav" — uklonjena jer joj je tvrdnja
+  subsumirana postojećom sabotažom: checker `deli tvrdnju` odbio).
+
+### 25.8 Krug 5: UTOVARNA LISTA — pravi prodajni grain
+
+Poslovna presuda operatera: parcijalna prodaja MORA biti moguća (500
+kg sa palete od 1.000), a datum prodaje NIJE datum prerade nego datum
+utovara/slanja (obrazac utovarne liste sledi). Time je 1:1 model
+(marker na preradi) postao netačan i **zamenjen je pre merge-a**.
+
+- **Model:** `tblUtovar` (UtovarID | BrojUtovara | Godina |
+  DatumUtovara | KupacID | Fakturisano | FakturaID | Napomena |
+  Stornirano) + `tblUtovarStavke` (UtovarStavkaID | UtovarID |
+  PreradaID | BrojPrerade | KolicinaKg | Stornirano);
+  `tblFakturaStavke` +`UtovarID`. **Prerada = proizvodni lot** (koliko
+  je proizvedeno); **utovar skida robu sa stanja** (koliko, kome,
+  KADA); **faktura finansijski prati utovar** (v1: 1 utovar = 1 GP
+  faktura, ista TX). `Prerada.Fakturisano/FakturaID` su UKLONJENI iz
+  svega (ništa nije bilo deploy-ovano). Bez `tblGPPaleta` — operater
+  nema poseban fizički ID (prerada mu je „paleta"); `GPPaletaID`
+  denorm se može dodati kasnije bez loma.
+- **Na stanju** = `NetoIzlazKg` − SUM aktivnih utovarenih kg
+  (`modUtovar.UtovarenoPoPreradi` — JEDNA funkcija za grid, writer i
+  storno kapiju). Writer `CreateUtovarSaFakturom_TX`: kapije stanja
+  (kolicina ≤ na stanju), proizvoda, kupca, cene; utovar + faktura +
+  FST stavke (PreradaID/BrojPrerade/UtovarID po imenu) u jednoj TX.
+- **SEF:** `DeliveryDate` GP stavke = **`Utovar.DatumUtovara`** (v1 =
+  datum izrade fakture; kad stigne poseban ekran/obrazac utovara,
+  datum ostaje isti izvor istine).
+- **Storno lanac:** faktura → oslobađa utovar (roba OSTAJE utovarena);
+  utovar (samo nefakturisan) → vraća robu na stanje (header + stavke);
+  prerada sa aktivnim utovarom se NE stornira (fail-closed, nema
+  orphan kaskade). Snapshot: `StornoFaktura_TX` +`tblUtovar` uslovno.
+- **Sledljivost:** stanja `prodato GP` (sve fakturisano) /
+  **`delimicno prodato`** (deo) / `preradjeno` (ništa); kolone 12/13
+  nose fakture i finalne kupce validno fakturisanih utovara („N
+  fakt."/„N kup." za više — parcijalno je LEGALNO, ne kvar).
+  Neusaglašenosti: utovar marker bez fakture/FST dokaza, stale veza,
+  stavka na storniran utovar, FST siroče, utovareno > proizvedeno —
+  „faktura neusaglasena" + NEPOTPUNI (utovar klase nose DokTip
+  `Utovar`; štampa odbija s razlogom dok obrazac ne stigne).
+- **Ekran:** GP kolona kg = „NA STANJU (kg)"; polje „Količina za
+  utovar (prazno = sve)" — ceo-lot klik ostaje default, parcijala je
+  upis broja.
+- Fixture: `ENSURE_TABLES` mehanizam (generator pravi tabele koje
+  donor nema); P lanac („delimično prodato": 50 od 120 kg); contract
+  vozila preseljena na utovar nivo (B2/WL/WM/OV/SB). Sabotaže: 15
+  mrtvih (marker model) zamenjeno sa 14 utovar sabotaža (katalog 373).
+- **Proces (novi režim):** subset dokaz novih sabotaža PRE punog
+  kataloga našao je oba problema za 12 min (defense-in-depth: stanje
+  kapija brani i W0; storno header već vraća stanje pa je stavkama
+  dodata sopstvena tvrdnja) — pun prolaz ide tek jednom, na kraju.
+
+### 25.9 Krug 5b: UI vidljivost utovara + štampani obrazac
+
+Operater: model bez ekrana i papira je bezvredan — utovar mora da se
+VIDI i da se PREDA sa robom. Isporučeno u istom PR-u:
+
+- **Peta lista „Utovari"** na ekranu Fakturisanje (redosled = tok
+  robe: Sveža roba | Gotova roba | **Utovari** | Fakture | SEF):
+  broj, datum, kupac, roba (broj prerade / „N pre."), kg, broj
+  fakture; čipovi sve/čeka(nefakturisan)/fakturisan; radnje
+  **„Utovarna lista"** (štampa) i **„Storniraj"** (potvrda pa
+  `StornoUtovar_TX` — writer kapija odbija fakturisan utovar).
+- **Štampani obrazac** (`EnsureUtovarSablon`/`FillUtovarSablon`, house
+  stil kao faktura; perzistentan list `UtovarSablon`): zaglavlje
+  prodavca + „UTOVARNA LISTA" + broj/datum utovara/kupac; stavke
+  `Rb | Broj prerade | Proizvod | Pakovanje (kutije/kese) | Kolicina
+  (kg)`; UKUPNO; potpisi „Robu predao/preuzeo". Režim
+  `UTOVAR_PRINT_MODE` (default PRINT; OFF u fixture-u).
+- NEPOTPUNI ruta za DokTip `Utovar` sada ŠTAMPA listu (umesto
+  odbijanja); `modUtovar.PrintUtovar` je zajednička ruta.
+- Nova mina u katalogu znanja: `cFid`/`cFId` u ISTOJ proceduri =
+  „Duplicate declaration" (case-insensitive) — uhvaćeno compile-only
+  runom, skener dupli-Dim proširen na modUtovar/modPrint.
+
+### 25.10 Smoke 5c: režim štampe, migracija starih GP faktura, tekstovi
+
+- **Režim štampe utovarne liste ide kroz Podešavanja** (kartica
+  Štampa, ključ `UTOVAR_PRINT_MODE`, PDF;PRINT;PREVIEW;OFF) — kao svi
+  dokumenti; **default je PDF, ne PRINT**: bez podešenog ključa
+  dokument ne sme tiho da ode na štampač.
+- **Migracija:** GP fakture napravljene verzijama PRE utovarne liste
+  imaju stavke bez `UtovarID` pa ih lista Utovari ne vidi (operaterov
+  nalaz). `Alt+F8 → BackfillUtovariIzGPFaktura` (jednokratno,
+  idempotentno) pravi utovar IZ postojećih podataka fakture (datum,
+  kupac, stavke — ništa se ne izmišlja) i vezuje stavke. NAMERNO nije
+  u `EnsureRuntimeSchema`: automatski bi „legalizovao" svaku buduću
+  siroče-stavku umesto da je NEPOTPUNI prijavi.
+- **Tekstovi:** naslovi mreže se seku pored prekidača — skraćeni na
+  „Gotova roba" / „Utovarne liste" (kontekst nosi segment); label
+  „Kol. za utovar (kg)" skraćen, a pravilo „prazno = celo stanje"
+  seli u hint liniju GOTOVA liste (`OTKUI_LBL_FK_HINT_GP`).
+
+### 25.11 Krug 5d: profesionalni obrazac utovarne liste + podaci prevoza
+
+Operaterov zahtev: „uradi sve iz preporuke, ne želim minimalno nego
+profesionalno" — obrazac utovarne liste dignut na pun logistički
+dokument, sa unosom podataka prevoza na listi Utovari.
+
+- **Šema `tblUtovar` +8 kolona:** `Prevoznik`, `Vozac`, `Registracija`,
+  `Plomba`, `TemperaturniRezim`, `MestoIstovara`, `VremeUtovara`,
+  `BrojNarudzbenice` (PO broj kupca). `CreateUtovarSaFakturom_TX`
+  odmah upisuje vreme utovara (`hh:mm`); ostalo unosi operater.
+- **Unos prevoza na listi Utovari:** 8 polja (prevoznik, vozač,
+  registracija, plomba, temp. režim, mesto istovara, PO broj,
+  napomena) vidljivih samo na toj listi + radnja „Sačuvaj prevoz" po
+  redu. Writer `UpdateUtovarPrevoz_TX` (transakcioni, kapije: utovar
+  postoji tačno jednom, nije storniran): **prazno polje ne dira
+  postojeću vrednost, „-" briše** — dopuna posle delimičnog unosa ne
+  gazi ranije uneto. Mreža Utovari dobila kolone PREVOZNIK i REG.
+- **Obrazac (LAYOUT_VER 2, 9 kolona):** identitet dokumenta (broj,
+  datum, vreme, faktura) + primalac (kupac, mesto istovara, PO broj);
+  blok PREVOZ (prevoznik/vozač/registracija/plomba/temp. režim);
+  stavke Rb | Lot | Proizvod | Proizvedeno | **Rok trajanja** |
+  Pakovanje | **Pal.** („1" cela / „deo") | Neto (kg) | **Bruto (kg)**;
+  zbirni red „UKUPNO · paleta: N [+ M deo]" + neto + bruto; napomena;
+  tri potpisa (Robu predao — pečat / Vozač / Robu preuzeo — pečat).
+- **Rok trajanja je IZVEDEN podatak:** datum prerade + N meseci iz
+  Podešavanja (`GP_ROK_TRAJANJA_MESECI`, default 24 za smrznuto) — uz
+  sanity opseg 1–600 celih meseci, jer datumski formatirana config
+  ćelija kroz srpski locale (`CStr` → „23.1.1900." → `CLng` čita tačke
+  kao hiljade = 2311900) obara `DateAdd` preko godine 9999 (greška 5).
+  Posebna kolona roka po preradi ostaje budući korak.
+- **Bruto po stavci:** cela paleta = bruto prerade; parcijala =
+  srazmeran udeo neto količine (aritmetika nad stvarnim merenjima);
+  bez bruto podatka = neto (ne izmišlja se).
+- **Fixture generator:** config vrednosti se upisuju kao TEKST
+  (`NumberFormat "@"`) — nov red tabele nasleđuje format reda iznad,
+  pa je datumski format pretvarao pin „24" u datum 1900-01-23;
+  `ENSURE_TABLES` sada i postojećoj tabeli dopunjava kolone koje fale
+  (donor iz prethodnog kruga nema prevoz kolone).
+- **Verifikacija:** test 161 tvrdi prevoz kolone u mreži; test 162
+  pun obrazac (vreme/faktura/mesto/PO/prevoz/plomba posle dopune,
+  datum proizvodnje, rok +24m, „deo", neto 20, bruto ≥ neto) + 
+  semantiku prazno/„-" u writeru. Dve nove sabotaže:
+  `utovar-gp-prevoz-prazno-brise` (prazno pregazi vrednost) i
+  `utovar-gp-rok-placebo` (rok = datum proizvodnje) — obaraju tačno
+  svoju tvrdnju. Katalog: 378 sabotaža.
+
+### 25.12 Revizija #6: integrity/lifecycle krug (3 blockera + P1)
+
+Završni krug pre merge-a — bez feature širenja, samo zatvaranje
+lifecycle rupa. Verifikacioni ciklus (RunAll + dokaz + Banka) ide
+ODLOŽENO, po operaterovom „tek kad budem zadovoljan modulom".
+
+- **BLOCKER 1 — faktura iz postojećeg utovara:** posle storna GP
+  fakture utovar ostaje aktivan a roba je fizički otišla — novi utovar
+  bi tvrdio da je izašla dva puta. Novi writer
+  `CreateFakturaIzUtovara_TX(utovarID)`: koristi postojeći
+  nefakturisani utovar, NE dira stanje, čita njegove aktivne stavke,
+  pravi samo novu fakturu + stavke, ponovo markira utovar, ostavlja
+  originalni `DatumUtovara`. Cene iz poslednje (stornirane) fakture
+  tog utovara — postoje uvek jer se utovar rađa uz fakturu; bez cene
+  za neku preradu writer blokira s uputstvom. Radnja **„Fakturiši"**
+  na listi Utovari (već fakturisan red — jasna poruka bez writera).
+- **BLOCKER 2 — SEF kapija GP linije:** GP stavka bez `UtovarID` više
+  NIKAD ne ide na SEF (ranije fail-open na datum fakture). Sve GP
+  linije fakture moraju nositi ISTI utovar (1 faktura = 1 utovar), a
+  utovar mora: postojati tačno jednom, biti aktivan, `Fakturisano=Da`
+  i tvrditi baš tu fakturu (`ValidateGpUtovarZaSEF`) — inače BLOCK.
+- **BLOCKER 3 — sledljivost dokaz po stavci:** dokaz fakturisanosti
+  više nije „postoji bar jedna FST na utovaru" (ANY-vs-ALL rupa kod
+  više prerada na istom utovaru) nego mapa `UtovarID|PreradaID →
+  zbir kg` — stavka je fakturisana samo ako njen par postoji i
+  količina se poklapa; sve drugo je „faktura neusaglasena".
+- **Pakovanja parcijalnog utovara (t.4):** `tblUtovarStavke` +
+  `BrojKutija`/`BrojKesa` — broj pakovanja koji je STVARNO ušao u
+  kamion. Writer puni samo dokazivo: cela paleta = puni brojevi;
+  parcijala = samo ako prerada ima jednu vrstu pakovanja i količina
+  je celobrojan umnožak kg/pakovanju (500/10 = 50); inače prazno.
+  Obrazac čita iz stavke (fallback na punu preradu samo za celu
+  paletu) — transportni dokument radije prazan nego pogrešan.
+- **P1:** datum i vreme utovara editabilni na listi Utovari (kroz
+  „Sačuvaj prevoz"; prazno = ne diraj, datum se ne može obrisati jer
+  je SEF datum isporuke); `tblUtovar`/`tblUtovarStavke`/`tblPrevoznici`
+  u `AuditableTables()` (CreatedBy/ModifiedBy kao ostali dokumenti);
+  migracija starih GP faktura numeriše utovar po godini DATUMA FAKTURE
+  (`GenerateBrojUtovara(godina)`) — bez „3/2026 sa datumom 2025".
+
+### 25.13 Revizija #7: završni integrity krug + pun recert
+
+- **B1 — datum utovara zaključan posle SEF slanja:** `DeliveryDate` je
+  poreski podatak. `UpdateUtovarPrevoz_TX` menja datum/vreme samo dok
+  faktura utovara NIJE dokazano otišla spolja (`LOCAL_FINALIZED` /
+  `SEF_READY` / `SEF_TECH_FAILED` + prazno); u svakom drugom SEF
+  stanju promena je blokirana s porukom. Transportni tekst (prevoznik,
+  plomba...) ostaje editabilan. Datum unos toleriše srpski format sa
+  završnom tačkom („2.6.2026." — `IsDate` baš nju ne prima).
+- **B2 — „nefakturisan" utovar sa aktivnom FST je kontradikcija:**
+  `CreateFakturaIzUtovara` u istom prolazu kroz FST (cene) broji i
+  AKTIVNE stavke — ako postoje, re-fakturisanje je blokirano (dupla
+  prodaja); sledljivost isti slučaj markira „faktura neusaglasena"
+  (header grana: bez markera + bez FakturaID + aktivna FST → lose).
+- **B3 — SEF količinski dokaz 1:1:** pored postojanja utovara,
+  `ValidateGpUtovarZaSEF` sada poredi zbir kg aktivnih GP linija po
+  preradi sa zbirom kg aktivnih utovarnih stavki — u OBA smera
+  (faktura od 400 kg nad utovarom od 500 kg = BLOCK; utovarna stavka
+  nepredstavljena u fakturi = BLOCK).
+- **P1:** radnja preimenovana u **„Ponovi fakturu"** — eksplicitno
+  koristi cene prethodne stornirane fakture (za storno iz tehničkog
+  razloga); korekcija cene je poseban budući rad (potvrda to i kaže).
+- **Obrazac v5 — merge mina:** tri pojedinačna row-merge-a (F7:I7,
+  F8:I8, F9:I9) Excel je slepio u JEDNU oblast F7:I9, pa je upis u
+  F8 (`UtMestoIst`) tiho nestajao. Header/prevoz blokovi su sada BEZ
+  merge-ova — tekst se prirodno preliva preko praznih susednih ćelija
+  (v2 se sekao jer su susedne bile pune). POUKA: uzastopni row-merge
+  isti raspon kolona = jedna velika oblast, imenovana ćelija unutar
+  nje gubi upis bez greške.
+- **Testovi (162):** ponovna faktura iz istog utovara (marker, ista
+  količina na stanju, originalan datum), odbijanje već fakturisanog,
+  rogue aktivna FST blok, SEF količinski mismatch sa ISTIM totalom
+  (25 kg × 122 = 30.5 kg × 100 — vozilo kome je količinska kapija
+  jedina brana), datum lock (SENT → odbij; transport tekst prolazi;
+  LOCAL_FINALIZED → prolazi + upis). **Sabotaže 381** (+3: refakt-
+  aktivna-fst, sef-kolicina-placebo, datum-lock-placebo).
+- **Recert na finalnom SHA:** vba_check čisto; RunAllTests 162/0;
+  Banka ZELENO; pun dokaz svih 8 prefiksa; compile ručna kapija.
+
+### 25.14 Revizija #8: dokaz vezan za fakturu + korekcija cene
+
+- **Sledljivost — troделни ključ dokaza:** FST dokaz je sada
+  `UtovarID|FakturaID|PreradaID → kg` — aktivna stavka TUĐE fakture
+  na utovaru više ne može da „dokaže" prodaju header fakture koja tu
+  robu ne nosi. Uz to: aktivne FST dva različita FakturaID na istom
+  utovaru = neusaglašeno (1 utovar = 1 faktura); aktivna FST za
+  preradu koje na utovaru NEMA = neusaglašeno (višak). SEF mapper i
+  sledljivost su sada jednako fail-closed.
+- **Korekcija cene bez falsifikovanja utovara:** pogrešna cena više
+  ne traži storno fizičkog utovara (roba JE otišla — taj događaj se
+  ne poništava). „Ponovi fakturu" sada pita za novu cenu (prazno =
+  cene prethodne fakture, za tehnički storno); v1 ograničenje: jedna
+  cena za ceo utovar, pa se utovar sa više prerada odbija umesto da
+  se cene tiho izravnaju. Poruka koja je savetovala storno utovara
+  UKLONJENA.
+- Testovi: korekcija cene (30.5 kg × 150 = novi iznos, datum utovara
+  netaknut). Recert: 162/0; ciljani dokaz sledljivost-gp/utovar-gp/
+  sef-gp.
+
+### 25.14 Revizija #9: model B — utovar može postojati PRE fakture
+
+Poslovna odluka operatera (uz revizorsku preporuku): utovarna lista je
+događaj magacina, faktura događaj računovodstva — životni ciklusi im
+ne moraju početi istog trenutka.
+
+- **Writer razdvojen na dva core-a:** `CreateUtovarCore` (kapije +
+  tblUtovar + stavke: količina, pakovanja, **dogovorena cena `CenaKg`**)
+  i postojeći `CreateFakturaIzUtovara`. `CreateUtovarSaFakturom_TX`
+  (brzi put) je sada tanak kompozit ta dva; novi `CreateUtovar_TX`
+  pravi SAMO utovar. Lanac cene u fakturisanju: uneta korekcija >
+  poslednja faktura utovara > **dogovorena cena sa stavke** (B-utovar
+  bez FST istorije) > blok.
+- **UI:** dva dugmeta na listi Gotova roba — postojeće „Izradi
+  fakturu" (utovar+faktura odmah) i novo **„Napravi utovar"** (samo
+  utovar; roba se skida sa stanja, lista se štampa, čip „čeka").
+  Radnja na listi Utovari vraćena na generičko **„Fakturiši"** — sada
+  pokriva prvo fakturisanje, ponavljanje posle storna i korekciju cene.
+- **Rok trajanja po vrsti proizvoda** (poslovno potvrđeno: rokovi se
+  razlikuju): `tblVrstaGotovihProizvoda` + kolona `RokMeseci` (unos u
+  Matičnim podacima; sanity 1–600 celih); obrazac je koristi po
+  stavci, prazno = globalni `GP_ROK_TRAJANJA_MESECI`.
+- Šema: `tblUtovarStavke` + `CenaKg`; `EnsureRuntimeSchema` self-heal
+  za obe kolone. Test 162: B tok (utovar bez markera skida stanje,
+  cena na stavci, kasnije fakturisanje nosi tu cenu, storno lanac
+  vraća stanje). SEF kapije netaknute — B-utovar bez fakture ne
+  postoji na SEF putu dok se ne fakturiše.
+- Revizorov audit P1 bio je zastareo nalaz: utovar tabele su u
+  `AuditableTables()` od revizije #6.
+
+### 25.15 Revizija #10: lanac razume model B + storno integritet
+
+- **B1 — nova stanja lanca:** „utovareno / ceka fakturu" (sve fizički
+  otišlo, faktura ne postoji) i „delimicno utovareno" (deo otišao,
+  ništa fakturisano) — utovar je samostalan događaj i lanac ga
+  prijavljuje i PRE fakture; finalni kupac (kolona 13) dolazi iz
+  aktivnog utovara, faktura ga kasnije samo potvrđuje. Fixture vozilo:
+  U lanac (120 proizvedeno / 50 utovareno / 0 fakturisano,
+  `UT-SLED-U` bez markera).
+- **B2 — storno utovara ne veruje samo header markeru:** kanonski
+  helper `modUtovar.AktivnihFstZaUtovar` (dele ga
+  `CreateFakturaIzUtovara` i `StornoUtovar`) — aktivna faktura-stavka
+  koja tvrdi utovar blokira storno (dupla zaliha) isto kao što blokira
+  re-fakturisanje (dupla prodaja).
+- **B3 — release proverava vlasnika:**
+  `ReleaseUtovarFromFaktura(utovarID, fakturaID)` resetuje marker SAMO
+  ako utovar tvrdi baš fakturu koja se stornira; korumpirana stavka
+  tuđe fakture se loguje i NE dira tuđ marker (lanac je prijavljuje
+  kao neusaglašenost).
+- **P1 audit self-heal:** `EnsureRuntimeSchema` dopunjava audit kolone
+  (CreatedAt/By, ModifiedAt/By) na tri nove tabele — klijent na
+  self-update putu dobija ko/kada trag bez ručnog `EnsureAuditColumns`.
+- **Test 163** (`T_UtovarB_SledIStornoKapije`, poseban broj po
+  revizorskoj preporuci): U lanac stanje+kupac, rogue FST blokira
+  storno i re-fakturu, storno žrtvene fakture sa korumpiranom stavkom
+  ne oslobađa tuđ utovar, pun cleanup. RunAllTests **163/0**.
+- POUKA: oslanjanje na `Dim i` niže u proceduri obara compile
+  („Variable not defined" modalni dijalog = suite VISI headless);
+  blok uvek deklariše svoju petlja-promenljivu.
+
+### 25.16 Revizija #11: kupac invariant + čišćenja — završni kod krug
+
+- **BLOCKER — kupac utovara = kupac fakture:** kanonski GP contract
+  proširen poslednjom karikom. SEF (`ValidateGpUtovarZaSEF`) blokira
+  slanje kad `Utovar.KupacID ≠ Faktura.KupacID`; sledljivost isti
+  mismatch markira „faktura neusaglasena" (ne „2 kup.") — faktura
+  kupcu B za robu koja je fizički otišla kupcu A nikad nije validna
+  prodaja. Test 163 dokazuje SEF blok (korupcija kupca → blok →
+  restore → prolaz).
+- **P1 — parcijalni bruto se ne štampa kao procena:** cela paleta
+  nosi izmereni bruto prerade; parcijala nema svoj izmeren bruto pa
+  ostaje PRAZNA (isti princip kao pakovanja); zbir bruto samo od
+  izmerenih stavki. Stvarni `UtovarStavka.BrutoKg` unos je budući rad.
+- **P1 — release jednom po utovaru:** storno fakture sa više stavki
+  istog utovara više ne pravi lažne „tvrdi drugu fakturu" warninge
+  (dedup po UtovarID pre `ReleaseUtovarFromFaktura`).
+- **Poslovna odluka (operater):** cena OSTAJE obavezna pri izradi
+  utovara — dogovara se pre utovara; „Fakturiši" je čita sa stavke.
+- RunAllTests **163/0**; pun recert (dokaz + Banka + compile + smoke)
+  na finalnom SHA pred merge — bez novih feature-a posle ovog kruga.
+
+### 25.17 Revizija #12: migracija uklonjena — završni rez pre merge-a
+
+- **`BackfillUtovariIzGPFaktura` OBRISAN** (revizorski blocker): rutina
+  je iz datuma FAKTURE izvodila datum FIZIČKOG utovara — a upravo je
+  ovaj PR utvrdio da su to dva različita događaja i da je datum
+  utovara poreska činjenica (SEF DeliveryDate). Uz to nije bila
+  transakciona (pad na pola fakture = parcijalno stanje). Stari GP
+  model nikad nije deploy-ovan, pa je migracija podržavala samo
+  neobjavljenu međufazu ovog istog PR-a. Ako backfill ikad stvarno
+  zatreba: zasebna migracija u kojoj operater EKSPLICITNO unosi
+  stvarni datum utovara, uz transakciju po celoj fakturi (zabeleženo
+  u modSetup komentaru).
+- Uklonjeni i: migracijski blok testa 162 (SB vozilo ostaje u
+  fixture-u — sledljivost siroče prijavljuje kao neusaglašenost) i
+  sabotaža `utovar-gp-migracija-bez-veze`. Katalog: 380 sabotaža.
+- Zabeleženo za kasnije (revizorske ne-blocker napomene): snapshot
+  `OpisProizvoda` na FakturaStavci (reprint ne sme da zavisi od
+  kasnije promene naziva na preradi), snapshot roka na utovarnoj
+  stavci, i prikaz utovara u detail stripu Sledljivosti (mreža je na
+  MAX_COLS=14).
+- PR opis #248 prepisan: dokumentuje model B / utovar grain umesto
+  obrisanog `Prerada.Fakturisano` modela.
+
+### 25.18 Smoke #12: pakovanja prate stanje (kapacitet izveden iz lota)
+
+Operaterov nalaz posle finalnog smoke-a (koji je ceo revizorov tok
+prošao): roba se smanji, a kutije/kese ne — a pakovanje JE definisano
+(uniformnih 10 kg), pa je računica prosta.
+
+- **`modUtovar.PakovanjaZaKg(kg, lotNeto, lotBroj, samoTacno)`** —
+  jedna formula za obe potrebe; kapacitet pakovanja se IZVODI iz
+  samog lota (`neto ÷ broj` = kg po pakovanju), bez nove šeme:
+  - **grid Gotova roba** (`samoTacno=False`): broj CELIH pakovanja na
+    stanju (`Fix`) — 733 kg uz 10 kg/kutiji = 73; hederi vraćeni na
+    „KUTIJE"/„KESE" (LOT sufiks više ne važi jer kolone prate stanje);
+  - **utovarna lista** (`samoTacno=True`): broj SAMO kad je količina
+    celobrojan umnožak kapaciteta — dokument i dalje ne nosi procene.
+- **Parcijala sada dobija OBE vrste pakovanja** (500 kg = 50 kutija i
+  50 kesa) — ranije je uslov „jedina vrsta pakovanja" ostavljao prazno
+  kad lot ima i kutije i kese.
+- **Read-time fallback u štampi:** stare parcijalne stavke (napravljene
+  pre ovog fixa, bez upisanih pakovanja) na reprint dobijaju istu
+  strogu računicu iz kapaciteta lota (`PakTekst` helper).
+
+### 25.19 Kapacitet pakovanja kao poslovna postavka
+
+Operaterov contract: kapaciteti se rešavaju u Podešavanjima, a
+kapacitet = **neto kg robe** po pakovanju (težina ambalaže ne ulazi —
+ona živi samo u brutu palete).
+
+- Nova podešavanja (kartica Štampa, uz rok trajanja):
+  `GP_KG_PO_KUTIJI` „Kapacitet kutije (kg neto)" i `GP_KG_PO_KESI`
+  „Kapacitet kese (kg neto)".
+- `KapacitetPakovanja` (modUtovar): postavka iz Podešavanja (sanity
+  0.1–1000 kg, ista odbrana od datumski formatirane ćelije kao rok) →
+  fallback izvedeno iz lota (neto ÷ broj) → 0. `PakovanjaZaKg` sada
+  prima ključ postavke; svi pozivaoci (grid Gotova roba, upis stavke,
+  reprint fallback) prosleđuju kutija/kesa ključ.
+- Bruto logika netaknuta (izmereni bruto prerade za celu paletu,
+  parcijala prazna).
+
+### 25.20 Revizija #13: završni correctness commit
+
+- **B1 — SEF lock po durable dokazu:** `SEF_TECH_FAILED` može doći i
+  POSLE `SEF_SENT` (Mistake), pa workflow stanje nije dovoljan dokaz
+  da dokument nije stigao spolja. Datum/vreme utovara je sada
+  zaključan i kad faktura ima `SEFDocumentId` (isti princip kao
+  `CanSendSEFInvoice`), bez obzira na stanje.
+- **B2 — rok trajanja je SNAPSHOT na lotu:** nova kolona
+  `tblPrerada.DatumIsteka` nastaje pri preradi po TADAŠNJEM pravilu
+  (`RokIstekaZaTip`: vrsta → RokMeseci → globalni CFG → 24); štampa
+  čita snapshot, a trenutna pravila koristi SAMO kao fallback za
+  stare lotove bez snapshota. Kasnija promena podešavanja više ne
+  menja rok na reprintu; otvara FEFO/isticanje analitiku. Globalni
+  rok preseljen u grupu „Otkup / dokumenta" (nije štampa opcija).
+- **B3 — UKUPNO BRUTO samo kad je kompletan:** ako ijedna stavka nema
+  izmeren bruto, zbir ostaje prazan (`svaBruto`) — 930 kg pored
+  1.400 kg neto više ne može da izgleda kao bruto celog kamiona.
+- **P1 writer fail-closed:** `RequireStavkeKonzistentne` — oštećena
+  aktivna utovarna stavka (nenumerička/nepozitivna količina, bez
+  PreradaID, header nepostojeći/dupli/storniran) BLOKIRA dalju
+  prodaju te prerade: tiho preskakanje u `UtovarenoPoPreradi` bi dalo
+  previsoko stanje (korupcija → moguća dupla prodaja).
+- **Kapacitet pakovanja — operaterov presek:** kapaciteti se NE
+  dupliraju u Podešavanjima (polja iz prošlog commita uklonjena) —
+  već postoje kao šifarnici `tblKutije`/`tblKese` (tip → NETO kg,
+  Matični podaci), a prerada nosi tip: lanac je šifarnik po tipu →
+  lot fallback (neto/broj). Testovi računice u T163 (lot fallback,
+  strogo/floor, prioritet šifarnika).
+- **Odluka (audit transporta):** plomba/registracija/prevoz ostaju
+  editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
+  append-only istorija korekcija = budući rad za cold-chain dokaz.
