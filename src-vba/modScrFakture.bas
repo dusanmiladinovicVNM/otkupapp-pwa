@@ -1567,7 +1567,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     ' Desna traka (korpa) uzima svoje, polje i dugmad dele OSTATAK. Na uskom
     ' ekranu traka nestaje -- bolje bez trake nego sa dugmadima koja se ne vide.
     wPolja = w - FK_KORPA_W - PAD
-    korpaVidi = (wPolja >= FK_POLJA_MIN)
+    ' Na listi UTOVARI korpa nema smisla (radnje idu po redu, ne kroz
+    ' korpu), a njen naslov "STAVKE FAKTURE" se sudarao sa redom od 10
+    ' prevoz polja (smoke: "SNAPOMENA" = S + NAPOMENA preko njega).
+    korpaVidi = (wPolja >= FK_POLJA_MIN) And (Scr_Lista() <> FK_UTOVARI)
     If Not korpaVidi Then wPolja = w
     kxK = w - FK_KORPA_W
 
