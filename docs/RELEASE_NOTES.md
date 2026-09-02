@@ -6965,6 +6965,21 @@ ijedne izmišljene veze.
   `Alt+F8 → BackfillUtovariIzGPFaktura` — dobiju utovar iz sopstvenih
   podataka i pojave se na listi Utovari.
 
+### Profesionalna utovarna lista: prevoz, lot, rok trajanja, bruto
+
+- **Podaci prevoza na utovaru:** prevoznik, vozač, registracija,
+  plomba, temperaturni režim, mesto istovara i PO broj kupca
+  (narudžbenica) — unose se na listi Utovari (8 polja + radnja
+  „Sačuvaj prevoz" po redu). Prazno polje ne dira ranije uneto,
+  „-" briše; mreža pokazuje kolone PREVOZNIK i REG.
+- **Obrazac je pun logistički dokument (9 kolona):** vreme utovara
+  (upisano automatski pri izradi), broj fakture, blok PREVOZ, po
+  stavci lot + datum proizvodnje + **rok trajanja** (datum prerade +
+  `GP_ROK_TRAJANJA_MESECI` iz Podešavanja, default 24) + oznaka palete
+  („1" cela / „deo") + **neto i bruto kg** (parcijala nosi srazmeran
+  bruto), zbir „UKUPNO · paleta: N [+ M deo]", napomena i tri potpisa
+  sa pečat-linijama (predao / vozač / preuzeo).
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;
@@ -6972,7 +6987,9 @@ ijedne izmišljene veze.
   mutirajući, ide poslednji) + **7 novih namernih kvarova** (stanje
   placebo, kontradikcija ćuti, progutani brojevi, dupla prodaja, storno
   ne oslobađa, mešanje korpe u oba smera) — svaki obara tačno svoj
-  imenovani test (dvosmerni dokaz). Ukupno 360 sabotaža u katalogu.
+  imenovani test (dvosmerni dokaz). Krug 5d dodaje još dve (prazno
+  polje prevoza pregazi vrednost; rok trajanja = datum proizvodnje) —
+  ukupno 378 sabotaža u katalogu.
 - Fixture: tri nova lanca (prodato GP / u hladnjači / kontradikcija) +
   potrošne prerade za writer test; generator sada ume da doda nove
   kolone koje donor nema (`ENSURE_COLS` — fixture je sveska POSLE

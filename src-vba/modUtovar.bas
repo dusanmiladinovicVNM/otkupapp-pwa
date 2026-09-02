@@ -95,6 +95,25 @@ Public Function UtovarenoPoPreradi() As Object
     Next i
 End Function
 
+' Upis jednog prevoz polja: prazno ne dira, "-" brise, ostalo upisuje.
+Private Sub UtUpisiPolje(ByVal rowUt As Long, ByVal kolona As String, _
+                         ByVal vrednost As String, ByVal SRC As String)
+    Dim v As String
+    v = Trim$(vrednost)
+    If Len(v) = 0 Then Exit Sub
+    If v = "-" Then v = ""
+    RequireUpdateCell TBL_UTOVAR, rowUt, kolona, v, SRC
+End Sub
+
+' Tekst polja utovara po imenu kolone -- meko (starija sveska bez
+' prevoz kolona daje prazno, ne pad).
+Private Function UtPolje(ByRef ut As Variant, ByVal rowUt As Long, _
+                         ByVal kolona As String) As String
+    Dim c As Long
+    c = GetColumnIndex(TBL_UTOVAR, kolona)
+    If c > 0 Then UtPolje = Trim$(CStr(nz(ut(rowUt, c))))
+End Function
+
 ' Aktivno utovareno kg jedne prerade (kapija storna prerade).
 Public Function UtovarenoKgPrerade(ByVal preradaID As String) As Double
     Dim d As Object: Set d = UtovarenoPoPreradi()
@@ -107,6 +126,7 @@ End Function
 '   1 UtovarID (prazan kod duplog -- IdIliPrazno guard)
 '   2 Broj ("1/2026")   3 Datum   4 Kupac (naziv)
 '   5 Roba ("51/2026" / "N pre.")   6 Ukupno kg   7 Broj fakture ("")
+'   8 Prevoznik   9 Registracija (krug 5d -- vidljivost prevoza)
 ' Stornirani utovari se ne listaju; stavke storniranog utovara ne.
 ' ============================================================
 Public Function GetUtovariForGrid() As Variant
@@ -181,7 +201,7 @@ Public Function GetUtovariForGrid() As Variant
     End If
 
     Dim outA() As Variant, i As Long, n As Long, utID As String, fid As String
-    ReDim outA(1 To UBound(ut, 1), 1 To 7)
+    ReDim outA(1 To UBound(ut, 1), 1 To 9)
     For i = 1 To UBound(ut, 1)
         utID = Trim$(CStr(nz(ut(i, cId))))
         n = n + 1
@@ -209,13 +229,15 @@ Public Function GetUtovariForGrid() As Variant
         Else
             outA(n, 7) = ""
         End If
+        outA(n, 8) = UtPolje(ut, i, COL_UT_PREVOZNIK)
+        outA(n, 9) = UtPolje(ut, i, COL_UT_REGISTRACIJA)
     Next i
     If n = 0 Then Exit Function
 
     Dim res() As Variant, r As Long, c As Long
-    ReDim res(1 To n, 1 To 7)
+    ReDim res(1 To n, 1 To 9)
     For r = 1 To n
-        For c = 1 To 7
+        For c = 1 To 9
             res(r, c) = outA(r, c)
         Next c
     Next r
@@ -224,6 +246,69 @@ Public Function GetUtovariForGrid() As Variant
 
 EH:
     LogErr SRC
+End Function
+
+' ============================================================
+' PODACI PREVOZA (krug 5d): prevoznik/vozac/registracija/plomba/
+' temperaturni rezim/mesto istovara/PO broj/napomena -- unose se na
+' listi Utovari (radnja "Sacuvaj prevoz") i idu na stampani obrazac.
+' Upis PO IMENU (kolone su dopuna na kraj tabele); kapije: utovar
+' postoji tacno jednom i nije storniran. Semantika polja: PRAZNO ne
+' dira postojecu vrednost (operater dopunjava npr. samo plombu),
+' crtica "-" BRISE polje (ispravka pogresnog unosa).
+' ============================================================
+Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
+        ByVal prevoznik As String, ByVal vozac As String, _
+        ByVal registracija As String, ByVal plomba As String, _
+        ByVal tempRezim As String, ByVal mestoIstovara As String, _
+        ByVal poBroj As String, ByVal napomena As String) As Boolean
+    Const SRC As String = "modUtovar.UpdateUtovarPrevoz_TX"
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, Trim$(utovarID))
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 1758, SRC, "Utovar ne postoji: " & utovarID
+    ElseIf rows.count <> 1 Then
+        Err.Raise vbObjectError + 1758, SRC, _
+                  "Utovar ne postoji jednoznacno: " & utovarID
+    End If
+    Dim rowUt As Long: rowUt = CLng(rows(1))
+    Dim d As Variant: d = GetTableData(TBL_UTOVAR)
+    If UCase$(Trim$(CStr(nz(d(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)))))) = "DA" Then
+        Err.Raise vbObjectError + 1759, SRC, "Utovar je storniran: " & utovarID
+    End If
+
+    UtUpisiPolje rowUt, COL_UT_PREVOZNIK, prevoznik, SRC
+    UtUpisiPolje rowUt, COL_UT_VOZAC, vozac, SRC
+    UtUpisiPolje rowUt, COL_UT_REGISTRACIJA, registracija, SRC
+    UtUpisiPolje rowUt, COL_UT_PLOMBA, plomba, SRC
+    UtUpisiPolje rowUt, COL_UT_TEMP_REZIM, tempRezim, SRC
+    UtUpisiPolje rowUt, COL_UT_MESTO_ISTOVARA, mestoIstovara, SRC
+    UtUpisiPolje rowUt, COL_UT_PO_BROJ, poBroj, SRC
+    UtUpisiPolje rowUt, COL_UT_NAPOMENA, napomena, SRC
+
+    tx.CommitTx
+    UpdateUtovarPrevoz_TX = True
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    LogErr SRC
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    UpdateUtovarPrevoz_TX = False
 End Function
 
 ' ============================================================
@@ -253,27 +338,79 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     kupacNaziv = Trim$(CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, COL_KUP_NAZIV))))
     If kupacNaziv = "" Then kupacNaziv = kupacID
 
-    ' Stavke + podaci prerade (proizvod, pakovanje) -- mapa pre petlje.
+    ' Krug 5d: header podaci profesionalnog obrasca (meko -- starija
+    ' sveska bez prevoz kolona daje prazna polja, ne pad).
+    Dim vreme As String, mestoIst As String, poBroj As String
+    Dim napomena As String, fakBroj As String, fid As String
+    Dim prevoz(0 To 4) As String
+    vreme = UtPolje(ut, rowUt, COL_UT_VREME)
+    mestoIst = UtPolje(ut, rowUt, COL_UT_MESTO_ISTOVARA)
+    poBroj = UtPolje(ut, rowUt, COL_UT_PO_BROJ)
+    napomena = UtPolje(ut, rowUt, COL_UT_NAPOMENA)
+    prevoz(0) = UtPolje(ut, rowUt, COL_UT_PREVOZNIK)
+    prevoz(1) = UtPolje(ut, rowUt, COL_UT_VOZAC)
+    prevoz(2) = UtPolje(ut, rowUt, COL_UT_REGISTRACIJA)
+    prevoz(3) = UtPolje(ut, rowUt, COL_UT_PLOMBA)
+    prevoz(4) = UtPolje(ut, rowUt, COL_UT_TEMP_REZIM)
+    fid = UtPolje(ut, rowUt, COL_UT_FAKTURA_ID)
+    If Len(fid) > 0 Then _
+        fakBroj = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, COL_FAK_BROJ))))
+
+    ' Rok trajanja = datum prerade + N meseci (Podesavanja; default 24
+    ' za smrznuto). IZVEDEN podatak, jasno dokumentovan -- posebna
+    ' kolona po preradi je buduci korak.
+    ' Sanity opseg je obavezan: datumski formatirana celija u configu
+    ' vrati datum, CStr na srpskom locale-u da "23.1.1900." a CLng to
+    ' parsira kao 2311900 (tacke = hiljade) -- DateAdd preko 9999. god
+    ' onda obara celu stampu greskom 5.
+    Dim rokMeseci As Long, rokD As Double
+    rokMeseci = 24
+    If IsNumeric(GetConfigValue(CFG_GP_ROK_MESECI)) Then
+        rokD = CDbl(GetConfigValue(CFG_GP_ROK_MESECI))
+        If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then _
+            rokMeseci = CLng(rokD)
+    End If
+
+    ' Podaci prerade: proizvod, pakovanje, datum proizvodnje, neto
+    ' izlaz (za "cela paleta / deo") i BRUTO (srazmerno za parcijalu).
     Dim preInfo As Object: Set preInfo = CreateObject("Scripting.Dictionary")
     preInfo.CompareMode = vbTextCompare
     Dim pd As Variant, i As Long
     pd = GetTableData(TBL_PRERADA)
     If IsArray(pd) Then
         Dim cPId As Long, cPTip As Long, cPKut As Long, cPKes As Long
+        Dim cPDat As Long, cPNeto As Long, cPBru As Long
         cPId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
         cPTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
         cPKut = RequireColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE, SRC)
         cPKes = RequireColumnIndex(TBL_PRERADA, COL_PRE_KESE, SRC)
+        cPDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
+        cPNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+        cPBru = GetColumnIndex(TBL_PRERADA, COL_PRE_BRUTO)
         For i = 1 To UBound(pd, 1)
-            If Not preInfo.Exists(Trim$(CStr(nz(pd(i, cPId))))) Then _
+            If Not preInfo.Exists(Trim$(CStr(nz(pd(i, cPId))))) Then
+                Dim bru As Double, net As Double
+                net = 0#: bru = 0#
+                If IsNumeric(pd(i, cPNeto)) Then net = CDbl(pd(i, cPNeto))
+                If cPBru > 0 Then
+                    If IsNumeric(pd(i, cPBru)) Then bru = CDbl(pd(i, cPBru))
+                End If
                 preInfo.Add Trim$(CStr(nz(pd(i, cPId)))), Array( _
                     Trim$(CStr(nz(pd(i, cPTip)))), _
                     Trim$(CStr(nz(pd(i, cPKut)))) & " kut. / " & _
-                    Trim$(CStr(nz(pd(i, cPKes)))) & " kesa")
+                    Trim$(CStr(nz(pd(i, cPKes)))) & " kesa", _
+                    pd(i, cPDat), net, bru)
+            End If
         Next i
     End If
 
-    Dim s As Variant, stavke() As Variant, nSt As Long, ukupnoKg As Double
+    ' Stavke obrasca (1..8): Lot | Proizvod | Dat. proizv. | Rok |
+    ' Pakovanje | Paleta | Neto | Bruto. Bruto: cela paleta = bruto
+    ' prerade; parcijala srazmerno neto udelu (aritmetika nad stvarnim
+    ' merenjima, ne izmisljanje); bez bruto podatka = neto.
+    Dim s As Variant, stavke() As Variant, nSt As Long
+    Dim totNeto As Double, totBruto As Double
+    Dim palCele As Long, palDelovi As Long
     s = GetTableData(TBL_UTOVAR_STAVKE)
     If Not IsArray(s) Then Exit Sub
     s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
@@ -283,33 +420,63 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     cSPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
     cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
     cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
-    ReDim stavke(1 To UBound(s, 1), 1 To 4)
+    ReDim stavke(1 To UBound(s, 1), 1 To 8)
     For i = 1 To UBound(s, 1)
         If Trim$(CStr(nz(s(i, cSUt)))) = Trim$(utovarID) Then
             nSt = nSt + 1
             stavke(nSt, 1) = Trim$(CStr(nz(s(i, cSBr))))
-            Dim pv As Variant, preK As String
+            Dim pv As Variant, preK As String, kol As Double
             preK = Trim$(CStr(nz(s(i, cSPre))))
+            kol = 0#
+            If IsNumeric(s(i, cSKol)) Then kol = CDbl(s(i, cSKol))
+            stavke(nSt, 7) = kol
+            totNeto = totNeto + kol
             If preInfo.Exists(preK) Then
                 pv = preInfo(preK)
                 stavke(nSt, 2) = CStr(pv(0))
-                stavke(nSt, 3) = CStr(pv(1))
+                stavke(nSt, 5) = CStr(pv(1))
+                If IsDate(pv(2)) Then
+                    stavke(nSt, 3) = CDate(pv(2))
+                    stavke(nSt, 4) = DateAdd("m", rokMeseci, CDate(pv(2)))
+                Else
+                    stavke(nSt, 3) = ""
+                    stavke(nSt, 4) = ""
+                End If
+                Dim udeo As Double, bruS As Double
+                If CDbl(pv(3)) > 0.0001 And kol >= CDbl(pv(3)) - 0.0001 Then
+                    stavke(nSt, 6) = "1"
+                    palCele = palCele + 1
+                    udeo = 1#
+                Else
+                    stavke(nSt, 6) = "deo"
+                    palDelovi = palDelovi + 1
+                    If CDbl(pv(3)) > 0.0001 Then udeo = kol / CDbl(pv(3)) Else udeo = 0#
+                End If
+                If CDbl(pv(4)) > 0.0001 Then
+                    bruS = Round(CDbl(pv(4)) * udeo, 2)
+                Else
+                    bruS = kol
+                End If
+                stavke(nSt, 8) = bruS
+                totBruto = totBruto + bruS
             Else
                 stavke(nSt, 2) = ""
                 stavke(nSt, 3) = ""
-            End If
-            If IsNumeric(s(i, cSKol)) Then
-                stavke(nSt, 4) = CDbl(s(i, cSKol))
-                ukupnoKg = ukupnoKg + CDbl(s(i, cSKol))
-            Else
-                stavke(nSt, 4) = 0#
+                stavke(nSt, 4) = ""
+                stavke(nSt, 5) = ""
+                stavke(nSt, 6) = ""
+                stavke(nSt, 8) = kol
+                totBruto = totBruto + kol
             End If
         End If
     Next i
     If nSt = 0 Then Exit Sub
 
     Dim ws As Worksheet
-    Set ws = FillUtovarSablon(broj, datum, kupacNaziv, stavke, nSt, ukupnoKg)
+    Set ws = FillUtovarSablon(broj, datum, vreme, kupacNaziv, mestoIst, _
+                              poBroj, fakBroj, prevoz, napomena, _
+                              stavke, nSt, _
+                              Array(palCele, palDelovi, totNeto, totBruto))
     If ws Is Nothing Then Exit Sub
 
     ' Rezim iz Podesavanja (kartica Stampa) -- kao svi dokumenti.
@@ -559,11 +726,16 @@ Private Function CreateUtovarSaFakturom(ByVal kupacID As String, _
     ' Positional AppendRow je ovde bezbedan: tblUtovar/tblUtovarStavke
     ' pravi EnsureUtovarSchemaCore pa je redosled kolona nas (v. Array
     ' u modSetup); svaka BUDUCA kolona ide na kraj (EnsureDataTable).
-    If AppendRow(TBL_UTOVAR, Array( _
+    Dim rowUtNovi As Long
+    rowUtNovi = AppendRow(TBL_UTOVAR, Array( _
         utovarID, GenerateBrojUtovara(), Year(Date), Date, kupacID, _
-        "", "", "", "")) <= 0 Then
+        "", "", "", ""))
+    If rowUtNovi <= 0 Then
         Err.Raise vbObjectError + 1755, SRC, "AppendRow nije uspeo za tblUtovar."
     End If
+    ' Vreme utovara (krug 5d) -- po imenu, kolona je dopuna na kraju.
+    RequireUpdateCell TBL_UTOVAR, rowUtNovi, COL_UT_VREME, _
+                      Format$(Now, "hh:mm"), SRC
 
     Dim stavkaNum As Long, rowUts As Long
     For Each s In stavke

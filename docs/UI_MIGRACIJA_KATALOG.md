@@ -5812,3 +5812,49 @@ VIDI i da se PREDA sa robom. Isporučeno u istom PR-u:
   „Gotova roba" / „Utovarne liste" (kontekst nosi segment); label
   „Kol. za utovar (kg)" skraćen, a pravilo „prazno = celo stanje"
   seli u hint liniju GOTOVA liste (`OTKUI_LBL_FK_HINT_GP`).
+
+### 25.11 Krug 5d: profesionalni obrazac utovarne liste + podaci prevoza
+
+Operaterov zahtev: „uradi sve iz preporuke, ne želim minimalno nego
+profesionalno" — obrazac utovarne liste dignut na pun logistički
+dokument, sa unosom podataka prevoza na listi Utovari.
+
+- **Šema `tblUtovar` +8 kolona:** `Prevoznik`, `Vozac`, `Registracija`,
+  `Plomba`, `TemperaturniRezim`, `MestoIstovara`, `VremeUtovara`,
+  `BrojNarudzbenice` (PO broj kupca). `CreateUtovarSaFakturom_TX`
+  odmah upisuje vreme utovara (`hh:mm`); ostalo unosi operater.
+- **Unos prevoza na listi Utovari:** 8 polja (prevoznik, vozač,
+  registracija, plomba, temp. režim, mesto istovara, PO broj,
+  napomena) vidljivih samo na toj listi + radnja „Sačuvaj prevoz" po
+  redu. Writer `UpdateUtovarPrevoz_TX` (transakcioni, kapije: utovar
+  postoji tačno jednom, nije storniran): **prazno polje ne dira
+  postojeću vrednost, „-" briše** — dopuna posle delimičnog unosa ne
+  gazi ranije uneto. Mreža Utovari dobila kolone PREVOZNIK i REG.
+- **Obrazac (LAYOUT_VER 2, 9 kolona):** identitet dokumenta (broj,
+  datum, vreme, faktura) + primalac (kupac, mesto istovara, PO broj);
+  blok PREVOZ (prevoznik/vozač/registracija/plomba/temp. režim);
+  stavke Rb | Lot | Proizvod | Proizvedeno | **Rok trajanja** |
+  Pakovanje | **Pal.** („1" cela / „deo") | Neto (kg) | **Bruto (kg)**;
+  zbirni red „UKUPNO · paleta: N [+ M deo]" + neto + bruto; napomena;
+  tri potpisa (Robu predao — pečat / Vozač / Robu preuzeo — pečat).
+- **Rok trajanja je IZVEDEN podatak:** datum prerade + N meseci iz
+  Podešavanja (`GP_ROK_TRAJANJA_MESECI`, default 24 za smrznuto) — uz
+  sanity opseg 1–600 celih meseci, jer datumski formatirana config
+  ćelija kroz srpski locale (`CStr` → „23.1.1900." → `CLng` čita tačke
+  kao hiljade = 2311900) obara `DateAdd` preko godine 9999 (greška 5).
+  Posebna kolona roka po preradi ostaje budući korak.
+- **Bruto po stavci:** cela paleta = bruto prerade; parcijala =
+  srazmeran udeo neto količine (aritmetika nad stvarnim merenjima);
+  bez bruto podatka = neto (ne izmišlja se).
+- **Fixture generator:** config vrednosti se upisuju kao TEKST
+  (`NumberFormat "@"`) — nov red tabele nasleđuje format reda iznad,
+  pa je datumski format pretvarao pin „24" u datum 1900-01-23;
+  `ENSURE_TABLES` sada i postojećoj tabeli dopunjava kolone koje fale
+  (donor iz prethodnog kruga nema prevoz kolone).
+- **Verifikacija:** test 161 tvrdi prevoz kolone u mreži; test 162
+  pun obrazac (vreme/faktura/mesto/PO/prevoz/plomba posle dopune,
+  datum proizvodnje, rok +24m, „deo", neto 20, bruto ≥ neto) + 
+  semantiku prazno/„-" u writeru. Dve nove sabotaže:
+  `utovar-gp-prevoz-prazno-brise` (prazno pregazi vrednost) i
+  `utovar-gp-rok-placebo` (rok = datum proizvodnje) — obaraju tačno
+  svoju tvrdnju. Katalog: 378 sabotaža.

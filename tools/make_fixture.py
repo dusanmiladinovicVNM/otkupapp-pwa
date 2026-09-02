@@ -1217,9 +1217,16 @@ SEED = {
     # UTOVARNE LISTE (krug 5): dokument fizicke isporuke. G/K/P na
     # lancima; B2/WL/WM/OV su contract negativi (v. komentar prerada).
     "tblUtovar": [
+        # G nosi i PUNE podatke prevoza (krug 5d) -- vozilo za test
+        # profesionalnog obrasca.
         {"UtovarID": "UT-SLED-G", "BrojUtovara": 1, "Godina": 2026,
          "DatumUtovara": FIXTURE_DATE, "KupacID": KUPAC2,
-         "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_GP},
+         "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_GP,
+         "Prevoznik": "Test prevoz DOO", "Vozac": "Petar Petrovic",
+         "Registracija": "BG-123-AB", "Plomba": "PL-0042",
+         "TemperaturniRezim": "-18 C", "MestoIstovara": "Beograd, Skladiste 2",
+         "VremeUtovara": "08:30", "BrojNarudzbenice": "PO-7788",
+         "Napomena": "fixture prevoz"},
         {"UtovarID": "UT-SLED-K", "BrojUtovara": 2, "Godina": 2026,
          "DatumUtovara": FIXTURE_DATE, "KupacID": KUPAC2,
          "Fakturisano": "Da", "FakturaID": "FAK-NEMA-GP"},
@@ -1949,7 +1956,11 @@ ENSURE_TABLES = {
     "tblUtovar": ("Utovar",
                   ["UtovarID", "BrojUtovara", "Godina", "DatumUtovara",
                    "KupacID", "Fakturisano", "FakturaID", "Napomena",
-                   "Stornirano"]),
+                   "Stornirano",
+                   # krug 5d: profesionalna utovarna lista (prevoz).
+                   "Prevoznik", "Vozac", "Registracija", "Plomba",
+                   "TemperaturniRezim", "MestoIstovara", "VremeUtovara",
+                   "BrojNarudzbenice"]),
     "tblUtovarStavke": ("UtovarStavke",
                         ["UtovarStavkaID", "UtovarID", "PreradaID",
                          "BrojPrerade", "KolicinaKg", "Stornirano"]),
@@ -2013,6 +2024,7 @@ SEF_CONFIG = {
     # ne zavisi od donora (ista klasa kao DEFAULT_SORTA_VOCA).
     "FAKTURA_PRINT_MODE": "OFF",
     "UTOVAR_PRINT_MODE": "OFF",
+    "GP_ROK_TRAJANJA_MESECI": "24",
     "SELLER_NAME": "Test prodavac DOO",
     "SELLER_PIB": "100000000",
     # Ekran Sledljivost (v6-ui-187): "Lanac (PDF)" postuje ovaj rezim; OFF da
@@ -2215,14 +2227,20 @@ def upsert_config(wb, table_name: str, pairs: dict,
 
     for key, val in pairs.items():
         r = existing.get(key.strip().upper())
+        # Vrednost ide kao TEKST: nov red nasledjuje format reda iznad,
+        # pa datumski format pretvori "24" u datum 1900-01-23 --
+        # GetConfigValue onda vrati smece (krug 5d: rok 2311900 meseci).
         if r is None:
             row = lo.ListRows.Add()
             row.Range.Cells(1, kcol).Value = key
+            row.Range.Cells(1, vcol).NumberFormat = "@"
             row.Range.Cells(1, vcol).Value = val
             if akt:
                 row.Range.Cells(1, akt).Value = STATUS_AKTIVAN
         else:
-            lo.ListRows(r).Range.Cells(1, vcol).Value = val
+            cell = lo.ListRows(r).Range.Cells(1, vcol)
+            cell.NumberFormat = "@"
+            cell.Value = val
     return len(pairs)
 
 
@@ -2282,7 +2300,8 @@ def build(donor: str, out: str, force: bool) -> int:
         # modSetup.EnsureDataTable: sheet + ListObject sa kolonama.
         created_tables = []
         for table_name, (sheet_name, headers) in ENSURE_TABLES.items():
-            if find_table(wb, table_name) is None:
+            lo_ex = find_table(wb, table_name)
+            if lo_ex is None:
                 ws_new = wb.Worksheets.Add()
                 ws_new.Name = sheet_name
                 for ci, h in enumerate(headers, start=1):
@@ -2292,8 +2311,16 @@ def build(donor: str, out: str, force: bool) -> int:
                                     ws_new.Cells(1, len(headers))), None, 1)
                 lo_new.Name = table_name
                 created_tables.append(table_name)
+            else:
+                # Postojecoj tabeli (donor = prosli fixture) dopuni
+                # kolone koje fale -- isto sto radi EnsureDataTable.
+                idx_ex = header_index(lo_ex)
+                for h in headers:
+                    if h.strip().lower() not in idx_ex:
+                        lo_ex.ListColumns.Add().Name = h
+                        created_tables.append(f"{table_name}.{h}")
         if created_tables:
-            print("Kreirane tabele: " + ", ".join(created_tables))
+            print("Kreirano (tabele/kolone): " + ", ".join(created_tables))
 
         # Nadogradnja seme PRE sejanja (v. ENSURE_COLS): nove kolone na KRAJ,
         # isto sto radi modSetup.EnsureColumnOnTable na startu aplikacije.

@@ -2266,21 +2266,28 @@ End Function
 
 
 ' ============================================================
-' UTOVARNA LISTA (krug 5) -- dokument fizicke isporuke GP robe: ide sa
-' robom u kamion. EnsureUtovarSablon (perzistentan, LAYOUT_VER kao
-' FakturaSablon) + FillUtovarSablon. Podatke prikuplja
-' modUtovar.PrintUtovar. stavke(1..n, 1..4):
-' 1=BrojPrerade 2=Proizvod 3=Pakovanje (kutije/kese) 4=KolicinaKg.
+' UTOVARNA LISTA (krug 5d -- PROFESIONALAN obrazac) -- dokument koji
+' ide sa robom u kamion. EnsureUtovarSablon (perzistentan, LAYOUT_VER
+' kao FakturaSablon) + FillUtovarSablon. Podatke prikuplja
+' modUtovar.PrintUtovar.
+'
+' Header: broj/datum/VREME utovara, kupac + MESTO ISTOVARA, broj
+' fakture i PO broj kupca; blok PREVOZ (prevoznik, vozac,
+' registracija, plomba, temperaturni rezim -- odbrana kod reklamacija
+' smrznute robe). stavke(1..n, 1..8):
+' 1=Lot(BrojPrerade) 2=Proizvod 3=DatumProizvodnje 4=RokTrajanja
+' 5=Pakovanje 6=Paleta("1"/"deo") 7=NetoKg 8=BrutoKg.
+' tot = Array(palCele, palDelovi, totNeto, totBruto).
 ' ============================================================
 Public Sub EnsureUtovarSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "1"
+    Const LAYOUT_VER As String = "2"
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
-        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        If CStr(ws.Range("K1").value) = LAYOUT_VER Then Exit Sub
         Application.DisplayAlerts = False
         ws.Delete
         Application.DisplayAlerts = True
@@ -2290,35 +2297,79 @@ Public Sub EnsureUtovarSablon()
     Set ws = ThisWorkbook.Sheets.Add
     ws.name = WS_UTOVAR_SABLON
     ws.cells.Font.name = "Calibri"
-    ws.cells.Font.Size = 10
-    ws.columns("A").ColumnWidth = 5
-    ws.columns("B").ColumnWidth = 16
-    ws.columns("C").ColumnWidth = 30
-    ws.columns("D").ColumnWidth = 18
-    ws.columns("E").ColumnWidth = 14
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 11
+    ws.columns("C").ColumnWidth = 24
+    ws.columns("D").ColumnWidth = 11
+    ws.columns("E").ColumnWidth = 11
+    ws.columns("F").ColumnWidth = 16
+    ws.columns("G").ColumnWidth = 6
+    ws.columns("H").ColumnWidth = 10
+    ws.columns("I").ColumnWidth = 10
 
     Dim r As Long
-    r = DocSellerHeader(ws, 1, 5, 5)
-    r = DocTitleBlock(ws, r, 5, "Dokument fizicke isporuke gotove robe", "UTOVARNA LISTA")
+    r = DocSellerHeader(ws, 1, 9, 9)
+    r = DocTitleBlock(ws, r, 9, "Dokument fizicke isporuke gotove robe", "UTOVARNA LISTA")
 
+    ' Levi blok: identitet dokumenta; desni blok: primalac.
     Dim fr As Long: fr = r + 1
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum utovara:"
-    ws.cells(fr + 2, 1).value = "Kupac:"
+    ws.cells(fr + 2, 1).value = "Vreme utovara:"
+    ws.cells(fr + 3, 1).value = "Faktura:"
     ws.cells(fr, 2).name = "UtBroj"
     ws.cells(fr, 2).NumberFormat = "@"
     ws.cells(fr + 1, 2).name = "UtDatum"
-    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 5)).Merge
-    ws.cells(fr + 2, 2).name = "UtKupac"
-    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+    ws.cells(fr + 2, 2).name = "UtVreme"
+    ws.cells(fr + 2, 2).NumberFormat = "@"
+    ws.cells(fr + 3, 2).name = "UtFaktura"
+    ws.cells(fr + 3, 2).NumberFormat = "@"
 
-    Dim hdr As Long: hdr = fr + 4
+    ws.cells(fr, 4).value = "Kupac:"
+    ws.cells(fr + 1, 4).value = "Mesto istovara:"
+    ws.cells(fr + 2, 4).value = "Narudzbenica (PO):"
+    ws.Range(ws.cells(fr, 5), ws.cells(fr, 9)).Merge
+    ws.cells(fr, 5).name = "UtKupac"
+    ws.Range(ws.cells(fr + 1, 5), ws.cells(fr + 1, 9)).Merge
+    ws.cells(fr + 1, 5).name = "UtMestoIst"
+    ws.Range(ws.cells(fr + 2, 5), ws.cells(fr + 2, 9)).Merge
+    ws.cells(fr + 2, 5).name = "UtPoBroj"
+    ws.cells(fr + 2, 5).NumberFormat = "@"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 3, 2)).Font.Bold = True
+    ws.Range(ws.cells(fr, 5), ws.cells(fr + 2, 5)).Font.Bold = True
+
+    ' Blok PREVOZ -- jedan naslovni red + red vrednosti.
+    Dim pr As Long: pr = fr + 5
+    ws.Range(ws.cells(pr, 1), ws.cells(pr, 9)).Merge
+    ws.cells(pr, 1).value = "PREVOZ"
+    ws.cells(pr, 1).Font.Bold = True
+    ws.cells(pr, 1).Interior.Color = DocColHeaderFill()
+    ws.cells(pr + 1, 1).value = "Prevoznik:"
+    ws.Range(ws.cells(pr + 1, 2), ws.cells(pr + 1, 3)).Merge
+    ws.cells(pr + 1, 2).name = "UtPrevoznik"
+    ws.cells(pr + 1, 4).value = "Vozac:"
+    ws.cells(pr + 1, 5).name = "UtVozac"
+    ws.cells(pr + 1, 6).value = "Reg.:"
+    ws.cells(pr + 1, 7).name = "UtRegistracija"
+    ws.cells(pr + 2, 1).value = "Plomba:"
+    ws.cells(pr + 2, 2).name = "UtPlomba"
+    ws.cells(pr + 2, 2).NumberFormat = "@"
+    ws.cells(pr + 2, 4).value = "Temp. rezim:"
+    ws.cells(pr + 2, 5).name = "UtTempRezim"
+    ws.Range(ws.cells(pr + 1, 2), ws.cells(pr + 2, 7)).Font.Bold = True
+
+    Dim hdr As Long: hdr = pr + 4
     ws.cells(hdr, 1).value = "Rb"
-    ws.cells(hdr, 2).value = "Broj prerade"
+    ws.cells(hdr, 2).value = "Lot"
     ws.cells(hdr, 3).value = "Proizvod"
-    ws.cells(hdr, 4).value = "Pakovanje"
-    ws.cells(hdr, 5).value = "Kolicina (kg)"
-    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
+    ws.cells(hdr, 4).value = "Proizvedeno"
+    ws.cells(hdr, 5).value = "Rok trajanja"
+    ws.cells(hdr, 6).value = "Pakovanje"
+    ws.cells(hdr, 7).value = "Pal."
+    ws.cells(hdr, 8).value = "Neto (kg)"
+    ws.cells(hdr, 9).value = "Bruto (kg)"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 9))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
         .HorizontalAlignment = xlCenter
@@ -2328,8 +2379,8 @@ Public Sub EnsureUtovarSablon()
     End With
     ws.cells(hdr + 1, 1).name = "UtStavkaStart"
 
-    ws.Range("H1").value = LAYOUT_VER
-    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    ws.Range("K1").value = LAYOUT_VER
+    ws.Range("K1").Font.Color = RGB(255, 255, 255)
     Exit Sub
 EH:
     Application.DisplayAlerts = True
@@ -2337,8 +2388,12 @@ EH:
 End Sub
 
 Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
-        ByVal kupacNaziv As String, ByVal stavke As Variant, ByVal nStavke As Long, _
-        ByVal ukupnoKg As Double) As Worksheet
+        ByVal vreme As String, ByVal kupacNaziv As String, _
+        ByVal mestoIstovara As String, ByVal poBroj As String, _
+        ByVal fakturaBroj As String, ByRef prevoz() As String, _
+        ByVal napomena As String, _
+        ByVal stavke As Variant, ByVal nStavke As Long, _
+        ByVal tot As Variant) As Worksheet
     On Error GoTo EH
     EnsureUtovarSablon
     Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
@@ -2346,20 +2401,29 @@ Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
     ws.Range("UtBroj").value = broj
     ws.Range("UtDatum").value = datum
     ws.Range("UtDatum").NumberFormat = "DD.MM.YYYY"
+    ws.Range("UtVreme").value = vreme
+    ws.Range("UtFaktura").value = fakturaBroj
     ws.Range("UtKupac").value = kupacNaziv
+    ws.Range("UtMestoIst").value = mestoIstovara
+    ws.Range("UtPoBroj").value = poBroj
+    ws.Range("UtPrevoznik").value = prevoz(0)
+    ws.Range("UtVozac").value = prevoz(1)
+    ws.Range("UtRegistracija").value = prevoz(2)
+    ws.Range("UtPlomba").value = prevoz(3)
+    ws.Range("UtTempRezim").value = prevoz(4)
 
     Dim startCell As Range: Set startCell = ws.Range("UtStavkaStart")
 
     ' Isti dinamican cleanup kao FakturaSablon (perzistentan list,
     ' prethodni dokument je mogao biti duzi -- v. komentare tamo).
     Dim cleanupRows As Long
-    cleanupRows = nStavke + 4
+    cleanupRows = nStavke + 8
     Dim contentBottom As Long
-    contentBottom = SablonLastContentRow(ws, 1, 5)
+    contentBottom = SablonLastContentRow(ws, 1, 9)
     If contentBottom - startCell.row > cleanupRows Then
         cleanupRows = contentBottom - startCell.row
     End If
-    With ws.Range(startCell, startCell.Offset(cleanupRows, 4))
+    With ws.Range(startCell, startCell.Offset(cleanupRows, 8))
         .UnMerge
         .ClearContents
         .Borders.LineStyle = xlNone
@@ -2374,33 +2438,61 @@ Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
         startCell.Offset(i - 1, 2).value = stavke(i, 2)
         startCell.Offset(i - 1, 3).value = stavke(i, 3)
         startCell.Offset(i - 1, 4).value = stavke(i, 4)
+        startCell.Offset(i - 1, 5).value = stavke(i, 5)
+        startCell.Offset(i - 1, 6).value = stavke(i, 6)
+        startCell.Offset(i - 1, 7).value = stavke(i, 7)
+        startCell.Offset(i - 1, 8).value = stavke(i, 8)
     Next i
 
     If nStavke > 0 Then
-        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))
+        With ws.Range(startCell, startCell.Offset(nStavke - 1, 8))
             .Borders.LineStyle = xlContinuous
             .Borders.Weight = xlThin
         End With
         ws.Range(startCell, startCell.Offset(nStavke - 1, 0)).HorizontalAlignment = xlCenter
-        ws.Range(startCell.Offset(0, 4), startCell.Offset(nStavke - 1, 4)).NumberFormat = "#,##0.00"
+        ws.Range(startCell.Offset(0, 6), startCell.Offset(nStavke - 1, 6)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 3), startCell.Offset(nStavke - 1, 4)).NumberFormat = "DD.MM.YYYY"
+        ws.Range(startCell.Offset(0, 7), startCell.Offset(nStavke - 1, 8)).NumberFormat = "#,##0.00"
     End If
 
-    Dim tot As Range: Set tot = startCell.Offset(nStavke, 0)
-    ws.Range(tot, tot.Offset(0, 3)).Merge
-    tot.value = "UKUPNO:"
-    tot.HorizontalAlignment = xlRight
-    tot.Font.Bold = True
-    tot.Offset(0, 4).value = ukupnoKg
-    tot.Offset(0, 4).NumberFormat = "#,##0.00"
-    tot.Offset(0, 4).Font.Bold = True
-    With ws.Range(tot, tot.Offset(0, 4))
+    ' Zbirni red: palete (cele + delovi), neto, bruto.
+    Dim tot1 As Range: Set tot1 = startCell.Offset(nStavke, 0)
+    ws.Range(tot1, tot1.Offset(0, 5)).Merge
+    Dim palTekst As String
+    palTekst = "UKUPNO  " & ChrW(183) & "  paleta: " & CStr(CLng(tot(0)))
+    If CLng(tot(1)) > 0 Then _
+        palTekst = palTekst & " + " & CStr(CLng(tot(1))) & " deo"
+    tot1.value = palTekst
+    tot1.HorizontalAlignment = xlRight
+    tot1.Font.Bold = True
+    tot1.Offset(0, 6).value = ""
+    tot1.Offset(0, 7).value = CDbl(tot(2))
+    tot1.Offset(0, 8).value = CDbl(tot(3))
+    ws.Range(tot1.Offset(0, 7), tot1.Offset(0, 8)).NumberFormat = "#,##0.00"
+    ws.Range(tot1.Offset(0, 7), tot1.Offset(0, 8)).Font.Bold = True
+    With ws.Range(tot1, tot1.Offset(0, 8))
         .Borders.LineStyle = xlContinuous
         .Borders.Weight = xlThin
     End With
 
-    Dim sgnRow As Long: sgnRow = tot.row + 3
-    ws.cells(sgnRow, 2).value = "Robu predao: ___________"
-    ws.cells(sgnRow, 4).value = "Robu preuzeo: ___________"
+    ' Napomena.
+    Dim napRow As Long: napRow = tot1.row + 2
+    ws.cells(napRow, 1).value = "Napomena:"
+    ws.Range(ws.cells(napRow, 2), ws.cells(napRow, 9)).Merge
+    ws.cells(napRow, 2).value = napomena
+
+    ' Potpisi: tri kolone -- magacin / vozac / primalac; pecat linije.
+    Dim sgnRow As Long: sgnRow = napRow + 3
+    ws.cells(sgnRow, 1).value = "Robu predao:"
+    ws.cells(sgnRow, 4).value = "Vozac:"
+    ws.cells(sgnRow, 7).value = "Robu preuzeo:"
+    ws.cells(sgnRow + 2, 1).value = "_________________"
+    ws.cells(sgnRow + 2, 4).value = "_________________"
+    ws.cells(sgnRow + 2, 7).value = "_________________"
+    ws.cells(sgnRow + 3, 1).value = "(potpis i pecat)"
+    ws.cells(sgnRow + 3, 4).value = "(potpis)"
+    ws.cells(sgnRow + 3, 7).value = "(potpis i pecat)"
+    ws.Range(ws.cells(sgnRow + 3, 1), ws.cells(sgnRow + 3, 7)).Font.Size = 8
 
     On Error Resume Next
     Application.PrintCommunication = False
@@ -2415,7 +2507,7 @@ Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
         .TopMargin = Application.InchesToPoints(0.5)
         .BottomMargin = Application.InchesToPoints(0.5)
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgnRow, 5)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgnRow + 3, 9)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0

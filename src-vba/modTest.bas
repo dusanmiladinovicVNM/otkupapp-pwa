@@ -6772,6 +6772,9 @@ Private Sub T_Fak_GpListaIKorpa()
     AssertEq CStr(uv(rUtG, 7)), "9/2026", "fakturisan utovar nosi broj fakture"
     AssertEq (rUtOV > 0), True, "nefakturisan utovar je u listi"
     AssertEq CStr(uv(rUtOV, 7)), "", "nefakturisan utovar nema broj fakture"
+    ' Krug 5d: prevoz je VIDLJIV u listi (prevoznik + registracija).
+    AssertEq CStr(uv(rUtG, 8)), "Test prevoz DOO", "lista nosi prevoznika"
+    AssertEq CStr(uv(rUtG, 9)), "BG-123-AB", "lista nosi registraciju"
 
     ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
     modScrFakture.Scr_FkKorpaTestReset
@@ -6940,7 +6943,24 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prijemnice", _
              "sveza stampa vraca prijemnicki heder"
 
-    ' --- Krug 5b: STAMPA UTOVARNE LISTE -- dokument koji ide sa robom
+    ' --- Krug 5d: PODACI PREVOZA -- upis nad utovarom (prazno = ne
+    ' diraj, "-" = obrisi) pa PROFESIONALAN obrazac.
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "Hladni transport DOO", _
+             "Marko Markovic", "NS-555-CC", "PL-9001", "-18 C", _
+             "Novi Sad, rampa 3", "PO-1234", "pazljivo"), True, _
+             "podaci prevoza se upisuju"
+    ' Prazno polje NE dira postojecu vrednost; "-" brise.
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "", "", "", "-", _
+             "", "", "", ""), True, "dopuna prevoza prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_PREVOZNIK)))), "Hladni transport DOO", _
+             "prazno polje ne dira postojecu vrednost"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID, _
+             COL_UT_PLOMBA)))), "", "crtica brise polje"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID, "", "", "", "PL-9002", _
+             "", "", "", ""), True, "nova plomba se upisuje"
+
+    ' --- Krug 5b/5d: STAMPA UTOVARNE LISTE -- pun obrazac
     ' (UTOVAR_PRINT_MODE=OFF u fixture-u: sablon se puni, izlaza nema).
     modUtovar.PrintUtovar utID
     Dim wsU As Worksheet, usRow As Long
@@ -6950,12 +6970,37 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
              "utovarna lista nosi svoj broj"
     AssertEq CStr(wsU.Range("UtKupac").value), "Test kupac 2", _
              "utovarna lista nosi kupca"
+    AssertEq (Len(CStr(wsU.Range("UtVreme").value)) > 0), True, _
+             "obrazac nosi vreme utovara"
+    AssertEq (Len(CStr(wsU.Range("UtFaktura").value)) > 0), True, _
+             "obrazac nosi broj fakture"
+    AssertEq CStr(wsU.Range("UtMestoIst").value), "Novi Sad, rampa 3", _
+             "obrazac nosi mesto istovara"
+    AssertEq CStr(wsU.Range("UtPoBroj").value), "PO-1234", _
+             "obrazac nosi PO broj kupca"
+    AssertEq CStr(wsU.Range("UtPrevoznik").value), "Hladni transport DOO", _
+             "obrazac nosi prevoznika"
+    AssertEq CStr(wsU.Range("UtRegistracija").value), "NS-555-CC", _
+             "obrazac nosi registraciju"
+    AssertEq CStr(wsU.Range("UtPlomba").value), "PL-9002", _
+             "obrazac nosi plombu"
+    AssertEq CStr(wsU.Range("UtTempRezim").value), "-18 C", _
+             "obrazac nosi temperaturni rezim"
     AssertEq CStr(wsU.cells(usRow, 2).value), "71/2026", _
              "stavka liste nosi broj prerade"
     AssertEq CStr(wsU.cells(usRow, 3).value), "Rinfuz", _
              "stavka liste nosi proizvod"
-    AssertEq Format$(CDbl(wsU.cells(usRow, 5).value), "0.00"), _
-             Format$(20#, "0.00"), "stavka liste nosi utovarene kg"
+    ' Rok trajanja = datum proizvodnje + N meseci iz Podesavanja (24).
+    AssertEq Format$(CDate(wsU.cells(usRow, 4).value), "yyyy-mm-dd"), _
+             "2026-03-15", "stavka nosi datum proizvodnje"
+    AssertEq Format$(CDate(wsU.cells(usRow, 5).value), "yyyy-mm-dd"), _
+             "2028-03-15", "rok trajanja = proizvodnja + 24 meseca"
+    AssertEq CStr(wsU.cells(usRow, 7).value), "deo", _
+             "parcijalni utovar je oznacen kao deo palete"
+    AssertEq Format$(CDbl(wsU.cells(usRow, 8).value), "0.00"), _
+             Format$(20#, "0.00"), "stavka liste nosi utovarene NETO kg"
+    AssertEq (CDbl(wsU.cells(usRow, 9).value) >= CDbl(wsU.cells(usRow, 8).value)), _
+             True, "bruto stavke nije manji od neto"
 
     ' --- Read-model: parcijalno prodata je i dalje dostupna (30.5).
     Dim gp As Variant, rW1 As Long

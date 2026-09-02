@@ -4118,26 +4118,23 @@ SABOTAZE = {
         "T_Fak_GpListaIKorpa",
         "fakturisan utovar nosi broj fakture",
     ),
-    # Krug 5b: stampana utovarna lista bez broja prerade je dokument
-    # bez lota -- roba u kamionu ne moze da se upari sa evidencijom.
+    # Krug 5d: stampana utovarna lista bez LOTA (broja prerade) je
+    # dokument bez sledljivosti -- roba u kamionu ne moze da se
+    # upari sa evidencijom.
     "utovar-gp-stampa-bez-lota": (
         "modPrint.bas",
         "        startCell.Offset(i - 1, 1).value = stavke(i, 1)\n"
         "        startCell.Offset(i - 1, 2).value = stavke(i, 2)\n"
         "        startCell.Offset(i - 1, 3).value = stavke(i, 3)\n"
         "        startCell.Offset(i - 1, 4).value = stavke(i, 4)\n"
-        "    Next i\n"
-        "\n"
-        "    If nStavke > 0 Then\n"
-        "        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))\n",
+        "        startCell.Offset(i - 1, 5).value = stavke(i, 5)\n"
+        "        startCell.Offset(i - 1, 6).value = stavke(i, 6)\n",
         "        ' SABOTAZA: lot progutan\n"
         "        startCell.Offset(i - 1, 2).value = stavke(i, 2)\n"
         "        startCell.Offset(i - 1, 3).value = stavke(i, 3)\n"
         "        startCell.Offset(i - 1, 4).value = stavke(i, 4)\n"
-        "    Next i\n"
-        "\n"
-        "    If nStavke > 0 Then\n"
-        "        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))\n",
+        "        startCell.Offset(i - 1, 5).value = stavke(i, 5)\n"
+        "        startCell.Offset(i - 1, 6).value = stavke(i, 6)\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "stavka liste nosi broj prerade",
     ),
@@ -4150,6 +4147,26 @@ SABOTAZE = {
         "            ' SABOTAZA: stavka ostaje bez utovara\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "migracija vezuje staru GP stavku na nov utovar",
+    ),
+    # Krug 5d: prazno prevoz polje NE sme da obrise postojecu
+    # vrednost (operater dopunjava samo plombu, ostalo ostaje).
+    "utovar-gp-prevoz-prazno-brise": (
+        "modUtovar.bas",
+        "    v = Trim$(vrednost)\n"
+        "    If Len(v) = 0 Then Exit Sub\n",
+        "    v = Trim$(vrednost)\n"
+        "    ' SABOTAZA: prazno pregazi vrednost\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "prazno polje ne dira postojecu vrednost",
+    ),
+    # Krug 5d: rok trajanja na obrascu = proizvodnja + N meseci iz
+    # Podesavanja -- bez toga papir tvrdi pogresan rok.
+    "utovar-gp-rok-placebo": (
+        "modUtovar.bas",
+        "                    stavke(nSt, 4) = DateAdd(\"m\", rokMeseci, CDate(pv(2)))\n",
+        "                    stavke(nSt, 4) = CDate(pv(2))   ' SABOTAZA: rok = proizvodnja\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "rok trajanja = proizvodnja + 24 meseca",
     ),
     # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
     # kasnije odbio, ali tek posle potvrde operatera (kasna greska).

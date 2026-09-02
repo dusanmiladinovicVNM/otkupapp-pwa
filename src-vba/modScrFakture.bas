@@ -103,7 +103,7 @@ Private Const FK_FAK_KOL_ID As Long = 8
 Private Const FK_SEF_KOL_ID As Long = 8
 ' GP lista: identitet i dostupnost, isti obrazac kao ZAFAKT.
 Private Const FK_GP_KOL_ID As Long = 9
-Private Const FK_UT_KOL_ID As Long = 7
+Private Const FK_UT_KOL_ID As Long = 9
 Private Const FK_GP_KOL_DOST As Long = 10
 
 Private mLista As String            ' FK_ZAFAKT | FK_FAKTURE | FK_SEF
@@ -294,6 +294,7 @@ Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
             ' Utovarna lista IDE SA ROBOM -- stampa po redu; storno samo
             ' nefakturisanog (writer kapija odbija ostale s razlogom).
             FkRadnjeZaListu = "utprint:OTKUI_BTN_UT_STAMPAJ:132:soft:1|" & _
+                         "utprevoz:OTKUI_BTN_UT_PREVOZ:132:ghost:1|" & _
                          "utstorno:OTKUI_BTN_UT_STORNO:96:danger:1"
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _
@@ -443,6 +444,7 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
         Case "fkprint":  RadnjaNadRedom = StampajFakturu(red)
         Case "utprint":  RadnjaNadRedom = StampajUtovar(red)
         Case "utstorno": RadnjaNadRedom = StornirajUtovar(red)
+        Case "utprevoz": RadnjaNadRedom = SacuvajPrevoz(red)
         Case "fkstat":   RadnjaNadRedom = OsveziStatusFakture(red)
         Case "sfsend":   RadnjaNadRedom = SefPosalji(red)
         Case "sfstat":   RadnjaNadRedom = SefOsvezi(red)
@@ -1131,10 +1133,12 @@ Private Function UtovariKolone() As Variant
     UtovariKolone = Array( _
         "OTKUI_HD_BROJ||txt|72|1", _
         "OTKUI_HD_DATUM||date|74|1", _
-        "OTKUI_HDS_KUPAC||txt|140|1", _
-        "OTKUI_HDU_ROBA||txt|110|1", _
-        "OTKUI_HD_KG||kg|84|1", _
+        "OTKUI_HDS_KUPAC||txt|130|1", _
+        "OTKUI_HDU_ROBA||txt|104|1", _
+        "OTKUI_HD_KG||kg|80|1", _
         "OTKUI_HDF_FAKTURA||txt|0|1", _
+        "OTKUI_HDU_PREVOZNIK||txt|110|2", _
+        "OTKUI_HDU_REG||txt|90|2", _
         "OTKUI_HDU_ID||txt|1|4")
 End Function
 
@@ -1150,7 +1154,7 @@ Private Function RedoviUtovara(ByVal filter As String, ByVal q As String) As Var
         Exit Function
     End If
 
-    ReDim outA(1 To UBound(src, 1), 1 To 7)
+    ReDim outA(1 To UBound(src, 1), 1 To 9)
     For i = 1 To UBound(src, 1)
         ' "ceka" cip pusta NEFAKTURISANE (oslobodjene stornom fakture)
         ' -- isto FkCipPrijemnica pravilo nad "dostupna".
@@ -1168,7 +1172,9 @@ Private Function RedoviUtovara(ByVal filter As String, ByVal q As String) As Var
         outA(n, 4) = CStr(src(i, 5))
         outA(n, 5) = CDbl(src(i, 6))
         outA(n, 6) = CStr(src(i, 7))
-        outA(n, 7) = CStr(src(i, 1))
+        outA(n, 7) = CStr(src(i, 8))
+        outA(n, 8) = CStr(src(i, 9))
+        outA(n, 9) = CStr(src(i, 1))
         zbirKg = zbirKg + CDbl(src(i, 6))
 Sledeci:
     Next i
@@ -1188,6 +1194,34 @@ Private Function StampajUtovar(ByVal red As Long) As Boolean
     modUtovar.PrintUtovar iD
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STAMPA"), False
     StampajUtovar = True
+End Function
+
+' Krug 5d: upis podataka prevoza nad izabranim redom -- vrednosti iz
+' 8 polja zone (vidljiva samo na listi UTOVARI). Prazno polje NE dira
+' postojecu vrednost, crtica "-" brise (writer semantika).
+Private Function SacuvajPrevoz(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    If modUtovar.UpdateUtovarPrevoz_TX(iD, _
+            PrevozPolje("scrFkUtPrev"), PrevozPolje("scrFkUtVoz"), _
+            PrevozPolje("scrFkUtReg"), PrevozPolje("scrFkUtPlo"), _
+            PrevozPolje("scrFkUtTemp"), PrevozPolje("scrFkUtMesto"), _
+            PrevozPolje("scrFkUtPo"), PrevozPolje("scrFkUtNap")) Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_PREVOZ"), False
+        SacuvajPrevoz = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_PREVOZ"), True
+    End If
+End Function
+
+Private Function PrevozPolje(ByVal nm As String) As String
+    Dim c As Object
+    On Error Resume Next
+    Set c = Kontrola(nm)
+    If c Is Nothing Then Exit Function
+    PrevozPolje = Trim$(CStr(c.text))
 End Function
 
 ' Storno utovara po redu -- potvrda pa StornoUtovar_TX (kapija u
@@ -1385,6 +1419,26 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrFkKolGP", Poruka("OTKUI_FLD_FK_KOLGP"), "txt", "", _
                          1, True, False, "FK"
 
+    ' PODACI PREVOZA (krug 5d): 8 polja vidljivih SAMO na listi
+    ' UTOVARI; radnja "Sacuvaj prevoz" ih upisuje u izabrani red
+    ' (prazno = ne diraj, "-" = obrisi). Idu na stampani obrazac.
+    modOtkupUI.NewFieldG z, "scrFkUtPrev", Poruka("OTKUI_FLD_UT_PREVOZNIK"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtVoz", Poruka("OTKUI_FLD_UT_VOZAC"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtReg", Poruka("OTKUI_FLD_UT_REG"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtPlo", Poruka("OTKUI_FLD_UT_PLOMBA"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtTemp", Poruka("OTKUI_FLD_UT_TEMP"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtMesto", Poruka("OTKUI_FLD_UT_MESTO"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtPo", Poruka("OTKUI_FLD_UT_PO"), "txt", "", _
+                         1, True, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtNap", Poruka("OTKUI_FLD_UT_NAPOMENA"), "txt", "", _
+                         1, True, False, "FK"
+
     ' BROJA FAKTURE OVDE NEMA, i to je namerno. Broj dodeljuje transakcija
     ' (CreateFaktura sam zove GenerateBrojFakture), operater ga ne bira. Polje
     ' sa "predlogom" koji transakcija ignorise bilo bi prikaz koji se garantovano
@@ -1452,6 +1506,30 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     z.Controls("scrFkCenaGP").Visible = (Scr_Lista() = FK_GP)
     PoljeX z, "scrFkKolGP", PAD + FK_FLD_W + 174, 150, FK_Y_LBL
     z.Controls("scrFkKolGP").Visible = (Scr_Lista() = FK_GP)
+
+    ' Prevoz polja (krug 5d) -- jedan red, samo na listi UTOVARI;
+    ' na toj listi se kupac/cena/kolicina polja sakrivaju pa je ceo
+    ' red slobodan.
+    Dim utVidi As Boolean, utX As Single
+    utVidi = (Scr_Lista() = FK_UTOVARI)
+    z.Controls("scrFkKup").Visible = Not utVidi
+    utX = PAD
+    PoljeX z, "scrFkUtPrev", utX, 140, FK_Y_LBL: utX = utX + 152
+    PoljeX z, "scrFkUtVoz", utX, 120, FK_Y_LBL: utX = utX + 132
+    PoljeX z, "scrFkUtReg", utX, 100, FK_Y_LBL: utX = utX + 112
+    PoljeX z, "scrFkUtPlo", utX, 90, FK_Y_LBL: utX = utX + 102
+    PoljeX z, "scrFkUtTemp", utX, 90, FK_Y_LBL: utX = utX + 102
+    PoljeX z, "scrFkUtMesto", utX, 160, FK_Y_LBL: utX = utX + 172
+    PoljeX z, "scrFkUtPo", utX, 110, FK_Y_LBL: utX = utX + 122
+    PoljeX z, "scrFkUtNap", utX, 150, FK_Y_LBL
+    z.Controls("scrFkUtPrev").Visible = utVidi
+    z.Controls("scrFkUtVoz").Visible = utVidi
+    z.Controls("scrFkUtReg").Visible = utVidi
+    z.Controls("scrFkUtPlo").Visible = utVidi
+    z.Controls("scrFkUtTemp").Visible = utVidi
+    z.Controls("scrFkUtMesto").Visible = utVidi
+    z.Controls("scrFkUtPo").Visible = utVidi
+    z.Controls("scrFkUtNap").Visible = utVidi
 
     ' Objasnjenje se zaustavlja pred trakom -- Label ne prelama, samo istece.
     z.Controls("fkHint").width = wPolja - PAD * 2

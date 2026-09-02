@@ -1632,6 +1632,20 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ASK_UT_STORNO", "Stornirati utovar? Roba se vra" & ChrW(263) & "a na stanje."
     UpsertRow lo, existing, "OTKUI_MSG_UT_STORNO", ChrW(10003) & " Utovar je storniran " & ChrW(8212) & " roba je vra" & ChrW(263) & "ena na stanje"
     UpsertRow lo, existing, "OTKUI_ERR_UT_STORNO", ChrW(10007) & " Storno utovara nije uspeo " & ChrW(8212) & " fakturisan utovar prvo trazi storno fakture"
+    ' Krug 5d: podaci prevoza (profesionalna utovarna lista).
+    UpsertRow lo, existing, "OTKUI_HDU_PREVOZNIK", "PREVOZNIK"
+    UpsertRow lo, existing, "OTKUI_HDU_REG", "REG."
+    UpsertRow lo, existing, "OTKUI_BTN_UT_PREVOZ", "Sa" & ChrW(269) & "uvaj prevoz"
+    UpsertRow lo, existing, "OTKUI_MSG_UT_PREVOZ", ChrW(10003) & " Podaci prevoza su sa" & ChrW(269) & "uvani"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_PREVOZ", ChrW(10007) & " Upis podataka prevoza nije uspeo"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PREVOZNIK", "Prevoznik"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_VOZAC", "Voza" & ChrW(269)
+    UpsertRow lo, existing, "OTKUI_FLD_UT_REG", "Registracija"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PLOMBA", "Plomba"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_TEMP", "Temp. re" & ChrW(382) & "im"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_MESTO", "Mesto istovara"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_PO", "Narud" & ChrW(382) & "benica (PO)"
+    UpsertRow lo, existing, "OTKUI_FLD_UT_NAPOMENA", "Napomena"
     UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
     UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---

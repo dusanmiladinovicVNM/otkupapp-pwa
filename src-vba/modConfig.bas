@@ -362,6 +362,17 @@ Public Const COL_UT_KUPAC As String = "KupacID"
 Public Const COL_UT_FAKTURISANO As String = "Fakturisano"
 Public Const COL_UT_FAKTURA_ID As String = "FakturaID"
 Public Const COL_UT_NAPOMENA As String = "Napomena"
+' Krug 5d (profesionalna utovarna lista): podaci PREVOZA i isporuke --
+' unos na listi Utovari, prikaz na stampanom obrascu. Temperaturni
+' rezim i plomba su odbrana kod reklamacija smrznute robe.
+Public Const COL_UT_PREVOZNIK As String = "Prevoznik"
+Public Const COL_UT_VOZAC As String = "Vozac"
+Public Const COL_UT_REGISTRACIJA As String = "Registracija"
+Public Const COL_UT_PLOMBA As String = "Plomba"
+Public Const COL_UT_TEMP_REZIM As String = "TemperaturniRezim"
+Public Const COL_UT_MESTO_ISTOVARA As String = "MestoIstovara"
+Public Const COL_UT_VREME As String = "VremeUtovara"
+Public Const COL_UT_PO_BROJ As String = "BrojNarudzbenice"
 Public Const COL_UTS_ID As String = "UtovarStavkaID"
 Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
 Public Const COL_UTS_PRERADA_ID As String = "PreradaID"
@@ -370,6 +381,10 @@ Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
 ' Stampani obrazac utovarne liste (ide sa robom) + rezim stampe.
 Public Const WS_UTOVAR_SABLON As String = "UtovarSablon"
 Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
+' Rok trajanja gotovog proizvoda = datum prerade + N meseci (poslovna
+' postavka; smrznuto voce standardno 24). Obrazac ga IZVODI -- posebna
+' kolona po preradi je buduci korak ako se pojavi potreba po lotu.
+Public Const CFG_GP_ROK_MESECI As String = "GP_ROK_TRAJANJA_MESECI"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

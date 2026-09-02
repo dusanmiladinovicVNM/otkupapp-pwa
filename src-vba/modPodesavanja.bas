@@ -100,6 +100,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "OM_IZDAVANJE_PRINT_MODE", "Revers ambala" & ChrW(382) & "e (izdavanje/povrat)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "FAKTURA_PRINT_MODE", "Faktura", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "UTOVAR_PRINT_MODE", "Utovarna lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "GP_ROK_TRAJANJA_MESECI", "Rok trajanja got. proizvoda (meseci)", "text"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_AMB_PRINT_MODE", "Kartica ambala" & ChrW(382) & "e", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
