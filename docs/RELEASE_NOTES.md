@@ -7000,6 +7000,17 @@ ijedne izmišljene veze.
   utovar tabele ušle u audit (CreatedBy/ModifiedBy); migracija starih
   GP faktura numeriše utovare po godini fakture.
 
+### Tri stroge granice (revizija #7)
+
+- **Datum utovara se zaključava kad faktura ode na SEF** — to je
+  poreski datum isporuke; lokalna promena posle slanja razišla bi se
+  od poslatog dokumenta. Podaci prevoza ostaju izmenjivi.
+- **„Ponovi fakturu"** (novo ime radnje) odbija utovar koji već nosi
+  aktivne stavke fakture — kontradiktorno stanje se prijavljuje i na
+  sledljivosti umesto da napravi duplu prodaju.
+- **SEF šalje samo količine koje se poklapaju sa utovarom** — faktura
+  od 400 kg nad utovarnom listom od 500 kg se blokira, u oba smera.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

@@ -386,8 +386,38 @@ Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
     ' moze biti ranije/kasnije od klika. Prazno = ne diraj; datum se
     ' NE moze obrisati ("-" nije dozvoljen -- dokument mora imati
     ' datum, on je SEF datum isporuke).
+    ' LOCK posle stvarnog SEF slanja (revizija #7 B1): DeliveryDate je
+    ' PORESKI podatak -- kad je faktura utovara otisla (ili pokusala da
+    ' ode) spolja, lokalna promena datuma bi se razisla sa SEF-om.
+    ' Menjanje je dozvoljeno samo u stanjima za koja NIJE dokazano
+    ' spoljno slanje: LOCAL_FINALIZED / SEF_READY / SEF_TECH_FAILED
+    ' (+ prazno kod starih faktura). Transportni tekst (prevoznik,
+    ' plomba...) ostaje editabilan -- nije poreski podatak.
     datumUtovara = Trim$(datumUtovara)
+    vremeUtovara = Trim$(vremeUtovara)
+    If (Len(datumUtovara) > 0 And datumUtovara <> "-") _
+       Or (Len(vremeUtovara) > 0 And vremeUtovara <> "-") Then
+        Dim lockFid As String
+        lockFid = Trim$(CStr(nz(d(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)))))
+        If Len(lockFid) > 0 Then
+            Dim wfState As String
+            wfState = Trim$(GetFakturaSEFWorkflowState(lockFid))
+            If Len(wfState) > 0 _
+               And wfState <> WF_LOCAL_FINALIZED _
+               And wfState <> WF_SEF_READY _
+               And wfState <> WF_SEF_TECH_FAILED Then
+                Err.Raise vbObjectError + 1775, SRC, _
+                          "Datum/vreme utovara je zakljucan: faktura je u SEF stanju " & _
+                          wfState & " -- promena bi se razisla sa poslatim dokumentom."
+            End If
+        End If
+    End If
     If Len(datumUtovara) > 0 And datumUtovara <> "-" Then
+        ' Srpski format prikazuje datum sa zavrsnom tackom ("2.6.2026.")
+        ' a IsDate bas nju ne prima -- skini je pre provere (operater
+        ' unosi/kopira upravo taj oblik).
+        If Right$(datumUtovara, 1) = "." Then _
+            datumUtovara = Left$(datumUtovara, Len(datumUtovara) - 1)
         If Not IsDate(datumUtovara) Then
             Err.Raise vbObjectError + 1774, SRC, _
                       "Datum utovara nije validan datum: " & datumUtovara
@@ -1169,23 +1199,39 @@ Private Function CreateFakturaIzUtovara(ByVal utovarID As String) As String
 
     ' --- Cene iz prethodnih (storniranih) faktura ovog utovara: FST se
     ' NE filtrira po stornu -- bas stornirani redovi nose cene; kasniji
-    ' red pobedjuje (poslednja faktura).
+    ' red pobedjuje (poslednja faktura). ISTI prolaz broji i AKTIVNE
+    ' stavke (revizija #7 B2): "nefakturisan" utovar sa aktivnom FST je
+    ' KONTRADIKCIJA (finansijski dokument tvrdi prodaju koju utovar
+    ' porice) -- re-fakturisanje preko nje bi napravilo duplu prodaju.
     Dim cene As Object: Set cene = CreateObject("Scripting.Dictionary")
     cene.CompareMode = vbTextCompare
     Dim fs As Variant, cFsUt As Long, cFsPre As Long, cFsCena As Long
+    Dim cFsSt As Long, cFsOs As Long, aktivnihFst As Long
     fs = GetTableData(TBL_FAKTURA_STAVKE)
     If IsArray(fs) Then
         cFsUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
         cFsPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
         cFsCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, SRC)
+        cFsSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
+        cFsOs = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
         For i = 1 To UBound(fs, 1)
             If Trim$(CStr(nz(fs(i, cFsUt)))) = utovarID Then
+                If UCase$(Trim$(CStr(nz(fs(i, cFsSt))))) <> "DA" _
+                   And Len(Trim$(CStr(nz(fs(i, cFsOs))))) = 0 Then
+                    aktivnihFst = aktivnihFst + 1
+                End If
                 If IsNumeric(fs(i, cFsCena)) Then
                     If CDbl(fs(i, cFsCena)) > 0 Then _
                         cene(Trim$(CStr(nz(fs(i, cFsPre))))) = CDbl(fs(i, cFsCena))
                 End If
             End If
         Next i
+    End If
+    If aktivnihFst > 0 Then
+        Err.Raise vbObjectError + 1776, SRC, _
+                  "Utovar " & utovarID & " nije markiran kao fakturisan, a nosi " & _
+                  CStr(aktivnihFst) & " aktivnih faktura-stavki -- podaci su " & _
+                  "neusaglaseni, re-fakturisanje je blokirano."
     End If
 
     ' --- Pre-validacija svih stavki pre ijednog upisa.

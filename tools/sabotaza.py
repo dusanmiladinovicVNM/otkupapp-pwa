@@ -4168,6 +4168,36 @@ SABOTAZE = {
         "T_FakturaGP_WriterKapijeIStorno",
         "rok trajanja = proizvodnja + 24 meseca",
     ),
+    # Revizija #7 B2: nefakturisan utovar sa aktivnom FST je
+    # kontradikcija -- bez brojanja bi re-fakturisanje duplo prodalo.
+    "utovar-gp-refakt-aktivna-fst": (
+        "modUtovar.bas",
+        "                    aktivnihFst = aktivnihFst + 1\n",
+        "                    aktivnihFst = aktivnihFst + 0   ' SABOTAZA\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "nefakturisan utovar sa aktivnom FST se ne fakturise ponovo",
+    ),
+    # Revizija #7 B3: SEF kolicinski dokaz 1:1 -- bez poredjenja bi
+    # poreska faktura od 400 kg prosla nad utovarom od 500 kg.
+    "sef-gp-kolicina-placebo": (
+        "modSEFMapper.bas",
+        "        If Abs(CDbl(gpKg(CStr(k))) - CDbl(utKg(CStr(k)))) > 0.0001 Then\n",
+        "        If False Then   ' SABOTAZA: kolicina se ne poredi\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "SEF blokira GP fakturu cija kolicina ne odgovara utovaru",
+    ),
+    # Revizija #7 B1: datum utovara je poreski podatak -- lock posle
+    # SEF slanja; bez njega se lokalni datum razilazi od poslatog.
+    "utovar-gp-datum-lock-placebo": (
+        "modUtovar.bas",
+        "            If Len(wfState) > 0 _\n"
+        "               And wfState <> WF_LOCAL_FINALIZED _\n"
+        "               And wfState <> WF_SEF_READY _\n"
+        "               And wfState <> WF_SEF_TECH_FAILED Then\n",
+        "            If False Then   ' SABOTAZA: lock ugasen\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "datum utovara je zakljucan posle SEF slanja",
+    ),
     # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
     # kasnije odbio, ali tek posle potvrde operatera (kasna greska).
     "fakture-gp-korpa-mesa-u-prj": (

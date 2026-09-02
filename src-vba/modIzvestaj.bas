@@ -4617,6 +4617,11 @@ DaljeFst:
             ElseIf Len(fid) > 0 Then
                 ' Stale veza: FakturaID bez markera.
                 utLose(k) = True
+            ElseIf fstPoUtovaru.Exists(k) Then
+                ' Revizija #7 B2: "nefakturisan" utovar (bez markera i
+                ' bez FakturaID) sa AKTIVNOM faktura-stavkom -- finansijski
+                ' dokument tvrdi prodaju koju utovar porice.
+                utLose(k) = True
             End If
 DaljeUt:
         Next i

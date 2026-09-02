@@ -5898,3 +5898,42 @@ ODLOŽENO, po operaterovom „tek kad budem zadovoljan modulom".
   u `AuditableTables()` (CreatedBy/ModifiedBy kao ostali dokumenti);
   migracija starih GP faktura numeriše utovar po godini DATUMA FAKTURE
   (`GenerateBrojUtovara(godina)`) — bez „3/2026 sa datumom 2025".
+
+### 25.13 Revizija #7: završni integrity krug + pun recert
+
+- **B1 — datum utovara zaključan posle SEF slanja:** `DeliveryDate` je
+  poreski podatak. `UpdateUtovarPrevoz_TX` menja datum/vreme samo dok
+  faktura utovara NIJE dokazano otišla spolja (`LOCAL_FINALIZED` /
+  `SEF_READY` / `SEF_TECH_FAILED` + prazno); u svakom drugom SEF
+  stanju promena je blokirana s porukom. Transportni tekst (prevoznik,
+  plomba...) ostaje editabilan. Datum unos toleriše srpski format sa
+  završnom tačkom („2.6.2026." — `IsDate` baš nju ne prima).
+- **B2 — „nefakturisan" utovar sa aktivnom FST je kontradikcija:**
+  `CreateFakturaIzUtovara` u istom prolazu kroz FST (cene) broji i
+  AKTIVNE stavke — ako postoje, re-fakturisanje je blokirano (dupla
+  prodaja); sledljivost isti slučaj markira „faktura neusaglasena"
+  (header grana: bez markera + bez FakturaID + aktivna FST → lose).
+- **B3 — SEF količinski dokaz 1:1:** pored postojanja utovara,
+  `ValidateGpUtovarZaSEF` sada poredi zbir kg aktivnih GP linija po
+  preradi sa zbirom kg aktivnih utovarnih stavki — u OBA smera
+  (faktura od 400 kg nad utovarom od 500 kg = BLOCK; utovarna stavka
+  nepredstavljena u fakturi = BLOCK).
+- **P1:** radnja preimenovana u **„Ponovi fakturu"** — eksplicitno
+  koristi cene prethodne stornirane fakture (za storno iz tehničkog
+  razloga); korekcija cene je poseban budući rad (potvrda to i kaže).
+- **Obrazac v5 — merge mina:** tri pojedinačna row-merge-a (F7:I7,
+  F8:I8, F9:I9) Excel je slepio u JEDNU oblast F7:I9, pa je upis u
+  F8 (`UtMestoIst`) tiho nestajao. Header/prevoz blokovi su sada BEZ
+  merge-ova — tekst se prirodno preliva preko praznih susednih ćelija
+  (v2 se sekao jer su susedne bile pune). POUKA: uzastopni row-merge
+  isti raspon kolona = jedna velika oblast, imenovana ćelija unutar
+  nje gubi upis bez greške.
+- **Testovi (162):** ponovna faktura iz istog utovara (marker, ista
+  količina na stanju, originalan datum), odbijanje već fakturisanog,
+  rogue aktivna FST blok, SEF količinski mismatch sa ISTIM totalom
+  (25 kg × 122 = 30.5 kg × 100 — vozilo kome je količinska kapija
+  jedina brana), datum lock (SENT → odbij; transport tekst prolazi;
+  LOCAL_FINALIZED → prolazi + upis). **Sabotaže 381** (+3: refakt-
+  aktivna-fst, sef-kolicina-placebo, datum-lock-placebo).
+- **Recert na finalnom SHA:** vba_check čisto; RunAllTests 162/0;
+  Banka ZELENO; pun dokaz svih 8 prefiksa; compile ručna kapija.

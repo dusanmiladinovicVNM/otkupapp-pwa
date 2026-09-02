@@ -159,6 +159,10 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     ' tihi fallback na datum fakture).
     Dim gpUtovarID As String
     gpUtovarID = ""
+    ' Kolicinski dokaz (revizija #7 B3): zbir kg aktivnih GP linija po
+    ' preradi -- poredi se 1:1 sa aktivnim UtovarStavkama tog utovara.
+    Dim gpKg As Object: Set gpKg = CreateObject("Scripting.Dictionary")
+    gpKg.CompareMode = vbTextCompare
     ' AUD-031: active-line markers. Both exist on tblFakturaStavke (full storno
     ' sets Stornirano="Da" on every line; a storno-ed invoiced prijemnica sets
     ' OsirocenoOd). RequireColumnIndex keeps the tax send path fail-closed.
@@ -239,6 +243,13 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
                 Err.Raise ERR_SEF_VALIDATION, SRC, _
                           "Invalid line quantity for faktura " & fakturaID
             End If
+            If Len(preradaID) > 0 Then
+                If gpKg.Exists(preradaID) Then
+                    gpKg(preradaID) = CDbl(gpKg(preradaID)) + qty
+                Else
+                    gpKg.Add preradaID, qty
+                End If
+            End If
 
             If Not TryParseDouble(CStr(stavke(i, colCena)), price) Or price < 0 Then
                 Err.Raise ERR_SEF_VALIDATION, SRC, _
@@ -307,8 +318,9 @@ NextStavka:
     End If
 
     ' GP kapija (revizija #6 t.2): utovar iza GP linija mora POSTOJATI
-    ' tacno jednom, biti aktivan i tvrditi bas OVU fakturu.
-    If Len(gpUtovarID) > 0 Then ValidateGpUtovarZaSEF gpUtovarID, fakturaID
+    ' tacno jednom, biti aktivan i tvrditi bas OVU fakturu; kolicine
+    ' fakture moraju 1:1 odgovarati utovarnim stavkama (revizija #7 B3).
+    If Len(gpUtovarID) > 0 Then ValidateGpUtovarZaSEF gpUtovarID, fakturaID, gpKg
 
     ValidateSEFTotalMatch "TotalNet", calcTotalNet, dto.TotalNet, fakturaID, SRC
     ValidateSEFTotalMatch "TotalVat", calcTotalVat, dto.TotalVat, fakturaID, SRC
@@ -326,7 +338,8 @@ End Function
 ' ne sme biti storniran, mora biti markiran Fakturisano=Da i mora
 ' tvrditi bas ovu fakturu. Bilo sta drugo = BLOCK slanja -- korumpiran
 ' GP red se ne sme "spasiti" datumom fakture.
-Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As String)
+Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As String, _
+                                  ByVal gpKg As Object)
     Const SRC As String = "modSEFMapper.ValidateGpUtovarZaSEF"
 
     Dim utRows As Collection
@@ -357,6 +370,57 @@ Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As S
         Err.Raise ERR_SEF_VALIDATION, SRC, _
                   "Utovar " & utovarID & " tvrdi drugu fakturu, ne " & fakturaID
     End If
+
+    ' Kolicinski dokaz 1:1 (revizija #7 B3): za svaku aktivnu GP liniju
+    ' fakture mora postojati aktivna UtovarStavka istog para
+    ' (utovar+prerada) sa ISTOM kolicinom -- i obrnuto, sve utovarne
+    ' stavke moraju biti predstavljene (1 utovar = 1 faktura). Poreska
+    ' faktura ne sme tvrditi 400 kg dok utovarna lista kaze 500.
+    Dim us As Variant, i As Long
+    Dim utKg As Object: Set utKg = CreateObject("Scripting.Dictionary")
+    utKg.CompareMode = vbTextCompare
+    us = GetTableData(TBL_UTOVAR_STAVKE)
+    If IsArray(us) Then us = ExcludeStornirano(us, TBL_UTOVAR_STAVKE)
+    If IsArray(us) Then
+        Dim cUsUt As Long, cUsPre As Long, cUsKol As Long, preK As String
+        cUsUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+        cUsPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+        cUsKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+        For i = 1 To UBound(us, 1)
+            If Trim$(CStr(nz(us(i, cUsUt)))) = Trim$(utovarID) Then
+                preK = Trim$(CStr(nz(us(i, cUsPre))))
+                If IsNumeric(us(i, cUsKol)) Then
+                    If utKg.Exists(preK) Then
+                        utKg(preK) = CDbl(utKg(preK)) + CDbl(us(i, cUsKol))
+                    Else
+                        utKg.Add preK, CDbl(us(i, cUsKol))
+                    End If
+                End If
+            End If
+        Next i
+    End If
+
+    Dim k As Variant
+    For Each k In gpKg.keys
+        If Not utKg.Exists(CStr(k)) Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                      "GP linija za preradu " & CStr(k) & _
+                      " nema utovarnu stavku na " & utovarID & " -- SEF send blocked."
+        End If
+        If Abs(CDbl(gpKg(CStr(k))) - CDbl(utKg(CStr(k)))) > 0.0001 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                      "Kolicina fakture (" & CStr(gpKg(CStr(k))) & _
+                      " kg) ne odgovara utovaru (" & CStr(utKg(CStr(k))) & _
+                      " kg) za preradu " & CStr(k) & " -- SEF send blocked."
+        End If
+    Next k
+    For Each k In utKg.keys
+        If Not gpKg.Exists(CStr(k)) Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                      "Utovarna stavka za preradu " & CStr(k) & _
+                      " nije predstavljena u fakturi " & fakturaID & " -- SEF send blocked."
+        End If
+    Next k
 End Sub
 
 ' Legacy/debug JSON snapshot serializer.

@@ -2281,13 +2281,15 @@ End Function
 ' ============================================================
 Public Sub EnsureUtovarSablon()
     On Error GoTo EH
-    ' v3 (smoke 5d): labele header/prevoz blokova MERGED preko dve
-    ' kolone -- kolona A je uska (Rb stavki) pa se "Vreme utovara:" i
-    ' slicne sekle na susednoj popunjenoj celiji ("Vreme", "Faktur").
-    ' v4: vrednosti header/prevoz blokova LEVO poravnate -- datum i
-    ' temp. rezim su se (kao datum/broj) lepili uz desnu ivicu celije,
-    ' vizuelno uz TUDJU labelu.
-    Const LAYOUT_VER As String = "4"
+    ' v5: header/prevoz blokovi BEZ merge-ova. Pojedinacni row-merge
+    ' F7:I7 + F8:I8 + F9:I9 se u Excelu slepio u JEDNU oblast F7:I9,
+    ' pa je upis u F8 (UtMestoIst) tiho nestajao -- vrednost drzi samo
+    ' gornja-leva celija. Umesto merge-a: labela i vrednost razmaknute
+    ' za po dve kolone, a tekst se prirodno preliva preko PRAZNIH
+    ' susednih celija (v2 se sekao jer su susedne bile PUNE). Datum se
+    ' ne preliva, ali kolona C (24) mu je dovoljna. v4 poravnanja
+    ' (vrednosti levo) zadrzana.
+    Const LAYOUT_VER As String = "5"
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
@@ -2318,14 +2320,11 @@ Public Sub EnsureUtovarSablon()
     r = DocSellerHeader(ws, 1, 9, 9)
     r = DocTitleBlock(ws, r, 9, "Dokument fizicke isporuke gotove robe", "UTOVARNA LISTA")
 
-    ' Levi blok: identitet dokumenta; desni blok: primalac. Labele
-    ' MERGED preko A:B odn. D:E -- kolona A je uska (Rb) pa se tekst
-    ' sekao na susednoj popunjenoj vrednosti.
+    ' Levi blok: identitet dokumenta; desni blok: primalac. BEZ
+    ' merge-ova (v5) -- labela u koloni 1 odn. 4 se preliva preko
+    ' prazne susedne kolone, vrednost u koloni 3 odn. 6 isto.
     Dim fr As Long
     fr = r + 1
-    For r = fr To fr + 3
-        ws.Range(ws.cells(r, 1), ws.cells(r, 2)).Merge
-    Next r
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum utovara:"
     ws.cells(fr + 2, 1).value = "Vreme utovara:"
@@ -2338,10 +2337,6 @@ Public Sub EnsureUtovarSablon()
     ws.cells(fr + 3, 3).name = "UtFaktura"
     ws.cells(fr + 3, 3).NumberFormat = "@"
 
-    For r = fr To fr + 2
-        ws.Range(ws.cells(r, 4), ws.cells(r, 5)).Merge
-        ws.Range(ws.cells(r, 6), ws.cells(r, 9)).Merge
-    Next r
     ws.cells(fr, 4).value = "Kupac:"
     ws.cells(fr + 1, 4).value = "Mesto istovara:"
     ws.cells(fr + 2, 4).value = "Narudzbenica (PO):"
@@ -2355,26 +2350,22 @@ Public Sub EnsureUtovarSablon()
     ws.Range(ws.cells(fr, 3), ws.cells(fr + 3, 3)).HorizontalAlignment = xlLeft
     ws.Range(ws.cells(fr, 6), ws.cells(fr + 2, 6)).HorizontalAlignment = xlLeft
 
-    ' Blok PREVOZ -- naslovni red + dva reda vrednosti (labele merged).
+    ' Blok PREVOZ -- naslovni red (jedini merge: pozadina preko cele
+    ' sirine) + dva reda vrednosti.
     Dim pr As Long: pr = fr + 5
     ws.Range(ws.cells(pr, 1), ws.cells(pr, 9)).Merge
     ws.cells(pr, 1).value = "PREVOZ"
     ws.cells(pr, 1).Font.Bold = True
     ws.cells(pr, 1).Interior.Color = DocColHeaderFill()
-    ws.Range(ws.cells(pr + 1, 1), ws.cells(pr + 1, 2)).Merge
     ws.cells(pr + 1, 1).value = "Prevoznik:"
     ws.cells(pr + 1, 3).name = "UtPrevoznik"
-    ws.Range(ws.cells(pr + 1, 4), ws.cells(pr + 1, 5)).Merge
     ws.cells(pr + 1, 4).value = "Vozac:"
     ws.cells(pr + 1, 6).name = "UtVozac"
     ws.cells(pr + 1, 7).value = "Reg.:"
-    ws.Range(ws.cells(pr + 1, 8), ws.cells(pr + 1, 9)).Merge
     ws.cells(pr + 1, 8).name = "UtRegistracija"
-    ws.Range(ws.cells(pr + 2, 1), ws.cells(pr + 2, 2)).Merge
     ws.cells(pr + 2, 1).value = "Plomba:"
     ws.cells(pr + 2, 3).name = "UtPlomba"
     ws.cells(pr + 2, 3).NumberFormat = "@"
-    ws.Range(ws.cells(pr + 2, 4), ws.cells(pr + 2, 5)).Merge
     ws.cells(pr + 2, 4).value = "Temp. rezim:"
     ws.cells(pr + 2, 6).name = "UtTempRezim"
     ws.Range(ws.cells(pr + 1, 3), ws.cells(pr + 2, 9)).Font.Bold = True
@@ -2496,11 +2487,10 @@ Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
         .Borders.Weight = xlThin
     End With
 
-    ' Napomena (label merged A:B -- v. komentar u EnsureUtovarSablon).
+    ' Napomena -- bez merge-a (v5): labela se preliva preko prazne B,
+    ' tekst preko praznih D..I.
     Dim napRow As Long: napRow = tot1.row + 2
-    ws.Range(ws.cells(napRow, 1), ws.cells(napRow, 2)).Merge
     ws.cells(napRow, 1).value = "Napomena:"
-    ws.Range(ws.cells(napRow, 3), ws.cells(napRow, 9)).Merge
     ws.cells(napRow, 3).value = napomena
 
     ' Potpisi: tri kolone -- magacin / vozac / primalac; pecat linije.

@@ -7065,6 +7065,102 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     Next i
     AssertEq CBool(gp(rW1, 8)), False, _
              "roba je JOS utovarena -- storno fakture ne vraca stanje"
+
+    ' --- Revizija #7 B2: "nefakturisan" utovar sa AKTIVNOM faktura-
+    ' stavkom je kontradikcija -- re-fakturisanje preko nje bi bilo
+    ' dupla prodaja. Rogue aktivna FST pa pokusaj.
+    Dim rowRog As Long
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-1", fid, "", 30.5, 100#, "", "", "", ""))
+    AssertEq (rowRog > 0), True, "rogue FST upisana"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-GP-W1", "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      utID2, "T162"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX(utID2), "", _
+             "nefakturisan utovar sa aktivnom FST se ne fakturise ponovo"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T162"
+
+    ' --- Revizija #6/#7 B1 lifecycle: nova faktura iz ISTOG utovara --
+    ' roba je fizicki izasla JEDNOM, ne pravi se nov utovar.
+    Dim fid3 As String, datPre As String
+    datPre = Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd")
+    fid3 = modUtovar.CreateFakturaIzUtovara_TX(utID2)
+    AssertEq (Len(fid3) > 0), True, "ponovna faktura iz istog utovara prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURISANO)))), "Da", "utovar je opet markiran fakturisanim"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_FAKTURA_ID)))), fid3, "utovar pamti NOVU fakturu"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), datPre, _
+             "datum utovara ostaje originalan posle ponovne fakture"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(0#, "0.00"), _
+             "ponovna faktura NE dira stanje (roba izasla jednom)"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX(utID2), "", _
+             "fakturisan utovar se ne fakturise ponovo"
+
+    ' --- Revizija #7 B3: SEF kolicinski dokaz 1:1. Korupcija drzi
+    ' UKUPAN IZNOS istim (25 kg x 122 = 30.5 kg x 100 = 3050) da
+    ' kontrola totala ne bi bila druga brana -- kolicinska kapija mora
+    ' da bude JEDINA koja ovo obara (pouka 4: vozilo bez druge odbrane).
+    Dim fs3 As Variant, rowF3 As Long
+    fs3 = GetTableData(TBL_FAKTURA_STAVKE)
+    rowF3 = 0
+    For i = 1 To UBound(fs3, 1)
+        If Trim$(CStr(nz(fs3(i, GetColumnIndex(TBL_FAKTURA_STAVKE, _
+           COL_FS_FAKTURA_ID))))) = fid3 Then rowF3 = i
+    Next i
+    AssertEq (rowF3 > 0), True, "stavka ponovljene fakture postoji"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_KOLICINA, 25, "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_CENA, 122, "T162"
+    Dim sefErr As Long
+    sefErr = 0
+    On Error Resume Next
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid3)
+    sefErr = Err.Number
+    On Error GoTo 0
+    AssertEq (sefErr <> 0), True, _
+             "SEF blokira GP fakturu cija kolicina ne odgovara utovaru"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_KOLICINA, 30.5, "T162"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowF3, COL_FS_CENA, 100, "T162"
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid3)
+    AssertEq (Not dto Is Nothing), True, _
+             "sa ispravnom kolicinom SEF DTO opet prolazi"
+
+    ' --- Revizija #7 B1: datum utovara je PORESKI podatak -- posle
+    ' stvarnog SEF slanja se zakljucava; transportni tekst ostaje slobodan.
+    Dim rowFk3 As Long
+    rowFk3 = 0
+    Dim fkAll As Variant
+    fkAll = GetTableData(TBL_FAKTURE)
+    For i = 1 To UBound(fkAll, 1)
+        If Trim$(CStr(nz(fkAll(i, GetColumnIndex(TBL_FAKTURE, COL_FAK_ID))))) = fid3 Then rowFk3 = i
+    Next i
+    RequireUpdateCell TBL_FAKTURE, rowFk3, "SEFWorkflowState", WF_SEF_SENT, "T162"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "", "", _
+             "", "", "", CStr(DateSerial(2026, 6, 1)), ""), False, _
+             "datum utovara je zakljucan posle SEF slanja"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "PL-LOCK", _
+             "", "", "", "", "", ""), True, _
+             "transportni tekst je editabilan i posle SEF slanja"
+    RequireUpdateCell TBL_FAKTURE, rowFk3, "SEFWorkflowState", _
+                      WF_LOCAL_FINALIZED, "T162"
+    AssertEq modUtovar.UpdateUtovarPrevoz_TX(utID2, "", "", "", "", "", _
+             "", "", "", CStr(DateSerial(2026, 6, 2)), ""), True, _
+             "datum je editabilan dok faktura nije stvarno poslata"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), "2026-06-02", _
+             "korigovan datum utovara je upisan"
+
+    ' Ocisti: storno ponovljene fakture pa originalni tok (storno utovara).
+    AssertEq modStorno.StornoFaktura_TX(fid3), True, _
+             "storno ponovljene fakture prolazi"
     AssertEq modStorno.StornoUtovar_TX(utID2), True, "storno utovara prolazi"
     gp = modFaktura.GetGPZaFakturisanjeForGrid()
     rW1 = 0

@@ -298,7 +298,7 @@ Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
             ' utovar bi tvrdio da je roba izasla dva puta.
             FkRadnjeZaListu = "utprint:OTKUI_BTN_UT_STAMPAJ:132:soft:1|" & _
                          "utprevoz:OTKUI_BTN_UT_PREVOZ:132:ghost:1|" & _
-                         "utfak:OTKUI_BTN_UT_FAKTURISI:104:primary:1|" & _
+                         "utfak:OTKUI_BTN_UT_FAKTURISI:124:primary:1|" & _
                          "utstorno:OTKUI_BTN_UT_STORNO:96:danger:1"
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _

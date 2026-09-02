@@ -1641,8 +1641,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_UT", "Izaberi red utovara, popuni prevoz pa 'Sa" & ChrW(269) & "uvaj prevoz'. Prazno polje ne dira upisano, crtica '-' bri" & ChrW(353) & "e."
     ' Revizija #6: nova faktura iz postojeceg utovara + editabilan
     ' datum/vreme utovara (SEF datum isporuke).
-    UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Fakturi" & ChrW(353) & "i"
-    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Izraditi NOVU fakturu iz ovog utovara? Roba ostaje utovarena, cene se preuzimaju iz prethodne (stornirane) fakture."
+    ' "Ponovi fakturu", ne "Fakturisi" (revizija #7 P1): radnja NAMERNO
+    ' preuzima cene iz prethodne stornirane fakture -- za storno iz
+    ' tehnickog razloga. Korekcija cene je poseban buduci rad.
+    UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Ponovi fakturu"
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Ponoviti fakturu iz ovog utovara PO PRETHODNIM CENAMA? Roba ostaje utovarena; za drugu cenu storniraj i ceo utovar pa izradi iznova."
     UpsertRow lo, existing, "OTKUI_MSG_UT_FAK", ChrW(10003) & " Nova faktura iz utovara je izra" & ChrW(273) & "ena"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK", ChrW(10007) & " Izrada fakture iz utovara nije uspela"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_VEC", ChrW(10007) & " Utovar je ve" & ChrW(263) & " fakturisan -- prvo storno fakture"
