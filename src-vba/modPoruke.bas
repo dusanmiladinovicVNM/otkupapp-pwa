@@ -1610,11 +1610,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' kontekst vec nosi segment dugme.
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_GP", "Gotova roba"
     UpsertRow lo, existing, "OTKUI_HDF_TIPGP", "PROIZVOD"
-    ' "LOT" sufiks (smoke 5d): kolone pokazuju pakovanja PROIZVEDENOG
-    ' lota, ne stanje -- kod parcijalno prodate prerade je "60 kutija"
-    ' uz "97 kg na stanju" zbunjivalo.
-    UpsertRow lo, existing, "OTKUI_HDF_KUTIJE", "KUT. LOT"
-    UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE LOT"
+    ' Revizija #12 smoke: kolone sada pokazuju cele pakete NA STANJU
+    ' (kapacitet izveden iz lota: neto/broj), pa "LOT" sufiks vise ne
+    ' vazi -- roba se smanji, smanje se i kutije/kese.
+    UpsertRow lo, existing, "OTKUI_HDF_KUTIJE", "KUTIJE"
+    UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE"
     UpsertRow lo, existing, "OTKUI_HDF_PREID", "PRE ID"
     UpsertRow lo, existing, "OTKUI_FLD_FK_CENAGP", "Cena gotove robe (RSD/kg)"
     ' Krug 5 (utovarna lista, parcijalna prodaja):

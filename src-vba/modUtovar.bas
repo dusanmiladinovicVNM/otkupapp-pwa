@@ -167,36 +167,62 @@ EH:
     LogErr SRC
 End Sub
 
-' Broj pakovanja koji je STVARNO usao u kamion -- samo kad je
-' dokazivo (revizija #6 t.4): cela kolicina -> puni brojevi iz
-' prerade; parcijala -> samo ako prerada ima JEDNU vrstu pakovanja i
-' kolicina je celobrojan umnozak kg po pakovanju (500 kg / 10 kg =
-' 50 kutija); inace PRAZNO -- utovarna lista je transportni dokument,
-' radije bez podatka nego sa pogresnim brojem.
+' Broj pakovanja za datu kolicinu, iz kapaciteta IZVEDENOG iz samog
+' lota (lotNeto/lotBroj = kg po pakovanju; pakovanje je uniformno,
+' npr. 10 kg -- operaterov contract posle smoke-a revizije #12).
+' samoTacno=True (dokument): broj SAMO kad je kg celobrojan umnozak
+' kapaciteta, inace Empty -- utovarna lista ne nosi aproksimacije.
+' samoTacno=False (grid): broj CELIH pakovanja na stanju (Fix) -- 733
+' kg uz 10 kg/kutiji = 73 cele kutije; bez podataka lota vraca 0.
+Public Function PakovanjaZaKg(ByVal kg As Double, ByVal lotNeto As Double, _
+                              ByVal lotBroj As Double, _
+                              ByVal samoTacno As Boolean) As Variant
+    Const EPS As Double = 0.0001
+    Dim poKom As Double, n As Double
+    If samoTacno Then PakovanjaZaKg = Empty Else PakovanjaZaKg = 0&
+    If lotBroj <= 0 Or lotNeto <= EPS Then Exit Function
+    poKom = lotNeto / lotBroj
+    If poKom <= EPS Then Exit Function
+    n = kg / poKom
+    If samoTacno Then
+        If Abs(n - Round(n)) <= 0.001 And Round(n) > 0 Then _
+            PakovanjaZaKg = CLng(Round(n))
+    Else
+        PakovanjaZaKg = CLng(Fix(n + EPS))
+    End If
+End Function
+
+' Prikazni tekst pakovanja iz dva (opciona) broja: "50 kut. / 50 kesa",
+' "50 kut.", "50 kesa" ili "" -- Empty/0 se ne prikazuje.
+Private Function PakTekst(ByVal k As Variant, ByVal s As Variant) As String
+    Dim kT As String, sT As String
+    If Not IsEmpty(k) Then If CLng(k) > 0 Then kT = CStr(CLng(k)) & " kut."
+    If Not IsEmpty(s) Then If CLng(s) > 0 Then sT = CStr(CLng(s)) & " kesa"
+    If Len(kT) > 0 And Len(sT) > 0 Then
+        PakTekst = kT & " / " & sT
+    Else
+        PakTekst = kT & sT
+    End If
+End Function
+
+' Broj pakovanja koji je STVARNO usao u kamion (revizija #6 t.4 +
+' #12 smoke): cela kolicina -> puni brojevi iz prerade; parcijala ->
+' po vrsti pakovanja NEZAVISNO, iz kapaciteta izvedenog iz lota
+' (500 kg / 10 kg = 50 kutija i 50 kesa), samo kad je kolicina
+' celobrojan umnozak; inace PRAZNO -- transportni dokument radije
+' bez podatka nego sa pogresnim brojem.
 Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
                          ByVal kut As Double, ByVal kes As Double, _
                          ByRef outKut As Variant, ByRef outKes As Variant)
     Const EPS As Double = 0.0001
-    Dim poKom As Double, n As Double
     outKut = Empty: outKes = Empty
     If kol >= neto - EPS Then
         If kut > 0 Then outKut = CLng(kut)
         If kes > 0 Then outKes = CLng(kes)
         Exit Sub
     End If
-    If kut > 0 And kes <= 0 Then
-        poKom = neto / kut
-        If poKom > EPS Then
-            n = kol / poKom
-            If Abs(n - CLng(n)) <= 0.001 And CLng(n) > 0 Then outKut = CLng(n)
-        End If
-    ElseIf kes > 0 And kut <= 0 Then
-        poKom = neto / kes
-        If poKom > EPS Then
-            n = kol / poKom
-            If Abs(n - CLng(n)) <= 0.001 And CLng(n) > 0 Then outKes = CLng(n)
-        End If
-    End If
+    outKut = PakovanjaZaKg(kol, neto, kut, True)
+    outKes = PakovanjaZaKg(kol, neto, kes, True)
 End Sub
 
 ' Broj AKTIVNIH (nestorniranih, neosirocenih) faktura-stavki koje
@@ -599,11 +625,15 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                 If cPBru > 0 Then
                     If IsNumeric(pd(i, cPBru)) Then bru = CDbl(pd(i, cPBru))
                 End If
+                Dim lotKut As Double, lotKes As Double
+                lotKut = 0#: lotKes = 0#
+                If IsNumeric(pd(i, cPKut)) Then lotKut = CDbl(pd(i, cPKut))
+                If IsNumeric(pd(i, cPKes)) Then lotKes = CDbl(pd(i, cPKes))
                 preInfo.Add Trim$(CStr(nz(pd(i, cPId)))), Array( _
                     Trim$(CStr(nz(pd(i, cPTip)))), _
                     Trim$(CStr(nz(pd(i, cPKut)))) & " kut. / " & _
                     Trim$(CStr(nz(pd(i, cPKes)))) & " kesa", _
-                    pd(i, cPDat), net, bru)
+                    pd(i, cPDat), net, bru, lotKut, lotKes)
             End If
         Next i
     End If
@@ -665,7 +695,16 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                 pv = preInfo(preK)
                 stavke(nSt, 2) = CStr(pv(0))
                 If Len(pakS) = 0 Then
-                    If kol >= CDbl(pv(3)) - 0.0001 Then pakS = CStr(pv(1))
+                    If kol >= CDbl(pv(3)) - 0.0001 Then
+                        pakS = CStr(pv(1))
+                    Else
+                        ' Stare parcijalne stavke bez upisanih pakovanja
+                        ' (pre revizije #12): ista STROGA racunica iz
+                        ' kapaciteta lota -- 500 kg / 10 kg = 50.
+                        pakS = PakTekst( _
+                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(5)), True), _
+                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(6)), True))
+                    End If
                 End If
                 stavke(nSt, 5) = pakS
                 If IsDate(pv(2)) Then

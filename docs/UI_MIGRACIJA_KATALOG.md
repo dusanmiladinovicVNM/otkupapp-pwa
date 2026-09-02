@@ -6061,3 +6061,24 @@ ne moraju početi istog trenutka.
   MAX_COLS=14).
 - PR opis #248 prepisan: dokumentuje model B / utovar grain umesto
   obrisanog `Prerada.Fakturisano` modela.
+
+### 25.18 Smoke #12: pakovanja prate stanje (kapacitet izveden iz lota)
+
+Operaterov nalaz posle finalnog smoke-a (koji je ceo revizorov tok
+prošao): roba se smanji, a kutije/kese ne — a pakovanje JE definisano
+(uniformnih 10 kg), pa je računica prosta.
+
+- **`modUtovar.PakovanjaZaKg(kg, lotNeto, lotBroj, samoTacno)`** —
+  jedna formula za obe potrebe; kapacitet pakovanja se IZVODI iz
+  samog lota (`neto ÷ broj` = kg po pakovanju), bez nove šeme:
+  - **grid Gotova roba** (`samoTacno=False`): broj CELIH pakovanja na
+    stanju (`Fix`) — 733 kg uz 10 kg/kutiji = 73; hederi vraćeni na
+    „KUTIJE"/„KESE" (LOT sufiks više ne važi jer kolone prate stanje);
+  - **utovarna lista** (`samoTacno=True`): broj SAMO kad je količina
+    celobrojan umnožak kapaciteta — dokument i dalje ne nosi procene.
+- **Parcijala sada dobija OBE vrste pakovanja** (500 kg = 50 kutija i
+  50 kesa) — ranije je uslov „jedina vrsta pakovanja" ostavljao prazno
+  kad lot ima i kutije i kese.
+- **Read-time fallback u štampi:** stare parcijalne stavke (napravljene
+  pre ovog fixa, bez upisanih pakovanja) na reprint dobijaju istu
+  strogu računicu iz kapaciteta lota (`PakTekst` helper).

@@ -494,10 +494,22 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
         If utovareno.Exists(preID) Then naStanju = naStanju - CDbl(utovareno(preID))
         If naStanju < 0 Then naStanju = 0#
         outA(n, 5) = naStanju
+        ' Pakovanja NA STANJU, ne pun lot (operaterov nalaz posle
+        ' smoke-a: roba se smanji, a kutije/kese ne). Kapacitet
+        ' pakovanja je IZVEDEN iz samog lota (neto/broj = npr. 10 kg
+        ' po kutiji -- pakovanje je uniformno), pa je broj CELIH
+        ' pakovanja na stanju prosta deoba (modUtovar.PakovanjaZaKg).
         outA(n, 6) = 0#
         outA(n, 7) = 0#
-        If IsNumeric(pd(i, cKut)) Then outA(n, 6) = CDbl(pd(i, cKut))
-        If IsNumeric(pd(i, cKes)) Then outA(n, 7) = CDbl(pd(i, cKes))
+        Dim lotNetoGp As Double
+        lotNetoGp = 0#
+        If IsNumeric(pd(i, cNeto)) Then lotNetoGp = CDbl(pd(i, cNeto))
+        If IsNumeric(pd(i, cKut)) Then _
+            outA(n, 6) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
+                                                 CDbl(pd(i, cKut)), False)
+        If IsNumeric(pd(i, cKes)) Then _
+            outA(n, 7) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
+                                                 CDbl(pd(i, cKes)), False)
         ' Krug 5 contract: dostupna = ima robe na stanju AND imenovan
         ' proizvod AND jednoznacan identitet. Marker na preradi vise ne
         ' postoji -- prodaju broje utovarne stavke.
