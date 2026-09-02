@@ -1422,22 +1422,24 @@ Public Sub Scr_Build(ByVal z As Object)
     ' PODACI PREVOZA (krug 5d): 8 polja vidljivih SAMO na listi
     ' UTOVARI; radnja "Sacuvaj prevoz" ih upisuje u izabrani red
     ' (prazno = ne diraj, "-" = obrisi). Idu na stampani obrazac.
+    ' isNum MORA biti False: True upisuje polje u mNumTag registar pa
+    ' FilterKeyPress guta svako slovo (smoke 5d -- "ne mogu da kucam").
     modOtkupUI.NewFieldG z, "scrFkUtPrev", Poruka("OTKUI_FLD_UT_PREVOZNIK"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtVoz", Poruka("OTKUI_FLD_UT_VOZAC"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtReg", Poruka("OTKUI_FLD_UT_REG"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtPlo", Poruka("OTKUI_FLD_UT_PLOMBA"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtTemp", Poruka("OTKUI_FLD_UT_TEMP"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtMesto", Poruka("OTKUI_FLD_UT_MESTO"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtPo", Poruka("OTKUI_FLD_UT_PO"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtNap", Poruka("OTKUI_FLD_UT_NAPOMENA"), "txt", "", _
-                         1, True, False, "FK"
+                         1, False, False, "FK"
 
     ' BROJA FAKTURE OVDE NEMA, i to je namerno. Broj dodeljuje transakcija
     ' (CreateFaktura sam zove GenerateBrojFakture), operater ga ne bira. Polje
