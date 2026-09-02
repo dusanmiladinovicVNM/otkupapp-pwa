@@ -557,7 +557,7 @@ Next`, ne obara potvrdu) + po jedan paletni list LJ za svaki `GLAVNI` izlaz tipa
 | `PROIZVODNJA_AKTIVNA` | Proizvodnja | `DA/NE` | `NE` | prikaz ekrana i wrapper-a `NOVAPRERADA` (D5) — klijent bez modula Hladnjača/Proizvodnja ne vidi ekran; **ne** gejtuje B1 (jedan ključ nema prekidač) |
 
 Čitanje kroz `ConfigFlag` / `GetConfigValue` obrazac (`IsProizvodnjaAktivna()` u
-`modConfig`, kao `IsPaletiranje`).
+`modConfig`, kao `IsPaletiranjeEnabled`).
 
 ---
 
