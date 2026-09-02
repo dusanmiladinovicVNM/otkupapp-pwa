@@ -1219,6 +1219,10 @@ Private Function SacuvajPrevoz(ByVal red As Long) As Boolean
             PrevozPolje("scrFkUtVoz"), PrevozPolje("scrFkUtReg")
         mCombosPunjeni = False
         PuniCombos
+        ' Polja se PRAZNE posle upisa (smoke 5d): uz semantiku "prazno
+        ' ne dira" zaostala vrednost bi se prepisala na SLEDECI izabran
+        ' red cim se klikne Sacuvaj prevoz.
+        OcistiPrevozPolja
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_PREVOZ"), False
         SacuvajPrevoz = True
@@ -1234,6 +1238,21 @@ Private Function PrevozPolje(ByVal nm As String) As String
     If c Is Nothing Then Exit Function
     PrevozPolje = Trim$(CStr(c.text))
 End Function
+
+' Isprazni svih 8 prevoz polja (posle upisa). mFill gard: brisanje
+' vozaca inace okine Change -> DopuniIzVozaca usred ciscenja.
+Private Sub OcistiPrevozPolja()
+    Dim nm As Variant, c As Object
+    On Error Resume Next
+    mFill = True
+    For Each nm In Array("scrFkUtPrev", "scrFkUtVoz", "scrFkUtReg", _
+                         "scrFkUtPlo", "scrFkUtTemp", "scrFkUtMesto", _
+                         "scrFkUtPo", "scrFkUtNap")
+        Set c = Kontrola(CStr(nm))
+        If Not c Is Nothing Then c.text = ""
+    Next nm
+    mFill = False
+End Sub
 
 ' Storno utovara po redu -- potvrda pa StornoUtovar_TX (kapija u
 ' writeru odbija fakturisan utovar s razlogom).

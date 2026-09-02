@@ -2284,7 +2284,10 @@ Public Sub EnsureUtovarSablon()
     ' v3 (smoke 5d): labele header/prevoz blokova MERGED preko dve
     ' kolone -- kolona A je uska (Rb stavki) pa se "Vreme utovara:" i
     ' slicne sekle na susednoj popunjenoj celiji ("Vreme", "Faktur").
-    Const LAYOUT_VER As String = "3"
+    ' v4: vrednosti header/prevoz blokova LEVO poravnate -- datum i
+    ' temp. rezim su se (kao datum/broj) lepili uz desnu ivicu celije,
+    ' vizuelno uz TUDJU labelu.
+    Const LAYOUT_VER As String = "4"
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
@@ -2348,6 +2351,9 @@ Public Sub EnsureUtovarSablon()
     ws.cells(fr + 2, 6).NumberFormat = "@"
     ws.Range(ws.cells(fr, 3), ws.cells(fr + 3, 3)).Font.Bold = True
     ws.Range(ws.cells(fr, 6), ws.cells(fr + 2, 6)).Font.Bold = True
+    ' v4: vrednosti uz svoju labelu, ne uz desnu ivicu celije.
+    ws.Range(ws.cells(fr, 3), ws.cells(fr + 3, 3)).HorizontalAlignment = xlLeft
+    ws.Range(ws.cells(fr, 6), ws.cells(fr + 2, 6)).HorizontalAlignment = xlLeft
 
     ' Blok PREVOZ -- naslovni red + dva reda vrednosti (labele merged).
     Dim pr As Long: pr = fr + 5
@@ -2372,6 +2378,7 @@ Public Sub EnsureUtovarSablon()
     ws.cells(pr + 2, 4).value = "Temp. rezim:"
     ws.cells(pr + 2, 6).name = "UtTempRezim"
     ws.Range(ws.cells(pr + 1, 3), ws.cells(pr + 2, 9)).Font.Bold = True
+    ws.Range(ws.cells(pr + 1, 3), ws.cells(pr + 2, 9)).HorizontalAlignment = xlLeft
 
     Dim hdr As Long: hdr = pr + 4
     ws.cells(hdr, 1).value = "Rb"
