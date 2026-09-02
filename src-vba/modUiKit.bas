@@ -507,7 +507,7 @@ End Function
 ' kontrole su i dalje CommandButton/TextBox/ComboBox, jer WithEvents omotac hvata
 ' bas njih. Zamena tipa kontrole bi pokidala svaki klik u panelu.
 ' ============================================================
-Public Sub PanelPanelStilNaslov(ByVal l As MSForms.label)
+Public Sub PanelStilNaslov(ByVal l As MSForms.label)
     l.BackStyle = fmBackStyleTransparent
     l.BorderStyle = fmBorderStyleNone
     l.ForeColor = C_FOREST
@@ -516,7 +516,7 @@ Public Sub PanelPanelStilNaslov(ByVal l As MSForms.label)
     l.Font.Bold = True
 End Sub
 
-Public Sub PanelPanelStilNapomena(ByVal l As MSForms.label)
+Public Sub PanelStilNapomena(ByVal l As MSForms.label)
     l.BackStyle = fmBackStyleTransparent
     l.BorderStyle = fmBorderStyleNone
     l.ForeColor = C_MUTED

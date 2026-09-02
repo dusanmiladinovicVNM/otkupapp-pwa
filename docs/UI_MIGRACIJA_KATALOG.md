@@ -7141,3 +7141,42 @@ decimale (formatiranje, `dec` ne pali podnožje, nijedna matična kolona sa tež
 ili cenom nije `num`) i dve sabotaže. **Stil panela nije pokriven testom** — to je
 vizuelni ishod koji se meri jedino smoke-om u Excelu; ne piše se placebo test
 koji bi tvrdio da „boja je postavljena".
+
+### 26.24 Kvalifikovan poziv je bio slepa mrlja checkera (`v6-ui-198`)
+
+Selidba stilova u `modUiKit` je skriptom **dvaput prefiksovala** dva imena —
+`PanelPanelStilNaslov` — pa su pozivi `modUiKit.PanelStilNaslov` padali tek na
+`Debug → Compile`, uz **`Method or data member not found`**.
+
+`vba_check` je bio zelen. Razlog je bio jedan red u `_proveri_naredbu`:
+
+```python
+if rest.startswith(("=", ".", "!")):   # `Foo.Bar` -- pristup clanu, ne poziv
+    return out
+```
+
+Time je **svaki kvalifikovan poziv** bio nevidljiv — a nova ljuska je sva na
+njima: `modOtkupUI.ShowToast`, `modMaticniIzvor.MatKolone`, `modUiPanel.PanelZatvori`.
+Provera je merila samo nekvalifikovane pozive, kojih u novom kodu skoro i nema.
+
+**Zatvoreno tako što se zaključuje samo tamo gde se sme.** Uveden je registar
+članova **po modulu** (`collect_module_members`, samo `.bas` — procedure, javne
+konstante i javne promenljive). Kad kvalifikator jeste poznat modul, član se
+proverava u **tom** modulu; kad nije — `tx.CommitTx`, `lo.ListRows`,
+`frm.Controls` — kvalifikator je objekat i odatle se o njegovim članovima ne može
+tvrditi ništa, pa se preskače. Ravan skup imena iz `collect_definitions` za ovo
+ne bi bio dovoljan: on kaže da ime postoji *negde*, a poziv pada ako baš taj
+modul nema baš tog člana.
+
+**Nula lažnih nalaza** nad 210 fajlova i ~135 modula — to je merilo koje je ovde
+važnije od hvatanja, jer lažan nalaz u `PostToolUse` hook-u uči da se checker
+ignoriše.
+
+Dvosmerni dokaz (`KVAL_CASES`, četiri slučaja): član kog modul nema **mora**
+zapištati; član kog ima **ne sme**; objekat koji nije modul **ne sme**; nepoznat
+modul se preskače. Isključena provera obara self-test po imenu — provereno.
+
+**Zamka uhvaćena u pisanju samog dokaza:** prva verzija je slučajeve puštala pod
+putanjom `<self-test>`, a `check_undefined` radi samo nad `.bas` — tri od četiri
+slučaja su bila prazan hod koji je „prolazio". Otkrio ih je jedini slučaj koji je
+očekivao nalaz. Zato slučajevi sada idu pod `modSelfTest.bas`.
