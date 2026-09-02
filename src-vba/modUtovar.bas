@@ -21,19 +21,22 @@ Option Explicit
 ' dozvoljen je samo nad nefakturisanim utovarom.
 ' ============================================================
 
-' Sledeci broj utovara -- maxN+1 unutar tekuce godine (isti obrazac
-' kao GenerateBrojPalete).
-Public Function GenerateBrojUtovara() As Long
+' Sledeci broj utovara -- maxN+1 unutar date godine (isti obrazac kao
+' GenerateBrojPalete). godina=0 -> tekuca. Parametar postoji zbog
+' migracije starih GP faktura: utovar iz fakture 2025. mora nositi
+' broj i godinu 2025, ne "3/2026 sa datumom 14.08.2025" (revizija #6).
+Public Function GenerateBrojUtovara(Optional ByVal godina As Long = 0) As Long
     Const SRC As String = "modUtovar.GenerateBrojUtovara"
     Dim d As Variant, i As Long, maxN As Long
     Dim cBr As Long, cGod As Long
+    If godina = 0 Then godina = Year(Date)
     d = GetTableData(TBL_UTOVAR)
     If IsArray(d) Then
         cBr = RequireColumnIndex(TBL_UTOVAR, COL_UT_BROJ, SRC)
         cGod = RequireColumnIndex(TBL_UTOVAR, COL_UT_GODINA, SRC)
         For i = 1 To UBound(d, 1)
             If IsNumeric(d(i, cGod)) And IsNumeric(d(i, cBr)) Then
-                If CLng(d(i, cGod)) = Year(Date) Then
+                If CLng(d(i, cGod)) = godina Then
                     If CLng(d(i, cBr)) > maxN Then maxN = CLng(d(i, cBr))
                 End If
             End If
@@ -162,6 +165,38 @@ Public Sub UpsertPrevoznikVozac(ByVal naziv As String, _
     Exit Sub
 EH:
     LogErr SRC
+End Sub
+
+' Broj pakovanja koji je STVARNO usao u kamion -- samo kad je
+' dokazivo (revizija #6 t.4): cela kolicina -> puni brojevi iz
+' prerade; parcijala -> samo ako prerada ima JEDNU vrstu pakovanja i
+' kolicina je celobrojan umnozak kg po pakovanju (500 kg / 10 kg =
+' 50 kutija); inace PRAZNO -- utovarna lista je transportni dokument,
+' radije bez podatka nego sa pogresnim brojem.
+Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
+                         ByVal kut As Double, ByVal kes As Double, _
+                         ByRef outKut As Variant, ByRef outKes As Variant)
+    Const EPS As Double = 0.0001
+    Dim poKom As Double, n As Double
+    outKut = Empty: outKes = Empty
+    If kol >= neto - EPS Then
+        If kut > 0 Then outKut = CLng(kut)
+        If kes > 0 Then outKes = CLng(kes)
+        Exit Sub
+    End If
+    If kut > 0 And kes <= 0 Then
+        poKom = neto / kut
+        If poKom > EPS Then
+            n = kol / poKom
+            If Abs(n - CLng(n)) <= 0.001 And CLng(n) > 0 Then outKut = CLng(n)
+        End If
+    ElseIf kes > 0 And kut <= 0 Then
+        poKom = neto / kes
+        If poKom > EPS Then
+            n = kol / poKom
+            If Abs(n - CLng(n)) <= 0.001 And CLng(n) > 0 Then outKes = CLng(n)
+        End If
+    End If
 End Sub
 
 ' Aktivno utovareno kg jedne prerade (kapija storna prerade).
@@ -311,7 +346,9 @@ Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
         ByVal prevoznik As String, ByVal vozac As String, _
         ByVal registracija As String, ByVal plomba As String, _
         ByVal tempRezim As String, ByVal mestoIstovara As String, _
-        ByVal poBroj As String, ByVal napomena As String) As Boolean
+        ByVal poBroj As String, ByVal napomena As String, _
+        Optional ByVal datumUtovara As String = "", _
+        Optional ByVal vremeUtovara As String = "") As Boolean
     Const SRC As String = "modUtovar.UpdateUtovarPrevoz_TX"
     Dim tx As clsTransaction
     Set tx = New clsTransaction
@@ -343,6 +380,30 @@ Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
     UtUpisiPolje rowUt, COL_UT_MESTO_ISTOVARA, mestoIstovara, SRC
     UtUpisiPolje rowUt, COL_UT_PO_BROJ, poBroj, SRC
     UtUpisiPolje rowUt, COL_UT_NAPOMENA, napomena, SRC
+
+    ' Datum/vreme utovara su EDITABILNI pre SEF slanja (revizija #6
+    ' P1): default nastaje pri izradi (Date/Now), ali stvaran utovar
+    ' moze biti ranije/kasnije od klika. Prazno = ne diraj; datum se
+    ' NE moze obrisati ("-" nije dozvoljen -- dokument mora imati
+    ' datum, on je SEF datum isporuke).
+    datumUtovara = Trim$(datumUtovara)
+    If Len(datumUtovara) > 0 And datumUtovara <> "-" Then
+        If Not IsDate(datumUtovara) Then
+            Err.Raise vbObjectError + 1774, SRC, _
+                      "Datum utovara nije validan datum: " & datumUtovara
+        End If
+        RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_DATUM, _
+                          CDate(datumUtovara), SRC
+    End If
+    vremeUtovara = Trim$(vremeUtovara)
+    If Len(vremeUtovara) > 0 And vremeUtovara <> "-" Then
+        If Not IsDate(vremeUtovara) Then
+            Err.Raise vbObjectError + 1774, SRC, _
+                      "Vreme utovara nije validno (hh:mm): " & vremeUtovara
+        End If
+        RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_VREME, _
+                          Format$(CDate(vremeUtovara), "hh:mm"), SRC
+    End If
 
     tx.CommitTx
     UpdateUtovarPrevoz_TX = True
@@ -478,10 +539,15 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
     If Not IsArray(s) Then Exit Sub
     Dim cSUt As Long, cSPre As Long, cSBr As Long, cSKol As Long
+    Dim cSKut As Long, cSKes As Long
     cSUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
     cSPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
     cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
     cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+    ' Pakovanja STVARNO utovarena (revizija #6 t.4) -- meko: stara
+    ' sveska/stare stavke ih nemaju.
+    cSKut = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KUTIJE)
+    cSKes = GetColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KESE)
     ReDim stavke(1 To UBound(s, 1), 1 To 8)
     For i = 1 To UBound(s, 1)
         If Trim$(CStr(nz(s(i, cSUt)))) = Trim$(utovarID) Then
@@ -493,10 +559,34 @@ Public Sub PrintUtovar(ByVal utovarID As String)
             If IsNumeric(s(i, cSKol)) Then kol = CDbl(s(i, cSKol))
             stavke(nSt, 7) = kol
             totNeto = totNeto + kol
+            ' Pakovanje: iz STAVKE (stvarno utovareno); bez podatka na
+            ' stavci fallback na punu preradu SAMO za celu paletu --
+            ' parcijala bez podatka ostaje prazna (t.4: transportni
+            ' dokument radije prazan nego pogresan).
+            Dim pakS As String, kutS As String, kesS As String
+            pakS = "": kutS = "": kesS = ""
+            If cSKut > 0 Then
+                If IsNumeric(s(i, cSKut)) Then _
+                    If CDbl(s(i, cSKut)) > 0 Then kutS = CStr(CLng(s(i, cSKut)))
+            End If
+            If cSKes > 0 Then
+                If IsNumeric(s(i, cSKes)) Then _
+                    If CDbl(s(i, cSKes)) > 0 Then kesS = CStr(CLng(s(i, cSKes)))
+            End If
+            If Len(kutS) > 0 And Len(kesS) > 0 Then
+                pakS = kutS & " kut. / " & kesS & " kesa"
+            ElseIf Len(kutS) > 0 Then
+                pakS = kutS & " kut."
+            ElseIf Len(kesS) > 0 Then
+                pakS = kesS & " kesa"
+            End If
             If preInfo.Exists(preK) Then
                 pv = preInfo(preK)
                 stavke(nSt, 2) = CStr(pv(0))
-                stavke(nSt, 5) = CStr(pv(1))
+                If Len(pakS) = 0 Then
+                    If kol >= CDbl(pv(3)) - 0.0001 Then pakS = CStr(pv(1))
+                End If
+                stavke(nSt, 5) = pakS
                 If IsDate(pv(2)) Then
                     stavke(nSt, 3) = CDate(pv(2))
                     stavke(nSt, 4) = DateAdd("m", rokMeseci, CDate(pv(2)))
@@ -525,7 +615,7 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                 stavke(nSt, 2) = ""
                 stavke(nSt, 3) = ""
                 stavke(nSt, 4) = ""
-                stavke(nSt, 5) = ""
+                stavke(nSt, 5) = pakS
                 stavke(nSt, 6) = ""
                 stavke(nSt, 8) = kol
                 totBruto = totBruto + kol
@@ -675,12 +765,16 @@ Private Function CreateUtovarSaFakturom(ByVal kupacID As String, _
     End If
 
     Dim colNetoIzlaz As Long, colBroj As Long, colGodina As Long
-    Dim colStorno As Long, colTipGp As Long
+    Dim colStorno As Long, colTipGp As Long, colKut As Long, colKes As Long
     colNetoIzlaz = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
     colBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
     colGodina = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
     colStorno = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, SRC)
     colTipGp = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+    ' Pakovanja (revizija #6 t.4) -- meko: sluze za izracunljiv broj
+    ' pakovanja utovarene kolicine, ne za kapiju.
+    colKut = GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)
+    colKes = GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)
 
     ' Na stanju = proizvedeno - vec utovareno (jedno pravilo za sve).
     Dim utovareno As Object: Set utovareno = UtovarenoPoPreradi()
@@ -761,11 +855,21 @@ Private Function CreateUtovarSaFakturom(ByVal kupacID As String, _
                       CStr(raspolozivo) & " kg). PreradaID=" & preradaID
         End If
 
+        Dim preKut As Double, preKes As Double
+        preKut = 0#: preKes = 0#
+        If colKut > 0 Then
+            If IsNumeric(preData(rowPre, colKut)) Then preKut = CDbl(preData(rowPre, colKut))
+        End If
+        If colKes > 0 Then
+            If IsNumeric(preData(rowPre, colKes)) Then preKes = CDbl(preData(rowPre, colKes))
+        End If
+
         preRows.Add preradaID, rowPre
         preValues.Add preradaID, Array( _
             kolicina, cena, _
             Trim$(CStr(nz(preData(rowPre, colBroj)))) & "/" & _
-            Trim$(CStr(nz(preData(rowPre, colGodina)))))
+            Trim$(CStr(nz(preData(rowPre, colGodina)))), _
+            CDbl(preData(rowPre, colNetoIzlaz)), preKut, preKes)
     Next s
 
     Dim ukupno As Double, key As Variant, preVals As Variant
@@ -811,6 +915,15 @@ Private Function CreateUtovarSaFakturom(ByVal kupacID As String, _
             Err.Raise vbObjectError + 1756, SRC, _
                       "AppendRow nije uspeo za tblUtovarStavke."
         End If
+        ' Pakovanja STVARNO utovarena (revizija #6 t.4) -- upis po
+        ' imenu (kolone su dopuna na kraju); prazno kad nije dokazivo.
+        Dim pkKut As Variant, pkKes As Variant
+        UtsPakovanja CDbl(preVals(0)), CDbl(preVals(3)), _
+                     CDbl(preVals(4)), CDbl(preVals(5)), pkKut, pkKes
+        If Not IsEmpty(pkKut) Then _
+            RequireUpdateCell TBL_UTOVAR_STAVKE, rowUts, COL_UTS_KUTIJE, pkKut, SRC
+        If Not IsEmpty(pkKes) Then _
+            RequireUpdateCell TBL_UTOVAR_STAVKE, rowUts, COL_UTS_KESE, pkKes, SRC
     Next s
 
     ' --- UPIS 2: faktura iz utovara (v1: 1 utovar = 1 faktura).
@@ -903,6 +1016,266 @@ Private Function CreateUtovarSaFakturom(ByVal kupacID As String, _
     ApplyAvansToFaktura kupacID, fakturaID
 
     CreateUtovarSaFakturom = fakturaID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' ============================================================
+' NOVA FAKTURA IZ POSTOJECEG UTOVARA (revizija #6 t.1 -- lifecycle).
+' Posle storna GP fakture utovar ostaje aktivan i nefakturisan, a roba
+' je FIZICKI otisla -- nov utovar bi tvrdio da je izasla dva puta.
+' Ovaj writer koristi postojeci utovar: NE dira stanje, cita njegove
+' aktivne stavke, pravi SAMO novu fakturu + stavke, ponovo markira
+' utovar i ostavlja originalni DatumUtovara (SEF datum isporuke).
+' Cene: iz POSLEDNJE (stornirane) fakture tog utovara -- one uvek
+' postoje jer se utovar radja iskljucivo zajedno sa fakturom.
+' ============================================================
+Public Function CreateFakturaIzUtovara_TX(ByVal utovarID As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+
+    CreateFakturaIzUtovara_TX = CreateFakturaIzUtovara(utovarID)
+
+    If CreateFakturaIzUtovara_TX = "" Then
+        Err.Raise vbObjectError + 1760, "CreateFakturaIzUtovara_TX", _
+                  "CreateFakturaIzUtovara nije uspeo."
+    End If
+
+    tx.CommitTx
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="FAKTURA_IZ_UTOVARA_SUCCESS", _
+        severity:="INFO", _
+        message:="GP faktura iz postojeceg utovara", _
+        userId:="Operator", _
+        moduleName:="modUtovar", _
+        procedureName:="CreateFakturaIzUtovara_TX", _
+        entityType:="Faktura", _
+        entityID:=CreateFakturaIzUtovara_TX, _
+        correlationId:=utovarID
+    On Error GoTo 0
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr "CreateFakturaIzUtovara_TX"
+    On Error Resume Next
+    Monitor_Error _
+        moduleName:="modUtovar", _
+        procedureName:="CreateFakturaIzUtovara_TX", _
+        entityType:="Faktura", _
+        entityID:="", _
+        correlationId:=utovarID, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    CreateFakturaIzUtovara_TX = ""
+End Function
+
+' Base -- NE zovi je spolja (pola upisa bez transakcije).
+Private Function CreateFakturaIzUtovara(ByVal utovarID As String) As String
+    Const SRC As String = "CreateFakturaIzUtovara"
+    On Error GoTo EH
+
+    utovarID = Trim$(utovarID)
+    If Len(utovarID) = 0 Then
+        Err.Raise vbObjectError + 1761, SRC, "UtovarID je obavezan."
+    End If
+
+    ' --- Kapije nad utovarom: postoji tacno jednom, aktivan, NEFAKTURISAN.
+    Dim utRows As Collection
+    Set utRows = FindRows(TBL_UTOVAR, COL_UT_ID, utovarID)
+    If utRows Is Nothing Then
+        Err.Raise vbObjectError + 1762, SRC, "Utovar ne postoji: " & utovarID
+    End If
+    If utRows.count <> 1 Then
+        Err.Raise vbObjectError + 1762, SRC, _
+                  "Utovar ne postoji jednoznacno: " & utovarID & _
+                  "; Count=" & CStr(utRows.count)
+    End If
+    Dim ut As Variant, rowUt As Long
+    ut = GetTableData(TBL_UTOVAR)
+    rowUt = CLng(utRows(1))
+    If UCase$(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)))))) = "DA" Then
+        Err.Raise vbObjectError + 1763, SRC, "Utovar je storniran: " & utovarID
+    End If
+    If UCase$(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)))))) = "DA" _
+       Or Len(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)))))) > 0 Then
+        Err.Raise vbObjectError + 1764, SRC, _
+                  "Utovar je vec fakturisan: " & utovarID & _
+                  " -- prvo storno postojece fakture."
+    End If
+
+    Dim kupacID As String
+    kupacID = Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)))))
+    Dim kupRows As Collection
+    Set kupRows = FindRows(TBL_KUPCI, COL_KUP_ID, kupacID)
+    If kupRows Is Nothing Then
+        Err.Raise vbObjectError + 1765, SRC, "Kupac ne postoji u tblKupci: " & kupacID
+    ElseIf kupRows.count <> 1 Then
+        Err.Raise vbObjectError + 1765, SRC, _
+                  "Kupac ne postoji jednoznacno u tblKupci: " & kupacID
+    End If
+
+    ' --- Aktivne stavke utovara (roba koja je fizicki otisla).
+    Dim s As Variant, i As Long
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then
+        Err.Raise vbObjectError + 1766, SRC, "Nema utovarnih stavki."
+    End If
+    s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then
+        Err.Raise vbObjectError + 1766, SRC, "Nema aktivnih utovarnih stavki."
+    End If
+    Dim cSUt As Long, cSPre As Long, cSBr As Long, cSKol As Long
+    cSUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+    cSPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+    cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
+    cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+
+    ' --- Cene iz prethodnih (storniranih) faktura ovog utovara: FST se
+    ' NE filtrira po stornu -- bas stornirani redovi nose cene; kasniji
+    ' red pobedjuje (poslednja faktura).
+    Dim cene As Object: Set cene = CreateObject("Scripting.Dictionary")
+    cene.CompareMode = vbTextCompare
+    Dim fs As Variant, cFsUt As Long, cFsPre As Long, cFsCena As Long
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsArray(fs) Then
+        cFsUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
+        cFsPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
+        cFsCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, SRC)
+        For i = 1 To UBound(fs, 1)
+            If Trim$(CStr(nz(fs(i, cFsUt)))) = utovarID Then
+                If IsNumeric(fs(i, cFsCena)) Then
+                    If CDbl(fs(i, cFsCena)) > 0 Then _
+                        cene(Trim$(CStr(nz(fs(i, cFsPre))))) = CDbl(fs(i, cFsCena))
+                End If
+            End If
+        Next i
+    End If
+
+    ' --- Pre-validacija svih stavki pre ijednog upisa.
+    Dim stavke As Collection: Set stavke = New Collection
+    Dim preradaID As String, kol As Double, ukupno As Double
+    For i = 1 To UBound(s, 1)
+        If Trim$(CStr(nz(s(i, cSUt)))) = utovarID Then
+            preradaID = Trim$(CStr(nz(s(i, cSPre))))
+            If Len(preradaID) = 0 Then
+                Err.Raise vbObjectError + 1767, SRC, _
+                          "Utovarna stavka bez PreradaID: " & utovarID
+            End If
+            If Not IsNumeric(s(i, cSKol)) Then
+                Err.Raise vbObjectError + 1767, SRC, _
+                          "Utovarna stavka bez kolicine. PreradaID=" & preradaID
+            End If
+            kol = CDbl(s(i, cSKol))
+            If kol <= 0 Then
+                Err.Raise vbObjectError + 1767, SRC, _
+                          "Kolicina stavke mora biti > 0. PreradaID=" & preradaID
+            End If
+            If Not cene.Exists(preradaID) Then
+                Err.Raise vbObjectError + 1768, SRC, _
+                          "Nema cene iz prethodne fakture za preradu " & preradaID & _
+                          " -- storniraj utovar i izradi fakturu iznova sa cenom."
+            End If
+            ' Naziv proizvoda mora postojati (ista kapija kao izrada).
+            If Len(Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, preradaID, COL_PRE_TIP_GP))))) = 0 Then
+                Err.Raise vbObjectError + 1769, SRC, _
+                          "TipGotovogProizvoda je prazan -- faktura mora imenovati proizvod: " & preradaID
+            End If
+            stavke.Add Array(preradaID, kol, CDbl(cene(preradaID)), _
+                             Trim$(CStr(nz(s(i, cSBr)))))
+            ukupno = ukupno + kol * CDbl(cene(preradaID))
+        End If
+    Next i
+    If stavke.count = 0 Then
+        Err.Raise vbObjectError + 1766, SRC, _
+                  "Utovar nema aktivnih stavki: " & utovarID
+    End If
+    If ukupno <= 0 Then
+        Err.Raise vbObjectError + 1770, SRC, _
+                  "Ukupan iznos fakture mora biti veci od nule."
+    End If
+
+    ' --- Upis fakture (isti pozicioni oblik kao CreateUtovarSaFakturom).
+    Dim fakturaID As String
+    fakturaID = GetNextID(TBL_FAKTURE, COL_FAK_ID, "FAK-")
+    If fakturaID = "" Then
+        Err.Raise vbObjectError + 1771, SRC, "GetNextID nije vratio FakturaID."
+    End If
+    Dim brojFakture As String
+    brojFakture = GenerateBrojFakture()
+    If brojFakture = "" Then
+        Err.Raise vbObjectError + 1771, SRC, _
+                  "GenerateBrojFakture nije vratio broj fakture."
+    End If
+
+    If AppendRow(TBL_FAKTURE, Array( _
+        fakturaID, brojFakture, Date, kupacID, ukupno, STATUS_NEPLACENO, _
+        Empty, "", "", WF_LOCAL_FINALIZED, "", "", "", Empty, Empty, _
+        "", "", "", 0, "Ne", "")) <= 0 Then
+        Err.Raise vbObjectError + 1772, SRC, "AppendRow nije uspeo za tblFakture."
+    End If
+
+    Dim sv As Variant, stavkaNum As Long, rowStavke As Long
+    For Each sv In stavke
+        stavkaNum = stavkaNum + 1
+        rowStavke = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+            fakturaID & "-" & Format$(stavkaNum, "00"), fakturaID, "", _
+            CDbl(sv(1)), CDbl(sv(2)), "", "", "", ""))
+        If rowStavke <= 0 Then
+            Err.Raise vbObjectError + 1773, SRC, _
+                      "AppendRow nije uspeo za tblFakturaStavke."
+        End If
+        RequireUpdateCell TBL_FAKTURA_STAVKE, rowStavke, COL_FS_PRERADA_ID, _
+                          CStr(sv(0)), SRC
+        RequireUpdateCell TBL_FAKTURA_STAVKE, rowStavke, COL_FS_BROJ_PRERADE, _
+                          CStr(sv(3)), SRC
+        RequireUpdateCell TBL_FAKTURA_STAVKE, rowStavke, COL_FS_UTOVAR_ID, _
+                          utovarID, SRC
+    Next sv
+
+    ' Marker: utovar ponovo fakturisan (1:1), DatumUtovara NETAKNUT.
+    RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURISANO, "Da", SRC
+    RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURA_ID, fakturaID, SRC
+
+    ApplyAvansToFaktura kupacID, fakturaID
+
+    CreateFakturaIzUtovara = fakturaID
     Exit Function
 
 EH:

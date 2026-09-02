@@ -5858,3 +5858,43 @@ dokument, sa unosom podataka prevoza na listi Utovari.
   `utovar-gp-prevoz-prazno-brise` (prazno pregazi vrednost) i
   `utovar-gp-rok-placebo` (rok = datum proizvodnje) — obaraju tačno
   svoju tvrdnju. Katalog: 378 sabotaža.
+
+### 25.12 Revizija #6: integrity/lifecycle krug (3 blockera + P1)
+
+Završni krug pre merge-a — bez feature širenja, samo zatvaranje
+lifecycle rupa. Verifikacioni ciklus (RunAll + dokaz + Banka) ide
+ODLOŽENO, po operaterovom „tek kad budem zadovoljan modulom".
+
+- **BLOCKER 1 — faktura iz postojećeg utovara:** posle storna GP
+  fakture utovar ostaje aktivan a roba je fizički otišla — novi utovar
+  bi tvrdio da je izašla dva puta. Novi writer
+  `CreateFakturaIzUtovara_TX(utovarID)`: koristi postojeći
+  nefakturisani utovar, NE dira stanje, čita njegove aktivne stavke,
+  pravi samo novu fakturu + stavke, ponovo markira utovar, ostavlja
+  originalni `DatumUtovara`. Cene iz poslednje (stornirane) fakture
+  tog utovara — postoje uvek jer se utovar rađa uz fakturu; bez cene
+  za neku preradu writer blokira s uputstvom. Radnja **„Fakturiši"**
+  na listi Utovari (već fakturisan red — jasna poruka bez writera).
+- **BLOCKER 2 — SEF kapija GP linije:** GP stavka bez `UtovarID` više
+  NIKAD ne ide na SEF (ranije fail-open na datum fakture). Sve GP
+  linije fakture moraju nositi ISTI utovar (1 faktura = 1 utovar), a
+  utovar mora: postojati tačno jednom, biti aktivan, `Fakturisano=Da`
+  i tvrditi baš tu fakturu (`ValidateGpUtovarZaSEF`) — inače BLOCK.
+- **BLOCKER 3 — sledljivost dokaz po stavci:** dokaz fakturisanosti
+  više nije „postoji bar jedna FST na utovaru" (ANY-vs-ALL rupa kod
+  više prerada na istom utovaru) nego mapa `UtovarID|PreradaID →
+  zbir kg` — stavka je fakturisana samo ako njen par postoji i
+  količina se poklapa; sve drugo je „faktura neusaglasena".
+- **Pakovanja parcijalnog utovara (t.4):** `tblUtovarStavke` +
+  `BrojKutija`/`BrojKesa` — broj pakovanja koji je STVARNO ušao u
+  kamion. Writer puni samo dokazivo: cela paleta = puni brojevi;
+  parcijala = samo ako prerada ima jednu vrstu pakovanja i količina
+  je celobrojan umnožak kg/pakovanju (500/10 = 50); inače prazno.
+  Obrazac čita iz stavke (fallback na punu preradu samo za celu
+  paletu) — transportni dokument radije prazan nego pogrešan.
+- **P1:** datum i vreme utovara editabilni na listi Utovari (kroz
+  „Sačuvaj prevoz"; prazno = ne diraj, datum se ne može obrisati jer
+  je SEF datum isporuke); `tblUtovar`/`tblUtovarStavke`/`tblPrevoznici`
+  u `AuditableTables()` (CreatedBy/ModifiedBy kao ostali dokumenti);
+  migracija starih GP faktura numeriše utovar po godini DATUMA FAKTURE
+  (`GenerateBrojUtovara(godina)`) — bez „3/2026 sa datumom 2025".

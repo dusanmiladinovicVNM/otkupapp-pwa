@@ -293,8 +293,12 @@ Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
         Case FK_UTOVARI
             ' Utovarna lista IDE SA ROBOM -- stampa po redu; storno samo
             ' nefakturisanog (writer kapija odbija ostale s razlogom).
+            ' "Fakturisi" (revizija #6 t.1): nova faktura nad POSTOJECIM
+            ' nefakturisanim utovarom (posle storna fakture) -- nov
+            ' utovar bi tvrdio da je roba izasla dva puta.
             FkRadnjeZaListu = "utprint:OTKUI_BTN_UT_STAMPAJ:132:soft:1|" & _
                          "utprevoz:OTKUI_BTN_UT_PREVOZ:132:ghost:1|" & _
+                         "utfak:OTKUI_BTN_UT_FAKTURISI:104:primary:1|" & _
                          "utstorno:OTKUI_BTN_UT_STORNO:96:danger:1"
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _
@@ -450,6 +454,7 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
         Case "utprint":  RadnjaNadRedom = StampajUtovar(red)
         Case "utstorno": RadnjaNadRedom = StornirajUtovar(red)
         Case "utprevoz": RadnjaNadRedom = SacuvajPrevoz(red)
+        Case "utfak":    RadnjaNadRedom = FakturisiUtovar(red)
         Case "fkstat":   RadnjaNadRedom = OsveziStatusFakture(red)
         Case "sfsend":   RadnjaNadRedom = SefPosalji(red)
         Case "sfstat":   RadnjaNadRedom = SefOsvezi(red)
@@ -1212,7 +1217,8 @@ Private Function SacuvajPrevoz(ByVal red As Long) As Boolean
             PrevozPolje("scrFkUtPrev"), PrevozPolje("scrFkUtVoz"), _
             PrevozPolje("scrFkUtReg"), PrevozPolje("scrFkUtPlo"), _
             PrevozPolje("scrFkUtTemp"), PrevozPolje("scrFkUtMesto"), _
-            PrevozPolje("scrFkUtPo"), PrevozPolje("scrFkUtNap")) Then
+            PrevozPolje("scrFkUtPo"), PrevozPolje("scrFkUtNap"), _
+            PrevozPolje("scrFkUtDat"), PrevozPolje("scrFkUtVre")) Then
         ' Sifarnik uci sacuvanu kombinaciju pa se predlozi odmah
         ' osveze -- sledeci utovar istog prevoznika je izbor, ne unos.
         modUtovar.UpsertPrevoznikVozac PrevozPolje("scrFkUtPrev"), _
@@ -1247,7 +1253,8 @@ Private Sub OcistiPrevozPolja()
     mFill = True
     For Each nm In Array("scrFkUtPrev", "scrFkUtVoz", "scrFkUtReg", _
                          "scrFkUtPlo", "scrFkUtTemp", "scrFkUtMesto", _
-                         "scrFkUtPo", "scrFkUtNap")
+                         "scrFkUtPo", "scrFkUtNap", "scrFkUtDat", _
+                         "scrFkUtVre")
         Set c = Kontrola(CStr(nm))
         If Not c Is Nothing Then c.text = ""
     Next nm
@@ -1270,6 +1277,34 @@ Private Function StornirajUtovar(ByVal red As Long) As Boolean
         StornirajUtovar = True
     Else
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_STORNO"), True
+    End If
+End Function
+
+' Nova faktura iz POSTOJECEG nefakturisanog utovara (revizija #6 t.1):
+' lifecycle posle storna GP fakture -- roba je fizicki otisla jednom,
+' fakturise se ISTI utovar, ne novi. Kapije i cene (iz poslednje
+' stornirane fakture) su u writeru.
+Private Function FakturisiUtovar(ByVal red As Long) As Boolean
+    Dim iD As String, fakturaID As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    ' Vec fakturisan red (kolona 6 mreze nosi broj fakture) -- jasna
+    ' poruka odmah, bez writera.
+    If Len(Trim$(CStr(modOtkupUI.GridCell(red, 6)))) > 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK_VEC"), True
+        Exit Function
+    End If
+    If MsgBox(Poruka("OTKUI_ASK_UT_FAK") & vbCrLf & vbCrLf & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 4))), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+    fakturaID = modUtovar.CreateFakturaIzUtovara_TX(iD)
+    If Len(fakturaID) > 0 Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_FAK"), False
+        FakturisiUtovar = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK"), True
     End If
 End Function
 
@@ -1474,6 +1509,13 @@ Public Sub Scr_Build(ByVal z As Object)
                          1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtNap", Poruka("OTKUI_FLD_UT_NAPOMENA"), "txt", "", _
                          1, False, False, "FK"
+    ' Datum/vreme utovara su EDITABILNI (revizija #6 P1): default
+    ' nastaju pri izradi, ali stvaran utovar moze biti drugog dana --
+    ' a DatumUtovara je SEF datum isporuke. Prazno = ne diraj.
+    modOtkupUI.NewFieldG z, "scrFkUtDat", Poruka("OTKUI_FLD_UT_DATUM"), "txt", "", _
+                         1, False, False, "FK"
+    modOtkupUI.NewFieldG z, "scrFkUtVre", Poruka("OTKUI_FLD_UT_VREME"), "txt", "", _
+                         1, False, False, "FK"
 
     ' BROJA FAKTURE OVDE NEMA, i to je namerno. Broj dodeljuje transakcija
     ' (CreateFaktura sam zove GenerateBrojFakture), operater ga ne bira. Polje
@@ -1550,14 +1592,18 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     utVidi = (Scr_Lista() = FK_UTOVARI)
     z.Controls("scrFkKup").Visible = Not utVidi
     utX = PAD
-    PoljeX z, "scrFkUtPrev", utX, 140, FK_Y_LBL: utX = utX + 152
-    PoljeX z, "scrFkUtVoz", utX, 120, FK_Y_LBL: utX = utX + 132
-    PoljeX z, "scrFkUtReg", utX, 100, FK_Y_LBL: utX = utX + 112
-    PoljeX z, "scrFkUtPlo", utX, 90, FK_Y_LBL: utX = utX + 102
-    PoljeX z, "scrFkUtTemp", utX, 90, FK_Y_LBL: utX = utX + 102
-    PoljeX z, "scrFkUtMesto", utX, 160, FK_Y_LBL: utX = utX + 172
-    PoljeX z, "scrFkUtPo", utX, 110, FK_Y_LBL: utX = utX + 122
-    PoljeX z, "scrFkUtNap", utX, 150, FK_Y_LBL
+    PoljeX z, "scrFkUtDat", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtVre", utX, 56, FK_Y_LBL: utX = utX + 68
+    PoljeX z, "scrFkUtPrev", utX, 120, FK_Y_LBL: utX = utX + 132
+    PoljeX z, "scrFkUtVoz", utX, 110, FK_Y_LBL: utX = utX + 122
+    PoljeX z, "scrFkUtReg", utX, 90, FK_Y_LBL: utX = utX + 102
+    PoljeX z, "scrFkUtPlo", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtTemp", utX, 80, FK_Y_LBL: utX = utX + 92
+    PoljeX z, "scrFkUtMesto", utX, 140, FK_Y_LBL: utX = utX + 152
+    PoljeX z, "scrFkUtPo", utX, 100, FK_Y_LBL: utX = utX + 112
+    PoljeX z, "scrFkUtNap", utX, 130, FK_Y_LBL
+    z.Controls("scrFkUtDat").Visible = utVidi
+    z.Controls("scrFkUtVre").Visible = utVidi
     z.Controls("scrFkUtPrev").Visible = utVidi
     z.Controls("scrFkUtVoz").Visible = utVidi
     z.Controls("scrFkUtReg").Visible = utVidi

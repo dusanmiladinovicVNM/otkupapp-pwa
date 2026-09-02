@@ -1963,7 +1963,9 @@ ENSURE_TABLES = {
                    "BrojNarudzbenice"]),
     "tblUtovarStavke": ("UtovarStavke",
                         ["UtovarStavkaID", "UtovarID", "PreradaID",
-                         "BrojPrerade", "KolicinaKg", "Stornirano"]),
+                         "BrojPrerade", "KolicinaKg", "Stornirano",
+                         # revizija #6 t.4: stvarno utovarena pakovanja.
+                         "BrojKutija", "BrojKesa"]),
     # Smoke 5d: sifarnik EKSTERNIH prevoznika/vozaca (nije tblVozaci).
     "tblPrevoznici": ("Prevoznici",
                       ["PrevoznikID", "Naziv", "Vozac", "Registracija",

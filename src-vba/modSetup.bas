@@ -1102,7 +1102,8 @@ Private Function AuditableTables() As Variant
         TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, _
         TBL_PARCELE, TBL_ARTIKLI, TBL_MAGACIN, TBL_CENOVNIK, TBL_KORISNICI, _
         TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
-        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT)
+        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT, _
+        TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI)
 End Function
 
 ' ============================================================
@@ -1154,7 +1155,8 @@ Public Sub EnsureUtovarSchemaCore()
               COL_UT_VREME, COL_UT_PO_BROJ)
     EnsureDataTable TBL_UTOVAR_STAVKE, "UtovarStavke", _
         Array(COL_UTS_ID, COL_UTS_UTOVAR_ID, COL_UTS_PRERADA_ID, _
-              COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO)
+              COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO, _
+              COL_UTS_KUTIJE, COL_UTS_KESE)
     ' Sifarnik prevoznika (smoke 5d): maticni podaci, bez storna --
     ' auto-uci se iz "Sacuvaj prevoz" i puni combo predloge.
     EnsureDataTable TBL_PREVOZNICI, "Prevoznici", _
@@ -1342,8 +1344,13 @@ Dalje:
         If UCase$(Trim$(CStr(nz(fD(rowF, cFSt))))) = "DA" Then GoTo DaljeF
 
         utovarID = GetNextID(TBL_UTOVAR, COL_UT_ID, "UT-")
+        ' Broj i godina prate DATUM FAKTURE (revizija #6): utovar iz
+        ' fakture 2025. ne sme dobiti broj "3/2026" uz datum 2025.
+        Dim migGodina As Long
+        migGodina = Year(Date)
+        If IsDate(fD(rowF, cFDat)) Then migGodina = Year(CDate(fD(rowF, cFDat)))
         If AppendRow(TBL_UTOVAR, Array( _
-            utovarID, modUtovar.GenerateBrojUtovara(), Year(Date), _
+            utovarID, modUtovar.GenerateBrojUtovara(migGodina), migGodina, _
             fD(rowF, cFDat), Trim$(CStr(nz(fD(rowF, cFKup)))), _
             "Da", CStr(k), "migracija GP fakture", "")) <= 0 Then
             Err.Raise vbObjectError + 9320, SRC, _

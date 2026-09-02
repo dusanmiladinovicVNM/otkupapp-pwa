@@ -6980,6 +6980,26 @@ ijedne izmišljene veze.
   bruto), zbir „UKUPNO · paleta: N [+ M deo]", napomena i tri potpisa
   sa pečat-linijama (predao / vozač / preuzeo).
 
+### Zatvoren GP lifecycle (revizija #6)
+
+- **„Fakturiši“ na listi Utovari:** posle storna GP fakture ISTI
+  utovar (roba je fizički otišla jednom) dobija novu fakturu — cene se
+  preuzimaju iz prethodne stornirane fakture, stanje se ne dira,
+  datum utovara ostaje originalan.
+- **SEF blok za GP bez utovara:** GP stavka bez validnog utovara
+  (postoji, aktivan, markiran baš tom fakturom) više nikad ne odlazi
+  na SEF sa datumom fakture — slanje se blokira s jasnom porukom.
+- **Sledljivost dokazuje po stavci:** količina prerade računa se kao
+  fakturisana samo kad postoji stavka fakture za baš taj utovar, tu
+  preradu i tu količinu.
+- **Pakovanja na utovarnoj listi:** dokument nosi broj kutija/kesa
+  koji je stvarno ušao u kamion; kod parcijalnog utovara broj se
+  upisuje samo kad je izračunljiv (npr. 500 kg / 10 kg = 50), inače
+  ostaje prazan — nikad pogrešan broj na transportnom dokumentu.
+- Datum i vreme utovara su editabilni pre SEF slanja (lista Utovari);
+  utovar tabele ušle u audit (CreatedBy/ModifiedBy); migracija starih
+  GP faktura numeriše utovare po godini fakture.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

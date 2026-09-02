@@ -387,6 +387,11 @@ Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
 Public Const COL_UTS_PRERADA_ID As String = "PreradaID"
 Public Const COL_UTS_BROJ_PRERADE As String = "BrojPrerade"
 Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
+' Pakovanja STVARNO utovarena (revizija #6 t.4): puni se samo kad je
+' broj dokaziv (cela paleta, ili jedina vrsta pakovanja celobrojno);
+' prazno = nepoznato, obrazac tada ne izmislja broj.
+Public Const COL_UTS_KUTIJE As String = "BrojKutija"
+Public Const COL_UTS_KESE As String = "BrojKesa"
 ' Stampani obrazac utovarne liste (ide sa robom) + rezim stampe.
 Public Const WS_UTOVAR_SABLON As String = "UtovarSablon"
 Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"

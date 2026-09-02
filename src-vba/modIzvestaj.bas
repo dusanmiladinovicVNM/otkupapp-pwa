@@ -4524,11 +4524,19 @@ Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
     ' (aktivna GP stavka bez utovara) po preradi.
     Dim fstPoUtovaru As Object: Set fstPoUtovaru = CreateObject("Scripting.Dictionary")
     fstPoUtovaru.CompareMode = vbTextCompare
+    ' Dokaz na GRAIN-u stavke (revizija #6 t.3): "UtovarID|PreradaID"
+    ' -> zbir kg aktivnih FST. Dokaz samo na nivou utovara je ANY-vs-
+    ' ALL rupa: faktura koja pokriva jednu od dve prerade utovara ne
+    ' sme da "fakturise" i drugu.
+    Dim fstPar As Object: Set fstPar = CreateObject("Scripting.Dictionary")
+    fstPar.CompareMode = vbTextCompare
     Dim fstSiroce As Object: Set fstSiroce = CreateObject("Scripting.Dictionary")
     fstSiroce.CompareMode = vbTextCompare
     Dim colFsPre As Long, colFsUt As Long, colFsSt As Long, colFsOs As Long
+    Dim colFsKol As Long
     colFsPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
     colFsUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    colFsKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
     If colFsPre > 0 And colFsUt > 0 Then
         Dim fs As Variant
         fs = GetTableData(TBL_FAKTURA_STAVKE)
@@ -4553,6 +4561,15 @@ Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
                             fstPoUtovaru(utK) = CLng(fstPoUtovaru(utK)) + 1
                         Else
                             fstPoUtovaru.Add utK, 1
+                        End If
+                        Dim parK As String
+                        parK = utK & "|" & k
+                        If colFsKol > 0 Then
+                            If fstPar.Exists(parK) Then
+                                fstPar(parK) = CDbl(fstPar(parK)) + SledDbl(fs(i, colFsKol))
+                            Else
+                                fstPar.Add parK, SledDbl(fs(i, colFsKol))
+                            End If
                         End If
                     End If
                 End If
@@ -4632,14 +4649,27 @@ DaljeUt:
                 If InStr("|" & CStr(v(5)) & "|", "|" & CStr(utAktivan(utID)) & "|") = 0 Then _
                     v(5) = CStr(v(5)) & "|" & CStr(utAktivan(utID))
                 If utValid.Exists(utID) Then
-                    v(1) = CDbl(v(1)) + kol
-                    Dim uv As Variant
-                    uv = utValid(utID)
-                    If InStr("|" & CStr(v(3)) & "|", "|" & CStr(uv(0)) & "|") = 0 Then _
-                        v(3) = CStr(v(3)) & "|" & CStr(uv(0))
-                    If Len(CStr(uv(1))) > 0 Then
-                        If InStr("|" & CStr(v(4)) & "|", "|" & CStr(uv(1)) & "|") = 0 Then _
-                            v(4) = CStr(v(4)) & "|" & CStr(uv(1))
+                    ' Dokaz PO STAVCI (revizija #6 t.3): za bas ovaj par
+                    ' utovar+prerada mora postojati aktivna FST sa ISTOM
+                    ' kolicinom -- validan header fakture ne dokazuje
+                    ' stavku koju faktura ne nosi (ANY-vs-ALL).
+                    Dim parKey As String
+                    parKey = utID & "|" & k
+                    If fstPar.Exists(parKey) And _
+                       Abs(SledDbl(fstPar(parKey)) - kol) <= 0.0001 Then
+                        v(1) = CDbl(v(1)) + kol
+                        Dim uv As Variant
+                        uv = utValid(utID)
+                        If InStr("|" & CStr(v(3)) & "|", "|" & CStr(uv(0)) & "|") = 0 Then _
+                            v(3) = CStr(v(3)) & "|" & CStr(uv(0))
+                        If Len(CStr(uv(1))) > 0 Then
+                            If InStr("|" & CStr(v(4)) & "|", "|" & CStr(uv(1)) & "|") = 0 Then _
+                                v(4) = CStr(v(4)) & "|" & CStr(uv(1))
+                        End If
+                    Else
+                        ' Fakturisan utovar cija faktura NE dokazuje ovu
+                        ' stavku (nema FST para ili kolicina ne odgovara).
+                        v(2) = True
                     End If
                 ElseIf utLose.Exists(utID) Then
                     v(2) = True
