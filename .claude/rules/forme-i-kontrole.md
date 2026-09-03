@@ -12,6 +12,16 @@ paths:
 
 > Preseljeno iz `CLAUDE.md` §3/§4. Učitava se kad se dira UI sloj.
 
+## Koje forme ostaju
+
+Posle plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 u projektu ostaju **četiri**:
+`frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`. Sve ostale se
+penzionišu po koracima §27.3; inventar i uslov po formi je §27.2.
+
+Pravilo koje iz toga sledi: **nova kontrola ne ide u legacy formu**, nego na
+ekran ljuske (`modScr*`). Izmena legacy forme se radi samo kad je pravilo iz
+§5 `otkup-i-dokumenta.md` izričito traži, ili u koraku koji tu formu uklanja.
+
 ## `.frx` se ne dira kao tekst
 
 Kontrole formi žive u binarnom `.frx` (`.frm` ima samo `OleObjectBlob`). Nove
@@ -43,7 +53,22 @@ Zatečeni pre-2.16.1 form-WithEvents su **zamrznuti** — ne diraj i ne dodaji n
 - `frmBankaExportPregled`
 - `frmIzvestaj`
 
+**Ovaj spisak se samo SKRAĆUJE.** Svih pet formi je u planu penzionisanja
+(§27.2): `frmDokumenta` u koraku 2, `frmAgrohemija` / `frmPalete` / `frmIzvestaj`
+u koraku 3, `frmBankaExportPregled` u koraku 4. Red se briše kad forma ode, i to
+u process PR-u — ne uz izmenu koda.
+
+Kad spisak ostane prazan, zabrana iznad i dalje važi: nijedna od četiri forme
+koje ostaju nema ni jednu `WithEvents` deklaraciju, i tako mora i da ostane —
+runtime kontrole u njima idu kroz omotače (`clsFlatBtn`, `clsUiSink`).
+
 ## Matični podaci (UI)
 
-`frmMaticniPodaci` + `frmStammdaten` (`Select Case Me.Tag`) + `modMaticniLookups`
-(data-driven meni).
+**Ljuska (važi):** ekrani `MAT_PARTNERI` / `MAT_ROBA` / `MAT_PAKOVANJE` /
+`MAT_KORISNICI` (`modMaticni*` + `modScrMat*`) i paneli `MAT_PODESAVANJA` /
+`MAT_ADMIN` (`modUiPanel`). Ulaz je prekidač sekcija u zaglavlju ljuske; pravo
+na oblast `MaticniPodaci` odlučuje šta je od toga dostupno.
+
+**Legacy (odlazi u koraku 5):** `frmMaticniPodaci` + `frmStammdaten`
+(`Select Case Me.Tag`) + `modMaticniLookups` (data-driven meni), zajedno sa
+`clsStmBtn` i `clsLookupMenuBtn` ako ostanu bez pozivaoca.

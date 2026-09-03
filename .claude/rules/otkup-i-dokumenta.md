@@ -8,6 +8,10 @@ paths:
   - "src-vba/modDokumentInvariant.bas"
 ---
 
+<!-- `frmOtkup.frm` i `frmDokumenta.frm` u `paths` odlaze SA formama (korak 2,
+     `docs/UI_MIGRACIJA_KATALOG.md` §27.3). Do tada moraju da stoje: agent koji
+     dira legacy formu mora da vidi §1–§3. -->
+
 # Otkup i dokumenta
 
 > Najaktivnija oblast projekta. Do sada je bila jedini red u CLAUDE.md §3 bez
@@ -68,11 +72,24 @@ koraci koji **ne smeju** da obore potvrdu snimanja (`OutputOtkupniList`,
 Ne dodavati upis u tabele mimo `SaveOtkupMulti_TX`, i ne premeštati best-effort
 korake iznad nje.
 
-## 5) Novi UI (`frmOtkupUI`) postoji paralelno — legacy se NE gasi
+## 5) Novi UI je ljuska — legacy se penzioniše po koracima
 
-Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
-`modOtkupUI` + ekranski moduli `modScr*`). **Dok oba sistema ne budu potpuna,
-`frmOtkup` i `frmDokumenta` ostaju potpuno operativni i ne diraju se.**
+Otkup i dokumenta su preneti na jednu runtime formu (`frmOtkupUI` + ljuska
+`modOtkupUI` + ekranski moduli `modScr*`).
+
+Zato `frmOtkup` i `frmDokumenta` više ne stoje „paralelno dok oba sistema ne
+budu potpuna" nego se **penzionišu po koracima**: `docs/UI_MIGRACIJA_KATALOG.md`
+§27 nosi inventar formi (§27.2), redosled uklanjanja (§27.3) i verifikaciju po
+koraku (§27.5). Obe odlaze u **koraku 2**.
+
+Redosled nije stvar ukusa: **prvo se seku reference, pa forma.** Forma bez
+referenci se kompajlira i ne smeta; forma koja referencira obrisano obara
+compile cele sveske. I `git rm` nije kraj posla — ni self-update ni
+`ImportAllVBA` ne brišu komponente, pa svaki korak nosi ručni `Remove` u VBE
+po instalaciji (§27.4).
+
+**Dok njihov korak ne bude isporučen, obe forme ostaju potpuno operativne i ne
+diraju se.** „Ne diraju se" znači: ne menjaju se mimo koraka koji ih uklanja.
 
 - **Izvor istine za stanje prelaska:** `docs/UI_MIGRACIJA_KATALOG.md` — pravila
   Z1–Z14, brojevni niz po režimu (Z3a), revizija ulaznog sloja 1:1 (Z3b),
@@ -85,7 +102,8 @@ Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
   **nijedna provera ne živi u ekranu.**
 - **Prelazno pravilo:** pravilo unosa se menja u tim modulima, pa se **ručno
   preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
-  namerno.
+  namerno — i **prestaju da postoje sa korakom 2**, kad forme odu. Od tada
+  pravilo živi na jednom mestu i preslikavanja nema.
 - Ugovor `ClearOtkupFields` iz §1 važi i za `modOtkupUI.ClearForm` — ista tri
   ponašanja, ista tri razloga. **Pokriven je testom** (`T_ClearForm_Ugovor` u
   `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Upis zbirne i prijemnice
