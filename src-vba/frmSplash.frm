@@ -23,11 +23,15 @@ Option Explicit
 '     open the app shell (modOtkupUI.ShowOtkupUI)
 '   - no business logic
 '
-' JEDAN ZNAK, NE TRI. .frx nosi DVA logotipa (Image12 = AX|OtkupApp,
-' Image25 = AgriX). Ranija verzija je preko njih crtala jos i tekstualni
-' "AX OtkupApp", pa se marka videla tri puta. Sada se koristi PRAVI logotip
-' (Image12), a Image25 i tekstualni znak se gase: dole ostaje samo tiha
-' linija "Powered by AgriX".
+' JEDAN ZNAK, NE TRI. .frx nosi DVA logotipa (gornji AX|OtkupApp, donji
+' AgriX). Ranija verzija je preko njih crtala jos i tekstualni "AX OtkupApp",
+' pa se marka videla tri puta. Sada se koristi PRAVI gornji logotip, a donji
+' i tekstualni znak se gase: dole ostaje samo tiha linija "Powered by AgriX".
+'
+' Slike se traze PO TIPU I POLOZAJU (LogoSlika), ne po imenu. Ime kontrole iz
+' dizajnera je promenljivo i NE vidi se iz izvora (.frx je binaran), a pogresno
+' pogodjeno ime nije tiha greska nego COMPILE greska ("Variable not defined"),
+' koja obara ceo projekat. Placeno jednom, na imenu "Image12".
 '
 ' Kontrole iz dizajnera se samo premestaju i gase; pozadina je runtime
 ' (modUiKit.NewLbl + Lerp), pa se .frx ne dira. Nema module-level MSForms
@@ -63,8 +67,34 @@ EH:
     LogErr "frmSplash.UserForm_Initialize"
 End Sub
 
+' Logotip iz .frx po TIPU kontrole -- v. zaglavlje modula. gornji = onaj sa
+' manjim .Top u dizajneru (AX|OtkupApp); ostali su ispod njega (AgriX).
+' Nothing kad slike nema -- pozivalac to mora da podnese.
+Private Function LogoSlika(ByVal gornji As Boolean) As Object
+    Dim c As Object, best As Object
+    On Error Resume Next
+    For Each c In Me.Controls
+        If TypeName(c) = "Image" Then
+            If best Is Nothing Then
+                Set best = c
+            ElseIf gornji Then
+                If c.top < best.top Then Set best = c
+            Else
+                If c.top > best.top Then Set best = c
+            End If
+        End If
+    Next c
+    Set LogoSlika = best
+End Function
+
 Private Sub BuildSplash()
     Dim i As Long, w As Single, h As Single, bh As Single, cx As Single, Y As Single
+    Dim logo As Object, drugi As Object
+
+    ' Obe slike se uzimaju PRE nego sto se ijednoj promeni .top -- LogoSlika
+    ' bira bas po tome, pa bi posle premestanja gornje obe bile "gornja".
+    Set logo = LogoSlika(True)
+    Set drugi = LogoSlika(False)
 
     ' Ceo ekran: isti racun kao modOtkupUI.GoFullScreen (ScreenWidthPoints /
     ' ScreenHeightPoints iz modWindow), jer je Excel u ovom trenutku sakriven
@@ -97,19 +127,23 @@ Private Sub BuildSplash()
     ' pa okvir sme da bude fiksan a da se slika ne izoblici.
     cx = (w - LOGO_W) / 2
     Y = h * 0.34 - LOGO_H / 2
-    With Image12
-        .PictureSizeMode = fmPictureSizeModeZoom
-        .PictureAlignment = fmPictureAlignmentCenter
-        .BackStyle = fmBackStyleTransparent
-        .BorderStyle = fmBorderStyleNone
-        .Left = cx: .top = Y: .width = LOGO_W: .Height = LOGO_H
-        .Visible = True
-        .ZOrder 0
-    End With
+    If Not logo Is Nothing Then
+        With logo
+            .PictureSizeMode = fmPictureSizeModeZoom
+            .PictureAlignment = fmPictureAlignmentCenter
+            .BackStyle = fmBackStyleTransparent
+            .BorderStyle = fmBorderStyleNone
+            .Left = cx: .top = Y: .width = LOGO_W: .Height = LOGO_H
+            .Visible = True
+            .ZOrder 0
+        End With
+    End If
 
     ' Tekstualni znak i drugi logotip se GASE -- v. zaglavlje modula.
     lblApp.Visible = False
-    Image25.Visible = False
+    If Not drugi Is Nothing Then
+        If Not drugi Is logo Then drugi.Visible = False
+    End If
 
     ' verzija ispod logotipa, centrirano
     With lblVersion

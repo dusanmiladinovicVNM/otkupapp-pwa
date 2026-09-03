@@ -8162,13 +8162,21 @@ verzalu.
 
 **Zašto pun ekran, i zašto JEDAN znak.** Prva verzija je bila mali prozor
 (400×236) na kome se marka videla **tri puta**: `.frx` splash-a nosi **dva**
-logotipa (`Image12` = `AX|OtkupApp`, `Image25` = `AgriX`), a preko njih je
-crtan i tekstualni „AX OtkupApp". Sada se koristi **pravi logotip**, a
-`Image25` i tekstualni znak se gase (`Visible = False`) — dole ostaje samo
-tiha linija „Powered by AgriX". Isto važi za `frmExcelMini`: njen `.frx` ima
-`Image1`, pa crtani znak otpada. Pun ekran je odluka istog reda: prijava kao
-mali dijalog nad **sakrivenim** Excelom izgledala je kao da aplikacija nije
-ni startovala.
+logotipa (gornji `AX|OtkupApp`, donji `AgriX`), a preko njih je crtan i
+tekstualni „AX OtkupApp". Sada se koristi **pravi gornji logotip**, a donji i
+tekstualni znak se gase (`Visible = False`) — dole ostaje samo tiha linija
+„Powered by AgriX". Isto važi za `frmExcelMini`, čiji `.frx` takođe ima
+logotip. Pun ekran je odluka istog reda: prijava kao mali dijalog nad
+**sakrivenim** Excelom izgledala je kao da aplikacija nije ni startovala.
+
+**Slike se traže po TIPU kontrole, ne po imenu** (`LogoSlika`: prolaz kroz
+`Me.Controls` uz `TypeName(c) = "Image"`, gornja = manji `.Top`). Razlog je
+plaćen jednom: `.frx` je binaran, pa se ime kontrole **ne vidi iz izvora**, a
+pogođeno ime nije tiha greška nego **compile greška** („Variable not defined")
+koja obara ceo projekat — što se i desilo sa imenom pročitanim iz binarnog
+sadržaja (`Image12` umesto `Image1`). Ostala imena (`lblApp`, `lblVersion`,
+`lblBy`, `btnOK`…) su bezbedna jer ih zatečeni kod već referencira; slike
+nijedan kod nije dirao, pa su bile jedina nepoznanica.
 
 **Šta je zajedničko i zašto:**
 

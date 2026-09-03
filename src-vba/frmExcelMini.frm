@@ -26,8 +26,10 @@ Option Explicit
 ' krem kartica sa 1pt ivicom, forest traka levo, logotip, zeleno primarno
 ' dugme.
 '
-' JEDAN ZNAK: .frx nosi logotip (Image1), pa se on i koristi -- crtani
-' tekstualni "AX OtkupApp" bi bio drugi znak na kartici od 232x78 tacaka.
+' JEDAN ZNAK: .frx nosi logotip, pa se on i koristi -- crtani tekstualni
+' "AX OtkupApp" bi bio drugi znak na kartici od 232x78 tacaka. Slika se trazi
+' PO TIPU kontrole (LogoSlika), ne po imenu: ime iz dizajnera se ne vidi iz
+' izvora (.frx je binaran), a promasaj je COMPILE greska koja obara projekat.
 ' Kontrole iz dizajnera se samo stilizuju i premestaju (btnCloseExcel kroz
 ' modUiKit.PanelStilDugme -- isti primitiv koji oblaci dugmad panela);
 ' ostalo je runtime (modUiKit.NewLbl), pa se .frx ne dira. Nema module-level
@@ -61,7 +63,23 @@ EH:
     LogErr "frmExcelMini.UserForm_Initialize"
 End Sub
 
+' Logotip iz .frx po TIPU kontrole -- v. zaglavlje modula. Nothing kad slike
+' nema; pozivalac to mora da podnese.
+Private Function LogoSlika() As Object
+    Dim c As Object
+    On Error Resume Next
+    For Each c In Me.Controls
+        If TypeName(c) = "Image" Then
+            Set LogoSlika = c
+            Exit Function
+        End If
+    Next c
+End Function
+
 Private Sub BuildMini()
+    Dim logo As Object
+    Set logo = LogoSlika()
+
     Me.width = MINI_W
     Me.Height = MINI_H
     Me.BackColor = C_CREAM
@@ -75,15 +93,17 @@ Private Sub BuildMini()
     NewLbl Me, "mnBar", "", 1, 1, 5, MINI_H - 2, 8, False, 0, C_FOREST
 
     ' logotip iz .frx; Zoom cuva odnos stranica, pa okvir sme da bude fiksan
-    With Image1
-        .PictureSizeMode = fmPictureSizeModeZoom
-        .PictureAlignment = fmPictureAlignmentCenter
-        .BackStyle = fmBackStyleTransparent
-        .BorderStyle = fmBorderStyleNone
-        .Left = 16: .top = 8: .width = 104: .Height = 20
-        .Visible = True
-        .ZOrder 0
-    End With
+    If Not logo Is Nothing Then
+        With logo
+            .PictureSizeMode = fmPictureSizeModeZoom
+            .PictureAlignment = fmPictureAlignmentCenter
+            .BackStyle = fmBackStyleTransparent
+            .BorderStyle = fmBorderStyleNone
+            .Left = 16: .top = 8: .width = 104: .Height = 20
+            .Visible = True
+            .ZOrder 0
+        End With
+    End If
     NewLbl Me, "mnSub", Poruka("OTKUI_MINI_EXCEL"), 124, 11, MINI_W - 138, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignRight
 
