@@ -373,6 +373,7 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_LOGIN_OTKAZI", "Otka" & ChrW(382) & "i"
     UpsertRow lo, existing, "OTKUI_MINI_EXCEL", "Excel je otvoren"
     UpsertRow lo, existing, "OTKUI_MINI_NAZAD", "Nazad u aplikaciju"
+    UpsertRow lo, existing, "OTKUI_MSG_IZLAZ", "Aplikacija se zatvara."
     UpsertRow lo, existing, "OTKUI_OPERATER_NEPOZNAT", "Operater"
     UpsertRow lo, existing, "OTKUI_SYNC_OK", "Sinhronizovano"
     UpsertRow lo, existing, "OTKUI_SYNC_PAO", "Sinhronizacija nije uspela"

@@ -257,8 +257,11 @@ Private Sub btnOK_Click()
     End If
 
     lblErr.caption = Poruka("AUTH_LBL_PRIJAVA_GRESKA") & " (" & mAttempts & "/" & MAX_ATT & ")"
-    ShellState Me, "shPin", "error"
+    ' REDOSLED: fokus PA stanje. btnOK je Default, pa Enter iz PIN polja stize
+    ' ovamo dok je PIN jos fokusiran; SetFocus tada okine txtPin_Exit, koji
+    ' shell vraca na "normal" -- i rust okvir bi nestao istog trena.
     txtUser.SetFocus
+    ShellState Me, "shPin", "error"
     Exit Sub
 EH:
     LogErr "frmLogin.btnOK_Click"

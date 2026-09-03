@@ -2,3 +2,14 @@
 # Bez ovoga git na Windows-u konvertuje LF -> CRLF pri checkout-u, pa procitani
 # golden vise nije jednak dump-u i test pada trajno -- na svakom svezem klonu.
 tests/golden/*.txt text eol=lf
+
+# .frm je VBA EKSPORT, ne rucno pisan tekst: VBA sam upisuje razmak na kraju
+# "Begin {...} frmX " linije i vraca ga pri svakom sledecem eksportu (svih 18
+# formi ga ima). Zato se nad njima ne pusta provera praznina -- inace
+# `git diff --check` prijavljuje nalaz koji se ne moze ispraviti a da se ne
+# kvari format koji ImportAllVBA cita. eol=lf drzi sve forme na istom kraju
+# reda: frmLogin.frm je jedini bio CRLF, pa je svaka njegova izmena izgledala
+# kao 200+ izmenjenih redova.
+src-vba/*.frm -whitespace text eol=lf
+# .frx je binaran (Windows-1250 sadrzaj kontrola) -- nikakva konverzija.
+src-vba/*.frx -text -diff

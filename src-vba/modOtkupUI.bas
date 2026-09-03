@@ -516,6 +516,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     BuildFilterPanel frm
     SetKlasa 1                      ' II klasa starta onemogucena
     SelectModeCore frm, "F1", False
+    OsveziAlatke frm                ' dugmad alatki po pravima operatera
     ShowZones frm
     mBuilding = False
     mBuildMs = CLng((Timer - t0) * 1000)
@@ -4321,6 +4322,48 @@ Private Sub OsveziDugmeSekcije(frm As Object)
 End Sub
 
 '=====================================================================
+' PRAVA NA ALATKE
+'
+' "Otvori Excel" i "Sinhronizuj" NISU ekrani pa ih registar ekrana
+' (modUiScreens) ne pokriva -- ali JESU oblasti prava, i legacy meni ih je
+' proveravao PRE radnje (frmOtkupAPP.btnOpenExcel_Click / btnSyncPWA_Click).
+' Dok ljuska nije bila ulaz u aplikaciju to je bio mrtav put; od kada jeste,
+' izostanak provere je zaobilazenje autorizacije: operater bez prava na Excel
+' dolazi do sirove radne sveske, a bez prava na Sync pokrece knjizenje.
+'
+' Razdvojeno u dve funkcije da bi se MAPA (tag -> oblast) mogla izmeriti bez
+' prijave: sama odluka zavisi od modAuth stanja, mapa ne.
+'=====================================================================
+Public Function AlatkaOblast(ByVal tag As String) As String
+    Select Case tag
+        Case "btnExcel": AlatkaOblast = OBL_OTVORI_EXCEL
+        Case "btnSync":  AlatkaOblast = OBL_SYNC_PWA
+    End Select
+End Function
+
+' Fail-closed: greska u proveri znaci NE SME. Alatka bez oblasti (nije u mapi)
+' nema sta da se proverava, pa prolazi.
+Public Function AlatkaSme(ByVal tag As String) As Boolean
+    Dim obl As String
+    On Error GoTo EH
+    obl = AlatkaOblast(tag)
+    If Len(obl) = 0 Then AlatkaSme = True: Exit Function
+    AlatkaSme = modAuth.KorisnikImaPravo(obl)
+    Exit Function
+EH:
+    LogErr "modOtkupUI.AlatkaSme(" & tag & ")"
+End Function
+
+' Dugme alatke bez prava se NE crta. Provera u rukovaocu je brana; ovo je da
+' operater ne gleda dugme koje ga svaki put odbije. Zove se pri gradnji i
+' posle zamene operatera (PrimeniNovaPrava) -- prava se menjaju u toku sesije.
+Private Sub OsveziAlatke(frm As Object)
+    On Error Resume Next
+    BoxShow frm.Controls("zHdr"), "btnExcel", AlatkaSme("btnExcel")
+    BoxShow frm.Controls("zRight"), "btnSync", AlatkaSme("btnSync")
+End Sub
+
+'=====================================================================
 ' ALATKE APLIKACIJE
 ' Ove cetiri radnje NISU dokumenti pa nemaju veze sa CommitDokument-om
 ' (koji je namerno prazan sav). Vezane su na postojece rutine, ne na nove.
@@ -4328,6 +4371,12 @@ End Sub
 Private Sub DoSync()
     Dim ok As Boolean
     On Error GoTo EH
+    ' Kapija pre radnje, kao u legacy meniju: sync KNJIZI (auto-map, novac),
+    ' pa provera ne sme da bude tek u pisacu.
+    If Not AlatkaSme("btnSync") Then
+        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        Exit Sub
+    End If
     ShowToast Poruka("OTKUI_MSG_SYNC_START"), False
     DoEvents
     ' postojeca ulazna tacka, napravljena bas za dugme (bez MsgBox-ova)
@@ -4365,6 +4414,12 @@ End Sub
 ' se ova rutina izvrsava iz clsFlatBtn eventa (sink forme je na steku).
 ' Sledece otvaranje je trenutno - 205 kontrola se ne gradi ponovo.
 Private Sub DoShowExcel()
+    ' Kapija pre radnje: iza ovog dugmeta je SIROVA radna sveska sa svim
+    ' tabelama. Legacy meni je isto pitao (frmOtkupAPP.btnOpenExcel_Click).
+    If Not AlatkaSme("btnExcel") Then
+        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        Exit Sub
+    End If
     On Error Resume Next
     Application.Visible = True
     mFrm.Hide
@@ -4430,6 +4485,7 @@ Private Sub PrimeniNovaPrava()
     If mFrm Is Nothing Then Exit Sub
 
     ObnoviNavPrava
+    OsveziAlatke mFrm            ' Excel i Sync prate NOVA prava, kao i sidebar
     If Len(mScreen) = 0 Then
         ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna
         ' povrsina ostala prazna. Novi operater koji prava IMA mora da dobije
@@ -4989,21 +5045,64 @@ Public Sub FixVbeCaption()
     Next i
 End Sub
 
+' Ekran na kome aplikacija sme da se otvori za OVOG operatera: pocetni ako sme
+' na njega, inace prvi dozvoljen iz registra. Prazno = nijedan.
+'
+' Postoji zato sto su prava po oblastima NEZAVISNA (modAuth.OblastiList): nalog
+' sa pravom na Banku a bez prava na Dokumenta je legitiman, a start koji trazi
+' bas SCR_POCETNI takvog operatera ostavlja bez aplikacije. Paneli se
+' preskacu iz istog razloga kao u NaPrviDozvoljenEkran: panel pokriva radnu
+' povrsinu, a ispod njega bi ostao zabranjen ekran.
+'
+' Javno zbog testa -- u harnessu se forma ne prikazuje, pa se odluka o startu
+' drugacije ne moze izmeriti.
+Public Function OtkupUI_StartEkran() As String
+    Dim r As Variant, kljuc As String
+    On Error GoTo EH
+    If modUiScreens.ScrAktivan(SCR_POCETNI) Then
+        OtkupUI_StartEkran = SCR_POCETNI
+        Exit Function
+    End If
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If Not modUiPanel.PanelPostoji(kljuc) Then
+            If modUiScreens.ScrAktivan(kljuc) Then
+                OtkupUI_StartEkran = kljuc
+                Exit Function
+            End If
+        End If
+    Next r
+    Exit Function
+EH:
+    ' Fail-closed: greska u trazenju ne sme da ispadne "sme na pocetni".
+    LogErr "modOtkupUI.OtkupUI_StartEkran"
+    OtkupUI_StartEkran = ""
+End Function
+
 ' Ulaz u aplikaciju: zove ga frmSplash posle splash-a (v6-ui-209), "Pokreni
 ' program" sa lista Pregled listova, povratak iz Excela (frmExcelMini) i
 ' operater rucno (Alt+F8).
 Public Sub ShowOtkupUI()
+    Dim kljuc As String
     ' Javan makro se moze pozvati i direktno (Alt+F8), mimo navigacije - zato se
-    ' pravo na POCETNI ekran proverava ovde. Bez ovoga bi se ekran sa pravom
-    ' upisa otvarao i korisniku kome ActivateScreen taj ekran ne bi dao.
-    If Not modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
-        ' Ovo je i ulaz pri startu, kad je Excel sakriven (StartApp): odbijen
-        ' ulaz bez ijednog prozora bi bio mrtva aplikacija, pa se Excel vraca.
-        Application.Visible = True
-        MsgBox Poruka("OTKUI_SCR_ZABRANJEN"), vbExclamation, APP_NAME
+    ' pravo proverava ovde, a ne tek u ActivateScreen.
+    kljuc = OtkupUI_StartEkran()
+    If Len(kljuc) = 0 Then
+        ' Nijedna oblast nije dozvoljena -> operater nema sta da radi u
+        ' aplikaciji. Excel se NE otkriva (u njemu su sve tabele): to bi od
+        ' odbijenog ulaza napravilo siri pristup nego sto ga ijedan ekran daje.
+        ' Sveska se zatvara na sledeci tick, kao kod neuspele prijave --
+        ' zatvaranje unutar Workbook_Open lanca nije bezbedno.
+        modUiScreens.ScrResetCache
+        MsgBox Poruka("OTKUI_SCR_NIJEDAN"), vbExclamation, APP_NAME
+        On Error Resume Next
+        Application.OnTime Now + TimeSerial(0, 0, 1), "QuitAfterFailedLogin"
         Exit Sub
     End If
     frmOtkupUI.show vbModeless
+    ' Gradnja uvek pocinje na SCR_POCETNI; operater koji na njega nema pravo
+    ' se prebacuje na svoj prvi dozvoljen ekran.
+    If kljuc <> SCR_POCETNI Then IdiNaEkran kljuc
 End Sub
 
 ' Zatvaranje ekrana (dugme X u zaglavlju ili sistemski X). Forma se SAKRIVA, ne
@@ -5014,10 +5113,21 @@ Public Sub OtkupUI_Sakrij()
     On Error Resume Next
     If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
     If Not mFrm Is Nothing Then mFrm.Hide
-    ' Ovaj ekran je ljuska (v6-ui-209) i Excel je pri startu sakriven: sakriven
-    ' ekran nad sakrivenim Excelom je mrtva aplikacija, pa se Excel vraca.
-    ' Aplikacija se gasi zatvaranjem Excela (Workbook_BeforeClose -> ShutdownApp).
-    Application.Visible = True
+    ' Ovaj ekran je ljuska (v6-ui-209) i Excel je pri startu sakriven, pa
+    ' sakriven ekran nad sakrivenim Excelom znaci mrtvu aplikaciju.
+    '
+    ' Ali otkrivanje sveske JE pristup podacima: X ne sme da bude prolaz do
+    ' onoga sto dugme "Otvori Excel" cuva iza prava. Zato ista kapija --
+    ' ko sme u Excel, njemu se sveska otkriva (isto sto legacy X radi kroz
+    ' ShutdownApp); ko ne sme, tome zatvaranje ljuske znaci IZLAZ iz
+    ' aplikacije. Zatvaranje ide na sledeci tick, jer se ova rutina izvrsava
+    ' iz clsFlatBtn eventa (sink forme je na steku).
+    If AlatkaSme("btnExcel") Then
+        Application.Visible = True
+    Else
+        MsgBox Poruka("OTKUI_MSG_IZLAZ"), vbInformation, APP_NAME
+        Application.OnTime Now + TimeSerial(0, 0, 1), "ZatvoriAplikaciju"
+    End If
 End Sub
 
 ' Gradnja ekrana je pukla. Zastavica mBuilding mora da padne, inace bi svaki

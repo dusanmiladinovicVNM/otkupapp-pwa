@@ -431,6 +431,8 @@ Public Sub RunAllTests()
     RunOne 181
     RunOne 182
     RunOne 183
+    RunOne 184
+    RunOne 185
     RunOne 124
     RunOne 125
     RunOne 126
@@ -680,6 +682,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
         Case 183: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
+        Case 184: TestName = "T_Ljuska_AlatkeTrazePravo"
+        Case 185: TestName = "T_Ljuska_StartEkranDozvoljen"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -871,6 +875,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
         Case 183: T_Sekcija_OdbijenPrelazakNePomeraSekciju
+        Case 184: T_Ljuska_AlatkeTrazePravo
+        Case 185: T_Ljuska_StartEkranDozvoljen
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -953,6 +959,64 @@ Private Sub T_ClearForm_BrisePartnera()
              "kooperant mora da bude obrisan posle snimanja"
 
     Unload f
+End Sub
+
+' ============================================================
+' LJUSKA KAO ULAZ U APLIKACIJU (v6-ui-210)
+' ============================================================
+
+' ALATKA JE OBLAST PRAVA, NE SAMO DUGME.
+'
+' "Otvori Excel" vodi u sirovu radnu svesku, "Sinhronizuj" KNJIZI -- legacy
+' meni je oba pitao za pravo pre radnje. Dok ljuska nije bila ulaz u
+' aplikaciju to je bio mrtav put; od kada jeste, izostanak mape je
+' zaobilazenje autorizacije.
+'
+' STA OVAJ TEST NE MERI: samu ODLUKU (KorisnikImaPravo). Fixture nema
+' ukljucen AUTH, pa je tamo sve dozvoljeno i kapija koja uvek pusta bila bi
+' zelena -- to se ovde zapisuje kao granica, ne precutkuje. Mereno je ono sto
+' se moze: MAPA tag -> oblast, i da AlatkaSme ide bas kroz KorisnikImaPravo
+' (isti obrazac koji vec koristi tvrdnja o ekranu bez sopstvene brane).
+Private Sub T_Ljuska_AlatkeTrazePravo()
+    ' NAJVAZNIJE PRVO: bez ove mape nijedna alatka nema oblast, pa sve prolaze.
+    AssertEq modOtkupUI.AlatkaOblast("btnExcel"), OBL_OTVORI_EXCEL, _
+             "Otvori Excel trazi pravo na oblast OtvoriExcel"
+    AssertEq modOtkupUI.AlatkaOblast("btnSync"), OBL_SYNC_PWA, _
+             "Sinhronizuj trazi pravo na oblast SyncPWA"
+
+    ' Alatka bez oblasti nije greska nego "nema sta da se proverava".
+    AssertEq modOtkupUI.AlatkaOblast("btnSnimi"), "", _
+             "alatka van mape nema oblast"
+    AssertEq modOtkupUI.AlatkaSme("btnSnimi"), True, _
+             "alatka bez oblasti prolazi"
+
+    ' Odluka ide kroz modAuth, ne kroz sopstvenu kopiju pravila.
+    AssertEq modOtkupUI.AlatkaSme("btnExcel"), modAuth.KorisnikImaPravo(OBL_OTVORI_EXCEL), _
+             "Excel alatka odgovara pravu na svoju oblast"
+    AssertEq modOtkupUI.AlatkaSme("btnSync"), modAuth.KorisnikImaPravo(OBL_SYNC_PWA), _
+             "Sync alatka odgovara pravu na svoju oblast"
+End Sub
+
+' START BIRA EKRAN NA KOJI OPERATER SME.
+'
+' Prava po oblastima su NEZAVISNA (modAuth.OblastiList): nalog sa pravom na
+' Banku a bez prava na Dokumenta je legitiman. Start koji trazi bas
+' SCR_POCETNI takvog operatera ostavlja bez aplikacije.
+'
+' STA OVAJ TEST NE MERI: granu "pocetni nije dozvoljen -> uzmi sledeci".
+' Fixture nema nacina da se DOKUMENTI zabrani (brana po ekranu postoji samo
+' za MAT_KORISNICI), pa se ta grana ovde ne izvrsava. Mereno je da start uopste
+' RAZRESI ekran, da je razreseni ekran dozvoljen i da nije panel.
+Private Sub T_Ljuska_StartEkranDozvoljen()
+    Dim k As String
+    k = modOtkupUI.OtkupUI_StartEkran()
+
+    ' NAJVAZNIJE PRVO: prazno znaci "nema ulaza" i gasi aplikaciju.
+    AssertEq (Len(k) > 0), True, "start razresi ekran za operatera sa pravima"
+    AssertEq modUiScreens.ScrAktivan(k), True, "start bira ekran na koji operater SME"
+    AssertEq modUiPanel.PanelPostoji(k), False, _
+             "start ne bira panel -- panel pokriva povrsinu, ekran ispod ostaje zabranjen"
+    AssertEq k, SCR_POCETNI, "sa punim pravima start je pocetni ekran"
 End Sub
 
 ' ============================================================

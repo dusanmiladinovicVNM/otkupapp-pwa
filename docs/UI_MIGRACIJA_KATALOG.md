@@ -8046,8 +8046,9 @@ suite vrati `SetTestMode prevMode`.
 | Šta | Gde | Napomena |
 |---|---|---|
 | Start → nova ljuska | `frmSplash.OpenAppShell` → `modOtkupUI.ShowOtkupUI` | jedina promena u start lancu; `StartApp` je nedirnut |
-| Odbijen ulaz vraća Excel | `ShowOtkupUI` | kad operater nema pravo na početni ekran (`DOKUMENTI`), Excel postaje vidljiv pre poruke — sa sakrivenim Excelom aplikacija bez prozora bi bila mrtva |
-| X ljuske vraća Excel | `OtkupUI_Sakrij` | isto pravilo; aplikacija se gasi **zatvaranjem Excela** (`Workbook_BeforeClose` → `ShutdownApp`) |
+| Start bira **prvi dozvoljen** ekran | `OtkupUI_StartEkran` → `ShowOtkupUI` | prava po oblastima su nezavisna (`modAuth.OblastiList`), pa nalog sa `BANKA=DA, DOKUMENTI=NE` mora da uđe; paneli se preskaču (pokrili bi zabranjen ekran ispod sebe). Nijedan dozvoljen → poruka i **zatvaranje sveske** na sledeći tick, bez otkrivanja Excela |
+| X ljuske → Excel **samo uz pravo** | `OtkupUI_Sakrij` | ista kapija kao „Otvori Excel"; bez tog prava zatvaranje ljuske znači izlaz iz aplikacije (`modMain.ZatvoriAplikaciju` preko `OnTime`) |
+| Alatke traže pravo | `AlatkaOblast` / `AlatkaSme` → `DoShowExcel`, `DoSync` | `OBL_OTVORI_EXCEL` i `OBL_SYNC_PWA`, kao u legacy meniju; dugme bez prava se i ne crta (`OsveziAlatke`, i posle zamene operatera) |
 | „Pokreni program" (list Pregled listova) | `modPregledListova.PokreniProgram` → `ShowOtkupUI` | do sada je otvarao stari meni |
 | Povratak iz Excela | `DoShowExcel` → `frmExcelMini` → `ShowOtkupUI` | plutajuća kartica „Nazad u aplikaciju"; bez nje bi nazad vodio samo `Alt+F8` |
 
@@ -8210,3 +8211,72 @@ nijedan kod nije dirao, pa su bile jedina nepoznanica.
 4. „Otvori Excel" → kartica sa forest trakom, logotipom i zelenim dugmetom;
    hover posvetli dugme; klik vraća ljusku i sakriva Excel.
 5. Ako natpis ostane prazan: `Alt+F8 → EnsurePoruke` (ide i sam kroz `InitApp`).
+
+### 27.8 Revizija pred merge: P0 autorizacija, P1 start (`v6-ui-210`)
+
+Spoljna revizija vrha grane dala je **NO MERGE**. Nalazi su provereni u kodu i
+svi su bili tačni; ovo je šta je urađeno.
+
+**P0 — zaobilaženje autorizacije za Excel i PWA sync.** Ljuska uvek crta
+`btnExcel` i `btnSync`, a rukovaoci su zvali `DoShowExcel` / `DoSync` **bez**
+provere `OBL_OTVORI_EXCEL` / `OBL_SYNC_PWA`; legacy meni je obe imao
+(`frmOtkupAPP.btnOpenExcel_Click`, `btnSyncPWA_Click`). Propust je **stariji od
+ove grane**, ali je do sada bio mrtav put — ljuska nije bila ulaz u aplikaciju.
+Prebacivanjem starta postao je živ, pa je i zatvoren ovde:
+
+- `AlatkaOblast(tag)` — mapa `btnExcel` → `OBL_OTVORI_EXCEL`, `btnSync` →
+  `OBL_SYNC_PWA`; alatka van mape nema šta da se proverava.
+- `AlatkaSme(tag)` — odluka kroz `modAuth.KorisnikImaPravo`, **fail-closed** na
+  sopstvenu grešku. Razdvojeno od mape da bi se mapa mogla izmeriti bez prijave.
+- Kapija stoji **u rukovaocu** (brana), a `OsveziAlatke` uz to i **ne crta**
+  dugme bez prava — pri gradnji i posle zamene operatera (`PrimeniNovaPrava`),
+  jer se prava menjaju u toku sesije.
+- **X ljuske** je bio treći put do sveske: sada otkriva Excel **samo** uz
+  `OBL_OTVORI_EXCEL`, inače znači izlaz iz aplikacije.
+
+**P1 — ograničeni nalozi nisu mogli da uđu.** `ShowOtkupUI` je tražio baš
+`SCR_POCETNI`. Novi `OtkupUI_StartEkran()` vraća početni ako sme na njega,
+inače prvi dozvoljen ekran iz registra (paneli se preskaču — isto pravilo kao
+`NaPrviDozvoljenEkran`). Prazan rezultat znači „nijedna oblast nije dozvoljena":
+poruka i **zatvaranje sveske** umesto ranijeg otkrivanja Excela — odbijen ulaz
+ne sme da daje širi pristup nego ijedan ekran.
+
+**P1 — start pre funkcionalnog pariteta: odluka je doneta, ne previđena.**
+Vlasnik proizvoda je 2026-09-03 izričito tražio da aplikacija nema **nijednu**
+vezu ka legacy formama i da legacy pokreće ručno iz VBE-a kad mu zatreba.
+Marža, uvozna komanda banke (§9.3), SEF upravljanje (§8.7) i „Izlaz" zato
+ostaju bez puta iz aplikacije do svojih ekrana (§27.2, koraci 4–6). To je
+**svesno prihvaćen trošak**, zapisan ovde da se ne čita kao propust.
+
+**P2 — greška PIN-a je nestajala pri prijavi Enter-om.** `btnOK.Default = True`,
+pa Enter iz PIN polja stiže u `btnOK_Click` dok je PIN još fokusiran;
+`txtUser.SetFocus` tada okine `txtPin_Exit`, koji shell vraća na `normal`.
+Ispravka je redosled: **fokus pa stanje**.
+
+**P2 — `git diff --check` je padao.** `frmLogin.frm` je bio jedina forma sa
+CRLF, pa je git svaki `CR` video kao trailing whitespace (i svaka izmena je
+izgledala kao 200+ redova). Normalizovan na LF. Preostalo upozorenje je
+**format VBA eksporta** — razmak na kraju `Begin {...} frmX ` linije koji VBA
+sam upisuje i vraća pri svakom eksportu (imaju ga **sve** forme), pa se ne
+ispravlja u fajlu nego pravilom: `src-vba/*.frm -whitespace text eol=lf` i
+`src-vba/*.frx -text -diff` u `.gitattributes`.
+
+**Testovi (184, 185) i sabotaže.** `T_Ljuska_AlatkeTrazePravo` meri mapu
+alatki i da odluka ide kroz `modAuth`; `T_Ljuska_StartEkranDozvoljen` meri da
+start razreši ekran, da je dozvoljen i da nije panel. Sabotaže
+`alatka-excel-bez-oblasti` i `start-ekran-nije-razresen` obaraju baš te
+tvrdnje.
+
+> **Šta ova dva testa NE mere, i zašto** — zapisano, ne prećutano: fixture nema
+> uključen AUTH, pa je u njemu sve dozvoljeno. Sama **odluka**
+> (`KorisnikImaPravo`) se zato ne može pokazati crvenom, kao ni grana „početni
+> nije dozvoljen → uzmi sledeći" (brana po ekranu postoji samo za
+> `MAT_KORISNICI`). Mereno je ono što se može: mapa, delegiranje i invarijante
+> razrešenog ekrana. Pun dokaz tih grana traži fixture sa `AUTH_ENABLED` i
+> nalogom sa suženim pravima — otvorena stavka.
+
+**Kapije posle ispravki:** `vba_check` čist (209 fajlova), sidra sabotaža 441
+provera, `git diff --check` čist. **Nisu izvršeni** (nema Excela u web sesiji):
+`Debug → Compile`, `run_vba` (uključujući testove 184 i 185), `dokaz.py` za dve
+nove sabotaže i UI smoke iz §27.6 i §27.7 — sve to ostaje kapija na Windows
+mašini pre merge-a.

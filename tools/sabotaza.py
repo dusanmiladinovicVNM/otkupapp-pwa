@@ -2891,6 +2891,28 @@ SABOTAZE = {
         "T_LegacyDok_PadListeBlokovaNijeAvans",
         "ni IZABRAN blok ne prolazi kad je ucitavanje palo",
     ),
+    # ---------------------------------------- LJUSKA: prava na alatke
+    # Bez mape tag -> oblast nijedna alatka nema oblast, pa AlatkaSme sve
+    # pusta: operater bez prava dolazi do sirove radne sveske.
+    "alatka-excel-bez-oblasti": (
+        "modOtkupUI.bas",
+        '        Case "btnExcel": AlatkaOblast = OBL_OTVORI_EXCEL\n',
+        '        Case "btnExcel": AlatkaOblast = ""   \' SABOTAZA: alatka bez oblasti\n',
+        "T_Ljuska_AlatkeTrazePravo",
+        "Otvori Excel trazi pravo na oblast OtvoriExcel",
+    ),
+    # Start koji ne razresi nijedan ekran gasi aplikaciju i operateru sa
+    # punim pravima.
+    "start-ekran-nije-razresen": (
+        "modOtkupUI.bas",
+        "    If modUiScreens.ScrAktivan(SCR_POCETNI) Then\n"
+        "        OtkupUI_StartEkran = SCR_POCETNI\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    Exit Function   \' SABOTAZA: start ne trazi nijedan ekran\n",
+        "T_Ljuska_StartEkranDozvoljen",
+        "start razresi ekran za operatera sa pravima",
+    ),
     # ---------------------------------------- MREZA: POZADINA PILULE
     # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila
     # obojen pravougaonik koji tvrdi stanje -- samo bez slova. Ovo je bila
