@@ -58,6 +58,13 @@ Private Const FX_VOZAC As String = "VOZ-TEST-1"
 ' poredi otkupno mesto bloka sa ovim, pa izmisljen ID vise ne prolazi.
 Private Const FX_STANICA As String = "STA-TEST-1"
 Private Const FX_STANICA2 As String = "STA-DRUGO"    ' ne postoji -- "tudje OM"
+' Nalozi iz fixture-a (tools/make_fixture.py, KORISNICI). AUTH je u fixture-u
+' ISKLJUCEN da postojece suite rade bez prijave; testovi prava ga pale kroz
+' modAuth.AuthTestUkljuci i vracaju kako su zatekli.
+Private Const FX_KOR_ADMIN As String = "admin.test"   ' bypass u KorisnikImaPravo
+Private Const FX_KOR_BANKA As String = "op.banka"     ' SAMO oblast Banka
+Private Const FX_KOR_GASEN As String = "op.gasen"     ' pun set prava, Aktivan=NE
+Private Const FX_KOR_PIN As String = "1234"
 ' Otkupni blokovi iz fixture-a: prvi je KOOP-TEST-1, drugi KOOP-TEST-2, oba na
 ' FX_STANICA. Vrednost prvog = Kolicina 400 * Cena 50; fixture nema tblNovac,
 ' pa je neisplaceni ostatak jednak vrednosti -- ali test ga i dalje racuna
@@ -433,6 +440,8 @@ Public Sub RunAllTests()
     RunOne 183
     RunOne 184
     RunOne 185
+    RunOne 186
+    RunOne 187
     RunOne 124
     RunOne 125
     RunOne 126
@@ -684,6 +693,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 183: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
         Case 184: TestName = "T_Ljuska_AlatkeTrazePravo"
         Case 185: TestName = "T_Ljuska_StartEkranDozvoljen"
+        Case 186: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
+        Case 187: TestName = "T_Matic_SekcijaTraziPravo"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -877,6 +888,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 183: T_Sekcija_OdbijenPrelazakNePomeraSekciju
         Case 184: T_Ljuska_AlatkeTrazePravo
         Case 185: T_Ljuska_StartEkranDozvoljen
+        Case 186: T_Ljuska_SuzenaPravaStartIAlatke
+        Case 187: T_Matic_SekcijaTraziPravo
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -972,11 +985,9 @@ End Sub
 ' aplikaciju to je bio mrtav put; od kada jeste, izostanak mape je
 ' zaobilazenje autorizacije.
 '
-' STA OVAJ TEST NE MERI: samu ODLUKU (KorisnikImaPravo). Fixture nema
-' ukljucen AUTH, pa je tamo sve dozvoljeno i kapija koja uvek pusta bila bi
-' zelena -- to se ovde zapisuje kao granica, ne precutkuje. Mereno je ono sto
-' se moze: MAPA tag -> oblast, i da AlatkaSme ide bas kroz KorisnikImaPravo
-' (isti obrazac koji vec koristi tvrdnja o ekranu bez sopstvene brane).
+' Ovaj test meri MAPU (tag -> oblast) i da odluka ide bas kroz modAuth. Samu
+' ODLUKU pod suzenim pravima meri test 186, nad nalogom iz fixture-a: ovde je
+' AUTH iskljucen pa je sve dozvoljeno, i kapija koja uvek pusta bila bi zelena.
 Private Sub T_Ljuska_AlatkeTrazePravo()
     ' NAJVAZNIJE PRVO: bez ove mape nijedna alatka nema oblast, pa sve prolaze.
     AssertEq modOtkupUI.AlatkaOblast("btnExcel"), OBL_OTVORI_EXCEL, _
@@ -1003,10 +1014,9 @@ End Sub
 ' Banku a bez prava na Dokumenta je legitiman. Start koji trazi bas
 ' SCR_POCETNI takvog operatera ostavlja bez aplikacije.
 '
-' STA OVAJ TEST NE MERI: granu "pocetni nije dozvoljen -> uzmi sledeci".
-' Fixture nema nacina da se DOKUMENTI zabrani (brana po ekranu postoji samo
-' za MAT_KORISNICI), pa se ta grana ovde ne izvrsava. Mereno je da start uopste
-' RAZRESI ekran, da je razreseni ekran dozvoljen i da nije panel.
+' Ovaj test meri normalan slucaj: start RAZRESI ekran, razreseni je dozvoljen
+' i nije panel. Granu "pocetni nije dozvoljen -> uzmi sledeci" meri test 186,
+' nad nalogom koji nema pravo na Dokumenta.
 Private Sub T_Ljuska_StartEkranDozvoljen()
     Dim k As String
     k = modOtkupUI.OtkupUI_StartEkran()
@@ -1017,6 +1027,119 @@ Private Sub T_Ljuska_StartEkranDozvoljen()
     AssertEq modUiPanel.PanelPostoji(k), False, _
              "start ne bira panel -- panel pokriva povrsinu, ekran ispod ostaje zabranjen"
     AssertEq k, SCR_POCETNI, "sa punim pravima start je pocetni ekran"
+End Sub
+
+' SUZENA PRAVA: START I ALATKE (grane koje su do fixture-a sa AUTH bile nemerene)
+'
+' Nalog op.banka ima pravo SAMO na oblast Banka -- nema Dokumenta (pocetni
+' ekran ljuske), nema OtvoriExcel ni SyncPWA (alatke zaglavlja). Tvrdi se ono
+' zbog cega je revizija dala NO MERGE:
+'   1) start NE ostavlja takvog operatera bez aplikacije nego ga vodi na prvi
+'      dozvoljen ekran (registar: Dokumenta, Palete, Storno, Oporavak, Agro,
+'      Fakture, pa BANKA_UVOZ -- prvi na koji sme);
+'   2) alatke koje vode u sirovu svesku i u knjizenje NE prolaze bez prava.
+'
+' Nalazi se skupljaju pa tvrde POSLE vracanja stanja: AssertEq puca na prvom
+' padu, a ostavljen ukljucen AUTH i prijavljen operater curili bi u svaki test
+' ispod ovog (isti razlog kao u T_LegacyDok_*).
+Private Sub T_Ljuska_SuzenaPravaStartIAlatke()
+    Dim biAuth As Boolean
+    Dim prijava As Boolean, prijavaGasen As Boolean
+    Dim smeDok As Boolean, smeBanka As Boolean, start As String
+    Dim smeExcel As Boolean, smeSync As Boolean
+    Dim smeExcelPosle As Boolean, startPosle As String
+
+    biAuth = modAuth.AuthTestUkljuci(True)
+    modUiScreens.ScrResetCache
+
+    ' Deaktiviran nalog (Aktivan=NE) sa PUNIM pravima: prijava sme da padne
+    ' samo na toj koloni. Bez ove tvrdnje bi "nema prava" i "ne moze da se
+    ' prijavi" bila ista poruka.
+    prijavaGasen = modAuth.ValidateLogin(FX_KOR_GASEN, FX_KOR_PIN)
+
+    prijava = modAuth.ValidateLogin(FX_KOR_BANKA, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+
+    smeDok = modUiScreens.ScrDozvoljen(SCR_POCETNI)
+    smeBanka = modUiScreens.ScrDozvoljen("BANKA_UVOZ")
+    start = modOtkupUI.OtkupUI_StartEkran()
+    smeExcel = modOtkupUI.AlatkaSme("btnExcel")
+    smeSync = modOtkupUI.AlatkaSme("btnSync")
+
+    modAuth.Logout
+    modAuth.AuthTestUkljuci biAuth
+    modUiScreens.ScrResetCache
+    smeExcelPosle = modOtkupUI.AlatkaSme("btnExcel")
+    startPosle = modOtkupUI.OtkupUI_StartEkran()
+
+    AssertEq prijava, True, "preduslov: suzen nalog se prijavljuje"
+
+    ' NAJVAZNIJE PRVO: alatka bez prava NE prolazi. Iza "Otvori Excel" je
+    ' sirova sveska sa svim tabelama, iza "Sinhronizuj" knjizenje.
+    AssertEq smeExcel, False, "Excel alatka NE sme bez prava na oblast"
+    AssertEq smeSync, False, "Sync alatka NE sme bez prava na oblast"
+
+    ' Start vodi na PRVI DOZVOLJEN ekran, ne na pocetni i ne u prazno.
+    AssertEq smeDok, False, "preduslov: nalog nema pravo na pocetni ekran"
+    AssertEq smeBanka, True, "preduslov: nalog ima pravo na Uvoz izvoda"
+    AssertEq start, "BANKA_UVOZ", "start vodi na prvi dozvoljen ekran"
+
+    AssertEq prijavaGasen, False, "deaktiviran nalog se ne prijavljuje"
+
+    ' Stanje se vraca: sledeci test ne sme da zatekne ukljucen AUTH.
+    AssertEq smeExcelPosle, True, "posle testa alatke opet prolaze"
+    AssertEq startPosle, SCR_POCETNI, "posle testa start je opet pocetni ekran"
+End Sub
+
+' MATICNI PODACI SU SEKCIJA, ALI PRAVO JE ISTO.
+'
+' Cetiri ekrana i dva panela sekcije Maticni traze OBL_MATICNI. Nalog op.banka
+' ga nema, pa nijedan ne sme -- ni ekran, ni panel (panel bi pokrio radnu
+' povrsinu, pa bi zabrana ekrana ispod njega bila bez efekta). Admin ima
+' bypass, i to se tvrdi da se "nema prava" ne bi moglo pomesati sa "AUTH lomi
+' sve".
+Private Sub T_Matic_SekcijaTraziPravo()
+    Dim biAuth As Boolean, i As Long
+    Dim prijavaOp As Boolean, prijavaAdmin As Boolean
+    Dim ekrani As Variant, opSme As String, adminSme As String
+    Dim startOp As String
+
+    ekrani = Array("MAT_PARTNERI", "MAT_ROBA", "MAT_PAKOVANJE", "MAT_KORISNICI", _
+                   "MAT_PODESAVANJA", "MAT_ADMIN")
+
+    biAuth = modAuth.AuthTestUkljuci(True)
+    modUiScreens.ScrResetCache
+
+    prijavaOp = modAuth.ValidateLogin(FX_KOR_BANKA, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+    For i = 0 To UBound(ekrani)
+        If modUiScreens.ScrDozvoljen(CStr(ekrani(i))) Then _
+            opSme = opSme & " " & CStr(ekrani(i))
+    Next i
+    startOp = modOtkupUI.OtkupUI_StartEkran()
+
+    modAuth.Logout
+    prijavaAdmin = modAuth.ValidateLogin(FX_KOR_ADMIN, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+    For i = 0 To UBound(ekrani)
+        If Not modUiScreens.ScrDozvoljen(CStr(ekrani(i))) Then _
+            adminSme = adminSme & " " & CStr(ekrani(i))
+    Next i
+
+    modAuth.Logout
+    modAuth.AuthTestUkljuci biAuth
+    modUiScreens.ScrResetCache
+
+    AssertEq prijavaOp, True, "preduslov: operater se prijavljuje"
+    AssertEq prijavaAdmin, True, "preduslov: admin se prijavljuje"
+
+    ' NAJVAZNIJE PRVO: nijedan deo sekcije Maticni ne sme bez prava.
+    AssertEq Trim$(opSme), "", _
+             "bez prava na Maticne podatke nijedan njihov ekran ni panel ne sme"
+    ' Start ne sme da zavrsi u sekciji na koju operater nema pravo.
+    AssertEq (Left$(startOp, 4) = "MAT_"), False, "start ne vodi u zabranjenu sekciju"
+    ' Admin bypass: bez ovoga bi gornja tvrdnja bila zelena i kad AUTH sve gasi.
+    AssertEq Trim$(adminSme), "", "admin sme sve iz sekcije Maticni"
 End Sub
 
 ' ============================================================

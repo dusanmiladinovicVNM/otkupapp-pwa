@@ -2913,6 +2913,33 @@ SABOTAZE = {
         "T_Ljuska_StartEkranDozvoljen",
         "start razresi ekran za operatera sa pravima",
     ),
+    # Kapija koja uvek pusta: alatka bez prava dolazi do sirove sveske i do
+    # knjizenja. Merljivo tek nad nalogom sa suzenim pravima (fixture: op.banka).
+    "alatka-sme-uvek": (
+        "modOtkupUI.bas",
+        "    AlatkaSme = modAuth.KorisnikImaPravo(obl)\n",
+        "    AlatkaSme = True   \' SABOTAZA: kapija uvek pusta\n",
+        "T_Ljuska_SuzenaPravaStartIAlatke",
+        "Excel alatka NE sme bez prava na oblast",
+    ),
+    # Start koji ne preskace zabranjen pocetni ekran vodi operatera na ekran
+    # na koji nema pravo -- ili ga ostavlja pred praznom povrsinom.
+    "start-ne-preskace-zabranjen": (
+        "modOtkupUI.bas",
+        "    If modUiScreens.ScrAktivan(SCR_POCETNI) Then\n",
+        "    If True Then   \' SABOTAZA: start ne pita za pravo\n",
+        "T_Ljuska_SuzenaPravaStartIAlatke",
+        "start vodi na prvi dozvoljen ekran",
+    ),
+    # Sekcija Maticni bez brane po oblasti: operater bez prava vidi partnere,
+    # robu, korisnike i oba panela (Podesavanja, Admin).
+    "maticni-bez-oblasti": (
+        "modUiScreens.bas",
+        "        ScrDozvoljen = modAuth.KorisnikImaPravo(obl)\n",
+        "        ScrDozvoljen = True   \' SABOTAZA: ekran ne trazi oblast\n",
+        "T_Matic_SekcijaTraziPravo",
+        "bez prava na Maticne podatke nijedan njihov ekran ni panel ne sme",
+    ),
     # ---------------------------------------- MREZA: POZADINA PILULE
     # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila
     # obojen pravougaonik koji tvrdi stanje -- samo bez slova. Ovo je bila

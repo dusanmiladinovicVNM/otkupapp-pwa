@@ -8261,19 +8261,59 @@ sam upisuje i vraća pri svakom eksportu (imaju ga **sve** forme), pa se ne
 ispravlja u fajlu nego pravilom: `src-vba/*.frm -whitespace text eol=lf` i
 `src-vba/*.frx -text -diff` u `.gitattributes`.
 
-**Testovi (184, 185) i sabotaže.** `T_Ljuska_AlatkeTrazePravo` meri mapu
-alatki i da odluka ide kroz `modAuth`; `T_Ljuska_StartEkranDozvoljen` meri da
-start razreši ekran, da je dozvoljen i da nije panel. Sabotaže
-`alatka-excel-bez-oblasti` i `start-ekran-nije-razresen` obaraju baš te
-tvrdnje.
+**Testovi i sabotaže.** `T_Ljuska_AlatkeTrazePravo` (184) meri mapu alatki i
+da odluka ide kroz `modAuth`; `T_Ljuska_StartEkranDozvoljen` (185) meri da start
+razreši ekran, da je dozvoljen i da nije panel.
 
-> **Šta ova dva testa NE mere, i zašto** — zapisano, ne prećutano: fixture nema
-> uključen AUTH, pa je u njemu sve dozvoljeno. Sama **odluka**
-> (`KorisnikImaPravo`) se zato ne može pokazati crvenom, kao ni grana „početni
-> nije dozvoljen → uzmi sledeći" (brana po ekranu postoji samo za
-> `MAT_KORISNICI`). Mereno je ono što se može: mapa, delegiranje i invarijante
-> razrešenog ekrana. Pun dokaz tih grana traži fixture sa `AUTH_ENABLED` i
-> nalogom sa suženim pravima — otvorena stavka.
+### 27.9 Fixture sa AUTH i nalogom sa suženim pravima (`v6-ui-211`)
+
+Revizija je tražila pun dokaz grana „nema prava", a on nije postojao: fixture
+je imao **prazan `tblKorisnici`** i AUTH isključen, pa je `KorisnikImaPravo`
+uvek vraćao `True`. Kapija koja uvek pušta bila bi zelena — tačno ono protiv
+čega postoji pravilo o dvosmernom dokazu.
+
+**Šta je dodato u `tools/make_fixture.py`:**
+
+| Nalog | Uloga | Prava | Čemu služi |
+|---|---|---|---|
+| `admin.test` | Admin | sve | bypass u `KorisnikImaPravo` — bez njega bi „suženi nalog ne sme" bilo zeleno i kad AUTH sve gasi |
+| `op.banka` | Operater | **samo `Banka`** | nema `Dokumenta` (početni ekran), `OtvoriExcel` ni `SyncPWA` (alatke), `MaticniPodaci` (sekcija) |
+| `op.gasen` | Operater | sve, ali `Aktivan=NE` | prijava sme da padne **samo** na toj koloni, da se „nema prava" ne meša sa „ne može da se prijavi" |
+
+Kolone prava (`KOR_OBLASTI` = `modAuth.OblastiList`) ulaze kroz `ENSURE_COLS`,
+pa donor stariji od Faze 1 ne obara build. **`AUTH_ENABLED` ostaje isključen**
+u fixture-u: sve postojeće suite rade bez prijave kao i do sada. Nalozi su
+samo **materijal**.
+
+AUTH se pali **seam-om** `modAuth.AuthTestUkljuci` (tvrdo gejtovan
+`IsTestMode`, vraća prethodno stanje) umesto upisom u `tblSEFConfig` — upis bi
+menjao svesku i curio u sledeći test. Prijava ide **pravim putem**
+(`modAuth.ValidateLogin`), bez forme, pa se meri stvarni lanac.
+
+**Novi testovi:**
+
+- **186 `T_Ljuska_SuzenaPravaStartIAlatke`** — `AlatkaSme("btnExcel")` i
+  `("btnSync")` su `False` bez prava; start vodi na **`BANKA_UVOZ`** (prvi
+  dozvoljen u registru), ne na zabranjeni početni i ne u prazno; deaktiviran
+  nalog se ne prijavljuje; posle testa se stanje **vraća** (tvrdi se i to).
+- **187 `T_Matic_SekcijaTraziPravo`** — nijedan od šest delova sekcije Matični
+  (`MAT_PARTNERI`, `MAT_ROBA`, `MAT_PAKOVANJE`, `MAT_KORISNICI` + paneli
+  `MAT_PODESAVANJA`, `MAT_ADMIN`) ne sme bez `OBL_MATICNI`; start ne završava u
+  zabranjenoj sekciji; **admin sme sve** (bypass).
+
+Oba testa skupljaju nalaze pa tvrde **posle** vraćanja stanja: `AssertEq` puca
+na prvom padu, a ostavljen uključen AUTH i prijavljen operater curili bi u
+svaki test ispod (isti razlog kao `T_LegacyDok_*`).
+
+**Sabotaže koje sada mogu da budu crvene:** `alatka-sme-uvek` (kapija uvek
+pušta), `start-ne-preskace-zabranjen` (start ne pita za pravo),
+`maticni-bez-oblasti` (ekran ne traži oblast) — plus ranije
+`alatka-excel-bez-oblasti` i `start-ekran-nije-razresen`.
+
+> **Fixture se MORA regenerisati.** `FIXTURE_FORMAT_VERSION` je podignut na 2 i
+> potpis se promenio; `run_vba.py` staje **pre Excela** dok je stara sveska na
+> disku. Prvo `python tools\make_fixture.py --donor "<put do .xlsm>" --force`,
+> pa suite.
 
 **Kapije posle ispravki:** `vba_check` čist (209 fajlova), sidra sabotaža 441
 provera, `git diff --check` čist. **Nisu izvršeni** (nema Excela u web sesiji):

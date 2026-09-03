@@ -29,13 +29,34 @@ Private gLoggedIn As Boolean
 ' obori prijavu, nikad da je odobri -- forma za prijavu je modalna i u harnessu
 ' se ne moze odigrati, a bas neuspela prijava je ono sto se meri.
 Private mPrijavaOdbijTest As Boolean
+' Test seam: AUTH ukljucen BEZ diranja tblSEFConfig. Postoji zato sto se prava
+' drugacije ne mogu izmeriti -- fixture mora da ostane sa AUTH=NE (inace bi
+' svaka postojeca suite trazila prijavu), a bas grane "nema prava" su one koje
+' su do sada bile nemerene. Upis u config bi menjao svesku i curio u sledeci
+' test; promenljiva se vraca u istom testu.
+' Tvrdo gejtovan: van test rezima ne radi nista (isti obrazac kao
+' modScrDokumenti.Scr_OtpTestSet).
+Private mAuthTestOn As Boolean
 
 ' ------------------------------------------------------------
 ' Da li je prijava ukljucena (opt-in). Prazno/missing = NE.
 ' ------------------------------------------------------------
+' Ukljuci/iskljuci AUTH samo za trajanje testa. Vraca prethodno stanje, da ga
+' test moze vratiti bez pamcenja u svojoj promenljivoj.
+Public Function AuthTestUkljuci(ByVal ukljuceno As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    AuthTestUkljuci = mAuthTestOn
+    mAuthTestOn = ukljuceno
+End Function
+
 Public Function AuthEnabled() As Boolean
     On Error GoTo EH
     Dim v As String
+    ' Seam ide PRVI i samo u test rezimu; u produkciji je mAuthTestOn uvek False.
+    If mAuthTestOn Then
+        AuthEnabled = True
+        Exit Function
+    End If
     v = UCase$(Trim$(GetConfigValue(CFG_KEY_AUTH_ENABLED)))
     AuthEnabled = (v = "YES" Or v = "DA" Or v = "TRUE" Or v = "1")
     Exit Function
