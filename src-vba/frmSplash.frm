@@ -19,27 +19,31 @@ Option Explicit
 ' ============================================================
 ' frmSplash / startup splash
 ' Responsibility:
-'   - show branding briefly, in the look of the new UI header:
-'     forest gradient, "AX" gold + "OtkupApp" cream, display font
-'   - then open the app shell (modOtkupUI.ShowOtkupUI)
+'   - full-screen brand moment in the shell palette, then
+'     open the app shell (modOtkupUI.ShowOtkupUI)
 '   - no business logic
 '
-' Kontrole iz dizajnera (lblApp, lblVersion, lblBy) se samo stilizuju i
-' premestaju; sve ostalo nastaje u runtime-u (modUiKit.NewLbl), pa se .frx
-' ne dira. Nema module-level MSForms deklaracija -- forma ostaje "meka" za
-' self-update (modSelfUpdate.IsHardModuleBody). Sve mere su u tackama.
+' JEDAN ZNAK, NE TRI. .frx nosi DVA logotipa (Image12 = AX|OtkupApp,
+' Image25 = AgriX). Ranija verzija je preko njih crtala jos i tekstualni
+' "AX OtkupApp", pa se marka videla tri puta. Sada se koristi PRAVI logotip
+' (Image12), a Image25 i tekstualni znak se gase: dole ostaje samo tiha
+' linija "Powered by AgriX".
+'
+' Kontrole iz dizajnera se samo premestaju i gase; pozadina je runtime
+' (modUiKit.NewLbl + Lerp), pa se .frx ne dira. Nema module-level MSForms
+' deklaracija -- forma ostaje "meka" za self-update. Mere su u tackama.
 ' ============================================================
 
-Private Const SPL_W  As Single = 400
-Private Const SPL_H  As Single = 236
-Private Const STRIPS As Long = 24        ' isti gradijent kao zaglavlje ekrana
-Private Const LOGO_Y As Single = 62      ' vrh "AX"; "OtkupApp" deli donju ivicu
+Private Const BANDS   As Long = 40      ' trake vertikalnog gradijenta
+Private Const LOGO_W  As Single = 340   ' okvir logotipa; Zoom cuva odnos stranica
+Private Const LOGO_H  As Single = 86
+Private Const FOOT_H  As Single = 52    ' podnozje: linija + dva reda teksta
 
 Private mChromeRemoved As Boolean
 Private m_Started As Boolean
 Private m_IsNavigating As Boolean
 
-' Prigusen tekst na forest podlozi -- ista vrednost kao hdrStat u zaglavlju.
+' Prigusen tekst na forest podlozi -- ista vrednost kao hdrStat u zaglavlju ljuske.
 Private Function MutedOnForest() As Long
     MutedOnForest = RGB(178, 190, 172)
 End Function
@@ -60,43 +64,54 @@ EH:
 End Sub
 
 Private Sub BuildSplash()
-    Dim i As Long, fnt As String, sw As Single
-    fnt = DisplayFont()
+    Dim i As Long, w As Single, h As Single, bh As Single, cx As Single, Y As Single
 
-    Me.width = SPL_W
-    Me.Height = SPL_H
+    ' Ceo ekran: isti racun kao modOtkupUI.GoFullScreen (ScreenWidthPoints /
+    ' ScreenHeightPoints iz modWindow), jer je Excel u ovom trenutku sakriven
+    ' pa Application.Width ne vredi.
+    w = ScreenWidthPoints()
+    h = ScreenHeightPoints()
+    If w < 600 Then w = 600
+    If h < 400 Then h = 400
+
+    Me.StartUpPosition = 0
+    Me.Left = 0
+    Me.top = 0
+    Me.width = w
+    Me.Height = h
     Me.BackColor = C_FOREST
 
-    ' gradijent ide IZA kontrola iz dizajnera (ZOrder 1 = pozadi)
-    sw = SPL_W / STRIPS
-    For i = 0 To STRIPS - 1
-        NewLbl Me, "spGr" & i, "", i * sw, 0, sw + 1, SPL_H, 8, False, 0, _
-               Lerp(C_FOREST, C_FOREST_DK, i / (STRIPS - 1))
+    ' Vertikalni gradijent preko celog ekrana. Trake idu IZA svega (ZOrder 1);
+    ' ne preklapaju se, pa im medjusobni redosled nije bitan.
+    bh = h / BANDS
+    For i = 0 To BANDS - 1
+        NewLbl Me, "spGr" & i, "", 0, i * bh, w, bh + 1, 8, False, 0, _
+               Lerp(C_FOREST, C_FOREST_DK, i / (BANDS - 1))
         Me.Controls("spGr" & i).ZOrder 1
     Next i
 
     ' zlatna nit na vrhu -- isti akcenat kao aktivna stavka sidebara
-    NewLbl Me, "spLine", "", 0, 0, SPL_W, 3, 8, False, 0, C_GOLD
+    NewLbl Me, "spLine", "", 0, 0, w, 3, 8, False, 0, C_GOLD
 
-    ' logo: "AX" zlatno (40pt) + "OtkupApp" krem (30pt), display font
-    NewLbl Me, "spAX", "AX", PAD + 8, LOGO_Y, 74, TxtH(40), 40, True, C_GOLD, -1, fmTextAlignLeft, fnt
-
-    With lblApp
-        .caption = "OtkupApp"
+    ' LOGOTIP iz .frx, centriran u gornjoj trecini. Zoom cuva odnos stranica,
+    ' pa okvir sme da bude fiksan a da se slika ne izoblici.
+    cx = (w - LOGO_W) / 2
+    Y = h * 0.34 - LOGO_H / 2
+    With Image12
+        .PictureSizeMode = fmPictureSizeModeZoom
+        .PictureAlignment = fmPictureAlignmentCenter
         .BackStyle = fmBackStyleTransparent
-        .ForeColor = C_CREAM
-        .Font.name = fnt
-        .Font.Size = 30
-        .Font.bold = True
-        .TextAlign = fmTextAlignLeft
-        .WordWrap = False
-        .Left = PAD + 84
-        .top = LOGO_Y + TxtH(40) - TxtH(30)
-        .width = 260
-        .Height = TxtH(30)
+        .BorderStyle = fmBorderStyleNone
+        .Left = cx: .top = Y: .width = LOGO_W: .Height = LOGO_H
+        .Visible = True
         .ZOrder 0
     End With
 
+    ' Tekstualni znak i drugi logotip se GASE -- v. zaglavlje modula.
+    lblApp.Visible = False
+    Image25.Visible = False
+
+    ' verzija ispod logotipa, centrirano
     With lblVersion
         .caption = "v" & APP_VERSION
         .BackStyle = fmBackStyleTransparent
@@ -104,17 +119,14 @@ Private Sub BuildSplash()
         .Font.name = F_UI
         .Font.Size = TS_META
         .Font.bold = False
-        .TextAlign = fmTextAlignLeft
+        .TextAlign = fmTextAlignCenter
         .WordWrap = False
-        .Left = PAD + 86
-        .top = LOGO_Y + TxtH(40) + 2
-        .width = 200
-        .Height = TxtH(TS_META)
+        .Left = cx: .top = Y + LOGO_H + 10: .width = LOGO_W: .Height = TxtH(TS_META)
         .ZOrder 0
     End With
 
     ' podnozje: tanka linija, "Powered by AgriX" levo, status desno
-    NewLbl Me, "spDiv", "", PAD, SPL_H - 42, SPL_W - 2 * PAD, 1, 8, False, 0, C_HDR_EDGE
+    NewLbl Me, "spDiv", "", PAD, h - FOOT_H, w - 2 * PAD, 1, 8, False, 0, C_HDR_EDGE
 
     With lblBy
         .caption = "Powered by AgriX"
@@ -125,16 +137,13 @@ Private Sub BuildSplash()
         .Font.bold = False
         .TextAlign = fmTextAlignLeft
         .WordWrap = False
-        .Left = PAD
-        .top = SPL_H - 30
-        .width = 160
-        .Height = TxtH(TS_MICRO)
+        .Left = PAD: .top = h - FOOT_H + 16: .width = 200: .Height = TxtH(TS_MICRO)
         .ZOrder 0
     End With
 
-    ' zlatna tacka + "Pokrecem aplikaciju..." -- kao hdrDot/hdrStat u zaglavlju
-    NewLbl Me, "spDot", "", SPL_W - PAD - 160, SPL_H - 27, 6, 6, 8, False, 0, C_GOLD
-    NewLbl Me, "spStat", Poruka("OTKUI_SPLASH_POKRECEM"), SPL_W - PAD - 150, SPL_H - 30, 150, _
+    ' zlatna tacka + status -- kao hdrDot/hdrStat u zaglavlju ljuske
+    NewLbl Me, "spDot", "", w - PAD - 168, h - FOOT_H + 19, 6, 6, 8, False, 0, C_GOLD
+    NewLbl Me, "spStat", Poruka("OTKUI_SPLASH_POKRECEM"), w - PAD - 158, h - FOOT_H + 15, 158, _
            TxtH(TS_META), TS_META, False, MutedOnForest(), -1, fmTextAlignRight
 End Sub
 

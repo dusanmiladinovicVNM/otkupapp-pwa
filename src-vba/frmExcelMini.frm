@@ -23,11 +23,15 @@ Option Explicit
 '   - no business logic
 '
 ' Otvara je modOtkupUI.DoShowExcel ("Otvori Excel"). Izgled prati ljusku:
-' krem kartica sa 1pt ivicom, forest traka levo, "AX OtkupApp" u display
-' fontu, zeleno primarno dugme. Kontrola iz dizajnera (btnCloseExcel) se samo
-' stilizuje (modUiKit.PanelStilDugme -- isti primitiv koji oblaci dugmad
-' panela); ostalo je runtime (modUiKit.NewLbl), pa se .frx ne dira. Nema
-' module-level MSForms deklaracija (meka forma).
+' krem kartica sa 1pt ivicom, forest traka levo, logotip, zeleno primarno
+' dugme.
+'
+' JEDAN ZNAK: .frx nosi logotip (Image1), pa se on i koristi -- crtani
+' tekstualni "AX OtkupApp" bi bio drugi znak na kartici od 232x78 tacaka.
+' Kontrole iz dizajnera se samo stilizuju i premestaju (btnCloseExcel kroz
+' modUiKit.PanelStilDugme -- isti primitiv koji oblaci dugmad panela);
+' ostalo je runtime (modUiKit.NewLbl), pa se .frx ne dira. Nema module-level
+' MSForms deklaracija (meka forma).
 ' ============================================================
 
 Private Const MINI_W As Single = 232
@@ -58,9 +62,6 @@ EH:
 End Sub
 
 Private Sub BuildMini()
-    Dim fnt As String
-    fnt = DisplayFont()
-
     Me.width = MINI_W
     Me.Height = MINI_H
     Me.BackColor = C_CREAM
@@ -73,9 +74,17 @@ Private Sub BuildMini()
     Me.Controls("mnB").ZOrder 1
     NewLbl Me, "mnBar", "", 1, 1, 5, MINI_H - 2, 8, False, 0, C_FOREST
 
-    NewLbl Me, "mnAX", "AX", 16, 9, 22, TxtH(TS_H1), TS_H1, True, C_GOLD, -1, fmTextAlignLeft, fnt
-    NewLbl Me, "mnName", "OtkupApp", 38, 9, 90, TxtH(TS_H1), TS_H1, True, C_FOREST, -1, fmTextAlignLeft, fnt
-    NewLbl Me, "mnSub", Poruka("OTKUI_MINI_EXCEL"), 120, 11, MINI_W - 132, TxtH(TS_META), _
+    ' logotip iz .frx; Zoom cuva odnos stranica, pa okvir sme da bude fiksan
+    With Image1
+        .PictureSizeMode = fmPictureSizeModeZoom
+        .PictureAlignment = fmPictureAlignmentCenter
+        .BackStyle = fmBackStyleTransparent
+        .BorderStyle = fmBorderStyleNone
+        .Left = 16: .top = 8: .width = 104: .Height = 20
+        .Visible = True
+        .ZOrder 0
+    End With
+    NewLbl Me, "mnSub", Poruka("OTKUI_MINI_EXCEL"), 124, 11, MINI_W - 138, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignRight
 
     With btnCloseExcel

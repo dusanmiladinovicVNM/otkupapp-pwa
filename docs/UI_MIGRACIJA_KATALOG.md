@@ -8156,9 +8156,19 @@ verzalu.
 
 | Forma | Šta se vidi | Kako je izvedeno |
 |---|---|---|
-| `frmSplash` | forest gradijent (24 trake, kao `zHdr`), zlatna nit na vrhu, „AX OtkupApp" 40/30pt, verzija, tanka linija, „Powered by AgriX" i zlatna tačka + „Pokrećem aplikaciju…" | `lblApp`/`lblVersion`/`lblBy` iz dizajnera se stilizuju i premeštaju; gradijent, nit, „AX", linija i status su runtime (`NewLbl`, `Lerp`) |
-| `frmLogin` | forest zaglavlje + zlatna nit, naslov „Prijava" u display fontu, natpisi polja verzalom, dva shell polja (focus zeleno, greška rust), poruka greške rust, „Prijavi se" zeleno (Enter) i „Otkaži" tiho (Esc), 1pt ivica umesto naslovne trake | shell-ovi `shUser`/`shPin` (`NewShell` + `ShellState` iz `_Enter`/`_Exit`); stil natpisa i dugmadi kroz `PanelStilNatpis` / `PanelStilNapomena` / `PanelStilDugme`; `btnOK.Default` / `btnCancel.Cancel` |
-| `frmExcelMini` | krem kartica 232×78 sa 1pt ivicom, forest traka levo, „AX OtkupApp" + „Excel je otvoren", zeleno dugme „Nazad u aplikaciju" (hover) | `btnCloseExcel` kroz `PanelStilDugme` / `PanelStilDugmeHover`; otvara je `DoShowExcel`, povratak ide u `ShowOtkupUI` |
+| `frmSplash` | **preko celog ekrana**: vertikalni forest gradijent (40 traka), zlatna nit na vrhu, **logotip `AX\|OtkupApp` iz `.frx`** centriran u gornjoj trećini, verzija ispod, a u podnožju linija + „Powered by AgriX" levo i zlatna tačka + „Pokrećem aplikaciju…" desno | veličina iz `ScreenWidthPoints`/`ScreenHeightPoints` (`modWindow`), kao `GoFullScreen`; `Image12` dobija `PictureSizeMode = Zoom`; `lblVersion`/`lblBy` se stilizuju i premeštaju; gradijent, nit, tačka i status su runtime (`NewLbl`, `Lerp`) |
+| `frmLogin` | **preko celog ekrana**: ista forest podloga, a prijava je **kartica 344×290** u sredini — zlatna nit, znak „AX OtkupApp", naslov u display fontu, natpisi verzalom, dva shell polja (focus zeleno, greška rust), „Prijavi se" zeleno (Enter) i „Otkaži" tiho (Esc), ispod kartice tiho „Powered by AgriX" | ista puna veličina kao splash; shell-ovi `shUser`/`shPin` (`NewShell` + `ShellState` iz `_Enter`/`_Exit`); stil natpisa i dugmadi kroz `PanelStilNatpis` / `PanelStilNapomena` / `PanelStilDugme`; `btnOK.Default` / `btnCancel.Cancel` |
+| `frmExcelMini` | krem kartica 232×78 sa 1pt ivicom, forest traka levo, **logotip iz `.frx`** + „Excel je otvoren", zeleno dugme „Nazad u aplikaciju" (hover) | `Image1` na `Zoom`; `btnCloseExcel` kroz `PanelStilDugme` / `PanelStilDugmeHover`; otvara je `DoShowExcel`, povratak ide u `ShowOtkupUI` |
+
+**Zašto pun ekran, i zašto JEDAN znak.** Prva verzija je bila mali prozor
+(400×236) na kome se marka videla **tri puta**: `.frx` splash-a nosi **dva**
+logotipa (`Image12` = `AX|OtkupApp`, `Image25` = `AgriX`), a preko njih je
+crtan i tekstualni „AX OtkupApp". Sada se koristi **pravi logotip**, a
+`Image25` i tekstualni znak se gase (`Visible = False`) — dole ostaje samo
+tiha linija „Powered by AgriX". Isto važi za `frmExcelMini`: njen `.frx` ima
+`Image1`, pa crtani znak otpada. Pun ekran je odluka istog reda: prijava kao
+mali dijalog nad **sakrivenim** Excelom izgledala je kao da aplikacija nije
+ni startovala.
 
 **Šta je zajedničko i zašto:**
 
@@ -8182,11 +8192,13 @@ verzalu.
 
 **Smoke (izgled se ne može automatizovati):**
 
-1. Splash: forest gradijent, zlatna nit, „AX OtkupApp", verzija ispod, dole
-   „Powered by AgriX" i „Pokrećem aplikaciju…"; bez naslovne trake.
-2. AUTH uključen: prijava ima forest zaglavlje i dva polja sa ivicom; klik u
-   polje boji ivicu zeleno; pogrešan PIN boji PIN polje rust i ispisuje
-   „Pogrešno korisničko ime ili PIN. (1/3)"; Enter = prijava, Esc = otkaz.
-3. „Otvori Excel" → kartica sa forest trakom i zelenim dugmetom; hover posvetli
-   dugme; klik vraća ljusku i sakriva Excel.
-4. Ako natpis ostane prazan: `Alt+F8 → EnsurePoruke` (ide i sam kroz `InitApp`).
+1. Splash pokriva **ceo ekran**, bez naslovne trake: gradijent, zlatna nit,
+   logotip centriran, verzija ispod, dole „Powered by AgriX" i „Pokrećem
+   aplikaciju…". Marka se vidi **jednom** (plus tiha tekstualna linija).
+2. Logotip nije izobličen ni odsečen (`Zoom`) i nema svetlu podlogu oko sebe.
+3. AUTH uključen: prijava pokriva ceo ekran, kartica je u sredini; klik u polje
+   boji ivicu zeleno; pogrešan PIN boji PIN polje rust i ispisuje „Pogrešno
+   korisničko ime ili PIN. (1/3)"; Enter = prijava, Esc = otkaz.
+4. „Otvori Excel" → kartica sa forest trakom, logotipom i zelenim dugmetom;
+   hover posvetli dugme; klik vraća ljusku i sakriva Excel.
+5. Ako natpis ostane prazan: `Alt+F8 → EnsurePoruke` (ide i sam kroz `InitApp`).

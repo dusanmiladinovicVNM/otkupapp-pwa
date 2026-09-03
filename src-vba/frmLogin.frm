@@ -21,13 +21,19 @@ Option Explicit
 ' Ugovor sa modAuth: Public LoginOK; validacija ide kroz
 ' modAuth.ValidateLogin; tri neuspela pokusaja zatvaraju formu.
 '
-' Izgled prati novu ljusku: forest zaglavlje sa "AX OtkupApp", krem telo,
+' Izgled: PREKO CELOG EKRANA -- ista forest podloga kao splash, a prijava
+' je KARTICA u sredini. Razlog nije ukras: prijava je prvo sto operater
+' vidi posle splash-a, a mali dijalog nad sakrivenim Excelom je izgledao
+' kao da aplikacija nije ni startovala.
+'
+' Kartica prati jezik ljuske: krem povrsina, zlatna nit, natpisi verzalom,
 ' polja u shell-u (ivica + ispuna; focus/error kroz modUiKit.ShellState),
-' zeleno primarno dugme. Kontrole iz dizajnera (lblTitle, lblSubtitle,
-' lblUser, lblPin, lblErr, txtUser, txtPin, btnOK, btnCancel) se samo
-' stilizuju i premestaju; zaglavlje, ivica i shell-ovi su runtime
-' (modUiKit), pa se .frx ne dira. Nema module-level MSForms deklaracija
-' (meka forma). Sve mere su u tackama.
+' zeleno primarno dugme. .frx nema logotip, pa znak stoji kao tekst -- i to
+' je JEDINI znak na ekranu.
+'
+' Kontrole iz dizajnera se samo stilizuju i premestaju; podloga, kartica i
+' shell-ovi su runtime (modUiKit), pa se .frx ne dira. Nema module-level
+' MSForms deklaracija (meka forma). Sve mere su u tackama.
 '
 ' Stil kontrola iz dizajnera ide kroz POSTOJECE primitive ljuske
 ' (PanelStilNatpis / PanelStilNapomena / PanelStilDugme) -- iste one koje
@@ -35,12 +41,11 @@ Option Explicit
 ' polje u shell-u (PostaviUnos), jer prijava nije panel nego forma za sebe.
 ' ============================================================
 
-Private Const LG_W    As Single = 344
-Private Const LG_H    As Single = 300
-Private Const HDR_H   As Single = 58
-Private Const FLD_H   As Single = 28       ' = FIELD_H novog UI-ja
-Private Const FLD_PAD As Single = 9        ' = INPUT_PAD novog UI-ja
-Private Const STRIPS  As Long = 24
+Private Const BANDS   As Long = 40         ' trake vertikalnog gradijenta
+Private Const CARD_W  As Single = 344      ' kartica prijave
+Private Const CARD_H  As Single = 290
+Private Const FLD_H   As Single = 28       ' = FIELD_H ljuske
+Private Const FLD_PAD As Single = 9        ' = INPUT_PAD ljuske
 Private Const MAX_ATT As Long = 3
 
 Public LoginOK As Boolean
@@ -64,29 +69,46 @@ EH:
 End Sub
 
 Private Sub BuildLogin()
-    Dim i As Long, fnt As String, sw As Single, w As Single
+    Dim i As Long, fnt As String, w As Single, h As Single, bh As Single
+    Dim cx As Single, cy As Single, iw As Single
     fnt = DisplayFont()
-    w = LG_W - 2 * PAD
 
-    Me.width = LG_W
-    Me.Height = LG_H
-    Me.BackColor = C_CREAM
+    ' Ceo ekran (isti racun kao splash; Excel je sakriven pa Application.Width
+    ' ne vredi), kartica u sredini.
+    w = ScreenWidthPoints()
+    h = ScreenHeightPoints()
+    If w < 600 Then w = 600
+    If h < 400 Then h = 400
 
-    ' ivica + ispuna iza svega (forma bez naslovne trake mora imati svoju ivicu)
-    NewLbl Me, "lgB", "", 0, 0, LG_W, LG_H, 8, False, 0, C_BORDER
-    NewLbl Me, "lgF", "", 1, 1, LG_W - 2, LG_H - 2, 8, False, 0, C_CREAM
-    Me.Controls("lgF").ZOrder 1
-    Me.Controls("lgB").ZOrder 1
+    Me.StartUpPosition = 0
+    Me.Left = 0
+    Me.top = 0
+    Me.width = w
+    Me.Height = h
+    Me.BackColor = C_FOREST
 
-    ' zaglavlje: forest gradijent + zlatna nit, "AX OtkupApp" u display fontu
-    sw = (LG_W - 2) / STRIPS
-    For i = 0 To STRIPS - 1
-        NewLbl Me, "lgGr" & i, "", 1 + i * sw, 1, sw + 1, HDR_H, 8, False, 0, _
-               Lerp(C_FOREST, C_FOREST_DK, i / (STRIPS - 1))
+    ' vertikalni gradijent -- iza svega
+    bh = h / BANDS
+    For i = 0 To BANDS - 1
+        NewLbl Me, "lgGr" & i, "", 0, i * bh, w, bh + 1, 8, False, 0, _
+               Lerp(C_FOREST, C_FOREST_DK, i / (BANDS - 1))
+        Me.Controls("lgGr" & i).ZOrder 1
     Next i
-    NewLbl Me, "lgLine", "", 1, HDR_H, LG_W - 2, 2, 8, False, 0, C_GOLD
-    NewLbl Me, "lgAX", "AX", PAD, CenterY(1, HDR_H, 20), 36, TxtH(20), 20, True, C_GOLD, -1, fmTextAlignLeft, fnt
-    NewLbl Me, "lgName", "OtkupApp", PAD + 36, CenterY(1, HDR_H, 18), 160, TxtH(18), 18, True, C_CREAM, -1, fmTextAlignLeft, fnt
+
+    cx = (w - CARD_W) / 2
+    cy = (h - CARD_H) / 2 - 20          ' malo iznad sredine -- optican centar
+    iw = CARD_W - 2 * PAD               ' unutrasnja sirina kartice
+
+    ' kartica: ivica + krem povrsina + zlatna nit na vrhu
+    NewLbl Me, "lgB", "", cx, cy, CARD_W, CARD_H, 8, False, 0, C_BORDER
+    NewLbl Me, "lgF", "", cx + 1, cy + 1, CARD_W - 2, CARD_H - 2, 8, False, 0, C_CREAM
+    NewLbl Me, "lgTop", "", cx + 1, cy + 1, CARD_W - 2, 3, 8, False, 0, C_GOLD
+
+    ' znak: "AX" zlatno + "OtkupApp" forest, u display fontu
+    NewLbl Me, "lgAX", "AX", cx + PAD, cy + 26, 34, TxtH(20), 20, True, C_GOLD, -1, _
+           fmTextAlignLeft, fnt
+    NewLbl Me, "lgName", "OtkupApp", cx + PAD + 32, cy + 28, 180, TxtH(18), 18, True, _
+           C_FOREST, -1, fmTextAlignLeft, fnt
 
     ' naslov u display fontu (PanelStilNaslov je TS_H1 -- ovde je naslov ekrana,
     ' pa ide TS_DISPLAY, isto kao naslov u ljusci)
@@ -95,51 +117,55 @@ Private Sub BuildLogin()
     lblTitle.Font.name = fnt
     lblTitle.Font.Size = TS_DISPLAY
     lblTitle.Font.bold = True
-    Postavi lblTitle, PAD, 72, w, TS_DISPLAY
+    Postavi lblTitle, cx + PAD, cy + 66, iw, TS_DISPLAY
 
     lblSubtitle.caption = Poruka("OTKUI_LOGIN_PODNASLOV")
     PanelStilNapomena lblSubtitle
-    Postavi lblSubtitle, PAD, 98, w, TS_META
+    Postavi lblSubtitle, cx + PAD, cy + 92, iw, TS_META
 
     ' polja: natpis iznad (verzal, kao u formi), shell + TextBox uvucen za FLD_PAD
     lblUser.caption = Poruka("KOR_LBL_KORISNICKO_IME")
     PanelStilNatpis lblUser                      ' sam podize u verzal
-    Postavi lblUser, PAD, 122, w, TS_LABEL
-    NewShell Me, "shUser", PAD, 136, w, FLD_H, C_INPUT_BORDER, C_WHITE
-    PostaviUnos txtUser, PAD, 136, w
+    Postavi lblUser, cx + PAD, cy + 116, iw, TS_LABEL
+    NewShell Me, "shUser", cx + PAD, cy + 130, iw, FLD_H, C_INPUT_BORDER, C_WHITE
+    PostaviUnos txtUser, cx + PAD, cy + 130, iw
 
     lblPin.caption = Poruka("OTKUI_LOGIN_PIN")
     PanelStilNatpis lblPin
-    Postavi lblPin, PAD, 174, w, TS_LABEL
-    NewShell Me, "shPin", PAD, 188, w, FLD_H, C_INPUT_BORDER, C_WHITE
-    PostaviUnos txtPin, PAD, 188, w
+    Postavi lblPin, cx + PAD, cy + 168, iw, TS_LABEL
+    NewShell Me, "shPin", cx + PAD, cy + 182, iw, FLD_H, C_INPUT_BORDER, C_WHITE
+    PostaviUnos txtPin, cx + PAD, cy + 182, iw
     txtPin.PasswordChar = ChrW(8226)   ' bullet -> maskiran PIN
 
     ' greska ispod polja, rust kao pilula greske u mrezi
     lblErr.caption = ""
     PanelStilNapomena lblErr
     lblErr.ForeColor = C_RUST
-    Postavi lblErr, PAD, 224, w, TS_META
+    Postavi lblErr, cx + PAD, cy + 218, iw, TS_META
 
     ' dugmad: primarno levo, "Otkazi" tiho desno; Enter = prijava, Esc = otkaz
     With btnOK
         .caption = Poruka("OTKUI_LOGIN_PRIJAVA")
-        .Left = PAD: .top = 246: .width = 160: .Height = 30
+        .Left = cx + PAD: .top = cy + 240: .width = 160: .Height = 30
         .Default = True
         .ZOrder 0
     End With
     PanelStilDugme btnOK, "primary"
     With btnCancel
         .caption = Poruka("OTKUI_LOGIN_OTKAZI")
-        .Left = LG_W - PAD - 104: .top = 246: .width = 104: .Height = 30
+        .Left = cx + CARD_W - PAD - 104: .top = cy + 240: .width = 104: .Height = 30
         .Cancel = True
         .ZOrder 0
     End With
     PanelStilDugme btnCancel, "ghost"
+
+    ' tiha linija ispod kartice -- isti kredit kao na splash-u
+    NewLbl Me, "lgBy", "Powered by AgriX", cx, cy + CARD_H + 14, CARD_W, TxtH(TS_MICRO), _
+           TS_MICRO, False, RGB(178, 190, 172), -1, fmTextAlignCenter
 End Sub
 
 ' Geometrija natpisa iz dizajnera. Stil je vec postavljen (PanelStil*); ovde je
-' samo mesto, sirina i visina linije, plus ZOrder iznad podloge zaglavlja.
+' samo mesto, sirina i visina linije, plus ZOrder iznad podloge kartice.
 Private Sub Postavi(lbl As Object, ByVal X As Single, ByVal Y As Single, _
                     ByVal w As Single, ByVal fs As Single)
     With lbl
@@ -179,7 +205,7 @@ Private Sub UserForm_Activate()
     txtUser.SetFocus
 End Sub
 
-' focus/error stanje shell-a, kao u formi novog UI-ja
+' focus/error stanje shell-a, kao u formi ljuske
 Private Sub txtUser_Enter()
     ShellState Me, "shUser", "focus"
 End Sub
