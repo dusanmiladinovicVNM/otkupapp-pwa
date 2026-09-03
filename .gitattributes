@@ -7,9 +7,22 @@ tests/golden/*.txt text eol=lf
 # "Begin {...} frmX " linije i vraca ga pri svakom sledecem eksportu (svih 18
 # formi ga ima). Zato se nad njima ne pusta provera praznina -- inace
 # `git diff --check` prijavljuje nalaz koji se ne moze ispraviti a da se ne
-# kvari format koji ImportAllVBA cita. eol=lf drzi sve forme na istom kraju
+# kvari format koji ImportAllVBA cita. eol=crlf drzi sve forme na istom kraju
 # reda: frmLogin.frm je jedini bio CRLF, pa je svaka njegova izmena izgledala
-# kao 200+ izmenjenih redova.
-src-vba/*.frm -whitespace text eol=lf
+# kao 200+ izmenjenih redova. Indeks ostaje LF (text), pa je diff i dalje mali.
+#
+# CRLF, NE LF: .frm je format koji cita VBComponents.Import (i ImportAllVBA i
+# run_vba). Formu sa LF krajem reda Import NE prepozna kao formu -- uveze je kao
+# STANDARDNI modul sa zaglavljem ("VERSION 5.00", "Begin {C62A...}") kao KODOM.
+# Taj modul se ne kompajlira, a modul koji se ne kompajlira obara CEO projekat:
+# svaki makro tada javlja "Cannot run the macro", ne compile gresku. Tako je
+# eol=lf (988d0707) ubio ceo harness -- 11 suite-ova palo na istoj poruci.
+src-vba/*.frm -whitespace text eol=crlf
+# Isto vazi za ostatak VBA izvora. Bez ovoga radno stablo na Linux/web sesiji
+# dobija LF (tamo core.autocrlf nije ukljucen), pa se ista provera ponasa
+# razlicito po masini -- a kapija koja vazi samo na jednoj masini nije kapija.
+src-vba/*.bas text eol=crlf
+src-vba/*.cls text eol=crlf
+src-vba/*.doccls text eol=crlf
 # .frx je binaran (Windows-1250 sadrzaj kontrola) -- nikakva konverzija.
 src-vba/*.frx -text -diff

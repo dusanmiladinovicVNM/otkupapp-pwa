@@ -398,6 +398,13 @@ class Sirovo:
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
+# Kolone prava u tblKorisnici = modAuth.OblastiList (jedna kolona po oblasti).
+# Stoji IZNAD _kor(): naloge za prava gradi modul-level kod, pa se lista
+# mora razresiti pre njega. Ista lista ide i u ENSURE_COLS nize.
+KOR_OBLASTI = ["Otkup", "Dokumenta", "Agrohemija", "Izvestaji", "Fakturisanje",
+               "Banka", "Marza", "Sledljivost", "MaticniPodaci", "Palete",
+               "OtvoriExcel", "SyncPWA"]
+
 # --- nalozi za prava (AUTH) --------------------------------------------------
 #
 # AUTH u fixture-u OSTAJE ISKLJUCEN (SEF_CONFIG nema AUTH_ENABLED): sve
@@ -2026,12 +2033,6 @@ SEED = {
 # U aplikaciji ih dodaje modSetup.EnsurePaletniListSchema (EnsureColumnOnTable
 # -> na KRAJ tabele); generator radi ISTO, pa je fixture = sveska POSLE
 # nadogradnje. Kolona koja vec postoji se ne dira.
-# Kolone prava u tblKorisnici = modAuth.OblastiList (jedna kolona po oblasti).
-# Drze se OVDE zato sto je nalog sa suzenim pravima podatak fixture-a: bez njih
-# add_row pada na SchemaError, a donor stariji od Faze 1 ih nema.
-KOR_OBLASTI = ["Otkup", "Dokumenta", "Agrohemija", "Izvestaji", "Fakturisanje",
-               "Banka", "Marza", "Sledljivost", "MaticniPodaci", "Palete",
-               "OtvoriExcel", "SyncPWA"]
 
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",

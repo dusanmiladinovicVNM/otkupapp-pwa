@@ -485,6 +485,35 @@ def check_ascii(path: str, raw: bytes) -> list[Finding]:
     return out
 
 
+def check_eol(path: str, raw: bytes) -> list[Finding]:
+    """VBA izvor mora biti CRLF -- LF ga tiho pretvara u nesto drugo.
+
+    `.frm` sa LF krajem reda `VBComponents.Import` NE prepozna kao formu:
+    uveze je kao STANDARDNI modul sa zaglavljem (VERSION 5.00, Begin {C62A...})
+    kao KODOM. Taj modul se ne kompajlira, a modul koji se ne kompajlira obara
+    CEO projekat -- svaki makro tada javlja 'Cannot run the macro', ne compile
+    gresku, pa simptom ne pokazuje na krivca. Tako je jedan `eol=lf` u
+    .gitattributes ubio svih 11 suite-ova, a `vba_check` je ostao zelen.
+
+    Zato provera gleda BAJTOVE, ne dekodirane linije: do trenutka kad kod
+    stigne do ostalih provera kraj reda je vec izgubljen.
+    """
+    if not raw:
+        return []
+    redovi = raw.split(b"\n")
+    # poslednji element je rep posle zadnjeg \n (prazan kad fajl zavrsava
+    # prelomom) -- on nema svoj kraj reda i ne broji se.
+    for i, line in enumerate(redovi[:-1], start=1):
+        if not line.endswith(b"\r"):
+            return [Finding(path, i, "KRAJ_REDA",
+                            "LF umesto CRLF. VBA izvor je CRLF format: formu sa LF "
+                            "Import uveze kao standardni modul sa zaglavljem kao "
+                            "kodom, pa ceo projekat prestane da se kompajlira. "
+                            "Vrati fajl kroz git (.gitattributes ga drzi na CRLF), "
+                            "ne rucnim prepisivanjem.")]
+    return []
+
+
 def check_decl_after_proc(path: str, lines: list[str]) -> list[Finding]:
     out, first_proc = [], None
     for i, line in enumerate(lines, start=1):
@@ -1565,6 +1594,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
                moduli: dict | None = None) -> list[Finding]:
     out = []
     out += check_ascii(path, raw)
+    out += check_eol(path, raw)
     out += check_decl_after_proc(path, lines)
     out += check_reserved(path, lines)
     out += check_undefined(path, lines, defined, arities, moduli)
@@ -2509,6 +2539,24 @@ End Sub
 ]
 
 
+# --- KRAJ_REDA: dokaz u oba smera -------------------------------------------
+#
+# Slucajevi su BAJTOVI, ne linije: provera i postoji zato sto se kraj reda
+# gubi cim se fajl dekodira. Polovina sa 0 nalaza drzi granicu -- fajl bez
+# ijednog preloma i fajl koji zavrsava CRLF-om ne smeju da zapiste.
+KRAJ_REDA_CASES = [
+    # --- mora da zapisti ---
+    ("ceo fajl u LF", 1, b'Attribute VB_Name = "modX"\nOption Explicit\n'),
+    ("jedan LF medju CRLF-ovima", 1,
+     b'Attribute VB_Name = "modX"\r\nOption Explicit\nPublic Sub R()\r\nEnd Sub\r\n'),
+    ("poslednji red bez CR", 1, b'Attribute VB_Name = "modX"\r\nOption Explicit\n\n'),
+    # --- NE sme da zapisti ---
+    ("uredan CRLF modul", 0,
+     b'Attribute VB_Name = "modX"\r\nOption Explicit\r\nPublic Sub R()\r\nEnd Sub\r\n'),
+    ("fajl bez ijednog preloma", 0, b'Attribute VB_Name = "modX"'),
+    ("prazan fajl (to je posao ODSECEN-a)", 0, b''),
+]
+
 # --- ODSECEN: dokaz u oba smera ---------------------------------------------
 #
 # Druga polovina (0 nalaza) drzi granicu: provera sme da zapisti SAMO na fajlu
@@ -2711,6 +2759,12 @@ def self_test() -> int:
             palo.append(f"  REGISTAR/{naziv}: ocekivano {ocekivano} nalaza, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, sirovo in KRAJ_REDA_CASES:
+        dobijeno = len(check_eol("<self-test>", sirovo))
+        if dobijeno != ocekivano:
+            palo.append(f"  KRAJ_REDA/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in ODSECEN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2844,7 +2898,8 @@ def self_test() -> int:
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
-              + len(PROC_SIZE_CASES) + len(KVAL_CASES) + 3)
+              + len(PROC_SIZE_CASES) + len(KVAL_CASES)
+              + len(KRAJ_REDA_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
