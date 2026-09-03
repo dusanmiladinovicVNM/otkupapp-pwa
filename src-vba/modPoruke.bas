@@ -364,6 +364,15 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_SYNC", "Sinhronizuj"
     UpsertRow lo, existing, "OTKUI_BTN_SNIMI", "Snimi radnu svesku"
     UpsertRow lo, existing, "OTKUI_BTN_EXCEL", "Otvori Excel"
+    ' --- splash, prijava i plutajuca kartica (frmSplash / frmLogin / frmExcelMini) ---
+    UpsertRow lo, existing, "OTKUI_SPLASH_POKRECEM", "Pokre" & ChrW(263) & "em aplikaciju" & ChrW(8230)
+    UpsertRow lo, existing, "OTKUI_LOGIN_NASLOV", "Prijava"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PODNASLOV", "Pristup aplikaciji"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PRIJAVA", "Prijavi se"
+    UpsertRow lo, existing, "OTKUI_LOGIN_OTKAZI", "Otka" & ChrW(382) & "i"
+    UpsertRow lo, existing, "OTKUI_MINI_EXCEL", "Excel je otvoren"
+    UpsertRow lo, existing, "OTKUI_MINI_NAZAD", "Nazad u aplikaciju"
     UpsertRow lo, existing, "OTKUI_OPERATER_NEPOZNAT", "Operater"
     UpsertRow lo, existing, "OTKUI_SYNC_OK", "Sinhronizovano"
     UpsertRow lo, existing, "OTKUI_SYNC_PAO", "Sinhronizacija nije uspela"

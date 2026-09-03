@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-200"
+Public Const UIKIT_BUILD As String = "v6-ui-209"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -560,6 +560,21 @@ Public Sub PanelStilDugme(ByVal b As MSForms.CommandButton, ByVal vrsta As Strin
     End Select
     b.Font.name = F_UI
     b.Font.Size = TS_META
+End Sub
+
+' Hover za dugme iz dizajnera. Iste vrednosti koje clsFlatBtn daje istim
+' podlogama, pa se runtime dugme i dugme iz .frx ne razidju u ponasanju.
+' Panel ga ne koristi (tamo hover nije bio ni ranije); koriste ga forme koje
+' su same sebi ekran -- prijava i plutajuca kartica nad Excelom.
+Public Sub PanelStilDugmeHover(ByVal b As MSForms.CommandButton, ByVal vrsta As String, _
+                               ByVal preko As Boolean)
+    PanelStilDugme b, vrsta
+    If Not preko Then Exit Sub
+    Select Case b.BackColor
+        Case C_GREEN: b.BackColor = C_BTN_HOVER
+        Case C_WHITE: b.BackColor = RGB(246, 244, 238)
+        Case Else:    b.BackColor = C_SAND
+    End Select
 End Sub
 
 ' Segment prekidaca grupa -- isti jezik kao prekidac lista na ekranima:

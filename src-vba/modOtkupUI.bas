@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-208"
+Public Const OTKUI_BUILD   As String = "v6-ui-209"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4368,6 +4368,10 @@ Private Sub DoShowExcel()
     On Error Resume Next
     Application.Visible = True
     mFrm.Hide
+    ' Plutajuca kartica "Nazad u aplikaciju" (frmExcelMini, u izgledu ove
+    ' ljuske) sakriva Excel i vraca ovaj ekran. Bez nje bi iz Excela nazad
+    ' vodio samo Alt+F8 -> ShowOtkupUI.
+    frmExcelMini.Show vbModeless
 End Sub
 
 ' modAuth.Login sam radi Logout pa prikazuje frmLogin modalno - to JE zamena
@@ -4985,11 +4989,17 @@ Public Sub FixVbeCaption()
     Next i
 End Sub
 
+' Ulaz u aplikaciju: zove ga frmSplash posle splash-a (v6-ui-209), "Pokreni
+' program" sa lista Pregled listova, povratak iz Excela (frmExcelMini) i
+' operater rucno (Alt+F8).
 Public Sub ShowOtkupUI()
     ' Javan makro se moze pozvati i direktno (Alt+F8), mimo navigacije - zato se
     ' pravo na POCETNI ekran proverava ovde. Bez ovoga bi se ekran sa pravom
     ' upisa otvarao i korisniku kome ActivateScreen taj ekran ne bi dao.
     If Not modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
+        ' Ovo je i ulaz pri startu, kad je Excel sakriven (StartApp): odbijen
+        ' ulaz bez ijednog prozora bi bio mrtva aplikacija, pa se Excel vraca.
+        Application.Visible = True
         MsgBox Poruka("OTKUI_SCR_ZABRANJEN"), vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -5004,6 +5014,10 @@ Public Sub OtkupUI_Sakrij()
     On Error Resume Next
     If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
     If Not mFrm Is Nothing Then mFrm.Hide
+    ' Ovaj ekran je ljuska (v6-ui-209) i Excel je pri startu sakriven: sakriven
+    ' ekran nad sakrivenim Excelom je mrtva aplikacija, pa se Excel vraca.
+    ' Aplikacija se gasi zatvaranjem Excela (Workbook_BeforeClose -> ShutdownApp).
+    Application.Visible = True
 End Sub
 
 ' Gradnja ekrana je pukla. Zastavica mBuilding mora da padne, inace bi svaki
