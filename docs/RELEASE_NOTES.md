@@ -7092,3 +7092,56 @@ ijedne izmišljene veze.
   nadogradnje šeme).
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
   i smoke nad pravim podacima (checklista u PR-u).
+
+---
+
+## vba-v2.92.0 — 2026-09-03
+
+### Matični podaci: pet ekrana nove ljuske umesto stare forme
+
+- **Partneri, Proizvodi i cene, Ambalaža i pakovanje, Korisnici** —
+  četiri ekrana sa 15 lista, sa istim ritmom kao ostatak nove ljuske
+  (prekidač lista, čipovi, pretraga, sortiranje, editor u zoni).
+  Unos i izmena idu kroz **istog pisca** koga zove i stara forma, pa se
+  pravila upisa ne mogu razići.
+- **Podešavanja i Administracija su STAVKE SIDEBARA**, ne više dva reda
+  u listi iza dugmeta „Otvori alatku". Međuekran je uklonjen — bio je
+  spisak od dve stavke koji ponavlja ono što sidebar već radi.
+- **Podešavanja i Admin dobili su oblik nove ljuske:** 11 odnosno 5
+  grupa je sada **prekidač segmenata** (vidi se tačno jedna grupa),
+  umesto naslaganih sklapajućih sekcija.
+- **Težine u ambalaži su decimalne.** Šest kolona (težine, cena,
+  cena po jedinici) je prikazivalo cele brojeve — 0,5 kg se videlo kao 0.
+
+### Prava pristupa i zamena operatera
+
+- **„Otkaži" u prijavi više ne odjavljuje operatera.** Klik na
+  „Operater" pa „Otkaži" (ili tri promašena PIN-a) je brisao sesiju, a
+  ekran je i dalje tvrdio da je stari operater prijavljen.
+- **Nalog bez prava ne vidi tuđe podatke.** Kad novi operater nema pravo
+  ni na jedan ekran, radna površina se **prazni** — ranije je ostajala
+  mreža prethodnog operatera.
+- **Sidebar prati nova prava odmah po zameni** (ranije je prikazivao
+  prava prethodnog operatera do restarta).
+- **Nesnimljeno se ne odbacuje tiho:** prelazak sa ekrana ili panela sa
+  otvorenim unosom pita pre nego što ga odbaci.
+- **Upis u naloge i prava nosi kapiju u samom piscu**, ne samo na ekranu.
+
+### Brzina matičnih lista
+
+- Čitanje liste više ne traži isti podatak desetinama puta: jedan prozor
+  keša po čitanju, i mape umesto pretrage po redu. Na Parcelama je to
+  bilo **1600 čitanja tabele kooperanata i ~640.000 poređenja** za dve
+  kolone teksta.
+- Isti obrazac primenjen na **Sledljivost** (7 pretraga po redu — oko 28
+  miliona poređenja za jedan izveštaj) i **Agrohemiju** (3 po artiklu).
+
+### Verifikacija
+
+- `vba_check` čist (209 fajlova), **439 sabotaža**, self-testovi
+  102/102 i 40/40, `WHO_WRITES` ažuran.
+- Dvadeset novih testova (164–183) i **20 novih sabotaža** — svaka obara
+  tačno svoj imenovani test.
+- **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
+  `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad
+  pravim podacima (checklista u PR-u).
