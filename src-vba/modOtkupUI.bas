@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-206"
+Public Const OTKUI_BUILD   As String = "v6-ui-207"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -5197,7 +5197,15 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
                 ' Ekran koji padne u GRADNJI ne sme da obori aplikaciju. Ovo je
                 ' jedini bail posle zatvaranja panela, pa se ekran ispod ovde
                 ' vraca rucno -- inace bi ostao deaktiviran.
-                z.Visible = False
+                '
+                ' Zona se UKLANJA, ne samo sakriva. Do v6-ui-207 je ostajala na
+                ' formi sa Visible = False, pa bi je sledeci pokusaj NASAO
+                ' (Set z = frm.Controls(nm)), preskocio gradnju jer "z nije
+                ' Nothing", i ActivateScreen bi prijavio USPESAN prelazak na
+                ' prazan ekran. Jedan pad u gradnji je tako trajno pretvarao
+                ' ekran u prazan -- do restarta aplikacije.
+                Set z = Nothing
+                UkloniZonu frm, nm
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
                 If zatvorenPanel Then PanelVracenNaEkran
                 PaintNav frm, NavTagFor(AktivnaStavka())
@@ -5298,6 +5306,34 @@ End Sub
 ' postavljen i posle povratka, pa ga ScrGridData procita kao pad ekrana: mreza
 ' se isprazni uz 'Lista se nije ucitala' iako su podaci procitani ispravno.
 ' Isti put pogadja svaki ekran koji u Scr_Rows dopunjava svoju zonu.
+' Uklanjanje zone koja se nije izgradila. Redosled je obavezan: OMOTAC pre
+' KONTROLE (.claude/rules/forme-i-kontrole.md) -- omotac koji prezivi svoju
+' kontrolu je mrtva referenca.
+'
+' Omotace koje je nedovrsena gradnja napravila za SVOJU decu ne mozemo naci po
+' tagu: oni ostaju u Btns i drze kontrole koje vise nisu na formi. To je
+' CURENJE, ne pad -- kontrola izvan forme ne dobija nijedan dogadjaj -- i put
+' postoji samo za ekran cija gradnja DIGNE gresku, sto je vec samo po sebi
+' nalaz. Bolje curenje na putu greske nego ekran koji trajno ostane prazan.
+Private Sub UkloniZonu(frm As Object, ByVal nm As String)
+    Dim i As Long
+    On Error Resume Next
+    If Not Btns Is Nothing Then
+        For i = Btns.count To 1 Step -1
+            If Btns(i).SinkTag = nm Then Btns.Remove i
+        Next i
+    End If
+    frm.Controls.Remove nm
+    Err.Clear
+End Sub
+
+' Koji ekran bi prekidac otvorio u datoj sekciji. Javno ZBOG TESTA: test mora da
+' zna kljuc PRE nego sto proba prelazak, da bi posle mogao da tvrdi nesto o
+' TOJ zoni (npr. da je posle pada gradnje nema).
+Public Function OtkupUI_EkranZaSekcijuTest(ByVal sekcija As String) As String
+    OtkupUI_EkranZaSekcijuTest = EkranZaSekciju(sekcija)
+End Function
+
 Public Function ScreenZone(ByVal kljuc As String) As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Function

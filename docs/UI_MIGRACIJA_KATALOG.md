@@ -7884,3 +7884,66 @@ prolazi. Kod ga od `v6-ui-205` odbija; komentar je ispravljen i sada kaže šta
   stvarno pada.
 - **Nije izvršeno u Excelu.** `RunAllTests`, stvarni crveno→zeleno sabotage run
   i ručni `Debug → Compile` traže Windows + Excel.
+
+### 26.33 Recenzija `b7b8954`: pad u gradnji je trajno praznio ekran (`v6-ui-207`)
+
+#### P1 — „lažno izgrađena" zona
+
+Neuspešna gradnja je zonu samo **sakrivala**, a ostavljala je na formi:
+
+1. `NewZone` napravi `zScr_<ekran>`;
+2. `ScrBuild` padne;
+3. `z.Visible = False`, zona **ostaje**;
+4. sledeći pokušaj: `Set z = frm.Controls(nm)` je **nađe**;
+5. `If z Is Nothing Then` je `False` → `ScrBuild` se **više ne poziva**;
+6. `ActivateScreen` prijavi **uspešan** prelazak na prazan ekran.
+
+Jedan pad u gradnji je tako ekran pretvarao u **trajno prazan**, do restarta.
+
+Zona se sada **uklanja** (`UkloniZonu`), u obaveznom redosledu — **omotač pre
+kontrole** (`.claude/rules/forme-i-kontrole.md`). Omotač same zone se nađe po
+`SinkTag` (jednak imenu zone); omotači koje je nedovršena gradnja napravila za
+*svoju decu* ostaju u `Btns` i drže kontrole koje više nisu na formi. To je
+**curenje, ne pad** — kontrola izvan forme ne dobija ni jedan događaj — i put
+postoji samo za ekran čija gradnja *digne grešku*, što je već samo po sebi nalaz.
+Bolje curenje na putu greške nego ekran koji trajno ostane prazan.
+
+**Test je ovo maskirao**, i to je tačna primedba: posle simuliranog pada rušio je
+formu i za uspešan pokušaj pravio novu. Sada se **ponavlja nad istom formom** i
+meri se razlika koja jedina razdvaja ispravno od pokvarenog:
+
+| Merenje | Ispravno | Pokvareno |
+|---|---|---|
+| zona posle pada (`ZonaKontrolaTest`) | **-1** (zone nema) | `0` (postoji, prazna) |
+| zona posle ponovljene gradnje | **> 0** (ima kontrole) | `0` (gradnja preskočena) |
+
+Razlika `-1` vs `0` nije kozmetika: `0` je *postojeća prazna* zona — upravo
+stanje koje je kvar ostavljao. Ključ se pita **pre** pokušaja
+(`OtkupUI_EkranZaSekcijuTest`), da se ne pogađa o kojoj zoni se tvrdi.
+
+Dve sabotaže, sa **različitim** tvrdnjama: `zona-posle-pada-gradnje-ostaje`
+(vraća `Visible = False`) i `zona-posle-pada-nema-kontrole` (gasi samo
+`Controls.Remove`, pa gradnja ostane preskočena).
+
+#### P2 — seam-ovi su mogli da kontaminiraju druge testove
+
+Vezivanje dejstva za `IsTestMode()` (§26.32) štiti **pogon**, ali ne štiti
+**suite**: test koji pukne između `ScrGradnjuOboriTest True` i `False` ostavlja
+seam upaljen, `RunOne` nastavlja na sledeći test, i taj pada **bez svoje
+krivice** — ista klasa laži zbog koje `CleanupPosleTesta` uopšte postoji.
+
+Nov `ResetSeamova` gasi svih sedam deny-seam-ova na jednom mestu, i zove se:
+
+- iz `CleanupPosleTesta` — posle **svakog** pada;
+- na **početku** `RunAllTests`, odmah posle `SetTestMode True` — jer seam
+  zapamćen iz prethodnog run-a je bio inertan dok je režim bio isključen, a
+  aktivira se tačno tada. (Redosled je obavezan: seam-ovi odbijaju postavljanje
+  van test režima, pa čišćenje mora **posle** `SetTestMode True`.)
+
+Novi seam koji samo sužava od sada ide **tamo**, ne u pojedinačni test.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **439** sabotaža); `--self-test` 102/102.
+- **Nije izvršeno u Excelu.** `RunAllTests`, crveno→zeleno sabotage run i ručni
+  `Debug → Compile` traže Windows + Excel.

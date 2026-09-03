@@ -232,6 +232,10 @@ Public Sub RunAllTests()
     Dim prevMode As Boolean
     prevMode = IsTestMode()
     SetTestMode True
+    ' Seam zapamcen iz prethodnog run-a je bio inertan dok je test rezim bio
+    ' iskljucen -- ali se aktivira tacno sada. Ciscenje ide POSLE SetTestMode
+    ' True, jer sami seam-ovi odbijaju postavljanje van test rezima.
+    ResetSeamova
 
     m_Total = 0
     m_Failed = 0
@@ -467,6 +471,30 @@ EH:
     AppendReport nm, "FAIL", errDesc
 End Sub
 
+' Svi seam-ovi koji SUZAVAJU ponasanje, na jednom mestu.
+'
+' Dejstvo im je vezano za test rezim (v. IsTestMode u potrosacima), pa posle
+' suite ne mogu da poremete pogon. Ali UNUTAR suite mogu: test koji pukne
+' izmedju "ScrGradnjuOboriTest True" i "False" ostavlja seam upaljen, RunOne
+' nastavlja na sledeci test, i taj pada BEZ SVOJE KRIVICE -- ista klasa lazi
+' zbog koje CleanupPosleTesta uopste postoji.
+'
+' Zove se i na POCETKU suite: seam zapamcen iz prethodnog run-a je inertan dok
+' je test rezim iskljucen, ali se ponovo aktivira cim ga suite upali.
+'
+' Novi seam koji samo suzava ide OVDE, ne u pojedinacni test.
+Private Sub ResetSeamova()
+    On Error Resume Next
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrGradnjuOboriTest False
+    modUiScreens.ScrResetCache
+    modUiPanel.PanelBranaZatvoriTest False
+    modMaticniUnos.MatBranaZatvoriTest False
+    modMaticniIzvor.MatComboPadTest ""
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
+    Err.Clear
+End Sub
+
 ' Test koji je pao NIJE stigao do svog ReleaseOtkupUIForm, pa modul novog UI-ja
 ' (mFrm, Btns, kes tabela) i aktivna otpremnica u modScrDokumenti ostaju
 ' zaprljani. Sledeci test bi tada gradio ekran nad ostacima prethodnog i pao BEZ
@@ -482,6 +510,7 @@ Private Sub CleanupPosleTesta()
     On Error Resume Next
     modOtkupUI.OtkupUI_Release
     modScrDokumenti.Scr_OtpOtkazi
+    ResetSeamova
 End Sub
 
 Private Function TestName(ByVal idx As Long) As String
@@ -13371,39 +13400,42 @@ End Sub
 ' prelazak na nepostojeci ekran ne sme da je pomeri.
 ' ============================================================
 Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
-    Dim f As frmOtkupUI
+    Dim f As frmOtkupUI, kljucMat As String
     Dim sekPosleNeuspeha As String, ekranPosleNeuspeha As String
-    Dim sekPosleUspeha As String
+    Dim sekPosleUspeha As String, ekranPosleUspeha As String
+    Dim zonaPosleNeuspeha As Long, zonaPosleUspeha As Long
     Dim sekBezEkrana As String, ekranBezEkrana As String
     Dim uspeoPrelazak As Boolean
 
-    ' --- 1) SEKCIJSKI prelazak koji ActivateScreen ODBIJE -----------------
-    ' Vozi se kroz PRAVI prekidac (OtkupUI_SekcijaTest), ne kroz ActivateScreen.
-    ' Do v6-ui-206 je ova polovina zvala OtkupUI_PrelazakTest, koji ActivateScreen
-    ' zove DIREKTNO -- pa uklanjanje vracanja sekcije iz PostaviSekciju nije
-    ' obaralo test: sabotaza je bila placebo, tacno ono protiv cega postoji
-    ' pravilo o dvosmernom dokazu (.claude/rules/testovi.md par.6).
-    '
-    ' Prelazak se obara kroz GRADNJU zone: to je jedini put kojim ActivateScreen
-    ' vraca False za ekran koji JE dostupan i POSTOJI (nedostupan ekran
-    ' EkranZaSekciju ne bi ni izabrao, pa bi se otislo u drugu granu).
-    '
-    ' SVEZA forma je obavezna: zona ekrana se gradi LENJO i ostaje izgradjena,
-    ' pa bi posle jednog uspesnog prelaska gradnja bila PRESKOCENA i seam ne bi
-    ' imao sta da obori -- tvrdnja bi tada merila uspeh, ne neuspeh.
     Set f = NewOtkupUIForm()
+    ' Kljuc se pita PRE pokusaja: posle pada gradnje tvrdi se nesto o BAS TOJ
+    ' zoni, pa se ne sme pogadjati (prekidac bira zapamceni ili prvi dostupan).
+    kljucMat = modOtkupUI.OtkupUI_EkranZaSekcijuTest(SEK_MATICNI)
+
+    ' --- 1) SEKCIJSKI prelazak koji ActivateScreen ODBIJE -----------------
+    ' Vozi se kroz PRAVI prekidac (OtkupUI_SekcijaTest), ne kroz ActivateScreen:
+    ' do v6-ui-206 je ova polovina zvala OtkupUI_PrelazakTest, koji ActivateScreen
+    ' zove DIREKTNO -- pa uklanjanje vracanja sekcije iz PostaviSekciju nije
+    ' obaralo test (.claude/rules/testovi.md par.6).
+    '
+    ' Neuspeh se pravi kroz GRADNJU zone: jedini put kojim ActivateScreen vraca
+    ' False za ekran koji JE dostupan i POSTOJI.
     modUiScreens.ScrGradnjuOboriTest True
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosleNeuspeha = modOtkupUI.AktivnaSekcija()
     ekranPosleNeuspeha = modOtkupUI.AktivanEkran()
+    zonaPosleNeuspeha = ZonaKontrolaTest(kljucMat)
     modUiScreens.ScrGradnjuOboriTest False
-    ReleaseOtkupUIForm f
 
-    ' --- 2) isti prelazak BEZ seam-a mora da USPE -------------------------
-    ' Bez ovoga bi tvrdnja iznad prolazila i kad prekidac uopste ne radi.
-    Set f = NewOtkupUIForm()
+    ' --- 2) PONOVLJEN prelazak na ISTOJ formi mora da USPE ----------------
+    ' Ovo je tvrdnja koju je v6-ui-206 propustio: zona koja se nije izgradila je
+    ' ostajala na formi (samo sakrivena), pa bi sledeci pokusaj NASAO nju,
+    ' preskocio gradnju i prijavio uspesan prelazak na PRAZAN ekran. Zato se
+    ' ponavlja nad ISTOM formom i meri da zona stvarno ima kontrole.
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosleUspeha = modOtkupUI.AktivnaSekcija()
+    ekranPosleUspeha = modOtkupUI.AktivanEkran()
+    zonaPosleUspeha = ZonaKontrolaTest(kljucMat)
 
     ' --- 3) SEKCIJA BEZ IJEDNOG DOSTUPNOG EKRANA -------------------------
     ' Drugi izlaz iz PostaviSekciju: EkranZaSekciju vrati prazno, pa se izlazi
@@ -13424,21 +13456,43 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     ReleaseOtkupUIForm f
 
     ' --- tvrdnje ----------------------------------------------------------
-    AssertEq sekPosleUspeha, SEK_MATICNI, "uspesan prelazak menja sekciju"
+    AssertEq (Len(kljucMat) > 0), True, "maticna sekcija ima ekran za otvaranje"
     AssertEq uspeoPrelazak, False, "prelazak na nepostojeci ekran ne uspeva"
 
-    AssertEq sekPosleNeuspeha, SEK_RAD, _
-             "neuspeo prelazak ne pomera sekciju"
+    ' 1) neuspeh: sekcija ostaje, zone NEMA
+    AssertEq sekPosleNeuspeha, SEK_RAD, "neuspeo prelazak ne pomera sekciju"
     AssertEq (Len(ekranPosleNeuspeha) > 0), True, _
              "neuspeo prelazak ostavlja ekran na kome jesmo"
     AssertEq modUiScreens.ScrSekcija(modUiScreens.ScrRowByKey(ekranPosleNeuspeha)), _
              SEK_RAD, "posle neuspeha su sekcija i ekran iz iste sekcije"
+    AssertEq zonaPosleNeuspeha, -1, _
+             "zona koja se nije izgradila je UKLONJENA, ne samo sakrivena"
 
+    ' 2) ponovljen pokusaj na ISTOJ formi
+    AssertEq sekPosleUspeha, SEK_MATICNI, "ponovljen prelazak uspeva"
+    AssertEq ekranPosleUspeha, kljucMat, "ponovljen prelazak otvara isti ekran"
+    AssertEq (zonaPosleUspeha > 0), True, _
+             "zona posle ponovljene gradnje STVARNO ima kontrole"
+
+    ' 3) sekcija bez dostupnog ekrana
     AssertEq sekBezEkrana, SEK_RAD, _
              "sekcija BEZ dostupnog ekrana se ne otvara -- ostaje prethodna"
     AssertEq modUiScreens.ScrSekcija(modUiScreens.ScrRowByKey(ekranBezEkrana)), _
              SEK_RAD, "ekran na sceni je iz sekcije koju zaglavlje prikazuje"
 End Sub
+
+' Broj kontrola u zoni datog ekrana; -1 kad zone NEMA. Razlika je bitna: 0 bi
+' bila prazna a POSTOJECA zona (upravo stanje koje je kvar ostavljao), a -1 je
+' uklonjena zona, koju sledeci pokusaj gradi ispocetka.
+Private Function ZonaKontrolaTest(ByVal kljuc As String) As Long
+    Dim z As Object
+    ZonaKontrolaTest = -1
+    On Error Resume Next
+    Set z = modOtkupUI.ScreenZone(kljuc)
+    If z Is Nothing Then Exit Function
+    ZonaKontrolaTest = z.Controls.count
+    Err.Clear
+End Function
 
 ' ============================================================
 ' 182. Otkazana prijava i nalog bez prava -- prikaz ne sme da laze.

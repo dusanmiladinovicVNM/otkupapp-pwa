@@ -2532,6 +2532,26 @@ SABOTAZE = {
     # DRUGI izlaz iz PostaviSekciju: sekcija bez ijednog dostupnog ekrana. Taj
     # je u v6-ui-204 bio zaboravljen, pa je zaglavlje pokazivalo novu sekciju a
     # na sceni je bio ekran iz stare.
+    # Zona koja se nije izgradila mora da NESTANE. Ostavljena (samo sakrivena)
+    # zona pretvara ekran u TRAJNO prazan: sledeci pokusaj je nadje, preskoci
+    # gradnju jer "z nije Nothing", i prijavi uspesan prelazak.
+    "zona-posle-pada-gradnje-ostaje": (
+        "modOtkupUI.bas",
+        "                Set z = Nothing\n                UkloniZonu frm, nm\n",
+        "                z.Visible = False   ' SABOTAZA: zona ostaje na formi\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "zona koja se nije izgradila je UKLONJENA",
+    ),
+    # Ista popravka, druga strana: posle uklanjanja zone ponovljen pokusaj mora
+    # da je STVARNO izgradi. Sabotaza gasi samo uklanjanje omotaca, pa kontrola
+    # ostane na formi i gradnja se preskoci.
+    "zona-posle-pada-nema-kontrole": (
+        "modOtkupUI.bas",
+        "    frm.Controls.Remove nm\n",
+        "    ' SABOTAZA: kontrola zone ostaje na formi\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "zona posle ponovljene gradnje STVARNO ima kontrole",
+    ),
     "sekcija-bez-ekrana-ostaje-promenjena": (
         "modOtkupUI.bas",
         "        VratiSekciju frm, staraSekcija\n        ShowToast Poruka(\"OTKUI_SEK_NEMA_EKRANA\"), False\n",
