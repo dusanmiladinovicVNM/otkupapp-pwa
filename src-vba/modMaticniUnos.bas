@@ -35,7 +35,7 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-205"
+Public Const MATUNOS_BUILD As String = "v6-ui-206"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
@@ -52,6 +52,7 @@ Private mBranaZatvorenaTest As Boolean
 
 ' Zatvara kapiju upisa za jednu tvrdnju (v. mBranaZatvorenaTest).
 Public Sub MatBranaZatvoriTest(ByVal zatvori As Boolean)
+    If Not IsTestMode() Then Exit Sub
     mBranaZatvorenaTest = zatvori
 End Sub
 
@@ -72,7 +73,7 @@ Public Function MatBranaUpisa(ByVal kljuc As String) As String
     ' Test seam: sme SAMO da ZATVORI kapiju, nikad da je otvori. U headless runu
     ' je MozeAdministraciju anti-lockout (svi su admini), pa bi tvrdnja "pisac
     ' postuje kapiju" inace merila dva puta prolaz.
-    If mBranaZatvorenaTest Then
+    If mBranaZatvorenaTest And IsTestMode() Then
         MatBranaUpisa = Poruka("MATU_ERR_BEZ_PRAVA")
         Exit Function
     End If
@@ -641,8 +642,9 @@ EH:
     ' kolonu stranog kljuca. Sada je fail-closed, kao i brana ekrana: neuspela
     ' provera nije prosla provera.
     '
-    ' Prazan spisak (bez greske) i dalje PROLAZI, i to je druga odluka: sekcija
-    ' u koju se unosi prvi zapis nema sta da ponudi, a polje sme da bude prazno.
+    ' Od v6-ui-205 ni prazan spisak vise ne prolazi (v. telo funkcije): ovamo se
+    ' dolazi samo za NEPRAZNU vrednost, pa prazan spisak znaci "nema cega da
+    ' bude". Ovaj put ostaje za greske koje se dignu U SAMOJ proveri.
     LogWarn "modMaticniUnos.ComboVrednostPostoji", _
             "spisak za '" & izvor & "' se ne cita (" & Err.Number & " " & _
             Err.description & ") -- vrednost odbijena"

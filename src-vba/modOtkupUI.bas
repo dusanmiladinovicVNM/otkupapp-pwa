@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-205"
+Public Const OTKUI_BUILD   As String = "v6-ui-206"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4191,6 +4191,7 @@ End Function
 
 Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
     Dim kljuc As String, staraSekcija As String
+    Dim errNum As Long, errDesc As String
     On Error GoTo EH
     If frm Is Nothing Then Exit Sub
     If sekcija <> SEK_RAD And sekcija <> SEK_MATICNI Then Exit Sub
@@ -4235,8 +4236,34 @@ Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
     PaintNav frm, NavTagFor(AktivnaStavka())
     Exit Sub
 EH:
-    LogErr "modOtkupUI.PostaviSekciju"
-    ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    ' I PAD vraca sekciju. Do v6-ui-206 je EH samo logovao, pa je neocekivana
+    ' greska u EkranZaSekciju ili ActivateScreen ostavljala zaglavlje i sidebar
+    ' u NOVOJ sekciji preko ekrana iz stare -- ista laz koju oba normalna
+    ' odbijanja vec ispravljaju, samo kroz put koji se ne planira.
+    '
+    ' Vraca se samo ako je sekcija stigla da se promeni: pad pre te tacke nema
+    ' sta da vrati, a "vracanje" na prazan string bi samo prosirilo kvar.
+    '
+    ' NEMA SVOJU SABOTAZU, i to je svesno. Da se ovaj put obori, trebalo bi
+    ' ubrizgati Err.Raise u zivu proceduru -- seam koji ne suzava nego pravi
+    ' pad, i jedini svoje vrste u projektu. Oba PLANIRANA odbijanja (nema
+    ' dostupnog ekrana / ActivateScreen odbio) imaju svoje sabotaze i one
+    ' pokrivaju isto vracanje; ovde je pokriveno pregledom, ne testom. Ako se
+    ' EH-u ikad doda logika koja se razlikuje od tih dva, treba mu i tvrdnja.
+    ' Vracanje je pod svojim On Error: greska U VRACANJU ne sme da pojede
+    ' prijavu prve greske.
+    ' Greska se PREPISE i UPISE u log PRE vracanja: vracanje ide pod svojim
+    ' On Error Resume Next, a ta naredba resetuje Err -- pa bi LogErr posle nje
+    ' upisao prazno (isto sto vba_check hvata kao MRTAV_LOG).
+    errNum = Err.Number
+    errDesc = Err.description
+    LogError "modOtkupUI.PostaviSekciju", errDesc, errNum
+    If Len(staraSekcija) > 0 And staraSekcija <> mSekcija Then
+        On Error Resume Next
+        VratiSekciju frm, staraSekcija
+        Err.Clear
+    End If
+    ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
 End Sub
 
 ' Vracanje sekcije posle prelaska koji se NIJE desio. Jedno mesto za oba izlaza

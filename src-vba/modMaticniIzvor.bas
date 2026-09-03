@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-205"
+Public Const MATIZ_BUILD As String = "v6-ui-206"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -593,6 +593,7 @@ End Function
 ' greske (nepostojeca ili prazna tabela). Oba samo suzavaju sta prolazi.
 Public Sub MatComboPadTest(ByVal izvor As String, _
                            Optional ByVal saGreskom As Boolean = True)
+    If Not IsTestMode() Then Exit Sub
     mComboPadTest = izvor
     mComboPadSaGreskom = saGreskom
 End Sub
@@ -600,7 +601,9 @@ End Sub
 Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) As Variant
     Dim d As Variant, i As Long, c As Collection, vr As Long, so As Long
     mComboGreska = ""
-    If Len(mComboPadTest) > 0 Then
+    ' Dejstvo je vezano za TEST REZIM, ne samo za postavljanje: zaboravljen
+    ' seam postaje inertan cim harness vrati SetTestMode prevMode.
+    If Len(mComboPadTest) > 0 And IsTestMode() Then
         If StrComp(mComboPadTest, izvor, vbTextCompare) = 0 Then
             If mComboPadSaGreskom Then _
                 mComboGreska = "test: izvor '" & izvor & "' se ne cita"

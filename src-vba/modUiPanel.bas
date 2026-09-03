@@ -26,7 +26,7 @@ Attribute VB_Name = "modUiPanel"
 '=====================================================================
 Option Explicit
 
-Public Const UIPANEL_BUILD As String = "v6-ui-203"
+Public Const UIPANEL_BUILD As String = "v6-ui-206"
 
 Private Const SRC As String = "modUiPanel"
 
@@ -118,7 +118,7 @@ End Function
 ' je odbijalo tek posle klika.
 Public Function PanelDozvoljen(ByVal kljuc As String) As Boolean
     On Error Resume Next
-    If mBranaZatvorenaTest Then Exit Function
+    If mBranaZatvorenaTest And IsTestMode() Then Exit Function
     If Not PanelPostoji(kljuc) Then Exit Function
     PanelDozvoljen = modAuth.MozeAdministraciju()
     Err.Clear
@@ -127,6 +127,7 @@ End Function
 ' Zatvara branu za jednu tvrdnju. Otvaranje ide iskljucivo kroz False, koji
 ' vraca normalno ponasanje -- ne postoji vrednost koja branu zaobilazi.
 Public Sub PanelBranaZatvoriTest(ByVal zatvori As Boolean)
+    If Not IsTestMode() Then Exit Sub
     mBranaZatvorenaTest = zatvori
 End Sub
 

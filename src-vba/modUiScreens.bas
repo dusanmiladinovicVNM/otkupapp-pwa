@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-205"
+Public Const UISCR_BUILD As String = "v6-ui-206"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -82,11 +82,26 @@ Public ScrLastErr As String
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
 
-' TEST: sekcija u kojoj NIJEDAN ekran nije dostupan. Sme SAMO da zabrani --
-' nema vrednosti kojom se pristup dodaje. Postoji zato sto se to stanje u
+' TEST SEAM-ovi. Oba smeju SAMO da ZABRANE -- nema vrednosti kojom se pristup
+' ili sposobnost dodaje.
+'
+' DEJSTVO IM JE VEZANO ZA TEST REZIM, ne samo postavljanje: potrosaci pitaju
+' IsTestMode() pri SVAKOM citanju, pa seam koji ostane postavljen (test koji
+' je pukao pre ciscenja) postaje inertan u trenutku kad RunAllTests vrati
+' SetTestMode prevMode. Bez toga bi zaboravljen seam ostavio aplikaciju
+' degradiranu do restarta -- a ciscenje kroz EH svakog testa je obecanje koje
+' se ne moze proveriti.
+'
+' mSekcijaZabranjenaTest: sekcija u kojoj nijedan ekran nije dostupan. To se u
 ' harnessu ne moze izazvati drugacije (AUTH je iskljucen, pa KorisnikImaPravo
-' vraca True za svakoga), a bas na njemu stoji vracanje sekcije u ljusci.
+' vraca True za svakoga), a bas na tom stanju stoji vracanje sekcije u ljusci.
 Private mSekcijaZabranjenaTest As String
+
+' mGradnjaPadaTest: Scr_Build "pada" za svaki ekran. Modeluje ekran koji se ne
+' izgradi -- jedini put kojim ActivateScreen moze da vrati False za ekran koji
+' je i dostupan i postoji, pa je i jedini nacin da se SEKCIJSKI prelazak obori
+' kroz pravi prekidac (v. T_Sekcija_OdbijenPrelazakNePomeraSekciju).
+Private mGradnjaPadaTest As Boolean
 
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
@@ -267,13 +282,20 @@ End Function
 ' tackama i tamo ostaju.
 ' Test seam: svi ekrani date sekcije su zabranjeni. Prazno gasi seam.
 Public Sub ScrSekcijuZabraniTest(ByVal sekcija As String)
+    If Not IsTestMode() Then Exit Sub
     mSekcijaZabranjenaTest = sekcija
+End Sub
+
+' Test seam: gradnja zone ekrana "pada". False gasi seam.
+Public Sub ScrGradnjuOboriTest(ByVal obori As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mGradnjaPadaTest = obori
 End Sub
 
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
     On Error Resume Next
-    If Len(mSekcijaZabranjenaTest) > 0 Then
+    If Len(mSekcijaZabranjenaTest) > 0 And IsTestMode() Then
         If ScrSekcija(ScrRowByKey(kljuc)) = mSekcijaZabranjenaTest Then Exit Function
     End If
     obl = ScrField(ScrRowByKey(kljuc), SCR_OBLAST)
@@ -379,6 +401,7 @@ End Function
 Public Function ScrBuild(ByVal kljuc As String, ByVal z As Object) As Boolean
     Dim m As String
     On Error Resume Next
+    If mGradnjaPadaTest And IsTestMode() Then Exit Function
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Application.Run m & ".Scr_Build", z

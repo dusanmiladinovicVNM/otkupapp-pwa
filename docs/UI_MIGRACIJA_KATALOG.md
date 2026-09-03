@@ -7800,3 +7800,87 @@ pooštravanje bi blokiralo unos prve kulture. Nije — pa je promena bezbedna.
   `sekcija-se-ne-vraca-posle-neuspeha`.
 - **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
   uslov za merge.
+
+### 26.32 Recenzija `afdc4d4`: exception putanja, placebo sabotaža, lepljivi seam-ovi (`v6-ui-206`)
+
+#### P1 — `EH` u `PostaviSekciju` nije vraćao sekciju
+
+Oba **planirana** odbijanja su vraćala sekciju, ali `EH` je samo logovao. Ako
+`EkranZaSekciju` ili `ActivateScreen` neočekivano pukne, zaglavlje i sidebar
+ostaju u novoj sekciji preko ekrana iz stare — ista laž, samo kroz put koji se
+ne planira.
+
+Vraćanje je dodato u `EH`, uz dva detalja koja nisu kozmetika:
+
+- vraća se **samo** ako je sekcija stigla da se promeni (`Len(staraSekcija) > 0
+  And staraSekcija <> mSekcija`) — pad pre te tačke nema šta da vrati;
+- greška se **prepiše i upiše u log PRE** vraćanja, jer vraćanje ide pod svojim
+  `On Error Resume Next`, a ta naredba resetuje `Err`. Prva verzija je imala
+  `LogErr` posle njega — i `vba_check` je to uhvatio kao `MRTAV_LOG`, tačno
+  provera koja za to postoji.
+
+#### P1 — sabotaža `sekcija-se-ne-vraca-posle-neuspeha` je bila placebo
+
+Prva polovina testa 183 je neuspeh izazivala kroz `OtkupUI_PrelazakTest`, koji
+zove `ActivateScreen` **direktno** — mimo `PostaviSekciju`. Uklanjanje rollbacka
+zato nije obaralo test. To je tačno ono protiv čega postoji pravilo o dvosmernom
+dokazu (`.claude/rules/testovi.md` §6), i propustio sam ga.
+
+Sada se neuspeh vozi kroz **pravi prekidač** (`OtkupUI_SekcijaTest`), a obara se
+kroz **gradnju zone** — jedini put kojim `ActivateScreen` vraća `False` za ekran
+koji *jeste* dostupan i *postoji* (nedostupan ekran `EkranZaSekciju` ne bi ni
+izabrao, pa bi se otišlo u drugu granu). Nov seam
+`modUiScreens.ScrGradnjuOboriTest` može samo da **obori** gradnju.
+
+Test je zato podeljen na **dve sveže forme**: zona ekrana se gradi lenjo i
+ostaje izgrađena, pa bi posle jednog uspešnog prelaska gradnja bila preskočena i
+seam ne bi imao šta da obori — tvrdnja bi merila uspeh, ne neuspeh. To je bila
+prva verzija ove popravke i uhvaćeno je pre commita.
+
+#### `EH` nema svoju sabotažu — svesno
+
+Da se taj put obori, trebalo bi **ubrizgati `Err.Raise` u živu proceduru** —
+seam koji ne sužava nego pravi pad, jedini svoje vrste u projektu. Prva verzija
+je imala sabotažu koja je delila tvrdnju sa postojećom, i **`vba_check` ju je
+odbio** („deli tvrdnju sa `sekcija-se-ne-vraca-posle-neuspeha` — test ih ne
+razlikuje"). Umesto lažne pokrivenosti, ograničenje je zapisano u kodu, iznad
+samog `EH`-a. Oba planirana odbijanja imaju svoje sabotaže i pokrivaju isto
+vraćanje.
+
+#### P2 — test seam-ovi su bili lepljivi
+
+`ScrSekcijuZabraniTest` i `MatComboPadTest` nisu bili vezani za test režim niti
+su imali garantovano čišćenje: test koji pukne pre svog `cleanup`-a ostavljao bi
+aplikaciju degradiranom do restarta. Ne bypass (svi mogu samo da zabrane), ali
+ne sme se osloniti na obećanje koje se ne može proveriti.
+
+**Dejstvo je sada vezano za test režim, ne za postavljanje** — potrošači pitaju
+`IsTestMode()` pri **svakom čitanju**:
+
+| Seam | Modul | Sme samo da |
+|---|---|---|
+| `ScrSekcijuZabraniTest` | `modUiScreens` | zabrani sekciju |
+| `ScrGradnjuOboriTest` | `modUiScreens` | obori gradnju |
+| `PanelBranaZatvoriTest` | `modUiPanel` | zatvori branu |
+| `MatBranaZatvoriTest` | `modMaticniUnos` | zatvori kapiju upisa |
+| `MatComboPadTest` | `modMaticniIzvor` | obori/isprazni spisak |
+
+Zaboravljen seam postaje **inertan** u trenutku kad `RunAllTests` vrati
+`SetTestMode prevMode`. Čišćenje je time garantovano strukturom, ne disciplinom.
+
+Ovo **nije** bezbednosni argument — `IsTestMode()` nije brana (v. §26.31). Ovi
+seam-ovi samo sužavaju, pa gejt služi sprečavanju nezgode, ne odbrani.
+
+#### P2 — zastareo komentar
+
+`modMaticniUnos.ComboVrednostPostoji`, `EH` blok, još je tvrdio da prazan spisak
+prolazi. Kod ga od `v6-ui-205` odbija; komentar je ispravljen i sada kaže šta
+`EH` zaista pokriva (greške dignute **u samoj proveri**).
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **437** sabotaža); `--self-test` 102/102.
+- Test 183 prepisan: tri slučaja, dve sveže forme, sekcijski prelazak koji
+  stvarno pada.
+- **Nije izvršeno u Excelu.** `RunAllTests`, stvarni crveno→zeleno sabotage run
+  i ručni `Debug → Compile` traže Windows + Excel.

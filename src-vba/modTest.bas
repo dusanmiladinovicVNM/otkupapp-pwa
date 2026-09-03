@@ -13372,28 +13372,42 @@ End Sub
 ' ============================================================
 Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     Dim f As frmOtkupUI
-    Dim sekPosle As String, sekPosleNeuspeha As String
-    Dim ekranPosleNeuspeha As String, uspeoPrelazak As Boolean
+    Dim sekPosleNeuspeha As String, ekranPosleNeuspeha As String
+    Dim sekPosleUspeha As String
     Dim sekBezEkrana As String, ekranBezEkrana As String
+    Dim uspeoPrelazak As Boolean
 
+    ' --- 1) SEKCIJSKI prelazak koji ActivateScreen ODBIJE -----------------
+    ' Vozi se kroz PRAVI prekidac (OtkupUI_SekcijaTest), ne kroz ActivateScreen.
+    ' Do v6-ui-206 je ova polovina zvala OtkupUI_PrelazakTest, koji ActivateScreen
+    ' zove DIREKTNO -- pa uklanjanje vracanja sekcije iz PostaviSekciju nije
+    ' obaralo test: sabotaza je bila placebo, tacno ono protiv cega postoji
+    ' pravilo o dvosmernom dokazu (.claude/rules/testovi.md par.6).
+    '
+    ' Prelazak se obara kroz GRADNJU zone: to je jedini put kojim ActivateScreen
+    ' vraca False za ekran koji JE dostupan i POSTOJI (nedostupan ekran
+    ' EkranZaSekciju ne bi ni izabrao, pa bi se otislo u drugu granu).
+    '
+    ' SVEZA forma je obavezna: zona ekrana se gradi LENJO i ostaje izgradjena,
+    ' pa bi posle jednog uspesnog prelaska gradnja bila PRESKOCENA i seam ne bi
+    ' imao sta da obori -- tvrdnja bi tada merila uspeh, ne neuspeh.
     Set f = NewOtkupUIForm()
-
-    ' Uspesan prelazak MENJA sekciju -- bez ovoga bi tvrdnja nize prolazila i
-    ' kad prekidac uopste ne radi.
+    modUiScreens.ScrGradnjuOboriTest True
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
-    sekPosle = modOtkupUI.AktivnaSekcija()
-
-    ' --- 1) prelazak koji ActivateScreen odbije ---------------------------
-    uspeoPrelazak = modOtkupUI.OtkupUI_PrelazakTest("NEPOSTOJECI_EKRAN")
     sekPosleNeuspeha = modOtkupUI.AktivnaSekcija()
     ekranPosleNeuspeha = modOtkupUI.AktivanEkran()
+    modUiScreens.ScrGradnjuOboriTest False
+    ReleaseOtkupUIForm f
 
-    ' --- 2) SEKCIJA BEZ IJEDNOG DOSTUPNOG EKRANA -------------------------
-    ' Drugi izlaz iz PostaviSekciju, i onaj koji je v6-ui-204 zaboravio:
-    ' EkranZaSekciju vrati prazno, pa se izlazi PRE ActivateScreen-a -- a
-    ' sekcija je vec bila promenjena. Ovo se vozi kroz PRAVI prekidac
-    ' (OtkupUI_SekcijaTest), ne kroz ActivateScreen: bez toga bi sabotaza
-    ' uklanjanja vracanja prezivela test.
+    ' --- 2) isti prelazak BEZ seam-a mora da USPE -------------------------
+    ' Bez ovoga bi tvrdnja iznad prolazila i kad prekidac uopste ne radi.
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    sekPosleUspeha = modOtkupUI.AktivnaSekcija()
+
+    ' --- 3) SEKCIJA BEZ IJEDNOG DOSTUPNOG EKRANA -------------------------
+    ' Drugi izlaz iz PostaviSekciju: EkranZaSekciju vrati prazno, pa se izlazi
+    ' PRE ActivateScreen-a -- a sekcija je vec bila promenjena.
     modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
     modUiScreens.ScrSekcijuZabraniTest SEK_MATICNI
     modUiScreens.ScrResetCache
@@ -13403,15 +13417,22 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     modUiScreens.ScrSekcijuZabraniTest ""
     modUiScreens.ScrResetCache
 
+    ' Prelazak na nepostojeci ekran: verdikt ActivateScreen-a, direktno.
+    uspeoPrelazak = modOtkupUI.OtkupUI_PrelazakTest("NEPOSTOJECI_EKRAN")
+
     modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
     ReleaseOtkupUIForm f
 
-    AssertEq sekPosle, SEK_MATICNI, "uspesan prelazak menja sekciju"
+    ' --- tvrdnje ----------------------------------------------------------
+    AssertEq sekPosleUspeha, SEK_MATICNI, "uspesan prelazak menja sekciju"
     AssertEq uspeoPrelazak, False, "prelazak na nepostojeci ekran ne uspeva"
-    AssertEq sekPosleNeuspeha, SEK_MATICNI, _
+
+    AssertEq sekPosleNeuspeha, SEK_RAD, _
              "neuspeo prelazak ne pomera sekciju"
     AssertEq (Len(ekranPosleNeuspeha) > 0), True, _
              "neuspeo prelazak ostavlja ekran na kome jesmo"
+    AssertEq modUiScreens.ScrSekcija(modUiScreens.ScrRowByKey(ekranPosleNeuspeha)), _
+             SEK_RAD, "posle neuspeha su sekcija i ekran iz iste sekcije"
 
     AssertEq sekBezEkrana, SEK_RAD, _
              "sekcija BEZ dostupnog ekrana se ne otvara -- ostaje prethodna"
