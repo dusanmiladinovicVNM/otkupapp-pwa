@@ -7624,3 +7624,85 @@ zna i za panel.
 - **VBA se u ovoj sesiji ne izvršava.** Pet scenarija iz recenzije
   (uspešna zamena, „Otkaži", tri pogrešna PIN-a, nalog bez prava, Podešavanja →
   Admin bez snimanja) i dalje moraju u Excel.
+
+### 26.30 Recenzija `078e3f8`: tri P1 i jedan placebo test (`v6-ui-204`)
+
+#### P1-1 — sekcija se menjala pre nego što se zna da li je prelazak uspeo
+
+`PostaviSekciju` je postavljao `mSekcija`, zlatno dugme i sidebar, pa **tek onda**
+zvao `ActivateScreen`. Ako prelazak ne uspe — operater odustane od odbacivanja
+nesnimljenog, cilj nema prava ili modul, gradnja padne — stari ekran ostaje na
+sceni, a zaglavlje i sidebar pokazuju **drugu sekciju**.
+
+`ActivateScreen` je zato postao **`Function` sa verdiktom**: `True` znači „posle
+poziva smo tamo gde smo hteli" (uključujući „već smo tu"), `False` znači da
+prelazak nije izvršen. `PostaviSekciju` na `False` vraća sekciju, dugme i
+sidebar. Pravilo je opšte: *pozivalac koji je uz prelazak promenio još nešto
+mora to da vrati.*
+
+#### P1-2 — nalog bez prava → nalog sa pravima je ostajao na praznoj površini
+
+`PrimeniNovaPrava` je tražio prvi dozvoljen ekran **samo kad je `mScreen`
+neprazan i zabranjen**. Posle operatera bez ijednog prava `mScreen` je prazan, pa
+je sledeći (validan) operater dobijao osvežen sidebar i ostajao pred praznom
+površinom do prvog ručnog klika. Dodata je grana za prazan `mScreen`.
+
+#### P1-3 — validacija combo-a je bila fail-open za glavni kvar izvora
+
+Prošli krug je popravio pogrešan sloj. `ComboVrednostPostoji` je dobio
+fail-closed `EH`, ali do njega se **nikad nije dolazilo**: `MatComboStavke`
+svaki pad pretvara u `Array()` (i to s razlogom — combo se ne sme srušiti), pa je
+provera prazan niz čitala kao „prošlo je". Kvar pri čitanju `tblStanice` je i
+dalje propuštao proizvoljan tekst u kolonu stranog ključa.
+
+Razlika sada ide odvojenim kanalom — `modMaticniIzvor.MatComboGreska()`, isti
+obrazac i isti razlog kao `modUiScreens.ScrLastErr`:
+
+| Stanje | Combo | Provera upisa |
+|---|---|---|
+| spisak pročitan, vrednost u njemu | popunjen | prolazi |
+| spisak pročitan, **prazan** | prazan | **prolazi** — prvi zapis u sekciji nema šta da ponudi |
+| **čitanje puklo** | prazan | **odbija**, uz `LogWarn` sa razlogom |
+
+#### P2-1 — auth test je bio placebo
+
+Test je zvao `AuthOtkazTest`, koji je **sam ponavljao** redosled iz `Login`-a —
+pa sabotaža nad pravim `Login`-om nije morala da ga obori. Tačno oblik protiv
+koga postoji pravilo o dvosmernom dokazu (`.claude/rules/testovi.md` §6).
+
+Sada je iz `Login`-a izdvojen **samo dijalog** (`PrikaziPrijavu`), jer je on
+jedini korak koji harness ne može da odigra. Test se vozi kroz **pravi `Login`**,
+a dva seam-a mogu samo da: (1) obore prijavu bez otvaranja forme, (2) postave
+sesiju — bez koje bi tvrdnja poredila prazno s praznim. Nijedan ne može da
+odobri pristup; u harnessu je AUTH isključen, pa postavljena sesija ne daje
+prava koja `MozeAdministraciju` ionako ne bi dala (anti-lockout).
+
+#### P2-2 — „ima li ekran branu" više se ne pogađa iz broja greške
+
+`ScrSopstvenaBrana` je `1004` čitao kao „ekran nema `Scr_Dozvoljen`". Ali `1004`
+je obična Excel greška koju i **postojeća** brana može da digne iznutra — pa je
+pukla brana bila nerazlučiva od nepostojeće, i propuštala.
+
+Sposobnost je sada **podatak u registru** (osmo polje, `SCR_BRANA`): ekran koji
+branu ne deklariše se ne pita uopšte; ekran koji je deklariše mora da odgovori,
+a **svaka** greška je „ne". Nijedan broj greške više ništa ne znači. Keš
+`mBrana` je otpao zajedno sa sniffing-om.
+
+Test 179 tvrdi da se polje i stvarnost slažu **u oba smera** — neupisana brana
+znači ekran koji se ne pita, upisana bez procedure znači ekran koji je trajno
+zabranjen.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **435** sabotaža); `--self-test` 102/102.
+- Nov test **183** `T_Sekcija_OdbijenPrelazakNePomeraSekciju`.
+- Test **182** proširen: posle prazne površine, operater sa pravima izlazi iz
+  nje sam; i vozi se kroz pravi `Login`.
+- Test **179** proširen: registar brane vs. moduli u oba smera; kvar pri čitanju
+  spiska odbija vrednost koja inače prolazi (mereno nad **validnom** vrednošću,
+  pa tvrdnja ne može biti prazna).
+- Četiri nove sabotaže: `sekcija-se-ne-vraca-posle-neuspeha`,
+  `prazna-povrsina-ostaje-i-sa-pravima`, `combo-kvar-izvora-prolazi`,
+  `registar-brane-se-razisao`.
+- **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
+  uslov za merge.

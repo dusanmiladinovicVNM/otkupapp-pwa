@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-203"
+Public Const UISCR_BUILD As String = "v6-ui-204"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -55,6 +55,15 @@ Public Const SCR_OBLAST  As Long = 5
 ' Dva skupa se nikad ne crtaju zajedno; zlatno dugme u zaglavlju ih menja.
 ' V. docs/UI_MIGRACIJA_KATALOG.md, 26.1 i 26.2.
 Public Const SCR_SEKCIJA As Long = 6
+
+' Nosi li ekran SOPSTVENU branu (Scr_Dozvoljen). "1" = nosi, sve ostalo = ne.
+'
+' Do v6-ui-204 se to zakljucivalo iz BROJA GRESKE: 1004 pri pozivu je citano kao
+' "ekran nema tu funkciju". Ali 1004 je obicna Excel greska koju i POSTOJECA
+' brana moze da digne iznutra -- i tada bi ekran bio propusten. Sposobnost je
+' zato podatak u registru, a ne pogodjena iz nacina na koji je poziv pukao.
+' Test 179 tvrdi da se polje i stvarnost slazu, u oba smera.
+Public Const SCR_BRANA   As Long = 7
 
 ' Redosled polja u redu GRUPE sidebara
 Public Const SCRG_KLJUC   As Long = 0
@@ -72,12 +81,10 @@ Public ScrLastErr As String
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
-' Kes odgovora "ima li ovaj ekran svoj Scr_Dozvoljen". Cuva se cinjenica o
-' POSTOJANJU funkcije, ne njen odgovor -- v. ScrSopstvenaBrana.
-Private mBrana As Object
 
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
+'       | brana ("1" = ekran nosi svoj Scr_Dozvoljen; v. SCR_BRANA)
 Public Function ScrRows() As Variant
     Dim c As Collection: Set c = New Collection
     c.Add "DOKUMENTI|modScrDokumenti|OTKUI_NAV_UNOS|" & IC_OTKUP & _
@@ -133,7 +140,7 @@ Public Function ScrRows() As Variant
     ' tblKorisnici), pa se odgovara kroz neobavezan Scr_Dozvoljen za ekran,
     ' odnosno kroz modUiPanel za panel (v. ScrDozvoljen nize).
     c.Add "MAT_KORISNICI|modScrMatKorisnici|OTKUI_NAV_MAT_KORISNICI|" & IC_MAT_KORISNICI & _
-          "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
+          "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI & "|1"
     ' PANEL, ne ekran: modul je prazan jer ovi redovi nemaju Scr_* ugovor.
     ' Ljuska ih prepoznaje po tome sto ih modUiPanel poznaje, pa klik u sidebaru
     ' otvara panel umesto ekrana.
@@ -272,46 +279,34 @@ Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     ScrDozvoljen = ScrSopstvenaBrana(kljuc)
 End Function
 
-' Odgovor samog ekrana na pitanje "smem li da te otvorim". Ekran koji nema
-' Scr_Dozvoljen (a to su svi osim maticnih Korisnika i Sistema) dobija True --
-' greska poziva znaci "nema takvu funkciju", ne "zabranjeno".
+' Odgovor samog ekrana na pitanje "smem li da te otvorim".
 '
-' Kesira se SAMO cinjenica "ima li ekran tu funkciju", nikad njen ODGOVOR:
-' prava se menjaju zamenom operatera, pa kesiran odgovor bi ostavio otvoren
-' ekran kome novi operater nema pristup. Isti obrazac i isti razlog kao mHas
-' kod ScrPostoji -- bez kesa bi svaki crtez sidebara bacio i uhvatio po jednu
-' gresku za SVAKI ekran koji tu funkciju nema.
+' KO IMA BRANU KAZE REGISTAR (SCR_BRANA), ne broj greske. Ekran koji je ne
+' deklarise se ne pita uopste -- prolazi. Ekran koji je deklarise mora da
+' odgovori: SVAKA greska pri pozivu je pukla brana, pa je odgovor ZABRANJENO.
+'
+' Do v6-ui-204 se sposobnost pogadjala iz greske 1004 ("Cannot run the macro").
+' Ali 1004 je obicna Excel greska koju i postojeca brana moze da digne iznutra,
+' pa je pukla brana bila nerazluciva od nepostojece -- i propustala. Sada
+' nijedan broj greske nista ne znaci: registar kaze da li brana postoji, a ako
+' postoji, greska je uvek "ne".
+'
+' Odgovor se NIKAD ne kesira: prava se menjaju zamenom operatera, pa bi kesiran
+' odgovor ostavio otvoren ekran kome novi operater nema pristup.
 Private Function ScrSopstvenaBrana(ByVal kljuc As String) As Boolean
-    Dim m As String, v As Variant
+    Dim m As String, red As String, v As Variant
     ScrSopstvenaBrana = True
-    If mBrana Is Nothing Then Set mBrana = CreateObject("Scripting.Dictionary")
-    If mBrana.Exists(kljuc) Then
-        If Not mBrana(kljuc) Then Exit Function
-    End If
-    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    red = ScrRowByKey(kljuc)
+    If ScrField(red, SCR_BRANA) <> "1" Then Exit Function
+    m = ScrField(red, SCR_MODUL)
     If Len(m) = 0 Then Exit Function
+
     On Error Resume Next
     Err.Clear
     v = Application.Run(m & ".Scr_Dozvoljen")
-    ' FAIL-CLOSED. Do v6-ui-199 je svaka greska ostavljala rezultat True, pa je
-    ' brana koja PUKNE propustala -- najgori mogus ishod za branu. Sada se
-    ' razlikuju dva slucaja:
-    '   1004 "Cannot run the macro" = ekran nema Scr_Dozvoljen -> nema brane,
-    '        prolazi (to je i dalje odgovor "nema takvu funkciju");
-    '   svaka DRUGA greska = brana postoji ali je pukla -> ZABRANJENO.
     If Err.Number = 0 Then
-        mBrana(kljuc) = True
         ScrSopstvenaBrana = CBool(v)
-    ElseIf Err.Number = 1004 And Not mBrana.Exists(kljuc) Then
-        ' 1004 pri PRVOM pokusaju = "Cannot run the macro", tj. ekran nema
-        ' Scr_Dozvoljen. To je i dalje odgovor "nema takvu funkciju".
-        mBrana(kljuc) = False
     Else
-        ' Sve ostalo je brana koja je PUKLA -- ukljucujuci 1004 nad ekranom za
-        ' koji vec znamo da branu IMA. Do v6-ui-203 je i taj slucaj citan kao
-        ' "nema funkciju", pa je brana koja iznutra digne 1004 (a to je obicna
-        ' Excel greska, ne retkost) propustala. Sada je fail-closed bez izuzetka.
-        mBrana(kljuc) = True
         ScrSopstvenaBrana = False
         ScrLastErr = m & ".Scr_Dozvoljen -> " & Err.Number & " " & Err.description
     End If
@@ -355,7 +350,6 @@ End Function
 ' postojali mogu da postoje.
 Public Sub ScrResetCache()
     Set mHas = Nothing
-    Set mBrana = Nothing
 End Sub
 
 '--------------------------------------------------------------- POZIV

@@ -35,7 +35,7 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-203"
+Public Const MATUNOS_BUILD As String = "v6-ui-204"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
@@ -602,7 +602,19 @@ Private Function ComboVrednostPostoji(ByVal kljuc As String, ByVal spec As Strin
     zavisi = modMaticniIzvor.MatComboZavisi(izvor)
     If Len(zavisi) > 0 Then kontekst = Vred(polja, zavisi)
     stavke = modMaticniIzvor.MatComboStavke(izvor, kontekst)
+    ' PUKLO citanje nije prazan spisak. MatComboStavke i jedno i drugo vraca kao
+    ' prazan niz (combo se ne sme srusiti), pa se razlika cita odvojeno --
+    ' inace bi kvar pri citanju tblStanice bio "provera je prosla".
+    If Len(modMaticniIzvor.MatComboGreska()) > 0 Then
+        LogWarn "modMaticniUnos.ComboVrednostPostoji", _
+                "spisak se ne cita (" & modMaticniIzvor.MatComboGreska() & _
+                ") -- vrednost odbijena"
+        ComboVrednostPostoji = False
+        Exit Function
+    End If
     If Not IsArray(stavke) Then Exit Function
+    ' PRAZAN spisak prolazi, i to je druga odluka: sekcija u koju se unosi prvi
+    ' zapis nema sta da ponudi, a polje sme da bude prazno.
     If UBound(stavke) < LBound(stavke) Then Exit Function
 
     For i = LBound(stavke) To UBound(stavke)

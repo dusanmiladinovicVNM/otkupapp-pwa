@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-201"
+Public Const MATIZ_BUILD As String = "v6-ui-204"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -65,6 +65,24 @@ Private mStatusKol As Object
 ' da prezivi citanje u kome je nastala i pokaze stare nazive.
 Private mMapaStanica As Object
 Private mMapaKoop As Object
+
+' Poslednja greska pri citanju spiska za combo. Prazno = citanje je proslo.
+'
+' ZASTO OVAKO, a ne kroz povratnu vrednost: MatComboStavke svaki pad pretvara u
+' prazan niz -- pozivalac koji puni combo tako dobija prazan spisak i to je
+' tacno ono sto treba (combo se ne sme srusiti). Ali PROVERA upisa je do
+' v6-ui-204 taj isti prazan niz citala kao "provera je prosla", pa je kvar pri
+' citanju tblStanice dozvoljavao proizvoljan tekst u koloni stranog kljuca.
+' Prazan spisak i PUKLO citanje moraju da se razlikuju, a razlika ne moze u
+' povratnu vrednost bez menjanja svih pozivalaca -- isti obrazac i isti razlog
+' kao modUiScreens.ScrLastErr.
+Private mComboGreska As String
+
+' TEST: izvor koji se "ne moze procitati". Sme SAMO da obori citanje, nikad da
+' ga odobri -- pa provera upisa moze da bude samo strozija, nikad blaza. Kvar
+' pri citanju tabele se u harnessu ne moze izazvati drugacije, a bas on je bio
+' rupa (prazan niz je citan kao "provera je prosla").
+Private mComboPadTest As String
 
 '------------------------------------------------------------- SEKCIJE
 ' Sekcije po ekranu. Redosled = redosled u prekidacu lista.
@@ -560,8 +578,27 @@ Public Function MatComboZavisi(ByVal izvor As String) As String
     If izvor = "@sorte" Then MatComboZavisi = "vrsta"
 End Function
 
+' Greska iz POSLEDNJEG MatComboStavke. Cita se odmah posle njega -- svaki nov
+' poziv je prepisuje.
+Public Function MatComboGreska() As String
+    MatComboGreska = mComboGreska
+End Function
+
+' Test seam: naredna citanja datog izvora "padaju". Prazan izvor gasi seam.
+Public Sub MatComboPadTest(ByVal izvor As String)
+    mComboPadTest = izvor
+End Sub
+
 Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) As Variant
     Dim d As Variant, i As Long, c As Collection, vr As Long, so As Long
+    mComboGreska = ""
+    If Len(mComboPadTest) > 0 Then
+        If StrComp(mComboPadTest, izvor, vbTextCompare) = 0 Then
+            mComboGreska = "test: izvor '" & izvor & "' se ne cita"
+            MatComboStavke = Array()
+            Exit Function
+        End If
+    End If
     On Error GoTo EH
     Select Case izvor
         Case "@stanice":     MatComboStavke = PrikazLista(TBL_STANICE, "StanicaID", "Naziv", "")
@@ -606,6 +643,7 @@ Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) 
     End Select
     Exit Function
 EH:
+    mComboGreska = "izvor '" & izvor & "': " & Err.Number & " " & Err.description
     MatComboStavke = Array()
 End Function
 

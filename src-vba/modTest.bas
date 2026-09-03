@@ -426,6 +426,7 @@ Public Sub RunAllTests()
     RunOne 180
     RunOne 181
     RunOne 182
+    RunOne 183
     RunOne 124
     RunOne 125
     RunOne 126
@@ -649,6 +650,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
+        Case 183: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -839,6 +841,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
+        Case 183: T_Sekcija_OdbijenPrelazakNePomeraSekciju
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -13354,6 +13357,48 @@ Private Sub T_UiPanel_ZivotniCiklusIPrava()
 End Sub
 
 ' ============================================================
+' 183. Odbijen prelazak NE sme da pomeri sekciju.
+'
+' PostaviSekciju je menjao mSekcija, zlatno dugme i sidebar PRE nego sto pozove
+' ActivateScreen. Ako prelazak ne uspe -- operater odustane od odbacivanja
+' nesacuvanog, ciljni ekran nema prava ili modul, gradnja padne -- stari ekran
+' ostaje na sceni, a zaglavlje i sidebar pokazuju DRUGU sekciju. Ista klasa
+' kvara kao oznaka sidebara koja pokazuje ekran na koji se nije preslo.
+'
+' Meri se kroz sekciju u kojoj NIJEDAN ekran nije dozvoljen: brana Korisnika se
+' zatvara seam-om, a ostala tri maticna ekrana se ne mogu zatvoriti -- pa se
+' umesto toga meri drugi smer: prelazak koji USPE mora sekciju da PROMENI, a
+' prelazak na nepostojeci ekran ne sme da je pomeri.
+' ============================================================
+Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
+    Dim f As frmOtkupUI
+    Dim sekPosle As String, sekPosleNeuspeha As String
+    Dim ekranPosleNeuspeha As String, uspeoPrelazak As Boolean
+
+    Set f = NewOtkupUIForm()
+
+    ' Uspesan prelazak MENJA sekciju -- bez ovoga bi tvrdnja nize prolazila i
+    ' kad prekidac uopste ne radi.
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    sekPosle = modOtkupUI.AktivnaSekcija()
+
+    ' Nepostojeci ekran: ActivateScreen mora da vrati False, pa sekcija ostaje.
+    uspeoPrelazak = modOtkupUI.OtkupUI_PrelazakTest("NEPOSTOJECI_EKRAN")
+    sekPosleNeuspeha = modOtkupUI.AktivnaSekcija()
+    ekranPosleNeuspeha = modOtkupUI.AktivanEkran()
+
+    modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
+    ReleaseOtkupUIForm f
+
+    AssertEq sekPosle, SEK_MATICNI, "uspesan prelazak menja sekciju"
+    AssertEq uspeoPrelazak, False, "prelazak na nepostojeci ekran ne uspeva"
+    AssertEq sekPosleNeuspeha, SEK_MATICNI, _
+             "neuspeo prelazak ne pomera sekciju"
+    AssertEq (Len(ekranPosleNeuspeha) > 0), True, _
+             "neuspeo prelazak ostavlja ekran na kome jesmo"
+End Sub
+
+' ============================================================
 ' 182. Otkazana prijava i nalog bez prava -- prikaz ne sme da laze.
 '
 ' Dva nalaza recenzije v6-ui-202, oba klasa "prikaz tvrdi jedno, stanje je
@@ -13377,25 +13422,40 @@ End Sub
 ' ============================================================
 Private Sub T_Auth_OtkazanaPrijavaNeLazePrikaz()
     Dim f As frmOtkupUI
-    Dim korPre As String, korPosle As String
-    Dim prijavljenPosle As Boolean
+    Dim korPosle As String, uspelo As Boolean
+    Dim prijavljenPosle As Boolean, bioPrijavljen As Boolean
     Dim redovaPre As Long, redovaPosle As Long
     Dim naslovVidljiv As Boolean, mrezaVidljiva As Boolean
+    Dim ekranPosleOporavka As String, mrezaPosleOporavka As Boolean
+    Const TEST_USR As String = "test.operater"
 
     ' --- 1) otkazana prijava vraca sesiju ---------------------------------
-    korPre = modAuth.GetCurrentUser()
-    modAuth.AuthOtkazTest
-    korPosle = modAuth.GetCurrentUser()
-    prijavljenPosle = modAuth.JePrijavljen()
+    ' Vozi se kroz PRAVI modAuth.Login. Do v6-ui-204 je test zvao seam koji je
+    ' sam ponavljao redosled iz Login-a -- pa sabotaza nad Login-om nije morala
+    ' da ga obori. To je tacno oblik placebo testa protiv koga postoji pravilo
+    ' o dvosmernom dokazu (.claude/rules/testovi.md par.6).
+    '
+    ' Sesija se POSTAVLJA, jer bez nje tvrdnja poredi prazno sa praznim i
+    ' prolazi i kad vracanja nema. Ako je neko STVARNO prijavljen (AUTH ukljucen
+    ' na masini na kojoj se test vrti), ne dira se nista -- tudja sesija nije
+    ' materijal za test.
+    bioPrijavljen = modAuth.JePrijavljen()
+    If Not bioPrijavljen Then
+        modAuth.AuthSesijaTest TEST_USR, "operater", "Test Operater"
+        modAuth.AuthOdbijPrijavuTest True
+        uspelo = modAuth.Login()
+        modAuth.AuthOdbijPrijavuTest False
+        korPosle = modAuth.GetCurrentUser()
+        prijavljenPosle = modAuth.JePrijavljen()
+        modAuth.AuthSesijaTest "", "", ""      ' vrati na zateceno (odjavljen)
 
-    AssertEq korPosle, korPre, _
-             "otkazana prijava vraca PRETHODNOG operatera, ne prazno"
-    ' U headless runu AUTH nije ukljucen pa niko nije prijavljen -- tada je i
-    ' vracanje prazno, i tvrdnja o JePrijavljen ne bi merila nista. Meri se
-    ' samo kad je bilo koga bilo.
-    If Len(korPre) > 0 Then
+        AssertEq uspelo, False, "odbijena prijava vraca False"
+        AssertEq korPosle, TEST_USR, _
+                 "otkazana prijava vraca PRETHODNOG operatera, ne prazno"
         AssertEq prijavljenPosle, True, _
                  "posle otkazivanja je sesija i dalje prijavljena"
+        AssertEq modAuth.JePrijavljen(), False, _
+                 "test za sobom ne ostavlja prijavljenu sesiju"
     End If
 
     ' --- 2) prazna radna povrsina je STVARNO prazna -----------------------
@@ -13408,6 +13468,15 @@ Private Sub T_Auth_OtkazanaPrijavaNeLazePrikaz()
     naslovVidljiv = f.Controls("zTitle").Visible
     mrezaVidljiva = f.Controls("zGrid").Visible
 
+    ' --- 3) sledeci operater SA pravima izlazi iz prazne povrsine ---------
+    ' PrimeniNovaPrava je trazio prvi dozvoljen ekran samo kad je mScreen bio
+    ' NEPRAZAN i zabranjen. Posle naloga bez ijednog prava mScreen je prazan, pa
+    ' je sledeci (validan) operater dobijao osvezen sidebar i ostajao pred
+    ' praznom povrsinom do prvog rucnog klika.
+    modOtkupUI.OtkupUI_PrimeniNovaPravaTest
+    ekranPosleOporavka = modOtkupUI.AktivanEkran()
+    mrezaPosleOporavka = f.Controls("zGrid").Visible
+
     ReleaseOtkupUIForm f
 
     AssertEq (redovaPre > 0), True, _
@@ -13416,6 +13485,9 @@ Private Sub T_Auth_OtkazanaPrijavaNeLazePrikaz()
              "prazna radna povrsina BRISE redove, ne samo sto ih sakriva"
     AssertEq naslovVidljiv, False, "naslovna traka se ne crta bez ijednog ekrana"
     AssertEq mrezaVidljiva, False, "mreza se ne crta bez ijednog ekrana"
+    AssertEq (Len(ekranPosleOporavka) > 0), True, _
+             "operater sa pravima izlazi iz prazne povrsine sam, bez rucnog klika"
+    AssertEq mrezaPosleOporavka, True, "mreza se vraca uz ekran"
 End Sub
 
 ' ============================================================
@@ -14638,6 +14710,9 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     Dim kljuc As String, bezZastite As String, pk As String
     Dim odgKorDodaj As String, odgKorIzmeni As String, odgKorStatus As String
     Dim noviKorID As String, noviStatus As String
+    Dim modul As String, neslaganje As String
+    Dim imaBranu As Boolean, kazeRegistar As Boolean
+    Dim stavke As Variant, odgPadIzvora As String
 
     ' --- 1) combo van liste se ODBIJA -------------------------------------
     Set polja = CreateObject("Scripting.Dictionary")
@@ -14648,6 +14723,27 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     AssertEq (Len(odg) > 0), True, "izmisljena stanica se odbija pre upisa"
     AssertEq CStr(polja(modMaticniUnos.MAT_FOKUS)), "stanica", _
              "odbijanje kaze koje polje je van liste"
+
+    ' KVAR PRI CITANJU spiska nije prazan spisak. MatComboStavke i jedno i drugo
+    ' vraca kao prazan niz, pa je do v6-ui-204 neprocitana tblStanice znacila
+    ' "provera je prosla" i proizvoljan tekst je ulazio u kolonu stranog kljuca.
+    ' Meri se nad VALIDNOM vrednoscu: ista vrednost prolazi dok se spisak cita,
+    ' a mora da bude odbijena kad citanje padne.
+    stavke = modMaticniIzvor.MatComboStavke("@stanice", "")
+    If IsArray(stavke) Then
+        If UBound(stavke) >= LBound(stavke) Then
+            polja("stanica") = CStr(stavke(LBound(stavke)))
+            AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", polja), "", _
+                     "postojeca stanica prolazi dok se spisak cita"
+            modMaticniIzvor.MatComboPadTest "@stanice"
+            odgPadIzvora = modMaticniUnos.MatProveriTest("KOOPERANTI", polja)
+            modMaticniIzvor.MatComboPadTest ""
+            AssertEq (Len(odgPadIzvora) > 0), True, _
+                     "kvar pri citanju spiska ODBIJA vrednost, ne propusta je"
+            AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", polja), "", _
+                     "seam se posle testa gasi"
+        End If
+    End If
 
     ' Prazan combo i dalje prolazi -- obaveznost je zasebna provera.
     Set polja = CreateObject("Scripting.Dictionary")
@@ -14705,8 +14801,24 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
              "kapija se posle testa vraca"
 
     ' --- 4) brana ekrana je fail-closed ----------------------------------
-    ' Ekran cija Scr_Dozvoljen PUKNE ne sme da prodje. Meri se preko ekrana koji
-    ' branu NEMA (mora da prodje) i onog koji je ima (mora da postuje odgovor).
+    ' KO IMA BRANU kaze REGISTAR (SCR_BRANA), ne broj greske. Polje i stvarnost
+    ' moraju da se slazu u OBA smera -- inace bi ekran sa branom koju registar
+    ' ne zna prolazio nepitan, a ekran bez brane koju registar tvrdi bio bi
+    ' TRAJNO zabranjen (svaka greska poziva je sada "ne").
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        modul = modUiScreens.ScrField(CStr(r), SCR_MODUL)
+        If Len(modul) > 0 Then
+            imaBranu = ProceduraPostoji(modul, "Scr_Dozvoljen")
+            kazeRegistar = (modUiScreens.ScrField(CStr(r), SCR_BRANA) = "1")
+            If imaBranu <> kazeRegistar Then _
+                neslaganje = neslaganje & " " & kljuc & _
+                             IIf(imaBranu, "(ima,neupisana)", "(upisana,nema)")
+        End If
+    Next r
+    AssertEq neslaganje, "", _
+             "registar brane se slaze sa modulima ekrana, u oba smera"
+
     AssertEq modUiScreens.ScrDozvoljen("PALETE"), modAuth.KorisnikImaPravo(OBL_PALETE), _
              "ekran bez sopstvene brane ide samo po oblasti"
     modScrMatKorisnici.Scr_MkorBranaZatvoriTest True

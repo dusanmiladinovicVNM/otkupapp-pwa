@@ -25,6 +25,11 @@ Private gCurrentUserUloga As String
 Private gCurrentUserIme As String
 Private gLoggedIn As Boolean
 
+' TEST: sledeci PrikaziPrijavu vraca False BEZ otvaranja forme. Sme samo da
+' obori prijavu, nikad da je odobri -- forma za prijavu je modalna i u harnessu
+' se ne moze odigrati, a bas neuspela prijava je ono sto se meri.
+Private mPrijavaOdbijTest As Boolean
+
 ' ------------------------------------------------------------
 ' Da li je prijava ukljucena (opt-in). Prazno/missing = NE.
 ' ------------------------------------------------------------
@@ -67,10 +72,7 @@ Public Function Login() As Boolean
 
     Logout
 
-    frmLogin.LoginOK = False
-    frmLogin.Show                 ' modal (default)
-    Login = frmLogin.LoginOK
-    Unload frmLogin
+    Login = PrikaziPrijavu()
 
     If Not Login Then VratiSesiju biUser, biUloga, biIme, biLog
     Exit Function
@@ -78,6 +80,18 @@ EH:
     LogErr "modAuth.Login"
     Login = False
     VratiSesiju biUser, biUloga, biIme, biLog
+End Function
+
+' Sam dijalog prijave. Izdvojen iz Login-a zato sto je to JEDINI korak koji se
+' u harnessu ne moze odigrati -- a sve oko njega (pamcenje sesije, gasenje,
+' vracanje) je bas ono sto je bilo pokvareno. Sa ovim se test vozi kroz PRAVI
+' Login, pa sabotaza nad vracanjem sesije stvarno obara tvrdnju.
+Private Function PrikaziPrijavu() As Boolean
+    If mPrijavaOdbijTest Then Exit Function      ' False, bez forme
+    frmLogin.LoginOK = False
+    frmLogin.Show                 ' modal (default)
+    PrikaziPrijavu = frmLogin.LoginOK
+    Unload frmLogin
 End Function
 
 ' Vracanje zapamcene sesije posle NEUSPELE prijave. Odvojeno zato sto se zove
@@ -104,23 +118,35 @@ Public Function JePrijavljen() As Boolean
     JePrijavljen = gLoggedIn
 End Function
 
-' TEST SEAM: odigraj OTKAZANU prijavu, bez forme za prijavu.
+' TEST SEAM: sledeca prijava NE USPEVA, bez otvaranja forme.
 '
-' Radi tacno redosled iz Login(): zapamti sesiju, obrisi je, "prijava nije
-' uspela", vrati. Forma frmLogin je modalna i u harnessu se ne moze odigrati,
-' a bas ovaj redosled je bio kvar -- pa se meri on, a ne poziv koji ga sadrzi.
-'
-' Tvrdo gejtovan: van test-rezima ne radi nista. Ne moze ni da odobri pristup
-' (nista ne postavlja sto vec nije bilo), samo da ga vrati u zateceno stanje.
-Public Sub AuthOtkazTest()
-    Dim biUser As String, biUloga As String, biIme As String, biLog As Boolean
+' Sme samo da obori prijavu. Ne postoji vrednost kojom se prijava odobrava --
+' True znaci "odbij", False vraca normalno ponasanje (forma se otvara).
+' Tvrdo gejtovan: van test-rezima ne radi nista.
+Public Sub AuthOdbijPrijavuTest(ByVal odbij As Boolean)
     If Not IsTestMode() Then Exit Sub
-    biUser = gCurrentUser
-    biUloga = gCurrentUserUloga
-    biIme = gCurrentUserIme
-    biLog = gLoggedIn
-    Logout
-    VratiSesiju biUser, biUloga, biIme, biLog
+    mPrijavaOdbijTest = odbij
+End Sub
+
+' TEST SEAM: postavi sesiju, da bi se imalo sta izgubiti.
+'
+' Bez prijavljene sesije tvrdnja "otkazivanje vraca prethodnog operatera" poredi
+' prazno sa praznim i prolazi i kad vracanja nema. Zato test mora da postavi
+' nekoga -- a to moze samo odavde, tvrdo gejtovano.
+'
+' NE DAJE PRAVA koja vec nisu data: u harnessu je AUTH iskljucen, pa
+' KorisnikImaPravo i MozeAdministraciju ionako vracaju True za svakoga
+' (anti-lockout). Prazan usr znaci Logout, pa test moze da vrati zateceno.
+Public Sub AuthSesijaTest(ByVal usr As String, ByVal uloga As String, ByVal ime As String)
+    If Not IsTestMode() Then Exit Sub
+    If Len(usr) = 0 Then
+        Logout
+        Exit Sub
+    End If
+    gCurrentUser = usr
+    gCurrentUserUloga = uloga
+    gCurrentUserIme = ime
+    gLoggedIn = True
 End Sub
 
 ' ------------------------------------------------------------

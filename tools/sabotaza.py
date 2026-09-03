@@ -2497,7 +2497,7 @@ SABOTAZE = {
         "    If Not Login Then VratiSesiju biUser, biUloga, biIme, biLog\n",
         "    ' SABOTAZA: otkazana prijava ostavlja prazan kontekst\n",
         "T_Auth_OtkazanaPrijavaNeLazePrikaz",
-        "otkazana prijava vraca PRETHODNOG operatera",
+        "otkazana prijava vraca PRETHODNOG operatera, ne prazno",
     ),
     # Prazna radna povrsina koja samo SAKRIJE mrezu i dalje drzi tudje redove:
     # mView prezivi, RenderGrid ga vrati, GridCell ga cita i bez crtanja.
@@ -2517,6 +2517,44 @@ SABOTAZE = {
         "    Brana = \"\"   ' SABOTAZA: pisac naloga bez sopstvene kapije\n",
         "T_Maticni_KapijeUpisaIZivotniCiklus",
         "pisac naloga odbija unos kad kapija ne pusta",
+    ),
+    # ------------------------------- RECENZIJA v6-ui-204
+    # Sekcija se menjala PRE nego sto se zna da li je prelazak uspeo, pa je
+    # odbijen prelazak ostavljao zaglavlje i sidebar u drugoj sekciji od one
+    # iz koje je ekran koji se i dalje vidi.
+    "sekcija-se-ne-vraca-posle-neuspeha": (
+        "modOtkupUI.bas",
+        "    If Not ActivateScreen(frm, kljuc) Then\n        mSekcija = staraSekcija\n",
+        "    If Not ActivateScreen(frm, kljuc) Then\n        ' SABOTAZA: sekcija ostaje promenjena\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "neuspeo prelazak ne pomera sekciju",
+    ),
+    # Posle naloga bez ijednog prava mScreen je prazan; sledeci operater sa
+    # pravima je dobijao samo osvezen sidebar i ostajao pred praznom povrsinom.
+    "prazna-povrsina-ostaje-i-sa-pravima": (
+        "modOtkupUI.bas",
+        "    If Len(mScreen) = 0 Then\n        ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna\n",
+        "    If False Then   ' SABOTAZA: prazna povrsina se ne oporavlja\n        ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "operater sa pravima izlazi iz prazne povrsine sam",
+    ),
+    # Kvar pri citanju spiska i prazan spisak se vracaju ISTO (prazan niz), pa
+    # provera koja ih ne razlikuje propusta proizvoljan strani kljuc.
+    "combo-kvar-izvora-prolazi": (
+        "modMaticniUnos.bas",
+        "    If Len(modMaticniIzvor.MatComboGreska()) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: kvar pri citanju spiska se ne razlikuje\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "kvar pri citanju spiska ODBIJA vrednost",
+    ),
+    # Ko ima branu kaze REGISTAR, ne broj greske. Polje koje se razidje sa
+    # modulima znaci ili ekran koji se ne pita, ili ekran koji je trajno zabranjen.
+    "registar-brane-se-razisao": (
+        "modUiScreens.bas",
+        "          \"|SISTEM|\" & OBL_MATICNI & \"|\" & SEK_MATICNI & \"|1\"\n",
+        "          \"|SISTEM|\" & OBL_MATICNI & \"|\" & SEK_MATICNI   ' SABOTAZA: brana neupisana\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "registar brane se slaze sa modulima ekrana",
     ),
     "panel-graditelj-ne-postoji": (
         "modUiPanel.bas",
