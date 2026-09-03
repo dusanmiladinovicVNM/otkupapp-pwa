@@ -143,7 +143,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         hdrIdx = hdrIdx + 1
         hnm = "lblMDgrp_" & CStr(hdrIdx)
         On Error Resume Next
-        frm.Controls.Remove hnm
+        frm.Controls.Remove CStr(hnm)
         On Error GoTo EH
 
         ' Samo najduzi naslov (npr. "Ambalaza i pakovanje") se prelama u 2 reda;
@@ -172,7 +172,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
 
             nm = "btnMD_" & tg
             On Error Resume Next
-            frm.Controls.Remove nm
+            frm.Controls.Remove CStr(nm)
             On Error GoTo EH
 
             Set c = frm.Controls.Add("Forms.CommandButton.1", nm, True)

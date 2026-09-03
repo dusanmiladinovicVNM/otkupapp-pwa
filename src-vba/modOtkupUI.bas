@@ -5454,7 +5454,17 @@ Private Sub UkloniZonu(frm As Object, ByVal nm As String, ByVal btnsPre As Long)
             Btns.Remove i
         Next i
     End If
-    frm.Controls.Remove nm
+    ' CStr(), NE golo nm: MSForms Controls.Remove preko kasnog vezivanja
+    ' odbija argument prosledjen ByRef -- javi 'Type mismatch', koji
+    ' On Error Resume Next pojede, pa zona OSTANE na formi. Isti poziv sa
+    ' literalom ili izrazom prolazi (izmereno: literal OK, promenljiva
+    ' Type mismatch, (promenljiva) OK, CStr(promenljiva) OK).
+    '
+    ' Zbog toga uklanjanje uvedeno u v6-ui-207 nikad nije uzimalo: zona je
+    ' ostajala prazna na formi, sledeci pokusaj ju je NASAO, preskocio
+    ' gradnju i prijavio uspesan prelazak na PRAZAN ekran -- tacno kvar
+    ' zbog kog je uklanjanje i dodato.
+    frm.Controls.Remove CStr(nm)
     Err.Clear
 End Sub
 

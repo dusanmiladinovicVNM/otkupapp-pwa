@@ -13835,7 +13835,14 @@ Private Sub T_MatIzvor_OpisSekcijaJePotpun()
                             zbirneKolone = zbirneKolone & " " & kljuc & "/" & ColF(spec, 0)
                     End Select
                     izv = ColF(spec, 1)
-                    If Left$(izv, 1) = "@" Then
+                    If modMaticniIzvor.JeAlias(izv) Then
+                        ' 4a) alias NIJE izvedena vrednost nego gola kolona pod
+                        ' imenom koje zavisi od instalacije. Tvrdnja je da se
+                        ' RAZRESI: alias bez ijedne postojece kolone tiho ostavlja
+                        ' praznu celiju, sto je tacno kvar zbog kog alias postoji.
+                        If Len(modMaticniIzvor.RazresiKolonu(tbl, izv)) = 0 Then _
+                            nepoznataKolona = nepoznataKolona & " " & kljuc & "." & izv
+                    ElseIf Left$(izv, 1) = "@" Then
                         ' 4) izvedena vrednost mora biti poznata
                         Select Case izv
                             Case "@status", "@ime_prezime", "@stanica", "@adresa_mesto", _
@@ -14094,6 +14101,21 @@ End Sub
 '
 ' Zasto i "fokus": forma je uz svaku poruku radila SetFocus na polje. Bez tog
 ' podatka operater dobije poruku i mora sam da trazi gde je greska.
+' Prva vrednost koju combo STVARNO nudi, iz fixture-a.
+'
+' Combo se proverava nad PRIKAZOM ("Naziv (ID)"), ne nad golim stranim
+' kljucem -- pa ukucan ID ("ST-001", "KOOP-1") nikad nije u ponudjenoj
+' listi. Grane koje tvrde PROLAZ su tako merile ODBIJANJE, i to na pogresnom
+' polju: T_MatUnos_ProveraOdbija je padao na kooperantu umesto na povrsini.
+' Test je pisan u sesiji bez Excela, pa se to nije videlo do prvog izvrsavanja.
+Private Function PrvaPonudjena(ByVal izvor As String) As String
+    Dim a As Variant
+    a = modMaticniIzvor.MatComboStavke(izvor, "")
+    If Not IsArray(a) Then Exit Function
+    If UBound(a) < LBound(a) Then Exit Function
+    PrvaPonudjena = CStr(a(LBound(a)))
+End Function
+
 Private Sub T_MatUnos_ProveraOdbija()
     Dim d As Object
 
@@ -14107,7 +14129,9 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 2) Popunjeno obavezno prolazi.
     Set d = CreateObject("Scripting.Dictionary")
-    d("ime") = "Dragana": d("prezime") = "Ilic": d("stanica") = "ST-001"
+    d("ime") = "Dragana": d("prezime") = "Ilic"
+    d("stanica") = PrvaPonudjena("@stanice")
+    AssertEq (Len(d("stanica")) > 0), True, "fixture nudi bar jedno otkupno mesto"
     AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", d), "", _
              "kooperant sa imenom, prezimenom i stanicom prolazi"
 
@@ -14130,8 +14154,13 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 5) Nula NIJE dozvoljena tamo gde nema smisla: parcela od nula hektara.
     Set d = CreateObject("Scripting.Dictionary")
-    d("kooperant") = "KOOP-1": d("katbroj") = "123": d("katopstina") = "Bukovik"
-    d("kultura") = "Malina": d("ggap") = "Da": d("povrsina") = "0"
+    ' Kooperant i kultura su combo polja kao i stanica: ukucane vrednosti su
+    ' obarale unos PRE povrsine, pa je tvrdnja o fokusu merila pogresno polje.
+    d("kooperant") = PrvaPonudjena("@kooperanti"): d("katbroj") = "123"
+    d("katopstina") = "Bukovik"
+    d("kultura") = PrvaPonudjena("@kulture"): d("ggap") = "Da": d("povrsina") = "0"
+    AssertEq (Len(d("kooperant")) > 0 And Len(d("kultura")) > 0), True, _
+             "fixture nudi bar jednog kooperanta i bar jednu kulturu"
     AssertEq (Len(modMaticniUnos.MatProveriTest("PARCELE", d)) > 0), True, _
              "parcela od nula hektara se odbija"
     AssertEq CStr(d(modMaticniUnos.MAT_FOKUS)), "povrsina", "odbijena je bas povrsina"
@@ -14158,7 +14187,12 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 8) Cenovnik: cena mora biti STROGO pozitivna.
     Set d = CreateObject("Scripting.Dictionary")
-    d("vrsta") = "Malina": d("klasa") = "I": d("cena") = "0"
+    ' Vrsta i klasa su combo (@vrste iz tblKulture, @klase iz konstanti), pa i
+    ' one moraju doci iz ponudjene liste -- ukucana vrsta obara unos pre cene.
+    d("vrsta") = PrvaPonudjena("@vrste"): d("klasa") = PrvaPonudjena("@klase")
+    d("cena") = "0"
+    AssertEq (Len(d("vrsta")) > 0 And Len(d("klasa")) > 0), True, _
+             "fixture nudi bar jednu vrstu voca i bar jednu klasu"
     AssertEq (Len(modMaticniUnos.MatProveriTest("CENOVNIK", d)) > 0), True, _
              "cena nula se odbija"
     d("cena") = "250"
@@ -14918,15 +14952,20 @@ Private Sub T_Mreza_DecimalaNeNestaje()
     Dim ekrani As Variant, e As Variant, liste As Variant, r As Variant
     Dim kljuc As String, cols As Variant, i As Long, izv As String
     Dim celaBezDecimale As String, spec As String
+    Dim ok As Boolean
 
     ' --- formatiranje ----------------------------------------------------
-    AssertEq modOtkupUI.CelijaTekst("dec", 0.5, ""), "0,50", _
+    ' Treci argument je ByRef zastavica kvara, ne tekst: CelijaTekst na
+    ' neuspeh vraca prazno I spusta ok, pa se prazna celija zbog greske
+    ' razlikuje od prazne zbog nepostojeceg podatka. Zato se i tvrdi.
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.5, ok), "0,50", _
              "pola kilograma se crta kao 0,50, ne kao 1"
-    AssertEq modOtkupUI.CelijaTekst("dec", 0.4, ""), "0,40", _
+    AssertEq ok, True, "formatiranje decimale ne prijavljuje kvar"
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.4, ok), "0,40", _
              "0,4 se crta kao 0,40, ne kao 0"
-    AssertEq modOtkupUI.CelijaTekst("dec", 152.5, ""), "152,50", _
+    AssertEq modOtkupUI.CelijaTekst("dec", 152.5, ok), "152,50", _
              "cena zadrzava decimale"
-    AssertEq modOtkupUI.CelijaTekst("num", 0.5, ""), "1", _
+    AssertEq modOtkupUI.CelijaTekst("num", 0.5, ok), "1", _
              "num i dalje zaokruzuje -- zato tezine i cene NISU num"
 
     ' --- dec ne pali podnozje --------------------------------------------

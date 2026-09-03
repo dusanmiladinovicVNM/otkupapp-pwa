@@ -2222,12 +2222,26 @@ SABOTAZE = {
         "T_MatUnos_ProveraOdbija",
         "prag blokade ispod praga upozorenja se odbija",
     ),
+    # Sidro je preslo iz MatKolonaPolja u JeAlias: razresivac je izdvojen da
+    # bi ga MREZA koristila isto kao editor (v6-ui-209). Ugasen JeAlias znaci
+    # da alias nigde nije alias -- editor pise u kolonu '@alias:...'.
     "maticni-alias-se-ne-razresava": (
         "modMaticniIzvor.bas",
-        "    If Left$(kol, 7) <> \"@alias:\" Then\n",
-        "    If True Then   ' SABOTAZA: alias ostaje nerazresen\n",
+        "    JeAlias = (Left$(kol, 7) = \"@alias:\")\n",
+        "    JeAlias = False   ' SABOTAZA: alias nikad nije alias\n",
         "T_MatUnos_OpisPoljaISema",
         "svako polje pise u kolonu koja POSTOJI u semi",
+    ),
+    # Druga polovina: alias JESTE prepoznat, ali se ne razresi ni u jednu
+    # postojecu kolonu. To je stanje u kome kolona tiho ostaje prazna --
+    # tacno kvar zbog kog alias i postoji, i jedina crvena za tvrdnju
+    # dodatu uz prelazak mreze na razresivac.
+    "maticni-alias-ne-nalazi-kolonu": (
+        "modMaticniIzvor.bas",
+        "        If GetColumnIndex(tbl, Trim$(CStr(ime))) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: nijedan alias se ne razresava\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "svaka gola kolona postoji u semi",
     ),
     # --------------------------------- MATICNI: EDITOR U ZONI (M2b)
     # Polja se dodeljuju iz bazena. Dva polja koja dobiju ISTU kontrolu bi se
