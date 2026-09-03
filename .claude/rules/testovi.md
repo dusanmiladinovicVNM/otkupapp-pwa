@@ -15,7 +15,11 @@ paths:
 
 <!-- frmOtkup.frm / modOtkupUI.bas / modScrDokumenti.bas su u paths namerno: u
      njima su test seam-ovi (§4). Bez ovoga agent koji menja formu ne bi znao da
-     postoje. -->
+     postoje.
+
+     `frmOtkup.frm` odlazi SA formom (korak 2, `docs/UI_MIGRACIJA_KATALOG.md`
+     §27.3) i sa njim njegova dva seam-a. Seam-ovi ljuske (`modOtkupUI`,
+     `modScrDokumenti`) OSTAJU — oni nisu prelazni. -->
 
 # Verifikacija — politika
 
@@ -130,7 +134,9 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 ## 4) Test seam-ovi koje produkcioni kod nosi
 
 Ako menjaš `frmOtkup`, `modOtkupUI` ili `modScrDokumenti`, znaj da ovo postoji i
-zašto — inače ćeš ih „počistiti":
+zašto — inače ćeš ih „počistiti". Seam-ovi ispod su **ljuskini i ostaju**;
+legacy `frmOtkup` ima svoja dva (`.claude/rules/otkup-i-dokumenta.md` §2) i ona
+odlaze sa formom u koraku 2 (`docs/UI_MIGRACIJA_KATALOG.md` §27.3):
 
 - `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
   zove direktno, bez vožnje celog upisa.
