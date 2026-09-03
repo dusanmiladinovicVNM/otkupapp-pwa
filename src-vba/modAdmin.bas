@@ -30,8 +30,20 @@ Option Explicit
 ' iskljucivo preko ChrW, kao u modMaticniLookups.
 ' ============================================================
 
-Private mFrm As Object              ' frmStammdaten instanca (host)
+Private mFrm As Object              ' okvir domacina (radna povrsina ljuske)
 Private mWrappers As Collection     ' clsAdminBtn (drzi WithEvents zivim)
+
+' Prekidac grupa -- isti obrazac koji Podesavanja vec koriste. Admin ima
+' dvanaest komandi u pet grupa; do v6-ui-201 su sve stajale naslagane, sto je
+' bio jedini ekran u aplikaciji koji tako izgleda.
+Private mAktivnaGrupa As String
+Private mSegBtns As Collection      ' key = naziv grupe -> segment dugme
+Private mKomande As Collection      ' key = naziv grupe -> Collection dugmadi
+Private mAdmW As Single
+
+Private Const ADM_SEG_H As Single = 24
+Private Const ADM_SEG_GAP As Single = 6
+Private Const ADM_M As Single = PAD
 
 ' ============================================================
 ' PUBLIC -- izgradnja panela (poziva frmStammdaten.UserForm_Activate za Tag="Admin")
@@ -62,91 +74,87 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
     w = frm.InsideWidth
     If w < 400 Then w = 960
 
-    Const m As Single = 12
+    Const m As Single = PAD
 
     ' Naslov
     Dim lblTitle As MSForms.label
-    Set lblTitle = AddLabel("adm_title", m, 8, w - 2 * m, 20)
-    lblTitle.caption = "Admin"
-    StyleLabel lblTitle, TXT_LIGHT(), True
-    lblTitle.Font.Size = FONT_SIZE_HEADER
+    Set lblTitle = AddLabel("adm_title", m, 14, w - 2 * m, 18)
+    lblTitle.caption = Poruka("OTKUI_MS_ADMIN")
+    modUiKit.PanelStilNaslov lblTitle
 
     ' Povratak (gore desno -- vidljiv pre skrolovanja)
     Dim btnBack As MSForms.CommandButton
-    Set btnBack = AddButton("btnAdmBack", w - m - 120, 32, 120, 24)
-    StyleExitButton btnBack, "Povratak"
+    Set btnBack = AddButton("btnAdmBack", w - m - 132, 38, 132, 26)
+    btnBack.caption = Poruka("OTKUI_BTN_PANEL_NAZAD")
+    modUiKit.PanelStilDugme btnBack, "ghost"
     WireButton btnBack, "back"
 
     ' Hint
     Dim lblHint As MSForms.label
-    Set lblHint = AddLabel("adm_hint", m, 36, w - m - 140, 16)
+    Set lblHint = AddLabel("adm_hint", m, 40, w - m - 150, 15)
     lblHint.caption = "Operativne i razvojne komande. Neke su destruktivne -- koristi oprezno."
-    StyleLabel lblHint, TXT_MUTED(), False
-    lblHint.Font.Size = FONT_SIZE_SMALL
+    modUiKit.PanelStilNapomena lblHint
 
     ' Grupe dugmadi (data-driven). Dodavanje komande = jedan red u AdminGroups.
     Dim groups As Variant
     groups = AdminGroups()
 
-    Const COLS As Long = 2
-    Const COLGAP As Single = 12
-    Const BTNH As Single = 26
-    Const ROWGAP As Single = 6
-    Const HDRH As Single = 16
-    Const HDRGAP As Single = 3
-    Const GROUPGAP As Single = 12
-    Dim btnW As Single
-    btnW = (w - 2 * m - (COLS - 1) * COLGAP) / COLS
+    ' Mere rasporeda stoje u RelayoutAdmin -- gradnja ih ne treba, jer kontrole
+    ' pravi na nuli i tek ih raspored postavlja (isti obrazac kao Podesavanja).
+    Const BTNH As Single = 28
 
-    Dim Y As Single: Y = 64
     Dim gi As Long, ii As Long
     Dim grp As Variant, items As Variant, it As Variant
-    Dim hl As MSForms.label, b As MSForms.CommandButton
-    Dim col As Long, cx As Single
-    Dim cap As String, act As String
+    Dim b As MSForms.CommandButton, seg As MSForms.CommandButton
+    Dim cap As String, act As String, gname As String
+    Dim lista As Collection
 
+    mAdmW = w
+    Set mSegBtns = New Collection
+    Set mKomande = New Collection
+
+    ' Gradnja: sve komande postoje, raspored ih pali i gasi. Isti obrazac kao
+    ' polja u Podesavanjima -- crta se JEDNA grupa, ostale su sklonjene.
     For gi = LBound(groups) To UBound(groups)
         grp = groups(gi)
+        gname = CStr(grp(0))
 
-        ' Sekcijski header (labela)
-        Set hl = AddLabel("admgrp_" & CStr(gi), m, Y, w - 2 * m, HDRH)
-        hl.caption = UCase$(CStr(grp(0)))
-        StyleLabel hl, TXT_MUTED(), True
-        hl.Font.Size = FONT_SIZE_SMALL
-        Y = Y + HDRH + HDRGAP
+        Set seg = AddButton("admgrp_" & CStr(gi), ADM_M, 0, _
+                            modUiKit.PanelSirinaSegmenta(gname), ADM_SEG_H)
+        modUiKit.PanelStilSegment seg, gname, False
+        ' Grupa se nosi U AKCIJI: clsAdminBtn nema polje za nosivost, a klasa se
+        ' po pravilu ne siri (v. .claude/rules/forme-i-kontrole.md).
+        WireButton seg, "grp:" & gname
+        mSegBtns.Add seg, gname
 
+        Set lista = New Collection
         items = grp(1)
-        col = 0
         For ii = LBound(items) To UBound(items)
             it = items(ii)
             cap = CStr(it(0))
             act = CStr(it(1))
-
-            cx = m + col * (btnW + COLGAP)
-            Set b = AddButton("btnAdm_" & act, cx, Y, btnW, BTNH)
+            Set b = AddButton("btnAdm_" & act, ADM_M, 0, 200, BTNH)
+            b.caption = cap
             If act = "checkupdate" Then
-                StylePrimaryButton b, cap
+                modUiKit.PanelStilDugme b, "primary"
+            ElseIf act = "ocisti" Or act = "migracija" Then
+                ' Jedine dve komande koje diraju podatke -- boja to kaze pre
+                ' nego sto se klikne, ne tek u dijalogu potvrde.
+                modUiKit.PanelStilDugme b, "danger"
             Else
-                StyleMenuButton b, cap
+                modUiKit.PanelStilDugme b, "ghost"
             End If
             WireButton b, act
-
-            If col = COLS - 1 Then
-                col = 0
-                Y = Y + BTNH + ROWGAP
-            Else
-                col = col + 1
-            End If
+            lista.Add b
         Next ii
-        If col <> 0 Then Y = Y + BTNH + ROWGAP
-        Y = Y + GROUPGAP
+        mKomande.Add lista, gname
+        If gi = LBound(groups) Then mAktivnaGrupa = gname
     Next gi
 
-    On Error Resume Next
-    mFrm.ScrollBars = fmScrollBarsVertical
-    mFrm.ScrollHeight = Y + 16
-    mFrm.KeepScrollBarsVisible = fmScrollBarsVertical
-    On Error GoTo 0
+    ' Skrol postavlja RelayoutAdmin -- on jedini zna dokle je raspored stigao.
+    ' Do v6-ui-201 je isti blok stajao i ovde, sa promenljivom Y koju gradnja
+    ' vise nema (raspored je preuzeo mere): "Variable not defined" pri compile-u.
+    RelayoutAdmin
 
     Exit Sub
 EH:
@@ -210,6 +218,16 @@ Public Sub AdminPanel_OnClick(ByVal action As String)
     ' AUD-033: tvrda brana i na akcijama (ne samo na izgradnji panela).
     If Not modAuth.MozeAdministraciju() Then
         MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ' Segment prekidaca nosi grupu u akciji ("grp:<naziv>") -- clsAdminBtn nema
+    ' polje za nosivost, a klasa se ne siri.
+    If Left$(action, 4) = "grp:" Then
+        If mAktivnaGrupa <> Mid$(action, 5) Then
+            mAktivnaGrupa = Mid$(action, 5)
+            RelayoutAdmin
+        End If
         Exit Sub
     End If
 
@@ -319,8 +337,29 @@ EH:
 End Sub
 
 ' Povratak na dashboard + cleanup (isti obrazac kao modPodesavanja.CloseConfigEditor).
+' Oslobadja reference modula bez zatvaranja domacina -- zove ga modUiPanel pre
+' nego sto isprazni okvir. Isti obrazac koji modPodesavanja vec ima
+' (Podesavanja_Release): WithEvents omotaci moraju da odu PRE kontrola, inace
+' drze kontrole kojih vise nema.
+Public Sub Admin_Release()
+    On Error Resume Next
+    Set mFrm = Nothing
+    Set mWrappers = Nothing
+    Set mSegBtns = Nothing
+    Set mKomande = Nothing
+    mAktivnaGrupa = ""
+End Sub
+
 Private Sub CloseAdminPanel()
     On Error Resume Next
+    ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
+    ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
+    ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
+    ' zajedno sa legacy formom.
+    '
+    ' Pita se po MODULU, ne po kljucu panela: modul zna svoje ime, a kljuc je
+    ' strano ime koje se moze preimenovati u registru (i jeste, u v6-ui-201).
+    If modUiPanel.PanelZatvoriAko("modAdmin") Then Exit Sub
     frmOtkupAPP.ReturnToDashboard "Admin zatvoren."
     Unload mFrm
     Set mFrm = Nothing
@@ -330,6 +369,85 @@ End Sub
 ' ============================================================
 ' PRIVATE -- runtime control helperi (Controls.Add; .frx se ne dira)
 ' ============================================================
+' Raspored: prekidac grupa, pa komande SAMO aktivne grupe. Isti ritam kao
+' Podesavanja -- segmenti se prelamaju, komande idu u dve kolone.
+Private Sub RelayoutAdmin()
+    Dim gname As Variant, grp As String, seg As MSForms.CommandButton
+    Dim X As Single, Y As Single, sw As Single, cx As Single
+    Dim lista As Collection, i As Long, col As Long, btnW As Single
+    Const COLS As Long = 2
+    Const COLGAP As Single = 14
+    Const BTNH As Single = 28
+    Const ROWGAP As Single = 8
+    On Error GoTo EH
+    If mSegBtns Is Nothing Then Exit Sub
+
+    X = ADM_M
+    Y = 76
+    For Each gname In AdminGrupeImena()
+        grp = CStr(gname)
+        Set seg = mSegBtns(grp)
+        sw = modUiKit.PanelSirinaSegmenta(grp)
+        If X > ADM_M And X + sw > mAdmW - ADM_M Then
+            X = ADM_M
+            Y = Y + ADM_SEG_H + ADM_SEG_GAP
+        End If
+        seg.Left = X: seg.top = Y: seg.width = sw: seg.Height = ADM_SEG_H
+        seg.Visible = True
+        modUiKit.PanelStilSegment seg, grp, (grp = mAktivnaGrupa)
+        X = X + sw + ADM_SEG_GAP
+    Next gname
+    Y = Y + ADM_SEG_H + 18
+
+    btnW = (mAdmW - 2 * ADM_M - (COLS - 1) * COLGAP) / COLS
+    For Each gname In AdminGrupeImena()
+        grp = CStr(gname)
+        Set lista = mKomande(grp)
+        If grp <> mAktivnaGrupa Then
+            For i = 1 To lista.count
+                lista(i).Visible = False
+            Next i
+        Else
+            col = 0
+            For i = 1 To lista.count
+                cx = ADM_M + col * (btnW + COLGAP)
+                lista(i).Left = cx
+                lista(i).top = Y
+                lista(i).width = btnW
+                lista(i).Height = BTNH
+                lista(i).Visible = True
+                If col = COLS - 1 Then
+                    col = 0
+                    Y = Y + BTNH + ROWGAP
+                Else
+                    col = col + 1
+                End If
+            Next i
+            If col <> 0 Then Y = Y + BTNH + ROWGAP
+        End If
+    Next gname
+
+    On Error Resume Next
+    mFrm.ScrollBars = fmScrollBarsVertical
+    mFrm.ScrollHeight = Y + 16
+    mFrm.KeepScrollBarsVisible = fmScrollBarsVertical
+    Exit Sub
+EH:
+    LogErr "modAdmin.RelayoutAdmin"
+End Sub
+
+' Imena grupa u redosledu registra -- raspored ih mora obici tim redom, a
+' Collection sa kljucem to ne garantuje.
+Private Function AdminGrupeImena() As Variant
+    Dim g As Variant, a() As Variant, i As Long
+    g = AdminGroups()
+    ReDim a(LBound(g) To UBound(g))
+    For i = LBound(g) To UBound(g)
+        a(i) = CStr(g(i)(0))
+    Next i
+    AdminGrupeImena = a
+End Function
+
 Private Sub WireButton(ByVal b As MSForms.CommandButton, ByVal act As String)
     Dim wrp As clsAdminBtn
     Set wrp = New clsAdminBtn

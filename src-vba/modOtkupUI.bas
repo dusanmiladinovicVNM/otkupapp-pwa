@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-188"
+Public Const OTKUI_BUILD   As String = "v6-ui-208"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -229,6 +229,11 @@ Private Const GAP         As Single = 10
 Public Const ICO_INSET   As Single = 24     ' sirina zone ikonice u dugmetu
 Public Const PAD         As Single = 16
 Private Const STATUS_H    As Single = 24
+' Donji blok sidebara (profil + podnozje) je prikovan za dno i NE deli visinu
+' sa stavkama. Imenovan je zato sto ulazi u meru na kojoj stoji odluka o
+' sekcijama (docs/UI_MIGRACIJA_KATALOG.md, 24.1) -- gola 62 u LayoutOtkup se
+' ne bi mogla tvrditi u testu.
+Private Const PROFIL_H    As Single = 62
 Private Const MIN_H       As Single = 620
 Private Const MIN_W       As Single = 900
 Private Const BP_NARROW   As Single = 860
@@ -279,6 +284,18 @@ Public Const IC_OPORAVAK As Long = &HE72C&   ' Refresh
 Private Const IC_SYNC     As Long = &HE753&   ' Cloud
 Private Const IC_HELP     As Long = &HE897&   ' Help
 Private Const IC_MATICNI  As Long = &HE713&   ' Setting
+' Ikonice maticne sekcije sidebara. Dve su PROVERENE (isti kod kao glif koji
+' ekran vec crta), tri su izabrane iz MDL2 kataloga i NISU vizuelno proverene u
+' ovoj sesiji -- provera je DumpMdl2Used (ime glifa stoji uz kod, pa se promasaj
+' vidi i na papiru). Pogresan kod je kvadratic, ne pad: BuildNav crta ikonicu
+' samo kad je kod razlicit od nule.
+Public Const IC_MAT_PARTNERI  As Long = &HE716&   ' People       (za proveru)
+Public Const IC_MAT_ROBA      As Long = &HE8EC&   ' Tag          (za proveru)
+Public Const IC_MAT_PAKOVANJE As Long = &HE7B8&   ' Package      (za proveru)
+Public Const IC_MAT_KORISNICI As Long = &HE748&   ' SwitchUser   (= IC_OPERATER)
+Public Const IC_MAT_SISTEM    As Long = &HE713&   ' Setting      (= IC_MATICNI)
+Public Const IC_MAT_ADMIN     As Long = &HE7EF&   ' Admin        (za proveru)
+Private Const IC_NAZAD    As Long = &HE72B&   ' Back         (za proveru)
 Private Const IC_KOPIRAJ  As Long = &HE8C8&   ' Copy - prepisi kolicinu
 Private Const IC_PROFIL   As Long = &HE77B&   ' Contact - profil u sidebaru
 ' Novac ima SMER, pa isplata i uplata nose strelice, ne "novcanik" - iz
@@ -363,7 +380,21 @@ Private mNavKey As Object
 Private mNavBroj As Object
 ' Aktivan ekran iz registra. "DOKUMENTI" je zatecen ekran koji ljuska jos
 ' crta po starom; svaki drugi se crta kroz ugovor, u svojoj zoni zScr_<kljuc>.
+' Radna povrsina je USTUPLJENA panelu. Ljuska ne zna KOM panelu -- zna samo da
+' zona ekrana, naslov i mreza ne smeju da se crtaju dok je ustupljena. Ko je u
+' njoj i sta ume, zna modUiPanel; ljuska mu daje samo prazan okvir.
+Private mPanelRezim As Boolean
+
 Private mScreen As String
+' SEKCIJA ljuske: RAD (dokumenti, finansije, analitika) ili MATICNI (sifarnici,
+' sistem). Zlatno dugme u zaglavlju je menja; dva skupa stavki sidebara se nikad
+' ne crtaju zajedno jer sidebar nema skrol (v. modUiScreens.SCR_SEKCIJA).
+Private mSekcija As String
+Private mNavUzak As Boolean          ' sidebar je suzen (uzak prozor)
+Private mNavVisina As Single         ' visina koju je aktivna sekcija zauzela
+Private mNavOff As Object            ' ime stavke sidebara -> stavka je prigusena
+Private mZadnjiRad As String         ' poslednji ekran radne sekcije
+Private mZadnjiMaticni As String     ' poslednji ekran maticne sekcije
 Private mPopFor As String            ' combo za koji je otvoren nas dropdown ("" = zatvoren)
 Private mColX(0 To MAX_COLS - 1) As Single   ' x i sirina kolona mreze; postavlja
 Private mColW(0 To MAX_COLS - 1) As Single   ' LayoutGrid, RenderGrid samo puni
@@ -456,6 +487,10 @@ Public Sub BuildOtkupScreen(frm As Object)
     mHoverRow = -1
     mHoverHd = -1
     mScreen = SCR_POCETNI
+    mSekcija = SEK_RAD
+    mNavUzak = False
+    mZadnjiRad = ""
+    mZadnjiMaticni = ""
     modUiKit.ResetNumFields             ' popunjava ga NewTxt tokom gradnje
     mDisplayFont = DisplayFont()
 
@@ -473,6 +508,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     BuildCtx frm
     BuildForm frm
     BuildGrid frm
+    BuildPanelHost frm
     BuildRight frm
     BuildStatus frm
 
@@ -527,8 +563,18 @@ Private Sub BuildHeader(frm As Object)
 End Sub
 
 '------------------------------------------------------------ NAV ----
+' Sidebar se GRADI za obe sekcije odjednom, a CRTA se samo aktivna.
+'
+' Zasto obe odjednom: stavka menija je ozicena kroz WireBtn -> clsFlatBtn
+' (WithEvents). Pravljenje i rusenje kontrola pri svakoj promeni sekcije bi
+' znacilo i ponovno ozicavanje, a ziv event-sink je u ovom projektu vec jednom
+' skupo naplacen (modSelfUpdate zove MaticniMenu_Release pre importa). Ovako se
+' kontrole naprave jednom i samo pale, gase i pomeraju -- LayoutNav.
+'
+' Grupe se broje kroz SVE sekcije (gi 0..4), pa imena stavki ostaju "nav" + dve
+' cifre: PaintNav i NavCollapse racunaju na Len(name) = 5.
 Private Sub BuildNav(frm As Object)
-    Dim z As Object, Y As Single, i As Long, j As Long
+    Dim z As Object, i As Long, j As Long
     Dim grp As Variant, r As Variant, gk As String, kljuc As String
     Dim aktivan As Boolean, ico As Long, nm As String, cap As String
     Set z = NewZone(frm, "zNav", 0, HEADER_H, SIDEBAR_W, 400, C_SAND)
@@ -539,39 +585,39 @@ Private Sub BuildNav(frm As Object)
     ' modul jos ne postoji (ili na koji korisnik nema pravo) crta se prigusen
     ' i klik na njega kaze zasto - umesto dosadasnjeg "nije vezano" za sve.
     Set mNavKey = CreateObject("Scripting.Dictionary")
+    Set mNavOff = CreateObject("Scripting.Dictionary")
     modUiScreens.ScrResetCache
     grp = modUiScreens.ScrGroups()
-    Y = 12
     For i = 0 To UBound(grp)
-        gk = Split(CStr(grp(i)), "|")(0)
-        NewLbl z, "navGrp" & i, UCase$(Poruka(Split(CStr(grp(i)), "|")(1))), 13, Y, 130, _
+        gk = modUiScreens.ScrField(CStr(grp(i)), SCRG_KLJUC)
+        NewLbl z, "navGrp" & i, _
+               UCase$(Poruka(modUiScreens.ScrField(CStr(grp(i)), SCRG_NASLOV))), 13, 0, 130, _
                TxtH(TS_NAVGRP), TS_NAVGRP, True, C_MUTED, -1
-        Y = Y + 20
         j = 0
         For Each r In modUiScreens.ScrRows()
             If modUiScreens.ScrField(CStr(r), SCR_GRUPA) = gk Then
                 kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
                 cap = Poruka(modUiScreens.ScrField(CStr(r), SCR_NASLOV))
-                ico = CLng(Val(modUiScreens.ScrField(CStr(r), SCR_IKONICA)))
+                ico = CLng(val(modUiScreens.ScrField(CStr(r), SCR_IKONICA)))
                 aktivan = modUiScreens.ScrAktivan(kljuc)
                 nm = "nav" & i & j
                 mNavKey(nm) = kljuc
+                mNavOff(nm) = Not aktivan
 
-                Dim sel As Boolean: sel = (kljuc = "DOKUMENTI")
-                NewLbl z, "navBar" & i & j, "", 0, Y, 3, NAV_H, 8, False, 0, _
+                Dim sel As Boolean: sel = (kljuc = SCR_POCETNI)
+                NewLbl z, "navBar" & i & j, "", 0, 0, 3, NAV_H, 8, False, 0, _
                        IIf(sel, C_GOLD, C_SAND)
                 If ico <> 0 Then
-                    NewLbl z, "navIco" & i & j, ChrW(ico), 12, CenterIco(Y, NAV_H, TS_NAVICO), _
-                           20, TxtH(TS_NAVICO), TS_NAVICO, False, _
+                    NewLbl z, "navIco" & i & j, ChrW(ico), 12, 0, 20, TxtH(TS_NAVICO), _
+                           TS_NAVICO, False, _
                            IIf(sel, C_GOLD, IIf(aktivan, C_ICON_OFF, C_DISABLED_FG)), -1, _
                            fmTextAlignLeft, F_ICON
                 End If
-                NewNavItem z, nm, cap, 0, Y, SIDEBAR_W - 1, NAV_H, sel
+                NewNavItem z, nm, cap, 0, 0, SIDEBAR_W - 1, NAV_H, sel
                 ' Znacka sa brojem stavki koje cekaju. Prazna dok brojac ne stigne;
                 ' ekran koji nema sta da broji je nikad ne popuni.
-                NewLbl z, nm & "B", "", SIDEBAR_W - 42, CenterY(Y, NAV_H, TS_MICRO), _
-                       30, TxtH(TS_MICRO), TS_MICRO, True, C_RUST, -1, _
-                       fmTextAlignRight, F_NUM
+                NewLbl z, nm & "B", "", SIDEBAR_W - 42, 0, 30, TxtH(TS_MICRO), _
+                       TS_MICRO, True, C_RUST, -1, fmTextAlignRight, F_NUM
                 z.Controls(nm & "B").ZOrder 0
                 If Not aktivan And Not sel Then _
                     z.Controls(nm & "X").ForeColor = C_DISABLED_FG
@@ -582,11 +628,9 @@ Private Sub BuildNav(frm As Object)
                 z.Controls("navIco" & i & j).ZOrder 0     ' moze da ne postoji (kod 0)
                 On Error GoTo 0
                 z.Controls(nm & "X").ZOrder 0
-                Y = Y + NAV_H
                 j = j + 1
             End If
         Next r
-        Y = Y + 12
     Next i
 
     ' PROFIL - dno sidebara. Nije natpis nego prekidac operatera: klik otvara
@@ -608,9 +652,85 @@ Private Sub BuildNav(frm As Object)
     NewLbl z, "navFootLn", "", 0, 0, SIDEBAR_W - 1, 1, 8, False, 0, C_BORDER
     NewLbl z, "navSezona", Poruka("OTKUI_FOOT_SEZONA"), 13, 0, 70, 13, TS_MICRO, False, RGB(146, 158, 140), -1
     NewLbl z, "navVerzija", BuildTagOrBlank(), SIDEBAR_W - 68, 0, 55, 13, TS_MICRO, False, RGB(146, 158, 140), -1, fmTextAlignRight, F_NUM
+
+    LayoutNav frm
 End Sub
 
-'------------------------------------------------------------ KPI ----
+' Postavlja Y i vidljivost stavkama AKTIVNE sekcije, a stavke druge gasi.
+' Zove se pri gradnji, pri promeni sekcije i iz LayoutOtkup (posle NavCollapse).
+'
+' Vidljivost je NAMERNO na jednom mestu. Da je razdeljena izmedju gradnje i
+' NavCollapse, suzavanje prozora bi upalilo i stavke sekcije koja se ne crta --
+' ista klasa kao traka zOtp koja je ostajala upaljena na tudjem ekranu.
+Private Sub LayoutNav(frm As Object)
+    Dim z As Object, grp As Variant, r As Variant
+    Dim i As Long, j As Long, Y As Single, gk As String, nm As String
+    Dim uSekciji As Boolean, brStavki As Long
+    On Error Resume Next
+    If frm Is Nothing Then Exit Sub
+    Set z = frm.Controls("zNav")
+    If z Is Nothing Then Exit Sub
+
+    grp = modUiScreens.ScrGroups()
+    Y = 12
+    For i = 0 To UBound(grp)
+        gk = modUiScreens.ScrField(CStr(grp(i)), SCRG_KLJUC)
+        uSekciji = (modUiScreens.ScrGrupaSekcija(CStr(grp(i))) = mSekcija)
+        brStavki = BrojStavkiGrupe(gk)
+
+        z.Controls("navGrp" & i).Visible = uSekciji And (brStavki > 0) And Not mNavUzak
+        If uSekciji And brStavki > 0 Then
+            z.Controls("navGrp" & i).top = Y
+            Y = Y + 20
+        End If
+
+        j = 0
+        For Each r In modUiScreens.ScrRows()
+            If modUiScreens.ScrField(CStr(r), SCR_GRUPA) = gk Then
+                nm = "nav" & i & j
+                If uSekciji Then
+                    PostaviNavStavku z, nm, i, j, Y, True
+                    Y = Y + NAV_H
+                Else
+                    PostaviNavStavku z, nm, i, j, 0, False
+                End If
+                j = j + 1
+            End If
+        Next r
+        If uSekciji And brStavki > 0 Then Y = Y + 12
+    Next i
+    mNavVisina = Y
+End Sub
+
+Private Function BrojStavkiGrupe(ByVal gk As String) As Long
+    Dim r As Variant
+    For Each r In modUiScreens.ScrRows()
+        If modUiScreens.ScrField(CStr(r), SCR_GRUPA) = gk Then _
+            BrojStavkiGrupe = BrojStavkiGrupe + 1
+    Next r
+End Function
+
+' Jedna stavka sidebara: pozadina, natpis, znacka, zlatna traka i ikonica.
+' Sve pet kontrola nose ISTU odluku o vidljivosti - stavka koja se ne crta ne
+' sme da ostavi za sobom traku ili glif druge sekcije.
+Private Sub PostaviNavStavku(z As Object, ByVal nm As String, ByVal i As Long, _
+                             ByVal j As Long, ByVal Y As Single, ByVal vis As Boolean)
+    On Error Resume Next
+    z.Controls(nm).top = Y
+    z.Controls(nm).Visible = vis
+    z.Controls(nm).width = IIf(mNavUzak, SIDEBAR_MIN - 1, SIDEBAR_W - 1)
+    z.Controls(nm & "X").top = CenterY(Y, NAV_H, TS_NAV)
+    z.Controls(nm & "X").Visible = vis And Not mNavUzak
+    z.Controls(nm & "B").top = CenterY(Y, NAV_H, TS_MICRO)
+    z.Controls(nm & "B").Visible = vis
+    z.Controls("navBar" & i & j).top = Y
+    z.Controls("navBar" & i & j).Visible = vis
+    z.Controls("navIco" & i & j).top = CenterIco(Y, NAV_H, TS_NAVICO)
+    z.Controls("navIco" & i & j).Left = IIf(mNavUzak, 11, 12)
+    z.Controls("navIco" & i & j).Visible = vis
+End Sub
+
+
 Private Sub BuildKpi(frm As Object)
     Dim z As Object, i As Long, cap As Variant
     Set z = NewZone(frm, "zKpi", SIDEBAR_W, HEADER_H, 800, KPI_H, C_CREAM)
@@ -1088,6 +1208,60 @@ Private Sub BuildForm(frm As Object)
     ' Natpis je kontekstualan ("Sacuvaj otkupni list"...), postavlja ga
     ' SelectModeCore - zato je dugme sire nego generickim "Sacuvaj".
     BtnV z, "btnSacuvaj", Poruka("OTKUI_BTN_SACUVAJ_OTKUP"), 0, 0, 196, 28, "primary", IC_SAVE
+End Sub
+
+'---------------------------------------------------------- PANEL ----
+' Prazan okvir preko radne povrsine. Ljuska ga samo pravi, meri i pali/gasi --
+' nikad ne stavlja nista u njega. Sadrzaj gradi modul panela, kroz PanelHost.
+'
+' ZASTO OKVIR, a ne sama forma: graditelji panela (modPodesavanja, modAdmin)
+' prvo sakriju SVE kontrole domacina. Nad formom bi to ugasilo celu ljusku;
+' nad namenskim okvirom gase samo ono sto je u njemu, a to je njihovo.
+Private Sub BuildPanelHost(frm As Object)
+    NewZone frm, "zPanel", SIDEBAR_W, HEADER_H, 620, 260, C_SAND_LT
+End Sub
+
+' Okvir u koji modul panela gradi svoje kontrole. Vraca Nothing ako ljuska nije
+' ziva -- pozivalac tada nema gde da gradi i to mora da vidi.
+Public Function PanelHost() As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Function
+    Set PanelHost = mFrm.Controls("zPanel")
+    If Err.Number <> 0 Then Err.Clear
+End Function
+
+' Ustupanje i vracanje radne povrsine. Ljuska ne pita ZASTO -- samo prerasporedi
+' i prekrije. Sadrzaj okvira ostaje netaknut: prazni ga onaj ko ga je i napunio.
+Public Sub PanelRezim(ByVal ukljuci As Boolean)
+    If mPanelRezim = ukljuci Then Exit Sub
+    mPanelRezim = ukljuci
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    ShowZones mFrm
+    LayoutOtkup mFrm
+End Sub
+
+Public Function PanelRezimAktivan() As Boolean
+    PanelRezimAktivan = mPanelRezim
+End Function
+
+' Radna povrsina se VRATILA ekranu ispod panela. Zove ga modUiPanel.PanelZatvori.
+'
+' Otvaranje panela je taj ekran deaktiviralo (ScrDeaktiviraj), pa mu je stanje
+' obrisano -- kod maticnih i mZonaEkran, koju modMaticniEkran.Zona() trazi za
+' SVAKU radnju. Sam raspored to ne vraca: mreza bi se videla nepromenjena, a
+' "Izmeni" bi tiho nista ne radila, jer bi Zona() vracala Nothing.
+'
+' Uz to se vraca i oznaka u sidebaru: dok je panel bio otvoren ona je stajala
+' na njemu, a panela vise nema.
+Public Sub PanelVracenNaEkran()
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mPanelRezim Then Exit Sub          ' jos je ustupljena -- nema sta da se vraca
+    PaintNav mFrm, NavTagFor(mScreen)
+    LayoutOtkup mFrm
+    If Len(mScreen) > 0 Then RefreshFromData
+    Err.Clear
 End Sub
 
 '----------------------------------------------------------- GRID ----
@@ -1751,7 +1925,7 @@ Public Sub LayoutOtkup(frm As Object)
         .Controls("navVerzija").top = .Height - 18
         .Controls("navVerzija").Left = navW - 68
         ' profil sedi tacno iznad podnozja
-        .Controls("profLn").top = .Height - 62: .Controls("profLn").width = navW - 1
+        .Controls("profLn").top = .Height - PROFIL_H: .Controls("profLn").width = navW - 1
         .Controls("profBox").top = .Height - 54
         .Controls("profIco").top = CenterIco(.Height - 54, 26, TS_NAVICO)
         .Controls("profName").top = .Height - 52
@@ -2435,24 +2609,23 @@ Private Sub LayoutRight(z As Object, zh As Single)
     MoveBtn z, "btnSync", 13, zh - 30
 End Sub
 
+' Suzen sidebar (uzak prozor): ostaju samo glifovi. Sirinu, natpise i glifove
+' stavki postavlja LayoutNav -- ovde se pamti SAMO stanje, jer vidljivost stavke
+' zavisi i od sekcije, a NavCollapse o sekcijama ne zna nista. Ranije je ova
+' rutina palila natpise svim stavkama redom, pa bi suzavanje prozora prikazalo
+' i stavke sekcije koja se ne crta.
 Private Sub NavCollapse(frm As Object, collapsed As Boolean)
-    Dim c As Object, z As Object
+    Dim z As Object
+    On Error Resume Next
     Set z = frm.Controls("zNav")
-    For Each c In z.Controls
-        If Left$(c.name, 6) = "navGrp" Then c.Visible = Not collapsed
-        If Left$(c.name, 6) = "navIco" Then c.Left = IIf(collapsed, 11, 12)
-        If Left$(c.name, 3) = "nav" And Len(c.name) = 6 Then
-            If Right$(c.name, 1) = "X" Then c.Visible = Not collapsed
-        End If
-        If Left$(c.name, 3) = "nav" And Len(c.name) = 5 Then
-            c.width = IIf(collapsed, SIDEBAR_MIN - 1, SIDEBAR_W - 1)
-        End If
-    Next c
+    If z Is Nothing Then Exit Sub
+    mNavUzak = collapsed
     z.Controls("navSezona").Visible = Not collapsed
     z.Controls("navVerzija").Visible = Not collapsed
     ' u suzenom sidebaru ostaje samo kvadrat sa glifom - ime nema gde da stane
     z.Controls("profName").Visible = Not collapsed
     z.Controls("profSub").Visible = Not collapsed
+    LayoutNav frm
 End Sub
 
 '=====================================================================
@@ -2626,6 +2799,11 @@ Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
             End If
         Case "kg":           CelijaTekst = FmtKg(CDbl(v))
         Case "num", "sum0":  CelijaTekst = FmtBroj(CDbl(v), 0)
+        ' DEC je broj sa decimalama koji NIJE zbirna velicina: tezina gajbice,
+        ' cena po jedinici. "num" ih je zaokruzivao na ceo broj -- 0,5 kg se
+        ' crtalo kao 1 -- a "rsd" bi ih upisao u podnozje kao zbir, sto
+        ' sifarnik nema sta da sabira (v. UI_MIGRACIJA_KATALOG 26.4).
+        Case "dec":          CelijaTekst = FmtBroj(CDbl(v), 2)
         Case "rsd", "mult":  CelijaTekst = FmtBroj(CDbl(v), 2)
         Case "rest"
             ' nula znaci "nema duga" - prazna celija je citljivija od 0,00
@@ -2795,7 +2973,23 @@ Public Sub SortZaListu(ByVal kljuc As String, ByRef col As Long, ByRef asc As Bo
     End If
 End Sub
 
+' Ekran prvo dobija priliku da kaze svoj sort; ako ga nema, vazi pravilo ljuske.
+' Bez toga bi sifarnici dobili "druga kolona opadajuce" -- pravilo napisano za
+' datum dokumenta, koje nad Stanicama znaci nazive unazad.
 Private Sub PrimeniSortZaListu(ByVal kljuc As String)
+    Dim spec As String, p() As String
+    spec = modUiScreens.ScrSort(mScreen)
+    If Len(spec) > 0 Then
+        p = Split(spec, ":")
+        If UBound(p) >= 1 Then
+            If val(p(0)) >= 1 Then
+                mSortCol = CLng(val(p(0)))
+                mSortAsc = (LCase$(Trim$(p(1))) = "asc")
+                mSortLista = kljuc
+                Exit Sub
+            End If
+        End If
+    End If
     SortZaListu kljuc, mSortCol, mSortAsc
     mSortLista = kljuc
 End Sub
@@ -3264,9 +3458,11 @@ Public Sub IdiNaEkran(ByVal kljuc As String)
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(kljuc) = 0 Then Exit Sub
-    If kljuc = mScreen Then Exit Sub
+    ' "Isti ekran" vise NIJE razlog za rano izlazenje: dok je panel otvoren,
+    ' povratak na ekran ispod njega je isti kljuc -- a mora da zatvori panel.
+    ' Odluku sada donosi ActivateScreen, koji zna i za panel.
     ActivateScreen mFrm, kljuc
-    PaintNav mFrm, NavTagFor(mScreen)
+    PaintNav mFrm, NavTagFor(AktivnaStavka())
 End Sub
 
 ' Kljuc ekrana na kome jesmo. Javno zato sto je "storno je EKRAN, a ne rezim"
@@ -3483,6 +3679,17 @@ Public Sub SelectNav(frm As Object, ByVal nm As String)
     If Len(kljuc) > 0 Then ActivateScreen frm, kljuc
 End Sub
 
+' Stavka sidebara na kojoj operater STVARNO jeste. Dok je panel otvoren to je
+' panel, inace ekran. Bez ovoga bi PaintNav posle svakog neuspelog prelaska
+' vratio oznaku na mScreen -- a mScreen je ekran ISPOD panela, pa bi sidebar
+' pokazivao Partnere dok se gledaju Podesavanja.
+Private Function AktivnaStavka() As String
+    Dim k As String
+    k = modUiPanel.PanelAktivan()
+    If Len(k) = 0 Then k = mScreen
+    AktivnaStavka = k
+End Function
+
 ' nav tag ekrana koji je aktivan - za vracanje oznake posle neuspelog prelaska
 Private Function NavTagFor(ByVal kljuc As String) As String
     Dim k As Variant
@@ -3496,23 +3703,44 @@ Private Function NavTagFor(ByVal kljuc As String) As String
 End Function
 
 ' samo bojenje sidebara - bez prelaska
+'
+' PRIGUSENA STAVKA OSTAJE PRIGUSENA. Do sada je bojenje svakoj neizabranoj
+' stavci vracalo punu boju, pa su Marza i Sledljivost izgledale prigusene samo
+' do prvog klika bilo gde u meniju -- posle toga su izgledale kao da rade.
+' U maticnoj sekciji bi to bilo tri od pet stavki, pa se ispravlja ovde.
+'
+' Stanje se cita iz mape napravljene pri gradnji (mNavOff), ne racuna se ovde:
+' bojenje ide na svaki klik, a odgovor "postoji li modul i ima li korisnik
+' pravo" je prolaz kroz registar. Mapa nastaje tacno tamo gde je taj odgovor
+' vec izracunat, pa se ne moze razici sa onim sto BuildNav nacrta.
 Private Sub PaintNav(frm As Object, ByVal nm As String)
-    Dim c As Object, z As Object, on_ As Boolean, idx As String
+    Dim c As Object, z As Object, on_ As Boolean, off_ As Boolean, idx As String
     On Error Resume Next                ' navIco moze da ne postoji (kod 0)
     Set z = frm.Controls("zNav")
     For Each c In z.Controls
         If Left$(c.name, 3) = "nav" And Len(c.name) = 5 Then
             on_ = (c.name = nm)
+            off_ = NavPrigusena(c.name)
             idx = Mid$(c.name, 4, 2)
             c.BackColor = IIf(on_, C_FOREST, C_SAND)
             c.Font.bold = on_                       ' marker stanja za hover (clsFlatBtn)
-            z.Controls(c.name & "X").ForeColor = IIf(on_, C_CREAM, RGB(52, 68, 44))
+            z.Controls(c.name & "X").ForeColor = _
+                IIf(on_, C_CREAM, IIf(off_, C_DISABLED_FG, RGB(52, 68, 44)))
             z.Controls(c.name & "X").Font.bold = on_
             z.Controls("navBar" & idx).BackColor = IIf(on_, C_GOLD, C_SAND)
-            z.Controls("navIco" & idx).ForeColor = IIf(on_, C_GOLD, C_ICON_OFF)
+            z.Controls("navIco" & idx).ForeColor = _
+                IIf(on_, C_GOLD, IIf(off_, C_DISABLED_FG, C_ICON_OFF))
         End If
     Next c
 End Sub
+
+' Da li je stavka sidebara prigusena (ekran nema modul ili nema prava).
+' Javna zbog testa - boja kontrole se u harnessu moze procitati, ali odluka o
+' njoj ne moze bez klika kroz formu.
+Public Function NavPrigusena(ByVal nmStavke As String) As Boolean
+    If mNavOff Is Nothing Then Exit Function
+    If mNavOff.Exists(nmStavke) Then NavPrigusena = mNavOff(nmStavke)
+End Function
 
 Private Sub RefreshKpi(frm As Object)
     Dim z As Object, cOtp As Long, cPrj As Long, om As String, sal As Double
@@ -3878,8 +4106,218 @@ Private Sub UiClickCore(ByVal tag As String)
             RenderFilterPanel
             RefreshFilterBadge
             ReloadGrid
-        Case "btnMatic": ShowToast Poruka("OTKUI_TODO_NEVEZANO"), False
+        Case "btnMatic": PrebaciSekciju mFrm
     End Select
+End Sub
+
+'=====================================================================
+' SEKCIJA LJUSKE
+' Zlatno dugme u zaglavlju nije alatka nego ODREDISTE - isto sto je u legacy
+' ljusci otvaralo ceo popup meni "Maticni podaci". Zato menja SKUP stavki
+' sidebara, a ne otvara panel: sidebar tako i dalje govori istinu o tome gde
+' si. Popup ispod dugmeta bi ostavio oznacenu stavku RADNE sekcije dok gledas
+' Kupce. V. docs/UI_MIGRACIJA_KATALOG.md, 24.2.
+'=====================================================================
+Private Sub PrebaciSekciju(frm As Object)
+    PostaviSekciju frm, IIf(mSekcija = SEK_MATICNI, SEK_RAD, SEK_MATICNI)
+End Sub
+
+' Javna zbog testa: klik kroz formu se u harnessu ne moze odigrati, a bas ovo
+' je tvrdnja koju M0 nosi (isti razlog kao SegIndeksIzTaga i GridSortSetTest).
+Public Sub OtkupUI_SekcijaTest(ByVal sekcija As String)
+    PostaviSekciju mFrm, sekcija
+End Sub
+
+' Ono sto se desi posle zamene operatera, bez same zamene. Javno zbog testa:
+' modAuth.Login trazi formu za prijavu, koja se u harnessu ne moze odigrati, a
+' tvrdnja ("sidebar prati NOVA prava") je bas ovde.
+Public Sub OtkupUI_PrimeniNovaPravaTest()
+    PrimeniNovaPrava
+End Sub
+
+' Prelazak na ekran, sa VERDIKTOM. Javno zbog testa: klik kroz formu se u
+' harnessu ne moze odigrati, a bas verdikt je ono na cemu stoji vracanje
+' sekcije kad prelazak ne uspe (PostaviSekciju).
+Public Function OtkupUI_PrelazakTest(ByVal kljuc As String) As Boolean
+    OtkupUI_PrelazakTest = ActivateScreen(mFrm, kljuc)
+End Function
+
+' Radna povrsina bez ijednog dozvoljenog ekrana. Javno zbog testa: do tog
+' stanja se u pogonu stize samo zamenom operatera na nalog bez prava, sto
+' harness ne moze da odigra -- a bas tu je bilo curenje (mreza je zadrzavala
+' redove prethodnog operatera).
+Public Sub OtkupUI_IsprazniPovrsinuTest()
+    If Not IsTestMode() Then Exit Sub
+    mScreen = ""
+    IsprazniRadnuPovrsinu mFrm
+End Sub
+
+' Zona ugovornog ekrana je promenila VISINU (npr. otvoren editor), pa raspored
+' mora ponovo.
+'
+' Ekran ovo zove sam: ljuska ne moze da pogodi kada se to desilo, a
+' LayoutScreenZone se izvrsava iskljucivo iz LayoutOtkup -- ni RefreshFromData
+' ni ReloadGrid ga ne diraju (oni preracunavaju MREZU). Bez ovoga bi zona ostala
+' na staroj visini, a polja editora bi se crtala ispod mreze -- vidljivo kao
+' "dugme ne radi".
+Public Sub OsveziRasporedEkrana()
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    LayoutOtkup mFrm
+End Sub
+
+Public Function AktivnaSekcija() As String
+    AktivnaSekcija = mSekcija
+End Function
+
+' Visina koju su stavke AKTIVNE sekcije stvarno zauzele u poslednjem rasporedu.
+' Javna zbog testa: mera na kojoj stoji cela odluka o sekcijama mora da se moze
+' tvrditi, inace bi dodavanje ekrana tiho gurnulo stavke ispod profila.
+Public Function NavVisinaSekcije() As Single
+    NavVisinaSekcije = mNavVisina
+End Function
+
+' Slobodna visina za stavke sidebara na NAJMANJEM dozvoljenom prozoru. Sidebar
+' nema skrol, pa je ovo tvrda granica, a ne preporuka.
+Public Function NavSlobodnaVisina() As Single
+    NavSlobodnaVisina = MIN_H - HEADER_H - STATUS_H - PROFIL_H
+End Function
+
+' Ime kontrole sidebara koja nosi dati ekran. Javno zbog testa - klik kroz
+' formu se u harnessu ne moze odigrati.
+Public Function NavTagZaEkran(ByVal kljuc As String) As String
+    NavTagZaEkran = NavTagFor(kljuc)
+End Function
+
+Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
+    Dim kljuc As String, staraSekcija As String
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    If frm Is Nothing Then Exit Sub
+    If sekcija <> SEK_RAD And sekcija <> SEK_MATICNI Then Exit Sub
+    If sekcija = mSekcija Then Exit Sub
+
+    ' Ekran sa kog se odlazi se PAMTI, po sekciji. Bez toga bi "Nazad na rad"
+    ' uvek vracao na Unos dokumenata, pa bi provera jednog sifarnika usred
+    ' fakturisanja kostala i povratak kroz meni.
+    ZapamtiEkranSekcije mSekcija, mScreen
+
+    staraSekcija = mSekcija
+    mSekcija = sekcija
+    OsveziDugmeSekcije frm
+    LayoutNav frm
+
+    kljuc = EkranZaSekciju(mSekcija)
+    If Len(kljuc) = 0 Then
+        ' Sekcija bez ijednog DOSTUPNOG ekrana. Zona ostaje na prethodnom
+        ' ekranu -- prazna zona bi izgledala kao pad -- ali onda i SEKCIJA mora
+        ' da ostane na prethodnoj.
+        '
+        ' Do v6-ui-205 se ovde izlazilo BEZ vracanja: zlatno dugme i sidebar su
+        ' pokazivali novu sekciju, a na sceni je bio ekran iz stare. Ista laz
+        ' koju rollback nize vec ispravlja za neuspeo ActivateScreen -- samo je
+        ' ovaj izlaz bio zaboravljen.
+        VratiSekciju frm, staraSekcija
+        ShowToast Poruka("OTKUI_SEK_NEMA_EKRANA"), False
+        Exit Sub
+    End If
+    ' ActivateScreen sam radi LayoutOtkup na kraju - ne ponavlja se ovde, i sam
+    ' izlazi kad se nista ne menja. Uslov "kljuc <> mScreen" je uklonjen jer je
+    ' propustao jedan slucaj: panel otvoren nad ekranom koji je i cilj sekcije.
+    '
+    ' PRELAZAK MOZE DA NE USPE: operater odustane od odbacivanja nesacuvanog,
+    ' ciljni ekran nema prava ili modul, gradnja padne. Do v6-ui-204 se sekcija
+    ' menjala PRE toga i ostajala promenjena -- zlatno dugme i sidebar su
+    ' pokazivali drugu sekciju od one iz koje je ekran koji se i dalje vidi.
+    If Not ActivateScreen(frm, kljuc) Then
+        VratiSekciju frm, staraSekcija
+        Exit Sub
+    End If
+    PaintNav frm, NavTagFor(AktivnaStavka())
+    Exit Sub
+EH:
+    ' I PAD vraca sekciju. Do v6-ui-206 je EH samo logovao, pa je neocekivana
+    ' greska u EkranZaSekciju ili ActivateScreen ostavljala zaglavlje i sidebar
+    ' u NOVOJ sekciji preko ekrana iz stare -- ista laz koju oba normalna
+    ' odbijanja vec ispravljaju, samo kroz put koji se ne planira.
+    '
+    ' Vraca se samo ako je sekcija stigla da se promeni: pad pre te tacke nema
+    ' sta da vrati, a "vracanje" na prazan string bi samo prosirilo kvar.
+    '
+    ' NEMA SVOJU SABOTAZU, i to je svesno. Da se ovaj put obori, trebalo bi
+    ' ubrizgati Err.Raise u zivu proceduru -- seam koji ne suzava nego pravi
+    ' pad, i jedini svoje vrste u projektu. Oba PLANIRANA odbijanja (nema
+    ' dostupnog ekrana / ActivateScreen odbio) imaju svoje sabotaze i one
+    ' pokrivaju isto vracanje; ovde je pokriveno pregledom, ne testom. Ako se
+    ' EH-u ikad doda logika koja se razlikuje od tih dva, treba mu i tvrdnja.
+    ' Vracanje je pod svojim On Error: greska U VRACANJU ne sme da pojede
+    ' prijavu prve greske.
+    ' Greska se PREPISE i UPISE u log PRE vracanja: vracanje ide pod svojim
+    ' On Error Resume Next, a ta naredba resetuje Err -- pa bi LogErr posle nje
+    ' upisao prazno (isto sto vba_check hvata kao MRTAV_LOG).
+    errNum = Err.Number
+    errDesc = Err.description
+    LogError "modOtkupUI.PostaviSekciju", errDesc, errNum
+    If Len(staraSekcija) > 0 And staraSekcija <> mSekcija Then
+        On Error Resume Next
+        VratiSekciju frm, staraSekcija
+        Err.Clear
+    End If
+    ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
+End Sub
+
+' Vracanje sekcije posle prelaska koji se NIJE desio. Jedno mesto za oba izlaza
+' (nema dostupnog ekrana / ActivateScreen odbio), jer je drugi izlaz bio
+' zaboravljen tacno zato sto je vracanje bilo prepisano u telu.
+Private Sub VratiSekciju(frm As Object, ByVal sekcija As String)
+    mSekcija = sekcija
+    OsveziDugmeSekcije frm
+    LayoutNav frm
+    PaintNav frm, NavTagFor(AktivnaStavka())
+End Sub
+
+Private Sub ZapamtiEkranSekcije(ByVal sekcija As String, ByVal kljuc As String)
+    If Len(kljuc) = 0 Then Exit Sub
+    If sekcija = SEK_MATICNI Then
+        mZadnjiMaticni = kljuc
+    Else
+        mZadnjiRad = kljuc
+    End If
+End Sub
+
+' Ekran na koji se ulazi u sekciju: zapamcen ako je jos dostupan, inace prvi
+' dostupan iz registra. Provera je obavezna - prava se menjaju zamenom
+' operatera, pa zapamcen ekran moze u medjuvremenu da postane zabranjen.
+Private Function EkranZaSekciju(ByVal sekcija As String) As String
+    Dim zapamcen As String
+    zapamcen = IIf(sekcija = SEK_MATICNI, mZadnjiMaticni, mZadnjiRad)
+    If Len(zapamcen) > 0 Then
+        If modUiScreens.ScrSekcija(modUiScreens.ScrRowByKey(zapamcen)) = sekcija Then
+            If modUiScreens.ScrAktivan(zapamcen) Then
+                EkranZaSekciju = zapamcen
+                Exit Function
+            End If
+        End If
+    End If
+    ' Registar odgovara koji je prvi dostupan - ljuska ne zna nijedan kljuc
+    ' unapred.
+    EkranZaSekciju = modUiScreens.ScrPrviUSekciji(sekcija)
+End Function
+
+' Natpis i glif zlatnog dugmeta prate sekciju: iz radne se ide u Maticne, iz
+' maticne nazad na rad. Dugme koje u obe sekcije pise isto ne bi reklo gde si.
+Private Sub OsveziDugmeSekcije(frm As Object)
+    Dim z As Object
+    On Error Resume Next
+    Set z = frm.Controls("zHdr")
+    If z Is Nothing Then Exit Sub
+    If mSekcija = SEK_MATICNI Then
+        z.Controls("btnMaticC").caption = Poruka("OTKUI_BTN_NAZAD_RAD")
+        z.Controls("btnMaticI").caption = ChrW(IC_NAZAD)
+    Else
+        z.Controls("btnMaticC").caption = Poruka("OTKUI_BTN_MATICNI")
+        z.Controls("btnMaticI").caption = ChrW(IC_MATICNI)
+    End If
 End Sub
 
 '=====================================================================
@@ -3944,14 +4382,147 @@ Private Sub DoSwitchOperater()
     End If
     staro = OperaterText()
     If modAuth.Login() Then
+        PrimeniNovaPrava
         RefreshOperater mFrm
         ShowToast Poruka("OTKUI_MSG_OPERATER") & " " & OperaterText(), False
     Else
+        ' Neuspela prijava normalno VRACA prethodnu sesiju (modAuth.Login). Ako
+        ' nije vracena -- nije je ni bilo, ili je vracanje puklo -- prikaz ne
+        ' sme da tvrdi da je stari operater tu: prava se primenjuju na PRAZNU
+        ' sesiju, sto radnu povrsinu i isprazni.
+        If Not modAuth.JePrijavljen() Then
+            PrimeniNovaPrava
+            RefreshOperater mFrm
+            ShowToast Poruka("OTKUI_MSG_ODJAVLJEN"), True
+            Exit Sub
+        End If
         ShowToast Poruka("OTKUI_MSG_OPERATER_ISTI") & " " & staro, False
     End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_MSG_OPERATER_PAO"), True
+End Sub
+
+' Nov operater -- nova prava. Do v6-ui-199 se menjalo samo ime u zaglavlju, pa
+' je admin mogao da otvori Korisnike, preda tastaturu operateru bez prava, a
+' ekran i njegove mutacione komande su ostajali otvoreni.
+'
+' Redosled nije proizvoljan:
+'   1) kes brane se BRISE pre svega -- inace bi se nova prava merila starim
+'      odgovorom;
+'   2) panel i editor se zatvaraju: oba nose stanje prethodnog operatera;
+'   3) sidebar se precrtava da prigusenje odgovara novim pravima;
+'   4) tek onda se proverava da li trenutni ekran sme da ostane.
+'
+' Ovo je UI brana. Tvrda brana stoji u piscu (modMaticniUnos), jer se do upisa
+' stize i mimo ovog ekrana.
+Private Sub PrimeniNovaPrava()
+    On Error Resume Next
+    modUiScreens.ScrResetCache
+    ' False: ekran ispod se ionako ponovo cita nize (ili se menja), pa bi
+    ' vracanje ovde bilo citanje viska.
+    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori False
+    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
+    If mFrm Is Nothing Then Exit Sub
+
+    ObnoviNavPrava
+    If Len(mScreen) = 0 Then
+        ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna
+        ' povrsina ostala prazna. Novi operater koji prava IMA mora da dobije
+        ' ekran -- do v6-ui-204 je dobijao samo osvezen sidebar i ostajao pred
+        ' praznom povrsinom do prvog rucnog klika.
+        NaPrviDozvoljenEkran
+        Err.Clear
+        Exit Sub
+    End If
+    If Not modUiScreens.ScrDozvoljen(mScreen) Then
+        ' Ekran koji novi operater ne sme da vidi ne ostaje otvoren.
+        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        NaPrviDozvoljenEkran
+        Err.Clear
+        Exit Sub
+    End If
+    PaintNav mFrm, NavTagFor(AktivnaStavka())
+    LayoutOtkup mFrm
+    RefreshFromData
+    Err.Clear
+End Sub
+
+' Prigusenja sidebara po NOVIM pravima -- bez gradnje kontrola.
+'
+' Do v6-ui-201 je ovde stajalo BuildNav mFrm. Ono zove NewZone, a NewZone radi
+' Controls.Add("Forms.Frame.1", "zNav") -- drugi put nad istom formom to je
+' runtime greska "name already exists". Greska se gutala (On Error Resume Next
+' u pozivaocu), pa se BuildNav prekidao na PRVOJ liniji: mNavOff je ostajao od
+' PRETHODNOG operatera i sidebar je pokazivao tudja prava. Tvrde brane su
+' drzale (ActivateScreen pita ScrDozvoljen na svaki klik), ali je meni lagao.
+'
+' Menjaju se samo PRAVA, a prava su jedino sto mNavOff drzi -- kontrole i
+' preslikavanje stavka -> ekran (mNavKey) ostaju isti. Mapa se zato obilazi
+' kroz mNavKey, ne kroz ponovljenu petlju po registru: dva spiska imena stavki
+' bi mogla da se razidju, jedan ne moze.
+Private Sub ObnoviNavPrava()
+    Dim k As Variant
+    If mNavKey Is Nothing Or mNavOff Is Nothing Then Exit Sub
+    modUiScreens.ScrResetCache
+    For Each k In mNavKey.keys
+        mNavOff(CStr(k)) = Not modUiScreens.ScrAktivan(CStr(mNavKey(k)))
+    Next k
+End Sub
+
+' Prvi ekran na koji novi operater SME. Postojalo je bezuslovno
+' ActivateScreen SCR_POCETNI -- ali ako novi operater nema pravo ni na
+' Dokumenta, taj prelazak se odbija i PRETHODNI (zabranjeni) ekran ostaje na
+' sceni, sa podacima prethodnog operatera. Zato se trazi redom, a ako nema
+' nijednog, radna povrsina se PRAZNI.
+Private Sub NaPrviDozvoljenEkran()
+    Dim r As Variant, kljuc As String
+    If modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
+        ActivateScreen mFrm, SCR_POCETNI
+        Exit Sub
+    End If
+    ' Redom kroz registar, PRESKACUCI panele: panel bi pokrio radnu povrsinu, a
+    ' mScreen bi ispod njega ostao zabranjen ekran -- pa bi se on vratio cim se
+    ' panel zatvori. Trazi se pravi ekran ili nijedan.
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If Not modUiPanel.PanelPostoji(kljuc) Then
+            If modUiScreens.ScrAktivan(kljuc) Then
+                ActivateScreen mFrm, kljuc
+                Exit Sub
+            End If
+        End If
+    Next r
+    ' Nijedan ekran nije dozvoljen. Prazna povrsina je jedini tacan prikaz --
+    ' zadrzan ekran bi pokazivao podatke koje novi operater ne sme da vidi.
+    mScreen = ""
+    IsprazniRadnuPovrsinu mFrm
+    ShowToast Poruka("OTKUI_SCR_NIJEDAN"), True
+End Sub
+
+' Radna povrsina bez ijednog dozvoljenog ekrana.
+'
+' Ne skriva samo mrezu -- BRISE joj stanje. Skrivena mreza sa tudjim redovima
+' je i dalje tudji podaci: mView prezivi, RenderGrid ga vrati cim se bilo sta
+' ponovo nacrta, a GridCell ga cita i bez crtanja. Zato prvo stanje, pa prikaz.
+Private Sub IsprazniRadnuPovrsinu(frm As Object)
+    On Error Resume Next
+    mView = Empty
+    mViewN = 0
+    mSumKg = 0: mSumVal = 0
+    mSelRow = 0
+    mHoverRow = -1
+    mPage = 1
+    mFilter = "sve"
+    mSearch = ""
+    ClosePopup
+    CloseFilterPanel
+    ClearMarks
+    RenderGrid                  ' iscrtaj PRAZNO preko starih redova
+    ShowZones frm
+    PaintNav frm, ""
+    LayoutOtkup frm
+    Err.Clear
 End Sub
 
 Private Sub RefreshOperater(frm As Object)
@@ -4445,8 +5016,14 @@ Public Sub OtkupUI_BuildFailed(ByVal errNum As Long, ByVal errDesc As String)
 End Sub
 
 Private Sub ShowZones(frm As Object)
-    Dim nmv As Variant, i As Long, dok As Boolean
+    Dim nmv As Variant, i As Long, dok As Boolean, prazno As Boolean
     dok = (mScreen = "DOKUMENTI")
+    ' PRAZAN mScreen znaci "nijedan ekran nije dozvoljen" (NaPrviDozvoljenEkran).
+    ' Naslov i mreza se tada NE crtaju. Do v6-ui-203 su se crtali, sa sadrzajem
+    ' PRETHODNOG operatera -- mreza je zadrzavala njegove redove jer je
+    ' LoadGridFromScreen za nepoznat kljuc izlazio pre nego sto isprazni mView.
+    ' To nije kozmetika nego curenje podataka izmedju naloga.
+    prazno = (Len(mScreen) = 0)
     nmv = Array("zHdr", "zNav", "zStatus")
     For i = 0 To UBound(nmv)
         On Error Resume Next
@@ -4455,11 +5032,16 @@ Private Sub ShowZones(frm As Object)
     ' Naslovna traka i mreza su ZAJEDNICKE - nosi ih i ugovorni ekran. Da
     ' nisu, svaki ekran bi izmislio svoj naslov i svoju listu, a lista je bas
     ' ono sto se deli (strane, sortiranje, pretraga, izbor).
+    ' Dok je radna povrsina USTUPLJENA panelu, naslov i mreza se ne crtaju:
+    ' panel pokriva isti prostor, a dve stvari u njemu su ista klasa kvara kao
+    ' editor i geo panel jedan preko drugog.
     nmv = Array("zTitle", "zGrid")
     For i = 0 To UBound(nmv)
         On Error Resume Next
-        frm.Controls(CStr(nmv(i))).Visible = True
+        frm.Controls(CStr(nmv(i))).Visible = (Not mPanelRezim) And (Not prazno)
     Next i
+    On Error Resume Next
+    frm.Controls("zPanel").Visible = mPanelRezim
     ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice
     ' i traka aktivne otpremnice.
     '
@@ -4477,49 +5059,175 @@ Private Sub ShowZones(frm As Object)
     For Each nmv In frm.Controls
         On Error Resume Next
         If Left$(nmv.name, 5) = "zScr_" Then
-            nmv.Visible = (Not dok) And (nmv.name = "zScr_" & mScreen)
+            nmv.Visible = (Not dok) And (Not mPanelRezim) And _
+                          (nmv.name = "zScr_" & mScreen)
         End If
     Next nmv
 End Sub
 
-' Prelazak na drugi ekran. Zona ekrana se gradi LENJO - tek pri prvom ulasku -
+' Prelazak na drugi ekran. VRACA da li smo posle poziva TAMO GDE SMO HTELI.
+'
+' False znaci da prelazak nije izvrsen: nema prava, nema modula, gradnja je
+' pala, ili je operater odustao od odbacivanja nesacuvanog. Pozivalac koji je
+' UZ prelazak promenio jos nesto (sekcija, zlatno dugme, sidebar) mora to da
+' vrati -- inace zaglavlje pokazuje jednu sekciju, a ekran je iz druge.
+'
+' Zona ekrana se gradi LENJO - tek pri prvom ulasku -
 ' i ostaje izgradjena. Merenje na ekranu dokumenata: 863 kontrole, od toga 623
 ' deljeni hrom i mreza, pa je ekran u proseku 240 kontrola i oko 180 ms; drzati
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
-Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
-    Dim z As Object, nm As String
-    If kljuc = mScreen Then Exit Sub
+Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
+    Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
+    Dim jePanel As Boolean, zatvorenPanel As Boolean, btnsPre As Long
+
+    ' Ponovljen klik na OTVOREN panel ne radi nista. Bez ovoga bi se panel
+    ' rusio i gradio ispocetka, pa bi Podesavanja izgubila nesacuvanu izmenu
+    ' na klik u stavku na kojoj operater vec jeste.
+    If Len(kljuc) > 0 Then
+        If modUiPanel.PanelAktivan() = UCase$(kljuc) Then
+            ActivateScreen = True       ' vec smo tu
+            Exit Function
+        End If
+    End If
+    jePanel = modUiPanel.PanelPostoji(kljuc)
+
+    ' Klik na stavku ekrana na kome VEC jesmo, bez otvorenog panela: nista se
+    ' ne menja, pa se nista i ne dira.
+    If (Not jePanel) And kljuc = mScreen And modUiPanel.PanelAktivan() = "" Then
+        ActivateScreen = True           ' vec smo tu
+        Exit Function
+    End If
+
+    ' ---- CILJ SE PROVERAVA PRVI ----------------------------------------
+    ' Pre nego sto se ista ZATVORI. Do v6-ui-203 se panel zatvarao na vrhu, pa
+    ' je klik na stavku ciji modul nedostaje (nepotpun import, self-update u
+    ' toku) ostavljao i panel zatvoren i ekran ispod njega deaktiviran -- za
+    ' potez koji nije nikuda ni odveo. Sada odbijen prelazak ne dira nista.
+    '
     ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je "DOKUMENTI"
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then
         ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
-        PaintNav frm, NavTagFor(mScreen)
-        Exit Sub
+        PaintNav frm, NavTagFor(AktivnaStavka())
+        Exit Function
     End If
-    If kljuc <> SCR_POCETNI Then
+    If (Not jePanel) And kljuc <> SCR_POCETNI Then
         ' Neuspeh mora da VRATI oznaku u sidebaru na ekran na kome zaista
         ' jesmo - inace bi meni pokazivao Palete dok je na ekranu jos Unos.
         If Not modUiScreens.ScrPostoji(kljuc) Then
             ShowToast Poruka("OTKUI_SCR_NEMA"), False
-            PaintNav frm, NavTagFor(mScreen)
-            Exit Sub
+            PaintNav frm, NavTagFor(AktivnaStavka())
+            Exit Function
         End If
+    End If
+
+    ' ---- NESACUVANO SE NE ODBACUJE TIHO --------------------------------
+    ' Pita se za ekran koji ODLAZI, i to samo kad panel NIJE otvoren: dok je
+    ' panel otvoren, ekran ispod je vec deaktiviran (editor mu je zatvoren pri
+    ' otvaranju panela), pa nema sta da izgubi.
+    If modUiPanel.PanelAktivan() = "" And Len(mScreen) > 0 Then
+        If modUiScreens.ScrImaNesacuvano(mScreen) Then
+            If MsgBox(Poruka("MATU_ASK_ODBACI_UNOS"), _
+                      vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then
+                PaintNav frm, NavTagFor(AktivnaStavka())
+                Exit Function
+            End If
+        End If
+    End If
+
+    ' ---- TEK SADA se zatvara ono sto je otvoreno -----------------------
+    ' Panel drzi CELU radnu povrsinu. Klik u sidebaru bi inace promenio ekran
+    ' ispod njega -- operater bi video isti panel, a ljuska bi mislila da je na
+    ' drugom ekranu.
+    '
+    ' Ekran ispod se vraca SAMO ako ostajemo na njemu. Kad se prelazi dalje,
+    ' vraca ga sam prelazak -- pa bi vracanje ovde bilo citanje viska.
+    If modUiPanel.PanelAktivan() <> "" Then
+        ' Nesacuvano u panelu se NE odbacuje tiho. Ako operater odustane,
+        ' oznaka u sidebaru se vraca na panel -- inace bi meni pokazivao ekran
+        ' na koji se nije preslo.
+        If Not modUiPanel.PanelSmemoDaZatvorimo() Then
+            PaintNav frm, NavTagFor(AktivnaStavka())
+            Exit Function
+        End If
+        vratiEkran = (Not jePanel) And (kljuc = mScreen)
+        modUiPanel.PanelZatvori vratiEkran
+        zatvorenPanel = True
+    End If
+
+    ' Stavka sidebara koja je PANEL, ne ekran. Grana je odvojena jer panel nema
+    ' nista od onoga sto sledi: ni zonu, ni naslovnu traku, ni mrezu, ni sort.
+    ' mScreen zato ostaje ekran ISPOD panela -- zatvaranje panela ga vraca bez
+    ' ponovne gradnje, a "Nazad na rad" i dalje zna odakle se doslo.
+    '
+    ' Do v6-ui-200 se ovde nije dolazilo: panel je otvarao ekran MAT_SISTEM
+    ' preko svog dugmeta "Otvori alatku". Taj ekran je bio spisak od dve stavke
+    ' -- tacno ono sto sidebar vec radi -- pa je uklonjen, a panel je postao
+    ' stavka sidebara kao i Korisnici.
+    If jePanel Then
+        ' Ekran koji ostaje ispod panela svejedno sprema svoje: editor koji bi
+        ' prezivo iza panela pise u sifarnik koji se vise ne vidi.
+        If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
+        ClosePopup
+        CloseFilterPanel
+        greska = modUiPanel.PanelOtvori(kljuc)
+        If Len(greska) > 0 Then
+            ShowToast greska, True
+            PanelVracenNaEkran
+            PaintNav frm, NavTagFor(AktivnaStavka())
+            Exit Function
+        End If
+        ActivateScreen = True
+        Exit Function
+    End If
+    ' Panel je zatvoren i ekran je vec vracen kad ostajemo na njemu.
+    If kljuc = mScreen Then
+        ActivateScreen = True
+        Exit Function
+    End If
+    If kljuc <> SCR_POCETNI Then
         nm = "zScr_" & kljuc
         On Error Resume Next
         Set z = frm.Controls(nm)
         On Error GoTo 0
         If z Is Nothing Then
+            ' Koliko omotaca postoji PRE gradnje. Sve iznad toga napravila je ova
+            ' gradnja -- i zona (WireZone) i sve sto je Scr_Build ozicio -- pa se
+            ' na neuspeh uklanja tacno taj rep. Do v6-ui-207 se uklanjao samo
+            ' omotac ZONE (po SinkTag), a omotaci njene dece su ostajali u Btns i
+            ' drzali odvojeno stablo kontrola zivim.
+            btnsPre = 0
+            If Not Btns Is Nothing Then btnsPre = Btns.count
             Set z = NewZone(frm, nm, SIDEBAR_W, HEADER_H, 400, 400, C_CREAM)
             WireZone z
             If Not modUiScreens.ScrBuild(kljuc, z) Then
-                ' ekran koji padne u gradnji ne sme da obori aplikaciju
-                z.Visible = False
+                ' Ekran koji padne u GRADNJI ne sme da obori aplikaciju. Ovo je
+                ' jedini bail posle zatvaranja panela, pa se ekran ispod ovde
+                ' vraca rucno -- inace bi ostao deaktiviran.
+                '
+                ' Zona se UKLANJA, ne samo sakriva. Do v6-ui-207 je ostajala na
+                ' formi sa Visible = False, pa bi je sledeci pokusaj NASAO
+                ' (Set z = frm.Controls(nm)), preskocio gradnju jer "z nije
+                ' Nothing", i ActivateScreen bi prijavio USPESAN prelazak na
+                ' prazan ekran. Jedan pad u gradnji je tako trajno pretvarao
+                ' ekran u prazan -- do restarta aplikacije.
+                Set z = Nothing
+                UkloniZonu frm, nm, btnsPre
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
-                PaintNav frm, NavTagFor(mScreen)
-                Exit Sub
+                If zatvorenPanel Then PanelVracenNaEkran
+                PaintNav frm, NavTagFor(AktivnaStavka())
+                Exit Function
             End If
         End If
     End If
+    ' Ekran koji odlazi sprema svoje: editor, panel, izbor. Ugovorno i kasno
+    ' vezano -- ljuska i dalje ne zna nijedan ekran po imenu.
+    '
+    ' TEK SADA, kad su sve provere prosle. Do v6-ui-201 je stajalo na vrhu, pa
+    ' je odbijen prelazak (nema prava, nema modula, gradnja pala) ostavljao
+    ' TRENUTNI ekran deaktiviran a i dalje na sceni: mreza se vidi, a radnje
+    ' tise ne rade jer im je zona obrisana.
+    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
     mScreen = kljuc
     ClosePopup
     CloseFilterPanel
@@ -4545,7 +5253,8 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
         ReloadGrid
     End If
     LayoutOtkup frm
-End Sub
+    ActivateScreen = True
+End Function
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
 ' pravougaonik i pita ga da se rasporedi - sta u njemu stoji ne zna.
@@ -4557,6 +5266,17 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
                              ByVal wTot As Single, ByVal hTot As Single)
     Dim z As Object, h As Single, gy As Single
     On Error Resume Next
+    ' Panel dobija CELU radnu povrsinu -- sidebar, zaglavlje i statusna traka
+    ' ostaju, sve ostalo je njegovo. Zona ekrana se tada ne meri: sakrivena je,
+    ' a Scr_Layout nad sakrivenom zonom trosi na raspored koji niko ne vidi.
+    If mPanelRezim Then
+        With frm.Controls("zPanel")
+            .Left = X: .top = HEADER_H: .width = w
+            .Height = hTot - HEADER_H - STATUS_H
+        End With
+        Exit Sub
+    End If
+
     Set z = frm.Controls("zScr_" & mScreen)
     If z Is Nothing Then Exit Sub
     z.Left = X
@@ -4593,6 +5313,41 @@ End Sub
 ' postavljen i posle povratka, pa ga ScrGridData procita kao pad ekrana: mreza
 ' se isprazni uz 'Lista se nije ucitala' iako su podaci procitani ispravno.
 ' Isti put pogadja svaki ekran koji u Scr_Rows dopunjava svoju zonu.
+' Uklanjanje zone koja se nije izgradila. Redosled je obavezan: OMOTACI pre
+' KONTROLE (.claude/rules/forme-i-kontrole.md) -- omotac koji prezivi svoju
+' kontrolu je mrtva referenca.
+'
+' btnsPre je broj omotaca PRE gradnje: sve iznad njega napravila je ova gradnja,
+' pa se uklanja ceo taj rep, OBRNUTIM redom (Collection reindeksira posle svakog
+' Remove). Do v6-ui-207 se trazio samo omotac zone po SinkTag, pa su omotaci
+' koje je nedovrsena Scr_Build napravila za svoju decu ostajali u Btns i drzali
+' odvojeno stablo kontrola zivim -- curenje koje bi rastalo sa svakim padom.
+Private Sub UkloniZonu(frm As Object, ByVal nm As String, ByVal btnsPre As Long)
+    Dim i As Long
+    On Error Resume Next
+    If Not Btns Is Nothing Then
+        For i = Btns.count To btnsPre + 1 Step -1
+            Btns.Remove i
+        Next i
+    End If
+    frm.Controls.Remove nm
+    Err.Clear
+End Sub
+
+' Broj zivih omotaca. Javno ZBOG TESTA: curenje omotaca se ne vidi ni na formi
+' ni u zoni -- jedini trag je duzina ove kolekcije.
+Public Function OtkupUI_BrojOmotacaTest() As Long
+    If Btns Is Nothing Then Exit Function
+    OtkupUI_BrojOmotacaTest = Btns.count
+End Function
+
+' Koji ekran bi prekidac otvorio u datoj sekciji. Javno ZBOG TESTA: test mora da
+' zna kljuc PRE nego sto proba prelazak, da bi posle mogao da tvrdi nesto o
+' TOJ zoni (npr. da je posle pada gradnje nema).
+Public Function OtkupUI_EkranZaSekcijuTest(ByVal sekcija As String) As String
+    OtkupUI_EkranZaSekcijuTest = EkranZaSekciju(sekcija)
+End Function
+
 Public Function ScreenZone(ByVal kljuc As String) As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Function
@@ -5278,12 +6033,36 @@ End Sub
 ' reversi nose tip ambalaze. CompareKey pada na StrComp kad vrednost nije broj,
 ' pa sortiranje po toj koloni radi i za tekst - nije potrebno sedmo polje.
 ' Ima li aktivni rezim kolonu u kilogramima? Od toga zavisi zbir u podnozju.
-Private Function ModeHasKgCol() As Boolean
+' Podnozje mreze pita OPIS KOLONA, a ne rezim dokumenata -- to je vec jednom
+' placeno (v. 13. i 14. u UI_MIGRACIJA_KATALOG). Racun je izdvojen u ciste
+' funkcije nad opisom da bi se isto pitanje moglo postaviti i listi koja jos
+' nije nacrtana: bez toga se tvrdnja "ova lista nema zbirove" moze proveriti
+' tek posle crtanja, a to znaci tek kroz formu.
+Public Function OpisImaKgKolonu(ByVal cols As Variant) As Boolean
     Dim i As Long
-    If Not IsArray(mCols) Then Exit Function
-    For i = 0 To UBound(mCols)
-        If ColF(CStr(mCols(i)), 2) = "kg" Then ModeHasKgCol = True: Exit Function
+    If Not IsArray(cols) Then Exit Function
+    For i = LBound(cols) To UBound(cols)
+        If ColF(CStr(cols(i)), 2) = "kg" Then OpisImaKgKolonu = True: Exit Function
     Next i
+End Function
+
+Public Function OpisImaValKolonu(ByVal cols As Variant) As Boolean
+    Dim i As Long
+    If Not IsArray(cols) Then Exit Function
+    For i = LBound(cols) To UBound(cols)
+        Select Case ColF(CStr(cols(i)), 2)
+            Case "rsd", "mult", "sum0", "rest": OpisImaValKolonu = True: Exit Function
+        End Select
+    Next i
+End Function
+
+' Prioritet kolone iz opisa (peto polje): 1 = crta se uvek, 4 = nikad (identitet).
+Public Function ColPrioritet(ByVal spec As String) As Long
+    ColPrioritet = CLng(val(ColF(spec, 4)))
+End Function
+
+Private Function ModeHasKgCol() As Boolean
+    ModeHasKgCol = OpisImaKgKolonu(mCols)
 End Function
 
 ' Da li lista uopste ima novcanu kolonu -- od toga zavisi da li se u podnozju
@@ -5298,13 +6077,7 @@ End Function
 ' OTKUI_HD_OSTATAK na Dokumentima, koja stoji UZ "mult" kolonu -- tamo je
 ' ModeHasValCol vec bio True, pa se nista ne menja.
 Private Function ModeHasValCol() As Boolean
-    Dim i As Long
-    If Not IsArray(mCols) Then Exit Function
-    For i = 0 To UBound(mCols)
-        Select Case ColF(CStr(mCols(i)), 2)
-            Case "rsd", "mult", "sum0", "rest": ModeHasValCol = True: Exit Function
-        End Select
-    Next i
+    ModeHasValCol = OpisImaValKolonu(mCols)
 End Function
 
 ' PLACENO nosi SAMO boju teksta, bez pozadine. Pozadinu (pilulu) nosi jedino
@@ -6389,11 +7162,25 @@ Public Sub OtkupUI_FormClosed()
     Set mFrm = Nothing
     mView = Empty
     mViewN = 0
+    ' Sekcija je stanje ljuske, ne forme: bez ciscenja bi sledeca gradnja
+    ' (i sledeci test) krenula u maticnoj sekciji koju je neko ostavio.
+    mSekcija = SEK_RAD
+    mNavUzak = False
+    mZadnjiRad = ""
+    mZadnjiMaticni = ""
 End Sub
 
 Public Sub OtkupUI_Release()
     On Error Resume Next
     StopOtkupUITimers
+    ' Panel u radnoj povrsini drzi referencu na OKVIR unutar ove forme, a modul
+    ' panela drzi njega. Dok te reference postoje, forma se ne moze osloboditi --
+    ' a ImportAllVBA prvo UKLANJA istoimenu komponentu, pa bi uklanjanje palo i
+    ' import bi napravio frmOtkupUI1. Zato panel odlazi PRE mFrm.
+    ' False: ekrana vise nema kome bi se vratila radna povrsina -- forma se ovog
+    ' trenutka rusi. Citanje ekrana ovde bi bilo citanje u prazno.
+    modUiPanel.PanelZatvori False
+    mPanelRezim = False
     Set mHovered = Nothing
     Set Btns = Nothing
     modUiKit.ResetNumFields             ' drzi reference na kontrole oborene forme
@@ -7621,6 +8408,13 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_REVERS", "Naslov F7: Reversi (PRIVREMENO)", "Library", IC_REVERS
     IcoRow a, "IC_ENTER", "(nije vezano)", "ReturnKey", IC_ENTER
     IcoRow a, "IC_OPORAVAK", "Naslov: Oporavak", "Refresh", IC_OPORAVAK
+    IcoRow a, "IC_MAT_PARTNERI", "Sidebar: Partneri", "People", IC_MAT_PARTNERI
+    IcoRow a, "IC_MAT_ROBA", "Sidebar: Proizvodi i cene", "Tag", IC_MAT_ROBA
+    IcoRow a, "IC_MAT_PAKOVANJE", "Sidebar: Ambalaza i pakovanje", "Package", IC_MAT_PAKOVANJE
+    IcoRow a, "IC_MAT_KORISNICI", "Sidebar: Korisnici", "SwitchUser", IC_MAT_KORISNICI
+    IcoRow a, "IC_MAT_SISTEM", "Sidebar: Podesavanja", "Setting", IC_MAT_SISTEM
+    IcoRow a, "IC_MAT_ADMIN", "Sidebar: Administracija", "Admin", IC_MAT_ADMIN
+    IcoRow a, "IC_NAZAD", "Dugme: Nazad na rad", "Back", IC_NAZAD
 
     Set wb = Workbooks.Add
     Set ws = wb.Sheets(1)

@@ -1532,8 +1532,8 @@ SABOTAZE = {
     # procitani ispravno.
     "zona-curi-gresku": (
         "modOtkupUI.bas",
-        "    If Err.Number <> 0 Then Err.Clear\nEnd Function\n",
-        "    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\nEnd Function\n",
+        "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    If Err.Number <> 0 Then Err.Clear\n",
+        "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\n",
         "T_PaletaDvoklik_OtvaraStavke",
         "procitana lista se ne prijavljuje kao pad ekrana",
     ),
@@ -2113,14 +2113,555 @@ SABOTAZE = {
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
         "prazan combo NIJE izbor -- tada blok dolazi iz poziva na broj",
     ),
+    # ------------------------------------- MATICNI: SEKCIJA I POKRETAC
+    # Sidebar nema skrol. Kad stavke predju slobodnu visinu, ne skroluju se nego
+    # TIHO nestanu ispod profila -- zato sekcije uopste postoje. Cetiri sabotaze:
+    # da mera stvarno meri, da prekidac stvarno gasi drugu sekciju, da radnja
+    # bira alatku po identitetu, i da ljuska pita ekran za njegovu branu.
+    "maticni-sifarnici-u-radnoj-sekciji": (
+        "modUiScreens.bas",
+        "                      \"SIFARNICI|OTKUI_NAVG_SIFARNICI|\" & SEK_MATICNI, _\n",
+        "                      \"SIFARNICI|OTKUI_NAVG_SIFARNICI|\" & SEK_RAD, _\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "radna sekcija staje u sidebar",
+    ),
+    "maticni-sidebar-ne-gasi-drugu-sekciju": (
+        "modOtkupUI.bas",
+        "    z.Controls(nm).top = Y\n    z.Controls(nm).Visible = vis\n",
+        "    z.Controls(nm).top = Y\n    z.Controls(nm).Visible = True   ' SABOTAZA: stavka druge sekcije ostaje\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "u maticnoj sekciji je radna stavka ugasena",
+    ),
+    "maticni-prigusena-stavka-se-preboji": (
+        "modOtkupUI.bas",
+        "                IIf(on_, C_CREAM, IIf(off_, C_DISABLED_FG, RGB(52, 68, 44)))\n",
+        "                IIf(on_, C_CREAM, RGB(52, 68, 44))   ' SABOTAZA: prigusenost nestaje\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "prigusena stavka ostaje prigusena i posle prebojavanja sidebara",
+    ),
+    # Paneli su od v6-ui-200 stavke sidebara, pa zive u DVA registra: modUiScreens
+    # ih crta, modUiPanel ih otvara. Kljuc preimenovan u jednom, a zaboravljen u
+    # drugom, daje stavku koja se vidi i ne otvara -- bez ijedne greske.
+    "panel-kljuc-se-razisao-sa-sidebarom": (
+        "modUiPanel.bas",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")\n",
+        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")   # SABOTAZA\n",
+        "T_UiPanel_StavkaSidebara",
+        "svaki panel ima svoj red u registru ekrana",
+    ),
+    "maticni-ljuska-ne-pita-branu-ekrana": (
+        "modUiScreens.bas",
+        "    ScrDozvoljen = ScrSopstvenaBrana(kljuc)\n",
+        "    ' SABOTAZA: ljuska ne pita ekran za njegovu branu\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "ljuska postuje branu ekrana korisnika, ne samo oblast",
+    ),
+    # Panel nema Scr_Dozvoljen (nema modul ekrana), pa mu branu drzi registar
+    # panela. Ljuska koja je ne pita pusta ne-admina u Podesavanja.
+    "panel-ljuska-ne-pita-branu-panela": (
+        "modUiScreens.bas",
+        "        ScrDozvoljen = modUiPanel.PanelDozvoljen(kljuc)\n",
+        "        ScrDozvoljen = True   ' SABOTAZA: brana panela se preskace\n",
+        "T_UiPanel_StavkaSidebara",
+        "ljuska postuje branu panela (PanelDozvoljen), ne samo oblast",
+    ),
+    # ------------------------------- MATICNI SIFARNICI: OPIS I CITANJE
+    # Opis 13 sekcija je ono sto je preneto iz frmStammdaten. Cetiri sabotaze
+    # ciljaju cetiri tvrdnje koje bi inace pukle tiho: identitet u koloni 1,
+    # podnozje bez laznih zbirova, sema kao izvor istine za kolonu statusa, i
+    # cip koji stvarno deli skup.
+    "maticni-kolona-1-nije-pk": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_ID|KooperantID|txt|84|1\", _\n",
+        "                \"OTKUI_HDM_ID|Telefon|txt|84|1\", _\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "kolona identiteta svake sekcije stvarno ga nosi",
+    ),
+    "maticni-tezina-kao-kilogrami": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|dec|130|1\")\n",
+        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|kg|130|1\")\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "nijedna maticna kolona nije kilogramska ni novcana",
+    ),
+    "maticni-status-pogadja-umesto-da-trazi": (
+        "modMaticniIzvor.bas",
+        "    If GetColumnIndex(tbl, \"Aktivan\") > 0 Then\n        MatStatusKolona = \"Aktivan\"\n    ElseIf GetColumnIndex(tbl, \"Aktivna\") > 0 Then\n        MatStatusKolona = \"Aktivna\"\n    End If\n",
+        "    MatStatusKolona = \"Aktivan\"   ' SABOTAZA: pogadja umesto da trazi u semi\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "kolona statusa se trazi u semi, ne pogadja",
+    ),
+    "maticni-cip-ne-deli-skup": (
+        "modMaticniIzvor.bas",
+        "            If filter = MAT_CIP_NEAKT And aktivan Then GoTo Sledeci\n",
+        "            ' SABOTAZA: cip 'neaktivni' ne filtrira nista\n",
+        "T_MatIzvor_CipIdentitetIPretraga",
+        "aktivni + neaktivni = svi",
+    ),
+    # ------------------------------------- MATICNI: JEDAN PISAC (M2)
+    # Provere su iz forme presle u modul; ako modul prestane da odbija, forma
+    # to vise nema gde da uhvati -- ona od v6-ui-189 samo prikazuje odgovor.
+    "maticni-unos-ne-trazi-obavezno": (
+        "modMaticniUnos.bas",
+        "        If modMaticniIzvor.PoljeF(spec, 3) = \"1\" And Len(v) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: obavezno polje se ne trazi\n",
+        "T_MatUnos_ProveraOdbija",
+        "kooperant bez imena se odbija",
+    ),
+    "maticni-unos-nula-hektara-prolazi": (
+        "modMaticniUnos.bas",
+        "    If kljuc = \"PARCELE\" And poljeKljuc = \"povrsina\" Then TraziPozitivan = True\n",
+        "    ' SABOTAZA: nula hektara postaje dozvoljena\n",
+        "T_MatUnos_ProveraOdbija",
+        "parcela od nula hektara se odbija",
+    ),
+    "maticni-unos-prag-blok-bez-provere": (
+        "modMaticniUnos.bas",
+        "                If upoz > 0 And blok > 0 And blok < upoz Then\n",
+        "                If False Then   ' SABOTAZA: pragovi se ne uporedjuju\n",
+        "T_MatUnos_ProveraOdbija",
+        "prag blokade ispod praga upozorenja se odbija",
+    ),
+    "maticni-alias-se-ne-razresava": (
+        "modMaticniIzvor.bas",
+        "    If Left$(kol, 7) <> \"@alias:\" Then\n",
+        "    If True Then   ' SABOTAZA: alias ostaje nerazresen\n",
+        "T_MatUnos_OpisPoljaISema",
+        "svako polje pise u kolonu koja POSTOJI u semi",
+    ),
+    # --------------------------------- MATICNI: EDITOR U ZONI (M2b)
+    # Polja se dodeljuju iz bazena. Dva polja koja dobiju ISTU kontrolu bi se
+    # pri upisu tiho pregazila -- upis prolazi, poruka je "Dodato", a podatak
+    # je pogresan. Zato bas ta tvrdnja ima svoju sabotazu.
+    "maticni-editor-polja-dele-kontrolu": (
+        "modMaticniEkran.bas",
+        "                KontrolaPolja = \"scrMatC\" & nmC\n",
+        "                KontrolaPolja = \"scrMatC0\"   ' SABOTAZA: sva combo polja u jedno\n",
+        "T_MatEkran_BazenPoljaIVisina",
+        "dva polja NIKAD ne dele istu kontrolu bazena",
+    ),
+    "maticni-cenovnik-dobija-izmeni": (
+        "modMaticniEkran.bas",
+        "    If lista <> \"CENOVNIK\" Then s = \"izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1\"\n",
+        "    s = \"izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1\"   ' SABOTAZA: i cenovnik\n",
+        "T_MatEkran_RadnjeIRezim",
+        "cenovnik ne dobija radnju izmene",
+    ),
+    "maticni-status-dugme-bez-kolone": (
+        "modMaticniEkran.bas",
+        "    If Len(modMaticniIzvor.MatStatusKolona(lista)) > 0 Then\n        If Len(s) > 0 Then s = s & \"|\"\n",
+        "    If True Then   ' SABOTAZA: dugme i tamo gde kolone statusa nema\n        If Len(s) > 0 Then s = s & \"|\"\n",
+        "T_MatEkran_RadnjeIRezim",
+        "deaktivacija se nudi samo gde postoji kolona statusa",
+    ),
+    # ------------------------------------------ MATICNI: GEO PARCELE (M3)
+    # Dva pravila koja su do M3 zivela samo u frmStammdaten, a trebala su i
+    # ekranu: prag "veci od 1000" pri citanju koordinata, i decimalna TACKA u
+    # adresi mape. Oba bi pukla tiho -- pogresna koordinata i pogresan URL.
+    "maticni-geo-prag-hiljadu": (
+        "modMaticniGeo.bas",
+        "            If Abs(d) > 1000 Then\n",
+        "            If Abs(d) > 0 Then   ' SABOTAZA: i broj parcele je koordinata\n",
+        "T_MatGeo_TekstIAdrese",
+        "mali brojevi se preskacu",
+    ),
+    "maticni-geo-url-sa-zarezom": (
+        "modMaticniGeo.bas",
+        "    GeoUrlMape = \"https://www.google.com/maps?q=\" & _\n                 Replace(CStr(lat), \",\", \".\") & \",\" & _\n                 Replace(CStr(lng), \",\", \".\")\n",
+        "    GeoUrlMape = \"https://www.google.com/maps?q=44,81,20,46\"   ' SABOTAZA: zarez u adresi\n",
+        "T_MatGeo_TekstIAdrese",
+        "decimalni separator u adresi je TACKA",
+    ),
+    "maticni-geo-radnja-svuda": (
+        "modMaticniEkran.bas",
+        "    If lista = \"PARCELE\" Then\n",
+        "    If True Then   ' SABOTAZA: geo dugme i tamo gde koordinata nema\n",
+        "T_MatGeo_TekstIAdrese",
+        "geo radnja postoji samo na Parcelama",
+    ),
+    # -------------------------------------- MATICNI: KORISNICI I PRAVA (M4)
+    # Recnik kolone Aktivan u tblKorisnici je "DA"/"NE" i cita ga modAuth
+    # (modAuth.bas:87 neaktivnim smatra SAMO "NE"). Genericko dugme je tu
+    # upisivalo "Aktivan"/"Neaktivan", pa deaktivacija nije sprecavala prijavu.
+    # Sabotaze vracaju tacno taj kvar -- i onaj oblik u kom se ne vidi u listi.
+    "kor-recnik-prenosi-zatecen-tekst": (
+        "modMaticniKorisnici.bas",
+        "    Else\n        DaNe = KOR_NE\n    End If\nEnd Function\n",
+        "    Else\n        DaNe = Trim$(v)   ' SABOTAZA: zatecen tekst prolazi kao vrednost\n    End If\nEnd Function\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "zatecena vrednost se ne prepisuje kao dozvola",
+    ),
+    "kor-prazno-pri-izmeni-je-dozvola": (
+        "modMaticniKorisnici.bas",
+        "        DaNe = IIf(praznoJeDa, KOR_DA, KOR_NE)\n",
+        "        DaNe = KOR_DA   ' SABOTAZA: prazno je uvek dozvola\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prazno pri izmeni nije dozvola",
+    ),
+    "kor-combo-nudi-sifarnik": (
+        "modMaticniKorisnici.bas",
+        "        Case \"@dane_kor\": KorComboStavke = Array(KOR_DA, KOR_NE)\n",
+        "        Case \"@dane_kor\": KorComboStavke = Array(\"Aktivan\", \"Neaktivan\")   ' SABOTAZA\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "combo aktivnosti nudi recnik kolone, ne recnik sifarnika",
+    ),
+    "kor-ime-nije-obavezno": (
+        "modMaticniKorisnici.bas",
+        "    u = Vred(polja, \"korime\")\n    If Len(u) = 0 Then\n",
+        "    u = Vred(polja, \"korime\")\n    If False Then   ' SABOTAZA: prazno ime prolazi\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prazno korisnicko ime se odbija",
+    ),
+    # Lista prava bira red po SKRIVENOJ koloni. Kad bi birala po prvoj, birala
+    # bi po lokalizovanom nazivu oblasti -- pa bi promena prevoda menjala to
+    # KOJE se pravo ukljucuje. Kvar bez ijedne greske u logu.
+    "kor-pravo-po-vidljivoj-koloni": (
+        "modMaticniIzvor.bas",
+        "        MatKolonaID = modMaticniKorisnici.KOR_COL_OBLAST\n",
+        "        MatKolonaID = 1   ' SABOTAZA: identitet iz vidljive kolone\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "lista prava prijavljuje svoju kolonu identiteta",
+    ),
+    "kor-kljuc-oblasti-se-crta": (
+        "modMaticniKorisnici.bas",
+        "        \"OTKUI_HDK_OBLAST|@kljuc|txt|0|4\")\n",
+        "        \"OTKUI_HDK_OBLAST|@kljuc|txt|90|1\")   ' SABOTAZA: kljuc u mrezi\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "kolona identiteta prava se NIKAD ne crta (prioritet 4)",
+    ),
+    "kor-prava-bez-radnje": (
+        "modMaticniEkran.bas",
+        "        Radnje = \"pravo:OTKUI_BTN_KOR_PRAVO:150:soft:1\"\n",
+        "        Radnje = \"\"   ' SABOTAZA: lista prava ostaje bez ijedne radnje\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prava imaju radnju ukljuci/iskljuci",
+    ),
+    # Adminov red nosi "DA" na svim oblastima zato sto je to POSLEDICA uloge.
+    # Kad uloga padne na Korisnik, prenos tih "DA" daje pun pristup koji niko
+    # nije dodelio -- a modAuth ga cita bukvalno. Kvar bez ijedne poruke.
+    "kor-spustanje-sa-admina-cuva-prava": (
+        "modMaticniKorisnici.bas",
+        "    GasiSvaPrava = (jeUnos Or bioAdmin)\n",
+        "    GasiSvaPrava = jeUnos   ' SABOTAZA: bivsi admin zadrzava svih 12 DA\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "spustanje sa admina gasi zatecena prava",
+    ),
+    # ---------------------------- MATICNI: POKRIVENOST MENIJA (M5)
+    # Dve registracije istih sekcija zive odvojeno (stari meni pamti grupisanje
+    # i natpise, nova sekcija ekrane i kolone). Sekcija koja ispadne iz jedne
+    # nestaje iz te ljuske BEZ IJEDNE GRESKE -- operater je jednostavno vise ne
+    # vidi. Zato se pokrivenost meri u oba smera.
+    "meni-sekcija-ispala-iz-nove-ljuske": (
+        "modMaticniIzvor.bas",
+        "        Case \"Kese\":        MatKljucIzLegacyTag = \"KESE\"\n",
+        "        ' SABOTAZA: Kese ispale iz prevoda Tag -> sekcija\n",
+        "T_Maticni_MenijiPokrivajuIsto",
+        "svaka sekcija starog menija je dostizna u novoj ljusci",
+    ),
+    # Druga sabotaza se NE pise: oba smera ove tvrdnje mere isti raskorak, pa
+    # bi svaka realna izmena oborila obe -- a sabotaza cija imenovana tvrdnja ne
+    # padne prva je gora od nijedne (dokaz.py bi javio PALA DRUGA TVRDNJA).
+    # ------------------------- MATICNI: SLAGANJE CITACA SA LEGACY-JEM
+    # Pisac je od M2a jedan i deljen; citac NIJE -- legacy LoadList i novi
+    # MatRedovi su dve nezavisne implementacije. Jedino sto ih moze razici je
+    # KOJE redove puste kroz sebe, i to se ne vidi ni u jednoj gresci: lista
+    # prosto ima red manje ili vise nego sto je imala.
+    "citac-pusta-prazan-pk": (
+        "modMaticniIzvor.bas",
+        "        If pkIdx = 0 Then GoTo Sledeci\n        If Trim$(NzToText(data(i, pkIdx))) = \"\" Then GoTo Sledeci\n",
+        "        If pkIdx = 0 Then GoTo Sledeci   ' SABOTAZA: prazan PK vise ne ispada\n",
+        "T_Maticni_CitacSlaganjeSaLegacy",
+        "novi citac pusta kroz sebe TACNO one zapise koje i LoadList",
+    ),
+    # Storno filter cenovnika bi oborio ISTU tvrdnju (skup redova), pa svoju
+    # sabotazu ne dobija -- v. napomenu uz "meni-sekcija-ispala-iz-nove-ljuske".
+    # Legacy lista pokazuje NAZIV stanice (LookupValue), a ne StanicaID. Kad bi
+    # novi citac pokazao ID, mreza bi izgledala uredno i ni jedna provera osim
+    # ove ne bi imala sta da prijavi.
+    "citac-stanica-po-id-u-ne-po-nazivu": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_STANICA|@stanica|txt|96|2\", _\n",
+        "                \"OTKUI_HDM_STANICA|StanicaID|txt|96|2\", _\n",
+        "T_Maticni_CitacSlaganjeSaLegacy",
+        "svaka gola vrednost novog citaca postoji i u legacy redu",
+    ),
+    # -------------------------- MATICNI: KASKADA ZAVISNOG COMBO-A
+    # Podatak je bio prenet iz forme, ozicavanje nije: spisak sorti se punio
+    # samo pri otvaranju editora, kad vrsta jos nema vrednost. Combo je ostajao
+    # prazan, a nista nije prijavljivalo gresku -- operater bi kucao naslepo.
+    "kaskada-zavisnost-ispala-iz-opisa": (
+        "modMaticniIzvor.bas",
+        "    If izvor = \"@sorte\" Then MatComboZavisi = \"vrsta\"\n",
+        "    ' SABOTAZA: sorta vise ne zna od cega zavisi\n",
+        "T_MatEkran_KaskadaZavisnogCombo",
+        "sorta cenovnika zavisi od vrste",
+    ),
+    # Kontekst koji se IGNORISE je gori od kaskade koje nema: combo izgleda
+    # popunjeno, a nudi sorte tudje vrste -- pa cena zavrsi na pogresnoj sorti.
+    "kaskada-kontekst-se-ignorise": (
+        "modMaticniIzvor.bas",
+        "                If StrComp(Trim$(NzToText(d(i, vr))), Trim$(kontekst), vbTextCompare) = 0 Then\n",
+        "                If True Then   ' SABOTAZA: kontekst se ignorise, vracaju se sve sorte\n",
+        "T_MatEkran_KaskadaZavisnogCombo",
+        "spisak sorti nosi SAMO sorte izabrane vrste",
+    ),
+    # -------------------------------- PANEL U RADNOJ POVRSINI (M6)
+    # Panel pokriva CELU radnu povrsinu. Kad se mreza ne skloni ispod njega,
+    # dve stvari dele isti prostor -- ista klasa kvara kao editor i geo panel
+    # jedan preko drugog, samo preko cele povrsine.
+    "panel-mreza-ostaje-ispod": (
+        "modOtkupUI.bas",
+        "        frm.Controls(CStr(nmv(i))).Visible = (Not mPanelRezim) And (Not prazno)\n",
+        "        frm.Controls(CStr(nmv(i))).Visible = True   ' SABOTAZA: mreza ostaje ispod panela\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "mreza se NE crta ispod panela",
+    ),
+    # Registar koji imenuje graditelja kog nema: dugme radi, panel se ne otvori,
+    # a jedina poruka je "Panel se nije otvorio: Cannot run the macro".
+    # ---------------------------- MATICNI: UBRZANO CITANJE (v6-ui-201)
+    # Dve zamene koje smeju da ubrzaju, a ne smeju da promene prikaz: mapa
+    # umesto LookupValue-a u petlji, i prozor kesa oko citanja. Obe bi pukle
+    # tiho -- pogresno ime kooperanta izgleda kao podatak, a otvoren prozor
+    # kesa se vidi tek posle SLEDECEG upisa.
+    "maticni-mapa-bez-prezimena": (
+        "modMaticniIzvor.bas",
+        "        Set mMapaKoop = BuildLookupDict(TBL_KOOPERANTI, \"KooperantID\", \"Ime\", \"Prezime\")\n",
+        "        Set mMapaKoop = BuildLookupDict(TBL_KOOPERANTI, \"KooperantID\", \"Ime\")   ' SABOTAZA\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "naziv kooperanta iz mape je isti kao iz LookupValue",
+    ),
+    # BuildRowIndex pamti BROJ REDA, pa je pomeraj za jedan tiho pogresan podatak,
+    # ne greska: red 5 bi nosio ime sa reda 6. Duplikat kljuca se ne sabotira --
+    # nad cistim podacima ga nema, pa tvrdnja ne bi ni pukla.
+    "mapa-reda-pomerena-za-jedan": (
+        "modDataAccess.bas",
+        "            If Not d.Exists(k) Then d.Add k, i\n",
+        "            If Not d.Exists(k) Then d.Add k, i + 1   ' SABOTAZA: pomeraj\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "red iz BuildRowIndex nosi isto sto je LookupValue vracao",
+    ),
+    "maticni-prozor-kesa-ostaje-otvoren": (
+        "modMaticniIzvor.bas",
+        "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n    EndTableCache\n",
+        "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n   ' SABOTAZA: prozor ostaje otvoren\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "citanje ZATVARA svoj prozor kesa",
+    ),
+    # ------------------------- PANEL: ZIVOTNI CIKLUS (recenzija v6-ui-201)
+    # Tri kvara koje su registri propustili jer nijedan test nije odigrao
+    # ciklus otvori -> nazad -> radi dalje. Sve tri su TIHE.
+    #
+    # 1) Zatvaranje po KLJUCU umesto po modulu. Kljuc je strano ime; kad se
+    #    preimenuje u registru, uslov vise nikad nije tacan i "Nazad" pada u
+    #    legacy granu (Unload nad okvirom, greska progutana).
+    "panel-zatvaranje-po-tudjem-imenu": (
+        "modUiPanel.bas",
+        "    If StrComp(PanelPolje(mAktivan, PAN_MODUL), modul, vbTextCompare) <> 0 Then Exit Function\n",
+        "    If StrComp(mAktivan, modul, vbTextCompare) <> 0 Then Exit Function   ' SABOTAZA: po kljucu\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "svaki modul panela zatvara SVOJ panel po imenu modula",
+    ),
+    # 2) Panel se sklonio, ali ekran ispod nije ponovo procitan -- a otvaranje
+    #    panela ga je deaktiviralo, pa mu je zona obrisana. Mreza se vidi,
+    #    radnje tise ne rade.
+    "panel-ne-vraca-ekran-ispod": (
+        "modUiPanel.bas",
+        "    If bioOtvoren And vratiEkran Then modOtkupUI.PanelVracenNaEkran\n",
+        "    ' SABOTAZA: ekran ispod ostaje deaktiviran\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "ekran ispod panela je posle NAZAD ponovo procitan",
+    ),
+    # 3) Odbijen prelazak deaktivira ekran na kome jesmo. Vraca staro mesto
+    #    poziva -- na vrh, pre provere prava.
+    "ljuska-deaktivira-pre-provere": (
+        "modOtkupUI.bas",
+        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n",
+        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "odbijen prelazak NE deaktivira ekran na kome jesmo",
+    ),
+    # 4) Prava posle zamene operatera: BuildNav umesto ObnoviNavPrava. Drugi
+    #    Controls.Add("zNav") puca, greska se guta, mapa ostaje od prethodnog.
+    "prava-se-ne-primenjuju-na-sidebar": (
+        "modOtkupUI.bas",
+        "        mNavOff(CStr(k)) = Not modUiScreens.ScrAktivan(CStr(mNavKey(k)))\n",
+        "        ' SABOTAZA: mapa prigusenja ostaje od prethodnog operatera\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "posle primene novih prava zabranjen ekran je prigusen u sidebaru",
+    ),
+    # ------------------- OTKAZANA PRIJAVA I NALOG BEZ PRAVA (v6-ui-203)
+    # Login je radio Logout PRE forme za prijavu, pa je "Otkazi" ostavljao
+    # prazan auth kontekst uz prikaz koji tvrdi da je stari operater tu.
+    "auth-otkaz-ne-vraca-sesiju": (
+        "modAuth.bas",
+        "    If Not Login Then VratiSesiju biUser, biUloga, biIme, biLog\n",
+        "    ' SABOTAZA: otkazana prijava ostavlja prazan kontekst\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "otkazana prijava vraca PRETHODNOG operatera, ne prazno",
+    ),
+    # Prazna radna povrsina koja samo SAKRIJE mrezu i dalje drzi tudje redove:
+    # mView prezivi, RenderGrid ga vrati, GridCell ga cita i bez crtanja.
+    "prazna-povrsina-zadrzava-redove": (
+        "modOtkupUI.bas",
+        "    mView = Empty\n    mViewN = 0\n    mSumKg = 0: mSumVal = 0\n",
+        "    ' SABOTAZA: stanje mreze ostaje, samo se sakriva\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "prazna radna povrsina BRISE redove",
+    ),
+    # Kapija u samom piscu naloga. Do v6-ui-203 su se KorDodaj/KorIzmeni/
+    # KorPromeniStatus oslanjali iskljucivo na to da ih svi pozivaoci zovu kroz
+    # modMaticniUnos -- jedan nov pozivalac je zaobilazio branu.
+    "korisnici-pisac-bez-kapije": (
+        "modMaticniKorisnici.bas",
+        "    Brana = modMaticniUnos.MatBranaUpisa(\"KORISNICI\")\n",
+        "    Brana = \"\"   ' SABOTAZA: pisac naloga bez sopstvene kapije\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "pisac naloga odbija unos kad kapija ne pusta",
+    ),
+    # ------------------------------- RECENZIJA v6-ui-204
+    # Sekcija se menjala PRE nego sto se zna da li je prelazak uspeo, pa je
+    # odbijen prelazak ostavljao zaglavlje i sidebar u drugoj sekciji od one
+    # iz koje je ekran koji se i dalje vidi.
+    "sekcija-se-ne-vraca-posle-neuspeha": (
+        "modOtkupUI.bas",
+        "    If Not ActivateScreen(frm, kljuc) Then\n        VratiSekciju frm, staraSekcija\n",
+        "    If Not ActivateScreen(frm, kljuc) Then\n        ' SABOTAZA: sekcija ostaje promenjena\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "neuspeo prelazak ne pomera sekciju",
+    ),
+    # DRUGI izlaz iz PostaviSekciju: sekcija bez ijednog dostupnog ekrana. Taj
+    # je u v6-ui-204 bio zaboravljen, pa je zaglavlje pokazivalo novu sekciju a
+    # na sceni je bio ekran iz stare.
+    # Zona koja se nije izgradila mora da NESTANE. Ostavljena (samo sakrivena)
+    # zona pretvara ekran u TRAJNO prazan: sledeci pokusaj je nadje, preskoci
+    # gradnju jer "z nije Nothing", i prijavi uspesan prelazak.
+    "zona-posle-pada-gradnje-ostaje": (
+        "modOtkupUI.bas",
+        "                Set z = Nothing\n                UkloniZonu frm, nm, btnsPre\n",
+        "                z.Visible = False   ' SABOTAZA: zona ostaje na formi\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "zona koja se nije izgradila je UKLONJENA",
+    ),
+    # Druga strana ISTE popravke, ali DRUGA linija i DRUGA tvrdnja: omotaci koje
+    # je nedovrsena gradnja napravila moraju da odu sa zonom. Ovde zona nestane
+    # kako treba (pa tvrdnja o njoj prolazi), a omotac prezivi -- curenje koje
+    # raste sa svakim padom gradnje.
+    "omotaci-posle-pada-gradnje-ostaju": (
+        "modOtkupUI.bas",
+        "        For i = Btns.count To btnsPre + 1 Step -1\n            Btns.Remove i\n        Next i\n",
+        "        ' SABOTAZA: omotaci nedovrsene gradnje ostaju u Btns\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "omotaci nedovrsene gradnje su uklonjeni sa zonom",
+    ),
+    "sekcija-bez-ekrana-ostaje-promenjena": (
+        "modOtkupUI.bas",
+        "        VratiSekciju frm, staraSekcija\n        ShowToast Poruka(\"OTKUI_SEK_NEMA_EKRANA\"), False\n",
+        "        ShowToast Poruka(\"OTKUI_SEK_NEMA_EKRANA\"), False   ' SABOTAZA: bez vracanja\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "sekcija BEZ dostupnog ekrana se ne otvara",
+    ),
+    # Prazan spisak izvora nije "ne mogu da proverim" nego "nema cega da bude".
+    # GetTableData za nepostojecu tabelu vraca Empty BEZ greske, pa se taj slucaj
+    # ne vidi kroz MatComboGreska -- i propustao je orphan strani kljuc.
+    "combo-prazan-izvor-prolazi": (
+        "modMaticniUnos.bas",
+        "    If UBound(stavke) < LBound(stavke) Then\n        ComboVrednostPostoji = False\n        Exit Function\n    End If\n",
+        "    If UBound(stavke) < LBound(stavke) Then Exit Function   ' SABOTAZA: prazan spisak prolazi\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "PRAZAN spisak izvora ODBIJA nepraznu vrednost",
+    ),
+    # Posle naloga bez ijednog prava mScreen je prazan; sledeci operater sa
+    # pravima je dobijao samo osvezen sidebar i ostajao pred praznom povrsinom.
+    "prazna-povrsina-ostaje-i-sa-pravima": (
+        "modOtkupUI.bas",
+        "    If Len(mScreen) = 0 Then\n        ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna\n",
+        "    If False Then   ' SABOTAZA: prazna povrsina se ne oporavlja\n        ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "operater sa pravima izlazi iz prazne povrsine sam",
+    ),
+    # Kvar pri citanju spiska i prazan spisak se vracaju ISTO (prazan niz), pa
+    # provera koja ih ne razlikuje propusta proizvoljan strani kljuc.
+    "combo-kvar-izvora-prolazi": (
+        "modMaticniUnos.bas",
+        "    If Len(modMaticniIzvor.MatComboGreska()) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: kvar pri citanju spiska se ne razlikuje\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "kvar pri citanju spiska ODBIJA vrednost",
+    ),
+    # Ko ima branu kaze REGISTAR, ne broj greske. Polje koje se razidje sa
+    # modulima znaci ili ekran koji se ne pita, ili ekran koji je trajno zabranjen.
+    "registar-brane-se-razisao": (
+        "modUiScreens.bas",
+        "          \"|SISTEM|\" & OBL_MATICNI & \"|\" & SEK_MATICNI & \"|1\"\n",
+        "          \"|SISTEM|\" & OBL_MATICNI & \"|\" & SEK_MATICNI   ' SABOTAZA: brana neupisana\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "registar brane se slaze sa modulima ekrana",
+    ),
+    "panel-graditelj-ne-postoji": (
+        "modUiPanel.bas",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")\n",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanelX|OTKUI_MS_ADMIN|Admin\")   ' SABOTAZA\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "graditelj svakog panela postoji pod imenom iz registra",
+    ),
+    # Omotaci (WithEvents) moraju da odu PRE kontrola. Modul bez _Release-a
+    # registar ne moze da oslobodi, pa omotac prezivi svoju kontrolu -- i puca
+    # tek pri sledecem kliku, daleko od uzroka.
+    "panel-modul-bez-oslobadjanja": (
+        "modAdmin.bas",
+        "Public Sub Admin_Release()\n",
+        "Public Sub Admin_ReleaseX()   ' SABOTAZA: dogovor o imenu prekrsen\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "svaki modul panela ima <Modul>_Release kako registar ocekuje",
+    ),
+    # ------------------------------- MREZA: DECIMALA U CELIJI
+    # Nadjeno u smoke-u: 0,5 kg se crtalo kao "1". Podatak je bio ispravan,
+    # gresio je prikaz -- a broj koji izgleda kao podatak je gori od pada.
+    "celija-dec-zaokruzuje": (
+        "modOtkupUI.bas",
+        "        Case \"dec\":          CelijaTekst = FmtBroj(CDbl(v), 2)\n",
+        "        Case \"dec\":          CelijaTekst = FmtBroj(CDbl(v), 0)   ' SABOTAZA: decimala nestaje\n",
+        "T_Mreza_DecimalaNeNestaje",
+        "pola kilograma se crta kao 0,50, ne kao 1",
+    ),
+    "tezina-nazad-na-num": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_TEZINA|\" & COL_KUT_TEZINA & \"|dec|110|1\", _\n",
+        "                \"OTKUI_HDM_TEZINA|\" & COL_KUT_TEZINA & \"|num|110|1\", _\n",
+        "T_Mreza_DecimalaNeNestaje",
+        "tezine i cene sifarnika su decimalne kolone",
+    ),
+    # ------------------- MATICNI: KAPIJE UPISA (recenzija P0/P1)
+    # Tri kvara koja ne prijavljuju nista: upis prolazi, a podatak je pogresan.
+    "kapija-combo-ne-meri-listu": (
+        "modMaticniUnos.bas",
+        "            If Not ComboVrednostPostoji(kljuc, spec, v, polja) Then\n",
+        "            If False Then   ' SABOTAZA: combo prima izmisljenu vrednost\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "izmisljena stanica se odbija pre upisa",
+    ),
+    "kapija-pk-bez-polja": (
+        "modMaticniIzvor.bas",
+        "        Case \"KESE\":       MatPK = COL_KES_TIP\n",
+        "        Case \"KESE\":       MatPK = \"NemaOvakveKolone\"   ' SABOTAZA\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "svaki prirodan PK ima polje koje se moze zakljucati",
+    ),
+    "kapija-brana-fail-open": (
+        "modScrMatKorisnici.bas",
+        "    If mBranaZatvorenaTest And IsTestMode() Then Exit Function\n",
+        "    ' SABOTAZA: brana se ne moze zatvoriti -- fail-open\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "zatvorena brana zabranjuje ekran",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu
     # suite -- tacno to se desilo listi izvoda.
     "mreza-rest-nije-novcana-kolona": (
         "modOtkupUI.bas",
-        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": ModeHasValCol = True: Exit Function\n",
-        "            Case \"rsd\", \"mult\", \"sum0\": ModeHasValCol = True: Exit Function   ' SABOTAZA: rest nije novac\n",
+        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": OpisImaValKolonu = True: Exit Function\n",
+        "            Case \"rsd\", \"mult\", \"sum0\": OpisImaValKolonu = True: Exit Function   ' SABOTAZA: rest nije novac\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
         "ljuska za listu izvoda crta zbir vrednosti u podnozju",
     ),

@@ -400,6 +400,13 @@ Private Sub SetArtCell(ByRef rowData As Variant, ByVal colName As String, ByVal 
     If idx > 0 Then rowData(idx) = value
 End Sub
 
+' Tekst celije po broju reda i kolone; prazan string kad reda ili kolone nema.
+' Tacno ono sto je LookupValue vracao za nepoznat kljuc / nepoznatu kolonu
+' (Empty -> CStr -> ""), pa se prikaz ne menja.
+Private Function CelijaTx(ByRef data As Variant, ByVal r As Long, ByVal c As Long) As String
+    If r > 0 And c > 0 Then CelijaTx = CStr(data(r, c))
+End Function
+
 Public Function GetMagacinStanje() As Variant
     ' Returns: 2D Array (ArtikalID, Naziv, Tip, JM, Ulaz, Izlaz, Stanje)
     Dim data As Variant
@@ -456,12 +463,26 @@ NextStanje:
     ReDim result(1 To dict.count, 1 To 7)
     Dim keys As Variant: keys = dict.keys
     
+    ' Tri LookupValue-a PO ARTIKLU, svaki sa svojim citanjem cele tblArtikli --
+    ' jedna mapa kljuc -> red i jedan prolaz daju isto (v. modDataAccess.BuildRowIndex).
+    Dim artIdx As Object, artData As Variant, ra As Long
+    Dim cArtNaziv As Long, cArtTip As Long, cArtJm As Long
+    Set artIdx = BuildRowIndex(TBL_ARTIKLI, COL_ART_ID)
+    artData = GetTableData(TBL_ARTIKLI)
+    cArtNaziv = GetColumnIndex(TBL_ARTIKLI, COL_ART_NAZIV)
+    cArtTip = GetColumnIndex(TBL_ARTIKLI, COL_ART_TIP)
+    cArtJm = GetColumnIndex(TBL_ARTIKLI, COL_ART_JM)
+
     For i = 0 To dict.count - 1
         vals = dict(keys(i))
         result(i + 1, 1) = keys(i)
-        result(i + 1, 2) = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, keys(i), COL_ART_NAZIV))
-        result(i + 1, 3) = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, keys(i), COL_ART_TIP))
-        result(i + 1, 4) = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, keys(i), COL_ART_JM))
+        ra = 0
+        If artIdx.Exists(CStr(keys(i))) Then ra = CLng(artIdx(CStr(keys(i))))
+        ' Kolona koje nema ostaje prazna -- isto sto je LookupValue vracao
+        ' (Empty -> ""), pa schema drift i dalje ne obara ceo izvestaj.
+        result(i + 1, 2) = CelijaTx(artData, ra, cArtNaziv)
+        result(i + 1, 3) = CelijaTx(artData, ra, cArtTip)
+        result(i + 1, 4) = CelijaTx(artData, ra, cArtJm)
         result(i + 1, 5) = vals(0)          ' Ulaz
         result(i + 1, 6) = vals(1)          ' Izlaz
         result(i + 1, 7) = vals(0) - vals(1) ' Stanje
@@ -531,12 +552,17 @@ NextRow:
     Dim keys As Variant: keys = dict.keys
     Dim totalVrednost As Double
     
+    ' Ime i prezime u JEDNOM prolazu -- BuildLookupDict ih spaja razmakom, sto
+    ' je tacno ono sto se ovde i pise.
+    Dim koopMapa As Object
+    Set koopMapa = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
+
     For i = 0 To dict.count - 1
-        Dim ime As String, prezime As String
-        ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Ime"))
-        prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Prezime"))
-        
-        result(i + 1, 1) = ime & " " & prezime
+        Dim imePrez As String
+        imePrez = ""
+        If koopMapa.Exists(CStr(keys(i))) Then imePrez = CStr(koopMapa(CStr(keys(i))))
+
+        result(i + 1, 1) = imePrez
         result(i + 1, 2) = keys(i)
         result(i + 1, 3) = dict(keys(i))
         totalVrednost = totalVrednost + dict(keys(i))

@@ -519,6 +519,14 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 19. ~~Izveštaji~~ **URAĐENO** (`v6-ui-186`, `modScrIzvestaji`) — v. §23.
     Ostaju: Marža, Sledljivost — svaki po istom obrascu.
 
+### Faza F — Matični podaci
+
+20. ~~**Matični podaci**~~ **URAĐENO** (`v6-ui-187` … `v6-ui-194`, §24.13–§24.19);
+    `btnMatic` je u novom UI-ju bio nevezan. Nije stajalo u Fazi E jer nije „još jedan
+    ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
+    i prevezuje jedini operativan put upisa matičnih podataka. Redosled
+    M0–M5 je u §24.10.
+
 ---
 
 ## 6. Pravilo koje važi za sve faze
@@ -6131,3 +6139,1881 @@ ona živi samo u brutu palete).
 - **Odluka (audit transporta):** plomba/registracija/prevoz ostaju
   editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
   append-only istorija korekcija = budući rad za cold-chain dokaz.
+## 26. Matični podaci — plan prelaska (M0–M6 urađeni)
+
+> Ovo je jedina sekcija kataloga koja je napisana **pre** posla koji opisuje.
+> Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
+> obrascu iz §7–§9, §22, §23" nego donosi **nov pojam u navigaciju** (sekcija
+> ljuske) i dira sidebar, koji do sada nijedan ekran nije dirao. Odluka o tome
+> se donosi jednom i pre pisanja, ne u toku.
+>
+> Stanje na dan `v6-ui-186`.
+
+### 26.0 Zatečeno stanje — šta dugme danas sadrži
+
+Dva puta, po jedan za svaku ljusku:
+
+| Ljuska | Dugme | Šta se otvara |
+| legacy `frmOtkupAPP` | `btnMaticni` (zlatno, gore desno) | `frmMaticniPodaci` — popup meni; klik na sekciju → `frmStammdaten` kao `mActiveContent` |
+| novi `frmOtkupUI` | `btnMatic` (zlatno, gore desno) | **ništa** — `modOtkupUI.bas:3847` javlja `OTKUI_TODO_NEVEZANO` |
+
+Meni je data-driven (`modMaticniLookups.MaticniSekcijeGrupisano`): **16 sekcija
+u 4 grupe**, svaka sekcija = jedan `Tag` za `frmStammdaten`.
+
+| Grupa | Sekcije (`Tag`) | Tabela | Oblik |
+|---|---|---|---|
+| Šifarnici | Kooperanti, Stanice, Kupci, Vozaci, Parcele | `tblKooperanti`, `tblStanice`, `tblKupci`, `tblVozaci`, `tblParcele` | lista + polja |
+| Proizvodi i cene | Artikli, Kulture, Cenovnik, VrstaGP | `tblArtikli`, `tblKulture`, `tblCenovnik`, `tblVrstaGP` | lista + polja |
+| Ambalaža i pakovanje | TipAmbalaze, TipPalete, Kutije, Kese | `tblTipAmbalaze`, `tblTipPalete`, `tblKutije`, `tblKese` | lista + polja (2 polja) |
+| Sistem | Podešavanja, Admin, Korisnici | `tblSEFConfig`, — , `tblKorisnici` | **panel**, **panel**, lista + matrica prava |
+
+`frmStammdaten` (3.674 linije) je jedna univerzalna forma: naslov + podnaslov,
+`lstData` (do 10 kolona), `lblField1..10` + `txtField1..10` + `cmbField1..6`,
+dugmad **Dodaj** / **Izmeni** / **Deaktiviraj-Aktiviraj** (runtime, `clsStmBtn`)
+/ **Povratak**. Po sekciji se granaju: `Setup*` (13 procedura), `LoadList`
+(351 linija), `lstData_Click`, `btnDodaj_Click` (**544 linije**),
+`btnIzmeni_Click` (**463 linije**), `ClearFields`, `ResetFieldVisibility`.
+
+Tri sekcije nisu obična CRUD:
+
+- **Cenovnik** je append-only — `btnIzmeni` se sakriva, izmena je nov važeći red.
+- **Parcele** nose GEO blok: GeoSrbija, paste koordinata, Google Maps, polygon
+  editor, „obriši geo" sa potvrdom u dva koraka (`btnGeo*`, ~600 linija).
+- **Korisnici** nose **dinamičku matricu prava po oblasti** (`BuildKorisniciOblasti`,
+  combo po oblasti iz `modAuth.OblastiList`) i upis u transakciji, po imenu kolone.
+
+Dve sekcije uopšte nisu liste: **Podešavanja** (`modPodesavanja.BuildConfigEditor`,
+847 linija — grupisani editor `tblSEFConfig` sa sklapanjem grupa) i **Admin**
+(`modAdmin.BuildAdminPanel`, 363 linije — deset dugmadi koja zovu postojeće
+ulazne tačke: self-update, setup, health check, Google auth, release, VBA
+import/export, migracija).
+
+### 26.1 Mera koja je oblikovala rešenje
+
+Sidebar **nema skrol**. `BuildNav` postavlja stavke apsolutno, `LayoutOtkup`
+mu daje visinu `hTot - HEADER_H - STATUS_H`, a profil i podnožje su prikovani
+za donjih 62 pt. Budžet na `MIN_H` (620):
+
+```
+620 - HEADER_H(42) - STATUS_H(24) = 554
+554 - profil/podnozje(62)          = 492  slobodno
+zauzeto danas: 12 + 3 grupe*(20+12) + 11 stavki*27 = 405   -> ostalo ~87
+```
+
+Ostalo je **~87 pt, to jest tri stavke — i to samo ako nema nove grupe**.
+Matični podaci donose pet stavki i dve grupe (`5*27 + 2*32 = 199`), ukupno
+**604 > 492**. Stavke bi na najmanjem prozoru nestale ispod profila, tiho —
+tačno klasa kvara koju §10 i §13 već plaćaju. Granica se probija i pri
+najštedljivijem rezu: već **četiri** stavke sa jednom grupom (`140`) prelaze
+slobodnih 87.
+
+**Zato Matični podaci ne mogu prosto da se dopišu u sidebar.** Sve što sledi
+je posledica ove mere, a ne ukusa.
+
+### 26.2 Odluka A — Matični podaci su SEKCIJA ljuske, ne još stavki u sidebaru
+
+Zlatno dugme već nosi tu nameru. `modOtkupUI.BuildHeader` kaže doslovno:
+*„Sve tri su ghostdark … a „Maticni podaci" ostaje jedino zlatno (primarno)
+dugme."* Ono nije alatka nego **odredište** — isto što je u legacy ljusci
+otvaralo ceo popup meni.
+
+Predlog: `btnMatic` **prebacuje sekciju ljuske**. Sidebar tada pokazuje grupe
+matičnih podataka, dugme menja natpis u „Nazad na rad" i vraća prethodni ekran.
+Dva skupa stavki nikad ne stoje zajedno, pa budžet iz §26.1 nije ni blizu
+granice (matična sekcija: `12 + 2*32 + 5*27 = 211`, radna ostaje `405`).
+
+Mehanika, najmanja moguća:
+
+1. `modUiScreens.ScrRows` dobija **sedmo polje** `SCR_SEKCIJA` (`RAD` | `MATICNI`);
+   `ScrGroups` isto. Postojeći redovi dobijaju `RAD` — ponašanje se ne menja.
+2. `BuildNav` gradi stavke za **obe** sekcije jednom, pri gradnji forme. Nema
+   pravljenja i rušenja kontrola u radu, pa nema ni ponovnog ožičavanja
+   (`WireBtn` → `clsFlatBtn` `WithEvents`); to je isti razlog zbog kog
+   `modMaticniLookups` drži `mWrappers` živim.
+3. Nov `LayoutNav(frm)` (izdvojen iz `BuildNav`) **postavlja Y i vidljivost samo
+   aktivnoj sekciji**. `NavCollapse` se ne dira.
+4. `Case "btnMatic"` obrće `mSekcija`, zove `LayoutNav` i prelazi na prvi
+   **dozvoljen** ekran te sekcije (`ScrAktivan`).
+
+Zašto ne popup meni ispod zlatnog dugmeta, kao u legacy-ju: dok si u matičnom
+ekranu sidebar bi pokazivao **izabranu stavku iz radne sekcije** — ljuska bi
+tvrdila da si na Dokumentima dok gledaš Kupce. Prekidač sekcije čuva da sidebar
+govori istinu, a to je jedina stvar koju sidebar radi.
+
+Zašto ne dodatna grupa u istom sidebaru: mera iz §26.1.
+
+### 26.3 Odluka B — pet ekrana, ne šesnaest i ne jedan
+
+`MAX_SEG = 11` je gornja granica lista po ekranu, a sekcija sa podacima ima
+**trinaest**. Jedan ekran otpada po meri, isto kao sidebar.
+
+Granica ekrana je **legacy grupa**. To nije lenjost nego reuse: grupisanje je u
+`modMaticniLookups` uvedeno svesno („Pakovanje … je svoja grupa - vizuelno
+podredjena osnovnim sifarnicima, a ne ravnopravno sa Kooperanti/Kupci/Stanice"),
+operater ga već zna, i preživelo je do danas.
+
+| # | Ključ | Naslov | Grupa sidebara | Liste | Oblast |
+|---|---|---|---|---|---|
+| 1 | `MAT_PARTNERI` | Partneri | ŠIFARNICI | Kooperanti · Stanice · Kupci · Vozači · Parcele | `OBL_MATICNI` |
+| 2 | `MAT_ROBA` | Proizvodi i cene | ŠIFARNICI | Artikli · Kulture · Cenovnik · Vrsta GP | `OBL_MATICNI` |
+| 3 | `MAT_PAKOVANJE` | Ambalaža i pakovanje | ŠIFARNICI | Ambalaža · Palete · Kutije · Kese | `OBL_MATICNI` |
+| 4 | `MAT_KORISNICI` | Korisnici | SISTEM | Korisnici (+ prava) | `OBL_MATICNI` + admin |
+| 5 | `MAT_SISTEM` | Podešavanja i alati | SISTEM | — (v. §26.9) | `OBL_MATICNI` + admin |
+
+> **Od `v6-ui-201` reda 5 nema.** Ekran-pokretač je uklonjen, a Podešavanja
+> i Administracija su **stavke sidebara** (`MAT_PODESAVANJA`, `MAT_ADMIN`) koje
+> otvaraju panel u radnoj površini — v. §26.27. Tabela iznad je stanje M0.
+
+Redovi registra (isti oblik kao postojeći, sa dodatim sedmim poljem):
+
+```
+c.Add "MAT_PARTNERI|modScrMatPartneri|OTKUI_NAV_MAT_PARTNERI|" & IC_MAT_PARTNERI & _
+      "|SIFARNICI|" & OBL_MATICNI & "|MATICNI"
+```
+
+Grupe: `"SIFARNICI|OTKUI_NAVG_SIFARNICI|MATICNI"`, `"SISTEM|OTKUI_NAVG_SISTEM|MATICNI"`.
+
+**Prava.** `OBL_MATICNI` već postoji (`modConfig.bas:677`) i već je oblast u
+matrici prava (`frmStammdaten.OblastCaption` zna `OBL_MATICNI`). `ScrDozvoljen`
+→ `modAuth.KorisnikImaPravo` time pokriva tri ekrana bez ijedne nove provere.
+Grupa SISTEM zadržava **dodatnu** admin branu koju `MaticniMenu_OnClick` danas
+primenjuje (`modAuth.MozeAdministraciju`) — `OBL_MATICNI` sam po sebi nije
+administracija. Tvrde brane u `modAdmin`/`modPodesavanja` ostaju gde jesu; ovo
+je i dalje samo UI brana.
+
+### 26.4 Odluka C — editor je u zoni ekrana i otvara se samo kad se uređuje
+
+Obrazac postoji i proveren je: `modScrPalete` lista „Nova prerada" drži polja u
+**svojoj zoni**, gradi ih `modOtkupUI.NewFieldG` (prefiks `scr` je obavezan —
+bez njega promena ide ljusci), a `Scr_Layout` ih pali, gasi i raspoređuje; zona
+raste samo za tu listu (`PAL_ZONA_H` → `PAL_ZONA_NOVA_H`).
+
+Matični ekran ima dva stanja zone:
+
+- **zatvorena** (`KPI_H`, 56): naziv sekcije, koliko zapisa, koliko aktivnih /
+  neaktivnih, dugme **„+ Nova stavka"**;
+- **otvorena** (≈ 56 + 3 reda po 46 + 34): do **deset** polja u redovima po
+  četiri (isti budžet koji `frmStammdaten` ima kroz `txtField1..10`), linija
+  koja kaže da li je unos nov ili izmena kog ID-ja, i dugmad **Sačuvaj** /
+  **Odustani**.
+
+Tok je isti kao u legacy formi, samo bez druge forme: klik na red u mreži bira
+zapis; **Izmeni** puni polja iz reda i otvara zonu; **+ Nova stavka** otvara
+praznu; **Sačuvaj** upisuje i zatvara; **Odustani** zatvara bez upisa.
+
+Izbor reda vraća `False` iz `Scr_Event` (mreža se ne čita ponovo, operater ne
+gubi mesto u listi) — pravilo iz `modScrOporavak` i `modScrPalete`. Upis vraća
+`True`.
+
+**Podnožje mreže ne treba nijednu izmenu ljuske.** `ModeHasKgCol` i
+`ModeHasValCol` čitaju **opis kolona ekrana** (`mCols`), ne `ActiveMode`; lista
+koja ne prijavi nijednu kolonu vrste `kg` ni `rsd`/`mult`/`sum0`/`rest` dobija
+podnožje bez oba zbira. Za šifarnike se time samo prijavljuju vrste kolona
+pošteno — „Težina gajbice" je `num`, ne `kg`, jer nije zbirna veličina. Ovo je
+provereno u kodu, ne pretpostavljeno; §13 i §14 su isti kvar plaćali dvaput.
+
+### 26.5 Odluka D — jedan pisac, i zašto ovde drugačije nego u Fazi B
+
+Faza B je **namerno** ostavila legacy formama njihovu kopiju upisne logike
+(v. §5). Ovde se to **ne ponavlja**, iz dva merljiva razloga:
+
+1. Za dokumente je postojao operativan put (legacy) i neproveren nov; kod
+   matičnih podataka postoji **samo jedan** put — forma. Druga kopija bi bila
+   prva prilika za razlaz, a ne osiguranje od njega.
+2. `docs/DOMEN/WHO_WRITES.md` pokazuje da matične tabele imaju **0–2** modula
+   koji ih pišu (`tblKulture`, `tblKupci`, `tblStanice`, `tblTipAmbalaze`,
+   `tblSEFConfig` — nula van testova; `tblKooperanti` — `modKooperant`;
+   `tblArtikli` — `modAgrohemija`; `tblParcele` — `modGeoParcele`,
+   `modMasterSync`; `tblKorisnici` — `modAuth`, `modSetup`). To je tačno
+   situacija iz CLAUDE.md §2 („isto polje često piše više modula") u kojoj
+   dodavanje još jednog pisca najviše košta — pogotovo što su ove tabele
+   **površina sinhronizacije** (`modStammdatenSync`, `modMasterSync`).
+
+Zato: provere i upis se **izdvajaju** iz `frmStammdaten.btnDodaj_Click` /
+`btnIzmeni_Click` / `OnSoftDeleteClick` u nov `modMaticniUnos`, a **legacy forma
+se prevezuje na njega**. To je pravilo §6 kataloga primenjeno doslovno
+(„ako rutina postoji ali je `Private` i vezana za formu, prvo se izdvaja račun
+iz prikaza"), isti potez kao `KoopRangRows` iz `LoadKoopRang` i
+`modIzvestaj.StampajReversAmbalaze` iz §23.1.
+
+Rizik se ne prećutkuje: prevezivanje dira **jedini operativan put** za matične
+podatke. Zato M2 (v. §26.10) ide sam, sa dvosmernim dokazom, i pre njega stoji
+M1 koji ne dira upis uopšte.
+
+### 26.6 Šta ekran uzima od ljuske — i šta ljuska mora da dobije
+
+Uzima, bez izmene: mrežu (sortiranje, pretraga, strane, označen red), prekidač
+lista (`Scr_Liste`), čipove (`Scr_Cipovi`), radnje nad redom (`Scr_Radnje`),
+naslovnu traku, toast, `NewFieldG` polja u zoni, granu `chg:` za promenu u
+polju, `row:` i `dbl:`.
+
+Ljuska dobija **tačno tri** izmene, sve u §26.2:
+
+| Izmena | Gde | Veličina |
+| `SCR_SEKCIJA` u registru + u `ScrGroups` | `modUiScreens` | ~15 linija |
+| `LayoutNav` izdvojen iz `BuildNav`, gradnja obe sekcije | `modOtkupUI.BuildNav` | ~40 linija |
+| `Case "btnMatic"` → prekidač sekcije | `modOtkupUI` | ~10 linija |
+
+Ništa od toga ne menja ponašanje radne sekcije: dok je `mSekcija = "RAD"`,
+`LayoutNav` postavlja iste stavke na iste Y koje `BuildNav` danas računa.
+
+### 26.7 Liste, kolone, čipovi i radnje — po ekranu
+
+**Čipovi** su svuda isti i nose jedinu poslovnu osu koju šifarnik ima —
+soft-delete: `sve` · `aktivni` · `neaktivni`. Sekcija bez kolone statusa ne
+prijavljuje nijedan čip; koja je to sekcija ne pogađa se nego se **pita**, istom
+proverom koju legacy koristi (`AktivanColName` → `Aktivan` ili `Aktivna`,
+`GetColumnIndex`). `tblCenovnik`, `tblTipAmbalaze` i `tblTipPalete` po zatečenoj
+šemi nemaju status; `tblKutije`, `tblKese`, `tblVrstaGP` ga imaju.
+
+**Radnje nad redom** (`Scr_Radnje`, budžet `MAX_ACT = 5`):
+
+| Lista | Radnje |
+| sve osim Cenovnika i Parcela | `izmeni` (soft) · `status` — „Deaktiviraj/Aktiviraj" (danger) |
+| Cenovnik | `novacena` — „Nova cena" (soft); **nema `izmeni`** — append-only, isto pravilo po kom legacy krije `btnIzmeni` |
+| Parcele | `izmeni` · `status` · `geo` — „Geo" (soft), otvara postojeće ulazne tačke (v. §26.9) |
+
+**Kolone lista** se ne izmišljaju — preslikavaju se iz `LoadList`, koja je za
+svaku sekciju već izabrala šta operater vidi (npr. Kooperanti: ID, ime+prezime,
+telefon, **naziv** stanice a ne `StanicaID`, BPG, tekući račun, PIN,
+adresa+mesto, JMBG, status). Prioriteti kolona (peto polje opisa) prate pravilo
+iz §9.2: identitet i naziv su 1, ostalo 2–3, tehnička polja 4 (nevidljiva).
+
+**Identitet reda.** Svaka lista nosi PK tabele u koloni 1 (`KooperantID`,
+`StanicaID`, …) i radnja bira **po njemu**, nikad po nazivu. Za matične podatke
+to nije ista klasa opasnosti kao kod dokumenata (nema generacija), ali istoimeni
+zapisi su ovde **obična pojava** — §18 to već beleži („duplikati istog naziva su
+u ovim šifarnicima obična pojava"). `frmStammdaten` to danas rešava
+`m_RowMap`-om iz pozicije u listboxu; posle sortiranja i pretrage u novoj mreži
+pozicija ne znači ništa, pa PK u koloni 1 nije udobnost nego uslov.
+
+### 26.8 Šta je namerno drugačije od legacy-ja
+
+- **Nema modalnih `MsgBox`-eva za ishod.** Uspeh ide u toast, greška u crveni
+  toast — kao na svih pet postojećih ekrana. `MsgBox` ostaje samo tamo gde je
+  **potvrda pre radnje koja menja podatke** (deaktivacija), po obrascu
+  `OdbaciIspravku` iz `modScrOporavak`.
+- **Pretraga i sortiranje nad svakom listom.** `lstData` ih nema; šifarnik od
+  hiljadu kooperanata se danas pregleda skrolovanjem.
+- **Status je pilula, ne tekst „DA/NE".** Mreža to već ume (`PaintPill`).
+- **Prelazak između sekcija ne zatvara i ne otvara formu.** Danas svaki izbor
+  radi `Unload frmStammdaten` pa `Show` — otud i `m_SetupDone` i
+  `mChromeRemoved` čuvari. Prekidač lista je promena jednog polja.
+- **Naziv umesto ID-ja u prikazu, ID u podacima.** Legacy to već radi za stanicu
+  kooperanta (`LookupValue`); pravilo se primenjuje na sve strane ključeve, uz
+  obrazac `PuniPartnerCombo` iz §9 za combo-e (dve kolone, čist ID u drugoj).
+
+### 26.9 Šta NIJE preneto (i zašto)
+
+- **Admin panel** (deset radnji). Nije lista nego spisak dugmadi; ugovorni ekran
+  uvek dobija mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa
+  bi ekran bez mreže tražio zahvat u ljusci — a dobio bi ništa. Ostaje
+  `modAdmin.BuildAdminPanel` na `frmStammdaten`; ekran `MAT_SISTEM` ga otvara
+  dugmetom zone (`frmStammdaten.Tag = "Admin"`, pa `Show vbModeless`).
+- **Podešavanja.** `modPodesavanja` radi, ima grupisanje i sklapanje grupa, i
+  nosi bezbednosno pravilo (interni/anti-tamper ključevi se **namerno** ne
+  prikazuju). Prelazak bi bio redizajn onoga što radi — `minimal change over
+  idealized redesign`. Otvara se iz `MAT_SISTEM` isto kao Admin.
+- **GEO alatke Parcela** (GeoSrbija, Google Maps, polygon editor). To su spoljni
+  prozori i pozivi; ostaju gde jesu i zovu se iz radnje `geo` nad redom, kroz
+  iste ulazne tačke (`OpenGoogleMaps`, `OpenParcelPolygonEditor`,
+  `modGeoParcele`). U zonu ulazi samo unos/paste koordinata, jer je to polje.
+- **Legacy popup `frmMaticniPodaci` i `frmStammdaten`** — ne diraju se i ostaju
+  potpuno operativni za `frmOtkupAPP`, po pravilu §5. Jedina izmena u
+  `frmStammdaten` je prevezivanje upisa na `modMaticniUnos` (M2).
+
+### 26.10 Redosled
+
+Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
+
+| Korak | Šta | Zašto tim redom |
+| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, grupa SISTEM sa dva dugmeta na legacy panele | Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
+|---|---|---|
+| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §26.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
+| **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §26.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
+| **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §26.15. Jedan pisac (§26.5). |
+| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §26.16. |
+| **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §26.17. Cenovnik je stigao već uz M2b. |
+| **M4** | `MAT_KORISNICI` — lista + matrica prava | **URAĐENO** (`v6-ui-193`) — v. §26.18. Zatvara i nalaz o deaktivaciji korisnika. |
+| **M5** | Odluka o Podešavanjima i Adminu | **URAĐENO** (`v6-ui-194`) — v. §26.19. Odgovor: **ostaju**, sa izmerenim razlozima; test 160 drži pokrivenost menija. |
+
+### 26.11 Verifikacija — šta se meri
+
+Merilo prelaska je **SLAGANJE sa legacy prikazom i upisom**, ne izgled:
+
+- za svaku od 13 sekcija test tvrdi da lista ekrana ima **iste redove i iste
+  vrednosti** kao `LoadList` iste sekcije (nezavisan read-model, po obrascu
+  §23.6); istoimeni zapisi u fixture-u su **obavezni**, da bi test uopšte umeo
+  da razlikuje izbor po PK od izbora po nazivu;
+- upis: test tvrdi da `modMaticniUnos` posle izdvajanja piše **iste ćelije**
+  koje je forma pisala (snimak reda pre/posle), za svaku sekciju posebno;
+- soft-delete: `AktivanColName` mora naći kolonu tamo gde je legacy nalazi, i
+  ne naći je tamo gde je nema — inače čip „aktivni" tiho pokazuje sve;
+- čipovi: ugovor „svaki čip koji ekran prijavi ume da se izabere"
+  (`SegIndeksIzTaga` presedan);
+- podnožje: test tvrdi da nijedna matična lista ne prijavljuje kolonu `kg` ni
+  novčanu vrstu, pa podnožje ne crta zbirove (§26.4);
+- **dvosmerni dokaz** (`tools/dokaz.py`) je ovde **obavezan**, ne opcion: M2
+  menja jedini operativan put za matične podatke;
+- ručna kapija: `Alt+F11 → Debug → Compile VBAProject`, pa smoke nad pravim
+  podacima — prekidač sekcije na najmanjem i na maksimizovanom prozoru, sve
+  liste, unos i izmena po sekciji, GEO alatke, i **legacy meni i dalje radi**.
+
+`run_vba` traži Windows + Excel, pa se u web sesiji izmena ponašanja prijavljuje
+kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
+
+### 26.12 Otvoreno
+
+- **Deset polja u tri reda po četiri** je gornja granica zatečenog modela
+  (`txtField1..10`). Kupci realno traže više (ulica, mesto, poštanski broj,
+  država, PIB, MB, e-mail, hladnjača, tekući račun, naziv = 10 tačno). Ako se
+  neka sekcija proširi, red se dodaje u zoni, ne u ljusci.
+- **Značka uz stavku menija** (`Scr_Brojac`) za šifarnike nema šta da broji.
+  Ne implementira se — ekran koji je ne implementira dobija nulu, a nula se ne
+  crta.
+- **Padajući redovi detalja** (parcele kooperanta ispod kooperanta, cene ispod
+  kulture) — isti odložen posao kao u §5/Faza C; ne uvodi se ovde.
+- **Sinhronizacija.** `modStammdatenSync` i `modMasterSync` čitaju iste tabele.
+  M2 ne menja šta se upisuje, pa ne bi smeo da ih dotakne — ali to je tvrdnja
+  koju test mora da drži, ne pretpostavka.
+  **M4 jeste promenio šta se upisuje** (`tblKorisnici.Aktivan`: `DA`/`NE` umesto
+  `Aktivan`/`Neaktivan`). Provereno je da tu tabelu **ne dodiruje nijedan**
+  sinhronizacioni put — nema pogodaka u `modStammdatenSync`, `modMasterSync`,
+  `gas/` ni `src/`. Jedini čitač je `modAuth`, i on je namerno ostavljen kakav
+  jeste. **Ostaje otvoreno:** migracija zatečenih `"Aktivan"`/`"Neaktivan"`
+  vrednosti u rečnik `DA`/`NE`. Dok se ne uradi, takav zapis se **čita kao
+  aktivan** — što je isto ponašanje kao pre M4, ne regresija.
+
+### 26.13 M0 — šta je stvarno urađeno (`v6-ui-187`)
+
+Nosač je gotov. Tri stvari su u izvedbi ispale **drugačije nego u planu**, i
+razlog je u svakom slučaju nešto što se videlo tek u kodu.
+
+**(1) `MAT_SISTEM` je EKRAN sa listom, ne zonsko dugme.** §26.9 je govorio da
+Podešavanja i Admin otvara „dugme zone". Ali ugovorni ekran **uvek** dobija
+mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa bi ekran sa
+dugmetom u zoni imao ispod sebe praznu mrežu koja izgleda kao pad. Lista alatki
+(dve, sa kolonama *Alatka · Šta radi · Otvara se* i radnjom „Otvori") je jedina
+lista koja tu ima smisla. Uz to daje matičnoj sekciji **bar jedan ekran od
+prvog dana** — bez njega bi zlatno dugme vodilo u sidebar u kom je sve
+prigušeno. Oba panela ostaju netaknuta: `modScrMatSistem.OtvoriPanel` radi tačno
+ono što `frmMaticniPodaci.OpenSekcija` radi (`Unload` → `Tag` → `Show`).
+
+**(2) Ugovor ekrana je dobio `Scr_Dozvoljen`.** Grupa SISTEM traži
+**administraciju**, a to nije oblast iz `tblKorisnici` pa ne staje u
+`SCR_OBLAST`. Umesto da ljuska dobije izuzetak po imenu ekrana, `ScrDozvoljen`
+sada pita i sam ekran; ekran koji tu funkciju nema se ponaša kao pre. Keširа se
+**samo činjenica da funkcija postoji**, nikad njen odgovor — prava se menjaju
+zamenom operatera.
+
+**(3) Popravljen zatečen kvar koji bi M0 obesmislio.** `PaintNav` je svakoj
+neizabranoj stavci vraćao punu boju, pa su Marža i Sledljivost izgledale
+prigušeno **samo do prvog klika** bilo gde u meniju. U matičnoj sekciji bi to
+bilo **tri od pet** stavki: operater bi video ekrane koji izgledaju kao da rade.
+Stanje se sada čita iz mape napravljene pri gradnji (`mNavOff`) — tamo gde je
+odgovor ionako već izračunat, pa se ne može razići sa onim što `BuildNav`
+nacrta.
+
+**Uz to:** „Nazad na rad" vraća **ekran sa kog se otišlo** (pamti se po
+sekciji), a ne uvek Unos dokumenata; `ModeHasKgCol` / `ModeHasValCol` su
+izdvojeni u čiste funkcije nad opisom kolona (`OpisImaKgKolonu`,
+`OpisImaValKolonu`), da bi se „ova lista nema zbirove" moglo tvrditi **pre**
+crtanja; gola `62` u `LayoutOtkup` je postala `PROFIL_H`, jer ulazi u meru iz
+§26.1 i mora da se može tvrditi u testu.
+
+**Mera iz §26.1 je sada test, ne komentar.** `LayoutNav` pamti visinu koju je
+sekcija zauzela, a test 150 je čita iz **stvarnog rasporeda** i tvrdi tri
+stvari: radna sekcija staje (405 ≤ 492), matična staje (211 ≤ 492), a **zajedno
+ne staju** (616 > 492) — to poslednje je jedini razlog zbog kog sekcije postoje.
+Test zato hvata i izmenu koja nema veze sa matičnim podacima: dodavanje šestog
+ekrana u OPERACIJE.
+
+**Verifikacija:** `vba_check` čist; pet novih sabotaža pod prefiksom `maticni-`.
+Testovi 150 i 151 su napisani ali **nisu izvršeni** — `run_vba` traži Windows +
+Excel, pa se u web sesiji ponašanje prijavljuje kao **neverifikovano**. Ostaje
+ručna kapija: `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`,
+`dokaz.py maticni`, pa smoke: prekidač sekcije na najmanjem i maksimizovanom
+prozoru, suženi sidebar, otvaranje oba panela, i **legacy meni i dalje radi**.
+Tri MDL2 glifa (`IC_MAT_PARTNERI`, `IC_MAT_ROBA`, `IC_MAT_PAKOVANJE`) su izabrana
+iz kataloga a **nisu vizuelno proverena** — provera je `DumpMdl2Used`.
+
+### 26.14 M1 — pregled bez ijednog upisa (`v6-ui-188`)
+
+Tri ekrana rade. **Nijedna linija upisa nije napisana** i `frmStammdaten` nije
+dirana: unos i izmena i dalje idu kroz staru formu, a to zona i kaže naglas
+(„Pregled. Unos i izmena i dalje idu kroz stari ekran matičnih podataka.") —
+u zoni, ne u dijalogu, jer se dijalog zatvori i zaboravi.
+
+**Podela na tri modula, ne na tri ekrana.**
+
+| Modul | Zna | Ne zna |
+|---|---|---|
+| `modMaticniIzvor` | tabele, PK, kolone, izvedene vrednosti, čipove, sort | ništa o kontrolama i ljusci |
+| `modMaticniEkran` | zonu, mrežu, prekidač lista | ništa o tabelama |
+| `modScrMat*` (3×) | **samo** koje sekcije nosi | sve ostalo |
+
+Ekranski moduli su po ~70 linija. Tri kopije istog rasporeda bi se razišle prvom
+doradom — to je već plaćeno na četiri kopije `Prefill*` (Z10).
+
+**Šta je preneto 1:1 iz `LoadList`:** koje kolone operater vidi i kojim redom, i
+svih šest izvedenih vrednosti (puno ime, **naziv** stanice umesto ID-ja, spojena
+adresa, adresa kupca sa poštanskim brojem, kooperant kao „Ime Prezime (ID)",
+geo status/izvor). Cenovnik zadržava svoj poredak (`ExcludeStornirano` →
+`SortArray` po datumu opadajuće, tie-break `CenaID`) — to je poslovno pravilo,
+ne prikaz: važeća cena je poslednja.
+
+**Tri stvari su namerno drugačije od legacy-ja:**
+
+1. **Kolona statusa se TRAŽI u šemi, ne pogađa.** Parcele nose `Aktivna`, ostali
+   `Aktivan`, a Cenovnik, Ambalaža i Palete je po zatečenoj šemi nemaju uopšte.
+   Isti probe koji legacy radi u `AktivanColName`, i isti razlog: sekcija bez te
+   kolone **ne dobija čipove**. Čip „Aktivni" koji tiho pokazuje sve je gori od
+   nikakvog čipa. Test to tvrdi po imenu (`maticni-status-pogadja-umesto-da-trazi`).
+2. **Identitet je PK u koloni 1, uvek.** Legacy bira red po poziciji u listboxu
+   (`m_RowMap`); u novoj mreži pozicija ne znači ništa posle sortiranja i
+   pretrage, a istoimeni zapisi su u šifarnicima obična pojava (§18).
+3. **Status ostaje tekst, ne pilula.** Vrsta ćelije `pill` ima **zatvoren rečnik**
+   od tri stanja dokumenta (Otkazana / Poslato / Sačuvana) — aktivnom kooperantu
+   bi pisalo „Sačuvana". Pilula za Aktivan/Neaktivan je nova vrsta ćelije i nije
+   M1.
+
+**Ugovor ekrana je dobio `Scr_Sort`.** Ljuskino pravilo je „druga kolona
+opadajuće" — napisano za datum dokumenta, a nad Stanicama znači nazive unazad.
+Umesto da se `SortZaListu` dopisuje sa još trinaest imena lista pored zatečena
+dva, ekran kaže svoj sort sam. Pravilo je jedno: **rastuće po koloni koju opis
+označi kao rastegljivu** (`part`) — računa se iz opisa kolona, pa dodavanje
+sekcije ne traži još jedan spisak koji bi se razišao. Cenovnik je jedini izuzetak
+i to je poslovno pravilo.
+
+**Podnožje nema lažne zbirove** — nijedna matična kolona nije `kg` ni novčana;
+težine su `num`, jer jesu broj ali nisu zbirna veličina. Test to tvrdi nad
+opisom, pre crtanja (§26.4).
+
+**Verifikacija:** `vba_check` čist (203 fajla, 331 sabotaža). Dva nova testa
+(152 — opis svih 13 sekcija je potpun i saglasan sa šemom; 153 — čip, identitet
+i pretraga nad stvarnim podacima) i četiri nove sabotaže. Test 153 **pada ako
+nijedna sekcija nema redove u fixture-u** — zelena tvrdnja nad praznim skupom ne
+dokazuje ništa. Kao i M0: **testovi nisu izvršeni** u web sesiji.
+
+**Otvoreno posle M1:** poređenje 1:1 sa `LoadList` po sekciji (traži Excel);
+pilula za status; `Scr_Brojac` se namerno ne implementira (šifarnik nema šta da
+broji, a nula se ne crta).
+
+### 26.15 M2a — jedan pisac (`v6-ui-189`)
+
+Provere i upis su izašli iz `frmStammdaten` u `modMaticniUnos`, **i forma je
+prevezana na njega**. `btnDodaj_Click` je bio 544 linije, `btnIzmeni_Click` 463;
+danas su po ~30, i ne sadrže nijedno poslovno pravilo. Formi je ostalo samo ono
+što forma jeste — koja kontrola nosi koje polje (`KontrolaZaPolje`, jedan
+`Select Case`).
+
+**Ulaz pisca je rečnik, ne kontrole.** `MatDodaj(kljuc, polja, noviID)` /
+`MatIzmeni(kljuc, red, polja)` / `MatPromeniStatus(kljuc, red, noviStatus)` —
+isti obrazac koji ljuska već koristi za `Scr_Save`. Modul u isti rečnik upisuje
+`fokus` = ključ odbijenog polja, pa forma ume da vrati kursor tamo gde je bila
+greška, kao i pre.
+
+**Opis polja je jedan, i služi dvoma.** `modMaticniIzvor.MatPolja` opisuje šta
+se unosi (ključ, natpis, vrsta, obavezno, kolona, izvor combo-a). Iz njega čita
+pisac; iz njega će u M2b čitati i editor. Dva spiska bi se razišla.
+
+**Jedna namerna izmena ponašanja: unos ide PO IMENU KOLONE.** Legacy je za deset
+sekcija zvao `AppendRow` sa nizom vrednosti, pa je tačnost zavisila od redosleda
+kolona — a šema se razlikuje po instalaciji; baš zato `LoadList` za Kupce već
+ima toleranciju, a `btnIzmeni` za Stanice alias-probe. Sada je svuda obrazac koji
+legacy već koristi za Korisnike i Kulture: prazan red pa `RequireUpdateCell` po
+imenu, sve u `clsTransaction`. **Upisuju se iste ćelije; menja se samo kako se
+adresiraju.** Alias-probe (`@alias:Kontakt,Telefon`) time važi i za unos, ne samo
+za izmenu.
+
+**Šta je namerno OSTALO nedosledno** — jer bi poravnanje bilo neizmerena izmena
+na jedinom operativnom putu upisa:
+
+- **Parcele pri unosu dobijaju status `"Da"`**, a soft-delete u istu kolonu piše
+  `"Aktivan"`/`"Neaktivan"`. Čitač aktivnim smatra sve što nije `"Neaktivan"`, pa
+  oba oblika prolaze. Zapisano u `MatStatusNaUnosu`.
+- **Prazan broj:** pri unosu ćelija ostaje prazna, pri izmeni se upisuje nula.
+  To je zatečeno (`btnDodaj` za Kulture preskače praznu gajbicu, `btnIzmeni`
+  upisuje 0) i čuva se doslovno.
+
+**Šta NIJE prešlo:** Korisnici. `tblKorisnici` nosi matricu prava i
+`PreparePin`, i ide u M4 zajedno sa svojim ekranom; do tada forma zadržava svoje
+`DodajKorisnika` / `IzmeniKorisnika` / `SoftDeleteLegacy` — tela su **prenesena
+neizmenjena** iz nekadašnjih `Case "Korisnici"` grana.
+
+**Nalaz usput, NIJE popravljen** (dira prijavu, pa ne ide slepo): dugme
+„Deaktiviraj" nad Korisnicima upisuje `"Neaktivan"` u `Aktivan`, a `modAuth`
+deaktiviranim smatra **samo** vrednost `"NE"` (`modAuth.bas:87`). Deaktivacija
+korisnika kroz to dugme dakle **ne sprečava prijavu** — u listi piše
+„Neaktivan", a login i dalje prolazi. Ovo je zatečeno stanje, ne posledica M2a
+(putanja je prenesena netaknuta u `SoftDeleteLegacy`). Rešava se u **M4**, gde
+se odlučuje i šta se upisuje i šta `modStammdatenSync` i PWA očekuju.
+
+**Verifikacija:** `vba_check` čist (204 fajla, 335 sabotaža). Dva nova testa —
+154 (opis polja svih 13 sekcija razrešava se u kolonu koja **postoji u šemi**;
+PK nije polje za ručni unos; alias se stvarno razrešava) i 155 (provere odbijaju
+prazno obavezno, ne-broj, negativno, nulu tamo gde nema smisla, i ukršteno
+pravilo pragova — uz to imenuju **koje** polje). Oba mere **bez ijednog upisa**
+(`MatProveriTest`), pa ne diraju tabele. Četiri nove sabotaže pod istim
+prefiksom. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
+
+**Ručna kapija za M2a je stroža nego dosad**, jer je ovo jedini put upisa:
+`Compile`, `RunAllTests`, `dokaz.py maticni`, pa smoke nad **kopijom** radne
+sveske — unos i izmena po svakoj od 13 sekcija, deaktivacija/aktivacija,
+nova cena, nova stanica u MALINA režimu (ogledalo vozača), i Korisnici (koji
+nisu dirani).
+
+### 26.16 M2b — editor u zoni (`v6-ui-190`)
+
+Tri matična ekrana sada **unose i menjaju**. Nijedno pravilo nije napisano
+ponovo: sve ide u `modMaticniUnos`, istog pisca koga zove i legacy forma.
+
+**Zona ima dva stanja.** Zatvorena je pregled (naziv sekcije, koliko zapisa,
+aktivni/neaktivni) plus dugme **„+ Nova stavka"**. Otvorena nosi polja sekcije,
+**Sačuvaj** i **Odustani**, i naslov koji kaže da li je nov zapis ili izmena
+kog ID-ja. Obrazac je iz liste „Nova prerada" na Paletama — polja postoje uvek,
+`Scr_Layout` ih pali, gasi i raspoređuje.
+
+**Polja su BAZEN, ne po sekciji.** `NewFieldG` pri gradnji odlučuje pravi li
+tekst ili combo, a sekcije se razlikuju — pa se gradi **deset tekstualnih i šest
+combo** polja (tačno budžet koji `frmStammdaten` ima kroz `txtField1..10` /
+`cmbField1..6`), a raspored svakoj sekciji dodeljuje sledeće slobodno polje
+njene vrste. Kupci troše svih deset tekstualnih; ništa ne prelazi bazen.
+
+> **Zašto baš to ima svoju sabotažu:** da dva polja dobiju istu kontrolu, jedno
+> bi pri upisu tiho pregazilo drugo — operater unese telefon, a snimi se kao BPG
+> broj. Upis prolazi, poruka je „Dodato", ništa ne prijavljuje grešku. Test 156
+> tvrdi da su sve dodeljene kontrole **različite**, za svih 13 sekcija.
+
+**Ljuska je dobila jedan izlaz:** `OsveziRasporedEkrana`. Otvaranje editora menja
+**visinu zone**, a `LayoutScreenZone` se izvršava isključivo iz `LayoutOtkup` —
+ni `RefreshFromData` ni `ReloadGrid` ga ne diraju (oni preračunavaju *mrežu*).
+Bez toga bi polja bila nacrtana ispod mreže, što se vidi kao „dugme ne radi".
+Ekran to traži sam; ljuska i dalje ne zna nijedan ekran po imenu.
+
+**Otvaranje i zatvaranje editora vraćaju `False`** iz `Scr_Event` — to su
+promene prikaza, ne podataka. Da vraćaju `True`, svaki klik na „Nova stavka"
+platio bi pun `RefreshFromData` (KPI, keš, combo-i). `True` vraćaju samo upis i
+promena statusa.
+
+**Radnje nad redom prate ono što sekcija stvarno ume:** `Izmeni` svuda osim na
+Cenovniku (append-only — isto pravilo po kom legacy krije to dugme), a
+`Deaktiviraj / Aktiviraj` **samo gde kolona statusa postoji**. Dugme koje tiho ne
+radi ništa je gore od dugmeta kog nema. Promena statusa traži potvrdu, po
+obrascu iz Oporavka.
+
+**Cenovnik je dobio nešto što legacy nema:** klik na `Izmeni` (ili dvoklik)
+otvara **nov unos sa vrednostima izabranog reda** — proizvod, sorta i klasa
+ostaju, cena i datum se unose novi. Legacy je za isto krio dugme i tražio da se
+sve otkuca ponovo. Zapis i dalje ide kroz `AddCena`, dakle append-only; menja se
+samo koliko se kuca.
+
+**Identitet:** red se bira po **PK iz kolone 1**, a `MatRedPoID` ga prevodi u red
+tabele. Pozicija u mreži se ne koristi nigde — posle sortiranja i pretrage ona
+ne znači ništa.
+
+**Verifikacija:** `vba_check` čist (204 fajla, 338 sabotaža). Dva nova testa —
+156 (bazen polja se ne preklapa; combo polje dobija combo kontrolu; otvorena
+zona je viša od zatvorene) i 157 (radnje prate mogućnosti sekcije; oblik opisa
+radnje). Tri nove sabotaže. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
+
+**Otvoreno posle M2:** Parcele još nemaju GEO radnju (M3); Korisnici i njihova
+matrica prava idu u M4, zajedno sa nalazom iz §26.15 o deaktivaciji koja ne
+sprečava prijavu.
+
+### 26.17 M3 — GEO parcele (`v6-ui-191`)
+
+Cenovnik je zatvoren već uz M2b (append-only + prefill iz izabranog reda), pa je
+M3 sveden na **GEO**. Šest legacy dugmadi uz listu parcela postalo je
+`modMaticniGeo` — operacije **po `ParcelaID`-ju**, bez ijedne kontrole.
+
+**Zašto po ID-ju:** legacy je slao `m_SelectedRow`, redni broj izveden iz
+pozicije u listboxu. U mreži koja se sortira i pretražuje pozicija ne znači
+ništa — a `modGeoParcele` **već ima** `*ByID` varijantu svake operacije, sa
+`RequireSingleParcelaRow` kapijom. Koristi se ona; ništa se nije prepisivalo.
+
+**Zona je dobila treće stanje.** Zatvorena / editor / **geo**. Editor i geo se
+isključuju — jedna stvar u zoni u isto vreme; dva panela jedan preko drugog su
+ista klasa kvara kao traka `zOtp` koja je ostajala upaljena na tuđem ekranu.
+Prelazak na drugu listu zatvara oba.
+
+GEO panel nosi koordinate izabrane parcele, red opisa (status / izvor / ima li
+poligon) i šest alatki: **Sačuvaj geo · Nalepi koordinate · GeoSrbija · Google
+Maps · Poligon · Obriši geo**, plus Zatvori. Radnja `geo` nad redom postoji
+**samo na Parcelama** — jedina sekcija sa koordinatama; dugme na ostalima bi
+otvaralo panel koji nema šta da pokaže.
+
+**Dva pravila su izašla iz forme, i forma ih sada zove:**
+
+1. **Prepoznavanje koordinata iz nalepljenog teksta** (`GeoIzTeksta`). Prag
+   `|d| > 1000` nije ukras: UTM34 nad Srbijom je sedmocifren, pa se time
+   odbacuju broj parcele, godina i sve ostalo iz reda prekopiranog sa portala.
+   Bez praga bi „Parcela 123" dala koordinatu 123. Test to tvrdi po imenu.
+2. **Adrese** (`GeoUrlMape`, `GeoUrlPoligon`, `GEO_URL_SRBIJA`). Adresa mape
+   mora imati decimalnu **tačku**: na mašini sa zarezom kao separatorom `CStr`
+   daje `44,81`, pa bi URL bio neispravan — mapa bi se otvorila na pogrešnom
+   mestu ili nikako. `frmStammdaten` više nema nijedan URL u sebi.
+
+**Brisanje traži potvrdu.** Legacy je to rešavao dugmetom u dva koraka
+(„Potvrdi brisanje"); ovde je `MsgBox` potvrda — ista brana, čitljivija, i ista
+kao kod promene statusa. Tačka i poligon se gube, a poligon se ručno crta.
+
+**Verifikacija:** `vba_check` čist (205 fajlova, 341 sabotaža). Nov test 158 —
+prepoznavanje koordinata (sa oznakama `N=`/`E:`, zagradama, tabovima; mali
+brojevi se preskaču; manje od dva velika broja = nema koordinata) i adrese
+(decimalna tačka, prazan ID ne daje adresu poligona) — plus tvrdnja da geo
+radnja postoji samo na Parcelama. Tri nove sabotaže. **Testovi nisu izvršeni**
+u web sesiji.
+
+**Otvoreno posle M3:** samo **M4** — Korisnici, matrica prava, i nalaz iz
+§26.15 (deaktivacija korisnika ne sprečava prijavu). Posle toga ostaje M5
+(odluka o Podešavanjima i Adminu), gde je podrazumevani odgovor „ostaju".
+
+### 26.18 M4 — Korisnici i prava (`v6-ui-193`)
+
+Poslednja sekcija menija koja je ostajala u formi. Ostala je namerno: `tblKorisnici`
+nosi PIN i matricu prava po oblasti, pa je čekala svoj ekran.
+
+**Ekran ima dve liste, i druga zavisi od prve.** `MAT_KORISNICI` nosi
+**Korisnici** (nalozi) i **Prava** (matrica po oblasti izabranog korisnika).
+Zato su na istom ekranu, a ne dva: prekidač je jedan potez, a promena ekrana bi
+izgubila izbor. Izabrani korisnik se pamti **odvojeno** od izabranog reda
+(`mKorisnikID` vs `mIzabranID`) — čim se na listi Prava izabere red, `mIzabranID`
+postaje oblast, a korisnik mora da ostane.
+
+**Zatvoren je nalaz iz §26.15.** Rečnik kolone `Aktivan` u `tblKorisnici` je
+`"DA"`/`"NE"` i tako ga čita `modAuth` (`modAuth.bas:87` neaktivnim smatra **samo**
+`"NE"`). Generičko dugme „Deaktiviraj" je u nju upisivalo `"Aktivan"`/`"Neaktivan"`
+— u listi je pisalo *Neaktivan*, a **prijava je prolazila**. Od M4 sve sekcije
+idu kroz `modMaticniUnos`, koji za Korisnike delegira `modMaticniKorisnici`, a
+taj piše isključivo `DA`/`NE`.
+
+**Čitač se NIJE dirao.** `modAuth` ostaje kakav jeste: zapisi koji već nose
+`"Neaktivan"` i dalje se čitaju kao aktivni, tačno kao do sada. Menja se samo šta
+se **upisuje** — nijedan korisnik ovom izmenom ne gubi pristup. Poravnanje
+zatečenih vrednosti je odvojen posao (migracija podataka), ne usputna izmena.
+
+**Drugi nalaz, zatvoren usput: spuštanje sa admina.** Adminov red nosi `DA` na
+svih dvanaest oblasti zato što je to **posledica uloge**, a ne izbor koji je neko
+napravio (`OblComboVal` je adminu uvek pisao `DA`). Kad uloga padne na *Korisnik*,
+prenos tih `DA` daje pun pristup koji niko nije dodelio — a `modAuth` ga čita
+bukvalno. Pravilo je izdvojeno u `GasiSvaPrava` i glasi: kad prava nisu izričito
+poslata, **unos i spuštanje sa admina** gase sve pa se dodeljuje ponovo.
+
+**Prava se ne uređuju u editoru.** Red liste Prava je oblast, ne zapis, i jedina
+radnja je *Uključi / isključi*. Zato ta lista nema ni „Izmeni" ni „Deaktiviraj"
+ni „Nova stavka" — uslov se čita iz opisa polja (`MatPolja` za nju ne daje
+editor), ne iz spiska sekcija, pa nova sekcija bez editora ne može da dobije
+dugme koje ne vodi nikuda. Dvanaest combo-a prava ne bi ni stalo u bazen od šest.
+
+**Identitet reda prava je skriven.** Prva kolona nosi *lokalizovan naziv* oblasti,
+a ključ (naziv kolone prava) stoji u koloni 4, prioritet 4 = nikad se ne crta.
+Zato je uveden `MatKolonaID(kljuc)`: sekcija **prijavljuje** koja kolona nosi
+identitet, a `modMaticniEkran` je pita umesto da pretpostavlja kolonu 1. Bez toga
+bi promena prevoda menjala to koje se pravo uključuje — kvar bez ijedne greške u
+logu. Isti obrazac koji `modScrMatSistem` već ima kroz `MS_COL_TAG`.
+
+**Brana je dvostruka.** Pored oblasti `MaticniPodaci`, ekran traži i
+administraciju (`Scr_Dozvoljen` → `modAuth.MozeAdministraciju`). Prava pristupa su
+jedina lista na kojoj se može dodeliti pristup samom sebi. Stavka u sidebaru
+ostaje **vidljiva ali prigušena** — operater treba da vidi da to postoji i da mu
+je zabranjeno, ne da mu nestane. Test seam sme **samo da zatvori** branu.
+
+**Šta je forma izgubila:** `btnDodaj`/`btnIzmeni` grane za Korisnike (~130 linija)
+sada su dva poziva `modMaticniUnos`; `NormalizeUloga` je obrisan (pravilo živi u
+piscu); `OblComboVal` je ostao bez `isAdmin` parametra — pravilo „admin dobija
+sve" bilo je na dva mesta, sada je na jednom. **Zatečena putanja soft-delete-a
+(`SoftDeleteLegacy`) je obrisana**: nijedna sekcija je više ne dostiže, a tiho
+upisivanje pogrešnog rečnika je upravo ono što se ovim zatvara — nepoznat `Tag`
+se sada odbija porukom, isto kao u `btnDodaj`/`btnIzmeni`.
+
+**Forma i ekran zovu istog pisca, ali ne šalju isto.** Forma šalje svih dvanaest
+combo-a prava pod prefiksom `obl:`; ekran ne šalje nijedan, pa mu prava ostaju
+netaknuta i menjaju se iz svoje liste. Pisac zato upisuje **samo one oblasti koje
+je stvarno dobio**.
+
+**Verifikacija:** `vba_check` čist (207 fajlova, 349 sabotaža). Nov test 159 —
+rečnik `DA`/`NE` (uključujući da zatečeni tekst ne prolazi kao dozvola), prazan
+PIN, obavezno i jedinstveno korisničko ime, pravilo spuštanja sa admina, skrivena
+kolona identiteta prava, radnje liste prava, naziv svake oblasti u katalogu, i
+brana ekrana. Testovi 152/154/157 prošireni na `MAT_KORISNICI`; tvrdnja „kolona 1
+nosi PK" generalizovana u „kolona identiteta koju sekcija prijavi stvarno ga
+nosi". Sedam novih sabotaža. **Testovi nisu izvršeni** u web sesiji — nema
+Excela; `Debug → Compile` ostaje ručna kapija.
+
+**Otvoreno posle M4:** samo **M5** — odluka o Podešavanjima i Adminu, gde je
+podrazumevani odgovor „ostaju" (to su alatke, ne matični podaci; već ih otvara
+ekran *Podešavanja i alati*). Van plana ostaje migracija zatečenih
+`"Aktivan"`/`"Neaktivan"` vrednosti u `tblKorisnici` u rečnik `DA`/`NE`.
+
+### 26.19 M5 — odluka o Podešavanjima i Adminu (`v6-ui-194`)
+
+Odgovor je **ostaju kao legacy paneli**, što je i bio podrazumevani odgovor iz
+§26.10 — ali sada sa izmerenim razlozima, a ne kao neispitana pretpostavka.
+Nijedan red produkcione logike se zbog M5 nije premestio; jedino što je M5
+proizveo je **test koji odluku drži** (160) i ovaj zapis.
+
+#### Podešavanja — ne staju u ugovor ekrana, i ne treba da stanu
+
+| Mera | Vrednost | Ograničenje ljuske |
+|---|---|---|
+| polja | **97** | bazen zone je **10 tekstualnih + 6 combo = 16** |
+| grupa | **11** | `MAX_SEG = 11` — prekidač lista je **već pun** |
+| najveća grupa | 17 (`Otkup / dokumenta`) | i ta jedna grupa ne staje u zonu |
+| tipovi | `text · bool · int · list:… · secret · memo` | opis polja zna `txt · num · cmb · date` |
+
+Tri nezavisna razloga, svaki sam za sebe dovoljan:
+
+1. **Ne staje.** Jedanaest grupa je tačno `MAX_SEG`; sledeća dodata grupa obara
+   prekidač. Ni jedna jedina grupa ne staje u zonu od 16 kontrola.
+2. **Radnja je druga.** Config editor pokazuje **celu grupu odjednom** i čuva
+   jednim klikom — tako se instalacija i podešava, red po red. Editor u zoni bi
+   isto značio jedno polje po otvaranju. To nije prenos nego pogoršanje.
+3. **Rečnik ne postoji.** `secret` i `memo` nemaju par ni u vrsti kolone
+   (`txt|num|date|part|kg|rsd|mult|sum0|rest|pill|paypill`) ni u vrsti polja
+   (`txt|num|cmb|date`). Uveli bi se dva nova pojma u ugovor koji ih nigde
+   drugde ne koristi.
+
+Prepisivanje bi značilo ~850 novih linija umesto ~850 koje rade — suprotno od
+`minimal change` (CLAUDE.md).
+
+#### Admin — staje po obliku, ali ne sme po sadržaju
+
+Dvanaest komandi u pet grupa **jeste** lista i legla bi u `MAT_SISTEM` kao još
+redova. Ne radi se, i razlog nije oblik nego **šta komande diraju**:
+`AdminVbaImport` ponovo učitava module u kojima živi ekran koji crta tu listu;
+`AdminEnsureEverything` i `MigrirajPodatkeIzStarog` menjaju šemu ispod nje;
+`OcistiTabele` briše podatke; self-update menja samu svesku. Red u mreži nove
+ljuske značio bi da ljuska poziva nešto što ruši ljusku **usred sopstvenog
+događaja**. Legacy panel koji preuzme prozor tu nije zaostatak nego tačan oblik.
+
+#### Brana je proverena, i nije u ljusci
+
+Da „ostaju" ne bi značilo „nisu pogledani": oba panela imaju **tvrdu branu u
+sebi**, nezavisno od sidebara — `modPodesavanja.BuildConfigEditor` i
+`modAdmin.AdminPanel_OnClick` oba odbijaju ne-admina (`AUD-033`), a Admin je
+gejtovan i na **svakoj akciji**, ne samo pri izgradnji panela. Ekran
+`MAT_SISTEM` dodaje treću branu (`Scr_Dozvoljen`). Prigušena stavka u sidebaru
+je time samo najspoljašnji sloj, ne jedini.
+
+#### Šta M5 ostavlja iza sebe: test 160
+
+Dve registracije istih sekcija žive odvojeno i to je namerno — stari meni pamti
+**grupisanje i natpise** (`modMaticniLookups`), nova sekcija pamti **ekrane i
+kolone** (`modMaticniIzvor`). Cena je da mogu da se raziđu: sekcija dopisana u
+jedan spisak a zaboravljena u drugom **nestaje iz te ljuske bez ijedne greške**.
+
+Test 160 meri pokrivenost **u oba smera**: svaki `Tag` starog menija mora biti
+dostižan u novoj ljusci — ili kao lista matičnog ekrana
+(`MatKljucIzLegacyTag`), ili kao alatka na *Podešavanja i alati*
+(`MsAlatkaTagovi`) — i nijedna lista nove ljuske ne sme postojati mimo starog
+menija. Jedini zabeležen izuzetak je **PRAVA**: matrica prava je u formi bila
+deo sekcije Korisnici, a ovde je svoja lista (§26.18).
+
+Brojke koje test drži: **16** sekcija u starom meniju, **15** lista u novoj
+sekciji (14 sa parom u meniju + PRAVA), **2** legacy panela na ekranu alatki.
+
+Za ovu tvrdnju stoji **jedna** sabotaža, ne dve: oba smera mere isti raskorak,
+pa bi svaka stvarna izmena oborila obe — a sabotaža čija imenovana tvrdnja ne
+padne prva gora je od nijedne.
+
+#### Čime je §26 zatvoren
+
+`btnMatic` više ne laže, svih 16 sekcija starog menija dostižno je iz nove
+ljuske, jedini put upisa matičnih podataka je jedan pisac koga zovu obe strane,
+i dva nalaza o pravima pristupa su zatvorena (§26.18). Ostaje jedan posao van
+plana: **migracija zatečenih `"Aktivan"`/`"Neaktivan"` vrednosti** u
+`tblKorisnici.Aktivan` u rečnik `DA`/`NE` (§26.12).
+
+### 26.20 Pred brisanje legacy formi — šta je nedostajalo (`v6-ui-195`)
+
+§26 je pisan pod pretpostavkom **koegzistencije**: legacy forma ostaje, cilj je
+*jedan pisac koga zovu obe strane* (§26.5). Kad je cilj postao **brisanje svih
+`frm*` fajlova**, ta pretpostavka je pala — i sa njom su se videle tri rupe koje
+pod starim ciljem nisu bile rupe.
+
+#### Šta jeste, a šta nije bilo premešteno
+
+| | Stanje posle M5 |
+|---|---|
+| **Premešteno** (jedna implementacija, oba pozivaoca) | upis i sve provere (`modMaticniUnos`), GEO (`modMaticniGeo`), Korisnici i prava (`modMaticniKorisnici`), prevod Tag→sekcija |
+| **Napravljeno paralelno** (dve implementacije) | **čitanje** — `LoadList` (355), `SetupColumnHeaders` (136), `lstData_Click` (159) i dalje samo u formi; nova ljuska ima `MatRedovi` / `MatKolone` / `MatVrednostiReda` |
+| **Umire sa formom, i to je u redu** | 13 `Setup*`, stilizovanje, raspored kontrola, `m_RowMap`, vidljivost geo kontrola — to su ruke te forme |
+
+Paralelno čitanje nije greška pod starim ciljem: pisac je deljen, pa se **upis**
+ne može razići, a čitač je imao legacy kao referencu. Ali referenca nestaje sa
+formom — pa se slaganje mora izmeriti **pre** brisanja, ne posle.
+
+#### 1. Test slaganja čitača (161) — napisan sada
+
+Tvrdnja iz §26.11 koja je kroz M1–M5 ostala nenapisana. Meri, nad svih 14 lista:
+**skup zapisa** (broj, višak, manjak — kao *jednu* tvrdnju, jer su to tri lica
+istog kvara) i **svaku golu vrednost** novog čitača protiv legacy reda istog
+identiteta. Izvedene vrednosti se preskaču i to je **granica tvrdnje, ne rupa**:
+`@status` novi čitač svodi na Aktivan/Neaktivan (parcele u šemi nose `"Da"`), a
+`@geo` legacy nije ni pokazivao — zabeležene odluke iz §26.8.
+
+Test i njegov seam (`frmStammdaten.StmTestLista`) su **privremeni**: umiru
+zajedno sa formom. To je svrha, ne propust.
+
+#### 2. Kaskada zavisnog combo-a — bila prekinuta
+
+`MatComboStavke("@sorte", kontekst)` **jeste** bio prenet iz forme. **Ožičavanje
+nije.** `OcistiPolja` je punio combo-e samo pri otvaranju editora, kad vrsta još
+nema vrednost, pa je spisak sorti ostajao prazan — operater je kucao naslepo.
+Događaj promene je stizao (`NewFieldG` → `WireInput` → `UiChange` →
+`ScrAct "chg:"`), ali ga je `modMaticniEkran` ispuštao.
+
+Popravka je zavisnost izmestila **u opis**, umesto tvrdo kodiranog
+`If izvor = "@sorte"`: `MatComboZavisi(izvor)` je jedan spisak koji koriste tri
+posla — punjenje pri otvaranju, ponovno punjenje na `chg:`, i punjenje posle
+učitavanja postojećeg zapisa. Dok je zavisnost stajala u punjenju, druga dva
+posla nisu ni postojala.
+
+Uz to ide straža od povratnog udara (`mUZavisnima`): `FillCmb` i `PostaviPolje`
+menjaju kontrolu, što opet okida `Change`. Kaskada je danas plitka pa bi se sama
+zaustavila — straža je uslov da druga zavisnost sutra ne postane petlja.
+
+#### 3. Podešavanja i Admin nemaju host bez forme — otvoreno
+
+`modPodesavanja.BuildConfigEditor(frm)` i `modAdmin.BuildAdminPanel(frm)` grade
+runtime kontrole **na `frmStammdaten`** (`Private mFrm As Object ' host`).
+Brisanjem forme oba panela umiru.
+
+To ne obara §26.19 — razlozi zašto **ne** postaju ekrani po ugovoru (97 polja,
+`MAX_SEG` pun, `secret`/`memo` bez para u rečniku) i dalje stoje. Menja se samo
+**gde žive**: treba im nov domaćin, a to je odluka koja nije doneta i nije bila u
+planu. Zove se **M6** i predstoji.
+
+### 26.21 M6 — Podešavanja i Admin u radnoj površini (`v6-ui-196`)
+
+§26.19 je zaključio da ta dva **ostaju paneli** — 97 polja u 11 grupa i 12
+sistemskih komandi ne staju u ugovor ekrana, i ne treba da stanu. §26.20 je
+pokazao da ih hostuje `frmStammdaten`, koja se briše. M6 im daje nov dom, **bez
+menjanja ijednog reda njihove logike**: `BuildConfigEditor` i `BuildAdminPanel`
+su oduvek primali `frm As Object` — menja se samo **ko je domaćin**.
+
+#### Ljuska daje prazan okvir i ništa više
+
+`modOtkupUI` dobija `zPanel` — okvir preko radne površine — i dve javne
+procedure: `PanelHost()` (okvir) i `PanelRezim(ukljuci)` (ustupanje). Ljuska
+**ne zna nijedan panel po imenu**, isto kao što ne zna nijedan ekran. Dok je
+površina ustupljena, `zScr_*`, `zTitle` i `zGrid` se ne crtaju; sidebar,
+zaglavlje i statusna traka ostaju.
+
+**Zašto okvir, a ne sama forma:** oba graditelja prvo sakriju **sve** kontrole
+domaćina. Nad formom bi to ugasilo celu ljusku; nad namenskim okvirom gase samo
+ono što je njihovo.
+
+#### Logika je u standardnom modulu, ne u formi
+
+`frmOtkupUI` nije dobio ništa. Registar panela je **`modUiPanel`** — nov
+standardni modul, isti obrazac koji `modUiScreens` ima za ekrane: red opisuje
+`KLJUC|modul|graditelj|naslov`, a poziv je isključivo **kasno vezan i
+kvalifikovan** (`Application.Run "modPodesavanja.BuildConfigEditor", host`).
+
+Zatvaranje ide obrnutim redom od otvaranja: prvo `<Modul>_Release` (omotači
+`WithEvents`), pa tek onda pražnjenje okvira. Omotač koji preživi svoju kontrolu
+je mrtva referenca koja puca tek pri sledećem kliku, daleko od uzroka. Ime
+procedure se izvodi iz imena modula po dogovoru (`modAdmin` → `Admin_Release`),
+pa nov panel ne traži red više u registru — samo da poštuje isti dogovor.
+`modAdmin` je taj dogovor dobio sada; `modPodesavanja` ga je već imao.
+
+#### Šta se promenilo u ponašanju
+
+Panel se otvara **unutar ljuske, preko mreže** — sidebar i zaglavlje ostaju,
+povratak je jedan klik. Klik u sidebaru dok je panel otvoren **prvo zatvara
+panel**: bez toga bi se ekran ispod promenio, operater bi video isti panel, a
+ljuska bi mislila da je negde drugde.
+
+Skrivena kolona identiteta na ekranu *Podešavanja i alati* više ne nosi legacy
+`Tag` za `frmStammdaten` nego **ključ panela**. Time nova ljuska nema više
+nijednu vezu sa tom formom.
+
+Izlaz iz panela je **host-svestan**: `CloseConfigEditor` / `CloseAdminPanel`
+pitaju da li je domaćin okvir ili forma. Ta grana nestaje zajedno sa legacy
+formom.
+
+#### Brana je trostruka, i to nije višak
+
+Ekran odgovara kroz `Scr_Dozvoljen`, registar proverava pre ustupanja površine,
+a graditelj još jednom (`AUD-033`). Prava se menjaju zamenom operatera, pa
+nijedan sloj ne veruje prethodnom. Provera u registru postoji da se površina ne
+ustupi panelu koji će odmah odbiti da se izgradi — operater bi ostao pred
+praznim okvirom.
+
+**Verifikacija:** `vba_check` čist (208 fajlova, 357 sabotaža). Nov test 163 —
+ugovor registra (modul, graditelj i naslov postoje; svaki modul poštuje dogovor
+o `_Release`), ustupanje i vraćanje radne površine, i odbijanje nepoznatog
+ključa bez uzimanja površine. Test 151 meri ključ panela umesto legacy `Tag`-a.
+Tri nove sabotaže. **Testovi nisu izvršeni** u web sesiji.
+
+**Posle M6 `frmStammdaten` više nema nijednog korisnika u novoj ljusci** — ostaje
+samo legacy meni (`frmMaticniPodaci`) i test 161, koji je i napisan da umre s
+njom.
+
+### 26.22 „Procedure too large" — katalog poruka je prerastao VBA granicu
+
+Prvi `Debug → Compile` posle spajanja sa `main`-om nije prošao:
+**`Procedure too large`** na `modPoruke.UpsertPoruke`.
+
+VBA odbija da prevede proceduru čija prevedena veličina prelazi **~64 KB**.
+`UpsertPoruke` je bila jedna procedura sa **1657** `UpsertRow` poziva; obe grane
+su nezavisno dopisivale poruke (Sledljivost, GP lanac, utovar sa jedne strane,
+matični sa druge) i spajanjem je prag probijen. Nijedna strana sama nije bila
+preko njega.
+
+**Zašto to nije uhvaćeno ranije:** nije sintaksna greška, pa `vba_check` ćuti;
+testovi je ne dotiču jer se modul ne prevede pa *ništa* ne radi; CI ne pokreće
+Excel. Jedina kapija koja je vidi je ručni `Debug → Compile` — a on je poslednji
+korak, ne prvi.
+
+**Rez.** `UpsertPoruke` je podeljena na **12 blokova** (`UpsertPoruke01`…`12`),
+a javna procedura zadržava izgradnju rečnika `existing` i redom ih zove. Podela
+je **mehanička, po granici naredbe**: redosled poziva je nepromenjen, prelomljene
+naredbe (`_`) nisu presečene, skup ključeva je dokazano identičan pre i posle.
+Najveći blok je ~17 KB izvora.
+
+**Kapija, da se ne ponovi.** `vba_check` je dobio `PROCEDURA_VELIKA`: procedura
+preko **40 KB izvora** je nalaz. Prag je izmeren, ne pogođen — najveća procedura
+u repou koja se uredno prevodi ima ~27 KB, nijedna nema preko 30 KB, a pala je
+imala ~200 KB. Meri se izvor, jer se prevedena veličina odavde ne može izračunati;
+mera je gruba namerno — posao provere je da javi „ova je prerasla", ne da predvidi
+tačan bajt na kom VBA staje.
+
+Dokaz u oba smera stoji u `vba_check --self-test` (`PROC_SIZE_CASES`), kako
+`.claude/rules/testovi.md` §6 traži kad se menja sam checker: jedan slučaj koji
+**mora** da zapišti i jedan veliki koji **ne sme**. Provereno i unazad — podignut
+prag obara self-test po imenu.
+
+### 26.23 Smoke posle integracije: decimale, radnja alatki, stil panela (`v6-ui-198`)
+
+Tri nalaza sa prvog pravog prolaza kroz nove ekrane.
+
+#### 1. Decimala je nestajala — i to na više mesta nego što je prijavljeno
+
+Težina gajbice `0,5 kg` se crtala kao **`1`**. Vrsta ćelije `num` formatira sa
+**nula decimala**, pa je `Format$` zaokruživao: `0,4 → "0"`, `0,5 → "1"`.
+
+Podatak u tabeli je bio **ispravan sve vreme** — pisac upisuje pun `Double`.
+Grešio je samo prikaz, što je gore od pada: broj izgleda kao podatak.
+
+Isti kvar je pogađao i **cenu u Cenovniku** i cenu po jedinici artikla —
+`152,50` se crtalo kao `153`. To niko nije prijavio, ali je ista greška.
+
+Uvedena je vrsta ćelije **`dec`**: dve decimale, **bez zbira u podnožju**. Nije
+upotrebljeno `rsd` iako ima dve decimale — novčane vrste pale podnožje sa
+zbirom, a šifarnik nema šta da sabira (§26.4). Šest kolona prebačeno; polja
+**unosa** ostaju `num`, jer provera već prima decimale i upisuje pun `Double`.
+
+#### 2. Radnja „Otvori" nije se videla
+
+Prigušenim (`soft`) dugmetom se nije videlo da je to **jedini ulaz** u alatku —
+lista je izgledala kao pregled bez radnje. Sada je `primary` i šira. Uz to je
+popravljen zastareo natpis kolone: od M6 se alatka otvara **u radnoj površini**,
+ne „u svom prozoru".
+
+#### 3. Paneli su i dalje izgledali kao stari ekrani
+
+M6 ih je preselio u radnu površinu, ali su i dalje crtani **legacy `Style*`
+helperima** — siva podloga, sistemski font, gusti redovi. To je bio pravi
+prigovor: mesto je novo, izgled nije.
+
+**Šta je promenjeno:** samo **prezentacija**. Registar polja
+(`ConfigEditorFields`, 97 redova), čitanje, `SaveConfigEditor` i ožičavanje
+(`clsConfigBtn`) su netaknuti.
+
+**Šta NIJE promenjeno, i zašto:** kontrole ostaju `CommandButton` / `TextBox` /
+`ComboBox`. `modUiKit.BtnV` pravi stilizovanu **ploču**, ne dugme, a
+`clsConfigBtn` hvata evente preko `WithEvents btn As CommandButton` — zamena tipa
+kontrole bi pokidala svaki klik u panelu. Zato se postojeće kontrole **boje**,
+ne zamenjuju.
+
+Stilovi stoje u **`modUiKit`** (`PanelStil*`), a ne u modulu panela: dva panela
+sa svojom kopijom istog pravila su dva mesta koja se prvom doradom raziđu. Oba
+panela sada dele paletu, tipografiju i ritam sa ostatkom ljuske; grupe u
+Podešavanjima su peščane trake sa strelicom stanja, a u Adminu **`Očisti tabele`
+i `Migracija` nose `danger` boju** — jedine dve komande koje diraju podatke, pa
+se to vidi *pre* klika, a ne tek u dijalogu potvrde.
+
+**Zapamćena zamka:** u MSForms se `SpecialEffect` i `BorderStyle` isključuju —
+postavljanje `SpecialEffect`-a *posle* `BorderStyle`-a gasi ivicu. Redosled je
+zato Flat → ivica → boja ivice.
+
+**Verifikacija:** `vba_check` čist (210 fajlova, 417 sabotaža). Nov test 178 za
+decimale (formatiranje, `dec` ne pali podnožje, nijedna matična kolona sa težinom
+ili cenom nije `num`) i dve sabotaže. **Stil panela nije pokriven testom** — to je
+vizuelni ishod koji se meri jedino smoke-om u Excelu; ne piše se placebo test
+koji bi tvrdio da „boja je postavljena".
+
+### 26.24 Kvalifikovan poziv je bio slepa mrlja checkera (`v6-ui-198`)
+
+Selidba stilova u `modUiKit` je skriptom **dvaput prefiksovala** dva imena —
+`PanelPanelStilNaslov` — pa su pozivi `modUiKit.PanelStilNaslov` padali tek na
+`Debug → Compile`, uz **`Method or data member not found`**.
+
+`vba_check` je bio zelen. Razlog je bio jedan red u `_proveri_naredbu`:
+
+```python
+if rest.startswith(("=", ".", "!")):   # `Foo.Bar` -- pristup clanu, ne poziv
+    return out
+```
+
+Time je **svaki kvalifikovan poziv** bio nevidljiv — a nova ljuska je sva na
+njima: `modOtkupUI.ShowToast`, `modMaticniIzvor.MatKolone`, `modUiPanel.PanelZatvori`.
+Provera je merila samo nekvalifikovane pozive, kojih u novom kodu skoro i nema.
+
+**Zatvoreno tako što se zaključuje samo tamo gde se sme.** Uveden je registar
+članova **po modulu** (`collect_module_members`, samo `.bas` — procedure, javne
+konstante i javne promenljive). Kad kvalifikator jeste poznat modul, član se
+proverava u **tom** modulu; kad nije — `tx.CommitTx`, `lo.ListRows`,
+`frm.Controls` — kvalifikator je objekat i odatle se o njegovim članovima ne može
+tvrditi ništa, pa se preskače. Ravan skup imena iz `collect_definitions` za ovo
+ne bi bio dovoljan: on kaže da ime postoji *negde*, a poziv pada ako baš taj
+modul nema baš tog člana.
+
+**Nula lažnih nalaza** nad 210 fajlova i ~135 modula — to je merilo koje je ovde
+važnije od hvatanja, jer lažan nalaz u `PostToolUse` hook-u uči da se checker
+ignoriše.
+
+Dvosmerni dokaz (`KVAL_CASES`, četiri slučaja): član kog modul nema **mora**
+zapištati; član kog ima **ne sme**; objekat koji nije modul **ne sme**; nepoznat
+modul se preskače. Isključena provera obara self-test po imenu — provereno.
+
+**Zamka uhvaćena u pisanju samog dokaza:** prva verzija je slučajeve puštala pod
+putanjom `<self-test>`, a `check_undefined` radi samo nad `.bas` — tri od četiri
+slučaja su bila prazan hod koji je „prolazio". Otkrio ih je jedini slučaj koji je
+očekivao nalaz. Zato slučajevi sada idu pod `modSelfTest.bas`.
+
+### 26.25 Recenzija: životni ciklus i autorizacija (`v6-ui-199`)
+
+Spoljna recenzija je dala tri P0 i tri P1. Prvi P0 (`PanelPanelStil*`) je već bio
+zatvoren u `827f3a9`, zajedno sa rupom u checkeru koja ga je propustila (§26.24).
+Ostalo se rešava ovde.
+
+#### P0 — editor je preživljavao promenu ekrana
+
+Četiri matična ekrana dele telo `modMaticniEkran`, pa je i stanje editora bilo
+deljeno **bez vlasnika**. Otvoriš izmenu Kooperanta, pređeš na Robu, klikneš
+Sačuvaj — pisalo bi u `tblKooperanti` dok gledaš robu.
+
+Dva reza, oba potrebna:
+
+1. **Vlasnik.** `mEditEkran` pamti ko je otvorio editor; `Sacuvaj` odbija tuđi,
+   zatvara ga i kaže zašto. To je kapija koja radi i ako ljuska propusti da javi.
+2. **Ugovor.** Nov, neobavezan `Scr_Deaktiviraj`: ljuska ga zove **pre** prelaska
+   na drugi ekran, a ekran zatvara editor, GEO panel i izbor. Ljuska i dalje ne
+   zna nijedan ekran po imenu — poziv je kasno vezan, kao `Scr_Dozvoljen`.
+
+#### P0 — promena operatera nije primenjivala nova prava
+
+`DoSwitchOperater` je osvežavao samo ime u zaglavlju. Admin je mogao da otvori
+*Korisnike*, preda tastaturu operateru bez prava, a ekran i mutacije ostaju
+otvoreni. Uvedeno `PrimeniNovaPrava`, i **redosled nije proizvoljan**: keš brane
+se briše **pre** svega (inače se nova prava mere starim odgovorom), pa se
+zatvaraju panel i editor, pa se sidebar precrtava, i tek onda se pita sme li
+trenutni ekran da ostane.
+
+#### P0 — brana je bila fail-open
+
+`ScrSopstvenaBrana` je počinjala sa `True` i svaka greška je ostavljala taj
+rezultat — brana koja **pukne** je propuštala. Sada se razlikuju dva ishoda:
+`1004` („nema takvu proceduru") i dalje prolazi, jer to je odgovor *„nema
+brane"*; **svaka druga greška zabranjuje**, i upisuje se u `ScrLastErr`.
+
+#### Tvrda kapija ide u pisca, ne samo u ekran
+
+UI brana pada zajedno sa svojim ekranom, a do upisa se stiže i iz legacy forme.
+Zato `MatBranaUpisa` stoji u `modMaticniUnos` i zove se iz `MatDodaj`,
+`MatIzmeni`, `MatPromeniStatus` i `KorPromeniPravo` — isti obrazac koji već važi
+za `ApplyAvansToOtkup` (`.claude/rules/testovi.md` §5). Korisnici traže još
+administraciju.
+
+#### P1 — combo je primao izmišljenu vrednost
+
+Kontrole su `fmStyleDropDownCombo` (slobodan tekst), a pisac je merio obaveznost
+i brojeve, ne **pripadnost listi**. Prolazio je nepostojeći `StanicaID`. Sada
+`ComboVrednostPostoji` gradi isti spisak koji editor nudi — uključujući kaskadni
+kontekst — pa se ponuda i provera ne mogu razići. Nepoznat izvor **ne odbija**:
+spisak koji se ne može izgraditi nije dokaz da je vrednost pogrešna.
+
+#### P1 — prirodan PK se preimenovao bez provere
+
+Kod ambalaže, paleta, kutija, kesa i vrste GP naziv **jeste** ključ, a nizvodne
+reference idu po vrednosti. Preimenovanje bi ostavilo kulture i prijemnice da
+pokazuju na ime kog više nema. `PkNepromenjen` to odbija sa uputstvom (nov zapis
+pa deaktivacija starog); transakcioni rename kroz sve reference je zaseban posao.
+
+#### P1 — otvoren unos je tiho nestajao
+
+Prelazak na drugu podlistu je zatvarao editor bez reči. Sada pita.
+
+#### P2 — GEO traka i prazni redovi
+
+Sedam alatki traži **764 pt**; prag je bio procena od 640, pa je na prozoru od
+900 pt (radna površina ~690) poslednje dugme izlazilo van zone — bez ijedne
+greške, samo odsečeno. Sada se meri stvarna širina **iz istog spiska iz kog se
+crta**, red se prelama, a visina zone se računa iz broja redova.
+
+Prateći razmaci u `frmStammdaten` očišćeni — **osim u zaglavlju dizajnera**:
+`Begin {GUID} frmStammdaten ` nosi razmak po `.frm` formatu i njegovo brisanje
+obara import.
+
+#### Verifikacija
+
+Nov test **179** — negativne tvrdnje, tačno ono što je recenzija tražila: combo
+van liste, prirodan PK bez polja za zaključavanje, kapija pisca, i brana koja se
+može zatvoriti. Tri nove sabotaže. `vba_check` čist (210 fajlova, 420 sabotaža).
+**Compile i Excel smoke ostaju na operateru** — recenzent to isto nije mogao da
+izvrši.
+
+### 26.26 Paneli dobijaju informacionu arhitekturu nove ljuske (`v6-ui-200`)
+
+Prethodni krug (§26.23) je panelima dao paletu i ritam, ali je **oblik ostao
+star**: jedanaest naslaganih sklapajućih grupa. To je obrazac stare forme —
+nova ljuska svuda pokazuje **jednu listu** i menja je prekidačem.
+
+**Podešavanja sada rade tako.** Jedanaest grupa je **prekidač segmenata**, kao
+prekidač lista na svakom ekranu; vidi se tačno jedna grupa, ostale su sklonjene,
+ne skupljene. Segmenti se prelamaju u više redova i šire po dužini natpisa —
+grupe idu od „SEF" do „Otkup / dokumenta", pa bi fiksna širina ili sekla ili
+rasipala. Početno stanje je **prva grupa izabrana**; prazan ekran („sve
+skupljeno") je bio isti stari obrazac.
+
+Uz to su otišla dugmad **„Raširi / Skupi sve"** — uz prekidač nemaju šta da rade —
+i sa njima `ConfigEditor_SetAll`, koji je ostao bez pozivaoca.
+
+**Ožičavanje se nije menjalo.** Kontrole ostaju `CommandButton`, `clsConfigBtn`
+i dalje hvata klik pod `action="grp"` — promenilo se samo **značenje** klika:
+bira grupu umesto da je sklapa. Zato ovaj krug ne uvodi nijedan nov put
+događaja, a menja ono što se vidi.
+
+**Admin je dobio linije sekcija.** Dvanaest komandi u pet grupa staje na jedan
+ekran, pa bi prekidač ovde sakrio pola alatki bez dobitka. Umesto toga sekcije
+razdvaja tanka linija — isti potez kojim ljuska deli zonu od mreže. Bez nje su
+grupe curile jedna u drugu, jer su sva dugmad iste težine.
+
+#### `ImportAllVBA` — šta je ovom ekranu bilo na putu
+
+`ImportAllVBA` **prvo uklanja istoimenu komponentu**, pa uvozi. `Remove` pada
+ako je forma učitana, greška se guta, i uvoz napravi `frmOtkupUI1` — otud drugi
+prolaz.
+
+Panel u radnoj površini je držao referencu na **okvir unutar te forme**
+(`modPodesavanja.mFrm` / `modAdmin.mFrm`), a `modUiPanel` je držao panel. Dok te
+reference postoje, forma se ne oslobađa. Zato `OtkupUI_Release` sada zatvara
+panel **pre** nego što pusti `mFrm`.
+
+`modMaticniEkran` referencu na formu nikad nije držao — zonu traži kroz
+`ScreenZone` pri svakoj upotrebi — ali je držao **stanje** koje bi preko rušenja
+prešlo na sledeću instancu; to čisti `Deaktiviraj`.
+
+#### Optimizacija matičnog čitača
+
+`PravaOpis` je za svaki red zvao `GetColumnIndex` dvanaest puta — za sto
+korisnika **1200 pretraga šeme** na svako crtanje liste — i uz to gradio nov niz
+`modAuth.OblastiList()` po redu. Oba su podignuta u keš koji pada zajedno sa
+ostalim izvedenim mapama (`MatResetCache` → `KorResetCache`), jer se šema menja
+instalacijom i keširan indeks ne sme da preživi reset.
+
+### 26.27 Paneli su stavke sidebara; ekran-pokretač je uklonjen (`v6-ui-201`)
+
+**Pitanje koje je ovo pokrenulo:** zašto se Podešavanja i Admin otvaraju preko
+dugmeta „Otvori alatku", a Korisnici direktno iz sidebara?
+
+**Odgovor: dugme nije imalo opravdanje.** Nastalo je u M0 (§26.13), kad je
+ugovorni ekran **bezuslovno** dobijao naslovnu traku i mrežu — ekran bez liste
+tada nije mogao da postoji, pa je `MAT_SISTEM` napravljen kao *lista alatki* da
+bi matična sekcija imala bar jedan ekran od prvog dana. U M6 (§26.21) su paneli
+prešli u radnu površinu ljuske, i time je jedini razlog za taj ekran nestao:
+ostao je **spisak od dve stavke koji ponavlja ono što sidebar radi**, plus jedan
+klik i jedan izbor više do istog panela.
+
+**Šta je promenjeno.**
+
+| Bilo | Sada |
+|---|---|
+| sidebar → `MAT_SISTEM` → red u mreži → „Otvori alatku" → panel | sidebar → panel |
+| `modScrMatSistem.bas` (255 linija, ceo `Scr_*` ugovor) | obrisan |
+| ključevi panela `PODESAVANJA` / `ADMIN` | `MAT_PODESAVANJA` / `MAT_ADMIN` |
+
+Ključ je sada **isti u oba registra**: `modUiScreens` red crta u sidebaru,
+`modUiPanel` red zna ko ga gradi. Polje modula u registru ekrana je **prazno**
+i to je nosilac razlike — panel nema `Scr_*` ugovor, pa ljuska po tom praznom
+polju zna da klik ide u `modUiPanel.PanelOtvori`, ne u gradnju zone.
+
+**Ljuska i dalje ne zna nijedan panel po imenu.** `ActivateScreen` pita
+`PanelPostoji(kljuc)`; ime panela, njegov modul i graditelj ostaju isključivo u
+`modUiPanel`.
+
+**`mScreen` ostaje ekran ISPOD panela.** Panel pokriva radnu površinu, ne menja
+je; zato zatvaranje panela vraća prethodni ekran bez ponovne gradnje, a „Nazad
+na rad" i dalje zna odakle se došlo. Oznaka u sidebaru zato više ne prati
+`mScreen` nego `AktivnaStavka()` — panel ako je otvoren, inače ekran. Bez toga
+bi sidebar posle svakog neuspelog prelaska pokazivao Partnere dok se gledaju
+Podešavanja.
+
+**Prigušenje kaže istinu pre klika.** `PanelDozvoljen` je nov ulaz u istu branu
+(administracija) koju su `PanelOtvori` i sami graditelji već imali; sidebar ga
+pita pri crtanju, pa stavka stoji prigušena umesto da se odbije posle klika.
+Brana ostaje trostruka i to nije višak — prava se menjaju zamenom operatera.
+
+**Sekcija i dalje staje u sidebar.** Šest stavki u dve grupe:
+`12 + (20 + 3·27 + 12)·2 = 238 pt` od `492 pt` slobodnih na najmanjem prozoru.
+
+**Admin je dobio isti oblik kao Podešavanja.** Pet grupa je prekidač segmenata,
+vidi se tačno jedna grupa. Grupa se nosi **u tekstu akcije** (`"grp:<naziv>"`)
+jer `clsAdminBtn` ima samo polje `action`, a klasa se ne proširuje.
+
+#### Spona sa starim menijem je preseljena, ne izgubljena
+
+Tvrdnja „novi UI dostiže sve što stari meni dostiže" (test 174) za šifarnike ide
+kroz `MatKljucIzLegacyTag`, a za ova dva panela je išla kroz
+`modScrMatSistem.MsAlatkaTagovi()`. Registar panela zato nosi **peto polje —
+legacy `Tag`** (`PanelKljucIzLegacyTag`).
+
+**Uz to je zatvorena tiha rupa iz M6.** Tada je `Alatke()` prešao sa legacy
+tagova na ključeve panela (`"Podešavanja"` → `"PODESAVANJA"`), a test 174 ih
+poredi sa `vbTextCompare` — koje razlikuje `š` od `S`. Poklapanje je pukla, ali
+se to nije videlo: VBA testovi se u web sesiji ne izvršavaju. Sada je veza
+podatak u registru, ne izvedeno ime.
+
+Istom logikom je popravljena i tvrdnja u `T_Sekcija_SidebarNeStajeZajedno`:
+„ekran bez modula je prigušen" merila je `MAT_PARTNERI`, koji **od M1 ima
+modul**. Prešla je na `MARZA`, jedini takav red danas.
+
+#### Ubrzano čitanje matičnih lista
+
+Merenje na čitaocu, ne pretpostavka:
+
+| Put | Bilo | Sada |
+|---|---|---|
+| `MatRedovi` | bez `BeginTableCache`; `Kol()` zove `GetColumnIndex` **po ćeliji, po redu**, a `GetColumnIndex` bez prozora skenira **sve** `ListObject`-e sveske | ceo čitač je u prozoru keša (depth-brojan, pa ugnježđavanje ne smeta) |
+| `@koop_naziv` | **dva** `LookupValue`-a po redu, svaki čita celu `tblKooperanti` i skenira je linearno | jedna `BuildLookupDict` mapa (`Ime` + `Prezime` u jednom prolazu), gradi se lenjo |
+| `@stanica` | `LookupValue` po redu | ista mapa, lenjo |
+| combo-i editora | svaki combo čita svoju tabelu bez prozora | `OčistiPolja` i `OsveziZavisne` drže prozor oko cele petlje |
+
+Za 800 parcela nad 400 kooperanata to je bilo **1600 čitanja** `tblKooperanti` i
+oko 640.000 poređenja — za dve kolone teksta. `BuildLookupDict` je već postojao
+tačno za taj obrazac (`modDataAccess`), pa je ovo upotreba, ne nov sloj.
+
+**Prozor keša se zatvara na svakom izlazu.** Jezgro ima šest izlaza, pa je
+`MatRedovi` podeljen na omotač (prozor + brisanje mapa) i `MatRedoviCore`
+(telo); greška se prepisuje u lokalne pre čišćenja, jer je `Err` globalan.
+Prozor koji ostane otvoren ne puca — **keširа podatke preko upisa koji sledi**,
+pa lista posle snimanja pokazuje staro stanje.
+
+#### Verifikacija
+
+- `python3 tools/vba_check.py` — čisto (209 fajlova, 423 sabotaže).
+- Test **165** je prepisan: iz `T_MatSistem_UgovorIIdentitet` u
+  `T_UiPanel_StavkaSidebara` — dva registra jedan ključ, prigušenje, brana,
+  odsustvo `MAT_SISTEM`, legacy `Tag`.
+- Test **180** (`T_Maticni_CitanjeNeMenjaVrednosti`) je nov: **ekvivalencija**
+  mape sa `LookupValue`-om (ključ po ključ, i red po red za `@koop_naziv`) i
+  ravnoteža prozora keša. Optimizacija koja menja prikaz nije optimizacija, a
+  pogrešno ime kooperanta izgleda kao podatak, ne kao kvar.
+- Nove sabotaže: `panel-kljuc-se-razisao-sa-sidebarom`,
+  `panel-ljuska-ne-pita-branu-panela`, `maticni-mapa-bez-prezimena`,
+  `maticni-prozor-kesa-ostaje-otvoren`.
+- **VBA se u ovoj sesiji ne izvršava** (`run_vba.py` traži Windows + Excel +
+  `pywin32`), pa su sve izmene ponašanja **neverifikovane**, ne zelene.
+  Compile je ručna kapija: `Alt+F11 → Debug → Compile VBAProject`.
+
+### 26.28 Recenzija `21963f4`: životni ciklus panela i zamena operatera (`v6-ui-202`)
+
+Recenzija je našla tri kvara koje nijedan dotadašnji test nije mogao da vidi —
+svi su merili **registre**, nijedan nije **odigrao ciklus**. Sva tri su tiha.
+
+#### P0-1 — „Nazad" u panelu je od `v6-ui-201` padao u legacy granu
+
+`modPodesavanja.CloseConfigEditor` i `modAdmin.CloseAdminPanel` su pitali
+`PanelAktivan() = "PODESAVANJA"` / `"ADMIN"`. Preimenovanjem ključeva u
+`MAT_PODESAVANJA` / `MAT_ADMIN` taj uslov **nikad više nije bio tačan**, pa je
+klik na „Nazad" išao u legacy granu: `frmOtkupAPP.ReturnToDashboard`, pa
+`Unload mFrm` nad **okvirom** (ne formom) → greška progutana, reference
+obrisane, panel ostaje na sceni i može biti mrtav.
+
+Popravka nisu dve zamene stringa. Pita se **po modulu**, ne po ključu:
+
+```vba
+If modUiPanel.PanelZatvoriAko("modPodesavanja") Then Exit Sub
+```
+
+Modul zna **svoje** ime — ono stoji u `Attribute VB_Name` i ne može da se
+raziđe sa registrom. Ključ je **strano** ime, i baš zato je i puklo.
+
+#### P0-2 — panel se sklonio, ali ekran ispod je ostajao poluživ
+
+Otvaranje panela deaktivira ekran ispod (`ScrDeaktiviraj`), što kod matičnih
+briše `mZonaEkran` — a bez nje `Zona()` vraća `Nothing` i **sve** radnje ekrana
+tiho ne rade. Zatvaranje je radilo samo `PanelRezim False` + raspored: mreža se
+vidi, „Izmeni" ne radi ništa.
+
+`PanelZatvori` sada ima `vratiEkran` (podrazumevano `True`) i zove
+`modOtkupUI.PanelVracenNaEkran` — ponovno čitanje ekrana **i** vraćanje njegove
+oznake u sidebaru. `False` prosleđuje samo onaj ko sam vraća ekran (prelazak na
+drugi) ili kome ekrana više nema (rušenje ljuske).
+
+#### P0-3 — zamena operatera nije primenjivala nova prava
+
+`PrimeniNovaPrava` je zvao `BuildNav mFrm`, a `BuildNav` radi
+`Controls.Add("Forms.Frame.1", "zNav")` — **drugi put nad istom formom to je
+runtime greška**. Guta je `On Error Resume Next` u pozivaocu, pa se `BuildNav`
+prekidao na **prvoj liniji**: `mNavOff` je ostajao od prethodnog operatera.
+
+Tvrde brane su držale (`ActivateScreen` pita `ScrDozvoljen` na svaki klik), ali
+je meni lagao. Menjaju se samo **prava**, a prava su jedino što `mNavOff` drži —
+pa `ObnoviNavPrava` prolazi kroz `mNavKey` i preračunava mapu, bez ijedne nove
+kontrole. Kroz `mNavKey`, a ne kroz ponovljenu petlju po registru: dva spiska
+imena stavki mogu da se raziđu, jedan ne može.
+
+Uz to: fallback je bio bezuslovni `ActivateScreen SCR_POCETNI`. Ako novi
+operater nema pravo ni na Dokumenta, taj prelazak se odbija i **prethodni
+(zabranjeni) ekran ostaje na sceni, sa podacima prethodnog operatera**.
+`NaPrviDozvoljenEkran` traži redom, a ako nema nijednog — radna površina se
+prazni.
+
+#### P1 — sve iz istog gnezda
+
+| Nalaz | Popravka |
+|---|---|
+| `ActivateScreen` deaktivira stari ekran **pre** provere prava/postojanja | deaktivacija je pomerena iza svih provera; odbijen prelazak ne dira ekran na kome jesmo |
+| navigacija sa panela tiho odbacuje nesnimljeno | `PanelImaNesacuvano` (isti dogovor o imenu kao `_Release`) + pitanje; `modPodesavanja` prati učitane vrednosti, pa je odgovor tačan bez ijednog čitanja configa |
+| posle `PanelZatvori` sidebar ostaje označen na panelu | `PanelVracenNaEkran` vraća oznaku |
+| `SaveConfigEditor` može ostaviti delimično snimljen config | upis je pod svojim rukovaocem: pad jednog polja više ne preskače ostala, nego ulazi u izveštaj |
+
+#### Šta NIJE menjano, i zašto
+
+- **`ScrSopstvenaBrana` i `1004`.** To je namerno: `1004` je „Cannot run the
+  macro" = ekran nema `Scr_Dozvoljen`. Svaka **druga** greška je fail-closed
+  (uvedeno u `v6-ui-199`). Kompromis je zabeležen, ne previđen.
+- **Combo validacija je fail-open kad se izvor ne može pročitati.** Isto
+  namerno: nepoznat izvor ne sme da odbije unos koji je legalan. Tvrda brana je
+  u `modMaticniUnos`, ne ovde.
+
+#### Optimizacija: `BuildRowIndex` i još tri mesta
+
+`BuildLookupDict` nosi najviše dve kolone. Tamo gde petlji iz iste tabele treba
+**više**, nov `modDataAccess.BuildRowIndex` daje mapu `ključ → broj reda`, pa se
+kolone čitaju direktno iz istog niza — jedan prolaz za sve.
+
+| Mesto | Bilo | Sada |
+|---|---|---|
+| `modSledljivost.TraceByZbirna` | **7** `LookupValue` po redu (3 × `tblKooperanti`, 4 × `tblParcele`) | dve mape `ključ → red`, po jedan prolaz |
+| `modAgrohemija.GetMagacinStanje` | 3 × `tblArtikli` po artiklu | jedna mapa `ključ → red` |
+| `modAgrohemija.ReportIzdavanjePoKooperantu` | 2 × `tblKooperanti` po kooperantu | `BuildLookupDict` (`Ime` + `Prezime`) |
+
+Za 5000 otkupa nad 800 parcela sledljivost je radila oko **28 miliona**
+poređenja za jedan izveštaj.
+
+**Ostalo, izmereno a nedirano** (isti obrazac, van opsega ovog kruga):
+`modIzvestaj` (5 mesta: vozači, stanice, kupci), `modStammdatenSync` (5),
+`modStornoFlow` (`GetTableData` u petlji, 12 mesta), `modPrint` (2, u
+**ugnježđenoj** petlji), `modDokumenta` (3), `modSEFMapper` (6). Većina ih radi
+unutar `BeginTableCache` prozora, pa ne čitaju list ponovo — ali linearni skeniraj
+po redu ostaje.
+
+#### Verifikacija
+
+- `python3 tools/vba_check.py` — čisto (209 fajlova, 428 sabotaža).
+- Nov test **181** `T_UiPanel_ZivotniCiklusIPrava` **odigrava ciklus**:
+  ekran → panel → „Nazad" → zona ekrana je živa; odbijen prelazak ne deaktivira
+  ekran na kome jesmo; svaki modul iz registra zatvara svoj panel po imenu
+  modula; posle primene novih prava zabranjena stavka je prigušena.
+- Test **180** proširen tvrdnjom o `BuildRowIndex` (`RedSlozen`).
+- Pet novih sabotaža: `panel-zatvaranje-po-tudjem-imenu`,
+  `panel-ne-vraca-ekran-ispod`, `ljuska-deaktivira-pre-provere`,
+  `prava-se-ne-primenjuju-na-sidebar`, `mapa-reda-pomerena-za-jedan`.
+- **VBA se u ovoj sesiji ne izvršava** — sve izmene ponašanja su
+  **NEVERIFIKOVANE**. Scenariji koje traži recenzija (Partneri → Podešavanja →
+  Nazad → izmena; Podešavanja → Admin bez snimanja; operater bez prava na
+  Dokumenta) moraju se odigrati u Excelu.
+
+### 26.29 Recenzija `4d1475b`: zamena operatera je izlagala stare podatke (`v6-ui-203`)
+
+Dva P0, oba klase **„prikaz tvrdi jedno, stanje je drugo"**. Nijedan se ne vidi
+kroz registre; oba se vide tek nad stanjem.
+
+#### P0-1 — „Otkaži" u prijavi je odjavljivao starog operatera
+
+`modAuth.Login` je radio `Logout` **pre** nego što otvori formu za prijavu. Klik
+na „Operater" pa „Otkaži" (ili tri promašena PIN-a):
+
+1. `Login` vrati `False`;
+2. stara sesija je **već obrisana**;
+3. `DoSwitchOperater` ide u `Else` granu i javlja „operater ostao isti";
+4. UI zadržava njegovo ime, sidebar i podatke — a `gLoggedIn` je `False`.
+
+Sesija se sada **pamti pa gasi**, i vraća kad prijava ne uspe. Otkazivanje znači
+„ne menjam operatera", pa se vraća tačno stanje pre klika — ništa se ne dobija
+što već nije bilo na ekranu. Vraćanje ide kroz `VratiSesiju` (zvano sa dva mesta,
+i iz `EH`) i ostavlja trag u auditu (`AUTH_LOGIN_OTKAZ`).
+
+Uz to, `DoSwitchOperater` više ne veruje: ako sesija **nije** vraćena
+(`modAuth.JePrijavljen()` = `False`), primenjuje prava na praznu sesiju umesto
+da tvrdi da je stari operater tu.
+
+#### P0-2 — nalog bez ijednog prava je i dalje video prethodnu mrežu
+
+`NaPrviDozvoljenEkran` je samo postavljao `mScreen = ""`. Ali:
+
+- `ShowZones` je `zTitle`/`zGrid` i dalje palio (`Not mPanelRezim`);
+- `LoadGridFromScreen` za nepoznat ključ **izlazi pre** nego što isprazni
+  `mView` (`If Not IsArray(d) Then Exit Sub`);
+- `LayoutScreenZone` samo ne nađe `zScr_` zonu i izađe.
+
+Rezultat: komentar je govorio „prazna radna površina", a prethodna mreža je
+ostajala vidljiva sa redovima prethodnog operatera.
+
+Sada: `ShowZones` ne crta naslov ni mrežu kad je `mScreen` prazan, a
+`IsprazniRadnuPovrsinu` **briše stanje**, ne samo vidljivost — `mView`, `mViewN`,
+zbirove, izbor, filter, pretragu, pa `RenderGrid` preko starih redova. Skrivena
+mreža sa tuđim redovima je i dalje tuđi podaci: `mView` preživi, a `GridCell` ga
+čita i bez crtanja.
+
+#### P1 — zatvoreni
+
+| Nalaz | Popravka |
+|---|---|
+| prelazak ekrana i otvaranje panela tiho odbacuju nesnimljen matični editor | nov neobavezan ugovor `Scr_ImaNesacuvano` (isti dogovor o imenu kao `Scr_Deaktiviraj`); `modMaticniEkran.ImaNesacuvano(ekran)` pita **čiji** je editor, kao i `EditorJeNas` |
+| `ComboVrednostPostoji` fail-open kad izvor ne može da se pročita | `EH` više ne znači „prolazi": greška u proveri nije odobrenje. **Prazan** spisak i dalje prolazi — sekcija u koju se unosi prvi zapis nema šta da ponudi |
+| `ScrSopstvenaBrana` svaki `1004` čita kao „nema branu" | `1004` je „nema proceduru" **samo pri prvom pokušaju**; nad ekranom za koji već znamo da branu ima, `1004` je pukla brana → zabranjeno |
+| `KorDodaj` / `KorIzmeni` / `KorPromeniStatus` bez sopstvene kapije | svi zovu `MatBranaUpisa("KORISNICI")` — ista implementacija, ne kopija pravila. `KorPromeniPravo` ju je već imao |
+
+#### P2 — zatvoren
+
+`ActivateScreen` je zatvarao panel **na vrhu**, pre validacije cilja. Klik na
+stavku čiji modul nedostaje (nepotpun import, self-update u toku) je tako
+ostavljao i panel zatvoren i ekran ispod deaktiviran — za potez koji nikuda nije
+odveo.
+
+Redosled je preokrenut: **cilj se proverava prvi**, pa se pita za nesnimljeno, i
+tek onda se išta zatvara. Odbijen prelazak sada ne dira ništa — panel ostaje
+otvoren, što i jeste istina. Jedini bail posle zatvaranja panela je pad u
+gradnji zone, i on ekran vraća ručno (`PanelVracenNaEkran`).
+
+Uz to su `IdiNaEkran` i `PostaviSekciju` izgubili svoje `kljuc <> mScreen`
+straže: dok je panel otvoren, povratak na ekran ispod njega **jeste** isti ključ,
+pa su ga te straže blokirale. Odluku sada donosi `ActivateScreen`, koji jedini
+zna i za panel.
+
+#### Šta ostaje otvoreno, svesno
+
+- **Snimanje Podešavanja nije atomsko.** Pojedinačne greške se sada prijavljuju
+  po ključu i ne prekidaju ostale, ali deo configa može biti snimljen a deo
+  odbijen. Atomičnost bi tražila transakciju nad dve tabele (`tblSEFConfig` +
+  `tblLocalConfig`) za 97 nezavisnih ključeva — nesrazmerno.
+- **Caller-level paritet za `BuildRowIndex`** (Sledljivost, Agrohemija) nije
+  odigran u Excelu. Ekvivalencija same mape jeste pokrivena testom 180.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **431** sabotaža); `--self-test` 102/102.
+- Nov test **182** `T_Auth_OtkazanaPrijavaNeLazePrikaz`: otkazana prijava vraća
+  prethodnog operatera; prazna radna površina **briše** redove (mereno preko
+  `GridBrojRedova`, uz tvrdnju da ih je pre toga bilo — inače bi tvrdnja bila
+  prazna).
+- Test **179** proširen: sva tri pisca naloga odbijaju sa zatvorenom kapijom, i
+  odbijena promena statusa ništa nije izračunala.
+- Tri nove sabotaže: `auth-otkaz-ne-vraca-sesiju`,
+  `prazna-povrsina-zadrzava-redove`, `korisnici-pisac-bez-kapije`.
+- Novi test seam-ovi: `modAuth.AuthOtkazTest`,
+  `modOtkupUI.OtkupUI_IsprazniPovrsinuTest`, `modMaticniUnos.MatBranaZatvoriTest`
+  — sva tri tvrdo gejtovana ili „samo zatvara", nijedan ne može da odobri pristup.
+- **VBA se u ovoj sesiji ne izvršava.** Pet scenarija iz recenzije
+  (uspešna zamena, „Otkaži", tri pogrešna PIN-a, nalog bez prava, Podešavanja →
+  Admin bez snimanja) i dalje moraju u Excel.
+
+### 26.30 Recenzija `078e3f8`: tri P1 i jedan placebo test (`v6-ui-204`)
+
+#### P1-1 — sekcija se menjala pre nego što se zna da li je prelazak uspeo
+
+`PostaviSekciju` je postavljao `mSekcija`, zlatno dugme i sidebar, pa **tek onda**
+zvao `ActivateScreen`. Ako prelazak ne uspe — operater odustane od odbacivanja
+nesnimljenog, cilj nema prava ili modul, gradnja padne — stari ekran ostaje na
+sceni, a zaglavlje i sidebar pokazuju **drugu sekciju**.
+
+`ActivateScreen` je zato postao **`Function` sa verdiktom**: `True` znači „posle
+poziva smo tamo gde smo hteli" (uključujući „već smo tu"), `False` znači da
+prelazak nije izvršen. `PostaviSekciju` na `False` vraća sekciju, dugme i
+sidebar. Pravilo je opšte: *pozivalac koji je uz prelazak promenio još nešto
+mora to da vrati.*
+
+#### P1-2 — nalog bez prava → nalog sa pravima je ostajao na praznoj površini
+
+`PrimeniNovaPrava` je tražio prvi dozvoljen ekran **samo kad je `mScreen`
+neprazan i zabranjen**. Posle operatera bez ijednog prava `mScreen` je prazan, pa
+je sledeći (validan) operater dobijao osvežen sidebar i ostajao pred praznom
+površinom do prvog ručnog klika. Dodata je grana za prazan `mScreen`.
+
+#### P1-3 — validacija combo-a je bila fail-open za glavni kvar izvora
+
+Prošli krug je popravio pogrešan sloj. `ComboVrednostPostoji` je dobio
+fail-closed `EH`, ali do njega se **nikad nije dolazilo**: `MatComboStavke`
+svaki pad pretvara u `Array()` (i to s razlogom — combo se ne sme srušiti), pa je
+provera prazan niz čitala kao „prošlo je". Kvar pri čitanju `tblStanice` je i
+dalje propuštao proizvoljan tekst u kolonu stranog ključa.
+
+Razlika sada ide odvojenim kanalom — `modMaticniIzvor.MatComboGreska()`, isti
+obrazac i isti razlog kao `modUiScreens.ScrLastErr`:
+
+| Stanje | Combo | Provera upisa |
+|---|---|---|
+| spisak pročitan, vrednost u njemu | popunjen | prolazi |
+| spisak pročitan, **prazan** | prazan | **prolazi** — prvi zapis u sekciji nema šta da ponudi |
+| **čitanje puklo** | prazan | **odbija**, uz `LogWarn` sa razlogom |
+
+#### P2-1 — auth test je bio placebo
+
+Test je zvao `AuthOtkazTest`, koji je **sam ponavljao** redosled iz `Login`-a —
+pa sabotaža nad pravim `Login`-om nije morala da ga obori. Tačno oblik protiv
+koga postoji pravilo o dvosmernom dokazu (`.claude/rules/testovi.md` §6).
+
+Sada je iz `Login`-a izdvojen **samo dijalog** (`PrikaziPrijavu`), jer je on
+jedini korak koji harness ne može da odigra. Test se vozi kroz **pravi `Login`**,
+a dva seam-a mogu samo da: (1) obore prijavu bez otvaranja forme, (2) postave
+sesiju — bez koje bi tvrdnja poredila prazno s praznim. Nijedan ne može da
+odobri pristup; u harnessu je AUTH isključen, pa postavljena sesija ne daje
+prava koja `MozeAdministraciju` ionako ne bi dala (anti-lockout).
+
+#### P2-2 — „ima li ekran branu" više se ne pogađa iz broja greške
+
+`ScrSopstvenaBrana` je `1004` čitao kao „ekran nema `Scr_Dozvoljen`". Ali `1004`
+je obična Excel greška koju i **postojeća** brana može da digne iznutra — pa je
+pukla brana bila nerazlučiva od nepostojeće, i propuštala.
+
+Sposobnost je sada **podatak u registru** (osmo polje, `SCR_BRANA`): ekran koji
+branu ne deklariše se ne pita uopšte; ekran koji je deklariše mora da odgovori,
+a **svaka** greška je „ne". Nijedan broj greške više ništa ne znači. Keš
+`mBrana` je otpao zajedno sa sniffing-om.
+
+Test 179 tvrdi da se polje i stvarnost slažu **u oba smera** — neupisana brana
+znači ekran koji se ne pita, upisana bez procedure znači ekran koji je trajno
+zabranjen.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **435** sabotaža); `--self-test` 102/102.
+- Nov test **183** `T_Sekcija_OdbijenPrelazakNePomeraSekciju`.
+- Test **182** proširen: posle prazne površine, operater sa pravima izlazi iz
+  nje sam; i vozi se kroz pravi `Login`.
+- Test **179** proširen: registar brane vs. moduli u oba smera; kvar pri čitanju
+  spiska odbija vrednost koja inače prolazi (mereno nad **validnom** vrednošću,
+  pa tvrdnja ne može biti prazna).
+- Četiri nove sabotaže: `sekcija-se-ne-vraca-posle-neuspeha`,
+  `prazna-povrsina-ostaje-i-sa-pravima`, `combo-kvar-izvora-prolazi`,
+  `registar-brane-se-razisao`.
+- **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
+  uslov za merge.
+
+### 26.31 Recenzija `4dd213a`: uklonjen auth bypass koji je uveo prošli krug (`v6-ui-205`)
+
+#### P0 — javni setter auth sesije je bio bypass, i uveo sam ga ja
+
+`v6-ui-204` je za test dodao `modAuth.AuthSesijaTest(usr, uloga, ime)`, koji
+direktno postavlja korisnika, ulogu, ime i `gLoggedIn = True`. Obrazložio sam ga
+sa „tvrdo gejtovan `IsTestMode()`".
+
+**`IsTestMode()` nije brana.** `modTestMode.SetTestMode` je `Public`, pa je bilo
+koji drugi workbook, add-in ili makro mogao:
+
+```vb
+SetTestMode True
+AuthSesijaTest "bilo_ko", ULOGA_ADMIN, "Admin"
+```
+
+i dobiti administratorsku sesiju **bez PIN-a, bez reda u `tblKorisnici` i bez
+ijednog audit traga**. Gejt koji se otvara javnim pozivom nije gejt.
+
+Oba seam-a su uklonjena i zamenjena **jednom regresionom procedurom** koja ne
+prima ništa i ne ostavlja ništa:
+
+`modAuth.AuthRegresijaOtkaz()` sama napravi privremeno stanje, provoza **pravi
+`Login`** (odbijen iznutra, bez forme), izmeri i **odjavi se pre izlaska** — i na
+uspešnom putu i kroz `EH`. Pozivalac dobija samo tekst nalaza. Nema javnog puta
+kojim se sesija postavlja, pa nema ni prozora u kome bi tuđi kod nasledio
+postavljeno stanje. Zatečenu sesiju procedura ne dira.
+
+Napadna površina se ovim **smanjila** u odnosu na `v6-ui-203`: nestao je i javni
+`AuthOdbijPrijavuTest` (koji je mogao samo da onemogući prijavu, ali je i to bio
+javan uticaj na auth tok).
+
+**Pravilo za dalje:** test seam sme da *sužava* (zatvori branu, obori prijavu,
+obori čitanje), nikad da *daje* — a „daje" uključuje i stanje sesije.
+`IsTestMode()` se ne sme računati kao bezbednosna granica.
+
+#### P1 — sekcija bez dostupnog cilja je i dalje lagala
+
+Rollback iz `v6-ui-204` je pokrivao samo `ActivateScreen = False`. Drugi izlaz —
+`EkranZaSekciju` vrati prazno, jer u ciljnoj sekciji nema ni jednog dostupnog
+ekrana — izlazio je **bez vraćanja**: zlatno dugme i sidebar u novoj sekciji, na
+sceni ekran iz stare.
+
+Vraćanje je izdvojeno u `VratiSekciju` i zove se sa **oba** izlaza. Taj je izlaz
+i bio zaboravljen zato što je vraćanje bilo prepisano u telu procedure.
+
+Test 183 je pokrivao samo prvi izlaz (kroz `OtkupUI_PrelazakTest`), pa bi
+sabotaža uklanjanja rollbacka mogla da preživi — recenzent je i to primetio.
+Sada se drugi izlaz vozi kroz **pravi prekidač** (`OtkupUI_SekcijaTest`), uz nov
+seam `modUiScreens.ScrSekcijuZabraniTest` koji može samo da **zabrani**.
+
+#### P1 — prazan combo izvor je i dalje puštao orphan FK
+
+Prošli krug je razdvojio *uhvaćenu grešku* od praznog spiska. Ali realan
+zajednički slučaj ne ide kroz grešku: `GetTableData` za nepostojeću ili praznu
+tabelu vraća `Empty` **bez greške**, `PrikazLista` to pretvara u `Array()`, i
+prazan niz je prolazio.
+
+`ComboVrednostPostoji` se zove **samo za nepraznu vrednost** (`Proveri`, grana
+`cmb`) — prazno polje je već prošlo granom obaveznosti i nikad ne stigne dovde.
+Zato prazan spisak znači **„nema čega da bude"**, ne „ne mogu da proverim", i
+sada odbija. Moje prošlo obrazloženje („prvi zapis u sekciji nema šta da
+ponudi") bilo je pogrešno.
+
+**Provereno je da nijedan šifarnik ne bootstrap-uje sebe kroz svoj combo** — sva
+12 combo polja:
+
+| Sekcija | Combo polja | Rizik od blokade |
+|---|---|---|
+| KOOPERANTI | `@stanice` | nema — stanica mora postojati pre kooperanta |
+| STANICE | `@dane` | nema — statička lista |
+| PARCELE | `@kooperanti`, `@kulture`, `@ggap` | nema — oba šifarnika se pune odvojeno |
+| ARTIKLI | `@tipartikla`, `@jm`, `@kulture` | nema — prve dve statičke |
+| **KULTURE** | samo `@tipambalaze` (opciono) | **nema** — `VrstaVoca`/`SortaVoca` su tekst, ne combo |
+| CENOVNIK | `@vrste`, `@sorte` (opciono), `@klase` | nema — cena za nepostojeću sortu **jeste** orphan FK |
+
+Ključan red je KULTURE: da je vrsta/sorta tamo bila combo nad `@kulture`,
+pooštravanje bi blokiralo unos prve kulture. Nije — pa je promena bezbedna.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **437** sabotaža); `--self-test` 102/102.
+- Test 182 više ne postavlja sesiju — meri ishod `AuthRegresijaOtkaz` i tvrdi da
+  posle nje **niko nije prijavljen**.
+- Test 183 dobio drugu polovinu: sekcija bez dostupnog ekrana, kroz pravi
+  prekidač; tvrdi i da je ekran na sceni iz sekcije koju zaglavlje prikazuje.
+- Test 179 dobio tvrdnju za prazan izvor bez greške (`MatComboPadTest` sada ima
+  dva režima: sa greškom i bez nje).
+- Tri nove sabotaže: `sekcija-bez-ekrana-ostaje-promenjena`,
+  `combo-prazan-izvor-prolazi`, plus retargetovana
+  `sekcija-se-ne-vraca-posle-neuspeha`.
+- **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
+  uslov za merge.
+
+### 26.32 Recenzija `afdc4d4`: exception putanja, placebo sabotaža, lepljivi seam-ovi (`v6-ui-206`)
+
+#### P1 — `EH` u `PostaviSekciju` nije vraćao sekciju
+
+Oba **planirana** odbijanja su vraćala sekciju, ali `EH` je samo logovao. Ako
+`EkranZaSekciju` ili `ActivateScreen` neočekivano pukne, zaglavlje i sidebar
+ostaju u novoj sekciji preko ekrana iz stare — ista laž, samo kroz put koji se
+ne planira.
+
+Vraćanje je dodato u `EH`, uz dva detalja koja nisu kozmetika:
+
+- vraća se **samo** ako je sekcija stigla da se promeni (`Len(staraSekcija) > 0
+  And staraSekcija <> mSekcija`) — pad pre te tačke nema šta da vrati;
+- greška se **prepiše i upiše u log PRE** vraćanja, jer vraćanje ide pod svojim
+  `On Error Resume Next`, a ta naredba resetuje `Err`. Prva verzija je imala
+  `LogErr` posle njega — i `vba_check` je to uhvatio kao `MRTAV_LOG`, tačno
+  provera koja za to postoji.
+
+#### P1 — sabotaža `sekcija-se-ne-vraca-posle-neuspeha` je bila placebo
+
+Prva polovina testa 183 je neuspeh izazivala kroz `OtkupUI_PrelazakTest`, koji
+zove `ActivateScreen` **direktno** — mimo `PostaviSekciju`. Uklanjanje rollbacka
+zato nije obaralo test. To je tačno ono protiv čega postoji pravilo o dvosmernom
+dokazu (`.claude/rules/testovi.md` §6), i propustio sam ga.
+
+Sada se neuspeh vozi kroz **pravi prekidač** (`OtkupUI_SekcijaTest`), a obara se
+kroz **gradnju zone** — jedini put kojim `ActivateScreen` vraća `False` za ekran
+koji *jeste* dostupan i *postoji* (nedostupan ekran `EkranZaSekciju` ne bi ni
+izabrao, pa bi se otišlo u drugu granu). Nov seam
+`modUiScreens.ScrGradnjuOboriTest` može samo da **obori** gradnju.
+
+Test je zato podeljen na **dve sveže forme**: zona ekrana se gradi lenjo i
+ostaje izgrađena, pa bi posle jednog uspešnog prelaska gradnja bila preskočena i
+seam ne bi imao šta da obori — tvrdnja bi merila uspeh, ne neuspeh. To je bila
+prva verzija ove popravke i uhvaćeno je pre commita.
+
+#### `EH` nema svoju sabotažu — svesno
+
+Da se taj put obori, trebalo bi **ubrizgati `Err.Raise` u živu proceduru** —
+seam koji ne sužava nego pravi pad, jedini svoje vrste u projektu. Prva verzija
+je imala sabotažu koja je delila tvrdnju sa postojećom, i **`vba_check` ju je
+odbio** („deli tvrdnju sa `sekcija-se-ne-vraca-posle-neuspeha` — test ih ne
+razlikuje"). Umesto lažne pokrivenosti, ograničenje je zapisano u kodu, iznad
+samog `EH`-a. Oba planirana odbijanja imaju svoje sabotaže i pokrivaju isto
+vraćanje.
+
+#### P2 — test seam-ovi su bili lepljivi
+
+`ScrSekcijuZabraniTest` i `MatComboPadTest` nisu bili vezani za test režim niti
+su imali garantovano čišćenje: test koji pukne pre svog `cleanup`-a ostavljao bi
+aplikaciju degradiranom do restarta. Ne bypass (svi mogu samo da zabrane), ali
+ne sme se osloniti na obećanje koje se ne može proveriti.
+
+**Dejstvo je sada vezano za test režim, ne za postavljanje** — potrošači pitaju
+`IsTestMode()` pri **svakom čitanju**:
+
+| Seam | Modul | Sme samo da |
+|---|---|---|
+| `ScrSekcijuZabraniTest` | `modUiScreens` | zabrani sekciju |
+| `ScrGradnjuOboriTest` | `modUiScreens` | obori gradnju |
+| `PanelBranaZatvoriTest` | `modUiPanel` | zatvori branu |
+| `MatBranaZatvoriTest` | `modMaticniUnos` | zatvori kapiju upisa |
+| `MatComboPadTest` | `modMaticniIzvor` | obori/isprazni spisak |
+
+Zaboravljen seam postaje **inertan** u trenutku kad `RunAllTests` vrati
+`SetTestMode prevMode`. Čišćenje je time garantovano strukturom, ne disciplinom.
+
+Ovo **nije** bezbednosni argument — `IsTestMode()` nije brana (v. §26.31). Ovi
+seam-ovi samo sužavaju, pa gejt služi sprečavanju nezgode, ne odbrani.
+
+#### P2 — zastareo komentar
+
+`modMaticniUnos.ComboVrednostPostoji`, `EH` blok, još je tvrdio da prazan spisak
+prolazi. Kod ga od `v6-ui-205` odbija; komentar je ispravljen i sada kaže šta
+`EH` zaista pokriva (greške dignute **u samoj proveri**).
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **437** sabotaža); `--self-test` 102/102.
+- Test 183 prepisan: tri slučaja, dve sveže forme, sekcijski prelazak koji
+  stvarno pada.
+- **Nije izvršeno u Excelu.** `RunAllTests`, stvarni crveno→zeleno sabotage run
+  i ručni `Debug → Compile` traže Windows + Excel.
+
+### 26.33 Recenzija `b7b8954`: pad u gradnji je trajno praznio ekran (`v6-ui-207`)
+
+#### P1 — „lažno izgrađena" zona
+
+Neuspešna gradnja je zonu samo **sakrivala**, a ostavljala je na formi:
+
+1. `NewZone` napravi `zScr_<ekran>`;
+2. `ScrBuild` padne;
+3. `z.Visible = False`, zona **ostaje**;
+4. sledeći pokušaj: `Set z = frm.Controls(nm)` je **nađe**;
+5. `If z Is Nothing Then` je `False` → `ScrBuild` se **više ne poziva**;
+6. `ActivateScreen` prijavi **uspešan** prelazak na prazan ekran.
+
+Jedan pad u gradnji je tako ekran pretvarao u **trajno prazan**, do restarta.
+
+Zona se sada **uklanja** (`UkloniZonu`), u obaveznom redosledu — **omotač pre
+kontrole** (`.claude/rules/forme-i-kontrole.md`). Omotač same zone se nađe po
+`SinkTag` (jednak imenu zone); omotači koje je nedovršena gradnja napravila za
+*svoju decu* ostaju u `Btns` i drže kontrole koje više nisu na formi. To je
+**curenje, ne pad** — kontrola izvan forme ne dobija ni jedan događaj — i put
+postoji samo za ekran čija gradnja *digne grešku*, što je već samo po sebi nalaz.
+Bolje curenje na putu greške nego ekran koji trajno ostane prazan.
+
+**Test je ovo maskirao**, i to je tačna primedba: posle simuliranog pada rušio je
+formu i za uspešan pokušaj pravio novu. Sada se **ponavlja nad istom formom** i
+meri se razlika koja jedina razdvaja ispravno od pokvarenog:
+
+| Merenje | Ispravno | Pokvareno |
+|---|---|---|
+| zona posle pada (`ZonaKontrolaTest`) | **-1** (zone nema) | `0` (postoji, prazna) |
+| zona posle ponovljene gradnje | **> 0** (ima kontrole) | `0` (gradnja preskočena) |
+
+Razlika `-1` vs `0` nije kozmetika: `0` je *postojeća prazna* zona — upravo
+stanje koje je kvar ostavljao. Ključ se pita **pre** pokušaja
+(`OtkupUI_EkranZaSekcijuTest`), da se ne pogađa o kojoj zoni se tvrdi.
+
+Dve sabotaže, sa **različitim** tvrdnjama: `zona-posle-pada-gradnje-ostaje`
+(vraća `Visible = False`) i `zona-posle-pada-nema-kontrole` (gasi samo
+`Controls.Remove`, pa gradnja ostane preskočena).
+
+#### P2 — seam-ovi su mogli da kontaminiraju druge testove
+
+Vezivanje dejstva za `IsTestMode()` (§26.32) štiti **pogon**, ali ne štiti
+**suite**: test koji pukne između `ScrGradnjuOboriTest True` i `False` ostavlja
+seam upaljen, `RunOne` nastavlja na sledeći test, i taj pada **bez svoje
+krivice** — ista klasa laži zbog koje `CleanupPosleTesta` uopšte postoji.
+
+Nov `ResetSeamova` gasi svih sedam deny-seam-ova na jednom mestu, i zove se:
+
+- iz `CleanupPosleTesta` — posle **svakog** pada;
+- na **početku** `RunAllTests`, odmah posle `SetTestMode True` — jer seam
+  zapamćen iz prethodnog run-a je bio inertan dok je režim bio isključen, a
+  aktivira se tačno tada. (Redosled je obavezan: seam-ovi odbijaju postavljanje
+  van test režima, pa čišćenje mora **posle** `SetTestMode True`.)
+
+Novi seam koji samo sužava od sada ide **tamo**, ne u pojedinačni test.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **439** sabotaža); `--self-test` 102/102.
+- **Nije izvršeno u Excelu.** `RunAllTests`, crveno→zeleno sabotage run i ručni
+  `Debug → Compile` traže Windows + Excel.
+
+### 26.34 Recenzija `4c4e026`: sabotaža koja pada na pogrešnoj tvrdnji (`v6-ui-208`)
+
+#### P1 — druga sabotaža nije mogla da dokaže to što je tvrdila
+
+`AssertEq` **diže grešku na prvom padu** (`Err.Raise ERR_ASSERT`), pa test
+prestaje tu. Sabotaža `zona-posle-pada-nema-kontrole` je uklanjala
+`frm.Controls.Remove nm` — posle prvog pada zona ostaje, pa prva pada tvrdnja
+*„zona koja se nije izgradila je UKLONJENA"*. Do tvrdnje koju je katalog
+očekivao (*„zona posle ponovljene gradnje STVARNO ima kontrole"*) se **nikad ne
+stiže**, i `dokaz.py` bi javio `PALA DRUGA TVRDNJA`.
+
+Tvrdnja iz prošlog kruga — „dve sabotaže sa različitim dokazima" — **nije bila
+tačna**. Sa tadašnjim kodom nije ni mogla biti: retry koji stvarno gradi je
+**posledica** uklanjanja zone, ne zaseban mehanizam, pa nijedna izmena koda ne
+obara samo njega.
+
+Rešenje nije bilo premapiranje nego **druga linija koja pada odvojeno** — i ona
+postoji, zahvaljujući sledećem nalazu:
+
+| Sabotaža | Šta gasi | Prva pada tvrdnja |
+|---|---|---|
+| `zona-posle-pada-gradnje-ostaje` | ceo `UkloniZonu` (vraća `Visible = False`) | zona je **UKLONJENA** |
+| `omotaci-posle-pada-gradnje-ostaju` | samo `Btns.Remove` petlju | **omotači** su uklonjeni sa zonom |
+
+Druga sada prolazi tvrdnju o zoni (zona *jeste* uklonjena) i pada na tvrdnji o
+omotačima. Dve različite linije, dva različita prva pada — determinističko.
+
+Tvrdnja `zonaPosleUspeha > 0` ostaje u testu, ali **bez svoje sabotaže**: ona je
+posledična provera koja test čini smislenim, a ne nezavisna činjenica.
+
+#### P2 — curenje omotača je zatvoreno, ne samo priznato
+
+Prošli krug je uklanjao samo omotač **same zone** (po `SinkTag`), pa bi omotači
+koje je nedovršena `Scr_Build` napravila za svoju decu ostajali u `Btns` i držali
+odvojeno stablo kontrola živim. Zapisao sam to kao prihvaćeno curenje.
+
+Predlog iz recenzije je bolji i jednako jeftin: **zapamti `Btns.Count` pre
+gradnje, na neuspeh ukloni ceo rep obrnutim redom.**
+
+```vb
+btnsPre = 0
+If Not Btns Is Nothing Then btnsPre = Btns.count   ' PRE NewZone/WireZone
+...
+For i = Btns.count To btnsPre + 1 Step -1
+    Btns.Remove i                                   ' obrnuto: Collection reindeksira
+Next i
+```
+
+Snimak ide **pre** `WireZone`, pa je i omotač same zone u repu — `SinkTag`
+pretraga je otpala. Curenja više nema, i sada je **merljivo**:
+`OtkupUI_BrojOmotacaTest` je jedini trag (na formi se ne vidi, u zoni se ne
+vidi), pa test tvrdi da je broj omotača posle pada **isti kao pre**.
+
+#### P2 — poslednji deny-seam je vezan za test režim
+
+`modScrMatKorisnici.Scr_MkorBranaZatvoriTest` je bio jedini bez `IsTestMode()`
+gejta — i na postavljanju i na čitanju. Sada prati isto pravilo kao ostalih šest:
+spoljni makro ga ne može trajno aktivirati, a zaboravljen postaje inertan čim
+suite vrati `SetTestMode prevMode`.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **439** sabotaža); `--self-test` 102/102.
+- Katalog je usput uhvatio tri zastarela sidra iz ovog istog kruga
+  (`zona-posle-pada-gradnje-ostaje`, `kapija-brana-fail-open` i tvrdnju nove
+  sabotaže) — provera radi.
+- **Nije izvršeno u Excelu.** Stvarni crveno→zeleno (`dokaz.py`), `RunAllTests`
+  i ručni `Debug → Compile` traže Windows + Excel. Redosled tvrdnji je ovde
+  proveren čitanjem, ne izvršavanjem.

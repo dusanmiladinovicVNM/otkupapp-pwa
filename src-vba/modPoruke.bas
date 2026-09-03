@@ -51,6 +51,30 @@ Public Sub UpsertPoruke(lo As ListObject)
         k = CStr(r.Range(1).Value)
         If k <> "" Then existing(k) = r.Index
     Next r
+    UpsertPoruke01 lo, existing
+    UpsertPoruke02 lo, existing
+    UpsertPoruke03 lo, existing
+    UpsertPoruke04 lo, existing
+    UpsertPoruke05 lo, existing
+    UpsertPoruke06 lo, existing
+    UpsertPoruke07 lo, existing
+    UpsertPoruke08 lo, existing
+    UpsertPoruke09 lo, existing
+    UpsertPoruke10 lo, existing
+    UpsertPoruke11 lo, existing
+    UpsertPoruke12 lo, existing
+    InvalidateCache
+End Sub
+
+' Katalog je podeljen na blokove zato sto VBA ima TVRDU granicu velicine
+' procedure (~64 KB prevedenog koda). Kad je katalog prerastao granicu, jedina
+' greska je bila "Procedure too large" pri Debug -> Compile -- ni jedan test ni
+' vba_check to nisu videli, jer se javlja tek pri prevodjenju.
+'
+' Podela je MEHANICKA, po granici naredbe: redosled poziva je nepromenjen, pa
+' je i sadrzaj kataloga nepromenjen. Nov blok se dodaje kad poslednji naraste --
+' ne dopisivati u nedogled u jedan.
+Private Sub UpsertPoruke01(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "APP_MSG_GRESKA_PRI_POKRETANJU", "Gre" & ChrW(353) & "ka pri pokretanju aplikacije. Pogledajte log."
     UpsertRow lo, existing, "AGRO_LBL_MAGACIN_IZDAVANJE_ROBE", "Magacin " & ChrW(8212) & " izdavanje robe i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "AGRO_LBL_IZLAZ_IZDAVANJE_ROBE", "Izlaz " & ChrW(8212) & " Izdavanje robe kooperantu"
@@ -203,6 +227,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "STM_ERR_GRESKA_PRI_UCITAVANJU_2", "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju stanica:"
     UpsertRow lo, existing, "AGRO_MSG_GRESKA_PRI_UNOSU", "Gre" & ChrW(353) & "ka pri unosu magacina, promene vra" & ChrW(263) & "ene:"
     UpsertRow lo, existing, "BANKA_LBL_PDF_AUSWAHLEN", "Izaberi PDF"
+End Sub
+
+Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN", "Razmena tokena nije uspela. Proveri Client ID/Secret."
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_OTK_NIJE", "Uvoz OTK nije potvr" & ChrW(273) & "en zbog fatal sync gre" & ChrW(353) & "ke."
     UpsertRow lo, existing, "SYNC_ERR_GRESKE", "Gre" & ChrW(353) & "ke:"
@@ -359,11 +386,278 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_NAV_PALETE", "Palete"
     UpsertRow lo, existing, "OTKUI_NAV_AGRO", "Agrohemija"
     UpsertRow lo, existing, "OTKUI_NAV_FAKT", "Fakturisanje"
+End Sub
+
+Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_UVOZ", "Uvoz izvoda"
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_NALOZI", "Platni nalozi"
     UpsertRow lo, existing, "OTKUI_NAV_MARZA", "Mar" & ChrW(382) & "a"
     UpsertRow lo, existing, "OTKUI_NAV_IZVESTAJI", "Izve" & ChrW(353) & "taji"
     UpsertRow lo, existing, "OTKUI_NAV_SLEDLJIVOST", "Sledljivost"
+
+    ' --- sekcija MATICNI (zlatno dugme u zaglavlju je pali i gasi) ---------
+    UpsertRow lo, existing, "OTKUI_NAVG_SIFARNICI", ChrW(352) & "IFARNICI"
+    UpsertRow lo, existing, "OTKUI_NAVG_SISTEM", "SISTEM"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_PARTNERI", "Partneri"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_ROBA", "Proizvodi i cene"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_PAKOVANJE", "Ambala" & ChrW(382) & "a i pakovanje"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_BTN_NAZAD_RAD", "Nazad na rad"
+    UpsertRow lo, existing, "OTKUI_SEK_NEMA_EKRANA", _
+        "Mati" & ChrW(269) & "ni podaci jo" & ChrW(353) & " nisu preba" & ChrW(269) & _
+        "eni na nove ekrane."
+
+    ' --- paneli maticne sekcije (stavke sidebara, samo admin) --------------
+    ' JEDAN kljuc sluzi i stavci sidebara i naslovu panela: dva kljuca za istu
+    ' stvar znace stavku koja se zove drugacije od ekrana koji otvara.
+    ' Do v6-ui-200 je ovde stajao i spisak alatki ekrana MAT_SISTEM
+    ' (OTKUI_SCRMS_*, OTKUI_HDMS_*, "Otvori alatku") -- taj ekran vise ne
+    ' postoji, pa su ti kljucevi obrisani zajedno sa njim.
+    UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA", "Pode" & ChrW(353) & "avanja"
+    UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Administracija"
+    UpsertRow lo, existing, "UIPAN_ASK_ODBACI", _
+        "Panel ima izmene koje nisu sa" & ChrW(269) & "uvane. Odbaciti ih?"
+    UpsertRow lo, existing, "OTKUI_MSG_ODJAVLJEN", _
+        "Prijava nije uspela. Niste prijavljeni -- prijavite se ponovo."
+    UpsertRow lo, existing, "OTKUI_SCR_NIJEDAN", _
+        "Ovaj nalog nema pravo ni na jedan ekran. Javi se administratoru."
+
+    ' --- maticni ekrani: prekidac sekcija, cipovi, zona, kolone (M1) --------
+    UpsertRow lo, existing, "OTKUI_SCRMP_SUB", _
+        "Kooperanti, stanice, kupci, voza" & ChrW(269) & "i i parcele"
+    UpsertRow lo, existing, "OTKUI_SCRMR_SUB", "Artikli, kulture, cenovnik i vrste gotovog proizvoda"
+    UpsertRow lo, existing, "OTKUI_SCRMK_SUB", "Ambala" & ChrW(382) & "a, palete, kutije i kese"
+
+    UpsertRow lo, existing, "OTKUI_SEGM_KOOP", "Kooperanti"
+    UpsertRow lo, existing, "OTKUI_SEGM_STAN", "Stanice"
+    UpsertRow lo, existing, "OTKUI_SEGM_KUPCI", "Kupci"
+    UpsertRow lo, existing, "OTKUI_SEGM_VOZ", "Voza" & ChrW(269) & "i"
+    UpsertRow lo, existing, "OTKUI_SEGM_PARC", "Parcele"
+    UpsertRow lo, existing, "OTKUI_SEGM_ART", "Artikli"
+    UpsertRow lo, existing, "OTKUI_SEGM_KULT", "Kulture"
+    UpsertRow lo, existing, "OTKUI_SEGM_CEN", "Cenovnik"
+    UpsertRow lo, existing, "OTKUI_SEGM_VGP", "Vrsta got. proizvoda"
+    UpsertRow lo, existing, "OTKUI_SEGM_AMB", "Ambala" & ChrW(382) & "a"
+    UpsertRow lo, existing, "OTKUI_SEGM_PAL", "Palete"
+    UpsertRow lo, existing, "OTKUI_SEGM_KUT", "Kutije"
+    UpsertRow lo, existing, "OTKUI_SEGM_KES", "Kese"
+    UpsertRow lo, existing, "OTKUI_SEGM_KOR", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_SEGM_PRAVA", "Prava"
+
+    ' --- M6: paneli u radnoj povrsini -----------------------------------
+    UpsertRow lo, existing, "UIPAN_ERR_NEPOZNAT", "Nepoznat panel:"
+    UpsertRow lo, existing, "UIPAN_ERR_NEMA_MESTA", _
+        "Radna povr" & ChrW(353) & "ina nije spremna -- otvori glavni ekran pa poku" & ChrW(353) & "aj ponovo."
+    UpsertRow lo, existing, "UIPAN_ERR_GRADNJA", "Panel se nije otvorio:"
+    UpsertRow lo, existing, "OTKUI_BTN_PANEL_NAZAD", "Nazad na listu"
+
+    UpsertRow lo, existing, "OTKUI_GTM_KOOP", "Kooperanti"
+    UpsertRow lo, existing, "OTKUI_GTM_STAN", "Otkupne stanice"
+    UpsertRow lo, existing, "OTKUI_GTM_KUPCI", "Kupci"
+    UpsertRow lo, existing, "OTKUI_GTM_VOZ", "Voza" & ChrW(269) & "i"
+    UpsertRow lo, existing, "OTKUI_GTM_PARC", "Katastarske parcele"
+    UpsertRow lo, existing, "OTKUI_GTM_ART", "Artikli"
+    UpsertRow lo, existing, "OTKUI_GTM_KULT", "Kulture"
+    UpsertRow lo, existing, "OTKUI_GTM_CEN", "Cenovnik"
+    UpsertRow lo, existing, "OTKUI_GTM_VGP", "Vrste gotovog proizvoda"
+    UpsertRow lo, existing, "OTKUI_GTM_AMB", "Tipovi ambala" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_GTM_PAL", "Tipovi paleta"
+    UpsertRow lo, existing, "OTKUI_GTM_KUT", "Kutije"
+    UpsertRow lo, existing, "OTKUI_GTM_KES", "Kese"
+
+    UpsertRow lo, existing, "OTKUI_CIPM_AKTIVNI", "Aktivni"
+    UpsertRow lo, existing, "OTKUI_CIPM_NEAKTIVNI", "Neaktivni"
+    UpsertRow lo, existing, "OTKUI_MAT_AKTIVAN", "Aktivan"
+    UpsertRow lo, existing, "OTKUI_MAT_NEAKTIVAN", "Neaktivan"
+    UpsertRow lo, existing, "OTKUI_MAT_ZAPISA", "zapisa"
+    UpsertRow lo, existing, "OTKUI_MAT_AKTIVNIH", "AKTIVNIH"
+    UpsertRow lo, existing, "OTKUI_MAT_NEAKTIVNIH", "NEAKTIVNIH"
+    UpsertRow lo, existing, "OTKUI_MAT_UNOS_LEGACY", _
+        "Izaberi red pa Izmeni, ili Nova stavka za nov zapis."
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_NOVI", "+ Nova stavka"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_SACUVAJ", "Sa" & ChrW(269) & "uvaj"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_ODUSTANI", "Odustani"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_IZMENI", "Izmeni"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_STATUS", "Deaktiviraj / Aktiviraj"
+    UpsertRow lo, existing, "OTKUI_MAT_NOV_ZAPIS", "Nov zapis"
+    UpsertRow lo, existing, "OTKUI_MAT_IZMENA", "Izmena:"
+    UpsertRow lo, existing, "OTKUI_MAT_STATUS_ASK", _
+        "Promeniti status ovog zapisa? Vidi se u svim izve" & ChrW(353) & "tajima i listama."
+
+    ' zaglavlja kolona maticnih lista
+    UpsertRow lo, existing, "OTKUI_HDM_ID", "ID"
+    UpsertRow lo, existing, "OTKUI_HDM_NAZIV", "Naziv"
+    UpsertRow lo, existing, "OTKUI_HDM_IME", "Ime"
+    UpsertRow lo, existing, "OTKUI_HDM_PREZIME", "Prezime"
+    UpsertRow lo, existing, "OTKUI_HDM_IME_PREZ", "Ime i prezime"
+    UpsertRow lo, existing, "OTKUI_HDM_TELEFON", "Telefon"
+    UpsertRow lo, existing, "OTKUI_HDM_STANICA", "Stanica"
+    UpsertRow lo, existing, "OTKUI_HDM_KONTAKT", "Kontakt"
+    UpsertRow lo, existing, "OTKUI_HDM_MESTO", "Mesto"
+    UpsertRow lo, existing, "OTKUI_HDM_ADRESA", "Adresa"
+    UpsertRow lo, existing, "OTKUI_HDM_BPG", "BPG"
+    UpsertRow lo, existing, "OTKUI_HDM_RACUN", "Teku" & ChrW(263) & "i ra" & ChrW(269) & "un"
+    UpsertRow lo, existing, "OTKUI_HDM_JMBG", "JMBG"
+    UpsertRow lo, existing, "OTKUI_HDM_HLADNJACA", "Hladnja" & ChrW(269) & "a"
+    UpsertRow lo, existing, "OTKUI_HDM_DRZAVA", "Dr" & ChrW(382) & "ava"
+    UpsertRow lo, existing, "OTKUI_HDM_PIB", "PIB"
+    UpsertRow lo, existing, "OTKUI_HDM_MB", "Mati" & ChrW(269) & "ni broj"
+    UpsertRow lo, existing, "OTKUI_HDM_EMAIL", "E-mail"
+    UpsertRow lo, existing, "OTKUI_HDM_STATUS", "Status"
+    UpsertRow lo, existing, "OTKUI_HDM_KOOPERANT", "Kooperant"
+    UpsertRow lo, existing, "OTKUI_HDM_KATBROJ", "Kat. broj"
+    UpsertRow lo, existing, "OTKUI_HDM_KATOPSTINA", "Kat. op" & ChrW(353) & "tina"
+    UpsertRow lo, existing, "OTKUI_HDM_KULTURA", "Kultura"
+    UpsertRow lo, existing, "OTKUI_HDM_POVRSINA", "Povr" & ChrW(353) & "ina (ha)"
+    UpsertRow lo, existing, "OTKUI_HDM_GGAP", "GGAP"
+    UpsertRow lo, existing, "OTKUI_HDM_GEO", "Geo"
+    UpsertRow lo, existing, "OTKUI_HDM_RIZIK", "Rizik"
+    UpsertRow lo, existing, "OTKUI_HDM_NAPOMENA", "Napomena"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP", "Tip"
+    UpsertRow lo, existing, "OTKUI_HDM_JM", "JM"
+    UpsertRow lo, existing, "OTKUI_HDM_CENA_JED", "Cena po jed."
+    UpsertRow lo, existing, "OTKUI_HDM_DOZA", "Doza po ha"
+    UpsertRow lo, existing, "OTKUI_HDM_PAKOVANJE", "Pakovanje"
+    UpsertRow lo, existing, "OTKUI_HDM_VRSTA", "Vrsta vo" & ChrW(263) & "a"
+    UpsertRow lo, existing, "OTKUI_HDM_SORTA", "Sorta vo" & ChrW(263) & "a"
+    UpsertRow lo, existing, "OTKUI_HDM_GAJBICA_PAL", "Gajbica/paleti"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_AMB", "Tip ambala" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_HDM_PRAG_UPOZ", "Prag upoz."
+    UpsertRow lo, existing, "OTKUI_HDM_PRAG_BLOK", "Prag blok."
+    UpsertRow lo, existing, "OTKUI_HDM_DATUM", "Datum"
+    UpsertRow lo, existing, "OTKUI_HDM_KLASA", "Klasa"
+    UpsertRow lo, existing, "OTKUI_HDM_CENA", "Cena"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_GP", "Tip gotovog proizvoda"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_PAL", "Tip palete"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_KUT", "Tip kutije"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_KES", "Tip kese"
+    UpsertRow lo, existing, "OTKUI_HDM_TEZINA", "Te" & ChrW(382) & "ina (kg)"
+    UpsertRow lo, existing, "OTKUI_HDM_TEZINA_GAJ", "Te" & ChrW(382) & "ina gajbice (kg)"
+
+    ' --- pisac maticnih podataka (modMaticniUnos, M2) ---------------------
+    UpsertRow lo, existing, "MATU_ERR_NEPOZNATA_SEKCIJA", "Nepoznata sekcija mati" & ChrW(269) & "nih podataka:"
+    UpsertRow lo, existing, "MATU_ERR_OBAVEZNO", "polje je obavezno."
+    UpsertRow lo, existing, "MATU_ERR_BROJ", "unesite broj."
+    UpsertRow lo, existing, "MATU_ERR_NEGATIVNO", "broj ne sme biti negativan."
+    UpsertRow lo, existing, "MATU_ERR_POZITIVNO", "broj mora biti ve" & ChrW(263) & "i od nule."
+    UpsertRow lo, existing, "MATU_ERR_PRAG_BLOK", _
+        "prag blokade mora biti ve" & ChrW(263) & "i ili jednak pragu upozorenja."
+    UpsertRow lo, existing, "MATU_ERR_VEC_POSTOJI", "Zapis sa tim nazivom ve" & ChrW(263) & " postoji:"
+    UpsertRow lo, existing, "MATU_ERR_NEMA_REDA", "Izaberite red iz liste."
+    UpsertRow lo, existing, "MATU_ERR_NEMA_STATUSA", _
+        "Ova sekcija nema kolonu statusa, pa se ne mo" & ChrW(382) & "e deaktivirati."
+    UpsertRow lo, existing, "MATU_ERR_CENOVNIK_APPEND", _
+        "Cenovnik se ne menja " & ChrW(8212) & " nova cena se DODAJE kao nov va" & ChrW(382) & "e" & ChrW(263) & "i red."
+    UpsertRow lo, existing, "MATU_ERR_CENA_NIJE_UPISANA", "Cena nije upisana."
+    UpsertRow lo, existing, "MATU_ERR_UPIS", "Upis nije uspeo:"
+    UpsertRow lo, existing, "MATU_OK_DODATO", "Dodato:"
+    UpsertRow lo, existing, "MATU_OK_IZMENJENO", "Izmenjeno."
+    UpsertRow lo, existing, "MATU_OK_STATUS", "Status promenjen u:"
+    UpsertRow lo, existing, "MATU_ERR_VAN_LISTE", _
+        "izaberite vrednost iz ponu" & ChrW(273) & "ene liste."
+    UpsertRow lo, existing, "MATU_ERR_PK_ZAKLJUCAN", _
+        "Naziv je klju" & ChrW(269) & " ovog " & ChrW(353) & "ifarnika i ne menja se -- " & _
+        "dodajte nov zapis, pa deaktivirajte stari."
+    UpsertRow lo, existing, "MATU_ERR_BEZ_PRAVA", _
+        "Nemate pravo izmene mati" & ChrW(269) & "nih podataka."
+    UpsertRow lo, existing, "MATU_ERR_TUDJI_EDITOR", _
+        "Unos je bio otvoren na drugom ekranu i zato je zatvoren -- nije upisan."
+    UpsertRow lo, existing, "MATU_ASK_ODBACI_UNOS", _
+        "Otvoren unos nije sa" & ChrW(269) & "uvan. Odbaciti ga i pre" & ChrW(263) & "i na drugu listu?"
+
+    UpsertRow lo, existing, "OTKUI_MP_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_MP_KONTAKT_IME", "Kontakt ime"
+    UpsertRow lo, existing, "OTKUI_MP_KONTAKT_PREZ", "Kontakt prezime"
+    UpsertRow lo, existing, "OTKUI_MP_ULICA", "Ulica"
+    UpsertRow lo, existing, "OTKUI_MP_POSTA", "Po" & ChrW(353) & "tanski broj"
+
+    ' --- GEO radnje nad parcelom (modMaticniGeo, M3) ----------------------
+    UpsertRow lo, existing, "MATG_ERR_NEMA_PARCELE", "Izaberite parcelu iz liste."
+    UpsertRow lo, existing, "MATG_ERR_NEMA_KATASTRA", _
+        "Parcela nema katastarski broj i op" & ChrW(353) & "tinu, pa se pretraga ne mo" & ChrW(382) & "e sastaviti."
+    UpsertRow lo, existing, "MATG_ERR_NEMA_TACKE", _
+        "Parcela nema upotrebljive Lat/Lng koordinate."
+    UpsertRow lo, existing, "MATG_ERR_N", "N koordinata nije broj."
+End Sub
+
+Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
+    UpsertRow lo, existing, "MATG_ERR_E", "E koordinata nije broj."
+    UpsertRow lo, existing, "MATG_ERR_POZITIVNE", "Koordinate moraju biti pozitivne."
+    UpsertRow lo, existing, "MATG_ERR_RADNJA", "Geo radnja nije uspela:"
+    UpsertRow lo, existing, "MATG_OPIS_NEMA_IZBORA", "Nema izabrane parcele."
+    UpsertRow lo, existing, "MATG_OPIS_BEZ_TACKE", "bez geo ta" & ChrW(269) & "ke"
+    UpsertRow lo, existing, "MATG_OPIS_POLIGON", "ima poligon"
+    UpsertRow lo, existing, "MATG_OK_SACUVANO", "Geo podaci su sa" & ChrW(269) & "uvani."
+    UpsertRow lo, existing, "MATG_OK_OBRISANO", "Geo podaci su obrisani."
+    UpsertRow lo, existing, "MATG_OK_PORTAL", "GeoSrbija otvorena; pretraga je u klipbordu."
+    UpsertRow lo, existing, "MATG_OK_NALEPLJENO", "Koordinate prepoznate iz klipborda."
+    UpsertRow lo, existing, "MATG_ERR_NALEPLJENO", _
+        "U klipbordu nema dve prepoznatljive koordinate."
+    UpsertRow lo, existing, "MATG_ASK_OBRISI", _
+        "Obrisati geo podatke ove parcele? Ta" & ChrW(269) & "ka i poligon se gube."
+
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_GEO", "Geo"
+    UpsertRow lo, existing, "OTKUI_MATG_CAP", "GEO PARCELE"
+    UpsertRow lo, existing, "OTKUI_MATG_N", "N koordinata (UTM34)"
+    UpsertRow lo, existing, "OTKUI_MATG_E", "E koordinata (UTM34)"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_SACUVAJ", "Sa" & ChrW(269) & "uvaj geo"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_NALEPI", "Nalepi koordinate"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_PORTAL", "GeoSrbija"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_MAPE", "Google Maps"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_POLIGON", "Poligon"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_OBRISI", "Obri" & ChrW(353) & "i geo"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_ZATVORI", "Zatvori"
+
+    ' --- M4: korisnici i prava ------------------------------------------
+    ' Zaglavlja kolona i polja editora korisnika.
+    UpsertRow lo, existing, "OTKUI_HDK_USERNAME", "Korisni" & ChrW(269) & "ko ime"
+    UpsertRow lo, existing, "OTKUI_HDK_IME", "Ime i prezime"
+    UpsertRow lo, existing, "OTKUI_HDK_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_HDK_ULOGA", "Uloga"
+    UpsertRow lo, existing, "OTKUI_HDK_AKTIVAN", "Aktivan"
+    UpsertRow lo, existing, "OTKUI_HDK_PRAVA", "Prava"
+    UpsertRow lo, existing, "OTKUI_HDK_OBLAST", "Oblast"
+    UpsertRow lo, existing, "OTKUI_HDK_PRAVO", "Pravo"
+    UpsertRow lo, existing, "OTKUI_HDK_ODAKLE", "Odakle"
+    UpsertRow lo, existing, "OTKUI_KOR_IMA", "ima pristup"
+    UpsertRow lo, existing, "OTKUI_KOR_NEMA", "nema pristup"
+    UpsertRow lo, existing, "OTKUI_KOR_JER_ADMIN", "iz uloge Admin"
+    UpsertRow lo, existing, "OTKUI_KOR_POJEDINACNO", "pojedina" & ChrW(269) & "no"
+    UpsertRow lo, existing, "OTKUI_KOR_SVE_ADMIN", "SVE (admin)"
+    UpsertRow lo, existing, "OTKUI_GTM_KOR", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_GTM_PRAVA", "Prava pristupa"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_SCRMK_SUB", _
+        "Nalozi, uloge i prava pristupa po oblasti."
+    UpsertRow lo, existing, "OTKUI_BTN_KOR_PRAVO", "Uklju" & ChrW(269) & "i / isklju" & ChrW(269) & "i"
+    UpsertRow lo, existing, "OTKUI_KOR_BEZ_IZBORA", _
+        "Izaberi korisnika u listi Korisnici da bi se videla njegova prava."
+    UpsertRow lo, existing, "OTKUI_KOR_PRAVA_ZA", "Prava:"
+
+    ' Nazivi oblasti. Kljuc = OTKUI_OBL_ + naziv kolone prava, velikim slovima
+    ' (v. modMaticniKorisnici.KorOblastNaziv). Nova oblast u modAuth.OblastiList
+    ' trazi tacno jedan red ovde.
+    UpsertRow lo, existing, "OTKUI_OBL_OTKUP", "Otkup"
+    UpsertRow lo, existing, "OTKUI_OBL_DOKUMENTA", "Dokumenta"
+    UpsertRow lo, existing, "OTKUI_OBL_AGROHEMIJA", "Agrohemija"
+    UpsertRow lo, existing, "OTKUI_OBL_IZVESTAJI", "Izve" & ChrW(353) & "taji"
+    UpsertRow lo, existing, "OTKUI_OBL_FAKTURISANJE", "Fakturisanje"
+    UpsertRow lo, existing, "OTKUI_OBL_BANKA", "Banka"
+    UpsertRow lo, existing, "OTKUI_OBL_MARZA", "Mar" & ChrW(382) & "a"
+    UpsertRow lo, existing, "OTKUI_OBL_SLEDLJIVOST", "Sledljivost"
+    UpsertRow lo, existing, "OTKUI_OBL_MATICNIPODACI", "Mati" & ChrW(269) & "ni podaci"
+    UpsertRow lo, existing, "OTKUI_OBL_PALETE", "Palete"
+    UpsertRow lo, existing, "OTKUI_OBL_OTVORIEXCEL", "Otvori Excel"
+    UpsertRow lo, existing, "OTKUI_OBL_SYNCPWA", "Sync PWA"
+
+    UpsertRow lo, existing, "MATK_ERR_USERNAME", "Korisni" & ChrW(269) & "ko ime je obavezno."
+    UpsertRow lo, existing, "MATK_ERR_POSTOJI", "Korisnik sa tim imenom ve" & ChrW(263) & " postoji:"
+    UpsertRow lo, existing, "MATK_ERR_PIN", "PIN je obavezan za novog korisnika."
+    UpsertRow lo, existing, "MATK_ERR_ADMIN_SVE", _
+        "Admin ima sve oblasti po ulozi -- pojedina" & ChrW(269) & "no pravo se ne menja."
+    UpsertRow lo, existing, "MATK_ERR_NEMA_OBLASTI", _
+        "Tabela korisnika nema kolonu za oblast:"
+
     UpsertRow lo, existing, "OTKUI_FOOT_SEZONA", "Sezona 2026"
 
     UpsertRow lo, existing, "OTKUI_KPI_DANAS", "DANAS OTKUPLJENO"
@@ -473,6 +767,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_CTXL_VOZAC", "Voza" & ChrW(269)
     UpsertRow lo, existing, "OTKUI_CTXL_PARTNER", "Partner"
     UpsertRow lo, existing, "OTKUI_FLDPART_OTKUP", "Kooperant"
+End Sub
+
+Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLDPART_OTPREMNICA", "Kupac"
     UpsertRow lo, existing, "OTKUI_FLDPART_ZBIRNA", "Kupac"
     UpsertRow lo, existing, "OTKUI_FLDPART_PRIJEMNICA", "Kupac"
@@ -636,6 +933,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "DOKUNOS_ERR_KUPAC", ChrW(10007) & " Izaberi kupca"
     UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_ZBIRNE", ChrW(10007) & " Unesi broj zbirne"
     UpsertRow lo, existing, "DOKUNOS_ERR_IZVOR_KL2", ChrW(10007) & " Izvor (otpremnice) ima Klasu II " & ChrW(8212) & " uklju" & ChrW(269) & "i " & ChrW(8222) & "Dve klase" & ChrW(8220) & " i unesi Kl.II, ina" & ChrW(269) & "e bi bila izgubljena u zbirnoj."
+End Sub
+
+Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_1", ChrW(10007) & " Zbirna"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_2", "ne postoji u sistemu " & ChrW(8212) & " prvo unesi zbirnu otpremnicu."
     UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
@@ -825,6 +1125,9 @@ Public Sub UpsertPoruke(lo As ListObject)
               " storniraj stari pa unesi ispravan; veze i prera" & ChrW(269) & "un idu automatski" & vbCrLf & vbCrLf & _
               "NE = ne" & ChrW(353) & "to drugo (bira se u slede" & ChrW(263) & "em koraku)" & vbCrLf & vbCrLf & _
               "OTKAZI = odustani, ni" & ChrW(353) & "ta se ne menja"
+End Sub
+
+Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ASK_MOD_2", ChrW(352) & "ta onda?" & vbCrLf & vbCrLf & _
               "DA = DUPLIKAT: dokument nikad nije trebalo da postoji " & ChrW(8212) & _
               " skini posledice, nema zamene" & vbCrLf & vbCrLf & _
@@ -1023,6 +1326,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MSG_PAL_STORNIRANA", ChrW(10003) & " Stornirana paleta"
     UpsertRow lo, existing, "OTKUI_ERR_PAL_PRERADJENA", ChrW(10007) & " Paleta je prera" & ChrW(273) & "ena " & ChrW(8212) & " prvo storniraj preradu, pa se vra" & ChrW(263) & "a u lager"
     UpsertRow lo, existing, "OTKUI_MSG_PAL_NEPOTPUNE", ChrW(10003) & " Nepotpunih paleta poslato na izlaz:"
+End Sub
+
+Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_PRE_STORNO", "Stornirati preradu br."
     UpsertRow lo, existing, "OTKUI_ASK_PRE_STORNO2", "Palete gotovih proizvoda se vra" & ChrW(263) & "aju u lager."
     UpsertRow lo, existing, "OTKUI_MSG_PRE_STORNIRANA", ChrW(10003) & " Stornirana prerada"
@@ -1179,6 +1485,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDF_SEF_ID", "SEF ID"
     UpsertRow lo, existing, "OTKUI_HDF_SEF_POSLATO", "POSLATO"
     UpsertRow lo, existing, "OTKUI_HDF_SEF_GRESKA", "GRE" & ChrW(352) & "KA"
+End Sub
+
+Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLD_FK_KUPAC", "Kupac"
     UpsertRow lo, existing, "OTKUI_BTN_FK_IZRADI", "Izradi fakturu"
     UpsertRow lo, existing, "OTKUI_BTN_FK_OCISTI", "Isprazni korpu"
@@ -1336,6 +1645,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDN_AVANS", "AVANS"
     UpsertRow lo, existing, "OTKUI_FLD_BN_RACUN", "Sa ra" & ChrW(269) & "una"
     UpsertRow lo, existing, "OTKUI_BTN_BN_UNALOG", "U naloge"
+End Sub
+
+Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_BN_IZNALOG", "Izbaci"
     UpsertRow lo, existing, "OTKUI_BTN_BN_AVANS", "Primeni avans"
     UpsertRow lo, existing, "OTKUI_BTN_BN_CSV", "Generi" & ChrW(353) & "i naloge"
@@ -1488,6 +1800,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDI_DOKID", "DOK ID"
     UpsertRow lo, existing, "OTKUI_HDI_KES", "KE" & ChrW(352) & " OTKUPAC"
     UpsertRow lo, existing, "OTKUI_HDI_VIRFIRMA", "VIRMAN FIRMA"
+End Sub
+
+Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDI_VIRAVANS", "VIRMAN AVANS"
     UpsertRow lo, existing, "OTKUI_HDI_UKUPNO", "UKUPNO"
     UpsertRow lo, existing, "OTKUI_HDI_ENTITET", "ENTITET"
@@ -1675,6 +1990,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' svog polja (100pt) pa se sekla/preklapala (smoke 5d).
     UpsertRow lo, existing, "OTKUI_FLD_UT_PO", "PO broj"
     UpsertRow lo, existing, "OTKUI_FLD_UT_NAPOMENA", "Napomena"
+End Sub
+
+Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
     UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
@@ -1683,8 +2001,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_SL_AUTO_GRESKA", ChrW(10007) & " Automatsko povezivanje prekinuto gre" & ChrW(353) & "kom " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano (vidi ErrorLog)"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
-    InvalidateCache
 End Sub
+
 
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)

@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-175"
+Public Const UIKIT_BUILD As String = "v6-ui-200"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -489,6 +489,105 @@ Public Function DisplayFont() As String
     On Error Resume Next
     DisplayFont = GetLocalConfigValue("UI_DISPLAY_FONT", F_DISPLAY_FB)
     If Len(DisplayFont) = 0 Then DisplayFont = F_DISPLAY_FB
+End Function
+
+' ============================================================
+' STIL PANELA U RADNOJ POVRSINI (v6-ui-198)
+'
+' Paneli su do sada nosili legacy izgled (siva podloga, sistemski font, gusti
+' redovi) zato sto je crtani legacy Style* helperima. Od migracije koriste ISTU
+' paletu i tipografiju kao ostatak nove ljuske -- modUiKit konstante -- pa se ne
+' vidi da su "stariji ekrani".
+'
+' Stoje OVDE, a ne u modulu panela: dva panela sa svojom kopijom istog
+' pravila su dva mesta koja se prvom doradom razidju.
+'
+' Menja se SAMO prezentacija. Registar polja (ConfigEditorFields, 97 redova),
+' citanje, upis (SaveConfigEditor) i ozicavanje (clsConfigBtn) ostaju netaknuti:
+' kontrole su i dalje CommandButton/TextBox/ComboBox, jer WithEvents omotac hvata
+' bas njih. Zamena tipa kontrole bi pokidala svaki klik u panelu.
+' ============================================================
+Public Sub PanelStilNaslov(ByVal l As MSForms.label)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_FOREST
+    l.Font.name = F_UI
+    l.Font.Size = TS_H1
+    l.Font.Bold = True
+End Sub
+
+Public Sub PanelStilNapomena(ByVal l As MSForms.label)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_MUTED
+    l.Font.name = F_UI
+    l.Font.Size = TS_META
+    l.Font.Bold = False
+End Sub
+
+' Natpis iznad polja -- verzalom i sitno, isto kao NewFieldG u ljusci.
+Public Sub PanelStilNatpis(ByVal l As MSForms.label)
+    l.caption = UCase$(l.caption)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_MUTED
+    l.Font.name = F_UI
+    l.Font.Size = TS_LABEL
+    l.Font.Bold = True
+End Sub
+
+Public Sub PanelStilUnos(ByVal t As MSForms.Control)
+    ' REDOSLED je bitan: u MSForms SpecialEffect i BorderStyle se iskljucuju --
+    ' postavljanje SpecialEffect-a POSLE BorderStyle-a gasi ivicu. Zato prvo
+    ' Flat, pa tek onda ivica i njena boja.
+    t.SpecialEffect = fmSpecialEffectFlat
+    t.BorderStyle = fmBorderStyleSingle
+    t.BorderColor = C_INPUT_BORDER
+    t.BackColor = C_WHITE
+    t.ForeColor = C_FOREST
+    t.Font.name = F_UI
+    t.Font.Size = TS_BODY
+End Sub
+
+' Dugme u paleti ljuske. Vrste su iste kao modUiKit.BtnV, da se dva mesta ne
+' razidju u tome sta "primarno" znaci.
+Public Sub PanelStilDugme(ByVal b As MSForms.CommandButton, ByVal vrsta As String)
+    Select Case vrsta
+        Case "primary": b.BackColor = C_GREEN: b.ForeColor = C_WHITE: b.Font.Bold = True
+        Case "soft":    b.BackColor = C_SOFT_BG: b.ForeColor = C_GREEN: b.Font.Bold = True
+        Case "danger":  b.BackColor = C_RUST: b.ForeColor = C_WHITE: b.Font.Bold = True
+        Case Else:      b.BackColor = C_WHITE: b.ForeColor = C_FOREST: b.Font.Bold = False
+    End Select
+    b.Font.name = F_UI
+    b.Font.Size = TS_META
+End Sub
+
+' Segment prekidaca grupa -- isti jezik kao prekidac lista na ekranima:
+' izabran je pun (forest/cream), ostali su beli sa ivicom.
+'
+' Zamenio je pescanu traku sa strelicom: sklapajuce grupe su bile OBRAZAC STARE
+' forme. Nova ljuska svuda pokazuje JEDNU listu i menja je prekidacem, pa i
+' podesavanja sada rade tako.
+Public Sub PanelStilSegment(ByVal b As MSForms.CommandButton, ByVal cap As String, _
+                            ByVal izabran As Boolean)
+    b.caption = cap
+    If izabran Then
+        b.BackColor = C_FOREST
+        b.ForeColor = C_CREAM
+    Else
+        b.BackColor = C_WHITE
+        b.ForeColor = C_MUTED
+    End If
+    b.Font.name = F_UI
+    b.Font.Size = TS_META
+    b.Font.Bold = izabran
+End Sub
+
+' Sirina segmenta po duzini natpisa. Racuna se, ne pogadja: grupe se zovu od
+' "SEF" do "Otkup / dokumenta", pa fiksna sirina ili secka ili rasipa.
+Public Function PanelSirinaSegmenta(ByVal cap As String) As Single
+    PanelSirinaSegmenta = 22 + Len(cap) * 5.4
+    If PanelSirinaSegmenta < 64 Then PanelSirinaSegmenta = 64
 End Function
 
 Public Function NewZone(parent As Object, nm As String, X As Single, Y As Single, _

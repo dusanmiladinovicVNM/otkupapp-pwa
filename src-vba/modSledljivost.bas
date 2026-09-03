@@ -616,17 +616,22 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     colOtkParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, _
                                        "modSledljivost.TraceByZbirna")
 
-    ' Lookup table guards -- ne menjaju logiku, samo fail-fast za schema drift
+    ' Lookup table guards -- ne menjaju logiku, samo fail-fast za schema drift.
+    ' Indeksi se PAMTE: do v6-ui-202 su iste kolone posle ovoga trazene jos
+    ' jednom po redu, kroz LookupValue.
+    Dim cKoopIme As Long, cKoopPrez As Long, cKoopBpg As Long
+    Dim cParKat As Long, cParGgap As Long, cParKult As Long, cParPov As Long
+
     RequireColumnIndex TBL_KOOPERANTI, "KooperantID", "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_KOOPERANTI, "Ime", "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_KOOPERANTI, "Prezime", "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_KOOPERANTI, COL_KOOP_BPG, "modSledljivost.TraceByZbirna"
+    cKoopIme = RequireColumnIndex(TBL_KOOPERANTI, "Ime", "modSledljivost.TraceByZbirna")
+    cKoopPrez = RequireColumnIndex(TBL_KOOPERANTI, "Prezime", "modSledljivost.TraceByZbirna")
+    cKoopBpg = RequireColumnIndex(TBL_KOOPERANTI, COL_KOOP_BPG, "modSledljivost.TraceByZbirna")
 
     RequireColumnIndex TBL_PARCELE, COL_PAR_ID, "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_PARCELE, COL_PAR_KAT_BROJ, "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_PARCELE, COL_PAR_GGAP, "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_PARCELE, COL_PAR_KULTURA, "modSledljivost.TraceByZbirna"
-    RequireColumnIndex TBL_PARCELE, COL_PAR_POVRSINA, "modSledljivost.TraceByZbirna"
+    cParKat = RequireColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ, "modSledljivost.TraceByZbirna")
+    cParGgap = RequireColumnIndex(TBL_PARCELE, COL_PAR_GGAP, "modSledljivost.TraceByZbirna")
+    cParKult = RequireColumnIndex(TBL_PARCELE, COL_PAR_KULTURA, "modSledljivost.TraceByZbirna")
+    cParPov = RequireColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA, "modSledljivost.TraceByZbirna")
 
     Dim count As Long
     Dim i As Long
@@ -651,14 +656,34 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     Dim koopID As String
     Dim pid As String
 
+    ' Sedam LookupValue-a PO REDU (tri nad tblKooperanti, cetiri nad tblParcele)
+    ' -- svaki je citao celu tabelu i skenirao je linearno. Nad 5000 otkupa i
+    ' 800 parcela to je oko 28 miliona poredjenja za jedan izvestaj.
+    '
+    ' Dve mape kljuc -> BROJ REDA nastaju u po jednom prolazu, a redovi se posle
+    ' citaju direktno iz istog niza. BuildLookupDict ovde ne bi bio dovoljan:
+    ' nosi najvise dve kolone, a ovde ih treba sedam.
+    Dim koopIdx As Object, parIdx As Object
+    Dim koopData As Variant, parData As Variant
+    Dim rk As Long, rp As Long
+    Set koopIdx = BuildRowIndex(TBL_KOOPERANTI, "KooperantID")
+    koopData = GetTableData(TBL_KOOPERANTI)
+    Set parIdx = BuildRowIndex(TBL_PARCELE, COL_PAR_ID)
+    parData = GetTableData(TBL_PARCELE)
+
     For i = 1 To UBound(otkupData, 1)
         If otpIDs.Exists(CStr(otkupData(i, colOtkOtpID))) Then
             idx = idx + 1
 
             koopID = CStr(otkupData(i, colKoop))
 
-            ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime"))
-            prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Prezime"))
+            rk = 0
+            If koopIdx.Exists(koopID) Then rk = CLng(koopIdx(koopID))
+            ime = "": prezime = ""
+            If rk > 0 Then
+                ime = CStr(koopData(rk, cKoopIme))
+                prezime = CStr(koopData(rk, cKoopPrez))
+            End If
 
             result(idx, 1) = ime & " " & prezime
             result(idx, 2) = otkupData(i, colKol)
@@ -667,21 +692,24 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
             result(idx, 5) = otkupData(i, colDat)
             result(idx, 6) = CStr(otkupData(i, colID))
             result(idx, 7) = CStr(otkupData(i, colOtkOtpID))
-            result(idx, 8) = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", _
-                                             koopID, COL_KOOP_BPG))
+            result(idx, 8) = ""
+            If rk > 0 Then result(idx, 8) = CStr(koopData(rk, cKoopBpg))
 
             pid = CStr(otkupData(i, colOtkParcela))
 
+            result(idx, 9) = ""
+            result(idx, 10) = ""
+            result(idx, 13) = ""
+            result(idx, 14) = ""
             If pid <> "" Then
-                result(idx, 9) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KAT_BROJ))
-                result(idx, 10) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_GGAP))
-                result(idx, 13) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KULTURA))
-                result(idx, 14) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_POVRSINA))
-            Else
-                result(idx, 9) = ""
-                result(idx, 10) = ""
-                result(idx, 13) = ""
-                result(idx, 14) = ""
+                rp = 0
+                If parIdx.Exists(pid) Then rp = CLng(parIdx(pid))
+                If rp > 0 Then
+                    result(idx, 9) = CStr(parData(rp, cParKat))
+                    result(idx, 10) = CStr(parData(rp, cParGgap))
+                    result(idx, 13) = CStr(parData(rp, cParKult))
+                    result(idx, 14) = CStr(parData(rp, cParPov))
+                End If
             End If
 
             result(idx, 11) = CStr(otkupData(i, colKlasa))

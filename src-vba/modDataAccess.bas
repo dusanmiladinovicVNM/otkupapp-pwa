@@ -28,6 +28,14 @@ Public Sub BeginTableCache()
     mTableCacheDepth = mTableCacheDepth + 1
 End Sub
 
+' Dubina otvorenih prozora kesa. Javno ZBOG TESTA: prozor koji ostane otvoren
+' ne pravi gresku nego tise zlo -- kesirani podaci prezive upis koji sledi, pa
+' lista posle snimanja pokazuje staru vrednost. Bez ovoga se ravnoteza
+' Begin/End ne moze tvrditi, a bas ona je ono sto se lako pokvari.
+Public Function TableCacheDepth() As Long
+    TableCacheDepth = mTableCacheDepth
+End Function
+
 Public Sub EndTableCache()
     If mTableCacheDepth > 0 Then mTableCacheDepth = mTableCacheDepth - 1
     If mTableCacheDepth <= 0 Then
@@ -540,6 +548,32 @@ Public Function BuildLookupDict(ByVal tblName As String, ByVal keyCol As String,
                 End If
                 d.Add k, v
             End If
+        End If
+    Next i
+End Function
+
+' Mapa keyCol -> BROJ REDA u GetTableData(tblName). Za petlje kojima iz iste
+' tabele treba VISE od dve kolone: BuildLookupDict bi tada trazio po jedan
+' prolaz na kolonu, a ovde je jedan prolaz za sve -- red se posle cita direktno
+' iz istog niza (data(r, c)).
+'
+' Prvi pojav kljuca pobedjuje, isto kao LookupValue (prvi match). Redovi sa
+' PRAZNIM kljucem se preskacu: LookupValue bi za praznu trazenu vrednost vratio
+' bas takav red, a to nikad nije bio zeljen odgovor nego posledica.
+Public Function BuildRowIndex(ByVal tblName As String, ByVal keyCol As String) As Object
+    Dim d As Object, data As Variant, ki As Long, i As Long, k As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BuildRowIndex = d
+
+    data = GetTableData(tblName)
+    If IsEmpty(data) Then Exit Function
+    ki = GetColumnIndex(tblName, keyCol)
+    If ki = 0 Then Exit Function
+
+    For i = 1 To UBound(data, 1)
+        k = CStr(data(i, ki))
+        If Len(k) > 0 Then
+            If Not d.Exists(k) Then d.Add k, i
         End If
     Next i
 End Function

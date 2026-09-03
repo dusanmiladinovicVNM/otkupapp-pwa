@@ -53,7 +53,7 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Initialize()
-    
+
     ' Nichts hier - Tag ist noch nicht verfuegbar
 End Sub
 
@@ -97,7 +97,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnDodaj, "Dodaj"
     StylePrimaryButton btnIzmeni, "Izmeni"
     StyleExitButton btnPovratak, "Povratak"
-    
+
     ' GEO buttons (samo Parcele tab, ali style ih unapred)
     StylePrimaryButton btnGeoOpen, "Otvori GeoSrbija"
     StylePrimaryButton btnPasteCoords, "Paste koordinata"
@@ -116,23 +116,7 @@ Private Sub UserForm_Activate()
     Next liLbl
     On Error GoTo EH
 
-    Select Case Me.Tag
-        Case "Kooperanti": SetupKooperanti
-        Case "Stanice": SetupStanice
-        Case "Korisnici": SetupKorisnici
-        Case "Kupci": SetupKupci
-        Case "Vozaci": SetupVozaci
-        Case "Parcele": SetupParcele
-        Case "Artikli": SetupArtikli
-        Case "Kulture": SetupKulture
-        Case "TipAmbalaze": SetupTipAmbalaze
-        Case "TipPalete": SetupTipPalete
-        Case "Cenovnik": SetupCenovnik
-        Case "Kutije": SetupKutije
-        Case "Kese": SetupKese
-        Case "VrstaGP": SetupVrstaGP
-        Case Else: SetupKooperanti
-    End Select
+    PokreniSetup
 
     LoadList
     ClearFields
@@ -161,11 +145,69 @@ EH:
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
+' Izbor Setup* procedure po Tag-u. Izdvojeno iz UserForm_Activate zato sto ga
+' zove i test seam (StmTestLista): dva spiska sekcija bi se razisla, pa bi test
+' merio drugu formu od one koju operater vidi.
+Private Sub PokreniSetup()
+    Select Case Me.Tag
+        Case "Kooperanti": SetupKooperanti
+        Case "Stanice": SetupStanice
+        Case "Korisnici": SetupKorisnici
+        Case "Kupci": SetupKupci
+        Case "Vozaci": SetupVozaci
+        Case "Parcele": SetupParcele
+        Case "Artikli": SetupArtikli
+        Case "Kulture": SetupKulture
+        Case "TipAmbalaze": SetupTipAmbalaze
+        Case "TipPalete": SetupTipPalete
+        Case "Cenovnik": SetupCenovnik
+        Case "Kutije": SetupKutije
+        Case "Kese": SetupKese
+        Case "VrstaGP": SetupVrstaGP
+        Case Else: SetupKooperanti
+    End Select
+End Sub
+
+' ============================================================
+' TEST SEAM -- PRIVREMEN, umire zajedno sa ovom formom.
+'
+' Postoji da bi se u JEDNOM trenutku izmerilo ono sto se posle brisanja
+' frmStammdaten vise ne moze izmeriti: da li novi citac (modMaticniIzvor)
+' vraca isti skup zapisa koji je LoadList vracao. Kad forma ode, ode i ovaj
+' seam i test 161 -- to je svrha, ne propust.
+'
+' Vraca Array(redovi2D, n, brKolona). redovi2D je 1-based (red, kolona);
+' kolona 1 je ono sto legacy lista drzi kao identitet reda.
+' ============================================================
+Public Function StmTestLista(ByVal sekTag As String) As Variant
+    Dim i As Long, j As Long, nc As Long, outA() As Variant
+    On Error GoTo EH
+    Me.tag = sekTag
+    PokreniSetup
+    LoadList
+    nc = lstData.ColumnCount
+    If nc < 1 Then nc = 1
+    If lstData.ListCount = 0 Then
+        StmTestLista = Array(Empty, 0, nc)
+        Exit Function
+    End If
+    ReDim outA(1 To lstData.ListCount, 1 To nc)
+    For i = 0 To lstData.ListCount - 1
+        For j = 0 To nc - 1
+            outA(i + 1, j + 1) = NzToText(lstData.List(i, j))
+        Next j
+    Next i
+    StmTestLista = Array(outA, lstData.ListCount, nc)
+    Exit Function
+EH:
+    Err.Raise Err.Number, "frmStammdaten.StmTestLista[" & sekTag & "]", Err.description
+End Function
+
 Private Sub StyleAllFields()
     On Error Resume Next
-    
+
     Dim i As Long
-    
+
     ' lblField1..10 -- naslovne labele, muted small
     For i = 1 To 10
         Dim lbl As MSForms.label
@@ -173,19 +215,19 @@ Private Sub StyleAllFields()
         StyleLabel lbl, TXT_MUTED(), False
         lbl.Font.Size = FONT_SIZE_SMALL
     Next i
-    
+
     ' GEO koordinate labele
     StyleLabel lblNCoord, TXT_MUTED(), False
     lblNCoord.Font.Size = FONT_SIZE_SMALL
     StyleLabel lblECoord, TXT_MUTED(), False
     lblECoord.Font.Size = FONT_SIZE_SMALL
-    
+
     On Error GoTo 0
 End Sub
 
 Private Sub SetupColumnHeaders()
     On Error Resume Next
-    
+
     ' Default: sakriti sve
     Dim i As Long
     For i = 1 To 10
@@ -197,7 +239,7 @@ Private Sub SetupColumnHeaders()
             lblH.Visible = False
         End If
     Next i
-    
+
     ' Entity-specific column headers
     Select Case Me.Tag
         Case "Kooperanti"
@@ -211,7 +253,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Adresa", True
             ShowHeader 9, "JMBG", True
             ShowHeader 10, "Aktivan", True
-            
+
         Case "Stanice"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
@@ -242,7 +284,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Hladnjaca", True
             ShowHeader 9, "Aktivan", True
             ShowHeader 10, "Ra" & ChrW(269) & "un", True
-            
+
         Case "Vozaci"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Ime", True
@@ -250,7 +292,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 4, "Telefon", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "PIN", True
-            
+
         Case "Parcele"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Kooperant", True
@@ -262,7 +304,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Geo", True
             ShowHeader 9, "Rizik", True
             ShowHeader 10, "Napomena", True
-            
+
         Case "Artikli"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
@@ -315,7 +357,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 1, "Tip gotovog proizvoda", True
             ShowHeader 2, "Aktivan", True
     End Select
-    
+
     On Error GoTo 0
 End Sub
 
@@ -360,12 +402,12 @@ Private Sub SetupKooperanti()
     ResetFieldVisibility
 
     Me.caption = "Kooperanti"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KOOPERANTI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kooperantima i njihovim stanicama"
     On Error GoTo 0
-    
+
     m_TableName = TBL_KOOPERANTI
 
     m_Headers = Array( _
@@ -402,12 +444,12 @@ Private Sub SetupStanice()
     ResetFieldVisibility
 
     Me.caption = "Otkupna Mesta"
-    
+
         On Error Resume Next
     StyleFrameTitleLabel lblTitle, "OTKUPNE STANICE"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o otkupnim stanicama"
     On Error GoTo 0
-    
+
     m_TableName = TBL_STANICE
 
     ' Redosled mora pratiti tblStanice (pozicijski prikaz u listi).
@@ -539,22 +581,10 @@ EH:
 End Sub
 
 ' --- Korisnici helperi (prava po oblasti, Model A) ---
-Private Function NormalizeUloga(ByVal v As String) As String
-    If StrComp(Trim$(v), ULOGA_ADMIN, vbTextCompare) = 0 Then
-        NormalizeUloga = ULOGA_ADMIN
-    Else
-        NormalizeUloga = ULOGA_KORISNIK
-    End If
-End Function
-
-' "DA"/"NE" za datu oblast iz desne kolone dropdowna: Admin -> uvek DA
-' (bypass, isto kao modAuth.KorisnikImaPravo); inace vrednost iz cmbObl_<oblast>.
-Private Function OblComboVal(ByVal isAdmin As Boolean, ByVal oblast As String) As String
-    If isAdmin Then
-        OblComboVal = "DA"
-        Exit Function
-    End If
-
+' "DA"/"NE" za datu oblast iz desne kolone dropdowna. Normalizaciju uloge i
+' pravilo "admin dobija sve" NE radi forma nego pisac (modMaticniKorisnici):
+' dva mesta koja isto pravilo pisu bila bi dva mesta koja se razidju.
+Private Function OblComboVal(ByVal oblast As String) As String
     Dim cb As MSForms.ComboBox
     On Error Resume Next
     Set cb = Me.Controls("cmbObl_" & oblast)
@@ -722,12 +752,12 @@ Private Sub SetupKupci()
     ResetFieldVisibility
 
     Me.caption = "Kupci"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KUPCI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kupcima"
     On Error GoTo 0
-    
+
     m_TableName = TBL_KUPCI
 
     m_Headers = Array( _
@@ -792,14 +822,14 @@ End Sub
 
 Private Sub SetupParcele()
     ResetFieldVisibility
-    
+
     Me.caption = "Parcele"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KATASTARSKE PARCELE"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o parcelama kooperanata"
     On Error GoTo 0
-    
+
     m_TableName = TBL_PARCELE
 
     ' Display headers for ListBox only
@@ -869,19 +899,19 @@ Private Sub SetupParcele()
     cmbField3.AddItem "Da"
     cmbField3.AddItem "Ne"
     cmbField3.AddItem "U postupku"
-    
+
     SetGeoControlsVisible False
-    
+
 End Sub
 Private Sub SetupArtikli()
     ResetFieldVisibility
     Me.caption = "Artikli"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "ARTIKLI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o artiklima"
     On Error GoTo 0
-    
+
     m_TableName = TBL_ARTIKLI
 
     m_Headers = Array( _
@@ -1192,69 +1222,52 @@ End Sub
 
 ' Public -- poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
 Public Sub OnSoftDeleteClick()
+    Dim kljuc As String, odgovor As String, noviStatus As String
     On Error GoTo EH
-
-    Dim colName As String
-    colName = AktivanColName()
-    If Len(colName) = 0 Then Exit Sub
 
     If lstData.ListIndex >= 0 Then m_SelectedRow = GetMappedSelectedRow()
     If m_SelectedRow = 0 Then
-        MsgBox "Izaberite stavku iz liste!", vbExclamation, APP_NAME
+        MsgBox Poruka("MATU_ERR_NEMA_REDA"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
-    Dim data As Variant
-    data = GetTableData(m_TableName)
-    If IsEmpty(data) Then Exit Sub
-
-    Dim colIdx As Long
-    colIdx = GetColumnIndex(m_TableName, colName)
-
-    Dim cur As String, newVal As String
-    cur = Trim$(NzToText(data(m_SelectedRow, colIdx)))
-    If StrComp(cur, STATUS_NEAKTIVAN, vbTextCompare) = 0 Then
-        newVal = STATUS_AKTIVAN
-    Else
-        newVal = STATUS_NEAKTIVAN
+    ' Od M4 SVE sekcije idu kroz modMaticniUnos, Korisnici ukljuceno. Time je
+    ' zatvoren nalaz iz M2a: ovo dugme je korisniku upisivalo "Neaktivan", a
+    ' modAuth neaktivnim smatra samo "NE" -- deaktivirani korisnik se i dalje
+    ' prijavljivao. Sada pisac za tu sekciju pise "NE" (v. modMaticniKorisnici
+    ' i UI_MIGRACIJA_KATALOG 26.18).
+    '
+    ' Nepoznat Tag se ODBIJA, isto kao u btnDodaj/btnIzmeni: zatecena putanja
+    ' koja bi tiho upisala pogresan recnik je upravo ono sto se ovde zatvara.
+    kljuc = SekcijaKljuc()
+    If Len(kljuc) = 0 Then
+        MsgBox Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & Me.Tag, vbCritical, APP_NAME
+        Exit Sub
     End If
 
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot m_TableName
-    RequireUpdateCell m_TableName, m_SelectedRow, colName, newVal, "frmStammdaten.OnSoftDeleteClick"
-    tx.CommitTx
-    Set tx = Nothing
+    odgovor = modMaticniUnos.MatPromeniStatus(kljuc, m_SelectedRow, noviStatus)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        Exit Sub
+    End If
 
     LoadList
     ClearFields
     m_SelectedRow = 0
-    MsgBox "Status promenjen u: " & newVal, vbInformation, APP_NAME
+    MsgBox Poruka("MATU_OK_STATUS") & " " & noviStatus, vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.OnSoftDeleteClick"
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
     MsgBox Poruka("STM_ERR_GRESKA_PRI_PROMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
 ' Tolerantno na schema drift: ako nijedan alias ne postoji, tiho preskace
 ' (ne rusi transakciju). Vraca True ako je nesto azurirano.
-Private Function UpdateFirstExistingCol(ByVal SRC As String, ByVal newValue As String, _
-                                        ParamArray colAliases() As Variant) As Boolean
-    Dim k As Long
-    For k = LBound(colAliases) To UBound(colAliases)
-        If GetColumnIndex(m_TableName, CStr(colAliases(k))) > 0 Then
-            RequireUpdateCell m_TableName, m_SelectedRow, CStr(colAliases(k)), newValue, SRC
-            UpdateFirstExistingCol = True
-            Exit Function
-        End If
-    Next k
-End Function
+' UpdateFirstExistingCol je PRESELJENO u modMaticniIzvor.MatKolonaPolja
+' ("@alias:A,B" u opisu polja) -- isti probe, ali sada ga koriste i unos i
+' izmena, a ne samo izmena.
 ' ============================================================
 ' LISTE LADEN
 ' ============================================================
@@ -1615,10 +1628,10 @@ End Sub
 
 Private Sub lstData_Click()
     If lstData.ListIndex < 0 Then Exit Sub
-    
+
     ResetGeoClearConfirm
     ClearGeoStatus
-    
+
     m_SelectedRow = GetMappedSelectedRow()
     If m_SelectedRow = 0 Then Exit Sub
 
@@ -1765,7 +1778,7 @@ Private Sub lstData_Click()
             SafeSetCombo cmbField3, lstData.List(lstData.ListIndex, 4)   ' Klasa
             txtField5.value = lstData.List(lstData.ListIndex, 5)         ' Cena
     End Select
-    
+
     UpdateGeoControlsVisibility
 
 End Sub
@@ -1827,1014 +1840,309 @@ End Sub
 ' HINZUFUeGEN
 ' ============================================================
 
-Private Sub btnDodaj_Click()
-    On Error GoTo EH
-
-    Const SRC As String = "frmStammdaten.btnDodaj_Click"
-
-    Dim rowData As Variant
-    Dim newID As String
-    Dim stanicaID As String
-    Dim korTx As clsTransaction          ' Korisnici: atomican upis (rollback na gresku)
-
-    Select Case Me.Tag
-
-        Case "Kooperanti"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite ime!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite prezime!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField1.value) = "" Then
-                MsgBox "Izaberite stanicu!", vbExclamation, APP_NAME
-                cmbField1.SetFocus
-                Exit Sub
-            End If
-
-            stanicaID = GetSelectedComboHiddenID(cmbField1)
-
-            If stanicaID = "" Or InStr(1, stanicaID, "ST-", vbTextCompare) = 0 Then
-                stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbField1.value, "StanicaID"))
-            End If
-
-            If stanicaID = "" Then
-                MsgBox "Nije prona" & ChrW(273) & "en StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "KooperantID", "KOOP-")
-
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
-                Trim$(txtField4.value), _
-                stanicaID, _
-                STATUS_AKTIVAN, _
-                Trim$(txtField6.value), _
-                Trim$(txtField7.value), _
-                Trim$(txtField8.value), _
-                Trim$(txtField9.value), _
-                Trim$(txtField10.value) _
-            )
-
-        Case "Stanice"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite mesto!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "StanicaID", "ST-")
-
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
-                STATUS_AKTIVAN, _
-                Trim$(txtField4.value), _
-                Trim$(txtField5.value), _
-                Trim$(txtField6.value), _
-                IIf(Trim$(cmbField1.value) = "", "Ne", Trim$(cmbField1.value)) _
-            )
-
-        Case "Korisnici"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField3.value) = "" Then
-                MsgBox "Unesite PIN!", vbExclamation, APP_NAME
-                txtField3.SetFocus
-                Exit Sub
-            End If
-
-            Dim postojiKor As Variant
-            postojiKor = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
-            If Not IsEmpty(postojiKor) Then
-                If Len(Trim$(CStr(postojiKor))) > 0 Then
-                    MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
-                    Exit Sub
-                End If
-            End If
-
-            Dim ulogaDodaj As String
-            ulogaDodaj = NormalizeUloga(cmbField1.value)
-
-            Dim admDodaj As Boolean
-            admDodaj = (StrComp(ulogaDodaj, ULOGA_ADMIN, vbTextCompare) = 0)
-
-            Dim aktivDodaj As String
-            If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivDodaj = "NE" Else aktivDodaj = "DA"
-
-            ' Upis PO IMENU u TRANSAKCIJI (atomicno; rollback uklanja delimican red
-            ' ako neki upis padne). tblKorisnici ima vise kolona oblasti + audit
-            ' kolone pa pozicijski AppendRow nije pouzdan (nove oblasti se dodaju
-            ' posle audit kolona). Isti obrazac kao btnIzmeni (RequireUpdateCell).
-            Dim korNewID As String
-            korNewID = GetNextID(m_TableName, COL_KOR_ID, "KOR-")
-
-            Set korTx = New clsTransaction
-            korTx.BeginTx
-            korTx.AddTableSnapshot m_TableName
-
-            Dim korEmpty() As Variant
-            ReDim korEmpty(1 To GetTable(m_TableName).ListColumns.count)
-            Dim korIdx As Long
-            korIdx = AppendRow(m_TableName, korEmpty)
-            If korIdx = 0 Then Err.Raise vbObjectError + 9500, SRC, "AppendRow nije uspeo."
-
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_ID, korNewID, SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_IME, Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_ULOGA, ulogaDodaj, SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_AKTIVAN, aktivDodaj, SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
-            RequireUpdateCell m_TableName, korIdx, COL_KOR_CREATED, Format$(Now, "yyyy-mm-dd hh:nn:ss"), SRC
-
-            Dim oblDod As Variant
-            For Each oblDod In modAuth.OblastiList()
-                RequireUpdateCell m_TableName, korIdx, CStr(oblDod), OblComboVal(admDodaj, CStr(oblDod)), SRC
-            Next oblDod
-
-            korTx.CommitTx
-
-            MsgBox "Dodato: " & korNewID, vbInformation, APP_NAME
-            LoadList
-            ClearFields
-            KorisniciSetDefaults
-            Exit Sub
-
-        Case "Kupci"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv kupca!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "KupacID", "KUP-")
-
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
-                Trim$(txtField4.value), _
-                Trim$(txtField5.value), _
-                Trim$(txtField6.value), _
-                Trim$(txtField7.value), _
-                Trim$(txtField8.value), _
-                Trim$(txtField9.value), _
-                STATUS_AKTIVAN, _
-                Trim$(txtField10.value) _
-            )
-
-        Case "Vozaci"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite ime vozaca!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite prezime vozaca!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "VozacID", "VOZ-")
-
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
-                STATUS_AKTIVAN, _
-                Trim$(txtField4.value) _
-            )
-
-        Case "Parcele"
-            If Trim$(cmbField1.value) = "" Then
-                MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
-                cmbField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite katastarski broj!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField3.value) = "" Then
-                MsgBox Poruka("STM_MSG_UNESITE_KATASTARSKU_OPSTINU"), vbExclamation, APP_NAME
-                txtField3.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField2.value) = "" Then
-                MsgBox "Izaberite kulturu!", vbExclamation, APP_NAME
-                cmbField2.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField3.value) = "" Then
-                MsgBox "Izaberite GGAP status!", vbExclamation, APP_NAME
-                cmbField3.SetFocus
-                Exit Sub
-            End If
-
-            Dim koopID As String
-            Dim povrsina As Double
-
-            koopID = ExtractIDFromDisplay(cmbField1.value)
-
-            If Not TryParseDouble(txtField5.value, povrsina) Or povrsina <= 0 Then
-                MsgBox Poruka("STM_MSG_UNESITE_VALIDNU_POVRSINU"), vbExclamation, APP_NAME
-                txtField5.SetFocus
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "ParcelaID", "PAR-")
-
-            rowData = Array( _
-                newID, _
-                koopID, _
-                Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
-                Trim$(cmbField2.value), _
-                povrsina, _
-                Trim$(cmbField3.value), _
-                "Da", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                "", _
-                Trim$(txtField7.value) _
-            )
-
-        Case "Artikli"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv artikla!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField5.value) = "" Then
-                MsgBox "Izaberite tip artikla!", vbExclamation, APP_NAME
-                cmbField5.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField6.value) = "" Then
-                MsgBox "Izaberite jedinicu mere!", vbExclamation, APP_NAME
-                cmbField6.SetFocus
-                Exit Sub
-            End If
-
-            Dim cenaArt As Double
-            Dim dozaArt As Double
-            Dim pakovanjeArt As Double
-
-            If Not TryParseDouble(txtField4.value, cenaArt) Or cenaArt < 0 Then
-                MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
-                txtField4.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField6.value, dozaArt) Or dozaArt < 0 Then
-                MsgBox "Unesite validnu dozu!", vbExclamation, APP_NAME
-                txtField6.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField7.value, pakovanjeArt) Or pakovanjeArt < 0 Then
-                MsgBox "Unesite validno pakovanje!", vbExclamation, APP_NAME
-                txtField7.SetFocus
-                Exit Sub
-            End If
-
-            newID = GetNextID(m_TableName, "ArtikalID", "ART-")
-
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(cmbField5.value), _
-                Trim$(cmbField6.value), _
-                cenaArt, _
-                dozaArt, _
-                Trim$(cmbField1.value), _
-                pakovanjeArt _
-            )
-
-        Case "Kulture"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            Dim gajbicaKul As Double
-            If Trim$(txtField3.value) <> "" Then
-                If Not TryParseDouble(txtField3.value, gajbicaKul) Or gajbicaKul < 0 Then
-                    MsgBox "Unesite validan broj gajbica po paleti!", vbExclamation, APP_NAME
-                    txtField3.SetFocus
-                    Exit Sub
-                End If
-            End If
-
-            Dim pragUpozKul As Double, pragBlokKul As Double
-            If Not ValidatePragoviKulture(pragUpozKul, pragBlokKul) Then Exit Sub
-
-            newID = GetNextID(m_TableName, "KulturaID", "KUL-")
-
-            ' tblKulture: jezgro (ID/Vrsta/Sorta) pozicijski; Gajbica/Aktivan/
-            ' TipAmbalaze PO IMENU (dodate kolone na kraju, redosled nesiguran).
-            Dim newRowKul As Long
-            newRowKul = AppendRow(m_TableName, _
-                Array(newID, Trim$(txtField1.value), Trim$(txtField2.value)))
-
-            If newRowKul > 0 Then
-                If Trim$(txtField3.value) <> "" Then _
-                    UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
-                UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
-                UpdateCell m_TableName, newRowKul, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value)
-                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozKul
-                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_BLOK, pragBlokKul
-                MsgBox "Dodato: " & newID, vbInformation, APP_NAME
-                LoadList
-                ClearFields
-            Else
-                MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU"), vbCritical, APP_NAME
-            End If
-            Exit Sub
-
-        Case "TipAmbalaze"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip ambala" & ChrW(382) & "e!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaAmb As Double
-            If Not TryParseDouble(txtField2.value, tezinaAmb) Or tezinaAmb < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu gajbice (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TAMB_TIP, Trim$(txtField1.value), COL_TAMB_TIP)))) > 0 Then
-                MsgBox "Tip ambala" & ChrW(382) & "e '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = Trim$(txtField1.value)   ' PK je sam naziv tipa
-            rowData = Array(Trim$(txtField1.value), tezinaAmb, STATUS_AKTIVAN)
-
-        Case "TipPalete"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip palete!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaPal As Double
-            If Not TryParseDouble(txtField2.value, tezinaPal) Or tezinaPal < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu palete (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TPAL_TIP, Trim$(txtField1.value), COL_TPAL_TIP)))) > 0 Then
-                MsgBox "Tip palete '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = Trim$(txtField1.value)
-            rowData = Array(Trim$(txtField1.value), tezinaPal, STATUS_AKTIVAN)
-
-        Case "Kutije"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip kutije!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaKut As Double
-            If Not TryParseDouble(txtField2.value, tezinaKut) Or tezinaKut < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu kutije (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KUT_TIP, Trim$(txtField1.value), COL_KUT_TIP)))) > 0 Then
-                MsgBox "Tip kutije '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = Trim$(txtField1.value)
-            rowData = Array(Trim$(txtField1.value), tezinaKut, STATUS_AKTIVAN)
-
-        Case "Kese"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip kese!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaKes As Double
-            If Not TryParseDouble(txtField2.value, tezinaKes) Or tezinaKes < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu kese (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KES_TIP, Trim$(txtField1.value), COL_KES_TIP)))) > 0 Then
-                MsgBox "Tip kese '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = Trim$(txtField1.value)
-            rowData = Array(Trim$(txtField1.value), tezinaKes, STATUS_AKTIVAN)
-
-        Case "VrstaGP"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip gotovog proizvoda!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_VGP_TIP, Trim$(txtField1.value), COL_VGP_TIP)))) > 0 Then
-                MsgBox "Tip gotovog proizvoda '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            newID = Trim$(txtField1.value)
-            rowData = Array(Trim$(txtField1.value), STATUS_AKTIVAN)
-
-        Case "Cenovnik"
-            ' Append-only: dodaje novi (vazeci) red preko modCenovnik.
-            If Trim$(cmbField1.value) = "" Then
-                MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
-                cmbField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField3.value) = "" Then
-                MsgBox "Izaberite klasu!", vbExclamation, APP_NAME
-                cmbField3.SetFocus
-                Exit Sub
-            End If
-
-            Dim cenaCen As Double
-            If Not TryParseDouble(txtField5.value, cenaCen) Or cenaCen <= 0 Then
-                MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
-                txtField5.SetFocus
-                Exit Sub
-            End If
-
-            Dim datCen As Date
-            If Not TryParseDateValue(txtField4.value, datCen) Then datCen = Date
-
-            Dim resCen As String
-            resCen = AddCena(datCen, cmbField1.value, cmbField2.value, cmbField3.value, cenaCen)
-
-            If resCen <> "" Then
-                MsgBox "Dodata cena: " & resCen, vbInformation, APP_NAME
-                LoadList
-                txtField5.value = ""        ' spremno za sledecu cenu; proizvod ostaje
-            Else
-                MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU_2"), vbCritical, APP_NAME
-            End If
-            Exit Sub
-
-        Case Else
-            MsgBox "Nepoznat tip mati" & ChrW(269) & "nih podataka: " & Me.Tag, vbCritical, APP_NAME
-            Exit Sub
-
-    End Select
-
-    If AppendRow(m_TableName, rowData) > 0 Then
-        MsgBox "Dodato: " & newID, vbInformation, APP_NAME
-
-        ' MALINA: nova stanica -> par-vozac sa istim ID-em (izvestaji/ambalaza).
-        ' Idempotentno + self-gated u modMalina; ne sme da obori unos stanice.
-        If Me.Tag = "Stanice" And IsMalinaMode() Then
-            On Error Resume Next
-            EnsureVozacMirrorForStanica newID, Trim$(txtField1.value), _
-                Trim$(txtField2.value), ""
-            On Error GoTo EH
-        End If
-
-        LoadList
-        ClearFields
-    Else
-        MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU"), vbCritical, APP_NAME
-    End If
-
-    Exit Sub
-
-EH:
-    If Not korTx Is Nothing Then korTx.RollbackTx   ' ukloni delimican red (Korisnici)
-    LogErr "frmStammdaten.btnDodaj_Click"
-    MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
-End Sub
+' btnDodaj_Click i btnIzmeni_Click su preseljeni nize, uz ostale unosne
+' procedure (v. odeljak UNOS I IZMENA).
 
 ' ============================================================
 ' AeNDERN
 ' ============================================================
 
-Private Sub btnIzmeni_Click()
+' ============================================================
+' UNOS I IZMENA -- forma vise NE nosi provere ni upis.
+'
+' Sve sto je do v6-ui-189 stajalo u btnDodaj_Click (544 linije) i
+' btnIzmeni_Click (463) preseljeno je u modMaticniUnos, koji od sada zovu OBE
+' strane: i ova forma i novi ekrani. Razlog i zasto ovde NIJE ponovljena odluka
+' iz Faze B (dve kopije namerno): docs/UI_MIGRACIJA_KATALOG.md 26.5.
+'
+' Formi je ostalo samo ono sto forma jeste: koja kontrola nosi koje polje.
+' ============================================================
+
+' Kljuc sekcije koji razume modMaticniIzvor / modMaticniUnos. Prazno = sekcija
+' koju modul ne pokriva (Korisnici, do M4).
+Private Function SekcijaKljuc() As String
+    SekcijaKljuc = modMaticniIzvor.MatKljucIzLegacyTag(Me.Tag)
+End Function
+
+' Ime kontrole koja nosi dato polje. JEDINO mesto na kom forma jos zna svoj
+' raspored -- preslikano iz Setup* procedura, red po red.
+Private Function KontrolaZaPolje(ByVal p As String) As String
+    Select Case Me.Tag
+        Case "Kooperanti"
+            Select Case p
+                Case "ime": KontrolaZaPolje = "txtField1"
+                Case "prezime": KontrolaZaPolje = "txtField2"
+                Case "mesto": KontrolaZaPolje = "txtField3"
+                Case "telefon": KontrolaZaPolje = "txtField4"
+                Case "stanica": KontrolaZaPolje = "cmbField1"
+                Case "bpg": KontrolaZaPolje = "txtField6"
+                Case "racun": KontrolaZaPolje = "txtField7"
+                Case "pin": KontrolaZaPolje = "txtField8"
+                Case "adresa": KontrolaZaPolje = "txtField9"
+                Case "jmbg": KontrolaZaPolje = "txtField10"
+            End Select
+        Case "Stanice"
+            Select Case p
+                Case "naziv": KontrolaZaPolje = "txtField1"
+                Case "mesto": KontrolaZaPolje = "txtField2"
+                Case "telefon": KontrolaZaPolje = "txtField3"
+                Case "kime": KontrolaZaPolje = "txtField4"
+                Case "kprezime": KontrolaZaPolje = "txtField5"
+                Case "pin": KontrolaZaPolje = "txtField6"
+                Case "hladnjaca": KontrolaZaPolje = "cmbField1"
+            End Select
+        Case "Kupci"
+            Select Case p
+                Case "naziv": KontrolaZaPolje = "txtField1"
+                Case "ulica": KontrolaZaPolje = "txtField2"
+                Case "mesto": KontrolaZaPolje = "txtField3"
+                Case "posta": KontrolaZaPolje = "txtField4"
+                Case "drzava": KontrolaZaPolje = "txtField5"
+                Case "pib": KontrolaZaPolje = "txtField6"
+                Case "mb": KontrolaZaPolje = "txtField7"
+                Case "email": KontrolaZaPolje = "txtField8"
+                Case "hladnjaca": KontrolaZaPolje = "txtField9"
+                Case "racun": KontrolaZaPolje = "txtField10"
+            End Select
+        Case "Korisnici"
+            Select Case p
+                Case "korime": KontrolaZaPolje = "txtField1"
+                Case "ime": KontrolaZaPolje = "txtField2"
+                Case "pin": KontrolaZaPolje = "txtField3"
+                Case "uloga": KontrolaZaPolje = "cmbField1"
+                Case "aktivan": KontrolaZaPolje = "cmbField2"
+                Case "stanica": KontrolaZaPolje = "cmbField3"
+            End Select
+        Case "Vozaci"
+            Select Case p
+                Case "ime": KontrolaZaPolje = "txtField1"
+                Case "prezime": KontrolaZaPolje = "txtField2"
+                Case "telefon": KontrolaZaPolje = "txtField3"
+                Case "pin": KontrolaZaPolje = "txtField4"
+            End Select
+        Case "Parcele"
+            Select Case p
+                Case "kooperant": KontrolaZaPolje = "cmbField1"
+                Case "katbroj": KontrolaZaPolje = "txtField2"
+                Case "katopstina": KontrolaZaPolje = "txtField3"
+                Case "kultura": KontrolaZaPolje = "cmbField2"
+                Case "povrsina": KontrolaZaPolje = "txtField5"
+                Case "ggap": KontrolaZaPolje = "cmbField3"
+                Case "napomena": KontrolaZaPolje = "txtField7"
+            End Select
+        Case "Artikli"
+            Select Case p
+                Case "naziv": KontrolaZaPolje = "txtField1"
+                Case "tip": KontrolaZaPolje = "cmbField5"
+                Case "jm": KontrolaZaPolje = "cmbField6"
+                Case "cena": KontrolaZaPolje = "txtField4"
+                Case "doza": KontrolaZaPolje = "txtField6"
+                Case "kultura": KontrolaZaPolje = "cmbField1"
+                Case "pakovanje": KontrolaZaPolje = "txtField7"
+            End Select
+        Case "Kulture"
+            Select Case p
+                Case "vrsta": KontrolaZaPolje = "txtField1"
+                Case "sorta": KontrolaZaPolje = "txtField2"
+                Case "gajbica": KontrolaZaPolje = "txtField3"
+                Case "tipamb": KontrolaZaPolje = "cmbField1"
+                Case "pragupoz": KontrolaZaPolje = "txtField5"
+                Case "pragblok": KontrolaZaPolje = "txtField6"
+            End Select
+        Case "Cenovnik"
+            Select Case p
+                Case "vrsta": KontrolaZaPolje = "cmbField1"
+                Case "sorta": KontrolaZaPolje = "cmbField2"
+                Case "klasa": KontrolaZaPolje = "cmbField3"
+                Case "datum": KontrolaZaPolje = "txtField4"
+                Case "cena": KontrolaZaPolje = "txtField5"
+            End Select
+        Case "VrstaGP"
+            If p = "tip" Then KontrolaZaPolje = "txtField1"
+        Case "TipAmbalaze", "TipPalete", "Kutije", "Kese"
+            Select Case p
+                Case "tip": KontrolaZaPolje = "txtField1"
+                Case "tezina": KontrolaZaPolje = "txtField2"
+            End Select
+    End Select
+End Function
+
+' Recnik "kljuc polja -> vrednost kontrole", u obliku koji modMaticniUnos ocekuje.
+'
+' Combo koji nosi strani kljuc daje SKRIVENI ID, ne prikaz: dve stanice istog
+' naziva su moguce, pa bi trazenje po nazivu pogodilo prvu. Isti razlog zbog kog
+' se red bira po PK, a ne po poziciji u listi.
+Private Function PokupiPolja(ByVal kljuc As String) As Object
+    Dim d As Object, a As Variant, r As Variant, nm As String, pk As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set PokupiPolja = d
+    a = modMaticniIzvor.MatPolja(kljuc)
+    If Not IsArray(a) Then Exit Function
+    For Each r In a
+        pk = modMaticniIzvor.PoljeF(CStr(r), 0)
+        nm = KontrolaZaPolje(pk)
+        If Len(nm) > 0 Then d(pk) = VrednostKontrole(nm, CStr(r))
+    Next r
+End Function
+
+Private Function VrednostKontrole(ByVal nm As String, ByVal spec As String) As String
+    Dim ctl As Object
+    On Error GoTo Fallback
+    Set ctl = Me.Controls(nm)
+    Select Case modMaticniIzvor.PoljeF(spec, 5)
+        Case "@stanice", "@kooperanti"
+            VrednostKontrole = GetSelectedComboHiddenID(ctl)
+        Case Else
+            VrednostKontrole = Trim$(NzToText(ctl.value))
+    End Select
+    Exit Function
+Fallback:
+    VrednostKontrole = ""
+End Function
+
+' Vrati fokus na polje koje je pisac odbio -- forma je to radila sa SetFocus
+' odmah uz svaku proveru.
+Private Sub FokusNaPolje(ByVal polja As Object)
+    Dim nm As String
+    On Error Resume Next
+    If polja Is Nothing Then Exit Sub
+    If Not polja.Exists(modMaticniUnos.MAT_FOKUS) Then Exit Sub
+    nm = KontrolaZaPolje(CStr(polja(modMaticniUnos.MAT_FOKUS)))
+    If Len(nm) > 0 Then Me.Controls(nm).SetFocus
+End Sub
+
+Private Sub btnDodaj_Click()
+    Dim kljuc As String, polja As Object, odgovor As String, noviID As String
     On Error GoTo EH
 
-    Const SRC As String = "frmStammdaten.btnIzmeni_Click"
-
-    If lstData.ListIndex >= 0 Then
-        m_SelectedRow = GetMappedSelectedRow()
-    End If
-
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite stavku iz liste!", vbExclamation, APP_NAME
+    If Me.Tag = "Korisnici" Then
+        DodajKorisnika
         Exit Sub
     End If
 
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    Dim stID As String
-    Dim koopIDEdit As String
-    Dim povrsinaEdit As Double
-    Dim cenaEdit As Double
-    Dim dozaEdit As Double
-    Dim pakovanjeEdit As Double
-
-    Select Case Me.Tag
-
-        Case "Kooperanti"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite ime!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite prezime!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            stID = GetSelectedComboHiddenID(cmbField1)
-
-            If stID = "" Or InStr(1, stID, "ST-", vbTextCompare) = 0 Then
-                stID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbField1.value, "StanicaID"))
-            End If
-
-            If stID = "" Then
-                MsgBox "Nije prona" & ChrW(273) & "en StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "Ime", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Prezime", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Telefon", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "StanicaID", stID, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "BPGBroj", Trim$(txtField6.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "TekuciRacun", Trim$(txtField7.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Pin", Trim$(txtField8.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Adresa", Trim$(txtField9.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "JMBG", Trim$(txtField10.value), SRC
-
-            tx.CommitTx
-            
-
-        Case "Stanice"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            ' tblStanice kod razlicitih instalacija ima drift u nazivima kolona
-            ' (npr. Ime vs KontaktIme, PIN vs Pin). Da izmena NE pukne na
-            ' nepostojecoj koloni (rollback cele izmene), azuriramo prvu kolonu
-            ' koja STVARNO postoji (alias-probe). Reuse: GetColumnIndex.
-            UpdateFirstExistingCol SRC, Trim$(txtField1.value), "Naziv"
-            UpdateFirstExistingCol SRC, Trim$(txtField2.value), "Mesto"
-            UpdateFirstExistingCol SRC, Trim$(txtField3.value), "Kontakt", "Telefon"
-            UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme"
-            UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
-            UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
-            UpdateFirstExistingCol SRC, Trim$(cmbField1.value), COL_STA_JE_HLADNJACA
-
-            tx.CommitTx
-
-        Case "Korisnici"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            ' Spreci duplikat korisnickog imena (drugi red sa istim username-om).
-            Dim dupIzm As Variant, curIDIzm As String
-            curIDIzm = Trim$(lstData.List(lstData.ListIndex, 0))   ' ID reda koji se menja
-            dupIzm = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
-            If Not IsEmpty(dupIzm) Then
-                If Len(Trim$(CStr(dupIzm))) > 0 And StrComp(Trim$(CStr(dupIzm)), curIDIzm, vbTextCompare) <> 0 Then
-                    MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
-                    Exit Sub
-                End If
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            Dim ulogaIzm As String
-            ulogaIzm = NormalizeUloga(cmbField1.value)
-
-            Dim admIzm As Boolean
-            admIzm = (StrComp(ulogaIzm, ULOGA_ADMIN, vbTextCompare) = 0)
-
-            Dim aktivIzm As String
-            If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivIzm = "NE" Else aktivIzm = "DA"
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_IME, Trim$(txtField2.value), SRC
-            If Len(Trim$(txtField3.value)) > 0 Then
-                RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
-            End If
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_ULOGA, ulogaIzm, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_AKTIVAN, aktivIzm, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
-
-            Dim oblIzm As Variant
-            For Each oblIzm In modAuth.OblastiList()
-                RequireUpdateCell m_TableName, m_SelectedRow, CStr(oblIzm), _
-                                  OblComboVal(admIzm, CStr(oblIzm)), SRC
-            Next oblIzm
-
-            tx.CommitTx
-
-        Case "Kupci"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv kupca!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "Naziv", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Ulica", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "PostanskiBroj", Trim$(txtField4.value), SRC
-            ' Drzava: ime kolone po instalaciji ("Drzava" bez dijakritike ili sa),
-            ' isto kao u LoadList -- resi dinamicki da se izmena sacuva.
-            Dim drzColKup As String
-            drzColKup = "Dr" & ChrW(382) & "ava"
-            If GetColumnIndex(m_TableName, drzColKup) = 0 Then drzColKup = "Drzava"
-            RequireUpdateCell m_TableName, m_SelectedRow, drzColKup, Trim$(txtField5.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "PIB", Trim$(txtField6.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "MaticniBroj", Trim$(txtField7.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Email", Trim$(txtField8.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Hladnjaca", Trim$(txtField9.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "TekuciRacun", Trim$(txtField10.value), SRC
-
-            tx.CommitTx
-
-        Case "Vozaci"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite ime vozaca!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite prezime vozaca!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "Ime", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Prezime", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Telefon", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "PIN", Trim$(txtField4.value), SRC
-
-            tx.CommitTx
-
-        Case "Parcele"
-            If Trim$(cmbField1.value) = "" Then
-                MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
-                cmbField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite katastarski broj!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField3.value) = "" Then
-                MsgBox Poruka("STM_MSG_UNESITE_KATASTARSKU_OPSTINU"), vbExclamation, APP_NAME
-                txtField3.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField2.value) = "" Then
-                MsgBox "Izaberite kulturu!", vbExclamation, APP_NAME
-                cmbField2.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField3.value) = "" Then
-                MsgBox "Izaberite GGAP status!", vbExclamation, APP_NAME
-                cmbField3.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField5.value, povrsinaEdit) Or povrsinaEdit <= 0 Then
-                MsgBox Poruka("STM_MSG_UNESITE_VALIDNU_POVRSINU"), vbExclamation, APP_NAME
-                txtField5.SetFocus
-                Exit Sub
-            End If
-
-            koopIDEdit = ExtractIDFromDisplay(cmbField1.value)
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "KooperantID", koopIDEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "KatBroj", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "KatOpstina", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Kultura", Trim$(cmbField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "PovrsinaHa", povrsinaEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "GGAPStatus", Trim$(cmbField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Napomena", Trim$(txtField7.value), SRC
-
-            tx.CommitTx
-
-        Case "Artikli"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite naziv artikla!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField5.value) = "" Then
-                MsgBox "Izaberite tip artikla!", vbExclamation, APP_NAME
-                cmbField5.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(cmbField6.value) = "" Then
-                MsgBox "Izaberite jedinicu mere!", vbExclamation, APP_NAME
-                cmbField6.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField4.value, cenaEdit) Or cenaEdit < 0 Then
-                MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
-                txtField4.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField6.value, dozaEdit) Or dozaEdit < 0 Then
-                MsgBox "Unesite validnu dozu!", vbExclamation, APP_NAME
-                txtField6.SetFocus
-                Exit Sub
-            End If
-
-            If Not TryParseDouble(txtField7.value, pakovanjeEdit) Or pakovanjeEdit < 0 Then
-                MsgBox "Unesite validno pakovanje!", vbExclamation, APP_NAME
-                txtField7.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "Naziv", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Tip", Trim$(cmbField5.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "JedinicaMere", Trim$(cmbField6.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "CenaPoJedinici", cenaEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "DozaPoHa", dozaEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Kultura", Trim$(cmbField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Pakovanje", pakovanjeEdit, SRC
-
-            tx.CommitTx
-
-        Case "Kulture"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            Dim gajbicaEdit As Double
-            If Trim$(txtField3.value) <> "" Then
-                If Not TryParseDouble(txtField3.value, gajbicaEdit) Or gajbicaEdit < 0 Then
-                    MsgBox "Unesite validan broj gajbica po paleti!", vbExclamation, APP_NAME
-                    txtField3.SetFocus
-                    Exit Sub
-                End If
-            End If
-
-            Dim pragUpozEdit As Double, pragBlokEdit As Double
-            If Not ValidatePragoviKulture(pragUpozEdit, pragBlokEdit) Then Exit Sub
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, "VrstaVoca", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "SortaVoca", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_GAJBICA_PALETA, gajbicaEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozEdit, SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_BLOK, pragBlokEdit, SRC
-
-            tx.CommitTx
-
-        Case "TipAmbalaze"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip ambala" & ChrW(382) & "e!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaAmbEdit As Double
-            If Not TryParseDouble(txtField2.value, tezinaAmbEdit) Or tezinaAmbEdit < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu gajbice (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_TAMB_TIP, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_TAMB_TEZINA, tezinaAmbEdit, SRC
-
-            tx.CommitTx
-
-        Case "TipPalete"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip palete!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaPalEdit As Double
-            If Not TryParseDouble(txtField2.value, tezinaPalEdit) Or tezinaPalEdit < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu palete (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TIP, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TEZINA, tezinaPalEdit, SRC
-
-            tx.CommitTx
-
-        Case "Kutije"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip kutije!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaKutEdit As Double
-            If Not TryParseDouble(txtField2.value, tezinaKutEdit) Or tezinaKutEdit < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu kutije (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUT_TIP, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUT_TEZINA, tezinaKutEdit, SRC
-
-            tx.CommitTx
-
-        Case "Kese"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip kese!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            Dim tezinaKesEdit As Double
-            If Not TryParseDouble(txtField2.value, tezinaKesEdit) Or tezinaKesEdit < 0 Then
-                MsgBox "Unesite validnu te" & ChrW(382) & "inu kese (kg)!", vbExclamation, APP_NAME
-                txtField2.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KES_TIP, Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KES_TEZINA, tezinaKesEdit, SRC
-
-            tx.CommitTx
-
-        Case "VrstaGP"
-            If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip gotovog proizvoda!", vbExclamation, APP_NAME
-                txtField1.SetFocus
-                Exit Sub
-            End If
-
-            tx.BeginTx
-            tx.AddTableSnapshot m_TableName
-
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_VGP_TIP, Trim$(txtField1.value), SRC
-
-            tx.CommitTx
-
-        Case "Cenovnik"
-            ' Append-only: istorija cena se ne menja. Nova cena = Dodaj.
-            MsgBox "Cenovnik je append-only." & vbCrLf & _
-                   Poruka("STM_MSG_NOVU_CENU_KORISTITE"), _
-                   vbInformation, APP_NAME
-            Exit Sub
-
-        Case Else
-            MsgBox "Nepoznat tip mati" & ChrW(269) & "nih podataka: " & Me.Tag, vbCritical, APP_NAME
-            Exit Sub
-
-    End Select
-
-    Set tx = Nothing
-
-    MsgBox "Izmenjeno!", vbInformation, APP_NAME
-
+    kljuc = SekcijaKljuc()
+    If Len(kljuc) = 0 Then
+        MsgBox Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & Me.Tag, vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    Set polja = PokupiPolja(kljuc)
+    odgovor = modMaticniUnos.MatDodaj(kljuc, polja, noviID)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
+        Exit Sub
+    End If
+
+    MsgBox Poruka("MATU_OK_DODATO") & " " & noviID, vbInformation, APP_NAME
     LoadList
-    ClearFields
-    m_SelectedRow = 0
-
+    If kljuc = "CENOVNIK" Then
+        txtField5.value = ""        ' spremno za sledecu cenu; proizvod ostaje
+    Else
+        ClearFields
+    End If
     Exit Sub
 
 EH:
-    LogErr SRC
+    LogErr "frmStammdaten.btnDodaj_Click"
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
+End Sub
 
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
+Private Sub btnIzmeni_Click()
+    Dim kljuc As String, polja As Object, odgovor As String
+    On Error GoTo EH
 
+    If lstData.ListIndex >= 0 Then m_SelectedRow = GetMappedSelectedRow()
+    If m_SelectedRow = 0 Then
+        MsgBox Poruka("MATU_ERR_NEMA_REDA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If Me.Tag = "Korisnici" Then
+        IzmeniKorisnika
+        Exit Sub
+    End If
+
+    kljuc = SekcijaKljuc()
+    If Len(kljuc) = 0 Then
+        MsgBox Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & Me.Tag, vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    Set polja = PokupiPolja(kljuc)
+    odgovor = modMaticniUnos.MatIzmeni(kljuc, m_SelectedRow, polja)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
+        Exit Sub
+    End If
+
+    MsgBox Poruka("MATU_OK_IZMENJENO"), vbInformation, APP_NAME
+    LoadList
+    ClearFields
+    m_SelectedRow = 0
+    Exit Sub
+
+EH:
+    LogErr "frmStammdaten.btnIzmeni_Click"
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_IZMENI") & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Korisnici od M4 idu kroz modMaticniKorisnici -- istog pisca koga zove i
+' ekran. Forma vise ne zna ni za PreparePin ni za recnik "DA"/"NE" ni za
+' redosled kolona prava; samo pokupi ono sto je operater otkucao.
+'
+' Dvanaest combo-a prava se predaje pod prefiksom "obl:" -- to je jedini deo
+' koji ekran NE salje, jer prava tamo imaju svoju listu. Pisac zato pise samo
+' one oblasti koje je stvarno dobio.
+Private Function PokupiKorisnika() As Object
+    Dim d As Object, obl As Variant
+    Set d = PokupiPolja("KORISNICI")
+    Set PokupiKorisnika = d
+    ' Stanicu je PokupiPolja vec procitalo kao skriveni ID (izvor "@stanice").
+    For Each obl In modAuth.OblastiList()
+        d(modMaticniKorisnici.KOR_OBL_PREFIKS & CStr(obl)) = _
+            OblComboVal(CStr(obl))
+    Next obl
+End Function
+
+Private Sub DodajKorisnika()
+    Dim polja As Object, odgovor As String, noviID As String
+    On Error GoTo EH
+    Set polja = PokupiKorisnika()
+    odgovor = modMaticniUnos.MatDodaj("KORISNICI", polja, noviID)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
+        Exit Sub
+    End If
+    MsgBox Poruka("MATU_OK_DODATO") & " " & noviID, vbInformation, APP_NAME
+    LoadList
+    ClearFields
+    KorisniciSetDefaults
+    Exit Sub
+EH:
+    LogErr "frmStammdaten.DodajKorisnika"
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub IzmeniKorisnika()
+    Dim polja As Object, odgovor As String
+    On Error GoTo EH
+    Set polja = PokupiKorisnika()
+    odgovor = modMaticniUnos.MatIzmeni("KORISNICI", m_SelectedRow, polja)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
+        Exit Sub
+    End If
+    MsgBox Poruka("MATU_OK_IZMENJENO"), vbInformation, APP_NAME
+    LoadList
+    ClearFields
+    m_SelectedRow = 0
+    Exit Sub
+EH:
+    LogErr "frmStammdaten.IzmeniKorisnika"
     MsgBox Poruka("STM_ERR_GRESKA_PRI_IZMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
@@ -2846,7 +2154,7 @@ Private Sub btnPovratak_Click()
     On Error GoTo EH
 
     ButtonActive btnPovratak
-    
+
     frmOtkupAPP.ReturnToDashboard "Mati" & ChrW(269) & "ni podaci zatvoreni."
     Unload Me
 
@@ -2916,27 +2224,9 @@ End Sub
 ' Prazno -> 0 (provera iskljucena za tu kulturu). Blok mora biti >= upoz kad su
 ' oba > 0 (inace bi blokada gasila upozorenje). Vraca False (uz MsgBox + fokus)
 ' na nevalidan unos; inace puni upozOut/blokOut.
-Private Function ValidatePragoviKulture(ByRef upozOut As Double, ByRef blokOut As Double) As Boolean
-    ValidatePragoviKulture = False
-    upozOut = 0: blokOut = 0
-    If Trim$(txtField5.value) <> "" Then
-        If Not TryParseDouble(txtField5.value, upozOut) Or upozOut < 0 Then
-            MsgBox "Unesite validan prag upozorenja (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
-            txtField5.SetFocus: Exit Function
-        End If
-    End If
-    If Trim$(txtField6.value) <> "" Then
-        If Not TryParseDouble(txtField6.value, blokOut) Or blokOut < 0 Then
-            MsgBox "Unesite validan prag blokade (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
-            txtField6.SetFocus: Exit Function
-        End If
-    End If
-    If upozOut > 0 And blokOut > 0 And blokOut < upozOut Then
-        MsgBox "Prag blokade mora biti veci ili jednak pragu upozorenja.", vbExclamation, APP_NAME
-        txtField6.SetFocus: Exit Function
-    End If
-    ValidatePragoviKulture = True
-End Function
+' ValidatePragoviKulture je PRESELJENO u modMaticniUnos (ukrstena provera
+' pragova kulture). Ostavljena kopija bi bila drugo mesto na kom isto pravilo
+' zivi -- tacno ono sto M2 uklanja.
 
 Private Sub ResetFieldVisibility()
     On Error Resume Next
@@ -2964,9 +2254,9 @@ Private Sub ResetFieldVisibility()
             .ColumnWidths = ""
         End With
     Next i
-    
+
     SetGeoControlsVisible False
-    
+
     On Error GoTo 0
 End Sub
 
@@ -3060,7 +2350,7 @@ Private Sub btnGeoOpen_Click()
     searchText = katBroj & " " & Replace(katOpstina, "KO ", "")
 
     CopyToClipboard searchText
-    ThisWorkbook.FollowHyperlink "https://a3.geosrbija.rs/"
+    ThisWorkbook.FollowHyperlink modMaticniGeo.GEO_URL_SRBIJA
 
     SetGeoStatus "GeoSrbija otvorena. Pretraga je kopirana: " & searchText, False
     Exit Sub
@@ -3182,7 +2472,7 @@ Private Sub btnPasteCoords_Click()
     Dim nVal As Double
     Dim eVal As Double
 
-    If Not TryExtractTwoCoordinates(txt, nVal, eVal) Then
+    If Not modMaticniGeo.GeoIzTeksta(txt, nVal, eVal) Then
         SetGeoStatus "Nisu pronadene validne koordinate u clipboard-u.", True
         Exit Sub
     End If
@@ -3485,6 +2775,9 @@ Private Function FormatCoordForTextBox(ByVal v As Double) As String
     FormatCoordForTextBox = Replace(Format$(v, "0.############"), ",", ".")
 End Function
 
+' TryExtractTwoCoordinates i CleanCoordToken su PRESELJENI u modMaticniGeo
+' (GeoIzTeksta / OcistiToken). Isto pravilo je trebalo i novom ekranu, a dve
+' kopije praga "|d| > 1000" bi se razisle prvom doradom.
 Private Sub ClearGeoFields()
     On Error Resume Next
 
@@ -3494,81 +2787,7 @@ Private Sub ClearGeoFields()
     On Error GoTo 0
 End Sub
 
-Private Function TryExtractTwoCoordinates(ByVal rawText As String, _
-                                          ByRef firstCoord As Double, _
-                                          ByRef secondCoord As Double) As Boolean
-    On Error GoTo EH
 
-    Dim txt As String
-    txt = Trim$(rawText)
-
-    If txt = "" Then Exit Function
-
-    txt = Replace(txt, vbCr, " ")
-    txt = Replace(txt, vbLf, " ")
-    txt = Replace(txt, vbTab, " ")
-    txt = Replace(txt, ";", " ")
-
-    Do While InStr(txt, "  ") > 0
-        txt = Replace(txt, "  ", " ")
-    Loop
-
-    Dim tokens() As String
-    tokens = Split(txt, " ")
-
-    Dim vals(0 To 1) As Double
-    Dim count As Long
-    Dim i As Long
-    Dim d As Double
-    Dim candidate As String
-
-    For i = LBound(tokens) To UBound(tokens)
-        candidate = CleanCoordToken(tokens(i))
-
-        If TryParseDouble(candidate, d) Then
-            If Abs(d) > 1000 Then
-                vals(count) = d
-                count = count + 1
-
-                If count = 2 Then Exit For
-            End If
-        End If
-    Next i
-
-    If count < 2 Then Exit Function
-
-    firstCoord = vals(0)
-    secondCoord = vals(1)
-
-    TryExtractTwoCoordinates = True
-    Exit Function
-
-EH:
-    TryExtractTwoCoordinates = False
-End Function
-
-Private Function CleanCoordToken(ByVal token As String) As String
-    Dim s As String
-    s = Trim$(token)
-
-    s = Replace(s, "N=", "")
-    s = Replace(s, "E=", "")
-    s = Replace(s, "N:", "")
-    s = Replace(s, "E:", "")
-    s = Replace(s, "n=", "")
-    s = Replace(s, "e=", "")
-    s = Replace(s, "n:", "")
-    s = Replace(s, "e:", "")
-
-    s = Replace(s, "(", "")
-    s = Replace(s, ")", "")
-    s = Replace(s, "[", "")
-    s = Replace(s, "]", "")
-    s = Replace(s, "{", "")
-    s = Replace(s, "}", "")
-
-    CleanCoordToken = s
-End Function
 
 Private Function GetSelectedParcelaID() As String
     Const SRC As String = "frmStammdaten.GetSelectedParcelaID"
@@ -3633,13 +2852,8 @@ End Sub
 Public Function OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double) As Boolean
     On Error GoTo EH
 
-    Dim url As String
-
-    url = "https://www.google.com/maps?q=" & _
-          Replace(CStr(lat), ",", ".") & "," & _
-          Replace(CStr(lng), ",", ".")
-
-    ThisWorkbook.FollowHyperlink url
+    ' Adresa se gradi u modMaticniGeo -- isti oblik koristi i novi ekran.
+    ThisWorkbook.FollowHyperlink modMaticniGeo.GeoUrlMape(lat, lng)
 
     OpenGoogleMaps = True
     Exit Function
@@ -3654,13 +2868,11 @@ Public Function OpenParcelPolygonEditor(ByVal parcelaID As String) As Boolean
 
     Dim url As String
 
-    If Trim$(parcelaID) = "" Then
+    url = modMaticniGeo.GeoUrlPoligon(parcelaID)
+    If Len(url) = 0 Then
         LogError "frmStammdaten.OpenParcelPolygonEditor", "ParcelaID nije prosleden."
         Exit Function
     End If
-
-    url = "https://dusanmiladinovicvnm.github.io/otkupapp-pwa/parcel-draw.html?parcelaId=" & _
-          WorksheetFunction.EncodeURL(parcelaID)
 
     ThisWorkbook.FollowHyperlink url
 

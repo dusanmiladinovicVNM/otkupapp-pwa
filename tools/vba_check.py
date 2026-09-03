@@ -114,6 +114,10 @@ SCR_UGOVOR = {
     "scr_meta", "scr_build", "scr_layout", "scr_rows", "scr_event",
     "scr_save", "scr_resetcache", "scr_liste", "scr_lista", "scr_radnje",
     "scr_naslovdopuna", "scr_brojac", "scr_cipovi", "scr_brojikomade",
+    # v6-ui-187/188: dodatna brana ekrana (administracija) i podrazumevani
+    # sort aktivne liste. Oba se zovu iskljucivo kasno vezano i kvalifikovano
+    # (modUiScreens.ScrDozvoljen / ScrSort), pa vazi isti izuzetak.
+    "scr_dozvoljen", "scr_sort", "scr_deaktiviraj", "scr_imanesacuvano",
 }
 
 
@@ -164,6 +168,14 @@ DECLARE_DEF = re.compile(
 
 CALL_STMT = re.compile(r"^(?:Call\s+)?([A-Za-z_]\w*)\s*(.*)$", re.IGNORECASE)
 
+# Clan modula koji NIJE procedura: javna konstanta ili javna promenljiva.
+# Kvalifikovan pristup (modConfig.TBL_OTKUP) je legalan i mora da prodje.
+JAVNI_CLAN_DEF = re.compile(
+    r"^\s*(?:Public|Global)\s+(?:Const\s+)?(\w+)\b\s*(?:\(|As\b|=)", re.IGNORECASE)
+
+# Kvalifikovan poziv na pocetku naredbe: `modX.Proc arg` ili `modX.Proc(arg)`.
+KVAL_POZIV = re.compile(r"^([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*(.*)$")
+
 BLOCK_OPEN = re.compile(r"^\s*(?:Public\s+|Private\s+)?(Type|Enum)\s+\w+", re.IGNORECASE)
 BLOCK_CLOSE = re.compile(r"^\s*End\s+(Type|Enum)\b", re.IGNORECASE)
 
@@ -200,6 +212,33 @@ def collect_definitions(files: list[str]) -> set[str]:
                         names.add(m.group(1).lower())
                         break
     return names
+
+
+def collect_module_members(files: list[str]) -> dict[str, set[str]]:
+    """Clanovi PO MODULU: {ime modula: {procedure i konstante}}.
+
+    Sluzi proveri KVALIFIKOVANOG poziva (modX.Proc). Ravan skup iz
+    collect_definitions na to ne odgovara: on kaze da ime postoji NEGDE, a
+    `modUiKit.PanelStilNaslov` pada ako bas taj modul nema bas tog clana.
+
+    Uzimaju se samo .bas moduli -- kod klase i forme kvalifikator je instanca,
+    ne modul, pa se tamo ne moze zakljucivati.
+    """
+    out: dict[str, set[str]] = {}
+    for path in files:
+        if not path.lower().endswith(".bas"):
+            continue
+        modul = os.path.splitext(os.path.basename(path))[0].lower()
+        clanovi: set[str] = set()
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            for line in fh:
+                for rx in (DECLARE_DEF, PROC_DEF, JAVNI_CLAN_DEF):
+                    m = rx.match(line)
+                    if m:
+                        clanovi.add(m.group(1).lower())
+                        break
+        out[modul] = clanovi
+    return out
 
 
 def _strip_comment(text: str) -> str:
@@ -322,7 +361,7 @@ def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
 
 
 def check_undefined(path: str, lines: list[str], defined: set[str],
-                    arities: dict) -> list[Finding]:
+                    arities: dict, moduli: dict | None = None) -> list[Finding]:
     if not path.lower().endswith(".bas"):
         return []
 
@@ -350,12 +389,13 @@ def check_undefined(path: str, lines: list[str], defined: set[str],
             # bio prijavljen kao poziv nedefinisane procedure.
             if je_labela and re.fullmatch(r"[A-Za-z_]\w*", stmt):
                 continue
-            out += _proveri_naredbu(path, i, line, stmt, defined, arities)
+            out += _proveri_naredbu(path, i, line, stmt, defined, arities, moduli)
     return out
 
 
 def _proveri_naredbu(path: str, i: int, line: str, stmt: str,
-                     defined: set[str], arities: dict) -> list[Finding]:
+                     defined: set[str], arities: dict,
+                     moduli: dict | None = None) -> list[Finding]:
         out: list[Finding] = []
         explicit_call = bool(re.match(r"^Call\s", stmt, re.IGNORECASE))
         m = CALL_STMT.match(stmt)
@@ -364,6 +404,25 @@ def _proveri_naredbu(path: str, i: int, line: str, stmt: str,
         name, rest = m.group(1), m.group(2).lstrip()
 
         if name.lower() in STMT_WORDS or name.lower() in RESERVED:
+            return out
+        # KVALIFIKOVAN POZIV: `modX.Proc arg`. Do v6-ui-198 je ovde bio slep --
+        # `rest.startswith(".")` ga je odbacivalo kao pristup clanu objekta, pa
+        # je poziv nepostojeceg clana modula prolazio sve do Debug -> Compile
+        # ("Method or data member not found"). A nova ljuska je SVA na takvim
+        # pozivima: modOtkupUI.ShowToast, modMaticniIzvor.MatKolone...
+        #
+        # Zakljucuje se SAMO kad je kvalifikator poznat .bas modul. Za sve
+        # ostalo (lo.ListRows, frm.Controls, tx.CommitTx) kvalifikator je
+        # objekat i o njegovim clanovima se odavde ne moze nista tvrditi.
+        if rest.startswith(".") and moduli:
+            mq = KVAL_POZIV.match(stmt)
+            if mq and mq.group(1).lower() in moduli:
+                clan = mq.group(2)
+                if clan.lower() not in moduli[mq.group(1).lower()]:
+                    out.append(Finding(path, i, "NEDEFINISAN",
+                                       f"poziv '{mq.group(1)}.{clan}' -- modul "
+                                       f"'{mq.group(1)}' nema clan '{clan}'. VBA: "
+                                       f'"Method or data member not found".'))
             return out
         # `Foo = 1` (dodela), `Foo.Bar` (clan), `Foo As Long` (clan tipa) --
         # nista od toga nije poziv procedure.
@@ -1457,13 +1516,58 @@ def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- PROCEDURA_VELIKA: VBA granica velicine procedure -------------------------
+#
+# VBA odbija da prevede proceduru cija prevedena velicina prelazi ~64 KB, uz
+# jedinu poruku "Procedure too large". Nijedna druga kapija to ne vidi: nije
+# sintaksna greska, testovi je ne dotaknu (modul se ne prevede pa NISTA ne radi),
+# a CI ne pokrece Excel. Naslo se tek rucnim Debug -> Compile, kad je katalog
+# poruka (modPoruke.UpsertPoruke, 1657 poziva u JEDNOJ proceduri) prerastao
+# granicu spajanjem dve grane.
+#
+# Prag je IZMEREN, ne pogodjen: najveca procedura u repou koja se uredno prevodi
+# ima ~27 KB izvora, nijedna nema preko 30 KB, a pala je imala ~200 KB. 40 KB
+# zato ostavlja glavu zatecenom kodu, a pukne davno pre tvrde granice.
+#
+# Meri se IZVOR, jer prevedena velicina se odavde ne moze izracunati. To je gruba
+# mera i namerno je gruba: posao provere je da javi "ova procedura je prerasla",
+# ne da predvidi tacan bajt na kom ce VBA stati.
+MAX_PROC_BAJTOVA = 40000
+
+_PROC_POC = re.compile(r"^\s*(?:Public |Private |Friend )?(?:Static )?"
+                       r"(Sub|Function|Property)\s+\w", re.I)
+_PROC_KRAJ = re.compile(r"^\s*End (Sub|Function|Property)\s*$", re.I)
+
+
+def check_proc_size(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    ime, poc, bajt = None, 0, 0
+    for i, l in enumerate(lines, 1):
+        if ime is None:
+            if _PROC_POC.match(l) and not l.lstrip().startswith("'"):
+                ime, poc, bajt = l.strip(), i, len(l) + 1
+            continue
+        bajt += len(l) + 1
+        if _PROC_KRAJ.match(l):
+            if bajt > MAX_PROC_BAJTOVA:
+                out.append(Finding(path, poc, "PROCEDURA_VELIKA",
+                                   f"procedura je {bajt // 1024} KB izvora "
+                                   f"(prag {MAX_PROC_BAJTOVA // 1024} KB). VBA odbija da "
+                                   f"prevede proceduru precu od ~64 KB prevedenog koda uz "
+                                   f'"Procedure too large" -- podeli je na vise procedura '
+                                   f"(v. modPoruke.UpsertPoruke)."))
+            ime = None
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
-               defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
+               defined: set[str], arities: dict[str, tuple[int, float]],
+               moduli: dict | None = None) -> list[Finding]:
     out = []
     out += check_ascii(path, raw)
     out += check_decl_after_proc(path, lines)
     out += check_reserved(path, lines)
-    out += check_undefined(path, lines, defined, arities)
+    out += check_undefined(path, lines, defined, arities, moduli)
     out += check_local_dupes(path, lines)
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
@@ -1472,6 +1576,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_test_registry(path, lines)
     out += check_storno_progutan(path, lines)
     out += check_nedeklarisan(path, lines)
+    out += check_proc_size(path, lines)
     return out
 
 
@@ -2440,6 +2545,64 @@ Option Explicit
 # razlikuje od Split() rezultata ili kolekcije.
 #
 # Bez tog suzavanja je provera nad zatecenim kodom dala 51 nalaz umesto 26.
+# --- KVALIFIKOVAN POZIV: modX.Proc -------------------------------------------
+# Zatecen incident: selidba stilova u modUiKit je dvaput prefiksovala imena
+# (PanelPanelStilNaslov), pa su pozivi modUiKit.PanelStilNaslov padali tek na
+# Debug -> Compile uz "Method or data member not found". Checker je do tada
+# odbacivao SVAKI kvalifikovan poziv kao pristup clanu objekta.
+#
+# Mapa modula se u ovim slucajevima daje rucno: self-test ne cita src-vba, pa
+# se meri BAS pravilo, a ne stanje repoa.
+KVAL_CASES = [
+    ("clan koji modul nema", 1, {"moduikit": {"panelstilnatpis"}},
+     """Option Explicit
+Public Sub Radi()
+    modUiKit.PanelStilNaslov x
+End Sub
+"""),
+    ("clan koji modul ima ne sme da zapisti", 0, {"moduikit": {"panelstilnaslov"}},
+     """Option Explicit
+Public Sub Radi()
+    modUiKit.PanelStilNaslov x
+End Sub
+"""),
+    # Druga polovina, i vaznija: kvalifikator koji NIJE modul je objekat, i o
+    # njegovim clanovima se ne sme zakljucivati. Ovde je najveci rizik laznog
+    # nalaza -- takav poziv je u ovom kodu na svakoj drugoj liniji.
+    ("objekat nije modul -- ne dira se", 0, {"moduikit": {"panelstilnaslov"}},
+     """Option Explicit
+Public Sub Radi()
+    tx.CommitTx
+    lo.ListRows.Add
+    frm.Controls("x").Visible = True
+End Sub
+"""),
+    ("nepoznat modul se preskace", 0, {"moduikit": {"panelstilnaslov"}},
+     """Option Explicit
+Public Sub Radi()
+    modNepoznat.BiloSta y
+End Sub
+"""),
+]
+
+PROC_SIZE_CASES = [
+    # PROCEDURA_VELIKA -- zatecen incident: katalog poruka je spajanjem dve grane
+    # prerastao VBA granicu, a jedina greska je bila "Procedure too large" pri
+    # rucnom Debug -> Compile. Izvor se GRADI, ne kuca: 40 KB literala usred ove
+    # skripte bi bio necitljiv, a meri isto.
+    ("procedura preko praga", 1,
+     "Option Explicit\nPublic Sub Ogromna()\n"
+     + '    Debug.Print "punjenje do preko praga velicine procedure"\n' * 900
+     + "End Sub\n"),
+    # Druga polovina dokaza, i vaznija: procedura koja je VELIKA ali ispod praga
+    # ne sme da zapisti. Lazan nalaz u PostToolUse hook-u uci da se checker
+    # ignorise, pa je gori od propustenog.
+    ("velika procedura ispod praga", 0,
+     "Option Explicit\nPublic Sub Velika()\n"
+     + '    Debug.Print "x"\n' * 500
+     + "End Sub\n"),
+]
+
 KOPIJA_NIZA_CASES = [
     # --- mora da zapisti ---
     ("citac po celiji, ByVal 2D niz", 1, """Option Explicit
@@ -2605,6 +2768,25 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp2, ignore_errors=True)
 
+    for naziv, ocekivano, mapa, izvor in KVAL_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        # Putanja MORA biti .bas: check_undefined radi samo nad modulima, pa bi
+        # "<self-test>" izasao odmah i sva cetiri slucaja bi bila prazan hod.
+        nalazi = check_undefined("modSelfTest.bas", lines, set(), {}, mapa)
+        dobijeno = sum(1 for f in nalazi if f.code == "NEDEFINISAN")
+        if dobijeno != ocekivano:
+            palo.append(f"  KVAL/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
+    for naziv, ocekivano, izvor in PROC_SIZE_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "PROCEDURA_VELIKA")
+        if dobijeno != ocekivano:
+            palo.append(f"  PROCEDURA_VELIKA/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in ZAKLONJENO_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2661,7 +2843,8 @@ def self_test() -> int:
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
-              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES) + 3)
+              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
+              + len(PROC_SIZE_CASES) + len(KVAL_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -2716,13 +2899,14 @@ def main(argv: list[str]) -> int:
     # Definicije se UVEK skupljaju nad celim src-vba, i kad se proverava jedan
     # fajl (hook) -- inace bi svaki poziv van tog fajla izgledao nedefinisano.
     defined = collect_definitions(vba_files([]))
+    moduli = collect_module_members(vba_files([]))
     arities = collect_arities(vba_files([]))
 
     for path in files:
         with open(path, "rb") as fh:
             raw = fh.read()
         lines = raw.decode("ascii", errors="replace").replace("\r\n", "\n").split("\n")
-        findings += check_file(path, raw, lines, defined, arities)
+        findings += check_file(path, raw, lines, defined, arities, moduli)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
         # pa isto ime u dve forme NIJE "Ambiguous name".
