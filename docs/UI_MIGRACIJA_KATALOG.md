@@ -7947,3 +7947,73 @@ Novi seam koji samo sužava od sada ide **tamo**, ne u pojedinačni test.
 - `vba_check`: čisto (209 fajlova, **439** sabotaža); `--self-test` 102/102.
 - **Nije izvršeno u Excelu.** `RunAllTests`, crveno→zeleno sabotage run i ručni
   `Debug → Compile` traže Windows + Excel.
+
+### 26.34 Recenzija `4c4e026`: sabotaža koja pada na pogrešnoj tvrdnji (`v6-ui-208`)
+
+#### P1 — druga sabotaža nije mogla da dokaže to što je tvrdila
+
+`AssertEq` **diže grešku na prvom padu** (`Err.Raise ERR_ASSERT`), pa test
+prestaje tu. Sabotaža `zona-posle-pada-nema-kontrole` je uklanjala
+`frm.Controls.Remove nm` — posle prvog pada zona ostaje, pa prva pada tvrdnja
+*„zona koja se nije izgradila je UKLONJENA"*. Do tvrdnje koju je katalog
+očekivao (*„zona posle ponovljene gradnje STVARNO ima kontrole"*) se **nikad ne
+stiže**, i `dokaz.py` bi javio `PALA DRUGA TVRDNJA`.
+
+Tvrdnja iz prošlog kruga — „dve sabotaže sa različitim dokazima" — **nije bila
+tačna**. Sa tadašnjim kodom nije ni mogla biti: retry koji stvarno gradi je
+**posledica** uklanjanja zone, ne zaseban mehanizam, pa nijedna izmena koda ne
+obara samo njega.
+
+Rešenje nije bilo premapiranje nego **druga linija koja pada odvojeno** — i ona
+postoji, zahvaljujući sledećem nalazu:
+
+| Sabotaža | Šta gasi | Prva pada tvrdnja |
+|---|---|---|
+| `zona-posle-pada-gradnje-ostaje` | ceo `UkloniZonu` (vraća `Visible = False`) | zona je **UKLONJENA** |
+| `omotaci-posle-pada-gradnje-ostaju` | samo `Btns.Remove` petlju | **omotači** su uklonjeni sa zonom |
+
+Druga sada prolazi tvrdnju o zoni (zona *jeste* uklonjena) i pada na tvrdnji o
+omotačima. Dve različite linije, dva različita prva pada — determinističko.
+
+Tvrdnja `zonaPosleUspeha > 0` ostaje u testu, ali **bez svoje sabotaže**: ona je
+posledična provera koja test čini smislenim, a ne nezavisna činjenica.
+
+#### P2 — curenje omotača je zatvoreno, ne samo priznato
+
+Prošli krug je uklanjao samo omotač **same zone** (po `SinkTag`), pa bi omotači
+koje je nedovršena `Scr_Build` napravila za svoju decu ostajali u `Btns` i držali
+odvojeno stablo kontrola živim. Zapisao sam to kao prihvaćeno curenje.
+
+Predlog iz recenzije je bolji i jednako jeftin: **zapamti `Btns.Count` pre
+gradnje, na neuspeh ukloni ceo rep obrnutim redom.**
+
+```vb
+btnsPre = 0
+If Not Btns Is Nothing Then btnsPre = Btns.count   ' PRE NewZone/WireZone
+...
+For i = Btns.count To btnsPre + 1 Step -1
+    Btns.Remove i                                   ' obrnuto: Collection reindeksira
+Next i
+```
+
+Snimak ide **pre** `WireZone`, pa je i omotač same zone u repu — `SinkTag`
+pretraga je otpala. Curenja više nema, i sada je **merljivo**:
+`OtkupUI_BrojOmotacaTest` je jedini trag (na formi se ne vidi, u zoni se ne
+vidi), pa test tvrdi da je broj omotača posle pada **isti kao pre**.
+
+#### P2 — poslednji deny-seam je vezan za test režim
+
+`modScrMatKorisnici.Scr_MkorBranaZatvoriTest` je bio jedini bez `IsTestMode()`
+gejta — i na postavljanju i na čitanju. Sada prati isto pravilo kao ostalih šest:
+spoljni makro ga ne može trajno aktivirati, a zaboravljen postaje inertan čim
+suite vrati `SetTestMode prevMode`.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **439** sabotaža); `--self-test` 102/102.
+- Katalog je usput uhvatio tri zastarela sidra iz ovog istog kruga
+  (`zona-posle-pada-gradnje-ostaje`, `kapija-brana-fail-open` i tvrdnju nove
+  sabotaže) — provera radi.
+- **Nije izvršeno u Excelu.** Stvarni crveno→zeleno (`dokaz.py`), `RunAllTests`
+  i ručni `Debug → Compile` traže Windows + Excel. Redosled tvrdnji je ovde
+  proveren čitanjem, ne izvršavanjem.

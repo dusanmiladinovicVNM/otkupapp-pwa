@@ -13404,6 +13404,7 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     Dim sekPosleNeuspeha As String, ekranPosleNeuspeha As String
     Dim sekPosleUspeha As String, ekranPosleUspeha As String
     Dim zonaPosleNeuspeha As Long, zonaPosleUspeha As Long
+    Dim omotacaPre As Long, omotacaPosleNeuspeha As Long
     Dim sekBezEkrana As String, ekranBezEkrana As String
     Dim uspeoPrelazak As Boolean
 
@@ -13420,11 +13421,13 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     '
     ' Neuspeh se pravi kroz GRADNJU zone: jedini put kojim ActivateScreen vraca
     ' False za ekran koji JE dostupan i POSTOJI.
+    omotacaPre = modOtkupUI.OtkupUI_BrojOmotacaTest()
     modUiScreens.ScrGradnjuOboriTest True
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosleNeuspeha = modOtkupUI.AktivnaSekcija()
     ekranPosleNeuspeha = modOtkupUI.AktivanEkran()
     zonaPosleNeuspeha = ZonaKontrolaTest(kljucMat)
+    omotacaPosleNeuspeha = modOtkupUI.OtkupUI_BrojOmotacaTest()
     modUiScreens.ScrGradnjuOboriTest False
 
     ' --- 2) PONOVLJEN prelazak na ISTOJ formi mora da USPE ----------------
@@ -13467,6 +13470,11 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
              SEK_RAD, "posle neuspeha su sekcija i ekran iz iste sekcije"
     AssertEq zonaPosleNeuspeha, -1, _
              "zona koja se nije izgradila je UKLONJENA, ne samo sakrivena"
+    ' Omotaci (WithEvents) koje je gradnja napravila moraju da odu SA zonom --
+    ' inace drze kontrole koje vise nisu na formi, i curenje raste sa svakim
+    ' padom gradnje. Meri se kao BROJ: na formi se ne vidi, u zoni se ne vidi.
+    AssertEq omotacaPosleNeuspeha, omotacaPre, _
+             "omotaci nedovrsene gradnje su uklonjeni sa zonom"
 
     ' 2) ponovljen pokusaj na ISTOJ formi
     AssertEq sekPosleUspeha, SEK_MATICNI, "ponovljen prelazak uspeva"

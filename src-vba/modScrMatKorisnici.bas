@@ -39,7 +39,7 @@ Public Function Scr_Meta() As String
 End Function
 
 Public Function Scr_Dozvoljen() As Boolean
-    If mBranaZatvorenaTest Then Exit Function
+    If mBranaZatvorenaTest And IsTestMode() Then Exit Function
     Scr_Dozvoljen = modAuth.MozeAdministraciju()
 End Function
 
@@ -102,5 +102,6 @@ End Sub
 
 ' Zatvara branu za test. Otvaranje nije moguce -- v. komentar uz mBranaZatvorenaTest.
 Public Sub Scr_MkorBranaZatvoriTest(ByVal zatvori As Boolean)
+    If Not IsTestMode() Then Exit Sub
     mBranaZatvorenaTest = zatvori
 End Sub

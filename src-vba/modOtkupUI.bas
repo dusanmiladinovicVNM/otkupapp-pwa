@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-207"
+Public Const OTKUI_BUILD   As String = "v6-ui-208"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -5078,7 +5078,7 @@ End Sub
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
 Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
     Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
-    Dim jePanel As Boolean, zatvorenPanel As Boolean
+    Dim jePanel As Boolean, zatvorenPanel As Boolean, btnsPre As Long
 
     ' Ponovljen klik na OTVOREN panel ne radi nista. Bez ovoga bi se panel
     ' rusio i gradio ispocetka, pa bi Podesavanja izgubila nesacuvanu izmenu
@@ -5191,6 +5191,13 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
         Set z = frm.Controls(nm)
         On Error GoTo 0
         If z Is Nothing Then
+            ' Koliko omotaca postoji PRE gradnje. Sve iznad toga napravila je ova
+            ' gradnja -- i zona (WireZone) i sve sto je Scr_Build ozicio -- pa se
+            ' na neuspeh uklanja tacno taj rep. Do v6-ui-207 se uklanjao samo
+            ' omotac ZONE (po SinkTag), a omotaci njene dece su ostajali u Btns i
+            ' drzali odvojeno stablo kontrola zivim.
+            btnsPre = 0
+            If Not Btns Is Nothing Then btnsPre = Btns.count
             Set z = NewZone(frm, nm, SIDEBAR_W, HEADER_H, 400, 400, C_CREAM)
             WireZone z
             If Not modUiScreens.ScrBuild(kljuc, z) Then
@@ -5205,7 +5212,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
                 ' prazan ekran. Jedan pad u gradnji je tako trajno pretvarao
                 ' ekran u prazan -- do restarta aplikacije.
                 Set z = Nothing
-                UkloniZonu frm, nm
+                UkloniZonu frm, nm, btnsPre
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
                 If zatvorenPanel Then PanelVracenNaEkran
                 PaintNav frm, NavTagFor(AktivnaStavka())
@@ -5306,26 +5313,33 @@ End Sub
 ' postavljen i posle povratka, pa ga ScrGridData procita kao pad ekrana: mreza
 ' se isprazni uz 'Lista se nije ucitala' iako su podaci procitani ispravno.
 ' Isti put pogadja svaki ekran koji u Scr_Rows dopunjava svoju zonu.
-' Uklanjanje zone koja se nije izgradila. Redosled je obavezan: OMOTAC pre
+' Uklanjanje zone koja se nije izgradila. Redosled je obavezan: OMOTACI pre
 ' KONTROLE (.claude/rules/forme-i-kontrole.md) -- omotac koji prezivi svoju
 ' kontrolu je mrtva referenca.
 '
-' Omotace koje je nedovrsena gradnja napravila za SVOJU decu ne mozemo naci po
-' tagu: oni ostaju u Btns i drze kontrole koje vise nisu na formi. To je
-' CURENJE, ne pad -- kontrola izvan forme ne dobija nijedan dogadjaj -- i put
-' postoji samo za ekran cija gradnja DIGNE gresku, sto je vec samo po sebi
-' nalaz. Bolje curenje na putu greske nego ekran koji trajno ostane prazan.
-Private Sub UkloniZonu(frm As Object, ByVal nm As String)
+' btnsPre je broj omotaca PRE gradnje: sve iznad njega napravila je ova gradnja,
+' pa se uklanja ceo taj rep, OBRNUTIM redom (Collection reindeksira posle svakog
+' Remove). Do v6-ui-207 se trazio samo omotac zone po SinkTag, pa su omotaci
+' koje je nedovrsena Scr_Build napravila za svoju decu ostajali u Btns i drzali
+' odvojeno stablo kontrola zivim -- curenje koje bi rastalo sa svakim padom.
+Private Sub UkloniZonu(frm As Object, ByVal nm As String, ByVal btnsPre As Long)
     Dim i As Long
     On Error Resume Next
     If Not Btns Is Nothing Then
-        For i = Btns.count To 1 Step -1
-            If Btns(i).SinkTag = nm Then Btns.Remove i
+        For i = Btns.count To btnsPre + 1 Step -1
+            Btns.Remove i
         Next i
     End If
     frm.Controls.Remove nm
     Err.Clear
 End Sub
+
+' Broj zivih omotaca. Javno ZBOG TESTA: curenje omotaca se ne vidi ni na formi
+' ni u zoni -- jedini trag je duzina ove kolekcije.
+Public Function OtkupUI_BrojOmotacaTest() As Long
+    If Btns Is Nothing Then Exit Function
+    OtkupUI_BrojOmotacaTest = Btns.count
+End Function
 
 ' Koji ekran bi prekidac otvorio u datoj sekciji. Javno ZBOG TESTA: test mora da
 ' zna kljuc PRE nego sto proba prelazak, da bi posle mogao da tvrdi nesto o

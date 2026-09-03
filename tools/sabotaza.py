@@ -2537,20 +2537,21 @@ SABOTAZE = {
     # gradnju jer "z nije Nothing", i prijavi uspesan prelazak.
     "zona-posle-pada-gradnje-ostaje": (
         "modOtkupUI.bas",
-        "                Set z = Nothing\n                UkloniZonu frm, nm\n",
+        "                Set z = Nothing\n                UkloniZonu frm, nm, btnsPre\n",
         "                z.Visible = False   ' SABOTAZA: zona ostaje na formi\n",
         "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
         "zona koja se nije izgradila je UKLONJENA",
     ),
-    # Ista popravka, druga strana: posle uklanjanja zone ponovljen pokusaj mora
-    # da je STVARNO izgradi. Sabotaza gasi samo uklanjanje omotaca, pa kontrola
-    # ostane na formi i gradnja se preskoci.
-    "zona-posle-pada-nema-kontrole": (
+    # Druga strana ISTE popravke, ali DRUGA linija i DRUGA tvrdnja: omotaci koje
+    # je nedovrsena gradnja napravila moraju da odu sa zonom. Ovde zona nestane
+    # kako treba (pa tvrdnja o njoj prolazi), a omotac prezivi -- curenje koje
+    # raste sa svakim padom gradnje.
+    "omotaci-posle-pada-gradnje-ostaju": (
         "modOtkupUI.bas",
-        "    frm.Controls.Remove nm\n",
-        "    ' SABOTAZA: kontrola zone ostaje na formi\n",
+        "        For i = Btns.count To btnsPre + 1 Step -1\n            Btns.Remove i\n        Next i\n",
+        "        ' SABOTAZA: omotaci nedovrsene gradnje ostaju u Btns\n",
         "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
-        "zona posle ponovljene gradnje STVARNO ima kontrole",
+        "omotaci nedovrsene gradnje su uklonjeni sa zonom",
     ),
     "sekcija-bez-ekrana-ostaje-promenjena": (
         "modOtkupUI.bas",
@@ -2648,7 +2649,7 @@ SABOTAZE = {
     ),
     "kapija-brana-fail-open": (
         "modScrMatKorisnici.bas",
-        "    If mBranaZatvorenaTest Then Exit Function\n",
+        "    If mBranaZatvorenaTest And IsTestMode() Then Exit Function\n",
         "    ' SABOTAZA: brana se ne moze zatvoriti -- fail-open\n",
         "T_Maticni_KapijeUpisaIZivotniCiklus",
         "zatvorena brana zabranjuje ekran",
