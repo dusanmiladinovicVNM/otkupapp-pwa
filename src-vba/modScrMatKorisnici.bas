@@ -80,6 +80,13 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     Scr_Event = modMaticniEkran.Dogadjaj(tag, mLista)
 End Function
 
+' Ljuska javlja da se ekran napusta -- editor, GEO panel i izbor odlaze s
+' njim. Bez ovoga bi otvoren unos preziveo prelazak na drugi ekran (v.
+' UI_MIGRACIJA_KATALOG 26.25).
+Public Sub Scr_Deaktiviraj()
+    modMaticniEkran.Deaktiviraj
+End Sub
+
 Public Sub Scr_ResetCache()
     modMaticniIzvor.MatResetCache
 End Sub

@@ -322,6 +322,10 @@ Public Function KorPromeniPravo(ByVal korID As String, ByVal oblast As String, _
     Dim red As Long, tx As clsTransaction, data As Variant
     On Error GoTo EH
     novo = ""
+    ' Ista tvrda kapija kao kod ostalih mutacija -- ovo je poseban ulaz, pa
+    ' brana ekrana nad njim ne vazi.
+    KorPromeniPravo = modMaticniUnos.MatBranaUpisa("PRAVA")
+    If Len(KorPromeniPravo) > 0 Then Exit Function
     If Len(Trim$(oblast)) = 0 Then
         KorPromeniPravo = Poruka("MATU_ERR_NEMA_REDA")
         Exit Function

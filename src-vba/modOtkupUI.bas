@@ -4272,6 +4272,7 @@ Private Sub DoSwitchOperater()
     End If
     staro = OperaterText()
     If modAuth.Login() Then
+        PrimeniNovaPrava
         RefreshOperater mFrm
         ShowToast Poruka("OTKUI_MSG_OPERATER") & " " & OperaterText(), False
     Else
@@ -4280,6 +4281,42 @@ Private Sub DoSwitchOperater()
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_MSG_OPERATER_PAO"), True
+End Sub
+
+' Nov operater -- nova prava. Do v6-ui-199 se menjalo samo ime u zaglavlju, pa
+' je admin mogao da otvori Korisnike, preda tastaturu operateru bez prava, a
+' ekran i njegove mutacione komande su ostajali otvoreni.
+'
+' Redosled nije proizvoljan:
+'   1) kes brane se BRISE pre svega -- inace bi se nova prava merila starim
+'      odgovorom;
+'   2) panel i editor se zatvaraju: oba nose stanje prethodnog operatera;
+'   3) sidebar se precrtava da prigusenje odgovara novim pravima;
+'   4) tek onda se proverava da li trenutni ekran sme da ostane.
+'
+' Ovo je UI brana. Tvrda brana stoji u piscu (modMaticniUnos), jer se do upisa
+' stize i mimo ovog ekrana.
+Private Sub PrimeniNovaPrava()
+    On Error Resume Next
+    modUiScreens.ScrResetCache
+    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
+    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
+    If mFrm Is Nothing Then Exit Sub
+
+    BuildNav mFrm                     ' prigusenje se racuna pri gradnji
+    If Len(mScreen) > 0 Then
+        If Not modUiScreens.ScrDozvoljen(mScreen) Then
+            ' Ekran koji novi operater ne sme da vidi ne ostaje otvoren.
+            ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+            ActivateScreen mFrm, SCR_POCETNI
+            Err.Clear
+            Exit Sub
+        End If
+    End If
+    PaintNav mFrm, NavTagFor(mScreen)
+    LayoutOtkup mFrm
+    RefreshFromData
+    Err.Clear
 End Sub
 
 Private Sub RefreshOperater(frm As Object)
@@ -4828,6 +4865,9 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     ' koji ostane otvoren nad zabranjenim ekranom je gori od oba ishoda.
     If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
     If kljuc = mScreen Then Exit Sub
+    ' Ekran koji odlazi sprema svoje: editor, panel, izbor. Ugovorno i kasno
+    ' vezano -- ljuska i dalje ne zna nijedan ekran po imenu.
+    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
     ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je "DOKUMENTI"
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then

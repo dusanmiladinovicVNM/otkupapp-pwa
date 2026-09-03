@@ -422,6 +422,7 @@ Public Sub RunAllTests()
     RunOne 176
     RunOne 177
     RunOne 178
+    RunOne 179
     RunOne 124
     RunOne 125
     RunOne 126
@@ -641,6 +642,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 176: TestName = "T_MatEkran_KaskadaZavisnogCombo"
         Case 177: TestName = "T_UiPanel_UgovorIUstupanje"
         Case 178: TestName = "T_Mreza_DecimalaNeNestaje"
+        Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -827,6 +829,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 176: T_MatEkran_KaskadaZavisnogCombo
         Case 177: T_UiPanel_UgovorIUstupanje
         Case 178: T_Mreza_DecimalaNeNestaje
+        Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -14218,4 +14221,81 @@ Private Sub T_Mreza_DecimalaNeNestaje()
         Next r
     Next e
     AssertEq celaBezDecimale, "", "tezine i cene sifarnika su decimalne kolone"
+End Sub
+
+' ============================================================
+' 179. Kapije upisa i zivotni ciklus editora -- NEGATIVNE tvrdnje.
+'
+' Testovi 164-178 mere OPIS i SLAGANJE. Ovaj meri sta se DESAVA kad je nesto
+' pogresno -- to je bio nalaz recenzije: struktura je pokrivena, ponasanje na
+' gresci nije.
+'
+' Cetiri stvari:
+'   1) COMBO mora da bira iz svoje liste. Kontrole su fmStyleDropDownCombo
+'      (slobodan tekst), pa je izmisljen StanicaID prolazio do upisa i strani
+'      kljuc bi pokazivao ni na sta.
+'   2) PRIRODAN PK se pri izmeni ne preimenuje. Kod ambalaze/paleta/kutija/kesa
+'      i vrste GP naziv JESTE kljuc, a nizvodne reference idu po vrednosti.
+'   3) TVRDA KAPIJA stoji u piscu, ne samo u ekranu -- do upisa se stize i iz
+'      legacy forme.
+'   4) Brana ekrana je FAIL-CLOSED: greska u brani znaci zabranjeno.
+' ============================================================
+Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
+    Dim polja As Object, odg As String, sekcije As Variant, r As Variant
+    Dim kljuc As String, bezZastite As String, pk As String
+
+    ' --- 1) combo van liste se ODBIJA -------------------------------------
+    Set polja = CreateObject("Scripting.Dictionary")
+    polja("ime") = "Test"
+    polja("prezime") = "Testic"
+    polja("stanica") = "___ne_postoji_stanica___"
+    odg = modMaticniUnos.MatProveriTest("KOOPERANTI", polja)
+    AssertEq (Len(odg) > 0), True, "izmisljena stanica se odbija pre upisa"
+    AssertEq CStr(polja(modMaticniUnos.MAT_FOKUS)), "stanica", _
+             "odbijanje kaze koje polje je van liste"
+
+    ' Prazan combo i dalje prolazi -- obaveznost je zasebna provera.
+    Set polja = CreateObject("Scripting.Dictionary")
+    polja("tip") = "___nov_tip_ambalaze___"
+    polja("tezina") = "0,5"
+    AssertEq modMaticniUnos.MatProveriTest("AMBALAZA", polja), "", _
+             "polje bez combo izvora se ne meri po listi"
+
+    ' --- 2) prirodan PK je zakljucan za izmenu ----------------------------
+    ' Sekcija bez prefiksa ID-ja ima prirodan PK; takva mora da ima polje koje
+    ' u njega pise, inace zakljucavanje nema sta da stiti.
+    sekcije = Array("AMBALAZA", "PALETE", "KUTIJE", "KESE", "VRSTAGP")
+    For Each r In sekcije
+        kljuc = CStr(r)
+        AssertEq modMaticniIzvor.MatPrefiksID(kljuc), "", _
+                 kljuc & " ima prirodan PK (bez prefiksa surogata)"
+        pk = modMaticniIzvor.MatPK(kljuc)
+        If Len(modMaticniUnos.MatPoljeZaKolonuTest(kljuc, pk)) = 0 Then _
+            bezZastite = bezZastite & " " & kljuc
+    Next r
+    AssertEq bezZastite, "", "svaki prirodan PK ima polje koje se moze zakljucati"
+
+    ' Sekcija SA surogatom se ne dira -- tamo operater PK i ne unosi.
+    AssertEq (Len(modMaticniIzvor.MatPrefiksID("KOOPERANTI")) > 0), True, _
+             "kooperanti imaju surogat kljuc, pa PK zakljucavanje ne vazi"
+
+    ' --- 3) tvrda kapija upisa POSTOJI i za korisnike trazi vise ----------
+    ' U headless runu je MozeAdministraciju anti-lockout (True), pa se meri da
+    ' kapija PUSTA kad prava postoje -- a da je uopste na putu dokazuje sabotaza.
+    AssertEq modMaticniUnos.MatBranaUpisa("KOOPERANTI"), "", _
+             "kapija pusta upis kad pravo postoji"
+    AssertEq modMaticniUnos.MatBranaUpisa("KORISNICI"), "", _
+             "kapija pusta korisnike kad je operater admin"
+
+    ' --- 4) brana ekrana je fail-closed ----------------------------------
+    ' Ekran cija Scr_Dozvoljen PUKNE ne sme da prodje. Meri se preko ekrana koji
+    ' branu NEMA (mora da prodje) i onog koji je ima (mora da postuje odgovor).
+    AssertEq modUiScreens.ScrDozvoljen("PALETE"), modAuth.KorisnikImaPravo(OBL_PALETE), _
+             "ekran bez sopstvene brane ide samo po oblasti"
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest True
+    AssertEq modUiScreens.ScrDozvoljen("MAT_KORISNICI"), False, _
+             "zatvorena brana zabranjuje ekran"
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
+    AssertEq modUiScreens.ScrDozvoljen("MAT_KORISNICI"), True, _
+             "brana se posle testa vraca"
 End Sub

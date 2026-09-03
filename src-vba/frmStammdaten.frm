@@ -53,7 +53,7 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Initialize()
-    
+
     ' Nichts hier - Tag ist noch nicht verfuegbar
 End Sub
 
@@ -97,7 +97,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnDodaj, "Dodaj"
     StylePrimaryButton btnIzmeni, "Izmeni"
     StyleExitButton btnPovratak, "Povratak"
-    
+
     ' GEO buttons (samo Parcele tab, ali style ih unapred)
     StylePrimaryButton btnGeoOpen, "Otvori GeoSrbija"
     StylePrimaryButton btnPasteCoords, "Paste koordinata"
@@ -205,9 +205,9 @@ End Function
 
 Private Sub StyleAllFields()
     On Error Resume Next
-    
+
     Dim i As Long
-    
+
     ' lblField1..10 -- naslovne labele, muted small
     For i = 1 To 10
         Dim lbl As MSForms.label
@@ -215,19 +215,19 @@ Private Sub StyleAllFields()
         StyleLabel lbl, TXT_MUTED(), False
         lbl.Font.Size = FONT_SIZE_SMALL
     Next i
-    
+
     ' GEO koordinate labele
     StyleLabel lblNCoord, TXT_MUTED(), False
     lblNCoord.Font.Size = FONT_SIZE_SMALL
     StyleLabel lblECoord, TXT_MUTED(), False
     lblECoord.Font.Size = FONT_SIZE_SMALL
-    
+
     On Error GoTo 0
 End Sub
 
 Private Sub SetupColumnHeaders()
     On Error Resume Next
-    
+
     ' Default: sakriti sve
     Dim i As Long
     For i = 1 To 10
@@ -239,7 +239,7 @@ Private Sub SetupColumnHeaders()
             lblH.Visible = False
         End If
     Next i
-    
+
     ' Entity-specific column headers
     Select Case Me.Tag
         Case "Kooperanti"
@@ -253,7 +253,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Adresa", True
             ShowHeader 9, "JMBG", True
             ShowHeader 10, "Aktivan", True
-            
+
         Case "Stanice"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
@@ -284,7 +284,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Hladnjaca", True
             ShowHeader 9, "Aktivan", True
             ShowHeader 10, "Ra" & ChrW(269) & "un", True
-            
+
         Case "Vozaci"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Ime", True
@@ -292,7 +292,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 4, "Telefon", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "PIN", True
-            
+
         Case "Parcele"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Kooperant", True
@@ -304,7 +304,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 8, "Geo", True
             ShowHeader 9, "Rizik", True
             ShowHeader 10, "Napomena", True
-            
+
         Case "Artikli"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
@@ -357,7 +357,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 1, "Tip gotovog proizvoda", True
             ShowHeader 2, "Aktivan", True
     End Select
-    
+
     On Error GoTo 0
 End Sub
 
@@ -402,12 +402,12 @@ Private Sub SetupKooperanti()
     ResetFieldVisibility
 
     Me.caption = "Kooperanti"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KOOPERANTI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kooperantima i njihovim stanicama"
     On Error GoTo 0
-    
+
     m_TableName = TBL_KOOPERANTI
 
     m_Headers = Array( _
@@ -444,12 +444,12 @@ Private Sub SetupStanice()
     ResetFieldVisibility
 
     Me.caption = "Otkupna Mesta"
-    
+
         On Error Resume Next
     StyleFrameTitleLabel lblTitle, "OTKUPNE STANICE"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o otkupnim stanicama"
     On Error GoTo 0
-    
+
     m_TableName = TBL_STANICE
 
     ' Redosled mora pratiti tblStanice (pozicijski prikaz u listi).
@@ -752,12 +752,12 @@ Private Sub SetupKupci()
     ResetFieldVisibility
 
     Me.caption = "Kupci"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KUPCI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kupcima"
     On Error GoTo 0
-    
+
     m_TableName = TBL_KUPCI
 
     m_Headers = Array( _
@@ -822,14 +822,14 @@ End Sub
 
 Private Sub SetupParcele()
     ResetFieldVisibility
-    
+
     Me.caption = "Parcele"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KATASTARSKE PARCELE"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o parcelama kooperanata"
     On Error GoTo 0
-    
+
     m_TableName = TBL_PARCELE
 
     ' Display headers for ListBox only
@@ -899,19 +899,19 @@ Private Sub SetupParcele()
     cmbField3.AddItem "Da"
     cmbField3.AddItem "Ne"
     cmbField3.AddItem "U postupku"
-    
+
     SetGeoControlsVisible False
-    
+
 End Sub
 Private Sub SetupArtikli()
     ResetFieldVisibility
     Me.caption = "Artikli"
-    
+
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "ARTIKLI"
     StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o artiklima"
     On Error GoTo 0
-    
+
     m_TableName = TBL_ARTIKLI
 
     m_Headers = Array( _
@@ -1628,10 +1628,10 @@ End Sub
 
 Private Sub lstData_Click()
     If lstData.ListIndex < 0 Then Exit Sub
-    
+
     ResetGeoClearConfirm
     ClearGeoStatus
-    
+
     m_SelectedRow = GetMappedSelectedRow()
     If m_SelectedRow = 0 Then Exit Sub
 
@@ -1778,7 +1778,7 @@ Private Sub lstData_Click()
             SafeSetCombo cmbField3, lstData.List(lstData.ListIndex, 4)   ' Klasa
             txtField5.value = lstData.List(lstData.ListIndex, 5)         ' Cena
     End Select
-    
+
     UpdateGeoControlsVisibility
 
 End Sub
@@ -2154,7 +2154,7 @@ Private Sub btnPovratak_Click()
     On Error GoTo EH
 
     ButtonActive btnPovratak
-    
+
     frmOtkupAPP.ReturnToDashboard "Mati" & ChrW(269) & "ni podaci zatvoreni."
     Unload Me
 
@@ -2254,9 +2254,9 @@ Private Sub ResetFieldVisibility()
             .ColumnWidths = ""
         End With
     Next i
-    
+
     SetGeoControlsVisible False
-    
+
     On Error GoTo 0
 End Sub
 

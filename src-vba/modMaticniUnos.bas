@@ -35,7 +35,7 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-193"
+Public Const MATUNOS_BUILD As String = "v6-ui-199"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
@@ -46,6 +46,28 @@ Private Const SRC As String = "modMaticniUnos"
 '--------------------------------------------------------------- UNOS
 ' Nov zapis. Vraca "" kad je proslo, inace poruku za operatera.
 ' noviID dobija ID novog zapisa (ili unetu vrednost, gde je PK sam naziv).
+' TVRDA KAPIJA UPISA. Stoji u piscu, ne samo u ekranu, jer se do ovih procedura
+' stize i iz legacy forme i iz svakog buduceg pozivaoca -- a UI brana pada
+' zajedno sa svojim ekranom. Isti obrazac koji vec vazi za ApplyAvansToOtkup i
+' IsplataBlokProblem (.claude/rules/testovi.md par.5).
+'
+' Korisnici traze JOS administraciju: prava pristupa su jedina lista na kojoj se
+' pristup moze dodeliti samom sebi.
+'
+' Vraca "" kad je dozvoljeno, inace poruku za operatera.
+Public Function MatBranaUpisa(ByVal kljuc As String) As String
+    On Error Resume Next
+    If Not modAuth.KorisnikImaPravo(OBL_MATICNI) Then
+        MatBranaUpisa = Poruka("MATU_ERR_BEZ_PRAVA")
+        Exit Function
+    End If
+    If kljuc = "KORISNICI" Or kljuc = "PRAVA" Then
+        If Not modAuth.MozeAdministraciju() Then _
+            MatBranaUpisa = Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA")
+    End If
+    Err.Clear
+End Function
+
 Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
                          ByRef noviID As String) As String
     Dim tbl As String, greska As String, red As Long, tx As clsTransaction
@@ -53,6 +75,8 @@ Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
 
     On Error GoTo EH
     noviID = ""
+    MatDodaj = MatBranaUpisa(kljuc)
+    If Len(MatDodaj) > 0 Then Exit Function
     tbl = modMaticniIzvor.MatTabela(kljuc)
     If Len(tbl) = 0 Then
         MatDodaj = Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & kljuc
@@ -139,6 +163,8 @@ Public Function MatIzmeni(ByVal kljuc As String, ByVal red As Long, _
     Dim tbl As String, greska As String, tx As clsTransaction
 
     On Error GoTo EH
+    MatIzmeni = MatBranaUpisa(kljuc)
+    If Len(MatIzmeni) > 0 Then Exit Function
     tbl = modMaticniIzvor.MatTabela(kljuc)
     If Len(tbl) = 0 Then
         MatIzmeni = Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & kljuc
@@ -160,6 +186,19 @@ Public Function MatIzmeni(ByVal kljuc As String, ByVal red As Long, _
     End If
 
     greska = Proveri(kljuc, polja)
+    If Len(greska) > 0 Then
+        MatIzmeni = greska
+        Exit Function
+    End If
+
+    ' PRIRODAN PK SE NE PREIMENUJE. Kod ambalaze, paleta, kutija, kesa i vrste
+    ' gotovog proizvoda naziv JESTE kljuc, i na njega se nizvodno pozivaju
+    ' kulture, prijemnice i palete po VREDNOSTI, ne po surogatu. Tiha izmena bi
+    ' ostavila te reference da pokazuju na ime kog vise nema.
+    '
+    ' Preimenovanje bi trazilo transakcionu izmenu SVIH referenci; dok toga
+    ' nema, polje se odbija sa uputstvom -- nov zapis pa deaktivacija starog.
+    greska = PkNepromenjen(kljuc, red, polja)
     If Len(greska) > 0 Then
         MatIzmeni = greska
         Exit Function
@@ -188,6 +227,8 @@ Public Function MatPromeniStatus(ByVal kljuc As String, ByVal red As Long, _
 
     On Error GoTo EH
     noviStatus = ""
+    MatPromeniStatus = MatBranaUpisa(kljuc)
+    If Len(MatPromeniStatus) > 0 Then Exit Function
     ' Kolona Aktivan u tblKorisnici NIJE obicna kolona statusa: modAuth
     ' neaktivnim smatra samo "NE", pa bi opsti upis ovde napisao "Neaktivan" i
     ' korisnik bi se i dalje prijavljivao. Zato ide kroz svog pisca.
@@ -315,6 +356,18 @@ Private Function Proveri(ByVal kljuc As String, ByVal polja As Object) As String
         If modMaticniIzvor.PoljeF(spec, 3) = "1" And Len(v) = 0 Then
             Proveri = Odbij(polja, spec, Poruka("MATU_ERR_OBAVEZNO"))
             Exit Function
+        End If
+
+        ' COMBO MORA DA BIRA IZ SVOJE LISTE. Kontrole su fmStyleDropDownCombo
+        ' (slobodan tekst), pa je do sada prolazio izmisljen StanicaID ili
+        ' proizvoljna vrednost enum-a: upis bi uspeo, a strani kljuc ne bi
+        ' pokazivao ni na sta. Prazno i dalje prolazi -- obaveznost je zasebna
+        ' provera iznad.
+        If modMaticniIzvor.PoljeF(spec, 2) = "cmb" And Len(v) > 0 Then
+            If Not ComboVrednostPostoji(kljuc, spec, v, polja) Then
+                Proveri = Odbij(polja, spec, Poruka("MATU_ERR_VAN_LISTE"))
+                Exit Function
+            End If
         End If
 
         If modMaticniIzvor.PoljeF(spec, 2) = "num" And Len(v) > 0 Then
@@ -466,6 +519,82 @@ End Function
 
 ' Prva vrednost sekcije bez surogat kljuca (tip ambalaze, palete, kutije, kese,
 ' gotovog proizvoda) -- ona JESTE PK.
+' Da li dati tekst postoji u spisku tog combo-a. Kontekst zavisnog izvora se
+' cita iz DRUGOG polja istog recnika (sorte zavise od vrste) -- isti spisak
+' zavisnosti koji koristi i editor, pa se provera i ponuda ne mogu razici.
+'
+' Nepoznat izvor NE odbija: spisak koji se ne moze izgraditi nije dokaz da je
+' vrednost pogresna, a lazno odbijanje bi zaustavilo upis koji je ispravan.
+' "" kad je PK netaknut ili sekcija ima surogat kljuc; inace poruka.
+Private Function PkNepromenjen(ByVal kljuc As String, ByVal red As Long, _
+                               ByVal polja As Object) As String
+    Dim pk As String, tbl As String, spec As String, poljeKljuc As String
+    Dim staro As String, novo As String, c As Long, data As Variant
+    On Error GoTo EH
+    ' Sekcija sa prefiksom ima surogat kljuc (KOOP-001) koji operater i ne
+    ' unosi -- tamo nema sta da se stiti.
+    If Len(modMaticniIzvor.MatPrefiksID(kljuc)) > 0 Then Exit Function
+    pk = modMaticniIzvor.MatPK(kljuc)
+    tbl = modMaticniIzvor.MatTabela(kljuc)
+    If Len(pk) = 0 Or Len(tbl) = 0 Then Exit Function
+
+    spec = PoljeZaKolonu(kljuc, pk)
+    If Len(spec) = 0 Then Exit Function
+    poljeKljuc = modMaticniIzvor.PoljeF(spec, 0)
+    novo = Vred(polja, poljeKljuc)
+    If Len(novo) = 0 Then Exit Function
+
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    c = GetColumnIndex(tbl, pk)
+    If c = 0 Then Exit Function
+    staro = Trim$(NzToText(data(red, c)))
+    If StrComp(staro, novo, vbTextCompare) <> 0 Then
+        polja(MAT_FOKUS) = poljeKljuc
+        PkNepromenjen = Poruka("MATU_ERR_PK_ZAKLJUCAN")
+    End If
+    Exit Function
+EH:
+    LogErr SRC & ".PkNepromenjen"
+End Function
+
+' Opis polja koje pise u datu kolonu, ili "" ako takvog nema.
+Private Function PoljeZaKolonu(ByVal kljuc As String, ByVal kolona As String) As String
+    Dim a As Variant, r As Variant
+    a = modMaticniIzvor.MatPolja(kljuc)
+    If Not IsArray(a) Then Exit Function
+    For Each r In a
+        If StrComp(modMaticniIzvor.MatKolonaPolja(kljuc, CStr(r)), kolona, vbTextCompare) = 0 Then
+            PoljeZaKolonu = CStr(r)
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function ComboVrednostPostoji(ByVal kljuc As String, ByVal spec As String, _
+                                      ByVal v As String, ByVal polja As Object) As Boolean
+    Dim izvor As String, zavisi As String, kontekst As String
+    Dim stavke As Variant, i As Long
+    On Error GoTo EH
+    ComboVrednostPostoji = True
+    izvor = modMaticniIzvor.PoljeF(spec, 5)
+    If Len(izvor) = 0 Then Exit Function
+
+    zavisi = modMaticniIzvor.MatComboZavisi(izvor)
+    If Len(zavisi) > 0 Then kontekst = Vred(polja, zavisi)
+    stavke = modMaticniIzvor.MatComboStavke(izvor, kontekst)
+    If Not IsArray(stavke) Then Exit Function
+    If UBound(stavke) < LBound(stavke) Then Exit Function
+
+    For i = LBound(stavke) To UBound(stavke)
+        If StrComp(Trim$(CStr(stavke(i))), Trim$(v), vbTextCompare) = 0 Then Exit Function
+    Next i
+    ComboVrednostPostoji = False
+    Exit Function
+EH:
+    ComboVrednostPostoji = True
+End Function
+
 Private Function PrvaVrednost(ByVal kljuc As String, ByVal polja As Object) As String
     Dim a As Variant
     a = modMaticniIzvor.MatPolja(kljuc)
@@ -518,6 +647,10 @@ Public Function MatProveriTest(ByVal kljuc As String, ByVal polja As Object) As 
 End Function
 
 ' Kolona u koju bi dato polje bilo upisano (posle razresenja alias-a).
+Public Function MatPoljeZaKolonuTest(ByVal kljuc As String, ByVal kolona As String) As String
+    MatPoljeZaKolonuTest = PoljeZaKolonu(kljuc, kolona)
+End Function
+
 Public Function MatKolonaZaPoljeTest(ByVal kljuc As String, ByVal poljeKljuc As String) As String
     MatKolonaZaPoljeTest = modMaticniIzvor.MatKolonaPolja(kljuc, _
                                 modMaticniIzvor.MatPolje(kljuc, poljeKljuc))

@@ -7180,3 +7180,85 @@ modul se preskače. Isključena provera obara self-test po imenu — provereno.
 putanjom `<self-test>`, a `check_undefined` radi samo nad `.bas` — tri od četiri
 slučaja su bila prazan hod koji je „prolazio". Otkrio ih je jedini slučaj koji je
 očekivao nalaz. Zato slučajevi sada idu pod `modSelfTest.bas`.
+
+### 26.25 Recenzija: životni ciklus i autorizacija (`v6-ui-199`)
+
+Spoljna recenzija je dala tri P0 i tri P1. Prvi P0 (`PanelPanelStil*`) je već bio
+zatvoren u `827f3a9`, zajedno sa rupom u checkeru koja ga je propustila (§26.24).
+Ostalo se rešava ovde.
+
+#### P0 — editor je preživljavao promenu ekrana
+
+Četiri matična ekrana dele telo `modMaticniEkran`, pa je i stanje editora bilo
+deljeno **bez vlasnika**. Otvoriš izmenu Kooperanta, pređeš na Robu, klikneš
+Sačuvaj — pisalo bi u `tblKooperanti` dok gledaš robu.
+
+Dva reza, oba potrebna:
+
+1. **Vlasnik.** `mEditEkran` pamti ko je otvorio editor; `Sacuvaj` odbija tuđi,
+   zatvara ga i kaže zašto. To je kapija koja radi i ako ljuska propusti da javi.
+2. **Ugovor.** Nov, neobavezan `Scr_Deaktiviraj`: ljuska ga zove **pre** prelaska
+   na drugi ekran, a ekran zatvara editor, GEO panel i izbor. Ljuska i dalje ne
+   zna nijedan ekran po imenu — poziv je kasno vezan, kao `Scr_Dozvoljen`.
+
+#### P0 — promena operatera nije primenjivala nova prava
+
+`DoSwitchOperater` je osvežavao samo ime u zaglavlju. Admin je mogao da otvori
+*Korisnike*, preda tastaturu operateru bez prava, a ekran i mutacije ostaju
+otvoreni. Uvedeno `PrimeniNovaPrava`, i **redosled nije proizvoljan**: keš brane
+se briše **pre** svega (inače se nova prava mere starim odgovorom), pa se
+zatvaraju panel i editor, pa se sidebar precrtava, i tek onda se pita sme li
+trenutni ekran da ostane.
+
+#### P0 — brana je bila fail-open
+
+`ScrSopstvenaBrana` je počinjala sa `True` i svaka greška je ostavljala taj
+rezultat — brana koja **pukne** je propuštala. Sada se razlikuju dva ishoda:
+`1004` („nema takvu proceduru") i dalje prolazi, jer to je odgovor *„nema
+brane"*; **svaka druga greška zabranjuje**, i upisuje se u `ScrLastErr`.
+
+#### Tvrda kapija ide u pisca, ne samo u ekran
+
+UI brana pada zajedno sa svojim ekranom, a do upisa se stiže i iz legacy forme.
+Zato `MatBranaUpisa` stoji u `modMaticniUnos` i zove se iz `MatDodaj`,
+`MatIzmeni`, `MatPromeniStatus` i `KorPromeniPravo` — isti obrazac koji već važi
+za `ApplyAvansToOtkup` (`.claude/rules/testovi.md` §5). Korisnici traže još
+administraciju.
+
+#### P1 — combo je primao izmišljenu vrednost
+
+Kontrole su `fmStyleDropDownCombo` (slobodan tekst), a pisac je merio obaveznost
+i brojeve, ne **pripadnost listi**. Prolazio je nepostojeći `StanicaID`. Sada
+`ComboVrednostPostoji` gradi isti spisak koji editor nudi — uključujući kaskadni
+kontekst — pa se ponuda i provera ne mogu razići. Nepoznat izvor **ne odbija**:
+spisak koji se ne može izgraditi nije dokaz da je vrednost pogrešna.
+
+#### P1 — prirodan PK se preimenovao bez provere
+
+Kod ambalaže, paleta, kutija, kesa i vrste GP naziv **jeste** ključ, a nizvodne
+reference idu po vrednosti. Preimenovanje bi ostavilo kulture i prijemnice da
+pokazuju na ime kog više nema. `PkNepromenjen` to odbija sa uputstvom (nov zapis
+pa deaktivacija starog); transakcioni rename kroz sve reference je zaseban posao.
+
+#### P1 — otvoren unos je tiho nestajao
+
+Prelazak na drugu podlistu je zatvarao editor bez reči. Sada pita.
+
+#### P2 — GEO traka i prazni redovi
+
+Sedam alatki traži **764 pt**; prag je bio procena od 640, pa je na prozoru od
+900 pt (radna površina ~690) poslednje dugme izlazilo van zone — bez ijedne
+greške, samo odsečeno. Sada se meri stvarna širina **iz istog spiska iz kog se
+crta**, red se prelama, a visina zone se računa iz broja redova.
+
+Prateći razmaci u `frmStammdaten` očišćeni — **osim u zaglavlju dizajnera**:
+`Begin {GUID} frmStammdaten ` nosi razmak po `.frm` formatu i njegovo brisanje
+obara import.
+
+#### Verifikacija
+
+Nov test **179** — negativne tvrdnje, tačno ono što je recenzija tražila: combo
+van liste, prirodan PK bez polja za zaključavanje, kapija pisca, i brana koja se
+može zatvoriti. Tri nove sabotaže. `vba_check` čist (210 fajlova, 420 sabotaža).
+**Compile i Excel smoke ostaju na operateru** — recenzent to isto nije mogao da
+izvrši.

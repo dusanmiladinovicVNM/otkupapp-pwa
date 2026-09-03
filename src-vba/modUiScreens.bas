@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-193"
+Public Const UISCR_BUILD As String = "v6-ui-199"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -268,10 +268,38 @@ Private Function ScrSopstvenaBrana(ByVal kljuc As String) As Boolean
     On Error Resume Next
     Err.Clear
     v = Application.Run(m & ".Scr_Dozvoljen")
-    mBrana(kljuc) = (Err.Number = 0)
-    If Err.Number = 0 Then ScrSopstvenaBrana = CBool(v)
+    ' FAIL-CLOSED. Do v6-ui-199 je svaka greska ostavljala rezultat True, pa je
+    ' brana koja PUKNE propustala -- najgori mogus ishod za branu. Sada se
+    ' razlikuju dva slucaja:
+    '   1004 "Cannot run the macro" = ekran nema Scr_Dozvoljen -> nema brane,
+    '        prolazi (to je i dalje odgovor "nema takvu funkciju");
+    '   svaka DRUGA greska = brana postoji ali je pukla -> ZABRANJENO.
+    If Err.Number = 0 Then
+        mBrana(kljuc) = True
+        ScrSopstvenaBrana = CBool(v)
+    ElseIf Err.Number = 1004 Then
+        mBrana(kljuc) = False
+    Else
+        mBrana(kljuc) = True
+        ScrSopstvenaBrana = False
+        ScrLastErr = m & ".Scr_Dozvoljen -> " & Err.Number & " " & Err.description
+    End If
     Err.Clear
 End Function
+
+' Ekran napusta scenu. Neobavezno -- ekran koji to ne implementira nema sta da
+' sprema. Zove se PRE nego sto se predje na drugi: ekran tada zatvara editore i
+' brise izbor, jer je sve to njegovo stanje.
+'
+' Greska poziva znaci "nema takvu proceduru", ne "pad" -- isto kao ScrPostoji.
+Public Sub ScrDeaktiviraj(ByVal kljuc As String)
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Sub
+    Application.Run m & ".Scr_Deaktiviraj"
+    Err.Clear
+End Sub
 
 Public Function ScrAktivan(ByVal kljuc As String) As Boolean
     ScrAktivan = ScrPostoji(kljuc)

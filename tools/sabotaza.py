@@ -2440,6 +2440,29 @@ SABOTAZE = {
         "T_Mreza_DecimalaNeNestaje",
         "tezine i cene sifarnika su decimalne kolone",
     ),
+    # ------------------- MATICNI: KAPIJE UPISA (recenzija P0/P1)
+    # Tri kvara koja ne prijavljuju nista: upis prolazi, a podatak je pogresan.
+    "kapija-combo-ne-meri-listu": (
+        "modMaticniUnos.bas",
+        "            If Not ComboVrednostPostoji(kljuc, spec, v, polja) Then\n",
+        "            If False Then   ' SABOTAZA: combo prima izmisljenu vrednost\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "izmisljena stanica se odbija pre upisa",
+    ),
+    "kapija-pk-bez-polja": (
+        "modMaticniIzvor.bas",
+        "        Case \"KESE\":       MatPK = COL_KES_TIP\n",
+        "        Case \"KESE\":       MatPK = \"NemaOvakveKolone\"   ' SABOTAZA\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "svaki prirodan PK ima polje koje se moze zakljucati",
+    ),
+    "kapija-brana-fail-open": (
+        "modScrMatKorisnici.bas",
+        "    If mBranaZatvorenaTest Then Exit Function\n",
+        "    ' SABOTAZA: brana se ne moze zatvoriti -- fail-open\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "zatvorena brana zabranjuje ekran",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

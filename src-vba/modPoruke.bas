@@ -558,6 +558,17 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "MATU_OK_DODATO", "Dodato:"
     UpsertRow lo, existing, "MATU_OK_IZMENJENO", "Izmenjeno."
     UpsertRow lo, existing, "MATU_OK_STATUS", "Status promenjen u:"
+    UpsertRow lo, existing, "MATU_ERR_VAN_LISTE", _
+        "izaberite vrednost iz ponu" & ChrW(273) & "ene liste."
+    UpsertRow lo, existing, "MATU_ERR_PK_ZAKLJUCAN", _
+        "Naziv je klju" & ChrW(269) & " ovog " & ChrW(353) & "ifarnika i ne menja se -- " & _
+        "dodajte nov zapis, pa deaktivirajte stari."
+    UpsertRow lo, existing, "MATU_ERR_BEZ_PRAVA", _
+        "Nemate pravo izmene mati" & ChrW(269) & "nih podataka."
+    UpsertRow lo, existing, "MATU_ERR_TUDJI_EDITOR", _
+        "Unos je bio otvoren na drugom ekranu i zato je zatvoren -- nije upisan."
+    UpsertRow lo, existing, "MATU_ASK_ODBACI_UNOS", _
+        "Otvoren unos nije sa" & ChrW(269) & "uvan. Odbaciti ga i pre" & ChrW(263) & "i na drugu listu?"
 
     UpsertRow lo, existing, "OTKUI_MP_PIN", "PIN"
     UpsertRow lo, existing, "OTKUI_MP_KONTAKT_IME", "Kontakt ime"

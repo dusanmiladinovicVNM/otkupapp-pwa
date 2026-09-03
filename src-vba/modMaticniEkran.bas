@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-195"
+Public Const MATEKR_BUILD As String = "v6-ui-199"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -49,6 +49,12 @@ Private Const MAT_GAP As Single = 10
 ' editora ne dobijaju kljuc ekrana -- pa se pamti pri citanju redova, sto se
 ' desava pre svakog dogadjaja.
 Private mZonaEkran As String
+
+' Ekran koji je OTVORIO editor. Cetiri maticna ekrana dele ovo telo, pa deljeno
+' stanje bez vlasnika znaci da editor otvoren nad Kooperantima prezivi prelazak
+' na Robu -- a "Sacuvaj" bi tada pisao u tblKooperanti dok operater gleda robu.
+' Zato svaka mutacija pita CIJI je editor, i odbija ako nije njen.
+Private mEditEkran As String
 
 ' Stanje editora. Prazan mEditKljuc znaci da je zona zatvorena; prazan mEditID
 ' uz otvoren editor znaci NOV zapis.
@@ -72,6 +78,10 @@ Private mUZavisnima As Boolean
 
 ' Visina zone sa otvorenim GEO panelom: jedan red polja (N i E) pa dugmad.
 Private Const MAT_GEO_H As Single = MAT_ZONA_H + 18 + MAT_RED_H + 38
+
+' Visina jednog reda alatki GEO panela. Traka se prelama kad ne staje u sirinu,
+' pa zona raste za po ovoliko po prelomljenom redu.
+Private Const GEO_RED_H As Single = 32
 
 '--------------------------------------------------------------- ZONA
 Public Sub ZonaGradi(ByVal z As Object)
@@ -235,21 +245,47 @@ Private Function RasporediGeo(ByVal z As Object, ByVal w As Single) As Single
     modOtkupUI.LayoutFieldInner z.Controls("scrGeoE")
 
     ' Dugmad idu DESNO od polja kad ima mesta, inace u red ispod njih.
+    '
+    ' Sedam alatki trazi 764pt. Prag 640 je bio PROCENA, i na prozoru od 900pt
+    ' (radna povrsina ~690) je poslednje dugme izlazilo van zone -- bez ijedne
+    ' greske, samo odseceno. Sada se meri STVARNA sirina i red se prelama kad
+    ' sledece dugme ne staje, a visina zone se racuna iz broja redova umesto da
+    ' bude konstanta.
     x = PAD + 2 * (kol + MAT_GAP)
-    If x + 640 > w - PAD Then
+    If x + SirinaGeoTrake() > w - PAD Then
         x = PAD
         y0 = y0 + MAT_RED_H
     Else
         y0 = y0 + 8
     End If
+
+    Dim redova As Long, xPoc As Single, bw As Single
+    redova = 1
+    xPoc = x
     For Each nm In GeoDugmad()
-        modUiKit.MoveBox z, CStr(nm), x, y0, SirinaGeoDugmeta(CStr(nm))
+        bw = SirinaGeoDugmeta(CStr(nm))
+        If x > xPoc And x + bw > w - PAD Then
+            x = xPoc
+            y0 = y0 + GEO_RED_H
+            redova = redova + 1
+        End If
+        modUiKit.MoveBox z, CStr(nm), x, y0, bw
         modUiKit.BoxShow z, CStr(nm), True
-        x = x + SirinaGeoDugmeta(CStr(nm)) + 6
+        x = x + bw + 6
         i = i + 1
     Next nm
 
-    RasporediGeo = MAT_GEO_H
+    RasporediGeo = MAT_GEO_H + (redova - 1) * GEO_RED_H
+End Function
+
+' Ukupna sirina trake alatki, sa razmacima. Racuna se iz istog spiska iz kog se
+' i crta -- broj u konstanti bi se razisao prvim dodatim dugmetom.
+Private Function SirinaGeoTrake() As Single
+    Dim nm As Variant, uk As Single
+    For Each nm In GeoDugmad()
+        uk = uk + SirinaGeoDugmeta(CStr(nm)) + 6
+    Next nm
+    SirinaGeoTrake = uk - 6
 End Function
 
 Private Function SirinaGeoDugmeta(ByVal nm As String) As Single
@@ -504,7 +540,12 @@ Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As B
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = lista Then Exit Function
         ' Odlazak sa liste zatvara editor: polja pripadaju sekciji koja se
-        ' napusta, a ostavljena bi trazila upis u drugu tabelu.
+        ' napusta, a ostavljena bi trazila upis u drugu tabelu. Zato se PITA --
+        ' do sada je otvoren unos tiho nestajao, pa se otkucano gubilo bez reci.
+        If Len(mEditKljuc) > 0 Then
+            If MsgBox(Poruka("MATU_ASK_ODBACI_UNOS"), _
+                      vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+        End If
         ZatvoriPanele
         lista = Mid$(tag, 3)
         ObradiDogadjaj = True
@@ -687,6 +728,7 @@ Private Sub OtvoriNov(ByVal lista As String)
     mGeoID = ""                      ' jedna stvar u zoni u isto vreme
     mEditKljuc = lista
     mEditID = ""
+    mEditEkran = mZonaEkran
     OcistiPolja lista
 End Sub
 
@@ -716,6 +758,7 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
     jeCenovnik = (lista = "CENOVNIK")
     mGeoID = ""                      ' jedna stvar u zoni u isto vreme
     mEditKljuc = lista
+    mEditEkran = mZonaEkran
     ' Prazan mEditID znaci UNOS -- otud cenovnik uvek dodaje nov red.
     mEditID = IIf(jeCenovnik, "", mIzabranID)
     OcistiPolja lista
@@ -804,6 +847,14 @@ Private Function Sacuvaj(ByVal lista As String) As Boolean
     Dim polja As Object, odgovor As String, noviID As String, red As Long
 
     If Len(mEditKljuc) = 0 Then Exit Function
+    ' KAPIJA: editor otvoren na drugom ekranu ne sme da pise odavde. Bez ovoga
+    ' bi "Sacuvaj" upisao u sifarnik koji operater vise ne gleda.
+    If Not EditorJeNas(mZonaEkran) Then
+        ZatvoriPanele
+        modOtkupUI.ShowToast Poruka("MATU_ERR_TUDJI_EDITOR"), True
+        modOtkupUI.OsveziRasporedEkrana
+        Exit Function
+    End If
     Set polja = PokupiPolja(mEditKljuc)
 
     If Len(mEditID) = 0 Then
@@ -834,8 +885,28 @@ End Function
 Public Sub ZatvoriEditor()
     mEditKljuc = ""
     mEditID = ""
+    mEditEkran = ""
     mUZavisnima = False
 End Sub
+
+' Ljuska javlja da se ekran napusta. Zatvara editor, GEO panel i izbor -- sve
+' troje pripada ekranu koji odlazi. Zove se kroz ugovor (Scr_Deaktiviraj), pa
+' ljuska i dalje ne zna nijedan ekran po imenu.
+Public Sub Deaktiviraj()
+    ZatvoriPanele
+    mIzabranID = ""
+    mKorisnikID = ""
+    mZonaEkran = ""
+End Sub
+
+' Da li je otvoreni editor BAS ovog ekrana. Prazan editor je "nicij" i prolazi.
+Private Function EditorJeNas(ByVal ekran As String) As Boolean
+    If Len(mEditKljuc) = 0 Then
+        EditorJeNas = True
+    Else
+        EditorJeNas = (mEditEkran = ekran)
+    End If
+End Function
 
 ' Prelazak na drugu listu zatvara i editor i GEO panel: oba pripadaju sekciji
 ' koja se napusta.
