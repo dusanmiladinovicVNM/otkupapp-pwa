@@ -424,6 +424,7 @@ Public Sub RunAllTests()
     RunOne 178
     RunOne 179
     RunOne 180
+    RunOne 181
     RunOne 124
     RunOne 125
     RunOne 126
@@ -645,6 +646,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 178: TestName = "T_Mreza_DecimalaNeNestaje"
         Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
+        Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -833,6 +835,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 178: T_Mreza_DecimalaNeNestaje
         Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
+        Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -13111,6 +13114,15 @@ Private Sub T_Maticni_CitanjeNeMenjaVrednosti()
     AssertEq MapaSlozena(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime"), "", _
              "mapa kooperanata (Ime + Prezime) se slaze sa LookupValue"
 
+    ' BuildRowIndex je druga polovina iste zamene (v6-ui-202): tamo gde iz iste
+    ' tabele treba VISE od dve kolone -- modSledljivost cita sedam, modAgrohemija
+    ' tri -- mapa nosi BROJ REDA, pa se kolone citaju direktno. Meri se isto:
+    ' red iz mape mora da nosi ono sto je LookupValue vracao.
+    AssertEq RedSlozen(TBL_KOOPERANTI, "KooperantID", "Ime"), "", _
+             "red iz BuildRowIndex nosi isto sto je LookupValue vracao"
+    AssertEq RedSlozen(TBL_PARCELE, COL_PAR_ID, COL_PAR_KAT_BROJ), "", _
+             "isto i za parcele (sedam kolona u modSledljivost)"
+
     ' Lista kooperanata i dalje NOSI tu kolonu -- da zamena ne bi bila merena
     ' nad kolonom koju vise niko ne crta.
     d = modMaticniIzvor.MatRedovi("KOOPERANTI", MAT_CIP_SVI, "")
@@ -13180,6 +13192,48 @@ EH:
     EndTableCache
 End Function
 
+' Slaganje mape BROJA REDA (BuildRowIndex) sa starim putem (LookupValue).
+' Isti oblik i isti razlog kao MapaSlozena, samo druga mapa.
+Private Function RedSlozen(ByVal tbl As String, ByVal kolID As String, _
+                           ByVal kolA As String) As String
+    Dim m As Object, data As Variant, ki As Long, ca As Long, i As Long
+    Dim id As String, izMape As String, izLookupa As String
+
+    On Error GoTo EH
+    BeginTableCache
+    Set m = BuildRowIndex(tbl, kolID)
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then
+        RedSlozen = "tabela " & tbl & " je prazna -- tvrdnja bi bila prazna"
+        GoTo Gotovo
+    End If
+    ki = GetColumnIndex(tbl, kolID)
+    ca = GetColumnIndex(tbl, kolA)
+    If ki = 0 Or ca = 0 Then
+        RedSlozen = "nema kolone " & kolID & "/" & kolA & " u " & tbl
+        GoTo Gotovo
+    End If
+
+    For i = 1 To UBound(data, 1)
+        id = CStr(data(i, ki))
+        If Len(id) > 0 Then
+            izMape = ""
+            If m.Exists(id) Then izMape = CStr(data(CLng(m(id)), ca))
+            izLookupa = CStr(LookupValue(tbl, kolID, id, kolA))
+            If izMape <> izLookupa Then
+                RedSlozen = RedSlozen & " [" & id & ": " & izMape & "<>" & izLookupa & "]"
+                If Len(RedSlozen) > 200 Then GoTo Gotovo
+            End If
+        End If
+    Next i
+Gotovo:
+    EndTableCache
+    Exit Function
+EH:
+    RedSlozen = "greska pri poredjenju nad " & tbl & ": " & Err.description
+    EndTableCache
+End Function
+
 ' ID iz zapisa oblika "Ime Prezime (ID)". Vraca "" kad zagrada nema -- red bez
 ' kooperanta se tako ne meri, umesto da se izmeri kao prazan ID.
 Private Function IzmedjuZagrada(ByVal s As String) As String
@@ -13188,6 +13242,113 @@ Private Function IzmedjuZagrada(ByVal s As String) As String
     b = InStrRev(s, ")")
     If a > 0 And b > a Then IzmedjuZagrada = Mid$(s, a + 1, b - a - 1)
 End Function
+
+' ============================================================
+' 181. Panel: OTVORI -> NAZAD -> ekran ispod je ZIV. I prava posle zamene.
+'
+' Recenzija v6-ui-201 je nasla tri kvara koje nijedan dotadasnji test nije
+' mogao da vidi, jer su svi merili REGISTRE, a nijedan nije odigrao ciklus.
+' Ovaj ga odigrava.
+'
+'   1) ZATVARANJE PO KLJUCU. modPodesavanja i modAdmin su pitali
+'      PanelAktivan() = "PODESAVANJA" / "ADMIN". Kad su kljucevi postali
+'      MAT_PODESAVANJA / MAT_ADMIN, uslov vise nikad nije bio tacan: "Nazad"
+'      je padao u legacy granu, radio Unload nad OKVIROM (ne formom), gutao
+'      gresku i ostavljao panel na sceni. Zato se sada pita po MODULU, a test
+'      tvrdi da svaki modul iz registra svoj panel STVARNO zatvara.
+'
+'   2) EKRAN ISPOD PANELA. Otvaranje panela deaktivira ekran ispod
+'      (ScrDeaktiviraj), sto kod maticnih brise mZonaEkran -- a bez nje Zona()
+'      vraca Nothing i SVE radnje ekrana tise ne rade. Zatvaranje panela zato
+'      mora da ekran ponovo procita, ne samo da vrati raspored.
+'
+'   3) ODBIJEN PRELAZAK. ActivateScreen je deaktivirao stari ekran PRE provere
+'      da li novi sme i postoji. Odbijen prelazak je tako ostavljao trenutni
+'      ekran na sceni, ali deaktiviran -- isti mrtav ekran, bez ijedne poruke.
+'
+' Cetvrta tvrdnja je zamena operatera: PrimeniNovaPrava je zvao BuildNav, a on
+' radi Controls.Add("zNav") -- drugi put nad istom formom to je greska koja se
+' guta, pa je mapa prigusenja ostajala od PRETHODNOG operatera.
+' ============================================================
+Private Sub T_UiPanel_ZivotniCiklusIPrava()
+    Dim f As frmOtkupUI, k As Variant, m As String
+    Dim zatvorio As String, odgovor As String
+    Dim zonaPreOtvaranja As String, zonaPosleZatvaranja As String
+    Dim zonaPosleOdbijenog As String, ekranPosleOdbijenog As String
+    Dim tagKor As String, prigusenPre As Boolean, prigusenPosle As Boolean
+
+    Set f = NewOtkupUIForm()
+
+    ' --- 1) svaki modul iz registra zatvara SVOJ panel --------------------
+    ' Ovo je tvrdnja koja bi uhvatila kvar iz recenzije: PanelZatvoriAko sa
+    ' imenom modula mora da vrati True kad je bas taj panel otvoren.
+    For Each k In modUiPanel.PanelKljucevi()
+        m = modUiPanel.PanelPolje(CStr(k), PAN_MODUL)
+        odgovor = modUiPanel.PanelOtvori(CStr(k))
+        If Len(odgovor) > 0 Then
+            zatvorio = zatvorio & " [" & CStr(k) & " se ne otvara: " & odgovor & "]"
+        Else
+            If Not modUiPanel.PanelZatvoriAko(m) Then _
+                zatvorio = zatvorio & " [" & m & " ne zatvara " & CStr(k) & "]"
+        End If
+        modUiPanel.PanelZatvori False
+    Next k
+    AssertEq zatvorio, "", "svaki modul panela zatvara SVOJ panel po imenu modula"
+    AssertEq modUiPanel.PanelZatvoriAko("modNepostojeci"), False, _
+             "tudje ime modula ne zatvara nicij panel"
+
+    ' --- 2) ciklus: ekran -> panel -> nazad -------------------------------
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    zonaPreOtvaranja = modMaticniEkran.MatZonaEkranTest()
+
+    modOtkupUI.IdiNaEkran "MAT_PODESAVANJA"
+    AssertEq modUiPanel.PanelAktivan(), "MAT_PODESAVANJA", _
+             "stavka sidebara otvara panel, ne ekran"
+    AssertEq modOtkupUI.PanelRezimAktivan(), True, "panel je uzeo radnu povrsinu"
+    ' mScreen ostaje ekran ISPOD panela -- panel ga ne menja.
+    AssertEq modOtkupUI.AktivanEkran(), "MAT_PARTNERI", _
+             "panel ne menja ekran ispod sebe"
+
+    modUiPanel.PanelZatvori
+    zonaPosleZatvaranja = modMaticniEkran.MatZonaEkranTest()
+    AssertEq modOtkupUI.PanelRezimAktivan(), False, "zatvaranje vraca radnu povrsinu"
+    AssertEq (Len(zonaPreOtvaranja) > 0), True, _
+             "ekran je pre panela imao svoju zonu (inace tvrdnja ne meri nista)"
+    AssertEq zonaPosleZatvaranja, zonaPreOtvaranja, _
+             "ekran ispod panela je posle NAZAD ponovo procitan (zona mu je ziva)"
+
+    ' --- 3) odbijen prelazak NE ubija ekran na kome jesmo -----------------
+    ' Brana ekrana Korisnici se zatvara seam-om; prelazak mora da bude odbijen,
+    ' a MAT_PARTNERI da ostane i ziv i aktivan.
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest True
+    modOtkupUI.IdiNaEkran "MAT_KORISNICI"
+    ekranPosleOdbijenog = modOtkupUI.AktivanEkran()
+    zonaPosleOdbijenog = modMaticniEkran.MatZonaEkranTest()
+
+    ' --- 4) zamena operatera: sidebar prati NOVA prava --------------------
+    ' Brana je jos zatvorena, pa Korisnici MORAJU postati priguseni cim se
+    ' prava ponovo primene. Sa starim BuildNav putem mapa se nije ni dirala.
+    tagKor = modOtkupUI.NavTagZaEkran("MAT_KORISNICI")
+    prigusenPre = modOtkupUI.NavPrigusena(tagKor)
+    modOtkupUI.OtkupUI_PrimeniNovaPravaTest
+    prigusenPosle = modOtkupUI.NavPrigusena(tagKor)
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
+
+    ReleaseOtkupUIForm f
+
+    AssertEq ekranPosleOdbijenog, "MAT_PARTNERI", _
+             "odbijen prelazak ostavlja ekran na kome jesmo"
+    AssertEq zonaPosleOdbijenog, zonaPreOtvaranja, _
+             "odbijen prelazak NE deaktivira ekran na kome jesmo"
+    AssertEq (Len(tagKor) > 0), True, "Korisnici imaju stavku u sidebaru"
+    AssertEq prigusenPosle, True, _
+             "posle primene novih prava zabranjen ekran je prigusen u sidebaru"
+    ' Bez ove druge polovine bi tvrdnja prolazila i kad je stavka VEC bila
+    ' prigusena, pa ne bi merila da se mapa uopste osvezava.
+    AssertEq prigusenPre, False, _
+             "pre primene je stavka bila puna (mapa je nastala sa otvorenom branom)"
+End Sub
 
 ' ============================================================
 ' 166. Maticni sifarnici: opis 13 sekcija je POTPUN i saglasan sa semom.

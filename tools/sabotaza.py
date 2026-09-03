@@ -2430,12 +2430,64 @@ SABOTAZE = {
         "T_Maticni_CitanjeNeMenjaVrednosti",
         "naziv kooperanta iz mape je isti kao iz LookupValue",
     ),
+    # BuildRowIndex pamti BROJ REDA, pa je pomeraj za jedan tiho pogresan podatak,
+    # ne greska: red 5 bi nosio ime sa reda 6. Duplikat kljuca se ne sabotira --
+    # nad cistim podacima ga nema, pa tvrdnja ne bi ni pukla.
+    "mapa-reda-pomerena-za-jedan": (
+        "modDataAccess.bas",
+        "            If Not d.Exists(k) Then d.Add k, i\n",
+        "            If Not d.Exists(k) Then d.Add k, i + 1   ' SABOTAZA: pomeraj\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "red iz BuildRowIndex nosi isto sto je LookupValue vracao",
+    ),
     "maticni-prozor-kesa-ostaje-otvoren": (
         "modMaticniIzvor.bas",
         "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n    EndTableCache\n",
         "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n   ' SABOTAZA: prozor ostaje otvoren\n",
         "T_Maticni_CitanjeNeMenjaVrednosti",
         "citanje ZATVARA svoj prozor kesa",
+    ),
+    # ------------------------- PANEL: ZIVOTNI CIKLUS (recenzija v6-ui-201)
+    # Tri kvara koje su registri propustili jer nijedan test nije odigrao
+    # ciklus otvori -> nazad -> radi dalje. Sve tri su TIHE.
+    #
+    # 1) Zatvaranje po KLJUCU umesto po modulu. Kljuc je strano ime; kad se
+    #    preimenuje u registru, uslov vise nikad nije tacan i "Nazad" pada u
+    #    legacy granu (Unload nad okvirom, greska progutana).
+    "panel-zatvaranje-po-tudjem-imenu": (
+        "modUiPanel.bas",
+        "    If StrComp(PanelPolje(mAktivan, PAN_MODUL), modul, vbTextCompare) <> 0 Then Exit Function\n",
+        "    If StrComp(mAktivan, modul, vbTextCompare) <> 0 Then Exit Function   ' SABOTAZA: po kljucu\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "svaki modul panela zatvara SVOJ panel po imenu modula",
+    ),
+    # 2) Panel se sklonio, ali ekran ispod nije ponovo procitan -- a otvaranje
+    #    panela ga je deaktiviralo, pa mu je zona obrisana. Mreza se vidi,
+    #    radnje tise ne rade.
+    "panel-ne-vraca-ekran-ispod": (
+        "modUiPanel.bas",
+        "    If bioOtvoren And vratiEkran Then modOtkupUI.PanelVracenNaEkran\n",
+        "    ' SABOTAZA: ekran ispod ostaje deaktiviran\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "ekran ispod panela je posle NAZAD ponovo procitan",
+    ),
+    # 3) Odbijen prelazak deaktivira ekran na kome jesmo. Vraca staro mesto
+    #    poziva -- na vrh, pre provere prava.
+    "ljuska-deaktivira-pre-provere": (
+        "modOtkupUI.bas",
+        "    If kljuc = mScreen Then Exit Sub\n    ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je \"DOKUMENTI\"\n",
+        "    If kljuc = mScreen Then Exit Sub\n    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n    ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je \"DOKUMENTI\"\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "odbijen prelazak NE deaktivira ekran na kome jesmo",
+    ),
+    # 4) Prava posle zamene operatera: BuildNav umesto ObnoviNavPrava. Drugi
+    #    Controls.Add("zNav") puca, greska se guta, mapa ostaje od prethodnog.
+    "prava-se-ne-primenjuju-na-sidebar": (
+        "modOtkupUI.bas",
+        "        mNavOff(CStr(k)) = Not modUiScreens.ScrAktivan(CStr(mNavKey(k)))\n",
+        "        ' SABOTAZA: mapa prigusenja ostaje od prethodnog operatera\n",
+        "T_UiPanel_ZivotniCiklusIPrava",
+        "posle primene novih prava zabranjen ekran je prigusen u sidebaru",
     ),
     "panel-graditelj-ne-postoji": (
         "modUiPanel.bas",

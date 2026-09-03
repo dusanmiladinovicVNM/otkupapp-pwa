@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-201"
+Public Const MATEKR_BUILD As String = "v6-ui-202"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -1069,6 +1069,13 @@ Private Function Zona() As Object
 End Function
 
 '------------------------------------------------------------ TEST SEAM
+' Ekran cija je zona POSLEDNJA citana. Javno zbog testa: ovo je stanje koje
+' Deaktiviraj brise, a bez koga sve radnje ekrana tise ne rade (Zona() vraca
+' Nothing). Kroz formu se ne vidi -- zato se cita direktno.
+Public Function MatZonaEkranTest() As String
+    MatZonaEkranTest = mZonaEkran
+End Function
+
 Public Function MatEditKljucTest() As String
     MatEditKljucTest = mEditKljuc
 End Function

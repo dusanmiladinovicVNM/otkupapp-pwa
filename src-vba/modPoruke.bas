@@ -415,6 +415,10 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     ' postoji, pa su ti kljucevi obrisani zajedno sa njim.
     UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA", "Pode" & ChrW(353) & "avanja"
     UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Administracija"
+    UpsertRow lo, existing, "UIPAN_ASK_ODBACI", _
+        "Panel ima izmene koje nisu sa" & ChrW(269) & "uvane. Odbaciti ih?"
+    UpsertRow lo, existing, "OTKUI_SCR_NIJEDAN", _
+        "Ovaj nalog nema pravo ni na jedan ekran. Javi se administratoru."
 
     ' --- maticni ekrani: prekidac sekcija, cipovi, zona, kolone (M1) --------
     UpsertRow lo, existing, "OTKUI_SCRMP_SUB", _

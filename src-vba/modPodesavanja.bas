@@ -26,6 +26,10 @@ Option Explicit
 
 Private mFrm As Object              ' frmStammdaten instanca (host)
 Private mInputs As Collection       ' input kontrole, key = ConfigKey
+' Vrednost koju je polje dobilo PRI GRADNJI (i posle svakog uspesnog snimanja).
+' Sluzi samo za odgovor "ima li nesacuvanog" -- porediti sa configom u tom
+' trenutku bi znacilo 97 citanja na svaki klik u sidebar; ovo je nula citanja.
+Private mUcitano As Collection      ' key = ConfigKey -> String
 Private mWrappers As Collection     ' clsConfigBtn (drzi WithEvents zivim)
 Private mBtnToggle As MSForms.CommandButton
 Private mGroupOrder As Collection       ' imena grupa po redosledu
@@ -263,6 +267,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
 
     Set mFrm = frm
     Set mInputs = New Collection
+    Set mUcitano = New Collection
     Set mWrappers = New Collection
     Set mBtnToggle = Nothing
 
@@ -387,6 +392,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             cmb.value = cur
             modUiKit.PanelStilUnos cmb
             mInputs.Add cmb, key
+            mUcitano.Add CStr(cur), key
             Set inCtl = cmb
         Else
             Set tb = AddText("cfg_" & key, 0, 0, mCellW, IIf(typ = "memo", 54, 22))
@@ -402,6 +408,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             tb.value = cur
             modUiKit.PanelStilUnos tb
             mInputs.Add tb, key
+            mUcitano.Add CStr(cur), key
             Set inCtl = tb
         End If
 
@@ -652,6 +659,34 @@ Private Sub WireButtonKey(ByVal b As MSForms.CommandButton, ByVal act As String,
     mWrappers.Add wrp
 End Sub
 
+' Ugovor panela (modUiPanel.PanelImaNesacuvano, po dogovoru o imenu). True kad
+' se BAR JEDNO polje razlikuje od vrednosti sa kojom je ucitano.
+'
+' Poredjenje ide na tekst, jer se tako i cuva (SetConfigValue prima String) --
+' polje koje je operater otkucao pa vratio na staro NIJE izmena.
+Public Function Podesavanja_ImaNesacuvano() As Boolean
+    Dim flds As Variant, i As Long, key As String
+    Dim sad As String, bilo As String
+    If mInputs Is Nothing Or mUcitano Is Nothing Then Exit Function
+    On Error Resume Next
+    flds = ConfigEditorFields()
+    For i = LBound(flds) To UBound(flds)
+        key = CStr(flds(i)(1))
+        sad = "": bilo = ""
+        Err.Clear
+        sad = Trim$(CStr(mInputs(key).value))
+        bilo = Trim$(CStr(mUcitano(key)))
+        If Err.Number = 0 Then
+            If sad <> bilo Then
+                Podesavanja_ImaNesacuvano = True
+                Err.Clear
+                Exit Function
+            End If
+        End If
+    Next i
+    Err.Clear
+End Function
+
 ' ============================================================
 ' PRIVATE -- save / back
 ' ============================================================
@@ -680,12 +715,27 @@ Private Sub SaveConfigEditor()
         If typ = "int" And Len(v) > 0 And Not IsNumeric(v) Then
             errs = errs & " - " & key & " mora biti broj." & vbCrLf
         Else
+            ' Upis je pod SVOJIM rukovaocem, ne pod EH: do v6-ui-201 je jedan
+            ' pad usred petlje skakao na EH, pa su polja pre njega bila
+            ' snimljena, polja posle njega nisu, a poruka je govorila samo o
+            ' gresci -- delimicno snimljen config bez spiska sta je proslo.
+            On Error Resume Next
+            Err.Clear
             If store = "local" Then
                 SetLocalConfigValue key, v
             Else
                 SetConfigValue key, v
             End If
-            n = n + 1
+            If Err.Number <> 0 Then
+                errs = errs & " - " & key & ": " & Err.description & vbCrLf
+            Else
+                n = n + 1
+                ' Polje je sada "cisto" -- sledeci ImaNesacuvano ga ne broji.
+                mUcitano.Remove key
+                mUcitano.Add v, key
+            End If
+            Err.Clear
+            On Error GoTo EH
         End If
     Next i
 
@@ -708,18 +758,26 @@ End Sub
 
 Private Sub CloseConfigEditor()
     On Error Resume Next
+    ' Nesacuvano se ne odbacuje tiho ni ovde -- isto pitanje koje ljuska
+    ' postavlja pri navigaciji (modUiPanel.PanelSmemoDaZatvorimo). Postavlja ga
+    ' PANEL, jer ono vazi i za legacy put, gde ljuske nema.
+    If Podesavanja_ImaNesacuvano() Then
+        If MsgBox(Poruka("UIPAN_ASK_ODBACI"), _
+                  vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
+    End If
     ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
     ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
     ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
     ' zajedno sa legacy formom.
-    If modUiPanel.PanelAktivan() = "PODESAVANJA" Then
-        modUiPanel.PanelZatvori
-        Exit Sub
-    End If
+    '
+    ' Pita se po MODULU, ne po kljucu panela: modul zna svoje ime, a kljuc je
+    ' strano ime koje se moze preimenovati u registru (i jeste, u v6-ui-201).
+    If modUiPanel.PanelZatvoriAko("modPodesavanja") Then Exit Sub
     frmOtkupAPP.ReturnToDashboard Poruka("CFG_MSG_PODESAVANJA_ZATVORENA")
     Unload mFrm
     Set mFrm = Nothing
     Set mInputs = Nothing
+    Set mUcitano = Nothing
     Set mWrappers = Nothing
     Set mBtnToggle = Nothing
     Set mGroupOrder = Nothing
@@ -862,6 +920,7 @@ Public Sub Podesavanja_Release()
     On Error Resume Next
     Set mFrm = Nothing
     Set mInputs = Nothing
+    Set mUcitano = Nothing
     Set mWrappers = Nothing
     Set mBtnToggle = Nothing
     Set mGroupOrder = Nothing

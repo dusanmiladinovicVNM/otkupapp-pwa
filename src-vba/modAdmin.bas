@@ -356,10 +356,10 @@ Private Sub CloseAdminPanel()
     ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
     ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
     ' zajedno sa legacy formom.
-    If modUiPanel.PanelAktivan() = "ADMIN" Then
-        modUiPanel.PanelZatvori
-        Exit Sub
-    End If
+    '
+    ' Pita se po MODULU, ne po kljucu panela: modul zna svoje ime, a kljuc je
+    ' strano ime koje se moze preimenovati u registru (i jeste, u v6-ui-201).
+    If modUiPanel.PanelZatvoriAko("modAdmin") Then Exit Sub
     frmOtkupAPP.ReturnToDashboard "Admin zatvoren."
     Unload mFrm
     Set mFrm = Nothing

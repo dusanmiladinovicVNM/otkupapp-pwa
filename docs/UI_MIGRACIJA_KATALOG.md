@@ -7419,3 +7419,113 @@ pa lista posle snimanja pokazuje staro stanje.
 - **VBA se u ovoj sesiji ne izvršava** (`run_vba.py` traži Windows + Excel +
   `pywin32`), pa su sve izmene ponašanja **neverifikovane**, ne zelene.
   Compile je ručna kapija: `Alt+F11 → Debug → Compile VBAProject`.
+
+### 26.28 Recenzija `21963f4`: životni ciklus panela i zamena operatera (`v6-ui-202`)
+
+Recenzija je našla tri kvara koje nijedan dotadašnji test nije mogao da vidi —
+svi su merili **registre**, nijedan nije **odigrao ciklus**. Sva tri su tiha.
+
+#### P0-1 — „Nazad" u panelu je od `v6-ui-201` padao u legacy granu
+
+`modPodesavanja.CloseConfigEditor` i `modAdmin.CloseAdminPanel` su pitali
+`PanelAktivan() = "PODESAVANJA"` / `"ADMIN"`. Preimenovanjem ključeva u
+`MAT_PODESAVANJA` / `MAT_ADMIN` taj uslov **nikad više nije bio tačan**, pa je
+klik na „Nazad" išao u legacy granu: `frmOtkupAPP.ReturnToDashboard`, pa
+`Unload mFrm` nad **okvirom** (ne formom) → greška progutana, reference
+obrisane, panel ostaje na sceni i može biti mrtav.
+
+Popravka nisu dve zamene stringa. Pita se **po modulu**, ne po ključu:
+
+```vba
+If modUiPanel.PanelZatvoriAko("modPodesavanja") Then Exit Sub
+```
+
+Modul zna **svoje** ime — ono stoji u `Attribute VB_Name` i ne može da se
+raziđe sa registrom. Ključ je **strano** ime, i baš zato je i puklo.
+
+#### P0-2 — panel se sklonio, ali ekran ispod je ostajao poluživ
+
+Otvaranje panela deaktivira ekran ispod (`ScrDeaktiviraj`), što kod matičnih
+briše `mZonaEkran` — a bez nje `Zona()` vraća `Nothing` i **sve** radnje ekrana
+tiho ne rade. Zatvaranje je radilo samo `PanelRezim False` + raspored: mreža se
+vidi, „Izmeni" ne radi ništa.
+
+`PanelZatvori` sada ima `vratiEkran` (podrazumevano `True`) i zove
+`modOtkupUI.PanelVracenNaEkran` — ponovno čitanje ekrana **i** vraćanje njegove
+oznake u sidebaru. `False` prosleđuje samo onaj ko sam vraća ekran (prelazak na
+drugi) ili kome ekrana više nema (rušenje ljuske).
+
+#### P0-3 — zamena operatera nije primenjivala nova prava
+
+`PrimeniNovaPrava` je zvao `BuildNav mFrm`, a `BuildNav` radi
+`Controls.Add("Forms.Frame.1", "zNav")` — **drugi put nad istom formom to je
+runtime greška**. Guta je `On Error Resume Next` u pozivaocu, pa se `BuildNav`
+prekidao na **prvoj liniji**: `mNavOff` je ostajao od prethodnog operatera.
+
+Tvrde brane su držale (`ActivateScreen` pita `ScrDozvoljen` na svaki klik), ali
+je meni lagao. Menjaju se samo **prava**, a prava su jedino što `mNavOff` drži —
+pa `ObnoviNavPrava` prolazi kroz `mNavKey` i preračunava mapu, bez ijedne nove
+kontrole. Kroz `mNavKey`, a ne kroz ponovljenu petlju po registru: dva spiska
+imena stavki mogu da se raziđu, jedan ne može.
+
+Uz to: fallback je bio bezuslovni `ActivateScreen SCR_POCETNI`. Ako novi
+operater nema pravo ni na Dokumenta, taj prelazak se odbija i **prethodni
+(zabranjeni) ekran ostaje na sceni, sa podacima prethodnog operatera**.
+`NaPrviDozvoljenEkran` traži redom, a ako nema nijednog — radna površina se
+prazni.
+
+#### P1 — sve iz istog gnezda
+
+| Nalaz | Popravka |
+|---|---|
+| `ActivateScreen` deaktivira stari ekran **pre** provere prava/postojanja | deaktivacija je pomerena iza svih provera; odbijen prelazak ne dira ekran na kome jesmo |
+| navigacija sa panela tiho odbacuje nesnimljeno | `PanelImaNesacuvano` (isti dogovor o imenu kao `_Release`) + pitanje; `modPodesavanja` prati učitane vrednosti, pa je odgovor tačan bez ijednog čitanja configa |
+| posle `PanelZatvori` sidebar ostaje označen na panelu | `PanelVracenNaEkran` vraća oznaku |
+| `SaveConfigEditor` može ostaviti delimično snimljen config | upis je pod svojim rukovaocem: pad jednog polja više ne preskače ostala, nego ulazi u izveštaj |
+
+#### Šta NIJE menjano, i zašto
+
+- **`ScrSopstvenaBrana` i `1004`.** To je namerno: `1004` je „Cannot run the
+  macro" = ekran nema `Scr_Dozvoljen`. Svaka **druga** greška je fail-closed
+  (uvedeno u `v6-ui-199`). Kompromis je zabeležen, ne previđen.
+- **Combo validacija je fail-open kad se izvor ne može pročitati.** Isto
+  namerno: nepoznat izvor ne sme da odbije unos koji je legalan. Tvrda brana je
+  u `modMaticniUnos`, ne ovde.
+
+#### Optimizacija: `BuildRowIndex` i još tri mesta
+
+`BuildLookupDict` nosi najviše dve kolone. Tamo gde petlji iz iste tabele treba
+**više**, nov `modDataAccess.BuildRowIndex` daje mapu `ključ → broj reda`, pa se
+kolone čitaju direktno iz istog niza — jedan prolaz za sve.
+
+| Mesto | Bilo | Sada |
+|---|---|---|
+| `modSledljivost.TraceByZbirna` | **7** `LookupValue` po redu (3 × `tblKooperanti`, 4 × `tblParcele`) | dve mape `ključ → red`, po jedan prolaz |
+| `modAgrohemija.GetMagacinStanje` | 3 × `tblArtikli` po artiklu | jedna mapa `ključ → red` |
+| `modAgrohemija.ReportIzdavanjePoKooperantu` | 2 × `tblKooperanti` po kooperantu | `BuildLookupDict` (`Ime` + `Prezime`) |
+
+Za 5000 otkupa nad 800 parcela sledljivost je radila oko **28 miliona**
+poređenja za jedan izveštaj.
+
+**Ostalo, izmereno a nedirano** (isti obrazac, van opsega ovog kruga):
+`modIzvestaj` (5 mesta: vozači, stanice, kupci), `modStammdatenSync` (5),
+`modStornoFlow` (`GetTableData` u petlji, 12 mesta), `modPrint` (2, u
+**ugnježđenoj** petlji), `modDokumenta` (3), `modSEFMapper` (6). Većina ih radi
+unutar `BeginTableCache` prozora, pa ne čitaju list ponovo — ali linearni skeniraj
+po redu ostaje.
+
+#### Verifikacija
+
+- `python3 tools/vba_check.py` — čisto (209 fajlova, 428 sabotaža).
+- Nov test **181** `T_UiPanel_ZivotniCiklusIPrava` **odigrava ciklus**:
+  ekran → panel → „Nazad" → zona ekrana je živa; odbijen prelazak ne deaktivira
+  ekran na kome jesmo; svaki modul iz registra zatvara svoj panel po imenu
+  modula; posle primene novih prava zabranjena stavka je prigušena.
+- Test **180** proširen tvrdnjom o `BuildRowIndex` (`RedSlozen`).
+- Pet novih sabotaža: `panel-zatvaranje-po-tudjem-imenu`,
+  `panel-ne-vraca-ekran-ispod`, `ljuska-deaktivira-pre-provere`,
+  `prava-se-ne-primenjuju-na-sidebar`, `mapa-reda-pomerena-za-jedan`.
+- **VBA se u ovoj sesiji ne izvršava** — sve izmene ponašanja su
+  **NEVERIFIKOVANE**. Scenariji koje traži recenzija (Partneri → Podešavanja →
+  Nazad → izmena; Podešavanja → Admin bez snimanja; operater bez prava na
+  Dokumenta) moraju se odigrati u Excelu.

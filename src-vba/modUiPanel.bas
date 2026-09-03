@@ -26,13 +26,13 @@ Attribute VB_Name = "modUiPanel"
 '=====================================================================
 Option Explicit
 
-Public Const UIPANEL_BUILD As String = "v6-ui-201"
+Public Const UIPANEL_BUILD As String = "v6-ui-202"
 
 Private Const SRC As String = "modUiPanel"
 
 ' Polja reda registra.
 Private Const PAN_KLJUC As Long = 0
-Private Const PAN_MODUL As Long = 1
+Public Const PAN_MODUL As Long = 1
 Private Const PAN_GRADI As Long = 2
 Private Const PAN_NASLOV As Long = 3
 Public Const PAN_LTAG As Long = 4
@@ -184,15 +184,44 @@ End Function
 ' Vraca radnu povrsinu ekranu. Bezbedno je zvati i kad nijedan panel nije
 ' otvoren -- panel se zatvara i iz svog dugmeta i iz ljuske, pa dvostruko
 ' zatvaranje mora da prodje bez traga.
-Public Sub PanelZatvori()
-    Dim host As Object
+'
+' vratiEkran = True (podrazumevano) znaci: posle sklanjanja panela ekran ispod
+' se PONOVO CITA. To nije kozmetika. Otvaranje panela je taj ekran deaktiviralo
+' (modOtkupUI.ActivateScreen -> ScrDeaktiviraj), pa mu je obrisano stanje --
+' kod maticnih i mZonaEkran, koju sve njegove radnje traze. Bez ponovnog
+' citanja bi se mreza videla, a "Izmeni" bi tiho nista ne radila.
+'
+' False prosledjuje samo onaj ko SAM vraca ekran (prelazak na drugi ekran) ili
+' onaj kome ekrana vise nema (rusenje ljuske) -- inace bi se ekran citao dvaput.
+Public Sub PanelZatvori(Optional ByVal vratiEkran As Boolean = True)
+    Dim host As Object, bioOtvoren As Boolean
     On Error Resume Next
+    bioOtvoren = (Len(mAktivan) > 0)
     ZatvoriTiho
     Set host = modOtkupUI.PanelHost()
     If Not host Is Nothing Then IsprazniOkvir host
     modOtkupUI.PanelRezim False
+    ' Samo ako je NESTO stvarno zatvoreno: PanelZatvori se zove i "za svaki
+    ' slucaj", a citanje ekrana na prazno je cist trosak.
+    If bioOtvoren And vratiEkran Then modOtkupUI.PanelVracenNaEkran
     Err.Clear
 End Sub
+
+' Zatvara panel SAMO ako je aktivan bas panel datog MODULA. Vraca True kad
+' jeste zatvorio -- pozivalac po tome zna da li je bio u ljusci ili u legacy
+' formi.
+'
+' ZASTO MODUL, A NE KLJUC: modul zna SVOJE ime i ono ne moze da se razidje sa
+' registrom. Kljuc je STRANO ime -- kad su PODESAVANJA/ADMIN u v6-ui-201
+' postali MAT_PODESAVANJA/MAT_ADMIN, poredjenja po kljucu u modPodesavanja i
+' modAdmin su tiho prestala da vaze: "Nazad" je padao u legacy granu, radio
+' Unload nad OKVIROM (ne formom), gutao gresku i ostavljao mrtav panel.
+Public Function PanelZatvoriAko(ByVal modul As String) As Boolean
+    If Len(mAktivan) = 0 Then Exit Function
+    If StrComp(PanelPolje(mAktivan, PAN_MODUL), modul, vbTextCompare) <> 0 Then Exit Function
+    PanelZatvori
+    PanelZatvoriAko = True
+End Function
 
 ' Pusta reference modula panela, ali NE dira okvir. Odvojeno zato sto redosled
 ' mora da bude: prvo omotaci (WithEvents), pa tek onda kontrole -- omotac koji
@@ -207,6 +236,34 @@ Private Sub ZatvoriTiho()
     Application.Run m & "." & OslobodiIme(m)
     Err.Clear
 End Sub
+
+' Ima li AKTIVAN panel nesacuvanih izmena. Neobavezno: panel koji tu proceduru
+' ne implementira nema sta da izgubi, pa greska poziva znaci False, ne pad.
+' Ime se izvodi iz imena modula, isti dogovor kao <Modul>_Release -- nov panel
+' ne trazi red vise u registru, samo da postuje isti dogovor.
+Public Function PanelImaNesacuvano() As Boolean
+    Dim m As String, v As Variant
+    If Len(mAktivan) = 0 Then Exit Function
+    m = PanelPolje(mAktivan, PAN_MODUL)
+    If Len(m) = 0 Then Exit Function
+    On Error Resume Next
+    Err.Clear
+    v = Application.Run(m & "." & Mid$(m, 4) & "_ImaNesacuvano")
+    If Err.Number = 0 Then PanelImaNesacuvano = CBool(v)
+    Err.Clear
+End Function
+
+' Smemo li da zatvorimo aktivan panel. Pita SAMO ako panel kaze da ima
+' nesacuvano -- inace se nista ne prikazuje. Do v6-ui-201 se otkucano u
+' Podesavanjima gubilo bez reci na klik u sidebar, isto kao sto se gubio unos
+' maticnog editora pre nego sto je i on poceo da pita (MATU_ASK_ODBACI_UNOS).
+Public Function PanelSmemoDaZatvorimo() As Boolean
+    PanelSmemoDaZatvorimo = True
+    If Not PanelImaNesacuvano() Then Exit Function
+    PanelSmemoDaZatvorimo = (MsgBox(Poruka("UIPAN_ASK_ODBACI"), _
+                                    vbExclamation + vbYesNo + vbDefaultButton2, _
+                                    APP_NAME) = vbYes)
+End Function
 
 ' Ime procedure koja oslobadja reference datog modula. Izvedeno iz imena modula
 ' po dogovoru (modPodesavanja -> Podesavanja_Release), pa nov panel ne trazi red

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-201"
+Public Const OTKUI_BUILD   As String = "v6-ui-202"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -1244,6 +1244,25 @@ End Sub
 Public Function PanelRezimAktivan() As Boolean
     PanelRezimAktivan = mPanelRezim
 End Function
+
+' Radna povrsina se VRATILA ekranu ispod panela. Zove ga modUiPanel.PanelZatvori.
+'
+' Otvaranje panela je taj ekran deaktiviralo (ScrDeaktiviraj), pa mu je stanje
+' obrisano -- kod maticnih i mZonaEkran, koju modMaticniEkran.Zona() trazi za
+' SVAKU radnju. Sam raspored to ne vraca: mreza bi se videla nepromenjena, a
+' "Izmeni" bi tiho nista ne radila, jer bi Zona() vracala Nothing.
+'
+' Uz to se vraca i oznaka u sidebaru: dok je panel bio otvoren ona je stajala
+' na njemu, a panela vise nema.
+Public Sub PanelVracenNaEkran()
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mPanelRezim Then Exit Sub          ' jos je ustupljena -- nema sta da se vraca
+    PaintNav mFrm, NavTagFor(mScreen)
+    LayoutOtkup mFrm
+    If Len(mScreen) > 0 Then RefreshFromData
+    Err.Clear
+End Sub
 
 '----------------------------------------------------------- GRID ----
 Private Sub BuildGrid(frm As Object)
@@ -4107,6 +4126,13 @@ Public Sub OtkupUI_SekcijaTest(ByVal sekcija As String)
     PostaviSekciju mFrm, sekcija
 End Sub
 
+' Ono sto se desi posle zamene operatera, bez same zamene. Javno zbog testa:
+' modAuth.Login trazi formu za prijavu, koja se u harnessu ne moze odigrati, a
+' tvrdnja ("sidebar prati NOVA prava") je bas ovde.
+Public Sub OtkupUI_PrimeniNovaPravaTest()
+    PrimeniNovaPrava
+End Sub
+
 ' Zona ugovornog ekrana je promenila VISINU (npr. otvoren editor), pa raspored
 ' mora ponovo.
 '
@@ -4311,16 +4337,18 @@ End Sub
 Private Sub PrimeniNovaPrava()
     On Error Resume Next
     modUiScreens.ScrResetCache
-    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
+    ' False: ekran ispod se ionako ponovo cita nize (ili se menja), pa bi
+    ' vracanje ovde bilo citanje viska.
+    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori False
     If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
     If mFrm Is Nothing Then Exit Sub
 
-    BuildNav mFrm                     ' prigusenje se racuna pri gradnji
+    ObnoviNavPrava
     If Len(mScreen) > 0 Then
         If Not modUiScreens.ScrDozvoljen(mScreen) Then
             ' Ekran koji novi operater ne sme da vidi ne ostaje otvoren.
             ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
-            ActivateScreen mFrm, SCR_POCETNI
+            NaPrviDozvoljenEkran
             Err.Clear
             Exit Sub
         End If
@@ -4329,6 +4357,60 @@ Private Sub PrimeniNovaPrava()
     LayoutOtkup mFrm
     RefreshFromData
     Err.Clear
+End Sub
+
+' Prigusenja sidebara po NOVIM pravima -- bez gradnje kontrola.
+'
+' Do v6-ui-201 je ovde stajalo BuildNav mFrm. Ono zove NewZone, a NewZone radi
+' Controls.Add("Forms.Frame.1", "zNav") -- drugi put nad istom formom to je
+' runtime greska "name already exists". Greska se gutala (On Error Resume Next
+' u pozivaocu), pa se BuildNav prekidao na PRVOJ liniji: mNavOff je ostajao od
+' PRETHODNOG operatera i sidebar je pokazivao tudja prava. Tvrde brane su
+' drzale (ActivateScreen pita ScrDozvoljen na svaki klik), ali je meni lagao.
+'
+' Menjaju se samo PRAVA, a prava su jedino sto mNavOff drzi -- kontrole i
+' preslikavanje stavka -> ekran (mNavKey) ostaju isti. Mapa se zato obilazi
+' kroz mNavKey, ne kroz ponovljenu petlju po registru: dva spiska imena stavki
+' bi mogla da se razidju, jedan ne moze.
+Private Sub ObnoviNavPrava()
+    Dim k As Variant
+    If mNavKey Is Nothing Or mNavOff Is Nothing Then Exit Sub
+    modUiScreens.ScrResetCache
+    For Each k In mNavKey.keys
+        mNavOff(CStr(k)) = Not modUiScreens.ScrAktivan(CStr(mNavKey(k)))
+    Next k
+End Sub
+
+' Prvi ekran na koji novi operater SME. Postojalo je bezuslovno
+' ActivateScreen SCR_POCETNI -- ali ako novi operater nema pravo ni na
+' Dokumenta, taj prelazak se odbija i PRETHODNI (zabranjeni) ekran ostaje na
+' sceni, sa podacima prethodnog operatera. Zato se trazi redom, a ako nema
+' nijednog, radna povrsina se PRAZNI.
+Private Sub NaPrviDozvoljenEkran()
+    Dim r As Variant, kljuc As String
+    If modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
+        ActivateScreen mFrm, SCR_POCETNI
+        Exit Sub
+    End If
+    ' Redom kroz registar, PRESKACUCI panele: panel bi pokrio radnu povrsinu, a
+    ' mScreen bi ispod njega ostao zabranjen ekran -- pa bi se on vratio cim se
+    ' panel zatvori. Trazi se pravi ekran ili nijedan.
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If Not modUiPanel.PanelPostoji(kljuc) Then
+            If modUiScreens.ScrAktivan(kljuc) Then
+                ActivateScreen mFrm, kljuc
+                Exit Sub
+            End If
+        End If
+    Next r
+    ' Nijedan ekran nije dozvoljen. Prazna povrsina je jedini tacan prikaz --
+    ' zadrzan ekran bi pokazivao podatke koje novi operater ne sme da vidi.
+    mScreen = ""
+    ShowToast Poruka("OTKUI_SCR_NIJEDAN"), True
+    ShowZones mFrm
+    PaintNav mFrm, ""
+    LayoutOtkup mFrm
 End Sub
 
 Private Sub RefreshOperater(frm As Object)
@@ -4870,7 +4952,7 @@ End Sub
 ' deljeni hrom i mreza, pa je ekran u proseku 240 kontrola i oko 180 ms; drzati
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
 Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
-    Dim z As Object, nm As String, greska As String
+    Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
     ' Ponovljen klik na OTVOREN panel ne radi nista. Bez ovoga bi se panel
     ' rusio i gradio ispocetka, pa bi Podesavanja izgubila nesacuvanu izmenu
     ' na klik u stavku na kojoj operater vec jeste.
@@ -4881,7 +4963,21 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     ' ispod njega -- operater bi video isti panel, a ljuska bi mislila da je na
     ' drugom ekranu. Zatvara se pre svega ostalog, i pre provere prava: panel
     ' koji ostane otvoren nad zabranjenim ekranom je gori od oba ishoda.
-    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
+    '
+    ' Ekran ispod se vraca SAMO ako ostajemo na njemu (klik na stavku ekrana na
+    ' kome vec jesmo). Kad se prelazi dalje, vraca ga sam prelazak -- pa bi
+    ' vracanje ovde bilo jedno citanje viska.
+    If modUiPanel.PanelAktivan() <> "" Then
+        ' Nesacuvano u panelu se NE odbacuje tiho. Ako operater odustane,
+        ' oznaka u sidebaru se vraca na panel -- inace bi meni pokazivao ekran
+        ' na koji se nije preslo.
+        If Not modUiPanel.PanelSmemoDaZatvorimo() Then
+            PaintNav frm, NavTagFor(AktivnaStavka())
+            Exit Sub
+        End If
+        vratiEkran = (kljuc = mScreen)
+        modUiPanel.PanelZatvori vratiEkran
+    End If
     ' Stavka sidebara koja je PANEL, ne ekran. Grana je odvojena jer panel nema
     ' nista od onoga sto sledi: ni zonu, ni naslovnu traku, ni mrezu, ni sort.
     ' mScreen zato ostaje ekran ISPOD panela -- zatvaranje panela ga vraca bez
@@ -4910,9 +5006,6 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
         Exit Sub
     End If
     If kljuc = mScreen Then Exit Sub
-    ' Ekran koji odlazi sprema svoje: editor, panel, izbor. Ugovorno i kasno
-    ' vezano -- ljuska i dalje ne zna nijedan ekran po imenu.
-    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
     ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je "DOKUMENTI"
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then
@@ -4944,6 +5037,14 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
             End If
         End If
     End If
+    ' Ekran koji odlazi sprema svoje: editor, panel, izbor. Ugovorno i kasno
+    ' vezano -- ljuska i dalje ne zna nijedan ekran po imenu.
+    '
+    ' TEK SADA, kad su sve provere prosle. Do v6-ui-201 je stajalo na vrhu, pa
+    ' je odbijen prelazak (nema prava, nema modula, gradnja pala) ostavljao
+    ' TRENUTNI ekran deaktiviran a i dalje na sceni: mreza se vidi, a radnje
+    ' tise ne rade jer im je zona obrisana.
+    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
     mScreen = kljuc
     ClosePopup
     CloseFilterPanel
@@ -6857,7 +6958,9 @@ Public Sub OtkupUI_Release()
     ' panela drzi njega. Dok te reference postoje, forma se ne moze osloboditi --
     ' a ImportAllVBA prvo UKLANJA istoimenu komponentu, pa bi uklanjanje palo i
     ' import bi napravio frmOtkupUI1. Zato panel odlazi PRE mFrm.
-    modUiPanel.PanelZatvori
+    ' False: ekrana vise nema kome bi se vratila radna povrsina -- forma se ovog
+    ' trenutka rusi. Citanje ekrana ovde bi bilo citanje u prazno.
+    modUiPanel.PanelZatvori False
     mPanelRezim = False
     Set mHovered = Nothing
     Set Btns = Nothing
