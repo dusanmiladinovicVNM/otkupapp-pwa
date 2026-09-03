@@ -413,9 +413,11 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_MAT_PAKOVANJE", "Ambala" & ChrW(382) & "a i pakovanje"
     UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
     UpsertRow lo, existing, "OTKUI_BTN_NAZAD_RAD", "Nazad na rad"
+    ' Poruka je nekad tvrdila da Maticni jos nisu prebaceni na nove ekrane.
+    ' Od kada jesu, jedini nacin da se do nje dodje je IZOSTANAK PRAVA -- pa je
+    ' stari tekst operateru govorio da funkcije nema, umesto da je ne sme.
     UpsertRow lo, existing, "OTKUI_SEK_NEMA_EKRANA", _
-        "Mati" & ChrW(269) & "ni podaci jo" & ChrW(353) & " nisu preba" & ChrW(269) & _
-        "eni na nove ekrane."
+        "U ovoj sekciji nemate nijedan dostupan ekran."
 
     ' --- paneli maticne sekcije (stavke sidebara, samo admin) --------------
     ' JEDAN kljuc sluzi i stavci sidebara i naslovu panela: dva kljuca za istu

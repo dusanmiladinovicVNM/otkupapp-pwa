@@ -2947,6 +2947,16 @@ SABOTAZE = {
     ),
     # Sekcija Maticni bez brane po oblasti: operater bez prava vidi partnere,
     # robu, korisnike i oba panela (Podesavanja, Admin).
+    # Odluka (EkranZaSekciju) je bila tacna i pre -- niko je nije primenio na
+    # dugme. Zato sabotaza gadja PRIMENU, ne odluku: tvrdnja nad odlukom je
+    # bila zelena dok je operater bez prava gledao dugme u zaglavlju.
+    "prekidac-sekcije-uvek-vidljiv": (
+        "modOtkupUI.bas",
+        "    BoxShow z, \"btnMatic\", (Len(EkranZaSekciju(cilj)) > 0)\n",
+        "    BoxShow z, \"btnMatic\", True   ' SABOTAZA: prekidac se crta uvek\n",
+        "T_Matic_SekcijaTraziPravo",
+        "prekidac sekcije se NE crta bez prava na Maticne podatke",
+    ),
     "maticni-bez-oblasti": (
         "modUiScreens.bas",
         "        ScrDozvoljen = modAuth.KorisnikImaPravo(obl)\n",

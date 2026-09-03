@@ -517,6 +517,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     SetKlasa 1                      ' II klasa starta onemogucena
     SelectModeCore frm, "F1", False
     OsveziAlatke frm                ' dugmad alatki po pravima operatera
+    OsveziDugmeSekcije frm          ' i prekidac sekcija ide po pravima
     ShowZones frm
     mBuilding = False
     mBuildMs = CLng((Timer - t0) * 1000)
@@ -4308,17 +4309,28 @@ End Function
 ' Natpis i glif zlatnog dugmeta prate sekciju: iz radne se ide u Maticne, iz
 ' maticne nazad na rad. Dugme koje u obe sekcije pise isto ne bi reklo gde si.
 Private Sub OsveziDugmeSekcije(frm As Object)
-    Dim z As Object
+    Dim z As Object, cilj As String
     On Error Resume Next
     Set z = frm.Controls("zHdr")
     If z Is Nothing Then Exit Sub
     If mSekcija = SEK_MATICNI Then
         z.Controls("btnMaticC").caption = Poruka("OTKUI_BTN_NAZAD_RAD")
         z.Controls("btnMaticI").caption = ChrW(IC_NAZAD)
+        cilj = SEK_RAD
     Else
         z.Controls("btnMaticC").caption = Poruka("OTKUI_BTN_MATICNI")
         z.Controls("btnMaticI").caption = ChrW(IC_MATICNI)
+        cilj = SEK_MATICNI
     End If
+    ' Prekidac vodi u DRUGU sekciju, pa se i crta po pravima TE sekcije:
+    ' operater bez ijednog dozvoljenog ekrana u njoj dugme ne vidi. Isti
+    ' obrazac kao OsveziAlatke -- brana ostaje u rukovaocu (PostaviSekciju),
+    ' ovo je da operater ne gleda dugme koje ga svaki put odbije.
+    '
+    ' Do v6-ui-211 se dugme crtalo uvek: nalog sa pravom samo na Banku video
+    ' je dugme Maticni podaci u zaglavlju, a klik mu je vracao poruku koja
+    ' tvrdi da ekrani ne postoje -- umesto da mu dugmeta uopste nema.
+    BoxShow z, "btnMatic", (Len(EkranZaSekciju(cilj)) > 0)
 End Sub
 
 '=====================================================================
@@ -4486,6 +4498,7 @@ Private Sub PrimeniNovaPrava()
 
     ObnoviNavPrava
     OsveziAlatke mFrm            ' Excel i Sync prate NOVA prava, kao i sidebar
+    OsveziDugmeSekcije mFrm      ' i prekidac sekcija -- inace ostane od starog
     If Len(mScreen) = 0 Then
         ' Prethodni operater nije imao pravo NI NA JEDAN ekran, pa je radna
         ' povrsina ostala prazna. Novi operater koji prava IMA mora da dobije

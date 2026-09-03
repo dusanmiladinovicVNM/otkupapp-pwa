@@ -1098,11 +1098,23 @@ End Sub
 ' povrsinu, pa bi zabrana ekrana ispod njega bila bez efekta). Admin ima
 ' bypass, i to se tvrdi da se "nema prava" ne bi moglo pomesati sa "AUTH lomi
 ' sve".
+' Da li je prekidac sekcija NACRTAN. Cita se sa same kontrole, kao
+' ZonaKontrolaTest: odluka (EkranZaSekciju) je vec postojala i bila tacna, a
+' kvar je bio u tome sto je niko nije PRIMENIO na dugme -- pa tvrdnja nad
+' odlukom ovo ne bi uhvatila.
+Private Function DugmeSekcijeVidljivoTest(f As Object) As Boolean
+    On Error Resume Next
+    DugmeSekcijeVidljivoTest = f.Controls("zHdr").Controls("btnMaticC").Visible
+    Err.Clear
+End Function
+
 Private Sub T_Matic_SekcijaTraziPravo()
     Dim biAuth As Boolean, i As Long
     Dim prijavaOp As Boolean, prijavaAdmin As Boolean
     Dim ekrani As Variant, opSme As String, adminSme As String
     Dim startOp As String
+    Dim f As frmOtkupUI
+    Dim dugmeOp As Boolean, dugmeAdmin As Boolean
 
     ekrani = Array("MAT_PARTNERI", "MAT_ROBA", "MAT_PAKOVANJE", "MAT_KORISNICI", _
                    "MAT_PODESAVANJA", "MAT_ADMIN")
@@ -1118,6 +1130,11 @@ Private Sub T_Matic_SekcijaTraziPravo()
     Next i
     startOp = modOtkupUI.OtkupUI_StartEkran()
 
+    ' Forma se gradi DOK je prijavljen suzen nalog -- tako se meri i sama
+    ' gradnja zaglavlja, ne samo osvezavanje posle zamene operatera.
+    Set f = NewOtkupUIForm()
+    dugmeOp = DugmeSekcijeVidljivoTest(f)
+
     modAuth.Logout
     prijavaAdmin = modAuth.ValidateLogin(FX_KOR_ADMIN, FX_KOR_PIN)
     modUiScreens.ScrResetCache
@@ -1125,6 +1142,10 @@ Private Sub T_Matic_SekcijaTraziPravo()
         If Not modUiScreens.ScrDozvoljen(CStr(ekrani(i))) Then _
             adminSme = adminSme & " " & CStr(ekrani(i))
     Next i
+
+    ' Drugi smer, kroz PRAVI put zamene operatera: dugme mora da se VRATI.
+    modOtkupUI.OtkupUI_PrimeniNovaPravaTest
+    dugmeAdmin = DugmeSekcijeVidljivoTest(f)
 
     modAuth.Logout
     modAuth.AuthTestUkljuci biAuth
@@ -1136,10 +1157,15 @@ Private Sub T_Matic_SekcijaTraziPravo()
     ' NAJVAZNIJE PRVO: nijedan deo sekcije Maticni ne sme bez prava.
     AssertEq Trim$(opSme), "", _
              "bez prava na Maticne podatke nijedan njihov ekran ni panel ne sme"
+    ' Ni ULAZ u sekciju: dugme zaglavlja je jedini put do nje iz radnog dela,
+    ' pa dozvoljen ekran nije jedino sto se mora izmeriti.
+    AssertEq dugmeOp, False, _
+             "prekidac sekcije se NE crta bez prava na Maticne podatke"
     ' Start ne sme da zavrsi u sekciji na koju operater nema pravo.
     AssertEq (Left$(startOp, 4) = "MAT_"), False, "start ne vodi u zabranjenu sekciju"
     ' Admin bypass: bez ovoga bi gornja tvrdnja bila zelena i kad AUTH sve gasi.
     AssertEq Trim$(adminSme), "", "admin sme sve iz sekcije Maticni"
+    AssertEq dugmeAdmin, True, "zamena operatera VRACA prekidac adminu"
 End Sub
 
 ' ============================================================
