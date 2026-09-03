@@ -402,30 +402,19 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_MAT_ROBA", "Proizvodi i cene"
     UpsertRow lo, existing, "OTKUI_NAV_MAT_PAKOVANJE", "Ambala" & ChrW(382) & "a i pakovanje"
     UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
-    UpsertRow lo, existing, "OTKUI_NAV_MAT_SISTEM", "Pode" & ChrW(353) & "avanja i alati"
     UpsertRow lo, existing, "OTKUI_BTN_NAZAD_RAD", "Nazad na rad"
     UpsertRow lo, existing, "OTKUI_SEK_NEMA_EKRANA", _
         "Mati" & ChrW(269) & "ni podaci jo" & ChrW(353) & " nisu preba" & ChrW(269) & _
         "eni na nove ekrane."
 
-    ' --- ekran "Podesavanja i alati" (maticna sekcija, samo admin) ---------
-    UpsertRow lo, existing, "OTKUI_SCRMS_SUB", _
-        "Pode" & ChrW(353) & "avanja i odr" & ChrW(382) & "avanje aplikacije"
-    UpsertRow lo, existing, "OTKUI_SCRMS_LISTA", "Alatke sistema"
-    UpsertRow lo, existing, "OTKUI_HDMS_ALATKA", "Alatka"
-    UpsertRow lo, existing, "OTKUI_HDMS_OPIS", "Sta radi"
-    UpsertRow lo, existing, "OTKUI_HDMS_GDE", "Otvara se"
+    ' --- paneli maticne sekcije (stavke sidebara, samo admin) --------------
+    ' JEDAN kljuc sluzi i stavci sidebara i naslovu panela: dva kljuca za istu
+    ' stvar znace stavku koja se zove drugacije od ekrana koji otvara.
+    ' Do v6-ui-200 je ovde stajao i spisak alatki ekrana MAT_SISTEM
+    ' (OTKUI_SCRMS_*, OTKUI_HDMS_*, "Otvori alatku") -- taj ekran vise ne
+    ' postoji, pa su ti kljucevi obrisani zajedno sa njim.
     UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA", "Pode" & ChrW(353) & "avanja"
-    UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA_OPIS", _
-        "Operativna pode" & ChrW(353) & "avanja aplikacije (bez internih klju" & ChrW(269) & "eva)"
-    UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Admin panel"
-    UpsertRow lo, existing, "OTKUI_MS_ADMIN_OPIS", _
-        "A" & ChrW(382) & "uriranje, setup, health check, Google autorizacija, alatke"
-    UpsertRow lo, existing, "OTKUI_MS_PROZOR", "u radnoj povr" & ChrW(353) & "ini"
-    UpsertRow lo, existing, "OTKUI_BTN_MS_OTVORI", "Otvori alatku"
-    UpsertRow lo, existing, "OTKUI_MS_ERR_OTVARANJE", _
-        "Panel nije mogao da se otvori: "
-    UpsertRow lo, existing, "OTKUI_MS_ERR_NEMA", "Nepoznata alatka."
+    UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Administracija"
 
     ' --- maticni ekrani: prekidac sekcija, cipovi, zona, kolone (M1) --------
     UpsertRow lo, existing, "OTKUI_SCRMP_SUB", _

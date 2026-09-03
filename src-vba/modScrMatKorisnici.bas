@@ -28,7 +28,7 @@ Private Const EKRAN As String = "MAT_KORISNICI"
 Private mLista As String
 
 ' Test seam za branu. Sme SAMO da je zatvori, nikad da je otvori -- iz istog
-' razloga kao na modScrMatSistem: u headless runu je MozeAdministraciju
+' razloga kao u modUiPanel: u headless runu je MozeAdministraciju
 ' anti-lockout (bez AUTH-a svi su admini), pa bi tvrdnja "ljuska postuje branu"
 ' inace merila dva puta True.
 Private mBranaZatvorenaTest As Boolean

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-200"
+Public Const OTKUI_BUILD   As String = "v6-ui-201"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -294,6 +294,7 @@ Public Const IC_MAT_ROBA      As Long = &HE8EC&   ' Tag          (za proveru)
 Public Const IC_MAT_PAKOVANJE As Long = &HE7B8&   ' Package      (za proveru)
 Public Const IC_MAT_KORISNICI As Long = &HE748&   ' SwitchUser   (= IC_OPERATER)
 Public Const IC_MAT_SISTEM    As Long = &HE713&   ' Setting      (= IC_MATICNI)
+Public Const IC_MAT_ADMIN     As Long = &HE7EF&   ' Admin        (za proveru)
 Private Const IC_NAZAD    As Long = &HE72B&   ' Back         (za proveru)
 Private Const IC_KOPIRAJ  As Long = &HE8C8&   ' Copy - prepisi kolicinu
 Private Const IC_PROFIL   As Long = &HE77B&   ' Contact - profil u sidebaru
@@ -3440,7 +3441,7 @@ Public Sub IdiNaEkran(ByVal kljuc As String)
     If Len(kljuc) = 0 Then Exit Sub
     If kljuc = mScreen Then Exit Sub
     ActivateScreen mFrm, kljuc
-    PaintNav mFrm, NavTagFor(mScreen)
+    PaintNav mFrm, NavTagFor(AktivnaStavka())
 End Sub
 
 ' Kljuc ekrana na kome jesmo. Javno zato sto je "storno je EKRAN, a ne rezim"
@@ -3656,6 +3657,17 @@ Public Sub SelectNav(frm As Object, ByVal nm As String)
     End If
     If Len(kljuc) > 0 Then ActivateScreen frm, kljuc
 End Sub
+
+' Stavka sidebara na kojoj operater STVARNO jeste. Dok je panel otvoren to je
+' panel, inace ekran. Bez ovoga bi PaintNav posle svakog neuspelog prelaska
+' vratio oznaku na mScreen -- a mScreen je ekran ISPOD panela, pa bi sidebar
+' pokazivao Partnere dok se gledaju Podesavanja.
+Private Function AktivnaStavka() As String
+    Dim k As String
+    k = modUiPanel.PanelAktivan()
+    If Len(k) = 0 Then k = mScreen
+    AktivnaStavka = k
+End Function
 
 ' nav tag ekrana koji je aktivan - za vracanje oznake posle neuspelog prelaska
 Private Function NavTagFor(ByVal kljuc As String) As String
@@ -4159,7 +4171,7 @@ Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
     End If
     ' ActivateScreen sam radi LayoutOtkup na kraju - ne ponavlja se ovde.
     If kljuc <> mScreen Then ActivateScreen frm, kljuc
-    PaintNav frm, NavTagFor(mScreen)
+    PaintNav frm, NavTagFor(AktivnaStavka())
     Exit Sub
 EH:
     LogErr "modOtkupUI.PostaviSekciju"
@@ -4313,7 +4325,7 @@ Private Sub PrimeniNovaPrava()
             Exit Sub
         End If
     End If
-    PaintNav mFrm, NavTagFor(mScreen)
+    PaintNav mFrm, NavTagFor(AktivnaStavka())
     LayoutOtkup mFrm
     RefreshFromData
     Err.Clear
@@ -4858,12 +4870,45 @@ End Sub
 ' deljeni hrom i mreza, pa je ekran u proseku 240 kontrola i oko 180 ms; drzati
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
 Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
-    Dim z As Object, nm As String
+    Dim z As Object, nm As String, greska As String
+    ' Ponovljen klik na OTVOREN panel ne radi nista. Bez ovoga bi se panel
+    ' rusio i gradio ispocetka, pa bi Podesavanja izgubila nesacuvanu izmenu
+    ' na klik u stavku na kojoj operater vec jeste.
+    If Len(kljuc) > 0 Then
+        If modUiPanel.PanelAktivan() = UCase$(kljuc) Then Exit Sub
+    End If
     ' Panel drzi CELU radnu povrsinu. Klik u sidebaru bi inace promenio ekran
     ' ispod njega -- operater bi video isti panel, a ljuska bi mislila da je na
     ' drugom ekranu. Zatvara se pre svega ostalog, i pre provere prava: panel
     ' koji ostane otvoren nad zabranjenim ekranom je gori od oba ishoda.
     If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
+    ' Stavka sidebara koja je PANEL, ne ekran. Grana je odvojena jer panel nema
+    ' nista od onoga sto sledi: ni zonu, ni naslovnu traku, ni mrezu, ni sort.
+    ' mScreen zato ostaje ekran ISPOD panela -- zatvaranje panela ga vraca bez
+    ' ponovne gradnje, a "Nazad na rad" i dalje zna odakle se doslo.
+    '
+    ' Do v6-ui-200 se ovde nije dolazilo: panel je otvarao ekran MAT_SISTEM
+    ' preko svog dugmeta "Otvori alatku". Taj ekran je bio spisak od dve stavke
+    ' -- tacno ono sto sidebar vec radi -- pa je uklonjen, a panel je postao
+    ' stavka sidebara kao i Korisnici.
+    If modUiPanel.PanelPostoji(kljuc) Then
+        If Not modUiScreens.ScrDozvoljen(kljuc) Then
+            ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+            PaintNav frm, NavTagFor(AktivnaStavka())
+            Exit Sub
+        End If
+        ' Ekran koji ostaje ispod panela svejedno sprema svoje: editor koji bi
+        ' prezivo iza panela pise u sifarnik koji se vise ne vidi.
+        If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen
+        ClosePopup
+        CloseFilterPanel
+        greska = modUiPanel.PanelOtvori(kljuc)
+        If Len(greska) > 0 Then
+            ShowToast greska, True
+            PaintNav frm, NavTagFor(AktivnaStavka())
+        End If
+        Exit Sub
+    End If
     If kljuc = mScreen Then Exit Sub
     ' Ekran koji odlazi sprema svoje: editor, panel, izbor. Ugovorno i kasno
     ' vezano -- ljuska i dalje ne zna nijedan ekran po imenu.
@@ -4872,7 +4917,7 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then
         ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
-        PaintNav frm, NavTagFor(mScreen)
+        PaintNav frm, NavTagFor(AktivnaStavka())
         Exit Sub
     End If
     If kljuc <> SCR_POCETNI Then
@@ -4880,7 +4925,7 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
         ' jesmo - inace bi meni pokazivao Palete dok je na ekranu jos Unos.
         If Not modUiScreens.ScrPostoji(kljuc) Then
             ShowToast Poruka("OTKUI_SCR_NEMA"), False
-            PaintNav frm, NavTagFor(mScreen)
+            PaintNav frm, NavTagFor(AktivnaStavka())
             Exit Sub
         End If
         nm = "zScr_" & kljuc
@@ -4894,7 +4939,7 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
                 ' ekran koji padne u gradnji ne sme da obori aplikaciju
                 z.Visible = False
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
-                PaintNav frm, NavTagFor(mScreen)
+                PaintNav frm, NavTagFor(AktivnaStavka())
                 Exit Sub
             End If
         End If
@@ -8045,7 +8090,8 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_MAT_ROBA", "Sidebar: Proizvodi i cene", "Tag", IC_MAT_ROBA
     IcoRow a, "IC_MAT_PAKOVANJE", "Sidebar: Ambalaza i pakovanje", "Package", IC_MAT_PAKOVANJE
     IcoRow a, "IC_MAT_KORISNICI", "Sidebar: Korisnici", "SwitchUser", IC_MAT_KORISNICI
-    IcoRow a, "IC_MAT_SISTEM", "Sidebar: Podesavanja i alati", "Setting", IC_MAT_SISTEM
+    IcoRow a, "IC_MAT_SISTEM", "Sidebar: Podesavanja", "Setting", IC_MAT_SISTEM
+    IcoRow a, "IC_MAT_ADMIN", "Sidebar: Administracija", "Admin", IC_MAT_ADMIN
     IcoRow a, "IC_NAZAD", "Dugme: Nazad na rad", "Back", IC_NAZAD
 
     Set wb = Workbooks.Add

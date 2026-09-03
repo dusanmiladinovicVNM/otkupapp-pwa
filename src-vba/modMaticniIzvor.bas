@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-195"
+Public Const MATIZ_BUILD As String = "v6-ui-201"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -52,6 +52,19 @@ Private mNeaktivnih As Long
 ' Kes odgovora "kako se u OVOJ tabeli zove kolona statusa". Odgovor trazi prolaz
 ' kroz zaglavlje tabele, a pita se pri svakom crtanju mreze i svakog cipa.
 Private mStatusKol As Object
+
+' Mape za IZVEDENE kolone (@stanica, @koop_naziv). Do v6-ui-201 su te dve
+' kolone isle kroz LookupValue POZVAN U PETLJI: jedan poziv je citao celu
+' tabelu i skenirao je linearno, a Parcele ga zovu DVA puta po redu (Ime i
+' Prezime posebno). Nad 800 parcela i 400 kooperanata to je 1600 citanja
+' tblKooperanti i ~640.000 poredjenja -- za dve kolone teksta.
+'
+' BuildLookupDict je vec postojao tacno za taj obrazac (modDataAccess), pa se
+' ovde samo koristi. Mapa se gradi LENJO (vecina sekcija je ne dodirne) i zivi
+' SAMO unutar jednog MatRedovi -- pravi se posle brisanja na ulazu, pa ne moze
+' da prezivi citanje u kome je nastala i pokaze stare nazive.
+Private mMapaStanica As Object
+Private mMapaKoop As Object
 
 '------------------------------------------------------------- SEKCIJE
 ' Sekcije po ekranu. Redosled = redosled u prekidacu lista.
@@ -197,7 +210,8 @@ End Function
 ' Kolona mreze koja nosi IDENTITET reda. Skoro svuda je prva (PK), ali lista
 ' prava u prvoj koloni ima lokalizovan naziv oblasti, a kljuc joj stoji u
 ' skrivenoj koloni. Jedan broj, deljen izmedju opisa kolona i radnje -- da se
-' indeks ne moze razici (isti razlog zbog kog modScrMatSistem ima MS_COL_TAG).
+' indeks ne moze razici (isti razlog zbog kog modScrStorno ima svoju kolonu
+' GeneracijaID -- red se bira po identitetu, nikad po rednom broju).
 Public Function MatKolonaID(ByVal kljuc As String) As Long
     If kljuc = "PRAVA" Then
         MatKolonaID = modMaticniKorisnici.KOR_COL_OBLAST
@@ -688,8 +702,45 @@ End Function
 ' KONTEKST nosi izbor koji lista trazi izvan sopstvenog reda -- za sada samo
 ' PRAVA, kojoj treba ID korisnika izabranog u susednoj listi. Prazan kontekst
 ' daje praznu listu; prava bez korisnika nisu podatak.
+' Citanje jedne liste. Telo je u MatRedoviCore; ovde je samo PROZOR:
+'
+'   - BeginTableCache/EndTableCache -- unutar jednog citanja se ista tabela i
+'     isti indeks kolone traze desetinama puta (Kol() zove GetColumnIndex po
+'     celiji, po redu, a GetColumnIndex bez prozora skenira SVE ListObjecte
+'     radne sveske). Prozor je depth-brojan, pa je ugnjezdavanje bezbedno --
+'     citanje pozvano iz vec otvorenog prozora ne zatvara tudji.
+'   - brisanje mapa izvedenih kolona, na ulazu i na izlazu.
+'
+' Omotac postoji zato sto jezgro ima sest izlaza; EndTableCache mora da se
+' izvrsi na SVAKOM, i onda kad citanje pukne -- prozor koji ostane otvoren
+' kesira podatke preko upisa koji sledi.
 Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
                           ByVal q As String, Optional ByVal kontekst As String = "") As Variant
+    Dim errNum As Long, errSrc As String, errDesc As String
+    On Error GoTo EH
+    OcistiMape
+    BeginTableCache
+    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)
+    EndTableCache
+    OcistiMape
+    Exit Function
+EH:
+    ' Greska se PREPISUJE pre ciscenja: Err je globalan, pa svaka procedura sa
+    ' sopstvenim On Error koja se izvrsi u medjuvremenu moze da ga obrise -- i
+    ' onda bi se dizala greska 0, bez ijednog traga o pravom uzroku.
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
+    EndTableCache
+    OcistiMape
+    Err.Raise errNum, errSrc, errDesc
+End Function
+
+Private Sub OcistiMape()
+    Set mMapaStanica = Nothing
+    Set mMapaKoop = Nothing
+End Sub
+
+Private Function MatRedoviCore(ByVal kljuc As String, ByVal filter As String, _
+                               ByVal q As String, ByVal kontekst As String) As Variant
     Dim cols As Variant, data As Variant, tbl As String
     Dim nCol As Long, i As Long, c As Long, n As Long
     Dim outA() As Variant, hay As String, pkIdx As Long, statIdx As Long
@@ -705,9 +756,9 @@ Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
     ' poslednje, MatUkupno govori o njemu.
     If kljuc = "KORISNICI" Or kljuc = "PRAVA" Then
         If kljuc = "PRAVA" Then
-            MatRedovi = modMaticniKorisnici.KorPravaRedovi(kontekst, q)
+            MatRedoviCore = modMaticniKorisnici.KorPravaRedovi(kontekst, q)
         Else
-            MatRedovi = modMaticniKorisnici.KorRedovi(filter, q)
+            MatRedoviCore = modMaticniKorisnici.KorRedovi(filter, q)
         End If
         mUkupno = modMaticniKorisnici.KorUkupno()
         mAktivnih = modMaticniKorisnici.KorAktivnih()
@@ -718,7 +769,7 @@ Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
     cols = MatKolone(kljuc)
     tbl = MatTabela(kljuc)
     If Not IsArray(cols) Or Len(tbl) = 0 Then
-        MatRedovi = Array(Array(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        MatRedoviCore = Array(Array(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
     nCol = UBound(cols) - LBound(cols) + 1
@@ -729,7 +780,7 @@ Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
     ' unos gore). Bez toga bi vazeca cena zavisila od redosleda upisa u tabelu.
     If kljuc = "CENOVNIK" And Not IsEmpty(data) Then data = CenovnikPoredak(data)
     If IsEmpty(data) Then
-        MatRedovi = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
+        MatRedoviCore = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
@@ -786,10 +837,10 @@ Sledeci:
     Next i
 
     If n = 0 Then
-        MatRedovi = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
+        MatRedoviCore = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
-    MatRedovi = Array(cols, outA, n, 0#, 0#, Array(0, 0, 0))
+    MatRedoviCore = Array(cols, outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
 EH:
     Err.Raise Err.Number, "modMaticniIzvor.MatRedovi[" & kljuc & "]", Err.description
@@ -876,14 +927,34 @@ Private Function SpojiPolja(ByVal tbl As String, ByRef data As Variant, ByVal r 
     End If
 End Function
 
+' Mape izvedenih kolona. Grade se pri PRVOJ celiji koja ih trazi, pa sekcija
+' koja ih nema ne plati nista. BuildLookupDict cuva PRVI pojav kljuca -- isto
+' pravilo koje LookupValue ima (prvi match pobedjuje), pa se prikaz ne menja.
+Private Function MapaStanica() As Object
+    If mMapaStanica Is Nothing Then _
+        Set mMapaStanica = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+    Set MapaStanica = mMapaStanica
+End Function
+
+' Ime i prezime u JEDNOM prolazu (BuildLookupDict spaja razmakom) -- ranije dva
+' odvojena LookupValue-a, svaki sa svojim citanjem cele tabele.
+Private Function MapaKooperanata() As Object
+    If mMapaKoop Is Nothing Then _
+        Set mMapaKoop = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
+    Set MapaKooperanata = mMapaKoop
+End Function
+
 ' Operater bira stanicu po NAZIVU, pa je i vidi po nazivu. StanicaID ostaje u
 ' podacima (kolona identiteta je PK reda, ne ovo).
 Private Function NazivStanice(ByVal tbl As String, ByRef data As Variant, _
                               ByVal r As Long) As String
-    Dim id As String
+    Dim id As String, m As Object
     id = Kol(tbl, data, r, "StanicaID")
     If Len(id) = 0 Then Exit Function
-    NazivStanice = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", id, "Naziv")))
+    Set m = MapaStanica()
+    If m.Exists(id) Then NazivStanice = Trim$(CStr(m(id)))
+    ' Nepoznat ID se prikazuje KAO ID, ne kao prazno: red bez naziva stanice bi
+    ' izgledao kao red bez stanice, a to su dva razlicita kvara.
     If Len(NazivStanice) = 0 Then NazivStanice = id
 End Function
 
@@ -891,12 +962,12 @@ End Function
 ' combo, pa se pretraga po ID-ju i po imenu ponasa isto kao pre.
 Private Function NazivKooperanta(ByVal tbl As String, ByRef data As Variant, _
                                  ByVal r As Long) As String
-    Dim id As String, ime As String, prez As String
+    Dim id As String, imePrez As String, m As Object
     id = Kol(tbl, data, r, COL_PAR_KOOP)
     If Len(id) = 0 Then Exit Function
-    ime = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", id, "Ime")))
-    prez = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", id, "Prezime")))
-    NazivKooperanta = Trim$(ime & " " & prez) & " (" & id & ")"
+    Set m = MapaKooperanata()
+    If m.Exists(id) Then imePrez = CStr(m(id))
+    NazivKooperanta = Trim$(imePrez) & " (" & id & ")"
 End Function
 
 ' Adresa kupca: ulica, postanski broj mesto -- isti sastav kao u LoadList.

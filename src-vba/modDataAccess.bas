@@ -28,6 +28,14 @@ Public Sub BeginTableCache()
     mTableCacheDepth = mTableCacheDepth + 1
 End Sub
 
+' Dubina otvorenih prozora kesa. Javno ZBOG TESTA: prozor koji ostane otvoren
+' ne pravi gresku nego tise zlo -- kesirani podaci prezive upis koji sledi, pa
+' lista posle snimanja pokazuje staru vrednost. Bez ovoga se ravnoteza
+' Begin/End ne moze tvrditi, a bas ona je ono sto se lako pokvari.
+Public Function TableCacheDepth() As Long
+    TableCacheDepth = mTableCacheDepth
+End Function
+
 Public Sub EndTableCache()
     If mTableCacheDepth > 0 Then mTableCacheDepth = mTableCacheDepth - 1
     If mTableCacheDepth <= 0 Then

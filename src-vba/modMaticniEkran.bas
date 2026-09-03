@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-199"
+Public Const MATEKR_BUILD As String = "v6-ui-201"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -964,6 +964,14 @@ Private Sub OcistiPolja(ByVal lista As String)
     PoljaEditora z, lista, True
     a = modMaticniIzvor.MatPolja(lista)
     If Not IsArray(a) Then Exit Sub
+    ' Prozor kesa oko CELE petlje: svaki combo cita svoju tabelu, a bez prozora
+    ' i svaki GetColumnIndex skenira sve ListObjecte radne sveske. Parcele imaju
+    ' sest polja sa izvorom, pa je otvaranje editora bilo sest citanja tabela i
+    ' ~20 skenova sveske. Prozor je depth-brojan pa ne smeta tudjem.
+    '
+    ' EndTableCache se ne moze preskociti: On Error Resume Next vazi za celu
+    ' proceduru, pa greska u petlji nastavlja na sledecu naredbu, ne izlazi.
+    BeginTableCache
     For Each r In a
         k = modMaticniIzvor.PoljeF(CStr(r), 0)
         nm = KontrolaPolja(lista, k)
@@ -972,6 +980,7 @@ Private Sub OcistiPolja(ByVal lista As String)
             z.Controls(nm).Controls(nm & "T").value = ""
         End If
     Next r
+    EndTableCache
     Err.Clear
 End Sub
 
@@ -1006,6 +1015,7 @@ Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
     a = modMaticniIzvor.MatPolja(lista)
     If Not IsArray(a) Then Exit Sub
     mUZavisnima = True
+    BeginTableCache
     For Each r In a
         izvor = modMaticniIzvor.PoljeF(CStr(r), 5)
         If Len(izvor) > 0 Then
@@ -1022,6 +1032,7 @@ Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
             End If
         End If
     Next r
+    EndTableCache
     mUZavisnima = False
     Err.Clear
 End Sub

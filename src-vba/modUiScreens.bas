@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-199"
+Public Const UISCR_BUILD As String = "v6-ui-201"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -128,12 +128,22 @@ Public Function ScrRows() As Variant
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
     c.Add "MAT_PAKOVANJE|modScrMatPakovanje|OTKUI_NAV_MAT_PAKOVANJE|" & IC_MAT_PAKOVANJE & _
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
-    ' Korisnici i Sistem nose JOS JEDNU branu preko oblasti -- administraciju.
-    ' Ona ne moze u SCR_OBLAST (to je naziv kolone prava u tblKorisnici), pa
-    ' ekran sam odgovara kroz neobavezan Scr_Dozvoljen (v. ScrDozvoljen nize).
+    ' Korisnici, Podesavanja i Admin nose JOS JEDNU branu preko oblasti --
+    ' administraciju. Ona ne moze u SCR_OBLAST (to je naziv kolone prava u
+    ' tblKorisnici), pa se odgovara kroz neobavezan Scr_Dozvoljen za ekran,
+    ' odnosno kroz modUiPanel za panel (v. ScrDozvoljen nize).
     c.Add "MAT_KORISNICI|modScrMatKorisnici|OTKUI_NAV_MAT_KORISNICI|" & IC_MAT_KORISNICI & _
           "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
-    c.Add "MAT_SISTEM|modScrMatSistem|OTKUI_NAV_MAT_SISTEM|" & IC_MAT_SISTEM & _
+    ' PANEL, ne ekran: modul je prazan jer ovi redovi nemaju Scr_* ugovor.
+    ' Ljuska ih prepoznaje po tome sto ih modUiPanel poznaje, pa klik u sidebaru
+    ' otvara panel umesto ekrana.
+    '
+    ' Do v6-ui-200 su stajali iza ekrana MAT_SISTEM i dugmeta "Otvori alatku" --
+    ' jedan klik i jedan spisak vise, bez ijednog dobitka: spisak od dve stavke
+    ' je ponavljao ono sto sidebar vec ume. Otud ekran alatki vise ne postoji.
+    c.Add "MAT_PODESAVANJA||OTKUI_MS_PODESAVANJA|" & IC_MAT_SISTEM & _
+          "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
+    c.Add "MAT_ADMIN||OTKUI_MS_ADMIN|" & IC_MAT_ADMIN & _
           "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
 
     Dim a() As Variant, i As Long
@@ -214,6 +224,13 @@ Public Function ScrPostoji(ByVal kljuc As String) As Boolean
         ScrPostoji = mHas(kljuc)
         Exit Function
     End If
+    ' Panel nema modul ekrana, ali POSTOJI -- inace bi ga sidebar crtao
+    ' prigusenim kao ekran koji jos nije napisan.
+    If modUiPanel.PanelPostoji(kljuc) Then
+        ScrPostoji = True
+        mHas(kljuc) = True
+        Exit Function
+    End If
     modul = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(modul) = 0 Then Exit Function
     On Error Resume Next
@@ -244,7 +261,15 @@ Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Else
         ScrDozvoljen = modAuth.KorisnikImaPravo(obl)
     End If
-    If ScrDozvoljen Then ScrDozvoljen = ScrSopstvenaBrana(kljuc)
+    If Not ScrDozvoljen Then Exit Function
+    ' Panel nema Scr_Dozvoljen jer nema modul ekrana -- njegovu branu drzi
+    ' registar panela. Bez ovoga bi stavka u sidebaru stajala puna, a otvaranje
+    ' bi odbilo: prigusenje mora da kaze istinu PRE klika.
+    If modUiPanel.PanelPostoji(kljuc) Then
+        ScrDozvoljen = modUiPanel.PanelDozvoljen(kljuc)
+        Exit Function
+    End If
+    ScrDozvoljen = ScrSopstvenaBrana(kljuc)
 End Function
 
 ' Odgovor samog ekrana na pitanje "smem li da te otvorim". Ekran koji nema

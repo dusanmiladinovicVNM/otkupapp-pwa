@@ -17,16 +17,16 @@ Attribute VB_Name = "modUiPanel"
 ' ZASTO NE U FORMU: frmOtkupUI je ljuska bez logike. Nista sto je do sada zivelo
 ' u frmStammdaten ne ide u nju -- ide u standardni modul, ovaj.
 '
-' BRANA JE TROSTRUKA i to nije visak: ekran Podesavanja i alati odgovara kroz
-' Scr_Dozvoljen, ovaj registar proverava pre otvaranja, a sam graditelj jos
-' jednom (AUD-033). Prava pristupa se menjaju zamenom operatera, pa nijedan sloj
-' ne sme da veruje prethodnom.
+' BRANA JE TROSTRUKA i to nije visak: sidebar pita PanelDozvoljen pre nego sto
+' stavku uopste nacrta punom bojom, PanelOtvori proverava jos jednom pre nego
+' sto ustupi radnu povrsinu, a sam graditelj treci put (AUD-033). Prava pristupa
+' se menjaju zamenom operatera, pa nijedan sloj ne sme da veruje prethodnom.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
 
-Public Const UIPANEL_BUILD As String = "v6-ui-196"
+Public Const UIPANEL_BUILD As String = "v6-ui-201"
 
 Private Const SRC As String = "modUiPanel"
 
@@ -35,20 +35,67 @@ Private Const PAN_KLJUC As Long = 0
 Private Const PAN_MODUL As Long = 1
 Private Const PAN_GRADI As Long = 2
 Private Const PAN_NASLOV As Long = 3
+Public Const PAN_LTAG As Long = 4
 
 ' Kljuc panela koji je trenutno u radnoj povrsini. Prazno = nijedan.
 Private mAktivan As String
 
+' Test seam za branu. Sme SAMO da je zatvori, nikad da je otvori -- brana koju
+' test moze da otkljuca nije brana. Postoji zato sto se u headless runu
+' administracija ne moze iskljuciti (MozeAdministraciju je anti-lockout: bez
+' AUTH-a svi su admini), pa bi tvrdnja "sidebar postuje branu panela" inace
+' merila dva puta True i prolazila i kad brane nema. Preseljen iz
+' modScrMatSistem zajedno sa branom koju meri.
+Private mBranaZatvorenaTest As Boolean
+
 '-------------------------------------------------------------- REGISTAR
-' Red: "KLJUC|modul|graditelj|naslov(katalog)".
+' Red: "KLJUC|modul|graditelj|naslov(katalog)|legacy Tag".
 '
 ' Graditelj prima JEDAN argument -- okvir domacina. To je isti potpis koji su te
 ' procedure vec imale (frm As Object), pa se telo panela nije menjalo: menja se
 ' samo KO je domacin.
 Public Function PanelRedovi() As Variant
+    ' Kljuc je ISTI kao red u registru ekrana (modUiScreens), jer sidebar bira
+    ' po njemu: MAT_PODESAVANJA / MAT_ADMIN. Jedan kljuc, dva registra -- ime
+    ' koje se razidje znaci stavku koja se ne otvara.
+    '
+    ' PETO polje je LEGACY TAG iz starog menija (modMaticniLookups.MaticniSekcije).
+    ' Nije prikaz nego SPONA: tvrdnja "novi UI dostize sve sto stari meni
+    ' dostize" (test 174) za sifarnike ide kroz MatKljucIzLegacyTag, a za ova
+    ' dva panela iskljucivo odavde. Do v6-ui-200 ju je drzao modScrMatSistem, u
+    ' spisku alatki; kad je taj ekran uklonjen, spona je morala negde -- a
+    ' registar panela je jedino mesto koje oba kraja vec zna.
     PanelRedovi = Array( _
-        "PODESAVANJA|modPodesavanja|BuildConfigEditor|OTKUI_MS_PODESAVANJA", _
-        "ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN")
+        "MAT_PODESAVANJA|modPodesavanja|BuildConfigEditor|OTKUI_MS_PODESAVANJA|" & _
+            "Pode" & ChrW(353) & "avanja", _
+        "MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin")
+End Function
+
+' Svi kljucevi registra, redom. Javno zbog testa: registar ekrana i registar
+' panela moraju da nose ISTE kljuceve, a to se ne moze tvrditi bez spiska.
+Public Function PanelKljucevi() As Variant
+    Dim r As Variant, a() As Variant, i As Long
+    r = PanelRedovi()
+    ReDim a(LBound(r) To UBound(r))
+    For i = LBound(r) To UBound(r)
+        a(i) = Split(CStr(r(i)), "|")(PAN_KLJUC)
+    Next i
+    PanelKljucevi = a
+End Function
+
+' Kljuc panela za stavku starog menija, ili "" ako ta stavka nije panel.
+' Ogledalo modMaticniIzvor.MatKljucIzLegacyTag, za druga dva Tag-a.
+Public Function PanelKljucIzLegacyTag(ByVal tag As String) As String
+    Dim r As Variant, p() As String
+    For Each r In PanelRedovi()
+        p = Split(CStr(r), "|")
+        If UBound(p) >= PAN_LTAG Then
+            If StrComp(p(PAN_LTAG), tag, vbTextCompare) = 0 Then
+                PanelKljucIzLegacyTag = p(PAN_KLJUC)
+                Exit Function
+            End If
+        End If
+    Next r
 End Function
 
 Public Function PanelPolje(ByVal kljuc As String, ByVal idx As Long) As String
@@ -65,6 +112,23 @@ End Function
 Public Function PanelPostoji(ByVal kljuc As String) As Boolean
     PanelPostoji = (Len(PanelPolje(kljuc, PAN_MODUL)) > 0)
 End Function
+
+' Sme li trenutni operater da otvori ovaj panel. Sidebar to pita PRE crtanja,
+' pa prigusena stavka kaze istinu -- do v6-ui-201 je stajala puna, a otvaranje
+' je odbijalo tek posle klika.
+Public Function PanelDozvoljen(ByVal kljuc As String) As Boolean
+    On Error Resume Next
+    If mBranaZatvorenaTest Then Exit Function
+    If Not PanelPostoji(kljuc) Then Exit Function
+    PanelDozvoljen = modAuth.MozeAdministraciju()
+    Err.Clear
+End Function
+
+' Zatvara branu za jednu tvrdnju. Otvaranje ide iskljucivo kroz False, koji
+' vraca normalno ponasanje -- ne postoji vrednost koja branu zaobilazi.
+Public Sub PanelBranaZatvoriTest(ByVal zatvori As Boolean)
+    mBranaZatvorenaTest = zatvori
+End Sub
 
 ' Kljuc panela koji je otvoren, ili "" ako nijedan.
 Public Function PanelAktivan() As String

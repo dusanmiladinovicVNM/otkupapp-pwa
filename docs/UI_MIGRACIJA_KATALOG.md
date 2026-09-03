@@ -6260,6 +6260,10 @@ operater ga već zna, i preživelo je do danas.
 | 4 | `MAT_KORISNICI` | Korisnici | SISTEM | Korisnici (+ prava) | `OBL_MATICNI` + admin |
 | 5 | `MAT_SISTEM` | Podešavanja i alati | SISTEM | — (v. §26.9) | `OBL_MATICNI` + admin |
 
+> **Od `v6-ui-201` reda 5 nema.** Ekran-pokretač je uklonjen, a Podešavanja
+> i Administracija su **stavke sidebara** (`MAT_PODESAVANJA`, `MAT_ADMIN`) koje
+> otvaraju panel u radnoj površini — v. §26.27. Tabela iznad je stanje M0.
+
 Redovi registra (isti oblik kao postojeći, sa dodatim sedmim poljem):
 
 ```
@@ -7311,3 +7315,107 @@ korisnika **1200 pretraga šeme** na svako crtanje liste — i uz to gradio nov 
 `modAuth.OblastiList()` po redu. Oba su podignuta u keš koji pada zajedno sa
 ostalim izvedenim mapama (`MatResetCache` → `KorResetCache`), jer se šema menja
 instalacijom i keširan indeks ne sme da preživi reset.
+
+### 26.27 Paneli su stavke sidebara; ekran-pokretač je uklonjen (`v6-ui-201`)
+
+**Pitanje koje je ovo pokrenulo:** zašto se Podešavanja i Admin otvaraju preko
+dugmeta „Otvori alatku", a Korisnici direktno iz sidebara?
+
+**Odgovor: dugme nije imalo opravdanje.** Nastalo je u M0 (§26.13), kad je
+ugovorni ekran **bezuslovno** dobijao naslovnu traku i mrežu — ekran bez liste
+tada nije mogao da postoji, pa je `MAT_SISTEM` napravljen kao *lista alatki* da
+bi matična sekcija imala bar jedan ekran od prvog dana. U M6 (§26.21) su paneli
+prešli u radnu površinu ljuske, i time je jedini razlog za taj ekran nestao:
+ostao je **spisak od dve stavke koji ponavlja ono što sidebar radi**, plus jedan
+klik i jedan izbor više do istog panela.
+
+**Šta je promenjeno.**
+
+| Bilo | Sada |
+|---|---|
+| sidebar → `MAT_SISTEM` → red u mreži → „Otvori alatku" → panel | sidebar → panel |
+| `modScrMatSistem.bas` (255 linija, ceo `Scr_*` ugovor) | obrisan |
+| ključevi panela `PODESAVANJA` / `ADMIN` | `MAT_PODESAVANJA` / `MAT_ADMIN` |
+
+Ključ je sada **isti u oba registra**: `modUiScreens` red crta u sidebaru,
+`modUiPanel` red zna ko ga gradi. Polje modula u registru ekrana je **prazno**
+i to je nosilac razlike — panel nema `Scr_*` ugovor, pa ljuska po tom praznom
+polju zna da klik ide u `modUiPanel.PanelOtvori`, ne u gradnju zone.
+
+**Ljuska i dalje ne zna nijedan panel po imenu.** `ActivateScreen` pita
+`PanelPostoji(kljuc)`; ime panela, njegov modul i graditelj ostaju isključivo u
+`modUiPanel`.
+
+**`mScreen` ostaje ekran ISPOD panela.** Panel pokriva radnu površinu, ne menja
+je; zato zatvaranje panela vraća prethodni ekran bez ponovne gradnje, a „Nazad
+na rad" i dalje zna odakle se došlo. Oznaka u sidebaru zato više ne prati
+`mScreen` nego `AktivnaStavka()` — panel ako je otvoren, inače ekran. Bez toga
+bi sidebar posle svakog neuspelog prelaska pokazivao Partnere dok se gledaju
+Podešavanja.
+
+**Prigušenje kaže istinu pre klika.** `PanelDozvoljen` je nov ulaz u istu branu
+(administracija) koju su `PanelOtvori` i sami graditelji već imali; sidebar ga
+pita pri crtanju, pa stavka stoji prigušena umesto da se odbije posle klika.
+Brana ostaje trostruka i to nije višak — prava se menjaju zamenom operatera.
+
+**Sekcija i dalje staje u sidebar.** Šest stavki u dve grupe:
+`12 + (20 + 3·27 + 12)·2 = 238 pt` od `492 pt` slobodnih na najmanjem prozoru.
+
+**Admin je dobio isti oblik kao Podešavanja.** Pet grupa je prekidač segmenata,
+vidi se tačno jedna grupa. Grupa se nosi **u tekstu akcije** (`"grp:<naziv>"`)
+jer `clsAdminBtn` ima samo polje `action`, a klasa se ne proširuje.
+
+#### Spona sa starim menijem je preseljena, ne izgubljena
+
+Tvrdnja „novi UI dostiže sve što stari meni dostiže" (test 174) za šifarnike ide
+kroz `MatKljucIzLegacyTag`, a za ova dva panela je išla kroz
+`modScrMatSistem.MsAlatkaTagovi()`. Registar panela zato nosi **peto polje —
+legacy `Tag`** (`PanelKljucIzLegacyTag`).
+
+**Uz to je zatvorena tiha rupa iz M6.** Tada je `Alatke()` prešao sa legacy
+tagova na ključeve panela (`"Podešavanja"` → `"PODESAVANJA"`), a test 174 ih
+poredi sa `vbTextCompare` — koje razlikuje `š` od `S`. Poklapanje je pukla, ali
+se to nije videlo: VBA testovi se u web sesiji ne izvršavaju. Sada je veza
+podatak u registru, ne izvedeno ime.
+
+Istom logikom je popravljena i tvrdnja u `T_Sekcija_SidebarNeStajeZajedno`:
+„ekran bez modula je prigušen" merila je `MAT_PARTNERI`, koji **od M1 ima
+modul**. Prešla je na `MARZA`, jedini takav red danas.
+
+#### Ubrzano čitanje matičnih lista
+
+Merenje na čitaocu, ne pretpostavka:
+
+| Put | Bilo | Sada |
+|---|---|---|
+| `MatRedovi` | bez `BeginTableCache`; `Kol()` zove `GetColumnIndex` **po ćeliji, po redu**, a `GetColumnIndex` bez prozora skenira **sve** `ListObject`-e sveske | ceo čitač je u prozoru keša (depth-brojan, pa ugnježđavanje ne smeta) |
+| `@koop_naziv` | **dva** `LookupValue`-a po redu, svaki čita celu `tblKooperanti` i skenira je linearno | jedna `BuildLookupDict` mapa (`Ime` + `Prezime` u jednom prolazu), gradi se lenjo |
+| `@stanica` | `LookupValue` po redu | ista mapa, lenjo |
+| combo-i editora | svaki combo čita svoju tabelu bez prozora | `OčistiPolja` i `OsveziZavisne` drže prozor oko cele petlje |
+
+Za 800 parcela nad 400 kooperanata to je bilo **1600 čitanja** `tblKooperanti` i
+oko 640.000 poređenja — za dve kolone teksta. `BuildLookupDict` je već postojao
+tačno za taj obrazac (`modDataAccess`), pa je ovo upotreba, ne nov sloj.
+
+**Prozor keša se zatvara na svakom izlazu.** Jezgro ima šest izlaza, pa je
+`MatRedovi` podeljen na omotač (prozor + brisanje mapa) i `MatRedoviCore`
+(telo); greška se prepisuje u lokalne pre čišćenja, jer je `Err` globalan.
+Prozor koji ostane otvoren ne puca — **keširа podatke preko upisa koji sledi**,
+pa lista posle snimanja pokazuje staro stanje.
+
+#### Verifikacija
+
+- `python3 tools/vba_check.py` — čisto (209 fajlova, 423 sabotaže).
+- Test **165** je prepisan: iz `T_MatSistem_UgovorIIdentitet` u
+  `T_UiPanel_StavkaSidebara` — dva registra jedan ključ, prigušenje, brana,
+  odsustvo `MAT_SISTEM`, legacy `Tag`.
+- Test **180** (`T_Maticni_CitanjeNeMenjaVrednosti`) je nov: **ekvivalencija**
+  mape sa `LookupValue`-om (ključ po ključ, i red po red za `@koop_naziv`) i
+  ravnoteža prozora keša. Optimizacija koja menja prikaz nije optimizacija, a
+  pogrešno ime kooperanta izgleda kao podatak, ne kao kvar.
+- Nove sabotaže: `panel-kljuc-se-razisao-sa-sidebarom`,
+  `panel-ljuska-ne-pita-branu-panela`, `maticni-mapa-bez-prezimena`,
+  `maticni-prozor-kesa-ostaje-otvoren`.
+- **VBA se u ovoj sesiji ne izvršava** (`run_vba.py` traži Windows + Excel +
+  `pywin32`), pa su sve izmene ponašanja **neverifikovane**, ne zelene.
+  Compile je ručna kapija: `Alt+F11 → Debug → Compile VBAProject`.

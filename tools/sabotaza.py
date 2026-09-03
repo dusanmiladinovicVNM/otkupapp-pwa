@@ -2139,19 +2139,31 @@ SABOTAZE = {
         "T_Sekcija_SidebarNeStajeZajedno",
         "prigusena stavka ostaje prigusena i posle prebojavanja sidebara",
     ),
-    "maticni-alatka-po-rednom-broju": (
-        "modScrMatSistem.bas",
-        "        outA(n, MS_COL_TAG) = CStr(src(i)(2))\n",
-        "        outA(n, MS_COL_TAG) = CStr(src(0)(2))   ' SABOTAZA: uvek prva alatka\n",
-        "T_MatSistem_UgovorIIdentitet",
-        "red 1 posle pretrage nosi kljuc SVOJE alatke",
+    # Paneli su od v6-ui-200 stavke sidebara, pa zive u DVA registra: modUiScreens
+    # ih crta, modUiPanel ih otvara. Kljuc preimenovan u jednom, a zaboravljen u
+    # drugom, daje stavku koja se vidi i ne otvara -- bez ijedne greske.
+    "panel-kljuc-se-razisao-sa-sidebarom": (
+        "modUiPanel.bas",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")\n",
+        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")   # SABOTAZA\n",
+        "T_UiPanel_StavkaSidebara",
+        "svaki panel ima svoj red u registru ekrana",
     ),
     "maticni-ljuska-ne-pita-branu-ekrana": (
         "modUiScreens.bas",
-        "    If ScrDozvoljen Then ScrDozvoljen = ScrSopstvenaBrana(kljuc)\n",
+        "    ScrDozvoljen = ScrSopstvenaBrana(kljuc)\n",
         "    ' SABOTAZA: ljuska ne pita ekran za njegovu branu\n",
-        "T_MatSistem_UgovorIIdentitet",
-        "ljuska postuje branu ekrana",
+        "T_MatKor_RecnikDaNeIPrava",
+        "ljuska postuje branu ekrana korisnika, ne samo oblast",
+    ),
+    # Panel nema Scr_Dozvoljen (nema modul ekrana), pa mu branu drzi registar
+    # panela. Ljuska koja je ne pita pusta ne-admina u Podesavanja.
+    "panel-ljuska-ne-pita-branu-panela": (
+        "modUiScreens.bas",
+        "        ScrDozvoljen = modUiPanel.PanelDozvoljen(kljuc)\n",
+        "        ScrDozvoljen = True   ' SABOTAZA: brana panela se preskace\n",
+        "T_UiPanel_StavkaSidebara",
+        "ljuska postuje branu panela (PanelDozvoljen), ne samo oblast",
     ),
     # ------------------------------- MATICNI SIFARNICI: OPIS I CITANJE
     # Opis 13 sekcija je ono sto je preneto iz frmStammdaten. Cetiri sabotaze
@@ -2406,10 +2418,29 @@ SABOTAZE = {
     ),
     # Registar koji imenuje graditelja kog nema: dugme radi, panel se ne otvori,
     # a jedina poruka je "Panel se nije otvorio: Cannot run the macro".
+    # ---------------------------- MATICNI: UBRZANO CITANJE (v6-ui-201)
+    # Dve zamene koje smeju da ubrzaju, a ne smeju da promene prikaz: mapa
+    # umesto LookupValue-a u petlji, i prozor kesa oko citanja. Obe bi pukle
+    # tiho -- pogresno ime kooperanta izgleda kao podatak, a otvoren prozor
+    # kesa se vidi tek posle SLEDECEG upisa.
+    "maticni-mapa-bez-prezimena": (
+        "modMaticniIzvor.bas",
+        "        Set mMapaKoop = BuildLookupDict(TBL_KOOPERANTI, \"KooperantID\", \"Ime\", \"Prezime\")\n",
+        "        Set mMapaKoop = BuildLookupDict(TBL_KOOPERANTI, \"KooperantID\", \"Ime\")   ' SABOTAZA\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "naziv kooperanta iz mape je isti kao iz LookupValue",
+    ),
+    "maticni-prozor-kesa-ostaje-otvoren": (
+        "modMaticniIzvor.bas",
+        "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n    EndTableCache\n",
+        "    MatRedovi = MatRedoviCore(kljuc, filter, q, kontekst)\n   ' SABOTAZA: prozor ostaje otvoren\n",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "citanje ZATVARA svoj prozor kesa",
+    ),
     "panel-graditelj-ne-postoji": (
         "modUiPanel.bas",
-        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN\")\n",
-        "        \"ADMIN|modAdmin|BuildAdminPanelX|OTKUI_MS_ADMIN\")   ' SABOTAZA\n",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")\n",
+        "        \"MAT_ADMIN|modAdmin|BuildAdminPanelX|OTKUI_MS_ADMIN|Admin\")   ' SABOTAZA\n",
         "T_UiPanel_UgovorIUstupanje",
         "graditelj svakog panela postoji pod imenom iz registra",
     ),

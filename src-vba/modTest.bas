@@ -423,6 +423,7 @@ Public Sub RunAllTests()
     RunOne 177
     RunOne 178
     RunOne 179
+    RunOne 180
     RunOne 124
     RunOne 125
     RunOne 126
@@ -628,7 +629,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 162: TestName = "T_FakturaGP_WriterKapijeIStorno"
         Case 163: TestName = "T_UtovarB_SledIStornoKapije"
         Case 164: TestName = "T_Sekcija_SidebarNeStajeZajedno"
-        Case 165: TestName = "T_MatSistem_UgovorIIdentitet"
+        Case 165: TestName = "T_UiPanel_StavkaSidebara"
         Case 166: TestName = "T_MatIzvor_OpisSekcijaJePotpun"
         Case 167: TestName = "T_MatIzvor_CipIdentitetIPretraga"
         Case 168: TestName = "T_MatUnos_OpisPoljaISema"
@@ -643,6 +644,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 177: TestName = "T_UiPanel_UgovorIUstupanje"
         Case 178: TestName = "T_Mreza_DecimalaNeNestaje"
         Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
+        Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -815,7 +817,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 162: T_FakturaGP_WriterKapijeIStorno
         Case 163: T_UtovarB_SledIStornoKapije
         Case 164: T_Sekcija_SidebarNeStajeZajedno
-        Case 165: T_MatSistem_UgovorIIdentitet
+        Case 165: T_UiPanel_StavkaSidebara
         Case 166: T_MatIzvor_OpisSekcijaJePotpun
         Case 167: T_MatIzvor_CipIdentitetIPretraga
         Case 168: T_MatUnos_OpisPoljaISema
@@ -830,6 +832,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 177: T_UiPanel_UgovorIUstupanje
         Case 178: T_Mreza_DecimalaNeNestaje
         Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
+        Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -12885,10 +12888,15 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
     slobodno = modOtkupUI.NavSlobodnaVisina()
     hRad = modOtkupUI.NavVisinaSekcije()
     tagRad = modOtkupUI.NavTagZaEkran("DOKUMENTI")
-    tagMat = modOtkupUI.NavTagZaEkran("MAT_SISTEM")
+    tagMat = modOtkupUI.NavTagZaEkran("MAT_PARTNERI")
     radVidljivaURad = VidljivaKontrola(z, tagRad)
 
-    tagNeizgradjen = modOtkupUI.NavTagZaEkran("MAT_PARTNERI")
+    ' Ekran koji je u registru, a modul mu jos nije napisan. Do v6-ui-200 je
+    ' ovde stajao MAT_PARTNERI -- od M1 on IMA modul, pa je tvrdnja "prigusen"
+    ' merila nesto sto vise nije tacno i prolazila bi samo greskom. MARZA je
+    ' danas jedini takav red (modScrMarza ne postoji); kad se napise, ovo pukne
+    ' PO IMENU i trazi nov primer, sto je i smisao.
+    tagNeizgradjen = modOtkupUI.NavTagZaEkran("MARZA")
 
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosle = modOtkupUI.AktivnaSekcija()
@@ -12904,7 +12912,7 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
 
     AssertEq losaSekcija, "", "svaki red registra je u poznatoj sekciji"
     AssertEq (Len(tagRad) > 0), True, "radna sekcija ima stavku za DOKUMENTI"
-    AssertEq (Len(tagMat) > 0), True, "maticna sekcija ima stavku za MAT_SISTEM"
+    AssertEq (Len(tagMat) > 0), True, "maticna sekcija ima stavku za MAT_PARTNERI"
 
     ' 1) svaka sekcija sama staje
     AssertEq (hRad > 0 And hRad <= slobodno), True, _
@@ -12935,94 +12943,251 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
 End Sub
 
 ' ============================================================
-' 165. Ekran "Podesavanja i alati": ugovor, brana i IDENTITET reda.
+' 165. Panel kao STAVKA SIDEBARA: dva registra, jedan kljuc, jedna brana.
 '
-' Radnja otvara panel po Tag-u iz NEVIDLJIVE kolone, ne po rednom broju. Sa dva
-' reda razlika se ne vidi, pa se meri nad PRETRAZENOM listom: kad pretraga
-' izbaci prvi red, red 1 mora da nosi Tag drugog. Pravilo koje vazi samo dok je
-' lista kratka nije pravilo -- ista klasa kao izbor dokumenta po broju.
+' Do v6-ui-200 su Podesavanja i Admin stajali iza ekrana MAT_SISTEM i njegovog
+' dugmeta "Otvori alatku": spisak od dve stavke koji je ponavljao ono sto
+' sidebar vec radi. Ekran je uklonjen, paneli su postali stavke sidebara -- i
+' time su dobili DVA registra: modUiScreens ih crta, modUiPanel ih otvara.
 '
-' Tag mora biti TACNO ono sto frmStammdaten.UserForm_Activate ocekuje; promasaj
-' (npr. bez dijakritike) bi otvorio podrazumevanu sekciju Kooperanti, tiho.
-Private Sub T_MatSistem_UgovorIIdentitet()
-    Dim red As String, d As Variant, cols As Variant
-    Dim tagPrvi As String, tagDrugi As String, tagPosleTrazenja As String
-    Dim n As Long, nTrazeno As Long
+' Cena dva registra je da mogu da se razidju: kljuc preimenovan u jednom, a
+' zaboravljen u drugom, daje stavku koja se vidi i ne otvara -- ili se otvara
+' iz koda, a u sidebaru je nema. Nijedno ne puca. Zato se meri:
+'   1) svaki kljuc registra panela ima svoj red u registru ekrana, i obrnuto;
+'   2) stavka NIJE prigusena kao "ekran bez modula" (polje modula je prazno
+'      namerno -- panel nema Scr_* ugovor);
+'   3) ljuska pita registar panela za branu, ne samo oblast prava;
+'   4) ekrana MAT_SISTEM vise NEMA -- pokretac je zaista uklonjen, a ne
+'      ostavljen paralelno sa sidebarom;
+'   5) legacy Tag starog menija vodi do kljuca panela (spona za test 174).
+' ============================================================
+Private Sub T_UiPanel_StavkaSidebara()
+    Dim k As Variant, red As String, nedostaje As String, losaSekcija As String
+    Dim r As Variant, kljuc As String, viska As String, br As Long
     Dim branaPostovana As Boolean, aktivanSaZatvorenom As Boolean
 
-    red = modUiScreens.ScrRowByKey("MAT_SISTEM")
-    AssertEq (Len(red) > 0), True, "MAT_SISTEM postoji u registru"
-    AssertEq modUiScreens.ScrField(red, SCR_MODUL), "modScrMatSistem", _
-             "MAT_SISTEM pokazuje na svoj modul"
-    AssertEq modUiScreens.ScrSekcija(red), SEK_MATICNI, "MAT_SISTEM je u maticnoj sekciji"
-    AssertEq modUiScreens.ScrField(red, SCR_OBLAST), OBL_MATICNI, _
-             "MAT_SISTEM trazi pravo na maticne podatke"
-    AssertEq modUiScreens.ScrPostoji("MAT_SISTEM"), True, "modul odgovara na ugovor"
-    AssertEq (InStr(modUiScreens.ScrMeta("MAT_SISTEM"), "kljuc=MAT_SISTEM") > 0), True, _
-             "Scr_Meta prijavljuje svoj kljuc"
+    ' --- 1) dva registra nose iste kljuceve -------------------------------
+    For Each k In modUiPanel.PanelKljucevi()
+        br = br + 1
+        red = modUiScreens.ScrRowByKey(CStr(k))
+        If Len(red) = 0 Then
+            nedostaje = nedostaje & " " & CStr(k)
+        Else
+            If modUiScreens.ScrSekcija(red) <> SEK_MATICNI Then _
+                losaSekcija = losaSekcija & " " & CStr(k)
+            If modUiScreens.ScrField(red, SCR_OBLAST) <> OBL_MATICNI Then _
+                losaSekcija = losaSekcija & " oblast:" & CStr(k)
+            ' Polje modula je prazno NAMERNO: panel nema Scr_* ugovor. Da nije
+            ' prazno, ljuska bi ga zvala kao ekran i dobila "Cannot run".
+            If Len(modUiScreens.ScrField(red, SCR_MODUL)) > 0 Then _
+                losaSekcija = losaSekcija & " modul:" & CStr(k)
+        End If
+    Next k
+    AssertEq br, 2, "registar panela nosi dva kljuca"
+    AssertEq nedostaje, "", "svaki panel ima svoj red u registru ekrana"
+    AssertEq losaSekcija, "", "red panela je u maticnoj sekciji, bez modula ekrana"
 
-    ' BRANA. Slaganje sa MozeAdministraciju se ne meri: u headless runu je AUTH
+    ' Obrnut smer: red registra ekrana BEZ modula mora biti panel. Bez ovoga bi
+    ' prazno polje modula postalo tiho dozvoljeno stanje za bilo koji red.
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If Len(modUiScreens.ScrField(CStr(r), SCR_MODUL)) = 0 Then
+            If Not modUiPanel.PanelPostoji(kljuc) Then viska = viska & " " & kljuc
+        End If
+    Next r
+    AssertEq viska, "", "red bez modula ekrana postoji samo za panel"
+
+    ' --- 2) stavka nije prigusena kao ekran koji jos nije napisan ---------
+    AssertEq modUiScreens.ScrPostoji("MAT_PODESAVANJA"), True, _
+             "panel POSTOJI za sidebar, iako nema modul ekrana"
+    AssertEq modUiScreens.ScrPostoji("MAT_ADMIN"), True, _
+             "i drugi panel postoji za sidebar"
+
+    ' --- 3) brana ---------------------------------------------------------
+    ' Slaganje sa MozeAdministraciju se ne meri: u headless runu je AUTH
     ' iskljucen pa su oba odgovora True, i tvrdnja bi prolazila i kad brane
-    ' nema. Meri se ono sto je NOVO u ljusci -- da ScrDozvoljen uopste PITA
-    ' ekran. Seam sme samo da zatvori branu (v. Scr_MsBranaZatvoriTest).
-    AssertEq modUiScreens.ScrDozvoljen("MAT_SISTEM"), True, _
-             "otvorena brana: ekran je dozvoljen"
-    modScrMatSistem.Scr_MsBranaZatvoriTest True
-    branaPostovana = (modUiScreens.ScrDozvoljen("MAT_SISTEM") = False)
-    aktivanSaZatvorenom = modUiScreens.ScrAktivan("MAT_SISTEM")
-    modScrMatSistem.Scr_MsBranaZatvoriTest False
+    ' nema. Meri se da ljuska uopste PITA registar panela.
+    AssertEq modUiScreens.ScrDozvoljen("MAT_PODESAVANJA"), True, _
+             "otvorena brana: panel je dozvoljen"
+    modUiPanel.PanelBranaZatvoriTest True
+    branaPostovana = (modUiScreens.ScrDozvoljen("MAT_PODESAVANJA") = False)
+    aktivanSaZatvorenom = modUiScreens.ScrAktivan("MAT_PODESAVANJA")
+    modUiPanel.PanelBranaZatvoriTest False
     AssertEq branaPostovana, True, _
-             "ljuska postuje branu ekrana (Scr_Dozvoljen), ne samo oblast"
+             "ljuska postuje branu panela (PanelDozvoljen), ne samo oblast"
     AssertEq aktivanSaZatvorenom, False, _
-             "zabranjen ekran nije aktivan u sidebaru"
-    AssertEq modUiScreens.ScrDozvoljen("MAT_SISTEM"), True, _
+             "zabranjen panel nije aktivan u sidebaru"
+    AssertEq modUiScreens.ScrDozvoljen("MAT_PODESAVANJA"), True, _
              "seam vraca branu u normalno stanje"
-    ' Ekran BEZ Scr_Dozvoljen se ponasa kao pre -- greska poziva znaci "nema
-    ' takvu funkciju", ne "zabranjeno".
+    ' Ekran BEZ sopstvene brane zavisi samo od oblasti -- panel je ne nasledjuje.
     AssertEq modUiScreens.ScrDozvoljen("PALETE"), modAuth.KorisnikImaPravo(OBL_PALETE), _
              "ekran bez sopstvene brane zavisi samo od oblasti"
 
-    ' Spisak alatki: dva reda, KLJUC PANELA u nevidljivoj koloni.
-    d = modUiScreens.ScrGridData("MAT_SISTEM", "sve", "")
-    AssertEq modUiScreens.ScrLastErr, "", "lista alatki se procitala bez greske"
-    AssertEq IsArray(d), True, "lista alatki vraca niz"
-    cols = d(0)
-    AssertEq (UBound(cols) + 1), modScrMatSistem.MS_COL_TAG, _
-             "opis kolona ima tacno onoliko kolona koliko identitet trazi"
-    AssertEq modOtkupUI.ColPrioritet(CStr(cols(modScrMatSistem.MS_COL_TAG - 1))), 4, _
-             "kolona identiteta se NE crta (prioritet 4)"
-    n = CLng(d(2))
-    AssertEq n, 2, "dve alatke u spisku"
-    tagPrvi = Trim$(CStr(d(1)(1, modScrMatSistem.MS_COL_TAG)))
-    tagDrugi = Trim$(CStr(d(1)(2, modScrMatSistem.MS_COL_TAG)))
-    AssertEq tagPrvi, "PODESAVANJA", "prvi red nosi kljuc panela Podesavanja"
-    AssertEq tagDrugi, "ADMIN", "drugi red nosi kljuc panela Admin"
+    ' --- 4) pokretaca vise nema -------------------------------------------
+    AssertEq modUiScreens.ScrRowByKey("MAT_SISTEM"), "", _
+             "ekran-pokretac MAT_SISTEM je uklonjen iz registra"
+    AssertEq modUiPanel.PanelPostoji("PODESAVANJA"), False, _
+             "stari kljuc panela vise ne postoji"
 
-    ' Kljuc mora da POSTOJI u registru panela. Bez ove tvrdnje bi ekran mogao da
-    ' nosi kljuc koji nigde nema graditelja -- dugme bi radilo, panel se ne bi
-    ' otvorio, a jedina poruka bi bila "Nepoznat panel".
-    AssertEq modUiPanel.PanelPostoji(tagPrvi), True, _
-             "kljuc prve alatke postoji u registru panela"
-    AssertEq modUiPanel.PanelPostoji(tagDrugi), True, _
-             "kljuc druge alatke postoji u registru panela"
-    AssertEq modScrMatSistem.Scr_MsTagZaRedTest(1), tagPrvi, _
-             "spisak i mreza se slazu za prvi red"
-    AssertEq modScrMatSistem.Scr_MsTagZaRedTest(2), tagDrugi, _
-             "spisak i mreza se slazu za drugi red"
-
-    ' IDENTITET: pretraga izbaci prvi red, pa je red 1 sada druga alatka.
-    d = modUiScreens.ScrGridData("MAT_SISTEM", "sve", "Admin")
-    nTrazeno = CLng(d(2))
-    AssertEq nTrazeno, 1, "pretraga 'Admin' ostavlja jedan red"
-    tagPosleTrazenja = Trim$(CStr(d(1)(1, modScrMatSistem.MS_COL_TAG)))
-    AssertEq tagPosleTrazenja, "ADMIN", _
-             "red 1 posle pretrage nosi kljuc SVOJE alatke, ne prve iz spiska"
-
-    ' Podnozje: lista alatki nema ni kilograme ni novac, pa zbirovi nemaju sta
-    ' da kazu. Meri se preko opisa kolona -- isto sto ljuska cita (26.4).
-    AssertEq modOtkupUI.OpisImaKgKolonu(cols), False, "spisak alatki nema kolonu kilograma"
-    AssertEq modOtkupUI.OpisImaValKolonu(cols), False, "spisak alatki nema novcanu kolonu"
+    ' --- 5) spona sa starim menijem ---------------------------------------
+    AssertEq modUiPanel.PanelKljucIzLegacyTag("Pode" & ChrW(353) & "avanja"), _
+             "MAT_PODESAVANJA", "legacy Tag Podesavanja vodi do svog panela"
+    AssertEq modUiPanel.PanelKljucIzLegacyTag("Admin"), "MAT_ADMIN", _
+             "legacy Tag Admin vodi do svog panela"
+    AssertEq modUiPanel.PanelKljucIzLegacyTag("Kooperanti"), "", _
+             "sifarnik nije panel"
 End Sub
+
+' ============================================================
+' 180. Ubrzano citanje daje ISTE vrednosti -- i ne ostavlja kes otvoren.
+'
+' v6-ui-201 je citanje maticnih lista ubrzao na dva nacina:
+'   a) MatRedovi radi unutar BeginTableCache prozora (ista tabela i isti indeks
+'      kolone se u jednom citanju traze desetinama puta, a GetColumnIndex bez
+'      prozora skenira SVE ListObjecte radne sveske);
+'   b) izvedene kolone @stanica i @koop_naziv idu kroz BuildLookupDict umesto
+'      kroz LookupValue POZVAN U PETLJI (dva citanja cele tblKooperanti PO REDU).
+'
+' Optimizacija koja menja PRIKAZ nije optimizacija, a razlika bi bila tiha:
+' pogresno ime kooperanta izgleda kao podatak, ne kao kvar. Zato se meri
+' EKVIVALENCIJA sa starim putem -- LookupValue je i dalje tu i sluzi kao
+' referenca, red po red.
+'
+' Druga polovina je prozor kesa: prozor koji ostane otvoren ne puca nego kesira
+' podatke PREKO upisa koji sledi, pa lista posle snimanja pokazuje staro stanje.
+' Meri se da dubina bude nula i posle uspesnog i posle praznog citanja.
+' ============================================================
+Private Sub T_Maticni_CitanjeNeMenjaVrednosti()
+    Dim d As Variant, rows As Variant, cols As Variant, n As Long
+    Dim i As Long, c As Long, izv As String
+    Dim dubinaPre As Long, dubinaPosle As Long, dubinaPosleNepoznate As Long
+    Dim ocekivano As String, dobijeno As String, razlike As String
+    Dim kolIdx As Long, id As String
+    Dim ime As String, prez As String
+
+    dubinaPre = modDataAccess.TableCacheDepth()
+
+    ' --- PARCELE nose izvedenu kolonu @koop_naziv -------------------------
+    d = modMaticniIzvor.MatRedovi("PARCELE", MAT_CIP_SVI, "")
+    dubinaPosle = modDataAccess.TableCacheDepth()
+    cols = d(0)
+    rows = d(1)
+    n = CLng(d(2))
+
+    ' Kolona se trazi iz OPISA, ne po rednom broju: opis se menja, a test ne
+    ' sme da pocne da meri susednu kolonu i da i dalje prolazi.
+    kolIdx = 0
+    For c = LBound(cols) To UBound(cols)
+        izv = ColF(CStr(cols(c)), 1)
+        If izv = "@koop_naziv" Then kolIdx = c - LBound(cols) + 1
+    Next c
+    AssertEq (kolIdx > 0), True, "Parcele imaju izvedenu kolonu naziva kooperanta"
+
+    If n > 0 And kolIdx > 0 Then
+        For i = 1 To n
+            ' Stari put: dva odvojena LookupValue-a, tacno kao pre v6-ui-201.
+            dobijeno = Trim$(NzToText(rows(i, kolIdx)))
+            id = IzmedjuZagrada(dobijeno)
+            If Len(id) > 0 Then
+                ime = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", id, "Ime")))
+                prez = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", id, "Prezime")))
+                ocekivano = Trim$(ime & " " & prez) & " (" & id & ")"
+                If dobijeno <> ocekivano Then
+                    razlike = razlike & " [" & dobijeno & "<>" & ocekivano & "]"
+                    If Len(razlike) > 200 Then Exit For
+                End If
+            End If
+        Next i
+    End If
+    AssertEq razlike, "", "naziv kooperanta iz mape je isti kao iz LookupValue"
+
+    ' --- @stanica: mapa i LookupValue moraju da se slozu za SVAKI ID ------
+    ' Naziv stanice se iz prikaza ne moze vratiti u ID (za razliku od "(ID)" kod
+    ' kooperanata), pa se ista zamena meri tamo gde JESTE merljiva -- nad samim
+    ' izvorom. Tvrdnja je ista: BuildLookupDict daje ono sto je LookupValue
+    ' davao, za svaki kljuc koji u tabeli postoji.
+    AssertEq MapaSlozena(TBL_STANICE, "StanicaID", "Naziv", ""), "", _
+             "mapa stanica se slaze sa LookupValue za svaki StanicaID"
+    AssertEq MapaSlozena(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime"), "", _
+             "mapa kooperanata (Ime + Prezime) se slaze sa LookupValue"
+
+    ' Lista kooperanata i dalje NOSI tu kolonu -- da zamena ne bi bila merena
+    ' nad kolonom koju vise niko ne crta.
+    d = modMaticniIzvor.MatRedovi("KOOPERANTI", MAT_CIP_SVI, "")
+    cols = d(0)
+    kolIdx = 0
+    For c = LBound(cols) To UBound(cols)
+        If ColF(CStr(cols(c)), 1) = "@stanica" Then kolIdx = c - LBound(cols) + 1
+    Next c
+    AssertEq (kolIdx > 0), True, "Kooperanti imaju izvedenu kolonu naziva stanice"
+
+    ' --- prozor kesa se ZATVARA -------------------------------------------
+    ' Nepoznata sekcija izlazi kroz DRUGI izlaz jezgra (nema opisa kolona), pa
+    ' meri da EndTableCache stoji na svakom izlazu, ne samo na uspesnom.
+    d = modMaticniIzvor.MatRedovi("NEPOSTOJECA", MAT_CIP_SVI, "")
+    dubinaPosleNepoznate = modDataAccess.TableCacheDepth()
+
+    AssertEq dubinaPre, 0, "test pocinje bez otvorenog prozora kesa"
+    AssertEq dubinaPosle, 0, "citanje ZATVARA svoj prozor kesa"
+    AssertEq dubinaPosleNepoznate, 0, "prozor se zatvara i kad citanje nista ne nadje"
+End Sub
+
+' Slaganje mape (BuildLookupDict) sa starim putem (LookupValue), kljuc po
+' kljuc. Vraca "" kad se sve slaze, inace spisak razlika. Prazna tabela je
+' NALAZ, ne prolaz: mapa nad praznom tabelom se slaze sa svim i ne meri nista.
+Private Function MapaSlozena(ByVal tbl As String, ByVal kolID As String, _
+                             ByVal kolA As String, ByVal kolB As String) As String
+    Dim m As Object, data As Variant, ki As Long, i As Long
+    Dim id As String, izMape As String, izLookupa As String
+
+    ' Referentni put je SPOR po definiciji -- LookupValue po kljucu, svaki sa
+    ' svojim citanjem tabele. Prozor kesa ostavlja poredjenja (to je ono sto se
+    ' meri), a sklanja ponovljena citanja lista. Zatvara se i kad pukne: prozor
+    ' koji procuri iz pomocne funkcije obara tvrdnju o dubini u samom testu.
+    On Error GoTo EH
+    BeginTableCache
+    Set m = BuildLookupDict(tbl, kolID, kolA, kolB)
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then
+        MapaSlozena = "tabela " & tbl & " je prazna -- tvrdnja bi bila prazna"
+        GoTo Gotovo
+    End If
+    ki = GetColumnIndex(tbl, kolID)
+    If ki = 0 Then
+        MapaSlozena = "nema kolone " & kolID & " u " & tbl
+        GoTo Gotovo
+    End If
+
+    For i = 1 To UBound(data, 1)
+        id = CStr(data(i, ki))
+        If Len(id) > 0 Then
+            izMape = ""
+            If m.Exists(id) Then izMape = CStr(m(id))
+            izLookupa = CStr(LookupValue(tbl, kolID, id, kolA))
+            If Len(kolB) > 0 Then _
+                izLookupa = izLookupa & " " & CStr(LookupValue(tbl, kolID, id, kolB))
+            If izMape <> izLookupa Then
+                MapaSlozena = MapaSlozena & " [" & id & ": " & izMape & "<>" & izLookupa & "]"
+                If Len(MapaSlozena) > 200 Then GoTo Gotovo
+            End If
+        End If
+    Next i
+Gotovo:
+    EndTableCache
+    Exit Function
+EH:
+    MapaSlozena = "greska pri poredjenju nad " & tbl & ": " & Err.description
+    EndTableCache
+End Function
+
+' ID iz zapisa oblika "Ime Prezime (ID)". Vraca "" kad zagrada nema -- red bez
+' kooperanta se tako ne meri, umesto da se izmeri kao prazan ID.
+Private Function IzmedjuZagrada(ByVal s As String) As String
+    Dim a As Long, b As Long
+    a = InStrRev(s, "(")
+    b = InStrRev(s, ")")
+    If a > 0 And b > a Then IzmedjuZagrada = Mid$(s, a + 1, b - a - 1)
+End Function
 
 ' ============================================================
 ' 166. Maticni sifarnici: opis 13 sekcija je POTPUN i saglasan sa semom.
@@ -13746,7 +13911,7 @@ Private Sub T_MatKor_RecnikDaNeIPrava()
     AssertEq bezNaziva, "", "svaka oblast prava ima naziv u katalogu poruka"
 
     ' Ekran korisnika nosi SVOJU branu (administracija), pored oblasti. Meri se
-    ' isto kao za MAT_SISTEM: seam sme SAMO da zatvori branu, nikad da je otvori
+    ' isto kao za panele: seam sme SAMO da zatvori branu, nikad da je otvori
     ' (v. Scr_MkorBranaZatvoriTest) -- inace bi tvrdnja merila dva puta True.
     AssertEq modUiScreens.ScrDozvoljen("MAT_KORISNICI"), True, _
              "admin vidi ekran korisnika"
@@ -13770,14 +13935,14 @@ End Sub
 '
 ' Novi UI sekciju dostize na dva nacina, i oba se ovde broje:
 '   - kao LISTU nekog maticnog ekrana (MatKljucIzLegacyTag),
-'   - kao ALATKU na ekranu Podesavanja i alati (MsAlatkaTagovi) -- Podesavanja
-'     i Admin ostaju legacy paneli, v. UI_MIGRACIJA_KATALOG 26.19.
+'   - kao PANEL, stavku sidebara (PanelKljucIzLegacyTag) -- Podesavanja i Admin
+'     ne staju u ugovor ekrana, v. UI_MIGRACIJA_KATALOG 26.19.
 ' ============================================================
 Private Sub T_Maticni_MenijiPokrivajuIsto()
     Dim sek As Variant, r As Variant, tg As String, kljuc As String
     Dim nedostizno As String, viska As String, brStari As Long, brNovi As Long
     Dim ekrani As Variant, e As Variant, liste As Variant, l As Variant
-    Dim alat As Variant, a As Variant, poznat As Boolean
+    Dim poznat As Boolean
     Dim noveListe As Object, i As Long, kljucevi As Variant
 
     Set noveListe = CreateObject("Scripting.Dictionary")
@@ -13793,7 +13958,6 @@ Private Sub T_Maticni_MenijiPokrivajuIsto()
     brNovi = noveListe.count
 
     ' --- smer 1: sve iz starog menija mora biti dostizno u novom UI-ju ------
-    alat = modScrMatSistem.MsAlatkaTagovi()
     sek = modMaticniLookups.MaticniSekcije()
     For Each r In sek
         brStari = brStari + 1
@@ -13803,10 +13967,8 @@ Private Sub T_Maticni_MenijiPokrivajuIsto()
         If Len(kljuc) > 0 Then
             poznat = noveListe.Exists(kljuc)
         Else
-            ' Nije lista nijednog ekrana -- sme, ali SAMO ako je alatka.
-            For Each a In alat
-                If StrComp(CStr(a), tg, vbTextCompare) = 0 Then poznat = True
-            Next a
+            ' Nije lista nijednog ekrana -- sme, ali SAMO ako je panel.
+            poznat = (Len(modUiPanel.PanelKljucIzLegacyTag(tg)) > 0)
         End If
         If Not poznat Then nedostizno = nedostizno & " " & tg
     Next r
@@ -13836,7 +13998,8 @@ Private Sub T_Maticni_MenijiPokrivajuIsto()
 
     ' Podesavanja i Admin su JEDINE dve sekcije koje nisu lista nijednog ekrana.
     ' Kad bi neka trece ispala iz MatKljucIzLegacyTag, ovde bi se videlo.
-    AssertEq UBound(alat) + 1, 2, "ekran alatki otvara tacno dva legacy panela"
+    AssertEq UBound(modUiPanel.PanelKljucevi()) + 1, 2, _
+             "registar panela pokriva tacno dve sekcije starog menija"
     AssertEq modMaticniIzvor.MatKljucIzLegacyTag("Admin"), "", _
              "Admin nije lista maticnog ekrana"
     AssertEq (Len(modMaticniIzvor.MatKljucIzLegacyTag("Korisnici")) > 0), True, _
@@ -14047,8 +14210,9 @@ Private Sub T_UiPanel_UgovorIUstupanje()
     For Each r In modUiPanel.PanelRedovi()
         p = Split(CStr(r), "|")
         br = br + 1
-        AssertEq (UBound(p) >= 3), True, "red registra ima sva cetiri polja: " & CStr(r)
-        If UBound(p) < 3 Then GoTo Sledeci
+        AssertEq (UBound(p) >= modUiPanel.PAN_LTAG), True, _
+                 "red registra ima svih pet polja: " & CStr(r)
+        If UBound(p) < modUiPanel.PAN_LTAG Then GoTo Sledeci
 
         If Not ProceduraPostoji(p(1), p(2)) Then _
             losModul = losModul & " " & p(1) & "." & p(2)
@@ -14063,8 +14227,8 @@ Sledeci:
     AssertEq losRelease, "", "svaki modul panela ima <Modul>_Release kako registar ocekuje"
     AssertEq losNaslov, "", "naslov svakog panela ima red u katalogu poruka"
 
-    AssertEq modUiPanel.PanelPostoji("PODESAVANJA"), True, "Podesavanja su u registru"
-    AssertEq modUiPanel.PanelPostoji("ADMIN"), True, "Admin je u registru"
+    AssertEq modUiPanel.PanelPostoji("MAT_PODESAVANJA"), True, "Podesavanja su u registru"
+    AssertEq modUiPanel.PanelPostoji("MAT_ADMIN"), True, "Admin je u registru"
     AssertEq modUiPanel.PanelPostoji("NEPOSTOJECI"), False, _
              "nepoznat kljuc nije u registru"
 
