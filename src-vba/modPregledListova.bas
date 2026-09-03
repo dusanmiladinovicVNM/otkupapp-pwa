@@ -76,11 +76,11 @@ End Sub
 ' --- Dugmad: akcije (Public, da ih OnAction moze pozvati) -------------------
 
 ' "Pokreni program" -> udji u glavni ekran. Init/licenca/splash su vec
-' odradjeni pri otvaranju fajla (StartApp), pa ovde samo prikazujemo glavnu
-' formu, isto kao i ostali pozivaci (frmMarza, frmIzvestaj, frmMaticniPodaci...).
+' odradjeni pri otvaranju fajla (StartApp), pa ovde samo prikazujemo ljusku,
+' isto sto radi i frmSplash pri startu (v6-ui-209).
 Public Sub PokreniProgram()
     On Error GoTo fail
-    frmOtkupAPP.Show
+    modOtkupUI.ShowOtkupUI
     Exit Sub
 fail:
     MsgBox "Ne mogu da otvorim program: " & Err.description, _

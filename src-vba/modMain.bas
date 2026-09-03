@@ -162,7 +162,8 @@ Public Sub StartApp()
     ScheduleStornoWarm
     On Error GoTo 0
 
-    ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
+    ' frmSplash sam sebe Unloaduje i pokrece ljusku (modOtkupUI.ShowOtkupUI).
+    ' Stari meni (frmOtkupAPP) se iz aplikacije vise ne otvara (v6-ui-209).
     Exit Sub
 
 EH:
