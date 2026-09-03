@@ -2730,32 +2730,6 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
-    # ---------------------------------------- LEGACY: frmDokumenta, blok/avans
-    # Prazna lista posle PADA ucitavanja opet postaje 'nema bloka', pa novac
-    # tiho ode kao avans kooperanta. Ista klasa koju je frmBankaImport imao
-    # tri puta (PR #220).
-    # Sidro je dvoredno jer je naredba dvoredna: marker NE sme iza "_"
-    # (zamka 4 -- komentar posle nastavka reda visi kompajler, ne test).
-    "dok-pad-liste-blokova-prolazi": (
-        "frmDokumenta.frm",
-        "    BlokIzborSme = ListaSme(m_BlokoviOk, m_BlokoviErr, _\n",
-        "    ' SABOTAZA: pad ucitavanja prolazi\n"
-        "    BlokIzborSme = ListaSme(True, m_BlokoviErr, _\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa",
-    ),
-    # Kapija sira od kvara je isto greska: prazna lista posle USPESNOG
-    # citanja stvarno znaci 'nema otvorenih blokova', i avans je tada tacan.
-    "dok-kapija-blokova-presiroka": (
-        "frmDokumenta.frm",
-        "                            \"otkupnih blokova\", \"da bloka nema\", outPoruka)\n",
-        "                            \"otkupnih blokova\", \"da bloka nema\", outPoruka)\n"
-        "    BlokIzborSme = False   ' SABOTAZA: kapija ne pusta ni urednu listu\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "uredno ucitana lista pusta avans",
-    ),
-    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
-    # napunjen kombo posle pada ucitavanja ima izbor, pa bi prosao.
     # ---- filter storniranih: nula je imala dva znacenja ----
     # Registar mora da PREPOZNA dokument tabelu; prazan registar vraca stari
     # fail-open na sva 183 poziva.
@@ -2813,45 +2787,6 @@ SABOTAZE = {
         "tabela koju registar ne poznaje PADA, ne prolazi kao da nema storno",
     ),
     # ---- ista klasa na strani KUPCA (legacy F6) i u LJUSCI (F5/F6) ----
-    # Pad ucitavanja liste faktura mora da zaustavi uplatu -- inace tiho postaje
-    # avans kupca, isto kao sto je pad liste blokova postajao avans kooperanta.
-    "dok-pad-liste-faktura-prolazi": (
-        "frmDokumenta.frm",
-        "    FakturaIzborSme = ListaSme(m_FaktureOk, m_FaktureErr, _\n",
-        "    ' SABOTAZA: pad ucitavanja liste faktura prolazi\n"
-        "    FakturaIzborSme = ListaSme(True, m_FaktureErr, _\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "pad ucitavanja liste faktura ZAUSTAVLJA knjizenje avansa kupca",
-    ),
-    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
-    # napunjen kombo posle pada ima izbor, pa bi prosao.
-    "dok-faktura-izbor-zaobilazi": (
-        "frmDokumenta.frm",
-        "    UplataSme = FakturaIzborSme(outPoruka)\n",
-        "    If fakturaIzabrana Then UplataSme = True: Exit Function   ' SABOTAZA\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "ni IZABRANA faktura ne prolazi kad je ucitavanje palo",
-    ),
-    # Uzina kapije je TVRDNJA, ne izuzetak: bez novca nema odluke faktura/avans,
-    # pa unos same ambalaze ne sme da stane zbog liste koja ga se ne tice.
-    "dok-uplata-kapija-siri-se-na-ambalazu": (
-        "frmDokumenta.frm",
-        "    If novac <= 0 Then\n        UplataSme = True\n        Exit Function\n    End If\n",
-        "    If False Then   ' SABOTAZA: kapija hvata i unos bez novca\n"
-        "        UplataSme = True\n        Exit Function\n    End If\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "unos bez novca NE staje zbog liste faktura",
-    ),
-    # Kapija sira od kvara je isto greska: uredno ucitana prazna lista stvarno
-    # znaci "kupac nema otvorenih faktura", i avans je tada tacan.
-    "dok-kapija-faktura-presiroka": (
-        "frmDokumenta.frm",
-        "                               \"otvorenih faktura\", \"da fakture nema\", outPoruka)\n",
-        "                               \"otvorenih faktura\", \"da fakture nema\", outPoruka)\n"
-        "    FakturaIzborSme = False   ' SABOTAZA: kapija ne pusta ni urednu listu\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "uredno ucitana lista pusta uplatu",
-    ),
     # LJUSKA: ista greska, drugi domacin. Pad je ovde isao samo u Debug.Print.
     "ljuska-pad-liste-blokova-prolazi": (
         "modOtkupUI.bas",
@@ -2897,13 +2832,6 @@ SABOTAZE = {
         '        Case "AMB_ISPLATE"\n',
         "T_Ljuska_PadListeNovcaNijeAvans",
         "rezim bez tih listi kapiju ne oseca",
-    ),
-    "dok-izbor-zaobilazi-kapiju": (
-        "frmDokumenta.frm",
-        "    KnjizenjeSme = BlokIzborSme(outPoruka)\n",
-        "    If blokIzabran Then KnjizenjeSme = True: Exit Function   ' SABOTAZA\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "ni IZABRAN blok ne prolazi kad je ucitavanje palo",
     ),
     # ---------------------------------------- LJUSKA: prava na alatke
     # Bez mape tag -> oblast nijedna alatka nema oblast, pa AlatkaSme sve

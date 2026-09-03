@@ -2137,7 +2137,7 @@ SEF_CONFIG = {
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):
-# ApplyDefaultProizvod tada ostavlja combo-e prazne (frmOtkup ga zove pod
+# ApplyDefaultProizvod tada ostavlja combo-e prazne (ekran ga zove pod
 # On Error Resume Next), pa Initialize ne okida auto-cenu i stanje forme je
 # deterministicno za golden snapshot.
 #

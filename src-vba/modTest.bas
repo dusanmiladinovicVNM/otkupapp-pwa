@@ -437,11 +437,6 @@ Public Sub RunAllTests()
     RunOne 180
     RunOne 181
     RunOne 182
-    RunOne 183
-    RunOne 184
-    RunOne 185
-    RunOne 186
-    RunOne 187
     RunOne 124
     RunOne 125
     RunOne 126
@@ -526,9 +521,9 @@ End Sub
 
 Private Function TestName(ByVal idx As Long) As String
     Select Case idx
-        Case 1: TestName = "T_PosleSnimanja_ZadrzavaKontekstOtpremnice"
-        Case 2: TestName = "T_PosleSnimanja_ZadrzavaZbirnu"
-        Case 3: TestName = "T_ClearForm_BrisePartnera"
+        Case 1: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
+        Case 2: TestName = "T_Ljuska_AlatkeTrazePravo"
+        Case 3: TestName = "T_Ljuska_StartEkranDozvoljen"
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
@@ -624,8 +619,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
         Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
-        Case 119: TestName = "T_LegacyDok_PadListeBlokovaNijeAvans"
-        Case 120: TestName = "T_LegacyDok_PadListeFakturaNijeAvans"
+        Case 119: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
+        Case 120: TestName = "T_Matic_SekcijaTraziPravo"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
@@ -690,11 +685,6 @@ Private Function TestName(ByVal idx As Long) As String
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
-        Case 183: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
-        Case 184: TestName = "T_Ljuska_AlatkeTrazePravo"
-        Case 185: TestName = "T_Ljuska_StartEkranDozvoljen"
-        Case 186: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
-        Case 187: TestName = "T_Matic_SekcijaTraziPravo"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -723,9 +713,9 @@ End Function
 ' sve sto test referencira.
 Private Sub InvokeTest(ByVal idx As Long)
     Select Case idx
-        Case 1: T_PosleSnimanja_ZadrzavaKontekstOtpremnice
-        Case 2: T_PosleSnimanja_ZadrzavaZbirnu
-        Case 3: T_ClearForm_BrisePartnera
+        Case 1: T_Sekcija_OdbijenPrelazakNePomeraSekciju
+        Case 2: T_Ljuska_AlatkeTrazePravo
+        Case 3: T_Ljuska_StartEkranDozvoljen
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
@@ -821,8 +811,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
         Case 117: T_Kolona_TrazenjeNeGutaGresku
         Case 118: T_MrezaPilula_PozadinaSeCisti
-        Case 119: T_LegacyDok_PadListeBlokovaNijeAvans
-        Case 120: T_LegacyDok_PadListeFakturaNijeAvans
+        Case 119: T_Ljuska_SuzenaPravaStartIAlatke
+        Case 120: T_Matic_SekcijaTraziPravo
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
@@ -885,11 +875,6 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
-        Case 183: T_Sekcija_OdbijenPrelazakNePomeraSekciju
-        Case 184: T_Ljuska_AlatkeTrazePravo
-        Case 185: T_Ljuska_StartEkranDozvoljen
-        Case 186: T_Ljuska_SuzenaPravaStartIAlatke
-        Case 187: T_Matic_SekcijaTraziPravo
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -916,63 +901,6 @@ End Sub
 ' ============================================================
 ' Testovi
 ' ============================================================
-
-' Posle snimanja otkupnog lista kontekst otpremnice mora da ostane: datum se NE
-' brise, jer sledeci blok ide u niz istog datuma. Pada ako se u ClearOtkupFields
-' vrati brisanje datuma (txtDatum.value = "").
-Private Sub T_PosleSnimanja_ZadrzavaKontekstOtpremnice()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
-
-    f.ClearOtkupFields
-
-    AssertEq f.txtDatum.value, FX_DATUM, _
-             "datum posle snimanja mora da ostane datum otpremnice"
-
-    AssertSnapshot DumpKontrole(f), "PosleSnimanja_KontekstOtpremnice"
-
-    Unload f
-End Sub
-
-' Broj zbirne ostaje popunjen posle snimanja: sledeci blok iste otpremnice mora
-' da dobije istu zbirnu, inace operater kuca broj iznova na svaki unos. Pada ako
-' se u ClearOtkupFields vrati txtBrojZbirne.value = "".
-Private Sub T_PosleSnimanja_ZadrzavaZbirnu()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
-
-    f.ClearOtkupFields
-    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
-             "broj zbirne mora da ostane popunjen posle snimanja"
-
-    ' Drugi blok nad istom otpremnicom -- posle jos jednog snimanja zbirna je ista.
-    f.cmbKooperant.value = FX_KOOPERANT2
-    f.ClearOtkupFields
-    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
-             "drugi blok mora da dobije istu zbirnu"
-
-    Unload f
-End Sub
-
-' Kooperant se BRISE posle snimanja -- sledeci unos je nov partner. Suprotno od
-' prethodna dva testa: ovde je brisanje trazeno ponasanje. Pada ako se iz
-' ClearOtkupFields ukloni cmbKooperant.value = "".
-Private Sub T_ClearForm_BrisePartnera()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
-
-    ' Preduslov: bez ovoga bi test bio zelen i kad kontrola uopste ne prima
-    ' vrednost, pa ne bi merio nista.
-    AssertEq f.cmbKooperant.value, FX_KOOPERANT, _
-             "preduslov: kooperant je postavljen pre ciscenja"
-
-    f.ClearOtkupFields
-
-    AssertEq f.cmbKooperant.value, "", _
-             "kooperant mora da bude obrisan posle snimanja"
-
-    Unload f
-End Sub
 
 ' ============================================================
 ' LJUSKA KAO ULAZ U APLIKACIJU (v6-ui-210)
@@ -6310,22 +6238,6 @@ Private Sub SetPolje(z As Object, ByVal grp As String, ByVal v As String)
     z.Controls(grp).Controls(grp & "T").text = v
 End Sub
 
-' Forma sa kontekstom otpremnice OTP-TEST-1 iz fixture-a, bez .Show.
-Private Function NewOtkupForm() As frmOtkup
-    Dim f As frmOtkup
-    Set f = New frmOtkup
-
-    Dim ctlCount As Long
-    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
-
-    f.txtDatum.value = FX_DATUM
-    f.txtBrojZbirne.value = FX_ZBIRNA
-    f.txtBrojDokumenta.value = FX_BROJ_OTP
-    f.cmbKooperant.value = FX_KOOPERANT
-
-    Set NewOtkupForm = f
-End Function
-
 ' ============================================================
 ' Assert-i
 ' ============================================================
@@ -9246,120 +9158,6 @@ Private Sub T_MrezaPilula_PozadinaSeCisti()
              "uredna vrednost VRACA pozadinu -- ciscenje ne ostaje zauvek"
 End Sub
 
-
-' TEST 119: u frmDokumenta prazna lista blokova NIJE izbor.
-'
-' Ista klasa greske koju je frmBankaImport imao i koja je tamo zatvorena u PR
-' #220. Ovde je stajala nedirnuta:
-'
-'   btnUnosOMUlaz_Click:  If cmbOtkupBlok.ListIndex >= 0 Then ... Else AVANS
-'
-' Prazan kombo i NEUSPELO ucitavanje izgledaju isto -- ListIndex je -1 u oba
-' slucaja. Punjenje (FillOpenOtkupi) je do sada padalo bez traga u stanju forme,
-' a pozivalac (cmbPrimalacOMUlaz_Change) nema rukovaoca -- pa je novac tiho
-' postajao AVANS kooperanta umesto da se knjizi na blok.
-'
-' Forma se u testu NE prikazuje: frmDokumenta nema UserForm_Initialize, pa je
-' New frmDokumenta jeftin i ne cita nijednu tabelu (isti razlog kao 11.1).
-Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
-    Dim f As frmDokumenta
-    Dim smePad As Boolean, smeOk As Boolean
-    Dim porukaPad As String, porukaOk As String
-    Dim padSaIzborom As Boolean, padBezIzbora As Boolean, okSaIzborom As Boolean
-
-    Set f = New frmDokumenta
-
-    ' PAD UCITAVANJA -> STOP. Nalazi se skupljaju pa tvrde POSLE Unload-a: pad
-    ' tvrdnje nad zivom formom ostavlja formu u memoriji i poruka se ne vidi.
-    f.DokTestSetBlokUcitanost False, "test greska"
-    smePad = f.DokTestBlokSme()
-    porukaPad = f.DokTestBlokPoruka()
-
-    ' Uredno ucitana lista pusta dalje -- kapija ne sme da bude sira od kvara.
-    ' Prazna lista posle USPESNOG citanja stvarno znaci "nema otvorenih blokova",
-    ' i avans je tada ispravan.
-    ' IZBOR NE SME DA ZAOBIDJE KAPIJU.
-    '
-    ' Pad usred punjenja ostavlja kombo DELIMICNO napunjen: operater tada bira
-    ' red iz nepotpune liste, ListIndex je >= 0, i kapija koja stoji samo u AVANS
-    ' grani se nikad ne pita. Odluka zato ne sme da zavisi od toga da li je red
-    ' izabran -- i to se ovde tvrdi za obe vrednosti.
-    padSaIzborom = f.DokTestKnjizenjeSme(True)
-    padBezIzbora = f.DokTestKnjizenjeSme(False)
-
-    f.DokTestSetBlokUcitanost True, ""
-    smeOk = f.DokTestBlokSme()
-    porukaOk = f.DokTestBlokPoruka()
-    okSaIzborom = f.DokTestKnjizenjeSme(True)
-
-    Unload f
-
-    AssertEq smePad, False, _
-             "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa"
-    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
-             "...i operater dobija objasnjenje, ne cutanje"
-    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
-             "...u kojem stoji i sta je puklo"
-    AssertEq padSaIzborom, False, _
-             "ni IZABRAN blok ne prolazi kad je ucitavanje palo"
-    AssertEq padBezIzbora, False, "...ni prazan izbor"
-
-    AssertEq smeOk, True, "uredno ucitana lista pusta avans"
-    AssertEq porukaOk, "", "...bez poruke"
-    AssertEq okSaIzborom, True, "...i pusta izabran blok"
-End Sub
-
-' ============================================================
-' 120: ISTA GRESKA NA STRANI KUPCA (F6 / "Izlaz").
-'
-' FillOpenFakture je pad citanja gubio isto kao FillOpenOtkupi: kombo ostane
-' prazan, a btnUnosIzlaz_Click iz praznog polja zakljucuje "nema fakture" i
-' knjizi NOV_KUPCI_AVANS. Razlika se vidi tek u saldu kupca.
-'
-' Kapija je ovde NAMERNO uza nego kod blokova: rezim pusta i unos same ambalaze
-' bez novca, a tada odluke faktura/avans nema -- pa lista ne sme da ga zaustavi.
-' Ta uzina je tvrdnja, ne izuzetak, i ima svoju sabotazu.
-' ============================================================
-Private Sub T_LegacyDok_PadListeFakturaNijeAvans()
-    Dim f As frmDokumenta
-    Dim smePad As Boolean, smeOk As Boolean
-    Dim porukaPad As String, porukaOk As String
-    Dim padSaIzborom As Boolean, bezNovca As Boolean, okSaIzborom As Boolean
-
-    Set f = New frmDokumenta
-
-    ' Nalazi se skupljaju pa tvrde POSLE Unload-a -- pad tvrdnje nad zivom formom
-    ' ostavlja formu u memoriji i poruka se ne vidi.
-    f.DokTestSetFaktUcitanost False, "test greska"
-    smePad = f.DokTestUplataSme(1000#, False)
-    porukaPad = f.DokTestUplataPoruka()
-    ' Izbor ne sme da zaobidje kapiju: delimicno napunjena lista IMA izbor.
-    padSaIzborom = f.DokTestUplataSme(1000#, True)
-    ' ...ali unos bez novca kapija ne dira.
-    bezNovca = f.DokTestUplataSme(0#, False)
-
-    f.DokTestSetFaktUcitanost True, ""
-    smeOk = f.DokTestUplataSme(1000#, False)
-    porukaOk = f.DokTestUplataPoruka()
-    okSaIzborom = f.DokTestUplataSme(1000#, True)
-
-    Unload f
-
-    AssertEq smePad, False, _
-             "pad ucitavanja liste faktura ZAUSTAVLJA knjizenje avansa kupca"
-    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
-             "...i operater dobija objasnjenje, ne cutanje"
-    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
-             "...u kojem stoji i sta je puklo"
-    AssertEq padSaIzborom, False, _
-             "ni IZABRANA faktura ne prolazi kad je ucitavanje palo"
-    AssertEq bezNovca, True, _
-             "unos bez novca NE staje zbog liste faktura"
-
-    AssertEq smeOk, True, "uredno ucitana lista pusta uplatu"
-    AssertEq porukaOk, "", "...bez poruke"
-    AssertEq okSaIzborom, True, "...i pusta izabranu fakturu"
-End Sub
 
 ' Recnik kakav modOtkupUI.SkupiPolja salje ekranu -- samo kljucevi od kojih
 ' zavisi kapija ucitanosti.

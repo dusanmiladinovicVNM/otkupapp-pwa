@@ -8096,7 +8096,7 @@ obrisano obara compile cele sveske.
 |---|---|---|
 | 0 | start → nova ljuska, bez veza ka legacy (**ovaj PR**, `v6-ui-209`) | — |
 | 1 | **process PR** za `.claude/`: `otkup-i-dokumenta.md` §5 („legacy se NE gasi" → „penzioniše se po §27"), `testovi.md` `paths:` (`frmOtkup.frm`), `forme-i-kontrole.md` (zamrznuti `WithEvents`, red „Matični podaci"). Ne sme zajedno sa feature izmenom (CLAUDE.md §6) | — |
-| 2 | `frmOtkup` + `frmDokumenta` (+ `.frx`); potom `modOtkupBlok`, `clsBlokUI` ako ostanu bez pozivaoca | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
+| 2 **(isporučen, §27.10)** | `frmOtkup` + `frmDokumenta` (+ `.frx`); `modOtkupBlok` i `clsBlokUI` OSTAJU — imaju pozivaoce iz ljuske | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
 | 3 | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
 | 4 | `frmFakturisanje`, `frmBankaExportPregled`, `frmSEF` (uslovno, §8.7) | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 | `frmMaticniPodaci` + `frmStammdaten` (+ `clsStmBtn`, `clsLookupMenuBtn` ako ostanu bez pozivaoca) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
@@ -8320,3 +8320,58 @@ provera, `git diff --check` čist. **Nisu izvršeni** (nema Excela u web sesiji)
 `Debug → Compile`, `run_vba` (uključujući testove 184 i 185), `dokaz.py` za dve
 nove sabotaže i UI smoke iz §27.6 i §27.7 — sve to ostaje kapija na Windows
 mašini pre merge-a.
+
+### 27.10 Korak 2 isporučen: `frmOtkup` i `frmDokumenta` uklonjeni
+
+Obe forme i njihovi `.frx` parovi su obrisani, zajedno sa svim referencama.
+`modOtkupBlok` i `clsBlokUI` **ostaju**: izmereno je 12 poziva iz ljuske
+(`modScrDokumenti`, `modScrIzvestaji`), pa uslov „ako ostanu bez pozivaoca"
+nije ispunjen. Deo `modOtkupBlok`-a koji je gradio legacy blok-UI je od sada
+mrtav kod u modulu koji ostaje — njegovo čišćenje je zasebna odluka, ne ovaj
+korak.
+
+**Šta je isečeno**
+
+| Gde | Šta |
+|---|---|
+| `modTest` | pet testova (`T_PosleSnimanja_ZadrzavaKontekstOtpremnice`, `T_PosleSnimanja_ZadrzavaZbirnu`, `T_ClearForm_BrisePartnera`, `T_LegacyDok_PadListeBlokovaNijeAvans`, `T_LegacyDok_PadListeFakturaNijeAvans`) + helper `NewOtkupForm` |
+| `tools/sabotaza.py` | sedam sabotaža nad `frmDokumenta.frm` (446 → 439) |
+| `frmOtkupAPP` | `btnBlocks_Click`, `btnPurchase_Click` |
+| `modAuth.OblastZaFormu` | `frmotkup`, `frmdokumenta` |
+| `tests/golden/` | `PosleSnimanja_KontekstOtpremnice.txt` — snimak kontrola obrisane forme |
+
+**Nijedna tvrdnja nije izgubljena.** Ugovor `ClearOtkupFields` (datum ostaje,
+zbirna ostaje, partner se briše) meri `T_ClearForm_Ugovor` nad ljuskom, i to
+šire — uz kilograme, ambalažu i granu bez aktivne otpremnice. Pravilo „pad
+liste nije avans" meri `T_Ljuska_PadListeNovcaNijeAvans`, sa tri slučaja koje
+kapija **ne sme** da dodirne.
+
+**Preseljeni slotovi.** Registar ne trpi rupe (`vba_check` → `REGISTAR`), pa je
+pet oslobođenih slotova popunjeno najvišim postojećim — isti obrazac kao
+`531ec56a` (test 152 → 146). Ukupno **187 → 182**.
+
+| Bio | Sada | Test |
+|---|---|---|
+| 183 | 1 | `T_Sekcija_OdbijenPrelazakNePomeraSekciju` |
+| 184 | 2 | `T_Ljuska_AlatkeTrazePravo` |
+| 185 | 3 | `T_Ljuska_StartEkranDozvoljen` |
+| 186 | 119 | `T_Ljuska_SuzenaPravaStartIAlatke` |
+| 187 | 120 | `T_Matic_SekcijaTraziPravo` |
+
+Starije sekcije ovog kataloga pominju te testove po **starim** brojevima — to
+su zapisi o tome šta je tada rađeno i ne prepisuju se; gornja tabela je prevod.
+
+**Dva `LogErr` stringa** u `frmFakturisanje` i `frmSledljivost` prijavljivala su
+`frmOtkup.btnPovratak_Click`, iako su te procedure u tim formama (kopiran
+string). Posle brisanja forme log bi pokazivao na modul koji ne postoji, pa su
+ispravljeni na svoja imena.
+
+**Verifikacija:** `vba_check` čist (207 fajlova, 439 sabotaža); FULL zeleno —
+`RunAllTests` **182/0**, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336,
+svih 11 suite-ova; `dokaz.py` crven **po imenu** za tri sabotaže nad
+preseljenim testovima (`prekidac-sekcije-uvek-vidljiv`, `alatka-sme-uvek`,
+`start-ne-preskace-zabranjen`).
+
+> **Instalirane sveske i dalje imaju obe forme** (§27.4): ni self-update ni
+> `ImportAllVBA` ne brišu komponente. Posle isporuke ide ručni `Remove frmOtkup`
+> i `Remove frmDokumenta` u VBE → `Compile` → `Save`.
