@@ -955,4 +955,5 @@ End Function
 
 Public Sub MatResetCache()
     Set mStatusKol = Nothing
+    modMaticniKorisnici.KorResetCache
 End Sub

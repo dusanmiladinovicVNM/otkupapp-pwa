@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-197"
+Public Const OTKUI_BUILD   As String = "v6-ui-200"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -6808,6 +6808,12 @@ End Sub
 Public Sub OtkupUI_Release()
     On Error Resume Next
     StopOtkupUITimers
+    ' Panel u radnoj povrsini drzi referencu na OKVIR unutar ove forme, a modul
+    ' panela drzi njega. Dok te reference postoje, forma se ne moze osloboditi --
+    ' a ImportAllVBA prvo UKLANJA istoimenu komponentu, pa bi uklanjanje palo i
+    ' import bi napravio frmOtkupUI1. Zato panel odlazi PRE mFrm.
+    modUiPanel.PanelZatvori
+    mPanelRezim = False
     Set mHovered = Nothing
     Set Btns = Nothing
     modUiKit.ResetNumFields             ' drzi reference na kontrole oborene forme

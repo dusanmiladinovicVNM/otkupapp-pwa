@@ -39,6 +39,16 @@ Private mCol0X As Single
 Private mCol1X As Single
 Private mTopContentY As Single
 
+' Grupa koja je trenutno prikazana. Prekidac grupa je zamenio sklapajuce
+' sekcije: nova ljuska svuda pokazuje JEDNU listu i menja je prekidacem, pa
+' podesavanja vise ne stoje kao jedanaest naslaganih harmonika.
+Private mAktivnaGrupa As String
+Private mSegRedova As Long
+
+' Visina jednog segmenta prekidaca i razmak medju njima.
+Private Const SEG_H As Single = 24
+Private Const SEG_GAP As Single = 6
+
 ' --- Registar polja: Array(Grupa, ConfigKey, Labela, Tip) ---
 ' Tip: "bool" (YES/NO), "list:A;B;C" (combo sa zadatim opcijama), "int",
 '      "secret", "memo", "text".
@@ -303,18 +313,8 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     lblHint.caption = "Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju. Grupa 'Banka / lokalno' se cuva u tblLocalConfig (per-masina)."
     modUiKit.PanelStilNapomena lblHint
 
-    ' Alatna traka: rasiri / skupi sve grupe odjednom.
-    Dim btnExpand As MSForms.CommandButton
-    Set btnExpand = AddButton("btnCfgExpandAll", m, 96, 150, 24)
-    btnExpand.caption = ChrW(9662) & "  Rasiri sve"
-    modUiKit.PanelStilDugme btnExpand, "ghost"
-    WireButton btnExpand, "expandall"
-
-    Dim btnCollapse As MSForms.CommandButton
-    Set btnCollapse = AddButton("btnCfgCollapseAll", m + 158, 96, 150, 24)
-    btnCollapse.caption = ChrW(9656) & "  Skupi sve"
-    modUiKit.PanelStilDugme btnCollapse, "ghost"
-    WireButton btnCollapse, "collapseall"
+    ' "Rasiri / skupi sve" su otisli sa sklapajucim sekcijama: uz prekidac
+    ' grupa nemaju sta da rade -- vidi se tacno jedna grupa.
 
     ' Geometrija kolona: 2 kolone kad ima dovoljno sirine, inace 1.
     Const COLGAP As Single = 16
@@ -324,7 +324,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     mCellW = (w - 2 * m - (mColCount - 1) * COLGAP) / mColCount
     mCol0X = m
     mCol1X = m + mCellW + COLGAP
-    mTopContentY = 134
+    mTopContentY = 106
 
     ' Izgradnja grupa (data-driven iz ConfigEditorFields; kolona "Grupa").
     ' Svaka grupa = collapsible sekcija (header dugme) sa svojim poljima.
@@ -422,11 +422,9 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         mRowsByGroup(grp).Add Array(lbl, inCtl, typ, brBtn)
     Next i
 
-    ' Pocetno stanje: sve grupe skupljene (pregledan "sadrzaj"); siri po potrebi.
-    Dim gname As Variant
-    For Each gname In mGroupOrder
-        mGroupHeaders(CStr(gname)).Tag = "1"
-    Next gname
+    ' Pocetno stanje: PRVA grupa je izabrana. Prazan ekran ("sve skupljeno") je
+    ' bio obrazac stare forme -- nova ljuska uvek pokazuje neku listu.
+    If mGroupOrder.count > 0 Then mAktivnaGrupa = CStr(mGroupOrder(1))
 
     RelayoutGroups
 
@@ -446,8 +444,6 @@ Public Sub ConfigEditor_OnClick(ByVal action As String, Optional ByVal groupKey 
         Case "toggle": ToggleConfigSheet
         Case "back": CloseConfigEditor
         Case "grp": ConfigEditor_ToggleGroup groupKey
-        Case "expandall": ConfigEditor_SetAll False
-        Case "collapseall": ConfigEditor_SetAll True
         Case "poppler", "browsepoppler": ConfigEditor_PickPoppler
         Case "browsefolder": ConfigEditor_PickFolderInto groupKey
     End Select
@@ -457,35 +453,19 @@ EH:
 End Sub
 
 ' Toggle collapse/expand jedne grupe (header.Tag "1"=collapsed).
+' Izbor grupe u prekidacu. Ime je zadrzano zbog clsConfigBtn (action="grp"),
+' ali posao je sada IZBOR, ne sklapanje.
 Public Sub ConfigEditor_ToggleGroup(ByVal grp As String)
     On Error GoTo EH
-    If mGroupHeaders Is Nothing Then Exit Sub
-    Dim hdr As MSForms.CommandButton
-    On Error Resume Next
-    Set hdr = mGroupHeaders(grp)
-    On Error GoTo EH
-    If hdr Is Nothing Then Exit Sub
-    hdr.Tag = IIf(hdr.Tag = "1", "0", "1")
+    If mGroupOrder Is Nothing Then Exit Sub
+    If Len(Trim$(grp)) = 0 Then Exit Sub
+    If mAktivnaGrupa = grp Then Exit Sub
+    mAktivnaGrupa = grp
     RelayoutGroups
     Exit Sub
 EH:
     LogErr "modPodesavanja.ConfigEditor_ToggleGroup"
 End Sub
-
-' Skupi (collapseAll=True) ili rasiri (False) sve grupe odjednom.
-Public Sub ConfigEditor_SetAll(ByVal collapseAll As Boolean)
-    On Error GoTo EH
-    If mGroupOrder Is Nothing Then Exit Sub
-    Dim g As Variant
-    For Each g In mGroupOrder
-        mGroupHeaders(CStr(g)).Tag = IIf(collapseAll, "1", "0")
-    Next g
-    RelayoutGroups
-    Exit Sub
-EH:
-    LogErr "modPodesavanja.ConfigEditor_SetAll"
-End Sub
-
 ' Dugme "Izaberi Poppler" -- direktan izbor pdftotext.exe iz Podesavanja (bez Alt+F8).
 ' Pokrece folder picker + upis (modSetup.SetupPopplerInteractive), pa osvezi prikaz
 ' polja PDFTOTEXT_EXE_PATH da odmah pokaze novu vrednost (prazno = auto pored xlsm-a).
@@ -520,112 +500,134 @@ End Sub
 Private Sub RelayoutGroups()
     On Error GoTo EH
     If mGroupOrder Is Nothing Then Exit Sub
+    If Len(mAktivnaGrupa) = 0 Then mAktivnaGrupa = CStr(mGroupOrder(1))
 
-    ' Ritam nove ljuske: visi unosi, natpis iznad polja, vise vazduha izmedju
-    ' redova i grupa. Legacy vrednosti (20/12/18/8) su davale gustinu koja se
-    ' vidi kao "stariji ekran" pored ostatka aplikacije.
-    Const HDRH As Single = 26
-    Const HDRGAP As Single = 8
     Const LBLH As Single = 12
     Const LBLGAP As Single = 3
     Const INH As Single = 22
     Const ROWGAP As Single = 12
     Const MEMOH As Single = 54
-    Const GROUPGAP As Single = 16
+    Const BRW As Single = 26, BRGAP As Single = 4
 
     Dim cellH As Single: cellH = LBLH + LBLGAP + INH + ROWGAP
     Dim memoCellH As Single: memoCellH = LBLH + LBLGAP + MEMOH + ROWGAP
 
-    Dim Y As Single: Y = mTopContentY
-    Dim gname As Variant, grp As String
-    Dim hdr As MSForms.CommandButton
-    Dim collapsed As Boolean
-    Dim grpRows As Collection, r As Variant
-    Dim lbl As MSForms.label, inCtl As MSForms.Control, typ As String
-    Dim brBtn As MSForms.CommandButton
-    Dim col As Long, cx As Single, idx As Long
-    Const BRW As Single = 26, BRGAP As Single = 4
-
+    ' --- 1) prekidac grupa: segmenti se prelamaju u vise redova ------------
+    Dim gname As Variant, grp As String, hdr As MSForms.CommandButton
+    Dim X As Single, Y As Single, sw As Single
+    X = mMargin
+    Y = mTopContentY
+    mSegRedova = 1
     For Each gname In mGroupOrder
         grp = CStr(gname)
         Set hdr = mGroupHeaders(grp)
-        hdr.Left = mMargin
-        hdr.width = mFormW - 2 * mMargin
+        sw = modUiKit.PanelSirinaSegmenta(grp)
+        If X > mMargin And X + sw > mFormW - mMargin Then
+            X = mMargin
+            Y = Y + SEG_H + SEG_GAP
+            mSegRedova = mSegRedova + 1
+        End If
+        hdr.Left = X
         hdr.top = Y
+        hdr.width = sw
+        hdr.Height = SEG_H
         hdr.Visible = True
-        collapsed = (hdr.Tag = "1")
-        modUiKit.PanelStilGrupa hdr, grp, collapsed
-        Y = Y + HDRH + HDRGAP
+        modUiKit.PanelStilSegment hdr, grp, (grp = mAktivnaGrupa)
+        X = X + sw + SEG_GAP
+    Next gname
+    Y = Y + SEG_H + 18
 
+    ' --- 2) polja SAMO aktivne grupe --------------------------------------
+    Dim grpRows As Collection, r As Variant, idx As Long
+    Dim lbl As MSForms.label, inCtl As MSForms.Control, typ As String
+    Dim brBtn As MSForms.CommandButton
+    Dim col As Long, cx As Single
+
+    For Each gname In mGroupOrder
+        grp = CStr(gname)
         Set grpRows = mRowsByGroup(grp)
-        col = 0
-        For idx = 1 To grpRows.count
-            r = grpRows(idx)
-            Set lbl = r(0)
-            Set inCtl = r(1)
-            typ = CStr(r(2))
-            Set brBtn = Nothing
-            If UBound(r) >= 3 Then Set brBtn = r(3)
+        If grp <> mAktivnaGrupa Then
+            ' Neaktivna grupa se SKLANJA, ne crta ispod -- to je razlika u
+            ' odnosu na stare sklapajuce sekcije.
+            For idx = 1 To grpRows.count
+                r = grpRows(idx)
+                r(0).Visible = False
+                r(1).Visible = False
+                If Not IsEmpty(r(3)) Then
+                    If Not r(3) Is Nothing Then r(3).Visible = False
+                End If
+            Next idx
+        Else
+            col = 0
+            For idx = 1 To grpRows.count
+                r = grpRows(idx)
+                Set lbl = r(0)
+                Set inCtl = r(1)
+                typ = CStr(r(2))
+                Set brBtn = Nothing
+                If Not IsEmpty(r(3)) Then
+                    If Not r(3) Is Nothing Then Set brBtn = r(3)
+                End If
 
-            If collapsed Then
-                lbl.Visible = False
-                inCtl.Visible = False
-                If Not brBtn Is Nothing Then brBtn.Visible = False
-            ElseIf typ = "memo" Then
-                If col = 1 Then Y = Y + cellH: col = 0
-                lbl.Left = mMargin: lbl.top = Y: lbl.width = mFormW - 2 * mMargin
-                lbl.Visible = True
-                inCtl.Left = mMargin: inCtl.top = Y + LBLH + LBLGAP
-                inCtl.width = mFormW - 2 * mMargin: inCtl.Height = MEMOH
-                inCtl.Visible = True
-                If Not brBtn Is Nothing Then brBtn.Visible = False
-                Y = Y + memoCellH
-                col = 0
-            Else
+                ' Memo uzima ceo red -- inace bi susedna kolona bila prazna.
+                If typ = "memo" And col = 1 Then
+                    col = 0
+                    Y = Y + cellH
+                End If
                 cx = IIf(col = 0, mCol0X, mCol1X)
+
                 lbl.Left = cx: lbl.top = Y: lbl.width = mCellW
-                lbl.Visible = True
-                inCtl.Left = cx: inCtl.top = Y + LBLH + LBLGAP
+                lbl.Height = LBLH: lbl.Visible = True
+
+                inCtl.Left = cx
+                inCtl.top = Y + LBLH + LBLGAP
                 inCtl.Visible = True
-                If brBtn Is Nothing Then
-                    inCtl.width = mCellW
+                If typ = "memo" Then
+                    inCtl.width = mFormW - 2 * mMargin
+                    inCtl.Height = MEMOH
                 Else
-                    inCtl.width = mCellW - BRW - BRGAP
-                    brBtn.Left = cx + inCtl.width + BRGAP
+                    inCtl.Height = INH
+                    inCtl.width = IIf(brBtn Is Nothing, mCellW, mCellW - BRW - BRGAP)
+                End If
+
+                If Not brBtn Is Nothing Then
+                    brBtn.Left = cx + mCellW - BRW
                     brBtn.top = inCtl.top
                     brBtn.width = BRW
                     brBtn.Height = INH
                     brBtn.Visible = True
                 End If
-                If mColCount = 1 Then
-                    Y = Y + cellH
-                ElseIf col = 1 Then
-                    Y = Y + cellH: col = 0
-                Else
-                    col = 1
-                End If
-            End If
-        Next idx
 
-        If (Not collapsed) And col = 1 Then Y = Y + cellH
-        If Not collapsed Then Y = Y + GROUPGAP
+                If typ = "memo" Then
+                    col = 0
+                    Y = Y + memoCellH
+                ElseIf col = mColCount - 1 Then
+                    col = 0
+                    Y = Y + cellH
+                Else
+                    col = col + 1
+                End If
+            Next idx
+            If col > 0 Then Y = Y + cellH
+        End If
     Next gname
 
-    On Error Resume Next
     mFrm.ScrollBars = fmScrollBarsVertical
     mFrm.ScrollHeight = Y + 16
     mFrm.KeepScrollBarsVisible = fmScrollBarsVertical
-    On Error GoTo 0
     Exit Sub
 EH:
     LogErr "modPodesavanja.RelayoutGroups"
 End Sub
 
-' Header dugme jedne grupe (collapsible). Klik hvata clsConfigBtn (action="grp").
+' Segment prekidaca grupa. Klik hvata clsConfigBtn (action="grp") -- ozicavanje
+' je ostalo isto, promenilo se samo ZNACENJE klika: bira grupu umesto da je
+' sklapa.
 Private Function AddGroupHeaderBtn(ByVal grp As String, ByVal idx As Long) As MSForms.CommandButton
     Dim b As MSForms.CommandButton
-    Set b = AddButton("cfggrp_" & CStr(idx), mMargin, 0, mFormW - 2 * mMargin, 26)
-    modUiKit.PanelStilGrupa b, grp, True
+    Set b = AddButton("cfggrp_" & CStr(idx), mMargin, 0, _
+                      modUiKit.PanelSirinaSegmenta(grp), SEG_H)
+    modUiKit.PanelStilSegment b, grp, False
     WireGroupButton b, grp
     Set AddGroupHeaderBtn = b
 End Function

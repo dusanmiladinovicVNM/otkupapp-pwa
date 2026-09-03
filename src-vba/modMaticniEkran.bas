@@ -892,6 +892,10 @@ End Sub
 ' Ljuska javlja da se ekran napusta. Zatvara editor, GEO panel i izbor -- sve
 ' troje pripada ekranu koji odlazi. Zove se kroz ugovor (Scr_Deaktiviraj), pa
 ' ljuska i dalje ne zna nijedan ekran po imenu.
+' Oslobadjanje uz rusenje ljuske. Ovaj modul NE drzi referencu na formu -- zonu
+' trazi kroz modOtkupUI.ScreenZone pri svakoj upotrebi -- ali drzi STANJE koje
+' bi preko rusenja preslo na sledecu instancu (otvoren editor nad zonom koje
+' vise nema). Zove ga Scr_Deaktiviraj i, preko njega, ljuska.
 Public Sub Deaktiviraj()
     ZatvoriPanele
     mIzabranID = ""

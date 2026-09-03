@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-175"
+Public Const UIKIT_BUILD As String = "v6-ui-200"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -562,16 +562,33 @@ Public Sub PanelStilDugme(ByVal b As MSForms.CommandButton, ByVal vrsta As Strin
     b.Font.Size = TS_META
 End Sub
 
-' Zaglavlje grupe: pescana traka preko cele sirine, sa strelicom stanja.
-Public Sub PanelStilGrupa(ByVal b As MSForms.CommandButton, ByVal grp As String, _
-                      ByVal skupljena As Boolean)
-    b.caption = IIf(skupljena, ChrW(9656), ChrW(9662)) & "  " & UCase$(grp)
-    b.BackColor = C_SAND
-    b.ForeColor = C_FOREST
+' Segment prekidaca grupa -- isti jezik kao prekidac lista na ekranima:
+' izabran je pun (forest/cream), ostali su beli sa ivicom.
+'
+' Zamenio je pescanu traku sa strelicom: sklapajuce grupe su bile OBRAZAC STARE
+' forme. Nova ljuska svuda pokazuje JEDNU listu i menja je prekidacem, pa i
+' podesavanja sada rade tako.
+Public Sub PanelStilSegment(ByVal b As MSForms.CommandButton, ByVal cap As String, _
+                            ByVal izabran As Boolean)
+    b.caption = cap
+    If izabran Then
+        b.BackColor = C_FOREST
+        b.ForeColor = C_CREAM
+    Else
+        b.BackColor = C_WHITE
+        b.ForeColor = C_MUTED
+    End If
     b.Font.name = F_UI
     b.Font.Size = TS_META
-    b.Font.Bold = True
+    b.Font.Bold = izabran
 End Sub
+
+' Sirina segmenta po duzini natpisa. Racuna se, ne pogadja: grupe se zovu od
+' "SEF" do "Otkup / dokumenta", pa fiksna sirina ili secka ili rasipa.
+Public Function PanelSirinaSegmenta(ByVal cap As String) As Single
+    PanelSirinaSegmenta = 22 + Len(cap) * 5.4
+    If PanelSirinaSegmenta < 64 Then PanelSirinaSegmenta = 64
+End Function
 
 Public Function NewZone(parent As Object, nm As String, X As Single, Y As Single, _
                          w As Single, h As Single, bg As Long) As Object

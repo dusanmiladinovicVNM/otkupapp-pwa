@@ -112,6 +112,15 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
         Set hl = AddLabel("admgrp_" & CStr(gi), m, Y, w - 2 * m, HDRH)
         hl.caption = CStr(grp(0))
         modUiKit.PanelStilNatpis hl
+        ' Tanka linija ispod naslova sekcije -- isti potez kojim ljuska deli
+        ' zonu od mreze. Bez nje su grupe komandi vizuelno curile jedna u
+        ' drugu, jer su sva dugmad iste tezine.
+        Dim ln As MSForms.label
+        Set ln = AddLabel("admln_" & CStr(gi), m, Y + HDRH - 2, w - 2 * m, 1)
+        ln.BackStyle = fmBackStyleOpaque
+        ln.BackColor = C_BORDER_LT
+        ln.BorderStyle = fmBorderStyleNone
+        ln.caption = ""
         Y = Y + HDRH + HDRGAP
 
         items = grp(1)

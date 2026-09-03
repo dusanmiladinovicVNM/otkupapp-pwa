@@ -48,6 +48,16 @@ Private Const SRC As String = "modMaticniKorisnici"
 ' Brojke iz POSLEDNJEG citanja -- isti obrazac koji modMaticniIzvor drzi za
 ' ostale sekcije. Racunaju se u istom prolazu kao redovi, pa zona i mreza ne
 ' mogu da se razidju.
+' Indeksi kolona oblasti, po jednom citanju. Bez ovoga je PravaOpis zvao
+' GetColumnIndex dvanaest puta PO REDU -- za sto korisnika 1200 pretraga sheme
+' na svako crtanje liste. Kes se puni na pocetku citanja i prazni sa ostalim
+' izvedenim mapama (MatResetCache -> KorResetCache).
+Private mOblIdx As Object
+
+' Spisak oblasti, jednom po citanju: modAuth.OblastiList pravi NOV niz na svaki
+' poziv, a PravaOpis se zove za svakog korisnika u listi.
+Private mOblasti As Variant
+
 Private mUkupno As Long
 Private mAktivnih As Long
 Private mNeaktivnih As Long
@@ -549,14 +559,36 @@ Private Function NazivStanice(ByVal id As String) As String
     If Len(nm) > 0 Then NazivStanice = nm & " (" & id & ")"
 End Function
 
-Private Function VrednostOblasti(ByVal data As Variant, ByVal red As Long, _
+Private Function VrednostOblasti(ByRef data As Variant, ByVal red As Long, _
                                  ByVal oblast As String) As String
-    If StrComp(PoljeReda(data, red, oblast), KOR_DA, vbTextCompare) = 0 Then
-        VrednostOblasti = KOR_DA
-    Else
-        VrednostOblasti = KOR_NE
+    Dim c As Long
+    c = OblastIndeks(oblast)
+    If c > 0 Then
+        If StrComp(Trim$(NzToText(data(red, c))), KOR_DA, vbTextCompare) = 0 Then
+            VrednostOblasti = KOR_DA
+            Exit Function
+        End If
     End If
+    VrednostOblasti = KOR_NE
 End Function
+
+' Indeks kolone oblasti iz kesa; prvi poziv ga trazi u semi.
+Private Function OblastIndeks(ByVal oblast As String) As Long
+    If mOblIdx Is Nothing Then Set mOblIdx = CreateObject("Scripting.Dictionary")
+    If Not mOblIdx.Exists(oblast) Then
+        On Error Resume Next
+        mOblIdx(oblast) = GetColumnIndex(TBL_KORISNICI, oblast)
+        Err.Clear
+    End If
+    OblastIndeks = CLng(mOblIdx(oblast))
+End Function
+
+' Kes indeksa pada sa ostalim izvedenim mapama -- sema se menja instalacijom,
+' pa kesiran indeks preko reseta ne sme da prezivi.
+Public Sub KorResetCache()
+    Set mOblIdx = Nothing
+    mOblasti = Empty
+End Sub
 
 ' Kratak opis prava za listu korisnika. Admin dobija jedan pojam umesto spiska
 ' od dvanaest -- isto sto legacy pise kao "SVE (admin)".
@@ -567,7 +599,8 @@ Private Function PravaOpis(ByRef data As Variant, ByVal red As Long, _
         PravaOpis = Poruka("OTKUI_KOR_SVE_ADMIN")
         Exit Function
     End If
-    For Each obl In modAuth.OblastiList()
+    If Not IsArray(mOblasti) Then mOblasti = modAuth.OblastiList()
+    For Each obl In mOblasti
         If VrednostOblasti(data, red, CStr(obl)) = KOR_DA Then
             If Len(res) > 0 Then res = res & ", "
             res = res & KorOblastNaziv(CStr(obl))

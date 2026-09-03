@@ -7262,3 +7262,52 @@ van liste, prirodan PK bez polja za zaključavanje, kapija pisca, i brana koja s
 može zatvoriti. Tri nove sabotaže. `vba_check` čist (210 fajlova, 420 sabotaža).
 **Compile i Excel smoke ostaju na operateru** — recenzent to isto nije mogao da
 izvrši.
+
+### 26.26 Paneli dobijaju informacionu arhitekturu nove ljuske (`v6-ui-200`)
+
+Prethodni krug (§26.23) je panelima dao paletu i ritam, ali je **oblik ostao
+star**: jedanaest naslaganih sklapajućih grupa. To je obrazac stare forme —
+nova ljuska svuda pokazuje **jednu listu** i menja je prekidačem.
+
+**Podešavanja sada rade tako.** Jedanaest grupa je **prekidač segmenata**, kao
+prekidač lista na svakom ekranu; vidi se tačno jedna grupa, ostale su sklonjene,
+ne skupljene. Segmenti se prelamaju u više redova i šire po dužini natpisa —
+grupe idu od „SEF" do „Otkup / dokumenta", pa bi fiksna širina ili sekla ili
+rasipala. Početno stanje je **prva grupa izabrana**; prazan ekran („sve
+skupljeno") je bio isti stari obrazac.
+
+Uz to su otišla dugmad **„Raširi / Skupi sve"** — uz prekidač nemaju šta da rade —
+i sa njima `ConfigEditor_SetAll`, koji je ostao bez pozivaoca.
+
+**Ožičavanje se nije menjalo.** Kontrole ostaju `CommandButton`, `clsConfigBtn`
+i dalje hvata klik pod `action="grp"` — promenilo se samo **značenje** klika:
+bira grupu umesto da je sklapa. Zato ovaj krug ne uvodi nijedan nov put
+događaja, a menja ono što se vidi.
+
+**Admin je dobio linije sekcija.** Dvanaest komandi u pet grupa staje na jedan
+ekran, pa bi prekidač ovde sakrio pola alatki bez dobitka. Umesto toga sekcije
+razdvaja tanka linija — isti potez kojim ljuska deli zonu od mreže. Bez nje su
+grupe curile jedna u drugu, jer su sva dugmad iste težine.
+
+#### `ImportAllVBA` — šta je ovom ekranu bilo na putu
+
+`ImportAllVBA` **prvo uklanja istoimenu komponentu**, pa uvozi. `Remove` pada
+ako je forma učitana, greška se guta, i uvoz napravi `frmOtkupUI1` — otud drugi
+prolaz.
+
+Panel u radnoj površini je držao referencu na **okvir unutar te forme**
+(`modPodesavanja.mFrm` / `modAdmin.mFrm`), a `modUiPanel` je držao panel. Dok te
+reference postoje, forma se ne oslobađa. Zato `OtkupUI_Release` sada zatvara
+panel **pre** nego što pusti `mFrm`.
+
+`modMaticniEkran` referencu na formu nikad nije držao — zonu traži kroz
+`ScreenZone` pri svakoj upotrebi — ali je držao **stanje** koje bi preko rušenja
+prešlo na sledeću instancu; to čisti `Deaktiviraj`.
+
+#### Optimizacija matičnog čitača
+
+`PravaOpis` je za svaki red zvao `GetColumnIndex` dvanaest puta — za sto
+korisnika **1200 pretraga šeme** na svako crtanje liste — i uz to gradio nov niz
+`modAuth.OblastiList()` po redu. Oba su podignuta u keš koji pada zajedno sa
+ostalim izvedenim mapama (`MatResetCache` → `KorResetCache`), jer se šema menja
+instalacijom i keširan indeks ne sme da preživi reset.
