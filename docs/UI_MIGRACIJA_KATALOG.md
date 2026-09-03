@@ -7529,3 +7529,98 @@ po redu ostaje.
   **NEVERIFIKOVANE**. Scenariji koje traži recenzija (Partneri → Podešavanja →
   Nazad → izmena; Podešavanja → Admin bez snimanja; operater bez prava na
   Dokumenta) moraju se odigrati u Excelu.
+
+### 26.29 Recenzija `4d1475b`: zamena operatera je izlagala stare podatke (`v6-ui-203`)
+
+Dva P0, oba klase **„prikaz tvrdi jedno, stanje je drugo"**. Nijedan se ne vidi
+kroz registre; oba se vide tek nad stanjem.
+
+#### P0-1 — „Otkaži" u prijavi je odjavljivao starog operatera
+
+`modAuth.Login` je radio `Logout` **pre** nego što otvori formu za prijavu. Klik
+na „Operater" pa „Otkaži" (ili tri promašena PIN-a):
+
+1. `Login` vrati `False`;
+2. stara sesija je **već obrisana**;
+3. `DoSwitchOperater` ide u `Else` granu i javlja „operater ostao isti";
+4. UI zadržava njegovo ime, sidebar i podatke — a `gLoggedIn` je `False`.
+
+Sesija se sada **pamti pa gasi**, i vraća kad prijava ne uspe. Otkazivanje znači
+„ne menjam operatera", pa se vraća tačno stanje pre klika — ništa se ne dobija
+što već nije bilo na ekranu. Vraćanje ide kroz `VratiSesiju` (zvano sa dva mesta,
+i iz `EH`) i ostavlja trag u auditu (`AUTH_LOGIN_OTKAZ`).
+
+Uz to, `DoSwitchOperater` više ne veruje: ako sesija **nije** vraćena
+(`modAuth.JePrijavljen()` = `False`), primenjuje prava na praznu sesiju umesto
+da tvrdi da je stari operater tu.
+
+#### P0-2 — nalog bez ijednog prava je i dalje video prethodnu mrežu
+
+`NaPrviDozvoljenEkran` je samo postavljao `mScreen = ""`. Ali:
+
+- `ShowZones` je `zTitle`/`zGrid` i dalje palio (`Not mPanelRezim`);
+- `LoadGridFromScreen` za nepoznat ključ **izlazi pre** nego što isprazni
+  `mView` (`If Not IsArray(d) Then Exit Sub`);
+- `LayoutScreenZone` samo ne nađe `zScr_` zonu i izađe.
+
+Rezultat: komentar je govorio „prazna radna površina", a prethodna mreža je
+ostajala vidljiva sa redovima prethodnog operatera.
+
+Sada: `ShowZones` ne crta naslov ni mrežu kad je `mScreen` prazan, a
+`IsprazniRadnuPovrsinu` **briše stanje**, ne samo vidljivost — `mView`, `mViewN`,
+zbirove, izbor, filter, pretragu, pa `RenderGrid` preko starih redova. Skrivena
+mreža sa tuđim redovima je i dalje tuđi podaci: `mView` preživi, a `GridCell` ga
+čita i bez crtanja.
+
+#### P1 — zatvoreni
+
+| Nalaz | Popravka |
+|---|---|
+| prelazak ekrana i otvaranje panela tiho odbacuju nesnimljen matični editor | nov neobavezan ugovor `Scr_ImaNesacuvano` (isti dogovor o imenu kao `Scr_Deaktiviraj`); `modMaticniEkran.ImaNesacuvano(ekran)` pita **čiji** je editor, kao i `EditorJeNas` |
+| `ComboVrednostPostoji` fail-open kad izvor ne može da se pročita | `EH` više ne znači „prolazi": greška u proveri nije odobrenje. **Prazan** spisak i dalje prolazi — sekcija u koju se unosi prvi zapis nema šta da ponudi |
+| `ScrSopstvenaBrana` svaki `1004` čita kao „nema branu" | `1004` je „nema proceduru" **samo pri prvom pokušaju**; nad ekranom za koji već znamo da branu ima, `1004` je pukla brana → zabranjeno |
+| `KorDodaj` / `KorIzmeni` / `KorPromeniStatus` bez sopstvene kapije | svi zovu `MatBranaUpisa("KORISNICI")` — ista implementacija, ne kopija pravila. `KorPromeniPravo` ju je već imao |
+
+#### P2 — zatvoren
+
+`ActivateScreen` je zatvarao panel **na vrhu**, pre validacije cilja. Klik na
+stavku čiji modul nedostaje (nepotpun import, self-update u toku) je tako
+ostavljao i panel zatvoren i ekran ispod deaktiviran — za potez koji nikuda nije
+odveo.
+
+Redosled je preokrenut: **cilj se proverava prvi**, pa se pita za nesnimljeno, i
+tek onda se išta zatvara. Odbijen prelazak sada ne dira ništa — panel ostaje
+otvoren, što i jeste istina. Jedini bail posle zatvaranja panela je pad u
+gradnji zone, i on ekran vraća ručno (`PanelVracenNaEkran`).
+
+Uz to su `IdiNaEkran` i `PostaviSekciju` izgubili svoje `kljuc <> mScreen`
+straže: dok je panel otvoren, povratak na ekran ispod njega **jeste** isti ključ,
+pa su ga te straže blokirale. Odluku sada donosi `ActivateScreen`, koji jedini
+zna i za panel.
+
+#### Šta ostaje otvoreno, svesno
+
+- **Snimanje Podešavanja nije atomsko.** Pojedinačne greške se sada prijavljuju
+  po ključu i ne prekidaju ostale, ali deo configa može biti snimljen a deo
+  odbijen. Atomičnost bi tražila transakciju nad dve tabele (`tblSEFConfig` +
+  `tblLocalConfig`) za 97 nezavisnih ključeva — nesrazmerno.
+- **Caller-level paritet za `BuildRowIndex`** (Sledljivost, Agrohemija) nije
+  odigran u Excelu. Ekvivalencija same mape jeste pokrivena testom 180.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **431** sabotaža); `--self-test` 102/102.
+- Nov test **182** `T_Auth_OtkazanaPrijavaNeLazePrikaz`: otkazana prijava vraća
+  prethodnog operatera; prazna radna površina **briše** redove (mereno preko
+  `GridBrojRedova`, uz tvrdnju da ih je pre toga bilo — inače bi tvrdnja bila
+  prazna).
+- Test **179** proširen: sva tri pisca naloga odbijaju sa zatvorenom kapijom, i
+  odbijena promena statusa ništa nije izračunala.
+- Tri nove sabotaže: `auth-otkaz-ne-vraca-sesiju`,
+  `prazna-povrsina-zadrzava-redove`, `korisnici-pisac-bez-kapije`.
+- Novi test seam-ovi: `modAuth.AuthOtkazTest`,
+  `modOtkupUI.OtkupUI_IsprazniPovrsinuTest`, `modMaticniUnos.MatBranaZatvoriTest`
+  — sva tri tvrdo gejtovana ili „samo zatvara", nijedan ne može da odobri pristup.
+- **VBA se u ovoj sesiji ne izvršava.** Pet scenarija iz recenzije
+  (uspešna zamena, „Otkaži", tri pogrešna PIN-a, nalog bez prava, Podešavanja →
+  Admin bez snimanja) i dalje moraju u Excel.

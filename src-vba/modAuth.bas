@@ -46,18 +46,82 @@ End Function
 ' [PasswordChar], lblErr, btnOK, btnCancel) i izvozi sa svojim .frx parom.
 ' ------------------------------------------------------------
 Public Function Login() As Boolean
+    Dim biUser As String, biUloga As String, biIme As String, biLog As Boolean
     On Error GoTo EH
+
+    ' Prethodna sesija se PAMTI pa tek onda gasi.
+    '
+    ' Do v6-ui-203 je ovde stajao go Logout: klik na "Operater" pa "Otkazi"
+    ' (ili tri promasena PIN-a) je Login vracao False, a stara sesija je vec
+    ' bila obrisana. Ljuska je tada javljala "operater ostao isti" i zadrzavala
+    ' njegovo ime, sidebar i podatke -- dok je auth kontekst bio PRAZAN.
+    ' Prikaz je tvrdio jedno, prava su bila drugo.
+    '
+    ' Otkazivanje znaci "ne menjam operatera", pa se vraca tacno stanje pre
+    ' klika. Ne dobija se nista novo: ta sesija je vec bila prijavljena i vec
+    ' je bila na ekranu.
+    biUser = gCurrentUser
+    biUloga = gCurrentUserUloga
+    biIme = gCurrentUserIme
+    biLog = gLoggedIn
+
     Logout
 
     frmLogin.LoginOK = False
     frmLogin.Show                 ' modal (default)
     Login = frmLogin.LoginOK
     Unload frmLogin
+
+    If Not Login Then VratiSesiju biUser, biUloga, biIme, biLog
     Exit Function
 EH:
     LogErr "modAuth.Login"
     Login = False
+    VratiSesiju biUser, biUloga, biIme, biLog
 End Function
+
+' Vracanje zapamcene sesije posle NEUSPELE prijave. Odvojeno zato sto se zove
+' sa dva mesta (normalan izlaz i EH), a preskoceno vracanje je bas onaj kvar
+' zbog koga ovo i postoji.
+'
+' Prazna sesija se ne vraca: to je slucaj prve prijave (StartApp), gde nema
+' cega da se vrati -- i gde bi "vracanje" bilo tiho ponistavanje odjave.
+Private Sub VratiSesiju(ByVal usr As String, ByVal uloga As String, _
+                        ByVal ime As String, ByVal biLog As Boolean)
+    If Not biLog Then Exit Sub
+    If Len(usr) = 0 Then Exit Sub
+    gCurrentUser = usr
+    gCurrentUserUloga = uloga
+    gCurrentUserIme = ime
+    gLoggedIn = True
+    AuditAuth "AUTH_LOGIN_OTKAZ", "INFO", usr & " (prijava nije promenjena)"
+End Sub
+
+' Da li je BILO KO prijavljen. Javno zato sto ljuska posle neuspele zamene mora
+' da zna da li je sesija vracena -- ako nije, prikaz ne sme da tvrdi da je stari
+' operater i dalje tu.
+Public Function JePrijavljen() As Boolean
+    JePrijavljen = gLoggedIn
+End Function
+
+' TEST SEAM: odigraj OTKAZANU prijavu, bez forme za prijavu.
+'
+' Radi tacno redosled iz Login(): zapamti sesiju, obrisi je, "prijava nije
+' uspela", vrati. Forma frmLogin je modalna i u harnessu se ne moze odigrati,
+' a bas ovaj redosled je bio kvar -- pa se meri on, a ne poziv koji ga sadrzi.
+'
+' Tvrdo gejtovan: van test-rezima ne radi nista. Ne moze ni da odobri pristup
+' (nista ne postavlja sto vec nije bilo), samo da ga vrati u zateceno stanje.
+Public Sub AuthOtkazTest()
+    Dim biUser As String, biUloga As String, biIme As String, biLog As Boolean
+    If Not IsTestMode() Then Exit Sub
+    biUser = gCurrentUser
+    biUloga = gCurrentUserUloga
+    biIme = gCurrentUserIme
+    biLog = gLoggedIn
+    Logout
+    VratiSesiju biUser, biUloga, biIme, biLog
+End Sub
 
 ' ------------------------------------------------------------
 ' Validacija kredencijala (poziva frmLogin posle OK).

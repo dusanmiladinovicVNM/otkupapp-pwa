@@ -425,6 +425,7 @@ Public Sub RunAllTests()
     RunOne 179
     RunOne 180
     RunOne 181
+    RunOne 182
     RunOne 124
     RunOne 125
     RunOne 126
@@ -647,6 +648,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
+        Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -836,6 +838,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
+        Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -13351,6 +13354,71 @@ Private Sub T_UiPanel_ZivotniCiklusIPrava()
 End Sub
 
 ' ============================================================
+' 182. Otkazana prijava i nalog bez prava -- prikaz ne sme da laze.
+'
+' Dva nalaza recenzije v6-ui-202, oba klasa "prikaz tvrdi jedno, stanje je
+' drugo". Nijedan se ne vidi kroz registre; oba se vide tek nad STANJEM.
+'
+'   1) OTKAZANA PRIJAVA. modAuth.Login je radio Logout PRE nego sto otvori
+'      formu. Klik na "Operater" pa "Otkazi" (ili tri promasena PIN-a) je
+'      vracao False, a stara sesija je vec bila obrisana -- pa je ljuska
+'      javljala "operater ostao isti" i zadrzavala njegovo ime, sidebar i
+'      podatke, dok je auth kontekst bio PRAZAN.
+'
+'      Meri se bez forme za prijavu (koja se u harnessu ne moze odigrati):
+'      seam-om koji odigra tacno taj redosled -- zapamti, obrisi, ne prijavi
+'      se, vrati.
+'
+'   2) NALOG BEZ IJEDNOG PRAVA. Radna povrsina se "praznila" tako sto je
+'      mScreen postajao prazan -- ali mView je ostajao pun, jer
+'      LoadGridFromScreen za nepoznat kljuc izlazi PRE nego sto ga isprazni.
+'      Mreza je i dalje nosila redove prethodnog operatera. To je curenje
+'      podataka izmedju naloga, ne kozmetika.
+' ============================================================
+Private Sub T_Auth_OtkazanaPrijavaNeLazePrikaz()
+    Dim f As frmOtkupUI
+    Dim korPre As String, korPosle As String
+    Dim prijavljenPosle As Boolean
+    Dim redovaPre As Long, redovaPosle As Long
+    Dim naslovVidljiv As Boolean, mrezaVidljiva As Boolean
+
+    ' --- 1) otkazana prijava vraca sesiju ---------------------------------
+    korPre = modAuth.GetCurrentUser()
+    modAuth.AuthOtkazTest
+    korPosle = modAuth.GetCurrentUser()
+    prijavljenPosle = modAuth.JePrijavljen()
+
+    AssertEq korPosle, korPre, _
+             "otkazana prijava vraca PRETHODNOG operatera, ne prazno"
+    ' U headless runu AUTH nije ukljucen pa niko nije prijavljen -- tada je i
+    ' vracanje prazno, i tvrdnja o JePrijavljen ne bi merila nista. Meri se
+    ' samo kad je bilo koga bilo.
+    If Len(korPre) > 0 Then
+        AssertEq prijavljenPosle, True, _
+                 "posle otkazivanja je sesija i dalje prijavljena"
+    End If
+
+    ' --- 2) prazna radna povrsina je STVARNO prazna -----------------------
+    Set f = NewOtkupUIForm()
+    modOtkupUI.GridTestLoad "PALETE"
+    redovaPre = modOtkupUI.GridBrojRedova()
+
+    modOtkupUI.OtkupUI_IsprazniPovrsinuTest
+    redovaPosle = modOtkupUI.GridBrojRedova()
+    naslovVidljiv = f.Controls("zTitle").Visible
+    mrezaVidljiva = f.Controls("zGrid").Visible
+
+    ReleaseOtkupUIForm f
+
+    AssertEq (redovaPre > 0), True, _
+             "mreza je pre praznjenja imala redove (inace tvrdnja ne meri nista)"
+    AssertEq redovaPosle, 0, _
+             "prazna radna povrsina BRISE redove, ne samo sto ih sakriva"
+    AssertEq naslovVidljiv, False, "naslovna traka se ne crta bez ijednog ekrana"
+    AssertEq mrezaVidljiva, False, "mreza se ne crta bez ijednog ekrana"
+End Sub
+
+' ============================================================
 ' 166. Maticni sifarnici: opis 13 sekcija je POTPUN i saglasan sa semom.
 '
 ' Ekran ne moze da se izmeri kroz formu bez Excela, ali OPIS moze -- a bas on
@@ -14568,6 +14636,8 @@ End Sub
 Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     Dim polja As Object, odg As String, sekcije As Variant, r As Variant
     Dim kljuc As String, bezZastite As String, pk As String
+    Dim odgKorDodaj As String, odgKorIzmeni As String, odgKorStatus As String
+    Dim noviKorID As String, noviStatus As String
 
     ' --- 1) combo van liste se ODBIJA -------------------------------------
     Set polja = CreateObject("Scripting.Dictionary")
@@ -14611,6 +14681,28 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
              "kapija pusta upis kad pravo postoji"
     AssertEq modMaticniUnos.MatBranaUpisa("KORISNICI"), "", _
              "kapija pusta korisnike kad je operater admin"
+
+    ' PISAC NALOGA nosi kapiju SAM. Do v6-ui-203 su se KorDodaj / KorIzmeni /
+    ' KorPromeniStatus oslanjali iskljucivo na to da ih svi pozivaoci zovu kroz
+    ' modMaticniUnos -- jedan nov pozivalac (ili Alt+F8) je zaobilazio branu nad
+    ' tabelom naloga i prava. Meri se sa ZATVORENOM kapijom: sve tri moraju da
+    ' odbiju PRE nego sto bilo sta dodirnu.
+    modMaticniUnos.MatBranaZatvoriTest True
+    odgKorDodaj = modMaticniKorisnici.KorDodaj(polja, noviKorID)
+    odgKorIzmeni = modMaticniKorisnici.KorIzmeni(1, polja)
+    odgKorStatus = modMaticniKorisnici.KorPromeniStatus(1, noviStatus)
+    modMaticniUnos.MatBranaZatvoriTest False
+
+    AssertEq (Len(odgKorDodaj) > 0), True, _
+             "pisac naloga odbija unos kad kapija ne pusta"
+    AssertEq (Len(odgKorIzmeni) > 0), True, _
+             "pisac naloga odbija izmenu kad kapija ne pusta"
+    AssertEq (Len(odgKorStatus) > 0), True, _
+             "pisac naloga odbija promenu statusa kad kapija ne pusta"
+    ' Odbijeno znaci i NEDIRNUTO: promena statusa ne sme da vrati novu vrednost.
+    AssertEq noviStatus, "", "odbijena promena statusa nista nije izracunala"
+    AssertEq modMaticniUnos.MatBranaUpisa("KORISNICI"), "", _
+             "kapija se posle testa vraca"
 
     ' --- 4) brana ekrana je fail-closed ----------------------------------
     ' Ekran cija Scr_Dozvoljen PUKNE ne sme da prodje. Meri se preko ekrana koji

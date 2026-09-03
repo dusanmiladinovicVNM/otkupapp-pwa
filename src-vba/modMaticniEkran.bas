@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-202"
+Public Const MATEKR_BUILD As String = "v6-ui-203"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -896,6 +896,19 @@ End Sub
 ' trazi kroz modOtkupUI.ScreenZone pri svakoj upotrebi -- ali drzi STANJE koje
 ' bi preko rusenja preslo na sledecu instancu (otvoren editor nad zonom koje
 ' vise nema). Zove ga Scr_Deaktiviraj i, preko njega, ljuska.
+' Ima li OVAJ ekran otvoren editor sa nesacuvanim unosom.
+'
+' Cetiri maticna ekrana dele ovo telo, pa se pita CIJI je editor -- isto
+' pravilo koje vec drzi Sacuvaj (EditorJeNas). Ekran koji nije vlasnik editora
+' nema sta da izgubi, pa njegov odlazak nista ne pita.
+'
+' Do v6-ui-203 se otkucano gubilo tiho na prelazak EKRANA i na otvaranje
+' panela: potvrda je postojala samo pri promeni LISTE (MATU_ASK_ODBACI_UNOS).
+Public Function ImaNesacuvano(ByVal ekran As String) As Boolean
+    If Len(mEditKljuc) = 0 Then Exit Function
+    ImaNesacuvano = (mEditEkran = ekran)
+End Function
+
 Public Sub Deaktiviraj()
     ZatvoriPanele
     mIzabranID = ""

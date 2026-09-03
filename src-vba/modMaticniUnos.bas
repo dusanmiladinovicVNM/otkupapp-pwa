@@ -35,13 +35,25 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-199"
+Public Const MATUNOS_BUILD As String = "v6-ui-203"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
 Public Const MAT_FOKUS As String = "fokus"
 
 Private Const SRC As String = "modMaticniUnos"
+
+' Zatvorena kapija upisa -- SAMO za test. Otvaranje ide iskljucivo kroz False,
+' koji vraca normalno ponasanje; ne postoji vrednost koja kapiju zaobilazi.
+' Postoji zato sto je u headless runu MozeAdministraciju anti-lockout (bez
+' AUTH-a su svi admini), pa bi tvrdnja "pisac postuje kapiju" inace merila dva
+' puta prolaz i prolazila i kad kapije nema.
+Private mBranaZatvorenaTest As Boolean
+
+' Zatvara kapiju upisa za jednu tvrdnju (v. mBranaZatvorenaTest).
+Public Sub MatBranaZatvoriTest(ByVal zatvori As Boolean)
+    mBranaZatvorenaTest = zatvori
+End Sub
 
 '--------------------------------------------------------------- UNOS
 ' Nov zapis. Vraca "" kad je proslo, inace poruku za operatera.
@@ -57,6 +69,13 @@ Private Const SRC As String = "modMaticniUnos"
 ' Vraca "" kad je dozvoljeno, inace poruku za operatera.
 Public Function MatBranaUpisa(ByVal kljuc As String) As String
     On Error Resume Next
+    ' Test seam: sme SAMO da ZATVORI kapiju, nikad da je otvori. U headless runu
+    ' je MozeAdministraciju anti-lockout (svi su admini), pa bi tvrdnja "pisac
+    ' postuje kapiju" inace merila dva puta prolaz.
+    If mBranaZatvorenaTest Then
+        MatBranaUpisa = Poruka("MATU_ERR_BEZ_PRAVA")
+        Exit Function
+    End If
     If Not modAuth.KorisnikImaPravo(OBL_MATICNI) Then
         MatBranaUpisa = Poruka("MATU_ERR_BEZ_PRAVA")
         Exit Function
@@ -592,7 +611,17 @@ Private Function ComboVrednostPostoji(ByVal kljuc As String, ByVal spec As Strin
     ComboVrednostPostoji = False
     Exit Function
 EH:
-    ComboVrednostPostoji = True
+    ' Citanje spiska je PUKLO. Do v6-ui-203 se to citalo kao "prolazi" -- greska
+    ' u proveri je postajala odobrenje, pa je proizvoljan tekst mogao da udje u
+    ' kolonu stranog kljuca. Sada je fail-closed, kao i brana ekrana: neuspela
+    ' provera nije prosla provera.
+    '
+    ' Prazan spisak (bez greske) i dalje PROLAZI, i to je druga odluka: sekcija
+    ' u koju se unosi prvi zapis nema sta da ponudi, a polje sme da bude prazno.
+    LogWarn "modMaticniUnos.ComboVrednostPostoji", _
+            "spisak za '" & izvor & "' se ne cita (" & Err.Number & " " & _
+            Err.description & ") -- vrednost odbijena"
+    ComboVrednostPostoji = False
 End Function
 
 Private Function PrvaVrednost(ByVal kljuc As String, ByVal polja As Object) As String

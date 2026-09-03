@@ -29,7 +29,7 @@ Attribute VB_Name = "modMaticniKorisnici"
 '=====================================================================
 Option Explicit
 
-Public Const MATKOR_BUILD As String = "v6-ui-193"
+Public Const MATKOR_BUILD As String = "v6-ui-203"
 
 Public Const KOR_DA As String = "DA"
 Public Const KOR_NE As String = "NE"
@@ -228,10 +228,26 @@ End Function
 
 '-------------------------------------------------------------- RADNJE
 ' Nov korisnik. Vraca "" kad je proslo.
+' Kapija je i OVDE, ne samo u modMaticniUnos.
+'
+' Pravilo projekta: kriticna kapija stoji i u piscu, jer se do pisca stize i
+' mimo modula unosa (.claude/rules/testovi.md, 5). Ove tri procedure su Public
+' i menjaju NALOGE I PRAVA -- najosetljiviju tabelu u aplikaciji -- a do
+' v6-ui-203 su se oslanjale iskljucivo na to da ih svi pozivaoci zovu kroz
+' modMaticniUnos. Jedan nov pozivalac (ili Alt+F8) je zaobilazio branu.
+'
+' Ista implementacija, ne kopija pravila: MatBranaUpisa("KORISNICI") vec zna
+' da ova sekcija trazi i pravo na maticne podatke i administraciju.
+Private Function Brana() As String
+    Brana = modMaticniUnos.MatBranaUpisa("KORISNICI")
+End Function
+
 Public Function KorDodaj(ByVal polja As Object, ByRef noviID As String) As String
     Dim greska As String, tx As clsTransaction, red As Long, adm As Boolean
     On Error GoTo EH
     noviID = ""
+    KorDodaj = Brana()
+    If Len(KorDodaj) > 0 Then Exit Function
     greska = Proveri(polja, "")
     If Len(greska) > 0 Then
         KorDodaj = greska
@@ -274,6 +290,8 @@ Public Function KorIzmeni(ByVal red As Long, ByVal polja As Object) As String
     Dim greska As String, tx As clsTransaction, adm As Boolean, korID As String
     Dim bioAdmin As Boolean
     On Error GoTo EH
+    KorIzmeni = Brana()
+    If Len(KorIzmeni) > 0 Then Exit Function
     If red < 1 Then
         KorIzmeni = Poruka("MATU_ERR_NEMA_REDA")
         Exit Function
@@ -307,6 +325,8 @@ Public Function KorPromeniStatus(ByVal red As Long, ByRef novi As String) As Str
     Dim tx As clsTransaction, cur As String
     On Error GoTo EH
     novi = ""
+    KorPromeniStatus = Brana()
+    If Len(KorPromeniStatus) > 0 Then Exit Function
     If red < 1 Then
         KorPromeniStatus = Poruka("MATU_ERR_NEMA_REDA")
         Exit Function

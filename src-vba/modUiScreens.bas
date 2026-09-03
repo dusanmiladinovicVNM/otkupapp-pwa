@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-201"
+Public Const UISCR_BUILD As String = "v6-ui-203"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -302,9 +302,15 @@ Private Function ScrSopstvenaBrana(ByVal kljuc As String) As Boolean
     If Err.Number = 0 Then
         mBrana(kljuc) = True
         ScrSopstvenaBrana = CBool(v)
-    ElseIf Err.Number = 1004 Then
+    ElseIf Err.Number = 1004 And Not mBrana.Exists(kljuc) Then
+        ' 1004 pri PRVOM pokusaju = "Cannot run the macro", tj. ekran nema
+        ' Scr_Dozvoljen. To je i dalje odgovor "nema takvu funkciju".
         mBrana(kljuc) = False
     Else
+        ' Sve ostalo je brana koja je PUKLA -- ukljucujuci 1004 nad ekranom za
+        ' koji vec znamo da branu IMA. Do v6-ui-203 je i taj slucaj citan kao
+        ' "nema funkciju", pa je brana koja iznutra digne 1004 (a to je obicna
+        ' Excel greska, ne retkost) propustala. Sada je fail-closed bez izuzetka.
         mBrana(kljuc) = True
         ScrSopstvenaBrana = False
         ScrLastErr = m & ".Scr_Dozvoljen -> " & Err.Number & " " & Err.description
@@ -317,6 +323,20 @@ End Function
 ' brise izbor, jer je sve to njegovo stanje.
 '
 ' Greska poziva znaci "nema takvu proceduru", ne "pad" -- isto kao ScrPostoji.
+' Ima li ekran nesacuvanih izmena. Neobavezno -- ekran koji to ne implementira
+' nema sta da izgubi, pa greska poziva znaci False, ne pad. Isti obrazac i isto
+' ime kao modUiPanel.PanelImaNesacuvano; ljuska pita oba pre nego sto zatvori.
+Public Function ScrImaNesacuvano(ByVal kljuc As String) As Boolean
+    Dim m As String, v As Variant
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    On Error Resume Next
+    Err.Clear
+    v = Application.Run(m & ".Scr_ImaNesacuvano")
+    If Err.Number = 0 Then ScrImaNesacuvano = CBool(v)
+    Err.Clear
+End Function
+
 Public Sub ScrDeaktiviraj(ByVal kljuc As String)
     Dim m As String
     On Error Resume Next

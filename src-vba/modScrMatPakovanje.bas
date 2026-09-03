@@ -65,6 +65,10 @@ End Function
 ' Ljuska javlja da se ekran napusta -- editor, GEO panel i izbor odlaze s
 ' njim. Bez ovoga bi otvoren unos preziveo prelazak na drugi ekran (v.
 ' UI_MIGRACIJA_KATALOG 26.25).
+Public Function Scr_ImaNesacuvano() As Boolean
+    Scr_ImaNesacuvano = modMaticniEkran.ImaNesacuvano(EKRAN)
+End Function
+
 Public Sub Scr_Deaktiviraj()
     modMaticniEkran.Deaktiviraj
 End Sub

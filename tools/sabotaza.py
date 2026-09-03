@@ -2411,7 +2411,7 @@ SABOTAZE = {
     # jedan preko drugog, samo preko cele povrsine.
     "panel-mreza-ostaje-ispod": (
         "modOtkupUI.bas",
-        "        frm.Controls(CStr(nmv(i))).Visible = Not mPanelRezim\n",
+        "        frm.Controls(CStr(nmv(i))).Visible = (Not mPanelRezim) And (Not prazno)\n",
         "        frm.Controls(CStr(nmv(i))).Visible = True   ' SABOTAZA: mreza ostaje ispod panela\n",
         "T_UiPanel_UgovorIUstupanje",
         "mreza se NE crta ispod panela",
@@ -2475,8 +2475,8 @@ SABOTAZE = {
     #    poziva -- na vrh, pre provere prava.
     "ljuska-deaktivira-pre-provere": (
         "modOtkupUI.bas",
-        "    If kljuc = mScreen Then Exit Sub\n    ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je \"DOKUMENTI\"\n",
-        "    If kljuc = mScreen Then Exit Sub\n    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n    ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je \"DOKUMENTI\"\n",
+        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n",
+        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n",
         "T_UiPanel_ZivotniCiklusIPrava",
         "odbijen prelazak NE deaktivira ekran na kome jesmo",
     ),
@@ -2488,6 +2488,35 @@ SABOTAZE = {
         "        ' SABOTAZA: mapa prigusenja ostaje od prethodnog operatera\n",
         "T_UiPanel_ZivotniCiklusIPrava",
         "posle primene novih prava zabranjen ekran je prigusen u sidebaru",
+    ),
+    # ------------------- OTKAZANA PRIJAVA I NALOG BEZ PRAVA (v6-ui-203)
+    # Login je radio Logout PRE forme za prijavu, pa je "Otkazi" ostavljao
+    # prazan auth kontekst uz prikaz koji tvrdi da je stari operater tu.
+    "auth-otkaz-ne-vraca-sesiju": (
+        "modAuth.bas",
+        "    If Not Login Then VratiSesiju biUser, biUloga, biIme, biLog\n",
+        "    ' SABOTAZA: otkazana prijava ostavlja prazan kontekst\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "otkazana prijava vraca PRETHODNOG operatera",
+    ),
+    # Prazna radna povrsina koja samo SAKRIJE mrezu i dalje drzi tudje redove:
+    # mView prezivi, RenderGrid ga vrati, GridCell ga cita i bez crtanja.
+    "prazna-povrsina-zadrzava-redove": (
+        "modOtkupUI.bas",
+        "    mView = Empty\n    mViewN = 0\n    mSumKg = 0: mSumVal = 0\n",
+        "    ' SABOTAZA: stanje mreze ostaje, samo se sakriva\n",
+        "T_Auth_OtkazanaPrijavaNeLazePrikaz",
+        "prazna radna povrsina BRISE redove",
+    ),
+    # Kapija u samom piscu naloga. Do v6-ui-203 su se KorDodaj/KorIzmeni/
+    # KorPromeniStatus oslanjali iskljucivo na to da ih svi pozivaoci zovu kroz
+    # modMaticniUnos -- jedan nov pozivalac je zaobilazio branu.
+    "korisnici-pisac-bez-kapije": (
+        "modMaticniKorisnici.bas",
+        "    Brana = modMaticniUnos.MatBranaUpisa(\"KORISNICI\")\n",
+        "    Brana = \"\"   ' SABOTAZA: pisac naloga bez sopstvene kapije\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "pisac naloga odbija unos kad kapija ne pusta",
     ),
     "panel-graditelj-ne-postoji": (
         "modUiPanel.bas",

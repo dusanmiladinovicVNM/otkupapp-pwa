@@ -117,7 +117,7 @@ SCR_UGOVOR = {
     # v6-ui-187/188: dodatna brana ekrana (administracija) i podrazumevani
     # sort aktivne liste. Oba se zovu iskljucivo kasno vezano i kvalifikovano
     # (modUiScreens.ScrDozvoljen / ScrSort), pa vazi isti izuzetak.
-    "scr_dozvoljen", "scr_sort", "scr_deaktiviraj",
+    "scr_dozvoljen", "scr_sort", "scr_deaktiviraj", "scr_imanesacuvano",
 }
 
 

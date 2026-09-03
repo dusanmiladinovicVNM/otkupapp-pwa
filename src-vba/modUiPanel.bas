@@ -26,7 +26,7 @@ Attribute VB_Name = "modUiPanel"
 '=====================================================================
 Option Explicit
 
-Public Const UIPANEL_BUILD As String = "v6-ui-202"
+Public Const UIPANEL_BUILD As String = "v6-ui-203"
 
 Private Const SRC As String = "modUiPanel"
 

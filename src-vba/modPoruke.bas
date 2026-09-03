@@ -417,6 +417,8 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Administracija"
     UpsertRow lo, existing, "UIPAN_ASK_ODBACI", _
         "Panel ima izmene koje nisu sa" & ChrW(269) & "uvane. Odbaciti ih?"
+    UpsertRow lo, existing, "OTKUI_MSG_ODJAVLJEN", _
+        "Prijava nije uspela. Niste prijavljeni -- prijavite se ponovo."
     UpsertRow lo, existing, "OTKUI_SCR_NIJEDAN", _
         "Ovaj nalog nema pravo ni na jedan ekran. Javi se administratoru."
 
