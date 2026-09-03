@@ -35,7 +35,7 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-204"
+Public Const MATUNOS_BUILD As String = "v6-ui-205"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
@@ -612,10 +612,23 @@ Private Function ComboVrednostPostoji(ByVal kljuc As String, ByVal spec As Strin
         ComboVrednostPostoji = False
         Exit Function
     End If
-    If Not IsArray(stavke) Then Exit Function
-    ' PRAZAN spisak prolazi, i to je druga odluka: sekcija u koju se unosi prvi
-    ' zapis nema sta da ponudi, a polje sme da bude prazno.
-    If UBound(stavke) < LBound(stavke) Then Exit Function
+    ' PRAZAN SPISAK ODBIJA. Do v6-ui-205 je prolazio, uz obrazlozenje "prvi
+    ' zapis u sekciji nema sta da ponudi" -- a to obrazlozenje je bilo pogresno:
+    ' ovamo se dolazi SAMO za NEPRAZNU vrednost (v. Proveri, grana cmb). Prazno
+    ' polje je vec proslo granom obaveznosti iznad i nikad ne stigne ovde.
+    '
+    ' Zato prazan spisak znaci "nema cega da bude" -- a ne "ne mogu da proverim".
+    ' GetTableData za nepostojecu ili praznu tabelu vraca Empty BEZ greske, pa
+    ' se taj slucaj ne vidi kroz MatComboGreska: bez ovoga bi nepostojeca
+    ' tblStanice pustala proizvoljan tekst pravo u StanicaID.
+    If Not IsArray(stavke) Then
+        ComboVrednostPostoji = False
+        Exit Function
+    End If
+    If UBound(stavke) < LBound(stavke) Then
+        ComboVrednostPostoji = False
+        Exit Function
+    End If
 
     For i = LBound(stavke) To UBound(stavke)
         If StrComp(Trim$(CStr(stavke(i))), Trim$(v), vbTextCompare) = 0 Then Exit Function

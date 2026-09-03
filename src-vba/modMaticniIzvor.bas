@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-204"
+Public Const MATIZ_BUILD As String = "v6-ui-205"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -83,6 +83,10 @@ Private mComboGreska As String
 ' pri citanju tabele se u harnessu ne moze izazvati drugacije, a bas on je bio
 ' rupa (prazan niz je citan kao "provera je prosla").
 Private mComboPadTest As String
+' Da li podmetnuti pad NOSI gresku. False = prazan spisak BEZ greske, sto je
+' realan slucaj (GetTableData za nepostojecu ili praznu tabelu vraca Empty bez
+' greske) i drugaciji od pukog citanja.
+Private mComboPadSaGreskom As Boolean
 
 '------------------------------------------------------------- SEKCIJE
 ' Sekcije po ekranu. Redosled = redosled u prekidacu lista.
@@ -584,9 +588,13 @@ Public Function MatComboGreska() As String
     MatComboGreska = mComboGreska
 End Function
 
-' Test seam: naredna citanja datog izvora "padaju". Prazan izvor gasi seam.
-Public Sub MatComboPadTest(ByVal izvor As String)
+' Test seam: naredna citanja datog izvora daju PRAZAN spisak. Prazan izvor gasi
+' seam. saGreskom = True dodaje i gresku citanja; False je prazan spisak bez
+' greske (nepostojeca ili prazna tabela). Oba samo suzavaju sta prolazi.
+Public Sub MatComboPadTest(ByVal izvor As String, _
+                           Optional ByVal saGreskom As Boolean = True)
     mComboPadTest = izvor
+    mComboPadSaGreskom = saGreskom
 End Sub
 
 Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) As Variant
@@ -594,7 +602,8 @@ Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) 
     mComboGreska = ""
     If Len(mComboPadTest) > 0 Then
         If StrComp(mComboPadTest, izvor, vbTextCompare) = 0 Then
-            mComboGreska = "test: izvor '" & izvor & "' se ne cita"
+            If mComboPadSaGreskom Then _
+                mComboGreska = "test: izvor '" & izvor & "' se ne cita"
             MatComboStavke = Array()
             Exit Function
         End If

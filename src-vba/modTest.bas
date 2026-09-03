@@ -13374,6 +13374,7 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     Dim f As frmOtkupUI
     Dim sekPosle As String, sekPosleNeuspeha As String
     Dim ekranPosleNeuspeha As String, uspeoPrelazak As Boolean
+    Dim sekBezEkrana As String, ekranBezEkrana As String
 
     Set f = NewOtkupUIForm()
 
@@ -13382,10 +13383,25 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosle = modOtkupUI.AktivnaSekcija()
 
-    ' Nepostojeci ekran: ActivateScreen mora da vrati False, pa sekcija ostaje.
+    ' --- 1) prelazak koji ActivateScreen odbije ---------------------------
     uspeoPrelazak = modOtkupUI.OtkupUI_PrelazakTest("NEPOSTOJECI_EKRAN")
     sekPosleNeuspeha = modOtkupUI.AktivnaSekcija()
     ekranPosleNeuspeha = modOtkupUI.AktivanEkran()
+
+    ' --- 2) SEKCIJA BEZ IJEDNOG DOSTUPNOG EKRANA -------------------------
+    ' Drugi izlaz iz PostaviSekciju, i onaj koji je v6-ui-204 zaboravio:
+    ' EkranZaSekciju vrati prazno, pa se izlazi PRE ActivateScreen-a -- a
+    ' sekcija je vec bila promenjena. Ovo se vozi kroz PRAVI prekidac
+    ' (OtkupUI_SekcijaTest), ne kroz ActivateScreen: bez toga bi sabotaza
+    ' uklanjanja vracanja prezivela test.
+    modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
+    modUiScreens.ScrSekcijuZabraniTest SEK_MATICNI
+    modUiScreens.ScrResetCache
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    sekBezEkrana = modOtkupUI.AktivnaSekcija()
+    ekranBezEkrana = modOtkupUI.AktivanEkran()
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrResetCache
 
     modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
     ReleaseOtkupUIForm f
@@ -13396,6 +13412,11 @@ Private Sub T_Sekcija_OdbijenPrelazakNePomeraSekciju()
              "neuspeo prelazak ne pomera sekciju"
     AssertEq (Len(ekranPosleNeuspeha) > 0), True, _
              "neuspeo prelazak ostavlja ekran na kome jesmo"
+
+    AssertEq sekBezEkrana, SEK_RAD, _
+             "sekcija BEZ dostupnog ekrana se ne otvara -- ostaje prethodna"
+    AssertEq modUiScreens.ScrSekcija(modUiScreens.ScrRowByKey(ekranBezEkrana)), _
+             SEK_RAD, "ekran na sceni je iz sekcije koju zaglavlje prikazuje"
 End Sub
 
 ' ============================================================
@@ -13422,41 +13443,21 @@ End Sub
 ' ============================================================
 Private Sub T_Auth_OtkazanaPrijavaNeLazePrikaz()
     Dim f As frmOtkupUI
-    Dim korPosle As String, uspelo As Boolean
-    Dim prijavljenPosle As Boolean, bioPrijavljen As Boolean
+    Dim nalazOtkaza As String
     Dim redovaPre As Long, redovaPosle As Long
     Dim naslovVidljiv As Boolean, mrezaVidljiva As Boolean
     Dim ekranPosleOporavka As String, mrezaPosleOporavka As Boolean
-    Const TEST_USR As String = "test.operater"
-
     ' --- 1) otkazana prijava vraca sesiju ---------------------------------
-    ' Vozi se kroz PRAVI modAuth.Login. Do v6-ui-204 je test zvao seam koji je
-    ' sam ponavljao redosled iz Login-a -- pa sabotaza nad Login-om nije morala
-    ' da ga obori. To je tacno oblik placebo testa protiv koga postoji pravilo
-    ' o dvosmernom dokazu (.claude/rules/testovi.md par.6).
-    '
-    ' Sesija se POSTAVLJA, jer bez nje tvrdnja poredi prazno sa praznim i
-    ' prolazi i kad vracanja nema. Ako je neko STVARNO prijavljen (AUTH ukljucen
-    ' na masini na kojoj se test vrti), ne dira se nista -- tudja sesija nije
-    ' materijal za test.
-    bioPrijavljen = modAuth.JePrijavljen()
-    If Not bioPrijavljen Then
-        modAuth.AuthSesijaTest TEST_USR, "operater", "Test Operater"
-        modAuth.AuthOdbijPrijavuTest True
-        uspelo = modAuth.Login()
-        modAuth.AuthOdbijPrijavuTest False
-        korPosle = modAuth.GetCurrentUser()
-        prijavljenPosle = modAuth.JePrijavljen()
-        modAuth.AuthSesijaTest "", "", ""      ' vrati na zateceno (odjavljen)
-
-        AssertEq uspelo, False, "odbijena prijava vraca False"
-        AssertEq korPosle, TEST_USR, _
-                 "otkazana prijava vraca PRETHODNOG operatera, ne prazno"
-        AssertEq prijavljenPosle, True, _
-                 "posle otkazivanja je sesija i dalje prijavljena"
-        AssertEq modAuth.JePrijavljen(), False, _
-                 "test za sobom ne ostavlja prijavljenu sesiju"
-    End If
+    ' Merenje je CELO u modAuth (AuthRegresijaOtkaz): ono vozi PRAVI Login i
+    ' samo prijavljuje nalaz. Test namerno NEMA nacin da postavi sesiju --
+    ' v6-ui-204 je za to imao javni setter, a to je bio auth bypass: IsTestMode
+    ' nije brana jer je SetTestMode javan. Ovde se zato meri ISHOD, a sposobnost
+    ' postavljanja sesije ne postoji ni za test.
+    nalazOtkaza = modAuth.AuthRegresijaOtkaz()
+    AssertEq nalazOtkaza, "", _
+             "otkazana prijava vraca PRETHODNOG operatera, ne prazno"
+    AssertEq modAuth.JePrijavljen(), False, _
+             "regresija za sobom ne ostavlja prijavljenu sesiju"
 
     ' --- 2) prazna radna povrsina je STVARNO prazna -----------------------
     Set f = NewOtkupUIForm()
@@ -14712,7 +14713,7 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     Dim noviKorID As String, noviStatus As String
     Dim modul As String, neslaganje As String
     Dim imaBranu As Boolean, kazeRegistar As Boolean
-    Dim stavke As Variant, odgPadIzvora As String
+    Dim stavke As Variant, odgPadIzvora As String, odgPrazanIzvor As String
 
     ' --- 1) combo van liste se ODBIJA -------------------------------------
     Set polja = CreateObject("Scripting.Dictionary")
@@ -14735,17 +14736,26 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
             polja("stanica") = CStr(stavke(LBound(stavke)))
             AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", polja), "", _
                      "postojeca stanica prolazi dok se spisak cita"
-            modMaticniIzvor.MatComboPadTest "@stanice"
+            modMaticniIzvor.MatComboPadTest "@stanice", True
             odgPadIzvora = modMaticniUnos.MatProveriTest("KOOPERANTI", polja)
+            ' PRAZAN spisak BEZ greske je realan slucaj: GetTableData za
+            ' nepostojecu ili praznu tabelu vraca Empty i nikakvu gresku ne
+            ' digne. Do v6-ui-205 je i to prolazilo, pa je proizvoljan tekst
+            ' mogao pravo u StanicaID kad tblStanice nema redova.
+            modMaticniIzvor.MatComboPadTest "@stanice", False
+            odgPrazanIzvor = modMaticniUnos.MatProveriTest("KOOPERANTI", polja)
             modMaticniIzvor.MatComboPadTest ""
             AssertEq (Len(odgPadIzvora) > 0), True, _
                      "kvar pri citanju spiska ODBIJA vrednost, ne propusta je"
+            AssertEq (Len(odgPrazanIzvor) > 0), True, _
+                     "PRAZAN spisak izvora ODBIJA nepraznu vrednost"
             AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", polja), "", _
                      "seam se posle testa gasi"
         End If
     End If
 
-    ' Prazan combo i dalje prolazi -- obaveznost je zasebna provera.
+    ' Polje BEZ combo izvora se po listi ne meri uopste -- to nije isto kao
+    ' combo cija je lista prazna (v. gore).
     Set polja = CreateObject("Scripting.Dictionary")
     polja("tip") = "___nov_tip_ambalaze___"
     polja("tezina") = "0,5"

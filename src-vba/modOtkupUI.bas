@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-204"
+Public Const OTKUI_BUILD   As String = "v6-ui-205"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4208,10 +4208,15 @@ Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
 
     kljuc = EkranZaSekciju(mSekcija)
     If Len(kljuc) = 0 Then
-        ' Sekcija bez ijednog izgradjenog ekrana: oznaka u sidebaru se sklanja
-        ' (nijedna stavka nije aktivna) i kaze se ZASTO. Glavna zona ostaje na
-        ' prethodnom ekranu - prazna zona bi izgledala kao pad.
-        PaintNav frm, ""
+        ' Sekcija bez ijednog DOSTUPNOG ekrana. Zona ostaje na prethodnom
+        ' ekranu -- prazna zona bi izgledala kao pad -- ali onda i SEKCIJA mora
+        ' da ostane na prethodnoj.
+        '
+        ' Do v6-ui-205 se ovde izlazilo BEZ vracanja: zlatno dugme i sidebar su
+        ' pokazivali novu sekciju, a na sceni je bio ekran iz stare. Ista laz
+        ' koju rollback nize vec ispravlja za neuspeo ActivateScreen -- samo je
+        ' ovaj izlaz bio zaboravljen.
+        VratiSekciju frm, staraSekcija
         ShowToast Poruka("OTKUI_SEK_NEMA_EKRANA"), False
         Exit Sub
     End If
@@ -4224,10 +4229,7 @@ Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
     ' menjala PRE toga i ostajala promenjena -- zlatno dugme i sidebar su
     ' pokazivali drugu sekciju od one iz koje je ekran koji se i dalje vidi.
     If Not ActivateScreen(frm, kljuc) Then
-        mSekcija = staraSekcija
-        OsveziDugmeSekcije frm
-        LayoutNav frm
-        PaintNav frm, NavTagFor(AktivnaStavka())
+        VratiSekciju frm, staraSekcija
         Exit Sub
     End If
     PaintNav frm, NavTagFor(AktivnaStavka())
@@ -4235,6 +4237,16 @@ Private Sub PostaviSekciju(frm As Object, ByVal sekcija As String)
 EH:
     LogErr "modOtkupUI.PostaviSekciju"
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Sub
+
+' Vracanje sekcije posle prelaska koji se NIJE desio. Jedno mesto za oba izlaza
+' (nema dostupnog ekrana / ActivateScreen odbio), jer je drugi izlaz bio
+' zaboravljen tacno zato sto je vracanje bilo prepisano u telu.
+Private Sub VratiSekciju(frm As Object, ByVal sekcija As String)
+    mSekcija = sekcija
+    OsveziDugmeSekcije frm
+    LayoutNav frm
+    PaintNav frm, NavTagFor(AktivnaStavka())
 End Sub
 
 Private Sub ZapamtiEkranSekcije(ByVal sekcija As String, ByVal kljuc As String)

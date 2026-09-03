@@ -2524,10 +2524,30 @@ SABOTAZE = {
     # iz koje je ekran koji se i dalje vidi.
     "sekcija-se-ne-vraca-posle-neuspeha": (
         "modOtkupUI.bas",
-        "    If Not ActivateScreen(frm, kljuc) Then\n        mSekcija = staraSekcija\n",
+        "    If Not ActivateScreen(frm, kljuc) Then\n        VratiSekciju frm, staraSekcija\n",
         "    If Not ActivateScreen(frm, kljuc) Then\n        ' SABOTAZA: sekcija ostaje promenjena\n",
         "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
         "neuspeo prelazak ne pomera sekciju",
+    ),
+    # DRUGI izlaz iz PostaviSekciju: sekcija bez ijednog dostupnog ekrana. Taj
+    # je u v6-ui-204 bio zaboravljen, pa je zaglavlje pokazivalo novu sekciju a
+    # na sceni je bio ekran iz stare.
+    "sekcija-bez-ekrana-ostaje-promenjena": (
+        "modOtkupUI.bas",
+        "        VratiSekciju frm, staraSekcija\n        ShowToast Poruka(\"OTKUI_SEK_NEMA_EKRANA\"), False\n",
+        "        ShowToast Poruka(\"OTKUI_SEK_NEMA_EKRANA\"), False   ' SABOTAZA: bez vracanja\n",
+        "T_Sekcija_OdbijenPrelazakNePomeraSekciju",
+        "sekcija BEZ dostupnog ekrana se ne otvara",
+    ),
+    # Prazan spisak izvora nije "ne mogu da proverim" nego "nema cega da bude".
+    # GetTableData za nepostojecu tabelu vraca Empty BEZ greske, pa se taj slucaj
+    # ne vidi kroz MatComboGreska -- i propustao je orphan strani kljuc.
+    "combo-prazan-izvor-prolazi": (
+        "modMaticniUnos.bas",
+        "    If UBound(stavke) < LBound(stavke) Then\n        ComboVrednostPostoji = False\n        Exit Function\n    End If\n",
+        "    If UBound(stavke) < LBound(stavke) Then Exit Function   ' SABOTAZA: prazan spisak prolazi\n",
+        "T_Maticni_KapijeUpisaIZivotniCiklus",
+        "PRAZAN spisak izvora ODBIJA nepraznu vrednost",
     ),
     # Posle naloga bez ijednog prava mScreen je prazan; sledeci operater sa
     # pravima je dobijao samo osvezen sidebar i ostajao pred praznom povrsinom.

@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-204"
+Public Const UISCR_BUILD As String = "v6-ui-205"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -81,6 +81,12 @@ Public ScrLastErr As String
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
+
+' TEST: sekcija u kojoj NIJEDAN ekran nije dostupan. Sme SAMO da zabrani --
+' nema vrednosti kojom se pristup dodaje. Postoji zato sto se to stanje u
+' harnessu ne moze izazvati drugacije (AUTH je iskljucen, pa KorisnikImaPravo
+' vraca True za svakoga), a bas na njemu stoji vracanje sekcije u ljusci.
+Private mSekcijaZabranjenaTest As String
 
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
@@ -259,9 +265,17 @@ End Function
 '
 ' Brana je i dalje samo UI brana; tvrde su u modAdmin/modPodesavanja ulaznim
 ' tackama i tamo ostaju.
+' Test seam: svi ekrani date sekcije su zabranjeni. Prazno gasi seam.
+Public Sub ScrSekcijuZabraniTest(ByVal sekcija As String)
+    mSekcijaZabranjenaTest = sekcija
+End Sub
+
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
     On Error Resume Next
+    If Len(mSekcijaZabranjenaTest) > 0 Then
+        If ScrSekcija(ScrRowByKey(kljuc)) = mSekcijaZabranjenaTest Then Exit Function
+    End If
     obl = ScrField(ScrRowByKey(kljuc), SCR_OBLAST)
     If Len(obl) = 0 Then
         ScrDozvoljen = True

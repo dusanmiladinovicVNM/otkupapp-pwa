@@ -7706,3 +7706,97 @@ zabranjen.
   `registar-brane-se-razisao`.
 - **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
   uslov za merge.
+
+### 26.31 Recenzija `4dd213a`: uklonjen auth bypass koji je uveo prošli krug (`v6-ui-205`)
+
+#### P0 — javni setter auth sesije je bio bypass, i uveo sam ga ja
+
+`v6-ui-204` je za test dodao `modAuth.AuthSesijaTest(usr, uloga, ime)`, koji
+direktno postavlja korisnika, ulogu, ime i `gLoggedIn = True`. Obrazložio sam ga
+sa „tvrdo gejtovan `IsTestMode()`".
+
+**`IsTestMode()` nije brana.** `modTestMode.SetTestMode` je `Public`, pa je bilo
+koji drugi workbook, add-in ili makro mogao:
+
+```vb
+SetTestMode True
+AuthSesijaTest "bilo_ko", ULOGA_ADMIN, "Admin"
+```
+
+i dobiti administratorsku sesiju **bez PIN-a, bez reda u `tblKorisnici` i bez
+ijednog audit traga**. Gejt koji se otvara javnim pozivom nije gejt.
+
+Oba seam-a su uklonjena i zamenjena **jednom regresionom procedurom** koja ne
+prima ništa i ne ostavlja ništa:
+
+`modAuth.AuthRegresijaOtkaz()` sama napravi privremeno stanje, provoza **pravi
+`Login`** (odbijen iznutra, bez forme), izmeri i **odjavi se pre izlaska** — i na
+uspešnom putu i kroz `EH`. Pozivalac dobija samo tekst nalaza. Nema javnog puta
+kojim se sesija postavlja, pa nema ni prozora u kome bi tuđi kod nasledio
+postavljeno stanje. Zatečenu sesiju procedura ne dira.
+
+Napadna površina se ovim **smanjila** u odnosu na `v6-ui-203`: nestao je i javni
+`AuthOdbijPrijavuTest` (koji je mogao samo da onemogući prijavu, ali je i to bio
+javan uticaj na auth tok).
+
+**Pravilo za dalje:** test seam sme da *sužava* (zatvori branu, obori prijavu,
+obori čitanje), nikad da *daje* — a „daje" uključuje i stanje sesije.
+`IsTestMode()` se ne sme računati kao bezbednosna granica.
+
+#### P1 — sekcija bez dostupnog cilja je i dalje lagala
+
+Rollback iz `v6-ui-204` je pokrivao samo `ActivateScreen = False`. Drugi izlaz —
+`EkranZaSekciju` vrati prazno, jer u ciljnoj sekciji nema ni jednog dostupnog
+ekrana — izlazio je **bez vraćanja**: zlatno dugme i sidebar u novoj sekciji, na
+sceni ekran iz stare.
+
+Vraćanje je izdvojeno u `VratiSekciju` i zove se sa **oba** izlaza. Taj je izlaz
+i bio zaboravljen zato što je vraćanje bilo prepisano u telu procedure.
+
+Test 183 je pokrivao samo prvi izlaz (kroz `OtkupUI_PrelazakTest`), pa bi
+sabotaža uklanjanja rollbacka mogla da preživi — recenzent je i to primetio.
+Sada se drugi izlaz vozi kroz **pravi prekidač** (`OtkupUI_SekcijaTest`), uz nov
+seam `modUiScreens.ScrSekcijuZabraniTest` koji može samo da **zabrani**.
+
+#### P1 — prazan combo izvor je i dalje puštao orphan FK
+
+Prošli krug je razdvojio *uhvaćenu grešku* od praznog spiska. Ali realan
+zajednički slučaj ne ide kroz grešku: `GetTableData` za nepostojeću ili praznu
+tabelu vraća `Empty` **bez greške**, `PrikazLista` to pretvara u `Array()`, i
+prazan niz je prolazio.
+
+`ComboVrednostPostoji` se zove **samo za nepraznu vrednost** (`Proveri`, grana
+`cmb`) — prazno polje je već prošlo granom obaveznosti i nikad ne stigne dovde.
+Zato prazan spisak znači **„nema čega da bude"**, ne „ne mogu da proverim", i
+sada odbija. Moje prošlo obrazloženje („prvi zapis u sekciji nema šta da
+ponudi") bilo je pogrešno.
+
+**Provereno je da nijedan šifarnik ne bootstrap-uje sebe kroz svoj combo** — sva
+12 combo polja:
+
+| Sekcija | Combo polja | Rizik od blokade |
+|---|---|---|
+| KOOPERANTI | `@stanice` | nema — stanica mora postojati pre kooperanta |
+| STANICE | `@dane` | nema — statička lista |
+| PARCELE | `@kooperanti`, `@kulture`, `@ggap` | nema — oba šifarnika se pune odvojeno |
+| ARTIKLI | `@tipartikla`, `@jm`, `@kulture` | nema — prve dve statičke |
+| **KULTURE** | samo `@tipambalaze` (opciono) | **nema** — `VrstaVoca`/`SortaVoca` su tekst, ne combo |
+| CENOVNIK | `@vrste`, `@sorte` (opciono), `@klase` | nema — cena za nepostojeću sortu **jeste** orphan FK |
+
+Ključan red je KULTURE: da je vrsta/sorta tamo bila combo nad `@kulture`,
+pooštravanje bi blokiralo unos prve kulture. Nije — pa je promena bezbedna.
+
+#### Verifikacija
+
+- `vba_check`: čisto (209 fajlova, **437** sabotaža); `--self-test` 102/102.
+- Test 182 više ne postavlja sesiju — meri ishod `AuthRegresijaOtkaz` i tvrdi da
+  posle nje **niko nije prijavljen**.
+- Test 183 dobio drugu polovinu: sekcija bez dostupnog ekrana, kroz pravi
+  prekidač; tvrdi i da je ekran na sceni iz sekcije koju zaglavlje prikazuje.
+- Test 179 dobio tvrdnju za prazan izvor bez greške (`MatComboPadTest` sada ima
+  dva režima: sa greškom i bez nje).
+- Tri nove sabotaže: `sekcija-bez-ekrana-ostaje-promenjena`,
+  `combo-prazan-izvor-prolazi`, plus retargetovana
+  `sekcija-se-ne-vraca-posle-neuspeha`.
+- **VBA se u ovoj sesiji ne izvršava.** Excel smoke zamene operatera ostaje
+  uslov za merge.
