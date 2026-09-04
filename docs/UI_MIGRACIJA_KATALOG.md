@@ -8423,8 +8423,22 @@ brisanje". Uslov nije ispunjen, pa se ne briše. Ostalo je **10 formi**.
 `frmFakturisanje.btnSEF_Click`, pa bi brisanje te forme ostavilo SEF bez ulaza.
 Od koraka 4 `frmOtkupAPP.btnInvoicing_Click` vodi pravo na `frmSEF`. Vizuelno je
 isto stanje: `OpenContentFormPublic` je i ranije koristio baš `btnInvoicing` za
-highlight, jer SEF nema svoje dugme u meniju. Sam `OpenContentFormPublic` je
-uklonjen — postojao je samo zbog tog skoka.
+highlight, jer SEF nema svoje dugme u meniju.
+
+> **Ispravka u toku koraka 4.** `OpenContentFormPublic` je najpre obrisan, uz
+> pogrešnu pretpostavku da mu je `frmFakturisanje.btnSEF_Click` bio jedini
+> pozivalac. Nije bio — zove ga i `frmMaticniPodaci.OpenSekcija` (za
+> `frmStammdaten`), a ta forma ostaje do koraka 5. Procedura je vraćena.
+>
+> **Nijedna automatska kapija to nije uhvatila**, i to iz dva poznata razloga:
+> `vba_check` `NEDEFINISAN` ne radi nad `.frm` (`testovi.md` §2), a VBA
+> kompajlira proceduru **tek kad se pozove** — pa je FULL ostao zelen na svih 11
+> suite-ova. Našao ga je **ručni `Debug → Compile`**, tačno ona kapija zbog koje
+> je i zadržana kao obavezna pred merge.
+>
+> Posle vraćanja je pušten i jednokratni presek: svaki poziv oblika `frmX.Clan`
+> u `src-vba/` proveren je protiv javnih članova i kontrola te forme — **nijedan
+> drugi ne visi**, ni od koraka 2 ni od 3.
 
 > Legacy meni je i sam dostupan samo ručno (`Alt+F8` → `frmOtkupAPP.Show`, §27.6
 > tačka 7), pa se dostupnost SEF-a ovim ne menja — menja se samo koje dugme vodi

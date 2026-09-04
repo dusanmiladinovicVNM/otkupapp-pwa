@@ -1059,6 +1059,31 @@ EH:
 End Sub
 
 
+' Otvaranje sadrzaja iz DRUGE forme, ne iz ovog menija.
+'
+' VRACENO u koraku 4: obrisan je sa pretpostavkom da mu je jedini pozivalac bio
+' frmFakturisanje.btnSEF_Click. Nije bio -- zove ga i frmMaticniPodaci.OpenSekcija
+' (za frmStammdaten), a ta forma ostaje do koraka 5. Provera je bila propustena:
+' grepovano je ime FORME, a ne ime ove procedure.
+'
+' Zasto nijedna automatska kapija nije pukla: vba_check NEDEFINISAN ne radi nad
+' .frm (testovi.md par.2), a VBA kompajlira proceduru TEK KAD SE POZOVE -- pa je
+' suite ostala zelena. Nasao ga je rucni Debug > Compile.
+'
+' Highlight nije moguc bez parent nav dugmeta (frmStammdaten ga nema), pa se
+' koristi btnInvoicing, koji je vec aktivan.
+Public Sub OpenContentFormPublic(ByVal contentForm As Object, _
+                                  ByVal sectionTitle As String)
+    On Error GoTo EH
+
+    OpenContentForm contentForm, btnInvoicing, sectionTitle
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.OpenContentFormPublic"
+End Sub
+
 Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal activeBtn As MSForms.CommandButton, _
                             ByVal sectionTitle As String)
