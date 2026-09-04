@@ -17,6 +17,11 @@ Option Explicit
 ' dok se izvrsava). Ako preimenujes modul, promeni i ovu konstantu.
 Private Const SELF_MODULE As String = "modVbaTools"
 
+' Koliko duplikata najvise po jednom prolazu. Iz jednog pokretanja ne prodje
+' proizvoljno mnogo brisanja (od 1506 trazenih ostalo je 125 neobrisanih), pa se
+' radi u serijama -- pusti RemoveDuplicateModules dok ne javi 0 kandidata.
+Private Const MAX_BRISANJA As Long = 200
+
 ' Radni folder sa izvorom (src-vba). Koriste ga ImportAllVBA i alat za duplikate.
 Private Const SRC_FOLDER As String = "C:\Users\Dusan\Documents\GitHub\otkupapp-pwa\src-vba\"
 
@@ -245,6 +250,7 @@ Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
             removed = removed + 1
         End If
         On Error GoTo 0
+        If removed >= MAX_BRISANJA Then Exit For
     Next i
 
     countAfter = proj.VBComponents.count
@@ -253,15 +259,16 @@ Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
     If Len(failed) > 0 Then Debug.Print failed
 
     Dim tail As String
-    ' Broj komponenti u toku makroa po pravilu STOJI: klase i forme se oslobadjaju
-    ' tek kad kod stane, a cesto ni tada (Remove iz istog projekta ume da prodje
-    ' bez greske a da ne obrise nista). Zato je jedina prava provera posle restarta.
-    tail = "Komponenti pre/posle (u toku makroa): " & countBefore & "/" & countAfter & vbCrLf & vbCrLf & _
-           "1) Snimi, zatvori i otvori radnu svesku." & vbCrLf & _
-           "2) Pusti ListDuplicateModules i pogledaj broj." & vbCrLf & _
-           "3) Ako su duplikati i dalje tu, brisanje iz samog projekta ne prolazi." & vbCrLf & _
-           "   Zatvori Excel i pusti spoljni skript (radi iz drugog procesa):" & vbCrLf & vbCrLf & _
-           "   powershell -File tools\clean_vba_duplicates.ps1 -Workbook ""<putanja.xlsm>"" -Apply"
+    ' VBE stablo se ne osvezava posle brisanja -- komponente ostaju iscrtane iako
+    ' ih u projektu nema. Merodavan je broj komponenti, ne Project Explorer.
+    tail = "Komponenti pre/posle: " & countBefore & "/" & countAfter & vbCrLf & _
+           "Ostalo kandidata: " & (dupCount - removed) & vbCrLf & vbCrLf & _
+           "Project Explorer i dalje crta obrisane -- to je zastareo prikaz," & vbCrLf & _
+           "veruj broju. Pusti RemoveDuplicateModules ponovo dok ne javi 0" & vbCrLf & _
+           "kandidata, pa SNIMI svesku (bez snimanja se sve vraca)." & vbCrLf & vbCrLf & _
+           "Ako broj komponenti stoji u mestu kroz dva prolaza, brisanje iznutra" & vbCrLf & _
+           "ne prolazi -- zatvori Excel i pusti:" & vbCrLf & _
+           "  powershell -File tools\clean_vba_duplicates.ps1 -Workbook ""<putanja.xlsm>"" -Apply"
 
     MsgBox "Obrisano (prijavljeno): " & removed & vbCrLf & _
            "Neuspesno: " & failedCount & _
