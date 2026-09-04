@@ -19,7 +19,13 @@ paths:
 integritet + 17-kol staging; parser po banci — `modBankaImportParserPdfToText` =
 Komercijalna, `modBankaProCredit`, `modBankaHalk`, `modBankaAlta` (`190-`,
 fingerprint naslov „IZVOD BR."); svi preko `pdftotext`/Poppler), mapiranje
-`modBankaMapiranje` → `tblNovac`, forma `frmBankaImport`.
+`modBankaMapiranje` → `tblNovac`, ekran `BANKA_UVOZ` (`modScrBankaUvoz`).
+
+**Uvoz pokreće ULAZAK u ekran**, ne dugme: u legacy meniju ga je pokretao klik
+na Banka, a u ljusci je ulazak taj klik (`Scr_Aktiviraj`). Zato je uvoz
+**izričita radnja operatera** — automatska usmeravanja (start, preusmeravanje
+posle zamene operatera) prosleđuju `ActivateScreen … , False` i kuku NE zovu.
+To je ugovor, ne stil: `RELEASE_GATES` §85 i `ARCHITECTURE_REFERENCE` §288/§440.
 
 - **Jaki ključevi** — `poziv na broj` = otkup/faktura, `tekući račun` — od
   v2.38.0/RF-09 iza dugmeta „Mapiraj jake ključeve (N)", **NE** na `_Activate`;
