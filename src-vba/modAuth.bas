@@ -65,11 +65,11 @@ EH:
 End Function
 
 ' ------------------------------------------------------------
-' Prikazi login formu (frmLogin) i vrati True ako je prijava uspela.
-' Validaciju radi frmLogin.btnOK_Click preko modAuth.ValidateLogin; forma
-' postavi Me.LoginOK. Poziva se iz modMain.StartApp (posle AccessGateOrQuit,
-' pre frmSplash). frmLogin se pravi u dizajneru (kontrole: txtUser, txtPin
-' [PasswordChar], lblErr, btnOK, btnCancel) i izvozi sa svojim .frx parom.
+' Prikazi prijavu i vrati True ako je uspela.
+' Prijava je od v6-ui-213 FAZA ljuske (modUiFaze), ne svoja forma: kartica se
+' crta runtime-om preko frmOtkupUI, a validaciju i dalje radi ValidateLogin.
+' Poziva se iz modMain.StartApp (posle AccessGateOrQuit, pre splash faze) i iz
+' ljuske pri zameni operatera (modOtkupUI.DoSwitchOperater).
 ' ------------------------------------------------------------
 Public Function Login() As Boolean
     Dim biUser As String, biUloga As String, biIme As String, biLog As Boolean
@@ -107,12 +107,13 @@ End Function
 ' u harnessu ne moze odigrati -- a sve oko njega (pamcenje sesije, gasenje,
 ' vracanje) je bas ono sto je bilo pokvareno. Sa ovim se test vozi kroz PRAVI
 ' Login, pa sabotaza nad vracanjem sesije stvarno obara tvrdnju.
+'
+' Ljuska je bez modalnosti, pa cekanje pravi modUiFaze rukom (DoEvents dok
+' dugme ne postavi ishod). Ugovor prema pozivaocu je nepromenjen: True samo
+' kad je operater prijavljen.
 Private Function PrikaziPrijavu() As Boolean
-    If mPrijavaOdbijTest Then Exit Function      ' False, bez forme
-    frmLogin.LoginOK = False
-    frmLogin.Show                 ' modal (default)
-    PrikaziPrijavu = frmLogin.LoginOK
-    Unload frmLogin
+    If mPrijavaOdbijTest Then Exit Function      ' False, bez prikaza
+    PrikaziPrijavu = modUiFaze.FazaPrijava()
 End Function
 
 ' Vracanje zapamcene sesije posle NEUSPELE prijave. Odvojeno zato sto se zove
@@ -200,7 +201,7 @@ EH:
 End Function
 
 ' ------------------------------------------------------------
-' Validacija kredencijala (poziva frmLogin posle OK).
+' Validacija kredencijala (zove je kartica prijave posle "Prijavi se").
 ' Na uspeh postavlja globalno stanje (gCurrentUser/uloga) + audit.
 ' ------------------------------------------------------------
 Public Function ValidateLogin(ByVal username As String, ByVal pin As String) As Boolean

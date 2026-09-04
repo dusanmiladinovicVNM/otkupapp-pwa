@@ -95,7 +95,12 @@ Public Sub StartApp()
 
     Application.Visible = False
 
-    frmSplash.Show             ' <-- splash pre main forme
+    ' Splash je od v6-ui-213 FAZA ljuske, ne svoja forma: isti prozor
+    ' (frmOtkupUI) drzi splash, prijavu, mini karticu i aplikaciju. Redosled je
+    ' isti koji je frmSplash imao -- dve sekunde znaka, pa ulaz u ljusku --
+    ' samo sto ulaz sada zove StartApp, a ne forma sama sebe.
+    modUiFaze.FazaBoot 2
+    modOtkupUI.ShowOtkupUI
 
     Call BackupFileOnStart
     Call PurgeOldBackups
@@ -162,7 +167,7 @@ Public Sub StartApp()
     ScheduleStornoWarm
     On Error GoTo 0
 
-    ' frmSplash sam sebe Unloaduje i pokrece ljusku (modOtkupUI.ShowOtkupUI).
+    ' Ljuska je vec na ekranu (splash faza + ShowOtkupUI iznad).
     ' Stari meni (frmOtkupAPP) je obrisan u koraku 7 -- ljuska je jedini ulaz.
     Exit Sub
 

@@ -469,6 +469,8 @@ Public Sub RunAllTests()
     RunOne 182
     RunOne 183
     RunOne 184
+    RunOne 185
+    RunOne 186
     RunOne 124
     RunOne 125
     RunOne 126
@@ -722,6 +724,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 182: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
         Case 183: TestName = "T_Analiza_EkranUIzradi"
         Case 184: TestName = "T_Fak_SefLogJeOpsegFakture"
+        Case 185: TestName = "T_Faza_PrijavaNeGradiLjusku"
+        Case 186: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -914,6 +918,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 182: T_BankaUvoz_PlanPrikazaJeIPlanPisca
         Case 183: T_Analiza_EkranUIzradi
         Case 184: T_Fak_SefLogJeOpsegFakture
+        Case 185: T_Faza_PrijavaNeGradiLjusku
+        Case 186: T_Faza_SplashIMiniSuFazeIsteLjuske
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6233,6 +6239,125 @@ Private Function PoljaEkrana(ByVal rezim As String) As Object
     p("stampajUvek") = False
     Set PoljaEkrana = p
 End Function
+
+' 185. Prijava je FAZA ljuske, i dok traje ljuska NIJE izgradjena.
+'
+' Ovo nije kozmetika nego kapija: gradnja ljuske cita registar ekrana i prava
+' operatera (ScrAktivan, OsveziAlatke), a u trenutku prijave operatera jos nema.
+' Kad bi UserForm_Initialize gradio kao ranije, ljuska bi dobila prava PRAZNE
+' sesije i zapamtila ih -- pa bi posle prijave zavisila od toga da li ih je neko
+' osvezio. Zato faza LOGIN gradnju odlaze.
+'
+' Merenje ide bez ijednog upisa: prazno korisnicko ime ValidateLogin odbija PRE
+' citanja tabele i pre audita, pa se brojac pokusaja izmeri a fixture ostane
+' netaknut.
+Private Sub T_Faza_PrijavaNeGradiLjusku()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim ctlCount As Long, imaLjusku As Boolean, nema As String
+    Dim pokusajiPosle1 As Long, cekaPosle1 As Boolean, greska1 As String
+    Dim cekaPosle3 As Boolean, ishodPosle3 As Boolean, fTaster As Boolean
+    Dim gradiULoginu As Boolean, gradiUApp As Boolean
+    Dim sinkPre As Long, sinkPosle As Long
+
+    gradiUApp = modUiFaze.FazaGradiLjusku()          ' podrazumevana faza je APP
+    modUiFaze.FazaRezimTest FAZA_LOGIN
+    gradiULoginu = modUiFaze.FazaGradiLjusku()
+
+    Set f = New frmOtkupUI
+    ctlCount = f.Controls.count                      ' okida UserForm_Initialize
+    imaLjusku = KontrolaPostoji(f, "zHdr")
+
+    modUiFaze.FazaGradiTest f, FAZA_LOGIN
+    Set z = f.Controls("zFaza")
+    For Each nm In Array("fzlCardB", "fzlCardF", "fzlTop", "fzlAX", "fzlName", _
+                         "fzlTitle", "fzlSub", "fzlCapU", "fzlShUB", "fzlUser", _
+                         "fzlCapP", "fzlShPB", "fzlPin", "fzlErr", "fzlOK", "fzlCancel")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Ispod kartice ljuska ne sluti tastere -- F1 bi inace menjao rezim ekrana
+    ' koji operater jos nema pravo da vidi.
+    fTaster = modUiFaze.FazaTaster(vbKeyF1)
+
+    ' Prazna polja: tri odbijena pokusaja, treci gasi cekanje.
+    modUiFaze.FazaKlik "fzlOK"
+    pokusajiPosle1 = modUiFaze.FazaPokusajiTest()
+    cekaPosle1 = modUiFaze.FazaCekaTest()
+    greska1 = z.Controls("fzlErr").caption
+    modUiFaze.FazaKlik "fzlOK"
+    modUiFaze.FazaKlik "fzlOK"
+    cekaPosle3 = modUiFaze.FazaCekaTest()
+    ishodPosle3 = modUiFaze.FazaIshodTest()
+
+    ' Ljuska se gradi TEK posle prijave, a gradnja resetuje spisak sinkova.
+    ' Ako pri tom obori i sinkove kartice, sledeca zamena operatera visi
+    ' zauvek: petlju cekanja prekida bas klik na dugme te kartice.
+    sinkPre = modOtkupUI.OtkupUI_SinkoviFazeTest()
+    modUiFaze.FazaRezimTest FAZA_APP
+    modOtkupUI.OtkupUI_EnsureShellBuilt
+    sinkPosle = modOtkupUI.OtkupUI_SinkoviFazeTest()
+
+    Unload f
+    modOtkupUI.OtkupUI_Release
+
+    AssertEq gradiUApp, True, "faza APP gradi ljusku"
+    AssertEq gradiULoginu, False, "faza LOGIN NE gradi ljusku"
+    AssertEq imaLjusku, False, "za vreme prijave ljuska nije izgradjena"
+    AssertEq nema, "", "kartica prijave ima sve svoje kontrole"
+    AssertEq fTaster, True, "F1 se ne prosledjuje ljusci ispod prijave"
+    AssertEq pokusajiPosle1, 1, "prvi odbijen pokusaj se broji"
+    AssertEq cekaPosle1, True, "posle prvog pokusaja prijava jos ceka"
+    AssertEq (Len(greska1) > 0), True, "odbijen pokusaj ispise razlog"
+    AssertEq cekaPosle3, False, "treci pokusaj zavrsava prijavu"
+    AssertEq ishodPosle3, False, "tri promasaja ne prijavljuju nikoga"
+    AssertEq (sinkPre > 0), True, "kartica prijave ima ozicene kontrole"
+    AssertEq sinkPosle, sinkPre, "gradnja ljuske ne obara sinkove kartice prijave"
+End Sub
+
+' 186. Splash i "Excel je otvoren" su faze ISTE forme, ne dve svoje forme.
+'
+' Sustina koju test drzi: dok faza drzi prozor, zone ljuske su UGASENE (ne samo
+' prekrivene). Prekriven Frame i dalje prima Tab, pa bi se ispod splash-a ili
+' mini kartice moglo dotaci polje ekrana. Povratak u APP mora te zone da vrati --
+' inace ljuska ostane ziva na ekranu a mrtva na dodir.
+Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, ugasenoUBootu As Boolean, ugasenoUMini As Boolean
+    Dim vraceno As Boolean, fazaSakrivena As Boolean
+    Dim bootVidljiv As Boolean, miniVidljiv As Boolean, miniGradijent As Boolean
+
+    Set f = NewOtkupUIForm()                         ' faza APP -- ljuska se gradi
+
+    modUiFaze.FazaGradiTest f, FAZA_BOOT
+    Set z = f.Controls("zFaza")
+    For Each nm In Array("fzpGr0", "fzpLn", "fzbAX", "fzbName", "fzbVer", _
+                         "fzbDiv", "fzbBy", "fzbDot", "fzbStat", _
+                         "fzmCardB", "fzmBar", "fzmAX", "fzmSub", "fzmBack")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+    bootVidljiv = VidljivaKontrola(z, "fzbStat")
+    ugasenoUBootu = Not f.Controls("zHdr").Enabled
+
+    modUiFaze.FazaGradiTest f, FAZA_MINI
+    miniVidljiv = VidljivaKontrola(z, "fzmBack")
+    miniGradijent = VidljivaKontrola(z, "fzpGr0")
+    ugasenoUMini = Not f.Controls("zHdr").Enabled
+
+    modUiFaze.FazaGradiTest f, FAZA_APP
+    fazaSakrivena = Not z.Visible
+    vraceno = f.Controls("zHdr").Enabled
+
+    ReleaseOtkupUIForm f
+
+    AssertEq nema, "", "splash i mini kartica imaju sve svoje kontrole"
+    AssertEq bootVidljiv, True, "splash pokazuje svoj status"
+    AssertEq miniVidljiv, True, "mini kartica pokazuje dugme za povratak"
+    AssertEq miniGradijent, False, "mini kartica gasi podlogu punog ekrana"
+    AssertEq ugasenoUBootu, True, "ispod splash-a su zone ljuske ugasene"
+    AssertEq ugasenoUMini, True, "ispod mini kartice su zone ljuske ugasene"
+    AssertEq fazaSakrivena, True, "povratak u aplikaciju sklanja fazu"
+    AssertEq vraceno, True, "povratak u aplikaciju vraca zone ljuske"
+End Sub
 
 ' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod
 ' frmOtkup; .Show se NE zove -- GoFullScreen, raspored i punjenje mreze idu tek

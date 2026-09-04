@@ -176,9 +176,9 @@ audit kolone) — mapiranjem po imenu kolone.
 
 ## 11. Tehničke napomene
 
-- **Prijavni prozor (frmLogin)** je posebna forma — stiže uz pun `.xlsm`
-  (ne kroz auto-ažuriranje koda). Za aktivaciju prijave koristi distribuirani
-  `.xlsm` koji je sadrži.
+- **Prijavni prozor** više nije posebna forma nego **ekran ljuske**
+  (`modUiFaze`, od `v6-ui-213`) — pa stiže i kroz auto-ažuriranje koda, kao i
+  ostatak aplikacije. Ranije je tražio pun `.xlsm`.
 - **Audit trag:** kolone `CreatedAt/CreatedBy/ModifiedAt/ModifiedBy` na glavnim
   tabelama — vidi se ko je i kada uneo/izmenio red (`Alt+F8 → EnsureAuditColumns`).
 - **Gde su podaci:** korisnici su u tabeli `tblKorisnici`; prekidač prijave je
