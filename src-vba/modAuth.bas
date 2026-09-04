@@ -348,7 +348,6 @@ Public Function OblastZaFormu(ByVal formName As String) As String
         Case "frmsef":                 OblastZaFormu = OBL_FAKTURISANJE
         Case "frmbankaimport":         OblastZaFormu = OBL_BANKA
         Case "frmmarza":               OblastZaFormu = OBL_MARZA
-        Case "frmmaticnipodaci":       OblastZaFormu = OBL_MATICNI
         Case Else:                     OblastZaFormu = vbNullString
     End Select
 End Function

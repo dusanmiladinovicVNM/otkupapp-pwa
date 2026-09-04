@@ -8100,7 +8100,7 @@ obrisano obara compile cele sveske.
 | 2 **(isporučen, §27.10)** | `frmOtkup` + `frmDokumenta` (+ `.frx`); `modOtkupBlok` i `clsBlokUI` OSTAJU — imaju pozivaoce iz ljuske | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
 | 3 **(isporučen, §27.11)** | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
 | 4 **(delimično isporučen, §27.12)** | `frmFakturisanje`, `frmBankaExportPregled`; `frmSEF` OSTAJE — uslov iz §8.7 nije ispunjen | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
-| 5 | `frmMaticniPodaci` + `frmStammdaten` (+ `clsStmBtn`, `clsLookupMenuBtn` ako ostanu bez pozivaoca) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
+| 5 **(isporučen, §27.13)** | `frmMaticniPodaci` + `frmStammdaten` + `clsStmBtn` + `clsLookupMenuBtn`; `modMaticniLookups` OSTAJE (ljuska ga koristi) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
 | 6 | `frmBankaImport` (kad uvoz i ručno mapiranje žive na ekranu), `frmMarza` (uz `modScrMarza`) | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
 | 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
 
@@ -8469,3 +8469,96 @@ suite-ova.
 
 **Šta ostaje za `frmSEF`:** ekran koji nosi `PrepareResubmit`, batch radnje i
 event log. Do tada forma živi, sada gejtovana kao i sve ostale.
+
+### 27.13 Korak 5 isporučen: Matični (`frmMaticniPodaci` + `frmStammdaten`)
+
+Obe forme, `clsStmBtn` i `clsLookupMenuBtn` su obrisani. **Ostalo je 8 formi.**
+
+`modMaticniLookups` **ostaje** — ljuska ga koristi (`MaticniSekcije` iz
+`modPodesavanja`/`modUiPanel`/`modTest`, `MaticniSekcijeGrupisano` iz `modAdmin`,
+`MaticniMenu_Release` iz `modOtkupUI`/`modSelfUpdate`). Otišla je samo njegova
+legacy polovina — `AttachMaticniMenu`, `HideStaticButtons`, `MaticniMenu_ResetAll`,
+`MaticniMenu_OnHover`, `MaticniMenu_OnClick`, `ButtonActiveByTag` — koja je
+postojala isključivo da izgradi meni u `frmMaticniPodaci`. `clsLookupMenuBtn` je
+instanciran samo u `AttachMaticniMenu`, pa je otišao s njom: uslov „ako ostanu bez
+pozivaoca" iz §27.3 je ovde ispunjen, za razliku od `modOtkupBlok` u koraku 2.
+
+## Poslednji prolaz poređenja sa legacy-jem
+
+`T_Maticni_CitacSlaganjeSaLegacy` je gradio **svežu instancu `frmStammdaten` po
+sekciji** i poredio njen čitač sa čitačem ljuske. Sa brisanjem forme test nema
+šta da poredi i briše se — nema zamene, jer se ne može porediti sa obrisanim.
+Zato je pre brisanja pušten poslednji prolaz i njegov izlaz stoji ovde:
+
+```
+KOOPERANTI=6r STANICE=2r KUPCI=2r VOZACI=2r PARCELE=2r ARTIKLI=4r KULTURE=1r
+CENOVNIK=0r VRSTAGP=0r AMBALAZA=1r PALETE=0r KUTIJE=0r KESE=0r KORISNICI=3r
+|| sekcija=14 redova=23 celija=91 raskorak=[] losihVrednosti=[]
+```
+
+**14 sekcija, 23 reda, 91 ćelija, nula raskoraka.** Uz to ide i granica te
+tvrdnje: **pet sekcija (`CENOVNIK`, `VRSTAGP`, `PALETE`, `KUTIJE`, `KESE`) imalo
+je nula redova u fixture-u**, pa je za njih „slaganje" bilo nad praznim skupom.
+Devet sekcija je stvarno poređeno.
+
+## Nalaz: jedna sabotaža je bila placebo
+
+Brisanje testa ostavilo je dve sabotaže bez tvrdnje. Umesto da ih prepišem
+napamet, izmerio sam šta se stvarno gubi:
+
+- `citac-stanica-po-id-u-ne-po-nazivu` — **jeste prava**: sa njom pada
+  `T_Maticni_CitanjeNeMenjaVrednosti` („Kooperanti imaju izvedenu kolonu naziva
+  stanice"). Preusmerena tamo i dokazana crvenom po imenu.
+- `citac-pusta-prazan-pk` — **ne obara ništa, i nikad nije ni moglo.** Gasi
+  preskakanje reda sa praznim PK-om, a `MatRedovi` vraća **identične brojeve
+  redova sa sabotažom i bez nje** (mereno po svih 14 sekcija): u fixture-u nema
+  nijednog reda sa praznim PK-om. Legacy poređenje je izgledalo kao pokriće samo
+  zato što su **oba** čitača preskakala isti — nepostojeći — red.
+
+Prva reakcija je bila da tvrdnju preselim u `T_Maticni_CitanjeNeMenjaVrednosti`.
+Povučena je: tvrdnja koju nijedna sabotaža ne može da obori **glumi kapiju**, a
+to je tačno ono protiv čega `testovi.md` §6 postoji. Sabotaža je obrisana
+(katalog 439 → 438), a invarijanta je i dalje u kodu — samo se sada zna da nije
+merena.
+
+> Da postane prava kapija treba **red sa praznim PK-om u `make_fixture`**, pa tek
+> onda tvrdnja u `modTest` i sabotaža uz nju. To je zaseban zadatak: dodavanje
+> reda dira brojeve koje druge tvrdnje već koriste.
+
+## Ostalo
+
+Slot 175 (obrisan test) popunjen je najvišim postojećim, kao i u koraku 2:
+**182 → 175** (`T_Auth_OtkazanaPrijavaNeLazePrikaz`). Ukupno **182 → 181**.
+
+`frmOtkupAPP` je izgubio `btnMaticni_Click` i `OpenMaticniForm`;
+`modAuth.OblastZaFormu` unos `frmmaticnipodaci`. Provera prava nije oslabljena —
+sekciju Matični u ljusci čuva `OBL_MATICNI` kroz registar ekrana, a to meri
+`T_Matic_SekcijaTraziPravo`.
+
+**Verifikacija:** `vba_check` čist (197 fajlova, 438 sabotaža); FULL zeleno —
+`RunAllTests` 181/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; `WHO_WRITES.md` nepromenjen; `dokaz.py` crven po imenu za preusmerenu
+sabotažu.
+
+## PAŽNJA: ovaj korak je prvi koji OBARA compile zatečene sveske
+
+Pravilo iz §27.3 kaže da „forma bez referenci se kompajlira i ne smeta". To važi
+samo dok **zaostala komponenta i dalje nalazi sve što ona zove**. U koracima 2–4
+je bilo tako: obrisane forme su zvale module koji postoje, pa je zatečena sveska
+posle `ImportAllVBA` i dalje kompajlirala.
+
+Korak 5 je drugačiji, jer je uz forme obrisana i **procedura koju zaostala klasa
+zove**: `clsLookupMenuBtn.btn_Click` → `MaticniMenu_OnClick`. Ta procedura je
+otišla sa legacy polovinom `modMaticniLookups`, pa zatečena sveska posle uvoza
+javlja **`Sub or Function not defined`** dok se klasa ne ukloni. Isto važi za
+`clsStmBtn` (`frmStammdaten.OnSoftDeleteClick`) i `frmMaticniPodaci`
+(`AttachMaticniMenu`, `OpenContentFormPublic`, `frmStammdaten`).
+
+**To nije kvar u isporuci nego posledica §27.4** — ni self-update ni
+`ImportAllVBA` ne brišu komponente. Ali menja redosled po instalaciji: uklanjanje
+više nije „kad stigneš" nego **deo istog posla**, između uvoza i compile-a.
+
+> Po instalaciji, tim redom: `ImportAllVBA` → `Remove frmMaticniPodaci`,
+> `Remove frmStammdaten`, `Remove clsStmBtn`, `Remove clsLookupMenuBtn` →
+> `Compile` → `Save`. Compile **između** uvoza i uklanjanja će pasti, i to je
+> očekivano.
