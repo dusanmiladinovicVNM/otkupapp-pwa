@@ -54,7 +54,29 @@ Public Const BIM_SALDO_NEKONZISTENTAN As Long = 3
 Private Const ERR_BIM_IMPORT_BASE As Long = vbObjectError + 2700
 Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
 
-Public Sub ImportBankaInbox_TX()
+' Koliko PDF-ova ceka u Inboxu. Postoji da pozivalac moze da odluci da li uvoz
+' UOPSTE ima sta da radi, bez pokretanja transakcije nad praznim skupom.
+Public Function BankaInboxBrojFajlova() As Long
+    Dim ime As String, n As Long
+    On Error GoTo EH
+    EnsureFolderExists GetBankaInboxPath()
+    ime = Dir$(GetBankaInboxPath() & "\*.pdf")
+    Do While ime <> ""
+        n = n + 1
+        ime = Dir$
+    Loop
+    BankaInboxBrojFajlova = n
+    Exit Function
+EH:
+    LogErr "modBankaImport.BankaInboxBrojFajlova"
+End Function
+
+' outUvezeno / outGreska su NEOBAVEZNI i postoje zato sto je ova rutina bila
+' Sub bez ishoda: SaveBankaImportRowsCore je brojao, ali je sve zavrsavalo u
+' Debug.Print. Pozivalac koji ne moze da kaze STA se uvezlo radi tiho knjizenje.
+' Zatecenim pozivaocima se nista ne menja -- argumenti su Optional.
+Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
+                               Optional ByRef outGreska As Long)
     Const SRC As String = "ImportBankaInbox_TX"
 
     Dim tx As clsTransaction
@@ -81,6 +103,9 @@ Public Sub ImportBankaInbox_TX()
 
     tx.CommitTx
     Set tx = Nothing
+
+    outUvezeno = successMoves.count
+    outGreska = errorMoves.count
 
     ExecutePendingBankaFileMoves successMoves
     Exit Sub
@@ -115,7 +140,8 @@ Public Sub ImportBankaInbox()
     ImportBankaInbox_WithDrivePull
 End Sub
 
-Public Sub ImportBankaInbox_WithDrivePull()
+Public Sub ImportBankaInbox_WithDrivePull(Optional ByRef outUvezeno As Long, _
+                                          Optional ByRef outGreska As Long)
     Const SRC As String = "ImportBankaInbox_WithDrivePull"
 
     On Error GoTo EH
@@ -134,7 +160,7 @@ Public Sub ImportBankaInbox_WithDrivePull()
         On Error GoTo EH
     End If
 
-    ImportBankaInbox_TX
+    ImportBankaInbox_TX outUvezeno, outGreska
     Exit Sub
 
 EH:

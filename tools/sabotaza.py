@@ -2722,6 +2722,25 @@ SABOTAZE = {
     # ---- filter storniranih: nula je imala dva znacenja ----
     # Registar mora da PREPOZNA dokument tabelu; prazan registar vraca stari
     # fail-open na sva 183 poziva.
+    # Ljuska ne zove kuku ulaska -- ekran se otvori, ali izvodi se ne uvezu.
+    # Odluka (Scr_Aktiviraj) postoji i dalje; pada PRIMENA, isti oblik kvara kao
+    # prekidac sekcija koji se crtao bez prava (v6-ui-211).
+    "bu-ulazak-ne-zove-kuku": (
+        "modOtkupUI.bas",
+        "    modUiScreens.ScrAktiviraj kljuc\n",
+        "    ' SABOTAZA: ulazak ne zove kuku ekrana\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "ulazak u ekran zove Scr_Aktiviraj",
+    ),
+    # Prazan Inbox pokrece uvoz: transakcija i diranje foldera nizasta, na svaki
+    # povratak na ekran.
+    "bu-prazan-inbox-pokrece-uvoz": (
+        "modScrBankaUvoz.bas",
+        "    If ceka <= 0 Then Exit Sub\n",
+        "    If False Then Exit Sub   ' SABOTAZA: prazan Inbox svejedno uvozi\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "prazan Inbox NE pokrece uvoz",
+    ),
     "storno-registar-prazan": (
         "modSchemaGuard.bas",
         "    TabelaNosiStorno = _\n"

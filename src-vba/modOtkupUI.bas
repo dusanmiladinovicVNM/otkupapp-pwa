@@ -5390,6 +5390,15 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
         ReloadGrid
     End If
     LayoutOtkup frm
+
+    ' Ekran je na sceni -- tek sad sme da uradi ono sto radi PRI ULASKU (Banka
+    ' uvozi izvode). Posle LayoutOtkup-a, da poruka padne na vec nacrtan ekran;
+    ' pod svojim On Error, da pad radnje ne ponisti uspesnu navigaciju.
+    On Error Resume Next
+    modUiScreens.ScrAktiviraj kljuc
+    Err.Clear
+    On Error GoTo 0
+
     ActivateScreen = True
 End Function
 

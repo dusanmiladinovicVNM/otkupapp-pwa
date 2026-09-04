@@ -110,6 +110,11 @@ Private mFill As Boolean            ' punjenje comboa okida Change - v. mPopMute
 ' pretvori ni u jedno od to dvoje. v. CiljUcitan.
 Private mCiljOK As Boolean
 Private mCiljErr As String
+' Koliko je puta ekran USAO na scenu i koliko je puta uvoz STVARNO pokrenut.
+' Dva broja, ne jedan: prvi meri da je kuka ozicena, drugi da prazan Inbox
+' ne pokrece nista. Jedan brojac ne bi razlikovao ta dva kvara.
+Private mAktivacija As Long
+Private mUvozPokusan As Long
 ' Koliko je puta punjenje liste POZVANO. Postoji zato sto se bez forme ne moze
 ' videti da li ga je kapija stvarno zvala: bez kontrole PuniCiljCombo izlazi
 ' odmah, pa uklonjen poziv ne menja nijedan drugi merljiv ishod -- a bas taj
@@ -257,6 +262,49 @@ Public Function Scr_Brojac() As Long
     k = Kpi()
     Scr_Brojac = CLng(k(0))
 End Function
+
+' ULAZAK NA EKRAN UVOZI ONO STO CEKA. U legacy meniju je klik na Banka radio
+' tacno to: ImportBankaInbox_WithDrivePull pa otvaranje mapiranja. Ljuska nema
+' to dugme -- ulazak u ekran JESTE taj klik, pa se ponasanje ne gubi.
+'
+' Prazan Inbox ne pokrece nista: bez ove provere bi svaki povratak na ekran
+' otvarao transakciju i dirao foldere nizasta.
+'
+' PRAVO se ne proverava ovde. Do Scr_Aktiviraj se dolazi samo kroz
+' ActivateScreen, koji ekran pusta tek posle ScrDozvoljen (OBL_BANKA) -- ista
+' brana koju je legacy imao u btnBanka_Click, samo jedno mesto iznad.
+'
+' Uvoz je BEST-EFFORT za navigaciju: pad se prijavljuje i loguje, ali ekran
+' svejedno ostaje otvoren nad onim sto je vec uvezeno -- isto sto je legacy
+' radio svojim EH-om ('Mapiranje ce biti otvoreno za postojece stavke').
+Public Sub Scr_Aktiviraj()
+    Dim ceka As Long, uvezeno As Long, greska As String, palo As Long
+
+    mAktivacija = mAktivacija + 1
+
+    On Error GoTo EH
+    ceka = modBankaImport.BankaInboxBrojFajlova()
+    If ceka <= 0 Then Exit Sub
+
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_UVOZIM"), False
+    DoEvents
+
+    mUvozPokusan = mUvozPokusan + 1
+    modBankaImport.ImportBankaInbox_WithDrivePull uvezeno, palo
+    Scr_ResetCache
+
+    greska = Poruka("OTKUI_MSG_BU_UVEZENO") & " " & CStr(uvezeno)
+    If palo > 0 Then greska = greska & ", " & Poruka("OTKUI_MSG_BU_UVOZ_PALO") & _
+                              " " & CStr(palo)
+    modOtkupUI.ShowToast greska, (palo > 0)
+    Exit Sub
+
+EH:
+    LogErr "modScrBankaUvoz.Scr_Aktiviraj"
+    On Error Resume Next
+    Scr_ResetCache
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_UVOZ"), True
+End Sub
 
 Public Sub Scr_ResetCache()
     ' mKpi se NE brise, samo proglasava zastarelim. Ako sledece citanje pukne,
@@ -1759,6 +1807,19 @@ Public Function Scr_BuCiljStanjeTest(ByVal ucitane As Boolean) As Boolean
     Scr_BuCiljStanjeTest = CiljUcitan(greska)
 End Function
 
+' Koliko je puta ekran usao na scenu. Jedini nacin da se izmeri da ljuska
+' kuku STVARNO zove -- odluka je i pre postojala, primena je ono sto pada.
+Public Function Scr_BuAktivacijaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_BuAktivacijaTest = mAktivacija
+End Function
+
+' Koliko je puta uvoz STVARNO pokrenut. Nad praznim Inboxom mora ostati 0.
+Public Function Scr_BuUvozPokusanTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_BuUvozPokusanTest = mUvozPokusan
+End Function
+
 Public Sub Scr_BuTestReset()
     If Not IsTestMode() Then Exit Sub
     mLista = BU_STAVKE
@@ -1769,5 +1830,7 @@ Public Sub Scr_BuTestReset()
     mCiljOK = True
     mCiljErr = ""
     mCiljPunjenja = 0
+    mAktivacija = 0
+    mUvozPokusan = 0
     Scr_ResetCache
 End Sub

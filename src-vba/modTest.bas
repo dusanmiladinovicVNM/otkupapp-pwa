@@ -436,6 +436,7 @@ Public Sub RunAllTests()
     RunOne 179
     RunOne 180
     RunOne 181
+    RunOne 182
     RunOne 124
     RunOne 125
     RunOne 126
@@ -620,6 +621,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
         Case 119: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
         Case 120: TestName = "T_Matic_SekcijaTraziPravo"
+        Case 182: TestName = "T_BankaUvoz_UlazakUvoziIzvode"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
@@ -811,6 +813,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 118: T_MrezaPilula_PozadinaSeCisti
         Case 119: T_Ljuska_SuzenaPravaStartIAlatke
         Case 120: T_Matic_SekcijaTraziPravo
+        Case 182: T_BankaUvoz_UlazakUvoziIzvode
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
@@ -7600,6 +7603,43 @@ End Function
 ' nego se TIHO odseca -- operater vidi ekran kome fali dugme, bez ijedne
 ' poruke. Lista stavki stoji TACNO na granici MAX_ACT, pa je ovo jedino mesto
 ' koje bi sestu radnju primetilo pre nego sto nestane.
+' ULAZAK U EKRAN BANKA UVOZI IZVODE -- kao klik na Banka u legacy meniju
+' (frmOtkupAPP.btnBanka_Click: ImportBankaInbox_WithDrivePull pa mapiranje).
+' Ljuska nema uvozno dugme; ulazak JESTE taj klik.
+'
+' Mere se DVE stvari, i to su dva razlicita kvara:
+'   1) da ljuska kuku STVARNO zove (ActivateScreen -> ScrAktiviraj). Odluka je
+'      postojala i pre, ali dok je niko ne primeni ekran ne uvozi nista --
+'      isti oblik kvara kao prekidac sekcija koji se crtao bez prava.
+'   2) da PRAZAN Inbox ne pokrece uvoz. Bez toga bi svaki povratak na ekran
+'      otvarao transakciju i dirao foldere nizasta.
+'
+' Sam uvoz se ne vozi: on pise u tabele i pomera fajlove po disku, a ova suite
+' je nemutirajuca. Fixture nema Inbox folder, pa je BankaInboxBrojFajlova 0 --
+' to je i preduslov koji se tvrdi, da test ne bi merio prazan skup slucajno.
+Private Sub T_BankaUvoz_UlazakUvoziIzvode()
+    Dim f As frmOtkupUI
+    Dim presao As Boolean, aktivacija As Long, pokusan As Long, ceka As Long
+
+    modScrBankaUvoz.Scr_BuTestReset
+    ceka = modBankaImport.BankaInboxBrojFajlova()
+
+    Set f = NewOtkupUIForm()
+    presao = modOtkupUI.OtkupUI_PrelazakTest("BANKA_UVOZ")
+    aktivacija = modScrBankaUvoz.Scr_BuAktivacijaTest()
+    pokusan = modScrBankaUvoz.Scr_BuUvozPokusanTest()
+
+    AssertEq presao, True, "preduslov: prelazak na Uvoz izvoda uspeva"
+    AssertEq ceka, 0, "preduslov: fixture nema izvoda u Inboxu"
+
+    ' NAJVAZNIJE: kuka je ozicena. Bez ovoga ekran ne uvozi nista, a nijedna
+    ' druga tvrdnja to ne bi primetila.
+    AssertEq (aktivacija > 0), True, _
+             "ulazak u ekran zove Scr_Aktiviraj (ljuska mora da pozove kuku)"
+    AssertEq pokusan, 0, _
+             "prazan Inbox NE pokrece uvoz -- nema transakcije nizasta"
+End Sub
+
 Private Sub T_BankaUvoz_UgovorEkrana()
     Dim liste As Variant, i As Long, kljucevi As String
     Dim kljuc As String, spec As String, d As Variant, kolone As Variant

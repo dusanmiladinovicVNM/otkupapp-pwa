@@ -118,6 +118,8 @@ SCR_UGOVOR = {
     # sort aktivne liste. Oba se zovu iskljucivo kasno vezano i kvalifikovano
     # (modUiScreens.ScrDozvoljen / ScrSort), pa vazi isti izuzetak.
     "scr_dozvoljen", "scr_sort", "scr_deaktiviraj", "scr_imanesacuvano",
+    # v6-ui-212: ulazak na scenu (Banka uvozi izvode pri ulasku).
+    "scr_aktiviraj",
 }
 
 
