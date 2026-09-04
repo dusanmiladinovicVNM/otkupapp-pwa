@@ -654,6 +654,20 @@ Private Function BuSmeMapiranjeCilja() As Boolean
     BuSmeMapiranjeCilja = mCiljOK
 End Function
 
+' Da li je cilj STVARNO izabran, ili je prazan pa dolazi iz poziva na broj.
+'
+' Razlika nosi novac: prazan izbor je legitimna grana (blok se izvodi iz poziva
+' na broj, a avans je tada namerno ponasanje), dok IZABRAN blok znaci da je
+' operater rekao KOJI dug placa -- pa writer nad njim drzi strozu kapiju.
+' Ko to izjednaci, prijavi writeru izbor kog nije bilo.
+'
+' Izdvojeno iz poziva zato sto se drugacije ne moze izmeriti: kao inline izraz
+' u sedmoargumentnom pozivu tvrdnja nije imala gde da se zakaci, pa je sabotaza
+' koja ga izjednaci sa True prolazila kroz CELU suite (izmereno, 181/0).
+Private Function CiljJeIzabran(ByVal izabranCilj As String) As Boolean
+    CiljJeIzabran = (Len(Trim$(izabranCilj)) > 0)
+End Function
+
 ' Puni listu cilja i kaze sme li se dalje. Obe rucne rute prolaze kroz OVO --
 ' dve kopije istog uslova bi se razisle, a prva je vec bila samo kod kupca.
 Private Function CiljUcitan(ByRef outPoruka As String) As Boolean
@@ -731,7 +745,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' punjena, a writer po stanju u trenutku upisa.
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
             bimID, kooperantID, blok, True, potvrdjeno, scope, _
-            (Len(Trim$(izabranBlok)) > 0))
+            CiljJeIzabran(izabranBlok))
 
     If n <= 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
@@ -1747,6 +1761,13 @@ End Function
 Public Function Scr_BuCiljPunjenoTest() As Long
     If Not IsTestMode() Then Exit Function
     Scr_BuCiljPunjenoTest = mCiljPunjenja
+End Function
+
+' Ide kroz ISTU funkciju koju zove RucnoKooperant -- seam koji bi sam racunao
+' isti izraz merio bi svoju kopiju, pa bi sabotaza nad produkcijom prosla.
+Public Function Scr_BuCiljIzabranTest(ByVal izabranCilj As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_BuCiljIzabranTest = CiljJeIzabran(izabranCilj)
 End Function
 
 Public Function Scr_BuCiljStanjeTest(ByVal ucitane As Boolean) As Boolean

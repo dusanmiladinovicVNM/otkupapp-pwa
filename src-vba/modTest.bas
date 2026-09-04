@@ -8234,6 +8234,17 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq modScrBankaUvoz.Scr_BuCiljStanjeTest(True), True, _
              "uredno procitana lista pusta mapiranje"
 
+    ' PRAZAN IZBOR NIJE IZBOR. Poslednji argument writera kaze da je blok
+    ' IZABRAN, pa writer nad njim drzi strozu kapiju. Prazno znaci da blok
+    ' dolazi iz poziva na broj -- tamo je avans namerno ponasanje. Ko to
+    ' izjednaci, prijavi writeru izbor kog nije bilo.
+    AssertEq modScrBankaUvoz.Scr_BuCiljIzabranTest(""), False, _
+             "prazan izbor NIJE izbor -- tada cilj dolazi iz poziva na broj"
+    AssertEq modScrBankaUvoz.Scr_BuCiljIzabranTest("   "), False, _
+             "ni sama beline nisu izbor"
+    AssertEq modScrBankaUvoz.Scr_BuCiljIzabranTest("BLK-1"), True, _
+             "izabran cilj se prijavljuje kao izbor"
+
     ' NEUSPEH SE NE PAMTI. Dve grane greske javljaju razlicito: blokovi je dizu
     ' (pa EH obrise kes), a fakture je vracaju kroz zastavicu i punjenje mirno
     ' stigne do kraja. Da se i tada kesira, radnja bi ostala tacno blokirana --

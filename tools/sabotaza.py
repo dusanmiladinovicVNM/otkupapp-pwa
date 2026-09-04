@@ -2096,6 +2096,23 @@ SABOTAZE = {
     # Prva sabotaza nad .frm fajlom. Pravila ove forme odlucuju hoce li uplata
     # postati avans, a do sada su bila proverljiva samo rukom -- pa je ista greska
     # tri puta prosla kroz review umesto kroz suite.
+    # LJUSKA, ista dva pravila koja legacy forma drzi za sebe. Do sada su na
+    # ekranu stajala BEZ ijedne sabotaze: prvo je imalo tvrdnju ali ne i unos u
+    # katalogu, drugo ni tvrdnju -- sabotaza nad njim je prolazila 181/0.
+    "bu-kapija-cilja-uvek-pusta": (
+        "modScrBankaUvoz.bas",
+        "    BuSmeMapiranjeCilja = mCiljOK\n",
+        "    BuSmeMapiranjeCilja = True   ' SABOTAZA: kapija uvek pusta\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "pad ucitavanja ZAUSTAVLJA rucno mapiranje",
+    ),
+    "bu-prazan-izbor-je-izbor": (
+        "modScrBankaUvoz.bas",
+        "    CiljJeIzabran = (Len(Trim$(izabranCilj)) > 0)\n",
+        "    CiljJeIzabran = True   ' SABOTAZA: prazan izbor je izbor\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "prazan izbor NIJE izbor -- tada cilj dolazi iz poziva na broj",
+    ),
     "banka-legacy-pad-liste-prolazi": (
         "frmBankaImport.frm",
         "    If Not m_BlokoviLoadOk Then\n",
