@@ -1,72 +1,78 @@
 ---
 paths:
-  - "src-vba/frmOtkup.frm"
   - "src-vba/modOtkup.bas"
   - "src-vba/modOtkupBlok.bas"
-  - "src-vba/frmDokumenta.frm"
+  - "src-vba/modOtkupUnos.bas"
   - "src-vba/modDokumenta.bas"
+  - "src-vba/modDokUnos.bas"
   - "src-vba/modDokumentInvariant.bas"
+  - "src-vba/modScrDokumenti.bas"
 ---
-
-<!-- `frmOtkup.frm` i `frmDokumenta.frm` u `paths` odlaze SA formama (korak 2,
-     `docs/UI_MIGRACIJA_KATALOG.md` §27.3). Do tada moraju da stoje: agent koji
-     dira legacy formu mora da vidi §1–§3. -->
 
 # Otkup i dokumenta
 
 > Najaktivnija oblast projekta. Do sada je bila jedini red u CLAUDE.md §3 bez
 > svog rules fajla — a baš tu su živela tri buga zbog kojih postoji `modTest`.
 
-## 1) `ClearOtkupFields` ima ugovor, ne „čisti formu"
+## 1) `ClearForm` ima ugovor, ne „čisti ekran"
 
-`frmOtkup.ClearOtkupFields` se izvršava posle **svakog** snimanja otkupnog lista
-(`btnUnos_Click`, po uspehu `SaveOtkupMulti_TX`). Šta se briše a šta ne — nije
-stvar ukusa, nego radnog toka operatera na terenu:
+`modOtkupUI.ClearForm` se izvršava posle **svakog** snimanja otkupnog lista
+(`modScrDokumenti.Scr_Save`, po uspehu `SaveOtkupMulti_TX`). Šta se briše a šta
+ne — nije stvar ukusa, nego radnog toka operatera na terenu:
 
 | Polje | Posle snimanja | Zašto |
 |---|---|---|
-| `txtDatum` | **ostaje** | sledeći blok ide u niz istog datuma otpremnice |
-| `txtBrojZbirne` | **ostaje** | sledeći blok iste otpremnice nosi istu zbirnu |
-| `cmbKooperant` | **briše se** | sledeći unos je nov partner |
+| `fgDatum` | **ostaje** | sledeći blok ide u niz istog datuma otpremnice |
+| `fgBrZbir` | **ostaje** | sledeći blok iste otpremnice nosi istu zbirnu |
+| `cbKupac` | **briše se** | sledeći unos je nov partner |
+| `fgKgI`, `fgKolAmb` | **brišu se** | podaci bloka odlaze sa partnerom |
 
-Sva tri su pokrivena testovima (`modTest`), i sva tri su dokazana u oba smera —
-vrati brisanje datuma ili zbirne, odnosno ukloni brisanje kooperanta, i pukne
-tačno taj test po imenu. **Ako menjaš ovu rutinu, prvo pročitaj šta test tvrdi.**
+Bez aktivne otpremnice datum se **vraća na danas** — prazno ili staro polje bi
+bila greška koju operater ispravlja pri svakom novom dokumentu. To je jedina
+razlika u odnosu na legacy, koji datum uopšte nije dirao.
 
-Ta rutina se dodatno oslanja na to da je forma živa: zove `AutoFillCenaOtkup`
-(vraća auto-cenu za i dalje izabran proizvod) i `RefreshBrojDokumentaSuggestion`.
-Obe su pod `On Error Resume Next` odnosno tolerantne na prazan kontekst.
+Sve to meri `T_ClearForm_Ugovor` u `modTest`, i dokazano je u oba smera — vrati
+brisanje datuma ili zbirne, odnosno ukloni brisanje partnera, i pukne tačno taj
+test po imenu. **Ako menjaš ovu rutinu, prvo pročitaj šta test tvrdi.**
 
-## 2) Test seam u formi — dve linije koje se ne diraju
+> Do koraka 2 je isti ugovor nosio `frmOtkup.ClearOtkupFields`, sa poljima
+> `txtDatum` / `txtBrojZbirne` / `cmbKooperant`. Forma je obrisana
+> (`docs/UI_MIGRACIJA_KATALOG.md` §27.10); ugovor je ostao.
 
-- `ClearOtkupFields` je **`Public`**, ne `Private`. To je namerno: `modTest` je
-  zove direktno, bez vožnje celog `btnUnos_Click` (koji traži stanica-lock, PDF
-  izlaz i auto-lanac hladnjače).
-- `cmbKooperant.SetFocus` je iza **`If Not IsTestMode()`**. Forma koja nije
-  `.Show`-ovana ne može da primi fokus; bez garda bi svi testovi padali na fokusu
-  umesto na ponašanju. U produkciji je `IsTestMode()` uvek `False`.
+## 2) Test seam-ovi žive u ljusci, ne više u formi
 
-Obe linije nose komentar u samoj formi. „Čišćenje" koje ih vrati u prethodno
-stanje obara test suite — i to je jedini način da se to primeti.
+Dve linije koje su ovde stajale (`ClearOtkupFields` kao `Public`, `SetFocus` iza
+`IsTestMode`) otišle su sa `frmOtkup` u koraku 2. Ljuska nosi svoje, i one su
+popisane na jednom mestu — `.claude/rules/testovi.md` §4: `ClearForm` /
+`ParseDatum` / `ParcelaID` su `Public`, tri `SetFocus`-a su iza `IsTestMode`, a
+`modScrDokumenti.Scr_OtpTestSet` je tvrdo gejtovan.
 
-## 3) Kontekst otpremnice se resetuje na tačno dva mesta
+Pravilo je isto kao i pre: **„čišćenje" koje ih vrati u prethodno stanje obara
+suite — i to je jedini način da se to primeti.**
 
-Datum i broj zbirne se nasleđuju sa izabrane otpremnice (panel „Otkupni
-blokovi"). Vraćaju se na „danas / prazno" samo kad se taj kontekst stvarno
-napušta:
+## 3) Kontekst otpremnice se napušta na jednom mestu
 
-- `ResetDatumKontekst` (`Public`, zove `modOtkupBlok` kad se blokovi sakriju)
-- promena otkupnog mesta **van** konteksta otpremnice, uz `OtkupBlok_IsPrefilling`
-  gard — prefill sam postavlja stanicu i NE sme da se resetuje
+Datum i broj zbirne se nasleđuju sa izabrane otpremnice. Vraćaju se na „danas /
+prazno" tek kad se taj kontekst stvarno napusti — u ljusci je to
+`modScrDokumenti.Scr_OtpOtkazi` (prazni `mOtpID` / `mOtpBroj` i vraća listu na
+otpremnice), a `ClearForm` posle njega vraća datum na danas (§1).
 
-Ako dodaješ treće mesto, pitanje nije „da li da očistim polja" nego „da li se
-kontekst otpremnice zaista napušta".
+Legacy par je bio `OtkupBlok_ClearActiveOtp` + `frmOtkup.ResetDatumKontekst`.
+Prvi postoji i dalje; drugog nema, ali ga `modOtkupBlok` i dalje zove
+(`mForm.ResetDatumKontekst`). **To je mrtav kod, ne kvar:** `mForm` postavlja
+`AttachOtkupBlokPanel`, a on posle koraka 2 nema nijednog pozivaoca — jedini je
+bio `frmOtkup.UserForm_Initialize`. `mForm As Object` znači da poziv ne obara
+compile. Čišćenje te polovine `modOtkupBlok`-a je zasebna odluka
+(`docs/UI_MIGRACIJA_KATALOG.md` §27.10).
+
+Ako dodaješ mesto koje resetuje kontekst, pitanje nije „da li da očistim polja"
+nego „da li se kontekst otpremnice zaista napušta".
 
 ## 4) Snimanje ide kroz transakciju, ne kroz formu
 
-`SaveOtkupMulti_TX` je jedina ulazna tačka za upis otkupa. `btnUnos_Click` iznad
-nje radi samo validaciju i prikupljanje vrednosti; ispod nje idu best-effort
-koraci koji **ne smeju** da obore potvrdu snimanja (`OutputOtkupniList`,
+`SaveOtkupMulti_TX` je jedina ulazna tačka za upis otkupa. `Scr_Save` →
+`modOtkupUnos` iznad nje radi validaciju i prikupljanje vrednosti; ispod nje
+idu best-effort koraci koji **ne smeju** da obore potvrdu snimanja (`OutputOtkupniList`,
 `AutoChainHladnjaca`, prevezivanje paleta) — svi su pod `On Error Resume Next`.
 
 Ne dodavati upis u tabele mimo `SaveOtkupMulti_TX`, i ne premeštati best-effort
@@ -80,7 +86,9 @@ Otkup i dokumenta su preneti na jednu runtime formu (`frmOtkupUI` + ljuska
 Zato `frmOtkup` i `frmDokumenta` više ne stoje „paralelno dok oba sistema ne
 budu potpuna" nego se **penzionišu po koracima**: `docs/UI_MIGRACIJA_KATALOG.md`
 §27 nosi inventar formi (§27.2), redosled uklanjanja (§27.3) i verifikaciju po
-koraku (§27.5). Obe odlaze u **koraku 2**.
+koraku (§27.5). Obe su otišle u **koraku 2** (§27.10) — ovaj fajl od tada
+opisuje ljusku, a legacy se pominje samo tamo gde objašnjava zašto je nešto
+ovakvo kakvo jeste.
 
 Redosled nije stvar ukusa: **prvo se seku reference, pa forma.** Forma bez
 referenci se kompajlira i ne smeta; forma koja referencira obrisano obara

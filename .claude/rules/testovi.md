@@ -2,7 +2,6 @@
 paths:
   - "src-vba/mod*Tests.bas"
   - "src-vba/modTest*.bas"
-  - "src-vba/frmOtkup.frm"
   - "src-vba/modOtkupUI.bas"
   - "src-vba/modScrDokumenti.bas"
   - "tools/vba_check.py"
@@ -13,13 +12,13 @@ paths:
   - "tests/golden/*"
 ---
 
-<!-- frmOtkup.frm / modOtkupUI.bas / modScrDokumenti.bas su u paths namerno: u
-     njima su test seam-ovi (§4). Bez ovoga agent koji menja formu ne bi znao da
-     postoje.
+<!-- modOtkupUI.bas / modScrDokumenti.bas su u paths namerno: u njima su test
+     seam-ovi (§4). Bez ovoga agent koji ih menja ne bi znao da postoje.
+     frmOtkup.frm je otisao odavde sa formom (korak 2, §27.10).
 
-     `frmOtkup.frm` odlazi SA formom (korak 2, `docs/UI_MIGRACIJA_KATALOG.md`
-     §27.3) i sa njim njegova dva seam-a. Seam-ovi ljuske (`modOtkupUI`,
-     `modScrDokumenti`) OSTAJU — oni nisu prelazni. -->
+     tests/golden/* trenutno ne pogadja nijedan fajl: jedini golden je bio snimak
+     kontrola te forme. Mehanizam (AssertSnapshot / DumpKontrole u modTest) ostaje,
+     pa unos stoji za sledeci golden. -->
 
 # Verifikacija — politika
 
@@ -59,6 +58,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `NEDEFINISAN` | poziv procedure koja nigde nije definisana |
 | `ARNOST` | poziv sa pogrešnim brojem argumenata |
 | `ZAKLONJENO` | lokalni skalar zvan sa zagradom → „Expected array" |
+| `KRAJ_REDA` | LF umesto CRLF u VBA izvoru → `Import` ne prepozna formu |
 
 `NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
 naredbe) — lažan nalaz je gori od propuštenog. **Poziv u izrazu (`x = Foo(1)`)
@@ -90,6 +90,16 @@ Izostavljeni su `Variant` (može nositi niz), nizovi, objekti (default member) i
 najvažnije — sadržaj string literala i komentara: 14 od prvih 20 nalaza ovog
 obrasca bilo je ime unutar teksta, ista klasa lažnih nalaza zbog koje je širenje
 `ARNOST`-a odbijeno.
+
+**`KRAJ_REDA` gleda BAJTOVE, ne dekodirane linije** — do ostalih provera je kraj
+reda već izgubljen. `.frm` sa LF krajem reda `VBComponents.Import` **ne prepozna
+kao formu**: uveze je kao standardni modul sa zaglavljem (`VERSION 5.00`,
+`Begin {C62A...}`) kao **kodom**. Taj modul se ne kompajlira, a modul koji se ne
+kompajlira obara ceo projekat — pa svaki makro javi `Cannot run the macro`, ne
+compile grešku. Jedan `eol=lf` u `.gitattributes` je tako oborio svih 11
+suite-ova dok je `vba_check` ostao zelen. Kraj reda sada drži `.gitattributes`
+(`eol=crlf` za `.frm`/`.bas`/`.cls`/`.doccls`), a ova provera je kapija koja radi
+**i u CI-ju, bez Excela**.
 
 **Dve provere duplikata nisu ista provera.** `DUPLIKAT` gleda globalni imenski
 prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je
@@ -133,10 +143,8 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 
 ## 4) Test seam-ovi koje produkcioni kod nosi
 
-Ako menjaš `frmOtkup`, `modOtkupUI` ili `modScrDokumenti`, znaj da ovo postoji i
-zašto — inače ćeš ih „počistiti". Seam-ovi ispod su **ljuskini i ostaju**;
-legacy `frmOtkup` ima svoja dva (`.claude/rules/otkup-i-dokumenta.md` §2) i ona
-odlaze sa formom u koraku 2 (`docs/UI_MIGRACIJA_KATALOG.md` §27.3):
+Ako menjaš `modOtkupUI` ili `modScrDokumenti`, znaj da ovo postoji i zašto —
+inače ćeš ih „počistiti":
 
 - `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
   zove direktno, bez vožnje celog upisa.
@@ -156,7 +164,9 @@ Modul unosa proverava nad **snimkom iz trenutka kad je lista punjena**. Između
 punjenja i potvrde stanje se može promeniti — drugi unos, uvoz izvoda, drugi
 pozivalac istog writer-a — pa bi prošla prevelika isplata. Zato kritična
 poslovna kapija (vlasništvo + aktivnost + **preračunat** preostali iznos) stoji
-i u writer-u, koji se zove i iz legacy `frmDokumenta`, bez ijedne UI provere.
+i u writer-u. Razlog je prvo bio legacy `frmDokumenta`, koji je writer zvao bez
+ijedne UI provere; forma je otišla u koraku 2, ali pravilo ostaje — writer i
+dalje ima pozivaoce mimo ekrana (uvoz izvoda, storno, poslovne suite).
 
 Obrazac je zajednički za `ApplyAvansToOtkup`, `IsplataBlokProblem` i
 `UplataFakturaProblem`: **jedna implementacija, dva pozivaoca** — core je diže

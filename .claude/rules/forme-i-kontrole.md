@@ -38,7 +38,7 @@ formu bez `.frx` para.
 `clsLookupMenuBtn`/`modMaticniLookups`.
 
 Za form-hostovane runtime kontrole koristi **generički `clsUiSink`** (`WireSink`
-+ `UiSinkEvent` dispatcher; vidi `frmDokumenta`/`frmOtkupAPP`).
++ `UiSinkEvent` dispatcher; vidi `frmOtkupAPP`).
 
 ## NOVE `Private WithEvents` deklaracije u FORMAMA su ZABRANJENE
 
@@ -47,16 +47,15 @@ Dodavanje event-sink deklaracije u formu **lomi self-update code-merge te forme*
 
 Zatečeni pre-2.16.1 form-WithEvents su **zamrznuti** — ne diraj i ne dodaji nove:
 
-- `frmDokumenta` — `m_tgl*` / storno-pregled / recovery dugmad
 - `frmAgrohemija` — „Pocetni dug"
 - `frmPalete`
 - `frmBankaExportPregled`
 - `frmIzvestaj`
 
-**Ovaj spisak se samo SKRAĆUJE.** Svih pet formi je u planu penzionisanja
-(§27.2): `frmDokumenta` u koraku 2, `frmAgrohemija` / `frmPalete` / `frmIzvestaj`
-u koraku 3, `frmBankaExportPregled` u koraku 4. Red se briše kad forma ode, i to
-u process PR-u — ne uz izmenu koda.
+**Ovaj spisak se samo SKRAĆUJE.** `frmDokumenta` je već otišao (korak 2, §27.10),
+pa je red obrisan. Preostale četiri su u planu penzionisanja (§27.2):
+`frmAgrohemija` / `frmPalete` / `frmIzvestaj` u koraku 3, `frmBankaExportPregled`
+u koraku 4. Red se briše kad forma ode, i to u process PR-u — ne uz izmenu koda.
 
 Kad spisak ostane prazan, zabrana iznad i dalje važi: nijedna od četiri forme
 koje ostaju nema ni jednu `WithEvents` deklaraciju, i tako mora i da ostane —
