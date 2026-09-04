@@ -605,6 +605,29 @@ Public Function PanelSirinaSegmenta(ByVal cap As String) As Single
     If PanelSirinaSegmenta < 64 Then PanelSirinaSegmenta = 64
 End Function
 
+' Slika iz koda (modLogo). BackColor je vazan: PictureSizeMode = Zoom cuva odnos
+' stranica, pa okvir koji mu ne odgovara ostavlja pojas oko slike -- a pozadina
+' je u samu sliku vec pecena, pa taj pojas mora da bude iste boje.
+'
+' BackStyle je OPAQUE namerno: transparentan Image bi kroz taj pojas pustio ono
+' sto je ispod (gradijent splash-a), pa bi se oko znaka video pravougaonik.
+Public Function NewImg(parent As Object, nm As String, X As Single, Y As Single, _
+                       w As Single, h As Single, ByVal bg As Long) As Object
+    Dim im As Object
+    Set im = parent.Controls.Add("Forms.Image.1", nm, True)
+    With im
+        .Left = X: .top = Y: .width = w: .Height = h
+        .BorderStyle = fmBorderStyleNone
+        .SpecialEffect = fmSpecialEffectFlat
+        .BackStyle = fmBackStyleOpaque
+        .BackColor = bg
+        .PictureSizeMode = fmPictureSizeModeZoom
+        .PictureAlignment = fmPictureAlignmentCenter
+        .Visible = False
+    End With
+    Set NewImg = im
+End Function
+
 Public Function NewZone(parent As Object, nm As String, X As Single, Y As Single, _
                          w As Single, h As Single, bg As Long) As Object
     Dim f As Object

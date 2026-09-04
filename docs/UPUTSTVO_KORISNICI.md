@@ -178,7 +178,9 @@ audit kolone) — mapiranjem po imenu kolone.
 
 - **Prijavni prozor** više nije posebna forma nego **ekran ljuske**
   (`modUiFaze`, od `v6-ui-213`) — pa stiže i kroz auto-ažuriranje koda, kao i
-  ostatak aplikacije. Ranije je tražio pun `.xlsm`.
+  ostatak aplikacije. Ranije je tražio pun `.xlsm`. Isto važi i za **logotip**:
+  živi u `modLogo` kao kod (`tools/logo_to_vba.py` ga generiše iz
+  `img/AgriX-Otkup-Logo-Final.png`), ne u `.frx`-u forme.
 - **Audit trag:** kolone `CreatedAt/CreatedBy/ModifiedAt/ModifiedBy` na glavnim
   tabelama — vidi se ko je i kada uneo/izmenio red (`Alt+F8 → EnsureAuditColumns`).
 - **Gde su podaci:** korisnici su u tabeli `tblKorisnici`; prekidač prijave je

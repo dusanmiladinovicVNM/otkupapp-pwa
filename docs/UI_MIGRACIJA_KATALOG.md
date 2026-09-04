@@ -8556,31 +8556,48 @@ prikazuje ponovo** (nikad nije ni sakrivena), pa `UserForm_Activate` ne puca po
 povratku — bez toga bi mreža ostala prazna, a fokus van polja. Sada je to jedna
 rutina sa dva pozivaoca (`UserForm_Activate` i `FazaApp`).
 
-#### Šta se izgubilo — rasterski logotip
+#### Rasterski logotip — `modLogo` umesto `.frx`
 
-`frmSplash.frx` i `frmExcelMini.frx` su nosili sliku logotipa. `.frx` se **ne
-pravi iz koda** (CLAUDE.md §3: nove kontrole idu runtime-om), pa faze crtaju
-**tekstualni** znak „AX OtkupApp" u `DisplayFont()` — isti onaj koji već nose
-zaglavlje ljuske (`hdrAX`/`hdrName`) i kartica prijave (`frmLogin.frx` slike
-nikad nije ni imao).
+`frmSplash.frx` i `frmExcelMini.frx` su nosili sliku logotipa, a `.frx` se **ne
+pravi iz koda** (CLAUDE.md §3). Prva verzija ovog koraka je zato crtala samo
+tekstualni znak; to je bila stvarna regresija i zatvorena je: logotip sada dolazi
+iz **`src-vba/modLogo.bas`** — GIF u Base64, dekodiran u privremeni fajl i učitan
+`LoadPicture`-om.
 
-To je **stvarna vizuelna regresija na splash-u**, i ne krije se. §27.7 je taj
-logotip uveo baš da bi se marka videla **jednom** umesto tri puta — taj cilj je i
-dalje ispunjen (jedan znak po fazi), samo je znak sada tipografski, ne rasterski.
+| Pitanje | Odgovor | Zašto |
+|---|---|---|
+| zašto ne `.frx` | jer ne putuje kroz self-update | `ImportFromFolder` uvozi **kod**; svaka promena logotipa bi tražila REINSTALL na svakoj mašini |
+| zašto GIF, ne PNG | `LoadPicture` ne čita PNG | zna BMP, RLE, ICO, WMF, EMF, GIF, JPEG. BMP je nekomprimovan (pola MB), JPEG bi na oštrim ivicama zlatnog teksta dao prsten. Znak ima nekoliko boja → GIF je ovde **bez gubitka** |
+| zašto je pozadina pečena | MSForms ne zna per-pixel alfu | providan PNG bi svejedno bio spljošten, samo na boju koju bi MSForms izabrao **umesto nas**. Kompozit ide unapred, na tačno onu boju na kojoj slika stoji |
+| kako se boje ne raziđu | `modLogo` izvozi `LOGO_BG_*` | ista konstanta boji ploču iza slike i pečena je u piksele — crtanje i slika ne mogu da se raziđu |
+| zašto tri veličine | `Zoom` skalira grubo | splash 480×157, kartica prijave 300×98, mini kartica 160×52 — svaka blizu stvarnoj meri prikaza |
 
-Ako se rasterski logotip vrati, jedini put je **ručno u dizajneru**: `Image`
-kontrola u `frmOtkupUI` i nov `.frx`. Cena je poznata i nije mala — `.frx` ne
-putuje kroz self-update (`ImportFromFolder` uvozi kod), pa bi ta izmena tražila
-**REINSTALL**, a ne obično ažuriranje.
+Splash ima gradijent, pa se boja uzima na sredini logotipa (`t = 0.35`). Razlika
+boje gradijenta preko visine znaka je najviše **1 jedinica po kanalu**, pa se
+ravna ploča iza slike ne vidi.
+
+**Tekstualni znak nije obrisan — postao je rezerva.** `LogoSlika` vraća `Nothing`
+kad nema MSXML/ADODB ili je TEMP nedostupan; tada se crta „AX OtkupApp" u
+`DisplayFont()`. Aplikacija bez logotipa radi; aplikacija koja pukne na startu ne
+radi. Test 184 meri baš to: znak se vidi **tačno jednom** — slika ILI tekst,
+nikad oba i nikad nijedan.
+
+Generator je **`tools/logo_to_vba.py`** (izvor: `img/AgriX-Otkup-Logo-Final.png`),
+pa se logotip regeneriše kad se brend promeni. Nosi self-test u oba smera: GIF se
+dekodira nazad i poredi piksel po piksel, pa se namerno pokvari jedan bajt —
+provera mora da prijavi razliku. Enkoder koji nikad nije pokazan crven ne
+dokazuje da išta meri. Ako self-test padne, `modLogo.bas` se **ne upisuje**.
+
+Ukupna cena: **11,4 KB GIF-a → 14,4 KB Base64** u jednom `.bas` modulu, nasuprot
+572 KB `.frx`-a koji nije putovao.
 
 #### Šta se dobilo
 
-- **Prijava sada stiže kroz self-update.** Do sada je bila u `.frx`-u i tražila
-  pun `.xlsm` (`docs/UPUTSTVO_KORISNICI.md` §11). `modUiFaze` je običan `.bas` —
-  meka komponenta.
+- **Prijava i logotip sada stižu kroz self-update.** Do sada su bili u `.frx`-u i
+  tražili pun `.xlsm` (`docs/UPUTSTVO_KORISNICI.md` §11).
 - **Povratak iz Excela je trenutan.** Prozor se skuplja i vraća; ljuska ostaje
   izgrađena. Ranije se krila jedna forma i pravila druga.
-- **-688 linija VBA i -572 KB `.frx`** uz jedan nov modul.
+- **-688 linija VBA i -572 KB `.frx`** uz dva nova modula (`modUiFaze`, `modLogo`).
 
 #### Isporuka
 
@@ -8597,7 +8614,8 @@ mesto; uklanjaju se ručno u VBE-u (`Remove` → `Compile` → `Save`), po opcij
 
 | Nivo | Ishod |
 |---|---|
-| `python tools/vba_check.py` | **zeleno** (uz 150 zatečenih `KRAJ_REDA` nalaza — artefakt Linux checkout-a, ne ove izmene) |
+| `python tools/vba_check.py` | **zeleno** (uz zatečene `KRAJ_REDA` nalaze — artefakt Linux checkout-a, ne ove izmene) |
+| `python tools/logo_to_vba.py` | **zeleno** — self-test enkodera u oba smera (povratno dekodiranje isto; pokvaren bajt daje razliku) |
 | `tools/sabotaza.py --proveri-sidra` | 446 sabotaža, 0 nalaza (+3 poznata) |
 | `python tools/run_vba.py` | **NIJE izvršeno** — traži Windows + Excel + `pywin32` |
 | `Debug > Compile VBAProject` | **NIJE izvršeno** |
@@ -8614,7 +8632,9 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
 #### Smoke checklista (`v6-ui-213`)
 
 1. AUTH **isključen**: otvori `.xlsm` → **splash preko celog ekrana** (gradijent,
-   zlatna nit, znak, verzija, „Pokrećem aplikaciju…") ~2 s → ljuska. Excel skriven.
+   zlatna nit, **logotip AX|Otkup**, verzija, „Pokrećem aplikaciju…") ~2 s →
+   ljuska. Excel skriven. Logotip nije izobličen ni odsečen, i **oko njega nema
+   pravougaonika druge boje** (ploča i slika dele `LOGO_BG_SPLASH`).
 2. AUTH **uključen**: posle licence ide **kartica prijave** u sredini forest
    podloge. Klik u polje boji ivicu zeleno; pogrešan PIN boji PIN polje rust i
    ispisuje „Pogrešno korisničko ime ili PIN. (1/3)"; **Enter** = prijava,
@@ -8635,6 +8655,10 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
    „Nemate dozvolu…", Excel ostaje vidljiv.
 10. Legacy: VBE Immediate `frmOtkupAPP.Show` → „Otvori Excel" daje istu karticu;
     „Nazad" vodi u **novu** ljusku (namerno — legacy pada u koraku 7).
+11. Logotip: proveri da `%TEMP%\AgriX_logo_SPLASH.gif` nastane pri prvom
+    splash-u. Ako logotipa nema nigde, a tekstualni znak jeste — `LogoSlika` je
+    vratila `Nothing`; razlog je u logu (`modLogo.UpisiPrivremeni`), a aplikacija
+    svejedno radi.
 
 ## Poslednji prolaz poređenja sa legacy-jem
 

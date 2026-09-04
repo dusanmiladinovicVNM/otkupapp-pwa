@@ -7554,6 +7554,7 @@ Public Sub OtkupUI_Release()
     On Error Resume Next
     mIzgradjena = False
     modUiFaze.FazaOtpusti
+    modLogo.LogoOtpusti                 ' ucitane slike drze IPictureDisp
     StopOtkupUITimers
     ' Panel u radnoj povrsini drzi referencu na OKVIR unutar ove forme, a modul
     ' panela drzi njega. Dok te reference postoje, forma se ne moze osloboditi --

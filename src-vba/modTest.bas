@@ -6325,23 +6325,30 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     Dim nema As String, ugasenoUBootu As Boolean, ugasenoUMini As Boolean
     Dim vraceno As Boolean, fazaSakrivena As Boolean
     Dim bootVidljiv As Boolean, miniVidljiv As Boolean, miniGradijent As Boolean
+    Dim znakBoot As Long, znakMini As Long
 
     Set f = NewOtkupUIForm()                         ' faza APP -- ljuska se gradi
 
     modUiFaze.FazaGradiTest f, FAZA_BOOT
     Set z = f.Controls("zFaza")
-    For Each nm In Array("fzpGr0", "fzpLn", "fzbAX", "fzbName", "fzbVer", _
+    For Each nm In Array("fzpGr0", "fzpLn", "fzbLogo", "fzbAX", "fzbName", "fzbVer", _
                          "fzbDiv", "fzbBy", "fzbDot", "fzbStat", _
-                         "fzmCardB", "fzmBar", "fzmAX", "fzmSub", "fzmBack")
+                         "fzmCardB", "fzmBar", "fzmLogo", "fzmAX", "fzmSub", "fzmBack")
         If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
     Next nm
     bootVidljiv = VidljivaKontrola(z, "fzbStat")
     ugasenoUBootu = Not f.Controls("zHdr").Enabled
+    ' Znak se vidi TACNO JEDNOM: ili logotip iz modLogo, ili tekstualna
+    ' rezerva -- nikad oba (dva znaka jedan preko drugog) i nikad nijedan
+    ' (splash bez marke). Koja se grana odigrala zavisi od masine (MSXML,
+    ' ADODB, TEMP), pa se broji, ne bira.
+    znakBoot = -CLng(VidljivaKontrola(z, "fzbLogo")) - CLng(VidljivaKontrola(z, "fzbAX"))
 
     modUiFaze.FazaGradiTest f, FAZA_MINI
     miniVidljiv = VidljivaKontrola(z, "fzmBack")
     miniGradijent = VidljivaKontrola(z, "fzpGr0")
     ugasenoUMini = Not f.Controls("zHdr").Enabled
+    znakMini = -CLng(VidljivaKontrola(z, "fzmLogo")) - CLng(VidljivaKontrola(z, "fzmAX"))
 
     modUiFaze.FazaGradiTest f, FAZA_APP
     fazaSakrivena = Not z.Visible
@@ -6357,6 +6364,8 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     AssertEq ugasenoUMini, True, "ispod mini kartice su zone ljuske ugasene"
     AssertEq fazaSakrivena, True, "povratak u aplikaciju sklanja fazu"
     AssertEq vraceno, True, "povratak u aplikaciju vraca zone ljuske"
+    AssertEq znakBoot, 1, "splash pokazuje znak tacno jednom (slika ILI tekst)"
+    AssertEq znakMini, 1, "mini kartica pokazuje znak tacno jednom (slika ILI tekst)"
 End Sub
 
 ' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod

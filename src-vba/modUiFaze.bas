@@ -27,11 +27,14 @@ Option Explicit
 ' WireBtn / WireInput -> clsFlatBtn, a tagovi krecu sa "fz", pa ih
 ' modOtkupUI.UiEvent prosledjuje ovamo (FazaEvent) pre svega ostalog.
 '
-' ZNAK JE TEKSTUALAN, ne slika. Rasterski logotip je ziveo u .frx-u splash-a i
-' mini kartice, a .frx se ne pravi iz koda (CLAUDE.md par.3): kontrole se
-' dodaju runtime-om. Isti tekstualni znak vec nosi zaglavlje ljuske (hdrAX /
-' hdrName) i kartica prijave, pa je ovo jedini znak koji aplikacija ima -- ne
-' cetvrti pored tri.
+' ZNAK JE SLIKA, SA TEKSTUALNOM REZERVOM. Rasterski logotip je ranije ziveo u
+' .frx-u splash-a i mini kartice; sada dolazi iz modLogo -- Base64 GIF u kodu,
+' dekodiran u privremeni fajl i ucitan LoadPicture-om. Time putuje kroz
+' self-update, a .frx ostaje prazan (CLAUDE.md par.3).
+'
+' Ako ucitavanje padne (nema MSXML/ADODB, TEMP nedostupan), LogoSlika vraca
+' Nothing i crta se tekstualni znak "AX OtkupApp" -- isti koji nosi zaglavlje
+' ljuske. Zato natpisi ispod slike i dalje postoje: oni nisu visak nego rezerva.
 '
 ' Fajl mora ostati 100% ASCII.
 ' ============================================================
@@ -50,7 +53,10 @@ Private Const MAX_ATT  As Long = 3        ' tri pokusaja, kao u frmLogin
 Private Const MINI_W   As Single = 232
 Private Const MINI_H   As Single = 78
 Private Const FOOT_H   As Single = 52     ' podnozje splash-a: linija + dva reda
-Private Const LOGO_FS  As Single = 30     ' znak na punom ekranu
+Private Const LOGO_FS  As Single = 30     ' tekstualna rezerva na punom ekranu
+Private Const LOGO_H_BOOT As Single = 86  ' visina znaka na splash-u
+Private Const LOGO_H_KART As Single = 26  ' visina znaka na kartici prijave
+Private Const LOGO_H_MINI As Single = 20  ' visina znaka na mini kartici
 
 Private mFaza As String
 Private mForma As Object          ' ziva instanca ljuske (i u testu, gde nije default)
@@ -432,6 +438,7 @@ End Sub
 Private Sub GradiBoot(z As Object)
     Dim fnt As String
     fnt = modUiKit.DisplayFont()
+    modUiKit.NewImg z, "fzbLogo", 0, 0, 260, LOGO_H_BOOT, LOGO_BG_SPLASH
     modUiKit.NewLbl z, "fzbAX", "AX", 0, 0, 60, modUiKit.TxtH(LOGO_FS), LOGO_FS, True, _
                     C_GOLD, -1, fmTextAlignRight, fnt
     modUiKit.NewLbl z, "fzbName", "OtkupApp", 0, 0, 240, modUiKit.TxtH(LOGO_FS), LOGO_FS, True, _
@@ -458,6 +465,7 @@ Private Sub GradiPrijavu(z As Object)
     modUiKit.NewLbl z, "fzlCardF", "", 0, 0, CARD_W - 2, CARD_H - 2, 8, False, 0, C_CREAM
     modUiKit.NewLbl z, "fzlTop", "", 0, 0, CARD_W - 2, 3, 8, False, 0, C_GOLD
 
+    modUiKit.NewImg z, "fzlLogo", 0, 0, 80, LOGO_H_KART, LOGO_BG_KARTICA
     modUiKit.NewLbl z, "fzlAX", "AX", 0, 0, 34, modUiKit.TxtH(20), 20, True, C_GOLD, -1, _
                     fmTextAlignLeft, fnt
     modUiKit.NewLbl z, "fzlName", "OtkupApp", 0, 0, 180, modUiKit.TxtH(18), 18, True, _
@@ -495,6 +503,7 @@ Private Sub GradiMini(z As Object)
     modUiKit.NewLbl z, "fzmCardB", "", 0, 0, MINI_W, MINI_H, 8, False, 0, C_BORDER
     modUiKit.NewLbl z, "fzmCardF", "", 1, 1, MINI_W - 2, MINI_H - 2, 8, False, 0, C_CREAM
     modUiKit.NewLbl z, "fzmBar", "", 1, 1, 5, MINI_H - 2, 8, False, 0, C_FOREST
+    modUiKit.NewImg z, "fzmLogo", 16, 8, 62, LOGO_H_MINI, LOGO_BG_MINI
     modUiKit.NewLbl z, "fzmAX", "AX", 16, 8, 22, modUiKit.TxtH(TS_H1 + 3), TS_H1 + 3, True, _
                     C_GOLD, -1, fmTextAlignLeft, fnt
     modUiKit.NewLbl z, "fzmName", "OtkupApp", 38, 9, 80, modUiKit.TxtH(TS_H1 + 1), TS_H1 + 1, _
@@ -562,14 +571,24 @@ Private Sub PostaviPunEkran(z As Object, f As Object)
         PrikaziGrupu z, "fzl", False
         PrikaziGrupu z, "fzm", False
 
-        ' Znak centriran u gornjoj trecini: "AX" desno poravnat do sredine,
-        ' "OtkupApp" levo od nje -- par se sam centrira bez merenja teksta.
-        Y = h * 0.34 - modUiKit.TxtH(LOGO_FS) / 2
-        znakW = 150
-        Mesto z, "fzbAX", w / 2 - 60 - znakW / 2, Y, 60, modUiKit.TxtH(LOGO_FS)
-        Mesto z, "fzbName", w / 2 - znakW / 2 + 4, Y, 240, modUiKit.TxtH(LOGO_FS)
-        Mesto z, "fzbVer", (w - 300) / 2, Y + modUiKit.TxtH(LOGO_FS) + 10, 300, _
-              modUiKit.TxtH(TS_META)
+        ' Logotip centriran u gornjoj trecini. Kad slike nema, isto mesto dobija
+        ' tekstualni znak: "AX" desno poravnat do sredine, "OtkupApp" levo od nje
+        ' -- par se tako sam centrira, bez merenja sirine teksta.
+        Y = h * 0.34 - LOGO_H_BOOT / 2
+        If PostaviZnak(z, "fzbLogo", LOGO_SPLASH, LOGO_ODNOS_SPLASH, _
+                       (w - LOGO_H_BOOT * LOGO_ODNOS_SPLASH) / 2, Y, LOGO_H_BOOT) Then
+            Vidi z, "fzbAX", False
+            Vidi z, "fzbName", False
+            Mesto z, "fzbVer", (w - 300) / 2, Y + LOGO_H_BOOT + 10, 300, _
+                  modUiKit.TxtH(TS_META)
+        Else
+            Y = h * 0.34 - modUiKit.TxtH(LOGO_FS) / 2
+            znakW = 150
+            Mesto z, "fzbAX", w / 2 - 60 - znakW / 2, Y, 60, modUiKit.TxtH(LOGO_FS)
+            Mesto z, "fzbName", w / 2 - znakW / 2 + 4, Y, 240, modUiKit.TxtH(LOGO_FS)
+            Mesto z, "fzbVer", (w - 300) / 2, Y + modUiKit.TxtH(LOGO_FS) + 10, 300, _
+                  modUiKit.TxtH(TS_META)
+        End If
 
         Mesto z, "fzbDiv", PAD, h - FOOT_H, w - 2 * PAD, 1
         Mesto z, "fzbBy", PAD, h - FOOT_H + 16, 200, modUiKit.TxtH(TS_MICRO)
@@ -596,8 +615,14 @@ Private Sub PostaviKarticu(z As Object, ByVal cx As Single, ByVal cy As Single)
     Mesto z, "fzlCardF", cx + 1, cy + 1, CARD_W - 2, CARD_H - 2
     Mesto z, "fzlTop", cx + 1, cy + 1, CARD_W - 2, 3
 
-    Mesto z, "fzlAX", cx + PAD, cy + 26, 34, modUiKit.TxtH(20)
-    Mesto z, "fzlName", cx + PAD + 32, cy + 28, 180, modUiKit.TxtH(18)
+    If PostaviZnak(z, "fzlLogo", LOGO_KARTICA, LOGO_ODNOS_KARTICA, _
+                   cx + PAD, cy + 24, LOGO_H_KART) Then
+        Vidi z, "fzlAX", False
+        Vidi z, "fzlName", False
+    Else
+        Mesto z, "fzlAX", cx + PAD, cy + 26, 34, modUiKit.TxtH(20)
+        Mesto z, "fzlName", cx + PAD + 32, cy + 28, 180, modUiKit.TxtH(18)
+    End If
     Mesto z, "fzlTitle", cx + PAD, cy + 66, iw, modUiKit.TxtH(TS_DISPLAY)
     Mesto z, "fzlSub", cx + PAD, cy + 92, iw, modUiKit.TxtH(TS_META)
 
@@ -628,6 +653,10 @@ Private Sub PostaviMini(z As Object)
     z.Left = 0: z.top = 0
     z.width = MINI_W: z.Height = MINI_H
     z.BackColor = C_CREAM
+    If PostaviZnak(z, "fzmLogo", LOGO_MINI, LOGO_ODNOS_MINI, 16, 8, LOGO_H_MINI) Then
+        Vidi z, "fzmAX", False
+        Vidi z, "fzmName", False
+    End If
     PodigniGrupu z, "fzm"
 End Sub
 
@@ -661,6 +690,43 @@ Private Sub PunProzor(f As Object)
 End Sub
 
 '--------------------------------------------------------- sitni alat ----
+
+' Znak: slika kad je ima, tekst kad je nema. True = slika je postavljena, pa
+' pozivalac gasi tekstualnu rezervu.
+'
+' Okvir se racuna iz ODNOSA slike, ne pogadja se: PictureSizeMode = Zoom cuva
+' odnos stranica, pa bi okvir koji mu ne odgovara ostavio pojas pozadine sa
+' strane -- vidljiv pravougaonik oko znaka na gradijentu splash-a.
+'
+' Neuspeh je OCEKIVAN ishod, ne greska (modLogo: nema MSXML/ADODB, TEMP
+' nedostupan). Zato se slika gasi i vraca False, a ne dize se greska: aplikacija
+' bez logotipa i dalje radi, aplikacija koja pukne na startu ne radi.
+Private Function PostaviZnak(z As Object, ByVal nm As String, ByVal kljuc As String, _
+                             ByVal odnos As Single, ByVal levo As Single, _
+                             ByVal gore As Single, ByVal visina As Single) As Boolean
+    Dim sl As Object, im As Object
+    On Error Resume Next
+    Set im = z.Controls(nm)
+    If im Is Nothing Then Exit Function
+    Set sl = modLogo.LogoSlika(kljuc)
+    If sl Is Nothing Then
+        im.Visible = False
+        Err.Clear
+        Exit Function
+    End If
+    Set im.Picture = sl
+    If Err.Number <> 0 Then
+        Err.Clear
+        im.Visible = False
+        Exit Function
+    End If
+    im.Left = levo: im.top = gore
+    im.width = visina * odnos: im.Height = visina
+    im.Visible = True
+    im.ZOrder 0
+    PostaviZnak = True
+    Err.Clear
+End Function
 
 Private Sub Mesto(z As Object, ByVal nm As String, ByVal X As Single, ByVal Y As Single, _
                   ByVal w As Single, ByVal h As Single)
