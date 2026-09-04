@@ -2376,17 +2376,6 @@ SABOTAZE = {
     # bi svaka realna izmena oborila obe -- a sabotaza cija imenovana tvrdnja ne
     # padne prva je gora od nijedne (dokaz.py bi javio PALA DRUGA TVRDNJA).
     # ------------------------- MATICNI: SLAGANJE CITACA SA LEGACY-JEM
-    # Pisac je od M2a jedan i deljen; citac NIJE -- legacy LoadList i novi
-    # MatRedovi su dve nezavisne implementacije. Jedino sto ih moze razici je
-    # KOJE redove puste kroz sebe, i to se ne vidi ni u jednoj gresci: lista
-    # prosto ima red manje ili vise nego sto je imala.
-    "citac-pusta-prazan-pk": (
-        "modMaticniIzvor.bas",
-        "        If pkIdx = 0 Then GoTo Sledeci\n        If Trim$(NzToText(data(i, pkIdx))) = \"\" Then GoTo Sledeci\n",
-        "        If pkIdx = 0 Then GoTo Sledeci   ' SABOTAZA: prazan PK vise ne ispada\n",
-        "T_Maticni_CitacSlaganjeSaLegacy",
-        "novi citac pusta kroz sebe TACNO one zapise koje i LoadList",
-    ),
     # Storno filter cenovnika bi oborio ISTU tvrdnju (skup redova), pa svoju
     # sabotazu ne dobija -- v. napomenu uz "meni-sekcija-ispala-iz-nove-ljuske".
     # Legacy lista pokazuje NAZIV stanice (LookupValue), a ne StanicaID. Kad bi
@@ -2396,8 +2385,8 @@ SABOTAZE = {
         "modMaticniIzvor.bas",
         "                \"OTKUI_HDM_STANICA|@stanica|txt|96|2\", _\n",
         "                \"OTKUI_HDM_STANICA|StanicaID|txt|96|2\", _\n",
-        "T_Maticni_CitacSlaganjeSaLegacy",
-        "svaka gola vrednost novog citaca postoji i u legacy redu",
+        "T_Maticni_CitanjeNeMenjaVrednosti",
+        "Kooperanti imaju izvedenu kolonu naziva stanice",
     ),
     # -------------------------- MATICNI: KASKADA ZAVISNOG COMBO-A
     # Podatak je bio prenet iz forme, ozicavanje nije: spisak sorti se punio

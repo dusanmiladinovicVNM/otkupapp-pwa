@@ -900,47 +900,6 @@ EH:
     MsgBox Poruka("OTKUP_ERR_FAJL_NIJE_USPESNO") & Err.description, vbExclamation, APP_NAME
 End Sub
 
-Private Sub btnMaticni_Click()
-    On Error GoTo EH
-
-    HighlightActive btnMaticni
-    lblStatus.caption = "Sekcija: Mati" & ChrW(269) & "ni podaci"
-    OpenMaticniForm
-
-    Exit Sub
-
-EH:
-    LogErr "frmOtkupAPP.btnMaticni_Click"
-    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
-End Sub
-
-Public Sub OpenMaticniForm()
-    On Error GoTo EH
-
-    ' --- Kontrola pristupa: oblast MaticniPodaci (opt-in AUTH_ENABLED) ---
-    If modAuth.AuthEnabled() Then
-        If Not modAuth.KorisnikImaPravo(OBL_MATICNI) Then
-            MsgBox "Nemate dozvolu za Maticne podatke.", vbExclamation, APP_NAME
-            Exit Sub
-        End If
-    End If
-
-    Load frmMaticniPodaci
-
-    With frmMaticniPodaci
-        .StartUpPosition = 0
-        .Left = Me.Left + btnMaticni.Left + 2
-        .top = Me.top + btnMaticni.top + btnMaticni.Height
-        .Show vbModeless
-    End With
-
-    Exit Sub
-
-EH:
-    LogErr "frmOtkupAPP.OpenMaticniForm"
-    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
-End Sub
-
 ' =========================
 ' Hover states
 ' =========================

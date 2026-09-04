@@ -436,7 +436,6 @@ Public Sub RunAllTests()
     RunOne 179
     RunOne 180
     RunOne 181
-    RunOne 182
     RunOne 124
     RunOne 125
     RunOne 126
@@ -677,14 +676,13 @@ Private Function TestName(ByVal idx As Long) As String
         Case 172: TestName = "T_MatGeo_TekstIAdrese"
         Case 173: TestName = "T_MatKor_RecnikDaNeIPrava"
         Case 174: TestName = "T_Maticni_MenijiPokrivajuIsto"
-        Case 175: TestName = "T_Maticni_CitacSlaganjeSaLegacy"
+        Case 175: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
         Case 176: TestName = "T_MatEkran_KaskadaZavisnogCombo"
         Case 177: TestName = "T_UiPanel_UgovorIUstupanje"
         Case 178: TestName = "T_Mreza_DecimalaNeNestaje"
         Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
-        Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -867,14 +865,13 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 172: T_MatGeo_TekstIAdrese
         Case 173: T_MatKor_RecnikDaNeIPrava
         Case 174: T_Maticni_MenijiPokrivajuIsto
-        Case 175: T_Maticni_CitacSlaganjeSaLegacy
+        Case 175: T_Auth_OtkazanaPrijavaNeLazePrikaz
         Case 176: T_MatEkran_KaskadaZavisnogCombo
         Case 177: T_UiPanel_UgovorIUstupanje
         Case 178: T_Mreza_DecimalaNeNestaje
         Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
-        Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -14437,118 +14434,6 @@ Private Sub T_Maticni_MenijiPokrivajuIsto()
 End Sub
 
 ' ============================================================
-' 175. SLAGANJE CITACA -- novi citac vraca isti skup zapisa kao LoadList.
-'
-' Ovo je tvrdnja iz 26.11 koja je ostala nenapisana kroz M1-M5, a mora da
-' postoji PRE nego sto se frmStammdaten obrise: posle brisanja nema sa cim da
-' se poredi. Test je zato PRIVREMEN i umire zajedno sa formom (v. 26.20).
-'
-' Zasto je bas skup identiteta ono sto se meri: pisac je od M2a jedan i deljen,
-' pa upis ne moze da se razidje. Citac NIJE deljen -- legacy LoadList i novi
-' MatRedovi su dve nezavisne implementacije. Sve sto ih moze razici je KOJE
-' redove puste kroz sebe: prazan PK, stornirano, redosled cenovnika, kolona
-' koja se u jednoj strani trazi po IMENU a u drugoj po POZICIJI (Case Else
-' grana LoadList-a cita data(i, 1), a novi citac MatPK po imenu).
-'
-' Meri se dvoje, po sekciji:
-'   1) SKUP redova -- isti broj, nijedan visak, nijedan manjak (jedna tvrdnja:
-'      to su tri lica istog kvara);
-'   2) svaka neprazna vrednost koju novi citac pokazuje NALAZI SE u legacy redu
-'      istog identiteta -- osim izvedenih vrednosti koje novi UI dodaje ili
-'      svodi. To hvata pogresan lookup i pogresan indeks kolone, a ne trazi da
-'      dve liste imaju iste kolone (nemaju, namerno).
-' ============================================================
-Private Sub T_Maticni_CitacSlaganjeSaLegacy()
-    Dim sek As Variant, r As Variant, tg As String, kljuc As String
-    Dim leg As Variant, legA As Variant, legN As Long, legC As Long
-    Dim nov As Variant, novA As Variant, novN As Long, cols As Variant
-    Dim idCol As Long, i As Long, j As Long, id As String, v As String, red As String
-    Dim mapa As Object, brSek As Long, brRed As Long, brCelija As Long, ost As Variant
-    Dim losaVrednost As String
-
-    ' JEDAN nalaz za ceo raskorak skupa redova, a ne tri. Visak, manjak i
-    ' razlika u broju su tri LICA istog kvara -- svaki pomak skupa pokrece sva
-    ' tri. Tri tvrdnje bi znacile da svaka sabotaza obara i tudju (dokaz.py to
-    ' prijavljuje kao PALA DRUGA TVRDNJA), a citalac izvestaja bi tri puta
-    ' citao isti dogadjaj.
-    Dim skupRedova As String
-
-    sek = modMaticniLookups.MaticniSekcije()
-    For Each r In sek
-        tg = CStr(r(1))
-        kljuc = modMaticniIzvor.MatKljucIzLegacyTag(tg)
-        ' Podesavanja i Admin nisu liste -- v. test 160.
-        If Len(kljuc) = 0 Then GoTo Sledeca
-        brSek = brSek + 1
-
-        ' SVEZA forma po sekciji: Setup* procedure nisu pisane da se smenjuju
-        ' nad istom instancom (m_SetupDone ih u pogonu pusta tacno jednom), pa
-        ' bi jedna instanca za cetrnaest sekcija merila stanje koje operater
-        ' nikad ne vidi.
-        leg = StmLegacyLista(tg)
-        legA = leg(0): legN = CLng(leg(1)): legC = CLng(leg(2))
-
-        nov = modMaticniIzvor.MatRedovi(kljuc, modMaticniIzvor.MAT_CIP_SVI, "")
-        cols = nov(0): novA = nov(1): novN = CLng(nov(2))
-        idCol = modMaticniIzvor.MatKolonaID(kljuc)
-
-        If legN <> novN Then _
-            skupRedova = skupRedova & " " & kljuc & "/broj(" & legN & ":" & novN & ")"
-
-        ' --- mapa identiteta iz legacy liste ------------------------------
-        Set mapa = CreateObject("Scripting.Dictionary")
-        For i = 1 To legN
-            red = ""
-            For j = 1 To legC
-                red = red & "|" & NzToText(legA(i, j))
-            Next j
-            mapa(UCase$(Trim$(NzToText(legA(i, 1))))) = red
-        Next i
-
-        For i = 1 To novN
-            brRed = brRed + 1
-            id = UCase$(Trim$(NzToText(novA(i, idCol))))
-            If Not mapa.Exists(id) Then
-                skupRedova = skupRedova & " " & kljuc & "/visak:" & id
-            Else
-                red = CStr(mapa(id))
-                For j = LBound(cols) To UBound(cols)
-                    ' IZVEDENE vrednosti se preskacu, i to nije rupa nego
-                    ' granica tvrdnje: "@status" novi citac SVODI na
-                    ' Aktivan/Neaktivan (parcele u semi nose "Da"), a "@geo"
-                    ' legacy uopste nije pokazivao. Te razlike su zabelezene
-                    ' odluke (26.8), pa bi ih ovaj test prijavljivao kao kvar.
-                    ' Gole kolone nemaju taj izgovor -- one moraju da se poklope.
-                    If Left$(ColF(CStr(cols(j)), 1), 1) <> "@" Then
-                        v = Trim$(NzToText(novA(i, j - LBound(cols) + 1)))
-                        If Len(v) > 0 Then
-                            brCelija = brCelija + 1
-                            If InStr(1, red, v, vbTextCompare) = 0 Then _
-                                losaVrednost = losaVrednost & " " & kljuc & ":" & id & _
-                                               "[" & ColF(CStr(cols(j)), 1) & "=" & v & "]"
-                        End If
-                    End If
-                Next j
-                mapa.Remove id
-            End If
-        Next i
-
-        ' Sve sto je ostalo u mapi legacy je pokazivao, a novi citac nije.
-        ost = mapa.Keys()
-        For i = LBound(ost) To UBound(ost)
-            skupRedova = skupRedova & " " & kljuc & "/manjak:" & CStr(ost(i))
-        Next i
-Sledeca:
-    Next r
-
-    AssertEq brSek, 14, "meri se svih 14 sekcija koje su liste (13 sifarnika + Korisnici)"
-    AssertEq (brRed > 0), True, "fixture ima redove za poredjenje (bilo ih je " & brRed & ")"
-    AssertEq (brCelija > 0), True, "poredi se bar jedna gola kolona (bilo ih je " & brCelija & ")"
-    AssertEq skupRedova, "", "novi citac pusta kroz sebe TACNO one zapise koje i LoadList"
-    AssertEq losaVrednost, "", "svaka gola vrednost novog citaca postoji i u legacy redu"
-End Sub
-
-' ============================================================
 ' 176. Kaskada zavisnog combo-a: sorte SAMO za izabranu vrstu.
 '
 ' Legacy je ovo radio u cmbField1_Change: promena vrste ponovo puni spisak
@@ -14693,30 +14578,6 @@ Sledeci:
     Unload f
     Set f = Nothing
 End Sub
-
-' Legacy lista jedne sekcije, iz SVEZE instance forme. Odvojeno od tela testa
-' zato sto forma mora da se oslobodi i kad citanje pukne -- inace bi jedan pad
-' ostavio cetrnaest zivih instanci.
-Private Function StmLegacyLista(ByVal sekTag As String) As Variant
-    Dim f As frmStammdaten, ctlCount As Long
-    On Error GoTo EH
-    Set f = New frmStammdaten
-    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
-    If ctlCount < 2 Then
-        Err.Raise ERR_ASSERT, "modTest.StmLegacyLista", _
-                  "frmStammdaten nije izgradjen (kontrola: " & ctlCount & ")"
-    End If
-    StmLegacyLista = f.StmTestLista(sekTag)
-    Unload f
-    Set f = Nothing
-    Exit Function
-EH:
-    On Error Resume Next
-    If Not f Is Nothing Then Unload f
-    Set f = Nothing
-    On Error GoTo 0
-    Err.Raise Err.Number, "modTest.StmLegacyLista[" & sekTag & "]", Err.description
-End Function
 
 Private Function SortaPripadaVrsti(ByVal sorta As String, ByVal vrsta As String) As Boolean
     Dim d As Variant, i As Long, vr As Long, so As Long
