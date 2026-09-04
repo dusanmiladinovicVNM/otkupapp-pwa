@@ -2727,8 +2727,8 @@ SABOTAZE = {
     # prekidac sekcija koji se crtao bez prava (v6-ui-211).
     "bu-ulazak-ne-zove-kuku": (
         "modOtkupUI.bas",
-        "    modUiScreens.ScrAktiviraj kljuc\n",
-        "    ' SABOTAZA: ulazak ne zove kuku ekrana\n",
+        "        modUiScreens.ScrAktiviraj kljuc\n",
+        "        ' SABOTAZA: ulazak ne zove kuku ekrana\n",
         "T_BankaUvoz_UlazakUvoziIzvode",
         "ulazak u ekran zove Scr_Aktiviraj",
     ),
@@ -2745,12 +2745,31 @@ SABOTAZE = {
     ),
     # Prazan rezultat radi posao: poruka 'uvezeno 0' i osvezavanje mreze na svaki
     # ulazak u ekran, iako se nista nije promenilo.
+    # Start pokrece uvoz: nalog sa pravom samo na Banku bi pri svakom pokretanju
+    # knjizio novac bez ijednog klika. Krsi RELEASE_GATES par.85 i
+    # ARCHITECTURE_REFERENCE par.288.
+    "bu-start-pokrece-uvoz": (
+        "modOtkupUI.bas",
+        "    If Not mStartUsmeravanje Then\n",
+        "    If True Then   ' SABOTAZA: i start pokrece kuku ulaska\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "automatsko usmeravanje sa starta NE pokrece uvoz",
+    ),
+    # Nadjen izvod NE pokrece posao ekrana: mreza ostaje zastarela, a rezultat
+    # se ne javlja -- toast kaze da je uvezeno, a redova nema.
+    "bu-nadjen-izvod-ne-radi-posao": (
+        "modScrBankaUvoz.bas",
+        "    mUvozUcinio = mUvozUcinio + 1\n",
+        "    ' SABOTAZA: nadjen izvod ne pokrece posao\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "nadjen izvod POKRECE posao ekrana",
+    ),
     "bu-prazan-rezultat-radi-posao": (
         "modScrBankaUvoz.bas",
         "    If nadjeno <= 0 Then Exit Sub\n",
         "    If False Then Exit Sub   ' SABOTAZA: prazan rezultat svejedno radi\n",
         "T_BankaUvoz_UlazakUvoziIzvode",
-        "prazan rezultat NE javlja nista i ne osvezava mrezu",
+        "prazan rezultat ne radi posao",
     ),
     "storno-registar-prazan": (
         "modSchemaGuard.bas",

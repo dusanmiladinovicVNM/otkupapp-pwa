@@ -330,6 +330,9 @@ Private mToastPending As String
 Private mDisplayFont As String
 Private mBusyGrid As Boolean
 Private mBuilding As Boolean
+' Traje samo dok ShowOtkupUI automatski usmerava na prvi dozvoljen ekran.
+' Ekranske kuke ulaska se tada NE zovu -- v. ShowOtkupUI.
+Private mStartUsmeravanje As Boolean
 Private mColSpec As Object
 Private mLastPageSize As Long
 ' Bazen cipova je ljuskin i ima MAX_CHIP slotova (ChipRow). Prvih MODE_CHIP
@@ -5115,7 +5118,18 @@ Public Sub ShowOtkupUI()
     frmOtkupUI.show vbModeless
     ' Gradnja uvek pocinje na SCR_POCETNI; operater koji na njega nema pravo
     ' se prebacuje na svoj prvi dozvoljen ekran.
-    If kljuc <> SCR_POCETNI Then IdiNaEkran kljuc
+    '
+    ' AUTOMATSKO USMERAVANJE NIJE KLIK. Ekran koji pri ulasku nesto RADI (Banka
+    ' uvozi izvode) to sme samo kad ga je operater otvorio. Uvoz pri startu bi
+    ' prekrsio ugovor: RELEASE_GATES par.85 i ARCHITECTURE_REFERENCE par.288
+    ' traze da uvoz bude izricita radnja operatera, a par.440 ga vezuje bas za
+    ' navigaciju. Nalog sa pravom SAMO na Banku ovde starta na BANKA_UVOZ, pa bi
+    ' bez ove zastavice svaki start knjizio novac bez ijednog klika.
+    If kljuc <> SCR_POCETNI Then
+        mStartUsmeravanje = True
+        IdiNaEkran kljuc
+        mStartUsmeravanje = False
+    End If
 End Sub
 
 ' Zatvaranje ekrana (dugme X u zaglavlju ili sistemski X). Forma se SAKRIVA, ne
@@ -5394,10 +5408,15 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
     ' Ekran je na sceni -- tek sad sme da uradi ono sto radi PRI ULASKU (Banka
     ' uvozi izvode). Posle LayoutOtkup-a, da poruka padne na vec nacrtan ekran;
     ' pod svojim On Error, da pad radnje ne ponisti uspesnu navigaciju.
-    On Error Resume Next
-    modUiScreens.ScrAktiviraj kljuc
-    Err.Clear
-    On Error GoTo 0
+    '
+    ' NE pri automatskom usmeravanju sa starta: tada ekran samo treba da se
+    ' otvori. Uvoz je izricita radnja operatera (ARCHITECTURE_REFERENCE par.288).
+    If Not mStartUsmeravanje Then
+        On Error Resume Next
+        modUiScreens.ScrAktiviraj kljuc
+        Err.Clear
+        On Error GoTo 0
+    End If
 
     ActivateScreen = True
 End Function
@@ -5500,6 +5519,16 @@ End Function
 ' Koji ekran bi prekidac otvorio u datoj sekciji. Javno ZBOG TESTA: test mora da
 ' zna kljuc PRE nego sto proba prelazak, da bi posle mogao da tvrdi nesto o
 ' TOJ zoni (npr. da je posle pada gradnje nema).
+' Automatsko usmeravanje sa starta, bez podizanja cele aplikacije. Javno zbog
+' testa: razlika izmedju klika i starta se drugacije ne moze izmeriti, a bas
+' ona odlucuje hoce li se novac knjiziti bez operatera.
+Public Function OtkupUI_StartPrelazakTest(ByVal kljuc As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    mStartUsmeravanje = True
+    OtkupUI_StartPrelazakTest = OtkupUI_PrelazakTest(kljuc)
+    mStartUsmeravanje = False
+End Function
+
 Public Function OtkupUI_EkranZaSekcijuTest(ByVal sekcija As String) As String
     OtkupUI_EkranZaSekcijuTest = EkranZaSekciju(sekcija)
 End Function

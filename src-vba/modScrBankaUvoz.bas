@@ -37,13 +37,14 @@ Attribute VB_Name = "modScrBankaUvoz"
 ' stavke je isti citac sa filterom -- to su cipovi. Zasebna lista po statusu
 ' bila bi druga kopija istog citaca koja moze da se razidje.
 '
-' STA NIJE PRENETO: UVOZ (povlacenje PDF-ova, parsiranje, staging). Razlog nije
-' duzina posla nego ishod: ImportBankaInbox_TX je Sub koji NE VRACA nista --
-' SaveBankaImportRowsCore prebroji i upisane i duplikate, ali oba zavrse u
-' Debug.Print. Dugme koje ne moze da kaze "uvezeno N, duplikata M" bilo bi tiho
-' knjizenje, a uz to pomera i fajlove po disku (Inbox -> Processed/Error). Uz
-' to, ni frmBankaImport nema uvozno dugme -- uvoz je oduvek zasebna komanda, pa
-' ovaj ekran time NIJE uzi od legacy-ja.
+' UVOZ JE PRENET (v6-ui-212, par.9.9). Prvobitna odluka je bila da ostane van
+' ekrana, i razlog je bio ishod: ImportBankaInbox_TX je bio Sub koji NE VRACA
+' nista, pa bi dugme koje ne ume da kaze "uvezeno N, duplikata M" bilo tiho
+' knjizenje. Taj razlog je otklonjen -- rutina sada vraca brojeve odvojeno.
+'
+' I sama pretpostavka je bila pogresna: uvoz NIJE dugme. U legacy meniju ga je
+' pokretao KLIK NA BANKA (frmOtkupAPP.btnBanka_Click), pa je ovde ULAZAK U
+' EKRAN taj klik -- v. Scr_Aktiviraj.
 '
 ' POLJA SU LJUSKINA, NE EKRANOVA. Sklop "natpis + shell + kontrola" pravi
 ' modOtkupUI.NewFieldG, raspored unutar polja modOtkupUI.LayoutFieldInner.
@@ -116,6 +117,12 @@ Private mCiljErr As String
 Private mAktivacija As Long
 Private mUvozPozvan As Long
 Private mUvozUcinio As Long
+' Ishod uvoza koji test PODMECE umesto pravog. Bez ovoga bi tvrdnja o grani
+' 'nesto je uvezeno' morala da vozi pravi uvoz -- a on pomera fajlove po disku.
+Private mUvozTestOn As Boolean
+Private mUvozTestUvezeno As Long
+Private mUvozTestDuplikata As Long
+Private mUvozTestNadjeno As Long
 ' Koliko je puta punjenje liste POZVANO. Postoji zato sto se bez forme ne moze
 ' videti da li ga je kapija stvarno zvala: bez kontrole PuniCiljCombo izlazi
 ' odmah, pa uklonjen poziv ne menja nijedan drugi merljiv ishod -- a bas taj
@@ -291,7 +298,14 @@ Public Sub Scr_Aktiviraj()
     DoEvents
 
     mUvozPozvan = mUvozPozvan + 1
-    modBankaImport.ImportBankaInbox_WithDrivePull uvezeno, duplikata, nadjeno
+    If mUvozTestOn And IsTestMode() Then
+        ' Podmetnut ishod: grana 'nesto je uvezeno' se meri BEZ dodira sa diskom.
+        uvezeno = mUvozTestUvezeno
+        duplikata = mUvozTestDuplikata
+        nadjeno = mUvozTestNadjeno
+    Else
+        modBankaImport.ImportBankaInbox_WithDrivePull uvezeno, duplikata, nadjeno
+    End If
 
     ' Ni posle povlacenja nema nicega -- ni rec. Poruka 'uvezeno 0' na svaki
     ' ulazak u ekran je sum, a ekran se nije promenio pa nema sta da se osvezi.
@@ -314,9 +328,13 @@ Public Sub Scr_Aktiviraj()
     Exit Sub
 
 EH:
+    ' I PAD OSVEZAVA MREZU. Tabela se commit-uje PRE pomeranja fajlova, pa pad
+    ' pomeranja ostavlja redove STVARNO upisane -- bez osvezavanja bi operater
+    ' video gresku nad mrezom u kojoj tih redova nema.
     LogErr "modScrBankaUvoz.Scr_Aktiviraj"
     On Error Resume Next
     Scr_ResetCache
+    modOtkupUI.RefreshFromData
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_UVOZ"), True
 End Sub
 
@@ -1842,6 +1860,17 @@ Public Function Scr_BuUvozUcinioTest() As Long
     Scr_BuUvozUcinioTest = mUvozUcinio
 End Function
 
+' Podmetni ishod uvoza. Tvrdo gejtovan: van test rezima ne radi nista, pa
+' produkcija uvek ide pravim putem.
+Public Sub Scr_BuUvozTestSet(ByVal ukljucen As Boolean, ByVal uvezeno As Long, _
+                             ByVal duplikata As Long, ByVal nadjeno As Long)
+    If Not IsTestMode() Then Exit Sub
+    mUvozTestOn = ukljucen
+    mUvozTestUvezeno = uvezeno
+    mUvozTestDuplikata = duplikata
+    mUvozTestNadjeno = nadjeno
+End Sub
+
 Public Sub Scr_BuTestReset()
     If Not IsTestMode() Then Exit Sub
     mLista = BU_STAVKE
@@ -1855,5 +1884,9 @@ Public Sub Scr_BuTestReset()
     mAktivacija = 0
     mUvozPozvan = 0
     mUvozUcinio = 0
+    mUvozTestOn = False
+    mUvozTestUvezeno = 0
+    mUvozTestDuplikata = 0
+    mUvozTestNadjeno = 0
     Scr_ResetCache
 End Sub

@@ -7614,16 +7614,21 @@ End Function
 '   2) da se uvoz zove I KAD JE LOKALNI INBOX PRAZAN. Prva verzija je ovde
 '      imala pretprovaru, pa se Drive pull -- koji je UNUTAR uvoza -- nikad nije
 '      pokretao: nov izvod moze da postoji samo na Drive-u.
-'   3) da prazan REZULTAT (ni posle povlacenja nema nicega) ne javlja nista i ne
-'      osvezava mrezu.
+'   3) da prazan REZULTAT ne radi posao (nema osvezavanja mreze ni rezultata).
+'   4) da AUTOMATSKI START ne pokrece uvoz -- samo klik operatera. Uvoz pri
+'      boot-u krsi RELEASE_GATES par.85 i ARCHITECTURE_REFERENCE par.288/440.
+'      Nalog sa pravom SAMO na Banku ovde starta bas na ovom ekranu.
 '
-' Sam uvoz se ne vozi: on pise u tabele i pomera fajlove po disku, a ova suite
-' je nemutirajuca. Fixture nema Inbox folder, pa je nadjeno 0 -- to je i
-' preduslov koji se tvrdi, da test ne bi merio prazan skup slucajno.
+' SAM UVOZ SE NE VOZI, i to na DVA nivoa. ImportBankaInbox_TX u test rezimu ne
+' radi nista (tvrda brana u modBankaImport): povlaci sa Drive-a, upisuje i POMERA
+' fajlove, pa bi suite umela da uveze pravi izvod u testnu svesku i da original
+' skloni -- produkciona sveska ga posle vise ne bi uvezla. Grana 'nesto je
+' uvezeno' se zato meri PODMETNUTIM ishodom (Scr_BuUvozTestSet), bez diska.
 Private Sub T_BankaUvoz_UlazakUvoziIzvode()
     Dim f As frmOtkupUI
     Dim presao As Boolean, aktivacija As Long
     Dim pozvan As Long, ucinio As Long, ceka As Long
+    Dim startPresao As Boolean, startPozvan As Long
 
     modScrBankaUvoz.Scr_BuTestReset
     ceka = modBankaImport.BankaInboxBrojFajlova()
@@ -7645,7 +7650,29 @@ Private Sub T_BankaUvoz_UlazakUvoziIzvode()
     AssertEq (pozvan > 0), True, _
              "uvoz se zove i kad je lokalni Inbox prazan"
     AssertEq ucinio, 0, _
-             "prazan rezultat NE javlja nista i ne osvezava mrezu"
+             "prazan rezultat ne radi posao (nema osvezavanja ni rezultata)"
+
+    ' --- grana 'nesto je uvezeno', sa PODMETNUTIM ishodom --------------------
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+    modOtkupUI.OtkupUI_PrelazakTest "DOKUMENTI"
+    modOtkupUI.OtkupUI_PrelazakTest "BANKA_UVOZ"
+    AssertEq modScrBankaUvoz.Scr_BuUvozUcinioTest(), 1, _
+             "nadjen izvod POKRECE posao ekrana (osvezavanje i rezultat)"
+
+    ' --- AUTOMATSKI START NIJE KLIK ------------------------------------------
+    ' Nalog sa pravom samo na Banku starta bas ovde. Uvoz pri startu bi knjizio
+    ' novac bez ijednog klika operatera.
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+    modOtkupUI.OtkupUI_PrelazakTest "DOKUMENTI"
+    startPresao = modOtkupUI.OtkupUI_StartPrelazakTest("BANKA_UVOZ")
+    startPozvan = modScrBankaUvoz.Scr_BuUvozPozvanTest()
+    modScrBankaUvoz.Scr_BuTestReset
+
+    AssertEq startPresao, True, "preduslov: start otvara ekran"
+    AssertEq startPozvan, 0, _
+             "automatsko usmeravanje sa starta NE pokrece uvoz -- samo klik"
 End Sub
 
 Private Sub T_BankaUvoz_UgovorEkrana()

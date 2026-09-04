@@ -99,12 +99,34 @@ Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
                                Optional ByRef outNadjeno As Long)
     Const SRC As String = "ImportBankaInbox_TX"
 
+    ' U TEST REZIMU SE NE IZVRSAVA. Ova rutina povlaci sa Drive-a, upisuje u
+    ' tabele i POMERA fajlove po disku (Inbox -> Processed / Error). Suite koja
+    ' bi je dotakla umela bi da uveze pravi izvod u testnu svesku i da original
+    ' skloni -- produkciona sveska ga posle vise ne bi uvezla, jer ga u Inboxu
+    ' nema. To se ne moze popraviti rollback-om: fajl je vec pomeren.
+    '
+    ' Brana stoji OVDE, a ne kod pozivaoca, bas zato sto ne zna ko ce je jednom
+    ' pozvati. Ekran ima svoj seam (Scr_BuUvozTestSet) da bi granu ipak mogao da
+    ' izmeri, bez ijednog dodira sa diskom.
+    If IsTestMode() Then
+        outUvezeno = 0
+        outDuplikata = 0
+        outNadjeno = 0
+        Exit Sub
+    End If
+
     Dim tx As clsTransaction
     Dim successMoves As Collection
     Dim errorMoves As Collection
     Dim errNum As Long
     Dim errDesc As String
     Dim errSrc As String
+
+    ' Izlazi se nuluju na ULAZU: ByRef argument nosi vrednost pozivaoca, pa bi
+    ' ponovljen poziv bez upisa vratio brojeve prethodnog uvoza.
+    outUvezeno = 0
+    outDuplikata = 0
+    outNadjeno = 0
 
     On Error GoTo EH
 
@@ -185,10 +207,16 @@ Public Sub ImportBankaInbox_WithDrivePull(Optional ByRef outUvezeno As Long, _
 
     On Error GoTo EH
 
+    outUvezeno = 0
+    outDuplikata = 0
+    outNadjeno = 0
+
     ' Drive povlacenje je BEST-EFFORT: ako Drive putanja nije dostupna (offline,
     ' pogresan BANKA_DRIVE_SOURCE_PATH, nepristupacan folder) NE obaraj uvoz --
     ' zabelezi WARN i uvezi lokalni Inbox svejedno. Sam uvoz (_TX) ostaje hard.
-    If BankaDrivePullConfigured() Then
+    ' I povlacenje je van test rezima: ono dira TUDJI folder (Drive) i pomera
+    ' originale u Downloaded.
+    If BankaDrivePullConfigured() And Not IsTestMode() Then
         On Error Resume Next
         PullBankPdfsFromDriveProduction
         If Err.Number <> 0 Then
