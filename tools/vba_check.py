@@ -791,6 +791,97 @@ def check_scalar_call(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# Ugradjeni clanovi UserForm-a koje pozivalac sme da dohvati spolja. Namerno
+# uzak spisak: sve van njega mora da postoji U FORMI, inace nije nas clan.
+UF_UGRADJENI = frozenset("""
+show hide tag caption controls name enabled visible repaint printform
+width height left top insidewidth insideheight scrolltop scrollleft
+startupposition backcolor forecolor mousepointer zoom activecontrol
+""".split())
+
+_FRM_CLAN = re.compile(r"\b(frm[A-Za-z0-9_]+)\s*\.\s*([A-Za-z0-9_]+)")
+_FRM_PUB_PROC = re.compile(
+    r"^Public (?:Sub|Function|Property (?:Get|Let|Set)) +([A-Za-z0-9_]+)", re.M)
+_FRM_PUB_VAR = re.compile(r"^Public +(?:WithEvents +)?([A-Za-z0-9_]+) +As ", re.M)
+_FRM_KONTROLA = re.compile(r"^\s*Begin\s+\S+\s+([A-Za-z0-9_]+)\s*$", re.M)
+_LOKALNO = re.compile(
+    r"(?:\bDim\b|\bStatic\b|\bByVal\b|\bByRef\b|\bPrivate\b|\bPublic\b)\s+"
+    r"([A-Za-z0-9_]+)\s+As\b")
+
+
+def clanovi_forme(tekst: str) -> set[str]:
+    """Sve na sta se spolja sme pozvati: javne procedure, javna polja, kontrole."""
+    out = {m.group(1).lower() for m in _FRM_PUB_PROC.finditer(tekst)}
+    out |= {m.group(1).lower() for m in _FRM_PUB_VAR.finditer(tekst)}
+    out |= {m.group(1).lower() for m in _FRM_KONTROLA.finditer(tekst)}
+    return out
+
+
+def _mapa_formi(frm_dir: str) -> dict[str, set[str]]:
+    mapa = {}
+    if not os.path.isdir(frm_dir):
+        return mapa
+    for name in os.listdir(frm_dir):
+        if not name.endswith(".frm"):
+            continue
+        with open(os.path.join(frm_dir, name), "r", encoding="ascii",
+                  errors="replace") as fh:
+            mapa[name[:-4].lower()] = clanovi_forme(fh.read())
+    return mapa
+
+
+def check_clan_forme(files: list[str],
+                     frm_dir: str | None = None) -> list[Finding]:
+    """`frmX.Clan` gde Clan ne postoji u frmX -- compile greska koju NISTA drugo
+    ne hvata.
+
+    `NEDEFINISAN` ne radi nad `.frm`, a VBA kompajlira proceduru **tek kad se
+    pozove** -- pa suite nad kojom se ta forma ne gradi ostane zelena i sa
+    slomljenim pozivom. Jedina kapija je bila rucni `Debug > Compile`.
+
+    Zatecen slucaj: `OpenContentFormPublic` obrisan iz `frmOtkupAPP` uz pogresnu
+    pretpostavku o jedinom pozivaocu -- `frmMaticniPodaci` ga je i dalje zvao.
+    FULL je bio zelen na svih 11 suite-ova.
+
+    Provera je NAMERNO uska, iz istog razloga kao `NEDEFINISAN`: lazan nalaz je
+    gori od propustenog.
+      - gleda samo imena koja odgovaraju POSTOJECOJ formi u `src-vba/`;
+      - preskace ime koje je u tom fajlu deklarisano kao promenljiva ili
+        parametar (`Dim frmX As ...`) -- tada `frmX` nije forma nego lokal;
+      - preskace sadrzaj string literala i komentare;
+      - ugradjene clanove UserForm-a pusta kroz `UF_UGRADJENI`.
+    """
+    if frm_dir is None:
+        frm_dir = SRC_VBA
+    mapa = _mapa_formi(frm_dir)
+    if not mapa:
+        return []
+
+    out = []
+    for path in files:
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            tekst = fh.read()
+        # ime koje je u OVOM fajlu deklarisano kao promenljiva nije forma
+        lokali = {m.group(1).lower() for m in _LOKALNO.finditer(tekst)}
+        sam = os.path.basename(path)[:-4].lower()
+        for i, line in enumerate(tekst.splitlines(), start=1):
+            if line.strip().startswith("'"):
+                continue
+            for m in _FRM_CLAN.finditer(_strip_strings(line)):
+                forma, clan = m.group(1).lower(), m.group(2).lower()
+                if forma in lokali or forma == sam:
+                    continue
+                if forma not in mapa:
+                    continue
+                if clan in UF_UGRADJENI or clan in mapa[forma]:
+                    continue
+                out.append(Finding(path, i, "CLAN_FORME",
+                                   f"'{m.group(1)}.{m.group(2)}' -- forma nema taj "
+                                   f"javni clan ni kontrolu. VBA to javlja tek na "
+                                   f"Debug > Compile, jer se modul forme kompajlira "
+                                   f"tek kad se pozove."))
+    return out
+
 def check_poruke(files: list[str]) -> list[Finding]:
     poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
     if not os.path.exists(poruke_path):
@@ -2539,6 +2630,53 @@ End Sub
 ]
 
 
+# --- CLAN_FORME: dokaz u oba smera ------------------------------------------
+#
+# Zatecen slucaj: OpenContentFormPublic obrisan iz frmOtkupAPP, a frmMaticniPodaci
+# ga je i dalje zvao. FULL je bio zelen na svih 11 suite-ova -- NEDEFINISAN ne radi
+# nad .frm, a VBA kompajlira modul forme tek kad se pozove.
+#
+# Polovina sa 0 nalaza drzi granicu i vaznija je: provera gleda samo imena koja
+# JESU forme, preskace lokale istog imena (Dim frmProba As Object) i ne dira
+# ugradjene clanove UserForm-a.
+SVAKA_FORMA = (
+    'VERSION 5.00\r\n'
+    'Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmProba \r\n'
+    '   Begin Forms.CommandButton btnOk\r\n'
+    '   End\r\n'
+    'End\r\n'
+    'Attribute VB_Name = "frmProba"\r\n'
+    'Option Explicit\r\n'
+    'Public LoginOK As Boolean\r\n'
+    'Public Sub OtvoriSekciju(ByVal s As String)\r\n'
+    'End Sub\r\n'
+    'Private Sub Skriveno()\r\n'
+    'End Sub\r\n'
+)
+
+CLAN_FORME_CASES = [
+    # --- mora da zapisti ---
+    ("clan koji ne postoji", 1,
+     'Public Sub P()\r\n    frmProba.NemaMe\r\n'),
+    ("Private clan nije javni clan", 1,
+     'Public Sub P()\r\n    frmProba.Skriveno\r\n'),
+    # --- NE sme da zapisti ---
+    ("javna procedura", 0,
+     'Public Sub P()\r\n    frmProba.OtvoriSekciju "x"\r\n'),
+    ("javno polje", 0,
+     'Public Sub P()\r\n    frmProba.LoginOK = False\r\n'),
+    ("kontrola iz zaglavlja", 0,
+     'Public Sub P()\r\n    frmProba.btnOk.Caption = ""\r\n'),
+    ("ugradjen clan UserForm-a", 0,
+     'Public Sub P()\r\n    frmProba.Show\r\n    frmProba.Tag = "x"\r\n'),
+    ("lokal istog imena nije forma", 0,
+     'Public Sub P(ByVal frmProba As MSForms.Frame)\r\n'
+     '    frmProba.InsideWidth = 10\r\n'),
+    ("ime koje nije forma", 0,
+     'Public Sub P()\r\n    frmNemaOvakve.BiloSta\r\n'),
+    ("u string literalu", 0,
+     'Public Sub P()\r\n    LogErr "frmProba.NemaMe"\r\n'),
+]
 # --- KRAJ_REDA: dokaz u oba smera -------------------------------------------
 #
 # Slucajevi su BAJTOVI, ne linije: provera i postoji zato sto se kraj reda
@@ -2765,6 +2903,25 @@ def self_test() -> int:
             palo.append(f"  KRAJ_REDA/{naziv}: ocekivano {ocekivano} nalaza, "
                         f"dobijeno {dobijeno}")
 
+    # CLAN_FORME trazi i FORMU i pozivaoca, pa oba idu na disk.
+    tmpcf = tempfile.mkdtemp(prefix="vbacheck_clan_")
+    try:
+        frmdir = os.path.join(tmpcf, "forme")
+        os.makedirs(frmdir, exist_ok=True)
+        with open(os.path.join(frmdir, "frmProba.frm"), "w",
+                  encoding="ascii", newline="") as fh:
+            fh.write(SVAKA_FORMA)
+        for naziv, ocekivano, izvor in CLAN_FORME_CASES:
+            put = os.path.join(tmpcf, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="") as fh:
+                fh.write('Attribute VB_Name = "modPozivalac"\r\n' + izvor)
+            dobijeno = len(check_clan_forme([put], frmdir))
+            if dobijeno != ocekivano:
+                palo.append(f"  CLAN_FORME/{naziv}: ocekivano {ocekivano} nalaza, "
+                            f"dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmpcf, ignore_errors=True)
+
     for naziv, ocekivano, izvor in ODSECEN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2899,7 +3056,7 @@ def self_test() -> int:
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)
-              + len(KRAJ_REDA_CASES) + 3)
+              + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -2984,6 +3141,7 @@ def main(argv: list[str]) -> int:
 
     findings += check_poruke(files)
     findings += check_storno_registar(files)
+    findings += check_clan_forme(files)
 
     # Katalog se proverava UVEK, i kad je dat jedan fajl.
     #
