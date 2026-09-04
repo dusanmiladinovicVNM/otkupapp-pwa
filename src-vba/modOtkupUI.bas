@@ -255,7 +255,7 @@ Public Const IC_FAKT     As Long = &HE8C7&   ' PaymentCard
 Private Const IC_BANKA    As Long = &HE825&   ' Bank
 Public Const IC_UVOZ     As Long = &HEA90&   ' PDF - izvodi su PDF fajlovi
 Public Const IC_NALOZI   As Long = &HE9D5&   ' CheckList - nalozi su spisak stavki
-Public Const IC_MARZA    As Long = &HE9D2&   ' AreaChart
+Public Const IC_ANALIZA  As Long = &HE9D2&   ' AreaChart
 Public Const IC_IZVEST   As Long = &HE9F9&   ' ReportDocument
 Public Const IC_SLEDLJ   As Long = &HE71B&   ' Link
 ' Akcije
@@ -3710,7 +3710,7 @@ End Function
 ' samo bojenje sidebara - bez prelaska
 '
 ' PRIGUSENA STAVKA OSTAJE PRIGUSENA. Do sada je bojenje svakoj neizabranoj
-' stavci vracalo punu boju, pa su Marza i Sledljivost izgledale prigusene samo
+' stavci vracalo punu boju, pa su prigusene stavke izgledale kao pune samo
 ' do prvog klika bilo gde u meniju -- posle toga su izgledale kao da rade.
 ' U maticnoj sekciji bi to bilo tri od pet stavki, pa se ispravlja ovde.
 '
@@ -8580,7 +8580,7 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_UPLATA", "Naslov F6: Uplate", "Download", IC_UPLATA
     IcoRow a, "IC_UVOZ", "Sidebar: Uvoz izvoda", "PDF", IC_UVOZ
     IcoRow a, "IC_NALOZI", "Sidebar: Platni nalozi", "CheckList", IC_NALOZI
-    IcoRow a, "IC_MARZA", "Sidebar: Marza", "AreaChart", IC_MARZA
+    IcoRow a, "IC_ANALIZA", "Sidebar: Analiza poslovanja", "AreaChart", IC_ANALIZA
     IcoRow a, "IC_IZVEST", "Sidebar: Izvestaji", "ReportDocument", IC_IZVEST
     IcoRow a, "IC_SLEDLJ", "Sidebar: Sledljivost", "Link", IC_SLEDLJ
     IcoRow a, "IC_SAVE", "Dugme: Sacuvaj", "Save", IC_SAVE

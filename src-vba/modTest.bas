@@ -456,6 +456,7 @@ Public Sub RunAllTests()
     RunOne 180
     RunOne 181
     RunOne 182
+    RunOne 183
     RunOne 124
     RunOne 125
     RunOne 126
@@ -707,6 +708,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
+        Case 183: TestName = "T_Analiza_EkranUIzradi"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -897,6 +899,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_BankaUvoz_PlanPrikazaJeIPlanPisca
+        Case 183: T_Analiza_EkranUIzradi
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -13020,7 +13023,7 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
     Dim radVidljivaUMat As Boolean, matVidljivaUMat As Boolean
     Dim radVidljivaURad As Boolean
     Dim r As Variant, losaSekcija As String, sek As String
-    Dim tagNeizgradjen As String, bojaNeizgradjenog As Long
+    Dim tagZabranjen As String, bojaZabranjenog As Long
 
     ' Registar: sekcija je ili RAD ili MATICNI. Prazno polje se cita kao RAD
     ' (SekcijaIli), pa red bez sedmog polja ne nestaje iz sidebara -- ali
@@ -13031,6 +13034,9 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
             losaSekcija = losaSekcija & " " & modUiScreens.ScrField(CStr(r), SCR_KLJUC)
     Next r
 
+    ' Stavka koja MORA da bude prigusena. Brana se zatvara PRE gradnje, jer
+    ' BuildNav mapu prigusenja pravi bas tada (mNavOff).
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest True
     Set f = NewOtkupUIForm()
     Set z = f.Controls("zNav")
 
@@ -13040,12 +13046,15 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
     tagMat = modOtkupUI.NavTagZaEkran("MAT_PARTNERI")
     radVidljivaURad = VidljivaKontrola(z, tagRad)
 
-    ' Ekran koji je u registru, a modul mu jos nije napisan. Do v6-ui-200 je
-    ' ovde stajao MAT_PARTNERI -- od M1 on IMA modul, pa je tvrdnja "prigusen"
-    ' merila nesto sto vise nije tacno i prolazila bi samo greskom. MARZA je
-    ' danas jedini takav red (modScrMarza ne postoji); kad se napise, ovo pukne
-    ' PO IMENU i trazi nov primer, sto je i smisao.
-    tagNeizgradjen = modOtkupUI.NavTagZaEkran("MARZA")
+    ' PRIMER PRIGUSENE STAVKE. Ovo je trece ime na istom mestu: MAT_PARTNERI je
+    ' dobio modul u M1, MARZA ga je dobila u v6-ui-213 (ekran ANALIZA) -- i svaki
+    ' put je tvrdnja pukla PO IMENU i trazila nov primer, sto je i bio smisao.
+    '
+    ' Sada primer vise ne zavisi od toga sta je u registru NENAPISANO: prigusenost
+    ' se izaziva ZATVORENOM BRANOM ekrana. Mereno svojstvo je isto -- mNavOff, i
+    ' to da PaintNav ne vrati punu boju -- jer ljuska ne zna ZASTO je stavka
+    ' neaktivna: ScrAktivan spaja 'nema modula' i 'nema prava' u isti odgovor.
+    tagZabranjen = modOtkupUI.NavTagZaEkran("MAT_KORISNICI")
 
     modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
     sekPosle = modOtkupUI.AktivnaSekcija()
@@ -13054,12 +13063,14 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
     matVidljivaUMat = VidljivaKontrola(z, tagMat)
     ' Prelazak preboji sidebar (PaintNav). Boja se cita POSLE toga - bas tu je
     ' prigusenost ranije nestajala.
-    bojaNeizgradjenog = z.Controls(tagNeizgradjen & "X").ForeColor
+    bojaZabranjenog = z.Controls(tagZabranjen & "X").ForeColor
 
     modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
     ReleaseOtkupUIForm f
+    modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
 
     AssertEq losaSekcija, "", "svaki red registra je u poznatoj sekciji"
+    AssertEq (Len(tagZabranjen) > 0), True, "Korisnici imaju stavku u sidebaru"
     AssertEq (Len(tagRad) > 0), True, "radna sekcija ima stavku za DOKUMENTI"
     AssertEq (Len(tagMat) > 0), True, "maticna sekcija ima stavku za MAT_PARTNERI"
 
@@ -13080,14 +13091,14 @@ Private Sub T_Sekcija_SidebarNeStajeZajedno()
     AssertEq radVidljivaUMat, False, "u maticnoj sekciji je radna stavka ugasena"
     AssertEq matVidljivaUMat, True, "u maticnoj sekciji je maticna stavka vidljiva"
 
-    ' 4) Ekran bez modula ostaje PRIGUSEN i posle prebojavanja. Bez ovoga bi tri
-    ' od pet maticnih stavki izgledale kao da rade, a klik na njih bi samo rekao
-    ' da ekran jos ne postoji.
-    AssertEq modOtkupUI.NavPrigusena(tagNeizgradjen), True, _
-             "ekran bez modula je prigusen"
+    ' 4) Nedostupan ekran ostaje PRIGUSEN i posle prebojavanja. Bez ovoga bi
+    ' stavka na koju operater nema pravo izgledala kao da radi cim negde klikne,
+    ' a klik na nju bi samo rekao da nema dozvolu.
+    AssertEq modOtkupUI.NavPrigusena(tagZabranjen), True, _
+             "nedostupan ekran je prigusen"
     AssertEq modOtkupUI.NavPrigusena(tagMat), False, _
-             "ekran koji postoji NIJE prigusen"
-    AssertEq bojaNeizgradjenog, C_DISABLED_FG, _
+             "dostupan ekran NIJE prigusen"
+    AssertEq bojaZabranjenog, C_DISABLED_FG, _
              "prigusena stavka ostaje prigusena i posle prebojavanja sidebara"
 End Sub
 
@@ -14434,8 +14445,13 @@ Private Sub T_MatKor_RecnikDaNeIPrava()
              "prava nemaju polja editora (pa ni dugme Nova stavka)"
 
     ' Svaka oblast ima naziv u katalogu -- inace bi u listi stajao naziv kolone.
+    '
+    ' Merilo je PorukaNedostaje, ne Len() = 0: Poruka() na nepoznat kljuc vraca
+    ' "[KLJUC]", nikad prazno, pa je provera duzine bila placebo -- prolazila bi
+    ' i za oblast koja u katalogu nema nijedan red. Nadjeno merenjem, sabotazom
+    ' 'analiza-naslov-bez-poruke' koja nije oborila nista.
     For Each obl In modAuth.OblastiList()
-        If Len(Poruka("OTKUI_OBL_" & UCase$(CStr(obl)))) = 0 Then _
+        If PorukaNedostaje("OTKUI_OBL_" & UCase$(CStr(obl))) Then _
             bezNaziva = bezNaziva & " " & CStr(obl)
     Next obl
     AssertEq bezNaziva, "", "svaka oblast prava ima naziv u katalogu poruka"
@@ -15072,3 +15088,93 @@ Sledeci:
     AssertEq modScrBankaUvoz.BuJakiOdgovor(3), "", _
              "kad ima sta da se mapira, batch se pokrece"
 End Sub
+
+' ============================================================
+' 183. Ekran U IZRADI je i dalje EKRAN.
+'
+' ANALIZA je uzela mesto reda MARZA -- reda koji je pokazivao na modul koji
+' nikad nije napisan, pa se stavka crtala prigusena, a klik je govorio da ekrana
+' nema. Zamena je izmena PONASANJA sidebara, pa se meri.
+'
+' Ekran nema sta da racuna i to i pise, ali tri stvari mora da uradi kako treba:
+'
+'   1) da POSTOJI za ljusku (Scr_Meta prolazi). Ime modula u registru se ne
+'      kompajlira -- ono je STRING (kasno vezivanje). Omaska u njemu ne pravi
+'      gresku nego prigusenu stavku, dakle tacno stanje od kog se htelo pobeci.
+'
+'   2) da vrati PRAZNU ali SVOJU mrezu. Ekran koji vrati Empty ostavlja mrezu
+'      na kolonama PRETHODNOG ekrana (LoadGridFromScreen radi Exit Sub):
+'      zaglavlje tudje liste stoji, celije prazne -- kvar vec jednom naplacen
+'      na cipu "Svi".
+'
+'   3) da naslovi koje Scr_Meta imenuje POSTOJE u katalogu poruka. Ti kljucevi
+'      su unutar jednog stringa, ne u pozivu Poruka("..."), pa ih staticka
+'      provera PORUKA (vba_check) NE VIDI: omaska bi dala prazan naslov ekrana
+'      i prazan naslov mreze, bez ijedne greske. Meri se za SVE ekrane registra,
+'      pa provera pokriva i one koji tek dolaze.
+' ============================================================
+Private Sub T_Analiza_EkranUIzradi()
+    Dim d As Variant, kolone As Variant, r As Variant
+    Dim meta As String, kljuc As String, polje As Variant, par As Variant
+    Dim bezNaziva As String, nepostoje As String
+
+    ' --- 1) ekran postoji, stari red ga vise ne deli ---------------------
+    AssertEq modUiScreens.ScrPostoji("ANALIZA"), True, _
+             "ekran u izradi POSTOJI za ljusku (inace je stavka prigusena)"
+    AssertEq (Len(modUiScreens.ScrRowByKey("MARZA")) = 0), True, _
+             "reda MARZA vise nema u registru"
+    AssertEq (InStr(modUiScreens.ScrMeta("ANALIZA"), "kljuc=ANALIZA") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+
+    ' --- 2) prazna, ali SVOJA mreza --------------------------------------
+    d = modScrAnaliza.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "ekran u izradi vraca niz, ne Empty"
+    AssertEq (UBound(d) >= 4), True, _
+             "vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+    AssertEq IsArray(d(0)), True, "ekran u izradi prijavljuje SVOJE kolone"
+    AssertEq CLng(d(2)), 0, "ekran u izradi nema nijedan red"
+    kolone = d(0)
+    AssertEq ((UBound(kolone) + 1) <= modOtkupUI.MAX_COLS), True, _
+             "ne trazi vise kolona nego sto mreza pravi"
+
+    ' --- 3) kljucevi naslova iz Scr_Meta postoje u katalogu --------------
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If Len(modUiScreens.ScrField(CStr(r), SCR_MODUL)) = 0 Then GoTo Sledeci
+        If Not modUiScreens.ScrPostoji(kljuc) Then
+            nepostoje = nepostoje & " " & kljuc
+            GoTo Sledeci
+        End If
+        meta = modUiScreens.ScrMeta(kljuc)
+        For Each polje In Array("naslov", "sub", "lista")
+            par = MetaKljuc(meta, CStr(polje))
+            If Len(par) > 0 Then
+                If PorukaNedostaje(CStr(par)) Then _
+                    bezNaziva = bezNaziva & " " & kljuc & "." & CStr(polje) & "=" & par
+            End If
+        Next polje
+Sledeci:
+    Next r
+    AssertEq nepostoje, "", _
+             "svaki red registra sa modulom ima ekran koji zaista postoji"
+    AssertEq bezNaziva, "", _
+             "svaki naslov iz Scr_Meta ima svoj red u katalogu poruka"
+End Sub
+
+' Kljuc koji katalog poruka NE ZNA. Poruka() takav vraca kao "[KLJUC]" i nikad
+' kao prazan string, pa je 'Len(Poruka(k)) = 0' provera koja ne moze da padne.
+Private Function PorukaNedostaje(ByVal k As String) As Boolean
+    PorukaNedostaje = (Poruka(k) = "[" & k & "]")
+End Function
+
+' Vrednost polja iz opisa ekrana ("kljuc=A|naslov=B"). Ljuska ima svoj
+' MetaVal, ali je Private -- ovde se cita isti string, istim pravilom.
+Private Function MetaKljuc(ByVal meta As String, ByVal polje As String) As String
+    Dim p As Variant
+    For Each p In Split(meta, "|")
+        If Left$(CStr(p), Len(polje) + 1) = polje & "=" Then
+            MetaKljuc = Mid$(CStr(p), Len(polje) + 2)
+            Exit Function
+        End If
+    Next p
+End Function

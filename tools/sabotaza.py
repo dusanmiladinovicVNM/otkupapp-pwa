@@ -2205,6 +2205,49 @@ SABOTAZE = {
         "T_Sekcija_SidebarNeStajeZajedno",
         "prigusena stavka ostaje prigusena i posle prebojavanja sidebara",
     ),
+    # ------------------------------------------------- EKRAN U IZRADI (ANALIZA)
+    # Ime modula u registru je STRING, ne poziv -- ne kompajlira se. Omaska u
+    # njemu ne pravi gresku nego prigusenu stavku: tacno stanje zbog kog je red
+    # MARZA i zamenjen. Ovo je ista tvrdnja koju petlja u istom testu radi nad
+    # SVIM redovima; ovde se gadja imenom, jer bi sabotaza nad tudjim redom prvo
+    # oborila tvrdnju TOG ekrana ("kasno vezivanje radi").
+    "analiza-ekran-ne-postoji": (
+        "modUiScreens.bas",
+        '    c.Add "ANALIZA|modScrAnaliza|OTKUI_NAV_ANALIZA|" & IC_ANALIZA & _\n',
+        '    c.Add "ANALIZA|modScrAnalize|OTKUI_NAV_ANALIZA|" & IC_ANALIZA & _\n',
+        "T_Analiza_EkranUIzradi",
+        "ekran u izradi POSTOJI za ljusku",
+    ),
+    # Ekran koji vrati Empty ostavlja mrezu na kolonama PRETHODNOG ekrana
+    # (LoadGridFromScreen radi Exit Sub): zaglavlje tudje liste stoji, celije
+    # prazne. Ekran bez podataka zato mora da vrati PRAZAN, a ne NIKAKAV odgovor.
+    "analiza-mreza-nasledjuje-tudje-kolone": (
+        "modScrAnaliza.bas",
+        "    Scr_Rows = Array(AnaGridCols(), Empty, 0, 0#, 0#)\n",
+        "    Scr_Rows = Empty   ' SABOTAZA: mreza ostaje na tudjim kolonama\n",
+        "T_Analiza_EkranUIzradi",
+        "ekran u izradi vraca niz, ne Empty",
+    ),
+    # Kljucevi naslova zive UNUTAR jednog stringa (Scr_Meta), ne u pozivu
+    # Poruka("..."), pa ih staticka provera PORUKA ne vidi. Omaska daje prazan
+    # naslov ekrana i prazan naslov mreze, bez ijedne greske.
+    # Poruka() na nepoznat kljuc vraca "[KLJUC]", NIKAD prazno -- pa je provera
+    # 'Len(Poruka(k)) = 0' bila provera koja ne moze da padne. Ova sabotaza je i
+    # nasla taj placebo: pre ispravke nije obarala nista.
+    "oblast-prava-bez-naziva": (
+        "modPoruke.bas",
+        '    UpsertRow lo, existing, "OTKUI_OBL_PALETE", "Palete"\n',
+        '    UpsertRow lo, existing, "OTKUI_OBL_PALETX", "Palete"\n',
+        "T_MatKor_RecnikDaNeIPrava",
+        "svaka oblast prava ima naziv u katalogu poruka",
+    ),
+    "analiza-naslov-bez-poruke": (
+        "modScrAnaliza.bas",
+        '    Scr_Meta = "kljuc=" & EKRAN & "|naslov=OTKUI_NAV_ANALIZA|sub=OTKUI_SCRAN_SUB" & _\n',
+        '    Scr_Meta = "kljuc=" & EKRAN & "|naslov=OTKUI_NAV_ANALIZE|sub=OTKUI_SCRAN_SUB" & _\n',
+        "T_Analiza_EkranUIzradi",
+        "svaki naslov iz Scr_Meta ima svoj red u katalogu poruka",
+    ),
     # Paneli su od v6-ui-200 stavke sidebara, pa zive u DVA registra: modUiScreens
     # ih crta, modUiPanel ih otvara. Kljuc preimenovan u jednom, a zaboravljen u
     # drugom, daje stavku koja se vidi i ne otvara -- bez ijedne greske.

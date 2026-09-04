@@ -346,7 +346,6 @@ Public Function OblastZaFormu(ByVal formName As String) As String
         ' ostalo BEZ ijedne provere prava. Do sada ga je stitilo samo to sto se
         ' do njega dolazilo kroz gejtovan frmFakturisanje.
         Case "frmsef":                 OblastZaFormu = OBL_FAKTURISANJE
-        Case "frmmarza":               OblastZaFormu = OBL_MARZA
         Case Else:                     OblastZaFormu = vbNullString
     End Select
 End Function

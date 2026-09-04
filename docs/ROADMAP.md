@@ -421,7 +421,9 @@ dead `GroupBySum`/`SumColumn`/`IzvestajTip` enum. [AUD-016; katalog FM-0027]
   (per-row verdict/urgency/fix, anchored to code commit; already-triaged entries skipped).
 - Commit the FM into the repo split per file (`docs/functional-map/`); add a drift-check
   script (`git hash-object` vs per-entry Referentni SHA); resolve `modMarza` status (FM
-  skipped as unused, but `frmMarza` is reachable from `frmOtkupAPP`).
+  skipped as unused; `frmMarza` was deleted in UI migration step 6, so `modMarza` now has **no
+  caller** — the ANALIZA screen deliberately does not call it, see `UI_MIGRACIJA_KATALOG.md`
+  §27.15).
 
 ### 10.6 Wave 5 — delta remediation (v85 + v142)
 Detail in `REFAKTOR_PLAYBOOK.md` §3b (RF-21..26) + §3c (RF-27..30); items in

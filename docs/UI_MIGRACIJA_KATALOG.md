@@ -8086,7 +8086,7 @@ svescom. Prošao je samo `vba_check`. Checkliste: §27.6 i §27.7.
 | `frmBankaExportPregled` | `BANKA_NALOZI` (`modScrBankaNalozi`) | **OBRISAN** (korak 4, §27.12) | logika je u `modBankaExportPregled` (ostaje); zamrznuti `WithEvents` |
 | `frmMaticniPodaci` + `frmStammdaten` | `MAT_PARTNERI` / `MAT_ROBA` / `MAT_PAKOVANJE` / `MAT_KORISNICI` + paneli `MAT_PODESAVANJA` / `MAT_ADMIN` (§26, M0–M6) | **BRIŠU SE** (korak 5) | `modMaticniLookups.MaticniOtvoriSekciju` (jedini kodni pozivalac `OpenSekcija`), `clsStmBtn`, test koji gradi `frmStammdaten` (`modTest`), `frmOtkupAPP.OpenMaticniForm`. Paneli su već u ljusci (`modUiPanel`), ali `modAdmin` / `modPodesavanja` još imaju legacy granu zatvaranja (`frmOtkupAPP.ReturnToDashboard`) |
 | `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — uvoz se okida **ulaskom u ekran** (§9.9), ručno mapiranje je na ekranu (§9.4) | **BRIŠE SE** (korak 6) — oba uslova su ispunjena: (a) uvoz ima radnju i ishod u ljusci (§9.9), (b) §9.4 slučajevi su na ekranu | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
-| `frmMarza` | **nema** (`modScrMarza` ne postoji; red u registru se crta prigušen) | **BRIŠE SE** (korak 6) tek uz ekran Marža | — |
+| `frmMarza` | `ANALIZA` (`modScrAnaliza`) — ekran je **U IZRADI** i to piše na njemu | **OBRISAN** (korak 6, §27.15) | `btnMargin_Click`, `modAuth.OblastZaFormu`; `modMarza` ostaje, bez pozivaoca |
 | `frmOtkupAPP` | ljuska je `frmOtkupUI` | **BRIŠE SE POSLEDNJA** (korak 7) | host za sve gore (`OpenContentFormPublic` / `ReturnToDashboard`) |
 | `frmLogin`, `frmSplash`, `frmExcelMini` | — (forme ljuske od `v6-ui-209`, §27.7) | **OSTAJU** | prijava, start, povratak iz Excela |
 | `frmOtkupUI` | — | **OSTAJE** | ljuska |
@@ -8106,7 +8106,7 @@ obrisano obara compile cele sveske.
 | 3 **(isporučen, §27.11)** | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
 | 4 **(delimično isporučen, §27.12)** | `frmFakturisanje`, `frmBankaExportPregled`; `frmSEF` OSTAJE — uslov iz §8.7 nije ispunjen | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 **(isporučen, §27.13)** | `frmMaticniPodaci` + `frmStammdaten` + `clsStmBtn` + `clsLookupMenuBtn`; `modMaticniLookups` OSTAJE (ljuska ga koristi) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
-| 6 **(delimično isporučen, §27.14)** | `frmBankaImport`; `frmMarza` OSTAJE — `modScrMarza` ne postoji | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
+| 6 **(isporučen, §27.14 + §27.15)** | `frmBankaImport`; `frmMarza` — uz nov ekran `ANALIZA` | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`, `btnMargin_Click`, `modAuth.OblastZaFormu` |
 | 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
 
 ### 27.4 Isporuka uklanjanja — zašto nije samo `git rm`
@@ -8760,3 +8760,102 @@ suite-ova; dvosmerni dokaz **8/8 crvenih**; `check-banka-eh.py` čist;
 > `python tools\make_fixture.py --donor <sveska> --out <nova> --force`.
 > Stara sveska nema `tblPartnerMap` redove ni izvod 4, pa tri tvrdnje padaju na
 > podacima — `run_vba` to hvata potpisom fixture-a pre podizanja Excela.
+### 27.15 Korak 6 dovršen: `frmMarza` → ekran `ANALIZA`
+
+Ostatak koraka 6 nije bio „seci reference pa briši" nego **napiši ekran**, i
+zato je čekao svoj PR. Sada ih je **šest**.
+
+## Zašto ekran, a ne samo brisanje forme
+
+Red `MARZA` je od S3a pokazivao na `modScrMarza`, modul koji nikad nije
+napisan: stavka se crtala prigušeno, a klik je govorio da ekrana nema. Brisanje
+same forme bi uklonilo jedinu Maržu u aplikaciji i ostavilo mrtav red u
+registru. Zato je red **zamenjen**, a ne obrisan.
+
+| | pre | posle |
+|---|---|---|
+| ključ | `MARZA` | `ANALIZA` |
+| modul | `modScrMarza` (**ne postoji**) | `modScrAnaliza` |
+| naslov | „Marža" | „Analiza poslovanja" |
+| oblast prava | `OBL_MARZA` | `OBL_MARZA` — **nepromenjeno** |
+| ikonica | `IC_MARZA` | `IC_ANALIZA` (isti glif, AreaChart) |
+
+**Oblast prava namerno ostaje `OBL_MARZA`.** To je NAZIV KOLONE u
+`tblKorisnici`, isti u svakoj instalaciji; pravo je isto, promenio se ekran koji
+ga troši. Preimenovanje bi tražilo migraciju kolone u svakoj svesci, izmenu
+`make_fixture`, `modAuth.OblastiList` i testova prava — za kozmetiku. Menja se
+samo **natpis**: `OTKUI_OBL_MARZA` sada glasi „Analiza poslovanja", pa ekran
+Korisnici i sidebar govore isto.
+
+## Šta ekran radi danas
+
+Zona kaže **U IZRADI**, mreža je prazna. Ništa se ne računa, pa se ništa ni ne
+tvrdi. Račun koji je forma zvala i dalje stoji u `modMarza`, ali ga ekran **ne
+zove**: audit (`AUDIT_FM_TRIJAZA.md`, FM-0106) je zabeležio da ta tri pogleda
+(po kupcu, po otkupnom mestu, ukupno) mešaju **procenu** sa **ostvarenom**
+maržom. Prvo se bira šta se od toga uopšte prikazuje. `modMarza` zato ostaje u
+izvoru **bez ijednog pozivaoca** — to je jedina postojeća marža-matematika i
+briše se tek kad se zna šta je zamenjuje.
+
+## Prazna mreža mora biti SVOJA
+
+`Scr_Rows` vraća `Array(kolone, Empty, 0, 0, 0)`, a ne `Empty`. Ekran koji vrati
+`Empty` ostavlja mrežu na kolonama PRETHODNOG ekrana (`LoadGridFromScreen` radi
+`Exit Sub`): zaglavlje tuđe liste stoji, ćelije prazne — kvar već jednom
+naplaćen na čipu „Svi". Sabotaža `analiza-mreza-nasledjuje-tudje-kolone` to i
+meri.
+
+## Test 164 je dobio nov primer prigušene stavke — treći put
+
+Tvrdnja „ekran bez modula je prigušen" je do sada morala da pokazuje na
+**nenapisan** ekran. `MAT_PARTNERI` je dobio modul u M1, `MARZA` sada — i svaki
+put je tvrdnja pukla **po imenu** i tražila nov primer, što je i bio smisao.
+Pošto posle ovog koraka **nijedan red registra nema prazan modul** osim panela,
+primer se više ne uzima iz registra: prigušenost se izaziva **zatvorenom branom**
+ekrana (`Scr_MkorBranaZatvoriTest`). Mereno svojstvo je isto — mapa `mNavOff` i
+to da `PaintNav` ne vrati punu boju — jer ljuska ne zna ZAŠTO je stavka
+neaktivna: `ScrAktivan` spaja „nema modula" i „nema prava" u isti odgovor.
+Zatečena sabotaža `maticni-prigusena-stavka-se-preboji` i dalje obara tu tvrdnju.
+
+## Nalaz uz put: `Poruka()` nikad ne vraća prazno
+
+Nov test tvrdi da ključevi naslova iz `Scr_Meta` postoje u katalogu poruka —
+**oni žive unutar jednog stringa, ne u pozivu `Poruka("...")`, pa ih statička
+provera `PORUKA` u `vba_check` NE VIDI.** Omaška bi dala prazan naslov ekrana i
+prazan naslov mreže, bez ijedne greške.
+
+Prva verzija te tvrdnje je bila **placebo**: merila je `Len(Poruka(k)) = 0`, a
+`Poruka()` nepoznat ključ vraća kao `"[KLJUČ]"` — nikad kao prazan string.
+Sabotaža `analiza-naslov-bez-poruke` je to i pokazala: **nije oborila ništa**.
+Merilo je zamenjeno sa `PorukaNedostaje`.
+
+Ista greška je stajala i u zatečenoj tvrdnji „svaka oblast prava ima naziv u
+katalogu poruka" (`T_MatKor_RecnikDaNeIPrava`) — i ona je prolazila bez obzira
+na katalog. Ispravljena je istim merilom i dobila svoju sabotažu
+(`oblast-prava-bez-naziva`), koja pre ispravke nije obarala ništa. Sve oblasti
+danas imaju naziv, pa je posle ispravke tvrdnja zelena — ali sada zato što meri.
+
+## Ostalo
+
+`frmOtkupAPP.btnMargin_Click` je obrisan; dugme ostaje u `.frx` bez rukovaoca,
+kao i ostala legacy dugmad iz koraka 2–6. `modAuth.OblastZaFormu` gubi
+`frmmarza` — u mapi ostaje samo `frmsef`.
+
+Ukupno **183** testa (bilo 182): dodat `T_Analiza_EkranUIzradi`, slot 183.
+Katalog sabotaža 452 → 456.
+
+> Slot je 183, a ne 182: ovaj PR je pisan nad `main`-om pre korektivnog PR-a
+> (§27.14a), pa je pri rebase-u prenumerisan. Isti razlog za brojeve u
+> verifikaciji ispod.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 456 sabotaža); FULL zeleno —
+`RunAllTests` 183/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; dvosmerni dokaz za četiri nove sabotaže + zatečenu
+`maticni-prigusena-stavka-se-preboji` — **5/5 crvenih ponovljeno posle rebase-a**,
+jer §27.14a menja fixture pa stari dokaz ne važi; `WHO_WRITES.md` nepromenjen.
+
+> Po instalaciji: `ImportAllVBA` → `Remove frmMarza` → `Compile` → `Save`.
+> Zaostala forma ovde **ne obara compile**: `frmMarza` ne zove ništa obrisano
+> (`ReportMarza*` u `modMarza` i dalje postoje), a njen jedini pokretač
+> (`btnMargin_Click`) je otišao. Ipak je ukloni — ostaje mrtav ekran koji se
+> otvara iz VBE i pokazuje maržu računatu metodologijom koja je pod nalazom.
