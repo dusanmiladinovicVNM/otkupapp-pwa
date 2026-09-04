@@ -89,7 +89,7 @@ Public Sub RunAgrohemijaSmokeSuite()
     Test_UlazZeroBlockedWithoutFlag
     Test_UlazZeroAllowedWithFlag
     Test_IzlazZeroBlockedEvenWithFlag
-    Test_FormExitWiresBasketPrice
+    Test_UnosWiresBasketPrice
 
     tx.RollbackTx
     txStarted = False
@@ -481,27 +481,35 @@ Private Sub Test_IzlazZeroBlockedEvenWithFlag()
         "Izlaz cena=0 ostaje blokiran i uz allowZeroValue (Err 4206)"
 End Sub
 
-Private Sub Test_FormExitWiresBasketPrice()
-    ' Cuva AUD-040 na UI granici: forma MORA proslediti korpa cenu kao overrideCena.
-    ' SaveMagacinCore-unit test to NE hvata (bug je bio u formi, ne u jezgru). Cita
-    ' izvor frmAgrohemija preko VBProject-a (treba "Trust access to VBA project object
-    ' model"); ako pristup nije dozvoljen -> SKIP (ne FAIL).
+Private Sub Test_UnosWiresBasketPrice()
+    ' Cuva AUD-040 na granici UNOSA: sloj koji zove jezgro MORA proslediti korpa
+    ' cenu kao overrideCena. SaveMagacinCore-unit test to NE hvata -- kvar je bio
+    ' u pozivaocu, ne u jezgru, i vidi se samo na samom pozivu.
+    '
+    ' Do koraka 3 je ovu granicu drzala frmAgrohemija; forma je obrisana
+    ' (docs/UI_MIGRACIJA_KATALOG.md par.27.11), a isti wiring je u modAgroUnos,
+    ' pa tvrdnja ide tamo umesto da nestane.
+    '
+    ' Provera je i dalje nad IZVOROM: meri se da poziv NOSI imenovani argument,
+    ' a bas taj argument moze tiho da otpadne a da racun i dalje prodje sa
+    ' podrazumevanom cenom artikla. Cita se preko VBProject-a (treba "Trust access
+    ' to VBA project object model"); bez pristupa -> SKIP, ne FAIL.
     Dim src As String
     On Error GoTo NoAccess
     Dim cm As Object
-    Set cm = ThisWorkbook.VBProject.VBComponents("frmAgrohemija").CodeModule
+    Set cm = ThisWorkbook.VBProject.VBComponents("modAgroUnos").CodeModule
     src = cm.Lines(1, cm.CountOfLines)
     On Error GoTo 0
 
-    AssertAgroTrue InStr(src, "overrideCena:=m_KorpaIzlaz(i).cena") > 0, _
-        "Forma izlaz prosledjuje korpa cenu kao overrideCena (AUD-040 wiring)"
-    AssertAgroTrue InStr(src, "allowZeroValue:=m_KorpaUlaz(i).allowZeroValue") > 0, _
-        "Forma ulaz prosledjuje allowZeroValue korpe"
+    AssertAgroTrue InStr(src, "overrideCena:=AD(korpa(i)") > 0, _
+        "Izlaz prosledjuje korpa cenu kao overrideCena (AUD-040 wiring)"
+    AssertAgroTrue InStr(src, "allowZeroValue:=AB(korpa(i)") > 0, _
+        "Ulaz prosledjuje allowZeroValue korpe"
     AssertAgroTrue InStr(src, "SaveMagacinCore(") > 0, _
-        "Forma zove SaveMagacinCore (typed greske stizu do UI)"
+        "Unos zove SaveMagacinCore (typed greske stizu do pozivaoca)"
     Exit Sub
 NoAccess:
-    LogAgroSkip "Form wiring provera (nema 'Trust access to VBA project object model')"
+    LogAgroSkip "Wiring provera (nema 'Trust access to VBA project object model')"
 End Sub
 
 ' ---------- Assert / log infrastruktura (bez worksheet-a) ----------

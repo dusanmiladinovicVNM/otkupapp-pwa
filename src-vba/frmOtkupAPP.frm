@@ -697,22 +697,16 @@ End Sub
 ' Navigation button clicks
 ' =========================
 
-' btnBlocks_Click / btnPurchase_Click su obrisani sa frmOtkup i
-' frmDokumenta (korak 2, docs/UI_MIGRACIJA_KATALOG.md par.27.3). Dugmad
+' btnBlocks_Click / btnPurchase_Click / btnPalete_Click / btnAgro_Click /
+' btnReports_Click / btnTrace_Click su obrisani sa frmOtkup i
+' frmDokumenta (korak 2) i frmPalete / frmAgrohemija / frmIzvestaj /
+' frmSledljivost (korak 3), docs/UI_MIGRACIJA_KATALOG.md par.27.3. Dugmad
 ' ostaju u .frx -- .frx se ne dira kao tekst -- ali bez rukovaoca ne rade
-' nista. Obe radnje su u ljusci: ekran DOKUMENTI (modScrDokumenti).
+' nista. Sve te radnje su u ljusci: ekrani DOKUMENTI, PALETE, AGRO,
+' IZVESTAJI i SLEDLJIVOST (modScr*).
 
-Private Sub btnPalete_Click()
-    OpenContentForm frmPalete, btnPalete, "Palete"
-End Sub
 
-Private Sub btnAgro_Click()
-    OpenContentForm frmAgrohemija, btnAgro, "Agrohemija"
-End Sub
 
-Private Sub btnReports_Click()
-    OpenContentForm frmIzvestaj, btnReports, "Izve" & ChrW(353) & "taji"
-End Sub
 
 Private Sub btnInvoicing_Click()
     OpenContentForm frmFakturisanje, btnInvoicing, "Fakturisanje"
@@ -830,11 +824,6 @@ Private Sub btnMargin_Click()
     OpenContentForm frmMarza, btnMargin, Poruka("OTKUP_LBL_MARZA")
 End Sub
 
-Private Sub btnTrace_Click()
-    HighlightActive btnTrace
-    lblStatus.caption = Poruka("OTKUP_LBL_SEKCIJA_IZVESTAJ_SLEDLJIVOSTI")
-    OpenContentForm frmSledljivost, btnTrace, Poruka("OTKUP_LBL_IZVESTAJ_SLEDLJIVOSTI")
-End Sub
 
 Private Sub btnOpenExcel_Click()
     ' Kontrola pristupa (opt-in AUTH): oblast "Otvori Excel".

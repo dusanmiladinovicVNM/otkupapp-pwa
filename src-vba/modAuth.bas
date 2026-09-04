@@ -334,19 +334,16 @@ End Sub
 ' ------------------------------------------------------------
 Public Function OblastZaFormu(ByVal formName As String) As String
     Select Case LCase$(Trim$(formName))
-        ' frmotkup / frmdokumenta su obrisani u koraku 2
-        ' (docs/UI_MIGRACIJA_KATALOG.md par.27.3). Oblasti OBL_OTKUP i
-        ' OBL_DOKUMENTA i dalje postoje -- nosi ih registar ekrana
+        ' frmotkup / frmdokumenta (korak 2) i frmpalete / frmagrohemija /
+        ' frmizvestaj / frmsledljivost (korak 3) su obrisani
+        ' (docs/UI_MIGRACIJA_KATALOG.md par.27.3). Njihove oblasti i dalje
+        ' postoje -- nosi ih registar ekrana
         ' (modUiScreens), koji je jedini pozivalac prava od kada je ljuska
         ' ulaz. Ova mapa vazi samo za PREOSTALE legacy forme.
-        Case "frmagrohemija":          OblastZaFormu = OBL_AGROHEMIJA
-        Case "frmizvestaj":            OblastZaFormu = OBL_IZVESTAJI
         Case "frmfakturisanje":        OblastZaFormu = OBL_FAKTURISANJE
         Case "frmbankaimport", "frmbankaexportpregled": OblastZaFormu = OBL_BANKA
         Case "frmmarza":               OblastZaFormu = OBL_MARZA
-        Case "frmsledljivost":         OblastZaFormu = OBL_SLEDLJIVOST
         Case "frmmaticnipodaci":       OblastZaFormu = OBL_MATICNI
-        Case "frmpalete":              OblastZaFormu = OBL_PALETE
         Case Else:                     OblastZaFormu = vbNullString
     End Select
 End Function
