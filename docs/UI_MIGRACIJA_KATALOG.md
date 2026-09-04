@@ -8106,7 +8106,7 @@ obrisano obara compile cele sveske.
 | 3 **(isporučen, §27.11)** | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
 | 4 **(delimično isporučen, §27.12)** | `frmFakturisanje`, `frmBankaExportPregled`; `frmSEF` OSTAJE — uslov iz §8.7 nije ispunjen | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 **(isporučen, §27.13)** | `frmMaticniPodaci` + `frmStammdaten` + `clsStmBtn` + `clsLookupMenuBtn`; `modMaticniLookups` OSTAJE (ljuska ga koristi) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
-| 6 | `frmBankaImport` (kad uvoz i ručno mapiranje žive na ekranu), `frmMarza` (uz `modScrMarza`) | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
+| 6 **(delimično isporučen, §27.14)** | `frmBankaImport`; `frmMarza` OSTAJE — `modScrMarza` ne postoji | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
 | 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
 
 ### 27.4 Isporuka uklanjanja — zašto nije samo `git rm`
@@ -8599,3 +8599,61 @@ Grana „nešto je uvezeno" se zato meri **podmetnutim ishodom**
 
 **Šta test ne pokriva:** sam uvoz nad pravim PDF-om i nedostupan Inbox. Oba
 ostaju na smoke-u — to je granica ovog testa i ne krije se.
+
+### 27.14 Korak 6 isporučen delimično: `frmBankaImport`
+
+**`frmMarza` OSTAJE.** `modScrMarza` **ne postoji** — registar ima red `MARZA`
+koji pokazuje na nepostojeći modul, pa se stavka crta prigušeno. Brisanje forme
+uklonilo bi jedinu Maržu u aplikaciji. To nije „seci reference pa briši" nego
+„napiši ekran", i zato je zaseban zadatak. Ostalo je **7 formi**.
+
+## Uslovi iz §27.2 — kako su zatvoreni
+
+| Uslov | Kako |
+|---|---|
+| (b) §9.4 — ručno mapiranje na ekranu | bilo ispunjeno i pre koraka 6 |
+| (a) uvozna komanda u ljusci | zatvoren u §27.12a — **ulazak u ekran** pokreće uvoz, kao klik na Banka u legacy meniju |
+
+Plan je uslov (a) formulisao kao „dugme" i sam ga odbacio, jer dugme bez ishoda
+znači tiho knjiženje. Ispalo je da uvoz **i ne treba** da bude dugme: legacy ga je
+vezivao za klik na Banka, a u ljusci je ulazak u ekran taj klik.
+
+## Dve tvrdnje su preseljene pre brisanja, ne posle
+
+`T_LegacyBanka_PadUcitavanjaNijePraznaLista` je nosio dva pravila o ručnom
+mapiranju, oba sa sabotažama. Pre nego što je forma dirnuta, izmereno je šta se
+gubi:
+
+- **„pad učitavanja zaustavlja ručno mapiranje"** — ljuska je tvrdnju već imala
+  (`T_BankaUvoz_RucnoMapiranjePravila`) i ona stvarno grize; falio je samo unos u
+  katalog sabotaža.
+- **„prazan izbor nije izbor"** — ljuska je imala kod, ali **nijednu tvrdnju**:
+  sabotaža koja prazan izbor prijavi writeru kao izabran blok prolazila je kroz
+  celu suite. Uslov je bio inline izraz u sedmoargumentnom pozivu, pa nije imao
+  gde da se zakači — izdvojen je u `CiljJeIzabran`.
+
+Obe su zatvorene u PR-u pre ovog koraka. Tek onda je legacy trio (test + dve
+sabotaže) obrisan — ništa nije nestalo nepokriveno.
+
+## Ostalo
+
+`frmOtkupAPP.btnBanka_Click` je radio uvoz pa otvarao formu; obrisan je, jer oba
+posla sada radi ekran. `modAuth.OblastZaFormu` gubi `frmbankaimport` — u mapi
+ostaju samo `frmsef` i `frmmarza`, jedine dve forme koje se još otvaraju kroz
+legacy host.
+
+`tools/check-banka-eh.py` je u `FILES` imao `frmBankaImport.frm`. Nije samo
+izbačen nego **zamenjen `modScrBankaUvoz.bas`**: EH disciplina koju taj alat čuva
+preselila se tamo gde je sada i ručno mapiranje i kuka ulaska. Alat je posle
+izmene čist na banka putanji.
+
+Slot 114 popunjen najvišim postojećim (**182 → 114**), kao u koracima 2 i 5.
+Ukupno **182 → 181** testa.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 444 sabotaže); FULL zeleno —
+`RunAllTests` 181/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; `check-banka-eh.py` čist; `WHO_WRITES.md` nepromenjen.
+
+> Po instalaciji: `ImportAllVBA` → `Remove frmBankaImport` → `Compile` → `Save`.
+> Zaostala forma ovde **ne obara compile** (ne zove ništa obrisano), za razliku od
+> koraka 5 — ali red ostaje isti.

@@ -698,13 +698,16 @@ End Sub
 ' =========================
 
 ' btnBlocks_Click / btnPurchase_Click / btnPalete_Click / btnAgro_Click /
-' btnReports_Click / btnTrace_Click / btnbankaisplate_Click su obrisani sa frmOtkup i
+' btnReports_Click / btnTrace_Click / btnbankaisplate_Click / btnBanka_Click
+' su obrisani sa frmOtkup i
 ' frmDokumenta (korak 2) i frmPalete / frmAgrohemija / frmIzvestaj /
 ' frmSledljivost (korak 3) i frmBankaExportPregled (korak 4),
 ' docs/UI_MIGRACIJA_KATALOG.md par.27.3. Dugmad
 ' ostaju u .frx -- .frx se ne dira kao tekst -- ali bez rukovaoca ne rade
 ' nista. Sve te radnje su u ljusci: ekrani DOKUMENTI, PALETE, AGRO,
-' IZVESTAJI, SLEDLJIVOST i BANKA_NALOZI (modScr*).
+' IZVESTAJI, SLEDLJIVOST, BANKA_NALOZI i BANKA_UVOZ (modScr*). Uvoz izvoda,
+' koji je btnBanka_Click radio pre otvaranja forme, sada pokrece ULAZAK u
+' ekran BANKA_UVOZ (modScrBankaUvoz.Scr_Aktiviraj).
 
 
 
@@ -716,64 +719,6 @@ End Sub
 ' koristio btnInvoicing, jer SEF nema svoje dugme u meniju.
 Private Sub btnInvoicing_Click()
     OpenContentForm frmSEF, btnInvoicing, "SEF upravljanje"
-End Sub
-
-Private Sub btnBanka_Click()
-    On Error GoTo EH
-
-    ' AUD-034b: kontrola pristupa (opt-in AUTH) PRE uvoza. ImportBankaInbox_WithDrivePull
-    ' KNJIZI novac / auto-map, pa provera mora biti pre njega (obrazac iz btnSyncPWA_Click).
-    If modAuth.AuthEnabled() Then
-        If Not modAuth.KorisnikImaPravo(OBL_BANKA) Then
-            MsgBox "Nemate dozvolu za pristup oblasti: Banka", vbExclamation, APP_NAME
-            Exit Sub
-        End If
-    End If
-
-    Dim oldPointer As Integer
-    oldPointer = Me.MousePointer
-
-    HighlightActive btnBanka
-
-    Me.MousePointer = fmMousePointerHourGlass
-    btnBanka.enabled = False
-
-    lblStatus.Visible = True
-    lblStatus.caption = "Uvozim nove bankovne izvode..."
-    lblStatus.ForeColor = RGB(220, 220, 220)
-    lblStatus.Font.Bold = False
-
-    ' Povuci nove PDF-ove sa Drive-a (ako je BANKA_DRIVE_SOURCE_PATH podesen)
-    ' pa uvezi lokalni Inbox. Bez Drive konfiguracije = isto kao lokalni uvoz.
-    ImportBankaInbox_WithDrivePull
-
-    lblStatus.caption = "Banka uvezena. Otvaram mapiranje..."
-
-    OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
-
-CleanExit:
-    btnBanka.enabled = True
-    Me.MousePointer = oldPointer
-    Exit Sub
-
-EH:
-    Dim errDesc As String
-    errDesc = Err.description
-
-    LogErr "frmOtkupAPP.btnBanka_Click"
-
-    On Error Resume Next
-    lblStatus.Visible = True
-    lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_UVOZU")
-    lblStatus.ForeColor = RGB(255, 80, 80)
-    lblStatus.Font.Bold = True
-
-    MsgBox Poruka("OTKUP_MSG_GRESKA_PRI_UVOZU") & vbCrLf & errDesc & vbCrLf & vbCrLf & _
-           "Mapiranje ce biti otvoreno za postojece neuparene stavke.", vbExclamation
-
-    OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
-
-    Resume CleanExit
 End Sub
 
 
