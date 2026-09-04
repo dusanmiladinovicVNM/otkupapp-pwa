@@ -230,6 +230,9 @@ Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
               "Nastaviti?" & vbCrLf & vbCrLf & summary, _
               vbYesNo + vbDefaultButton2 + vbExclamation, "Brisanje duplikata") <> vbYes Then Exit Sub
 
+    Dim countBefore As Long, countAfter As Long
+    countBefore = proj.VBComponents.count
+
     Dim i As Long, removed As Long, failed As String, failedCount As Long
     For i = 0 To dupCount - 1
         On Error Resume Next
@@ -244,16 +247,26 @@ Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
         On Error GoTo 0
     Next i
 
-    Debug.Print "Obrisano: " & removed & ", neuspesno: " & failedCount
+    countAfter = proj.VBComponents.count
+    Debug.Print "Obrisano: " & removed & ", neuspesno: " & failedCount & _
+                "; komponenti pre/posle: " & countBefore & "/" & countAfter
     If Len(failed) > 0 Then Debug.Print failed
 
-    MsgBox "Obrisano: " & removed & vbCrLf & _
+    Dim tail As String
+    ' Broj komponenti u toku makroa po pravilu STOJI: klase i forme se oslobadjaju
+    ' tek kad kod stane, a cesto ni tada (Remove iz istog projekta ume da prodje
+    ' bez greske a da ne obrise nista). Zato je jedina prava provera posle restarta.
+    tail = "Komponenti pre/posle (u toku makroa): " & countBefore & "/" & countAfter & vbCrLf & vbCrLf & _
+           "1) Snimi, zatvori i otvori radnu svesku." & vbCrLf & _
+           "2) Pusti ListDuplicateModules i pogledaj broj." & vbCrLf & _
+           "3) Ako su duplikati i dalje tu, brisanje iz samog projekta ne prolazi." & vbCrLf & _
+           "   Zatvori Excel i pusti spoljni skript (radi iz drugog procesa):" & vbCrLf & vbCrLf & _
+           "   powershell -File tools\clean_vba_duplicates.ps1 -Workbook ""<putanja.xlsm>"" -Apply"
+
+    MsgBox "Obrisano (prijavljeno): " & removed & vbCrLf & _
            "Neuspesno: " & failedCount & _
            IIf(failedCount > 0, vbCrLf & vbCrLf & Left$(failed, 700) & _
-               "(ceo spisak: Immediate prozor)", "") & vbCrLf & vbCrLf & _
-           "Klase i forme se stvarno oslobadjaju tek kad makro stane." & vbCrLf & _
-           "Snimi, zatvori i otvori radnu svesku, pa pokreni ListDuplicateModules" & vbCrLf & _
-           "da proveris da li je ostalo jos nesto (onda ponovi brisanje).", _
+               "(ceo spisak: Immediate prozor)", "") & vbCrLf & vbCrLf & tail, _
            vbInformation, "Brisanje duplikata"
 End Sub
 
