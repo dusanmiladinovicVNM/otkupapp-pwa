@@ -14,9 +14,17 @@ paths:
 
 ## Koje forme ostaju
 
-Posle plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 u projektu ostaju **četiri**:
-`frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`. Sve ostale se
-penzionišu po koracima §27.3; inventar i uslov po formi je §27.2.
+Cilj plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 su **četiri** forme:
+`frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`.
+
+Posle koraka 5 ih je **osam** — uz te četiri:
+
+| Forma | Zašto je još tu |
+|---|---|
+| `frmSEF` | SEF upravljanje (`PrepareResubmit`, batch radnje, event log) nije preneto ni na jedan ekran (§8.7). Čeka svoj ekran, ne korak. Ulaz je `frmOtkupAPP.btnInvoicing`, oblast `OBL_FAKTURISANJE`. |
+| `frmBankaImport` | korak 6 — uz uvoznu komandu i ručno mapiranje na ekranu (§9.3/§9.4) |
+| `frmMarza` | korak 6 — uz ekran Marža (`modScrMarza` ne postoji) |
+| `frmOtkupAPP` | korak 7, poslednja — host za `frmSEF` i preostale `ReturnToDashboard` pozive |
 
 Pravilo koje iz toga sledi: **nova kontrola ne ide u legacy formu**, nego na
 ekran ljuske (`modScr*`). Izmena legacy forme se radi samo kad je pravilo iz
@@ -34,8 +42,9 @@ formu bez `.frx` para.
 
 ## Dinamičke kontrole (bez `.frx`)
 
-`Controls.Add` + WithEvents klasa: `clsBlokUI`/`modOtkupBlok`,
-`clsLookupMenuBtn`/`modMaticniLookups`.
+`Controls.Add` + WithEvents klasa: `clsBlokUI`/`modOtkupBlok`. Drugi primer je
+bio `clsLookupMenuBtn`/`modMaticniLookups` — klasa je otišla u koraku 5 sa
+`frmMaticniPodaci`, jedinom formom koja je taj meni gradila.
 
 Za form-hostovane runtime kontrole koristi **generički `clsUiSink`** (`WireSink`
 + `UiSinkEvent` dispatcher; vidi `frmOtkupAPP`).
@@ -45,21 +54,18 @@ Za form-hostovane runtime kontrole koristi **generički `clsUiSink`** (`WireSink
 Dodavanje event-sink deklaracije u formu **lomi self-update code-merge te forme**
 (krivac za crash 2.16.1 → 2.21.0; `docs/SELF_UPDATE.md` zamka #11).
 
-Zatečeni pre-2.16.1 form-WithEvents su **zamrznuti** — ne diraj i ne dodaji nove:
+Zatečeni pre-2.16.1 form-WithEvents su bili **zamrznuti** — spisak se samo
+skraćivao, red po red, kako je koja forma odlazila: `frmDokumenta` (korak 2),
+`frmAgrohemija` / `frmPalete` / `frmIzvestaj` (korak 3), `frmBankaExportPregled`
+(korak 4).
 
-- `frmAgrohemija` — „Pocetni dug"
-- `frmPalete`
-- `frmBankaExportPregled`
-- `frmIzvestaj`
+**Spisak je sada PRAZAN.** Zabrana iznad time ne slabi nego postaje apsolutna:
+nijedna preostala forma nema nijednu `WithEvents` deklaraciju, i tako mora da
+ostane. Izuzetka više nema — svaki novi form-`WithEvents` je nov kvar, ne
+nastavak zatečenog stanja.
 
-**Ovaj spisak se samo SKRAĆUJE.** `frmDokumenta` je već otišao (korak 2, §27.10),
-pa je red obrisan. Preostale četiri su u planu penzionisanja (§27.2):
-`frmAgrohemija` / `frmPalete` / `frmIzvestaj` u koraku 3, `frmBankaExportPregled`
-u koraku 4. Red se briše kad forma ode, i to u process PR-u — ne uz izmenu koda.
-
-Kad spisak ostane prazan, zabrana iznad i dalje važi: nijedna od četiri forme
-koje ostaju nema ni jednu `WithEvents` deklaraciju, i tako mora i da ostane —
-runtime kontrole u njima idu kroz omotače (`clsFlatBtn`, `clsUiSink`).
+Runtime kontrole u formama idu kroz omotače: `clsFlatBtn` (ljuska), `clsUiSink`
+(generički sink), `clsBlokUI` (`modOtkupBlok`).
 
 ## Matični podaci (UI)
 
@@ -68,6 +74,7 @@ runtime kontrole u njima idu kroz omotače (`clsFlatBtn`, `clsUiSink`).
 `MAT_ADMIN` (`modUiPanel`). Ulaz je prekidač sekcija u zaglavlju ljuske; pravo
 na oblast `MaticniPodaci` odlučuje šta je od toga dostupno.
 
-**Legacy (odlazi u koraku 5):** `frmMaticniPodaci` + `frmStammdaten`
-(`Select Case Me.Tag`) + `modMaticniLookups` (data-driven meni), zajedno sa
-`clsStmBtn` i `clsLookupMenuBtn` ako ostanu bez pozivaoca.
+**Legacy je otišao u koraku 5** (§27.13): `frmMaticniPodaci`, `frmStammdaten`,
+`clsStmBtn` i `clsLookupMenuBtn`. `modMaticniLookups` **ostaje** — ljuska koristi
+`MaticniSekcije`, `MaticniSekcijeGrupisano` i `MaticniMenu_Release`; otišla je
+samo njegova polovina koja je gradila stari meni.

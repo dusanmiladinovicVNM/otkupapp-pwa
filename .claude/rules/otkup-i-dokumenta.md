@@ -112,8 +112,8 @@ diraju se.** „Ne diraju se" znači: ne menjaju se mimo koraka koji ih uklanja.
   preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
   namerno — i **prestaju da postoje sa korakom 2**, kad forme odu. Od tada
   pravilo živi na jednom mestu i preslikavanja nema.
-- Ugovor `ClearOtkupFields` iz §1 važi i za `modOtkupUI.ClearForm` — ista tri
-  ponašanja, ista tri razloga. **Pokriven je testom** (`T_ClearForm_Ugovor` u
+- Ugovor iz §1 nosi `modOtkupUI.ClearForm` — ista tri ponašanja, isti razlozi
+  kao u legacy formi koje više nema. **Pokriven je testom** (`T_ClearForm_Ugovor` u
   `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Upis zbirne i prijemnice
   (`ZbirnaValidiraj` / `PrijemnicaValidiraj`) ima svojih pet testova u istoj
   suite-i, a upis novca i ambalaže (`IsplataValidiraj` / `UplataValidiraj` /
