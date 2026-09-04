@@ -59,7 +59,7 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 | Ko piše koju tabelu | generisano iz `src-vba/` | `docs/DOMEN/WHO_WRITES.md` |
 | Tabele / kolone / konstante, pristup podacima | `modConfig.bas`, `modDataAccess.bas` | `.claude/rules/podaci-i-config.md` |
 | Otkup / dokumenta | `modScrDokumenti`+`modOtkupUnos`/`modDokUnos`, `modOtkup`+`modDokumenta` | `.claude/rules/otkup-i-dokumenta.md` |
-| Forme, `.frx`, runtime kontrole | `frmMaticniPodaci`, `clsBlokUI`, `clsUiSink` | `.claude/rules/forme-i-kontrole.md` |
+| Forme, `.frx`, runtime kontrole | `frmOtkupUI`, `clsFlatBtn`, `clsUiSink` | `.claude/rules/forme-i-kontrole.md` |
 | Agrohemija / ambalaža / cenovnik | `modAgrohemija`, `modAmbalaza`, `modCenovnik` | `.claude/rules/agrohemija-i-cene.md` |
 | Banka — izvodi i nalozi | `modBankaImport`+parseri, `modBankaMapiranje` | `.claude/rules/banka.md` |
 | Sync / PWA, self-update, release build | `mod*Sync`, `modSelfUpdate`, `modRelease`, `gas/` | `.claude/rules/sync-i-self-update.md` |

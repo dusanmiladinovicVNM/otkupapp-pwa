@@ -39,7 +39,7 @@ Runbook: `docs/production-runbook-banka-import-setup.md`; novi parser:
 
 ## Banka nalozi (isplate)
 
-`frmBankaExportPregled` + `modBankaExportPregled` — pregled otvorenih blokova,
+`modScrBankaNalozi` + `modBankaExportPregled` — pregled otvorenih blokova,
 per-blok „Isplatiti" override; runtime combo (`.frx` se ne dira) — „Kooperant"
 filter radi i na unos i kao dd, substring, prune override-a protiv PUNE liste;
 „Sa računa" = izbor računa firme (do 4 zasebna polja `BANKA_NALOG_RACUN_1..4` u

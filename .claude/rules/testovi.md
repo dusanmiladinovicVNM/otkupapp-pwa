@@ -59,6 +59,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `ARNOST` | poziv sa pogrešnim brojem argumenata |
 | `ZAKLONJENO` | lokalni skalar zvan sa zagradom → „Expected array" |
 | `KRAJ_REDA` | LF umesto CRLF u VBA izvoru → `Import` ne prepozna formu |
+| `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
 
 `NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
 naredbe) — lažan nalaz je gori od propuštenog. **Poziv u izrazu (`x = Foo(1)`)
@@ -100,6 +101,18 @@ compile grešku. Jedan `eol=lf` u `.gitattributes` je tako oborio svih 11
 suite-ova dok je `vba_check` ostao zelen. Kraj reda sada drži `.gitattributes`
 (`eol=crlf` za `.frm`/`.bas`/`.cls`/`.doccls`), a ova provera je kapija koja radi
 **i u CI-ju, bez Excela**.
+
+**`CLAN_FORME` postoji zbog rupe koju `NEDEFINISAN` ne pokriva.** Ta provera ne
+radi nad `.frm`, a VBA kompajlira modul forme **tek kad se pozove** — pa poziv na
+član koji ne postoji preživi i `vba_check` i celu suite. Zatečen slučaj:
+`OpenContentFormPublic` obrisan iz `frmOtkupAPP` uz pogrešnu pretpostavku o
+jedinom pozivaocu, dok ga je `frmMaticniPodaci` i dalje zvao — **FULL je bio
+zelen na svih 11 suite-ova**, a našao ga je tek ručni `Debug → Compile`.
+
+Uska je iz istog razloga kao `NEDEFINISAN`: gleda samo imena koja odgovaraju
+postojećoj formi, preskače ime deklarisano kao promenljiva ili parametar u tom
+fajlu (`Dim frmX As ...` — bez toga `modTheme` daje pet lažnih nalaza na
+`frmBelow`), i pušta uzak spisak ugrađenih članova `UserForm`-a.
 
 **Dve provere duplikata nisu ista provera.** `DUPLIKAT` gleda globalni imenski
 prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je

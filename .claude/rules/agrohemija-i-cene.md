@@ -2,7 +2,7 @@
 paths:
   - "src-vba/modAgrohemija.bas"
   - "src-vba/modAgrohemijaTests.bas"
-  - "src-vba/frmAgrohemija.frm"
+  - "src-vba/modAgroUnos.bas"
   - "src-vba/modAmbalaza.bas"
   - "src-vba/modCenovnik.bas"
   - "src-vba/sAmbalaza.doccls"
@@ -14,8 +14,14 @@ paths:
 
 ## Agrohemija / magacin
 
-`frmAgrohemija` + `modAgrohemija`: `SaveMagacin` piše ledger `MAG_ULAZ` /
+`modAgroUnos` + `modAgrohemija`: `SaveMagacin` piše ledger `MAG_ULAZ` /
 `MAG_IZLAZ`, stanje kroz `GetMagacinStanje`, dug kroz `GetAgrohemijaDug`.
+Ekran je `AGRO` (`modScrAgro`); `frmAgrohemija` je otišla u koraku 3 (§27.11).
+
+> **AUD-040 stoji na granici unosa**, ne u jezgru: `modAgroUnos` mora da
+> prosledi korpa cenu kao `overrideCena` i `allowZeroValue` iz korpe.
+> `SaveMagacinCore` unit-test to ne hvata — kvar je bio u pozivaocu. Meri ga
+> `Test_UnosWiresBasketPrice` (`modAgrohemijaTests`), nad izvorom modula.
 
 - **Izlaz opciono bez parcele** kad je `PRACENJE_PARCELA` OFF (`IsPracenjeParcela`,
   isti flag koji čita i ekran dokumenata; smart-doza se tada preskače).
