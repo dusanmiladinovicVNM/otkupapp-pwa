@@ -8540,5 +8540,25 @@ sekciju Matični u ljusci čuva `OBL_MATICNI` kroz registar ekrana, a to meri
 suite-ova; `WHO_WRITES.md` nepromenjen; `dokaz.py` crven po imenu za preusmerenu
 sabotažu.
 
-> Po instalaciji: `ImportAllVBA` → `Remove frmMaticniPodaci` / `frmStammdaten` /
-> `clsStmBtn` / `clsLookupMenuBtn` → `Compile` → `Save`.
+## PAŽNJA: ovaj korak je prvi koji OBARA compile zatečene sveske
+
+Pravilo iz §27.3 kaže da „forma bez referenci se kompajlira i ne smeta". To važi
+samo dok **zaostala komponenta i dalje nalazi sve što ona zove**. U koracima 2–4
+je bilo tako: obrisane forme su zvale module koji postoje, pa je zatečena sveska
+posle `ImportAllVBA` i dalje kompajlirala.
+
+Korak 5 je drugačiji, jer je uz forme obrisana i **procedura koju zaostala klasa
+zove**: `clsLookupMenuBtn.btn_Click` → `MaticniMenu_OnClick`. Ta procedura je
+otišla sa legacy polovinom `modMaticniLookups`, pa zatečena sveska posle uvoza
+javlja **`Sub or Function not defined`** dok se klasa ne ukloni. Isto važi za
+`clsStmBtn` (`frmStammdaten.OnSoftDeleteClick`) i `frmMaticniPodaci`
+(`AttachMaticniMenu`, `OpenContentFormPublic`, `frmStammdaten`).
+
+**To nije kvar u isporuci nego posledica §27.4** — ni self-update ni
+`ImportAllVBA` ne brišu komponente. Ali menja redosled po instalaciji: uklanjanje
+više nije „kad stigneš" nego **deo istog posla**, između uvoza i compile-a.
+
+> Po instalaciji, tim redom: `ImportAllVBA` → `Remove frmMaticniPodaci`,
+> `Remove frmStammdaten`, `Remove clsStmBtn`, `Remove clsLookupMenuBtn` →
+> `Compile` → `Save`. Compile **između** uvoza i uklanjanja će pasti, i to je
+> očekivano.
