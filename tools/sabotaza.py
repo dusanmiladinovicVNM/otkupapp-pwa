@@ -2732,14 +2732,25 @@ SABOTAZE = {
         "T_BankaUvoz_UlazakUvoziIzvode",
         "ulazak u ekran zove Scr_Aktiviraj",
     ),
-    # Prazan Inbox pokrece uvoz: transakcija i diranje foldera nizasta, na svaki
-    # povratak na ekran.
-    "bu-prazan-inbox-pokrece-uvoz": (
+    # PRETPROVERA PRE DRIVE PULL-A -- kvar zbog kog je prva verzija promasila
+    # glavni scenario: lokalni Inbox prazan, izvodi na Drive-u, ekran odmah
+    # izadje pa se pull nikad ne pokrene. Sabotaza vraca bas tu pretprovaru.
+    "bu-pretprovera-pre-drive-pulla": (
         "modScrBankaUvoz.bas",
-        "    If ceka <= 0 Then Exit Sub\n",
-        "    If False Then Exit Sub   ' SABOTAZA: prazan Inbox svejedno uvozi\n",
+        "    mUvozPozvan = mUvozPozvan + 1\n",
+        "    If modBankaImport.BankaInboxBrojFajlova() <= 0 Then Exit Sub\n"
+        "    mUvozPozvan = mUvozPozvan + 1\n",
         "T_BankaUvoz_UlazakUvoziIzvode",
-        "prazan Inbox NE pokrece uvoz",
+        "uvoz se zove i kad je lokalni Inbox prazan",
+    ),
+    # Prazan rezultat radi posao: poruka 'uvezeno 0' i osvezavanje mreze na svaki
+    # ulazak u ekran, iako se nista nije promenilo.
+    "bu-prazan-rezultat-radi-posao": (
+        "modScrBankaUvoz.bas",
+        "    If nadjeno <= 0 Then Exit Sub\n",
+        "    If False Then Exit Sub   ' SABOTAZA: prazan rezultat svejedno radi\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "prazan rezultat NE javlja nista i ne osvezava mrezu",
     ),
     "storno-registar-prazan": (
         "modSchemaGuard.bas",

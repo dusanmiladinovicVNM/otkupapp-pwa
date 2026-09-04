@@ -56,8 +56,15 @@ Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
 
 ' Koliko PDF-ova ceka u Inboxu. Postoji da pozivalac moze da odluci da li uvoz
 ' UOPSTE ima sta da radi, bez pokretanja transakcije nad praznim skupom.
+'
+' GRESKA SE DIZE, NE GUTA. Prva verzija je pad citanja logovala i vracala nulu,
+' pa je nedostupan Inbox (pogresna putanja, nema dozvole, mrezni disk dole)
+' operateru izgledao isto kao prazan: ekran se otvori, nista se ne javi, a
+' izvodi koji cekaju se ne uvezu. Nula sme da znaci samo STVARNO nula fajlova.
 Public Function BankaInboxBrojFajlova() As Long
+    Const SRC As String = "BankaInboxBrojFajlova"
     Dim ime As String, n As Long
+    Dim errNum As Long, errDesc As String
     On Error GoTo EH
     EnsureFolderExists GetBankaInboxPath()
     ime = Dir$(GetBankaInboxPath() & "\*.pdf")
@@ -68,15 +75,28 @@ Public Function BankaInboxBrojFajlova() As Long
     BankaInboxBrojFajlova = n
     Exit Function
 EH:
-    LogErr "modBankaImport.BankaInboxBrojFajlova"
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
 End Function
 
-' outUvezeno / outGreska su NEOBAVEZNI i postoje zato sto je ova rutina bila
-' Sub bez ishoda: SaveBankaImportRowsCore je brojao, ali je sve zavrsavalo u
-' Debug.Print. Pozivalac koji ne moze da kaze STA se uvezlo radi tiho knjizenje.
-' Zatecenim pozivaocima se nista ne menja -- argumenti su Optional.
+' Izlazi su NEOBAVEZNI i postoje zato sto je ova rutina bila Sub bez ishoda:
+' SaveBankaImportRowsCore je brojao, ali je sve zavrsavalo u Debug.Print, pa je
+' pozivalac mogao samo tiho da knjizi. Zatecenim pozivaocima se nista ne menja.
+'
+' UVEZENO I DUPLIKAT SE BROJE ODVOJENO. Oba zavrsavaju u successMoves -- razlika
+' je samo status poteza (BIM_STATUS_IMPORTED / BIM_STATUS_DUPLICATE_ONLY). Prva
+' verzija je vracala successMoves.count kao 'uvezeno', pa je fajl koji je ceo
+' duplikat operateru prijavljivan kao nov izvod.
+'
+' outGreska NE POSTOJI, i to je namerno: svaka PDF greska radi Err.Raise, obara
+' batch i rollback-uje transakciju -- izlazi tada nikad ne stignu do pozivaoca.
+' Brojac gresaka bi bio grana koja se ne moze dostici, pa pad ide kroz gresku,
+' kako i jeste.
 Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
-                               Optional ByRef outGreska As Long)
+                               Optional ByRef outDuplikata As Long, _
+                               Optional ByRef outNadjeno As Long)
     Const SRC As String = "ImportBankaInbox_TX"
 
     Dim tx As clsTransaction
@@ -92,6 +112,12 @@ Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
     EnsureFolderExists GetBankaProcessedPath()
     EnsureFolderExists GetBankaErrorPath()
 
+    ' Praznina se meri OVDE, a ne kod pozivaoca: pozivalac koji prvo prebroji
+    ' lokalni Inbox pa odustane nikad ne bi ni povukao sa Drive-a -- a nov izvod
+    ' moze da postoji SAMO tamo. Do ovog reda se dolazi tek posle Drive pull-a.
+    outNadjeno = BankaInboxBrojFajlova()
+    If outNadjeno <= 0 Then Exit Sub
+
     Set successMoves = New Collection
     Set errorMoves = New Collection
 
@@ -104,8 +130,8 @@ Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
     tx.CommitTx
     Set tx = Nothing
 
-    outUvezeno = successMoves.count
-    outGreska = errorMoves.count
+    outUvezeno = BrojPotezaPoStatusu(successMoves, BIM_STATUS_IMPORTED)
+    outDuplikata = BrojPotezaPoStatusu(successMoves, BIM_STATUS_DUPLICATE_ONLY)
 
     ExecutePendingBankaFileMoves successMoves
     Exit Sub
@@ -140,8 +166,21 @@ Public Sub ImportBankaInbox()
     ImportBankaInbox_WithDrivePull
 End Sub
 
+' Koliko poteza nosi dati status. Status je treci clan niza koji pravi
+' AddPendingBankaFileMove -- v. komentar tamo.
+Private Function BrojPotezaPoStatusu(ByVal potezi As Collection, _
+                                     ByVal status As String) As Long
+    Dim p As Variant, n As Long
+    If potezi Is Nothing Then Exit Function
+    For Each p In potezi
+        If StrComp(CStr(p(2)), status, vbTextCompare) = 0 Then n = n + 1
+    Next p
+    BrojPotezaPoStatusu = n
+End Function
+
 Public Sub ImportBankaInbox_WithDrivePull(Optional ByRef outUvezeno As Long, _
-                                          Optional ByRef outGreska As Long)
+                                          Optional ByRef outDuplikata As Long, _
+                                          Optional ByRef outNadjeno As Long)
     Const SRC As String = "ImportBankaInbox_WithDrivePull"
 
     On Error GoTo EH
@@ -160,7 +199,7 @@ Public Sub ImportBankaInbox_WithDrivePull(Optional ByRef outUvezeno As Long, _
         On Error GoTo EH
     End If
 
-    ImportBankaInbox_TX outUvezeno, outGreska
+    ImportBankaInbox_TX outUvezeno, outDuplikata, outNadjeno
     Exit Sub
 
 EH:

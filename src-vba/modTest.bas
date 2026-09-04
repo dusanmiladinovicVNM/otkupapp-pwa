@@ -7611,15 +7611,19 @@ End Function
 '   1) da ljuska kuku STVARNO zove (ActivateScreen -> ScrAktiviraj). Odluka je
 '      postojala i pre, ali dok je niko ne primeni ekran ne uvozi nista --
 '      isti oblik kvara kao prekidac sekcija koji se crtao bez prava.
-'   2) da PRAZAN Inbox ne pokrece uvoz. Bez toga bi svaki povratak na ekran
-'      otvarao transakciju i dirao foldere nizasta.
+'   2) da se uvoz zove I KAD JE LOKALNI INBOX PRAZAN. Prva verzija je ovde
+'      imala pretprovaru, pa se Drive pull -- koji je UNUTAR uvoza -- nikad nije
+'      pokretao: nov izvod moze da postoji samo na Drive-u.
+'   3) da prazan REZULTAT (ni posle povlacenja nema nicega) ne javlja nista i ne
+'      osvezava mrezu.
 '
 ' Sam uvoz se ne vozi: on pise u tabele i pomera fajlove po disku, a ova suite
-' je nemutirajuca. Fixture nema Inbox folder, pa je BankaInboxBrojFajlova 0 --
-' to je i preduslov koji se tvrdi, da test ne bi merio prazan skup slucajno.
+' je nemutirajuca. Fixture nema Inbox folder, pa je nadjeno 0 -- to je i
+' preduslov koji se tvrdi, da test ne bi merio prazan skup slucajno.
 Private Sub T_BankaUvoz_UlazakUvoziIzvode()
     Dim f As frmOtkupUI
-    Dim presao As Boolean, aktivacija As Long, pokusan As Long, ceka As Long
+    Dim presao As Boolean, aktivacija As Long
+    Dim pozvan As Long, ucinio As Long, ceka As Long
 
     modScrBankaUvoz.Scr_BuTestReset
     ceka = modBankaImport.BankaInboxBrojFajlova()
@@ -7627,7 +7631,8 @@ Private Sub T_BankaUvoz_UlazakUvoziIzvode()
     Set f = NewOtkupUIForm()
     presao = modOtkupUI.OtkupUI_PrelazakTest("BANKA_UVOZ")
     aktivacija = modScrBankaUvoz.Scr_BuAktivacijaTest()
-    pokusan = modScrBankaUvoz.Scr_BuUvozPokusanTest()
+    pozvan = modScrBankaUvoz.Scr_BuUvozPozvanTest()
+    ucinio = modScrBankaUvoz.Scr_BuUvozUcinioTest()
 
     AssertEq presao, True, "preduslov: prelazak na Uvoz izvoda uspeva"
     AssertEq ceka, 0, "preduslov: fixture nema izvoda u Inboxu"
@@ -7636,8 +7641,11 @@ Private Sub T_BankaUvoz_UlazakUvoziIzvode()
     ' druga tvrdnja to ne bi primetila.
     AssertEq (aktivacija > 0), True, _
              "ulazak u ekran zove Scr_Aktiviraj (ljuska mora da pozove kuku)"
-    AssertEq pokusan, 0, _
-             "prazan Inbox NE pokrece uvoz -- nema transakcije nizasta"
+    ' Pretprovera lokalnog Inboxa OVDE bi ubila Drive pull, koji je unutar uvoza.
+    AssertEq (pozvan > 0), True, _
+             "uvoz se zove i kad je lokalni Inbox prazan"
+    AssertEq ucinio, 0, _
+             "prazan rezultat NE javlja nista i ne osvezava mrezu"
 End Sub
 
 Private Sub T_BankaUvoz_UgovorEkrana()

@@ -376,7 +376,7 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MSG_BU_UVOZIM", _
         "Uvozim nove bankovne izvode..."
     UpsertRow lo, existing, "OTKUI_MSG_BU_UVEZENO", "Uvezeno izvoda:"
-    UpsertRow lo, existing, "OTKUI_MSG_BU_UVOZ_PALO", "sa gre" & ChrW(353) & "kom:"
+    UpsertRow lo, existing, "OTKUI_MSG_BU_DUPLIKATA", "duplikata:"
     UpsertRow lo, existing, "OTKUI_ERR_BU_UVOZ", _
         "Uvoz izvoda nije uspeo. Mapiranje je otvoreno za postoje" & ChrW(263) & _
         "e stavke."

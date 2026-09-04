@@ -114,7 +114,8 @@ Private mCiljErr As String
 ' Dva broja, ne jedan: prvi meri da je kuka ozicena, drugi da prazan Inbox
 ' ne pokrece nista. Jedan brojac ne bi razlikovao ta dva kvara.
 Private mAktivacija As Long
-Private mUvozPokusan As Long
+Private mUvozPozvan As Long
+Private mUvozUcinio As Long
 ' Koliko je puta punjenje liste POZVANO. Postoji zato sto se bez forme ne moze
 ' videti da li ga je kapija stvarno zvala: bez kontrole PuniCiljCombo izlazi
 ' odmah, pa uklonjen poziv ne menja nijedan drugi merljiv ishod -- a bas taj
@@ -267,8 +268,11 @@ End Function
 ' tacno to: ImportBankaInbox_WithDrivePull pa otvaranje mapiranja. Ljuska nema
 ' to dugme -- ulazak u ekran JESTE taj klik, pa se ponasanje ne gubi.
 '
-' Prazan Inbox ne pokrece nista: bez ove provere bi svaki povratak na ekran
-' otvarao transakciju i dirao foldere nizasta.
+' UVOZ SE ZOVE BEZ PRETPROVERE, i to je cela poenta. Prva verzija je ovde
+' brojala lokalni Inbox i izlazila ako je prazan -- pa se Drive pull, koji je
+' UNUTAR uvoza, nikad nije ni pokretao. Nov izvod moze da postoji SAMO na
+' Drive-u: lokalno prazno tada znaci 'jos nije povuceno', ne 'nema nista'.
+' Odluku o praznini donosi ImportBankaInbox_TX, POSLE povlacenja.
 '
 ' PRAVO se ne proverava ovde. Do Scr_Aktiviraj se dolazi samo kroz
 ' ActivateScreen, koji ekran pusta tek posle ScrDozvoljen (OBL_BANKA) -- ista
@@ -278,25 +282,35 @@ End Function
 ' svejedno ostaje otvoren nad onim sto je vec uvezeno -- isto sto je legacy
 ' radio svojim EH-om ('Mapiranje ce biti otvoreno za postojece stavke').
 Public Sub Scr_Aktiviraj()
-    Dim ceka As Long, uvezeno As Long, greska As String, palo As Long
+    Dim uvezeno As Long, duplikata As Long, nadjeno As Long, tekst As String
 
     mAktivacija = mAktivacija + 1
 
     On Error GoTo EH
-    ceka = modBankaImport.BankaInboxBrojFajlova()
-    If ceka <= 0 Then Exit Sub
-
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_UVOZIM"), False
     DoEvents
 
-    mUvozPokusan = mUvozPokusan + 1
-    modBankaImport.ImportBankaInbox_WithDrivePull uvezeno, palo
-    Scr_ResetCache
+    mUvozPozvan = mUvozPozvan + 1
+    modBankaImport.ImportBankaInbox_WithDrivePull uvezeno, duplikata, nadjeno
 
-    greska = Poruka("OTKUI_MSG_BU_UVEZENO") & " " & CStr(uvezeno)
-    If palo > 0 Then greska = greska & ", " & Poruka("OTKUI_MSG_BU_UVOZ_PALO") & _
-                              " " & CStr(palo)
-    modOtkupUI.ShowToast greska, (palo > 0)
+    ' Ni posle povlacenja nema nicega -- ni rec. Poruka 'uvezeno 0' na svaki
+    ' ulazak u ekran je sum, a ekran se nije promenio pa nema sta da se osvezi.
+    If nadjeno <= 0 Then Exit Sub
+    mUvozUcinio = mUvozUcinio + 1
+
+    ' MREZA MORA DA SE PONOVO PROCITA. ActivateScreen je ucitao redove PRE ove
+    ' kuke, pa bi bez ovoga toast javljao 'Uvezeno izvoda: N' nad mrezom u kojoj
+    ' tih redova jos nema -- do prvog sledeceg osvezavanja.
+    Scr_ResetCache
+    modOtkupUI.RefreshFromData
+
+    ' Ime NIJE 'poruka': lokalni skalar tog imena zaklanja funkciju Poruka() u
+    ' celoj proceduri, pa svaki Poruka(...) postaje indeksiranje niza i modul
+    ' prestaje da se kompajlira (vba_check ZAKLONJENO, .claude/rules/testovi.md).
+    tekst = Poruka("OTKUI_MSG_BU_UVEZENO") & " " & CStr(uvezeno)
+    If duplikata > 0 Then _
+        tekst = tekst & ", " & Poruka("OTKUI_MSG_BU_DUPLIKATA") & " " & CStr(duplikata)
+    modOtkupUI.ShowToast tekst, False
     Exit Sub
 
 EH:
@@ -1814,10 +1828,18 @@ Public Function Scr_BuAktivacijaTest() As Long
     Scr_BuAktivacijaTest = mAktivacija
 End Function
 
-' Koliko je puta uvoz STVARNO pokrenut. Nad praznim Inboxom mora ostati 0.
-Public Function Scr_BuUvozPokusanTest() As Long
+' Koliko je puta uvoz POZVAN. Mora rasti i kad je lokalni Inbox prazan --
+' inace Drive pull, koji je unutar uvoza, nikad ne bi ni krenuo.
+Public Function Scr_BuUvozPozvanTest() As Long
     If Not IsTestMode() Then Exit Function
-    Scr_BuUvozPokusanTest = mUvozPokusan
+    Scr_BuUvozPozvanTest = mUvozPozvan
+End Function
+
+' Koliko je puta uvoz STVARNO nesto zatekao (nadjeno > 0). Nad praznim ostaje 0:
+' bez fajlova nema ni poruke ni osvezavanja mreze.
+Public Function Scr_BuUvozUcinioTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_BuUvozUcinioTest = mUvozUcinio
 End Function
 
 Public Sub Scr_BuTestReset()
@@ -1831,6 +1853,7 @@ Public Sub Scr_BuTestReset()
     mCiljErr = ""
     mCiljPunjenja = 0
     mAktivacija = 0
-    mUvozPokusan = 0
+    mUvozPozvan = 0
+    mUvozUcinio = 0
     Scr_ResetCache
 End Sub
