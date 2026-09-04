@@ -1090,9 +1090,9 @@ ona korpu prazni, pa i ona ide kroz isti kanal.
 
 ### 8.7 Šta NIJE preneto
 
-- `frmFakturisanje` i `frmSEF` se **ne gase i ne menjaju** — isto pravilo kao
-  za `frmOtkup`, `frmDokumenta` i `frmAgrohemija` (§5, Faza B; §7.4).
-  Dve kopije poslovne logike postoje namerno.
+- ~~`frmFakturisanje` i `frmSEF` se **ne gase i ne menjaju**~~ — **delimično
+  prevaziđeno korakom 4 (§27.12): `frmFakturisanje` je obrisan.** `frmSEF`
+  ostaje, jer stavke ispod (batch radnje, event log) i dalje žive samo u njemu.
 - **Avans se i dalje obračunava sam**, unutar `CreateFaktura`
   (`ApplyAvansToFaktura`). Ekran o tome ne zna ništa i ne prikazuje ga —
   isto kao legacy.
@@ -8076,9 +8076,9 @@ svescom. Prošao je samo `vba_check`. Checkliste: §27.6 i §27.7.
 | `frmAgrohemija` | `AGRO` (`modScrAgro`) | **BRIŠE SE** (korak 3) | `modAgrohemijaTests` čita **izvor forme** preko VBProject-a (AUD-040 wiring) — tvrdnja se prebacuje na `modAgroUnos` ili briše |
 | `frmIzvestaj` | `IZVESTAJI` (`modScrIzvestaji`) | **BRIŠE SE** (korak 3) | §23.8 nalazi zatvoreni za novi UI; zamrznuti `WithEvents` |
 | `frmSledljivost` | `SLEDLJIVOST` (`modScrSledljivost`) | **BRIŠE SE** (korak 3) | §24: upis ide kroz iste TX kapije, forma nosi samo kopiju rute štampe |
-| `frmFakturisanje` | `FAKTURE` (`modScrFakture`) | **BRIŠE SE** (korak 4) | jedini pozivalac `frmSEF` |
-| `frmSEF` | SEF radnje nad redom (§8.3) | **uslovno** (korak 4) | §8.7 „šta NIJE preneto" — ako SEF upravljanje nije na ekranu, prvo ekran pa brisanje |
-| `frmBankaExportPregled` | `BANKA_NALOZI` (`modScrBankaNalozi`) | **BRIŠE SE** (korak 4) | logika je u `modBankaExportPregled` (ostaje); zamrznuti `WithEvents` |
+| `frmFakturisanje` | `FAKTURE` (`modScrFakture`) | **OBRISAN** (korak 4, §27.12) | bio jedini pozivalac `frmSEF`; ulaz u SEF prešao na `btnInvoicing` |
+| `frmSEF` | SEF radnje nad redom (§8.3) | **OSTAJE do ekrana** (§27.12) | §8.7: `PrepareResubmit`, batch radnje i event log nisu preneti. Ulaz je `btnInvoicing`, oblast `OBL_FAKTURISANJE` |
+| `frmBankaExportPregled` | `BANKA_NALOZI` (`modScrBankaNalozi`) | **OBRISAN** (korak 4, §27.12) | logika je u `modBankaExportPregled` (ostaje); zamrznuti `WithEvents` |
 | `frmMaticniPodaci` + `frmStammdaten` | `MAT_PARTNERI` / `MAT_ROBA` / `MAT_PAKOVANJE` / `MAT_KORISNICI` + paneli `MAT_PODESAVANJA` / `MAT_ADMIN` (§26, M0–M6) | **BRIŠU SE** (korak 5) | `modMaticniLookups.MaticniOtvoriSekciju` (jedini kodni pozivalac `OpenSekcija`), `clsStmBtn`, test koji gradi `frmStammdaten` (`modTest`), `frmOtkupAPP.OpenMaticniForm`. Paneli su već u ljusci (`modUiPanel`), ali `modAdmin` / `modPodesavanja` još imaju legacy granu zatvaranja (`frmOtkupAPP.ReturnToDashboard`) |
 | `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — **bez uvozne komande** (§9.3), sa fallback-om na ručno mapiranje u formi (§9.4) | **BRIŠE SE** (korak 6) tek kad: (a) uvozna komanda dobije radnju u ljusci (`ImportBankaInbox_TX` je `Sub` bez ishoda — treba povratna vrednost), (b) §9.4 slučajevi pređu na ekran | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
 | `frmMarza` | **nema** (`modScrMarza` ne postoji; red u registru se crta prigušen) | **BRIŠE SE** (korak 6) tek uz ekran Marža | — |
@@ -8099,7 +8099,7 @@ obrisano obara compile cele sveske.
 | 1 | **process PR** za `.claude/`: `otkup-i-dokumenta.md` §5 („legacy se NE gasi" → „penzioniše se po §27"), `testovi.md` `paths:` (`frmOtkup.frm`), `forme-i-kontrole.md` (zamrznuti `WithEvents`, red „Matični podaci"). Ne sme zajedno sa feature izmenom (CLAUDE.md §6) | — |
 | 2 **(isporučen, §27.10)** | `frmOtkup` + `frmDokumenta` (+ `.frx`); `modOtkupBlok` i `clsBlokUI` OSTAJU — imaju pozivaoce iz ljuske | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
 | 3 **(isporučen, §27.11)** | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
-| 4 | `frmFakturisanje`, `frmBankaExportPregled`, `frmSEF` (uslovno, §8.7) | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
+| 4 **(delimično isporučen, §27.12)** | `frmFakturisanje`, `frmBankaExportPregled`; `frmSEF` OSTAJE — uslov iz §8.7 nije ispunjen | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 | `frmMaticniPodaci` + `frmStammdaten` (+ `clsStmBtn`, `clsLookupMenuBtn` ako ostanu bez pozivaoca) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
 | 6 | `frmBankaImport` (kad uvoz i ručno mapiranje žive na ekranu), `frmMarza` (uz `modScrMarza`) | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
 | 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
@@ -8411,3 +8411,61 @@ suite-ova; `WHO_WRITES.md` regenerisan (`tblMagacin` sa 3 pisca na 2 —
 > Kao i posle koraka 2: **instalirane sveske zadržavaju sve četiri forme**
 > (§27.4). Po instalaciji ide `ImportAllVBA` → `Remove` za svaku → `Compile` →
 > `Save`.
+
+### 27.12 Korak 4 isporučen delimično: `frmFakturisanje` i `frmBankaExportPregled`
+
+**`frmSEF` OSTAJE.** §8.7 kaže da SEF upravljanje — `PrepareResubmit`, batch SEF
+radnje i SEF event log — **nije preneto** ni na jedan ekran. §27.2 je tu formu i
+označio kao *uslovnu*: „ako SEF upravljanje nije na ekranu, prvo ekran pa
+brisanje". Uslov nije ispunjen, pa se ne briše. Ostalo je **10 formi**.
+
+**Ulaz u SEF je premešten.** `frmSEF` se otvarao isključivo iz
+`frmFakturisanje.btnSEF_Click`, pa bi brisanje te forme ostavilo SEF bez ulaza.
+Od koraka 4 `frmOtkupAPP.btnInvoicing_Click` vodi pravo na `frmSEF`. Vizuelno je
+isto stanje: `OpenContentFormPublic` je i ranije koristio baš `btnInvoicing` za
+highlight, jer SEF nema svoje dugme u meniju.
+
+> **Ispravka u toku koraka 4.** `OpenContentFormPublic` je najpre obrisan, uz
+> pogrešnu pretpostavku da mu je `frmFakturisanje.btnSEF_Click` bio jedini
+> pozivalac. Nije bio — zove ga i `frmMaticniPodaci.OpenSekcija` (za
+> `frmStammdaten`), a ta forma ostaje do koraka 5. Procedura je vraćena.
+>
+> **Nijedna automatska kapija to nije uhvatila**, i to iz dva poznata razloga:
+> `vba_check` `NEDEFINISAN` ne radi nad `.frm` (`testovi.md` §2), a VBA
+> kompajlira proceduru **tek kad se pozove** — pa je FULL ostao zelen na svih 11
+> suite-ova. Našao ga je **ručni `Debug → Compile`**, tačno ona kapija zbog koje
+> je i zadržana kao obavezna pred merge.
+>
+> Posle vraćanja je pušten i jednokratni presek: svaki poziv oblika `frmX.Clan`
+> u `src-vba/` proveren je protiv javnih članova i kontrola te forme — **nijedan
+> drugi ne visi**, ni od koraka 2 ni od 3.
+
+> Legacy meni je i sam dostupan samo ručno (`Alt+F8` → `frmOtkupAPP.Show`, §27.6
+> tačka 7), pa se dostupnost SEF-a ovim ne menja — menja se samo koje dugme vodi
+> do njega.
+
+**Nalaz usput: `frmSEF` nikad nije bio gejtovan.** `OpenContentForm` proverava
+pravo preko `modAuth.OblastZaFormu(contentForm.name)`, a ta mapa nije imala unos
+za `frmSEF` — vraćala je prazno, a `KorisnikImaPravo("")` vraća **True**. SEF
+upravljanje je do sada bilo zaštićeno samo time što se do njega dolazilo kroz
+gejtovan `frmFakturisanje`. Premeštanjem ulaza ta posredna zaštita bi nestala,
+pa je `frmSEF` dobio svoj unos: `OBL_FAKTURISANJE`. Time je i zatvorena rupa
+koja je postojala i pre ovog koraka.
+
+`frmFakturisanje` i `frmBankaExportPregled` su se držali **po jednom linijom** u
+`frmOtkupAPP` (`btnInvoicing_Click`, `btnbankaisplate_Click`). Nijedna sabotaža
+ih nije gađala, nijedna klasa nije ostala bez pozivaoca (`clsBlokIsplata` drži
+`modBankaExportPregled` + `modScrBankaNalozi`; `clsUiSink` drži `frmOtkupAPP` i
+`frmBankaImport`), i `WHO_WRITES.md` se nije promenio — nijedna od dve nije bila
+pisac tabele.
+
+**Verifikacija:** `vba_check` čist (201 fajl, 439 sabotaža); FULL zeleno —
+`RunAllTests` 182/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova.
+
+> Kao i ranije: **instalirane sveske zadržavaju obe forme** (§27.4). Po
+> instalaciji `ImportAllVBA` → `Remove frmFakturisanje` / `Remove
+> frmBankaExportPregled` → `Compile` → `Save`.
+
+**Šta ostaje za `frmSEF`:** ekran koji nosi `PrepareResubmit`, batch radnje i
+event log. Do tada forma živi, sada gejtovana kao i sve ostale.
