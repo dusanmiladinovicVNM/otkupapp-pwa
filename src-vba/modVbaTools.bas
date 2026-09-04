@@ -17,6 +17,9 @@ Option Explicit
 ' dok se izvrsava). Ako preimenujes modul, promeni i ovu konstantu.
 Private Const SELF_MODULE As String = "modVbaTools"
 
+' Radni folder sa izvorom (src-vba). Koriste ga ImportAllVBA i alat za duplikate.
+Private Const SRC_FOLDER As String = "C:\Users\Dusan\Documents\GitHub\otkupapp-pwa\src-vba\"
+
 Public Sub ExportAllVBA()
     Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport23.06.2026_najnoviji\"        ' <-- IZMENI ("\" na kraju)
     If Not VBAProjectAccessible() Then Exit Sub
@@ -42,7 +45,8 @@ Public Sub ExportAllVBA()
 End Sub
 
 Public Sub ImportAllVBA()
-    Const folder As String = "C:\Users\Dusan\Documents\GitHub\otkupapp-pwa\src-vba\"        ' <-- IZMENI
+    Dim folder As String
+    folder = SRC_FOLDER                                    ' <-- IZMENI gore, u SRC_FOLDER
     If Not VBAProjectAccessible() Then Exit Sub
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
@@ -116,6 +120,180 @@ Public Sub ImportAllVBA()
            vbCrLf & SELF_MODULE & " se ne uvozi (izvrsava se).", _
            vbInformation, "ImportAllVBA"
 End Sub
+
+' ============================================================
+' CISCENJE DUPLIKATA (clsStmBtn1..125, clsSEFResponse1..99, frmX2 ...)
+'
+' Uzrok: u ImportAllVBA se prvo radi VBComponents.Remove pa Import. Za KLASE i
+' FORME brisanje nije trenutno - ime ostaje zauzeto dok makro traje - pa Import
+' napravi kopiju sa brojem na kraju. Svaki sledeci ImportAllVBA doda jos jednu.
+'
+' Pravilo brisanja je namerno usko, da ne obrise nista pravo. Komponenta X<broj>
+' se brise SAMO ako:
+'   1) NE postoji fajl X<broj>.bas/.cls/.frm u src-vba (nije praceni modul),
+'   2) postoji fajl X.bas/.cls/.frm u src-vba,
+'   3) komponenta X postoji u projektu (original je tu, kopija je visak).
+' Document moduli (ThisWorkbook, Sheet1..Sheet25) se NIKAD ne diraju.
+'
+' Redosled: ListDuplicateModules (pregled) -> RemoveDuplicateModules (brisanje)
+'           -> snimi, zatvori i otvori radnu svesku -> ListDuplicateModules opet.
+' ============================================================
+
+' Samo prebroji i ispisi, ne brise nista.
+Public Sub ListDuplicateModules()
+    ScanDuplicateModules False
+End Sub
+
+' Obrise duplikate (uz potvrdu).
+Public Sub RemoveDuplicateModules()
+    ScanDuplicateModules True
+End Sub
+
+Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
+    If Not VBAProjectAccessible() Then Exit Sub
+
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(SRC_FOLDER) Then
+        MsgBox "Folder ne postoji: " & SRC_FOLDER, vbExclamation, "Duplikati": Exit Sub
+    End If
+
+    ' 1) imena koja src-vba prati (bez ekstenzije)
+    Dim tracked As Object: Set tracked = CreateObject("Scripting.Dictionary")
+    tracked.CompareMode = vbTextCompare
+    Dim fil As Object, ext As String
+    For Each fil In fso.GetFolder(SRC_FOLDER).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        If ext = "bas" Or ext = "cls" Or ext = "frm" Then
+            tracked(fso.GetBaseName(fil.name)) = True
+        End If
+    Next fil
+
+    ' 2) klasifikacija komponenti u projektu
+    Dim dupNames() As String, dupCount As Long
+    ReDim dupNames(0 To proj.VBComponents.count)
+
+    Dim dupList As String, orphanList As String, unknownList As String
+    Dim orphanCount As Long, unknownCount As Long
+    Dim vbc As Object, nm As String, baseName As String
+
+    For Each vbc In proj.VBComponents
+        nm = vbc.name
+        If vbc.Type <> 100 And StrComp(nm, SELF_MODULE, vbTextCompare) <> 0 _
+           And Not tracked.Exists(nm) Then
+
+            baseName = TrimTrailingDigits(nm)
+            If Len(baseName) > 0 And Len(baseName) < Len(nm) And tracked.Exists(baseName) Then
+                If ComponentExists(proj, baseName) Then
+                    dupNames(dupCount) = nm
+                    dupCount = dupCount + 1
+                    dupList = dupList & nm & vbCrLf
+                Else
+                    orphanCount = orphanCount + 1
+                    orphanList = orphanList & nm & " -> nema '" & baseName & "' u projektu" & vbCrLf
+                End If
+            Else
+                unknownCount = unknownCount + 1
+                unknownList = unknownList & nm & vbCrLf
+            End If
+        End If
+    Next vbc
+
+    ' 3) izvestaj u fajl pored radne sveske + rezime
+    Dim reportPath As String
+    reportPath = WriteDuplicateReport(fso, dupList, orphanList, unknownList)
+
+    Dim summary As String
+    summary = "Ukupno komponenti: " & proj.VBComponents.count & vbCrLf & _
+              "Duplikati za brisanje: " & dupCount & vbCrLf & _
+              "Bez originala (RUCNO proveriti): " & orphanCount & vbCrLf & _
+              "Van src-vba, nije duplikat (ne dira se): " & unknownCount & vbCrLf & vbCrLf & _
+              IIf(Len(reportPath) > 0, "Spisak: " & reportPath, "Spisak nije mogao da se upise.")
+    Debug.Print summary
+
+    If Not doRemove Then
+        MsgBox summary, vbInformation, "Duplikati - samo pregled"
+        Exit Sub
+    End If
+
+    If dupCount = 0 Then
+        MsgBox "Nema duplikata za brisanje." & vbCrLf & vbCrLf & summary, vbInformation, "Duplikati"
+        Exit Sub
+    End If
+
+    If MsgBox("Brisem " & dupCount & " komponenti iz VBA projekta." & vbCrLf & _
+              "Izvor istine ostaje src-vba; originali se ne diraju." & vbCrLf & vbCrLf & _
+              "SNIMI radnu svesku pre nego sto potvrdis." & vbCrLf & vbCrLf & _
+              "Nastaviti?" & vbCrLf & vbCrLf & summary, _
+              vbYesNo + vbDefaultButton2 + vbExclamation, "Brisanje duplikata") <> vbYes Then Exit Sub
+
+    Dim i As Long, removed As Long, failed As String, failedCount As Long
+    For i = 0 To dupCount - 1
+        On Error Resume Next
+        Err.Clear
+        proj.VBComponents.Remove proj.VBComponents(dupNames(i))
+        If Err.Number <> 0 Then
+            failedCount = failedCount + 1
+            failed = failed & "  " & dupNames(i) & " (" & Err.Number & " " & Err.Description & ")" & vbCrLf
+        Else
+            removed = removed + 1
+        End If
+        On Error GoTo 0
+    Next i
+
+    Debug.Print "Obrisano: " & removed & ", neuspesno: " & failedCount
+    If Len(failed) > 0 Then Debug.Print failed
+
+    MsgBox "Obrisano: " & removed & vbCrLf & _
+           "Neuspesno: " & failedCount & _
+           IIf(failedCount > 0, vbCrLf & vbCrLf & Left$(failed, 700) & _
+               "(ceo spisak: Immediate prozor)", "") & vbCrLf & vbCrLf & _
+           "Klase i forme se stvarno oslobadjaju tek kad makro stane." & vbCrLf & _
+           "Snimi, zatvori i otvori radnu svesku, pa pokreni ListDuplicateModules" & vbCrLf & _
+           "da proveris da li je ostalo jos nesto (onda ponovi brisanje).", _
+           vbInformation, "Brisanje duplikata"
+End Sub
+
+' "clsStmBtn125" -> "clsStmBtn"; "modOtkup" -> "modOtkup" (nista da skine).
+Private Function TrimTrailingDigits(ByVal s As String) As String
+    Dim i As Long
+    i = Len(s)
+    Do While i > 0
+        If InStr("0123456789", Mid$(s, i, 1)) = 0 Then Exit Do
+        i = i - 1
+    Loop
+    TrimTrailingDigits = Left$(s, i)
+End Function
+
+Private Function ComponentExists(ByVal proj As Object, ByVal compName As String) As Boolean
+    Dim vbc As Object
+    On Error Resume Next
+    Set vbc = proj.VBComponents(compName)
+    On Error GoTo 0
+    ComponentExists = Not (vbc Is Nothing)
+End Function
+
+' Vrati putanju izvestaja, ili "" ako upis nije uspeo.
+Private Function WriteDuplicateReport(ByVal fso As Object, ByVal dupList As String, _
+                                      ByVal orphanList As String, ByVal unknownList As String) As String
+    Dim path As String, ts As Object
+    path = ThisWorkbook.path & "\vba_duplikati.txt"
+    On Error GoTo Fail
+    Set ts = fso.CreateTextFile(path, True)
+    ts.WriteLine "Duplikati - " & Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    ts.WriteLine ""
+    ts.WriteLine "[ZA BRISANJE]"
+    ts.WriteLine IIf(Len(dupList) > 0, dupList, "  (nema)")
+    ts.WriteLine "[BEZ ORIGINALA - rucna provera]"
+    ts.WriteLine IIf(Len(orphanList) > 0, orphanList, "  (nema)")
+    ts.WriteLine "[VAN src-vba - ne dira se]"
+    ts.WriteLine IIf(Len(unknownList) > 0, unknownList, "  (nema)")
+    ts.Close
+    WriteDuplicateReport = path
+    Exit Function
+Fail:
+    WriteDuplicateReport = ""
+End Function
 
 ' ---------------- helperi ----------------
 
