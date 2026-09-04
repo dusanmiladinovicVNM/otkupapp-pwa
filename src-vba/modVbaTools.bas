@@ -179,10 +179,13 @@ Private Sub ScanDuplicateModules(ByVal doRemove As Boolean)
 
     For Each vbc In proj.VBComponents
         nm = vbc.name
-        If vbc.Type <> 100 And StrComp(nm, SELF_MODULE, vbTextCompare) <> 0 _
+        baseName = TrimTrailingDigits(nm)
+        ' modVbaTools i njegove kopije (modVbaTools1...) se NE diraju: odavde se
+        ' kod izvrsava, a brisanje modula koji radi rusi Excel. Kopije tog modula
+        ' obrisi rucno u VBE (desni klik > Remove), tek kad si van njega.
+        If vbc.Type <> 100 And StrComp(baseName, SELF_MODULE, vbTextCompare) <> 0 _
            And Not tracked.Exists(nm) Then
 
-            baseName = TrimTrailingDigits(nm)
             If Len(baseName) > 0 And Len(baseName) < Len(nm) And tracked.Exists(baseName) Then
                 If ComponentExists(proj, baseName) Then
                     dupNames(dupCount) = nm
