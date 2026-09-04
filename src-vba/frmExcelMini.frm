@@ -17,29 +17,30 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmCloseExcel / Excel close helper
+' frmExcelMini / plutajuca kartica dok je Excel otvoren
 ' Responsibility:
-'   - hide Excel
-'   - return operator to frmOtkupAPP
+'   - jedno dugme: sakrij Excel i vrati ljusku (modOtkupUI.ShowOtkupUI)
 '   - no business logic
+'
+' Otvara je modOtkupUI.DoShowExcel ("Otvori Excel"). Izgled prati ljusku:
+' krem kartica sa 1pt ivicom, forest traka levo, logotip, zeleno primarno
+' dugme.
+'
+' JEDAN ZNAK: .frx nosi logotip, pa se on i koristi -- crtani tekstualni
+' "AX OtkupApp" bi bio drugi znak na kartici od 232x78 tacaka. Slika se trazi
+' PO TIPU kontrole (LogoSlika), ne po imenu: ime iz dizajnera se ne vidi iz
+' izvora (.frx je binaran), a promasaj je COMPILE greska koja obara projekat.
+' Kontrole iz dizajnera se samo stilizuju i premestaju (btnCloseExcel kroz
+' modUiKit.PanelStilDugme -- isti primitiv koji oblaci dugmad panela);
+' ostalo je runtime (modUiKit.NewLbl), pa se .frx ne dira. Nema module-level
+' MSForms deklaracija (meka forma).
 ' ============================================================
+
+Private Const MINI_W As Single = 232
+Private Const MINI_H As Single = 78
 
 Private mChromeRemoved As Boolean
 Private m_IsClosing As Boolean
-
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
 
 Private Sub UserForm_Initialize()
     On Error GoTo EH
@@ -47,39 +48,90 @@ Private Sub UserForm_Initialize()
     mChromeRemoved = False
     m_IsClosing = False
 
-    btnCloseExcel.caption = "Zatvori Excel"
+    BuildMini
 
+    ' gore desno u Excelu, kao i do sada
     Me.StartUpPosition = 0
-
     If Application.Visible Then
         Me.Left = Application.Left + Application.width - Me.width - 20
         Me.top = Application.top + 40
     End If
 
-    Me.BackColor = BG_MAIN()
-    StylePrimaryButton btnCloseExcel, "Zatvori Excel"
-
     Exit Sub
 
 EH:
-    LogErr "frmCloseExcel.UserForm_Initialize"
+    LogErr "frmExcelMini.UserForm_Initialize"
+End Sub
+
+' Logotip iz .frx po TIPU kontrole -- v. zaglavlje modula. Nothing kad slike
+' nema; pozivalac to mora da podnese.
+Private Function LogoSlika() As Object
+    Dim c As Object
+    On Error Resume Next
+    For Each c In Me.Controls
+        If TypeName(c) = "Image" Then
+            Set LogoSlika = c
+            Exit Function
+        End If
+    Next c
+End Function
+
+Private Sub BuildMini()
+    Dim logo As Object
+    Set logo = LogoSlika()
+
+    Me.width = MINI_W
+    Me.Height = MINI_H
+    Me.BackColor = C_CREAM
+
+    ' ivica + ispuna (isti par kao NewShell) iza svega; ispuna pa ivica, da
+    ' ivica zavrsi najdublje
+    NewLbl Me, "mnB", "", 0, 0, MINI_W, MINI_H, 8, False, 0, C_BORDER
+    NewLbl Me, "mnF", "", 1, 1, MINI_W - 2, MINI_H - 2, 8, False, 0, C_CREAM
+    Me.Controls("mnF").ZOrder 1
+    Me.Controls("mnB").ZOrder 1
+    NewLbl Me, "mnBar", "", 1, 1, 5, MINI_H - 2, 8, False, 0, C_FOREST
+
+    ' logotip iz .frx; Zoom cuva odnos stranica, pa okvir sme da bude fiksan
+    If Not logo Is Nothing Then
+        With logo
+            .PictureSizeMode = fmPictureSizeModeZoom
+            .PictureAlignment = fmPictureAlignmentCenter
+            .BackStyle = fmBackStyleTransparent
+            .BorderStyle = fmBorderStyleNone
+            .Left = 16: .top = 8: .width = 104: .Height = 20
+            .Visible = True
+            .ZOrder 0
+        End With
+    End If
+    NewLbl Me, "mnSub", Poruka("OTKUI_MINI_EXCEL"), 124, 11, MINI_W - 138, TxtH(TS_META), _
+           TS_META, False, C_MUTED, -1, fmTextAlignRight
+
+    With btnCloseExcel
+        .caption = Poruka("OTKUI_MINI_NAZAD")
+        .Left = 16
+        .top = 38
+        .width = MINI_W - 32
+        .Height = 28
+        .ZOrder 0
+    End With
+    PanelStilDugme btnCloseExcel, "primary"
 End Sub
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
-
-    Me.BackColor = BG_MAIN()
-
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
-
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
     Exit Sub
-
 EH:
-    LogErr "frmCloseExcel.UserForm_Activate"
+    LogErr "frmExcelMini.UserForm_Activate"
+End Sub
+
+Private Sub btnCloseExcel_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    PanelStilDugmeHover btnCloseExcel, "primary", True
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    PanelStilDugmeHover btnCloseExcel, "primary", False
 End Sub
 
 Private Sub btnCloseExcel_Click()
@@ -102,17 +154,17 @@ Private Sub ReturnToAppShell()
     Application.Visible = False
 
     On Error Resume Next
-    frmOtkupAPP.Show
+    modOtkupUI.ShowOtkupUI
     On Error GoTo EH
 
     Unload Me
     Exit Sub
 
 EH:
-    LogErr "frmCloseExcel.ReturnToAppShell"
+    LogErr "frmExcelMini.ReturnToAppShell"
 
     On Error Resume Next
     Application.Visible = False
-    frmOtkupAPP.Show
+    modOtkupUI.ShowOtkupUI
     Unload Me
 End Sub

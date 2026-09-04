@@ -284,7 +284,7 @@ Canonical startup contract:
 - `StartApp` calls `InitApp` on first run;
 - `InitApp` suspends `ScreenUpdating`, `Calculation` and `EnableEvents` while validating the workbook runtime;
 - startup validation runs `ValidateAllTables` against the canonical table set and surfaces missing-table warnings;
-- after initialization, `StartApp` may hide Excel, show `frmSplash`, and hand off to `frmOtkupAPP`;
+- after initialization, `StartApp` may hide Excel, show `frmSplash`, and hand off to the new UI `frmOtkupUI` through `modOtkupUI.ShowOtkupUI`; `frmOtkupAPP` is legacy and is no longer opened by the application (started manually from the VBE only; removal plan in `docs/UI_MIGRACIJA_KATALOG.md` §27);
 - file imports such as `ImportBankaInbox_TX()` are explicit operator actions and must not run automatically at boot;
 - SEF stuck-state recovery may run opportunistically but must not block boot;
 - journal recovery warnings are advisory and must keep the operator in control.
@@ -294,7 +294,7 @@ Canonical shutdown contract:
 - normal exits route through `ShutdownApp`;
 - `ShutdownApp` restores `Application.Visible = True`;
 - `ShutdownApp` unloads the shell and writes `LogAppShutdown`;
-- form-control close on `frmOtkupAPP` and workbook-level `Workbook_BeforeClose` share the same shutdown contract;
+- closing `frmOtkupUI` (X) hides it and restores `Application.Visible`; the application shuts down through workbook-level `Workbook_BeforeClose` → `ShutdownApp` (form-control close on the manually started `frmOtkupAPP` shares the same shutdown contract);
 - startup and shutdown logs must form a paired lifecycle trail when the app closes normally.
 
 ### 4.5 Setup and Local Workstation Config

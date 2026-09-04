@@ -457,7 +457,9 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
 
 **Legacy se NE gasi i NE menja.** `frmOtkup` i `frmDokumenta` ostaju potpuno
 operativni dok novi UI ne bude umeo sve što one umeju; do tada obe kopije
-poslovne logike postoje **namerno**. Pravilo za taj period: pravilo unosa se
+poslovne logike postoje **namerno**. *(Od `v6-ui-209` aplikacija se otvara u
+novoj ljusci i **nema nijednu vezu ka legacy formama** — one se pokreću samo
+ručno iz VBE-a. Forme još nisu obrisane; redosled i uslovi po formi: §27.)* Pravilo za taj period: pravilo unosa se
 menja u `modOtkupUnos` / `modDokUnos`, pa se **ručno preslika** u legacy formu,
 i to se zapiše uz izmenu. Prebacivanje legacy formi na zajedničke module je
 odluka koja dolazi tek kad novi UI prođe rad u pogonu (i moguće nikad, ako se
@@ -526,6 +528,16 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
     ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
     i prevezuje jedini operativan put upisa matičnih podataka. Redosled
     M0–M5 je u §24.10.
+
+### Faza G — ljuska
+
+21. ~~**Start ide u novu ljusku, bez veza ka legacy formama**~~ **URAĐENO**
+    (`v6-ui-209`) — v. §27. Splash otvara `frmOtkupUI`; ni `modMain` ni
+    ljuska ne referenciraju nijednu legacy formu. Uz to su `frmSplash`,
+    `frmLogin` i `frmExcelMini` prešli na estetiku ljuske (§27.7).
+    Bez ekrana ostaju: **Marža** (`modScrMarza` ne postoji), **uvozna komanda
+    banke** (§9.3) i **SEF upravljanje** (§8.7). Plan uklanjanja legacy formi:
+    §27.3.
 
 ---
 
@@ -8017,3 +8029,349 @@ suite vrati `SetTestMode prevMode`.
 - **Nije izvršeno u Excelu.** Stvarni crveno→zeleno (`dokaz.py`), `RunAllTests`
   i ručni `Debug → Compile` traže Windows + Excel. Redosled tvrdnji je ovde
   proveren čitanjem, ne izvršavanjem.
+
+---
+
+## 27. Ljuska: start bez veza ka legacy + plan uklanjanja formi (`v6-ui-209`)
+
+> Odluka (2026-09-03): nova ljuska i legacy forme su **razdvojene**. Aplikacija
+> se otvara u `frmOtkupUI`; ni `modMain`, ni `frmOtkupUI` / `modOtkupUI` **ne
+> referenciraju** nijednu legacy formu — nema fallback-a na stari meni, nema
+> prekidača, nema dugmeta ka njemu. Legacy forme **nisu obrisane**: ko ih treba,
+> pokreće ih ručno iz VBE-a (`frmOtkupAPP.Show` u Immediate prozoru) i one među
+> sobom rade kao pre. Ovaj paragraf je plan po kome se brišu.
+
+### 27.1 Šta je promenjeno
+
+| Šta | Gde | Napomena |
+|---|---|---|
+| Start → nova ljuska | `frmSplash.OpenAppShell` → `modOtkupUI.ShowOtkupUI` | jedina promena u start lancu; `StartApp` je nedirnut |
+| Start bira **prvi dozvoljen** ekran | `OtkupUI_StartEkran` → `ShowOtkupUI` | prava po oblastima su nezavisna (`modAuth.OblastiList`), pa nalog sa `BANKA=DA, DOKUMENTI=NE` mora da uđe; paneli se preskaču (pokrili bi zabranjen ekran ispod sebe). Nijedan dozvoljen → poruka i **zatvaranje sveske** na sledeći tick, bez otkrivanja Excela |
+| X ljuske → Excel **samo uz pravo** | `OtkupUI_Sakrij` | ista kapija kao „Otvori Excel"; bez tog prava zatvaranje ljuske znači izlaz iz aplikacije (`modMain.ZatvoriAplikaciju` preko `OnTime`) |
+| Alatke traže pravo | `AlatkaOblast` / `AlatkaSme` → `DoShowExcel`, `DoSync` | `OBL_OTVORI_EXCEL` i `OBL_SYNC_PWA`, kao u legacy meniju; dugme bez prava se i ne crta (`OsveziAlatke`, i posle zamene operatera) |
+| „Pokreni program" (list Pregled listova) | `modPregledListova.PokreniProgram` → `ShowOtkupUI` | do sada je otvarao stari meni |
+| Povratak iz Excela | `DoShowExcel` → `frmExcelMini` → `ShowOtkupUI` | plutajuća kartica „Nazad u aplikaciju"; bez nje bi nazad vodio samo `Alt+F8` |
+
+**Posledice koje su prihvaćene:** Marža, uvozna komanda banke (§9.3), SEF
+upravljanje (§8.7) i dugme „Izlaz" **nisu dostupni iz aplikacije** dok ne dobiju
+ekran. Matični podaci **jesu** — sekcija ljuske je zatvorena u §26 (M0–M6), pa
+je jedini legacy put koji je ovaj korak zatvorio ionako bio suvišan.
+
+**Isporuka:** promenjene komponente su meke (`modMain`, `modOtkupUI`,
+`modUiKit`, `modPoruke`, `modPregledListova`; `frmSplash`, `frmLogin`,
+`frmExcelMini` nemaju module-level `MSForms` deklaracije) → **običan
+self-update**. Legacy forme ostaju u svesci netaknute.
+
+**Šta u web sesiji NIJE verifikovano:** `run_vba`, `Compile`, smoke nad pravom
+svescom. Prošao je samo `vba_check`. Checkliste: §27.6 i §27.7.
+
+### 27.2 Inventar formi — sudbina svake
+
+| Forma | Pendant u novoj ljusci | Sudbina | Uslov / šta drži |
+|---|---|---|---|
+| `frmOtkup` | `DOKUMENTI` F1 (`modScrDokumenti` + `modOtkupUnos`) | **BRIŠE SE** (korak 2) | testovi 1–3 u `modTest` (`New frmOtkup`) i sabotaže nad njima; `frmOtkupAPP.btnBlocks_Click`; `modOtkupBlok` + `clsBlokUI` ostaju bez pozivaoca |
+| `frmDokumenta` | `DOKUMENTI` F2–F7 + `STORNO` + `OPORAVAK` | **BRIŠE SE** (korak 2) | testovi `T_LegacyDok_*` + sabotaže nad `frmDokumenta.frm`; `btnPurchase_Click` |
+| `frmPalete` | `PALETE` (`modScrPalete`) | **BRIŠE SE** (korak 3) | zamrznuti form-`WithEvents` (forme-i-kontrole.md) — lista se skraćuje kroz process PR |
+| `frmAgrohemija` | `AGRO` (`modScrAgro`) | **BRIŠE SE** (korak 3) | `modAgrohemijaTests` čita **izvor forme** preko VBProject-a (AUD-040 wiring) — tvrdnja se prebacuje na `modAgroUnos` ili briše |
+| `frmIzvestaj` | `IZVESTAJI` (`modScrIzvestaji`) | **BRIŠE SE** (korak 3) | §23.8 nalazi zatvoreni za novi UI; zamrznuti `WithEvents` |
+| `frmSledljivost` | `SLEDLJIVOST` (`modScrSledljivost`) | **BRIŠE SE** (korak 3) | §24: upis ide kroz iste TX kapije, forma nosi samo kopiju rute štampe |
+| `frmFakturisanje` | `FAKTURE` (`modScrFakture`) | **BRIŠE SE** (korak 4) | jedini pozivalac `frmSEF` |
+| `frmSEF` | SEF radnje nad redom (§8.3) | **uslovno** (korak 4) | §8.7 „šta NIJE preneto" — ako SEF upravljanje nije na ekranu, prvo ekran pa brisanje |
+| `frmBankaExportPregled` | `BANKA_NALOZI` (`modScrBankaNalozi`) | **BRIŠE SE** (korak 4) | logika je u `modBankaExportPregled` (ostaje); zamrznuti `WithEvents` |
+| `frmMaticniPodaci` + `frmStammdaten` | `MAT_PARTNERI` / `MAT_ROBA` / `MAT_PAKOVANJE` / `MAT_KORISNICI` + paneli `MAT_PODESAVANJA` / `MAT_ADMIN` (§26, M0–M6) | **BRIŠU SE** (korak 5) | `modMaticniLookups.MaticniOtvoriSekciju` (jedini kodni pozivalac `OpenSekcija`), `clsStmBtn`, test koji gradi `frmStammdaten` (`modTest`), `frmOtkupAPP.OpenMaticniForm`. Paneli su već u ljusci (`modUiPanel`), ali `modAdmin` / `modPodesavanja` još imaju legacy granu zatvaranja (`frmOtkupAPP.ReturnToDashboard`) |
+| `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — **bez uvozne komande** (§9.3), sa fallback-om na ručno mapiranje u formi (§9.4) | **BRIŠE SE** (korak 6) tek kad: (a) uvozna komanda dobije radnju u ljusci (`ImportBankaInbox_TX` je `Sub` bez ishoda — treba povratna vrednost), (b) §9.4 slučajevi pređu na ekran | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
+| `frmMarza` | **nema** (`modScrMarza` ne postoji; red u registru se crta prigušen) | **BRIŠE SE** (korak 6) tek uz ekran Marža | — |
+| `frmOtkupAPP` | ljuska je `frmOtkupUI` | **BRIŠE SE POSLEDNJA** (korak 7) | host za sve gore (`OpenContentFormPublic` / `ReturnToDashboard`) |
+| `frmLogin`, `frmSplash`, `frmExcelMini` | — (forme ljuske od `v6-ui-209`, §27.7) | **OSTAJU** | prijava, start, povratak iz Excela |
+| `frmOtkupUI` | — | **OSTAJE** | ljuska |
+
+### 27.3 Redosled uklanjanja — svaki korak je jedan PR i jedna puna isporuka
+
+**Pravilo redosleda:** prvo se seku **reference** (handleri u `frmOtkupAPP`,
+testovi, sabotaže, alati), pa tek onda forma. Forma koja u nekoj instalaciji
+ostane a **nema referenci** se kompajlira i ne smeta; forma koja referencira
+obrisano obara compile cele sveske.
+
+| Korak | Šta | Reference koje se seku |
+|---|---|---|
+| 0 | start → nova ljuska, bez veza ka legacy (**ovaj PR**, `v6-ui-209`) | — |
+| 1 | **process PR** za `.claude/`: `otkup-i-dokumenta.md` §5 („legacy se NE gasi" → „penzioniše se po §27"), `testovi.md` `paths:` (`frmOtkup.frm`), `forme-i-kontrole.md` (zamrznuti `WithEvents`, red „Matični podaci"). Ne sme zajedno sa feature izmenom (CLAUDE.md §6) | — |
+| 2 **(isporučen, §27.10)** | `frmOtkup` + `frmDokumenta` (+ `.frx`); `modOtkupBlok` i `clsBlokUI` OSTAJU — imaju pozivaoce iz ljuske | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
+| 3 | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
+| 4 | `frmFakturisanje`, `frmBankaExportPregled`, `frmSEF` (uslovno, §8.7) | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
+| 5 | `frmMaticniPodaci` + `frmStammdaten` (+ `clsStmBtn`, `clsLookupMenuBtn` ako ostanu bez pozivaoca) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
+| 6 | `frmBankaImport` (kad uvoz i ručno mapiranje žive na ekranu), `frmMarza` (uz `modScrMarza`) | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
+| 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
+
+### 27.4 Isporuka uklanjanja — zašto nije samo `git rm`
+
+- **Self-update nikad ne uklanja komponente.** `ImportFromFolder` uvozi samo ono
+  što je u release folderu; zamka #7 (`docs/SELF_UPDATE.md`) zabranjuje `Remove`
+  forme u runtime-u. Release prune (`modRelease`) sklanja fajl sa Drive-a, ali
+  **klijentova sveska zadržava formu**. Ni `ImportAllVBA` ne briše ono čega u
+  folderu nema.
+- Zato je svaki korak **puna isporuka + uklanjanje komponente u svakoj
+  instalaciji**. Dve opcije: **(A)** ručno u VBE (`Remove frmX` → Compile → Save),
+  uz backup koji `BackupFileOnStart` već pravi; **(B)** admin makro koji radi
+  `VBComponents.Remove` nad zadatom listom iz čistog stanja — **nijedna forma
+  učitana**, pre `StartApp`. Rizik (B) je baš zamka #1 (Remove forme u runtime-u
+  je već jednom korumpirao svesku), pa ide **tek posle (A) na jednoj mašini**.
+- Zbog pravila redosleda (§27.3), instalacija koja korak preskoči ostaje
+  kompajlabilna: forme bez referenci samo zauzimaju mesto.
+
+### 27.5 Verifikacija po koraku
+
+1. `python tools/vba_check.py` — ASCII, deklaracije, `DUPLIKAT`, orphan
+   `Poruka("...")`, sidra sabotaža.
+2. `python tools/sabotaza.py --proveri-sidra` (obrisane forme = obrisane sabotaže).
+3. `python tools/run_vba.py` **FULL** (Windows + Excel): suite koja je
+   referencirala formu mora i dalje da se **kompajlira** (compile signal stiže
+   kroz `RunAllTests`).
+4. `Alt+F11 → Debug → Compile VBAProject` — ručna kapija.
+5. `python tools/dokaz.py <fajl>` za svaku novu ili promenjenu sabotažu.
+6. Smoke nad pravom svescom po checklisti koraka.
+
+### 27.6 Smoke checklista za start (`v6-ui-209`)
+
+1. Otvori `.xlsm` → splash → **nova ljuska**, ne stari meni. Excel sakriven.
+2. Ljuska → X → Excel **vidljiv**, sveska otvorena. `Alt+F8 → ShowOtkupUI` vraća ekran.
+3. „Otvori Excel" → Excel vidljiv, ekran sakriven, gore desno kartica „Nazad u
+   aplikaciju" → klik vraća ekran i sakriva Excel.
+4. List „Pregled listova" → „Pokreni program" → nova ljuska.
+5. AUTH uključen, operater **bez** prava na oblast Dokumenta → poruka „Nemate
+   dozvolu za ovu oblast" i Excel **vidljiv** (ne prazan sakriven Excel).
+6. Zatvaranje Excela → `Workbook_BeforeClose` → `ShutdownApp` (log ima par
+   start/shutdown).
+7. Legacy ručno: VBE Immediate `frmOtkupAPP.Show` → stari meni radi kao pre.
+   Napomena: njegov X i „Izlaz" zovu `ShutdownApp`, koji unload-uje **sve**
+   forme — i ljusku.
+
+### 27.7 Splash, prijava i plutajuća kartica u estetici ljuske
+
+Tri male forme koje aplikacija otvara (`frmSplash`, `frmLogin`, `frmExcelMini`)
+nosile su staru temu (`modTheme`: krem + zlatna dugmad, sistemske ivice). Sada
+prate isti jezik kao `frmOtkupUI`: forest gradijent zaglavlja sa zlatnom niti,
+„AX" zlatno + „OtkupApp" krem u display fontu (`DisplayFont`), krem telo, polja
+u shell-u sa focus/error stanjem, zeleno primarno dugme, prigušeni natpisi u
+verzalu.
+
+| Forma | Šta se vidi | Kako je izvedeno |
+|---|---|---|
+| `frmSplash` | **preko celog ekrana**: vertikalni forest gradijent (40 traka), zlatna nit na vrhu, **logotip `AX\|OtkupApp` iz `.frx`** centriran u gornjoj trećini, verzija ispod, a u podnožju linija + „Powered by AgriX" levo i zlatna tačka + „Pokrećem aplikaciju…" desno | veličina iz `ScreenWidthPoints`/`ScreenHeightPoints` (`modWindow`), kao `GoFullScreen`; `Image12` dobija `PictureSizeMode = Zoom`; `lblVersion`/`lblBy` se stilizuju i premeštaju; gradijent, nit, tačka i status su runtime (`NewLbl`, `Lerp`) |
+| `frmLogin` | **preko celog ekrana**: ista forest podloga, a prijava je **kartica 344×290** u sredini — zlatna nit, znak „AX OtkupApp", naslov u display fontu, natpisi verzalom, dva shell polja (focus zeleno, greška rust), „Prijavi se" zeleno (Enter) i „Otkaži" tiho (Esc), ispod kartice tiho „Powered by AgriX" | ista puna veličina kao splash; shell-ovi `shUser`/`shPin` (`NewShell` + `ShellState` iz `_Enter`/`_Exit`); stil natpisa i dugmadi kroz `PanelStilNatpis` / `PanelStilNapomena` / `PanelStilDugme`; `btnOK.Default` / `btnCancel.Cancel` |
+| `frmExcelMini` | krem kartica 232×78 sa 1pt ivicom, forest traka levo, **logotip iz `.frx`** + „Excel je otvoren", zeleno dugme „Nazad u aplikaciju" (hover) | `Image1` na `Zoom`; `btnCloseExcel` kroz `PanelStilDugme` / `PanelStilDugmeHover`; otvara je `DoShowExcel`, povratak ide u `ShowOtkupUI` |
+
+**Zašto pun ekran, i zašto JEDAN znak.** Prva verzija je bila mali prozor
+(400×236) na kome se marka videla **tri puta**: `.frx` splash-a nosi **dva**
+logotipa (gornji `AX|OtkupApp`, donji `AgriX`), a preko njih je crtan i
+tekstualni „AX OtkupApp". Sada se koristi **pravi gornji logotip**, a donji i
+tekstualni znak se gase (`Visible = False`) — dole ostaje samo tiha linija
+„Powered by AgriX". Isto važi za `frmExcelMini`, čiji `.frx` takođe ima
+logotip. Pun ekran je odluka istog reda: prijava kao mali dijalog nad
+**sakrivenim** Excelom izgledala je kao da aplikacija nije ni startovala.
+
+**Slike se traže po TIPU kontrole, ne po imenu** (`LogoSlika`: prolaz kroz
+`Me.Controls` uz `TypeName(c) = "Image"`, gornja = manji `.Top`). Razlog je
+plaćen jednom: `.frx` je binaran, pa se ime kontrole **ne vidi iz izvora**, a
+pogođeno ime nije tiha greška nego **compile greška** („Variable not defined")
+koja obara ceo projekat — što se i desilo sa imenom pročitanim iz binarnog
+sadržaja (`Image12` umesto `Image1`). Ostala imena (`lblApp`, `lblVersion`,
+`lblBy`, `btnOK`…) su bezbedna jer ih zatečeni kod već referencira; slike
+nijedan kod nije dirao, pa su bile jedina nepoznanica.
+
+**Šta je zajedničko i zašto:**
+
+- **`.frx` se ne dira.** Kontrole iz dizajnera se samo oblače; sve novo je
+  `Controls.Add` kroz `modUiKit`. Forme nemaju nijednu module-level `MSForms`
+  deklaraciju, pa ostaju **meke** — izmena ide običnim self-update-om.
+- **Nema novih `WithEvents`.** Hover i focus idu kroz evente kontrola iz
+  dizajnera (`_MouseMove`, `_Enter`, `_Exit`), koje forma već sme da ima.
+- **Stil ide kroz postojeće primitive**, `PanelStil*` iz §26 (`modUiKit`) — one
+  koje već oblače panele Podešavanja i Admin. Nova je samo
+  `PanelStilDugmeHover`: hover nije bio potreban panelima, a ove tri forme su
+  same sebi ekran. Stoji uz `PanelStilDugme`, po istom pravilu iz §26 („dva
+  mesta sa kopijom istog pravila razidju se prvom doradom").
+- **`PanelStilUnos` se namerno NE koristi u prijavi:** on crta svoju ivicu, a
+  ovde je ivica shell-a (`NewShell`), koji nosi focus/error stanje. Dve ivice
+  jedna u drugoj su tačno ono što shell rešava.
+- **Naslovna traka se skida** kroz postojeći `modWindow.EnsureUserFormChromeRemoved`
+  (isti koji koristi `frmOtkupAPP`), umesto tri privatne kopije `RemoveTitleBar`.
+- **Tekst ide kroz `Poruke`** (`OTKUI_SPLASH_POKRECEM`, `OTKUI_LOGIN_*`,
+  `OTKUI_MINI_*`; greška prijave koristi postojeći `AUTH_LBL_PRIJAVA_GRESKA`).
+
+**Smoke (izgled se ne može automatizovati):**
+
+1. Splash pokriva **ceo ekran**, bez naslovne trake: gradijent, zlatna nit,
+   logotip centriran, verzija ispod, dole „Powered by AgriX" i „Pokrećem
+   aplikaciju…". Marka se vidi **jednom** (plus tiha tekstualna linija).
+2. Logotip nije izobličen ni odsečen (`Zoom`) i nema svetlu podlogu oko sebe.
+3. AUTH uključen: prijava pokriva ceo ekran, kartica je u sredini; klik u polje
+   boji ivicu zeleno; pogrešan PIN boji PIN polje rust i ispisuje „Pogrešno
+   korisničko ime ili PIN. (1/3)"; Enter = prijava, Esc = otkaz.
+4. „Otvori Excel" → kartica sa forest trakom, logotipom i zelenim dugmetom;
+   hover posvetli dugme; klik vraća ljusku i sakriva Excel.
+5. Ako natpis ostane prazan: `Alt+F8 → EnsurePoruke` (ide i sam kroz `InitApp`).
+
+### 27.8 Revizija pred merge: P0 autorizacija, P1 start (`v6-ui-210`)
+
+Spoljna revizija vrha grane dala je **NO MERGE**. Nalazi su provereni u kodu i
+svi su bili tačni; ovo je šta je urađeno.
+
+**P0 — zaobilaženje autorizacije za Excel i PWA sync.** Ljuska uvek crta
+`btnExcel` i `btnSync`, a rukovaoci su zvali `DoShowExcel` / `DoSync` **bez**
+provere `OBL_OTVORI_EXCEL` / `OBL_SYNC_PWA`; legacy meni je obe imao
+(`frmOtkupAPP.btnOpenExcel_Click`, `btnSyncPWA_Click`). Propust je **stariji od
+ove grane**, ali je do sada bio mrtav put — ljuska nije bila ulaz u aplikaciju.
+Prebacivanjem starta postao je živ, pa je i zatvoren ovde:
+
+- `AlatkaOblast(tag)` — mapa `btnExcel` → `OBL_OTVORI_EXCEL`, `btnSync` →
+  `OBL_SYNC_PWA`; alatka van mape nema šta da se proverava.
+- `AlatkaSme(tag)` — odluka kroz `modAuth.KorisnikImaPravo`, **fail-closed** na
+  sopstvenu grešku. Razdvojeno od mape da bi se mapa mogla izmeriti bez prijave.
+- Kapija stoji **u rukovaocu** (brana), a `OsveziAlatke` uz to i **ne crta**
+  dugme bez prava — pri gradnji i posle zamene operatera (`PrimeniNovaPrava`),
+  jer se prava menjaju u toku sesije.
+- **X ljuske** je bio treći put do sveske: sada otkriva Excel **samo** uz
+  `OBL_OTVORI_EXCEL`, inače znači izlaz iz aplikacije.
+
+**P1 — ograničeni nalozi nisu mogli da uđu.** `ShowOtkupUI` je tražio baš
+`SCR_POCETNI`. Novi `OtkupUI_StartEkran()` vraća početni ako sme na njega,
+inače prvi dozvoljen ekran iz registra (paneli se preskaču — isto pravilo kao
+`NaPrviDozvoljenEkran`). Prazan rezultat znači „nijedna oblast nije dozvoljena":
+poruka i **zatvaranje sveske** umesto ranijeg otkrivanja Excela — odbijen ulaz
+ne sme da daje širi pristup nego ijedan ekran.
+
+**P1 — start pre funkcionalnog pariteta: odluka je doneta, ne previđena.**
+Vlasnik proizvoda je 2026-09-03 izričito tražio da aplikacija nema **nijednu**
+vezu ka legacy formama i da legacy pokreće ručno iz VBE-a kad mu zatreba.
+Marža, uvozna komanda banke (§9.3), SEF upravljanje (§8.7) i „Izlaz" zato
+ostaju bez puta iz aplikacije do svojih ekrana (§27.2, koraci 4–6). To je
+**svesno prihvaćen trošak**, zapisan ovde da se ne čita kao propust.
+
+**P2 — greška PIN-a je nestajala pri prijavi Enter-om.** `btnOK.Default = True`,
+pa Enter iz PIN polja stiže u `btnOK_Click` dok je PIN još fokusiran;
+`txtUser.SetFocus` tada okine `txtPin_Exit`, koji shell vraća na `normal`.
+Ispravka je redosled: **fokus pa stanje**.
+
+**P2 — `git diff --check` je padao.** `frmLogin.frm` je bio jedina forma sa
+CRLF, pa je git svaki `CR` video kao trailing whitespace (i svaka izmena je
+izgledala kao 200+ redova). Normalizovan na LF. Preostalo upozorenje je
+**format VBA eksporta** — razmak na kraju `Begin {...} frmX ` linije koji VBA
+sam upisuje i vraća pri svakom eksportu (imaju ga **sve** forme), pa se ne
+ispravlja u fajlu nego pravilom: `src-vba/*.frm -whitespace text eol=lf` i
+`src-vba/*.frx -text -diff` u `.gitattributes`.
+
+**Testovi i sabotaže.** `T_Ljuska_AlatkeTrazePravo` (184) meri mapu alatki i
+da odluka ide kroz `modAuth`; `T_Ljuska_StartEkranDozvoljen` (185) meri da start
+razreši ekran, da je dozvoljen i da nije panel.
+
+### 27.9 Fixture sa AUTH i nalogom sa suženim pravima (`v6-ui-211`)
+
+Revizija je tražila pun dokaz grana „nema prava", a on nije postojao: fixture
+je imao **prazan `tblKorisnici`** i AUTH isključen, pa je `KorisnikImaPravo`
+uvek vraćao `True`. Kapija koja uvek pušta bila bi zelena — tačno ono protiv
+čega postoji pravilo o dvosmernom dokazu.
+
+**Šta je dodato u `tools/make_fixture.py`:**
+
+| Nalog | Uloga | Prava | Čemu služi |
+|---|---|---|---|
+| `admin.test` | Admin | sve | bypass u `KorisnikImaPravo` — bez njega bi „suženi nalog ne sme" bilo zeleno i kad AUTH sve gasi |
+| `op.banka` | Operater | **samo `Banka`** | nema `Dokumenta` (početni ekran), `OtvoriExcel` ni `SyncPWA` (alatke), `MaticniPodaci` (sekcija) |
+| `op.gasen` | Operater | sve, ali `Aktivan=NE` | prijava sme da padne **samo** na toj koloni, da se „nema prava" ne meša sa „ne može da se prijavi" |
+
+Kolone prava (`KOR_OBLASTI` = `modAuth.OblastiList`) ulaze kroz `ENSURE_COLS`,
+pa donor stariji od Faze 1 ne obara build. **`AUTH_ENABLED` ostaje isključen**
+u fixture-u: sve postojeće suite rade bez prijave kao i do sada. Nalozi su
+samo **materijal**.
+
+AUTH se pali **seam-om** `modAuth.AuthTestUkljuci` (tvrdo gejtovan
+`IsTestMode`, vraća prethodno stanje) umesto upisom u `tblSEFConfig` — upis bi
+menjao svesku i curio u sledeći test. Prijava ide **pravim putem**
+(`modAuth.ValidateLogin`), bez forme, pa se meri stvarni lanac.
+
+**Novi testovi:**
+
+- **186 `T_Ljuska_SuzenaPravaStartIAlatke`** — `AlatkaSme("btnExcel")` i
+  `("btnSync")` su `False` bez prava; start vodi na **`BANKA_UVOZ`** (prvi
+  dozvoljen u registru), ne na zabranjeni početni i ne u prazno; deaktiviran
+  nalog se ne prijavljuje; posle testa se stanje **vraća** (tvrdi se i to).
+- **187 `T_Matic_SekcijaTraziPravo`** — nijedan od šest delova sekcije Matični
+  (`MAT_PARTNERI`, `MAT_ROBA`, `MAT_PAKOVANJE`, `MAT_KORISNICI` + paneli
+  `MAT_PODESAVANJA`, `MAT_ADMIN`) ne sme bez `OBL_MATICNI`; start ne završava u
+  zabranjenoj sekciji; **admin sme sve** (bypass).
+
+Oba testa skupljaju nalaze pa tvrde **posle** vraćanja stanja: `AssertEq` puca
+na prvom padu, a ostavljen uključen AUTH i prijavljen operater curili bi u
+svaki test ispod (isti razlog kao `T_LegacyDok_*`).
+
+**Sabotaže koje sada mogu da budu crvene:** `alatka-sme-uvek` (kapija uvek
+pušta), `start-ne-preskace-zabranjen` (start ne pita za pravo),
+`maticni-bez-oblasti` (ekran ne traži oblast) — plus ranije
+`alatka-excel-bez-oblasti` i `start-ekran-nije-razresen`.
+
+> **Fixture se MORA regenerisati.** `FIXTURE_FORMAT_VERSION` je podignut na 2 i
+> potpis se promenio; `run_vba.py` staje **pre Excela** dok je stara sveska na
+> disku. Prvo `python tools\make_fixture.py --donor "<put do .xlsm>" --force`,
+> pa suite.
+
+**Kapije posle ispravki:** `vba_check` čist (209 fajlova), sidra sabotaža 441
+provera, `git diff --check` čist. **Nisu izvršeni** (nema Excela u web sesiji):
+`Debug → Compile`, `run_vba` (uključujući testove 184 i 185), `dokaz.py` za dve
+nove sabotaže i UI smoke iz §27.6 i §27.7 — sve to ostaje kapija na Windows
+mašini pre merge-a.
+
+### 27.10 Korak 2 isporučen: `frmOtkup` i `frmDokumenta` uklonjeni
+
+Obe forme i njihovi `.frx` parovi su obrisani, zajedno sa svim referencama.
+`modOtkupBlok` i `clsBlokUI` **ostaju**: izmereno je 12 poziva iz ljuske
+(`modScrDokumenti`, `modScrIzvestaji`), pa uslov „ako ostanu bez pozivaoca"
+nije ispunjen. Deo `modOtkupBlok`-a koji je gradio legacy blok-UI je od sada
+mrtav kod u modulu koji ostaje — njegovo čišćenje je zasebna odluka, ne ovaj
+korak.
+
+**Šta je isečeno**
+
+| Gde | Šta |
+|---|---|
+| `modTest` | pet testova (`T_PosleSnimanja_ZadrzavaKontekstOtpremnice`, `T_PosleSnimanja_ZadrzavaZbirnu`, `T_ClearForm_BrisePartnera`, `T_LegacyDok_PadListeBlokovaNijeAvans`, `T_LegacyDok_PadListeFakturaNijeAvans`) + helper `NewOtkupForm` |
+| `tools/sabotaza.py` | sedam sabotaža nad `frmDokumenta.frm` (446 → 439) |
+| `frmOtkupAPP` | `btnBlocks_Click`, `btnPurchase_Click` |
+| `modAuth.OblastZaFormu` | `frmotkup`, `frmdokumenta` |
+| `tests/golden/` | `PosleSnimanja_KontekstOtpremnice.txt` — snimak kontrola obrisane forme |
+
+**Nijedna tvrdnja nije izgubljena.** Ugovor `ClearOtkupFields` (datum ostaje,
+zbirna ostaje, partner se briše) meri `T_ClearForm_Ugovor` nad ljuskom, i to
+šire — uz kilograme, ambalažu i granu bez aktivne otpremnice. Pravilo „pad
+liste nije avans" meri `T_Ljuska_PadListeNovcaNijeAvans`, sa tri slučaja koje
+kapija **ne sme** da dodirne.
+
+**Preseljeni slotovi.** Registar ne trpi rupe (`vba_check` → `REGISTAR`), pa je
+pet oslobođenih slotova popunjeno najvišim postojećim — isti obrazac kao
+`531ec56a` (test 152 → 146). Ukupno **187 → 182**.
+
+| Bio | Sada | Test |
+|---|---|---|
+| 183 | 1 | `T_Sekcija_OdbijenPrelazakNePomeraSekciju` |
+| 184 | 2 | `T_Ljuska_AlatkeTrazePravo` |
+| 185 | 3 | `T_Ljuska_StartEkranDozvoljen` |
+| 186 | 119 | `T_Ljuska_SuzenaPravaStartIAlatke` |
+| 187 | 120 | `T_Matic_SekcijaTraziPravo` |
+
+Starije sekcije ovog kataloga pominju te testove po **starim** brojevima — to
+su zapisi o tome šta je tada rađeno i ne prepisuju se; gornja tabela je prevod.
+
+**Dva `LogErr` stringa** u `frmFakturisanje` i `frmSledljivost` prijavljivala su
+`frmOtkup.btnPovratak_Click`, iako su te procedure u tim formama (kopiran
+string). Posle brisanja forme log bi pokazivao na modul koji ne postoji, pa su
+ispravljeni na svoja imena.
+
+**Verifikacija:** `vba_check` čist (207 fajlova, 439 sabotaža); FULL zeleno —
+`RunAllTests` **182/0**, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336,
+svih 11 suite-ova; `dokaz.py` crven **po imenu** za tri sabotaže nad
+preseljenim testovima (`prekidac-sekcije-uvek-vidljiv`, `alatka-sme-uvek`,
+`start-ne-preskace-zabranjen`).
+
+> **Instalirane sveske i dalje imaju obe forme** (§27.4): ni self-update ni
+> `ImportAllVBA` ne brišu komponente. Posle isporuke ide ručni `Remove frmOtkup`
+> i `Remove frmDokumenta` u VBE → `Compile` → `Save`.

@@ -897,7 +897,7 @@ End Function
 
 Private Sub RemoveCtl(ByVal nm As String)
     On Error Resume Next
-    mFrm.Controls.Remove nm
+    mFrm.Controls.Remove CStr(nm)
     On Error GoTo 0
 End Sub
 

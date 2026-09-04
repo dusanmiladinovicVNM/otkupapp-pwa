@@ -162,7 +162,8 @@ Public Sub StartApp()
     ScheduleStornoWarm
     On Error GoTo 0
 
-    ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
+    ' frmSplash sam sebe Unloaduje i pokrece ljusku (modOtkupUI.ShowOtkupUI).
+    ' Stari meni (frmOtkupAPP) se iz aplikacije vise ne otvara (v6-ui-209).
     Exit Sub
 
 EH:
@@ -285,6 +286,16 @@ End Sub
 
 Public Sub CloseExcel()
     Application.Visible = False
+End Sub
+
+' Zatvaranje aplikacije sa sledeceg tick-a. Postoji zbog OnTime: zatvaranje
+' sveske IZ event-a kontrole (clsFlatBtn sink je tada na steku) ili iz
+' Workbook_Open lanca nije bezbedno -- isti razlog zbog kojeg licencna kapija
+' i neuspela prijava zakazuju gasenje umesto da ga izvrse odmah.
+' Snima, kao i legacy "Izlaz" (frmOtkupAPP.btnExit_Click).
+Public Sub ZatvoriAplikaciju()
+    On Error Resume Next
+    ThisWorkbook.Close SaveChanges:=True
 End Sub
 
 Public Sub SaveApp()

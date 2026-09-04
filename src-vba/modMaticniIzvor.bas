@@ -290,7 +290,7 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_ID|StanicaID|txt|76|1", _
                 "OTKUI_HDM_NAZIV|Naziv|part|0|1", _
                 "OTKUI_HDM_MESTO|Mesto|txt|110|2", _
-                "OTKUI_HDM_TELEFON|Telefon|txt|92|2", _
+                "OTKUI_HDM_TELEFON|@alias:Kontakt,Telefon|txt|92|2", _
                 "OTKUI_HDM_KONTAKT|@ime_prezime|txt|130|3", _
                 "OTKUI_HDM_HLADNJACA|JeHladnjaca|txt|76|2", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
@@ -515,25 +515,41 @@ Public Function MatPolje(ByVal kljuc As String, ByVal poljeKljuc As String) As S
     Next r
 End Function
 
-' Stvarna kolona za polje: razresava "@alias:A,B" nad semom tabele. Vraca "" kad
-' nijedna ne postoji -- pisac tada to polje PRESKACE umesto da obori ceo upis.
-Public Function MatKolonaPolja(ByVal kljuc As String, ByVal spec As String) As String
-    Dim kol As String, tbl As String, imena As Variant, ime As Variant
-    kol = PoljeF(spec, 4)
-    If Len(kol) = 0 Then Exit Function
-    If Left$(kol, 7) <> "@alias:" Then
-        MatKolonaPolja = kol
+' "@alias:A,B" je GOLA kolona ciji se NAZIV bira po semi, ne po kodu -- ista
+' informacija se na razlicitim instalacijama zove razlicito (tblStanice:
+' Kontakt posle nadogradnje, Telefon pre nje; v. modMigracija.StaroImeKolone).
+' Nije izvedena vrednost: citac je posle razresenja cita kao svaku drugu.
+Public Function JeAlias(ByVal kol As String) As Boolean
+    JeAlias = (Left$(kol, 7) = "@alias:")
+End Function
+
+' Prva kolona iz alias liste koja POSTOJI u semi. Ime koje nije alias vraca
+' kako jeste; alias bez ijedne postojece kolone vraca "" -- pozivalac tada
+' polje PRESKACE umesto da obori ceo upis ili citanje.
+Public Function RazresiKolonu(ByVal tbl As String, ByVal kol As String) As String
+    Dim imena As Variant, ime As Variant
+    If Not JeAlias(kol) Then
+        RazresiKolonu = kol
         Exit Function
     End If
-    tbl = MatTabela(kljuc)
     If Len(tbl) = 0 Then Exit Function
     imena = Split(Mid$(kol, 8), ",")
     For Each ime In imena
         If GetColumnIndex(tbl, Trim$(CStr(ime))) > 0 Then
-            MatKolonaPolja = Trim$(CStr(ime))
+            RazresiKolonu = Trim$(CStr(ime))
             Exit Function
         End If
     Next ime
+End Function
+
+' Stvarna kolona za polje EDITORA. Mreza koristi isti razresivac (MatRedoviCore)
+' -- do v6-ui-209 ga je imala samo ova strana, pa je kolona Telefon na
+' Otkupnim mestima bila popunjena u unosu a prazna u listi.
+Public Function MatKolonaPolja(ByVal kljuc As String, ByVal spec As String) As String
+    Dim kol As String
+    kol = PoljeF(spec, 4)
+    If Len(kol) = 0 Then Exit Function
+    MatKolonaPolja = RazresiKolonu(MatTabela(kljuc), kol)
 End Function
 
 ' Prefiks novog ID-ja. Prazno znaci da sekcija NEMA surogat kljuc -- PK je sama
@@ -845,7 +861,12 @@ Private Function MatRedoviCore(ByVal kljuc As String, ByVal filter As String, _
     ReDim idx(0 To nCol - 1)
     For c = 0 To nCol - 1
         izv = ColF(CStr(cols(LBound(cols) + c)), 1)
-        If Len(izv) > 0 And Left$(izv, 1) <> "@" Then idx(c) = GetColumnIndex(tbl, izv)
+        ' Alias NIJE izvedena vrednost: ima svoj indeks kao i gola kolona,
+        ' samo mu se ime bira po semi.
+        If Len(izv) > 0 Then
+            If Left$(izv, 1) <> "@" Or JeAlias(izv) Then _
+                idx(c) = GetColumnIndex(tbl, RazresiKolonu(tbl, izv))
+        End If
     Next c
 
     ReDim outA(1 To UBound(data, 1), 1 To nCol)
@@ -922,7 +943,8 @@ Private Function VrednostCelije(ByVal kljuc As String, ByVal tbl As String, _
     Dim izv As String
     izv = ColF(spec, 1)
     If Len(izv) = 0 Then Exit Function
-    If Left$(izv, 1) <> "@" Then
+    ' Alias je gola kolona pod drugim imenom -- indeks je vec razresen gore.
+    If Left$(izv, 1) <> "@" Or JeAlias(izv) Then
         If kolIdx > 0 Then VrednostCelije = data(r, kolIdx)
         Exit Function
     End If

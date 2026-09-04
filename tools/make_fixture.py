@@ -398,7 +398,50 @@ class Sirovo:
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
+# Kolone prava u tblKorisnici = modAuth.OblastiList (jedna kolona po oblasti).
+# Stoji IZNAD _kor(): naloge za prava gradi modul-level kod, pa se lista
+# mora razresiti pre njega. Ista lista ide i u ENSURE_COLS nize.
+KOR_OBLASTI = ["Otkup", "Dokumenta", "Agrohemija", "Izvestaji", "Fakturisanje",
+               "Banka", "Marza", "Sledljivost", "MaticniPodaci", "Palete",
+               "OtvoriExcel", "SyncPWA"]
+
+# --- nalozi za prava (AUTH) --------------------------------------------------
+#
+# AUTH u fixture-u OSTAJE ISKLJUCEN (SEF_CONFIG nema AUTH_ENABLED): sve
+# postojece suite rade kao i do sada. Ovi redovi su MATERIJAL -- test koji meri
+# prava pali AUTH kroz seam (modAuth.AuthTestUkljuci) i prijavi se pravim putem
+# (ValidateLogin), pa ih vrati kako je zatekao.
+#
+# Bez naloga sa SUZENIM pravima dve grane se nisu mogle pokazati crvenom:
+# "alatka bez prava ne prolazi" i "start bira PRVI DOZVOLJEN ekran, ne pocetni".
+# Zelena suite koja tu granu nikad nije izvrsila ne dokazuje nista.
+#
+# PIN je plaintext: modAuth.VerifyPin podnosi i plaintext (legacy zapis), a
+# prva prijava bi ga migrirala u hash -- fixture se ionako pravi iznova.
+def _kor(username, ime, uloga, prava, pin="1234"):
+    red = {"KorisnikID": "KOR-" + username.upper().replace(".", "-"),
+           "Username": username, "ImePrezime": ime, "PIN": pin,
+           "Uloga": uloga, "Aktivan": "DA", "StanicaID": STANICA}
+    for obl in KOR_OBLASTI:
+        red[obl] = "DA" if obl in prava else "NE"
+    return red
+
+
+KORISNICI = [
+    # Admin: bypass u KorisnikImaPravo -- sluzi da se tvrdnja "suzen nalog NE
+    # sme" ne cita kao "AUTH lomi sve".
+    _kor("admin.test", "Admin Test", "Admin", KOR_OBLASTI),
+    # Operater SAMO za Banku. Namerno bez: Dokumenta (pocetni ekran ljuske),
+    # OtvoriExcel i SyncPWA (alatke zaglavlja), MaticniPodaci (sekcija ljuske).
+    _kor("op.banka", "Operater Banka", "Operater", ["Banka"]),
+    # Deaktiviran nalog sa PUNIM pravima: prijava sme da padne SAMO na koloni
+    # Aktivan, a ne zato sto nalog nema prava.
+    dict(_kor("op.gasen", "Operater Ugasen", "Operater", KOR_OBLASTI),
+         Aktivan="NE"),
+]
+
 SEED = {
+    "tblKorisnici": KORISNICI,
     "tblStanice": [
         {"StanicaID": STANICA, "Naziv": "Test Otkupno Mesto", "Mesto": "Test Mesto",
          "Aktivan": STATUS_AKTIVAN, "JeHladnjaca": "NE"},
@@ -1990,7 +2033,10 @@ SEED = {
 # U aplikaciji ih dodaje modSetup.EnsurePaletniListSchema (EnsureColumnOnTable
 # -> na KRAJ tabele); generator radi ISTO, pa je fixture = sveska POSLE
 # nadogradnje. Kolona koja vec postoji se ne dira.
+
 ENSURE_COLS = {
+    "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
+                     "Aktivan", "StanicaID"] + KOR_OBLASTI,
     "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
     # Revizija #13: snapshot roka na lotu (prazno u fixture-u =
     # fallback putanja RokIstekaZaTip, koju test 162 i tvrdi).
@@ -2091,7 +2137,7 @@ SEF_CONFIG = {
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):
-# ApplyDefaultProizvod tada ostavlja combo-e prazne (frmOtkup ga zove pod
+# ApplyDefaultProizvod tada ostavlja combo-e prazne (ekran ga zove pod
 # On Error Resume Next), pa Initialize ne okida auto-cenu i stanje forme je
 # deterministicno za golden snapshot.
 #
@@ -2124,7 +2170,7 @@ FIXTURE_SIG_EXT = ".sig"
 # ostanu isti -- potpis bi tvrdio da je stari fixture i dalje dobar. Tada se
 # ovaj broj podigne za jedan. Jeftinije i tacnije nego hashirati ceo .py, koji
 # bi trazio regeneraciju i na izmenu komentara.
-FIXTURE_FORMAT_VERSION = 1
+FIXTURE_FORMAT_VERSION = 2
 
 
 def signature() -> str:

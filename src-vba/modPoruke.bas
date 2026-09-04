@@ -364,6 +364,16 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_SYNC", "Sinhronizuj"
     UpsertRow lo, existing, "OTKUI_BTN_SNIMI", "Snimi radnu svesku"
     UpsertRow lo, existing, "OTKUI_BTN_EXCEL", "Otvori Excel"
+    ' --- splash, prijava i plutajuca kartica (frmSplash / frmLogin / frmExcelMini) ---
+    UpsertRow lo, existing, "OTKUI_SPLASH_POKRECEM", "Pokre" & ChrW(263) & "em aplikaciju" & ChrW(8230)
+    UpsertRow lo, existing, "OTKUI_LOGIN_NASLOV", "Prijava"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PODNASLOV", "Pristup aplikaciji"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_LOGIN_PRIJAVA", "Prijavi se"
+    UpsertRow lo, existing, "OTKUI_LOGIN_OTKAZI", "Otka" & ChrW(382) & "i"
+    UpsertRow lo, existing, "OTKUI_MINI_EXCEL", "Excel je otvoren"
+    UpsertRow lo, existing, "OTKUI_MINI_NAZAD", "Nazad u aplikaciju"
+    UpsertRow lo, existing, "OTKUI_MSG_IZLAZ", "Aplikacija se zatvara."
     UpsertRow lo, existing, "OTKUI_OPERATER_NEPOZNAT", "Operater"
     UpsertRow lo, existing, "OTKUI_SYNC_OK", "Sinhronizovano"
     UpsertRow lo, existing, "OTKUI_SYNC_PAO", "Sinhronizacija nije uspela"
@@ -403,9 +413,11 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_MAT_PAKOVANJE", "Ambala" & ChrW(382) & "a i pakovanje"
     UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
     UpsertRow lo, existing, "OTKUI_BTN_NAZAD_RAD", "Nazad na rad"
+    ' Poruka je nekad tvrdila da Maticni jos nisu prebaceni na nove ekrane.
+    ' Od kada jesu, jedini nacin da se do nje dodje je IZOSTANAK PRAVA -- pa je
+    ' stari tekst operateru govorio da funkcije nema, umesto da je ne sme.
     UpsertRow lo, existing, "OTKUI_SEK_NEMA_EKRANA", _
-        "Mati" & ChrW(269) & "ni podaci jo" & ChrW(353) & " nisu preba" & ChrW(269) & _
-        "eni na nove ekrane."
+        "U ovoj sekciji nemate nijedan dostupan ekran."
 
     ' --- paneli maticne sekcije (stavke sidebara, samo admin) --------------
     ' JEDAN kljuc sluzi i stavci sidebara i naslovu panela: dva kljuca za istu

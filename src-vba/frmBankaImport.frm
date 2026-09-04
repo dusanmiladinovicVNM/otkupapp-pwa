@@ -139,7 +139,7 @@ Private Sub BuildListHeaders()
     x = lstBanka.Left
     For i = LBound(titles) To UBound(titles)
         nm = "hdrBanka_" & CStr(i)
-        Me.Controls.Remove nm
+        Me.Controls.Remove CStr(nm)
 
         Set lbl = Me.Controls.Add("Forms.Label.1", nm, True)
         lbl.Left = x

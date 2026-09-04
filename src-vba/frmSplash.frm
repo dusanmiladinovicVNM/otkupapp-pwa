@@ -19,28 +19,38 @@ Option Explicit
 ' ============================================================
 ' frmSplash / startup splash
 ' Responsibility:
-'   - show branding briefly
-'   - then open frmOtkupAPP
+'   - full-screen brand moment in the shell palette, then
+'     open the app shell (modOtkupUI.ShowOtkupUI)
 '   - no business logic
+'
+' JEDAN ZNAK, NE TRI. .frx nosi DVA logotipa (gornji AX|OtkupApp, donji
+' AgriX). Ranija verzija je preko njih crtala jos i tekstualni "AX OtkupApp",
+' pa se marka videla tri puta. Sada se koristi PRAVI gornji logotip, a donji
+' i tekstualni znak se gase: dole ostaje samo tiha linija "Powered by AgriX".
+'
+' Slike se traze PO TIPU I POLOZAJU (LogoSlika), ne po imenu. Ime kontrole iz
+' dizajnera je promenljivo i NE vidi se iz izvora (.frx je binaran), a pogresno
+' pogodjeno ime nije tiha greska nego COMPILE greska ("Variable not defined"),
+' koja obara ceo projekat. Placeno jednom, na imenu "Image12".
+'
+' Kontrole iz dizajnera se samo premestaju i gase; pozadina je runtime
+' (modUiKit.NewLbl + Lerp), pa se .frx ne dira. Nema module-level MSForms
+' deklaracija -- forma ostaje "meka" za self-update. Mere su u tackama.
 ' ============================================================
+
+Private Const BANDS   As Long = 40      ' trake vertikalnog gradijenta
+Private Const LOGO_W  As Single = 340   ' okvir logotipa; Zoom cuva odnos stranica
+Private Const LOGO_H  As Single = 86
+Private Const FOOT_H  As Single = 52    ' podnozje: linija + dva reda teksta
 
 Private mChromeRemoved As Boolean
 Private m_Started As Boolean
 Private m_IsNavigating As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
+' Prigusen tekst na forest podlozi -- ista vrednost kao hdrStat u zaglavlju ljuske.
+Private Function MutedOnForest() As Long
+    MutedOnForest = RGB(178, 190, 172)
+End Function
 
 Private Sub UserForm_Initialize()
     On Error GoTo EH
@@ -49,15 +59,7 @@ Private Sub UserForm_Initialize()
     m_Started = False
     m_IsNavigating = False
 
-    lblApp.caption = "OtkupApp"
-    lblVersion.caption = "v" & APP_VERSION
-    lblBy.caption = "Powered by AgriX"
-
-    Me.BackColor = BG_MAIN()
-
-    StyleLabel lblApp, TXT_MUTED(), True
-    StyleLabel lblVersion, TXT_MUTED(), True
-    StyleLabel lblBy, TXT_MUTED(), True
+    BuildSplash
 
     Exit Sub
 
@@ -65,16 +67,124 @@ EH:
     LogErr "frmSplash.UserForm_Initialize"
 End Sub
 
+' Logotip iz .frx po TIPU kontrole -- v. zaglavlje modula. gornji = onaj sa
+' manjim .Top u dizajneru (AX|OtkupApp); ostali su ispod njega (AgriX).
+' Nothing kad slike nema -- pozivalac to mora da podnese.
+Private Function LogoSlika(ByVal gornji As Boolean) As Object
+    Dim c As Object, best As Object
+    On Error Resume Next
+    For Each c In Me.Controls
+        If TypeName(c) = "Image" Then
+            If best Is Nothing Then
+                Set best = c
+            ElseIf gornji Then
+                If c.top < best.top Then Set best = c
+            Else
+                If c.top > best.top Then Set best = c
+            End If
+        End If
+    Next c
+    Set LogoSlika = best
+End Function
+
+Private Sub BuildSplash()
+    Dim i As Long, w As Single, h As Single, bh As Single, cx As Single, Y As Single
+    Dim logo As Object, drugi As Object
+
+    ' Obe slike se uzimaju PRE nego sto se ijednoj promeni .top -- LogoSlika
+    ' bira bas po tome, pa bi posle premestanja gornje obe bile "gornja".
+    Set logo = LogoSlika(True)
+    Set drugi = LogoSlika(False)
+
+    ' Ceo ekran: isti racun kao modOtkupUI.GoFullScreen (ScreenWidthPoints /
+    ' ScreenHeightPoints iz modWindow), jer je Excel u ovom trenutku sakriven
+    ' pa Application.Width ne vredi.
+    w = ScreenWidthPoints()
+    h = ScreenHeightPoints()
+    If w < 600 Then w = 600
+    If h < 400 Then h = 400
+
+    Me.StartUpPosition = 0
+    Me.Left = 0
+    Me.top = 0
+    Me.width = w
+    Me.Height = h
+    Me.BackColor = C_FOREST
+
+    ' Vertikalni gradijent preko celog ekrana. Trake idu IZA svega (ZOrder 1);
+    ' ne preklapaju se, pa im medjusobni redosled nije bitan.
+    bh = h / BANDS
+    For i = 0 To BANDS - 1
+        NewLbl Me, "spGr" & i, "", 0, i * bh, w, bh + 1, 8, False, 0, _
+               Lerp(C_FOREST, C_FOREST_DK, i / (BANDS - 1))
+        Me.Controls("spGr" & i).ZOrder 1
+    Next i
+
+    ' zlatna nit na vrhu -- isti akcenat kao aktivna stavka sidebara
+    NewLbl Me, "spLine", "", 0, 0, w, 3, 8, False, 0, C_GOLD
+
+    ' LOGOTIP iz .frx, centriran u gornjoj trecini. Zoom cuva odnos stranica,
+    ' pa okvir sme da bude fiksan a da se slika ne izoblici.
+    cx = (w - LOGO_W) / 2
+    Y = h * 0.34 - LOGO_H / 2
+    If Not logo Is Nothing Then
+        With logo
+            .PictureSizeMode = fmPictureSizeModeZoom
+            .PictureAlignment = fmPictureAlignmentCenter
+            .BackStyle = fmBackStyleTransparent
+            .BorderStyle = fmBorderStyleNone
+            .Left = cx: .top = Y: .width = LOGO_W: .Height = LOGO_H
+            .Visible = True
+            .ZOrder 0
+        End With
+    End If
+
+    ' Tekstualni znak i drugi logotip se GASE -- v. zaglavlje modula.
+    lblApp.Visible = False
+    If Not drugi Is Nothing Then
+        If Not drugi Is logo Then drugi.Visible = False
+    End If
+
+    ' verzija ispod logotipa, centrirano
+    With lblVersion
+        .caption = "v" & APP_VERSION
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = MutedOnForest()
+        .Font.name = F_UI
+        .Font.Size = TS_META
+        .Font.bold = False
+        .TextAlign = fmTextAlignCenter
+        .WordWrap = False
+        .Left = cx: .top = Y + LOGO_H + 10: .width = LOGO_W: .Height = TxtH(TS_META)
+        .ZOrder 0
+    End With
+
+    ' podnozje: tanka linija, "Powered by AgriX" levo, status desno
+    NewLbl Me, "spDiv", "", PAD, h - FOOT_H, w - 2 * PAD, 1, 8, False, 0, C_HDR_EDGE
+
+    With lblBy
+        .caption = "Powered by AgriX"
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = MutedOnForest()
+        .Font.name = F_UI
+        .Font.Size = TS_MICRO
+        .Font.bold = False
+        .TextAlign = fmTextAlignLeft
+        .WordWrap = False
+        .Left = PAD: .top = h - FOOT_H + 16: .width = 200: .Height = TxtH(TS_MICRO)
+        .ZOrder 0
+    End With
+
+    ' zlatna tacka + status -- kao hdrDot/hdrStat u zaglavlju ljuske
+    NewLbl Me, "spDot", "", w - PAD - 168, h - FOOT_H + 19, 6, 6, 8, False, 0, C_GOLD
+    NewLbl Me, "spStat", Poruka("OTKUI_SPLASH_POKRECEM"), w - PAD - 158, h - FOOT_H + 15, 158, _
+           TxtH(TS_META), TS_META, False, MutedOnForest(), -1, fmTextAlignRight
+End Sub
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
-    Me.BackColor = BG_MAIN()
-
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 
     If m_Started Then Exit Sub
     m_Started = True
@@ -112,7 +222,7 @@ Private Sub OpenAppShell()
     m_IsNavigating = True
 
     Unload Me
-    frmOtkupAPP.Show
+    modOtkupUI.ShowOtkupUI
 
     Exit Sub
 
@@ -120,7 +230,7 @@ EH:
     LogErr "frmSplash.OpenAppShell"
 
     On Error Resume Next
-    frmOtkupAPP.Show
+    modOtkupUI.ShowOtkupUI
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)

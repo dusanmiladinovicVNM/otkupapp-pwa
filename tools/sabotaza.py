@@ -2222,12 +2222,26 @@ SABOTAZE = {
         "T_MatUnos_ProveraOdbija",
         "prag blokade ispod praga upozorenja se odbija",
     ),
+    # Sidro je preslo iz MatKolonaPolja u JeAlias: razresivac je izdvojen da
+    # bi ga MREZA koristila isto kao editor (v6-ui-209). Ugasen JeAlias znaci
+    # da alias nigde nije alias -- editor pise u kolonu '@alias:...'.
     "maticni-alias-se-ne-razresava": (
         "modMaticniIzvor.bas",
-        "    If Left$(kol, 7) <> \"@alias:\" Then\n",
-        "    If True Then   ' SABOTAZA: alias ostaje nerazresen\n",
+        "    JeAlias = (Left$(kol, 7) = \"@alias:\")\n",
+        "    JeAlias = False   ' SABOTAZA: alias nikad nije alias\n",
         "T_MatUnos_OpisPoljaISema",
         "svako polje pise u kolonu koja POSTOJI u semi",
+    ),
+    # Druga polovina: alias JESTE prepoznat, ali se ne razresi ni u jednu
+    # postojecu kolonu. To je stanje u kome kolona tiho ostaje prazna --
+    # tacno kvar zbog kog alias i postoji, i jedina crvena za tvrdnju
+    # dodatu uz prelazak mreze na razresivac.
+    "maticni-alias-ne-nalazi-kolonu": (
+        "modMaticniIzvor.bas",
+        "        If GetColumnIndex(tbl, Trim$(CStr(ime))) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: nijedan alias se ne razresava\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "svaka gola kolona postoji u semi",
     ),
     # --------------------------------- MATICNI: EDITOR U ZONI (M2b)
     # Polja se dodeljuju iz bazena. Dva polja koja dobiju ISTU kontrolu bi se
@@ -2716,32 +2730,6 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
-    # ---------------------------------------- LEGACY: frmDokumenta, blok/avans
-    # Prazna lista posle PADA ucitavanja opet postaje 'nema bloka', pa novac
-    # tiho ode kao avans kooperanta. Ista klasa koju je frmBankaImport imao
-    # tri puta (PR #220).
-    # Sidro je dvoredno jer je naredba dvoredna: marker NE sme iza "_"
-    # (zamka 4 -- komentar posle nastavka reda visi kompajler, ne test).
-    "dok-pad-liste-blokova-prolazi": (
-        "frmDokumenta.frm",
-        "    BlokIzborSme = ListaSme(m_BlokoviOk, m_BlokoviErr, _\n",
-        "    ' SABOTAZA: pad ucitavanja prolazi\n"
-        "    BlokIzborSme = ListaSme(True, m_BlokoviErr, _\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa",
-    ),
-    # Kapija sira od kvara je isto greska: prazna lista posle USPESNOG
-    # citanja stvarno znaci 'nema otvorenih blokova', i avans je tada tacan.
-    "dok-kapija-blokova-presiroka": (
-        "frmDokumenta.frm",
-        "                            \"otkupnih blokova\", \"da bloka nema\", outPoruka)\n",
-        "                            \"otkupnih blokova\", \"da bloka nema\", outPoruka)\n"
-        "    BlokIzborSme = False   ' SABOTAZA: kapija ne pusta ni urednu listu\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "uredno ucitana lista pusta avans",
-    ),
-    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
-    # napunjen kombo posle pada ucitavanja ima izbor, pa bi prosao.
     # ---- filter storniranih: nula je imala dva znacenja ----
     # Registar mora da PREPOZNA dokument tabelu; prazan registar vraca stari
     # fail-open na sva 183 poziva.
@@ -2799,45 +2787,6 @@ SABOTAZE = {
         "tabela koju registar ne poznaje PADA, ne prolazi kao da nema storno",
     ),
     # ---- ista klasa na strani KUPCA (legacy F6) i u LJUSCI (F5/F6) ----
-    # Pad ucitavanja liste faktura mora da zaustavi uplatu -- inace tiho postaje
-    # avans kupca, isto kao sto je pad liste blokova postajao avans kooperanta.
-    "dok-pad-liste-faktura-prolazi": (
-        "frmDokumenta.frm",
-        "    FakturaIzborSme = ListaSme(m_FaktureOk, m_FaktureErr, _\n",
-        "    ' SABOTAZA: pad ucitavanja liste faktura prolazi\n"
-        "    FakturaIzborSme = ListaSme(True, m_FaktureErr, _\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "pad ucitavanja liste faktura ZAUSTAVLJA knjizenje avansa kupca",
-    ),
-    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
-    # napunjen kombo posle pada ima izbor, pa bi prosao.
-    "dok-faktura-izbor-zaobilazi": (
-        "frmDokumenta.frm",
-        "    UplataSme = FakturaIzborSme(outPoruka)\n",
-        "    If fakturaIzabrana Then UplataSme = True: Exit Function   ' SABOTAZA\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "ni IZABRANA faktura ne prolazi kad je ucitavanje palo",
-    ),
-    # Uzina kapije je TVRDNJA, ne izuzetak: bez novca nema odluke faktura/avans,
-    # pa unos same ambalaze ne sme da stane zbog liste koja ga se ne tice.
-    "dok-uplata-kapija-siri-se-na-ambalazu": (
-        "frmDokumenta.frm",
-        "    If novac <= 0 Then\n        UplataSme = True\n        Exit Function\n    End If\n",
-        "    If False Then   ' SABOTAZA: kapija hvata i unos bez novca\n"
-        "        UplataSme = True\n        Exit Function\n    End If\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "unos bez novca NE staje zbog liste faktura",
-    ),
-    # Kapija sira od kvara je isto greska: uredno ucitana prazna lista stvarno
-    # znaci "kupac nema otvorenih faktura", i avans je tada tacan.
-    "dok-kapija-faktura-presiroka": (
-        "frmDokumenta.frm",
-        "                               \"otvorenih faktura\", \"da fakture nema\", outPoruka)\n",
-        "                               \"otvorenih faktura\", \"da fakture nema\", outPoruka)\n"
-        "    FakturaIzborSme = False   ' SABOTAZA: kapija ne pusta ni urednu listu\n",
-        "T_LegacyDok_PadListeFakturaNijeAvans",
-        "uredno ucitana lista pusta uplatu",
-    ),
     # LJUSKA: ista greska, drugi domacin. Pad je ovde isao samo u Debug.Print.
     "ljuska-pad-liste-blokova-prolazi": (
         "modOtkupUI.bas",
@@ -2884,12 +2833,64 @@ SABOTAZE = {
         "T_Ljuska_PadListeNovcaNijeAvans",
         "rezim bez tih listi kapiju ne oseca",
     ),
-    "dok-izbor-zaobilazi-kapiju": (
-        "frmDokumenta.frm",
-        "    KnjizenjeSme = BlokIzborSme(outPoruka)\n",
-        "    If blokIzabran Then KnjizenjeSme = True: Exit Function   ' SABOTAZA\n",
-        "T_LegacyDok_PadListeBlokovaNijeAvans",
-        "ni IZABRAN blok ne prolazi kad je ucitavanje palo",
+    # ---------------------------------------- LJUSKA: prava na alatke
+    # Bez mape tag -> oblast nijedna alatka nema oblast, pa AlatkaSme sve
+    # pusta: operater bez prava dolazi do sirove radne sveske.
+    "alatka-excel-bez-oblasti": (
+        "modOtkupUI.bas",
+        '        Case "btnExcel": AlatkaOblast = OBL_OTVORI_EXCEL\n',
+        '        Case "btnExcel": AlatkaOblast = ""   \' SABOTAZA: alatka bez oblasti\n',
+        "T_Ljuska_AlatkeTrazePravo",
+        "Otvori Excel trazi pravo na oblast OtvoriExcel",
+    ),
+    # Start koji ne razresi nijedan ekran gasi aplikaciju i operateru sa
+    # punim pravima.
+    "start-ekran-nije-razresen": (
+        "modOtkupUI.bas",
+        "    If modUiScreens.ScrAktivan(SCR_POCETNI) Then\n"
+        "        OtkupUI_StartEkran = SCR_POCETNI\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    Exit Function   \' SABOTAZA: start ne trazi nijedan ekran\n",
+        "T_Ljuska_StartEkranDozvoljen",
+        "start razresi ekran za operatera sa pravima",
+    ),
+    # Kapija koja uvek pusta: alatka bez prava dolazi do sirove sveske i do
+    # knjizenja. Merljivo tek nad nalogom sa suzenim pravima (fixture: op.banka).
+    "alatka-sme-uvek": (
+        "modOtkupUI.bas",
+        "    AlatkaSme = modAuth.KorisnikImaPravo(obl)\n",
+        "    AlatkaSme = True   \' SABOTAZA: kapija uvek pusta\n",
+        "T_Ljuska_SuzenaPravaStartIAlatke",
+        "Excel alatka NE sme bez prava na oblast",
+    ),
+    # Start koji ne preskace zabranjen pocetni ekran vodi operatera na ekran
+    # na koji nema pravo -- ili ga ostavlja pred praznom povrsinom.
+    "start-ne-preskace-zabranjen": (
+        "modOtkupUI.bas",
+        "    If modUiScreens.ScrAktivan(SCR_POCETNI) Then\n",
+        "    If True Then   \' SABOTAZA: start ne pita za pravo\n",
+        "T_Ljuska_SuzenaPravaStartIAlatke",
+        "start vodi na prvi dozvoljen ekran",
+    ),
+    # Sekcija Maticni bez brane po oblasti: operater bez prava vidi partnere,
+    # robu, korisnike i oba panela (Podesavanja, Admin).
+    # Odluka (EkranZaSekciju) je bila tacna i pre -- niko je nije primenio na
+    # dugme. Zato sabotaza gadja PRIMENU, ne odluku: tvrdnja nad odlukom je
+    # bila zelena dok je operater bez prava gledao dugme u zaglavlju.
+    "prekidac-sekcije-uvek-vidljiv": (
+        "modOtkupUI.bas",
+        "    BoxShow z, \"btnMatic\", (Len(EkranZaSekciju(cilj)) > 0)\n",
+        "    BoxShow z, \"btnMatic\", True   ' SABOTAZA: prekidac se crta uvek\n",
+        "T_Matic_SekcijaTraziPravo",
+        "prekidac sekcije se NE crta bez prava na Maticne podatke",
+    ),
+    "maticni-bez-oblasti": (
+        "modUiScreens.bas",
+        "        ScrDozvoljen = modAuth.KorisnikImaPravo(obl)\n",
+        "        ScrDozvoljen = True   \' SABOTAZA: ekran ne trazi oblast\n",
+        "T_Matic_SekcijaTraziPravo",
+        "bez prava na Maticne podatke nijedan njihov ekran ni panel ne sme",
     ),
     # ---------------------------------------- MREZA: POZADINA PILULE
     # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila

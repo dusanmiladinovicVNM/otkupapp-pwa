@@ -577,7 +577,7 @@ Private Sub btnPovratak_Click()
     Exit Sub
 
 EH:
-    LogErr "frmOtkup.btnPovratak_Click"
+    LogErr "frmSledljivost.btnPovratak_Click"
     Unload Me
 End Sub
 

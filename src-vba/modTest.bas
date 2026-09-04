@@ -58,6 +58,13 @@ Private Const FX_VOZAC As String = "VOZ-TEST-1"
 ' poredi otkupno mesto bloka sa ovim, pa izmisljen ID vise ne prolazi.
 Private Const FX_STANICA As String = "STA-TEST-1"
 Private Const FX_STANICA2 As String = "STA-DRUGO"    ' ne postoji -- "tudje OM"
+' Nalozi iz fixture-a (tools/make_fixture.py, KORISNICI). AUTH je u fixture-u
+' ISKLJUCEN da postojece suite rade bez prijave; testovi prava ga pale kroz
+' modAuth.AuthTestUkljuci i vracaju kako su zatekli.
+Private Const FX_KOR_ADMIN As String = "admin.test"   ' bypass u KorisnikImaPravo
+Private Const FX_KOR_BANKA As String = "op.banka"     ' SAMO oblast Banka
+Private Const FX_KOR_GASEN As String = "op.gasen"     ' pun set prava, Aktivan=NE
+Private Const FX_KOR_PIN As String = "1234"
 ' Otkupni blokovi iz fixture-a: prvi je KOOP-TEST-1, drugi KOOP-TEST-2, oba na
 ' FX_STANICA. Vrednost prvog = Kolicina 400 * Cena 50; fixture nema tblNovac,
 ' pa je neisplaceni ostatak jednak vrednosti -- ali test ga i dalje racuna
@@ -430,7 +437,6 @@ Public Sub RunAllTests()
     RunOne 180
     RunOne 181
     RunOne 182
-    RunOne 183
     RunOne 124
     RunOne 125
     RunOne 126
@@ -515,9 +521,9 @@ End Sub
 
 Private Function TestName(ByVal idx As Long) As String
     Select Case idx
-        Case 1: TestName = "T_PosleSnimanja_ZadrzavaKontekstOtpremnice"
-        Case 2: TestName = "T_PosleSnimanja_ZadrzavaZbirnu"
-        Case 3: TestName = "T_ClearForm_BrisePartnera"
+        Case 1: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
+        Case 2: TestName = "T_Ljuska_AlatkeTrazePravo"
+        Case 3: TestName = "T_Ljuska_StartEkranDozvoljen"
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
@@ -613,8 +619,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
         Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
-        Case 119: TestName = "T_LegacyDok_PadListeBlokovaNijeAvans"
-        Case 120: TestName = "T_LegacyDok_PadListeFakturaNijeAvans"
+        Case 119: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
+        Case 120: TestName = "T_Matic_SekcijaTraziPravo"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
@@ -679,7 +685,6 @@ Private Function TestName(ByVal idx As Long) As String
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
-        Case 183: TestName = "T_Sekcija_OdbijenPrelazakNePomeraSekciju"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -708,9 +713,9 @@ End Function
 ' sve sto test referencira.
 Private Sub InvokeTest(ByVal idx As Long)
     Select Case idx
-        Case 1: T_PosleSnimanja_ZadrzavaKontekstOtpremnice
-        Case 2: T_PosleSnimanja_ZadrzavaZbirnu
-        Case 3: T_ClearForm_BrisePartnera
+        Case 1: T_Sekcija_OdbijenPrelazakNePomeraSekciju
+        Case 2: T_Ljuska_AlatkeTrazePravo
+        Case 3: T_Ljuska_StartEkranDozvoljen
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
@@ -806,8 +811,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
         Case 117: T_Kolona_TrazenjeNeGutaGresku
         Case 118: T_MrezaPilula_PozadinaSeCisti
-        Case 119: T_LegacyDok_PadListeBlokovaNijeAvans
-        Case 120: T_LegacyDok_PadListeFakturaNijeAvans
+        Case 119: T_Ljuska_SuzenaPravaStartIAlatke
+        Case 120: T_Matic_SekcijaTraziPravo
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
@@ -870,7 +875,6 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_Auth_OtkazanaPrijavaNeLazePrikaz
-        Case 183: T_Sekcija_OdbijenPrelazakNePomeraSekciju
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -898,61 +902,198 @@ End Sub
 ' Testovi
 ' ============================================================
 
-' Posle snimanja otkupnog lista kontekst otpremnice mora da ostane: datum se NE
-' brise, jer sledeci blok ide u niz istog datuma. Pada ako se u ClearOtkupFields
-' vrati brisanje datuma (txtDatum.value = "").
-Private Sub T_PosleSnimanja_ZadrzavaKontekstOtpremnice()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
+' ============================================================
+' LJUSKA KAO ULAZ U APLIKACIJU (v6-ui-210)
+' ============================================================
 
-    f.ClearOtkupFields
+' ALATKA JE OBLAST PRAVA, NE SAMO DUGME.
+'
+' "Otvori Excel" vodi u sirovu radnu svesku, "Sinhronizuj" KNJIZI -- legacy
+' meni je oba pitao za pravo pre radnje. Dok ljuska nije bila ulaz u
+' aplikaciju to je bio mrtav put; od kada jeste, izostanak mape je
+' zaobilazenje autorizacije.
+'
+' Ovaj test meri MAPU (tag -> oblast) i da odluka ide bas kroz modAuth. Samu
+' ODLUKU pod suzenim pravima meri test 186, nad nalogom iz fixture-a: ovde je
+' AUTH iskljucen pa je sve dozvoljeno, i kapija koja uvek pusta bila bi zelena.
+Private Sub T_Ljuska_AlatkeTrazePravo()
+    ' NAJVAZNIJE PRVO: bez ove mape nijedna alatka nema oblast, pa sve prolaze.
+    AssertEq modOtkupUI.AlatkaOblast("btnExcel"), OBL_OTVORI_EXCEL, _
+             "Otvori Excel trazi pravo na oblast OtvoriExcel"
+    AssertEq modOtkupUI.AlatkaOblast("btnSync"), OBL_SYNC_PWA, _
+             "Sinhronizuj trazi pravo na oblast SyncPWA"
 
-    AssertEq f.txtDatum.value, FX_DATUM, _
-             "datum posle snimanja mora da ostane datum otpremnice"
+    ' Alatka bez oblasti nije greska nego "nema sta da se proverava".
+    AssertEq modOtkupUI.AlatkaOblast("btnSnimi"), "", _
+             "alatka van mape nema oblast"
+    AssertEq modOtkupUI.AlatkaSme("btnSnimi"), True, _
+             "alatka bez oblasti prolazi"
 
-    AssertSnapshot DumpKontrole(f), "PosleSnimanja_KontekstOtpremnice"
-
-    Unload f
+    ' Odluka ide kroz modAuth, ne kroz sopstvenu kopiju pravila.
+    AssertEq modOtkupUI.AlatkaSme("btnExcel"), modAuth.KorisnikImaPravo(OBL_OTVORI_EXCEL), _
+             "Excel alatka odgovara pravu na svoju oblast"
+    AssertEq modOtkupUI.AlatkaSme("btnSync"), modAuth.KorisnikImaPravo(OBL_SYNC_PWA), _
+             "Sync alatka odgovara pravu na svoju oblast"
 End Sub
 
-' Broj zbirne ostaje popunjen posle snimanja: sledeci blok iste otpremnice mora
-' da dobije istu zbirnu, inace operater kuca broj iznova na svaki unos. Pada ako
-' se u ClearOtkupFields vrati txtBrojZbirne.value = "".
-Private Sub T_PosleSnimanja_ZadrzavaZbirnu()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
+' START BIRA EKRAN NA KOJI OPERATER SME.
+'
+' Prava po oblastima su NEZAVISNA (modAuth.OblastiList): nalog sa pravom na
+' Banku a bez prava na Dokumenta je legitiman. Start koji trazi bas
+' SCR_POCETNI takvog operatera ostavlja bez aplikacije.
+'
+' Ovaj test meri normalan slucaj: start RAZRESI ekran, razreseni je dozvoljen
+' i nije panel. Granu "pocetni nije dozvoljen -> uzmi sledeci" meri test 186,
+' nad nalogom koji nema pravo na Dokumenta.
+Private Sub T_Ljuska_StartEkranDozvoljen()
+    Dim k As String
+    k = modOtkupUI.OtkupUI_StartEkran()
 
-    f.ClearOtkupFields
-    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
-             "broj zbirne mora da ostane popunjen posle snimanja"
-
-    ' Drugi blok nad istom otpremnicom -- posle jos jednog snimanja zbirna je ista.
-    f.cmbKooperant.value = FX_KOOPERANT2
-    f.ClearOtkupFields
-    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
-             "drugi blok mora da dobije istu zbirnu"
-
-    Unload f
+    ' NAJVAZNIJE PRVO: prazno znaci "nema ulaza" i gasi aplikaciju.
+    AssertEq (Len(k) > 0), True, "start razresi ekran za operatera sa pravima"
+    AssertEq modUiScreens.ScrAktivan(k), True, "start bira ekran na koji operater SME"
+    AssertEq modUiPanel.PanelPostoji(k), False, _
+             "start ne bira panel -- panel pokriva povrsinu, ekran ispod ostaje zabranjen"
+    AssertEq k, SCR_POCETNI, "sa punim pravima start je pocetni ekran"
 End Sub
 
-' Kooperant se BRISE posle snimanja -- sledeci unos je nov partner. Suprotno od
-' prethodna dva testa: ovde je brisanje trazeno ponasanje. Pada ako se iz
-' ClearOtkupFields ukloni cmbKooperant.value = "".
-Private Sub T_ClearForm_BrisePartnera()
-    Dim f As frmOtkup
-    Set f = NewOtkupForm()
+' SUZENA PRAVA: START I ALATKE (grane koje su do fixture-a sa AUTH bile nemerene)
+'
+' Nalog op.banka ima pravo SAMO na oblast Banka -- nema Dokumenta (pocetni
+' ekran ljuske), nema OtvoriExcel ni SyncPWA (alatke zaglavlja). Tvrdi se ono
+' zbog cega je revizija dala NO MERGE:
+'   1) start NE ostavlja takvog operatera bez aplikacije nego ga vodi na prvi
+'      dozvoljen ekran (registar: Dokumenta, Palete, Storno, Oporavak, Agro,
+'      Fakture, pa BANKA_UVOZ -- prvi na koji sme);
+'   2) alatke koje vode u sirovu svesku i u knjizenje NE prolaze bez prava.
+'
+' Nalazi se skupljaju pa tvrde POSLE vracanja stanja: AssertEq puca na prvom
+' padu, a ostavljen ukljucen AUTH i prijavljen operater curili bi u svaki test
+' ispod ovog (isti razlog kao u T_LegacyDok_*).
+Private Sub T_Ljuska_SuzenaPravaStartIAlatke()
+    Dim biAuth As Boolean
+    Dim prijava As Boolean, prijavaGasen As Boolean
+    Dim smeDok As Boolean, smeBanka As Boolean, start As String
+    Dim smeExcel As Boolean, smeSync As Boolean
+    Dim smeExcelPosle As Boolean, startPosle As String
 
-    ' Preduslov: bez ovoga bi test bio zelen i kad kontrola uopste ne prima
-    ' vrednost, pa ne bi merio nista.
-    AssertEq f.cmbKooperant.value, FX_KOOPERANT, _
-             "preduslov: kooperant je postavljen pre ciscenja"
+    biAuth = modAuth.AuthTestUkljuci(True)
+    modUiScreens.ScrResetCache
 
-    f.ClearOtkupFields
+    ' Deaktiviran nalog (Aktivan=NE) sa PUNIM pravima: prijava sme da padne
+    ' samo na toj koloni. Bez ove tvrdnje bi "nema prava" i "ne moze da se
+    ' prijavi" bila ista poruka.
+    prijavaGasen = modAuth.ValidateLogin(FX_KOR_GASEN, FX_KOR_PIN)
 
-    AssertEq f.cmbKooperant.value, "", _
-             "kooperant mora da bude obrisan posle snimanja"
+    prijava = modAuth.ValidateLogin(FX_KOR_BANKA, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
 
-    Unload f
+    smeDok = modUiScreens.ScrDozvoljen(SCR_POCETNI)
+    smeBanka = modUiScreens.ScrDozvoljen("BANKA_UVOZ")
+    start = modOtkupUI.OtkupUI_StartEkran()
+    smeExcel = modOtkupUI.AlatkaSme("btnExcel")
+    smeSync = modOtkupUI.AlatkaSme("btnSync")
+
+    modAuth.Logout
+    modAuth.AuthTestUkljuci biAuth
+    modUiScreens.ScrResetCache
+    smeExcelPosle = modOtkupUI.AlatkaSme("btnExcel")
+    startPosle = modOtkupUI.OtkupUI_StartEkran()
+
+    AssertEq prijava, True, "preduslov: suzen nalog se prijavljuje"
+
+    ' NAJVAZNIJE PRVO: alatka bez prava NE prolazi. Iza "Otvori Excel" je
+    ' sirova sveska sa svim tabelama, iza "Sinhronizuj" knjizenje.
+    AssertEq smeExcel, False, "Excel alatka NE sme bez prava na oblast"
+    AssertEq smeSync, False, "Sync alatka NE sme bez prava na oblast"
+
+    ' Start vodi na PRVI DOZVOLJEN ekran, ne na pocetni i ne u prazno.
+    AssertEq smeDok, False, "preduslov: nalog nema pravo na pocetni ekran"
+    AssertEq smeBanka, True, "preduslov: nalog ima pravo na Uvoz izvoda"
+    AssertEq start, "BANKA_UVOZ", "start vodi na prvi dozvoljen ekran"
+
+    AssertEq prijavaGasen, False, "deaktiviran nalog se ne prijavljuje"
+
+    ' Stanje se vraca: sledeci test ne sme da zatekne ukljucen AUTH.
+    AssertEq smeExcelPosle, True, "posle testa alatke opet prolaze"
+    AssertEq startPosle, SCR_POCETNI, "posle testa start je opet pocetni ekran"
+End Sub
+
+' MATICNI PODACI SU SEKCIJA, ALI PRAVO JE ISTO.
+'
+' Cetiri ekrana i dva panela sekcije Maticni traze OBL_MATICNI. Nalog op.banka
+' ga nema, pa nijedan ne sme -- ni ekran, ni panel (panel bi pokrio radnu
+' povrsinu, pa bi zabrana ekrana ispod njega bila bez efekta). Admin ima
+' bypass, i to se tvrdi da se "nema prava" ne bi moglo pomesati sa "AUTH lomi
+' sve".
+' Da li je prekidac sekcija NACRTAN. Cita se sa same kontrole, kao
+' ZonaKontrolaTest: odluka (EkranZaSekciju) je vec postojala i bila tacna, a
+' kvar je bio u tome sto je niko nije PRIMENIO na dugme -- pa tvrdnja nad
+' odlukom ovo ne bi uhvatila.
+Private Function DugmeSekcijeVidljivoTest(f As Object) As Boolean
+    On Error Resume Next
+    DugmeSekcijeVidljivoTest = f.Controls("zHdr").Controls("btnMaticC").Visible
+    Err.Clear
+End Function
+
+Private Sub T_Matic_SekcijaTraziPravo()
+    Dim biAuth As Boolean, i As Long
+    Dim prijavaOp As Boolean, prijavaAdmin As Boolean
+    Dim ekrani As Variant, opSme As String, adminSme As String
+    Dim startOp As String
+    Dim f As frmOtkupUI
+    Dim dugmeOp As Boolean, dugmeAdmin As Boolean
+
+    ekrani = Array("MAT_PARTNERI", "MAT_ROBA", "MAT_PAKOVANJE", "MAT_KORISNICI", _
+                   "MAT_PODESAVANJA", "MAT_ADMIN")
+
+    biAuth = modAuth.AuthTestUkljuci(True)
+    modUiScreens.ScrResetCache
+
+    prijavaOp = modAuth.ValidateLogin(FX_KOR_BANKA, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+    For i = 0 To UBound(ekrani)
+        If modUiScreens.ScrDozvoljen(CStr(ekrani(i))) Then _
+            opSme = opSme & " " & CStr(ekrani(i))
+    Next i
+    startOp = modOtkupUI.OtkupUI_StartEkran()
+
+    ' Forma se gradi DOK je prijavljen suzen nalog -- tako se meri i sama
+    ' gradnja zaglavlja, ne samo osvezavanje posle zamene operatera.
+    Set f = NewOtkupUIForm()
+    dugmeOp = DugmeSekcijeVidljivoTest(f)
+
+    modAuth.Logout
+    prijavaAdmin = modAuth.ValidateLogin(FX_KOR_ADMIN, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+    For i = 0 To UBound(ekrani)
+        If Not modUiScreens.ScrDozvoljen(CStr(ekrani(i))) Then _
+            adminSme = adminSme & " " & CStr(ekrani(i))
+    Next i
+
+    ' Drugi smer, kroz PRAVI put zamene operatera: dugme mora da se VRATI.
+    modOtkupUI.OtkupUI_PrimeniNovaPravaTest
+    dugmeAdmin = DugmeSekcijeVidljivoTest(f)
+
+    modAuth.Logout
+    modAuth.AuthTestUkljuci biAuth
+    modUiScreens.ScrResetCache
+
+    AssertEq prijavaOp, True, "preduslov: operater se prijavljuje"
+    AssertEq prijavaAdmin, True, "preduslov: admin se prijavljuje"
+
+    ' NAJVAZNIJE PRVO: nijedan deo sekcije Maticni ne sme bez prava.
+    AssertEq Trim$(opSme), "", _
+             "bez prava na Maticne podatke nijedan njihov ekran ni panel ne sme"
+    ' Ni ULAZ u sekciju: dugme zaglavlja je jedini put do nje iz radnog dela,
+    ' pa dozvoljen ekran nije jedino sto se mora izmeriti.
+    AssertEq dugmeOp, False, _
+             "prekidac sekcije se NE crta bez prava na Maticne podatke"
+    ' Start ne sme da zavrsi u sekciji na koju operater nema pravo.
+    AssertEq (Left$(startOp, 4) = "MAT_"), False, "start ne vodi u zabranjenu sekciju"
+    ' Admin bypass: bez ovoga bi gornja tvrdnja bila zelena i kad AUTH sve gasi.
+    AssertEq Trim$(adminSme), "", "admin sme sve iz sekcije Maticni"
+    AssertEq dugmeAdmin, True, "zamena operatera VRACA prekidac adminu"
 End Sub
 
 ' ============================================================
@@ -6097,22 +6238,6 @@ Private Sub SetPolje(z As Object, ByVal grp As String, ByVal v As String)
     z.Controls(grp).Controls(grp & "T").text = v
 End Sub
 
-' Forma sa kontekstom otpremnice OTP-TEST-1 iz fixture-a, bez .Show.
-Private Function NewOtkupForm() As frmOtkup
-    Dim f As frmOtkup
-    Set f = New frmOtkup
-
-    Dim ctlCount As Long
-    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
-
-    f.txtDatum.value = FX_DATUM
-    f.txtBrojZbirne.value = FX_ZBIRNA
-    f.txtBrojDokumenta.value = FX_BROJ_OTP
-    f.cmbKooperant.value = FX_KOOPERANT
-
-    Set NewOtkupForm = f
-End Function
-
 ' ============================================================
 ' Assert-i
 ' ============================================================
@@ -9033,120 +9158,6 @@ Private Sub T_MrezaPilula_PozadinaSeCisti()
              "uredna vrednost VRACA pozadinu -- ciscenje ne ostaje zauvek"
 End Sub
 
-
-' TEST 119: u frmDokumenta prazna lista blokova NIJE izbor.
-'
-' Ista klasa greske koju je frmBankaImport imao i koja je tamo zatvorena u PR
-' #220. Ovde je stajala nedirnuta:
-'
-'   btnUnosOMUlaz_Click:  If cmbOtkupBlok.ListIndex >= 0 Then ... Else AVANS
-'
-' Prazan kombo i NEUSPELO ucitavanje izgledaju isto -- ListIndex je -1 u oba
-' slucaja. Punjenje (FillOpenOtkupi) je do sada padalo bez traga u stanju forme,
-' a pozivalac (cmbPrimalacOMUlaz_Change) nema rukovaoca -- pa je novac tiho
-' postajao AVANS kooperanta umesto da se knjizi na blok.
-'
-' Forma se u testu NE prikazuje: frmDokumenta nema UserForm_Initialize, pa je
-' New frmDokumenta jeftin i ne cita nijednu tabelu (isti razlog kao 11.1).
-Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
-    Dim f As frmDokumenta
-    Dim smePad As Boolean, smeOk As Boolean
-    Dim porukaPad As String, porukaOk As String
-    Dim padSaIzborom As Boolean, padBezIzbora As Boolean, okSaIzborom As Boolean
-
-    Set f = New frmDokumenta
-
-    ' PAD UCITAVANJA -> STOP. Nalazi se skupljaju pa tvrde POSLE Unload-a: pad
-    ' tvrdnje nad zivom formom ostavlja formu u memoriji i poruka se ne vidi.
-    f.DokTestSetBlokUcitanost False, "test greska"
-    smePad = f.DokTestBlokSme()
-    porukaPad = f.DokTestBlokPoruka()
-
-    ' Uredno ucitana lista pusta dalje -- kapija ne sme da bude sira od kvara.
-    ' Prazna lista posle USPESNOG citanja stvarno znaci "nema otvorenih blokova",
-    ' i avans je tada ispravan.
-    ' IZBOR NE SME DA ZAOBIDJE KAPIJU.
-    '
-    ' Pad usred punjenja ostavlja kombo DELIMICNO napunjen: operater tada bira
-    ' red iz nepotpune liste, ListIndex je >= 0, i kapija koja stoji samo u AVANS
-    ' grani se nikad ne pita. Odluka zato ne sme da zavisi od toga da li je red
-    ' izabran -- i to se ovde tvrdi za obe vrednosti.
-    padSaIzborom = f.DokTestKnjizenjeSme(True)
-    padBezIzbora = f.DokTestKnjizenjeSme(False)
-
-    f.DokTestSetBlokUcitanost True, ""
-    smeOk = f.DokTestBlokSme()
-    porukaOk = f.DokTestBlokPoruka()
-    okSaIzborom = f.DokTestKnjizenjeSme(True)
-
-    Unload f
-
-    AssertEq smePad, False, _
-             "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa"
-    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
-             "...i operater dobija objasnjenje, ne cutanje"
-    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
-             "...u kojem stoji i sta je puklo"
-    AssertEq padSaIzborom, False, _
-             "ni IZABRAN blok ne prolazi kad je ucitavanje palo"
-    AssertEq padBezIzbora, False, "...ni prazan izbor"
-
-    AssertEq smeOk, True, "uredno ucitana lista pusta avans"
-    AssertEq porukaOk, "", "...bez poruke"
-    AssertEq okSaIzborom, True, "...i pusta izabran blok"
-End Sub
-
-' ============================================================
-' 120: ISTA GRESKA NA STRANI KUPCA (F6 / "Izlaz").
-'
-' FillOpenFakture je pad citanja gubio isto kao FillOpenOtkupi: kombo ostane
-' prazan, a btnUnosIzlaz_Click iz praznog polja zakljucuje "nema fakture" i
-' knjizi NOV_KUPCI_AVANS. Razlika se vidi tek u saldu kupca.
-'
-' Kapija je ovde NAMERNO uza nego kod blokova: rezim pusta i unos same ambalaze
-' bez novca, a tada odluke faktura/avans nema -- pa lista ne sme da ga zaustavi.
-' Ta uzina je tvrdnja, ne izuzetak, i ima svoju sabotazu.
-' ============================================================
-Private Sub T_LegacyDok_PadListeFakturaNijeAvans()
-    Dim f As frmDokumenta
-    Dim smePad As Boolean, smeOk As Boolean
-    Dim porukaPad As String, porukaOk As String
-    Dim padSaIzborom As Boolean, bezNovca As Boolean, okSaIzborom As Boolean
-
-    Set f = New frmDokumenta
-
-    ' Nalazi se skupljaju pa tvrde POSLE Unload-a -- pad tvrdnje nad zivom formom
-    ' ostavlja formu u memoriji i poruka se ne vidi.
-    f.DokTestSetFaktUcitanost False, "test greska"
-    smePad = f.DokTestUplataSme(1000#, False)
-    porukaPad = f.DokTestUplataPoruka()
-    ' Izbor ne sme da zaobidje kapiju: delimicno napunjena lista IMA izbor.
-    padSaIzborom = f.DokTestUplataSme(1000#, True)
-    ' ...ali unos bez novca kapija ne dira.
-    bezNovca = f.DokTestUplataSme(0#, False)
-
-    f.DokTestSetFaktUcitanost True, ""
-    smeOk = f.DokTestUplataSme(1000#, False)
-    porukaOk = f.DokTestUplataPoruka()
-    okSaIzborom = f.DokTestUplataSme(1000#, True)
-
-    Unload f
-
-    AssertEq smePad, False, _
-             "pad ucitavanja liste faktura ZAUSTAVLJA knjizenje avansa kupca"
-    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
-             "...i operater dobija objasnjenje, ne cutanje"
-    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
-             "...u kojem stoji i sta je puklo"
-    AssertEq padSaIzborom, False, _
-             "ni IZABRANA faktura ne prolazi kad je ucitavanje palo"
-    AssertEq bezNovca, True, _
-             "unos bez novca NE staje zbog liste faktura"
-
-    AssertEq smeOk, True, "uredno ucitana lista pusta uplatu"
-    AssertEq porukaOk, "", "...bez poruke"
-    AssertEq okSaIzborom, True, "...i pusta izabranu fakturu"
-End Sub
 
 ' Recnik kakav modOtkupUI.SkupiPolja salje ekranu -- samo kljucevi od kojih
 ' zavisi kapija ucitanosti.
@@ -13648,7 +13659,14 @@ Private Sub T_MatIzvor_OpisSekcijaJePotpun()
                             zbirneKolone = zbirneKolone & " " & kljuc & "/" & ColF(spec, 0)
                     End Select
                     izv = ColF(spec, 1)
-                    If Left$(izv, 1) = "@" Then
+                    If modMaticniIzvor.JeAlias(izv) Then
+                        ' 4a) alias NIJE izvedena vrednost nego gola kolona pod
+                        ' imenom koje zavisi od instalacije. Tvrdnja je da se
+                        ' RAZRESI: alias bez ijedne postojece kolone tiho ostavlja
+                        ' praznu celiju, sto je tacno kvar zbog kog alias postoji.
+                        If Len(modMaticniIzvor.RazresiKolonu(tbl, izv)) = 0 Then _
+                            nepoznataKolona = nepoznataKolona & " " & kljuc & "." & izv
+                    ElseIf Left$(izv, 1) = "@" Then
                         ' 4) izvedena vrednost mora biti poznata
                         Select Case izv
                             Case "@status", "@ime_prezime", "@stanica", "@adresa_mesto", _
@@ -13907,6 +13925,21 @@ End Sub
 '
 ' Zasto i "fokus": forma je uz svaku poruku radila SetFocus na polje. Bez tog
 ' podatka operater dobije poruku i mora sam da trazi gde je greska.
+' Prva vrednost koju combo STVARNO nudi, iz fixture-a.
+'
+' Combo se proverava nad PRIKAZOM ("Naziv (ID)"), ne nad golim stranim
+' kljucem -- pa ukucan ID ("ST-001", "KOOP-1") nikad nije u ponudjenoj
+' listi. Grane koje tvrde PROLAZ su tako merile ODBIJANJE, i to na pogresnom
+' polju: T_MatUnos_ProveraOdbija je padao na kooperantu umesto na povrsini.
+' Test je pisan u sesiji bez Excela, pa se to nije videlo do prvog izvrsavanja.
+Private Function PrvaPonudjena(ByVal izvor As String) As String
+    Dim a As Variant
+    a = modMaticniIzvor.MatComboStavke(izvor, "")
+    If Not IsArray(a) Then Exit Function
+    If UBound(a) < LBound(a) Then Exit Function
+    PrvaPonudjena = CStr(a(LBound(a)))
+End Function
+
 Private Sub T_MatUnos_ProveraOdbija()
     Dim d As Object
 
@@ -13920,7 +13953,9 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 2) Popunjeno obavezno prolazi.
     Set d = CreateObject("Scripting.Dictionary")
-    d("ime") = "Dragana": d("prezime") = "Ilic": d("stanica") = "ST-001"
+    d("ime") = "Dragana": d("prezime") = "Ilic"
+    d("stanica") = PrvaPonudjena("@stanice")
+    AssertEq (Len(d("stanica")) > 0), True, "fixture nudi bar jedno otkupno mesto"
     AssertEq modMaticniUnos.MatProveriTest("KOOPERANTI", d), "", _
              "kooperant sa imenom, prezimenom i stanicom prolazi"
 
@@ -13943,8 +13978,13 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 5) Nula NIJE dozvoljena tamo gde nema smisla: parcela od nula hektara.
     Set d = CreateObject("Scripting.Dictionary")
-    d("kooperant") = "KOOP-1": d("katbroj") = "123": d("katopstina") = "Bukovik"
-    d("kultura") = "Malina": d("ggap") = "Da": d("povrsina") = "0"
+    ' Kooperant i kultura su combo polja kao i stanica: ukucane vrednosti su
+    ' obarale unos PRE povrsine, pa je tvrdnja o fokusu merila pogresno polje.
+    d("kooperant") = PrvaPonudjena("@kooperanti"): d("katbroj") = "123"
+    d("katopstina") = "Bukovik"
+    d("kultura") = PrvaPonudjena("@kulture"): d("ggap") = "Da": d("povrsina") = "0"
+    AssertEq (Len(d("kooperant")) > 0 And Len(d("kultura")) > 0), True, _
+             "fixture nudi bar jednog kooperanta i bar jednu kulturu"
     AssertEq (Len(modMaticniUnos.MatProveriTest("PARCELE", d)) > 0), True, _
              "parcela od nula hektara se odbija"
     AssertEq CStr(d(modMaticniUnos.MAT_FOKUS)), "povrsina", "odbijena je bas povrsina"
@@ -13971,7 +14011,12 @@ Private Sub T_MatUnos_ProveraOdbija()
 
     ' 8) Cenovnik: cena mora biti STROGO pozitivna.
     Set d = CreateObject("Scripting.Dictionary")
-    d("vrsta") = "Malina": d("klasa") = "I": d("cena") = "0"
+    ' Vrsta i klasa su combo (@vrste iz tblKulture, @klase iz konstanti), pa i
+    ' one moraju doci iz ponudjene liste -- ukucana vrsta obara unos pre cene.
+    d("vrsta") = PrvaPonudjena("@vrste"): d("klasa") = PrvaPonudjena("@klase")
+    d("cena") = "0"
+    AssertEq (Len(d("vrsta")) > 0 And Len(d("klasa")) > 0), True, _
+             "fixture nudi bar jednu vrstu voca i bar jednu klasu"
     AssertEq (Len(modMaticniUnos.MatProveriTest("CENOVNIK", d)) > 0), True, _
              "cena nula se odbija"
     d("cena") = "250"
@@ -14731,15 +14776,20 @@ Private Sub T_Mreza_DecimalaNeNestaje()
     Dim ekrani As Variant, e As Variant, liste As Variant, r As Variant
     Dim kljuc As String, cols As Variant, i As Long, izv As String
     Dim celaBezDecimale As String, spec As String
+    Dim ok As Boolean
 
     ' --- formatiranje ----------------------------------------------------
-    AssertEq modOtkupUI.CelijaTekst("dec", 0.5, ""), "0,50", _
+    ' Treci argument je ByRef zastavica kvara, ne tekst: CelijaTekst na
+    ' neuspeh vraca prazno I spusta ok, pa se prazna celija zbog greske
+    ' razlikuje od prazne zbog nepostojeceg podatka. Zato se i tvrdi.
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.5, ok), "0,50", _
              "pola kilograma se crta kao 0,50, ne kao 1"
-    AssertEq modOtkupUI.CelijaTekst("dec", 0.4, ""), "0,40", _
+    AssertEq ok, True, "formatiranje decimale ne prijavljuje kvar"
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.4, ok), "0,40", _
              "0,4 se crta kao 0,40, ne kao 0"
-    AssertEq modOtkupUI.CelijaTekst("dec", 152.5, ""), "152,50", _
+    AssertEq modOtkupUI.CelijaTekst("dec", 152.5, ok), "152,50", _
              "cena zadrzava decimale"
-    AssertEq modOtkupUI.CelijaTekst("num", 0.5, ""), "1", _
+    AssertEq modOtkupUI.CelijaTekst("num", 0.5, ok), "1", _
              "num i dalje zaokruzuje -- zato tezine i cene NISU num"
 
     ' --- dec ne pali podnozje --------------------------------------------

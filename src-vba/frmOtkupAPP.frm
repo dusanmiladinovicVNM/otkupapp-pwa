@@ -697,13 +697,10 @@ End Sub
 ' Navigation button clicks
 ' =========================
 
-Private Sub btnBlocks_Click()
-    OpenContentForm frmOtkup, btnBlocks, "Otkupni blokovi"
-End Sub
-
-Private Sub btnPurchase_Click()
-    OpenContentForm frmDokumenta, btnPurchase, "Otkup i prodaja"
-End Sub
+' btnBlocks_Click / btnPurchase_Click su obrisani sa frmOtkup i
+' frmDokumenta (korak 2, docs/UI_MIGRACIJA_KATALOG.md par.27.3). Dugmad
+' ostaju u .frx -- .frx se ne dira kao tekst -- ali bez rukovaoca ne rade
+' nista. Obe radnje su u ljusci: ekran DOKUMENTI (modScrDokumenti).
 
 Private Sub btnPalete_Click()
     OpenContentForm frmPalete, btnPalete, "Palete"
