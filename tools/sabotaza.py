@@ -2748,12 +2748,25 @@ SABOTAZE = {
     # Start pokrece uvoz: nalog sa pravom samo na Banku bi pri svakom pokretanju
     # knjizio novac bez ijednog klika. Krsi RELEASE_GATES par.85 i
     # ARCHITECTURE_REFERENCE par.288.
-    "bu-start-pokrece-uvoz": (
+    # ActivateScreen ignorise argument i uvek zove kuku. Prva verzija ove
+    # sabotaze je gadjala poziv u ShowOtkupUI -- liniju koju test NE izvrsava, pa
+    # nije obarala nista. Ovde pada sama odluka, kroz koju prolaze oba automatska
+    # usmeravanja.
+    "bu-kuka-ignorise-argument": (
         "modOtkupUI.bas",
-        "    If Not mStartUsmeravanje Then\n",
-        "    If True Then   ' SABOTAZA: i start pokrece kuku ulaska\n",
+        "    If kuka Then\n",
+        "    If True Then   ' SABOTAZA: kuka se zove i kad je iskljucena\n",
         "T_BankaUvoz_UlazakUvoziIzvode",
         "automatsko usmeravanje sa starta NE pokrece uvoz",
+    ),
+    # Put koji je prva popravka promasila: zamena operatera na nalog sa pravom
+    # samo na Banku ulazi u ekran automatski, pa bi pokrenula uvoz bez klika.
+    "bu-zamena-operatera-pokrece-uvoz": (
+        "modOtkupUI.bas",
+        "                ActivateScreen mFrm, kljuc, False\n",
+        "                ActivateScreen mFrm, kljuc   ' SABOTAZA: zamena je klik\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "zamena operatera NE pokrece uvoz",
     ),
     # Nadjen izvod NE pokrece posao ekrana: mreza ostaje zastarela, a rezultat
     # se ne javlja -- toast kaze da je uvezeno, a redova nema.
