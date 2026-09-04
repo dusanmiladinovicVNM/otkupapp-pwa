@@ -635,9 +635,9 @@ MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.4 Šta NIJE preneto
 
-- `frmAgrohemija` se **ne gasi i ne menja** — isto pravilo kao za `frmOtkup` i
-  `frmDokumenta` (§5, Faza B). Legacy zadržava svoju kopiju logike; pravilo se
-  menja u `modAgroUnos` pa se **ručno preslikava** u formu.
+- ~~`frmAgrohemija` se **ne gasi i ne menja**~~ — **prevaziđeno korakom 3
+  (§27.11): forma je obrisana.** Pravilo je važilo dok su dve kopije živele
+  paralelno; logika sada živi samo u `modAgroUnos` i preslikavanja nema.
 - **Dobavljač je slobodan tekst**, kao i u legacy-ju (`cmbDobavljac` se nigde
   ne puni iz tabele). Šifarnik dobavljača ne postoji i ovde se ne uvodi.
 - **Storno magacin stavke** nije ovde — to je posao ekrana Storno.
@@ -4530,9 +4530,10 @@ matricu, identitet, prikaz istine, zonu.
 
 ### 23.7 Šta NIJE preneto, i zašto
 
-- **`frmIzvestaj` se ne gasi i ne menja** — dve kopije žive namerno (§5,
-  Faza B). `Report*`, `PrintIzvestaj`, `PrintKartica*PDF`,
-  `IzvestajTabDostupan` — nijedno pravilo nije dirano.
+- ~~**`frmIzvestaj` se ne gasi i ne menja**~~ — **prevaziđeno korakom 3
+  (§27.11): forma je obrisana.** Dve kopije su živele namerno dok je legacy bio
+  operativan; `Report*`, `PrintIzvestaj`, `PrintKartica*PDF` i
+  `IzvestajTabDostupan` su u modulima i nisu dirani ni tada ni sada.
 - **Detail panel „Detalji otkupa"** — prenet u krugu 4 kao detalj traka u
   zoni (§23.11/S7), ne kao padajući redovi; padajući redovi u mreži ostaju
   Faza C. Štampa dokumenta iz reda jeste preneta.
@@ -8097,7 +8098,7 @@ obrisano obara compile cele sveske.
 | 0 | start → nova ljuska, bez veza ka legacy (**ovaj PR**, `v6-ui-209`) | — |
 | 1 | **process PR** za `.claude/`: `otkup-i-dokumenta.md` §5 („legacy se NE gasi" → „penzioniše se po §27"), `testovi.md` `paths:` (`frmOtkup.frm`), `forme-i-kontrole.md` (zamrznuti `WithEvents`, red „Matični podaci"). Ne sme zajedno sa feature izmenom (CLAUDE.md §6) | — |
 | 2 **(isporučen, §27.10)** | `frmOtkup` + `frmDokumenta` (+ `.frx`); `modOtkupBlok` i `clsBlokUI` OSTAJU — imaju pozivaoce iz ljuske | `modTest`: testovi 1–3 (`ClearOtkupFields` ugovor — ljuska ga meri u `T_ClearForm_Ugovor`), `NewOtkupForm`, `T_LegacyDok_*` (pravilo „pad liste nije avans" ljuska meri u `T_Ljuska_PadListeNovcaNijeAvans`); `RunOne`/`TestName`/`InvokeTest` slotovi; sabotaže nad obe forme; `frmOtkupAPP.btnBlocks_Click` / `btnPurchase_Click`; `modAuth.OblastZaFormu` (stringovi); `docs/DOMEN/WHO_WRITES.md` regenerisati (`tools/who_writes.py`) |
-| 3 | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
+| 3 **(isporučen, §27.11)** | `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost` | `modAgrohemijaTests` (AUD-040 wiring nad izvorom forme); handleri `btnPalete/btnAgro/btnReports/btnTrace`; `modAuth.OblastZaFormu`; §7.4 („`frmAgrohemija` se ne gasi") |
 | 4 | `frmFakturisanje`, `frmBankaExportPregled`, `frmSEF` (uslovno, §8.7) | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 | `frmMaticniPodaci` + `frmStammdaten` (+ `clsStmBtn`, `clsLookupMenuBtn` ako ostanu bez pozivaoca) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
 | 6 | `frmBankaImport` (kad uvoz i ručno mapiranje žive na ekranu), `frmMarza` (uz `modScrMarza`) | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`; `btnMargin_Click` |
@@ -8375,3 +8376,38 @@ preseljenim testovima (`prekidac-sekcije-uvek-vidljiv`, `alatka-sme-uvek`,
 > **Instalirane sveske i dalje imaju obe forme** (§27.4): ni self-update ni
 > `ImportAllVBA` ne brišu komponente. Posle isporuke ide ručni `Remove frmOtkup`
 > i `Remove frmDokumenta` u VBE → `Compile` → `Save`.
+
+### 27.11 Korak 3 isporučen: `frmPalete`, `frmAgrohemija`, `frmIzvestaj`, `frmSledljivost`
+
+Četiri forme i njihovi `.frx` parovi obrisani. **Ostalo je 12 formi**, od toga
+četiri koje ostaju zauvek (§27.2) i osam za korake 4–7.
+
+Graf referenci je bio tanak — svaka forma se držala **jednom linijom** u
+`frmOtkupAPP` (`btnPalete_Click`, `btnAgro_Click`, `btnReports_Click`,
+`btnTrace_Click`), plus jedna tvrdnja u `modAgrohemijaTests`. Ukupno **pet**
+kodnih referenci na četiri forme. Nijedna sabotaža ih nije gađala, i nijedna
+`cls*` klasa nije ostala bez pozivaoca (`clsUiSink` i dalje koriste
+`frmOtkupAPP` i `frmBankaImport`, `clsBlokUI` drži `modOtkupBlok`).
+
+**AUD-040 tvrdnja je PRESELJENA, ne obrisana.** `Test_FormExitWiresBasketPrice`
+je čitao izvor `frmAgrohemija` i tvrdio da poziv nosi `overrideCena` iz korpe —
+kvar koji `SaveMagacinCore` unit-test ne hvata, jer je bio u pozivaocu. Ista
+granica danas je `modAgroUnos` (`overrideCena:=AD(korpa(i), "cena")`,
+`allowZeroValue:=AB(korpa(i), "nula")`), pa je test preimenovan u
+`Test_UnosWiresBasketPrice` i preusmeren tamo. Provera ostaje nad izvorom jer
+meri da poziv **nosi imenovani argument** — a baš on može tiho da otpadne, i
+račun tada prođe sa podrazumevanom cenom artikla.
+
+Ta izmena je dokazana u oba smera **ručno**: `dokaz.py` pokriva samo
+`RunAllTests` i banka-suite, ne agro. Argument je sklonjen od korpe
+(`allowZeroValue:=CBool(AB(...))` — semantički isto, string drugačiji), suite je
+pala **24/25 sa tačno jednom crvenom**, pa je vraćen i suite je opet 25/25.
+
+**Verifikacija:** `vba_check` čist (203 fajla, 439 sabotaža); FULL zeleno —
+`RunAllTests` 182/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; `WHO_WRITES.md` regenerisan (`tblMagacin` sa 3 pisca na 2 —
+`frmAgrohemija` je bio treći).
+
+> Kao i posle koraka 2: **instalirane sveske zadržavaju sve četiri forme**
+> (§27.4). Po instalaciji ide `ImportAllVBA` → `Remove` za svaku → `Compile` →
+> `Save`.
