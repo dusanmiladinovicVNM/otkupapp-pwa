@@ -73,6 +73,12 @@ vezano i kvalifikovano** (`Application.Run "modScrDokumenti.Scr_Rows"`). Poziv
 nikad nije nekvalifikovan, pa VBA nema šta da razrešava i „Ambiguous name" ne
 nastaje. Spisak je `SCR_UGOVOR` u `vba_check.py`.
 
+Deo ugovora je **neobavezan** — ekran koji ga ne implementira ponaša se kao pre:
+`Scr_Dozvoljen` (dodatna brana), `Scr_Sort`, `Scr_ImaNesacuvano`,
+`Scr_Deaktiviraj` (izlazak) i `Scr_Aktiviraj` (ulazak). Kad dodaješ nov član,
+dodaj ga i u `SCR_UGOVOR`, inače `DUPLIKAT` prijavi drugi `modScr*` koji ga
+implementira.
+
 Izuzetak važi **samo kad su svi definicioni fajlovi `modScr*`**. Ista procedura
 u bilo kom drugom modulu i dalje pada — što je i bio smisao provere. Dokazano u
 oba smera: `Scr_Rows` prekopiran u `modUiData` puca, obična dupla definicija u

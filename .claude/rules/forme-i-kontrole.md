@@ -17,14 +17,19 @@ paths:
 Cilj plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 su **četiri** forme:
 `frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`.
 
-Posle koraka 5 ih je **osam** — uz te četiri:
+Posle koraka 6 ih je **sedam** — uz te četiri:
 
 | Forma | Zašto je još tu |
 |---|---|
-| `frmSEF` | SEF upravljanje (`PrepareResubmit`, batch radnje, event log) nije preneto ni na jedan ekran (§8.7). Čeka svoj ekran, ne korak. Ulaz je `frmOtkupAPP.btnInvoicing`, oblast `OBL_FAKTURISANJE`. |
-| `frmBankaImport` | korak 6 — uz uvoznu komandu i ručno mapiranje na ekranu (§9.3/§9.4) |
-| `frmMarza` | korak 6 — uz ekran Marža (`modScrMarza` ne postoji) |
-| `frmOtkupAPP` | korak 7, poslednja — host za `frmSEF` i preostale `ReturnToDashboard` pozive |
+| `frmSEF` | SEF upravljanje (`PrepareResubmit`, batch radnje, event log) nije preneto ni na jedan ekran (§8.7). Čeka **ekran**, ne korak. Ulaz je `frmOtkupAPP.btnInvoicing`, oblast `OBL_FAKTURISANJE`. |
+| `frmMarza` | čeka ekran koji je zamenjuje (`modScrMarza` ne postoji) |
+| `frmOtkupAPP` | poslednja — host za `frmSEF` i preostale `ReturnToDashboard` pozive |
+
+**Te tri se drže međusobno**, i to je jedini razlog zašto ijedna još stoji:
+`frmSEF` zove `frmOtkupAPP.ReturnToDashboard` i otvara se njegovim dugmetom, pa
+host ne može pre nje. Nijedna od tri ne čeka „korak" nego **kod koji treba
+napisati** — dva ekrana i gašenje dve legacy grane zatvaranja u `modAdmin` i
+`modPodesavanja`.
 
 Pravilo koje iz toga sledi: **nova kontrola ne ide u legacy formu**, nego na
 ekran ljuske (`modScr*`). Izmena legacy forme se radi samo kad je pravilo iz
