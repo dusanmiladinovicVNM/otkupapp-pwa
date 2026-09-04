@@ -41,12 +41,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "src-vba"
 
-# RF-09 teren: import + mapiranje + forma.
+# RF-09 teren: import + mapiranje + ekran.
+#
+# frmBankaImport.frm je otisao u koraku 6 (docs/UI_MIGRACIJA_KATALOG.md par.27.14),
+# a njegovo mesto je uzeo modScrBankaUvoz: tamo je sada i rucno mapiranje i kuka
+# ulaska koja pokrece uvoz, pa se ista EH disciplina trazi od njega.
 FILES = [
     "modBankaImport.bas",
     "modBankaMapiranje.bas",
     "modParse.bas",
-    "frmBankaImport.frm",
+    "modScrBankaUvoz.bas",
     "modTestBanka.bas",
 ]
 

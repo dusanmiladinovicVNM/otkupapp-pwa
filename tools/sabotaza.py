@@ -2113,23 +2113,6 @@ SABOTAZE = {
         "T_BankaUvoz_RucnoMapiranjePravila",
         "prazan izbor NIJE izbor -- tada cilj dolazi iz poziva na broj",
     ),
-    "banka-legacy-pad-liste-prolazi": (
-        "frmBankaImport.frm",
-        "    If Not m_BlokoviLoadOk Then\n",
-        "    If Not m_BlokoviLoadOk And False Then   ' SABOTAZA: pad ucitavanja prolazi\n",
-        "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
-        "pad ucitavanja liste blokova zaustavlja rucno mapiranje",
-    ),
-    # Prazan combo NIJE izbor: tada blok dolazi iz poziva na broj, gde je avans
-    # legitiman. Ko to izjednaci, ili ugasi legitimnu granu ili prijavi writeru
-    # izbor kog nije bilo.
-    "banka-legacy-prazan-combo-je-izbor": (
-        "frmBankaImport.frm",
-        '    ManualBlokIzabran = (Trim$(nz(cmbOtkupBlok.value, "")) <> "")\n',
-        '    ManualBlokIzabran = True   \' SABOTAZA: prazan combo je izbor\n',
-        "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
-        "prazan combo NIJE izbor -- tada blok dolazi iz poziva na broj",
-    ),
     # ------------------------------------- MATICNI: SEKCIJA I POKRETAC
     # Sidebar nema skrol. Kad stavke predju slobodnu visinu, ne skroluju se nego
     # TIHO nestanu ispod profila -- zato sekcije uopste postoje. Cetiri sabotaze:
