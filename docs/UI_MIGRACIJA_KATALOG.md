@@ -1359,7 +1359,12 @@ su opisane u §9.10; nijedna nije stvar ovog ekrana i sve pogađaju i ostale.
 lista ne zavisi od polja — polja biraju **cilj** ručnog mapiranja, ne skup
 redova — pa se `RefreshFromData` iz `chg:` grane **namerno ne zove**.
 
-### 9.3 Odluka: UVOZ ne ulazi u ekran
+### 9.3 ~~Odluka: UVOZ ne ulazi u ekran~~ — **prevaziđeno (§9.9)**
+
+> **Ova odluka više ne važi.** Uvoz je prenet u `v6-ui-212` — okida ga ulazak u
+> ekran, ne dugme. Razlog naveden ispod (nema ishoda) je otklonjen: rutina sada
+> vraća uvezeno i duplikate odvojeno. Zapis ostaje jer objašnjava zašto je
+> odluka tada bila takva; stanje je u **§9.9**.
 
 Povlačenje PDF-ova, parsiranje i staging (`ImportBankaInbox_TX`,
 `PullBankPdfsFromDriveProduction`) **ostaju van ekrana**. Razlog nije dužina
@@ -1503,8 +1508,8 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.8 Šta NIJE preneto
 
-- **Uvoz** (v. §9.3). `frmBankaImport` i put `ImportBankaInbox` ostaju jedini
-  način da se izvod uveze.
+- ~~**Uvoz** (v. §9.3)~~ — **preneto u `v6-ui-212` (§9.9):** ulazak u ekran
+  uvozi ono što čeka, kao klik na Banka u legacy meniju.
 - **`frmBankaImport` i `frmBankaExportPregled` se ne gase i ne menjaju.** Dve
   kopije poslovne logike postoje namerno; pravilo se menja u `modBankaMapiranje`
   pa se ručno preslikava u formu.
@@ -8080,7 +8085,7 @@ svescom. Prošao je samo `vba_check`. Checkliste: §27.6 i §27.7.
 | `frmSEF` | SEF radnje nad redom (§8.3) | **OSTAJE do ekrana** (§27.12) | §8.7: `PrepareResubmit`, batch radnje i event log nisu preneti. Ulaz je `btnInvoicing`, oblast `OBL_FAKTURISANJE` |
 | `frmBankaExportPregled` | `BANKA_NALOZI` (`modScrBankaNalozi`) | **OBRISAN** (korak 4, §27.12) | logika je u `modBankaExportPregled` (ostaje); zamrznuti `WithEvents` |
 | `frmMaticniPodaci` + `frmStammdaten` | `MAT_PARTNERI` / `MAT_ROBA` / `MAT_PAKOVANJE` / `MAT_KORISNICI` + paneli `MAT_PODESAVANJA` / `MAT_ADMIN` (§26, M0–M6) | **BRIŠU SE** (korak 5) | `modMaticniLookups.MaticniOtvoriSekciju` (jedini kodni pozivalac `OpenSekcija`), `clsStmBtn`, test koji gradi `frmStammdaten` (`modTest`), `frmOtkupAPP.OpenMaticniForm`. Paneli su već u ljusci (`modUiPanel`), ali `modAdmin` / `modPodesavanja` još imaju legacy granu zatvaranja (`frmOtkupAPP.ReturnToDashboard`) |
-| `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — **bez uvozne komande** (§9.3), sa fallback-om na ručno mapiranje u formi (§9.4) | **BRIŠE SE** (korak 6) tek kad: (a) uvozna komanda dobije radnju u ljusci (`ImportBankaInbox_TX` je `Sub` bez ishoda — treba povratna vrednost), (b) §9.4 slučajevi pređu na ekran | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
+| `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — uvoz se okida **ulaskom u ekran** (§9.9), ručno mapiranje je na ekranu (§9.4) | **BRIŠE SE** (korak 6) — oba uslova su ispunjena: (a) uvoz ima radnju i ishod u ljusci (§9.9), (b) §9.4 slučajevi su na ekranu | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
 | `frmMarza` | **nema** (`modScrMarza` ne postoji; red u registru se crta prigušen) | **BRIŠE SE** (korak 6) tek uz ekran Marža | — |
 | `frmOtkupAPP` | ljuska je `frmOtkupUI` | **BRIŠE SE POSLEDNJA** (korak 7) | host za sve gore (`OpenContentFormPublic` / `ReturnToDashboard`) |
 | `frmLogin`, `frmSplash`, `frmExcelMini` | — (forme ljuske od `v6-ui-209`, §27.7) | **OSTAJU** | prijava, start, povratak iz Excela |
@@ -8562,3 +8567,35 @@ više nije „kad stigneš" nego **deo istog posla**, između uvoza i compile-a.
 > `Remove frmStammdaten`, `Remove clsStmBtn`, `Remove clsLookupMenuBtn` →
 > `Compile` → `Save`. Compile **između** uvoza i uklanjanja će pasti, i to je
 > očekivano.
+
+### 9.9 Uvoz ulazi u ekran — ali kao ULAZAK, ne kao dugme (`v6-ui-212`)
+
+§9.3 je uvoz ostavio van ekrana zbog **ishoda**: `ImportBankaInbox_TX` je bio
+`Sub` koji ne vraća ništa, pa bi dugme koje ne ume da kaže „uvezeno N,
+duplikata M" bilo tiho knjiženje.
+
+Ispostavilo se da je i sama pretpostavka bila pogrešna. **Uvoz nije dugme.** U
+legacy meniju ga je pokretao `btnBanka_Click` — klik na Banka je uvozio pa
+otvarao mapiranje. U ljusci je **ulazak u ekran** taj klik.
+
+Ugovor ekrana je zato dobio `Scr_Aktiviraj` (neobavezan član, kao
+`Scr_Dozvoljen`), a `ImportBankaInbox_TX` vraća **uvezeno i duplikate odvojeno**
+— pa razlog iz §9.3 više ne stoji.
+
+**Start nije klik.** `ShowOtkupUI` automatski usmerava operatera na prvi
+dozvoljen ekran; nalog sa pravom samo na Banku tako starta baš ovde. Kuka se
+pri tom usmeravanju **ne zove** — uvoz mora ostati izričita radnja operatera
+(`RELEASE_GATES` §85, `ARCHITECTURE_REFERENCE` §288; §440 ga vezuje baš za
+navigaciju).
+
+**Uvoz se ne izvršava u test režimu.** Brana stoji u `ImportBankaInbox_TX`, ne
+kod pozivaoca: rutina povlači sa Drive-a, upisuje u tabele i **pomera fajlove**
+(Inbox → Processed/Error). Suite koja bi je dotakla umela bi da uveze pravi
+izvod u testnu svesku i da original skloni — produkciona sveska ga posle više
+ne bi uvezla. To se ne popravlja rollback-om: fajl je već pomeren.
+
+Grana „nešto je uvezeno" se zato meri **podmetnutim ishodom**
+(`Scr_BuUvozTestSet`), bez ijednog dodira sa diskom.
+
+**Šta test ne pokriva:** sam uvoz nad pravim PDF-om i nedostupan Inbox. Oba
+ostaju na smoke-u — to je granica ovog testa i ne krije se.

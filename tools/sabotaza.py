@@ -2739,6 +2739,68 @@ SABOTAZE = {
     # ---- filter storniranih: nula je imala dva znacenja ----
     # Registar mora da PREPOZNA dokument tabelu; prazan registar vraca stari
     # fail-open na sva 183 poziva.
+    # Ljuska ne zove kuku ulaska -- ekran se otvori, ali izvodi se ne uvezu.
+    # Odluka (Scr_Aktiviraj) postoji i dalje; pada PRIMENA, isti oblik kvara kao
+    # prekidac sekcija koji se crtao bez prava (v6-ui-211).
+    "bu-ulazak-ne-zove-kuku": (
+        "modOtkupUI.bas",
+        "        modUiScreens.ScrAktiviraj kljuc\n",
+        "        ' SABOTAZA: ulazak ne zove kuku ekrana\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "ulazak u ekran zove Scr_Aktiviraj",
+    ),
+    # PRETPROVERA PRE DRIVE PULL-A -- kvar zbog kog je prva verzija promasila
+    # glavni scenario: lokalni Inbox prazan, izvodi na Drive-u, ekran odmah
+    # izadje pa se pull nikad ne pokrene. Sabotaza vraca bas tu pretprovaru.
+    "bu-pretprovera-pre-drive-pulla": (
+        "modScrBankaUvoz.bas",
+        "    mUvozPozvan = mUvozPozvan + 1\n",
+        "    If modBankaImport.BankaInboxBrojFajlova() <= 0 Then Exit Sub\n"
+        "    mUvozPozvan = mUvozPozvan + 1\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "uvoz se zove i kad je lokalni Inbox prazan",
+    ),
+    # Prazan rezultat radi posao: poruka 'uvezeno 0' i osvezavanje mreze na svaki
+    # ulazak u ekran, iako se nista nije promenilo.
+    # Start pokrece uvoz: nalog sa pravom samo na Banku bi pri svakom pokretanju
+    # knjizio novac bez ijednog klika. Krsi RELEASE_GATES par.85 i
+    # ARCHITECTURE_REFERENCE par.288.
+    # ActivateScreen ignorise argument i uvek zove kuku. Prva verzija ove
+    # sabotaze je gadjala poziv u ShowOtkupUI -- liniju koju test NE izvrsava, pa
+    # nije obarala nista. Ovde pada sama odluka, kroz koju prolaze oba automatska
+    # usmeravanja.
+    "bu-kuka-ignorise-argument": (
+        "modOtkupUI.bas",
+        "    If kuka Then\n",
+        "    If True Then   ' SABOTAZA: kuka se zove i kad je iskljucena\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "automatsko usmeravanje sa starta NE pokrece uvoz",
+    ),
+    # Put koji je prva popravka promasila: zamena operatera na nalog sa pravom
+    # samo na Banku ulazi u ekran automatski, pa bi pokrenula uvoz bez klika.
+    "bu-zamena-operatera-pokrece-uvoz": (
+        "modOtkupUI.bas",
+        "                ActivateScreen mFrm, kljuc, False\n",
+        "                ActivateScreen mFrm, kljuc   ' SABOTAZA: zamena je klik\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "zamena operatera NE pokrece uvoz",
+    ),
+    # Nadjen izvod NE pokrece posao ekrana: mreza ostaje zastarela, a rezultat
+    # se ne javlja -- toast kaze da je uvezeno, a redova nema.
+    "bu-nadjen-izvod-ne-radi-posao": (
+        "modScrBankaUvoz.bas",
+        "    mUvozUcinio = mUvozUcinio + 1\n",
+        "    ' SABOTAZA: nadjen izvod ne pokrece posao\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "nadjen izvod POKRECE posao ekrana",
+    ),
+    "bu-prazan-rezultat-radi-posao": (
+        "modScrBankaUvoz.bas",
+        "    If nadjeno <= 0 Then Exit Sub\n",
+        "    If False Then Exit Sub   ' SABOTAZA: prazan rezultat svejedno radi\n",
+        "T_BankaUvoz_UlazakUvoziIzvode",
+        "prazan rezultat ne radi posao",
+    ),
     "storno-registar-prazan": (
         "modSchemaGuard.bas",
         "    TabelaNosiStorno = _\n"

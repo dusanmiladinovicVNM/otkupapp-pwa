@@ -368,6 +368,24 @@ Public Function ScrImaNesacuvano(ByVal kljuc As String) As Boolean
     Err.Clear
 End Function
 
+' Ekran je USAO na scenu. Neobavezan clan ugovora, kao Scr_Dozvoljen -- ekran
+' koji ga ne implementira ponasa se kao pre.
+'
+' Postoji zbog Banke: u legacy meniju je klik na Banka UVOZIO izvode pa otvarao
+' mapiranje. Ljuska nema to dugme -- ulazak u ekran JESTE taj klik. Bez ove
+' kuke ekran bi pokazivao samo ono sto je neko ranije uvezao.
+'
+' Zove se POSLE aktivacije (mScreen je vec postavljen), da radnja i njena poruka
+' padnu na ekran koji je vec na sceni, a njen pad ne obori navigaciju.
+Public Sub ScrAktiviraj(ByVal kljuc As String)
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Sub
+    Application.Run m & ".Scr_Aktiviraj"
+    Err.Clear
+End Sub
+
 Public Sub ScrDeaktiviraj(ByVal kljuc As String)
     Dim m As String
     On Error Resume Next

@@ -330,6 +330,7 @@ Private mToastPending As String
 Private mDisplayFont As String
 Private mBusyGrid As Boolean
 Private mBuilding As Boolean
+
 Private mColSpec As Object
 Private mLastPageSize As Long
 ' Bazen cipova je ljuskin i ima MAX_CHIP slotova (ChipRow). Prvih MODE_CHIP
@@ -3456,14 +3457,16 @@ End Sub
 ' Sidebar se preboji POSLE prelaska, iz mScreen a ne iz kljuca: kad
 ' ActivateScreen odbije prelazak (nema prava, modul nedostaje), mScreen je
 ' ostao stari i oznaka mora da pokazuje ekran na kome zaista jesmo.
-Public Sub IdiNaEkran(ByVal kljuc As String)
+' kuka: v. ActivateScreen. Podrazumevano TRUE -- IdiNaEkran je klik.
+Public Sub IdiNaEkran(ByVal kljuc As String, _
+                      Optional ByVal kuka As Boolean = True)
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(kljuc) = 0 Then Exit Sub
     ' "Isti ekran" vise NIJE razlog za rano izlazenje: dok je panel otvoren,
     ' povratak na ekran ispod njega je isti kljuc -- a mora da zatvori panel.
     ' Odluku sada donosi ActivateScreen, koji zna i za panel.
-    ActivateScreen mFrm, kljuc
+    ActivateScreen mFrm, kljuc, kuka
     PaintNav mFrm, NavTagFor(AktivnaStavka())
 End Sub
 
@@ -4140,8 +4143,11 @@ End Sub
 ' Prelazak na ekran, sa VERDIKTOM. Javno zbog testa: klik kroz formu se u
 ' harnessu ne moze odigrati, a bas verdikt je ono na cemu stoji vracanje
 ' sekcije kad prelazak ne uspe (PostaviSekciju).
-Public Function OtkupUI_PrelazakTest(ByVal kljuc As String) As Boolean
-    OtkupUI_PrelazakTest = ActivateScreen(mFrm, kljuc)
+' kuka: v. ActivateScreen. Test prosledjuje False da izmeri automatsko
+' usmeravanje bez podizanja cele aplikacije.
+Public Function OtkupUI_PrelazakTest(ByVal kljuc As String, _
+                                     Optional ByVal kuka As Boolean = True) As Boolean
+    OtkupUI_PrelazakTest = ActivateScreen(mFrm, kljuc, kuka)
 End Function
 
 ' Radna povrsina bez ijednog dozvoljenog ekrana. Javno zbog testa: do tog
@@ -4550,8 +4556,11 @@ End Sub
 ' nijednog, radna povrsina se PRAZNI.
 Private Sub NaPrviDozvoljenEkran()
     Dim r As Variant, kljuc As String
+    ' AUTOMATSKO USMERAVANJE: kuka ulaska se NE zove. Ovamo se dolazi posle
+    ' zamene operatera ili pada prava, bez ijednog klika na ekran -- pa ni ekran
+    ' ne sme da uradi ono sto radi na klik.
     If modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
-        ActivateScreen mFrm, SCR_POCETNI
+        ActivateScreen mFrm, SCR_POCETNI, False
         Exit Sub
     End If
     ' Redom kroz registar, PRESKACUCI panele: panel bi pokrio radnu povrsinu, a
@@ -4561,7 +4570,7 @@ Private Sub NaPrviDozvoljenEkran()
         kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
         If Not modUiPanel.PanelPostoji(kljuc) Then
             If modUiScreens.ScrAktivan(kljuc) Then
-                ActivateScreen mFrm, kljuc
+                ActivateScreen mFrm, kljuc, False
                 Exit Sub
             End If
         End If
@@ -5115,7 +5124,17 @@ Public Sub ShowOtkupUI()
     frmOtkupUI.show vbModeless
     ' Gradnja uvek pocinje na SCR_POCETNI; operater koji na njega nema pravo
     ' se prebacuje na svoj prvi dozvoljen ekran.
-    If kljuc <> SCR_POCETNI Then IdiNaEkran kljuc
+    '
+    ' AUTOMATSKO USMERAVANJE NIJE KLIK. Ekran koji pri ulasku nesto RADI (Banka
+    ' uvozi izvode) to sme samo kad ga je operater otvorio. Uvoz pri startu bi
+    ' prekrsio ugovor: RELEASE_GATES par.85 i ARCHITECTURE_REFERENCE par.288
+    ' traze da uvoz bude izricita radnja operatera, a par.440 ga vezuje bas za
+    ' navigaciju. Nalog sa pravom SAMO na Banku ovde starta na BANKA_UVOZ, pa bi
+    ' bez ove zastavice svaki start knjizio novac bez ijednog klika.
+    ' Kuka je UGASENA: start nije klik. Nalog sa pravom samo na Banku ovde
+    ' zavrsava bas na BANKA_UVOZ, pa bi inace svako pokretanje uvozilo izvode
+    ' bez operatera.
+    If kljuc <> SCR_POCETNI Then IdiNaEkran kljuc, False
 End Sub
 
 ' Zatvaranje ekrana (dugme X u zaglavlju ili sistemski X). Forma se SAKRIVA, ne
@@ -5213,7 +5232,18 @@ End Sub
 ' i ostaje izgradjena. Merenje na ekranu dokumenata: 863 kontrole, od toga 623
 ' deljeni hrom i mreza, pa je ekran u proseku 240 kontrola i oko 180 ms; drzati
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
-Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
+' kuka: da li ekran sme da uradi ono sto radi PRI ULASKU (Banka uvozi izvode).
+' TRUE je za radnju operatera -- klik u sidebaru, prekidac sekcija, prelazak.
+' FALSE je za AUTOMATSKO USMERAVANJE: start i preusmeravanje posle zamene
+' operatera. Uvoz mora ostati izricita radnja (RELEASE_GATES par.85,
+' ARCHITECTURE_REFERENCE par.288/440).
+'
+' Argument, a NE globalna zastavica: prva verzija je zastavicu podizala samo u
+' ShowOtkupUI, pa je NaPrviDozvoljenEkran (posle zamene operatera na nalog sa
+' pravom samo na Banku) i dalje pokretao uvoz bez ijednog klika. Zastavica
+' pokriva put koji je autor gledao; argument pokriva svakog pozivaoca.
+Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
+                                Optional ByVal kuka As Boolean = True) As Boolean
     Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
     Dim jePanel As Boolean, zatvorenPanel As Boolean, btnsPre As Long
 
@@ -5390,6 +5420,19 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String) As Boolean
         ReloadGrid
     End If
     LayoutOtkup frm
+
+    ' Ekran je na sceni -- tek sad sme da uradi ono sto radi PRI ULASKU (Banka
+    ' uvozi izvode). Posle LayoutOtkup-a, da poruka padne na vec nacrtan ekran;
+    ' pod svojim On Error, da pad radnje ne ponisti uspesnu navigaciju.
+    '
+    ' Samo kad je ekran otvorio OPERATER -- v. argument kuka.
+    If kuka Then
+        On Error Resume Next
+        modUiScreens.ScrAktiviraj kljuc
+        Err.Clear
+        On Error GoTo 0
+    End If
+
     ActivateScreen = True
 End Function
 
@@ -5491,6 +5534,7 @@ End Function
 ' Koji ekran bi prekidac otvorio u datoj sekciji. Javno ZBOG TESTA: test mora da
 ' zna kljuc PRE nego sto proba prelazak, da bi posle mogao da tvrdi nesto o
 ' TOJ zoni (npr. da je posle pada gradnje nema).
+
 Public Function OtkupUI_EkranZaSekcijuTest(ByVal sekcija As String) As String
     OtkupUI_EkranZaSekcijuTest = EkranZaSekciju(sekcija)
 End Function

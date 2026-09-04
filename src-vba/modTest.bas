@@ -436,6 +436,7 @@ Public Sub RunAllTests()
     RunOne 179
     RunOne 180
     RunOne 181
+    RunOne 182
     RunOne 124
     RunOne 125
     RunOne 126
@@ -497,6 +498,9 @@ Private Sub ResetSeamova()
     modMaticniUnos.MatBranaZatvoriTest False
     modMaticniIzvor.MatComboPadTest ""
     modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
+    ' Podmetnut ishod uvoza mora da se ugasi i kad tvrdnja padne pre kraja testa
+    ' -- inace bi sledeci test merio lazni uvoz.
+    modScrBankaUvoz.Scr_BuTestReset
     Err.Clear
 End Sub
 
@@ -620,6 +624,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
         Case 119: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
         Case 120: TestName = "T_Matic_SekcijaTraziPravo"
+        Case 182: TestName = "T_BankaUvoz_UlazakUvoziIzvode"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
@@ -811,6 +816,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 118: T_MrezaPilula_PozadinaSeCisti
         Case 119: T_Ljuska_SuzenaPravaStartIAlatke
         Case 120: T_Matic_SekcijaTraziPravo
+        Case 182: T_BankaUvoz_UlazakUvoziIzvode
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
@@ -7600,6 +7606,118 @@ End Function
 ' nego se TIHO odseca -- operater vidi ekran kome fali dugme, bez ijedne
 ' poruke. Lista stavki stoji TACNO na granici MAX_ACT, pa je ovo jedino mesto
 ' koje bi sestu radnju primetilo pre nego sto nestane.
+' ULAZAK U EKRAN BANKA UVOZI IZVODE -- kao klik na Banka u legacy meniju
+' (frmOtkupAPP.btnBanka_Click: ImportBankaInbox_WithDrivePull pa mapiranje).
+' Ljuska nema uvozno dugme; ulazak JESTE taj klik.
+'
+' Mere se DVE stvari, i to su dva razlicita kvara:
+'   1) da ljuska kuku STVARNO zove (ActivateScreen -> ScrAktiviraj). Odluka je
+'      postojala i pre, ali dok je niko ne primeni ekran ne uvozi nista --
+'      isti oblik kvara kao prekidac sekcija koji se crtao bez prava.
+'   2) da se uvoz zove I KAD JE LOKALNI INBOX PRAZAN. Prva verzija je ovde
+'      imala pretprovaru, pa se Drive pull -- koji je UNUTAR uvoza -- nikad nije
+'      pokretao: nov izvod moze da postoji samo na Drive-u.
+'   3) da prazan REZULTAT ne radi posao (nema osvezavanja mreze ni rezultata).
+'   4) da AUTOMATSKI START ne pokrece uvoz -- samo klik operatera. Uvoz pri
+'      boot-u krsi RELEASE_GATES par.85 i ARCHITECTURE_REFERENCE par.288/440.
+'      Nalog sa pravom SAMO na Banku ovde starta bas na ovom ekranu.
+'
+' SAM UVOZ SE NE VOZI, i to na DVA nivoa. ImportBankaInbox_TX u test rezimu ne
+' radi nista (tvrda brana u modBankaImport): povlaci sa Drive-a, upisuje i POMERA
+' fajlove, pa bi suite umela da uveze pravi izvod u testnu svesku i da original
+' skloni -- produkciona sveska ga posle vise ne bi uvezla. Grana 'nesto je
+' uvezeno' se zato meri PODMETNUTIM ishodom (Scr_BuUvozTestSet), bez diska.
+Private Sub T_BankaUvoz_UlazakUvoziIzvode()
+    Dim f As frmOtkupUI
+    Dim presao As Boolean, aktivacija As Long
+    Dim pozvan As Long, ucinio As Long
+    Dim startPresao As Boolean, startPozvan As Long
+    Dim biAuth As Boolean, prijava As Boolean, zamenaPozvan As Long
+    Dim zamenaEkran As String
+
+    ' NE cita se pravi Inbox. BankaInboxBrojFajlova ide kroz EnsureFolderExists
+    ' i Dir$ nad putanjom iz tblLocalConfig, koju fixture zadrzava -- test bi
+    ' tako mogao da napravi ili procita STVARNI folder, i da padne na masini na
+    ' kojoj u njemu ima PDF-ova. Nula je ovde zagarantovana branom u test rezimu
+    ' (ImportBankaInbox_TX ne radi nista), a ne stanjem diska.
+    modScrBankaUvoz.Scr_BuTestReset
+
+    Set f = NewOtkupUIForm()
+    presao = modOtkupUI.OtkupUI_PrelazakTest("BANKA_UVOZ")
+    aktivacija = modScrBankaUvoz.Scr_BuAktivacijaTest()
+    pozvan = modScrBankaUvoz.Scr_BuUvozPozvanTest()
+    ucinio = modScrBankaUvoz.Scr_BuUvozUcinioTest()
+
+    AssertEq presao, True, "preduslov: prelazak na Uvoz izvoda uspeva"
+
+    ' NAJVAZNIJE: kuka je ozicena. Bez ovoga ekran ne uvozi nista, a nijedna
+    ' druga tvrdnja to ne bi primetila.
+    AssertEq (aktivacija > 0), True, _
+             "ulazak u ekran zove Scr_Aktiviraj (ljuska mora da pozove kuku)"
+    ' Pretprovera lokalnog Inboxa OVDE bi ubila Drive pull, koji je unutar uvoza.
+    AssertEq (pozvan > 0), True, _
+             "uvoz se zove i kad je lokalni Inbox prazan"
+    AssertEq ucinio, 0, _
+             "prazan rezultat ne radi posao (nema osvezavanja ni rezultata)"
+
+    ' --- grana 'nesto je uvezeno', sa PODMETNUTIM ishodom --------------------
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+    modOtkupUI.OtkupUI_PrelazakTest "DOKUMENTI"
+    modOtkupUI.OtkupUI_PrelazakTest "BANKA_UVOZ"
+    AssertEq modScrBankaUvoz.Scr_BuUvozUcinioTest(), 1, _
+             "nadjen izvod POKRECE posao ekrana (osvezavanje i rezultat)"
+
+    ' --- AUTOMATSKI START NIJE KLIK ------------------------------------------
+    ' Nalog sa pravom samo na Banku starta bas ovde. Uvoz pri startu bi knjizio
+    ' novac bez ijednog klika operatera.
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+    modOtkupUI.OtkupUI_PrelazakTest "DOKUMENTI"
+    startPresao = modOtkupUI.OtkupUI_PrelazakTest("BANKA_UVOZ", False)
+    startPozvan = modScrBankaUvoz.Scr_BuUvozPozvanTest()
+    modScrBankaUvoz.Scr_BuTestReset
+
+    AssertEq startPresao, True, "preduslov: start otvara ekran"
+    AssertEq startPozvan, 0, _
+             "automatsko usmeravanje sa starta NE pokrece uvoz -- samo klik"
+
+    ' --- ZAMENA OPERATERA je isto automatsko usmeravanje ---------------------
+    ' Ovo je put koji je prva popravka promasila: globalna zastavica se dizala
+    ' samo u ShowOtkupUI, pa je PrimeniNovaPrava -> NaPrviDozvoljenEkran ulazio
+    ' u ekran sa ugasenom zastavicom i pokretao pravi uvoz. Nalog sa pravom SAMO
+    ' na Banku zavrsava bas na BANKA_UVOZ, pa se meri kroz njega.
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+
+    ' Ekran se PRVO postavlja na DOKUMENTI, koji suzen nalog NE sme. Bez toga
+    ' PrimeniNovaPrava vidi dozvoljen tekuci ekran i NaPrviDozvoljenEkran se
+    ' nikad ne pozove -- tvrdnja bi bila zelena a da put nije ni predjen
+    ' (mereno: sabotaza tog puta tada ne obara nista).
+    modOtkupUI.OtkupUI_PrelazakTest "DOKUMENTI"
+    modScrBankaUvoz.Scr_BuTestReset
+    modScrBankaUvoz.Scr_BuUvozTestSet True, 2, 1, 3
+
+    biAuth = modAuth.AuthTestUkljuci(True)
+    modUiScreens.ScrResetCache
+    prijava = modAuth.ValidateLogin(FX_KOR_BANKA, FX_KOR_PIN)
+    modUiScreens.ScrResetCache
+    modOtkupUI.OtkupUI_PrimeniNovaPravaTest
+    zamenaEkran = modOtkupUI.AktivanEkran()
+    zamenaPozvan = modScrBankaUvoz.Scr_BuUvozPozvanTest()
+
+    modAuth.Logout
+    modAuth.AuthTestUkljuci biAuth
+    modUiScreens.ScrResetCache
+    modScrBankaUvoz.Scr_BuTestReset
+
+    AssertEq prijava, True, "preduslov: suzen nalog se prijavljuje"
+    AssertEq zamenaEkran, "BANKA_UVOZ", _
+             "preduslov: zamena operatera je STVARNO presla na Uvoz izvoda"
+    AssertEq zamenaPozvan, 0, _
+             "zamena operatera NE pokrece uvoz -- ni ona nije klik"
+End Sub
+
 Private Sub T_BankaUvoz_UgovorEkrana()
     Dim liste As Variant, i As Long, kljucevi As String
     Dim kljuc As String, spec As String, d As Variant, kolone As Variant
