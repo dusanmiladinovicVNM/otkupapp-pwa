@@ -698,18 +698,24 @@ End Sub
 ' =========================
 
 ' btnBlocks_Click / btnPurchase_Click / btnPalete_Click / btnAgro_Click /
-' btnReports_Click / btnTrace_Click su obrisani sa frmOtkup i
+' btnReports_Click / btnTrace_Click / btnbankaisplate_Click su obrisani sa frmOtkup i
 ' frmDokumenta (korak 2) i frmPalete / frmAgrohemija / frmIzvestaj /
-' frmSledljivost (korak 3), docs/UI_MIGRACIJA_KATALOG.md par.27.3. Dugmad
+' frmSledljivost (korak 3) i frmBankaExportPregled (korak 4),
+' docs/UI_MIGRACIJA_KATALOG.md par.27.3. Dugmad
 ' ostaju u .frx -- .frx se ne dira kao tekst -- ali bez rukovaoca ne rade
 ' nista. Sve te radnje su u ljusci: ekrani DOKUMENTI, PALETE, AGRO,
-' IZVESTAJI i SLEDLJIVOST (modScr*).
+' IZVESTAJI, SLEDLJIVOST i BANKA_NALOZI (modScr*).
 
 
 
 
+' Fakturisanje je na ekranu FAKTURE (modScrFakture), pa ovo dugme od koraka 4
+' vodi na ono jedino sto NIJE preneto: SEF upravljanje (PrepareResubmit, batch
+' radnje, event log -- par.8.7). Ulaz je do sada isao kroz frmFakturisanje.btnSEF,
+' a ta forma je obrisana. Highlight je isti: OpenContentFormPublic je i ranije
+' koristio btnInvoicing, jer SEF nema svoje dugme u meniju.
 Private Sub btnInvoicing_Click()
-    OpenContentForm frmFakturisanje, btnInvoicing, "Fakturisanje"
+    OpenContentForm frmSEF, btnInvoicing, "SEF upravljanje"
 End Sub
 
 Private Sub btnBanka_Click()
@@ -770,9 +776,6 @@ EH:
     Resume CleanExit
 End Sub
 
-Private Sub btnbankaisplate_Click()
-    OpenContentForm frmBankaExportPregled, btnBankaIsplate, "Banke platni nalozi"
-End Sub
 
 Private Sub btnSyncPWA_Click()
     On Error GoTo EH
@@ -1055,19 +1058,6 @@ EH:
     LogErr "frmOtkupAPP.FitActiveContent"
 End Sub
 
-Public Sub OpenContentFormPublic(ByVal contentForm As Object, _
-                                  ByVal sectionTitle As String)
-    On Error GoTo EH
-    
-    ' Highlight nije moguc bez parent nav button-a (jer SEF nema sidebar dugme)
-    ' Zato koristimo trenutni nav highlight koji je vec aktivan (btnInvoicing)
-    OpenContentForm contentForm, btnInvoicing, sectionTitle
-    
-    Exit Sub
-    
-EH:
-    LogErr "frmOtkupAPP.OpenContentFormPublic"
-End Sub
 
 Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal activeBtn As MSForms.CommandButton, _

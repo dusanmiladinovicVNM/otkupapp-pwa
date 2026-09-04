@@ -340,8 +340,13 @@ Public Function OblastZaFormu(ByVal formName As String) As String
         ' postoje -- nosi ih registar ekrana
         ' (modUiScreens), koji je jedini pozivalac prava od kada je ljuska
         ' ulaz. Ova mapa vazi samo za PREOSTALE legacy forme.
-        Case "frmfakturisanje":        OblastZaFormu = OBL_FAKTURISANJE
-        Case "frmbankaimport", "frmbankaexportpregled": OblastZaFormu = OBL_BANKA
+        ' frmsef, ne frmfakturisanje: forma je obrisana u koraku 4, a SEF je
+        ' dobio njen ulaz. Bez ovog reda OblastZaFormu bi za frmSEF vratila
+        ' prazno, a KorisnikImaPravo("") vraca True -- pa bi SEF upravljanje
+        ' ostalo BEZ ijedne provere prava. Do sada ga je stitilo samo to sto se
+        ' do njega dolazilo kroz gejtovan frmFakturisanje.
+        Case "frmsef":                 OblastZaFormu = OBL_FAKTURISANJE
+        Case "frmbankaimport":         OblastZaFormu = OBL_BANKA
         Case "frmmarza":               OblastZaFormu = OBL_MARZA
         Case "frmmaticnipodaci":       OblastZaFormu = OBL_MATICNI
         Case Else:                     OblastZaFormu = vbNullString
