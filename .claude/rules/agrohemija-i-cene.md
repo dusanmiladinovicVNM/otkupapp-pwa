@@ -18,7 +18,7 @@ paths:
 `MAG_IZLAZ`, stanje kroz `GetMagacinStanje`, dug kroz `GetAgrohemijaDug`.
 
 - **Izlaz opciono bez parcele** kad je `PRACENJE_PARCELA` OFF (`IsPracenjeParcela`,
-  isti flag kao `frmOtkup`; smart-doza se tada preskače).
+  isti flag koji čita i ekran dokumenata; smart-doza se tada preskače).
 - **Početni dug kooperanta (migracija)** = rezervisani virtuelni artikal
   `ART_POCETNI_DUG` (`modConfig`) + `BookPocetniDug` →
   `SaveMagacin(... allowNoStock:=True)`. Artikal je izuzet iz combo-lista i iz

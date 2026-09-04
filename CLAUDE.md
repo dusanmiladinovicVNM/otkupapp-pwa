@@ -12,8 +12,9 @@
 
 1. **Reference-first.** Izvori istine: `docs/DOMEN/README.md` (šta dokumenti jesu
    i koje invarijante drže), `docs/DOMEN/WHO_WRITES.md` (ko piše koju tabelu),
-   `docs/ARCHITECTURE_REFERENCE.md`, `docs/UI_MIGRACIJA_KATALOG.md` (prelazak
-   `frmOtkup`/`frmDokumenta` na `frmOtkupUI` — šta je preneto i u kojoj fazi).
+   `docs/ARCHITECTURE_REFERENCE.md`, `docs/UI_MIGRACIJA_KATALOG.md` (prelazak na
+   ljusku `frmOtkupUI` — šta je preneto, i plan penzionisanja legacy formi po
+   koracima, §27).
 2. **Pretraži postojeće** u `src-vba/` (VBA/Excel) i `src/` (PWA) PRE nego što
    predložiš nov fajl, komponentu, helper, tip, konstantu, validaciju ili sloj.
    Ako ekvivalent postoji — koristi ga ili proširi minimalno. Novo samo uz jasan
@@ -57,7 +58,7 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 | Domen: šta dokumenti jesu, invarijante | `docs/DOMEN/` | `docs/DOMEN/README.md` |
 | Ko piše koju tabelu | generisano iz `src-vba/` | `docs/DOMEN/WHO_WRITES.md` |
 | Tabele / kolone / konstante, pristup podacima | `modConfig.bas`, `modDataAccess.bas` | `.claude/rules/podaci-i-config.md` |
-| Otkup / dokumenta | `frmOtkup`+`modOtkup`, `frmDokumenta`+`modDokumenta` | `.claude/rules/otkup-i-dokumenta.md` |
+| Otkup / dokumenta | `modScrDokumenti`+`modOtkupUnos`/`modDokUnos`, `modOtkup`+`modDokumenta` | `.claude/rules/otkup-i-dokumenta.md` |
 | Forme, `.frx`, runtime kontrole | `frmMaticniPodaci`, `clsBlokUI`, `clsUiSink` | `.claude/rules/forme-i-kontrole.md` |
 | Agrohemija / ambalaža / cenovnik | `modAgrohemija`, `modAmbalaza`, `modCenovnik` | `.claude/rules/agrohemija-i-cene.md` |
 | Banka — izvodi i nalozi | `modBankaImport`+parseri, `modBankaMapiranje` | `.claude/rules/banka.md` |
