@@ -39,6 +39,9 @@ Provere:
                      tabele po procitanom polju (mereno: 1.8 ms po redu).
  11. ODSECEN     -- prazan fajl ili fajl bez `Attribute VB_Name`. Nije modul
                      nego ostatak neuspelog upisa; do sada je prolazio kao cist.
+ 13. DUPLI_LOKAL -- isto ime deklarisano dvaput u ISTOJ proceduri (parametar +
+                     `Dim`, ili `Dim src` uz `Const SRC`). VBA je case-insensitive,
+                     pa je to "Duplicate declaration" i modul se NE kompajlira.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -789,6 +792,96 @@ def check_scalar_call(path: str, lines: list[str]) -> list[Finding]:
                         f'-- VBA to cita kao indeksiranje: compile error "Expected array". '
                         f"Ako je ciljana istoimena procedura, pozovi je KVALIFIKOVANO "
                         f"(modPoruke.Poruka(...))."))
+        i = k
+    return out
+
+
+
+# --- 13. DUPLI_LOKAL: isto ime dvaput u ISTOJ proceduri ----------------------
+#
+# DUPLIKAT_LOKALNI (provera 8) gleda MODUL-LEVEL clanove i namerno ne ulazi u
+# procedure -- isto ime u DVE procedure je potpuno legalno. Ali dvaput u JEDNOJ
+# proceduri je "Duplicate declaration", i to je klasa koja je ovaj projekat
+# kostala dva puna prolaza:
+#
+#     Private Function RedoviSefLog(...)
+#         Dim src As Variant, i As Long
+#         Const SRC As String = "modScrFakture.RedoviSefLog"   ' <- sudar
+#
+# VBA je case-insensitive, pa su `src` i `SRC` isto ime. Simptom NIJE uredan pad
+# testa: modul se ne kompajlira, `run_vba` visi do timeout-a i javi "The remote
+# procedure call failed", Excel ostane u [break], a pravi razlog ("Duplicate
+# declaration") vidi se samo u VBE dijalogu. Isti trosak kao zamka #19.
+#
+# NAMERNO USKO -- lazan nalaz je gori od propustenog:
+#   - gledaju se samo `Dim`, `Static` i `Const` (ne `ReDim`: `Dim a` + `ReDim a`
+#     je legalan par);
+#   - nastavak reda (` _`) u telu se ne spaja, pa se druga imena iz prelomljenog
+#     `Dim`-a propuste -- promasaj, ne lazan nalaz;
+#   - `#If` blokovi se preskacu: dve grane smeju da deklarisu isto ime.
+DEKL_U_PROC = re.compile(r"^(?:Dim|Static|Const)\s+(.*)$", re.IGNORECASE)
+IME_DEKL = re.compile(r"^(\w+)")
+
+
+def _imena_procedure(header: str, body: list[str]) -> dict[str, list[int]]:
+    """ime -> [redni broj reda u telu]; -1 znaci "iz zaglavlja (parametar)"."""
+    mesta: dict[str, list[int]] = defaultdict(list)
+    for m in PARAM_DECL.finditer(header):
+        mesta[m.group(1).lower()].append(-1)
+
+    cond = 0
+    for off, line in enumerate(body):
+        golo = _clean(line).strip()
+        low = golo.lower()
+        if low.startswith("#if") or low.startswith("#elseif") or low.startswith("#else"):
+            cond = 1
+            continue
+        if low.startswith("#end if"):
+            cond = 0
+            continue
+        if cond:
+            continue
+        m = DEKL_U_PROC.match(golo)
+        if not m:
+            continue
+        for part in _split_top_level(m.group(1)):
+            d = IME_DEKL.match(part.strip())
+            if d:
+                mesta[d.group(1).lower()].append(off)
+    return mesta
+
+
+def check_dupli_lokal(path: str, lines: list[str]) -> list[Finding]:
+    out: list[Finding] = []
+    i, n = 0, len(lines)
+    while i < n:
+        m = PROC_DEF.match(lines[i])
+        if not m or NOT_A_VAR.match(lines[i]) and DECLARE_DEF.match(lines[i]):
+            i += 1
+            continue
+        proc = m.group(1)
+        header, j = lines[i].rstrip(), i
+        while header.endswith("_") and j + 1 < n:
+            j += 1
+            header = header[:-1] + " " + lines[j].strip()
+            header = header.rstrip()
+        k = j + 1
+        while k < n and not PROC_END.match(lines[k]) and not PROC_DEF.match(lines[k]):
+            k += 1
+        body = lines[j + 1:k]
+
+        for ime, mesta in sorted(_imena_procedure(_strip_strings(header), body).items()):
+            if len(mesta) < 2:
+                continue
+            gde = ", ".join("zaglavlje" if o < 0 else str(j + 2 + o) for o in mesta)
+            red = j + 2 + max(o for o in mesta if o >= 0) if any(
+                o >= 0 for o in mesta) else i + 1
+            out.append(Finding(
+                path, red, "DUPLI_LOKAL",
+                f"'{ime}' je u proceduri '{proc}' deklarisano {len(mesta)} puta "
+                f"({gde}) -- VBA je case-insensitive, pa je to "
+                f'"Duplicate declaration": modul se NE kompajlira, a suite ne '
+                f"padne nego VISI do timeout-a."))
         i = k
     return out
 
@@ -1692,6 +1785,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_reserved(path, lines)
     out += check_undefined(path, lines, defined, arities, moduli)
     out += check_local_dupes(path, lines)
+    out += check_dupli_lokal(path, lines)
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
     out += check_truncated(path, raw, lines)
@@ -2899,6 +2993,12 @@ def self_test() -> int:
             palo.append(f"  REGISTAR/{naziv}: ocekivano {ocekivano} nalaza, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, telo in DUPLI_LOKAL_CASES:
+        dobijeno = len(check_dupli_lokal("<self-test>", telo.split("\n")))
+        if dobijeno != ocekivano:
+            palo.append(f"  DUPLI_LOKAL/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, sirovo in KRAJ_REDA_CASES:
         dobijeno = len(check_eol("<self-test>", sirovo))
         if dobijeno != ocekivano:
@@ -3058,7 +3158,8 @@ def self_test() -> int:
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)
-              + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES) + 3)
+              + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES)
+              + len(DUPLI_LOKAL_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -3067,6 +3168,89 @@ def self_test() -> int:
     print(f"self-test: cisto ({ukupno} slucajeva: DUPLIKAT_LOKALNI, "
           f"NEDEFINISAN/ARNOST, ZAKLONJENO, i jedan kroz ceo CLI).")
     return 0
+
+
+# --- DUPLI_LOKAL: dokaz u oba smera -----------------------------------------
+#
+# Druga polovina (0 nalaza) je ovde vaznija od prve: provera ulazi u TELO
+# procedure, gde su legalni obrasci cesti (isto ime u dve procedure, `ReDim`
+# posle `Dim`, zarez u string literalu, dve `#If` grane). Lazan nalaz u hook-u
+# bi kostao vise nego propusten sudar.
+DUPLI_LOKAL_CASES = [
+    # --- mora da zapisti ---
+    ("Dim src uz Const SRC (mina koja je i naterala proveru)", 1, """\
+Private Function R(ByVal a As String) As Variant
+    Dim src As Variant, i As Long
+    Const SRC As String = "modX.R"
+End Function
+"""),
+    ("parametar pa Dim istog imena", 1, """\
+Private Sub R(ByVal iD As String)
+    Dim id As Long
+End Sub
+"""),
+    ("dva Dim-a istog imena, razlicita velicina slova", 1, """\
+Private Sub R()
+    Dim a As Long
+    Dim A As String
+End Sub
+"""),
+    ("drugo ime iz istog Dim reda", 1, """\
+Private Sub R()
+    Dim a As Long, b As String
+    Dim b As Long
+End Sub
+"""),
+    # --- NE sme da zapisti ---
+    ("uredna procedura", 0, """\
+Private Sub R(ByVal a As String)
+    Dim b As Long, c As String
+    Const D As String = "x"
+End Sub
+"""),
+    ("isto ime u DVE procedure -- potpuno legalno", 0, """\
+Private Sub R()
+    Dim src As Long
+End Sub
+
+Private Sub S()
+    Dim src As Long
+End Sub
+"""),
+    ("ReDim posle Dim", 0, """\
+Private Sub R()
+    Dim a() As Long
+    ReDim a(1 To 5)
+End Sub
+"""),
+    ("ime samo u komentaru", 0, """\
+Private Sub R()
+    Dim src As Long
+    ' Dim src As Long
+End Sub
+"""),
+    ("zarez unutar string literala", 0, """\
+Private Sub R()
+    Const A As String = "x, y"
+    Dim b As Long
+End Sub
+"""),
+    ("dve #If grane smeju isto ime", 0, """\
+Private Sub R()
+#If VBA7 Then
+    Dim h As LongPtr
+#Else
+    Dim h As Long
+#End If
+End Sub
+"""),
+    ("zarez unutar dimenzija niza", 0, """\
+Private Sub R()
+    Dim a(1 To 5, 1 To 3) As Double
+    Dim b As Long
+End Sub
+"""),
+]
 
 
 # --- katalog sabotaza ------------------------------------------------------
