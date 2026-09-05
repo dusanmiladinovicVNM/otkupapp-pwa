@@ -497,13 +497,6 @@ Private Function ValidateTargetShape() As String
                         "Alat ne menja tip komponente - resi rucno u VBE."
                     Exit Function
                 End If
-            ElseIf ext = "doccls" Then
-                ' Document modul se NIKAD ne dodaje (ni Add ni Import) - list ili
-                ' sveska mora vec da postoji u ovoj radnoj svesci.
-                ValidateTargetShape = "Izvor ima " & mSrcName(lname) & ".doccls, a u projektu NEMA" & vbCrLf & _
-                    "odgovarajuci document modul (list ili ThisWorkbook)." & vbCrLf & _
-                    "Document moduli se ne kreiraju importom - fali list u radnoj svesci."
-                Exit Function
             End If
         End If
     Next k
@@ -551,7 +544,7 @@ Private Function BuildPlan() As String
     Dim k As Variant, lname As String, ext As String, baseName As String
     Dim body As String, cur As String, okOut As Boolean, exists As Boolean, vbc As Object
     Dim nSame As Long, nDoc As Long, nForm As Long, nSoft As Long, nNew As Long
-    Dim nHard As Long, nStale As Long, emptyS As String, c As Object
+    Dim nHard As Long, nStale As Long, nEmpty As Long, emptyS As String, c As Object
 
     Set mAct = CreateObject("Scripting.Dictionary")
     Set mBody = CreateObject("Scripting.Dictionary")
@@ -591,7 +584,26 @@ Private Function BuildPlan() As String
         ElseIf exists And SameCode(cur, body) Then
             mAct(lname) = "same"
             nSame = nSame + 1
+        ElseIf Len(body) = 0 Then
+            ' PRAZAN IZVOR = NO-OP, za svaku ekstenziju. Prazan izvozni fajl ne
+            ' opisuje komponentu: 42 od 43 .doccls u src-vba nemaju nijednu
+            ' liniju koda (samo ThisWorkbook ima telo) - to su artefakti prvog
+            ' punog eksporta, a ne tvrdnja "ovaj modul mora biti prazan".
+            ' Zato prazan izvor NIKAD ne brise zatecen kod (fail-safe i protiv
+            ' lose ekstrakcije nad ne-praznim fajlom) i NIKAD ne obara import
+            ' zbog lista koga u ovoj svesci nema.
+            mAct(lname) = "same"
+            nEmpty = nEmpty + 1
+            If Not exists Then emptyS = emptyS & "  " & baseName & "." & ext & vbCrLf
         ElseIf ext = "doccls" Then
+            ' .doccls SA KODOM mora imati svoju komponentu - document modul se
+            ' ne kreira ni Add-om ni Import-om, pa je jedini ishod fail-closed.
+            If Not exists Then
+                BuildPlan = "Izvor ima " & baseName & ".doccls SA KODOM, a u projektu NEMA" & vbCrLf & _
+                    "odgovarajuci document modul (list ili ThisWorkbook)." & vbCrLf & _
+                    "Document moduli se ne kreiraju importom - fali list u radnoj svesci."
+                Exit Function
+            End If
             mAct(lname) = "doc"
             mBody(lname) = body
             nDoc = nDoc + 1
@@ -616,12 +628,6 @@ Private Function BuildPlan() As String
             mAct(lname) = "hard"
             AddCsv mHard, baseName & "." & ext
             nHard = nHard + 1
-        ElseIf Len(body) = 0 And exists Then
-            ' Prazan izvor NIKAD ne brise zatecen kod (fail-safe i protiv lose
-            ' ekstrakcije nad ne-praznim fajlom).
-            mAct(lname) = "same"
-            nSame = nSame + 1
-            emptyS = emptyS & "  " & baseName & vbCrLf
         ElseIf exists Then
             mAct(lname) = "soft"
             mBody(lname) = body
@@ -655,7 +661,8 @@ Private Function BuildPlan() As String
            "  STALE (van izvora, Remove): " & nStale & vbCrLf & _
            IIf(nStale > 0, "    " & mStale & vbCrLf, "") & _
            IIf(nHard > 0, "    tvrdi: " & mHard & vbCrLf, "") & _
-           IIf(Len(emptyS) > 0, "  prazan izvor - nije diran:" & vbCrLf & emptyS, "")
+           "  prazan izvor (preskocen): " & nEmpty & vbCrLf & _
+           IIf(Len(emptyS) > 0, "    bez komponente u svesci:" & vbCrLf & Cap(emptyS, 300), "")
     Exit Function
 EH:
     BuildPlan = "Pravljenje plana nije uspelo: [" & Err.Number & "] " & Err.description
@@ -999,7 +1006,10 @@ Private Function VerifyFinalProject(ByVal folder As String) As String
             nm = mSrcName(lname)
             want = TypeForExt(CStr(mSrcMap(lname)))
             If Not ComponentExists(proj, nm) Then
-                missing = missing & " " & nm
+                ' prazan izvorni fajl ne opisuje komponentu (v. BuildPlan) -
+                ' isto pravilo mora vaziti i ovde, inace plan preskoci a
+                ' provera trazi pa oborila bi uspesan import
+                If Len(ExtractModuleCode(CStr(mSrcFile(lname)))) > 0 Then missing = missing & " " & nm
             ElseIf proj.VBComponents(nm).Type <> want Then
                 bad = bad & "  " & nm & ": tip " & proj.VBComponents(nm).Type & ", ocekivano " & want & vbCrLf
             End If
