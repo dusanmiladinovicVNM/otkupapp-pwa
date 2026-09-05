@@ -328,27 +328,13 @@ Public Sub Logout()
     gCurrentUserIme = vbNullString
 End Sub
 
-' ------------------------------------------------------------
-' Mapiranje forma (po imenu) -> oblast. Koristi guard u
-' frmOtkupAPP.OpenContentForm. Nepoznata forma -> "" (ne blokira).
-' ------------------------------------------------------------
-Public Function OblastZaFormu(ByVal formName As String) As String
-    Select Case LCase$(Trim$(formName))
-        ' frmotkup / frmdokumenta (korak 2) i frmpalete / frmagrohemija /
-        ' frmizvestaj / frmsledljivost (korak 3) su obrisani
-        ' (docs/UI_MIGRACIJA_KATALOG.md par.27.3). Njihove oblasti i dalje
-        ' postoje -- nosi ih registar ekrana
-        ' (modUiScreens), koji je jedini pozivalac prava od kada je ljuska
-        ' ulaz. Ova mapa vazi samo za PREOSTALE legacy forme.
-        ' frmsef, ne frmfakturisanje: forma je obrisana u koraku 4, a SEF je
-        ' dobio njen ulaz. Bez ovog reda OblastZaFormu bi za frmSEF vratila
-        ' prazno, a KorisnikImaPravo("") vraca True -- pa bi SEF upravljanje
-        ' ostalo BEZ ijedne provere prava. Do sada ga je stitilo samo to sto se
-        ' do njega dolazilo kroz gejtovan frmFakturisanje.
-        Case "frmsef":                 OblastZaFormu = OBL_FAKTURISANJE
-        Case Else:                     OblastZaFormu = vbNullString
-    End Select
-End Function
+' OblastZaFormu (mapa 'ime legacy forme -> oblast prava') je obrisana u koraku 7
+' (docs/UI_MIGRACIJA_KATALOG.md par.27.17). Imala je TACNO JEDNOG pozivaoca --
+' frmOtkupAPP.OpenContentForm -- i nestala je zajedno s njim.
+'
+' Prava se od tada traze SAMO kroz registar ekrana (modUiScreens.ScrDozvoljen,
+' polje SCR_OBLAST). Jedna mapa manje znaci i jedno mesto manje na kome se
+' oblast moze razici sa ekranom koji je trosi.
 
 ' ------------------------------------------------------------
 ' Zakazano gasenje posle neuspele prijave (mirror license gate:

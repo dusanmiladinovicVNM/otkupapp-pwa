@@ -765,21 +765,14 @@ Private Sub CloseConfigEditor()
         If MsgBox(Poruka("UIPAN_ASK_ODBACI"), _
                   vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
     End If
-    ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
-    ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
-    ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
-    ' zajedno sa legacy formom.
+    ' Domacin je OKVIR u radnoj povrsini ljuske (modUiPanel). Legacy grana --
+    ' 'domacin je FORMA, pa je zatvori' -- otisla je sa frmOtkupAPP u koraku 7
+    ' (docs/UI_MIGRACIJA_KATALOG.md par.27.17). Ciscenje referenci radi
+    ' Podesavanja_Release, koji modUiPanel zove PRE nego sto isprazni okvir.
     '
     ' Pita se po MODULU, ne po kljucu panela: modul zna svoje ime, a kljuc je
     ' strano ime koje se moze preimenovati u registru (i jeste, u v6-ui-201).
-    If modUiPanel.PanelZatvoriAko("modPodesavanja") Then Exit Sub
-    frmOtkupAPP.ReturnToDashboard Poruka("CFG_MSG_PODESAVANJA_ZATVORENA")
-    Unload mFrm
-    Set mFrm = Nothing
-    Set mInputs = Nothing
-    Set mUcitano = Nothing
-    Set mWrappers = Nothing
-    Set mBtnToggle = Nothing
+    modUiPanel.PanelZatvoriAko "modPodesavanja"
     Set mGroupOrder = Nothing
     Set mRowsByGroup = Nothing
     Set mGroupHeaders = Nothing

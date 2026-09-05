@@ -4,7 +4,7 @@ Attribute VB_Name = "modPregledListova"
 ' modPregledListova - pravi / azurira list "Pregled listova":
 '   kolona A = naziv lista, kolona B = klikabilan link ka tom listu.
 ' Iznad tabele su dugmici:
-'   "Pokreni program" -> otvara glavni ekran (frmOtkupAPP.Show)
+'   "Pokreni program" -> otvara ljusku (modOtkupUI.ShowOtkupUI)
 '   "Otvori VBA"      -> otvara VBA editor
 '   "Migracije"       -> MigrirajPodatkeIzStarog (uvoz iz starog fajla)
 '   "Ocisti tabele"   -> brise SAMO unose iz definisanih tabela (header+tbl ostaju)

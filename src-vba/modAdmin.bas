@@ -352,18 +352,14 @@ End Sub
 
 Private Sub CloseAdminPanel()
     On Error Resume Next
-    ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
-    ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
-    ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
-    ' zajedno sa legacy formom.
+    ' Domacin je OKVIR u radnoj povrsini ljuske (modUiPanel). Legacy grana --
+    ' 'domacin je FORMA, pa je zatvori' -- otisla je sa frmOtkupAPP u koraku 7
+    ' (docs/UI_MIGRACIJA_KATALOG.md par.27.17). Ciscenje referenci radi
+    ' Admin_Release, koji modUiPanel zove PRE nego sto isprazni okvir.
     '
     ' Pita se po MODULU, ne po kljucu panela: modul zna svoje ime, a kljuc je
     ' strano ime koje se moze preimenovati u registru (i jeste, u v6-ui-201).
-    If modUiPanel.PanelZatvoriAko("modAdmin") Then Exit Sub
-    frmOtkupAPP.ReturnToDashboard "Admin zatvoren."
-    Unload mFrm
-    Set mFrm = Nothing
-    Set mWrappers = Nothing
+    modUiPanel.PanelZatvoriAko "modAdmin"
 End Sub
 
 ' ============================================================
