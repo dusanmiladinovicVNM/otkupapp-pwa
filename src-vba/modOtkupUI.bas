@@ -330,6 +330,12 @@ Private mToastPending As String
 Private mDisplayFont As String
 Private mBusyGrid As Boolean
 Private mBuilding As Boolean
+' Da li je ljuska (zone, mreza, sidebar) STVARNO izgradjena. Do v6-ui-214 je
+' to bilo isto sto i "forma postoji", jer je UserForm_Initialize uvek gradio.
+' Sada faza prijave (modUiFaze) prikazuje istu formu PRE nego sto operater
+' postoji, pa gradnja mora da sacheka -- inace bi ljuska zapamtila prava
+' prazne sesije.
+Private mIzgradjena As Boolean
 
 Private mColSpec As Object
 Private mLastPageSize As Long
@@ -469,8 +475,9 @@ Public Sub BuildOtkupScreen(frm As Object)
     ' dalje - inace ostaje "ziv" ekran koji ne reaguje ni na sta.
     On Error GoTo EH
     mBuilding = True
+    mIzgradjena = False
     Set mFrm = frm
-    Set Btns = New Collection
+    Set Btns = SinkoviFaze()
     Set mHovered = Nothing
     modUiData.ResetCache
     Set mColSpec = CreateObject("Scripting.Dictionary")
@@ -521,6 +528,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     OsveziDugmeSekcije frm          ' i prekidac sekcija ide po pravima
     ShowZones frm
     mBuilding = False
+    mIzgradjena = True
     mBuildMs = CLng((Timer - t0) * 1000)
     Exit Sub
 EH:
@@ -530,6 +538,44 @@ EH:
 End Sub
 
 '--------------------------------------------------------- HEADER ----
+' Gradnja ljuske resetuje spisak event-sinkova (clsFlatBtn). Sinkovi FAZE
+' (splash, prijava, mini kartica) ne smeju da padnu sa njim.
+'
+' Njihove kontrole zive u zFaza i NE prave se ponovo -- ostale bi na ekranu
+' bez ijednog dogadjaja. Kod prijave to nije kozmetika nego ZAGLAVLJIVANJE:
+' petlju cekanja (modUiFaze.FazaPrijava) prekida bas klik na "Prijavi se" ili
+' "Otkazi", pa bi zamena operatera posle prve gradnje ljuske visila zauvek.
+' Isto vazi za "Nazad u aplikaciju" na mini kartici.
+'
+' Redosled je bas ovakav zato sto se ljuska gradi POSLE prijave (faza LOGIN je
+' odlaze), pa su fazni sinkovi uvek stariji od nje.
+Private Function SinkoviFaze() As Collection
+    Dim c As Collection, b As Variant
+    Set c = New Collection
+    On Error Resume Next
+    If Not Btns Is Nothing Then
+        For Each b In Btns
+            If Left$(b.SinkTag, 2) = "fz" Then c.Add b
+        Next b
+    End If
+    Err.Clear
+    Set SinkoviFaze = c
+End Function
+
+' Koliko je sinkova faze zivo. Javno samo zbog testa: da je gradnja ljuske
+' oborila kartu prijave, suite to ne bi videla nikako drugacije -- forma se u
+' harnessu ne prikazuje, pa se klik ne moze odigrati.
+Public Function OtkupUI_SinkoviFazeTest() As Long
+    Dim b As Variant, n As Long
+    On Error Resume Next
+    If Btns Is Nothing Then Exit Function
+    For Each b In Btns
+        If Left$(b.SinkTag, 2) = "fz" Then n = n + 1
+    Next b
+    Err.Clear
+    OtkupUI_SinkoviFazeTest = n
+End Function
+
 Private Sub BuildHeader(frm As Object)
     Dim z As Object, i As Long
     Set z = NewZone(frm, "zHdr", 0, 0, 1100, HEADER_H, C_FOREST)
@@ -3807,6 +3853,13 @@ End Sub
 Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant)
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
+    ' Kontrole faze (splash, prijava, mini kartica) nose tag "fz..." i idu u
+    ' modUiFaze PRE nego sto ijedna grana dodirne kontrolu ljuske -- u fazi
+    ' prijave ljuska jos nije ni izgradjena.
+    If Left$(tag, 2) = "fz" Then
+        modUiFaze.FazaEvent tag, ev, arg
+        Exit Sub
+    End If
     Select Case ev
         Case "Click":    UiClick tag
         Case "DblClick": UiDblClick tag
@@ -3849,6 +3902,10 @@ End Function
 Public Function HandleKeyFrom(ByVal tag As String, ByVal KeyCode As Long, _
                               ByVal Shift As Long) As Boolean
     On Error Resume Next
+    If Left$(tag, 2) = "fz" Then
+        HandleKeyFrom = modUiFaze.FazaTaster(KeyCode)
+        Exit Function
+    End If
     If KeyCode = vbKeyDown And (Shift And 4) <> 0 Then
         ' Alt+dole je standardni potez za otvaranje liste. Bez presretanja bi
         ' MSForms otvorio SVOJU listu - sa ivicom, klizacem i tudjim fontom,
@@ -3910,8 +3967,8 @@ Private Sub UiClick(ByVal tag As String)
     Select Case True
         Case Left$(tag, 3) = "pop"                    ' izbor iz naseg dropdown-a
         Case Right$(tag, 1) = "D" And Len(tag) > 2    ' strelica dropdown-a
-        Case tag = "btnClose", tag = "btnExcel"       ' forma se sakriva
-        Case tag = "btnOperater"                      ' frmLogin je bio modalan
+        Case tag = "btnClose", tag = "btnExcel"       ' forma se sakriva ili skuplja
+        Case tag = "btnOperater"                      ' prijava je pokrila prozor
         Case Else: KeepKeys
     End Select
 End Sub
@@ -4456,11 +4513,11 @@ Private Sub DoShowExcel()
     End If
     On Error Resume Next
     Application.Visible = True
-    mFrm.Hide
-    ' Plutajuca kartica "Nazad u aplikaciju" (frmExcelMini, u izgledu ove
-    ' ljuske) sakriva Excel i vraca ovaj ekran. Bez nje bi iz Excela nazad
-    ' vodio samo Alt+F8 -> ShowOtkupUI.
-    frmExcelMini.Show vbModeless
+    ' Plutajuca kartica "Nazad u aplikaciju" je od v6-ui-214 FAZA ove iste
+    ' forme (modUiFaze), ne zasebna forma: prozor se skuplja na karticu i
+    ' vraca. Ljuska ostaje izgradjena, pa je povratak trenutan -- isti razlog
+    ' zbog koga se forma na X sakriva umesto da se unload-uje.
+    modUiFaze.FazaMini
 End Sub
 
 ' modAuth.Login sam radi Logout pa prikazuje frmLogin modalno - to JE zamena
@@ -5117,9 +5174,102 @@ EH:
     OtkupUI_StartEkran = ""
 End Function
 
-' Ulaz u aplikaciju: zove ga frmSplash posle splash-a (v6-ui-209), "Pokreni
-' program" sa lista Pregled listova, povratak iz Excela (frmExcelMini) i
-' operater rucno (Alt+F8).
+' Forma je ozivela (UserForm_Initialize). Do v6-ui-214 je taj event odmah gradio
+' ljusku; sada gradnju odlucuje FAZA prozora.
+'
+' Razlog nije stil nego prava: splash, prijava i mini kartica su od v6-ui-214
+' faze OVE forme (modUiFaze), pa se forma prikazuje i PRE prijave. Gradnja cita
+' registar ekrana i prava operatera, a u fazi prijave operatera jos nema --
+' izgradjena ljuska bi dobila prava prazne sesije i zapamtila ih.
+'
+' mFrm se postavlja UVEK, i pre gradnje: kartica prijave salje svoje dogadjaje
+' kroz istu UiEvent putanju, koja bez zive forme cutke izlazi.
+Public Sub OtkupUI_Init(frm As Object)
+    On Error GoTo EH
+    Set mFrm = frm
+    modUiFaze.FazaOtvorena frm
+    If Not modUiFaze.FazaGradiLjusku() Then Exit Sub
+    OtkupUI_EnsureShellBuilt
+    Exit Sub
+EH:
+    OtkupUI_BuildFailed Err.Number, Err.description
+End Sub
+
+' Ljuska se gradi JEDNOM po zivotu forme. Zove je i faza APP (posle prijave) i
+' UserForm_Initialize -- ko god prvi stigne.
+'
+' ScreenUpdating se MORA vratiti i kad gradnja pukne, inace Excel ostaje
+' zamrznut ekran bez ijedne poruke, a operater misli da je aplikacija pala.
+Public Sub OtkupUI_EnsureShellBuilt()
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    If mFrm Is Nothing Then Exit Sub
+    If mIzgradjena Then Exit Sub
+    Application.ScreenUpdating = False
+    BuildOtkupScreen mFrm
+    Application.ScreenUpdating = True
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    Application.ScreenUpdating = True
+    OtkupUI_BuildFailed errNum, errDesc
+End Sub
+
+' Ljuska je dobila prozor nazad -- uradi ono sto je do v6-ui-214 radio
+' UserForm_Activate. Postoji zato sto se forma iz faze u fazu NE prikazuje
+' ponovo (nikad nije ni sakrivena), pa Activate vise ne puca po povratku:
+' mreza bi ostala prazna, a fokus van polja.
+'
+' Zove je i sam UserForm_Activate -- jedno mesto, dva pozivaoca.
+Public Sub OtkupUI_AktivirajLjusku(frm As Object)
+    On Error Resume Next
+    If Not mIzgradjena Then Exit Sub
+    GoFullScreen frm
+    LayoutOtkup frm
+    frm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
+    ' Mreza se puni TEK sada: hrom je vec na ekranu, pa citanje tabele ne
+    ' produzava vreme do prvog prikaza.
+    EnsureGridLoaded
+    Err.Clear
+End Sub
+
+' Ljuska ustupa CEO prozor fazi (splash, prijava, mini kartica) i vraca ga.
+'
+' Zone se GASE, ne samo prekrivaju. Prekriven Frame i dalje prima Tab, pa bi se
+' iz kartice prijave moglo dotaci polje ekrana ispod nje -- a taj ekran je bas
+' ono sto prijava jos nije odobrila.
+'
+' Prefiks "z" je isti ugovor koji ShowZones vec koristi za zScr_*: sve zone su
+' "z" + ime, a nijedna kontrola unutar zone ne pocinje tim slovom.
+Public Sub OtkupUI_ZoneUstupi(ByVal ustupi As Boolean)
+    Dim c As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If Not ustupi Then
+        For Each c In mFrm.Controls
+            If Left$(c.name, 1) = "z" And c.name <> "zFaza" Then c.Enabled = True
+        Next c
+        If Not mIzgradjena Then Exit Sub
+        ShowZones mFrm
+        LayoutOtkup mFrm
+        Err.Clear
+        Exit Sub
+    End If
+    ClosePopup
+    CloseFilterPanel
+    For Each c In mFrm.Controls
+        If Left$(c.name, 1) = "z" And c.name <> "zFaza" Then
+            c.Visible = False
+            c.Enabled = False
+        End If
+    Next c
+    Err.Clear
+End Sub
+
+' Ulaz u aplikaciju: zove ga modMain.StartApp posle splash faze (v6-ui-214),
+' "Pokreni program" sa lista Pregled listova i operater rucno (Alt+F8).
+' Povratak iz Excela vise ne prolazi ovuda -- mini kartica je faza iste forme
+' (modUiFaze.FazaApp), pa ljuska ne mora ponovo kroz kapiju start-ekrana.
 Public Sub ShowOtkupUI()
     Dim kljuc As String
     ' Javan makro se moze pozvati i direktno (Alt+F8), mimo navigacije - zato se
@@ -5132,12 +5282,17 @@ Public Sub ShowOtkupUI()
         ' Sveska se zatvara na sledeci tick, kao kod neuspele prijave --
         ' zatvaranje unutar Workbook_Open lanca nije bezbedno.
         modUiScreens.ScrResetCache
+        ' Splash ne sme da ostane iznad poruke o odbijanju: prozor koji je
+        ' faza otvorila mora da se sklopi pre MsgBox-a.
+        modUiFaze.FazaSakrij
         MsgBox Poruka("OTKUI_SCR_NIJEDAN"), vbExclamation, APP_NAME
         On Error Resume Next
         Application.OnTime Now + TimeSerial(0, 0, 1), "QuitAfterFailedLogin"
         Exit Sub
     End If
-    frmOtkupUI.show vbModeless
+    ' Prikaz, gradnja i vracanje zona idu kroz fazu: forma je mozda vec na
+    ' ekranu (splash) ili skupljena na mini karticu.
+    modUiFaze.FazaApp
     ' Gradnja uvek pocinje na SCR_POCETNI; operater koji na njega nema pravo
     ' se prebacuje na svoj prvi dozvoljen ekran.
     '
@@ -7377,6 +7532,10 @@ End Sub
 
 Public Sub OtkupUI_FormClosed()
     On Error Resume Next
+    mIzgradjena = False
+    ' Faza mora da sazna da prozora vise nema: njene petlje (splash, cekanje
+    ' prijave) se vrte na DoEvents i inace bi ostale da vise nad nicim.
+    modUiFaze.FazaOtpusti
     mPopFor = ""
     StopOtkupUITimers
     Set mHovered = Nothing
@@ -7393,6 +7552,9 @@ End Sub
 
 Public Sub OtkupUI_Release()
     On Error Resume Next
+    mIzgradjena = False
+    modUiFaze.FazaOtpusti
+    modLogo.LogoOtpusti                 ' ucitane slike drze IPictureDisp
     StopOtkupUITimers
     ' Panel u radnoj povrsini drzi referencu na OKVIR unutar ove forme, a modul
     ' panela drzi njega. Dok te reference postoje, forma se ne moze osloboditi --
@@ -7462,6 +7624,13 @@ End Sub
 
 Public Function HandleGlobalKey(ByVal KeyCode As Long, ByVal Shift As Long) As Boolean
     On Error Resume Next
+    ' Ispod splash-a, prijave i mini kartice ljuska ne sluti tastere: F1-F8 bi
+    ' menjali rezim ekrana koji operater u tom trenutku ne vidi (a u prijavi
+    ' jos ni ne sme da vidi).
+    If modUiFaze.FazaAktivna() Then
+        HandleGlobalKey = modUiFaze.FazaTaster(KeyCode)
+        Exit Function
+    End If
     If KeyCode = vbKeyEscape And Len(mPopFor) > 0 Then
         ClosePopup                      ' Esc prvo zatvara dropdown
         HandleGlobalKey = True

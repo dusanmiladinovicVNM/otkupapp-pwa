@@ -284,7 +284,7 @@ Canonical startup contract:
 - `StartApp` calls `InitApp` on first run;
 - `InitApp` suspends `ScreenUpdating`, `Calculation` and `EnableEvents` while validating the workbook runtime;
 - startup validation runs `ValidateAllTables` against the canonical table set and surfaces missing-table warnings;
-- after initialization, `StartApp` may hide Excel, show `frmSplash`, and hand off to the UI shell `frmOtkupUI` through `modOtkupUI.ShowOtkupUI`. **`frmOtkupAPP` no longer exists** — it was deleted in UI migration step 7 (`docs/UI_MIGRACIJA_KATALOG.md` §27.17), together with `frmSEF`. Four forms remain: `frmOtkupUI` (shell), `frmLogin`, `frmSplash`, `frmExcelMini`;
+- Excel is hidden as the **first statement of `Workbook_Open`**, and `StartApp` raises the splash **phase** of the shell (`modUiFaze.FazaBoot`) before any gate runs; licence, self-update, min-version and login all happen over that splash, and the shell comes up through `modOtkupUI.ShowOtkupUI`. The workbook is revealed at exactly three points: a gate that denies startup, first-run setup (`SetupNewPC` needs `FileDialog`), and the shell's "Open Excel" button behind `OBL_OTVORI_EXCEL`. **`frmOtkupAPP` no longer exists** — it was deleted in UI migration step 7 (`docs/UI_MIGRACIJA_KATALOG.md` §27.17), together with `frmSEF`. Since §27.18 there is **exactly one form**: splash, login and the "Excel is open" card are phases of `frmOtkupUI` (`modUiFaze`), not separate forms;
 - file imports such as `ImportBankaInbox_TX()` are explicit operator actions and must not run automatically at boot;
 - SEF stuck-state recovery may run opportunistically but must not block boot;
 - journal recovery warnings are advisory and must keep the operator in control.
@@ -436,7 +436,7 @@ Canonical boundary:
 - activation handlers use guarded error handling and must not crash the UI lifecycle;
 - destructive actions require explicit operator confirmation at the form/operator-shell layer;
 - `frmOtkupUI` is the operator shell and must not embed domain writes outside explicit action handlers; screens (`modScr*`) own their actions and call `_TX` writers;
-- `frmSplash` performs no business reads/writes beyond UI presentation and handoff;
+- the splash, login and mini-card phases (`modUiFaze`) perform no business reads/writes beyond UI presentation, credential validation through `modAuth.ValidateLogin`, and handoff;
 - Banka inbox import is triggered from the Banka navigation/review workflow, not from app startup;
 - form-level close and workbook-level close must delegate to the centralized shutdown path.
 

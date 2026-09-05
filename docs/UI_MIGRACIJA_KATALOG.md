@@ -534,7 +534,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 21. ~~**Start ide u novu ljusku, bez veza ka legacy formama**~~ **URAĐENO**
     (`v6-ui-209`) — v. §27. Splash otvara `frmOtkupUI`; ni `modMain` ni
     ljuska ne referenciraju nijednu legacy formu. Uz to su `frmSplash`,
-    `frmLogin` i `frmExcelMini` prešli na estetiku ljuske (§27.7).
+    `frmLogin` i `frmExcelMini` prešli na estetiku ljuske (§27.7), a od
+    `v6-ui-214` **više nisu forme nego faze te iste ljuske** (§27.18).
     Bez ekrana ostaju: **Marža** (`modScrMarza` ne postoji), **uvozna komanda
     banke** (§9.3) i **SEF upravljanje** (§8.7). Plan uklanjanja legacy formi:
     §27.3.
@@ -8051,12 +8052,12 @@ suite vrati `SetTestMode prevMode`.
 
 | Šta | Gde | Napomena |
 |---|---|---|
-| Start → nova ljuska | `frmSplash.OpenAppShell` → `modOtkupUI.ShowOtkupUI` | jedina promena u start lancu; `StartApp` je nedirnut |
+| Start → nova ljuska | `frmSplash.OpenAppShell` → `modOtkupUI.ShowOtkupUI` | jedina promena u start lancu; `StartApp` je nedirnut. **Od `v6-ui-214`** splash je faza ljuske, pa lanac ide `modUiFaze.FazaBoot` → `ShowOtkupUI` iz samog `StartApp` (§27.18) |
 | Start bira **prvi dozvoljen** ekran | `OtkupUI_StartEkran` → `ShowOtkupUI` | prava po oblastima su nezavisna (`modAuth.OblastiList`), pa nalog sa `BANKA=DA, DOKUMENTI=NE` mora da uđe; paneli se preskaču (pokrili bi zabranjen ekran ispod sebe). Nijedan dozvoljen → poruka i **zatvaranje sveske** na sledeći tick, bez otkrivanja Excela |
 | X ljuske → Excel **samo uz pravo** | `OtkupUI_Sakrij` | ista kapija kao „Otvori Excel"; bez tog prava zatvaranje ljuske znači izlaz iz aplikacije (`modMain.ZatvoriAplikaciju` preko `OnTime`) |
 | Alatke traže pravo | `AlatkaOblast` / `AlatkaSme` → `DoShowExcel`, `DoSync` | `OBL_OTVORI_EXCEL` i `OBL_SYNC_PWA`, kao u legacy meniju; dugme bez prava se i ne crta (`OsveziAlatke`, i posle zamene operatera) |
 | „Pokreni program" (list Pregled listova) | `modPregledListova.PokreniProgram` → `ShowOtkupUI` | do sada je otvarao stari meni |
-| Povratak iz Excela | `DoShowExcel` → `frmExcelMini` → `ShowOtkupUI` | plutajuća kartica „Nazad u aplikaciju"; bez nje bi nazad vodio samo `Alt+F8` |
+| Povratak iz Excela | `DoShowExcel` → `frmExcelMini` → `ShowOtkupUI` | plutajuća kartica „Nazad u aplikaciju"; bez nje bi nazad vodio samo `Alt+F8`. **Od `v6-ui-214`** kartica je faza iste ljuske (`modUiFaze.FazaMini`), pa se prozor skuplja umesto da se krije (§27.18) |
 
 **Posledice koje su prihvaćene:** Marža, uvozna komanda banke (§9.3), SEF
 upravljanje (§8.7) i dugme „Izlaz" **nisu dostupni iz aplikacije** dok ne dobiju
@@ -8088,8 +8089,8 @@ svescom. Prošao je samo `vba_check`. Checkliste: §27.6 i §27.7.
 | `frmBankaImport` | `BANKA_UVOZ` (`modScrBankaUvoz`) — uvoz se okida **ulaskom u ekran** (§9.9), ručno mapiranje je na ekranu (§9.4) | **BRIŠE SE** (korak 6) — oba uslova su ispunjena: (a) uvoz ima radnju i ishod u ljusci (§9.9), (b) §9.4 slučajevi su na ekranu | `T_LegacyBanka_*` + sabotaže; `tools/check-banka-eh.py` ima formu u `FILES` |
 | `frmMarza` | `ANALIZA` (`modScrAnaliza`) — ekran je **U IZRADI** i to piše na njemu | **OBRISAN** (korak 6, §27.15) | `btnMargin_Click`, `modAuth.OblastZaFormu`; `modMarza` ostaje, bez pozivaoca |
 | `frmOtkupAPP` | ljuska je `frmOtkupUI` | **BRIŠE SE POSLEDNJA** (korak 7) | host za sve gore (`OpenContentFormPublic` / `ReturnToDashboard`) |
-| `frmLogin`, `frmSplash`, `frmExcelMini` | — (forme ljuske od `v6-ui-209`, §27.7) | **OSTAJU** | prijava, start, povratak iz Excela |
-| `frmOtkupUI` | — | **OSTAJE** | ljuska |
+| `frmLogin`, `frmSplash`, `frmExcelMini` | faze ljuske `LOGIN` / `BOOT` / `MINI` (`modUiFaze`) | **OBRISANE** (§27.18) | ništa — sve tri su prešle u `frmOtkupUI` |
+| `frmOtkupUI` | — | **OSTAJE** | ljuska; od `v6-ui-214` **jedina forma projekta** |
 
 ### 27.3 Redosled uklanjanja — svaki korak je jedan PR i jedna puna isporuka
 
@@ -8108,6 +8109,7 @@ obrisano obara compile cele sveske.
 | 5 **(isporučen, §27.13)** | `frmMaticniPodaci` + `frmStammdaten` + `clsStmBtn` + `clsLookupMenuBtn`; `modMaticniLookups` OSTAJE (ljuska ga koristi) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
 | 6 **(isporučen, §27.14 + §27.15)** | `frmBankaImport`; `frmMarza` — uz nov ekran `ANALIZA` | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`, `btnMargin_Click`, `modAuth.OblastZaFormu` |
 | 7 **(isporučen, §27.17)** | `frmOtkupAPP` **i** `frmSEF` — zajedno, jer se drže međusobno | `ReturnToDashboard` grane u `modAdmin`/`modPodesavanja`, `modAuth.OblastZaFormu` cela, mrtva petlja u `modGoogleSyncOrchestrator.SyncProgress`, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
+| 8 **(isporučen, §27.18)** | `frmSplash`, `frmLogin`, `frmExcelMini` → faze ljuske. **Nije bio deo plana** (§27.2 ih je vodio kao „OSTAJU") i ne drži ga nijedan raniji korak: to nisu legacy forme nego forme ljuske. Posle njega ostaje **jedna forma** | `modMain.StartApp` (`frmSplash.Show`), `modAuth.PrikaziPrijavu` (`frmLogin.LoginOK` / `.Show`), `modOtkupUI.DoShowExcel` (`frmExcelMini.Show`) |
 
 ### 27.4 Isporuka uklanjanja — zašto nije samo `git rm`
 
@@ -9049,3 +9051,252 @@ suite-ova; `check-banka-eh.py` čist; `WHO_WRITES.md` nepromenjen.
 > Po instalaciji: `ImportAllVBA` → `Remove frmOtkupAPP`, `Remove frmSEF` →
 > `Compile` → `Save`. Zaostale forme ovde **obaraju compile**: `frmSEF`
 > referencira `frmOtkupAPP`, a `frmOtkupAPP` zove `OblastZaFormu` koje više nema.
+
+### 27.18 Posle plana: splash, prijava i mini kartica postaju FAZE ljuske (`v6-ui-214`)
+
+> Posle ovog koraka `src-vba/` ima **jedan** `.frm` fajl: `frmOtkupUI`.
+> Plan §27 je bio ispunjen na **četiri** forme (§27.17); ovo ide korak dalje.
+
+**Zašto ovo nije bilo u planu.** §27.2 je te tri forme svrstao u „OSTAJU" —
+one nisu legacy nego forme ljuske, pa ih nijedan korak plana nije ni čekao. Ali razlog zbog koga legacy odlazi važi i za
+njih: **isti jezik iscrtan na četiri mesta se razilazi prvom doradom.** Gradijent
+od 40 traka, zlatna nit, znak „AX OtkupApp", `NewShell` polja i primarno dugme
+živeli su u kopiji u `frmSplash`, `frmLogin`, `frmExcelMini` **i** `modOtkupUI` —
+isto pravilo koje je u §26 dalo `PanelStilDugmeHover`.
+
+#### Šta je promenjeno
+
+| Bilo | Sada | Gde |
+|---|---|---|
+| `frmSplash` (241 lin. + 537 KB `.frx`) | faza `BOOT` | `modUiFaze.FazaBoot` |
+| `frmLogin` (277 lin. + `.frx`) | faza `LOGIN` | `modUiFaze.FazaPrijava` |
+| `frmExcelMini` (170 lin. + 31 KB `.frx`) | faza `MINI` | `modUiFaze.FazaMini` |
+| ljuska | faza `APP` | `modUiFaze.FazaApp` |
+
+Sve kontrole su **runtime** (`modUiKit`), u okviru `zFaza` preko celog prozora.
+**Nijedna nova `WithEvents` deklaracija:** dugmad i polja idu kroz
+`WireBtn`/`WireInput` → `clsFlatBtn`, a tagovi počinju sa `fz`, pa ih
+`modOtkupUI.UiEvent` prosleđuje u `modUiFaze.FazaEvent` **pre** nego što dodirne
+ijednu kontrolu ljuske.
+
+Pozivaoci:
+
+| Šta | Bilo | Sada |
+|---|---|---|
+| start | `modMain.StartApp` → `frmSplash.Show` (splash sam zove `ShowOtkupUI`) | `modUiFaze.FazaBoot` na vrhu `StartApp`-a, `ShowOtkupUI` na kraju — splash stoji preko svih kapija |
+| prijava | `modAuth.PrikaziPrijavu` → `frmLogin.Show` (modalno) | `modUiFaze.FazaPrijava()` — isti `Boolean` ugovor |
+| „Otvori Excel" | `DoShowExcel` → `mFrm.Hide` + `frmExcelMini.Show` | `DoShowExcel` → `modUiFaze.FazaMini` (prozor se **skuplja**, ne krije) |
+
+#### Tri odluke koje su koštale najviše razmišljanja
+
+**1. Modalnost prijave.** `modAuth.Login` je sinhrona `Boolean` funkcija i zove
+se iz `StartApp` (pre svega) i iz ljuske (zamena operatera). Ljuska je
+`ShowModal = False`, pa se čekanje pravi rukom: `Do While ... DoEvents`. To nije
+novo — `frmSplash.WaitSeconds` je isti postupak vrteo za svoje dve sekunde, u
+istom `Workbook_Open` lancu.
+
+Dve brane: `mUPrijavi` (druga prijava preko prve nije zamena operatera nego dva
+čekanja na istom steku) i `mZiva` (petlja staje kad forma padne — `FazaOtpusti`
+iz `UserForm_Terminate`).
+
+**2. Zone se GASE, ne prekrivaju.** Prekriven `Frame` i dalje prima `Tab`, pa bi
+se ispod kartice prijave moglo dotaći polje ekrana — a taj ekran je baš ono što
+prijava još nije odobrila. `OtkupUI_ZoneUstupi` zato postavlja i
+`Visible = False` i `Enabled = False` na sve zone (`z*`), pa ih vraća.
+
+**3. Ljuska se NE gradi dok traje prijava.** Ovo je kapija, ne kozmetika:
+`BuildOtkupScreen` čita registar ekrana i prava operatera (`ScrAktivan`,
+`OsveziAlatke`), a u trenutku prijave operatera **još nema** — izgrađena ljuska
+bi dobila prava prazne sesije i zapamtila ih. Zato `UserForm_Initialize` više ne
+gradi bezuslovno nego pita `modUiFaze.FazaGradiLjusku()`, a gradnju posle
+prijave radi `modOtkupUI.OtkupUI_EnsureShellBuilt`.
+
+Iz iste izmene sledi i `OtkupUI_AktivirajLjusku`: forma se između faza **ne
+prikazuje ponovo** (nikad nije ni sakrivena), pa `UserForm_Activate` ne puca po
+povratku — bez toga bi mreža ostala prazna, a fokus van polja. Sada je to jedna
+rutina sa dva pozivaoca (`UserForm_Activate` i `FazaApp`).
+
+#### Rasterski logotip — `modLogo` umesto `.frx`
+
+`frmSplash.frx` i `frmExcelMini.frx` su nosili sliku logotipa, a `.frx` se **ne
+pravi iz koda** (CLAUDE.md §3). Prva verzija ovog koraka je zato crtala samo
+tekstualni znak; to je bila stvarna regresija i zatvorena je: logotip sada dolazi
+iz **`src-vba/modLogo.bas`** — GIF u Base64, dekodiran u privremeni fajl i učitan
+`LoadPicture`-om.
+
+| Pitanje | Odgovor | Zašto |
+|---|---|---|
+| zašto ne `.frx` | jer ne putuje kroz self-update | `ImportFromFolder` uvozi **kod**; svaka promena logotipa bi tražila REINSTALL na svakoj mašini |
+| zašto GIF, ne PNG | `LoadPicture` ne čita PNG | zna BMP, RLE, ICO, WMF, EMF, GIF, JPEG. BMP je nekomprimovan (pola MB), JPEG bi na oštrim ivicama zlatnog teksta dao prsten. Znak ima nekoliko boja → GIF je ovde **bez gubitka** |
+| zašto je pozadina pečena | MSForms ne zna per-pixel alfu | providan PNG bi svejedno bio spljošten, samo na boju koju bi MSForms izabrao **umesto nas**. Kompozit ide unapred, na tačno onu boju na kojoj slika stoji |
+| kako se boje ne raziđu | `modLogo` izvozi `LOGO_BG_*` | ista konstanta boji ploču iza slike i pečena je u piksele — crtanje i slika ne mogu da se raziđu |
+| zašto se **ne skalira** | `Zoom` skalira grubo | v. „Crisp" ispod |
+
+Splash ima gradijent, pa se boja uzima na sredini logotipa (`t = 0.35`). Razlika
+boje gradijenta preko visine znaka je najviše **1 jedinica po kanalu**, pa se
+ravna ploča iza slike ne vidi.
+
+**Tekstualni znak nije obrisan — postao je rezerva.** `LogoSlika` vraća `Nothing`
+kad nema MSXML/ADODB ili je TEMP nedostupan; tada se crta „AX OtkupApp" u
+`DisplayFont()`. Aplikacija bez logotipa radi; aplikacija koja pukne na startu ne
+radi. Test 184 meri baš to: znak se vidi **tačno jednom** — slika ILI tekst,
+nikad oba i nikad nijedan.
+
+**Crisp: slika se crta 1:1, ne skalira se.** Prva verzija je slala jednu veličinu
+(480×157) koju je `Zoom` smanjivao na ~350×115 — i to se videlo. `PictureSizeMode
+= Zoom` ide kroz `StretchBlt` sa `COLORONCOLOR`, dakle **bez ikakvog uglačavanja**:
+smanjivanje prosto **ispušta** redove i kolone. Znak „AX" je sav od kosina, pa su
+ispuštene kolone izašle kao stepenice.
+
+Zato se piksel mera više **ne bira rukom nego računa**: okvir je zadat u tačkama
+(raspored ljuske), a slika dobija tačno onoliko piksela koliko taj okvir pokriva
+na ekranu — na 96 DPI to je `visina × 96/72`.
+
+| Znak | okvir | 1x | 2x |
+|---|---|---|---|
+| splash | 86 pt | 353×115 | 705×230 |
+| kartica prijave | 26 pt | 107×35 | 215×70 |
+| mini kartica | 20 pt | 83×27 | 166×54 |
+
+Varijantu bira **runtime** (`LogoKljuc`), jer koliko piksela okvir pokriva zavisi
+i od rezolucije i od DPI-ja. Bira se ona čija je mera **bliža u odnosu**, ne u
+razlici: rastezanje 1,5× i skupljanje 1,5× nisu isti gubitak, a poređenje kvadrata
+sa proizvodom (geometrijska sredina) ih izjednačava bez logaritma. Test 186 tvrdi
+smer odluke — sićušan okvir uzima 1x, ogroman 2x — jer se sam DPI mašine na kojoj
+suite radi ne sme ugraditi u tvrdnju.
+
+Uz to je paleta podignuta sa 64 na **256 boja** (GIF maksimum): antialiasing
+zlatnog teksta na tamnom pravi više nijansi nego što 64 pokriva, pa se na ivicama
+video prelaz u trakama.
+
+Generator je **`tools/logo_to_vba.py`** (izvor: `img/AgriX-Otkup-Logo-Final.png`),
+pa se logotip regeneriše kad se brend promeni. Nosi self-test u oba smera: GIF se
+dekodira nazad i poredi piksel po piksel, pa se namerno pokvari jedan bajt —
+provera mora da prijavi razliku. Enkoder koji nikad nije pokazan crven ne
+dokazuje da išta meri. Ako self-test padne, `modLogo.bas` se **ne upisuje**.
+
+Ukupna cena: **24,5 KB GIF-a → 32,7 KB Base64** za šest slika u jednom `.bas`
+modulu, nasuprot 572 KB `.frx`-a koji nije putovao.
+
+#### Redosled starta: splash → prijava → ekran, i sveska se ne vidi
+
+Prelazak na faze je otvorio nešto što se ranije nije moglo: **splash sada može da
+bude prvo što operater vidi.** Do sada je bio pretposlednji.
+
+| Bilo | Sada |
+|---|---|
+| licenca, self-update, verzija, prijava — sve nad **vidljivom** sveskom | sve preko **splash-a**, sveska skrivena |
+| `Application.Visible = False` pred kraj `StartApp`-a | **prva naredba `Workbook_Open`-a** |
+| splash 2 s, pa ljuska | splash od početka, `FazaBootSacekaj 1.2` samo kao **donja granica** |
+| prijava kao poseban prozor pre splash-a | faza `LOGIN` istog prozora, **posle** splash-a |
+
+**Fiksne dve sekunde su otišle.** Bile su nasleđe `frmSplash`-a, koji je bio
+nezavisan tajmer — audit FM-0115 je baš to i tražio: „da prestane da bude
+nezavisan tajmer i postane bezbedan prikaz stvarnog startup lifecycle-a". Splash
+sada stoji preko **stvarnog** posla (licenca, self-update, mrežna provera
+verzije, prijava), pa čekanje ostaje samo kao donja granica — da znak ne bljesne
+kad je sve prošlo trenutno. Uz to natpis u podnožju kaže **koji** posao traje
+(`FazaStatus`: „Provera licence…", „Provera verzije…", „Učitavam ekran…"), jer
+zamrznut natpis nad mrežnim pozivom izgleda kao da je aplikacija stala.
+
+**Sveska se otkriva na tačno tri mesta**, i svako od njih to i traži:
+
+| Gde | Zašto | Šta posle |
+|---|---|---|
+| odbijena kapija — licenca, verzija, neuspela prijava | poruka o odbijanju mora da se vidi | aplikacija se gasi (te grane same zovu `Visible = True`) |
+| first-run setup (`SetupNewPC`) | bira foldere kroz `Application.FileDialog` (`SetupBankFolders`) | splash se skloni, setup odradi, sveska se vrati **skrivena**, splash se vrati |
+| dugme „Otvori Excel" u ljusci | operater ga je tražio | iza prava `OBL_OTVORI_EXCEL`; povratak kroz mini karticu |
+
+Dve kapije umeju da **otkriju svesku pa ipak propuste** — self-update na „Ne" i
+min-version na `WARN`. Obe leže u tuđim modulima (`modSelfUpdate` je u
+`SKIP_MODULES`, ne dira se), pa `StartApp` posle svake vraća `Visible = False`.
+Bez toga bi ostatak starta — uključujući prijavu — tekao nad vidljivom sveskom,
+što je baš ono od čega se krenulo.
+
+**Šta se odavde ne može popraviti:** bljesak dok Excel učitava fajl, pre nego
+što makro uopšte krene. To radi Excel, ne mi. `Application.Visible = False` kao
+prva naredba `Workbook_Open`-a je najranije mesto koje VBA ima.
+
+**Povratak posle prijave** je zbog ovoga morao da se promeni: stara grana je
+znala samo za `APP` („ako je prozor bio prikazan → vrati ekran, inače sakrij"),
+pa bi start posle prijave nakratko ostao na **praznom ekranu** — prozor sakriven,
+a Excel iza njega već skriven. Sada se vraća **faza iz koje je prijava pozvana**.
+Račun je izdvojen u `FazaPovratak`, jer se u harnessu ne može odigrati:
+`FazaPrijava` se vrti na `DoEvents` dok neko ne klikne dugme, a baš ta odluka je
+bila pogrešna. Meri je test 185.
+
+#### Šta se dobilo
+
+- **Splash je prvo što se vidi, a listovi se ne vide nijednom** od klika na fajl do ekrana.
+- **Prijava i logotip sada stižu kroz self-update.** Do sada su bili u `.frx`-u i
+  tražili pun `.xlsm` (`docs/UPUTSTVO_KORISNICI.md` §11).
+- **Povratak iz Excela je trenutan.** Prozor se skuplja i vraća; ljuska ostaje
+  izgrađena. Ranije se krila jedna forma i pravila druga.
+- **-688 linija VBA i -572 KB `.frx`** uz dva nova modula (`modUiFaze`, `modLogo`).
+
+#### Isporuka
+
+Promenjene komponente su **meke** (`modUiFaze` je nov `.bas`; `modMain`,
+`modAuth`, `modOtkupUI`, `modTest` su `.bas`; `frmOtkupUI.frm` i `frmOtkupAPP.frm`
+nemaju module-level `MSForms` deklaracije) → **običan self-update**.
+
+**Ali uklanjanje tri komponente ne ide kroz self-update** — važi §27.4 u celini:
+`ImportFromFolder` ne uklanja ništa, pa `frmSplash`/`frmLogin`/`frmExcelMini`
+ostaju u zatečenoj svesci. Bez referenci se i dalje kompajliraju i samo zauzimaju
+mesto; uklanjaju se ručno u VBE-u (`Remove` → `Compile` → `Save`), po opciji (A).
+
+#### Verifikacija
+
+| Nivo | Ishod |
+|---|---|
+| `python tools/vba_check.py` | **zeleno** (uz zatečene `KRAJ_REDA` nalaze — artefakt Linux checkout-a, ne ove izmene) |
+| `python tools/logo_to_vba.py` | **zeleno** — self-test enkodera u oba smera (povratno dekodiranje isto; pokvaren bajt daje razliku) |
+| `tools/sabotaza.py --proveri-sidra` | 446 sabotaža, 0 nalaza (+3 poznata) |
+| `python tools/run_vba.py` | **NIJE izvršeno** — traži Windows + Excel + `pywin32` |
+| `Debug > Compile VBAProject` | **NIJE izvršeno** |
+| smoke nad pravom sveskom | **NIJE izvršeno** — checklista ispod |
+
+**Ponašanje starta je time NEVERIFIKOVANO.** Ovo je izmena u `StartApp` lancu:
+ako pukne, aplikacija se ne otvara. Testovi 183/184 mere fazu bez prikaza forme —
+oni ne mogu da izmere ni `.Show`, ni `DoEvents` petlju, ni `GoFullScreen`.
+
+**Sabotaže za testove 183/184 nisu dodate**, jer se `tools/dokaz.py` (dokaz u oba
+smera) ne može izvršiti u web sesiji — sidro koje nikad nije pokazano crveno ne
+dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
+
+#### Smoke checklista (`v6-ui-214`)
+
+1. AUTH **isključen**: otvori `.xlsm` → **splash je prvo što se vidi** (gradijent,
+   zlatna nit, **logotip AX|Otkup**, verzija, status u podnožju) → ljuska.
+   **Listovi se ne vide nijednom.** Logotip nije izobličen ni odsečen, i **oko
+   njega nema pravougaonika druge boje** (ploča i slika dele `LOGO_BG_SPLASH`).
+2. AUTH **uključen**: splash → **kartica prijave** u sredini iste forest podloge
+   → ljuska. Klik u polje boji ivicu zeleno; pogrešan PIN boji PIN polje rust i
+   ispisuje „Pogrešno korisničko ime ili PIN. (1/3)"; **Enter** = prijava,
+   **Esc** = otkaz; tri promašaja zatvaraju aplikaciju (i tek tada se vidi Excel).
+3. Posle uspešne prijave **nema praznog ekrana** — vraća se splash, pa ljuska.
+   Ako je mašina prvi put: `SETUP_MSG_FIRSTRUN_PONUDA` → „Da" skloni splash,
+   otkrije Excel za folder-pickere, pa ga vrati skriven i vrati splash.
+4. „Otvori Excel" → prozor se **skuplja** na karticu gore desno (forest traka,
+   znak, zeleno dugme „Nazad u aplikaciju"); hover posvetli dugme; klik vraća
+   **pun ekran** sa **napunjenom mrežom** i fokusom u polju broja.
+5. Sidebar → profil → zamena operatera: kartica prijave pokrije ljusku; „Otkaži"
+   vraća **isti** ekran i istog operatera (ne prazan prozor).
+6. Ispod splash-a i mini kartice **F1–F8 i Esc ne rade ništa**.
+7. `Alt+F4` nad karticom prijave = „Otkaži"; nad mini karticom = povratak u
+   aplikaciju; nad splash-om ne radi ništa.
+8. X ljuske → Excel vidljiv (uz pravo) → `Alt+F8 → ShowOtkupUI` vraća ekran.
+9. Operater **bez ijedne dozvoljene oblasti**: splash se sklanja **pre** poruke
+   „Nemate dozvolu…", Excel ostaje vidljiv.
+10. Logotip: proveri da `%TEMP%\AgriX_logo_SPLASH.gif` nastane pri prvom
+    splash-u. Ako logotipa nema nigde, a tekstualni znak jeste — `LogoSlika` je
+    vratila `Nothing`; razlog je u logu (`modLogo.UpisiPrivremeni`), a aplikacija
+    svejedno radi.
+
+| | |
+|---|---|
+| Stanje posle koraka 7 (§27.17) | `frmOtkupUI`, `frmLogin`, `frmSplash`, `frmExcelMini` |
+| Ostalo posle ovoga | **`frmOtkupUI`, i to je sve** |
+| `.frm` / `.frx` parova | 4 → **1** |
+| VBA fajlova | 198 → **194** |
+

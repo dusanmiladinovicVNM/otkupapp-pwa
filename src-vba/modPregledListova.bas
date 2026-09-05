@@ -77,7 +77,7 @@ End Sub
 
 ' "Pokreni program" -> udji u glavni ekran. Init/licenca/splash su vec
 ' odradjeni pri otvaranju fajla (StartApp), pa ovde samo prikazujemo ljusku,
-' isto sto radi i frmSplash pri startu (v6-ui-209).
+' isto sto StartApp radi posle splash faze (modUiFaze.FazaBoot, v6-ui-214).
 Public Sub PokreniProgram()
     On Error GoTo fail
     modOtkupUI.ShowOtkupUI

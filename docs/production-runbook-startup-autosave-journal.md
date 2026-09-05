@@ -65,18 +65,35 @@ Ako `StartApp` padne, Excel se vraća vidljiv i prikazuje poruku da se pogleda l
 Startup sekvenca:
 
 1. `InitApp` ako aplikacija nije inicijalizovana.
-2. `Application.Visible = False`.
-3. `frmSplash.Show` — splash sam otvara **ljusku** (`modOtkupUI.ShowOtkupUI`).
-   Stari meni (`frmOtkupAPP`) se iz aplikacije više ne otvara (od `v6-ui-209`);
-   pokreće se samo ručno iz VBE-a.
-4. `BackupFileOnStart`.
-5. `PurgeOldBackups`.
-6. `PurgeOldJournals`.
-7. `PurgeOldLogs`.
-8. `LogAppStart`.
-9. `RecoverAllStuckSEFSendingInvoices` best-effort.
-10. `CheckJournalForRecovery`.
-11. Ako journal warning postoji, prikazuje MsgBox.
+2. `Application.Visible = False` pa `modUiFaze.FazaBoot` — **splash je prvo što
+   operater vidi**, i stoji preko svih kapija ispod. (Sveska je već skrivena u
+   `Workbook_Open`, prvom naredbom; ovde se skrivanje ponavlja jer je `StartApp`
+   javan i pokreće se i ručno.)
+3. `AccessGateOrQuit` — licenca / probni period.
+4. `CheckForUpdateOnOpen` — self-update; na „Da" zakazuje `RunSelfUpdate` i izlazi.
+5. `UpdateGateOrQuit` — min-version gate.
+6. `modAuth.Login` — **prijava**, faza `LOGIN` istog prozora. Neuspela prijava
+   otkriva svesku i zakazuje gašenje.
+7. First-run setup (`SetupNewPC`) — **jedino mesto koje otkriva svesku i nastavlja**:
+   bira foldere kroz `FileDialog`. Splash se skloni, setup odradi, sveska se
+   vrati skrivena, splash se vrati.
+8. `MOUSEWHEEL_SCROLL`.
+9. `FazaBootSacekaj 1.2` pa `modOtkupUI.ShowOtkupUI` — **ekran**. Čekanje je donja
+   granica trajanja splash-a, ne fiksna pauza: kad je start trajao duže, ne čeka
+   ništa. Stari meni (`frmOtkupAPP`) je obrisan u koraku 7.
+10. `BackupFileOnStart`.
+11. `PurgeOldBackups`.
+12. `PurgeOldJournals`.
+13. `PurgeOldLogs`.
+14. `LogAppStart`.
+15. `RecoverAllStuckSEFSendingInvoices` best-effort.
+16. `CheckJournalForRecovery`.
+17. Ako journal warning postoji, prikazuje MsgBox.
+
+**Sveska se od `v6-ui-214` otkriva na tačno tri mesta:** odbijena kapija (licenca,
+verzija, prijava — te grane same zovu `Visible = True` pa gase aplikaciju),
+first-run setup, i dugme „Otvori Excel" u ljusci (iza prava `OBL_OTVORI_EXCEL`).
+Nigde drugde između klika na fajl i ekrana.
 
 Važno:
 

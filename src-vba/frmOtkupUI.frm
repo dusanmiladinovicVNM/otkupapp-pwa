@@ -15,29 +15,34 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 '=====================================================================
 ' Kod-behind za PRAZNU UserForm nazvanu frmOtkupUI.
-' Nijedna kontrola ne postoji u dizajneru - sve gradi modOtkupUI.
+' Nijedna kontrola ne postoji u dizajneru - sve gradi modOtkupUI
+' (ljuska) i modUiFaze (splash, prijava, mini kartica).
 ' Properties: (Name)=frmOtkupUI, ShowModal=False.
 '
-' PAZNJA: forma se NE sme zvati frmOtkup - to ime zauzima postojeca
-' produkciona forma (src-vba/frmOtkup.frm, 1294 linije).
+' OVO JE JEDINA FORMA PROJEKTA (v6-ui-214). Cetiri faze jednog prozora:
+'   BOOT   splash pri pokretanju          (bivsi frmSplash)
+'   LOGIN  prijava operatera              (bivsi frmLogin)
+'   MINI   kartica dok je Excel otkriven  (bivsi frmExcelMini)
+'   APP    ljuska sa ekranima
+' Zato svaki event ovde PRVO pita fazu, pa tek onda radi posao ljuske.
 '
 ' Ovde NEMA nijedne module-level deklaracije - ni WithEvents, ni
 ' "As MSForms.*". To je namerno: IsHardModuleBody (modSelfUpdate.bas)
 ' bi inace proglasio formu tvrdom i svaka njena izmena bi trazila
 ' REINSTALL umesto self-update-a. Sav UI i svi eventi zive u
-' modOtkupUI / clsFlatBtn.
+' modOtkupUI / modUiFaze / clsFlatBtn.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
 
+' Gradnju ljuske vise ne odlucuje ovaj event nego FAZA prozora: u fazi
+' prijave operatera jos nema, pa ljuska ne sme da se izgradi sa pravima
+' prazne sesije. Odluku nosi modOtkupUI.OtkupUI_Init, koje i vraca
+' ScreenUpdating i kad gradnja pukne.
 Private Sub UserForm_Initialize()
-    ' ScreenUpdating se MORA vratiti i kad gradnja pukne - inace Excel ostaje
-    ' zamrznut ekran bez ijedne poruke, a operater misli da je aplikacija pala.
     On Error GoTo EH
-    Application.ScreenUpdating = False
-    modOtkupUI.BuildOtkupScreen Me
-    Application.ScreenUpdating = True
+    modOtkupUI.OtkupUI_Init Me
     Exit Sub
 EH:
     Dim errNum As Long, errDesc As String
@@ -52,13 +57,11 @@ Private Sub UserForm_Activate()
     ' ivicu). Posto sistemskog X vise nema, zatvaranje ide preko btnClose.
     ' MakeResizable se NE zove - prazna je; stil menja iskljucivo GoFullScreen,
     ' jer jedino ono preko FormHwnd zna koji je prozor NAS.
-    modOtkupUI.GoFullScreen Me
-    modOtkupUI.LayoutOtkup Me
-    On Error Resume Next
-    Me.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
-    ' Mreza se puni TEK sada: hrom je vec na ekranu, pa citanje tabele ne
-    ' produzava vreme do prvog prikaza.
-    modOtkupUI.EnsureGridLoaded
+    '
+    ' Splash, prijava i mini kartica imaju svoju geometriju i svoj sadrzaj, pa
+    ' faza aktivaciju preuzima celu.
+    If modUiFaze.FazaAktiviraj(Me) Then Exit Sub
+    modOtkupUI.OtkupUI_AktivirajLjusku Me
 End Sub
 
 ' Zatvaranje preko X ne unload-uje formu nego je sakrije: sledece otvaranje je
@@ -67,9 +70,13 @@ End Sub
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
+        ' Alt+F4 nad splash-om, prijavom ili mini karticom ne znaci isto sto i
+        ' nad ljuskom: prijava se otkazuje, kartica vraca u aplikaciju, splash
+        ' se ne prekida.
+        If modUiFaze.FazaZatvori() Then Exit Sub
         ' NE "Me.Hide": posto se forma ne unload-uje, Terminate ne puca, pa bi
         ' zakljucana stanica ostala zauzeta na serveru. OtkupUI_Sakrij pusta
-        ' lock pa sakriva - isto sto legacy radi u frmOtkup.UserForm_QueryClose.
+        ' lock pa sakriva - isto sto legacy radi u UserForm_QueryClose.
         modOtkupUI.OtkupUI_Sakrij
     End If
 End Sub
@@ -79,6 +86,12 @@ Private Sub UserForm_Resize()
     If busy Then Exit Sub
     busy = True
     On Error Resume Next
+    ' Najmanja mera vazi za LJUSKU. Mini kartica je 232x78 i ovaj minimum bi je
+    ' odmah razvukao nazad preko celog Excela.
+    If modUiFaze.FazaRaspored(Me) Then
+        busy = False
+        Exit Sub
+    End If
     If Me.Height < 560 Then Me.Height = 560
     If Me.width < 660 Then Me.width = 660
     modOtkupUI.LayoutOtkup Me
@@ -106,4 +119,3 @@ End Sub
 Private Sub UserForm_Terminate()
     modOtkupUI.OtkupUI_FormClosed
 End Sub
-

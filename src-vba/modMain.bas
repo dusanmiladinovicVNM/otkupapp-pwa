@@ -31,11 +31,32 @@ Public Sub StartApp()
 
     If Not m_Initialized Then InitApp
 
+    ' --- Sakrij Excel i digni SPLASH pre svih kapija (v6-ui-214) ---
+    ' Do sada su licenca, self-update, provera verzije i prijava tekli nad
+    ' VIDLJIVOM sveskom, a Excel se krio tek pred kraj -- operater je izmedju
+    ' klika na fajl i ekrana video listove, i to vise puta.
+    '
+    ' Sada je red: sakrij -> splash -> kapije -> prijava -> ekran. Sveska se
+    ' otkriva SAMO na tri mesta, i svako od njih to i zeli: odbijena kapija
+    ' (licenca / verzija / prijava -- te grane same zovu Visible = True pa gase
+    ' aplikaciju), first-run setup (bira foldere kroz FileDialog) i dugme
+    ' "Otvori Excel" u ljusci, koje stoji iza prava OBL_OTVORI_EXCEL.
+    '
+    ' Skrivanje stoji i ovde, ne samo u Workbook_Open: StartApp je javan i
+    ' pokrece se i rucno (Alt+F8), a i tada vazi isto pravilo.
+    Application.Visible = False
+    modUiFaze.FazaBoot
+
     ' --- Licenca (per-uredjaj / node-locked) ---
     ' Blokira pokretanje ako licenca nije vazeca za OVAJ racunar.
     ' Opt-in: radi samo ako je LICENSE_ENABLED = YES u tblSEFConfig
     ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
+    modUiFaze.FazaStatus Poruka("OTKUI_SPLASH_LICENCA")
     If Not AccessGateOrQuit() Then Exit Sub
+    ' Kapija je mogla da otkrije svesku i da ipak PROPUSTI (unet kljuc posle
+    ' isteka probnog perioda). Tada se vracamo iza zavese -- otkrivanje je bilo
+    ' za dijalog, ne za rad.
+    Application.Visible = False
 
     ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
     ' Startup watchdog (RecoverPendingSelfUpdate) se zove IZNUTRA CheckForUpdateOnOpen
@@ -54,12 +75,18 @@ Public Sub StartApp()
         Application.OnTime Now, "'" & Replace$(ThisWorkbook.name, "'", "''") & "'!RunSelfUpdate"
         Exit Sub
     End If
+    ' "Ne" na ponudu azuriranja: modSelfUpdate je pre pitanja otkrio svesku
+    ' (i ne sme se dirati -- frozen modul), pa je ovde vracamo.
+    Application.Visible = False
 
     ' --- Min-version gate (flota) ---
     ' Server (GAS action "checkVersion") javlja minimalnu dozvoljenu verziju;
     ' zastarela verzija dobija upozorenje, a uz enforce=YES i blok pokretanja.
     ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
+    modUiFaze.FazaStatus Poruka("OTKUI_SPLASH_VERZIJA")
     If Not UpdateGateOrQuit() Then Exit Sub
+    ' WARN grana ("preporucuje se azuriranje") otkrije svesku pa propusti.
+    Application.Visible = False
 
     ' --- Per-user prijava (opt-in: AUTH_ENABLED u tblSEFConfig) ---
     ' Dok AUTH_ENABLED != YES -> sve radi kao pre (bez prijave).
@@ -75,13 +102,21 @@ Public Sub StartApp()
 
     ' --- First-run setup gate (per-masina) ---
     ' Ako ovaj racunar jos nije prosao SetupNewPC (APP_SETUP_COMPLETED != "DA" u
-    ' tblLocalConfig), ponudi podesavanje odmah -- pre skrivanja Excela i splash-a,
-    ' dok je prozor jos vidljiv i interaktivan. Jednokratno: cim SetupNewPC prodje
+    ' tblLocalConfig), ponudi podesavanje odmah. Jednokratno: cim SetupNewPC prodje
     ' zeleno i upise "DA", ova kapija se vise ne javlja. Fail-soft (ne obara start).
+    '
+    ' JEDINO mesto u startu koje stvarno trazi VIDLJIV Excel: SetupNewPC bira
+    ' foldere kroz Application.FileDialog (modSetup.SetupBankFolders). Zato se
+    ' sveska otkriva SAMO za njega i odmah vraca, a splash se u medjuvremenu
+    ' sklanja da ne pokriva dijaloge.
     On Error Resume Next
     If UCase$(Trim$(GetLocalConfigValue("APP_SETUP_COMPLETED", ""))) <> "DA" Then
         If MsgBox(Poruka("SETUP_MSG_FIRSTRUN_PONUDA"), vbYesNo + vbQuestion, APP_NAME) = vbYes Then
+            modUiFaze.FazaSakrij
+            Application.Visible = True
             SetupNewPC
+            Application.Visible = False
+            modUiFaze.FazaBoot
         End If
     End If
     On Error GoTo EH
@@ -93,9 +128,12 @@ Public Sub StartApp()
     If UCase$(Trim$(GetLocalConfigValue("MOUSEWHEEL_SCROLL", "DA"))) <> "NE" Then MouseWheel_On Else MouseWheel_Off
     On Error GoTo EH
 
-    Application.Visible = False
-
-    frmSplash.Show             ' <-- splash pre main forme
+    ' Splash stoji od pocetka; ovde se samo dopunjava do najmanjeg trajanja, da
+    ' znak ne bljesne kad su sve kapije prosle trenutno (licenca iskljucena,
+    ' offline, bez prijave). Kad je start trajao duze, ne ceka nista.
+    modUiFaze.FazaStatus Poruka("OTKUI_SPLASH_EKRAN")
+    modUiFaze.FazaBootSacekaj 1.2
+    modOtkupUI.ShowOtkupUI
 
     Call BackupFileOnStart
     Call PurgeOldBackups
@@ -162,7 +200,7 @@ Public Sub StartApp()
     ScheduleStornoWarm
     On Error GoTo 0
 
-    ' frmSplash sam sebe Unloaduje i pokrece ljusku (modOtkupUI.ShowOtkupUI).
+    ' Ljuska je vec na ekranu (splash faza + ShowOtkupUI iznad).
     ' Stari meni (frmOtkupAPP) je obrisan u koraku 7 -- ljuska je jedini ulaz.
     Exit Sub
 

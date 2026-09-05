@@ -8,7 +8,17 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
 Private Sub Workbook_Open()
+    ' PRVA naredba, pre svega ostalog (v6-ui-214): od klika na fajl do ekrana
+    ' operater ne sme da vidi listove. Monitor_AppOpen ispod je mrezni poziv --
+    ' dok on traje sveska bi stajala otvorena na ekranu.
+    '
+    ' Bljesak dok Excel ucitava fajl (pre nego sto makro uopste krene) se odavde
+    ' ne moze skratiti -- to radi Excel, ne mi.
+    '
+    ' Svaka grana koja odbija start (licenca, verzija, neuspela prijava, greska
+    ' u EH ispod) sama vraca Visible = True pre svoje poruke.
     On Error Resume Next
+    Application.Visible = False
     Monitor_AppOpen "Operator"
     On Error GoTo EH
     
