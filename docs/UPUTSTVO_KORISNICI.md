@@ -177,7 +177,7 @@ audit kolone) — mapiranjem po imenu kolone.
 ## 11. Tehničke napomene
 
 - **Prijavni prozor** više nije posebna forma nego **ekran ljuske**
-  (`modUiFaze`, od `v6-ui-213`) — pa stiže i kroz auto-ažuriranje koda, kao i
+  (`modUiFaze`, od `v6-ui-214`) — pa stiže i kroz auto-ažuriranje koda, kao i
   ostatak aplikacije. Ranije je tražio pun `.xlsm`. Isto važi i za **logotip**:
   živi u `modLogo` kao kod (`tools/logo_to_vba.py` ga generiše iz
   `img/AgriX-Otkup-Logo-Final.png`), ne u `.frx`-u forme.

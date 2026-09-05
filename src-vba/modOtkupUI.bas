@@ -330,7 +330,7 @@ Private mToastPending As String
 Private mDisplayFont As String
 Private mBusyGrid As Boolean
 Private mBuilding As Boolean
-' Da li je ljuska (zone, mreza, sidebar) STVARNO izgradjena. Do v6-ui-213 je
+' Da li je ljuska (zone, mreza, sidebar) STVARNO izgradjena. Do v6-ui-214 je
 ' to bilo isto sto i "forma postoji", jer je UserForm_Initialize uvek gradio.
 ' Sada faza prijave (modUiFaze) prikazuje istu formu PRE nego sto operater
 ' postoji, pa gradnja mora da sacheka -- inace bi ljuska zapamtila prava
@@ -4513,7 +4513,7 @@ Private Sub DoShowExcel()
     End If
     On Error Resume Next
     Application.Visible = True
-    ' Plutajuca kartica "Nazad u aplikaciju" je od v6-ui-213 FAZA ove iste
+    ' Plutajuca kartica "Nazad u aplikaciju" je od v6-ui-214 FAZA ove iste
     ' forme (modUiFaze), ne zasebna forma: prozor se skuplja na karticu i
     ' vraca. Ljuska ostaje izgradjena, pa je povratak trenutan -- isti razlog
     ' zbog koga se forma na X sakriva umesto da se unload-uje.
@@ -5174,10 +5174,10 @@ EH:
     OtkupUI_StartEkran = ""
 End Function
 
-' Forma je ozivela (UserForm_Initialize). Do v6-ui-213 je taj event odmah gradio
+' Forma je ozivela (UserForm_Initialize). Do v6-ui-214 je taj event odmah gradio
 ' ljusku; sada gradnju odlucuje FAZA prozora.
 '
-' Razlog nije stil nego prava: splash, prijava i mini kartica su od v6-ui-213
+' Razlog nije stil nego prava: splash, prijava i mini kartica su od v6-ui-214
 ' faze OVE forme (modUiFaze), pa se forma prikazuje i PRE prijave. Gradnja cita
 ' registar ekrana i prava operatera, a u fazi prijave operatera jos nema --
 ' izgradjena ljuska bi dobila prava prazne sesije i zapamtila ih.
@@ -5215,7 +5215,7 @@ EH:
     OtkupUI_BuildFailed errNum, errDesc
 End Sub
 
-' Ljuska je dobila prozor nazad -- uradi ono sto je do v6-ui-213 radio
+' Ljuska je dobila prozor nazad -- uradi ono sto je do v6-ui-214 radio
 ' UserForm_Activate. Postoji zato sto se forma iz faze u fazu NE prikazuje
 ' ponovo (nikad nije ni sakrivena), pa Activate vise ne puca po povratku:
 ' mreza bi ostala prazna, a fokus van polja.
@@ -5266,7 +5266,7 @@ Public Sub OtkupUI_ZoneUstupi(ByVal ustupi As Boolean)
     Err.Clear
 End Sub
 
-' Ulaz u aplikaciju: zove ga modMain.StartApp posle splash faze (v6-ui-213),
+' Ulaz u aplikaciju: zove ga modMain.StartApp posle splash faze (v6-ui-214),
 ' "Pokreni program" sa lista Pregled listova i operater rucno (Alt+F8).
 ' Povratak iz Excela vise ne prolazi ovuda -- mini kartica je faza iste forme
 ' (modUiFaze.FazaApp), pa ljuska ne mora ponovo kroz kapiju start-ekrana.

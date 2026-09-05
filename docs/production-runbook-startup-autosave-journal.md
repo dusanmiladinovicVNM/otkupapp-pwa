@@ -67,7 +67,7 @@ Startup sekvenca:
 1. `InitApp` ako aplikacija nije inicijalizovana.
 2. `Application.Visible = False`.
 3. `modUiFaze.FazaBoot 2` pa `modOtkupUI.ShowOtkupUI` — splash je **faza**
-   ljuske (`frmOtkupUI`), ne svoja forma (od `v6-ui-213`); posle dve sekunde
+   ljuske (`frmOtkupUI`), ne svoja forma (od `v6-ui-214`); posle dve sekunde
    `StartApp` sam otvara ljusku. Stari meni (`frmOtkupAPP`) se iz aplikacije
    više ne otvara (od `v6-ui-209`); pokreće se samo ručno iz VBE-a.
 4. `BackupFileOnStart`.

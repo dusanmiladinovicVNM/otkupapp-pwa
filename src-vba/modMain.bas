@@ -95,7 +95,7 @@ Public Sub StartApp()
 
     Application.Visible = False
 
-    ' Splash je od v6-ui-213 FAZA ljuske, ne svoja forma: isti prozor
+    ' Splash je od v6-ui-214 FAZA ljuske, ne svoja forma: isti prozor
     ' (frmOtkupUI) drzi splash, prijavu, mini karticu i aplikaciju. Redosled je
     ' isti koji je frmSplash imao -- dve sekunde znaka, pa ulaz u ljusku --
     ' samo sto ulaz sada zove StartApp, a ne forma sama sebe.

@@ -4,7 +4,7 @@ Option Explicit
 ' ============================================================
 ' modUiFaze - splash, prijava i "Excel je otvoren" kao FAZE JEDNE LJUSKE
 '
-' Do v6-ui-213 su to bile tri zasebne forme (frmSplash, frmLogin,
+' Do v6-ui-214 su to bile tri zasebne forme (frmSplash, frmLogin,
 ' frmExcelMini). Svaka je nosila svoju kopiju istog jezika: gradijent od 40
 ' traka, zlatnu nit, znak "AX OtkupApp", shell polja, primarno dugme -- a
 ' kopija istog pravila na cetiri mesta se razidje prvom doradom (isto pravilo

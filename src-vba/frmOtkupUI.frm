@@ -19,7 +19,7 @@ Attribute VB_Exposed = False
 ' (ljuska) i modUiFaze (splash, prijava, mini kartica).
 ' Properties: (Name)=frmOtkupUI, ShowModal=False.
 '
-' OVO JE JEDINA FORMA PROJEKTA (v6-ui-213). Cetiri faze jednog prozora:
+' OVO JE JEDINA FORMA PROJEKTA (v6-ui-214). Cetiri faze jednog prozora:
 '   BOOT   splash pri pokretanju          (bivsi frmSplash)
 '   LOGIN  prijava operatera              (bivsi frmLogin)
 '   MINI   kartica dok je Excel otkriven  (bivsi frmExcelMini)

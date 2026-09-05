@@ -364,7 +364,7 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_SYNC", "Sinhronizuj"
     UpsertRow lo, existing, "OTKUI_BTN_SNIMI", "Snimi radnu svesku"
     UpsertRow lo, existing, "OTKUI_BTN_EXCEL", "Otvori Excel"
-    ' --- splash, prijava i plutajuca kartica (frmSplash / frmLogin / frmExcelMini) ---
+    ' --- splash, prijava i plutajuca kartica: od v6-ui-214 faze ljuske (modUiFaze) ---
     UpsertRow lo, existing, "OTKUI_SPLASH_POKRECEM", "Pokre" & ChrW(263) & "em aplikaciju" & ChrW(8230)
     UpsertRow lo, existing, "OTKUI_LOGIN_NASLOV", "Prijava"
     UpsertRow lo, existing, "OTKUI_LOGIN_PODNASLOV", "Pristup aplikaciji"
