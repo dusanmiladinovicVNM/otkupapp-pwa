@@ -14,3 +14,13 @@ tests/fixtures/
 # Izlaz poslednjeg run_vba.py -- lokalan po masini i po prolazu
 tests/last_run.json
 tests/last_run.txt
+
+# Claude Code lokalni worktree-jevi
+.claude/worktrees/
+
+# APR pipeline (docs/Market Intelligence): medjukoraci koraka 01 i 02 se
+# regenerisu iz Scripts/ (run_pipeline.py), pa ne idu u git. Praceni ostaju
+# validirani izlaz (Processed/), izvestaji (Reports/) i raniji dataset
+# apr_veleprodaja_*.xlsx u Clean Data.
+docs/Market Intelligence/01_Market_Data/APR/Raw Data/apr_companies_*
+docs/Market Intelligence/01_Market_Data/APR/Clean Data/apr_companies_financials_*
