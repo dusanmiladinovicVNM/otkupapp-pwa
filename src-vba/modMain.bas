@@ -163,7 +163,7 @@ Public Sub StartApp()
     On Error GoTo 0
 
     ' frmSplash sam sebe Unloaduje i pokrece ljusku (modOtkupUI.ShowOtkupUI).
-    ' Stari meni (frmOtkupAPP) se iz aplikacije vise ne otvara (v6-ui-209).
+    ' Stari meni (frmOtkupAPP) je obrisan u koraku 7 -- ljuska je jedini ulaz.
     Exit Sub
 
 EH:

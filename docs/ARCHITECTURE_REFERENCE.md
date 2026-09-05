@@ -284,7 +284,7 @@ Canonical startup contract:
 - `StartApp` calls `InitApp` on first run;
 - `InitApp` suspends `ScreenUpdating`, `Calculation` and `EnableEvents` while validating the workbook runtime;
 - startup validation runs `ValidateAllTables` against the canonical table set and surfaces missing-table warnings;
-- after initialization, `StartApp` may hide Excel, show `frmSplash`, and hand off to the new UI `frmOtkupUI` through `modOtkupUI.ShowOtkupUI`; `frmOtkupAPP` is legacy and is no longer opened by the application (started manually from the VBE only; removal plan in `docs/UI_MIGRACIJA_KATALOG.md` §27);
+- after initialization, `StartApp` may hide Excel, show `frmSplash`, and hand off to the UI shell `frmOtkupUI` through `modOtkupUI.ShowOtkupUI`. **`frmOtkupAPP` no longer exists** — it was deleted in UI migration step 7 (`docs/UI_MIGRACIJA_KATALOG.md` §27.17), together with `frmSEF`. Four forms remain: `frmOtkupUI` (shell), `frmLogin`, `frmSplash`, `frmExcelMini`;
 - file imports such as `ImportBankaInbox_TX()` are explicit operator actions and must not run automatically at boot;
 - SEF stuck-state recovery may run opportunistically but must not block boot;
 - journal recovery warnings are advisory and must keep the operator in control.
@@ -294,7 +294,7 @@ Canonical shutdown contract:
 - normal exits route through `ShutdownApp`;
 - `ShutdownApp` restores `Application.Visible = True`;
 - `ShutdownApp` unloads the shell and writes `LogAppShutdown`;
-- closing `frmOtkupUI` (X) hides it and restores `Application.Visible`; the application shuts down through workbook-level `Workbook_BeforeClose` → `ShutdownApp` (form-control close on the manually started `frmOtkupAPP` shares the same shutdown contract);
+- closing `frmOtkupUI` (X) hides it and restores `Application.Visible`; the application shuts down through workbook-level `Workbook_BeforeClose` → `ShutdownApp`;
 - startup and shutdown logs must form a paired lifecycle trail when the app closes normally.
 
 ### 4.5 Setup and Local Workstation Config
@@ -435,7 +435,7 @@ Canonical boundary:
 - business modules must raise errors, return result objects/IDs/Boolean failure or log details instead of using `MsgBox` as control flow;
 - activation handlers use guarded error handling and must not crash the UI lifecycle;
 - destructive actions require explicit operator confirmation at the form/operator-shell layer;
-- `frmOtkupAPP` is the main operator shell and must not embed domain writes outside explicit button/action handlers;
+- `frmOtkupUI` is the operator shell and must not embed domain writes outside explicit action handlers; screens (`modScr*`) own their actions and call `_TX` writers;
 - `frmSplash` performs no business reads/writes beyond UI presentation and handoff;
 - Banka inbox import is triggered from the Banka navigation/review workflow, not from app startup;
 - form-level close and workbook-level close must delegate to the centralized shutdown path.
@@ -3533,7 +3533,7 @@ Current rules:
 - The „Pocetni dug" (opening-debt migration) button is created at runtime via form-local `Private WithEvents` + `Controls.Add` (the `.frx` is not edited) and delegates to `BookPocetniDug` (§13.1); it requires a selected kooperant and prompts for the amount via `InputBox`.
 - The form may show user-facing `MsgBox` feedback because it is a UI layer.
 - Business/data modules must not own UI popups as control flow.
-- Return navigation and query-close behavior must route back to `frmOtkupAPP` without embedding business writes.
+- Return navigation and query-close behavior must route back to the shell (`frmOtkupUI`) without embedding business writes. (Historic: this said `frmOtkupAPP`, removed in §27.17.)
 
 ### 13.3 PWA Management Agrohemija Issuing
 

@@ -8107,7 +8107,7 @@ obrisano obara compile cele sveske.
 | 4 **(delimično isporučen, §27.12)** | `frmFakturisanje`, `frmBankaExportPregled`; `frmSEF` OSTAJE — uslov iz §8.7 nije ispunjen | `btnInvoicing_Click`, `btnbankaisplate_Click`; `OpenContentFormPublic frmSEF`; pomeni u `modSEF*` / `modConfig` — proveriti da li su kod ili komentar |
 | 5 **(isporučen, §27.13)** | `frmMaticniPodaci` + `frmStammdaten` + `clsStmBtn` + `clsLookupMenuBtn`; `modMaticniLookups` OSTAJE (ljuska ga koristi) | `modMaticniLookups.MaticniOtvoriSekciju`, test nad `frmStammdaten` u `modTest`, `frmOtkupAPP.btnMaticni_Click` / `OpenMaticniForm`, legacy grana zatvaranja u `modAdmin.CloseAdminPanel` i `modPodesavanja.CloseConfigEditor` |
 | 6 **(isporučen, §27.14 + §27.15)** | `frmBankaImport`; `frmMarza` — uz nov ekran `ANALIZA` | `T_LegacyBanka_*` + sabotaže, `check-banka-eh.py` `FILES`, `btnBanka_Click`, `btnMargin_Click`, `modAuth.OblastZaFormu` |
-| 7 | `frmOtkupAPP` poslednja | preostali `ReturnToDashboard` pozivi, `modAuth.OblastZaFormu` cela, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
+| 7 **(isporučen, §27.17)** | `frmOtkupAPP` **i** `frmSEF` — zajedno, jer se drže međusobno | `ReturnToDashboard` grane u `modAdmin`/`modPodesavanja`, `modAuth.OblastZaFormu` cela, mrtva petlja u `modGoogleSyncOrchestrator.SyncProgress`, `docs/ARCHITECTURE_REFERENCE.md` §4.4; `modMain.ShutdownApp` ostaje (zove ga `Workbook_BeforeClose`) |
 
 ### 27.4 Isporuka uklanjanja — zašto nije samo `git rm`
 
@@ -8994,3 +8994,58 @@ nepromenjen.
 
 > **Fixture se mora regenerisati** uz ovaj PR — stara sveska nema `tblSEFEventLog`
 > redove, pa tri tvrdnje padaju na podacima.
+
+### 27.17 Korak 7 — plan §27 je ispunjen: **četiri forme**
+
+`frmOtkupAPP` i `frmSEF` odlaze **zajedno**, jer su se držale međusobno:
+`frmSEF` je zvala `frmOtkupAPP.ReturnToDashboard` i otvarala se njegovim
+dugmetom, pa host nije mogao pre nje. Uslov za `frmSEF` zatvoren je u §27.16.
+
+| | |
+|---|---|
+| Cilj plana (§27.2) | `frmOtkupUI`, `frmLogin`, `frmSplash`, `frmExcelMini` |
+| Ostalo posle koraka 7 | **tačno te četiri** |
+| VBA fajlova | 196 → **194** |
+
+## Reference se seku pre forme (§27.3)
+
+| Gde | Šta je bilo | Šta je sada |
+|---|---|---|
+| `modAdmin.CloseAdminPanel` | „domaćin može biti FORMA ili OKVIR" → `ReturnToDashboard` + `Unload mFrm` | samo `PanelZatvoriAko` — reference čisti `Admin_Release`, koji `modUiPanel` zove pre pražnjenja okvira |
+| `modPodesavanja.CloseConfigEditor` | isto | isto (`Podesavanja_Release`) |
+| `modGoogleSyncOrchestrator.SyncProgress` | petlja kroz `VBA.UserForms` tražeći `frmOtkupAPP` | samo `LogInfo` — v. niže |
+| `modAuth.OblastZaFormu` | mapa „ime legacy forme → oblast prava" | **obrisana cela** |
+
+**`OblastZaFormu` je imala TAČNO JEDNOG pozivaoca** — `frmOtkupAPP.OpenContentForm`
+— i nestala je zajedno s njim. Prava se od sada traže samo kroz registar ekrana
+(`modUiScreens.ScrDozvoljen`, polje `SCR_OBLAST`). Jedna mapa manje znači i jedno
+mesto manje na kome se oblast može razići sa ekranom koji je troši.
+
+**`SyncProgress` je pisao u formu koje već dugo nema.** Petlja je od `v6-ui-209`
+prolazila kroz sve otvorene forme i ne nalazila ništa — mrtav kod koji izgleda
+kao da nešto prikazuje. Ishod sync-a ljuska već pokazuje (`modOtkupUI.DoSync`:
+toast na početku i kraju, `RefreshSyncBadge`); poruka po koraku je dijagnostika i
+njeno mesto je log.
+
+## Zašto ovaj korak nema nov test
+
+Ovde se **ne menja ponašanje** — brišu se putanje bez pozivaoca:
+
+- legacy grana u `CloseAdminPanel` / `CloseConfigEditor` bila je dohvatljiva samo
+  kad je domaćin FORMA; u ljusci `PanelZatvoriAko` uvek vrati `True` i izađe pre
+  nje. Panel zatvaranje već meri `T_UiPanel_ZivotniCiklusIPrava`.
+- `SyncProgress` petlja od `v6-ui-209` nije nalazila nijednu formu.
+- `OblastZaFormu` je ostala bez pozivaoca.
+
+Ono što bi ovakvo brisanje moglo da pokvari — zaostalu referencu na obrisanu
+formu — hvata **`CLAN_FORME`** u `vba_check` (uvedena u §27.12 posle baš takvog
+propusta), a compile je ručna kapija. Izmišljen test ovde ne bi merio ništa što
+te dve kapije već ne mere.
+
+**Verifikacija:** `vba_check` čist (**194** fajla, 465 sabotaža); FULL zeleno —
+`RunAllTests` 184/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; `check-banka-eh.py` čist; `WHO_WRITES.md` nepromenjen.
+
+> Po instalaciji: `ImportAllVBA` → `Remove frmOtkupAPP`, `Remove frmSEF` →
+> `Compile` → `Save`. Zaostale forme ovde **obaraju compile**: `frmSEF`
+> referencira `frmOtkupAPP`, a `frmOtkupAPP` zove `OblastZaFormu` koje više nema.

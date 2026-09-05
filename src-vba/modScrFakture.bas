@@ -38,9 +38,10 @@ Attribute VB_Name = "modScrFakture"
 ' dobio ekran kome fali dugme, bez ijedne poruke. Isti kvar je vec placen na
 ' listi paleta (v6-ui-162).
 '
-' frmSEF OSTAJE OPERATIVAN i nepromenjen: nosi event log po fakturi,
-' PrepareResubmit i batch radnje (RecoverAllStuckSEFSendingInvoices, refresh
-' pending) -- nista od toga nije radnja nad JEDNIM redom, pa ovde ne pripada.
+' SEF DOGADJAJI su sesta lista (FK_SEF_LOG): event log po fakturi, otvara se
+' dvoklikom na red liste SEF. Tri radnje koje nisu radnja nad JEDNIM redom --
+' PrepareResubmit i dva batch prolaza -- stoje tamo, jer im je opseg FAKTURA,
+' ne dogadjaj. Time je frmSEF ostala bez ijednog posla i obrisana je u koraku 7.
 '
 ' POLJA SU LJUSKINA, NE EKRANOVA. Sklop "natpis + shell + kontrola" pravi
 ' modOtkupUI.NewFieldG, raspored unutar polja modOtkupUI.LayoutFieldInner.

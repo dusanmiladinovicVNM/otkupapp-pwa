@@ -420,20 +420,20 @@ Private Sub AppendStep(ByRef summary As String, _
     End If
 End Sub
 
+' Napredak sync-a ide u LOG, ne na formu.
+'
+' Do koraka 7 je ovde stajala petlja koja je medju otvorenim formama trazila
+' frmOtkupAPP i dopisivala mu red u panel. Ta forma vise ne postoji, pa bi
+' petlja svaki put prosla kroz sve forme i ne nasla nista -- mrtav kod koji
+' izgleda kao da nesto prikazuje.
+'
+' Ljuska ishod sync-a vec pokazuje: modOtkupUI.DoSync javlja pocetak i kraj
+' toast-om i boji znacku (RefreshSyncBadge). Poruka po koraku je dijagnostika i
+' njeno mesto je log.
 Private Sub SyncProgress(ByVal message As String)
     On Error Resume Next
 
-    Dim uf As Object
-
     LogInfo ORCH_MODULE, "PROGRESS - " & CStr(message)
-
-    For Each uf In VBA.UserForms
-        If TypeName(uf) = "frmOtkupAPP" Then
-            uf.AppendPWASyncLog CStr(message)
-            Exit For
-        End If
-    Next uf
-
     DoEvents
 End Sub
 
