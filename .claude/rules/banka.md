@@ -28,8 +28,28 @@ posle zamene operatera) prosleđuju `ActivateScreen … , False` i kuku NE zovu.
 To je ugovor, ne stil: `RELEASE_GATES` §85 i `ARCHITECTURE_REFERENCE` §288/§440.
 
 - **Jaki ključevi** — `poziv na broj` = otkup/faktura, `tekući račun` — od
-  v2.38.0/RF-09 iza dugmeta „Mapiraj jake ključeve (N)", **NE** na `_Activate`;
-  `_Activate` samo prebroji preko read-only `CountStrongKeyReadyBankaImport`.
+  v2.38.0/RF-09 iza dugmeta „Jaki ključevi", **nikad na ulazak u ekran**. Broj
+  spremnih stavki daje read-only `CountStrongKeyReadyBankaImport` i stoji u
+  **potvrdi**; na nuli se batch ne pokreće. Natpis dugmeta **nema `(N)`**: natpis
+  radnje u ljusci je ključ kataloga poruka (`Scr_Radnje`), pa broj u njega ne
+  staje bez izmene ugovora radnji. (Do v2.39 je ovde pisalo da natpis nosi `(N)`
+  i da `_Activate` prebrojava — oboje je bilo netačno posle uklanjanja forme.)
+- **PRIKAZ I PISAC DELE JEDAN PLAN.** `BimAutoPlan` / `BimAutoPlanIzVrednosti`
+  vraća `smer | partnerTip | partnerID | ciljTip | ciljID | izvor` **bez ijednog
+  upisa**. Pisac ga izvršava (`AutoMapIncomingKupac`,
+  `AutoMapOutgoingKooperantOrOM` više ne odlučuju, samo pišu), mreža ga prikazuje
+  u koloni Predlog, potvrda ga čita naglas. **Nova grana automatskog mapiranja
+  ide u plan, ne u pisca** — inače prikaz i akcija odu u različitim pravcima.
+  Cena tog razlaza je izmerena: kolona je pisala „avans kupca" dok je `Auto`
+  knjižio na fakturu (§27.14a).
+- `samoJaki` **zaustavlja** lanac, ne filtrira ga posle računanja — inače greška
+  u čitanju `tblStanice` obara i batch kome ta tabela ne treba.
+- Čip i značka „jaki ključevi" znače **strogo jak ključ** i moraju se slagati sa
+  `CountStrongKeyReadyBankaImport`. To je drugo pitanje od „šta će `Auto` uraditi"
+  i ne spaja se s njim; čita se iz istog plana (`izvor = JAK`) da dve kopije
+  istog uslova ne postoje.
+- Radnja koja **knjiži novac nad jednim redom pita za potvrdu i imenuje cilj**.
+  Plan bez cilja se ne prećutkuje: potvrda kaže da red ide na ručno.
 - Dedupe ključ uključuje **broj računa**.
 - `Map*` imaju **smer guard** (`RequireBimSmer`).
 - Blok sa 3+ otvorenih stavki diže `ERR_BMAP_MANUAL_REQUIRED` koju batch guta

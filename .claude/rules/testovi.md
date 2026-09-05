@@ -61,14 +61,31 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `KRAJ_REDA` | LF umesto CRLF u VBA izvoru → `Import` ne prepozna formu |
 | `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
 
+**`Poruka()` nikad ne vraća prazno.** Nepoznat ključ daje `"[KLJUČ]"`, pa je
+`Len(Poruka(k)) = 0` provera koja **ne može da padne**. Tvrdnja „ključ postoji u
+katalogu" mora da meri tu oznaku (`PorukaNedostaje` u `modTest`), inače je
+placebo — dve takve su živele zelene dok ih sabotaža nije razotkrila
+(`UI_MIGRACIJA_KATALOG.md` §27.15). Statički `PORUKA` hvata samo
+`Poruka("LITERAL")`; ključ sastavljen u kodu (`"OTKUI_OBL_" & oblast`) ili
+sakriven u stringu (`Scr_Meta`) mu je **nevidljiv** i traži tvrdnju u testu.
+
 `NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
 naredbe) — lažan nalaz je gori od propuštenog. **Poziv u izrazu (`x = Foo(1)`)
 se ne proverava**: bez tipova se poziv funkcije ne razlikuje od indeksiranja
 niza. To je poznata rupa, ne previd — pokušaj proširenja je dao 406 lažnih
-nalaza (ime funkcije unutar string literala, između ostalog). Uzak izuzetak od `DUPLIKAT`-a
-postoji za ugovor ekrana (`Scr_*` u `modScr*`), a od `DUPLIKAT_LOKALNI`-og za
-`Property Get/Let/Set` trojku. Ne kompajlira VBA: ne hvata tip-greške ni
-nedeklarisane promenljive, a u `.frm`/`.cls` ne radi `NEDEFINISAN`/`ARNOST`.
+nalaza (ime funkcije unutar string literala, između ostalog).
+
+> **Posledica koju plaćaš ti, ne checker.** Kad dodaš parametar javnoj
+> proceduri, `ARNOST` **neće** naći zastarele pozive u `AssertEq ...` — oni su u
+> poziciji izraza. Suite tada ne padne nego **visi**: `run_vba` javlja
+> „Exception occurred", Excel ostaje u `[break]`, a pravi razlog je
+> „Argument not optional" u dijalogu. Posle svake izmene potpisa ručno pretraži
+> pozive po imenu.
+
+Uzak izuzetak od `DUPLIKAT`-a postoji za ugovor ekrana (`Scr_*` u `modScr*`), a
+od `DUPLIKAT_LOKALNI`-og za `Property Get/Let/Set` trojku. Ne kompajlira VBA: ne
+hvata tip-greške ni nedeklarisane promenljive, a u `.frm`/`.cls` ne radi
+`NEDEFINISAN`/`ARNOST`.
 
 **`ZAKLONJENO` postoji zbog rupe koju su ostale tri provere ostavile.** Lokalno
 ime koje se poklapa sa imenom funkcije **zaklanja** je unutar te procedure (VBA je
