@@ -17,19 +17,23 @@ paths:
 Cilj plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 su **četiri** forme:
 `frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`.
 
-Posle koraka 6 ih je **sedam** — uz te četiri:
+Posle koraka 6 ih je **šest** — uz te četiri:
 
 | Forma | Zašto je još tu |
 |---|---|
 | `frmSEF` | SEF upravljanje (`PrepareResubmit`, batch radnje, event log) nije preneto ni na jedan ekran (§8.7). Čeka **ekran**, ne korak. Ulaz je `frmOtkupAPP.btnInvoicing`, oblast `OBL_FAKTURISANJE`. |
-| `frmMarza` | čeka ekran koji je zamenjuje (`modScrMarza` ne postoji) |
 | `frmOtkupAPP` | poslednja — host za `frmSEF` i preostale `ReturnToDashboard` pozive |
 
-**Te tri se drže međusobno**, i to je jedini razlog zašto ijedna još stoji:
+**Te dve se drže međusobno**, i to je jedini razlog zašto ijedna još stoji:
 `frmSEF` zove `frmOtkupAPP.ReturnToDashboard` i otvara se njegovim dugmetom, pa
-host ne može pre nje. Nijedna od tri ne čeka „korak" nego **kod koji treba
-napisati** — dva ekrana i gašenje dve legacy grane zatvaranja u `modAdmin` i
-`modPodesavanja`.
+host ne može pre nje. Nijedna ne čeka „korak" nego **kod koji treba napisati** —
+jedan ekran i gašenje dve legacy grane zatvaranja u `modAdmin` i `modPodesavanja`.
+
+`frmMarza` je otišla u §27.15: red registra `MARZA` je **zamenjen** ekranom
+`ANALIZA` (`modScrAnaliza`), koji je U IZRADI i to piše na sebi. To je obrazac za
+ostatak: forma bez ekrana se ne briše nego joj se **napiše zamena**, makar ta
+zamena zasad samo pošteno rekla da još ne radi. Prazan ekran koji to kaže je
+bolji od prigušene stavke koja na klik javlja da ekrana nema.
 
 Pravilo koje iz toga sledi: **nova kontrola ne ide u legacy formu**, nego na
 ekran ljuske (`modScr*`). Izmena legacy forme se radi samo kad je pravilo iz
