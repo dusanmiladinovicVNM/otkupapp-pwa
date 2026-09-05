@@ -187,8 +187,12 @@ Public Sub ImportAllVBA()
     If Len(problem) = 0 Then problem = ValidateTargetShape()
     If Len(problem) = 0 Then problem = BuildPlan()
     If Len(problem) > 0 Then
+        ' recNote MORA i ovde: RecoverImportState se zove PRE preflight-a, pa bi
+        ' prolaz koji padne na kapiji potrosio i obrisao pending marker, a operater
+        ' nikad ne bi saznao da je zatecena prekinuta faza 2.
         MsgBox "PREFLIGHT je odbio import." & vbCrLf & _
-               "NISTA nije menjano u VBA projektu." & vbCrLf & vbCrLf & problem, _
+               "NISTA nije menjano u VBA projektu." & vbCrLf & vbCrLf & problem & _
+               IIf(Len(recNote) > 0, vbCrLf & vbCrLf & recNote, ""), _
                vbCritical, "ImportAllVBA"
         Exit Sub
     End If
@@ -225,6 +229,13 @@ Public Sub ImportAllVBA()
 
     ' --- od ove tacke je projekat u izmeni: svaki izlaz ide kroz FAIL/EH ---
     On Error GoTo EH
+
+    ' 5b) Kapija koju preflight nije mogao da izvrsi dok je forma bila ucitana.
+    '     Sada su sve forme unload-ovane pa je .Designer citljiv, a nijedna
+    '     VBProject izmena jos nije napravljena - pad ovde znaci nula mutacija
+    '     (backup je napravljen, runtime je oboren, projekat netaknut).
+    fatal = ValidateFormDesigner()
+    If Len(fatal) > 0 Then GoTo FAIL
 
     ' 6) STALE PRVO: zaostala forma/modul moze da referencira ono cega u novom
     '    izvoru vise nema i da obori compile; ako izvor kaze da ne postoji, nema
@@ -569,11 +580,19 @@ Private Function ValidateTargetShape() As String
         End If
         ctlN = DesignerControlCount(vbc, okOut)
         If Not okOut Then
-            ValidateTargetShape = "Ne moze da se procita dizajner forme " & ONLY_FORM & _
-                " - import se ne pokrece (fail-closed)."
-            Exit Function
-        End If
-        If ctlN <> 0 Then
+            ' VBE ne da da se cita .Designer dok forma ima ZIVU INSTANCU - a to je
+            ' NORMALNO stanje: posle otvaranja sveske StartApp digne aplikaciju i
+            ' frmOtkupUI je ucitana. Preflight zato tu proveru ODLAZE do
+            ' ValidateFormDesigner, koji ide odmah posle PrepareRuntimeForImport
+            ' (Unload svih formi) - i dalje PRE ijedne izmene projekta.
+            ' Ako nijedna forma nije ucitana a dizajner se i dalje ne cita, to nije
+            ' ziva instanca nego stvarna korupcija -> odbij odmah.
+            If VBA.UserForms.count = 0 Then
+                ValidateTargetShape = "Ne moze da se procita dizajner forme " & ONLY_FORM & _
+                    " (a nijedna forma nije ucitana) - import se ne pokrece (fail-closed)."
+                Exit Function
+            End If
+        ElseIf ctlN <> 0 Then
             ValidateTargetShape = ONLY_FORM & " ima " & ctlN & " kontrolu(e) u DIZAJNERU." & vbCrLf & _
                 "Ljuska mora ostati prazna (sve kontrole nastaju u runtime-u)." & vbCrLf & _
                 "Alat ne radi automatski popravak dizajnera - resi rucno u VBE."
@@ -595,6 +614,26 @@ Private Function ValidateTargetShape() As String
     Exit Function
 EH:
     ValidateTargetShape = "Provera zatecenog projekta nije uspela: [" & Err.Number & "] " & Err.description
+End Function
+
+' Dizajner jedine forme mora biti prazan. Zove se POSLE PrepareRuntimeForImport,
+' kad vise nema zive instance koja blokira citanje .Designer-a. "" = uredu.
+Private Function ValidateFormDesigner() As String
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim vbc As Object, ctlN As Long, okOut As Boolean
+
+    If Not ComponentExists(proj, ONLY_FORM) Then Exit Function   ' clean import u fazi 2
+    Set vbc = proj.VBComponents(ONLY_FORM)
+    ctlN = DesignerControlCount(vbc, okOut)
+    If Not okOut Then
+        ValidateFormDesigner = "Dizajner forme " & ONLY_FORM & " se ne cita ni posle" & vbCrLf & _
+            "oslobadjanja runtime-a (Unload svih formi)." & vbCrLf & _
+            "Nijedna izmena projekta nije napravljena."
+    ElseIf ctlN <> 0 Then
+        ValidateFormDesigner = ONLY_FORM & " ima " & ctlN & " kontrolu(e) u DIZAJNERU." & vbCrLf & _
+            "Ljuska mora ostati prazna - sve kontrole nastaju u runtime-u." & vbCrLf & _
+            "Nijedna izmena projekta nije napravljena."
+    End If
 End Function
 
 ' Odluci sta se radi sa svakom komponentom. Citanje, bez izmene. "" = uredu.
