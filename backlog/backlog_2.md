@@ -126,7 +126,7 @@ End Sub
 - [ ] frmBankaImport
 - [ ] frmBankaExportPregled
 - [ ] frmFakturisanje
-- [ ] frmMarza
+- [x] frmMarza
 - [ ] frmMaticniPodaci
 - [ ] frmOtkupAPP
 - [ ] frmPalete

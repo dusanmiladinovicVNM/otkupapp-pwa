@@ -408,7 +408,18 @@ End Sub
 Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_UVOZ", "Uvoz izvoda"
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_NALOZI", "Platni nalozi"
-    UpsertRow lo, existing, "OTKUI_NAV_MARZA", "Mar" & ChrW(382) & "a"
+    UpsertRow lo, existing, "OTKUI_NAV_ANALIZA", "Analiza poslovanja"
+    ' Ekran je U IZRADI (modScrAnaliza) -- zona to i pise, da stavka koja se
+    ' otvara ne bi izgledala kao ekran koji nema podataka.
+    UpsertRow lo, existing, "OTKUI_SCRAN_SUB", _
+              "Poslovno-finansijske analize " & ChrW(8212) & " u izradi"
+    UpsertRow lo, existing, "OTKUI_SCRAN_LISTA", "Pokazatelji"
+    UpsertRow lo, existing, "OTKUI_SCRAN_CAP", "U izradi"
+    UpsertRow lo, existing, "OTKUI_SCRAN_IZRADA", "Ekran je u izradi"
+    UpsertRow lo, existing, "OTKUI_SCRAN_OPIS", _
+              "Ovde dolaze poslovno-finansijske analize nad podacima koje " & _
+              "aplikacija ve" & ChrW(263) & " ima."
+    UpsertRow lo, existing, "OTKUI_SCRAN_HD_POKAZ", "Pokazatelj"
     UpsertRow lo, existing, "OTKUI_NAV_IZVESTAJI", "Izve" & ChrW(353) & "taji"
     UpsertRow lo, existing, "OTKUI_NAV_SLEDLJIVOST", "Sledljivost"
 
@@ -662,7 +673,9 @@ Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OBL_IZVESTAJI", "Izve" & ChrW(353) & "taji"
     UpsertRow lo, existing, "OTKUI_OBL_FAKTURISANJE", "Fakturisanje"
     UpsertRow lo, existing, "OTKUI_OBL_BANKA", "Banka"
-    UpsertRow lo, existing, "OTKUI_OBL_MARZA", "Mar" & ChrW(382) & "a"
+    ' Kljuc prati OBLAST (OBL_MARZA = kolona Marza u tblKorisnici), a naziv
+    ' prati EKRAN koji to pravo trosi -- od v6-ui-213 je to Analiza poslovanja.
+    UpsertRow lo, existing, "OTKUI_OBL_MARZA", "Analiza poslovanja"
     UpsertRow lo, existing, "OTKUI_OBL_SLEDLJIVOST", "Sledljivost"
     UpsertRow lo, existing, "OTKUI_OBL_MATICNIPODACI", "Mati" & ChrW(269) & "ni podaci"
     UpsertRow lo, existing, "OTKUI_OBL_PALETE", "Palete"

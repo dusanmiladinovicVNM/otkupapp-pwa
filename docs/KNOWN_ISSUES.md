@@ -311,6 +311,10 @@ AUD-002/003/007/016/017/018/034/037/039 are not re-listed.
   offset/shape drift into an import abort, not silent corruption. Residual the gate can't see: 0/0
   account-only rows (money-zero). Shared date/account/poziv fixes belong to RF-16.
 - `frmMarza` (FM-0106) is legacy/unused → all rows Accepted/P3; no business risk unless revived.
+  **Form deleted** in UI migration step 6 (`UI_MIGRACIJA_KATALOG.md` §27.15); its sidebar slot is
+  now screen `ANALIZA` (`modScrAnaliza`), marked U IZRADI. `modMarza` stays in source with **no
+  caller** — the FM-0106 methodology findings (estimated vs realized margin) must be settled
+  before any new screen reuses that math.
 - Refuted side-detail: FM-0137 #10 (`modStornoWarm` shutdown) — `Workbook_BeforeClose` already calls
   `ShutdownApp`→`StopStornoWarm`, so the "add to BeforeClose" recommendation is redundant.
 

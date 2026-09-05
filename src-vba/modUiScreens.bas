@@ -33,8 +33,12 @@ Attribute VB_Name = "modUiScreens"
 '
 ' Od S4b SVI ekrani daju svoje redove kroz Scr_Rows - i ekran dokumenata,
 ' koji je do tada jedini punio mrezu po svom. Mreza je time neutralna.
-' Ostali ekrani su u registru sa modulom koji jos ne postoji - sidebar ih
-' prikazuje prigusene.
+'
+' Od v6-ui-213 SVAKI red registra ima svoj modul: MARZA je bio poslednji bez
+' njega i zamenio ga je ANALIZA. Sposobnost da se ekran bez modula nacrta
+' prigusen OSTAJE (v. ScrPostoji) -- ona je tu za ekran koji tek dolazi, ne za
+' zatecen red. Prazno polje modula danas znaci PANEL, i test 165 to tvrdi u oba
+' smera.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
@@ -133,7 +137,11 @@ Public Function ScrRows() As Variant
           "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
     c.Add "BANKA_NALOZI|modScrBankaNalozi|OTKUI_NAV_BANKA_NALOZI|" & IC_NALOZI & _
           "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
-    c.Add "MARZA|modScrMarza|OTKUI_NAV_MARZA|" & IC_MARZA & _
+    ' ANALIZA je do v6-ui-213 bila MARZA, red koji je pokazivao na modul koji
+    ' nikad nije napisan. Oblast prava ostaje OBL_MARZA -- to je NAZIV KOLONE u
+    ' tblKorisnici, isti u svakoj instalaciji; pravo je isto, promenio se ekran
+    ' koji ga trosi, pa preimenovanje kolone ne bi kupilo nista.
+    c.Add "ANALIZA|modScrAnaliza|OTKUI_NAV_ANALIZA|" & IC_ANALIZA & _
           "|FINANSIJE|" & OBL_MARZA & "|" & SEK_RAD
     c.Add "IZVESTAJI|modScrIzvestaji|OTKUI_NAV_IZVESTAJI|" & IC_IZVEST & _
           "|ANALITIKA|" & OBL_IZVESTAJI & "|" & SEK_RAD
@@ -148,8 +156,8 @@ Public Function ScrRows() As Variant
     ' Plan i obrazlozenje: docs/UI_MIGRACIJA_KATALOG.md, 26.3.
     '
     ' Od M4 svih pet ima svoj modul; prigusene u sekciji MATICNI vise nema.
-    ' Sidebar i dalje prigusuje ekran bez modula (MARZA, SLEDLJIVOST) -- to nije
-    ' propust nego zatecen nacin da se vidi sta dolazi (v. vrh modula).
+    ' Od v6-ui-213 je nema nigde -- svaki red registra ima modul. Sposobnost
+    ' prigusivanja ostaje za ekran koji tek dolazi (v. vrh modula).
     c.Add "MAT_PARTNERI|modScrMatPartneri|OTKUI_NAV_MAT_PARTNERI|" & IC_MAT_PARTNERI & _
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
     c.Add "MAT_ROBA|modScrMatRoba|OTKUI_NAV_MAT_ROBA|" & IC_MAT_ROBA & _

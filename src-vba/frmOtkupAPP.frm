@@ -698,8 +698,8 @@ End Sub
 ' =========================
 
 ' btnBlocks_Click / btnPurchase_Click / btnPalete_Click / btnAgro_Click /
-' btnReports_Click / btnTrace_Click / btnbankaisplate_Click / btnBanka_Click
-' su obrisani sa frmOtkup i
+' btnReports_Click / btnTrace_Click / btnbankaisplate_Click / btnBanka_Click /
+' btnMargin_Click su obrisani sa frmOtkup i
 ' frmDokumenta (korak 2) i frmPalete / frmAgrohemija / frmIzvestaj /
 ' frmSledljivost (korak 3) i frmBankaExportPregled (korak 4),
 ' docs/UI_MIGRACIJA_KATALOG.md par.27.3. Dugmad
@@ -708,6 +708,11 @@ End Sub
 ' IZVESTAJI, SLEDLJIVOST, BANKA_NALOZI i BANKA_UVOZ (modScr*). Uvoz izvoda,
 ' koji je btnBanka_Click radio pre otvaranja forme, sada pokrece ULAZAK u
 ' ekran BANKA_UVOZ (modScrBankaUvoz.Scr_Aktiviraj).
+'
+' btnMargin je otisao istim putem, ali sa jednom razlikom: frmMarza NIJE
+' prebacena nego UKINUTA. Marza je bila legacy koja se ne koristi (audit
+' FM-0106), a njeno mesto u sidebaru drzi ekran ANALIZA (modScrAnaliza), koji
+' je U IZRADI i to i pise. V. docs/UI_MIGRACIJA_KATALOG.md par.27.15.
 
 
 
@@ -768,9 +773,6 @@ EH:
     Resume CleanExit
 End Sub
 
-Private Sub btnMargin_Click()
-    OpenContentForm frmMarza, btnMargin, Poruka("OTKUP_LBL_MARZA")
-End Sub
 
 
 Private Sub btnOpenExcel_Click()
