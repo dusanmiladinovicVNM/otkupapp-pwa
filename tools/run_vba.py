@@ -75,6 +75,8 @@ SUITES = {
     "RunSEFTestSuite":          {"gate": True,  "dialogs": True,  "default": False},
     "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
+    # Prerada 2.0 (Faza A): sema, seed, materijalizacija lager jedinica.
+    "RunProizvodnjaTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
     "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},

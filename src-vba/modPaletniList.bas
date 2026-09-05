@@ -2902,12 +2902,17 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     ' Osiguraj nove kolone PRE transakcije (inace PalAppendRow tiho preskoci
     ' upis bruto/paleta/ambalaza -> 0 u sazetku paletnog lista).
     EnsurePreradaCols
+    ' Prerada 2.0 (Faza A): svaki nov lot dobija lager jedinicu u ISTOJ
+    ' transakciji -- bez nje lot nije prodajan od Faze B1. Tabela nastaje
+    ' self-heal-om na startu; ako je nema, staje se glasno, ne tiho.
+    RequireTable TBL_LAGER_JEDINICE, SRC
 
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRERADA
     tx.AddTableSnapshot TBL_PRERADA_STAVKA
     tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_LAGER_JEDINICE
 
     RequirePreradaSchema SRC
     RequirePreradaStavkaSchema SRC
@@ -2977,6 +2982,9 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
                   NzD(SafeCell(dPal, CLng(palRows(k)), iNeto)), Now, "")
         RequireUpdateCell TBL_PALETA, CLng(palRows(k)), COL_PAL_PRERADJENO, "Da", SRC
     Next k
+
+    ' Lager jedinica lota (IzvorTip=PRERADA) + obrnuti pokazivac na preradi.
+    modProizvodnja.MaterijalizujPreradu preID, SRC
 
     tx.CommitTx
     SavePrerada_TX = preID

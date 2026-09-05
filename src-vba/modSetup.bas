@@ -964,6 +964,10 @@ Public Sub EnsurePaletniListSchema()
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
     EnsureUtovarSchemaCore
 
+    ' Prerada 2.0 (Faza A): proizvodno jezgro -- tabele, seed, lager
+    ' jedinica za svaku legacy preradu. Idempotentno, bez dijaloga.
+    EnsureProizvodnjaSchemaSve
+
     EnsureCenovnikSchema
 
     EnsurePaletaSablon
@@ -1103,7 +1107,9 @@ Private Function AuditableTables() As Variant
         TBL_PARCELE, TBL_ARTIKLI, TBL_MAGACIN, TBL_CENOVNIK, TBL_KORISNICI, _
         TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
         TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT, _
-        TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI)
+        TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI, _
+        TBL_TIPOVI_PROCESA, TBL_PROIZVODI, TBL_OPREMA, TBL_LAGER_JEDINICE, _
+        TBL_PROCES_SARZE, TBL_PROCES_ULAZI, TBL_PROCES_IZLAZI, TBL_PROCES_PARAMETRI)
 End Function
 
 ' ============================================================
@@ -1164,6 +1170,99 @@ Public Sub EnsureUtovarSchemaCore()
               COL_PRV_AKTIVAN)
 End Sub
 
+' ============================================================
+' PRERADA 2.0 (Faza A): sema proizvodnog jezgra. Idempotentno
+' (EnsureDataTable postojecoj tabeli samo dopunjava kolone). Zove se iz
+' EnsurePaletniListSchema, EnsureRuntimeSchema (self-heal) i Alt+F8
+' EnsureProizvodnjaSchema. Redosled kolona = redosled u
+' docs/PRERADA_2_MODEL_I_PLAN.md par. 4; fixture generator (tools/
+' make_fixture.py ENSURE_TABLES) mora da ga ponovi.
+' ============================================================
+Public Sub EnsureProizvodnjaSchemaCore()
+    EnsureDataTable TBL_TIPOVI_PROCESA, "TipoviProcesa", _
+        Array(COL_TPR_SIFRA, COL_TPR_NAZIV, COL_TPR_MENJA_PROIZVOD, _
+              COL_TPR_ZAHTEVA_OPREMU, COL_TPR_ULAZNA_FORMA, COL_TPR_OBAVEZNI_PARAM, _
+              COL_TPR_AKTIVAN)
+    EnsureDataTable TBL_PROIZVODI, "Proizvodi", _
+        Array(COL_PRZ_ID, COL_PRZ_VRSTA, COL_PRZ_NAZIV, COL_PRZ_FORMA, _
+              COL_PRZ_PRODAJNI, COL_PRZ_IZVOR_TIP, COL_PRZ_IZVOR_KLJUC, COL_PRZ_AKTIVAN)
+    EnsureDataTable TBL_OPREMA, "Oprema", _
+        Array(COL_OPR_ID, COL_OPR_STANICA, COL_OPR_TIP, COL_OPR_NAZIV, _
+              COL_OPR_KAPACITET, COL_OPR_AKTIVAN)
+    EnsureDataTable TBL_LAGER_JEDINICE, "LagerJedinice", _
+        Array(COL_LJ_ID, COL_LJ_BROJ, COL_LJ_GODINA, COL_LJ_TIP, COL_LJ_PROIZVOD, _
+              COL_LJ_KLASA, COL_LJ_KALIBRACIJA, COL_LJ_KG_POCETNO, COL_LJ_LOT, _
+              COL_LJ_TIP_KUTIJE, COL_LJ_KUTIJE, COL_LJ_TIP_KESE, COL_LJ_KESE, _
+              COL_LJ_TEZINA_PALETE, COL_LJ_BRUTO, COL_LJ_DATUM, COL_LJ_ROK, _
+              COL_LJ_STANICA, COL_LJ_IZVOR_TIP, COL_LJ_IZVOR_ID, COL_LJ_NAPOMENA, _
+              COL_STORNIRANO)
+    EnsureDataTable TBL_PROCES_SARZE, "ProcesSarze", _
+        Array(COL_SRZ_ID, COL_SRZ_BROJ, COL_SRZ_GODINA, COL_SRZ_TIP, COL_SRZ_STANICA, _
+              COL_SRZ_OPREMA, COL_SRZ_POCETAK, COL_SRZ_KRAJ, COL_SRZ_STATUS, _
+              COL_SRZ_ODGOVORNI, COL_SRZ_NAPOMENA, COL_STORNIRANO)
+    EnsureDataTable TBL_PROCES_ULAZI, "ProcesUlazi", _
+        Array(COL_PUL_ID, COL_PUL_SARZA, COL_PUL_LJ, COL_PUL_KG, COL_PUL_NAPOMENA, _
+              COL_STORNIRANO)
+    EnsureDataTable TBL_PROCES_IZLAZI, "ProcesIzlazi", _
+        Array(COL_PIZ_ID, COL_PIZ_SARZA, COL_PIZ_LJ, COL_PIZ_PROIZVOD, COL_PIZ_KLASA, _
+              COL_PIZ_KALIBRACIJA, COL_PIZ_KG, COL_PIZ_TIP, COL_PIZ_NAPOMENA, _
+              COL_STORNIRANO)
+    EnsureDataTable TBL_PROCES_PARAMETRI, "ProcesParametri", _
+        Array(COL_PPR_ID, COL_PPR_SARZA, COL_PPR_KLJUC, COL_PPR_VREDNOST, _
+              COL_PPR_JEDINICA, COL_STORNIRANO)
+
+    ' Most ka legacy tabelama (na KRAJ; upis ide po imenu).
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_LJ_ID
+    EnsureColumnOnTable TBL_UTOVAR_STAVKE, COL_UTS_LJ_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_LJ_ID
+
+    ' Audit kolone i na novim tabelama (isti razlog kao za utovar,
+    ' #248 revizija #10): bez njih StampRowAudit tiho preskace ko/kada.
+    Dim t As Variant, i As Long
+    t = Array(TBL_TIPOVI_PROCESA, TBL_PROIZVODI, TBL_OPREMA, TBL_LAGER_JEDINICE, _
+              TBL_PROCES_SARZE, TBL_PROCES_ULAZI, TBL_PROCES_IZLAZI, TBL_PROCES_PARAMETRI)
+    For i = LBound(t) To UBound(t)
+        If Not GetTable(CStr(t(i))) Is Nothing Then
+            EnsureColumnOnTable CStr(t(i)), COL_AUDIT_CREATED_AT
+            EnsureColumnOnTable CStr(t(i)), COL_AUDIT_CREATED_BY
+            EnsureColumnOnTable CStr(t(i)), COL_AUDIT_MODIFIED_AT
+            EnsureColumnOnTable CStr(t(i)), COL_AUDIT_MODIFIED_BY
+        End If
+    Next i
+
+    SetColumnNumberFormat TBL_LAGER_JEDINICE, COL_LJ_KG_POCETNO, "0.00"
+    SetColumnNumberFormat TBL_PROCES_ULAZI, COL_PUL_KG, "0.00"
+    SetColumnNumberFormat TBL_PROCES_IZLAZI, COL_PIZ_KG, "0.00"
+End Sub
+
+' Core + seed + materijalizacija + backfill, BEZ dijaloga. Vraca sazetak.
+Public Function EnsureProizvodnjaSchemaSve() As String
+    EnsureProizvodnjaSchemaCore
+    Dim s As String
+    s = modProizvodnja.SeedProizvodnjaMaticni()
+    s = s & ", lager jedinica +" & CStr(modProizvodnja.MaterijalizujLegacyPrerade())
+    s = s & ", stavki sa LJ +" & CStr(modProizvodnja.BackfillLjNaStavkama())
+    EnsureProizvodnjaSchemaSve = s
+End Function
+
+' Alt+F8 -> EnsureProizvodnjaSchema (jednokratno na master svesci; isti
+' posao radi i self-heal na startu, ovo je rucni put sa porukom).
+Public Sub EnsureProizvodnjaSchema()
+    On Error GoTo EH
+    Dim s As String
+    s = EnsureProizvodnjaSchemaSve()
+    LogSetup "OK", "EnsureProizvodnjaSchema done: " & s
+    If Not IsTestMode() Then
+        MsgBox "Prerada 2.0: seme su kreirane/proverene." & vbCrLf & s, _
+               vbInformation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogSetup "ERROR", "EnsureProizvodnjaSchema failed: " & Err.description
+    MsgBox "Gre" & ChrW(353) & "ka u EnsureProizvodnjaSchema: " & Err.description, _
+           vbCritical, APP_NAME
+End Sub
+
 Public Sub EnsureRuntimeSchema()
     On Error Resume Next
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
@@ -1201,6 +1300,14 @@ Public Sub EnsureRuntimeSchema()
     Next audI
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+
+    ' Prerada 2.0 (Faza A) na self-update putu: tabele + seed + lager
+    ' jedinica za svaku legacy preradu + LJ kljuc na stavkama. Sve je
+    ' idempotentno i deterministicko (mapa PreradaID -> LJ je 1:1), pa SME
+    ' u self-heal -- za razliku od obrisanog BackfillUtovariIzGPFaktura,
+    ' koji je izvodio cinjenicu koju operater nije uneo (#248 revizija #12).
+    ' Bez ovoga bi klijent posle update-a prodavao lotove bez jedinice.
+    EnsureProizvodnjaSchemaSve
 
     ' Format kolona (schema-drift: reinstall/self-update vrati kolone na General ->
     ' E-notacija/tarabe na dokumentima). Idempotentno, tera se na SVAKI start.

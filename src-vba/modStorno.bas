@@ -1810,6 +1810,11 @@ Public Function StornoPrerada_TX(ByVal preradaID As String) As Boolean
     tx.AddTableSnapshot TBL_PRERADA
     tx.AddTableSnapshot TBL_PRERADA_STAVKA
     tx.AddTableSnapshot TBL_PALETA
+    ' Prerada 2.0 (Faza A): storno prerade nosi i njenu lager jedinicu.
+    ' USLOVNO (B3 obrazac): sveska pre nadogradnje nema tabelu.
+    If Not GetTable(TBL_LAGER_JEDINICE) Is Nothing Then
+        tx.AddTableSnapshot TBL_LAGER_JEDINICE
+    End If
 
     If Not StornoPrerada(preradaID) Then
         Err.Raise ERR_STORNO_BASE + 45, SRC, _
@@ -1848,6 +1853,11 @@ Public Function StornoPrerada(ByVal preradaID As String) As Boolean
     End If
 
     MarkRowStornirano TBL_PRERADA, rowPre, SRC
+
+    ' Prerada 2.0 (Faza A): lager jedinica lota ide u storno sa preradom --
+    ' LJ je kljuc prodaje od Faze B1, pa bi bez ovoga stornirana prerada
+    ' ostala prodajna jedinica. Meko po tabeli (sveska pre nadogradnje).
+    StornoLjZaIzvor LJ_IZVOR_PRERADA, preradaID, SRC
 
     ' storniraj stavke + vrati preradene palete u lager (Preradjeno = "")
     Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
@@ -2404,6 +2414,28 @@ Private Sub MarkRowStornirano(ByVal tblName As String, _
                               ByVal rowIndex As Long, _
                               ByVal sourceName As String)
     RequireUpdateCell tblName, rowIndex, COL_STORNIRANO, STORNO_DA, sourceName
+End Sub
+
+' Prerada 2.0: stornira SVE aktivne lager jedinice datog porekla
+' (IzvorTip/IzvorID). Jedinica prati sudbinu dokumenta koji ju je stvorio;
+' kapija "jedinica ima potomka" dolazi sa procesnim writer-ima (Faza B2).
+' Meko po tabeli: sveska pre nadogradnje nema tblLagerJedinice.
+Private Sub StornoLjZaIzvor(ByVal izvorTip As String, ByVal izvorID As String, _
+                            ByVal sourceName As String)
+    If GetTable(TBL_LAGER_JEDINICE) Is Nothing Then Exit Sub
+    Dim d As Variant, i As Long, cT As Long, cIz As Long, cSt As Long
+    d = GetTableData(TBL_LAGER_JEDINICE)
+    If Not IsArray(d) Then Exit Sub
+    cT = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_TIP, sourceName)
+    cIz = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_ID, sourceName)
+    cSt = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_STORNIRANO, sourceName)
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(CStr(nz(d(i, cT)))), izvorTip, vbTextCompare) = 0 _
+           And StrComp(Trim$(CStr(nz(d(i, cIz)))), Trim$(izvorID), vbTextCompare) = 0 _
+           And Not IsStorniranoValue(d(i, cSt)) Then
+            MarkRowStornirano TBL_LAGER_JEDINICE, i, sourceName
+        End If
+    Next i
 End Sub
 
 ' Storno po BROJU dokumenta zahvata SVE aktivne redove tog broja (Klasa I + II

@@ -31,6 +31,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblPaletaStavka` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
 | `tblSEFEventLog` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblSEFSubmission` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
+| `tblLagerJedinice` | 2 | `modPaletniList`, `modStorno` |
 | `tblMagacin` | 2 | `modAgroUnos`, `modAgrohemija` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
 | `tblPrerada` | 2 | `modPaletniList`, `modStorno` |
@@ -46,9 +47,12 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
+| `tblProizvodi` | 0 | _(samo testovi)_ |
 | `tblSEFConfig` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
+| `tblTipoviProcesa` | 0 | _(samo testovi)_ |
+| `tblVrstaGotovihProizvoda` | 0 | _(samo testovi)_ |
 
 ## Test moduli po tabeli
 
@@ -56,18 +60,22 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakture`: `modSEFTests`, `modTestBanka`, `modTestStorno`
 - `tblNovac`: `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
-- `tblFakturaStavke`: `modTestStorno`
+- `tblFakturaStavke`: `modTestProizvodnja`, `modTestStorno`
 - `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
-- `tblPaleta`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPaleta`: `modTestPalete`, `modTestProizvodnja`, `modTestStorno`, `modTestStornoCentar`
 - `tblPaletaStavka`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
+- `tblLagerJedinice`: `modTestProizvodnja`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblParcele`: `modAgrohemijaTests`
+- `tblPrerada`: `modTestProizvodnja`
 - `tblStornoZurnal`: `modTestStornoCentar`
+- `tblUtovar`: `modTestProizvodnja`
+- `tblUtovarStavke`: `modTestProizvodnja`
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
 - `tblPartnerMap`: `modTestBanka`
@@ -75,9 +83,12 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`
 - `tblKutije`: `modTest`
+- `tblProizvodi`: `modTestProizvodnja`
 - `tblSEFConfig`: `modTestStorno`
 - `tblStanice`: `modTestBanka`
 - `tblTipAmbalaze`: `modTestPalete`
+- `tblTipoviProcesa`: `modTestProizvodnja`
+- `tblVrstaGotovihProizvoda`: `modTestProizvodnja`
 
 ## Sta ovo NE pokriva
 

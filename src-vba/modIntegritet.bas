@@ -110,6 +110,9 @@ Private Sub RunAllChecks()
     Chk_D1_PreradjenoBezPrerade
     Chk_D2_PreradaNesvezaPaleta
     Chk_A5_PreradaKg
+    Chk_P4_PreradaLagerJedinica
+    Chk_P5_StavkeLagerJedinica
+    Chk_P6_LagerJedinicaOsnov
 End Sub
 
 ' ============================================================
@@ -743,6 +746,211 @@ Private Sub Chk_D2_PreradaNesvezaPaleta()
 
 EH:
     WriteErr "D2", Err.description
+End Sub
+
+' ============================================================
+' BLOK P: PRERADA 2.0 -- lager jedinica (Faza A). Invarijante I6/I7
+' iz docs/PRERADA_2_MODEL_I_PLAN.md par. 5.
+' ============================================================
+
+' CHECK P4: svaka prerada ima TACNO JEDNU lager jedinicu (IzvorTip=PRERADA),
+' KgPocetno = NetoIzlazKg, aktivna prerada sa tipom ima ProizvodID, obrnuti
+' pokazivac tblPrerada.LagerJedinicaID pokazuje na tu jedinicu.
+Private Sub Chk_P4_PreradaLagerJedinica()
+    On Error GoTo EH
+    Dim bad As Collection: Set bad = New Collection
+    If GetTable(TBL_LAGER_JEDINICE) Is Nothing Then
+        WriteBlock "P4", "Prerada <-> lager jedinica", _
+                   Array("PreradaID", "BrojPrerade", "LagerJedinicaID", "Razlog"), Empty
+        Exit Sub
+    End If
+
+    ' Mapa IzvorID -> (ljID, broj LJ, KgPocetno, ProizvodID) jednim prolazom.
+    Dim lj As Variant: lj = GetTableData(TBL_LAGER_JEDINICE)
+    Dim mapa As Object: Set mapa = CreateObject("Scripting.Dictionary")
+    mapa.CompareMode = vbTextCompare
+    If IsArray(lj) Then
+        Dim lId As Long, lT As Long, lIz As Long, lKg As Long, lPr As Long, j As Long, k As String
+        lId = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_ID, "modIntegritet.P4")
+        lT = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_TIP, "modIntegritet.P4")
+        lIz = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_ID, "modIntegritet.P4")
+        lKg = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_KG_POCETNO, "modIntegritet.P4")
+        lPr = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_PROIZVOD, "modIntegritet.P4")
+        For j = 1 To UBound(lj, 1)
+            If UCase$(Trim$(CStr(nz(lj(j, lT))))) = LJ_IZVOR_PRERADA Then
+                k = Trim$(CStr(nz(lj(j, lIz))))
+                If Len(k) > 0 Then
+                    If mapa.Exists(k) Then
+                        mapa(k) = Array(CStr(mapa(k)(0)), CLng(mapa(k)(1)) + 1, mapa(k)(2), mapa(k)(3))
+                    Else
+                        mapa.Add k, Array(Trim$(CStr(nz(lj(j, lId)))), 1, lj(j, lKg), _
+                                          Trim$(CStr(nz(lj(j, lPr)))))
+                    End If
+                End If
+            End If
+        Next j
+    End If
+
+    Dim d As Variant: d = GetTableData(TBL_PRERADA)
+    If IsArray(d) Then
+        Dim cId As Long, cBroj As Long, cNeto As Long, cTip As Long, cSt As Long, cLj As Long
+        cId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, "modIntegritet.P4")
+        cBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, "modIntegritet.P4")
+        cNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, "modIntegritet.P4")
+        cTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, "modIntegritet.P4")
+        cSt = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, "modIntegritet.P4")
+        cLj = GetColumnIndex(TBL_PRERADA, COL_PRE_LJ_ID)
+
+        Dim i As Long, pid As String, aktivna As Boolean, ljID As String, razlog As String
+        Dim neto As Double, kg As Double
+        For i = 1 To UBound(d, 1)
+            pid = Trim$(CStr(nz(d(i, cId))))
+            If Len(pid) > 0 Then
+                aktivna = (UCase$(Trim$(CStr(nz(d(i, cSt))))) <> "DA")
+                razlog = "": ljID = ""
+                If Not mapa.Exists(pid) Then
+                    razlog = "bez lager jedinice"
+                ElseIf CLng(mapa(pid)(1)) > 1 Then
+                    razlog = "vise lager jedinica (" & CStr(mapa(pid)(1)) & ")"
+                    ljID = CStr(mapa(pid)(0))
+                Else
+                    ljID = CStr(mapa(pid)(0))
+                    neto = 0: If IsNumeric(d(i, cNeto)) Then neto = CDbl(d(i, cNeto))
+                    kg = 0: If IsNumeric(mapa(pid)(2)) Then kg = CDbl(mapa(pid)(2))
+                    If aktivna And Abs(neto - kg) > 0.01 Then
+                        razlog = "KgPocetno " & Format$(kg, "0.00") & " != NetoIzlazKg " & Format$(neto, "0.00")
+                    ElseIf aktivna And Len(Trim$(CStr(nz(d(i, cTip))))) > 0 _
+                           And Len(CStr(mapa(pid)(3))) = 0 Then
+                        razlog = "LJ bez ProizvodID (tip '" & Trim$(CStr(nz(d(i, cTip)))) & "' nije u tblProizvodi)"
+                    ElseIf cLj > 0 Then
+                        If StrComp(Trim$(CStr(nz(d(i, cLj)))), ljID, vbTextCompare) <> 0 Then
+                            razlog = "obrnuti pokazivac '" & Trim$(CStr(nz(d(i, cLj)))) & "' != LJ"
+                        End If
+                    End If
+                End If
+                If Len(razlog) > 0 Then bad.Add Array(pid, CStr(d(i, cBroj)), ljID, razlog)
+            End If
+        Next i
+    End If
+
+    WriteBlock "P4", "Prerada <-> lager jedinica (bez LJ / vise LJ / kg / proizvod / pokazivac)", _
+               Array("PreradaID", "BrojPrerade", "LagerJedinicaID", "Razlog"), CollToArray(bad, 4)
+    Exit Sub
+EH:
+    WriteErr "P4", Err.description
+End Sub
+
+' CHECK P5: aktivna utovarna/fakturna GP stavka nosi LagerJedinicaID koji
+' postoji i cije poreklo (IzvorID) je bas ta prerada.
+Private Sub Chk_P5_StavkeLagerJedinica()
+    On Error GoTo EH
+    Dim bad As Collection: Set bad = New Collection
+    If Not GetTable(TBL_LAGER_JEDINICE) Is Nothing Then
+        Dim izvorPoLj As Object: Set izvorPoLj = CreateObject("Scripting.Dictionary")
+        izvorPoLj.CompareMode = vbTextCompare
+        Dim lj As Variant: lj = GetTableData(TBL_LAGER_JEDINICE)
+        If IsArray(lj) Then
+            Dim lId As Long, lIz As Long, j As Long, k As String
+            lId = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_ID, "modIntegritet.P5")
+            lIz = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_ID, "modIntegritet.P5")
+            For j = 1 To UBound(lj, 1)
+                k = Trim$(CStr(nz(lj(j, lId))))
+                If Len(k) > 0 Then
+                    If Not izvorPoLj.Exists(k) Then izvorPoLj.Add k, Trim$(CStr(nz(lj(j, lIz))))
+                End If
+            Next j
+        End If
+        P5Tabela bad, izvorPoLj, TBL_UTOVAR_STAVKE, COL_UTS_ID, COL_UTS_PRERADA_ID, COL_UTS_LJ_ID
+        P5Tabela bad, izvorPoLj, TBL_FAKTURA_STAVKE, COL_FS_ID, COL_FS_PRERADA_ID, COL_FS_LJ_ID
+    End If
+    WriteBlock "P5", "GP stavke bez / sa pogresnom lager jedinicom", _
+               Array("Tabela", "StavkaID", "PreradaID", "LagerJedinicaID", "Razlog"), CollToArray(bad, 5)
+    Exit Sub
+EH:
+    WriteErr "P5", Err.description
+End Sub
+
+Private Sub P5Tabela(ByVal bad As Collection, ByVal izvorPoLj As Object, _
+                     ByVal tbl As String, ByVal colId As String, _
+                     ByVal colPre As String, ByVal colLj As String)
+    If GetTable(tbl) Is Nothing Then Exit Sub
+    Dim cId As Long, cPre As Long, cLj As Long
+    cId = GetColumnIndex(tbl, colId)
+    cPre = GetColumnIndex(tbl, colPre)
+    cLj = GetColumnIndex(tbl, colLj)
+    If cId = 0 Or cPre = 0 Or cLj = 0 Then Exit Sub
+    Dim d As Variant: d = GetTableData(tbl)
+    If Not IsArray(d) Then Exit Sub
+    d = ExcludeStornirano(d, tbl)
+    If Not IsArray(d) Then Exit Sub
+    Dim i As Long, pre As String, ljID As String, razlog As String
+    For i = 1 To UBound(d, 1)
+        pre = Trim$(CStr(nz(d(i, cPre))))
+        If Len(pre) > 0 Then
+            ljID = Trim$(CStr(nz(d(i, cLj))))
+            razlog = ""
+            If Len(ljID) = 0 Then
+                razlog = "bez LagerJedinicaID"
+            ElseIf Not izvorPoLj.Exists(ljID) Then
+                razlog = "LJ ne postoji"
+            ElseIf StrComp(CStr(izvorPoLj(ljID)), pre, vbTextCompare) <> 0 Then
+                razlog = "LJ pripada preradi '" & CStr(izvorPoLj(ljID)) & "'"
+            End If
+            If Len(razlog) > 0 Then bad.Add Array(tbl, CStr(nz(d(i, cId))), pre, ljID, razlog)
+        End If
+    Next i
+End Sub
+
+' CHECK P6: osnovne cinjenice lager jedinice -- jedinstven ID, poznat
+' IzvorTip, neprazan IzvorID, StanicaID na aktivnoj jedinici.
+Private Sub Chk_P6_LagerJedinicaOsnov()
+    On Error GoTo EH
+    Dim bad As Collection: Set bad = New Collection
+    If Not GetTable(TBL_LAGER_JEDINICE) Is Nothing Then
+        Dim d As Variant: d = GetTableData(TBL_LAGER_JEDINICE)
+        If IsArray(d) Then
+            Dim cId As Long, cT As Long, cIz As Long, cSt As Long, cStan As Long, cBroj As Long, cGod As Long
+            cId = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_ID, "modIntegritet.P6")
+            cT = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_TIP, "modIntegritet.P6")
+            cIz = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_IZVOR_ID, "modIntegritet.P6")
+            cSt = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_STORNIRANO, "modIntegritet.P6")
+            cStan = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_STANICA, "modIntegritet.P6")
+            cBroj = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_BROJ, "modIntegritet.P6")
+            cGod = RequireColumnIndex(TBL_LAGER_JEDINICE, COL_LJ_GODINA, "modIntegritet.P6")
+            Dim brojac As Object: Set brojac = CreateObject("Scripting.Dictionary")
+            brojac.CompareMode = vbTextCompare
+            Dim i As Long, id As String, tip As String, oznaka As String
+            For i = 1 To UBound(d, 1)
+                id = Trim$(CStr(nz(d(i, cId))))
+                If brojac.Exists(id) Then brojac(id) = CLng(brojac(id)) + 1 Else brojac.Add id, 1
+            Next i
+            For i = 1 To UBound(d, 1)
+                id = Trim$(CStr(nz(d(i, cId))))
+                oznaka = CStr(nz(d(i, cBroj))) & "/" & CStr(nz(d(i, cGod)))
+                tip = UCase$(Trim$(CStr(nz(d(i, cT)))))
+                If Len(id) = 0 Then
+                    bad.Add Array(id, oznaka, "prazan LagerJedinicaID")
+                ElseIf CLng(brojac(id)) > 1 Then
+                    bad.Add Array(id, oznaka, "dupli LagerJedinicaID")
+                End If
+                If tip <> LJ_IZVOR_SARZA And tip <> LJ_IZVOR_PALETA And tip <> LJ_IZVOR_PRERADA Then
+                    bad.Add Array(id, oznaka, "nepoznat IzvorTip '" & tip & "'")
+                ElseIf Len(Trim$(CStr(nz(d(i, cIz))))) = 0 Then
+                    bad.Add Array(id, oznaka, "prazan IzvorID")
+                End If
+                If UCase$(Trim$(CStr(nz(d(i, cSt))))) <> "DA" Then
+                    If Len(Trim$(CStr(nz(d(i, cStan))))) = 0 Then
+                        bad.Add Array(id, oznaka, "aktivna jedinica bez StanicaID")
+                    End If
+                End If
+            Next i
+        End If
+    End If
+    WriteBlock "P6", "Lager jedinica -- osnovne cinjenice (ID, izvor, stanica)", _
+               Array("LagerJedinicaID", "Oznaka", "Razlog"), CollToArray(bad, 3)
+    Exit Sub
+EH:
+    WriteErr "P6", Err.description
 End Sub
 
 ' ============================================================

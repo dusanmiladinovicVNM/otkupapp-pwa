@@ -412,6 +412,161 @@ Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
 ' kolona po preradi je buduci korak ako se pojavi potreba po lotu.
 Public Const CFG_GP_ROK_MESECI As String = "GP_ROK_TRAJANJA_MESECI"
 
+' ============================================================
+' PRERADA 2.0 -- proizvodno jezgro (docs/PRERADA_2_MODEL_I_PLAN.md).
+' LAGER JEDINICA je jedini kljuc robe u lageru i u sledljivosti: sveza
+' paleta (tblPaleta) i legacy "paleta gotovog proizvoda" (tblPrerada) se
+' predstavljaju kao lager jedinice kroz materijalizaciju (IzvorTip/IzvorID).
+' PROCESNA SARZA: N ulaznih jedinica -> M izlaznih, sa klasifikovanim
+' izlazom (GLAVNI/NUSPROIZVOD/OTPAD/GUBITAK) i masa-balansom kao
+' invarijantom writer-a. Faza A: sema + maticni podaci + lager jedinica
+' za sve legacy prerade (eagerno) i za palete (lenjo, pri ulasku u proces).
+' Bez KgTrenutno kesa i bez Status kolone na jedinici: raspolozivo i
+' stanje se IZVODE pri citanju (modProizvodnja.RaspolozivoPoJedinici).
+' ============================================================
+Public Const TBL_TIPOVI_PROCESA As String = "tblTipoviProcesa"
+Public Const TBL_PROIZVODI As String = "tblProizvodi"
+Public Const TBL_OPREMA As String = "tblOprema"
+Public Const TBL_LAGER_JEDINICE As String = "tblLagerJedinice"
+Public Const TBL_PROCES_SARZE As String = "tblProcesSarze"
+Public Const TBL_PROCES_ULAZI As String = "tblProcesUlazi"
+Public Const TBL_PROCES_IZLAZI As String = "tblProcesIzlazi"
+Public Const TBL_PROCES_PARAMETRI As String = "tblProcesParametri"
+
+' tblTipoviProcesa (maticni; Sifra je PK, kao TipGotovogProizvoda)
+Public Const COL_TPR_SIFRA As String = "Sifra"
+Public Const COL_TPR_NAZIV As String = "Naziv"
+Public Const COL_TPR_MENJA_PROIZVOD As String = "MenjaProizvod"
+Public Const COL_TPR_ZAHTEVA_OPREMU As String = "ZahtevaOpremu"
+Public Const COL_TPR_ULAZNA_FORMA As String = "DozvoljenaUlaznaForma"
+Public Const COL_TPR_OBAVEZNI_PARAM As String = "ObavezniParametri"
+Public Const COL_TPR_AKTIVAN As String = "Aktivan"
+
+' tblProizvodi (maticni). Klasa i kalibracija NISU atributi proizvoda --
+' kolone su lager jedinice. IzvorTip/IzvorKljuc = most ka tblKulture
+' (VrstaVoca) i tblVrstaGotovihProizvoda (TipGotovogProizvoda, RokMeseci).
+Public Const COL_PRZ_ID As String = "ProizvodID"
+Public Const COL_PRZ_VRSTA As String = "VrstaVoca"
+Public Const COL_PRZ_NAZIV As String = "Naziv"
+Public Const COL_PRZ_FORMA As String = "Forma"
+Public Const COL_PRZ_PRODAJNI As String = "Prodajni"
+Public Const COL_PRZ_IZVOR_TIP As String = "IzvorTip"
+Public Const COL_PRZ_IZVOR_KLJUC As String = "IzvorKljuc"
+Public Const COL_PRZ_AKTIVAN As String = "Aktivan"
+
+' tblOprema (maticni; tunel je red sa TipOpreme=TUNEL, ne posebna tabela)
+Public Const COL_OPR_ID As String = "OpremaID"
+Public Const COL_OPR_STANICA As String = "StanicaID"
+Public Const COL_OPR_TIP As String = "TipOpreme"
+Public Const COL_OPR_NAZIV As String = "Naziv"
+Public Const COL_OPR_KAPACITET As String = "KapacitetKg"
+Public Const COL_OPR_AKTIVAN As String = "Aktivan"
+
+' tblLagerJedinice (dokument-tabela; Stornirano + audit)
+Public Const COL_LJ_ID As String = "LagerJedinicaID"
+Public Const COL_LJ_BROJ As String = "BrojJedinice"
+Public Const COL_LJ_GODINA As String = "Godina"
+Public Const COL_LJ_TIP As String = "TipJedinice"
+Public Const COL_LJ_PROIZVOD As String = "ProizvodID"
+Public Const COL_LJ_KLASA As String = "Klasa"
+Public Const COL_LJ_KALIBRACIJA As String = "Kalibracija"
+Public Const COL_LJ_KG_POCETNO As String = "KgPocetno"
+Public Const COL_LJ_LOT As String = "LotBroj"
+Public Const COL_LJ_TIP_KUTIJE As String = "TipKutije"
+Public Const COL_LJ_KUTIJE As String = "BrojKutija"
+Public Const COL_LJ_TIP_KESE As String = "TipKese"
+Public Const COL_LJ_KESE As String = "BrojKesa"
+Public Const COL_LJ_TEZINA_PALETE As String = "TezinaPaleteKg"
+Public Const COL_LJ_BRUTO As String = "BrutoKg"
+Public Const COL_LJ_DATUM As String = "DatumNastanka"
+' Rok je SNAPSHOT pri nastanku jedinice (isti princip kao tblPrerada.DatumIsteka,
+' revizija #13 PR #248) -- citanje nikad iz tekuceg pravila.
+Public Const COL_LJ_ROK As String = "DatumIsteka"
+Public Const COL_LJ_STANICA As String = "StanicaID"
+Public Const COL_LJ_IZVOR_TIP As String = "IzvorTip"
+Public Const COL_LJ_IZVOR_ID As String = "IzvorID"
+Public Const COL_LJ_NAPOMENA As String = "Napomena"
+
+' tblProcesSarze
+Public Const COL_SRZ_ID As String = "SarzaID"
+Public Const COL_SRZ_BROJ As String = "BrojSarze"
+Public Const COL_SRZ_GODINA As String = "Godina"
+Public Const COL_SRZ_TIP As String = "TipProcesa"
+Public Const COL_SRZ_STANICA As String = "StanicaID"
+Public Const COL_SRZ_OPREMA As String = "OpremaID"
+Public Const COL_SRZ_POCETAK As String = "DatumVremePocetak"
+Public Const COL_SRZ_KRAJ As String = "DatumVremeKraj"
+Public Const COL_SRZ_STATUS As String = "Status"
+Public Const COL_SRZ_ODGOVORNI As String = "OdgovorniRadnik"
+Public Const COL_SRZ_NAPOMENA As String = "Napomena"
+
+' tblProcesUlazi
+Public Const COL_PUL_ID As String = "ProcesUlazID"
+Public Const COL_PUL_SARZA As String = "SarzaID"
+Public Const COL_PUL_LJ As String = "LagerJedinicaID"
+Public Const COL_PUL_KG As String = "KgUlaz"
+Public Const COL_PUL_NAPOMENA As String = "Napomena"
+
+' tblProcesIzlazi (ProizvodID/Klasa/Kalibracija su SNIMAK sa jedinice --
+' izvestaj po sarzi bez join-a, isti obrazac kao BrojPrerade na utovarnoj stavci)
+Public Const COL_PIZ_ID As String = "ProcesIzlazID"
+Public Const COL_PIZ_SARZA As String = "SarzaID"
+Public Const COL_PIZ_LJ As String = "LagerJedinicaID"
+Public Const COL_PIZ_PROIZVOD As String = "ProizvodID"
+Public Const COL_PIZ_KLASA As String = "Klasa"
+Public Const COL_PIZ_KALIBRACIJA As String = "Kalibracija"
+Public Const COL_PIZ_KG As String = "KgIzlaz"
+Public Const COL_PIZ_TIP As String = "TipIzlaza"
+Public Const COL_PIZ_NAPOMENA As String = "Napomena"
+
+' tblProcesParametri (kljuc/vrednost po sarzi: zamrzavanje, Brix, ... --
+' umesto subtype tabele po tipu procesa)
+Public Const COL_PPR_ID As String = "ParametarID"
+Public Const COL_PPR_SARZA As String = "SarzaID"
+Public Const COL_PPR_KLJUC As String = "Kljuc"
+Public Const COL_PPR_VREDNOST As String = "Vrednost"
+Public Const COL_PPR_JEDINICA As String = "Jedinica"
+
+' Most ka legacy tabelama: obrnuti pokazivac na preradi i LJ kljuc na
+' prodajnim stavkama (prodajni grain prelazi na LJ u Fazi B1).
+Public Const COL_PRE_LJ_ID As String = "LagerJedinicaID"
+Public Const COL_UTS_LJ_ID As String = "LagerJedinicaID"
+Public Const COL_FS_LJ_ID As String = "LagerJedinicaID"
+
+' Skupovi vrednosti
+Public Const PRZ_FORMA_SVEZE As String = "SVEZE"
+Public Const PRZ_FORMA_SMRZNUTO As String = "SMRZNUTO"
+Public Const PRZ_FORMA_BLOK As String = "BLOK"
+Public Const PRZ_FORMA_PIRE As String = "PIRE"
+Public Const PRZ_FORMA_BULK As String = "BULK"
+Public Const PRZ_IZVOR_KULTURA As String = "KULTURA"
+Public Const PRZ_IZVOR_VGP As String = "VGP"
+Public Const PRZ_IZVOR_RUCNO As String = "RUCNO"
+Public Const LJ_TIP_PALETA As String = "PALETA"
+Public Const LJ_TIP_BULK As String = "BULK"
+Public Const LJ_TIP_BLOK As String = "BLOK"
+Public Const LJ_TIP_CISTERNA As String = "CISTERNA"
+Public Const LJ_TIP_KONTEJNER As String = "KONTEJNER"
+Public Const LJ_IZVOR_SARZA As String = "SARZA"
+Public Const LJ_IZVOR_PALETA As String = "PALETA"
+Public Const LJ_IZVOR_PRERADA As String = "PRERADA"
+Public Const SRZ_STATUS_OTVORENA As String = "OTVORENA"
+Public Const SRZ_STATUS_ZAVRSENA As String = "ZAVRSENA"
+Public Const PIZ_TIP_GLAVNI As String = "GLAVNI"
+Public Const PIZ_TIP_NUSPROIZVOD As String = "NUSPROIZVOD"
+Public Const PIZ_TIP_OTPAD As String = "OTPAD"
+Public Const PIZ_TIP_GUBITAK As String = "GUBITAK"
+
+' ID prefiksi (GetNextID poredi Left$; svaki prefiks zivi u svojoj tabeli)
+Public Const LJ_ID_PREFIKS As String = "LJ-"
+Public Const PRZ_ID_PREFIKS As String = "PRZ-"
+Public Const OPR_ID_PREFIKS As String = "OPR-"
+Public Const SRZ_ID_PREFIKS As String = "SRZ-"
+Public Const PUL_ID_PREFIKS As String = "PUL-"
+Public Const PIZ_ID_PREFIKS As String = "PIZ-"
+Public Const PPR_ID_PREFIKS As String = "PPR-"
+
+
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
 Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
@@ -716,6 +871,8 @@ Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
 ' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
 Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
+' Identitet stanice (tblStanice) -- do Prerade 2.0 se pisao kao literal.
+Public Const COL_STA_ID As String = "StanicaID"
 
 ' =========================
 ' Auth / korisnici (Faza 1) - opt-in prijava + prava po oblasti
