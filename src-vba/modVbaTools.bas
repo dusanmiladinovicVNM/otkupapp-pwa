@@ -65,6 +65,26 @@ Option Explicit
 ' - ne uvozi sam sebe: modVbaTools se izvrsava dok import traje, pa se preskace;
 '   razlika prema izvoru se PRIJAVLJUJE u izvestaju (ne cuti se).
 '
+' ------------------------------------------------------------
+' IZMERENA GRANICA: VBE demand-compile u fazi 2
+' ------------------------------------------------------------
+' Ako je izvorni fajl toliko pokvaren da VBE novouvezenu komponentu ne moze da
+' kompajlira, VBE digne SVOJ modalni dijalog jos UNUTAR VBComponents.Import i
+' makro ostane u [break]. Kod se iz Import-a ne vrati, pa ImportOne ne stigne da
+' verifikuje nista - nema ni zelene ni crvene poruke. To se NE moze uhvatiti sa
+' On Error: nije VBA greska nego VBE dijalog.
+'
+' Mereno (T13, 05.09.2026): .cls bez "VERSION 1.0 CLASS" zaglavlja VBE uveze kao
+' STANDARDNI modul (odlucuje po sadrzaju, ne po ekstenziji), a "WithEvents" je u
+' standardnom modulu nelegalan -> "Compile error: Only valid in object module".
+'
+' Ishod je i dalje bezbedan: backup je napravljen pre prve destruktivne operacije,
+' sveska se ne snima, a pending marker ostaje u registru pa ga sledeci prolaz
+' prepozna i ocisti (RecoverImportState).
+'
+' PRAVILO ZA OPERATERA: izostanak poruke znaci isto sto i crvena poruka -
+' Run > Reset, NE snimaj, zatvori bez snimanja, otvori ponovo.
+'
 ' Poredjenje koda (SameCode/CanonCode/LowerOutsideStrings), detekcija tvrdog tela
 ' i ekstrakcija tela iz export fajla su NAMERNO duplirane iz modSelfUpdate: tamo
 ' su Private, a modSelfUpdate se u ovom zadatku ne dira.
