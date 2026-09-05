@@ -9083,7 +9083,7 @@ Pozivaoci:
 
 | Šta | Bilo | Sada |
 |---|---|---|
-| start | `modMain.StartApp` → `frmSplash.Show` (splash sam zove `ShowOtkupUI`) | `modUiFaze.FazaBoot 2` pa `modOtkupUI.ShowOtkupUI`, oba iz `StartApp` |
+| start | `modMain.StartApp` → `frmSplash.Show` (splash sam zove `ShowOtkupUI`) | `modUiFaze.FazaBoot` na vrhu `StartApp`-a, `ShowOtkupUI` na kraju — splash stoji preko svih kapija |
 | prijava | `modAuth.PrikaziPrijavu` → `frmLogin.Show` (modalno) | `modUiFaze.FazaPrijava()` — isti `Boolean` ugovor |
 | „Otvori Excel" | `DoShowExcel` → `mFrm.Hide` + `frmExcelMini.Show` | `DoShowExcel` → `modUiFaze.FazaMini` (prozor se **skuplja**, ne krije) |
 
@@ -9151,8 +9151,56 @@ dokazuje da išta meri. Ako self-test padne, `modLogo.bas` se **ne upisuje**.
 Ukupna cena: **11,4 KB GIF-a → 14,4 KB Base64** u jednom `.bas` modulu, nasuprot
 572 KB `.frx`-a koji nije putovao.
 
+#### Redosled starta: splash → prijava → ekran, i sveska se ne vidi
+
+Prelazak na faze je otvorio nešto što se ranije nije moglo: **splash sada može da
+bude prvo što operater vidi.** Do sada je bio pretposlednji.
+
+| Bilo | Sada |
+|---|---|
+| licenca, self-update, verzija, prijava — sve nad **vidljivom** sveskom | sve preko **splash-a**, sveska skrivena |
+| `Application.Visible = False` pred kraj `StartApp`-a | **prva naredba `Workbook_Open`-a** |
+| splash 2 s, pa ljuska | splash od početka, `FazaBootSacekaj 1.2` samo kao **donja granica** |
+| prijava kao poseban prozor pre splash-a | faza `LOGIN` istog prozora, **posle** splash-a |
+
+**Fiksne dve sekunde su otišle.** Bile su nasleđe `frmSplash`-a, koji je bio
+nezavisan tajmer — audit FM-0115 je baš to i tražio: „da prestane da bude
+nezavisan tajmer i postane bezbedan prikaz stvarnog startup lifecycle-a". Splash
+sada stoji preko **stvarnog** posla (licenca, self-update, mrežna provera
+verzije, prijava), pa čekanje ostaje samo kao donja granica — da znak ne bljesne
+kad je sve prošlo trenutno. Uz to natpis u podnožju kaže **koji** posao traje
+(`FazaStatus`: „Provera licence…", „Provera verzije…", „Učitavam ekran…"), jer
+zamrznut natpis nad mrežnim pozivom izgleda kao da je aplikacija stala.
+
+**Sveska se otkriva na tačno tri mesta**, i svako od njih to i traži:
+
+| Gde | Zašto | Šta posle |
+|---|---|---|
+| odbijena kapija — licenca, verzija, neuspela prijava | poruka o odbijanju mora da se vidi | aplikacija se gasi (te grane same zovu `Visible = True`) |
+| first-run setup (`SetupNewPC`) | bira foldere kroz `Application.FileDialog` (`SetupBankFolders`) | splash se skloni, setup odradi, sveska se vrati **skrivena**, splash se vrati |
+| dugme „Otvori Excel" u ljusci | operater ga je tražio | iza prava `OBL_OTVORI_EXCEL`; povratak kroz mini karticu |
+
+Dve kapije umeju da **otkriju svesku pa ipak propuste** — self-update na „Ne" i
+min-version na `WARN`. Obe leže u tuđim modulima (`modSelfUpdate` je u
+`SKIP_MODULES`, ne dira se), pa `StartApp` posle svake vraća `Visible = False`.
+Bez toga bi ostatak starta — uključujući prijavu — tekao nad vidljivom sveskom,
+što je baš ono od čega se krenulo.
+
+**Šta se odavde ne može popraviti:** bljesak dok Excel učitava fajl, pre nego
+što makro uopšte krene. To radi Excel, ne mi. `Application.Visible = False` kao
+prva naredba `Workbook_Open`-a je najranije mesto koje VBA ima.
+
+**Povratak posle prijave** je zbog ovoga morao da se promeni: stara grana je
+znala samo za `APP` („ako je prozor bio prikazan → vrati ekran, inače sakrij"),
+pa bi start posle prijave nakratko ostao na **praznom ekranu** — prozor sakriven,
+a Excel iza njega već skriven. Sada se vraća **faza iz koje je prijava pozvana**.
+Račun je izdvojen u `FazaPovratak`, jer se u harnessu ne može odigrati:
+`FazaPrijava` se vrti na `DoEvents` dok neko ne klikne dugme, a baš ta odluka je
+bila pogrešna. Meri je test 185.
+
 #### Šta se dobilo
 
+- **Splash je prvo što se vidi, a listovi se ne vide nijednom** od klika na fajl do ekrana.
 - **Prijava i logotip sada stižu kroz self-update.** Do sada su bili u `.frx`-u i
   tražili pun `.xlsm` (`docs/UPUTSTVO_KORISNICI.md` §11).
 - **Povratak iz Excela je trenutan.** Prozor se skuplja i vraća; ljuska ostaje
@@ -9191,17 +9239,17 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
 
 #### Smoke checklista (`v6-ui-214`)
 
-1. AUTH **isključen**: otvori `.xlsm` → **splash preko celog ekrana** (gradijent,
-   zlatna nit, **logotip AX|Otkup**, verzija, „Pokrećem aplikaciju…") ~2 s →
-   ljuska. Excel skriven. Logotip nije izobličen ni odsečen, i **oko njega nema
-   pravougaonika druge boje** (ploča i slika dele `LOGO_BG_SPLASH`).
-2. AUTH **uključen**: posle licence ide **kartica prijave** u sredini forest
-   podloge. Klik u polje boji ivicu zeleno; pogrešan PIN boji PIN polje rust i
+1. AUTH **isključen**: otvori `.xlsm` → **splash je prvo što se vidi** (gradijent,
+   zlatna nit, **logotip AX|Otkup**, verzija, status u podnožju) → ljuska.
+   **Listovi se ne vide nijednom.** Logotip nije izobličen ni odsečen, i **oko
+   njega nema pravougaonika druge boje** (ploča i slika dele `LOGO_BG_SPLASH`).
+2. AUTH **uključen**: splash → **kartica prijave** u sredini iste forest podloge
+   → ljuska. Klik u polje boji ivicu zeleno; pogrešan PIN boji PIN polje rust i
    ispisuje „Pogrešno korisničko ime ili PIN. (1/3)"; **Enter** = prijava,
-   **Esc** = otkaz; tri promašaja zatvaraju aplikaciju.
-3. Posle uspešne prijave prozor se **sakrije** dok traje first-run kapija
-   (`SETUP_MSG_FIRSTRUN_PONUDA` mora da se vidi nad **vidljivim** Excelom), pa
-   dolazi splash, pa ljuska.
+   **Esc** = otkaz; tri promašaja zatvaraju aplikaciju (i tek tada se vidi Excel).
+3. Posle uspešne prijave **nema praznog ekrana** — vraća se splash, pa ljuska.
+   Ako je mašina prvi put: `SETUP_MSG_FIRSTRUN_PONUDA` → „Da" skloni splash,
+   otkrije Excel za folder-pickere, pa ga vrati skriven i vrati splash.
 4. „Otvori Excel" → prozor se **skuplja** na karticu gore desno (forest traka,
    znak, zeleno dugme „Nazad u aplikaciju"); hover posvetli dugme; klik vraća
    **pun ekran** sa **napunjenom mrežom** i fokusom u polju broja.

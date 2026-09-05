@@ -6258,6 +6258,7 @@ Private Sub T_Faza_PrijavaNeGradiLjusku()
     Dim cekaPosle3 As Boolean, ishodPosle3 As Boolean, fTaster As Boolean
     Dim gradiULoginu As Boolean, gradiUApp As Boolean
     Dim sinkPre As Long, sinkPosle As Long
+    Dim izSplasha As String, izLjuske As String, bezPrikaza As String
 
     gradiUApp = modUiFaze.FazaGradiLjusku()          ' podrazumevana faza je APP
     modUiFaze.FazaRezimTest FAZA_LOGIN
@@ -6297,6 +6298,13 @@ Private Sub T_Faza_PrijavaNeGradiLjusku()
     modOtkupUI.OtkupUI_EnsureShellBuilt
     sinkPosle = modOtkupUI.OtkupUI_SinkoviFazeTest()
 
+    ' Kuda se prozor vraca posle prijave. Start je od v6-ui-214 SPLASH ->
+    ' PRIJAVA -> EKRAN, pa prijava pozvana iz splash-a mora u splash i da se
+    ' vrati: Excel je sakriven, pa bi svaki drugi ishod bio prazan ekran.
+    izSplasha = modUiFaze.FazaPovratak(FAZA_BOOT, True)
+    izLjuske = modUiFaze.FazaPovratak(FAZA_APP, True)
+    bezPrikaza = modUiFaze.FazaPovratak(FAZA_APP, False)
+
     Unload f
     modOtkupUI.OtkupUI_Release
 
@@ -6312,6 +6320,9 @@ Private Sub T_Faza_PrijavaNeGradiLjusku()
     AssertEq ishodPosle3, False, "tri promasaja ne prijavljuju nikoga"
     AssertEq (sinkPre > 0), True, "kartica prijave ima ozicene kontrole"
     AssertEq sinkPosle, sinkPre, "gradnja ljuske ne obara sinkove kartice prijave"
+    AssertEq izSplasha, FAZA_BOOT, "prijava iz splash-a vraca splash, ne prazan ekran"
+    AssertEq izLjuske, FAZA_APP, "zamena operatera vraca ekran"
+    AssertEq bezPrikaza, "", "prijava bez prikazanog prozora ga i ostavlja sakrivenog"
 End Sub
 
 ' 186. Splash i "Excel je otvoren" su faze ISTE forme, ne dve svoje forme.

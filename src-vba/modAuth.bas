@@ -68,8 +68,8 @@ End Function
 ' Prikazi prijavu i vrati True ako je uspela.
 ' Prijava je od v6-ui-214 FAZA ljuske (modUiFaze), ne svoja forma: kartica se
 ' crta runtime-om preko frmOtkupUI, a validaciju i dalje radi ValidateLogin.
-' Poziva se iz modMain.StartApp (posle AccessGateOrQuit, pre splash faze) i iz
-' ljuske pri zameni operatera (modOtkupUI.DoSwitchOperater).
+' Poziva se iz modMain.StartApp (posle kapija licence i verzije, PREKO splash
+' faze) i iz ljuske pri zameni operatera (modOtkupUI.DoSwitchOperater).
 ' ------------------------------------------------------------
 Public Function Login() As Boolean
     Dim biUser As String, biUloga As String, biIme As String, biLog As Boolean

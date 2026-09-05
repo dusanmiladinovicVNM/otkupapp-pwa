@@ -62,6 +62,9 @@ Private mFaza As String
 Private mForma As Object          ' ziva instanca ljuske (i u testu, gde nije default)
 Private mZiva As Boolean          ' forma jos postoji -- prekida DoEvents petlje
 
+' Trenutak kad je splash osvanuo -- iz njega se racuna NAJMANJE trajanje.
+Private mBootOd As Double
+Private mBootTece As Boolean
 Private mPrijavaOK As Boolean
 Private mPrijavaCeka As Boolean
 Private mUPrijavi As Boolean      ' brana od ugnjezdene prijave
@@ -117,22 +120,61 @@ End Sub
 
 '-------------------------------------------------------------- ulazi ----
 
-' Splash: pokazi znak i cekaj zadato vreme. Ljuska se gradi TEK posle ovoga
-' (modOtkupUI.ShowOtkupUI), isto kao sto je frmSplash radio.
-Public Sub FazaBoot(ByVal sekundi As Double)
-    Dim kraj As Date
+' Splash: prikazi ga i ODMAH se vrati.
+'
+' Do v6-ui-214 je ovde stajalo cekanje od dve sekunde -- prazan hod nasledjen
+' od frmSplash-a, koji je bio nezavisan tajmer. Sada splash stoji preko
+' STVARNOG startup posla (licenca, self-update, provera verzije, prijava), pa
+' nema sta da se ceka: cekanje bi samo produzilo start za dve sekunde.
+'
+' Najmanje trajanje i dalje postoji, ali kao DONJA granica na kraju
+' (FazaBootSacekaj), da znak ne bljesne kad je sve proslo trenutno.
+Public Sub FazaBoot()
     On Error GoTo EH
     mFaza = FAZA_BOOT
     Uvedi
     Postavi
-    kraj = DateAdd("s", sekundi, Now)
-    Do While Now < kraj
-        DoEvents
-        If Not mZiva Then Exit Do
-    Loop
+    If Not mBootTece Then
+        mBootOd = Timer
+        mBootTece = True
+    End If
+    DoEvents                        ' da se znak stvarno iscrta pre sledeceg posla
     Exit Sub
 EH:
     LogErr "modUiFaze.FazaBoot"
+End Sub
+
+' Dopuni splash do NAJMANJE zadatog trajanja, racunato od trenutka kad je
+' osvanuo. Kad je start trajao duze, ne ceka nista.
+'
+' Timer se u ponoc vraca na nulu; negativan protek znaci bas to i tretira se
+' kao "vreme je isteklo" -- start se ne zaustavlja zbog prelaska dana.
+Public Sub FazaBootSacekaj(ByVal najmanje As Double)
+    On Error GoTo EH
+    If Not mBootTece Then Exit Sub
+    Do While mZiva
+        If Timer - mBootOd >= najmanje Or Timer < mBootOd Then Exit Do
+        DoEvents
+    Loop
+    mBootTece = False
+    Exit Sub
+EH:
+    LogErr "modUiFaze.FazaBootSacekaj"
+    mBootTece = False
+End Sub
+
+' Natpis u podnozju splash-a. Splash sada stoji preko pravog posla, pa mora da
+' kaze KOJI posao traje -- "Pokrecem aplikaciju..." zamrznut na mreznom pozivu
+' izgleda kao da je aplikacija stala.
+Public Sub FazaStatus(ByVal tekst As String)
+    Dim z As Object
+    On Error Resume Next
+    If Faza() <> FAZA_BOOT Then Exit Sub
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    z.Controls("fzbStat").caption = tekst
+    DoEvents
+    Err.Clear
 End Sub
 
 ' Prijava. Vraca True kad je operater prijavljen -- ugovor je isti koji je
@@ -143,7 +185,7 @@ End Sub
 ' Frame i dalje prima Tab), i vrti se DoEvents dok dugme ne postavi ishod.
 ' Isti postupak koji je frmSplash koristio za svoje dve sekunde.
 Public Function FazaPrijava() As Boolean
-    Dim prethodna As String, bilaPrikazana As Boolean
+    Dim prethodna As String, bilaPrikazana As Boolean, povratak As String
     On Error GoTo EH
 
     ' Druga prijava preko prve nije zamena operatera nego dva cekanja na istom
@@ -168,18 +210,16 @@ Public Function FazaPrijava() As Boolean
     Loop
 
     FazaPrijava = mPrijavaOK
-    mFaza = FAZA_APP
 
-    ' Odakle je prijava pozvana, tamo se i vraca:
-    '  - zamena operatera u ljusci (prozor je vec bio na ekranu) -> nazad u APP;
-    '  - start (prozor smo otvorili mi) -> SAKRIJ, tacno kao "Unload frmLogin".
-    '    Iza prijave u modMain.StartApp ide first-run kapija, koja trazi VIDLJIV
-    '    i upotrebljiv Excel; prazna forest podloga preko celog ekrana bi je
-    '    pokrila.
-    If bilaPrikazana And prethodna = FAZA_APP Then
-        Postavi
-    Else
+    ' Kuda posle prijave -- racun je izdvojen (FazaPovratak) zato sto se u
+    ' harnessu ne moze odigrati: FazaPrijava se vrti na DoEvents dok neko ne
+    ' klikne dugme, a bas ta odluka je bila pogresna.
+    povratak = FazaPovratak(prethodna, bilaPrikazana)
+    If Len(povratak) = 0 Then
         FazaSakrij
+    Else
+        mFaza = povratak
+        Postavi
     End If
 
     mUPrijavi = False
@@ -190,6 +230,23 @@ EH:
     mUPrijavi = False
     mFaza = FAZA_APP
     FazaPrijava = False
+End Function
+
+' Faza u koju se prozor vraca posle prijave; "" znaci "sakrij ga".
+'
+' Vraca se ONA faza iz koje je prijava pozvana, ne uvek APP:
+'  - iz splash-a (start) -> nazad na splash, pa ShowOtkupUI dize ekran;
+'  - iz ljuske (zamena operatera) -> nazad na ekran.
+'
+' Do v6-ui-214 je ovde stajalo "APP ako je bio prikazan, inace sakrij". Kad je
+' splash presao ISPRED prijave, ta grana je start posle prijave ostavljala na
+' PRAZNOM ekranu: prozor se sakrije, a Excel je iza njega vec sakriven.
+'
+' Prozor koji uopste nije bio na ekranu se i vraca sakriven -- pozivalac nije
+' trazio da mu se nesto prikaze.
+Public Function FazaPovratak(ByVal prethodna As String, _
+                             ByVal bilaPrikazana As Boolean) As String
+    If bilaPrikazana Then FazaPovratak = prethodna
 End Function
 
 ' "Otvori Excel": prozor se SKUPLJA na karticu umesto da se sakrije. Ljuska
