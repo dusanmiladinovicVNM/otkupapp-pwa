@@ -14,30 +14,37 @@ paths:
 
 ## Koje forme ostaju
 
-Cilj plana iz `docs/UI_MIGRACIJA_KATALOG.md` §27 su **četiri** forme:
-`frmOtkupUI` (ljuska), `frmLogin`, `frmSplash`, `frmExcelMini`.
+Plan iz `docs/UI_MIGRACIJA_KATALOG.md` §27 je **ispunjen** (korak 7, §27.17).
+Formi ima **četiri** i to su sve:
 
-Posle koraka 6 ih je **šest** — uz te četiri:
-
-| Forma | Zašto je još tu |
+| Forma | Uloga |
 |---|---|
-| `frmSEF` | SEF upravljanje (`PrepareResubmit`, batch radnje, event log) nije preneto ni na jedan ekran (§8.7). Čeka **ekran**, ne korak. Ulaz je `frmOtkupAPP.btnInvoicing`, oblast `OBL_FAKTURISANJE`. |
-| `frmOtkupAPP` | poslednja — host za `frmSEF` i preostale `ReturnToDashboard` pozive |
+| `frmOtkupUI` | ljuska — jedini operaterski ekran; sadržaj daju `modScr*` |
+| `frmLogin` | prijava |
+| `frmSplash` | start |
+| `frmExcelMini` | povratak iz Excela |
 
-**Te dve se drže međusobno**, i to je jedini razlog zašto ijedna još stoji:
-`frmSEF` zove `frmOtkupAPP.ReturnToDashboard` i otvara se njegovim dugmetom, pa
-host ne može pre nje. Nijedna ne čeka „korak" nego **kod koji treba napisati** —
-jedan ekran i gašenje dve legacy grane zatvaranja u `modAdmin` i `modPodesavanja`.
+**Legacy formi više nema**, pa nema ni izuzetka: nova kontrola ide na **ekran**
+(`modScr*`), tačka. Ranije je ovde stajalo „osim kad §5 `otkup-i-dokumenta.md`
+izričito traži" — taj izuzetak je postojao zbog preslikavanja pravila unosa u
+formu koja ga je duplirala i otišao je sa korakom 2.
 
-`frmMarza` je otišla u §27.15: red registra `MARZA` je **zamenjen** ekranom
-`ANALIZA` (`modScrAnaliza`), koji je U IZRADI i to piše na sebi. To je obrazac za
-ostatak: forma bez ekrana se ne briše nego joj se **napiše zamena**, makar ta
-zamena zasad samo pošteno rekla da još ne radi. Prazan ekran koji to kaže je
-bolji od prigušene stavke koja na klik javlja da ekrana nema.
+## Kako se forma penzioniše (obrazac iz §27)
 
-Pravilo koje iz toga sledi: **nova kontrola ne ide u legacy formu**, nego na
-ekran ljuske (`modScr*`). Izmena legacy forme se radi samo kad je pravilo iz
-§5 `otkup-i-dokumenta.md` izričito traži, ili u koraku koji tu formu uklanja.
+Vredi i za sve što tek dolazi:
+
+1. **Prvo se seku reference, pa forma** (§27.3). Forma koja ostane a nema
+   referenci se kompajlira i ne smeta; forma koja referencira obrisano **obara
+   compile cele sveske**.
+2. **Forma bez ekrana se ne briše nego joj se NAPIŠE zamena** — makar ta zamena
+   zasad pošteno rekla da još ne radi (`frmMarza` → ekran `ANALIZA` „U IZRADI",
+   §27.15). Prazan ekran koji to kaže bolji je od prigušene stavke koja na klik
+   javlja da ekrana nema.
+3. **Pre brisanja se izmeri šta se gubi.** Tvrdnje koje forma nosi se
+   **presele**, ne obrišu — a ako ljuska tu tvrdnju već ima, proverava se da
+   stvarno grize (§27.14: jedna je bila bez ijedne sabotaže).
+4. **Po instalaciji ide `Remove`.** Self-update nikad ne uklanja komponente
+   (§27.4), pa zaostala forma živi dok je operater ručno ne skine.
 
 ## `.frx` se ne dira kao tekst
 
@@ -56,7 +63,7 @@ bio `clsLookupMenuBtn`/`modMaticniLookups` — klasa je otišla u koraku 5 sa
 `frmMaticniPodaci`, jedinom formom koja je taj meni gradila.
 
 Za form-hostovane runtime kontrole koristi **generički `clsUiSink`** (`WireSink`
-+ `UiSinkEvent` dispatcher; vidi `frmOtkupAPP`).
++ `UiSinkEvent` dispatcher; živ primer je `frmOtkupUI` sa `modOtkupUI`).
 
 ## NOVE `Private WithEvents` deklaracije u FORMAMA su ZABRANJENE
 

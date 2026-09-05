@@ -105,13 +105,11 @@ diraju se.** „Ne diraju se" znači: ne menjaju se mimo koraka koji ih uklanja.
   zaključuje iz koda.
 - **Poslovna logika unosa je izdvojena iz formi:** `modOtkupUnos` (otkupni list),
   `modDokUnos` (otpremnica, zbirna, prijemnica) i `modNovacUnos` (isplate, uplate
-  kupaca, reversi) — bez ijedne kontrole, zovu ih i ekran i, kad za to dođe red,
-  forma. Ekran (`modScrDokumenti.Scr_Save`) samo prevodi polja u rečnik;
-  **nijedna provera ne živi u ekranu.**
-- **Prelazno pravilo:** pravilo unosa se menja u tim modulima, pa se **ručno
-  preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
-  namerno — i **prestaju da postoje sa korakom 2**, kad forme odu. Od tada
-  pravilo živi na jednom mestu i preslikavanja nema.
+  kupaca, reversi) — bez ijedne kontrole. Ekran (`modScrDokumenti.Scr_Save`) samo
+  prevodi polja u rečnik; **nijedna provera ne živi u ekranu.**
+- Prelazno pravilo o **ručnom preslikavanju u legacy formu** otišlo je sa korakom
+  2 (`UI_MIGRACIJA_KATALOG.md` §27.10): forme koja je pravilo duplirala više nema,
+  pa pravilo živi na **jednom** mestu i preslikavanja nema.
 - Ugovor iz §1 nosi `modOtkupUI.ClearForm` — ista tri ponašanja, isti razlozi
   kao u legacy formi koje više nema. **Pokriven je testom** (`T_ClearForm_Ugovor` u
   `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Upis zbirne i prijemnice

@@ -13,8 +13,8 @@
 1. **Reference-first.** Izvori istine: `docs/DOMEN/README.md` (šta dokumenti jesu
    i koje invarijante drže), `docs/DOMEN/WHO_WRITES.md` (ko piše koju tabelu),
    `docs/ARCHITECTURE_REFERENCE.md`, `docs/UI_MIGRACIJA_KATALOG.md` (prelazak na
-   ljusku `frmOtkupUI` — šta je preneto, i plan penzionisanja legacy formi po
-   koracima, §27).
+   ljusku `frmOtkupUI` — šta je preneto i kako; §27 je **završen**, ostale su
+   četiri forme).
 2. **Pretraži postojeće** u `src-vba/` (VBA/Excel) i `src/` (PWA) PRE nego što
    predložiš nov fajl, komponentu, helper, tip, konstantu, validaciju ili sloj.
    Ako ekvivalent postoji — koristi ga ili proširi minimalno. Novo samo uz jasan

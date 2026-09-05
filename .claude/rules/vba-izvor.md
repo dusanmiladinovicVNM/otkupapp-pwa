@@ -55,6 +55,13 @@ postojeće na vrhu i objasni ih komentarom tamo.
 konvenciju projekta: **`errNum` / `errDesc` / `errSrc`** (`modStorno.LogAndReraise`,
 `modAgrohemija`, `modBankaImport`), ne izmišljaj `eNum`/`eSrc`.
 
+**Isto ime dvaput u ISTOJ proceduri je isti rod greške** — „Duplicate
+declaration". `Dim src` i `Const SRC` se sudaraju, kao i parametar i `Dim` istog
+imena. Simptom **nije uredan pad testa nego VIŠENJE**: modul se ne kompajlira,
+`run_vba` ide do timeout-a i javi „The remote procedure call failed", Excel
+ostane u `[break]`, a pravi razlog se vidi samo u VBE dijalogu. Od v2.39 to hvata
+`DUPLI_LOKAL` u `vba_check` — napisana tek pošto je ta mina naplaćena **dvaput**.
+
 `tools/vba_check.py` proverava compile-hard podskup (ključne reči + imena tipova).
 Šira lista iz starog `CLAUDE.md` (`name`, `line`, `text`, `date`, `base`, `time`,
 `mid`, `local`, `read`…) je **stilska** — zatečeni kod ih koristi i kompajlira se;

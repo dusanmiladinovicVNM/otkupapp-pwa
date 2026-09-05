@@ -1,7 +1,8 @@
 ---
 paths:
   - "src-vba/modBanka*.bas"
-  - "src-vba/frmBanka*.frm"
+  - "src-vba/modScrBankaUvoz.bas"
+  - "src-vba/modScrBankaNalozi.bas"
   - "src-vba/modNovac*.bas"
   - "src-vba/modTestBanka.bas"
   - "gas/bank-pdf-downloader/**"
