@@ -100,6 +100,7 @@ Private mHard As String         ' csv IMENA FAJLOVA za fazu 2
 Private mGone As String         ' csv imena stvarno uklonjenih u fazi 1
 Private mFormNew As Boolean     ' frmOtkupUI ne postoji -> clean import u fazi 2
 Private mSelfNote As String     ' izvestaj o samom modVbaTools
+Private mRecNote As String      ' izvestaj o prekinutoj ranijoj fazi 2
 Private mSum As String          ' izvestaj faze 1
 Private mRbFail As String       ' komponente kojima ROLLBACK NIJE uspeo
 
@@ -155,6 +156,7 @@ Public Sub ImportAllVBA()
     ' 0b) zaostalo stanje prekinute faze 2 se NE nastavlja slepo - cisti se, a
     '     nedostajuci moduli se ionako vide u novom planu (nema komponente = novo).
     recNote = RecoverImportState()
+    mRecNote = recNote              ' mora prezivi fazu 2 (durable stanje)
 
     folder = ResolveFolder(SRC_FOLDER, "Izaberi src-vba folder")
     If Len(folder) = 0 Then Exit Sub
@@ -279,6 +281,7 @@ Public Sub ImportAllVBA_Phase2()
     Dim savedN As Long, phase1Sum As String, problem As String, fatal As String
     Dim arr() As String, i As Long, fn As String, baseName As String, ext As String
     Dim imported As Long, expected As Long, report As String
+    Dim selfNote As String, recNote As String
 
     sec = P2Section()
     If GetSetting(REG_APP, sec, "pending", "") <> "1" Then
@@ -297,6 +300,8 @@ Public Sub ImportAllVBA_Phase2()
     savedN = CLng("0" & GetSetting(REG_APP, sec, "hardn", "0"))
     bkPath = GetSetting(REG_APP, sec, "backup", "")
     phase1Sum = GetSetting(REG_APP, sec, "sum", "")
+    selfNote = GetSetting(REG_APP, sec, "selfnote", "")
+    recNote = GetSetting(REG_APP, sec, "recnote", "")
 
     If Len(folder) = 0 Then
         fatal = "2. faza: izgubljen je put do izvora (stanje posle 1. faze nije citljivo)." & vbCrLf & _
@@ -379,8 +384,11 @@ Public Sub ImportAllVBA_Phase2()
         ShowImportFailure "Zavrsna provera projekta NIJE prosla:" & vbCrLf & problem & vbCrLf & _
                           vbCrLf & phase1Sum, bkPath
     Else
-        ShowImportSuccess phase1Sum & vbCrLf & "2. faza: uvezeno " & imported & " tvrdih modula" & _
-                          IIf(formNew, " + " & ONLY_FORM, ""), bkPath
+        ' selfNote ide PRVI: on nosi upozorenje da modVbaTools nije azuriran, a
+        ' izvestaj se na kraju secka (MsgBox ~1024 znaka).
+        ShowImportSuccess selfNote & IIf(Len(recNote) > 0, vbCrLf & recNote, "") & vbCrLf & _
+                          "2. faza: uvezeno " & imported & " tvrdih modula" & _
+                          IIf(formNew, " + " & ONLY_FORM, "") & vbCrLf & phase1Sum, bkPath
     End If
     Exit Sub
 
@@ -441,7 +449,7 @@ End Function
 Private Function ValidateSourceLayout(ByVal folder As String) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim fil As Object, ext As String
-    Dim frmN As Long, frxN As Long, frmList As String, frxList As String
+    Dim frmN As Long, frxN As Long, frmList As String, frxList As String, beginN As Long
 
     On Error GoTo EH
     For Each fil In fso.GetFolder(folder).files
@@ -469,6 +477,37 @@ Private Function ValidateSourceLayout(ByVal folder As String) As String
         ValidateSourceLayout = _
             "Izvor mora imati TACNO JEDAN .frx: " & ONLY_FORM & ".frx" & vbCrLf & _
             "Nadjeno .frx fajlova: " & frxN & vbCrLf & frxList
+        Exit Function
+    End If
+
+    ' CANONICAL MARKER: alat mora naci SEBE u izvoru. Bez ovoga bi proizvoljan
+    ' folder sa jednom formom prosao kao "src-vba", a negative delta bi onda
+    ' proglasila skoro ceo projekat viskom i ponudila da ga ukloni.
+    If Not mSrcMap.Exists(LCase$(SELF_MODULE)) Then
+        ValidateSourceLayout = _
+            "Izabrani folder nije src-vba: nema " & SELF_MODULE & ".bas." & vbCrLf & _
+            "Alat mora da nadje SVOJ izvorni fajl - inace bi skoro sve u projektu" & vbCrLf & _
+            "izgledalo kao komponenta van izvora (visak za uklanjanje)."
+        Exit Function
+    End If
+
+    ' Dizajner jedine forme mora biti prazan I U IZVORU, ne samo u projektu.
+    ' Zaglavlje .frm sme imati TACNO JEDAN Begin blok (sama forma); svaki
+    ' ugnjezden Begin je kontrola u dizajneru. Bez ove kapije bi kontrola dodata
+    ' u .frx prosla neprimeceno: code merge dira samo telo, pa bi izvor i sveska
+    ' tiho ostali razliciti - a kod mFormNew bi pala tek ZAVRSNA provera, posle
+    ' mutacije, umesto ovde sa nula izmena.
+    beginN = SourceFormBeginCount(folder & ONLY_FORM & ".frm")
+    If beginN < 1 Then
+        ValidateSourceLayout = _
+            "Izvorna " & ONLY_FORM & ".frm se ne cita kao VBA export (nema 'Begin' blok)."
+        Exit Function
+    ElseIf beginN > 1 Then
+        ValidateSourceLayout = _
+            "Izvorna " & ONLY_FORM & ".frm ima " & (beginN - 1) & " kontrolu(e) u DIZAJNERU" & vbCrLf & _
+            "(Begin blokova u zaglavlju: " & beginN & ", ocekivan tacno 1)." & vbCrLf & vbCrLf & _
+            "Ljuska mora ostati prazna - sve kontrole nastaju u runtime-u" & vbCrLf & _
+            "(modOtkupUI / modUiFaze / modUiKit + clsFlatBtn / clsUiSink), nikad u .frx."
         Exit Function
     End If
     Exit Function
@@ -545,6 +584,7 @@ Private Function BuildPlan() As String
     Dim body As String, cur As String, okOut As Boolean, exists As Boolean, vbc As Object
     Dim nSame As Long, nDoc As Long, nForm As Long, nSoft As Long, nNew As Long
     Dim nHard As Long, nStale As Long, nEmpty As Long, emptyS As String, c As Object
+    Dim declName As String
 
     Set mAct = CreateObject("Scripting.Dictionary")
     Set mBody = CreateObject("Scripting.Dictionary")
@@ -558,6 +598,23 @@ Private Function BuildPlan() As String
         baseName = mSrcName(lname)
 
         body = ExtractModuleCode(CStr(mSrcFile(lname)))
+
+        ' Ime iz 'Attribute VB_Name' je AUTORITET za VBComponents.Import (faza 2):
+        ' Import krsti komponentu po zaglavlju, ne po imenu fajla. Da se razilazi,
+        ' faza 2 bi napravila komponentu pogresnog imena TEK POSLE Remove-a - dakle
+        ' posle destrukcije. Zato kapija stoji ovde, pre ijedne mutacije.
+        declName = DeclaredVBName(CStr(mSrcFile(lname)))
+        If Len(declName) = 0 Then
+            BuildPlan = "Izvorni fajl " & baseName & "." & ext & " nema 'Attribute VB_Name'." & vbCrLf & _
+                "To nije ispravan VBA export - Import bi komponentu nazvao proizvoljno."
+            Exit Function
+        ElseIf StrComp(declName, baseName, vbTextCompare) <> 0 Then
+            BuildPlan = "Izvorni fajl " & baseName & "." & ext & " deklarise drugo ime:" & vbCrLf & _
+                "  Attribute VB_Name = " & Chr$(34) & declName & Chr$(34) & vbCrLf & vbCrLf & _
+                "Ime fajla i ime komponente moraju biti isti - inace Import napravi" & vbCrLf & _
+                "komponentu '" & declName & "', a alat trazi '" & baseName & "'."
+            Exit Function
+        End If
 
         exists = ComponentExists(proj, baseName)
         cur = ""
@@ -585,13 +642,24 @@ Private Function BuildPlan() As String
             mAct(lname) = "same"
             nSame = nSame + 1
         ElseIf Len(body) = 0 Then
-            ' PRAZAN IZVOR = NO-OP, za svaku ekstenziju. Prazan izvozni fajl ne
-            ' opisuje komponentu: 42 od 43 .doccls u src-vba nemaju nijednu
-            ' liniju koda (samo ThisWorkbook ima telo) - to su artefakti prvog
-            ' punog eksporta, a ne tvrdnja "ovaj modul mora biti prazan".
-            ' Zato prazan izvor NIKAD ne brise zatecen kod (fail-safe i protiv
-            ' lose ekstrakcije nad ne-praznim fajlom) i NIKAD ne obara import
-            ' zbog lista koga u ovoj svesci nema.
+            ' PRAZNO TELO: no-op SAMO za .doccls. 42 od 43 .doccls u src-vba nemaju
+            ' nijednu liniju koda (samo ThisWorkbook ima telo) - to su artefakti
+            ' prvog punog eksporta, opis listova JEDNE sveske iz juna, a ne tvrdnja
+            ' "ovaj modul mora biti prazan". Takav fajl ne sme ni da brise zatecen
+            ' kod ni da obara import zbog lista koga u ovoj svesci nema.
+            '
+            ' Za .bas/.cls/.frm je obrnuto: prazan izvor je skoro uvek POKVAREN ili
+            ' odsecen fajl. Tihi preskok bi ostavio star kod u svesci i zavrsio kao
+            ' "uspeh", pa izvor i projekat vise ne bi bili isti - a alat se zove
+            ' sinhronizator. Fail-closed, pre ijedne mutacije.
+            If ext <> "doccls" Then
+                BuildPlan = "Izvorni fajl " & baseName & "." & ext & " je PRAZAN" & vbCrLf & _
+                    "(zaglavlje bez ijedne linije koda)." & vbCrLf & vbCrLf & _
+                    "Za .bas/.cls/.frm to je skoro uvek odsecen ili pokvaren fajl." & vbCrLf & _
+                    "Preskok bi ostavio STAR kod u svesci i prijavio uspeh, pa izvor" & vbCrLf & _
+                    "i projekat vise ne bi bili isti. Proveri fajl u git-u."
+                Exit Function
+            End If
             mAct(lname) = "same"
             nEmpty = nEmpty + 1
             If Not exists Then emptyS = emptyS & "  " & baseName & "." & ext & vbCrLf
@@ -1102,6 +1170,10 @@ Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As S
     SaveSetting REG_APP, sec, "formnew", IIf(mFormNew, "1", "0")
     SaveSetting REG_APP, sec, "backup", bkPath
     SaveSetting REG_APP, sec, "sum", Cap(mSum, 900)
+    ' Upozorenje o drift-u modVbaTools-a je najvaznije bas kad faza 2 postoji -
+    ' bez ovoga bi ga zavrsna poruka faze 2 progutala.
+    SaveSetting REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
+    SaveSetting REG_APP, sec, "recnote", Cap(mRecNote, 300)
     SaveSetting REG_APP, sec, "pending", "1"
     SaveImportPhase2State = True
     Exit Function
@@ -1210,6 +1282,55 @@ EH:
     On Error Resume Next
     Close #ff
     FileIsCrLf = False
+End Function
+
+' Broj 'Begin' blokova u zaglavlju .frm (do 'Attribute VB_Name'). Sama forma je
+' jedan Begin; svaki ugnjezden Begin je KONTROLA U DIZAJNERU. -1 = necitljivo.
+Private Function SourceFormBeginCount(ByVal fpath As String) As Long
+    Dim ff As Integer, ln As String, u As String, n As Long
+    On Error GoTo EH
+    ff = FreeFile
+    Open fpath For Input As #ff
+    Do While Not EOF(ff)
+        Line Input #ff, ln
+        u = UCase$(LTrim$(ln))
+        If Left$(u, 17) = "ATTRIBUTE VB_NAME" Then Exit Do
+        If Left$(u, 5) = "BEGIN" Then n = n + 1
+    Loop
+    Close #ff
+    SourceFormBeginCount = n
+    Exit Function
+EH:
+    On Error Resume Next
+    Close #ff
+    SourceFormBeginCount = -1
+End Function
+
+' Ime deklarisano u 'Attribute VB_Name' - autoritet za VBComponents.Import.
+' "" ako ga nema ili je fajl necitljiv.
+Private Function DeclaredVBName(ByVal fpath As String) As String
+    Dim ff As Integer, ln As String, u As String, p As Long
+    On Error GoTo EH
+    ff = FreeFile
+    Open fpath For Input As #ff
+    Do While Not EOF(ff)
+        Line Input #ff, ln
+        u = UCase$(LTrim$(ln))
+        If Left$(u, 17) = "ATTRIBUTE VB_NAME" Then
+            p = InStr(ln, """")
+            If p > 0 Then
+                ln = Mid$(ln, p + 1)
+                p = InStr(ln, """")
+                If p > 1 Then DeclaredVBName = Left$(ln, p - 1)
+            End If
+            Exit Do
+        End If
+    Loop
+    Close #ff
+    Exit Function
+EH:
+    On Error Resume Next
+    Close #ff
 End Function
 
 Private Function ReadAllText(ByVal fpath As String) As String
