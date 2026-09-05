@@ -156,6 +156,10 @@ Public Function ScrRows() As Variant
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
     c.Add "MAT_PAKOVANJE|modScrMatPakovanje|OTKUI_NAV_MAT_PAKOVANJE|" & IC_MAT_PAKOVANJE & _
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
+    ' Prerada 2.0 (Faza A): sifarnici proizvodnog jezgra (proizvodi, tipovi
+    ' procesa, oprema). Sekcija MATICNI se crta sama, pa sesta stavka staje.
+    c.Add "MAT_PROIZVODNJA|modScrMatProizvodnja|OTKUI_NAV_MAT_PROIZVODNJA|" & IC_MAT_PROIZVODNJA & _
+          "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
     ' Korisnici, Podesavanja i Admin nose JOS JEDNU branu preko oblasti --
     ' administraciju. Ona ne moze u SCR_OBLAST (to je naziv kolone prava u
     ' tblKorisnici), pa se odgovara kroz neobavezan Scr_Dozvoljen za ekran,

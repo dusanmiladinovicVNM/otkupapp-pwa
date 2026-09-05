@@ -2037,10 +2037,12 @@ SEED = {
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
                      "Aktivan", "StanicaID"] + KOR_OBLASTI,
-    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
+    # Prerada 2.0 (Faza A): LagerJedinicaID na prodajnim stavkama i
+    # obrnuti pokazivac na preradi (modSetup.EnsureProizvodnjaSchemaCore).
+    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID", "LagerJedinicaID"],
     # Revizija #13: snapshot roka na lotu (prazno u fixture-u =
     # fallback putanja RokIstekaZaTip, koju test 162 i tvrdi).
-    "tblPrerada": ["DatumIsteka"],
+    "tblPrerada": ["DatumIsteka", "LagerJedinicaID"],
     # Revizija #9: rok trajanja po vrsti GP (prazno = globalni).
     "tblVrstaGotovihProizvoda": ["RokMeseci"],
 }
@@ -2062,12 +2064,120 @@ ENSURE_TABLES = {
                          "BrojPrerade", "KolicinaKg", "Stornirano",
                          # revizija #6 t.4: stvarno utovarena pakovanja;
                          # revizija #9: dogovorena cena (model B).
-                         "BrojKutija", "BrojKesa", "CenaKg"]),
+                         "BrojKutija", "BrojKesa", "CenaKg",
+                         # Prerada 2.0 (Faza A): prodajni grain prelazi
+                         # na lager jedinicu u Fazi B1.
+                         "LagerJedinicaID"]),
     # Smoke 5d: sifarnik EKSTERNIH prevoznika/vozaca (nije tblVozaci).
     "tblPrevoznici": ("Prevoznici",
                       ["PrevoznikID", "Naziv", "Vozac", "Registracija",
                        "Aktivan"]),
+    # Prerada 2.0 (Faza A) -- isto sto radi modSetup.EnsureProizvodnjaSchemaCore
+    # (redosled kolona = redosled u Array). Audit kolone dodaje self-heal.
+    "tblTipoviProcesa": ("TipoviProcesa",
+                         ["Sifra", "Naziv", "MenjaProizvod", "ZahtevaOpremu",
+                          "DozvoljenaUlaznaForma", "ObavezniParametri", "Aktivan"]),
+    "tblProizvodi": ("Proizvodi",
+                     ["ProizvodID", "VrstaVoca", "Naziv", "Forma", "Prodajni",
+                      "IzvorTip", "IzvorKljuc", "Aktivan"]),
+    "tblOprema": ("Oprema",
+                  ["OpremaID", "StanicaID", "TipOpreme", "Naziv", "KapacitetKg",
+                   "Aktivan"]),
+    "tblLagerJedinice": ("LagerJedinice",
+                         ["LagerJedinicaID", "BrojJedinice", "Godina", "TipJedinice",
+                          "ProizvodID", "Klasa", "Kalibracija", "KgPocetno", "LotBroj",
+                          "TipKutije", "BrojKutija", "TipKese", "BrojKesa",
+                          "TezinaPaleteKg", "BrutoKg", "DatumNastanka", "DatumIsteka",
+                          "StanicaID", "IzvorTip", "IzvorID", "Napomena", "Stornirano"]),
+    "tblProcesSarze": ("ProcesSarze",
+                       ["SarzaID", "BrojSarze", "Godina", "TipProcesa", "StanicaID",
+                        "OpremaID", "DatumVremePocetak", "DatumVremeKraj", "Status",
+                        "OdgovorniRadnik", "Napomena", "Stornirano"]),
+    "tblProcesUlazi": ("ProcesUlazi",
+                       ["ProcesUlazID", "SarzaID", "LagerJedinicaID", "KgUlaz",
+                        "Napomena", "Stornirano"]),
+    "tblProcesIzlazi": ("ProcesIzlazi",
+                        ["ProcesIzlazID", "SarzaID", "LagerJedinicaID", "ProizvodID",
+                         "Klasa", "Kalibracija", "KgIzlaz", "TipIzlaza", "Napomena",
+                         "Stornirano"]),
+    "tblProcesParametri": ("ProcesParametri",
+                           ["ParametarID", "SarzaID", "Kljuc", "Vrednost", "Jedinica",
+                            "Stornirano"]),
 }
+
+# --- Prerada 2.0 (Faza A): fixture = sveska POSLE nadogradnje ---------------
+# Isti algoritam kao modProizvodnja (MaterijalizujLegacyPrerade / SeedProizvodi /
+# SeedTipoviProcesa / BackfillLjNaStavkama), pa je fixture ono sto self-heal
+# napravi na startu: svaka prerada (i stornirana; dupli PreradaID se PRESKACE)
+# dobija lager jedinicu IzvorTip=PRERADA, obrnuti pokazivac
+# tblPrerada.LagerJedinicaID, a utovarne/fakturne stavke sa PreradaID dobijaju
+# LagerJedinicaID. Rok = fallback po tekucem pravilu (fixture prerade nemaju
+# snapshot): globalni default 24 meseca. Test T02 (modTestProizvodnja) tvrdi
+# isto ponasanje nad VBA implementacijom -- razilazenje = pad.
+PRZ_RINFUZ_ID = "PRZ-FIX-RINFUZ"
+PRERADA_2_TIPOVI = [
+    # (Sifra, Naziv, MenjaProizvod, ZahtevaOpremu, DozvoljenaUlaznaForma, ObavezniParametri)
+    ("PRANJE", "Pranje", "Ne", "Ne", "SVEZE", ""),
+    ("SORTIRANJE", "Sortiranje", "Da", "Da", "SVEZE;SMRZNUTO", ""),
+    ("KALIBRACIJA", "Kalibracija", "Da", "Da", "SVEZE;SMRZNUTO", ""),
+    ("PREBIRANJE", "Prebiranje", "Da", "Da", "SVEZE;SMRZNUTO", ""),
+    ("ZAMRZAVANJE", "Zamrzavanje", "Da", "Da", "SVEZE",
+     "VREME_ULAZ;VREME_IZLAZ;TEMP_ROBE_ULAZ;TEMP_ROBE_IZLAZ;CILJNA_TEMP"),
+    ("IZBIJANJE_KOSTICE", "Izbijanje koštice", "Da", "Da", "SVEZE;SMRZNUTO", ""),
+    ("PAKOVANJE", "Pakovanje", "Da", "Ne", "SMRZNUTO;BULK", ""),
+    ("PREPAKIVANJE", "Prepakivanje", "Ne", "Ne", "", ""),
+    ("PASIRANJE", "Pasiranje", "Da", "Da", "SVEZE;SMRZNUTO", "BRIX"),
+    ("BLOK", "Blok", "Da", "Da", "SMRZNUTO;PIRE;BULK", ""),
+    ("ODMRZAVANJE", "Odmrzavanje", "Da", "Ne", "SMRZNUTO", ""),
+    ("PRERADA_LEGACY", "Prerada (legacy)", "Da", "Ne", "", ""),
+]
+
+
+def _prerada_2_fixture() -> None:
+    from collections import Counter
+    prerade = SEED["tblPrerada"]
+    cnt = Counter(r["PreradaID"] for r in prerade)
+    lj_rows, mapa = [], {}
+    for r in prerade:
+        pid = r["PreradaID"]
+        if cnt[pid] != 1:
+            continue                      # korupcija: bez jedinice (P4)
+        lj = "LJ-" + (pid[4:] if pid.startswith("PRE-") else pid)
+        mapa[pid] = lj
+        r["LagerJedinicaID"] = lj
+        d = r["Datum"]
+        lj_rows.append({
+            "LagerJedinicaID": lj, "BrojJedinice": r["BrojPrerade"],
+            "Godina": r["Godina"], "TipJedinice": "PALETA",
+            "ProizvodID": PRZ_RINFUZ_ID if r.get("TipGotovogProizvoda", "") == "Rinfuz" else "",
+            "KgPocetno": r.get("NetoIzlazKg", 0),
+            "BrojKutija": r.get("BrojKutija", ""), "BrojKesa": r.get("BrojKesa", ""),
+            "DatumNastanka": d,
+            "DatumIsteka": datetime.date(d.year + 2, d.month, d.day),
+            "StanicaID": "", "IzvorTip": "PRERADA", "IzvorID": pid,
+            "Stornirano": r.get("Stornirano", ""),
+        })
+    SEED["tblLagerJedinice"] = lj_rows
+    for t in ("tblUtovarStavke", "tblFakturaStavke"):
+        for r in SEED.get(t, []):
+            if r.get("PreradaID", "") in mapa:
+                r["LagerJedinicaID"] = mapa[r["PreradaID"]]
+    SEED["tblVrstaGotovihProizvoda"] = [
+        {"TipGotovogProizvoda": "Rinfuz", "Aktivan": STATUS_AKTIVAN},
+    ]
+    SEED["tblProizvodi"] = [
+        {"ProizvodID": PRZ_RINFUZ_ID, "VrstaVoca": "", "Naziv": "Rinfuz",
+         "Forma": "SMRZNUTO", "Prodajni": "Da", "IzvorTip": "VGP",
+         "IzvorKljuc": "Rinfuz", "Aktivan": STATUS_AKTIVAN},
+    ]
+    SEED["tblTipoviProcesa"] = [
+        {"Sifra": s, "Naziv": n, "MenjaProizvod": m, "ZahtevaOpremu": o,
+         "DozvoljenaUlaznaForma": f, "ObavezniParametri": p, "Aktivan": STATUS_AKTIVAN}
+        for (s, n, m, o, f, p) in PRERADA_2_TIPOVI
+    ]
+
+
+_prerada_2_fixture()
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
 LOCAL_CONFIG = {

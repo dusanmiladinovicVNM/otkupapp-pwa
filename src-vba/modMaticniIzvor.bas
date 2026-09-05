@@ -112,6 +112,14 @@ Public Function MatSekcijeEkrana(ByVal ekran As String) As Variant
                 "PALETE|OTKUI_SEGM_PAL|OTKUI_GTM_PAL|68", _
                 "KUTIJE|OTKUI_SEGM_KUT|OTKUI_GTM_KUT|68", _
                 "KESE|OTKUI_SEGM_KES|OTKUI_GTM_KES|60")
+        ' Prerada 2.0 (Faza A): sifarnici proizvodnog jezgra. Proizvodi se
+        ' i SEJU iz kultura i vrsta GP (modProizvodnja.SeedProizvodi), pa je
+        ' ovo za dopunu (klasa/kalibracija NISU ovde -- kolone su jedinice).
+        Case "MAT_PROIZVODNJA"
+            MatSekcijeEkrana = Array( _
+                "PROIZVODI|OTKUI_SEGM_PRZ|OTKUI_GTM_PRZ|84", _
+                "TIPPROCESA|OTKUI_SEGM_TPR|OTKUI_GTM_TPR|104", _
+                "OPREMA|OTKUI_SEGM_OPR|OTKUI_GTM_OPR|72")
         Case "MAT_KORISNICI"
             ' Dve liste, i druga ZAVISI od prve: prava se citaju za korisnika
             ' izabranog u listi Korisnici. Zato su na istom ekranu, a ne dva --
@@ -171,6 +179,9 @@ Public Function MatTabela(ByVal kljuc As String) As String
         ' korisnika, ne zaseban zapis.
         Case "KORISNICI":  MatTabela = TBL_KORISNICI
         Case "PRAVA":      MatTabela = TBL_KORISNICI
+        Case "PROIZVODI":  MatTabela = TBL_PROIZVODI
+        Case "TIPPROCESA": MatTabela = TBL_TIPOVI_PROCESA
+        Case "OPREMA":     MatTabela = TBL_OPREMA
     End Select
 End Function
 
@@ -191,6 +202,9 @@ Public Function MatPK(ByVal kljuc As String) As String
         Case "PALETE":     MatPK = COL_TPAL_TIP
         Case "KUTIJE":     MatPK = COL_KUT_TIP
         Case "KESE":       MatPK = COL_KES_TIP
+        Case "PROIZVODI":  MatPK = COL_PRZ_ID
+        Case "TIPPROCESA": MatPK = COL_TPR_SIFRA   ' sifra je PK, kao tip kutije
+        Case "OPREMA":     MatPK = COL_OPR_ID
         Case "KORISNICI":  MatPK = COL_KOR_ID
         ' PRAVA nemaju PK: red je oblast, a ne zapis. Identitet nosi skrivena
         ' kolona -- v. MatKolonaID.
@@ -375,6 +389,33 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_TIP_KES|" & COL_KES_TIP & "|part|0|1", _
                 "OTKUI_HDM_TEZINA|" & COL_KES_TEZINA & "|dec|110|1", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
+        Case "PROIZVODI"
+            MatKolone = Array( _
+                "OTKUI_HDM_ID|" & COL_PRZ_ID & "|txt|84|1", _
+                "OTKUI_HDM_NAZIV|" & COL_PRZ_NAZIV & "|part|0|1", _
+                "OTKUI_HDM_VRSTA|" & COL_PRZ_VRSTA & "|txt|100|2", _
+                "OTKUI_HDM_FORMA|" & COL_PRZ_FORMA & "|txt|84|1", _
+                "OTKUI_HDM_PRODAJNI|" & COL_PRZ_PRODAJNI & "|txt|64|2", _
+                "OTKUI_HDM_IZVOR_TIP|" & COL_PRZ_IZVOR_TIP & "|txt|72|3", _
+                "OTKUI_HDM_IZVOR_KLJUC|" & COL_PRZ_IZVOR_KLJUC & "|txt|110|3", _
+                "OTKUI_HDM_STATUS|@status|txt|76|1")
+        Case "TIPPROCESA"
+            MatKolone = Array( _
+                "OTKUI_HDM_SIFRA|" & COL_TPR_SIFRA & "|txt|130|1", _
+                "OTKUI_HDM_NAZIV|" & COL_TPR_NAZIV & "|part|0|1", _
+                "OTKUI_HDM_MENJA_PROIZVOD|" & COL_TPR_MENJA_PROIZVOD & "|txt|84|2", _
+                "OTKUI_HDM_ZAHTEVA_OPREMU|" & COL_TPR_ZAHTEVA_OPREMU & "|txt|92|2", _
+                "OTKUI_HDM_ULAZNA_FORMA|" & COL_TPR_ULAZNA_FORMA & "|txt|140|3", _
+                "OTKUI_HDM_OBAVEZNI_PARAM|" & COL_TPR_OBAVEZNI_PARAM & "|txt|160|3", _
+                "OTKUI_HDM_STATUS|@status|txt|76|1")
+        Case "OPREMA"
+            MatKolone = Array( _
+                "OTKUI_HDM_ID|" & COL_OPR_ID & "|txt|84|1", _
+                "OTKUI_HDM_NAZIV|" & COL_OPR_NAZIV & "|part|0|1", _
+                "OTKUI_HDM_TIP_OPREME|" & COL_OPR_TIP & "|txt|100|1", _
+                "OTKUI_HDM_STANICA|@stanica|txt|110|2", _
+                "OTKUI_HDM_KAPACITET_KG|" & COL_OPR_KAPACITET & "|num|84|2", _
+                "OTKUI_HDM_STATUS|@status|txt|76|1")
     End Select
 End Function
 
@@ -491,6 +532,30 @@ Public Function MatPolja(ByVal kljuc As String) As Variant
             MatPolja = Array( _
                 "tip|OTKUI_HDM_TIP_KES|txt|1|" & COL_KES_TIP & "|", _
                 "tezina|OTKUI_HDM_TEZINA|num|1|" & COL_KES_TEZINA & "|")
+        ' IzvorTip/IzvorKljuc se ne unose rucno: pise ih seed (KULTURA/VGP);
+        ' rucno unet proizvod ih ostavlja prazne (= RUCNO).
+        Case "PROIZVODI"
+            MatPolja = Array( _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|" & COL_PRZ_NAZIV & "|", _
+                "vrsta|OTKUI_HDM_VRSTA|cmb|0|" & COL_PRZ_VRSTA & "|@vrste", _
+                "forma|OTKUI_HDM_FORMA|cmb|1|" & COL_PRZ_FORMA & "|@forma", _
+                "prodajni|OTKUI_HDM_PRODAJNI|cmb|1|" & COL_PRZ_PRODAJNI & "|@dane")
+        ' Sifra je PRVO polje: sekcija bez surogat kljuca uzima prvu vrednost
+        ' kao PK (modMaticniUnos.PrvaVrednost), kao tip kutije.
+        Case "TIPPROCESA"
+            MatPolja = Array( _
+                "sifra|OTKUI_HDM_SIFRA|txt|1|" & COL_TPR_SIFRA & "|", _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|" & COL_TPR_NAZIV & "|", _
+                "menja|OTKUI_HDM_MENJA_PROIZVOD|cmb|1|" & COL_TPR_MENJA_PROIZVOD & "|@dane", _
+                "oprema|OTKUI_HDM_ZAHTEVA_OPREMU|cmb|1|" & COL_TPR_ZAHTEVA_OPREMU & "|@dane", _
+                "forma|OTKUI_HDM_ULAZNA_FORMA|txt|0|" & COL_TPR_ULAZNA_FORMA & "|", _
+                "param|OTKUI_HDM_OBAVEZNI_PARAM|txt|0|" & COL_TPR_OBAVEZNI_PARAM & "|")
+        Case "OPREMA"
+            MatPolja = Array( _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|" & COL_OPR_NAZIV & "|", _
+                "tip|OTKUI_HDM_TIP_OPREME|cmb|1|" & COL_OPR_TIP & "|@tipopreme", _
+                "stanica|OTKUI_HDM_STANICA|cmb|1|" & COL_OPR_STANICA & "|@stanice", _
+                "kapacitet|OTKUI_HDM_KAPACITET_KG|num|0|" & COL_OPR_KAPACITET & "|")
     End Select
 End Function
 
@@ -564,6 +629,8 @@ Public Function MatPrefiksID(ByVal kljuc As String) As String
         Case "ARTIKLI":    MatPrefiksID = "ART-"
         Case "KULTURE":    MatPrefiksID = "KUL-"
         Case "KORISNICI":  MatPrefiksID = "KOR-"
+        Case "PROIZVODI":  MatPrefiksID = PRZ_ID_PREFIKS
+        Case "OPREMA":     MatPrefiksID = OPR_ID_PREFIKS
     End Select
 End Function
 
@@ -638,6 +705,11 @@ Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) 
         Case "@ggap":        MatComboStavke = Array("Da", "Ne", "U postupku")
         Case "@dane":        MatComboStavke = Array("Ne", "Da")
         Case "@klase":       MatComboStavke = Array(KLASA_I, KLASA_II)
+        ' Prerada 2.0: forme proizvoda i tipovi opreme (skupovi iz modConfig).
+        Case "@forma":       MatComboStavke = Array(PRZ_FORMA_SVEZE, PRZ_FORMA_SMRZNUTO, _
+                                                    PRZ_FORMA_BLOK, PRZ_FORMA_PIRE, PRZ_FORMA_BULK)
+        Case "@tipopreme":   MatComboStavke = Array("TUNEL", "LINIJA", "IZBIJAC", "PAKERICA", _
+                                                    "KALIBRATOR", "PASIRKA", "METAL_DETEKTOR", "OSTALO")
         ' Uloge i DA/NE korisnika stoje u modMaticniKorisnici: recnik kolone je
         ' "DA"/"NE" i cita ga modAuth, pa se ne sme prepisati ovde.
         Case "@uloge", "@dane_kor": MatComboStavke = modMaticniKorisnici.KorComboStavke(izvor)

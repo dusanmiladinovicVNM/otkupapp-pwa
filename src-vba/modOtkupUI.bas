@@ -292,6 +292,7 @@ Private Const IC_MATICNI  As Long = &HE713&   ' Setting
 Public Const IC_MAT_PARTNERI  As Long = &HE716&   ' People       (za proveru)
 Public Const IC_MAT_ROBA      As Long = &HE8EC&   ' Tag          (za proveru)
 Public Const IC_MAT_PAKOVANJE As Long = &HE7B8&   ' Package      (za proveru)
+Public Const IC_MAT_PROIZVODNJA As Long = &HE9F5&  ' Processing   (za proveru)
 Public Const IC_MAT_KORISNICI As Long = &HE748&   ' SwitchUser   (= IC_OPERATER)
 Public Const IC_MAT_SISTEM    As Long = &HE713&   ' Setting      (= IC_MATICNI)
 Public Const IC_MAT_ADMIN     As Long = &HE7EF&   ' Admin        (za proveru)
@@ -8602,6 +8603,7 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_MAT_PARTNERI", "Sidebar: Partneri", "People", IC_MAT_PARTNERI
     IcoRow a, "IC_MAT_ROBA", "Sidebar: Proizvodi i cene", "Tag", IC_MAT_ROBA
     IcoRow a, "IC_MAT_PAKOVANJE", "Sidebar: Ambalaza i pakovanje", "Package", IC_MAT_PAKOVANJE
+    IcoRow a, "IC_MAT_PROIZVODNJA", "Sidebar: Proizvodnja (sifarnici)", "Processing", IC_MAT_PROIZVODNJA
     IcoRow a, "IC_MAT_KORISNICI", "Sidebar: Korisnici", "SwitchUser", IC_MAT_KORISNICI
     IcoRow a, "IC_MAT_SISTEM", "Sidebar: Podesavanja", "Setting", IC_MAT_SISTEM
     IcoRow a, "IC_MAT_ADMIN", "Sidebar: Administracija", "Admin", IC_MAT_ADMIN

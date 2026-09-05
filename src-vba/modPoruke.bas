@@ -63,6 +63,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertPoruke10 lo, existing
     UpsertPoruke11 lo, existing
     UpsertPoruke12 lo, existing
+    UpsertPoruke13 lo, existing
     InvalidateCache
 End Sub
 
@@ -2022,6 +2023,29 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
 End Sub
 
+
+' --- Prerada 2.0 (Faza A): sifarnici proizvodnje (ekran MAT_PROIZVODNJA) ---
+Private Sub UpsertPoruke13(lo As ListObject, existing As Object)
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_PROIZVODNJA", "Proizvodnja"
+    UpsertRow lo, existing, "OTKUI_SCRMPZ_SUB", "Proizvodi, tipovi procesa i oprema"
+    UpsertRow lo, existing, "OTKUI_SEGM_PRZ", "Proizvodi"
+    UpsertRow lo, existing, "OTKUI_SEGM_TPR", "Tipovi procesa"
+    UpsertRow lo, existing, "OTKUI_SEGM_OPR", "Oprema"
+    UpsertRow lo, existing, "OTKUI_GTM_PRZ", "Proizvodi"
+    UpsertRow lo, existing, "OTKUI_GTM_TPR", "Tipovi procesa"
+    UpsertRow lo, existing, "OTKUI_GTM_OPR", "Oprema"
+    UpsertRow lo, existing, "OTKUI_HDM_SIFRA", ChrW(352) & "ifra"
+    UpsertRow lo, existing, "OTKUI_HDM_FORMA", "Forma"
+    UpsertRow lo, existing, "OTKUI_HDM_PRODAJNI", "Prodajni"
+    UpsertRow lo, existing, "OTKUI_HDM_IZVOR_TIP", "Izvor"
+    UpsertRow lo, existing, "OTKUI_HDM_IZVOR_KLJUC", "Izvorni klju" & ChrW(269)
+    UpsertRow lo, existing, "OTKUI_HDM_MENJA_PROIZVOD", "Menja proizvod"
+    UpsertRow lo, existing, "OTKUI_HDM_ZAHTEVA_OPREMU", "Zahteva opremu"
+    UpsertRow lo, existing, "OTKUI_HDM_ULAZNA_FORMA", "Dozvoljena ulazna forma"
+    UpsertRow lo, existing, "OTKUI_HDM_OBAVEZNI_PARAM", "Obavezni parametri"
+    UpsertRow lo, existing, "OTKUI_HDM_TIP_OPREME", "Tip opreme"
+    UpsertRow lo, existing, "OTKUI_HDM_KAPACITET_KG", "Kapacitet (kg)"
+End Sub
 
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)
