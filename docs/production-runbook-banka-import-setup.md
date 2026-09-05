@@ -28,7 +28,7 @@ Lokalni Inbox  (npr. C:\...\OtkupAPP\Bank_Izvodi\Inbox)
   │  ImportBankaInbox_TX  ->  ExtractTextFromPdf (pdftotext)  ->  ParseBankaIzvodForImport (Komercijalna)
   ▼
 tblBankaImport  (staging)
-  │  frmBankaImport: dugme "Mapiraj jake kljuceve (N)" (poziv/racun) + rucno
+  │  ekran BANKA_UVOZ (modScrBankaUvoz): "Jaki kljucevi" (poziv/racun) + Auto + rucno
   ▼
 tblNovac  (finansijska knjiga)
 ```
@@ -57,7 +57,10 @@ git checkout <grana> && git pull --ff-only origin <grana>
 Excel: `Alt+F8 → ImportAllVBA → Debug → Compile → snimi`.
 
 Relevantni moduli: `modBankaImport`, `modBankaImportParserPdfToText`,
-`modBankaMapiranje`, `modNovac`, forma `frmBankaImport`.
+`modBankaMapiranje`, `modNovac`, ekran `modScrBankaUvoz`.
+
+> **v2.39 — forme `frmBankaImport` više nema** (`UI_MIGRACIJA_KATALOG.md` §27.14).
+> Uvoz i mapiranje su na ekranu **Uvoz izvoda** (`BANKA_UVOZ`) u ljusci `frmOtkupUI`.
 
 ---
 
@@ -217,12 +220,14 @@ Bez ovoga import radi, ali auto-map slabo hvata (sve ide ručno).
 
 ## Faza 7 — Mapiranje (`tblBankaImport` → `tblNovac`)
 
-Otvori formu **Banka uvoz izvoda** (`frmBankaImport`):
-- **Na otvaranje se NE knjiži ništa** (od v2.38.0 / RF-09; ranije je otvaranje forme pokretalo `AutoMapStrongKeysBankaImport_TX` i pravilo redove u `tblNovac`). Umesto toga se prebroji koliko bi stavki mapirali **jaki ključevi** (poziv na broj → otkup/faktura, tekući račun) i to piše u statusu i na dugmetu **„Mapiraj jake ključeve (N)"** — knjiženje ide na klik, uz potvrdu i prikaz rezultata. Dvosmislene ostaju otvorene (bez Error).
+Otvori ekran **Uvoz izvoda** (`BANKA_UVOZ`, `modScrBankaUvoz`):
+- **Ulazak u ekran pokreće UVOZ** (Drive pull + `ImportBankaInbox_TX`), ali **ne knjiži ništa** (od v2.38.0 / RF-09). Uvoz ne ide na start aplikacije ni na automatsko preusmeravanje posle zamene operatera — samo na ulazak koji je operater izabrao.
 - Kartica **„Mapirano X / Ukupno Y"** = stvarno stanje (`Obradjeno=Da` / sve staged).
-- Preostale: selektuj red → „Pregled automatskog mapiranja" pokaže predlog i izvor poklapanja (`tekuci racun` / `poziv na broj`) → **„Automatski mapiraj red"** ili **„Ručno mapiraj red"**; **„Skip"** za naknade/interne.
-- **„Automatski mapiraj sve"** = pun cascade (uključuje ime/PartnerMap heuristiku). Poruka na kraju kaže i koliko je redova ostalo **za ručno** (nejednoznačno, npr. blok sa 3+ otvorenih stavki) — takav red dobija status `Error` i batch **ne pada** zbog njega.
-- **Ručno mapiranje** (od v2.38.0): tip mora da odgovara smeru stavke (Kupac = uplata, Kooperant = isplata, OM = oba, ali čist smer) — pogrešan izbor se odbija uz poruku. Za tip **Kupac** se nudi lista otvorenih faktura tog kupca; **bez izabrane fakture uplata se knjiži kao avans** i program to traži da se potvrdi. Ispod automatskog pregleda stoji sekcija **„RUČNO"** koja pokazuje šta bi tačno uradilo dugme „Ručno mapiraj red" sa trenutnim izborom (uključujući „ODBIJENO" i razlog).
+- Kolona **Predlog** pokazuje **pun plan** knjiženja — tačno ono što će „Auto" uraditi: cilj (faktura / avans / blok / otkupno mesto) i, kad poklapanje NIJE po jakom ključu, i izvor („iz mape", „po imenu"). Do v2.39 je ta kolona računala samo jake ključeve, pa je umela da piše „avans kupca" dok je „Auto" knjižio na fakturu.
+- **„Auto"** nad izabranim redom **pita za potvrdu i imenuje cilj** pre knjiženja. Ako plana nema, potvrda to kaže — red će biti označen za ručno.
+- **„Jaki ključevi"** = batch samo za jednoznačne jake ključeve (poziv na broj → otkup/faktura, tekući račun). Potvrda nosi **broj stavki** (`CountStrongKeyReadyBankaImport`); na nuli se batch **ne pokreće**. Dvosmislene ostaju otvorene (bez Error).
+- **„Auto sve"** = pun cascade (uključuje ime/PartnerMap heuristiku). Poruka na kraju kaže i koliko je redova ostalo **za ručno** (nejednoznačno, npr. blok sa 3+ otvorenih stavki) — takav red dobija status `Error` i batch **ne pada** zbog njega.
+- **Ručno mapiranje** (od v2.38.0): tip mora da odgovara smeru stavke (Kupac = uplata, Kooperant = isplata, OM = oba, ali čist smer) — pogrešan izbor se odbija uz poruku. Za tip **Kupac** se nudi lista otvorenih faktura tog kupca; **bez izabrane fakture uplata se knjiži kao avans** i program to traži da se potvrdi.
 
 Backfill saveti:
 - Prvi veliki prolaz pokreni iz Immediate na **kopiji**: `?AutoMapStrongKeysBankaImport_TX` (vrati broj mapiranih), proveri par knjiženja, pa na produkciji.
@@ -236,7 +241,7 @@ Verifikacija (par stavki): lanac `BIM → NOV → otkup/faktura/avans`, BIM trag
 
 Dnevna rutina:
 1. GAS trigger u 07h puni `01_Bank`.
-2. Operater otvori „Banka uvoz izvoda" → (pull+import) → klik **„Mapiraj jake ključeve (N)"** → dovrši ručno/„Auto sve".
+2. Operater uđe na ekran **„Uvoz izvoda"** (ulazak = pull+import) → klik **„Jaki ključevi"** (potvrda kaže koliko ih je) → dovrši „Auto"/ručno/„Auto sve".
 3. Provera „Mapirano" brojača i otvorenih stavki.
 
 ---

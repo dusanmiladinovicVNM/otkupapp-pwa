@@ -522,10 +522,21 @@ End Sub
 '=====================================================================
 ' RADNJE NAD REDOM
 '=====================================================================
+' AUTO PITA PRE NEGO STO PROKNJIZI, i pita KONKRETNO.
+'
+' Do v2.39 je klik odmah knjizio, a jedini prethodni nagovestaj cilja bila je
+' kolona Predlog -- koja je racunala SAMO jake kljuceve, dok pisac ide i preko
+' PartnerMap-a i imena. Red je tako umeo da pise "avans kupca", a da novac ode
+' na fakturu. Sada se pita nad ISTIM planom koji ce pisac izvrsiti
+' (modBankaMapiranje.BimAutoPlan), pa potvrda ne moze da tvrdi nesto drugo.
 Private Function AutoRed(ByVal red As Long) As Boolean
-    Dim bimID As String, rezultat As String
+    Dim bimID As String, rezultat As String, plan As Variant
     bimID = StavkaZaRad(red)
     If Len(bimID) = 0 Then Exit Function
+
+    plan = modBankaMapiranje.BimAutoPlan(bimID)
+    If MsgBox(BuPitanjeAuto(plan, RedOznaka(red), modBankaMapiranje.BimPlanOpis(plan)), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
 
     rezultat = modBankaMapiranje.AutoMapBankaImportRow_TX(bimID)
 
@@ -539,6 +550,26 @@ Private Function AutoRed(ByVal red As Long) As Boolean
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_AUTO"), False
     End If
     AutoRed = True
+End Function
+
+' Tekst potvrde za Auto. Public i cist -- meri se bez mreze i bez knjizenja.
+'
+' Plan bez cilja se NE precutkuje: red ce biti oznacen za rucno, i to je ishod
+' koji operater treba da odobri isto kao i knjizenje.
+Public Function BuPitanjeAuto(ByVal plan As Variant, ByVal oznaka As String, _
+                              ByVal ciljOpis As String) As String
+    Dim glava As String
+
+    glava = Poruka("OTKUI_ASK_BU_AUTO")
+    If Len(oznaka) > 0 Then glava = glava & " " & oznaka
+
+    If Not modBankaMapiranje.BimPlanImaCilj(plan) Then
+        BuPitanjeAuto = glava & vbCrLf & vbCrLf & Poruka("OTKUI_ASK_BU_AUTO_NEMA")
+        Exit Function
+    End If
+
+    BuPitanjeAuto = glava & vbCrLf & vbCrLf & _
+                    BuPredlogTekst(CStr(plan(0)), CStr(plan(3)), ciljOpis, True, CStr(plan(5)))
 End Function
 
 Private Function PreskociRed(ByVal red As Long) As Boolean
@@ -562,11 +593,46 @@ End Function
 ' Batch: knjizi samo stavke sa jednoznacnim jakim kljucem. Pad se PRIJAVLJUJE --
 ' ceo pass je tada rollback-ovan, a tiho "0 mapirano" je izgledalo kao "nema sta
 ' da se mapira" (AUD-014).
+' BROJ STAVKI STOJI U PITANJU, i nula ne pokrece batch.
+'
+' Legacy forma je taj broj nosila u natpisu dugmeta ("Mapiraj jake kljuceve (N)"),
+' u statusu i u potvrdi, i gasila dugme na nuli. Ljuskin natpis radnje je KLJUC
+' KATALOGA, pa broj u njega ne staje bez izmene ugovora radnji -- ali potvrda i
+' odbijanje nule ne traze nista od ljuske i vracaju se ovde. Broj daje
+' CountStrongKeyReadyBankaImport, isti onaj koji je forma zvala.
+' ODBIJANJE NA NULI. Prazno = batch se pokrece, inace poruka koja ide umesto
+' njega. Odvojeno od JakiKljucevi jer se odluka mora izmeriti, a batch se u
+' harnessu ne pokrece (pise u tabele).
+Public Function BuJakiOdgovor(ByVal spremno As Long) As String
+    If spremno <= 0 Then BuJakiOdgovor = Poruka("OTKUI_MSG_BU_JAKI_NULA")
+End Function
+
+' BROJ STAVKI STOJI U PITANJU. Legacy forma ga je nosila u natpisu dugmeta
+' ("Mapiraj jake kljuceve (N)"), u statusu i u potvrdi. Ljuskin natpis radnje je
+' KLJUC KATALOGA, pa broj u njega ne staje bez izmene ugovora radnji -- potvrda
+' ga prima bez ijedne izmene ljuske, i to je mesto na kome operater i odlucuje.
+Public Function BuPitanjeJaki(ByVal spremno As Long) As String
+    BuPitanjeJaki = Poruka("OTKUI_ASK_BU_JAKI") & " " & _
+                    Poruka("OTKUI_ASK_BU_JAKI_N") & " " & CStr(spremno)
+End Function
+
 Private Function JakiKljucevi() As Boolean
-    Dim n As Long, errDesc As String
-    If MsgBox(Poruka("OTKUI_ASK_BU_JAKI"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+    Dim n As Long, spremno As Long, errDesc As String, odgovor As String
 
     On Error GoTo EH
+    spremno = modBankaMapiranje.CountStrongKeyReadyBankaImport()
+    odgovor = BuJakiOdgovor(spremno)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, False
+        JakiKljucevi = True
+        Exit Function
+    End If
+
+    If MsgBox(BuPitanjeJaki(spremno), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+        JakiKljucevi = True
+        Exit Function
+    End If
+
     n = modBankaMapiranje.AutoMapStrongKeysBankaImport_TX()
     Scr_ResetCache
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_JAKI") & " " & CStr(n), False
@@ -997,7 +1063,7 @@ Private Function RedoviStavke(ByVal filter As String, ByVal q As String) As Vari
         outA(n, 6) = CDbl(src(i, 8))
         outA(n, 7) = BuStatusTekst(obr)
         outA(n, 8) = BuPredlogTekst(CStr(src(i, 11)), CStr(src(i, 13)), CStr(src(i, 14)), _
-                                    CBool(src(i, 10)))
+                                    CBool(src(i, 10)), CStr(src(i, 16)))
         outA(n, 9) = CStr(src(i, 3))
         ' Identitet koji je citac PROVERIO (prazan = dvosmislen). Ne crta se.
         outA(n, 10) = iD
@@ -1041,11 +1107,17 @@ End Function
 ' viserednom preview panelu (BuildAutoPreviewText, oko 350 linija sa granama).
 ' Ovde je jedna celija po redu, pa se vidi za SVE redove odjednom.
 '
-' Racun ne radi ovaj tekst: cilj i njegovu oznaku dao je citac
-' (modBankaMapiranje.BimJakiKljucInfo). Ovde je samo formulacija, i zato je
-' Public -- da se moze izmeriti bez mreze.
+' Racun ne radi ovaj tekst: cilj, njegovu oznaku i IZVOR dao je citac
+' (modBankaMapiranje.BimAutoPlanIzVrednosti -- isti plan koji pisac izvrsava).
+' Ovde je samo formulacija, i zato je Public -- da se moze izmeriti bez mreze.
+'
+' IZVOR se ispisuje samo kad NIJE jak kljuc. Jak kljuc (tekuci racun / poziv na
+' broj) je normalan put i njegovo imenovanje bi samo zatrpalo kolonu; poklapanje
+' po imenu ili iz PartnerMap-a je slabiji dokaz i operater to mora da vidi PRE
+' nego sto klikne Auto.
 Public Function BuPredlogTekst(ByVal smer As String, ByVal ciljTip As String, _
-                               ByVal ciljOpis As String, ByVal otvoren As Boolean) As String
+                               ByVal ciljOpis As String, ByVal otvoren As Boolean, _
+                               ByVal izvor As String) As String
     ' Zatvorena stavka nema sta da predlozi.
     If Not otvoren Then Exit Function
 
@@ -1061,8 +1133,21 @@ Public Function BuPredlogTekst(ByVal smer As String, ByVal ciljTip As String, _
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_AVANS") & " " & ciljOpis
         Case BIM_CILJ_BLOK
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_BLOK") & " " & ciljOpis
+        Case BIM_CILJ_OM
+            BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_OM") & " " & ciljOpis
         Case Else
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_NEMA")
+            Exit Function
+    End Select
+
+    BuPredlogTekst = BuPredlogTekst & BuIzvorSufiks(izvor)
+End Function
+
+' Oznaka slabijeg izvora, ili prazno za jak kljuc.
+Public Function BuIzvorSufiks(ByVal izvor As String) As String
+    Select Case izvor
+        Case BIM_IZV_MAPA: BuIzvorSufiks = " (" & Poruka("OTKUI_LBL_BU_IZV_MAPA") & ")"
+        Case BIM_IZV_IME:  BuIzvorSufiks = " (" & Poruka("OTKUI_LBL_BU_IZV_IME") & ")"
     End Select
 End Function
 

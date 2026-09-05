@@ -4,7 +4,12 @@ Status: **operativni runbook za incidente oko bankarskih izvoda, mapiranja uplat
 
 Aplikacija: **OtkupApp / AgriX**
 Domen: **PDF bankarski izvod → `tblBankaImport` staging → `tblNovac` finansijska knjiga → `tblFakture` / `tblOtkup` statusi**
-Glavni kod: `src-vba/modBankaImport.bas`, `src-vba/modBankaMapiranje.bas`, `src-vba/modNovac.bas`, `src-vba/frmBankaImport.frm`
+Glavni kod: `src-vba/modBankaImport.bas`, `src-vba/modBankaMapiranje.bas`, `src-vba/modNovac.bas`, `src-vba/modScrBankaUvoz.bas`
+
+> **v2.39 — forme `frmBankaImport` više nema.** Uklonjena je u koraku 6 migracije UI-ja
+> (`docs/UI_MIGRACIJA_KATALOG.md` §27.14); njen posao radi ekran **Uvoz izvoda**
+> (`BANKA_UVOZ`, `src-vba/modScrBankaUvoz.bas`) u ljusci `frmOtkupUI`. Svuda gde je
+> u ovom runbook-u pisalo „otvori formu", čita se „otvori ekran Uvoz izvoda".
 
 ---
 
@@ -53,11 +58,17 @@ Ako je OM: OMID / StanicaID:
 
 ## 2. Source of truth: gde se gleda
 
-### 2.1. Prvo mesto: `frmBankaImport`
+### 2.1. Prvo mesto: ekran **Uvoz izvoda** (`BANKA_UVOZ`)
 
-Otvoriti formu **Banka import**.
+U ljusci `frmOtkupUI`, sekcija **Finansije → Uvoz izvoda**.
 
-Forma prikazuje otvorene stavke iz `GetBankaImportOpen()` i pokazuje:
+> **Ulazak u ekran POKREĆE uvoz** iz Inbox-a (Drive pull + `ImportBankaInbox_TX`).
+> U legacy meniju je to radio klik na „Banka"; u ljusci je ulazak taj klik. Uvoz se
+> NE pokreće pri startu aplikacije ni pri automatskom preusmeravanju posle zamene
+> operatera (`RELEASE_GATES.md` §85, `ARCHITECTURE_REFERENCE.md` §288/§440).
+
+Ekran ima dve liste (`Stavke` / `Izvodi`). Lista **Stavke** prikazuje redove iz
+`GetBankaImportForGrid()` i pokazuje:
 
 * `BIM ID`;
 * datum transakcije;
@@ -71,13 +82,15 @@ Forma prikazuje otvorene stavke iz `GetBankaImportOpen()` i pokazuje:
 
 Dostupne UI akcije:
 
-| Dugme         | Kada se koristi                                        | Šta radi                                                                                 |
-| ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Auto jedan    | kada operator želi auto-map samo jedne stavke          | `AutoMapBankaImportRow_TX(bimID)`                                                        |
-| Auto sve      | kada se mapiraju sve otvorene stavke                   | `AutoMapAllBankaImport_TX()`                                                             |
-| Sačuvaj ručno | kada auto-preview nije dovoljan ili treba ručna odluka | `MapBankaImportAsKupac_TX`, `MapBankaImportAsKooperantBlock_TX`, `MapBankaImportAsOM_TX` |
-| Skip          | kada stavka ne treba u `tblNovac`                      | `SkipBankaImportRow_TX(bimID)`                                                           |
-| Osveži        | reload otvorenih stavki                                | `LoadBankaRows`                                                                          |
+| Dugme          | Kada se koristi                                         | Šta radi                                                                                 |
+| -------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Auto           | auto-map izabrane stavke; **pita za potvrdu i imenuje cilj** | `AutoMapBankaImportRow_TX(bimID)`                                                    |
+| Ručno          | kada plan nije dovoljan ili treba ručna odluka          | `MapBankaImportAsKupac_TX`, `MapBankaImportAsKooperantBlock_TX`, `MapBankaImportAsOM_TX` |
+| Preskoči       | kada stavka ne treba u `tblNovac`                       | `SkipBankaImportRow_TX(bimID)`                                                           |
+| Jaki ključevi  | batch samo za jednoznačne jake ključeve; potvrda nosi **broj stavki**, na nuli se ne pokreće | `CountStrongKeyReadyBankaImport()` → `AutoMapStrongKeysBankaImport_TX()` |
+| Auto sve       | kada se mapiraju sve otvorene stavke                    | `AutoMapAllBankaImport_TX()`                                                             |
+
+Osvežavanje liste je posao ljuske (`RefreshFromData`), ne dugme ekrana.
 
 ### 2.2. Drugo mesto: `tblBankaImport`
 
@@ -341,7 +354,7 @@ Runbook pravilo:
 
 ### Korak 1: Nađi `BIM-*` red
 
-U `frmBankaImport` ili `tblBankaImport` pronađi red po:
+Na ekranu **Uvoz izvoda** ili u `tblBankaImport` pronađi red po:
 
 ```text
 BIM-ID
@@ -772,7 +785,7 @@ Ne koristiti direktno `SaveNovac` za incident recovery osim ako tehnički i fina
 ### Primer A: PDF u processed, `BIM-*` postoji, `Obradjeno = prazno`
 
 Zaključak: import je uspeo, stavka čeka mapiranje.
-Akcija: otvoriti `frmBankaImport`, proveriti preview, mapirati auto ili ručno.
+Akcija: otvoriti ekran **Uvoz izvoda**, proveriti kolonu **Predlog**, mapirati auto ili ručno.
 
 ### Primer B: Kupac uplatio tačan iznos fakture, ali otišlo u avans
 
@@ -808,7 +821,7 @@ Akcija: proveriti original PDF i bankarsku referencu; tehnički owner rešava ru
 3. Dodati eksplicitnu “Undo/Correct bank mapping” proceduru umesto ručnih korekcija.
 4. Dodati obavezan razlog za `Skip`.
 5. Dodati audit za izmene `tblPartnerMap`.
-6. Dodati ekran “Pronađi NOV po BIM” direktno u `frmBankaImport`.
+6. Dodati „Pronađi NOV po BIM" direktno na ekran **Uvoz izvoda**.
 7. Dodati detekciju `BIM.Obradjeno = Da`, ali bez `NOV-*` linka.
 8. Dodati dnevni report `BIM.Obradjeno = Error` i starih otvorenih `BIM` stavki.
 9. Dodati bolju zaštitu od file-system/TX mismatch-a kod pomeranja PDF-a.

@@ -8657,3 +8657,106 @@ suite-ova; `check-banka-eh.py` čist; `WHO_WRITES.md` nepromenjen.
 > Po instalaciji: `ImportAllVBA` → `Remove frmBankaImport` → `Compile` → `Save`.
 > Zaostala forma ovde **ne obara compile** (ne zove ništa obrisano), za razliku od
 > koraka 5 — ali red ostaje isti.
+
+### 27.14a Korektivni PR posle recenzije koraka 6 — plan knjiženja
+
+Recenzija PR #262/#263 je našla **P1 blocker**: ekran je prikazivao jedno, a
+knjižio drugo. Nalaz je potvrđen merenjem i zatvoren pre release-a.
+
+## Šta je bilo pogrešno
+
+Kolona **Predlog** je računala `BimJakiKljucInfo` — **samo jake ključeve**. Radnja
+`Auto` ide kroz `AutoMapBankaImportRow` sa `strongOnly=False`, dakle celim lancem:
+
+| | Predlog (pre) | što je `Auto` stvarno radio |
+|---|---|---|
+| ime iz `tblPartnerMap` | „nema jakog ključa" | odmah mapira partnera |
+| egzaktan naziv kupca / kooperanta | „nema jakog ključa" | odmah mapira partnera |
+| naziv otkupnog mesta | „nema jakog ključa" | knjiži na OM |
+| jak ključ dao kupca, poziv na broj nije dao fakturu | „avans kupca" | **traži fakturu po pozivu/svrsi/iznosu i knjiži NA NJU** |
+
+Poslednji red je najgori: nije reč o slabijoj grani nego o tome da i **unutar**
+jakog ključa pisac radi korak koji prikaz nije imao. Uz to `Auto` **nije tražio
+nikakvu potvrdu** — klik je odmah knjižio.
+
+Neslaganje je postojalo i pre koraka 6, ali je legacy `BuildAutoPreviewText`
+prikazivao i fallback grane. Korak 6 je obrisao poslednji detaljan preview i
+tvrdio da je zamena potpuna — time je nalaz postao blocker **tog** koraka.
+
+## Ispravka: jedan plan, dva čitaoca
+
+`BimAutoPlanIzVrednosti` / `BimAutoPlan` je ta odluka izdvojena i **bez ijednog
+upisa**. Vraća `smer | partnerTip | partnerID | ciljTip | ciljID | izvor`.
+
+- **Pisac ga izvršava**: `AutoMapIncomingKupac` i `AutoMapOutgoingKooperantOrOM`
+  više ne donose odluke, nego samo pišu ono što plan kaže. Kopije nema, pa se
+  prikaz i akcija ne mogu razići.
+- **Mreža ga prikazuje**: kolona Predlog nosi cilj i, kad izvor **nije** jak ključ,
+  i oznaku („iz mape", „po imenu"). Jak ključ se ne imenuje — on je normalan put.
+- **Potvrda ga čita naglas**: `Auto` sada pita i imenuje konkretan cilj. Kad plana
+  nema, potvrda kaže da će red biti označen za ručno — i to je ishod koji operater
+  odobrava.
+
+**`samoJaki` zaustavlja lanac, ne filtrira ga.** Batch „Jaki ključevi" prekida se
+pre `PartnerMap`-a, isto kao pre. Da se lanac uvek računa do kraja pa filtrira,
+greška u čitanju `tblStanice` obarala bi i batch kome te tabele ne trebaju.
+
+**Čip „jaki ključevi" ostaje STROGO jak ključ** i dalje se mora slagati sa
+`CountStrongKeyReadyBankaImport`. To je drugo pitanje od „šta će Auto uraditi" i
+namerno se ne spaja — samo se sada čita iz istog plana (`izvor = JAK`), pa dve
+kopije istog uslova više ne postoje.
+
+**Šta plan ne zna:** raspodelu unutar bloka. Blok sa 3+ otvorenih stavki ima
+jednoznačnog kooperanta (plan postoji), a pisac ga odbija sa
+`ERR_BMAP_MANUAL_REQUIRED`. To je **odbijanje**, ne pogrešno knjiženje: plan sme
+da obeća više nego što pisac uradi, ali nikad nešto **drugo**.
+
+## P2: broj stavki uz „Jaki ključeve"
+
+Posle brisanja forme `CountStrongKeyReadyBankaImport` je ostao **bez ijednog
+produkcionog pozivaoca** — zvao ga je samo test. Vraćen je: potvrda nosi broj, a
+na nuli se batch **ne pokreće**.
+
+Natpis dugmeta i dalje **nema** `(N)`: natpis radnje u ljusci je **ključ kataloga**
+poruka, pa broj u njega ne staje bez izmene ugovora radnji (`Scr_Radnje`). To je
+svesno ostavljeno — potvrda je mesto na kome operater i odlučuje. `banka.md` je
+tvrdio da dugme nosi `(N)` i da `_Activate` prebrojava; oboje je bilo netačno i
+ispravlja se zasebnim process PR-om.
+
+## P2: runbookovi
+
+Četiri dokumenta su vodila operatera na komponentu koje više nema:
+`production-runbook-banka-novac.md`, `production-runbook-banka-import-setup.md`,
+`development-banka-parser.md`, `gas/bank-pdf-downloader/README.md`. Svi upućuju na
+ekran `BANKA_UVOZ`; tabela dugmadi je prepisana po stvarnom ekranu (Auto sa
+potvrdom, Jaki ključevi sa brojem, Ručno, Preskoči, Auto sve), a „Osveži /
+`LoadBankaRows`" je uklonjen — osvežavanje je posao ljuske.
+
+`ARCHITECTURE_REFERENCE.md` §8.15 je iz „Banka Review **Form** Boundary" postao
+„**Screen** Boundary", uz pravilo o jednom planu. Istorijski zapisi
+(`AUDIT_FM_TRIJAZA`, `KNOWN_ISSUES` AUD-014, changelog-ovi) se **ne prepravljaju**.
+
+## Dokaz
+
+Fixture je dobio **izvod 4** sa dva reda — jedina dva u kojima se pun plan
+razlikuje od jakog ključa (jedan preko `tblPartnerMap`, jedan „konto bez poziva na
+broj" gde se faktura nalazi po iznosu). Razlog je izmeren, ne pretpostavljen:
+**bez njih sabotaža `mreza-prikazuje-samo-jak-kljuc` nije obarala ništa** — tvrdnja
+„mreža prikazuje isti plan koji će pisac izvršiti" bila je placebo, jer se nijedan
+zatečeni red nije razlikovao po ta dva računa.
+
+Uz put je izmereno i da kupac 2 ima **tri** fakture na 5000, pa tražilac ispravno
+odbija dvosmislen izbor; test to sada i tvrdi (`plan-uzima-dvosmislenu-fakturu`).
+
+Nov test `T_BankaUvoz_PlanPrikazaJeIPlanPisca` (slot 182) i **osam** sabotaža.
+Testovi 181 → 182, katalog sabotaža 444 → 452.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 452 sabotaže); FULL zeleno —
+`RunAllTests` 182/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, svih 11
+suite-ova; dvosmerni dokaz **8/8 crvenih**; `check-banka-eh.py` čist;
+`WHO_WRITES.md` nepromenjen.
+
+> **Fixture se MORA regenerisati** uz ovaj PR:
+> `python tools\make_fixture.py --donor <sveska> --out <nova> --force`.
+> Stara sveska nema `tblPartnerMap` redove ni izvod 4, pa tri tvrdnje padaju na
+> podacima — `run_vba` to hvata potpisom fixture-a pre podizanja Excela.

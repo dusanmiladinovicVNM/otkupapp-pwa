@@ -19,7 +19,7 @@ PDF izvoda
         Select Case bankId -> rutira na parser TE banke (5 funkcija)
         4-nivo integrity check   (DELJENO — saldo vs parsirane sume/brojevi)
         17-kolonski staging       (DELJENO -> tblBankaImport)
-  -> frmBankaImport               (auto-map po jakim kljucevima; DELJENO)
+  -> ekran BANKA_UVOZ            (auto-map po jakim kljucevima; DELJENO)
 ```
 
 Za novu banku pišeš **samo jedan modul** (`modBanka<Ime>.bas`) sa 5 funkcija i
@@ -154,7 +154,7 @@ sekcija curi (npr. neisključena „na čekanju").
 
 ### Korak 6 — kvalitet polja (integritet ovo NE pokriva)
 Iz per-red dumpa proveri `racun`, `partner`, `svrha`, `poziv`, `referenca` —
-njih integritet ne validira, a auto-map (`frmBankaImport`, Faza 7) koristi
+njih integritet ne validira, a auto-map (ekran `BANKA_UVOZ` / `modScrBankaUvoz`, Faza 7) koristi
 **tekući račun** (primarno) i **poziv na broj** (sekundarno). Račun mora biti
 čist; naziv banke (poreklo naloga) ne sme upasti u partnera/svrhu.
 

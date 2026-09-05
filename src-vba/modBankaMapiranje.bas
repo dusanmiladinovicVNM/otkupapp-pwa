@@ -97,6 +97,16 @@ Public Const BIM_TIP_OM As String = "OM"
 Public Const BIM_CILJ_FAKTURA As String = "FAKTURA"
 Public Const BIM_CILJ_AVANS As String = "AVANS"
 Public Const BIM_CILJ_BLOK As String = "BLOK"
+' Cetvrti cilj postoji samo u PUNOM planu (BimAutoPlan): jaki kljucevi nikad ne
+' vode na otkupno mesto -- tamo se stize samo preko PartnerMap-a ili imena.
+Public Const BIM_CILJ_OM As String = "OM"
+
+' CIME je plan razresen. Ovo NIJE ukras: 'faktura po jakom kljucu' i 'faktura
+' nadjena po iznosu' su dve razlicite tvrdnje o istom novcu, a operater ih do
+' sada nije razlikovao jer mu je mreza pokazivala samo prvu.
+Public Const BIM_IZV_JAK As String = "JAK"        ' konto / poziv na broj
+Public Const BIM_IZV_MAPA As String = "MAPA"      ' tblPartnerMap
+Public Const BIM_IZV_IME As String = "IME"        ' egzaktan naziv partnera
 
 ' Smer stavke izvoda - JEDAN klasifikator za citaoce (preview u formi) i pisce
 ' (RequireBimSmer). Bez zajednickog koda su preview i writer imali razlicit
@@ -1488,18 +1498,6 @@ End Function
 ' Vraca KupacID po jakim kljucevima ili "" (ukljucujuci konflikt racun<->poziv).
 ' fakturaID je izlazni parametar: popunjen samo kad poziv na broj jednoznacno
 ' pogodi fakturu.
-Private Function ResolveStrongKupac(ByVal bankaImportID As String, _
-                                    ByRef fakturaID As String) As String
-    Dim bim As Variant
-
-    fakturaID = ""
-
-    bim = GetBankaImportRowByID(bankaImportID)
-    If IsEmpty(bim) Then Exit Function
-
-    ResolveStrongKupac = ResolveStrongKupacByKeys( _
-        CStr(NzBIM(bim(1, 4), "")), CStr(NzBIM(bim(1, 10), "")), fakturaID)
-End Function
 
 ' Ista odluka, ali iz VEC PROCITANIH kljuceva (konto + poziv na broj). Prebrojavanje
 ' u formi ima ceo red u ruci, pa bi `GetBankaImportRowByID` po redu znacilo jos
@@ -1538,16 +1536,6 @@ Private Function ResolveStrongKupacByKeys(ByVal konto As String, _
     End If
 End Function
 
-' Vraca KooperantID po jakim kljucevima ili "" (ukljucujuci konflikt poziv<->racun).
-Private Function ResolveStrongKooperant(ByVal bankaImportID As String) As String
-    Dim bim As Variant
-
-    bim = GetBankaImportRowByID(bankaImportID)
-    If IsEmpty(bim) Then Exit Function
-
-    ResolveStrongKooperant = ResolveStrongKooperantByKeys( _
-        CStr(NzBIM(bim(1, 4), "")), CStr(NzBIM(bim(1, 10), "")))
-End Function
 
 ' Vidi ResolveStrongKupacByKeys -- ista optimizacija za isplatnu granu.
 Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
@@ -1695,6 +1683,187 @@ Public Function BimJakKljucSpreman(ByVal uplata As Double, ByVal isplata As Doub
     BimJakKljucSpreman = (Len(CStr(info(1))) > 0)
 End Function
 
+
+' ============================================================
+' PUN PLAN AUTOMATSKOG KNJIZENJA -- JEDAN IZVOR ZA PRIKAZ I ZA PISCA
+'
+' BimJakiKljucInfo odgovara na "sta bi JAKI KLJUCEVI zatvorili". To je odgovor
+' koji treba BROJACU i cipu "jaki kljucevi", i njemu se ta dva moraju slagati.
+'
+' Ali radnja Auto nad redom NIJE strong-only: AutoMapBankaImportRow ide dalje --
+' PartnerMap, egzaktno ime, otkupno mesto -- i, za uplatu razresenu jakim kljucem
+' BEZ poziva na fakturu, jos i TRAZI fakturu po pozivu/svrsi/iznosu. Zato je
+' mreza umela da kaze "avans kupca", a klik proknjizi FAKTURU; ili "nema jakog
+' kljuca", a klik svejedno odmah mapira partnera ili otkupno mesto. Kod knjizenja
+' novca prikaz koji tvrdi jedno a radnja uradi drugo je KVAR, ne nepreciznost.
+'
+' Ovaj plan je ta odluka, izdvojena i BEZ IJEDNOG UPISA. Pisac ga izvrsava, mreza
+' ga prikazuje, potvrda ga cita naglas -- kopije nema, pa nema ni razlaza.
+'
+' Vraca 0-bazirano:
+'   0 smer       BIM_SMER_UPLATA | BIM_SMER_ISPLATA | BIM_SMER_NEJASAN
+'   1 partnerTip BIM_TIP_KUPAC | BIM_TIP_KOOPERANT | BIM_TIP_OM | ""
+'   2 partnerID  KupacID / KooperantID / StanicaID; "" = PLANA NEMA
+'   3 ciljTip    BIM_CILJ_FAKTURA | BIM_CILJ_AVANS | BIM_CILJ_BLOK | BIM_CILJ_OM | ""
+'   4 ciljID     FakturaID kad je cilj faktura, inace ""
+'   5 izvor      BIM_IZV_JAK | BIM_IZV_MAPA | BIM_IZV_IME | ""
+'
+' samoJaki JE ZAUSTAVLJANJE, NE FILTER. Batch "Jaki kljucevi" prekida lanac pre
+' PartnerMap-a, pa ga i plan mora prekinuti na istom mestu: da se lanac uvek
+' racuna do kraja pa filtrira, schema greska u tblStanice bi obarala i strong
+' batch kome te tabele uopste ne trebaju.
+'
+' STA PLAN NE ZNA: raspodelu unutar bloka. Blok sa 3+ otvorenih stavki ima
+' jednoznacnog kooperanta (pa plan POSTOJI), a pisac ga svejedno odbija sa
+' ERR_BMAP_MANUAL_REQUIRED. To je ODBIJANJE, ne pogresno knjizenje: plan sme da
+' obeca vise nego sto pisac uradi, ali nikad nesto DRUGO.
+Public Function BimAutoPlanIzVrednosti(ByVal uplata As Double, ByVal isplata As Double, _
+                                       ByVal konto As String, ByVal poziv As String, _
+                                       ByVal partnerName As String, ByVal svrha As String, _
+                                       Optional ByVal samoJaki As Boolean = False) As Variant
+    Dim smer As String, pid As String, fakturaID As String
+    Dim mapped As Variant
+
+    smer = ClassifyBimSmer(uplata, isplata)
+    BimAutoPlanIzVrednosti = PlanRed(smer, "", "", "", "", "")
+
+    Select Case smer
+        Case BIM_SMER_UPLATA
+            pid = ResolveStrongKupacByKeys(konto, poziv, fakturaID)
+            If Len(pid) > 0 Then
+                ' Jak kljuc je dao KUPCA; fakturu mozda nije. Pisac tada trazi
+                ' fakturu po pozivu/svrsi/iznosu -- i bas tu je mreza govorila
+                ' "avans", a knjizila se faktura.
+                If Len(fakturaID) = 0 Then _
+                    fakturaID = FakturaZaKupcaIzVrednosti(pid, poziv, svrha, uplata)
+                BimAutoPlanIzVrednosti = PlanKupac(smer, pid, fakturaID, BIM_IZV_JAK)
+                Exit Function
+            End If
+            If samoJaki Then Exit Function
+
+            mapped = LookupPartnerMap(partnerName)
+            If Not IsEmpty(mapped) Then
+                ' SAMO "Kupac". Mapa koja za uplatu kaze Kooperant/OM se PRESKACE
+                ' i lanac ide dalje -- tako radi i pisac.
+                If CStr(mapped(1)) = BIM_TIP_KUPAC Then
+                    fakturaID = FakturaZaKupcaIzVrednosti(CStr(mapped(0)), poziv, svrha, uplata)
+                    BimAutoPlanIzVrednosti = PlanKupac(smer, CStr(mapped(0)), fakturaID, BIM_IZV_MAPA)
+                    Exit Function
+                End If
+            End If
+
+            mapped = TryResolveKupacBIM(partnerName)
+            If Not IsEmpty(mapped) Then
+                fakturaID = FakturaZaKupcaIzVrednosti(CStr(mapped(0)), poziv, svrha, uplata)
+                BimAutoPlanIzVrednosti = PlanKupac(smer, CStr(mapped(0)), fakturaID, BIM_IZV_IME)
+                Exit Function
+            End If
+
+            mapped = TryResolveOMBIM(partnerName)
+            If Not IsEmpty(mapped) Then _
+                BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_OM, CStr(mapped(0)), _
+                                                 BIM_CILJ_OM, "", BIM_IZV_IME)
+
+        Case BIM_SMER_ISPLATA
+            pid = ResolveStrongKooperantByKeys(konto, poziv)
+            If Len(pid) > 0 Then
+                BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _
+                                                 BIM_CILJ_BLOK, "", BIM_IZV_JAK)
+                Exit Function
+            End If
+            If samoJaki Then Exit Function
+
+            mapped = LookupPartnerMap(partnerName)
+            If Not IsEmpty(mapped) Then
+                Select Case CStr(mapped(1))
+                    Case BIM_TIP_KOOPERANT
+                        BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, CStr(mapped(0)), _
+                                                         BIM_CILJ_BLOK, "", BIM_IZV_MAPA)
+                        Exit Function
+                    Case BIM_TIP_OM
+                        BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_OM, CStr(mapped(0)), _
+                                                         BIM_CILJ_OM, "", BIM_IZV_MAPA)
+                        Exit Function
+                End Select
+            End If
+
+            mapped = TryResolveKooperantBIM(partnerName)
+            If Not IsEmpty(mapped) Then
+                BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, CStr(mapped(0)), _
+                                                 BIM_CILJ_BLOK, "", BIM_IZV_IME)
+                Exit Function
+            End If
+
+            mapped = TryResolveOMBIM(partnerName)
+            If Not IsEmpty(mapped) Then _
+                BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_OM, CStr(mapped(0)), _
+                                                 BIM_CILJ_OM, "", BIM_IZV_IME)
+    End Select
+End Function
+
+' Plan iz VEC PROCITANOG reda. Pisac i potvrda rade nad jednim redom, pa im je
+' ovo ulaz; mreza ima vrednosti u ruci i zove verziju iznad.
+Public Function BimAutoPlan(ByVal bankaImportID As String, _
+                            Optional ByVal samoJaki As Boolean = False) As Variant
+    Dim bim As Variant
+
+    BimAutoPlan = PlanRed(BIM_SMER_NEJASAN, "", "", "", "", "")
+    bim = GetBankaImportRowByID(bankaImportID)
+    If IsEmpty(bim) Then Exit Function
+
+    BimAutoPlan = BimAutoPlanIzVrednosti( _
+        CDbl(NzBIM(bim(1, 5), 0#)), CDbl(NzBIM(bim(1, 6), 0#)), _
+        CStr(NzBIM(bim(1, 4), "")), CStr(NzBIM(bim(1, 10), "")), _
+        CStr(NzBIM(bim(1, 3), "")), CStr(NzBIM(bim(1, 8), "")), samoJaki)
+End Function
+
+' NAZIV cilja za JEDAN plan -- ono sto potvrda cita naglas operateru.
+'
+' Mreza isti posao radi mapama (OpisCilja), jer ide kroz sve redove odjednom;
+' ovde je jedan red, pa je LookupValue jeftiniji od gradnje cetiri mape.
+Public Function BimPlanOpis(ByVal plan As Variant) As String
+    Dim pid As String
+    If Not BimPlanImaCilj(plan) Then Exit Function
+    pid = CStr(plan(2))
+
+    Select Case CStr(plan(3))
+        Case BIM_CILJ_FAKTURA
+            BimPlanOpis = CStr(NzBIM(LookupValue(TBL_FAKTURE, COL_FAK_ID, CStr(plan(4)), _
+                                                 COL_FAK_BROJ), CStr(plan(4))))
+        Case BIM_CILJ_AVANS
+            BimPlanOpis = CStr(NzBIM(LookupValue(TBL_KUPCI, COL_KUP_ID, pid, COL_KUP_NAZIV), pid))
+        Case BIM_CILJ_BLOK
+            BimPlanOpis = Trim$(CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Ime"), "")) & _
+                                " " & CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Prezime"), "")))
+            If Len(BimPlanOpis) = 0 Then BimPlanOpis = pid
+        Case BIM_CILJ_OM
+            BimPlanOpis = CStr(NzBIM(LookupValue(TBL_STANICE, "StanicaID", pid, "Naziv"), pid))
+    End Select
+End Function
+
+' Ima li plan uopste cilj. Prazan partnerID znaci da auto nema sta da uradi.
+Public Function BimPlanImaCilj(ByVal plan As Variant) As Boolean
+    If Not IsArray(plan) Then Exit Function
+    If UBound(plan) < 5 Then Exit Function
+    BimPlanImaCilj = (Len(CStr(plan(2))) > 0)
+End Function
+
+Private Function PlanRed(ByVal smer As String, ByVal partnerTip As String, _
+                         ByVal partnerID As String, ByVal ciljTip As String, _
+                         ByVal ciljID As String, ByVal izvor As String) As Variant
+    PlanRed = Array(smer, partnerTip, partnerID, ciljTip, ciljID, izvor)
+End Function
+
+' Kupac sa fakturom je FAKTURA, bez nje AVANS -- isto pravilo koje je do sada
+' stajalo samo u BimJakiKljucInfo.
+Private Function PlanKupac(ByVal smer As String, ByVal kupacID As String, _
+                           ByVal fakturaID As String, ByVal izvor As String) As Variant
+    If Len(fakturaID) > 0 Then
+        PlanKupac = PlanRed(smer, BIM_TIP_KUPAC, kupacID, BIM_CILJ_FAKTURA, fakturaID, izvor)
+    Else
+        PlanKupac = PlanRed(smer, BIM_TIP_KUPAC, kupacID, BIM_CILJ_AVANS, "", izvor)
+    End If
+End Function
 ' Je li stavka jos u redu za mapiranje. ISTO pravilo koje primenjuje
 ' GetBankaImportOpen (sve sto nije "Da" ni "Skip"), izdvojeno da ga cip ekrana
 ' i brojac znacke ne bi prepisivali.
@@ -1733,6 +1902,35 @@ End Function
 ' Uplate i isplate se sabiraju nad OTVORENIM redovima -- isto kao legacy, koji
 ' ih racuna nad m_Data (rezultat GetBankaImportOpen). To je "koliko novca jos
 ' ceka da bude proknjizeno", ne promet izvoda.
+
+' CIME se cilj plana predstavlja operateru. Uvek NAZIV, ne ID: broj fakture,
+' naziv kupca / kooperanta / otkupnog mesta. Blok se predstavlja kooperantom, a
+' ne brojem poziva -- broj bloka JESTE poziv na broj (AutoBlockNoForBim), ali
+' operater proverava KOME novac ide, a poziv na broj vec stoji u svojoj koloni.
+Private Function OpisCilja(ByVal plan As Variant, ByVal poziv As String, _
+                           ByVal fakture As Object, ByVal kupci As Object, _
+                           ByVal koopi As Object, ByVal stanice As Object) As String
+    Dim pid As String, fakturaID As String
+    pid = CStr(plan(2))
+    fakturaID = CStr(plan(4))
+
+    Select Case CStr(plan(3))
+        Case BIM_CILJ_FAKTURA: OpisCilja = IzMape(fakture, fakturaID, fakturaID)
+        Case BIM_CILJ_AVANS:   OpisCilja = IzMape(kupci, pid, pid)
+        Case BIM_CILJ_BLOK:    OpisCilja = IzMape(koopi, pid, Trim$(poziv))
+        Case BIM_CILJ_OM:      OpisCilja = IzMape(stanice, pid, pid)
+    End Select
+End Function
+
+' Vrednost iz mape, ili rezerva kad je mape nema / kljuc nije u njoj. Rezerva je
+' ID: prazna celija bi izgledala kao da cilja nema.
+Private Function IzMape(ByVal d As Object, ByVal kljuc As String, _
+                        ByVal rezerva As String) As String
+    IzMape = rezerva
+    If d Is Nothing Then Exit Function
+    If Len(kljuc) = 0 Then Exit Function
+    If d.Exists(kljuc) Then IzMape = CStr(d(kljuc))
+End Function
 Public Function GetBankaImportKpi() As Variant
     Const SRC As String = "GetBankaImportKpi"
 
@@ -1824,7 +2022,7 @@ Public Function GetBankaImportForGrid() As Variant
 
     Dim cID As Long, cBrDok As Long, cRac As Long, cDatTx As Long
     Dim cPart As Long, cKonto As Long, cPoziv As Long
-    Dim cUpl As Long, cIspl As Long, cObr As Long
+    Dim cUpl As Long, cIspl As Long, cObr As Long, cSvrha As Long
 
     cID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
     cBrDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
@@ -1836,22 +2034,29 @@ Public Function GetBankaImportForGrid() As Variant
     cUpl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
     cIspl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
     cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    ' Svrha placanja ulazi u PLAN (trazenje fakture po svrsi), pa je citac mora
+    ' predati -- inace bi mreza racunala drugaciji plan nego pisac.
+    cSvrha = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA, SRC)
 
     ' Nazivi za predlog. Jednoprolazne mape -- alternativa je LookupValue po redu.
     Dim fakture As Object
     Dim kupci As Object
+    Dim koopi As Object
+    Dim stanice As Object
     Set fakture = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_FAK_BROJ)
     Set kupci = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Set koopi = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
 
     Dim outA() As Variant
     Dim i As Long, n As Long
     Dim uplata As Double, isplata As Double
     Dim poziv As String, obr As String
     Dim otvoren As Boolean
-    Dim info As Variant
-    Dim ciljTip As String, ciljOpis As String, partnerID As String, fakturaID As String
+    Dim plan As Variant
+    Dim ciljTip As String, ciljOpis As String, izvor As String
 
-    ReDim outA(1 To UBound(data, 1), 1 To 15)
+    ReDim outA(1 To UBound(data, 1), 1 To 16)
 
     For i = 1 To UBound(data, 1)
         uplata = CDbl(NzBIM(data(i, cUpl), 0#))
@@ -1862,34 +2067,22 @@ Public Function GetBankaImportForGrid() As Variant
 
         ciljTip = ""
         ciljOpis = ""
+        izvor = ""
 
         If otvoren Then
-            info = BimJakiKljucInfo(uplata, isplata, _
-                                    CStr(NzBIM(data(i, cKonto), "")), poziv)
-            partnerID = CStr(info(1))
-            fakturaID = CStr(info(2))
-            ciljTip = CStr(info(3))
-
-            Select Case ciljTip
-                Case BIM_CILJ_FAKTURA
-                    ciljOpis = fakturaID
-                    If Not fakture Is Nothing Then
-                        If fakture.Exists(fakturaID) Then ciljOpis = CStr(fakture(fakturaID))
-                    End If
-
-                Case BIM_CILJ_AVANS
-                    ciljOpis = partnerID
-                    If Not kupci Is Nothing Then
-                        If kupci.Exists(partnerID) Then ciljOpis = CStr(kupci(partnerID))
-                    End If
-
-                Case BIM_CILJ_BLOK
-                    ' Blok JESTE poziv na broj iz izvoda (AutoBlockNoForBim), pa
-                    ' se ne trazi jos jednom -- vec je u redu.
-                    ciljOpis = Trim$(poziv)
-            End Select
+            ' PUN PLAN, ne samo jak kljuc. Do v2.39 je ovde stajao
+            ' BimJakiKljucInfo, pa je mreza tvrdila "avans kupca" za red koji
+            ' Auto knjizi na FAKTURU, i "nema jakog kljuca" za red koji Auto
+            ' odmah mapira preko PartnerMap-a. V. BimAutoPlanIzVrednosti.
+            plan = BimAutoPlanIzVrednosti(uplata, isplata, _
+                                          CStr(NzBIM(data(i, cKonto), "")), poziv, _
+                                          CStr(NzBIM(data(i, cPart), "")), _
+                                          CStr(NzBIM(data(i, cSvrha), "")))
+            ciljTip = CStr(plan(3))
+            izvor = CStr(plan(5))
+            ciljOpis = OpisCilja(plan, poziv, fakture, kupci, koopi, stanice)
         Else
-            info = Array(ClassifyBimSmer(uplata, isplata), "", "", "")
+            plan = Array(ClassifyBimSmer(uplata, isplata), "", "", "", "", "")
         End If
 
         n = n + 1
@@ -1903,11 +2096,16 @@ Public Function GetBankaImportForGrid() As Variant
         outA(n, 8) = isplata
         outA(n, 9) = obr
         outA(n, 10) = otvoren
-        outA(n, 11) = CStr(info(0))
-        outA(n, 12) = (Len(CStr(info(1))) > 0)
+        outA(n, 11) = CStr(plan(0))
+        ' JAK KLJUC, ne "ima plan". Cip "jaki kljucevi" i znacka moraju da se
+        ' slazu sa CountStrongKeyReadyBankaImport, a plan zna i za slabije
+        ' izvore. Uslov je isti onaj koji BimJakKljucSpreman meri -- samo
+        ' procitan iz plana, pa se dve kopije ne mogu raziciti.
+        outA(n, 12) = (izvor = BIM_IZV_JAK)
         outA(n, 13) = ciljTip
         outA(n, 14) = ciljOpis
         outA(n, 15) = Trim$(CStr(data(i, cID)))
+        outA(n, 16) = izvor
     Next i
 
     If n = 0 Then Exit Function
@@ -2183,123 +2381,57 @@ EH:
     Err.Raise errNum, SRC, errDesc
 End Function
 
+' PISAC IZVRSAVA PLAN, ne pravi ga. Lanac odluka (jak kljuc -> PartnerMap ->
+' ime -> OM, uz trazenje fakture za kupca) zivi u BimAutoPlan -- isti onaj koji
+' mreza prikazuje i koji potvrda cita naglas.
 Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
+    Dim plan As Variant
     Dim partnerName As String
-    Dim mapped As Variant
-    Dim fakturaID As String
-    Dim resolvedKupac As String
-    Dim learn As Boolean
 
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
 
     partnerName = CStr(bim(1, 3))
-    learn = (Len(Trim$(partnerName)) > 0)
+    plan = BimAutoPlan(bankaImportID, strongOnly)
+    If Not BimPlanImaCilj(plan) Then Exit Function
 
-    ' PRIORITET: jaki kljucevi (tekuci racun -> kupac, poziv na broj -> faktura).
-    ' Sama odluka zivi u ResolveStrongKupac da bi isti kod mogao i SAMO da prebroji
-    ' sta bi se mapiralo, bez knjizenja (CountStrongKeyReadyBankaImport).
-    resolvedKupac = ResolveStrongKupac(bankaImportID, fakturaID)
-
-    If resolvedKupac <> "" Then
-        If fakturaID = "" Then
-            fakturaID = TryResolveFakturaForKupac(bankaImportID, resolvedKupac)
-        End If
-        AutoMapIncomingKupac = MapBankaImportAsKupac(bankaImportID, resolvedKupac, fakturaID, learn)
-        Exit Function
-    End If
-
-    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
-    If strongOnly Then
-        AutoMapIncomingKupac = ""
-        Exit Function
-    End If
-
-    ' FALLBACK (nepromenjeno): PartnerMap -> egzaktno ime -> OM.
-    mapped = LookupPartnerMap(partnerName)
-    If Not IsEmpty(mapped) Then
-        If CStr(mapped(1)) = "Kupac" Then
-            fakturaID = TryResolveFakturaForKupac(bankaImportID, CStr(mapped(0)))
-            AutoMapIncomingKupac = MapBankaImportAsKupac(bankaImportID, CStr(mapped(0)), fakturaID, False)
-            Exit Function
-        End If
-    End If
-
-    mapped = TryResolveKupacBIM(partnerName)
-    If Not IsEmpty(mapped) Then
-        fakturaID = TryResolveFakturaForKupac(bankaImportID, CStr(mapped(0)))
-        AutoMapIncomingKupac = MapBankaImportAsKupac(bankaImportID, CStr(mapped(0)), fakturaID, False)
-        Exit Function
-    End If
-
-    mapped = TryResolveOMBIM(partnerName)
-    If Not IsEmpty(mapped) Then
-        AutoMapIncomingKupac = MapBankaImportAsOM(bankaImportID, CStr(mapped(0)), "", False)
-        Exit Function
-    End If
-
-    AutoMapIncomingKupac = ""
+    Select Case CStr(plan(1))
+        Case BIM_TIP_KUPAC
+            ' Ucenje PartnerMap-a ide SAMO uz jak kljuc: ime koje je vec doslo
+            ' IZ mape ili iz poklapanja imena ne sme da se upise nazad kao
+            ' naucena veza (bilo bi to ucenje od sebe samog).
+            AutoMapIncomingKupac = MapBankaImportAsKupac( _
+                bankaImportID, CStr(plan(2)), CStr(plan(4)), _
+                (CStr(plan(5)) = BIM_IZV_JAK) And (Len(Trim$(partnerName)) > 0))
+        Case BIM_TIP_OM
+            AutoMapIncomingKupac = MapBankaImportAsOM(bankaImportID, CStr(plan(2)), "", False)
+    End Select
 End Function
 
+' Vidi AutoMapIncomingKupac -- isti odnos prema planu.
 Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
+    Dim plan As Variant
     Dim partnerName As String
-    Dim mapped As Variant
     Dim createdCount As Long
-    Dim resolvedKoop As String
-    Dim learn As Boolean
 
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
 
     partnerName = CStr(bim(1, 3))
-    learn = (Len(Trim$(partnerName)) > 0)
+    plan = BimAutoPlan(bankaImportID, strongOnly)
+    If Not BimPlanImaCilj(plan) Then Exit Function
 
-    ' PRIORITET: jaki kljucevi (poziv na broj -> otkupni list, tekuci racun).
-    ' Odluka je izdvojena u ResolveStrongKooperant (vidi ResolveStrongKupac).
-    resolvedKoop = ResolveStrongKooperant(bankaImportID)
-
-    If resolvedKoop <> "" Then
-        createdCount = MapBankaImportAsKooperantBlock(bankaImportID, resolvedKoop, learn)
-        If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
-        Exit Function
-    End If
-
-    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
-    If strongOnly Then
-        AutoMapOutgoingKooperantOrOM = ""
-        Exit Function
-    End If
-
-    ' FALLBACK (nepromenjeno): PartnerMap -> egzaktno ime -> OM.
-    mapped = LookupPartnerMap(partnerName)
-    If Not IsEmpty(mapped) Then
-        Select Case CStr(mapped(1))
-            Case "Kooperant"
-                createdCount = MapBankaImportAsKooperantBlock(bankaImportID, CStr(mapped(0)), False)
-                If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
-                Exit Function
-            Case "OM"
-                AutoMapOutgoingKooperantOrOM = MapBankaImportAsOM(bankaImportID, CStr(mapped(0)), "", False)
-                Exit Function
-        End Select
-    End If
-
-    mapped = TryResolveKooperantBIM(partnerName)
-    If Not IsEmpty(mapped) Then
-        createdCount = MapBankaImportAsKooperantBlock(bankaImportID, CStr(mapped(0)), False)
-        If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
-        Exit Function
-    End If
-
-    mapped = TryResolveOMBIM(partnerName)
-    If Not IsEmpty(mapped) Then
-        AutoMapOutgoingKooperantOrOM = MapBankaImportAsOM(bankaImportID, CStr(mapped(0)), "", False)
-        Exit Function
-    End If
-
-    AutoMapOutgoingKooperantOrOM = ""
+    Select Case CStr(plan(1))
+        Case BIM_TIP_KOOPERANT
+            createdCount = MapBankaImportAsKooperantBlock( _
+                bankaImportID, CStr(plan(2)), _
+                (CStr(plan(5)) = BIM_IZV_JAK) And (Len(Trim$(partnerName)) > 0))
+            If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
+        Case BIM_TIP_OM
+            AutoMapOutgoingKooperantOrOM = MapBankaImportAsOM(bankaImportID, CStr(plan(2)), "", False)
+    End Select
 End Function
 
 
@@ -2310,18 +2442,37 @@ End Function
 
 Public Function TryResolveFakturaForKupac(ByVal bankaImportID As String, ByVal kupacID As String) As String
     Dim bim As Variant
-    Dim faktData As Variant
-    Dim colFID As Long, colBroj As Long, colKup As Long, colIznos As Long, colStatus As Long
     Dim poziv As String, svrha As String, uplata As Double
-    Dim i As Long, hitCount As Long, hitID As String
-    
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
-    
-    poziv = NormalizeLooseBIM(CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ)))
-    svrha = NormalizeLooseBIM(CStr(bim(1, 8)))
+
+    poziv = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ))
+    svrha = CStr(bim(1, 8))
     uplata = CDbl(NzBIM(bim(1, 5), 0#))
-    
+
+    TryResolveFakturaForKupac = FakturaZaKupcaIzVrednosti(kupacID, poziv, svrha, uplata)
+End Function
+
+' ISTA odluka, ali iz VEC PROCITANIH vrednosti reda -- bez ijednog citanja
+' tblBankaImport. Postoji zato sto je PLAN potreban i po redu (pisac, potvrda)
+' i za CELU listu odjednom (mreza): verzija koja cita red bi na velikom izvodu
+' znacila jos jedan prolaz kroz tabelu po redu. Isti razlog kao
+' ResolveStrongKupacByKeys.
+Public Function FakturaZaKupcaIzVrednosti(ByVal kupacID As String, _
+                                          ByVal pozivSirovo As String, _
+                                          ByVal svrhaSirovo As String, _
+                                          ByVal uplata As Double) As String
+    Dim faktData As Variant
+    Dim colFID As Long, colBroj As Long, colKup As Long, colIznos As Long, colStatus As Long
+    Dim poziv As String, svrha As String
+    Dim i As Long, hitCount As Long, hitID As String
+
+    If Len(kupacID) = 0 Then Exit Function
+
+    poziv = NormalizeLooseBIM(pozivSirovo)
+    svrha = NormalizeLooseBIM(svrhaSirovo)
+
     faktData = GetTableData(TBL_FAKTURE)
     If IsEmpty(faktData) Then Exit Function
     
@@ -2366,7 +2517,7 @@ Public Function TryResolveFakturaForKupac(ByVal bankaImportID As String, ByVal k
 NextI:
     Next i
     
-    If hitCount = 1 Then TryResolveFakturaForKupac = hitID
+    If hitCount = 1 Then FakturaZaKupcaIzVrednosti = hitID
 End Function
 
 Private Function TryResolveOtkupForKooperant(ByVal bankaImportID As String, _

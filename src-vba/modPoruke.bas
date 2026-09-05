@@ -1609,7 +1609,15 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_FAKTURA", "faktura"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_AVANS", "avans kupca"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_BLOK", "blok"
-    UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_NEMA", "nema jakog klju" & ChrW(269) & "a"
+    UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_OM", "otkupno mesto"
+    ' Bilo "nema jakog kljuca" -- a kolona od v2.39 prikazuje PUN plan, koji zna
+    ' i za PartnerMap i za poklapanje imena. Red bez jakog kljuca, a sa planom,
+    ' sada ima sta da pokaze; prazno je tek kad auto zaista nema cilj.
+    UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_NEMA", "nema cilja"
+    ' Slabiji izvor poklapanja se IMENUJE. Jak kljuc se ne imenuje -- on je
+    ' normalan put, pa bi oznaka samo zatrpala kolonu.
+    UpsertRow lo, existing, "OTKUI_LBL_BU_IZV_MAPA", "iz mape"
+    UpsertRow lo, existing, "OTKUI_LBL_BU_IZV_IME", "po imenu"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_NEJASAN", "nejasan smer"
     UpsertRow lo, existing, "OTKUI_LBL_BU_HINT", "Izaberi red pa radnju."
     UpsertRow lo, existing, "OTKUI_LBL_BU_HINT_AVANS", "Prazna faktura = AVANS kupca."
@@ -1636,6 +1644,14 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MSG_BU_AVANS_OK", ChrW(10003) & " Ceo iznos je knji" & ChrW(382) & "en kao avans kooperanta"
     UpsertRow lo, existing, "OTKUI_ASK_BU_SKIP", "Presko" & ChrW(269) & "iti stavku izvoda"
     UpsertRow lo, existing, "OTKUI_ASK_BU_JAKI", "Proknji" & ChrW(382) & "iti sve stavke sa jednozna" & ChrW(269) & "nim jakim klju" & ChrW(269) & "em?"
+    UpsertRow lo, existing, "OTKUI_ASK_BU_JAKI_N", "Stavki:"
+    UpsertRow lo, existing, "OTKUI_MSG_BU_JAKI_NULA", "Nema stavki sa jednozna" & ChrW(269) & "nim jakim klju" & ChrW(269) & "em."
+    ' Auto nad redom PITA, i pita konkretno -- druga linija potvrde nosi cilj iz
+    ' istog plana koji ce pisac izvrsiti.
+    UpsertRow lo, existing, "OTKUI_ASK_BU_AUTO", "Proknji" & ChrW(382) & "iti automatski stavku"
+    UpsertRow lo, existing, "OTKUI_ASK_BU_AUTO_NEMA", _
+              "Auto nema jednozna" & ChrW(269) & "an cilj " & ChrW(8212) & _
+              " stavka " & ChrW(263) & "e biti ozna" & ChrW(269) & "ena za ru" & ChrW(269) & "no. Nastaviti?"
     UpsertRow lo, existing, "OTKUI_ASK_BU_SVE", "Pokrenuti automatsko mapiranje SVIH otvorenih stavki?"
     UpsertRow lo, existing, "OTKUI_ASK_BU_AVANS", "Nije izabrana faktura." & vbCrLf & vbCrLf & "Uplata se knji" & ChrW(382) & "i kao AVANS kupca, ne kao zatvaranje fakture." & vbCrLf & vbCrLf & "Nastaviti?"
     UpsertRow lo, existing, "OTKUI_ASK_BU_RUCNO", "Ru" & ChrW(269) & "no mapirati stavku"

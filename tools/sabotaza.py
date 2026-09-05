@@ -2113,6 +2113,72 @@ SABOTAZE = {
         "T_BankaUvoz_RucnoMapiranjePravila",
         "prazan izbor NIJE izbor -- tada cilj dolazi iz poziva na broj",
     ),
+    # ===================================== PLAN AUTOMATSKOG KNJIZENJA
+    # Kolona Predlog je racunala SAMO jake kljuceve, dok radnja Auto ide celim
+    # lancem. Stavka je zato umela da PISE 'avans kupca', a da novac ode NA
+    # FAKTURU. Osam sabotaza drzi obe polovine: da plan vidi ceo lanac, i da ga
+    # mreza i potvrda prikazuju bas takvog.
+    "plan-ne-trazi-fakturu-za-kupca": (
+        "modBankaMapiranje.bas",
+        "                    fakturaID = FakturaZaKupcaIzVrednosti(pid, poziv, svrha, uplata)\n",
+        "                    fakturaID = \"\"   ' SABOTAZA: plan ne trazi fakturu, pisac hoce\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "plan vidi FAKTURU -- ono sto ce pisac i proknjiziti",
+    ),
+    # Tri kandidata nisu nalaz. Bez ovoga bi trazilac uzeo bilo koju od tri
+    # fakture istog iznosa -- novac na pogresnu, bez ijedne poruke.
+    "plan-uzima-dvosmislenu-fakturu": (
+        "modBankaMapiranje.bas",
+        "    If hitCount = 1 Then FakturaZaKupcaIzVrednosti = hitID\n",
+        "    If hitCount >= 1 Then FakturaZaKupcaIzVrednosti = hitID   ' SABOTAZA: dvosmislen izbor prolazi\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "tri kandidata nisu nalaz -- plan ostaje AVANS",
+    ),
+    "plan-preskace-partnermapu": (
+        "modBankaMapiranje.bas",
+        "                If CStr(mapped(1)) = BIM_TIP_KUPAC Then\n",
+        "                If False Then   ' SABOTAZA: plan preskace PartnerMap\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "PartnerMap razresava kupca -- klik bi ga odmah mapirao",
+    ),
+    # samoJaki mora da ZAUSTAVI lanac, ne da ga filtrira posle racunanja.
+    "samo-jaki-ne-prekida-lanac": (
+        "modBankaMapiranje.bas",
+        "                BimAutoPlanIzVrednosti = PlanKupac(smer, pid, fakturaID, BIM_IZV_JAK)\n                Exit Function\n            End If\n            If samoJaki Then Exit Function\n",
+        "                BimAutoPlanIzVrednosti = PlanKupac(smer, pid, fakturaID, BIM_IZV_JAK)\n                Exit Function\n            End If\n            If False Then Exit Function   ' SABOTAZA: batch jakih ide dalje\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "batch jakih kljuceva NE ide na mapu",
+    ),
+    # SRZ NALAZA: mreza se vraca na 'samo jaki kljucevi', pa opet tvrdi jedno
+    # dok radnja radi drugo.
+    "mreza-prikazuje-samo-jak-kljuc": (
+        "modBankaMapiranje.bas",
+        "                                          CStr(NzBIM(data(i, cSvrha), \"\")))\n",
+        "                                          CStr(NzBIM(data(i, cSvrha), \"\")), True)   ' SABOTAZA: mreza opet samo jak kljuc\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "mreza prikazuje ISTI plan koji ce pisac izvrsiti",
+    ),
+    "auto-potvrda-ne-imenuje-cilj": (
+        "modScrBankaUvoz.bas",
+        "                    BuPredlogTekst(CStr(plan(0)), CStr(plan(3)), ciljOpis, True, CStr(plan(5)))\n",
+        "                    \"\"   ' SABOTAZA: potvrda ne kaze KUDA ide novac\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "potvrda Auto imenuje konkretan cilj, ne pita uopsteno",
+    ),
+    "jaki-kljucevi-bez-broja": (
+        "modScrBankaUvoz.bas",
+        "                    Poruka(\"OTKUI_ASK_BU_JAKI_N\") & \" \" & CStr(spremno)\n",
+        "                    Poruka(\"OTKUI_ASK_BU_JAKI_N\")   ' SABOTAZA: potvrda bez broja stavki\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "potvrda jakih kljuceva nosi BROJ stavki",
+    ),
+    "jaki-kljucevi-na-nuli-pokrecu": (
+        "modScrBankaUvoz.bas",
+        "    If spremno <= 0 Then BuJakiOdgovor = Poruka(\"OTKUI_MSG_BU_JAKI_NULA\")\n",
+        "    If spremno < 0 Then BuJakiOdgovor = Poruka(\"OTKUI_MSG_BU_JAKI_NULA\")   ' SABOTAZA: nula pokrece batch\n",
+        "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
+        "nula stavki NE pokrece batch nego javlja da nema sta",
+    ),
     # ------------------------------------- MATICNI: SEKCIJA I POKRETAC
     # Sidebar nema skrol. Kad stavke predju slobodnu visinu, ne skroluju se nego
     # TIHO nestanu ispod profila -- zato sekcije uopste postoje. Cetiri sabotaze:
