@@ -2179,6 +2179,34 @@ SABOTAZE = {
         "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
         "nula stavki NE pokrece batch nego javlja da nema sta",
     ),
+    # Ljuskin CompareKey nenumericke vrednosti poredi StrComp-om, pa bi
+    # zapis 'dd.mm.yyyy' sortirao po DANU: 31.01.2026 ispred 01.02.2026.
+    # Dnevnik cija hronologija nije tacna ne dokazuje nista.
+    "seflog-vreme-kao-tekst": (
+        "modScrFakture.bas",
+        "        outA(n, 1) = VremeSerijski(src(i, cVreme))\n",
+        "        outA(n, 1) = CStr(src(i, cVreme))   ' SABOTAZA: sort po danu, ne po vremenu\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "vreme u modelu je BROJ -- inace ljuska sortira StrComp-om",
+    ),
+    # AUDIT trag: greska pretvorena u Empty se cita kao 'faktura nema
+    # dogadjaja'. Nedostajuca tabela ili izgubljena kolona FakturaID time
+    # izgledaju kao uredan prazan log. Isti razlog kao AUD-014.
+    "seflog-pad-citanja-cuti": (
+        "modSEFPersistance.bas",
+        "    Err.Raise errNum, errSrc, errDesc\n",
+        "    Err.Clear   ' SABOTAZA: pad citanja izgleda kao prazan dnevnik\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "pad citanja dnevnika se PRIJAVLJUJE, ne izgleda kao prazan log",
+    ),
+    # Dva dogadjaja istog dana bez sata izgledaju kao isti trenutak.
+    "seflog-prikaz-bez-sata": (
+        "modOtkupUI.bas",
+        "    FmtDatumVreme = Format$(d, \"dd.mm.yyyy. hh:nn\")\n",
+        "    FmtDatumVreme = Format$(d, \"dd.mm.yyyy.\")   ' SABOTAZA: sat otpada\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "prikaz vremena nosi sat, ne samo datum",
+    ),
     # ===================================== SEF DOGADJAJI (log po fakturi)
     # Poslednje sto je frmSEF imao a ljuska nije. Sve tvrdnje su o OPSEGU: log
     # koji pokaze tudje dogadjaje je gori od praznog, jer se bas njime dokazuje

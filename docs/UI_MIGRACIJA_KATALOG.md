@@ -8930,12 +8930,52 @@ Posejana su četiri događaja: **tri** fakture `FAK-TEST-N` i **jedan** fakture
 `FAK-TEST-P`. Drugi postoji zbog opsega — bez njega tvrdnja „log pripada
 izabranoj fakturi" prolazi i kad čitač vrati ceo dnevnik.
 
-Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **pet** sabotaža.
-Testovi 183 → 184, katalog sabotaža 456 → 461.
+## Dva nalaza recenzije (P2), zatvorena pre merge-a
 
-**Verifikacija:** `vba_check` čist (196 fajlova, 461 sabotaža); FULL zeleno —
+**1. Hronologija nije bila hronologija.** Model je nosio `CStr(EventTime)`, a
+ljuskin `CompareKey` nenumeričke vrednosti poređuje `StrComp`-om — nad zapisom
+`dd.mm.yyyy` to je sortiranje **po danu**, pa bi `31.01.2026` došao ispred
+`01.02.2026`. Za dnevnik događaja hronologija JE sadržaj.
+
+Model sada nosi **serijski broj** (`VremeSerijski`), pa `CompareKey` radi
+numeričko poređenje. Uveden je i tip kolone **`datetime`**: `date` prikazuje samo
+datum, a dva događaja istog dana bez sata izgledaju kao isti trenutak.
+
+**Moja tvrdnja o sortu bila je placebo** — proveravala je samo da `Scr_Sort()`
+vraća `"1:desc"`, a svi fixture događaji su imali isti `FIXTURE_DATE`, pa se
+tekstualno i hronološko sortiranje nisu ni razlikovali. Događaji sada **prelaze
+granicu meseca** i imaju sat, a test tvrdi i **preduslov**: da bi po tekstu
+redosled bio obrnut. Bez tog preduslova tvrdnja opet ne bi merila ništa.
+
+Uz to je `make_fixture.xl_serial` naučio `datetime` (bio je samo `date`, pa je sat
+tiho otpadao — `datetime.datetime` je podklasa od `date`).
+
+**2. Pad čitanja audit-loga izgledao je kao „nema događaja".**
+`GetSEFEventsForFaktura` je svaku grešku pretvarao u `Empty`, a `Empty` se čita kao
+„faktura nema događaja". Nedostajuća tabela, izgubljena kolona `FakturaID` ili pad
+filtera time su operateru izgledali kao uredan prazan log — na ekranu čiji je ceo
+smisao dokaz šta je kome poslato.
+
+Čitač sada čuva `Err` **pre** `LogErr`-a (koji ume da ga obriše) i propagira
+grešku; `Empty` znači tačno jedno: čitanje je uspelo i redova nema. Isti razlog zbog
+kog `CountStrongKeyReadyBankaImport` ne guta grešku (AUD-014).
+
+Pad se u harnessu ne može izazvati bez lomljenja šeme, pa je dodat seam
+`SefLogPadTestSet` — isti obrazac kao `ScrGradnjuOboriTest`. Test tvrdi i da se
+posle gašenja seam-a čitanje vraća u normalu, da tvrdnja ne bi prolazila nad
+zaglavljenim seam-om.
+
+> **P3 iz recenzije nije nalaz.** Dva razmaka na kraju
+> `ARCHITECTURE_REFERENCE.md:612` su **markdown hard break**: linije 610, 611 i 612
+> ih imaju sve tri, a 613 (poslednja u bloku) nema nijedan. Uklanjanje samo sa 612
+> spojilo bi je sa 613 pri prikazu.
+
+Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **osam** sabotaža.
+Testovi 183 → 184, katalog sabotaža 456 → 464.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 464 sabotaže); FULL zeleno —
 `RunAllTests` 184/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, SEF
-238/238, svih 11 suite-ova; dvosmerni dokaz **5/5 crvenih**; `WHO_WRITES.md`
+238/238, svih 11 suite-ova; dvosmerni dokaz **8/8 crvenih**; `WHO_WRITES.md`
 nepromenjen.
 
 > **Fixture se mora regenerisati** uz ovaj PR — stara sveska nema `tblSEFEventLog`

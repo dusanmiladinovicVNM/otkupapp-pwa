@@ -1,6 +1,9 @@
 Attribute VB_Name = "modSEFPersistance"
 Option Explicit
 
+' v. SefLogPadTestSet -- seam za pad citanja dnevnika dogadjaja.
+Private mSefLogPadTest As Boolean
+
 ' =========================================================
 ' modSEFPersistence
 ' Alle SEF-Reads/Writes laufen ueber modDataAccess
@@ -658,10 +661,28 @@ EH:
     GetSEFSubmissionsForFaktura = Empty
 End Function
 
+' TEST SEAM: citanje dnevnika "pada". Modeluje schema drift -- nedostajucu
+' kolonu FakturaID ili pad GetTableData -- sto je jedini nacin da se izmeri da
+' pad NE izgleda kao prazan log: sema se u harnessu ne sme lomiti. Isti obrazac
+' kao modUiScreens.ScrGradnjuOboriTest.
+'
+' Vezan je za TEST REZIM pri svakom citanju, ne samo pri postavljanju: seam koji
+' ostane upaljen (test koji je pukao pre ciscenja) postaje inertan cim
+' RunAllTests vrati prethodni rezim.
+Public Sub SefLogPadTestSet(ByVal obori As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mSefLogPadTest = obori
+End Sub
+
 Public Function GetSEFEventsForFaktura(ByVal fakturaID As String) As Variant
     On Error GoTo EH
 
     Const SRC As String = "modSEFPersistance.GetSEFEventsForFaktura"
+
+    ' Namerno UNUTAR On Error GoTo EH -- meri se bas to da EH gresku prosledjuje,
+    ' a ne da je pretvara u prazan odgovor.
+    If mSefLogPadTest And IsTestMode() Then _
+        Err.Raise ERR_SEF_STATE, SRC, "SEAM: citanje dnevnika pada"
 
     Dim data As Variant
     data = GetTableData(TBL_SEF_EVENT_LOG)
@@ -682,9 +703,30 @@ Public Function GetSEFEventsForFaktura(ByVal fakturaID As String) As Variant
     GetSEFEventsForFaktura = FilterArray(data, filters)
     Exit Function
 
+' PAD CITANJA NIJE PRAZAN DNEVNIK.
+'
+' Do v2.39 je svaka greska ovde postajala Empty, a pozivalac Empty cita kao
+' 'faktura nema dogadjaja'. Nedostajuca tabela, izgubljena kolona FakturaID ili
+' pad filtera time su operateru izgledali kao uredan prazan log -- a ovo je
+' AUDIT trag, jedino cime se dokazuje sta je kome poslato. Isti razlog zbog kog
+' CountStrongKeyReadyBankaImport ne guta gresku (AUD-014).
+'
+' Empty od sada znaci TACNO jedno: citanje je uspelo i redova nema.
+'
+' Err se cita PRE LogErr-a -- LogErr ume da obrise Err, pa bi Raise ispod njega
+' dizao gresku bez broja i opisa (v. provera MRTAV_LOG u vba_check).
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC
     GetSEFEventsForFaktura = Empty
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 ' AUD-032b: razduzi TACNO ONU submisiju koju korektivni resubmit zamenjuje.

@@ -90,6 +90,11 @@ Private Const FX_FAK_PLAC As String = "FAK-TEST-P"     ' KUPAC, uplacena u celos
 Private Const FX_SEFLOG_NEPL As Long = 3
 Private Const FX_SEFLOG_PLAC As Long = 1
 Private Const FX_SEFLOG_TUDJ As String = "Tudja faktura"
+' Tri vremena PRELAZE granicu meseca i imaju sat. Po TEKSTU ("31.01.2026" vs
+' "01.02.2026") redosled je obrnut od hronoloskog, pa fixture razlikuje
+' sortiranje po serijskom broju od sortiranja po zapisu.
+Private Const FX_SEFLOG_TIP_PRVI As String = "SUBMIT"
+Private Const FX_SEFLOG_TIP_DRUGI As String = "STATUS"
 Private Const FX_FAK_PLAC_IZNOS As Double = 4000
 Private Const FX_FAK_STORNO As String = "FAK-TEST-X"   ' ne sme da se pojavi u listi
 ' Prijemnice ekrana Fakturisanje, sve tri kupca FX_KUPAC:
@@ -15210,6 +15215,8 @@ Private Sub T_Fak_SefLogJeOpsegFakture()
     Dim tudje As String, spec As String, kolone As Variant
     Dim bezNaziva As String, losoPolje As String
     Dim naslov As String
+    Dim vPrvi As Variant, vDrugi As Variant
+    Dim padPrijavljen As Boolean
 
     modScrFakture.Scr_FkListaTestSet "SEFLOG"
 
@@ -15256,6 +15263,58 @@ Private Sub T_Fak_SefLogJeOpsegFakture()
     AssertEq modScrFakture.Scr_Sort(), "", _
              "ostale liste zadrzavaju pravilo ljuske"
     modScrFakture.Scr_FkListaTestSet "SEFLOG"
+
+    ' --- 5b) SORT SE MERI, NE SAMO TRAZI ----------------------------------
+    ' "Scr_Sort vraca 1:desc" je bilo nedovoljno: ljuskin CompareKey nenumericke
+    ' vrednosti poredi StrComp-om, pa bi kolona sa TEKSTOM "dd.mm.yyyy" bila
+    ' sortirana po danu. Meri se ono od cega sort zavisi -- da model nosi BROJ.
+    modScrFakture.Scr_FkSefLogOpsegSet FX_FAK_NEPL, "2/2026"
+    d = modScrFakture.Scr_Rows("sve", "")
+    redovi = d(1)
+    vPrvi = 0: vDrugi = 0
+    For i = 1 To CLng(d(2))
+        If CStr(redovi(i, 2)) = FX_SEFLOG_TIP_PRVI Then vPrvi = redovi(i, 1)
+        If CStr(redovi(i, 2)) = FX_SEFLOG_TIP_DRUGI Then vDrugi = redovi(i, 1)
+    Next i
+
+    AssertEq IsNumeric(vPrvi), True, _
+             "vreme u modelu je BROJ -- inace ljuska sortira StrComp-om"
+    AssertEq (CDbl(vPrvi) < CDbl(vDrugi)), True, _
+             "stariji dogadjaj ima manji serijski broj (31.01 pre 01.02)"
+
+    ' PREDUSLOV ZA DOKAZ: da tekstualno poredjenje daje SUPROTNO. Bez ovoga bi
+    ' tvrdnja iznad prolazila i nad fixture-om u kome su sva vremena ista -- bas
+    ' to je i bio propust prve verzije ovog testa.
+    AssertEq (StrComp(Format$(CDate(vPrvi), "dd.mm.yyyy"), _
+                      Format$(CDate(vDrugi), "dd.mm.yyyy"), vbTextCompare) > 0), True, _
+             "preduslov: po TEKSTU bi redosled bio obrnut"
+
+    ' Prikaz nosi i SAT: dva dogadjaja istog dana se moraju razlikovati.
+    AssertEq (InStr(modOtkupUI.FmtDatumVreme(vPrvi), "23:50") > 0), True, _
+             "prikaz vremena nosi sat, ne samo datum"
+
+    ' --- 5c) PAD CITANJA NIJE PRAZAN DNEVNIK -------------------------------
+    ' Ovo je AUDIT trag. Do v2.39 je citac svaku gresku pretvarao u Empty, a
+    ' Empty se cita kao 'faktura nema dogadjaja' -- nedostajuca tabela ili
+    ' izgubljena kolona FakturaID time su izgledale kao uredan prazan log.
+    ' Empty od sada znaci TACNO jedno: citanje je uspelo i redova nema.
+    modSEFPersistance.SefLogPadTestSet True
+    padPrijavljen = False
+    On Error Resume Next
+    d = modScrFakture.Scr_Rows("sve", "")
+    padPrijavljen = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+    modSEFPersistance.SefLogPadTestSet False
+
+    AssertEq padPrijavljen, True, _
+             "pad citanja dnevnika se PRIJAVLJUJE, ne izgleda kao prazan log"
+
+    ' A posle gasenja seam-a citanje mora opet da radi -- inace bi tvrdnja iznad
+    ' prolazila i kad seam ostane zaglavljen.
+    d = modScrFakture.Scr_Rows("sve", "")
+    AssertEq CLng(d(2)), FX_SEFLOG_NEPL, _
+             "posle seam-a citanje se vraca u normalu"
 
     ' --- 6) tri radnje, nijedna ne trazi izabran DOGADJAJ ------------------
     ' Sve tri rade nad FAKTUROM u opsegu; peto polje 0 znaci 'radi bez reda'.

@@ -1608,7 +1608,7 @@ End Sub
 
 Private Function SEFLogKolone() As Variant
     SEFLogKolone = Array( _
-        "OTKUI_HDF_SL_VREME||txt|132|1", _
+        "OTKUI_HDF_SL_VREME||datetime|140|1", _
         "OTKUI_HDF_SL_TIP||txt|150|1", _
         "OTKUI_HDF_SL_PORUKA||txt|0|1", _
         "OTKUI_HDF_SL_DETALJI||txt|240|3")
@@ -1648,7 +1648,7 @@ Private Function RedoviSefLog(ByVal filter As String, ByVal q As String) As Vari
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
-        outA(n, 1) = CStr(src(i, cVreme))
+        outA(n, 1) = VremeSerijski(src(i, cVreme))
         outA(n, 2) = CStr(src(i, cTip))
         outA(n, 3) = CStr(src(i, cPoruka))
         outA(n, 4) = CStr(src(i, cDetalji))
@@ -1660,6 +1660,23 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrFakture.RedoviSefLog[" & mStep & "]", Err.description
+End Function
+
+' VREME KAO BROJ, ne kao tekst. Ljuskin CompareKey nenumericke vrednosti poredi
+' StrComp-om, pa bi zapis 'dd.mm.yyyy' sortirao po danu: 31.01.2026 bi dosao
+' ispred 01.02.2026. Dnevnik cija hronologija nije tacna ne dokazuje nista.
+'
+' Nekonvertibilna vrednost se vraca KAKVA JESTE: pretvaranje u nulu bi sve
+' neispravne zapise slozilo na pocetak i izgledalo kao uredan podatak.
+Private Function VremeSerijski(ByVal v As Variant) As Variant
+    On Error Resume Next
+    VremeSerijski = v
+    If IsEmpty(v) Or IsNull(v) Then Exit Function
+    VremeSerijski = CDbl(CDate(v))
+    If Err.Number <> 0 Then
+        VremeSerijski = v
+        Err.Clear
+    End If
 End Function
 
 ' Faktura nad kojom tri radnje loga rade. Prazno = lista nije otvorena preko
