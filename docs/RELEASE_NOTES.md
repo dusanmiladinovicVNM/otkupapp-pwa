@@ -7145,3 +7145,71 @@ ijedne izmišljene veze.
 - **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad
   pravim podacima (checklista u PR-u).
+
+---
+
+## vba-v2.93.0 — u pripremi
+
+### Jedan prozor: 18 formi → 1
+
+Plan iz `docs/UI_MIGRACIJA_KATALOG.md` §27 je završen. Aplikacija je do sada
+otvarala niz zasebnih prozora — svaki sa svojom kopijom istog izgleda i svojim
+ponašanjem. Sada postoji **jedan prozor** (`frmOtkupUI`), a sve ostalo su
+**ekrani i faze** u njemu.
+
+- **Otkup i dokumenta, Palete, Agrohemija, Izveštaji, Sledljivost, Fakturisanje,
+  Matični podaci, Platni nalozi, Uvoz izvoda** — svi rade kroz istu ljusku:
+  isti sidebar, ista mreža, isto sortiranje, pretraga i štampa.
+- **Marža** je zamenjena ekranom **Analiza poslovanja**.
+- **SEF događaji** su dobili šestu listu na ekranu Fakturisanje — poslednje što
+  je stara SEF forma imala a ljuska nije.
+- **Splash, prijava i kartica „Excel je otvoren"** više nisu forme nego **faze**
+  istog prozora.
+
+Praktična posledica: prelazak sa ekrana na ekran je trenutan (prozor se ne
+zatvara i ne otvara), a izgled se više ne može razići između delova aplikacije.
+
+### Start: splash → prijava → ekran, bez pogleda na tabele
+
+- **Splash je prvo što se vidi** posle klika na fajl, i stoji preko celog
+  pokretanja — provere licence, ažuriranja i verzije, pa prijava.
+- **Tabele se ne vide nijednom** između klika na fajl i ekrana. Radna sveska se
+  otkriva samo na tri mesta, i svako od njih to i traži: kad kapija odbije
+  pokretanje (i aplikacija se gasi), kod prvog podešavanja računara (bira
+  foldere), i kad operater sam pritisne **„Otvori Excel"**.
+- **Splash više nije tajmer od dve sekunde** nego prikaz stvarnog posla — u
+  podnožju piše koji korak traje („Provera licence…", „Provera verzije…").
+  Kad je pokretanje brzo, čeka se najmanje 1,2 s da znak ne bljesne; kad traje
+  duže, ne dodaje ništa.
+- **Povratak iz Excela je trenutan:** prozor se skuplja na malu karticu „Nazad u
+  aplikaciju" umesto da se zatvara, pa se ekran ne gradi ponovo.
+
+### Logotip putuje sa kodom
+
+- Logotip je ranije živeo u binarnom delu forme, koji **ne ide kroz
+  auto-ažuriranje** — svaka izmena znaka tražila je punu reinstalaciju. Sada je
+  deo koda i stiže običnim ažuriranjem, kao i sve ostalo.
+- Isto važi i za **prijavni prozor**: do sada je tražio pun `.xlsm`.
+- Znak se crta **1:1**, bez skaliranja, pa je oštar; za ekrane veće rezolucije
+  postoji druga veličina koja se bira sama.
+
+### Provere koje su usput dodate
+
+- **`CLAN_FORME`** — poziv na član forme koji ne postoji. To je greška koju VBA
+  javlja tek na ručnom `Compile`, a testovi je ne vide.
+- **`DUPLI_LOKAL`** — isto ime dvaput u istoj proceduri. Obara ceo projekat, a
+  javlja se kao „Cannot run the macro", pa simptom ne pokazuje na krivca.
+- **`KRAJ_REDA`** — `.frm` sa pogrešnim krajem reda uveze se kao običan modul i
+  obori ceo projekat. Jednom je tako ugašen ceo test harness.
+
+### Verifikacija
+
+- `vba_check` čist, **465 sabotaža** (svaka obara tačno svoj imenovani test),
+  self-test enkodera logotipa u oba smera.
+- **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
+  `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad pravim
+  podacima. Pokretanje je izmenjeno u samom korenu, pa smoke starta nije
+  opcion — checklista je u `docs/UI_MIGRACIJA_KATALOG.md` §27.18.
+- **Posle ažuriranja jednom ručno u VBE-u:** ukloni `frmSplash`, `frmLogin` i
+  `frmExcelMini`. Auto-ažuriranje nikad ne briše komponente, pa one ostaju u
+  zatečenoj svesci — bez ijedne reference, ali zauzimaju mesto.
