@@ -6337,6 +6337,7 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     Dim vraceno As Boolean, fazaSakrivena As Boolean
     Dim bootVidljiv As Boolean, miniVidljiv As Boolean, miniGradijent As Boolean
     Dim znakBoot As Long, znakMini As Long
+    Dim sitan As String, krupan As String, odnosSitan As Single, odnosKrupan As Single
 
     Set f = NewOtkupUIForm()                         ' faza APP -- ljuska se gradi
 
@@ -6365,6 +6366,16 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     fazaSakrivena = Not z.Visible
     vraceno = f.Controls("zHdr").Enabled
 
+    ' Varijanta znaka (1x / 2x) se bira po tome koliko piksela okvir pokriva.
+    ' Merenje ne sme da zavisi od DPI-ja masine na kojoj suite radi, pa se tvrdi
+    ' SMER odluke: sicusan okvir uzima 1x, ogroman 2x. Uz to obe varijante moraju
+    ' da imaju odnos stranica -- kljuc bez njega dao bi okvir sirine nula i znak
+    ' bi nestao, a nista drugo to ne bi prijavilo.
+    sitan = modLogo.LogoKljuc(LOGO_SPLASH, 1)
+    krupan = modLogo.LogoKljuc(LOGO_SPLASH, 10000)
+    odnosSitan = modLogo.LogoOdnos(sitan)
+    odnosKrupan = modLogo.LogoOdnos(krupan)
+
     ReleaseOtkupUIForm f
 
     AssertEq nema, "", "splash i mini kartica imaju sve svoje kontrole"
@@ -6377,6 +6388,10 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     AssertEq vraceno, True, "povratak u aplikaciju vraca zone ljuske"
     AssertEq znakBoot, 1, "splash pokazuje znak tacno jednom (slika ILI tekst)"
     AssertEq znakMini, 1, "mini kartica pokazuje znak tacno jednom (slika ILI tekst)"
+    AssertEq sitan, LOGO_SPLASH, "sitan okvir uzima 1x sliku"
+    AssertEq krupan, LOGO_SPLASH & "2", "krupan okvir uzima 2x sliku"
+    AssertEq (odnosSitan > 2.5 And odnosSitan < 3.5), True, "1x slika ima odnos stranica"
+    AssertEq (odnosKrupan > 2.5 And odnosKrupan < 3.5), True, "2x slika ima odnos stranica"
 End Sub
 
 ' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod

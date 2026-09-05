@@ -9130,7 +9130,7 @@ iz **`src-vba/modLogo.bas`** — GIF u Base64, dekodiran u privremeni fajl i uč
 | zašto GIF, ne PNG | `LoadPicture` ne čita PNG | zna BMP, RLE, ICO, WMF, EMF, GIF, JPEG. BMP je nekomprimovan (pola MB), JPEG bi na oštrim ivicama zlatnog teksta dao prsten. Znak ima nekoliko boja → GIF je ovde **bez gubitka** |
 | zašto je pozadina pečena | MSForms ne zna per-pixel alfu | providan PNG bi svejedno bio spljošten, samo na boju koju bi MSForms izabrao **umesto nas**. Kompozit ide unapred, na tačno onu boju na kojoj slika stoji |
 | kako se boje ne raziđu | `modLogo` izvozi `LOGO_BG_*` | ista konstanta boji ploču iza slike i pečena je u piksele — crtanje i slika ne mogu da se raziđu |
-| zašto tri veličine | `Zoom` skalira grubo | splash 480×157, kartica prijave 300×98, mini kartica 160×52 — svaka blizu stvarnoj meri prikaza |
+| zašto se **ne skalira** | `Zoom` skalira grubo | v. „Crisp" ispod |
 
 Splash ima gradijent, pa se boja uzima na sredini logotipa (`t = 0.35`). Razlika
 boje gradijenta preko visine znaka je najviše **1 jedinica po kanalu**, pa se
@@ -9142,14 +9142,41 @@ kad nema MSXML/ADODB ili je TEMP nedostupan; tada se crta „AX OtkupApp" u
 radi. Test 184 meri baš to: znak se vidi **tačno jednom** — slika ILI tekst,
 nikad oba i nikad nijedan.
 
+**Crisp: slika se crta 1:1, ne skalira se.** Prva verzija je slala jednu veličinu
+(480×157) koju je `Zoom` smanjivao na ~350×115 — i to se videlo. `PictureSizeMode
+= Zoom` ide kroz `StretchBlt` sa `COLORONCOLOR`, dakle **bez ikakvog uglačavanja**:
+smanjivanje prosto **ispušta** redove i kolone. Znak „AX" je sav od kosina, pa su
+ispuštene kolone izašle kao stepenice.
+
+Zato se piksel mera više **ne bira rukom nego računa**: okvir je zadat u tačkama
+(raspored ljuske), a slika dobija tačno onoliko piksela koliko taj okvir pokriva
+na ekranu — na 96 DPI to je `visina × 96/72`.
+
+| Znak | okvir | 1x | 2x |
+|---|---|---|---|
+| splash | 86 pt | 353×115 | 705×230 |
+| kartica prijave | 26 pt | 107×35 | 215×70 |
+| mini kartica | 20 pt | 83×27 | 166×54 |
+
+Varijantu bira **runtime** (`LogoKljuc`), jer koliko piksela okvir pokriva zavisi
+i od rezolucije i od DPI-ja. Bira se ona čija je mera **bliža u odnosu**, ne u
+razlici: rastezanje 1,5× i skupljanje 1,5× nisu isti gubitak, a poređenje kvadrata
+sa proizvodom (geometrijska sredina) ih izjednačava bez logaritma. Test 186 tvrdi
+smer odluke — sićušan okvir uzima 1x, ogroman 2x — jer se sam DPI mašine na kojoj
+suite radi ne sme ugraditi u tvrdnju.
+
+Uz to je paleta podignuta sa 64 na **256 boja** (GIF maksimum): antialiasing
+zlatnog teksta na tamnom pravi više nijansi nego što 64 pokriva, pa se na ivicama
+video prelaz u trakama.
+
 Generator je **`tools/logo_to_vba.py`** (izvor: `img/AgriX-Otkup-Logo-Final.png`),
 pa se logotip regeneriše kad se brend promeni. Nosi self-test u oba smera: GIF se
 dekodira nazad i poredi piksel po piksel, pa se namerno pokvari jedan bajt —
 provera mora da prijavi razliku. Enkoder koji nikad nije pokazan crven ne
 dokazuje da išta meri. Ako self-test padne, `modLogo.bas` se **ne upisuje**.
 
-Ukupna cena: **11,4 KB GIF-a → 14,4 KB Base64** u jednom `.bas` modulu, nasuprot
-572 KB `.frx`-a koji nije putovao.
+Ukupna cena: **24,5 KB GIF-a → 32,7 KB Base64** za šest slika u jednom `.bas`
+modulu, nasuprot 572 KB `.frx`-a koji nije putovao.
 
 #### Redosled starta: splash → prijava → ekran, i sveska se ne vidi
 

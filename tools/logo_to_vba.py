@@ -58,11 +58,22 @@ C_CREAM = (0xF7, 0xF4, 0xEE)
 # LOGO_T_SPLASH u modUiFaze -- ploca iza slike se crta bas tom bojom.
 T_SPLASH = 0.35
 
-# kljuc -> (pozadina, sirina, visina, broj boja)
+# Broj boja u paleti. GIF ide do 256 i na ovom znaku je to bez gubitka --
+# antialiasing zlatnog teksta na tamnom pravi vise nijansi nego sto 64 pokriva.
+BOJA = 256
+
+# kljuc -> (pozadina, visina OKVIRA u tackama)
+#
+# Piksel mera se NE bira rukom nego racuna: okvir je zadat u tackama (raspored
+# ljuske), a slika mora da ima tacno onoliko piksela koliko taj okvir pokriva na
+# ekranu. Na 96 DPI je to visina * 96/72.
+#
+# Svaka varijanta se pece i u 2x, za ekrane na kojima okvir pokriva vise
+# piksela (veca rezolucija ili DPI). Izbor je runtime -- modLogo.LogoKljuc.
 VARIJANTE = [
-    ("SPLASH", "forest", 480, 157, 64),
-    ("KARTICA", "cream", 300, 98, 64),
-    ("MINI", "cream", 160, 52, 48),
+    ("SPLASH", "forest", 86),
+    ("KARTICA", "cream", 26),
+    ("MINI", "cream", 20),
 ]
 
 
@@ -354,14 +365,19 @@ def b64_lines(b64, per=200):
 
 
 def gradi(png_w, png_h, rgba):
-    """Vrati listu (kljuc, bg_rgb, w, h, gif_bytes)."""
+    """Vrati listu (kljuc, bg_rgb, w, h, gif_bytes, paleta, indeksi)."""
     rez = []
-    for kljuc, poz, nw, nh, ncol in VARIJANTE:
+    odnos = png_w / float(png_h)
+    for kljuc, poz, visina_pt in VARIJANTE:
         bg = lerp(C_FOREST, C_FOREST_DK, T_SPLASH) if poz == "forest" else C_CREAM
         rgb = composite(png_w, png_h, rgba, bg)
-        small = resize_box(png_w, png_h, rgb, nw, nh)
-        pal, idx = quantize(nw, nh, small, ncol)
-        rez.append((kljuc, bg, nw, nh, gif_encode(nw, nh, pal, idx), pal, idx))
+        for skala in (1, 2):
+            nh = int(round(visina_pt * 96 / 72.0)) * skala
+            nw = int(round(nh * odnos))
+            small = resize_box(png_w, png_h, rgb, nw, nh)
+            pal, idx = quantize(nw, nh, small, BOJA)
+            ime = kljuc if skala == 1 else kljuc + "2"
+            rez.append((ime, bg, nw, nh, gif_encode(nw, nh, pal, idx), pal, idx))
     return rez
 
 
@@ -420,20 +436,20 @@ def ispisi_bas(rez):
     a("' Fajl je 100% ASCII (Base64 i jeste ASCII).")
     a(crta)
     a("")
-    for kljuc, bg, nw, nh, gif, _pal, _idx in rez:
+    for kljuc, _bg, nw, nh, gif, _pal, _idx in rez:
         a("' %s: %dx%d, %d bajtova GIF-a" % (kljuc, nw, nh, len(gif)))
-        a('Public Const LOGO_%s As String = "%s"' % (kljuc, kljuc))
+    a("")
+    a("' Osnovni kljucevi (1x). Varijantu za OVAJ ekran daje LogoKljuc.")
+    for kljuc, _bg, _nw, _nh, _gif, _pal, _idx in rez:
+        if not kljuc.endswith("2"):
+            a('Public Const LOGO_%s As String = "%s"' % (kljuc, kljuc))
     a("")
     a("' Boja na koju je slika pecena. Ploca iza slike se crta BAS ovim, pa se")
     a("' pravougaonik oko znaka ne vidi.")
     for kljuc, bg, _nw, _nh, _gif, _pal, _idx in rez:
-        a("Public Const LOGO_BG_%s As Long = %s   ' RGB(%d, %d, %d)"
-          % (kljuc, vba_color(bg), bg[0], bg[1], bg[2]))
-    a("")
-    a("' Odnos stranica (sirina / visina). Okvir slike se racuna po njemu, pa Zoom")
-    a("' nema sta da doda sa strane -- inace bi se oko znaka video pojas pozadine.")
-    for kljuc, _bg, nw, nh, _gif, _pal, _idx in rez:
-        a("Public Const LOGO_ODNOS_%s As Single = %.4f" % (kljuc, nw / float(nh)))
+        if not kljuc.endswith("2"):
+            a("Public Const LOGO_BG_%s As Long = %s   ' RGB(%d, %d, %d)"
+              % (kljuc, vba_color(bg), bg[0], bg[1], bg[2]))
     a("")
     a("' Ucitane slike po kljucu -- dekodiranje i upis na disk idu jednom po sesiji.")
     a("Private mKes As Object")
@@ -507,10 +523,62 @@ def ispisi_bas(rez):
     a('    LogErr "modLogo.UpisiPrivremeni"')
     a("End Function")
     a("")
+    a(crta)
+    a("' Odnos stranica izabrane slike (sirina / visina).")
+    a("'")
+    a("' Okvir se racuna po NJEMU, ne po zajednickom broju: varijante se razlikuju")
+    a("' u cetvrtoj decimali zbog zaokruzivanja piksela, a okvir koji odnosu ne")
+    a("' odgovara ostavlja pojas pozadine sa strane -- vidljiv pravougaonik oko")
+    a("' znaka na gradijentu splash-a.")
+    a(crta)
+    a("Public Function LogoOdnos(ByVal kljuc As String) As Single")
+    a("    Select Case kljuc")
+    for kljuc, _bg, nw, nh, _gif, _pal, _idx in rez:
+        a('        Case "%s": LogoOdnos = %.5f' % (kljuc, nw / float(nh)))
+    a("    End Select")
+    a("End Function")
+    a("")
+    a("' Visina slike u pikselima -- po njoj LogoKljuc bira varijantu.")
+    a("Private Function LogoPxH(ByVal kljuc As String) As Long")
+    a("    Select Case kljuc")
+    for kljuc, _bg, _nw, nh, _gif, _pal, _idx in rez:
+        a('        Case "%s": LogoPxH = %d' % (kljuc, nh))
+    a("    End Select")
+    a("End Function")
+    a("")
+    a(crta)
+    a("' Varijanta slike za OVAJ ekran: 1x ili 2x.")
+    a("'")
+    a("' ZASTO UOPSTE POSTOJI: MSForms skalira sliku bez uglacavanja (StretchBlt,")
+    a("' COLORONCOLOR), pa smanjivanje prosto ISPUSTA redove i kolone. Na kosim")
+    a("' potezima znaka -- a \"A\" i \"X\" su same kosine -- to izlazi kao stepenice.")
+    a("' Zato slika mora da ima priblizno onoliko piksela koliko okvir STVARNO")
+    a("' pokriva na ekranu, a to zavisi i od rezolucije i od DPI-ja.")
+    a("'")
+    a("' Bira se varijanta cija je mera BLIZA U ODNOSU, ne u razlici: rastezanje")
+    a("' 1.5x i skupljanje 1.5x nisu isti gubitak, a poredjenje kvadrata sa")
+    a("' proizvodom (geometrijska sredina) ih izjednacava bez logaritma.")
+    a(crta)
+    a("Public Function LogoKljuc(ByVal osnovni As String, ByVal visinaTacaka As Single) As String")
+    a("    Dim pxTrazeno As Single, po1000 As Single, px1 As Long, px2 As Long")
+    a("    On Error GoTo EH")
+    a("    LogoKljuc = osnovni")
+    a("    px1 = LogoPxH(osnovni)")
+    a('    px2 = LogoPxH(osnovni & "2")')
+    a("    If px1 <= 0 Or px2 <= 0 Then Exit Function")
+    a("    po1000 = PixelsToPointsY(1000)          ' 1000 piksela u tackama, na ovom ekranu")
+    a("    If po1000 <= 0 Then Exit Function")
+    a("    pxTrazeno = visinaTacaka * 1000 / po1000")
+    a("    If pxTrazeno * pxTrazeno > CSng(px1) * CSng(px2) Then LogoKljuc = osnovni & \"2\"")
+    a("    Exit Function")
+    a("EH:")
+    a("    LogoKljuc = osnovni")
+    a("End Function")
+    a("")
     a("Private Function Base64Za(ByVal kljuc As String) As String")
     a("    Select Case kljuc")
     for kljuc, _bg, _nw, _nh, _gif, _pal, _idx in rez:
-        a("        Case LOGO_%s: Base64Za = B64_%s()" % (kljuc, kljuc))
+        a('        Case "%s": Base64Za = B64_%s()' % (kljuc, kljuc))
     a("    End Select")
     a("End Function")
     a("")

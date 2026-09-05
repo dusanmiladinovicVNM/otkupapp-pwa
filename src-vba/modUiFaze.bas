@@ -632,8 +632,8 @@ Private Sub PostaviPunEkran(z As Object, f As Object)
         ' tekstualni znak: "AX" desno poravnat do sredine, "OtkupApp" levo od nje
         ' -- par se tako sam centrira, bez merenja sirine teksta.
         Y = h * 0.34 - LOGO_H_BOOT / 2
-        If PostaviZnak(z, "fzbLogo", LOGO_SPLASH, LOGO_ODNOS_SPLASH, _
-                       (w - LOGO_H_BOOT * LOGO_ODNOS_SPLASH) / 2, Y, LOGO_H_BOOT) Then
+        znakW = LOGO_H_BOOT * modLogo.LogoOdnos(modLogo.LogoKljuc(LOGO_SPLASH, LOGO_H_BOOT))
+        If PostaviZnak(z, "fzbLogo", LOGO_SPLASH, (w - znakW) / 2, Y, LOGO_H_BOOT) Then
             Vidi z, "fzbAX", False
             Vidi z, "fzbName", False
             Mesto z, "fzbVer", (w - 300) / 2, Y + LOGO_H_BOOT + 10, 300, _
@@ -672,8 +672,7 @@ Private Sub PostaviKarticu(z As Object, ByVal cx As Single, ByVal cy As Single)
     Mesto z, "fzlCardF", cx + 1, cy + 1, CARD_W - 2, CARD_H - 2
     Mesto z, "fzlTop", cx + 1, cy + 1, CARD_W - 2, 3
 
-    If PostaviZnak(z, "fzlLogo", LOGO_KARTICA, LOGO_ODNOS_KARTICA, _
-                   cx + PAD, cy + 24, LOGO_H_KART) Then
+    If PostaviZnak(z, "fzlLogo", LOGO_KARTICA, cx + PAD, cy + 24, LOGO_H_KART) Then
         Vidi z, "fzlAX", False
         Vidi z, "fzlName", False
     Else
@@ -710,7 +709,7 @@ Private Sub PostaviMini(z As Object)
     z.Left = 0: z.top = 0
     z.width = MINI_W: z.Height = MINI_H
     z.BackColor = C_CREAM
-    If PostaviZnak(z, "fzmLogo", LOGO_MINI, LOGO_ODNOS_MINI, 16, 8, LOGO_H_MINI) Then
+    If PostaviZnak(z, "fzmLogo", LOGO_MINI, 16, 8, LOGO_H_MINI) Then
         Vidi z, "fzmAX", False
         Vidi z, "fzmName", False
     End If
@@ -751,20 +750,23 @@ End Sub
 ' Znak: slika kad je ima, tekst kad je nema. True = slika je postavljena, pa
 ' pozivalac gasi tekstualnu rezervu.
 '
-' Okvir se racuna iz ODNOSA slike, ne pogadja se: PictureSizeMode = Zoom cuva
-' odnos stranica, pa bi okvir koji mu ne odgovara ostavio pojas pozadine sa
+' Okvir se racuna iz ODNOSA izabrane slike, ne pogadja se: PictureSizeMode = Zoom
+' cuva odnos stranica, pa bi okvir koji mu ne odgovara ostavio pojas pozadine sa
 ' strane -- vidljiv pravougaonik oko znaka na gradijentu splash-a.
 '
 ' Neuspeh je OCEKIVAN ishod, ne greska (modLogo: nema MSXML/ADODB, TEMP
 ' nedostupan). Zato se slika gasi i vraca False, a ne dize se greska: aplikacija
 ' bez logotipa i dalje radi, aplikacija koja pukne na startu ne radi.
-Private Function PostaviZnak(z As Object, ByVal nm As String, ByVal kljuc As String, _
-                             ByVal odnos As Single, ByVal levo As Single, _
-                             ByVal gore As Single, ByVal visina As Single) As Boolean
-    Dim sl As Object, im As Object
+Private Function PostaviZnak(z As Object, ByVal nm As String, ByVal osnovni As String, _
+                             ByVal levo As Single, ByVal gore As Single, _
+                             ByVal visina As Single) As Boolean
+    Dim sl As Object, im As Object, kljuc As String
     On Error Resume Next
     Set im = z.Controls(nm)
     If im Is Nothing Then Exit Function
+    ' Varijanta (1x / 2x) se bira po tome koliko piksela okvir STVARNO pokriva na
+    ' ovom ekranu -- slika koja se ne skalira nema sta da izgubi.
+    kljuc = modLogo.LogoKljuc(osnovni, visina)
     Set sl = modLogo.LogoSlika(kljuc)
     If sl Is Nothing Then
         im.Visible = False
@@ -778,7 +780,7 @@ Private Function PostaviZnak(z As Object, ByVal nm As String, ByVal kljuc As Str
         Exit Function
     End If
     im.Left = levo: im.top = gore
-    im.width = visina * odnos: im.Height = visina
+    im.width = visina * modLogo.LogoOdnos(kljuc): im.Height = visina
     im.Visible = True
     im.ZOrder 0
     PostaviZnak = True
