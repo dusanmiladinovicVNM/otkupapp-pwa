@@ -15193,6 +15193,20 @@ Private Function MetaKljuc(ByVal meta As String, ByVal polje As String) As Strin
     Next p
 End Function
 
+' Da li citanje dnevnika pod datim seam rezimom PODIZE gresku. Seam se gasi i
+' kad prolaz pukne -- zaboravljen seam bi ostavio ekran degradiran do kraja
+' suite-a (v. modUiScreens, isto pravilo).
+Private Function PadDnevnika(ByVal rezim As String) As Boolean
+    Dim d As Variant
+    modSEFPersistance.SefLogPadTestSet rezim
+    On Error Resume Next
+    d = modScrFakture.Scr_Rows("sve", "")
+    PadDnevnika = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+    modSEFPersistance.SefLogPadTestSet ""
+End Function
+
 ' ============================================================
 ' 184. SEF DOGADJAJI SU OPSEGOM VEZANI ZA FAKTURU.
 '
@@ -15294,24 +15308,24 @@ Private Sub T_Fak_SefLogJeOpsegFakture()
              "prikaz vremena nosi sat, ne samo datum"
 
     ' --- 5c) PAD CITANJA NIJE PRAZAN DNEVNIK -------------------------------
-    ' Ovo je AUDIT trag. Do v2.39 je citac svaku gresku pretvarao u Empty, a
-    ' Empty se cita kao 'faktura nema dogadjaja' -- nedostajuca tabela ili
-    ' izgubljena kolona FakturaID time su izgledale kao uredan prazan log.
-    ' Empty od sada znaci TACNO jedno: citanje je uspelo i redova nema.
-    modSEFPersistance.SefLogPadTestSet True
-    padPrijavljen = False
-    On Error Resume Next
-    d = modScrFakture.Scr_Rows("sve", "")
-    padPrijavljen = (Err.Number <> 0)
-    Err.Clear
-    On Error GoTo 0
-    modSEFPersistance.SefLogPadTestSet False
+    ' Ovo je AUDIT trag, jedino cime se dokazuje sta je kome poslato. Do v2.39
+    ' je citac svaku gresku pretvarao u Empty, a Empty se cita kao 'faktura nema
+    ' dogadjaja'. Mere se DVA razlicita kvara, jer se i lece na dva mesta.
 
+    ' (1) Tabela postoji, ali citanje puca -- EH mora da PROSLEDI gresku.
+    padPrijavljen = PadDnevnika("CITANJE")
     AssertEq padPrijavljen, True, _
              "pad citanja dnevnika se PRIJAVLJUJE, ne izgleda kao prazan log"
 
-    ' A posle gasenja seam-a citanje mora opet da radi -- inace bi tvrdnja iznad
-    ' prolazila i kad seam ostane zaglavljen.
+    ' (2) Dnevnika NEMA. GetTableData za nepostojecu tabelu vraca isti Empty kao
+    ' za praznu, pa se izlazi PRE nego sto EH uopste dodje na red -- ovu granu
+    ' propagacija greske ne bi ni videla. Hvata je RequireTable.
+    padPrijavljen = PadDnevnika("TABELA")
+    AssertEq padPrijavljen, True, _
+             "nepostojeca tabela NIJE prazan dnevnik"
+
+    ' A posle gasenja seam-a citanje mora opet da radi -- inace bi obe tvrdnje
+    ' iznad prolazile i kad seam ostane zaglavljen.
     d = modScrFakture.Scr_Rows("sve", "")
     AssertEq CLng(d(2)), FX_SEFLOG_NEPL, _
              "posle seam-a citanje se vraca u normalu"

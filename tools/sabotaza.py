@@ -2192,6 +2192,17 @@ SABOTAZE = {
     # AUDIT trag: greska pretvorena u Empty se cita kao 'faktura nema
     # dogadjaja'. Nedostajuca tabela ili izgubljena kolona FakturaID time
     # izgledaju kao uredan prazan log. Isti razlog kao AUD-014.
+    # Nepostojeca tabela i prazna tabela daju ISTI Empty iz GetTableData, pa bez
+    # RequireTable nedostajuci dnevnik izgleda kao 'faktura nema dogadjaja'.
+    # Rani izlazak je PRE EH-a, pa ga propagacija greske ne bi ni videla -- ovo
+    # je zato zasebna sabotaza, ne varijanta seflog-pad-citanja-cuti.
+    "seflog-nepostojeca-tabela-je-prazna": (
+        "modSEFPersistance.bas",
+        "    RequireTable tabela, SRC\n",
+        "    ' SABOTAZA: nepostojeca tabela opet izgleda kao prazan dnevnik\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "nepostojeca tabela NIJE prazan dnevnik",
+    ),
     "seflog-pad-citanja-cuti": (
         "modSEFPersistance.bas",
         "    Err.Raise errNum, errSrc, errDesc\n",

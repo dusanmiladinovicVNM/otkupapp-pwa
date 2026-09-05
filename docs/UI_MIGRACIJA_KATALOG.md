@@ -8960,22 +8960,36 @@ smisao dokaz šta je kome poslato.
 grešku; `Empty` znači tačno jedno: čitanje je uspelo i redova nema. Isti razlog zbog
 kog `CountStrongKeyReadyBankaImport` ne guta grešku (AUD-014).
 
-Pad se u harnessu ne može izazvati bez lomljenja šeme, pa je dodat seam
-`SefLogPadTestSet` — isti obrazac kao `ScrGradnjuOboriTest`. Test tvrdi i da se
-posle gašenja seam-a čitanje vraća u normalu, da tvrdnja ne bi prolazila nad
-zaglavljenim seam-om.
+**3. Nepostojeća tabela je i dalje izgledala kao prazan dnevnik** (druga runda
+recenzije). `GetTableData` za tabelu koje nema vraća **isti `Empty`** kao za
+praznu, a rani izlazak je **pre** `EH`-a i pre `RequireColumnIndex` — pa
+propagacija greške tu granu nije ni videla. Moj prvi seam je dizao grešku
+direktno, što je merilo `EH`, ali **ne i stvarnu putanju**.
+
+Sada `RequireTable` stoji **pre** `GetTableData`, pa `Empty` znači tačno jedno:
+tabela postoji i prazna je.
+
+Seam ima **dva režima**, jer su to dva kvara koja se leče na dva mesta:
+`"TABELA"` podmeće ime nepostojeće tabele (stvarna putanja, hvata je
+`RequireTable`), `"CITANJE"` diže grešku posle nje (izgubljena kolona, pad
+filtera — hvata je `EH`). Svaki režim ima **svoju tvrdnju i svoju sabotažu**:
+`vba_check` je i odbio prvu verziju, jer su dve sabotaže delile istu tvrdnju pa
+ih test nije razlikovao.
+
+Test tvrdi i da se posle gašenja seam-a čitanje vraća u normalu — inače bi obe
+tvrdnje prolazile nad zaglavljenim seam-om.
 
 > **P3 iz recenzije nije nalaz.** Dva razmaka na kraju
 > `ARCHITECTURE_REFERENCE.md:612` su **markdown hard break**: linije 610, 611 i 612
 > ih imaju sve tri, a 613 (poslednja u bloku) nema nijedan. Uklanjanje samo sa 612
 > spojilo bi je sa 613 pri prikazu.
 
-Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **osam** sabotaža.
-Testovi 183 → 184, katalog sabotaža 456 → 464.
+Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **devet** sabotaža.
+Testovi 183 → 184, katalog sabotaža 456 → 465.
 
-**Verifikacija:** `vba_check` čist (196 fajlova, 464 sabotaže); FULL zeleno —
+**Verifikacija:** `vba_check` čist (196 fajlova, 465 sabotaža); FULL zeleno —
 `RunAllTests` 184/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, SEF
-238/238, svih 11 suite-ova; dvosmerni dokaz **8/8 crvenih**; `WHO_WRITES.md`
+238/238, svih 11 suite-ova; dvosmerni dokaz **9/9 crvenih**; `WHO_WRITES.md`
 nepromenjen.
 
 > **Fixture se mora regenerisati** uz ovaj PR — stara sveska nema `tblSEFEventLog`
