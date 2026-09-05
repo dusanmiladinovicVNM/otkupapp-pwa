@@ -87,6 +87,13 @@ Private Const FK_FAKTURE As String = "FAKTURE"
 Private Const FK_SEF     As String = "SEF"
 Private Const FK_GP      As String = "GOTOVA"
 Private Const FK_UTOVARI As String = "UTOVARI"   ' krug 5: pregled utovarnih lista
+' SEF DOGADJAJI -- event log JEDNE fakture, otvara se dvoklikom iz liste SEF.
+'
+' Ovo je poslednje sto je legacy frmSEF imao a ljuska nije (par.8.7): tabelu
+' tblSEFEventLog nije citao nijedan ekran. Zasebna lista, a ne jos radnji nad
+' listom SEF, jer je MAX_ACT pet a SEF ih vec ima pet -- sesta bi se TIHO
+' odsekla (v. komentar uz Scr_Radnje). Isti obrazac kao PALETE -> STAVKE.
+Private Const FK_SEF_LOG As String = "SEFLOG"
 
 ' SKRIVENA KOLONA IDENTITETA. Prioritet 4, a LayoutGrid crta do 3 -- vrednost
 ' postoji u modelu, celija se nikad ne pravi. Identitet ide U RED, ne pored
@@ -101,12 +108,21 @@ Private Const FK_ZAF_KOL_ID As Long = 10
 Private Const FK_ZAF_KOL_DOST As Long = 11
 Private Const FK_FAK_KOL_ID As Long = 8
 Private Const FK_SEF_KOL_ID As Long = 8
+' Log nema identitet reda koji radnja koristi: sve tri radnje rade nad
+' FAKTUROM u opsegu, ne nad dogadjajem. Zato ni skrivene ID kolone nema.
 ' GP lista: identitet i dostupnost, isti obrazac kao ZAFAKT.
 Private Const FK_GP_KOL_ID As Long = 9
 Private Const FK_UT_KOL_ID As Long = 9
 Private Const FK_GP_KOL_DOST As Long = 10
 
-Private mLista As String            ' FK_ZAFAKT | FK_FAKTURE | FK_SEF
+Private mLista As String            ' FK_ZAFAKT | FK_FAKTURE | FK_SEF | FK_SEF_LOG
+
+' OPSEG LISTE SEF DOGADJAJA. Log bez fakture nije 'prazan log' nego 'nije
+' izabrana faktura' -- i to su dva razlicita ekrana za operatera. Broj i
+' verzija stoje uz naslov (Scr_NaslovDopuna), pa se posle Pripremi ponovo vidi
+' da je verzija otisla na sledecu.
+Private mSefFakID As String
+Private mSefFakBroj As String
 
 ' KORPA: prijemnice koje cekaju da postanu faktura. Ovo NIJE podatak u tabeli
 ' nego prolazno stanje ekrana, pa ima svoj kanal ka znacki -- v. KorpaPromenjena.
@@ -162,7 +178,8 @@ Public Function Scr_Liste() As Variant
         FK_GP & "|OTKUI_SEG_FK_GP|OTKUI_GRID_TITLE_FK_GP|100", _
         FK_UTOVARI & "|OTKUI_SEG_FK_UTOVARI|OTKUI_GRID_TITLE_FK_UTOVARI|84", _
         FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64", _
-        FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44")
+        FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44", _
+        FK_SEF_LOG & "|OTKUI_SEG_FK_SEFLOG|OTKUI_GRID_TITLE_FK_SEFLOG|96")
 End Function
 
 Public Function Scr_Lista() As String
@@ -174,10 +191,37 @@ End Function
 ' ne vidi cije se prijemnice gledaju.
 Public Function Scr_NaslovDopuna() As String
     Dim naziv As String
+
+    ' Log nosi BROJ fakture i njenu SEF verziju: bez toga se ne vidi ciji je
+    ' log, a posle 'Pripremi ponovo' ni da je verzija otisla na sledecu.
+    If Scr_Lista() = FK_SEF_LOG Then
+        If Len(mSefFakBroj) = 0 Then Exit Function
+        Scr_NaslovDopuna = ChrW(8212) & " " & mSefFakBroj & SefVerzijaDopuna()
+        Exit Function
+    End If
+
     If Scr_Lista() <> FK_ZAFAKT Then Exit Function
     naziv = KupacNaziv()
     If Len(naziv) = 0 Then Exit Function
     Scr_NaslovDopuna = ChrW(8212) & " " & naziv
+End Function
+
+' Verzija se cita SVEZA iz tabele, ne pamti se pri otvaranju: 'Pripremi
+' ponovo' je menja, a naslov se posle radnje ionako iscrtava iznova.
+Private Function SefVerzijaDopuna() As String
+    Dim v As String
+    On Error Resume Next
+    If Len(mSefFakID) = 0 Then Exit Function
+    v = Trim$(CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, mSefFakID, "SEFVersionNo")))
+    Err.Clear
+    If Len(v) > 0 Then SefVerzijaDopuna = "  v" & v
+End Function
+
+' PODRAZUMEVAN SORT. Prazno = ljuskino pravilo (druga kolona opadajuce), koje
+' za ostale liste ovog ekrana i dalje vazi. Log je jedini kome je druga kolona
+' TIP dogadjaja -- sortiran po njemu izgleda kao da je hronologija razbacana.
+Public Function Scr_Sort() As String
+    If Scr_Lista() = FK_SEF_LOG Then Scr_Sort = "1:desc"
 End Function
 
 ' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne pripada
@@ -303,6 +347,14 @@ Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _
                          "fkstat:OTKUI_BTN_FK_STATUS:132:soft:1"
+        Case FK_SEF_LOG
+            ' TRI RADNJE, sve sa petim poljem 0 -- ne traze izabran DOGADJAJ
+            ' nego rade nad FAKTUROM u opsegu liste. Prve dve su batch i ne
+            ' ticu se opsega uopste; stoje ovde jer nigde drugde nisu radnja
+            ' nad redom, a legacy ih je drzao na istom ekranu.
+            FkRadnjeZaListu = "sfprep:OTKUI_BTN_FK_SEF_PRIPREMI:132:primary:0|" & _
+                         "sfpend:OTKUI_BTN_FK_SEF_PENDING:132:soft:0|" & _
+                         "sfrecall:OTKUI_BTN_FK_SEF_OPORAVI_SVE:120:ghost:0"
         Case FK_SEF
             FkRadnjeZaListu = "sfsend:OTKUI_BTN_FK_SEF_POSALJI:96:primary:1|" & _
                          "sfstat:OTKUI_BTN_FK_SEF_STATUS:112:soft:1|" & _
@@ -361,8 +413,15 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     ' Dvoklik PREBACUJE red u korpu i iz nje -- jedan potez umesto trazenja
     ' dugmeta. To je najblizi parnjak legacy multiselect-u, gde se klikom po
     ' redu oznacavalo i odznacavalo.
+    '
+    ' Na listi SEF isti potez OTVARA log te fakture (kao PALETE -> STAVKE):
+    ' legacy frmSEF je fakturu birao iz kombo-a, a ovde je vec u mrezi.
     If Left$(tag, 4) = "dbl:" Then
-        ObradiKlik = PrebaciRed(CLng(val(Mid$(tag, 5))))
+        If Scr_Lista() = FK_SEF Then
+            ObradiKlik = OtvoriSefLog(CLng(val(Mid$(tag, 5))))
+        Else
+            ObradiKlik = PrebaciRed(CLng(val(Mid$(tag, 5))))
+        End If
         Exit Function
     End If
 
@@ -443,6 +502,21 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
     If UBound(p) < 1 Then Exit Function
     kljuc = p(0)
     red = CLng(val(p(1)))
+
+    ' Radnje SEF loga ne traze izabran red (peto polje 0), pa se odvajaju PRE
+    ' provere reda -- isto kao batch radnje na ekranu Uvoz izvoda.
+    Select Case kljuc
+        Case "sfprep"
+            RadnjaNadRedom = SefPripremiPonovo()
+            Exit Function
+        Case "sfpend"
+            RadnjaNadRedom = SefOsveziPending()
+            Exit Function
+        Case "sfrecall"
+            RadnjaNadRedom = SefOporaviSve()
+            Exit Function
+    End Select
+
     If red < 1 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
@@ -1031,6 +1105,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Select Case Scr_Lista()
         Case FK_FAKTURE: Scr_Rows = RedoviFakture(filter, q): Exit Function
         Case FK_SEF:     Scr_Rows = RedoviSEF(filter, q): Exit Function
+        Case FK_SEF_LOG: Scr_Rows = RedoviSefLog(filter, q): Exit Function
         Case FK_GP:      Scr_Rows = RedoviGP(filter, q): Exit Function
         Case FK_UTOVARI: Scr_Rows = RedoviUtovara(filter, q): Exit Function
     End Select
@@ -1043,6 +1118,7 @@ Public Function FkKoloneZaListu(ByVal kljuc As String) As Variant
     Select Case kljuc
         Case FK_FAKTURE: FkKoloneZaListu = FaktureKolone()
         Case FK_SEF:     FkKoloneZaListu = SEFKolone()
+        Case FK_SEF_LOG: FkKoloneZaListu = SEFLogKolone()
         Case FK_GP:      FkKoloneZaListu = GPKolone()
         Case FK_UTOVARI: FkKoloneZaListu = UtovariKolone()
         Case Else:       FkKoloneZaListu = PrijemniceKolone()
@@ -1503,6 +1579,154 @@ EH:
     Err.Raise Err.Number, "modScrFakture.RedoviSEF[" & mStep & "]", Err.description
 End Function
 
+
+'---------------------------------------------------- LISTA: SEF DOGADJAJI
+' Log JEDNE fakture. Opseg postavlja dvoklik na listi SEF; bez njega lista je
+' prazna i radnje odbijaju -- 'nije izabrana faktura' i 'faktura nema dogadjaje'
+' su dva razlicita stanja i ne smeju da izgledaju isto.
+Private Function OtvoriSefLog(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_SEF_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    mSefFakID = iD
+    mSefFakBroj = BrojReda(red)
+    mLista = FK_SEF_LOG
+    OtvoriSefLog = True
+End Function
+
+' Javno ZBOG TESTA: opseg se ne vidi ni u mrezi ni u zoni, a od njega zavisi
+' i sta lista pokazuje i nad cim tri radnje rade.
+Public Function Scr_FkSefLogOpsegTest() As String
+    Scr_FkSefLogOpsegTest = mSefFakID
+End Function
+
+Public Sub Scr_FkSefLogOpsegSet(ByVal fakturaID As String, ByVal broj As String)
+    If Not IsTestMode() Then Exit Sub
+    mSefFakID = fakturaID
+    mSefFakBroj = broj
+End Sub
+
+Private Function SEFLogKolone() As Variant
+    SEFLogKolone = Array( _
+        "OTKUI_HDF_SL_VREME||txt|132|1", _
+        "OTKUI_HDF_SL_TIP||txt|150|1", _
+        "OTKUI_HDF_SL_PORUKA||txt|0|1", _
+        "OTKUI_HDF_SL_DETALJI||txt|240|3")
+End Function
+
+Private Function RedoviSefLog(ByVal filter As String, ByVal q As String) As Variant
+    Dim src As Variant, i As Long, n As Long, outA() As Variant
+    Dim hay As String
+    Dim cVreme As Long, cTip As Long, cPoruka As Long, cDetalji As Long
+    ' Ime konstante NIJE 'SRC': u ovoj proceduri vec postoji lokalna 'src', a
+    ' VBA je case-insensitive -- dve deklaracije istog imena su 'Duplicate
+    ' declaration' i modul se NE KOMPAJLIRA. Suite tada visi umesto da padne.
+    Const LOG_SRC As String = "modScrFakture.RedoviSefLog"
+    On Error GoTo EH
+    mStep = "seflog"
+
+    If Len(mSefFakID) = 0 Then
+        RedoviSefLog = PrazanRezultat(SEFLogKolone())
+        Exit Function
+    End If
+
+    src = modSEFPersistance.GetSEFEventsForFaktura(mSefFakID)
+    If Not IsArray(src) Then
+        RedoviSefLog = PrazanRezultat(SEFLogKolone())
+        Exit Function
+    End If
+
+    cVreme = RequireColumnIndex(TBL_SEF_EVENT_LOG, "EventTime", LOG_SRC)
+    cTip = RequireColumnIndex(TBL_SEF_EVENT_LOG, "EventType", LOG_SRC)
+    cPoruka = RequireColumnIndex(TBL_SEF_EVENT_LOG, "Message", LOG_SRC)
+    cDetalji = RequireColumnIndex(TBL_SEF_EVENT_LOG, "Details", LOG_SRC)
+
+    ReDim outA(1 To UBound(src, 1), 1 To 4)
+    For i = 1 To UBound(src, 1)
+        hay = CStr(src(i, cTip)) & "|" & CStr(src(i, cPoruka)) & "|" & CStr(src(i, cDetalji))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        n = n + 1
+        outA(n, 1) = CStr(src(i, cVreme))
+        outA(n, 2) = CStr(src(i, cTip))
+        outA(n, 3) = CStr(src(i, cPoruka))
+        outA(n, 4) = CStr(src(i, cDetalji))
+Sledeci:
+    Next i
+
+    mStep = "OK"
+    RedoviSefLog = Array(SEFLogKolone(), outA, n, 0#, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrFakture.RedoviSefLog[" & mStep & "]", Err.description
+End Function
+
+' Faktura nad kojom tri radnje loga rade. Prazno = lista nije otvorena preko
+' fakture, pa radnja nema nad cim -- i to se kaze, ne cuti.
+Private Function SefLogFaktura() As String
+    If Not modFaktura.SEFKonfigurisan() Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_SEF_OFF"), True
+        Exit Function
+    End If
+    If Len(mSefFakID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_SEF_NEMA_OPSEGA"), True
+        Exit Function
+    End If
+    SefLogFaktura = mSefFakID
+End Function
+
+' Odbijenu fakturu vraca u stanje iz kog se sme poslati ponovo. Sesta radnja
+' liste SEF po smislu, ali ovde po racunici: MAX_ACT je pet.
+Private Function SefPripremiPonovo() As Boolean
+    Dim iD As String
+    iD = SefLogFaktura()
+    If Len(iD) = 0 Then Exit Function
+    If MsgBox(Poruka("OTKUI_ASK_FK_SEF_PRIPREMI") & " " & mSefFakBroj, _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+
+    modSEFValidator.PrepareRejectedInvoiceForResubmit iD
+    Scr_ResetCache
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_SEF_PRIPREMLJENO"), False
+    SefPripremiPonovo = True
+End Function
+
+' DVA BATCH PROLAZA. Ishod je viseredni sazetak (AUD-032f: batch prijavljuje
+' sta je uradio, ne tihi 'gotovo'), pa ide u MsgBox a ne u toast -- toast je
+' jedan red i odsekao bi bas ono zbog cega sazetak i postoji.
+Private Function SefOsveziPending() As Boolean
+    Dim sazetak As String
+    If Not modFaktura.SEFKonfigurisan() Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_SEF_OFF"), True
+        Exit Function
+    End If
+    If MsgBox(Poruka("OTKUI_ASK_FK_SEF_PENDING"), vbQuestion + vbYesNo, _
+              APP_NAME) <> vbYes Then Exit Function
+
+    sazetak = modSEFStatusSync.RefreshPendingOutboundInvoices_TX()
+    Scr_ResetCache
+    MsgBox Poruka("OTKUI_MSG_FK_SEF_PENDING") & vbCrLf & sazetak, _
+           vbInformation, APP_NAME
+    SefOsveziPending = True
+End Function
+
+' Isti prolaz koji StartApp radi pri pokretanju (modMain) -- ovde na zahtev,
+' kad operater zna da je nesto zaglavilo izmedju dva starta.
+Private Function SefOporaviSve() As Boolean
+    Dim sazetak As String
+    If Not modFaktura.SEFKonfigurisan() Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_SEF_OFF"), True
+        Exit Function
+    End If
+    If MsgBox(Poruka("OTKUI_ASK_FK_SEF_OPORAVI_SVE"), vbQuestion + vbYesNo, _
+              APP_NAME) <> vbYes Then Exit Function
+
+    sazetak = modSEFService.RecoverAllStuckSEFSendingInvoices()
+    Scr_ResetCache
+    MsgBox Poruka("OTKUI_MSG_FK_SEF_OPORAVLJENO") & vbCrLf & sazetak, _
+           vbInformation, APP_NAME
+    SefOporaviSve = True
+End Function
 '=====================================================================
 ' ZONA
 '=====================================================================

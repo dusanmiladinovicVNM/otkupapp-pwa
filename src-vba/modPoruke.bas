@@ -1528,6 +1528,29 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_FK_STAMPAJ", ChrW(352) & "tampaj"
     UpsertRow lo, existing, "OTKUI_BTN_FK_STATUS", "Osve" & ChrW(382) & "i status"
     UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_POSALJI", "Po" & ChrW(353) & "alji"
+    ' SEF DOGADJAJI -- sesta lista ekrana Fakturisanje (event log po fakturi).
+    UpsertRow lo, existing, "OTKUI_SEG_FK_SEFLOG", "SEF doga" & ChrW(273) & "aji"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_SEFLOG", "SEF doga" & ChrW(273) & "aji"
+    UpsertRow lo, existing, "OTKUI_HDF_SL_VREME", "Vreme"
+    UpsertRow lo, existing, "OTKUI_HDF_SL_TIP", "Doga" & ChrW(273) & "aj"
+    UpsertRow lo, existing, "OTKUI_HDF_SL_PORUKA", "Poruka"
+    UpsertRow lo, existing, "OTKUI_HDF_SL_DETALJI", "Detalji"
+    UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_PRIPREMI", "Pripremi ponovo"
+    UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_PENDING", "Osve" & ChrW(382) & "i pending"
+    UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_OPORAVI_SVE", "Oporavi sve"
+    UpsertRow lo, existing, "OTKUI_ASK_FK_SEF_PRIPREMI", _
+              "Pripremiti odbijenu fakturu za ponovno slanje?"
+    UpsertRow lo, existing, "OTKUI_ASK_FK_SEF_PENDING", _
+              "Osve" & ChrW(382) & "iti status svih faktura koje " & ChrW(269) & "ekaju odgovor SEF-a?"
+    UpsertRow lo, existing, "OTKUI_ASK_FK_SEF_OPORAVI_SVE", _
+              "Proveriti sve fakture zaglavljene u slanju?"
+    UpsertRow lo, existing, "OTKUI_MSG_FK_SEF_PRIPREMLJENO", _
+              ChrW(10003) & " Faktura je pripremljena za ponovno slanje"
+    UpsertRow lo, existing, "OTKUI_MSG_FK_SEF_PENDING", "Pending fakture osve" & ChrW(382) & "ene:"
+    UpsertRow lo, existing, "OTKUI_MSG_FK_SEF_OPORAVLJENO", "Oporavak zaglavljenih u slanju:"
+    ' Lista loga se otvara DVOKLIKOM na fakturu; bez toga radnja nema nad cim.
+    UpsertRow lo, existing, "OTKUI_ERR_FK_SEF_NEMA_OPSEGA", _
+              "Otvori SEF doga" & ChrW(273) & "aje dvoklikom na fakturu."
     UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_STATUS", "Osve" & ChrW(382) & "i SEF"
     UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_OTKAZI", "Otka" & ChrW(382) & "i"
     UpsertRow lo, existing, "OTKUI_BTN_FK_SEF_STORNO", "Storno"

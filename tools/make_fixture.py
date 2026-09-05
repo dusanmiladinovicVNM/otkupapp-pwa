@@ -2065,6 +2065,29 @@ SEED = {
     ],
     # Naucene veze imena iz banke. Prazna tabela je do sada znacila da grana
     # PartnerMap u automatskom knjizenju nije bila pokrivena nijednom tvrdnjom.
+    # SEF EVENT LOG -- do sada PRAZAN, pa lista "SEF dogadjaji" nije imala nad
+    # cim da se meri. TRI dogadjaja jedne fakture i JEDAN druge: bez tog drugog
+    # tvrdnja "log je opsegom vezan za izabranu fakturu" prolazi i kad citac
+    # vrati ceo dnevnik.
+    "tblSEFEventLog": [
+        {"SEFEventID": "SEV-FIX-1", "FakturaID": FAKTURA_NEPL,
+         "EventTime": FIXTURE_DATE, "EventType": "SUBMIT",
+         "Message": "Faktura poslata na SEF", "Details": "requestId=REQ-1",
+         "OperatorName": "fixture"},
+        {"SEFEventID": "SEV-FIX-2", "FakturaID": FAKTURA_NEPL,
+         "EventTime": FIXTURE_DATE, "EventType": "STATUS",
+         "Message": "Status procitan", "Details": "apiStatus=Sent",
+         "OperatorName": "fixture"},
+        {"SEFEventID": "SEV-FIX-3", "FakturaID": FAKTURA_NEPL,
+         "EventTime": FIXTURE_DATE, "EventType": "REJECTED",
+         "Message": "SEF je odbio fakturu", "Details": "razlog=test",
+         "OperatorName": "fixture"},
+        # Druga faktura, jedan dogadjaj -- kontrola opsega.
+        {"SEFEventID": "SEV-FIX-P", "FakturaID": FAKTURA_PLAC,
+         "EventTime": FIXTURE_DATE, "EventType": "SUBMIT",
+         "Message": "Tudja faktura", "Details": "ne sme u tudji log",
+         "OperatorName": "fixture"},
+    ],
     "tblPartnerMap": [
         {"BankaName": PM_KUPAC_IME, "PartnerID": KUPAC, "EntitetTip": "Kupac"},
         {"BankaName": PM_KOOP_IME, "PartnerID": "KOOP-TEST-1",

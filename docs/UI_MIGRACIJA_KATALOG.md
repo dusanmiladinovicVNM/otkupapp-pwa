@@ -8859,3 +8859,84 @@ jer §27.14a menja fixture pa stari dokaz ne važi; `WHO_WRITES.md` nepromenjen.
 > (`ReportMarza*` u `modMarza` i dalje postoje), a njen jedini pokretač
 > (`btnMargin_Click`) je otišao. Ipak je ukloni — ostaje mrtav ekran koji se
 > otvara iz VBE i pokazuje maržu računatu metodologijom koja je pod nalazom.
+
+### 27.16 `frmSEF` — poslednje što je forma imala, sada je lista ljuske
+
+Uslov iz §8.7 („`PrepareResubmit`, batch radnje i event log nisu preneti") je
+zatvoren. Forma **još nije obrisana** — to je korak 7, zajedno sa `frmOtkupAPP`;
+prvo se seku reference, pa tek onda forma (§27.3).
+
+## Izmereno pre pisanja
+
+`frmSEF` ima 775 linija i 12 dugmadi. **Pet radnji nad redom je ljuska već
+imala** — lista `SEF` ekrana Fakturisanje ih zove nad istim funkcijama
+`modSEFService` / `modSEFStatusSync`, uz isti `InputBox` za komentar:
+`btnPosalji`→`sfsend`, `btnOsvezi`→`sfstat`, `btnCancel`→`sfcancel`,
+`btnStorno`→`sfstorno`, `btnRecoverSending`→`sfrecov`.
+
+Stvarna rupa je bila u četiri stavke:
+
+| Šta | Gde živi | Napomena |
+|---|---|---|
+| event log po fakturi | `tblSEFEventLog` → `GetSEFEventsForFaktura` | **nijedan `modScr*` nije čitao tu tabelu** |
+| `PrepareRejectedInvoiceForResubmit` | `modSEFValidator` | šesta radnja, a `MAX_ACT` je pet |
+| `RefreshPendingOutboundInvoices_TX` | `modSEFStatusSync` | ručni okidač samo u formi |
+| `RecoverAllStuckSEFSendingInvoices` | `modSEFService` | **već se zove sa starta** (`modMain`), falio je samo ručni okidač |
+
+## Zašto šesta LISTA, a ne nov ekran
+
+SEF je već na Fakturisanju, pod `OBL_FAKTURISANJE`, sa svojim čipovima i
+kolonama. Nov ekran bi tražio oblast prava, ikonicu i mesto u sekciji — za posao
+koji je pola koraka od postojeće liste. `Scr_Liste` ima pet lista, `MAX_SEG` je
+11, pa šesta staje.
+
+Lista `SEFLOG` se otvara **dvoklikom** na red liste `SEF`, po obrascu
+`PALETE → STAVKE`: legacy je fakturu birao iz kombo-a, a ovde je već u mreži.
+Naslov nosi broj fakture i njenu SEF verziju (`Scr_NaslovDopuna`), pa se posle
+„Pripremi ponovo" vidi da je verzija otišla na sledeću — to je jedino polje
+info-panela koje mreža nije imala.
+
+Tri radnje su na toj listi, sve sa petim poljem `0` (ne traže izabran red): rade
+nad **fakturom u opsegu**, ne nad događajem. Time je i `MAX_ACT` poštovan na obe
+liste — 5 na `SEF`, 3 na `SEFLOG`.
+
+Dva batch prolaza javljaju **višeredni sažetak** (AUD-032f), pa idu u `MsgBox` a
+ne u toast: toast je jedan red i odsekao bi baš ono zbog čega sažetak postoji.
+
+## Šta NIJE u ovom koraku
+
+**Gašenje dugmadi po stanju.** `frmSEF` gasi `Pošalji`/`Otkaži`/`Storno` po
+`CanSendSEFInvoice` / `CanCancelSEFStatus` / `CanStornoSEFStatus` i menja natpis
+u „Retry slanje na SEF" za `SEF_TECH_FAILED`. Ljuska pali svaku radnju kojoj je
+red izabran — kapija je unutar radnje, pa klik na nedozvoljenu daje poruku umesto
+zasivljenog dugmeta. **To je razlika koja postoji i danas**, nezavisno od brisanja
+forme, i traži proširenje ugovora radnji (ljuska bi morala da pita ekran „je li
+ova radnja dozvoljena nad ovim redom"). Zaseban posao — dira ljusku, ne ekran.
+
+## Mina koja je koštala dva prolaza
+
+`Dim src` i `Const SRC` u **istoj proceduri**: VBA je case-insensitive, pa je to
+„Duplicate declaration" i modul se **ne kompajlira**. Suite tada ne padne nego
+**visi** — `run_vba` javlja „The remote procedure call failed" posle punog
+timeout-a, Excel ostaje u `[break]`, a pravi razlog se vidi samo u VBE dijalogu.
+`vba_check` to ne hvata: `DUPLIKAT_LOKALNI` gleda modul-level `Public`
+deklaracije, ne procedure-level `Dim`/`Const`. Konstanta je preimenovana u
+`LOG_SRC`, a razlog stoji u komentaru iznad nje.
+
+## Fixture
+
+`tblSEFEventLog` je bio **prazan**, pa lista nije imala nad čim da se meri.
+Posejana su četiri događaja: **tri** fakture `FAK-TEST-N` i **jedan** fakture
+`FAK-TEST-P`. Drugi postoji zbog opsega — bez njega tvrdnja „log pripada
+izabranoj fakturi" prolazi i kad čitač vrati ceo dnevnik.
+
+Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **pet** sabotaža.
+Testovi 183 → 184, katalog sabotaža 456 → 461.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 461 sabotaža); FULL zeleno —
+`RunAllTests` 184/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, SEF
+238/238, svih 11 suite-ova; dvosmerni dokaz **5/5 crvenih**; `WHO_WRITES.md`
+nepromenjen.
+
+> **Fixture se mora regenerisati** uz ovaj PR — stara sveska nema `tblSEFEventLog`
+> redove, pa tri tvrdnje padaju na podacima.
