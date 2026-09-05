@@ -60,6 +60,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `ZAKLONJENO` | lokalni skalar zvan sa zagradom → „Expected array" |
 | `KRAJ_REDA` | LF umesto CRLF u VBA izvoru → `Import` ne prepozna formu |
 | `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
+| `DUPLI_LOKAL` | isto ime dvaput u **istoj** proceduri (`Dim src` uz `Const SRC`, parametar pa `Dim`) |
 
 **`Poruka()` nikad ne vraća prazno.** Nepoznat ključ daje `"[KLJUČ]"`, pa je
 `Len(Poruka(k)) = 0` provera koja **ne može da padne**. Tvrdnja „ključ postoji u
