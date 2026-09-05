@@ -118,6 +118,16 @@ ZBIRNA2 = "ZB-TEST-2"
 # ga koriste porede identifikatore, ne citaju karticu kupca.
 KUPAC = "KUP-TEST-1"
 KUPAC2 = "KUP-TEST-2"
+# KUPAC2 IMA tekuci racun: bez njega nijedan red fixture-a ne prolazi kroz
+# TryResolveKupacByKonto, pa se "jak kljuc dao kupca, ali ne i fakturu" -- grana
+# u kojoj je preview govorio AVANS a pisac knjizio FAKTURU -- nije mogla izmeriti.
+KUPAC2_RACUN = "265-0000000999999-99"
+
+# tblPartnerMap: naucene veze "ime iz banke -> partner". Imena su NAMERNO
+# sinteticka i ne poklapaju se ni sa jednim nazivom kupca/kooperanta -- inace bi
+# grana MAPA i grana IME davale isti odgovor i tvrdnja ih ne bi razlikovala.
+PM_KUPAC_IME = "Mapirani Platilac doo"
+PM_KOOP_IME = "Mapirani Isplatilac"
 FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
 # Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
@@ -148,6 +158,12 @@ NOVAC_DUPLI_BROJ = "NOV-DUPLI-1"
 BIM_IZVOD_1 = "IZV-FIX-1"                 # isti broj na dva racuna -> kolizija
 BIM_IZVOD_2 = "IZV-FIX-2"                 # izvod kome se saldo NE slaze
 BIM_IZVOD_3 = "IZV-FIX-3"                 # nosi DVOSMISLEN BankaImportID
+# Izvod 4 postoji ZBOG DOKAZA, ne zbog jos podataka: njegova dva reda su
+# jedina u fixture-u u kojima se PUN PLAN automatskog knjizenja razlikuje od
+# odgovora samih JAKIH KLJUCEVA. Bez njih tvrdnja "mreza prikazuje isti plan
+# koji ce pisac izvrsiti" prolazi i kad mreza racuna samo jake kljuceve --
+# izmereno: sabotaza mreza-prikazuje-samo-jak-kljuc nije obarala nista.
+BIM_IZVOD_4 = "IZV-FIX-4"                 # plan != jak kljuc
 BIM_RACUN_1 = "160-0000000111111-11"
 BIM_RACUN_2 = "265-0000000222222-22"
 BIM_DATUM_1 = datetime.date(2026, 3, 16)
@@ -1521,6 +1537,35 @@ SEED = {
          "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
          "PocetnoStanje": 2000, "ZavrsnoStanje": 2200,
          "UkupanDuguje": 0, "UkupanPotrazuje": 200},
+        # --- Izvod 4, racun 1, DRUGI datum: PLAN != JAK KLJUC.
+        #
+        # (1) Ime iz banke stoji u tblPartnerMap. Jaki kljucevi tu ne vide
+        #     nista ("nema cilja"), a Auto bi red odmah mapirao na kupca.
+        # (2) Konto pokazuje na KUPCA 2, poziva na broj nema. Jaki kljucevi
+        #     zato kazu AVANS, a Auto nadje fakturu po iznosu (4000 je
+        #     jedinstven iznos tog kupca) i knjizi NA NJU.
+        #
+        # Saldo se slaze: 20000 + 5500 - 0 = 25500.
+        {"BankaImportID": "BIM-FIX-MAP", "BrojDokumenta": BIM_IZVOD_4,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": PM_KUPAC_IME,
+         "PartnerKonto": "", "Opis": "Ime iz PartnerMap-a",
+         "Uplata": 1500, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-MAP", "IzvorFajl": "fixture5.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 20000, "ZavrsnoStanje": 25500,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 5500},
+        {"BankaImportID": "BIM-FIX-AVF", "BrojDokumenta": BIM_IZVOD_4,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Konto Platilac",
+         "PartnerKonto": KUPAC2_RACUN, "Opis": "Konto bez poziva na broj",
+         "Uplata": 4000, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-AVF", "IzvorFajl": "fixture5.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 20000, "ZavrsnoStanje": 25500,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 5500},
     ],
     # Tri prijemnice, sve tri sa razlogom:
     #   PRJ-TEST-A i PRJ-TEST-B  ISTI broj, RAZLICIT kupac -> kolizija identiteta
@@ -2015,7 +2060,15 @@ SEED = {
     # kapije porede ID-eve pa im redovi ne trebaju).
     "tblKupci": [
         {"KupacID": KUPAC, "Naziv": "Test kupac 1", "PIB": "100000001"},
-        {"KupacID": KUPAC2, "Naziv": "Test kupac 2", "PIB": "100000002"},
+        {"KupacID": KUPAC2, "Naziv": "Test kupac 2", "PIB": "100000002",
+         "TekuciRacun": KUPAC2_RACUN},
+    ],
+    # Naucene veze imena iz banke. Prazna tabela je do sada znacila da grana
+    # PartnerMap u automatskom knjizenju nije bila pokrivena nijednom tvrdnjom.
+    "tblPartnerMap": [
+        {"BankaName": PM_KUPAC_IME, "PartnerID": KUPAC, "EntitetTip": "Kupac"},
+        {"BankaName": PM_KOOP_IME, "PartnerID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant"},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

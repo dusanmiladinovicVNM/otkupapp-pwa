@@ -609,7 +609,7 @@ Current rules:
 **Purpose:** bank-import staging table for parsed PDF statement rows before reconciliation into `tblNovac`, faktura/otkup links, or skip/error state.  
 **Primary key:** `BankaImportID` (`BIM-*`).  
 **Written by:** `modBankaImport` and the Banka PDF parser pipeline.  
-**Read by:** `frmBankaImport`, `modBankaMapiranje`, finance reports and audit/review flows.  
+**Read by:** `modScrBankaUvoz` (screen `BANKA_UVOZ`), `modBankaMapiranje`, finance reports and audit/review flows.  
 **Soft delete:** `Stornirano = "Da"`.
 
 Canonical columns:
@@ -1533,7 +1533,7 @@ APP_BANKA_INBOX PDFs
   -> non-duplicate row staging
   -> transaction commit
   -> deferred successful file moves
-  -> reconciliation through frmBankaImport / modBankaMapiranje
+  -> reconciliation through screen BANKA_UVOZ (modScrBankaUvoz) / modBankaMapiranje
 ```
 
 `ImportBankaInbox_TX()` is the transaction boundary for staging. It snapshots `tblBankaImport`, processes selected/inbox PDF files, commits only after successful staging, and performs successful file moves after commit.
@@ -1825,18 +1825,23 @@ preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
 
 The invalid pattern of nested `If novID <> "" Then` and duplicate count/balance updates is not allowed.
 
-### 8.15 Banka Review Form Boundary
+### 8.15 Banka Review Screen Boundary
 
-`frmBankaImport` is a review/orchestration shell, not a business-rule owner.
+> **v2.39.** `frmBankaImport` was removed in UI migration step 6
+> (`UI_MIGRACIJA_KATALOG.md` §27.14). Its role moved to screen **`BANKA_UVOZ`**
+> (`modScrBankaUvoz`) inside the `frmOtkupUI` shell. The boundary rule is unchanged:
+> the screen is a review/orchestration shell, not a business-rule owner.
 
-Current form responsibilities:
+Current screen responsibilities:
 
-- `LoadBankaRows()` reads `GetBankaImportOpen()` and shows only non-stornirano rows that are not processed or skipped.
+- Entering the screen triggers the import (`Scr_Aktiviraj` → Drive pull + `ImportBankaInbox_TX`). It must NOT run on startup or on automatic re-routing after an operator switch (§4.4 gate, `RELEASE_GATES.md` §85).
+- `Scr_Rows` reads `GetBankaImportForGrid()` / `GetBankaIzvodiForGrid()` and shows only non-stornirano rows.
 - Row selection auto-suggests `Kupac` mapping for uplata-only rows and `Kooperant` mapping for isplata-only rows.
-- `LoadManualTargets()` fills target combos from kupci, kooperanti or stanice based on `MapTip`.
+- Manual target combos are filled from kupci, kooperanti or stanice based on `MapTip`.
 - Kooperant mapping can load distinct open `BrojDok` block candidates from active `tblOtkup` rows.
-- Preview UI calls shared `modBankaMapiranje` helpers directly, including `GetBankaImportRowByID`, `TryResolveKupacBIM`, `TryResolveKooperantBIM`, `TryResolveOMBIM`, `TryResolveFakturaForKupac`, `GetOtkupCandidatesForKooperantBlock`, `NormalizeLooseBIM`, `NzBIM` and `GetKooperantNaziv`.
-- Auto-map controls call `AutoMapBankaImportRow_TX()` or `AutoMapAllBankaImport_TX()`.
+- **One plan drives both display and writer.** The `Predlog` column and the `Auto` confirmation both read `BimAutoPlan` / `BimAutoPlanIzVrednosti` — the same decision chain `AutoMapBankaImportRow` executes (strong key → PartnerMap → exact name → OM, plus invoice lookup for a strong-key customer without a `PozivNaBroj` invoice). Before v2.39 the column computed **strong keys only**, so a row could read „avans kupca" while the click booked an invoice.
+- The chip and badge „jaki ključevi" keep the **strong-key** meaning and must agree with `CountStrongKeyReadyBankaImport` — that is a different question from „what will Auto do", and the two are deliberately not merged.
+- Auto-map controls call `AutoMapBankaImportRow_TX()` or `AutoMapAllBankaImport_TX()`; the single-row `Auto` confirms first and names the concrete target.
 - Manual commit controls call the corresponding `_TX` wrappers and then reload the queue.
 
 ### 8.16 Banka Monitoring Boundary

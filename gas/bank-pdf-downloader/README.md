@@ -19,7 +19,7 @@ Banka (email)
         └─[Google Drive for Desktop sync]→ H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank
               └─ PullBankPdfsFromDriveProduction   (src-vba/modBankaImport.bas)
                    └─ ImportBankaInbox_TX           → tblBankaImport
-                        └─ modBankaMapiranje        → tblNovac  (frmBankaImport)
+                        └─ modBankaMapiranje        → tblNovac  (ekran BANKA_UVOZ)
 ```
 
 ## Fajlovi

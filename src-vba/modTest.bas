@@ -151,8 +151,8 @@ Private Const FX_BIM_P_KOLIZIJA As String = "Drugi Platilac"
 Private Const FX_BIM_P_DA As String = "Obradjeni Platilac"
 Private Const FX_BIM_P_DUP As String = "Dvojnik Prvi"
 Private Const FX_BIM_P_STORNO As String = "Stornirani Platilac"
-Private Const FX_BIM_SVE As Long = 13       ' 14 redova minus jedan storniran
-Private Const FX_BIM_OTVORENIH As Long = 7  ' status "" ili "Error"
+Private Const FX_BIM_SVE As Long = 15       ' 16 redova minus jedan storniran
+Private Const FX_BIM_OTVORENIH As Long = 9  ' status "" ili "Error" (+2 iz izvoda 4)
 Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus + jedan nesaglasan
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
@@ -166,6 +166,25 @@ Private Const FX_KUPAC As String = "KUP-TEST-1"
 ' Kolizija brojeva: PRJ-TEST-A (KUP-TEST-1) i PRJ-TEST-B (KUP-TEST-2) nose ISTI
 ' BrojPrijemnice. Tako je i u produkciji -- broj se racuna po kupcu.
 Private Const FX_KUPAC2 As String = "KUP-TEST-2"
+' Tekuci racun KUPCA 2 -- jedini u fixture-u kroz koji prolazi jak kljuc
+' 'konto -> kupac'. Bez njega se grana u kojoj jak kljuc da KUPCA ali NE i
+' fakturu ne moze izmeriti, a bas u njoj je prikaz govorio 'avans' dok je pisac
+' knjizio FAKTURU.
+Private Const FX_KUPAC2_RACUN As String = "265-0000000999999-99"
+' tblPartnerMap: naucene veze imena iz banke. Imena su sinteticka i NE poklapaju
+' se ni sa jednim nazivom kupca/kooperanta -- inace grana MAPA i grana IME ne bi
+' bile razlucive.
+Private Const FX_PM_KUPAC_IME As String = "Mapirani Platilac doo"
+Private Const FX_PM_KOOP_IME As String = "Mapirani Isplatilac"
+' Naziv kupca 1 -- ulaz za granu 'egzaktno ime'.
+Private Const FX_KUPAC_NAZIV As String = "Test kupac 1"
+' Fakture kupca 2 u fixture-u -- IZMERENO, ne pretpostavljeno:
+'   4000  -> FAK-SLED-GP2, JEDINSTVEN iznos (auto ju nalazi)
+'   5000  -> TRI fakture (FAK-TEST-N + dve SLED) -- dvosmisleno, auto ODBIJA
+'   12345.67 -> nijedna
+Private Const FX_FAK_KUP2_JEDNA As String = "FAK-SLED-GP2"
+Private Const FX_FAK_KUP2_JEDNA_IZNOS As Double = 4000
+Private Const FX_IZNOS_BEZ_FAKTURE As Double = 12345.67
 Private Const FX_PRIJ_BROJ As String = "1/150326"
 Private Const FX_PRIJ_STORNO As String = "9/150326"
 ' Kolizioni par storniranih: isti broj, dva kupca, dve palete.
@@ -436,6 +455,7 @@ Public Sub RunAllTests()
     RunOne 179
     RunOne 180
     RunOne 181
+    RunOne 182
     RunOne 124
     RunOne 125
     RunOne 126
@@ -686,6 +706,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 179: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
         Case 180: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
+        Case 182: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -875,6 +896,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 179: T_Maticni_KapijeUpisaIZivotniCiklus
         Case 180: T_Maticni_CitanjeNeMenjaVrednosti
         Case 181: T_UiPanel_ZivotniCiklusIPrava
+        Case 182: T_BankaUvoz_PlanPrikazaJeIPlanPisca
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7917,9 +7939,9 @@ Private Sub T_BankaUvoz_RedNosiSmerIOtvorenost()
     ' Zatvorena stavka nema sta da predlozi: predlog racuna resolvere, a nad
     ' zatvorenim redom nema sta da se mapira.
     AssertEq modScrBankaUvoz.BuPredlogTekst(BIM_SMER_UPLATA, BIM_CILJ_FAKTURA, _
-                                            "2/2026", False), "", _
+                                            "2/2026", False, BIM_IZV_JAK), "", _
              "zatvorena stavka nema predlog"
-    AssertEq (Len(modScrBankaUvoz.BuPredlogTekst(BIM_SMER_NEJASAN, "", "", True)) > 0), True, _
+    AssertEq (Len(modScrBankaUvoz.BuPredlogTekst(BIM_SMER_NEJASAN, "", "", True, "")) > 0), True, _
              "nejasan smer se PRIJAVLJUJE u predlogu, ne cuti"
 
     modScrBankaUvoz.Scr_BuTestReset
@@ -8199,11 +8221,11 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
              "nesaglasan izvod ne donosi NISTA u promet -- ne zna se koji zbirovi vaze"
 
     AssertEq BuBrojRedova("razlika"), 1, "tacno jedan izvod se ne slaze"
-    AssertEq BuBrojRedova("sve"), 6, _
-             "sest grupa: dva racuna i dva ciklusa pod istim brojem, pa jos tri"
+    AssertEq BuBrojRedova("sve"), 7, _
+             "sedam grupa: dva racuna i dva ciklusa pod istim brojem, pa jos cetiri"
     ' Izvod 3 je ceo obradjen, pa cip "sa otvorenim" ima sta da iskljuci --
     ' inace bi propustao sve i bio prazna tvrdnja.
-    AssertEq BuBrojRedova("otvoreni"), 4, "cetiri izvoda jos imaju otvorenih stavki"
+    AssertEq BuBrojRedova("otvoreni"), 5, "pet izvoda jos ima otvorenih stavki"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub
@@ -14912,4 +14934,141 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     modScrMatKorisnici.Scr_MkorBranaZatvoriTest False
     AssertEq modUiScreens.ScrDozvoljen("MAT_KORISNICI"), True, _
              "brana se posle testa vraca"
+End Sub
+
+' ============================================================
+' 182. PLAN KNJIZENJA JE ISTI ZA PRIKAZ I ZA PISCA.
+'
+' Kolona Predlog je do v2.39 racunala SAMO jake kljuceve (BimJakiKljucInfo),
+' dok radnja Auto ide celim lancem: jak kljuc -> PartnerMap -> egzaktno ime ->
+' otkupno mesto, a za uplatu razresenu jakim kljucem BEZ poziva na fakturu jos i
+' trazi fakturu po pozivu/svrsi/iznosu. Ista stavka je zato umela da PISE
+' 'avans kupca', a da posle klika novac ode NA FAKTURU; ili da pise 'nema jakog
+' kljuca', a klik je odmah mapira. Kod knjizenja novca to nije nepreciznost nego
+' kvar, i ovaj test ga meri u oba oblika.
+'
+' Merilo nije 'plan je tacan' nego 'plan i pisac su ISTI'. Zato se svuda gde je
+' moguce poredi PLAN sa onim sto stara, jaka odluka kaze -- razlika mora da
+' postoji, inace tvrdnja ne bi merila nista.
+' ============================================================
+Private Sub T_BankaUvoz_PlanPrikazaJeIPlanPisca()
+    Dim plan As Variant, jak As Variant, src As Variant
+    Dim i As Long, neslaganje As String, otvorenih As Long
+    Dim tekst As String
+
+    ' --- 1) JAK KLJUC DAO KUPCA, ALI NE I FAKTURU --------------------
+    ' Konto -> KUPAC2, poziva na broj nema. Pisac tada trazi fakturu po iznosu
+    ' i nalazi je -- 4000 je jedinstven iznos medju fakturama tog kupca.
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               FX_FAK_KUP2_JEDNA_IZNOS, 0, FX_KUPAC2_RACUN, "", "", "")
+    jak = modBankaMapiranje.BimJakiKljucInfo( _
+              FX_FAK_KUP2_JEDNA_IZNOS, 0, FX_KUPAC2_RACUN, "")
+
+    AssertEq CStr(jak(3)), BIM_CILJ_AVANS, _
+             "preduslov: sama jaka odluka tu vidi AVANS (inace nema razlike)"
+    AssertEq CStr(plan(3)), BIM_CILJ_FAKTURA, _
+             "plan vidi FAKTURU -- ono sto ce pisac i proknjiziti"
+    AssertEq CStr(plan(4)), FX_FAK_KUP2_JEDNA, _
+             "plan imenuje KOJU fakturu"
+    AssertEq CStr(plan(5)), BIM_IZV_JAK, _
+             "izvor je jak kljuc -- kupac je razresen kontom"
+
+    ' --- 2) DVOSMISLEN iznos NE postaje faktura -----------------------
+    ' Kupac 2 ima TRI fakture na 5000. Tri kandidata nisu nalaz, pa plan (i
+    ' pisac) ostaju na avansu. Bez ove tvrdnje bi trazilac smeo da uzme bilo
+    ' koju od tri -- novac na pogresnu fakturu, bez ijedne poruke.
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               FX_FAK_NEPL_IZNOS, 0, FX_KUPAC2_RACUN, "", "", "")
+    AssertEq CStr(plan(3)), BIM_CILJ_AVANS, _
+             "tri kandidata nisu nalaz -- plan ostaje AVANS"
+
+    ' --- 2b) iznos koji nijedna faktura ne pokriva --------------------
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               FX_IZNOS_BEZ_FAKTURE, 0, FX_KUPAC2_RACUN, "", "", "")
+    AssertEq CStr(plan(3)), BIM_CILJ_AVANS, _
+             "bez poklapanja plan ostaje AVANS -- ne izmislja fakturu"
+
+    ' --- 3) PartnerMap: prikaz je govorio 'nema jakog kljuca' ---------
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               1000, 0, "", "", FX_PM_KUPAC_IME, "")
+    jak = modBankaMapiranje.BimJakiKljucInfo(1000, 0, "", "")
+
+    AssertEq CStr(jak(1)), "", _
+             "preduslov: jaki kljucevi tu NE vide nista"
+    AssertEq CStr(plan(2)), FX_KUPAC, _
+             "PartnerMap razresava kupca -- klik bi ga odmah mapirao"
+    AssertEq CStr(plan(5)), BIM_IZV_MAPA, _
+             "izvor je mapa, i to se vidi u predlogu"
+
+    ' --- 4) egzaktno ime ---------------------------------------------
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               1000, 0, "", "", FX_KUPAC_NAZIV, "")
+    AssertEq CStr(plan(2)), FX_KUPAC, _
+             "poklapanje po imenu razresava kupca"
+    AssertEq CStr(plan(5)), BIM_IZV_IME, _
+             "izvor je ime -- najslabiji dokaz, pa se imenuje"
+
+    ' --- 5) isplata preko mape ide na BLOK kooperanta -----------------
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               0, 500, "", "", FX_PM_KOOP_IME, "")
+    AssertEq CStr(plan(1)), BIM_TIP_KOOPERANT, _
+             "isplata preko mape razresava kooperanta"
+    AssertEq CStr(plan(3)), BIM_CILJ_BLOK, _
+             "cilj isplate je blok"
+
+    ' --- 6) samoJaki PREKIDA lanac, ne filtrira ga --------------------
+    ' Batch 'Jaki kljucevi' se zaustavlja pre PartnerMap-a. Da se lanac uvek
+    ' racuna do kraja pa filtrira, greska u citanju tblStanice bi obarala i
+    ' batch kome te tabele uopste ne trebaju.
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               1000, 0, "", "", FX_PM_KUPAC_IME, "", True)
+    AssertEq modBankaMapiranje.BimPlanImaCilj(plan), False, _
+             "batch jakih kljuceva NE ide na mapu"
+
+    ' --- 7) MREZA PRIKAZUJE ISTI PLAN --------------------------------
+    ' Ovo je tvrdnja zbog koje test postoji: ono sto operater vidi u koloni
+    ' Predlog i ono sto ce Auto uraditi moraju biti isti plan.
+    src = modBankaMapiranje.GetBankaImportForGrid()
+    AssertEq IsArray(src), True, "citac mreze vraca redove"
+    For i = 1 To UBound(src, 1)
+        ' Zatvoren red nema plan; dvosmislen ID (prazna prva kolona) radnja
+        ' ionako odbija, pa ga ni ovde ne treba razresavati.
+        If Not CBool(src(i, 10)) Then GoTo Sledeci
+        If Len(Trim$(CStr(src(i, 1)))) = 0 Then GoTo Sledeci
+        otvorenih = otvorenih + 1
+        plan = modBankaMapiranje.BimAutoPlan(CStr(src(i, 15)))
+        If CStr(src(i, 13)) <> CStr(plan(3)) Or CStr(src(i, 16)) <> CStr(plan(5)) Then _
+            neslaganje = neslaganje & " " & CStr(src(i, 15)) & _
+                         "[mreza=" & CStr(src(i, 13)) & "/" & CStr(src(i, 16)) & _
+                         " pisac=" & CStr(plan(3)) & "/" & CStr(plan(5)) & "]"
+Sledeci:
+    Next i
+    AssertEq (otvorenih > 0), True, _
+             "preduslov: ima otvorenih redova (inace petlja ne meri nista)"
+    AssertEq neslaganje, "", _
+             "mreza prikazuje ISTI plan koji ce pisac izvrsiti"
+
+    ' --- 8) potvrda imenuje KONKRETAN cilj ---------------------------
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti( _
+               FX_FAK_NEPL_IZNOS, 0, FX_KUPAC2_RACUN, "", "", "")
+    tekst = modScrBankaUvoz.BuPitanjeAuto(plan, "BIM-X", "2/2026")
+    AssertEq (InStr(tekst, "2/2026") > 0), True, _
+             "potvrda Auto imenuje konkretan cilj, ne pita uopsteno"
+
+    ' Nejasan smer -> plana nema. Ni to se ne precutkuje: red ce biti oznacen
+    ' za rucno, sto je ishod koji operater takodje odobrava.
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti(100, 100, "", "", "", "")
+    AssertEq modBankaMapiranje.BimPlanImaCilj(plan), False, _
+             "preduslov: nejasan smer nema plan"
+    tekst = modScrBankaUvoz.BuPitanjeAuto(plan, "BIM-X", "")
+    AssertEq (InStr(tekst, Poruka("OTKUI_ASK_BU_AUTO_NEMA")) > 0), True, _
+             "plan bez cilja se u potvrdi NE precutkuje"
+
+    ' --- 9) 'Jaki kljucevi' nose broj i ne pokrecu se na nuli ---------
+    AssertEq (InStr(modScrBankaUvoz.BuPitanjeJaki(7), "7") > 0), True, _
+             "potvrda jakih kljuceva nosi BROJ stavki"
+    AssertEq (Len(modScrBankaUvoz.BuJakiOdgovor(0)) > 0), True, _
+             "nula stavki NE pokrece batch nego javlja da nema sta"
+    AssertEq modScrBankaUvoz.BuJakiOdgovor(3), "", _
+             "kad ima sta da se mapira, batch se pokrece"
 End Sub
