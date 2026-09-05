@@ -7145,3 +7145,48 @@ ijedne izmišljene veze.
 - **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad
   pravim podacima (checklista u PR-u).
+
+---
+
+## vba-v2.93.0 — 2026-09-05
+
+### Prerada 2.0 — Faza A: proizvodno jezgro (šema) i lager jedinica
+
+Prvi korak plana `docs/PRERADA_2_MODEL_I_PLAN.md` (usvojene odluke D1–D5).
+Bez novog ekrana za proizvodnju — to je Faza C. Ovo izdanje priprema podatke.
+
+- **Nove tabele** (nastaju same, na startu): `tblTipoviProcesa` (12 tipova:
+  sortiranje, zamrzavanje, izbijanje koštice, pakovanje…), `tblProizvodi`
+  (po jedan proizvod za svaku vrstu voća i svaku vrstu gotovog proizvoda —
+  seje se iz postojećih šifarnika), `tblOprema`, `tblLagerJedinice`,
+  `tblProcesSarze`, `tblProcesUlazi`, `tblProcesIzlazi`, `tblProcesParametri`.
+- **Lager jedinica je novi ključ robe.** Svaka postojeća prerada dobija tačno
+  jednu lager jedinicu (`IzvorTip=PRERADA`), i stornirana (jedinica je tada
+  stornirana) — pa istorijske utovarne i fakturne stavke uvek imaju jedinicu.
+  Obrnuti pokazivač `tblPrerada.LagerJedinicaID`; `LagerJedinicaID` i na
+  utovarnim i fakturnim stavkama (popunjeno iz mape prerada → jedinica, 1:1).
+  Dupli `PreradaID` ne dobija jedinicu (prijavljuje P4).
+- **Rok trajanja jedinice je snapshot** (`DatumIsteka`): kopira se sa prerade,
+  stari lot bez snapshota dobija rok po tekućem pravilu jednom, sad.
+- **Nova prerada** (Palete → Nova prerada) odmah pravi svoju jedinicu u istoj
+  transakciji; **storno prerade** stornira i jedinicu.
+- **Raspoloživo po jedinici** je jedna funkcija (fizičko − utovareno; ulazi
+  procesa i blokade dolaze u sledećim fazama). Bez keš kolona — saldo se
+  izvodi pri čitanju, kao ambalaža.
+- **Matični podaci → nova stavka „Proizvodnja"** (sekcija matičnih): liste
+  Proizvodi, Tipovi procesa, Oprema — unos, izmena, aktivni/neaktivni, kao
+  ostali šifarnici. Šifra tipa procesa je ključ (kao tip kutije).
+- **Integritet:** novi blok P (P4 prerada ↔ jedinica, P5 GP stavke bez/sa
+  pogrešnom jedinicom, P6 osnovne činjenice jedinice).
+- **Ručni put:** `Alt+F8 → EnsureProizvodnjaSchema` (isto što radi self-heal
+  na startu, sa porukom koliko je čega nastalo).
+
+### Verifikacija
+
+- `vba_check` čisto (199 fajlova), `--self-test` čisto; `who_writes` ažuran.
+- Nova suite `RunProizvodnjaTestSuite` (T01 šema idempotentna, T02
+  materijalizacija, T03 raspoloživo, T17 oznaka i rok) u `SUITES`; fixture
+  generator sam materijalizuje jedinice za fixture prerade (potpis se menja).
+- **Excel verifikacija čeka Windows run** (izmene nastale u web sesiji):
+  `RunProizvodnjaTestSuite`, `RunAllTests`, `RunPaleteTestSuite`,
+  `RunStornoTestSuite`, `Alt+F11 → Debug → Compile VBAProject`.

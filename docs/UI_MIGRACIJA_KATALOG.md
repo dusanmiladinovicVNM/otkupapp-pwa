@@ -8657,3 +8657,56 @@ suite-ova; `check-banka-eh.py` čist; `WHO_WRITES.md` nepromenjen.
 > Po instalaciji: `ImportAllVBA` → `Remove frmBankaImport` → `Compile` → `Save`.
 > Zaostala forma ovde **ne obara compile** (ne zove ništa obrisano), za razliku od
 > koraka 5 — ali red ostaje isti.
+
+
+## 28. Prerada 2.0 — Faza A: jezgro šeme i lager jedinica (`v6-ui-210`)
+
+Spec i plan: `docs/PRERADA_2_MODEL_I_PLAN.md` (odluke D1–D5, PR-ovi A → B1 → B2 →
+C1 → C2 → D → E). Ovaj paragraf beleži šta je iz PR-A ušlo u kod i šta je
+namerno ostalo za sledeće faze.
+
+### 28.1 Šta je ušlo
+
+- **Šema:** osam tabela (`tblTipoviProcesa`, `tblProizvodi`, `tblOprema`,
+  `tblLagerJedinice`, `tblProcesSarze`, `tblProcesUlazi`, `tblProcesIzlazi`,
+  `tblProcesParametri`) kroz `modSetup.EnsureProizvodnjaSchemaCore`; kolona
+  `LagerJedinicaID` na `tblPrerada`, `tblUtovarStavke`, `tblFakturaStavke`;
+  registri `STORNO_TABELE`/`BEZ_STORNA`, `AuditableTables`. Self-heal na startu
+  (`EnsureRuntimeSchema → EnsureProizvodnjaSchemaSve`) — isti argument kao za
+  utovar (§25.9): klijent posle self-update-a mora odmah imati jedinice.
+- **`modProizvodnja`:** seed (tipovi po `Sifra`, proizvodi po
+  `IzvorTip+IzvorKljuc`), materijalizacija svih legacy prerada (i storniranih;
+  dupli `PreradaID` se preskače), backfill `LagerJedinicaID` na stavkama,
+  `RaspolozivoPoJedinici` (fizičko − utovareno; `PALETA` poreklo čita živu
+  `tblPaleta.NetoKg`; dupli ID = −1), `LjOznaka` (`PRE 51/2026`, `PAL 31/2026`,
+  `LJ 12/2026`), `LjRokTrajanja` (snapshot `DatumIsteka`, fallback
+  `RokIstekaZaTip` samo za stare lotove).
+- **Legacy writer-i:** `SavePrerada_TX` pravi jedinicu u istoj transakciji
+  (`RequireTable` + snapshot); `StornoPrerada` stornira jedinicu (`StornoLjZaIzvor`,
+  uslovni snapshot po B3 obrascu).
+- **Integritet:** blok P4/P5/P6 (`docs/INTEGRITET_PROVERE.md`).
+- **Matični:** nov tanak ekran `MAT_PROIZVODNJA` (`modScrMatProizvodnja`, obrazac
+  `modScrMatPakovanje`) sa sekcijama `PROIZVODI` / `TIPPROCESA` / `OPREMA`
+  deklarisanim u `modMaticniIzvor`; combo izvori `@forma`, `@tipopreme`; `Sifra`
+  tipa procesa je PK bez surogata (prvo polje, kao tip kutije). Sekcija MATIČNI
+  se crta sama, pa šesta stavka staje u profil sidebara (§26.1).
+- **Harness:** `RunProizvodnjaTestSuite` (T01/T02/T03/T17) u `SUITES`;
+  `tools/make_fixture.py` sam materijalizuje jedinice za fixture prerade istim
+  algoritmom kao VBA (T02 tvrdi VBA stranu) — fixture = sveska posle self-heal-a.
+
+### 28.2 Šta je namerno ostalo
+
+- Writer-i šarže (`OtvoriSarzu_TX`, `ZavrsiSarzu_TX`, `StornoProcesSarza_TX`),
+  kapija `PaletaUProcesu`, provere P1–P3 → PR-B2.
+- Prodajni stek na `LagerJedinicaID` (utovar, faktura, SEF, sledljivost) → PR-B1.
+- Ekran Proizvodnja, procesni list, paletni list jedinice, `PROIZVODNJA_AKTIVNA`
+  i ostali ključevi Podešavanja → PR-C1; graf sledljivosti → PR-C2.
+- Sabotaže bloka `proizvodnja-*` idu uz prvi Windows dokaz (web sesija ne može da
+  ih dokaže u oba smera).
+
+### 28.3 Verifikacija PR-A
+
+`vba_check` čisto (199 fajlova) i `--self-test` čisto; `who_writes` ažuran. Excel
+strana (suite, `RunAllTests` 181, `RunPaleteTestSuite`, `RunStornoTestSuite`,
+regeneracija fixture-a, Compile) **nije izvršena** — web sesija; smoke checklista
+je u planu, §15.2.

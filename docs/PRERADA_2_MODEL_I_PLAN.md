@@ -7,7 +7,15 @@
 - **Grana:** `claude/prerada-2-production-core-stfebv`
 - **Preduslovi u `main`-u:** [#247](https://github.com/dusanmiladinovicVNM/otkupapp-pwa/pull/247)
   i [#248](https://github.com/dusanmiladinovicVNM/otkupapp-pwa/pull/248) su spojeni
-  2026-09-02 (`main` = `f5ef9ca`); ostaje FULL suite zelen na tom `main`-u pre PR-A.
+  2026-09-02. Do 2026-09-05 su ušli i **#250 matični ekrani** (`modMaticniIzvor`,
+  `frmStammdaten`/`frmMaticniPodaci` obrisani), **#252–#262 uklanjanje formi**
+  (koraci 2–6: `frmPalete`, `frmOtkup`, `frmDokumenta`, `frmBankaImport` obrisani;
+  ostaju `frmOtkupUI`, `frmSplash`, `frmLogin`, `frmExcelMini`, `frmMarza`,
+  `frmOtkupAPP`, `frmSEF`) i process PR-ovi pravila (#251, #253, #258, #263).
+  **Test platforma** (`claude/vba-test-framework-unify`, manifest suite-ova) još
+  **nije** u `main`-u — suite se registruje u `SUITES`, prelazak na manifest posle
+  spajanja.
+- **Stanje isporuke:** PR-A' (jezgro) je u radu na ovoj grani — v. §15.0.
 - **Vezano:** `docs/DOMEN/README.md`, `docs/adr/0001-*.md`, `docs/adr/0002-*.md`,
   `docs/AMBALAZA_MODEL.md`, `docs/UI_MIGRACIJA_KATALOG.md` §25,
   `docs/EXCEL_TEST_HARNESS.md`, `docs/INTEGRITET_PROVERE.md`,
@@ -38,7 +46,7 @@ kasnije faze, u skladu sa odlukama 66 i 67 Master Plana.
 | **D2** | Ulaz se knjiži pri **otvaranju** šarže. | Roba u tunelu nije raspoloživa ni utovaru ni drugom procesu. Ulazi su posle otvaranja nepromenljivi; promena = storno otvorene šarže (uvek dozvoljen) + nova. |
 | **D3** | Tolerancija balansa je **apsolutni kg** iz Podešavanja, `PROCES_BALANS_TOLERANCIJA_KG`, default **0,5**. | Isti prag kao `modIntegritet` A5. Razlika iznad praga blokira „Završi"; razlika ispod praga se **ne skriva** — prijavljuje se kao `NERASPOREDJENO` u izveštaju šarže. |
 | **D4** | **Jedan brojač** `BrojSarze` po godini za sve tipove; prikaz `SORT 12/2026`. | Mirror `GenerateBrojPrerade`; tip je prefiks u prikazu, ne deo broja. |
-| **D5** | Lista „Nova prerada" na ekranu Palete ide kroz 2.0 writer od Faze C. | Posle C1 `SavePrerada_TX` zove samo legacy `frmPalete`; posle D se gasi i tamo. |
+| **D5** | Lista „Nova prerada" na ekranu Palete ide kroz 2.0 writer od Faze C. | `frmPalete` je obrisana (#254), pa `SavePrerada_TX` posle C1 zove još samo stub u `modPaletniListUI`; gasi se u C1 zajedno sa wrapperom. |
 
 Odbačeno u v1 i ostaje odbačeno: `KgTrenutno` keš na jedinici; `Status` kolona na
 jedinici; `tblZamrzavanje` subtype; `tblTuneli` kao posebna tabela; `CorrectionProcess`.
@@ -62,11 +70,11 @@ jedinici; `tblZamrzavanje` subtype; `tblTuneli` kao posebna tabela; `CorrectionP
 | #248 storno | faktura oslobađa utovar; utovar samo nefakturisan; prerada sa utovarom se ne stornira (`ERR_STORNO_BASE+53`); poslednji zauzet kod na grani `+70` (proveriti na `main`-u pre PR-B2) | `modStorno.bas` (#248) |
 | #248 ekran | `modScrFakture` liste `ZAFAKT | GOTOVA | UTOVARI | FAKTURE | SEF`; identitet GP reda kolona 9 (`FK_GP_KOL_ID`), dostupnost 10; korpa `mKorpa` u stanju modula; seam `Scr_FkKorpaTestDodajGP(preradaID, …)` | `modScrFakture.bas:85-125, 2048` (#248) |
 | Ljuska | registar `modUiScreens.ScrRows`, kasno vezivanje `Application.Run`; ugovor `Scr_Meta/Build/Layout/Rows/Liste/Lista/Radnje/Event/Save/ResetCache/Cipovi/NaslovDopuna/Brojac`; polja `NewFieldG` sa prefiksom `scr`; mreža `GridCell`; `ShowToast` | `modUiScreens.bas:1-60`, `modOtkupUI.bas:4300, 5153, 6344` |
-| Matični unos | `modMaticniLookups.MaticniSekcije` (data-driven meni) + `frmStammdaten` (`Select Case Me.Tag` → `m_TableName`) | `modMaticniLookups.bas:33`, `frmStammdaten.frm:1036-1072` |
+| Matični unos | ekrani `MAT_*` u ljusci (#250): sekcija = deklaracija u `modMaticniIzvor` (`MatSekcijeEkrana`, `MatTabela`, `MatPK`, `MatKolone`, `MatPolja`, `MatPrefiksID`, `MatComboStavke`); tanak `modScrMat*` modul po ekranu; upis kroz `modMaticniUnos`. `frmStammdaten` i `frmMaticniPodaci` su obrisani | `modMaticniIzvor.bas`, `modScrMatPakovanje.bas` |
 | Podešavanja | `CfgAdd c, grupa, kljuc, natpis, tip`; grupe „Otkup / dokumenta", „Štampa", … | `modPodesavanja.bas:187` |
 | Integritet | postojeći blokovi A1–A5, B2–B7, C1–C5, D1–D2; A5 = `NetoUlaz = Σ stavke`, `izlaz ≤ ulaz` | `modIntegritet.bas` |
 | Greške | `modPaletniList` 7320–7344, `modCenovnik` 7701–7705, `modUtovar` 1730–1779, `modSetup` 9310–9321; **7400–7499 slobodno** | grep |
-| Verifikacija | `SUITES` u `tools/run_vba.py` (nova suite `gate: True`); fixture `ENSURE_TABLES` + potpis; `tools/sabotaza.py` katalog (380 posle #248); `RunAllTests` 163; CI: `vba_check`, `who_writes --check` | `.claude/rules/testovi.md`, `docs/EXCEL_TEST_HARNESS.md` |
+| Verifikacija | `SUITES` u `tools/run_vba.py` (nova suite `gate: True`; manifest posle spajanja test platforme); fixture `ENSURE_TABLES` + potpis; `tools/sabotaza.py` katalog (444 na `main`-u 2026-09-05); `RunAllTests` do testa 181, novi idu od **182**; CI: `vba_check`, `who_writes --check` | `.claude/rules/testovi.md`, `docs/EXCEL_TEST_HARNESS.md` |
 | Nepostojeće | komore, tuneli, oprema, smene, senzori, HACCP, uzorci, lotovi — ni u VBA ni u PWA | grep |
 
 ---
@@ -99,7 +107,7 @@ Moduli (novi su podebljani):
 | `modPaletniList` | `SavePrerada_TX` +LJ (A); kapija `PaletaUProcesu` u Reassign/Detach/Adjust (B2); wrapper `NOVAPRERADA` (C1) |
 | `modIntegritet` | provere P1–P6 |
 | `modPrint` | `ProcesSablon`, `LjSablon` (C1) |
-| `modConfig`, `modSetup`, `modSchemaGuard`, `modPodesavanja`, `modPoruke`, `modMaticniLookups`, `frmStammdaten` (samo code-behind), `modUiScreens`, `modOtkupUI` (ikonica) | konstante, registri, unos matičnih, ključevi poruka |
+| `modConfig`, `modSetup`, `modSchemaGuard`, `modPodesavanja`, `modPoruke`, `modMaticniIzvor` + **`modScrMatProizvodnja`** (ekran `MAT_PROIZVODNJA`), `modUiScreens`, `modOtkupUI` (ikonica) | konstante, registri, unos matičnih, ključevi poruka |
 | `tools/make_fixture.py`, `tools/sabotaza.py`, `tools/run_vba.py`, `tests/schema_donor.json` | harness |
 
 ---
@@ -513,7 +521,10 @@ kutije/kese (`GetKutijeOptions`/`GetKeseOptions` — postojeće).
 Ekran **ne računa i ne upisuje**: balans u KPI računa `modProizvodnja.BalansKorpe(ulazKg,
 izlazi)` (ista aritmetika kao writer, jedna implementacija). `Scr_Save` ruta: na `ULAZ`
 → `OtvoriSarzu_TX`; na `IZLAZ` → `ZavrsiSarzu_TX`; posle uspeha `OutputProcesList`,
-`Scr_ResetCache`, toast.
+`Scr_ResetCache`, toast. Ekran implementira i neobavezne članove ugovora iz
+`vba-izvor.md` §4: `Scr_ImaNesacuvano` (korpa sa redovima = nesačuvan rad, ljuska pita
+pre napuštanja) i `Scr_Deaktiviraj` (korpa i izbor odlaze sa ekranom), po obrascu
+`modScrMatPakovanje`.
 
 Test seam-ovi (gejtovani `IsTestMode`): `Scr_PrzTestSet(kljucListe)`,
 `Scr_PrzUlazTestDodaj(id, kg)`, `Scr_PrzIzlazTestDodaj(...)`, `Scr_PrzBalansTest()`.
@@ -536,7 +547,7 @@ Polja: `OTKUI_PRZ_TIP`, `…_STANICA`, `…_OPREMA`, `…_POCETAK`, `…_ODG`, `
 | Fakturisanje (`modScrFakture`) | lista `GOTOVA` na LJ (§7) | B1 |
 | Sledljivost (`modScrSledljivost`) | lista `GENEALOGIJA`; LANAC kolone (§8) | C2 |
 | Storno centar (`modScrStorno`) | ne dira se: storno šarže/LJ pripada ekranu Proizvodnja (kao paleta/prerada ekranu Palete — katalog, red „Storno palete i prerade") | — |
-| Matični podaci | tri nove sekcije u `MaticniSekcije` + `frmStammdaten` `Select Case` (`TBL_TIPOVI_PROCESA`, `TBL_PROIZVODI`, `TBL_OPREMA`); samo code-behind, bez `.frx` | A |
+| Matični podaci | nov tanak ekran `MAT_PROIZVODNJA` (`modScrMatProizvodnja`, sekcija MATIČNI, oblast `OBL_MATICNI`) sa sekcijama `PROIZVODI`, `TIPPROCESA`, `OPREMA` deklarisanim u `modMaticniIzvor`; combo izvori `@forma`, `@tipopreme`; `Sifra` tipa procesa je PK bez surogata (prvo polje, kao tip kutije) | A ✔ |
 
 ---
 
@@ -616,8 +627,9 @@ NetoIzlaz` → `GUBITAK` sa napomenom `LEGACY (neevidentiran otpad)`; `tblPrerad
 = nova šarža. Ništa se ne izmišlja preko onoga što je evidentirano (početak = kraj = `Datum`
 prerade je jedino što je zabeleženo); **ne ide** u self-heal — isti princip zbog kog
 je `BackfillUtovariIzGPFaktura` obrisan (#248 revizija #12): migracija je eksplicitna
-radnja operatera, transakciona po dokumentu. Posle D: `SavePrerada_TX` se gasi i u
-legacy `frmPalete` (dugme zove wrapper).
+radnja operatera, transakciona po dokumentu. `frmPalete` je obrisana u #254, pa
+`SavePrerada_TX` posle C1 nema više nijednog pozivaoca osim stuba u
+`modPaletniListUI` — oba se gase u C1.
 
 ### 13.4 Ono što se **ne** menja
 
@@ -681,13 +693,15 @@ Obrazac `modTestPalete`: `SeedMasterData`, `TstAppend`, `Chk/ChkEq/ChkEqD`,
 | # | Test | Faza |
 |---|---|---|
 | 160–163 | postojeći GP testovi prevedeni na LJ ključ | B1 |
-| 164 | `T_LJ_ProdajniStekNaLJ` — grid GOTOVA iz LJ, korpa po LJ, utovar+faktura+SEF snapshot nose LJ, legacy lot i 2.0 lot na istoj fakturi | B1 |
-| 165 | `T_Prz_UgovorEkrana` — `Scr_Meta`, 4 liste, radnje po listi, čipovi, identitet skriven i poslednji | C1 |
-| 166 | `T_Prz_KorpaIBalansKPI` — dodaj/ukloni izlaz, KPI = `BalansKorpe`, „Završi" ugašeno van tolerancije, „Knjiži gubitak" dodaje red | C1 |
-| 167 | `T_ZonaPrz_PoljaIRaspored` — parametarska polja se pale po tipu; `scr` prefiks; `LayoutFieldInner` | C1 |
-| 168 | `T_Prz_WrapperNovaPrerada` — Palete/NOVAPRERADA kroz 2.0: šarža `PRERADA_LEGACY`, 1 GLAVNI, GUBITAK = razlika | C1 |
-| 169 | `T_Sled_Genealogija` | C2 |
-| 170 | `T_Sled_LanacMultiSarza` — kolona 29 multi, stanje `u procesu`, refs | C2 |
+| 182 | `T_LJ_ProdajniStekNaLJ` — grid GOTOVA iz LJ, korpa po LJ, utovar+faktura+SEF snapshot nose LJ, legacy lot i 2.0 lot na istoj fakturi | B1 |
+| 183 | `T_Prz_UgovorEkrana` — `Scr_Meta`, 4 liste, radnje po listi, čipovi, identitet skriven i poslednji | C1 |
+| 184 | `T_Prz_KorpaIBalansKPI` — dodaj/ukloni izlaz, KPI = `BalansKorpe`, „Završi" ugašeno van tolerancije, „Knjiži gubitak" dodaje red | C1 |
+| 185 | `T_ZonaPrz_PoljaIRaspored` — parametarska polja se pale po tipu; `scr` prefiks; `LayoutFieldInner` | C1 |
+| 186 | `T_Prz_WrapperNovaPrerada` — Palete/NOVAPRERADA kroz 2.0: šarža `PRERADA_LEGACY`, 1 GLAVNI, GUBITAK = razlika | C1 |
+| 187 | `T_Sled_Genealogija` | C2 |
+| 188 | `T_Sled_LanacMultiSarza` — kolona 29 multi, stanje `u procesu`, refs | C2 |
+
+(Matični ekrani #250 zauzeli su 164–181; brojevi Prerade kreću od 182.)
 
 ### 14.4 Sabotaže (`tools/sabotaza.py`)
 
@@ -706,12 +720,12 @@ Obavezan dvosmerni dokaz (kritične invarijante + izmenjen checker/test):
 | `proizvodnja-materijalizacija-bez-storna` | stornirana prerada dobija aktivnu LJ | T02, P4 |
 | `proizvodnja-forma-placebo` | `DozvoljenaUlaznaForma` ne proverava | T16 |
 | `proizvodnja-rok-iz-tekuceg-pravila` | štampa/`LjRokTrajanja` računa rok iz tekućeg pravila umesto snapshota | T17 |
-| `utovar-gp-kljuc-prerada` | `CreateUtovarCore` čita stanje po `PreradaID` umesto LJ | 164 |
-| `sef-gp-identitet-prerada` | `SellersItemIdentification` vraćen na `PreradaID` | 164 |
-| `sledljivost-graf-storno-ivica` | stornirani ulaz crta ivicu | 169 |
-| `sledljivost-graf-dupli-id` | dupli LJ ID se povezuje | 169 |
-| `sledljivost-lanac-multi-prvi` | kolona 29 uzima samo prvu šaržu | 170 |
-| `prz-ekran-zavrsi-uvek` | dugme Završi upaljeno van tolerancije | 166 |
+| `utovar-gp-kljuc-prerada` | `CreateUtovarCore` čita stanje po `PreradaID` umesto LJ | 182 |
+| `sef-gp-identitet-prerada` | `SellersItemIdentification` vraćen na `PreradaID` | 182 |
+| `sledljivost-graf-storno-ivica` | stornirani ulaz crta ivicu | 187 |
+| `sledljivost-graf-dupli-id` | dupli LJ ID se povezuje | 187 |
+| `sledljivost-lanac-multi-prvi` | kolona 29 uzima samo prvu šaržu | 188 |
+| `prz-ekran-zavrsi-uvek` | dugme Završi upaljeno van tolerancije | 184 |
 
 Postojećih 20 GP sabotaža ostaju i moraju obarati **isti** test posle B1.
 
@@ -738,15 +752,22 @@ Postojećih 20 GP sabotaža ostaju i moraju obarati **isti** test posle B1.
 
 ## 15) Plan isporuke po PR-ovima
 
+### 15.0 Stanje isporuke (2026-09-05)
+
+| PR | Stanje | Šta je ušlo |
+|---|---|---|
+| PR-A' (jezgro) | **u radu**, grana `claude/prerada-2-production-core-stfebv` | konstante i registri; `EnsureProizvodnjaSchemaCore/Sve/EnsureProizvodnjaSchema` + self-heal; `modProizvodnja` (seed, materijalizacija, backfill, `RaspolozivoPoJedinici` v0, `LjOznaka`, `LjRokTrajanja`); `SavePrerada_TX` pravi LJ, `StornoPrerada` stornira LJ; integritet P4–P6; `modTestProizvodnja` T01/T02/T03/T17 u `SUITES`; fixture `ENSURE_TABLES` + LJ redovi; matični ekran `MAT_PROIZVODNJA`. **Neverifikovano u Excelu** (web sesija): `vba_check` čist; suite, `RunAllTests`, `RunPaleteTestSuite`, `RunStornoTestSuite`, regeneracija fixture-a i Compile čekaju Windows run. |
+| Odloženo iz PR-A | → B1/B2 | `IsProizvodnjaAktivna` i ključevi u `modPodesavanja` (C1), `PaletaUProcesu` kapija (B2), sabotaža `proizvodnja-materijalizacija-bez-storna` (uz Windows dokaz) |
+
 Redosled je strog (svaki PR gradi na prethodnom u `main`-u). Svaki PR: jedna grana,
-rebase na `main` pre push-a (Opcija 3), release notes + katalog §26 dopuna, smoke
-checklista u opisu PR-a. `.claude/` izmene (npr. `rules/proizvodnja.md`) idu u **zaseban
+rebase na `main` pre push-a (Opcija 3), release notes + katalog **§28** dopuna (§26 su
+matični, §27 ljuska), smoke checklista u opisu PR-a. `.claude/` izmene (npr. `rules/proizvodnja.md`) idu u **zaseban
 process PR** posle PR-A.
 
 | PR | Naslov | Sadržaj | Fajlovi | Preduslov | Definicija gotovog |
 |---|---|---|---|---|---|
 | **PR-0** | docs: model i plan | ovaj dokument | `docs/` | — | ✔ (ova grana) |
-| **PR-A** | Prerada 2.0 — šema, matični podaci, lager jedinica za legacy | §4 tabele/kolone/registri; seed; materijalizacija + backfill (§13.1, 13.2); `SavePrerada_TX` pravi LJ za novu preradu; `StornoPrerada` stornira LJ; matični unos 3 sekcije; `IsProizvodnjaAktivna`; P4, P5, P6; `modTestProizvodnja` T01, T02, T17; fixture `ENSURE_TABLES` | `modConfig`, `modSetup`, `modSchemaGuard`, `modProizvodnja` (novo), `modPaletniList`, `modStorno`, `modIntegritet`, `modMaticniLookups`, `frmStammdaten` (code), `modPodesavanja`, `modTestProizvodnja` (novo), `tools/make_fixture.py`, `tools/run_vba.py`, `tests/schema_donor.json`, `docs/` | #247, #248 u `main` | FAST čist; `RunProizvodnjaTestSuite` 3/0; `RunAllTests` 163/0 i `RunPaleteTestSuite` bez promene; dokaz `proizvodnja-materijalizacija-bez-storna`; compile; smoke A |
+| **PR-A** | Prerada 2.0 — šema, matični podaci, lager jedinica za legacy | §4 tabele/kolone/registri; seed; materijalizacija + backfill (§13.1, 13.2); `SavePrerada_TX` pravi LJ za novu preradu; `StornoPrerada` stornira LJ; matični ekran `MAT_PROIZVODNJA` (3 sekcije); P4, P5, P6; `modTestProizvodnja` T01, T02, T03, T17; fixture `ENSURE_TABLES` + LJ redovi | `modConfig`, `modSetup`, `modSchemaGuard`, `modProizvodnja` (novo), `modPaletniList`, `modStorno`, `modIntegritet`, `modMaticniIzvor`, `modScrMatProizvodnja` (novo), `modUiScreens`, `modOtkupUI`, `modPoruke`, `modTestProizvodnja` (novo), `tools/make_fixture.py`, `tools/run_vba.py`, `docs/` | #247, #248, #250 u `main` (✔) | FAST čist (✔ web); `RunProizvodnjaTestSuite` 4/0; `RunAllTests` 181/0 i `RunPaleteTestSuite` bez promene; compile; smoke A (§15.2) |
 | **PR-B1** | Prodajni stek na `LagerJedinicaID` | §7 u celosti; test 164; sabotaže `utovar-gp-kljuc-prerada`, `sef-gp-identitet-prerada`; 20 GP sabotaža premeštena sidra | `modUtovar`, `modFaktura`, `modSEFMapper`, `clsSEFLine`, `modScrFakture`, `modIzvestaj`, `modStorno`, `modSetup`, `modPrint`, `modTest`, `tools/sabotaza.py`, `tools/make_fixture.py`, `docs/SEF_LIFECYCLE_MANUAL.md` | PR-A | `RunAllTests` 164/0; `RunSEFTestSuite`, `RunFakturaSmokeSuite`, `RunStornoTestSuite` zeleni; pun dokaz svih GP prefiksa (`utovar-gp sef-gp sledljivost-gp storno-gp faktura-gp fakture-gp`) — isti broj zelenih kao na `main`-u pre PR-a; compile; smoke B1 (legacy lot i dalje se prodaje, štampa, šalje na SEF; storno lanac isti) |
 | **PR-B2** | Procesni writer-i i storno šarže | §5, §6, §6.5; `PaletaUProcesu` u tri writer-a `modPaletniList`; utovar „na stanju" odbija procesnu potrošnju (već kroz `RaspolozivoPoJedinici`); P1–P3; T03–T16; 8 sabotaža `proizvodnja-*` | `modProizvodnja`, `modStorno`, `modPaletniList`, `modUtovar` (jedna funkcija stanja), `modIntegritet`, `modTestProizvodnja`, `tools/sabotaza.py`, `tools/make_fixture.py` (lanci `SRZ-SLED-*`) | PR-B1 | `RunProizvodnjaTestSuite` 17/0; `RunPaleteTestSuite` + T13; `RunStornoTestSuite`; dokaz `proizvodnja` 10/10; compile; **nema ekrana** — smoke kroz `Alt+F8` test-rutinu nad fixture-om |
 | **PR-C1** | Ekran Proizvodnja + procesni list + paletni list LJ | §9 (osim GENEALOGIJA), §10, §11; wrapper `NOVAPRERADA` (D5); poruke; testovi 165–168; sabotaža `prz-ekran-zavrsi-uvek` | `modScrProizvodnja` (novo), `modUiScreens`, `modOtkupUI` (ikonica), `modPoruke`, `modPrint`, `modPodesavanja`, `modConfig`, `modScrPalete`, `modTest`, `docs/UI_MIGRACIJA_KATALOG.md` §26 | PR-B2 | `RunAllTests` 168/0; compile; **smoke C1** (§15.1) nad pravim podacima operatera; `PROIZVODNJA_AKTIVNA=NE` sakriva ekran i wrapper |
@@ -790,6 +811,25 @@ mogu ići paralelno na različitim modulima posle B2, uz zajednički rebase.
 12. `RunProductionHealthCheck`: blok P bez nalaza.
 
 ---
+
+### 15.2 Smoke checklista PR-A (operater)
+
+1. `git pull` grane, `ImportAllVBA`, `Alt+F11 → Debug → Compile VBAProject` bez greške.
+2. `python tools\make_fixture.py` (regeneracija fixture-a, nov potpis), pa
+   `python tools\run_vba.py --suite RunProizvodnjaTestSuite` → 4 testa zelena; zatim
+   `RunAllTests`, `RunPaleteTestSuite`, `RunStornoTestSuite`.
+3. Na kopiji prave sveske: `Alt+F8 → EnsureProizvodnjaSchema` → poruka sa brojem
+   tipova procesa, proizvoda, lager jedinica i stavki; drugi poziv → sve +0.
+4. Listovi `TipoviProcesa` (12 redova), `Proizvodi` (po jedan za svaku vrstu voća i
+   svaku vrstu GP), `LagerJedinice` (jedan red po preradi, stornirane sa `Da`),
+   `Prerada.LagerJedinicaID` popunjen; `UtovarStavke.LagerJedinicaID` popunjen.
+5. Sidebar → zlatno dugme (matični) → stavka **Proizvodnja**: tri liste; unos novog
+   tipa procesa (šifra kao PK, dupla šifra odbijena), proizvoda (forma iz liste) i
+   opreme (stanica iz liste); čipovi aktivni/neaktivni.
+6. Nova prerada preko Palete/Nova prerada: u `LagerJedinice` nastaje red
+   `IzvorTip=PRERADA` sa `DatumIsteka`; storno te prerade stornira i taj red.
+7. `Alt+F8 → RunIntegritetProvere`: blok P4/P5/P6 bez nalaza na čistoj svesci;
+   ručno ispražnjen `LagerJedinicaID` na jednoj utovarnoj stavci → P5 ga prijavi.
 
 ## 16) Rizici i mitigacije
 

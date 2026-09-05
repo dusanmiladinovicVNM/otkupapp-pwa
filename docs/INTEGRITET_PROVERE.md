@@ -58,6 +58,13 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 | D1 | Paleta `Preradjeno=Da` bez ijedne aktivne prerada-stavke (reset flaga izostao) |
 | D2 | Prerada-stavka ka nevalidnoj paleti (nesveža/stornirana/nepostojeća) — **očekivano prazno** zbog storno guarda |
 
+### P — Prerada 2.0: lager jedinica (Faza A)
+| Kod | Značenje | Napomena |
+|---|---|---|
+| P4 | Prerada ↔ lager jedinica: bez LJ / više LJ (`IzvorTip=PRERADA`, isti `IzvorID`) / `KgPocetno ≠ NetoIzlazKg` (aktivna) / LJ bez `ProizvodID` iako prerada ima tip / obrnuti pokazivač `tblPrerada.LagerJedinicaID ≠ LJ` | tol 0.01 kg; sve prerade, i stornirane (LJ nasleđuje `Stornirano`) |
+| P5 | Aktivna utovarna/fakturna GP stavka bez `LagerJedinicaID`, sa nepostojećom LJ, ili sa LJ koja pripada drugoj preradi | meko po tabeli (sveska pre nadogradnje) |
+| P6 | Lager jedinica: prazan/dupli `LagerJedinicaID`, nepoznat `IzvorTip`, prazan `IzvorID`, aktivna jedinica bez `StanicaID` | `StanicaID` je prazan kad sveska nema tačno jednu stanicu `JeHladnjaca=Da` |
+
 ## Podesive tolerancije
 
 U `modIntegritet.bas`, vrh modula:
