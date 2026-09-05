@@ -8859,3 +8859,138 @@ jer §27.14a menja fixture pa stari dokaz ne važi; `WHO_WRITES.md` nepromenjen.
 > (`ReportMarza*` u `modMarza` i dalje postoje), a njen jedini pokretač
 > (`btnMargin_Click`) je otišao. Ipak je ukloni — ostaje mrtav ekran koji se
 > otvara iz VBE i pokazuje maržu računatu metodologijom koja je pod nalazom.
+
+### 27.16 `frmSEF` — poslednje što je forma imala, sada je lista ljuske
+
+Uslov iz §8.7 („`PrepareResubmit`, batch radnje i event log nisu preneti") je
+zatvoren. Forma **još nije obrisana** — to je korak 7, zajedno sa `frmOtkupAPP`;
+prvo se seku reference, pa tek onda forma (§27.3).
+
+## Izmereno pre pisanja
+
+`frmSEF` ima 775 linija i 12 dugmadi. **Pet radnji nad redom je ljuska već
+imala** — lista `SEF` ekrana Fakturisanje ih zove nad istim funkcijama
+`modSEFService` / `modSEFStatusSync`, uz isti `InputBox` za komentar:
+`btnPosalji`→`sfsend`, `btnOsvezi`→`sfstat`, `btnCancel`→`sfcancel`,
+`btnStorno`→`sfstorno`, `btnRecoverSending`→`sfrecov`.
+
+Stvarna rupa je bila u četiri stavke:
+
+| Šta | Gde živi | Napomena |
+|---|---|---|
+| event log po fakturi | `tblSEFEventLog` → `GetSEFEventsForFaktura` | **nijedan `modScr*` nije čitao tu tabelu** |
+| `PrepareRejectedInvoiceForResubmit` | `modSEFValidator` | šesta radnja, a `MAX_ACT` je pet |
+| `RefreshPendingOutboundInvoices_TX` | `modSEFStatusSync` | ručni okidač samo u formi |
+| `RecoverAllStuckSEFSendingInvoices` | `modSEFService` | **već se zove sa starta** (`modMain`), falio je samo ručni okidač |
+
+## Zašto šesta LISTA, a ne nov ekran
+
+SEF je već na Fakturisanju, pod `OBL_FAKTURISANJE`, sa svojim čipovima i
+kolonama. Nov ekran bi tražio oblast prava, ikonicu i mesto u sekciji — za posao
+koji je pola koraka od postojeće liste. `Scr_Liste` ima pet lista, `MAX_SEG` je
+11, pa šesta staje.
+
+Lista `SEFLOG` se otvara **dvoklikom** na red liste `SEF`, po obrascu
+`PALETE → STAVKE`: legacy je fakturu birao iz kombo-a, a ovde je već u mreži.
+Naslov nosi broj fakture i njenu SEF verziju (`Scr_NaslovDopuna`), pa se posle
+„Pripremi ponovo" vidi da je verzija otišla na sledeću — to je jedino polje
+info-panela koje mreža nije imala.
+
+Tri radnje su na toj listi, sve sa petim poljem `0` (ne traže izabran red): rade
+nad **fakturom u opsegu**, ne nad događajem. Time je i `MAX_ACT` poštovan na obe
+liste — 5 na `SEF`, 3 na `SEFLOG`.
+
+Dva batch prolaza javljaju **višeredni sažetak** (AUD-032f), pa idu u `MsgBox` a
+ne u toast: toast je jedan red i odsekao bi baš ono zbog čega sažetak postoji.
+
+## Šta NIJE u ovom koraku
+
+**Gašenje dugmadi po stanju.** `frmSEF` gasi `Pošalji`/`Otkaži`/`Storno` po
+`CanSendSEFInvoice` / `CanCancelSEFStatus` / `CanStornoSEFStatus` i menja natpis
+u „Retry slanje na SEF" za `SEF_TECH_FAILED`. Ljuska pali svaku radnju kojoj je
+red izabran — kapija je unutar radnje, pa klik na nedozvoljenu daje poruku umesto
+zasivljenog dugmeta. **To je razlika koja postoji i danas**, nezavisno od brisanja
+forme, i traži proširenje ugovora radnji (ljuska bi morala da pita ekran „je li
+ova radnja dozvoljena nad ovim redom"). Zaseban posao — dira ljusku, ne ekran.
+
+## Mina koja je koštala dva prolaza
+
+`Dim src` i `Const SRC` u **istoj proceduri**: VBA je case-insensitive, pa je to
+„Duplicate declaration" i modul se **ne kompajlira**. Suite tada ne padne nego
+**visi** — `run_vba` javlja „The remote procedure call failed" posle punog
+timeout-a, Excel ostaje u `[break]`, a pravi razlog se vidi samo u VBE dijalogu.
+`vba_check` to ne hvata: `DUPLIKAT_LOKALNI` gleda modul-level `Public`
+deklaracije, ne procedure-level `Dim`/`Const`. Konstanta je preimenovana u
+`LOG_SRC`, a razlog stoji u komentaru iznad nje.
+
+## Fixture
+
+`tblSEFEventLog` je bio **prazan**, pa lista nije imala nad čim da se meri.
+Posejana su četiri događaja: **tri** fakture `FAK-TEST-N` i **jedan** fakture
+`FAK-TEST-P`. Drugi postoji zbog opsega — bez njega tvrdnja „log pripada
+izabranoj fakturi" prolazi i kad čitač vrati ceo dnevnik.
+
+## Dva nalaza recenzije (P2), zatvorena pre merge-a
+
+**1. Hronologija nije bila hronologija.** Model je nosio `CStr(EventTime)`, a
+ljuskin `CompareKey` nenumeričke vrednosti poređuje `StrComp`-om — nad zapisom
+`dd.mm.yyyy` to je sortiranje **po danu**, pa bi `31.01.2026` došao ispred
+`01.02.2026`. Za dnevnik događaja hronologija JE sadržaj.
+
+Model sada nosi **serijski broj** (`VremeSerijski`), pa `CompareKey` radi
+numeričko poređenje. Uveden je i tip kolone **`datetime`**: `date` prikazuje samo
+datum, a dva događaja istog dana bez sata izgledaju kao isti trenutak.
+
+**Moja tvrdnja o sortu bila je placebo** — proveravala je samo da `Scr_Sort()`
+vraća `"1:desc"`, a svi fixture događaji su imali isti `FIXTURE_DATE`, pa se
+tekstualno i hronološko sortiranje nisu ni razlikovali. Događaji sada **prelaze
+granicu meseca** i imaju sat, a test tvrdi i **preduslov**: da bi po tekstu
+redosled bio obrnut. Bez tog preduslova tvrdnja opet ne bi merila ništa.
+
+Uz to je `make_fixture.xl_serial` naučio `datetime` (bio je samo `date`, pa je sat
+tiho otpadao — `datetime.datetime` je podklasa od `date`).
+
+**2. Pad čitanja audit-loga izgledao je kao „nema događaja".**
+`GetSEFEventsForFaktura` je svaku grešku pretvarao u `Empty`, a `Empty` se čita kao
+„faktura nema događaja". Nedostajuća tabela, izgubljena kolona `FakturaID` ili pad
+filtera time su operateru izgledali kao uredan prazan log — na ekranu čiji je ceo
+smisao dokaz šta je kome poslato.
+
+Čitač sada čuva `Err` **pre** `LogErr`-a (koji ume da ga obriše) i propagira
+grešku; `Empty` znači tačno jedno: čitanje je uspelo i redova nema. Isti razlog zbog
+kog `CountStrongKeyReadyBankaImport` ne guta grešku (AUD-014).
+
+**3. Nepostojeća tabela je i dalje izgledala kao prazan dnevnik** (druga runda
+recenzije). `GetTableData` za tabelu koje nema vraća **isti `Empty`** kao za
+praznu, a rani izlazak je **pre** `EH`-a i pre `RequireColumnIndex` — pa
+propagacija greške tu granu nije ni videla. Moj prvi seam je dizao grešku
+direktno, što je merilo `EH`, ali **ne i stvarnu putanju**.
+
+Sada `RequireTable` stoji **pre** `GetTableData`, pa `Empty` znači tačno jedno:
+tabela postoji i prazna je.
+
+Seam ima **dva režima**, jer su to dva kvara koja se leče na dva mesta:
+`"TABELA"` podmeće ime nepostojeće tabele (stvarna putanja, hvata je
+`RequireTable`), `"CITANJE"` diže grešku posle nje (izgubljena kolona, pad
+filtera — hvata je `EH`). Svaki režim ima **svoju tvrdnju i svoju sabotažu**:
+`vba_check` je i odbio prvu verziju, jer su dve sabotaže delile istu tvrdnju pa
+ih test nije razlikovao.
+
+Test tvrdi i da se posle gašenja seam-a čitanje vraća u normalu — inače bi obe
+tvrdnje prolazile nad zaglavljenim seam-om.
+
+> **P3 iz recenzije nije nalaz.** Dva razmaka na kraju
+> `ARCHITECTURE_REFERENCE.md:612` su **markdown hard break**: linije 610, 611 i 612
+> ih imaju sve tri, a 613 (poslednja u bloku) nema nijedan. Uklanjanje samo sa 612
+> spojilo bi je sa 613 pri prikazu.
+
+Nov test `T_Fak_SefLogJeOpsegFakture` (slot 184) i **devet** sabotaža.
+Testovi 183 → 184, katalog sabotaža 456 → 465.
+
+**Verifikacija:** `vba_check` čist (196 fajlova, 465 sabotaža); FULL zeleno —
+`RunAllTests` 184/0, Banka 205/0, Storno 181/0, BusinessFlowPro 336/336, SEF
+238/238, svih 11 suite-ova; dvosmerni dokaz **9/9 crvenih**; `WHO_WRITES.md`
+nepromenjen.
+
+> **Fixture se mora regenerisati** uz ovaj PR — stara sveska nema `tblSEFEventLog`
+> redove, pa tri tvrdnje padaju na podacima.

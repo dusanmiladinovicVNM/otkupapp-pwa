@@ -2566,7 +2566,7 @@ Private Sub StyleGridCell(lbl As Object, ByVal kind As String, ByVal isBroj As B
         fn = F_NUM: bd = True: fc = C_FOREST
     Else
         Select Case kind
-            Case "date":              fn = F_NUM: fs = TS_CELL_SM
+            Case "date", "datetime":  fn = F_NUM: fs = TS_CELL_SM
             Case "part":              fs = TS_CELL_LG: fc = C_FOREST
             Case "kg", "num", "sum0": fn = F_NUM: fc = C_FOREST
             Case "rest":              fn = F_NUM
@@ -2790,6 +2790,22 @@ Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
     On Error GoTo EH
 
     Select Case kind
+        ' VREME, NE SAMO DATUM -- i to iz SERIJSKE vrednosti.
+        '
+        ' Kolona 'date' prikazuje datum, a model joj sme nositi tekst: sort tada
+        ' ide kroz CompareKey, koji nenumericke vrednosti poredi StrComp-om. Nad
+        ' zapisom 'dd.mm.yyyy' to znaci poredjenje po DANU pa po mesecu, pa je
+        ' 31.01.2026 ispred 01.02.2026. Za dnevnik dogadjaja to nije kozmetika --
+        ' hronologija JE sadrzaj.
+        '
+        ' Zato 'datetime' trazi da model nosi serijski broj (Double): CompareKey
+        ' tada radi numericko poredjenje, a ovde se broj vraca u citljiv oblik
+        ' zajedno sa satom, koji 'date' odseca.
+        Case "datetime"
+            CelijaTekst = FmtDatumVreme(v)
+            If Len(CelijaTekst) = 0 Then
+                If Trim$(CStr(v)) <> "" And Trim$(CStr(v)) <> "0" Then ok = False
+            End If
         Case "date"
             CelijaTekst = FmtDatumKratko(v)
             ' Datum koji se NE MOZE prikazati je kvar prikaza, ne prazna celija.
@@ -7194,6 +7210,20 @@ Private Function ColIsNum(ByVal i As Long) As Boolean
     Select Case ColKind(i)
         Case "kg", "num", "sum0", "rsd", "mult", "rest": ColIsNum = True
     End Select
+End Function
+
+' Datum I VREME iz serijske vrednosti. Prazno kad se ne moze procitati -- isto
+' pravilo kao FmtDatumKratko, pa CelijaTekst i ovde prijavi kvar prikaza.
+Public Function FmtDatumVreme(ByVal v As Variant) As String
+    Dim d As Date
+    On Error Resume Next
+    If IsEmpty(v) Or IsNull(v) Then Exit Function
+    d = CDate(v)
+    If Err.Number <> 0 Then
+        Err.Clear
+        Exit Function
+    End If
+    FmtDatumVreme = Format$(d, "dd.mm.yyyy. hh:nn")
 End Function
 
 Private Function ColKind(ByVal i As Long) As String

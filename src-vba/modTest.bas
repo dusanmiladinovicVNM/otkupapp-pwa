@@ -84,6 +84,17 @@ Private Const FX_FAKTURA_BEZ_IZNOSA As String = "FAK-TEST-0"
 Private Const FX_FAK_NEPL As String = "FAK-TEST-N"     ' KUPAC2, bez uplate
 Private Const FX_FAK_NEPL_IZNOS As Double = 5000
 Private Const FX_FAK_PLAC As String = "FAK-TEST-P"     ' KUPAC, uplacena u celosti
+' SEF EVENT LOG (tblSEFEventLog): TRI dogadjaja fakture FX_FAK_NEPL i JEDAN
+' fakture FX_FAK_PLAC. Drugi postoji zbog opsega -- bez njega tvrdnja
+' "log pripada izabranoj fakturi" prolazi i kad citac vrati ceo dnevnik.
+Private Const FX_SEFLOG_NEPL As Long = 3
+Private Const FX_SEFLOG_PLAC As Long = 1
+Private Const FX_SEFLOG_TUDJ As String = "Tudja faktura"
+' Tri vremena PRELAZE granicu meseca i imaju sat. Po TEKSTU ("31.01.2026" vs
+' "01.02.2026") redosled je obrnut od hronoloskog, pa fixture razlikuje
+' sortiranje po serijskom broju od sortiranja po zapisu.
+Private Const FX_SEFLOG_TIP_PRVI As String = "SUBMIT"
+Private Const FX_SEFLOG_TIP_DRUGI As String = "STATUS"
 Private Const FX_FAK_PLAC_IZNOS As Double = 4000
 Private Const FX_FAK_STORNO As String = "FAK-TEST-X"   ' ne sme da se pojavi u listi
 ' Prijemnice ekrana Fakturisanje, sve tri kupca FX_KUPAC:
@@ -457,6 +468,7 @@ Public Sub RunAllTests()
     RunOne 181
     RunOne 182
     RunOne 183
+    RunOne 184
     RunOne 124
     RunOne 125
     RunOne 126
@@ -709,6 +721,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 181: TestName = "T_UiPanel_ZivotniCiklusIPrava"
         Case 182: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
         Case 183: TestName = "T_Analiza_EkranUIzradi"
+        Case 184: TestName = "T_Fak_SefLogJeOpsegFakture"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -900,6 +913,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 181: T_UiPanel_ZivotniCiklusIPrava
         Case 182: T_BankaUvoz_PlanPrikazaJeIPlanPisca
         Case 183: T_Analiza_EkranUIzradi
+        Case 184: T_Fak_SefLogJeOpsegFakture
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6510,8 +6524,8 @@ Private Sub T_Fak_UgovorEkrana()
     liste = modScrFakture.Scr_Liste()
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-    AssertEq UBound(liste) + 1, 5, _
-             "pet lista (krug 5: + Utovari), i kad SEF nije podesen"
+    AssertEq UBound(liste) + 1, 6, _
+             "sest lista (+ SEF dogadjaji), i kad SEF nije podesen"
     ' GP lista postoji i drzi drugo mesto (odmah uz ZAFAKT -- obe su
     ' "roba za fakturisanje", pa stoje jedna uz drugu); utovari odmah
     ' iza (tok robe: roba -> isporuka -> faktura).
@@ -6527,7 +6541,7 @@ Private Sub T_Fak_UgovorEkrana()
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|ZAFAKT|GOTOVA|UTOVARI|FAKTURE|SEF", _
+    AssertEq kljucevi, "|ZAFAKT|GOTOVA|UTOVARI|FAKTURE|SEF|SEFLOG", _
              "redosled i kljucevi lista -- roba za fakturisanje prva (PRJ pa GP)"
 
     ' RADNJE PO LISTI. Citaju se po KLJUCU, ne kroz Scr_Lista: Scr_Lista je
@@ -15178,3 +15192,168 @@ Private Function MetaKljuc(ByVal meta As String, ByVal polje As String) As Strin
         End If
     Next p
 End Function
+
+' Da li citanje dnevnika pod datim seam rezimom PODIZE gresku. Seam se gasi i
+' kad prolaz pukne -- zaboravljen seam bi ostavio ekran degradiran do kraja
+' suite-a (v. modUiScreens, isto pravilo).
+Private Function PadDnevnika(ByVal rezim As String) As Boolean
+    Dim d As Variant
+    modSEFPersistance.SefLogPadTestSet rezim
+    On Error Resume Next
+    d = modScrFakture.Scr_Rows("sve", "")
+    PadDnevnika = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+    modSEFPersistance.SefLogPadTestSet ""
+End Function
+
+' ============================================================
+' 184. SEF DOGADJAJI SU OPSEGOM VEZANI ZA FAKTURU.
+'
+' Poslednje sto je legacy frmSEF imao a ljuska nije (par.8.7): tabelu
+' tblSEFEventLog nije citao nijedan ekran. Sada je cita sesta lista ekrana
+' Fakturisanje, koja se otvara DVOKLIKOM na red liste SEF -- isti obrazac kao
+' PALETE -> STAVKE.
+'
+' Merilo je OPSEG, jer je bas tu forma vec platila kvar (AUD-032d): promena
+' izabrane fakture nije cistila prikazan kontekst, pa je tudji status izgledao
+' kao njen. Ovde isti kvar znaci tudji EVENT LOG, sto je gore -- log je ono cime
+' se dokazuje sta je kome poslato.
+'
+' Tri stanja koja se NE SMEJU izjednaciti:
+'   nema opsega (lista nije otvorena preko fakture) | faktura bez dogadjaja |
+'   faktura sa dogadjajima
+' ============================================================
+Private Sub T_Fak_SefLogJeOpsegFakture()
+    Dim d As Variant, redovi As Variant, i As Long
+    Dim tudje As String, spec As String, kolone As Variant
+    Dim bezNaziva As String, losoPolje As String
+    Dim naslov As String
+    Dim vPrvi As Variant, vDrugi As Variant
+    Dim padPrijavljen As Boolean
+
+    modScrFakture.Scr_FkListaTestSet "SEFLOG"
+
+    ' --- 1) BEZ OPSEGA lista je prazna, ne ceo dnevnik --------------------
+    modScrFakture.Scr_FkSefLogOpsegSet "", ""
+    d = modScrFakture.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "lista bez opsega vraca uredan prazan odgovor"
+    AssertEq CLng(d(2)), 0, "bez izabrane fakture log je PRAZAN, ne tudji"
+    AssertEq IsArray(d(0)), True, _
+             "i prazna lista prijavljuje SVOJE kolone (inace mreza ostaje na tudjim)"
+
+    ' --- 2) opseg = faktura sa tri dogadjaja ------------------------------
+    modScrFakture.Scr_FkSefLogOpsegSet FX_FAK_NEPL, "2/2026"
+    d = modScrFakture.Scr_Rows("sve", "")
+    AssertEq CLng(d(2)), FX_SEFLOG_NEPL, _
+             "log pokazuje tacno dogadjaje IZABRANE fakture"
+
+    ' Nijedan red ne sme biti tudji. Broj bi se slozio i da citac vrati tri
+    ' pogresna reda, pa se gleda i SADRZAJ.
+    redovi = d(1)
+    For i = 1 To CLng(d(2))
+        If InStr(1, CStr(redovi(i, 3)), FX_SEFLOG_TUDJ, vbTextCompare) > 0 Then _
+            tudje = tudje & " red" & i
+    Next i
+    AssertEq tudje, "", "u logu nema nijednog dogadjaja druge fakture"
+
+    ' --- 3) druga faktura -> drugi log ------------------------------------
+    modScrFakture.Scr_FkSefLogOpsegSet FX_FAK_PLAC, "3/2026"
+    d = modScrFakture.Scr_Rows("sve", "")
+    AssertEq CLng(d(2)), FX_SEFLOG_PLAC, _
+             "promena fakture menja log (AUD-032d: kontekst se ne zadrzava)"
+
+    ' --- 4) naslov kaze CIJI je log ---------------------------------------
+    naslov = modScrFakture.Scr_NaslovDopuna()
+    AssertEq (InStr(naslov, "3/2026") > 0), True, _
+             "naslov liste nosi BROJ fakture -- inace se ne vidi ciji je log"
+
+    ' --- 5) hronologija, ne abeceda ---------------------------------------
+    ' Ljuskino pravilo je 'druga kolona opadajuce'; druga kolona ovde je TIP
+    ' dogadjaja, pa bi log izgledao kao da mu je redosled razbacan.
+    AssertEq modScrFakture.Scr_Sort(), "1:desc", _
+             "log se sortira po VREMENU, najnovije prvo"
+    modScrFakture.Scr_FkListaTestSet "SEF"
+    AssertEq modScrFakture.Scr_Sort(), "", _
+             "ostale liste zadrzavaju pravilo ljuske"
+    modScrFakture.Scr_FkListaTestSet "SEFLOG"
+
+    ' --- 5b) SORT SE MERI, NE SAMO TRAZI ----------------------------------
+    ' "Scr_Sort vraca 1:desc" je bilo nedovoljno: ljuskin CompareKey nenumericke
+    ' vrednosti poredi StrComp-om, pa bi kolona sa TEKSTOM "dd.mm.yyyy" bila
+    ' sortirana po danu. Meri se ono od cega sort zavisi -- da model nosi BROJ.
+    modScrFakture.Scr_FkSefLogOpsegSet FX_FAK_NEPL, "2/2026"
+    d = modScrFakture.Scr_Rows("sve", "")
+    redovi = d(1)
+    vPrvi = 0: vDrugi = 0
+    For i = 1 To CLng(d(2))
+        If CStr(redovi(i, 2)) = FX_SEFLOG_TIP_PRVI Then vPrvi = redovi(i, 1)
+        If CStr(redovi(i, 2)) = FX_SEFLOG_TIP_DRUGI Then vDrugi = redovi(i, 1)
+    Next i
+
+    AssertEq IsNumeric(vPrvi), True, _
+             "vreme u modelu je BROJ -- inace ljuska sortira StrComp-om"
+    AssertEq (CDbl(vPrvi) < CDbl(vDrugi)), True, _
+             "stariji dogadjaj ima manji serijski broj (31.01 pre 01.02)"
+
+    ' PREDUSLOV ZA DOKAZ: da tekstualno poredjenje daje SUPROTNO. Bez ovoga bi
+    ' tvrdnja iznad prolazila i nad fixture-om u kome su sva vremena ista -- bas
+    ' to je i bio propust prve verzije ovog testa.
+    AssertEq (StrComp(Format$(CDate(vPrvi), "dd.mm.yyyy"), _
+                      Format$(CDate(vDrugi), "dd.mm.yyyy"), vbTextCompare) > 0), True, _
+             "preduslov: po TEKSTU bi redosled bio obrnut"
+
+    ' Prikaz nosi i SAT: dva dogadjaja istog dana se moraju razlikovati.
+    AssertEq (InStr(modOtkupUI.FmtDatumVreme(vPrvi), "23:50") > 0), True, _
+             "prikaz vremena nosi sat, ne samo datum"
+
+    ' --- 5c) PAD CITANJA NIJE PRAZAN DNEVNIK -------------------------------
+    ' Ovo je AUDIT trag, jedino cime se dokazuje sta je kome poslato. Do v2.39
+    ' je citac svaku gresku pretvarao u Empty, a Empty se cita kao 'faktura nema
+    ' dogadjaja'. Mere se DVA razlicita kvara, jer se i lece na dva mesta.
+
+    ' (1) Tabela postoji, ali citanje puca -- EH mora da PROSLEDI gresku.
+    padPrijavljen = PadDnevnika("CITANJE")
+    AssertEq padPrijavljen, True, _
+             "pad citanja dnevnika se PRIJAVLJUJE, ne izgleda kao prazan log"
+
+    ' (2) Dnevnika NEMA. GetTableData za nepostojecu tabelu vraca isti Empty kao
+    ' za praznu, pa se izlazi PRE nego sto EH uopste dodje na red -- ovu granu
+    ' propagacija greske ne bi ni videla. Hvata je RequireTable.
+    padPrijavljen = PadDnevnika("TABELA")
+    AssertEq padPrijavljen, True, _
+             "nepostojeca tabela NIJE prazan dnevnik"
+
+    ' A posle gasenja seam-a citanje mora opet da radi -- inace bi obe tvrdnje
+    ' iznad prolazile i kad seam ostane zaglavljen.
+    d = modScrFakture.Scr_Rows("sve", "")
+    AssertEq CLng(d(2)), FX_SEFLOG_NEPL, _
+             "posle seam-a citanje se vraca u normalu"
+
+    ' --- 6) tri radnje, nijedna ne trazi izabran DOGADJAJ ------------------
+    ' Sve tri rade nad FAKTUROM u opsegu; peto polje 0 znaci 'radi bez reda'.
+    ' Da je 1, dugmad bi bila mrtva dok operater ne klikne na neki dogadjaj.
+    spec = modScrFakture.FkRadnjeZaListu("SEFLOG")
+    AssertEq BrojStavkiOpisa(spec), 3, "log ima tri radnje"
+    AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_ACT), True, _
+             "radnje staju u bazen ljuske"
+    For i = 0 To UBound(Split(spec, "|"))
+        ' Radnja je 'kljuc:natpis:sirina:stil:trebaRed' -- deli se dvotackom,
+        ' ne uspravnom crtom (ColF je za opis KOLONE).
+        If Split(Split(spec, "|")(i), ":")(4) <> "0" Then _
+            losoPolje = losoPolje & " " & Split(Split(spec, "|")(i), ":")(0)
+    Next i
+    AssertEq losoPolje, "", "nijedna radnja loga ne trazi izabran dogadjaj"
+
+    ' --- 7) kolone imaju naziv u katalogu ---------------------------------
+    kolone = modScrFakture.FkKoloneZaListu("SEFLOG")
+    AssertEq (UBound(kolone) + 1), 4, "log ima cetiri kolone"
+    For i = LBound(kolone) To UBound(kolone)
+        If PorukaNedostaje(ColF(CStr(kolone(i)), 0)) Then _
+            bezNaziva = bezNaziva & " " & ColF(CStr(kolone(i)), 0)
+    Next i
+    AssertEq bezNaziva, "", "svaka kolona loga ima naziv u katalogu poruka"
+
+    modScrFakture.Scr_FkSefLogOpsegSet "", ""
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub

@@ -1,6 +1,9 @@
 Attribute VB_Name = "modSEFPersistance"
 Option Explicit
 
+' v. SefLogPadTestSet -- seam za pad citanja dnevnika dogadjaja.
+Private mSefLogPadTest As String
+
 ' =========================================================
 ' modSEFPersistence
 ' Alle SEF-Reads/Writes laufen ueber modDataAccess
@@ -658,14 +661,65 @@ EH:
     GetSEFSubmissionsForFaktura = Empty
 End Function
 
+' TEST SEAM: dnevnik se cita iz tabele KOJE NEMA.
+'
+' Prva verzija je samo dizala gresku i time merila da EH prosledjuje -- ali
+' NIJE prolazila kroz putanju koja je i bila kvar: GetTableData za nepostojecu
+' tabelu vraca Empty (modDataAccess), pa se rano izlazi PRE nego sto se EH i
+' RequireColumnIndex uopste aktiviraju. Nepostojeca tabela je tako i dalje
+' izgledala kao prazan dnevnik.
+'
+' Zato seam podmece IME nepostojece tabele: put je onda stvaran -- RequireTable
+' je jedino sto stoji izmedju te tabele i tihog Empty. Sema se u harnessu ne sme
+' lomiti, pa je ovo jedini nacin da se ta razlika izmeri.
+'
+' Vezan je za TEST REZIM pri svakom citanju, ne samo pri postavljanju: seam koji
+' ostane upaljen (test koji je pukao pre ciscenja) postaje inertan cim
+' RunAllTests vrati prethodni rezim.
+' DVA REZIMA, jer su to dva razlicita kvara:
+'   "TABELA"  -- dnevnika NEMA. GetTableData za nepostojecu tabelu vraca isti
+'                Empty kao za praznu, pa se izlazi PRE EH-a; jedino RequireTable
+'                tu razliku pravi.
+'   "CITANJE" -- tabela postoji, ali citanje puca (izgubljena kolona, pad
+'                filtera). Tu se meri da EH gresku PROSLEDI, a ne proguta.
+' Prazno gasi seam.
+Public Sub SefLogPadTestSet(ByVal rezim As String)
+    If Not IsTestMode() Then Exit Sub
+    mSefLogPadTest = UCase$(Trim$(rezim))
+End Sub
+
+Private Function SefLogTabela() As String
+    SefLogTabela = TBL_SEF_EVENT_LOG
+    If mSefLogPadTest = "TABELA" And IsTestMode() Then _
+        SefLogTabela = "tblSEFEventLogNePostoji"
+End Function
+
 Public Function GetSEFEventsForFaktura(ByVal fakturaID As String) As Variant
     On Error GoTo EH
 
     Const SRC As String = "modSEFPersistance.GetSEFEventsForFaktura"
 
-    Dim data As Variant
-    data = GetTableData(TBL_SEF_EVENT_LOG)
+    Dim tabela As String
+    tabela = SefLogTabela()
 
+    ' NEPOSTOJECA TABELA NIJE PRAZAN DNEVNIK.
+    '
+    ' GetTableData za tabelu koje nema vraca Empty, isto kao za tabelu koja je
+    ' prazna. Bez ove kapije bi se rano izaslo PRE nego sto se EH i
+    ' RequireColumnIndex uopste aktiviraju, pa bi nedostajuca tabela operateru
+    ' izgledala kao 'faktura nema dogadjaja'. RequireTable je jedino sto tu
+    ' razliku pravi -- i mora da stoji PRE citanja, ne posle.
+    RequireTable tabela, SRC
+
+    ' Drugi rezim seam-a: tabela POSTOJI, ali citanje puca. Namerno UNUTAR
+    ' On Error GoTo EH -- meri se bas to da EH gresku prosledjuje.
+    If mSefLogPadTest = "CITANJE" And IsTestMode() Then _
+        Err.Raise ERR_SEF_STATE, SRC, "SEAM: citanje dnevnika pada"
+
+    Dim data As Variant
+    data = GetTableData(tabela)
+
+    ' Ovde Empty vise moze da znaci SAMO jedno: tabela postoji i prazna je.
     If IsEmpty(data) Then
         GetSEFEventsForFaktura = Empty
         Exit Function
@@ -677,14 +731,38 @@ Public Function GetSEFEventsForFaktura(ByVal fakturaID As String) As Variant
     Set filters = New Collection
     Set fp = New clsFilterParam
 
-    filters.Add fp.Init(RequireColumnIndex(TBL_SEF_EVENT_LOG, "FakturaID", SRC), "=", fakturaID)
+    filters.Add fp.Init(RequireColumnIndex(tabela, "FakturaID", SRC), "=", fakturaID)
 
     GetSEFEventsForFaktura = FilterArray(data, filters)
     Exit Function
 
+' PAD CITANJA NIJE PRAZAN DNEVNIK.
+'
+' Do v2.39 je svaka greska ovde postajala Empty, a pozivalac Empty cita kao
+' 'faktura nema dogadjaja'. Izgubljena kolona FakturaID ili pad filtera time su
+' operateru izgledali kao uredan prazan log -- a ovo je AUDIT trag, jedino cime
+' se dokazuje sta je kome poslato. Isti razlog zbog kog
+' CountStrongKeyReadyBankaImport ne guta gresku (AUD-014).
+'
+' Nedostajucu TABELU ovaj EH ne bi ni video: GetTableData je za nju vracao
+' Empty, pa se izlazilo rano. Nju hvata RequireTable iznad.
+'
+' Empty od sada znaci TACNO jedno: citanje je uspelo i redova nema.
+'
+' Err se cita PRE LogErr-a -- LogErr ume da obrise Err, pa bi Raise ispod njega
+' dizao gresku bez broja i opisa (v. provera MRTAV_LOG u vba_check).
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC
     GetSEFEventsForFaktura = Empty
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 ' AUD-032b: razduzi TACNO ONU submisiju koju korektivni resubmit zamenjuje.

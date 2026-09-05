@@ -1888,7 +1888,7 @@ SABOTAZE = {
         "    End If\n"
         "    Scr_Liste = Array( _\n",
         "T_Fak_UgovorEkrana",
-        "pet lista (krug 5: + Utovari), i kad SEF nije podesen",
+        "sest lista (+ SEF dogadjaji), i kad SEF nije podesen",
     ),
     # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
@@ -2178,6 +2178,91 @@ SABOTAZE = {
         "    If spremno < 0 Then BuJakiOdgovor = Poruka(\"OTKUI_MSG_BU_JAKI_NULA\")   ' SABOTAZA: nula pokrece batch\n",
         "T_BankaUvoz_PlanPrikazaJeIPlanPisca",
         "nula stavki NE pokrece batch nego javlja da nema sta",
+    ),
+    # Ljuskin CompareKey nenumericke vrednosti poredi StrComp-om, pa bi
+    # zapis 'dd.mm.yyyy' sortirao po DANU: 31.01.2026 ispred 01.02.2026.
+    # Dnevnik cija hronologija nije tacna ne dokazuje nista.
+    "seflog-vreme-kao-tekst": (
+        "modScrFakture.bas",
+        "        outA(n, 1) = VremeSerijski(src(i, cVreme))\n",
+        "        outA(n, 1) = CStr(src(i, cVreme))   ' SABOTAZA: sort po danu, ne po vremenu\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "vreme u modelu je BROJ -- inace ljuska sortira StrComp-om",
+    ),
+    # AUDIT trag: greska pretvorena u Empty se cita kao 'faktura nema
+    # dogadjaja'. Nedostajuca tabela ili izgubljena kolona FakturaID time
+    # izgledaju kao uredan prazan log. Isti razlog kao AUD-014.
+    # Nepostojeca tabela i prazna tabela daju ISTI Empty iz GetTableData, pa bez
+    # RequireTable nedostajuci dnevnik izgleda kao 'faktura nema dogadjaja'.
+    # Rani izlazak je PRE EH-a, pa ga propagacija greske ne bi ni videla -- ovo
+    # je zato zasebna sabotaza, ne varijanta seflog-pad-citanja-cuti.
+    "seflog-nepostojeca-tabela-je-prazna": (
+        "modSEFPersistance.bas",
+        "    RequireTable tabela, SRC\n",
+        "    ' SABOTAZA: nepostojeca tabela opet izgleda kao prazan dnevnik\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "nepostojeca tabela NIJE prazan dnevnik",
+    ),
+    "seflog-pad-citanja-cuti": (
+        "modSEFPersistance.bas",
+        "    Err.Raise errNum, errSrc, errDesc\n",
+        "    Err.Clear   ' SABOTAZA: pad citanja izgleda kao prazan dnevnik\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "pad citanja dnevnika se PRIJAVLJUJE, ne izgleda kao prazan log",
+    ),
+    # Dva dogadjaja istog dana bez sata izgledaju kao isti trenutak.
+    "seflog-prikaz-bez-sata": (
+        "modOtkupUI.bas",
+        "    FmtDatumVreme = Format$(d, \"dd.mm.yyyy. hh:nn\")\n",
+        "    FmtDatumVreme = Format$(d, \"dd.mm.yyyy.\")   ' SABOTAZA: sat otpada\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "prikaz vremena nosi sat, ne samo datum",
+    ),
+    # ===================================== SEF DOGADJAJI (log po fakturi)
+    # Poslednje sto je frmSEF imao a ljuska nije. Sve tvrdnje su o OPSEGU: log
+    # koji pokaze tudje dogadjaje je gori od praznog, jer se bas njime dokazuje
+    # sta je kome poslato.
+    # Prazna lista mora da vrati SVOJE kolone. Empty ostavlja mrezu na
+    # kolonama prethodne liste -- isti kvar kao na ekranu Analiza.
+    "seflog-prazan-je-nikakav": (
+        "modScrFakture.bas",
+        "    If Len(mSefFakID) = 0 Then\n        RedoviSefLog = PrazanRezultat(SEFLogKolone())\n",
+        "    If Len(mSefFakID) = 0 Then\n        RedoviSefLog = Empty   ' SABOTAZA: mreza ostaje na kolonama tudje liste\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "lista bez opsega vraca uredan prazan odgovor",
+    ),
+    # SRZ: log koji nije vezan za fakturu pokazuje tudje dogadjaje kao njene.
+    # Isti kvar je forma vec platila (AUD-032d), samo nad statusom.
+    "seflog-cita-ceo-dnevnik": (
+        "modScrFakture.bas",
+        "    src = modSEFPersistance.GetSEFEventsForFaktura(mSefFakID)\n",
+        "    src = GetTableData(TBL_SEF_EVENT_LOG)   ' SABOTAZA: log nije vezan za fakturu\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "log pokazuje tacno dogadjaje IZABRANE fakture",
+    ),
+    "seflog-naslov-ne-kaze-ciji-je": (
+        "modScrFakture.bas",
+        "        Scr_NaslovDopuna = ChrW(8212) & \" \" & mSefFakBroj & SefVerzijaDopuna()\n",
+        "        Scr_NaslovDopuna = SefVerzijaDopuna()   ' SABOTAZA: naslov bez broja fakture\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "naslov liste nosi BROJ fakture -- inace se ne vidi ciji je log",
+    ),
+    "seflog-sort-po-tipu": (
+        "modScrFakture.bas",
+        "    If Scr_Lista() = FK_SEF_LOG Then Scr_Sort = \"1:desc\"\n",
+        "    If False Then Scr_Sort = \"1:desc\"   ' SABOTAZA: log po drugoj koloni (tip)\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "log se sortira po VREMENU, najnovije prvo",
+    ),
+    # Radnje loga rade nad FAKTUROM u opsegu. Sa petim poljem 1 bi dugme
+    # bilo mrtvo dok operater ne klikne na neki dogadjaj -- a moze ih i
+    # ne biti nijedan.
+    "seflog-radnja-trazi-dogadjaj": (
+        "modScrFakture.bas",
+        "            FkRadnjeZaListu = \"sfprep:OTKUI_BTN_FK_SEF_PRIPREMI:132:primary:0|\" & _\n",
+        "            FkRadnjeZaListu = \"sfprep:OTKUI_BTN_FK_SEF_PRIPREMI:132:primary:1|\" & _\n",
+        "T_Fak_SefLogJeOpsegFakture",
+        "nijedna radnja loga ne trazi izabran dogadjaj",
     ),
     # ------------------------------------- MATICNI: SEKCIJA I POKRETAC
     # Sidebar nema skrol. Kad stavke predju slobodnu visinu, ne skroluju se nego

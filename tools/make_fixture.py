@@ -38,6 +38,13 @@ KEEP_ROWS = {"tblporuke", "tblsefconfig", "tblconfig", "tbllocalconfig"}
 # FIKSAN datum, ne "danas": golden snapshot hvata txtDatum, pa bi fixture vezan
 # za danasnji dan obarao golden fajlove svaki sledeci dan.
 FIXTURE_DATE = datetime.date(2026, 3, 15)
+# SEF dogadjaji NAMERNO prelaze granicu meseca i imaju sat: po TEKSTU
+# ("31.01.2026" vs "01.02.2026") redosled je obrnut od hronoloskog, pa fixture
+# razlikuje sortiranje po serijskom broju od sortiranja po zapisu. Bez toga je
+# tvrdnja o hronologiji placebo -- svi dogadjaji su imali isti FIXTURE_DATE.
+SEF_EV_1 = datetime.datetime(2026, 1, 31, 23, 50)
+SEF_EV_2 = datetime.datetime(2026, 2, 1, 0, 5)
+SEF_EV_3 = datetime.datetime(2026, 3, 15, 9, 0)
 
 STATUS_AKTIVAN = "Aktivan"          # modConfig.STATUS_AKTIVAN
 AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
@@ -2065,6 +2072,29 @@ SEED = {
     ],
     # Naucene veze imena iz banke. Prazna tabela je do sada znacila da grana
     # PartnerMap u automatskom knjizenju nije bila pokrivena nijednom tvrdnjom.
+    # SEF EVENT LOG -- do sada PRAZAN, pa lista "SEF dogadjaji" nije imala nad
+    # cim da se meri. TRI dogadjaja jedne fakture i JEDAN druge: bez tog drugog
+    # tvrdnja "log je opsegom vezan za izabranu fakturu" prolazi i kad citac
+    # vrati ceo dnevnik.
+    "tblSEFEventLog": [
+        {"SEFEventID": "SEV-FIX-1", "FakturaID": FAKTURA_NEPL,
+         "EventTime": SEF_EV_1, "EventType": "SUBMIT",
+         "Message": "Faktura poslata na SEF", "Details": "requestId=REQ-1",
+         "OperatorName": "fixture"},
+        {"SEFEventID": "SEV-FIX-2", "FakturaID": FAKTURA_NEPL,
+         "EventTime": SEF_EV_2, "EventType": "STATUS",
+         "Message": "Status procitan", "Details": "apiStatus=Sent",
+         "OperatorName": "fixture"},
+        {"SEFEventID": "SEV-FIX-3", "FakturaID": FAKTURA_NEPL,
+         "EventTime": SEF_EV_3, "EventType": "REJECTED",
+         "Message": "SEF je odbio fakturu", "Details": "razlog=test",
+         "OperatorName": "fixture"},
+        # Druga faktura, jedan dogadjaj -- kontrola opsega.
+        {"SEFEventID": "SEV-FIX-P", "FakturaID": FAKTURA_PLAC,
+         "EventTime": FIXTURE_DATE, "EventType": "SUBMIT",
+         "Message": "Tudja faktura", "Details": "ne sme u tudji log",
+         "OperatorName": "fixture"},
+    ],
     "tblPartnerMap": [
         {"BankaName": PM_KUPAC_IME, "PartnerID": KUPAC, "EntitetTip": "Kupac"},
         {"BankaName": PM_KOOP_IME, "PartnerID": "KOOP-TEST-1",
@@ -2258,8 +2288,17 @@ class SchemaError(Exception):
     pass
 
 
-def xl_serial(d: datetime.date) -> int:
-    """Excel serijski broj datuma -- bez vremenske zone, za razliku od datetime preko COM-a."""
+def xl_serial(d):
+    """Excel serijski broj datuma ILI datuma-i-vremena.
+
+    Bez vremenske zone, za razliku od datetime preko COM-a. datetime.datetime je
+    podklasa od date, pa se proverava PRVI -- inace bi sat tiho otpao i dnevnik
+    dogadjaja bi imao tri zapisa istog trenutka.
+    """
+    if isinstance(d, datetime.datetime):
+        dan = (d.date() - EXCEL_EPOCH).days
+        sek = d.hour * 3600 + d.minute * 60 + d.second
+        return dan + sek / 86400.0
     return (d - EXCEL_EPOCH).days
 
 
@@ -2348,7 +2387,9 @@ def add_row(lo, values: dict, table_name: str) -> None:
     for key, val in values.items():
         cell = row.Range.Cells(1, idx[key.strip().lower()])
         if isinstance(val, datetime.date):
-            cell.NumberFormat = "dd.mm.yyyy"
+            cell.NumberFormat = ("dd.mm.yyyy hh:mm"
+                                 if isinstance(val, datetime.datetime)
+                                 else "dd.mm.yyyy")
             cell.Value = xl_serial(val)
         elif isinstance(val, Sirovo):
             cell.NumberFormat = "General"
