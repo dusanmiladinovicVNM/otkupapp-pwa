@@ -659,7 +659,7 @@ Private Function BuildPlan() As String
            "  soft .bas/.cls merge: " & nSoft & ", novih: " & nNew & vbCrLf & _
            "  tvrdi (Remove + 2. faza Import): " & nHard & vbCrLf & _
            "  STALE (van izvora, Remove): " & nStale & vbCrLf & _
-           IIf(nStale > 0, "    " & mStale & vbCrLf, "") & _
+           IIf(nStale > 0, "    " & Cap(mStale, 240) & vbCrLf, "") & _
            IIf(nHard > 0, "    tvrdi: " & mHard & vbCrLf, "") & _
            "  prazan izvor (preskocen): " & nEmpty & vbCrLf & _
            IIf(Len(emptyS) > 0, "    bez komponente u svesci:" & vbCrLf & Cap(emptyS, 300), "")
@@ -714,7 +714,9 @@ Private Sub RemoveStaleComponents(ByRef fatal As String)
             End If
         End If
     Next i
-    If Len(mGone) > 0 Then mSum = mSum & "Uklonjeno (van izvora): " & mGone & vbCrLf
+    ' NE ponavljaj celu listu - plan je vec ispisuje, a MsgBox prikaze ~1024
+    ' znaka pa bi drugi ispis odsekao uputstva na kraju poruke.
+    If Len(mGone) > 0 Then mSum = mSum & "Uklonjeno (van izvora): " & CsvCount(mGone) & " komponenti" & vbCrLf
 End Sub
 
 ' .doccls: samo code merge u postojecu komponentu. Pad = fatalno (uz rollback).
@@ -1495,15 +1497,18 @@ End Function
 ' IZVESTAJI
 ' ============================================================
 
+' MsgBox prikaze oko 1024 znaka i TIHO odseca ostatak. Zato uputstvo koje
+' operater mora da izvrsi ide PRE izvestaja - detalji smeju da se izgube,
+' "Compile pa Save" ne sme.
 Private Sub ShowImportSuccess(ByVal summary As String, ByVal bkPath As String)
     MsgBox "ImportAllVBA je zavrsen." & vbCrLf & vbCrLf & _
-           Cap(summary, 1400) & vbCrLf & vbCrLf & _
-           "Backup: " & bkPath & vbCrLf & vbCrLf & _
            "SLEDECE (rucno, tim redom):" & vbCrLf & _
            "  1. Alt+F11 -> Debug -> Compile VBAProject" & vbCrLf & _
            "  2. ako je cisto -> Save" & vbCrLf & _
-           "  3. zatvori pa ponovo otvori fajl" & vbCrLf & vbCrLf & _
-           "Alat NE snima svesku - rucni Compile je zavrsna kapija.", _
+           "  3. zatvori pa ponovo otvori fajl" & vbCrLf & _
+           "Alat NE snima svesku - rucni Compile je zavrsna kapija." & vbCrLf & vbCrLf & _
+           "Backup: " & bkPath & vbCrLf & vbCrLf & _
+           Cap(summary, 600), _
            vbInformation, "ImportAllVBA"
 End Sub
 
@@ -1514,9 +1519,10 @@ Private Sub ShowImportFailure(ByVal msg As String, ByVal bkPath As String)
              "Te komponente su ostale BEZ ispravnog koda." & vbCrLf
     End If
     MsgBox "ImportAllVBA NIJE uspeo." & vbCrLf & vbCrLf & _
-           Cap(msg, 1200) & vbCrLf & rb & vbCrLf & _
            "NE SNIMAJ RADNU SVESKU." & vbCrLf & _
            "Zatvori je BEZ snimanja; na disku je ispravna verzija." & vbCrLf & _
-           IIf(Len(bkPath) > 0, "Backup: " & bkPath, "Backup nije napravljen."), _
+           IIf(Len(bkPath) > 0, "Backup: " & bkPath, "Backup nije napravljen.") & vbCrLf & _
+           rb & vbCrLf & _
+           Cap(msg, 600), _
            vbCritical, "ImportAllVBA"
 End Sub
