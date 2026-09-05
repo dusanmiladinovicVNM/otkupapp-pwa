@@ -199,14 +199,22 @@ Public Sub ImportAllVBA()
 
     ' 2) nema sta da se radi -> izlaz bez backup-a, teardown-a i ijedne mutacije
     If Len(mStale) = 0 And Len(mHard) = 0 And Not mFormNew And Not PlanHasMerges() Then
+        ' Plan bez ijedne razlike i bez viska je JACI dokaz od backup-a: svaka
+        ' izvorna komponenta postoji sa istim kodom i nema komponente van izvora.
+        ' Tek tu sme da padne marker prekinute faze 2.
+        ClearImportPhase2State
         MsgBox "Projekat je vec usaglasen sa izvorom - 0 izmena." & vbCrLf & vbCrLf & _
-               mSum & vbCrLf & mSelfNote & IIf(Len(recNote) > 0, vbCrLf & recNote, ""), _
+               IIf(Len(recNote) > 0, recNote & vbCrLf & "Provereno sada: projekat JESTE usaglasen, upozorenje se povlaci." & vbCrLf & vbCrLf, "") & _
+               mSum & vbCrLf & mSelfNote, _
                vbInformation, "ImportAllVBA"
         Exit Sub
     End If
 
+    ' recNote MORA i ovde: ako operater klikne Ne, marker ostaje (ne brise se vise
+    ' u RecoverImportState), ali mora bar jednom da procita zasto.
     If MsgBox("ImportAllVBA ce uskladiti projekat sa izvorom:" & vbCrLf & vbCrLf & _
-              Cap(mSum, 900) & vbCrLf & vbCrLf & "Nastaviti?", _
+              IIf(Len(recNote) > 0, recNote & vbCrLf & vbCrLf, "") & _
+              Cap(mSum, 700) & vbCrLf & vbCrLf & "Nastaviti?", _
               vbYesNo + vbQuestion, "ImportAllVBA") <> vbYes Then Exit Sub
 
     mBusy = True
@@ -220,6 +228,10 @@ Public Sub ImportAllVBA()
                vbCritical, "ImportAllVBA"
         Exit Sub
     End If
+
+    ' 3b) Backup je uspeo -> postoji NOV bezbedan baseline, pa marker eventualne
+    '     ranije prekinute faze 2 sme da padne. Do ove tacke je namerno stajao.
+    ClearImportPhase2State
 
     ' 4) zaostali .log iz ranijih neuspelih importa (da nov .log bude nov nalaz)
     DeleteImportLogs folder
@@ -662,6 +674,9 @@ Private Function BuildPlan() As String
         ' Import krsti komponentu po zaglavlju, ne po imenu fajla. Da se razilazi,
         ' faza 2 bi napravila komponentu pogresnog imena TEK POSLE Remove-a - dakle
         ' posle destrukcije. Zato kapija stoji ovde, pre ijedne mutacije.
+        BuildPlan = ValidateExportEnvelope(CStr(mSrcFile(lname)), ext, baseName)
+        If Len(BuildPlan) > 0 Then Exit Function
+
         declName = DeclaredVBName(CStr(mSrcFile(lname)))
         If Len(declName) = 0 Then
             BuildPlan = "Izvorni fajl " & baseName & "." & ext & " nema 'Attribute VB_Name'." & vbCrLf & _
@@ -686,7 +701,28 @@ Private Function BuildPlan() As String
             End If
         End If
 
-        If lname = LCase$(SELF_MODULE) Then
+        If Len(body) = 0 Then
+            ' PRAZNO TELO SE PROVERAVA PRVO - pre self grane i pre delta-skipa.
+            ' Inace ga zaobilaze dva slucaja: prazan izvor nad praznom zatecenom
+            ' komponentom (SameCode("","") = True -> "same") i sam modVbaTools.bas
+            ' (self grana) - a bas on je canonical marker foldera, pa bi odsecen
+            ' fajl prosao kao dokaz da je folder ispravan src-vba.
+            '
+            ' .doccls prazan = no-op: 42 od 43 u src-vba nemaju nijednu liniju koda,
+            ' artefakti prvog punog eksporta, opis listova JEDNE sveske iz juna.
+            ' .bas/.cls/.frm prazan = skoro uvek odsecen ili pokvaren fajl -> FATAL.
+            If ext <> "doccls" Then
+                BuildPlan = "Izvorni fajl " & baseName & "." & ext & " je PRAZAN" & vbCrLf & _
+                    "(zaglavlje bez ijedne linije koda)." & vbCrLf & vbCrLf & _
+                    "Za .bas/.cls/.frm to je skoro uvek odsecen ili pokvaren fajl." & vbCrLf & _
+                    "Preskok bi ostavio STAR kod u svesci i prijavio uspeh, pa izvor" & vbCrLf & _
+                    "i projekat vise ne bi bili isti. Proveri fajl u git-u."
+                Exit Function
+            End If
+            mAct(lname) = "same"
+            nEmpty = nEmpty + 1
+            If Not exists Then emptyS = emptyS & "  " & baseName & "." & ext & vbCrLf
+        ElseIf lname = LCase$(SELF_MODULE) Then
             ' Sam sebe ne dira, ali cutati ne sme.
             mAct(lname) = "self"
             If Not exists Then
@@ -700,28 +736,6 @@ Private Function BuildPlan() As String
         ElseIf exists And SameCode(cur, body) Then
             mAct(lname) = "same"
             nSame = nSame + 1
-        ElseIf Len(body) = 0 Then
-            ' PRAZNO TELO: no-op SAMO za .doccls. 42 od 43 .doccls u src-vba nemaju
-            ' nijednu liniju koda (samo ThisWorkbook ima telo) - to su artefakti
-            ' prvog punog eksporta, opis listova JEDNE sveske iz juna, a ne tvrdnja
-            ' "ovaj modul mora biti prazan". Takav fajl ne sme ni da brise zatecen
-            ' kod ni da obara import zbog lista koga u ovoj svesci nema.
-            '
-            ' Za .bas/.cls/.frm je obrnuto: prazan izvor je skoro uvek POKVAREN ili
-            ' odsecen fajl. Tihi preskok bi ostavio star kod u svesci i zavrsio kao
-            ' "uspeh", pa izvor i projekat vise ne bi bili isti - a alat se zove
-            ' sinhronizator. Fail-closed, pre ijedne mutacije.
-            If ext <> "doccls" Then
-                BuildPlan = "Izvorni fajl " & baseName & "." & ext & " je PRAZAN" & vbCrLf & _
-                    "(zaglavlje bez ijedne linije koda)." & vbCrLf & vbCrLf & _
-                    "Za .bas/.cls/.frm to je skoro uvek odsecen ili pokvaren fajl." & vbCrLf & _
-                    "Preskok bi ostavio STAR kod u svesci i prijavio uspeh, pa izvor" & vbCrLf & _
-                    "i projekat vise ne bi bili isti. Proveri fajl u git-u."
-                Exit Function
-            End If
-            mAct(lname) = "same"
-            nEmpty = nEmpty + 1
-            If Not exists Then emptyS = emptyS & "  " & baseName & "." & ext & vbCrLf
         ElseIf ext = "doccls" Then
             ' .doccls SA KODOM mora imati svoju komponentu - document modul se
             ' ne kreira ni Add-om ni Import-om, pa je jedini ishod fail-closed.
@@ -1101,6 +1115,7 @@ Private Function VerifyFinalProject(ByVal folder As String) As String
     Dim c As Object, k As Variant, lname As String, nm As String, want As Long
     Dim formN As Long, formNames As String, extra As String, missing As String
     Dim ctlN As Long, okOut As Boolean, bad As String
+    Dim body As String, cur As String, drift As String
 
     On Error GoTo EH
 
@@ -1134,18 +1149,32 @@ Private Function VerifyFinalProject(ByVal folder As String) As String
         If lname <> LCase$(SELF_MODULE) Then
             nm = mSrcName(lname)
             want = TypeForExt(CStr(mSrcMap(lname)))
+            body = ExtractModuleCode(CStr(mSrcFile(lname)))
             If Not ComponentExists(proj, nm) Then
                 ' prazan izvorni fajl ne opisuje komponentu (v. BuildPlan) -
                 ' isto pravilo mora vaziti i ovde, inace plan preskoci a
                 ' provera trazi pa oborila bi uspesan import
-                If Len(ExtractModuleCode(CStr(mSrcFile(lname)))) > 0 Then missing = missing & " " & nm
+                If Len(body) > 0 Then missing = missing & " " & nm
             ElseIf proj.VBComponents(nm).Type <> want Then
                 bad = bad & "  " & nm & ": tip " & proj.VBComponents(nm).Type & ", ocekivano " & want & vbCrLf
+            ElseIf Len(body) > 0 Then
+                ' DRIFT: prisustvo i tip ne dokazuju da je kod stvarno primenjen.
+                ' AddFromString ume da tiho ne upise sve (COM diskonekt), a tada bi
+                ' prolaz zavrsio kao uspeh nad starim kodom. Isti SameCode kojim
+                ' delta-skip odlucuje da NE dira modul mora da vazi i kao dokaz da
+                ' ga je dirao kako treba - inace mu ni skip ne bi smeo da se veruje.
+                cur = ComponentCode(proj.VBComponents(nm), okOut)
+                If Not okOut Then
+                    drift = drift & " " & nm & "(necitljiv)"
+                ElseIf Not SameCode(cur, body) Then
+                    drift = drift & " " & nm
+                End If
             End If
         End If
     Next k
 
     If Len(missing) > 0 Then bad = bad & "  nedostaju komponente:" & missing & vbCrLf
+    If Len(drift) > 0 Then bad = bad & "  kod se razlikuje od izvora:" & Cap(drift, 200) & vbCrLf
     ' 3) visak = zaostala stale komponenta ILI artefakt neuspelog importa (modX1)
     If Len(extra) > 0 Then bad = bad & "  komponente van izvora (visak):" & extra & vbCrLf
 
@@ -1246,15 +1275,27 @@ Private Sub ClearImportPhase2State()
     Err.Clear
 End Sub
 
-' Zaostalo stanje prekinute faze 2 se NE nastavlja - cisti se i prijavljuje.
+' Zaostalo stanje prekinute faze 2: PROCITAJ i prijavi, ali NE BRISI.
+'
+' Marker znaci "raniji prolaz je mozda ostavio projekat nepotpun". Brisanje na
+' ovom mestu bi ga potrosilo i kad novi prolaz ne uradi NISTA - preflight padne,
+' ili operater klikne Ne na potvrdu. Tada bi upozorenje nestalo, a projekat ostao
+' nepotpun; sledeci Save bi ga zabetonirao bez ijedne reci.
+'
+' Zato se marker brise tek kad postoji NOV bezbedan baseline: uspeo backup
+' (ClearImportPhase2State posle MakePreImportBackup) ILI plan koji dokazuje da je
+' projekat vec potpuno usaglasen sa izvorom (0 razlika, 0 viska).
 ' Vraca napomenu za izvestaj ("" ako nije bilo nicega).
 Private Function RecoverImportState() As String
     Dim sec As String: sec = P2Section()
     On Error Resume Next
     If GetSetting(REG_APP, sec, "pending", "") = "1" Then
-        RecoverImportState = "NAPOMENA: zatecena je prekinuta 2. faza ranijeg importa - stanje je" & vbCrLf & _
-            "ocisceno i krenulo se iz pocetka (backup: " & GetSetting(REG_APP, sec, "backup", "?") & ")."
-        DeleteSetting REG_APP, sec
+        RecoverImportState = "PAZNJA: zatecena je prekinuta 2. faza ranijeg importa." & vbCrLf & _
+            "Projekat je mozda NEPOTPUN. Backup tog prolaza: " & _
+            GetSetting(REG_APP, sec, "backup", "?") & vbCrLf & _
+            "Upozorenje ostaje dok se import ne dovrsi ili dok se ne dokaze da je" & vbCrLf & _
+            "projekat usaglasen sa izvorom. Do tada NE SNIMAJ svesku."
+        ' NB: DeleteSetting se NAMERNO ne poziva ovde (vidi komentar iznad).
         Application.EnableEvents = True
         Application.ScreenUpdating = True
         Application.StatusBar = False
@@ -1363,6 +1404,59 @@ EH:
     On Error Resume Next
     Close #ff
     SourceFormBeginCount = -1
+End Function
+
+' Omotac izvoznog fajla mora odgovarati vrsti komponente. VBE odlucuje tip po
+' SADRZAJU, ne po ekstenziji: .cls bez "VERSION x.y CLASS" + BEGIN/END zaglavlja
+' uveze se kao STANDARDNI modul. Mereno u T13 (05.09.2026): tako uvezen clsFlatBtn
+' zavrsio je pod Modules, a "WithEvents" je u standardnom modulu nelegalan, pa je
+' VBE digao svoj modalni compile dijalog jos UNUTAR Import-a i makro je ostao u
+' [break] - posle Remove-a, dakle posle destrukcije.
+'
+' Opsti slucaj VBE demand-compile-a se ne moze uhvatiti (vidi zaglavlje modula),
+' ali OVA klasa kvara moze - i mora - da se presece ovde, pre ijedne mutacije.
+' "" = uredu.
+Private Function ValidateExportEnvelope(ByVal fpath As String, ByVal ext As String, _
+                                        ByVal baseName As String) As String
+    Dim ff As Integer, ln As String, u As String
+    Dim firstSeen As Boolean, verOk As Boolean, hasBegin As Boolean, hasEnd As Boolean
+
+    If ext = "bas" Then Exit Function          ' .bas nema omotac; VB_Name je dovoljan
+
+    On Error GoTo EH
+    ff = FreeFile
+    Open fpath For Input As #ff
+    Do While Not EOF(ff)
+        Line Input #ff, ln
+        u = UCase$(Trim$(ln))
+        If Left$(u, 17) = "ATTRIBUTE VB_NAME" Then Exit Do
+        If Len(u) > 0 Then
+            If Not firstSeen Then
+                firstSeen = True
+                If ext = "frm" Then
+                    verOk = (Left$(u, 8) = "VERSION ")
+                Else
+                    verOk = (Left$(u, 8) = "VERSION " And Right$(u, 6) = " CLASS")
+                End If
+            End If
+            If Left$(u, 5) = "BEGIN" Then hasBegin = True
+            If Left$(u, 3) = "END" Then hasEnd = True
+        End If
+    Loop
+    Close #ff
+
+    If Not verOk Or Not hasBegin Or Not hasEnd Then
+        ValidateExportEnvelope = "Izvorni fajl " & baseName & "." & ext & " nema ispravno zaglavlje" & vbCrLf & _
+            "VBA export-a (" & IIf(ext = "frm", "VERSION + Begin/End", "VERSION x.y CLASS + BEGIN/END") & ")." & vbCrLf & vbCrLf & _
+            "VBE odlucuje tip komponente po SADRZAJU, ne po ekstenziji: takav fajl bi" & vbCrLf & _
+            "bio uvezen kao pogresna vrsta komponente, i to TEK POSLE Remove-a." & vbCrLf & _
+            "Prekid ovde znaci nula izmena projekta."
+    End If
+    Exit Function
+EH:
+    On Error Resume Next
+    Close #ff
+    ValidateExportEnvelope = "Izvorni fajl " & baseName & "." & ext & " nije citljiv."
 End Function
 
 ' Ime deklarisano u 'Attribute VB_Name' - autoritet za VBComponents.Import.
