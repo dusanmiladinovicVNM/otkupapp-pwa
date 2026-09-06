@@ -109,8 +109,31 @@ su informativni (placeholder `0.0.0-dev` ako `stamp-build` nije pokrenut — vid
      + „potreban reinstall" u izveštaju (nikad `Remove`!),
    - **faza 2** (ako ima `failed`): `Remove` njih (uz type-guard: samo
      std/class modul) → `OnTime +2s` → `RunSelfUpdatePhase2` ih `Import`-uje,
-   - **save** + „zatvori i otvori"; `EnableEvents`/`ScreenUpdating` se
-     **vraćaju na svakom izlazu** (uspeh/greška/prekid).
+   - **save**, pa **ponuda živog restarta** — v. tačku 4;
+     `EnableEvents`/`ScreenUpdating` se **vraćaju na svakom izlazu**
+     (uspeh/greška/prekid).
+4. **Živi restart (bez zatvaranja fajla).** Posle **potvrđenog** save-a,
+   `FinishAndOfferRestart` pita operatera želi li da program krene odmah. Na „Da"
+   zakaže `Application.OnTime` → `StartApp` na **prazan stack**; na „Ne" ostaje
+   staro „zatvorite i otvorite". Izbor je operaterov — update teče dok čovek čeka
+   da uđe u program, pa mu se trenutak ne nameće.
+
+   **Zašto `StartApp`, a ne `Workbook_Open`:** sve što `Workbook_Open` radi mimo
+   `StartApp`-a je **po sesiji**, ne po pokretanju aplikacije — `Monitor_AppOpen` i
+   `VBA_STARTUP_SUCCESS` su telemetrija *otvaranja fajla*, a `CleanupOrphanedLocks`
+   je jednokratna higijena koja je već odrađena. Ponoviti ih značilo bi lagati
+   telemetriju o drugom otvaranju kojeg nema.
+
+   **Zašto je bezbedno:** merenje iz zamke #29 — izmena koda briše module-level
+   stanje u SVIM modulima, pa je `modMain.m_Initialized` već `False` i `StartApp`
+   odradi **pun `InitApp`**: pravi hladan start, ne polovna inicijalizacija. Isto
+   merenje pokazuje da se `Public Const` preko granice modula ispravno osvežava, pa
+   aplikacija prijavljuje **novu** verziju.
+
+   **Nema compile zavisnosti:** `Application.OnTime` prima **ime** procedure kao
+   string — kasno vezano po prirodi, pa frozen `modSelfUpdate` ne dobija compile
+   referencu na updatable `modMain` (zamka #24). Workbook-qualified je obavezno
+   (zamka #16). **Fail-soft:** ako zakazivanje ne uspe → stara poruka, nikad tiho.
 
 ---
 
