@@ -136,6 +136,7 @@ Private mSelfNote As String     ' izvestaj o samom modVbaTools
 Private mRecNote As String      ' izvestaj o prekinutoj ranijoj fazi 2
 Private mPrevBackup As String   ' backup ranije PREKINUTE transakcije (poslednji known-good)
 Private mMutated As Boolean     ' je li dirnuta ijedna komponenta u ovom prolazu
+Private mDesignerDeferred As Boolean  ' dizajner nije procitan (forma je bila ucitana)
 Private mSum As String          ' izvestaj faze 1
 Private mRbFail As String       ' komponente kojima ROLLBACK NIJE uspeo
 
@@ -193,6 +194,7 @@ Public Sub ImportAllVBA()
     recNote = RecoverImportState()
     mRecNote = recNote              ' mora prezivi fazu 2 (durable stanje)
     mMutated = False
+    mDesignerDeferred = False
 
     folder = ResolveFolder(SRC_FOLDER, "Izaberi src-vba folder")
     If Len(folder) = 0 Then Exit Sub
@@ -215,13 +217,28 @@ Public Sub ImportAllVBA()
 
     ' 2) nema sta da se radi -> izlaz bez backup-a, teardown-a i ijedne mutacije
     If Len(mStale) = 0 And Len(mHard) = 0 And Not mFormNew And Not PlanHasMerges() Then
-        ' Plan bez ijedne razlike i bez viska je JACI dokaz od backup-a: svaka
-        ' izvorna komponenta postoji sa istim kodom i nema komponente van izvora.
-        ' Tek tu sme da padne marker prekinute faze 2.
+        ' Plan bez ijedne razlike i bez viska dokazuje KOD i sastav projekta, ali
+        ' NE i oblik forme kad je provera dizajnera bila odlozena (forma ucitana).
+        ' Za obicno izvestavanje to je dovoljno; za POVLACENJE recovery upozorenja
+        ' nije - tu dokaz mora biti potpun, pa se runtime obara samo zbog te jedne
+        ' provere. Nijedna komponenta se pri tom ne dira.
+        If Len(recNote) > 0 And mDesignerDeferred Then
+            PrepareRuntimeForImport
+            problem = ValidateFormDesigner()
+            RestoreRuntimeAfterImport
+            If Len(problem) > 0 Then
+                ShowImportFailure "Nema izmena koda, ali OBLIK projekta nije potvrdjen:" & vbCrLf & _
+                    problem & vbCrLf & "Upozorenje o prekinutom importu OSTAJE upisano.", ""
+                Exit Sub
+            End If
+        End If
         ClearImportPhase2State
         MsgBox "Projekat je vec usaglasen sa izvorom - 0 izmena." & vbCrLf & vbCrLf & _
                IIf(Len(recNote) > 0, recNote & vbCrLf & "Provereno sada: projekat JESTE usaglasen, upozorenje se povlaci." & vbCrLf & vbCrLf, "") & _
-               mSum & vbCrLf & mSelfNote, _
+               mSum & vbCrLf & mSelfNote & _
+               IIf(mDesignerDeferred And Len(recNote) = 0, vbCrLf & _
+                   "NB: dizajner forme nije proveren (forma je ucitana) - proverava se" & vbCrLf & _
+                   "uz prvi stvarni import, posle oslobadjanja runtime-a.", ""), _
                vbInformation, "ImportAllVBA"
         Exit Sub
     End If
@@ -658,6 +675,7 @@ Private Function ValidateTargetShape() As String
                     " (a nijedna forma nije ucitana) - import se ne pokrece (fail-closed)."
                 Exit Function
             End If
+            mDesignerDeferred = True
         ElseIf ctlN <> 0 Then
             ValidateTargetShape = ONLY_FORM & " ima " & ctlN & " kontrolu(e) u DIZAJNERU." & vbCrLf & _
                 "Ljuska mora ostati prazna (sve kontrole nastaju u runtime-u)." & vbCrLf & _
@@ -1305,9 +1323,14 @@ End Sub
 Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As String) As Boolean
     Dim sec As String: sec = P2Section()
     On Error GoTo EH
+    ' phase="2" ide POSLEDNJI - on je readiness kapija, ne pending. pending je
+    ' legitimno "1" kroz celu transakciju (BeginImportTransaction ga je postavio),
+    ' pa "pending se upisuje poslednji" ovde nista ne znaci. Da phase padne na 2
+    ' pre nego sto hard/gone/formnew legnu, zaostao OnTime iz ranijeg prolaza bi
+    ' delimican handoff procitao kao kompletan - a phase=1 je uveden bas da to
+    ' spreci.
     SaveSetting REG_APP, sec, "dir", folder
     SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
-    SaveSetting REG_APP, sec, "phase", "2"
     SaveSetting REG_APP, sec, "hard", mHard
     SaveSetting REG_APP, sec, "hardn", CStr(CsvCount(mHard))
     SaveSetting REG_APP, sec, "gone", mGone
@@ -1319,6 +1342,11 @@ Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As S
     SaveSetting REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
     SaveSetting REG_APP, sec, "recnote", Cap(mRecNote, 300)
     SaveSetting REG_APP, sec, "pending", "1"
+    ' procitaj nazad ono od cega faza 2 zavisi; tek ako je leglo, otvori kapiju
+    If GetSetting(REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
+    If GetSetting(REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
+    If GetSetting(REG_APP, sec, "hardn", "") <> CStr(CsvCount(mHard)) Then Exit Function
+    SaveSetting REG_APP, sec, "phase", "2"      ' <- kapija, poslednja
     SaveImportPhase2State = True
     Exit Function
 EH:
