@@ -468,14 +468,18 @@ Public Sub ImportAllVBA_Phase2()
     ' 5) zavrsna verifikacija nad flush-ovanim projektom
     problem = VerifyFinalProject(folder)
     DeleteImportLogs folder
-    ClearImportPhase2State
     RestoreRuntimeAfterImport
     mBusy = False
 
     If Len(problem) > 0 Then
+        ' Marker OSTAJE. Import je mozda i prosao, ali zavrsna provera kaze da
+        ' projekat ne odgovara izvoru - to je stanje zbog koga durable transakcija
+        ' i postoji. Ranije se ovde brisao bezuslovno, cime je faza 2 krsila ugovor
+        ' koji faza 1 postuje (brisanje samo na VERIFIKOVANOM uspehu).
         ShowImportFailure "Zavrsna provera projekta NIJE prosla:" & vbCrLf & problem & vbCrLf & _
                           vbCrLf & phase1Sum, bkPath
     Else
+        ClearImportPhase2State      ' verifikovan uspeh - transakcija je zatvorena
         ' selfNote ide PRVI: on nosi upozorenje da modVbaTools nije azuriran, a
         ' izvestaj se na kraju secka (MsgBox ~1024 znaka).
         ShowImportSuccess selfNote & IIf(Len(recNote) > 0, vbCrLf & recNote, "") & vbCrLf & _
@@ -1327,10 +1331,23 @@ End Function
 Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As String) As Boolean
     Dim sec As String: sec = P2Section()
     On Error GoTo EH
-    SaveSetting REG_APP, sec, "dir", folder
-    SaveSetting REG_APP, sec, "backup", bkPath
+    ' REDOSLED JE DEO UGOVORA. Kad stari pending=1 vec postoji, pravilo "pending se
+    ' upisuje poslednji" ne daje nikakvu atomarnost - pending je sve vreme 1. Zato
+    ' prvo ide ono cije bi gubljenje najvise kostalo:
+    '   1. prevbackup - pokazivac na poslednji ISPRAVAN backup. Da SaveSetting padne
+    '      posle upisa novog "backup" a pre "prevbackup", izgubili bismo ga bas u
+    '      funkciji koja postoji da ga sacuva.
+    '   2. phase=1 - zaostao OnTime iz ranijeg prolaza vise ne sme da udje u fazu 2.
+    '   3. tek onda podaci ovog prolaza.
     SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
     SaveSetting REG_APP, sec, "phase", "1"
+    If Len(mPrevBackup) > 0 Then
+        ' procitaj nazad pre nego sto prepises "backup" - ako pokazivac nije legao,
+        ' nova transakcija se NE otvara (import se ne pokrece)
+        If GetSetting(REG_APP, sec, "prevbackup", "") <> mPrevBackup Then Exit Function
+    End If
+    SaveSetting REG_APP, sec, "dir", folder
+    SaveSetting REG_APP, sec, "backup", bkPath
     SaveSetting REG_APP, sec, "hard", ""
     SaveSetting REG_APP, sec, "hardn", "0"
     SaveSetting REG_APP, sec, "gone", ""
