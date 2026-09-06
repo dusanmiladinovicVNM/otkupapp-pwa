@@ -6,6 +6,9 @@ paths:
   - "src-vba/modScrDokumenti.bas"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
+  - "tools/vba_parity_check.py"
+  - "tools/vba_selfupdate_gates.py"
+  - "tools/vba_hard_census.py"
   - "tools/sabotaza.py"
   - "tools/make_fixture.py"
   - "tools/dump_schema.py"
@@ -40,8 +43,12 @@ u hook: 11 suite-ova uz podizanje Excela na svakom zaustavljanju je desktop
 sesiju činilo neupotrebljivom.
 
 **Centralni verdikt nezavisan od mašine daje CI** (`.github/workflows/static.yml`):
-JSON validnost `settings*.json`, `vba_check`, `who_writes --check`. CI ne pokreće
-Excel i nikad neće.
+JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, i tri kapije
+nad self-update motorom (§8). CI ne pokreće Excel i nikad neće.
+
+Svaki od tih alata ima i `--self-test` korak u istom workflow-u. To nije
+udvajanje: zelen checker nad čistim repoom ne razlikuje „nema greške" od
+„provera ništa ne meri".
 
 ## 2) `tools/vba_check.py` — radi svuda, i u Linux sesiji
 
@@ -227,3 +234,49 @@ Zamke pri pisanju nove (kraj reda, uvlačenje, vraćanje): `docs/EXCEL_TEST_HARN
 Finalni smoke-test u Excelu (klik po klik), izgled forme, štampa i PDF, ponašanje
 nad pravim podacima. Zato svaki rad završi kratkom numerisanom test-checklistom u
 chatu. Checklista **nije** zamena za test koji je moguće napisati.
+
+## 8) Tri kapije nad self-update motorom
+
+Sve tri su čist Python, rade u CI-ju i u web sesiji, i sve tri imaju
+`--self-test`. Postoje zato što motor koji se sam ažurira ima invarijante koje
+**suite ne može da izmeri**: greška se ne vidi kao crven test nego kao klijent
+koji je snimio polu-nov projekat i više ne može da se ažurira.
+
+| Alat | Čuva | Pada kad |
+|---|---|---|
+| `tools/vba_parity_check.py` | da obe kopije HARD/SOFT algoritma nose **isti kod** | `modSelfUpdate` i `modVbaTools` divergiraju, ili korpus fikstura ne daje očekivan verdikt |
+| `tools/vba_selfupdate_gates.py` | da se `Save` **ne dosegne bez dokaza** | postoji put do `SaveWorkbookVerified` bez `VerifyReleaseProject` pre njega, ili bez `AbortSelfUpdate` između |
+| `tools/vba_hard_census.py` | da **tvrda površina** ostane mala i namerna | tvrd `.frm`/`.doccls`/`.bas`, nova tvrda `.cls` van `WHITELIST`, ili mrtav unos u `WHITELIST`-u |
+
+### Zašto paritet uopšte postoji
+
+HARD/SOFT algoritam (`IsHardModuleBody`, `CanonCode`, `SameCode` i pratioci) živi
+u **dve privatne kopije**. Spojiti ih se ne može: `modSelfUpdate` je frozen
+bootstrap (`SKIP_MODULES`) i ne sme da zavisi ni od čega što se update-uje.
+
+Kopije su **već divergirale**. PR #274 je popravio detekciju razmaka u
+`modVbaTools`, `modSelfUpdate` je ostao sa rupom, a `modVbaTools` je pritom nosio
+komentar „isti obrazac stoji i u `modSelfUpdate`" — koji više nije bio tačan
+(zamka #22 u `docs/SELF_UPDATE.md`). **Komentar ne može da bude kapija; exit kod
+može.**
+
+Census **ne duplira** algoritam nego uvozi referentnu implementaciju iz
+`vba_parity_check`. Treća kopija bi bila treća stvar koja može da divergira.
+
+### Šta ove kapije NE dokazuju
+
+Da se Python referenca ponaša isto kao VBA. Dokazuju da obe VBA kopije nose isti
+kod i da taj kod odgovara pisanoj specifikaciji. Ponašanje nad živim VBE-om se
+meri **ručno** — `RunSelfUpdateDev` nad **kopijom** prave sveske
+(`docs/SELF_UPDATE.md`, „Lokalni DEV test"). Ta razlika se prijavljuje, ne
+prećutkuje.
+
+### `MRTAV_UNOS` — zašto whitelist mora da boli kad zastari
+
+`WHITELIST` u `vba_hard_census.py` nabraja namerne event-sink klase. Pravilo
+`MRTAV_UNOS` obara CI kad klasa iz liste **više nije** tvrda. To nije pedanterija:
+lista koja se ne održava postaje spisak imena bez značenja, a prvo sledeće
+stvarno zaprljanje prođe neopaženo. Isti obrazac je već jednom ujeo — komentar u
+zaglavlju `modSelfUpdate` je nabrajao module (`modKarticaDetalji`, `modMouseWheel`,
+`clsWheelList`) koji su u međuvremenu obrisani, a niko to nije primetio jer
+komentar ništa ne obara.
