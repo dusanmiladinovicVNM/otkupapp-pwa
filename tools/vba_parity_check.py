@@ -17,7 +17,7 @@ Komentar ne moze da bude kapija; exit kod moze.
 Izlazni kod: 0 = cisto, 2 = ima nalaza.
 
 Provere:
-  PARITET   -- sest procedura algoritma mora biti KOD-ZA-KOD isto u oba modula.
+  PARITET   -- procedure algoritma moraju biti KOD-ZA-KOD iste u oba modula.
                Poredi se telo bez komentara i bez visestrukih razmaka: komentari
                smeju (i treba da) budu razliciti, kod ne sme.
   FIKSTURA  -- referentna Python implementacija istog algoritma nad korpusom
@@ -49,6 +49,7 @@ PARITY_PROCS = (
     "SameCode",
     "CanonCode",
     "LowerOutsideStrings",
+    "ComponentCode",
 )
 
 PARITY_MODULES = ("modSelfUpdate.bas", "modVbaTools.bas")

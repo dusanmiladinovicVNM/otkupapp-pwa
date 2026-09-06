@@ -361,6 +361,26 @@ se desio i fix koji radi:
     Ista lista i isti redosled stoje u `modVbaTools.PrepareRuntimeForImport`;
     razlika između ta dva je bug (`StopOtkupUITimers`, `Admin_Release`,
     `OtkupUI_Release` su nedostajali u `modSelfUpdate` do ove izmene).
+25. **`Err.Number = 0` posle `AddFromString` NIJE dokaz da je telo primenjeno.**
+    To je tačno oblik u kome zamka #3 nastupa: COM diskonekt `CodeModule`-a može da
+    ostavi modul sa **starim** (ili polovinim) kodom, a prolaz da se završi kao
+    uspeh — pa `Save` overi nekonzistentan projekat. Merenje iz zamke #23 je ovo
+    učinilo hitnijim, ne manje hitnim: `AddFromString` nad tvrdim telom je prošao
+    **bez greške**, dakle „nema greške“ i „primenjeno“ nisu ista stvar.
+    **Fix:** svaki soft upis nosi dokaz — `VerifyWritten` čita kod **nazad** iz
+    projekta i poredi ga sa izvorom (`SameCode`). Nova komponenta uz to mora da
+    prođe i `ImportedOk` (ime iz `VB_Name` + tip): `VBComponents.Add` ume da vrati
+    `modX1` kad ime zauzme zaostala komponenta, pa bi se nov kod upisao **pored**
+    starog umesto preko njega.
+    Neuspeo dokaz ide **istim putem kao genuino pao upis** — još jedan prolaz, pa
+    `.bas`/`.cls` u fazu 2 (`Remove`+`Import`), a forma/sheet u rollback +
+    `needsReinstall` (nikad `Remove` forme, zamka #1). Nikad `"ok"`.
+    **Zašto ovo ne pravi lažne padove:** ista `SameCode` već godinu dana odlučuje
+    delta-skip nad istim parom (`CodeModule.Lines` vs `ExtractModuleCode`). Da
+    proizvodi lažne razlike, svaki update bi re-merge-ovao SVE — a to je bio bug
+    koji je zatvoren (zamka #10). Read-back koristi tačno taj, već dokazan par.
+    Obrnuto isto važi: ako `SameCode` ne bi smela da se veruje kao dokaz upisa,
+    ne bi smela ni kao osnov da se modul **ne dira**.
 
 ---
 

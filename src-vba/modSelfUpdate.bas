@@ -793,7 +793,10 @@ End Function
 '  - identican kod (SameCode)        -> "same", NE diraj
 '  - tvrd .bas/.cls (WithEvents/MSForms module-level) -> "phase2" (failedOut), kod
 '    se NE dira; Remove+Import ide u fazi 2 (AddFromString ga ne bi podneo)
-'  - obican .bas/.cls                 -> DeleteLines+AddFromString (ili Add za nov)
+'  - obican .bas/.cls                 -> DeleteLines+AddFromString (ili Add za nov),
+'    pa OBAVEZAN dokaz upisa: kod se cita NAZAD i poredi sa izvorom (VerifyWritten).
+'    Err=0 nije dokaz da je telo primenjeno - bez read-back-a bi COM diskonekt
+'    (zamka #3) prosao kao uspeh nad starim kodom, a save bi ga overio.
 '  - forma/doccls                     -> code-merge; NIKAD Remove; pad -> rollback
 '    starog koda + needsReinstall (fatalno; pozivalac ne snima)
 '  - nova forma/sheet                 -> "skip" + needsReinstall (reinstall)
@@ -809,6 +812,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
     Dim pass As Long, anyLeft As Boolean, usedPass As Long
     Dim fil As Object, ext As String, baseName As String, fkey As String
     Dim body As String, cur As String, readOk As Boolean, extractOk As Boolean, compExists As Boolean
+    Dim vErr As String
     Dim vbc As Object, proj As Object
     Dim okN As Long, sameN As Long, phase2N As Long, k As Variant, failS As String, skipS As String, hardS As String
 
@@ -824,6 +828,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                 baseName = fso.GetBaseName(fil.name)
                 fkey = LCase$(fil.name)
                 If InStr(skip, "," & LCase$(baseName) & ",") = 0 And Not st.Exists(fkey) Then
+                    vErr = ""                     ' dokaz upisa po fajlu, ne po prolazu
                     On Error Resume Next
                     Err.Clear
                     body = ExtractModuleCode(fil.path)
@@ -870,13 +875,26 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                             If vbc.CodeModule.CountOfLines > 0 Then _
                                 vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
                             If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                            If Err.Number = 0 Then st(fkey) = "ok"
+                            If Err.Number = 0 Then vErr = VerifyWritten(vbc, body)
+                            If Err.Number = 0 And Len(vErr) = 0 Then st(fkey) = "ok"
                         ElseIf ext = "bas" Or ext = "cls" Then
                             Err.Clear                     ' Err9 lookup ne sme da oboji Add put
                             Set vbc = proj.VBComponents.Add(IIf(ext = "bas", 1, 2))
                             vbc.name = baseName
                             If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                            If Err.Number = 0 Then st(fkey) = "ok"
+                            ' Nova komponenta: pored koda mora da se potvrdi i IDENTITET
+                            ' (ime iz VB_Name + tip) - Add moze da vrati modX1 kad ime
+                            ' zauzme zaostala komponenta, pa bi se novi kod upisao pored
+                            ' starog umesto preko njega.
+                            If Err.Number = 0 Then
+                                If Not ImportedOk(vbc, baseName, ext) Then
+                                    vErr = "nova komponenta nije verifikovana (ime='" & _
+                                           SafeCompName(vbc) & "')"
+                                Else
+                                    vErr = VerifyWritten(vbc, body)
+                                End If
+                            End If
+                            If Err.Number = 0 And Len(vErr) = 0 Then st(fkey) = "ok"
                         Else
                             st(fkey) = "skip"             ' nova forma/sheet -> reinstall
                             needsReinstall = True
@@ -884,6 +902,12 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                     End If
                     If Err.Number <> 0 And Not st.Exists(fkey) Then
                         er(fkey) = "[" & Err.Number & "] " & Err.description
+                        anyLeft = True
+                    ElseIf Len(vErr) > 0 And Not st.Exists(fkey) Then
+                        ' Upis bez greske ali BEZ DOKAZA da je primenjen. Ide istim putem
+                        ' kao genuino pao upis: jos jedan prolaz, pa .bas/.cls u fazu 2
+                        ' (Remove+Import), a forma/sheet u rollback + reinstall. Nikad "ok".
+                        er(fkey) = vErr
                         anyLeft = True
                     End If
                     Err.Clear
@@ -923,6 +947,42 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         IIf(Len(hardS) > 0, vbCrLf & "Faza 2 (Remove+Import):" & vbCrLf & hardS, "") & _
         IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
         IIf(Len(failS) > 0, vbCrLf & "GRESKE:" & vbCrLf & failS, "")
+End Function
+
+' Procitaj kod komponente. okOut=False znaci NE MOZE DA SE PROCITA - to NIJE
+' isto sto i "modul je prazan" (prazan modul: okOut=True, povratna vrednost "").
+' To dvoje se ne sme mesati: necitljiv CodeModule je upravo simptom COM
+' diskonekta (zamka #3), a prazan modul je legitimno stanje (zamka #21).
+Private Function ComponentCode(ByVal vbc As Object, ByRef okOut As Boolean) As String
+    Dim s As String
+    okOut = False
+    On Error Resume Next
+    Err.Clear
+    If vbc.CodeModule.CountOfLines > 0 Then s = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+    okOut = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+    ComponentCode = s
+End Function
+
+' DOKAZ UPISA: procitaj kod NAZAD iz projekta i uporedi ga sa izvorom. Vrati ""
+' ako se poklapa, inace opis problema.
+'
+' Zasto: Err.Number = 0 posle AddFromString NIJE dokaz da je telo primenjeno.
+' Upravo to je oblik u kome zamka #3 nastupa - COM diskonekt CodeModule-a moze da
+' ostavi modul sa STARIM (ili polovinim) kodom, a prolaz da se zavrsi kao uspeh.
+' Takav ishod je najgori moguci: projekat je nekonzistentan, a save ga overi.
+'
+' Isti SameCode kojim delta-skip odlucuje da modul NE dira mora da vazi i kao
+' dokaz da ga je dirao kako treba - inace mu ni skip ne bi smeo da se veruje.
+Private Function VerifyWritten(ByVal vbc As Object, ByVal body As String) As String
+    Dim back As String, backOk As Boolean
+    back = ComponentCode(vbc, backOk)
+    If Not backOk Then
+        VerifyWritten = "kod se posle upisa NE MOZE PROCITATI (CodeModule diskonektovan?)"
+    ElseIf Not SameCode(back, body) Then
+        VerifyWritten = "kod posle upisa se RAZLIKUJE od izvora (upis nije primenjen)"
+    End If
 End Function
 
 ' Da li telo (izvuceno ExtractModuleCode) ima MODULE-LEVEL "WithEvents" ili
