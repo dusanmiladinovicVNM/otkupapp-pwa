@@ -384,6 +384,14 @@ Public Sub ImportAllVBA_Phase2()
                 "(marker je iz prekinutog prolaza, ne iz zavrsene 1. faze)."
         GoTo FAIL
     End If
+
+    ' mMutated se NE nasledjuje iz faze 1: izmedju faza je izvrsen
+    ' VBComponents.Remove, a izmena strukture projekta resetuje module-level
+    ' stanje (isti razlog zbog koga phase2 stanje uopste zivi u registru).
+    ' Mereno 06.09.2026: bez ovoga je failure poruka faze 2 izostavljala red
+    ' "Upozorenje ostaje upisano". Da je faza 2 uopste pokrenuta znaci da je
+    ' faza 1 vec uklanjala komponente - dakle mutacija je izvesna.
+    mMutated = True
     selfNote = GetSetting(REG_APP, sec, "selfnote", "")
     recNote = GetSetting(REG_APP, sec, "recnote", "")
 
