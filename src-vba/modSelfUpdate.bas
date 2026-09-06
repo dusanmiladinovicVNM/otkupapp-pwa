@@ -936,8 +936,10 @@ Private Function IsHardModuleBody(ByVal body As String) As Boolean
     Dim t As String: t = Replace$(Replace$(body, vbCrLf, vbLf), vbCr, vbLf)
     arr = Split(t, vbLf)
     For i = 0 To UBound(arr)
-        u = CodeLineUpper(arr(i))          ' bez stringa/komentara (da "WithEvents"
-        If Len(u) > 0 Then                 ' u komentaru ne da lazni pozitiv)
+        ' bez stringa/komentara (da "WithEvents" u komentaru ne da lazni pozitiv)
+        ' i nad SAZETIM razmakom (da broj razmaka ne odlucuje o klasifikaciji).
+        u = CollapseSpaces(CodeLineUpper(arr(i)))
+        If Len(u) > 0 Then
             ' kraj module-level dela = prva procedura
             w = u
             If Left$(w, 7) = "PUBLIC " Then w = Mid$(w, 8)
@@ -945,6 +947,10 @@ Private Function IsHardModuleBody(ByVal body As String) As Boolean
             If Left$(w, 7) = "FRIEND " Then w = Mid$(w, 8)
             If Left$(w, 7) = "STATIC " Then w = Mid$(w, 8)
             If w Like "SUB *" Or w Like "FUNCTION *" Or w Like "PROPERTY *" Then Exit For
+            ' Trazi se nad SAZETIM razmakom: "As  MSForms.Label" sa dva razmaka je
+            ' ista deklaracija, a doslovno " AS MSFORMS." je ne bi nasao -> modul bi
+            ' presao kao "soft" i otisao u AddFromString. Mereno 06.09.2026 kroz
+            ' ImportAllVBA (zamka #22); isti obrazac stoji u modVbaTools.
             If InStr(1, u, "WITHEVENTS ") > 0 Then IsHardModuleBody = True: Exit Function
             If InStr(1, u, " AS MSFORMS.") > 0 Then IsHardModuleBody = True: Exit Function
         End If
@@ -963,6 +969,23 @@ Private Function CodeLineUpper(ByVal s As String) As String
         out = out & ch
     Next i
     CodeLineUpper = UCase$(LTrim$(out))
+End Function
+
+' Sazmi svaki niz razmaka/tabova u jedan razmak. Za detekciju tvrdog tela, gde
+' broj razmaka ne menja znacenje deklaracije. (Isto kao modVbaTools.CollapseSpaces.)
+Private Function CollapseSpaces(ByVal s As String) As String
+    Dim i As Long, c As String, out As String, wasSp As Boolean
+    For i = 1 To Len(s)
+        c = Mid$(s, i, 1)
+        If c = " " Or c = vbTab Then
+            If Not wasSp Then out = out & " "
+            wasSp = True
+        Else
+            out = out & c
+            wasSp = False
+        End If
+    Next i
+    CollapseSpaces = out
 End Function
 
 ' Da li su dva tela koda identicna. Ignorise SAMO zavrsne CR/LF; ostalo mora biti
@@ -1014,11 +1037,22 @@ Private Function CanonCode(ByVal s As String) As String
     CanonCode = s
 End Function
 
-' Lowercase kod IZVAN string-literala i komentara; case unutar "..." i posle ' se
-' CUVA. Koristi SameCode da absorbuje VBE identifier re-casing (identifikatori se
-' lowercase-uju na obe strane -> match) a da NE proguta case-only izmenu u stringu.
+' Lowercase kod IZVAN string-literala i komentara + SAZIMANJE razmaka izvan njih;
+' case i razmak unutar "..." i posle ' se CUVA. Koristi SameCode da absorbuje VBE
+' identifier re-casing (identifikatori se lowercase-uju na obe strane -> match) a da
+' NE proguta case-only izmenu u stringu.
 ' VBA string-literal nikad ne prelazi fizicki red (line-continuation je van navodnika),
 ' pa je per-red obrada tacna. "" unutar stringa = escaped navodnik (ostaje u stringu).
+'
+' SAZIMANJE razmaka je nadjeno MERENJEM (06.09.2026, PR #274): VBE PREFORMATIRA
+' razmak pri unosu koda - izvorno "As  MSForms.Label" u projektu postane
+' "As MSForms.Label". Bez ovoga bi zavrsna provera (VerifyReleaseProject) takvu
+' razliku prijavila kao drift, pa bi USPESAN update zavrsio fatalnim abortom bez
+' snimanja. Lazno crveno je ovde skuplje od propustenog upozorenja: tera operatera
+' da odbaci ispravan release. Isti razlog zbog koga CanonCode vec apsorbuje VBE
+' re-casing identifikatora i NBSP anomaliju.
+' Cena koja se prihvata: izmena SAMO u uvlacenju/razmaku tretira se kao "isto" i ne
+' prenosi se - a VBE bi je ionako preformatirao.
 Private Function LowerOutsideStrings(ByVal s As String) As String
     ' NB: promenljiva se zove inQ (ne inStr) - "inStr" bi se sudarilo sa ugradjenom
     ' InStr() funkcijom (VBA case-insensitive) -> "If inStr Then" = Syntax error.
@@ -1049,6 +1083,13 @@ Private Function LowerOutsideStrings(ByVal s As String) As String
             ElseIf c = "'" Then
                 out = out & Mid$(s, i)            ' komentar do kraja reda -> cuvaj
                 Exit Do
+            ElseIf c = " " Or c = vbTab Then
+                out = out & " "                   ' niz razmaka/tabova -> jedan razmak
+                Do While i <= n
+                    c = Mid$(s, i, 1)
+                    If c <> " " And c <> vbTab Then Exit Do
+                    i = i + 1
+                Loop
             Else
                 out = out & LCase$(c)             ' kod van stringa/komentara -> lower
                 i = i + 1

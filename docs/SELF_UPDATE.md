@@ -311,9 +311,25 @@ se desio i fix koji radi:
     editovanjem izvornog fajla**, što je tačno ono što programer radi.
     **Mereno 06.09.2026** kroz `ImportAllVBA` (PR #274): tako napisan `modArrayUtils`
     klasifikovan je kao soft; posle popravke (detekcija nad sažetim razmakom) isti
-    fajl je klasifikovan kao **tvrd**. Popravka je ušla u `modVbaTools`;
-    **`modSelfUpdate.IsHardModuleBody` i dalje ima istu rupu** — modul je frozen
-    (`SKIP_MODULES`) i nije diran u tom PR-u. Kad se bude dirao: isti fix.
+    fajl je klasifikovan kao **tvrd**. Popravka je prvo ušla samo u `modVbaTools`;
+    `modSelfUpdate` je ostao sa rupom još jedan PR, a `modVbaTools` je pritom nosio
+    komentar „isti obrazac stoji i u `modSelfUpdate`“ — koji više nije bio tačan.
+    **Zatvoreno:** ista popravka je sada i u `modSelfUpdate` (`CollapseSpaces` +
+    detekcija nad sažetim razmakom + sažimanje razmaka u `LowerOutsideStrings`).
+
+    **Pouka koja je važnija od same rupe:** algoritam ima **dve privatne kopije**
+    koje se ne mogu spojiti (`modSelfUpdate` je frozen bootstrap i ne sme da zavisi
+    ni od čega što se update-uje). Komentar koji tvrdi paritet nije kapija — istruli
+    tiho. Zato paritet sada čuva `tools/vba_parity_check.py` (u CI): šest procedura
+    algoritma mora biti **kod-za-kod** isto u oba modula, uz korpus fikstura koji
+    pina specifikaciju. Komentari smeju da se razlikuju, kod ne sme.
+
+    **Poznat lažni pozitiv (svesno pinovan, NE popravljen):** `CodeLineUpper`
+    odseca komentar, ali **ne** sadržaj stringa — pa `Private Const X As String =
+    "Private WithEvents …"` klasifikuje modul kao **tvrd**. Greška je konzervativna
+    (skuplji put kroz `Remove`+`Import`, nikad netačan ishod) i danas nema nijednog
+    takvog modula u `src-vba`. Popravka bi bila izmena **semantike** detektora i
+    mora u **obe** kopije istovremeno, uz merenje — ne usput.
 23. **`AddFromString` nad tvrdim telom NIJE diskonektovao `CodeModule` — zamka #3
     se nije reprodukovala.** Isto merenje 06.09.2026: modul sa module-level
     `As MSForms.Label` primljen je kroz `AddFromString` **bez greške** (`Err=0`),
