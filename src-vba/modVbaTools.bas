@@ -176,7 +176,7 @@ End Sub
 ' Alt+F8 -> ImportAllVBA. Ako je potrebna faza 2, ona se nastavlja sama.
 Public Sub ImportAllVBA()
     Dim problem As String, bkPath As String, folder As String
-    Dim fatal As String, recNote As String
+    Dim fatal As String, recNote As String, appTornDown As Boolean
 
     ' 0) re-entry brana. mBusy ostaje True kroz prozor faze 1 -> faze 2; ako je
     '    faza 2 prekinuta (Esc, greska u dispatch-u), operater sme da je odblokira.
@@ -223,12 +223,34 @@ Public Sub ImportAllVBA()
         ' nije - tu dokaz mora biti potpun, pa se runtime obara samo zbog te jedne
         ' provere. Nijedna komponenta se pri tom ne dira.
         If Len(recNote) > 0 And mDesignerDeferred Then
+            ' Teardown je VIDLJIV TROSAK: PrepareRuntimeForImport gasi tajmere,
+            ' otpusta reference i unload-uje frmOtkupUI, a RestoreRuntimeAfterImport
+            ' po dizajnu vraca samo Events/ScreenUpdating - nije rekonstrukcija
+            ' runtime-a. Posto frmOtkupUI JESTE aplikacija (Excel je skriven), ovaj
+            ' prolaz bi inace nemo ugasio app iako nije promenio ni jednu liniju.
+            ' Alat nigde ne pokusava da vaskrsne runtime i nece ni ovde - zato
+            ' odluku nosi operater. "Ne" nema nikakvu posledicu: kod je usaglasen,
+            ' marker prosto ostaje do prolaza u kome forma nije podignuta.
+            If MsgBox("Nema izmena koda." & vbCrLf & vbCrLf & recNote & vbCrLf & vbCrLf & _
+                      "Da bi se upozorenje POVUKLO, mora se proveriti i dizajner forme," & vbCrLf & _
+                      "a to trazi zatvaranje aplikacije (frmOtkupUI). Alat je NE podize" & vbCrLf & _
+                      "nazad - posle provere zatvori i ponovo otvori fajl." & vbCrLf & vbCrLf & _
+                      "Zatvoriti aplikaciju i proveriti?" & vbCrLf & _
+                      "(Ne = nista se ne dira, upozorenje ostaje)", _
+                      vbYesNo + vbQuestion, "ImportAllVBA") <> vbYes Then
+                MsgBox "Nista nije menjano - aplikacija radi dalje." & vbCrLf & _
+                       "Upozorenje o prekinutom importu OSTAJE upisano." & vbCrLf & vbCrLf & _
+                       mSum & vbCrLf & mSelfNote, vbInformation, "ImportAllVBA"
+                Exit Sub
+            End If
             PrepareRuntimeForImport
             problem = ValidateFormDesigner()
             RestoreRuntimeAfterImport
+            appTornDown = True
             If Len(problem) > 0 Then
                 ShowImportFailure "Nema izmena koda, ali OBLIK projekta nije potvrdjen:" & vbCrLf & _
-                    problem & vbCrLf & "Upozorenje o prekinutom importu OSTAJE upisano.", ""
+                    problem & vbCrLf & "Upozorenje o prekinutom importu OSTAJE upisano." & vbCrLf & _
+                    "APLIKACIJA JE ZATVORENA radi provere - zatvori i ponovo otvori fajl.", ""
                 Exit Sub
             End If
         End If
@@ -238,7 +260,10 @@ Public Sub ImportAllVBA()
                mSum & vbCrLf & mSelfNote & _
                IIf(mDesignerDeferred And Len(recNote) = 0, vbCrLf & _
                    "NB: dizajner forme nije proveren (forma je ucitana) - proverava se" & vbCrLf & _
-                   "uz prvi stvarni import, posle oslobadjanja runtime-a.", ""), _
+                   "uz prvi stvarni import, posle oslobadjanja runtime-a.", "") & _
+               IIf(appTornDown, vbCrLf & vbCrLf & _
+                   "APLIKACIJA JE ZATVORENA radi provere dizajnera." & vbCrLf & _
+                   "Zatvori i ponovo otvori fajl da se vrati.", ""), _
                vbInformation, "ImportAllVBA"
         Exit Sub
     End If
