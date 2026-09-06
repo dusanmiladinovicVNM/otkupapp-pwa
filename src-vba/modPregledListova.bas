@@ -8,6 +8,7 @@ Attribute VB_Name = "modPregledListova"
 '   "Otvori VBA"      -> otvara VBA editor
 '   "Migracije"       -> MigrirajPodatkeIzStarog (uvoz iz starog fajla)
 '   "Ocisti tabele"   -> brise SAMO unose iz definisanih tabela (header+tbl ostaju)
+'   "Uvezi VBA"       -> modVbaTools.ImportAllVBA (usaglasi projekat sa src-vba)
 ' Pokrece se RUCNO (Alt+F8 -> NapraviPregledListova). Bezbedno se moze
 ' pokretati vise puta - sadrzaj i dugmad se svaki put iznova generisu.
 ' ============================================================
@@ -108,6 +109,19 @@ Public Sub PokreniMigraciju()
 fail:
     MsgBox "Gre" & ChrW(353) & "ka pri migraciji: " & Err.description, _
            vbExclamation, "Migracije"
+End Sub
+
+' "Uvezi VBA" -> usaglasi VBA projekat sa src-vba folderom (dev alat).
+'
+' Namerno BEZ dodatne potvrde: ImportAllVBA sam prikazuje PLAN (sta se menja, sta
+' se uklanja) i pita "Nastaviti?", pravi backup pre prve izmene i odbija posao ako
+' izvor nije ispravan. Jos jedan MsgBox bi dodao klik bez ijedne nove garancije.
+'
+' Na masini bez dev putanje (SRC_FOLDER ne postoji) alat otvara izbor foldera, a
+' preflight odbija sve sto nije pravi src-vba (mora imati modVbaTools.bas, tacno
+' jednu .frm i njen .frx). Zato dugme ne moze da naskodi pogresnim klikom.
+Public Sub UveziVBA()
+    ImportAllVBA
 End Sub
 
 ' "Ocisti tabele" -> brise SAMO unose (DataBodyRange) iz dole navedenih tabela;
@@ -216,7 +230,8 @@ Private Sub DodajDugmad(ByVal ws As Worksheet)
         Array("Pokreni program", "PokreniProgram"), _
         Array("Otvori VBA", "OtvoriVBA"), _
         Array("Migracije", "PokreniMigraciju"), _
-        Array("Ocisti tabele", "OcistiTabele"))
+        Array("Ocisti tabele", "OcistiTabele"), _
+        Array("Uvezi VBA", "UveziVBA"))
 
     Dim leftPt As Double, topPt As Double, wPt As Double, hPt As Double, gap As Double
     leftPt = ws.Range("A1").Left
