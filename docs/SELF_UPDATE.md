@@ -145,6 +145,8 @@ se desio i fix koji radi:
 6. **`PrepareRuntimeForSelfUpdate`** (release dinamičkih panela + unload formi +
    `StopScheduledSync`) je **higijena pre `Remove`-a** (da forma ne drži kontrole
    tih modula) — NE rešava zamku #3 (to rešava `Import`).
+   **Svi pozivi čišćenja su KASNO VEZANI** (`CallOptional` → `Application.Run`
+   workbook-qualified), v. zamka #24.
 7. **Komponenta koja padne u fazi 1 sme u `Remove`/fazu 2 SAMO ako je `.bas`/`.cls`.**
    Ranije je SVAKA `failed` komponenta išla u `VBComponents.Remove` — uklanjanje
    FORME u runtime-u je zamka #1 (korupcija + Document Recovery = **crash Excela**),
@@ -162,7 +164,10 @@ se desio i fix koji radi:
    otkazuje SVE (`StopAutoSaveTimer`, `StopHeartbeatTimer`, `StopStornoWarm`).
    **NB:** kad se u `main` doda nov `Application.OnTime` tajmer, MORA se dodati i
    njegov `Stop*` u `PrepareRuntimeForSelfUpdate` (StornoWarm je bio propušten
-   jer je stigao posle prvog hardening rada).
+   jer je stigao posle prvog hardening rada; `StopOtkupUITimers` je bio propušten
+   jer je toast tajmer stigao sa ljuskom `frmOtkupUI`). Isto važi za novi runtime
+   podsistem koji drži forme/sink-ove — treba mu `*_Release` u istoj listi
+   (`Admin_Release` i `OtkupUI_Release` su bili propušteni iz istog razloga).
 9. **`EnableEvents`/`ScreenUpdating` se moraju VRATITI na svakom izlazu update
    toka** (`RestoreRuntimeAfterSelfUpdate`) — inače `Workbook_Open` ne opali pri
    sledećem otvaranju fajla u ISTOJ Excel instanci („zatvori i otvori" onda
@@ -320,6 +325,27 @@ se desio i fix koji radi:
     **Šta znači:** uslov pod kojim zamka #3 nastupa nije poznat tačno koliko smo
     mislili. Pre bilo kakvog opuštanja dvofaznog modela treba ponoviti merenje na
     živoj aplikaciji (forma podignuta, paneli izgrađeni) i na više Excel verzija.
+24. **Čišćenje runtime-a ne sme biti compile zavisnost — zamka #19 naopako.**
+    `PrepareRuntimeForSelfUpdate` je do sada zvao `OtkupBlok_Release`,
+    `KarticaDetalji_Reset`, `MouseWheel_Off`… **direktno**. To je compile-time
+    referenca iz **frozen** modula (`SKIP_MODULES`) na **updatable** module: čim
+    self-update isporuči release u kome je jedna od tih procedura obrisana ili
+    preimenovana, `modSelfUpdate` **prestaje da se kompajlira** — a on je jedini
+    put kojim klijent dobija sledeću ispravku. Klijent bi ostao trajno zaključan
+    na staroj verziji, i to tek posle uspešnog update-a (najgori mogući trenutak).
+    Zamka #19 opisuje isti mehanizam u drugom smeru (nov `modMain` → star
+    `modSelfUpdate`); ovo je smer frozen → updatable.
+    **Fix:** sav teardown ide kroz `CallOptional` (`Application.Run` +
+    `QualifiedProc`). Nepostojeća procedura = tih no-op. Lista imena je
+    **kompatibilnosni ABI**, ne compile zavisnost — zato u njoj smeju (i treba da)
+    ostanu legacy imena (`KarticaDetalji_Reset`, `MouseWheel_Off`) i posle brisanja
+    tih modula iz `src-vba`: isti updater mora da očisti i STAR klijent koji ih još
+    ima. Workbook-qualified je obavezno — golo `Application.Run "Proc"` sa dve
+    otvorene kopije može da očisti tuđi runtime (zamka #16).
+    Ista lista i isti redosled stoje u `modVbaTools.PrepareRuntimeForImport`;
+    razlika između ta dva je bug (`StopOtkupUITimers`, `Admin_Release`,
+    `OtkupUI_Release` su nedostajali u `modSelfUpdate` do ove izmene).
+
 ---
 
 ## Preduslovi i ograničenja
