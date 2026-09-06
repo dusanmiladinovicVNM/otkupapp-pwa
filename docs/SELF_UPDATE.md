@@ -149,6 +149,8 @@ se desio i fix koji radi:
    tih modula) — NE rešava zamku #3 (to rešava `Import`).
    **Svi pozivi čišćenja su KASNO VEZANI** (`CallOptional` → `Application.Run`
    workbook-qualified), v. zamka #24.
+   **NB:** „higijena“ je pola priče — redosled *teardown pre prve izmene koda* je
+   **uslov ispravnosti**, v. zamka #29.
 7. **Komponenta koja padne u fazi 1 sme u `Remove`/fazu 2 SAMO ako je `.bas`/`.cls`.**
    Ranije je SVAKA `failed` komponenta išla u `VBComponents.Remove` — uklanjanje
    FORME u runtime-u je zamka #1 (korupcija + Document Recovery = **crash Excela**),
@@ -478,6 +480,44 @@ se desio i fix koji radi:
     **Zašto se stubovi NE brišu iz `src-vba`:** za `ImportAllVBA` prazan `.doccls`
     nosi informaciju „ovaj list postoji i nema kod” — brisanje iz izvora bi značilo
     reći da je list višak. Stubovi ostaju; tolerantan je merge, ne izvor.
+29. **Teardown MORA da ide pre prve izmene koda — to je uslov ispravnosti, ne higijena.**
+    **Mereno 07.09.2026** nad živim VBE-om (probe modul sa module-level
+    promenljivom, pa soft merge **nevezanog** modula):
+
+    ```
+    0. polazno                        stanje='ALIVE'   APP_VERSION='2.28.4'
+    A. soft merge modTheme            stanje=''        APP_VERSION='2.28.4'
+    B. soft merge modConfig -> 9.99.9 stanje=''        APP_VERSION='9.99.9'
+    C. Remove+Import modTheme         stanje=''        APP_VERSION='9.99.9'
+    ```
+
+    Dva nalaza:
+
+    - **Izmena bilo kog modula briše module-level stanje u SVIM modulima.**
+      Promenljiva u `modProbe` je nestala kad je izmenjen `modTheme`.
+    - **`Public Const` preko granice modula se ISPRAVNO osvežava.** `APP_VERSION`
+      pročitan iz drugog, već kompajliranog modula vratio je novu vrednost —
+      nema zastarelog inlining-a.
+
+    **Zašto je prvi nalaz opasan:** `Stop*` procedure otkazuju zakazan
+    `Application.OnTime` preko **module-level** promenljive —
+    `StopScheduledSync` radi
+    `Application.OnTime EarliestTime:=mNextScheduledRun, Schedule:=False`.
+    Sama `OnTime` registracija živi u **Excelu**, ne u VBA, pa brisanje VBA
+    stanja **ne dotiče** zakazan tik. Ako bi se teardown pozvao *posle* prve
+    izmene koda, `mNextScheduledRun` bi već bio `0` → otkazivanje tiho promaši →
+    tik ostane zakazan i opali nad **nepotpunim** projektom (zamka #8).
+
+    Danas je redosled ispravan (`RunSelfUpdateCore` zove `PrepareRuntimeForSelfUpdate`
+    pre `ImportFromFolder`), ali je do ovog merenja bio zaštićen samo običajem.
+    Sada ga čuva statička kapija — `tools/vba_selfupdate_gates.py`, pravilo
+    **`KAPIJA_TEARDOWN`**: `ImportFromFolder` mora imati `PrepareRuntimeForSelfUpdate`
+    ranije u istoj proceduri.
+
+    **Posledica za „live" restart (bez zatvaranja fajla):** oba merenja idu u
+    prilog. Stanje se briše → `modMain.m_Initialized` postaje `False` → ponovni
+    `StartApp` odradi pun `InitApp`, dakle pravi hladan start umesto polovne
+    inicijalizacije. A `APP_VERSION` bi bio tačan, ne zastario.
 
 ---
 
