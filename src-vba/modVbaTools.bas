@@ -1705,7 +1705,7 @@ Private Function IsHardModuleBody(ByVal body As String) As Boolean
     Dim t As String: t = Replace$(Replace$(body, vbCrLf, vbLf), vbCr, vbLf)
     arr = Split(t, vbLf)
     For i = 0 To UBound(arr)
-        u = CodeLineUpper(arr(i))
+        u = CollapseSpaces(CodeLineUpper(arr(i)))
         If Len(u) > 0 Then
             w = u
             If Left$(w, 7) = "PUBLIC " Then w = Mid$(w, 8)
@@ -1713,6 +1713,10 @@ Private Function IsHardModuleBody(ByVal body As String) As Boolean
             If Left$(w, 7) = "FRIEND " Then w = Mid$(w, 8)
             If Left$(w, 7) = "STATIC " Then w = Mid$(w, 8)
             If w Like "SUB *" Or w Like "FUNCTION *" Or w Like "PROPERTY *" Then Exit For
+            ' Trazi se nad SAZETIM razmakom: "As  MSForms.Label" sa dva razmaka je
+            ' ista deklaracija, a doslovno " AS MSFORMS." je ne bi nasao. Mereno
+            ' 06.09.2026 - tako napisan modul prosao je kao "soft" u AddFromString.
+            ' (Isti obrazac stoji i u modSelfUpdate.IsHardModuleBody.)
             If InStr(1, u, "WITHEVENTS ") > 0 Then IsHardModuleBody = True: Exit Function
             If InStr(1, u, " AS MSFORMS.") > 0 Then IsHardModuleBody = True: Exit Function
         End If
@@ -1730,6 +1734,23 @@ Private Function CodeLineUpper(ByVal s As String) As String
         out = out & ch
     Next i
     CodeLineUpper = UCase$(LTrim$(out))
+End Function
+
+' Sazmi svaki niz razmaka/tabova u jedan razmak. Za detekciju tvrdog tela, gde
+' broj razmaka ne menja znacenje deklaracije.
+Private Function CollapseSpaces(ByVal s As String) As String
+    Dim i As Long, c As String, out As String, wasSp As Boolean
+    For i = 1 To Len(s)
+        c = Mid$(s, i, 1)
+        If c = " " Or c = vbTab Then
+            If Not wasSp Then out = out & " "
+            wasSp = True
+        Else
+            out = out & c
+            wasSp = False
+        End If
+    Next i
+    CollapseSpaces = out
 End Function
 
 ' Binarno poredjenje kanonizovanih tela.
@@ -1759,7 +1780,18 @@ Private Function CanonCode(ByVal s As String) As String
     CanonCode = s
 End Function
 
-' Lowercase kod izvan string-literala i komentara; case unutar "..." i posle '
+' Lowercase kod izvan string-literala i komentara + SAZIMANJE razmaka izvan njih.
+'
+' Sazimanje je nadjeno MERENJEM (06.09.2026): VBE PREFORMATIRA razmak pri unosu
+' koda - izvorno "As  MSForms.Label" u projektu postane "As MSForms.Label". Bez
+' ovoga zavrsni drift pass takvu razliku prijavi kao neusaglasenost, pa se USPESAN
+' import zavrsi crvenom porukom. Lazno crveno je gore od propustenog upozorenja:
+' tera operatera da odbaci ispravan prolaz. Isti razlog zbog koga CanonCode vec
+' apsorbuje VBE re-casing identifikatora i NBSP anomaliju.
+' Cena koja se prihvata: izmena SAMO u uvlacenju/razmaku se tretira kao "isto" i
+' ne prenosi se - a VBE bi je ionako preformatirao.
+'
+' Case i razmak unutar "..." i posle '
 ' se CUVA (inace bi case-only izmena u stringu prosla kao "isto").
 Private Function LowerOutsideStrings(ByVal s As String) As String
     ' NB: promenljiva se zove inQ - "inStr" bi se sudarilo sa ugradjenom InStr().
@@ -1790,6 +1822,13 @@ Private Function LowerOutsideStrings(ByVal s As String) As String
             ElseIf c = "'" Then
                 out = out & Mid$(s, i)
                 Exit Do
+            ElseIf c = " " Or c = vbTab Then
+                out = out & " "                   ' niz razmaka/tabova -> jedan razmak
+                Do While i <= n
+                    c = Mid$(s, i, 1)
+                    If c <> " " And c <> vbTab Then Exit Do
+                    i = i + 1
+                Loop
             Else
                 out = out & LCase$(c)
                 i = i + 1
