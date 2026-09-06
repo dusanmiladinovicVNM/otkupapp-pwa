@@ -54,37 +54,37 @@ Private mFilterNezavrsene As Boolean
 Private mMultiMode As Boolean
 Private mPrefilling As Boolean          ' True dok PrefillLeftForm puni levu formu
 
-Private mBtnToggle As MSForms.CommandButton
-Private mBtnStorno As MSForms.CommandButton
-Private mBtnPrint As MSForms.CommandButton
-Private mBtnFilter As MSForms.CommandButton
-Private mBtnBiraj As MSForms.CommandButton
-Private mBtnSpecDatum As MSForms.CommandButton
-Private mBtnLost As MSForms.CommandButton        ' sekcija "Izgubljeni blokovi"
-Private mBtnPreuzmi As MSForms.CommandButton
+Private mBtnToggle As Object
+Private mBtnStorno As Object
+Private mBtnPrint As Object
+Private mBtnFilter As Object
+Private mBtnBiraj As Object
+Private mBtnSpecDatum As Object
+Private mBtnLost As Object        ' sekcija "Izgubljeni blokovi"
+Private mBtnPreuzmi As Object
 Private mLostMode As Boolean
-Private mTxtSpecOd As MSForms.TextBox
-Private mTxtSpecDo As MSForms.TextBox
-Private mLstOtp As MSForms.ListBox
-Private mLstBlok As MSForms.ListBox
-Private mTxtCenaOtp As MSForms.TextBox
-Private mLblUkupno As MSForms.label
-Private mLblNapisano As MSForms.label
-Private mLblPreostalo As MSForms.label
-Private mLblUkupnoAmb As MSForms.label
-Private mLblNapisanoAmb As MSForms.label
-Private mLblPreostaloAmb As MSForms.label
-Private mLblZbirna As MSForms.label
+Private mTxtSpecOd As Object
+Private mTxtSpecDo As Object
+Private mLstOtp As Object
+Private mLstBlok As Object
+Private mTxtCenaOtp As Object
+Private mLblUkupno As Object
+Private mLblNapisano As Object
+Private mLblPreostalo As Object
+Private mLblUkupnoAmb As Object
+Private mLblNapisanoAmb As Object
+Private mLblPreostaloAmb As Object
+Private mLblZbirna As Object
 
 ' Desno od "Ostatak"/"Ostatak amb": ukupan iznos izdatih otkupnih listova
 ' (Sum Kolicina*Cena = "Ukupna vrednost") za IZABRANOG kooperanta u tekucoj godini.
 ' Dugme ispod otvara rang svih kooperanata firme po istom iznosu (overlay preko grida).
-Private mLblKoopTotal As MSForms.label
-Private mBtnKoopRang As MSForms.CommandButton
+Private mLblKoopTotal As Object
+Private mBtnKoopRang As Object
 Private mCurKoopID As String
-Private mLblRangTitle As MSForms.label
-Private mLstRang As MSForms.ListBox
-Private mBtnRangClose As MSForms.CommandButton
+Private mLblRangTitle As Object
+Private mLstRang As Object
+Private mBtnRangClose As Object
 
 ' ============================================================
 ' Const ne moze da sadrzi ChrW() poziv -- bezparametarske funkcije
@@ -390,7 +390,6 @@ Private Sub BuildPanel()
     On Error Resume Next
     StyleListBox mLstRang
     On Error GoTo 0
-    MouseWheel_Register mLstRang
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -453,11 +452,6 @@ Private Sub BuildPanel()
     Set mLstBlok = AddCtl("ListBox", "lstOtkBlokBlok", BLOK_LEFT, GRID_TOP, BLOK_W, gridH)
     mLstBlok.ColumnCount = 9
     mLstBlok.ColumnWidths = BLOK_COLW
-
-    ' Tockic misa nad panel-listama (dinamicke -> registruj ih odmah po
-    ' kreiranju; skidanje ide preko frmOtkup Deactivate/QueryClose).
-    MouseWheel_Register mLstOtp
-    MouseWheel_Register mLstBlok
 
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"

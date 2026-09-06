@@ -129,11 +129,13 @@ se desio i fix koji radi:
    → `AddFromString` bind-uje MSForms tip-biblioteku u toku COM edita →
    diskonektuje `CodeModule` (`-2147417848`). `DeleteLines` prođe; pada baš
    `AddFromString`. **Ti moduli MORAJU kroz `Import`** (rekreacija komponente —
-   podnosi MSForms decls; radi i u `ImportAllVBA`). Trenutno: `modOtkupBlok`,
-   `modKarticaDetalji`, `modPodesavanja`, `modMouseWheel`, `clsWheelList`
-   (rutiranje je automatsko: greška u fazi 1 → `failed` → faza 2 `Import`;
-   nema hardkodirane liste). NIJE stvar živih instanci — `Release`
-   referenci NE pomaže.
+   podnosi MSForms decls; radi i u `ImportAllVBA`). Trenutno **samo pet event-sink
+   klasa**: `clsUiSink`, `clsFlatBtn`, `clsBlokUI`, `clsConfigBtn`, `clsAdminBtn`
+   (rutiranje je automatsko: `IsHardModuleBody` pre-rutira, a greška u fazi 1
+   → `failed` → faza 2 `Import`; nema hardkodirane liste). Veliki kontroleri
+   (`modOtkupBlok`, `modPodesavanja`) su **soft** — module-level reference
+   dinamičkih kontrola su `As Object`, a event routing je u sink klasama.
+   NIJE stvar živih instanci — `Release` referenci NE pomaže.
 4. **`VBComponents.Remove` je ODLOŽEN** u runtime-u (izvrši se tek kad makro
    završi). `Remove`+`Import` u istom makrou → **`modX1` duplikati** → „Ambiguous
    name". Zato **dvofazni**: faza 1 `Remove` (queued) → `OnTime +2s` (flush) →
@@ -441,16 +443,19 @@ se desio i fix koji radi:
 ## Smoke test posle release-a (naročito kad se menjaju moduli sa MSForms decls)
 
 Novi/izmenjeni moduli sa `module-level MSForms.` deklaracijama ili `WithEvents`
-(npr. `modMouseWheel`, `clsWheelList`) idu kroz dvofazni `Remove`+`Import`
+(danas samo event-sink klase: `clsUiSink`, `clsFlatBtn`, `clsBlokUI`,
+`clsConfigBtn`, `clsAdminBtn`) idu kroz dvofazni `Remove`+`Import`
 (zamka #3/#4). Posle release-a koji ih dira, na **kopiji** klijenta:
 
 1. `PublishReleaseToDrive` sa izmenjenim modulima.
 2. Na kopiji klijenta pokreni self-update (`Workbook_Open` → „Da").
-3. Posle restarta `Alt+F11` → proveri da **nema duplikata** (`modMouseWheel1`,
-   `clsWheelList1`, `modX1` …); duplikat = „Ambiguous name" = faza 2 pala.
+3. Posle restarta `Alt+F11` → proveri da **nema duplikata** (`clsUiSink1`,
+   `modX1` …); duplikat = „Ambiguous name" = faza 2 pala.
 4. `Debug → Compile VBAProject` → mora proći bez greške.
-5. Otvori formu sa ListBox-om, upali točkić (Podešavanja ili `MouseWheel_On`),
-   proveri scroll; otvori/zatvori VBE (ne sme freeze).
+5. Otvori Otkup ekran i Podešavanja — paneli koje grade `modOtkupBlok` /
+   `modPodesavanja` moraju da se izgrade i da dugmad reaguju (te module drže
+   sink klase, pa se baš na njima vidi da je faza 2 prošla); otvori/zatvori VBE
+   (ne sme freeze).
 6. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
 
 ---

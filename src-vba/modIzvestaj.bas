@@ -1419,7 +1419,7 @@ End Function
 ' OTKUPNI LISTOVI (Otkupna mesta) -- sve otkup linije jedne stanice.
 ' Grain = po OtkupID (linija/klasa), kao kartica; Klasa I/II dele BrDok ali su
 ' zasebni redovi. Kol. 8 = ref-kljuc "OTK|<OtkupID>" za panel "Detalji otkupa"
-' (modKarticaDetalji, KART_REFKEY_COL=7) i za stampu celog lista po BrDok-u.
+' (detalj panel u modScrIzvestaji) i za stampu celog lista po BrDok-u.
 ' Returns: (1)Datum (2)BrDok (3)Kooperant (4)Vrsta (5)Klasa (6)Kolicina (7)Vrednost (8)RefKljuc
 ' ============================================================
 Public Function ReportOtkupListe(ByVal stanicaID As String, _
