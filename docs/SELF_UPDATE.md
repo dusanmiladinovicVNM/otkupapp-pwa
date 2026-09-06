@@ -416,6 +416,33 @@ se desio i fix koji radi:
     **rasporeda** koda — put do nje se otvara tek kad neko doda **treći** uspešan
     izlaz i zaboravi kapiju, a tada nema crvenog testa, ima samo klijenta koji je
     snimio polu-nov projekat.
+27. **Tvrda površina se ne održava komentarom nego kapijom.**
+    Do sada je jedina evidencija toga šta je tvrdo bio komentar u zaglavlju
+    `modSelfUpdate` — i on je nabrajao `modKarticaDetalji`, `modMouseWheel`,
+    `clsWheelList`… module koji su u međuvremenu **obrisani**. Komentar koji niko
+    ne izvršava istruli tiho; isti obrazac je već jednom ujelo kod zamke #22.
+    **`tools/vba_hard_census.py` (u CI)** čita `src-vba/` i prijavljuje svaku tvrdu
+    komponentu sa razlogom i tačnim redom. Pravila:
+
+    | pravilo | pada kad |
+    |---|---|
+    | `TVRDA_FORMA` | `.frm` postane tvrd — takav update **nikad ne može da prođe** (ni `AddFromString`, zamka #3, ni `Remove`+`Import`, zamka #1) |
+    | `TVRDA_DOCCLS` | document modul postane tvrd — ne može se `Remove`-ovati, pa za njega faza 2 ne postoji |
+    | `TVRDA_BAS` | standardni modul postane tvrd — **bez izuzetka** |
+    | `TVRDA_CLS` | nova tvrda klasa nije u `WHITELIST` |
+    | `MRTAV_UNOS` | klasa iz `WHITELIST` više nije tvrda — inace whitelist truli u spisak imena bez značenja |
+
+    `MRTAV_UNOS` je tu jer je baš to što je ovde pošlo naopako: lista koja se ne
+    održava propusti prvo sledeće stvarno zaprljanje.
+    Algoritam detekcije se **ne duplira** — census uvozi referentnu implementaciju
+    iz `vba_parity_check`, koja je pod paritetnom kapijom sa obe VBA kopije. Treća
+    kopija bi bila treća stvar koja može da divergira. Self-test tvrdi i da se
+    objašnjenje (`hard_reason`) i odluka (`ref_is_hard`) slažu nad celim korpusom.
+
+    Stanje u trenutku uvođenja kapije: **0 tvrdih `.bas`, 0 tvrdih `.frm`,
+    0 tvrdih `.doccls`, 5 tvrdih `.cls`** (`clsAdminBtn`, `clsBlokUI`,
+    `clsConfigBtn`, `clsFlatBtn`, `clsUiSink`) — mali `WithEvents` kernel, tačno
+    ono što je i bila namera.
 
 ---
 
