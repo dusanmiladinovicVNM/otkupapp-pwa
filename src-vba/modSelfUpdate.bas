@@ -215,6 +215,17 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
         Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
     End If
 
+    ' 5b) ZAVRSNA KAPIJA pre save-a: dokazi da projekat STVARNO odgovara preuzetom
+    '     release-u. Pojedinacne provere hvataju svoj korak, ali nijedna ne hvata
+    '     ZBIR: komponentu koja je nestala posle svog uspesnog merge-a, tip koji se
+    '     promenio, ili modul koji je drift-ovao posle merge-a.
+    Dim verifyProblem As String
+    verifyProblem = VerifyReleaseProject(tempDir)
+    If Len(verifyProblem) > 0 Then
+        AbortSelfUpdate "Zavrsna provera release-a NIJE prosla:" & vbCrLf & verifyProblem
+        Exit Sub
+    End If
+
     ' 6) Sve soft proslo -> ATOMARAN, VERIFIKOVAN save (bez potvrdjenog save = neuspeh)
     If Not SaveWorkbookVerified() Then
         AbortSelfUpdate "Azuriranje NIJE snimljeno (fajl je mozda samo-za-citanje ili zakljucan)."
@@ -324,6 +335,17 @@ Public Sub RunSelfUpdatePhase2()
         DeleteSetting "AgriXSelfUpdate", sec
         AbortSelfUpdate "2. faza NIJE uspela za sve module (uvezeno " & imported & "/" & expected & "):" & _
                vbCrLf & stillFail
+        Exit Sub
+    End If
+
+    ' ZAVRSNA KAPIJA pre save-a - ISTA kao na soft-only putu. ImportedOk gore je
+    ' dokazao ime i tip svake uvezene komponente, ali ne i da je KOD u projektu
+    ' jednak izvoru, niti da su soft moduli iz faze 1 preziveli prozor izmedju faza.
+    Dim verifyProblem As String
+    verifyProblem = VerifyReleaseProject(p2dir)
+    If Len(verifyProblem) > 0 Then
+        DeleteSetting "AgriXSelfUpdate", sec
+        AbortSelfUpdate "2. faza: zavrsna provera release-a NIJE prosla:" & vbCrLf & verifyProblem
         Exit Sub
     End If
 
@@ -983,6 +1005,119 @@ Private Function VerifyWritten(ByVal vbc As Object, ByVal body As String) As Str
     ElseIf Not SameCode(back, body) Then
         VerifyWritten = "kod posle upisa se RAZLIKUJE od izvora (upis nije primenjen)"
     End If
+End Function
+
+' ZAVRSNA KAPIJA: da li tekuci VBA projekat odgovara PREUZETOM release-u.
+' Vrati "" ako sve odgovara, inace opis problema (skracen za MsgBox; pun tekst
+' ide u LogErr). Zove se na OBA uspesna puta, neposredno PRE SaveWorkbookVerified.
+'
+' Zasto postoji: svaka pojedinacna provera hvata svoj korak (VerifyWritten dokazuje
+' jedan upis, ImportedOk jedan Import), ali nijedna ne hvata ZBIR. Komponenta moze
+' da nestane posle svog uspesnog merge-a, tip da se promeni, ili modul da drift-uje
+' u prozoru izmedju faze 1 i faze 2. Bez ove kapije takav projekat bi bio SNIMLJEN.
+'
+' SMER PROVERE: izvor -> projekat. NAMERNO se NE proverava obrnuto (komponenta u
+' projektu koje nema u izvoru). Self-update nije kanonski sinhronizator kao
+' ImportAllVBA: postojeci klijenti nose legacy/stale module koje self-update
+' istorijski NE brise, pa bi pravilo "visak = fatalno" oborilo update svima.
+' Ciscenje zaostalih komponenti pripada ImportAllVBA (RemoveStaleComponents).
+'
+' SKIP_MODULES (modSelfUpdate, modVbaTools) su izuzeti od jednakosti sa izvorom -
+' self-update ih NAMERNO ne dira, pa bi zahtev da odgovaraju izvoru bio zahtev da
+' se promenilo ono sto se po definiciji nije menjalo.
+Private Function VerifyReleaseProject(ByVal folder As String) As String
+    Const SRC As String = "modSelfUpdate.VerifyReleaseProject"
+    On Error GoTo EH
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim skip As String: skip = "," & LCase$(SKIP_MODULES) & ","
+    Dim fil As Object, ext As String, baseName As String, body As String, cur As String
+    Dim want As Long, okOut As Boolean, extractErr As Long
+    Dim missing As String, badType As String, drift As String, unreadable As String
+    Dim badSrc As String, bad As String, n As Long
+
+    For Each fil In fso.GetFolder(folder).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        want = TypeForExt(ext)
+        If want > 0 Then
+            baseName = fso.GetBaseName(fil.name)
+            If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
+                n = n + 1
+
+                On Error Resume Next
+                Err.Clear
+                body = ExtractModuleCode(fil.path)
+                extractErr = Err.Number
+                On Error GoTo EH
+
+                If extractErr <> 0 Then
+                    ' Ekstrakcija GENUINO pala - ne moze se tvrditi da je release
+                    ' primenjen ako se ne zna sta je release trebalo da bude.
+                    badSrc = badSrc & " " & fil.name
+                ElseIf Not ComponentExists(proj, baseName) Then
+                    ' Prazan izvorni fajl NE opisuje komponentu (zamka #21) - isto
+                    ' pravilo koje merge koristi mora da vazi i ovde, inace bi
+                    ' provera trazila ono sto merge namerno preskace.
+                    If Len(body) > 0 Then missing = missing & " " & baseName
+                ElseIf proj.VBComponents(baseName).Type <> want Then
+                    badType = badType & " " & baseName & "(" & _
+                              proj.VBComponents(baseName).Type & "<>" & want & ")"
+                ElseIf Len(body) > 0 Then
+                    ' Prisustvo i tip NE dokazuju da je kod primenjen. Isti SameCode
+                    ' kojim delta-skip odlucuje da modul NE dira mora da vazi i kao
+                    ' dokaz da je projekat jednak release-u.
+                    cur = ComponentCode(proj.VBComponents(baseName), okOut)
+                    If Not okOut Then
+                        unreadable = unreadable & " " & baseName
+                    ElseIf Not SameCode(cur, body) Then
+                        drift = drift & " " & baseName
+                    End If
+                End If
+            End If
+        End If
+    Next fil
+
+    ' Nula proverenih komponenti nije "cisto" nego prazan/pogresan folder.
+    If n = 0 Then
+        VerifyReleaseProject = "  nijedan izvorni fajl nije nadjen u " & folder
+        Exit Function
+    End If
+
+    If Len(missing) > 0 Then bad = bad & "  nedostaju komponente:" & missing & vbCrLf
+    If Len(badType) > 0 Then bad = bad & "  pogresan tip:" & badType & vbCrLf
+    If Len(unreadable) > 0 Then bad = bad & "  kod se ne moze procitati:" & unreadable & vbCrLf
+    If Len(drift) > 0 Then bad = bad & "  kod se razlikuje od izvora:" & drift & vbCrLf
+    If Len(badSrc) > 0 Then bad = bad & "  izvor se ne moze procitati:" & badSrc & vbCrLf
+
+    If Len(bad) > 0 Then
+        ' Pun tekst u log, skracen u poruku: AbortSelfUpdate stavlja ovu poruku PRE
+        ' uputstva operateru, a MsgBox tiho odseca oko 1024 znaka - dugacak spisak
+        ' bi progutao bas ono sto operater mora da procita.
+        LogErr SRC, "provereno " & n & " komponenti; " & Replace$(bad, vbCrLf, " | ")
+        bad = Cap(bad, 300)
+    End If
+    VerifyReleaseProject = bad
+    Exit Function
+EH:
+    ' Kapija koja pukne NE sme da propusti save - nemogucnost provere je nalaz.
+    VerifyReleaseProject = "  provera je pukla: [" & Err.Number & "] " & Err.description
+End Function
+
+' VBE tip komponente za ekstenziju izvornog fajla; 0 = nije izvorni fajl koda.
+Private Function TypeForExt(ByVal ext As String) As Long
+    Select Case LCase$(ext)
+        Case "bas":    TypeForExt = 1
+        Case "cls":    TypeForExt = 2
+        Case "frm":    TypeForExt = 3
+        Case "doccls": TypeForExt = 100
+        Case Else:     TypeForExt = 0
+    End Select
+End Function
+
+' Skrati tekst na n znakova (MsgBox tiho odseca dugacke poruke).
+Private Function Cap(ByVal s As String, ByVal n As Long) As String
+    If Len(s) <= n Then Cap = s Else Cap = Left$(s, n) & "..."
 End Function
 
 ' Da li telo (izvuceno ExtractModuleCode) ima MODULE-LEVEL "WithEvents" ili

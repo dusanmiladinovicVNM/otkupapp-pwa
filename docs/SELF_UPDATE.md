@@ -381,6 +381,39 @@ se desio i fix koji radi:
     koji je zatvoren (zamka #10). Read-back koristi tačno taj, već dokazan par.
     Obrnuto isto važi: ako `SameCode` ne bi smela da se veruje kao dokaz upisa,
     ne bi smela ni kao osnov da se modul **ne dira**.
+26. **Nijedan `Save` bez zavrsne provere celog release-a.**
+    Pojedinačne provere hvataju svaka svoj korak — `VerifyWritten` dokazuje jedan
+    upis, `ImportedOk` jedan `Import` — ali **nijedna ne hvata zbir**: komponentu
+    koja je nestala *posle* svog uspešnog merge-a, tip koji se promenio, ili modul
+    koji je drift-ovao u prozoru između faze 1 i faze 2. Takav projekat bi do sada
+    bio **snimljen**.
+    **Fix:** `VerifyReleaseProject(folder)` se zove na **oba** uspešna puta,
+    neposredno pre `SaveWorkbookVerified`: za svaki izvorni fajl osim `SKIP_MODULES`
+    proverava da komponenta postoji, da joj je tip tačan (`.bas`→1, `.cls`→2,
+    `.frm`→3, `.doccls`→100), da je kod čitljiv i da `SameCode(projekat, izvor)`.
+    Bilo koji problem → `AbortSelfUpdate` bez snimanja.
+
+    **Smer provere je `izvor → projekat`, namerno jednosmerno.** Komponenta koja
+    postoji u projektu a nema je u izvoru se **NE** prijavljuje. Self-update nije
+    kanonski sinhronizator kao `ImportAllVBA`: postojeći klijenti nose legacy/stale
+    module koje self-update istorijski ne briše, pa bi pravilo „višak = fatalno“
+    oborilo update **svima**. Čišćenje zaostalih komponenti pripada `ImportAllVBA`
+    (`RemoveStaleComponents`), ne updateru.
+
+    **Prazan izvorni fajl ne opisuje komponentu** (isto pravilo kao zamka #21) —
+    inače bi provera tražila ono što merge namerno preskače.
+
+    **Pun tekst nalaza ide u `LogErr`, u poruku ide skraćen na 300 znakova.**
+    `AbortSelfUpdate` stavlja poruku PRE uputstva operateru, a `MsgBox` tiho seče
+    oko 1024 znaka — dugačak spisak drift-a bi progutao baš ono što operater mora
+    da pročita.
+
+    **Kapija je i statički čuvana:** `tools/vba_selfupdate_gates.py` (u CI) traži da
+    svaki poziv `SaveWorkbookVerified` ima `VerifyReleaseProject` ranije u istoj
+    proceduri, i da između njih stoji `AbortSelfUpdate`. Razlog: to je invarijanta
+    **rasporeda** koda — put do nje se otvara tek kad neko doda **treći** uspešan
+    izlaz i zaboravi kapiju, a tada nema crvenog testa, ima samo klijenta koji je
+    snimio polu-nov projekat.
 
 ---
 
