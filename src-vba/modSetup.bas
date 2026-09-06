@@ -1228,6 +1228,12 @@ Public Sub EnsureRuntimeSchema()
     ' Sledljivost ispravki (ADR-0002 / Faza 7). Idempotentno; nastane automatski
     ' posle self-update-a KODA (bez rucnog Alt+F8).
     EnsureSledljivostSchema
+
+    ' Dugmad na listu "Pregled listova". Nije sema tabela, ali je ISTA klasa
+    ' izmene: akcija dodata kroz azuriranje KODA mora nastati sama posle restarta,
+    ' bez rucnog NapraviPregledListova. Tiho i idempotentno - dira samo band sa
+    ' dugmadima, i to samo kad se razlikuje od spiska.
+    EnsurePregledDugmad
 End Sub
 
 ' ============================================================

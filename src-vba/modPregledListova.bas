@@ -8,6 +8,7 @@ Attribute VB_Name = "modPregledListova"
 '   "Otvori VBA"      -> otvara VBA editor
 '   "Migracije"       -> MigrirajPodatkeIzStarog (uvoz iz starog fajla)
 '   "Ocisti tabele"   -> brise SAMO unose iz definisanih tabela (header+tbl ostaju)
+'   "Uvezi VBA"       -> modVbaTools.ImportAllVBA (usaglasi projekat sa src-vba)
 ' Pokrece se RUCNO (Alt+F8 -> NapraviPregledListova). Bezbedno se moze
 ' pokretati vise puta - sadrzaj i dugmad se svaki put iznova generisu.
 ' ============================================================
@@ -110,6 +111,19 @@ fail:
            vbExclamation, "Migracije"
 End Sub
 
+' "Uvezi VBA" -> usaglasi VBA projekat sa src-vba folderom (dev alat).
+'
+' Namerno BEZ dodatne potvrde: ImportAllVBA sam prikazuje PLAN (sta se menja, sta
+' se uklanja) i pita "Nastaviti?", pravi backup pre prve izmene i odbija posao ako
+' izvor nije ispravan. Jos jedan MsgBox bi dodao klik bez ijedne nove garancije.
+'
+' Na masini bez dev putanje (SRC_FOLDER ne postoji) alat otvara izbor foldera, a
+' preflight odbija sve sto nije pravi src-vba (mora imati modVbaTools.bas, tacno
+' jednu .frm i njen .frx). Zato dugme ne moze da naskodi pogresnim klikom.
+Public Sub UveziVBA()
+    ImportAllVBA
+End Sub
+
 ' "Ocisti tabele" -> brise SAMO unose (DataBodyRange) iz dole navedenih tabela;
 ' zaglavlja i sami ListObject-i ostaju. Trazi da operater ukuca "OBRISI" (NE moze
 ' undo) -- InputBox umesto Da/Ne da se izbegne slucajno brisanje jednim klikom.
@@ -209,14 +223,69 @@ Private Sub ObrisiDugmad(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' Nacrtaj dugmice u "bandu" iznad tabele (redovi 1-2), jedan pored drugog.
-Private Sub DodajDugmad(ByVal ws As Worksheet)
-    Dim specs As Variant
-    specs = Array( _
+' JEDAN izvor istine za dugmad. I crtanje i provera citaju odavde - da se spisak
+' ne razidje na dva mesta prvom doradom.
+Private Function DugmadSpec() As Variant
+    DugmadSpec = Array( _
         Array("Pokreni program", "PokreniProgram"), _
         Array("Otvori VBA", "OtvoriVBA"), _
         Array("Migracije", "PokreniMigraciju"), _
-        Array("Ocisti tabele", "OcistiTabele"))
+        Array("Ocisti tabele", "OcistiTabele"), _
+        Array("Uvezi VBA", "UveziVBA"))
+End Function
+
+' Dugmad iznad tabele moraju postojati SVUDA i UVEK: nova akcija dodata kroz
+' azuriranje KODA mora nastati sama posle restarta, bez rucnog Alt+F8. Isti
+' razlog zbog koga postoji EnsureRuntimeSchema za kolone - zato se odatle i zove.
+'
+' NAMERNO ne zove NapraviPregledListova: on regenerise CEO list (Cells.Clear,
+' Hyperlinks, Activate, Select, FreezePanes) i na kraju pokaze MsgBox. Na startu
+' je sveska skrivena i splash je podignut, pa bi aktiviranje lista i poruka bili
+' vidljiva steta. Ovde se dira iskljucivo band sa dugmadima, i to SAMO kad se
+' razlikuje od spiska.
+'
+' Lista "Pregled listova" se ovde NE pravi ako je nema - to ostaje posao rucnog
+' NapraviPregledListova. Fail-soft: greska nikad ne sme da obori start.
+Public Sub EnsurePregledDugmad()
+    On Error Resume Next
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(PREGLED_SHEET)
+    If ws Is Nothing Then Err.Clear: Exit Sub
+    If Not DugmadOdgovaraju(ws) Then
+        ObrisiDugmad ws
+        DodajDugmad ws
+    End If
+    Err.Clear
+End Sub
+
+' True ako su na listu tacno ocekivana dugmad. Poredi broj i natpise, NE OnAction:
+' Excel ga vraca kvalifikovano imenom sveske ("Ime.xlsm!Proc"), pa bi doslovno
+' poredjenje uvek bilo netacno i band bi se necujno precrtavao na svakom startu.
+Private Function DugmadOdgovaraju(ByVal ws As Worksheet) As Boolean
+    On Error GoTo EH
+    Dim specs As Variant: specs = DugmadSpec()
+    If ws.buttons.count <> (UBound(specs) - LBound(specs) + 1) Then Exit Function
+    Dim i As Long, j As Long, nadjeno As Boolean
+    For i = LBound(specs) To UBound(specs)
+        nadjeno = False
+        For j = 1 To ws.buttons.count
+            If StrComp(ws.buttons(j).caption, CStr(specs(i)(0)), vbTextCompare) = 0 Then
+                nadjeno = True
+                Exit For
+            End If
+        Next j
+        If Not nadjeno Then Exit Function
+    Next i
+    DugmadOdgovaraju = True
+    Exit Function
+EH:
+    DugmadOdgovaraju = False      ' necitljivo -> precrtaj (fail-safe, ne fail-open)
+End Function
+
+' Nacrtaj dugmice u "bandu" iznad tabele (redovi 1-2), jedan pored drugog.
+Private Sub DodajDugmad(ByVal ws As Worksheet)
+    Dim specs As Variant
+    specs = DugmadSpec()
 
     Dim leftPt As Double, topPt As Double, wPt As Double, hPt As Double, gap As Double
     leftPt = ws.Range("A1").Left
