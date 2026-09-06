@@ -66,6 +66,19 @@ Option Explicit
 '   razlika prema izvoru se PRIJAVLJUJE u izvestaju (ne cuti se).
 '
 ' ------------------------------------------------------------
+' POZNATO OGRANICENJE: atributi NOVE .cls komponente
+' ------------------------------------------------------------
+' Nova soft komponenta nastaje kroz VBComponents.Add + AddFromString, a
+' ExtractModuleCode namerno odbacuje "Attribute VB_*" linije. Za NOVU klasu to
+' znaci da se ne prenose ne-podrazumevani class atributi (VB_PredeclaredId,
+' VB_Exposed, VB_Creatable, MultiUse) - dobija se klasa sa default vrednostima.
+' Zavrsni drift pass poredi samo telo koda, pa ni on to ne vidi.
+' Danas je bez posledica: svih 12 klasa u src-vba ima podrazumevane atribute
+' (provereno 06.09.2026). Kad se pojavi klasa koja ih menja, ispravno resenje je
+' rutiranje NOVE .cls kroz fazu 2 (native Import cuva ceo omotac); sudara imena
+' nema jer komponenta jos ne postoji.
+'
+' ------------------------------------------------------------
 ' IZMERENA GRANICA: VBE demand-compile u fazi 2
 ' ------------------------------------------------------------
 ' Ako je izvorni fajl toliko pokvaren da VBE novouvezenu komponentu ne moze da
@@ -121,6 +134,8 @@ Private mGone As String         ' csv imena stvarno uklonjenih u fazi 1
 Private mFormNew As Boolean     ' frmOtkupUI ne postoji -> clean import u fazi 2
 Private mSelfNote As String     ' izvestaj o samom modVbaTools
 Private mRecNote As String      ' izvestaj o prekinutoj ranijoj fazi 2
+Private mPrevBackup As String   ' backup ranije PREKINUTE transakcije (poslednji known-good)
+Private mMutated As Boolean     ' je li dirnuta ijedna komponenta u ovom prolazu
 Private mSum As String          ' izvestaj faze 1
 Private mRbFail As String       ' komponente kojima ROLLBACK NIJE uspeo
 
@@ -177,6 +192,7 @@ Public Sub ImportAllVBA()
     '     nedostajuci moduli se ionako vide u novom planu (nema komponente = novo).
     recNote = RecoverImportState()
     mRecNote = recNote              ' mora prezivi fazu 2 (durable stanje)
+    mMutated = False
 
     folder = ResolveFolder(SRC_FOLDER, "Izaberi src-vba folder")
     If Len(folder) = 0 Then Exit Sub
@@ -229,9 +245,22 @@ Public Sub ImportAllVBA()
         Exit Sub
     End If
 
-    ' 3b) Backup je uspeo -> postoji NOV bezbedan baseline, pa marker eventualne
-    '     ranije prekinute faze 2 sme da padne. Do ove tacke je namerno stajao.
-    ClearImportPhase2State
+    ' 3b) OTVORI DURABLE TRANSAKCIJU pre ijedne mutacije.
+    '     Ranije se ovde brisao stari marker uz pretpostavku "backup uspeo = nov
+    '     bezbedan baseline". Ta pretpostavka je NETACNA kad se dolazi iz prekinutog
+    '     prolaza: SaveCopyAs tada snima VEC nepotpun projekat, pa bi se durable
+    '     pokazivac na poslednji ISPRAVAN backup izgubio.
+    '     Gore od toga: izmedju brisanja starog i upisa novog markera lezala je cela
+    '     destruktivna faza 1. VBE ume da zaustavi izvrsavanje van On Error modela
+    '     (mereno u T13), pa bi se pad u tom prozoru desio BEZ ijednog markera.
+    '     Marker zato postoji NEPREKIDNO: stari se ne brise, nego se atomarno
+    '     zamenjuje novim (pending se upisuje POSLEDNJI).
+    If Not BeginImportTransaction(folder, bkPath) Then
+        mBusy = False
+        MsgBox "Nije uspeo upis stanja transakcije (SaveSetting) - import se ne pokrece.", _
+               vbCritical, "ImportAllVBA"
+        Exit Sub
+    End If
 
     ' 4) zaostali .log iz ranijih neuspelih importa (da nov .log bude nov nalaz)
     DeleteImportLogs folder
@@ -248,6 +277,8 @@ Public Sub ImportAllVBA()
     '     (backup je napravljen, runtime je oboren, projekat netaknut).
     fatal = ValidateFormDesigner()
     If Len(fatal) > 0 Then GoTo FAIL
+
+    mMutated = True     ' od ove tacke pad NE sme da obrise marker transakcije
 
     ' 6) STALE PRVO: zaostala forma/modul moze da referencira ono cega u novom
     '    izvoru vise nema i da obori compile; ako izvor kaze da ne postoji, nema
@@ -294,8 +325,10 @@ Public Sub ImportAllVBA()
     DeleteImportLogs folder
     mBusy = False
     If Len(problem) > 0 Then
+        ' verifikacija pala nad IZMENJENIM projektom -> marker ostaje
         ShowImportFailure "Zavrsna provera projekta NIJE prosla:" & vbCrLf & problem, bkPath
     Else
+        ClearImportPhase2State      ' verifikovan uspeh - transakcija je zatvorena
         ShowImportSuccess mSum & vbCrLf & mSelfNote & IIf(Len(recNote) > 0, vbCrLf & recNote, ""), bkPath
     End If
     Exit Sub
@@ -303,7 +336,9 @@ Public Sub ImportAllVBA()
 FAIL:
     On Error Resume Next          ' greska u samoj FAIL grani ne sme da vrti EH -> FAIL
     RestoreRuntimeAfterImport
-    ClearImportPhase2State
+    ' Marker se brise SAMO ako projekat nije ni dirnut. Cim je pala prva mutacija,
+    ' stanje je neizvesno i upozorenje mora da prezivi do sledeceg prolaza.
+    If Not mMutated Then ClearImportPhase2State
     mBusy = False
     ShowImportFailure fatal, bkPath
     Exit Sub
@@ -342,7 +377,13 @@ Public Sub ImportAllVBA_Phase2()
     formNew = (GetSetting(REG_APP, sec, "formnew", "0") = "1")
     savedN = CLng("0" & GetSetting(REG_APP, sec, "hardn", "0"))
     bkPath = GetSetting(REG_APP, sec, "backup", "")
+    mPrevBackup = GetSetting(REG_APP, sec, "prevbackup", "")
     phase1Sum = GetSetting(REG_APP, sec, "sum", "")
+    If GetSetting(REG_APP, sec, "phase", "") <> "2" Then
+        fatal = "2. faza: stanje nije oznaceno kao spremno za 2. fazu" & vbCrLf & _
+                "(marker je iz prekinutog prolaza, ne iz zavrsene 1. faze)."
+        GoTo FAIL
+    End If
     selfNote = GetSetting(REG_APP, sec, "selfnote", "")
     recNote = GetSetting(REG_APP, sec, "recnote", "")
 
@@ -440,7 +481,8 @@ FAIL:
     ' .log fajlovi se brisu TEK posle hvatanja greske - brisanje loga nikad ne sme
     ' da maskira razlog pada.
     DeleteImportLogs folder
-    ClearImportPhase2State
+    ' Marker se NE brise: faza 1 je vec uklonila komponente, projekat je nepotpun i
+    ' sledeci prolaz to mora da sazna. Cisti ga tek uspeh ili dokazana usaglasenost.
     RestoreRuntimeAfterImport
     mBusy = False
     ShowImportFailure fatal, bkPath
@@ -1252,6 +1294,8 @@ Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As S
     Dim sec As String: sec = P2Section()
     On Error GoTo EH
     SaveSetting REG_APP, sec, "dir", folder
+    SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting REG_APP, sec, "phase", "2"
     SaveSetting REG_APP, sec, "hard", mHard
     SaveSetting REG_APP, sec, "hardn", CStr(CsvCount(mHard))
     SaveSetting REG_APP, sec, "gone", mGone
@@ -1269,6 +1313,30 @@ EH:
     SaveImportPhase2State = False
 End Function
 
+' Otvori durable transakciju PRE prve mutacije. pending se upisuje POSLEDNJI, pa
+' polovicno stanje nikad ne prolazi kao "u toku". Stari marker se ne brise -
+' prepisuje se, a pokazivac na poslednji siguran backup (prevbackup) se nosi dalje.
+Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As String) As Boolean
+    Dim sec As String: sec = P2Section()
+    On Error GoTo EH
+    SaveSetting REG_APP, sec, "dir", folder
+    SaveSetting REG_APP, sec, "backup", bkPath
+    SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting REG_APP, sec, "phase", "1"
+    SaveSetting REG_APP, sec, "hard", ""
+    SaveSetting REG_APP, sec, "hardn", "0"
+    SaveSetting REG_APP, sec, "gone", ""
+    SaveSetting REG_APP, sec, "formnew", "0"
+    SaveSetting REG_APP, sec, "sum", ""
+    SaveSetting REG_APP, sec, "selfnote", ""
+    SaveSetting REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    SaveSetting REG_APP, sec, "pending", "1"
+    BeginImportTransaction = True
+    Exit Function
+EH:
+    BeginImportTransaction = False
+End Function
+
 Private Sub ClearImportPhase2State()
     On Error Resume Next
     DeleteSetting REG_APP, P2Section()
@@ -1282,19 +1350,28 @@ End Sub
 ' ili operater klikne Ne na potvrdu. Tada bi upozorenje nestalo, a projekat ostao
 ' nepotpun; sledeci Save bi ga zabetonirao bez ijedne reci.
 '
-' Zato se marker brise tek kad postoji NOV bezbedan baseline: uspeo backup
-' (ClearImportPhase2State posle MakePreImportBackup) ILI plan koji dokazuje da je
-' projekat vec potpuno usaglasen sa izvorom (0 razlika, 0 viska).
+' Marker se brise na TACNO tri mesta, i nijedno nije "backup je uspeo":
+'   1. plan bez ijedne razlike i bez viska (dokaz da je projekat vec usaglasen),
+'   2. verifikovan uspeh faze 1 (kad faza 2 nije potrebna),
+'   3. verifikovan uspeh faze 2.
+' Pad posle prve mutacije ga NIKAD ne brise.
 ' Vraca napomenu za izvestaj ("" ako nije bilo nicega).
 Private Function RecoverImportState() As String
     Dim sec As String: sec = P2Section()
     On Error Resume Next
+    mPrevBackup = ""
     If GetSetting(REG_APP, sec, "pending", "") = "1" Then
-        RecoverImportState = "PAZNJA: zatecena je prekinuta 2. faza ranijeg importa." & vbCrLf & _
-            "Projekat je mozda NEPOTPUN. Backup tog prolaza: " & _
-            GetSetting(REG_APP, sec, "backup", "?") & vbCrLf & _
+        ' Backup PREKINUTE transakcije je poslednji snimak za koji znamo da je
+        ' nastao pre nego sto je projekat postao nepotpun. Nosi se kroz nov prolaz
+        ' (prevbackup) jer novi SaveCopyAs snima VEC nepotpuno stanje.
+        mPrevBackup = GetSetting(REG_APP, sec, "prevbackup", "")
+        If Len(mPrevBackup) = 0 Then mPrevBackup = GetSetting(REG_APP, sec, "backup", "")
+        RecoverImportState = "PAZNJA: zatecen je prekinut raniji import." & vbCrLf & _
+            "Projekat je mozda NEPOTPUN. Poslednji siguran backup: " & _
+            IIf(Len(mPrevBackup) > 0, mPrevBackup, "?") & vbCrLf & _
             "Upozorenje ostaje dok se import ne dovrsi ili dok se ne dokaze da je" & vbCrLf & _
-            "projekat usaglasen sa izvorom. Do tada NE SNIMAJ svesku."
+            "projekat usaglasen sa izvorom. Do tada NE SNIMAJ svesku." & vbCrLf & _
+            "NB: backup ovog prolaza snima ZATECENO (mozda nepotpuno) stanje."
         ' NB: DeleteSetting se NAMERNO ne poziva ovde (vidi komentar iznad).
         Application.EnableEvents = True
         Application.ScreenUpdating = True
@@ -1795,7 +1872,9 @@ Private Sub ShowImportFailure(ByVal msg As String, ByVal bkPath As String)
     MsgBox "ImportAllVBA NIJE uspeo." & vbCrLf & vbCrLf & _
            "NE SNIMAJ RADNU SVESKU." & vbCrLf & _
            "Zatvori je BEZ snimanja; na disku je ispravna verzija." & vbCrLf & _
-           IIf(Len(bkPath) > 0, "Backup: " & bkPath, "Backup nije napravljen.") & vbCrLf & _
+           IIf(Len(bkPath) > 0, "Backup ovog prolaza: " & bkPath, "Backup nije napravljen.") & vbCrLf & _
+           IIf(Len(mPrevBackup) > 0, "SIGURNIJI (pre prekinutog prolaza): " & mPrevBackup & vbCrLf, "") & _
+           IIf(mMutated, "Upozorenje ostaje upisano - sledeci ImportAllVBA ce ga prijaviti." & vbCrLf, "") & _
            rb & vbCrLf & _
            Cap(msg, 600), _
            vbCritical, "ImportAllVBA"
