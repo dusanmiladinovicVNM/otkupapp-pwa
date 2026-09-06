@@ -33,7 +33,12 @@ Option Explicit
 ' OPT-IN: radi samo ako je REL_FOLDER_ID postavljen (modConfig).
 ' FAIL-SOFT: svaka greska u proveri samo se loguje, start ide dalje.
 ' Reuse: modDrive (download/list), modUpdateGate.VersionCompare,
-'        modGoogleAuth.ExtractJsonStringGoogle, Stop*Timer, *_Release/Reset.
+'        modGoogleAuth.ExtractJsonStringGoogle.
+' CISCENJE RUNTIME-A JE KASNO VEZANO: Stop*Timer i *_Release/Reset se zovu preko
+' CallOptional (Application.Run), NE compile-time. modSelfUpdate je frozen, ti
+' moduli su updatable - direktan poziv bi znacio da brisanje jedne od tih
+' procedura obori compile updatera i time zauvek zakljuca klijenta na staroj
+' verziji. Lista imena je kompatibilnostni ABI, ne compile zavisnost.
 ' Skip pri importu: modSelfUpdate (na stack-u) + modVbaTools (dev tool).
 ' NAPOMENA: posto je modSelfUpdate u SKIP_MODULES, ispravke SAMOG updatera ne
 ' stizu self-update-om - klijent ih dobija jednokratno kroz ImportAllVBA / nov
@@ -347,6 +352,13 @@ End Sub
 ' Oslobodi runtime stanje pre self-update importa: ugasi evente/sync/tajmere,
 ' otpusti module-level reference dinamickih kontrola/WithEvents (inace CodeModule
 ' edit tih modula diskonektuje COM), unload sve forme. Best-effort.
+'
+' SVI pozivi ciscenja su KASNO VEZANI (CallOptional) i fail-soft. Razlog nije
+' stil nego zamka #19 naopako: modSelfUpdate je frozen (SKIP_MODULES), a moduli
+' koje cisti jesu updatable. Direktan (compile-time) poziv znaci da brisanje ili
+' preimenovanje bilo koje od tih procedura obara compile SAMOG updatera - pa
+' klijent koji je tu izmenu vec dobio vise ne moze da se azurira. Kasno vezivanje
+' pretvara "nema procedure" iz compile greske u no-op.
 Private Sub PrepareRuntimeForSelfUpdate()
     On Error Resume Next
 
@@ -357,25 +369,43 @@ Private Sub PrepareRuntimeForSelfUpdate()
     ' (ili u prozoru izmedju faze 1 i 2, dok su "tvrdi" moduli uklonjeni) forsira
     ' demand-compile polomljenog projekta; AutoSaveTick/StornoWarm bi uz to jos i
     ' pokrenuli izmenu preko radne kopije.
-    StopScheduledSync               ' modGoogleSyncOrchestrator (pending OnTime sync)
-    StopAutoSaveTimer               ' modJournaling (pending AutoSaveTick)
-    StopHeartbeatTimer              ' modStanicaLock (90s heartbeat)
-    StopStornoWarm                  ' modStornoWarm (storno browse warm cache tick)
+    CallOptional "StopScheduledSync"    ' modGoogleSyncOrchestrator (pending OnTime sync)
+    CallOptional "StopAutoSaveTimer"    ' modJournaling (pending AutoSaveTick)
+    CallOptional "StopHeartbeatTimer"   ' modStanicaLock (90s heartbeat)
+    CallOptional "StopStornoWarm"       ' modStornoWarm (storno browse warm cache tick)
+    CallOptional "StopOtkupUITimers"    ' modOtkupUI (toast tick)
 
-    ' Release module-level WithEvents/kontrole (dinamicki paneli)
-    OtkupBlok_Release               ' modOtkupBlok (clsBlokUI)
-    Podesavanja_Release             ' modPodesavanja (clsConfigBtn)
-    MaticniMenu_Release             ' modMaticniLookups (clsLookupMenuBtn)
-    KarticaDetalji_Reset            ' modKarticaDetalji
-    MouseWheel_Off                  ' modMouseWheel (skini LL mouse hook pre izmene koda)
+    ' Release module-level WithEvents/kontrole (dinamicki paneli). Redosled je isti
+    ' kao u modVbaTools.PrepareRuntimeForImport: OtkupUI_Release ide POSLEDNJI jer
+    ' panel radne povrsine drzi OKVIR unutar forme, a modul panela drzi njega.
+    CallOptional "OtkupBlok_Release"    ' modOtkupBlok (clsBlokUI)
+    CallOptional "Podesavanja_Release"  ' modPodesavanja (clsConfigBtn)
+    CallOptional "MaticniMenu_Release"  ' modMaticniLookups (clsLookupMenuBtn)
+    CallOptional "Admin_Release"        ' modAdmin (clsAdminBtn)
+    CallOptional "KarticaDetalji_Reset" ' modKarticaDetalji (legacy; v. dole)
+    CallOptional "MouseWheel_Off"       ' modMouseWheel (legacy; LL mouse hook)
+    CallOptional "OtkupUI_Release"      ' modOtkupUI (ljuska + clsUiSink/clsFlatBtn)
 
     ' Unload sve forme (Terminate svake otpusti svoje clsUiSink sink-ove i kontrole)
     Do While VBA.UserForms.count > 0
         Unload VBA.UserForms(0)
     Loop
 
+    ' NB: DoEvents pusta unload-e da se sleknu. NIJE sinhronizacija za
+    ' VBComponents.Remove - to radi iskljucivo izlazak iz makroa + Application.OnTime.
     DoEvents
     On Error GoTo 0
+End Sub
+
+' Fail-soft kasno vezan poziv OPCIONE procedure ciscenja u OVOJ radnoj svesci.
+' Workbook-qualified (QualifiedProc) je obavezno: kad su dve kopije AgriX-a
+' otvorene (DEV test na kopiji), golo Application.Run "Proc" moze da se razresi u
+' POGRESNOJ svesci - pa bi teardown ugasio tudji runtime, a svoj ostavio ziv.
+' Procedura koja ne postoji = Err se postavi i obrise -> tih no-op, ne greska.
+Private Sub CallOptional(ByVal procName As String)
+    On Error Resume Next
+    Application.Run QualifiedProc(procName)
+    Err.Clear
 End Sub
 
 ' Vrati aplikaciona podesavanja koja PrepareRuntimeForSelfUpdate gasi. MORA se
