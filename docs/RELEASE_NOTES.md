@@ -7210,6 +7210,28 @@ zatvara i ne otvara), a izgled se više ne može razići između delova aplikaci
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad pravim
   podacima. Pokretanje je izmenjeno u samom korenu, pa smoke starta nije
   opcion — checklista je u `docs/UI_MIGRACIJA_KATALOG.md` §27.18.
-- **Posle ažuriranja jednom ručno u VBE-u:** ukloni `frmSplash`, `frmLogin` i
-  `frmExcelMini`. Auto-ažuriranje nikad ne briše komponente, pa one ostaju u
-  zatečenoj svesci — bez ijedne reference, ali zauzimaju mesto.
+- **Zaostale forme se više ne uklanjaju ručno.** Auto-ažuriranje i dalje nikad ne
+  briše komponente, pa `frmSplash`, `frmLogin` i `frmExcelMini` ostaju u zatečenoj
+  svesci — ali ih sada `ImportAllVBA` skida sam (vidi niže).
+
+### Alat za uvoz koda (`ImportAllVBA`) — prepisan
+
+Ovo ne vidi operater, ali vidi svako ko instalira ili ažurira svesku ručno.
+
+- **Zaostale komponente odlaze same.** Alat sada tretira `src-vba` kao jedini
+  izvor istine: šta je u svesci a nema ga u izvoru — briše se. Prvi prolaz na
+  pravoj svesci uklonio je **21 komponentu**, od toga **18 duplikata** koje je
+  napravio stari alat (`clsFlatBtn1`, `clsFlatBtn2`, `clsUiSink1`…). Sedeli su
+  tamo nevidljivi; `clsFlatBtn1` je scenario u kome tiho radi **stara** klasa.
+- **Jedina forma se više ne uvozi nego se menja samo njen kod.** Stari alat je
+  komponentu uklanjao pa je odmah uvozio, a to u istom prolazu ne može da uspe —
+  otud „radi iz drugog pokušaja" i `.log` fajlovi u `src-vba`.
+- **Prekinut uvoz se pamti.** Ako nešto pukne usred posla, upozorenje preživi i
+  gašenje Excela; sledeće pokretanje ga prijavi i povuče tek kad dokaže da je
+  sveska usaglašena. Sveska se **nikad ne snima sama** — ručni `Compile` ostaje
+  završna kapija, a backup se pravi pre prve izmene.
+- **Odbija posao kad izvor nije ispravan** umesto da napravi štetu: druga forma
+  u izvoru, prazan ili odsečen fajl, neslaganje imena fajla i modula, kontrola
+  zaostala u dizajneru ljuske.
+
+Detalji, izmerene granice i šta i dalje nije dokazano: PR #274.

@@ -299,6 +299,27 @@ se desio i fix koji radi:
     prazan izvor NIKAD ne briše zatečen kod (fail-safe i protiv loše ekstrakcije nad
     ne-praznim fajlom); genuina greška ekstrakcije (`Err<>0`) i dalje → `failed` → faza
     2/reinstall. Mrtva `clsSEFValidationResult.cls` (0 referenci) **obrisana**.
+22. **`IsHardModuleBody` ne vidi deklaraciju sa VIŠE RAZMAKA — rupa i ovde.**
+    Detekcija traži doslovan niz `" AS MSFORMS."`, pa `Private x  As  MSForms.Label`
+    (dva razmaka) prolazi kao **soft** modul i ide u `AddFromString`. VBE svoje
+    eksporte normalizuje, pa se to ne može desiti round-tripom — može **samo ručnim
+    editovanjem izvornog fajla**, što je tačno ono što programer radi.
+    **Mereno 06.09.2026** kroz `ImportAllVBA` (PR #274): tako napisan `modArrayUtils`
+    klasifikovan je kao soft; posle popravke (detekcija nad sažetim razmakom) isti
+    fajl je klasifikovan kao **tvrd**. Popravka je ušla u `modVbaTools`;
+    **`modSelfUpdate.IsHardModuleBody` i dalje ima istu rupu** — modul je frozen
+    (`SKIP_MODULES`) i nije diran u tom PR-u. Kad se bude dirao: isti fix.
+23. **`AddFromString` nad tvrdim telom NIJE diskonektovao `CodeModule` — zamka #3
+    se nije reprodukovala.** Isto merenje 06.09.2026: modul sa module-level
+    `As MSForms.Label` primljen je kroz `AddFromString` **bez greške** (`Err=0`),
+    a ne sa `-2147417848`. Prijavljuje se kao **NEREPRODUKOVANO**, bez zaključka i
+    bez izmene modela — uslovi se razlikuju od originalnog nalaza (aplikacija nije
+    bila podignuta, MSForms tip-biblioteka je već bila učitana, drugi Excel build).
+    **Šta ovo NE znači:** da je podela soft/tvrd nepotrebna. Zamka #3 je nastala iz
+    stvarnog crash-a i model se na osnovu jednog negativnog merenja ne menja.
+    **Šta znači:** uslov pod kojim zamka #3 nastupa nije poznat tačno koliko smo
+    mislili. Pre bilo kakvog opuštanja dvofaznog modela treba ponoviti merenje na
+    živoj aplikaciji (forma podignuta, paneli izgrađeni) i na više Excel verzija.
 ---
 
 ## Preduslovi i ograničenja
