@@ -443,6 +443,41 @@ se desio i fix koji radi:
     0 tvrdih `.doccls`, 5 tvrdih `.cls`** (`clsAdminBtn`, `clsBlokUI`,
     `clsConfigBtn`, `clsFlatBtn`, `clsUiSink`) — mali `WithEvents` kernel, tačno
     ono što je i bila namera.
+28. **Prazan `.doccls`/`.frm` stub kome fali komponenta NIJE „nova forma” — bio je
+    doživotna blokada self-update-a.** Reprodukovano 06.09.2026 na živom klijentu
+    (`AgriX_2.39.0_testVenivno.xlsm`), pri prvom ručnom `RunSelfUpdateDev`:
+
+    ```
+    Azuriranje NIJE moguce kroz self-update (forma/sheet zahteva reinstall).
+    Azurirano: 1, bez izmene: 189, faza 2 (tvrdi): 0 (prolaza: 1)
+    Preskoceno (novo, reinstall):
+      skarticakoop.doccls
+    ```
+
+    `sKarticaKoop.doccls` ima **9 redova i svih 9 su header** — nijedan red koda.
+    U `src-vba` je **42 od 43** `.doccls` takvo. `ExtractModuleCode` nad njima vrati
+    prazno telo uz `Err=0`, a `extractOk` za `.doccls` prihvata i prazno
+    (`Len(body) > 0 Or ext = "doccls"`). Kad komponente **nema** u svesci, tok je
+    padao u završni `Else` → `"skip"` + `needsReinstall = True` → **fatalni abort**.
+
+    **Posledica:** klijentu kome fali ijedan takav list self-update **nikad** ne može
+    da prođe. Ne jednom — nikad, jer se prazan stub nema čime isporučiti. I gore:
+    `AnyUpdatePending` je istu komponentu brojao kao „nova”, pa no-op kapija nikad
+    nije opalila — svaki pokušaj je rušio **živ runtime** (pun teardown, unload svih
+    formi) da bi završio abortom.
+
+    **Fix (dva mesta, isto pravilo):** *prazan izvorni fajl ne opisuje komponentu*.
+    - `ImportFromFolder`: `Len(body) = 0` uz nepostojeću komponentu → `"same"` (no-op).
+      Forma/sheet koja **nosi kod** i ne postoji → i dalje `needsReinstall` (zamka #7/#20).
+    - `AnyUpdatePending`: prazan izvor uz nepostojeću komponentu nije „nova komponenta”.
+
+    Isto pravilo je već važilo za `.bas`/`.cls` (zamka #21) i za `VerifyReleaseProject`
+    (zamka #26) — **nedostajalo je baš na putu koji odlučuje o reinstall-u.** Merge i
+    završna provera su tvrdili suprotno jedno o drugom nad istim fajlom.
+
+    **Zašto se stubovi NE brišu iz `src-vba`:** za `ImportAllVBA` prazan `.doccls`
+    nosi informaciju „ovaj list postoji i nema kod” — brisanje iz izvora bi značilo
+    reći da je list višak. Stubovi ostaju; tolerantan je merge, ne izvor.
 
 ---
 
