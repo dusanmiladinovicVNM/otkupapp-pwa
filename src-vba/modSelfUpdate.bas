@@ -11,8 +11,8 @@ Option Explicit
 '   RunSelfUpdateCore: PrepareRuntime -> faza 1 code-merge -> faza 2 (tvrdi) -> save.
 '
 ' KLJUCNO (potvrdjen root cause): moduli sa MODULE-LEVEL deklaracijom MSForms
-' kontrole / WithEvents (modOtkupBlok, modKarticaDetalji, modPodesavanja,
-' modMouseWheel, clsWheelList, clsUiSink) NE mogu kroz AddFromString: dodavanje
+' kontrole / WithEvents (danas samo event-sink klase: clsUiSink, clsFlatBtn,
+' clsBlokUI, clsConfigBtn, clsAdminBtn) NE mogu kroz AddFromString: dodavanje
 ' tih deklaracija bind-uje MSForms tip-biblioteku u toku COM edita pa diskonektuje
 ' CodeModule ([-2147417848]). Ti moduli se PREPOZNAJU UNAPRED (IsHardModuleBody:
 ' module-level "WithEvents" ili "As MSForms.") i idu PRAVO u fazu 2 (Remove +
@@ -43,6 +43,10 @@ Option Explicit
 ' NAPOMENA: posto je modSelfUpdate u SKIP_MODULES, ispravke SAMOG updatera ne
 ' stizu self-update-om - klijent ih dobija jednokratno kroz ImportAllVBA / nov
 ' .xlsm. Tek posle toga self-update opet vazi. (docs/SELF_UPDATE.md)
+' NAPOMENA UZ ISTORIJU: komentari nize pominju modMouseWheel/clsWheelList kao
+' krivce za crash pri Remove+Import. Ti moduli su OBRISANI (tockic misa je
+' uklonjen kao feature); pomeni su zadrzani jer objasnjavaju ZASTO delta-skip i
+' no-op kapija postoje - razlog vazi i bez njih.
 ' ASCII-only modul (vidi CLAUDE.md, sekcija 4 - encoding).
 ' ============================================================
 
@@ -1213,7 +1217,7 @@ Private Function CanonCode(ByVal s As String) As String
     ' 2) RTrim svaki red + lowercase kod IZVAN stringova/komentara (LowerOutsideStrings):
     '    apsorbuje VBE identifier re-casing bez gubljenja case-a u stringovima/komentarima
     '    (SameCode posle poredi BINARNO). Trailing whitespace nebitan (hvata "ista
-    '    duzina ali razlicit" slucaj: red sa/bez zavrsnog space-a, npr. clsWheelList).
+    '    duzina ali razlicit" slucaj: red sa/bez zavrsnog space-a).
     Dim arr() As String, i As Long
     arr = Split(s, vbLf)
     For i = LBound(arr) To UBound(arr)

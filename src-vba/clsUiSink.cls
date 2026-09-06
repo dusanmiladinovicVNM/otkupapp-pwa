@@ -28,7 +28,7 @@ Option Explicit
 '   ' jedan Public dispatcher u formi:
 '   Public Sub UiSinkEvent(tagName, ev, arg)       ' Select Case -> handleri
 '
-' Isti obrazac kao clsBlokUI / clsWheelList / clsAdminBtn (WithEvents u
+' Isti obrazac kao clsBlokUI / clsConfigBtn / clsAdminBtn (WithEvents u
 ' klasi, ne u formi). Podrzani eventi: btn.Click, lst.Change, lst.Click,
 ' lst.DblClick, txt.Change, cmb.Change, tgl.Change -- prosiri ovde (i u
 ' dispatcheru forme) po potrebi.

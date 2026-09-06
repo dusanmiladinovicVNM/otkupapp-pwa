@@ -31,7 +31,7 @@ Private mInputs As Collection       ' input kontrole, key = ConfigKey
 ' trenutku bi znacilo 97 citanja na svaki klik u sidebar; ovo je nula citanja.
 Private mUcitano As Collection      ' key = ConfigKey -> String
 Private mWrappers As Collection     ' clsConfigBtn (drzi WithEvents zivim)
-Private mBtnToggle As MSForms.CommandButton
+Private mBtnToggle As Object
 Private mGroupOrder As Collection       ' imena grupa po redosledu
 Private mRowsByGroup As Collection      ' key=grupa -> Collection of Array(lbl, input, typ)
 Private mGroupHeaders As Collection     ' key=grupa -> header CommandButton (Tag "1"=collapsed)
@@ -99,10 +99,6 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
     CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_ZBIRNA_PROVERA", "Prijemnica: kad zbirna nije u sistemu", "list:BLOK;UPOZORENJE"
-
-    ' --- Interfejs / lokalno -- per-masina UI podesavanja (tblLocalConfig, store="local") ---
-    ' MOUSEWHEEL_SCROLL cita StartApp (i SaveConfigEditor primenjuje odmah); prazno = DA.
-    CfgAdd c, "Interfejs / lokalno", "MOUSEWHEEL_SCROLL", "Skrolovanje listi to" & ChrW(269) & "ki" & ChrW(263) & "em mi" & ChrW(353) & "a (prazno = DA)", "list:DA;NE", "local"
 
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
@@ -738,11 +734,6 @@ Private Sub SaveConfigEditor()
             On Error GoTo EH
         End If
     Next i
-
-    ' Primeni odmah podesavanja sa runtime efektom (bez restarta): tockic misa.
-    On Error Resume Next
-    If UCase$(Trim$(GetLocalConfigValue("MOUSEWHEEL_SCROLL", "DA"))) <> "NE" Then MouseWheel_On Else MouseWheel_Off
-    On Error GoTo EH
 
     If Len(errs) > 0 Then
         MsgBox "Sacuvano: " & n & " polja." & vbCrLf & vbCrLf & _
