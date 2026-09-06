@@ -921,8 +921,19 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                                 End If
                             End If
                             If Err.Number = 0 And Len(vErr) = 0 Then st(fkey) = "ok"
+                        ElseIf Len(body) = 0 Then
+                            ' PRAZAN izvorni fajl NE OPISUJE komponentu. 42 od 43
+                            ' .doccls u src-vba su prazni stubovi (samo header); klijent
+                            ' kome fali ijedan takav list bi inace na SVAKOM update-u
+                            ' dobio "forma/sheet zahteva reinstall" i fatalni abort -
+                            ' zauvek, jer se prazan stub nema cime isporuciti.
+                            ' Isto pravilo vec vazi za .bas/.cls (zamka #21) i za
+                            ' VerifyReleaseProject; ovde je nedostajalo.
+                            st(fkey) = "same"             ' nema sta da se isporuci -> no-op
                         Else
-                            st(fkey) = "skip"             ' nova forma/sheet -> reinstall
+                            ' Nova forma/sheet KOJA NOSI KOD: ne moze se napraviti iz
+                            ' koda (zamka #7/#20) -> reinstall, fail-closed.
+                            st(fkey) = "skip"
                             needsReinstall = True
                         End If
                     End If
@@ -1317,15 +1328,23 @@ Private Function AnyUpdatePending(ByVal folder As String) As Boolean
         If ext = "bas" Or ext = "cls" Or ext = "frm" Or ext = "doccls" Then
             baseName = fso.GetBaseName(fil.name)
             If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-                If Not ComponentExists(proj, baseName) Then
-                    AnyUpdatePending = True: Exit Function        ' nova komponenta
-                End If
-                Set vbc = proj.VBComponents(baseName)
                 body = ExtractModuleCode(fil.path)
-                cur = ""
-                If vbc.CodeModule.CountOfLines > 0 Then cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
-                If Not SameCode(cur, body) Then
-                    AnyUpdatePending = True: Exit Function     ' izmenjen kod
+                If Not ComponentExists(proj, baseName) Then
+                    ' Prazan izvorni fajl ne opisuje komponentu -> NIJE "nova
+                    ' komponenta". Bez ovoga no-op kapija nikad ne opali kod
+                    ' klijenta kome fali neki prazan .doccls stub: svaki update mu
+                    ' rusi ziv runtime (teardown) da bi zavrsio fatalnim abortom.
+                    If Len(body) > 0 Then
+                        AnyUpdatePending = True: Exit Function    ' nova komponenta sa kodom
+                    End If
+                Else
+                    Set vbc = proj.VBComponents(baseName)
+                    cur = ""
+                    If vbc.CodeModule.CountOfLines > 0 Then _
+                        cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+                    If Not SameCode(cur, body) Then
+                        AnyUpdatePending = True: Exit Function     ' izmenjen kod
+                    End If
                 End If
             End If
         End If
