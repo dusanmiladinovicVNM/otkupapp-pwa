@@ -17,8 +17,17 @@ Provere:
                    koji nije dokazao da projekat odgovara release-u.
   KAPIJA_ABORT  -- svaka procedura koja zove `VerifyReleaseProject` mora na neuspeh
                    zvati `AbortSelfUpdate`. Provera koja se ignorise nije kapija.
-  KAPIJA_POSTOJI-- obe procedure moraju postojati (da preimenovanje ne ugasi proveru
-                   tiho, tako sto vise nema sta da se nadje).
+  KAPIJA_TEARDOWN -- `ImportFromFolder` mora imati `PrepareRuntimeForSelfUpdate`
+                   RANIJE u istoj proceduri. Mereno 07.09.2026: izmena BILO KOG
+                   modula brise module-level stanje u SVIM modulima, a Stop*-ovi
+                   otkazuju zakazan Application.OnTime preko module-level
+                   promenljive (`StopScheduledSync` -> `mNextScheduledRun`). Sama
+                   OnTime registracija zivi u EXCELU i brisanje VBA stanja je ne
+                   dotice -- pa teardown POSLE prve izmene koda znaci da
+                   otkazivanje tiho promasi, a tik opali nad nepotpunim
+                   projektom. Redosled je uslov ispravnosti (zamka #29).
+  KAPIJA_POSTOJI-- sve nadgledane procedure moraju postojati (da preimenovanje ne
+                   ugasi proveru tiho, tako sto vise nema sta da se nadje).
 """
 
 import io
@@ -33,6 +42,8 @@ MODUL = "modSelfUpdate.bas"
 SAVE_PROC = "SaveWorkbookVerified"
 GATE_PROC = "VerifyReleaseProject"
 ABORT_PROC = "AbortSelfUpdate"
+TEARDOWN_PROC = "PrepareRuntimeForSelfUpdate"
+MERGE_PROC = "ImportFromFolder"
 
 _PROC_HEAD = re.compile(
     r"^(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
@@ -99,7 +110,7 @@ def check_gates(path=None):
     imena = set(n for n, _ in procs)
     nalazi = []
 
-    for ime in (SAVE_PROC, GATE_PROC, ABORT_PROC):
+    for ime in (SAVE_PROC, GATE_PROC, ABORT_PROC, TEARDOWN_PROC, MERGE_PROC):
         if ime not in imena:
             nalazi.append("KAPIJA_POSTOJI  nema procedure {} -- provera bi ostala "
                           "zelena jer vise nema sta da nadje".format(ime))
@@ -107,8 +118,9 @@ def check_gates(path=None):
         return nalazi
 
     pozivalaca = 0
+    merge_pozivalaca = 0
     for ime, telo in procs:
-        if ime in (SAVE_PROC, GATE_PROC):
+        if ime in (SAVE_PROC, GATE_PROC, TEARDOWN_PROC, MERGE_PROC):
             continue                      # definicija same procedure nije poziv
 
         i_save = _prvi_indeks(telo, SAVE_PROC)
@@ -125,6 +137,25 @@ def check_gates(path=None):
                 nalazi.append(
                     "KAPIJA_SAVE  {}: {} je POSLE {} -- kapija posle save-a nije "
                     "kapija".format(ime, GATE_PROC, SAVE_PROC))
+
+        # Teardown mora da prethodi PRVOJ izmeni koda. Ne trazi se "negde u
+        # proceduri" nego RANIJE OD merge-a: posle prve izmene koda module-level
+        # stanje je vec obrisano, pa Stop*-ovi ne mogu da otkazu zakazan OnTime.
+        i_merge = _prvi_indeks(telo, MERGE_PROC)
+        i_tear = _prvi_indeks(telo, TEARDOWN_PROC)
+        if i_merge >= 0:
+            merge_pozivalaca += 1
+            if i_tear < 0:
+                nalazi.append(
+                    "KAPIJA_TEARDOWN  {}: zove {} BEZ {} -- posle prve izmene koda "
+                    "module-level stanje je obrisano, pa Stop*-ovi ne mogu da otkazu "
+                    "zakazan OnTime (zamka #29)"
+                    .format(ime, MERGE_PROC, TEARDOWN_PROC))
+            elif i_tear > i_merge:
+                nalazi.append(
+                    "KAPIJA_TEARDOWN  {}: {} je POSLE {} -- tik zakazan pre izmene "
+                    "ostaje neotkazan i opali nad nepotpunim projektom (zamka #29)"
+                    .format(ime, TEARDOWN_PROC, MERGE_PROC))
 
         # Abort se trazi BAS U PROZORU izmedju kapije i save-a. Traziti ga bilo
         # gde u proceduri ne bi merilo nista: grana "save nije uspeo" ionako zove
@@ -145,6 +176,10 @@ def check_gates(path=None):
             "KAPIJA_SAVE  ocekivana su BAR DVA puta do save-a (soft-only i faza 2), "
             "nadjeno {} -- provera vise ne meri ono zbog cega postoji"
             .format(pozivalaca))
+    if merge_pozivalaca < 1:
+        nalazi.append(
+            "KAPIJA_TEARDOWN  nijedna procedura ne zove {} -- provera vise ne meri "
+            "ono zbog cega postoji".format(MERGE_PROC))
     return nalazi
 
 
@@ -162,7 +197,13 @@ CIST = (
     "End Function\n"
     "Private Sub AbortSelfUpdate(ByVal msg As String)\n"
     "End Sub\n"
+    "Private Sub PrepareRuntimeForSelfUpdate()\n"
+    "End Sub\n"
+    "Private Function ImportFromFolder(ByVal f As String) As String\n"
+    "End Function\n"
     "Private Sub PutA()\n"
+    "    PrepareRuntimeForSelfUpdate\n"
+    "    s = ImportFromFolder(d)\n"
     "    p = VerifyReleaseProject(d)\n"
     "    If Len(p) > 0 Then AbortSelfUpdate p\n"
     "    If Not SaveWorkbookVerified() Then AbortSelfUpdate \"ne\"\n"
@@ -185,6 +226,16 @@ def self_test():
     def slucaj(naziv, izvor, ocekuj_kod):
         """ocekuj_kod=None -> mora biti CISTO; inace nalaz mora poceti tim kodom."""
         slucajevi.append(naziv)
+        # SIDRO SABOTAZE ZASTAREVA. Svaki sabotazni slucaj je `CIST.replace(...)`;
+        # kad se CIST promeni, sidro tiho promasi, tekst ostane ISPRAVAN, provera
+        # ga proglasi cistim -- i slucaj vise ne meri nista, a self-test je zelen.
+        # Zato: ako se od sabotaze ocekuje nalaz, tekst MORA da se razlikuje od
+        # CIST-a. (Uhvaceno u praksi -- dva sidra su zastarela cim je CIST dobio
+        # teardown i merge.)
+        if ocekuj_kod is not None and izvor == CIST:
+            palo.append("  {}: sabotaza NIJE primenjena -- sidro zastarelo, "
+                        "slucaj vise ne meri nista".format(naziv))
+            return
         tmp = tempfile.mkdtemp(prefix="sugates_")
         try:
             put = os.path.join(tmp, MODUL)
@@ -217,11 +268,11 @@ def self_test():
 
     # Kapija POSLE save-a nije kapija.
     slucaj("kapija-posle-save",
-           CIST.replace("Private Sub PutA()\n"
+           CIST.replace("    s = ImportFromFolder(d)\n"
                         "    p = VerifyReleaseProject(d)\n"
                         "    If Len(p) > 0 Then AbortSelfUpdate p\n"
                         "    If Not SaveWorkbookVerified() Then AbortSelfUpdate \"ne\"\n",
-                        "Private Sub PutA()\n"
+                        "    s = ImportFromFolder(d)\n"
                         "    If Not SaveWorkbookVerified() Then AbortSelfUpdate \"ne\"\n"
                         "    p = VerifyReleaseProject(d)\n"
                         "    If Len(p) > 0 Then AbortSelfUpdate p\n", 1),
@@ -229,10 +280,10 @@ def self_test():
 
     # Kapija cija se neuspesnost ignorise.
     slucaj("kapija-bez-aborta",
-           CIST.replace("Private Sub PutA()\n"
+           CIST.replace("    s = ImportFromFolder(d)\n"
                         "    p = VerifyReleaseProject(d)\n"
                         "    If Len(p) > 0 Then AbortSelfUpdate p\n",
-                        "Private Sub PutA()\n"
+                        "    s = ImportFromFolder(d)\n"
                         "    p = VerifyReleaseProject(d)\n", 1),
            "KAPIJA_ABORT")
 
@@ -248,6 +299,25 @@ def self_test():
                         "    If Len(p) > 0 Then AbortSelfUpdate p\n",
                         "    ' ovde je nekad stajao VerifyReleaseProject poziv\n", 2),
            "KAPIJA_SAVE")
+
+    # Teardown uklonjen sa puta koji radi merge.
+    slucaj("merge-bez-teardowna",
+           CIST.replace("    PrepareRuntimeForSelfUpdate\n", "", 1),
+           "KAPIJA_TEARDOWN")
+
+    # Teardown POSLE merge-a -- tacno zamka #29.
+    slucaj("teardown-posle-mergea",
+           CIST.replace("    PrepareRuntimeForSelfUpdate\n"
+                        "    s = ImportFromFolder(d)\n",
+                        "    s = ImportFromFolder(d)\n"
+                        "    PrepareRuntimeForSelfUpdate\n", 1),
+           "KAPIJA_TEARDOWN")
+
+    # Teardown samo u komentaru NIJE poziv.
+    slucaj("teardown-samo-u-komentaru",
+           CIST.replace("    PrepareRuntimeForSelfUpdate\n",
+                        "    ' ovde je nekad bio PrepareRuntimeForSelfUpdate\n", 1),
+           "KAPIJA_TEARDOWN")
 
     # Manje od dva puta do save-a = provera vise nista ne meri.
     slucaj("jedan-put-do-savea",
@@ -283,8 +353,8 @@ def main(argv):
             print(x, file=sys.stderr)
         print("\nvba_selfupdate_gates: {} nalaza.".format(len(nalazi)), file=sys.stderr)
         return 2
-    print("vba_selfupdate_gates: cisto (svaki put do save-a prolazi kroz {})."
-          .format(GATE_PROC))
+    print("vba_selfupdate_gates: cisto (save prolazi kroz {}, merge ide posle {})."
+          .format(GATE_PROC, TEARDOWN_PROC))
     return 0
 
 
