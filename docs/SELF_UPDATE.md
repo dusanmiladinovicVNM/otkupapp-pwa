@@ -118,11 +118,15 @@ su informativni (placeholder `0.0.0-dev` ako `stamp-build` nije pokrenut — vid
    staro „zatvorite i otvorite". Izbor je operaterov — update teče dok čovek čeka
    da uđe u program, pa mu se trenutak ne nameće.
 
-   **Zašto `StartApp`, a ne `Workbook_Open`:** sve što `Workbook_Open` radi mimo
-   `StartApp`-a je **po sesiji**, ne po pokretanju aplikacije — `Monitor_AppOpen` i
-   `VBA_STARTUP_SUCCESS` su telemetrija *otvaranja fajla*, a `CleanupOrphanedLocks`
-   je jednokratna higijena koja je već odrađena. Ponoviti ih značilo bi lagati
-   telemetriju o drugom otvaranju kojeg nema.
+   **Zašto `StartApp`, a ne `Workbook_Open`:** `Monitor_AppOpen` i
+   `VBA_STARTUP_SUCCESS` su telemetrija *otvaranja fajla*, ne pokretanja
+   aplikacije — ponoviti ih značilo bi prijaviti drugo otvaranje kojeg nema.
+
+   > **Ispravka ranijeg obrazloženja.** Treća stvar koju `Workbook_Open` radi —
+   > `CleanupOrphanedLocks` — **nije** u istoj kategoriji, a ovde je prvo bila
+   > pogrešno opravdana kao „već odrađena". Jeste odrađena — ali **pre** update-a.
+   > Sam update stvara **nov** orphan. Rešenje je niže: teardown otpušta lock
+   > eksplicitno, pa posle toga `CleanupOrphanedLocks` nema šta da čisti.
 
    **Zašto je bezbedno:** merenje iz zamke #29 — izmena koda briše module-level
    stanje u SVIM modulima, pa je `modMain.m_Initialized` već `False` i `StartApp`
@@ -134,6 +138,17 @@ su informativni (placeholder `0.0.0-dev` ako `stamp-build` nije pokrenut — vid
    string — kasno vezano po prirodi, pa frozen `modSelfUpdate` ne dobija compile
    referencu na updatable `modMain` (zamka #24). Workbook-qualified je obavezno
    (zamka #16). **Fail-soft:** ako zakazivanje ne uspe → stara poruka, nikad tiho.
+
+   **Lock stanice se otpušta u teardown-u** (`ReleaseActiveStanicaLock`, kasno
+   vezano). Bez toga bi živi restart ostavljao orphan: `CleanupOrphanedLocks` se
+   zove **samo iz `Workbook_Open`**, koji restart preskače, a `gActiveStanica` je
+   module-level pa je posle prve izmene koda obrisana — lock se više ne bi imao
+   čime otpustiti i stanica bi drugima izgledala zauzeta do isteka TTL-a.
+   Zato ide **pre** merge-a, po istoj invarijanti kao zamka #29.
+
+   **Mereno:** `AcquireStanicaLock` **ne odbija** već zauzet lock — prepisuje ga
+   sa istim `OWNER`-om (`DEVICE_ID_VBA`). Operater dakle **ne bi** ostao
+   zaključan; šteta bi bila to što **druge** sesije i PWA vide stanicu kao zauzetu.
 
 ---
 

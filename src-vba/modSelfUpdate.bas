@@ -408,6 +408,14 @@ Private Sub PrepareRuntimeForSelfUpdate()
     CallOptional "StopStornoWarm"       ' modStornoWarm (storno browse warm cache tick)
     CallOptional "StopOtkupUITimers"    ' modOtkupUI (toast tick)
 
+    ' Otpusti lock stanice koju ova sesija drzi. MORA ovde, PRE prve izmene koda:
+    ' gActiveStanica je module-level, a izmena koda brise module-level stanje u
+    ' SVIM modulima (mereno, zamka #29) - posle toga se ne zna koji lock drzimo.
+    ' Bez ovoga lock ostaje "YES" u SyncControl-u, a jedina rutina koja ga cisti
+    ' (CleanupOrphanedLocks) se zove SAMO iz Workbook_Open - sto ziv restart
+    ' preskace. Stanica bi drugima izgledala zauzeta do isteka TTL-a.
+    CallOptional "ReleaseActiveStanicaLock"   ' modStanicaLock
+
     ' Release module-level WithEvents/kontrole (dinamicki paneli). Redosled je isti
     ' kao u modVbaTools.PrepareRuntimeForImport: OtkupUI_Release ide POSLEDNJI jer
     ' panel radne povrsine drzi OKVIR unutar forme, a modul panela drzi njega.
@@ -448,11 +456,17 @@ End Sub
 ' udje u program (StartApp izadje na "Da" i prekine startup), pa je pokretanje
 ' odmah ono sto zeli u 99% slucajeva - ali trenutak bira on.
 '
-' ZASTO JE StartApp TACAN ULAZ, a ne Workbook_Open: sve sto Workbook_Open radi
-' MIMO StartApp-a je PO SESIJI, ne po pokretanju aplikacije. Monitor_AppOpen i
-' VBA_STARTUP_SUCCESS su telemetrija OTVARANJA FAJLA, a CleanupOrphanedLocks je
-' jednokratna higijena koja je vec odradjena pri stvarnom otvaranju. Ponoviti ih
-' znacilo bi lagati telemetriju o drugom otvaranju kojeg nema.
+' ZASTO JE StartApp TACAN ULAZ, a ne Workbook_Open: Monitor_AppOpen i
+' VBA_STARTUP_SUCCESS su telemetrija OTVARANJA FAJLA, ne pokretanja aplikacije --
+' ponoviti ih znacilo bi prijaviti drugo otvaranje kojeg nema.
+'
+' NB: treca stvar koju Workbook_Open radi, CleanupOrphanedLocks, NIJE u istoj
+' kategoriji i ranije je ovde bila pogresno obrazlozena kao "vec odradjena".
+' Jeste odradjena - ali PRE update-a. Sam update stvara NOV orphan: teardown gasi
+' heartbeat, a izmena koda brise gActiveStanica, pa se lock vise ne moze
+' otpustiti. Zato ga teardown sada otpusta EKSPLICITNO
+' (CallOptional "ReleaseActiveStanicaLock"), dok se jos zna koja je stanica.
+' Preskakanje CleanupOrphanedLocks je posle toga bezbedno: nema sta da cisti.
 '
 ' ZASTO JE RESTART BEZBEDAN (mereno 07.09.2026, zamka #29): izmena koda brise
 ' module-level stanje u SVIM modulima, pa je modMain.m_Initialized vec False ->
