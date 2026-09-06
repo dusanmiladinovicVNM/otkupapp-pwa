@@ -50,6 +50,8 @@ PARITY_PROCS = (
     "CanonCode",
     "LowerOutsideStrings",
     "ComponentCode",
+    "TypeForExt",
+    "Cap",
 )
 
 PARITY_MODULES = ("modSelfUpdate.bas", "modVbaTools.bas")
