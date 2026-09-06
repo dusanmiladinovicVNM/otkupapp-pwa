@@ -248,10 +248,7 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
     End If
 
     RestoreRuntimeAfterSelfUpdate
-    MsgBox Poruka("SU_ZAVRSENO_FAJLOVA") & n & vbCrLf & _
-           summary & vbCrLf & vbCrLf & _
-           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
-           vbInformation, APP_NAME
+    FinishAndOfferRestart Poruka("SU_ZAVRSENO_FAJLOVA") & n & vbCrLf & summary
     Exit Sub
 EH:
     AbortSelfUpdate Poruka("SU_GRESKA_AZURIRANJE") & Err.description
@@ -377,9 +374,8 @@ Public Sub RunSelfUpdatePhase2()
     On Error GoTo EH
 
     RestoreRuntimeAfterSelfUpdate
-    MsgBox Poruka("SU_ZAVRSENO_PREUZETO") & nTxt & ", 2. faza uvezeno: " & imported & vbCrLf & vbCrLf & _
-           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
-           vbInformation, APP_NAME
+    FinishAndOfferRestart Poruka("SU_ZAVRSENO_PREUZETO") & nTxt & _
+                          ", 2. faza uvezeno: " & imported
     Exit Sub
 EH:
     DeleteSetting "AgriXSelfUpdate", P2Section()
@@ -412,6 +408,14 @@ Private Sub PrepareRuntimeForSelfUpdate()
     CallOptional "StopStornoWarm"       ' modStornoWarm (storno browse warm cache tick)
     CallOptional "StopOtkupUITimers"    ' modOtkupUI (toast tick)
 
+    ' Otpusti lock stanice koju ova sesija drzi. MORA ovde, PRE prve izmene koda:
+    ' gActiveStanica je module-level, a izmena koda brise module-level stanje u
+    ' SVIM modulima (mereno, zamka #29) - posle toga se ne zna koji lock drzimo.
+    ' Bez ovoga lock ostaje "YES" u SyncControl-u, a jedina rutina koja ga cisti
+    ' (CleanupOrphanedLocks) se zove SAMO iz Workbook_Open - sto ziv restart
+    ' preskace. Stanica bi drugima izgledala zauzeta do isteka TTL-a.
+    CallOptional "ReleaseActiveStanicaLock"   ' modStanicaLock
+
     ' Release module-level WithEvents/kontrole (dinamicki paneli). Redosled je isti
     ' kao u modVbaTools.PrepareRuntimeForImport: OtkupUI_Release ide POSLEDNJI jer
     ' panel radne povrsine drzi OKVIR unutar forme, a modul panela drzi njega.
@@ -443,6 +447,62 @@ Private Sub CallOptional(ByVal procName As String)
     On Error Resume Next
     Application.Run QualifiedProc(procName)
     Err.Clear
+End Sub
+
+' Uspesan kraj update-a: ponudi ZIV restart aplikacije umesto zatvaranja fajla.
+' Zove se SAMO posle potvrdjenog SaveWorkbookVerified, na oba uspesna puta.
+'
+' IZBOR JE OPERATEROV, ne automatika. U produkciji update tece dok covek ceka da
+' udje u program (StartApp izadje na "Da" i prekine startup), pa je pokretanje
+' odmah ono sto zeli u 99% slucajeva - ali trenutak bira on.
+'
+' ZASTO JE StartApp TACAN ULAZ, a ne Workbook_Open: Monitor_AppOpen i
+' VBA_STARTUP_SUCCESS su telemetrija OTVARANJA FAJLA, ne pokretanja aplikacije --
+' ponoviti ih znacilo bi prijaviti drugo otvaranje kojeg nema.
+'
+' NB: treca stvar koju Workbook_Open radi, CleanupOrphanedLocks, NIJE u istoj
+' kategoriji i ranije je ovde bila pogresno obrazlozena kao "vec odradjena".
+' Jeste odradjena - ali PRE update-a. Sam update stvara NOV orphan: teardown gasi
+' heartbeat, a izmena koda brise gActiveStanica, pa se lock vise ne moze
+' otpustiti. Zato ga teardown sada otpusta EKSPLICITNO
+' (CallOptional "ReleaseActiveStanicaLock"), dok se jos zna koja je stanica.
+' Preskakanje CleanupOrphanedLocks je posle toga bezbedno: nema sta da cisti.
+'
+' ZASTO JE RESTART BEZBEDAN (mereno 07.09.2026, zamka #29): izmena koda brise
+' module-level stanje u SVIM modulima, pa je modMain.m_Initialized vec False ->
+' StartApp odradi PUN InitApp. Dakle pravi hladan start, a ne polovna
+' inicijalizacija nad zatecenim stanjem. Isto merenje pokazuje da se Public Const
+' preko granice modula ispravno osvezava, pa aplikacija prijavljuje NOVU verziju.
+'
+' ZASTO NEMA COMPILE ZAVISNOSTI: Application.OnTime prima IME procedure kao
+' string, dakle kasno vezano po prirodi. Frozen modSelfUpdate tako ne dobija
+' compile referencu na updatable modMain (zamka #24). Workbook-qualified je
+' obavezno - dve otvorene kopije (zamka #16).
+'
+' FAIL-SOFT: ako zakazivanje ne uspe, pada nazad na staro uputstvo. Nikad tiho -
+' operater mora da zna da program nije pokrenut.
+Private Sub FinishAndOfferRestart(ByVal msg As String)
+    Dim zakazano As Boolean
+
+    If MsgBox(msg & vbCrLf & vbCrLf & _
+              "Pokrenuti program ODMAH sa novom verzijom?" & vbCrLf & vbCrLf & _
+              "Da - program se pokrece odmah, bez zatvaranja fajla." & vbCrLf & _
+              "Ne - promene se aktiviraju kad zatvorite i ponovo otvorite fajl.", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    ' Prazan stack: OnTime opali tek kad se ovaj makro zavrsi. Isti obrazac kojim
+    ' se zakazuje faza 2, i jedini bezbedan nacin da se udje u tek izmenjen kod.
+    On Error Resume Next
+    Err.Clear
+    Application.OnTime Now + TimeSerial(0, 0, 1), QualifiedProc("StartApp")
+    zakazano = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+    If zakazano Then Exit Sub
+
+    MsgBox "Program NIJE mogao da se pokrene automatski." & vbCrLf & _
+           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
+           vbExclamation, APP_NAME
 End Sub
 
 ' Vrati aplikaciona podesavanja koja PrepareRuntimeForSelfUpdate gasi. MORA se

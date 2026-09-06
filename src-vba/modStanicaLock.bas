@@ -122,6 +122,19 @@ Public Sub ReleaseStanicaLock(ByVal stanicaID As String)
     Call ReleaseStanicaLockInternal(stanicaID, gActiveDatum, True)
 End Sub
 
+' Otpusti lock stanice koju OVA sesija drzi, BEZ argumenta. Postoji da bi
+' self-update mogao da ga pozove KASNO VEZANO (CallOptional) iz teardown-a --
+' modSelfUpdate je frozen i ne sme da early-bind-uje updatable module (zamka #24),
+' a ReleaseStanicaLock trazi stanicaID koji pozivalac tamo nema.
+'
+' MORA se pozvati PRE prve izmene koda: gActiveStanica je module-level, a izmena
+' bilo kog modula brise module-level stanje u svim modulima (mereno, zamka #29).
+' Posle toga se vise ne zna koji lock drzimo, pa se ne moze ni otpustiti.
+Public Sub ReleaseActiveStanicaLock()
+    If Len(gActiveStanica) = 0 Then Exit Sub
+    Call ReleaseStanicaLockInternal(gActiveStanica, gActiveDatum, True)
+End Sub
+
 ' Atomic stanica switch: release stari sa bulk push, acquire novi.
 ' Pozivaj iz cmbOtkupnoMesto_Change u frmOtkup kad korisnik menja
 ' stanicu unutar iste form sesije.
