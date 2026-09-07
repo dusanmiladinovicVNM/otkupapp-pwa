@@ -6547,10 +6547,23 @@ Public Sub FillZbirneCombo(frm As Object)
     ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
     ' a ovo se zove na svaku promenu rezima.
     '
-    ' NE DE-DUPLIRA po broju, i to je namerno. Isti BrojZbirne na dva reda ume
-    ' da bude DVA dokumenta (broj se generise po vozacu; T_Oporavak_CiljneListe
-    ' tvrdi da ciljna lista mora da ponudi OBA). Spajanje bi bilo isti kvar koji
-    ' je RowsAktivni vec platio -- v. par.28.1f i ZBR-IDENT-01.
+    ' NE DE-DUPLIRA po broju, i to je namerno.
+    '
+    ' Generator broj DRZI JEDINSTVENIM i to dvostruko: format je
+    ' "x/ddmmyy[-rb]" gde je x numericki deo VOZACA, pa dva vozaca ne mogu
+    ' dati isti broj; a SuggestNextBroj za ZBR jos i bumpuje sekvencu dok
+    ' BrojZbirneExists ne kaze da je slobodna. Na auto putu duplikat je
+    ' NEMOGUC.
+    '
+    ' Nastaje samo MIMO generatora: rucnim unosom (auto-broj se gasi u
+    ' Podesavanjima, IsAutoBrojDokumenta), uvozom ili ispravkom u tabeli --
+    ' a na tim putevima jedinstvenost niko ne proverava pri upisu
+    ' (BrojZbirneExists je Private i zove se samo iz predloga).
+    '
+    ' Duplikat je zato UVEK ANOMALIJA. Spajanje bi je sakrilo od jedine osobe
+    ' koja je moze videti, i bilo bi isti kvar koji je RowsAktivni vec platio
+    ' (T_Oporavak_CiljneListe). Prava ispravka je KI-007 / ZBR-IDENT-01, u
+    ' core-u -- v. par.28.1f.
     src = ExcludeStornirano(src, TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)

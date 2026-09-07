@@ -15745,12 +15745,18 @@ End Sub
 '   ZB-TEST-STORNO -- Stornirano = Da  -> NE SME biti u ponudi
 '   ZB-TEST-DUPL   -- dva AKTIVNA reda -> OBA OSTAJU
 '
-' Drugi red nije previd nego KAPIJA. Isti BrojZbirne na dva reda ume da bude
-' DVA dokumenta: broj se generise po vozacu, i T_Oporavak_CiljneListe vec tvrdi
-' da ciljna lista mora da ponudi oba ("lista je vlasnikom smatrala samo kupca i
-' spajala ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu
-' treba"). Ova tvrdnja drzi da se ta greska ne uvuce u picker pod izgovorom
-' "ciscenja duplikata".
+' Drugi red nije previd nego KAPIJA. Generator broj drzi jedinstvenim dvostruko
+' (format "x/ddmmyy[-rb]" nosi VOZACA, pa dva vozaca ne mogu dati isti broj; uz
+' to SuggestNextBroj bumpuje sekvencu dok BrojZbirneExists ne kaze da je
+' slobodna), pa je na auto putu duplikat NEMOGUC. Nastaje samo mimo generatora
+' -- rucnim unosom sa ugasenim auto-brojem, uvozom ili ispravkom u tabeli, gde
+' jedinstvenost pri upisu niko ne proverava.
+'
+' Duplikat je zato UVEK anomalija, i bas zato se ne sme spajati: spajanje ga
+' sakriva od jedine osobe koja ga moze videti. T_Oporavak_CiljneListe je isti
+' kvar vec platio ("lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN
+' red, pa operater ne bi mogao da izabere onaj koji mu treba"). Prava ispravka
+' je KI-007 / ZBR-IDENT-01, u core-u.
 ' ============================================================
 Private Sub T_Zbirne_PickerJeKanonskiReadModel()
     Dim f As frmOtkupUI, CB As Object

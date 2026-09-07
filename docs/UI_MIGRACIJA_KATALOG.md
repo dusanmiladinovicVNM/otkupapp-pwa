@@ -9713,14 +9713,26 @@ AssertEq duplih, 2, "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"
 > *„lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red, pa operater
 > ne bi mogao da izabere onaj koji mu treba"*
 
-**Broj zbirne se generiše po vozaču**, pa isti broj na dva aktivna reda ume da
-budu **dva dokumenta**. `modScrOporavak.RowsAktivni` to već poštuje — ključuje po
-`broj + vlasnik` (i po generaciji gde je ima). `GetAktivneZbirne` ključuje po
-**samom broju**, dakle nosi grešku koju je `RowsAktivni` već platio i ispravio.
+**Na auto putu duplikat je NEMOGUĆ, i to dvostruko.** Format je
+`x/ddmmyy[-rb]`, gde je `x` numerički deo **vozača** — dva vozača ne mogu dati
+isti broj. Uz to `SuggestNextBroj` za `ZBR` bumpuje sekvencu u petlji
+`Do While BrojZbirneExists(...)`, koja skenira **celu** `tblZbirna`. Fixture red
+`ZB-TEST-DUPL` nije ni u kanonskom formatu — to je sintetički anomalijski red.
 
-Da je picker prebačen na njega, dva stvarna dokumenta bi se spojila u jednu
-ponudu — a zbir kg bi ih prikazao kao jedan dokument od 300 kg koji ne postoji.
-To nije čišćenje nego izmišljanje podatka.
+Duplikat nastaje **samo mimo generatora**: ručnim unosom (auto-broj se gasi u
+Podešavanjima, `IsAutoBrojDokumenta`), uvozom ili ispravkom u tabeli. Na tim
+putevima jedinstvenost pri upisu **niko ne proverava** — `BrojZbirneExists` je
+`Private` u `modBrojevi` i zove se samo iz predloga.
+
+**Zato je duplikat uvek anomalija — i baš zato se ne sme spajati.** Spajanje bi
+je sklonilo sa očiju jedine osobe koja je može videti, i to u trenutku kad bira
+na šta da veže dokument. `modScrOporavak.RowsAktivni` je isti kvar već platio i
+ispravio (ključuje po `broj + vlasnik`, i po generaciji gde je ima);
+`GetAktivneZbirne` ključuje po **samom broju** i tu grešku i dalje nosi.
+
+Da je picker prebačen na njega, dva reda bi se spojila u jednu ponudu — a zbir kg
+bi ih prikazao kao jedan dokument od 300 kg koji ne postoji. To nije čišćenje
+nego izmišljanje podatka, i to baš nad anomalijom koja traži pogled.
 
 Zato:
 
@@ -9732,10 +9744,13 @@ Zato:
 #### ZBR-IDENT-01 — otvoreno, i sada dokazano
 
 Prijemnica se na zbirnu vezuje **samo brojem**, a `ZbirnaPostoji` odgovara samo
-na „postoji li taj broj". Sa dva istoimena aktivna dokumenta veza je dvosmislena,
-i **nijedan sloj to ne prijavljuje**. To više nije hipoteza o „anomalnom
-datasetu" — reprodukovano je u fixture-u (`ZB-TEST-DUPL`) i već ima test koji
-brani suprotnu stranu.
+na „postoji li taj broj". Sa dva istoimena aktivna reda veza je dvosmislena, i
+**nijedan sloj to ne prijavljuje**.
+
+Rizik je **nizak po verovatnoći, ali bez ijedne kapije**: generator takav broj ne
+može da napravi, ali ga ručni unos sa ugašenim auto-brojem, uvoz ili ispravka u
+tabeli mogu — i tada ništa ne staje. Zato ovo nije „popraviti odmah" nego
+„zapisati i rešiti u core-u".
 
 Zapisano kao **KI-007** u `docs/KNOWN_ISSUES.md`. Rešenje ide u **core** (veza po
 identitetu, ne po broju), ne u UI: picker ne može da reši dvosmislenost koju

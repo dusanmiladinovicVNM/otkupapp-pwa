@@ -5235,12 +5235,13 @@ SABOTAZE = {
         "T_Zbirne_PickerJeKanonskiReadModel",
         "picker ne nudi storniranu zbirnu",
     ),
-    # Naizgled bezazleno "ciscenje duplikata" koje bi spojilo DVA dokumenta u
-    # jednu ponudu. Broj zbirne se generise PO VOZACU, pa isti broj na dva
-    # aktivna reda ume da bude dva dokumenta -- T_Oporavak_CiljneListe to vec
-    # tvrdi za ciljnu listu ("lista je vlasnikom smatrala samo kupca i spajala
-    # ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu treba").
-    # Ova sabotaza brani da ista greska ne udje u picker.
+    # Naizgled bezazleno "ciscenje duplikata". Generator broj drzi jedinstvenim
+    # (format nosi vozaca + bump-loop dok broj ne bude slobodan), pa je duplikat
+    # UVEK anomalija -- rucni unos sa ugasenim auto-brojem, uvoz ili ispravka u
+    # tabeli. Spajanje bi je sakrilo od jedine osobe koja je moze videti, i bio
+    # bi to isti kvar koji je T_Oporavak_CiljneListe vec platio ("lista je
+    # vlasnikom smatrala samo kupca i spajala ih u JEDAN red, pa operater ne bi
+    # mogao da izabere onaj koji mu treba").
     "zbirne-picker-spaja-isti-broj": (
         "modOtkupUI.bas",
         "    For i = 1 To j\n"

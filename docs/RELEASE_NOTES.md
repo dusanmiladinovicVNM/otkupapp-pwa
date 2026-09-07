@@ -7312,9 +7312,11 @@ Padajuća lista **Broj zbirne** (otkupni list, otpremnica, prijemnica) je nudila
 **stornirane** zbirne. Izbor takve zbirne aplikacija odbija tek na snimanju — na
 dokumentu koji je već ceo popunjen. Sada ih u ponudi nema.
 
-Šta se **nije** promenilo, namerno: ako isti broj zbirne nose **dva različita
-dokumenta** (broj se generiše po vozaču), lista i dalje nudi **oba**. Spajanje bi
-značilo da operater ne može da izabere onaj koji mu treba.
+Šta se **nije** promenilo, namerno: ako se isti broj zbirne ipak nađe na dva
+reda, lista i dalje nudi **oba**. Auto-broj to ne može da napravi — broj u sebi
+nosi vozača i dan — pa je takav slučaj uvek znak da je nešto uneto ručno ili
+uvezeno. Spajanje bi ga sakrilo baš od operatera, u trenutku kad bira na šta da
+veže dokument.
 
 ### Prijava: F-tasteri više ne rade ispod kartice
 
