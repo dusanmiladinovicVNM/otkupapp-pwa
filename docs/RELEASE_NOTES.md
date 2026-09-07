@@ -7204,7 +7204,7 @@ zatvara i ne otvara), a izgled se više ne može razići između delova aplikaci
 
 ### Verifikacija
 
-- `vba_check` čist, **470 sabotaža** (svaka obara tačno svoj imenovani test),
+- `vba_check` čist, **474 sabotaže** (svaka obara tačno svoj imenovani test),
   self-test enkodera logotipa u oba smera.
 - **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad pravim
@@ -7283,6 +7283,26 @@ otišlo sa formom, pa se avans mogao vezivati samo blok po blok.
   posebno, a ne kao primenjen — ranije je i takav slučaj izgledao kao uspeh.
 - Blok iz korpe koji nema avans ili nema otvoren iznos se ne dira i ne broji.
 - Greška na jednom bloku ne prekida ostale.
+
+### Prijemnica: manjak se opet vidi PRE snimanja
+
+Uz unos prijemnice (F4) ponovo stoji živa linija u akcionom redu:
+
+**`ZBIRNA 1.000,00 · PRIJEM 995,00 · MANJAK 5,00 kg (0,50%)`**
+
+- **Boja je poruka:** ispod 0,5% zeleno, do 2% žuto, preko crveno. Isti pragovi
+  kao pre. Višak se boji isto kao manjak — i on znači da se negde meri pogrešno.
+- **Poredi se neto sa neto.** U bruto režimu se od unetog skida tara (gajbe ×
+  težina tipa ambalaže), za obe klase. Bez toga bi svaka prijemnica u bruto
+  režimu prijavljivala višak koji ne postoji.
+- **Broji i ono što još nije snimljeno** — zato se linija menja dok se kuca.
+- **Bez izabrane zbirne linije nema.** Manjak bez zbirne nije nula nego
+  nepoznat, a ispisana nula bi izgledala kao da se sve slaže.
+- **Prosek gajbe** stoji u natpisu polja gajbi: dok se količina i gajbe kucaju
+  pokazuje prosek tog unosa, a bez njih prosek cele zbirne.
+
+Ovo je postojalo u staroj formi za dokumenta i nestalo je sa njom; sam račun je
+sve vreme bio u kodu, samo ga niko nije zvao.
 
 ### Prijava: F-tasteri više ne rade ispod kartice
 

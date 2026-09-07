@@ -334,6 +334,20 @@ python tools/sabotaza.py --vrati              # vrati
 Koja sabotaža obara koji test i sa kojom tvrdnjom — **`--lista`**, ne prepisivati
 nigde; skripta je izvor istine.
 
+**Test iz kataloga ne mora da bude u `RunAllTests`.** `--proveri-sidra` traži ime
+i tvrdnju u `modTest`, `modTestBanka` **i `modBusinessFlowProTests`** (lista je
+`_TEST_FAJLOVI`). Tvrdnje koje traže **upis** žive samo u trećem modulu — `modTest`
+ne piše u tabele — pa se sabotaža nad writer-om dokazuje nad **njegovom** suitom:
+
+```bash
+python tools/sabotaza.py manjak-preview-bez-druge-klase
+python tools/run_vba.py --suite RunBusinessFlowProSuite   # ocekuj FAIL
+```
+
+Takav unos u katalogu **mora** da u komentaru kaže koju suitu treba pustiti —
+inače će sledeći put biti pušten `RunAllTests`, proći zeleno, i izgledaće kao da
+sabotaža ništa ne meri.
+
 Za legacy formu radi se ručno u `ClearOtkupFields` (dodaj `txtDatum.value = ""`,
 `txtBrojZbirne.value = ""`, ukloni `cmbKooperant.value = ""`), revert je
 `git checkout -- src-vba/frmOtkup.frm`.

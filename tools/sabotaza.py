@@ -81,6 +81,19 @@ ESCN = "\n"
 DQ34 = chr(34)
 SRC_VBA = os.path.join(ROOT, "src-vba")
 
+# Moduli u kojima staticka provera trazi imenovani test i njegove tvrdnje.
+#
+# modBusinessFlowProTests je dodat sa MIG-004: tvrdnje koje traze UPIS zive
+# samo tamo (modTest ne pise u tabele), pa katalog do tada nije mogao da
+# zasticuje nijednu od njih -- sabotaza nad writer-om nije imala gde da
+# imenuje svoj test.
+#
+# Tri pomocne rutine (SeedKupac / SeedKooperant / SeedStanica) postoje i u
+# modTestBanka i u modBusinessFlowProTests. Mapa tela ih pregazi, i to je
+# bezbedno: to su fixture helperi, nikad ciljevi sabotaze. Ako neki dan
+# postanu, provera ce prijaviti "PALA DRUGA TVRDNJA" -- ne cutanje.
+_TEST_FAJLOVI = ("modTest.bas", "modTestBanka.bas", "modBusinessFlowProTests.bas")
+
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
@@ -5151,6 +5164,57 @@ SABOTAZE = {
     # ostane, pa F1 otvori Excel pomoc preko kartice koju operater jos nije
     # prosao. Sabotaza pomera opseg na F10 -- red ostaje, kod se kompajlira,
     # a pada tacno tvrdnja o F1 (cetiri tvrdnje pre nje i dalje prolaze).
+    # MIG-004. Prag bojenja manjka (0,5% / 2%) je jedini razlog zbog koga se
+    # linija uopste gleda: operater ne cita brojeve nego BOJU. Ugasen prag daje
+    # zelenu liniju nad prijemnicom kojoj fali trecina robe.
+    "manjak-prag-uvek-zelen": (
+        "modOtkupUI.bas",
+        "    If Abs(pct) < 0.5 Then\n",
+        "    If True Then   \' SABOTAZA: prag manjka je ugasen\n",
+        "T_Manjak_LinijaIPragSuSamoF4",
+        "0,5% vise nije zeleno",
+    ),
+    # Bez zbirne manjak nije nula nego NEPOZNAT. Ugasena kapija crta
+    # "MANJAK 0,00 kg (0,00%)" u zelenom nad dokumentom koji nema roditelja --
+    # tacno obrnuto od onoga sto treba da kaze.
+    "manjak-linija-bez-zbirne": (
+        "modOtkupUI.bas",
+        "    If zbrKg <= 0 Then Exit Function\n",
+        "    If zbrKg < -1 Then Exit Function   \' SABOTAZA: linija i bez zbirne\n",
+        "T_Manjak_LinijaIPragSuSamoF4",
+        "bez zbirne nema linije -- nula bi izgledala kao slaganje",
+    ),
+    # Prosek gajbe je broj PRIJEMNICE. U natpisu polja gajbi na otkupnom listu
+    # ili zbirnoj je tudja mera koju niko nije trazio -- a natpis polja je
+    # mesto na koje operater ne gleda dvaput.
+    "manjak-prosek-svuda": (
+        "modOtkupUI.bas",
+        "    If ActiveMode = \"F4\" Then\n"
+        "        kg = ParseNum(FldText(\"fgKgI\"))\n",
+        "    If True Then   \' SABOTAZA: prosek gajbe i van prijemnice\n"
+        "        kg = ParseNum(FldText(\"fgKgI\"))\n",
+        "T_Manjak_LinijaIPragSuSamoF4",
+        "izlazak iz F4 vraca natpis polja gajbi",
+    ),
+    # Cela svrha "Preview" varijante je da NEUPISANI kilogrami iz forme udju u
+    # racun -- inace operater vidi manjak stanja PRE svog unosa i snima
+    # dokument po pogresnoj slici. Sabotaza gasi drugu klasu: prva i dalje
+    # ulazi, pa greska prolazi kroz svaki jednoklasni scenario.
+    # Obara DVE tvrdnje istog testa (prijemnica 250 umesto 275, manjak 50
+    # umesto 25) i to nije zamka 5/6: Assert* u modBusinessFlowProTests
+    # BELEZI pa nastavlja (LogPass/LogFail), pa se obe prijave po imenu.
+    #
+    # PROVERA IDE NAD DRUGOM SUITOM: tvrdnja trazi upis, pa zivi u
+    # RunBusinessFlowProSuite. Dokaz:
+    #   python tools/sabotaza.py manjak-preview-bez-druge-klase
+    #   python tools/run_vba.py --suite RunBusinessFlowProSuite   # ocekuj FAIL
+    "manjak-preview-bez-druge-klase": (
+        "modDokumenta.bas",
+        "    prijKg = prijKg + pendingKgKlI + pendingKgKlII\n",
+        "    prijKg = prijKg + pendingKgKlI   \' SABOTAZA: druga klasa ne ulazi\n",
+        "Test_ManjakPreviewJeZbirnaMinusPrijem",
+        "Manjak: neupisane kg obe klase ulaze u prijemnicu",
+    ),
     "faza-prijava-pusta-f-tastere": (
         "modUiFaze.bas",
         "                Case vbKeyF1 To vbKeyF9: FazaTaster = True\n",
@@ -5324,7 +5388,7 @@ POZNATI_NALAZI_DOKAZ = {
 
 def _imena_testova() -> set:
     imena = set()
-    for f in ("modTest.bas", "modTestBanka.bas"):
+    for f in _TEST_FAJLOVI:
         put = os.path.join(SRC_VBA, f)
         if not os.path.exists(put):
             continue
@@ -5437,7 +5501,8 @@ def _poruka_delovi(izraz: str):
 #     AssertEq rezultat, "Placeno", "status fakture je ispravan"
 #
 # -- a dokaz.py vidi samo PORUKU koja je pala.
-_ASSERT_IMENA = ("asserteq", "chkeqd", "chkeq", "chk")
+_ASSERT_IMENA = ("assertdoublenear", "asserteq", "asserttrue",
+                 "chkeqd", "chkeq", "chk")
 
 
 def _podeli_vrh(tekst: str) -> list:
@@ -5549,7 +5614,7 @@ def _tela_testova() -> dict:
     TVRDNJA u prolazu.
     """
     tela = {}
-    for f in ("modTest.bas", "modTestBanka.bas"):
+    for f in _TEST_FAJLOVI:
         put = os.path.join(SRC_VBA, f)
         if not os.path.exists(put):
             continue
@@ -5847,7 +5912,8 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
                                 "trazi tacno jednu" % (zamene, zamene + 1)))
 
         if test not in imena:
-            nalazi.append((ime, f"test '{test}' ne postoji u modTest/modTestBanka"))
+            nalazi.append((ime, "test '%s' ne postoji ni u jednom test modulu (%s)"
+                                % (test, ", ".join(_TEST_FAJLOVI))))
 
         # zamka 7: prazna zamena se "nalazi" svuda, pa --vrati tiho ne uradi nista
         if not novo.strip():
@@ -5998,7 +6064,7 @@ _SELF_TEST = [
      "nema fajla"),
     ("test ne postoji",
      (None, None, None, "T_OvakavTestNePostoji", "tvrdnja D"),
-     "ne postoji u modTest"),
+     "ne postoji ni u jednom test modulu"),
     ("zamena prazna",
      (None, None, "" , None, "tvrdnja E"),
      "zamena je prazna"),

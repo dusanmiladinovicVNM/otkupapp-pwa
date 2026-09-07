@@ -103,6 +103,7 @@ Public Sub RunBusinessFlowProSuite()
 
     ' RF-05 (frmDokumenta unos + storno set)
     Test_ProsekGajbeExcludesStornirano
+    Test_ManjakPreviewJeZbirnaMinusPrijem
     Test_OpenFaktureExcludeStornirano
     Test_ZbirnaKlasaIIGuard
     Test_PrefillBiraPoslednjuGeneraciju
@@ -2279,6 +2280,80 @@ Private Sub Test_ProsekGajbeExcludesStornirano()
 
 EH:
     LogFatal "Test_ProsekGajbeExcludesStornirano", Err.Number, Err.description
+End Sub
+
+' MIG-004. Manjak koji F4 crta nije novi racun nego CalculateManjakPreview --
+' funkcija koja je od brisanja frmDokumenta ostala bez ijednog pozivaoca. Ovo
+' meri BAS NJU, nad pravim redovima: da sabira po broju zbirne, da dodaje
+' NEUPISANE kilograme iz forme, i da stornirane redove ne broji ni sa jedne
+' strane. Bez toga bi ekran mogao da pokaze zelenu nulu nad podacima koji se
+' ne slazu.
+Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("MANJAK")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String, brojPrij As String
+    brojZbirne = TEST_PREFIX & "-ZBR-MJ-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-MJ-" & scenario
+
+    ' Zbirna 300 kg u dva reda (100 + 200) -- manjak se meri po BROJU, ne po
+    ' jednom redu; sa jednim redom bi i pogresno "uzmi prvi" prolazilo.
+    Dim zbrI As String, zbrII As String
+    zbrI = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrII = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          200#, TEST_TIP_AMB, 20, KLASA_II)
+    AssertTrue Len(zbrI) > 0 And Len(zbrII) > 0, "Manjak: fixture zbirna I+II kreirana"
+
+    Dim prj As String
+    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                            TEST_VRSTA, TEST_SORTA, 200#, 100#, TEST_TIP_AMB, 20, 0, "I")
+    AssertTrue Len(prj) > 0, "Manjak: fixture prijemnica kreirana"
+
+    ' 300 upisano na zbirnoj, 200 stiglo prijemnicom -> manjak 100 kg = 33,33%.
+    Dim m As Variant
+    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
+    AssertTrue IsArray(m), "Manjak: preview vraca niz"
+    AssertDoubleNear 300#, CDbl(m(0)), 0.01, "Manjak: zbirna je ZBIR svih svojih redova"
+    AssertDoubleNear 200#, CDbl(m(1)), 0.01, "Manjak: prijemnica je zbir upisanih redova"
+    AssertDoubleNear 100#, CDbl(m(2)), 0.01, "Manjak: manjak je zbirna minus prijemnica"
+    AssertDoubleNear 33.3333, CDbl(m(3)), 0.01, "Manjak: procenat je udeo u ZBIRNOJ"
+
+    ' NEUPISANI kilogrami iz forme ulaze u prijemnicu -- to je cela svrha
+    ' "Preview" varijante: operater vidi manjak PRE snimanja, ne posle.
+    m = CalculateManjakPreview(brojZbirne, 50#, 25#)
+    AssertDoubleNear 275#, CDbl(m(1)), 0.01, "Manjak: neupisane kg obe klase ulaze u prijemnicu"
+    AssertDoubleNear 25#, CDbl(m(2)), 0.01, "Manjak: manjak pada za neupisane kilograme"
+
+    ' Stornirana prijemnica NE ulazi -- inace bi ispravka dokumenta izgledala
+    ' kao da je roba stigla dvaput.
+    MarkTestRowStornirano TBL_PRIJEMNICA, "PrijemnicaID", prj
+    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
+    AssertDoubleNear 0#, CDbl(m(1)), 0.01, "Manjak: stornirana prijemnica se NE broji"
+    AssertDoubleNear 300#, CDbl(m(2)), 0.01, "Manjak: posle storna fali cela zbirna"
+
+    ' Ista uzica na drugoj strani: storniran red zbirne smanjuje ocekivanje.
+    MarkTestRowStornirano TBL_ZBIRNA, "ZbirnaID", zbrII
+    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
+    AssertDoubleNear 100#, CDbl(m(0)), 0.01, "Manjak: storniran red zbirne se NE broji"
+
+    ' Broj koji ne postoji nije "sve se slaze" nego NEMA ZBIRNE: zbirna ostaje
+    ' nula, i bas po toj nuli ekran zna da liniju ne sme da nacrta.
+    m = CalculateManjakPreview(TEST_PREFIX & "-ZBR-NEMA-" & scenario, 40#, 0#)
+    AssertDoubleNear 0#, CDbl(m(0)), 0.01, "Manjak: nepostojeca zbirna daje nula kg"
+    AssertDoubleNear 40#, CDbl(m(1)), 0.01, "Manjak: neupisane kg se i tada vide"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ManjakPreviewJeZbirnaMinusPrijem", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OpenFaktureExcludeStornirano()

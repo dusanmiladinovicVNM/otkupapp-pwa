@@ -472,6 +472,7 @@ Public Sub RunAllTests()
     RunOne 185
     RunOne 186
     RunOne 187
+    RunOne 188
     RunOne 124
     RunOne 125
     RunOne 126
@@ -728,6 +729,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 185: TestName = "T_Faza_PrijavaNeGradiLjusku"
         Case 186: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
         Case 187: TestName = "T_Zbirna_OdredisteJePoljeF3"
+        Case 188: TestName = "T_Manjak_LinijaIPragSuSamoF4"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -923,6 +925,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 185: T_Faza_PrijavaNeGradiLjusku
         Case 186: T_Faza_SplashIMiniSuFazeIsteLjuske
         Case 187: T_Zbirna_OdredisteJePoljeF3
+        Case 188: T_Manjak_LinijaIPragSuSamoF4
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -15628,6 +15631,100 @@ Private Sub T_Zbirna_OdredisteJePoljeF3()
 
     AssertEq Polje(zf, "fgHladnjaca"), "", "ClearForm brise hladnjacu"
     AssertEq Polje(zf, "fgPogon"), "", "ClearForm brise pogon"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' ============================================================
+' 188. MANJAK PRIJEMNICE: LINIJA, PRAG I OBIM (MIG-004)
+'
+' Legacy frmDokumenta je pri unosu prijemnice pisao zivu liniju
+' "Zbirna X | Prijemnica Y | Manjak Z (P%)" i bojio je po pragu 0,5% / 2%.
+' Sa formom je otisao prikaz, a ne racun: CalculateManjakPreview je ostao u
+' modDokumenta bez ijednog pozivaoca. Operater je od tada prijemnicu snimao
+' ne videvsi koliko fali.
+'
+' Ovde se mere TRI stvari koje ne traze upis u tabele:
+'   prag boje       -- granice su 0,5 i 2, i mere se APSOLUTNO (visak = manjak)
+'   kapija linije   -- bez zbirne linija NE POSTOJI; nula bi lagala da se slaze
+'   obim            -- linija i "prosek gajbe" postoje SAMO u F4
+'
+' Da racun stvarno sabira prave redove meri
+' modBusinessFlowProTests.Test_ManjakPreviewJeZbirnaMinusPrijem -- ta karika
+' trazi upis, a ovaj modul ne pise u tabele.
+' ============================================================
+Private Sub T_Manjak_LinijaIPragSuSamoF4()
+    Dim f As frmOtkupUI, zf As Object, fr As Object
+    Dim linija As String, natpisF1 As String, natpisF4 As String
+
+    ' 1) PRAG BOJE. Granice se mere sa OBE strane: 0,49 je jos zeleno, 0,5 vec
+    '    nije. Bez granicnih vrednosti bi i "uvek zeleno" prolazilo.
+    AssertEq modOtkupUI.ManjakBoja(0#), C_GREEN, "slaganje u dlaku je zeleno"
+    AssertEq modOtkupUI.ManjakBoja(0.49), C_GREEN, "ispod 0,5% je jos zeleno"
+    AssertEq modOtkupUI.ManjakBoja(0.5), C_AMBER, "0,5% vise nije zeleno"
+    AssertEq modOtkupUI.ManjakBoja(1.99), C_AMBER, "ispod 2% je zuto"
+    AssertEq modOtkupUI.ManjakBoja(2#), C_RUST, "2% je crveno"
+    ' VISAK je odstupanje isto kao manjak: prijemnica teza od zbirne znaci da se
+    ' negde meri pogresno, i mora da bude jednako glasna.
+    AssertEq modOtkupUI.ManjakBoja(-2.5), C_RUST, "visak preko praga je crven kao manjak"
+    AssertEq modOtkupUI.ManjakBoja(-0.2), C_GREEN, "sitan visak je zelen kao sitan manjak"
+
+    ' 2) KAPIJA LINIJE. Zbirna od nula kilograma znaci da zbirne NEMA -- broj
+    '    nije izabran, ne postoji ili je stornirana. Linija tada ne postoji.
+    AssertEq modOtkupUI.ManjakLinija(0#, 40#, -40#, 0#), "", _
+             "bez zbirne nema linije -- nula bi izgledala kao slaganje"
+
+    ' 3) SADRZAJ LINIJE. Ceo string se ne poredi -- format broja zavisi od
+    '    podesavanja masine. Mere se dve stvari: da linija IMENUJE svoja tri
+    '    broja, i da se MENJA sa njima. Druga tvrdnja je ta koja obara "ispisi
+    '    samo natpise": ista tri natpisa nad drugim brojevima moraju dati
+    '    drugaciju liniju.
+    linija = modOtkupUI.ManjakLinija(1000#, 995#, 5#, 0.5)
+    AssertEq (Len(linija) > 0), True, "sa zbirnom linija postoji"
+    AssertEq (InStr(linija, Poruka("OTKUI_MNJ_ZBIRNA")) > 0), True, "linija imenuje zbirnu"
+    AssertEq (InStr(linija, Poruka("OTKUI_MNJ_PRIJEM")) > 0), True, "linija imenuje prijemnicu"
+    AssertEq (InStr(linija, Poruka("OTKUI_MNJ_MANJAK")) > 0), True, "linija imenuje manjak"
+    AssertEq (InStr(linija, "%") > 0), True, "linija nosi procenat"
+    AssertEq (InStr(linija, Format$(5#, "#,##0.00")) > 0), True, "linija nosi BAS manjak"
+    AssertEq (modOtkupUI.ManjakLinija(1000#, 900#, 100#, 10#) = linija), False, _
+             "linija prati brojeve, ne samo natpise"
+
+    ' 4) OBIM. Linija i prosek gajbe pripadaju SAMO prijemnici.
+    '    Sve ide kroz SelectMode, ne kroz kucanje: forma se u testu gradi bez
+    '    .Show, pa se ne oslanjamo na to da MSForms okine Change.
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    Set fr = zf.Controls("fgVrednost")
+    AssertEq KontrolaPostoji(fr, "fgVrednostMnj"), True, "akcioni red ima red za manjak"
+
+    modOtkupUI.SelectMode f, "F1"
+    natpisF1 = zf.Controls("fgKolAmb").Controls("fgKolAmbL").caption
+    AssertEq fr.Controls("fgVrednostMnj").caption, "", "F1 ne crta manjak prijemnice"
+    AssertEq (InStr(natpisF1, Poruka("OTKUI_MNJ_PROSEK")) > 0), False, _
+             "F1 nema prosek gajbe u natpisu polja gajbi"
+
+    ' Kolicina i gajbe se upisuju PRE ulaska u F4 -- ulazak je taj koji racuna.
+    SetPolje zf, "fgKgI", "300"
+    SetPolje zf, "fgKolAmb", "20"
+
+    modOtkupUI.SelectMode f, "F4"
+    natpisF4 = zf.Controls("fgKolAmb").Controls("fgKolAmbL").caption
+    AssertEq (InStr(natpisF4, Poruka("OTKUI_MNJ_PROSEK")) > 0), True, _
+             "F4 pokazuje prosek gajbe iz onoga sto je uneto"
+
+    ' F4 bez izabrane zbirne: red postoji, linija ne -- manjak bez roditelja
+    ' nije nula nego NEPOZNAT.
+    AssertEq fr.Controls("fgVrednostMnj").caption, "", "F4 bez zbirne nema liniju"
+    ' Kilogrami ostaju u JEDNOM centriranom redu dok manjka nema; dva reda
+    ' postoje samo kad linija stvarno stoji ispod njih.
+    AssertEq (fr.Controls("fgVrednostKg").top = 2), False, _
+             "bez manjka kilogrami nisu u gornjem redu"
+
+    ' Povratak u F1 mora da POCISTI natpis polja gajbi -- inace bi otkupni list
+    ' nosio broj koji za njega ne znaci nista.
+    modOtkupUI.SelectMode f, "F1"
+    AssertEq zf.Controls("fgKolAmb").Controls("fgKolAmbL").caption, natpisF1, _
+             "izlazak iz F4 vraca natpis polja gajbi"
 
     ReleaseOtkupUIForm f
 End Sub
