@@ -9461,12 +9461,20 @@ Zato nov test ide kroz `Scr_Save`, a ne kroz writer.
 
 **Šta NIJE izmereno, i zašto**
 
-- **Izvođenje hladnjače iz reda kupca** (`FillHladnjaca`). Fixture
-  (`tools/make_fixture.py`) nema kolonu `Hladnjaca` u `tblKupci`, a dodavanje
-  bi bilo **donor-zavisno**: zeleno na svesci koja tu kolonu ima, neizvršeno na
-  onoj koja je nema — ista klasa lutrije kao config-gate iz §8.8. Ostaje na
-  operaterskom smoke-u: izaberi kupca sa upisanom hladnjačom u F3 i proveri da
-  se polje popuni.
+- **Izvođenje hladnjače iz reda kupca** (`FillHladnjaca`) — **nema automatsku
+  tvrdnju.** Fixture (`tools/make_fixture.py`) nema kolonu `Hladnjaca` u
+  `tblKupci`, a dodavanje bi bilo **donor-zavisno**: zeleno na svesci koja tu
+  kolonu ima, neizvršeno na onoj koja je nema — ista klasa lutrije kao
+  config-gate iz §8.8.
+
+  > **Smoke nad pravom sveskom je prošao** (07.09.2026): kompajlira, polja se
+  > vide u F3, izbor kupca popunjava hladnjaču. **Ali prvi pokušaj nije radio, a
+  > uzrok NIJE utvrđen** — proradilo je posle ponovnog pokretanja. Najverovatniji
+  > kandidat je `modUiData.CachedTable`, koji drži snimak od starta aplikacije,
+  > pa vrednost uneta u list dok aplikacija radi ne postoji za ekran (isto važi
+  > i za `FillParcele`). Ako se ponovi: `Alt+F8 → Diag_Hladnjaca`, `Ctrl+G` —
+  > ispisuje svih pet mogućih uzroka, uključujući razliku „KES red" vs
+  > „LIST red" koja baš tu sumnju potvrđuje ili obara.
 - **Korak polje → rečnik** (`SkupiPolja`). `SkupiPolja` je `Private`, a `modTest`
   ne piše u tabele; širenje vidljivosti samo zbog jedne tvrdnje nije plaćeno.
   Karika ispod nje (rečnik → tabela) jeste pod testom.
