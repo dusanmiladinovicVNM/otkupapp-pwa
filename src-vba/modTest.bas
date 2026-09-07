@@ -473,6 +473,7 @@ Public Sub RunAllTests()
     RunOne 186
     RunOne 187
     RunOne 188
+    RunOne 189
     RunOne 124
     RunOne 125
     RunOne 126
@@ -730,6 +731,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 186: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
         Case 187: TestName = "T_Zbirna_OdredisteJePoljeF3"
         Case 188: TestName = "T_Manjak_LinijaIPragSuSamoF4"
+        Case 189: TestName = "T_Zbirne_PickerNeNudiStornirane"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -926,6 +928,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 186: T_Faza_SplashIMiniSuFazeIsteLjuske
         Case 187: T_Zbirna_OdredisteJePoljeF3
         Case 188: T_Manjak_LinijaIPragSuSamoF4
+        Case 189: T_Zbirne_PickerNeNudiStornirane
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -15725,6 +15728,81 @@ Private Sub T_Manjak_LinijaIPragSuSamoF4()
     modOtkupUI.SelectMode f, "F1"
     AssertEq zf.Controls("fgKolAmb").Controls("fgKolAmbL").caption, natpisF1, _
              "izlazak iz F4 vraca natpis polja gajbi"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' ============================================================
+' 189. PICKER BROJA ZBIRNE NE NUDI STORNIRANE (MIG-005a)
+'
+' Combo BROJ ZBIRNE je do v6-ui-219 punjen iz SIROVE tabele -- pa je nudio i
+' storniranu zbirnu, koju writer odbija (modDokUnos -> ZbirnaPostoji,
+' storno-aware). Ponuda koju writer odbija je gora od prazne: operater to otkrije
+' tek na snimanju, nad dokumentom koji je vec ceo popunio.
+'
+' Mereno nad FIXTURE-om, bez ijednog upisa: ZB-TEST-STORNO ima Stornirano = Da.
+'
+' OVAJ TEST NE TVRDI NISTA O DUPLIKATIMA, i to je namerno. Isti BrojZbirne na
+' vise redova ima DVA razlicita uzroka, koja se ne smeju meriti istom merom:
+'
+'   jedan dokument, dva reda -- Klasa I + Klasa II. SaveZbirnaMulti_TX zove
+'       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda nose
+'       isti GeneracijaID. Picker bi tu trebalo da pokaze JEDNU stavku, a danas
+'       pokazuje dve. To je i dalje OTVORENO (MIG-005b).
+'
+'   dva dokumenta, isti broj -- anomalija (rucni unos, uvoz, ispravka u tabeli);
+'       redovni generator je ne pravi. Tu su dva GeneracijaID-a.
+'
+' Razlika trazi LOGICKI kljuc (GeneracijaID, odnosno broj + vozac + kupac), ne
+' broj i ne fizicki red. Dok picker nosi samo broj, ne moze je ni izraziti --
+' v. KI-007 / ZBR-IDENT-01. Zato ovde nema tvrdnje koja bi buducu ispravnu
+' de-duplikaciju proglasila regresijom.
+' ============================================================
+Private Sub T_Zbirne_PickerNeNudiStornirane()
+    Dim f As frmOtkupUI, CB As Object
+    Dim sirovo As Variant
+    Dim r As Long, iBr As Long, iSt As Long
+    Dim sirovihStorno As Long, comboStorno As Long, comboAktivnih As Long
+
+    ' 1) PREDUSLOV. Bez stornirane zbirne u fixture-u test ne meri nista -- pa to
+    '    mora da PADNE, a ne da tiho prodje kao zeleno.
+    sirovo = modUiData.CachedTable(TBL_ZBIRNA)
+    AssertEq IsArray(sirovo), True, "preduslov: tblZbirna je citljiva"
+    iBr = modUiData.ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
+    iSt = modUiData.ColIdx(TBL_ZBIRNA, COL_STORNIRANO)
+    AssertEq (iBr > 0), True, "preduslov: tblZbirna ima kolonu BrojZbirne"
+    AssertEq (iSt > 0), True, "preduslov: tblZbirna ima kolonu Stornirano"
+    For r = 1 To UBound(sirovo, 1)
+        If StrComp(modUiData.CellS(sirovo, r, iBr), FX_ZBIRNA_STORNO, vbTextCompare) = 0 Then
+            sirovihStorno = sirovihStorno + 1
+        End If
+        If StrComp(modUiData.CellS(sirovo, r, iBr), FX_ZBIRNA, vbTextCompare) = 0 Then
+            comboAktivnih = comboAktivnih + 1
+        End If
+    Next r
+    AssertEq (sirovihStorno >= 1), True, "preduslov: fixture ima storniranu zbirnu"
+    AssertEq (comboAktivnih >= 1), True, "preduslov: fixture ima aktivnu zbirnu"
+
+    ' 2) PONUDA. Stornirane nema; aktivna je i dalje tu (filtar ne sme da pojede
+    '    sve -- prazan picker bi prosao tvrdnju o storniranoj).
+    Set f = NewOtkupUIForm()
+    modOtkupUI.SelectMode f, "F4"          ' F4 vezuje zbirnu (ModeVezujeZbirnu)
+    modOtkupUI.FillZbirneCombo f
+    Set CB = f.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+
+    comboStorno = 0
+    comboAktivnih = 0
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_STORNO, vbTextCompare) = 0 Then
+            comboStorno = comboStorno + 1
+        End If
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA, vbTextCompare) = 0 Then
+            comboAktivnih = comboAktivnih + 1
+        End If
+    Next r
+
+    AssertEq comboStorno, 0, "picker ne nudi storniranu zbirnu"
+    AssertEq (comboAktivnih >= 1), True, "picker i dalje nudi aktivnu zbirnu"
 
     ReleaseOtkupUIForm f
 End Sub

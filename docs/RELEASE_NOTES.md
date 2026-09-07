@@ -7204,7 +7204,7 @@ zatvara i ne otvara), a izgled se više ne može razići između delova aplikaci
 
 ### Verifikacija
 
-- `vba_check` čist, **474 sabotaže** (svaka obara tačno svoj imenovani test),
+- `vba_check` čist, **475 sabotaža** (svaka obara tačno svoj imenovani test),
   self-test enkodera logotipa u oba smera.
 - **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad pravim
@@ -7305,6 +7305,17 @@ Uz unos prijemnice (F4) ponovo stoji živa linija u akcionom redu:
 
 Ovo je postojalo u staroj formi za dokumenta i nestalo je sa njom; sam račun je
 sve vreme bio u kodu, samo ga niko nije zvao.
+
+### Broj zbirne: stornirane se više ne nude
+
+Padajuća lista **Broj zbirne** (otkupni list, otpremnica, prijemnica) je nudila i
+**stornirane** zbirne. Izbor takve zbirne aplikacija odbija tek na snimanju — na
+dokumentu koji je već ceo popunjen. Sada ih u ponudi nema.
+
+Ostaje **nerešeno**, i to se ovde kaže otvoreno: zbirna sa dve klase (I i II) i
+dalje stoji **dvaput** u listi. To su dva reda **jednog** dokumenta, pa bi tu
+trebalo da stoji jedna stavka. Spajanje traži da lista nosi identitet dokumenta,
+a ne samo broj — pa ide u zaseban korak.
 
 ### Prijava: F-tasteri više ne rade ispod kartice
 

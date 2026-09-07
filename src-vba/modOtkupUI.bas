@@ -6534,6 +6534,35 @@ Public Sub FillZbirneCombo(frm As Object)
     CB.Clear
     src = CachedTable(TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
+    ' MIG-005a: STORNIRANE ZBIRNE SE NE NUDE.
+    '
+    ' Kes ljuske je sirova tabela, pa je picker do v6-ui-219 nudio i storniranu
+    ' zbirnu -- a writer je odbija (modDokUnos -> ZbirnaPostoji, koja radi bas
+    ' ovaj filtar). Ponuda koju writer odbija je gora od prazne: operater to
+    ' otkrije tek na snimanju, nad dokumentom koji je vec ceo popunio.
+    '
+    ' Filtar je POSTOJECI modHelpers.ExcludeStornirano -- isti koji zove i
+    ' ZbirnaPostoji. Picker i writer time gledaju istu definiciju "aktivne", pa
+    ' se ne mogu raziici. Radi nad prosledjenim nizom, bez novog citanja lista:
+    ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
+    ' a ovo se zove na svaku promenu rezima.
+    '
+    ' NE DE-DUPLIRA. Isti broj na vise redova ima DVA razlicita uzroka:
+    '   jedan dokument, dva reda -- Klasa I + II. SaveZbirnaMulti_TX zove
+    '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda
+    '       nose isti GeneracijaID. Tu BI trebalo pokazati jednu stavku, a
+    '       danas se pokazuju dve -- zatecen kvar, vodi se kao MIG-005b.
+    '   dva dokumenta, isti broj -- anomalija (rucni unos sa ugasenim
+    '       auto-brojem, uvoz, ispravka u tabeli); generator je ne pravi, jer
+    '       SuggestNextBroj vrti BrojZbirneExists dok broj ne bude slobodan.
+    '
+    ' Razlika trazi LOGICKI kljuc (GeneracijaID = broj + vozac + kupac), ne
+    ' broj i ne fizicki red. Combo nosi samo broj, pa je ni ne moze izraziti:
+    ' dve stavke istog broja daju polju istu vrednost i writer-u isti podatak.
+    ' Zato se ovde NE de-duplikuje niti se to zakljucava tvrdnjom -- resenje
+    ' ide uz KI-007 / ZBR-IDENT-01, v. par.28.1f.
+    src = ExcludeStornirano(src, TBL_ZBIRNA)
+    If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
     If iBroj < 1 Then GoTo XIT

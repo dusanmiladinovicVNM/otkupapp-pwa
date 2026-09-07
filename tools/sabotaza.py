@@ -5224,6 +5224,17 @@ SABOTAZE = {
         "Test_ManjakPreviewJeZbirnaMinusPrijem",
         "Manjak: neupisane kg obe klase ulaze u prijemnicu",
     ),
+    # MIG-005a. Picker koji nudi ono sto writer odbija je gori od praznog:
+    # operater to otkrije tek na snimanju, nad dokumentom koji je vec popunio.
+    # Filtar je isti (ExcludeStornirano) koji zove i ZbirnaPostoji -- zato se
+    # picker i writer ne mogu raziici.
+    "zbirne-picker-nudi-stornirane": (
+        "modOtkupUI.bas",
+        "    src = ExcludeStornirano(src, TBL_ZBIRNA)\n",
+        "    src = src   \' SABOTAZA: picker nudi i stornirane\n",
+        "T_Zbirne_PickerNeNudiStornirane",
+        "picker ne nudi storniranu zbirnu",
+    ),
     "faza-prijava-pusta-f-tastere": (
         "modUiFaze.bas",
         "                Case vbKeyF1 To vbKeyF9: FazaTaster = True\n",
