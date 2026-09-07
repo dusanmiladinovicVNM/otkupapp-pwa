@@ -15840,9 +15840,21 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim pecat As String
     Dim p4 As String, pTgtB As String, pTgtA As String
     Dim pStor As String, pD1 As String, pD2 As String
+    Dim pFx As String, pFxGen As String
 
-    ' A20 + PREDUSLOV: aktivan red bez generacije je integritetska greska.
+    ' A20: aktivan red bez generacije je integritetska greska.
+    '
+    ' I ovo stanje se POSTAVLJA. ZB-TEST-1 je najprometniji broj u fixture-u --
+    ' testovi u njega upisuju prijemnice -- pa se ne sme pretpostaviti da je do
+    ' 190. jos aktivan i bez generacije. Dovoljan je JEDAN aktivan red bez
+    ' generacije da broj bude integritetska greska, i taj red test sam obezbedjuje.
+    pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
+    pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID, ""
     idFx = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, pFx
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID, pFxGen
 
     ' A1 / A2
     idPrazan = ZbirnaIdentResolve("", FX_VOZAC, FX_KUPAC)
@@ -15963,6 +15975,7 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Dim unija As Object
     Dim oznakaAktivne As String, oznakaSiroceta As String
     Dim pecat As String, p4 As String, pPrjBroj As String
+    Dim pFx As String, pFxGen As String
     Const SIROCE_BROJ As String = "ZB-SIROCE-TEST"
 
     ' STANJE SE POSTAVLJA, NE PRETPOSTAVLJA -- isti razlog kao u testu 190.
@@ -15981,8 +15994,15 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Set unija = AktivniBrojeviZbirne()
     If unija.Exists(FX_ZBIRNA_MIRNA) Then oznakaAktivne = CStr(unija(FX_ZBIRNA_MIRNA))
 
+    ' Isti razlog kao u testu 190: stanje ZB-TEST-1 se postavlja, ne pretpostavlja.
+    pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
+    pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID, ""
     id = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
     rInteg = ZbirnaNovUnosRazlog(id)
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, pFx
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID, pFxGen
 
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
     rAktivan = ZbirnaNovUnosRazlog(id)
