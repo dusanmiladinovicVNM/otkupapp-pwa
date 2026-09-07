@@ -8,6 +8,13 @@
 **Default stav:** `reuse > new` · `extend > duplicate` · `verify > conclude` ·
 `inspect before propose` · `minimal change over idealized redesign`.
 
+**Ljuska korisnika je Git Bash, i samo Git Bash.** Svaka komanda koja mu se da
+ide u **bash obliku sa `/`** — nikad PowerShell oblik, nikad `\` u putanji.
+Backslash u Git Bash-u **nestaje bez greške**: `python tools\run_vba.py` postane
+`toolsrun_vba.py`, a `cd ~\Documents\GitHub\...` postane `~DocumentsGitHub...`.
+Poruka o grešci pokazuje na fajl koji ne postoji, ne na pravi uzrok. Važi i za
+poziv PowerShell skripte: `powershell -File tools/check_merge.ps1`.
+
 ## 1) Pre izmene
 
 1. **Reference-first.** Izvori istine: `docs/DOMEN/README.md` (šta dokumenti jesu
@@ -75,9 +82,9 @@ Ako oblast nema svoj fajl, važi samo ovo ovde.
 
 | Nivo | Kada | Komanda |
 |---|---|---|
-| **FAST** | posle svake VBA izmene; ide i automatski kroz `PostToolUse` hook | `python tools\vba_check.py` |
-| **TARGETED** | za feature ili bug — suite koja pokriva to područje | `python tools\run_vba.py --suite <ime>` |
-| **FULL** | pred release i za rizične izmene u jezgru | `python tools\run_vba.py` |
+| **FAST** | posle svake VBA izmene; ide i automatski kroz `PostToolUse` hook | `python tools/vba_check.py` |
+| **TARGETED** | za feature ili bug — suite koja pokriva to područje | `python tools/run_vba.py --suite <ime>` |
+| **FULL** | pred release i za rizične izmene u jezgru | `python tools/run_vba.py` |
 
 - `vba_check` radi svuda, i u Linux sesiji. `run_vba` traži **Windows + Excel +
   `pywin32`** i u web sesiji se **ne izvršava** — tamo se izmena ponašanja
@@ -102,12 +109,12 @@ Detalji i katalog: `.claude/rules/testovi.md`. Zašto su pravila ovakva:
 Detalji: `.claude/rules/git-i-release.md`.
 
 - Razvoj na zadatoj feature grani. **Ne praviti PR bez eksplicitnog zahteva.**
-- Integracija `main`-a: `git fetch` → `powershell -File tools\check_merge.ps1` →
+- Integracija `main`-a: `git fetch` → `powershell -File tools/check_merge.ps1` →
   rebase lokalno → **pokaži rezultat** → `push --force-with-lease` tek po
   eksplicitnom odobrenju. Nikad force-push pre pokazivanja.
 - **Izmene u `.claude/` idu isključivo kroz zaseban process PR, jedan po jedan** —
   nikad zajedno sa feature izmenom. Paralelne sesije nad istim `.claude/` su već
   proizvele tri sudarena PR-a.
 - Komande zovi iz root-a repoa; `cd ... &&` prefiks obara permission match.
-- Na kraju izmene koda daj komande za preuzimanje grane (PowerShell oblik;
+- Na kraju izmene koda daj komande za preuzimanje grane (**bash oblik**;
   `~/Documents/GitHub/otkupapp-pwa` = `ImportAllVBA` folder).
