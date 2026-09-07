@@ -1142,6 +1142,10 @@ Private Sub T_Matic_SekcijaTraziPravo()
     ' Admin bypass: bez ovoga bi gornja tvrdnja bila zelena i kad AUTH sve gasi.
     AssertEq Trim$(adminSme), "", "admin sme sve iz sekcije Maticni"
     AssertEq dugmeAdmin, True, "zamena operatera VRACA prekidac adminu"
+
+    ' v. komentar u T_PrefillBezBroja_PredlaziBroj: put uspeha mora da oslobodi
+    ' formu, inace je placa prvi sledeci test koji gradi ekran.
+    ReleaseOtkupUIForm f
 End Sub
 
 ' ============================================================
@@ -3249,6 +3253,12 @@ Private Sub T_PrefillBezBroja_PredlaziBroj()
                             "|omid=" & FX_STANICA & "|brdok=TEST-BR-1"
     AssertEq Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text)), "TEST-BR-1", _
              "broj koji prefill donese se ne pregazuje predlogom"
+
+    ' Forma se OSLOBADJA i na uspehu. Bez ovoga ostaje ucitana, pa prvi sledeci
+    ' test koji gradi ekran radi nad ostacima -- i pukne DOK JE FORMA ZIVA, gde
+    ' njena masinerija brise Err, pa pad stigne kao "greska bez opisa". Na padu
+    ' ovo radi CleanupPosleTesta; put uspeha do sada nije imao nikoga.
+    ReleaseOtkupUIForm f
 End Sub
 ' ============================================================
 ' 60. Uvid je identity-scoped u CELOSTI, ne samo u lancu
@@ -7927,6 +7937,10 @@ Private Sub T_BankaUvoz_UlazakUvoziIzvode()
              "preduslov: zamena operatera je STVARNO presla na Uvoz izvoda"
     AssertEq zamenaPozvan, 0, _
              "zamena operatera NE pokrece uvoz -- ni ona nije klik"
+
+    ' v. komentar u T_PrefillBezBroja_PredlaziBroj: put uspeha mora da oslobodi
+    ' formu, inace je placa prvi sledeci test koji gradi ekran.
+    ReleaseOtkupUIForm f
 End Sub
 
 Private Sub T_BankaUvoz_UgovorEkrana()
