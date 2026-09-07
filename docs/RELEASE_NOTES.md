@@ -7204,7 +7204,7 @@ zatvara i ne otvara), a izgled se više ne može razići između delova aplikaci
 
 ### Verifikacija
 
-- `vba_check` čist, **465 sabotaža** (svaka obara tačno svoj imenovani test),
+- `vba_check` čist, **470 sabotaža** (svaka obara tačno svoj imenovani test),
   self-test enkodera logotipa u oba smera.
 - **Ručna kapija pred upotrebu:** `Alt+F8 → ImportAllVBA`,
   `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, i smoke nad pravim
@@ -7283,3 +7283,12 @@ otišlo sa formom, pa se avans mogao vezivati samo blok po blok.
   posebno, a ne kao primenjen — ranije je i takav slučaj izgledao kao uspeh.
 - Blok iz korpe koji nema avans ili nema otvoren iznos se ne dira i ne broji.
 - Greška na jednom bloku ne prekida ostale.
+
+### Prijava: F-tasteri više ne rade ispod kartice
+
+Dok stoji kartica za prijavu, `F1`–`F9` su prolazili kroz nju do Excela — `F1`
+je otvarao Excel pomoć preko kartice. Do ekrana aplikacije nisu stizali ni pre
+(prekidač režima nije radio), ali su „padali kroz". Sada se gutaju.
+
+Kucanje korisničkog imena i PIN-a je nepromenjeno; `Enter` i dalje prijavljuje,
+`Esc` otkazuje.

@@ -5117,6 +5117,11 @@ SABOTAZE = {
     ),
     # Blok bez avansa iz korpe ulazi u batch kao "bez promene" -- zbirni ishod
     # tada laze o tome koliko je posla uopste bilo.
+    # NAMERNO obara DVE tvrdnje istog testa (kandidata 3 umesto 2, noop 2 umesto
+    # 1), i to nije zamka 5/6: `Chk*` u modTestBanka BELEZI pa nastavlja, pa se
+    # obe prijave po imenu -- ne postoji tvrdnja koja "sakrije" onu iz kataloga.
+    # Uzi pogodak nije moguc: isti red je i brojac kandidata i kapija ulaska u
+    # batch, pa jedna promena nuzno pomera oba broja.
     "banka-nalozi-avans-broji-i-prazne": (
         "modScrBankaNalozi.bas",
         "            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then\n"
@@ -5140,6 +5145,18 @@ SABOTAZE = {
         '            FldShow z, "fgHladnjaca", True   \' SABOTAZA: odrediste vidljivo svuda\n',
         "T_Zbirna_OdredisteJePoljeF3",
         "F1 nema polje hladnjace",
+    ),
+    # Ispod kartice prijave tasteri ljuske ne smeju da rade. Nepotrosen taster
+    # NE stize do ljuske (oba pozivaoca izlaze odmah) nego do MSForms-a: KeyCode
+    # ostane, pa F1 otvori Excel pomoc preko kartice koju operater jos nije
+    # prosao. Sabotaza pomera opseg na F10 -- red ostaje, kod se kompajlira,
+    # a pada tacno tvrdnja o F1 (cetiri tvrdnje pre nje i dalje prolaze).
+    "faza-prijava-pusta-f-tastere": (
+        "modUiFaze.bas",
+        "                Case vbKeyF1 To vbKeyF9: FazaTaster = True\n",
+        "                Case vbKeyF10: FazaTaster = True   \' SABOTAZA: F1-F9 prolaze\n",
+        "T_Faza_PrijavaNeGradiLjusku",
+        "F1 se ne prosledjuje ljusci ispod prijave",
     ),
 }
 

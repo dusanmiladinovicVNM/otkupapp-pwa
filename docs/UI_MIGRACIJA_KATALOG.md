@@ -9325,6 +9325,28 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
 | `.frm` / `.frx` parova | 4 → **1** |
 | VBA fajlova | 198 → **194** |
 
+#### Dopuna (07.09.2026): F-tasteri ispod kartice prijave
+
+`T_Faza_PrijavaNeGradiLjusku` (test 185) je od `b1029e96` padao na tvrdnji
+**„F1 se ne prosleđuje ljusci ispod prijave"** — test i `FazaTaster` su ušli
+**istim commitom** i protivrečili jedan drugom, pa ta tvrdnja nikad nije bila
+zelena. Nije regresija nego neizmerena tvrdnja: FULL na Windows-u nije pušten
+posle tog commita.
+
+`FazaTaster` je pod `FAZA_LOGIN` trošio samo `Enter` i `Esc`. Nepotrošen taster
+**ne stiže do ljuske** — i `HandleGlobalKey` i `HandleKeyFrom` izlaze odmah čim
+je faza aktivna — ali `KeyCode` ostaje, pa ga obradi MSForms: `F1` otvara Excel
+pomoć preko kartice koju operater još nije prošao. Ispravka guta `F1`–`F9` pod
+`FAZA_LOGIN`.
+
+**Blanket `True` kao u `BOOT`/`MINI` ovde ne može.** Te dve faze nemaju polja za
+kucanje; kartica prijave ima. Pozivalac (`clsFlatBtn.ForwardKey`) na `True`
+postavlja `KeyCode = 0`, pa bi gutanje svakog tastera ubilo unos korisničkog
+imena i PIN-a — a tagovi tih polja počinju sa `fz`, pa im svaki pritisak ide
+baš kroz `FazaTaster`.
+
+Sabotaža: `faza-prijava-pusta-f-tastere` (pomera opseg na `F10`; red ostaje,
+kod se kompajlira, pada tačno ta tvrdnja).
 
 ---
 
