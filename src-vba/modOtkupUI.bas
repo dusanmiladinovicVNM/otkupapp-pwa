@@ -6547,23 +6547,20 @@ Public Sub FillZbirneCombo(frm As Object)
     ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
     ' a ovo se zove na svaku promenu rezima.
     '
-    ' NE DE-DUPLIRA po broju, i to je namerno.
+    ' NE DE-DUPLIRA. Isti broj na vise redova ima DVA razlicita uzroka:
+    '   jedan dokument, dva reda -- Klasa I + II. SaveZbirnaMulti_TX zove
+    '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda
+    '       nose isti GeneracijaID. Tu BI trebalo pokazati jednu stavku, a
+    '       danas se pokazuju dve -- zatecen kvar, vodi se kao MIG-005b.
+    '   dva dokumenta, isti broj -- anomalija (rucni unos sa ugasenim
+    '       auto-brojem, uvoz, ispravka u tabeli); generator je ne pravi, jer
+    '       SuggestNextBroj vrti BrojZbirneExists dok broj ne bude slobodan.
     '
-    ' Generator broj DRZI JEDINSTVENIM i to dvostruko: format je
-    ' "x/ddmmyy[-rb]" gde je x numericki deo VOZACA, pa dva vozaca ne mogu
-    ' dati isti broj; a SuggestNextBroj za ZBR jos i bumpuje sekvencu dok
-    ' BrojZbirneExists ne kaze da je slobodna. Na auto putu duplikat je
-    ' NEMOGUC.
-    '
-    ' Nastaje samo MIMO generatora: rucnim unosom (auto-broj se gasi u
-    ' Podesavanjima, IsAutoBrojDokumenta), uvozom ili ispravkom u tabeli --
-    ' a na tim putevima jedinstvenost niko ne proverava pri upisu
-    ' (BrojZbirneExists je Private i zove se samo iz predloga).
-    '
-    ' Duplikat je zato UVEK ANOMALIJA. Spajanje bi je sakrilo od jedine osobe
-    ' koja je moze videti, i bilo bi isti kvar koji je RowsAktivni vec platio
-    ' (T_Oporavak_CiljneListe). Prava ispravka je KI-007 / ZBR-IDENT-01, u
-    ' core-u -- v. par.28.1f.
+    ' Razlika trazi LOGICKI kljuc (GeneracijaID = broj + vozac + kupac), ne
+    ' broj i ne fizicki red. Combo nosi samo broj, pa je ni ne moze izraziti:
+    ' dve stavke istog broja daju polju istu vrednost i writer-u isti podatak.
+    ' Zato se ovde NE de-duplikuje niti se to zakljucava tvrdnjom -- resenje
+    ' ide uz KI-007 / ZBR-IDENT-01, v. par.28.1f.
     src = ExcludeStornirano(src, TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)

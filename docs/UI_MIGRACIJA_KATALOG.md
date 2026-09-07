@@ -9381,6 +9381,7 @@ ispod proveren do funkcije, ne do imena.
 | ~~MIG-003~~ | ~~**„Primeni avans (sel.)"** — batch nad čekiranim blokovima~~ — **ZATVOREN** (`v6-ui-217`), v. §28.1d | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
 | ~~MIG-004~~ | ~~**Manjak prijemnice vs zbirna + prosek gajbe** (F4)~~ — **ZATVOREN** (`v6-ui-218`), v. §28.1e | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
 | ~~MIG-005~~ | ~~**Lista zbirnih za izbor** (F3)~~ — **PREKVALIFIKOVAN**, v. §28.1f: unos je bio **netačan** (bila je F4, ne F3) i sam prikaz **nije izgubljen**. Zatvoren je uži nalaz **MIG-005a** (`v6-ui-219`) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
+| MIG-005b | **Dvoklasna zbirna stoji DVAPUT u pickeru** (F1/F2/F4) | — (nastalo u ljusci) | `SaveZbirnaMulti_TX` zove `SaveZbirna` dvaput sa **istim** brojem, vozačem i kupcem (Klasa I i II), pa su to **dva reda jednog dokumenta** sa istim `GeneracijaID`. `FillZbirneCombo` dodaje **svaki red**, pa se broj vidi dvaput. De-duplikacija traži **logički ključ** (`GeneracijaID`, odnosno broj + vozač + kupac), ne broj i ne fizički red — a picker nosi samo broj, pa dva dokumenta istog broja ionako ne može da razlikuje. **Blokirano na KI-007 / ZBR-IDENT-01** |
 | MIG-006 | **Živ verdikt validacije zbirne** (F3) | `frmDokumenta.UpdateValidacija` (korak 2) | Kapija JESTE preneta i tvrda je (`modDokUnos.ZbirnaValidiraj` → `ValidateZbirnaPreUnosa`; komentar u `modDokUnos` to i kaže: „račun je isti, samo se ovde ne crta"). Nedostaje da operater PRE snimanja vidi „OK" ili „Razlika". KPI pločica „Validacija" u ljusci je zakucana na `OTKUI_KPI_SPREMNO` u zelenom (`modOtkupUI`, `RefreshKpi`) |
 | MIG-007 | **MALINA: sekcija Zbirna se ne gasi** | `frmDokumenta.DisableFraZbirnaMalina` (korak 2) | `IsMalinaMode` u ljusci postoji, ali samo za auto-izbor par-vozača. F3 je u malina modu potpuno otvoren, iako `modDokUnos` otpremnicu snima sa praznim `BrojZbirne` i zbirnu pravi sam. **Šteta nije reprodukovana** — tvrdi se samo da kapija koja je postojala nema naslednika |
 | MIG-008 | **Sedam polja detalja kartice** | `modKarticaDetalji.ShowOtkupDetails` (modul obrisan) | Legacy panel je ispisivao do 19 parova; nova detalj traka (`modScrIzvestaji.IzDetaljOtkupLista`, do 6 linija) nosi drugi sadržaj i dodaje nizvodnu sledljivost. Bez zamene su ostali: **parcela, sorta, bruto, tip ambalaže, gajbe, izdata ambalaža, isplaćeno (keš) + primalac** |
@@ -9703,68 +9704,60 @@ promenu režima.
 
 Plan je tražio i **de-duplikaciju po broju** i **zbir kg po broju** u
 `GetAktivneZbirne`, pa da picker čita njega kao „kanonski read-model". **Oboje je
-odbačeno**, jer je kod pokazao suprotno:
+odbačeno.** Prvi pokušaj obrazloženja te odluke bio je **pogrešan** i ispravljen
+je odmah zatim; ovde stoji tačan.
 
-```
-' modTest, T_Oporavak_CiljneListe
-AssertEq duplih, 2, "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"
-```
+**Broj je jedinstven, dokument nije red.** Redovni generator `BrojZbirne` drži
+globalno jedinstvenim: format je `x/ddmmyy[-rb]` gde je `x` numerički deo vozača,
+a `SuggestNextBroj` za `ZBR` uz to vrti `Do While BrojZbirneExists(...)` nad
+**celom** tabelom. Dvosmislen broj zato ne nastaje redovnim putem — samo ručnim
+unosom sa ugašenim auto-brojem, uvozom ili ispravkom u tabeli, gde jedinstvenost
+pri upisu **niko ne proverava** (`BrojZbirneExists` je `Private`, zove se samo iz
+predloga). Zato mutacione putanje moraju ostati **fail-closed**.
 
-> *„lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red, pa operater
-> ne bi mogao da izabere onaj koji mu treba"*
+**Tri različite stvari koje se lako pomešaju:**
 
-**Na auto putu duplikat je NEMOGUĆ, i to dvostruko.** Format je
-`x/ddmmyy[-rb]`, gde je `x` numerički deo **vozača** — dva vozača ne mogu dati
-isti broj. Uz to `SuggestNextBroj` za `ZBR` bumpuje sekvencu u petlji
-`Do While BrojZbirneExists(...)`, koja skenira **celu** `tblZbirna`. Fixture red
-`ZB-TEST-DUPL` nije ni u kanonskom formatu — to je sintetički anomalijski red.
+| | Šta je | Primer |
+|---|---|---|
+| fizički red | red u `tblZbirna` | Klasa I; Klasa II |
+| logički dokument | `GeneracijaID` = broj + vozač + kupac | jedna zbirna, dva reda |
+| poslovni broj | `BrojZbirne` | ono što picker prikazuje |
 
-Duplikat nastaje **samo mimo generatora**: ručnim unosom (auto-broj se gasi u
-Podešavanjima, `IsAutoBrojDokumenta`), uvozom ili ispravkom u tabeli. Na tim
-putevima jedinstvenost pri upisu **niko ne proverava** — `BrojZbirneExists` je
-`Private` u `modBrojevi` i zove se samo iz predloga.
+`SaveZbirnaMulti_TX` zove `SaveZbirna` **dvaput sa istim brojem, vozačem i
+kupcem** — dakle **dvoklasna zbirna je JEDAN dokument na DVA reda**, sa istim
+`GeneracijaID`.
 
-**Zato je duplikat uvek anomalija — i baš zato se ne sme spajati.** Spajanje bi
-je sklonilo sa očiju jedine osobe koja je može videti, i to u trenutku kad bira
-na šta da veže dokument. `modScrOporavak.RowsAktivni` je isti kvar već platio i
-ispravio (ključuje po `broj + vlasnik`, i po generaciji gde je ima);
-`GetAktivneZbirne` ključuje po **samom broju** i tu grešku i dalje nosi.
+**Zbog te razlike je de-duplikacija odbijena, ali i sam picker ostao nedovršen:**
 
-Da je picker prebačen na njega, dva reda bi se spojila u jednu ponudu — a zbir kg
-bi ih prikazao kao jedan dokument od 300 kg koji ne postoji. To nije čišćenje
-nego izmišljanje podatka, i to baš nad anomalijom koja traži pogled.
+- `GetAktivneZbirne` de-duplikuje po **samom broju**. To je pogrešan ključ: spojio
+  bi i dva **različita** dokumenta koja anomalno dele broj, a zbir kg bi ih
+  prikazao kao jedan dokument koji ne postoji. Zato **nije diran** i ostaje bez
+  produkcionog pozivaoca.
+- Ispravna de-duplikacija bi grupisala po **logičkom dokumentu**, ne po broju.
+  Za to picker mora da nosi identitet — a nosi samo broj.
 
-Zato:
+**Zato dvoklasna zbirna i dalje stoji dvaput u pickeru.** To je zatečeni kvar koji
+ovaj korak **nije rešio**, vodi se kao **MIG-005b** i blokiran je na
+KI-007 / ZBR-IDENT-01.
 
-- `GetAktivneZbirne` **nije diran** i **ostaje bez produkcionog pozivaoca**;
-- picker **ne de-duplikuje**, i to je sada **kapija sa tvrdnjom**, ne previd;
-- dijagram „3 kopije → 1" iz plana je netačan: posle ovoga je **3 → 3**, jer se
-  spajanje pokazalo kao pogrešan potez, a ne kao odloženi.
-
-#### ZBR-IDENT-01 — otvoreno, i sada dokazano
-
-Prijemnica se na zbirnu vezuje **samo brojem**, a `ZbirnaPostoji` odgovara samo
-na „postoji li taj broj". Sa dva istoimena aktivna reda veza je dvosmislena, i
-**nijedan sloj to ne prijavljuje**.
-
-Rizik je **nizak po verovatnoći, ali bez ijedne kapije**: generator takav broj ne
-može da napravi, ali ga ručni unos sa ugašenim auto-brojem, uvoz ili ispravka u
-tabeli mogu — i tada ništa ne staje. Zato ovo nije „popraviti odmah" nego
-„zapisati i rešiti u core-u".
-
-Zapisano kao **KI-007** u `docs/KNOWN_ISSUES.md`. Rešenje ide u **core** (veza po
-identitetu, ne po broju), ne u UI: picker ne može da reši dvosmislenost koju
-writer ne ume da izrazi.
+> **Ranija verzija ovog odeljka tvrdila je suprotno** — da dupla stavka mora da
+> ostane „da bi operater mogao da izabere pravi". Ta tvrdnja je **neodrživa**:
+> obe stavke prikazuju isti tekst i daju polju istu vrednost, a writer prima samo
+> broj. Izbor između dve identične stavke ne nosi identitet nigde dalje. Tvrdnja
+> u testu i sabotaža koje su to zaključavale su **uklonjene**, jer bi buduću
+> ispravnu de-duplikaciju proglasile regresijom.
 
 **Verifikacija**
 
 | Šta | Gde |
 |---|---|
-| Stornirana zbirna nije u ponudi; dva aktivna reda istog broja **ostaju oba** | `modTest` `T_Zbirne_PickerJeKanonskiReadModel` (bez ijednog upisa, nad fixture-om; oba preduslova se tvrde, pa test ne može tiho da prođe kao prazan) |
-| Sabotaže | `zbirne-picker-nudi-stornirane`, `zbirne-picker-spaja-isti-broj` |
+| Stornirana zbirna nije u ponudi, a aktivna jeste (filtar ne sme da pojede sve) | `modTest` `T_Zbirne_PickerNeNudiStornirane` (bez ijednog upisa, nad fixture-om; preduslovi se tvrde, pa test ne može tiho da prođe kao prazan) |
+| Sabotaža | `zbirne-picker-nudi-stornirane` |
 
-**Šta NIJE izmereno:** sam izgled padajućeg panela i redosled po datumu —
-sortiranje je zatečeno ponašanje i ova izmena ga ne dira.
+**Šta NIJE izmereno ni rešeno:** izgled padajućeg panela i redosled po datumu
+(zatečeno ponašanje, ne dira se) i — važnije — **dupla stavka dvoklasne zbirne**,
+koja ostaje otvorena kao MIG-005b. O duplikatima ovaj korak **namerno ne tvrdi
+ništa**, da buduća ispravna de-duplikacija ne bi bila proglašena regresijom.
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 

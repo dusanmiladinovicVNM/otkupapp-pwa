@@ -5232,31 +5232,8 @@ SABOTAZE = {
         "modOtkupUI.bas",
         "    src = ExcludeStornirano(src, TBL_ZBIRNA)\n",
         "    src = src   \' SABOTAZA: picker nudi i stornirane\n",
-        "T_Zbirne_PickerJeKanonskiReadModel",
+        "T_Zbirne_PickerNeNudiStornirane",
         "picker ne nudi storniranu zbirnu",
-    ),
-    # Naizgled bezazleno "ciscenje duplikata". Generator broj drzi jedinstvenim
-    # (format nosi vozaca + bump-loop dok broj ne bude slobodan), pa je duplikat
-    # UVEK anomalija -- rucni unos sa ugasenim auto-brojem, uvoz ili ispravka u
-    # tabeli. Spajanje bi je sakrilo od jedine osobe koja je moze videti, i bio
-    # bi to isti kvar koji je T_Oporavak_CiljneListe vec platio ("lista je
-    # vlasnikom smatrala samo kupca i spajala ih u JEDAN red, pa operater ne bi
-    # mogao da izabere onaj koji mu treba").
-    "zbirne-picker-spaja-isti-broj": (
-        "modOtkupUI.bas",
-        "    For i = 1 To j\n"
-        "        CB.AddItem CStr(arr(i))\n"
-        "    Next i\n",
-        "    Dim vidj As Object: Set vidj = CreateObject(\"Scripting.Dictionary\")\n"
-        "    vidj.CompareMode = vbTextCompare\n"
-        "    For i = 1 To j\n"
-        "        If Not vidj.Exists(CStr(arr(i))) Then   \' SABOTAZA: spaja isti broj\n"
-        "            vidj.Add CStr(arr(i)), True\n"
-        "            CB.AddItem CStr(arr(i))\n"
-        "        End If\n"
-        "    Next i\n",
-        "T_Zbirne_PickerJeKanonskiReadModel",
-        "isti broj na vise AKTIVNIH redova ostaje vise ponuda -- broj nije identitet",
     ),
     "faza-prijava-pusta-f-tastere": (
         "modUiFaze.bas",
