@@ -130,9 +130,24 @@ End Sub
 ' MORA se pozvati PRE prve izmene koda: gActiveStanica je module-level, a izmena
 ' bilo kog modula brise module-level stanje u svim modulima (mereno, zamka #29).
 ' Posle toga se vise ne zna koji lock drzimo, pa se ne moze ni otpustiti.
+' doBulkPush = FALSE, i to NIJE detalj. ReleaseStanicaLockInternal sa True prvo
+' pozove BulkPushPendingForStanica, koji APPENDUJE pending otkupne redove na
+' Google sheet pa TEK ONDA lokalno upise ClientRecordID = "VBA:" & OtkupID.
+' Taj lokalni marker je JEDINI idempotency guard za ponovni push
+' ("If Len(crid) > 0 Then GoTo NextRow").
+'
+' Ciscenje pred self-update ne sme da nosi poslovni side effect: push bi se desio
+' PRE nego sto se zna da ce update uspeti, a AbortSelfUpdate zatvara svesku sa
+' SaveChanges:=False -- cloud append bi ostao, lokalni marker bi se odbacio, i
+' sledeca sesija bi iste redove poslala PONOVO. Duplikati u cloud-u iz rutine
+' koja je trebalo samo da otpusti lock.
+'
+' Sa False radi se tacno ono sto lifecycle cleanup treba: LOCK=NO, cist
+' OWNER/MESSAGE, reset gActiveStanica/gActiveDatum, StopHeartbeatTimer. Pending
+' redovi ostaju pending i idu kroz normalan poslovni tok.
 Public Sub ReleaseActiveStanicaLock()
     If Len(gActiveStanica) = 0 Then Exit Sub
-    Call ReleaseStanicaLockInternal(gActiveStanica, gActiveDatum, True)
+    Call ReleaseStanicaLockInternal(gActiveStanica, gActiveDatum, False)
 End Sub
 
 ' Atomic stanica switch: release stari sa bulk push, acquire novi.
