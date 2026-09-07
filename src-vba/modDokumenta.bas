@@ -49,6 +49,7 @@ Public Type ZbirnaIdent
     selectedGeneracijaID As String
     selectedVozacID As String
     selectedKupacID As String
+    brojUAktivnojPrijemnici As Boolean
 End Type
 
 ' ============================================================
@@ -446,6 +447,15 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
 
     If Len(res.normalizedBroj) = 0 Then GoTo XIT
 
+    ' I1: da li broj vec drzi AKTIVNA prijemnica. Cita se iz kanonskog
+    ' read-modela, da postoji JEDNA definicija "zauzetog broja".
+    Dim unija As Object
+    Set unija = AktivniBrojeviZbirne()
+    If unija.Exists(res.normalizedBroj) Then
+        res.brojUAktivnojPrijemnici = _
+            (InStr(1, CStr(unija(res.normalizedBroj)), "P", vbBinaryCompare) > 0)
+    End If
+
     Dim sirovo As Variant
     sirovo = GetTableData(TBL_ZBIRNA)
     If Not IsArray(sirovo) Then GoTo XIT
@@ -561,7 +571,10 @@ Public Function ZbirnaSmeNovUnos(ByRef id As ZbirnaIdent) As Boolean
     If id.integrityStatus <> ZBR_INT_OK Then Exit Function
     If id.activeLogicalCount > 0 Then Exit Function
     If id.historicalOwnerCount = 0 Then
-        ZbirnaSmeNovUnos = True
+        ' Nijedna zbirna IKAD pod tim brojem -- slobodno, OSIM ako ga vec drzi
+        ' aktivna prijemnica (I1). Tada bi nova zbirna tiho postala njen
+        ' roditelj: prijemnica se vezuje samo brojem i ne bi ni primetila.
+        ZbirnaSmeNovUnos = Not id.brojUAktivnojPrijemnici
         Exit Function
     End If
     ZbirnaSmeNovUnos = id.historicalOwnerIsScope
@@ -574,6 +587,64 @@ Public Function ZbirnaRoditeljOK(ByRef id As ZbirnaIdent) As Boolean
     If id.integrityStatus <> ZBR_INT_OK Then Exit Function
     ZbirnaRoditeljOK = (id.resolutionStatus = ZBR_RES_UNIQUE)
 End Function
+
+' I1 -- KANONSKI READ-MODEL AKTIVNIH BROJEVA ZBIRNE (ugovor par.8).
+'
+' Skup = normalizovani brojevi AKTIVNIH zbirnih UNIJA normalizovani BrojZbirne
+' iz AKTIVNIH prijemnica.
+'
+' Unija nije opreznost nego ispravka rupe: broj koji referencira aktivna
+' prijemnica je ZAUZET i onda kad mu je zbirna-red storniran ili nikad nije
+' upisan. Bez tog drugog izvora takav broj izgleda slobodan.
+'
+' Vrednost kaze ODAKLE broj dolazi -- "Z", "P" ili "ZP" -- da pozivalac moze da
+' razlikuje siroce (samo prijemnica) od normalnog para.
+Public Function AktivniBrojeviZbirne() As Object
+    Const SRC As String = "modDokumenta.AktivniBrojeviZbirne"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AktivniBrojeviZbirne = res
+
+    On Error GoTo EH
+
+    DodajBrojeve res, TBL_ZBIRNA, COL_ZBR_BROJ, "Z", SRC
+    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "P", SRC
+    Exit Function
+
+EH:
+    LogErr SRC
+End Function
+
+' Jedan izvor u recnik. Oznaka se DODAJE na postojecu, pa broj koji nose obe
+' tabele dobije "ZP" -- razlika siroce/par se ne gubi.
+Private Sub DodajBrojeve(ByRef res As Object, ByVal tblName As String, _
+                         ByVal brojCol As String, ByVal oznaka As String, _
+                         ByVal sourceName As String)
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, tblName)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cBr As Long
+    cBr = RequireColumnIndex(tblName, brojCol, sourceName)
+
+    Dim r As Long, b As String
+    For r = 1 To UBound(data, 1)
+        b = ZbirnaBrojNorm(NzToText(data(r, cBr)))
+        If Len(b) > 0 Then
+            If res.Exists(b) Then
+                If InStr(1, CStr(res(b)), oznaka, vbBinaryCompare) = 0 Then
+                    res(b) = CStr(res(b)) & oznaka
+                End If
+            Else
+                res.Add b, oznaka
+            End If
+        End If
+    Next r
+End Sub
 
 Public Function GetOtpremniceByStation(ByVal stanicaID As String, _
                                        Optional ByVal datumOd As Date = 0, _
