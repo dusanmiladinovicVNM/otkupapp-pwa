@@ -697,7 +697,12 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
     if zapisan == tekuci:
         return 0
 
-    komanda = 'python tools\\make_fixture.py --donor "<put do .xlsm>" --force'
+    # Bash oblik sa "/": korisnikova ljuska je Git Bash, gde backslash NESTAJE bez
+    # greske -- "tools\\make_fixture.py" postane "toolsmake_fixture.py", a poruka
+    # pokazuje na fajl koji ne postoji umesto na pravi uzrok (CLAUDE.md).
+    # Postojeci fixture sme da bude svoj donor; --out je tada obavezan.
+    komanda = ('python tools/make_fixture.py --donor tests/fixtures/otkup_test.xlsm '
+               '--out tests/fixtures/otkup_test_new.xlsm --force')
     if not zapisan:
         # FAIL-CLOSED. Sveska od generatora pre ovog sistema NE moze da se
         # proveri, a to je bas prvi run na svakoj zatecenoj masini -- tacno
