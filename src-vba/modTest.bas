@@ -15834,6 +15834,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim idFx As ZbirnaIdent, idPrazan As ZbirnaIdent, idNema As ZbirnaIdent
     Dim idJedna As ZbirnaIdent, idTudj As ZbirnaIdent, idDve As ZbirnaIdent
     Dim idStorno As ZbirnaIdent, idIstorija As ZbirnaIdent, idRazmaci As ZbirnaIdent
+    Dim pecat As String
 
     ' A20 + PREDUSLOV: aktivan red bez generacije je integritetska greska.
     idFx = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
@@ -15847,6 +15848,11 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", "GEN-D2"
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", "GEN-TB"
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", "GEN-TA"
+
+    ' PREDUSLOV PECATA. StampGeneraciju je tih no-op kad FindRows ne nadje red,
+    ' pa bi bez ove tvrdnje ceo test merio INTEGRITY_ERROR i padao bez objasnjenja.
+    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
+                                       COL_GENERACIJA_ID)))
 
     idJedna = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
     idTudj = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
@@ -15862,6 +15868,8 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", ""
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", ""
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", ""
+
+    AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
 
     AssertEq idFx.integrityStatus, ZBR_INT_ERROR, _
              "preduslov/A20: aktivan red bez generacije je integritetska greska"
@@ -15921,6 +15929,7 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Dim rSiroce As String
     Dim unija As Object
     Dim imaOldu As Boolean, oznakaOldu As String
+    Dim pecat As String
     Const SIROCE_BROJ As String = "ZB-SIROCE-TEST"
 
     ' I1 read-model: broj koji nose OBE tabele mora da nosi obe oznake.
@@ -15932,6 +15941,8 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     rInteg = ZbirnaNovUnosRazlog(id)
 
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
+    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
+                                       COL_GENERACIJA_ID)))
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
     rAktivan = ZbirnaNovUnosRazlog(id)
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
@@ -15961,6 +15972,7 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
 
+    AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
     AssertEq imaOldu, True, "preduslov/I1: read-model zna za broj koji nose i zbirna i prijemnica"
     AssertEq (InStr(1, oznakaOldu, "Z") > 0), True, "I1: oznaka nosi izvor zbirna"
     AssertEq (InStr(1, oznakaOldu, "P") > 0), True, "I1: oznaka nosi izvor prijemnica"
