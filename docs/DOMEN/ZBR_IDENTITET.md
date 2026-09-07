@@ -278,32 +278,46 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 
 ---
 
-## 12) Zašto I2 nije u L1 — fixture ne poštuje ZBR-IDENT-01
+## 12) Fixture i ZBR-IDENT-01
 
-`tools/make_fixture.py` **ne upisuje `GeneracijaID` ni na jedan red, nijedne
-tabele.** `modSetup.EnsureSledljivostSchema` pravi samo *kolonu*; vrednosti
-ostaju prazne. To i stoji zapisano u `modTest.StampGeneraciju`:
+**Do `v6-ui-221` fixture nije poštovao invarijantu.** `tools/make_fixture.py` nije
+upisivao `GeneracijaID` ni na jedan red, a tri reda (`ZBI-TEST-1`, `ZBI-TEST-2`,
+`ZBI-TEST-STOR`) nisu imala ni `KupacID`. To je stanje koje produkcija **ne može
+da proizvede**: `ValidateZbirnaInput` odbija zbirnu bez kupca, a sva tri writer-a
+odmah zovu `ApplyGeneracijaID`.
 
-> *„Fixture redovi se seju mimo writera, pa generacije nemaju; test ih postavlja
-> da bi dva dokumenta bila razlučiva."*
+Posledica je bila da se **svaki postojeći broj čita kao `INTEGRITY_ERROR`**, pa je
+I2 bio blokiran — `T_BrutoNeto_PoRezimu` tvrdi `AssertEq resP, ""` nad
+`FX_ZBIRNA`, i tvrda blokada u `PrijemnicaValidiraj` oborila bi ga bez obzira gde
+se postavi.
 
-Za produkciju to nije stanje koje može da nastane — sva tri writer-a odmah
-pečate generaciju (§2). Za fixture jeste, pa se **svaki postojeći broj čita kao
-`INTEGRITY_ERROR`**.
+**Sada svih 24 reda `tblZbirna` nose `GeneracijaID` i `KupacID`.**
 
-Kapiju u §5 to ne obara: `CheckDuplicate` na tim brojevima puca prvi, sa svojom
-porukom, pa `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` ostaje zelen.
+| Odluka | Zašto |
+|---|---|
+| Format `GEN-00000` | `GetNextID` parsira **numerički** sufiks posle prefiksa; nenumerička generacija ostavlja `maxNum` pogrešan, pa bi sledeći upis kovao već zauzetu vrednost |
+| Jedna generacija po redu | u ovom fixture-u nijedan par ne deli `broj + vozač + kupac`, pa dvoklasne zbirne nema. **A6** se zato meri kroz `SaveZbirnaMulti_TX` u BFP suite-i |
+| Anomalije se prave **u testu** | **A17** (dva aktivna dokumenta istog vlasnika) i **A20** (aktivan red bez generacije) su *fault injection* koji `modTest` postavlja i vraća — fixture ostaje validno produkciono stanje |
+| Testovi više **ne pečate** generacije | pečatiranje je bilo zaobilaženje pogrešnog fixture-a; sada se očekivana vrednost **čita iz reda**, pa tvrdnja ne zavisi ni od rednog broja reda u `make_fixture.py` |
 
-**I2 obara.** `T_BrutoNeto_PoRezimu` tvrdi:
+### Granica: invarijanta je ZBR, ne „svaka dokument-tabela"
+
+Širenje na `tblOtpremnica` bi **odmah** oborilo
+`T_ZavrsetakIspravke_NeDegradiraOldDocID`, koji kao preduslov tvrdi:
 
 ```vb
-AssertEq resP, "", "prijemnica sa ispravnim bruto unosom prolazi provere"
+AssertEq modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-LEG-A"), "", _
+         "preduslov: zatecen dokument NEMA generaciju"
 ```
 
-a `PrijemnicaUnosKojiProlazi()` koristi `FX_ZBIRNA`, red bez generacije. Tvrda
-blokada na `INTEGRITY_ERROR` u `PrijemnicaValidiraj` vratila bi neprazan `resP`
-i oborila taj test — bez obzira gde se u proceduri postavi.
+Taj red namerno nema generaciju, jer test meri **degradaciju na poslovni broj** kad
+je nema. `ZBR-IDENT-01` se zato drži `tblZbirna`; ostale tabele su zaseban razgovor.
 
-**Redosled je zato:** fixture prvo dobije generacije (svoj korak, sa svojim
-dokazom — jer to menja i `GeneracijaIDZaBrojArr`, koja bi tada *ponovo koristila*
-generacije umesto da ih kuje), pa tek onda I2 i A6/A9–A14/A17/A21.
+### Regeneracija
+
+Fixture je artefakt, ne repo sadržaj — posle izmene `make_fixture.py` mora se
+ponovo napraviti, inače `run_vba` staje na proveri ustajalosti:
+
+```bash
+python tools/make_fixture.py --donor "<put/do/donora.xlsm>" --force
+```

@@ -532,15 +532,36 @@ SEED = {
     # ciljeva prevezivanja sme da nudi iskljucivo AKTIVNE dokumente. Bez
     # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
     # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
+        # ZBR-IDENT-01: SVAKI red tblZbirna nosi GeneracijaID i KupacID.
+    #
+    # Fixture redovi se seju MIMO writer-a, pa su do sada bili stanje koje
+    # produkcija ne moze da proizvede: ValidateZbirnaInput odbija zbirnu bez
+    # KupacID-a, a sva tri writer-a (SaveZbirna, modMasterSync,
+    # modDokumentInvariant) odmah zovu ApplyGeneracijaID. Prazan GeneracijaID
+    # je zato integritetska greska, ne "legacy oblik" -- v. docs/DOMEN/ZBR_IDENTITET.md.
+    #
+    # Format je GEN-00000: GetNextID parsira NUMERICKI sufiks posle prefiksa
+    # (modDataAccess.GetNextID), pa bi nenumericka generacija ostavila maxNum
+    # pogresan i sledeci upis bi kovao vec zauzetu vrednost.
+    #
+    # Jedna generacija po redu: u ovom fixture-u nijedan par ne deli
+    # broj+vozac+kupac, pa nema dvoklasne zbirne. A6 (dva reda = jedan dokument)
+    # se zato meri kroz SaveZbirnaMulti_TX u BFP suite-i, ne odavde.
+    #
+    # ANOMALIJE SE PRAVE U TESTU, ne ovde: A17 (dva aktivna dokumenta istog
+    # vlasnika) i A20 (aktivan red bez generacije) su fault injection koji
+    # modTest postavlja i vraca, da fixture ostane validno produkciono stanje.
     "tblZbirna": [
         {"ZbirnaID": "ZBI-KASK-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00001"},
         {"ZbirnaID": "ZBI-KASK-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 400, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 40,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00002"},
         # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
         # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
         # smatrala samo kupca, pa operater nije mogao da izabere pravi.
@@ -557,87 +578,109 @@ SEED = {
         {"ZbirnaID": "ZBI-TGT-B", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00003"},
         {"ZbirnaID": "ZBI-TGT-A", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
-         "Klasa": "I", "KupacID": KUPAC, "Stornirano": "Da"},
+         "Klasa": "I", "KupacID": KUPAC, "Stornirano": "Da",
+         "GeneracijaID": "GEN-00004"},
         # Izvorna zbirna: jednoznacna, da test meri BAS cilj a ne izvor.
         {"ZbirnaID": "ZBI-OLDU-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_OLDU, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00005"},
         {"ZbirnaID": "ZBI-STL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_STALE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00006"},
         {"ZbirnaID": "ZBI-TEST-4", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_MIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00007"},
         {"ZbirnaID": "ZBI-DUPL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00008"},
         {"ZbirnaID": "ZBI-DUPL-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
-         "Klasa": "I", "KupacID": KUPAC},
+         "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00009"},
         {"ZbirnaID": "ZBI-TEST-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 1000, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 100,
-         "Klasa": "I"},
+         "Klasa": "I",
+         "KupacID": KUPAC, "GeneracijaID": "GEN-00010"},
         {"ZbirnaID": "ZBI-TEST-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA2, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 950, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 95,
-         "Klasa": "I"},
+         "Klasa": "I",
+         "KupacID": KUPAC, "GeneracijaID": "GEN-00011"},
         {"ZbirnaID": "ZBI-TEST-STOR", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_STORNIRANA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 500, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 50,
-         "Klasa": "I", "Stornirano": "Da"},
+         "Klasa": "I", "Stornirano": "Da",
+         "KupacID": KUPAC, "GeneracijaID": "GEN-00012"},
         # SLEDLJIVOST vozila -- v. blok konstanti SLED_* gore.
         {"ZbirnaID": "ZBI-SLED-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_1 + SLED_KG_2, "Klasa": "I", "KupacID": KUPAC},
+         "UkupnoKolicina": SLED_KG_1 + SLED_KG_2, "Klasa": "I", "KupacID": KUPAC,
+         "GeneracijaID": "GEN-00013"},
         {"ZbirnaID": "ZBI-SLED-N", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_N, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": 150, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": 150, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00014"},
         {"ZbirnaID": "ZBI-SLED-R", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_R, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": 250, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": 250, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00015"},
         # Krug 8: F-lanac (ALL fakturisanost) i M-lanac (SearchRefs).
         {"ZbirnaID": "ZBI-SLED-F", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_F, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_F, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_F, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00016"},
         {"ZbirnaID": "ZBI-SLED-M", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_M, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_M, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_M, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00017"},
         # GP grana (v. blok konstanti SLED_ZBIRNA_G/H/K gore).
         {"ZbirnaID": "ZBI-SLED-G", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_G, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_G, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_G, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00018"},
         {"ZbirnaID": "ZBI-SLED-H", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_H, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_H, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_H, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00019"},
         {"ZbirnaID": "ZBI-SLED-K", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_K, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_K, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_K, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00020"},
         {"ZbirnaID": "ZBI-SLED-P", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_P, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00021"},
         # U lanac (revizija #10 B1): 120 proizvedeno / 50 utovareno /
         # 0 fakturisano -> stanje "delimicno utovareno", kupac iz UTOVARA.
         {"ZbirnaID": "ZBI-SLED-U", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_U, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00022"},
         # Dvosmislen par za sledljivost (v. SLED_ZBIRNA_D): dva aktivna
         # vlasnika (dva vozaca) dele broj; nijedan drugi test ih ne dira.
         {"ZbirnaID": "ZBI-SLED-D1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": SLED_ZBIRNA_D, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": 100, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": 100, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00023"},
         {"ZbirnaID": "ZBI-SLED-D2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_D, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
-         "UkupnoKolicina": 100, "Klasa": "I", "KupacID": KUPAC2},
+         "UkupnoKolicina": 100, "Klasa": "I", "KupacID": KUPAC2,
+         "GeneracijaID": "GEN-00024"},
     ],
     # Tri slucaja koje zadatak trazi:
     #   OTP-TEST-1  datum iz proslosti + poznata zbirna + ostatak != 0 (1000 - 400)
