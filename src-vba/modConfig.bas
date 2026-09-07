@@ -110,6 +110,10 @@ Public Const COL_KOOP_ID As String = "KooperantID"
 Public Const COL_KUP_TEKUCI_RACUN As String = "TekuciRacun"
 Public Const COL_KUP_ID As String = "KupacID"
 Public Const COL_KUP_NAZIV As String = "Naziv"
+' Hladnjaca kupca -- odrediste otpremnice, prepisuje se u tblZbirna.Hladnjaca.
+' Kolona NIJE u modSetup semi: postoji po instalaciji (schema drift), pa je
+' LookupValue nad njom fail-safe (nema kolone -> Empty) i polje ostaje prazno.
+Public Const COL_KUP_HLADNJACA As String = "Hladnjaca"
 ' --- Spaltennamen tblParcele ---
 Public Const COL_PAR_ID As String = "ParcelaID"
 Public Const COL_PAR_KOOP As String = "KooperantID"

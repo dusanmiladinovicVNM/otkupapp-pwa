@@ -5096,6 +5096,18 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "preradjena paleta nije u ponudi kao sveza",
     ),
+    # MIG-001. Odrediste zbirne (hladnjaca/pogon) ima smisla samo u F3, jer samo
+    # tblZbirna nosi te kolone. Polje koje se vidi svuda trazi podatak koji u
+    # otpremnici i prijemnici nema gde da ode -- a operater bi ga popunio.
+    # Sabotaza NE pogadja prvu tvrdnju testa (F3 IMA polje, i dalje prolazi)
+    # nego bas onu koja meri iskljucivost.
+    "zbirna-odrediste-vidljivo-svuda": (
+        "modOtkupUI.bas",
+        '            FldShow z, "fgHladnjaca", (mode = "F3")\n',
+        '            FldShow z, "fgHladnjaca", True   \' SABOTAZA: odrediste vidljivo svuda\n',
+        "T_Zbirna_OdredisteJePoljeF3",
+        "F1 nema polje hladnjace",
+    ),
 }
 
 

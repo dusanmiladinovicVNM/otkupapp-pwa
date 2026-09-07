@@ -1168,6 +1168,16 @@ Private Sub BuildForm(frm As Object)
     ' kooperanta, kao frmOtkup.cmbKooperant_Change.
     NewFieldG z, "fgParcela", Poruka("OTKUI_FLD_PARCELA"), "cmb", "", 1, False, False, "DOK"
 
+    ' HLADNJACA i POGON - samo Zbirna (F3). tblZbirna nosi obe kolone, writer ih
+    ' pise (modDokumenta.BuildZbirnaRowData) i modDokumentInvariant ih cuva pri
+    ' rekalkulaciji, a do ovog polja ih ekran nije imao odakle poslati - svaka
+    ' zbirna uneta kroz ljusku isla je sa prazne dve kolone (MIG-001,
+    ' docs/UI_MIGRACIJA_KATALOG.md par.28.1a).
+    ' Hladnjaca je combo jer je IZVEDENA (jedna stavka, sa reda kupca), pogon je
+    ' slobodan unos - tako je bilo i u frmDokumenta.
+    NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
+    NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
+
     ' SMER REVERSA - cetiri medjusobno iskljuciva segmenta, isti skup kao
     ' frmDokumenta.SetupOMIzdavanjeToggle. Span 2 da sva cetiri stanu u red.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
@@ -3338,6 +3348,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgTipAmb", False
             FldShow z, "fgAmbPr", False
             FldShow z, "fgParcela", False
+            FldShow z, "fgHladnjaca", False
+            FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", False
             FldShow z, "fgVrednost", False
             ' otvoreni blok i neisplaceni ostatak imaju smisla samo kod isplata
@@ -3358,6 +3370,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgTipAmb", True
             FldShow z, "fgAmbPr", False
             FldShow z, "fgParcela", False
+            FldShow z, "fgHladnjaca", False
+            FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", True
             FldShow z, "fgVrednost", False
             FldShow z, "fgBlok", False
@@ -3382,6 +3396,10 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             ' otpremnica i zbirna je ne dodiruju
             FldShow z, "fgAmbPr", (mode = "F1" Or mode = "F4")
             FldShow z, "fgParcela", (mode = "F1" And IsPracenjeParcela())
+            ' Odrediste zbirne: samo F3. tblOtpremnica i tblPrijemnica te kolone
+            ' nemaju, pa bi polje u drugom rezimu trazilo podatak koji nema gde.
+            FldShow z, "fgHladnjaca", (mode = "F3")
+            FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
             FldShow z, "fgVrednost", True
             FldShow z, "fgBlok", False
@@ -3582,6 +3600,10 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     FillOpenBlokovi frm
     FillOpenFakture frm
     FillParcele frm
+    ' Hladnjaca zavisi od partnera KAO I parcele, pa se osvezava na istom mestu:
+    ' ulazak u F3 sa vec izabranim kupcem inace ne bi imao odakle da je dobije
+    ' (UiChange je puni samo na PROMENU partnera).
+    FillHladnjaca frm
     ' Smer reversa i "isplata iz" pripadaju JEDNOM dokumentu - prelazak u drugi
     ' rezim ih vraca na pocetno stanje, kao i sve ostale izbore u formi.
     SetSmerRev 0
@@ -4778,6 +4800,8 @@ Private Sub UiChange(ByVal tag As String)
             FillOpenBlokovi mFrm
             FillOpenFakture mFrm
             FillParcele mFrm
+            ' Hladnjaca je vrednost KUPCA - menja se sa partnerom, kao i parcele.
+            FillHladnjaca mFrm
             ' Broj prijemnice zavisi od KUPCA. Legacy cmbKupac_Change prvo
             ' OBRISE broj pa trazi predlog - bez brisanja bi kod ne-hladnjaca
             ' kupca (koji predlog ne dobija) ostao broj hladnjace.
@@ -7144,6 +7168,59 @@ Private Sub RefreshSaldoOM()
     mFrm.Controls("zForm").Controls("fgAvans").Controls("fgAvansL").caption = cap
 End Sub
 
+' HLADNJACA na Zbirni (F3). IZVEDENA vrednost, ne sifarnik: legacy
+' frmDokumenta.cmbKupac_Change je citao Hladnjacu sa reda IZABRANOG KUPCA i
+' dodavao je kao JEDINU stavku comba. Isti izvor i ovde.
+'
+' Tri stvari koje su posledica sredine, ne nove odluke:
+'   - kolone mozda NEMA (schema drift; COL_KUP_HLADNJACA nije u modSetup semi),
+'     pa se lista tada ostavlja prazna i upis prolazi kao i do sada;
+'   - polje se puni samo u F3, jer samo tblZbirna nosi tu kolonu;
+'   - jedina stavka se i BIRA. Legacy ju je samo ponudio, pa je vrednost
+'     zavisila od toga da li ce operater otvoriti listu sa jednim redom; tako bi
+'     kolona i dalje ostajala prazna, a to je bas rupa koju MIG-001 zatvara.
+'     Izbor je i dalje njegov - polje se moze obrisati.
+'
+' POGON se NE izvodi ni iz cega: u frmDokumenta cmbPogon nije punila nijedna
+' linija koda (bio je slobodan unos). Zavisnost pogona od hladnjace bi bila NOVO
+' poslovno pravilo, ne parity, i ovde se ne uvodi.
+Private Sub FillHladnjaca(frm As Object)
+    Dim CB As MSForms.ComboBox, kupID As String, d As Variant
+    Dim iId As Long, iHl As Long, r As Long, hl As String, muted As Boolean
+    On Error GoTo EH
+    Set CB = frm.Controls("zForm").Controls("fgHladnjaca").Controls("fgHladnjacaT")
+    ' Programski upis - bez ovoga bi punjenje otvorilo panel predloga, isto kao
+    ' kod FillZbirneCombo (mZbirnaFill) i ClearForm.
+    muted = mPopMute
+    mPopMute = True
+    CB.Clear
+    CB.text = ""
+    If ActiveMode <> "F3" Then GoTo Kraj
+    kupID = PartnerID(frm)
+    If Len(kupID) = 0 Then GoTo Kraj
+    d = CachedTable(TBL_KUPCI)
+    If Not IsArray(d) Then GoTo Kraj
+    iId = ColIdx(TBL_KUPCI, COL_KUP_ID)
+    iHl = ColIdx(TBL_KUPCI, COL_KUP_HLADNJACA)
+    If iId = 0 Or iHl = 0 Then GoTo Kraj
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, iId))) = kupID Then
+            hl = Trim$(NzToText(d(r, iHl)))
+            If Len(hl) > 0 Then
+                CB.AddItem hl
+                CB.text = hl
+            End If
+            Exit For
+        End If
+    Next r
+Kraj:
+    mPopMute = muted
+    Exit Sub
+EH:
+    mPopMute = muted
+    LogErr "modOtkupUI.FillHladnjaca"
+End Sub
+
 ' Parcele izabranog kooperanta - isti prikaz i isti izvor kao
 ' frmOtkup.cmbKooperant_Change (KatBroj | Kultura | ha), ID u skrivenoj koloni
 ' umesto u zagradi, pa ExtractParcelaID vise nije potreban.
@@ -7818,6 +7895,11 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     p("kolicinaII") = IIf(mKlasa = 2, ParseNum(FldText("fgKgII")), 0#)
     p("cenaII") = IIf(mKlasa = 2, CenaText(2), 0#)
     p("kolAmbII") = IIf(mKlasa = 2, ParseNum(FldText("fgKolAmbII")), 0#)
+    ' ODREDISTE ZBIRNE (MIG-001). Polja postoje samo u F3, a jedini rezim koji
+    ' ove kljuceve i cita je ZBIRNA (modScrDokumenti.SaveZbirna) - zato ovde
+    ' nema grane po rezimu: sakriveno polje je prazno, i prazno i ostaje.
+    p("hladnjaca") = Trim$(FldText("fgHladnjaca"))
+    p("pogon") = Trim$(FldText("fgPogon"))
     p("novac") = ParseNum(FldText("fgNovac"))
     ' --- gotovinski rezimi i reversi (F5 / F6 / F7) ---
     ' Sve cetiri vrednosti dolaze iz polja koja postoje samo u svom rezimu;
@@ -8384,6 +8466,10 @@ Public Sub ClearForm()
     mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").text = ""
     mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").text = ""
     mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").text = ""
+    ' Hladnjaca prati partnera (brise se ispod), pogon pripada JEDNOM dokumentu -
+    ' zadrzan bi sledecu zbirnu poslao na tudje odrediste.
+    mFrm.Controls("zForm").Controls("fgHladnjaca").Controls("fgHladnjacaT").text = ""
+    mFrm.Controls("zForm").Controls("fgPogon").Controls("fgPogonT").text = ""
     ' PARTNER se prazni kao i sve ostalo - sledeci dokument je nov kooperant
     ' (legacy ClearOtkupFields: cmbKooperant.value = "", cmbParcela.Clear). Bez
     ' ovoga zatecen kooperant ostaje u polju, pa bi unos samo kilograma tiho

@@ -199,7 +199,7 @@ zaključivati iz koda.
 | `chkDveKlaseOtp/Zbr/Prij_Click` | II klasa | **IMA** (`SetKlasa`) |
 | `RefreshBrojOtp/Zbirne/Prij/ReversSuggestion` | predlozi po nizu | **IMA** (v6-ui-112) |
 | `cmbKupac_Change` → broj prijemnice | briše pa predlaže | **IMA** (v6-ui-113) |
-| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** — zato `SaveZbirnaMulti_TX` iz novog UI-ja dobija prazne `hladnjaca`/`pogon`. **Zavedeno kao MIG-001 (§28.1)**: kolone postoje, writer ih piše, `modDokumentInvariant` ih čuva — a ekran ih ne može popuniti |
+| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | ~~**NEMA**~~ → **IMA od `v6-ui-215`** (MIG-001, §28.1b): `fgHladnjaca` (izvedena, iz reda kupca) i `fgPogon` (slobodan unos), oba samo u F3 |
 | `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **IMA** (v6-ui-117, `FillOpenFakture` uz polje `fgFaktura`) |
 | `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B (živi prikaz; upis F4 ne zavisi od njega) |
 | `UpdateValidacija` (živi prikaz + kapija pri upisu zbirne) | poklapanje zbirne sa otpremnicama | **kapija IMA** (`ZbirnaValidiraj`, v6-ui-116), **živi prikaz NEMA** |
@@ -293,7 +293,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Zbirna se mora poklopiti sa svojim otpremnicama (kg **i** ambalaža) | `ZbirnaValidiraj` → `ValidateZbirnaPreUnosa` | hard-kapija, **ne zavisi** od `VALIDACIJA_UNOSA` — kao u legacy |
 | Zbirna: izvor ima Kl.II a prekidač isključen → blokada | `ZbirnaValidiraj` → `ZbirnaIzvorImaKlasuII` | inače bi se Kl.II tiho izgubila |
 | Zbirna **nema** bruto→neto ni cenu | — | `tblZbirna` nema ni `BrutoKg` ni `Cena`; zbirna je zbir već netiranih otpremnica |
-| Zbirna: `Hladnjaca` / `Pogon` | — | novi UI nema ta polja (Z3b) → upisuje se prazno. **MIG-001, §28.1** — jedina potvrđena rupa u paritetu POSLOVNOG PODATKA, ne prikaza |
+| Zbirna: `Hladnjaca` / `Pogon` | `modOtkupUI` (`fgHladnjaca` / `fgPogon`) + `modScrDokumenti.SaveZbirna` | ~~novi UI nema ta polja (Z3b)~~ → **preneto u `v6-ui-215`** (MIG-001, §28.1b). Writer nije diran |
 | Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA` (BLOK / UPOZORENJE) |
 | Prijemnica: bruto→neto po klasama, `BrutoKg` zamrznut | `PrijemnicaValidiraj` | isto kao otkup i otpremnica |
 | Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
@@ -9354,7 +9354,7 @@ ispod proveren do funkcije, ne do imena.
 
 | Oznaka | Šta je nestalo | Odakle (korak) | Šta je izmereno |
 |---|---|---|---|
-| **MIG-001** | **`Hladnjaca` i `Pogon` na Zbirnoj (F3)** | `frmDokumenta` (korak 2) | Jedina rupa u paritetu **poslovnog podatka**, ne prikaza — v. §28.1a |
+| ~~**MIG-001**~~ | ~~**`Hladnjaca` i `Pogon` na Zbirnoj (F3)**~~ | `frmDokumenta` (korak 2) | **ZATVOREN** (`v6-ui-215`) — v. §28.1b |
 | MIG-002 | Brojka i lista **INTEGRITETA** | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
 | MIG-003 | **„Primeni avans (sel.)"** — batch nad čekiranim blokovima | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
 | MIG-004 | **Manjak prijemnice vs zbirna + prosek gajbe** (F4) | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
@@ -9415,6 +9415,64 @@ kroz postojeće ključeve `p("hladnjaca")` / `p("pogon")`; **`SaveZbirnaMulti_TX
 se ne dira**. Tvrdnja koja se traži nije „kontrole postoje" nego **parity
 podatka**: izbor u ekranu → `Scr_Save` → isti par vrednosti u rečniku → isti par
 kod writera → isti par u `tblZbirna`.
+
+### 28.1b MIG-001 zatvoren (`v6-ui-215`)
+
+Zbirna (F3) je dobila dva polja, i to je jedina promena ponašanja — **writer nije
+diran** (`SaveZbirnaMulti_TX` i `BuildZbirnaRowData` su isti), a `modDokUnos` je
+oba ključa prosleđivao i pre ovoga.
+
+| Karika | Šta je urađeno |
+|---|---|
+| Polje | `modOtkupUI`: `fgHladnjaca` (combo) i `fgPogon` (txt), grupa `DOK`, **vidljiva samo u F3** (`ApplyFormFields`) |
+| Izvor hladnjače | `FillHladnjaca` čita `tblKupci.Hladnjaca` reda **izabranog kupca** i nudi je kao jedinu stavku — isti izvor koji je imao `frmDokumenta.cmbKupac_Change` |
+| Izvor pogona | **nema ga** — slobodan unos, kao u legacy formi |
+| Rečnik | `SkupiPolja` šalje `p("hladnjaca")` / `p("pogon")` |
+| Ekran | `modScrDokumenti.SaveZbirna` ih prevodi u ulazni rečnik; nijedna provera nije dodata |
+| Čišćenje | `ClearForm` prazni oba — hladnjača ide sa partnerom (koji se briše), pogon pripada jednom dokumentu |
+| Šema | nova konstanta `COL_KUP_HLADNJACA` u `modConfig` |
+
+**Dve stvari koje su namerno drugačije od legacy-ja, i zašto:**
+
+1. **Jedina ponuđena hladnjača se i BIRA.** Legacy ju je samo dodao u listu, pa je
+   vrednost zavisila od toga hoće li operater otvoriti dropdown sa jednim redom —
+   a kolona je zbog toga i ostajala prazna. Izbor je i dalje njegov: polje se
+   može obrisati.
+2. **Pogon nije vezan za hladnjaču.** U `frmDokumenta` `cmbPogon` nije punila
+   nijedna linija koda. Zavisnost bi bila **nov poslovni rule**, ne parity, i
+   ovde se ne uvodi.
+
+**Schema drift je nosilac, ne izuzetak.** `tblKupci.Hladnjaca` nije u `modSetup`
+šemi — legacy ga je čitao golim stringom, pa po instalaciji kolone može i ne
+biti. `FillHladnjaca` tada ostavlja polje prazno i **ne blokira upis**: prazno
+odredište je legitimno stanje (kupac bez hladnjače), i tako je bilo i pre.
+
+**Verifikacija**
+
+| Šta | Gde |
+|---|---|
+| Ugovor ekrana: polja postoje, **samo** u F3 (mereno u F1/F2/F4 i povratku u F3), `ClearForm` ih prazni | `modTest` test **187** `T_Zbirna_OdredisteJePoljeF3` |
+| **Data parity**: rečnik ljuske → `Scr_Save` → `ZbirnaUpisi` → `SaveZbirnaMulti_TX` → red u `tblZbirna` nosi iste vrednosti; prazno odredište i dalje prolazi | `modBusinessFlowProTests.Test_ZbirnaEkranNosiOdrediste` |
+| Sabotaža | `zbirna-odrediste-vidljivo-svuda` — polje vidljivo u svim režimima; obara **drugu** tvrdnju testa 187 (prva, „F3 ima polje", i dalje prolazi) |
+
+Postojeći `Test_ZbirnaRowDataColumnMapped` meri **drugu** kariku — writer piše
+argumente u svoje kolone — i bio je zelen sve vreme dok je ekran slao prazno.
+Zato nov test ide kroz `Scr_Save`, a ne kroz writer.
+
+**Šta NIJE izmereno, i zašto**
+
+- **Izvođenje hladnjače iz reda kupca** (`FillHladnjaca`). Fixture
+  (`tools/make_fixture.py`) nema kolonu `Hladnjaca` u `tblKupci`, a dodavanje
+  bi bilo **donor-zavisno**: zeleno na svesci koja tu kolonu ima, neizvršeno na
+  onoj koja je nema — ista klasa lutrije kao config-gate iz §8.8. Ostaje na
+  operaterskom smoke-u: izaberi kupca sa upisanom hladnjačom u F3 i proveri da
+  se polje popuni.
+- **Korak polje → rečnik** (`SkupiPolja`). `SkupiPolja` je `Private`, a `modTest`
+  ne piše u tabele; širenje vidljivosti samo zbog jedne tvrdnje nije plaćeno.
+  Karika ispod nje (rečnik → tabela) jeste pod testom.
+- **Compile i suite** — pisano u web sesiji, gde `run_vba` ne radi. `vba_check`
+  je čist (466 sabotaža, 0 nalaza). Pred merge ide `Debug → Compile VBAProject`,
+  `RunAllTests` i `RunBusinessFlowProSuite`, plus `dokaz.py` nad novom sabotažom.
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 

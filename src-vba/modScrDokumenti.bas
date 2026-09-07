@@ -850,6 +850,12 @@ Private Function SaveZbirna(ByVal polja As Object) As String
     p("vozacID") = polja("vozacID")
     p("kupacID") = polja("kooperantID")
     p("brDok") = polja("brDok")
+    ' ODREDISTE (MIG-001): hladnjaca i pogon su kolone tblZbirna koje writer vec
+    ' pise; do v6-ui-215 ih ekran nije slao, pa su isle prazne. Ekran ih SAMO
+    ' prevodi - pravilo (odakle hladnjaca dolazi) zivi u ljusci, provera u
+    ' modDokUnos, upis u modDokumenta.
+    p("hladnjaca") = polja("hladnjaca")
+    p("pogon") = polja("pogon")
     p("vrsta") = polja("vrsta")
     p("sorta") = polja("sorta")
     p("tipAmb") = polja("tipAmb")

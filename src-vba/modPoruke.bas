@@ -843,6 +843,8 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLD_AMB_PR_PRIJEMNICA", "Povrat ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "OTKUI_TIP_AMB_EQ", "Prepi" & ChrW(353) & "i koli" & ChrW(269) & "inu predate ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "OTKUI_FLD_KOL_AMB", "KOL. AMBALA" & ChrW(381) & "E"
+    UpsertRow lo, existing, "OTKUI_FLD_HLADNJACA", "HLADNJA" & ChrW(268) & "A"
+    UpsertRow lo, existing, "OTKUI_FLD_POGON", "POGON"
     UpsertRow lo, existing, "OTKUI_FLD_KLASA", "KLASA ROBE"
     UpsertRow lo, existing, "OTKUI_SEG_KLASA_I", "I klasa"
     UpsertRow lo, existing, "OTKUI_SEG_KLASA_II", "II klasa"
