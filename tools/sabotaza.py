@@ -5224,6 +5224,39 @@ SABOTAZE = {
         "Test_ManjakPreviewJeZbirnaMinusPrijem",
         "Manjak: neupisane kg obe klase ulaze u prijemnicu",
     ),
+    # MIG-005a. Picker koji nudi ono sto writer odbija je gori od praznog:
+    # operater to otkrije tek na snimanju, nad dokumentom koji je vec popunio.
+    # Filtar je isti (ExcludeStornirano) koji zove i ZbirnaPostoji -- zato se
+    # picker i writer ne mogu raziici.
+    "zbirne-picker-nudi-stornirane": (
+        "modOtkupUI.bas",
+        "    src = ExcludeStornirano(src, TBL_ZBIRNA)\n",
+        "    src = src   \' SABOTAZA: picker nudi i stornirane\n",
+        "T_Zbirne_PickerJeKanonskiReadModel",
+        "picker ne nudi storniranu zbirnu",
+    ),
+    # Naizgled bezazleno "ciscenje duplikata" koje bi spojilo DVA dokumenta u
+    # jednu ponudu. Broj zbirne se generise PO VOZACU, pa isti broj na dva
+    # aktivna reda ume da bude dva dokumenta -- T_Oporavak_CiljneListe to vec
+    # tvrdi za ciljnu listu ("lista je vlasnikom smatrala samo kupca i spajala
+    # ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu treba").
+    # Ova sabotaza brani da ista greska ne udje u picker.
+    "zbirne-picker-spaja-isti-broj": (
+        "modOtkupUI.bas",
+        "    For i = 1 To j\n"
+        "        CB.AddItem CStr(arr(i))\n"
+        "    Next i\n",
+        "    Dim vidj As Object: Set vidj = CreateObject(\"Scripting.Dictionary\")\n"
+        "    vidj.CompareMode = vbTextCompare\n"
+        "    For i = 1 To j\n"
+        "        If Not vidj.Exists(CStr(arr(i))) Then   \' SABOTAZA: spaja isti broj\n"
+        "            vidj.Add CStr(arr(i)), True\n"
+        "            CB.AddItem CStr(arr(i))\n"
+        "        End If\n"
+        "    Next i\n",
+        "T_Zbirne_PickerJeKanonskiReadModel",
+        "isti broj na vise AKTIVNIH redova ostaje vise ponuda -- broj nije identitet",
+    ),
     "faza-prijava-pusta-f-tastere": (
         "modUiFaze.bas",
         "                Case vbKeyF1 To vbKeyF9: FazaTaster = True\n",

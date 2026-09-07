@@ -473,6 +473,7 @@ Public Sub RunAllTests()
     RunOne 186
     RunOne 187
     RunOne 188
+    RunOne 189
     RunOne 124
     RunOne 125
     RunOne 126
@@ -730,6 +731,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 186: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
         Case 187: TestName = "T_Zbirna_OdredisteJePoljeF3"
         Case 188: TestName = "T_Manjak_LinijaIPragSuSamoF4"
+        Case 189: TestName = "T_Zbirne_PickerJeKanonskiReadModel"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -926,6 +928,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 186: T_Faza_SplashIMiniSuFazeIsteLjuske
         Case 187: T_Zbirna_OdredisteJePoljeF3
         Case 188: T_Manjak_LinijaIPragSuSamoF4
+        Case 189: T_Zbirne_PickerJeKanonskiReadModel
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -15725,6 +15728,78 @@ Private Sub T_Manjak_LinijaIPragSuSamoF4()
     modOtkupUI.SelectMode f, "F1"
     AssertEq zf.Controls("fgKolAmb").Controls("fgKolAmbL").caption, natpisF1, _
              "izlazak iz F4 vraca natpis polja gajbi"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' ============================================================
+' 189. PICKER BROJA ZBIRNE NE NUDI STORNIRANE (MIG-005a)
+'
+' Combo BROJ ZBIRNE je naslednik lstZbirne iz frmDokumenta, ali je do
+' v6-ui-219 punjen iz SIROVE tabele -- pa je nudio i storniranu zbirnu, koju
+' writer odbija (modDokUnos -> ZbirnaPostoji, storno-aware). Ponuda koju writer
+' odbija je gora od prazne: operater to otkrije tek na snimanju, nad dokumentom
+' koji je vec ceo popunio.
+'
+' Mereno nad FIXTURE-om, bez ijednog upisa:
+'   ZB-TEST-STORNO -- Stornirano = Da  -> NE SME biti u ponudi
+'   ZB-TEST-DUPL   -- dva AKTIVNA reda -> OBA OSTAJU
+'
+' Drugi red nije previd nego KAPIJA. Isti BrojZbirne na dva reda ume da bude
+' DVA dokumenta: broj se generise po vozacu, i T_Oporavak_CiljneListe vec tvrdi
+' da ciljna lista mora da ponudi oba ("lista je vlasnikom smatrala samo kupca i
+' spajala ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu
+' treba"). Ova tvrdnja drzi da se ta greska ne uvuce u picker pod izgovorom
+' "ciscenja duplikata".
+' ============================================================
+Private Sub T_Zbirne_PickerJeKanonskiReadModel()
+    Dim f As frmOtkupUI, CB As Object
+    Dim sirovo As Variant
+    Dim r As Long, iBr As Long, iSt As Long
+    Dim sirovihDupl As Long, sirovihStorno As Long
+    Dim uComboU As Long, comboStorno As Long
+
+    ' 1) PREDUSLOV. Bez ova dva reda test ne meri nista -- pa to mora da PADNE,
+    '    a ne da tiho prodje kao zeleno.
+    sirovo = modUiData.CachedTable(TBL_ZBIRNA)
+    AssertEq IsArray(sirovo), True, "preduslov: tblZbirna je citljiva"
+    iBr = modUiData.ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
+    iSt = modUiData.ColIdx(TBL_ZBIRNA, COL_STORNIRANO)
+    AssertEq (iBr > 0), True, "preduslov: tblZbirna ima kolonu BrojZbirne"
+    AssertEq (iSt > 0), True, "preduslov: tblZbirna ima kolonu Stornirano"
+    For r = 1 To UBound(sirovo, 1)
+        If StrComp(modUiData.CellS(sirovo, r, iBr), FX_ZBIRNA_DUPL, vbTextCompare) = 0 Then
+            sirovihDupl = sirovihDupl + 1
+        End If
+        If StrComp(modUiData.CellS(sirovo, r, iBr), FX_ZBIRNA_STORNO, vbTextCompare) = 0 Then
+            sirovihStorno = sirovihStorno + 1
+        End If
+    Next r
+    AssertEq (sirovihDupl >= 2), True, _
+             "preduslov: fixture ima isti broj zbirne na vise redova"
+    AssertEq (sirovihStorno >= 1), True, _
+             "preduslov: fixture ima storniranu zbirnu"
+
+    ' 2) PONUDA. Stornirane nema; dva aktivna dokumenta istog broja ostaju oba.
+    Set f = NewOtkupUIForm()
+    modOtkupUI.SelectMode f, "F4"          ' F4 vezuje zbirnu (ModeVezujeZbirnu)
+    modOtkupUI.FillZbirneCombo f
+    Set CB = f.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+    AssertEq (CB.ListCount > 0), True, "preduslov: picker je napunjen"
+
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_STORNO, vbTextCompare) = 0 Then
+            comboStorno = comboStorno + 1
+        End If
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_DUPL, vbTextCompare) = 0 Then
+            uComboU = uComboU + 1
+        End If
+    Next r
+
+    AssertEq comboStorno, 0, "picker ne nudi storniranu zbirnu"
+    ' KAPIJA, ne previd: dva reda su dva dokumenta i oba moraju da se ponude.
+    AssertEq uComboU, sirovihDupl, _
+             "isti broj na vise AKTIVNIH redova ostaje vise ponuda -- broj nije identitet"
 
     ReleaseOtkupUIForm f
 End Sub

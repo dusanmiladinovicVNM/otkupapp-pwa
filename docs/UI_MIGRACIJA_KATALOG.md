@@ -9380,7 +9380,7 @@ ispod proveren do funkcije, ne do imena.
 | ~~MIG-002~~ | ~~Brojka i lista **INTEGRITETA**~~ — **ZATVOREN** (`v6-ui-216`), v. §28.1c | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
 | ~~MIG-003~~ | ~~**„Primeni avans (sel.)"** — batch nad čekiranim blokovima~~ — **ZATVOREN** (`v6-ui-217`), v. §28.1d | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
 | ~~MIG-004~~ | ~~**Manjak prijemnice vs zbirna + prosek gajbe** (F4)~~ — **ZATVOREN** (`v6-ui-218`), v. §28.1e | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
-| MIG-005 | **Lista zbirnih za izbor** (F3) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
+| ~~MIG-005~~ | ~~**Lista zbirnih za izbor** (F3)~~ — **PREKVALIFIKOVAN**, v. §28.1f: unos je bio **netačan** (bila je F4, ne F3) i sam prikaz **nije izgubljen**. Zatvoren je uži nalaz **MIG-005a** (`v6-ui-219`) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
 | MIG-006 | **Živ verdikt validacije zbirne** (F3) | `frmDokumenta.UpdateValidacija` (korak 2) | Kapija JESTE preneta i tvrda je (`modDokUnos.ZbirnaValidiraj` → `ValidateZbirnaPreUnosa`; komentar u `modDokUnos` to i kaže: „račun je isti, samo se ovde ne crta"). Nedostaje da operater PRE snimanja vidi „OK" ili „Razlika". KPI pločica „Validacija" u ljusci je zakucana na `OTKUI_KPI_SPREMNO` u zelenom (`modOtkupUI`, `RefreshKpi`) |
 | MIG-007 | **MALINA: sekcija Zbirna se ne gasi** | `frmDokumenta.DisableFraZbirnaMalina` (korak 2) | `IsMalinaMode` u ljusci postoji, ali samo za auto-izbor par-vozača. F3 je u malina modu potpuno otvoren, iako `modDokUnos` otpremnicu snima sa praznim `BrojZbirne` i zbirnu pravi sam. **Šteta nije reprodukovana** — tvrdi se samo da kapija koja je postojala nema naslednika |
 | MIG-008 | **Sedam polja detalja kartice** | `modKarticaDetalji.ShowOtkupDetails` (modul obrisan) | Legacy panel je ispisivao do 19 parova; nova detalj traka (`modScrIzvestaji.IzDetaljOtkupLista`, do 6 linija) nosi drugi sadržaj i dodaje nizvodnu sledljivost. Bez zamene su ostali: **parcela, sorta, bruto, tip ambalaže, gajbe, izdata ambalaža, isplaćeno (keš) + primalac** |
@@ -9663,6 +9663,93 @@ funkcija identiteta i svaka tvrdnja o njoj bila bi placebo. Umesto lažne pokriv
 to ide na **operaterov smoke**: uključi bruto unos, unesi prijemnicu sa gajbama i
 tipom ambalaže, i proveri da manjak pada za taru (a ne da skoči u višak). Isto
 važi za sam izgled linije i za boje.
+
+### 28.1f MIG-005 prekvalifikovan; MIG-005a zatvoren (`v6-ui-219`)
+
+**Unos u §28.1 je bio netačan na dva mesta, i to se ovde ispravlja.**
+
+**Bila je F4, ne F3.** Legacy `lstZbirne_Click` je pisao u `txtBrojZbirnePrij` i
+zvao `UpdateManjak` — dakle „Lista zbirnih" je bila **birač zbirne za
+prijemnicu**, blizanac MIG-004, a ne lista ekrana F3.
+
+**Prikaz nije izgubljen.** `fgBrZbir` je combo sa panelom koji se sužava
+kucanjem, vidljiv u F1/F2/F4 (`ModeVezujeZbirnu`), i `FillZbirneCombo` to i
+kaže u svom zaglavlju:
+
+> *„Zamena za lstZbirne iz frmDokumenta … Broj zbirne je oblika `x/ddmmyy` pa
+> nosi datum u sebi — zato je sam broj dovoljan za prepoznavanje."*
+
+To je **napisana odluka**, ne propust: pet legacy kolona (datum, vrsta, sorta,
+kg) ne vraćamo. Cena bi bila izmena `PopRender`, panela **zajedničkog za svaki
+combo u ljusci**, ili dekorisanje stavke — što ruši slobodno kucanje i prefill
+(`RefreshBrojPredlog` upisuje go broj). Od MIG-004 se kilogrami zbirne ionako
+vide u liniji manjka čim se zbirna izabere.
+
+#### Šta je stvarno bio kvar (MIG-005a)
+
+`FillZbirneCombo` je čitao **sirovu tabelu** (`CachedTable`, bez filtra), pa je
+picker nudio i **storniranu** zbirnu — koju writer odbija
+(`modDokUnos.PrijemnicaValidiraj` → `ZbirnaPostoji`, storno-aware). Ponuda koju
+writer odbija je gora od prazne: operater to otkrije tek na snimanju, nad
+dokumentom koji je već ceo popunio.
+
+Ispravka je **jedan red**: `ExcludeStornirano(src, TBL_ZBIRNA)` — **isti** filtar
+koji zove i `ZbirnaPostoji`, pa picker i writer gledaju istu definiciju „aktivne"
+i ne mogu da se raziđu. Radi nad prosleđenim keširanim nizom; `CachedTable` je keš
+ljuske i invalidira se generacijom (`modUiData.ResetCache`), a ovo se zove na svaku
+promenu režima.
+
+#### Šta je iz plana IZBAČENO usred rada — i zašto
+
+Plan je tražio i **de-duplikaciju po broju** i **zbir kg po broju** u
+`GetAktivneZbirne`, pa da picker čita njega kao „kanonski read-model". **Oboje je
+odbačeno**, jer je kod pokazao suprotno:
+
+```
+' modTest, T_Oporavak_CiljneListe
+AssertEq duplih, 2, "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"
+```
+
+> *„lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red, pa operater
+> ne bi mogao da izabere onaj koji mu treba"*
+
+**Broj zbirne se generiše po vozaču**, pa isti broj na dva aktivna reda ume da
+budu **dva dokumenta**. `modScrOporavak.RowsAktivni` to već poštuje — ključuje po
+`broj + vlasnik` (i po generaciji gde je ima). `GetAktivneZbirne` ključuje po
+**samom broju**, dakle nosi grešku koju je `RowsAktivni` već platio i ispravio.
+
+Da je picker prebačen na njega, dva stvarna dokumenta bi se spojila u jednu
+ponudu — a zbir kg bi ih prikazao kao jedan dokument od 300 kg koji ne postoji.
+To nije čišćenje nego izmišljanje podatka.
+
+Zato:
+
+- `GetAktivneZbirne` **nije diran** i **ostaje bez produkcionog pozivaoca**;
+- picker **ne de-duplikuje**, i to je sada **kapija sa tvrdnjom**, ne previd;
+- dijagram „3 kopije → 1" iz plana je netačan: posle ovoga je **3 → 3**, jer se
+  spajanje pokazalo kao pogrešan potez, a ne kao odloženi.
+
+#### ZBR-IDENT-01 — otvoreno, i sada dokazano
+
+Prijemnica se na zbirnu vezuje **samo brojem**, a `ZbirnaPostoji` odgovara samo
+na „postoji li taj broj". Sa dva istoimena aktivna dokumenta veza je dvosmislena,
+i **nijedan sloj to ne prijavljuje**. To više nije hipoteza o „anomalnom
+datasetu" — reprodukovano je u fixture-u (`ZB-TEST-DUPL`) i već ima test koji
+brani suprotnu stranu.
+
+Zapisano kao **KI-007** u `docs/KNOWN_ISSUES.md`. Rešenje ide u **core** (veza po
+identitetu, ne po broju), ne u UI: picker ne može da reši dvosmislenost koju
+writer ne ume da izrazi.
+
+**Verifikacija**
+
+| Šta | Gde |
+|---|---|
+| Stornirana zbirna nije u ponudi; dva aktivna reda istog broja **ostaju oba** | `modTest` `T_Zbirne_PickerJeKanonskiReadModel` (bez ijednog upisa, nad fixture-om; oba preduslova se tvrde, pa test ne može tiho da prođe kao prazan) |
+| Sabotaže | `zbirne-picker-nudi-stornirane`, `zbirne-picker-spaja-isti-broj` |
+
+**Šta NIJE izmereno:** sam izgled padajućeg panela i redosled po datumu —
+sortiranje je zatečeno ponašanje i ova izmena ga ne dira.
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 

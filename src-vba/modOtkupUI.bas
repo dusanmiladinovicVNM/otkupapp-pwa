@@ -6534,6 +6534,25 @@ Public Sub FillZbirneCombo(frm As Object)
     CB.Clear
     src = CachedTable(TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
+    ' MIG-005a: STORNIRANE ZBIRNE SE NE NUDE.
+    '
+    ' Kes ljuske je sirova tabela, pa je picker do v6-ui-219 nudio i storniranu
+    ' zbirnu -- a writer je odbija (modDokUnos -> ZbirnaPostoji, koja radi bas
+    ' ovaj filtar). Ponuda koju writer odbija je gora od prazne: operater to
+    ' otkrije tek na snimanju, nad dokumentom koji je vec ceo popunio.
+    '
+    ' Filtar je POSTOJECI modHelpers.ExcludeStornirano -- isti koji zove i
+    ' ZbirnaPostoji. Picker i writer time gledaju istu definiciju "aktivne", pa
+    ' se ne mogu raziici. Radi nad prosledjenim nizom, bez novog citanja lista:
+    ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
+    ' a ovo se zove na svaku promenu rezima.
+    '
+    ' NE DE-DUPLIRA po broju, i to je namerno. Isti BrojZbirne na dva reda ume
+    ' da bude DVA dokumenta (broj se generise po vozacu; T_Oporavak_CiljneListe
+    ' tvrdi da ciljna lista mora da ponudi OBA). Spajanje bi bilo isti kvar koji
+    ' je RowsAktivni vec platio -- v. par.28.1f i ZBR-IDENT-01.
+    src = ExcludeStornirano(src, TBL_ZBIRNA)
+    If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
     If iBroj < 1 Then GoTo XIT
