@@ -9325,6 +9325,28 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
 | `.frm` / `.frx` parova | 4 → **1** |
 | VBA fajlova | 198 → **194** |
 
+#### Dopuna (07.09.2026): F-tasteri ispod kartice prijave
+
+`T_Faza_PrijavaNeGradiLjusku` (test 185) je od `b1029e96` padao na tvrdnji
+**„F1 se ne prosleđuje ljusci ispod prijave"** — test i `FazaTaster` su ušli
+**istim commitom** i protivrečili jedan drugom, pa ta tvrdnja nikad nije bila
+zelena. Nije regresija nego neizmerena tvrdnja: FULL na Windows-u nije pušten
+posle tog commita.
+
+`FazaTaster` je pod `FAZA_LOGIN` trošio samo `Enter` i `Esc`. Nepotrošen taster
+**ne stiže do ljuske** — i `HandleGlobalKey` i `HandleKeyFrom` izlaze odmah čim
+je faza aktivna — ali `KeyCode` ostaje, pa ga obradi MSForms: `F1` otvara Excel
+pomoć preko kartice koju operater još nije prošao. Ispravka guta `F1`–`F9` pod
+`FAZA_LOGIN`.
+
+**Blanket `True` kao u `BOOT`/`MINI` ovde ne može.** Te dve faze nemaju polja za
+kucanje; kartica prijave ima. Pozivalac (`clsFlatBtn.ForwardKey`) na `True`
+postavlja `KeyCode = 0`, pa bi gutanje svakog tastera ubilo unos korisničkog
+imena i PIN-a — a tagovi tih polja počinju sa `fz`, pa im svaki pritisak ide
+baš kroz `FazaTaster`.
+
+Sabotaža: `faza-prijava-pusta-f-tastere` (pomera opseg na `F10`; red ostaje,
+kod se kompajlira, pada tačno ta tvrdnja).
 
 ---
 
@@ -9356,7 +9378,7 @@ ispod proveren do funkcije, ne do imena.
 |---|---|---|---|
 | ~~**MIG-001**~~ | ~~**`Hladnjaca` i `Pogon` na Zbirnoj (F3)**~~ | `frmDokumenta` (korak 2) | **ZATVOREN** (`v6-ui-215`) — v. §28.1b |
 | ~~MIG-002~~ | ~~Brojka i lista **INTEGRITETA**~~ — **ZATVOREN** (`v6-ui-216`), v. §28.1c | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
-| MIG-003 | **„Primeni avans (sel.)"** — batch nad čekiranim blokovima | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
+| ~~MIG-003~~ | ~~**„Primeni avans (sel.)"** — batch nad čekiranim blokovima~~ — **ZATVOREN** (`v6-ui-217`), v. §28.1d | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
 | MIG-004 | **Manjak prijemnice vs zbirna + prosek gajbe** (F4) | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
 | MIG-005 | **Lista zbirnih za izbor** (F3) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
 | MIG-006 | **Živ verdikt validacije zbirne** (F3) | `frmDokumenta.UpdateValidacija` (korak 2) | Kapija JESTE preneta i tvrda je (`modDokUnos.ZbirnaValidiraj` → `ValidateZbirnaPreUnosa`; komentar u `modDokUnos` to i kaže: „račun je isti, samo se ovde ne crta"). Nedostaje da operater PRE snimanja vidi „OK" ili „Razlika". KPI pločica „Validacija" u ljusci je zakucana na `OTKUI_KPI_SPREMNO` u zelenom (`modOtkupUI`, `RefreshKpi`) |
@@ -9526,6 +9548,46 @@ crta na promenu podataka — 19 provera na toj učestalosti je isti kvar zbog ko
 su dva PR-a vadila sekunde iz uvida o stornu. Ako se ispostavi da je pasivan
 signal potreban, jeftin put je brojati nalaze **iz snimka** (kad postoji), ne
 računati ih za značku.
+
+### 28.1d MIG-003 zatvoren (`v6-ui-217`)
+
+Batch „Primeni avans" je vraćen — **nad korpom**, ne kao šesto dugme.
+
+**Zašto obim bira korpa.** Bazen radnji je pun (`MAX_ACT` = 5, i test to drži
+kao tvrdnju), pa šesto dugme ne postoji. Korpa („U NALOZIMA") je direktni
+naslednik legacy čekiranja: puna korpa znači batch, prazna vraća radnju na
+izabran red. Zato je peto polje radnje `bnavans` moralo da postane **0** — sa
+`1` bi dugme bilo ugašeno dok red nije izabran, pa batch nad punom korpom ne bi
+imao nijedan ulaz. To je tiha vrsta kvara (po redu i dalje radi), i ima svoju
+sabotažu.
+
+| Karika | Šta |
+|---|---|
+| Obim | `BnAvansObim(korpaBroj, red)` — čist račun: `KORPA` / `RED` / `NEMA`, korpa ima prednost |
+| Motor | `BnAvansNadIDovima(ids, ok, noop, err, zbir)` — bez `MsgBox`-a i bez toast-a, pa se može izmeriti nad fixture-om |
+| Kandidat | blok koji ima **i** avans **i** otvoren iznos; ostali iz korpe se ne broje nigde (korpa je izbor za izvoz i sme da ih sadrži) |
+| Po bloku | `AvansJedan` hvata grešku **kod sebe** — jedan anoman blok ne obara ceo batch i ne ostavlja ostale neobrađene (legacy petlja to nije imala) |
+| Ishod | jedan red: primenjeno + zbir, pa „bez promene" i „greška" samo kad ih ima; greška boji poruku crveno |
+| Svežina | lista se čita sveže (`BuildBlokIsplataList`), ne iz snimka mreže — isto pravilo koje drži izvoz (RF-10 R2) |
+
+**Razlog zbog kog je batch bio odložen je i zatvoren.** §22.6 je pisao: *„batch
+knjiženje traži zbirni izveštaj ishoda (ok/no-op/greška po bloku), a toast nosi
+jedan red."* Ishod sada **jeste** jedan red, jer motor razdvaja tri broja i zbir.
+Ključno je da „uspela transakcija" nije uspeh: `ApplyAvansToOtkup_TX` vraća
+`True` i za no-op, pa je dokaz isključivo proknjižen iznos iz `ByRef` parametra
+(RF-02 / AUD-010).
+
+**Verifikacija**
+
+| Šta | Gde |
+|---|---|
+| Obim (tri slučaja + prednost korpe) i `trebaRed = 0` | `modTest` `T_BankaNalozi_UgovorEkrana` (prošireno) |
+| **Zbirni ishod nad pravim upisom**: dva bloka jednog kooperanta i avans koji stiže samo za jedan → `ok = 1`, `noop = 1`, `zbir = 300`; blok kooperanta bez avansa **nije kandidat**; drugi prolaz ne prijavljuje nijedan primenjen avans | `modTestBanka` **T23** `T23_BatchAvansRazdvajaIshode`, u izolovanoj transakciji (`BeginIsolatedTx`) |
+| Sabotaže | `banka-nalozi-avans-trazi-red` (batch ostaje bez ulaza), `banka-nalozi-avans-broji-i-prazne` (zbirni ishod laže o obimu posla) |
+
+**Šta NIJE izmereno:** sam `MsgBox` potvrde i tekst toast-a (ekran, ne račun) —
+motor je odvojen baš zato što se on može meriti; i `compile` + suite, koji se
+izvršavaju na Windows-u. `vba_check` je ovde čist (469 sabotaža, 0 nalaza).
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 

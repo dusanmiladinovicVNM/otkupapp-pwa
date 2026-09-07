@@ -335,6 +335,14 @@ Public Function FazaTaster(ByVal KeyCode As Long) As Boolean
             Select Case KeyCode
                 Case vbKeyReturn: Prijavi: FazaTaster = True
                 Case vbKeyEscape: Otkazi: FazaTaster = True
+                ' F1-F9 su tasteri LJUSKE (rezim ekrana, storno, pomoc). Ispod
+                ' kartice se GUTAJU. Nepotrosen taster ovde ne stize do ljuske
+                ' -- oba pozivaoca izlaze odmah -- ali ga zato obradi MSForms:
+                ' KeyCode ostane, pa F1 otvori Excel pomoc preko kartice.
+                ' Blanket True kao u BOOT/MINI ovde NE moze: kartica ima polja
+                ' za kucanje, a pozivalac na True postavlja KeyCode = 0, pa bi
+                ' gutanje svakog tastera ubilo unos korisnika i PIN-a.
+                Case vbKeyF1 To vbKeyF9: FazaTaster = True
             End Select
         Case FAZA_BOOT, FAZA_MINI
             ' Nijedan taster ljuske (F1-F8, Esc) ne sme da radi ispod zavese.

@@ -1142,6 +1142,10 @@ Private Sub T_Matic_SekcijaTraziPravo()
     ' Admin bypass: bez ovoga bi gornja tvrdnja bila zelena i kad AUTH sve gasi.
     AssertEq Trim$(adminSme), "", "admin sme sve iz sekcije Maticni"
     AssertEq dugmeAdmin, True, "zamena operatera VRACA prekidac adminu"
+
+    ' v. komentar u T_PrefillBezBroja_PredlaziBroj: put uspeha mora da oslobodi
+    ' formu, inace je placa prvi sledeci test koji gradi ekran.
+    ReleaseOtkupUIForm f
 End Sub
 
 ' ============================================================
@@ -3249,6 +3253,12 @@ Private Sub T_PrefillBezBroja_PredlaziBroj()
                             "|omid=" & FX_STANICA & "|brdok=TEST-BR-1"
     AssertEq Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text)), "TEST-BR-1", _
              "broj koji prefill donese se ne pregazuje predlogom"
+
+    ' Forma se OSLOBADJA i na uspehu. Bez ovoga ostaje ucitana, pa prvi sledeci
+    ' test koji gradi ekran radi nad ostacima -- i pukne DOK JE FORMA ZIVA, gde
+    ' njena masinerija brise Err, pa pad stigne kao "greska bez opisa". Na padu
+    ' ovo radi CleanupPosleTesta; put uspeha do sada nije imao nikoga.
+    ReleaseOtkupUIForm f
 End Sub
 ' ============================================================
 ' 60. Uvid je identity-scoped u CELOSTI, ne samo u lancu
@@ -7927,6 +7937,10 @@ Private Sub T_BankaUvoz_UlazakUvoziIzvode()
              "preduslov: zamena operatera je STVARNO presla na Uvoz izvoda"
     AssertEq zamenaPozvan, 0, _
              "zamena operatera NE pokrece uvoz -- ni ona nije klik"
+
+    ' v. komentar u T_PrefillBezBroja_PredlaziBroj: put uspeha mora da oslobodi
+    ' formu, inace je placa prvi sledeci test koji gradi ekran.
+    ReleaseOtkupUIForm f
 End Sub
 
 Private Sub T_BankaUvoz_UgovorEkrana()
@@ -9772,6 +9786,29 @@ Private Sub T_BankaNalozi_UgovorEkrana()
     AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), _
              modOtkupUI.MAX_ACT, _
              "radnji je TACNO MAX_ACT -- sesta bi se tiho odsekla (peta je izricito 'svi')"
+
+    ' MIG-003: "Primeni avans" ima dva obima, jer sesto dugme ne postoji (bazen
+    ' je pun). Obim bira KORPA -- naslednik legacy cekiranja. Peto polje radnje
+    ' zato MORA biti 0: sa 1 bi dugme bilo ugaseno dok red nije izabran, pa
+    ' batch nad punom korpom ne bi imao nijedan ulaz.
+    spec = modScrBankaNalozi.BnRadnjeZaListu("NALOZI")
+    For j = 0 To UBound(Split(spec, "|"))
+        If Split(Split(spec, "|")(j), ":")(0) = "bnavans" Then
+            AssertEq Split(Split(spec, "|")(j), ":")(4), "0", _
+                     "Primeni avans ne trazi izabran red -- inace batch nema ulaz"
+        End If
+    Next j
+
+    ' Obim je cist racun, pa se meri bez mreze i bez upisa. Korpa ima prednost
+    ' nad izabranim redom: ona je izricit izbor operatera.
+    AssertEq modScrBankaNalozi.BnAvansObim(0, 0), "NEMA", _
+             "bez korpe i bez reda radnja nema nad cim"
+    AssertEq modScrBankaNalozi.BnAvansObim(0, 3), "RED", _
+             "prazna korpa vraca radnju na izabran red"
+    AssertEq modScrBankaNalozi.BnAvansObim(2, 0), "KORPA", _
+             "puna korpa znaci batch"
+    AssertEq modScrBankaNalozi.BnAvansObim(2, 3), "KORPA", _
+             "korpa ima prednost i kad je red izabran"
 
     spec = modScrBankaNalozi.BnCipoviZaListu("NALOZI")
     AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _

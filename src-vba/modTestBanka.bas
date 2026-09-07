@@ -121,6 +121,7 @@ Public Sub RunBankaImportTestSuite()
     T19_OtvorenBlokBezKooperantaPada
     T20_DupliKooperantIDNeBiraRacun
     T21_IzabranPlacenBlokNijeAvans
+    T23_BatchAvansRazdvajaIshode
 
     tx.RollbackTx
     Set tx = Nothing
@@ -816,6 +817,82 @@ Private Sub T21_IzabranPlacenBlokNijeAvans()
     ChkEq n, 1, S & "isti blok iz poziva na broj i dalje knjizi avans"
     ChkEq BimObradjeno(P & "BIM-P2"), "Da", S & "...i stavka je zatvorena"
     ChkEqD IsplataZaBim(P & "BIM-P2"), 1000, S & "...celim iznosom"
+End Sub
+
+' ============================================================
+' T23 - MIG-003: BATCH "Primeni avans" nad korpom razdvaja ISHODE.
+'
+' Legacy dugme "Primeni avans (sel.)" je otislo sa frmBankaExportPregled u
+' koraku 4, a par. 22.6 ga je vodio kao "ostaje u legacy formi" -- te forme vise
+' nema, pa radnje nije bilo nigde. Odlozeno je bilo zbog JEDNE stvari: batch
+' knjizenje trazi zbirni izvestaj ishoda, a toast nosi jedan red.
+'
+' Zato ovaj test ne meri "prosao je" nego BAS taj zbirni ishod:
+'   - blok koji je primio avans broji se u ok, sa svojim iznosom u zbiru;
+'   - blok kome nije ostalo avansa je BEZ PROMENE, ne uspeh (ApplyAvansToOtkup_TX
+'     vraca True i za no-op -- RF-02 / AUD-010);
+'   - blok cijem kooperantu avansa NEMA se ne broji NIGDE: korpa je izbor za
+'     izvoz i sme da ga sadrzi, pa bi ga "bez promene" lazno naduvalo.
+' ============================================================
+Private Sub T23_BatchAvansRazdvajaIshode()
+    Const S As String = "T23 batch avans: "
+
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+    SeedStanica P & "OM-22", P & "Stanica 22"
+    SeedKooperant P & "K-22A", "Test", "SaAvansom", P & "OM-22"
+    SeedKooperant P & "K-22B", "Test", "BezAvansa", P & "OM-22"
+
+    ' K-22A: dva otvorena bloka po 500, ali avans je samo 300 -- taman toliko da
+    ' JEDAN blok dobije, a drugi ostane bez promene. Ta razlika je cela poenta.
+    SeedOtkup P & "OTK-22A", P & "K-22A", P & "BLOK-22A", 100, 5, "Malina"
+    SeedOtkup P & "OTK-22B", P & "K-22A", P & "BLOK-22B", 100, 5, "Malina"
+    SeedAvansKooperanta P & "NOV-22", P & "K-22A", 300
+
+    ' K-22B: otvoren blok, ali kooperant nema avans -- kontrolni slucaj.
+    SeedOtkup P & "OTK-22C", P & "K-22B", P & "BLOK-22C", 100, 5, "Malina"
+
+    Dim ids As Object
+    Set ids = CreateObject("Scripting.Dictionary")
+    ids(P & "OTK-22A") = True
+    ids(P & "OTK-22B") = True
+    ids(P & "OTK-22C") = True
+
+    Dim ok As Long, noop As Long, greska As Long
+    Dim zbir As Double, kandidata As Long
+    kandidata = modScrBankaNalozi.BnAvansNadIDovima(ids, ok, noop, greska, zbir)
+
+    ' Chk u ovom modulu NE prekida test (belezi pa nastavlja), pa se sve tvrdnje
+    ' izvrsavaju -- prva je najvaznija zbog citljivosti izvestaja, ne mehanike:
+    ' zbir je ono sto je STVARNO proknjizeno, ne broj uspelih transakcija.
+    ChkEqD zbir, 300, S & "zbir je stvarno proknjizen avans (300)"
+    ChkEq ok, 1, S & "tacno jedan blok je primio avans"
+    ChkEq noop, 1, S & "drugi blok kooperanta je BEZ PROMENE, ne uspeh"
+    ChkEq greska, 0, S & "nijedna greska"
+    ChkEq kandidata, 2, S & "blok kooperanta bez avansa se NE broji medju kandidate"
+
+    ' Ledger: avans je vezan za tacno jedan blok, i kooperantu vise nije slobodan.
+    ChkEqD SlobodanAvansKooperanta(P & "K-22A"), 0, S & "avans kooperanta je potrosen"
+    ChkEq NovacRedovaSaOtkupID(P & "OTK-22C"), 0, S & "blok bez avansa nije dotaknut"
+
+    ' Drugi prolaz nad istim skupom: nema vise sta da se veze, pa NIJEDAN blok
+    ' ne sme da se prijavi kao primenjen. Bez ove tvrdnje bi "uspela transakcija
+    ' = primenjen avans" prosla nezapazeno.
+    ok = -1: noop = -1: greska = -1: zbir = -1
+    kandidata = modScrBankaNalozi.BnAvansNadIDovima(ids, ok, noop, greska, zbir)
+    ChkEq ok, 0, S & "drugi prolaz ne prijavljuje nijedan primenjen avans"
+    ChkEqD zbir, 0, S & "drugi prolaz ne knjizi nijedan dinar"
+
+    ' Prazan skup je legitiman ulaz, ne greska.
+    ok = -1: noop = -1: greska = -1: zbir = -1
+    kandidata = modScrBankaNalozi.BnAvansNadIDovima(CreateObject("Scripting.Dictionary"), _
+                                                    ok, noop, greska, zbir)
+    ChkEq kandidata, 0, S & "prazna korpa nema kandidata"
+    ChkEq greska, 0, S & "prazna korpa nije greska"
+
+    tx.RollbackTx
+    Set tx = Nothing
 End Sub
 
 ' ============================================================

@@ -5104,6 +5104,33 @@ SABOTAZE = {
     # MIG-002. Lista INTEGRITET je jedini prikaz nalaza revizije otkad je panel
     # otisao sa frmOtkupAPP; bez nje motor (modIntegritet) opet ostaje bez
     # pozivaoca, a nista operateru ne kaze da podaci ne stimaju.
+    # MIG-003. Bazen radnji je pun (MAX_ACT), pa batch nema svoje dugme -- obim
+    # bira korpa. Peto polje 1 gasi dugme dok red nije izabran, pa batch nad
+    # punom korpom ostaje bez ijednog ulaza: radnja postoji u kodu, a operater
+    # do nje ne moze. Tiho, jer po redu i dalje radi.
+    "banka-nalozi-avans-trazi-red": (
+        "modScrBankaNalozi.bas",
+        '                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:0|" & _\n',
+        '                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:1|" & _\n',
+        "T_BankaNalozi_UgovorEkrana",
+        "Primeni avans ne trazi izabran red",
+    ),
+    # Blok bez avansa iz korpe ulazi u batch kao "bez promene" -- zbirni ishod
+    # tada laze o tome koliko je posla uopste bilo.
+    # NAMERNO obara DVE tvrdnje istog testa (kandidata 3 umesto 2, noop 2 umesto
+    # 1), i to nije zamka 5/6: `Chk*` u modTestBanka BELEZI pa nastavlja, pa se
+    # obe prijave po imenu -- ne postoji tvrdnja koja "sakrije" onu iz kataloga.
+    # Uzi pogodak nije moguc: isti red je i brojac kandidata i kapija ulaska u
+    # batch, pa jedna promena nuzno pomera oba broja.
+    "banka-nalozi-avans-broji-i-prazne": (
+        "modScrBankaNalozi.bas",
+        "            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then\n"
+        "                n = n + 1\n",
+        "            If True Then   \' SABOTAZA: i blok bez avansa je kandidat\n"
+        "                n = n + 1\n",
+        "T23_BatchAvansRazdvajaIshode",
+        "blok kooperanta bez avansa se NE broji medju kandidate",
+    ),
     "oporavak-integritet-lista-nestala": (
         "modScrOporavak.bas",
         '        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100", _\n'
@@ -5118,6 +5145,18 @@ SABOTAZE = {
         '            FldShow z, "fgHladnjaca", True   \' SABOTAZA: odrediste vidljivo svuda\n',
         "T_Zbirna_OdredisteJePoljeF3",
         "F1 nema polje hladnjace",
+    ),
+    # Ispod kartice prijave tasteri ljuske ne smeju da rade. Nepotrosen taster
+    # NE stize do ljuske (oba pozivaoca izlaze odmah) nego do MSForms-a: KeyCode
+    # ostane, pa F1 otvori Excel pomoc preko kartice koju operater jos nije
+    # prosao. Sabotaza pomera opseg na F10 -- red ostaje, kod se kompajlira,
+    # a pada tacno tvrdnja o F1 (cetiri tvrdnje pre nje i dalje prolaze).
+    "faza-prijava-pusta-f-tastere": (
+        "modUiFaze.bas",
+        "                Case vbKeyF1 To vbKeyF9: FazaTaster = True\n",
+        "                Case vbKeyF10: FazaTaster = True   \' SABOTAZA: F1-F9 prolaze\n",
+        "T_Faza_PrijavaNeGradiLjusku",
+        "F1 se ne prosledjuje ljusci ispod prijave",
     ),
 }
 

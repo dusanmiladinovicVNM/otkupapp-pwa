@@ -220,7 +220,7 @@ Public Function BnRadnjeZaListu(ByVal kljuc As String) As String
             BnRadnjeZaListu = "bnadd:OTKUI_BTN_BN_UNALOG:96:primary:1|" & _
                               "bniznos:OTKUI_BTN_BN_IZNOS:80:soft:1|" & _
                               "bndel:OTKUI_BTN_BN_IZNALOG:80:ghost:1|" & _
-                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:1|" & _
+                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:0|" & _
                               "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0"
     End Select
 End Function
@@ -317,6 +317,20 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
     ' Batch radnja ne trazi izabran red (peto polje u BnRadnjeZaListu je 0).
     If kljuc = "bnsve" Then
         RadnjaNadRedom = DodajSveSaRacunom()
+        Exit Function
+    End If
+
+    ' "Primeni avans" ima DVA obima, kao i legacy dugmad ("na blok" i "(sel.)").
+    ' Bazen radnji je pun (MAX_ACT), pa sesto dugme ne postoji -- obim bira
+    ' KORPA, koja je nasledila legacy cekiranje: puna korpa znaci batch, prazna
+    ' vraca radnju na izabran red. Zato peto polje mora ostati 0: sa 1 bi dugme
+    ' bilo ugaseno dok red nije izabran, pa batch nad korpom ne bi imao ulaz.
+    If kljuc = "bnavans" Then
+        Select Case BnAvansObim(BnKorpaBroj(), red)
+            Case "KORPA": RadnjaNadRedom = PrimeniAvansKorpa()
+            Case "RED":   RadnjaNadRedom = PrimeniAvans(red)
+            Case Else:    modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS_OBIM"), True
+        End Select
         Exit Function
     End If
 
@@ -693,6 +707,162 @@ Private Function PrimeniAvans(ByVal red As Long) As Boolean
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_AVANS_NOOP"), True
     End If
     PrimeniAvans = True
+End Function
+
+' OBIM radnje "Primeni avans" -- cist racun, bez ijednog dodira sa podacima,
+' da se odluka moze izmeriti bez mreze i bez upisa. Korpa ima prednost: ona je
+' IZRICIT izbor operatera (naslednik legacy cekiranja), a izabran red je ono
+' sto ostane kad korpe nema. Prazno oboje nije greska nego uputstvo.
+Public Function BnAvansObim(ByVal korpaBroj As Long, ByVal red As Long) As String
+    If korpaBroj > 0 Then
+        BnAvansObim = "KORPA"
+    ElseIf red > 0 Then
+        BnAvansObim = "RED"
+    Else
+        BnAvansObim = "NEMA"
+    End If
+End Function
+
+' JEDAN blok: 1 = proknjizeno, 0 = bez promene, -1 = greska.
+'
+' Greska se hvata OVDE, ne u petlji iznad: jedan anomalan blok ne sme da obori
+' ceo batch i ostavi ostale neobradjene (isti razlog kao AutoMapBankaImportRow
+' u RF-09). Legacy petlja to nije imala -- prva greska je isla u EH forme.
+'
+' "Bez promene" NIJE uspeh: ApplyAvansToOtkup_TX vraca True i za no-op (nema
+' slobodnog avansa, blok vise nije otvoren), pa je dokaz da se nesto desilo
+' iskljucivo proknjizen iznos iz ByRef parametra (RF-02 / AUD-010).
+Private Function AvansJedan(ByVal koopID As String, ByVal otkupID As String, _
+                            ByRef outIznos As Double) As Long
+    On Error GoTo EH
+    outIznos = 0
+    If Not ApplyAvansToOtkup_TX(koopID, otkupID, outIznos) Then
+        AvansJedan = -1
+        Exit Function
+    End If
+    If outIznos > 0 Then AvansJedan = 1
+    Exit Function
+EH:
+    LogErr "modScrBankaNalozi.AvansJedan[" & otkupID & "]"
+    AvansJedan = -1
+End Function
+
+' Koliko blokova iz skupa ima I avans I otvoren iznos. Isti filter koji koristi
+' i motor -- jedna definicija namerno, da se potvrda i posao ne raziidju.
+Private Function BnAvansKandidata(ByVal ids As Object) As Long
+    Dim sveze As Collection, v As Variant, blk As clsBlokIsplata, n As Long
+    On Error GoTo EH
+    If ids Is Nothing Then Exit Function
+    Set sveze = modBankaExportPregled.BuildBlokIsplataList()
+    If sveze Is Nothing Then Exit Function
+    For Each v In sveze
+        Set blk = v
+        If ids.Exists(blk.otkupID) Then
+            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then n = n + 1
+        End If
+    Next v
+    BnAvansKandidata = n
+    Exit Function
+EH:
+    LogErr "modScrBankaNalozi.BnAvansKandidata"
+End Function
+
+' MOTOR batch-a: veze avans na svaki blok iz zadatog skupa OtkupID-jeva. Vraca
+' broj OBRADJENIH blokova (kandidata), a ishod razdvaja kroz ByRef --
+' primenjeno / bez promene / greska, uz zbir stvarno proknjizenog.
+'
+' Bez MsgBox-a i bez toast-a: ovo je racun, ne ekran. Zato ga test moze pokrenuti
+' nad fixture-om, sto je jedini nacin da se "batch prijavljuje ZBIRNI ishod"
+' izmeri -- a bas taj ishod je bio razlog zbog kog je batch odlozen (par. 22.6).
+'
+' Lista se cita SVEZE (BuildBlokIsplataList), ne iz snimka mreze: izmedju
+' punjenja korpe i klika stanje se moglo promeniti -- isto pravilo koje drzi
+' izvoz (RF-10 R2).
+'
+' Blok iz korpe koji nema sta da primi se NE broji ni u jedan ishod: korpa je
+' izbor za izvoz i sme da sadrzi i takve, pa bi ih "bez promene" lazno naduvalo.
+Public Function BnAvansNadIDovima(ByVal ids As Object, ByRef outOk As Long, _
+                                  ByRef outNoop As Long, ByRef outErr As Long, _
+                                  ByRef outZbir As Double) As Long
+    Dim sveze As Collection, v As Variant, blk As clsBlokIsplata
+    Dim ishod As Long, iznos As Double, n As Long
+    outOk = 0
+    outNoop = 0
+    outErr = 0
+    outZbir = 0
+    On Error GoTo EH
+    If ids Is Nothing Then Exit Function
+    Set sveze = modBankaExportPregled.BuildBlokIsplataList()
+    If sveze Is Nothing Then Exit Function
+
+    For Each v In sveze
+        Set blk = v
+        If ids.Exists(blk.otkupID) Then
+            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then
+                n = n + 1
+                ishod = AvansJedan(blk.kooperantID, blk.otkupID, iznos)
+                Select Case ishod
+                    Case 1
+                        outOk = outOk + 1
+                        outZbir = outZbir + iznos
+                    Case 0
+                        outNoop = outNoop + 1
+                    Case Else
+                        outErr = outErr + 1
+                End Select
+            End If
+        End If
+    Next v
+
+    BnAvansNadIDovima = n
+    Exit Function
+EH:
+    LogErr "modScrBankaNalozi.BnAvansNadIDovima"
+    outErr = outErr + 1
+    BnAvansNadIDovima = n
+End Function
+
+' BATCH nad korpom (MIG-003). Legacy "Primeni avans (sel.)" je otisao sa
+' frmBankaExportPregled u koraku 4, a par. 22.6 ga je vodio kao "ostaje u legacy
+' formi" -- te forme odavno nema, pa radnje nije bilo nigde.
+Private Function PrimeniAvansKorpa() As Boolean
+    Dim ids As Object, kandidata As Long
+    Dim ok As Long, noop As Long, greska As Long, zbir As Double
+    Dim tekst As String
+
+    Set ids = BnKorpaIDs()
+    If ids Is Nothing Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS_OBIM"), True
+        Exit Function
+    End If
+
+    ' Broji se PRE potvrde, da operater ne potvrdjuje posao koji ne postoji.
+    kandidata = BnAvansKandidata(ids)
+    If kandidata = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS_KORPA_NEMA"), True
+        Exit Function
+    End If
+
+    If MsgBox(Poruka("OTKUI_ASK_BN_AVANS_KORPA") & vbCrLf & vbCrLf & _
+              Poruka("OTKUI_LBL_BN_AVANS_BLOKOVA") & " " & kandidata, _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+
+    BnAvansNadIDovima ids, ok, noop, greska, zbir
+
+    Scr_ResetCache
+    ' ZBIRNI ISHOD u jednom redu -- to je bio jedini razlog zbog kog je batch
+    ' odlozen (par. 22.6: "toast nosi jedan red"). Nosi primenjeno i zbir, a bez
+    ' promene i gresku samo kad ih ima.
+    tekst = Poruka("OTKUI_MSG_BN_AVANS_ZBIR") & " " & ok & " " & ChrW(183) & " " & _
+            Format$(zbir, "#,##0.00") & " RSD"
+    If noop > 0 Then tekst = tekst & "  " & ChrW(183) & " " & _
+                             Poruka("OTKUI_LBL_BN_AVANS_BEZ") & " " & noop
+    If greska > 0 Then tekst = tekst & "  " & ChrW(183) & " " & _
+                               Poruka("OTKUI_LBL_BN_AVANS_GRESKA") & " " & greska
+    ' Greska boji poruku crveno: batch koji je delimicno pao ne sme da izgleda
+    ' kao uspeh, ma koliko blokova proslo.
+    modOtkupUI.ShowToast tekst, (greska > 0)
+    PrimeniAvansKorpa = True
 End Function
 
 '=====================================================================
