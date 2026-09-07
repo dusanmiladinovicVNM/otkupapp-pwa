@@ -96,6 +96,11 @@ vraća `True` za `PONISTENJE` i za `OTPREMNICA+DUPLI/ISPRAVKA`, to jest za jedin
 modove koji tu i dolaze. Grana `FLOW_DOC_ZBIRNA` ostaje po broju jer `tblOtkup`
 nosi `BrojZbirne`, ne `ZbirnaID`; taj put je zaštićen uzvodno.
 
+> **Šta je pri prelasku NESTALO iz aplikacije — na jednom mestu: §28.** Ovaj
+> sažetak govori šta još nije preneto iz plana; §28 popisuje ono što je bilo pa
+> ga više nema, uključujući stavke koje su nestale tek brisanjem forme, mesecima
+> posle odluke da se ekran za njih ne pravi.
+
 ---
 
 ## 1. Zajednička pravila (važe u obe forme)
@@ -194,7 +199,7 @@ zaključivati iz koda.
 | `chkDveKlaseOtp/Zbr/Prij_Click` | II klasa | **IMA** (`SetKlasa`) |
 | `RefreshBrojOtp/Zbirne/Prij/ReversSuggestion` | predlozi po nizu | **IMA** (v6-ui-112) |
 | `cmbKupac_Change` → broj prijemnice | briše pa predlaže | **IMA** (v6-ui-113) |
-| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** — zato `SaveZbirnaMulti_TX` iz novog UI-ja dobija prazne `hladnjaca`/`pogon` |
+| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** — zato `SaveZbirnaMulti_TX` iz novog UI-ja dobija prazne `hladnjaca`/`pogon`. **Zavedeno kao MIG-001 (§28.1)**: kolone postoje, writer ih piše, `modDokumentInvariant` ih čuva — a ekran ih ne može popuniti |
 | `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **IMA** (v6-ui-117, `FillOpenFakture` uz polje `fgFaktura`) |
 | `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B (živi prikaz; upis F4 ne zavisi od njega) |
 | `UpdateValidacija` (živi prikaz + kapija pri upisu zbirne) | poklapanje zbirne sa otpremnicama | **kapija IMA** (`ZbirnaValidiraj`, v6-ui-116), **živi prikaz NEMA** |
@@ -288,7 +293,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Zbirna se mora poklopiti sa svojim otpremnicama (kg **i** ambalaža) | `ZbirnaValidiraj` → `ValidateZbirnaPreUnosa` | hard-kapija, **ne zavisi** od `VALIDACIJA_UNOSA` — kao u legacy |
 | Zbirna: izvor ima Kl.II a prekidač isključen → blokada | `ZbirnaValidiraj` → `ZbirnaIzvorImaKlasuII` | inače bi se Kl.II tiho izgubila |
 | Zbirna **nema** bruto→neto ni cenu | — | `tblZbirna` nema ni `BrutoKg` ni `Cena`; zbirna je zbir već netiranih otpremnica |
-| Zbirna: `Hladnjaca` / `Pogon` | — | novi UI nema ta polja (Z3b) → upisuje se prazno |
+| Zbirna: `Hladnjaca` / `Pogon` | — | novi UI nema ta polja (Z3b) → upisuje se prazno. **MIG-001, §28.1** — jedina potvrđena rupa u paritetu POSLOVNOG PODATKA, ne prikaza |
 | Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA` (BLOK / UPOZORENJE) |
 | Prijemnica: bruto→neto po klasama, `BrutoKg` zamrznut | `PrijemnicaValidiraj` | isto kao otkup i otpremnica |
 | Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
@@ -1511,9 +1516,10 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 - ~~**Uvoz** (v. §9.3)~~ — **preneto u `v6-ui-212` (§9.9):** ulazak u ekran
   uvozi ono što čeka, kao klik na Banka u legacy meniju.
-- **`frmBankaImport` i `frmBankaExportPregled` se ne gase i ne menjaju.** Dve
-  kopije poslovne logike postoje namerno; pravilo se menja u `modBankaMapiranje`
-  pa se ručno preslikava u formu.
+- ~~**`frmBankaImport` i `frmBankaExportPregled` se ne gase i ne menjaju.**~~ —
+  **prevaziđeno:** `frmBankaExportPregled` je obrisan u koraku 4 (§27.12),
+  `frmBankaImport` u koraku 6 (§27.14). Dve kopije više ne postoje, pa nema ni
+  ručnog preslikavanja. Šta je pritom nestalo: §28.1 (batch „Primeni avans").
 - **Parseri** (`modBankaImportParserPdfToText`, `modBankaProCredit`,
   `modBankaHalk`, `modBankaAlta`) nisu dirani.
 - **Veliki preview panel** — zamenjen kolonom „Predlog" (§9.5).
@@ -4083,13 +4089,20 @@ Neuspeh čitanja KPI-ja nije nula: poslednja poznata vrednost, a pre prve
 
 ### 22.6 Šta NIJE preneto
 
-- **`frmBankaExportPregled` se ne gasi i ne menja** — dve kopije žive namerno
-  (§5, Faza B). `ValidateNalogSaldo`, `ClampOverridesToOpen`, CSV writer i
-  cent-domen pravilo **nisu dirani**.
-- **„Isplatiti" override** (delimična isplata) — v. odluku (B).
+- ~~**`frmBankaExportPregled` se ne gasi i ne menja**~~ — **prevaziđeno korakom
+  4 (§27.12): forma je obrisana.** `ValidateNalogSaldo`, CSV writer i cent-domen
+  pravilo su i dalje nedirani; `ClampOverridesToOpen` je ostao bez produkcionog
+  pozivaoca (ekran koristi `ClampOverridesToOpenDict`, isti račun nad rečnikom).
+- ~~**„Isplatiti" override** (delimična isplata)~~ — **preneto**: iznos po bloku
+  (`modScrBankaNalozi.mIznosi` + `ClampOverridesToOpenDict`), meri ga
+  `T_BankaNalozi_IznosPoBloku`.
 - **„Primeni avans (sel.)"** (batch nad čekiranim) — v1 nosi avans samo po
   redu; batch ostaje u legacy formi. Razlog: batch knjiženje traži zbirni
   izveštaj ishoda (ok/no-op/greška po bloku), a toast nosi jedan red.
+  > **Od koraka 4 to znači da batch-a NEMA nigde** — forma u kojoj je „ostajao"
+  > je obrisana. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim
+  > iznosom iz RF-02/AUD-010) je netaknut; nedostaje grupna radnja i njen zbirni
+  > ishod. Zavedeno u §28.1.
 - **Storno isplate / izvoda** nije ovde — posao ekrana Storno.
 
 ### 22.7 Fixture
@@ -4370,7 +4383,7 @@ zato **prikaz nad postojećim računima**; nijedan `Report*`, matrica ni
 | headers po tabu u `btnStampaj_Click` | `IzHeaderiZaListu` (izvedeno iz opisa kolona ekrana) |
 | `lblStatus` (4 stanja) | hint zone: „izveštaj ne postoji za kombinaciju" ≠ „izaberi entitet" ≠ opis prikazanog konteksta |
 | specijalni redovi lista (v. §23.4) | **brojke zone** (OM avans / agro nerasp.; primljeno / kod otkupca) |
-| detail panel „Detalji otkupa" (`modKarticaDetalji`) | **NIJE preneto** — v. §23.7 |
+| detail panel „Detalji otkupa" (`modKarticaDetalji`) | preneto kao **detalj traka** zone (§23.7/§23.11); modul je posle toga ostao bez pozivaoca i **obrisan** je. Traka nosi drugi sadržaj — sedam polja legacy panela nema nigde (§28.1) |
 
 ### 23.2 Odluke
 
@@ -4561,9 +4574,11 @@ matricu, identitet, prikaz istine, zonu.
   print sheeta — string koji Excel ume da protumači (npr. tip ambalaže
   `12/1` kao datum) menja oblik u štampanom PDF-u. Za **novi UI** zatvoreno
   u krugu 4: `PrintIzvestajHouse` piše sve data ćelije sa
-  `NumberFormat="@"` (§23.11/S8). **Legacy putanja** (`frmIzvestaj` →
-  `PrintIzvestaj`/`OutputToSheet`) i dalje nosi kvar — pripada zajedničkom
-  prolazu, ne ovom PR-u. Golih nizova >15 cifara u izveštajima nema
+  `NumberFormat="@"` (§23.11/S8). ~~**Legacy putanja** (`frmIzvestaj` →
+  `PrintIzvestaj`/`OutputToSheet`) i dalje nosi kvar~~ — **prevaziđeno korakom 3
+  (§27.11): `modPrint.PrintIzvestaj` je ostao bez ijednog pozivaoca**, pa ta
+  putanja više nije dohvatljiva. `OutputToSheet` jeste živ (zove ga
+  `modIzvestaj`), pa se klasa kvara ne zatvara brisanjem forme. Golih nizova >15 cifara u izveštajima nema
   (provereno po listama — nijedna ne nosi račun), pa N1 klasa ne nastaje.
 - **Kursor preko placeholder-a pretrage** — poznat estetski backlog svih
   ekrana, ne dira se (§22.9).
@@ -9039,6 +9054,16 @@ Ovde se **ne menja ponašanje** — brišu se putanje bez pozivaoca:
 - `SyncProgress` petlja od `v6-ui-209` nije nalazila nijednu formu.
 - `OblastZaFormu` je ostala bez pozivaoca.
 
+> **Dopuna (§28, merenje nad `c0658568`): dve stvari OVDE jesu nestale iz
+> aplikacije, i nisu bile popisane.** `frmOtkupAPP` nije bio samo host — nosio
+> je i panel `ShowIntegritet` (redovi iz `modIntegritet.GetIntegritetRows`,
+> naslov „INTEGRITET — N neusklađenih zapisa" iz `IntegritetUkupno`) i pozivao
+> `modJournaling.FlushNow` na promenu sekcije i na povratak na dashboard. Sve
+> tri procedure su danas bez pozivaoca. Provere integriteta se i dalje pokreću
+> iz Admin panela (`RunIntegritetProvere`), a autosave žurnala i dalje radi —
+> ali brojka neusklađenih više ne stoji nigde, a pražnjenje nema izričitu tačku.
+> Zavedeno kao **MIG-002** i **MIG-010** u §28.1.
+
 Ono što bi ovakvo brisanje moglo da pokvari — zaostalu referencu na obrisanu
 formu — hvata **`CLAN_FORME`** u `vba_check` (uvedena u §27.12 posle baš takvog
 propusta), a compile je ručna kapija. Izmišljen test ovde ne bi merio ništa što
@@ -9300,3 +9325,152 @@ dokazuje da išta meri (CLAUDE.md §5). To je preostao posao za Windows sesiju.
 | `.frm` / `.frx` parova | 4 → **1** |
 | VBA fajlova | 198 → **194** |
 
+
+---
+
+## 28. Registar izgubljenog — mereno nad `main`-om (`c0658568`, 07.09.2026)
+
+Plan §27 je ispunjen i ostala je **jedna forma**. Ovaj odeljak je popis onoga
+što je pri tom prelasku **nestalo iz aplikacije**, na jednom mestu. Do sada je
+bio razbacan po „Šta NIJE preneto" pododeljcima pojedinih faza, a deo nije bio
+nigde — jer je nestao tek brisanjem forme, mesecima posle odluke da se za tu
+stavku ekran ne pravi. Rečenica „ostaje u legacy formi" prestaje da važi u
+trenutku kad forma ode, i taj trenutak niko ne pregleda unazad.
+
+**Kako je mereno.** Za svaku obrisanu formu uzet je njen izvor iz commita pre
+brisanja i upoređen sa današnjim stablom: koje je javne procedure zvala i koje
+od njih danas nemaju nijednog pozivaoca. Uz to je nad celim `src-vba/`
+prebrojan nedostižan kod (procedura bez spoljnog pozivaoca i bez puta od bilo
+koje koja ga ima). Komentari se ne broje kao pozivaoci, `.frx` je izuzet.
+**Merenje je statičko** — compile i suite nisu izvršeni u sesiji u kojoj je ovo
+pisano.
+
+**„Bez pozivaoca" nije isto što i „izgubljeno".** Interni helper koji je forma
+zvala direktno, a danas ga zove samo motor iznad njega, radi i dalje (cela
+`TryResolve*` familija u `modBankaMapiranje` je takav slučaj). Zato je svaki red
+ispod proveren do funkcije, ne do imena.
+
+### 28.1 Izgubljeno i nezamenjeno — čeka odluku
+
+| Oznaka | Šta je nestalo | Odakle (korak) | Šta je izmereno |
+|---|---|---|---|
+| **MIG-001** | **`Hladnjaca` i `Pogon` na Zbirnoj (F3)** | `frmDokumenta` (korak 2) | Jedina rupa u paritetu **poslovnog podatka**, ne prikaza — v. §28.1a |
+| MIG-002 | Brojka i lista **INTEGRITETA** | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
+| MIG-003 | **„Primeni avans (sel.)"** — batch nad čekiranim blokovima | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
+| MIG-004 | **Manjak prijemnice vs zbirna + prosek gajbe** (F4) | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
+| MIG-005 | **Lista zbirnih za izbor** (F3) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
+| MIG-006 | **Živ verdikt validacije zbirne** (F3) | `frmDokumenta.UpdateValidacija` (korak 2) | Kapija JESTE preneta i tvrda je (`modDokUnos.ZbirnaValidiraj` → `ValidateZbirnaPreUnosa`; komentar u `modDokUnos` to i kaže: „račun je isti, samo se ovde ne crta"). Nedostaje da operater PRE snimanja vidi „OK" ili „Razlika". KPI pločica „Validacija" u ljusci je zakucana na `OTKUI_KPI_SPREMNO` u zelenom (`modOtkupUI`, `RefreshKpi`) |
+| MIG-007 | **MALINA: sekcija Zbirna se ne gasi** | `frmDokumenta.DisableFraZbirnaMalina` (korak 2) | `IsMalinaMode` u ljusci postoji, ali samo za auto-izbor par-vozača. F3 je u malina modu potpuno otvoren, iako `modDokUnos` otpremnicu snima sa praznim `BrojZbirne` i zbirnu pravi sam. **Šteta nije reprodukovana** — tvrdi se samo da kapija koja je postojala nema naslednika |
+| MIG-008 | **Sedam polja detalja kartice** | `modKarticaDetalji.ShowOtkupDetails` (modul obrisan) | Legacy panel je ispisivao do 19 parova; nova detalj traka (`modScrIzvestaji.IzDetaljOtkupLista`, do 6 linija) nosi drugi sadržaj i dodaje nizvodnu sledljivost. Bez zamene su ostali: **parcela, sorta, bruto, tip ambalaže, gajbe, izdata ambalaža, isplaćeno (keš) + primalac** |
+| MIG-009 | **„Štampaj otpremnicu" sa liste KARTICA** | `frmIzvestaj` detalj dugmad (korak 3) | Ruta postoji (`OutputOtpremnicaPDF`) i koristi se na listi ROBA; na KARTICA se štampa samo otkupni list |
+| MIG-010 | **Eksplicitno pražnjenje žurnala** | `modJournaling.FlushNow` (korak 7) | Legacy je pražnjenje forsirao na promenu sekcije i na povratak na dashboard. Autosave radi (`clsTransaction` → `MarkDirtyAndSchedule` → `AutoSaveTick`), pa trajnost nije ugrožena; nestale su izričite tačke |
+
+### 28.1a MIG-001 — zašto je ovo drugačije od ostalih
+
+Sve ostalo u §28.1 je **prikaz ili radnja**. MIG-001 je jedino mesto gde
+**dokument nosi podatak koji ekran ne može da popuni**:
+
+| Karika | Stanje |
+|---|---|
+| Šema | `tblZbirna` ima kolone `Hladnjaca` i `Pogon` (`modConfig`: `COL_ZBR_HLADNJACA`, `COL_ZBR_POGON`) |
+| Writer | `modDokumenta.BuildZbirnaRowData` ih upisuje; `SaveZbirnaMulti_TX` / `SaveZbirna_TX` / `SaveZbirna` ih nose kao imenovane argumente |
+| Ulazni sloj | `modDokUnos` postavlja `p("hladnjaca") = ""` i `p("pogon") = ""` i prosleđuje ih writeru — uz komentar da novi UI ta polja nema |
+| Rekalkulacija | `modDokumentInvariant` ih **čuva** iz template reda pri sistemskoj korekciji — prazno ostaje prazno |
+| Test | `modBusinessFlowProTests` tvrdi round-trip obe vrednosti (`Zbirna mapiranje: Hladnjaca` / `: Pogon`) — dakle ugovor se meri, samo ga niko ne popunjava |
+
+Posledica: **svaka zbirna uneta kroz ljusku ima prazne `Hladnjaca` i `Pogon`**,
+a dokument ih i dalje deklariše kao svoje.
+
+**Šta je legacy stvarno radio — izmereno u izvoru obrisane forme, pre nego što
+se pravilo prepiše po sećanju:**
+
+- `cmbKupac_Change` je oba comba **očistio**, pa je za izabranog kupca pročitao
+  `LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca")` i, ako vrednost
+  postoji, dodao je kao **jedinu stavku** `cmbHladnjaca`. Dakle hladnjača nije
+  bila izbor iz šifarnika nego **izvedena vrednost iz matičnog reda kupca**.
+- `cmbPogon` je bio samo očišćen. **Nijedna linija forme nikada nije punila
+  `cmbPogon`** — pogon je bio slobodan unos operatera, bez izvora i bez
+  zavisnosti od hladnjače.
+- `PrefillZbirnaFromStornirana` je obe vrednosti vraćao iz stornirane zbirne.
+
+Zato „Pogon zavisi od Hladnjače / kupca" **nije zatečeno pravilo** — ako se
+uvede, to je **nov business rule**, a ne parity. Isto važi i za listu hladnjača:
+zatečeno je bilo „tačno jedna, ona sa kupčevog reda".
+
+**Dve stvari se moraju izmeriti pre implementacije, ne posle:**
+
+1. **`tblKupci.Hladnjaca` nije u `modConfig` niti ga pravi `modSetup`** — legacy
+   ga je čitao **golim stringom**. To je klasičan schema drift (CLAUDE.md §3):
+   po instalaciji kolone može i ne biti, i tada je i legacy pisao prazno.
+   Provera stvarne šeme je prvi korak, a ne pretpostavka.
+2. **Podatak nema nijednog čitaoca osim invarijante i testa** — nijedan izveštaj,
+   štampa ni sync ne čitaju `COL_ZBR_HLADNJACA` / `COL_ZBR_POGON`. To ne obara
+   nalaz (ugovor dokumenta je ugovor), ali određuje prioritet: rupa je u
+   **kompletnosti zapisa**, ne u brojci koju neko gleda.
+
+**Obim koji bi zatvorio nalaz, bez proširenja:** dva polja vidljiva samo u F3;
+hladnjača se popunjava iz matičnog reda kupca kad ta kolona postoji (inače polje
+ostaje prazno i ne blokira upis); pogon slobodan unos; `Scr_Save` ih prosleđuje
+kroz postojeće ključeve `p("hladnjaca")` / `p("pogon")`; **`SaveZbirnaMulti_TX`
+se ne dira**. Tvrdnja koja se traži nije „kontrole postoje" nego **parity
+podatka**: izbor u ekranu → `Scr_Save` → isti par vrednosti u rečniku → isti par
+kod writera → isti par u `tblZbirna`.
+
+### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
+
+| Šta | Gde je odluka |
+|---|---|
+| Marža — tri pogleda (po kupcu, po OM, ukupno) | §27.15 + zaglavlje `modScrAnaliza`: ekran ANALIZA je **u izradi** i to piše na njemu, jer audit FM-0106 kaže da ta tri pogleda mešaju PROCENU sa OSTVARENOM maržom. `modMarza` (463 linije, **svih 9 procedura**) stoji bez pozivaoca kao građa. Dok ANALIZA ne dobije sadržaj, marže nema nigde |
+| `CheckVerwaisteDokumente` — modalno upozorenje na siročiće pri otvaranju | §3.2: zamenjeno stalnom listom „Nedovršeno" i brojkom u zoni (dijalog se zatvori i zaboravi, lista ne može). Danas bez oba pozivaoca (155 linija u `modHelpers`) |
+| Grupisani pregled storniranih (`GetStorniraniGrupisano`) | §3.2: zamenjen čipom „Otkazane" nad svakim tipom |
+| Storno palete i prerade iz F8 | §3.2: pripada ekranu Palete |
+| Zbirna: bruto→neto i cena | §3.1: `tblZbirna` nema te kolone — nije gubitak nego nepostojeće polje |
+
+### 28.3 Zamenjeno drugim oblikom — funkcija živi, stari kod je siroče
+
+| Staro (bez pozivaoca) | Novo |
+|---|---|
+| `modDokumenta.GetAktivneZbirne` / `GetAktivnePrijemnice` | `modScrOporavak.RowsAktivni` — lista koja se pretražuje i sortira umesto comba |
+| `modStornoFlow.RunSimpleStorno*` (četiri) | `modStornoDok` zove `Storno*_TX` direktno; njegov preflight `StornoRazlog` pokriva svih devet tipova (šire od legacy provere za dva). Telemetrija nije izgubljena — `modStorno.MonitorStornoSuccess` diže `STORNO_*` na svih 14 putanja |
+| `modBankaMapiranje.MapBankaImportAsKooperantBlock_TX` | `MapBankaImportAsKooperantBlockManual_TX` + `PlanBlokRaspodela` (podela iznosa po više blokova) |
+| `modBankaMapiranje.TryResolveOtkupForKooperant` | `GetOtkupCandidatesForKooperantBlock` (RF-09) |
+| `modBankaExportPregled.SummarizeBlokList` | četiri KPI brojke (`NalogeKpi`) + čipovi „ima račun / bez računa / avans" |
+| `modBankaExportPregled.ClampOverridesToOpen` | `ClampOverridesToOpenDict` — isti račun nad rečnikom |
+| `modPrint.PrintIzvestaj` | `PrintIzvestajHouse` (§23.8) |
+| `modStornoRecovery.UndoStorno_TX` | `UndoOperation_TX` po `OperationID` (`modStornoZurnal`) |
+| `modMain.SaveApp` / `OpenExcel` / `CloseExcel` | `btnSnimi` (`ThisWorkbook.Save`) i `btnExcel` u ljusci — funkcija radi, ali postoje dva puta za isti potez |
+| `modKarticaDetalji` (ceo modul) | detalj traka zone (§23.11/S7); modul **obrisan** |
+| `modMouseWheel` + `clsWheelList` | uklonjeni zajedno sa legacy formama |
+
+### 28.4 Zapisi ovog kataloga koji više nisu opisivali stanje
+
+Ispravljeni na svojim mestima u istom prolazu:
+
+- §9.8 — „`frmBankaImport` i `frmBankaExportPregled` se ne gase i ne menjaju"
+  (obe obrisane, koraci 6 i 4).
+- §22.6 — „`frmBankaExportPregled` se ne gasi" i „„Isplatiti" override nije
+  preneto" (jeste — iznos po bloku, meri `T_BankaNalozi_IznosPoBloku`); uz to
+  je batch avans označen kao **nestao**, ne „ostaje u formi".
+- §23.7 — red tabele je `modKarticaDetalji` vodio kao „NIJE preneto", dok
+  sam §23.7 kaže da je detalj prenet u krugu 4.
+- §23.8 — „legacy putanja i dalje nosi kvar": `PrintIzvestaj` je ostao bez
+  pozivaoca, pa ta putanja više nije dohvatljiva.
+
+### 28.5 Mrtav kod — brojka uz nalaz
+
+Isti prolaz, nad celim `src-vba/`:
+
+| Merilo | Brojka |
+|---|---|
+| Nedostižno, **testovi računati kao pozivaoci** | **7.555 linija koda u 73 modula** |
+| Nedostižno, samo produkcioni pozivaoci | 10.100 linija, od čega **3.733** otpada na `Test_*` / `Diag_*` makroe i procedure koje drže samo testovi |
+
+Najveći pojedinačni: `modTheme` **809** (60 od 71 procedure — cela legacy paleta
+za forme kojih više nema), `modDokumenta` **634** (19 procedura, fajl netaknut od
+koraka 2), `modOtkupUI` 562, `modMarza` 457 (9/9), `modMasterSync` 454,
+`modSEFMapper` 277.
+
+> **Ne briše se sve što je bez pozivaoca.** `modMarza` i read-modeli
+> `modIntegritet`-a (`GetIntegritetRows`, `IntegritetUkupno`) su **građa za
+> ekrane koji tek treba da nastanu** (§28.1 MIG-002, §28.2 marža). `modTheme` i
+> `modPrint.PrintIzvestaj` nemaju takvu budućnost i mogu odmah.
