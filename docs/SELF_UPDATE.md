@@ -577,6 +577,37 @@ se desio i fix koji radi:
     (`frmOtkupUI`) i on ima code-behind (4484 znaka), a praznih `.bas`/`.cls`
     stubova nema nijednog. Ovo je zatvaranje semantičke rupe, ne ispravka živog
     kvara — i zato se prijavljuje kao takvo.
+31. **Backup se VERIFIKUJE — `SaveCopyAs` bez greške nije dokaz.**
+    `MakePreUpdateBackup` je do sada radio `SaveCopyAs` pa bezuslovno vraćao
+    `True`. To je ista klasa greške koju zamke #12 (`SaveWorkbookVerified`) i #25
+    (`VerifyWritten`) već zatvaraju — samo na **poslednjoj liniji odbrane**: ako je
+    backup krnj, operater to sazna tek kad mu zatreba, a tada je kasno.
+
+    `BackupLooksUsable` traži dva praga, oba namerno labava (lažno „backup nije
+    uspeo" tera operatera da odgovara na „Nastaviti ipak?" bez razloga):
+
+    | prag | hvata |
+    |---|---|
+    | apsolutni: **≥ 50 KB** | 0 bajtova i grubo odsečen upis; važi uvek |
+    | odnos: **≥ izvor / 2** | delimičan upis; preskače se kad veličina izvora nije čitljiva (npr. SharePoint URL) |
+
+    **Mereno 07.09.2026** (`SaveCopyAs` preko COM-a nad fixture sveskom):
+
+    ```
+    izvor  748781 B     backup 748753 B     odnos 1.000
+    ```
+
+    Prag `0.5` ima ogromnu rezervu — lažan pad nije realan rizik. Isto merenje
+    pokazuje da su **oba praga potrebna**, nijedan nije suvišan:
+
+    ```
+    backup od 0 bajtova    -> pada na APSOLUTNOM,  odnos ga ne bi ni video
+    backup odsečen na 30%  -> prolazi apsolutni (224 KB), pada na ODNOSU
+    ```
+
+    Provera koja **pukne** ne sme da potvrdi backup — `EH` vraća `False`.
+    Ponašanje na neuspeh se ne menja: i dalje fail-soft „Nastaviti ipak?", jer
+    odluku o riziku donosi operater, ne updater.
 
 ---
 
