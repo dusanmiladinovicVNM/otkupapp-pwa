@@ -474,6 +474,8 @@ Public Sub RunAllTests()
     RunOne 187
     RunOne 188
     RunOne 189
+    RunOne 190
+    RunOne 191
     RunOne 124
     RunOne 125
     RunOne 126
@@ -732,6 +734,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 187: TestName = "T_Zbirna_OdredisteJePoljeF3"
         Case 188: TestName = "T_Manjak_LinijaIPragSuSamoF4"
         Case 189: TestName = "T_Zbirne_PickerNeNudiStornirane"
+        Case 190: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
+        Case 191: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -929,6 +933,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 187: T_Zbirna_OdredisteJePoljeF3
         Case 188: T_Manjak_LinijaIPragSuSamoF4
         Case 189: T_Zbirne_PickerNeNudiStornirane
+        Case 190: T_ZbirnaIdent_BrojSeRazresavaUDokument
+        Case 191: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -5990,11 +5996,20 @@ End Function
 ' generacije nemaju; test ih postavlja da bi dva dokumenta bila razluciva.
 Private Sub StampGeneraciju(ByVal tbl As String, ByVal idCol As String, _
                             ByVal docID As String, ByVal gen As String)
+    PostaviPoljePoPK tbl, idCol, docID, COL_GENERACIJA_ID, gen
+End Sub
+
+' Jedno polje na redu po PK-u. Fixture se seje mimo writera, pa test sam
+' postavlja stanje koje mu treba -- i vraca ga PRE tvrdnji, da pala tvrdnja ne
+' ostavi izmenjen fixture ostatku suite-a nad istom sveskom.
+Private Sub PostaviPoljePoPK(ByVal tbl As String, ByVal idCol As String, _
+                             ByVal docID As String, ByVal col As String, _
+                             ByVal val As Variant)
     Dim rows As Collection
     Set rows = FindRows(tbl, idCol, docID)
     If rows Is Nothing Then Exit Sub
     If rows.count = 0 Then Exit Sub
-    UpdateCell tbl, rows(1), COL_GENERACIJA_ID, gen
+    UpdateCell tbl, rows(1), col, val
 End Sub
 
 ' Vrednost jednog polja iz prefill opisa ("kljuc=vrednost|kljuc=vrednost").
@@ -15805,4 +15820,155 @@ Private Sub T_Zbirne_PickerNeNudiStornirane()
     AssertEq (comboAktivnih >= 1), True, "picker i dalje nudi aktivnu zbirnu"
 
     ReleaseOtkupUIForm f
+End Sub
+
+' ZBR-IDENT-01: broj zbirne se razresava u LOGICKI DOKUMENT, ne u red.
+'
+' Ugovor i acceptance lista: docs/DOMEN/ZBR_IDENTITET.md par.4 i par.9
+' (A1-A5, A7, A8, A16, A20).
+'
+' Fixture redovi se seju MIMO writera, pa nemaju generaciju -- test to prvo
+' TVRDI (A20), a tek onda pecati generacije da bi dokumenti bili razlucivi.
+' Bez te tvrdnje test bi merio sasvim drugo stanje nego sto misli da meri.
+Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
+    Dim idFx As ZbirnaIdent, idPrazan As ZbirnaIdent, idNema As ZbirnaIdent
+    Dim idJedna As ZbirnaIdent, idTudj As ZbirnaIdent, idDve As ZbirnaIdent
+    Dim idStorno As ZbirnaIdent, idIstorija As ZbirnaIdent, idRazmaci As ZbirnaIdent
+
+    ' A20 + PREDUSLOV: aktivan red bez generacije je integritetska greska.
+    idFx = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
+
+    ' A1 / A2
+    idPrazan = ZbirnaIdentResolve("", FX_VOZAC, FX_KUPAC)
+    idNema = ZbirnaIdentResolve("ZB-NE-POSTOJI", FX_VOZAC, FX_KUPAC)
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", "GEN-D1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", "GEN-D2"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", "GEN-TB"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", "GEN-TA"
+
+    idJedna = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
+    idTudj = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
+    idDve = ZbirnaIdentResolve(FX_ZBIRNA_DUPL, FX_VOZAC, FX_KUPAC)
+    idStorno = ZbirnaIdentResolve(FX_ZBIRNA_STORNO, FX_VOZAC, FX_KUPAC)
+    idIstorija = ZbirnaIdentResolve(FX_ZBIRNA_TGT, FX_VOZAC, FX_KUPAC)
+    idRazmaci = ZbirnaIdentResolve("  " & FX_ZBIRNA_MIRNA & "  ", FX_VOZAC, FX_KUPAC)
+
+    ' Fixture se vraca PRE tvrdnji: pala tvrdnja ne sme da ostavi pecacene
+    ' generacije ostatku suite-a nad istom sveskom.
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", ""
+
+    AssertEq idFx.integrityStatus, ZBR_INT_ERROR, _
+             "preduslov/A20: aktivan red bez generacije je integritetska greska"
+    AssertEq idFx.resolutionStatus, ZBR_RES_AMBIGUOUS, _
+             "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'"
+    AssertEq idFx.selectedGeneracijaID, "", _
+             "A20: identitet se ne pogadja iz broja i vlasnika"
+
+    AssertEq idPrazan.resolutionStatus, ZBR_RES_NONE, "A1: prazan broj je NONE"
+    AssertEq idPrazan.historicalOwnerCount, 0, "A1: prazan broj nema istoriju"
+    AssertEq idPrazan.integrityStatus, ZBR_INT_OK, "A1: prazan broj nije greska"
+    AssertEq idNema.resolutionStatus, ZBR_RES_NONE, "A2: nepostojeci broj je NONE"
+    AssertEq idNema.historicalOwnerCount, 0, "A2: nepostojeci broj nema istoriju"
+
+    AssertEq idJedna.resolutionStatus, ZBR_RES_UNIQUE, "A3: jedna aktivna zbirna je UNIQUE"
+    AssertEq idJedna.activeLogicalCount, 1, "A3: jedan logicki dokument"
+    AssertEq idJedna.activeOwnerCount, 1, "A3: jedan vlasnik"
+    AssertEq idJedna.historicalOwnerCount, 1, "A3: jedan vlasnik i u istoriji"
+    AssertEq idJedna.historicalOwnerIsScope, True, "A3: taj vlasnik je prosledjeni scope"
+    AssertEq idJedna.selectedGeneracijaID, "GEN-T4", "A3: vraca se generacija tog dokumenta"
+
+    AssertEq idTudj.resolutionStatus, ZBR_RES_OWNER_MISMATCH, "A4: drugi scope je OWNER_MISMATCH"
+    AssertEq idTudj.activeLogicalCount, 1, "A4: dokument postoji -- sporan je vlasnik"
+    AssertEq idTudj.matchingScopeActiveLogicalCount, 0, "A4: u tom scope-u nema nijednog"
+    AssertEq idTudj.selectedGeneracijaID, "", "A4: tudj dokument se ne bira"
+
+    AssertEq idDve.resolutionStatus, ZBR_RES_AMBIGUOUS, "A5: dva aktivna su CURRENT_AMBIGUOUS"
+    AssertEq idDve.activeLogicalCount, 2, "A5: dva logicka dokumenta"
+    AssertEq idDve.activeOwnerCount, 2, "A5: dva vlasnika"
+
+    AssertEq idStorno.resolutionStatus, ZBR_RES_NONE, "A7: sam storniran red nije aktivan dokument"
+    AssertEq idStorno.activeLogicalCount, 0, "A7: aktivnih nema"
+    AssertEq idStorno.historicalOwnerCount, 1, "A7: istorija prezivljava storno"
+
+    AssertEq idIstorija.resolutionStatus, ZBR_RES_UNIQUE, "A8: danas jednoznacan broj je UNIQUE"
+    AssertEq idIstorija.historicalOwnerCount, 2, "A8: a IKAD su ga drzala dva vlasnika"
+
+    AssertEq idRazmaci.normalizedBroj, idJedna.normalizedBroj, "A16: razmaci se normalizuju"
+    AssertEq idRazmaci.selectedGeneracijaID, idJedna.selectedGeneracijaID, _
+             "A16: normalizovan broj daje ISTI dokument"
+    AssertEq idRazmaci.resolutionStatus, idJedna.resolutionStatus, "A16: i isti status"
+End Sub
+
+' ZBR-ACTIVE-NUMBER-01: kapija za nov unos zbirne (ugovor par.5; A15, A18).
+'
+' Strogo pravilo: aktivan logicki dokument pod tim brojem znaci NE, MA CIJI BIO.
+' Isti vlasnik sme tek POSLE storna. Test tvrdi OBA smera -- inace bi bio zelen
+' i kad kapija odbija sve, i kad propusta sve.
+Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
+    Dim id As ZbirnaIdent
+    Dim rInteg As String, rAktivan As String, rAktivanIsti As String
+    Dim rRazmaci As String, rNov As String, rIspravka As String, rTudj As String
+    Dim rSiroce As String
+    Dim unija As Object
+    Dim imaOldu As Boolean, oznakaOldu As String
+    Const SIROCE_BROJ As String = "ZB-SIROCE-TEST"
+
+    ' I1 read-model: broj koji nose OBE tabele mora da nosi obe oznake.
+    Set unija = AktivniBrojeviZbirne()
+    imaOldu = unija.Exists(FX_ZBIRNA_OLDU)
+    If imaOldu Then oznakaOldu = CStr(unija(FX_ZBIRNA_OLDU))
+
+    id = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
+    rInteg = ZbirnaNovUnosRazlog(id)
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
+    id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
+    rAktivan = ZbirnaNovUnosRazlog(id)
+    id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
+    rAktivanIsti = ZbirnaNovUnosRazlog(id)
+    id = ZbirnaIdentResolve("  " & FX_ZBIRNA_MIRNA & "  ", FX_VOZAC, FX_KUPAC)
+    rRazmaci = ZbirnaNovUnosRazlog(id)
+
+    id = ZbirnaIdentResolve("ZB-NOV-TEST", FX_VOZAC, FX_KUPAC)
+    rNov = ZbirnaNovUnosRazlog(id)
+
+    ' Ispravka: isti red storniran -> isti vlasnik sme, drugi ne sme.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, "Da"
+    id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
+    rIspravka = ZbirnaNovUnosRazlog(id)
+    id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
+    rTudj = ZbirnaNovUnosRazlog(id)
+
+    ' I1 kroz kapiju: broj koji drzi aktivna prijemnica, a zbirne pod njim nema.
+    ' PRJ-OLD-U se POMERA i VRACA unutar ovog testa -- fixture komentar trazi da
+    ' ga nijedan test ne ostavi pomerenog, jer relink po broju nad njim meri.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, SIROCE_BROJ
+    id = ZbirnaIdentResolve(SIROCE_BROJ, FX_VOZAC, FX_KUPAC)
+    rSiroce = ZbirnaNovUnosRazlog(id)
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, FX_ZBIRNA_OLDU
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
+
+    AssertEq imaOldu, True, "preduslov/I1: read-model zna za broj koji nose i zbirna i prijemnica"
+    AssertEq (InStr(1, oznakaOldu, "Z") > 0), True, "I1: oznaka nosi izvor zbirna"
+    AssertEq (InStr(1, oznakaOldu, "P") > 0), True, "I1: oznaka nosi izvor prijemnica"
+
+    AssertEq rInteg, ZBR_GATE_INTEGRITET, "aktivan red bez generacije zaustavlja nov unos"
+    AssertEq rAktivan, ZBR_GATE_AKTIVNA, "aktivan broj ne prima nov unos od drugog vlasnika"
+    AssertEq rAktivanIsti, ZBR_GATE_AKTIVNA, _
+             "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan"
+    AssertEq rRazmaci, ZBR_GATE_AKTIVNA, _
+             "A15: razmaci ne otvaraju rupu koju sirovo poredjenje pusta"
+    AssertEq rNov, "", "nov broj PROLAZI -- kapija ne odbija sve"
+    AssertEq rIspravka, "", "posle storna ISTI vlasnik sme ponovo (ispravka)"
+    AssertEq rTudj, ZBR_GATE_TUDJ, "posle storna DRUGI vlasnik ne sme"
+    AssertEq rSiroce, ZBR_GATE_SIROCE, "I1: broj koji drzi aktivna prijemnica nije slobodan"
 End Sub
