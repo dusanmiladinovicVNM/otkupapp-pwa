@@ -9,6 +9,57 @@ Option Explicit
 ' ============================================================
 
 ' ============================================================
+' ZBR-IDENT-01 -- IDENTITET ZBIRNE
+'
+' Ugovor i acceptance testovi: docs/DOMEN/ZBR_IDENTITET.md
+'
+' Broj zbirne je LABELA, ne identitet. Identitet logickog dokumenta je
+' GeneracijaID; broj + VozacID + KupacID je SCOPE u kome se generacija nalazi
+' ili kuje. Dvoklasna zbirna je JEDAN dokument na DVA reda -- SaveZbirnaMulti_TX
+' zove SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda nose
+' istu generaciju.
+'
+' Resolver odgovara na DVA NEZAVISNA pitanja, i to je cela poenta razdvajanja:
+'   resolutionStatus     -- da li je broj SADA jednoznacno razresiv (bez storniranih)
+'   historicalOwnerCount -- da li je broj IKAD pripadao vise od jednog vlasnika
+' UNIQUE uz historicalOwnerCount = 2 je VALIDNO stanje, ne kontradikcija: broj je
+' danas jednoznacan, a u proslosti ga je drzao i drugi vlasnik.
+'
+' activeLogicalCount i activeOwnerCount se NE izvode jedan iz drugog: dvoklasna
+' zbirna daje 1/1 iz dva reda, dva zasebna unosa istog vozaca daju 2/1.
+' ============================================================
+Public Const ZBR_INT_OK As String = "OK"
+Public Const ZBR_INT_ERROR As String = "INTEGRITY_ERROR"
+
+Public Const ZBR_RES_NONE As String = "NONE"
+Public Const ZBR_RES_UNIQUE As String = "UNIQUE"
+Public Const ZBR_RES_OWNER_MISMATCH As String = "OWNER_MISMATCH"
+Public Const ZBR_RES_AMBIGUOUS As String = "CURRENT_AMBIGUOUS"
+
+' Razlog odbijanja novog unosa. Kod, ne poruka: modDokumenta je sloj podataka i
+' ne nosi korisnicki tekst (prevod je u modDokUnos.ZbirnaGatePoruka).
+Public Const ZBR_GATE_INTEGRITET As String = "INTEGRITET"
+Public Const ZBR_GATE_AKTIVNA As String = "AKTIVNA"
+Public Const ZBR_GATE_TUDJ As String = "TUDJ"
+Public Const ZBR_GATE_SIROCE As String = "SIROCE"
+
+Public Type ZbirnaIdent
+    normalizedBroj As String
+    integrityStatus As String
+    activeLogicalCount As Long
+    activeOwnerCount As Long
+    historicalOwnerCount As Long
+    scopeProvided As Boolean
+    historicalOwnerIsScope As Boolean
+    matchingScopeActiveLogicalCount As Long
+    resolutionStatus As String
+    selectedGeneracijaID As String
+    selectedVozacID As String
+    selectedKupacID As String
+    brojUAktivnojPrijemnici As Boolean
+End Type
+
+' ============================================================
 ' OTPREMNICA - Station gibt Ware an Fahrer
 ' ============================================================
 Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
@@ -353,6 +404,276 @@ Public Function ZbirnaPostoji(ByVal brojZbirne As String) As Boolean
 EH:
     LogErr "modDokumenta.ZbirnaPostoji", "broj=" & brojZbirne
 End Function
+
+' Normalizacija broja zbirne -- JEDNO mesto za ceo ZBR-IDENT lanac.
+'
+' CheckDuplicate poredi SIROVO (CStr(...) = searchValue, bez Trim, case-sensitive),
+' pa " 5/070926 " prolazi pored "5/070926". Ta rupa se ne zatvara u njemu (D2 --
+' preskakanje storniranih nosi ispravka-workflow na svih 6 tipova), nego OVDE.
+Public Function ZbirnaBrojNorm(ByVal broj As String) As String
+    ZbirnaBrojNorm = Trim$(NzToText(broj))
+End Function
+
+' Vlasnik zbirne je KOMPOZITAN: VozacID + KupacID. Isti spisak koji koriste
+' ApplyGeneracijaID i modStorno.VlasniciPoBroju.
+Private Function ZbirnaVlasnikKljuc(ByVal vozacID As Variant, _
+                                    ByVal kupacID As Variant) As String
+    ZbirnaVlasnikKljuc = UCase$(Trim$(NzToText(vozacID))) & "|" & _
+                         UCase$(Trim$(NzToText(kupacID)))
+End Function
+
+' Razresava BROJ zbirne u LOGICKI DOKUMENT. Puni ceo DTO iz jednog citanja
+' tabele: sirov niz nosi IKAD, ExcludeStornirano nad njim nosi SADA.
+'
+' Zasto ExcludeStornirano a ne sopstveni test na kolonu Stornirano: to je ISTI
+' filtar koji zovu ZbirnaPostoji i GeneracijaIDZaBrojArr. Resolver, picker i
+' writer time gledaju istu definiciju "aktivne" i ne mogu da se raziidju.
+'
+' Zasto NE modStorno.VlasniciPoBroju, koja je istog oblika: ona poredi broj
+' case-sensitive (ZBR-NORM-02) i broji samo vlasnike, ne generacije. Ovde su
+' potrebna oba, pa i normalizacija mora da bude sopstvena.
+'
+' FAIL-CLOSED: kad integrityStatus nije OK, resolutionStatus NIKAD nije NONE.
+' NONE je jedina vrednost koja negde znaci "sme se" (kapija za nov unos), pa se
+' ne sme dobiti iz greske. Aktivan red bez generacije zato daje CURRENT_AMBIGUOUS
+' uz INTEGRITY_ERROR -- oba znace tvrdu blokadu, a integrityStatus kaze zasto.
+' Identitet se NE pogadja iz broja i vlasnika (D4: nema legacy fallbacka).
+Public Function ZbirnaIdentResolve(ByVal broj As String, _
+                                   Optional ByVal vozacID As String = "", _
+                                   Optional ByVal kupacID As String = "") As ZbirnaIdent
+    Const SRC As String = "modDokumenta.ZbirnaIdentResolve"
+
+    Dim res As ZbirnaIdent
+    res.integrityStatus = ZBR_INT_OK
+    res.resolutionStatus = ZBR_RES_NONE
+    res.normalizedBroj = ZbirnaBrojNorm(broj)
+    res.scopeProvided = (Len(Trim$(NzToText(vozacID))) > 0) And _
+                        (Len(Trim$(NzToText(kupacID))) > 0)
+
+    On Error GoTo EH
+
+    If Len(res.normalizedBroj) = 0 Then GoTo XIT
+
+    ' I1: da li broj vec drzi AKTIVNA prijemnica. Cita se iz kanonskog
+    ' read-modela, da postoji JEDNA definicija "zauzetog broja".
+    Dim unija As Object
+    Set unija = AktivniBrojeviZbirne()
+    If unija.Exists(res.normalizedBroj) Then
+        res.brojUAktivnojPrijemnici = _
+            (InStr(1, CStr(unija(res.normalizedBroj)), "P", vbBinaryCompare) > 0)
+    End If
+
+    Dim sirovo As Variant
+    sirovo = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(sirovo) Then GoTo XIT
+
+    Dim cBr As Long, cVoz As Long, cKup As Long, cGen As Long
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+    cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, SRC)
+
+    Dim scopeKljuc As String
+    If res.scopeProvided Then scopeKljuc = ZbirnaVlasnikKljuc(vozacID, kupacID)
+
+    ' --- IKAD: sirov niz, stornirani se BROJE ---
+    Dim ikadVl As Object: Set ikadVl = CreateObject("Scripting.Dictionary")
+    Dim r As Long, vl As String
+    For r = 1 To UBound(sirovo, 1)
+        If StrComp(Trim$(NzToText(sirovo(r, cBr))), res.normalizedBroj, vbTextCompare) = 0 Then
+            vl = ZbirnaVlasnikKljuc(sirovo(r, cVoz), sirovo(r, cKup))
+            If Not ikadVl.Exists(vl) Then ikadVl.Add vl, 1
+        End If
+    Next r
+    res.historicalOwnerCount = ikadVl.Count
+
+    If res.scopeProvided And res.historicalOwnerCount = 1 Then
+        res.historicalOwnerIsScope = (StrComp(ikadVl.Keys()(0), scopeKljuc, vbTextCompare) = 0)
+    End If
+
+    ' --- SADA: isti niz kroz ExcludeStornirano ---
+    Dim akt As Variant
+    akt = ExcludeStornirano(sirovo, TBL_ZBIRNA)
+    If Not IsArray(akt) Then GoTo XIT
+
+    Dim aktGen As Object: Set aktGen = CreateObject("Scripting.Dictionary")
+    Dim aktVl As Object: Set aktVl = CreateObject("Scripting.Dictionary")
+    Dim genVoz As Object: Set genVoz = CreateObject("Scripting.Dictionary")
+    Dim genKup As Object: Set genKup = CreateObject("Scripting.Dictionary")
+    Dim scopeGen As Object: Set scopeGen = CreateObject("Scripting.Dictionary")
+
+    Dim gen As String, prazneAktivne As Long
+    For r = 1 To UBound(akt, 1)
+        If StrComp(Trim$(NzToText(akt(r, cBr))), res.normalizedBroj, vbTextCompare) = 0 Then
+            vl = ZbirnaVlasnikKljuc(akt(r, cVoz), akt(r, cKup))
+            If Not aktVl.Exists(vl) Then aktVl.Add vl, 1
+
+            gen = Trim$(NzToText(akt(r, cGen)))
+            If Len(gen) = 0 Then
+                prazneAktivne = prazneAktivne + 1
+            Else
+                If Not aktGen.Exists(gen) Then
+                    aktGen.Add gen, 1
+                    genVoz.Add gen, Trim$(NzToText(akt(r, cVoz)))
+                    genKup.Add gen, Trim$(NzToText(akt(r, cKup)))
+                End If
+                If res.scopeProvided Then
+                    If StrComp(vl, scopeKljuc, vbTextCompare) = 0 Then
+                        If Not scopeGen.Exists(gen) Then scopeGen.Add gen, 1
+                    End If
+                End If
+            End If
+        End If
+    Next r
+
+    res.activeLogicalCount = aktGen.Count
+    res.activeOwnerCount = aktVl.Count
+    res.matchingScopeActiveLogicalCount = scopeGen.Count
+
+    ' ZBR-IDENT-01: aktivan red MORA da nosi generaciju. Prazna nije alternativni
+    ' oblik identiteta nego integritetska greska -- sva tri writer-a u tblZbirna
+    ' (SaveZbirna, modMasterSync, modDokumentInvariant) odmah zovu ApplyGeneracijaID.
+    If prazneAktivne > 0 Then
+        res.integrityStatus = ZBR_INT_ERROR
+        res.resolutionStatus = ZBR_RES_AMBIGUOUS
+        GoTo XIT
+    End If
+
+    If res.activeLogicalCount = 0 Then
+        res.resolutionStatus = ZBR_RES_NONE
+    ElseIf res.activeLogicalCount > 1 Then
+        res.resolutionStatus = ZBR_RES_AMBIGUOUS
+    ElseIf res.scopeProvided And res.matchingScopeActiveLogicalCount = 0 Then
+        res.resolutionStatus = ZBR_RES_OWNER_MISMATCH
+    Else
+        res.resolutionStatus = ZBR_RES_UNIQUE
+        gen = aktGen.Keys()(0)
+        res.selectedGeneracijaID = gen
+        res.selectedVozacID = genVoz(gen)
+        res.selectedKupacID = genKup(gen)
+    End If
+
+XIT:
+    ZbirnaIdentResolve = res
+    Exit Function
+
+EH:
+    LogErr SRC, "broj=" & broj
+    res.integrityStatus = ZBR_INT_ERROR
+    res.resolutionStatus = ZBR_RES_AMBIGUOUS
+    res.selectedGeneracijaID = ""
+    res.selectedVozacID = ""
+    res.selectedKupacID = ""
+    ZbirnaIdentResolve = res
+End Function
+
+' Kapija ZBR-ACTIVE-NUMBER-01 (ugovor par.5) kao TABELA, na jednom mestu.
+'
+' Strogo, BEZ izuzetka za istog vlasnika: aktivan logicki dokument pod tim brojem
+' znaci NE, ma ciji bio. Isti vlasnik sme tek posle storna, kad aktivnih nema.
+' To nista ne lomi: ZbirnaValidiraj se zove TACNO jednom (modScrDokumenti
+' Scr_Save), pre SaveZbirnaMulti_TX, pa validator nikad ne vidi red koji je sam
+' upravo napisao; izmene zbirne u mestu nema -- ispravka je storno pa nov unos.
+Public Function ZbirnaNovUnosRazlog(ByRef id As ZbirnaIdent) As String
+    If id.integrityStatus <> ZBR_INT_OK Then
+        ZbirnaNovUnosRazlog = ZBR_GATE_INTEGRITET
+        Exit Function
+    End If
+
+    If id.activeLogicalCount > 0 Then
+        ZbirnaNovUnosRazlog = ZBR_GATE_AKTIVNA
+        Exit Function
+    End If
+
+    If id.historicalOwnerCount = 0 Then
+        ' Nijedna zbirna IKAD pod tim brojem -- slobodno, OSIM ako ga vec drzi
+        ' aktivna prijemnica (I1). Tada bi nova zbirna tiho postala njen
+        ' roditelj: prijemnica se vezuje samo brojem i ne bi ni primetila.
+        If id.brojUAktivnojPrijemnici Then ZbirnaNovUnosRazlog = ZBR_GATE_SIROCE
+        Exit Function
+    End If
+
+    ' Aktivnih nema, a istorija postoji: ispravku sme SAMO isti vlasnik.
+    If Not id.historicalOwnerIsScope Then ZbirnaNovUnosRazlog = ZBR_GATE_TUDJ
+End Function
+
+' Tanak omotac nad JEDNOM tabelom iznad -- da druga kopija pravila ne odluta.
+Public Function ZbirnaSmeNovUnos(ByRef id As ZbirnaIdent) As Boolean
+    ZbirnaSmeNovUnos = (Len(ZbirnaNovUnosRazlog(id)) = 0)
+End Function
+
+' Ugovor par.6: prijemnica se vezuje SAMO na jednoznacno razresen dokument.
+' Kod CURRENT_AMBIGUOUS / OWNER_MISMATCH / INTEGRITY_ERROR se kanonski roditelj
+' NE trazi -- biranje "najverovatnijeg" iz dvosmislenog skupa je tiho pogadjanje.
+'
+' ISTORIJA JE DEO BEZBEDNOSTI, ne samo sadasnje stanje. UNIQUE danas uz broj koji
+' je IKAD drzalo vise vlasnika i dalje nije bezbedan roditelj: prijemnica cuva
+' SAMO BrojZbirne, pa svaka nizvodna operacija po broju moze da zahvati i tudje.
+' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
+' mutaciju po broju. Uslov pada tek kad prijemnica dobije pravi FK na generaciju.
+Public Function ZbirnaRoditeljOK(ByRef id As ZbirnaIdent) As Boolean
+    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
+    If id.historicalOwnerCount > 1 Then Exit Function
+    ZbirnaRoditeljOK = (id.resolutionStatus = ZBR_RES_UNIQUE)
+End Function
+
+' I1 -- KANONSKI READ-MODEL AKTIVNIH BROJEVA ZBIRNE (ugovor par.8).
+'
+' Skup = normalizovani brojevi AKTIVNIH zbirnih UNIJA normalizovani BrojZbirne
+' iz AKTIVNIH prijemnica.
+'
+' Unija nije opreznost nego ispravka rupe: broj koji referencira aktivna
+' prijemnica je ZAUZET i onda kad mu je zbirna-red storniran ili nikad nije
+' upisan. Bez tog drugog izvora takav broj izgleda slobodan.
+'
+' Vrednost kaze ODAKLE broj dolazi -- "Z", "P" ili "ZP" -- da pozivalac moze da
+' razlikuje siroce (samo prijemnica) od normalnog para.
+Public Function AktivniBrojeviZbirne() As Object
+    Const SRC As String = "modDokumenta.AktivniBrojeviZbirne"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AktivniBrojeviZbirne = res
+
+    On Error GoTo EH
+
+    DodajBrojeve res, TBL_ZBIRNA, COL_ZBR_BROJ, "Z", SRC
+    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "P", SRC
+    Exit Function
+
+EH:
+    LogErr SRC
+End Function
+
+' Jedan izvor u recnik. Oznaka se DODAJE na postojecu, pa broj koji nose obe
+' tabele dobije "ZP" -- razlika siroce/par se ne gubi.
+Private Sub DodajBrojeve(ByRef res As Object, ByVal tblName As String, _
+                         ByVal brojCol As String, ByVal oznaka As String, _
+                         ByVal sourceName As String)
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, tblName)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cBr As Long
+    cBr = RequireColumnIndex(tblName, brojCol, sourceName)
+
+    Dim r As Long, b As String
+    For r = 1 To UBound(data, 1)
+        b = ZbirnaBrojNorm(NzToText(data(r, cBr)))
+        If Len(b) > 0 Then
+            If res.Exists(b) Then
+                If InStr(1, CStr(res(b)), oznaka, vbBinaryCompare) = 0 Then
+                    res(b) = CStr(res(b)) & oznaka
+                End If
+            Else
+                res.Add b, oznaka
+            End If
+        End If
+    Next r
+End Sub
 
 Public Function GetOtpremniceByStation(ByVal stanicaID As String, _
                                        Optional ByVal datumOd As Date = 0, _

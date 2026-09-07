@@ -1,8 +1,12 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
-> **Status:** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor sa brojem
-> linije). §§4–7 su **ugovor koji još NIJE implementiran** — to je plan za L1,
-> ne opis stanja. Ne čitaj ih kao opis ponašanja.
+> **KI-007 je DELIMICNO zatvoren:** resolver + F3 prevencija + I1 jesu; F4 parent
+> guard (I2) **nije**.
+>
+> **Status (L1, `v6-ui-220`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi
+> izvor sa brojem linije). §§4–5 i I1 iz §8 su **implementirani**. **I2 iz §8 i §6
+> NISU** — blokirani su na fixture-u, v. §12. §9 kaže koji su acceptance testovi
+> napisani, a koji čekaju.
 >
 > Ovaj fajl je odgovor na `KNOWN_ISSUES.md` KI-007, koji traži da se invarijanta
 > ZBR-IDENT-01 definiše pre nego što se dira core.
@@ -104,7 +108,13 @@ matchingScopeActiveLogicalCount    Long
 resolutionStatus                   NONE | UNIQUE | OWNER_MISMATCH | CURRENT_AMBIGUOUS
 selectedGeneracijaID               String    ' popunjeno samo kad je UNIQUE
 selectedVozacID / selectedKupacID  String
+brojUAktivnojPrijemnici            Boolean  ' I1, par.8
 ```
+
+**Fail-closed, dodato u implementaciji:** kad `integrityStatus` nije `OK`,
+`resolutionStatus` **nikad nije `NONE`** — postavlja se `CURRENT_AMBIGUOUS`.
+`NONE` je jedina vrednost koja negde znači „sme se" (kapija u §5), pa se ne sme
+dobiti iz greške. `integrityStatus` i dalje kaže *zašto*.
 
 Dve **nezavisne** dimenzije, dva pitanja:
 
@@ -129,12 +139,23 @@ Radi nad `normalizedBroj`. **Ne** delegira poređenje na `VlasniciPoBroju`, koji
 je case-sensitive.
 
 ```
-integrityStatus = INTEGRITY_ERROR                     -> BLOCK
-activeLogicalCount > 0                                -> BLOCK   (bez izuzetka za vlasnika)
+integrityStatus = INTEGRITY_ERROR                     -> BLOCK  (INTEGRITET)
+activeLogicalCount > 0                                -> BLOCK  (AKTIVNA)
+activeLogicalCount = 0 AND historicalOwnerCount = 0
+        AND brojUAktivnojPrijemnici                   -> BLOCK  (SIROCE)
 activeLogicalCount = 0 AND historicalOwnerCount = 0   -> ALLOW
-activeLogicalCount = 0 AND historicalOwnerIsScope     -> ALLOW   (ispravka / re-entry)
-inace                                                 -> BLOCK
+activeLogicalCount = 0 AND historicalOwnerIsScope     -> ALLOW  (ispravka / re-entry)
+inace                                                 -> BLOCK  (TUDJ)
 ```
+
+Kapija vraća **kod razloga**, ne poruku: `modDokumenta` je sloj podataka i ne nosi
+korisnički tekst. Prevod je jedini prelaz, u `modDokUnos.ZbirnaGatePoruka`. Uzrok
+se ne stapa u jednu poruku — zauzet sada, zauzet ikad, drži ga prijemnica i
+pokvaren podatak su četiri različita poteza za operatera.
+
+**`SIROCE` grana je dodata u implementaciji** i dolazi iz I1: broj koji drži
+aktivna prijemnica a nijedna zbirna nikad nije slobodan — nova zbirna pod njim
+tiho bi postala roditelj tuđe prijemnice.
 
 | Aktivni log. dok. | Istorija vlasnika | Kandidat | Ishod |
 |---|---|---|---|
@@ -163,7 +184,19 @@ tabela zaštićena.
 | `NONE` | postojeći BLOK/UPOZORENJE (`ZbirnaPostoji` + `PrijemnicaZbirnaBlokira()`), bez izmene |
 | `CURRENT_AMBIGUOUS` | hard block, **bez** traženja kanonskog roditelja |
 | `OWNER_MISMATCH` | hard block |
-| `UNIQUE` | prolaz, `selectedGeneracijaID` je roditelj |
+| `UNIQUE` + `historicalOwnerCount > 1` | **hard block** |
+| `UNIQUE` + `historicalOwnerCount <= 1` | prolaz, `selectedGeneracijaID` je roditelj |
+
+**Istorija je deo bezbednosti, ne samo sadašnje stanje.** `UNIQUE` danas uz broj
+koji je *ikad* držalo više vlasnika i dalje nije bezbedan roditelj: prijemnica
+čuva **samo `BrojZbirne`**, pa svaka nizvodna operacija po broju može da zahvati i
+tuđe. `modStorno.RequireJedanVlasnikIkadPoBroju` postoji baš zbog toga. Uslov pada
+tek kad prijemnica dobije pravi FK na generaciju (`Prijemnica.ZbirnaGeneracijaID`).
+
+> **Ispravka regresije.** Ugovor v3 je ovaj red imao; v4 ga je ispustio pri
+> usvajanju stroge F3 matrice, bez oznake. `ZbirnaRoditeljOK` je verno
+> implementirao v4 — kod nije odlutao od ugovora, ugovor je odlutao od sebe.
+> Vraćeno pre nego što je I2 dobio ijednog pozivaoca.
 
 ## 7) Odluke
 
@@ -189,6 +222,12 @@ roditelja iz dvosmislenog skupa je tiho pogađanje i zabranjeno je ugovorom.
 ## 9) Acceptance testovi
 
 Svaki test tvrdi **svoj preduslov** pre glavne tvrdnje.
+
+**Pokriveno u L1** (`modTest`, `RunAllTests`): A1–A5, A7, A8, A15, A16, A18, A20
+— testovi `T_ZbirnaIdent_BrojSeRazresavaUDokument` i
+`T_ZbirnaKapija_AktivanBrojNeSmeDvaput`, plus pet sabotaža.
+
+**Čeka** (razlog u §12): A6, A9–A14, A17, A21.
 
 | # | Ulaz | Tvrdnja |
 |---|---|---|
@@ -236,3 +275,35 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 | Pravilo grupisanja u praksi | `modScrOporavak.bas:770` |
 | Kapija za mutaciju po broju (isti obrazac) | `modStorno.RequireJedanVlasnikIkadPoBroju` |
 | Storno nije brisanje | `docs/DOMEN/README.md` §2 |
+
+---
+
+## 12) Zašto I2 nije u L1 — fixture ne poštuje ZBR-IDENT-01
+
+`tools/make_fixture.py` **ne upisuje `GeneracijaID` ni na jedan red, nijedne
+tabele.** `modSetup.EnsureSledljivostSchema` pravi samo *kolonu*; vrednosti
+ostaju prazne. To i stoji zapisano u `modTest.StampGeneraciju`:
+
+> *„Fixture redovi se seju mimo writera, pa generacije nemaju; test ih postavlja
+> da bi dva dokumenta bila razlučiva."*
+
+Za produkciju to nije stanje koje može da nastane — sva tri writer-a odmah
+pečate generaciju (§2). Za fixture jeste, pa se **svaki postojeći broj čita kao
+`INTEGRITY_ERROR`**.
+
+Kapiju u §5 to ne obara: `CheckDuplicate` na tim brojevima puca prvi, sa svojom
+porukom, pa `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` ostaje zelen.
+
+**I2 obara.** `T_BrutoNeto_PoRezimu` tvrdi:
+
+```vb
+AssertEq resP, "", "prijemnica sa ispravnim bruto unosom prolazi provere"
+```
+
+a `PrijemnicaUnosKojiProlazi()` koristi `FX_ZBIRNA`, red bez generacije. Tvrda
+blokada na `INTEGRITY_ERROR` u `PrijemnicaValidiraj` vratila bi neprazan `resP`
+i oborila taj test — bez obzira gde se u proceduri postavi.
+
+**Redosled je zato:** fixture prvo dobije generacije (svoj korak, sa svojim
+dokazom — jer to menja i `GeneracijaIDZaBrojArr`, koja bi tada *ponovo koristila*
+generacije umesto da ih kuje), pa tek onda I2 i A6/A9–A14/A17/A21.

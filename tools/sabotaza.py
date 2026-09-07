@@ -5242,6 +5242,59 @@ SABOTAZE = {
         "T_Faza_PrijavaNeGradiLjusku",
         "F1 se ne prosledjuje ljusci ispod prijave",
     ),
+    # ZBR-IDENT-01 -- docs/DOMEN/ZBR_IDENTITET.md
+    "zbirna-ident-broji-i-stornirane": (
+        "modDokumenta.bas",
+        "    akt = ExcludeStornirano(sirovo, TBL_ZBIRNA)\n",
+        "    akt = sirovo   \' SABOTAZA: aktivni skup nosi i stornirane\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A7: sam storniran red nije aktivan dokument",
+    ),
+    "zbirna-ident-greska-kao-none": (
+        "modDokumenta.bas",
+        "        res.integrityStatus = ZBR_INT_ERROR\n"
+        "        res.resolutionStatus = ZBR_RES_AMBIGUOUS\n"
+        "        GoTo XIT\n",
+        "        res.integrityStatus = ZBR_INT_ERROR\n"
+        "        res.resolutionStatus = ZBR_RES_NONE   \' SABOTAZA: greska kao 'sme se'\n"
+        "        GoTo XIT\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'",
+    ),
+    "zbirna-broj-bez-normalizacije": (
+        "modDokumenta.bas",
+        "    ZbirnaBrojNorm = Trim$(NzToText(broj))\n",
+        "    ZbirnaBrojNorm = NzToText(broj)   \' SABOTAZA: razmaci ostaju\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A16: razmaci se normalizuju",
+    ),
+    "zbirna-kapija-pusta-istog-vlasnika": (
+        "modDokumenta.bas",
+        "    If id.activeLogicalCount > 0 Then\n"
+        "        ZbirnaNovUnosRazlog = ZBR_GATE_AKTIVNA\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    If id.activeLogicalCount > 0 And Not id.historicalOwnerIsScope Then\n"
+        "        ZbirnaNovUnosRazlog = ZBR_GATE_AKTIVNA   \' SABOTAZA: isti vlasnik sme dvaput\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
+        "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan",
+    ),
+    "zbirna-f4-ignorise-istoriju": (
+        "modDokumenta.bas",
+        "    If id.historicalOwnerCount > 1 Then Exit Function\n",
+        "    \' SABOTAZA: F4 ignorise istoriju vlasnika\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj",
+    ),
+    "zbirna-i1-ne-gleda-prijemnice": (
+        "modDokumenta.bas",
+        "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",
+        "    \' SABOTAZA: read-model ne gleda prijemnice\n",
+        "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
+        "I1: aktivna prijemnica daje oznaku izvora P",
+    ),
 }
 
 
