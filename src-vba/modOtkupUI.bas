@@ -1221,6 +1221,14 @@ Private Sub BuildForm(frm As Object)
     ' kolicine; ovde stoji uz iznos, jer se cita zajedno sa njim.
     NewLbl fr, "fgVrednostKg", "", 0, CenterY(0, FIELD_H, TS_META), 250, TxtH(TS_META), _
            TS_META, True, C_FOREST, -1, fmTextAlignLeft, F_NUM
+    ' MANJAK PRIJEMNICE (samo F4) - drugi red ISTE kolone. Legacy
+    ' frmDokumenta.lblManjak; racun je preziveo formu
+    ' (modDokumenta.CalculateManjakPreview), ali ga posle koraka 2 niko nije
+    ' zvao - operater je prijemnicu snimao ne videvsi koliko fali (MIG-004).
+    ' Kolona dobija dva reda tek kad linija POSTOJI: dok je prazna, kilogrami
+    ' ostaju centrirani kao i do sada (SetManjakLine pomera oba).
+    NewLbl fr, "fgVrednostMnj", "", 0, 15, 250, TxtH(TS_META), _
+           TS_META, True, C_MUTED, -1, fmTextAlignLeft, F_NUM
 
     ' OTVORENI BLOK + NEISPLACENI OSTATAK (samo isplate). U frmDokumenta je to
     ' cmbOtkupBlok, poznat kao "preostali kes" - poslovno to nije kes nego
@@ -2339,6 +2347,12 @@ Public Sub LayoutFieldInner(fr As Object)
             fr.Controls(nm & "Kg").Left = plateW + GAP + 4 + VAL_CALC_W + GAP
             fr.Controls(nm & "Kg").width = fr.width - _
                 (plateW + GAP + 4 + VAL_CALC_W + GAP)
+            ' manjak deli kolonu sa kilogramima - ista leva ivica i ista sirina,
+            ' razlikuje ih samo red (top postavlja SetManjakLine)
+            If HasCtl(fr, nm & "Mnj") Then
+                fr.Controls(nm & "Mnj").Left = fr.Controls(nm & "Kg").Left
+                fr.Controls(nm & "Mnj").width = fr.Controls(nm & "Kg").width
+            End If
         End If
     End If
 End Sub
@@ -3609,6 +3623,11 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     SetSmerRev 0
     SetAvans 1
     RefreshSaldoOM
+    ' Manjak i prosek gajbe pripadaju SAMO prijemnici. Bez ovoga bi izlazak iz
+    ' F4 ostavio tudju liniju u akcionom redu i "PROSEK GAJBE" u natpisu polja
+    ' -- broj koji za otkupni list ili zbirnu ne znaci nista.
+    SetManjakLine
+    SetProsekGajbe
     ' prazna ambalaza: uz otkup se izdaje, uz prijemnicu se vraca
     If key = "F1" Or key = "F4" Then
         frm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrL").caption = _
@@ -4788,11 +4807,18 @@ Private Sub UiChange(ByVal tag As String)
             ReloadGrid
         Case "fgKgIT", "fgKgIIT", "fgCena1T", "fgCena2T"
             RecalcVrednost
-        ' u bruto rezimu neto zavisi i od ambalaze - tara se racuna iz nje
-        Case "fgKolAmbT", "fgTipAmbT"
+        ' u bruto rezimu neto zavisi i od ambalaze - tara se racuna iz nje.
+        ' Gajbe II klase su ovde od MIG-004: manjak poredi neto OBE klase, pa
+        ' bez ovog okidaca prijemnica sa dve klase u bruto rezimu prijavljuje
+        ' manjak po neskinutoj tari druge klase.
+        Case "fgKolAmbT", "fgTipAmbT", "fgKolAmbIIT"
             RecalcVrednost
         Case "fgBrZbirT"
             SetAktivnaZbirna mFrm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT").text
+            ' manjak i prosek gajbe se mere PREMA IZABRANOJ ZBIRNOJ - promena
+            ' broja menja obe strane poredjenja, ne samo ono sto je otkucano
+            SetManjakLine
+            SetProsekGajbe
         Case "fgBrOtprT"
             If ActiveMode = "F3" Then _
                 SetAktivnaZbirna mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").text
@@ -8620,6 +8646,11 @@ Private Sub RecalcVrednost()
     SetCalcLine 2, Poruka("OTKUI_SEG_KLASA_II"), ParseNum(FldText("fgKgII")), CenaText(2), _
                 (mKlasa = 2 And v2 > 0)
     SetKgLine
+    ' Manjak i prosek gajbe zavise od ISTIH brojeva (kolicina, gajbe, tip
+    ' ambalaze), pa se osvezavaju na istom mestu -- inace bi svaki nov okidac
+    ' morao da se doda na tri spiska umesto na jedan.
+    SetManjakLine
+    SetProsekGajbe
     PaintVrednost v1 + v2
 End Sub
 
@@ -8643,13 +8674,11 @@ Private Sub SetKgLine()
     If OtkupBrutoUnos() Then
         amb = ParseNum(FldText("fgKolAmb"))
         tip = Trim$(FldText("fgTipAmb"))
-        If kgI > 0 And amb > 0 And Len(tip) > 0 Then
-            tara = amb * GetTezinaGajbice(tip)
-            If tara > 0 And tara < kgI Then
-                cap = Poruka("OTKUI_KG_NETO") & " " & FmtBroj(kgI - tara, 2) & " " & _
-                      Poruka("OTKUI_UNIT_KG") & "   (" & FmtBroj(kgI, 2) & " " & _
-                      ChrW(8722) & " " & FmtBroj(tara, 2) & ")"
-            End If
+        tara = TaraPrikaz(amb, tip)
+        If kgI > 0 And tara > 0 And tara < kgI Then
+            cap = Poruka("OTKUI_KG_NETO") & " " & FmtBroj(kgI - tara, 2) & " " & _
+                  Poruka("OTKUI_UNIT_KG") & "   (" & FmtBroj(kgI, 2) & " " & _
+                  ChrW(8722) & " " & FmtBroj(tara, 2) & ")"
         End If
     End If
 
@@ -8659,6 +8688,156 @@ Private Sub SetKgLine()
               FmtBroj(kgII, 2) & ")"
     End If
     L.caption = cap
+End Sub
+
+' TARA ZA PRIKAZ: gajbe x tezina tipa ambalaze, i to SAMO u bruto rezimu -- van
+' njega uneti broj vec jeste neto, pa nema sta da se skida. Racun je izvucen iz
+' SetKgLine zato sto ga od MIG-004 trazi i manjak: dve kopije istog pravila se
+' razilaze prvom doradom (isti razlog zbog koga je legacy otisao).
+Private Function TaraPrikaz(ByVal kolAmb As Double, ByVal tip As String) As Double
+    On Error Resume Next
+    If Not OtkupBrutoUnos() Then Exit Function
+    If kolAmb <= 0 Then Exit Function
+    tip = Trim$(tip)
+    If Len(tip) = 0 Then Exit Function
+    TaraPrikaz = kolAmb * GetTezinaGajbice(tip)
+End Function
+
+' NETO ZA PRIKAZ iz unetog broja. Tara koja je veca ili jednaka unetom NIJE
+' neto nego greska unosa -- writer je odbija imenom (modDokUnos, "tezina
+' ambalaze je veca"), pa je prikaz ne pretvara u nulu ni u minus nego ostavlja
+' uneti broj takav kakav je. Legacy frmDokumenta je isto pravilo imao kao
+' PrijNetoZaPrikaz i otislo je sa formom.
+Private Function NetoPrikaz(ByVal uneto As Double, ByVal kolAmb As Double, _
+                            ByVal tip As String) As Double
+    Dim t As Double
+    NetoPrikaz = uneto
+    If uneto <= 0 Then Exit Function
+    t = TaraPrikaz(kolAmb, tip)
+    If t <= 0 Or t >= uneto Then Exit Function
+    NetoPrikaz = uneto - t
+End Function
+
+' Boja manjka. Prag je legacy frmDokumenta: ispod 0,5% zeleno, do 2% zuto,
+' preko crveno. Meri se APSOLUTNA vrednost -- visak je odstupanje isto kao
+' manjak i isto tako trazi pogled pre snimanja.
+Public Function ManjakBoja(ByVal pct As Double) As Long
+    If Abs(pct) < 0.5 Then
+        ManjakBoja = C_GREEN
+    ElseIf Abs(pct) < 2 Then
+        ManjakBoja = C_AMBER
+    Else
+        ManjakBoja = C_RUST
+    End If
+End Function
+
+' "MANJAK 5,00 kg (0,50%) . ZBIRNA 1.000,00 . PRIJEM 995,00"
+'
+' Zbirna od nula kilograma znaci da zbirne NEMA (broj nije izabran, ne postoji
+' ili je stornirana). Tada linija ne postoji: manjak bez zbirne nije nula nego
+' NEPOZNAT, a ispisana nula bi izgledala kao da se sve slaze -- i to bas u
+' trenutku kad operater snima dokument koji nema roditelja.
+'
+' MANJAK IDE PRVI, iako je legacy redosled bio Zbirna | Prijemnica | Manjak.
+' Razlog je merljiv, ne stilski: Label nema prelom, a kolona je ogranicena
+' dugmadima akcionog reda (LayoutFields secka okvir da ne zadje pod njih), pa
+' se rep ODSECA. U legacy redosledu prvo otpada procenat -- tacno onaj podatak
+' po kome se boja racuna. Ovako otpada IZVOD (zbirna i prijem), a presuda i
+' procenat ostaju vidljivi na svakoj sirini prozora.
+Public Function ManjakLinija(ByVal zbrKg As Double, ByVal prijKg As Double, _
+                             ByVal manjakKg As Double, ByVal pct As Double) As String
+    If zbrKg <= 0 Then Exit Function
+    ManjakLinija = Poruka("OTKUI_MNJ_MANJAK") & " " & FmtBroj(manjakKg, 2) & " " & _
+                   Poruka("OTKUI_UNIT_KG") & " (" & FmtBroj(pct, 2) & "%)" & _
+                   " " & ChrW(183) & " " & _
+                   Poruka("OTKUI_MNJ_ZBIRNA") & " " & FmtBroj(zbrKg, 2) & _
+                   " " & ChrW(183) & " " & _
+                   Poruka("OTKUI_MNJ_PRIJEM") & " " & FmtBroj(prijKg, 2)
+End Function
+
+' ZIVI MANJAK PRIJEMNICE (samo F4).
+'
+' Poredi NETO sa NETO. Zbirna se u tabeli cuva u neto, pa se od unetog bruta
+' MORA skinuti tara -- inace bi svaka prijemnica u bruto rezimu prijavljivala
+' visak koji ne postoji, i to crvenim. Isti redosled je imao i legacy
+' frmDokumenta.UpdateManjak.
+'
+' Kolona kilograma ima dva reda tek kad linija postoji: dok je prazna,
+' kilogrami ostaju centrirani kao pre MIG-004.
+'
+' CENA: CalculateManjakPreview cita tblZbirna i tblPrijemnica u celini, a ovo se
+' zove na svaki pritisak tastera u poljima kolicine i ambalaze. Isto je radio i
+' legacy (UpdateManjak je visio na istim Change dogadjajima), a trosak je ogranicen
+' na F4 SA izabranom zbirnom -- van toga se izlazi pre ijednog citanja. Ako ikad
+' zasmeta, mesto za kes je (broj zbirne + modUiData.DataGeneracija), NE prepisivanje
+' racuna ovde: formula manjka sme da postoji na jednom mestu.
+Private Sub SetManjakLine()
+    Dim L As Object, K As Object, fr As Object, broj As String, m As Variant
+    Dim kgI As Double, kgII As Double, tip As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    Set fr = mFrm.Controls("zForm").Controls("fgVrednost")
+    If fr Is Nothing Then Exit Sub
+    Set L = fr.Controls("fgVrednostMnj")
+    Set K = fr.Controls("fgVrednostKg")
+    If L Is Nothing Then Exit Sub
+    L.caption = ""
+
+    If ActiveMode = "F4" Then
+        broj = Trim$(FldText("fgBrZbir"))
+        If Len(broj) > 0 Then
+            tip = Trim$(FldText("fgTipAmb"))
+            kgI = NetoPrikaz(ParseNum(FldText("fgKgI")), ParseNum(FldText("fgKolAmb")), tip)
+            If mKlasa = 2 Then
+                kgII = NetoPrikaz(ParseNum(FldText("fgKgII")), _
+                                  ParseNum(FldText("fgKolAmbII")), tip)
+            End If
+            m = modDokumenta.CalculateManjakPreview(broj, kgI, kgII)
+            If IsArray(m) Then
+                If UBound(m) >= 3 Then
+                    L.caption = ManjakLinija(CDbl(m(0)), CDbl(m(1)), CDbl(m(2)), CDbl(m(3)))
+                    L.ForeColor = ManjakBoja(CDbl(m(3)))
+                End If
+            End If
+        End If
+    End If
+
+    If Len(L.caption) > 0 Then
+        K.top = 2
+        L.top = 15
+    Else
+        K.top = CenterY(0, FIELD_H, TS_META)
+    End If
+End Sub
+
+' PROSEK PO GAJBI ide u NATPIS polja gajbi -- isti obrazac kao raspoloziv avans
+' otkupnog mesta u natpisu polja "Isplata iz" (RefreshSaldoOM). Razlog je isti:
+' akcioni red vec nosi dva reda, treci nema gde, a broj se ionako cita bas kod
+' polja koje ga proizvodi.
+'
+' Dva izvora, isti redosled kao u legacy frmDokumenta: dok se kolicina i gajbe
+' KUCAJU vazi prosek tog unosa (i to iz neto, ne iz bruta); bez njih pada na
+' prosek cele zbirne (CalculateProsekGajbeByZbirna).
+Private Sub SetProsekGajbe()
+    Dim cap As String, p As Double, kg As Double, amb As Double, broj As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    cap = UCase$(Poruka("OTKUI_FLD_KOL_AMB"))
+    If ActiveMode = "F4" Then
+        kg = ParseNum(FldText("fgKgI"))
+        amb = ParseNum(FldText("fgKolAmb"))
+        If kg > 0 And amb > 0 Then
+            p = NetoPrikaz(kg, amb, Trim$(FldText("fgTipAmb"))) / amb
+        Else
+            broj = Trim$(FldText("fgBrZbir"))
+            If Len(broj) > 0 Then p = modDokumenta.CalculateProsekGajbeByZbirna(broj)
+        End If
+        If p > 0 Then
+            cap = cap & "   " & ChrW(183) & "   " & Poruka("OTKUI_MNJ_PROSEK") & " " & _
+                  FmtBroj(p, 2) & " " & Poruka("OTKUI_UNIT_KG")
+        End If
+    End If
+    mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbL").caption = cap
 End Sub
 
 ' "I klasa  3.200 kg x 48,50" - jedan red po klasi, jer sa dve cene jedan

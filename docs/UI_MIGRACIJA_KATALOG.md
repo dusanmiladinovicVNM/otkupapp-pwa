@@ -9379,7 +9379,7 @@ ispod proveren do funkcije, ne do imena.
 | ~~**MIG-001**~~ | ~~**`Hladnjaca` i `Pogon` na Zbirnoj (F3)**~~ | `frmDokumenta` (korak 2) | **ZATVOREN** (`v6-ui-215`) — v. §28.1b |
 | ~~MIG-002~~ | ~~Brojka i lista **INTEGRITETA**~~ — **ZATVOREN** (`v6-ui-216`), v. §28.1c | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
 | ~~MIG-003~~ | ~~**„Primeni avans (sel.)"** — batch nad čekiranim blokovima~~ — **ZATVOREN** (`v6-ui-217`), v. §28.1d | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
-| MIG-004 | **Manjak prijemnice vs zbirna + prosek gajbe** (F4) | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
+| ~~MIG-004~~ | ~~**Manjak prijemnice vs zbirna + prosek gajbe** (F4)~~ — **ZATVOREN** (`v6-ui-218`), v. §28.1e | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
 | MIG-005 | **Lista zbirnih za izbor** (F3) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
 | MIG-006 | **Živ verdikt validacije zbirne** (F3) | `frmDokumenta.UpdateValidacija` (korak 2) | Kapija JESTE preneta i tvrda je (`modDokUnos.ZbirnaValidiraj` → `ValidateZbirnaPreUnosa`; komentar u `modDokUnos` to i kaže: „račun je isti, samo se ovde ne crta"). Nedostaje da operater PRE snimanja vidi „OK" ili „Razlika". KPI pločica „Validacija" u ljusci je zakucana na `OTKUI_KPI_SPREMNO` u zelenom (`modOtkupUI`, `RefreshKpi`) |
 | MIG-007 | **MALINA: sekcija Zbirna se ne gasi** | `frmDokumenta.DisableFraZbirnaMalina` (korak 2) | `IsMalinaMode` u ljusci postoji, ali samo za auto-izbor par-vozača. F3 je u malina modu potpuno otvoren, iako `modDokUnos` otpremnicu snima sa praznim `BrojZbirne` i zbirnu pravi sam. **Šteta nije reprodukovana** — tvrdi se samo da kapija koja je postojala nema naslednika |
@@ -9588,6 +9588,81 @@ Ključno je da „uspela transakcija" nije uspeh: `ApplyAvansToOtkup_TX` vraća
 **Šta NIJE izmereno:** sam `MsgBox` potvrde i tekst toast-a (ekran, ne račun) —
 motor je odvojen baš zato što se on može meriti; i `compile` + suite, koji se
 izvršavaju na Windows-u. `vba_check` je ovde čist (469 sabotaža, 0 nalaza).
+
+### 28.1e MIG-004 zatvoren (`v6-ui-218`)
+
+Živi manjak prijemnice i prosek gajbe su vraćeni u F4.
+
+**Šta je zapravo nedostajalo.** Ne račun — `modDokumenta.CalculateManjakPreview`
+i `CalculateProsekGajbeByZbirna` su preživeli brisanje forme netaknuti. Nedostajao
+je **pozivalac**: od koraka 2 operater je prijemnicu snimao ne videvši koliko
+robe fali u odnosu na zbirnu. Zato je izmena u ljusci, a u `modDokumenta` nema
+nijedne linije.
+
+**Gde je šta stalo.** Legacy je imao dva zasebna labela ispod polja prijemnice;
+ljuska nema to mesto, pa su oba otišla na mesta koja u njoj već postoje:
+
+| Šta | Gde | Presedan |
+|---|---|---|
+| Linija manjka | **drugi red kolone kilograma** u akcionom redu (`fgVrednostMnj`) | kilogrami su tu iz istog razloga — legacy `lblUkupnoKG` je bio uz polje količine, a čita se zajedno sa iznosom |
+| Prosek gajbe | **natpis polja gajbi** (`fgKolAmbL`) | raspoloživ avans OM-a stoji u natpisu polja „Isplata iz" (`RefreshSaldoOM`) |
+
+Kolona kilograma dobija dva reda **tek kad linija postoji**; dok je prazna,
+kilogrami ostaju centrirani kao pre. Treći red ne postoji — `FIELD_H` je 28pt, a
+dva reda po ~11pt su sve što staje.
+
+**Neto vs neto je poslovni deo, ne kozmetika.** Zbirna se u tabeli čuva u neto.
+Da se poredi sa **unetim** brojem, svaka prijemnica u bruto režimu prijavljivala
+bi višak koji ne postoji — i to crvenim. Zato uneto prolazi kroz `NetoPrikaz`
+(tara = gajbe × težina tipa, i samo u bruto režimu), za obe klase. Isti račun je
+dotad stajao u dve kopije unutar `SetKgLine`; sada je jedan, a `SetKgLine` ga
+koristi.
+
+Tara koja je **veća ili jednaka** unetom nije neto nego greška unosa — writer je
+odbija imenom (`modDokUnos`), pa je prikaz ostavlja neizmenjenu umesto da pokaže
+nulu ili minus.
+
+**Zbirna od nula kilograma znači da zbirne NEMA**, ne da se sve slaže. Broj koji
+nije izabran, ne postoji ili je storniran daje nulu, i tada linija **ne postoji**.
+Ispisano „MANJAK 0,00 kg (0,00%)" u zelenom bilo bi tačno obrnuto od onoga što
+treba da kaže — i to nad dokumentom koji nema roditelja.
+
+**Prag boje** je legacy: ispod 0,5% zeleno, do 2% žuto, preko crveno, mereno
+**apsolutno** — višak je odstupanje isto kao manjak.
+
+**Redosled u liniji NIJE legacy**, i to je jedina svesna razlika. Legacy je pisao
+`Zbirna | Prijemnica | Manjak (P%)`. Label u ljusci nema prelom, a kolona je
+ograničena dugmadima akcionog reda (`LayoutFields` seče okvir da ne zađe pod
+njih), pa se rep **odseca** — u prvom smoke prolazu je otpao baš procenat, onaj
+podatak po kome se boja i računa. Zato linija sada glasi
+`MANJAK 5,00 kg (0,50%) · ZBIRNA 1.000,00 · PRIJEM 995,00`: kad je prozor uzak,
+otpada **izvod**, a presuda i procenat ostaju.
+
+**Verifikacija**
+
+| Šta | Gde |
+|---|---|
+| Prag boje na obe strane granice (0,49 / 0,5 / 1,99 / 2) i za višak | `modTest` `T_Manjak_LinijaIPragSuSamoF4` |
+| Kapija linije (bez zbirne nema linije) i da linija prati **brojeve**, ne samo natpise | isto |
+| Obim: linija i prosek gajbe samo u F4, i izlazak iz F4 vraća natpis polja gajbi | isto |
+| **Račun nad pravim redovima**: zbirna 300 u dva reda, prijemnica 200 → manjak 100 = 33,33%; neupisani kilogrami **obe klase** ulaze; stornirani red se ne broji ni sa jedne strane; nepostojeći broj daje nula kg | `modBusinessFlowProTests` `Test_ManjakPreviewJeZbirnaMinusPrijem` |
+| Sabotaže | `manjak-prag-uvek-zelen`, `manjak-linija-bez-zbirne`, `manjak-prosek-svuda`, `manjak-preview-bez-druge-klase` |
+
+**Katalog sabotaža sada vidi i `modBusinessFlowProTests`.** Do sada je
+`--proveri-sidra` tražio ime testa samo u `modTest` i `modTestBanka`, pa nijedna
+tvrdnja koja traži **upis** nije mogla da bude zaštićena sabotažom. Lista je sada
+`_TEST_FAJLOVI`, a `_ASSERT_IMENA` je dopunjen primitivama te suite
+(`AssertTrue`, `AssertDoubleNear`; `AssertEquals` hvata postojeći prefiks). Takav
+unos mora u komentaru da kaže **koju suitu treba pustiti** — inače bi se pustio
+`RunAllTests`, prošao zeleno, i izgledalo bi da sabotaža ništa ne meri.
+
+**Šta NIJE izmereno — i zašto.** Bruto → neto oduzimanje tare **nema automatski
+test**. `OtkupBrutoUnos()` je konfiguraciona zastavica iz tabele, fixture je u
+neto režimu, a `modTest` ne piše u tabele — pa je u toj suiti `NetoPrikaz`
+funkcija identiteta i svaka tvrdnja o njoj bila bi placebo. Umesto lažne pokrivenosti
+to ide na **operaterov smoke**: uključi bruto unos, unesi prijemnicu sa gajbama i
+tipom ambalaže, i proveri da manjak pada za taru (a ne da skoči u višak). Isto
+važi za sam izgled linije i za boje.
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 
