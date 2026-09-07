@@ -7168,6 +7168,77 @@ Private Sub RefreshSaldoOM()
     mFrm.Controls("zForm").Controls("fgAvans").Controls("fgAvansL").caption = cap
 End Sub
 
+' DIJAGNOSTIKA popune hladnjace. Alt+F8 -> Diag_Hladnjaca, pa Ctrl+G.
+' Ne menja nista. Postoji zato sto "polje se ne popuni" ima PET razlicitih
+' uzroka koji se spolja vide isto: pogresan rezim, partner bez razresenog ID-ja,
+' kolone nema u tabeli, nijedan red ne nosi taj ID, ili kes drzi snimak od
+' starta aplikacije (vrednost uneta u list POSLE toga se ne vidi). Isti razlog
+' i isti oblik kao Diag_IzRedovi / Diag_BnRedovi.
+Public Sub Diag_Hladnjaca()
+    Dim kupID As String, d As Variant, iId As Long, iHl As Long
+    Dim r As Long, n As Long, lo As ListObject, sirovo As String
+    On Error Resume Next
+    Debug.Print "--- Diag_Hladnjaca ---"
+    Debug.Print "  ActiveMode        = [" & ActiveMode & "]   (mora biti F3)"
+    If mFrm Is Nothing Then
+        Debug.Print "  mFrm              = Nothing -- ljuska nije izgradjena"
+        Exit Sub
+    End If
+    Debug.Print "  cbKupac.text      = [" & mFrm.Controls("zCtx").Controls("cbKupac").text & "]"
+    Debug.Print "  cbKupac.ListIndex = " & mFrm.Controls("zCtx").Controls("cbKupac").ListIndex & _
+                "   (-1 = nista nije IZABRANO, samo otkucano)"
+    kupID = PartnerID(mFrm)
+    Debug.Print "  PartnerID         = [" & kupID & "]"
+    Debug.Print "  polje vidljivo    = " & mFrm.Controls("zForm").Controls("fgHladnjaca").Visible
+    Debug.Print "  polje tekst       = [" & FldText("fgHladnjaca") & "]"
+    iId = ColIdx(TBL_KUPCI, COL_KUP_ID)
+    iHl = ColIdx(TBL_KUPCI, COL_KUP_HLADNJACA)
+    Debug.Print "  kolona KupacID    = " & iId
+    Debug.Print "  kolona Hladnjaca  = " & iHl & "   (0 = kolone NEMA u tblKupci)"
+    ' Zaglavlja se ispisuju uvek: ime kolone se trazi TACNO, pa "Hladnjaca" i
+    ' "Hladnjaca " ili verzija sa dijakritikom nisu ista kolona. Ista klasa
+    ' greske kao Kolicina/Kolicina u .claude/rules/podaci-i-config.md.
+    Dim hh As Variant, c As Long, red As String
+    hh = GetTableHeaders(TBL_KUPCI)
+    If IsArray(hh) Then
+        For c = LBound(hh) To UBound(hh)
+            red = red & "[" & CStr(hh(c)) & "] "
+        Next c
+        Debug.Print "  zaglavlja tblKupci= " & red
+    End If
+    d = CachedTable(TBL_KUPCI)
+    If Not IsArray(d) Then
+        Debug.Print "  tblKupci (kes)    = nije niz"
+    Else
+        Debug.Print "  redova u kesu     = " & UBound(d, 1)
+        If iId > 0 And iHl > 0 Then
+            For r = 1 To UBound(d, 1)
+                If Trim$(CStr(d(r, iId))) = kupID Then
+                    n = n + 1
+                    Debug.Print "  KES red " & r & "      : Hladnjaca=[" & NzToText(d(r, iHl)) & "]"
+                End If
+            Next r
+            If n = 0 Then Debug.Print "  KES: nijedan red nema KupacID = [" & kupID & "]"
+        End If
+    End If
+    ' SVEZE iz lista, mimo svakog kesa. Ako se razlikuje od KES reda, vrednost je
+    ' uneta posle starta aplikacije i lek je restart (ili modUiData.ResetCache).
+    Set lo = GetTable(TBL_KUPCI)
+    If lo Is Nothing Then
+        Debug.Print "  tblKupci         = tabela nije nadjena"
+    ElseIf lo.DataBodyRange Is Nothing Then
+        Debug.Print "  tblKupci         = prazna"
+    ElseIf iId > 0 And iHl > 0 Then
+        For r = 1 To lo.DataBodyRange.rows.count
+            If Trim$(CStr(lo.DataBodyRange.Cells(r, iId).value)) = kupID Then
+                sirovo = NzToText(lo.DataBodyRange.Cells(r, iHl).value)
+                Debug.Print "  LIST red " & r & "     : Hladnjaca=[" & sirovo & "]"
+            End If
+        Next r
+    End If
+    Debug.Print "--- kraj ---"
+End Sub
+
 ' HLADNJACA na Zbirni (F3). IZVEDENA vrednost, ne sifarnik: legacy
 ' frmDokumenta.cmbKupac_Change je citao Hladnjacu sa reda IZABRANOG KUPCA i
 ' dodavao je kao JEDINU stavku comba. Isti izvor i ovde.
