@@ -9355,7 +9355,7 @@ ispod proveren do funkcije, ne do imena.
 | Oznaka | Šta je nestalo | Odakle (korak) | Šta je izmereno |
 |---|---|---|---|
 | ~~**MIG-001**~~ | ~~**`Hladnjaca` i `Pogon` na Zbirnoj (F3)**~~ | `frmDokumenta` (korak 2) | **ZATVOREN** (`v6-ui-215`) — v. §28.1b |
-| MIG-002 | Brojka i lista **INTEGRITETA** | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
+| ~~MIG-002~~ | ~~Brojka i lista **INTEGRITETA**~~ — **ZATVOREN** (`v6-ui-216`), v. §28.1c | `frmOtkupAPP.ShowIntegritet` (korak 7) | `modIntegritet.GetIntegritetRows` i `IntegritetUkupno` bez pozivaoca; od tri javna ulaza preživeo je samo `RunIntegritetProvere` (zove ga `modAdmin`). Provere se pokreću iz Admin panela, ali natpis „INTEGRITET — N neusklađenih zapisa" ne stoji nigde. §27.17 ovo ne pominje |
 | MIG-003 | **„Primeni avans (sel.)"** — batch nad čekiranim blokovima | `frmBankaExportPregled` (korak 4) | §22.6 ga je vodio kao „ostaje u legacy formi"; ta forma je obrisana. `modScrBankaNalozi` ima radnju samo nad izabranim redom. Motor (`modNovac.ApplyAvansToOtkup_TX`, sa `ByRef` primenjenim iznosom) netaknut |
 | MIG-004 | **Manjak prijemnice vs zbirna + prosek gajbe** (F4) | `frmDokumenta.UpdateManjak` (korak 2) | `modDokumenta.CalculateManjakPreview` bez pozivaoca; `CalculateProsekGajbeByZbirna` drže samo testovi. Legacy linija: „Zbirna X kg \| Prijemnica Y kg \| Manjak Z kg (P%)", bojena po pragu 0,5% / 2%. Vodi se i u §0 tačka 3 |
 | MIG-005 | **Lista zbirnih za izbor** (F3) | `frmDokumenta.LoadZbirneListbox` (korak 2) | `modScrDokumenti.Scr_Liste` izlazi kad režim nije `OTKUP` — F3 nema nijednu listu. Isti račun (aktivne zbirne, 5 kolona) stoji dvaput: `modDokumenta.GetAktivneZbirne` (bez pozivaoca) i `modScrOporavak.RowsAktivni` (ciljevi prevezivanja). Vodi se i u §0 tačka 3 |
@@ -9481,6 +9481,51 @@ Zato nov test ide kroz `Scr_Save`, a ne kroz writer.
 - **Compile i suite** — pisano u web sesiji, gde `run_vba` ne radi. `vba_check`
   je čist (466 sabotaža, 0 nalaza). Pred merge ide `Debug → Compile VBAProject`,
   `RunAllTests` i `RunBusinessFlowProSuite`, plus `dokaz.py` nad novom sabotažom.
+
+### 28.1c MIG-002 zatvoren (`v6-ui-216`)
+
+Nalazi revizije se opet vide — kao **sedma lista ekrana Oporavak**
+(`modScrOporavak`), ne kao KPI pločica.
+
+| Karika | Šta je urađeno |
+|---|---|
+| Lista | `INTEGRITET` u `Scr_Liste` (sedma; staje u `MAX_SEG`) |
+| Redovi | `modIntegritet.GetIntegritetRows` 1:1 kroz postojeći `Rows2D` — dve kolone (`PROBLEM` / `DETALJ`), oba naziva **reuse** iz kataloga (`OTKUI_HDS_*`) |
+| Broj | `Scr_NaslovDopuna` — **ukupan** broj nalaza, ne broj vidljivih redova: pretraga sme da suzi mrežu, ali ne i istinu o tome koliko ih ima. Isti natpis koji je nosio legacy panel. Broji se iz **snimka**, ne kroz `IntegritetUkupno`: ta brojka je stanje poslednjeg prolaza **bilo kog** pozivaoca (Admin dugme pokreće svoj), a naslov mora da opisuje baš listu koju operater gleda. Snimak se traži i u naslovu, jer ljuska naslov crta **pre** mreže — inače bi broj prvi put bio prazan |
+| Motor | **nedirnut** — `modIntegritet` je isti fajl, 19 provera, read-only |
+
+**Zašto ne KPI pločica**, iako §28.1 to pominje kao mogućnost: KPI zona se
+osvežava na svaku promenu ekrana, a `RunAllChecks` je 19 prolaza kroz tabele.
+To je tačno onaj trošak zbog kojeg `Scr_Brojac` ovog ekrana namerno broji **samo**
+„Nedovršeno" (v. komentar uz njega). Ovde se račun pokreće **tek kad se lista
+otvori** i drži u snimku pod `modUiData.DataGeneracija()`, a `Scr_ResetCache` ga
+obara na svaki upis — inače bi ekran posle popravke i dalje prijavljivao stari
+nalaz.
+
+**Zašto lista nema radnju.** Nalaz nije stavka koja se prevezuje nego opis
+neslaganja; popravka ide svojim tokom (Nedovršeno, prevezivanje, storno). Dugme
+nad takvim redom obećalo bi radnju koje nema — zato `Scr_Radnje` za tu listu
+vraća prazno, i to je pod testom.
+
+**Verifikacija**
+
+| Šta | Gde |
+|---|---|
+| Sedam lista, redosled i ključevi, bazen prekidača; `INTEGRITET` je pregled **bez radnje**; prekidač ga bira | `modTest` `T_Oporavak_UgovorIRadnje` (prošireno, ne nov test) |
+| Sabotaža | `oporavak-integritet-lista-nestala` — lista uklonjena iz `Scr_Liste`; obara tvrdnju „ekran ima sedam lista" |
+
+**Šta NIJE izmereno:** sam sadržaj nalaza (`GetIntegritetRows` nad fixture-om) —
+19 provera nad testnim tabelama je skup prolaz koji bi `RunAllTests` produžio
+zbog liste koja je pregled; motor je nedirnut i ima svoj Admin ulaz. I ovde
+važi: compile i suite se izvršavaju na Windows-u, `vba_check` je čist ovde
+(467 sabotaža, 0 nalaza).
+
+**Šta ovo NE vraća:** brojka se i dalje **ne vidi bez otvaranja ekrana**.
+Značka uz stavku sidebara (`Scr_Brojac`) namerno broji samo „Nedovršeno", jer se
+crta na promenu podataka — 19 provera na toj učestalosti je isti kvar zbog kojeg
+su dva PR-a vadila sekunde iz uvida o stornu. Ako se ispostavi da je pasivan
+signal potreban, jeftin put je brojati nalaze **iz snimka** (kad postoji), ne
+računati ih za značku.
 
 ### 28.2 Izgubljeno namerno — odluka postoji i zapisana je
 

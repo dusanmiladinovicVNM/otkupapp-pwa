@@ -2148,13 +2148,17 @@ Private Sub T_Oporavak_UgovorIRadnje()
     AssertEq (InStr(modUiScreens.ScrMeta("OPORAVAK"), "kljuc=OPORAVAK") > 0), True, _
              "Scr_Meta prijavljuje svoj kljuc"
 
-    ' 2) Sest lista, i to bas ovih sest.
+    ' 2) Sedam lista, i to bas ovih sedam. INTEGRITET je dosao sa MIG-002:
+    '    panel koji je crtao te nalaze otisao je sa frmOtkupAPP u koraku 7, a
+    '    motor (modIntegritet) je ostao ceo i bez ijednog pozivaoca.
     liste = modScrOporavak.Scr_Liste()
-    AssertEq (UBound(liste) + 1), 6, "ekran ima sest lista"
+    AssertEq (UBound(liste) + 1), 7, "ekran ima sedam lista"
+    AssertEq ((UBound(liste) + 1) <= modOtkupUI.MAX_SEG), True, _
+             "liste staju u bazen prekidaca ljuske"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|NEDOVRSENO|PRIJEMNICE|ZBIRNE|PALETE|CILJPRIJ|UNDO", _
+    AssertEq kljucevi, "|NEDOVRSENO|PRIJEMNICE|ZBIRNE|PALETE|CILJPRIJ|UNDO|INTEGRITET", _
              "redosled i kljucevi lista"
 
     ' 3) Radnje po listi. Prazno = lista je samo pregled ili izbor cilja.
@@ -2179,6 +2183,14 @@ Private Sub T_Oporavak_UgovorIRadnje()
     ' Radnja koja menja podatke i tesko se poziva nazad mora da bude crvena.
     AssertEq (InStr(modScrOporavak.Scr_Radnje(), ":danger:") > 0), True, _
              "Vrati storno nosi danger stil"
+
+    ' 4) INTEGRITET je PREGLED, ne radna lista. Nalaz nije stavka koja se
+    '    prevezuje nego opis neslaganja -- popravka ide kroz svoj tok
+    '    (Nedovrseno, prevezivanje, storno). Dugme nad takvim redom bi obecalo
+    '    radnju koje nema.
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    AssertEq modScrOporavak.Scr_Radnje(), "", "Integritet je pregled bez radnje"
+    AssertEq modScrOporavak.Scr_Lista(), "INTEGRITET", "prekidac bira listu Integritet"
 
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
 End Sub

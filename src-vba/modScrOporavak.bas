@@ -75,6 +75,12 @@ Private mStep As String           ' korak za poruku o gresci
 Private mBrNedovrseno As Long
 Private mBrOsirocene As Long
 Private mBrUndo As Long
+' INTEGRITET: snimak nalaza + generacija podataka pod kojom je punjen.
+' Jedina lista ovog ekrana koja se NE cita sveza pri svakom osvezavanju -
+' RunAllChecks je 19 prolaza kroz tabele, a Scr_Rows se zove i na svaki znak
+' pretrage. Isti obrazac kao snimak ekrana Izvestaji (par. 23.9/S2).
+Private mIntSnimak As Variant
+Private mIntGen As Long
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -89,7 +95,8 @@ Public Function Scr_Liste() As Variant
         "ZBIRNE|OTKUI_SEG_OPO_ZBR|OTKUI_GRID_TITLE_CILJ_ZBIRNA|92", _
         "PALETE|OTKUI_SEG_OPO_PAL|OTKUI_GRID_TITLE_OSIR_PAL|96", _
         "CILJPRIJ|OTKUI_SEG_OPO_CPR|OTKUI_GRID_TITLE_CILJ_PRIJ|116", _
-        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100")
+        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100", _
+        "INTEGRITET|OTKUI_SEG_OPO_INT|OTKUI_GRID_TITLE_INTEGRITET|100")
 End Function
 
 Public Function Scr_Lista() As String
@@ -103,6 +110,17 @@ Public Function Scr_NaslovDopuna() As String
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_NaslovDopuna = mCiljZbirna
         Case "PALETE":     Scr_NaslovDopuna = mCiljPrijemnica
+        Case "INTEGRITET"
+            ' UKUPAN broj nalaza, ne broj vidljivih redova: pretraga suzava
+            ' mrezu, a "koliko ih ima" ne sme da zavisi od toga sta je operater
+            ' ukucao. Isti natpis koji je nosio legacy panel frmOtkupAPP
+            ' ("INTEGRITET -- N neuskladjenih zapisa").
+            '
+            ' Snimak se trazi OVDE, a ne samo u Scr_Rows: ljuska naslov crta PRE
+            ' mreze (RefreshGridTitle pa ReloadGrid), pa bi broj prvi put bio
+            ' prazan i pojavio se tek na sledecem osvezavanju. Poziv je
+            ' besplatan -- mreza odmah ispod dobija isti snimak iz kesa.
+            Scr_NaslovDopuna = CStr(IntegritetNalaza()) & " " & Poruka("OTKUI_OPO_INT_NALAZA")
     End Select
 End Function
 
@@ -403,9 +421,12 @@ EH:
 End Function
 
 Public Sub Scr_ResetCache()
-    ' Ovaj ekran nema izvedenih mapa - svaka lista se cita sveza iz svog
-    ' izvora pri svakom osvezavanju. Metod postoji zbog ugovora: ljuska ga
-    ' zove posle svake promene podataka.
+    ' Pet lista se cita SVEZE iz svog izvora pri svakom osvezavanju - one nemaju
+    ' sta da se ponisti. Izuzetak je INTEGRITET: njegovih 19 provera se drzi u
+    ' snimku (v. mIntSnimak), pa upis mora da ga obori, inace bi ekran posle
+    ' popravke i dalje prijavljivao stari nalaz.
+    mIntSnimak = Empty
+    mIntGen = 0
 End Sub
 
 '-------------------------------------------------------------- REDOVI
@@ -416,6 +437,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "PALETE":     Scr_Rows = RowsOsirocenePalete(q): Exit Function
         Case "CILJPRIJ":   Scr_Rows = RowsAktivnePrijemnice(q): Exit Function
         Case "UNDO":       Scr_Rows = RowsUndo(q): Exit Function
+        Case "INTEGRITET": Scr_Rows = RowsIntegritet(q): Exit Function
     End Select
     Scr_Rows = RowsNedovrseno(q)
 End Function
@@ -841,6 +863,57 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrOporavak.RowsUndo[" & mStep & "]", Err.description
+End Function
+
+'--- INTEGRITET: nalazi revizije tabela (MIG-002) ---------------------
+' Sa frmOtkupAPP je otisao panel koji je crtao BAS ovaj spisak, uz natpis
+' "INTEGRITET -- N neuskladjenih zapisa". Motor je ostao ceo i nedirnut
+' (modIntegritet.GetIntegritetRows, 19 provera), ali bez ijednog pozivaoca:
+' provere su se od tada mogle pokrenuti samo iz Admin panela, koji pise sheet i
+' zatvara MsgBox. Nista vise nije samo od sebe reklo operateru da podaci ne
+' stimaju (docs/UI_MIGRACIJA_KATALOG.md par.28.1 MIG-002).
+'
+' ZASTO OVDE, a ne kao KPI plocica: KPI se osvezava na svaku promenu ekrana, a
+' RunAllChecks je 19 prolaza kroz tabele. Ovaj ekran je vec "sta nije dovrseno",
+' racun se pokrece tek kad se lista otvori, i drzi se u snimku do sledeceg upisa.
+'
+' ZASTO NEMA RADNJE: nalaz nije stavka koja se prevezuje nego opis neslaganja;
+' popravka ide kroz svoj tok (Nedovrseno, prevezivanje, storno). Scr_Radnje za
+' ovu listu namerno vraca prazno.
+Private Function IntGridCols() As Variant
+    IntGridCols = Array( _
+        "OTKUI_HDS_PROBLEM||txt|150|1", _
+        "OTKUI_HDS_DETALJ||txt|0|1")
+End Function
+
+' Snimak nalaza pod generacijom podataka. Bez ovoga bi svaki znak u pretrazi
+' pokrenuo svih 19 provera -- ista greska zbog koje su dva PR-a vadila sekunde
+' iz uvida o stornu (v. komentar uz Scr_Brojac).
+Private Function IntegritetSnimak() As Variant
+    If mIntGen = modUiData.DataGeneracija() And mIntGen > 0 Then
+        IntegritetSnimak = mIntSnimak
+        Exit Function
+    End If
+    mIntSnimak = GetIntegritetRows()
+    mIntGen = modUiData.DataGeneracija()
+    ' Generacija ume da bude 0 na startu; snimak bi se tada gradio iznova pri
+    ' svakom pozivu. Jedinica znaci "snimak postoji", a Scr_ResetCache ga i
+    ' dalje obara na upis.
+    If mIntGen = 0 Then mIntGen = 1
+    IntegritetSnimak = mIntSnimak
+End Function
+
+' UKUPAN broj nalaza iz SNIMKA. Namerno se ne cita modIntegritet.IntegritetUkupno:
+' on drzi brojku POSLEDNJEG prolaza bilo kog pozivaoca (Admin dugme pokrece svoj),
+' a broj u naslovu mora da opisuje bas listu koju operater gleda.
+Private Function IntegritetNalaza() As Long
+    Dim src As Variant
+    src = IntegritetSnimak()
+    If IsArray(src) Then IntegritetNalaza = UBound(src, 1)
+End Function
+
+Private Function RowsIntegritet(ByVal q As String) As Variant
+    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q, False)
 End Function
 
 '------------------------------------------------------------ TEST SEAM

@@ -7235,3 +7235,37 @@ Ovo ne vidi operater, ali vidi svako ko instalira ili ažurira svesku ručno.
   zaostala u dizajneru ljuske.
 
 Detalji, izmerene granice i šta i dalje nije dokazano: PR #274.
+
+### Zbirna: „Hladnjača" i „Pogon" se ponovo unose
+
+Zbirna je oduvek nosila te dve kolone i one se i dalje upisuju u tabelu — ali od
+prelaska na jedan prozor nije postojalo polje kroz koje bi se popunile, pa je
+svaka zbirna uneta u novom UI-ju odlazila sa prazna dva podatka.
+
+- **Dva polja u režimu Zbirna (F3).** Vide se samo tamo — otpremnica i
+  prijemnica te kolone nemaju.
+- **Hladnjača se nudi sama**, sa reda izabranog kupca; ako kupac nema upisanu
+  hladnjaču, polje ostaje prazno i unos prolazi kao i do sada.
+- **Pogon je slobodan unos**, kao i u staroj formi.
+- Posle snimanja se oba prazne — hladnjača ide sa partnerom, pogon pripada tom
+  jednom dokumentu.
+
+### Integritet: nalazi revizije se opet vide
+
+Uz stari početni ekran otišao je i panel koji je pokazivao **koliko zapisa se ne
+slaže** (otpremnica vs zbirna, siročići, blokovi bez otpremnice, palete bez
+stavki…). Provere su i dalje postojale, ali su se mogle pokrenuti samo iz Admin
+panela — ništa više nije samo od sebe reklo da nešto ne štima.
+
+- **Nova lista „Integritet" na ekranu Oporavak.** Isti spisak nalaza koji je
+  crtao stari panel, u mreži koja se sortira, pretražuje i štampa kao i svaka
+  druga.
+- **U naslovu stoji ukupan broj** neusklađenih zapisa — i kad pretraga suzi
+  prikaz.
+- Račun se pokreće **tek kad se lista otvori** (19 provera kroz tabele) i pamti
+  do sledećeg upisa, pa ne usporava ostatak aplikacije.
+- Lista je **pregled bez radnji**: nalaz nije stavka koja se prevezuje nego opis
+  neslaganja — popravka ide svojim tokom (Nedovršeno, prevezivanje, storno).
+
+> Šta je sve pri prelasku na jedan prozor nestalo iz aplikacije, i šta je od toga
+> vraćeno: `docs/UI_MIGRACIJA_KATALOG.md` §28.
