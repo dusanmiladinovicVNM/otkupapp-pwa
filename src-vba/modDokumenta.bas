@@ -36,6 +36,13 @@ Public Const ZBR_RES_UNIQUE As String = "UNIQUE"
 Public Const ZBR_RES_OWNER_MISMATCH As String = "OWNER_MISMATCH"
 Public Const ZBR_RES_AMBIGUOUS As String = "CURRENT_AMBIGUOUS"
 
+' Razlog odbijanja novog unosa. Kod, ne poruka: modDokumenta je sloj podataka i
+' ne nosi korisnicki tekst (prevod je u modDokUnos.ZbirnaGatePoruka).
+Public Const ZBR_GATE_INTEGRITET As String = "INTEGRITET"
+Public Const ZBR_GATE_AKTIVNA As String = "AKTIVNA"
+Public Const ZBR_GATE_TUDJ As String = "TUDJ"
+Public Const ZBR_GATE_SIROCE As String = "SIROCE"
+
 Public Type ZbirnaIdent
     normalizedBroj As String
     integrityStatus As String
@@ -567,17 +574,32 @@ End Function
 ' To nista ne lomi: ZbirnaValidiraj se zove TACNO jednom (modScrDokumenti
 ' Scr_Save), pre SaveZbirnaMulti_TX, pa validator nikad ne vidi red koji je sam
 ' upravo napisao; izmene zbirne u mestu nema -- ispravka je storno pa nov unos.
-Public Function ZbirnaSmeNovUnos(ByRef id As ZbirnaIdent) As Boolean
-    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
-    If id.activeLogicalCount > 0 Then Exit Function
+Public Function ZbirnaNovUnosRazlog(ByRef id As ZbirnaIdent) As String
+    If id.integrityStatus <> ZBR_INT_OK Then
+        ZbirnaNovUnosRazlog = ZBR_GATE_INTEGRITET
+        Exit Function
+    End If
+
+    If id.activeLogicalCount > 0 Then
+        ZbirnaNovUnosRazlog = ZBR_GATE_AKTIVNA
+        Exit Function
+    End If
+
     If id.historicalOwnerCount = 0 Then
         ' Nijedna zbirna IKAD pod tim brojem -- slobodno, OSIM ako ga vec drzi
         ' aktivna prijemnica (I1). Tada bi nova zbirna tiho postala njen
         ' roditelj: prijemnica se vezuje samo brojem i ne bi ni primetila.
-        ZbirnaSmeNovUnos = Not id.brojUAktivnojPrijemnici
+        If id.brojUAktivnojPrijemnici Then ZbirnaNovUnosRazlog = ZBR_GATE_SIROCE
         Exit Function
     End If
-    ZbirnaSmeNovUnos = id.historicalOwnerIsScope
+
+    ' Aktivnih nema, a istorija postoji: ispravku sme SAMO isti vlasnik.
+    If Not id.historicalOwnerIsScope Then ZbirnaNovUnosRazlog = ZBR_GATE_TUDJ
+End Function
+
+' Tanak omotac nad JEDNOM tabelom iznad -- da druga kopija pravila ne odluta.
+Public Function ZbirnaSmeNovUnos(ByRef id As ZbirnaIdent) As Boolean
+    ZbirnaSmeNovUnos = (Len(ZbirnaNovUnosRazlog(id)) = 0)
 End Function
 
 ' Ugovor par.6: prijemnica se vezuje SAMO na jednoznacno razresen dokument.

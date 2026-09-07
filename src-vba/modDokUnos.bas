@@ -345,6 +345,18 @@ End Function
 
 ' Redosled provera je isti kao u frmDokumenta.btnUnosZbr_Click - to nije stil
 ' nego ponasanje: operater je navikao koje ga polje prvo zaustavi.
+' Kod razloga -> korisnicki tekst. Uzrok se NE stapa u jednu poruku: operater
+' mora da zna da li je broj zauzet SADA, IKAD, drzi ga prijemnica, ili je
+' podatak pokvaren -- to su cetiri razlicita poteza koja treba da povuce.
+Private Function ZbirnaGatePoruka(ByVal razlog As String) As String
+    Select Case razlog
+        Case ZBR_GATE_AKTIVNA: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_AKTIVNA")
+        Case ZBR_GATE_TUDJ: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_TUDJ")
+        Case ZBR_GATE_SIROCE: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_SIROCE")
+        Case Else: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
+    End Select
+End Function
+
 Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As String
     Dim kolI As Double, kolII As Double
     Dim kolAmb As Long, kolAmbII As Long
@@ -427,6 +439,29 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     dup = CheckDuplicate(TBL_ZBIRNA, COL_ZBR_BROJ, S(p, "brDok"), COL_ZBR_DATUM)
     If Len(dup) > 0 Then
         fokus = "brDok": ZbirnaValidiraj = dup: Exit Function
+    End If
+
+    ' ZBR-ACTIVE-NUMBER-01 (docs/DOMEN/ZBR_IDENTITET.md par.5).
+    '
+    ' Ide POSLE CheckDuplicate, ne umesto njega: CheckDuplicate se ne dira (D2),
+    ' jer preskakanje storniranih nosi ispravka-workflow na svih 6 tipova
+    ' dokumenata. Ova kapija hvata ono sto on propusta -- sirovo poredjenje bez
+    ' Trim i case-sensitive (" 5/070926 " prolazi pored "5/070926"), storno pa
+    ' ponovna upotreba od DRUGOG vlasnika, i broj koji drzi aktivna prijemnica
+    ' bez svoje zbirne.
+    '
+    ' Strogo je: aktivan logicki dokument pod tim brojem znaci NE, ma ciji bio.
+    ' To ne obara dvoklasnu zbirnu -- ovaj validator se zove TACNO jednom, iz
+    ' modScrDokumenti.Scr_Save, pre SaveZbirnaMulti_TX; nikad ne vidi red koji je
+    ' sam upravo napisao.
+    Dim zbrId As ZbirnaIdent
+    Dim gateRazlog As String
+    zbrId = ZbirnaIdentResolve(S(p, "brDok"), S(p, "vozacID"), S(p, "kupacID"))
+    gateRazlog = ZbirnaNovUnosRazlog(zbrId)
+    If Len(gateRazlog) > 0 Then
+        fokus = "brDok"
+        ZbirnaValidiraj = ZbirnaGatePoruka(gateRazlog)
+        Exit Function
     End If
     Exit Function
 EH:
