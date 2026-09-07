@@ -9738,7 +9738,8 @@ kupcem** — dakle **dvoklasna zbirna je JEDAN dokument na DVA reda**, sa istim
 
 **Zato dvoklasna zbirna i dalje stoji dvaput u pickeru.** To je zatečeni kvar koji
 ovaj korak **nije rešio**, vodi se kao **MIG-005b** i blokiran je na
-KI-007 / ZBR-IDENT-01.
+KI-007 / ZBR-IDENT-01 — ugovor i acceptance testovi su u
+`docs/DOMEN/ZBR_IDENTITET.md`.
 
 > **Ranija verzija ovog odeljka tvrdila je suprotno** — da dupla stavka mora da
 > ostane „da bi operater mogao da izabere pravi". Ta tvrdnja je **neodrživa**:

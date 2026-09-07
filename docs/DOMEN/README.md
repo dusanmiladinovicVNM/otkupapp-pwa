@@ -85,6 +85,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | Provere integriteta | `docs/INTEGRITET_PROVERE.md` |
+| Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |
