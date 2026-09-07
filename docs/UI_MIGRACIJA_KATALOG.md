@@ -9630,6 +9630,14 @@ treba da kaže — i to nad dokumentom koji nema roditelja.
 **Prag boje** je legacy: ispod 0,5% zeleno, do 2% žuto, preko crveno, mereno
 **apsolutno** — višak je odstupanje isto kao manjak.
 
+**Redosled u liniji NIJE legacy**, i to je jedina svesna razlika. Legacy je pisao
+`Zbirna | Prijemnica | Manjak (P%)`. Label u ljusci nema prelom, a kolona je
+ograničena dugmadima akcionog reda (`LayoutFields` seče okvir da ne zađe pod
+njih), pa se rep **odseca** — u prvom smoke prolazu je otpao baš procenat, onaj
+podatak po kome se boja i računa. Zato linija sada glasi
+`MANJAK 5,00 kg (0,50%) · ZBIRNA 1.000,00 · PRIJEM 995,00`: kad je prozor uzak,
+otpada **izvod**, a presuda i procenat ostaju.
+
 **Verifikacija**
 
 | Šta | Gde |

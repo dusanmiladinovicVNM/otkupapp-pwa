@@ -7288,8 +7288,10 @@ otišlo sa formom, pa se avans mogao vezivati samo blok po blok.
 
 Uz unos prijemnice (F4) ponovo stoji živa linija u akcionom redu:
 
-**`ZBIRNA 1.000,00 · PRIJEM 995,00 · MANJAK 5,00 kg (0,50%)`**
+**`MANJAK 5,00 kg (0,50%) · ZBIRNA 1.000,00 · PRIJEM 995,00`**
 
+- **Manjak i procenat idu prvi** — akcioni red je uzak, pa se rep linije
+  odseca; ovako presuda ostaje vidljiva na svakoj sirini prozora.
 - **Boja je poruka:** ispod 0,5% zeleno, do 2% žuto, preko crveno. Isti pragovi
   kao pre. Višak se boji isto kao manjak — i on znači da se negde meri pogrešno.
 - **Poredi se neto sa neto.** U bruto režimu se od unetog skida tara (gajbe ×

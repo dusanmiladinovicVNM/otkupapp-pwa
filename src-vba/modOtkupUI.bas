@@ -8731,21 +8731,28 @@ Public Function ManjakBoja(ByVal pct As Double) As Long
     End If
 End Function
 
-' "ZBIRNA 1.000,00 . PRIJEM 995,00 . MANJAK 5,00 kg (0,50%)"
+' "MANJAK 5,00 kg (0,50%) . ZBIRNA 1.000,00 . PRIJEM 995,00"
 '
 ' Zbirna od nula kilograma znaci da zbirne NEMA (broj nije izabran, ne postoji
 ' ili je stornirana). Tada linija ne postoji: manjak bez zbirne nije nula nego
 ' NEPOZNAT, a ispisana nula bi izgledala kao da se sve slaze -- i to bas u
 ' trenutku kad operater snima dokument koji nema roditelja.
+'
+' MANJAK IDE PRVI, iako je legacy redosled bio Zbirna | Prijemnica | Manjak.
+' Razlog je merljiv, ne stilski: Label nema prelom, a kolona je ogranicena
+' dugmadima akcionog reda (LayoutFields secka okvir da ne zadje pod njih), pa
+' se rep ODSECA. U legacy redosledu prvo otpada procenat -- tacno onaj podatak
+' po kome se boja racuna. Ovako otpada IZVOD (zbirna i prijem), a presuda i
+' procenat ostaju vidljivi na svakoj sirini prozora.
 Public Function ManjakLinija(ByVal zbrKg As Double, ByVal prijKg As Double, _
                              ByVal manjakKg As Double, ByVal pct As Double) As String
     If zbrKg <= 0 Then Exit Function
-    ManjakLinija = Poruka("OTKUI_MNJ_ZBIRNA") & " " & FmtBroj(zbrKg, 2) & _
-                   "   " & ChrW(183) & "   " & _
-                   Poruka("OTKUI_MNJ_PRIJEM") & " " & FmtBroj(prijKg, 2) & _
-                   "   " & ChrW(183) & "   " & _
-                   Poruka("OTKUI_MNJ_MANJAK") & " " & FmtBroj(manjakKg, 2) & " " & _
-                   Poruka("OTKUI_UNIT_KG") & " (" & FmtBroj(pct, 2) & "%)"
+    ManjakLinija = Poruka("OTKUI_MNJ_MANJAK") & " " & FmtBroj(manjakKg, 2) & " " & _
+                   Poruka("OTKUI_UNIT_KG") & " (" & FmtBroj(pct, 2) & "%)" & _
+                   " " & ChrW(183) & " " & _
+                   Poruka("OTKUI_MNJ_ZBIRNA") & " " & FmtBroj(zbrKg, 2) & _
+                   " " & ChrW(183) & " " & _
+                   Poruka("OTKUI_MNJ_PRIJEM") & " " & FmtBroj(prijKg, 2)
 End Function
 
 ' ZIVI MANJAK PRIJEMNICE (samo F4).
