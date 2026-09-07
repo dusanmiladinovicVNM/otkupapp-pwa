@@ -470,9 +470,11 @@ End Function
 ' Upisuje zbirnu. Vraca ZbirnaID (ili spojene ID-eve obe klase); prazno znaci
 ' da upis nije uspeo.
 '
-' HLADNJACA I POGON idu prazni: novi UI nema ta dva polja (odrediste otpremnice,
-' katalog Z3b "cmbKupac_Change -> cmbHladnjaca / cmbPogon: NEMA"). Kljucevi u
-' recniku postoje da ekran koji ih dobije nema sta da menja ovde.
+' HLADNJACA I POGON dolaze iz ekrana (v6-ui-215, MIG-001): F3 ima svoja dva
+' polja, ljuska ih salje kroz p("hladnjaca") / p("pogon"), a ovde se samo
+' prosledjuju writeru. Do tada su isla prazna, pa je svaka zbirna uneta kroz
+' ljusku imala prazne kolone koje writer i modDokumentInvariant ipak nose.
+' Prazna vrednost je i dalje legitimna (kupac bez hladnjace, kolone nema).
 Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, errDesc As String
     On Error GoTo EH

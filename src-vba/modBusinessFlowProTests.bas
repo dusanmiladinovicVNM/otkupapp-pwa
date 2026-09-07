@@ -114,6 +114,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
+    Test_ZbirnaEkranNosiOdrediste
     Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
 
@@ -3034,6 +3035,98 @@ Private Sub Test_PorukeKatalogPokrivaDokumenta()
 
 EH:
     LogFatal "Test_PorukeKatalogPokrivaDokumenta", Err.Number, Err.description
+End Sub
+
+' MIG-001: EKRAN -> WRITER -> TABELA za hladnjacu i pogon.
+'
+' Test_ZbirnaRowDataColumnMapped iznad meri drugu kariku: writer prima dve
+' vrednosti kao argumente i pise ih u SVOJE kolone. Ta tvrdnja je bila zelena i
+' dok je ekran slao prazno -- writer je dobijao "" i uredno ga upisivao.
+'
+' Ovde se meri put kojim vrednost STVARNO ide u produkciji: recnik ljuske ->
+' modScrDokumenti.Scr_Save -> modDokUnos.ZbirnaUpisi -> SaveZbirnaMulti_TX ->
+' tblZbirna. Pukne cim bilo koja karika ispusti kljuc (npr. mapiranje u
+' SaveZbirna), sto tvrdnja nad writerom ne vidi.
+Private Sub Test_ZbirnaEkranNosiOdrediste()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBREKR")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojOtp As String, brojZbirne As String
+    brojOtp = TEST_PREFIX & "-OTP-EKR-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-EKR-" & scenario
+
+    ' Izvor zbirne: jedna otpremnica jedne klase. Zbirna mora da prijavi TACNO
+    ' njene kilograme i gajbe, inace je zaustavi ZbirnaValidiraj i test bi merio
+    ' kapiju umesto prenosa vrednosti.
+    Dim otpRes As String
+    otpRes = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                                    TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 4)
+    AssertTrue Len(otpRes) > 0, "Zbirna ekran: izvorna otpremnica snimljena"
+
+    ' Recnik je isti oblik koji ljuska salje (modOtkupUI.SkupiPolja): partner je
+    ' pod kljucem "kooperantID" jer je to ista kontrola u svim rezimima.
+    Dim polja As Object
+    Set polja = CreateObject("Scripting.Dictionary")
+    polja.CompareMode = vbTextCompare
+    polja("rezim") = "ZBIRNA"
+    polja("datum") = testDate
+    polja("vozacID") = TEST_VOZ_ID
+    polja("kooperantID") = TEST_KUP_ID
+    polja("brDok") = brojZbirne
+    polja("hladnjaca") = "Hladnjaca " & scenario
+    polja("pogon") = "Pogon " & scenario
+    polja("vrsta") = TEST_VRSTA
+    polja("sorta") = TEST_SORTA
+    polja("tipAmb") = TEST_TIP_AMB
+    polja("kolicinaI") = 100#
+    polja("kolAmb") = 4
+    polja("dveKlase") = False
+    polja("kolicinaII") = 0#
+    polja("kolAmbII") = 0
+
+    Dim greska As String
+    greska = modScrDokumenti.Scr_Save(polja)
+    AssertEquals "", greska, "Zbirna ekran: Scr_Save prolazi"
+
+    Dim zbrID As String
+    zbrID = Trim$(CStr(polja("rezultat")))
+    AssertTrue Len(zbrID) > 0, "Zbirna ekran: upis vraca ZbirnaID"
+
+    ' Tvrdnja koja nosi ceo test: ono sto je operater izabrao stiglo je u red.
+    AssertEquals "Hladnjaca " & scenario, ZbrPolje(zbrID, COL_ZBR_HLADNJACA), _
+                 "Zbirna ekran: hladnjaca iz recnika je u tblZbirna"
+    AssertEquals "Pogon " & scenario, ZbrPolje(zbrID, COL_ZBR_POGON), _
+                 "Zbirna ekran: pogon iz recnika je u tblZbirna"
+
+    ' Kontrola u drugom smeru: bez ta dva kljuca upis i dalje prolazi i kolone
+    ' ostaju prazne. Prazno je legitimno stanje (kupac bez hladnjace), pa novo
+    ' polje ne sme da postane kapija.
+    Dim brojZbirne2 As String, otpRes2 As String, zbrID2 As String
+    brojZbirne2 = TEST_PREFIX & "-ZBR-EKR2-" & scenario
+    otpRes2 = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                                     TEST_PREFIX & "-OTP-EKR2-" & scenario, brojZbirne2, _
+                                     TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 4)
+    AssertTrue Len(otpRes2) > 0, "Zbirna ekran: druga izvorna otpremnica snimljena"
+
+    polja("brDok") = brojZbirne2
+    polja("hladnjaca") = ""
+    polja("pogon") = ""
+    greska = modScrDokumenti.Scr_Save(polja)
+    AssertEquals "", greska, "Zbirna ekran: prazno odrediste ne blokira upis"
+    zbrID2 = Trim$(CStr(polja("rezultat")))
+    AssertTrue Len(zbrID2) > 0, "Zbirna ekran: drugi upis vraca ZbirnaID"
+    AssertEquals "", ZbrPolje(zbrID2, COL_ZBR_HLADNJACA), _
+                 "Zbirna ekran: prazna hladnjaca ostaje prazna"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZbirnaEkranNosiOdrediste", Err.Number, Err.description
 End Sub
 
 Private Sub Test_ZbirnaRowDataColumnMapped()

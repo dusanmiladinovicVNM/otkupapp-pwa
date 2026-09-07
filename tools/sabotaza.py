@@ -5096,6 +5096,29 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "preradjena paleta nije u ponudi kao sveza",
     ),
+    # MIG-001. Odrediste zbirne (hladnjaca/pogon) ima smisla samo u F3, jer samo
+    # tblZbirna nosi te kolone. Polje koje se vidi svuda trazi podatak koji u
+    # otpremnici i prijemnici nema gde da ode -- a operater bi ga popunio.
+    # Sabotaza NE pogadja prvu tvrdnju testa (F3 IMA polje, i dalje prolazi)
+    # nego bas onu koja meri iskljucivost.
+    # MIG-002. Lista INTEGRITET je jedini prikaz nalaza revizije otkad je panel
+    # otisao sa frmOtkupAPP; bez nje motor (modIntegritet) opet ostaje bez
+    # pozivaoca, a nista operateru ne kaze da podaci ne stimaju.
+    "oporavak-integritet-lista-nestala": (
+        "modScrOporavak.bas",
+        '        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100", _\n'
+        '        "INTEGRITET|OTKUI_SEG_OPO_INT|OTKUI_GRID_TITLE_INTEGRITET|100")\n',
+        '        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100")   \' SABOTAZA: nema Integriteta\n',
+        "T_Oporavak_UgovorIRadnje",
+        "ekran ima sedam lista",
+    ),
+    "zbirna-odrediste-vidljivo-svuda": (
+        "modOtkupUI.bas",
+        '            FldShow z, "fgHladnjaca", (mode = "F3")\n',
+        '            FldShow z, "fgHladnjaca", True   \' SABOTAZA: odrediste vidljivo svuda\n',
+        "T_Zbirna_OdredisteJePoljeF3",
+        "F1 nema polje hladnjace",
+    ),
 }
 
 

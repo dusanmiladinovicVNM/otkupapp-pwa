@@ -471,6 +471,7 @@ Public Sub RunAllTests()
     RunOne 184
     RunOne 185
     RunOne 186
+    RunOne 187
     RunOne 124
     RunOne 125
     RunOne 126
@@ -726,6 +727,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 184: TestName = "T_Fak_SefLogJeOpsegFakture"
         Case 185: TestName = "T_Faza_PrijavaNeGradiLjusku"
         Case 186: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
+        Case 187: TestName = "T_Zbirna_OdredisteJePoljeF3"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -920,6 +922,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 184: T_Fak_SefLogJeOpsegFakture
         Case 185: T_Faza_PrijavaNeGradiLjusku
         Case 186: T_Faza_SplashIMiniSuFazeIsteLjuske
+        Case 187: T_Zbirna_OdredisteJePoljeF3
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2145,13 +2148,17 @@ Private Sub T_Oporavak_UgovorIRadnje()
     AssertEq (InStr(modUiScreens.ScrMeta("OPORAVAK"), "kljuc=OPORAVAK") > 0), True, _
              "Scr_Meta prijavljuje svoj kljuc"
 
-    ' 2) Sest lista, i to bas ovih sest.
+    ' 2) Sedam lista, i to bas ovih sedam. INTEGRITET je dosao sa MIG-002:
+    '    panel koji je crtao te nalaze otisao je sa frmOtkupAPP u koraku 7, a
+    '    motor (modIntegritet) je ostao ceo i bez ijednog pozivaoca.
     liste = modScrOporavak.Scr_Liste()
-    AssertEq (UBound(liste) + 1), 6, "ekran ima sest lista"
+    AssertEq (UBound(liste) + 1), 7, "ekran ima sedam lista"
+    AssertEq ((UBound(liste) + 1) <= modOtkupUI.MAX_SEG), True, _
+             "liste staju u bazen prekidaca ljuske"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|NEDOVRSENO|PRIJEMNICE|ZBIRNE|PALETE|CILJPRIJ|UNDO", _
+    AssertEq kljucevi, "|NEDOVRSENO|PRIJEMNICE|ZBIRNE|PALETE|CILJPRIJ|UNDO|INTEGRITET", _
              "redosled i kljucevi lista"
 
     ' 3) Radnje po listi. Prazno = lista je samo pregled ili izbor cilja.
@@ -2176,6 +2183,14 @@ Private Sub T_Oporavak_UgovorIRadnje()
     ' Radnja koja menja podatke i tesko se poziva nazad mora da bude crvena.
     AssertEq (InStr(modScrOporavak.Scr_Radnje(), ":danger:") > 0), True, _
              "Vrati storno nosi danger stil"
+
+    ' 4) INTEGRITET je PREGLED, ne radna lista. Nalaz nije stavka koja se
+    '    prevezuje nego opis neslaganja -- popravka ide kroz svoj tok
+    '    (Nedovrseno, prevezivanje, storno). Dugme nad takvim redom bi obecalo
+    '    radnju koje nema.
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    AssertEq modScrOporavak.Scr_Radnje(), "", "Integritet je pregled bez radnje"
+    AssertEq modScrOporavak.Scr_Lista(), "INTEGRITET", "prekidac bira listu Integritet"
 
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
 End Sub
@@ -15516,4 +15531,66 @@ Private Sub T_Fak_SefLogJeOpsegFakture()
 
     modScrFakture.Scr_FkSefLogOpsegSet "", ""
     modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' ============================================================
+' 187. ODREDISTE ZBIRNE JE POLJE, I SAMO U F3 (MIG-001)
+'
+' tblZbirna ima kolone Hladnjaca i Pogon, writer ih pise i modDokumentInvariant
+' ih cuva pri rekalkulaciji -- a ekran ih do v6-ui-215 nije imao odakle poslati,
+' pa je svaka zbirna uneta kroz ljusku isla sa prazne dve kolone. To je bio
+' jedini nalaz gde dokument nosi podatak koji ekran ne moze da popuni
+' (docs/UI_MIGRACIJA_KATALOG.md par.28.1a).
+'
+' Ovde se meri UGOVOR EKRANA: polja postoje, vide se SAMO u F3, i ClearForm ih
+' prazni. Da vrednost stvarno stigne do reda u tabeli meri
+' modBusinessFlowProTests.Test_ZbirnaEkranNosiOdrediste -- ta karika trazi upis,
+' a ovaj modul ne pise u tabele.
+' ============================================================
+Private Sub T_Zbirna_OdredisteJePoljeF3()
+    Dim f As frmOtkupUI, zf As Object
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+
+    ' 1) F3 IMA oba polja.
+    modOtkupUI.SelectMode f, "F3"
+    AssertEq zf.Controls("fgHladnjaca").Visible, True, "F3 ima polje hladnjace"
+    AssertEq zf.Controls("fgPogon").Visible, True, "F3 ima polje pogona"
+
+    ' 2) OSTALI ROBNI REZIMI ih NEMAJU. tblOtkup, tblOtpremnica i tblPrijemnica
+    '    te kolone nemaju, pa bi polje tamo trazilo podatak koji nema gde da ode.
+    '    Mere se tri rezima, ne jedan: uslov je jedan izraz i promasaj bi se
+    '    inace video samo u onom koji test slucajno gadja.
+    modOtkupUI.SelectMode f, "F1"
+    AssertEq zf.Controls("fgHladnjaca").Visible, False, "F1 nema polje hladnjace"
+    AssertEq zf.Controls("fgPogon").Visible, False, "F1 nema polje pogona"
+
+    modOtkupUI.SelectMode f, "F2"
+    AssertEq zf.Controls("fgHladnjaca").Visible, False, "F2 nema polje hladnjace"
+    AssertEq zf.Controls("fgPogon").Visible, False, "F2 nema polje pogona"
+
+    modOtkupUI.SelectMode f, "F4"
+    AssertEq zf.Controls("fgHladnjaca").Visible, False, "F4 nema polje hladnjace"
+    AssertEq zf.Controls("fgPogon").Visible, False, "F4 nema polje pogona"
+
+    ' 3) POVRATAK u F3 ih vraca -- prekidac radi u OBA smera. Bez ovoga bi
+    '    tvrdnja prolazila i sa poljem koje se jednom sakrije pa vise nikad.
+    modOtkupUI.SelectMode f, "F3"
+    AssertEq zf.Controls("fgHladnjaca").Visible, True, "povratak u F3 vraca hladnjacu"
+
+    ' 4) ClearForm ih prazni. Hladnjaca ide sa partnerom (i on se brise), pogon
+    '    pripada JEDNOM dokumentu -- zadrzan bi sledecu zbirnu poslao na tudje
+    '    odrediste, a to je greska koju operater ne vidi na potvrdi.
+    SetPolje zf, "fgHladnjaca", "Hladnjaca 1"
+    SetPolje zf, "fgPogon", "Pogon 1"
+    AssertEq Polje(zf, "fgHladnjaca"), "Hladnjaca 1", "preduslov: hladnjaca je upisana"
+    AssertEq Polje(zf, "fgPogon"), "Pogon 1", "preduslov: pogon je upisan"
+
+    modOtkupUI.ClearForm
+
+    AssertEq Polje(zf, "fgHladnjaca"), "", "ClearForm brise hladnjacu"
+    AssertEq Polje(zf, "fgPogon"), "", "ClearForm brise pogon"
+
+    ReleaseOtkupUIForm f
 End Sub
