@@ -170,7 +170,18 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
         Exit Sub
     End If
 
-    ' 3) Oslobodi runtime stanje (root cause fix) PRE importa
+    ' 3) Oslobodi runtime stanje (root cause fix) PRE importa.
+    '
+    ' REDOSLED JE USLOV ISPRAVNOSTI, NE HIGIJENA. Mereno 07.09.2026: izmena BILO
+    ' KOG modula brise module-level promenljive u SVIM modulima (probe: 'ALIVE' ->
+    ' '' posle soft merge-a nevezanog modula). A Stop*-ovi otkazuju zakazan tik
+    ' preko module-level promenljive - StopScheduledSync radi
+    ' Application.OnTime EarliestTime:=mNextScheduledRun, Schedule:=False.
+    ' Sama OnTime registracija zivi u EXCELU i brisanje VBA stanja je NE dotice.
+    ' Zato: pozvati teardown POSLE prve izmene koda znaci da je mNextScheduledRun
+    ' vec 0 -> otkazivanje tiho promasi -> tik ostane zakazan i opali nad
+    ' nepotpunim projektom. Ovaj poziv NE SME da se pomeri ispod ImportFromFolder.
+    ' Cuva ga i staticka kapija (tools/vba_selfupdate_gates.py, KAPIJA_TEARDOWN).
     PrepareRuntimeForSelfUpdate
 
     ' 4) Faza 1: code-merge (soft) + delta-skip + pre-rutiranje tvrdih u fazu 2.
