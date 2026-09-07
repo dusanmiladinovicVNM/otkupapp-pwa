@@ -77,7 +77,8 @@ koje su deklarisane snapshotom**. Ako Repository sam deklariše svoju tabelu, on
   Application zna koje tabele jedna operacija menja kao celinu.
 
 **Ovo ne uvodi novo pravilo — kodifikuje zatečeno.** Mereno nad `src-vba/`
-(produkcija, bez testova):
+(produkcija, bez testova) **na dan ove odluke**; tekuće vrednosti drži
+`docs/Architecture/ARH_SNIMAK.md`, gde treći red mora ostati nula:
 
 | | Broj |
 |---|---|
@@ -129,6 +130,10 @@ Ne blokiraju ovaj ADR; ulaze u `vba_check` uz Fazu 1:
    može krenuti kao upozorenje umesto greške.
 4. **Obavezan „dokaz u oba smera"** za sve tri (`CLAUDE.md` §5) — menja se sam
    checker.
+
+> **Stanje:** `REPO_TX` i `REPO_API` su sprovedeni u `tools/vba_check.py`
+> (v. plan §4, PR1). `REPO_POZIV` i imenovani `SLOJ` izuzetak nisu — dolaze uz
+> Repository fazu, kad prvi `modRepo*` modul bude postojao.
 
 ## Alternativa (odbijena)
 
