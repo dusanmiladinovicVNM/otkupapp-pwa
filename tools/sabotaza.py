@@ -94,6 +94,15 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # postanu, provera ce prijaviti "PALA DRUGA TVRDNJA" -- ne cutanje.
 _TEST_FAJLOVI = ("modTest.bas", "modTestBanka.bas", "modBusinessFlowProTests.bas")
 
+# Modul u kome test ZIVI -> suite koju treba pustiti. Imena suita su iz kataloga
+# SUITES u tools/run_vba.py (jedini izvor istine o tome koja suite postoji);
+# ovde stoji samo preslikavanje modul -> suite, koje run_vba nema.
+_SUITA_PO_MODULU = {
+    "modTest.bas": "RunAllTests",
+    "modTestBanka.bas": "RunBankaImportTestSuite",
+    "modBusinessFlowProTests.bas": "RunBusinessFlowProSuite",
+}
+
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
@@ -5277,7 +5286,7 @@ def primeni(ime: str) -> int:
     print(f"sabotaza '{ime}' primenjena u src-vba/{fajl}")
     print(f"  ocekuj:  FAIL {test}")
     print(f"  tvrdnja: {tvrdnja}")
-    print("  pokreni: python tools/run_vba.py --suite RunAllTests")
+    print(f"  pokreni: python tools/run_vba.py --suite {_suita_testa(test)}")
     print("  vrati:   python tools/sabotaza.py --vrati")
     return 0
 
@@ -5395,6 +5404,24 @@ def _imena_testova() -> set:
         tekst, _ = _procitaj(put)
         imena.update(_TEST_SUB.findall(tekst))
     return imena
+
+
+def _suita_testa(test: str) -> str:
+    """Suite u kojoj taj test ZAISTA ide -- po modulu u kome je definisan.
+
+    Savet je do MIG-004 uvek glasio RunAllTests. Za test iz modTestBanka ili
+    modBusinessFlowProTests to je pogresna komanda: suite prodje ZELENO (test
+    u njoj i ne postoji), pa izgleda kao da sabotaza nista ne meri -- a ona je
+    u radnom stablu i ostaje tamo. Tisi oblik istog kvara od kog i postoji ceo
+    ovaj alat.
+    """
+    for fajl, suita in _SUITA_PO_MODULU.items():
+        put = os.path.join(SRC_VBA, fajl)
+        if not os.path.exists(put):
+            continue
+        if test in _TEST_SUB.findall(_procitaj(put)[0]):
+            return suita
+    return _SUITA_PO_MODULU[_TEST_FAJLOVI[0]]
 
 
 # Tvrdnja iz kataloga mora da bude tvrdnja BAS TOG testa.
