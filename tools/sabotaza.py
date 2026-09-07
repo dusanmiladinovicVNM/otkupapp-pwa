@@ -5293,7 +5293,7 @@ SABOTAZE = {
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",
         "    \' SABOTAZA: read-model ne gleda prijemnice\n",
         "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
-        "I1: oznaka nosi izvor prijemnica",
+        "I1: aktivna prijemnica daje oznaku izvora P",
     ),
 }
 

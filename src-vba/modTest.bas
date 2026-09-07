@@ -249,6 +249,9 @@ Private Const FX_OTPREMNICA_NEW_T As String = "15/TEST"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
+' Dvosmislen par koji NIJEDAN drugi test ne dira. ZB-TEST-DUPL se ne koristi:
+' test 22 (StornoZbirna_TX) stornira ZBI-DUPL-2, pa do 190. vise nije dvosmislen.
+Private Const FX_ZBIRNA_SLDD As String = "ZB-TEST-SLDD"
 Private Const FX_VOZAC2 As String = "VOZ-TEST-2"
 ' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
 ' toliko da prijavi, inace je kapija obara.
@@ -15835,6 +15838,8 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim idJedna As ZbirnaIdent, idTudj As ZbirnaIdent, idDve As ZbirnaIdent
     Dim idStorno As ZbirnaIdent, idIstorija As ZbirnaIdent, idRazmaci As ZbirnaIdent
     Dim pecat As String
+    Dim p4 As String, pTgtB As String, pTgtA As String
+    Dim pStor As String, pD1 As String, pD2 As String
 
     ' A20 + PREDUSLOV: aktivan red bez generacije je integritetska greska.
     idFx = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
@@ -15843,11 +15848,32 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     idPrazan = ZbirnaIdentResolve("", FX_VOZAC, FX_KUPAC)
     idNema = ZbirnaIdentResolve("ZB-NE-POSTOJI", FX_VOZAC, FX_KUPAC)
 
+    ' STANJE SE POSTAVLJA, NE PRETPOSTAVLJA.
+    '
+    ' Ovaj test ide 190. po redu -- posle 189 testova koji fixture MENJAJU.
+    ' Prva verzija je merila ZB-TEST-DUPL i pala: test 22 (StornoZbirna_TX)
+    ' stornira ZBI-DUPL-2, pa taj broj do ovde vise nema dva aktivna vlasnika.
+    ' Zato se svaki red koji se meri prvo dovede u trazeno stanje, pa vrati na
+    ' ZATECENU vrednost -- ne na "", jer zatecena ne mora biti prazna.
+    p4 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO))
+    pTgtB = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO))
+    pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
+    pStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-STOR", COL_STORNIRANO))
+    pD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
+    pD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO))
+
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, "Da"
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-STOR", COL_STORNIRANO, "Da"
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
+
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", "GEN-D1"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", "GEN-D2"
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", "GEN-TB"
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", "GEN-TA"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", "GEN-SD1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", "GEN-SD2"
 
     ' PREDUSLOV PECATA. StampGeneraciju je tih no-op kad FindRows ne nadje red,
     ' pa bi bez ove tvrdnje ceo test merio INTEGRITY_ERROR i padao bez objasnjenja.
@@ -15856,18 +15882,24 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
 
     idJedna = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
     idTudj = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
-    idDve = ZbirnaIdentResolve(FX_ZBIRNA_DUPL, FX_VOZAC, FX_KUPAC)
+    idDve = ZbirnaIdentResolve(FX_ZBIRNA_SLDD, FX_VOZAC, FX_KUPAC2)
     idStorno = ZbirnaIdentResolve(FX_ZBIRNA_STORNO, FX_VOZAC, FX_KUPAC)
     idIstorija = ZbirnaIdentResolve(FX_ZBIRNA_TGT, FX_VOZAC, FX_KUPAC)
     idRazmaci = ZbirnaIdentResolve("  " & FX_ZBIRNA_MIRNA & "  ", FX_VOZAC, FX_KUPAC)
 
-    ' Fixture se vraca PRE tvrdnji: pala tvrdnja ne sme da ostavi pecacene
-    ' generacije ostatku suite-a nad istom sveskom.
+    ' Fixture se vraca PRE tvrdnji: pala tvrdnja ne sme da ostavi izmenjen
+    ' fixture ostatku suite-a nad istom sveskom.
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", ""
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", ""
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-STOR", COL_STORNIRANO, pStor
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
 
     AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
 
@@ -15896,6 +15928,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idTudj.matchingScopeActiveLogicalCount, 0, "A4: u tom scope-u nema nijednog"
     AssertEq idTudj.selectedGeneracijaID, "", "A4: tudj dokument se ne bira"
 
+    AssertEq idDve.historicalOwnerCount, 2, "preduslov/A5: fixture ima par dva vlasnika"
     AssertEq idDve.resolutionStatus, ZBR_RES_AMBIGUOUS, "A5: dva aktivna su CURRENT_AMBIGUOUS"
     AssertEq idDve.activeLogicalCount, 2, "A5: dva logicka dokumenta"
     AssertEq idDve.activeOwnerCount, 2, "A5: dva vlasnika"
@@ -15928,21 +15961,29 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Dim rRazmaci As String, rNov As String, rIspravka As String, rTudj As String
     Dim rSiroce As String
     Dim unija As Object
-    Dim imaOldu As Boolean, oznakaOldu As String
-    Dim pecat As String
+    Dim oznakaAktivne As String, oznakaSiroceta As String
+    Dim pecat As String, p4 As String, pPrjBroj As String
     Const SIROCE_BROJ As String = "ZB-SIROCE-TEST"
 
-    ' I1 read-model: broj koji nose OBE tabele mora da nosi obe oznake.
+    ' STANJE SE POSTAVLJA, NE PRETPOSTAVLJA -- isti razlog kao u testu 190.
+    ' Prva verzija je tvrdila da ZB-TEST-OLDU nose i zbirna i prijemnica; do
+    ' 191. po redu zbirna pod tim brojem vise nije aktivna, pa je oznaka bila
+    ' samo "P". Sada test sam pravi oba slucaja nad redovima koje kontrolise.
+    p4 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO))
+    pPrjBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", _
+                                    COL_PRJ_BROJ_ZBIRNE))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
+    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
+                                       COL_GENERACIJA_ID)))
+
+    ' I1: aktivna zbirna daje oznaku "Z".
     Set unija = AktivniBrojeviZbirne()
-    imaOldu = unija.Exists(FX_ZBIRNA_OLDU)
-    If imaOldu Then oznakaOldu = CStr(unija(FX_ZBIRNA_OLDU))
+    If unija.Exists(FX_ZBIRNA_MIRNA) Then oznakaAktivne = CStr(unija(FX_ZBIRNA_MIRNA))
 
     id = ZbirnaIdentResolve(FX_ZBIRNA, FX_VOZAC, FX_KUPAC)
     rInteg = ZbirnaNovUnosRazlog(id)
 
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
-    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
-                                       COL_GENERACIJA_ID)))
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
     rAktivan = ZbirnaNovUnosRazlog(id)
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
@@ -15960,22 +16001,24 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
     rTudj = ZbirnaNovUnosRazlog(id)
 
-    ' I1 kroz kapiju: broj koji drzi aktivna prijemnica, a zbirne pod njim nema.
-    ' PRJ-OLD-U se POMERA i VRACA unutar ovog testa -- fixture komentar trazi da
-    ' ga nijedan test ne ostavi pomerenog, jer relink po broju nad njim meri.
+    ' I1 kroz kapiju: broj koji drzi AKTIVNA prijemnica, a zbirne pod njim nema.
+    ' PRJ-OLD-U se pomera i vraca na ZATECENU vrednost unutar ovog testa.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, SIROCE_BROJ
+    Set unija = AktivniBrojeviZbirne()
+    If unija.Exists(SIROCE_BROJ) Then oznakaSiroceta = CStr(unija(SIROCE_BROJ))
     id = ZbirnaIdentResolve(SIROCE_BROJ, FX_VOZAC, FX_KUPAC)
     rSiroce = ZbirnaNovUnosRazlog(id)
 
     ' Fixture se vraca PRE tvrdnji.
-    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, FX_ZBIRNA_OLDU
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, pPrjBroj
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
 
     AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
-    AssertEq imaOldu, True, "preduslov/I1: read-model zna za broj koji nose i zbirna i prijemnica"
-    AssertEq (InStr(1, oznakaOldu, "Z") > 0), True, "I1: oznaka nosi izvor zbirna"
-    AssertEq (InStr(1, oznakaOldu, "P") > 0), True, "I1: oznaka nosi izvor prijemnica"
+
+    AssertEq (InStr(1, oznakaAktivne, "Z") > 0), True, "I1: aktivna zbirna daje oznaku izvora Z"
+    AssertEq (InStr(1, oznakaSiroceta, "P") > 0), True, "I1: aktivna prijemnica daje oznaku izvora P"
+    AssertEq (InStr(1, oznakaSiroceta, "Z") > 0), False, "I1: siroce nema zbirnu, pa nema oznaku Z"
 
     AssertEq rInteg, ZBR_GATE_INTEGRITET, "aktivan red bez generacije zaustavlja nov unos"
     AssertEq rAktivan, ZBR_GATE_AKTIVNA, "aktivan broj ne prima nov unos od drugog vlasnika"
