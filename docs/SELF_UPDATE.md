@@ -518,6 +518,27 @@ se desio i fix koji radi:
     prilog. Stanje se briše → `modMain.m_Initialized` postaje `False` → ponovni
     `StartApp` odradi pun `InitApp`, dakle pravi hladan start umesto polovne
     inicijalizacije. A `APP_VERSION` bi bio tačan, ne zastario.
+30. **Prazno telo je izgovor SAMO za `.doccls` — ne i za `.frm`.**
+    Zamka #28 je uvela pravilo „prazan izvorni fajl ne opisuje komponentu" i
+    primenila ga na **oba** tipa. Za `.doccls` je tačno: prazan stub stvarno ne
+    opisuje ništa — list postoji ili ne postoji nezavisno od koda. Za `.frm` nije:
+    **forma bez code-behind je i dalje forma** — nosi dizajner i `.frx`, a
+    self-update ne ume da kreira komponentu tipa 3 (zamka #7/#20).
+
+    Posledica rupe: nov **designer-only** `.frm` bio bi **dvostruko nevidljiv** —
+    `AnyUpdatePending` ga ne bi računao kao izmenu (update ne bi ni krenuo), a i da
+    krene, `ImportFromFolder` bi ga tretirao kao `„same"` umesto da traži reinstall.
+    Forma nikad ne bi stigla do klijenta, **bez ijedne poruke**.
+
+    **Fix:** izuzetak se veže za ekstenziju, na **sva tri** mesta koja odlučuju o
+    istoj stvari — `ImportFromFolder`, `AnyUpdatePending` i `VerifyReleaseProject`.
+    Baš neslaganje između tih tačaka je i proizvelo zamku #28, pa se sada drže
+    zajedno.
+
+    **Danas ne pogađa nijedan fajl:** `src-vba` ima tačno jedan `.frm`
+    (`frmOtkupUI`) i on ima code-behind (4484 znaka), a praznih `.bas`/`.cls`
+    stubova nema nijednog. Ovo je zatvaranje semantičke rupe, ne ispravka živog
+    kvara — i zato se prijavljuje kao takvo.
 
 ---
 
