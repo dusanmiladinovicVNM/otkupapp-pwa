@@ -2169,6 +2169,17 @@ ENSURE_COLS = {
     "tblPrerada": ["DatumIsteka"],
     # Revizija #9: rok trajanja po vrsti GP (prazno = globalni).
     "tblVrstaGotovihProizvoda": ["RokMeseci"],
+    # ZBR-IDENT-01: identitet logickog dokumenta zbirne.
+    #
+    # U aplikaciji je dodaje modSetup.EnsureSledljivostSchema na SVAKOM startu,
+    # pa je donor (i stari fixture) NEMA -- postoji tek u temp kopiji tokom
+    # run-a. Bez nje sejanje po imenu obara red, jer SEED sada upisuje
+    # GeneracijaID na svaki red tblZbirna (v. docs/DOMEN/ZBR_IDENTITET.md par.12).
+    #
+    # Samo tblZbirna: EnsureSledljivostSchema je dodaje na sest tabela, ali
+    # invarijanta se drzi zbirne -- tblOtpremnica namerno ima red bez generacije
+    # (OTP-LEG-A), koji T_ZavrsetakIspravke_NeDegradiraOldDocID tvrdi kao preduslov.
+    "tblZbirna": ["GeneracijaID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi

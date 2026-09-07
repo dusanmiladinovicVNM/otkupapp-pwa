@@ -313,6 +313,20 @@ AssertEq modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-LEG-A"), "
 Taj red namerno nema generaciju, jer test meri **degradaciju na poslovni broj** kad
 je nema. `ZBR-IDENT-01` se zato drži `tblZbirna`; ostale tabele su zaseban razgovor.
 
+### Kolona ne postoji u donoru — zato `ENSURE_COLS`
+
+`GeneracijaID` **nije deo šeme sveske**: pravi je `modSetup.EnsureSledljivostSchema`
+na svakom startu aplikacije, u radnoj kopiji. Donor je zato nema, pa je prvi
+pokušaj sejanja pao sa `SEMA: tblZbirna: donor nema kolone ['GeneracijaID']`.
+
+Generator za to već ima mehanizam — `ENSURE_COLS` dograđuje kolone koje donor
+nema, *pre* sejanja, isto što `EnsureColumnOnTable` radi na startu. Dodat je
+`"tblZbirna": ["GeneracijaID"]`.
+
+Namerno **samo `tblZbirna`**: `EnsureSledljivostSchema` je dodaje na šest tabela,
+ali invarijanta se drži zbirne — `tblOtpremnica` namerno zadržava `OTP-LEG-A` bez
+generacije (v. granicu iznad).
+
 ### Regeneracija
 
 Fixture je artefakt, ne repo sadržaj — posle izmene `make_fixture.py` mora se
