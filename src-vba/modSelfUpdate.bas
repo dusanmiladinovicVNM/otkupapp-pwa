@@ -932,18 +932,26 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                                 End If
                             End If
                             If Err.Number = 0 And Len(vErr) = 0 Then st(fkey) = "ok"
-                        ElseIf Len(body) = 0 Then
-                            ' PRAZAN izvorni fajl NE OPISUJE komponentu. 42 od 43
+                        ElseIf ext = "doccls" And Len(body) = 0 Then
+                            ' PRAZAN .doccls stub NE OPISUJE komponentu. 42 od 43
                             ' .doccls u src-vba su prazni stubovi (samo header); klijent
                             ' kome fali ijedan takav list bi inace na SVAKOM update-u
                             ' dobio "forma/sheet zahteva reinstall" i fatalni abort -
                             ' zauvek, jer se prazan stub nema cime isporuciti.
                             ' Isto pravilo vec vazi za .bas/.cls (zamka #21) i za
-                            ' VerifyReleaseProject; ovde je nedostajalo.
+                            ' VerifyReleaseProject.
                             st(fkey) = "same"             ' nema sta da se isporuci -> no-op
                         Else
-                            ' Nova forma/sheet KOJA NOSI KOD: ne moze se napraviti iz
-                            ' koda (zamka #7/#20) -> reinstall, fail-closed.
+                            ' Nova forma/sheet -> ne moze se napraviti iz koda
+                            ' (zamka #7/#20) -> reinstall, fail-closed.
+                            '
+                            ' .frm ide OVAMO I KAD JE TELO PRAZNO. Forma bez
+                            ' code-behind je i dalje forma: nosi dizajner i .frx, a
+                            ' self-update ne ume da kreira komponentu tipa 3. Prazno
+                            ' telo je izgovor SAMO za .doccls, gde stub stvarno ne
+                            ' opisuje nista - list postoji ili ne postoji nezavisno od
+                            ' koda. Bez ovog razdvajanja bi nov designer-only .frm bio
+                            ' TIHO preskocen i nikad ne bi stigao do klijenta.
                             st(fkey) = "skip"
                             needsReinstall = True
                         End If
@@ -1085,7 +1093,14 @@ Private Function VerifyReleaseProject(ByVal folder As String) As String
                     ' Prazan izvorni fajl NE opisuje komponentu (zamka #21) - isto
                     ' pravilo koje merge koristi mora da vazi i ovde, inace bi
                     ' provera trazila ono sto merge namerno preskace.
-                    If Len(body) > 0 Then missing = missing & " " & baseName
+                    '
+                    ' Izuzetak je isti kao u merge-u: prazno telo je izgovor SAMO za
+                    ' .doccls. Forma bez code-behind je i dalje forma i njeno
+                    ' odsustvo JESTE nalaz. Da se tri mesta koja odlucuju o istoj
+                    ' stvari (merge, AnyUpdatePending, ova provera) ne razidju -- bas
+                    ' takva nesaglasnost je i proizvela zamku #28.
+                    If Len(body) > 0 Or ext = "frm" Then _
+                        missing = missing & " " & baseName
                 ElseIf proj.VBComponents(baseName).Type <> want Then
                     badType = badType & " " & baseName & "(" & _
                               proj.VBComponents(baseName).Type & "<>" & want & ")"
@@ -1345,8 +1360,14 @@ Private Function AnyUpdatePending(ByVal folder As String) As Boolean
                     ' komponenta". Bez ovoga no-op kapija nikad ne opali kod
                     ' klijenta kome fali neki prazan .doccls stub: svaki update mu
                     ' rusi ziv runtime (teardown) da bi zavrsio fatalnim abortom.
-                    If Len(body) > 0 Then
-                        AnyUpdatePending = True: Exit Function    ' nova komponenta sa kodom
+                    '
+                    ' IZUZETAK: .frm se racuna kao izmena i kad je telo prazno.
+                    ' Forma bez code-behind je i dalje forma, i mora da pokrene pun
+                    ' put - koji ce je fail-closed prijaviti kao "potreban reinstall".
+                    ' Inace bi nov designer-only .frm bio dvostruko nevidljiv: update
+                    ' ne bi ni krenuo, pa ni izvestaj ne bi postojao.
+                    If Len(body) > 0 Or ext = "frm" Then
+                        AnyUpdatePending = True: Exit Function    ' nova komponenta
                     End If
                 Else
                     Set vbc = proj.VBComponents(baseName)
