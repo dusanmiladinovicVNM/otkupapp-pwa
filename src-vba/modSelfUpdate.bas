@@ -648,11 +648,63 @@ Private Function MakePreUpdateBackup() As Boolean
     If Dir(bkDir, vbDirectory) = "" Then MkDir bkDir
     Dim nm As String
     nm = "AgriX_pre-update_" & APP_VERSION & "_" & Format$(Now, "yyyy-mm-dd_hhmm") & ".xlsm"
-    ThisWorkbook.SaveCopyAs bkDir & "\" & nm
-    MakePreUpdateBackup = True
+    Dim bkPath As String: bkPath = bkDir & "\" & nm
+
+    ThisWorkbook.SaveCopyAs bkPath
+
+    ' DOKAZ, ne pretpostavka. SaveCopyAs koji NE baci gresku nije dokaz da backup
+    ' postoji i da je upotrebljiv - isti razlog zbog koga postoji SaveWorkbookVerified
+    ' (zamka #12) i VerifyWritten (zamka #25). Backup je POSLEDNJA linija odbrane za
+    ' ceo update: ako je krnj, operater to mora da sazna PRE nego sto se projekat
+    ' pocne menjati, dok "Nastaviti ipak?" jos ima smisla - a ne kad mu zatreba.
+    MakePreUpdateBackup = BackupLooksUsable(bkPath)
     Exit Function
 EH:
     MakePreUpdateBackup = False
+End Function
+
+' Da li backup fajl stvarno postoji i ima verodostojnu velicinu.
+'
+' Dva praga, oba namerno labava - lazno "backup nije uspeo" tera operatera da
+' odgovara na "Nastaviti ipak?" bez razloga, pa se trazi samo ono sto nedvosmisleno
+' znaci krnj upis:
+'   1. APSOLUTNI: manji od 50 KB. Prazna .xlsm je veca; fixture sveska je 0.7 MB,
+'      a prava klijentska jos veca (mereno). Ovaj prag hvata 0 bajtova i odsecen
+'      upis, i vazi uvek.
+'   2. ODNOS prema izvornoj svesci: SaveCopyAs pise ISTU svesku, pa se velicine
+'      gotovo poklapaju. Trazi se samo da backup nije manji od POLOVINE izvora.
+'
+' MERENO 07.09.2026 (SaveCopyAs preko COM-a nad fixture sveskom):
+'   izvor 748781 B, backup 748753 B -> odnos 1.000. Prag od 0.5 ima ogromnu
+'   rezervu, pa lazan pad nije realan rizik.
+' Ista merenja pokazuju da su OBA praga potrebna - nijedan nije suvisan:
+'   backup od 0 bajtova       -> pada na APSOLUTNOM, odnos ga ne bi ni video
+'   backup odsecen na 30%     -> prolazi apsolutni (224 KB), pada na ODNOSU
+'      Preskace se kad velicina izvora nije citljiva (npr. SharePoint URL umesto
+'      lokalnog puta) - tada ostaje samo apsolutni prag.
+Private Function BackupLooksUsable(ByVal bkPath As String) As Boolean
+    Const MIN_BYTES As Double = 51200#
+    On Error GoTo EH
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FileExists(bkPath) Then Exit Function
+
+    Dim bkSize As Double: bkSize = fso.GetFile(bkPath).Size
+    If bkSize < MIN_BYTES Then Exit Function
+
+    Dim srcSize As Double
+    On Error Resume Next
+    srcSize = fso.GetFile(ThisWorkbook.FullName).Size
+    On Error GoTo EH
+    If srcSize > 0 Then
+        If bkSize < srcSize / 2 Then Exit Function
+    End If
+
+    BackupLooksUsable = True
+    Exit Function
+EH:
+    ' Provera koja pukne NE sme da potvrdi backup.
+    BackupLooksUsable = False
 End Function
 
 ' Napravi JEDINSTVEN prazan temp folder za preuzimanje. Jedinstven (timestamp) da
