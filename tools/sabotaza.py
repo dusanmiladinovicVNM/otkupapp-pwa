@@ -5104,6 +5104,28 @@ SABOTAZE = {
     # MIG-002. Lista INTEGRITET je jedini prikaz nalaza revizije otkad je panel
     # otisao sa frmOtkupAPP; bez nje motor (modIntegritet) opet ostaje bez
     # pozivaoca, a nista operateru ne kaze da podaci ne stimaju.
+    # MIG-003. Bazen radnji je pun (MAX_ACT), pa batch nema svoje dugme -- obim
+    # bira korpa. Peto polje 1 gasi dugme dok red nije izabran, pa batch nad
+    # punom korpom ostaje bez ijednog ulaza: radnja postoji u kodu, a operater
+    # do nje ne moze. Tiho, jer po redu i dalje radi.
+    "banka-nalozi-avans-trazi-red": (
+        "modScrBankaNalozi.bas",
+        '                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:0|" & _\n',
+        '                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:1|" & _\n',
+        "T_BankaNalozi_UgovorEkrana",
+        "Primeni avans ne trazi izabran red",
+    ),
+    # Blok bez avansa iz korpe ulazi u batch kao "bez promene" -- zbirni ishod
+    # tada laze o tome koliko je posla uopste bilo.
+    "banka-nalozi-avans-broji-i-prazne": (
+        "modScrBankaNalozi.bas",
+        "            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then\n"
+        "                n = n + 1\n",
+        "            If True Then   \' SABOTAZA: i blok bez avansa je kandidat\n"
+        "                n = n + 1\n",
+        "T23_BatchAvansRazdvajaIshode",
+        "blok kooperanta bez avansa se NE broji medju kandidate",
+    ),
     "oporavak-integritet-lista-nestala": (
         "modScrOporavak.bas",
         '        "UNDO|OTKUI_SEG_OPO_UND|OTKUI_GRID_TITLE_UNDO|100", _\n'

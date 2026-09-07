@@ -7269,3 +7269,17 @@ panela — ništa više nije samo od sebe reklo da nešto ne štima.
 
 > Šta je sve pri prelasku na jedan prozor nestalo iz aplikacije, i šta je od toga
 > vraćeno: `docs/UI_MIGRACIJA_KATALOG.md` §28.
+
+### Platni nalozi: „Primeni avans" radi i nad više blokova
+
+Stara forma je imala dva dugmeta — na jedan blok i na sve čekirane. Drugo je
+otišlo sa formom, pa se avans mogao vezivati samo blok po blok.
+
+- **Korpa bira obim.** Ako su blokovi u korpi („U NALOZIMA"), dugme radi nad
+  njima; ako je korpa prazna, radi nad izabranim redom, kao i do sada.
+- **Ishod se prijavljuje zbirno:** koliko je blokova primilo avans i koliko
+  dinara ukupno, plus „bez promene" i „greška" kad ih ima.
+- **„Bez promene" nije uspeh.** Blok kojem nije ostalo slobodnog avansa se broji
+  posebno, a ne kao primenjen — ranije je i takav slučaj izgledao kao uspeh.
+- Blok iz korpe koji nema avans ili nema otvoren iznos se ne dira i ne broji.
+- Greška na jednom bloku ne prekida ostale.

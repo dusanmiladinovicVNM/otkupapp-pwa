@@ -9773,6 +9773,29 @@ Private Sub T_BankaNalozi_UgovorEkrana()
              modOtkupUI.MAX_ACT, _
              "radnji je TACNO MAX_ACT -- sesta bi se tiho odsekla (peta je izricito 'svi')"
 
+    ' MIG-003: "Primeni avans" ima dva obima, jer sesto dugme ne postoji (bazen
+    ' je pun). Obim bira KORPA -- naslednik legacy cekiranja. Peto polje radnje
+    ' zato MORA biti 0: sa 1 bi dugme bilo ugaseno dok red nije izabran, pa
+    ' batch nad punom korpom ne bi imao nijedan ulaz.
+    spec = modScrBankaNalozi.BnRadnjeZaListu("NALOZI")
+    For j = 0 To UBound(Split(spec, "|"))
+        If Split(Split(spec, "|")(j), ":")(0) = "bnavans" Then
+            AssertEq Split(Split(spec, "|")(j), ":")(4), "0", _
+                     "Primeni avans ne trazi izabran red -- inace batch nema ulaz"
+        End If
+    Next j
+
+    ' Obim je cist racun, pa se meri bez mreze i bez upisa. Korpa ima prednost
+    ' nad izabranim redom: ona je izricit izbor operatera.
+    AssertEq modScrBankaNalozi.BnAvansObim(0, 0), "NEMA", _
+             "bez korpe i bez reda radnja nema nad cim"
+    AssertEq modScrBankaNalozi.BnAvansObim(0, 3), "RED", _
+             "prazna korpa vraca radnju na izabran red"
+    AssertEq modScrBankaNalozi.BnAvansObim(2, 0), "KORPA", _
+             "puna korpa znaci batch"
+    AssertEq modScrBankaNalozi.BnAvansObim(2, 3), "KORPA", _
+             "korpa ima prednost i kad je red izabran"
+
     spec = modScrBankaNalozi.BnCipoviZaListu("NALOZI")
     AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _
              "lista NALOZI ne trazi vise cipova nego sto bazen ima"
