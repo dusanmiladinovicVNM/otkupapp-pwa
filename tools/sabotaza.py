@@ -5281,6 +5281,13 @@ SABOTAZE = {
         "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
         "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan",
     ),
+    "zbirna-f4-ignorise-istoriju": (
+        "modDokumenta.bas",
+        "    If id.historicalOwnerCount > 1 Then Exit Function\n",
+        "    \' SABOTAZA: F4 ignorise istoriju vlasnika\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj",
+    ),
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",

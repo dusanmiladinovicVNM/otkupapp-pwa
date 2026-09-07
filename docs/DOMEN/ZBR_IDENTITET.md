@@ -1,5 +1,8 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
+> **KI-007 je DELIMICNO zatvoren:** resolver + F3 prevencija + I1 jesu; F4 parent
+> guard (I2) **nije**.
+>
 > **Status (L1, `v6-ui-220`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi
 > izvor sa brojem linije). §§4–5 i I1 iz §8 su **implementirani**. **I2 iz §8 i §6
 > NISU** — blokirani su na fixture-u, v. §12. §9 kaže koji su acceptance testovi
@@ -181,7 +184,19 @@ tabela zaštićena.
 | `NONE` | postojeći BLOK/UPOZORENJE (`ZbirnaPostoji` + `PrijemnicaZbirnaBlokira()`), bez izmene |
 | `CURRENT_AMBIGUOUS` | hard block, **bez** traženja kanonskog roditelja |
 | `OWNER_MISMATCH` | hard block |
-| `UNIQUE` | prolaz, `selectedGeneracijaID` je roditelj |
+| `UNIQUE` + `historicalOwnerCount > 1` | **hard block** |
+| `UNIQUE` + `historicalOwnerCount <= 1` | prolaz, `selectedGeneracijaID` je roditelj |
+
+**Istorija je deo bezbednosti, ne samo sadašnje stanje.** `UNIQUE` danas uz broj
+koji je *ikad* držalo više vlasnika i dalje nije bezbedan roditelj: prijemnica
+čuva **samo `BrojZbirne`**, pa svaka nizvodna operacija po broju može da zahvati i
+tuđe. `modStorno.RequireJedanVlasnikIkadPoBroju` postoji baš zbog toga. Uslov pada
+tek kad prijemnica dobije pravi FK na generaciju (`Prijemnica.ZbirnaGeneracijaID`).
+
+> **Ispravka regresije.** Ugovor v3 je ovaj red imao; v4 ga je ispustio pri
+> usvajanju stroge F3 matrice, bez oznake. `ZbirnaRoditeljOK` je verno
+> implementirao v4 — kod nije odlutao od ugovora, ugovor je odlutao od sebe.
+> Vraćeno pre nego što je I2 dobio ijednog pozivaoca.
 
 ## 7) Odluke
 

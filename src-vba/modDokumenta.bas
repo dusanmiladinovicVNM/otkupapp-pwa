@@ -605,8 +605,15 @@ End Function
 ' Ugovor par.6: prijemnica se vezuje SAMO na jednoznacno razresen dokument.
 ' Kod CURRENT_AMBIGUOUS / OWNER_MISMATCH / INTEGRITY_ERROR se kanonski roditelj
 ' NE trazi -- biranje "najverovatnijeg" iz dvosmislenog skupa je tiho pogadjanje.
+'
+' ISTORIJA JE DEO BEZBEDNOSTI, ne samo sadasnje stanje. UNIQUE danas uz broj koji
+' je IKAD drzalo vise vlasnika i dalje nije bezbedan roditelj: prijemnica cuva
+' SAMO BrojZbirne, pa svaka nizvodna operacija po broju moze da zahvati i tudje.
+' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
+' mutaciju po broju. Uslov pada tek kad prijemnica dobije pravi FK na generaciju.
 Public Function ZbirnaRoditeljOK(ByRef id As ZbirnaIdent) As Boolean
     If id.integrityStatus <> ZBR_INT_OK Then Exit Function
+    If id.historicalOwnerCount > 1 Then Exit Function
     ZbirnaRoditeljOK = (id.resolutionStatus = ZBR_RES_UNIQUE)
 End Function
 

@@ -15898,6 +15898,10 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
 
     AssertEq idIstorija.resolutionStatus, ZBR_RES_UNIQUE, "A8: danas jednoznacan broj je UNIQUE"
     AssertEq idIstorija.historicalOwnerCount, 2, "A8: a IKAD su ga drzala dva vlasnika"
+    AssertEq ZbirnaRoditeljOK(idIstorija), False, _
+             "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj"
+    AssertEq ZbirnaRoditeljOK(idJedna), True, _
+             "A8: broj sa jednim vlasnikom IKAD jeste bezbedan roditelj"
 
     AssertEq idRazmaci.normalizedBroj, idJedna.normalizedBroj, "A16: razmaci se normalizuju"
     AssertEq idRazmaci.selectedGeneracijaID, idJedna.selectedGeneracijaID, _
