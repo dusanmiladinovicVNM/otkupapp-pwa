@@ -484,11 +484,20 @@ End Sub
 Private Sub FinishAndOfferRestart(ByVal msg As String)
     Dim zakazano As Boolean
 
+    ' Na "Ne" se NE izlazi tiho. Operater je vec procitao rezime u ovom dijalogu,
+    ' ali dijalog je modalan i nestaje - bez potvrde ostaje bez ijednog traga da je
+    ' update uopste snimljen. Do sada je taj put UVEK zavrsavao eksplicitnim
+    ' uputstvom; ta garancija se zadrzava.
     If MsgBox(msg & vbCrLf & vbCrLf & _
               "Pokrenuti program ODMAH sa novom verzijom?" & vbCrLf & vbCrLf & _
               "Da - program se pokrece odmah, bez zatvaranja fajla." & vbCrLf & _
               "Ne - promene se aktiviraju kad zatvorite i ponovo otvorite fajl.", _
-              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then
+        MsgBox "Azuriranje je SNIMLJENO." & vbCrLf & _
+               "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
+               vbInformation, APP_NAME
+        Exit Sub
+    End If
 
     ' Prazan stack: OnTime opali tek kad se ovaj makro zavrsi. Isti obrazac kojim
     ' se zakazuje faza 2, i jedini bezbedan nacin da se udje u tek izmenjen kod.
