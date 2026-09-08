@@ -1090,7 +1090,11 @@ SABOTAZE = {
         "    If id.activeOwnerCount > 1 Then   ' SABOTAZA: storniran vlasnik se ne broji\n"
         "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA\n",
         "T_StorniranVlasnik_JosImaAktivnuDecu",
-        "staje kapija na nivou moda, pre transakcije, sa razlogom",
+        # Od ZBR-MUT-01 obe kapije (nivo moda i detach) idu kroz isti racun, pa
+        # ova sabotaza gasi ceo lanac i operacija PROLAZI. Pada zato prva
+        # tvrdnja, ne ona o poruci -- ranije je vazilo obrnuto, jer je jedna
+        # kapija ostajala ziva.
+        "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
     ),
     # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
     # "tudji blok nije pomeren" bez pozitivne kontrole.

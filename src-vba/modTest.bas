@@ -2876,10 +2876,15 @@ Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
                                            SV_MODE_DUPLI, True, False, "GEN-ZB-K2")
     AssertEq CBool(res("success")), False, _
              "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima"
-    ' Ishod cuvaju DVE nezavisne kapije (na nivou moda i u detach-u), pa ga
-    ' jedna sabotaza ne moze oboriti. Zato se tvrdi i KOJA je stala: kapija
-    ' na nivou moda staje PRE transakcije i objasnjava razlog, dok bi detach
-    ' pukao iznutra i dao samo "Storno zbirne nije uspeo".
+    ' Tvrdi se i KOJA kapija je stala: ona na nivou moda staje PRE transakcije i
+    ' objasnjava razlog, dok bi detach pukao iznutra i dao samo "Storno zbirne
+    ' nije uspeo".
+    '
+    ' Do v6-ui-225 su to bile DVE NEZAVISNE kapije, pa ih jedna sabotaza nije
+    ' mogla oboriti obe. Od ZBR-MUT-01 obe idu kroz isti racun
+    ' (modDokumenta.ZbirnaMutacijaPoBrojuRazlog), pa jedna greska u njemu gasi
+    ' ceo lanac -- to je cena centralizacije i zato bas to meri sabotaza
+    ' guard-samo-aktivni-vlasnici, koja tada obara tvrdnju IZNAD ove.
     AssertEq (InStr(1, CStr(res("message")), "Zamena bi prevezala decu", _
                     vbTextCompare) > 0), True, _
              "staje kapija na nivou moda, pre transakcije, sa razlogom"
