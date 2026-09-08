@@ -217,6 +217,33 @@ End Function
 
 ' Null-safe pretvaranje vrednosti iz tabele/celije u tekst.
 ' Vraca "" za Null/Empty/Error; inace CStr(v). Pozivaoci sami rade Trim$ gde treba.
+' ZBR-NORM-02: JEDINSTVENA SEMANTIKA poredjenja poslovnih brojeva.
+'
+' Nije jedini komparator u projektu i ne treba da bude: ZbirnaPostoji,
+' BrojZbirneExists, ZbirnaIdentResolve i AktivniBrojeviZbirne imaju svoja
+' inline poredjenja sa ISTOM semantikom (Trim + vbTextCompare). Prebacivati i
+' njih samo radi jednog izvora znacilo bi dirati stabilan kod bez poslovne
+' koristi. Ova funkcija postoji za ODLUCIVACE koji su radili DRUGACIJE.
+'
+' Poslovni broj (BrojZbirne, BrojPrijemnice, BrDok...) je LABELA koju kuca
+' covek ili generise generator, pa se ista vrednost javlja u vise oblika:
+' vodeci/prateci razmak iz Excel celije, i razlicit case kod rucnog unosa
+' (format zbirne dozvoljava prefiks "S" -- v. IsValidBrojZbirneFormat).
+'
+' Do v6-ui-226 je isti kljuc imao TRI normalizacije: pun (Trim + vbTextCompare)
+' u ZbirnaPostoji/BrojZbirneExists/ZbirnaIdentResolve, samo Trim u
+' VlasniciPoBroju/LookupActiveID, i sirov u CheckDuplicate. Kapija i akter su
+' tako mogli da racunaju razlicito nad istim brojem.
+'
+' Pravilo: KAPIJA sme da bude SIRA od aktera, nikad uza. Zato ovo koriste
+' odlucivaci; mutatori (DetachOtpremniceInline, RelinkOtpremniceToZbirna_TX,
+' RedJeIzabranogDokumenta) namerno ostaju uzi -- kapija >= akter je time
+' garantovano, a prosirivanje aktera bi diralo redove koje danas ne dira.
+' CheckDuplicate ostaje sirov, imenovano u ugovoru par.3.
+Public Function BrojJednak(ByVal a As Variant, ByVal b As Variant) As Boolean
+    BrojJednak = (StrComp(Trim$(NzToText(a)), Trim$(NzToText(b)), vbTextCompare) = 0)
+End Function
+
 Public Function NzToText(ByVal v As Variant) As String
     If IsNull(v) Or IsEmpty(v) Then
         NzToText = ""

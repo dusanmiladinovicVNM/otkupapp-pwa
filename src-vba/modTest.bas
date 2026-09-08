@@ -482,6 +482,7 @@ Public Sub RunAllTests()
     RunOne 192
     RunOne 193
     RunOne 194
+    RunOne 195
     RunOne 124
     RunOne 125
     RunOne 126
@@ -745,6 +746,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 192: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
         Case 193: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
         Case 194: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
+        Case 195: TestName = "T_BrojKapija_IstoZaSvakiCase"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -947,6 +949,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 192: T_Prijemnica_VezujeSeSamoNaJednoznacnu
         Case 193: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
         Case 194: T_Zbirne_PickerJednaStavkaPoDokumentu
+        Case 195: T_BrojKapija_IstoZaSvakiCase
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -16202,6 +16205,62 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
              "preduslov: taj broj pre izmene NIJE dvosmislen"
     AssertEq NalazSadrzi(posle, "B8", FX_ZBIRNA_TGT), True, _
              "B8 vidi broj sa dva aktivna dokumenta"
+End Sub
+
+' ZBR-NORM-02: kapije nad poslovnim brojem poredi JEDNA funkcija.
+'
+' Isti kljuc je imao TRI normalizacije: pun (Trim + vbTextCompare) u
+' ZbirnaPostoji/ZbirnaIdentResolve, samo Trim u VlasniciPoBroju/LookupActiveID,
+' i sirov u CheckDuplicate. Otkad ZBR-MUT-01 kapiju vodi kroz resolver, kapija i
+' akter su racunali po dva razlicita pravila nad istim brojem.
+'
+' Meri se BEZ IJEDNOG UPISA: fixture broj ZB-TEST-KASK nosi slova, pa je dovoljno
+' pozvati iste funkcije sa LCase varijantom. Preduslovi tvrde da tacan case daje
+' NE-NULA rezultat -- inace bi "isto kao tacan case" bilo zeleno i kad obe grane
+' vrate nulu.
+Private Sub T_BrojKapija_IstoZaSvakiCase()
+    Dim tacan As Long, malim As Long, saRazmakom As Long
+    Dim idTacan As String, idMalim As String
+    Dim dTacan As Long, dMalim As Long, dSaRazmakom As Long
+
+    ' --- VlasniciPoBroju: vlasnicka kapija ---
+    tacan = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Norm", _
+                            True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    malim = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, LCase$(FX_ZBIRNA_KASK), "T_Norm", _
+                            True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    saRazmakom = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, " " & FX_ZBIRNA_KASK & " ", _
+                                 "T_Norm", True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+
+    AssertEq (tacan > 0), True, _
+             "preduslov: tacan case daje ne-nula vlasnika (inace tvrdnja ne meri nista)"
+    AssertEq malim, tacan, "VlasniciPoBroju: mali case daje ISTE vlasnike"
+    AssertEq saRazmakom, tacan, "VlasniciPoBroju: razmaci ne menjaju racun"
+
+    ' --- LookupActiveID: nalazenje PK ---
+    idTacan = LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, COL_ZBR_ID)
+    idMalim = LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, LCase$(FX_ZBIRNA_KASK), COL_ZBR_ID)
+    AssertEq (Len(idTacan) > 0), True, _
+             "preduslov: tacan case nalazi aktivan PK"
+    AssertEq idMalim, idTacan, "LookupActiveID: mali case nalazi ISTI dokument"
+
+    ' --- DistinctActiveValues: skup dece za kaskadu ---
+    dTacan = modStornoFlow.DistinctActiveValues_Test(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                                     COL_PRJ_BROJ_ZBIRNE, FX_ZBIRNA_KASK)
+    dMalim = modStornoFlow.DistinctActiveValues_Test(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                                     COL_PRJ_BROJ_ZBIRNE, LCase$(FX_ZBIRNA_KASK))
+    AssertEq (dTacan > 0), True, _
+             "preduslov: tacan case nalazi decu (test seam radi u test-rezimu)"
+    AssertEq dMalim, dTacan, "DistinctActiveValues: mali case daje ISTU decu"
+
+    ' RAZMAK je ovde bio PRAVI kvar, ne case: celija je bila trimovana, filterVal
+    ' nije, pa bi netrimovan pozivalac tiho dobio prazan skup. Bez ove tvrdnje
+    ' commit bi popravio nesto sto nijedna provera ne meri -- a sabotaza koja
+    ' vraca staro poredjenje kvari OBE stvari odjednom, pa bi bila crvena zbog
+    ' case-a i ostavila trim nedokazan.
+    dSaRazmakom = modStornoFlow.DistinctActiveValues_Test(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                                          COL_PRJ_BROJ_ZBIRNE, _
+                                                          " " & FX_ZBIRNA_KASK & " ")
+    AssertEq dSaRazmakom, dTacan, "DistinctActiveValues: razmaci ne menjaju decu"
 End Sub
 
 ' MIG-005b: picker pokazuje JEDNU stavku po DOKUMENTU, ne po redu.

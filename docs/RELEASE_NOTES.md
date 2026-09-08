@@ -7465,3 +7465,22 @@ To su tri različita posla za operatera i više se ne stapaju u jednu poruku.
 **Šta se nije promenilo:** dvoklasna zbirna (Klasa I + II) je i dalje **jedan**
 dokument i stornira se kao i pre. Isto važi za ispravljenu zbirnu pod istim
 brojem — ona nije „dva dokumenta" nego stari i novi oblik istog posla.
+
+### Veliko i malo slovo u broju više ne prave dva broja
+
+Broj zbirne, prijemnice ili naloga je **oznaka koju kuca čovek**, pa se ista
+vrednost lako nađe u dva oblika — sa razmakom sa strane, ili sa velikim umesto
+malog slova.
+
+Provere koje odlučuju **sme li se nešto raditi nad tim brojem** su do sada
+razmak zanemarivale, ali su veliko i malo slovo tretirale kao **različite
+brojeve**. Posledica: provera je gledala jedan broj, a sam posao ponekad drugi.
+
+Sada sve takve provere porede broj na **jedan isti način**. `ZB-100` i `zb-100`
+su isti broj za svaku proveru koja odlučuje.
+
+**Šta se namerno nije promenilo:** sâm upis i prevezivanje i dalje rade nad
+tačnim oblikom broja iz tabele. Provera sme da bude **šira** od posla — tada
+staje i pita; obrnuto bi značilo da posao zahvati više nego što je provereno.
+U svakodnevnom radu se ne vidi razlika: brojevi koje pravi program uvek imaju
+isti oblik.
