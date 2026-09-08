@@ -5327,6 +5327,19 @@ SABOTAZE = {
         "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
         "B9 vidi aktivnu zbirnu bez GeneracijaID",
     ),
+    # A21/KR-001: vraca nasledjivanje generacije u PWA uvoz. Dva uredjaja sa
+    # istim brojem, vozacem i kupcem opet dobijaju ISTU generaciju, pa
+    # activeLogicalCount (broji generacije) ostaje 1 -- resolver kaze UNIQUE,
+    # F4 pusta, B8 cuti. Tvrdnja mora biti TACAN tekst: BFP izlaz nosi naziv
+    # tvrdnje, ne ime Sub-a (v. dokaz.py _pali).
+    "mastersync-nasledjuje-tudju-generaciju": (
+        "modMasterSync.bas",
+        "        ApplyNovaGeneracijaID TBL_ZBIRNA, result\n",
+        "        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _\n"
+        "                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID\n",
+        "Test_ZBR_ImportDvaUredjajaNeStapaDokumente",
+        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog",
+    ),
     "picker-ne-spaja-redove-dokumenta": (
         "modOtkupUI.bas",
         "                    uzmi = False          \' drugi red ISTOG dokumenta\n",

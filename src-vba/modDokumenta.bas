@@ -1373,6 +1373,38 @@ Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, 
                                             ScopePairsToArray(vlasnikPairs, SRC)), SRC
 End Sub
 
+' Pecati NOVU generaciju na upravo dodat red -- bez gledanja na to sta jos stoji
+' pod istim brojem.
+'
+' ApplyGeneracijaID resava DRUGI problem: tamo dva fizicka reda cine JEDAN
+' dokument (Kl.I + Kl.II), pa drugi red mora da nasledi generaciju prvog. Nasledje
+' je tacno samo za pisca koji jedan dokument deli na vise redova.
+'
+' Pisac koji svaki red pise kao ZASEBAN dokument mora ovo. Za njega je nasledje
+' aktivno stetno: dva odvojena dokumenta bi dobila isti GeneracijaID, pa bi
+'   - ZbirnaIdentResolve izbrojao activeLogicalCount = 1 (broji GENERACIJE),
+'     dakle UNIQUE -- F4 pusta, B8 cuti, kolizija se ne prijavljuje;
+'   - StornoZbirna, koji redove bira po generaciji (RedJeIzabranogDokumenta),
+'     stornirao OBA dokumenta na jedan storno;
+'   - modScrStorno vise ne bi mogao ni da ih razlikuje: skrivena kolona
+'     identiteta u gridu je bas COL_GENERACIJA_ID (modScrDokumenti.IdKolonaTipa).
+'
+' Prvi korisnik je modMasterSync: PWA import pise JEDAN red po ClientRecordID-u
+' (obe klase sabrane u "I/II"), a IsDuplicateZbirnaInMaster odbija ponovljen CRID
+' pre upisa -- svaki red koji stigne do AppendRow je dokument koji nikad nije
+' vidjen.
+Public Sub ApplyNovaGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long)
+    Const SRC As String = "modDokumenta.ApplyNovaGeneracijaID"
+
+    If rowIndex <= 0 Then
+        Err.Raise vbObjectError + 1018, SRC, _
+                  "Neispravan red za upis generacije (" & tableName & ")."
+    End If
+
+    RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
+                      NewGeneracijaID(tableName), SRC
+End Sub
+
 ' Bira redove dokumenta za prefill ispravke (frmDokumenta.Prefill*FromStornirana).
 '
 ' Polazi od ANCHOR reda -- konkretnog PK-a stornirane (OldDocID iz correction

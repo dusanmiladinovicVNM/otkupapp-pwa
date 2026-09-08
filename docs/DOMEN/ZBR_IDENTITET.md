@@ -4,9 +4,13 @@
 > read-model, F4 parent guard (I2), MasterSync detekcija i MIG-005b (picker)
 > **jesu** implementirani.
 >
-> **Status (`v6-ui-222`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
+> **Status (`v6-ui-224`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
 > sa brojem linije). §§4–6 i I1/I2 iz §8 su **implementirani**. §9 kaže koji su
 > acceptance testovi napisani, a koji čekaju i zašto.
+>
+> **§2 je bio nepotpun:** tabela tri writer-a je tvrdila da sva tri zovu
+> `ApplyGeneracijaID`, i to je tačno opisivalo kod — ali ne i to da je za jednog
+> od njih (`modMasterSync`) nasleđivanje generacije **pogrešno**. V. §11b.
 >
 > Ovaj fajl je odgovor na `KNOWN_ISSUES.md` KI-007, koji traži da se invarijanta
 > ZBR-IDENT-01 definiše pre nego što se dira core.
@@ -40,7 +44,7 @@ reda.
 | Writer | AppendRow | ApplyGeneracijaID |
 |---|---|---|
 | `modDokumenta.SaveZbirna` | `modDokumenta.bas:633` | `:636` |
-| `modMasterSync` (PWA import) | `modMasterSync.bas:3175` | `:3180` |
+| `modMasterSync` (PWA import) | `modMasterSync.bas:3175` | `ApplyNovaGeneracijaID` — **uvek nova**, v. §11b |
 | `modDokumentInvariant` (rekalkulacija) | `modDokumentInvariant.bas:412` | `:421` |
 
 Lanac garancija: `RequireColumnIndex(COL_GENERACIJA_ID)` pada glasno ako kolone
@@ -241,8 +245,13 @@ testovi `T_ZbirnaIdent_BrojSeRazresavaUDokument`,
 `T_ZbirnaKapija_AktivanBrojNeSmeDvaput` i
 `T_Prijemnica_VezujeSeSamoNaJednoznacnu`, plus **devet** sabotaža.
 
-**Čeka:** A6, A9–A12, A14, A21 — sve traže **upis** (`Scr_Save`,
-`SaveZbirnaMulti_TX`, import), pa idu u BFP suite, ne u `RunAllTests`.
+**Pokriveno** (`modBusinessFlowProTests`, `RunBusinessFlowProSuite`): A21 —
+`Test_ZBR_ImportDvaUredjajaNeStapaDokumente` ide kroz **pravi** uvoz
+(`TestHook_ImportZbirnaRowPWA` → `ImportRowToTblZbirna`), plus sabotaža
+`mastersync-nasledjuje-tudju-generaciju`.
+
+**Čeka:** A6, A9–A12, A14 — sve traže **upis** (`Scr_Save`,
+`SaveZbirnaMulti_TX`), pa idu u BFP suite, ne u `RunAllTests`.
 A17 više ne čeka: par „dva dokumenta istog vlasnika" fixture nema, ali ga test
 pravi sam (privremeno izjednači vozača para) i vraća.
 
@@ -267,7 +276,7 @@ pravi sam (privremeno izjednači vozača para) i vraća.
 | A17 | dva aktivna log. dok. **istog** vlasnika | `CURRENT_AMBIGUOUS`; `2 / 1`. Dvosmislenost nije pitanje vlasnika. |
 | A18 | aktivan `5/070926` vlasnik A, kandidat `" 5/070926 "` vlasnik **A** | **BLOCK.** Preduslov: normalizovani brojevi jednaki i vlasnik isti. |
 | A20 | aktivan red sa praznim `GeneracijaID` | `INTEGRITY_ERROR`; resolver **ne pogađa** identitet; `IntegritetUkupno` +1. |
-| A21 | import / rekalkulacija | Ne prolaze kroz `ZbirnaValidiraj`; red ipak dobija `GeneracijaID`. Fiksira granicu kapije iz §5. |
+| A21 | import: dva `ClientRecordID`-a, **isti** vozač, kupac i broj | Ne prolazi kroz `ZbirnaValidiraj` (fiksira granicu kapije iz §5), oba reda opstaju, ali dobijaju **različite** `GeneracijaID` → `2 / 1`, `CURRENT_AMBIGUOUS`, F4 blokira, B8 prijavljuje. |
 
 A19 je **povučen** (bio je legacy `LogicalZbirnaKey` fallback) — v. D4. Broj se
 ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
@@ -316,18 +325,45 @@ mitigacijom na GAS strani.
 
 Zato `ImportRowToTblZbirna` red **upisuje**, pa zove
 `PrijaviKolizijuBrojaZbirne` — koja meri **stanje koje je import ostavio** (zove
-se posle `ApplyGeneracijaID`, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
+se posle pečaćenja identiteta, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
 diže grešku**: pad detekcije unutar transakcije oborio bi baš onaj upis koji
 treba da sačuva.
 
 Trajni trag je u `modIntegritet`: **B8** (broj nosi više aktivnih dokumenata) i
 **B9** (aktivna zbirna bez `GeneracijaID`). Log se izgubi, nalaz ostaje.
 
-Bezbedno je baš zato što I2 ide **pre** ovoga: F4 fail-closed odbija dvosmislen
-broj, pa nijedan nizvodni proces ne bira roditelja po broju.
+### Zašto MasterSync **uvek kuje** novu generaciju (`v6-ui-224`)
 
-**Neverifikovano:** da import zaista *ne* blokira (A21) traži pravi uvoz, pa ide u
-BFP suite. `RunAllTests` pokriva samo detekciju (B8/B9), kroz test 193.
+Do `v6-ui-224` je import zvao `ApplyGeneracijaID`, koji generaciju **nasleđuje**
+od aktivnog reda istog broja u istom opsegu (`VozacID + KupacID`). To je tačno za
+`SaveZbirnaMulti_TX` i `modDokumentInvariant` — oni **jedan** dokument pišu u
+**dva** reda (Kl. I i Kl. II), pa drugi red mora u generaciju prvog.
+
+Za import nije. PWA obe klase sabira u **jedan** red (`Klasa = "I/II"`), a
+`IsDuplicateZbirnaInMaster` odbija već uvezen `ClientRecordID` **pre** upisa —
+svaki red koji stigne do `AppendRow` je dokument koji nikad nije viđen. Isti
+vozač i isti kupac **ne znače** isti dokument; to je tačno **A17**, i to je baš
+`KR-001` scenario: dva uređaja offline dodele isti broj istom vozaču i kupcu.
+
+Nasleđivanje je zato uništavalo činjenicu koju detekcija treba da vidi — i to
+**pre** nego što bi je iko izmerio:
+
+| Posledica | Zašto |
+|---|---|
+| `PrijaviKolizijuBrojaZbirne` ćuti | `activeLogicalCount` broji **generacije**; stopljene daju 1 |
+| **B8** nema nalaz | presudu uzima od istog resolvera |
+| **F4** pušta prijemnicu | `resolutionStatus = UNIQUE`, `historicalOwnerCount = 1` |
+| **jedan storno obori oba dokumenta** | `StornoZbirna` redove bira po generaciji (`RedJeIzabranogDokumenta`), a kapiju `RequireJedanVlasnikPoBroju` **preskače** kad je generacija zadata |
+| operater ih ne razlikuje ni u listi | skrivena kolona identiteta u storno gridu je baš `COL_GENERACIJA_ID` (`modScrDokumenti.IdKolonaTipa`) |
+
+Poslednja dva reda su teža od prva tri: nije reč o propuštenoj detekciji nego o
+**pogrešnoj identifikaciji na svakoj nizvodnoj radnji po identitetu**.
+
+Pravilo je zato: pisac koji **jedan dokument deli na više redova** nasleđuje
+(`ApplyGeneracijaID`); pisac koji **svaki red piše kao zaseban dokument** kuje
+(`ApplyNovaGeneracijaID`). Bezbednost ne dolazi od toga što je I2 ušao ranije,
+nego od toga što dve terenske činjenice ne postaju jedan identitet — tek onda broj
+**stvarno** postane dvosmislen, pa ga F4 fail-closed odbija.
 
 ## 12) Fixture i ZBR-IDENT-01
 

@@ -42,7 +42,7 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 | B5b | Otpremnica **bez `BrojZbirne`** (nije vezana za zbirnu) |
 | B6 | `BrojZbirne` se poklapa sa zbirnom **samo do velikog/malog slova** (npr. `s5/…` vs `S5/…`) — advisory za normalizaciju; skenira otpremnicu/prijemnicu/paleta-stavku/otkup |
 | B7 | **Zbirna sa 0** (ili prazan) `UkupnoKolicina` — sama po sebi anomalija (komplement A2: A2 hvata zbirne-sa-kg-bez-prijema) |
-| B8 | **`BrojZbirne` nosi više aktivnih dokumenata** — vezivanje po broju nije jednoznačno. Kandidati se traže jednim prolazom (broj sa više aktivnih redova), a presudu daje `ZbirnaIdentResolve`, pa dvoklasna zbirna (dva reda, **jedan** dokument) nije nalaz. F3 i F4 ovakvo stanje više ne prave — PWA import ga namerno **prihvata** (ingest činjenice, ne komanda), pa mora negde da se vidi |
+| B8 | **`BrojZbirne` nosi više aktivnih dokumenata** — vezivanje po broju nije jednoznačno. Kandidati se traže jednim prolazom (broj sa više aktivnih redova), a presudu daje `ZbirnaIdentResolve`, pa dvoklasna zbirna (dva reda, **jedan** dokument) nije nalaz. F3 i F4 ovakvo stanje više ne prave — PWA import ga namerno **prihvata** (ingest činjenice, ne komanda), pa mora negde da se vidi. Do `v6-ui-224` B8 tu koliziju **nije video** kad su oba dokumenta imala istog vozača i kupca: import im je davao istu generaciju, pa je resolver brojao jedan dokument. V. `docs/DOMEN/ZBR_IDENTITET.md` §11b |
 | B9 | **Aktivna zbirna bez `GeneracijaID`** — identitet dokumenta nedostaje (`ZBR-IDENT-01`). Sva tri writer-a odmah zovu `ApplyGeneracijaID`, pa produkcija ovo ne pravi; ručna izmena u tabeli i starije sveske mogu |
 
 ### C — Palete

@@ -16273,7 +16273,10 @@ End Sub
 
 ' Da li nalaz sa datom sifrom sadrzi dati tekst. Blok pocinje redom cija je PRVA
 ' kolona sifra; detalji ispod nose praznu prvu kolonu, pa se sifra pamti.
-Private Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
+'
+' Public zbog modBusinessFlowProTests (A21 meri B8 nad PRAVIM uvozom). Druga
+' kopija ovog citaca bi znacila dva razumevanja oblika nalaza.
+Public Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
                              ByVal tekst As String) As Boolean
     If Not IsArray(rows) Then Exit Function
 

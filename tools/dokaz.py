@@ -53,6 +53,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_VBA = os.path.join(ROOT, "src-vba")
 SUITE_BANKA = "RunBankaImportTestSuite"
 SUITE_ALL = "RunAllTests"
+SUITE_BFP = "RunBusinessFlowProSuite"
 
 
 def _modul_sabotaza():
@@ -78,9 +79,17 @@ def _pusti(*a, timeout=1200):
                           timeout=timeout)
 
 
-def _suite_za(test: str) -> str:
-    # Pisac ide u banka-suite: RunAllTests je nemutirajuca, pa tvrdnji o upisu
-    # u njoj nema.
+def _suite_za(test: str, sab=None) -> str:
+    """Suite se bira po MODULU u kome test zivi, ne po obliku imena.
+
+    Prefiks imena je lagao: sve sto ne pocinje sa "T_" islo je u banka-suite, pa
+    bi test iz modBusinessFlowProTests bio trazen u suiti u kojoj ne postoji --
+    ona prodje ZELENO, i sabotaza izgleda kao da nista ne meri. sabotaza.py to
+    vec resava (_suita_testa nad _SUITA_PO_MODULU); ovde se samo koristi, da
+    preslikavanje modul -> suite ima JEDNU definiciju.
+    """
+    if sab is not None:
+        return sab._suita_testa(test)
     return SUITE_ALL if test.startswith("T_") else SUITE_BANKA
 
 
@@ -101,13 +110,22 @@ def _tokeni_banke(izlaz: str) -> list:
 def _pali(izlaz: str, suite: str) -> list:
     if suite == SUITE_ALL:
         return re.findall(r"^\s*FAIL (\S+) -- (.*)$", izlaz, re.M)
+    if suite == SUITE_BFP:
+        # BFP ne ispisuje ime Sub-a nego NAZIV TVRDNJE (LogFail prima bas njega),
+        # pa identitet nosi tvrdnja. Zato katalog za BFP mora da nosi TACAN
+        # tekst tvrdnje, ne podniz -- podniz se ovde prijavi kao "NE OBARA SVOJ
+        # TEST", dakle glasno, ne tiho.
+        return [(t.strip(), t.strip())
+                for t in re.findall(r"^\s*FAIL (.*?)(?: -- .*)?$", izlaz, re.M)]
     return _tokeni_banke(izlaz)
 
 
-def _kljuc_testa(test: str, suite: str) -> str:
+def _kljuc_testa(test: str, suite: str, tvrdnja: str = "") -> str:
     """Sta se poredi sa onim sto je palo."""
     if suite == SUITE_ALL:
         return test
+    if suite == SUITE_BFP:
+        return tvrdnja.strip()               # v. _pali: BFP pise tvrdnju
     m = re.match(r"(T\d+)_", test)          # T21_IzabranPlacenBlok... -> T21
     return m.group(1) if m else test
 
@@ -153,7 +171,7 @@ def main(argv: list) -> int:
     print("sabotaza: %d" % len(stavke), flush=True)
 
     # --- KAPIJA: baza mora biti zelena pre prve mutacije --------------------
-    potrebne = sorted({_suite_za(t) for _, _, t, _ in stavke} | {SUITE_ALL})
+    potrebne = sorted({_suite_za(t, sab) for _, _, t, _ in stavke} | {SUITE_ALL})
     for suite in potrebne:
         ok, opis = _baza_zelena(suite)
         print("BAZNO: %s" % opis, flush=True)
@@ -173,7 +191,7 @@ def main(argv: list) -> int:
             print("%-46s APPLY-FAIL" % ime, flush=True)
             continue
 
-        suite = _suite_za(ocekTest)
+        suite = _suite_za(ocekTest, sab)
         pali, greska = [], ""
         try:
             run = _pusti(sys.executable, "tools/run_vba.py", "--suite", suite)
@@ -207,7 +225,7 @@ def main(argv: list) -> int:
             stanje = "NE OBARA NISTA"
         else:
             crvenih += 1
-            kljuc = _kljuc_testa(ocekTest, suite)
+            kljuc = _kljuc_testa(ocekTest, suite, ocekTvrdnja)
             imena = sorted({p0 for p0, _ in pali})
             # Poredi se SAMO ono sto je palo u njenom testu. Siroka
             # sabotaza obori i druge testove, pa bi tvrdnja iz TUDJEG

@@ -1470,6 +1470,38 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
     TestHook_ValidatePWAZbirnaDatum = ValidatePWAZbirna(data, 1)
 End Function
 
+' ZBR-IDENT-01 / A21: PRAVI uvoz jednog VOZ reda u tblZbirna, bez Google Sheets-a.
+' Fabrikuje se samo ono sto ImportRowToTblZbirna cita; ostale VOZ kolone ne uticu
+' na identitet pa se ne popunjavaju.
+'
+' NE ide kroz ImportOneVOZSheet, dakle ni kroz IsDuplicateZbirnaInMaster -- test
+' sam salje razlicite ClientRecordID-ove, bas kao dva uredjaja sa terena.
+Public Function TestHook_ImportZbirnaRowPWA(ByVal crid As String, _
+                                           ByVal vozacID As String, _
+                                           ByVal kupacID As String, _
+                                           ByVal datumValue As Variant, _
+                                           ByVal vrsta As String, _
+                                           ByVal sorta As String, _
+                                           ByVal kolKlI As Double, _
+                                           ByVal brojZbirne As String) As String
+    Dim data As Variant
+    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+
+    data(1, VS_CLIENT_RECORD_ID) = crid
+    data(1, VS_VOZAC_ID) = vozacID
+    data(1, VS_KUPAC_ID) = kupacID
+    data(1, VS_DATUM) = datumValue
+    data(1, VS_VRSTA) = vrsta
+    data(1, VS_SORTA) = sorta
+    data(1, VS_KOLICINA_KL_I) = kolKlI
+    data(1, VS_KOLICINA_KL_II) = 0
+    data(1, VS_TIP_AMB) = ""
+    data(1, VS_KOL_AMB) = 0
+    data(1, VS_BROJ_ZBIRNE) = brojZbirne
+
+    TestHook_ImportZbirnaRowPWA = ImportRowToTblZbirna(data, 1, crid)
+End Function
+
 ' AUD-041(b): kanonski ZBR fallback generator (MAX sekvence, ne row-count).
 Public Function TestHook_GenerateBrojZbirne(ByVal vozacID As String, _
                                            ByVal datum As Date) As String
@@ -3175,10 +3207,28 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     result = AppendRow(TBL_ZBIRNA, rowData)
     
     If result > 0 Then
-        ' Generacija (nasledjuje se od aktivnih redova istog BrojZbirne, inace nova)
-        ' -- PWA import ne sme da ostavi red bez generacije, prefill je cita.
-        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _
-                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
+        ' ZBR-IDENT-01: UVEK NOVA generacija, nikad nasledjena.
+        '
+        ' Do v6-ui-224 je ovde stajao ApplyGeneracijaID, koji generaciju nasledjuje
+        ' od aktivnog reda istog broja u istom scope-u (VozacID + KupacID). To je
+        ' tacno za SaveZbirnaMulti_TX i modDokumentInvariant -- oni JEDAN dokument
+        ' pisu u DVA reda (Kl.I i Kl.II), pa drugi red mora u generaciju prvog.
+        '
+        ' Ovde nije. PWA import obe klase sabira u JEDAN red ("I/II" iznad), a
+        ' IsDuplicateZbirnaInMaster odbija vec uvezen ClientRecordID PRE upisa --
+        ' dakle svaki red koji stigne dovde je dokument koji nikad nije vidjen.
+        ' Isti vozac i isti kupac NE znace isti dokument (A17): dva uredjaja
+        ' offline dodele isti broj istom vozacu i kupcu, sto je bas KR-001.
+        '
+        ' Nasledjivanje je unistavalo cinjenicu koju detekcija ispod treba da vidi:
+        ' dva dokumenta bi delila GeneracijaID, activeLogicalCount (broji GENERACIJE)
+        ' bi ostao 1, pa bi PrijaviKolizijuBrojaZbirne cutala, B8 ne bi imao nalaz, a
+        ' F4 bi broj proglasio jednoznacnim. Gore od toga: StornoZbirna redove bira
+        ' po generaciji (RedJeIzabranogDokumenta), pa bi jedan storno stornirao OBA
+        ' terenska dokumenta, a skrivena kolona identiteta u storno gridu je bas
+        ' COL_GENERACIJA_ID (modScrDokumenti.IdKolonaTipa) -- operater ih ne bi ni
+        ' razlikovao.
+        ApplyNovaGeneracijaID TBL_ZBIRNA, result
 
         ' ZBR-IDENT-01 (korak 5): INGEST, pa DETEKCIJA -- ne blokada.
         '
@@ -3193,8 +3243,10 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
         ' konflikt PRIJAVLJUJE: log odmah, i nalaz u modIntegritet (B8/B9) koji
         ' ga vidi i kasnije.
         '
-        ' Bezbedno je bas zato sto F4 od koraka 4 fail-closed odbija dvosmislen
-        ' broj: nijedan nizvodni proces ne bira roditelja po broju.
+        ' Bezbedno je zato sto se dve terenske cinjenice ne stapaju u jedan
+        ' identitet (v. ApplyNovaGeneracijaID iznad), pa broj STVARNO postane
+        ' dvosmislen -- a F4 fail-closed odbija dvosmislen broj. Bez toga bi ova
+        ' detekcija merila stanje koje je sama prethodna linija zataskala.
         PrijaviKolizijuBrojaZbirne brojZbirne, vozacID, kupacID, clientRecordID
 
         LogInfo "ImportRowToTblZbirna", "Importiert: " & newID & " BrojZbirne=" & brojZbirne & _

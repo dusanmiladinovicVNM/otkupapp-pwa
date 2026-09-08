@@ -7411,3 +7411,33 @@ različita** dokumenta, lista ih i dalje pokazuje **dvaput**. To nije propust �
 takvo stanje je neispravno i lista ga ne sme sakriti spajanjem u jednu stavku
 koja ne postoji. Takav broj F4 već odbija pri vezivanju prijemnice, a revizija
 integriteta ga prijavljuje kao **B8**.
+
+### Uvoz sa dva uređaja više ne spaja dva dokumenta u jedan
+
+Kad dva uređaja rade **offline**, oba mogu da dodele **isti broj zbirne** istom
+vozaču i istom kupcu. To je poznat rizik (`KR-001`) i uvoz ga i dalje prima —
+ništa se sa terena ne odbija i ništa se ne gubi.
+
+Ali do sada je uvoz ta **dva dokumenta upisivao kao jedan**. Drugi red je nasleđivao
+identitet prvog, jer se identitet tražio po broju i vlasniku — a isti vozač i isti
+kupac ne znače isti dokument.
+
+Posledice su bile ozbiljne i **nevidljive**:
+
+- provera integriteta **B8** nije prijavljivala takav broj, iako pod njim stoje
+  dva dokumenta;
+- vezivanje prijemnice (F4) prolazilo je kao da je broj jednoznačan;
+- **jedan storno obarao je oba dokumenta** — operater stornira zbirnu jednog
+  uređaja, a tiho nestane i zbirna drugog;
+- u listi za storno se ta dva dokumenta nisu mogla ni razlikovati.
+
+Sada svaki uvezen red dobija **svoj** identitet. Broj tada stvarno postane
+dvosmislen — pa ga F4 odbija, B8 ga prijavljuje, a storno pogađa tačno onaj
+dokument koji je izabran.
+
+**Šta se nije promenilo:** uvoz i dalje ne blokira. Kolizija se **upisuje pa
+prijavljuje**, jer je činjenica sa terena već nastala i odbijanje bi značilo
+gubitak podatka.
+
+Ovo ne dira dvoklasnu zbirnu (Klasa I + II) unetu u Excel-u: to jesu dva reda
+**jednog** dokumenta i ona i dalje dele identitet.
