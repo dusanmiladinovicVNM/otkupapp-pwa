@@ -1819,10 +1819,12 @@ Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa artikle", Err.description
+    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa artikle", bfpErrDesc
 End Sub
 
 Private Function RF28OtpremnicaZaOtkup(ByVal otkupID As String) As String
@@ -1907,10 +1909,12 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "ZBR-IDENT-01 A21 uvoz dva uredjaja", Err.description
+    LogFail "ZBR-IDENT-01 A21 uvoz dva uredjaja", bfpErrDesc
 End Sub
 
 Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
@@ -1947,11 +1951,13 @@ Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
     On Error GoTo 0
-    LogFail "RF-28 AUD-041b broj zbirne rupa", Err.description
+    LogFail "RF-28 AUD-041b broj zbirne rupa", bfpErrDesc
 End Sub
 
 ' AUD-043(b): otkup koji je vec u DRUGOJ zbirnoj ne sme da bude tiho prepisan.
@@ -2001,10 +2007,12 @@ Private Sub Test_RF28_LinkKonfliktNePrepisuje()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043b link konflikt", Err.description
+    LogFail "RF-28 AUD-043b link konflikt", bfpErrDesc
 End Sub
 
 ' AUD-043(b): membership se razresava preko ZbirnaID (PK), NE preko BrojZbirne.
@@ -2057,10 +2065,12 @@ Private Sub Test_RF28_MembershipKoristiSvojuZbirnu()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043b membership preko PK", Err.description
+    LogFail "RF-28 AUD-043b membership preko PK", bfpErrDesc
 End Sub
 
 ' AUD-043(b): dan je stvarni guard -- susedni dan prolazi (utovar posle ponoci),
@@ -2124,10 +2134,12 @@ Private Sub Test_RF28_MembershipDanskiProzor()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043b danski prozor", Err.description
+    LogFail "RF-28 AUD-043b danski prozor", bfpErrDesc
 End Sub
 
 ' AUD-042(b): nevalidan datum je SyncError, ne tihi danasnji datum.
@@ -2240,11 +2252,13 @@ Private Sub Test_RF28_VozacIDUpdateIshodi()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     TestHook_ArmFailSeam ""
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-042a VozacID ishodi", Err.description
+    LogFail "RF-28 AUD-042a VozacID ishodi", bfpErrDesc
 End Sub
 
 ' ------------------------------------------------------------
@@ -2827,10 +2841,12 @@ Private Sub Test_ZBR_DeteNosiGeneracijuRoditelja()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "ZBR-CHILD-01 dete nosi generaciju roditelja", Err.description
+    LogFail "ZBR-CHILD-01 dete nosi generaciju roditelja", bfpErrDesc
 End Sub
 
 ' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
@@ -2842,17 +2858,24 @@ End Sub
 ' Grana A sama NE razlikuje tacno od pogresnog: kad je prijemnica vezana za
 ' jedinu zbirnu pod tim brojem, nasledjivanje i pogadjanje vracaju ISTU vrednost.
 ' Prva verzija ovog testa je imala samo granu A i sabotaza je prosla neprimeceno
-' (dokaz.py: NE OBARA NISTA). Granu B nosi PRODUKCIONI redosled iz malina lanca:
-' dete nastaje PRE roditelja, pa je prijemnicina generacija legitimno prazna dok
-' zbirna pod istim brojem vec postoji. Tu nasledjivanje daje prazno, a pogadjanje
-' generaciju -- i tek tu se meri.
+' (dokaz.py: NE OBARA NISTA).
+'
+' Grana B je ZATECEN red: broj stoji, generacija prazna. Druga verzija je tu
+' pokusala redosled "dete pre roditelja" i pukla na ValidatePrijemnicaInput:
+' PrijemnicaZbirnaBlokira() je po defaultu True (Case Else hvata i prazno), pa
+' prijemnica bez postojece zbirne uopste ne prolazi. Taj redosled je stvaran za
+' OTPREMNICU iz auto-lanca (modAutoHladnjaca), ne za prijemnicu.
+'
+' Zatecen red je pak stvaran za oba: tako izgleda svaki red pre migracije, i
+' takav ostaje dok backfill ne prodje -- a pod dvosmislenim brojem ostaje prazan
+' zauvek. Tu nasledjivanje daje prazno, a pogadjanje generaciju. Stavka koja bi
+' pogodila tvrdila bi sledljivost koju njen sopstveni roditelj nema.
 Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     Dim tx As clsTransaction
     Dim testDate As Date, scenario As String
-    Dim brojA As String, brojB As String
+    Dim brojA As String
     Dim brPrijA As String, brPrijB As String
-    Dim zbrA As String, prjA As String
-    Dim zbrB As String, prjB As String
+    Dim zbrA As String, prjA As String, prjB As String
     Dim genPrj As String
 
     On Error GoTo EH
@@ -2888,47 +2911,41 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     AssertEquals genPrj, PrvaGeneracijaPaletneStavke(prjA), _
         "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
 
-    ' --- B) DETE PRE RODITELJA -- jedina grana koja razlikuje nasledjivanje ---
-    '
-    ' Isti redosled koji modAutoHladnjaca vec ima: prijemnica se snima dok zbirne
-    ' jos nema, pa joj je generacija legitimno prazna. Zbirna pod tim brojem se
-    ' pojavi tek posle, i paletizacija se desava kad broj VEC razresava na nju.
-    ' Tacan odgovor je i dalje PRAZNO -- prijemnica je izvor istine, ne broj.
-    brojB = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-            Format$(NextTestDate(), "ddmmyy")
-
-    prjB = SavePrijemnica(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojB, _
+    ' --- B) ZATECEN red: broj stoji, generacija prazna ---
+    prjB = SavePrijemnica(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojA, _
                           TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, _
                           KLASA_I, 0)
-    AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: prijemnica bez roditelja je snimljena"
+    AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: druga prijemnica je snimljena"
+
+    IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjB
     AssertEquals "", _
         NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_GEN)), _
-        "ZBR-PAL preduslov: prijemnica pre roditelja ima PRAZNU generaciju"
+        "ZBR-PAL preduslov: prijemnica je u zatecenom obliku (generacija prazna)"
+    AssertEquals brojA, _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_BROJ_ZBIRNE)), _
+        "ZBR-PAL preduslov: prijemnica je zadrzala broj"
+    AssertEquals genPrj, ZbirnaGeneracijaZaBroj(brojA), _
+        "ZBR-PAL preduslov: broj razresava na generaciju (ima sta da se pogodi)"
 
-    zbrB = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojB, TEST_KUP_ID, _
-                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                         100#, TEST_TIP_AMB, 10, KLASA_I)
-    AssertTrue Len(zbrB) > 0, "ZBR-PAL preduslov: zbirna pod brojem B je snimljena"
-    AssertTrue Len(ZbirnaGeneracijaZaBroj(brojB)) > 0, _
-        "ZBR-PAL preduslov: broj B SADA razresava na generaciju (ima sta da se pogodi)"
-
-    PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojB, _
+    PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojA, _
                        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=KLASA_I, _
                        netoKg:=100#, brGajbica:=10, tipAmb:=TEST_TIP_AMB
 
     AssertTrue BrojPaletnihStavki(prjB) > 0, _
         "ZBR-PAL preduslov: paletizacija je napravila stavku (grana B)"
     AssertEquals "", PrvaGeneracijaPaletneStavke(prjB), _
-        "ZBR-PAL: dete pre roditelja, stavka nasledjuje PRAZNO umesto da pogadja po broju"
+        "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju"
 
     tx.RollbackTx
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "ZBR-CHILD-01 paleta nasledjuje od prijemnice", Err.description
+    LogFail "ZBR-CHILD-01 paleta nasledjuje od prijemnice", bfpErrDesc
 End Sub
 
 ' Generacija prve paletne stavke date prijemnice, ili prazno. Prazno je i
@@ -3057,10 +3074,12 @@ Private Sub Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "ZBR-CHILD-01 backfill ne veze staro dete na novu generaciju", Err.description
+    LogFail "ZBR-CHILD-01 backfill ne veze staro dete na novu generaciju", bfpErrDesc
 End Sub
 
 ' Vraca red u oblik kakav ima pre migracije: broj zbirne stoji, generacija ne.
@@ -3178,10 +3197,12 @@ Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     Exit Sub
 
 EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "ZBR-MUT-01 dva dokumenta istog vlasnika", Err.description
+    LogFail "ZBR-MUT-01 dva dokumenta istog vlasnika", bfpErrDesc
 End Sub
 
 Private Sub Test_StornoGuardNaSvimPutanjama()

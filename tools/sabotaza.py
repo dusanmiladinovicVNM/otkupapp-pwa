@@ -5336,18 +5336,20 @@ SABOTAZE = {
     ),
     # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
     # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
-    # brojem" -- a to je produkcioni redosled iz malina lanca: dete pre roditelja,
-    # prijemnica jos prazna, zbirna pod istim brojem vec postoji.
+    # brojem" -- a to je zatecen red pre migracije: broj stoji, generacija prazna,
+    # zbirna pod tim brojem postoji i ima sta da se pogodi.
     #
     # Prva verzija je gadjala tvrdnju grane A, gde su nasledjivanje i pogadjanje
-    # vracali ISTU vrednost -- inertna sabotaza (dokaz.py: NE OBARA NISTA).
+    # vracali ISTU vrednost -- inertna sabotaza (dokaz.py: NE OBARA NISTA). Druga
+    # je pokusala "dete pre roditelja", sto za prijemnicu blokira
+    # PrijemnicaZbirnaBlokira() (default True). Meri se na ZATECENOM redu.
     "paleta-pogadja-generaciju-po-broju": (
         "modPaletniList.bas",
         "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
         "                                        COL_DETE_ZBIRNA_GEN))\n",
         "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
-        "ZBR-PAL: dete pre roditelja, stavka nasledjuje PRAZNO umesto da pogadja po broju",
+        "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
     ),
     "dete-ne-nosi-generaciju-roditelja": (
         "modDokumenta.bas",
