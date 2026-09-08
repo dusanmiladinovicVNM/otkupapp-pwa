@@ -261,7 +261,12 @@ ne samo onaj ko piše test.
 > ```bash
 > python tools/make_fixture.py --donor tests/fixtures/otkup_test.xlsm --out tests/fixtures/otkup_test_new.xlsm --force
 > mv tests/fixtures/otkup_test_new.xlsm tests/fixtures/otkup_test.xlsm
+> mv tests/fixtures/otkup_test_new.sig  tests/fixtures/otkup_test.sig
 > ```
+>
+> **Premeštaju se DVA fajla.** Potpis stoji u pratećem `.sig` sa istim korenom
+> imena. `mv` samo `.xlsm` ostavlja stari `.sig`, pa provera ustajalosti puca
+> **ponovo, nad svežom sveskom** — i izgleda kao da regeneracija nije radila.
 >
 > **`--out` je tu obavezan.** Generator odbija donor koji je isti fajl kao
 > izlaz, pa `--donor tests/fixtures/otkup_test.xlsm --force` bez `--out`

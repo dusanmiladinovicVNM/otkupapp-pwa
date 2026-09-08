@@ -701,8 +701,15 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
     # greske -- "tools\\make_fixture.py" postane "toolsmake_fixture.py", a poruka
     # pokazuje na fajl koji ne postoji umesto na pravi uzrok (CLAUDE.md).
     # Postojeci fixture sme da bude svoj donor; --out je tada obavezan.
+    #
+    # PREMESTAJU SE DVA FAJLA. Potpis stoji u pratecem .sig (FIXTURE_SIG_EXT) sa
+    # istim korenom imena, pa `mv` samo .xlsm ostavlja stari .sig -- i provera
+    # ustajalosti puca PONOVO, nad svezom sveskom. Tako izgleda kao da
+    # regeneracija nije radila, a radila je.
     komanda = ('python tools/make_fixture.py --donor tests/fixtures/otkup_test.xlsm '
-               '--out tests/fixtures/otkup_test_new.xlsm --force')
+               '--out tests/fixtures/otkup_test_new.xlsm --force\n'
+               '  mv tests/fixtures/otkup_test_new.xlsm tests/fixtures/otkup_test.xlsm\n'
+               '  mv tests/fixtures/otkup_test_new.sig tests/fixtures/otkup_test.sig')
     if not zapisan:
         # FAIL-CLOSED. Sveska od generatora pre ovog sistema NE moze da se
         # proveri, a to je bas prvi run na svakoj zatecenoj masini -- tacno
