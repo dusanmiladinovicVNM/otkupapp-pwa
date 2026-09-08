@@ -7325,3 +7325,32 @@ je otvarao Excel pomoć preko kartice. Do ekrana aplikacije nisu stizali ni pre
 
 Kucanje korisničkog imena i PIN-a je nepromenjeno; `Enter` i dalje prijavljuje,
 `Esc` otkazuje.
+
+### Broj zbirne se ne može dodeliti dvaput
+
+Broj zbirne je do sada bio **labela**, ne identitet. Provera pri unosu hvatala je
+samo doslovno isti niz znakova, i to samo među nestorniranim redovima — pa su
+kroz nju prolazila tri stvarna slučaja:
+
+- broj sa **razmakom** ispred ili iza (` 5/070926` je prolazilo pored `5/070926`),
+- broj koji je posle storna **preuzeo drugi vozač ili kupac**,
+- broj koji već koristi **aktivna prijemnica**, a zbirne pod njim nema.
+
+U sva tri slučaja bi nova zbirna tiho postala roditelj tuđeg dokumenta, a
+prijemnica se na zbirnu vezuje **samo brojem** i to ne bi ni primetila.
+
+Sada F3 odbija nov unos kad broj već drži aktivna zbirna — **ma čija bila**, i
+kad je ista. Poruka kaže i **zašto**, jer su to četiri različita poteza za
+operatera: broj je zauzet sada · broj je nekad pripadao drugom vozaču ili kupcu ·
+broj drži prijemnica · podatak je oštećen.
+
+**Ispravka radi kao i pre:** posle storniranja isti vozač i kupac smeju ponovo da
+unesu isti broj. Blokira se samo tuđe preuzimanje.
+
+Iza toga stoji `GeneracijaID` — identitet koji dokument nosi kroz storno i
+ispravku. Dvoklasna zbirna (I + II) je **jedan** dokument na dva reda i tako se i
+broji.
+
+**Ostaje nerešeno,** i kaže se otvoreno: vezivanje prijemnice na zbirnu i dalje
+ide po broju, ne po identitetu — to je sledeći korak. Dupla stavka dvoklasne
+zbirne u listi (v. gore) čeka isti taj korak.
