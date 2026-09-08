@@ -121,6 +121,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_StornoGuardNaSvimPutanjama
+    Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -2693,6 +2694,110 @@ End Function
 ' Guard mora da vazi na SVIM number-only putanjama, ne samo na direktnom
 ' StornoPrijemnicaByBroj_TX: ISPRAVKA/DUPLI otpremnice idu kroz atomic helper,
 ' a SIMPLE/DUPLI zbirna kroz core StornoZbirna.
+' ZBR-MUT-01: mutacija po BROJU staje kad broj nosi DVA AKTIVNA dokumenta,
+' makar bili istog vlasnika.
+'
+' Zatecena kapija je brojala VLASNIKE, pa je ovo stanje prolazilo. Posledice su
+' bile razlicite po putanji, a obe destruktivne PREKO granice dokumenta:
+'   SIMPLE  -- zaglavlje se stornira tacno (po generaciji), ali
+'              DetachOtpremniceInline nize ide po BROJU i prazni BrojZbirne
+'              deci OBA dokumenta;
+'   ISPRAVKA -- relink i rekalkulacija po broju zahvataju oba.
+'
+' Stanje pravi PRAVI uvoz (dva ClientRecordID-a), jer je bas on jedini put kojim
+' redovno nastaje: F3 kapija ga ne pusta, a Excel writer dva reda istog broja i
+' vlasnika stapa u JEDAN dokument. Zato je i negativna kontrola dole bas taj
+' slucaj -- da kapija ne pocne da odbija dvoklasnu zbirnu.
+Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
+    Dim tx As clsTransaction
+    Dim testDate As Date
+    Dim scenario As String
+    Dim broj As String, brojDvoklasna As String
+    Dim idA As String, idB As String, otpID As String
+    Dim ident As ZbirnaIdent
+    Dim r As Object
+    Dim zbr1 As String, zbr2 As String
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRMUT")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRMUT-A-" & scenario, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    idB = TestHook_ImportZbirnaRowPWA("CRID-ZBRMUT-B-" & scenario, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+
+    ' Dete koje visi o BROJU -- ono sto je detach ranije odvezivao preko granice.
+    otpID = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                              TEST_PREFIX & "-OTP-ZBRMUT-" & scenario, broj, _
+                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+
+    ident = ZbirnaIdentResolve(broj, TEST_VOZ_ID, TEST_KUP_ID)
+
+    ' Preduslov: bas A17 oblik. Bez ovoga bi test mogao da meri dva VLASNIKA,
+    ' sto je zatecena kapija i ranije hvatala.
+    AssertEquals "2", CStr(ident.activeLogicalCount), _
+        "ZBR-MUT preduslov: broj nosi DVA aktivna dokumenta"
+    AssertEquals "1", CStr(ident.activeOwnerCount), _
+        "ZBR-MUT preduslov: oba su ISTOG vlasnika"
+    AssertTrue Len(otpID) > 0, "ZBR-MUT preduslov: otpremnica visi o tom broju"
+
+    ' --- SIMPLE ---
+    Set r = RunSimpleStornoZbirna(broj)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: SIMPLE storno staje na dva aktivna dokumenta istog vlasnika"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
+        "ZBR-MUT: dokument A ostaje aktivan"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idB), _
+        "ZBR-MUT: dokument B ostaje aktivan"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-MUT: otpremnica NIJE odvezana preko granice dokumenta"
+
+    ' --- ISPRAVKA ---
+    Set r = RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: ISPRAVKA staje na dva aktivna dokumenta istog vlasnika"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
+        "ZBR-MUT: ISPRAVKA nije stornirala dokument A"
+
+    ' --- NEGATIVNA KONTROLA: dvoklasna zbirna (dva reda, JEDNA generacija) ---
+    ' Kapija sme da odbija samo dva DOKUMENTA. Ako pocne da odbija i ovo, obara
+    ' redovan storno svake dvoklasne zbirne -- pa bi tvrdnje gore bile zelene iz
+    ' pogresnog razloga.
+    brojDvoklasna = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+                    Format$(NextTestDate(), "ddmmyy")
+    zbr1 = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojDvoklasna, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbr2 = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojDvoklasna, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         50#, TEST_TIP_AMB, 5, KLASA_II)
+    AssertEquals GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbr1), _
+                 GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbr2), _
+        "ZBR-MUT preduslov: dva reda dvoklasne dele generaciju"
+
+    Set r = RunSimpleStornoZbirna(brojDvoklasna)
+    AssertTrue CBool(r("success")), _
+        "ZBR-MUT negativna kontrola: dvoklasna zbirna se i dalje stornira"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-MUT-01 dva dokumenta istog vlasnika", Err.description
+End Sub
+
 Private Sub Test_StornoGuardNaSvimPutanjama()
     On Error GoTo EH
 

@@ -293,9 +293,10 @@ Optional ByVal docID As String = "") As Object
 
     ' Roditeljska zbirna se nize rekalkulise PO BROJU, pa dvosmislen broj mora
     ' da zaustavi operaciju PRE storna.
-    If ZbirnaBrojJeDvosmislenIkad(CStr(s("brojZbirne"))) Then
-        r("message") = "Broj zbirne '" & CStr(s("brojZbirne")) & "' je pripadao VISE " & _
-                       "vlasnika, a rekalkulacija ide PO BROJU. Razdvoj brojeve pa ponovi."
+    Dim razRek As String: razRek = ZbirnaMutRazlog(pz)
+    If Len(razRek) > 0 Then
+        r("message") = ZbirnaMutPoruka(razRek, "zbirne", pz, _
+                                       "Rekalkulacija ide PO BROJU")
         Exit Function
     End If
     ' Identitet ide i writeru -- prijemnica simple put to vec radi.
@@ -419,10 +420,10 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
     ' broj roditelja dvosmislen, nijedno od toga ne moze da zna cije je.
     ' RESI KASNIJE prolazi -- nista ne mutira.
     If mode <> SV_MODE_RESI_KASNIJE Then
-        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then
-            r("message") = "Broj roditeljske zbirne '" & parentZbirna & "' je pripadao " & _
-                           "VISE vlasnika. Otpremnica se ne moze ispraviti bez da se " & _
-                           "dira tudja zbirna -- razdvoj brojeve pa ponovi."
+        Dim razPar As String: razPar = ZbirnaMutRazlog(parentZbirna)
+        If Len(razPar) > 0 Then
+            r("message") = ZbirnaMutPoruka(razPar, "roditeljske zbirne", parentZbirna, _
+                                           "Otpremnica se ne moze ispraviti bez da se dira tudji dokument")
             Exit Function
         End If
     End If
@@ -609,12 +610,13 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     ' a ValidateZbirnaInvariant poredi iste agregate po broju, pa kontaminaciju
     ' potvrdi kao ISPRAVNU. Zato ovde, i to PRE relinka blokova: inace se blokovi
     ' prevezu pa se tek onda otkrije da ostatak ne moze bezbedno da se zavrsi.
-    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then
+    Dim razNZ As String: razNZ = ZbirnaMutRazlog(newZbirna)
+    If Len(razNZ) > 0 Then
         MarkCorrectionManual correctionID, _
                              "Razdvoj brojeve zbirnih pa prevezi rucno.", _
-                             "Broj ciljne zbirne '" & newZbirna & "' je pripadao VISE " & _
-                             "vlasnika -- relink i rekalkulacija po broju nisu bezbedni."
-        r("message") = "Broj ciljne zbirne '" & newZbirna & "' je pripadao VISE vlasnika."
+                             ZbirnaMutPoruka(razNZ, "ciljne zbirne", newZbirna, _
+                                             "Relink i rekalkulacija po broju nisu bezbedni")
+        r("message") = ZbirnaMutPoruka(razNZ, "ciljne zbirne", newZbirna, "")
         Exit Function
     End If
 
@@ -674,12 +676,13 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
         r("message") = "Roditeljska zbirna stare otpremnice nije razresena."
         Exit Function
     End If
-    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then
+    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)
+    If Len(razOZ) > 0 Then
         MarkCorrectionManual correctionID, _
                              "Razdvoj brojeve zbirnih pa prevezi rucno.", _
-                             "Broj stare zbirne '" & oldZbirna & "' je pripadao VISE " & _
-                             "vlasnika -- relink prijemnica bi zahvatio tudje."
-        r("message") = "Broj stare zbirne '" & oldZbirna & "' je pripadao VISE vlasnika."
+                             ZbirnaMutPoruka(razOZ, "stare zbirne", oldZbirna, _
+                                             "Relink prijemnica bi zahvatio tudje")
+        r("message") = ZbirnaMutPoruka(razOZ, "stare zbirne", oldZbirna, "")
         Exit Function
     End If
 
@@ -959,18 +962,20 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
     ' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
     ' RecalculateZbirnaFromOtpremnice_TX(newBroj). Dvosmislen izvor znaci "cija
     ' deca se sele", dvosmislen cilj znaci "cije zaglavlje dobija zbir".
-    Dim dvosmislen As String, kojaStrana As String
-    If ZbirnaBrojJeDvosmislenIkad(newBroj) Then
-        dvosmislen = newBroj: kojaStrana = "ciljne"
-    ElseIf ZbirnaBrojJeDvosmislenIkad(oldBroj) Then
-        dvosmislen = oldBroj: kojaStrana = "stare"
+    Dim dvosmislen As String, kojaStrana As String, razStr As String
+    razStr = ZbirnaMutRazlog(newBroj)
+    If Len(razStr) > 0 Then
+        dvosmislen = newBroj: kojaStrana = "ciljne zbirne"
+    Else
+        razStr = ZbirnaMutRazlog(oldBroj)
+        If Len(razStr) > 0 Then dvosmislen = oldBroj: kojaStrana = "stare zbirne"
     End If
     If Len(dvosmislen) > 0 Then
         MarkCorrectionManual correctionID, _
                              "Razdvoj brojeve zbirnih pa prevezi rucno.", _
-                             "Broj " & kojaStrana & " zbirne '" & dvosmislen & "' je pripadao " & _
-                             "VISE vlasnika -- relink i rekalkulacija po broju nisu bezbedni."
-        r("message") = "Broj " & kojaStrana & " zbirne '" & dvosmislen & "' je pripadao VISE vlasnika."
+                             ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, _
+                                             "Relink i rekalkulacija po broju nisu bezbedni")
+        r("message") = ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, "")
         Exit Function
     End If
 
@@ -2174,13 +2179,17 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' Zaglavlje po generaciji. DetachOtpremniceInline nize ide po BROJU jer
     ' otpremnica zbirnu i nosi kao broj -- zato kapija: dva aktivna dokumenta
     ' istog broja delila bi otpremnice, pa bi se odvezale i tudje.
+    '
+    ' Do v6-ui-225 je ova kapija brojala VLASNIKE, a komentar iznad nje govorio o
+    ' DOKUMENTIMA. Dva aktivna dokumenta ISTOG vlasnika (A17, sto MasterSync od
+    ' v6-ui-224 ispravno pravi) prolazila su: zaglavlje bi bilo stornirano tacno,
+    ' po generaciji, a onda bi Detach nize odvezao decu OBA dokumenta.
     ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
-    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, SRC, True, _
-                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
+    Dim razMut As String: razMut = ZbirnaMutRazlog(broj)
+    If Len(razMut) > 0 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
-                  "Broj zbirne '" & broj & "' je pripadao VISE vlasnika -- " & _
-                  "otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan. " & _
-                  "Vazi i kad je jedan vlasnik storniran: njegova deca ostaju aktivna."
+                  ZbirnaMutPoruka(razMut, "zbirne", broj, _
+                                  "Otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan")
     End If
     If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
     outDet = DetachOtpremniceInline(broj, SRC)
@@ -2299,32 +2308,59 @@ End Function
 ' Rekalkulisi zbirnu iz preostalih aktivnih otpremnica; ako ih VISE NEMA -> STORNO
 ' zbirne (nikad aktivna 0/0 -> to je bio "nuliranje" bug). NE dira prijemnicu/palete
 ' (mod odlucuje: DUPLI ostavlja osiroceno; PONISTENJE kaskadira zasebno). True=uspeh.
-' Je li BROJ ZBIRNE ikada pripadao vise vlasnika (vozac + kupac)?
+' Sme li se po BROJU mutirati ono sto visi o zbirni? Boolean oblik, za dva
+' pozivaoca kojima ne treba poruka; ostali zovu ZbirnaMutRazlog i dobiju UZROK.
 '
-' Otpremnica flow mutira RODITELJSKU zbirnu -- rekalkulise je, stornira, ili
-' joj prevezuje prijemnice -- a sve to ide PO BrojZbirne. Dok child mutacije
-' nisu scoped po owneru, dvosmislen broj roditelja mora da zaustavi operaciju.
+' Otpremnica flow mutira RODITELJSKU zbirnu -- rekalkulise je, stornira, ili joj
+' prevezuje prijemnice -- a sve to ide PO BrojZbirne. Dok deca nemaju generaciju,
+' nerazresen broj roditelja mora da zaustavi operaciju.
 '
-' Broji i STORNIRANE vlasnike: storniran vlasnik i dalje moze imati aktivnu
-' decu, jer StornoZbirna_TX dira samo redove tblZbirna.
-' Kapija ne sme da bude fail-open na SOPSTVENU gresku. Sa "On Error Resume Next"
-' je schema drift ili nedostajuca owner kolona davala False -- to jest "broj je
-' jednoznacan, mutiraj" -- bas u slucaju kad se nista ne zna. Za kapiju je
-' "ne mogu da dokazem jednoznacnost" isto sto i "ne mutiraj".
+' IME JE ZATECENO i uze od znacenja: od v6-ui-225 ovo nije samo "vise vlasnika"
+' nego i "vise aktivnih dokumenata istog vlasnika". Nije preimenovano da se u
+' istom koraku ne bi menjala i mera i imena na osam mesta.
 '
-' True (a ne Err.Raise) je namerno: pozivaoci ovo citaju u If-u i vracaju poruku,
-' a re-raise bi trazio jos jedan sloj EH-a na cetiri mesta.
+' Fail-closed na sopstvenu gresku je sada u DVA sloja, oba u jezgru:
+' ZbirnaIdentResolve na gresku vraca INTEGRITY_ERROR (ne prazan DTO), a
+' ZbirnaMutacijaPoBrojuRazlog to pretvara u blokadu. Za kapiju je "ne mogu da
+' dokazem jednoznacnost" isto sto i "ne mutiraj".
 Private Function ZbirnaBrojJeDvosmislenIkad(ByVal broj As String) As Boolean
-    On Error GoTo EH
-    ' Prazan broj nije nerazresen nego "nema roditelja" -- nema sta da se mutira.
-    If Len(Trim$(broj)) = 0 Then Exit Function
-    ZbirnaBrojJeDvosmislenIkad = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
-                                  MOD_NAME, True, _
-                                  Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
-    Exit Function
-EH:
-    LogErr MOD_NAME & ".ZbirnaBrojJeDvosmislenIkad"
-    ZbirnaBrojJeDvosmislenIkad = True
+    ZbirnaBrojJeDvosmislenIkad = (Len(ZbirnaMutRazlog(broj)) > 0)
+End Function
+
+' ZBR-MUT-01: JEDNA definicija "sme li se mutirati po broju", u jezgru identiteta.
+'
+' Do v6-ui-225 je ova kapija brojala VLASNIKE (VlasniciPoBroju .count > 1). Svaki
+' komentar uz njenih sest poziva je opisivao DOKUMENTNU dvosmislenost ("dva
+' aktivna dokumenta istog broja delila bi otpremnice"), a mera je bila vlasnicka
+' -- dva pojma koja se poklapaju samo dok jedan vlasnik ne moze da ima dva
+' dokumenta pod istim brojem. MasterSync od v6-ui-224 bas to ispravno pravi
+' (KR-001, dva uredjaja offline), pa se pojmovi razilaze i mera vise ne vazi.
+'
+' Sta se NIJE promenilo: vlasnicka grana ostaje, i dalje IKAD (storniran vlasnik
+' ima aktivnu decu). Dodata je samo dokumentna.
+Private Function ZbirnaMutRazlog(ByVal broj As String) As String
+    ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj)
+End Function
+
+' Poruka za operatera. Uzrok se NE stapa u jednu recenicu: "dva vlasnika" i "dva
+' unosa istog vlasnika" traze razlicit potez, a pokvaren identitet treci.
+Private Function ZbirnaMutPoruka(ByVal razlog As String, ByVal uloga As String, _
+                                 ByVal broj As String, ByVal posledica As String) As String
+    Dim uzrok As String, savet As String
+    Select Case razlog
+        Case ZBR_MUT_VISE_VLASNIKA
+            uzrok = "je pripadao VISE vlasnika"
+            savet = "Razdvoj brojeve pa ponovi."
+        Case ZBR_MUT_VISE_DOKUMENATA
+            uzrok = "nosi VISE aktivnih dokumenata (isti vlasnik, dva odvojena unosa)"
+            savet = "Storniraj visak ili razdvoj brojeve pa ponovi."
+        Case Else
+            uzrok = "ima aktivnu zbirnu bez identiteta (GeneracijaID)"
+            savet = "Pokreni Provere integriteta (B9) pa ponovi."
+    End Select
+    ZbirnaMutPoruka = "Broj " & uloga & " '" & broj & "' " & uzrok & "."
+    If Len(posledica) > 0 Then ZbirnaMutPoruka = ZbirnaMutPoruka & " " & posledica & "."
+    ZbirnaMutPoruka = ZbirnaMutPoruka & " " & savet
 End Function
 
 ' Poslednja odbrana: i ako neki buduci pozivalac zaboravi kapiju, rekalkulacija
@@ -2455,12 +2491,11 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' FAIL-CLOSED: deca se biraju po BrojZbirne, pa dva aktivna dokumenta istog
     ' broja dele decu iz ugla ove rutine. Ponistavanje bi odvezalo i tudje.
     ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
-    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _
-                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
-        res("message") = "Broj zbirne '" & brojZbirne & "' je pripadao VISE " & _
-                         "vlasnika. Deca se u semi vezuju BROJEM, pa se lanac ne " & _
-                         "moze ponistiti samo za jedan -- razdvoj brojeve pa ponovi. " & _
-                         "Vazi i za storniranog vlasnika: deca mu ostaju aktivna."
+    ' Do v6-ui-225 je i ovde mera bila vlasnicka, a opasnost dokumentna.
+    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)
+    If Len(razPon) > 0 Then
+        res("message") = ZbirnaMutPoruka(razPon, "zbirne", brojZbirne, _
+                                         "Deca se u semi vezuju BROJEM, pa se lanac ne moze ponistiti samo za jedan")
         Exit Function
     End If
     brojZbirne = Trim$(brojZbirne)
@@ -2489,8 +2524,13 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
         tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     End If
 
+    ' gen je do v6-ui-225 bio MRTAV PARAMETAR: pozivalac ga je slao (linija sa
+    ' docID), a StornoZbirna se zvao bez njega -- pa je zaglavlje biralo po BROJU,
+    ' dakle sve redove tog broja. Kapija iznad sada ne pusta dva aktivna dokumenta,
+    ' ali izbor svejedno mora da bude po identitetu: ispravljena zbirna pod istim
+    ' brojem ima i storniranu generaciju, i nju ne treba ponovo dirati.
     If ZbirnaPostoji(brojZbirne) Then
-        If Not StornoZbirna(brojZbirne) Then _
+        If Not StornoZbirna(brojZbirne, gen) Then _
             Err.Raise ERR_STORNO_FW_BASE + 50, SRC, "StornoZbirna (ponistenje) nije uspeo."
     End If
     Dim k As Long

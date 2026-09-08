@@ -50,12 +50,35 @@ Public Const ZBR_PARENT_DVOSMISLEN As String = "DVOSMISLEN"
 Public Const ZBR_PARENT_TUDJ As String = "TUDJ_VLASNIK"
 Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 
+' ZBR-MUT-01: razlozi zbog kojih se po BROJU ne sme mutirati.
+'
+' Deca zbirne (otpremnica, prijemnica, paletna stavka, denormalizovan otkup)
+' nose SAMO BrojZbirne -- generacije nemaju. Zato svaka rutina koja decu bira
+' po broju zahvata SVE dokumente tog broja, ma koliko ih bilo.
+'
+' Dva razloga su RAZLICITA i ne smeju se stopiti:
+'   VLASNIK   -- broj je IKAD pripadao vise od jednog (VozacID, KupacID).
+'                Storniran vlasnik se broji: deca mu ostaju aktivna.
+'   DOKUMENTI -- broj SADA nosi vise od jednog aktivnog logickog dokumenta,
+'                makar bili istog vlasnika (A17). Do v6-ui-224 to stanje uvoz
+'                nije ni pravio, jer je stapao generacije; sada ga pravi
+'                ispravno, pa mora i da se vidi.
+'
+' historicalLogicalCount se MERI i prijavljuje, ali NE blokira: ispravka pod
+' istim brojem (ZBR-ACTIVE-NUMBER-01 ALLOW grana) je zakuje na 2 kod svakog
+' redovnog re-entry-ja, a DetachOtpremniceInline pri tom prazni broj na deci
+' stornirane generacije -- pa ona za mutaciju po broju vise i ne konkurisu.
+Public Const ZBR_MUT_INTEGRITET As String = "INTEGRITET"
+Public Const ZBR_MUT_VISE_VLASNIKA As String = "VISE_VLASNIKA"
+Public Const ZBR_MUT_VISE_DOKUMENATA As String = "VISE_DOKUMENATA"
+
 Public Type ZbirnaIdent
     normalizedBroj As String
     integrityStatus As String
     activeLogicalCount As Long
     activeOwnerCount As Long
     historicalOwnerCount As Long
+    historicalLogicalCount As Long
     scopeProvided As Boolean
     historicalOwnerIsScope As Boolean
     matchingScopeActiveLogicalCount As Long
@@ -485,14 +508,21 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
 
     ' --- IKAD: sirov niz, stornirani se BROJE ---
     Dim ikadVl As Object: Set ikadVl = CreateObject("Scripting.Dictionary")
-    Dim r As Long, vl As String
+    Dim ikadGen As Object: Set ikadGen = CreateObject("Scripting.Dictionary")
+    Dim r As Long, vl As String, ikadG As String
     For r = 1 To UBound(sirovo, 1)
         If StrComp(Trim$(NzToText(sirovo(r, cBr))), res.normalizedBroj, vbTextCompare) = 0 Then
             vl = ZbirnaVlasnikKljuc(sirovo(r, cVoz), sirovo(r, cKup))
             If Not ikadVl.Exists(vl) Then ikadVl.Add vl, 1
+            ikadG = Trim$(NzToText(sirovo(r, cGen)))
+            If Len(ikadG) > 0 Then
+                If Not ikadGen.Exists(ikadG) Then ikadGen.Add ikadG, 1
+            End If
         End If
     Next r
     res.historicalOwnerCount = ikadVl.Count
+    ' MERI SE, NE BLOKIRA -- v. komentar uz ZBR_MUT_* konstante.
+    res.historicalLogicalCount = ikadGen.Count
 
     If res.scopeProvided And res.historicalOwnerCount = 1 Then
         res.historicalOwnerIsScope = (StrComp(ikadVl.Keys()(0), scopeKljuc, vbTextCompare) = 0)
@@ -618,6 +648,53 @@ End Function
 ' SAMO BrojZbirne, pa svaka nizvodna operacija po broju moze da zahvati i tudje.
 ' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
 ' mutaciju po broju. Uslov pada tek kad prijemnica dobije pravi FK na generaciju.
+' ZBR-MUT-01 -- sme li se po BROJU mutirati ono sto visi o zbirni.
+'
+' Trece pitanje, uz kapiju za kreiranje (F3) i za roditelja (F4). Ovde se ne pita
+' "sme li nov unos" ni "koji je roditelj", nego: SME LI RUTINA KOJA DECU BIRA PO
+' BROJU da radi. Deca generacije nemaju, pa ona zahvata sve dokumente tog broja.
+'
+' Vraca prazno kad sme. Razlog se ne stapa u jednu poruku: vise vlasnika i vise
+' dokumenata istog vlasnika su dva razlicita poteza za operatera.
+'
+' Namerno NE gleda historicalLogicalCount -- v. komentar uz ZBR_MUT_* konstante.
+Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent) As String
+    If id.integrityStatus <> ZBR_INT_OK Then
+        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_INTEGRITET
+        Exit Function
+    End If
+
+    ' IKAD, ne samo sada: storniran vlasnik i dalje moze imati AKTIVNU decu, a
+    ' ona nose isti broj.
+    If id.historicalOwnerCount > 1 Then
+        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA
+        Exit Function
+    End If
+
+    ' SADA: samo aktivni dokumenti konkurisu za decu. Dva aktivna istog vlasnika
+    ' (A17) owner-brojac ne vidi -- zbog toga ova grana i postoji.
+    If id.activeLogicalCount > 1 Then
+        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA
+    End If
+End Function
+
+' Isto, ali od samog broja -- za pozivaoce koji nemaju razresen DTO.
+'
+' FAIL-CLOSED na sopstvenu gresku: "ne mogu da dokazem jednoznacnost" je za
+' kapiju isto sto i "ne mutiraj". Prazan broj nije nerazresen nego "nema
+' roditelja" -- nema sta da se mutira.
+Public Function ZbirnaMutacijaPoBrojuRazlogZaBroj(ByVal broj As String) As String
+    Dim id As ZbirnaIdent
+    On Error GoTo EH
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+    id = ZbirnaIdentResolve(broj)
+    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZbirnaMutacijaPoBrojuRazlog(id)
+    Exit Function
+EH:
+    LogErr "modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj"
+    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZBR_MUT_INTEGRITET
+End Function
+
 Public Function ZbirnaRoditeljRazlog(ByRef id As ZbirnaIdent) As String
     If id.integrityStatus <> ZBR_INT_OK Then
         ZbirnaRoditeljRazlog = ZBR_GATE_INTEGRITET

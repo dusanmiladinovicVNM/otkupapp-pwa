@@ -7441,3 +7441,27 @@ gubitak podatka.
 
 Ovo ne dira dvoklasnu zbirnu (Klasa I + II) unetu u Excel-u: to jesu dva reda
 **jednog** dokumenta i ona i dalje dele identitet.
+
+### Storno i ispravka staju kad broj nosi dva dokumenta
+
+Nastavak prethodne stavke. Kad uvoz sa dva uređaja ostavi **dva dokumenta pod
+istim brojem**, to više nije samo vidljivo — sada i **zaustavlja** radnje koje bi
+zahvatile oba.
+
+Sve što visi o zbirnoj — otpremnica, prijemnica, palete, otkup — u tabeli je
+vezano **brojem**, ne dokumentom. Zato svaka radnja koja ide po broju hvata sve
+dokumente tog broja. Zaštita je postojala, ali je proveravala **kupca i vozača**,
+a ne broj dokumenata. Dva dokumenta **istog** vozača i kupca prolazila su kroz
+nju, pa je:
+
+- **storno** stornirao izabranu zbirnu ispravno, a onda **otkačio otpremnice oba
+  dokumenta** — one drugog dokumenta ostale bi bez zbirne, bez ijedne poruke;
+- **ispravka** prevezivala i tuđe otpremnice i prijemnice na novi broj.
+
+Sada obe radnje staju i kažu **zašto**: da li je broj pripadao više vlasnika, ili
+nosi više aktivnih dokumenata istog vlasnika, ili postoji zbirna bez identiteta.
+To su tri različita posla za operatera i više se ne stapaju u jednu poruku.
+
+**Šta se nije promenilo:** dvoklasna zbirna (Klasa I + II) je i dalje **jedan**
+dokument i stornira se kao i pre. Isto važi za ispravljenu zbirnu pod istim
+brojem — ona nije „dva dokumenta" nego stari i novi oblik istog posla.

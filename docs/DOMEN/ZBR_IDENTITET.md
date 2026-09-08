@@ -105,6 +105,8 @@ integrityStatus                    OK | INTEGRITY_ERROR
 activeLogicalCount                 Long      ' distinct non-empty GeneracijaID, aktivni redovi
 activeOwnerCount                   Long      ' distinct (VozacID,KupacID), aktivni redovi
 historicalOwnerCount               Long      ' distinct (VozacID,KupacID), SVI redovi IKAD
+historicalLogicalCount             Long      ' distinct GeneracijaID, SVI redovi IKAD
+                                             ' MERI SE, NE BLOKIRA -- v. par.13
 scopeProvided                      Boolean
 historicalOwnerIsScope             Boolean   ' True samo kad je historicalOwnerCount = 1
                                              ' i taj vlasnik = prosledjeni scope
@@ -422,3 +424,81 @@ ponovo napraviti, inače `run_vba` staje na proveri ustajalosti:
 ```bash
 python tools/make_fixture.py --donor "<put/do/donora.xlsm>" --force
 ```
+
+## 13) `ZBR-MUT-01` — vlasnička i dokumentna dvosmislenost nisu isto (`v6-ui-225`)
+
+Deca zbirne — otpremnica, prijemnica, paletna stavka, denormalizovan otkup —
+nose **samo `BrojZbirne`**. Generacije nemaju. Zato svaka rutina koja decu bira
+po broju zahvata **sve** dokumente tog broja, ma koliko ih bilo.
+
+Kapija za to je postojala (`modStornoFlow.ZbirnaBrojJeDvosmislenIkad`, šest
+poziva) i merila je **vlasnike**:
+
+```vb
+VlasniciPoBroju(...).count > 1
+```
+
+**Komentar uz svaki od tih šest poziva opisivao je dokumentnu dvosmislenost**
+(*„dva aktivna dokumenta istog broja delila bi otpremnice, pa bi se odvezale i
+tuđe"*), a mera je bila vlasnička. Dva pojma se poklapaju samo dok jedan vlasnik
+**ne može** da ima dva dokumenta pod istim brojem — a `v6-ui-224` je baš to
+učinio dostižnim (`KR-001`, dva uređaja offline; A17 oblik `2 / 1`).
+
+| | Šta meri | Kad je opasno |
+|---|---|---|
+| `historicalOwnerCount > 1` | broj je **ikad** prešao granicu vlasništva | storniran vlasnik i dalje ima aktivnu decu |
+| `activeLogicalCount > 1` | broj **sada** nosi više dokumenata | samo aktivni konkurišu za decu |
+
+Kapija je sada `modDokumenta.ZbirnaMutacijaPoBrojuRazlog` i blokira na **oba**,
+sa različitim razlogom (`ZBR_MUT_VISE_VLASNIKA` / `ZBR_MUT_VISE_DOKUMENATA` /
+`ZBR_MUT_INTEGRITET`) — uzrok se ne stapa, jer su to tri različita poteza za
+operatera.
+
+### Šta je propuštalo, po putanji
+
+| Putanja | Zaglavlje | Deca |
+|---|---|---|
+| `StornoZbirnaIDetach_TX` (SIMPLE) | tačno, po generaciji | `DetachOtpremniceInline` **prazni `BrojZbirne` deci OBA dokumenta** |
+| `PonistiZbirnaChain_TX` | `gen` je bio **mrtav parametar** — prosleđivan i nikad korišćen | otpremnice/prijemnice skupljane po golom broju |
+| `Run/CompleteZbirnaCorrection` | — | relink i rekalkulacija po broju zahvataju oba |
+| `RunOtpremnicaCorrection` (roditelj) | — | ista kapija nad roditeljskom zbirnom |
+
+### Zašto `historicalLogicalCount` **ne** blokira
+
+Meri se i stoji u DTO-u, ali nije uslov. Razlog je unutar ovog istog ugovora:
+`ZbirnaNovUnosRazlog` ima ALLOW granu
+
+```
+activeLogicalCount = 0 AND historicalOwnerIsScope  ->  ALLOW  (ispravka / re-entry)
+```
+
+a `GeneracijaIDZaBrojArr` isključuje stornirane — pa **svaki redovan re-entry kuje
+novu generaciju**. Ispravljena zbirna pod istim brojem zato stoji kao
+`historicalLogicalCount = 2, historicalOwnerCount = 1`. Blokada na toj vrednosti
+bi značila da F3 kaže „smeš ponovo pod ovim brojem", a storno „ne smeš ga više
+dirati" — kontradikcija u istom ugovoru. `modTest` test 34
+(`T_IstiBrojRazliciteGeneracije_NijeIstiDokument`) to stanje tvrdi kao legitimno.
+
+Uz to je opasnost uža nego što izgleda: `DetachOtpremniceInline` **prazni broj**
+na deci, pa posle prostog storna deca stornirane generacije taj broj više i ne
+nose — za mutaciju po broju ne konkurišu. Stanje „stornirana generacija sa
+aktivnom decom pod istim brojem" ne nastaje redovnim putem, nego ručnom izmenom
+u tabeli; tada ga hvata `integrityStatus` / B9, ne ova kapija.
+
+**Trajno rešenje** je da deca nose `ZbirnaGeneracijaID`. Dok ga nemaju, kapija je
+jedino što stoji između mutacije po labeli i tuđeg dokumenta.
+
+### Verifikacija
+
+| Šta | Gde |
+|---|---|
+| `2 aktivna dokumenta / 1 vlasnik` → SIMPLE i ISPRAVKA staju, deca ostaju vezana | `modBusinessFlowProTests` `Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta` (stanje pravi **pravi uvoz**, dva `ClientRecordID`-a) |
+| Dvoklasna zbirna (dva reda, **jedna** generacija) se i dalje stornira | ista, negativna kontrola |
+| Fail-closed na sopstvenu grešku | `modTest` `T_KapijaZbirne_FailClosedNaSvojuGresku` (schema drift) |
+| Sabotaža | `kapija-mutacije-broji-samo-vlasnike` |
+
+**Nije zasebno mereno:** prosleđivanje `gen` u `StornoZbirna` iz
+`PonistiZbirnaChain_TX`. Kapija iznad više ne pušta dva aktivna dokumenta, a
+`StornoZbirna` preskače već stornirane redove — pa kroz podržane putanje razlike
+u ponašanju nema. Ispravka je precizna, ne merljiva; sabotaža za nju bi bila
+zelena bez obzira na kod, pa nije ni dodata.

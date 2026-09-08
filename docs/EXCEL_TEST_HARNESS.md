@@ -363,6 +363,8 @@ suiti u kojoj ne postoji, ona prođe zeleno, i izgledalo bi kao da sabotaža ni�
 ne meri. Komentar uz unos svejedno neka kaže koju suitu treba pustiti — za ručno
 pokretanje.
 
+**`AssertEquals` je do `v6-ui-225` bila nevidljiva za `--proveri-sidra`.** Imena tvrdnji se poklapaju prefiksom, pa je `assertequals` padalo pod `asserteq` i onda na granicu imena (sledeći znak je slovo) — tiho je ispadalo iz prepoznavanja. **147 tvrdnji** u `modBusinessFlowProTests` za tu proveru nije postojalo, pa je katalog nad njima mogao da zastari bez ijedne poruke; `dokaz.py` bi to javio tek na Windows-u, kao `PALA DRUGA TVRDNJA`. Duže ime sada ide **pre** kraćeg, a self-test ima slučaj koji to meri.
+
 **BFP piše `last_run_bfp.txt` pored sveske** (`v6-ui-224`), u istom formatu kao
 `modTest` (`last_run.txt`) i `modTestBanka` (`last_run_banka.txt`). Bez toga se
 pad te suite vidi samo kao `Err.Raise` iz `EndRun`, čiji opis ne preživi COM
