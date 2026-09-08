@@ -1178,6 +1178,37 @@ Private Sub SvAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals 
         ci = GetColumnIndex(tblName, CStr(cols(i)))
         If ci > 0 Then nr.Range.cells(1, ci).value = vals(i)
     Next i
+    PecatiGeneracijuAkoZbirna tblName, nr
+End Sub
+
+' ZBR-IDENT-01: aktivan red tblZbirna MORA da nosi GeneracijaID.
+'
+' Seed je do v6-ui-225 upisivao red bez nje, pa je suite merila stanje koje
+' produkcija ne pravi -- sva tri writer-a odmah zovu ApplyGeneracijaID. Kad je
+' kapija za mutaciju po broju (ZBR-MUT-01) pocela da cita integritet, 58 provera
+' je palo na fixture, ne na kod.
+'
+' Pecat ide kroz ISTU produkcionu rutinu, pa Klasa I i Klasa II istog broja i
+' vlasnika dele generaciju -- kao i u pravom unosu.
+Private Sub PecatiGeneracijuAkoZbirna(ByVal tblName As String, ByVal nr As ListRow)
+    If StrComp(tblName, TBL_ZBIRNA, vbTextCompare) <> 0 Then Exit Sub
+    Dim cBr As Long, cVo As Long, cKu As Long
+    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cVo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
+    cKu = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
+    If cBr = 0 Then Exit Sub
+    ApplyGeneracijaID TBL_ZBIRNA, nr.Index, _
+                      COL_ZBR_BROJ, NzToText(nr.Range.cells(1, cBr).value), _
+                      COL_ZBR_VOZAC, NzToText(nr.Range.cells(1, cVo).value), _
+                      COL_ZBR_KUPAC, NzToText(nr.Range.cells(1, cKu).value)
+    ' Seed koji tiho prekrsi invarijantu obara sve nizvodno, a suite ostane
+    ' zelena iz pogresnog razloga. Zato glasno, ovde, a ne po tvrdnjama.
+    Dim cGen As Long
+    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, "modTestStorno.PecatiGeneracijuAkoZbirna")
+    If Len(NzToText(nr.Range.cells(1, cGen).value)) = 0 Then
+        Err.Raise vbObjectError + 2801, "modTestStorno.PecatiGeneracijuAkoZbirna", _
+                  "Seed tblZbirna bez GeneracijaID (ZBR-IDENT-01)."
+    End If
 End Sub
 
 ' ============================================================

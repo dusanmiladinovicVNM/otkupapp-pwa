@@ -779,6 +779,31 @@ Private Sub TcSeedRow(ByVal tbl As String, ByVal cols As Variant, ByVal vals As 
         ci = GetColumnIndex(tbl, CStr(cols(i)))
         If ci > 0 Then nr.Range.cells(1, ci).value = vals(i)
     Next i
+    TcPecatiGeneraciju tbl, nr
+End Sub
+
+' ZBR-IDENT-01: aktivan red tblZbirna MORA da nosi GeneracijaID -- v. isti
+' komentar uz modTestStorno.PecatiGeneracijuAkoZbirna. Pecat ide kroz produkcionu
+' rutinu, pa dve klase istog broja i vlasnika dele generaciju.
+Private Sub TcPecatiGeneraciju(ByVal tbl As String, ByVal nr As ListRow)
+    If StrComp(tbl, TBL_ZBIRNA, vbTextCompare) <> 0 Then Exit Sub
+    Dim cBr As Long, cVo As Long, cKu As Long
+    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cVo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
+    cKu = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
+    If cBr = 0 Then Exit Sub
+    ApplyGeneracijaID TBL_ZBIRNA, nr.Index, _
+                      COL_ZBR_BROJ, NzToText(nr.Range.cells(1, cBr).value), _
+                      COL_ZBR_VOZAC, NzToText(nr.Range.cells(1, cVo).value), _
+                      COL_ZBR_KUPAC, NzToText(nr.Range.cells(1, cKu).value)
+    ' Seed koji tiho prekrsi invarijantu obara sve nizvodno, a suite ostane
+    ' zelena iz pogresnog razloga. Zato glasno, ovde, a ne po tvrdnjama.
+    Dim cGen As Long
+    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, "modTestStornoCentar.TcPecatiGeneraciju")
+    If Len(NzToText(nr.Range.cells(1, cGen).value)) = 0 Then
+        Err.Raise vbObjectError + 2802, "modTestStornoCentar.TcPecatiGeneraciju", _
+                  "Seed tblZbirna bez GeneracijaID (ZBR-IDENT-01)."
+    End If
 End Sub
 
 Private Sub TcChk(ByVal cond As Boolean, ByVal nm As String)
