@@ -7395,3 +7395,19 @@ Dve nove stavke u „Provere integriteta":
 
 U svakodnevnom radu se ništa ne menja — unos zbirne i prijemnice rade kao i pre.
 Ovo je samo dopuna izveštaja koji se pokreće po potrebi.
+
+### Lista brojeva zbirnih pokazuje dokument, ne red u tabeli
+
+Padajuća lista uz polje **Broj zbirne** nabrajala je **redove** tabele. Dvoklasna
+zbirna (Klasa I + Klasa II) je **jedan dokument upisan u dva reda**, pa je isti
+broj u listi stajao **dvaput**. Izgledalo je kao da postoje dve zbirne, a
+postojala je jedna.
+
+Sada lista daje **jednu stavku po dokumentu**. Dvoklasna zbirna se pojavljuje
+jednom, kao što i jeste.
+
+**Šta se namerno nije promenilo:** ako pod istim brojem stvarno stoje **dva
+različita** dokumenta, lista ih i dalje pokazuje **dvaput**. To nije propust —
+takvo stanje je neispravno i lista ga ne sme sakriti spajanjem u jednu stavku
+koja ne postoji. Takav broj F4 već odbija pri vezivanju prijemnice, a revizija
+integriteta ga prijavljuje kao **B8**.

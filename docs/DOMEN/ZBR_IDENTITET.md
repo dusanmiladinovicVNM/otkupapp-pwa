@@ -1,8 +1,8 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
 > **KI-007 je zatvoren:** resolver, F3 prevencija (`ZBR-ACTIVE-NUMBER-01`), I1
-> read-model, F4 parent guard (I2) i MasterSync detekcija **jesu** implementirani.
-> Ostaje samo MIG-005b (picker).
+> read-model, F4 parent guard (I2), MasterSync detekcija i MIG-005b (picker)
+> **jesu** implementirani.
 >
 > **Status (`v6-ui-222`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
 > sa brojem linije). §§4–6 i I1/I2 iz §8 su **implementirani**. §9 kaže koji su
@@ -276,9 +276,11 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 
 - **`ZBR-NORM-02`** — `VlasniciPoBroju` (`modStorno.bas:2523`) poredi broj
   case-sensitive. Nije deo L1; resolver ga zaobilazi sopstvenom normalizacijom.
-- **MIG-005b** — dupla stavka dvoklasne zbirne u pickeru; blokiran je na ovome,
-  jer ispravna de-duplikacija grupiše po logičkom dokumentu, a picker danas nosi
-  samo broj. V. `UI_MIGRACIJA_KATALOG.md` §28.1f.
+- **MIG-005b** — **urađen** (`v6-ui-223`): `FillZbirneCombo` de-duplikuje po
+  `GeneracijaID`, pa dvoklasna zbirna daje jednu stavku. Dva **različita**
+  dokumenta pod istim brojem i dalje stoje dvaput — namerno; F4 takav broj odbija
+  (`CURRENT_AMBIGUOUS`), a B8 ga prijavljuje. Test
+  `T_Zbirne_PickerJednaStavkaPoDokumentu`. V. `UI_MIGRACIJA_KATALOG.md` §28.1f.
 - Nema izmene `CheckDuplicate`, `OtpremnicaValidiraj`, `GeneracijaIDZaBrojArr`.
 - Važe opšta pravila: bez novih `Private WithEvents`, `.frx` se ne dira, VBA
   izvor 100% ASCII, korisnički tekst kroz `modPoruke`.

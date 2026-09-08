@@ -15774,16 +15774,15 @@ End Sub
 '
 '   jedan dokument, dva reda -- Klasa I + Klasa II. SaveZbirnaMulti_TX zove
 '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda nose
-'       isti GeneracijaID. Picker bi tu trebalo da pokaze JEDNU stavku, a danas
-'       pokazuje dve. To je i dalje OTVORENO (MIG-005b).
+'       isti GeneracijaID. Picker tu pokazuje JEDNU stavku -- to meri
+'       T_Zbirne_PickerJednaStavkaPoDokumentu (MIG-005b), ne ovaj test.
 '
 '   dva dokumenta, isti broj -- anomalija (rucni unos, uvoz, ispravka u tabeli);
 '       redovni generator je ne pravi. Tu su dva GeneracijaID-a.
 '
-' Razlika trazi LOGICKI kljuc (GeneracijaID, odnosno broj + vozac + kupac), ne
-' broj i ne fizicki red. Dok picker nosi samo broj, ne moze je ni izraziti --
-' v. KI-007 / ZBR-IDENT-01. Zato ovde nema tvrdnje koja bi buducu ispravnu
-' de-duplikaciju proglasila regresijom.
+' Razlika trazi LOGICKI kljuc (GeneracijaID), ne broj i ne fizicki red --
+' v. KI-007 / ZBR-IDENT-01. Zato ovde nema tvrdnje o broju stavki: ovaj test
+' meri SAMO da stornirane nema u listi.
 ' ============================================================
 Private Sub T_Zbirne_PickerNeNudiStornirane()
     Dim f As frmOtkupUI, CB As Object
