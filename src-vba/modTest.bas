@@ -481,6 +481,7 @@ Public Sub RunAllTests()
     RunOne 191
     RunOne 192
     RunOne 193
+    RunOne 194
     RunOne 124
     RunOne 125
     RunOne 126
@@ -743,6 +744,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 191: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
         Case 192: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
         Case 193: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
+        Case 194: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -944,6 +946,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 191: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
         Case 192: T_Prijemnica_VezujeSeSamoNaJednoznacnu
         Case 193: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
+        Case 194: T_Zbirne_PickerJednaStavkaPoDokumentu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2873,10 +2876,15 @@ Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
                                            SV_MODE_DUPLI, True, False, "GEN-ZB-K2")
     AssertEq CBool(res("success")), False, _
              "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima"
-    ' Ishod cuvaju DVE nezavisne kapije (na nivou moda i u detach-u), pa ga
-    ' jedna sabotaza ne moze oboriti. Zato se tvrdi i KOJA je stala: kapija
-    ' na nivou moda staje PRE transakcije i objasnjava razlog, dok bi detach
-    ' pukao iznutra i dao samo "Storno zbirne nije uspeo".
+    ' Tvrdi se i KOJA kapija je stala: ona na nivou moda staje PRE transakcije i
+    ' objasnjava razlog, dok bi detach pukao iznutra i dao samo "Storno zbirne
+    ' nije uspeo".
+    '
+    ' Do v6-ui-225 su to bile DVE NEZAVISNE kapije, pa ih jedna sabotaza nije
+    ' mogla oboriti obe. Od ZBR-MUT-01 obe idu kroz isti racun
+    ' (modDokumenta.ZbirnaMutacijaPoBrojuRazlog), pa jedna greska u njemu gasi
+    ' ceo lanac -- to je cena centralizacije i zato bas to meri sabotaza
+    ' guard-samo-aktivni-vlasnici, koja tada obara tvrdnju IZNAD ove.
     AssertEq (InStr(1, CStr(res("message")), "Zamena bi prevezala decu", _
                     vbTextCompare) > 0), True, _
              "staje kapija na nivou moda, pre transakcije, sa razlogom"
@@ -15771,16 +15779,15 @@ End Sub
 '
 '   jedan dokument, dva reda -- Klasa I + Klasa II. SaveZbirnaMulti_TX zove
 '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda nose
-'       isti GeneracijaID. Picker bi tu trebalo da pokaze JEDNU stavku, a danas
-'       pokazuje dve. To je i dalje OTVORENO (MIG-005b).
+'       isti GeneracijaID. Picker tu pokazuje JEDNU stavku -- to meri
+'       T_Zbirne_PickerJednaStavkaPoDokumentu (MIG-005b), ne ovaj test.
 '
 '   dva dokumenta, isti broj -- anomalija (rucni unos, uvoz, ispravka u tabeli);
 '       redovni generator je ne pravi. Tu su dva GeneracijaID-a.
 '
-' Razlika trazi LOGICKI kljuc (GeneracijaID, odnosno broj + vozac + kupac), ne
-' broj i ne fizicki red. Dok picker nosi samo broj, ne moze je ni izraziti --
-' v. KI-007 / ZBR-IDENT-01. Zato ovde nema tvrdnje koja bi buducu ispravnu
-' de-duplikaciju proglasila regresijom.
+' Razlika trazi LOGICKI kljuc (GeneracijaID), ne broj i ne fizicki red --
+' v. KI-007 / ZBR-IDENT-01. Zato ovde nema tvrdnje o broju stavki: ovaj test
+' meri SAMO da stornirane nema u listi.
 ' ============================================================
 Private Sub T_Zbirne_PickerNeNudiStornirane()
     Dim f As frmOtkupUI, CB As Object
@@ -16197,9 +16204,84 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
              "B8 vidi broj sa dva aktivna dokumenta"
 End Sub
 
+' MIG-005b: picker pokazuje JEDNU stavku po DOKUMENTU, ne po redu.
+'
+' Dvoklasna zbirna (Kl.I + Kl.II) su DVA reda JEDNOG dokumenta -- isti broj,
+' isti vozac i kupac, ISTA generacija. Do sada je stajala dvaput.
+'
+' Fixture takav par nema (nijedna dva reda ne dele broj+vozac+kupac), pa ga test
+' PRAVI od ZB-TEST-SLDD para i vraca. Meri se OBA smera nad istim redovima:
+'   ista generacija    -> JEDNA stavka   (dvoklasna zbirna)
+'   razlicite generacije -> DVE stavke    (anomalija; F4 je odbija, B8 prijavljuje)
+' Bez druge grane bi tvrdnja bila zelena i kad picker spaja sve po broju.
+Private Sub T_Zbirne_PickerJednaStavkaPoDokumentu()
+    Dim f As frmOtkupUI, CB As Object
+    Dim r As Long, jedanDok As Long, dvaDok As Long
+    Dim genD1 As String, genD2 As String
+    Dim vozD2 As String, kupD2 As String
+    Dim stD1 As String, stD2 As String
+
+    genD1 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_GENERACIJA_ID)))
+    genD2 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID)))
+    vozD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC))
+    kupD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC))
+    stD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
+    stD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO))
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.SelectMode f, "F4"          ' F4 vezuje zbirnu (ModeVezujeZbirnu)
+    Set CB = f.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
+
+    ' A) JEDAN dokument na dva reda: izjednaci vlasnika I generaciju.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, _
+                     NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_VOZAC))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC, _
+                     NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_KUPAC))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD1
+    modUiData.ResetCache          ' picker cita CachedTable -- bez ovoga meri bajato
+    modOtkupUI.FillZbirneCombo f
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
+            jedanDok = jedanDok + 1
+        End If
+    Next r
+
+    ' B) DVA dokumenta pod istim brojem: vrati D2 svoju generaciju.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD2
+    modUiData.ResetCache
+    modOtkupUI.FillZbirneCombo f
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
+            dvaDok = dvaDok + 1
+        End If
+    Next r
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, vozD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC, kupD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, stD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, stD2
+    modUiData.ResetCache
+    ReleaseOtkupUIForm f
+
+    AssertEq (Len(genD1) > 0), True, _
+             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
+    AssertEq (genD1 <> genD2), True, _
+             "preduslov: par u fixture-u nosi RAZLICITE generacije"
+
+    AssertEq jedanDok, 1, "dva reda ISTOG dokumenta daju JEDNU stavku"
+    AssertEq dvaDok, 2, "dva RAZLICITA dokumenta istog broja ostaju dve stavke"
+End Sub
+
 ' Da li nalaz sa datom sifrom sadrzi dati tekst. Blok pocinje redom cija je PRVA
 ' kolona sifra; detalji ispod nose praznu prvu kolonu, pa se sifra pamti.
-Private Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
+'
+' Public zbog modBusinessFlowProTests (A21 meri B8 nad PRAVIM uvozom). Druga
+' kopija ovog citaca bi znacila dva razumevanja oblika nalaza.
+Public Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
                              ByVal tekst As String) As Boolean
     If Not IsArray(rows) Then Exit Function
 

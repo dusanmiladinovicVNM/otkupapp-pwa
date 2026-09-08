@@ -76,7 +76,10 @@ SUITES = {
     "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
-    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    # Pad ove suite stize kao Err.Raise iz EndRun, pa opis ne prezivi COM
+    # granicu -- ime pale tvrdnje se cita iz fajla, kao kod banke.
+    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True,
+                                 "result_file": "last_run_bfp.txt"},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},

@@ -6521,7 +6521,8 @@ End Sub
 Public Sub FillZbirneCombo(frm As Object)
     Dim CB As MSForms.ComboBox, src As Variant, iBroj As Long, iDat As Long
     Dim r As Long, n As Long, arr() As Variant, key() As Double, i As Long, j As Long
-    Dim cur As String
+    Dim cur As String, iGen As Long, gen As String, uzmi As Boolean
+    Dim vidjene As Object
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
     ' Punjenje liste NE sme da pojede upisani broj. ComboBox.Clear brise stavke
@@ -6547,34 +6548,60 @@ Public Sub FillZbirneCombo(frm As Object)
     ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
     ' a ovo se zove na svaku promenu rezima.
     '
-    ' NE DE-DUPLIRA. Isti broj na vise redova ima DVA razlicita uzroka:
+    ' MIG-005b: JEDNA STAVKA PO DOKUMENTU, ne po redu.
+    '
+    ' Isti broj na vise redova ima DVA razlicita uzroka, i samo jedan je kvar:
     '   jedan dokument, dva reda -- Klasa I + II. SaveZbirnaMulti_TX zove
     '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda
-    '       nose isti GeneracijaID. Tu BI trebalo pokazati jednu stavku, a
-    '       danas se pokazuju dve -- zatecen kvar, vodi se kao MIG-005b.
+    '       nose ISTU generaciju. Tu treba JEDNA stavka -- to je MIG-005b.
     '   dva dokumenta, isti broj -- anomalija (rucni unos sa ugasenim
-    '       auto-brojem, uvoz, ispravka u tabeli); generator je ne pravi, jer
-    '       SuggestNextBroj vrti BrojZbirneExists dok broj ne bude slobodan.
+    '       auto-brojem, uvoz, ispravka u tabeli). RAZLICITE generacije.
     '
-    ' Razlika trazi LOGICKI kljuc (GeneracijaID = broj + vozac + kupac), ne
-    ' broj i ne fizicki red. Combo nosi samo broj, pa je ni ne moze izraziti:
-    ' dve stavke istog broja daju polju istu vrednost i writer-u isti podatak.
-    ' Zato se ovde NE de-duplikuje niti se to zakljucava tvrdnjom -- resenje
-    ' ide uz KI-007 / ZBR-IDENT-01, v. par.28.1f.
+    ' Zato se de-duplikuje po GeneracijaID, ne po broju. Spajanje po broju bi
+    ' i anomaliju prikazalo kao jedan dokument koji ne postoji.
+    '
+    ' Anomalija se i dalje vidi DVAPUT, i to je tacno: pod tim brojem stvarno
+    ' stoje dva dokumenta. Operater ih iz liste ne moze razlikovati, ali to nije
+    ' stvar pickera -- F4 od ZBR-IDENT-01 takav broj odbija (CURRENT_AMBIGUOUS),
+    ' a modIntegritet ga prijavljuje kao B8.
+    '
+    ' Red BEZ generacije se NE spaja ni sa cim: prazna generacija je integritetska
+    ' greska (B9), a spajanje po njoj bi stopilo dva razlicita dokumenta u jedan.
+    ' Kad kolone nema (starija sveska pre EnsureSledljivostSchema), de-duplikacije
+    ' nema -- lista koja pokaze vise nego sto treba je manje stetna od one koja
+    ' sakrije dokument.
     src = ExcludeStornirano(src, TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
+    iGen = ColIdx(TBL_ZBIRNA, COL_GENERACIJA_ID)
     If iBroj < 1 Then GoTo XIT
+
+    If iGen > 0 Then
+        Set vidjene = CreateObject("Scripting.Dictionary")
+        vidjene.CompareMode = vbTextCompare
+    End If
 
     n = UBound(src, 1)
     ReDim arr(1 To n): ReDim key(1 To n)
     j = 0
     For r = 1 To n
         If Len(CellS(src, r, iBroj)) > 0 Then
-            j = j + 1
-            arr(j) = CellS(src, r, iBroj)
-            key(j) = CellDate(src, r, iDat)
+            uzmi = True
+            gen = ""
+            If iGen > 0 Then gen = Trim$(CellS(src, r, iGen))
+            If Len(gen) > 0 Then
+                If vidjene.Exists(gen) Then
+                    uzmi = False          ' drugi red ISTOG dokumenta
+                Else
+                    vidjene.Add gen, 1
+                End If
+            End If
+            If uzmi Then
+                j = j + 1
+                arr(j) = CellS(src, r, iBroj)
+                key(j) = CellDate(src, r, iDat)
+            End If
         End If
     Next r
     If j = 0 Then GoTo XIT

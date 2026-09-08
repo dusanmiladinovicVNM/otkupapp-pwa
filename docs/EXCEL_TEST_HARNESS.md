@@ -356,9 +356,22 @@ python tools/sabotaza.py manjak-preview-bez-druge-klase
 python tools/run_vba.py --suite RunBusinessFlowProSuite   # ocekuj FAIL
 ```
 
-Takav unos u katalogu **mora** da u komentaru kaže koju suitu treba pustiti —
-inače će sledeći put biti pušten `RunAllTests`, proći zeleno, i izgledaće kao da
-sabotaža ništa ne meri.
+`dokaz.py` od `v6-ui-224` suitu bira **po modulu** u kome test živi (deli
+`_suita_testa` sa `sabotaza.py`), ne po obliku imena. Ranije je sve što ne počinje
+sa `T_` slalo u banka-suitu: test iz `modBusinessFlowProTests` bi bio tražen u
+suiti u kojoj ne postoji, ona prođe zeleno, i izgledalo bi kao da sabotaža ništa
+ne meri. Komentar uz unos svejedno neka kaže koju suitu treba pustiti — za ručno
+pokretanje.
+
+**`AssertEquals` je do `v6-ui-225` bila nevidljiva za `--proveri-sidra`.** Imena tvrdnji se poklapaju prefiksom, pa je `assertequals` padalo pod `asserteq` i onda na granicu imena (sledeći znak je slovo) — tiho je ispadalo iz prepoznavanja. **147 tvrdnji** u `modBusinessFlowProTests` za tu proveru nije postojalo, pa je katalog nad njima mogao da zastari bez ijedne poruke; `dokaz.py` bi to javio tek na Windows-u, kao `PALA DRUGA TVRDNJA`. Duže ime sada ide **pre** kraćeg, a self-test ima slučaj koji to meri.
+
+**BFP piše `last_run_bfp.txt` pored sveske** (`v6-ui-224`), u istom formatu kao
+`modTest` (`last_run.txt`) i `modTestBanka` (`last_run_banka.txt`). Bez toga se
+pad te suite vidi samo kao `Err.Raise` iz `EndRun`, čiji opis ne preživi COM
+granicu — pa se ne zna **koja** tvrdnja je pala. Razlika u odnosu na druge dve:
+BFP ispisuje **naziv tvrdnje**, ne ime `Sub`-a (`LogFail` prima baš njega), pa
+unos u katalogu za BFP mora da nosi **tačan** tekst tvrdnje. Podniz se prijavi kao
+`NE OBARA SVOJ TEST` — glasno, ne tiho.
 
 Za legacy formu radi se ručno u `ClearOtkupFields` (dodaj `txtDatum.value = ""`,
 `txtBrojZbirne.value = ""`, ukloni `cmbKooperant.value = ""`), revert je

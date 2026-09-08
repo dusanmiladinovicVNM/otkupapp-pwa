@@ -47,6 +47,15 @@ Private m_DateSeq As Long
 
 Private Const TEST_LOG_SHEET As String = "BUSINESS_FLOW_PRO_TEST_LOG"
 
+' Izvestaj na DISK, u istom formatu kao modTest.WriteResultFile.
+'
+' Debug.Print ne izlazi iz Excela, a opis podignute greske ne prezivi COM
+' granicu (pywin32 vidi golo "Exception occurred"). Bez ovoga run_vba vidi
+' samo da je suite pala, ne i KOJA tvrdnja -- pa je dvosmerni dokaz nad njom
+' slep: sabotaza koja obori bas ciljanu tvrdnju i ona koja obori neku drugu
+' izgledaju isto. Isti razlog i isti format kao modTestBanka.
+Private m_Report As String
+
 Private Const TEST_ST_ID As String = "ST-90001"
 Private Const TEST_KOOP_ID As String = "KOOP-90001"
 Private Const TEST_VOZ_ID As String = "VOZ-90001"
@@ -95,6 +104,7 @@ Public Sub RunBusinessFlowProSuite()
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
     Test_RF28_AutoOtpremnicaNeMesaArtikle
     Test_RF28_BrojZbirneRupaNeDajeDuplikat
+    Test_ZBR_ImportDvaUredjajaNeStapaDokumente
     Test_RF28_LinkKonfliktNePrepisuje
     Test_RF28_MembershipKoristiSvojuZbirnu
     Test_RF28_MembershipDanskiProzor
@@ -111,6 +121,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_StornoGuardNaSvimPutanjama
+    Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -1818,6 +1829,87 @@ End Function
 
 ' AUD-041(b): rupa u nizu ne sme da proizvede vec zauzet broj. Row-count generator
 ' je za {"N/ddmmyy", "N/ddmmyy-3"} vracao "-3" ponovo; MAX-seq vraca "-4".
+' ZBR-IDENT-01 / A21 (KR-001): DVA UREDJAJA, isti vozac, isti kupac, isti broj.
+'
+' To NIJE dvoklasna zbirna. PWA obe klase sabira u JEDAN red ("I/II"), pa dva reda
+' iz uvoza znace dve odvojene terenske cinjenice -- dva dokumenta koja slucajno
+' dele broj, jer su uredjaji bili offline (KR-001).
+'
+' Do v6-ui-224 je ImportRowToTblZbirna zvao ApplyGeneracijaID, koji generaciju
+' NASLEDJUJE od aktivnog reda istog broja u istom scope-u (vozac + kupac). Drugi
+' uvoz je zato dobijao generaciju prvog, pa su dve cinjenice postajale JEDAN
+' identitet. Posledice koje ovaj test meri, sve odjednom:
+'   activeLogicalCount broji GENERACIJE -> ostajao 1 -> resolutionStatus UNIQUE
+'   -> F4 (ZbirnaRoditeljRazlog) pusta prijemnicu na spojen dokument
+'   -> PrijaviKolizijuBrojaZbirne i B8 (koji presudu uzimaju od resolvera) cute.
+'
+' Meri se OBA smera: da uvoz nije odbijen (oba reda postoje) i da identitet nije
+' stopljen. Bez prve grane bi tvrdnja bila zelena i da import blokira, sto je bas
+' ono sto korak 5 nije smeo da uradi.
+Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
+    Dim tx As clsTransaction
+    Dim testDate As Date
+    Dim broj As String
+    Dim idA As String, idB As String
+    Dim genA As String, genB As String
+    Dim ident As ZbirnaIdent
+
+    On Error GoTo EH
+
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+
+    idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-A-" & m_RunID, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
+                                      100, broj)
+    idB = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-B-" & m_RunID, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
+                                      120, broj)
+
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, idA)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, idB)
+
+    ident = ZbirnaIdentResolve(broj, TEST_VOZ_ID, TEST_KUP_ID)
+
+    Dim nalazi As Variant
+    nalazi = modIntegritet.GetIntegritetRows()
+
+    ' INGEST: nijedan red nije odbijen, uvoz nije rollback-ovan.
+    AssertTrue (Len(idA) > 0 And Len(idB) > 0 And idA <> idB), _
+        "A21 ingest: oba PWA reda su upisana kao zasebne zbirne"
+
+    ' ZBR-IDENT-01: dve cinjenice, dva identiteta.
+    AssertTrue (Len(genA) > 0 And Len(genB) > 0), _
+        "A21: oba uvezena reda nose GeneracijaID"
+    AssertTrue (genA <> genB), _
+        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog"
+
+    ' Detekcija je time dobila sta da vidi.
+    AssertEquals "2", CStr(ident.activeLogicalCount), _
+        "A21: broj nosi DVA aktivna logicka dokumenta"
+    AssertEquals "1", CStr(ident.activeOwnerCount), _
+        "A21/A17: dvosmislenost postoji i kod JEDNOG vlasnika"
+    AssertEquals ZBR_RES_AMBIGUOUS, ident.resolutionStatus, _
+        "A21: resolver kaze CURRENT_AMBIGUOUS"
+    AssertEquals ZBR_PARENT_DVOSMISLEN, ZbirnaRoditeljRazlog(ident), _
+        "A21: F4 fail-closed odbija taj broj"
+    AssertTrue modTest.NalazSadrzi(nalazi, "B8", broj), _
+        "A21: revizija integriteta (B8) prijavljuje broj"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-IDENT-01 A21 uvoz dva uredjaja", Err.description
+End Sub
+
 Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
     Dim tx As clsTransaction
     Dim prevAuto As String
@@ -2602,6 +2694,125 @@ End Function
 ' Guard mora da vazi na SVIM number-only putanjama, ne samo na direktnom
 ' StornoPrijemnicaByBroj_TX: ISPRAVKA/DUPLI otpremnice idu kroz atomic helper,
 ' a SIMPLE/DUPLI zbirna kroz core StornoZbirna.
+' ZBR-MUT-01: mutacija po BROJU staje kad broj nosi DVA AKTIVNA dokumenta,
+' makar bili istog vlasnika.
+'
+' Zatecena kapija je brojala VLASNIKE, pa je ovo stanje prolazilo. Posledice su
+' bile razlicite po putanji, a obe destruktivne PREKO granice dokumenta:
+'   SIMPLE  -- zaglavlje se stornira tacno (po generaciji), ali
+'              DetachOtpremniceInline nize ide po BROJU i prazni BrojZbirne
+'              deci OBA dokumenta;
+'   ISPRAVKA -- relink i rekalkulacija po broju zahvataju oba.
+'
+' Stanje pravi PRAVI uvoz (dva ClientRecordID-a), jer je bas on jedini put kojim
+' redovno nastaje: F3 kapija ga ne pusta, a Excel writer dva reda istog broja i
+' vlasnika stapa u JEDAN dokument. Zato je i negativna kontrola dole bas taj
+' slucaj -- da kapija ne pocne da odbija dvoklasnu zbirnu.
+Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
+    Dim tx As clsTransaction
+    Dim testDate As Date
+    Dim scenario As String
+    Dim broj As String, brojDvoklasna As String
+    Dim idA As String, idB As String, otpID As String
+    Dim ident As ZbirnaIdent
+    Dim r As Object
+    Dim zbr1 As String, zbr2 As String
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRMUT")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRMUT-A-" & scenario, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    idB = TestHook_ImportZbirnaRowPWA("CRID-ZBRMUT-B-" & scenario, TEST_VOZ_ID, _
+                                      TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+
+    ' Dete koje visi o BROJU -- ono sto je detach ranije odvezivao preko granice.
+    otpID = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                              TEST_PREFIX & "-OTP-ZBRMUT-" & scenario, broj, _
+                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+
+    ident = ZbirnaIdentResolve(broj, TEST_VOZ_ID, TEST_KUP_ID)
+
+    ' Preduslov: bas A17 oblik. Bez ovoga bi test mogao da meri dva VLASNIKA,
+    ' sto je zatecena kapija i ranije hvatala.
+    AssertEquals "2", CStr(ident.activeLogicalCount), _
+        "ZBR-MUT preduslov: broj nosi DVA aktivna dokumenta"
+    AssertEquals "1", CStr(ident.activeOwnerCount), _
+        "ZBR-MUT preduslov: oba su ISTOG vlasnika"
+    AssertTrue Len(otpID) > 0, "ZBR-MUT preduslov: otpremnica visi o tom broju"
+
+    ' --- SIMPLE ---
+    Set r = RunSimpleStornoZbirna(broj)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: SIMPLE storno staje na dva aktivna dokumenta istog vlasnika"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
+        "ZBR-MUT: dokument A ostaje aktivan"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idB), _
+        "ZBR-MUT: dokument B ostaje aktivan"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-MUT: otpremnica NIJE odvezana preko granice dokumenta"
+
+    ' --- ISPRAVKA i DUPLI: RAZLICITE PUTANJE, obe se mere ---
+    '
+    ' Do v6-ui-225 je ovaj blok pisao "ISPRAVKA" a vrteo SV_MODE_DUPLI. Tvrdnja
+    ' je bila zelena, ali ne iz razloga koji je imenovala: DUPLI staje tek u
+    ' StornoZbirnaIDetach_TX, dok ISPRAVKA do te rutine uopste ne dolazi --
+    ' ona ide na CreateCorrectionContext pa StornoZbirna_TX, i njena jedina
+    ' odbrana je PRED-MUTACIONA kapija u RunZbirnaCorrection. Ta kapija je do
+    ' istog koraka brojala VLASNIKE, pa je A17 kroz nju prolazio: zaglavlje bi
+    ' bilo stornirano, a blokada stigla tek na CompleteZbirnaIspravka -- dakle
+    ' posle izmene, u MANUAL stanju.
+    Set r = RunZbirnaCorrection(broj, SV_MODE_ISPRAVKA, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: ISPRAVKA staje PRE mutacije na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
+        "ZBR-MUT: ISPRAVKA nije stornirala zaglavlje"
+
+    Set r = RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: DUPLI staje na dva aktivna dokumenta istog vlasnika"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-MUT: DUPLI nije odvezao otpremnicu"
+
+    ' --- NEGATIVNA KONTROLA: dvoklasna zbirna (dva reda, JEDNA generacija) ---
+    ' Kapija sme da odbija samo dva DOKUMENTA. Ako pocne da odbija i ovo, obara
+    ' redovan storno svake dvoklasne zbirne -- pa bi tvrdnje gore bile zelene iz
+    ' pogresnog razloga.
+    brojDvoklasna = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+                    Format$(NextTestDate(), "ddmmyy")
+    zbr1 = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojDvoklasna, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbr2 = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojDvoklasna, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         50#, TEST_TIP_AMB, 5, KLASA_II)
+    AssertEquals GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbr1), _
+                 GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbr2), _
+        "ZBR-MUT preduslov: dva reda dvoklasne dele generaciju"
+
+    Set r = RunSimpleStornoZbirna(brojDvoklasna)
+    AssertTrue CBool(r("success")), _
+        "ZBR-MUT negativna kontrola: dvoklasna zbirna se i dalje stornira"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-MUT-01 dva dokumenta istog vlasnika", Err.description
+End Sub
+
 Private Sub Test_StornoGuardNaSvimPutanjama()
     On Error GoTo EH
 
@@ -4083,6 +4294,12 @@ Private Sub EndRun()
 
     AppendTestLog "SUITE", "SUMMARY", "INFO", summary
 
+    ' PRE MsgBox-a i PRE Err.Raise: gate iskace iz procedure, pa bi upis
+    ' posle njega izostao bas kad suite padne -- dakle kad je jedino i treba.
+    On Error Resume Next
+    WriteResultFileBFP
+    On Error GoTo 0
+
     If m_Failed > 0 Then
         MsgBox "Business Flow Pro tests finished with failures." & vbCrLf & summary, _
                vbExclamation, APP_NAME
@@ -4100,6 +4317,7 @@ Private Sub EndRun()
 End Sub
 
 Private Sub ResetCounters()
+    m_Report = ""
     m_Total = 0
     m_Passed = 0
     m_Failed = 0
@@ -4154,6 +4372,7 @@ Private Sub LogPass(ByVal testName As String)
 
     Debug.Print "[PASS] " & testName
     AppendTestLog "TEST", testName, "PASS", ""
+    m_Report = m_Report & "PASS " & testName & vbLf
 End Sub
 
 Private Sub LogFail(ByVal testName As String, ByVal details As String)
@@ -4162,6 +4381,17 @@ Private Sub LogFail(ByVal testName As String, ByVal details As String)
 
     Debug.Print "[FAIL] " & testName & " :: " & details
     AppendTestLog "TEST", testName, "FAIL", details
+    m_Report = m_Report & "FAIL " & testName & " -- " & details & vbLf
+End Sub
+
+Private Sub WriteResultFileBFP()
+    Dim path As String
+    Dim fnum As Integer
+    path = ThisWorkbook.path & Application.PathSeparator & "last_run_bfp.txt"
+    fnum = FreeFile
+    Open path For Output As #fnum
+    Print #fnum, "TESTS=" & m_Total & " FAIL=" & m_Failed & vbLf & m_Report;
+    Close #fnum
 End Sub
 
 Private Sub LogSkip(ByVal testName As String, ByVal reason As String)
@@ -4170,6 +4400,7 @@ Private Sub LogSkip(ByVal testName As String, ByVal reason As String)
 
     Debug.Print "[SKIP] " & testName & " :: " & reason
     AppendTestLog "TEST", testName, "SKIP", reason
+    m_Report = m_Report & "SKIP " & testName & " -- " & reason & vbLf
 End Sub
 
 Private Sub LogInfo(ByVal message As String)
@@ -4183,6 +4414,8 @@ Private Sub LogFatal(ByVal sourceName As String, ByVal errNum As Long, ByVal err
 
     Debug.Print "[FATAL] " & sourceName & " :: " & CStr(errNum) & " - " & errDesc
     AppendTestLog "FATAL", sourceName, "FAIL", CStr(errNum) & " - " & errDesc
+    m_Report = m_Report & "FAIL " & sourceName & " -- FATAL " & _
+               CStr(errNum) & " " & errDesc & vbLf
 End Sub
 
 Private Sub InitTestLog()

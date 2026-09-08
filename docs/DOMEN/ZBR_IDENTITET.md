@@ -1,12 +1,16 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
 > **KI-007 je zatvoren:** resolver, F3 prevencija (`ZBR-ACTIVE-NUMBER-01`), I1
-> read-model, F4 parent guard (I2) i MasterSync detekcija **jesu** implementirani.
-> Ostaje samo MIG-005b (picker).
+> read-model, F4 parent guard (I2), MasterSync detekcija i MIG-005b (picker)
+> **jesu** implementirani.
 >
-> **Status (`v6-ui-222`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
+> **Status (`v6-ui-224`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
 > sa brojem linije). §§4–6 i I1/I2 iz §8 su **implementirani**. §9 kaže koji su
 > acceptance testovi napisani, a koji čekaju i zašto.
+>
+> **§2 je bio nepotpun:** tabela tri writer-a je tvrdila da sva tri zovu
+> `ApplyGeneracijaID`, i to je tačno opisivalo kod — ali ne i to da je za jednog
+> od njih (`modMasterSync`) nasleđivanje generacije **pogrešno**. V. §11b.
 >
 > Ovaj fajl je odgovor na `KNOWN_ISSUES.md` KI-007, koji traži da se invarijanta
 > ZBR-IDENT-01 definiše pre nego što se dira core.
@@ -35,12 +39,14 @@ reda.
 ## 2) Šta kod danas stvarno garantuje
 
 **Svaki upisan red dobija `GeneracijaID`.** Tri i samo tri writer-a rade
-`AppendRow` u `tblZbirna`, i sva tri odmah zovu `ApplyGeneracijaID`:
+`AppendRow` u `tblZbirna`, i sva tri ga odmah **pečate** — ali ne istom rutinom:
+prva dva generaciju **nasleđuju** u svom opsegu, `modMasterSync` je **kuje**
+(v. §11b):
 
 | Writer | AppendRow | ApplyGeneracijaID |
 |---|---|---|
 | `modDokumenta.SaveZbirna` | `modDokumenta.bas:633` | `:636` |
-| `modMasterSync` (PWA import) | `modMasterSync.bas:3175` | `:3180` |
+| `modMasterSync` (PWA import) | `modMasterSync.bas:3175` | `ApplyNovaGeneracijaID` — **uvek nova**, v. §11b |
 | `modDokumentInvariant` (rekalkulacija) | `modDokumentInvariant.bas:412` | `:421` |
 
 Lanac garancija: `RequireColumnIndex(COL_GENERACIJA_ID)` pada glasno ako kolone
@@ -101,6 +107,8 @@ integrityStatus                    OK | INTEGRITY_ERROR
 activeLogicalCount                 Long      ' distinct non-empty GeneracijaID, aktivni redovi
 activeOwnerCount                   Long      ' distinct (VozacID,KupacID), aktivni redovi
 historicalOwnerCount               Long      ' distinct (VozacID,KupacID), SVI redovi IKAD
+historicalLogicalCount             Long      ' distinct GeneracijaID, SVI redovi IKAD
+                                             ' MERI SE, NE BLOKIRA -- v. par.13
 scopeProvided                      Boolean
 historicalOwnerIsScope             Boolean   ' True samo kad je historicalOwnerCount = 1
                                              ' i taj vlasnik = prosledjeni scope
@@ -241,8 +249,13 @@ testovi `T_ZbirnaIdent_BrojSeRazresavaUDokument`,
 `T_ZbirnaKapija_AktivanBrojNeSmeDvaput` i
 `T_Prijemnica_VezujeSeSamoNaJednoznacnu`, plus **devet** sabotaža.
 
-**Čeka:** A6, A9–A12, A14, A21 — sve traže **upis** (`Scr_Save`,
-`SaveZbirnaMulti_TX`, import), pa idu u BFP suite, ne u `RunAllTests`.
+**Pokriveno** (`modBusinessFlowProTests`, `RunBusinessFlowProSuite`): A21 —
+`Test_ZBR_ImportDvaUredjajaNeStapaDokumente` ide kroz **pravi** uvoz
+(`TestHook_ImportZbirnaRowPWA` → `ImportRowToTblZbirna`), plus sabotaža
+`mastersync-nasledjuje-tudju-generaciju`.
+
+**Čeka:** A6, A9–A12, A14 — sve traže **upis** (`Scr_Save`,
+`SaveZbirnaMulti_TX`), pa idu u BFP suite, ne u `RunAllTests`.
 A17 više ne čeka: par „dva dokumenta istog vlasnika" fixture nema, ali ga test
 pravi sam (privremeno izjednači vozača para) i vraća.
 
@@ -267,7 +280,7 @@ pravi sam (privremeno izjednači vozača para) i vraća.
 | A17 | dva aktivna log. dok. **istog** vlasnika | `CURRENT_AMBIGUOUS`; `2 / 1`. Dvosmislenost nije pitanje vlasnika. |
 | A18 | aktivan `5/070926` vlasnik A, kandidat `" 5/070926 "` vlasnik **A** | **BLOCK.** Preduslov: normalizovani brojevi jednaki i vlasnik isti. |
 | A20 | aktivan red sa praznim `GeneracijaID` | `INTEGRITY_ERROR`; resolver **ne pogađa** identitet; `IntegritetUkupno` +1. |
-| A21 | import / rekalkulacija | Ne prolaze kroz `ZbirnaValidiraj`; red ipak dobija `GeneracijaID`. Fiksira granicu kapije iz §5. |
+| A21 | import: dva `ClientRecordID`-a, **isti** vozač, kupac i broj | Ne prolazi kroz `ZbirnaValidiraj` (fiksira granicu kapije iz §5), oba reda opstaju, ali dobijaju **različite** `GeneracijaID` → `2 / 1`, `CURRENT_AMBIGUOUS`, F4 blokira, B8 prijavljuje. |
 
 A19 je **povučen** (bio je legacy `LogicalZbirnaKey` fallback) — v. D4. Broj se
 ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
@@ -276,9 +289,11 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 
 - **`ZBR-NORM-02`** — `VlasniciPoBroju` (`modStorno.bas:2523`) poredi broj
   case-sensitive. Nije deo L1; resolver ga zaobilazi sopstvenom normalizacijom.
-- **MIG-005b** — dupla stavka dvoklasne zbirne u pickeru; blokiran je na ovome,
-  jer ispravna de-duplikacija grupiše po logičkom dokumentu, a picker danas nosi
-  samo broj. V. `UI_MIGRACIJA_KATALOG.md` §28.1f.
+- **MIG-005b** — **urađen** (`v6-ui-223`): `FillZbirneCombo` de-duplikuje po
+  `GeneracijaID`, pa dvoklasna zbirna daje jednu stavku. Dva **različita**
+  dokumenta pod istim brojem i dalje stoje dvaput — namerno; F4 takav broj odbija
+  (`CURRENT_AMBIGUOUS`), a B8 ga prijavljuje. Test
+  `T_Zbirne_PickerJednaStavkaPoDokumentu`. V. `UI_MIGRACIJA_KATALOG.md` §28.1f.
 - Nema izmene `CheckDuplicate`, `OtpremnicaValidiraj`, `GeneracijaIDZaBrojArr`.
 - Važe opšta pravila: bez novih `Private WithEvents`, `.frx` se ne dira, VBA
   izvor 100% ASCII, korisnički tekst kroz `modPoruke`.
@@ -314,18 +329,45 @@ mitigacijom na GAS strani.
 
 Zato `ImportRowToTblZbirna` red **upisuje**, pa zove
 `PrijaviKolizijuBrojaZbirne` — koja meri **stanje koje je import ostavio** (zove
-se posle `ApplyGeneracijaID`, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
+se posle pečaćenja identiteta, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
 diže grešku**: pad detekcije unutar transakcije oborio bi baš onaj upis koji
 treba da sačuva.
 
 Trajni trag je u `modIntegritet`: **B8** (broj nosi više aktivnih dokumenata) i
 **B9** (aktivna zbirna bez `GeneracijaID`). Log se izgubi, nalaz ostaje.
 
-Bezbedno je baš zato što I2 ide **pre** ovoga: F4 fail-closed odbija dvosmislen
-broj, pa nijedan nizvodni proces ne bira roditelja po broju.
+### Zašto MasterSync **uvek kuje** novu generaciju (`v6-ui-224`)
 
-**Neverifikovano:** da import zaista *ne* blokira (A21) traži pravi uvoz, pa ide u
-BFP suite. `RunAllTests` pokriva samo detekciju (B8/B9), kroz test 193.
+Do `v6-ui-224` je import zvao `ApplyGeneracijaID`, koji generaciju **nasleđuje**
+od aktivnog reda istog broja u istom opsegu (`VozacID + KupacID`). To je tačno za
+`SaveZbirnaMulti_TX` i `modDokumentInvariant` — oni **jedan** dokument pišu u
+**dva** reda (Kl. I i Kl. II), pa drugi red mora u generaciju prvog.
+
+Za import nije. PWA obe klase sabira u **jedan** red (`Klasa = "I/II"`), a
+`IsDuplicateZbirnaInMaster` odbija već uvezen `ClientRecordID` **pre** upisa —
+svaki red koji stigne do `AppendRow` je dokument koji nikad nije viđen. Isti
+vozač i isti kupac **ne znače** isti dokument; to je tačno **A17**, i to je baš
+`KR-001` scenario: dva uređaja offline dodele isti broj istom vozaču i kupcu.
+
+Nasleđivanje je zato uništavalo činjenicu koju detekcija treba da vidi — i to
+**pre** nego što bi je iko izmerio:
+
+| Posledica | Zašto |
+|---|---|
+| `PrijaviKolizijuBrojaZbirne` ćuti | `activeLogicalCount` broji **generacije**; stopljene daju 1 |
+| **B8** nema nalaz | presudu uzima od istog resolvera |
+| **F4** pušta prijemnicu | `resolutionStatus = UNIQUE`, `historicalOwnerCount = 1` |
+| **jedan storno obori oba dokumenta** | `StornoZbirna` redove bira po generaciji (`RedJeIzabranogDokumenta`), a kapiju `RequireJedanVlasnikPoBroju` **preskače** kad je generacija zadata |
+| operater ih ne razlikuje ni u listi | skrivena kolona identiteta u storno gridu je baš `COL_GENERACIJA_ID` (`modScrDokumenti.IdKolonaTipa`) |
+
+Poslednja dva reda su teža od prva tri: nije reč o propuštenoj detekciji nego o
+**pogrešnoj identifikaciji na svakoj nizvodnoj radnji po identitetu**.
+
+Pravilo je zato: pisac koji **jedan dokument deli na više redova** nasleđuje
+(`ApplyGeneracijaID`); pisac koji **svaki red piše kao zaseban dokument** kuje
+(`ApplyNovaGeneracijaID`). Bezbednost ne dolazi od toga što je I2 ušao ranije,
+nego od toga što dve terenske činjenice ne postaju jedan identitet — tek onda broj
+**stvarno** postane dvosmislen, pa ga F4 fail-closed odbija.
 
 ## 12) Fixture i ZBR-IDENT-01
 
@@ -333,7 +375,7 @@ BFP suite. `RunAllTests` pokriva samo detekciju (B8/B9), kroz test 193.
 upisivao `GeneracijaID` ni na jedan red, a tri reda (`ZBI-TEST-1`, `ZBI-TEST-2`,
 `ZBI-TEST-STOR`) nisu imala ni `KupacID`. To je stanje koje produkcija **ne može
 da proizvede**: `ValidateZbirnaInput` odbija zbirnu bez kupca, a sva tri writer-a
-odmah zovu `ApplyGeneracijaID`.
+odmah pečate validan `GeneracijaID`.
 
 Posledica je bila da se **svaki postojeći broj čita kao `INTEGRITY_ERROR`**, pa je
 I2 bio blokiran — `T_BrutoNeto_PoRezimu` tvrdi `AssertEq resP, ""` nad
@@ -384,3 +426,81 @@ ponovo napraviti, inače `run_vba` staje na proveri ustajalosti:
 ```bash
 python tools/make_fixture.py --donor "<put/do/donora.xlsm>" --force
 ```
+
+## 13) `ZBR-MUT-01` — vlasnička i dokumentna dvosmislenost nisu isto (`v6-ui-225`)
+
+Deca zbirne — otpremnica, prijemnica, paletna stavka, denormalizovan otkup —
+nose **samo `BrojZbirne`**. Generacije nemaju. Zato svaka rutina koja decu bira
+po broju zahvata **sve** dokumente tog broja, ma koliko ih bilo.
+
+Kapija za to je postojala (`modStornoFlow.ZbirnaBrojJeDvosmislenIkad`, šest
+poziva) i merila je **vlasnike**:
+
+```vb
+VlasniciPoBroju(...).count > 1
+```
+
+**Komentar uz svaki od tih šest poziva opisivao je dokumentnu dvosmislenost**
+(*„dva aktivna dokumenta istog broja delila bi otpremnice, pa bi se odvezale i
+tuđe"*), a mera je bila vlasnička. Dva pojma se poklapaju samo dok jedan vlasnik
+**ne može** da ima dva dokumenta pod istim brojem — a `v6-ui-224` je baš to
+učinio dostižnim (`KR-001`, dva uređaja offline; A17 oblik `2 / 1`).
+
+| | Šta meri | Kad je opasno |
+|---|---|---|
+| `historicalOwnerCount > 1` | broj je **ikad** prešao granicu vlasništva | storniran vlasnik i dalje ima aktivnu decu |
+| `activeLogicalCount > 1` | broj **sada** nosi više dokumenata | samo aktivni konkurišu za decu |
+
+Kapija je sada `modDokumenta.ZbirnaMutacijaPoBrojuRazlog` i blokira na **oba**,
+sa različitim razlogom (`ZBR_MUT_VISE_VLASNIKA` / `ZBR_MUT_VISE_DOKUMENATA` /
+`ZBR_MUT_INTEGRITET`) — uzrok se ne stapa, jer su to tri različita poteza za
+operatera.
+
+### Šta je propuštalo, po putanji
+
+| Putanja | Zaglavlje | Deca |
+|---|---|---|
+| `StornoZbirnaIDetach_TX` (SIMPLE) | tačno, po generaciji | `DetachOtpremniceInline` **prazni `BrojZbirne` deci OBA dokumenta** |
+| `PonistiZbirnaChain_TX` | `gen` je bio **mrtav parametar** — prosleđivan i nikad korišćen | otpremnice/prijemnice skupljane po golom broju |
+| `Run/CompleteZbirnaCorrection` | — | relink i rekalkulacija po broju zahvataju oba |
+| `RunOtpremnicaCorrection` (roditelj) | — | ista kapija nad roditeljskom zbirnom |
+
+### Zašto `historicalLogicalCount` **ne** blokira
+
+Meri se i stoji u DTO-u, ali nije uslov. Razlog je unutar ovog istog ugovora:
+`ZbirnaNovUnosRazlog` ima ALLOW granu
+
+```
+activeLogicalCount = 0 AND historicalOwnerIsScope  ->  ALLOW  (ispravka / re-entry)
+```
+
+a `GeneracijaIDZaBrojArr` isključuje stornirane — pa **svaki redovan re-entry kuje
+novu generaciju**. Ispravljena zbirna pod istim brojem zato stoji kao
+`historicalLogicalCount = 2, historicalOwnerCount = 1`. Blokada na toj vrednosti
+bi značila da F3 kaže „smeš ponovo pod ovim brojem", a storno „ne smeš ga više
+dirati" — kontradikcija u istom ugovoru. `modTest` test 34
+(`T_IstiBrojRazliciteGeneracije_NijeIstiDokument`) to stanje tvrdi kao legitimno.
+
+Uz to je opasnost uža nego što izgleda: `DetachOtpremniceInline` **prazni broj**
+na deci, pa posle prostog storna deca stornirane generacije taj broj više i ne
+nose — za mutaciju po broju ne konkurišu. Stanje „stornirana generacija sa
+aktivnom decom pod istim brojem" ne nastaje redovnim putem, nego ručnom izmenom
+u tabeli; tada ga hvata `integrityStatus` / B9, ne ova kapija.
+
+**Trajno rešenje** je da deca nose `ZbirnaGeneracijaID`. Dok ga nemaju, kapija je
+jedino što stoji između mutacije po labeli i tuđeg dokumenta.
+
+### Verifikacija
+
+| Šta | Gde |
+|---|---|
+| `2 aktivna dokumenta / 1 vlasnik` → SIMPLE i ISPRAVKA staju, deca ostaju vezana | `modBusinessFlowProTests` `Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta` (stanje pravi **pravi uvoz**, dva `ClientRecordID`-a) |
+| Dvoklasna zbirna (dva reda, **jedna** generacija) se i dalje stornira | ista, negativna kontrola |
+| Fail-closed na sopstvenu grešku | `modTest` `T_KapijaZbirne_FailClosedNaSvojuGresku` (schema drift) |
+| Sabotaža | `kapija-mutacije-broji-samo-vlasnike` |
+
+**Nije zasebno mereno:** prosleđivanje `gen` u `StornoZbirna` iz
+`PonistiZbirnaChain_TX`. Kapija iznad više ne pušta dva aktivna dokumenta, a
+`StornoZbirna` preskače već stornirane redove — pa kroz podržane putanje razlike
+u ponašanju nema. Ispravka je precizna, ne merljiva; sabotaža za nju bi bila
+zelena bez obzira na kod, pa nije ni dodata.

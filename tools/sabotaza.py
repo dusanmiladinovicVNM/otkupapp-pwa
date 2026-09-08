@@ -717,16 +717,18 @@ SABOTAZE = {
     "otpremnica-bez-kapije-nad-zbirnom": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "        Dim razPar As String: razPar = ZbirnaMutRazlog(parentZbirna)\n",
         "    If False Then   ' SABOTAZA: dvosmislena roditeljska zbirna se ignorise\n"
-        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "        Dim razPar As String: razPar = ZbirnaMutRazlog(parentZbirna)\n",
         "T_OtpremnicaNadDvosmislenomZbirnom_Staje",
         "DUPLI staje kad je broj roditeljske zbirne dvosmislen",
     ),
     # Zatecen PENDING context iz starije verzije zaobilazi kapiju na startu.
     "zatecen-context-bez-kapije": (
         "modStornoFlow.bas",
-        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
+        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n"
+        "    If Len(razOZ) > 0 Then\n",
+        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n"
         "    If False Then   ' SABOTAZA: zatecen context prolazi bez provere\n",
         "T_ZatecenContext_NePrevezujeTudjePrijemnice",
         "tudja prijemnica NIJE prevezana na novu zbirnu",
@@ -737,10 +739,10 @@ SABOTAZE = {
     # dokumenta. Guard prolazi, tudja prijemnica se preveze.
     "stale-parent-po-broju": (
         "modStornoFlow.bas",
-        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
+        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n",
         "    Dim sabZbirna As String   ' SABOTAZA: roditelj po broju, ne iz context-a\n"
         "    sabZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE))\n"
-        "    If ZbirnaBrojJeDvosmislenIkad(sabZbirna) Then\n",
+        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(sabZbirna)\n",
         "T_ZatecenContext_NePrevezujeTudjePrijemnice",
         "tudja prijemnica NIJE prevezana na novu zbirnu",
     ),
@@ -749,18 +751,11 @@ SABOTAZE = {
     # -- pa storniran vlasnik sa aktivnom decom prolazi.
     "cilj-bez-istorijske-kapije": (
         "modStornoFlow.bas",
-        "    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then\n",
+        "    Dim razNZ As String: razNZ = ZbirnaMutRazlog(newZbirna)\n"
+        "    If Len(razNZ) > 0 Then\n",
+        "    Dim razNZ As String: razNZ = ZbirnaMutRazlog(newZbirna)\n"
         "    If False Then   ' SABOTAZA: ciljna zbirna se ne proverava\n",
         "T_CiljnaZbirnaDvosmislena_Staje",
-        # NE deklarise se poslovni ishod, nego PORUKA -- i to je posledica
-        # v2.84.0. Otkad RecalculateZbirnaFromOtpremnice_TX nosi kapiju U SEBI,
-        # gasenje kapije po call-site-u vise ne menja kolicinu ciljnog
-        # zaglavlja: centralna je zaustavi. Ishod time cuvaju DVE kapije, pa ga
-        # jedna sabotaza po konstrukciji ne moze oboriti.
-        #
-        # Razlika se vidi samo u poruci: kapija po call-site-u imenuje CILJNU
-        # zbirnu, dok centralna staje iznutra i daje samo neuspeh. Isti oblik
-        # kao guard-samo-aktivni-vlasnici.
         "razlog imenuje CILJNU zbirnu, ne staru",
     ),
     # Kes tabela memoise NEUSPEH -- zatecen incident sa prave instalacije:
@@ -1056,63 +1051,50 @@ SABOTAZE = {
     # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
     "zbirna-ispravka-cilj-bez-kapije": (
         "modStornoFlow.bas",
-        "    If ZbirnaBrojJeDvosmislenIkad(newBroj) Then\n"
-        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
-        "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n"
-        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
+        "    razStr = ZbirnaMutRazlog(newBroj)\n"
+        "    If Len(razStr) > 0 Then\n",
+        "    razStr = ZbirnaMutRazlog(newBroj)\n"
+        "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n",
         "T_IspravkaZbirne_KapijaNaObeStrane",
-        # Deklaracija pomerena na PREVEZIVANJE, ne na rekalkulaciju -- takodje
-        # posledica v2.84.0, ali iz drugog razloga nego kod
-        # cilj-bez-istorijske-kapije.
-        #
-        # Centralna kapija stiti REKALKULACIJU (ona je u
-        # RecalculateZbirnaFromOtpremnice_TX), pa kolicina ciljnog zaglavlja
-        # vise ne mrda. Ali PREVEZIVANJE OTPREMNICE nema svoju centralnu
-        # kapiju, pa bez kapije po call-site-u otpremnica izvora STVARNO
-        # zavrsi na dvosmislenom cilju -- mereno: ocekivano ZB-TEST-OLDU,
-        # dobijeno ZB-TEST-TGT.
-        #
-        # Nova tvrdnja je zato JACA od stare: opisuje pogresnu mutaciju, ne
-        # izostanak jedne. Asimetrija (rekalkulacija ima centralnu kapiju,
-        # prevezivanje otpremnice nema) upisana je kao otvoren nalaz.
         "dvosmislen CILJ: otpremnica izvora nije prevezana",
     ),
     # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
     "zbirna-ispravka-izvor-bez-kapije": (
         "modStornoFlow.bas",
-        "    ElseIf ZbirnaBrojJeDvosmislenIkad(oldBroj) Then\n",
-        "    ElseIf False Then   ' SABOTAZA: izvorna strana se ne proverava\n",
+        "        razStr = ZbirnaMutRazlog(oldBroj)\n",
+        "        razStr = \"\"   ' SABOTAZA: izvorna strana se ne proverava\n",
         "T_IspravkaZbirne_KapijaNaObeStrane",
         "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja",
     ),
     # Kapija fail-open na sopstvenu gresku: schema drift -> "jednoznacno je".
+    # Kapija je od v6-ui-225 u jezgru (modDokumenta), pa je i fail-closed grana
+    # tamo. ZbirnaIdentResolve na sopstvenu gresku vraca INTEGRITY_ERROR; ova
+    # grana je ono sto od toga pravi blokadu. Bez nje drift daje nule i kapija
+    # kaze "bezbedno" -- tacno fail-open koji test meri.
     "kapija-fail-open": (
-        "modStornoFlow.bas",
-        "EH:\n"
-        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
-        "    ZbirnaBrojJeDvosmislenIkad = True\n",
-        "EH:\n"
-        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
-        "    ZbirnaBrojJeDvosmislenIkad = False   ' SABOTAZA: fail-open kapija\n",
+        "modDokumenta.bas",
+        "    If id.integrityStatus <> ZBR_INT_OK Then\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_INTEGRITET\n",
+        "    If False Then   ' SABOTAZA: fail-open kapija\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_INTEGRITET\n",
         "T_KapijaZbirne_FailClosedNaSvojuGresku",
         "nerazresena jednoznacnost se tretira kao dvosmislena",
     ),
-    # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
-    # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
-    #
-    # Ne deklarise se success ("DUPLI staje..."), nego KOJA kapija je stala.
-    # Ishod cuvaju DVE nezavisne kapije -- na nivou moda i u detach-u -- pa
-    # success ostaje False i kad ova otkaze; jedna sabotaza ga po konstrukciji
-    # ne moze oboriti. Razlika se vidi samo u poruci: kapija na nivou moda
-    # staje PRE transakcije i kaze razlog, dok bi detach pukao iznutra.
+    # Kapija je od v6-ui-225 u jezgru. Ista greska, novo mesto: storniran vlasnik
+    # prestaje da se broji, pa broj koji je IKAD presao vlasnicku granicu prolazi
+    # -- a deca stornirane zbirne ostaju aktivna i nose isti broj.
     "guard-samo-aktivni-vlasnici": (
-        "modStornoFlow.bas",
-        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
-        "                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
-        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
-        "                              MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        "modDokumenta.bas",
+        "    If id.historicalOwnerCount > 1 Then\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA\n",
+        "    If id.activeOwnerCount > 1 Then   ' SABOTAZA: storniran vlasnik se ne broji\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA\n",
         "T_StorniranVlasnik_JosImaAktivnuDecu",
-        "staje kapija na nivou moda, pre transakcije, sa razlogom",
+        # Od ZBR-MUT-01 obe kapije (nivo moda i detach) idu kroz isti racun, pa
+        # ova sabotaza gasi ceo lanac i operacija PROLAZI. Pada zato prva
+        # tvrdnja, ne ona o poruci -- ranije je vazilo obrnuto, jer je jedna
+        # kapija ostajala ziva.
+        "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
     ),
     # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
     # "tudji blok nije pomeren" bez pozitivne kontrole.
@@ -1135,14 +1117,12 @@ SABOTAZE = {
         "T_ZavrsetakIspravke_NeDegradiraOldDocID",
         "MOJ blok JESTE prevezan na zamensku otpremnicu",
     ),
-    # Zamena zbirne bez kapije: zaglavlje se stornira tacno, a completion posle
-    # snimanja zamene odnese decu TUDJE zbirne.
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
-        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
         "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
     ),
@@ -1177,11 +1157,10 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _\n"
-        "                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then\n"
-        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
-        "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n"
-        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)\n"
+        "    If Len(razPon) > 0 Then\n",
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)\n"
+        "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
     ),
@@ -5327,6 +5306,38 @@ SABOTAZE = {
         "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
         "B9 vidi aktivnu zbirnu bez GeneracijaID",
     ),
+    # A21/KR-001: vraca nasledjivanje generacije u PWA uvoz. Dva uredjaja sa
+    # istim brojem, vozacem i kupcem opet dobijaju ISTU generaciju, pa
+    # activeLogicalCount (broji generacije) ostaje 1 -- resolver kaze UNIQUE,
+    # F4 pusta, B8 cuti. Tvrdnja mora biti TACAN tekst: BFP izlaz nosi naziv
+    # tvrdnje, ne ime Sub-a (v. dokaz.py _pali).
+    # ZBR-MUT-01: skida DOKUMENTNU granu kapije i ostavlja samo vlasnicku --
+    # tacno stanje pre v6-ui-225. Dva aktivna dokumenta istog vlasnika opet
+    # prolaze, pa SIMPLE storno odveze i decu drugog dokumenta.
+    "kapija-mutacije-broji-samo-vlasnike": (
+        "modDokumenta.bas",
+        "    If id.activeLogicalCount > 1 Then\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA\n",
+        "    If False Then   ' SABOTAZA: samo vlasnicka dvosmislenost blokira\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA\n",
+        "Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta",
+        "ZBR-MUT: otpremnica NIJE odvezana preko granice dokumenta",
+    ),
+    "mastersync-nasledjuje-tudju-generaciju": (
+        "modMasterSync.bas",
+        "        ApplyNovaGeneracijaID TBL_ZBIRNA, result\n",
+        "        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _\n"
+        "                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID\n",
+        "Test_ZBR_ImportDvaUredjajaNeStapaDokumente",
+        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog",
+    ),
+    "picker-ne-spaja-redove-dokumenta": (
+        "modOtkupUI.bas",
+        "                    uzmi = False          \' drugi red ISTOG dokumenta\n",
+        "                    uzmi = True   \' SABOTAZA: svaki red je svoja stavka\n",
+        "T_Zbirne_PickerJednaStavkaPoDokumentu",
+        "dva reda ISTOG dokumenta daju JEDNU stavku",
+    ),
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",
@@ -5631,7 +5642,12 @@ def _poruka_delovi(izraz: str):
 #     AssertEq rezultat, "Placeno", "status fakture je ispravan"
 #
 # -- a dokaz.py vidi samo PORUKU koja je pala.
-_ASSERT_IMENA = ("assertdoublenear", "asserteq", "asserttrue",
+# Redosled NIJE proizvoljan: poredi se startswith, pa duze ime mora PRE kraceg.
+# "assertequals" je pod "asserteq" padalo na granicu imena (sledeci znak je 'u',
+# dakle alnum) i tiho ispadalo iz prepoznavanja -- 147 tvrdnji u
+# modBusinessFlowProTests nije postojalo za --proveri-sidra, pa je katalog nad
+# njima mogao da zastari bez ijedne poruke.
+_ASSERT_IMENA = ("assertdoublenear", "assertequals", "asserteq", "asserttrue",
                  "chkeqd", "chkeq", "chk")
 
 
@@ -6336,6 +6352,9 @@ def _self_test() -> int:
             "    AssertEq a, b, \"lista \" & Split(CStr(x), \"|\")(0) & \" ima tabelu\"\n"
             "    AssertEq a, b, \"iznos \" & Format$(x, \"0.00\")\n"
             "    AssertEq nosiDok, True, \"zdrava tvrdnja\"\n"
+            # BFP koristi AssertEquals; pod "asserteq" je padalo na granicu
+            # imena, pa tvrdnja nije ni postojala za proveru sidara.
+            "    AssertEquals \"a\", b, \"tvrdnja iz AssertEquals\"\n"
             "    AssertEq a, b, \"tvrdnja A\"\n"
             "    AssertEq a, b, \"tvrdnja B\"\n"
             "    AssertEq a, b, \"tvrdnja C\"\n"
@@ -6383,6 +6402,20 @@ def _self_test() -> int:
     iza_zagrada = tuple(zdravo[:4]) + ("prava poruka ",)
     if _nalazi({"iza-zagrada": iza_zagrada}, imena, tela):
         print("SELF-TEST: poruka iza laznih spoljnih zagrada nije prepoznata",
+              file=sys.stderr)
+        lose += 1
+
+    # TVRDNJA IZ AssertEquals mora da se prizna.
+    #
+    # Do v6-ui-225 nije: startswith je "assertequals" hvatao pod "asserteq", pa
+    # ga granica imena ('u' je alnum) odbacivala -- i svih 147 takvih tvrdnji u
+    # modBusinessFlowProTests nije postojalo za --proveri-sidra. Katalog nad
+    # njima je mogao da zastari bez ijedne poruke, sto je tisi kvar od pogresnog
+    # nalaza: dokaz.py bi tek na Windows-u javio PALA DRUGA TVRDNJA.
+    n += 1
+    iz_equals = tuple(zdravo[:4]) + ("tvrdnja iz AssertEquals",)
+    if _nalazi({"iz-equals": iz_equals}, imena, tela):
+        print("SELF-TEST: tvrdnja iz AssertEquals nije prepoznata",
               file=sys.stderr)
         lose += 1
 

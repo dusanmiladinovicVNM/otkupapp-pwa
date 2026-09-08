@@ -7395,3 +7395,73 @@ Dve nove stavke u „Provere integriteta":
 
 U svakodnevnom radu se ništa ne menja — unos zbirne i prijemnice rade kao i pre.
 Ovo je samo dopuna izveštaja koji se pokreće po potrebi.
+
+### Lista brojeva zbirnih pokazuje dokument, ne red u tabeli
+
+Padajuća lista uz polje **Broj zbirne** nabrajala je **redove** tabele. Dvoklasna
+zbirna (Klasa I + Klasa II) je **jedan dokument upisan u dva reda**, pa je isti
+broj u listi stajao **dvaput**. Izgledalo je kao da postoje dve zbirne, a
+postojala je jedna.
+
+Sada lista daje **jednu stavku po dokumentu**. Dvoklasna zbirna se pojavljuje
+jednom, kao što i jeste.
+
+**Šta se namerno nije promenilo:** ako pod istim brojem stvarno stoje **dva
+različita** dokumenta, lista ih i dalje pokazuje **dvaput**. To nije propust —
+takvo stanje je neispravno i lista ga ne sme sakriti spajanjem u jednu stavku
+koja ne postoji. Takav broj F4 već odbija pri vezivanju prijemnice, a revizija
+integriteta ga prijavljuje kao **B8**.
+
+### Uvoz sa dva uređaja više ne spaja dva dokumenta u jedan
+
+Kad dva uređaja rade **offline**, oba mogu da dodele **isti broj zbirne** istom
+vozaču i istom kupcu. To je poznat rizik (`KR-001`) i uvoz ga i dalje prima —
+ništa se sa terena ne odbija i ništa se ne gubi.
+
+Ali do sada je uvoz ta **dva dokumenta upisivao kao jedan**. Drugi red je nasleđivao
+identitet prvog, jer se identitet tražio po broju i vlasniku — a isti vozač i isti
+kupac ne znače isti dokument.
+
+Posledice su bile ozbiljne i **nevidljive**:
+
+- provera integriteta **B8** nije prijavljivala takav broj, iako pod njim stoje
+  dva dokumenta;
+- vezivanje prijemnice (F4) prolazilo je kao da je broj jednoznačan;
+- **jedan storno obarao je oba dokumenta** — operater stornira zbirnu jednog
+  uređaja, a tiho nestane i zbirna drugog;
+- u listi za storno se ta dva dokumenta nisu mogla ni razlikovati.
+
+Sada svaki uvezen red dobija **svoj** identitet. Broj tada stvarno postane
+dvosmislen — pa ga F4 odbija, B8 ga prijavljuje, a storno pogađa tačno onaj
+dokument koji je izabran.
+
+**Šta se nije promenilo:** uvoz i dalje ne blokira. Kolizija se **upisuje pa
+prijavljuje**, jer je činjenica sa terena već nastala i odbijanje bi značilo
+gubitak podatka.
+
+Ovo ne dira dvoklasnu zbirnu (Klasa I + II) unetu u Excel-u: to jesu dva reda
+**jednog** dokumenta i ona i dalje dele identitet.
+
+### Storno i ispravka staju kad broj nosi dva dokumenta
+
+Nastavak prethodne stavke. Kad uvoz sa dva uređaja ostavi **dva dokumenta pod
+istim brojem**, to više nije samo vidljivo — sada i **zaustavlja** radnje koje bi
+zahvatile oba.
+
+Sve što visi o zbirnoj — otpremnica, prijemnica, palete, otkup — u tabeli je
+vezano **brojem**, ne dokumentom. Zato svaka radnja koja ide po broju hvata sve
+dokumente tog broja. Zaštita je postojala, ali je proveravala **kupca i vozača**,
+a ne broj dokumenata. Dva dokumenta **istog** vozača i kupca prolazila su kroz
+nju, pa je:
+
+- **storno** stornirao izabranu zbirnu ispravno, a onda **otkačio otpremnice oba
+  dokumenta** — one drugog dokumenta ostale bi bez zbirne, bez ijedne poruke;
+- **ispravka** prevezivala i tuđe otpremnice i prijemnice na novi broj.
+
+Sada obe radnje staju i kažu **zašto**: da li je broj pripadao više vlasnika, ili
+nosi više aktivnih dokumenata istog vlasnika, ili postoji zbirna bez identiteta.
+To su tri različita posla za operatera i više se ne stapaju u jednu poruku.
+
+**Šta se nije promenilo:** dvoklasna zbirna (Klasa I + II) je i dalje **jedan**
+dokument i stornira se kao i pre. Isto važi za ispravljenu zbirnu pod istim
+brojem — ona nije „dva dokumenta" nego stari i novi oblik istog posla.
