@@ -7377,3 +7377,42 @@ kao i pre — blokira ili pita, po podešavanju `PRIJEMNICA_ZBIRNA_PROVERA`. To 
 stanje koje operater može da zna unapred (zbirna tek stiže), pa tu potvrda ima
 smisla. Kod dvosmislenog ili tuđeg dokumenta nema: ekran ne može ni da ponudi koji
 je pravi, pa se ne pita nego staje.
+
+### MasterSync: kolizija broja zbirne se prijavljuje, ne blokira
+
+Zaokružuje `ZBR-IDENT-01`. F3 i F4 od ovog izdanja odbijaju dvosmislen broj —
+`ImportRowToTblZbirna` **ne**, i to je namerno.
+
+**Zašto ne blokira.** F3/F4 su komande operatera: konflikt znači „ne radi to".
+Import je *ingest već nastale činjenice sa terena*. `ImportZbirnaRow_TX` na prazan
+povratak diže `Err.Raise` **unutar `tx`**, pa bi odbijanje rollback-om bacilo
+**ceo sync red** — podatak sa terena bi se izgubio, a kolizija ostala
+neprijavljena. `KNOWN_ISSUES` **KR-001** multi-device koliziju `BrojZbirne` već
+prihvata kao rizik, sa mitigacijom na GAS strani.
+
+**Gde je detekcija.** `PrijaviKolizijuBrojaZbirne` u `modMasterSync`:
+
+- zove se **posle `ApplyGeneracijaID`**, ne pre — isti vlasnik nasleđuje postojeću
+  generaciju, drugi dobija novu, pa se tek posle upisa vidi da li je broj postao
+  dvosmislen;
+- **nikad ne diže grešku** — radi unutar transakcije uvoza, pa bi pad detekcije
+  oborio baš onaj upis koji treba da sačuva.
+
+**Trajni trag** je u `modIntegritet`, jer se log izgubi a nalaz ostaje:
+
+| | |
+|---|---|
+| **B8** | `BrojZbirne` nosi više aktivnih dokumenata |
+| **B9** | aktivna zbirna bez `GeneracijaID` |
+
+B8 kandidate traži jednim prolazom, a presudu daje `ZbirnaIdentResolve` — pravilo
+nema drugu kopiju, i dvoklasna zbirna (dva reda, **jedan** dokument) zato nije
+nalaz.
+
+**Bezbedno je zbog redosleda:** I2 je ušao *pre* ovoga, pa F4 fail-closed odbija
+dvosmislen broj i nijedan nizvodni proces ne bira roditelja po broju.
+
+**Nije dokazano:** da import zaista *ne* blokira (A21) traži pravi uvoz, pa ide u
+BFP suite. `RunAllTests` (test 193) pokriva samo detekciju — i to tako što meri
+pojavu **konkretnog** broja, jer fixture namerno nosi dvosmislen `ZB-TEST-SLDD` pa
+B8 uvek nešto prijavljuje.
