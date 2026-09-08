@@ -480,6 +480,7 @@ Public Sub RunAllTests()
     RunOne 190
     RunOne 191
     RunOne 192
+    RunOne 193
     RunOne 124
     RunOne 125
     RunOne 126
@@ -741,6 +742,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 190: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
         Case 191: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
         Case 192: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
+        Case 193: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -941,6 +943,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 190: T_ZbirnaIdent_BrojSeRazresavaUDokument
         Case 191: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
         Case 192: T_Prijemnica_VezujeSeSamoNaJednoznacnu
+        Case 193: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -16150,3 +16153,66 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     AssertEq (rNema = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")), False, _
              "A13: 'nema zbirne' se ne prijavljuje kao dvosmislenost"
 End Sub
+
+' Korak 5: sto import PRIHVATI, integritet mora da VIDI.
+'
+' PWA import namerno ne blokira koliziju broja (ingest cinjenice, ne komanda --
+' v. modMasterSync.PrijaviKolizijuBrojaZbirne), pa nalaz mora da postoji negde
+' gde se vidi i kasnije. To su provere B8 i B9 u modIntegritet.
+'
+' Ne meri se "ima li bloka B8": fixture NAMERNO nosi dvosmislen broj
+' (ZB-TEST-SLDD, za sledljivost testove), pa B8 uvek nesto prijavljuje. Meri se
+' da li se pojavio BAS broj koji test napravi -- inace bi tvrdnja bila zelena i
+' kad provera ne radi nista.
+Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
+    Dim pre As Variant, posle As Variant
+    Dim pGen As String, pTgtA As String
+
+    pre = modIntegritet.GetIntegritetRows()
+
+    ' B9: aktivan red bez generacije. B8: drugi vlasnik istog broja ozivljen,
+    ' pa ZB-TEST-TGT dobija DVA aktivna dokumenta.
+    pGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID))
+    pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, ""
+
+    posle = modIntegritet.GetIntegritetRows()
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID, pGen
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
+
+    AssertEq (Len(pGen) > 0), True, _
+             "preduslov/ZBR-IDENT-01: fixture red je NOSIO generaciju pre izmene"
+
+    AssertEq NalazSadrzi(pre, "B9", FX_ZBIRNA_MIRNA), False, _
+             "preduslov: zatecen fixture nema zbirnu bez generacije"
+    AssertEq NalazSadrzi(posle, "B9", FX_ZBIRNA_MIRNA), True, _
+             "B9 vidi aktivnu zbirnu bez GeneracijaID"
+
+    AssertEq NalazSadrzi(pre, "B8", FX_ZBIRNA_TGT), False, _
+             "preduslov: taj broj pre izmene NIJE dvosmislen"
+    AssertEq NalazSadrzi(posle, "B8", FX_ZBIRNA_TGT), True, _
+             "B8 vidi broj sa dva aktivna dokumenta"
+End Sub
+
+' Da li nalaz sa datom sifrom sadrzi dati tekst. Blok pocinje redom cija je PRVA
+' kolona sifra; detalji ispod nose praznu prvu kolonu, pa se sifra pamti.
+Private Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
+                             ByVal tekst As String) As Boolean
+    If Not IsArray(rows) Then Exit Function
+
+    Dim i As Long, tekuca As String
+    For i = 1 To UBound(rows, 1)
+        If Len(Trim$(NzToText(rows(i, 1)))) > 0 Then
+            tekuca = Trim$(NzToText(rows(i, 1)))
+        End If
+        If StrComp(tekuca, sifra, vbTextCompare) = 0 Then
+            If InStr(1, NzToText(rows(i, 2)), tekst, vbTextCompare) > 0 Then
+                NalazSadrzi = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function

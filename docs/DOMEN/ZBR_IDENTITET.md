@@ -1,8 +1,8 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
-> **KI-007 je zatvoren u lancu F3 → F4:** resolver, F3 prevencija
-> (`ZBR-ACTIVE-NUMBER-01`), I1 read-model i F4 parent guard (I2) **jesu**
-> implementirani. Ostaje MasterSync (ingest + detekcija, ne blokada) i MIG-005b.
+> **KI-007 je zatvoren:** resolver, F3 prevencija (`ZBR-ACTIVE-NUMBER-01`), I1
+> read-model, F4 parent guard (I2) i MasterSync detekcija **jesu** implementirani.
+> Ostaje samo MIG-005b (picker).
 >
 > **Status (`v6-ui-222`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
 > sa brojem linije). §§4–6 i I1/I2 iz §8 su **implementirani**. §9 kaže koji su
@@ -294,6 +294,38 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 | Storno nije brisanje | `docs/DOMEN/README.md` §2 |
 
 ---
+
+## 11b) MasterSync — ingest, pa detekcija
+
+**Ista provera, druga posledica.** F3 i F4 su **komande** operatera: konflikt tamo
+znači „ne radi to", pa se unos odbija. PWA import je **ingest već nastale
+činjenice sa terena**, i tu odbijanje nije simetrično.
+
+| | F3 / F4 | MasterSync |
+|---|---|---|
+| Šta je unos | namera operatera | činjenica sa terena |
+| Ko može da izabere drugi broj | operater, odmah | niko |
+| Cena odbijanja | operater kucne drugi broj | `Err.Raise` u `tx` → **rollback celog sync reda** |
+
+`ImportZbirnaRow_TX` na prazan povratak diže grešku unutar transakcije, pa bi
+blokada **izgubila podatak** — a koliziju ostavila neprijavljenu. `KNOWN_ISSUES`
+**KR-001** multi-device koliziju `BrojZbirne` već *prihvata* kao rizik, sa
+mitigacijom na GAS strani.
+
+Zato `ImportRowToTblZbirna` red **upisuje**, pa zove
+`PrijaviKolizijuBrojaZbirne` — koja meri **stanje koje je import ostavio** (zove
+se posle `ApplyGeneracijaID`, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
+diže grešku**: pad detekcije unutar transakcije oborio bi baš onaj upis koji
+treba da sačuva.
+
+Trajni trag je u `modIntegritet`: **B8** (broj nosi više aktivnih dokumenata) i
+**B9** (aktivna zbirna bez `GeneracijaID`). Log se izgubi, nalaz ostaje.
+
+Bezbedno je baš zato što I2 ide **pre** ovoga: F4 fail-closed odbija dvosmislen
+broj, pa nijedan nizvodni proces ne bira roditelja po broju.
+
+**Neverifikovano:** da import zaista *ne* blokira (A21) traži pravi uvoz, pa ide u
+BFP suite. `RunAllTests` pokriva samo detekciju (B8/B9), kroz test 193.
 
 ## 12) Fixture i ZBR-IDENT-01
 

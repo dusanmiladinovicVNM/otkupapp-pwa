@@ -7377,3 +7377,21 @@ kao i pre — blokira ili pita, po podešavanju `PRIJEMNICA_ZBIRNA_PROVERA`. To 
 stanje koje operater može da zna unapred (zbirna tek stiže), pa tu potvrda ima
 smisla. Kod dvosmislenog ili tuđeg dokumenta nema: ekran ne može ni da ponudi koji
 je pravi, pa se ne pita nego staje.
+
+### Revizija integriteta vidi dvosmislen broj zbirne
+
+Uvoz iz PWA i dalje prima **sve** što stigne sa terena — nijedan zapis se ne
+odbija i ništa se ne gubi. Ali ako se pri uvozu desi da isti broj zbirne
+dobiju dva različita dokumenta, to se sada **vidi u reviziji**, umesto da ostane
+nezapaženo.
+
+Dve nove stavke u „Provere integriteta":
+
+- **B8** — broj zbirne nosi **više aktivnih zbirnih**, pa se po njemu ne može
+  jednoznačno vezati. Dvoklasna zbirna (I + II) nije nalaz: to su dva reda
+  **jednog** dokumenta.
+- **B9** — aktivna zbirna kojoj **nedostaje identitet** dokumenta. Redovnim radom
+  ne nastaje; može posle ručne izmene u tabeli ili u starijim sveskama.
+
+U svakodnevnom radu se ništa ne menja — unos zbirne i prijemnice rade kao i pre.
+Ovo je samo dopuna izveštaja koji se pokreće po potrebi.
