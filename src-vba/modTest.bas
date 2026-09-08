@@ -481,6 +481,7 @@ Public Sub RunAllTests()
     RunOne 191
     RunOne 192
     RunOne 193
+    RunOne 194
     RunOne 124
     RunOne 125
     RunOne 126
@@ -743,6 +744,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 191: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
         Case 192: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
         Case 193: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
+        Case 194: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -944,6 +946,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 191: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
         Case 192: T_Prijemnica_VezujeSeSamoNaJednoznacnu
         Case 193: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
+        Case 194: T_Zbirne_PickerJednaStavkaPoDokumentu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -16195,6 +16198,78 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
              "preduslov: taj broj pre izmene NIJE dvosmislen"
     AssertEq NalazSadrzi(posle, "B8", FX_ZBIRNA_TGT), True, _
              "B8 vidi broj sa dva aktivna dokumenta"
+End Sub
+
+' MIG-005b: picker pokazuje JEDNU stavku po DOKUMENTU, ne po redu.
+'
+' Dvoklasna zbirna (Kl.I + Kl.II) su DVA reda JEDNOG dokumenta -- isti broj,
+' isti vozac i kupac, ISTA generacija. Do sada je stajala dvaput.
+'
+' Fixture takav par nema (nijedna dva reda ne dele broj+vozac+kupac), pa ga test
+' PRAVI od ZB-TEST-SLDD para i vraca. Meri se OBA smera nad istim redovima:
+'   ista generacija    -> JEDNA stavka   (dvoklasna zbirna)
+'   razlicite generacije -> DVE stavke    (anomalija; F4 je odbija, B8 prijavljuje)
+' Bez druge grane bi tvrdnja bila zelena i kad picker spaja sve po broju.
+Private Sub T_Zbirne_PickerJednaStavkaPoDokumentu()
+    Dim f As frmOtkupUI, CB As Object
+    Dim r As Long, jedanDok As Long, dvaDok As Long
+    Dim genD1 As String, genD2 As String
+    Dim vozD2 As String, kupD2 As String
+    Dim stD1 As String, stD2 As String
+
+    genD1 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_GENERACIJA_ID)))
+    genD2 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID)))
+    vozD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC))
+    kupD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC))
+    stD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
+    stD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO))
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.SelectMode f, "F4"          ' F4 vezuje zbirnu (ModeVezujeZbirnu)
+    Set CB = f.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
+
+    ' A) JEDAN dokument na dva reda: izjednaci vlasnika I generaciju.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, _
+                     NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_VOZAC))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC, _
+                     NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_KUPAC))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD1
+    modUiData.ResetCache          ' picker cita CachedTable -- bez ovoga meri bajato
+    modOtkupUI.FillZbirneCombo f
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
+            jedanDok = jedanDok + 1
+        End If
+    Next r
+
+    ' B) DVA dokumenta pod istim brojem: vrati D2 svoju generaciju.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD2
+    modUiData.ResetCache
+    modOtkupUI.FillZbirneCombo f
+    For r = 0 To CB.ListCount - 1
+        If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
+            dvaDok = dvaDok + 1
+        End If
+    Next r
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, vozD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC, kupD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, stD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, stD2
+    modUiData.ResetCache
+    ReleaseOtkupUIForm f
+
+    AssertEq (Len(genD1) > 0), True, _
+             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
+    AssertEq (genD1 <> genD2), True, _
+             "preduslov: par u fixture-u nosi RAZLICITE generacije"
+
+    AssertEq jedanDok, 1, "dva reda ISTOG dokumenta daju JEDNU stavku"
+    AssertEq dvaDok, 2, "dva RAZLICITA dokumenta istog broja ostaju dve stavke"
 End Sub
 
 ' Da li nalaz sa datom sifrom sadrzi dati tekst. Blok pocinje redom cija je PRVA

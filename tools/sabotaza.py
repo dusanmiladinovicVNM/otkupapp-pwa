@@ -5327,6 +5327,13 @@ SABOTAZE = {
         "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
         "B9 vidi aktivnu zbirnu bez GeneracijaID",
     ),
+    "picker-ne-spaja-redove-dokumenta": (
+        "modOtkupUI.bas",
+        "                    uzmi = False          \' drugi red ISTOG dokumenta\n",
+        "                    uzmi = True   \' SABOTAZA: svaki red je svoja stavka\n",
+        "T_Zbirne_PickerJednaStavkaPoDokumentu",
+        "dva reda ISTOG dokumenta daju JEDNU stavku",
+    ),
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",
