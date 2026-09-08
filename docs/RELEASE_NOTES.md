@@ -7378,41 +7378,20 @@ stanje koje operater može da zna unapred (zbirna tek stiže), pa tu potvrda ima
 smisla. Kod dvosmislenog ili tuđeg dokumenta nema: ekran ne može ni da ponudi koji
 je pravi, pa se ne pita nego staje.
 
-### MasterSync: kolizija broja zbirne se prijavljuje, ne blokira
+### Revizija integriteta vidi dvosmislen broj zbirne
 
-Zaokružuje `ZBR-IDENT-01`. F3 i F4 od ovog izdanja odbijaju dvosmislen broj —
-`ImportRowToTblZbirna` **ne**, i to je namerno.
+Uvoz iz PWA i dalje prima **sve** što stigne sa terena — nijedan zapis se ne
+odbija i ništa se ne gubi. Ali ako se pri uvozu desi da isti broj zbirne
+dobiju dva različita dokumenta, to se sada **vidi u reviziji**, umesto da ostane
+nezapaženo.
 
-**Zašto ne blokira.** F3/F4 su komande operatera: konflikt znači „ne radi to".
-Import je *ingest već nastale činjenice sa terena*. `ImportZbirnaRow_TX` na prazan
-povratak diže `Err.Raise` **unutar `tx`**, pa bi odbijanje rollback-om bacilo
-**ceo sync red** — podatak sa terena bi se izgubio, a kolizija ostala
-neprijavljena. `KNOWN_ISSUES` **KR-001** multi-device koliziju `BrojZbirne` već
-prihvata kao rizik, sa mitigacijom na GAS strani.
+Dve nove stavke u „Provere integriteta":
 
-**Gde je detekcija.** `PrijaviKolizijuBrojaZbirne` u `modMasterSync`:
+- **B8** — broj zbirne nosi **više aktivnih zbirnih**, pa se po njemu ne može
+  jednoznačno vezati. Dvoklasna zbirna (I + II) nije nalaz: to su dva reda
+  **jednog** dokumenta.
+- **B9** — aktivna zbirna kojoj **nedostaje identitet** dokumenta. Redovnim radom
+  ne nastaje; može posle ručne izmene u tabeli ili u starijim sveskama.
 
-- zove se **posle `ApplyGeneracijaID`**, ne pre — isti vlasnik nasleđuje postojeću
-  generaciju, drugi dobija novu, pa se tek posle upisa vidi da li je broj postao
-  dvosmislen;
-- **nikad ne diže grešku** — radi unutar transakcije uvoza, pa bi pad detekcije
-  oborio baš onaj upis koji treba da sačuva.
-
-**Trajni trag** je u `modIntegritet`, jer se log izgubi a nalaz ostaje:
-
-| | |
-|---|---|
-| **B8** | `BrojZbirne` nosi više aktivnih dokumenata |
-| **B9** | aktivna zbirna bez `GeneracijaID` |
-
-B8 kandidate traži jednim prolazom, a presudu daje `ZbirnaIdentResolve` — pravilo
-nema drugu kopiju, i dvoklasna zbirna (dva reda, **jedan** dokument) zato nije
-nalaz.
-
-**Bezbedno je zbog redosleda:** I2 je ušao *pre* ovoga, pa F4 fail-closed odbija
-dvosmislen broj i nijedan nizvodni proces ne bira roditelja po broju.
-
-**Nije dokazano:** da import zaista *ne* blokira (A21) traži pravi uvoz, pa ide u
-BFP suite. `RunAllTests` (test 193) pokriva samo detekciju — i to tako što meri
-pojavu **konkretnog** broja, jer fixture namerno nosi dvosmislen `ZB-TEST-SLDD` pa
-B8 uvek nešto prijavljuje.
+U svakodnevnom radu se ništa ne menja — unos zbirne i prijemnice rade kao i pre.
+Ovo je samo dopuna izveštaja koji se pokreće po potrebi.
