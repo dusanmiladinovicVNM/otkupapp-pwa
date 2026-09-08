@@ -15837,17 +15837,15 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim idFx As ZbirnaIdent, idPrazan As ZbirnaIdent, idNema As ZbirnaIdent
     Dim idJedna As ZbirnaIdent, idTudj As ZbirnaIdent, idDve As ZbirnaIdent
     Dim idStorno As ZbirnaIdent, idIstorija As ZbirnaIdent, idRazmaci As ZbirnaIdent
-    Dim pecat As String
+    Dim genT4 As String, genTgtB As String
     Dim p4 As String, pTgtB As String, pTgtA As String
     Dim pStor As String, pD1 As String, pD2 As String
     Dim pFx As String, pFxGen As String
 
     ' A20: aktivan red bez generacije je integritetska greska.
     '
-    ' I ovo stanje se POSTAVLJA. ZB-TEST-1 je najprometniji broj u fixture-u --
-    ' testovi u njega upisuju prijemnice -- pa se ne sme pretpostaviti da je do
-    ' 190. jos aktivan i bez generacije. Dovoljan je JEDAN aktivan red bez
-    ' generacije da broj bude integritetska greska, i taj red test sam obezbedjuje.
+    ' Fixture od ZBR-IDENT-01 nadalje nosi generaciju na SVAKOM redu, pa se ovo
+    ' stanje vise ne zatice -- pravi se namerno (fault injection) i vraca odmah.
     pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
     pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
@@ -15860,13 +15858,19 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     idPrazan = ZbirnaIdentResolve("", FX_VOZAC, FX_KUPAC)
     idNema = ZbirnaIdentResolve("ZB-NE-POSTOJI", FX_VOZAC, FX_KUPAC)
 
-    ' STANJE SE POSTAVLJA, NE PRETPOSTAVLJA.
-    '
-    ' Ovaj test ide 190. po redu -- posle 189 testova koji fixture MENJAJU.
-    ' Prva verzija je merila ZB-TEST-DUPL i pala: test 22 (StornoZbirna_TX)
-    ' stornira ZBI-DUPL-2, pa taj broj do ovde vise nema dva aktivna vlasnika.
-    ' Zato se svaki red koji se meri prvo dovede u trazeno stanje, pa vrati na
-    ' ZATECENU vrednost -- ne na "", jer zatecena ne mora biti prazna.
+    ' Generacije se CITAJU iz fixture-a, ne pecate. Do ZBR-IDENT-01 fixture ih
+    ' nije imao pa ih je test postavljao -- to je bio zaobilazak pogresnog
+    ' fixture-a, ne test podatak. Ocekivana vrednost se cita iz reda, da tvrdnja
+    ' ne zavisi od rednog broja reda u make_fixture.py.
+    genT4 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
+                                       COL_GENERACIJA_ID)))
+    genTgtB = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", _
+                                         COL_GENERACIJA_ID)))
+
+    ' STORNO STANJE SE POSTAVLJA, NE PRETPOSTAVLJA. Ovaj test ide 190. po redu --
+    ' posle 189 testova koji fixture MENJAJU. Prva verzija je merila ZB-TEST-DUPL
+    ' i pala: test 22 stornira ZBI-DUPL-2, pa taj broj do ovde vise nema dva
+    ' aktivna vlasnika. Vraca se na ZATECENU vrednost, ne na "".
     p4 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO))
     pTgtB = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO))
     pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
@@ -15881,17 +15885,6 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
 
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", "GEN-TB"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", "GEN-TA"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", "GEN-SD1"
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", "GEN-SD2"
-
-    ' PREDUSLOV PECATA. StampGeneraciju je tih no-op kad FindRows ne nadje red,
-    ' pa bi bez ove tvrdnje ceo test merio INTEGRITY_ERROR i padao bez objasnjenja.
-    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
-                                       COL_GENERACIJA_ID)))
-
     idJedna = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
     idTudj = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC2, FX_KUPAC)
     idDve = ZbirnaIdentResolve(FX_ZBIRNA_SLDD, FX_VOZAC, FX_KUPAC2)
@@ -15899,13 +15892,6 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     idIstorija = ZbirnaIdentResolve(FX_ZBIRNA_TGT, FX_VOZAC, FX_KUPAC)
     idRazmaci = ZbirnaIdentResolve("  " & FX_ZBIRNA_MIRNA & "  ", FX_VOZAC, FX_KUPAC)
 
-    ' Fixture se vraca PRE tvrdnji: pala tvrdnja ne sme da ostavi izmenjen
-    ' fixture ostatku suite-a nad istom sveskom.
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
@@ -15913,10 +15899,13 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
 
-    AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
+    AssertEq (Len(genT4) > 0), True, _
+             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
+    AssertEq (Len(genTgtB) > 0), True, _
+             "preduslov/ZBR-IDENT-01: i drugi fixture red nosi GeneracijaID"
 
     AssertEq idFx.integrityStatus, ZBR_INT_ERROR, _
-             "preduslov/A20: aktivan red bez generacije je integritetska greska"
+             "A20: aktivan red bez generacije je integritetska greska"
     AssertEq idFx.resolutionStatus, ZBR_RES_AMBIGUOUS, _
              "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'"
     AssertEq idFx.selectedGeneracijaID, "", _
@@ -15933,7 +15922,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idJedna.activeOwnerCount, 1, "A3: jedan vlasnik"
     AssertEq idJedna.historicalOwnerCount, 1, "A3: jedan vlasnik i u istoriji"
     AssertEq idJedna.historicalOwnerIsScope, True, "A3: taj vlasnik je prosledjeni scope"
-    AssertEq idJedna.selectedGeneracijaID, "GEN-T4", "A3: vraca se generacija tog dokumenta"
+    AssertEq idJedna.selectedGeneracijaID, genT4, "A3: vraca se generacija tog dokumenta"
 
     AssertEq idTudj.resolutionStatus, ZBR_RES_OWNER_MISMATCH, "A4: drugi scope je OWNER_MISMATCH"
     AssertEq idTudj.activeLogicalCount, 1, "A4: dokument postoji -- sporan je vlasnik"
@@ -15950,6 +15939,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idStorno.historicalOwnerCount, 1, "A7: istorija prezivljava storno"
 
     AssertEq idIstorija.resolutionStatus, ZBR_RES_UNIQUE, "A8: danas jednoznacan broj je UNIQUE"
+    AssertEq idIstorija.selectedGeneracijaID, genTgtB, "A8: bira se aktivan dokument"
     AssertEq idIstorija.historicalOwnerCount, 2, "A8: a IKAD su ga drzala dva vlasnika"
     AssertEq ZbirnaRoditeljOK(idIstorija), False, _
              "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj"
@@ -15974,7 +15964,7 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Dim rSiroce As String
     Dim unija As Object
     Dim oznakaAktivne As String, oznakaSiroceta As String
-    Dim pecat As String, p4 As String, pPrjBroj As String
+    Dim genT4 As String, p4 As String, pPrjBroj As String
     Dim pFx As String, pFxGen As String
     Const SIROCE_BROJ As String = "ZB-SIROCE-TEST"
 
@@ -15982,19 +15972,21 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     ' Prva verzija je tvrdila da ZB-TEST-OLDU nose i zbirna i prijemnica; do
     ' 191. po redu zbirna pod tim brojem vise nije aktivna, pa je oznaka bila
     ' samo "P". Sada test sam pravi oba slucaja nad redovima koje kontrolise.
+    '
+    ' Generacija se CITA iz fixture-a (ZBR-IDENT-01), ne pecati.
     p4 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO))
+    genT4 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
+                                       COL_GENERACIJA_ID)))
     pPrjBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", _
                                     COL_PRJ_BROJ_ZBIRNE))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, ""
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", "GEN-T4"
-    pecat = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
-                                       COL_GENERACIJA_ID)))
 
     ' I1: aktivna zbirna daje oznaku "Z".
     Set unija = AktivniBrojeviZbirne()
     If unija.Exists(FX_ZBIRNA_MIRNA) Then oznakaAktivne = CStr(unija(FX_ZBIRNA_MIRNA))
 
-    ' Isti razlog kao u testu 190: stanje ZB-TEST-1 se postavlja, ne pretpostavlja.
+    ' A20 je fault injection: fixture od ZBR-IDENT-01 nosi generaciju na svakom
+    ' redu, pa se prazna pravi namerno i vraca odmah.
     pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
     pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
@@ -16031,10 +16023,10 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
 
     ' Fixture se vraca PRE tvrdnji.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-OLD-U", COL_PRJ_BROJ_ZBIRNE, pPrjBroj
-    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
 
-    AssertEq pecat, "GEN-T4", "preduslov: StampGeneraciju je stvarno upisao generaciju"
+    AssertEq (Len(genT4) > 0), True, _
+             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
 
     AssertEq (InStr(1, oznakaAktivne, "Z") > 0), True, "I1: aktivna zbirna daje oznaku izvora Z"
     AssertEq (InStr(1, oznakaSiroceta, "P") > 0), True, "I1: aktivna prijemnica daje oznaku izvora P"

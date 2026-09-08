@@ -258,13 +258,25 @@ ne samo onaj ko piše test.
 > redove pre sejanja. Izlaz mora biti druga putanja (donor = izlaz se odbija), pa se
 > fajl posle premesti:
 >
-> ```powershell
-> python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --out tests\fixtures\otkup_test_new.xlsm --force
+> ```bash
+> python tools/make_fixture.py --donor tests/fixtures/otkup_test.xlsm --out tests/fixtures/otkup_test_new.xlsm --force
+> mv tests/fixtures/otkup_test_new.xlsm tests/fixtures/otkup_test.xlsm
+> mv tests/fixtures/otkup_test_new.sig  tests/fixtures/otkup_test.sig
 > ```
 >
+> **Premeštaju se DVA fajla.** Potpis stoji u pratećem `.sig` sa istim korenom
+> imena. `mv` samo `.xlsm` ostavlja stari `.sig`, pa provera ustajalosti puca
+> **ponovo, nad svežom sveskom** — i izgleda kao da regeneracija nije radila.
+>
 > **`--out` je tu obavezan.** Generator odbija donor koji je isti fajl kao
-> izlaz, pa `--donor testsixtures\otkup_test.xlsm --force` bez `--out`
+> izlaz, pa `--donor tests/fixtures/otkup_test.xlsm --force` bez `--out`
 > ne radi — ta komanda je već dva puta napisana u pregledima kao da radi.
+>
+> **Bash oblik, ne PowerShell.** Ranija verzija ovog bloka je bila u backslash
+> obliku, i u njoj je `tests\fixtures` postalo `tests` + **stvarni form-feed bajt**
+> — korupcija koja je bila komitovana u repou. Backslash u Git Bash-u nestaje
+> **bez greške**, pa poruka pokazuje na fajl koji ne postoji umesto na pravi
+> uzrok (`CLAUDE.md`).
 
 - Donor daje samo strukturu; spisak kolona se **ne** zakucava u Python (šema
   tabela je izvor istine). Podaci su 100% sintetički, u transakciji koja se uvek
