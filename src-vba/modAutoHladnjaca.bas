@@ -231,7 +231,8 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
         ' Bez ovoga bi svaka otpremnica iz auto-lanca trajno ostala bez
         ' generacije, pa faza 3 ("koristi generaciju kad je nose SVI redovi")
         ' nad novim podacima nikad ne bi postala tacna bez rucnog backfill-a.
-        ZavrsiVezuOtpremniceNaZbirnu otpID, brZbr, zbrIDI, SRC
+        ZavrsiVezuOtpremniceNaZbirnu otpID, brZbr, zbrIDI, _
+                                     "modAutoHladnjaca.AutoChainHladnjaca"
         Dim prjI As String
         If failStep <> "PRJ" Then _
             prjI = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
@@ -275,7 +276,8 @@ KlasaIDone:
         ' Bez ovoga bi svaka otpremnica iz auto-lanca trajno ostala bez
         ' generacije, pa faza 3 ("koristi generaciju kad je nose SVI redovi")
         ' nad novim podacima nikad ne bi postala tacna bez rucnog backfill-a.
-        ZavrsiVezuOtpremniceNaZbirnu otpID2, brZbr, zbrIDII, SRC
+        ZavrsiVezuOtpremniceNaZbirnu otpID2, brZbr, zbrIDII, _
+                                     "modAutoHladnjaca.AutoChainHladnjaca"
         Dim prjII As String
         If failStep <> "PRJ" Then _
             prjII = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
