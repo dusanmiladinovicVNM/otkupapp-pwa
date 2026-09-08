@@ -1322,8 +1322,21 @@ End Sub
 ' Razresava se JEDNOM PO RAZLICITOM BROJU, ne po redu: ZbirnaIdentResolve cita
 ' celu tblZbirna, pa bi poziv po redu bio O(n*m) nad celom istorijom.
 ' ============================================================
+' Operaterski ulaz (Alt+F8). Telo je u _Core da bi suite mogla da ga pozove:
+' MsgBox u automatskom testu visi, pa bi bez ovog seam-a backfill ostao
+' NEPOKRIVEN -- a upravo je on jedini pisac koji odlucuje po istoriji broja.
 Public Sub BackfillDeteZbirnaGeneracija()
+    Dim popunjeno As Long, preskoceno As Long
+    BackfillDeteZbirnaGeneracija_Core True, popunjeno, preskoceno
+End Sub
+
+Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
+                                             ByRef popunjeno As Long, _
+                                             ByRef preskoceno As Long)
     On Error GoTo EH
+
+    popunjeno = 0
+    preskoceno = 0
 
     EnsureSledljivostSchema
 
@@ -1366,7 +1379,6 @@ Public Sub BackfillDeteZbirnaGeneracija()
     Next k
 
     ' --- 3) upisi tamo gde je razresen ---
-    Dim popunjeno As Long, preskoceno As Long
     For t = LBound(tbls) To UBound(tbls)
         Dim dat2 As Variant: dat2 = GetTableData(CStr(tbls(t)))
         If IsArray(dat2) Then
@@ -1395,12 +1407,14 @@ Public Sub BackfillDeteZbirnaGeneracija()
     LogInfo "modSetup.BackfillDeteZbirnaGeneracija", _
             "popunjeno=" & popunjeno & " preskoceno=" & preskoceno & _
             " razlicitih brojeva=" & brojevi.count
-    MsgBox "Backfill ZbirnaGeneracijaID na deci:" & vbCrLf & _
-           "popunjeno: " & popunjeno & vbCrLf & _
-           "preskoceno (broj je IKAD nosio vise dokumenata): " & preskoceno & vbCrLf & vbCrLf & _
-           "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre. " & _
-           "Dvosmislene brojeve prijavljuje Provera integriteta (B8).", _
-           vbInformation, APP_NAME
+    If showMessages Then
+        MsgBox "Backfill ZbirnaGeneracijaID na deci:" & vbCrLf & _
+               "popunjeno: " & popunjeno & vbCrLf & _
+               "preskoceno (broj je IKAD nosio vise dokumenata): " & preskoceno & vbCrLf & vbCrLf & _
+               "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre. " & _
+               "Dvosmislene brojeve prijavljuje Provera integriteta (B8).", _
+               vbInformation, APP_NAME
+    End If
     Exit Sub
 EH:
     LogErr "modSetup.BackfillDeteZbirnaGeneracija"

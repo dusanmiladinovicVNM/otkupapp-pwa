@@ -124,6 +124,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta
     Test_ZBR_DeteNosiGeneracijuRoditelja
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
+    Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -2834,23 +2835,33 @@ End Sub
 
 ' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
 '
-' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna. Prijemnica svoj
-' ZbirnaGeneracijaID vec nosi, pa je novo pitanje "koja je zbirna SADA pod ovim
-' brojem" i suvisno i opasno -- izmedju nastanka prijemnice i palete moze da se
-' desi storno + re-entry, pa bi prijemnica ostala na GEN-A a paleta dobila GEN-B.
+' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna, i prijemnica svoj
+' ZbirnaGeneracijaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
+' zato i suvisno i pogresno -- pravilo je "nikad ne pogadjaj kad vec znas".
+'
+' Grana A sama NE razlikuje tacno od pogresnog: kad je prijemnica vezana za
+' jedinu zbirnu pod tim brojem, nasledjivanje i pogadjanje vracaju ISTU vrednost.
+' Prva verzija ovog testa je imala samo granu A i sabotaza je prosla neprimeceno
+' (dokaz.py: NE OBARA NISTA). Granu B nosi PRODUKCIONI redosled iz malina lanca:
+' dete nastaje PRE roditelja, pa je prijemnicina generacija legitimno prazna dok
+' zbirna pod istim brojem vec postoji. Tu nasledjivanje daje prazno, a pogadjanje
+' generaciju -- i tek tu se meri.
 Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     Dim tx As clsTransaction
     Dim testDate As Date, scenario As String
-    Dim broj As String, brPrij As String
-    Dim zbrID As String, prjID As String
-    Dim genPrj As String, genPal As String
+    Dim brojA As String, brojB As String
+    Dim brPrijA As String, brPrijB As String
+    Dim zbrA As String, prjA As String
+    Dim zbrB As String, prjB As String
+    Dim genPrj As String
 
     On Error GoTo EH
 
     scenario = NewScenarioCode("ZBRPAL")
     testDate = NextTestDate()
-    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brPrij = TEST_PREFIX & "-PRJ-PAL-" & scenario
+    brojA = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brPrijA = TEST_PREFIX & "-PRJ-PALA-" & scenario
+    brPrijB = TEST_PREFIX & "-PRJ-PALB-" & scenario
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -2859,23 +2870,56 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, broj, TEST_KUP_ID, _
-                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                          100#, TEST_TIP_AMB, 10, KLASA_I)
-    AssertTrue Len(zbrID) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
+    ' --- A) uobicajen redosled: roditelj pa dete ---
+    zbrA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(zbrA) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
 
-    prjID = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrij, broj, _
-                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, 0, _
-                              KLASA_I, 0)
-    AssertTrue Len(prjID) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijA, brojA, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, 0, _
+                             KLASA_I, 0)
+    AssertTrue Len(prjA) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
 
-    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_DETE_ZBIRNA_GEN))
+    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_GEN))
     AssertTrue Len(genPrj) > 0, "ZBR-PAL preduslov: prijemnica nosi generaciju roditelja"
-
-    genPal = PrvaGeneracijaPaletneStavke(prjID)
-    AssertTrue Len(genPal) > 0, "ZBR-PAL preduslov: paletizacija je napravila stavku"
-    AssertEquals genPrj, genPal, _
+    AssertTrue BrojPaletnihStavki(prjA) > 0, _
+        "ZBR-PAL preduslov: paletizacija je napravila stavku (grana A)"
+    AssertEquals genPrj, PrvaGeneracijaPaletneStavke(prjA), _
         "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
+
+    ' --- B) DETE PRE RODITELJA -- jedina grana koja razlikuje nasledjivanje ---
+    '
+    ' Isti redosled koji modAutoHladnjaca vec ima: prijemnica se snima dok zbirne
+    ' jos nema, pa joj je generacija legitimno prazna. Zbirna pod tim brojem se
+    ' pojavi tek posle, i paletizacija se desava kad broj VEC razresava na nju.
+    ' Tacan odgovor je i dalje PRAZNO -- prijemnica je izvor istine, ne broj.
+    brojB = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(NextTestDate(), "ddmmyy")
+
+    prjB = SavePrijemnica(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojB, _
+                          TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, _
+                          KLASA_I, 0)
+    AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: prijemnica bez roditelja je snimljena"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-PAL preduslov: prijemnica pre roditelja ima PRAZNU generaciju"
+
+    zbrB = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojB, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(zbrB) > 0, "ZBR-PAL preduslov: zbirna pod brojem B je snimljena"
+    AssertTrue Len(ZbirnaGeneracijaZaBroj(brojB)) > 0, _
+        "ZBR-PAL preduslov: broj B SADA razresava na generaciju (ima sta da se pogodi)"
+
+    PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojB, _
+                       vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=KLASA_I, _
+                       netoKg:=100#, brGajbica:=10, tipAmb:=TEST_TIP_AMB
+
+    AssertTrue BrojPaletnihStavki(prjB) > 0, _
+        "ZBR-PAL preduslov: paletizacija je napravila stavku (grana B)"
+    AssertEquals "", PrvaGeneracijaPaletneStavke(prjB), _
+        "ZBR-PAL: dete pre roditelja, stavka nasledjuje PRAZNO umesto da pogadja po broju"
 
     tx.RollbackTx
     Exit Sub
@@ -2887,7 +2931,8 @@ EH:
     LogFail "ZBR-CHILD-01 paleta nasledjuje od prijemnice", Err.description
 End Sub
 
-' Generacija prve paletne stavke date prijemnice, ili prazno.
+' Generacija prve paletne stavke date prijemnice, ili prazno. Prazno je i
+' legitiman rezultat i "nema stavke", pa se postojanje meri BrojPaletnihStavki.
 Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As String
     Dim dat As Variant: dat = GetTableData(TBL_PALETA_STAVKA)
     If Not IsArray(dat) Then Exit Function
@@ -2902,6 +2947,137 @@ Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As St
         End If
     Next r
 End Function
+
+Private Function BrojPaletnihStavki(ByVal prijemnicaID As String) As Long
+    Dim rows As Collection
+    Set rows = FindRows(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijemnicaID)
+    If rows Is Nothing Then Exit Function
+    BrojPaletnihStavki = rows.count
+End Function
+
+' ZBR-CHILD-01 faza 2: backfill rekonstruise identitet STARIH redova.
+'
+' Zasto poseban test, a ne oslanjanje na granu E testa DeteNosiGeneracijuRoditelja:
+' ta grana meri PRIMITIVU (ZbirnaJedinaGeneracijaIkadZaBroj) pozivajuci je
+' direktno, a backfill je nikad nije zvao ni u jednom testu. Sabotaza koja je
+' menjala njegov izbor kriterijuma zato nije obarala NISTA -- menjala je red koda
+' koji suite ne izvrsava. Pokrivena primitiva nije pokriven pozivalac.
+'
+' Test vozi BackfillDeteZbirnaGeneracija_Core nad dva broja odjednom:
+'   X -- pod njim je IKAD bila jedna generacija  -> mora da POPUNI
+'   Y -- pod njim su IKAD bile dve (storno + re-entry) -> mora da CUTI
+' Grana X je anti-placebo: bez nje bi "ostalo prazno" prolazilo i kad backfill
+' uopste nije radio.
+Private Sub Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju()
+    Dim tx As clsTransaction
+    Dim testDate As Date, scenario As String
+    Dim brojX As String, brojY As String
+    Dim zbrX As String, zbrYA As String, zbrYB As String
+    Dim genX As String, genYB As String
+    Dim otpX As String, otpY As String
+    Dim popunjeno As Long, preskoceno As Long
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRBF")
+    testDate = NextTestDate()
+    brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(NextTestDate(), "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    ' --- X: jedna generacija ikad ---
+    zbrX = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojX, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    genX = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrX)
+    AssertTrue Len(genX) > 0, "ZBR-BACKFILL preduslov: zbirna X nosi generaciju"
+
+    otpX = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-BFX-" & scenario, brojX, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(otpX) > 0, "ZBR-BACKFILL preduslov: otpremnica X je snimljena"
+
+    ' --- Y: dve generacije ikad (storno pa re-entry istog vlasnika, ugovor par.5) ---
+    zbrYA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojY, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          80#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertTrue Len(zbrYA) > 0, "ZBR-BACKFILL preduslov: zbirna Y-A je snimljena"
+
+    Set r = RunSimpleStornoZbirna(brojY)
+    AssertTrue CBool(r("success")), "ZBR-BACKFILL preduslov: storno zbirne Y-A je prosao"
+
+    zbrYB = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojY, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          70#, TEST_TIP_AMB, 7, KLASA_I)
+    genYB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrYB)
+    AssertTrue (Len(genYB) > 0 And genYB <> GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrYA)), _
+        "ZBR-BACKFILL preduslov: re-entry pod brojem Y dao je NOVU generaciju"
+
+    otpY = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-BFY-" & scenario, brojY, _
+                             TEST_VRSTA, TEST_SORTA, 70#, 10#, TEST_TIP_AMB, 7, KLASA_I)
+    AssertTrue Len(otpY) > 0, "ZBR-BACKFILL preduslov: otpremnica Y je snimljena"
+
+    ' --- oblik ZATECENOG reda: broj postoji, generacija ne ---
+    ' Tacno stanje svakog reda pre migracije. Bez ovog koraka backfill nema sta
+    ' da radi (preskace popunjene), pa bi test bio zelen ne merivsi nista.
+    IsprazniGeneracijuDeteta TBL_OTPREMNICA, COL_OTP_ID, otpX
+    IsprazniGeneracijuDeteta TBL_OTPREMNICA, COL_OTP_ID, otpY
+
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-BACKFILL preduslov: red X je u zatecenom obliku (generacija prazna)"
+    AssertEquals brojX, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-BACKFILL preduslov: red X je zadrzao broj"
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpY, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-BACKFILL preduslov: red Y je u zatecenom obliku (generacija prazna)"
+    AssertEquals brojY, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpY, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-BACKFILL preduslov: red Y je zadrzao broj"
+    AssertEquals genYB, ZbirnaGeneracijaZaBroj(brojY), _
+        "ZBR-BACKFILL preduslov: 'ko je roditelj SADA' pod Y vraca novu generaciju"
+
+    BackfillDeteZbirnaGeneracija_Core False, popunjeno, preskoceno
+
+    AssertEquals genX, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-BACKFILL: jednoznacan broj se popunjava"
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpY, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-BACKFILL: broj koji je IKAD nosio dve generacije ostaje PRAZAN"
+    AssertTrue popunjeno >= 1, "ZBR-BACKFILL preduslov: backfill je nesto upisao"
+    AssertTrue preskoceno >= 1, "ZBR-BACKFILL preduslov: backfill je nesto preskocio"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 backfill ne veze staro dete na novu generaciju", Err.description
+End Sub
+
+' Vraca red u oblik kakav ima pre migracije: broj zbirne stoji, generacija ne.
+Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
+                                     ByVal idColumn As String, _
+                                     ByVal idValue As String)
+    Const SRC As String = "IsprazniGeneracijuDeteta"
+
+    Dim rows As Collection
+    Set rows = FindRows(tableName, idColumn, idValue)
+    If rows Is Nothing Or rows.count = 0 Then
+        Err.Raise vbObjectError + 9311, SRC, _
+                  "Red nije nadjen. Tabela=" & tableName & " ID=" & idValue
+    End If
+
+    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_GEN, "", SRC
+End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     Dim tx As clsTransaction

@@ -623,6 +623,14 @@ produkcionih pisaca** kroz njega. **Nijedan čitalac nije diran.**
 **Faza 2** — `modSetup.BackfillDeteZbirnaGeneracija`: jednokratno, idempotentno
 (samo prazni redovi), van `EnsureRuntimeSchema` jer je skupo po startu.
 
+Telo je u **`BackfillDeteZbirnaGeneracija_Core(showMessages, popunjeno, preskoceno)`**;
+javna procedura je samo operaterski ulaz sa `MsgBox`-om. Seam nije kozmetika —
+`MsgBox` u automatskoj suite visi, pa je backfill bez njega bio **nepozvan ni iz
+jednog testa**. To se videlo tek dvosmernim dokazom: sabotaža koja mu je menjala
+kriterijum izbora nije obarala ništa, jer je menjala red koda koji se ne izvršava.
+**Pokrivena primitiva nije pokriven pozivalac** — `ZbirnaJedinaGeneracijaIkadZaBroj`
+je imala svoju tvrdnju, a jedini pisac koji je zove nije imao nijednu.
+
 **Kriterijum je ISTORIJSKI, ne tekući** — i to je razlika koja čuva sledljivost.
 Backfill zove `ZbirnaJedinaGeneracijaIkadZaBroj`, ne `ZbirnaGeneracijaZaBroj`:
 
