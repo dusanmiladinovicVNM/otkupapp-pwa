@@ -5283,10 +5283,35 @@ SABOTAZE = {
     ),
     "zbirna-f4-ignorise-istoriju": (
         "modDokumenta.bas",
-        "    If id.historicalOwnerCount > 1 Then Exit Function\n",
-        "    \' SABOTAZA: F4 ignorise istoriju vlasnika\n",
+        "            If id.historicalOwnerCount > 1 Then\n"
+        "                ZbirnaRoditeljRazlog = ZBR_PARENT_ISTORIJA\n"
+        "            End If\n",
+        "            \' SABOTAZA: F4 ignorise istoriju vlasnika\n",
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj",
+    ),
+    "zbirna-f4-nije-vezan": (
+        "modDokUnos.bas",
+        "        If Len(rodRazlog) > 0 Then\n",
+        "        If Len(rodRazlog) < 0 Then   \' SABOTAZA: F4 ne proverava roditelja\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu",
+    ),
+    "zbirna-f4-pusta-tudjeg-vlasnika": (
+        "modDokumenta.bas",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ\n",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            \' SABOTAZA: tudj vlasnik prolazi kao roditelj\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "zbirna drugog vlasnika zaustavlja prijemnicu",
+    ),
+    "zbirna-ident-broji-vlasnike-ne-dokumente": (
+        "modDokumenta.bas",
+        "    res.activeLogicalCount = aktGen.Count\n",
+        "    res.activeLogicalCount = aktVl.Count   \' SABOTAZA: broji vlasnike\n",
+        "T_ZbirnaIdent_BrojSeRazresavaUDokument",
+        "A17: dva aktivna dokumenta ISTOG vlasnika su i dalje dvosmislena",
     ),
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",

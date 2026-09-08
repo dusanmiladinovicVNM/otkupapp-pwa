@@ -7354,3 +7354,26 @@ broji.
 **Ostaje nerešeno,** i kaže se otvoreno: vezivanje prijemnice na zbirnu i dalje
 ide po broju, ne po identitetu — to je sledeći korak. Dupla stavka dvoklasne
 zbirne u listi (v. gore) čeka isti taj korak.
+
+### Prijemnica se vezuje samo na jednoznačnu zbirnu
+
+Prijemnica se na zbirnu vezuje **brojem** — a broj do sada nije bio dovoljan da se
+utvrdi **koji** je to dokument. Provera je odgovarala samo na „postoji li taj
+broj", i vraćala potvrdu čim ga nosi bilo koji aktivan red.
+
+To znači da se prijemnica mogla vezati:
+
+- na **jednu od dve** zbirne koje dele broj — a koju, biralo se redosledom u
+  tabeli, ne izborom operatera;
+- na zbirnu koja pripada **drugom vozaču ili kupcu**;
+- na broj koji su ranije držala **dva vlasnika**, gde nizvodne radnje po broju
+  mogu da zahvate i tuđi dokument.
+
+Sada F4 u sva tri slučaja **staje**, i poruka kaže koji je od njih. Roba više ne
+može tiho da završi na dokumentu koji niko nije izabrao.
+
+**Šta se nije promenilo:** kad zbirne pod tim brojem **nema**, ponašanje je isto
+kao i pre — blokira ili pita, po podešavanju `PRIJEMNICA_ZBIRNA_PROVERA`. To je
+stanje koje operater može da zna unapred (zbirna tek stiže), pa tu potvrda ima
+smisla. Kod dvosmislenog ili tuđeg dokumenta nema: ekran ne može ni da ponudi koji
+je pravi, pa se ne pita nego staje.
