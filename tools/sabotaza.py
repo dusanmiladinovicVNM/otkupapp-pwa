@@ -5316,6 +5316,42 @@ SABOTAZE = {
     # prolaze, pa SIMPLE storno odveze i decu drugog dokumenta.
     # ZBR-NORM-02: svaki odlucivac se meri ZASEBNO. Jedna sabotaza po mestu, da
     # se ne moze desiti da dva budu prebacena a treci ostane na starom poredjenju.
+    # ZBR-CHILD-01: tri sabotaze, po jedna na svaki deo invarijante -- postavljanje,
+    # brisanje, i fail-closed razresenje. Jedna bi propustila da su druga dva
+    # pokvarena.
+    "dete-ne-nosi-generaciju-roditelja": (
+        "modDokumenta.bas",
+        "    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName\n",
+        "    ' SABOTAZA: upisuje se samo broj, generacija roditelja se ne pece\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: dete nosi generaciju roditelja",
+    ),
+    "odvez-ostavlja-generaciju": (
+        "modDokumenta.bas",
+        "    PoveziDeteNaZbirnu tableName, rowIndex, brojCol, \"\", \"\", sourceName\n",
+        "    RequireUpdateCell tableName, rowIndex, brojCol, \"\", sourceName"
+        "   ' SABOTAZA: brise se samo broj\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: odvezivanje brise i generaciju roditelja",
+    ),
+    # Zamenjuje RAZRESAVANJE POGADJANJEM: prvi red pod tim brojem, bez obzira na
+    # storno i na dvosmislenost. Tacno ono protiv cega cela ZBR-IDENT celina
+    # postoji, i najverovatnija "popravka" koju bi neko posle dopisao.
+    #
+    # Cilja granu D testa, ne B: kad zbirne UOPSTE nema, i pogadjanje vrati
+    # prazno, pa bi nad B ova sabotaza bila zelena.
+    "dete-pogadja-generaciju-po-broju": (
+        "modDokumenta.bas",
+        "    id = ZbirnaIdentResolve(broj)\n"
+        "    If id.integrityStatus <> ZBR_INT_OK Then Exit Function\n"
+        "    If id.resolutionStatus <> ZBR_RES_UNIQUE Then Exit Function\n"
+        "    ZbirnaGeneracijaZaBroj = id.selectedGeneracijaID\n",
+        "    ' SABOTAZA: prvi red pod tim brojem, bez razresavanja\n"
+        "    ZbirnaGeneracijaZaBroj = Trim$(NzToText(LookupValue(TBL_ZBIRNA, _\n"
+        "                                COL_ZBR_BROJ, broj, COL_GENERACIJA_ID)))\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: stornirana zbirna NIJE roditelj -- generacija ostaje prazna",
+    ),
     "vlasnici-poredi-case": (
         "modStorno.bas",
         "        If BrojJednak(data(i, cBr), broj) Then\n",

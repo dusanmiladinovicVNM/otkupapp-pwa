@@ -7484,3 +7484,20 @@ tačnim oblikom broja iz tabele. Provera sme da bude **šira** od posla — tada
 staje i pita; obrnuto bi značilo da posao zahvati više nego što je provereno.
 U svakodnevnom radu se ne vidi razlika: brojevi koje pravi program uvek imaju
 isti oblik.
+
+### Priprema: dokumenti pamte kojoj zbirnoj tačno pripadaju
+
+Otpremnica, prijemnica, paletna stavka i otkupni blok do sada su zbirnu pamtili
+**samo po broju**. Broj je oznaka, ne identitet — zato su neke radnje nad zbirnom
+morale da stanu i pitaju, umesto da same znaju šta pripada kome.
+
+Od ovog izdanja ti dokumenti uz broj pamte i **tačan dokument** kome pripadaju.
+
+**U radu se ništa ne menja.** Ovo je priprema: podatak se upisuje, ali ga još
+nijedna radnja ne koristi. Zato nema nove poruke ni novog ponašanja.
+
+**Za postojeće podatke** postoji jednokratna dopuna (`BackfillDeteZbirnaGeneracija`
+kroz Alt+F8). Ona popunjava **samo** one dokumente kod kojih je jasno kojoj
+zbirnoj pripadaju. Gde nije jasno — jer isti broj nose dva dokumenta, ili je
+zbirna otkazana — polje ostaje prazno, i takvi dokumenti se i dalje čitaju po
+broju, kao i pre. Dopuna se sme pokrenuti više puta; drugi put ne radi ništa.

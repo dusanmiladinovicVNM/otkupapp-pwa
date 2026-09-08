@@ -483,6 +483,7 @@ Public Sub RunAllTests()
     RunOne 193
     RunOne 194
     RunOne 195
+    RunOne 196
     RunOne 124
     RunOne 125
     RunOne 126
@@ -747,6 +748,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 193: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
         Case 194: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
         Case 195: TestName = "T_BrojKapija_IstoZaSvakiCase"
+        Case 196: TestName = "T_DeteZbirne_ImaKolonuGeneracije"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -950,6 +952,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 193: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
         Case 194: T_Zbirne_PickerJednaStavkaPoDokumentu
         Case 195: T_BrojKapija_IstoZaSvakiCase
+        Case 196: T_DeteZbirne_ImaKolonuGeneracije
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -16205,6 +16208,28 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
              "preduslov: taj broj pre izmene NIJE dvosmislen"
     AssertEq NalazSadrzi(posle, "B8", FX_ZBIRNA_TGT), True, _
              "B8 vidi broj sa dva aktivna dokumenta"
+End Sub
+
+' ZBR-CHILD-01 (Faza 1): kolona za generaciju roditelja postoji na SVA CETIRI
+' deteta. Bez upisa -- meri se sema, ne ponasanje.
+'
+' Tabela koja ispadne iz EnsureSledljivostSchema ne bi pukla odmah: pisci bi
+' padali tek kad neko poveze bas to dete, a citaoci bi tiho radili po broju. Ovo
+' je jeftina provera da spisak u modSetup pokriva sve sto zbirnu nosi kao broj.
+Private Sub T_DeteZbirne_ImaKolonuGeneracije()
+    AssertEq (GetColumnIndex(TBL_OTPREMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
+             "tblOtpremnica ima ZbirnaGeneracijaID"
+    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
+             "tblPrijemnica ima ZbirnaGeneracijaID"
+    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN) > 0), True, _
+             "tblPaletaStavka ima ZbirnaGeneracijaID"
+    AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_GEN) > 0), True, _
+             "tblOtkup ima ZbirnaGeneracijaID"
+
+    ' Kolona roditelja se NE sme pomesati sa kolonom deteta: obe postoje na
+    ' tblOtpremnica i tblPrijemnica, i znace razlicite stvari.
+    AssertEq (StrComp(COL_DETE_ZBIRNA_GEN, COL_GENERACIJA_ID, vbTextCompare) <> 0), True, _
+             "generacija DETETA i generacija SAMOG dokumenta su razlicite kolone"
 End Sub
 
 ' ZBR-NORM-02: kapije nad poslovnim brojem poredi JEDNA funkcija.

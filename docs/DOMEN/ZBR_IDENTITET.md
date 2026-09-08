@@ -551,3 +551,78 @@ su radili **drugačije**, ne oni koji su radili isto na svoj način.
 **Ostaje otvoreno:** `CheckDuplicate` (§3) i mutatori. Trajno rešenje za oboje je
 isto kao za `ZBR-MUT-01` — `ZbirnaGeneracijaID` na deci, pa poređenje po broju
 prestane da bude identitetsko pitanje.
+
+## 15) `ZBR-CHILD-01` — generacija roditelja na detetu (`v6-ui-227`, faze 1–2)
+
+Trajno rešenje za ono što `ZBR-MUT-01` (§13) drži kapijom, i za ono što
+`ZBR-NORM-02` (§14) drži pravilom „kapija ⊇ akter". Oboje postoji **samo zato što
+deca zbirnu nose kao labelu**, ne kao identitet.
+
+`ZbirnaGeneracijaID` na `tblOtpremnica`, `tblPrijemnica`, `tblPaletaStavka` i
+`tblOtkup` (denorm) je ta veza.
+
+### Zašto se ne peča pri upisu deteta
+
+Prva pretpostavka — „dete pri nastanku zna roditelja" — **ne važi**.
+`modAutoHladnjaca.bas:213` snima otpremnicu, a zbirnu tek na `:221`. U malina i
+hladnjača lancu **dete redovno nastaje pre roditelja**.
+
+Zato invarijanta nije „uvek popunjeno", nego:
+
+> `ZbirnaGeneracijaID` na detetu je **prazan**, ili jednak generaciji zbirne kojoj
+> dete pripada — i menja se **u koraku sa `BrojZbirne`**, uključujući brisanje.
+
+**Prazno je legitimno** i znači „roditelj još nije razrešen". Čitalac tada pada na
+broj, tačno kao pre ove kolone. To je ono što čini postepenu migraciju mogućom.
+
+### Jedan put, u oba smera
+
+| | |
+|---|---|
+| `PoveziDeteNaZbirnu` | upisuje broj **i** generaciju, u istom potezu |
+| `OdveziDeteOdZbirne` | briše oboje |
+| `ZbirnaGeneracijaZaBroj` | broj → generacija, **fail-closed**: prazno za sve što nije `UNIQUE` |
+
+Dva odvojena upisa bi se pre ili kasnije razišla — neko doda putanju koja
+postavlja broj a zaboravi generaciju, i dete ostane sa **tuđom** generacijom.
+To je gore od prazne: prazna bar znači „ne znam".
+
+`ZbirnaGeneracijaZaBroj` se zove **jednom po broju, ne po redu** —
+`ZbirnaIdentResolve` čita celu `tblZbirna`, pa bi poziv u petlji nad decom bio
+O(n·m). Petlje uzimaju generaciju jednom i prosleđuju je.
+
+### Šta je urađeno, šta nije
+
+**Faza 1** — kolona (`EnsureSledljivostSchema`), choke point, i **svih 16
+produkcionih pisaca** kroz njega. **Nijedan čitalac nije diran.**
+
+**Faza 2** — `modSetup.BackfillDeteZbirnaGeneracija`: jednokratno, idempotentno
+(samo prazni redovi), van `EnsureRuntimeSchema` jer je skupo po startu. Popunjava
+**samo jednoznačan broj**; dvosmisleni i storniran roditelj ostaju prazni. Odluka
+o jednoznačnosti se ne prepisuje — zove istu `ZbirnaGeneracijaZaBroj` koju
+koriste pisci.
+
+**Faza 3 (ne u ovom koraku)** — odlučivači koji danas biraju decu po broju
+(`DetachOtpremniceInline`, `ActiveOtpIDsByZbirna`, `ActivePrijIDsByZbirna`,
+`RelinkOtpremniceToZbirna_TX`, `DistinctActiveValues`) prelaze na generaciju kad
+je nose **svi** relevantni redovi, inače ostaju na broju.
+
+**Faza 4 (ne u ovom koraku)** — `ZbirnaMutacijaPoBrojuRazlog` prestaje da blokira
+`activeLogicalCount > 1` kad sva deca tog broja nose generaciju. Tek tada je
+`ZBR-MUT-01` rešen strukturno, a ne kapijom.
+
+**Korist stiže u fazi 4.** Faze 1–2 su trošak bez vidljive promene — to je
+svesno plaćeno da bi koraci bili odvojivo dokazivi.
+
+### Verifikacija
+
+| Šta | Gde |
+|---|---|
+| Kolona postoji na sve četiri tabele, i nije ista kao generacija samog dokumenta | `modTest` `T_DeteZbirne_ImaKolonuGeneracije` (bez upisa) |
+| Roditelj jednoznačan → dete nosi njegovu generaciju; roditelja nema → **prazno**; odvezivanje briše oboje; **storniran roditelj → prazno** | `modBusinessFlowProTests` `Test_ZBR_DeteNosiGeneracijuRoditelja` |
+| Sabotaže | `dete-ne-nosi-generaciju-roditelja`, `odvez-ostavlja-generaciju`, `dete-pogadja-generaciju-po-broju` |
+
+Grana sa **storniranim** roditeljem postoji zato što razdvaja *razrešavanje* od
+*pogađanja*: kad zbirne uopšte nema, i naivni `LookupValue` po broju vrati prazno,
+pa bi sabotaža koja uvodi pogađanje prošla neprimećeno. Sa storniranim roditeljem
+pogađanje vraća njegovu generaciju, a tačan odgovor je prazno.

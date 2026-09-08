@@ -122,6 +122,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_StornoGuardNaSvimPutanjama
     Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta
+    Test_ZBR_DeteNosiGeneracijuRoditelja
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -2708,6 +2709,105 @@ End Function
 ' redovno nastaje: F3 kapija ga ne pusta, a Excel writer dva reda istog broja i
 ' vlasnika stapa u JEDAN dokument. Zato je i negativna kontrola dole bas taj
 ' slucaj -- da kapija ne pocne da odbija dvoklasnu zbirnu.
+' ZBR-CHILD-01 (Faza 1): generacija roditelja se na detetu menja U KORAKU sa
+' BrojZbirne -- i kad se postavlja, i kad se brise.
+'
+' Meri se oba smera i oba ishoda razresenja:
+'   roditelj postoji i jednoznacan  -> dete nosi NJEGOVU generaciju
+'   roditelja nema (dete pre zbirne) -> dete nosi PRAZNO, ne pogodjenu vrednost
+'   odvezivanje                      -> i broj i generacija prazni
+'
+' Treca grana je razlog zasto ova kolona uopste moze da se uvede postepeno:
+' prazno je legitimno stanje i znaci "citaj po broju", pa Faza 1 ne menja nista
+' za citaoce. Bez te tvrdnje bi neko kasnije "popravio" prazno na pogadjanje.
+Private Sub Test_ZBR_DeteNosiGeneracijuRoditelja()
+    Dim tx As clsTransaction
+    Dim testDate As Date
+    Dim scenario As String
+    Dim broj As String, brojBezZbirne As String
+    Dim zbrID As String, genZbr As String
+    Dim otpSaRod As String, otpBezRod As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRCHILD")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brojBezZbirne = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+                    Format$(NextTestDate(), "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    ' --- A) roditelj postoji: dete nosi njegovu generaciju ---
+    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, broj, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          100#, TEST_TIP_AMB, 10, KLASA_I)
+    genZbr = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrID)
+    AssertTrue Len(genZbr) > 0, "ZBR-CHILD preduslov: zbirna nosi svoju generaciju"
+
+    otpSaRod = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                                 TEST_PREFIX & "-OTP-CHLD-A-" & scenario, broj, _
+                                 TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(otpSaRod) > 0, "ZBR-CHILD preduslov: otpremnica sa roditeljem je snimljena"
+    AssertEquals genZbr, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpSaRod, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-CHILD: dete nosi generaciju roditelja"
+
+    ' --- B) roditelja NEMA: prazno, ne pogodjeno ---
+    otpBezRod = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                                  TEST_PREFIX & "-OTP-CHLD-B-" & scenario, brojBezZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 50#, 10#, TEST_TIP_AMB, 5, KLASA_I)
+    AssertTrue Len(otpBezRod) > 0, "ZBR-CHILD preduslov: otpremnica bez roditelja je snimljena"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpBezRod, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-CHILD: bez roditelja generacija ostaje PRAZNA"
+    AssertEquals brojBezZbirne, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpBezRod, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-CHILD: broj se svejedno upisuje (dete pre roditelja je normalno)"
+
+    ' --- C) odvezivanje brise OBOJE ---
+    Set r = RunSimpleStornoZbirna(broj)
+    AssertTrue CBool(r("success")), "ZBR-CHILD preduslov: storno zbirne je prosao"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpSaRod, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-CHILD: odvezivanje brise broj"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpSaRod, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-CHILD: odvezivanje brise i generaciju roditelja"
+
+    ' --- D) roditelj STORNIRAN: red pod tim brojem POSTOJI, ali nije aktivan ---
+    '
+    ' Ovo je slucaj koji razdvaja RAZRESAVANJE od POGADJANJA. Grane B i C ne bi
+    ' ga uhvatile: kad zbirne uopste nema, i naivni LookupValue po broju vrati
+    ' prazno, pa bi sabotaza koja uvodi pogadjanje prosla neprimeceno. Ovde
+    ' pogadjanje vraca generaciju STORNIRANE zbirne, a tacan odgovor je prazno.
+    Dim otpPosleStorna As String
+    otpPosleStorna = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                                       TEST_PREFIX & "-OTP-CHLD-D-" & scenario, broj, _
+                                       TEST_VRSTA, TEST_SORTA, 30#, 10#, TEST_TIP_AMB, 3, KLASA_I)
+    AssertTrue Len(otpPosleStorna) > 0, _
+        "ZBR-CHILD preduslov: otpremnica pod storniranim brojem je snimljena"
+    AssertTrue Len(GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrID)) > 0, _
+        "ZBR-CHILD preduslov: stornirana zbirna I DALJE nosi generaciju (ima sta da se pogodi)"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpPosleStorna, COL_DETE_ZBIRNA_GEN)), _
+        "ZBR-CHILD: stornirana zbirna NIJE roditelj -- generacija ostaje prazna"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 dete nosi generaciju roditelja", Err.description
+End Sub
+
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     Dim tx As clsTransaction
     Dim testDate As Date

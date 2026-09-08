@@ -347,11 +347,16 @@ Private Function LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As 
     tx.AddTableSnapshot TBL_OTKUP
 
     Dim k As Long, r As Long
+    ' ZBR-CHILD-01: jednom po broju, ne po redu -- ZbirnaIdentResolve cita celu
+    ' tblZbirna. U auto-lancu je zbirna cesto tek nastala, pa se generacija
+    ' razresava ovde, posle njenog upisa.
+    Dim genZbr As String: genZbr = ZbirnaGeneracijaZaBroj(brZbr)
     For k = 1 To rows.count
         r = rows(k)
         If Len(otpID) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_OTPREMNICA_ID, otpID, SRC
         If Len(otpID) > 0 Then SetOtkupBrojOtpremnice r, otpID
-        If Len(brZbr) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, brZbr, SRC
+        If Len(brZbr) > 0 Then PoveziDeteNaZbirnu TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
+                                                  brZbr, genZbr, SRC
         If Len(vozacID) > 0 And curVoz = "" Then _
             RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, vozacID, SRC
     Next k

@@ -1140,7 +1140,9 @@ Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As Str
                     " Klasa=" & klasa
             End If
 
-            RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brZbirne, SRC
+            ' ZBR-CHILD-01: broj i generacija roditelja idu zajedno.
+            PoveziDeteNaZbirnu TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, _
+                               brZbirne, ZbirnaGeneracijaZaBroj(brZbirne), SRC
             Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cId), "")))
             If otpID <> "" Then otpMap(otpID) = brZbirne
 
@@ -1175,8 +1177,9 @@ Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal ca
             If otpMap.Exists(otpID) Then
                 Dim cur As String: cur = Trim$(CStr(nz(data(r, cBrZ), "")))
                 If cur = "" Then
-                    RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
-                        CStr(otpMap(otpID)), callerSrc
+                    PoveziDeteNaZbirnu TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
+                        CStr(otpMap(otpID)), ZbirnaGeneracijaZaBroj(CStr(otpMap(otpID))), _
+                        callerSrc
                 End If
             End If
         End If
@@ -2382,8 +2385,8 @@ Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
     RequireBrojZbirneNotConflicting TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
                                     brojZbirne, "OtpremnicaID=" & otpremnicaID, sourceName
 
-    RequireUpdateCell TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
-                      brojZbirne, sourceName
+    PoveziDeteNaZbirnu TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
+                       brojZbirne, ZbirnaGeneracijaZaBroj(brojZbirne), sourceName
 End Sub
 
 Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
@@ -3464,7 +3467,8 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
             RequireBrojZbirneNotConflicting TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
                                             brojZbirne, "OtkupID=" & otkupID, SRC
 
-            RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
+            PoveziDeteNaZbirnu TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
+                               brojZbirne, ZbirnaGeneracijaZaBroj(brojZbirne), SRC
 
             Dim otpID As String
             otpID = Trim$(CStr(nz(otkData(rowOtkup, colOtkOtpID), "")))
