@@ -16076,6 +16076,7 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     Dim rDobar As String, rNema As String, rDvosmislen As String
     Dim rTudj As String, rIstorija As String
     Dim pD1 As String, pD2 As String, pTgtB As String, pTgtA As String
+    Dim idDobar As ZbirnaIdent
 
     ' Stanje se POSTAVLJA, ne pretpostavlja -- test ide 192. po redu.
     pD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
@@ -16087,10 +16088,21 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, "Da"
 
-    ' 1) LEGITIMNO: jednoznacna zbirna istog vlasnika PROLAZI. Bez ove grane bi
-    '    test bio zelen i kad kapija odbija sve.
+    ' 1) LEGITIMNO: jednoznacna zbirna istog vlasnika PROLAZI kapiju. Bez ove
+    '    grane bi test bio zelen i kad kapija odbija sve.
+    '
+    '    Meri se KAPIJA, ne ceo validator, i to namerno: legitiman unos ide dalje
+    '    kroz PrepoznajIspravkuPrijemnice, koji trazi potvrdu preko MsgBox-a kad
+    '    u tblStornoVeze stoji zatecen PENDING context -- a do 192. testa ga
+    '    raniji testovi ostave. MsgBox u headless run-u je visenje koje watchdog
+    '    samo maskira (isto upozorenje stoji u tools/make_fixture.py).
+    '
+    '    Da je kapija uopste POZVANA iz validatora dokazuju tri grane ispod --
+    '    one se vracaju bas njenim porukama, kroz pravi PrijemnicaValidiraj.
     Set p = PrijemnicaUnosKojiProlazi()
-    rDobar = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    idDobar = ZbirnaIdentResolve(CStr(p("brojZbirne")), CStr(p("vozacID")), _
+                                 CStr(p("kupacID")))
+    rDobar = ZbirnaRoditeljRazlog(idDobar)
 
     ' 2) A13: zbirne pod tim brojem NEMA -- politika ostaje zatecena
     '    (PRIJEMNICA_ZBIRNA_PROVERA; u fixture-u nepodesena = BLOK, bez dijaloga).
@@ -16121,7 +16133,9 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
 
-    AssertEq rDobar, "", "jednoznacna zbirna istog vlasnika PROLAZI"
+    AssertEq idDobar.resolutionStatus, ZBR_RES_UNIQUE, _
+             "preduslov: legitiman unos se razresava u jedan dokument"
+    AssertEq rDobar, "", "jednoznacna zbirna istog vlasnika PROLAZI kapiju"
 
     AssertEq rDvosmislen, Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN"), _
              "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu"
