@@ -821,12 +821,11 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     ' Dok child mutacije ne budu scoped (VozacID/KupacID postoje, v. katalog),
     ' jedina postena opcija je stati PRE nego sto se ista promeni.
     If mode <> SV_MODE_RESI_KASNIJE Then
-        If CBool(s("brojDvosmislenIkad")) Then
-            r("message") = "Broj zbirne '" & broj & "' je pripadao VISE vlasnika " & _
-                           "(vozac + kupac). Zamena bi prevezala decu OBE zbirne, jer " & _
-                           "se otpremnice i prijemnice vezuju BROJEM -- a storniran " & _
-                           "vlasnik i dalje moze imati aktivnu decu. Razdvoj brojeve " & _
-                           "pa ponovi."
+        Dim razZC As String: razZC = NzToText(s("mutRazlog"))
+        If Len(razZC) > 0 Then
+            r("message") = ZbirnaMutPoruka(razZC, "zbirne", broj, _
+                "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
+                "prijemnice vezuju BROJEM")
             Exit Function
         End If
     End If
@@ -2767,21 +2766,25 @@ Private Function ScanZbirna(ByVal broj As String, _
     ' broj nose DVE aktivne zbirne, brojke opisuju oba dokumenta. To se ne moze
     ' razdvojiti podatkom koji postoji, pa se ne pravimo da moze -- putanje koje
     ' bi na osnovu toga menjale decu staju (v. PonistiZbirnaChain_TX).
-    d("brojDvosmislen") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
-                          MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
-    ' UKLJUCUJE I STORNIRANE vlasnike, namerno.
+    ' ZBR-MUT-01: JEDAN racun, isti koji koriste sve ostale putanje po broju.
     '
-    ' StornoZbirna_TX stornira SAMO redove tblZbirna -- otpremnice, prijemnice i
-    ' palete ne dira. Zato je ovo potpuno legitimno stanje:
+    ' Do v6-ui-225 su ovde stajala DVA vlasnicka brojaca. Oba su merila vlasnike,
+    ' ne dokumente, pa dva aktivna dokumenta ISTOG vlasnika (A17) nisu videla --
+    ' a bas po ovom kljucu je RunZbirnaCorrection odlucivao da li sme da dira
+    ' decu. Jedan od ta dva (brojDvosmislen, samo aktivni) nije imao nijednog
+    ' citaoca, pa je i sam bio poziv na pogresan racun.
+    '
+    ' Racun UKLJUCUJE STORNIRANE vlasnike, namerno. StornoZbirna_TX stornira SAMO
+    ' redove tblZbirna -- otpremnice, prijemnice i palete ne dira. Zato je ovo
+    ' potpuno legitimno stanje:
     '
     '   Zbirna A  broj Z-10  STORNIRANA   ali OTP-A i PRJ-A jos AKTIVNI
     '   Zbirna B  broj Z-10  AKTIVNA
     '
-    ' Sa brojanjem samo AKTIVNIH vlasnika, izbor B daje "broj je jednoznacan" --
-    ' pa DetachOtpremniceInline i kaskada, koje idu PO BROJU, odvezu i decu
+    ' Sa brojanjem samo AKTIVNIH, izbor B daje "broj je jednoznacan" -- pa
+    ' DetachOtpremniceInline i kaskada, koje idu PO BROJU, odvezu i decu
     ' stornirane A. Storniran vlasnik nestaje iz racuna, njegova deca ne.
-    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
-                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
+    d("mutRazlog") = ZbirnaMutRazlog(broj)
     d("otpCount") = CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj, strict)
     Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)
     d("prijCount") = pc

@@ -405,7 +405,8 @@ End Sub
 ' ============================================================
 ' ZBR-IDENT-01: prazan GeneracijaID na aktivnom redu je integritetska greska,
 ' ne alternativni oblik identiteta. Sva tri writer-a (SaveZbirna, modMasterSync,
-' modDokumentInvariant) odmah zovu ApplyGeneracijaID, pa produkcija ovo stanje
+' modDokumentInvariant) odmah PECATE validan GeneracijaID -- prva dva ga
+' nasledjuju u svom scope-u, MasterSync ga kuje -- pa produkcija ovo stanje
 ' ne pravi -- ali rucna izmena u tabeli i starije sveske mogu.
 Private Sub Chk_B9_ZbirnaBezGeneracije()
     On Error GoTo EH

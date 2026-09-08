@@ -39,7 +39,9 @@ reda.
 ## 2) Šta kod danas stvarno garantuje
 
 **Svaki upisan red dobija `GeneracijaID`.** Tri i samo tri writer-a rade
-`AppendRow` u `tblZbirna`, i sva tri odmah zovu `ApplyGeneracijaID`:
+`AppendRow` u `tblZbirna`, i sva tri ga odmah **pečate** — ali ne istom rutinom:
+prva dva generaciju **nasleđuju** u svom opsegu, `modMasterSync` je **kuje**
+(v. §11b):
 
 | Writer | AppendRow | ApplyGeneracijaID |
 |---|---|---|
@@ -373,7 +375,7 @@ nego od toga što dve terenske činjenice ne postaju jedan identitet — tek ond
 upisivao `GeneracijaID` ni na jedan red, a tri reda (`ZBI-TEST-1`, `ZBI-TEST-2`,
 `ZBI-TEST-STOR`) nisu imala ni `KupacID`. To je stanje koje produkcija **ne može
 da proizvede**: `ValidateZbirnaInput` odbija zbirnu bez kupca, a sva tri writer-a
-odmah zovu `ApplyGeneracijaID`.
+odmah pečate validan `GeneracijaID`.
 
 Posledica je bila da se **svaki postojeći broj čita kao `INTEGRITY_ERROR`**, pa je
 I2 bio blokiran — `T_BrutoNeto_PoRezimu` tvrdi `AssertEq resP, ""` nad

@@ -1080,20 +1080,15 @@ SABOTAZE = {
         "T_KapijaZbirne_FailClosedNaSvojuGresku",
         "nerazresena jednoznacnost se tretira kao dvosmislena",
     ),
-    # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
-    # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
-    #
-    # Ne deklarise se success ("DUPLI staje..."), nego KOJA kapija je stala.
-    # Ishod cuvaju DVE nezavisne kapije -- na nivou moda i u detach-u -- pa
-    # success ostaje False i kad ova otkaze; jedna sabotaza ga po konstrukciji
-    # ne moze oboriti. Razlika se vidi samo u poruci: kapija na nivou moda
-    # staje PRE transakcije i kaze razlog, dok bi detach pukao iznutra.
+    # Kapija je od v6-ui-225 u jezgru. Ista greska, novo mesto: storniran vlasnik
+    # prestaje da se broji, pa broj koji je IKAD presao vlasnicku granicu prolazi
+    # -- a deca stornirane zbirne ostaju aktivna i nose isti broj.
     "guard-samo-aktivni-vlasnici": (
-        "modStornoFlow.bas",
-        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
-        "                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
-        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
-        "                              MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        "modDokumenta.bas",
+        "    If id.historicalOwnerCount > 1 Then\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA\n",
+        "    If id.activeOwnerCount > 1 Then   ' SABOTAZA: storniran vlasnik se ne broji\n"
+        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_VLASNIKA\n",
         "T_StorniranVlasnik_JosImaAktivnuDecu",
         "staje kapija na nivou moda, pre transakcije, sa razlogom",
     ),
@@ -1118,14 +1113,12 @@ SABOTAZE = {
         "T_ZavrsetakIspravke_NeDegradiraOldDocID",
         "MOJ blok JESTE prevezan na zamensku otpremnicu",
     ),
-    # Zamena zbirne bez kapije: zaglavlje se stornira tacno, a completion posle
-    # snimanja zamene odnese decu TUDJE zbirne.
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
-        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
         "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
     ),

@@ -787,11 +787,12 @@ End Sub
 ' rutinu, pa dve klase istog broja i vlasnika dele generaciju.
 Private Sub TcPecatiGeneraciju(ByVal tbl As String, ByVal nr As ListRow)
     If StrComp(tbl, TBL_ZBIRNA, vbTextCompare) <> 0 Then Exit Sub
+    ' RequireColumnIndex, ne GetColumnIndex: bez kolone vlasnika pao bi tek
+    ' Cells(1, 0), a to je greska koja ne kaze sta nedostaje.
     Dim cBr As Long, cVo As Long, cKu As Long
-    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    cVo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
-    cKu = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
-    If cBr = 0 Then Exit Sub
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modTestStornoCentar.TcPecatiGeneraciju")
+    cVo = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modTestStornoCentar.TcPecatiGeneraciju")
+    cKu = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modTestStornoCentar.TcPecatiGeneraciju")
     ApplyGeneracijaID TBL_ZBIRNA, nr.Index, _
                       COL_ZBR_BROJ, NzToText(nr.Range.cells(1, cBr).value), _
                       COL_ZBR_VOZAC, NzToText(nr.Range.cells(1, cVo).value), _

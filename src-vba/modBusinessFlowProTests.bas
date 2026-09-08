@@ -2761,12 +2761,27 @@ Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)), _
         "ZBR-MUT: otpremnica NIJE odvezana preko granice dokumenta"
 
-    ' --- ISPRAVKA ---
+    ' --- ISPRAVKA i DUPLI: RAZLICITE PUTANJE, obe se mere ---
+    '
+    ' Do v6-ui-225 je ovaj blok pisao "ISPRAVKA" a vrteo SV_MODE_DUPLI. Tvrdnja
+    ' je bila zelena, ali ne iz razloga koji je imenovala: DUPLI staje tek u
+    ' StornoZbirnaIDetach_TX, dok ISPRAVKA do te rutine uopste ne dolazi --
+    ' ona ide na CreateCorrectionContext pa StornoZbirna_TX, i njena jedina
+    ' odbrana je PRED-MUTACIONA kapija u RunZbirnaCorrection. Ta kapija je do
+    ' istog koraka brojala VLASNIKE, pa je A17 kroz nju prolazio: zaglavlje bi
+    ' bilo stornirano, a blokada stigla tek na CompleteZbirnaIspravka -- dakle
+    ' posle izmene, u MANUAL stanju.
+    Set r = RunZbirnaCorrection(broj, SV_MODE_ISPRAVKA, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR-MUT: ISPRAVKA staje PRE mutacije na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
+        "ZBR-MUT: ISPRAVKA nije stornirala zaglavlje"
+
     Set r = RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
     AssertFalse CBool(r("success")), _
-        "ZBR-MUT: ISPRAVKA staje na dva aktivna dokumenta istog vlasnika"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, idA), _
-        "ZBR-MUT: ISPRAVKA nije stornirala dokument A"
+        "ZBR-MUT: DUPLI staje na dva aktivna dokumenta istog vlasnika"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-MUT: DUPLI nije odvezao otpremnicu"
 
     ' --- NEGATIVNA KONTROLA: dvoklasna zbirna (dva reda, JEDNA generacija) ---
     ' Kapija sme da odbija samo dva DOKUMENTA. Ako pocne da odbija i ovo, obara

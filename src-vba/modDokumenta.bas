@@ -569,7 +569,8 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
 
     ' ZBR-IDENT-01: aktivan red MORA da nosi generaciju. Prazna nije alternativni
     ' oblik identiteta nego integritetska greska -- sva tri writer-a u tblZbirna
-    ' (SaveZbirna, modMasterSync, modDokumentInvariant) odmah zovu ApplyGeneracijaID.
+    ' (SaveZbirna, modMasterSync, modDokumentInvariant) odmah PECATE validan
+    ' GeneracijaID: prva dva ga NASLEDJUJU u svom scope-u, MasterSync ga KUJE.
     If prazneAktivne > 0 Then
         res.integrityStatus = ZBR_INT_ERROR
         res.resolutionStatus = ZBR_RES_AMBIGUOUS

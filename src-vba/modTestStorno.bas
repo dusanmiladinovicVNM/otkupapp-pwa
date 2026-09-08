@@ -1184,7 +1184,7 @@ End Sub
 ' ZBR-IDENT-01: aktivan red tblZbirna MORA da nosi GeneracijaID.
 '
 ' Seed je do v6-ui-225 upisivao red bez nje, pa je suite merila stanje koje
-' produkcija ne pravi -- sva tri writer-a odmah zovu ApplyGeneracijaID. Kad je
+' produkcija ne pravi -- sva tri writer-a odmah pecate validan GeneracijaID. Kad je
 ' kapija za mutaciju po broju (ZBR-MUT-01) pocela da cita integritet, 58 provera
 ' je palo na fixture, ne na kod.
 '
@@ -1192,11 +1192,12 @@ End Sub
 ' vlasnika dele generaciju -- kao i u pravom unosu.
 Private Sub PecatiGeneracijuAkoZbirna(ByVal tblName As String, ByVal nr As ListRow)
     If StrComp(tblName, TBL_ZBIRNA, vbTextCompare) <> 0 Then Exit Sub
+    ' RequireColumnIndex, ne GetColumnIndex: bez kolone vlasnika pao bi tek
+    ' Cells(1, 0), a to je greska koja ne kaze sta nedostaje.
     Dim cBr As Long, cVo As Long, cKu As Long
-    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    cVo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
-    cKu = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
-    If cBr = 0 Then Exit Sub
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modTestStorno.PecatiGeneracijuAkoZbirna")
+    cVo = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modTestStorno.PecatiGeneracijuAkoZbirna")
+    cKu = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modTestStorno.PecatiGeneracijuAkoZbirna")
     ApplyGeneracijaID TBL_ZBIRNA, nr.Index, _
                       COL_ZBR_BROJ, NzToText(nr.Range.cells(1, cBr).value), _
                       COL_ZBR_VOZAC, NzToText(nr.Range.cells(1, cVo).value), _
