@@ -287,8 +287,8 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 
 ## 10) Van opsega, imenovano
 
-- **`ZBR-NORM-02`** — `VlasniciPoBroju` (`modStorno.bas:2523`) poredi broj
-  case-sensitive. Nije deo L1; resolver ga zaobilazi sopstvenom normalizacijom.
+- **`ZBR-NORM-02`** — **urađeno** (`v6-ui-226`, §14): kapije nad poslovnim brojem
+  porede kroz `modHelpers.BrojJednak`.
 - **MIG-005b** — **urađen** (`v6-ui-223`): `FillZbirneCombo` de-duplikuje po
   `GeneracijaID`, pa dvoklasna zbirna daje jednu stavku. Dva **različita**
   dokumenta pod istim brojem i dalje stoje dvaput — namerno; F4 takav broj odbija
@@ -504,3 +504,43 @@ jedino što stoji između mutacije po labeli i tuđeg dokumenta.
 `StornoZbirna` preskače već stornirane redove — pa kroz podržane putanje razlike
 u ponašanju nema. Ispravka je precizna, ne merljiva; sabotaža za nju bi bila
 zelena bez obzira na kod, pa nije ni dodata.
+
+## 14) `ZBR-NORM-02` — jedno poređenje za kapije (`v6-ui-226`)
+
+Poslovni broj je **labela**: dolazi iz Excel ćelije (razmaci) ili iz ručnog unosa
+(case). Isti ključ je imao **tri** normalizacije:
+
+| Nivo | Gde | Šta radi |
+|---|---|---|
+| pun | `ZbirnaPostoji`, `BrojZbirneExists`, `ZbirnaIdentResolve`, `AktivniBrojeviZbirne` | `Trim` + `vbTextCompare` |
+| samo `Trim` | `VlasniciPoBroju`, `LookupActiveID`, `DistinctActiveValues` | case-sensitive |
+| sirov | `CheckDuplicate` | ni trim ni case — imenovano u §3 |
+
+Dok je kapija za mutaciju bila vlasnička (`VlasniciPoBroju`), kapija i akter su
+računali **isto** — oba na drugom nivou. `ZBR-MUT-01` je kapiju prebacio na
+resolver (prvi nivo), pa su se razišli.
+
+**Pravilo: kapija sme da bude ŠIRA od aktera, nikad uža.** Šira kapija
+preblokira — glasno i bezbedno; uža bi pustila radnju koja zahvata više nego što
+je izmereno. Zato `BrojJednak` koriste **odlučivači**, a mutatori
+(`DetachOtpremniceInline`, `RelinkOtpremniceToZbirna_TX`,
+`RedJeIzabranogDokumenta`, `ActiveOtpIDsByZbirna`, `ActivePrijIDsByZbirna`)
+namerno ostaju uži: proširiti njih značilo bi dirati redove koje danas ne diraju,
+a to je izmena ponašanja koja traži svoj dokaz po putanji.
+
+**Asimetrija u `DistinctActiveValues`** je usput ispravljena: ćelija je bila
+trimovana, `filterVal` nije, pa bi netrimovan pozivalac tiho dobio prazan skup —
+u `CompleteZbirnaIspravka` to znači „nema paleta za prevezivanje". Sva tri
+zatečena pozivaoca šalju trimovanu vrednost (`GetCorrectionField` trimuje), pa
+**kvar nije bio živ** — ali jeste bio zamka.
+
+**Verifikacija:** `modTest` `T_BrojKapija_IstoZaSvakiCase` meri sva tri
+odlučivača, bez ijednog upisa, nad fixture brojem `ZB-TEST-KASK` koji nosi slova.
+Preduslovi tvrde da tačan case daje ne-nula rezultat, inače bi „isto kao tačan
+case" bilo zeleno i kad obe grane vrate nulu. Sabotaže: `vlasnici-poredi-case`,
+`lookup-aktivnog-poredi-case`, `deca-po-broju-poredi-case` — po jedna na svaki
+odlučivač, da se ne može desiti da dva budu prebačena a treći ostane star.
+
+**Ostaje otvoreno:** `CheckDuplicate` (§3) i mutatori. Trajno rešenje za oboje je
+isto kao za `ZBR-MUT-01` — `ZbirnaGeneracijaID` na deci, pa poređenje po broju
+prestane da bude identitetsko pitanje.

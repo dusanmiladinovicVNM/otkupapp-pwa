@@ -1938,7 +1938,8 @@ Public Function LookupActiveID(ByVal tblName As String, _
     Dim i As Long
 
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBroj))) = Trim$(brojValue) Then
+        ' ZBR-NORM-02: isto poredjenje kao VlasniciPoBroju -- odlucivac.
+        If BrojJednak(data(i, colBroj), brojValue) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 resultId = CStr(data(i, colID))
             End If
@@ -2520,7 +2521,8 @@ Public Function VlasniciPoBroju(ByVal tblName As String, ByVal brojCol As String
 
     Dim i As Long, k As String
     For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then
+        ' ZBR-NORM-02: kapija poredi kroz BrojJednak (Trim + vbTextCompare).
+        If BrojJednak(data(i, cBr), broj) Then
             If ukljuciStornirane Or Not IsStorniranoValue(data(i, cSt)) Then
                 k = ""
                 For j = LBound(cVl) To UBound(cVl)

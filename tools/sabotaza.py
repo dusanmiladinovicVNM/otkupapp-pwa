@@ -5314,6 +5314,29 @@ SABOTAZE = {
     # ZBR-MUT-01: skida DOKUMENTNU granu kapije i ostavlja samo vlasnicku --
     # tacno stanje pre v6-ui-225. Dva aktivna dokumenta istog vlasnika opet
     # prolaze, pa SIMPLE storno odveze i decu drugog dokumenta.
+    # ZBR-NORM-02: svaki odlucivac se meri ZASEBNO. Jedna sabotaza po mestu, da
+    # se ne moze desiti da dva budu prebacena a treci ostane na starom poredjenju.
+    "vlasnici-poredi-case": (
+        "modStorno.bas",
+        "        If BrojJednak(data(i, cBr), broj) Then\n",
+        "        If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then   ' SABOTAZA: case-sensitive\n",
+        "T_BrojKapija_IstoZaSvakiCase",
+        "VlasniciPoBroju: mali case daje ISTE vlasnike",
+    ),
+    "lookup-aktivnog-poredi-case": (
+        "modStorno.bas",
+        "        If BrojJednak(data(i, colBroj), brojValue) Then\n",
+        "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojValue) Then   ' SABOTAZA: case-sensitive\n",
+        "T_BrojKapija_IstoZaSvakiCase",
+        "LookupActiveID: mali case nalazi ISTI dokument",
+    ),
+    "deca-po-broju-poredi-case": (
+        "modStornoFlow.bas",
+        "        If BrojJednak(data(i, cF), filterVal) Then\n",
+        "        If Trim$(CStr(data(i, cF))) = filterVal Then   ' SABOTAZA: case-sensitive + netrimovan filter\n",
+        "T_BrojKapija_IstoZaSvakiCase",
+        "DistinctActiveValues: mali case daje ISTU decu",
+    ),
     "kapija-mutacije-broji-samo-vlasnike": (
         "modDokumenta.bas",
         "    If id.activeLogicalCount > 1 Then\n"

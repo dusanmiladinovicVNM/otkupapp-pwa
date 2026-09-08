@@ -2239,6 +2239,16 @@ Public Function OtpremnicaJeJediniVlasnik_Test(ByVal parentZbirna As String, _
     OtpremnicaJeJediniVlasnik_Test = OtpremnicaIsSoleOwner(parentZbirna, oldBroj, gen)
 End Function
 
+' TEST SEAM: DistinctActiveValues je Private, a ZBR-NORM-02 trazi da se i ona
+' meri -- inace bi test dokazao samo dva od tri odlucivaca, a treci bi mogao da
+' ostane na starom poredjenju bez ijedne crvene tvrdnje.
+Public Function DistinctActiveValues_Test(ByVal tblName As String, ByVal valueCol As String, _
+                                          ByVal filterCol As String, _
+                                          ByVal filterVal As String) As Long
+    If Not IsTestMode() Then Exit Function
+    DistinctActiveValues_Test = DistinctActiveValues(tblName, valueCol, filterCol, filterVal).count
+End Function
+
 ' TEST SEAM: ZbirnaBrojJeDvosmislenIkad je Private, a njeno ponasanje NA
 ' SOPSTVENU GRESKU je poslovna odluka -- fail-open kapija je gora od nikakve.
 ' Kroz ponasanje se to ne moze izmeriti jednoznacno: pod schema drift-om pada i
@@ -2904,7 +2914,11 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim i As Long, v As String
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cF))) = filterVal Then
+        ' ZBR-NORM-02: filterVal je do sada poredjen NETRIMOVAN, dok je celija
+        ' bila trimovana -- asimetrija koja bi netrimovanom pozivaocu tiho
+        ' vratila prazan skup. Sva tri zatecena pozivaoca salju trimovanu
+        ' vrednost, pa nije bilo ziv kvar, ali zamka jeste.
+        If BrojJednak(data(i, cF), filterVal) Then
             If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
                 v = Trim$(CStr(data(i, cV)))
                 If Len(v) > 0 And Not seen.Exists(v) Then
