@@ -217,7 +217,13 @@ End Function
 
 ' Null-safe pretvaranje vrednosti iz tabele/celije u tekst.
 ' Vraca "" za Null/Empty/Error; inace CStr(v). Pozivaoci sami rade Trim$ gde treba.
-' ZBR-NORM-02: JEDNO poredjenje poslovnih brojeva, za sve KAPIJE.
+' ZBR-NORM-02: JEDINSTVENA SEMANTIKA poredjenja poslovnih brojeva.
+'
+' Nije jedini komparator u projektu i ne treba da bude: ZbirnaPostoji,
+' BrojZbirneExists, ZbirnaIdentResolve i AktivniBrojeviZbirne imaju svoja
+' inline poredjenja sa ISTOM semantikom (Trim + vbTextCompare). Prebacivati i
+' njih samo radi jednog izvora znacilo bi dirati stabilan kod bez poslovne
+' koristi. Ova funkcija postoji za ODLUCIVACE koji su radili DRUGACIJE.
 '
 ' Poslovni broj (BrojZbirne, BrojPrijemnice, BrDok...) je LABELA koju kuca
 ' covek ili generise generator, pa se ista vrednost javlja u vise oblika:

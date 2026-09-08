@@ -288,7 +288,7 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
 ## 10) Van opsega, imenovano
 
 - **`ZBR-NORM-02`** — **urađeno** (`v6-ui-226`, §14): kapije nad poslovnim brojem
-  porede kroz `modHelpers.BrojJednak`.
+  porede po **jedinstvenoj semantici** (`Trim` + `vbTextCompare`).
 - **MIG-005b** — **urađen** (`v6-ui-223`): `FillZbirneCombo` de-duplikuje po
   `GeneracijaID`, pa dvoklasna zbirna daje jednu stavku. Dva **različita**
   dokumenta pod istim brojem i dalje stoje dvaput — namerno; F4 takav broj odbija
@@ -505,7 +505,7 @@ jedino što stoji između mutacije po labeli i tuđeg dokumenta.
 u ponašanju nema. Ispravka je precizna, ne merljiva; sabotaža za nju bi bila
 zelena bez obzira na kod, pa nije ni dodata.
 
-## 14) `ZBR-NORM-02` — jedno poređenje za kapije (`v6-ui-226`)
+## 14) `ZBR-NORM-02` — jedinstvena semantika poređenja broja (`v6-ui-226`)
 
 Poslovni broj je **labela**: dolazi iz Excel ćelije (razmaci) ili iz ručnog unosa
 (case). Isti ključ je imao **tri** normalizacije:
@@ -540,6 +540,13 @@ Preduslovi tvrde da tačan case daje ne-nula rezultat, inače bi „isto kao ta�
 case" bilo zeleno i kad obe grane vrate nulu. Sabotaže: `vlasnici-poredi-case`,
 `lookup-aktivnog-poredi-case`, `deca-po-broju-poredi-case` — po jedna na svaki
 odlučivač, da se ne može desiti da dva budu prebačena a treći ostane star.
+
+**`BrojJednak` nije jedini komparator, i ne treba da bude.** `ZbirnaPostoji`,
+`BrojZbirneExists`, `ZbirnaIdentResolve` i `AktivniBrojeviZbirne` zadržavaju
+svoja inline poređenja — **ista semantika**, drugi zapis. Prebacivati i njih samo
+radi jednog izvora istine znači dirati stabilan kod bez poslovne koristi i sa
+istim blast radiusom kao prava izmena. Ono što je popravljeno su odlučivači koji
+su radili **drugačije**, ne oni koji su radili isto na svoj način.
 
 **Ostaje otvoreno:** `CheckDuplicate` (§3) i mutatori. Trajno rešenje za oboje je
 isto kao za `ZBR-MUT-01` — `ZbirnaGeneracijaID` na deci, pa poređenje po broju

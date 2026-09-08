@@ -16221,7 +16221,7 @@ End Sub
 Private Sub T_BrojKapija_IstoZaSvakiCase()
     Dim tacan As Long, malim As Long, saRazmakom As Long
     Dim idTacan As String, idMalim As String
-    Dim dTacan As Long, dMalim As Long
+    Dim dTacan As Long, dMalim As Long, dSaRazmakom As Long
 
     ' --- VlasniciPoBroju: vlasnicka kapija ---
     tacan = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Norm", _
@@ -16251,6 +16251,16 @@ Private Sub T_BrojKapija_IstoZaSvakiCase()
     AssertEq (dTacan > 0), True, _
              "preduslov: tacan case nalazi decu (test seam radi u test-rezimu)"
     AssertEq dMalim, dTacan, "DistinctActiveValues: mali case daje ISTU decu"
+
+    ' RAZMAK je ovde bio PRAVI kvar, ne case: celija je bila trimovana, filterVal
+    ' nije, pa bi netrimovan pozivalac tiho dobio prazan skup. Bez ove tvrdnje
+    ' commit bi popravio nesto sto nijedna provera ne meri -- a sabotaza koja
+    ' vraca staro poredjenje kvari OBE stvari odjednom, pa bi bila crvena zbog
+    ' case-a i ostavila trim nedokazan.
+    dSaRazmakom = modStornoFlow.DistinctActiveValues_Test(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                                          COL_PRJ_BROJ_ZBIRNE, _
+                                                          " " & FX_ZBIRNA_KASK & " ")
+    AssertEq dSaRazmakom, dTacan, "DistinctActiveValues: razmaci ne menjaju decu"
 End Sub
 
 ' MIG-005b: picker pokazuje JEDNU stavku po DOKUMENTU, ne po redu.

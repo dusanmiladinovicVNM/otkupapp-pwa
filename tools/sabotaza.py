@@ -5333,9 +5333,19 @@ SABOTAZE = {
     "deca-po-broju-poredi-case": (
         "modStornoFlow.bas",
         "        If BrojJednak(data(i, cF), filterVal) Then\n",
-        "        If Trim$(CStr(data(i, cF))) = filterVal Then   ' SABOTAZA: case-sensitive + netrimovan filter\n",
+        "        If Trim$(CStr(data(i, cF))) = filterVal Then   ' SABOTAZA: case-sensitive\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: mali case daje ISTU decu",
+    ),
+    # UZA sabotaza, namerno odvojena od gornje: case ostaje ispravan, gubi se SAMO
+    # Trim$ nad filterVal-om. Gornja kvari oboje odjednom, pa bi bila crvena zbog
+    # case-a i ostavila trim -- pravi kvar u ovoj funkciji -- nedokazan.
+    "deca-po-broju-ne-trimuje-filter": (
+        "modStornoFlow.bas",
+        "        If BrojJednak(data(i, cF), filterVal) Then\n",
+        "        If StrComp(Trim$(NzToText(data(i, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
+        "T_BrojKapija_IstoZaSvakiCase",
+        "DistinctActiveValues: razmaci ne menjaju decu",
     ),
     "kapija-mutacije-broji-samo-vlasnike": (
         "modDokumenta.bas",
