@@ -479,6 +479,7 @@ Public Sub RunAllTests()
     RunOne 189
     RunOne 190
     RunOne 191
+    RunOne 192
     RunOne 124
     RunOne 125
     RunOne 126
@@ -739,6 +740,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 189: TestName = "T_Zbirne_PickerNeNudiStornirane"
         Case 190: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
         Case 191: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
+        Case 192: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -938,6 +940,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 189: T_Zbirne_PickerNeNudiStornirane
         Case 190: T_ZbirnaIdent_BrojSeRazresavaUDokument
         Case 191: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
+        Case 192: T_Prijemnica_VezujeSeSamoNaJednoznacnu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -15841,6 +15844,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim p4 As String, pTgtB As String, pTgtA As String
     Dim pStor As String, pD1 As String, pD2 As String
     Dim pFx As String, pFxGen As String
+    Dim idIsti As ZbirnaIdent, pVozD2 As String
 
     ' A20: aktivan red bez generacije je integritetska greska.
     '
@@ -15892,6 +15896,14 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     idIstorija = ZbirnaIdentResolve(FX_ZBIRNA_TGT, FX_VOZAC, FX_KUPAC)
     idRazmaci = ZbirnaIdentResolve("  " & FX_ZBIRNA_MIRNA & "  ", FX_VOZAC, FX_KUPAC)
 
+    ' A17: dva aktivna dokumenta ISTOG vlasnika. Fixture takav par nema, pa se
+    ' pravi -- ZBI-SLED-D2 privremeno dobija vozaca svog para. Dvosmislenost
+    ' nije pitanje vlasnika nego BROJA logickih dokumenata.
+    pVozD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, FX_VOZAC
+    idIsti = ZbirnaIdentResolve(FX_ZBIRNA_SLDD, FX_VOZAC, FX_KUPAC2)
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, pVozD2
+
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
@@ -15933,6 +15945,11 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idDve.resolutionStatus, ZBR_RES_AMBIGUOUS, "A5: dva aktivna su CURRENT_AMBIGUOUS"
     AssertEq idDve.activeLogicalCount, 2, "A5: dva logicka dokumenta"
     AssertEq idDve.activeOwnerCount, 2, "A5: dva vlasnika"
+
+    AssertEq idIsti.resolutionStatus, ZBR_RES_AMBIGUOUS, _
+             "A17: dva aktivna dokumenta ISTOG vlasnika su i dalje dvosmislena"
+    AssertEq idIsti.activeLogicalCount, 2, "A17: dva logicka dokumenta"
+    AssertEq idIsti.activeOwnerCount, 1, "A17: ali JEDAN vlasnik"
 
     AssertEq idStorno.resolutionStatus, ZBR_RES_NONE, "A7: sam storniran red nije aktivan dokument"
     AssertEq idStorno.activeLogicalCount, 0, "A7: aktivnih nema"
@@ -16042,4 +16059,80 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     AssertEq rIspravka, "", "posle storna ISTI vlasnik sme ponovo (ispravka)"
     AssertEq rTudj, ZBR_GATE_TUDJ, "posle storna DRUGI vlasnik ne sme"
     AssertEq rSiroce, ZBR_GATE_SIROCE, "I1: broj koji drzi aktivna prijemnica nije slobodan"
+End Sub
+
+' I2: prijemnica se vezuje SAMO na jednoznacno razresenu zbirnu.
+'
+' Ugovor: docs/DOMEN/ZBR_IDENTITET.md par.6 (A13, A14).
+'
+' ZbirnaPostoji odgovara samo na "postoji li taj broj" -- vraca True cim ijedan
+' aktivan red nosi broj. Prijemnica se na zbirnu vezuje GOLOM LABELOM, pa bi bez
+' ove kapije zavrsila na dokumentu koji niko nije izabrao.
+'
+' Meri se kroz PRAVI validator, ne kroz helper: helper je vec pokriven u testu
+' 190, a ovde je pitanje da li je uopste POZVAN i na pravom mestu.
+Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
+    Dim p As Object, fokus As String
+    Dim rDobar As String, rNema As String, rDvosmislen As String
+    Dim rTudj As String, rIstorija As String
+    Dim pD1 As String, pD2 As String, pTgtB As String, pTgtA As String
+
+    ' Stanje se POSTAVLJA, ne pretpostavlja -- test ide 192. po redu.
+    pD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
+    pD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO))
+    pTgtB = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO))
+    pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, "Da"
+
+    ' 1) LEGITIMNO: jednoznacna zbirna istog vlasnika PROLAZI. Bez ove grane bi
+    '    test bio zelen i kad kapija odbija sve.
+    Set p = PrijemnicaUnosKojiProlazi()
+    rDobar = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 2) A13: zbirne pod tim brojem NEMA -- politika ostaje zatecena
+    '    (PRIJEMNICA_ZBIRNA_PROVERA; u fixture-u nepodesena = BLOK, bez dijaloga).
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = "ZB-NE-POSTOJI"
+    rNema = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 3) DVOSMISLEN: dva aktivna dokumenta pod istim brojem.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_SLDD
+    p("kupacID") = FX_KUPAC2
+    rDvosmislen = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 4) TUDJ: aktivna zbirna postoji, ali pripada drugom vozacu.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_MIRNA
+    p("vozacID") = FX_VOZAC2
+    rTudj = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 5) ISTORIJA: danas jednoznacan, ali su ga IKAD drzala dva vlasnika.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_TGT
+    rIstorija = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
+
+    AssertEq rDobar, "", "jednoznacna zbirna istog vlasnika PROLAZI"
+
+    AssertEq rDvosmislen, Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN"), _
+             "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu"
+    AssertEq rTudj, Poruka("DOKUNOS_ERR_ZBR_P_TUDJ"), _
+             "zbirna drugog vlasnika zaustavlja prijemnicu"
+    AssertEq rIstorija, Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA"), _
+             "broj koji su IKAD drzala dva vlasnika zaustavlja prijemnicu"
+
+    ' A13: poruka za "nema zbirne" je i dalje STARA -- politika te grane se ne dira.
+    AssertEq (InStr(1, rNema, Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")) > 0), True, _
+             "A13: kad zbirne nema, poruka ostaje postojeca -- I2 tu ne dira politiku"
+    AssertEq (rNema = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")), False, _
+             "A13: 'nema zbirne' se ne prijavljuje kao dvosmislenost"
 End Sub

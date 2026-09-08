@@ -1,12 +1,12 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
-> **KI-007 je DELIMICNO zatvoren:** resolver + F3 prevencija + I1 jesu; F4 parent
-> guard (I2) **nije**.
+> **KI-007 je zatvoren u lancu F3 → F4:** resolver, F3 prevencija
+> (`ZBR-ACTIVE-NUMBER-01`), I1 read-model i F4 parent guard (I2) **jesu**
+> implementirani. Ostaje MasterSync (ingest + detekcija, ne blokada) i MIG-005b.
 >
-> **Status (L1, `v6-ui-220`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi
-> izvor sa brojem linije). §§4–5 i I1 iz §8 su **implementirani**. **I2 iz §8 i §6
-> NISU** — blokirani su na fixture-u, v. §12. §9 kaže koji su acceptance testovi
-> napisani, a koji čekaju.
+> **Status (`v6-ui-222`):** §§1–3 opisuju **zatečeni kod** (svaka tvrdnja nosi izvor
+> sa brojem linije). §§4–6 i I1/I2 iz §8 su **implementirani**. §9 kaže koji su
+> acceptance testovi napisani, a koji čekaju i zašto.
 >
 > Ovaj fajl je odgovor na `KNOWN_ISSUES.md` KI-007, koji traži da se invarijanta
 > ZBR-IDENT-01 definiše pre nego što se dira core.
@@ -187,6 +187,19 @@ tabela zaštićena.
 | `UNIQUE` + `historicalOwnerCount > 1` | **hard block** |
 | `UNIQUE` + `historicalOwnerCount <= 1` | prolaz, `selectedGeneracijaID` je roditelj |
 
+Tabela živi na **jednom mestu** — `modDokumenta.ZbirnaRoditeljRazlog`;
+`ZbirnaRoditeljOK` je tanak omotač nad njom. Vraća **kod razloga**, a prevod u
+tekst je u `modDokUnos.ZbirnaRoditeljPoruka` — isti obrazac kao F3 kapija.
+
+**Zašto tvrda blokada, a ne `UPOZORENJE`.** `PRIJEMNICA_ZBIRNA_PROVERA` bira
+politiku za *„zbirne nema"* — stanje koje operater može da zna unapred (zbirna tek
+stiže). Dvosmislen ili tuđ dokument nije to: potvrda ne pomaže, jer ekran ne može
+ni da ponudi **koji** je pravi. Zato se ta politika ne dira, a nove grane blokiraju
+bezuslovno.
+
+Kapija stoji u **`Else` grani** iza `ZbirnaPostoji` — kad zbirne nema, do nje se i
+ne stiže, pa je „`NONE` → postojeće ponašanje" iz tabele doslovno tačno.
+
 **Istorija je deo bezbednosti, ne samo sadašnje stanje.** `UNIQUE` danas uz broj
 koji je *ikad* držalo više vlasnika i dalje nije bezbedan roditelj: prijemnica
 čuva **samo `BrojZbirne`**, pa svaka nizvodna operacija po broju može da zahvati i
@@ -223,11 +236,15 @@ roditelja iz dvosmislenog skupa je tiho pogađanje i zabranjeno je ugovorom.
 
 Svaki test tvrdi **svoj preduslov** pre glavne tvrdnje.
 
-**Pokriveno u L1** (`modTest`, `RunAllTests`): A1–A5, A7, A8, A15, A16, A18, A20
-— testovi `T_ZbirnaIdent_BrojSeRazresavaUDokument` i
-`T_ZbirnaKapija_AktivanBrojNeSmeDvaput`, plus pet sabotaža.
+**Pokriveno** (`modTest`, `RunAllTests`): A1–A5, A7, A8, A13, A15–A18, A20 —
+testovi `T_ZbirnaIdent_BrojSeRazresavaUDokument`,
+`T_ZbirnaKapija_AktivanBrojNeSmeDvaput` i
+`T_Prijemnica_VezujeSeSamoNaJednoznacnu`, plus **devet** sabotaža.
 
-**Čeka** (razlog u §12): A6, A9–A14, A17, A21.
+**Čeka:** A6, A9–A12, A14, A21 — sve traže **upis** (`Scr_Save`,
+`SaveZbirnaMulti_TX`, import), pa idu u BFP suite, ne u `RunAllTests`.
+A17 više ne čeka: par „dva dokumenta istog vlasnika" fixture nema, ali ga test
+pravi sam (privremeno izjednači vozača para) i vraća.
 
 | # | Ulaz | Tvrdnja |
 |---|---|---|

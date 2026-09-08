@@ -345,6 +345,21 @@ End Function
 
 ' Redosled provera je isti kao u frmDokumenta.btnUnosZbr_Click - to nije stil
 ' nego ponasanje: operater je navikao koje ga polje prvo zaustavi.
+' Kod razloga za RODITELJA -> korisnicki tekst. NEMA se prevodi u postojecu
+' poruku "zbirna ne postoji": do nje se kroz PrijemnicaValidiraj ne stize (kapija
+' je u Else grani, gde zbirna postoji), ali funkcija ne sme da vrati prazno i tako
+' izgleda kao prolaz.
+Private Function ZbirnaRoditeljPoruka(ByVal razlog As String) As String
+    Select Case razlog
+        Case ZBR_PARENT_DVOSMISLEN: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")
+        Case ZBR_PARENT_TUDJ: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_TUDJ")
+        Case ZBR_PARENT_ISTORIJA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA")
+        Case ZBR_PARENT_NEMA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " " & _
+                                                     Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
+        Case Else: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
+    End Select
+End Function
+
 ' Kod razloga -> korisnicki tekst. Uzrok se NE stapa u jednu poruku: operater
 ' mora da zna da li je broj zauzet SADA, IKAD, drzi ga prijemnica, ili je
 ' podatak pokvaren -- to su cetiri razlicita poteza koja treba da povuce.
@@ -629,6 +644,30 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
             PrijemnicaValidiraj = " ": Exit Function
         End If
         fokus = ""            ' operater je potvrdio - polje vise nije sporno
+    Else
+        ' I2 (docs/DOMEN/ZBR_IDENTITET.md par.6): "postoji" NIJE isto sto i
+        ' "jednoznacna". ZbirnaPostoji odgovara samo na prvo -- vraca True cim
+        ' ijedan aktivan red nosi taj broj, pa bi se prijemnica vezala i kad pod
+        ' brojem stoje DVA dokumenta, ili dokument DRUGOG vlasnika.
+        '
+        ' Veza se upisuje kao GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), pa nizvodne
+        ' operacije po broju mogu da zahvate tudje. Zato i UNIQUE danas pada ako
+        ' je broj IKAD imao dva vlasnika -- isto pravilo koje drzi
+        ' modStorno.RequireJedanVlasnikIkadPoBroju.
+        '
+        ' Ovo je TVRDA blokada, ne UPOZORENJE: PRIJEMNICA_ZBIRNA_PROVERA bira
+        ' politiku za "zbirne nema" -- stanje koje operater moze da zna unapred.
+        ' Dvosmislen ili tudj dokument nije to; tu potvrda ne pomaze jer ekran ne
+        ' moze ni da ponudi koji je pravi.
+        Dim zbrRod As ZbirnaIdent
+        Dim rodRazlog As String
+        zbrRod = ZbirnaIdentResolve(S(p, "brojZbirne"), S(p, "vozacID"), S(p, "kupacID"))
+        rodRazlog = ZbirnaRoditeljRazlog(zbrRod)
+        If Len(rodRazlog) > 0 Then
+            fokus = "brojZbirne"
+            PrijemnicaValidiraj = ZbirnaRoditeljPoruka(rodRazlog)
+            Exit Function
+        End If
     End If
 
     If strogo And Len(S(p, "vrsta")) = 0 Then

@@ -43,6 +43,13 @@ Public Const ZBR_GATE_AKTIVNA As String = "AKTIVNA"
 Public Const ZBR_GATE_TUDJ As String = "TUDJ"
 Public Const ZBR_GATE_SIROCE As String = "SIROCE"
 
+' Razlog odbijanja RODITELJA (F4). Zaseban skup od ZBR_GATE_*: tamo je pitanje
+' "sme li NOV broj", ovde "sme li se prijemnica vezati na POSTOJECI dokument".
+Public Const ZBR_PARENT_NEMA As String = "NEMA"
+Public Const ZBR_PARENT_DVOSMISLEN As String = "DVOSMISLEN"
+Public Const ZBR_PARENT_TUDJ As String = "TUDJ_VLASNIK"
+Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
+
 Public Type ZbirnaIdent
     normalizedBroj As String
     integrityStatus As String
@@ -611,10 +618,34 @@ End Function
 ' SAMO BrojZbirne, pa svaka nizvodna operacija po broju moze da zahvati i tudje.
 ' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
 ' mutaciju po broju. Uslov pada tek kad prijemnica dobije pravi FK na generaciju.
+Public Function ZbirnaRoditeljRazlog(ByRef id As ZbirnaIdent) As String
+    If id.integrityStatus <> ZBR_INT_OK Then
+        ZbirnaRoditeljRazlog = ZBR_GATE_INTEGRITET
+        Exit Function
+    End If
+
+    Select Case id.resolutionStatus
+        Case ZBR_RES_UNIQUE
+            ' Jednoznacan DANAS jos nije dovoljno -- v. komentar iznad.
+            If id.historicalOwnerCount > 1 Then
+                ZbirnaRoditeljRazlog = ZBR_PARENT_ISTORIJA
+            End If
+        Case ZBR_RES_AMBIGUOUS
+            ZbirnaRoditeljRazlog = ZBR_PARENT_DVOSMISLEN
+        Case ZBR_RES_OWNER_MISMATCH
+            ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ
+        Case Else
+            ' NONE: pod tim brojem nema aktivnog dokumenta, pa nema ni roditelja.
+            ' Politiku za taj slucaj (BLOK ili UPOZORENJE, po
+            ' PRIJEMNICA_ZBIRNA_PROVERA) drzi ZbirnaPostoji u validatoru IZNAD
+            ' ove kapije -- ovde stoji samo da funkcija ne laze kad se pozove sama.
+            ZbirnaRoditeljRazlog = ZBR_PARENT_NEMA
+    End Select
+End Function
+
+' Tanak omotac nad JEDNOM tabelom iznad -- da druga kopija pravila ne odluta.
 Public Function ZbirnaRoditeljOK(ByRef id As ZbirnaIdent) As Boolean
-    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
-    If id.historicalOwnerCount > 1 Then Exit Function
-    ZbirnaRoditeljOK = (id.resolutionStatus = ZBR_RES_UNIQUE)
+    ZbirnaRoditeljOK = (Len(ZbirnaRoditeljRazlog(id)) = 0)
 End Function
 
 ' I1 -- KANONSKI READ-MODEL AKTIVNIH BROJEVA ZBIRNE (ugovor par.8).
