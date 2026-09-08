@@ -5313,6 +5313,20 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A17: dva aktivna dokumenta ISTOG vlasnika su i dalje dvosmislena",
     ),
+    "integritet-ne-vidi-dvosmislen-broj": (
+        "modIntegritet.bas",
+        "            If id.activeLogicalCount > 1 Then\n",
+        "            If id.activeLogicalCount > 2 Then   \' SABOTAZA: dva se ne broje\n",
+        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
+        "B8 vidi broj sa dva aktivna dokumenta",
+    ),
+    "integritet-ne-vidi-praznu-generaciju": (
+        "modIntegritet.bas",
+        "        If Len(Trim$(NzToText(data(r, cGen)))) = 0 Then\n",
+        "        If False Then   \' SABOTAZA: prazna generacija se ne prijavljuje\n",
+        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
+        "B9 vidi aktivnu zbirnu bez GeneracijaID",
+    ),
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",

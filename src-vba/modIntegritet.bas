@@ -101,6 +101,8 @@ Private Sub RunAllChecks()
     Chk_B5b_OtpremnicaBezZbirne
     Chk_B6_ZbirnaCaseMismatch
     Chk_B7_ZbirnaNulaKg
+    Chk_B8_DvosmislenBrojZbirne
+    Chk_B9_ZbirnaBezGeneracije
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
@@ -333,6 +335,106 @@ Private Sub Chk_B7_ZbirnaNulaKg()
 
 EH:
     WriteErr "B7", Err.description
+End Sub
+
+' ============================================================
+' CHECK B8: BROJ ZBIRNE NIJE JEDNOZNACAN
+' ============================================================
+' Ugovor: docs/DOMEN/ZBR_IDENTITET.md. F3 i F4 ovakvo stanje vise ne prave --
+' ali PWA import ga PRIHVATA namerno (ingest cinjenice, ne komanda), pa mora
+' negde da se VIDI. Ovo je to mesto.
+'
+' Kandidati se traze jednim prolazom (broj sa vise od jednog aktivnog reda), a
+' presudu daje ZbirnaIdentResolve -- da pravilo ne bi imalo drugu kopiju ovde.
+' Dvoklasna zbirna ima dva reda a JEDAN dokument, pa kandidat nije i nalaz.
+Private Sub Chk_B8_DvosmislenBrojZbirne()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cBr As Long, cVoz As Long, cKup As Long
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "Chk_B8")
+    cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "Chk_B8")
+    cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "Chk_B8")
+
+    Dim brojac As Object: Set brojac = CreateObject("Scripting.Dictionary")
+    brojac.CompareMode = vbTextCompare
+    Dim prvi As Object: Set prvi = CreateObject("Scripting.Dictionary")
+    prvi.CompareMode = vbTextCompare
+
+    Dim r As Long, b As String
+    For r = 1 To UBound(data, 1)
+        b = ZbirnaBrojNorm(NzToText(data(r, cBr)))
+        If Len(b) > 0 Then
+            If brojac.Exists(b) Then
+                brojac(b) = CLng(brojac(b)) + 1
+            Else
+                brojac.Add b, 1
+                prvi.Add b, NzToText(data(r, cVoz)) & Chr$(1) & NzToText(data(r, cKup))
+            End If
+        End If
+    Next r
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim k As Variant, vl As Variant, id As ZbirnaIdent
+    For Each k In brojac.Keys
+        If CLng(brojac(k)) > 1 Then
+            vl = Split(CStr(prvi(k)), Chr$(1))
+            id = ZbirnaIdentResolve(CStr(k), CStr(vl(0)), CStr(vl(1)))
+            If id.activeLogicalCount > 1 Then
+                bad.Add Array(CStr(k), CStr(id.activeLogicalCount), _
+                              CStr(id.activeOwnerCount), CStr(brojac(k)))
+            End If
+        End If
+    Next k
+
+    WriteBlock "B8", "BrojZbirne nosi VISE aktivnih dokumenata (vezivanje po broju nije jednoznacno)", _
+               Array("BrojZbirne", "Dokumenata", "Vlasnika", "Redova"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "B8", Err.description
+End Sub
+
+' ============================================================
+' CHECK B9: AKTIVNA ZBIRNA BEZ GeneracijaID
+' ============================================================
+' ZBR-IDENT-01: prazan GeneracijaID na aktivnom redu je integritetska greska,
+' ne alternativni oblik identiteta. Sva tri writer-a (SaveZbirna, modMasterSync,
+' modDokumentInvariant) odmah zovu ApplyGeneracijaID, pa produkcija ovo stanje
+' ne pravi -- ali rucna izmena u tabeli i starije sveske mogu.
+Private Sub Chk_B9_ZbirnaBezGeneracije()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cId As Long, cBr As Long, cGen As Long
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "Chk_B9")
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "Chk_B9")
+    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, "Chk_B9")
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        If Len(Trim$(NzToText(data(r, cGen)))) = 0 Then
+            bad.Add Array(NzToText(data(r, cId)), NzToText(data(r, cBr)))
+        End If
+    Next r
+
+    WriteBlock "B9", "Aktivna zbirna bez GeneracijaID (identitet dokumenta nedostaje)", _
+               Array("ZbirnaID", "BrojZbirne"), CollToArray(bad, 2)
+    Exit Sub
+
+EH:
+    WriteErr "B9", Err.description
 End Sub
 
 ' ============================================================

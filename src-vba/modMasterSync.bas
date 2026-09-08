@@ -3180,6 +3180,23 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
         ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _
                           COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
 
+        ' ZBR-IDENT-01 (korak 5): INGEST, pa DETEKCIJA -- ne blokada.
+        '
+        ' F3 i F4 su KOMANDE operatera: konflikt tamo znaci "ne radi to", pa se
+        ' unos odbija. Ovo je INGEST vec nastale cinjenice sa terena, i tu
+        ' odbijanje nije simetricno: pozivalac (ImportZbirnaRow_TX) na prazan
+        ' povratak dize Err.Raise UNUTAR tx, pa bi rollback bacio CEO sync red.
+        ' Podatak bi se izgubio, a kolizija ostala neprijavljena -- gore od oba.
+        '
+        ' KR-001 u KNOWN_ISSUES multi-device koliziju BrojZbirne vec prihvata kao
+        ' rizik, sa mitigacijom na GAS strani. Ovde se zato red UPISUJE, a
+        ' konflikt PRIJAVLJUJE: log odmah, i nalaz u modIntegritet (B8/B9) koji
+        ' ga vidi i kasnije.
+        '
+        ' Bezbedno je bas zato sto F4 od koraka 4 fail-closed odbija dvosmislen
+        ' broj: nijedan nizvodni proces ne bira roditelja po broju.
+        PrijaviKolizijuBrojaZbirne brojZbirne, vozacID, kupacID, clientRecordID
+
         LogInfo "ImportRowToTblZbirna", "Importiert: " & newID & " BrojZbirne=" & brojZbirne & _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
         ImportRowToTblZbirna = newID
@@ -3193,6 +3210,38 @@ EH:
     LogErr "ImportRowToTblZbirna", "ClientRecordID: " & clientRecordID
     ImportRowToTblZbirna = ""
 End Function
+
+' Detekcija kolizije broja POSLE upisa. Zove se sa vec ubacenim redom, pa meri
+' STANJE KOJE JE IMPORT OSTAVIO, ne ono pre njega.
+'
+' NIKAD ne dize gresku: ovo radi unutar transakcije uvoza, pa bi pad detekcije
+' oborio i sam upis -- tacno ono sto ova funkcija treba da spreci.
+Private Sub PrijaviKolizijuBrojaZbirne(ByVal broj As String, ByVal vozacID As String, _
+                                       ByVal kupacID As String, ByVal crid As String)
+    Const SRC As String = "ImportRowToTblZbirna"
+    Dim id As ZbirnaIdent
+    On Error GoTo EH
+
+    id = ZbirnaIdentResolve(broj, vozacID, kupacID)
+
+    If id.integrityStatus <> ZBR_INT_OK Then
+        LogWarn SRC, "ZBR-IDENT-01: aktivna zbirna bez GeneracijaID pod brojem " & _
+                broj, "CRID=" & crid
+        Exit Sub
+    End If
+
+    If id.activeLogicalCount > 1 Then
+        LogWarn SRC, "ZBR-IDENT-01: broj " & broj & " nosi " & _
+                CStr(id.activeLogicalCount) & " aktivna dokumenta (" & _
+                CStr(id.activeOwnerCount) & " vlasnika) -- uvoz je prihvacen, " & _
+                "vezivanje po broju vise nije jednoznacno", "CRID=" & crid
+    End If
+    Exit Sub
+
+EH:
+    ' Detekcija koja padne ne sme da obori uvoz -- samo se zapise da je pala.
+    LogErr SRC & ".PrijaviKolizijuBrojaZbirne", "CRID=" & crid
+End Sub
 
 ' ============================================================
 ' PRIVATE -- Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
