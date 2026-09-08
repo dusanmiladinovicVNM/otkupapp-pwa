@@ -123,6 +123,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_StornoGuardNaSvimPutanjama
     Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta
     Test_ZBR_DeteNosiGeneracijuRoditelja
+    Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -2798,6 +2799,29 @@ Private Sub Test_ZBR_DeteNosiGeneracijuRoditelja()
         NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpPosleStorna, COL_DETE_ZBIRNA_GEN)), _
         "ZBR-CHILD: stornirana zbirna NIJE roditelj -- generacija ostaje prazna"
 
+    ' --- E) RE-ENTRY: backfill NE SME da veze staro dete na novu generaciju ---
+    '
+    ' Ugovor par.5 izricito dozvoljava da isti vlasnik posle storna ponovo unese
+    ' zbirnu pod ISTIM brojem. Tada pod tim brojem stoje stornirana GEN-A i aktivna
+    ' GEN-B, a staro dete (jos bez generacije) istorijski pripada GEN-A.
+    '
+    ' "Ko je roditelj SADA" tu vraca GEN-B -- tacno za nov upis, POGRESNO za
+    ' rekonstrukciju starog reda. Backfill zato pita "ko je IKAD bio pod ovim
+    ' brojem" i cuti kad ih je bilo vise. Lazna sledljivost je gora od prazne
+    ' kolone: prazna bar ne tvrdi nista.
+    Dim zbrB As String, genB As String
+    zbrB = SaveZbirna_TX(testDate, TEST_VOZ_ID, broj, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         70#, TEST_TIP_AMB, 7, KLASA_I)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    AssertTrue (Len(genB) > 0 And genB <> genZbr), _
+        "ZBR-CHILD preduslov: re-entry pod istim brojem dao je NOVU generaciju"
+
+    AssertEquals genB, ZbirnaGeneracijaZaBroj(broj), _
+        "ZBR-CHILD: 'ko je roditelj SADA' vraca novu generaciju (tacno za nov upis)"
+    AssertEquals "", ZbirnaJedinaGeneracijaIkadZaBroj(broj), _
+        "ZBR-CHILD: 'ko je IKAD' cuti kad su pod brojem bile DVE generacije"
+
     tx.RollbackTx
     Exit Sub
 
@@ -2807,6 +2831,77 @@ EH:
     On Error GoTo 0
     LogFail "ZBR-CHILD-01 dete nosi generaciju roditelja", Err.description
 End Sub
+
+' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
+'
+' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna. Prijemnica svoj
+' ZbirnaGeneracijaID vec nosi, pa je novo pitanje "koja je zbirna SADA pod ovim
+' brojem" i suvisno i opasno -- izmedju nastanka prijemnice i palete moze da se
+' desi storno + re-entry, pa bi prijemnica ostala na GEN-A a paleta dobila GEN-B.
+Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
+    Dim tx As clsTransaction
+    Dim testDate As Date, scenario As String
+    Dim broj As String, brPrij As String
+    Dim zbrID As String, prjID As String
+    Dim genPrj As String, genPal As String
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRPAL")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brPrij = TEST_PREFIX & "-PRJ-PAL-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, broj, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          100#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(zbrID) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
+
+    prjID = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrij, broj, _
+                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, 0, _
+                              KLASA_I, 0)
+    AssertTrue Len(prjID) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
+
+    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_DETE_ZBIRNA_GEN))
+    AssertTrue Len(genPrj) > 0, "ZBR-PAL preduslov: prijemnica nosi generaciju roditelja"
+
+    genPal = PrvaGeneracijaPaletneStavke(prjID)
+    AssertTrue Len(genPal) > 0, "ZBR-PAL preduslov: paletizacija je napravila stavku"
+    AssertEquals genPrj, genPal, _
+        "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 paleta nasledjuje od prijemnice", Err.description
+End Sub
+
+' Generacija prve paletne stavke date prijemnice, ili prazno.
+Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As String
+    Dim dat As Variant: dat = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(dat) Then Exit Function
+    Dim cP As Long, cG As Long, r As Long
+    cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN)
+    If cP = 0 Or cG = 0 Then Exit Function
+    For r = 1 To UBound(dat, 1)
+        If Trim$(NzToText(dat(r, cP))) = Trim$(prijemnicaID) Then
+            PrvaGeneracijaPaletneStavke = Trim$(NzToText(dat(r, cG)))
+            Exit Function
+        End If
+    Next r
+End Function
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     Dim tx As clsTransaction

@@ -224,6 +224,14 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
             failZbr = AddKlasa(failZbr, "I")
             GoTo KlasaIDone
         End If
+        ' ZBR-CHILD-01: otpremnica je nastala PRE zbirne, pa je njena generacija
+        ' roditelja tada bila prazna. Sada zbirna postoji i njen PK je poznat --
+        ' veza se zavrsava ODMAH, u istom lancu.
+        '
+        ' Bez ovoga bi svaka otpremnica iz auto-lanca trajno ostala bez
+        ' generacije, pa faza 3 ("koristi generaciju kad je nose SVI redovi")
+        ' nad novim podacima nikad ne bi postala tacna bez rucnog backfill-a.
+        ZavrsiVezuOtpremniceNaZbirnu otpID, brZbr, zbrIDI, SRC
         Dim prjI As String
         If failStep <> "PRJ" Then _
             prjI = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
@@ -260,6 +268,14 @@ KlasaIDone:
             failZbr = AddKlasa(failZbr, "II")
             GoTo KlasaIIDone
         End If
+        ' ZBR-CHILD-01: otpremnica je nastala PRE zbirne, pa je njena generacija
+        ' roditelja tada bila prazna. Sada zbirna postoji i njen PK je poznat --
+        ' veza se zavrsava ODMAH, u istom lancu.
+        '
+        ' Bez ovoga bi svaka otpremnica iz auto-lanca trajno ostala bez
+        ' generacije, pa faza 3 ("koristi generaciju kad je nose SVI redovi")
+        ' nad novim podacima nikad ne bi postala tacna bez rucnog backfill-a.
+        ZavrsiVezuOtpremniceNaZbirnu otpID2, brZbr, zbrIDII, SRC
         Dim prjII As String
         If failStep <> "PRJ" Then _
             prjII = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
@@ -596,3 +612,30 @@ Private Function ClassOrDefault(ByVal v As Variant) As String
     ClassOrDefault = KlasaOrDefault(v)
 End Function
 
+' ZBR-CHILD-01: zavrsi vezu otpremnice na zbirnu kad zbirna tek nastane.
+'
+' U auto-lancu otpremnica nastaje PRE zbirne, pa joj je generacija roditelja
+' tada prazna -- to je tacno u tom trenutku, ali ostalo bi tako ZAUVEK. Faza 3
+' ("koristi generaciju kad je nose SVI redovi") nad novim podacima nikad ne bi
+' postala tacna bez rucnog backfill-a.
+'
+' Generacija se cita iz PK upravo kreirane zbirne, ne razresava po broju:
+' NIKAD NE POGADJAJ KAD VEC ZNAS.
+'
+' Tih izlaz na prazan ulaz je namerno: ovo je dopuna veze, ne kapija. Klasa
+' koja nije snimljena nema sta da vezuje, a pad ovde bi obarao lanac koji je
+' inace uspeo.
+Private Sub ZavrsiVezuOtpremniceNaZbirnu(ByVal otpID As String, ByVal brZbr As String, _
+                                         ByVal zbrID As String, ByVal SRC As String)
+    On Error GoTo EH
+    If Len(Trim$(otpID)) = 0 Or Len(Trim$(zbrID)) = 0 Then Exit Sub
+    Dim gen As String: gen = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrID)
+    If Len(gen) = 0 Then Exit Sub
+    Dim redovi As Collection: Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    If redovi.count <> 1 Then Exit Sub
+    PoveziDeteNaZbirnu TBL_OTPREMNICA, CLng(redovi(1)), COL_OTP_BROJ_ZBIRNE, _
+                       brZbr, gen, SRC
+    Exit Sub
+EH:
+    LogErr "modAutoHladnjaca.ZavrsiVezuOtpremniceNaZbirnu", "otpID=" & otpID
+End Sub

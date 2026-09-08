@@ -575,6 +575,30 @@ Zato invarijanta nije „uvek popunjeno", nego:
 **Prazno je legitimno** i znači „roditelj još nije razrešen". Čitalac tada pada na
 broj, tačno kao pre ove kolone. To je ono što čini postepenu migraciju mogućom.
 
+### Pravilo: nikad ne pogađaj kad već znaš
+
+Identitet roditelja se uzima **najbližim poznatim putem**, a razrešavanje po broju
+je poslednja opcija — ne prva:
+
+| Situacija | Odakle generacija |
+|---|---|
+| Neposredni roditelj je nosi | **kopira se od njega** (paleta ← prijemnica) |
+| Poznat je konkretan `ZbirnaID` | čita se **iz tog reda** (`GeneracijaPoID`) |
+| Nema nijednog kanonskog identiteta | tek tada `ZbirnaGeneracijaZaBroj`, fail-closed |
+
+Prva verzija ovog koraka je to prekršila na tri mesta, i sva tri su bila
+**tiho pogrešna**:
+
+- `LinkZbirnaToOtkupAndOtpremnica` je imao `ZbirnaID` i bacao ga da bi pitao
+  labelu. U `KR-001` koliziji (dva aktivna dokumenta pod istim brojem)
+  razrešavanje po broju vrati **prazno** — dakle veza bi izostala baš tamo gde je
+  najpotrebnija.
+- `AddStavka` je imao `PrijemnicaID` i pitao globalno „koja je zbirna **sada** pod
+  ovim brojem". Posle storna + re-entry prijemnica ostaje na `GEN-A`, a njena
+  paleta bi dobila `GEN-B` — razbijena sledljivost unutar jednog lanca.
+- `modAutoHladnjaca` je imao upravo kreiran `ZbirnaID` i nije završio vezu, pa je
+  otpremnica **trajno** ostajala prazna (v. sledeći odeljak).
+
 ### Jedan put, u oba smera
 
 | | |
@@ -597,10 +621,32 @@ O(n·m). Petlje uzimaju generaciju jednom i prosleđuju je.
 produkcionih pisaca** kroz njega. **Nijedan čitalac nije diran.**
 
 **Faza 2** — `modSetup.BackfillDeteZbirnaGeneracija`: jednokratno, idempotentno
-(samo prazni redovi), van `EnsureRuntimeSchema` jer je skupo po startu. Popunjava
-**samo jednoznačan broj**; dvosmisleni i storniran roditelj ostaju prazni. Odluka
-o jednoznačnosti se ne prepisuje — zove istu `ZbirnaGeneracijaZaBroj` koju
-koriste pisci.
+(samo prazni redovi), van `EnsureRuntimeSchema` jer je skupo po startu.
+
+**Kriterijum je ISTORIJSKI, ne tekući** — i to je razlika koja čuva sledljivost.
+Backfill zove `ZbirnaJedinaGeneracijaIkadZaBroj`, ne `ZbirnaGeneracijaZaBroj`:
+
+```
+GEN-A | ZB-10 | vlasnik X | STORNIRANO
+GEN-B | ZB-10 | vlasnik X | AKTIVNO      <- resolver kaže UNIQUE = GEN-B
+OTP-A | BrojZbirne = ZB-10 | generacija prazna
+```
+
+To stanje §5 **izričito dozvoljava** (re-entry istog vlasnika posle storna).
+`OTP-A` je istorijski dete `GEN-A`; „sada" bi mu upisalo `GEN-B` i napravilo
+**lažnu sledljivost** — gore od prazne kolone, jer prazna bar ne tvrdi ništa.
+
+Popunjava se samo broj koji je **ikad** nosio jednu generaciju. Stornirana jedina
+generacija se sme upisati: ako je pod tim brojem ikad postojala samo jedna,
+identitet je poznat bez obzira na današnje stanje.
+
+### Auto-lanac: veza se završava, ne ostavlja
+
+U auto-lancu otpremnica nastaje **pre** zbirne, pa joj je generacija tada prazna —
+tačno u tom trenutku. Ali bez dopune ostala bi tako **zauvek**, i faza 3 („koristi
+generaciju kad je nose svi redovi") nad novim podacima nikad ne bi postala tačna
+bez ručnog backfill-a. `ZavrsiVezuOtpremniceNaZbirnu` zato završava vezu odmah po
+nastanku zbirne, čitajući generaciju **iz njenog PK-a**.
 
 **Faza 3 (ne u ovom koraku)** — odlučivači koji danas biraju decu po broju
 (`DetachOtpremniceInline`, `ActiveOtpIDsByZbirna`, `ActivePrijIDsByZbirna`,

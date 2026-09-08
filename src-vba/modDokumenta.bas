@@ -79,6 +79,7 @@ Public Type ZbirnaIdent
     activeOwnerCount As Long
     historicalOwnerCount As Long
     historicalLogicalCount As Long
+    historicalOnlyGeneracijaID As String   ' popunjeno samo kad je historicalLogicalCount = 1
     scopeProvided As Boolean
     historicalOwnerIsScope As Boolean
     matchingScopeActiveLogicalCount As Long
@@ -532,6 +533,7 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
     res.historicalOwnerCount = ikadVl.Count
     ' MERI SE, NE BLOKIRA -- v. komentar uz ZBR_MUT_* konstante.
     res.historicalLogicalCount = ikadGen.Count
+    If res.historicalLogicalCount = 1 Then res.historicalOnlyGeneracijaID = ikadGen.Keys()(0)
 
     If res.scopeProvided And res.historicalOwnerCount = 1 Then
         res.historicalOwnerIsScope = (StrComp(ikadVl.Keys()(0), scopeKljuc, vbTextCompare) = 0)
@@ -1501,6 +1503,40 @@ Public Function ZbirnaGeneracijaZaBroj(ByVal broj As String) As String
     Exit Function
 EH:
     LogErr "modDokumenta.ZbirnaGeneracijaZaBroj", "broj=" & broj
+End Function
+
+' ZBR-CHILD-01: identitet roditelja kad je broj IKAD imao samo JEDNU generaciju.
+'
+' Za BACKFILL, ne za pisce. Razlika je sustinska:
+'
+'   ZbirnaGeneracijaZaBroj  pita "ko je roditelj SADA" -- tacno za red koji se
+'                           upravo vezuje, jer se vezuje za tekuci dokument.
+'   ova funkcija            pita "ko je IKAD bio pod ovim brojem" -- tacno za
+'                           stari red kome se identitet naknadno rekonstruise.
+'
+' Zasto backfill ne sme "sada": ugovor par.5 IZRICITO dozvoljava re-entry istog
+' vlasnika posle storna, pa je ovo legitimno stanje:
+'
+'   GEN-A | ZB-10 | vlasnik X | STORNIRANO
+'   GEN-B | ZB-10 | vlasnik X | AKTIVNO      <- resolver kaze UNIQUE = GEN-B
+'   OTP-A | BrojZbirne = ZB-10 | generacija prazna
+'
+' OTP-A je istorijski dete GEN-A. "Sada" bi mu upisalo GEN-B i napravilo LAZNU
+' SLEDLJIVOST -- gore od prazne kolone, jer prazna bar ne tvrdi nista.
+'
+' Stornirana JEDINA generacija se sme upisati: ako je pod tim brojem ikad
+' postojala samo jedna, identitet je poznat bez obzira na danasnje stanje.
+Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String) As String
+    Dim id As ZbirnaIdent
+    On Error GoTo EH
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+    id = ZbirnaIdentResolve(broj)
+    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
+    If id.historicalLogicalCount <> 1 Then Exit Function
+    ZbirnaJedinaGeneracijaIkadZaBroj = id.historicalOnlyGeneracijaID
+    Exit Function
+EH:
+    LogErr "modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj", "broj=" & broj
 End Function
 
 ' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.

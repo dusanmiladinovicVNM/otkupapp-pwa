@@ -5319,6 +5319,27 @@ SABOTAZE = {
     # ZBR-CHILD-01: tri sabotaze, po jedna na svaki deo invarijante -- postavljanje,
     # brisanje, i fail-closed razresenje. Jedna bi propustila da su druga dva
     # pokvarena.
+    # ZBR-CHILD-01 / P1 iz review-a #299: backfill vraca na "ko je roditelj SADA".
+    # Posle re-entry-ja istog vlasnika to je NOVA generacija, pa bi staro dete bilo
+    # vezano na dokument kome nikad nije pripadalo -- lazna sledljivost.
+    "backfill-veze-staro-dete-na-novu-generaciju": (
+        "modSetup.bas",
+        "        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))\n",
+        "        brojevi(k) = ZbirnaGeneracijaZaBroj(CStr(k))   ' SABOTAZA: tekuci, ne istorijski\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: 'ko je IKAD' cuti kad su pod brojem bile DVE generacije",
+    ),
+    # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
+    # vidi tek posle storna + re-entry: prijemnica ostaje na GEN-A, paleta bi
+    # dobila GEN-B.
+    "paleta-pogadja-generaciju-po-broju": (
+        "modPaletniList.bas",
+        "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
+        "                                        COL_DETE_ZBIRNA_GEN))\n",
+        "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
+        "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
+        "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica",
+    ),
     "dete-ne-nosi-generaciju-roditelja": (
         "modDokumenta.bas",
         "    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName\n",

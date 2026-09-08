@@ -1310,14 +1310,14 @@ End Sub
 ' Alt+F8, jednokratno; idempotentno (dira SAMO prazne). NE ide u
 ' EnsureRuntimeSchema -- skupo je po startu, a i nije rutina nego odluka.
 '
-' POPUNJAVA SE SAMO JEDNOZNACAN BROJ. Sve ostalo -- broj bez aktivne zbirne,
-' dvosmislen broj, pokvaren identitet -- ostaje PRAZNO. To nije propust migracije
-' nego njen smisao: identitet se ne pogadja iz labele. Prazno dete citalac i dalje
-' cita po broju, tacno kao pre ove kolone, pa migracija ne moze da pogorsa stanje.
+' POPUNJAVA SE SAMO BROJ KOJI JE IKAD NOSIO JEDNU generaciju. Sve ostalo --
+' broj koji je drzalo vise dokumenata kroz vreme, ili pokvaren identitet --
+' ostaje PRAZNO. To nije propust migracije nego njen smisao: identitet se ne
+' pogadja iz labele. Prazno dete citalac i dalje cita po broju, tacno kao pre
+' ove kolone, pa migracija ne moze da pogorsa stanje.
 '
-' Odluka o jednoznacnosti se NE prepisuje ovde: zove se modDokumenta.
-' ZbirnaGeneracijaZaBroj, ista funkcija koju koriste pisci. Dve definicije
-' "jednoznacnog broja" bi se razisle prvom izmenom pravila.
+' KRITERIJUM JE ISTORIJSKI, NE TEKUCI, i to je razlika koja cuva sledljivost --
+' v. modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj.
 '
 ' Razresava se JEDNOM PO RAZLICITOM BROJU, ne po redu: ZbirnaIdentResolve cita
 ' celu tblZbirna, pa bi poziv po redu bio O(n*m) nad celom istorijom.
@@ -1357,7 +1357,12 @@ Public Sub BackfillDeteZbirnaGeneracija()
     ' --- 2) razresi svaki broj JEDNOM ---
     Dim k As Variant
     For Each k In brojevi.Keys
-        brojevi(k) = ZbirnaGeneracijaZaBroj(CStr(k))
+        ' NE ZbirnaGeneracijaZaBroj: ta pita "ko je roditelj SADA", a backfill
+        ' rekonstruise identitet STARIH redova. Posle re-entry-ja istog vlasnika
+        ' (ugovor par.5) pod istim brojem stoje stornirana GEN-A i aktivna GEN-B;
+        ' "sada" bi starom detetu GEN-A upisalo GEN-B -- LAZNA SLEDLJIVOST, gora
+        ' od prazne kolone.
+        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))
     Next k
 
     ' --- 3) upisi tamo gde je razresen ---
@@ -1392,7 +1397,7 @@ Public Sub BackfillDeteZbirnaGeneracija()
             " razlicitih brojeva=" & brojevi.count
     MsgBox "Backfill ZbirnaGeneracijaID na deci:" & vbCrLf & _
            "popunjeno: " & popunjeno & vbCrLf & _
-           "preskoceno (broj nije jednoznacan): " & preskoceno & vbCrLf & vbCrLf & _
+           "preskoceno (broj je IKAD nosio vise dokumenata): " & preskoceno & vbCrLf & vbCrLf & _
            "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre. " & _
            "Dvosmislene brojeve prijavljuje Provera integriteta (B8).", _
            vbInformation, APP_NAME

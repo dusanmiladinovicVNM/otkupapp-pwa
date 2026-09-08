@@ -1103,6 +1103,10 @@ Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As Str
     '   (Grupisanje+SaveZbirnaMulti je padalo na Klasa-II-only grupi: kolI=0.)
     Dim otpMap As Object
     Set otpMap = CreateObject("Scripting.Dictionary")
+    ' Paralelna mapa: OtpremnicaID -> generacija roditelja, da otkup ne mora
+    ' ponovo da razresava po broju (ZBR-CHILD-01).
+    Dim otpGenMap As Object
+    Set otpGenMap = CreateObject("Scripting.Dictionary")
 
     Dim created As Long: created = 0
     Dim r As Long
@@ -1140,11 +1144,18 @@ Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As Str
                     " Klasa=" & klasa
             End If
 
-            ' ZBR-CHILD-01: broj i generacija roditelja idu zajedno.
+            ' ZBR-CHILD-01: broj i generacija roditelja idu zajedno, a generacija
+            ' se cita IZ UPRAVO KREIRANE zbirne (zbrRes je njen PK) -- ne pogadja se
+            ' ponovo po broju. Broj u mirror slucaju nosi "S" prefiks i moze biti
+            ' deljen, PK ne moze.
+            Dim genZbr As String: genZbr = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrRes)
             PoveziDeteNaZbirnu TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, _
-                               brZbirne, ZbirnaGeneracijaZaBroj(brZbirne), SRC
+                               brZbirne, genZbr, SRC
             Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cId), "")))
-            If otpID <> "" Then otpMap(otpID) = brZbirne
+            If otpID <> "" Then
+                otpMap(otpID) = brZbirne
+                otpGenMap(otpID) = genZbr
+            End If
 
             created = created + 1
         End If
@@ -1153,12 +1164,14 @@ Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As Str
     If created = 0 Then Exit Function
 
     ' backfill BrojZbirne na tblOtkup (preko OtpremnicaID), jedan prolaz
-    BackfillOtkupBrojZbirneByOtpremnica otpMap, SRC
+    BackfillOtkupBrojZbirneByOtpremnica otpMap, otpGenMap, SRC
 
     AutoCreateZbirnaFromOtpremnice = created
 End Function
 
-Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal callerSrc As String)
+Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, _
+                                               ByVal otpGenMap As Object, _
+                                               ByVal callerSrc As String)
     If otpMap Is Nothing Then Exit Sub
     If otpMap.count = 0 Then Exit Sub
 
@@ -1177,9 +1190,10 @@ Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal ca
             If otpMap.Exists(otpID) Then
                 Dim cur As String: cur = Trim$(CStr(nz(data(r, cBrZ), "")))
                 If cur = "" Then
+                    ' Generacija iz iste mape -- otkup nasledjuje identitet koji je
+                    ' otpremnica vec dobila iz PK-a, ne novo pogadjanje po broju.
                     PoveziDeteNaZbirnu TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
-                        CStr(otpMap(otpID)), ZbirnaGeneracijaZaBroj(CStr(otpMap(otpID))), _
-                        callerSrc
+                        CStr(otpMap(otpID)), CStr(otpGenMap(otpID)), callerSrc
                 End If
             End If
         End If
@@ -2370,8 +2384,16 @@ Private Sub LinkOtkupToOtpremnicaStrict(ByVal otkupID As String, _
     SetOtkupBrojOtpremnice rowOtkup, otpremnicaID
 End Sub
 
+' ZBR-CHILD-01: generaciju PRIMA, ne pogadja.
+'
+' Pozivalac (LinkZbirnaToOtkupAndOtpremnica) ima konkretan ZbirnaID -- membership
+' se i razresava preko PK, bas zato sto broj u multi-device koliziji nije
+' jedinstven (AUD-043b). Ponovno pitanje ZbirnaGeneracijaZaBroj(brojZbirne) bi
+' taj identitet BACILO i vratilo prazno u KR-001 slucaju -- dakle bas tamo gde
+' je veza najpotrebnija.
 Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
                                              ByVal brojZbirne As String, _
+                                             ByVal genZbirne As String, _
                                              ByVal sourceName As String)
     If Len(Trim$(brojZbirne)) = 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 50, sourceName, _
@@ -2386,7 +2408,7 @@ Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
                                     brojZbirne, "OtpremnicaID=" & otpremnicaID, sourceName
 
     PoveziDeteNaZbirnu TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
-                       brojZbirne, ZbirnaGeneracijaZaBroj(brojZbirne), sourceName
+                       brojZbirne, genZbirne, sourceName
 End Sub
 
 Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
@@ -3340,6 +3362,13 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
 
+    ' ZBR-CHILD-01: NIKAD NE POGADJAJ KAD VEC ZNAS.
+    ' Konkretan ZbirnaID je poznat (kapija iznad ga i zahteva), pa se generacija
+    ' cita IZ TOG REDA -- jednom, za svu decu. Razresavanje po broju bi u
+    ' KR-001 koliziji (dva aktivna dokumenta pod istim brojem) vratilo prazno.
+    Dim genZbirne As String
+    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+
     ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
     ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID
     ' bio prihvatan bez provere da otkup uopste pripada tom vozacu/danu.
@@ -3468,14 +3497,14 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
                                             brojZbirne, "OtkupID=" & otkupID, SRC
 
             PoveziDeteNaZbirnu TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
-                               brojZbirne, ZbirnaGeneracijaZaBroj(brojZbirne), SRC
+                               brojZbirne, genZbirne, SRC
 
             Dim otpID As String
             otpID = Trim$(CStr(nz(otkData(rowOtkup, colOtkOtpID), "")))
 
             If Len(otpID) > 0 Then
                 If Not updatedOtp.Exists(otpID) Then
-                    LinkOtpremnicaToBrojZbirneStrict otpID, brojZbirne, SRC
+                    LinkOtpremnicaToBrojZbirneStrict otpID, brojZbirne, genZbirne, SRC
                     updatedOtp.Add otpID, True
                 End If
             End If
