@@ -4481,7 +4481,11 @@ Private Sub LogFail(ByVal testName As String, ByVal details As String)
 
     Debug.Print "[FAIL] " & testName & " :: " & details
     AppendTestLog "TEST", testName, "FAIL", details
-    m_Report = m_Report & "FAIL " & testName & " -- " & details & vbLf
+    ' Separator je " :: ", ne " -- ": tekst tvrdnje SME da sadrzi " -- ", pa bi
+    ' se ime na njemu odseklo pri citanju (dokaz.py bi javio NE OBARA SVOJ TEST
+    ' nad sabotazom koja radi savrseno). Isti separator modul vec koristi u
+    ' Debug.Print, pa je izlaz i konzistentan.
+    m_Report = m_Report & "FAIL " & testName & " :: " & details & vbLf
 End Sub
 
 Private Sub WriteResultFileBFP()
@@ -4500,7 +4504,7 @@ Private Sub LogSkip(ByVal testName As String, ByVal reason As String)
 
     Debug.Print "[SKIP] " & testName & " :: " & reason
     AppendTestLog "TEST", testName, "SKIP", reason
-    m_Report = m_Report & "SKIP " & testName & " -- " & reason & vbLf
+    m_Report = m_Report & "SKIP " & testName & " :: " & reason & vbLf
 End Sub
 
 Private Sub LogInfo(ByVal message As String)
@@ -4514,7 +4518,7 @@ Private Sub LogFatal(ByVal sourceName As String, ByVal errNum As Long, ByVal err
 
     Debug.Print "[FATAL] " & sourceName & " :: " & CStr(errNum) & " - " & errDesc
     AppendTestLog "FATAL", sourceName, "FAIL", CStr(errNum) & " - " & errDesc
-    m_Report = m_Report & "FAIL " & sourceName & " -- FATAL " & _
+    m_Report = m_Report & "FAIL " & sourceName & " :: FATAL " & _
                CStr(errNum) & " " & errDesc & vbLf
 End Sub
 

@@ -341,10 +341,13 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
         ' inace nova. Vazi za sve pozivaoce -- Multi_TX i pojedinacne _TX putanje.
         ' ZBR-CHILD-01: generacija RODITELJSKE zbirne na ovom detetu. Prazna je
         ' pravilo, ne izuzetak: u malina/hladnjaca lancu otpremnica nastaje PRE
+        ' zbirne. Ide kroz PoveziDeteNaZbirnu iako je broj vec u rowData: da
+        ' JEDINI PUT bude stvarno jedini -- prepis iste vrednosti je jeftin,
+        ' a druga putanja bi znacila da se par moze raziciti.
         ' zbirne (modAutoHladnjaca), pa roditelj tada jos ne postoji -- popunice
         ' je LinkZbirnaToOtkupAndOtpremnica ili backfill.
-        RequireUpdateCell TBL_OTPREMNICA, newRow, COL_DETE_ZBIRNA_GEN, _
-                          ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SaveOtpremnica"
+        PoveziDeteNaZbirnu TBL_OTPREMNICA, newRow, COL_OTP_BROJ_ZBIRNE, brojZbirne, _
+                           ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SaveOtpremnica"
         ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp, _
                           COL_OTP_STANICA, stanicaID
 
@@ -1500,11 +1503,17 @@ EH:
     LogErr "modDokumenta.ZbirnaGeneracijaZaBroj", "broj=" & broj
 End Function
 
-' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu.
+' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.
 '
-' Broj i generacija se upisuju ZAJEDNO. Dva odvojena upisa bi pre ili kasnije
+' Broj i generacija se upisuju ZAJEDNO. Dva odvojena upisa bi se pre ili kasnije
 ' razisla: neko doda putanju koja postavlja broj a zaboravi generaciju, i dete
 ' ostane sa TUDJOM generacijom -- gore od prazne, jer prazna bar znaci "ne znam".
+'
+' Zovu ga i SaveOtpremnica/SavePrijemnica posle AppendRow, iako je broj vec u
+' rowData: prepis iste vrednosti je jeftin, a druga putanja bi znacila da se par
+' moze raziciti. Jedini upis koji NE ide ovuda je PalAppendRow u modPaletniList,
+' i tamo rizika nema -- oba polja idu u ISTOM append pozivu, pa ih nema sta da
+' razdvoji.
 '
 ' gen se prosledjuje, ne racuna ovde: pozivaoci su cesto petlje nad decom istog
 ' broja (v. ZbirnaGeneracijaZaBroj).
@@ -2058,8 +2067,8 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
 
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
-    RequireUpdateCell TBL_PRIJEMNICA, appendedRow, COL_DETE_ZBIRNA_GEN, _
-                      ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
+    PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
+                       ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
     ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, _
                       COL_PRJ_KUPAC, kupacID
 
