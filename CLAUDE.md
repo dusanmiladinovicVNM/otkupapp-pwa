@@ -55,8 +55,12 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
   compile error. Za EH koristi `errNum` / `errDesc` / `errSrc`.
 - **`.frx` se ne dira kao tekst.** Nove kontrole → runtime (`Controls.Add`).
   **Nove `Private WithEvents` deklaracije u formama su ZABRANJENE.**
-- **Šema tabela je izvor istine, ne kod** (schema drift po instalaciji). Pre
-  upisa proveri stvarne nazive kolona.
+- **Šema tabela dolazi iz koda: `schema/schema.json` je kanon.** `modSchema.bas`
+  je njegov generisan artefakt (`tools/gen_schema_module.py`), sveska je
+  posledica. Menjaš šemu → menjaš `schema.json`, pa regenerišeš. Nikad obrnuto.
+- **Redosled kolona je deo šeme, ne kozmetika.** `AppendRow` piše **poziciono**,
+  a pisci grade goli `Array(...)` — kolona ubačena u sredinu tiho šalje vrednosti
+  u pogrešne kolone. Nove kolone idu **na kraj**.
 - `.frm` uvek ide u commit sa svojim `.frx` parom.
 
 ## 4) Mapa koda + gde su detaljna pravila
@@ -65,7 +69,9 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 |---|---|---|
 | Domen: šta dokumenti jesu, invarijante | `docs/DOMEN/` | `docs/DOMEN/README.md` |
 | Ko piše koju tabelu | generisano iz `src-vba/` | `docs/DOMEN/WHO_WRITES.md` |
+| Šema tabela — kanon, self-heal, provera | `schema/schema.json`, `modSchema.bas` | `.claude/rules/podaci-i-config.md` |
 | Tabele / kolone / konstante, pristup podacima | `modConfig.bas`, `modDataAccess.bas` | `.claude/rules/podaci-i-config.md` |
+| Arhitektonski ugovor (A1–A12), vlasništvo upisa | `docs/DOMEN/ARCHITECTURE_CONTRACT.md`, `docs/DOMEN/WRITE_OWNERSHIP.json` | isti fajl |
 | Otkup / dokumenta | `modScrDokumenti`+`modOtkupUnos`/`modDokUnos`, `modOtkup`+`modDokumenta` | `.claude/rules/otkup-i-dokumenta.md` |
 | Forme, `.frx`, runtime kontrole | `frmOtkupUI`, `clsFlatBtn`, `clsUiSink` | `.claude/rules/forme-i-kontrole.md` |
 | Agrohemija / ambalaža / cenovnik | `modAgrohemija`, `modAmbalaza`, `modCenovnik` | `.claude/rules/agrohemija-i-cene.md` |
@@ -90,6 +96,10 @@ Ako oblast nema svoj fajl, važi samo ovo ovde.
 - `vba_check` radi svuda, i u Linux sesiji. `run_vba` traži **Windows + Excel +
   `pywin32`** i u web sesiji se **ne izvršava** — tamo se izmena ponašanja
   prijavljuje kao **neverifikovana**, nikad kao zelena.
+- **Diraš šemu ili upis?** Dodaj i ove dve, obe rade bez Excela:
+  `python tools/gen_schema_module.py --check` (kanon i `modSchema` u koraku) i
+  `python tools/who_writes.py --check-ownership` (A11 — nov pisač domen-tabele
+  obara CI). Pred uvoz u zatečenu svesku: `python tools/schema_diff.py <sveska>`.
 - **Compile je ručna kapija pred release:** `Alt+F11 → Debug → Compile
   VBAProject`. Automatski verdikt je često `NEJASNO` i tako se i prijavljuje.
 - **Izmena ponašanja nosi test u `modTest`**, ne checklistu. Checklista u chatu je

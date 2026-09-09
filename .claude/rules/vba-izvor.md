@@ -116,3 +116,17 @@ Najčešći ulaz nije merge nego **neuspeo pokušaj izmene**: python heredoc koj
 - **Pozicijski `AppendRow` zavisi od redosleda kolona** — bezbedan samo ako je
   redosled potvrđen. Inače upis **po imenu** (`UpdateCell`/`GetColumnIndex`).
   Detalji o šemi: `.claude/rules/podaci-i-config.md`.
+- **`modSchema.bas` je generisan — ne menja se rukom.** Kanon je
+  `schema/schema.json`; posle izmene ide `python tools/gen_schema_module.py`.
+  `vba_check` pravilo `SEMA_REGISTAR` ne pušta `TBL_*` konstantu koje nema u
+  registru, a `gen_schema_module.py --check` obara CI ako su se kanon i modul
+  razišli.
+- **Ime parametra može da zakloni proceduru** — VBA je case-insensitive, pa
+  `Reg reg, ...` unutar procedure koja ima parametar `reg` postaje **pozivanje
+  tog parametra**, ne procedure (runtime 438, „Object doesn't support this
+  property or method"). `ZAKLONJENO` ovo **ne hvata**: namerno preskače objekte,
+  jer `Variant`/objekat sme da se indeksira. Ista klasa greške kao `ZAKLONJENO`,
+  ali je nalazi samo test — v. `modSchema.RegistrujTabelu` (PR #302).
+- **`Set d("kljuc") = objekat` nad late-bound `Scripting.Dictionary` puca** —
+  traži `Property Set`, koji Dictionary ne izlaže. Ako registar mora da nosi
+  strukturu, čuvaj **string** pa ga parsiraj, ne ugnježden objekat.

@@ -43,8 +43,9 @@ u hook: 11 suite-ova uz podizanje Excela na svakom zaustavljanju je desktop
 sesiju činilo neupotrebljivom.
 
 **Centralni verdikt nezavisan od mašine daje CI** (`.github/workflows/static.yml`):
-JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, i tri kapije
-nad self-update motorom (§8). CI ne pokreće Excel i nikad neće.
+JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, tri kapije
+nad self-update motorom (§8), i dve kapije nad šemom i vlasništvom (§9). CI ne
+pokreće Excel i nikad neće.
 
 Svaki od tih alata ima i `--self-test` korak u istom workflow-u. To nije
 udvajanje: zelen checker nad čistim repoom ne razlikuje „nema greške" od
@@ -68,6 +69,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `KRAJ_REDA` | LF umesto CRLF u VBA izvoru → `Import` ne prepozna formu |
 | `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
 | `DUPLI_LOKAL` | isto ime dvaput u **istoj** proceduri (`Dim src` uz `Const SRC`, parametar pa `Dim`) |
+| `SEMA_REGISTAR` | `TBL_*` konstanta koje nema u registru `modSchema` — `EnsureAllTables` je ne bi napravio, a `VerifySchema` ne bi prijavio da fali |
 
 **`Poruka()` nikad ne vraća prazno.** Nepoznat ključ daje `"[KLJUČ]"`, pa je
 `Len(Poruka(k)) = 0` provera koja **ne može da padne**. Tvrdnja „ključ postoji u
@@ -280,3 +282,47 @@ stvarno zaprljanje prođe neopaženo. Isti obrazac je već jednom ujeo — komen
 zaglavlju `modSelfUpdate` je nabrajao module (`modKarticaDetalji`, `modMouseWheel`,
 `clsWheelList`) koji su u međuvremenu obrisani, a niko to nije primetio jer
 komentar ništa ne obara.
+
+## 9) Dve kapije nad šemom i vlasništvom
+
+Obe su čist Python, rade u CI-ju i u web sesiji, i obe hvataju stanje koje
+**suite ne može da izmeri** — jer greška ne postoji dok se ne pojavi na tuđoj
+svesci ili u tuđem modulu.
+
+| Alat | Čuva | Pada kad |
+|---|---|---|
+| `tools/gen_schema_module.py --check` | da su kanon (`schema/schema.json`) i `modSchema.bas` u koraku | neko izmeni jedno bez drugog — sveska bi se lečila po zastareloj šemi, a otisak na startu prijavljivao drift koji niko ne ume da objasni |
+| `tools/who_writes.py --check-ownership` | ugovor A11 — ko sme da piše koju tabelu | pojavi se pisač van `WRITE_OWNERSHIP.json` |
+
+### Zašto ownership kapija meri baš mutatore
+
+`AddTableSnapshot` znači „moja transakcija mora da ume da vrati ovu tabelu", ne
+„ja sam pišem". Koordinator sme da snapshotuje tuđu tabelu i pozove API njenog
+vlasnika. Kapija zato broji **`AppendRow` / `UpdateCell` / `RequireUpdateCell`**.
+
+Prva verzija je merila pomešano, a `RequireUpdateCell` joj je bio **nevidljiv**:
+regex je tražio granicu reči pred `UpdateCell`, a u `RequireUpdateCell` je nema.
+**220 poziva** je prolazilo neopaženo — uključujući `modSEFPersistance` nad
+`tblFakture`, koji u mapi uopšte nije postojao. Ista klasa greške kao placebo
+test: kapija zelena, a meri pola stvarnosti.
+
+### Otisak šeme — zašto nad prefiksom, a ne nad celim zaglavljem
+
+`SchemaCheckOnStart` poredi otisak sveske sa kanonom. Meri se **kanonski
+prefiks** zaglavlja, iz dva razloga:
+
+1. `modSetup.EnsureRuntimeSchema` dodaje kolone na svakom startu i one idu **na
+   kraj**. Legitimne su — samo ih kanon još ne drži — pa bi otisak nad celim
+   zaglavljem prijavljivao trajan lažan drift. Provera koju operater nauči da
+   ignoriše ne štiti ništa.
+2. Pozicioni upis zavisi **tačno** od prefiksa: sve iza poslednje kanonske
+   kolone ne može da pomeri nijednu vrednost koju pisci šalju.
+
+Time se otisak i `VerifySchema` poklapaju **po konstrukciji**. Kad se ne poklope,
+to više nije drift u svesci nego kvar u kodu — i poruka tako i glasi.
+
+### Šta ove kapije NE dokazuju
+
+Da je kanon **tačan**. Dokazuju da su kanon, modul i sveska međusobno u koraku.
+Da li je sam kanon ispravan model pokazuju domenski testovi (`modTest` 197–199) i
+`docs/DOMEN/DOCUMENT_HEADER_LINES.md`.
