@@ -487,6 +487,7 @@ Public Sub RunAllTests()
     RunOne 197
     RunOne 198
     RunOne 199
+    RunOne 200
     RunOne 124
     RunOne 125
     RunOne 126
@@ -755,6 +756,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 197: TestName = "T_Sema_OtisakParitetSaGeneratorom"
         Case 198: TestName = "T_Sema_SveskaOdgovaraKanonu"
         Case 199: TestName = "T_Sema_OtisakVidiRedosled"
+        Case 200: TestName = "T_Sema_KapijaBije"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -962,6 +964,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 197: T_Sema_OtisakParitetSaGeneratorom
         Case 198: T_Sema_SveskaOdgovaraKanonu
         Case 199: T_Sema_OtisakVidiRedosled
+        Case 200: T_Sema_KapijaBije
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6584,6 +6587,44 @@ Private Sub T_Sema_OtisakVidiRedosled()
     ' Kapija pred upis prolazi nad zdravom tabelom (fail-closed provera bi
     ' inace mogla biti "uvek pada", sto je isto bezvredno).
     modSchema.SchemaReadyOrFail "T_Sema_OtisakVidiRedosled", TBL_OTKUP
+End Sub
+
+
+' Kapija pred upis mora da GRIZE, ne samo da postoji.
+'
+' Fail-closed provera koja nikad nije pokazana crvena ne dokazuje nista -- ista
+' klasa placebo testa kao zelena suite koja ne meri. Zato se ovde trazi da
+' SchemaReadyOrFail digne gresku nad tabelom koje u kanonu nema, i da PROPUSTI
+' zdravu tabelu (kapija koja uvek pada je isto bezvredna).
+'
+' Ozicenost u produkcione pisce (Save*Multi_TX, CreateFaktura_TX) dokazuju same
+' poslovne suite: da kapija lazno pada, RunBusinessFlowProSuite bi pao odmah.
+Private Sub T_Sema_KapijaBije()
+    Dim pukla As Boolean
+    Dim opis As String
+
+    ' 1) nepoznata tabela -> mora da digne gresku
+    On Error Resume Next
+    Err.Clear
+    modSchema.SchemaReadyOrFail "T_Sema_KapijaBije", "tblNePostoji"
+    pukla = (Err.Number <> 0)
+    opis = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    If Not pukla Then
+        Err.Raise ERR_ASSERT, "T_Sema_KapijaBije", _
+                  "SchemaReadyOrFail je PROPUSTIO tabelu koje nema u kanonu -- " & _
+                  "kapija ne grize"
+    End If
+
+    If InStr(1, opis, "tblNePostoji", vbTextCompare) = 0 Then
+        Err.Raise ERR_ASSERT, "T_Sema_KapijaBije", _
+                  "greska ne imenuje tabelu: " & opis
+    End If
+
+    ' 2) zdrava tabela -> mora da PROPUSTI (kapija koja uvek pada je bezvredna)
+    modSchema.SchemaReadyOrFail "T_Sema_KapijaBije", TBL_OTKUP & "|" & TBL_NOVAC
 End Sub
 
 

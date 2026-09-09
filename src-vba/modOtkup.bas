@@ -127,6 +127,15 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
 
     On Error GoTo EH
 
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
+    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
+    ' pada upisa -- greska nastaje u podacima, ne u logu.
+    '
+    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
+    ' transakciju koja se odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "SaveOtkupMulti_TX", _
+        TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
+
     If Trim$(kooperantID) = "" Then
         Err.Raise vbObjectError + 1810, "SaveOtkupMulti_TX", _
                   "KooperantID je obavezan."

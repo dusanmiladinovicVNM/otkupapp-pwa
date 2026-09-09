@@ -117,19 +117,26 @@ koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
 
-**Dva vlasništva, ne jedno.** `schema_owner` sme da napravi tabelu ili kolonu;
-`row_owner` sme da upiše poslovni red. `modSetup` sme da napravi `tblOtkup` — ne
-sme da upiše otkup.
+**Kapija proverava isključivo `row_owner`.** `schema_owner` je zaseban pojam
+(ko sme da napravi tabelu ili kolonu) i **ne učestvuje** u proveri mutacije reda
+— unija dva spiska bi bila poznat bypass: propuštala bi baš ono što ugovor
+zabranjuje. Ko sme da menja šemu je druga provera, ne ova.
 
-**Zatečeno stanje koje ovo pravilo cilja** (mereno nad mutatorima):
+`modSetup` je danas u `row_owner` baseline-u zato što **stvarno piše** redove
+(backfill `BrojOtpremnice` nad `tblOtkup`, admin nalog nad `tblKorisnici`) — ne
+zato što sme. Cilj ga isključuje.
+
+**Zatečeno stanje koje ovo pravilo cilja** (mereno nad mutatorima,
+`WRITE_OWNERSHIP.json`):
 
 | Tabela | `row_owner` danas | Cilj |
 |---|---|---|
-| `tblOtkup` | 8 | `modOtkup` |
-| `tblPrijemnica` | 3 | `modDokumenta` |
+| `tblOtkup` | 9 | `modOtkup` |
+| `tblFakturaStavke` | 3 | — |
 | `tblFakture` | 3 | — |
+| `tblKorisnici` | 3 | — |
 | `tblNovac` | 3 | — |
-| `tblZbirna` | 2 | `modDokumenta` |
+| `tblPrijemnica` | 3 | `modDokumenta` |
 
 > Do PR1 je kapija merila i snapshot i upis pomešano, a `RequireUpdateCell` joj
 > je bio **nevidljiv** (regex je tražio granicu reči pred `UpdateCell`). Time je
@@ -152,7 +159,7 @@ ownership listi domen-tabela.
 | Gate | Tvrdnja | Kako se meri |
 |---|---|---|
 | **G1 — reproduktivna sveska** | prazan `.xlsm` + uvoz koda + `SetupNewPC` = spremna aplikacija, bez ručnog koraka. Kanon je `schema/schema.json` u gitu; sveska je posledica. | `modSchema.EnsureAllTables` + `VerifySchema`; `.frm`/`.frx` se **uvoze kao build artefakt** (binarni `.frx` se ne generiše iz koda) |
-| **G1b — redosled kolona je deo šeme** | upis je pozicion (`AppendRow`), pa preraspored tiho šalje vrednosti u pogrešne kolone | otisak nad **uređenim** kanonskim prefiksom (`SchemaCheckOnStart`), tvrda kapija `SchemaReadyOrFail` pred upis, `schema_diff` blokira uvoz |
+| **G1b — redosled kolona je deo šeme** | upis je pozicion (`AppendRow`), pa svako razilaženje **pre kraja** — premeštena kolona, izbačena iz sredine, ubačena u sredinu — tiho šalje vrednosti u pogrešna polja | otisak nad **uređenim** kanonskim prefiksom (`SchemaCheckOnStart`, uz self-heal), `SchemaReadyOrFail` pred svakim pozicionim upisom (`Save*Multi_TX`, `CreateFaktura_TX`), `schema_diff` blokira uvoz na prefiks-nekompatibilnost |
 | **G2 — duplikat broja** | dva dokumenta sa istim poslovnim brojem ne prave **nijedan** poseban code path u jezgru | test `BrojNijeIdentitet` + pravilo `NEMA_BROJA_KAO_FK` |
 | **G3 — sledljivost bez pogađanja** | lanac unazad ide samo kroz ID/FK graf | test `TraceBezPogadjanja` |
 | **G4 — vlasništvo upisa** | nov pisač domen-tabele obara CI | `who_writes.py --check-ownership` |

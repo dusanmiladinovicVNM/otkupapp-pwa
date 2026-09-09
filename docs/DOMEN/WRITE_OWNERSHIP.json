@@ -3,14 +3,14 @@
     "Vlasnistvo nad upisom u tabele (Architecture Contract A11).",
     "GENERISAN baseline (PR1) -- posle se menja RUCNO, i to samo skracivanjem.",
     "",
-    "row_owner:    moduli koji smeju da MENJAJU poslovne redove.",
-    "schema_owner: moduli koji smeju da naprave tabelu/kolonu, ali NE i red.",
-    "              (modSetup sme da napravi tblOtkup; ne sme da upise otkup.)",
-    "cilj:         A11 meta za row_owner. Prazno = odluka jos nije doneta.",
+    "row_owner: moduli koji smeju da MENJAJU redove. JEDINI spisak koji kapija",
+    "           proverava. modSetup je ovde jer danas stvarno pise (backfill",
+    "           BrojOtpremnice nad tblOtkup, admin nad tblKorisnici) -- ne zato",
+    "           sto sme; cilj ga iskljucuje.",
+    "cilj:      A11 meta. Prazno = odluka jos nije doneta; ne izmisljati.",
     "",
     "Kapija meri MUTATORE (AppendRow / UpdateCell / RequireUpdateCell), ne",
-    "ucesnike transakcije (AddTableSnapshot). Snapshot je ucesce, ne vlasnistvo:",
-    "koordinator sme da snapshotuje tudju tabelu i zove API njenog vlasnika.",
+    "ucesnike transakcije (AddTableSnapshot). Snapshot je ucesce, ne vlasnistvo.",
     "",
     "    python tools/who_writes.py --check-ownership",
     "",
@@ -59,11 +59,10 @@
   "tblKorisnici": {
     "row_owner": [
       "modAuth",
-      "modMaticniKorisnici"
-    ],
-    "schema_owner": [
+      "modMaticniKorisnici",
       "modSetup"
     ],
+    "schema_owner": [],
     "cilj": []
   },
   "tblNovac": {
@@ -83,12 +82,11 @@
       "modNovac",
       "modOtkup",
       "modOtkupBlok",
+      "modSetup",
       "modSledljivost",
       "modStornoFlow"
     ],
-    "schema_owner": [
-      "modSetup"
-    ],
+    "schema_owner": [],
     "cilj": [
       "modOtkup"
     ]

@@ -14,7 +14,8 @@ Tri ishoda, i sva tri su normalna -- vazno je da se VIDE pre uvoza:
                   NISTA se ne brise -- ali registar je nepotpun, pa te kolone
                   VerifySchema nikad nece cuvati. Regenerisi registar iz OVE
                   sveske ako su legitimne.
-  RAZLIKA REDOSLEDA  ista imena, drugi raspored. NIJE bezopasno.
+  POZICIONI HAZARD  kanon i sveska se razilaze PRE kraja (premestena,
+                  izbacena iz sredine, ili ubacena u sredinu). NIJE bezopasno.
                   modDataAccess.AppendRow pise POZICIONO, a pisci poput
                   modOtkup.SaveOtkup grade goli Array(...) sa 22 vrednosti.
                   Preraspored tiho salje vrednosti u pogresne kolone -- gore
@@ -35,41 +36,20 @@ import sys
 MSO_AUTOMATION_SECURITY_LOW = 1
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA_BAS = os.path.join(ROOT, "src-vba", "modSchema.bas")
-MODCONFIG = os.path.join(ROOT, "src-vba", "modConfig.bas")
-
-SPEC_POC = re.compile(r"^Private Sub (Spec\w+)\(ByVal reg As Object\)")
-KOL = re.compile(r'^\s*k\.Add "([^"]+)"')
-REG_RED = re.compile(r'^\s*RegistrujTabelu reg, (TBL_\w+), "([^"]+)", k')
-TBL_CONST = re.compile(r'^Public Const (TBL_\w+)\s+As String\s*=\s*"(\w+)"')
+KANON = os.path.join(ROOT, "schema", "schema.json")
 
 
 def registar() -> dict:
-    """tblIme -> (sheet, [kolone]) iz modSchema.bas, bez Excela."""
-    const2tbl = {}
-    with open(MODCONFIG, encoding="ascii", errors="replace") as fh:
-        for l in fh:
-            m = TBL_CONST.match(l)
-            if m:
-                const2tbl[m.group(1)] = m.group(2)
+    """tblIme -> (sheet, [kolone]) iz KANONA.
 
-    out, kolone = {}, []
-    with open(SCHEMA_BAS, encoding="ascii", errors="replace") as fh:
-        for l in fh:
-            l = l.rstrip("\r\n")
-            if SPEC_POC.match(l):
-                kolone = []
-                continue
-            m = KOL.match(l)
-            if m:
-                kolone.append(m.group(1))
-                continue
-            m = REG_RED.match(l)
-            if m:
-                tbl = const2tbl.get(m.group(1), m.group(1))
-                out[tbl] = (m.group(2), kolone)
-                kolone = []
-    return out
+    Cita schema/schema.json, ne generisani modSchema.bas: kanon je izvor istine,
+    a artefakt sme da bude zastareo (to hvata gen_schema_module.py --check).
+    Alat koji poredi svesku mora da ide na izvor.
+    """
+    import json
+    with open(KANON, encoding="utf-8") as fh:
+        d = json.load(fh)
+    return {t["table"]: (t["sheet"], t["columns"]) for t in d["tables"]}
 
 
 def sveska(path: str) -> dict:
@@ -134,7 +114,20 @@ def main(argv) -> int:
         for c in w_cols:
             if c not in r_cols:
                 visak_kol.append((tbl, c))
-        if r_cols != w_cols and sorted(r_cols) == sorted(w_cols):
+
+        # POZICIONA BEZBEDNOST je pitanje PREFIKSA, ne skupa.
+        #
+        # AppendRow pise poziciono, pa je bezbedno samo ako je jedan spisak
+        # prefiks drugog:
+        #   kanon A B C  |  sveska A B C X Y   -> OK (visak je samo REP)
+        #   kanon A B C D|  sveska A B C       -> OK (fali samo REP; leci se)
+        # Sve ostalo pomera bar jednu poziciju:
+        #   kanon A B C D|  sveska A C D       -> B fali IZ SREDINE
+        #   kanon A B C D|  sveska A X B C D   -> X ubacen U SREDINU
+        # Ranija provera je gledala samo cistu permutaciju istog skupa, pa je
+        # oba gornja slucaja propustala.
+        n = min(len(r_cols), len(w_cols))
+        if r_cols[:n] != w_cols[:n]:
             redosled.append(tbl)
 
     print("Registar: %d tabela, %d kolona"
@@ -160,7 +153,7 @@ def main(argv) -> int:
             "iz OVE sveske ako su legitimne.")
     sekcija("VISAK U SVESCI -- kolona", visak_kol,
             "Isto: nista se ne brise, ali ih registar ne cuva.")
-    sekcija("RAZLIKA REDOSLEDA -- BLOKIRA UVOZ", redosled,
+    sekcija("POZICIONI HAZARD -- BLOKIRA UVOZ", redosled,
             "Upis je POZICION (AppendRow): vrednosti bi otisle u pogresne kolone. "
             "Mora se resiti pre uvoza -- EnsureAllTables ovo NE popravlja, jer bi "
             "premestanje kolone pomerilo podatke.")
@@ -172,7 +165,7 @@ def main(argv) -> int:
         return 0
 
     if redosled:
-        print("REZULTAT: %d razlika, od toga %d RAZLIKA REDOSLEDA -- uvoz je "
+        print("REZULTAT: %d razlika, od toga %d POZICIONI HAZARD -- uvoz je "
               "NEBEZBEDAN dok se ne resi." % (ukupno, len(redosled)))
         return 2
 

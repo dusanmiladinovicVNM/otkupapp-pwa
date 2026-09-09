@@ -134,6 +134,17 @@ Public Sub StartApp()
     On Error Resume Next
     Dim semaPoruka As String
     semaPoruka = modSchema.SchemaCheckOnStart()
+
+    ' Neslaganje se prvo POKUSAVA izleciti, pa se tek onda prijavljuje. Bez toga
+    ' bi tvrda kapija pred upisom (SchemaReadyOrFail) blokirala rad na svesci
+    ' kojoj samo fali kolona -- a to je tacno stanje koje EnsureAllTables resava
+    ' u jednom prolazu. Redosled se NE leci (premestanje bi pomerilo podatke),
+    ' pa poruka posle drugog prolaza znaci: mora rucno.
+    If Len(semaPoruka) > 0 Then
+        modSchema.EnsureAllTables
+        semaPoruka = modSchema.SchemaCheckOnStart()
+    End If
+
     If Len(semaPoruka) > 0 Then
         LogError "modMain.StartApp", "SEMA: " & semaPoruka, 0, "WARN"
         Monitor_Event _

@@ -128,6 +128,15 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
 
     On Error GoTo EH
 
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
+    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
+    ' pada upisa -- greska nastaje u podacima, ne u logu.
+    '
+    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
+    ' transakciju koja se odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "SaveOtpremnicaMulti_TX", _
+        TBL_OTPREMNICA & "|" & TBL_AMBALAZA
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
@@ -895,6 +904,14 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
     Set tx = New clsTransaction
 
     On Error GoTo EH
+
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
+    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
+    ' pada upisa -- greska nastaje u podacima, ne u logu.
+    '
+    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
+    ' transakciju koja se odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "SaveZbirnaMulti_TX", TBL_ZBIRNA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
@@ -2031,6 +2048,16 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Set tx = New clsTransaction
 
     On Error GoTo EH
+
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
+    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
+    ' pada upisa -- greska nastaje u podacima, ne u logu.
+    '
+    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
+    ' transakciju koja se odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "SavePrijemnicaMulti_TX", _
+        TBL_PRIJEMNICA & "|" & TBL_AMBALAZA & "|" & TBL_FAKTURA_STAVKE & _
+        "|" & TBL_FAKTURE & "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA

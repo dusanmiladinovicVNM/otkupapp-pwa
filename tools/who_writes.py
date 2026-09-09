@@ -3,12 +3,19 @@
 Rucno pisana mapa istruli za mesec dana. Ova se generise, pa je verifikovana po
 konstrukciji: sto nije u kodu, nije ni u mapi.
 
-Dva izvora, oba mehanicka:
+Dva izvora, oba mehanicka -- ali NE znace isto:
 
-  1. clsTransaction.AddTableSnapshot TBL_X  -- svaka _TX operacija SAMA deklarise
-     koje tabele menja (da bi RollbackTx umeo da ih vrati). To je najpouzdaniji
-     signal: ako modul snapshot-uje tabelu, on je i menja.
-  2. AppendRow / UpdateCell TBL_X           -- direktan upis kroz modDataAccess.
+  1. MUTATE: AppendRow / UpdateCell / RequireUpdateCell TBL_X
+     Modul stvarno MENJA redove. Samo ovo je vlasnistvo (ugovor A11), i samo
+     ovo meri --check-ownership.
+  2. TX: clsTransaction.AddTableSnapshot TBL_X
+     Operacija deklarise koje tabele njena transakcija mora da ume da VRATI.
+     To je ucesce u transakciji, NE vlasnistvo: koordinator sme da snapshotuje
+     tudju tabelu i pozove API njenog vlasnika.
+
+Ranija verzija ovog fajla je tvrdila da je snapshot "najpouzdaniji signal: ako
+modul snapshot-uje tabelu, on je i menja". Nije tacno i vodilo je do lazne slike
+vlasnistva -- npr. modStorno snapshotuje tblOtkup a ne pise ga direktno.
 
 Cemu sluzi: kad isto polje pise vise mesta po razlicitim pravilima, to je klasa
 buga koju test hvata tek posle nastanka (v. CLAUDE.md S5). Mapa to cini vidljivim
@@ -187,10 +194,11 @@ def check_ownership(writers: dict, path: str) -> int:
                 f"  {table}: tabela nije u registru vlasnistva. "
                 f"Pisci: {', '.join(prod)}")
             continue
-        # Sema i poslovni redovi su razliciti pojmovi vlasnistva: modSetup sme
-        # da NAPRAVI tblOtkup, ali ne i da upise otkup.
-        dozvoljeni = (set(reg[table].get("row_owner", []))
-                      | set(reg[table].get("schema_owner", [])))
+        # ISKLJUCIVO row_owner. schema_owner NE ucestvuje: ugovor kaze da
+        # modSetup sme da NAPRAVI tblOtkup ali ne i da upise otkup, pa bi unija
+        # dva spiska bila poznat bypass -- kapija bi propustila bas ono sto
+        # ugovor zabranjuje. Ko sme da menja SEMU je druga provera, ne ova.
+        dozvoljeni = set(reg[table].get("row_owner", []))
         novi = [m for m in prod if m not in dozvoljeni]
         if novi:
             greske.append(
