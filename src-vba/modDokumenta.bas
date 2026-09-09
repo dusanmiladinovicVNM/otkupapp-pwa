@@ -72,6 +72,14 @@ Public Const ZBR_MUT_INTEGRITET As String = "INTEGRITET"
 Public Const ZBR_MUT_VISE_VLASNIKA As String = "VISE_VLASNIKA"
 Public Const ZBR_MUT_VISE_DOKUMENATA As String = "VISE_DOKUMENATA"
 
+' ZBR-CHILD-01 faza 2: ZASTO backfill preskace broj. Tri razloga, ne jedan --
+' prvo merenje nad pravim podacima je dalo 85 popunjenih i 4572 preskocena, a
+' poruka je sva tri prijavljivala kao "broj je IKAD nosio vise dokumenata".
+' Migracija koja ne ume da kaze STA je zatekla ne moze da vodi sledeci korak.
+Public Const ZBR_BF_INTEGRITET As String = "INTEGRITET"
+Public Const ZBR_BF_NEMA_GENERACIJE As String = "NEMA_GENERACIJE"
+Public Const ZBR_BF_VISE_GENERACIJA As String = "VISE_GENERACIJA"
+
 Public Type ZbirnaIdent
     normalizedBroj As String
     integrityStatus As String
@@ -1526,16 +1534,37 @@ End Function
 '
 ' Stornirana JEDINA generacija se sme upisati: ako je pod tim brojem ikad
 ' postojala samo jedna, identitet je poznat bez obzira na danasnje stanje.
-Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String) As String
+' `outRazlog` je Optional ByRef: zatecenim pozivaocima se nista ne menja, a
+' migracija dobija RAZLOG. Odluka ostaje na JEDNOM mestu -- da backfill sam
+' racuna razlog, imao bi drugu kopiju pravila, sto je tacno ono sto faza 2
+' nije htela.
+Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String, _
+                                                 Optional ByRef outRazlog As String) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
+    outRazlog = ""
     If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
     id = ZbirnaIdentResolve(broj)
-    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
-    If id.historicalLogicalCount <> 1 Then Exit Function
+    If id.integrityStatus <> ZBR_INT_OK Then
+        outRazlog = ZBR_BF_INTEGRITET
+        Exit Function
+    End If
+    ' 0 i >1 oba padaju na <> 1, ali traze RAZLICIT potez: nula znaci da nijedna
+    ' zbirna pod tim brojem nema GeneracijaID (stari red pre uvodjenja kolone),
+    ' vise od jedne znaci stvarnu dvosmislenost. Prvo se resava migracijom
+    ' roditelja, drugo se ne resava uopste.
+    If id.historicalLogicalCount = 0 Then
+        outRazlog = ZBR_BF_NEMA_GENERACIJE
+        Exit Function
+    End If
+    If id.historicalLogicalCount > 1 Then
+        outRazlog = ZBR_BF_VISE_GENERACIJA
+        Exit Function
+    End If
     ZbirnaJedinaGeneracijaIkadZaBroj = id.historicalOnlyGeneracijaID
     Exit Function
 EH:
+    outRazlog = ZBR_BF_INTEGRITET
     LogErr "modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj", "broj=" & broj
 End Function
 

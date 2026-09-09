@@ -5329,7 +5329,7 @@ SABOTAZE = {
     # test koji vozi BackfillDeteZbirnaGeneracija_Core.
     "backfill-veze-staro-dete-na-novu-generaciju": (
         "modSetup.bas",
-        "        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))\n",
+        "        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k), razlogBroja)\n",
         "        brojevi(k) = ZbirnaGeneracijaZaBroj(CStr(k))   ' SABOTAZA: tekuci, ne istorijski\n",
         "Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju",
         "ZBR-BACKFILL: broj koji je IKAD nosio dve generacije ostaje PRAZAN",
