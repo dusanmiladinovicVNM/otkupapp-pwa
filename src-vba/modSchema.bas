@@ -38,7 +38,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "7A4CC6C7"
+Public Const SCHEMA_FINGERPRINT As String = "3B702DE1"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -657,6 +657,7 @@ Private Sub SpecFakture(ByVal reg As Object)
     k.Add "ZamenjenSa"
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
+    k.Add "GeneracijaID"
     RegistrujTabelu reg, TBL_FAKTURE, "Fakture", k
 End Sub
 
@@ -844,6 +845,7 @@ Private Sub SpecNovac(ByVal reg As Object)
     k.Add "ZamenjenSa"
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
+    k.Add "GeneracijaID"
     RegistrujTabelu reg, TBL_NOVAC, "Novac", k
 End Sub
 
@@ -886,6 +888,8 @@ Private Sub SpecOtkup(ByVal reg As Object)
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
     k.Add "BrojOtpremnice"
+    k.Add "GeneracijaID"
+    k.Add "ZbirnaGeneracijaID"
     RegistrujTabelu reg, TBL_OTKUP, "Otkup", k
 End Sub
 
@@ -915,6 +919,8 @@ Private Sub SpecOtpremnica(ByVal reg As Object)
     k.Add "ZamenjenSa"
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
+    k.Add "GeneracijaID"
+    k.Add "ZbirnaGeneracijaID"
     RegistrujTabelu reg, TBL_OTPREMNICA, "Otpremnica", k
 End Sub
 
@@ -966,6 +972,7 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
+    k.Add "ZbirnaGeneracijaID"
     RegistrujTabelu reg, TBL_PALETA_STAVKA, "PaletaStavka", k
 End Sub
 
@@ -1105,6 +1112,8 @@ Private Sub SpecPrijemnica(ByVal reg As Object)
     k.Add "ZamenjenSa"
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
+    k.Add "GeneracijaID"
+    k.Add "ZbirnaGeneracijaID"
     RegistrujTabelu reg, TBL_PRIJEMNICA, "Prijemnica", k
 End Sub
 

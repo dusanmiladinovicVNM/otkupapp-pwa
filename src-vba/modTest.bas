@@ -488,6 +488,7 @@ Public Sub RunAllTests()
     RunOne 198
     RunOne 199
     RunOne 200
+    RunOne 201
     RunOne 124
     RunOne 125
     RunOne 126
@@ -757,6 +758,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 198: TestName = "T_Sema_SveskaOdgovaraKanonu"
         Case 199: TestName = "T_Sema_OtisakVidiRedosled"
         Case 200: TestName = "T_Sema_KapijaBije"
+        Case 201: TestName = "T_Sema_SamoLeci"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -965,6 +967,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 198: T_Sema_SveskaOdgovaraKanonu
         Case 199: T_Sema_OtisakVidiRedosled
         Case 200: T_Sema_KapijaBije
+        Case 201: T_Sema_SamoLeci
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6625,6 +6628,77 @@ Private Sub T_Sema_KapijaBije()
 
     ' 2) zdrava tabela -> mora da PROPUSTI (kapija koja uvek pada je bezvredna)
     modSchema.SchemaReadyOrFail "T_Sema_KapijaBije", TBL_OTKUP & "|" & TBL_NOVAC
+End Sub
+
+
+' KAPIJA G1: sveska se moze obrisati -- kod je vrati.
+'
+' Ovo je jedina tvrdnja iz ugovora koju nijedan drugi test ne meri. Bez nje je
+' "sema dolazi iz koda" samo dokumentacija: registar moze biti savrsen, a
+' EnsureAllTables da ne ume da napravi tabelu koje nema.
+'
+' Bira se tblMGMT: u kanonu je, nema nijedan red i nijedan citac u kodu -- pa
+' brisanje ne moze da obori drugi test. Vracanje ide i kroz EH, da prekid usred
+' testa ne ostavi fixture bez tabele.
+Private Sub T_Sema_SamoLeci()
+    Dim lo As ListObject
+    Dim ws As Worksheet
+    Dim postojala As Boolean
+    Dim prijavljeno As Boolean
+    Dim odst As Collection
+    Dim i As Long
+    Dim prevAlerts As Boolean
+
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    postojala = Not (lo Is Nothing)
+    If Not postojala Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "preduslov: tblMGMT mora postojati pre testa"
+    End If
+
+    prevAlerts = Application.DisplayAlerts
+
+    On Error GoTo EH
+
+    ' 1) obrisi ceo sheet sa tabelom
+    Set ws = lo.Parent
+    Application.DisplayAlerts = False
+    ws.Delete
+    Application.DisplayAlerts = prevAlerts
+
+    ' 2) VerifySchema MORA da je prijavi -- inace provera ne meri nista
+    Set odst = modSchema.VerifySchema()
+    For i = 1 To odst.count
+        If InStr(1, CStr(odst(i)), TBL_MGMT, vbTextCompare) > 0 Then prijavljeno = True
+    Next i
+
+    ' 3) izleci iz koda
+    modSchema.EnsureAllTables
+
+    ' 4) vratila se, i sema je opet cista
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    On Error GoTo 0
+
+    If Not prijavljeno Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "VerifySchema NIJE prijavila obrisanu tabelu"
+    End If
+    If lo Is Nothing Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "EnsureAllTables nije vratio tblMGMT"
+    End If
+
+    AssertEq modSchema.SchemaCheckOnStart(), "", "sema posle lecenja"
+    Exit Sub
+
+EH:
+    ' Fixture ne sme da ostane bez tabele ni kad test pukne.
+    Application.DisplayAlerts = prevAlerts
+    On Error Resume Next
+    modSchema.EnsureAllTables
+    On Error GoTo 0
+    Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+              "greska u toku testa (tabela vracena): " & Err.description
 End Sub
 
 
