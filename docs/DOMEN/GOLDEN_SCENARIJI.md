@@ -329,7 +329,7 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 | D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument; novac ostaje u istoriji ali se **odvezuje**: `ukupno 56000 / vezano 0 / nealocirano 56000` |
 | F2 | fakturisano `I=DA / II=NE` — dokaz da je `Fakturisano` line-level |
 | G1 | samo Klasa II prolazi ceo lanac |
-| G2 | **dve zbirne sa istim `BrojZbirne`**, različitih vlasnika: storno jedne ne dira drugu (`aktivnih 1 / storniranih 1`) |
+| G2 | **dve zbirne sa istim `BrojZbirne`**, različitih vlasnika: `prva kg=400 STORNIRANA / druga kg=600 AKTIVNA` — dokazuje **koja** je stornirana |
 
 ---
 
@@ -369,3 +369,32 @@ nekonzistentan".
 
 Do te odluke D1 nije registrovan i nema golden. Kad odluka padne, D1 se piše na
 **odlučeno** ponašanje i registruje — i time postaje dokaz da pravilo važi.
+
+---
+
+## 11) Zašto G2 ne koristi običnu `ZBIRNA` sekciju
+
+Dva razloga, oba naučena na sopstvenoj grešci.
+
+**Prvi:** `ZBIRNA` računa preko `SumOtpremniceByKlasa(BrojZbirne)` i
+`IsZbirnaConsistent(BrojZbirne)`. Broj sam ne razlikuje dve logičke zbirne, pa
+je rezultat bio `invarijanta PUKLA` — i to je bilo **zaključano kao očekivano**.
+Posle PR4, kad invarijanta počne da prima `ZbirnaID`, ispravka arhitekture bi
+oborila golden koji je treba da štiti. Isti oblik greške kao D1 (§10).
+
+**Drugi:** `aktivnih 1 / storniranih 1` ne kaže **koja** je stornirana. Bug koji
+stornira drugu umesto prve ostavlja iste brojeve i test ostaje zelen.
+
+Zato G2 preskače broj-based sekciju i izveštava po poziciji nastanka:
+
+```
+IDENTITET ZBIRNE
+  prva   kg=400.00  STORNIRANA
+  druga  kg=600.00  AKTIVNA
+```
+
+Nijedan ID se ne ispisuje — ni današnji ni budući. Posle PR4 adapter traži red po
+`ZbirnaID`; golden ostaje identičan.
+
+**Dokaz:** storno druge umesto prve → golden pada na `IDENTITET ZBIRNE`, dok
+`STATUS` ostaje nepromenjen (`aktivnih 1 / storniranih 1`).

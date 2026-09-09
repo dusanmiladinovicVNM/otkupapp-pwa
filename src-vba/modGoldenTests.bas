@@ -202,7 +202,11 @@ Private Sub GldReset()
 
 End Sub
 
-' Maticni podaci scenarija. Idempotentno; sve se rollback-uje.
+' Maticni podaci scenarija.
+'
+' NIJE idempotentan i to je namerno: GldMoraDaNePostoji pada ako rezervisani
+' identitet vec postoji. Svaki scenario radi u svojoj transakciji i
+' rollback-uje se, pa na pocetku uvek ne postoje.
 Private Sub GldSeed()
     GldSeedRed TBL_STANICE, "StanicaID", GLD_STANICA, "Naziv", "GOLDEN STANICA"
     GldSeedRed TBL_VOZACI, "VozacID", GLD_VOZAC, "Ime", "GOLDEN VOZAC"
@@ -343,6 +347,68 @@ End Function
 ' ostao zelen i kad bi neko obrisao ResetNovacOtkupLink.
 '
 ' Ovaj oblik prezivi i buduci tblNovacAlokacije model.
+' Koja je zbirna stornirana, a koja je ostala -- po REDOSLEDU nastanka.
+'
+' Dva razloga zasto G2 ne sme da koristi obicnu ZBIRNA sekciju:
+'
+'   1. Ona racuna preko SumOtpremniceByKlasa(BrojZbirne) i
+'      IsZbirnaConsistent(BrojZbirne), a broj sam ne razlikuje dve logicke
+'      zbirne. Rezultat je "invarijanta PUKLA" -- i to bi bilo ZAKLJUCANO kao
+'      ocekivano. Posle PR4, kad invarijanta pocne da prima ZbirnaID, ispravka
+'      arhitekture bi oborila golden koji je treba da stiti.
+'   2. "aktivnih 1 / storniranih 1" ne kaze KOJA je stornirana. Bug koji
+'      stornira drugu umesto prve ostavlja iste brojeve i test ostaje zelen.
+'
+' Zato se izvestava kolicina i status po poziciji. ID se NE ispisuje -- ni
+' danasnji ni buduci. Posle PR4 adapter trazi red po ZbirnaID; golden isti.
+Private Function GldIdentitetZbirni() As String
+    Dim data As Variant
+    Dim cID As Long, cKol As Long, cSt As Long
+    Dim i As Long, k As Long
+    Dim s As String
+    Dim oznaka As String
+    Dim nadjen As Boolean
+
+    s = "IDENTITET ZBIRNE" & vbLf
+    If m_Zbr.count = 0 Then
+        GldIdentitetZbirni = s & "  nema" & vbLf
+        Exit Function
+    End If
+
+    data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then
+        GldIdentitetZbirni = s & "  nema" & vbLf
+        Exit Function
+    End If
+
+    cID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "GldIdentitetZbirni")
+    cKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, "GldIdentitetZbirni")
+    cSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, "GldIdentitetZbirni")
+
+    For k = 1 To m_Zbr.count
+        Select Case k
+            Case 1: oznaka = "prva "
+            Case 2: oznaka = "druga"
+            Case Else: oznaka = "br." & CStr(k)
+        End Select
+
+        nadjen = False
+        For i = 1 To UBound(data, 1)
+            If StrComp(Trim$(NzToText(data(i, cID))), Trim$(CStr(m_Zbr(k))), _
+                       vbTextCompare) = 0 Then
+                s = s & "  " & oznaka & "  kg=" & Fmt2(SafeD(data(i, cKol))) & _
+                    "  " & IIf(UCase$(Trim$(NzToText(data(i, cSt)))) = "DA", _
+                               "STORNIRANA", "AKTIVNA") & vbLf
+                nadjen = True
+                Exit For
+            End If
+        Next i
+        If Not nadjen Then s = s & "  " & oznaka & "  NEMA REDA" & vbLf
+    Next k
+
+    GldIdentitetZbirni = s
+End Function
+
 Private Function GldNovacAlokacija() As String
     Dim data As Variant
     Dim cKoop As Long, cIspl As Long, cOtk As Long
@@ -1477,7 +1543,10 @@ Private Sub Gld_G2_IstiBrojDvaDokumenta()
     ' storno PRVE -- druga mora ostati netaknuta
     GldStornoZbirne 1
 
-    AssertSnapshot GldSnapshot("G2 isti broj dva dokumenta", broj), GldIme(15)
+    ' Prazan kljuc -> preskace se broj-based ZBIRNA sekcija; identitet ide
+    ' zasebno, po poziciji.
+    AssertSnapshot GldSnapshot("G2 isti broj dva dokumenta", "") & _
+                   GldIdentitetZbirni(), GldIme(15)
 
     tx.RollbackTx
     Exit Sub

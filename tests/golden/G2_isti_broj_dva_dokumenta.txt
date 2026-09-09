@@ -7,11 +7,6 @@ DOKUMENTI
   faktura         0
 OTKUP
   nema
-ZBIRNA
-  poslato         I=0.00  II=0.00
-  primljeno       I=0.00  II=0.00
-  kalo            I=0.00  II=0.00
-  invarijanta     PUKLA
 STATUS
   otkup           aktivnih 0  storniranih 0
   otpremnica      aktivnih 0  storniranih 0
@@ -25,3 +20,6 @@ NOVAC
   nealocirano      0.00
 FAKTURA
   nema
+IDENTITET ZBIRNE
+  prva   kg=400.00  STORNIRANA
+  druga  kg=600.00  AKTIVNA
