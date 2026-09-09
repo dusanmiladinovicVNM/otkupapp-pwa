@@ -1,6 +1,6 @@
 ---
 name: pre-flight
-description: Kapija PRE pisanja koda za veću izmenu u AgriX/OtkupApp. Koristi kad promena uvodi novu tabelu; domain-relevantnu novu kolonu (identitet/FK, lifecycle/status, količina, datum poslovnog događaja, storno, finansije, sledljivost); novog writer-a nad postojećom tabelom; storno ili kaskadu; promenu identiteta, ključa ili resolver-a; migraciju ili uklanjanje legacy capability-ja; schema/setup; self-update ili import motor; fakturu/SEF/banku; ili tok koji menja kardinalnost, vlasništvo ili lifecycle. NE koristi se za lokalni bug sa jasnom reprodukcijom bez promene contracta, ASCII/Poruka/copy izmene, refaktor jednog modula bez promene read/write semantike, ni čisto vizuelnu UI izmenu bez promene ponašanja — ali ti izuzeci prestaju da važe čim posao tokom rada dodirne dedup/grupisanje/brojanje, parent linkage, mapiranje reda u logički dokument, ownership ili lifecycle (§2).
+description: Kapija PRE pisanja koda za veću izmenu u AgriX/OtkupApp. Koristi kad promena uvodi novu tabelu; domain-relevantnu novu kolonu (identitet/FK, lifecycle/status, količina, datum poslovnog događaja, storno, finansije, sledljivost); novog writer-a nad postojećom tabelom; storno ili kaskadu; promenu identiteta, ključa ili resolver-a; migraciju ili uklanjanje legacy capability-ja; schema/setup; self-update ili import motor; fakturu/SEF/banku; ili tok koji menja kardinalnost, vlasništvo ili lifecycle. NE koristi se za lokalni bug sa jasnom reprodukcijom bez promene contracta, ASCII/Poruka/copy izmene, refaktor jednog modula bez promene read/write semantike, ni čisto vizuelnu UI izmenu bez promene ponašanja — ali ti izuzeci prestaju da važe čim posao tokom rada dodirne značenje reda ili dokumenta — identitet, vezivanje, brojanje ili grupisanje, ownership, lifecycle, koji datum i koji status kome pripada — ili traži promenu premise postojećeg testa (§2).
 ---
 
 # AgriX Pre-Flight
@@ -41,6 +41,10 @@ mapiranje reda u logički dokument, ownership, lifecycle/storno, **semantiku pos
 koji datum i koji status kome pripada** — ili moraš da **promeniš premisu
 postojećeg regression testa** — STOP i uradi verdikt iz §1 pre nastavka. Izuzetak „lokalni bug sa
 jasnom reprodukcijom" tada više ne važi.
+
+Opis skill-a nosi kraći, generički oblik iste liste — jer se on čita **pre** ovog fajla. Kad se
+ovde doda signal, proveri da li ga opis pokriva; dve liste koje divergiraju su rupa kroz koju
+skill ne bude ni učitan.
 
 ## 3. Četiri stvari koje se čitaju, ne pamte
 
