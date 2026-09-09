@@ -19,6 +19,27 @@ Private mTableCacheDepth As Long
 Private mExclCache As Object        ' kes ExcludeStornirano rezultata (po tblName), isti prozor
 Private mColCache As Object         ' kes GetColumnIndex ("tbl|col" -> index), isti prozor
 
+' --- NewEntityID: neprozirni PK za transakcione dokumente (PR1) ---
+' GetNextID skenira CELU tabelu i uzima max+1. To je O(n) po upisu, i -- vaznije
+' -- trazi centralni brojac, pa dva uredjaja offline ne mogu da naprave identitet
+' bez sudara. Novi transakcioni PK zato ide iz CoCreateGuid.
+'
+' Maticni podaci (KOOP-123, ST-1, VOZ-7) NAMERNO ostaju na GetNextID: PWA i GAS
+' ih vec tretiraju kao stabilne identitete. Sistem svesno ima dva formata ID-a;
+' v. docs/DOMEN/DOCUMENT_HEADER_LINES.md S2.
+Private Type GUID_T
+    Data1 As Long
+    Data2 As Integer
+    Data3 As Integer
+    Data4(0 To 7) As Byte
+End Type
+
+#If VBA7 Then
+    Private Declare PtrSafe Function CoCreateGuid Lib "ole32" (ByRef pGuid As GUID_T) As Long
+#Else
+    Private Declare Function CoCreateGuid Lib "ole32" (ByRef pGuid As GUID_T) As Long
+#End If
+
 Public Sub BeginTableCache()
     If mTableCacheDepth = 0 Then
         Set mTableCache = CreateObject("Scripting.Dictionary")
@@ -387,6 +408,49 @@ Public Function FindRows(ByVal tblName As String, ByVal colName As String, _
     Next i
     
     Set FindRows = result
+End Function
+
+' Neprozirni, nepromenljivi PK za transakcione dokumente: prefiks + 32 hex znaka.
+'
+' JEDINA fabrika ID-eva za nov model -- nijedan modul ne pravi svoju GUID logiku,
+' inace se format razidje i sledljivost prestane da bude poredljiva.
+'
+' Bez crtica i viticastih zagrada: ID zavrsava u Variant nizovima koje GetTableData
+' vraca, pa svaka 4 znaka po redu nisu besplatna.
+'
+' Fail-closed: ako CoCreateGuid ne uspe, vraca se PRAZAN string. Pozivalac koji
+' prazan ID upise napravio bi red bez identiteta -- gore od pada upisa -- pa se
+' prazno mora proveriti na mestu poziva, isto kao kod GetNextID.
+Public Function NewEntityID(ByVal prefix As String) As String
+    Dim g As GUID_T
+    Dim hr As Long
+    Dim i As Long
+    Dim hex32 As String
+
+    On Error GoTo EH
+
+    hr = CoCreateGuid(g)
+    If hr <> 0 Then
+        LogError "modDataAccess.NewEntityID", _
+                 "CoCreateGuid nije uspeo. HRESULT=" & CStr(hr), hr
+        NewEntityID = ""
+        Exit Function
+    End If
+
+    hex32 = Right$("00000000" & Hex$(g.Data1), 8) & _
+            Right$("0000" & Hex$(g.Data2 And &HFFFF&), 4) & _
+            Right$("0000" & Hex$(g.Data3 And &HFFFF&), 4)
+
+    For i = 0 To 7
+        hex32 = hex32 & Right$("00" & Hex$(g.Data4(i)), 2)
+    Next i
+
+    NewEntityID = prefix & hex32
+    Exit Function
+
+EH:
+    LogError "modDataAccess.NewEntityID", Err.description, Err.Number
+    NewEntityID = ""
 End Function
 
 Public Function GetNextID(ByVal tblName As String, ByVal idColName As String, _

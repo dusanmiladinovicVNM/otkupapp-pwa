@@ -1,0 +1,277 @@
+{
+  "_o_fajlu": [
+    "Vlasnistvo nad upisom u tabele (Architecture Contract A11).",
+    "GENERISAN baseline (PR1) -- posle se menja RUCNO, i to samo skracivanjem.",
+    "",
+    "dozvoljeni: moduli koji smeju da pisu. Nov pisac van liste obara CI",
+    "            (python tools/who_writes.py --check-ownership).",
+    "cilj:       A11 meta. Prazno = odluka jos nije doneta; ne izmisljati.",
+    "",
+    "Test moduli se ne broje: pisu uz rollback i nisu vlasnici podataka."
+  ],
+  "tblAmbalaza": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modMasterSync",
+      "modOtkup",
+      "modStorno",
+      "modStornoFlow",
+      "modStornoRecovery"
+    ],
+    "cilj": []
+  },
+  "tblArtikli": {
+    "dozvoljeni": [
+      "modAgrohemija"
+    ],
+    "cilj": []
+  },
+  "tblBankaImport": {
+    "dozvoljeni": [
+      "modBankaImport",
+      "modBankaMapiranje",
+      "modStorno"
+    ],
+    "cilj": []
+  },
+  "tblFakturaStavke": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modFaktura",
+      "modStorno",
+      "modStornoFlow",
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblFakture": {
+    "dozvoljeni": [
+      "modBankaMapiranje",
+      "modDokumenta",
+      "modFaktura",
+      "modNovac",
+      "modSEFService",
+      "modSEFStatusSync",
+      "modSEFValidator",
+      "modStorno",
+      "modStornoFlow",
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblKooperanti": {
+    "dozvoljeni": [
+      "modKooperant"
+    ],
+    "cilj": []
+  },
+  "tblKorisnici": {
+    "dozvoljeni": [
+      "modAuth",
+      "modMaticniKorisnici",
+      "modSetup"
+    ],
+    "cilj": []
+  },
+  "tblMagacin": {
+    "dozvoljeni": [
+      "modAgroUnos",
+      "modAgrohemija"
+    ],
+    "cilj": []
+  },
+  "tblNovac": {
+    "dozvoljeni": [
+      "modBankaMapiranje",
+      "modDokumenta",
+      "modFaktura",
+      "modNovac",
+      "modOtkup",
+      "modStorno",
+      "modStornoFlow",
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblOtkup": {
+    "dozvoljeni": [
+      "modAutoHladnjaca",
+      "modBankaMapiranje",
+      "modDokumenta",
+      "modMasterSync",
+      "modNovac",
+      "modOtkup",
+      "modOtkupBlok",
+      "modSetup",
+      "modSledljivost",
+      "modStorno",
+      "modStornoFlow",
+      "modStornoRecovery"
+    ],
+    "cilj": [
+      "modOtkup",
+      "modSetup"
+    ]
+  },
+  "tblOtpremnica": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modMasterSync",
+      "modStorno",
+      "modStornoFlow"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblPaleta": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modPaletniList",
+      "modStorno"
+    ],
+    "cilj": []
+  },
+  "tblPaletaStavka": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modPaletniList",
+      "modStorno"
+    ],
+    "cilj": []
+  },
+  "tblParcele": {
+    "dozvoljeni": [
+      "modGeoParcele",
+      "modMasterSync"
+    ],
+    "cilj": []
+  },
+  "tblPartnerMap": {
+    "dozvoljeni": [
+      "modBankaMapiranje"
+    ],
+    "cilj": []
+  },
+  "tblPrerada": {
+    "dozvoljeni": [
+      "modPaletniList",
+      "modStorno"
+    ],
+    "cilj": []
+  },
+  "tblPreradaStavka": {
+    "dozvoljeni": [
+      "modPaletniList",
+      "modStorno"
+    ],
+    "cilj": []
+  },
+  "tblPrevoznici": {
+    "dozvoljeni": [
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblPrijemnica": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modFaktura",
+      "modStorno",
+      "modStornoFlow"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblSEFEventLog": {
+    "dozvoljeni": [
+      "modSEFService",
+      "modSEFStatusSync",
+      "modSEFValidator"
+    ],
+    "cilj": []
+  },
+  "tblSEFSubmission": {
+    "dozvoljeni": [
+      "modSEFService",
+      "modSEFStatusSync",
+      "modSEFValidator"
+    ],
+    "cilj": []
+  },
+  "tblStornoVeze": {
+    "dozvoljeni": [
+      "modStornoContext"
+    ],
+    "cilj": []
+  },
+  "tblStornoZurnal": {
+    "dozvoljeni": [
+      "modStorno",
+      "modStornoFlow"
+    ],
+    "cilj": []
+  },
+  "tblUtovar": {
+    "dozvoljeni": [
+      "modStorno",
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblUtovarStavke": {
+    "dozvoljeni": [
+      "modStorno",
+      "modUtovar"
+    ],
+    "cilj": []
+  },
+  "tblZbirna": {
+    "dozvoljeni": [
+      "modDokumentInvariant",
+      "modDokumenta",
+      "modMasterSync",
+      "modStorno",
+      "modStornoFlow"
+    ],
+    "cilj": [
+      "modDokumenta",
+      "modDokumentInvariant"
+    ]
+  },
+  "tblOtkupStavke": {
+    "dozvoljeni": [
+      "modOtkup"
+    ],
+    "cilj": [
+      "modOtkup"
+    ]
+  },
+  "tblOtpremnicaStavke": {
+    "dozvoljeni": [
+      "modDokumenta"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblPrijemnicaStavke": {
+    "dozvoljeni": [
+      "modDokumenta"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblZbirnaStavke": {
+    "dozvoljeni": [
+      "modDokumenta",
+      "modDokumentInvariant"
+    ],
+    "cilj": [
+      "modDokumenta",
+      "modDokumentInvariant"
+    ]
+  }
+}

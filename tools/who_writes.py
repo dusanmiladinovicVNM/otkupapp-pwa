@@ -23,6 +23,7 @@ Radi svuda (ne treba Excel).
 
 import argparse
 import collections
+import json
 import os
 import re
 import sys
@@ -30,6 +31,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src-vba")
 DEFAULT_OUT = os.path.join(ROOT, "docs", "DOMEN", "WHO_WRITES.md")
+OWNERSHIP_PATH = os.path.join(ROOT, "docs", "DOMEN", "WRITE_OWNERSHIP.json")
 
 VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 
@@ -45,7 +47,7 @@ def table_constants() -> dict:
     path = os.path.join(SRC, "modConfig.bas")
     with open(path, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
-    return dict(re.findall(r'Public Const (TBL_\w+) As String = "(\w+)"', text))
+    return dict(re.findall(r'Public Const (TBL_\w+)\s+As String = "(\w+)"', text))
 
 
 def scan() -> dict:
@@ -124,15 +126,93 @@ def render(writers: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def production_writers(writers: dict) -> dict:
+    """tabela -> sortirani produkcioni moduli (test moduli se ne broje)."""
+    out = {}
+    for table, kinds in writers.items():
+        mods = set()
+        for names in kinds.values():
+            mods |= names
+        prod = sorted(m for m in mods if not TEST_MODULE_RE.search(m))
+        if prod:
+            out[table] = prod
+    return out
+
+
+def check_ownership(writers: dict, path: str) -> int:
+    """Architecture Contract A11: nov pisac van liste obara CI.
+
+    Racna, ne cilj: 'dozvoljeni' je zamrznuto zateceno stanje, pa gate hvata
+    SIRENJE vlasnistva od danas. Skracivanje ka 'cilj' je posao kasnijih PR-ova
+    i svaki korak je vidljiva izmena ovog fajla.
+    """
+    if not os.path.exists(path):
+        print(f"Ne postoji: {path}", file=sys.stderr)
+        return 2
+
+    with open(path, encoding="utf-8") as fh:
+        reg = json.load(fh)
+
+    stvarno = production_writers(writers)
+    greske = []
+
+    for table, prod in sorted(stvarno.items()):
+        if table not in reg:
+            greske.append(
+                f"  {table}: tabela nije u registru vlasnistva. "
+                f"Pisci: {', '.join(prod)}")
+            continue
+        dozvoljeni = set(reg[table].get("dozvoljeni", []))
+        novi = [m for m in prod if m not in dozvoljeni]
+        if novi:
+            greske.append(
+                f"  {table}: nov pisac van liste -> {', '.join(novi)}. "
+                f"Ili zovi API vlasnika ({', '.join(sorted(dozvoljeni)) or 'nema'}), "
+                f"ili svesno prosiri {os.path.basename(path)}.")
+
+    if greske:
+        print("A11 -- vlasnistvo nad upisom prekrseno:", file=sys.stderr)
+        for g in greske:
+            print(g, file=sys.stderr)
+        return 2
+
+    # napredak ka cilju -- informativno, ne obara
+    otvoreno = []
+    for table in sorted(reg):
+        if table == "_o_fajlu":
+            continue
+        cilj = reg[table].get("cilj") or []
+        if not cilj:
+            continue
+        viska = sorted(set(reg[table].get("dozvoljeni", [])) - set(cilj))
+        if viska:
+            otvoreno.append(f"  {table}: jos {len(viska)} -> {', '.join(viska)}")
+
+    print(f"{os.path.basename(path)}: nema novih pisaca "
+          f"({len(stvarno)} tabela provereno)")
+    if otvoreno:
+        print("Do A11 cilja jos:")
+        for o in otvoreno:
+            print(o)
+    return 0
+
+
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description="Mapa vlasnistva nad tabelama, iz koda.")
     ap.add_argument("--out", nargs="?", const=DEFAULT_OUT,
                     help=f"upisi u fajl (podrazumevano {DEFAULT_OUT})")
     ap.add_argument("--check", action="store_true",
                     help="exit 2 ako se generisan sadrzaj razlikuje od fajla")
+    ap.add_argument("--check-ownership", action="store_true",
+                    help="exit 2 ako tabelu pise modul van WRITE_OWNERSHIP.json")
     args = ap.parse_args(argv)
 
-    text = render(scan())
+    writers = scan()
+
+    if args.check_ownership:
+        return check_ownership(writers, OWNERSHIP_PATH)
+
+    text = render(writers)
 
     if args.check:
         path = args.out or DEFAULT_OUT

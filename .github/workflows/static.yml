@@ -110,6 +110,12 @@ jobs:
       - name: WHO_WRITES je azuran
         run: python3 tools/who_writes.py --check
 
+      # Architecture Contract A11: nov pisac domen-tabele obara CI.
+      # Racna, ne cilj -- WRITE_OWNERSHIP.json je zamrznuto zateceno stanje, pa
+      # kapija hvata SIRENJE vlasnistva. Skracivanje ka cilju je posao PR-ova.
+      - name: A11 -- vlasnistvo nad upisom
+        run: python3 tools/who_writes.py --check-ownership
+
       # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
       # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
       # i videla se tek kao [break] u VBE-u na Windows masini.

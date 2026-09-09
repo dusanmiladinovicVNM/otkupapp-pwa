@@ -48,6 +48,12 @@ Public Sub SetupNewPC()
     EnsureLocalConfigTable
     EnsurePoruke
 
+    ' PR1: registar seme pravi/dopunjava SVE tabele iz modSchema. Ide ovde, a
+    ' NE u EnsureRuntimeSchema (koji se vrti na svakom startu): prolaz kroz 41
+    ' tabelu i 590 kolona je preskup po startu. Na startu ide samo citanje,
+    ' kroz Check_SchemaRegistry u health check-u.
+    modSchema.EnsureAllTables
+
     LogSetup "INFO", "SetupNewPC started"
     LogSetup "INFO", "Workbook: " & ThisWorkbook.fullName
     LogSetup "INFO", "Machine: " & Environ$("COMPUTERNAME")
@@ -1816,7 +1822,11 @@ Public Sub DebugKoloneTabele()
 End Sub
 
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
-Private Sub EnsureDataTable(ByVal tblName As String, _
+'
+' Public od PR1 (registar seme): modSchema.EnsureAllTables je jedini spoljni
+' pozivalac i prosledjuje zaglavlja IZ REGISTRA. Mehanizam kreiranja ostaje
+' ovde -- modSchema drzi deklaraciju, modSetup je izvrsava.
+Public Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal sheetName As String, _
                             ByVal headers As Variant)
     Dim lo As ListObject
