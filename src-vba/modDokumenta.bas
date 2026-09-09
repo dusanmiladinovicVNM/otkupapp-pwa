@@ -678,7 +678,21 @@ End Function
 ' dokumenata istog vlasnika su dva razlicita poteza za operatera.
 '
 ' Namerno NE gleda historicalLogicalCount -- v. komentar uz ZBR_MUT_* konstante.
-Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent) As String
+' `scopedPoGeneraciji` je faza 4: kapija SME da pusti dva aktivna dokumenta pod
+' istim brojem, ali samo tamo gde akter vise ne bira decu po broju.
+'
+' Default je False i to nije opreznost nego nuznost: kapiju zove DEVET mesta, a
+' faza 3 je na generaciju prebacila TRI. Ostali i dalje biraju po broju --
+' RecalculateZbirnaFromOtpremnice_TX preko SumOtpremniceByKlasa sabira SVE
+' otpremnice pod brojem. Da je ova grana bezuslovna, zbirna bi dobila zbir tudjeg
+' dokumenta u zaglavlje, tiho i u kilogramima. To je ZBR-MUT-01 naopako: ne
+' sirenjem aktera nego suzavanjem kapije.
+'
+' Pozivalac NE sme da salje "postoji generacija" nego BAS onu odluku koju vec
+' racuna za svoju selekciju (`genEff <> ""`). Kapija i akter tako gledaju isti
+' izraz, ne dva slicna.
+Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent, _
+                                            Optional ByVal scopedPoGeneraciji As Boolean = False) As String
     If id.integrityStatus <> ZBR_INT_OK Then
         ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_INTEGRITET
         Exit Function
@@ -693,6 +707,11 @@ Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent) As String
 
     ' SADA: samo aktivni dokumenti konkurisu za decu. Dva aktivna istog vlasnika
     ' (A17) owner-brojac ne vidi -- zbog toga ova grana i postoji.
+    '
+    ' Faza 4: kad akter bira decu po generaciji, "dva aktivna dokumenta" mu vise
+    ' nije opasnost -- dira samo svoje. Grana tada nema sta da brani.
+    If scopedPoGeneraciji Then Exit Function
+
     If id.activeLogicalCount > 1 Then
         ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA
     End If
@@ -703,12 +722,13 @@ End Function
 ' FAIL-CLOSED na sopstvenu gresku: "ne mogu da dokazem jednoznacnost" je za
 ' kapiju isto sto i "ne mutiraj". Prazan broj nije nerazresen nego "nema
 ' roditelja" -- nema sta da se mutira.
-Public Function ZbirnaMutacijaPoBrojuRazlogZaBroj(ByVal broj As String) As String
+Public Function ZbirnaMutacijaPoBrojuRazlogZaBroj(ByVal broj As String, _
+                                                 Optional ByVal scopedPoGeneraciji As Boolean = False) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
     If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
     id = ZbirnaIdentResolve(broj)
-    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZbirnaMutacijaPoBrojuRazlog(id)
+    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZbirnaMutacijaPoBrojuRazlog(id, scopedPoGeneraciji)
     Exit Function
 EH:
     LogErr "modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj"

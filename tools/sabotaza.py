@@ -1061,7 +1061,7 @@ SABOTAZE = {
     # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
     "zbirna-ispravka-izvor-bez-kapije": (
         "modStornoFlow.bas",
-        "        razStr = ZbirnaMutRazlog(oldBroj)\n",
+        "        razStr = ZbirnaMutRazlog(oldBroj, Len(genOp) > 0)\n",
         "        razStr = \"\"   ' SABOTAZA: izvorna strana se ne proverava\n",
         "T_IspravkaZbirne_KapijaNaObeStrane",
         "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja",
@@ -1157,9 +1157,9 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)\n"
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)\n"
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
@@ -5362,6 +5362,25 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
+    # ZBR-CHILD-01 faza 4: gasi popustanje -- kapija opet staje i kad je izbor
+    # scoped. Meri se korist zbog koje su faze 1-3 placene.
+    "kapija-ne-pusta-scoped-izbor": (
+        "modDokumenta.bas",
+        "    If scopedPoGeneraciji Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: popustanje se ne desava\n",
+        "Test_ZBR_KapijaPustaKadJeIzborScoped",
+        "ZBR-F4: storno SA generacijom prolazi iako broj nosi dva dokumenta",
+    ),
+    # Druga strana istog prekidaca: kapija pusta BEZ obzira na to da li akter
+    # zna koji dokument dira. Bez ove sabotaze "popusta samo kad je scoped" bi
+    # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
+    "kapija-pusta-i-nescoped-izbor": (
+        "modStornoFlow.bas",
+        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(genEff) > 0)\n",
+        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, True)   ' SABOTAZA: uvek scoped\n",
+        "Test_ZBR_KapijaPustaKadJeIzborScoped",
+        "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
+    ),
     # ZBR-CHILD-01 faza 3 / P1: iskljucuje prijemnice i palete iz odluke, pa rezim
     # ostaje po TABELI. Kaskada tada sme da bude pola scoped (otpremnice suzene na
     # GEN-B) a pola po broju (prijemnice padnu, jer je jedna legacy), i dokument
@@ -5813,12 +5832,16 @@ def _poruka_delovi(izraz: str):
 #
 # -- a dokaz.py vidi samo PORUKU koja je pala.
 # Redosled NIJE proizvoljan: poredi se startswith, pa duze ime mora PRE kraceg.
+# "assertfalse" je nedostajao: 24 tvrdnje u repou su bile NEVIDLJIVE proveri, pa
+# bi sabotaza uperena u bilo koju od njih bila prijavljena kao "tvrdnja ZASTARELA".
+# Lazna uzbuna je gora od propustene: uci da se crven nalaz preskace.
+#
 # "assertequals" je pod "asserteq" padalo na granicu imena (sledeci znak je 'u',
 # dakle alnum) i tiho ispadalo iz prepoznavanja -- 147 tvrdnji u
 # modBusinessFlowProTests nije postojalo za --proveri-sidra, pa je katalog nad
 # njima mogao da zastari bez ijedne poruke.
 _ASSERT_IMENA = ("assertdoublenear", "assertequals", "asserteq", "asserttrue",
-                 "chkeqd", "chkeq", "chk")
+                 "assertfalse", "chkeqd", "chkeq", "chk")
 
 
 def _podeli_vrh(tekst: str) -> list:
@@ -6525,6 +6548,9 @@ def _self_test() -> int:
             # BFP koristi AssertEquals; pod "asserteq" je padalo na granicu
             # imena, pa tvrdnja nije ni postojala za proveru sidara.
             "    AssertEquals \"a\", b, \"tvrdnja iz AssertEquals\"\n"
+            # AssertFalse: isti rod rupe kao AssertEquals -- ime nije bilo u
+            # _ASSERT_IMENA, pa tvrdnja za proveru sidara nije ni postojala.
+            "    AssertFalse nosiDok, \"tvrdnja iz AssertFalse\"\n"
             "    AssertEq a, b, \"tvrdnja A\"\n"
             "    AssertEq a, b, \"tvrdnja B\"\n"
             "    AssertEq a, b, \"tvrdnja C\"\n"
@@ -6540,12 +6566,24 @@ def _self_test() -> int:
               _ST_ZDRAVO + ESCN,
               "    Nesto = 1" + ESCN,
               "T_Postoji", "zdrava tvrdnja")
+    # ista stvar, ali tvrdnja dolazi iz AssertFalse -- mora da se PRIZNA
+    zdravoFalse = ("modOtkupUI.bas",
+                   _ST_ZDRAVO + ESCN,
+                   "    Nesto = 1" + ESCN,
+                   "T_Postoji", "tvrdnja iz AssertFalse")
 
     lose = 0
     n = 0
     # 0) zdrav katalog ne sme da da nijedan nalaz
     if _nalazi({"zdrav": zdravo}, imena, tela):
         print("SELF-TEST: zdrav unos je prijavljen kao nalaz", file=sys.stderr)
+        lose += 1
+    n += 1
+
+    # 0b) tvrdnja iz AssertFalse je ravnopravna -- inace bi 24 zatecene tvrdnje
+    #     bile nevidljive, a njihove sabotaze prijavljene kao zastarele.
+    if _nalazi({"zdrav-false": zdravoFalse}, imena, tela):
+        print("SELF-TEST: tvrdnja iz AssertFalse nije prepoznata", file=sys.stderr)
         lose += 1
     n += 1
 

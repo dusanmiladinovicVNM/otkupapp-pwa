@@ -966,28 +966,6 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
         Exit Function
     End If
 
-    ' ISTA KAPIJA KAO U ISPRAVCI OTPREMNICE, i to na OBE strane. Ovde su po broju
-    ' i izvor i cilj: RelinkOtpremniceToZbirna_TX(oldBroj, newBroj),
-    ' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
-    ' RecalculateZbirnaFromOtpremnice_TX(newBroj). Dvosmislen izvor znaci "cija
-    ' deca se sele", dvosmislen cilj znaci "cije zaglavlje dobija zbir".
-    Dim dvosmislen As String, kojaStrana As String, razStr As String
-    razStr = ZbirnaMutRazlog(newBroj)
-    If Len(razStr) > 0 Then
-        dvosmislen = newBroj: kojaStrana = "ciljne zbirne"
-    Else
-        razStr = ZbirnaMutRazlog(oldBroj)
-        If Len(razStr) > 0 Then dvosmislen = oldBroj: kojaStrana = "stare zbirne"
-    End If
-    If Len(dvosmislen) > 0 Then
-        MarkCorrectionManual correctionID, _
-                             "Razdvoj brojeve zbirnih pa prevezi rucno.", _
-                             ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, _
-                                             "Relink i rekalkulacija po broju nisu bezbedni")
-        r("message") = ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, "")
-        Exit Function
-    End If
-
     ' ZBR-CHILD-01 faza 3: identitet STAROG dokumenta, ne pogadjanje po broju.
     ' Do ovog koraka je stara zbirna VEC stornirana (context pa StornoZbirna_TX u
     ' RunZbirnaCorrection), pa bi resolver po broju vratio prazno ili -- gore --
@@ -1008,6 +986,32 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
            And SvaAktivnaDecaNoseGeneraciju(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, oldBroj) Then
             genOp = genStare
         End If
+    End If
+
+    ' ISTA KAPIJA KAO U ISPRAVCI OTPREMNICE, i to na OBE strane. Dvosmislen izvor
+    ' znaci "cija deca se sele", dvosmislen cilj znaci "cije zaglavlje dobija zbir".
+    '
+    ' Faza 4 popusta SAMO na strani IZVORA. Izvor je posle faze 3 scoped:
+    ' RelinkOtpremniceToZbirna_TX i DistinctActiveValues po oldBroj biraju po
+    ' generaciji. CILJ nije -- RecalculateZbirnaFromOtpremnice_TX preko
+    ' SumOtpremniceByKlasa i dalje sabira SVE otpremnice pod newBroj, pa bi
+    ' popustanje tamo upisalo tudji zbir u zaglavlje. Rekalkulacija prelazi na
+    ' generaciju u zasebnom koraku; do tada ciljna strana ostaje kakva je bila.
+    Dim dvosmislen As String, kojaStrana As String, razStr As String
+    razStr = ZbirnaMutRazlog(newBroj)
+    If Len(razStr) > 0 Then
+        dvosmislen = newBroj: kojaStrana = "ciljne zbirne"
+    Else
+        razStr = ZbirnaMutRazlog(oldBroj, Len(genOp) > 0)
+        If Len(razStr) > 0 Then dvosmislen = oldBroj: kojaStrana = "stare zbirne"
+    End If
+    If Len(dvosmislen) > 0 Then
+        MarkCorrectionManual correctionID, _
+                             "Razdvoj brojeve zbirnih pa prevezi rucno.", _
+                             ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, _
+                                             "Relink i rekalkulacija po broju nisu bezbedni")
+        r("message") = ZbirnaMutPoruka(razStr, kojaStrana, dvosmislen, "")
+        Exit Function
     End If
 
     ' Ako je broj promenjen -> prevezi otpremnice(+otkup) i prijemnice(+palete).
@@ -2202,16 +2206,10 @@ End Function
 ' pre kolone -- pa se ni jedna zatecena brojka ne pomera.
 Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal gen As String, _
                                         ByVal SRC As String) As Long
-    ' Odluka o rezimu je za CELU operaciju, ne po tabeli: Detach dira i otpremnice
-    ' i denormalizovani otkup, pa bi nezavisna odluka mogla da odveze otpremnice
-    ' samo GEN-B a otkup svih generacija pod tim brojem.
-    Dim genEff As String: genEff = ""
-    If Len(Trim$(gen)) > 0 Then
-        If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne) _
-           And SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, brojZbirne) Then
-            genEff = gen
-        End If
-    End If
+    ' `gen` je VEC odluka za celu operaciju (StornoZbirnaIDetach_TX je racuna nad
+    ' obe tabele koje Detach dira, pre kapije). Ovde se vise ne odlucuje -- da se
+    ' odlucuje i ovde, kapija i akter bi gledali dva razlicita izraza.
+    Dim genEff As String: genEff = gen
 
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
@@ -2281,14 +2279,25 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' v6-ui-224 ispravno pravi) prolazila su: zaglavlje bi bilo stornirano tacno,
     ' po generaciji, a onda bi Detach nize odvezao decu OBA dokumenta.
     ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
-    Dim razMut As String: razMut = ZbirnaMutRazlog(broj)
+    ' Faza 4: odluka o rezimu se racuna PRE kapije i deli sa akterom. Detach je
+    ' do sada odlucivao sam, ispod kapije -- pa je kapija branila i ono sto akter
+    ' vise ne moze da pogresi. Isti izraz sada vide oboje.
+    Dim genEff As String: genEff = ""
+    If Len(Trim$(gen)) > 0 Then
+        If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
+           And SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj) Then
+            genEff = gen
+        End If
+    End If
+
+    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(genEff) > 0)
     If Len(razMut) > 0 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
                   ZbirnaMutPoruka(razMut, "zbirne", broj, _
                                   "Otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan")
     End If
     If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
-    outDet = DetachOtpremniceInline(broj, gen, SRC)
+    outDet = DetachOtpremniceInline(broj, genEff, SRC)
     tx.CommitTx
     Set tx = Nothing
     StornoZbirnaIDetach_TX = True
@@ -2444,8 +2453,9 @@ End Function
 '
 ' Sta se NIJE promenilo: vlasnicka grana ostaje, i dalje IKAD (storniran vlasnik
 ' ima aktivnu decu). Dodata je samo dokumentna.
-Private Function ZbirnaMutRazlog(ByVal broj As String) As String
-    ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj)
+Private Function ZbirnaMutRazlog(ByVal broj As String, _
+                                 Optional ByVal scopedPoGeneraciji As Boolean = False) As String
+    ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj, scopedPoGeneraciji)
 End Function
 
 ' Poruka za operatera. Uzrok se NE stapa u jednu recenicu: "dva vlasnika" i "dva
@@ -2610,22 +2620,8 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' broja dele decu iz ugla ove rutine. Ponistavanje bi odvezalo i tudje.
     ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
     ' Do v6-ui-225 je i ovde mera bila vlasnicka, a opasnost dokumentna.
-    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne)
-    If Len(razPon) > 0 Then
-        res("message") = ZbirnaMutPoruka(razPon, "zbirne", brojZbirne, _
-                                         "Deca se u semi vezuju BROJEM, pa se lanac ne moze ponistiti samo za jedan")
-        Exit Function
-    End If
-    brojZbirne = Trim$(brojZbirne)
-    If Len(brojZbirne) = 0 Then Exit Function
-
-    ' Rezim za CELU kaskadu, ne po tabeli. Kaskada bira po broju iz tri skupa;
-    ' nezavisna odluka bi mogla da stornira otpremnice samo GEN-B, a prijemnice --
-    ' jer je jedna legacy -- svih generacija pod tim brojem. Pola scoped, pola po
-    ' broju je gore od oba cista rezima.
-    '
-    ' Prijemnice i palete ulaze u odluku samo kad ownsChain: kad ih kaskada ne
-    ' dira, njihov legacy red nema zasto da obori suzavanje otpremnica.
+    ' Faza 4: rezim se racuna PRE kapije i deli sa akterom (v. isti obrazac u
+    ' StornoZbirnaIDetach_TX).
     Dim genOp As String: genOp = ""
     If Len(Trim$(gen)) > 0 Then
         Dim scopeOK As Boolean
@@ -2636,6 +2632,21 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
         End If
         If scopeOK Then genOp = gen
     End If
+
+    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)
+    If Len(razPon) > 0 Then
+        res("message") = ZbirnaMutPoruka(razPon, "zbirne", brojZbirne, _
+                                         "Deca se u semi vezuju BROJEM, pa se lanac ne moze ponistiti samo za jedan")
+        Exit Function
+    End If
+    brojZbirne = Trim$(brojZbirne)
+    If Len(brojZbirne) = 0 Then Exit Function
+
+    ' Rezim je izracunat IZNAD kapije: kaskada bira po broju iz tri skupa, pa bi
+    ' nezavisna odluka po tabeli mogla da stornira otpremnice samo GEN-B a
+    ' prijemnice svih generacija. Prijemnice i palete ulaze u odluku samo kad
+    ' ownsChain -- kad ih kaskada ne dira, njihov legacy red nema zasto da obori
+    ' suzavanje otpremnica.
 
     ' ID-jeve + prijemnica-brojeve-sa-paletama skupi PRE mutacije.
     Dim otpIDs As Collection: Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, genOp, SRC)

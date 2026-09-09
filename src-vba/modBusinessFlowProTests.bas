@@ -129,6 +129,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta
     Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli
     Test_ZBR_IspravkaVezeSvojuDecuNeTudju
+    Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -3597,6 +3598,106 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFail "ZBR-CHILD-01 faza 3 ispravka veze svoju decu", bfpErrDesc
+End Sub
+
+' ZBR-CHILD-01 faza 4: kapija pusta dva aktivna dokumenta kad izbor JESTE scoped.
+'
+' Ovo je korist zbog koje su faze 1-3 placene. KR-001 scenario -- dva uredjaja bez
+' veze posalju zbirnu pod istim brojem, isti vozac i kupac -- danas zaustavlja i
+' storno i ponistenje, iako svaki dokument ima svoju decu.
+'
+' Kontrast u istom testu je bitan:
+'   bez generacije -> kapija STOJI. Pozivalac koji ne kaze KOJI dokument stornira
+'                     ne moze biti pusten -- pod tim brojem ih je dva.
+'   sa generacijom -> kapija PUSTA. Selekcija posle faze 3 dira samo svoju decu.
+'
+' Deca moraju da dobiju generaciju kroz MasterSync exact-link, ne kroz obican
+' upis: cim su oba dokumenta aktivna, ZbirnaGeneracijaZaBroj je fail-closed i
+' otpremnica snimljena po broju ostaje bez generacije. Link preko ZbirnaID zna
+' tacno cija je.
+Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim broj As String
+    Dim zbrA As String, zbrB As String, genA As String, genB As String
+    Dim otpA As String, otpB As String
+    Dim otkA As String, otkB As String, cridA As String, cridB As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRF4")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    otpA = "OTP-ZBRF4-A-" & scenario
+    otpB = "OTP-ZBRF4-B-" & scenario
+    otkA = "OTK-ZBRF4-A-" & scenario
+    otkB = "OTK-ZBRF4-B-" & scenario
+    cridA = "CRID-ZBRF4-OA-" & scenario
+    cridB = "CRID-ZBRF4-OB-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRF4-ZA-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRF4-ZB-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    AssertTrue (Len(genA) > 0 And Len(genB) > 0 And genA <> genB), _
+        "ZBR-F4 preduslov: dva aktivna dokumenta pod istim brojem, razlicite generacije"
+
+    AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OA-" & scenario
+    AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OB-" & scenario
+    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, "I", 100#, cridA, ""
+    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, "I", 100#, cridB, ""
+    VeziOtkupZaOtpremnicuFixture otkA, otpA
+    VeziOtkupZaOtpremnicuFixture otkB, otpB
+
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
+
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F4 preduslov: otpremnica A nosi generaciju A"
+    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F4 preduslov: otpremnica B nosi generaciju B"
+
+    ' --- BEZ generacije: pozivalac ne kaze KOJI dokument -> kapija STOJI ---
+    Set r = RunSimpleStornoZbirna(broj)
+    AssertFalse CBool(r("success")), _
+        "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR-F4: posle odbijenog storna dokument A je netaknut"
+
+    ' --- SA generacijom: izbor je scoped -> kapija PUSTA ---
+    Set r = RunSimpleStornoZbirna(broj, genB)
+    AssertTrue CBool(r("success")), _
+        "ZBR-F4: storno SA generacijom prolazi iako broj nosi dva dokumenta"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR-F4: stornira se bas izabrani dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR-F4: dokument A ostaje aktivan"
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F4: sopstvena otpremnica B je odvezana"
+    AssertEquals broj, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F4: otpremnica dokumenta A NIJE dirnuta"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 faza 4 kapija pusta scoped izbor", bfpErrDesc
 End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()

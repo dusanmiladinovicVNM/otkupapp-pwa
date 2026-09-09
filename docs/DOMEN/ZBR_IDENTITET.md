@@ -755,9 +755,53 @@ decu ima samo *drugi* dokument, relink vrati 0, a pozivalac to (preko
 prevezao tuđu decu bez reči. Fail-closed umesto tihe štete, ali jeste nova
 `MANUAL` tamo gde je ranije „prolazilo".
 
-**Faza 4 (ne u ovom koraku)** — `ZbirnaMutacijaPoBrojuRazlog` prestaje da blokira
-`activeLogicalCount > 1` kad sva deca tog broja nose generaciju. Tek tada je
-`ZBR-MUT-01` rešen strukturno, a ne kapijom.
+**Faza 4 (`v6-ui-229`)** — `ZbirnaMutacijaPoBrojuRazlog` prestaje da blokira
+`activeLogicalCount > 1` — ali **samo tamo gde je akter prešao na generaciju**.
+
+Plan je bio „skini granu iz kapije". Merenje ga je oborilo: kapiju zove **devet**
+mesta, a faza 3 je prebacila **tri**. `RecalculateZbirnaFromOtpremnice_TX` preko
+`SumOtpremniceByKlasa` i dalje sabira **sve** otpremnice pod brojem:
+
+```vb
+If Trim$(CStr(data(i, cBroj))) = brojZbirne Then
+```
+
+Bezuslovno popuštanje bi zbirnoj upisalo **tuđi zbir u zaglavlje** — tiho, u
+kilogramima. To je `ZBR-MUT-01` naopako: ne širenjem aktera nego sužavanjem
+kapije.
+
+Zato `scopedPoGeneraciji` ide kao **`Optional`, default `False`**: šest netaknutih
+mesta se ne diraju uopšte. Popuštaju tri:
+
+| mesto | akter | |
+|---|---|---|
+| `StornoZbirnaIDetach_TX` | Detach (otp + otkup) | ✅ |
+| `PonistiZbirnaChain_TX` | kaskada | ✅ |
+| `CompleteZbirnaIspravka`, strana `oldBroj` | relink + `DistinctActiveValues` | ✅ |
+| `CompleteZbirnaIspravka`, strana `newBroj` | uključuje rekalkulaciju po broju | ❌ |
+
+**Uslov nije „postoji generacija" nego baš onaj izraz koji to mesto već računa za
+selekciju** (`genEff <> ""`). Zbog toga je odluka **podignuta iznad kapije** — do
+faze 4 se računala ispod nje, pa je kapija branila i ono što akter više ne može
+da pogreši.
+
+`VISE_VLASNIKA` i `INTEGRITET` ostaju netaknute.
+
+#### Šta se time dobija, i šta i dalje staje
+
+KR-001: dva uređaja pošalju zbirnu pod istim brojem, isti vozač i kupac.
+
+```
+RunSimpleStornoZbirna(broj)          -> i dalje STAJE
+RunSimpleStornoZbirna(broj, genB)    -> PROLAZI, dira samo svoju decu
+```
+
+Razlika nije kozmetička: pozivalac koji **ne kaže koji dokument** stornira ne sme
+biti pušten — pod tim brojem ih je dva. Kapija popušta tek kad akter zna šta radi.
+
+**Faza 5 (ne u ovom koraku)** — rekalkulacija prelazi na generaciju, pa i ciljna
+strana ispravke sme da popusti. Zbir u zaglavlju je druga vrsta rizika od
+odvezivanja dece i ide zasebno.
 
 **Korist stiže u fazi 4.** Faze 1–2 su trošak bez vidljive promene — to je
 svesno plaćeno da bi koraci bili odvojivo dokazivi.
