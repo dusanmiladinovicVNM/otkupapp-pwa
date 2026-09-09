@@ -74,6 +74,7 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 | VBA izvor (ASCII, deklaracije, duplikati) | ceo `src-vba/` | `.claude/rules/vba-izvor.md` |
 | Testovi i verifikacija | `mod*Tests`, `tools/vba_check.py`, `tools/run_vba.py` | `.claude/rules/testovi.md` |
 | Git, PR, release | `tools/release.sh`, `docs/RELEASE_*` | `.claude/rules/git-i-release.md` |
+| Kapija pre veće izmene (nova tabela/kolona, nov writer, identitet, storno, schema, SEF/banka) | — | skill `pre-flight` |
 
 Fajlovi u `.claude/rules/` imaju `paths:` frontmatter (koja putanja ih aktivira).
 Ako oblast nema svoj fajl, važi samo ovo ovde.
