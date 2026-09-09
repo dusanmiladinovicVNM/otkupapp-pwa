@@ -247,6 +247,7 @@ pregledaju pre nego što se zaključaju.
 | 4 | ambalaža nije usklađena otpremnica ↔ zbirna | `invarijanta PUKLA` zabeležena kao da je sistem kriv |
 | 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u PR5 |
 | 6 | `DOKUMENTI` je brojao **pozive testa** (`m_nOtp = m_nOtp + 1`) | tautologija: A3 je dokazivao „test je jednom pozvao `GldOtpremnica`", ne „sistem je napravio jednu otpremnicu"; bug koji od jednog poziva napravi dve otpremnice po 500 kg ostavio bi agregat isti i test **zelen** |
+| 8 | seed rezervisanih identiteta bio fail-open | zatečen `STA-GLD-1` sa drugim nazivom ili `Aktivan=Ne` prihvatio bi se — scenario opet ne poseduje ceo svoj ulaz |
 | 7 | preduslov je proveravao samo identitet, ne ključ scenarija | zatečena otpremnica sa `BrojZbirne = GLD-A1` ušla bi u rezultat i kad kooperant nema nijedan stari otkup |
 
 Dve greške vrede da se pamte kao pravila:
@@ -270,3 +271,25 @@ golden [otpremnica 1] vs tekuci [otpremnica 2]   <- pada OVDE
 ```
 
 Posle PR5 adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
+
+### Ugovor izolacije, u celini
+
+```
+PRE      GLD identiteti          ne postoje
+         transakciona istorija   ne postoji
+         ključ scenarija         ne postoji
+SCENARIO sam napravi sve što mu treba
+POSLE    rollback -> isto stanje kao PRE
+```
+
+Sva tri uslova su **fail-fast** i imenovana. Dokazano sabotažom: dupli `GldSeed`
+u istoj transakciji daje
+
+```
+rezervisani identitet STA-GLD-1 vec postoji u tblStanice (1)
+  -- scenario ne poseduje svoj ulaz
+```
+
+Idempotentnost se namerno **ne** traži: svaki scenario radi u svojoj transakciji
+i rollback-uje se, pa identiteti na početku uvek ne postoje. Ako postoje, to je
+nalaz — ili je prethodni rollback zakazao, ili ime više nije rezervisano.

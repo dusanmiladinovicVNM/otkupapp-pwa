@@ -181,16 +181,7 @@ Private Sub GldSeedRed(ByVal tbl As String, ByVal kljucKol As String, _
                        ByVal naziv As String)
     Dim rowData As Variant
 
-    ' Fail-closed: identitet je vlasnistvo golden harness-a. Ako vec postoji,
-    ' ili je nas (pa je no-op) ili je tudji sa istim imenom -- a to znaci da
-    ' scenario ne zna sta zapravo koristi.
-    If GldRedPostoji(tbl, kljucKol, kljuc) Then
-        If GldBrojRedova(tbl, kljucKol, kljuc) > 1 Then
-            Err.Raise GLD_ERR, "GldSeedRed", _
-                      tbl & " ima vise redova sa " & kljucKol & "=" & kljuc
-        End If
-        Exit Sub
-    End If
+    GldMoraDaNePostoji tbl, kljucKol, kljuc
 
     rowData = GldPrazanRed(tbl)
     GldPolje rowData, tbl, kljucKol, kljuc
@@ -202,10 +193,33 @@ Private Sub GldSeedRed(ByVal tbl As String, ByVal kljucKol As String, _
     End If
 End Sub
 
+' Rezervisani identitet NE SME da postoji pre seed-a.
+'
+' Ranija verzija je bila fail-open: postojeci red se prihvatao ako ga ima
+' tacno jedan. Tada bi zatecen STA-GLD-1 sa drugim nazivom ili Aktivan=Ne
+' usao u scenario -- ista bolest kao zatecen avans: scenario vise ne
+' poseduje ceo svoj ulaz.
+'
+' Idempotentnost ovde NE treba: svaki scenario radi u svojoj transakciji i
+' rollback-uje se, pa GLD identiteti na pocetku uvek NE postoje. Ako
+' postoje, to je nalaz -- ili je prethodni rollback zakazao, ili ime nije
+' vise rezervisano.
+Private Sub GldMoraDaNePostoji(ByVal tbl As String, ByVal kolona As String, _
+                               ByVal vrednost As String)
+    Dim n As Long
+
+    n = GldBrojRedova(tbl, kolona, vrednost)
+    If n > 0 Then
+        Err.Raise GLD_ERR, "GldSeed", _
+                  "rezervisani identitet " & vrednost & " vec postoji u " & _
+                  tbl & " (" & CStr(n) & ") -- scenario ne poseduje svoj ulaz"
+    End If
+End Sub
+
 Private Sub GldSeedKooperant()
     Dim rowData As Variant
 
-    If GldRedPostoji(TBL_KOOPERANTI, "KooperantID", GLD_KOOP) Then Exit Sub
+    GldMoraDaNePostoji TBL_KOOPERANTI, "KooperantID", GLD_KOOP
 
     rowData = GldPrazanRed(TBL_KOOPERANTI)
     GldPolje rowData, TBL_KOOPERANTI, "KooperantID", GLD_KOOP
