@@ -5362,6 +5362,26 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
+    # ZBR-CHILD-01 faza 3: gasi suzavanje -- kaskada opet dira svu decu pod brojem.
+    # Meri se posledica, ne grana: dete DRUGOG dokumenta ostaje vezano samo ako
+    # suzavanje stvarno radi.
+    "deca-se-biraju-po-broju-a-ne-po-generaciji": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function\n",
+        "    If True Then Exit Function   ' SABOTAZA: nikad ne suzavaj, biraj po broju\n",
+        "Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta",
+        "ZBR-F3: kaskada NE odvezuje dete drugog dokumenta pod istim brojem",
+    ),
+    # Druga strana istog pravila: gasi FALLBACK, pa suzavanje radi i kad jedno dete
+    # nema generaciju. Bez ove sabotaze "sve-ili-nista" bi bilo tvrdnja bez mere --
+    # zeleno bi bilo i da fallback ne postoji.
+    "suzavanje-ignorise-dete-bez-generacije": (
+        "modDokumenta.bas",
+        "        If Len(Trim$(NzToText(data(CLng(kandidati(k)), cGen)))) = 0 Then Exit Function\n",
+        "        If False Then Exit Function   ' SABOTAZA: prazna generacija ne vraca na broj\n",
+        "Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta",
+        "ZBR-F3: jedno dete bez generacije vraca CEO izbor na broj (zatecen ishod)",
+    ),
     # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
     # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
     # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
@@ -5422,8 +5442,8 @@ SABOTAZE = {
     ),
     "deca-po-broju-poredi-case": (
         "modStornoFlow.bas",
-        "        If BrojJednak(data(i, cF), filterVal) Then\n",
-        "        If Trim$(CStr(data(i, cF))) = filterVal Then   ' SABOTAZA: case-sensitive\n",
+        "        If BrojJednak(data(c, cF), filterVal) Then\n",
+        "        If Trim$(CStr(data(c, cF))) = filterVal Then   ' SABOTAZA: case-sensitive\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: mali case daje ISTU decu",
     ),
@@ -5432,8 +5452,8 @@ SABOTAZE = {
     # case-a i ostavila trim -- pravi kvar u ovoj funkciji -- nedokazan.
     "deca-po-broju-ne-trimuje-filter": (
         "modStornoFlow.bas",
-        "        If BrojJednak(data(i, cF), filterVal) Then\n",
-        "        If StrComp(Trim$(NzToText(data(i, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
+        "        If BrojJednak(data(c, cF), filterVal) Then\n",
+        "        If StrComp(Trim$(NzToText(data(c, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: razmaci ne menjaju decu",
     ),

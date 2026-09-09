@@ -513,7 +513,15 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
             If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) _
                And OtpremnicaIsSoleOwner(parentZbirna, oldBroj, docID) Then
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP)
+                ' ZBR-CHILD-01: generacija roditelja se NE pogadja po broju dok je
+                ' dete nosi. Ovo dete je bas njegovo, pa je njegov ZbirnaGeneracijaID
+                ' roditeljev identitet. Razresavanje po broju je poslednja instanca,
+                ' za red koji jos nije backfill-ovan.
+                Dim genP As String
+                genP = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                            CStr(s("otpID")), COL_DETE_ZBIRNA_GEN))
+                If Len(genP) = 0 Then genP = ZbirnaGeneracijaZaBroj(parentZbirna)
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, genP)
                 If Not CBool(cascP("ok")) Then
                     FailCorrectionContext cidP, "Kaskadno ponistenje toka zbirne nije uspelo."
                     r("message") = "Ponistenje nije uspelo (kaskada zbirne).": Exit Function
@@ -726,7 +734,9 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
         ' Preseli nizvodni tok (prijemnica + paleta-stavke) sa stare na novu zbirnu.
         If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) And Len(oldZbirna) > 0 Then
             Dim prijBrojevi As Collection
-            Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, oldZbirna)
+            Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                                   COL_PRJ_BROJ_ZBIRNE, oldZbirna, _
+                                                   ZbirnaGeneracijaZaBroj(oldZbirna))
             Dim p As Long
             For p = 1 To prijBrojevi.count
                 If Not ReassignPrijemnicaToZbirna_TX(CStr(prijBrojevi(p)), newZbirna) Then
@@ -996,7 +1006,9 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
             End If
         End If
         Dim prijBrojevi As Collection
-        Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, oldBroj)
+        Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                                               COL_PRJ_BROJ_ZBIRNE, oldBroj, _
+                                               ZbirnaGeneracijaZaBroj(oldBroj))
         Dim k As Long
         For k = 1 To prijBrojevi.count
             If Not ReassignPrijemnicaToZbirna_TX(CStr(prijBrojevi(k)), newBroj) Then
@@ -1250,7 +1262,13 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
 
             If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) Then
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP)
+                ' ZBR-CHILD-01: v. isti obrazac u otpremnickoj grani -- dete zna
+                ' roditelja, pa se ne pogadja po broju.
+                Dim genP As String
+                genP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+                                            prijID, COL_DETE_ZBIRNA_GEN))
+                If Len(genP) = 0 Then genP = ZbirnaGeneracijaZaBroj(parentZbirna)
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, genP)
                 If Not CBool(cascP("ok")) Then
                     ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
                     Dim razlogP As String: razlogP = ""
@@ -2079,6 +2097,11 @@ Private Function RelinkOtpremniceToZbirna_TX(ByVal oldZbirna As String, ByVal ne
     cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
     cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
 
+    ' ZBR-CHILD-01 faza 3: IZVOR se suzava na stari dokument. ZbirnaGeneracijaZaBroj
+    ' je fail-closed (prazno za sve sto nije UNIQUE), pa dvosmislen stari broj sam
+    ' vraca fallback na broj -- isto sto je bilo i pre kolone.
+    Dim genStare As String: genStare = ZbirnaGeneracijaZaBroj(oldZbirna)
+
     Dim otpRows As Collection: Set otpRows = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -2086,6 +2109,7 @@ Private Function RelinkOtpremniceToZbirna_TX(ByVal oldZbirna As String, ByVal ne
             otpRows.Add i
         End If
     Next i
+    Set otpRows = SuziDecuNaGeneraciju(TBL_OTPREMNICA, data, otpRows, genStare)
     If otpRows.count = 0 Then Exit Function
 
     Set tx = New clsTransaction
@@ -2108,14 +2132,19 @@ Private Function RelinkOtpremniceToZbirna_TX(ByVal oldZbirna As String, ByVal ne
         ocZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
         ocSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
         If ocZbr > 0 Then
+            Dim okand As Collection: Set okand = New Collection
             Dim j As Long
             For j = 1 To UBound(od, 1)
                 If Trim$(CStr(od(j, ocZbr))) = oldZbirna Then
                     If ocSt = 0 Or UCase$(Trim$(CStr(od(j, ocSt)))) <> "DA" Then
-                        PoveziDeteNaZbirnu TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, _
-                                           newZbirna, genNove, SRC
+                        okand.Add j
                     End If
                 End If
+            Next j
+            Set okand = SuziDecuNaGeneraciju(TBL_OTKUP, od, okand, genStare)
+            For j = 1 To okand.count
+                PoveziDeteNaZbirnu TBL_OTKUP, CLng(okand(j)), COL_OTK_BROJ_ZBIRNE, _
+                                   newZbirna, genNove, SRC
             Next j
         End If
     End If
@@ -2131,18 +2160,28 @@ End Function
 
 ' Telo odvezivanja (bez TX; koristi se unutar vec otvorene transakcije). Aktivne
 ' otpremnice sa datom zbirnom -> BrojZbirne = "" ("ceka zbirnu"), + otkup denorm.
-Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal SRC As String) As Long
+' ZBR-CHILD-01 faza 3: izbor po broju ostaje netaknut (isto poredjenje kao pre),
+' a SuziDecuNaGeneraciju odbacuje decu drugog dokumenta pod istim brojem. Kad
+' makar jedno dete jos nema generaciju, suzavanje se ne desava i skup je isti kao
+' pre kolone -- pa se ni jedna zatecena brojka ne pomera.
+Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal gen As String, _
+                                        ByVal SRC As String) As Long
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
     Dim cZbr As Long, cSt As Long
     cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
     cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    Dim kand As Collection: Set kand = New Collection
     Dim i As Long, n As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            OdveziDeteOdZbirne TBL_OTPREMNICA, i, COL_OTP_BROJ_ZBIRNE, SRC
-            n = n + 1
+            kand.Add i
         End If
+    Next i
+    Set kand = SuziDecuNaGeneraciju(TBL_OTPREMNICA, data, kand, gen)
+    For i = 1 To kand.count
+        OdveziDeteOdZbirne TBL_OTPREMNICA, CLng(kand(i)), COL_OTP_BROJ_ZBIRNE, SRC
+        n = n + 1
     Next i
     ' Denormalizovani otkup.BrojZbirne -> takodje prazno.
     Dim od As Variant: od = GetTableData(TBL_OTKUP)
@@ -2151,13 +2190,18 @@ Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal SRC As
         ocZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
         ocSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
         If ocZbr > 0 Then
+            Dim okand As Collection: Set okand = New Collection
             Dim j As Long
             For j = 1 To UBound(od, 1)
                 If Trim$(CStr(od(j, ocZbr))) = brojZbirne Then
                     If ocSt = 0 Or UCase$(Trim$(CStr(od(j, ocSt)))) <> "DA" Then
-                        OdveziDeteOdZbirne TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, SRC
+                        okand.Add j
                     End If
                 End If
+            Next j
+            Set okand = SuziDecuNaGeneraciju(TBL_OTKUP, od, okand, gen)
+            For j = 1 To okand.count
+                OdveziDeteOdZbirne TBL_OTKUP, CLng(okand(j)), COL_OTK_BROJ_ZBIRNE, SRC
             Next j
         End If
     End If
@@ -2197,7 +2241,7 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
                                   "Otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan")
     End If
     If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
-    outDet = DetachOtpremniceInline(broj, SRC)
+    outDet = DetachOtpremniceInline(broj, gen, SRC)
     tx.CommitTx
     Set tx = Nothing
     StornoZbirnaIDetach_TX = True
@@ -2397,7 +2441,8 @@ EH:
 End Function
 
 ' Aktivni OtpremnicaID-jevi za dati BrojZbirne.
-Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal SRC As String) As Collection
+Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
+                                      ByVal SRC As String) As Collection
     Dim result As New Collection
     Set ActiveOtpIDsByZbirna = result
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
@@ -2406,16 +2451,22 @@ Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal SRC As S
     cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    Dim kand As Collection: Set kand = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            result.Add Trim$(CStr(data(i, cId)))
+            kand.Add i
         End If
+    Next i
+    Set kand = SuziDecuNaGeneraciju(TBL_OTPREMNICA, data, kand, gen)
+    For i = 1 To kand.count
+        result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
     Next i
 End Function
 
 ' Aktivni PrijemnicaID-jevi za dati BrojZbirne (svi redovi, obe klase).
-Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal SRC As String) As Collection
+Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
+                                       ByVal SRC As String) As Collection
     Dim result As New Collection
     Set ActivePrijIDsByZbirna = result
     Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
@@ -2424,11 +2475,16 @@ Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal SRC As 
     cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     cSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+    Dim kand As Collection: Set kand = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            result.Add Trim$(CStr(data(i, cId)))
+            kand.Add i
         End If
+    Next i
+    Set kand = SuziDecuNaGeneraciju(TBL_PRIJEMNICA, data, kand, gen)
+    For i = 1 To kand.count
+        result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
     Next i
 End Function
 
@@ -2517,11 +2573,12 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     If Len(brojZbirne) = 0 Then Exit Function
 
     ' ID-jeve + prijemnica-brojeve-sa-paletama skupi PRE mutacije.
-    Dim otpIDs As Collection: Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, SRC)
+    Dim otpIDs As Collection: Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, gen, SRC)
     Dim prijIDs As Collection, prijBrPalete As Collection
     If ownsChain Then
-        Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, SRC)
-        Set prijBrPalete = DistinctActiveValues(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, brojZbirne)
+        Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, gen, SRC)
+        Set prijBrPalete = DistinctActiveValues(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, _
+                                                COL_PALS_BROJ_ZBIRNE, brojZbirne, gen)
     Else
         Set prijIDs = New Collection: Set prijBrPalete = New Collection
     End If
@@ -2906,7 +2963,8 @@ End Function
 
 ' Distinktne AKTIVNE vrednosti valueCol gde filterCol = filterVal.
 Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As String, _
-                                      ByVal filterCol As String, ByVal filterVal As String) As Collection
+                                      ByVal filterCol As String, ByVal filterVal As String, _
+                                      Optional ByVal gen As String = "") As Collection
     Dim result As New Collection
     Set DistinctActiveValues = result
     On Error GoTo EH
@@ -2917,21 +2975,30 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
     cF = GetColumnIndex(tblName, filterCol)
     cSt = GetColumnIndex(tblName, COL_STORNIRANO)
     If cV = 0 Or cF = 0 Then Exit Function
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    Dim i As Long, v As String
-    For i = 1 To UBound(data, 1)
+
+    ' ZBR-CHILD-01 faza 3: kandidati pa suzavanje, da bi dedup radio nad decom
+    ' JEDNOG dokumenta. Dedup pre suzavanja bi spojio vrednosti dva dokumenta pod
+    ' istim brojem i suzavanje vise ne bi imalo sta da razdvoji.
+    Dim kand As Collection: Set kand = New Collection
+    Dim c As Long
+    For c = 1 To UBound(data, 1)
         ' ZBR-NORM-02: filterVal je do sada poredjen NETRIMOVAN, dok je celija
         ' bila trimovana -- asimetrija koja bi netrimovanom pozivaocu tiho
         ' vratila prazan skup. Sva tri zatecena pozivaoca salju trimovanu
         ' vrednost, pa nije bilo ziv kvar, ali zamka jeste.
-        If BrojJednak(data(i, cF), filterVal) Then
-            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-                v = Trim$(CStr(data(i, cV)))
-                If Len(v) > 0 And Not seen.Exists(v) Then
-                    seen(v) = True
-                    result.Add v
-                End If
-            End If
+        If BrojJednak(data(c, cF), filterVal) Then
+            If cSt = 0 Or UCase$(Trim$(CStr(data(c, cSt)))) <> "DA" Then kand.Add c
+        End If
+    Next c
+    Set kand = SuziDecuNaGeneraciju(tblName, data, kand, gen)
+
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim i As Long, v As String
+    For i = 1 To kand.count
+        v = Trim$(CStr(data(CLng(kand(i)), cV)))
+        If Len(v) > 0 And Not seen.Exists(v) Then
+            seen(v) = True
+            result.Add v
         End If
     Next i
     Exit Function

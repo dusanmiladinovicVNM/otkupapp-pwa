@@ -1569,6 +1569,58 @@ Public Sub OdveziDeteOdZbirne(ByVal tableName As String, ByVal rowIndex As Long,
     PoveziDeteNaZbirnu tableName, rowIndex, brojCol, "", "", sourceName
 End Sub
 
+' ZBR-CHILD-01 faza 3: JEDAN put kojim se skup dece suzava na JEDAN dokument.
+'
+' Pandan write choke point-u iznad. Namerno NE preuzima i izbor po broju: cetiri
+' zatecena odlucivaca porede broj TACNO (Trim$(CStr(..)) = broj), a peti
+' (DistinctActiveValues) kanonski preko BrojJednak. Da je ovaj put preuzeo i to
+' poredjenje, ona cetiri bi se tiho PROSIRILA -- akter siri od zatecenog je bas
+' smer koji ZBR-NORM-02 zove opasnim. Zato svaki pozivalac zadrzava svoje
+' poredjenje, a ovde se centralizuje samo ono sto je faza 3: generacija.
+'
+' PRAVILO (sve-ili-nista, ne hibrid):
+'   1) trazena generacija prazna       -> vrati kandidate nepromenjeno
+'   2) bilo koji kandidat bez generacije -> vrati kandidate nepromenjeno
+'   3) inace                            -> vrati samo one koje se poklapaju
+'
+' Zasto NE hibrid "poklapa se ILI je prazno": pod jednim brojem mogu stajati dva
+' dokumenta, pa bi isti prazan red upao u skup OBA -- dupli detach, pogresan
+' racun. Fallback je bit-identican zatecenom ponasanju, sto je i uslov da faza 3
+' ne pomeri nijednu zatecenu brojku.
+'
+' `data` ide ByRef i mora biti BAS onaj snimak nad kojim pozivalac vrti petlju:
+' drugo citanje unutar iste transakcije moglo bi da vidi drugo stanje, pa bi
+' indeksi redova pokazivali na tudje redove. ByRef i zbog KOPIJA_NIZA.
+Public Function SuziDecuNaGeneraciju(ByVal tableName As String, ByRef data As Variant, _
+                                     ByVal kandidati As Collection, _
+                                     ByVal gen As String) As Collection
+    Set SuziDecuNaGeneraciju = kandidati
+
+    If kandidati Is Nothing Then Exit Function
+    If kandidati.count = 0 Then Exit Function
+    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function
+    If IsEmpty(data) Then Exit Function
+    If Not IsArray(data) Then Exit Function
+
+    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_GEN)
+    If cGen = 0 Then Exit Function
+
+    Dim k As Long
+    For k = 1 To kandidati.count
+        If Len(Trim$(NzToText(data(CLng(kandidati(k)), cGen)))) = 0 Then Exit Function
+    Next k
+
+    Dim suzeno As New Collection
+    For k = 1 To kandidati.count
+        If StrComp(Trim$(NzToText(data(CLng(kandidati(k)), cGen))), _
+                   Trim$(NzToText(gen)), vbTextCompare) = 0 Then
+            suzeno.Add CLng(kandidati(k))
+        End If
+    Next k
+
+    Set SuziDecuNaGeneraciju = suzeno
+End Function
+
 Public Sub ApplyNovaGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long)
     Const SRC As String = "modDokumenta.ApplyNovaGeneracijaID"
 

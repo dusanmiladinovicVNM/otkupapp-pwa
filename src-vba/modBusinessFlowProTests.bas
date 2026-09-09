@@ -126,6 +126,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju
     Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
+    Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -3250,6 +3251,132 @@ Private Sub VeziOtkupZaOtpremnicuFixture(ByVal otkupID As String, _
     End If
 
     RequireUpdateCell TBL_OTKUP, CLng(rows(1)), COL_OTK_OTPREMNICA_ID, otpremnicaID, SRC
+End Sub
+
+' ZBR-CHILD-01 faza 3: kaskada dira SVOJU decu, ne svu decu pod tim brojem.
+'
+' Scenario nije hipotetican nego postoji danas. Creation path:
+' `modStornoDok` STIP_ZBIRNA zove `modStorno.StornoZbirna_TX`, koji snapshot-uje
+' SAMO tblZbirna i stornira ZAGLAVLJE -- decu ne dira. Zato posle njega postoji
+' stornirana zbirna sa jos AKTIVNOM decom.
+'
+' Kapija ZBR-MUT-01 to NE zaustavlja kad je vlasnik isti: istorijska grana broji
+' VLASNIKE (`ikadVl` po ZbirnaVlasnikKljuc), a re-entry istog vozaca i kupca daje
+' 1; aktivnih dokumenata je takodje 1, jer je A storniran. Kapija pusta, a Detach
+' po broju odvezuje i decu A.
+'
+' Deo 2 meri fallback: cim jedno dete nema generaciju, suzavanje se ne desava i
+' ishod je BIT-IDENTICAN zatecenom -- ukljucujuci i njegovu manu. To je cena koja
+' je svesno placena da faza 3 ne pomeri nijednu zatecenu brojku.
+Private Sub Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim brojX As String, brojY As String
+    Dim zbrA As String, zbrB As String, genA As String, genB As String
+    Dim otpA As String, otpB As String
+    Dim zbrC As String, zbrD As String, genC As String
+    Dim otpC As String, otpD As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRF3")
+    testDate = NextTestDate()
+    brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(NextTestDate(), "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    ' ================= DEO 1: sva deca nose generaciju -> suzavanje radi =========
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3-A-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, brojX)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    AssertTrue Len(genA) > 0, "ZBR-F3 preduslov: zbirna A nosi generaciju"
+
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3A-" & scenario, brojX, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F3 preduslov: otpremnica A nosi generaciju A"
+
+    ' Operaterski storno zaglavlja -- deca ostaju AKTIVNA i zadrzavaju broj.
+    AssertTrue StornoZbirna_TX(brojX, genA), _
+        "ZBR-F3 preduslov: zaglavlje A je stornirano"
+    AssertEquals brojX, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3 preduslov: otpremnica A je i posle storna zaglavlja jos vezana"
+
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3-B-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, brojX)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    AssertTrue (Len(genB) > 0 And genB <> genA), _
+        "ZBR-F3 preduslov: re-entry istog vlasnika dao je NOVU generaciju"
+
+    otpB = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3B-" & scenario, brojX, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F3 preduslov: otpremnica B nosi generaciju B"
+
+    ' Kapija PUSTA -- i to je deo nalaza, ne slucajnost.
+    AssertEquals "", ZbirnaMutRazlog(brojX), _
+        "ZBR-F3 preduslov: kapija ZBR-MUT-01 pusta (isti vlasnik, jedan aktivan)"
+
+    Set r = RunSimpleStornoZbirna(brojX, genB)
+    AssertTrue CBool(r("success")), "ZBR-F3 preduslov: storno zbirne B je prosao"
+
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3 preduslov: sopstvena otpremnica B JESTE odvezana"
+    AssertEquals brojX, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3: kaskada NE odvezuje dete drugog dokumenta pod istim brojem"
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F3: dete drugog dokumenta zadrzava svoju generaciju"
+
+    ' ================= DEO 2: jedno dete bez generacije -> fallback na broj =======
+    zbrC = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3-C-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, brojY)
+    genC = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrC)
+    otpC = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3C-" & scenario, brojY, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue StornoZbirna_TX(brojY, genC), _
+        "ZBR-F3 preduslov: zaglavlje C je stornirano"
+
+    zbrD = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3-D-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, brojY)
+    otpD = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3D-" & scenario, brojY, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 8, KLASA_I)
+
+    ' Zatecen red: broj stoji, generacija ne. Dovoljan je JEDAN takav.
+    IsprazniGeneracijuDeteta TBL_OTPREMNICA, COL_OTP_ID, otpD
+    AssertEquals "", DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpD), _
+        "ZBR-F3 preduslov: otpremnica D je u zatecenom obliku"
+
+    Set r = RunSimpleStornoZbirna(brojY, GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrD))
+    AssertTrue CBool(r("success")), "ZBR-F3 preduslov: storno zbirne D je prosao"
+
+    AssertEquals "", _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpC, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3: jedno dete bez generacije vraca CEO izbor na broj (zatecen ishod)"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 faza 3 kaskada po generaciji", bfpErrDesc
 End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
