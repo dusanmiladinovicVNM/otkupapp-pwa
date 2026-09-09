@@ -1,7 +1,7 @@
-== A3 vise blokova jedna otpremnica ==
+== D1 storno otpremnice ==
 DOKUMENTI
-  otkupa          2
-  otpremnica      1
+  otkupa          1
+  otpremnica      0
   zbirnih         1
   prijemnica      1
   faktura         0
@@ -13,16 +13,16 @@ OTKUP
   od toga kesom   0.00
   isplaceno svi   NE
 ZBIRNA
-  poslato         I=1000.00  II=0.00
+  poslato         I=0.00  II=0.00
   primljeno       I=1000.00  II=0.00
-  kalo            I=0.00  II=0.00
-  invarijanta     OK
+  kalo            I=-1000.00  II=0.00
+  invarijanta     PUKLA
 STATUS
-  otkup           aktivnih 2  storniranih 0
-  otpremnica      aktivnih 1  storniranih 0
+  otkup           aktivnih 1  storniranih 0
+  otpremnica      aktivnih 0  storniranih 1
   zbirna          aktivnih 1  storniranih 0
   prijemnica      aktivnih 1  storniranih 0
 AMBALAZA
-  kooperant 12/1  -100
+  kooperant 12/1  -50
 FAKTURA
   nema

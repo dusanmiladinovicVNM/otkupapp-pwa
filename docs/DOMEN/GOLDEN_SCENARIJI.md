@@ -1,6 +1,6 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: grupa A implementirana (5 od 20), B–G čekaju.**
+> **Status: 14 scenarija implementirano i zaključano; B4 čeka PR6.**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -139,7 +139,7 @@ FAKTURA
 
 ---
 
-## 4) Scenariji (20)
+## 4) Scenariji (15 zadržanih)
 
 ### A — Fresh Fruit Flow
 
@@ -158,14 +158,11 @@ FAKTURA
 | B1 | Gotovina pri otkupu | `tblNovac` → header |
 | B2 | Avans primenjen na otkup | `ApplyAvansToOtkup` |
 | B3 | **Delimična isplata** — `Isplaceno` ostaje prazno | prag „plaćeno u celosti" |
-| B4 | Dvoklasni otkup plaćen u celosti | **danas ovo pada**: Klasa II nikad ne dobije `Isplaceno` (`modNovac.bas:1240` vs `modOtkup.bas:279`). Golden se piše na **ispravnu** vrednost, sa `KNOWN_FAIL` oznakom dok PR6 ne popravi. |
+| B4 | Dvoklasni otkup plaćen u celosti | **premisa se menja — v. §8.** Nije registrovan; golden još nije napisan. |
 
-### C — Ambalaža
-
-| # | Scenario | Šta hvata |
-|---|---|---|
-| C1 | OM izdaje prazne gajbe, kooperant vraća | ledger, obe noge |
-| C2 | Saldo kroz ceo lanac | izvedeni saldo, ne kolona |
+> **Izbačeni odlukom:** C1, C2 (ambalaža — pokriva `RunStornoTestSuite` i
+> sekcija `AMBALAZA` u svakom golden-u), E1 (ispravka), F1 (faktura iz više
+> prijemnica — pokriva `RunBusinessFlowProSuite`), G3 (auto-hladnjača).
 
 ### D — Storno
 
@@ -175,17 +172,10 @@ FAKTURA
 | D2 | Storno prijemnice koja je fakturisana | kaskada |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
-### E — Ispravka
-
-| # | Scenario | Šta hvata |
-|---|---|---|
-| E1 | Storno + reizdavanje pod **istim** poslovnim brojem | A9; danas traži `GeneracijaID`, posle PR12 ne sme |
-
 ### F — Faktura
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| F1 | Faktura iz više prijemnica | 1:1 po stavci, puna količina |
 | F2 | **Delimično fakturisanje** — Klasa I da, Klasa II ne | dokaz da je `Fakturisano` line-level (`DOCUMENT_HEADER_LINES.md` §4.4) |
 
 ### G — Ivični
@@ -194,7 +184,6 @@ FAKTURA
 |---|---|---|
 | G1 | Samo Klasa II, bez Klase I | grana koju `hasKlasaI = False` menja |
 | G2 | **Dva dokumenta sa istim poslovnim brojem** | G2 kapija ugovora; storno jednog ne dira drugi |
-| G3 | Auto-hladnjača lanac | postojeća automatika ostaje funkcionalno identična |
 
 ---
 
@@ -293,3 +282,55 @@ rezervisani identitet STA-GLD-1 vec postoji u tblStanice (1)
 Idempotentnost se namerno **ne** traži: svaki scenario radi u svojoj transakciji
 i rollback-uje se, pa identiteti na početku uvek ne postoje. Ako postoje, to je
 nalaz — ili je prethodni rollback zakazao, ili ime više nije rezervisano.
+
+---
+
+## 8) Nalaz koji menja premisu B4
+
+B4 je specificiran na pretpostavci da Klasa II ne dobija `Isplaceno` dok Klasa I
+dobija — dakle da je u pitanju **primary-row** greška.
+
+Merenje kaže drugo. `UpdateOtkupStatus` (`modNovac.bas:1224`) je **jedino** mesto
+koje piše kolonu `Isplaceno`, a zovu ga samo:
+
+- `modBankaMapiranje` (uparivanje izvoda),
+- `modDokumenta:4929`,
+- `ApplyAvansToOtkup_TX` (`modNovac:1642`) i `modNovac:1749`.
+
+**Ne zove ga putanja upisa otkupa.** `SaveOtkupMulti_TX` zove
+`ApplyAvansToOtkup` — verziju **bez** `_TX`, koja `UpdateOtkupStatus` ne dira.
+
+Posledica, zaključana u golden-u B1: gotovina uneta pri otkupu se **evidentira**
+(`placeno 50000.00`), ali otkup **ne postaje isplaćen** (`isplaceno svi NE`) — i
+to važi za **obe klase**, ne samo za drugu.
+
+Zato B4 kako je napisan ne bi merio primary-row grešku nego ovo šire ponašanje.
+Pre nego što dobije golden, treba odlučiti šta je poslovno tačno:
+
+1. da li kes pri otkupu **treba** da zatvori otkup (onda je nalaz bug za PR6), ili
+2. je namerno da se otkup zatvara tek kroz novčani modul / banku (onda B4 treba
+   prespecificirati na putanju koja stvarno prolazi kroz `UpdateOtkupStatus`).
+
+Do te odluke B4 nije registrovan i nema golden — golden pisan na pogrešnu
+premisu bio bi gori od nijednog.
+
+---
+
+## 9) Šta svaki zaključan golden dokazuje
+
+| Golden | Ključna tvrdnja |
+|---|---|
+| A1 | pun lanac do fakture: 1 dokument svake vrste, faktura 55000 |
+| A2 | dvoklasni: **1** logički otkup (ne 2), ishod isti kao jednoklasni |
+| A3 | 2 otkupa → **1** otpremnica; sabotaža sa 2×500 kg pada na kardinalnosti |
+| A4 | **2** otpremnice → 1 zbirna, invarijanta OK |
+| A5 | kalo 25 kg je poslovna činjenica, ne greška |
+| B1 | kes pri otkupu se evidentira, ali **ne** zatvara otkup (§8) |
+| B2 | avans se primenjuje: `avansom 20000 / kesom 0` |
+| B3 | delimična isplata kešom: `avansom 0 / kesom 20000` |
+| D1 | storno otpremnice: `aktivnih 0 / storniranih 1`, zbirna ostaje bez izvora |
+| D2 | storno fakturisane prijemnice — kaskada |
+| D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument, obe klase |
+| F2 | fakturisano `I=DA / II=NE` — dokaz da je `Fakturisano` line-level |
+| G1 | samo Klasa II prolazi ceo lanac |
+| G2 | isti broj, dva dokumenta: storno jednog ne dira drugi (`aktivnih 1 / storniranih 1`) |

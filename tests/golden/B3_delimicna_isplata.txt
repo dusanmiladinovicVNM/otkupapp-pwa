@@ -1,6 +1,6 @@
-== A3 vise blokova jedna otpremnica ==
+== B3 delimicna isplata ==
 DOKUMENTI
-  otkupa          2
+  otkupa          1
   otpremnica      1
   zbirnih         1
   prijemnica      1
@@ -8,9 +8,9 @@ DOKUMENTI
 OTKUP
   predao          I=1000.00  II=0.00
   vrednost        50000.00
-  placeno         0.00
+  placeno         20000.00
   od toga avansom 0.00
-  od toga kesom   0.00
+  od toga kesom   20000.00
   isplaceno svi   NE
 ZBIRNA
   poslato         I=1000.00  II=0.00
@@ -18,11 +18,11 @@ ZBIRNA
   kalo            I=0.00  II=0.00
   invarijanta     OK
 STATUS
-  otkup           aktivnih 2  storniranih 0
+  otkup           aktivnih 1  storniranih 0
   otpremnica      aktivnih 1  storniranih 0
   zbirna          aktivnih 1  storniranih 0
   prijemnica      aktivnih 1  storniranih 0
 AMBALAZA
-  kooperant 12/1  -100
+  kooperant 12/1  -50
 FAKTURA
   nema
