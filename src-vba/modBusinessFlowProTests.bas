@@ -3400,6 +3400,7 @@ Private Sub Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli()
     Dim broj As String
     Dim zbrA As String, zbrB As String, genA As String, genB As String
     Dim otpA As String, otpB As String, prjA As String, prjB As String
+    Dim prevKupac As String
     Dim r As Object
 
     On Error GoTo EH
@@ -3407,6 +3408,13 @@ Private Sub Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli()
     scenario = NewScenarioCode("ZBRF3X")
     testDate = NextTestDate()
     broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    ' Bez ovoga je ownsChain = False, pa kaskada prijemnice UOPSTE ne dira -- i
+    ' glavna tvrdnja prolazi ne merivsi nista. Prva verzija testa je bas tako
+    ' pala: preduslov "sopstvena prijemnica B je stornirana" je javio da lanac
+    ' nije vlasnicki. Testovi inace ne diraju config -> sacuvaj pa vrati.
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -3472,6 +3480,7 @@ Private Sub Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli()
         "ZBR-F3X: otpremnica i prijemnica drugog dokumenta zavrse u ISTOM stanju"
 
     tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     Exit Sub
 
 EH:
@@ -3479,6 +3488,7 @@ EH:
     Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
     LogFail "ZBR-CHILD-01 faza 3 rezim po operaciji", bfpErrDesc
 End Sub
