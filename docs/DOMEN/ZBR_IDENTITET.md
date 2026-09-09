@@ -818,12 +818,17 @@ RunSimpleStornoZbirna("X", "GEN-C")
 `IdoviGeneracije` takođe poredi samo generaciju. Faza 4 je uklonila kapiju koja ju
 je maskirala kad je `X` dvosmislen, i time je učinila dohvatljivijom.
 
-`ZbirnaGeneracijaPripadaBroju(broj, gen)` je zato **dvostruka brana**:
+`ZbirnaGeneracijaPripadaBroju(broj, gen)` stoji na **jednom** mestu —
+`modStorno.StornoZbirna`, tamo gde se šteta dešava — i odgovara `Err.Raise`-om.
 
-| mesto | uloga |
-|---|---|
-| preduslov za `genEff` na tri scoped mesta | tuđa generacija ne otvara kapiju |
-| `modStorno.StornoZbirna` | tvrda odbrana — `Err.Raise`, ne „padni na broj" |
+Prva verzija je imala **dve** brane: i ovu, i proveru para kao preduslov za
+`genEff` u scoped odluci. Obe su radile, i baš zato **nijedna nije bila merljiva**:
+`dokaz.py` skida jednu po jednu, a druga bi svaki put odbila poziv umesto nje.
+Rezultat je bio `NE OBARA NISTA` za obe — dve ispravne provere koje zajedno ne
+dokazuju ništa.
+
+Druga kopija je uklonjena. **Jedna brana, jedno mesto, jedan merljiv test.**
+Odbrana koja se ne može pokazati crvenom nije odbrana nego pretpostavka.
 
 Gleda i **stornirane** redove namerno: `CompleteZbirnaIspravka` legitimno radi sa
 identitetom stare, već stornirane zbirne.

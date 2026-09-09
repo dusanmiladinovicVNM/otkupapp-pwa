@@ -5362,21 +5362,13 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
-    # (zamena je bez ' SABOTAZA komentara: red se zavrsava line-continuation-om,
-    # a komentar posle '_' je VBA syntax error -- provera to i hvata.)
-    # ZBR-CHILD-01 / P1: skida proveru para iz SCOPED odluke, pa tudja generacija
-    # opet otvara kapiju. Meri se premisa faze 4: "akter zna identitet" mora da
-    # znaci identitet OVOG poslovnog dokumenta, ne bilo koji neprazan GeneracijaID.
-    "scoped-kapija-ne-proverava-par-broj-generacija": (
-        "modStornoFlow.bas",
-        "        If ZbirnaGeneracijaPripadaBroju(broj, gen) _\n",
-        "        If True _\n",
-        "Test_ZBR_TudjaGeneracijaNeOtvaraKapiju",
-        "ZBR-PAR: dokument DRUGOG broja ostaje netaknut",
-    ),
-    # Druga brana za istu rupu, i starija od faze 4: StornoZbirna bira red samo po
-    # generaciji, pa bez ove provere stornira dokument tudjeg broja i kad kapija
-    # uopste nije popustila.
+    # ZBR-CHILD-01 / P1: StornoZbirna bira red ISKLJUCIVO po generaciji, pa bez
+    # ove provere stornira dokument tudjeg broja.
+    #
+    # Prva verzija je imala DVE brane -- i ovu i proveru para u scoped odluci --
+    # pa nijedna nije bila merljiva: dokaz.py skida jednu po jednu, a druga je
+    # svaki put odbila poziv umesto nje (dokaz.py: NE OBARA NISTA za obe). Druga
+    # kopija je uklonjena. Jedna brana, jedno mesto, jedan merljiv test.
     "storno-zbirne-ne-proverava-par-broj-generacija": (
         "modStorno.bas",
         "        If Not ZbirnaGeneracijaPripadaBroju(brojZbirne, generacijaID) Then\n",
