@@ -656,10 +656,104 @@ generaciju kad je nose svi redovi") nad novim podacima nikad ne bi postala tačn
 bez ručnog backfill-a. `ZavrsiVezuOtpremniceNaZbirnu` zato završava vezu odmah po
 nastanku zbirne, čitajući generaciju **iz njenog PK-a**.
 
-**Faza 3 (ne u ovom koraku)** — odlučivači koji danas biraju decu po broju
-(`DetachOtpremniceInline`, `ActiveOtpIDsByZbirna`, `ActivePrijIDsByZbirna`,
-`RelinkOtpremniceToZbirna_TX`, `DistinctActiveValues`) prelaze na generaciju kad
-je nose **svi** relevantni redovi, inače ostaju na broju.
+**Faza 3 (`v6-ui-228`)** — pet odlučivača (`DetachOtpremniceInline`,
+`ActiveOtpIDsByZbirna`, `ActivePrijIDsByZbirna`, `RelinkOtpremniceToZbirna_TX`,
+`DistinctActiveValues`) više ne dira svu decu pod brojem, nego samo svoju.
+
+Čvor je `modDokumenta.SuziDecuNaGeneraciju` — pandan write choke point-u:
+
+```
+trazena generacija prazna          -> kandidati nepromenjeni
+bilo koji kandidat bez generacije  -> kandidati nepromenjeni
+inace                              -> samo oni koji se poklapaju
+```
+
+**Sve-ili-ništa, ne hibrid.** „Poklapa se ili je prazno" bi isti prazan red
+ubacilo u skup **oba** dokumenta pod tim brojem — dupli detach, pogrešan račun.
+
+**Izbor po broju namerno NIJE preuzet.** Četiri odlučivača porede broj tačno
+(`Trim$(CStr(..)) = broj`), peti kanonski (`BrojJednak`). Da je čvor preuzeo i to,
+ona četiri bi se **tiho proširila** — akter širi od zatečenog je smer koji §14
+zove opasnim. Nesklad ostaje zatečen i imenovan, nije usput „popravljen".
+
+#### Šta je faza 3 zapravo zatvorila
+
+Nije bila samo priprema. Ovo stanje postoji **danas**:
+
+```
+A: Z-10, vlasnik X, STORNIRANA, OTP-A jos AKTIVNA
+B: Z-10, vlasnik X, AKTIVNA
+```
+
+Creation path je `modStornoDok` `STIP_ZBIRNA` → `modStorno.StornoZbirna_TX`, koji
+snapshot-uje **samo `tblZbirna`** i stornira zaglavlje — decu ne dira.
+
+Kapija `ZBR-MUT-01` to ne zaustavlja: istorijska grana broji **vlasnike**
+(`ikadVl` po `ZbirnaVlasnikKljuc`), pa re-entry istog vozača i kupca daje 1, a
+aktivnih dokumenata je takođe 1. Kapija pušta, a `Detach` po broju odvezuje i decu
+`A`. Sužavanje po generaciji to zatvara strukturno.
+
+**Zaostatak, imenovan:** dok backfill ne prođe, fallback grana i dalje nosi tu
+rupu. Zatvara je faza 4, prelaskom kapije sa `historicalOwnerCount` na
+`historicalLogicalCount`.
+
+#### Granica „sve-ili-ništa" je OPERACIJA, ne tabela
+
+`SuziDecuNaGeneraciju` odlučuje nad **jednim** skupom, a poslovna mutacija dira
+više tabela. Kad svaka odlučuje sama, jedna kaskada zna da bude pola scoped a
+pola po broju:
+
+```
+ZB-X / GEN-A:  OTP-A -> GEN-A      PRJ-A -> ""      <- legacy
+ZB-X / GEN-B:  OTP-B -> GEN-B      PRJ-B -> GEN-B
+
+ponisti GEN-B:
+  otpremnice  svi popunjeni -> suzi -> OTP-A prezivi
+  prijemnice  jedan prazan  -> broj  -> PRJ-A STORNIRANA
+```
+
+Dokument `GEN-A` završi **polovično poništen**, što je gore od oba čista režima.
+
+Zato `SvaAktivnaDecaNoseGeneraciju` računa odluku **jednom**, nad svim tabelama
+koje ta operacija bira po broju, pa se svim selektorima prosledi isti režim:
+
+| operacija | tabele u odluci |
+|---|---|
+| `DetachOtpremniceInline` | `tblOtpremnica` + `tblOtkup` |
+| `PonistiZbirnaChain_TX` | `tblOtpremnica` (+ `tblPrijemnica`, `tblPaletaStavka` kad `ownsChain`) |
+| `CompleteZbirnaIspravka` | `tblOtpremnica` + `tblOtkup` + `tblPrijemnica` |
+
+Odlučivač poredi kroz `BrojJednak` iako četiri pozivaoca porede tačno. `BrojJednak`
+je širi, pa je njegov skup kandidata **nadskup** stvarnog — ako svi u nadskupu nose
+generaciju, nosi je i svaki podskup. Greška ide samo u stranu „ne sužavaj".
+
+#### Ispravka uzima identitet, ne pogađa ga
+
+Lifecycle je: context sa `OldDocID` → `StornoZbirna_TX` → operater snimi novu →
+`CompleteZbirnaIspravka` → relink. **U trenutku relinka stara zbirna više nije
+aktivna**, pa je razrešavanje po broju tu najgore što se može uraditi:
+
+```
+GEN-A  broj X  STORNIRANA   <- dokument koji se ispravlja
+GEN-B  broj X  AKTIVNA      <- nastao u medjuvremenu
+
+ZbirnaGeneracijaZaBroj("X")  ->  GEN-B
+```
+
+Relink bi tada **precizno izabrao pogrešan dokument**: prevezao bi tuđu decu, a
+svoju ostavio. To je gore od stanja pre faze 3, gde je prevozio obe.
+
+`GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, oldDocID)` radi nad PK-om, kome storno ne
+smeta. Kanonski ID je sačuvan **pre** storna — isto pravilo kao u §15: *nikad ne
+pogađaj kad već znaš*.
+
+#### Jedan ishod koji se menja
+
+`RelinkOtpremniceToZbirna_TX` sada sužava **izvor**. Kad pod starim brojem aktivnu
+decu ima samo *drugi* dokument, relink vrati 0, a pozivalac to (preko
+`CountActive` po broju) vidi kao neuspeh i obeleži ispravku **MANUAL**. Ranije bi
+prevezao tuđu decu bez reči. Fail-closed umesto tihe štete, ali jeste nova
+`MANUAL` tamo gde je ranije „prolazilo".
 
 **Faza 4 (ne u ovom koraku)** — `ZbirnaMutacijaPoBrojuRazlog` prestaje da blokira
 `activeLogicalCount > 1` kad sva deca tog broja nose generaciju. Tek tada je
