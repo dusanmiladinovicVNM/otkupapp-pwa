@@ -246,8 +246,27 @@ pregledaju pre nego što se zaključaju.
 | 3 | format broja lokalno zavisan (`1720,00`) | golden pada na mašini sa drugom decimalnom oznakom; test meri Control Panel |
 | 4 | ambalaža nije usklađena otpremnica ↔ zbirna | `invarijanta PUKLA` zabeležena kao da je sistem kriv |
 | 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u PR5 |
+| 6 | `DOKUMENTI` je brojao **pozive testa** (`m_nOtp = m_nOtp + 1`) | tautologija: A3 je dokazivao „test je jednom pozvao `GldOtpremnica`", ne „sistem je napravio jednu otpremnicu"; bug koji od jednog poziva napravi dve otpremnice po 500 kg ostavio bi agregat isti i test **zelen** |
+| 7 | preduslov je proveravao samo identitet, ne ključ scenarija | zatečena otpremnica sa `BrojZbirne = GLD-A1` ušla bi u rezultat i kad kooperant nema nijedan stari otkup |
 
-Greška 2 je najvažnija i vredi je pamtiti kao pravilo:
+Dve greške vrede da se pamte kao pravila:
 
 > **Rollback rešava ono što scenario ostavi iza sebe. Ne rešava ono što je
-> zatekao.**
+> zatekao.** (greška 2, dopunjeno greškom 7)
+
+> **Oracle mora da meri šta je sistem napravio, ne šta je test nameravao.**
+> (greška 6)
+
+### Dokaz da oracle zaista grize
+
+`DOKUMENTI` sada čita sistem: distinct `GeneracijaID`, a gde ga red ne nosi
+(`tblOtkup`) — distinct poslovni broj, sve u opsegu scenarija.
+
+Sabotaža: A3 pravi **dve** otpremnice po 500 kg umesto jedne od 1000.
+
+```
+poslato 1000.00          <- agregat NEPROMENJEN
+golden [otpremnica 1] vs tekuci [otpremnica 2]   <- pada OVDE
+```
+
+Posle PR5 adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
