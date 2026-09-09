@@ -59,10 +59,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakturaStavke`: `modTestStorno`
 - `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
-- `tblPrijemnica`: `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPrijemnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
-- `tblPaleta`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblPaletaStavka`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPaleta`: `modBusinessFlowProTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPaletaStavka`: `modBusinessFlowProTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`

@@ -949,6 +949,22 @@ Public Const COL_TRACE_IZDATO_STATUS As String = "IzdatoStatus"   ' DRAFT / IZDA
 ' odrediti (uzastopni ID-evi ne znace istu generaciju).
 Public Const COL_GENERACIJA_ID As String = "GeneracijaID"
 
+' ZBR-CHILD-01: generacija RODITELJSKE zbirne, na DETETU (otpremnica,
+' prijemnica, paletna stavka, denormalizovan otkup).
+'
+' Deca zbirnu do sada nose SAMO kao BrojZbirne -- labelu, ne identitet. Zato
+' svaka rutina koja decu bira po broju zahvata SVE dokumente tog broja, i zato
+' postoji kapija ZBR-MUT-01. Ova kolona je trajno resenje, ne jos jedna kapija.
+'
+' PRAZNO JE LEGITIMNO i znaci "roditelj jos nije razresen": dete cesto nastaje
+' PRE zbirne (modAutoHladnjaca pravi otpremnicu pa tek onda zbirnu), a i posle
+' backfill-a ostaje prazno tamo gde broj nije jednoznacan. Citalac tada pada na
+' broj -- kao i do sada.
+'
+' Invarijanta: vrednost se menja U KORAKU sa BrojZbirne, ukljucujuci brisanje.
+' Jedini put je modDokumenta.PoveziDeteNaZbirnu / OdveziDeteOdZbirne.
+Public Const COL_DETE_ZBIRNA_GEN As String = "ZbirnaGeneracijaID"
+
 ' Vrednosti IzdatoStatus (izdato = kod kupca -> nepromenljivo; koriguje se storno+reizdaj).
 Public Const IZDATO_DRAFT As String = "DRAFT"
 Public Const IZDATO_IZDATO As String = "IZDATO"

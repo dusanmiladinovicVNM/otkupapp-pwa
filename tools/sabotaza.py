@@ -5316,6 +5316,96 @@ SABOTAZE = {
     # prolaze, pa SIMPLE storno odveze i decu drugog dokumenta.
     # ZBR-NORM-02: svaki odlucivac se meri ZASEBNO. Jedna sabotaza po mestu, da
     # se ne moze desiti da dva budu prebacena a treci ostane na starom poredjenju.
+    # ZBR-CHILD-01: tri sabotaze, po jedna na svaki deo invarijante -- postavljanje,
+    # brisanje, i fail-closed razresenje. Jedna bi propustila da su druga dva
+    # pokvarena.
+    # ZBR-CHILD-01 / P1 iz review-a #299: backfill vraca na "ko je roditelj SADA".
+    # Posle re-entry-ja istog vlasnika to je NOVA generacija, pa bi staro dete bilo
+    # vezano na dokument kome nikad nije pripadalo -- lazna sledljivost.
+    #
+    # Prva verzija je gadjala tvrdnju iz Test_ZBR_DeteNosiGeneracijuRoditelja, koja
+    # primitivu zove DIREKTNO -- backfill nije zvao nijedan test, pa je sabotaza
+    # menjala red koda koji se ne izvrsava (dokaz.py: NE OBARA NISTA). Sada gadja
+    # test koji vozi BackfillDeteZbirnaGeneracija_Core.
+    "backfill-veze-staro-dete-na-novu-generaciju": (
+        "modSetup.bas",
+        "        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))\n",
+        "        brojevi(k) = ZbirnaGeneracijaZaBroj(CStr(k))   ' SABOTAZA: tekuci, ne istorijski\n",
+        "Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju",
+        "ZBR-BACKFILL: broj koji je IKAD nosio dve generacije ostaje PRAZAN",
+    ),
+    # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
+    # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
+    # brojem" -- a to je zatecen red pre migracije: broj stoji, generacija prazna,
+    # zbirna pod tim brojem postoji i ima sta da se pogodi.
+    #
+    # Prva verzija je gadjala tvrdnju grane A, gde su nasledjivanje i pogadjanje
+    # vracali ISTU vrednost -- inertna sabotaza (dokaz.py: NE OBARA NISTA). Druga
+    # je pokusala "dete pre roditelja", sto za prijemnicu blokira
+    # PrijemnicaZbirnaBlokira() (default True). Meri se na ZATECENOM redu.
+    "paleta-pogadja-generaciju-po-broju": (
+        "modPaletniList.bas",
+        "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
+        "                                        COL_DETE_ZBIRNA_GEN))\n",
+        "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
+        "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
+        "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
+    ),
+    # ZBR-CHILD-01 lifecycle: gasi dovrsavanje veze u auto-lancu. Helper je
+    # fail-soft i njegov neuspeh ne ulazi u failLink, pa lanac prijavi uspeh a
+    # otpremnica ostane nerazresena. Bez ove sabotaze tvrdnja ne bi dokazala da
+    # meri korak dovrsavanja, nego samo da je veza nekako nastala.
+    "autochain-ne-dovrsava-vezu-otpremnice": (
+        "modAutoHladnjaca.bas",
+        "    If Len(gen) = 0 Then Exit Sub\n",
+        "    If True Then Exit Sub   ' SABOTAZA: veza se ne dovrsava\n",
+        "Test_HladnjacaChainHappyPath",
+        "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
+    ),
+    # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
+    # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
+    # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
+    # ISTO sto pisac pise.
+    "child-veza-proverava-samo-broj": (
+        "modMasterSync.bas",
+        "    If Len(currentGen) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
+        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
+        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji",
+    ),
+    "dete-ne-nosi-generaciju-roditelja": (
+        "modDokumenta.bas",
+        "    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName\n",
+        "    ' SABOTAZA: upisuje se samo broj, generacija roditelja se ne pece\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: dete nosi generaciju roditelja",
+    ),
+    "odvez-ostavlja-generaciju": (
+        "modDokumenta.bas",
+        "    PoveziDeteNaZbirnu tableName, rowIndex, brojCol, \"\", \"\", sourceName\n",
+        "    RequireUpdateCell tableName, rowIndex, brojCol, \"\", sourceName"
+        "   ' SABOTAZA: brise se samo broj\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: odvezivanje brise i generaciju roditelja",
+    ),
+    # Zamenjuje RAZRESAVANJE POGADJANJEM: prvi red pod tim brojem, bez obzira na
+    # storno i na dvosmislenost. Tacno ono protiv cega cela ZBR-IDENT celina
+    # postoji, i najverovatnija "popravka" koju bi neko posle dopisao.
+    #
+    # Cilja granu D testa, ne B: kad zbirne UOPSTE nema, i pogadjanje vrati
+    # prazno, pa bi nad B ova sabotaza bila zelena.
+    "dete-pogadja-generaciju-po-broju": (
+        "modDokumenta.bas",
+        "    id = ZbirnaIdentResolve(broj)\n"
+        "    If id.integrityStatus <> ZBR_INT_OK Then Exit Function\n"
+        "    If id.resolutionStatus <> ZBR_RES_UNIQUE Then Exit Function\n"
+        "    ZbirnaGeneracijaZaBroj = id.selectedGeneracijaID\n",
+        "    ' SABOTAZA: prvi red pod tim brojem, bez razresavanja\n"
+        "    ZbirnaGeneracijaZaBroj = Trim$(NzToText(LookupValue(TBL_ZBIRNA, _\n"
+        "                                COL_ZBR_BROJ, broj, COL_GENERACIJA_ID)))\n",
+        "Test_ZBR_DeteNosiGeneracijuRoditelja",
+        "ZBR-CHILD: stornirana zbirna NIJE roditelj -- generacija ostaje prazna",
+    ),
     "vlasnici-poredi-case": (
         "modStorno.bas",
         "        If BrojJednak(data(i, cBr), broj) Then\n",

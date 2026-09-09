@@ -115,8 +115,12 @@ def _pali(izlaz: str, suite: str) -> list:
         # pa identitet nosi tvrdnja. Zato katalog za BFP mora da nosi TACAN
         # tekst tvrdnje, ne podniz -- podniz se ovde prijavi kao "NE OBARA SVOJ
         # TEST", dakle glasno, ne tiho.
+        # Separator je " :: ", ne " -- ": tekst tvrdnje sme da sadrzi " -- ", pa
+        # bi se ime na njemu odseklo i sabotaza koja radi savrseno bi bila
+        # prijavljena kao "NE OBARA SVOJ TEST". modBusinessFlowProTests zato
+        # pise " :: " -- isti separator koji vec koristi u Debug.Print.
         return [(t.strip(), t.strip())
-                for t in re.findall(r"^\s*FAIL (.*?)(?: -- .*)?$", izlaz, re.M)]
+                for t in re.findall(r"^\s*FAIL (.*?)(?: :: .*)?$", izlaz, re.M)]
     return _tokeni_banke(izlaz)
 
 

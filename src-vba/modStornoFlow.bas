@@ -2092,9 +2092,14 @@ Private Function RelinkOtpremniceToZbirna_TX(ByVal oldZbirna As String, ByVal ne
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTKUP
+    ' ZBR-CHILD-01: generacija se razresi JEDNOM po broju, ne po redu --
+    ' ZbirnaIdentResolve cita celu tblZbirna. Prazno je legitimno (cilj jos nije
+    ' jednoznacan) i znaci "citaj po broju".
+    Dim genNove As String: genNove = ZbirnaGeneracijaZaBroj(newZbirna)
     Dim k As Long
     For k = 1 To otpRows.count
-        RequireUpdateCell TBL_OTPREMNICA, CLng(otpRows(k)), COL_OTP_BROJ_ZBIRNE, newZbirna, SRC
+        PoveziDeteNaZbirnu TBL_OTPREMNICA, CLng(otpRows(k)), COL_OTP_BROJ_ZBIRNE, _
+                           newZbirna, genNove, SRC
     Next k
     ' Denormalizovani otkup.BrojZbirne (za aktivne blokove sa starom zbirnom).
     Dim od As Variant: od = GetTableData(TBL_OTKUP)
@@ -2107,7 +2112,8 @@ Private Function RelinkOtpremniceToZbirna_TX(ByVal oldZbirna As String, ByVal ne
             For j = 1 To UBound(od, 1)
                 If Trim$(CStr(od(j, ocZbr))) = oldZbirna Then
                     If ocSt = 0 Or UCase$(Trim$(CStr(od(j, ocSt)))) <> "DA" Then
-                        RequireUpdateCell TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, newZbirna, SRC
+                        PoveziDeteNaZbirnu TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, _
+                                           newZbirna, genNove, SRC
                     End If
                 End If
             Next j
@@ -2134,7 +2140,7 @@ Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal SRC As
     Dim i As Long, n As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            RequireUpdateCell TBL_OTPREMNICA, i, COL_OTP_BROJ_ZBIRNE, "", SRC
+            OdveziDeteOdZbirne TBL_OTPREMNICA, i, COL_OTP_BROJ_ZBIRNE, SRC
             n = n + 1
         End If
     Next i
@@ -2149,7 +2155,7 @@ Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal SRC As
             For j = 1 To UBound(od, 1)
                 If Trim$(CStr(od(j, ocZbr))) = brojZbirne Then
                     If ocSt = 0 Or UCase$(Trim$(CStr(od(j, ocSt)))) <> "DA" Then
-                        RequireUpdateCell TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, "", SRC
+                        OdveziDeteOdZbirne TBL_OTKUP, j, COL_OTK_BROJ_ZBIRNE, SRC
                     End If
                 End If
             Next j
@@ -2448,7 +2454,7 @@ Private Function FreeOtkupBloksInline(ByVal otpIDs As Collection, ByVal SRC As S
         If idSet.Exists(Trim$(CStr(data(i, cOtp)))) Then
             If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
                 RequireUpdateCell TBL_OTKUP, i, COL_OTK_OTPREMNICA_ID, "", SRC
-                If cZbr > 0 Then RequireUpdateCell TBL_OTKUP, i, COL_OTK_BROJ_ZBIRNE, "", SRC
+                If cZbr > 0 Then OdveziDeteOdZbirne TBL_OTKUP, i, COL_OTK_BROJ_ZBIRNE, SRC
                 SetOtkupBrojOtpremnice i, ""      ' Faza 7 korak 5: ocisti denorm kljuc (unbind)
                 n = n + 1
             End If

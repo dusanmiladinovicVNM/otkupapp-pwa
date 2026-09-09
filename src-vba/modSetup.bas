@@ -1268,6 +1268,18 @@ Public Sub EnsureSledljivostSchema()
     Next i
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
     EnsureKolonaSaTragom TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+
+    ' ZBR-CHILD-01: generacija RODITELJSKE zbirne na detetu. Ide na tabele koje
+    ' zbirnu nose kao BrojZbirne -- ukljucujuci tblPaletaStavka, koja u gornjem
+    ' spisku nije jer sama nije dokument-tabela sa trace kolonama.
+    '
+    ' Samo SEMA. Popunjavanje starih redova je zasebna, jednokratna migracija
+    ' (BackfillDeteZbirnaGeneracija) -- skupa je za svaki start, i mora da bira
+    ' samo jednoznacne brojeve, sto je odluka a ne rutina.
+    EnsureKolonaSaTragom TBL_OTPREMNICA, COL_DETE_ZBIRNA_GEN
+    EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_GEN
+    EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN
+    EnsureKolonaSaTragom TBL_OTKUP, COL_DETE_ZBIRNA_GEN
 End Sub
 
 ' Jedna kolona, sa tragom. Pad se zapise i NE zaustavlja ostale kolone.
@@ -1292,6 +1304,121 @@ End Sub
 ' ne izmislja) i nije bila transakciona. Ako se backfill ikad stvarno
 ' zatreba: zasebna migracija u kojoj operater EKSPLICITNO unosi stvarni
 ' datum utovara, uz clsTransaction po celoj fakturi.
+
+' ============================================================
+' ZBR-CHILD-01, Faza 2: popuni ZbirnaGeneracijaID na POSTOJECOJ deci.
+' Alt+F8, jednokratno; idempotentno (dira SAMO prazne). NE ide u
+' EnsureRuntimeSchema -- skupo je po startu, a i nije rutina nego odluka.
+'
+' POPUNJAVA SE SAMO BROJ KOJI JE IKAD NOSIO JEDNU generaciju. Sve ostalo --
+' broj koji je drzalo vise dokumenata kroz vreme, ili pokvaren identitet --
+' ostaje PRAZNO. To nije propust migracije nego njen smisao: identitet se ne
+' pogadja iz labele. Prazno dete citalac i dalje cita po broju, tacno kao pre
+' ove kolone, pa migracija ne moze da pogorsa stanje.
+'
+' KRITERIJUM JE ISTORIJSKI, NE TEKUCI, i to je razlika koja cuva sledljivost --
+' v. modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj.
+'
+' Razresava se JEDNOM PO RAZLICITOM BROJU, ne po redu: ZbirnaIdentResolve cita
+' celu tblZbirna, pa bi poziv po redu bio O(n*m) nad celom istorijom.
+' ============================================================
+' Operaterski ulaz (Alt+F8). Telo je u _Core da bi suite mogla da ga pozove:
+' MsgBox u automatskom testu visi, pa bi bez ovog seam-a backfill ostao
+' NEPOKRIVEN -- a upravo je on jedini pisac koji odlucuje po istoriji broja.
+Public Sub BackfillDeteZbirnaGeneracija()
+    Dim popunjeno As Long, preskoceno As Long
+    BackfillDeteZbirnaGeneracija_Core True, popunjeno, preskoceno
+End Sub
+
+Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
+                                             ByRef popunjeno As Long, _
+                                             ByRef preskoceno As Long)
+    On Error GoTo EH
+
+    popunjeno = 0
+    preskoceno = 0
+
+    EnsureSledljivostSchema
+
+    Dim tbls As Variant, cols As Variant
+    tbls = Array(TBL_OTPREMNICA, TBL_PRIJEMNICA, TBL_PALETA_STAVKA, TBL_OTKUP)
+    cols = Array(COL_OTP_BROJ_ZBIRNE, COL_PRJ_BROJ_ZBIRNE, COL_PALS_BROJ_ZBIRNE, COL_OTK_BROJ_ZBIRNE)
+
+    ' --- 1) skupi RAZLICITE brojeve kojima dete nema generaciju ---
+    Dim brojevi As Object: Set brojevi = CreateObject("Scripting.Dictionary")
+    brojevi.CompareMode = vbTextCompare
+
+    Dim t As Long
+    For t = LBound(tbls) To UBound(tbls)
+        Dim dat As Variant: dat = GetTableData(CStr(tbls(t)))
+        If IsArray(dat) Then
+            Dim cB As Long, cG As Long
+            cB = GetColumnIndex(CStr(tbls(t)), CStr(cols(t)))
+            cG = GetColumnIndex(CStr(tbls(t)), COL_DETE_ZBIRNA_GEN)
+            If cB > 0 And cG > 0 Then
+                Dim r As Long
+                For r = 1 To UBound(dat, 1)
+                    If Len(Trim$(NzToText(dat(r, cG)))) = 0 Then
+                        Dim b As String: b = Trim$(NzToText(dat(r, cB)))
+                        If Len(b) > 0 And Not brojevi.Exists(b) Then brojevi.Add b, ""
+                    End If
+                Next r
+            End If
+        End If
+    Next t
+
+    ' --- 2) razresi svaki broj JEDNOM ---
+    Dim k As Variant
+    For Each k In brojevi.Keys
+        ' NE ZbirnaGeneracijaZaBroj: ta pita "ko je roditelj SADA", a backfill
+        ' rekonstruise identitet STARIH redova. Posle re-entry-ja istog vlasnika
+        ' (ugovor par.5) pod istim brojem stoje stornirana GEN-A i aktivna GEN-B;
+        ' "sada" bi starom detetu GEN-A upisalo GEN-B -- LAZNA SLEDLJIVOST, gora
+        ' od prazne kolone.
+        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))
+    Next k
+
+    ' --- 3) upisi tamo gde je razresen ---
+    For t = LBound(tbls) To UBound(tbls)
+        Dim dat2 As Variant: dat2 = GetTableData(CStr(tbls(t)))
+        If IsArray(dat2) Then
+            Dim cB2 As Long, cG2 As Long
+            cB2 = GetColumnIndex(CStr(tbls(t)), CStr(cols(t)))
+            cG2 = GetColumnIndex(CStr(tbls(t)), COL_DETE_ZBIRNA_GEN)
+            If cB2 > 0 And cG2 > 0 Then
+                Dim r2 As Long
+                For r2 = 1 To UBound(dat2, 1)
+                    If Len(Trim$(NzToText(dat2(r2, cG2)))) = 0 Then
+                        Dim b2 As String: b2 = Trim$(NzToText(dat2(r2, cB2)))
+                        If Len(b2) > 0 Then
+                            If Len(CStr(brojevi(b2))) > 0 Then
+                                UpdateCell CStr(tbls(t)), r2, COL_DETE_ZBIRNA_GEN, CStr(brojevi(b2))
+                                popunjeno = popunjeno + 1
+                            Else
+                                preskoceno = preskoceno + 1
+                            End If
+                        End If
+                    End If
+                Next r2
+            End If
+        End If
+    Next t
+
+    LogInfo "modSetup.BackfillDeteZbirnaGeneracija", _
+            "popunjeno=" & popunjeno & " preskoceno=" & preskoceno & _
+            " razlicitih brojeva=" & brojevi.count
+    If showMessages Then
+        MsgBox "Backfill ZbirnaGeneracijaID na deci:" & vbCrLf & _
+               "popunjeno: " & popunjeno & vbCrLf & _
+               "preskoceno (broj je IKAD nosio vise dokumenata): " & preskoceno & vbCrLf & vbCrLf & _
+               "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre. " & _
+               "Dvosmislene brojeve prijavljuje Provera integriteta (B8).", _
+               vbInformation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modSetup.BackfillDeteZbirnaGeneracija"
+End Sub
 
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH

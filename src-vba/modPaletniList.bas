@@ -1334,15 +1334,30 @@ Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
     Dim sid As String
     sid = GetNextID(TBL_PALETA_STAVKA, COL_PALS_ID, "PLS-")
 
+    ' ZBR-CHILD-01: generacija se NASLEDJUJE OD PRIJEMNICE, ne razresava po broju.
+    '
+    ' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna. Prijemnica svoj
+    ' ZbirnaGeneracijaID vec nosi (pecat u SavePrijemnica), pa je pitanje
+    ' "koja je zbirna SADA pod ovim brojem" i suvisno i opasno: izmedju nastanka
+    ' prijemnice i palete moze da se desi storno + re-entry pod istim brojem, pa
+    ' bi prijemnica ostala na GEN-A a njena paleta dobila GEN-B. To bi razbilo
+    ' bas sledljivost koju ova kolona uvodi.
+    '
+    ' Prazna je legitimna -- prijemnica je jos nema (auto-lanac).
+    Dim genRoditelja As String
+    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
+                                        COL_DETE_ZBIRNA_GEN))
     PalAppendRow TBL_PALETA_STAVKA, _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
               COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
               COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
-              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO), _
+              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO, _
+              COL_DETE_ZBIRNA_GEN), _
         Array(sid, palID, prijemnicaID, _
               brojPrij, brojZbirne, klasa, _
               vrstaVoca, sortaVoca, gajbice, _
-              neto, amb, Now, "")
+              neto, amb, Now, "", _
+              genRoditelja)
 End Sub
 
 Private Sub ClosePaleta(ByVal palRow As Long, ByVal SRC As String)
@@ -1735,6 +1750,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     Next k
 
     ' ---- STEP 2: delta-warn + re-point + KG-sync ----
+    ' ZBR-CHILD-01: generacija nove zbirne, JEDNOM za sve stavke.
+    Dim genNovZbr As String: genNovZbr = ZbirnaGeneracijaZaBroj(newBrZbr)
     Dim warnMsg As String: warnMsg = ""
     Dim kk As Variant
     For Each kk In oldGajbByKl.Keys
@@ -1760,7 +1777,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         If newById.Exists(kl3) Then
             RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_PRIJEMNICA_ID, CStr(newById(kl3)), SRC
             RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_BROJ_PRIJ, newBroj, SRC
-            If Len(newBrZbr) > 0 Then RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_BROJ_ZBIRNE, newBrZbr, SRC
+            If Len(newBrZbr) > 0 Then PoveziDeteNaZbirnu TBL_PALETA_STAVKA, i, _
+                                          COL_PALS_BROJ_ZBIRNE, newBrZbr, genNovZbr, SRC
             ' KG-sync samo kad se broj gajbica klase poklapa
             If NzL(oldGajbByKl(kl3)) = NzL(newGajb(kl3)) And NzL(newGajb(kl3)) > 0 Then
                 Dim perG As Double: perG = NzD(newNeto(kl3)) / NzL(newGajb(kl3))

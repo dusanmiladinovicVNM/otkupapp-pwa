@@ -7484,3 +7484,37 @@ tačnim oblikom broja iz tabele. Provera sme da bude **šira** od posla — tada
 staje i pita; obrnuto bi značilo da posao zahvati više nego što je provereno.
 U svakodnevnom radu se ne vidi razlika: brojevi koje pravi program uvek imaju
 isti oblik.
+
+### Priprema: dokumenti pamte kojoj zbirnoj tačno pripadaju
+
+Otpremnica, prijemnica, paletna stavka i otkupni blok do sada su zbirnu pamtili
+**samo po broju**. Broj je oznaka, ne identitet — zato su neke radnje nad zbirnom
+morale da stanu i pitaju, umesto da same znaju šta pripada kome.
+
+Od ovog izdanja ti dokumenti uz broj pamte i **tačan dokument** kome pripadaju.
+
+**U radu se ništa ne menja.** Ovo je priprema: podatak se upisuje, ali ga još
+nijedna radnja ne koristi. Zato nema nove poruke ni novog ponašanja.
+
+**Za postojeće podatke** postoji jednokratna dopuna (`BackfillDeteZbirnaGeneracija`
+kroz Alt+F8). Ona popunjava **samo** one dokumente kod kojih je jasno kojoj
+zbirnoj pripadaju: gde je pod tim brojem **ikad** postojala samo jedna zbirna.
+Ako je ta jedina zbirna u međuvremenu otkazana, polje se svejedno popunjava —
+dokument je i dalje njen, otkazivanje ne menja kome je pripadao.
+
+Gde je pod istim brojem postojala **više od jedne** zbirne, polje ostaje prazno.
+Tu se ne pogađa: takvi dokumenti se i dalje čitaju po broju, kao i pre. Dopuna se
+sme pokrenuti više puta; drugi put ne radi ništa.
+
+### Sinhronizacija više ne može tiho da premesti dokument
+
+Kad dva uređaja bez međusobne veze pošalju zbirnu pod **istim brojem**, to su dve
+različite zbirne — program ih tako i vodi. Do sada je sinhronizacija, ako je
+otkupni blok ili otpremnica već pripadala prvoj, mogla da ih **prepiše na drugu**
+bez ijedne poruke, jer je poredila samo broj.
+
+Od ovog izdanja sinhronizacija u tom slučaju **staje i prijavljuje** umesto da
+prepiše. Dokument ostaje kod zbirne kojoj je pripadao.
+
+Prebacivanje na drugu zbirnu i dalje postoji — kroz ispravku i prevezivanje, gde
+je to svesna radnja operatera, a ne nusproizvod sinhronizacije.

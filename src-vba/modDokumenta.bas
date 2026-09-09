@@ -79,6 +79,7 @@ Public Type ZbirnaIdent
     activeOwnerCount As Long
     historicalOwnerCount As Long
     historicalLogicalCount As Long
+    historicalOnlyGeneracijaID As String   ' popunjeno samo kad je historicalLogicalCount = 1
     scopeProvided As Boolean
     historicalOwnerIsScope As Boolean
     matchingScopeActiveLogicalCount As Long
@@ -339,6 +340,15 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
     If newRow > 0 Then
         ' Generacija: nasledjuje se od aktivnih redova istog broja (Klasa I <-> II),
         ' inace nova. Vazi za sve pozivaoce -- Multi_TX i pojedinacne _TX putanje.
+        ' ZBR-CHILD-01: generacija RODITELJSKE zbirne na ovom detetu. Prazna je
+        ' pravilo, ne izuzetak: u malina/hladnjaca lancu otpremnica nastaje PRE
+        ' zbirne. Ide kroz PoveziDeteNaZbirnu iako je broj vec u rowData: da
+        ' JEDINI PUT bude stvarno jedini -- prepis iste vrednosti je jeftin,
+        ' a druga putanja bi znacila da se par moze raziciti.
+        ' zbirne (modAutoHladnjaca), pa roditelj tada jos ne postoji -- popunice
+        ' je LinkZbirnaToOtkupAndOtpremnica ili backfill.
+        PoveziDeteNaZbirnu TBL_OTPREMNICA, newRow, COL_OTP_BROJ_ZBIRNE, brojZbirne, _
+                           ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SaveOtpremnica"
         ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp, _
                           COL_OTP_STANICA, stanicaID
 
@@ -523,6 +533,7 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
     res.historicalOwnerCount = ikadVl.Count
     ' MERI SE, NE BLOKIRA -- v. komentar uz ZBR_MUT_* konstante.
     res.historicalLogicalCount = ikadGen.Count
+    If res.historicalLogicalCount = 1 Then res.historicalOnlyGeneracijaID = ikadGen.Keys()(0)
 
     If res.scopeProvided And res.historicalOwnerCount = 1 Then
         res.historicalOwnerIsScope = (StrComp(ikadVl.Keys()(0), scopeKljuc, vbTextCompare) = 0)
@@ -1471,6 +1482,93 @@ End Sub
 ' (obe klase sabrane u "I/II"), a IsDuplicateZbirnaInMaster odbija ponovljen CRID
 ' pre upisa -- svaki red koji stigne do AppendRow je dokument koji nikad nije
 ' vidjen.
+' ZBR-CHILD-01: generacija roditeljske zbirne za dati BROJ, ili prazno.
+'
+' FAIL-CLOSED: prazno se vraca za sve sto nije jednoznacno -- nema aktivne zbirne,
+' dvosmislen broj, pokvaren identitet. Dete tada ostaje bez generacije, sto je
+' legitimno stanje i znaci "citaj po broju, kao i do sada". Pogadjati identitet
+' iz broja je tacno ono protiv cega cela ZBR-IDENT celina i postoji.
+'
+' Zove se JEDNOM PO BROJU, ne po redu: ZbirnaIdentResolve cita celu tblZbirna, pa
+' bi poziv u petlji nad decom bio O(n*m). Petlje zato uzimaju gen jednom i salju
+' ga u PoveziDeteNaZbirnu.
+Public Function ZbirnaGeneracijaZaBroj(ByVal broj As String) As String
+    Dim id As ZbirnaIdent
+    On Error GoTo EH
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+    id = ZbirnaIdentResolve(broj)
+    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
+    If id.resolutionStatus <> ZBR_RES_UNIQUE Then Exit Function
+    ZbirnaGeneracijaZaBroj = id.selectedGeneracijaID
+    Exit Function
+EH:
+    LogErr "modDokumenta.ZbirnaGeneracijaZaBroj", "broj=" & broj
+End Function
+
+' ZBR-CHILD-01: identitet roditelja kad je broj IKAD imao samo JEDNU generaciju.
+'
+' Za BACKFILL, ne za pisce. Razlika je sustinska:
+'
+'   ZbirnaGeneracijaZaBroj  pita "ko je roditelj SADA" -- tacno za red koji se
+'                           upravo vezuje, jer se vezuje za tekuci dokument.
+'   ova funkcija            pita "ko je IKAD bio pod ovim brojem" -- tacno za
+'                           stari red kome se identitet naknadno rekonstruise.
+'
+' Zasto backfill ne sme "sada": ugovor par.5 IZRICITO dozvoljava re-entry istog
+' vlasnika posle storna, pa je ovo legitimno stanje:
+'
+'   GEN-A | ZB-10 | vlasnik X | STORNIRANO
+'   GEN-B | ZB-10 | vlasnik X | AKTIVNO      <- resolver kaze UNIQUE = GEN-B
+'   OTP-A | BrojZbirne = ZB-10 | generacija prazna
+'
+' OTP-A je istorijski dete GEN-A. "Sada" bi mu upisalo GEN-B i napravilo LAZNU
+' SLEDLJIVOST -- gore od prazne kolone, jer prazna bar ne tvrdi nista.
+'
+' Stornirana JEDINA generacija se sme upisati: ako je pod tim brojem ikad
+' postojala samo jedna, identitet je poznat bez obzira na danasnje stanje.
+Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String) As String
+    Dim id As ZbirnaIdent
+    On Error GoTo EH
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+    id = ZbirnaIdentResolve(broj)
+    If id.integrityStatus <> ZBR_INT_OK Then Exit Function
+    If id.historicalLogicalCount <> 1 Then Exit Function
+    ZbirnaJedinaGeneracijaIkadZaBroj = id.historicalOnlyGeneracijaID
+    Exit Function
+EH:
+    LogErr "modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj", "broj=" & broj
+End Function
+
+' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.
+'
+' Broj i generacija se upisuju ZAJEDNO. Dva odvojena upisa bi se pre ili kasnije
+' razisla: neko doda putanju koja postavlja broj a zaboravi generaciju, i dete
+' ostane sa TUDJOM generacijom -- gore od prazne, jer prazna bar znaci "ne znam".
+'
+' Zovu ga i SaveOtpremnica/SavePrijemnica posle AppendRow, iako je broj vec u
+' rowData: prepis iste vrednosti je jeftin, a druga putanja bi znacila da se par
+' moze raziciti. Jedini upis koji NE ide ovuda je PalAppendRow u modPaletniList,
+' i tamo rizika nema -- oba polja idu u ISTOM append pozivu, pa ih nema sta da
+' razdvoji.
+'
+' gen se prosledjuje, ne racuna ovde: pozivaoci su cesto petlje nad decom istog
+' broja (v. ZbirnaGeneracijaZaBroj).
+Public Sub PoveziDeteNaZbirnu(ByVal tableName As String, ByVal rowIndex As Long, _
+                              ByVal brojCol As String, ByVal brojZbirne As String, _
+                              ByVal gen As String, ByVal sourceName As String)
+    RequireUpdateCell tableName, rowIndex, brojCol, brojZbirne, sourceName
+    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName
+End Sub
+
+' ZBR-CHILD-01: dete se odvezuje od zbirne -- oba polja, u istom potezu.
+'
+' Bez ovoga bi odvezano dete zadrzalo generaciju stornirane zbirne i izgledalo kao
+' da joj i dalje pripada, dok mu je broj prazan.
+Public Sub OdveziDeteOdZbirne(ByVal tableName As String, ByVal rowIndex As Long, _
+                              ByVal brojCol As String, ByVal sourceName As String)
+    PoveziDeteNaZbirnu tableName, rowIndex, brojCol, "", "", sourceName
+End Sub
+
 Public Sub ApplyNovaGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long)
     Const SRC As String = "modDokumenta.ApplyNovaGeneracijaID"
 
@@ -2003,6 +2101,10 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
+    ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
+    ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
+    PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
+                       ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
     ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, _
                       COL_PRJ_KUPAC, kupacID
 
@@ -4162,7 +4264,9 @@ Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
     Dim k As Long
     For k = 1 To rows.count
         RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
-        If hasZbr Then RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
+        ' ZBR-CHILD-01: broj i generacija idu zajedno (v. PoveziDeteNaZbirnu).
+        If hasZbr Then PoveziDeteNaZbirnu TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, _
+                                          tZbr, ZbirnaGeneracijaZaBroj(tZbr), SRC
         SetOtkupBrojOtpremnice rows(k), targetOtpID
     Next k
 
@@ -4324,6 +4428,16 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Next i
     If targetRows.count = 0 Then Exit Function                  ' nema aktivne prijemnice
 
+    ' ZBR-CHILD-01: generacija CILJA, jednom za sve redove.
+    '
+    ' Kad je pozivalac zadao generaciju, ona JE identitet cilja -- iznad je vec
+    ' dokazano da se razresava (tgtIds). Kad nije, izvodi se iz broja i prazna je
+    ' ako broj nije jednoznacan; tada dete ostaje bez generacije, sto je isto
+    ' stanje kao pre ove kolone.
+    Dim genCilja As String
+    genCilja = Trim$(NzToText(zbirnaGeneracijaID))
+    If Len(genCilja) = 0 Then genCilja = ZbirnaGeneracijaZaBroj(targetBrZbirne)
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
@@ -4331,7 +4445,8 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
 
     Dim k As Long
     For k = 1 To targetRows.count
-        RequireUpdateCell TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, targetBrZbirne, SRC
+        PoveziDeteNaZbirnu TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, _
+                           targetBrZbirne, genCilja, SRC
     Next k
 
     ' Sledljivost: paletne stavke te prijemnice moraju dobiti NOVU BrojZbirne, inace
@@ -4386,7 +4501,8 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                         pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)
                     End If
                     If pripada Then
-                        RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, targetBrZbirne, SRC
+                        PoveziDeteNaZbirnu TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, _
+                                           targetBrZbirne, genCilja, SRC
                     End If
                 End If
             Next r2
