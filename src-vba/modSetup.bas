@@ -1335,6 +1335,7 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
                                              ByRef preskoceno As Long)
     On Error GoTo EH
 
+    Dim preskNemaGen As Long, preskVise As Long, preskIntegritet As Long
     popunjeno = 0
     preskoceno = 0
 
@@ -1368,6 +1369,10 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
     Next t
 
     ' --- 2) razresi svaki broj JEDNOM ---
+    ' Razlog po broju -- da izvestaj moze da kaze STA je zatekao.
+    Dim razlozi As Object: Set razlozi = CreateObject("Scripting.Dictionary")
+    razlozi.CompareMode = vbTextCompare
+
     Dim k As Variant
     For Each k In brojevi.Keys
         ' NE ZbirnaGeneracijaZaBroj: ta pita "ko je roditelj SADA", a backfill
@@ -1375,7 +1380,9 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
         ' (ugovor par.5) pod istim brojem stoje stornirana GEN-A i aktivna GEN-B;
         ' "sada" bi starom detetu GEN-A upisalo GEN-B -- LAZNA SLEDLJIVOST, gora
         ' od prazne kolone.
-        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k))
+        Dim razlogBroja As String
+        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k), razlogBroja)
+        razlozi(CStr(k)) = razlogBroja
     Next k
 
     ' --- 3) upisi tamo gde je razresen ---
@@ -1396,6 +1403,11 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
                                 popunjeno = popunjeno + 1
                             Else
                                 preskoceno = preskoceno + 1
+                                Select Case CStr(razlozi(b2))
+                                    Case ZBR_BF_NEMA_GENERACIJE: preskNemaGen = preskNemaGen + 1
+                                    Case ZBR_BF_VISE_GENERACIJA: preskVise = preskVise + 1
+                                    Case Else: preskIntegritet = preskIntegritet + 1
+                                End Select
                             End If
                         End If
                     End If
@@ -1406,13 +1418,21 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
 
     LogInfo "modSetup.BackfillDeteZbirnaGeneracija", _
             "popunjeno=" & popunjeno & " preskoceno=" & preskoceno & _
+            " (nemaGeneracije=" & preskNemaGen & " viseGeneracija=" & preskVise & _
+            " integritet=" & preskIntegritet & ")" & _
             " razlicitih brojeva=" & brojevi.count
     If showMessages Then
         MsgBox "Backfill ZbirnaGeneracijaID na deci:" & vbCrLf & _
-               "popunjeno: " & popunjeno & vbCrLf & _
-               "preskoceno (broj je IKAD nosio vise dokumenata): " & preskoceno & vbCrLf & vbCrLf & _
-               "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre. " & _
-               "Dvosmislene brojeve prijavljuje Provera integriteta (B8).", _
+               "popunjeno: " & popunjeno & vbCrLf & vbCrLf & _
+               "preskoceno: " & preskoceno & vbCrLf & _
+               "  - zbirna pod tim brojem nema GeneracijaID: " & preskNemaGen & vbCrLf & _
+               "  - broj je IKAD nosio vise dokumenata: " & preskVise & vbCrLf & _
+               "  - identitet pod tim brojem je neispravan: " & preskIntegritet & vbCrLf & vbCrLf & _
+               "Preskoceni redovi se i dalje citaju PO BROJU, kao i pre." & vbCrLf & _
+               "Prvi razlog znaci da stare zbirne same nemaju identitet -- to se " & _
+               "resava migracijom zbirnih, ne ovom dopunom." & vbCrLf & _
+               "Dvosmislene brojeve prijavljuje Provera integriteta (B8), " & _
+               "zbirne bez GeneracijaID (B9).", _
                vbInformation, APP_NAME
     End If
     Exit Sub

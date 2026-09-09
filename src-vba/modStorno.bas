@@ -699,6 +699,19 @@ Public Function StornoZbirna(ByVal brojZbirne As String, _
         RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
                                    COL_ZBR_VOZAC, COL_ZBR_KUPAC
 
+    ' ZBR-CHILD-01: par (broj, generacija) mora da postoji. RedJeIzabranogDokumenta
+    ' nize bira red ISKLJUCIVO po generaciji -- broj se tada vise i ne gleda -- pa
+    ' bi StornoZbirna("X", "GEN-C") stornirao GEN-C i kad on pripada broju Y.
+    ' Pozivalac koji posalje nespojiv par ne zna koji dokument dira, i to je
+    ' greska, ne alternativni ulaz: fail-closed, ne "padni na broj".
+    If Len(Trim$(generacijaID)) > 0 Then
+        If Not ZbirnaGeneracijaPripadaBroju(brojZbirne, generacijaID) Then
+            Err.Raise ERR_STORNO_BASE + 22, SRC, _
+                      "Generacija ne pripada tom broju zbirne. BrojZbirne=" & brojZbirne & _
+                      "; GeneracijaID=" & generacijaID
+        End If
+    End If
+
     Dim foundAny As Boolean
     Dim changedCount As Long
     Dim i As Long
