@@ -269,7 +269,11 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
 
     On Error GoTo EH
 
-    tx.BeginTx
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+    modSchema.SchemaReadyOrFail "SaveOtpremnica_TX", _
+        TBL_OTPREMNICA & "|" & TBL_AMBALAZA
+
+tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
 
@@ -1035,7 +1039,11 @@ Public Function SaveZbirna_TX(ByVal datum As Date, ByVal vozacID As String, _
 
     On Error GoTo EH
 
-    tx.BeginTx
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+    modSchema.SchemaReadyOrFail "SaveZbirna_TX", _
+        TBL_ZBIRNA
+
+tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 
     SaveZbirna_TX = SaveZbirna(datum, vozacID, brojZbirne, kupacID, _
@@ -2213,7 +2221,11 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
 
     On Error GoTo EH
 
-    tx.BeginTx
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+    modSchema.SchemaReadyOrFail "SavePrijemnica_TX", _
+        TBL_PRIJEMNICA & "|" & TBL_AMBALAZA
+
+tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE

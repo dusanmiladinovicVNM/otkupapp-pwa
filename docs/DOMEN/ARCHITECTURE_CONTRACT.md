@@ -158,8 +158,23 @@ ownership listi domen-tabela.
 
 | Gate | Tvrdnja | Kako se meri |
 |---|---|---|
-| **G1 — reproduktivna sveska** | prazan `.xlsm` + uvoz koda + `SetupNewPC` = spremna aplikacija, bez ručnog koraka. Kanon je `schema/schema.json` u gitu; sveska je posledica. | `modSchema.EnsureAllTables` + `VerifySchema`; `.frm`/`.frx` se **uvoze kao build artefakt** (binarni `.frx` se ne generiše iz koda) |
-| **G1b — redosled kolona je deo šeme** | upis je pozicion (`AppendRow`), pa svako razilaženje **pre kraja** — premeštena kolona, izbačena iz sredine, ubačena u sredinu — tiho šalje vrednosti u pogrešna polja | otisak nad **uređenim** kanonskim prefiksom (`SchemaCheckOnStart`, uz self-heal), `SchemaReadyOrFail` pred svakim pozicionim upisom (`Save*Multi_TX`, `CreateFaktura_TX`), `schema_diff` blokira uvoz na prefiks-nekompatibilnost |
+| **G1 — reproduktivna sveska** | prazan `.xlsm` + uvoz koda + `SetupNewPC` = spremna aplikacija, bez ručnog koraka. Kanon je `schema/schema.json` u gitu; sveska je posledica. | **delimično dokazano** — v. G1a |
+| **G1a — rekonstrukcija tabele iz koda** | obrisana tabela se vraća iz registra, bez donora i bez ručnog koraka | test 201 `T_Sema_SamoLeci`: obriši `tblMGMT` → `VerifySchema` je prijavi → `EnsureAllTables` je vrati → šema čista |
+| **G1b — redosled kolona je deo šeme** | upis je pozicion (`AppendRow`), pa svako razilaženje **pre kraja** — premeštena kolona, izbačena iz sredine, ubačena u sredinu, ili **produženo ime poslednje kanonske kolone** — tiho šalje vrednosti u pogrešna polja | poređenje po **indeksu kolone** (`PrefiksNeslaganje`, jedan helper za obe kapije), otisak nad uređenim prefiksom uz self-heal, `SchemaReadyOrFail` pred pozicionim upisom, `schema_diff` blokira uvoz. Testovi 199, 202. |
+
+> **G1 još NIJE dokazana u celini.** Dokazana je njena *rekonstrukciona*
+> komponenta (G1a): jedna nestala tabela se vraća iz registra. Nije mereno:
+> prazan `.xlsm` + uvoz svih modula + `.frm`/`.frx` + `SetupNewPC` + config
+> bootstrap = upotrebljiv AgriX. Dok to nema svoj test, ugovor ne sme da tvrdi
+> više nego što meri.
+>
+> **Gde kapija `SchemaReadyOrFail` stoji danas** (10 poziva): `SaveOtkup_TX`,
+> `SaveOtkupMulti_TX`, `SaveOtpremnica_TX`, `SaveOtpremnicaMulti_TX`,
+> `SaveZbirna_TX`, `SaveZbirnaMulti_TX`, `SavePrijemnica_TX`,
+> `SavePrijemnicaMulti_TX`, `SaveNovac_TX`, `CreateFaktura_TX`.
+> **Nisu još gejtovani** pisci van lanca dokumenata — agrohemija, banka, geo,
+> palete, utovar. Dobijaju kapiju kad im dođe red u refaktoru; do tada ugovor to
+> ne sme da tvrdi.
 | **G2 — duplikat broja** | dva dokumenta sa istim poslovnim brojem ne prave **nijedan** poseban code path u jezgru | test `BrojNijeIdentitet` + pravilo `NEMA_BROJA_KAO_FK` |
 | **G3 — sledljivost bez pogađanja** | lanac unazad ide samo kroz ID/FK graf | test `TraceBezPogadjanja` |
 | **G4 — vlasništvo upisa** | nov pisač domen-tabele obara CI | `who_writes.py --check-ownership` |

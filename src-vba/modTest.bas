@@ -489,6 +489,7 @@ Public Sub RunAllTests()
     RunOne 199
     RunOne 200
     RunOne 201
+    RunOne 202
     RunOne 124
     RunOne 125
     RunOne 126
@@ -759,6 +760,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 199: TestName = "T_Sema_OtisakVidiRedosled"
         Case 200: TestName = "T_Sema_KapijaBije"
         Case 201: TestName = "T_Sema_SamoLeci"
+        Case 202: TestName = "T_Sema_PrefiksNijeString"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -968,6 +970,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 199: T_Sema_OtisakVidiRedosled
         Case 200: T_Sema_KapijaBije
         Case 201: T_Sema_SamoLeci
+        Case 202: T_Sema_PrefiksNijeString
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6699,6 +6702,69 @@ EH:
     On Error GoTo 0
     Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
               "greska u toku testa (tabela vracena): " & Err.description
+End Sub
+
+
+' Prefiks se poredi po INDEKSU KOLONE, ne po stringu.
+'
+' Prva verzija je radila InStr(1, stvarno, ocekivano) nad spojenim zaglavljima.
+' To laze bas na POSLEDNJOJ kanonskoj koloni, jer iza nje nema delimitera:
+'
+'     kanon    "|MGMTID|...|PIN"
+'     stvarno  "|MGMTID|...|PINExtra"
+'     InStr    = 1   -> gate PROPUSTA, a kolona PIN ne postoji
+'
+' Nije teorijski: PR2 je vecinu tabela zavrsio sa GeneracijaID /
+' ZbirnaGeneracijaID, pa je tacno ta pozicija bila nezasticena.
+'
+' Meri se nad tblMGMT (nula redova, nijedan citac u kodu), a ime kolone se vraca
+' i kroz EH.
+Private Sub T_Sema_PrefiksNijeString()
+    Dim lo As ListObject
+    Dim staroIme As String
+    Dim zadnja As Long
+    Dim pukla As Boolean
+
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    If lo Is Nothing Then
+        Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+                  "preduslov: tblMGMT mora postojati"
+    End If
+
+    zadnja = modSchema.SchemaTableColumns(TBL_MGMT).count
+    staroIme = lo.ListColumns(zadnja).name
+
+    On Error GoTo EH
+
+    ' produzi POSLEDNJU kanonsku kolonu -- string-prefiks bi ovo progutao
+    lo.ListColumns(zadnja).name = staroIme & "Extra"
+
+    On Error Resume Next
+    Err.Clear
+    modSchema.SchemaReadyOrFail "T_Sema_PrefiksNijeString", TBL_MGMT
+    pukla = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    lo.ListColumns(zadnja).name = staroIme
+    On Error GoTo 0
+
+    If Not pukla Then
+        Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+                  "kapija je PROPUSTILA produzeno ime poslednje kolone -- " & _
+                  "poredi se string umesto kolone po indeksu"
+    End If
+
+    ' i posle vracanja mora biti cisto (kapija koja uvek pada je bezvredna)
+    modSchema.SchemaReadyOrFail "T_Sema_PrefiksNijeString", TBL_MGMT
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    lo.ListColumns(zadnja).name = staroIme
+    On Error GoTo 0
+    Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+              "greska u toku testa (ime vraceno): " & Err.description
 End Sub
 
 

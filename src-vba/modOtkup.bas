@@ -22,7 +22,11 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
 
     On Error GoTo EH
 
-    tx.BeginTx
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+    modSchema.SchemaReadyOrFail "SaveOtkup_TX", _
+        TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
+
+tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
 

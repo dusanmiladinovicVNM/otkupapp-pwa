@@ -179,7 +179,7 @@ Public Function VerifySchema() As Collection
     Dim delovi() As String
     Dim i As Long
     Dim ocekivano As String
-    Dim stvarno As String
+    Dim neslaganje As String
 
     Set out = New Collection
     Set reg = SchemaRegistry()
@@ -195,10 +195,8 @@ Public Function VerifySchema() As Collection
         Else
             Set imena = CreateObject("Scripting.Dictionary")
             imena.CompareMode = vbTextCompare
-            stvarno = ""
             For Each lc In lo.ListColumns
                 If Not imena.Exists(lc.name) Then imena.Add lc.name, True
-                stvarno = stvarno & "|" & lc.name
             Next lc
 
             ocekivano = RegKolone(CStr(tblName))
@@ -212,14 +210,13 @@ Public Function VerifySchema() As Collection
                 End If
             Next i
 
-            ' Redosled: kanon mora biti PREFIKS stvarnog zaglavlja. Visak na
-            ' kraju je dozvoljen (kolona koju kanon jos ne zna), ali svako
-            ' razilazenje PRE kraja znaci da je pozicion upis promasen.
-            If Len(ocekivano) > 0 Then
-                If InStr(1, stvarno, ocekivano, vbTextCompare) <> 1 Then
-                    out.Add SCHEMA_DRIFT_REDOSLED & "|" & CStr(tblName) & _
-                            "|ocekivano" & ocekivano & " ;stvarno" & stvarno
-                End If
+            ' Redosled: kanon mora biti PREFIKS stvarnog zaglavlja, po INDEKSU
+            ' KOLONE. Visak na kraju je dozvoljen (kolona koju kanon jos ne zna),
+            ' ali svako razilazenje PRE kraja znaci da je pozicion upis promasen.
+            neslaganje = PrefiksNeslaganje(lo, SchemaTableColumns(CStr(tblName)))
+            If Len(neslaganje) > 0 Then
+                out.Add SCHEMA_DRIFT_REDOSLED & "|" & CStr(tblName) & _
+                        "|" & neslaganje
             End If
         End If
     Next tblName
@@ -332,10 +329,8 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
     Dim delovi() As String
     Dim tblName As String
     Dim lo As ListObject
-    Dim lc As ListColumn
     Dim i As Long
-    Dim ocekivano As String
-    Dim stvarno As String
+    Dim neslaganje As String
 
     Set reg = SchemaRegistry()
     delovi = Split(tblList, "|")
@@ -360,21 +355,14 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
                           "Pokreni modSchema.EnsureAllTables pa ponovi."
             End If
 
-            stvarno = ""
-            For Each lc In lo.ListColumns
-                stvarno = stvarno & "|" & lc.name
-            Next lc
-
-            ocekivano = RegKolone(tblName)
-
-            If InStr(1, stvarno, ocekivano, vbTextCompare) <> 1 Then
+            neslaganje = PrefiksNeslaganje(lo, SchemaTableColumns(tblName))
+            If Len(neslaganje) > 0 Then
                 Err.Raise vbObjectError + 9405, sourceName, _
-                          "Tabela '" & tblName & "' ne odgovara kanonskoj semi. " & _
-                          "Upis je POZICION, pa bi vrednosti otisle u pogresne " & _
-                          "kolone. Ocekivano (prefiks):" & ocekivano & _
-                          " ;stvarno:" & stvarno & _
-                          " -- pokreni modSchema.EnsureAllTables; ako i posle " & _
-                          "toga odstupa, redosled se mora popraviti rucno."
+                          "Tabela '" & tblName & "' ne odgovara kanonskoj semi (" & _
+                          neslaganje & "). Upis je POZICION, pa bi vrednosti " & _
+                          "otisle u pogresne kolone. Pokreni " & _
+                          "modSchema.EnsureAllTables; ako i posle toga odstupa, " & _
+                          "redosled se mora popraviti rucno."
             End If
         End If
     Next i
@@ -437,6 +425,38 @@ End Function
 
 Private Function Modulo32(ByVal v As Double) As Double
     Modulo32 = v - Int(v / 4294967296#) * 4294967296#
+End Function
+
+' Da li zaglavlje tabele pocinje TACNO kanonskim kolonama, po INDEKSU.
+'
+' Poredjenje po stringu ("|A|B" u "|A|BExtra") daje LAZAN prolaz: InStr vrati 1,
+' a kolona B ne postoji. Ranjiva je bas poslednja kanonska kolona, jer iza nje
+' nema delimitera. Zato se poredi kolona po kolona.
+'
+' Vraca "" kad je sve u redu, inace opis PRVOG neslaganja -- pozivalac odlucuje
+' da li ga prijavljuje ili dize gresku.
+'
+' Jedan helper za VerifySchema i SchemaReadyOrFail: dve kapije ne smeju da
+' razviju razlicite definicije "ispravnog prefiksa".
+Private Function PrefiksNeslaganje(ByVal lo As ListObject, _
+                                   ByVal kolone As Collection) As String
+    Dim i As Long
+    Dim stvarno As String
+
+    If lo.ListColumns.count < kolone.count Then
+        PrefiksNeslaganje = "tabela ima " & CStr(lo.ListColumns.count) & _
+                            " kolona, kanon trazi " & CStr(kolone.count)
+        Exit Function
+    End If
+
+    For i = 1 To kolone.count
+        stvarno = lo.ListColumns(i).name
+        If StrComp(stvarno, CStr(kolone(i)), vbTextCompare) <> 0 Then
+            PrefiksNeslaganje = "pozicija " & CStr(i) & ": ocekivano '" & _
+                                CStr(kolone(i)) & "', stvarno '" & stvarno & "'"
+            Exit Function
+        End If
+    Next i
 End Function
 
 Private Sub EnsureJednuTabelu(ByVal tblName As String)
