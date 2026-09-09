@@ -14,11 +14,19 @@ Pre produkcionog koda izgovori status za svaku osu, uz **dokaz** (fajl:linija, I
 ili `N/A — razlog`:
 
 `DOMAIN` · `IDENTITY` · `CARDINALITY` · `INVARIANTS/OWNER` · `WRITERS` · `DOWNSTREAM` ·
-`CAPABILITY` · `ACCEPTANCE PROOF` · `PLATFORM` · `LANDING` → `PROVEN` / `GAP` / `N/A`
+`CAPABILITY` · `ACCEPTANCE CONTRACT` · `PLATFORM` · `LANDING` → `PROVEN` / `GAP` / `N/A`
 
-**`GAP` na `DOMAIN`, `IDENTITY`, `CARDINALITY`, `INVARIANTS/OWNER` ili `DOWNSTREAM`, kad je ta osa
-relevantna → NEMA PRODUKCIONOG KODA.** Dozvoljen je samo eksperiment koji je tako i označen i ne
-ulazi u produkcioni put. `PROVEN` bez navedenog dokaza je `GAP`, ne `PROVEN`.
+**`GAP` na `DOMAIN`, `IDENTITY`, `CARDINALITY`, `INVARIANTS/OWNER`, `DOWNSTREAM` ili
+`ACCEPTANCE CONTRACT`, kad je ta osa relevantna → NEMA PRODUKCIONOG KODA.** Isto važi za `WRITERS`
+kad izmena menja write semantiku, tabelu ili polje, invarijantu, ili dodaje/menja writer-a — isto
+polje često piše više modula, pa zakrpa jednog ostavlja ostale otvorene (`CLAUDE.md` §2). Za
+read-only izmenu je `WRITERS: N/A`. Dozvoljen je samo eksperiment koji je tako i označen i ne ulazi
+u produkcioni put. `PROVEN` bez navedenog dokaza je `GAP`, ne `PROVEN`.
+
+**`ACCEPTANCE CONTRACT` je plan dokaza, ne dokaz** — kod još ne postoji. Pre koda odgovara: šta će
+tačno važiti kad se završi · šta mora ostati netaknuto · koji edge case mora proći · koji negativan
+slučaj mora biti odbijen · kojim testom ili merenjem se to dokazuje. Zelen rezultat, sabotaža i
+crveno→zeleno dolaze **posle** implementacije, po `CLAUDE.md` §5 i `.claude/rules/testovi.md`.
 
 Nijedan checker ovo ne meri — zato ide dokaz uz svaku osu, a ne sama reč.
 
@@ -29,7 +37,8 @@ Trigger u opisu gleda **početak** posla, a posao mutira. MIG-005a je počeo kao
 samo broj" — a §28.1g pokazuje da mu je `GeneracijaID` sve vreme bio dostupan.
 
 Zato: čim tokom rada dodirneš **dedup / group / count**, parent linkage, lookup po poslovnom broju,
-mapiranje reda u logički dokument, ownership, lifecycle/storno — ili moraš da **promeniš premisu
+mapiranje reda u logički dokument, ownership, lifecycle/storno, **semantiku poslovnog događaja —
+koji datum i koji status kome pripada** — ili moraš da **promeniš premisu
 postojećeg regression testa** — STOP i uradi verdikt iz §1 pre nastavka. Izuzetak „lokalni bug sa
 jasnom reprodukcijom" tada više ne važi.
 
