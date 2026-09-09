@@ -8,10 +8,10 @@ DOKUMENTI
 OTKUP
   predao          I=1000.00  II=0.00
   vrednost        50000.00
-  placeno         20000.00
-  od toga avansom 20000.00
+  placeno         50000.00
+  od toga avansom 50000.00
   od toga kesom   0.00
-  isplaceno svi   NE
+  isplaceno svi   DA
 ZBIRNA
   poslato         I=1000.00  II=0.00
   primljeno       I=1000.00  II=0.00

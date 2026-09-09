@@ -1,6 +1,6 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: 14 scenarija implementirano i zaključano; B4 čeka PR6.**
+> **Status: 13 scenarija implementirano i zaključano.**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -139,7 +139,7 @@ FAKTURA
 
 ---
 
-## 4) Scenariji (15 zadržanih)
+## 4) Scenariji (13 zadržanih)
 
 ### A — Fresh Fruit Flow
 
@@ -155,10 +155,11 @@ FAKTURA
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| B1 | Gotovina pri otkupu | `tblNovac` → header |
-| B2 | Avans primenjen na otkup | `ApplyAvansToOtkup` |
-| B3 | **Delimična isplata** — `Isplaceno` ostaje prazno | prag „plaćeno u celosti" |
-| B4 | Dvoklasni otkup plaćen u celosti | **premisa se menja — v. §8.** Nije registrovan; golden još nije napisan. |
+| B2 | **Pun avans** → `isplaceno svi DA` | `ApplyAvansToOtkup` zatvara otkup |
+| B3 | **Delimičan avans** → `isplaceno svi NE` | prag „plaćeno u celosti" |
+
+> B1 i B4 su uklonjeni: merili su keš uz otkupni list, koji u domenu ne postoji
+> (§8).
 
 > **Izbačeni odlukom:** C1, C2 (ambalaža — pokriva `RunStornoTestSuite` i
 > sekcija `AMBALAZA` u svakom golden-u), E1 (ispravka), F1 (faktura iz više
@@ -285,34 +286,38 @@ nalaz — ili je prethodni rollback zakazao, ili ime više nije rezervisano.
 
 ---
 
-## 8) Nalaz koji menja premisu B4
+## 8) Keš se ne vezuje za otkupni list — B1 i B4 uklonjeni
 
-B4 je specificiran na pretpostavci da Klasa II ne dobija `Isplaceno` dok Klasa I
-dobija — dakle da je u pitanju **primary-row** greška.
+**Poslovno pravilo:** keš nikada ne ide uz otkupni list. Ekran otkupnog lista u
+novom UI-ju nema polje za novac, a `modOtkupUnos` inicijalizuje `p("novac") = 0#`
+i **nigde ga ne menja** — jedine druge reference na taj ključ su u
+`modNovacUnos`, što je zaseban rečnik novčanog ekrana.
 
-Merenje kaže drugo. `UpdateOtkupStatus` (`modNovac.bas:1224`) je **jedino** mesto
-koje piše kolonu `Isplaceno`, a zovu ga samo:
+Posledice:
 
-- `modBankaMapiranje` (uparivanje izvoda),
-- `modDokumenta:4929`,
-- `ApplyAvansToOtkup_TX` (`modNovac:1642`) i `modNovac:1749`.
+| Šta | Ishod |
+|---|---|
+| `SaveOtkupMulti_TX(novac)` parametar | mrtav iz UI putanje |
+| `SaveNovac(otkupID:=primaryID)` u `modOtkup.bas:279` | **mrtav kod**, ne bug koji treba popraviti |
+| kolone `Novac`, `PrimalacNovca` na `tblOtkup` | uvek 0 / prazno → brišu se u refaktoru |
+| B1 (keš pri otkupu) | **uklonjen** — merio je putanju koja u domenu ne postoji |
+| B4 (dvoklasni plaćen kešom) | **uklonjen** iz istog razloga |
+| B3 | prespecificiran na **delimičan avans** |
 
-**Ne zove ga putanja upisa otkupa.** `SaveOtkupMulti_TX` zove
-`ApplyAvansToOtkup` — verziju **bez** `_TX`, koja `UpdateOtkupStatus` ne dira.
+Čitaoci kolone `Novac` koji ostaju: `modOtkup.GetSaldoByStation`,
+`modOtkupBlok:945` (štampa bloka), `modDokumenta:3696` — svi vide nulu i idu u
+čišćenje zajedno sa kolonom.
 
-Posledica, zaključana u golden-u B1: gotovina uneta pri otkupu se **evidentira**
-(`placeno 50000.00`), ali otkup **ne postaje isplaćen** (`isplaceno svi NE`) — i
-to važi za **obe klase**, ne samo za drugu.
+### Ispravka ranije tvrdnje
 
-Zato B4 kako je napisan ne bi merio primary-row grešku nego ovo šire ponašanje.
-Pre nego što dobije golden, treba odlučiti šta je poslovno tačno:
+Prva verzija ovog odeljka je tvrdila da `UpdateOtkupStatus` nije pozvan sa
+putanje otkupa uopšte. **Netačno** — mereno `awk` opsegom koji je sekao pre
+kraja procedure. `ApplyAvansToOtkup` ga zove na `modNovac.bas:1642`
+(`If preostalo <= 0 Then UpdateOtkupStatus otkupID`), unutar sebe.
 
-1. da li kes pri otkupu **treba** da zatvori otkup (onda je nalaz bug za PR6), ili
-2. je namerno da se otkup zatvara tek kroz novčani modul / banku (onda B4 treba
-   prespecificirati na putanju koja stvarno prolazi kroz `UpdateOtkupStatus`).
-
-Do te odluke B4 nije registrovan i nema golden — golden pisan na pogrešnu
-premisu bio bi gori od nijednog.
+Tačno je uže: `Isplaceno` se postavlja kroz **avans**, banku i novčani modul —
+ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
+`isplaceno svi DA`, delimičan 20 000 u B3 daje `NE`.
 
 ---
 
@@ -325,9 +330,8 @@ premisu bio bi gori od nijednog.
 | A3 | 2 otkupa → **1** otpremnica; sabotaža sa 2×500 kg pada na kardinalnosti |
 | A4 | **2** otpremnice → 1 zbirna, invarijanta OK |
 | A5 | kalo 25 kg je poslovna činjenica, ne greška |
-| B1 | kes pri otkupu se evidentira, ali **ne** zatvara otkup (§8) |
-| B2 | avans se primenjuje: `avansom 20000 / kesom 0` |
-| B3 | delimična isplata kešom: `avansom 0 / kesom 20000` |
+| B2 | pun avans 50 000 → `avansom 50000`, `isplaceno svi DA` |
+| B3 | delimičan avans 20 000 → `isplaceno svi NE` (prag nije dostignut) |
 | D1 | storno otpremnice: `aktivnih 0 / storniranih 1`, zbirna ostaje bez izvora |
 | D2 | storno fakturisane prijemnice — kaskada |
 | D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument, obe klase |

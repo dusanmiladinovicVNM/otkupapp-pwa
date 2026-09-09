@@ -80,13 +80,11 @@ Public Sub RunGoldenSuite()
     GldOne 3
     GldOne 4
     GldOne 5
-    GldOne 6
+    ' 6 (B1) i 9 (B4) su UKLONJENI: kes se nikad ne vezuje za otkupni list, pa
+    ' su merili putanju koja u domenu ne postoji. Ekran otkupnog lista nema polje
+    ' za novac, a modOtkupUnos salje novac:=0 uvek -- v. GOLDEN_SCENARIJI.md S8.
     GldOne 7
     GldOne 8
-    ' 9 = B4: NIJE registrovan dok PR6 ne ukloni primary-row bug. Golden postoji
-    ' i pisan je na ISPRAVNU vrednost; PR6 ga registruje i time dokazuje da je
-    ' bug otisao. Trajno crvena centralna kapija bi naucila operatera da ignorise
-    ' crveno -- v. GOLDEN_SCENARIJI.md S5b.
     GldOne 10
     GldOne 11
     GldOne 12
@@ -113,10 +111,8 @@ Private Function GldIme(ByVal idx As Long) As String
         Case 3: GldIme = "A3_vise_blokova_jedna_otpremnica"
         Case 4: GldIme = "A4_vise_otpremnica_jedna_zbirna"
         Case 5: GldIme = "A5_kalo"
-        Case 6: GldIme = "B1_gotovina_pri_otkupu"
         Case 7: GldIme = "B2_avans_primenjen"
-        Case 8: GldIme = "B3_delimicna_isplata"
-        Case 9: GldIme = "B4_dvoklasni_placen_u_celosti"
+        Case 8: GldIme = "B3_delimican_avans"
         Case 10: GldIme = "D1_storno_otpremnice"
         Case 11: GldIme = "D2_storno_fakturisane_prijemnice"
         Case 12: GldIme = "D3_storno_dvoklasnog_otkupa"
@@ -133,10 +129,8 @@ Private Sub GldPozovi(ByVal idx As Long)
         Case 3: Gld_A3_ViseBlokova
         Case 4: Gld_A4_ViseOtpremnica
         Case 5: Gld_A5_Kalo
-        Case 6: Gld_B1_Gotovina
         Case 7: Gld_B2_Avans
-        Case 8: Gld_B3_DelimicnaIsplata
-        Case 9: Gld_B4_DvoklasniPlacen
+        Case 8: Gld_B3_DelimicanAvans
         Case 10: Gld_D1_StornoOtpremnice
         Case 11: Gld_D2_StornoFakturisanePrijemnice
         Case 12: Gld_D3_StornoDvoklasnogOtkupa
@@ -1057,37 +1051,6 @@ End Sub
 ' GRUPA B -- Novac
 '=====================================================================
 
-' B1: gotovina pri otkupu pokriva punu vrednost.
-'
-' NALAZ koji ovaj golden zakljucava: kes upisan pri otkupu se EVIDENTIRA
-' (placeno 50000), ali otkup NE postaje "isplacen". UpdateOtkupStatus -- jedino
-' mesto koje pise kolonu Isplaceno -- ne zove se sa putanje upisa otkupa uopste;
-' zovu ga samo banka, ApplyAvansToOtkup_TX i novcani modul. Vazi za obe klase,
-' ne samo za drugu.
-Private Sub Gld_B1_Gotovina()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-B1"
-    GldPocni tx, broj
-
-    ' 1000 kg x 50 = 50000; placa se u celosti
-    GldOtkupSaNovcem broj, broj & "-B", 1000#, 50#, 0#, 0#, 50000#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
-
-    AssertSnapshot GldSnapshot("B1 gotovina pri otkupu", broj), GldIme(6)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_B1", gldDesc
-End Sub
-
 ' B2: avans koji je scenario SAM napravio primenjuje se na otkup.
 Private Sub Gld_B2_Avans()
     Dim tx As clsTransaction
@@ -1098,7 +1061,8 @@ Private Sub Gld_B2_Avans()
     broj = "GLD-B2"
     GldPocni tx, broj
 
-    GldAvans 20000#
+    ' avans pokriva PUNU vrednost (1000 x 50)
+    GldAvans 50000#
     GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
     GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
     GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
@@ -1113,8 +1077,11 @@ EH:
     Err.Raise GLD_ERR, "Gld_B2", gldDesc
 End Sub
 
-' B3: placeno manje od vrednosti -> Isplaceno ostaje prazno.
-Private Sub Gld_B3_DelimicnaIsplata()
+' B3: avans pokriva SAMO deo vrednosti.
+'
+' Isplata ide preko avansa, ne kesa: kes se nikad ne vezuje za otkupni list
+' (ekran nema to polje, modOtkupUnos salje novac:=0 uvek).
+Private Sub Gld_B3_DelimicanAvans()
     Dim tx As clsTransaction
     Dim gldDesc As String
     Dim broj As String
@@ -1123,12 +1090,13 @@ Private Sub Gld_B3_DelimicnaIsplata()
     broj = "GLD-B3"
     GldPocni tx, broj
 
-    ' vrednost 50000, placeno 20000
-    GldOtkupSaNovcem broj, broj & "-B", 1000#, 50#, 0#, 0#, 20000#
+    ' vrednost 50000, avansom pokriveno 20000
+    GldAvans 20000#
+    GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
     GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
     GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
 
-    AssertSnapshot GldSnapshot("B3 delimicna isplata", broj), GldIme(8)
+    AssertSnapshot GldSnapshot("B3 delimican avans", broj), GldIme(8)
 
     tx.RollbackTx
     Exit Sub
@@ -1137,38 +1105,6 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Err.Raise GLD_ERR, "Gld_B3", gldDesc
 End Sub
-
-' B4: dvoklasni otkup placen u CELOSTI.
-'
-' NIJE registrovan u RunGoldenSuite dok PR6 ne ukloni primary-row bug:
-' MarkOtkupIsplacen racuna po redu (modNovac.bas:1240), a novac se upisuje samo
-' na primarni red (modOtkup.bas:279), pa Klasa II nikad ne dobije Isplaceno.
-' Golden je pisan na ISPRAVNU vrednost (isplaceno svi DA); PR6 ga registruje i
-' time dokazuje da je bug otisao.
-Private Sub Gld_B4_DvoklasniPlacen()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-B4"
-    GldPocni tx, broj
-
-    ' I: 1000 x 50 = 50000; II: 200 x 30 = 6000; ukupno 56000
-    GldOtkupSaNovcem broj, broj & "-B", 1000#, 50#, 200#, 30#, 56000#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 200#, 30#, 10
-    GldZbirnaIPrijemnica broj, 1000#, 200#, 50, 10, 1000#, 200#
-
-    AssertSnapshot GldSnapshot("B4 dvoklasni placen u celosti", broj), GldIme(9)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_B4", gldDesc
-End Sub
-
 
 '=====================================================================
 ' GRUPA D -- Storno
@@ -1341,7 +1277,11 @@ EH:
     Err.Raise GLD_ERR, "Gld_G2", gldDesc
 End Sub
 
-' Otkup sa gotovinom -- isti writer, samo novac != 0.
+' Otkup sa novcem -- KORISTI SE SAMO u D3, da storno ima sta da ponisti.
+'
+' Redovna putanja NIKAD ne salje novac uz otkupni list: ekran nema to polje, a
+' modOtkupUnos salje novac:=0. Parametar postoji jos samo na writer-u i ide u
+' brisanje zajedno sa kolonama Novac/PrimalacNovca (v. DOCUMENT_HEADER_LINES S4.1).
 Private Sub GldOtkupSaNovcem(ByVal brojZbirne As String, ByVal brDok As String, _
                              ByVal kolI As Double, ByVal cenaI As Double, _
                              ByVal kolII As Double, ByVal cenaII As Double, _

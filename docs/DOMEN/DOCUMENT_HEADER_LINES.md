@@ -129,7 +129,7 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 | `Datum`, `KooperantID`, `StanicaID`, `VozacID`, `ParcelaID`, `KulturaID` | → matični |
 | `VrstaVoca`, `SortaVoca`, `TipAmbalaze` | H — u potpisu stoje jednom |
 | `KolAmbIzdata` | H — OM izdao prazne kooperantu |
-| `Novac`, `PrimalacNovca` | H — snapshot gotovine |
+| ~~`Novac`, `PrimalacNovca`~~ | **BRIŠU SE** — keš se ne vezuje za otkupni list; v. §4.1b |
 | `Isplaceno`, `DatumIsplate` | H — **izvedeno** iz `tblNovac` vs `SUM(stavke.Kolicina × Cena)`; v. §6.1 |
 | `OtpremnicaID` | → `tblOtpremnica`, nullable |
 | `ZbirnaID` | → `tblZbirna`, nullable, **denormalizovano** (nasleđeno od otpremnice) — nije kanonska membership |
@@ -284,10 +284,12 @@ Isplaceno(OtkupID) = "Da"  <=>  SUM(tblNovac za OtkupID) >= VrednostOtkupa
 `Isplaceno` je **izvedeno** (A5), računa se nad headerom, i računa se **jednom po
 dokumentu**.
 
-> Ovo ispravlja postojeći bug: danas se `Isplaceno` računa po redu
-> (`modNovac.bas:1240`) ali se gotovina upisuje samo na primarni red
-> (`modOtkup.bas:279`), pa red Klase II nikad ne dobije `Isplaceno` iako je
-> kooperant plaćen u celosti.
+> Raniji tekst je ovde opisivao „primary-row bug": gotovina se upisuje samo na
+> Klasu I, pa Klasa II nikad ne dobije `Isplaceno`. **To nije bug nego mrtav
+> kod** — keš uopšte ne ulazi kroz otkupni list (§4.1b). Putanja koja stvarno
+> postavlja `Isplaceno` je avans, i ona radi ispravno (golden B2/B3).
+> Ostaje da vrednost dokumenta posle refaktora bude `SUM(stavke)`, a
+> `Isplaceno` jedno polje na headeru.
 
 ### 6.2 Zbirna = zbir svojih aktivnih otpremnica
 
