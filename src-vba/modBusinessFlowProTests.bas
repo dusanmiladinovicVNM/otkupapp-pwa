@@ -3324,7 +3324,9 @@ Private Sub Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta()
         "ZBR-F3 preduslov: otpremnica B nosi generaciju B"
 
     ' Kapija PUSTA -- i to je deo nalaza, ne slucajnost.
-    AssertEquals "", ZbirnaMutRazlog(brojX), _
+    ' Jezgro, ne modStornoFlow.ZbirnaMutRazlog: taj je Private i tanak omotac nad
+    ' bas ovom funkcijom, pa je iz drugog modula i nedostupan i suvisan.
+    AssertEquals "", modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(brojX), _
         "ZBR-F3 preduslov: kapija ZBR-MUT-01 pusta (isti vlasnik, jedan aktivan)"
 
     Set r = RunSimpleStornoZbirna(brojX, genB)
