@@ -30,6 +30,7 @@ Public Sub RunProductionHealthCheck()
 
     BeginHealthRun "PRODUCTION HEALTH CHECK"
 
+    Check_SchemaRegistry
     Check_CoreTablesAndColumns
     Check_DuplicateDocumentKeys
     Check_NovacRowsAreFinanciallyValid
@@ -53,6 +54,52 @@ EH:
                " Source=" & Err.SOURCE & _
                " Description=" & Err.description
     EndHealthRun
+End Sub
+
+' ============================================================
+' CHECK 0: REGISTAR SEME (modSchema)
+'
+' Sira od Check_CoreTablesAndColumns: ta proverava rucno nabrojan spisak
+' kljucnih tabela, ova poredi CELU svesku sa registrom. Samo cita -- popravlja
+' modSchema.EnsureAllTables, koji se ovde NE zove: health check ne sme da menja
+' podatke koje meri.
+' ============================================================
+
+Private Sub Check_SchemaRegistry()
+    Dim odstupanja As Collection
+    Dim i As Long
+    Dim prikaz As String
+    Dim n As Long
+
+    On Error GoTo EH
+
+    Set odstupanja = modSchema.VerifySchema()
+
+    If odstupanja.count = 0 Then
+        HealthOk "SchemaRegistry", "sveska odgovara registru (modSchema)"
+        Exit Sub
+    End If
+
+    ' Prvih deset u poruku -- ceo spisak bi zatrpao log, a deset je dovoljno
+    ' da se vidi da li fali jedna kolona ili cela tabela.
+    n = odstupanja.count
+    If n > 10 Then n = 10
+    For i = 1 To n
+        If Len(prikaz) > 0 Then prikaz = prikaz & "; "
+        prikaz = prikaz & CStr(odstupanja(i))
+    Next i
+    If odstupanja.count > 10 Then
+        prikaz = prikaz & "; ... (+" & CStr(odstupanja.count - 10) & ")"
+    End If
+
+    HealthFail "SchemaRegistry", _
+               "odstupanja od registra: " & CStr(odstupanja.count) & _
+               " -- " & prikaz & ". Pokreni modSchema.EnsureAllTables."
+    Exit Sub
+
+EH:
+    HealthFail "SchemaRegistry", _
+               "provera nije izvrsena: " & Err.description
 End Sub
 
 ' ============================================================

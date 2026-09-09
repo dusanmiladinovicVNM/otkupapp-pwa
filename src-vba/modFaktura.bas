@@ -15,6 +15,16 @@ Public Function CreateFaktura_TX(ByVal kupacID As String, _
 
     On Error GoTo EH
 
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
+    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
+    ' pada upisa -- greska nastaje u podacima, ne u logu.
+    '
+    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
+    ' transakciju koja se odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "CreateFaktura_TX", _
+        TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_PRIJEMNICA & _
+        "|" & TBL_NOVAC
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE

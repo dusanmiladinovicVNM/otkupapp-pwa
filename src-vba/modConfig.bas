@@ -59,9 +59,6 @@ Public Const TBL_SEF_CONFIG As String = "tblSEFConfig"
 Public Const TBL_KORISNICI As String = "tblKorisnici"
 
 ' --- Phase 2 Tabellen ---
-Public Const TBL_PROIZVODJACI As String = "tblProizvodjaci"
-Public Const TBL_HLADNJACA As String = "tblHladnjaca"
-Public Const TBL_LAGER As String = "tblLager"
 Public Const TBL_PRERADA As String = "tblPrerada"
 
 ' --- Paletni list (Phase 2 / hladnjaca) ---
@@ -73,17 +70,13 @@ Public Const TBL_TIP_PALETE As String = "tblTipPalete"
 Public Const TBL_KUTIJE As String = "tblKutije"
 Public Const TBL_KESE As String = "tblKese"
 Public Const TBL_VRSTA_GP As String = "tblVrstaGotovihProizvoda"
-Public Const TBL_KVALITET As String = "tblKvalitet"
-Public Const TBL_SEF As String = "tblSEF"
-Public Const TBL_SLEDLJIVOST As String = "tblSledljivost"
-Public Const TBL_METEO As String = "tblMeteo"
 
-' --- Report Tabellen ---
-Public Const TBL_RPT_SALDO_OM As String = "tblRptSaldoOM"
-Public Const TBL_RPT_SALDO_KUPCI As String = "tblRptSaldoKupci"
-Public Const TBL_RPT_MARZA As String = "tblRptMarza"
-Public Const TBL_RPT_VOZACI As String = "tblRptVozaci"
-Public Const TBL_RPT_ZBIRNI As String = "tblRptZbirni"
+' --- Tabele koje postoje u svesci, a do PR1 nisu imale konstantu ---
+' tblMGMT: maticni podaci rukovodstva (jos bez citaca u kodu).
+' tblLocalConfig: podesavanja PO MASINI (PDFTOTEXT_EXE_PATH i sl.),
+' odvojena od tblConfig koji je zajednicki.
+Public Const TBL_MGMT As String = "tblMGMT"
+Public Const TBL_LOCAL_CONFIG As String = "tblLocalConfig"
 
 ' --- Poruke (resource table) ---
 Public Const TBL_PORUKE   As String = "tblPoruke"

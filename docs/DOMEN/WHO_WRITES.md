@@ -5,9 +5,12 @@
 
 Izvedeno iz dva mehanicka signala u `src-vba/`:
 
-- **tx** -- `clsTransaction.AddTableSnapshot TBL_X`: operacija sama
-  deklarise koje tabele menja, da bi `RollbackTx` umeo da ih vrati.
-- **direct** -- `AppendRow` / `UpdateCell` kroz `modDataAccess`.
+- **mutate** -- `AppendRow` / `UpdateCell` / `RequireUpdateCell`:
+  modul stvarno MENJA redove. Samo ovo je vlasnistvo (ugovor A11).
+- **tx** -- `clsTransaction.AddTableSnapshot TBL_X`: operacija
+  snapshotuje tabelu da bi `RollbackTx` umeo da je vrati. To je
+  UCESCE u transakciji, ne vlasnistvo -- koordinator sme da
+  snapshotuje tudju tabelu i zove API njenog vlasnika.
 
 Test moduli su odvojeni: pisu uz rollback i nisu vlasnici podataka.
 
@@ -15,68 +18,95 @@ Test moduli su odvojeni: pisu uz rollback i nisu vlasnici podataka.
 to je klasa buga koju test hvata tek posle nastanka. Pre nego sto
 promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
-| Tabela | Pisaca | Produkcioni moduli |
+| Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblOtkup` | 12 | `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStorno`, `modStornoFlow`, `modStornoRecovery` |
-| `tblFakture` | 10 | `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar` |
-| `tblNovac` | 8 | `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modUtovar` |
-| `tblAmbalaza` | 6 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery` |
-| `tblFakturaStavke` | 5 | `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar` |
-| `tblZbirna` | 5 | `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow` |
-| `tblOtpremnica` | 4 | `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow` |
-| `tblPrijemnica` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow` |
-| `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
+| `tblOtkup` | 9 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow` |
+| `tblFakturaStavke` | 3 | `modDokumenta`, `modStorno`, `modUtovar` |
+| `tblFakture` | 3 | `modFaktura`, `modSEFPersistance`, `modStorno` |
 | `tblKorisnici` | 3 | `modAuth`, `modMaticniKorisnici`, `modSetup` |
-| `tblPaleta` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
-| `tblPaletaStavka` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
-| `tblSEFEventLog` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
-| `tblSEFSubmission` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
-| `tblMagacin` | 2 | `modAgroUnos`, `modAgrohemija` |
+| `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
+| `tblPrijemnica` | 3 | `modDokumenta`, `modFaktura`, `modStorno` |
+| `tblBankaImport` | 2 | `modBankaMapiranje`, `modStorno` |
+| `tblPaleta` | 2 | `modPaletniList`, `modStorno` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
-| `tblPrerada` | 2 | `modPaletniList`, `modStorno` |
-| `tblPreradaStavka` | 2 | `modPaletniList`, `modStorno` |
-| `tblStornoZurnal` | 2 | `modStorno`, `modStornoFlow` |
 | `tblUtovar` | 2 | `modStorno`, `modUtovar` |
-| `tblUtovarStavke` | 2 | `modStorno`, `modUtovar` |
+| `tblAmbalaza` | 1 | `modStornoRecovery` |
 | `tblArtikli` | 1 | `modAgrohemija` |
-| `tblKooperanti` | 1 | `modKooperant` |
-| `tblPartnerMap` | 1 | `modBankaMapiranje` |
+| `tblOtpremnica` | 1 | `modDokumenta` |
+| `tblPaletaStavka` | 1 | `modPaletniList` |
 | `tblPrevoznici` | 1 | `modUtovar` |
+| `tblSEFConfig` | 1 | `modConfig` |
+| `tblSEFSubmission` | 1 | `modSEFPersistance` |
 | `tblStornoVeze` | 1 | `modStornoContext` |
+| `tblUtovarStavke` | 1 | `modUtovar` |
+| `tblZbirna` | 1 | `modDokumentInvariant` |
+| `tblKooperanti` | 0 | _(samo testovi)_ |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
-| `tblSEFConfig` | 0 | _(samo testovi)_ |
+| `tblMagacin` | 0 | _(samo testovi)_ |
+| `tblPartnerMap` | 0 | _(samo testovi)_ |
+| `tblPrerada` | 0 | _(samo testovi)_ |
+| `tblPreradaStavka` | 0 | _(samo testovi)_ |
+| `tblSEFEventLog` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
+| `tblStornoZurnal` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
+
+## Ucesnici transakcije (snapshot, NE vlasnistvo)
+
+- `tblOtkup`: `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modSledljivost`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
+- `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblKorisnici`: `modMaticniKorisnici`
+- `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
+- `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
+- `tblPaleta`: `modDokumenta`, `modPaletniList`, `modStorno`
+- `tblParcele`: `modGeoParcele`, `modMasterSync`
+- `tblUtovar`: `modStorno`, `modUtovar`
+- `tblAmbalaza`: `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
+- `tblOtpremnica`: `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
+- `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
+- `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
+- `tblStornoVeze`: `modStornoContext`
+- `tblUtovarStavke`: `modStorno`, `modUtovar`
+- `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
+- `tblKooperanti`: `modKooperant`
+- `tblMagacin`: `modAgroUnos`, `modAgrohemija`
+- `tblPartnerMap`: `modBankaMapiranje`
+- `tblPrerada`: `modPaletniList`, `modStorno`
+- `tblPreradaStavka`: `modPaletniList`, `modStorno`
+- `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
+- `tblStornoZurnal`: `modStorno`, `modStornoFlow`
 
 ## Test moduli po tabeli
 
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
-- `tblFakture`: `modSEFTests`, `modTestBanka`, `modTestStorno`
-- `tblNovac`: `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
-- `tblAmbalaza`: `modBusinessFlowProTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
-- `tblFakturaStavke`: `modTestStorno`
-- `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
+- `tblFakturaStavke`: `modTest`, `modTestStorno`
+- `tblFakture`: `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
+- `tblNovac`: `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
 - `tblPaleta`: `modBusinessFlowProTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblPaletaStavka`: `modBusinessFlowProTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblSEFEventLog`: `modSEFTests`
-- `tblSEFSubmission`: `modSEFTests`
-- `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblParcele`: `modAgrohemijaTests`
-- `tblStornoZurnal`: `modTestStornoCentar`
+- `tblAmbalaza`: `modBusinessFlowProTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblArtikli`: `modAgrohemijaTests`
-- `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
-- `tblPartnerMap`: `modTestBanka`
+- `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
+- `tblPaletaStavka`: `modBusinessFlowProTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblSEFConfig`: `modTestStorno`
+- `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
+- `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`
 - `tblKutije`: `modTest`
-- `tblSEFConfig`: `modTestStorno`
+- `tblMagacin`: `modAgrohemijaTests`, `modTest`
+- `tblPartnerMap`: `modTestBanka`
+- `tblSEFEventLog`: `modSEFTests`
 - `tblStanice`: `modTestBanka`
+- `tblStornoZurnal`: `modTestStornoCentar`
 - `tblTipAmbalaze`: `modTestPalete`
 
 ## Sta ovo NE pokriva

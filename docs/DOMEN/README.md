@@ -61,9 +61,28 @@ Ne dodavati kolonu sa saldom. Puni model: `docs/AMBALAZA_MODEL.md`.
 ostaju u formi posle snimanja (sledeći blok ide u niz iste otpremnice), kooperant
 se briše. Ugovor i testovi: `.claude/rules/otkup-i-dokumenta.md`.
 
-**Šema tabela je izvor istine, ne kod.** Instalacije se razlikuju (schema drift).
-Pre upisa proveri stvarne nazive kolona; `tools/dump_schema.py` ispisuje šemu bilo
-koje sveske. Vidi `CLAUDE.md` §4.
+**Registar u `modSchema` je izvor istine za šemu — ne sveska.** Obrnuto je važilo
+do PR1: spiskovi kolona osnovnih tabela živeli su isključivo u `.xlsm`, pa se
+prazna sveska nije mogla rekonstruisati, a obrisana kolona se videla tek kao pad
+upisa satima kasnije.
+
+Sada: `modSchema` deklariše svih 41 tabelu i 590 kolona, `EnsureAllTables` ih
+pravi i dopunjava, `VerifySchema` prijavljuje odstupanje (i vrti se u health
+check-u), a `SchemaReadyOrFail` je tvrda kapija pred upis. Registar je generisan
+iz stvarne sveske i regeneriše se:
+
+```
+python tools/dump_schema.py <sveska> --json <put.json>
+python tools/gen_schema_module.py --json <put.json>
+```
+
+Statička kapija `SEMA_REGISTAR` (`vba_check`) ne pušta `TBL_*` konstantu koje
+nema u registru. Suprotan smer — tabela u svesci bez konstante — hvata generator.
+
+**Vlasništvo nad upisom je deklarisano** (`WRITE_OWNERSHIP.json`, ugovor A11).
+`python tools/who_writes.py --check-ownership` obara CI na svakog novog pisca
+domen-tabele. Lista je zamrznuto zatečeno stanje — račna, ne cilj; skraćuje se
+kroz PR-ove.
 
 ## 3) Ko šta piše
 
@@ -85,7 +104,11 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | Provere integriteta | `docs/INTEGRITET_PROVERE.md` |
-| Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` |
+| Arhitektonski ugovor (A1–A12, kapije, Pre-Flight) | `docs/DOMEN/ARCHITECTURE_CONTRACT.md` |
+| Ciljni model dokumenata (header + stavke, PK/FK, kardinaliteti) | `docs/DOMEN/DOCUMENT_HEADER_LINES.md` |
+| Vlasništvo nad upisom (A11) | `docs/DOMEN/WRITE_OWNERSHIP.json` |
+| Plan refaktora, redosled PR-ova, kapija odluke | `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` |
+| Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |

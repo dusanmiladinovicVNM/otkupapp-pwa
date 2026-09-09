@@ -1,0 +1,233 @@
+{
+  "_o_fajlu": [
+    "Vlasnistvo nad upisom u tabele (Architecture Contract A11).",
+    "GENERISAN baseline (PR1) -- posle se menja RUCNO, i to samo skracivanjem.",
+    "",
+    "row_owner: moduli koji smeju da MENJAJU redove. JEDINI spisak koji kapija",
+    "           proverava. modSetup je ovde jer danas stvarno pise (backfill",
+    "           BrojOtpremnice nad tblOtkup, admin nad tblKorisnici) -- ne zato",
+    "           sto sme; cilj ga iskljucuje.",
+    "cilj:      A11 meta. Prazno = odluka jos nije doneta; ne izmisljati.",
+    "",
+    "Kapija meri MUTATORE (AppendRow / UpdateCell / RequireUpdateCell), ne",
+    "ucesnike transakcije (AddTableSnapshot). Snapshot je ucesce, ne vlasnistvo.",
+    "",
+    "    python tools/who_writes.py --check-ownership",
+    "",
+    "Test moduli se ne broje: pisu uz rollback i nisu vlasnici podataka."
+  ],
+  "tblAmbalaza": {
+    "row_owner": [
+      "modStornoRecovery"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblArtikli": {
+    "row_owner": [
+      "modAgrohemija"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblBankaImport": {
+    "row_owner": [
+      "modBankaMapiranje",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblFakturaStavke": {
+    "row_owner": [
+      "modDokumenta",
+      "modStorno",
+      "modUtovar"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblFakture": {
+    "row_owner": [
+      "modFaktura",
+      "modSEFPersistance",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblKorisnici": {
+    "row_owner": [
+      "modAuth",
+      "modMaticniKorisnici",
+      "modSetup"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblNovac": {
+    "row_owner": [
+      "modBankaMapiranje",
+      "modNovac",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblOtkup": {
+    "row_owner": [
+      "modAutoHladnjaca",
+      "modDokumenta",
+      "modMasterSync",
+      "modNovac",
+      "modOtkup",
+      "modOtkupBlok",
+      "modSetup",
+      "modSledljivost",
+      "modStornoFlow"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modOtkup"
+    ]
+  },
+  "tblOtpremnica": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblPaleta": {
+    "row_owner": [
+      "modPaletniList",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblPaletaStavka": {
+    "row_owner": [
+      "modPaletniList"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblParcele": {
+    "row_owner": [
+      "modGeoParcele",
+      "modMasterSync"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblPrevoznici": {
+    "row_owner": [
+      "modUtovar"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblPrijemnica": {
+    "row_owner": [
+      "modDokumenta",
+      "modFaktura",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblSEFConfig": {
+    "row_owner": [
+      "modConfig"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblSEFSubmission": {
+    "row_owner": [
+      "modSEFPersistance"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblStornoVeze": {
+    "row_owner": [
+      "modStornoContext"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblUtovar": {
+    "row_owner": [
+      "modStorno",
+      "modUtovar"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblUtovarStavke": {
+    "row_owner": [
+      "modUtovar"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblZbirna": {
+    "row_owner": [
+      "modDokumentInvariant"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblOtkupStavke": {
+    "row_owner": [
+      "modOtkup"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modOtkup"
+    ]
+  },
+  "tblOtpremnicaStavke": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblPrijemnicaStavke": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblZbirnaStavke": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  }
+}

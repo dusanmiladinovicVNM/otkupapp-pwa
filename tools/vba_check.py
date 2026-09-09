@@ -1081,6 +1081,69 @@ def check_storno_registar(files: list[str],
     return out
 
 
+# --- SEMA_REGISTAR: svaka TBL_ konstanta mora biti u registru seme ------------
+#
+# Od PR1 je izvor istine za strukturu tabela modSchema, ne sveska. To vazi samo
+# ako je registar POTPUN: TBL_ konstanta koje u njemu nema je tabela koju
+# EnsureAllTables nece napraviti i VerifySchema nece proveriti -- dakle tiha
+# rupa tacno u mehanizmu koji postoji da rupa ne bude tiha.
+#
+# Isti oblik kao STORNO_REGISTAR: spisak je DEKLARACIJA OCEKIVANJA, a provera
+# je staticka, da se ne oslanja na to da li je neko pokrenuo Excel.
+#
+# Obrnut smer (tabela u svesci bez konstante) hvata tools/gen_schema_module.py
+# pri generisanju -- tamo je jer trazi ispis stvarne sveske.
+SEMA_REG_POZIV = re.compile(r"^\s*RegistrujTabelu\s+reg\s*,\s*(TBL_\w+)\s*,", re.I)
+SEMA_TBL_CONST = re.compile(r'^Public Const (TBL_\w+)\s+As String\s*=\s*"(\w+)"')
+
+
+def registar_seme(schema_path: str) -> set[str]:
+    """TBL_ konstante koje modSchema stvarno upisuje u registar."""
+    if not os.path.exists(schema_path):
+        return set()
+    with open(schema_path, "r", encoding="ascii", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    poznate: set[str] = set()
+    for tekst, _ln in _logical_lines(lines):
+        m = SEMA_REG_POZIV.match(_strip_comment(tekst))
+        if m:
+            poznate.add(m.group(1))
+    return poznate
+
+
+def check_sema_registar(config_path: str | None = None,
+                        schema_path: str | None = None) -> list[Finding]:
+    if config_path is None:
+        config_path = os.path.join(SRC_VBA, "modConfig.bas")
+    if schema_path is None:
+        schema_path = os.path.join(SRC_VBA, "modSchema.bas")
+
+    if not os.path.exists(config_path) or not os.path.exists(schema_path):
+        return []
+
+    u_registru = registar_seme(schema_path)
+    if not u_registru:
+        # modSchema postoji ali registar je prazan -- to je kvar, ne "nema sta"
+        return [Finding(schema_path, 1, "SEMA_REGISTAR",
+                        "modSchema postoji, a registar je prazan: nijedan poziv "
+                        "'RegistrujTabelu reg, TBL_X, ...' nije nadjen. Regenerisi ga "
+                        "(python tools/gen_schema_module.py --json <put>).")]
+
+    out = []
+    with open(config_path, "r", encoding="ascii", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    for i, l in enumerate(lines, 1):
+        m = SEMA_TBL_CONST.match(l)
+        if m and m.group(1) not in u_registru:
+            out.append(Finding(
+                config_path, i, "SEMA_REGISTAR",
+                f"{m.group(1)} ('{m.group(2)}') nije u registru seme "
+                f"(modSchema). EnsureAllTables je nece napraviti, a "
+                f"VerifySchema nece prijaviti da fali -- dodaj je u registar "
+                f"ili obrisi konstantu ako je mrtva."))
+    return out
+
+
 # --- jedna putanja za sve provere nad jednim fajlom ---------------------------
 #
 # Postoji da bi self-test isao KROZ NJU, a ne pored nje. Da self-test zove
@@ -2079,6 +2142,67 @@ STORNO_PROGUTAN_CASES = [
 
 # STORNO_REGISTAR: poziv mora da imenuje tabelu koju registar poznaje.
 # Lazni registar u self-testu zna TBL_OTKUP, TBL_NOVAC i TBL_KUPCI.
+_SR_SCH_OK = (
+    "Option Explicit\n"
+    "Private Sub SpecOtkup(ByVal reg As Object)\n"
+    "    Dim k As Collection\n"
+    "    Set k = New Collection\n"
+    '    k.Add "OtkupID"\n'
+    '    RegistrujTabelu reg, TBL_OTKUP, "Otkup", k\n'
+    "End Sub\n"
+    "Private Sub SpecKupci(ByVal reg As Object)\n"
+    "    Dim k As Collection\n"
+    "    Set k = New Collection\n"
+    '    k.Add "KupacID"\n'
+    '    RegistrujTabelu reg, TBL_KUPCI, "Kupci", k\n'
+    "End Sub\n"
+)
+
+SEMA_REGISTAR_CASES = [
+    ("sve konstante u registru -- cisto", 0,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP As String = "tblOtkup"\n'
+     'Public Const TBL_KUPCI As String = "tblKupci"\n',
+     _SR_SCH_OK),
+    ("konstanta van registra -- nalaz", 1,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP As String = "tblOtkup"\n'
+     'Public Const TBL_KUPCI As String = "tblKupci"\n'
+     'Public Const TBL_ZABORAVLJENA As String = "tblZaboravljena"\n',
+     _SR_SCH_OK),
+    ("vise razmaka pre As se i dalje vidi", 1,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP   As String = "tblOtkup"\n'
+     'Public Const TBL_KUPCI As String = "tblKupci"\n'
+     'Public Const TBL_DRUGA    As String = "tblDruga"\n',
+     _SR_SCH_OK),
+    ("prazan registar je kvar, ne 'nema sta'", 1,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP As String = "tblOtkup"\n',
+     "Option Explicit\n"
+     "Private Sub BuildRegistry()\n"
+     "End Sub\n"),
+    ("zakomentarisan Reg se ne broji kao pokrivenost", 1,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP As String = "tblOtkup"\n'
+     'Public Const TBL_KUPCI As String = "tblKupci"\n',
+     "Option Explicit\n"
+     "Private Sub SpecOtkup(ByVal reg As Object)\n"
+     "    Dim k As Collection\n"
+     '    RegistrujTabelu reg, TBL_OTKUP, "Otkup", k\n'
+     '    '"'"' RegistrujTabelu reg, TBL_KUPCI, "Kupci", k\n'
+     "End Sub\n"),
+    ("prelomljen Reg poziv se vidi", 0,
+     "Option Explicit\n"
+     'Public Const TBL_OTKUP As String = "tblOtkup"\n',
+     "Option Explicit\n"
+     "Private Sub SpecOtkup(ByVal reg As Object)\n"
+     "    Dim k As Collection\n"
+     "    RegistrujTabelu reg, _\n"
+     '        TBL_OTKUP, "Otkup", k\n'
+     "End Sub\n"),
+]
+
 STORNO_REGISTAR_CASES = [
     ("tabela iz spiska sa stornom -- cisto", 0,
      "Option Explicit\n"
@@ -3081,6 +3205,24 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp2, ignore_errors=True)
 
+    # SEMA_REGISTAR je isto cross-file (modConfig + modSchema), sa lazna dva
+    # fajla na disku.
+    tmp3 = tempfile.mkdtemp(prefix="vbacheck_sr_")
+    try:
+        for naziv, ocekivano, cfg, sch in SEMA_REGISTAR_CASES:
+            pc = os.path.join(tmp3, "modConfig.bas")
+            ps = os.path.join(tmp3, "modSchema.bas")
+            with open(pc, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(cfg)
+            with open(ps, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(sch)
+            dobijeno = len(check_sema_registar(pc, ps))
+            if dobijeno != ocekivano:
+                palo.append(f"  SEMA_REGISTAR/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp3, ignore_errors=True)
+
     for naziv, ocekivano, mapa, izvor in KVAL_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         # Putanja MORA biti .bas: check_undefined radi samo nad modulima, pa bi
@@ -3327,6 +3469,7 @@ def main(argv: list[str]) -> int:
 
     findings += check_poruke(files)
     findings += check_storno_registar(files)
+    findings += check_sema_registar()
     findings += check_clan_forme(files)
 
     # Katalog se proverava UVEK, i kad je dat jedan fajl.
