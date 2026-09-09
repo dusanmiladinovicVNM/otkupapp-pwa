@@ -127,6 +127,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju
     Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
     Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta
+    Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli
+    Test_ZBR_IspravkaVezeSvojuDecuNeTudju
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -3379,6 +3381,212 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFail "ZBR-CHILD-01 faza 3 kaskada po generaciji", bfpErrDesc
+End Sub
+
+' ZBR-CHILD-01 faza 3 / P1: rezim je po OPERACIJI, ne po tabeli.
+'
+' Kaskada bira decu iz tri skupa. Kad svaki odlucuje sam, jedna poslovna radnja
+' zna da bude pola scoped a pola po broju:
+'
+'   otpremnice: obe nose generaciju -> suzi na GEN-B -> OTP-A prezivi
+'   prijemnice: jedna je legacy     -> fallback      -> PRJ-A stornirana
+'
+' Ovaj test NE tvrdi da je fallback ishod pozeljan -- tvrdi da je JEDINSTVEN.
+' Kad bilo koji skup padne na broj, pada CELA operacija; mesavina je gora od oba
+' cista rezima, jer ostavlja pola dokumenta.
+Private Sub Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim broj As String
+    Dim zbrA As String, zbrB As String, genA As String, genB As String
+    Dim otpA As String, otpB As String, prjA As String, prjB As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRF3X")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' --- dokument A: otpremnica sa generacijom, prijemnica ZATECENA (bez nje) ---
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3X-A-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3XA-" & scenario, broj, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-F3XA-" & scenario, broj, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, KLASA_I, 0)
+    AssertTrue (Len(otpA) > 0 And Len(prjA) > 0), _
+        "ZBR-F3X preduslov: dokument A ima i otpremnicu i prijemnicu"
+
+    IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjA
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F3X preduslov: otpremnica A NOSI generaciju"
+    AssertEquals "", DeteGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+        "ZBR-F3X preduslov: prijemnica A je ZATECENA (bez generacije)"
+
+    AssertTrue StornoZbirna_TX(broj, genA), _
+        "ZBR-F3X preduslov: zaglavlje A je stornirano (deca ostaju aktivna)"
+
+    ' --- dokument B: oba deteta nose generaciju ---
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3X-B-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    otpB = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3XB-" & scenario, broj, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 8, KLASA_I)
+    prjB = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-F3XB-" & scenario, broj, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 0, 0, KLASA_I, 0)
+    AssertTrue (Len(genB) > 0 And genB <> genA), _
+        "ZBR-F3X preduslov: B je NOVA generacija pod istim brojem"
+    AssertEquals genB, DeteGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+        "ZBR-F3X preduslov: prijemnica B nosi generaciju"
+
+    Set r = RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, genB)
+    AssertTrue CBool(r("success")), "ZBR-F3X preduslov: ponistenje B je proslo"
+
+    ' Sopstvena deca su svakako dirnuta -- bez toga kaskada nije ni radila.
+    AssertTrue RedJeStorniran(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F3X preduslov: sopstvena otpremnica B je stornirana"
+    AssertTrue RedJeStorniran(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+        "ZBR-F3X preduslov: sopstvena prijemnica B je stornirana (lanac je vlasnicki)"
+
+    ' JEZGRO: prijemnica A je legacy, pa CELA operacija pada na broj -- ukljucujuci
+    ' i otpremnice. Mesavina bi ostavila OTP-A a stornirala PRJ-A.
+    AssertEquals StornoOznaka(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+                 StornoOznaka(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F3X: otpremnica i prijemnica drugog dokumenta zavrse u ISTOM stanju"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 faza 3 rezim po operaciji", bfpErrDesc
+End Sub
+
+Private Function StornoOznaka(ByVal tableName As String, ByVal idColumn As String, _
+                                      ByVal idValue As String) As String
+    StornoOznaka = UCase$(NzToText(LookupValue(tableName, idColumn, idValue, COL_STORNIRANO)))
+End Function
+
+Private Function RedJeStorniran(ByVal tableName As String, ByVal idColumn As String, _
+                                ByVal idValue As String) As Boolean
+    RedJeStorniran = (StornoOznaka(tableName, idColumn, idValue) = "DA")
+End Function
+
+' ZBR-CHILD-01 faza 3 / P1: ISPRAVKA uzima identitet STAROG dokumenta.
+'
+' Lifecycle je: context sa OldDocID -> StornoZbirna_TX -> operater snimi novu ->
+' CompleteZbirnaIspravka -> relink. U trenutku relinka stara zbirna VISE NIJE
+' AKTIVNA, pa razresavanje po broju ne moze da je nadje.
+'
+' Prva verzija je bas tu zvala ZbirnaGeneracijaZaBroj(oldBroj). Dva ishoda:
+'   nema drugog dokumenta pod tim brojem -> prazno -> suzavanje mrtvo
+'   ima aktivnog GEN-B pod istim brojem  -> GEN-B  -> relink precizno izabere
+'                                                     POGRESAN dokument
+' Drugi je gori od stanja pre faze 3: nekad je prevozio i svoju i tudju decu, a
+' tako bi prevezao SAMO tudju, a svoju ostavio. Ovaj test meri bas taj slucaj.
+Private Sub Test_ZBR_IspravkaVezeSvojuDecuNeTudju()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim brojStari As String, brojNovi As String
+    Dim zbrA As String, zbrB As String, zbrC As String
+    Dim genA As String, genB As String, genC As String
+    Dim otpA As String, otpB As String
+    Dim cid As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRF3I")
+    testDate = NextTestDate()
+    brojStari = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brojNovi = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+               Format$(NextTestDate(), "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3I-A-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, brojStari)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3IA-" & scenario, brojStari, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F3I preduslov: otpremnica A nosi generaciju A"
+
+    ' Ispravka: zaglavlje A se stornira, context pamti njegov OldDocID.
+    Set r = RunZbirnaCorrection(brojStari, SV_MODE_ISPRAVKA, True, genA)
+    cid = CStr(r("correctionID"))
+    AssertTrue (CBool(r("success")) And Len(cid) > 0), _
+        "ZBR-F3I preduslov: ispravka je otvorena i zaglavlje A stornirano"
+
+    ' IZMEDJU storna i zavrsetka pod ISTIM brojem nastane drugi dokument.
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRF3I-B-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, brojStari)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    otpB = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-F3IB-" & scenario, brojStari, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F3I preduslov: otpremnica B nosi generaciju B"
+    AssertEquals genB, ZbirnaGeneracijaZaBroj(brojStari), _
+        "ZBR-F3I preduslov: razresavanje po STAROM broju sada vraca TUDJU generaciju"
+
+    ' Zamena: nova zbirna pod NOVIM brojem.
+    zbrC = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojNovi, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    genC = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrC)
+    AssertTrue Len(genC) > 0, "ZBR-F3I preduslov: zamenska zbirna je snimljena"
+
+    Set r = CompleteZbirnaIspravka(cid, brojNovi)
+    AssertTrue CBool(r("success")), "ZBR-F3I preduslov: zavrsetak ispravke je prosao"
+
+    AssertEquals brojNovi, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3I: ispravka prevezuje SVOJU otpremnicu na novi broj"
+    AssertEquals brojStari, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-F3I: otpremnica drugog dokumenta ostaje NETAKNUTA"
+    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F3I: otpremnica drugog dokumenta zadrzava svoju generaciju"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 faza 3 ispravka veze svoju decu", bfpErrDesc
 End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()

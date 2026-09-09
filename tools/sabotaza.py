@@ -5362,6 +5362,27 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
+    # ZBR-CHILD-01 faza 3 / P1: vraca odluku o rezimu na NIVO TABELE. Kaskada tada
+    # sme da bude pola scoped (otpremnice) a pola po broju (prijemnice), pa jedan
+    # dokument zavrsi polovicno ponisten.
+    "rezim-se-odlucuje-po-tabeli": (
+        "modStornoFlow.bas",
+        "        scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)\n",
+        "        scopeOK = True   ' SABOTAZA: rezim po tabeli, ne po operaciji\n",
+        "Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli",
+        "ZBR-F3X: otpremnica i prijemnica drugog dokumenta zavrse u ISTOM stanju",
+    ),
+    # ZBR-CHILD-01 faza 3 / P1: vraca pogadjanje po broju tamo gde je kanonski ID
+    # vec sacuvan. Na ISPRAVKA lifecycle-u stara zbirna je vec stornirana, pa
+    # resolver vrati generaciju TUDJEG aktivnog dokumenta pod istim brojem.
+    "relink-staru-generaciju-pogadja-po-broju": (
+        "modStornoFlow.bas",
+        "    If Len(Trim$(oldDocID)) > 0 Then _\n"
+        "        genStare = NzToText(GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, oldDocID))\n",
+        "    genStare = ZbirnaGeneracijaZaBroj(oldBroj)   ' SABOTAZA: pogadja po broju\n",
+        "Test_ZBR_IspravkaVezeSvojuDecuNeTudju",
+        "ZBR-F3I: otpremnica drugog dokumenta ostaje NETAKNUTA",
+    ),
     # ZBR-CHILD-01 faza 3: gasi suzavanje -- kaskada opet dira svu decu pod brojem.
     # Meri se posledica, ne grana: dete DRUGOG dokumenta ostaje vezano samo ako
     # suzavanje stvarno radi.

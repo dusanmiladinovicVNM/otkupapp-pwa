@@ -1569,6 +1569,55 @@ Public Sub OdveziDeteOdZbirne(ByVal tableName As String, ByVal rowIndex As Long,
     PoveziDeteNaZbirnu tableName, rowIndex, brojCol, "", "", sourceName
 End Sub
 
+' ZBR-CHILD-01 faza 3: da li se CELA operacija sme suzavati.
+'
+' `SuziDecuNaGeneraciju` odlucuje po JEDNOM skupu, a poslovna mutacija dira vise
+' tabela. Kad svaka odlucuje sama, jedna kaskada zna da bude pola scoped a pola
+' po broju: otpremnice suzene na GEN-B, a prijemnice -- jer je jedna legacy --
+' vracene na broj, pa se stornira i prijemnica GEN-A. Sve-ili-nista mora da vazi
+' nad CELOM operacijom, ne nad tabelom.
+'
+' Odluka se zato racuna JEDNOM, nad svim tabelama koje ta operacija bira po broju,
+' pa se svim selektorima prosledi ista: generacija (suzavaj) ili prazno (ne suzavaj).
+'
+' Poredi kroz BrojJednak namerno, iako cetiri pozivaoca porede tacno. BrojJednak
+' je siri, pa je ovde skup kandidata NADSKUP stvarnog: ako svi u nadskupu nose
+' generaciju, nosi je i svaki podskup. Greska ide samo u stranu "ne suzavaj",
+' nikad u "suzi pogresno".
+Public Function SvaAktivnaDecaNoseGeneraciju(ByVal tableName As String, _
+                                             ByVal brojCol As String, _
+                                             ByVal broj As String) As Boolean
+    SvaAktivnaDecaNoseGeneraciju = True
+
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(tableName)
+    If IsEmpty(data) Then Exit Function
+    If Not IsArray(data) Then Exit Function
+
+    Dim cBroj As Long: cBroj = GetColumnIndex(tableName, brojCol)
+    If cBroj = 0 Then Exit Function
+    Dim cSt As Long: cSt = GetColumnIndex(tableName, COL_STORNIRANO)
+    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_GEN)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If BrojJednak(data(i, cBroj), broj) Then
+            If cSt = 0 Or UCase$(Trim$(NzToText(data(i, cSt)))) <> "DA" Then
+                ' Kandidat postoji, a tabela nema kolonu -> ne moze se scope-ovati.
+                If cGen = 0 Then
+                    SvaAktivnaDecaNoseGeneraciju = False
+                    Exit Function
+                End If
+                If Len(Trim$(NzToText(data(i, cGen)))) = 0 Then
+                    SvaAktivnaDecaNoseGeneraciju = False
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 ' ZBR-CHILD-01 faza 3: JEDAN put kojim se skup dece suzava na JEDAN dokument.
 '
 ' Pandan write choke point-u iznad. Namerno NE preuzima i izbor po broju: cetiri

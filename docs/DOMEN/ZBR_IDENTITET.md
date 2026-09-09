@@ -697,6 +697,56 @@ aktivnih dokumenata je takođe 1. Kapija pušta, a `Detach` po broju odvezuje i 
 rupu. Zatvara je faza 4, prelaskom kapije sa `historicalOwnerCount` na
 `historicalLogicalCount`.
 
+#### Granica „sve-ili-ništa" je OPERACIJA, ne tabela
+
+`SuziDecuNaGeneraciju` odlučuje nad **jednim** skupom, a poslovna mutacija dira
+više tabela. Kad svaka odlučuje sama, jedna kaskada zna da bude pola scoped a
+pola po broju:
+
+```
+ZB-X / GEN-A:  OTP-A -> GEN-A      PRJ-A -> ""      <- legacy
+ZB-X / GEN-B:  OTP-B -> GEN-B      PRJ-B -> GEN-B
+
+ponisti GEN-B:
+  otpremnice  svi popunjeni -> suzi -> OTP-A prezivi
+  prijemnice  jedan prazan  -> broj  -> PRJ-A STORNIRANA
+```
+
+Dokument `GEN-A` završi **polovično poništen**, što je gore od oba čista režima.
+
+Zato `SvaAktivnaDecaNoseGeneraciju` računa odluku **jednom**, nad svim tabelama
+koje ta operacija bira po broju, pa se svim selektorima prosledi isti režim:
+
+| operacija | tabele u odluci |
+|---|---|
+| `DetachOtpremniceInline` | `tblOtpremnica` + `tblOtkup` |
+| `PonistiZbirnaChain_TX` | `tblOtpremnica` (+ `tblPrijemnica`, `tblPaletaStavka` kad `ownsChain`) |
+| `CompleteZbirnaIspravka` | `tblOtpremnica` + `tblOtkup` + `tblPrijemnica` |
+
+Odlučivač poredi kroz `BrojJednak` iako četiri pozivaoca porede tačno. `BrojJednak`
+je širi, pa je njegov skup kandidata **nadskup** stvarnog — ako svi u nadskupu nose
+generaciju, nosi je i svaki podskup. Greška ide samo u stranu „ne sužavaj".
+
+#### Ispravka uzima identitet, ne pogađa ga
+
+Lifecycle je: context sa `OldDocID` → `StornoZbirna_TX` → operater snimi novu →
+`CompleteZbirnaIspravka` → relink. **U trenutku relinka stara zbirna više nije
+aktivna**, pa je razrešavanje po broju tu najgore što se može uraditi:
+
+```
+GEN-A  broj X  STORNIRANA   <- dokument koji se ispravlja
+GEN-B  broj X  AKTIVNA      <- nastao u medjuvremenu
+
+ZbirnaGeneracijaZaBroj("X")  ->  GEN-B
+```
+
+Relink bi tada **precizno izabrao pogrešan dokument**: prevezao bi tuđu decu, a
+svoju ostavio. To je gore od stanja pre faze 3, gde je prevozio obe.
+
+`GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, oldDocID)` radi nad PK-om, kome storno ne
+smeta. Kanonski ID je sačuvan **pre** storna — isto pravilo kao u §15: *nikad ne
+pogađaj kad već znaš*.
+
 #### Jedan ishod koji se menja
 
 `RelinkOtpremniceToZbirna_TX` sada sužava **izvor**. Kad pod starim brojem aktivnu
