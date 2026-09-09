@@ -1,6 +1,6 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: 13 scenarija implementirano i zaključano.**
+> **Status: 12 registrovano i zaključano; D1 čeka poslovnu odluku (§10).**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -139,7 +139,7 @@ FAKTURA
 
 ---
 
-## 4) Scenariji (13 zadržanih)
+## 4) Scenariji (12 registrovanih + D1 pending)
 
 ### A — Fresh Fruit Flow
 
@@ -169,7 +169,7 @@ FAKTURA
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| D1 | Storno otpremnice → zbirna se rekalkuliše | §6.2 posle mutacije |
+| D1 | Storno otpremnice → zbirna se rekalkuliše | **NIJE registrovan — §10** |
 | D2 | Storno prijemnice koja je fakturisana | kaskada |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
@@ -193,26 +193,19 @@ FAKTURA
 | Pitanje | Odluka |
 |---|---|
 | Rečnik tvrdnji (§2) | prihvaćen; dopunjen sa **brojem logičkih dokumenata** kao dozvoljenom činjenicom i **brojem ID-eva** kao zabranjenom |
-| Obim | zadržava se **svih 20** |
-| B4 | golden se piše na **ispravnu** vrednost — v. §5b |
+| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 pending (§10) |
 
-### 5b) B4 ne sme da bude trajno crvena centralna kapija
+### 5b) Nijedan scenario ne sme da bude trajno crvena centralna kapija
 
 `RunGoldenSuite` je `gate: True` i u podrazumevanom setu. Scenario koji trajno
 pada pretvorio bi FULL u trajno crven — a provera koju operater nauči da
-ignoriše ne štiti ništa. To je ista bolest kao placebo test, samo obrnuta.
+ignoriše ne štiti ništa.
 
-Zato:
+Zato scenario čije poslovno pravilo **još nije odlučeno** ostaje **neregistrovan
+i bez goldena**, a razlog se piše ovde. Golden pisan na neodlučenu semantiku je
+gori od nijednog: zamrzava pretpostavku kao ugovor.
 
-- golden za B4 se piše na **ispravnu** vrednost (kooperant plaćen u celosti →
-  `isplaceno svi DA`) i **pregleda se**,
-- ali se B4 **ne registruje** u `RunGoldenSuite` dok PR6 ne ukloni primary-row
-  bug (`modNovac.bas:1240` računa po redu, `modOtkup.bas:279` piše novac samo na
-  primarni red),
-- PR6 ga registruje i time **dokazuje** da je bug popravljen.
-
-Alternativa — pisati golden na današnju pogrešnu vrednost pa ga menjati u PR6 —
-značila bi da sigurnosna mreža kodifikuje bug.
+Trenutno tako stoji **D1** (§10). Ranije su tako uklonjeni B1 i B4 (§8).
 
 ---
 
@@ -332,9 +325,47 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 | A5 | kalo 25 kg je poslovna činjenica, ne greška |
 | B2 | pun avans 50 000 → `avansom 50000`, `isplaceno svi DA` |
 | B3 | delimičan avans 20 000 → `isplaceno svi NE` (prag nije dostignut) |
-| D1 | storno otpremnice: `aktivnih 0 / storniranih 1`, zbirna ostaje bez izvora |
-| D2 | storno fakturisane prijemnice — kaskada |
-| D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument, obe klase |
+| D2 | storno fakturisane prijemnice: faktura `osirocena DA`, `osirocenih stavki 1` — izdata faktura se ne briše, traži korekciju |
+| D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument; novac ostaje u istoriji ali se **odvezuje**: `ukupno 56000 / vezano 0 / nealocirano 56000` |
 | F2 | fakturisano `I=DA / II=NE` — dokaz da je `Fakturisano` line-level |
 | G1 | samo Klasa II prolazi ceo lanac |
-| G2 | isti broj, dva dokumenta: storno jednog ne dira drugi (`aktivnih 1 / storniranih 1`) |
+| G2 | **dve zbirne sa istim `BrojZbirne`**, različitih vlasnika: storno jedne ne dira drugu (`aktivnih 1 / storniranih 1`) |
+
+---
+
+## 10) D1 — nedorečen lifecycle, ne bug u testu
+
+Prva verzija D1 je **zaključala kvar kao očekivano ponašanje**. Golden je glasio:
+
+```
+otpremnica  aktivnih 0  storniranih 1
+ZBIRNA
+  poslato     I=0.00
+  primljeno   I=1000.00
+  kalo        I=-1000.00
+  invarijanta PUKLA
+```
+
+Time je mreža tvrdila: *„posle legalne poslovne operacije dozvoljeno je da
+kanonska invarijanta bude PUKLA."* To je suprotno od njene svrhe.
+
+Uzrok nije u testu. `StornoOtpremnica_TX` stornira otpremnicu i njenu ambalažu i
+**namerno nema kaskadu** ka zbirnoj — `modStorno` to i kaže. Ali zbirna je
+agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa ostaje bez
+izvora.
+
+### Odluka koja nedostaje
+
+Otpremnica ima aktivnu zbirnu (i eventualno prijemnicu). Storno otpremnice:
+
+| Opcija | Posledica |
+|---|---|
+| **A — zabrani** | storno pada dok zbirna postoji; operater prvo mora da razveže |
+| **B — kaskadiraj** | storno povlači zbirnu (i prijemnicu) nizvodno |
+| **C — rekalkuliši** | zbirna se automatski umanji za storniranu otpremnicu |
+
+Šta god se izabere, ishod **ne sme** biti „operacija uspela, sistem
+nekonzistentan".
+
+Do te odluke D1 nije registrovan i nema golden. Kad odluka padne, D1 se piše na
+**odlučeno** ponašanje i registruje — i time postaje dokaz da pravilo važi.

@@ -42,6 +42,9 @@ Private Const GLD_DATUM As Date = #3/15/2026#
 Private Const GLD_KOOP As String = "KOOP-GLD-1"
 Private Const GLD_STANICA As String = "STA-GLD-1"
 Private Const GLD_VOZAC As String = "VOZ-GLD-1"
+' Drugi vozac: zbirna se broji PO VOZACU, pa dva dokumenta sa istim brojem
+' mogu legalno postojati samo ako im je vlasnik razlicit (v. G2).
+Private Const GLD_VOZAC2 As String = "VOZ-GLD-2"
 Private Const GLD_KUPAC As String = "KUP-GLD-1"
 Private Const GLD_VRSTA As String = "TESTVOCE"
 Private Const GLD_SORTA As String = "TESTSORTA"
@@ -85,7 +88,11 @@ Public Sub RunGoldenSuite()
     ' za novac, a modOtkupUnos salje novac:=0 uvek -- v. GOLDEN_SCENARIJI.md S8.
     GldOne 7
     GldOne 8
-    GldOne 10
+    ' 10 (D1) NIJE registrovan: storno otpremnice ostavlja zbirnu bez izvora i
+    ' invarijanta puca. Zamrznuti "PUKLA" kao ocekivano znacilo bi da golden
+    ' tvrdi kako je posle legalne operacije dozvoljeno nekonzistentno stanje --
+    ' suprotno od svrhe mreze. Ceka poslovnu odluku: zabrani / kaskadiraj /
+    ' rekalkulisi (GOLDEN_SCENARIJI.md S10).
     GldOne 11
     GldOne 12
     GldOne 13
@@ -199,6 +206,7 @@ End Sub
 Private Sub GldSeed()
     GldSeedRed TBL_STANICE, "StanicaID", GLD_STANICA, "Naziv", "GOLDEN STANICA"
     GldSeedRed TBL_VOZACI, "VozacID", GLD_VOZAC, "Ime", "GOLDEN VOZAC"
+    GldSeedRed TBL_VOZACI, "VozacID", GLD_VOZAC2, "Ime", "GOLDEN VOZAC 2"
     GldSeedRed TBL_KUPCI, "KupacID", GLD_KUPAC, "Naziv", "GOLDEN KUPAC"
     GldSeedKooperant
 End Sub
@@ -320,9 +328,49 @@ Private Function GldSnapshot(ByVal naslov As String, ByVal brojZbirne As String)
     If Len(brojZbirne) > 0 Then s = s & GldZbirna(brojZbirne)
     s = s & GldStatus()
     s = s & GldAmbalaza()
+    s = s & GldNovacAlokacija()
     s = s & GldFakture()
 
     GldSnapshot = s
+End Function
+
+' Novac: koliko je isplaceno, koliko je jos VEZANO za otkupe scenarija, koliko
+' je ostalo nealokirano.
+'
+' Storno otkupa NE ponistava novcanu transakciju -- covek je fizicki dobio pare.
+' StornoOtkup radi ResetNovacOtkupLink: iznos ostaje u istoriji, ali prestaje da
+' bude alociran na taj otkup. Bez ova tri broja golden to ne bi video, pa bi
+' ostao zelen i kad bi neko obrisao ResetNovacOtkupLink.
+'
+' Ovaj oblik prezivi i buduci tblNovacAlokacije model.
+Private Function GldNovacAlokacija() As String
+    Dim data As Variant
+    Dim cKoop As Long, cIspl As Long, cOtk As Long
+    Dim i As Long
+    Dim ukupno As Double, vezano As Double
+    Dim id As String
+
+    data = GetTableData(TBL_NOVAC)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_NOVAC)
+        If IsArray(data) Then
+            cKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, "GldNovacAlokacija")
+            cIspl = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, "GldNovacAlokacija")
+            cOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, "GldNovacAlokacija")
+            For i = 1 To UBound(data, 1)
+                If StrComp(Trim$(NzToText(data(i, cKoop))), GLD_KOOP, vbTextCompare) = 0 Then
+                    ukupno = ukupno + SafeD(data(i, cIspl))
+                    id = Trim$(NzToText(data(i, cOtk)))
+                    If Len(id) > 0 Then vezano = vezano + SafeD(data(i, cIspl))
+                End If
+            Next i
+        End If
+    End If
+
+    GldNovacAlokacija = "NOVAC" & vbLf & _
+        "  ukupno isplaceno " & Fmt2(ukupno) & vbLf & _
+        "  vezano za otkup  " & Fmt2(vezano) & vbLf & _
+        "  nealocirano      " & Fmt2(ukupno - vezano) & vbLf
 End Function
 
 ' Koliko je dokumenata AKTIVNO, a koliko STORNIRANO -- u opsegu scenarija.
@@ -676,7 +724,68 @@ Private Function GldFakture() As String
         End If
     End If
 
-    GldFakture = "FAKTURA" & vbLf & "  iznos           " & Fmt2(iznos) & vbLf
+    GldFakture = "FAKTURA" & vbLf & _
+        "  iznos           " & Fmt2(iznos) & vbLf & _
+        "  osirocena       " & GldFakturaOsirocena() & vbLf & _
+        "  osirocenih stavki " & CStr(GldOsirocenihStavki()) & vbLf
+End Function
+
+' Izdata faktura se posle storna svoje prijemnice NE brise -- markira se kao
+' osirocena (COL_OSIROCENO_OD) i trazi korekciju. Bez ovoga bi D2 ostao zelen i
+' kad bi neko obrisao MarkFakturaOrphaned / MarkFakturaStavkeOrphaned.
+Private Function GldFakturaOsirocena() As String
+    Dim data As Variant
+    Dim cID As Long, cOs As Long
+    Dim i As Long, k As Long
+
+    GldFakturaOsirocena = "-"
+    If m_Fak.count = 0 Then Exit Function
+
+    data = GetTableData(TBL_FAKTURE)
+    If Not IsArray(data) Then Exit Function
+
+    cID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, "GldFakturaOsirocena")
+    cOs = GetColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD)
+    If cOs = 0 Then Exit Function
+
+    GldFakturaOsirocena = "NE"
+    For i = 1 To UBound(data, 1)
+        For k = 1 To m_Fak.count
+            If StrComp(Trim$(NzToText(data(i, cID))), Trim$(CStr(m_Fak(k))), _
+                       vbTextCompare) = 0 Then
+                If Len(Trim$(NzToText(data(i, cOs)))) > 0 Then
+                    GldFakturaOsirocena = "DA"
+                    Exit Function
+                End If
+            End If
+        Next k
+    Next i
+End Function
+
+Private Function GldOsirocenihStavki() As Long
+    Dim data As Variant
+    Dim cFak As Long, cOs As Long
+    Dim i As Long, k As Long
+
+    If m_Fak.count = 0 Then Exit Function
+
+    data = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(data) Then Exit Function
+
+    cFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "GldOsirocenihStavki")
+    cOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+    If cOs = 0 Then Exit Function
+
+    For i = 1 To UBound(data, 1)
+        If Len(Trim$(NzToText(data(i, cOs)))) > 0 Then
+            For k = 1 To m_Fak.count
+                If StrComp(Trim$(NzToText(data(i, cFak))), Trim$(CStr(m_Fak(k))), _
+                           vbTextCompare) = 0 Then
+                    GldOsirocenihStavki = GldOsirocenihStavki + 1
+                End If
+            Next k
+        End If
+    Next i
 End Function
 
 
@@ -852,6 +961,51 @@ Private Sub GldZbirnaIPrijemnica(ByVal broj As String, _
     GldDodaj m_Prj, res
 End Sub
 
+' Fakturise SAMO zadatu klasu.
+'
+' Scenario kaze POSLOVNU NAMERU ("fakturisi Klasu I"); adapter nalazi sta je to
+' danas. Ranija verzija je slala m_Prj(1) -- "prva fizicka prijemnica koju je
+' legacy writer vratio" -- pa bi posle PR8 to bio HEADER ID, ne red Klase I, i
+' sam scenario bi morao da se menja. Posle PR8 ovde ide
+' PrijemnicaStavkaID gde je Klasa = zadata; scenario i golden ostaju isti.
+Private Sub GldFakturisiKlasu(ByVal klasa As String)
+    Dim data As Variant
+    Dim cID As Long, cKlasa As Long
+    Dim i As Long, k As Long
+    Dim stavke As Collection
+    Dim id As String
+    Dim res As String
+
+    Set stavke = New Collection
+
+    data = GetTableData(TBL_PRIJEMNICA)
+    If IsArray(data) Then
+        cID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "GldFakturisiKlasu")
+        cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "GldFakturisiKlasu")
+        For i = 1 To UBound(data, 1)
+            id = Trim$(NzToText(data(i, cID)))
+            For k = 1 To m_Prj.count
+                If StrComp(id, Trim$(CStr(m_Prj(k))), vbTextCompare) = 0 Then
+                    If UCase$(Trim$(NzToText(data(i, cKlasa)))) = UCase$(klasa) Then
+                        stavke.Add Array(id)
+                    End If
+                End If
+            Next k
+        Next i
+    End If
+
+    If stavke.count = 0 Then
+        Err.Raise GLD_ERR, "GldFakturisiKlasu", _
+                  "nema prijemnicne stavke klase " & klasa
+    End If
+
+    res = CreateFaktura_TX(GLD_KUPAC, stavke)
+    If Len(res) = 0 Then
+        Err.Raise GLD_ERR, "GldFakturisiKlasu", "CreateFaktura_TX nije vratio ID"
+    End If
+    GldDodaj m_Fak, res
+End Sub
+
 ' Faktura nad SVIM prijemnicama koje je scenario napravio.
 Private Sub GldFaktura()
     Dim stavke As Collection
@@ -895,6 +1049,59 @@ End Sub
 
 ' Storno CELOG otkupnog bloka po poslovnom broju -- danas je to jedini ulaz koji
 ' zahvati obe klase. PR5 ga zamenjuje storno-om po DocumentID.
+' Zbirna za zadatog vozaca -- G2 pravi dve sa istim brojem.
+Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
+                              ByVal kolI As Double)
+    Dim res As String
+
+    res = SaveZbirnaMulti_TX(GLD_DATUM, vozac, broj, GLD_KUPAC, "", "", _
+            GLD_VRSTA, GLD_SORTA, kolI, GLD_AMB, 50, False, 0#, 0)
+    If Len(res) = 0 Then
+        Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije snimljena"
+    End If
+    GldDodaj m_Zbr, res
+End Sub
+
+' Storno JEDNE od vise zbirnih pod istim brojem.
+'
+' Danas StornoZbirna_TX trazi broj + generaciju, jer broj sam nije identitet --
+' adapter generaciju cita iz reda koji je writer vratio. Posle PR4 ide
+' StornoZbirna_TX(ZbirnaID); scenario i golden ostaju isti.
+Private Sub GldStornoZbirne(ByVal idx As Long)
+    Dim data As Variant
+    Dim cID As Long, cGen As Long, cBroj As Long
+    Dim i As Long
+    Dim ciljID As String
+    Dim gen As String, broj As String
+
+    ciljID = Trim$(CStr(m_Zbr(idx)))
+
+    data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then
+        Err.Raise GLD_ERR, "GldStornoZbirne", "tblZbirna je prazna"
+    End If
+
+    cID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "GldStornoZbirne")
+    cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "GldStornoZbirne")
+    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
+
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cID))), ciljID, vbTextCompare) = 0 Then
+            broj = Trim$(NzToText(data(i, cBroj)))
+            If cGen > 0 Then gen = Trim$(NzToText(data(i, cGen)))
+            Exit For
+        End If
+    Next i
+
+    If Len(broj) = 0 Then
+        Err.Raise GLD_ERR, "GldStornoZbirne", "zbirna " & ciljID & " nije nadjena"
+    End If
+
+    If Not StornoZbirna_TX(broj, gen) Then
+        Err.Raise GLD_ERR, "GldStornoZbirne", "storno zbirne nije uspeo"
+    End If
+End Sub
+
 Private Sub GldStornoOtkupa(ByVal brDok As String)
     If Not StornoOtkupByBrDok_TX(brDok) Then
         Err.Raise GLD_ERR, "GldStornoOtkupa", "storno otkupa nije uspeo"
@@ -1173,7 +1380,10 @@ Private Sub Gld_D3_StornoDvoklasnogOtkupa()
     broj = "GLD-D3"
     GldPocni tx, broj
 
-    GldOtkupSaNovcem broj, broj & "-B", 1000#, 50#, 200#, 30#, 56000#
+    ' Novac ide AVANSOM: kes se ne vezuje za otkupni list (S8). Avans se pri
+    ' upisu alocira na otkup, pa storno ima sta da odveze.
+    GldAvans 56000#
+    GldOtkup broj, broj & "-B", 1000#, 50#, 200#, 30#
     GldStornoOtkupa broj & "-B"
 
     AssertSnapshot GldSnapshot("D3 storno dvoklasnog otkupa", broj), GldIme(12)
@@ -1197,7 +1407,6 @@ Private Sub Gld_F2_DelimicnoFakturisanje()
     Dim tx As clsTransaction
     Dim gldDesc As String
     Dim broj As String
-    Dim stavke As Collection
 
     On Error GoTo EH
     broj = "GLD-F2"
@@ -1205,10 +1414,7 @@ Private Sub Gld_F2_DelimicnoFakturisanje()
 
     GldLanac broj, 1000#, 50#, 200#, 30#, 1000#, 200#
 
-    ' samo prva prijemnicna stavka (Klasa I)
-    Set stavke = New Collection
-    stavke.Add Array(Trim$(CStr(m_Prj(1))))
-    GldDodaj m_Fak, CreateFaktura_TX(GLD_KUPAC, stavke)
+    GldFakturisiKlasu "I"
 
     AssertSnapshot GldSnapshot("F2 delimicno fakturisanje", broj) & _
                    GldFakturisanoPoKlasi(), GldIme(13)
@@ -1263,9 +1469,13 @@ Private Sub Gld_G2_IstiBrojDvaDokumenta()
     broj = "GLD-G2"
     GldPocni tx, broj
 
-    GldOtkup broj, broj & "-B1", 400#, 50#, 0#, 0#
-    GldOtkup broj, broj & "-B2", 600#, 50#, 0#, 0#
-    GldStornoOtkupa broj & "-B1"
+    ' DVE zbirne sa ISTIM BrojZbirne, razlicitih vlasnika (dva vozaca) -- stanje
+    ' koje generator ne pravi, ali rucni unos i uvoz prave (ZBR_IDENTITET.md S3).
+    GldZbirnaZaVozaca broj, GLD_VOZAC, 400#
+    GldZbirnaZaVozaca broj, GLD_VOZAC2, 600#
+
+    ' storno PRVE -- druga mora ostati netaknuta
+    GldStornoZbirne 1
 
     AssertSnapshot GldSnapshot("G2 isti broj dva dokumenta", broj), GldIme(15)
 
@@ -1277,23 +1487,3 @@ EH:
     Err.Raise GLD_ERR, "Gld_G2", gldDesc
 End Sub
 
-' Otkup sa novcem -- KORISTI SE SAMO u D3, da storno ima sta da ponisti.
-'
-' Redovna putanja NIKAD ne salje novac uz otkupni list: ekran nema to polje, a
-' modOtkupUnos salje novac:=0. Parametar postoji jos samo na writer-u i ide u
-' brisanje zajedno sa kolonama Novac/PrimalacNovca (v. DOCUMENT_HEADER_LINES S4.1).
-Private Sub GldOtkupSaNovcem(ByVal brojZbirne As String, ByVal brDok As String, _
-                             ByVal kolI As Double, ByVal cenaI As Double, _
-                             ByVal kolII As Double, ByVal cenaII As Double, _
-                             ByVal novac As Double)
-    Dim res As String
-
-    res = SaveOtkupMulti_TX(GLD_DATUM, GLD_KOOP, GLD_STANICA, GLD_VRSTA, GLD_SORTA, _
-                            kolI, cenaI, GLD_AMB, 50, GLD_VOZAC, brDok, novac, _
-                            "GOLDEN", "", brojZbirne, (kolII > 0), kolII, cenaII)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldOtkupSaNovcem", "SaveOtkupMulti_TX nije vratio ID"
-    End If
-
-    GldDodaj m_Otk, res
-End Sub

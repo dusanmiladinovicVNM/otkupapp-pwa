@@ -1,28 +1,27 @@
 == G2 isti broj dva dokumenta ==
 DOKUMENTI
-  otkupa          1
+  otkupa          0
   otpremnica      0
-  zbirnih         0
+  zbirnih         1
   prijemnica      0
   faktura         0
 OTKUP
-  predao          I=600.00  II=0.00
-  vrednost        30000.00
-  placeno         0.00
-  od toga avansom 0.00
-  od toga kesom   0.00
-  isplaceno svi   NE
+  nema
 ZBIRNA
   poslato         I=0.00  II=0.00
   primljeno       I=0.00  II=0.00
   kalo            I=0.00  II=0.00
-  invarijanta     OK
+  invarijanta     PUKLA
 STATUS
-  otkup           aktivnih 1  storniranih 1
+  otkup           aktivnih 0  storniranih 0
   otpremnica      aktivnih 0  storniranih 0
-  zbirna          aktivnih 0  storniranih 0
+  zbirna          aktivnih 1  storniranih 1
   prijemnica      aktivnih 0  storniranih 0
 AMBALAZA
-  kooperant 12/1  -50
+  kooperant 12/1  0
+NOVAC
+  ukupno isplaceno 0.00
+  vezano za otkup  0.00
+  nealocirano      0.00
 FAKTURA
   nema

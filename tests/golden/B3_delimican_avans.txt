@@ -24,5 +24,9 @@ STATUS
   prijemnica      aktivnih 1  storniranih 0
 AMBALAZA
   kooperant 12/1  -50
+NOVAC
+  ukupno isplaceno 20000.00
+  vezano za otkup  20000.00
+  nealocirano      0.00
 FAKTURA
   nema
