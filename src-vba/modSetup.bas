@@ -1821,7 +1821,15 @@ Public Sub DebugKoloneTabele()
            Join(h, " | "), vbInformation, APP_NAME
 End Sub
 
-' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
+' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u.
+'
+' NIJE no-op kad tabela postoji: tada dopunjava kolone koje fale
+' (EnsureColumnOnTable po zaglavlju). Raniji komentar je tvrdio suprotno i
+' zavarao review -- procitan je komentar, ne telo.
+'
+' Sta NE radi: ne brise viska kolone i ne popravlja REDOSLED. Premestanje
+' kolone u tabeli sa podacima bi pomerilo vrednosti, pa je pogresan redosled
+' nalaz za coveka (modSchema.VerifySchema), ne nesto sto se leci u prolazu.
 '
 ' Public od PR1 (registar seme): modSchema.EnsureAllTables je jedini spoljni
 ' pozivalac i prosledjuje zaglavlja IZ REGISTRA. Mehanizam kreiranja ostaje

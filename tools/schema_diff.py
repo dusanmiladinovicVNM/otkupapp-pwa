@@ -14,10 +14,15 @@ Tri ishoda, i sva tri su normalna -- vazno je da se VIDE pre uvoza:
                   NISTA se ne brise -- ali registar je nepotpun, pa te kolone
                   VerifySchema nikad nece cuvati. Regenerisi registar iz OVE
                   sveske ako su legitimne.
-  RAZLIKA REDOSLEDA  ista imena, drugi raspored. Bezobrazno bezopasno:
-                  ceo kod cita kolone po IMENU (GetColumnIndex), ne po indeksu.
+  RAZLIKA REDOSLEDA  ista imena, drugi raspored. NIJE bezopasno.
+                  modDataAccess.AppendRow pise POZICIONO, a pisci poput
+                  modOtkup.SaveOtkup grade goli Array(...) sa 22 vrednosti.
+                  Preraspored tiho salje vrednosti u pogresne kolone -- gore
+                  od pada upisa. Citanje jeste po imenu (GetColumnIndex);
+                  upis nije.
 
-Exit: 0 = nema razlike, 1 = ima razlike (nije greska, nego nalaz), 2 = kvar.
+Exit: 0 = nema razlike, 1 = ima razlike (nalaz, odluci sam),
+      2 = kvar ILI razlika redosleda (uvoz nebezbedan).
 
 Windows + Excel + pywin32. Sveska se otvara read-only i nikad ne snima.
 """
@@ -35,7 +40,7 @@ MODCONFIG = os.path.join(ROOT, "src-vba", "modConfig.bas")
 
 SPEC_POC = re.compile(r"^Private Sub (Spec\w+)\(ByVal reg As Object\)")
 KOL = re.compile(r'^\s*k\.Add "([^"]+)"')
-REG_RED = re.compile(r'^\s*Reg reg, (TBL_\w+), "([^"]+)", k')
+REG_RED = re.compile(r'^\s*RegistrujTabelu reg, (TBL_\w+), "([^"]+)", k')
 TBL_CONST = re.compile(r'^Public Const (TBL_\w+)\s+As String\s*=\s*"(\w+)"')
 
 
@@ -155,14 +160,21 @@ def main(argv) -> int:
             "iz OVE sveske ako su legitimne.")
     sekcija("VISAK U SVESCI -- kolona", visak_kol,
             "Isto: nista se ne brise, ali ih registar ne cuva.")
-    sekcija("RAZLIKA REDOSLEDA", redosled,
-            "Bezopasno: kod cita kolone po IMENU (GetColumnIndex), ne po indeksu.")
+    sekcija("RAZLIKA REDOSLEDA -- BLOKIRA UVOZ", redosled,
+            "Upis je POZICION (AppendRow): vrednosti bi otisle u pogresne kolone. "
+            "Mora se resiti pre uvoza -- EnsureAllTables ovo NE popravlja, jer bi "
+            "premestanje kolone pomerilo podatke.")
 
     ukupno = (len(fali_tab) + len(fali_kol) + len(visak_tab)
               + len(visak_kol) + len(redosled))
     if ukupno == 0:
         print("REZULTAT: sveska i registar se poklapaju.")
         return 0
+
+    if redosled:
+        print("REZULTAT: %d razlika, od toga %d RAZLIKA REDOSLEDA -- uvoz je "
+              "NEBEZBEDAN dok se ne resi." % (ukupno, len(redosled)))
+        return 2
 
     print("REZULTAT: %d razlika. Nije greska -- nalaz. Odluci pre uvoza." % ukupno)
     return 1

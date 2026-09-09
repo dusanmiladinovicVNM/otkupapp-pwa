@@ -484,6 +484,9 @@ Public Sub RunAllTests()
     RunOne 194
     RunOne 195
     RunOne 196
+    RunOne 197
+    RunOne 198
+    RunOne 199
     RunOne 124
     RunOne 125
     RunOne 126
@@ -749,6 +752,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 194: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
         Case 195: TestName = "T_BrojKapija_IstoZaSvakiCase"
         Case 196: TestName = "T_DeteZbirne_ImaKolonuGeneracije"
+        Case 197: TestName = "T_Sema_OtisakParitetSaGeneratorom"
+        Case 198: TestName = "T_Sema_SveskaOdgovaraKanonu"
+        Case 199: TestName = "T_Sema_OtisakVidiRedosled"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -953,6 +959,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 194: T_Zbirne_PickerJednaStavkaPoDokumentu
         Case 195: T_BrojKapija_IstoZaSvakiCase
         Case 196: T_DeteZbirne_ImaKolonuGeneracije
+        Case 197: T_Sema_OtisakParitetSaGeneratorom
+        Case 198: T_Sema_SveskaOdgovaraKanonu
+        Case 199: T_Sema_OtisakVidiRedosled
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6509,6 +6518,75 @@ End Sub
 ' ============================================================
 ' Assert-i
 ' ============================================================
+' ============================================================
+' SEMA (PR1) -- kanon je schema/schema.json, modSchema je generisan artefakt.
+' ============================================================
+
+' Paritet algoritma sa generatorom. Otisak racunaju DVE implementacije --
+' tools/gen_schema_module.py (Python) i modSchema.Fnv1a32 (VBA). Ako se
+' raziju, SchemaCheckOnStart bi na svakom startu prijavljivao lazan drift, a
+' operater bi naucio da ga ignorise.
+'
+' Vektori su standardni FNV-1a 32, pa test meri i to da je algoritam ZAISTA
+' FNV-1a, a ne "nesto sto obe strane rade isto pogresno".
+Private Sub T_Sema_OtisakParitetSaGeneratorom()
+    AssertEq modSchema.Fnv1a32(""), "811C9DC5", "FNV-1a prazan string"
+    AssertEq modSchema.Fnv1a32("a"), "E40C292C", "FNV-1a 'a'"
+    AssertEq modSchema.Fnv1a32("abc"), "1A47E90B", "FNV-1a 'abc'"
+    AssertEq modSchema.Fnv1a32("tblOtkup|OtkupID|Datum"), "8192EFAD", _
+             "FNV-1a nad delom seme"
+End Sub
+
+' Sveska odgovara kanonu -- i po sadrzaju i po REDOSLEDU.
+'
+' Fixture je generisan iz iste sveske iz koje je kanon zasejan, pa ovde nema
+' legitimnog odstupanja: svako je ili drift u fixture-u ili greska u registru.
+Private Sub T_Sema_SveskaOdgovaraKanonu()
+    Dim odstupanja As Collection
+    Dim opis As String
+    Dim i As Long
+    Dim n As Long
+
+    Set odstupanja = modSchema.VerifySchema()
+
+    n = odstupanja.count
+    If n > 5 Then n = 5
+    For i = 1 To n
+        If Len(opis) > 0 Then opis = opis & "; "
+        opis = opis & CStr(odstupanja(i))
+    Next i
+
+    AssertEq odstupanja.count, 0, "VerifySchema nad fixture-om -- " & opis
+    AssertEq modSchema.SchemaFingerprintActual(), modSchema.SCHEMA_FINGERPRINT, _
+             "otisak sveske vs kanon"
+    AssertEq modSchema.SchemaCheckOnStart(), "", "SchemaCheckOnStart"
+End Sub
+
+' Otisak MORA da vidi preraspored, ne samo nedostatak.
+'
+' Razlog nije estetika: modDataAccess.AppendRow pise POZICIONO, a pisci poput
+' modOtkup.SaveOtkup grade goli Array(...) sa 22 vrednosti. Kolona ubacena u
+' sredinu tiho pomera sve iza sebe u pogresna polja -- gore od pada upisa.
+' Provera koja gleda samo prisustvo kolona to ne bi videla.
+Private Sub T_Sema_OtisakVidiRedosled()
+    Dim a As String
+    Dim b As String
+
+    a = modSchema.Fnv1a32("tblX|Kolona1|Kolona2")
+    b = modSchema.Fnv1a32("tblX|Kolona2|Kolona1")
+
+    If a = b Then
+        Err.Raise ERR_ASSERT, "T_Sema_OtisakVidiRedosled", _
+                  "isti otisak za razlicit redosled kolona -- provera bi " & _
+                  "propustila preraspored, a upis je pozicion"
+    End If
+
+    ' Kapija pred upis prolazi nad zdravom tabelom (fail-closed provera bi
+    ' inace mogla biti "uvek pada", sto je isto bezvredno).
+    modSchema.SchemaReadyOrFail "T_Sema_OtisakVidiRedosled", TBL_OTKUP
+End Sub
+
+
 Public Sub AssertEq(ByVal actual As Variant, ByVal expected As Variant, _
                     ByVal label As String)
     Dim a As String, e As String

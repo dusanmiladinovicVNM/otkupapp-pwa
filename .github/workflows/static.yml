@@ -116,6 +116,13 @@ jobs:
       - name: A11 -- vlasnistvo nad upisom
         run: python3 tools/who_writes.py --check-ownership
 
+      # Kanon seme je schema/schema.json u gitu; modSchema.bas je njegov
+      # generisan artefakt. Ako se raziju, sveska bi se lecila po zastareloj
+      # semi, a otisak na startu bi prijavljivao drift koji niko ne moze da
+      # objasni.
+      - name: modSchema je u koraku sa kanonom
+        run: python3 tools/gen_schema_module.py --check
+
       # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
       # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
       # i videla se tek kao [break] u VBE-u na Windows masini.

@@ -35,8 +35,22 @@ OWNERSHIP_PATH = os.path.join(ROOT, "docs", "DOMEN", "WRITE_OWNERSHIP.json")
 
 VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 
+# DVA razlicita pojma, koja su do PR1 bila pomesana:
+#
+#   MUTATOR   -- modul koji stvarno MENJA redove tabele. Samo on je vlasnik u
+#                smislu A11.
+#   UCESNIK   -- modul cija transakcija snapshotuje tabelu da bi RollbackTx
+#                umeo da je vrati. To je ucesce u transakciji, NE vlasnistvo:
+#                ciljna arhitektura ima koordinatora koji snapshotuje tudju
+#                tabelu i zove API njenog vlasnika.
+#
+# RequireUpdateCell je do PR1 bio NEVIDLJIV kapiji: stari regex je trazio
+# \bUpdateCell, a u "RequireUpdateCell" pre "UpdateCell" nema granice reci.
+# Time je 220 poziva -- 29 nad tblFakture, 26 nad tblPaleta, 12 nad tblOtkup --
+# prolazilo kroz mapu neopazeno.
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
-DIRECT_RE = re.compile(r'\b(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
+MUTATE_RE = re.compile(
+    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
 # pa nisu vlasnici podataka i ne treba da zamagle pravu sliku.
@@ -63,7 +77,7 @@ def scan() -> dict:
                 stripped = line.strip()
                 if stripped.startswith("'"):        # komentar
                     continue
-                for regex, kind in ((SNAPSHOT_RE, "tx"), (DIRECT_RE, "direct")):
+                for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
                     for m in regex.finditer(stripped):
                         token = m.group(1)
                         table = const2tbl.get(token, m.group(2) or token)
@@ -80,9 +94,12 @@ def render(writers: dict) -> str:
         "",
         "Izvedeno iz dva mehanicka signala u `src-vba/`:",
         "",
-        "- **tx** -- `clsTransaction.AddTableSnapshot TBL_X`: operacija sama",
-        "  deklarise koje tabele menja, da bi `RollbackTx` umeo da ih vrati.",
-        "- **direct** -- `AppendRow` / `UpdateCell` kroz `modDataAccess`.",
+        "- **mutate** -- `AppendRow` / `UpdateCell` / `RequireUpdateCell`:",
+        "  modul stvarno MENJA redove. Samo ovo je vlasnistvo (ugovor A11).",
+        "- **tx** -- `clsTransaction.AddTableSnapshot TBL_X`: operacija",
+        "  snapshotuje tabelu da bi `RollbackTx` umeo da je vrati. To je",
+        "  UCESCE u transakciji, ne vlasnistvo -- koordinator sme da",
+        "  snapshotuje tudju tabelu i zove API njenog vlasnika.",
         "",
         "Test moduli su odvojeni: pisu uz rollback i nisu vlasnici podataka.",
         "",
@@ -97,19 +114,25 @@ def render(writers: dict) -> str:
 
     rows = []
     for table, kinds in writers.items():
-        prod = sorted({m for s in kinds.values() for m in s if not is_test(m)})
+        mut = sorted({m for m in kinds.get("mutate", set()) if not is_test(m)})
+        tx = sorted({m for m in kinds.get("tx", set()) if not is_test(m)})
         test = sorted({m for s in kinds.values() for m in s if is_test(m)})
-        rows.append((table, prod, test))
+        rows.append((table, mut, test, tx))
 
     rows.sort(key=lambda r: (-len(r[1]), r[0]))
 
-    lines += ["| Tabela | Pisaca | Produkcioni moduli |", "|---|---|---|"]
-    for table, prod, _ in rows:
-        mods = ", ".join(f"`{m}`" for m in prod) if prod else "_(samo testovi)_"
-        lines.append(f"| `{table}` | {len(prod)} | {mods} |")
+    lines += ["| Tabela | Mutatora | Moduli koji MENJAJU redove |", "|---|---|---|"]
+    for table, mut, _, _ in rows:
+        mods = ", ".join(f"`{m}`" for m in mut) if mut else "_(samo testovi)_"
+        lines.append(f"| `{table}` | {len(mut)} | {mods} |")
+
+    lines += ["", "## Ucesnici transakcije (snapshot, NE vlasnistvo)", ""]
+    for table, _, _, tx in rows:
+        if tx:
+            lines.append(f"- `{table}`: " + ", ".join(f"`{m}`" for m in tx))
 
     lines += ["", "## Test moduli po tabeli", ""]
-    for table, _, test in rows:
+    for table, _, test, _ in rows:
         if test:
             lines.append(f"- `{table}`: " + ", ".join(f"`{m}`" for m in test))
 
@@ -126,14 +149,16 @@ def render(writers: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def production_writers(writers: dict) -> dict:
-    """tabela -> sortirani produkcioni moduli (test moduli se ne broje)."""
+def production_writers(writers: dict, kind: str = "mutate") -> dict:
+    """tabela -> sortirani produkcioni moduli date vrste.
+
+    kind="mutate" su stvarni pisci (A11 gate meri njih).
+    kind="tx" su ucesnici transakcije -- korisno za citanje, ali NE vlasnistvo.
+    """
     out = {}
     for table, kinds in writers.items():
-        mods = set()
-        for names in kinds.values():
-            mods |= names
-        prod = sorted(m for m in mods if not TEST_MODULE_RE.search(m))
+        prod = sorted(m for m in kinds.get(kind, set())
+                      if not TEST_MODULE_RE.search(m))
         if prod:
             out[table] = prod
     return out
@@ -153,7 +178,7 @@ def check_ownership(writers: dict, path: str) -> int:
     with open(path, encoding="utf-8") as fh:
         reg = json.load(fh)
 
-    stvarno = production_writers(writers)
+    stvarno = production_writers(writers, "mutate")
     greske = []
 
     for table, prod in sorted(stvarno.items()):
@@ -162,7 +187,10 @@ def check_ownership(writers: dict, path: str) -> int:
                 f"  {table}: tabela nije u registru vlasnistva. "
                 f"Pisci: {', '.join(prod)}")
             continue
-        dozvoljeni = set(reg[table].get("dozvoljeni", []))
+        # Sema i poslovni redovi su razliciti pojmovi vlasnistva: modSetup sme
+        # da NAPRAVI tblOtkup, ali ne i da upise otkup.
+        dozvoljeni = (set(reg[table].get("row_owner", []))
+                      | set(reg[table].get("schema_owner", [])))
         novi = [m for m in prod if m not in dozvoljeni]
         if novi:
             greske.append(
@@ -184,7 +212,7 @@ def check_ownership(writers: dict, path: str) -> int:
         cilj = reg[table].get("cilj") or []
         if not cilj:
             continue
-        viska = sorted(set(reg[table].get("dozvoljeni", [])) - set(cilj))
+        viska = sorted(set(reg[table].get("row_owner", [])) - set(cilj))
         if viska:
             otvoreno.append(f"  {table}: jos {len(viska)} -> {', '.join(viska)}")
 

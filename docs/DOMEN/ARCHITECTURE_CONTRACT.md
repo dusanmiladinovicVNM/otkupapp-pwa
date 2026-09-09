@@ -28,9 +28,21 @@ konteksta) + acceptance test `BrojNijeIdentitet`.
 
 ## A3 — header + stavke
 
-Ako dokument može da nosi ponovljive podatke, nosi ih kao stavke. Podela je
-mehanička: *polje koje u ulazu stoji jednom → header; polje koje varira → stavka.*
+Ako dokument može da nosi ponovljive podatke, nosi ih kao stavke.
+
+> **Polje koje pripada dokumentu kao celini → header. Polje koje poslovno može
+> imati različitu vrednost među stavkama istog dokumenta → stavka.**
+
 Ne kopirati header polja u svaku stavku.
+
+**Postojeći potpis ulaza je dokaz trenutne poslovne kardinalnosti, ne definicija
+domena.** Za refaktor dokumenata je `Save*Multi_TX` bio vrlo dobar dokaz — autor
+je za svako polje već odlučio da li varira po klasi — ali taj signal ne sme da
+postane pravilo. Inače jedan ekran koji danas nudi samo jedan proizvod sutra
+natera model Prodaje da tvrdi kako proizvod pripada zaglavlju.
+
+Kad se signal iz UI-ja i poslovna kardinalnost razilaze, **poslovna odlučuje**, a
+razlika se zapisuje kao **ODLUKA** u modelu.
 
 *Provera:* review + `DOCUMENT_HEADER_LINES.md` tabela grain-a.
 
@@ -99,14 +111,30 @@ modula, traži se jedan ulaz.
 *Provera:* `docs/DOMEN/WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`.
 Nov pisač koji nije na listi = pad CI-ja.
 
-**Zatečeno stanje koje ovo pravilo cilja** (mereno, `WHO_WRITES.md`):
+**Snapshot nije vlasništvo.** `AddTableSnapshot` znači „moja transakcija mora da
+ume da vrati ovu tabelu", ne „ja sam pišem". Ciljna arhitektura ima koordinatora
+koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
+**mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
+transakcije se prikazuju odvojeno.
 
-| Tabela | Pisaca danas |
-|---|---|
-| `tblOtkup` | 12 |
-| `tblFakture` | 10 |
-| `tblNovac` | 8 |
-| `tblAmbalaza` | 6 |
+**Dva vlasništva, ne jedno.** `schema_owner` sme da napravi tabelu ili kolonu;
+`row_owner` sme da upiše poslovni red. `modSetup` sme da napravi `tblOtkup` — ne
+sme da upiše otkup.
+
+**Zatečeno stanje koje ovo pravilo cilja** (mereno nad mutatorima):
+
+| Tabela | `row_owner` danas | Cilj |
+|---|---|---|
+| `tblOtkup` | 8 | `modOtkup` |
+| `tblPrijemnica` | 3 | `modDokumenta` |
+| `tblFakture` | 3 | — |
+| `tblNovac` | 3 | — |
+| `tblZbirna` | 2 | `modDokumenta` |
+
+> Do PR1 je kapija merila i snapshot i upis pomešano, a `RequireUpdateCell` joj
+> je bio **nevidljiv** (regex je tražio granicu reči pred `UpdateCell`). Time je
+> 220 poziva prolazilo neopaženo — uključujući `modSEFPersistance` nad
+> `tblFakture`, koji u mapi uopšte nije postojao.
 
 ## A12 — UI ne zna detalje persistencije
 
@@ -123,7 +151,8 @@ ownership listi domen-tabela.
 
 | Gate | Tvrdnja | Kako se meri |
 |---|---|---|
-| **G1 — reproduktivna sveska** | prazan `.xlsm` + uvoz koda + `SetupAgriX` = spremna aplikacija, bez ručnog koraka | test `SemaSamoLeci`; napomena: `.frm`/`.frx` se **uvoze kao build artefakt** (binarni `.frx` se ne generiše iz koda) |
+| **G1 — reproduktivna sveska** | prazan `.xlsm` + uvoz koda + `SetupNewPC` = spremna aplikacija, bez ručnog koraka. Kanon je `schema/schema.json` u gitu; sveska je posledica. | `modSchema.EnsureAllTables` + `VerifySchema`; `.frm`/`.frx` se **uvoze kao build artefakt** (binarni `.frx` se ne generiše iz koda) |
+| **G1b — redosled kolona je deo šeme** | upis je pozicion (`AppendRow`), pa preraspored tiho šalje vrednosti u pogrešne kolone | otisak nad **uređenim** kanonskim prefiksom (`SchemaCheckOnStart`), tvrda kapija `SchemaReadyOrFail` pred upis, `schema_diff` blokira uvoz |
 | **G2 — duplikat broja** | dva dokumenta sa istim poslovnim brojem ne prave **nijedan** poseban code path u jezgru | test `BrojNijeIdentitet` + pravilo `NEMA_BROJA_KAO_FK` |
 | **G3 — sledljivost bez pogađanja** | lanac unazad ide samo kroz ID/FK graf | test `TraceBezPogadjanja` |
 | **G4 — vlasništvo upisa** | nov pisač domen-tabele obara CI | `who_writes.py --check-ownership` |

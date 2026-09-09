@@ -121,6 +121,33 @@ Public Sub StartApp()
     End If
     On Error GoTo EH
 
+    ' --- Sema sveske vs kanon (PR1) ---
+    ' Kanon je schema/schema.json; modSchema je njegov generisan artefakt.
+    ' Provera je JEFTINA: otisak nad kanonskim prefiksom zaglavlja, ~590 citanja
+    ' .Name (red velicine 10 ms). Pun VerifySchema se placa TEK kad se otisci
+    ' razlikuju, da bi poruka rekla STA odstupa.
+    '
+    ' Fail-SOFT namerno: pogresna sema ne sme da zakljuca aplikaciju, jer bi
+    ' jedan lazan nalaz ostavio operatera bez alata usred sezone. Tvrda kapija
+    ' stoji na drugom mestu -- modSchema.SchemaReadyOrFail, pred sam upis, gde
+    ' pogresan redosled stvarno moze da posalje vrednosti u pogresne kolone.
+    On Error Resume Next
+    Dim semaPoruka As String
+    semaPoruka = modSchema.SchemaCheckOnStart()
+    If Len(semaPoruka) > 0 Then
+        LogError "modMain.StartApp", "SEMA: " & semaPoruka, 0, "WARN"
+        Monitor_Event _
+            eventType:="SCHEMA_DRIFT", _
+            severity:="WARN", _
+            message:=semaPoruka, _
+            userId:="Operator", _
+            moduleName:="modMain", _
+            procedureName:="StartApp", _
+            entityType:="Schema", _
+            entityID:=modSchema.SCHEMA_FINGERPRINT
+    End If
+    On Error GoTo EH
+
     ' Splash stoji od pocetka; ovde se samo dopunjava do najmanjeg trajanja, da
     ' znak ne bljesne kad su sve kapije prosle trenutno (licenca iskljucena,
     ' offline, bez prijave). Kad je start trajao duze, ne ceka nista.

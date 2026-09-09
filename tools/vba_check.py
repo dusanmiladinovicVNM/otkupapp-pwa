@@ -1093,7 +1093,7 @@ def check_storno_registar(files: list[str],
 #
 # Obrnut smer (tabela u svesci bez konstante) hvata tools/gen_schema_module.py
 # pri generisanju -- tamo je jer trazi ispis stvarne sveske.
-SEMA_REG_POZIV = re.compile(r"^\s*Reg\s+reg\s*,\s*(TBL_\w+)\s*,", re.I)
+SEMA_REG_POZIV = re.compile(r"^\s*RegistrujTabelu\s+reg\s*,\s*(TBL_\w+)\s*,", re.I)
 SEMA_TBL_CONST = re.compile(r'^Public Const (TBL_\w+)\s+As String\s*=\s*"(\w+)"')
 
 
@@ -1126,7 +1126,7 @@ def check_sema_registar(config_path: str | None = None,
         # modSchema postoji ali registar je prazan -- to je kvar, ne "nema sta"
         return [Finding(schema_path, 1, "SEMA_REGISTAR",
                         "modSchema postoji, a registar je prazan: nijedan poziv "
-                        "'Reg reg, TBL_X, ...' nije nadjen. Regenerisi ga "
+                        "'RegistrujTabelu reg, TBL_X, ...' nije nadjen. Regenerisi ga "
                         "(python tools/gen_schema_module.py --json <put>).")]
 
     out = []
@@ -2148,13 +2148,13 @@ _SR_SCH_OK = (
     "    Dim k As Collection\n"
     "    Set k = New Collection\n"
     '    k.Add "OtkupID"\n'
-    '    Reg reg, TBL_OTKUP, "Otkup", k\n'
+    '    RegistrujTabelu reg, TBL_OTKUP, "Otkup", k\n'
     "End Sub\n"
     "Private Sub SpecKupci(ByVal reg As Object)\n"
     "    Dim k As Collection\n"
     "    Set k = New Collection\n"
     '    k.Add "KupacID"\n'
-    '    Reg reg, TBL_KUPCI, "Kupci", k\n'
+    '    RegistrujTabelu reg, TBL_KUPCI, "Kupci", k\n'
     "End Sub\n"
 )
 
@@ -2189,8 +2189,8 @@ SEMA_REGISTAR_CASES = [
      "Option Explicit\n"
      "Private Sub SpecOtkup(ByVal reg As Object)\n"
      "    Dim k As Collection\n"
-     '    Reg reg, TBL_OTKUP, "Otkup", k\n'
-     '    '"'"' Reg reg, TBL_KUPCI, "Kupci", k\n'
+     '    RegistrujTabelu reg, TBL_OTKUP, "Otkup", k\n'
+     '    '"'"' RegistrujTabelu reg, TBL_KUPCI, "Kupci", k\n'
      "End Sub\n"),
     ("prelomljen Reg poziv se vidi", 0,
      "Option Explicit\n"
@@ -2198,7 +2198,7 @@ SEMA_REGISTAR_CASES = [
      "Option Explicit\n"
      "Private Sub SpecOtkup(ByVal reg As Object)\n"
      "    Dim k As Collection\n"
-     "    Reg reg, _\n"
+     "    RegistrujTabelu reg, _\n"
      '        TBL_OTKUP, "Otkup", k\n'
      "End Sub\n"),
 ]
