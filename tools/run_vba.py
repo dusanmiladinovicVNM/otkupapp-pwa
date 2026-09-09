@@ -81,6 +81,10 @@ SUITES = {
     "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True,
                                  "result_file": "last_run_bfp.txt"},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    # Golden poslovni scenariji: mere ISHOD, ne strukturu. Svaki radi u
+    # transakciji i rollback-uje se, pa je drugi prolaz identican prvom.
+    # Verdikt stize kao Err.Raise iz RunGoldenSuite -- gate: True.
+    "RunGoldenSuite":           {"gate": True,  "dialogs": False, "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},
 }

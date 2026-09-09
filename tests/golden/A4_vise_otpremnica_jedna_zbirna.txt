@@ -1,0 +1,11 @@
+== A4 vise otpremnica jedna zbirna ==
+OTKUP
+  predao          I=1000.00  II=0.00
+  vrednost        50000.00
+  placeno         1000.00
+  isplaceno svi   NE
+ZBIRNA
+  poslato         I=1000.00  II=0.00
+  primljeno       I=1000.00  II=0.00
+  kalo            I=0.00  II=0.00
+  invarijanta     OK
