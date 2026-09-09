@@ -787,6 +787,50 @@ da pogreši.
 
 `VISE_VLASNIKA` i `INTEGRITET` ostaju netaknute.
 
+#### „Znam identitet" mora da znači identitet OVOG broja
+
+Faza 4 popušta kapiju uz ugovor *akter zna koji dokument dira*. Ali `gen <> ""`
+znači samo da akter drži **neku** generaciju.
+
+`modStorno.RedJeIzabranogDokumenta` kad dobije generaciju bira red **isključivo po
+njoj** — broj se tada više i ne gleda:
+
+```vb
+If Len(Trim$(gen)) = 0 Then
+    RedJeIzabranogDokumenta = (Trim$(CStr(data(i, colBroj))) = Trim$(broj))
+    Exit Function
+End If
+RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
+```
+
+Bez provere para:
+
+```
+broj X:  GEN-A, GEN-B      broj Y:  GEN-C
+
+RunSimpleStornoZbirna("X", "GEN-C")
+  -> kapija popusti (gen neprazna, deca scoped)
+  -> StornoZbirna bira GEN-C, jer broj vise ne ucestvuje
+  -> stornira se dokument DRUGOG poslovnog broja
+```
+
+**Rupa je starija od faze 4** — i kad `X` nosi jedan dokument, nespojiv par prolazi;
+`IdoviGeneracije` takođe poredi samo generaciju. Faza 4 je uklonila kapiju koja ju
+je maskirala kad je `X` dvosmislen, i time je učinila dohvatljivijom.
+
+`ZbirnaGeneracijaPripadaBroju(broj, gen)` je zato **dvostruka brana**:
+
+| mesto | uloga |
+|---|---|
+| preduslov za `genEff` na tri scoped mesta | tuđa generacija ne otvara kapiju |
+| `modStorno.StornoZbirna` | tvrda odbrana — `Err.Raise`, ne „padni na broj" |
+
+Gleda i **stornirane** redove namerno: `CompleteZbirnaIspravka` legitimno radi sa
+identitetom stare, već stornirane zbirne.
+
+Nespojiv par nije alternativni ulaz nego **greška pozivaoca**, pa je odgovor
+fail-closed: odbij, ne tumači.
+
 #### Šta se time dobija, i šta i dalje staje
 
 KR-001: dva uređaja pošalju zbirnu pod istim brojem, isti vozač i kupac.

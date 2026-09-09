@@ -130,6 +130,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli
     Test_ZBR_IspravkaVezeSvojuDecuNeTudju
     Test_ZBR_KapijaPustaKadJeIzborScoped
+    Test_ZBR_TudjaGeneracijaNeOtvaraKapiju
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -3698,6 +3699,104 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFail "ZBR-CHILD-01 faza 4 kapija pusta scoped izbor", bfpErrDesc
+End Sub
+
+' ZBR-CHILD-01 / P1: neprazna generacija NIJE dokaz da akter zna dokument.
+'
+' Faza 4 popusta kapiju uz ugovor "akter zna identitet". Ali `gen <> ""` znaci
+' samo da akter drzi NEKU generaciju -- ne nuzno onu koja pripada prosledjenom
+' broju. A `RedJeIzabranogDokumenta` kad dobije generaciju bira red ISKLJUCIVO po
+' njoj: broj se tada vise i ne gleda.
+'
+'   broj X:  GEN-A, GEN-B   (oba aktivna, sva deca nose generaciju)
+'   broj Y:  GEN-C
+'
+'   RunSimpleStornoZbirna("X", "GEN-C")
+'     bez provere para -> kapija popusti (gen neprazna, deca scoped)
+'                      -> StornoZbirna bira GEN-C, jer broj vise ne ucestvuje
+'                      -> stornira se dokument DRUGOG poslovnog broja
+'
+' Rupa je STARIJA od faze 4 -- i kad X nosi jedan dokument, nespojiv par prolazi.
+' Faza 4 je samo uklonila kapiju koja ju je maskirala kad je X dvosmislen.
+Private Sub Test_ZBR_TudjaGeneracijaNeOtvaraKapiju()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim brojX As String, brojY As String
+    Dim zbrA As String, zbrB As String, zbrC As String
+    Dim genA As String, genB As String, genC As String
+    Dim otpA As String, otpC As String
+    Dim r As Object
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRPAR")
+    testDate = NextTestDate()
+    brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(NextTestDate(), "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    ' broj X: dva aktivna dokumenta istog vlasnika
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRPAR-A-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, brojX)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-PARA-" & scenario, brojX, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRPAR-B-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, brojX)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    AssertTrue (Len(genA) > 0 And Len(genB) > 0 And genA <> genB), _
+        "ZBR-PAR preduslov: broj X nosi dva aktivna dokumenta"
+
+    ' broj Y: sasvim drugi dokument
+    zbrC = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojY, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         90#, TEST_TIP_AMB, 9, KLASA_I)
+    genC = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrC)
+    otpC = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-PARC-" & scenario, brojY, _
+                             TEST_VRSTA, TEST_SORTA, 90#, 10#, TEST_TIP_AMB, 9, KLASA_I)
+    AssertTrue Len(genC) > 0, "ZBR-PAR preduslov: broj Y nosi svoj dokument"
+    AssertEquals genC, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpC), _
+        "ZBR-PAR preduslov: otpremnica Y nosi generaciju C"
+
+    AssertFalse ZbirnaGeneracijaPripadaBroju(brojX, genC), _
+        "ZBR-PAR preduslov: GEN-C ne pripada broju X"
+
+    ' Nespojiv par: broj X, generacija sa broja Y.
+    Set r = RunSimpleStornoZbirna(brojX, genC)
+    AssertFalse CBool(r("success")), _
+        "ZBR-PAR: nespojiv par (broj, generacija) ne prolazi"
+
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrC), _
+        "ZBR-PAR: dokument DRUGOG broja ostaje netaknut"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR-PAR: dokument A ostaje aktivan"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR-PAR: dokument B ostaje aktivan"
+    AssertEquals brojY, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpC, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-PAR: dete drugog broja nije odvezano"
+    AssertEquals brojX, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR-PAR: dete broja X nije odvezano"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 tudja generacija ne otvara kapiju", bfpErrDesc
 End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()

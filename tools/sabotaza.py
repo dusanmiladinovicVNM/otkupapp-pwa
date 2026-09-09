@@ -5362,6 +5362,28 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
+    # (zamena je bez ' SABOTAZA komentara: red se zavrsava line-continuation-om,
+    # a komentar posle '_' je VBA syntax error -- provera to i hvata.)
+    # ZBR-CHILD-01 / P1: skida proveru para iz SCOPED odluke, pa tudja generacija
+    # opet otvara kapiju. Meri se premisa faze 4: "akter zna identitet" mora da
+    # znaci identitet OVOG poslovnog dokumenta, ne bilo koji neprazan GeneracijaID.
+    "scoped-kapija-ne-proverava-par-broj-generacija": (
+        "modStornoFlow.bas",
+        "        If ZbirnaGeneracijaPripadaBroju(broj, gen) _\n",
+        "        If True _\n",
+        "Test_ZBR_TudjaGeneracijaNeOtvaraKapiju",
+        "ZBR-PAR: dokument DRUGOG broja ostaje netaknut",
+    ),
+    # Druga brana za istu rupu, i starija od faze 4: StornoZbirna bira red samo po
+    # generaciji, pa bez ove provere stornira dokument tudjeg broja i kad kapija
+    # uopste nije popustila.
+    "storno-zbirne-ne-proverava-par-broj-generacija": (
+        "modStorno.bas",
+        "        If Not ZbirnaGeneracijaPripadaBroju(brojZbirne, generacijaID) Then\n",
+        "        If False Then   ' SABOTAZA: par se ne proverava\n",
+        "Test_ZBR_TudjaGeneracijaNeOtvaraKapiju",
+        "ZBR-PAR: nespojiv par (broj, generacija) ne prolazi",
+    ),
     # ZBR-CHILD-01 faza 4: gasi popustanje -- kapija opet staje i kad je izbor
     # scoped. Meri se korist zbog koje su faze 1-3 placene.
     "kapija-ne-pusta-scoped-izbor": (
@@ -5413,7 +5435,9 @@ SABOTAZE = {
     # suzavanje stvarno radi.
     "deca-se-biraju-po-broju-a-ne-po-generaciji": (
         "modDokumenta.bas",
+        "    If kandidati.count = 0 Then Exit Function\n"
         "    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function\n",
+        "    If kandidati.count = 0 Then Exit Function\n"
         "    If True Then Exit Function   ' SABOTAZA: nikad ne suzavaj, biraj po broju\n",
         "Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta",
         "ZBR-F3: kaskada NE odvezuje dete drugog dokumenta pod istim brojem",

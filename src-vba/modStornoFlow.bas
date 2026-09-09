@@ -981,7 +981,8 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
     ' na broju -- inace bi otpremnice bile scoped a prijemnice ne.
     Dim genOp As String: genOp = ""
     If Len(Trim$(genStare)) > 0 Then
-        If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldBroj) _
+        If ZbirnaGeneracijaPripadaBroju(oldBroj, genStare) _
+           And SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldBroj) _
            And SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, oldBroj) _
            And SvaAktivnaDecaNoseGeneraciju(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, oldBroj) Then
             genOp = genStare
@@ -2284,7 +2285,10 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' vise ne moze da pogresi. Isti izraz sada vide oboje.
     Dim genEff As String: genEff = ""
     If Len(Trim$(gen)) > 0 Then
-        If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
+        ' Neprazna generacija NIJE dokaz da akter zna dokument POD TIM BROJEM.
+        ' Bez ovoga bi tudja generacija otvorila kapiju (v. ZbirnaGeneracijaPripadaBroju).
+        If ZbirnaGeneracijaPripadaBroju(broj, gen) _
+           And SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
            And SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj) Then
             genEff = gen
         End If
@@ -2625,7 +2629,8 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     Dim genOp As String: genOp = ""
     If Len(Trim$(gen)) > 0 Then
         Dim scopeOK As Boolean
-        scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)
+        scopeOK = ZbirnaGeneracijaPripadaBroju(brojZbirne, gen) _
+                  And SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)
         If scopeOK And ownsChain Then
             scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne) _
                       And SvaAktivnaDecaNoseGeneraciju(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, brojZbirne)

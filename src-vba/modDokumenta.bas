@@ -52,9 +52,14 @@ Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 
 ' ZBR-MUT-01: razlozi zbog kojih se po BROJU ne sme mutirati.
 '
-' Deca zbirne (otpremnica, prijemnica, paletna stavka, denormalizovan otkup)
-' nose SAMO BrojZbirne -- generacije nemaju. Zato svaka rutina koja decu bira
-' po broju zahvata SVE dokumente tog broja, ma koliko ih bilo.
+' Deca zbirne (otpremnica, prijemnica, paletna stavka, denormalizovan otkup) od
+' faze 1 nose i ZbirnaGeneracijaID -- ali on sme biti PRAZAN (roditelj jos nije
+' razresen), pa se na njega ne moze racunati bez provere.
+'
+' Rutina koja decu bira po broju zato i dalje zahvata SVE dokumente tog broja --
+' osim kad je izbor scoped po generaciji (faza 3), a to zna samo pozivalac.
+' Otud `scopedPoGeneraciji` parametar nize: kapija popusta tek kad akter dokaze
+' da bira po generaciji, i to za CELU svoju operaciju.
 '
 ' Dva razloga su RAZLICITA i ne smeju se stopiti:
 '   VLASNIK   -- broj je IKAD pripadao vise od jednog (VozacID, KupacID).
@@ -664,15 +669,18 @@ End Function
 ' NE trazi -- biranje "najverovatnijeg" iz dvosmislenog skupa je tiho pogadjanje.
 '
 ' ISTORIJA JE DEO BEZBEDNOSTI, ne samo sadasnje stanje. UNIQUE danas uz broj koji
-' je IKAD drzalo vise vlasnika i dalje nije bezbedan roditelj: prijemnica cuva
-' SAMO BrojZbirne, pa svaka nizvodna operacija po broju moze da zahvati i tudje.
+' je IKAD drzalo vise vlasnika i dalje nije bezbedan roditelj: nizvodna operacija
+' koja ide po broju moze da zahvati i tudje. Prijemnica od faze 1 ima FK na
+' generaciju, ali on sme biti prazan, pa sam po sebi ne ukida ovu kapiju.
 ' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
-' mutaciju po broju. Uslov pada tek kad prijemnica dobije pravi FK na generaciju.
+' mutaciju po broju.
 ' ZBR-MUT-01 -- sme li se po BROJU mutirati ono sto visi o zbirni.
 '
 ' Trece pitanje, uz kapiju za kreiranje (F3) i za roditelja (F4). Ovde se ne pita
 ' "sme li nov unos" ni "koji je roditelj", nego: SME LI RUTINA KOJA DECU BIRA PO
-' BROJU da radi. Deca generacije nemaju, pa ona zahvata sve dokumente tog broja.
+' BROJU da radi. Izbor po broju zahvata sve dokumente tog broja; generacija na
+' detetu postoji od faze 1, ali sme biti prazna, pa je popustanje uslovljeno --
+' v. scopedPoGeneraciji.
 '
 ' Vraca prazno kad sme. Razlog se ne stapa u jednu poruku: vise vlasnika i vise
 ' dokumenata istog vlasnika su dva razlicita poteza za operatera.
@@ -1554,6 +1562,49 @@ End Function
 '
 ' Stornirana JEDINA generacija se sme upisati: ako je pod tim brojem ikad
 ' postojala samo jedna, identitet je poznat bez obzira na danasnje stanje.
+' ZBR-CHILD-01: da li generacija ZAISTA pripada tom poslovnom broju.
+'
+' `RedJeIzabranogDokumenta` (modStorno) kad dobije generaciju bira red ISKLJUCIVO
+' po njoj -- broj se vise ne gleda. Zato `StornoZbirna("X", "GEN-C")` stornira
+' GEN-C i kad GEN-C pripada broju Y. `IdoviGeneracije` isto poredi samo
+' generaciju, pa ni ona nije branila par.
+'
+' Rupa je STARIJA od faze 4: i kad broj X nosi jedan dokument, nespojiv par bi
+' prosao. Faza 4 je samo uklonila slucajnu barijeru -- kapiju koja je taj poziv
+' zaustavljala kad je X dvosmislen -- i time je ucinila dohvatljivom u vise
+' slucajeva. A njena premisa ("akter zna identitet") bez ove provere ne stoji:
+' neprazan GeneracijaID nije dokaz da akter zna dokument POD TIM BROJEM.
+'
+' Gleda i STORNIRANE redove namerno: `CompleteZbirnaIspravka` legitimno radi sa
+' identitetom stare, vec stornirane zbirne.
+Public Function ZbirnaGeneracijaPripadaBroju(ByVal broj As String, _
+                                             ByVal gen As String) As Boolean
+    On Error GoTo EH
+    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
+    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+    If Not IsArray(data) Then Exit Function
+
+    Dim cBroj As Long: cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    Dim cGen As Long: cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
+    If cBroj = 0 Or cGen = 0 Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cGen))), Trim$(NzToText(gen)), vbTextCompare) = 0 Then
+            If BrojJednak(data(i, cBroj), broj) Then
+                ZbirnaGeneracijaPripadaBroju = True
+                Exit Function
+            End If
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr "modDokumenta.ZbirnaGeneracijaPripadaBroju", "broj=" & broj & " gen=" & gen
+End Function
+
 ' `outRazlog` je Optional ByRef: zatecenim pozivaocima se nista ne menja, a
 ' migracija dobija RAZLOG. Odluka ostaje na JEDNOM mestu -- da backfill sam
 ' racuna razlog, imao bi drugu kopiju pravila, sto je tacno ono sto faza 2
