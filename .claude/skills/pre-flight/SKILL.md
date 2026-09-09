@@ -94,6 +94,10 @@ od dugmeta: unos, pregled, mutacija, validacija, status, upozorenje, oporavak, �
 pasivni integritetni signal. Katalog je `docs/UI_MIGRACIJA_KATALOG.md`; legacy se ne briše dok red nije
 zatvoren. „Kod još postoji" nije dokaz da operater ima funkciju.
 
+**Red u katalogu je tvrdnja, ne dokaz.** Pre rada po njemu proveri ga naspram legacy koda koji
+opisuje: MIG-005 je mesecima stajao sa pogrešnim ekranom (F3 umesto F4) i pogrešnim nalazom da je
+prikaz izgubljen (§28.1f).
+
 ## 7. PLATFORM EXPERIMENT
 
 `business ambiguity → specification first` · `platform ambiguity → experiment first`
