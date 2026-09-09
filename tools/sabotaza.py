@@ -5362,13 +5362,19 @@ SABOTAZE = {
         "Test_HladnjacaChainHappyPath",
         "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
     ),
-    # ZBR-CHILD-01 faza 3 / P1: vraca odluku o rezimu na NIVO TABELE. Kaskada tada
-    # sme da bude pola scoped (otpremnice) a pola po broju (prijemnice), pa jedan
-    # dokument zavrsi polovicno ponisten.
+    # ZBR-CHILD-01 faza 3 / P1: iskljucuje prijemnice i palete iz odluke, pa rezim
+    # ostaje po TABELI. Kaskada tada sme da bude pola scoped (otpremnice suzene na
+    # GEN-B) a pola po broju (prijemnice padnu, jer je jedna legacy), i dokument
+    # GEN-A zavrsi polovicno ponisten.
+    #
+    # Prva verzija je gadjala PRVI red bloka (scopeOK = ...OTPREMNICA...) i bila
+    # INERTNA: sledeci red (`If scopeOK And ownsChain`) ionako preracuna scopeOK
+    # nad prijemnicama i vrati ga na False, pa je sabotaza sama sebe lecila
+    # (dokaz.py: NE OBARA NISTA). Sidro mora da skine bas UNAKRSNI deo odluke.
     "rezim-se-odlucuje-po-tabeli": (
         "modStornoFlow.bas",
-        "        scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)\n",
-        "        scopeOK = True   ' SABOTAZA: rezim po tabeli, ne po operaciji\n",
+        "        If scopeOK And ownsChain Then\n",
+        "        If False Then   ' SABOTAZA: prijemnice i palete ne ulaze u odluku\n",
         "Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli",
         "ZBR-F3X: otpremnica i prijemnica drugog dokumenta zavrse u ISTOM stanju",
     ),
