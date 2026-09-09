@@ -52,6 +52,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblStornoZurnal` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
+| `tblVozaci` | 0 | _(samo testovi)_ |
 
 ## Ucesnici transakcije (snapshot, NE vlasnistvo)
 
@@ -98,16 +99,17 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
+- `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblKulture`: `modTestPalete`
-- `tblKupci`: `modTestBanka`
+- `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblPartnerMap`: `modTestBanka`
 - `tblSEFEventLog`: `modSEFTests`
-- `tblStanice`: `modTestBanka`
+- `tblStanice`: `modGoldenTests`, `modTestBanka`
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblTipAmbalaze`: `modTestPalete`
+- `tblVozaci`: `modGoldenTests`
 
 ## Sta ovo NE pokriva
 

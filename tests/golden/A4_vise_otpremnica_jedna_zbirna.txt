@@ -1,11 +1,19 @@
 == A4 vise otpremnica jedna zbirna ==
+DOKUMENTI
+  otkupa          1
+  otpremnica      2
+  zbirnih         1
+  prijemnica      1
+  faktura         0
 OTKUP
   predao          I=1000.00  II=0.00
   vrednost        50000.00
-  placeno         1000.00
+  placeno         0.00
   isplaceno svi   NE
 ZBIRNA
   poslato         I=1000.00  II=0.00
   primljeno       I=1000.00  II=0.00
   kalo            I=0.00  II=0.00
   invarijanta     OK
+FAKTURA
+  nema

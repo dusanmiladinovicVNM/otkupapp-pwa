@@ -1,8 +1,12 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: PREDLOG, nije implementirano.** Poslednja stavka PR2.
+> **Status: grupa A implementirana (5 od 20), B–G čekaju.**
+> `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
+> `tests/golden/`.
+>
 > Konstrukcija se pregleda **pre** implementacije — jer je ovde najlakše
-> napraviti tačno onu grešku zbog koje scenariji i postoje.
+> napraviti tačno onu grešku zbog koje scenariji i postoje. Pregled grupe A je
+> uhvatio pet grešaka u samim scenarijima (§7).
 
 ---
 
@@ -23,6 +27,29 @@ postoji: kodifikuje kompenzaciju umesto pravila.
 
 ---
 
+## 1b) Izolacija ulaznog, ne samo izlaznog stanja
+
+Rollback čisti ono što scenario **ostavi**. Ne čisti ono što je **zatekao**.
+
+Prva verzija grupe A koristila je `KOOP-TEST-1` iz fixture-a i svih pet goldena
+je javljalo `placeno 1000.00` — iako nijedan scenario ništa ne plaća. To je bio
+zatečen avans, koji `SaveOtkupMulti_TX` automatski primeni. Izmena tog avansa u
+fixture-u oborila bi goldene a da niko nije dirao poslovanje.
+
+Zato scenariji koriste **sopstvene identitete bez transakcione istorije**:
+
+```
+KOOP-GLD-1   STA-GLD-1   VOZ-GLD-1   KUP-GLD-1
+```
+
+`GldPreduslov` to i **proverava** pre svakog scenarija: ako identitet već ima
+otkup ili red u novcu, scenario staje sa imenovanom greškom. Golden test mora da
+poseduje ceo poslovni ulaz koji utiče na izlaz, ne samo ID-eve koje je sam
+napravio.
+
+Gde je zatečeno stanje **predmet** testa (B2 — avans), scenario ga pravi sam, u
+svojoj transakciji.
+
 ## 2) Rečnik tvrdnji — šta scenario SME da tvrdi
 
 ### Dozvoljeno: poslovne činjenice
@@ -35,12 +62,14 @@ postoji: kodifikuje kompenzaciju umesto pravila.
 | Status | koji **dokumenti** su aktivni, koji stornirani |
 | Faktura | iznos; koje su stavke ušle; šta je ostalo nefakturisano |
 | Sledljivost | iz kog otkupa potiče roba na konkretnoj fakturi |
+| **Broj logičkih dokumenata** | „dva bloka su otišla na jednu otpremnicu" — jedan poziv writer-a = jedan dokument |
 
 ### Zabranjeno: oblik implementacije
 
 | Ne sme | Zašto |
 |---|---|
 | broj **redova** u tabeli | menja se u PR3 po definiciji |
+| broj **ID-eva** koje writer vrati | dvoklasni dokument danas vraća dva — to je broj redova prerušen u broj dokumenata |
 | `GeneracijaID` bilo gde | mehanizam koji PR12 briše |
 | poslovni broj kao **ključ pretrage** | A2 — broj je labela |
 | indeks kolone, redosled kolona | to meri `VerifySchema`, ne poslovni test |
@@ -65,32 +94,52 @@ Snapshot    -> funkcija koja vraca POSLOVNE cinjenice kao tekst
 AssertSnapshot -> poredjenje sa golden fajlom u gitu
 ```
 
-Snapshot **ne sme** da čita tabele u sirovom obliku. Čita ih kroz iste
-read-modele koje koristi aplikacija (`GetAmbalazeStanje`, `GetIsplataForOtkup`,
-`ValidateZbirnaInvariant`, …), pa se u PR3 menja implementacija tih čitača, ne
-sam scenario.
+### Golden Query Adapter
 
-Primer izlaza — namerno bez ijednog imena tabele:
+`GldSnapshot` i njegovi pomoćnici su **jedino mesto koje zna kako su podaci
+složeni**:
 
 ```
-KOOPERANT KOOP-1
+Scenario  ->  Golden Query Adapter  ->  trenutni storage / read-model
+```
+
+Gde produkcioni read-model postoji, koristi se (`GetIsplataForOtkup`,
+`SumOtpremniceByKlasa`, `IsZbirnaConsistent`, `GetAmbalazeStanje`). Za deo
+činjenica ga **nema**, pa adapter čita tabelu direktno — to je svesna granica,
+ne propust, i zato ovde piše umesto da se tvrdi da se koriste samo read-modeli.
+
+**Scenario i golden fajl se nikad ne menjaju. Adapter sme.**
+
+Stvarni izlaz (A2), namerno bez ijednog imena tabele i bez ijednog ID-a:
+
+```
+== A2 dvoklasni lanac ==
+DOKUMENTI
+  otkupa          1
+  otpremnica      1
+  zbirnih         1
+  prijemnica      1
+  faktura         1
+OTKUP
   predao          I=1000.00  II=200.00
-  isplaceno       DA
-  saldo           0.00
-  ambalaza 12/1   -40
-ZBIRNA 12/090926
+  vrednost        56000.00
+  placeno         0.00
+  isplaceno svi   NE
+ZBIRNA
   poslato         I=1000.00  II=200.00
-  primljeno       I= 980.00  II=195.00
-  kalo                 20.00       5.00
+  primljeno       I=1000.00  II=200.00
+  kalo            I=0.00  II=0.00
+  invarijanta     OK
 FAKTURA
-  iznos           123456.00
-  stavki          2
-  nefakturisano   0
+  iznos           62000.00
 ```
+
+`otkupa 1` iako dvoklasni otkup danas fizički daje dva reda — broji se
+**poziv writer-a**, ne ID. Posle PR5 taj broj ostaje 1 i golden se ne menja.
 
 ---
 
-## 4) Predlog scenarija (18)
+## 4) Scenariji (20)
 
 ### A — Fresh Fruit Flow
 
@@ -149,16 +198,31 @@ FAKTURA
 
 ---
 
-## 5) Tri stvari koje tražim da se potvrde pre implementacije
+## 5) Donete odluke
 
-1. **Rečnik iz §2** — je li išta zabranjeno zapravo potrebno, ili išta
-   dozvoljeno zapravo previše veže za današnju strukturu?
-2. **B4 kao `KNOWN_FAIL`** — golden se piše na *ispravnu* vrednost i test pada
-   dok PR6 ne popravi primary-row bug. Alternativa je pisati golden na *današnju
-   pogrešnu* vrednost pa ga menjati u PR6 — što bi značilo da mreža kodifikuje
-   bug. Predlažem prvo; treba potvrda jer uvodi namerno crven test.
-3. **Obim** — 18 scenarija je gornja granica onoga što se održava. Ako je
-   previše, prvo bih izostavio D2, G3 i C2.
+| Pitanje | Odluka |
+|---|---|
+| Rečnik tvrdnji (§2) | prihvaćen; dopunjen sa **brojem logičkih dokumenata** kao dozvoljenom činjenicom i **brojem ID-eva** kao zabranjenom |
+| Obim | zadržava se **svih 20** |
+| B4 | golden se piše na **ispravnu** vrednost — v. §5b |
+
+### 5b) B4 ne sme da bude trajno crvena centralna kapija
+
+`RunGoldenSuite` je `gate: True` i u podrazumevanom setu. Scenario koji trajno
+pada pretvorio bi FULL u trajno crven — a provera koju operater nauči da
+ignoriše ne štiti ništa. To je ista bolest kao placebo test, samo obrnuta.
+
+Zato:
+
+- golden za B4 se piše na **ispravnu** vrednost (kooperant plaćen u celosti →
+  `isplaceno svi DA`) i **pregleda se**,
+- ali se B4 **ne registruje** u `RunGoldenSuite` dok PR6 ne ukloni primary-row
+  bug (`modNovac.bas:1240` računa po redu, `modOtkup.bas:279` piše novac samo na
+  primarni red),
+- PR6 ga registruje i time **dokazuje** da je bug popravljen.
+
+Alternativa — pisati golden na današnju pogrešnu vrednost pa ga menjati u PR6 —
+značila bi da sigurnosna mreža kodifikuje bug.
 
 ---
 
@@ -167,3 +231,23 @@ FAKTURA
 Izgled forme, štampu, PDF i ponašanje nad pravim podacima — to ostaje na
 operateru (`.claude/rules/testovi.md` §7). Golden scenariji mere **poslovni
 ishod**, ne prezentaciju.
+
+---
+
+## 7) Šta je pregled grupe A uhvatio
+
+Pet grešaka — sve u **scenarijima**, nijedna u sistemu. Zato se goldeni
+pregledaju pre nego što se zaključaju.
+
+| # | Greška | Posledica da je prošla |
+|---|---|---|
+| 1 | snapshot je čitao celu svesku po kooperantu | `predao 1720` iako scenario snima 1000; golden pada na svaku izmenu fixture-a |
+| 2 | scenario je koristio `KOOP-TEST-1` iz fixture-a | `placeno 1000.00` u svih pet, iako nijedan ništa ne plaća — zatečen avans |
+| 3 | format broja lokalno zavisan (`1720,00`) | golden pada na mašini sa drugom decimalnom oznakom; test meri Control Panel |
+| 4 | ambalaža nije usklađena otpremnica ↔ zbirna | `invarijanta PUKLA` zabeležena kao da je sistem kriv |
+| 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u PR5 |
+
+Greška 2 je najvažnija i vredi je pamtiti kao pravilo:
+
+> **Rollback rešava ono što scenario ostavi iza sebe. Ne rešava ono što je
+> zatekao.**
