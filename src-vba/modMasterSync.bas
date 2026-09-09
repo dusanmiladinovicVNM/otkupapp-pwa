@@ -2289,10 +2289,33 @@ End Function
 ' isti broj. Bezuslovni RequireUpdateCell je tiho prepisivao postojecu vezu, pa
 ' je jedna zbirna mogla "preuzeti" otkupe/otpremnice iz druge (dvostruko
 ' obracunata roba, a prva zbirna ostaje bez stavki). Konflikt = greska.
-Private Sub RequireBrojZbirneNotConflicting(ByVal tblName As String, _
+' ZBR-CHILD-01: kapija mora da gleda ISTO sto pisac pise.
+'
+' Ranija verzija se zvala RequireBrojZbirneNotConflicting i gledala je SAMO broj.
+' Dok je PoveziDeteNaZbirnu pisao samo broj, upis pod istim brojem je bio
+' idempotentan -- prepisivanje iste vrednosti preko sebe. Otkad pisac pise i
+' generaciju, isti taj put TIHO PREBACUJE dete sa jednog logickog dokumenta na
+' drugi, jer dva dokumenta pod istim brojem su tacno ono sto KR-001 dozvoljava.
+' Kapija nije oslabila; upis je ojacao ispod nje. To je ZBR-MUT-01 naopako:
+' kapija (broj) uza od aktera (broj + generacija).
+'
+' Matrica:
+'   postojeci broj | postojeca gen | novo (broj/gen) | ishod
+'   prazan         | prazna        | X / GEN-A       | ALLOW
+'   X              | prazna        | X / GEN-A       | ALLOW  (dovrsava vezu)
+'   X              | GEN-A         | X / GEN-A       | ALLOW  (idempotentno)
+'   X              | GEN-A         | X / GEN-B       | BLOCK
+'   X              | GEN-A         | X / prazna      | BLOCK  (ne brise se znanje)
+'   X              | bilo sta      | Y / bilo sta    | BLOCK
+'   prazan         | GEN-A         | bilo sta        | BLOCK  (integritet)
+'
+' Prepisivanje roditelja POSTOJI, ali kroz ispravku/prevez, koji su operaterske
+' komande. Ingest zatecene cinjenice nije mesto za promenu vlasnistva dokumenta.
+Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
                                             ByVal rowIndex As Long, _
                                             ByVal columnName As String, _
                                             ByVal brojZbirne As String, _
+                                            ByVal genZbirne As String, _
                                             ByVal contextInfo As String, _
                                             ByVal sourceName As String)
     Dim data As Variant
@@ -2306,17 +2329,47 @@ Private Sub RequireBrojZbirneNotConflicting(ByVal tblName As String, _
     Dim colIdx As Long
     colIdx = RequireColumnIndex(tblName, columnName, sourceName)
 
+    Dim colGen As Long
+    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_GEN, sourceName)
+
     Dim current As String
     current = Trim$(CStr(nz(data(rowIndex, colIdx), "")))
 
-    If Len(current) = 0 Then Exit Sub
-    If StrComp(current, Trim$(brojZbirne), vbTextCompare) = 0 Then Exit Sub
+    Dim currentGen As String
+    currentGen = Trim$(CStr(nz(data(rowIndex, colGen), "")))
 
-    Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 33, sourceName, _
-              "Konflikt BrojZbirne -- red je vec vezan na drugu zbirnu. Table=" & tblName & _
-              "; " & contextInfo & _
-              "; Postojeci=" & current & _
-              "; Novi=" & Trim$(brojZbirne)
+    ' Generacija bez broja: dvoje se menjaju u koraku, pa je ovo pokvaren red.
+    ' Fail-closed -- ingest ga ne "popravlja" upisom preko.
+    If Len(current) = 0 And Len(currentGen) > 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 45, sourceName, _
+                  "Integritet: red nosi ZbirnaGeneracijaID bez BrojZbirne. Table=" & tblName & _
+                  "; " & contextInfo & _
+                  "; PostojecaGeneracija=" & currentGen
+    End If
+
+    If Len(current) > 0 Then
+        If Not BrojJednak(current, brojZbirne) Then
+            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 33, sourceName, _
+                      "Konflikt BrojZbirne -- red je vec vezan na drugu zbirnu. Table=" & tblName & _
+                      "; " & contextInfo & _
+                      "; Postojeci=" & current & _
+                      "; Novi=" & Trim$(brojZbirne)
+        End If
+    End If
+
+    ' Isti broj NIJE isti dokument. Poznata generacija se ne menja ingest-om --
+    ' ni na drugu, ni na praznu.
+    If Len(currentGen) > 0 Then
+        If StrComp(currentGen, Trim$(genZbirne), vbTextCompare) <> 0 Then
+            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 46, sourceName, _
+                      "Konflikt ZbirnaGeneracijaID -- red je vec dete DRUGOG dokumenta pod istim " & _
+                      "brojem. Table=" & tblName & _
+                      "; " & contextInfo & _
+                      "; Broj=" & Trim$(brojZbirne) & _
+                      "; PostojecaGeneracija=" & currentGen & _
+                      "; NovaGeneracija=" & Trim$(genZbirne)
+        End If
+    End If
 End Sub
 
 Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
@@ -2403,9 +2456,11 @@ Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
     Dim rowOtpremnica As Long
     rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
 
-    ' AUD-043(b): isti guard kao na otkupu -- ne prepisuj tudju vezu u tisini.
-    RequireBrojZbirneNotConflicting TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
-                                    brojZbirne, "OtpremnicaID=" & otpremnicaID, sourceName
+    ' AUD-043(b) + ZBR-CHILD-01: isti guard kao na otkupu -- ne prepisuj tudju
+    ' vezu u tisini, ni kad je broj isti a dokument drugi.
+    RequireZbirnaVezaNotConflicting TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
+                                    brojZbirne, genZbirne, _
+                                    "OtpremnicaID=" & otpremnicaID, sourceName
 
     PoveziDeteNaZbirnu TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
                        brojZbirne, genZbirne, sourceName
@@ -3492,9 +3547,11 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
                              "; BrojZbirne=" & brojZbirne
             End If
 
-            ' AUD-043(b): otkup koji je vec u DRUGOJ zbirnoj se NE prepisuje.
-            RequireBrojZbirneNotConflicting TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
-                                            brojZbirne, "OtkupID=" & otkupID, SRC
+            ' AUD-043(b) + ZBR-CHILD-01: otkup koji je vec dete DRUGOG dokumenta
+            ' se NE prepisuje -- ni kad taj drugi dokument nosi isti broj.
+            RequireZbirnaVezaNotConflicting TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
+                                            brojZbirne, genZbirne, _
+                                            "OtkupID=" & otkupID, SRC
 
             PoveziDeteNaZbirnu TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
                                brojZbirne, genZbirne, SRC

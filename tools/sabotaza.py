@@ -5351,6 +5351,28 @@ SABOTAZE = {
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
     ),
+    # ZBR-CHILD-01 lifecycle: gasi dovrsavanje veze u auto-lancu. Helper je
+    # fail-soft i njegov neuspeh ne ulazi u failLink, pa lanac prijavi uspeh a
+    # otpremnica ostane nerazresena. Bez ove sabotaze tvrdnja ne bi dokazala da
+    # meri korak dovrsavanja, nego samo da je veza nekako nastala.
+    "autochain-ne-dovrsava-vezu-otpremnice": (
+        "modAutoHladnjaca.bas",
+        "    If Len(gen) = 0 Then Exit Sub\n",
+        "    If True Then Exit Sub   ' SABOTAZA: veza se ne dovrsava\n",
+        "Test_HladnjacaChainHappyPath",
+        "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
+    ),
+    # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
+    # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
+    # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
+    # ISTO sto pisac pise.
+    "child-veza-proverava-samo-broj": (
+        "modMasterSync.bas",
+        "    If Len(currentGen) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
+        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
+        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji",
+    ),
     "dete-ne-nosi-generaciju-roditelja": (
         "modDokumenta.bas",
         "    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName\n",

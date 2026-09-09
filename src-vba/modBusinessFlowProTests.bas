@@ -125,6 +125,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_DeteNosiGeneracijuRoditelja
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju
+    Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
     Test_StornoGuardUKaskadi
     Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
@@ -2299,6 +2300,31 @@ Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
     RequireAppend TBL_OTKUP, rowData, "AppendRF28OtkupFixture"
 End Sub
 
+Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
+                                        ByVal datum As Date, _
+                                        ByVal vozacID As String, _
+                                        ByVal brojOtpremnice As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTPREMNICA)
+
+    SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID
+    SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_DATUM, datum
+    SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_STANICA, TEST_ST_ID
+    SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_VOZAC, vozacID
+    SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtpremnice
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_VRSTA, TEST_VRSTA
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_SORTA, TEST_SORTA
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOLICINA, 100#
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_CENA, 10#
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_TIP_AMB, TEST_TIP_AMB
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
+    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
+
+    ' BrojZbirne i ZbirnaGeneracijaID ostaju PRAZNI -- dete pre roditelja, sto je
+    ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
+    RequireAppend TBL_OTPREMNICA, rowData, "AppendRF28OtpremnicaFixture"
+End Sub
+
 Private Sub AppendRF28ZbirnaFixture(ByVal zbirnaID As String, _
                                     ByVal datum As Date, _
                                     ByVal vozacID As String, _
@@ -3096,6 +3122,134 @@ Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
     End If
 
     RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_GEN, "", SRC
+End Sub
+
+' ZBR-CHILD-01 / P1: ingest NE SME da premesti dete na drugi dokument.
+'
+' Dok je PoveziDeteNaZbirnu pisao samo broj, drugi link pod istim brojem je bio
+' idempotentan -- ista vrednost preko sebe. Otkad pise i generaciju, isti put
+' menja ROdITELJA deteta, a stara kapija (samo broj) to ne vidi. Regresiju je
+' uveo upis, ne kapija.
+'
+' Scenario je KR-001, koji ugovor izricito dozvoljava: dva uredjaja bez veze
+' posalju zbirnu pod istim brojem, istim vozacem i istim kupcem. Membership
+' kapije (vozac, poslovni dan) tu prolaze, pa dete legitimno stigne u oba skupa.
+'
+' Mere se OBA pozivna mesta iste kapije:
+'   korak 2 -- otkup je vec dete GEN-A
+'   korak 3 -- otkup je cist, ali otpremnica na koju pokazuje je dete GEN-A
+Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim broj As String, brojOtp As String
+    Dim zbrA As String, zbrB As String, genA As String, genB As String
+    Dim otkID As String, otkID2 As String
+    Dim crid As String, crid2 As String, otpID As String
+    Dim raised As Boolean
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRFK")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    otkID = "OTK-ZBRFK-A-" & scenario
+    otkID2 = "OTK-ZBRFK-B-" & scenario
+    crid = "CRID-ZBRFK-A-" & scenario
+    crid2 = "CRID-ZBRFK-B-" & scenario
+    otpID = "OTP-ZBRFK-" & scenario
+    brojOtp = TEST_PREFIX & "-OTP-ZBRFK-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRFK-ZA-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
+                                       100, broj)
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRFK-ZB-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
+                                       120, broj)
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
+    AssertTrue (Len(genA) > 0 And Len(genB) > 0 And genA <> genB), _
+        "ZBR-FK preduslov: dva dokumenta pod istim brojem nose RAZLICITE generacije"
+
+    AppendRF28OtpremnicaFixture otpID, testDate, TEST_VOZ_ID, brojOtp
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid, ""
+    VeziOtkupZaOtpremnicuFixture otkID, otpID
+
+    ' --- 1) prvi link DOVRSAVA praznu vezu ---
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, crid
+    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK preduslov: prvi link je upisao generaciju A na otkup"
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK preduslov: prvi link je upisao generaciju A na otpremnicu"
+
+    ' --- 2) drugi dokument, ISTI broj -> kapija na otkupu ---
+    raised = False
+    On Error Resume Next
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, crid
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "ZBR-FK: drugi dokument pod istim brojem ne prolazi tiho"
+    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji"
+    AssertEquals broj, _
+        NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE)), _
+        "ZBR-FK: otkup zadrzava broj -- blokira se generacija, ne broj"
+
+    ' --- 3) ista kapija na otpremnickom pozivnom mestu ---
+    ' Otkup2 je cist, pa njegova kapija pusta; otpremnica na koju pokazuje je vec
+    ' dete GEN-A. Bez ovog koraka drugo pozivno mesto ostaje nemereno.
+    AppendRF28OtkupFixture otkID2, testDate, TEST_VOZ_ID, "I", 100#, crid2, ""
+    VeziOtkupZaOtpremnicuFixture otkID2, otpID
+
+    raised = False
+    On Error Resume Next
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, crid2
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "ZBR-FK: kapija radi i na otpremnickom pozivnom mestu"
+    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK: otpremnica ostaje na svojoj originalnoj generaciji"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR-CHILD-01 MasterSync ne prepisuje generaciju deteta", bfpErrDesc
+End Sub
+
+Private Function DeteGeneracija(ByVal tableName As String, _
+                                ByVal idColumn As String, _
+                                ByVal idValue As String) As String
+    DeteGeneracija = NzToText(LookupValue(tableName, idColumn, idValue, COL_DETE_ZBIRNA_GEN))
+End Function
+
+Private Sub VeziOtkupZaOtpremnicuFixture(ByVal otkupID As String, _
+                                         ByVal otpremnicaID As String)
+    Const SRC As String = "VeziOtkupZaOtpremnicuFixture"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows Is Nothing Or rows.count = 0 Then
+        Err.Raise vbObjectError + 9321, SRC, "Otkup nije nadjen. ID=" & otkupID
+    End If
+
+    RequireUpdateCell TBL_OTKUP, CLng(rows(1)), COL_OTK_OTPREMNICA_ID, otpremnicaID, SRC
 End Sub
 
 Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
@@ -4417,6 +4571,18 @@ Private Sub Test_HladnjacaChainHappyPath()
     AssertEquals DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, FindPrijemnicaIDByBrojAndKlasa(brPrij, KLASA_I)), _
                  DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, FindPrijemnicaIDByBrojAndKlasa(brPrij, KLASA_II)), _
         "Hladnjaca lanac: prijemnica Kl.I i Kl.II dele generaciju"
+
+    ' ZBR-CHILD-01: lanac snima otpremnicu PRE zbirne, pa joj je veza u tom
+    ' trenutku prazna; ZavrsiVezuOtpremniceNaZbirnu je dovrsava posle. Taj helper
+    ' je fail-soft (tri Exit Sub-a i LogErr) i njegov neuspeh NE ulazi u failLink,
+    ' pa lanac moze da prijavi uspeh a veza da ostane nerazresena. Merenje je
+    ' jedini nacin da se to vidi -- odsustvo upozorenja ovde ne dokazuje nista.
+    AssertEquals DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I)), _
+                 DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)), _
+        "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne"
+    AssertEquals DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, FindZbirnaIDByBrojAndKlasa(brDok, KLASA_II)), _
+                 DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_II)), _
+        "Hladnjaca lanac: otpremnica Kl.II nosi generaciju SVOJE zbirne"
 
     ' Back-link u otkup red.
     Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)

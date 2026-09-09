@@ -668,6 +668,44 @@ je nose **svi** relevantni redovi, inače ostaju na broju.
 **Korist stiže u fazi 4.** Faze 1–2 su trošak bez vidljive promene — to je
 svesno plaćeno da bi koraci bili odvojivo dokazivi.
 
+### Kapija mora da gleda isto što pisac piše
+
+Uvođenje kolone je **oslabilo jednu zatečenu kapiju, a da je niko nije dirao.**
+
+`modMasterSync.RequireBrojZbirneNotConflicting` je gledao samo `BrojZbirne`.
+Dok je `PoveziDeteNaZbirnu` pisao samo broj, upis pod **istim** brojem bio je
+idempotentan — ista vrednost preko sebe. Otkad pisac piše i generaciju, isti taj
+put menja **roditelja** deteta:
+
+```
+Zbirna A: Broj = ZB-10, Gen = GEN-A     <- dete je već ovde
+Zbirna B: Broj = ZB-10, Gen = GEN-B     <- drugi uređaj, isti broj (§5 dozvoljava)
+
+kapija:   "ZB-10" == "ZB-10"  -> prolazi
+pisac:    GEN-A -> GEN-B      -> tiho premešten vlasnik
+```
+
+To je `ZBR-MUT-01` naopako: **kapija (broj) uža od aktera (broj + generacija)**.
+Regresiju je uveo upis, ne kapija — što je i razlog da se pravilo formuliše kao
+*„kapija i pisac gledaju isti ključ"*, a ne kao spisak provera.
+
+Guard je zato `RequireZbirnaVezaNotConflicting`, sa matricom:
+
+| postojeći broj | postojeća gen. | novo (broj/gen.) | ishod |
+|---|---|---|---|
+| prazan | prazna | `X` / `GEN-A` | ALLOW |
+| `X` | prazna | `X` / `GEN-A` | ALLOW — završava nerazrešenu vezu |
+| `X` | `GEN-A` | `X` / `GEN-A` | ALLOW — idempotentno |
+| `X` | `GEN-A` | `X` / `GEN-B` | **BLOCK** |
+| `X` | `GEN-A` | `X` / prazna | **BLOCK** — znanje se ne briše |
+| `X` | bilo šta | `Y` / bilo šta | **BLOCK** |
+| prazan | `GEN-A` | bilo šta | **BLOCK** — integritet |
+
+**Prepisivanje roditelja postoji**, ali kroz ispravku i prevez, koji su
+operaterske komande. Zato zabrana **nije** u `PoveziDeteNaZbirnu`: choke point
+mora da ostane upotrebljiv za te putanje. Ingest zatečene činjenice nije mesto
+za promenu vlasništva dokumenta — ista podela komanda/ingest kao u §13.
+
 ### Verifikacija
 
 | Šta | Gde |
