@@ -60,6 +60,12 @@ Ako se vrednost može izvesti iz stavki, ona je **izvedena** ili **eksplicitno
 označen keš**. Nikad dva ravnopravna izvora. Keš se imenuje kao keš u nazivu
 kolone ili komentaru, i ima test koji dokazuje da se poklapa sa izvorom.
 
+> **Granica: „izvedeno" prestaje da važi kad dokument bude izdat.** Sadržaj
+> izdatog dokumenta je istorijska činjenica, ne keš — v. **A13**. A5 govori o
+> tome da se ista vrednost ne drži dvaput; A13 o tome da se izdata vrednost ne
+> prepisuje. Nisu u sukobu: dok je dokument otvoren, stavke se izvode; kad se
+> izda, one **postaju** sadržaj te verzije.
+
 *Provera:* invarijantni testovi po dokumentu (`DOCUMENT_HEADER_LINES.md` §6).
 
 ## A6 — identitet zaliha je `LagerJedinicaID`
@@ -168,6 +174,122 @@ domen.
 ownership listi domen-tabela.
 
 ---
+
+---
+
+## A13 — izvedeni dokument nije mutable keš
+
+Lanac nema svuda isti semantički status:
+
+```
+OTKUP  ->  OTPREMNICA  ->  ZBIRNA  ->  PRIJEMNICA
+izvor      izvedeno        izvedeno     NOVA cinjenica
+```
+
+**Otkup je primarna činjenica** — količine nastaju neposrednim unosom.
+**Otpremnica i Zbirna su izvedeni poslovni dokumenti:** `Otpremnica = zbir svojih
+Otkupa`, `Zbirna = zbir svojih Otpremnica`.
+
+Ali izvedeno **nije** isto što i keš:
+
+> Kad je dokument jednom **izdat**, njegov sadržaj postaje istorijska poslovna
+> činjenica. Ne sme se tiho prepisati zato što se izvor kasnije promenio.
+
+Ispravka izvora zato ne menja postojeći dokument, nego **pravi novu verziju**:
+
+```
+OTK 120  STORNIRAN          OTK 121  IspravkaOdID = OTK120
+OTP 44   ZAMENJENA          OTP 45   IspravkaOdID = OTP44
+ZBR 18   ZAMENJENA          ZBR 19   IspravkaOdID = ZBR18
+```
+
+Sva tri nova dokumenta nose **isti `CorrectionID`** — nastala su iz jedne
+poslovne korekcije. Stare verzije ostaju zauvek čitljive.
+
+Invarijanta u jednoj rečenici:
+
+> **Napravi novu verziju dokumenta iz novih aktivnih izvora — ne prepisuj
+> istorijski dokument.**
+
+**Propagacija staje pred prvom nezavisnom činjenicom.** Prijemnica je količina
+koja je **stvarno primljena** kod kupca; ona se ne menja zato što se promenila
+Zbirna. Razlika (`Zbirna 980` vs `Prijemnica 975`) je kalo, gubitak ili drugi
+stvaran događaj i **mora ostati vidljiva**.
+
+*Provera:* acceptance scenariji `CorrectionPropagation` i `CorrectionSestre`
+(`GOLDEN_SCENARIJI.md` §12). Registruju se u PR4, kad propagacija postoji.
+
+---
+
+## A14 — dokument ima tri stanja, i to je već u kodu
+
+```
+DRAFT          otvoren; izvori se vezuju, sadrzaj se jos racuna
+IZDATO         izdat; sadrzaj te verzije je zamrznut
+PROSLEDJENO    izdat i poslat dalje (PWA/kupac)
+```
+
+Ovo **nije nov state machine** — `IzdatoStatus` sa te tri vrednosti postoji od
+ADR-0001, a `modDokumentInvariant.DocIsIssued` je kapija koja brani in-place
+izmenu izdatog dokumenta. Prazno se čita kao `IZDATO` (konzervativno), jer
+lanac dokumenata danas **nema** draft fazu.
+
+Šta ugovor dodaje: **`DRAFT` je jedino stanje u kom je in-place izmena
+dozvoljena.** Sve preko toga ide kroz storno + reizdavanje (A9, A13). Kad UI
+dobije „otvoren dokument", `DRAFT` prestaje da bude rezervisan i ovo pravilo je
+već tu.
+
+Redosled unosa **nije** domenska invarijanta: operater sme prvo da napravi
+otpremnicu pa otkupe, ili prvo zbirnu pa otpremnice. Dok je dokument `DRAFT`,
+smisleno je prikazivati `očekivano / povezano / preostalo`. Finalizacija je ta
+koja zamrzava sastav i količine.
+
+*Provera:* `DocIsIssued` gate; `IZDATO_DRAFT` / `IZDATO_IZDATO` /
+`IZDATO_PROSLEDJENO` u `modConfig`.
+
+---
+
+## A15 — članstvo se pamti po verziji, ne pokazivačem
+
+Mutable FK ne može da nosi istoriju sastava. Dokaz je slučaj sa sestrama:
+
+```
+ZBR18 = OTP44 + OTP50 + OTP51
+ispravi se OTP44  ->  OTP45
+
+ZBR19 = OTP45 + OTP50 + OTP51
+```
+
+`OTP50` i `OTP51` se **nisu menjale**, a istorijski pripadaju **i** sastavu
+`ZBR18` **i** sastavu `ZBR19`. Jedan `Otpremnica.ZbirnaID` može da pokaže samo
+jednu od te dve: ili se stara verzija raspadne, ili nova nema sestre. U oba
+slučaja istorija se gubi **tiho**.
+
+Zato sastav živi u eksplicitnoj tabeli članstva:
+
+```
+tblZbirnaIzvori        ZbirnaID + OtpremnicaID       (PR3, postoji)
+tblOtpremnicaIzvori    OtpremnicaID + OtkupID        (uz refaktor Otpremnice)
+```
+
+Redovi su **nepromenljivi**: ne menjaju se i ne brišu. Nova verzija dokumenta
+dobija svoje redove. Zato te tabele nemaju `Stornirano` i stoje u
+`modSchemaGuard.BEZ_STORNA` sa tim obrazloženjem.
+
+**Odluka o `Otpremnica.ZbirnaID`:** ostaje, ali **degradiran na pokazivač** —
+„na kojoj je *aktivnoj* zbirnoj ova otpremnica sada". Kanonski sastav je
+`tblZbirnaIzvori`. Pokazivač je time **imenovan keš u smislu A5** i nosi test
+koji dokazuje da se poklapa sa članstvom. Drži se jer čini proveru „već vezana"
+i čitanje u UI-ju jednim čitanjem umesto spajanja.
+
+Za svaki dokument mora se moći odgovoriti — **bez gledanja trenutnog stanja
+sistema**:
+
+> „Od kojih je tačno dokumenata ova verzija bila sastavljena?"
+
+*Provera:* `Test_PR3_ClanstvoJeZapisanoPoVerziji`,
+`Test_PR3_PokazivacSeSlazeSaClanstvom`; sabotaža „ne upisuj članstvo" obara
+prvi po imenu.
 
 ## Četiri tvrde kapije
 

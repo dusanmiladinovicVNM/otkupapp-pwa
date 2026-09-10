@@ -1242,11 +1242,13 @@ Public Function CreateZbirna_TX(ByVal h As Object, _
     ' kapija sme da digne gresku, a nema smisla otvarati transakciju koja se
     ' odmah rollback-uje.
     modSchema.SchemaReadyOrFail "CreateZbirna_TX", _
-        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_OTPREMNICA
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
+        "|" & TBL_OTPREMNICA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
     tx.AddTableSnapshot TBL_OTPREMNICA
 
     CreateZbirna_TX = CreateZbirna(h, izvorOtpremnice, ocekivano)
@@ -1339,6 +1341,10 @@ Private Function CreateZbirna(ByVal h As Object, _
     RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, SRC
     RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, SRC
     RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, SRC
+
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, SRC
 
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID, SRC
@@ -1534,9 +1540,36 @@ Private Function CreateZbirna(ByVal h As Object, _
         End If
     Next k
 
-    ' Membership -- u ISTOJ transakciji kao header i stavke.
+    ' --- clanstvo, u ISTOJ transakciji kao header i stavke -------------------
+    '
+    ' Dva zapisa, i NISU isti pojam:
+    '
+    '   tblZbirnaIzvori        od kojih je otpremnica ova VERZIJA sastavljena.
+    '                          Nepromenljivo. Posle ispravke jedne otpremnice
+    '                          nastaje nova verzija zbirne, a sestre koje se nisu
+    '                          menjale pripadaju i staroj i novoj -- jedan FK to
+    '                          ne moze da pokaze.
+    '   Otpremnica.ZbirnaID    na kojoj je AKTIVNOJ zbirnoj otpremnica sada.
+    '                          Izvedeno iz gornjeg (A5: imenovan kes), drzi se
+    '                          zbog jeftine provere "vec vezana" i citalaca.
     Dim kljuc As Variant
+    Dim izvorID As String
+
     For Each kljuc In redPoID.Keys
+        izvorID = NewEntityID("ZBI-")
+        If izvorID = "" Then
+            Err.Raise vbObjectError + 1256, SRC, _
+                      "NewEntityID nije vratio ZbirnaIzvorID."
+        End If
+
+        rowData = BuildZbirnaIzvorRowData(izvorID, zbirnaID, _
+                                          IDIzRedaOtpremnice(data, cID, _
+                                                             CLng(redPoID(kljuc))))
+        If AppendRow(TBL_ZBIRNA_IZVORI, rowData) <= 0 Then
+            Err.Raise vbObjectError + 1257, SRC, _
+                      "AppendRow nije upisao clanstvo otpremnice."
+        End If
+
         RequireUpdateCell TBL_OTPREMNICA, CLng(redPoID(kljuc)), _
                           COL_OTP_ZBIRNA_ID, zbirnaID, SRC
     Next kljuc
@@ -1563,7 +1596,7 @@ End Function
 ' Tacno jedan red za dati OtpremnicaID. Nula i vise od jednog su oba greska:
 ' tihi "uzmi prvi pogodak" je klasa buga zbog koje CreateFaktura ima
 ' RequireSingleFakturaRow.
-Private Function NadjiJedanRedOtpremnice(ByVal data As Variant, _
+Private Function NadjiJedanRedOtpremnice(ByRef data As Variant, _
                                          ByVal colID As Long, _
                                          ByVal otpID As String, _
                                          ByVal src As String) As Long
@@ -1755,6 +1788,38 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     End If
 
     BuildZbirnaHeaderRowData = rowData
+End Function
+
+' Clanstvo se pise ORIGINALNIM OtpremnicaID-em iz tabele, ne kljucem recnika:
+' kljuc je UCase$ normalizovan da bi duplikat bio uhvatljiv, a u tabelu mora da
+' ode ono sto tamo stvarno stoji.
+Private Function IDIzRedaOtpremnice(ByRef data As Variant, ByVal colID As Long, _
+                                    ByVal red As Long) As String
+    IDIzRedaOtpremnice = Trim$(NzToText(data(red, colID)))
+End Function
+
+Private Function BuildZbirnaIzvorRowData(ByVal izvorID As String, _
+                                         ByVal zbirnaID As String, _
+                                         ByVal otpremnicaID As String) As Variant
+    Const SRC As String = "BuildZbirnaIzvorRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_IZVORI)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1258, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirnaIzvori."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_ID, izvorID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, _
+                        otpremnicaID, SRC
+
+    BuildZbirnaIzvorRowData = rowData
 End Function
 
 Private Function BuildZbirnaStavkaRowData(ByVal stavkaID As String, _

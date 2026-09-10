@@ -904,6 +904,20 @@
       ]
     },
     {
+      "table": "tblZbirnaIzvori",
+      "const": "TBL_ZBIRNA_IZVORI",
+      "sheet": "ZbirnaIzvori",
+      "columns": [
+        "ZbirnaIzvorID",
+        "ZbirnaID",
+        "OtpremnicaID",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
       "table": "tblZbirnaStavke",
       "const": "TBL_ZBIRNA_STAVKE",
       "sheet": "ZbirnaStavke",

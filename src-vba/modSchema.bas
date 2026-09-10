@@ -38,7 +38,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "060AF8B3"
+Public Const SCHEMA_FINGERPRINT As String = "9DEE83B8"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -518,6 +518,7 @@ Private Function BuildRegistry() As Object
     SpecVozaci reg
     SpecVrstaGotovihProizvoda reg
     SpecZbirna reg
+    SpecZbirnaIzvori reg
     SpecZbirnaStavke reg
 
     Set BuildRegistry = reg
@@ -1368,6 +1369,19 @@ Private Sub SpecZbirna(ByVal reg As Object)
     k.Add "IzdatoStatus"
     k.Add "GeneracijaID"
     RegistrujTabelu reg, TBL_ZBIRNA, "Zbirna", k
+End Sub
+
+Private Sub SpecZbirnaIzvori(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "ZbirnaIzvorID"
+    k.Add "ZbirnaID"
+    k.Add "OtpremnicaID"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_ZBIRNA_IZVORI, "ZbirnaIzvori", k
 End Sub
 
 Private Sub SpecZbirnaStavke(ByVal reg As Object)

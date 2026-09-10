@@ -437,3 +437,74 @@ Nijedan ID se ne ispisuje — ni današnji ni budući. Posle PR4 adapter traži 
 
 **Dokaz:** storno druge umesto prve → golden pada na `IDENTITET ZBIRNE`, dok
 `STATUS` ostaje nepromenjen (`aktivnih 1 / storniranih 1`).
+
+---
+
+## 12) Propagacija ispravke — dva scenarija, oba čekaju PR4
+
+Zaključano ugovorom **A13** (izvedeni dokument nije mutable keš), **A14**
+(lifecycle) i **A15** (verzionisano članstvo). Ovde stoje kao **specifikacija**;
+registruju se kad propagacija bude implementirana — golden pisan na ponašanje
+koje kod još nema bio bi trajno crven (§5b).
+
+### H1 — `CorrectionPropagation`
+
+```
+OTK1 -> OTP1 -> ZBR1
+ispravka OTK1 -> OTK2
+```
+
+Očekivano:
+
+```
+OTP1   ostaje istorijski NEPROMENJENA, superseded
+OTP2   nov ID + nov broj + IspravkaOdID = OTP1
+ZBR1   ostaje istorijski NEPROMENJENA, superseded
+ZBR2   nov ID + nov broj + IspravkaOdID = ZBR1
+
+nov lanac:  OTK2 -> OTP2 -> ZBR2
+sva tri nova dokumenta nose isti CorrectionID
+```
+
+Tvrdnja koja se lako previdi: **stari lanac mora ostati potpuno
+rekonstruišljiv** — ne samo da postoji, nego da se iz njega može pročitati
+sastav i količine kakve su bile pri izdavanju.
+
+Prijemnica se **ne dira**. Ako je postojala, ostaje sa svojom količinom; razlika
+prema novoj zbirnoj je poslovna činjenica (kalo/gubitak), ne greška.
+
+### H2 — `CorrectionSestre`
+
+Ovo je scenario koji obara mutable FK model:
+
+```
+ZBR1 = OTP1 + OTP2 + OTP3
+menja se izvor SAMO ispod OTP1  ->  OTP4 zamenjuje OTP1
+
+ZBR2 = OTP4 + OTP2 + OTP3
+```
+
+Očekivano:
+
+```
+ZBR2 sastav:  OTP4, OTP2, OTP3
+ZBR1 sastav:  OTP1, OTP2, OTP3     <- i dalje, nepromenjeno
+```
+
+`OTP2` i `OTP3` se nisu menjale, a pripadaju **oba** sastava. Jedan
+`Otpremnica.ZbirnaID` može da pokaže samo jednu od dve zbirne — zato sastav živi
+u `tblZbirnaIzvori`, a FK je degradiran na pokazivač „gde je sada" (A15).
+
+**Ako ovaj scenario ne prođe bez gubitka istorije, model veze nije dovoljan** —
+i to je ceo razlog zbog kog tabela članstva postoji.
+
+### Šta od toga već stoji
+
+PR3 je isporučio tabelu i upis: `tblZbirnaIzvori` nastaje u istoj transakciji
+kao header i stavke, sastav se čita bez gledanja trenutnog stanja otpremnica, a
+pokazivač ima test koji dokazuje da se poklapa sa članstvom
+(`Test_PR3_ClanstvoJeZapisanoPoVerziji`, `Test_PR3_PokazivacSeSlazeSaClanstvom`).
+
+Ono što nedostaje je sama propagacija — pravljenje nove verzije nizvodnih
+dokumenata pri ispravci izvora. To je PR4.
+

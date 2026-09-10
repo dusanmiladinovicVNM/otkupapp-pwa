@@ -155,6 +155,17 @@ ZbirnaStavkaID PK "ZBS-" | ZbirnaID FK | RedniBroj
 Klasa | Kolicina | KolAmbalaze
 ```
 
+### Tabele članstva — sastav VERZIJE dokumenta
+
+```
+tblZbirnaIzvori        ZbirnaIzvorID PK "ZBI-" | ZbirnaID FK | OtpremnicaID FK
+tblOtpremnicaIzvori    OtpremnicaIzvorID PK "OPI-" | OtpremnicaID FK | OtkupID FK
+```
+
+Redovi su **nepromenljivi**. Odgovaraju na pitanje koje pokazivač ne može:
+*„od kojih je tačno dokumenata ova verzija bila sastavljena"* — bez gledanja
+trenutnog stanja sistema. Puno obrazloženje: `ARCHITECTURE_CONTRACT.md` **A15**.
+
 ### `tblPrijemnica` (header)
 
 ```
@@ -187,9 +198,10 @@ tblOtkup ──1:N──> tblOtkupStavke
    │ ZbirnaID (nullable, denorm)
    v
 tblOtpremnica ──1:N──> tblOtpremnicaStavke
-   │ ZbirnaID (nullable)
+   │ ZbirnaID (nullable, POKAZIVAC na aktivnu)
    v
 tblZbirna ──1:N──> tblZbirnaStavke
+   ^ ──1:N──> tblZbirnaIzvori ──N:1──> tblOtpremnica   (sastav verzije)
    ^
    │ ZbirnaID
 tblPrijemnica ──1:N──> tblPrijemnicaStavke
@@ -214,8 +226,16 @@ otpremnicu. Ako se ikad pojavi potreba za delimičnom alokacijom, uvodi se
 eksplicitna alokaciona tabela — ne rasplinjava se FK na stavku „za svaki slučaj".
 
 Isto važi za `ZbirnaID` na otkupu: header, denormalizovan (nasleđen od
-otpremnice), i **ne** koristi se kao kanonska membership veza. Kanonska
-membership je uvek `Otpremnica.ZbirnaID`.
+otpremnice), i **ne** koristi se kao kanonska membership veza.
+
+> **Ispravka ranije formulacije.** Ovde je stajalo „kanonska membership je uvek
+> `Otpremnica.ZbirnaID`". To više ne važi: kanonski sastav je **`tblZbirnaIzvori`**,
+> a `Otpremnica.ZbirnaID` je **pokazivač** na trenutno aktivnu zbirnu — imenovan
+> keš u smislu A5, sa testom koji dokazuje da se poklapa sa članstvom.
+>
+> Razlog je scenario sa sestrama (A15): posle ispravke jedne otpremnice, one
+> koje se nisu menjale pripadaju **i** staroj **i** novoj verziji zbirne. Jedan
+> FK može da pokaže samo jednu — istorija se gubi tiho.
 
 ---
 
@@ -691,8 +711,8 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
-| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` i `ZbirnaStavkaID` oba fail-closed. **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
-| 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, **rekalkulacija zbirne pri stornu otpremnice (§7.1)**, print, izveštaji, testovi. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje golden D1. | 3 · **§7.1 odlučen** |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
+| 4 | **Zbirna cutover**: invarijanta po ID-u (preko `tblZbirnaIzvori`), `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, **rekalkulacija zbirne pri stornu otpremnice (§7.1)**, **propagacija ispravke = nova verzija (A13)**, print, izveštaji, testovi. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. | 3 · **§7.1, A13–A15 odlučeni** |
 | 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
 | 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |

@@ -179,11 +179,34 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 `ZbirnaStavkaID` (PK `ZBS-`), `ZbirnaID` →, `RedniBroj`, `Klasa`, `Kolicina`,
 `KolAmbalaze`.
 
+**`tblZbirnaIzvori`** — grain: **jedna otpremnica u sastavu jedne verzije zbirne**
+`ZbirnaIzvorID` (PK `ZBI-`), `ZbirnaID` →, `OtpremnicaID` →, audit ×4.
+
+> Redovi su **nepromenljivi** — ne menjaju se i ne brišu. Nova verzija zbirne
+> dobija svoje redove; stara zadržava svoje. Zato tabela nema `Stornirano` i
+> stoji u `BEZ_STORNA`.
+>
+> **`Otpremnica.ZbirnaID` je degradiran na pokazivač** („na kojoj je *aktivnoj*
+> zbirnoj otpremnica sada"), i time imenovan keš u smislu A5 — sa testom koji
+> dokazuje da se poklapa sa članstvom. Kanonski sastav je `tblZbirnaIzvori`.
+> Razlog: sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a
+> jedan FK može da pokaže samo jednu (A15).
+
 > **Zbirna nema cenu.** `tblZbirna` je nikad nije imala i `SaveZbirnaMulti_TX` je
 > ne prima (`modDokUnos.bas:422`). Ne dodavati je.
 
-**Izvor istine:** zbirna je **agregat** — otpremnice su izvor. Njene stavke su
-**keš** (A5), i invarijanta §6.2 to dokazuje pri svakoj izmeni.
+**Izvor istine:** zbirna je **agregat** — otpremnice su izvor. Ali „izvedeno"
+prestaje da važi kad dokument bude izdat:
+
+| Stanje dokumenta | Šta su stavke |
+|---|---|
+| `DRAFT` | **keš** (A5) — izvode se iz izvora, invarijanta §6.2 to dokazuje pri svakoj izmeni |
+| `IZDATO` / `PROSLEDJENO` | **sadržaj te verzije** — istorijska činjenica, ne prepisuje se (A13) |
+
+Kad se izvor promeni posle izdavanja, ne menja se ovaj dokument nego se pravi
+**nova verzija** (A13). Lanac dokumenata danas nema draft fazu, pa je u praksi
+svaki dokument odmah izdat — što znači da je drugi red pravilo, a prvi
+priprema za trenutak kad UI dobije „otvoren dokument".
 
 **Vlasnik upisa (A11): samo `modDokumenta`.** Danas 3 pisca
 (`modDokumentInvariant`, `modDokumenta`, `modMasterSync`).

@@ -43,6 +43,7 @@ Public Const TBL_OTKUP As String = "tblOtkup"
 Public Const TBL_OTPREMNICA As String = "tblOtpremnica"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
 Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
+Public Const TBL_ZBIRNA_IZVORI As String = "tblZbirnaIzvori"
 Public Const TBL_PRIJEMNICA As String = "tblPrijemnica"
 Public Const TBL_FAKTURE As String = "tblFakture"
 Public Const TBL_FAKTURA_STAVKE As String = "tblFakturaStavke"
@@ -228,6 +229,21 @@ Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"
 Public Const COL_ZBR_VRSTA As String = "VrstaVoca"
 Public Const COL_ZBR_SORTA As String = "SortaVoca"
 Public Const COL_ZBR_KLASA As String = "Klasa"
+
+' --- tblZbirnaIzvori (PR3: verzionisano clanstvo) ---
+'
+' Od kojih je TACNO otpremnica ova VERZIJA zbirne bila sastavljena.
+'
+' Zasto ne moze samo Otpremnica.ZbirnaID: posle ispravke jedne otpremnice nastaje
+' NOVA verzija zbirne, a sestre koje se nisu menjale pripadaju i staroj i novoj.
+' Jedan mutable FK moze da pokaze samo jednu -- ili se stara verzija raspadne
+' (sestre odu na novu), ili nova nema sestre. Istorija se gubi tiho.
+'
+' Redovi su NEPROMENLJIVI: ne menjaju se i ne brisu. Nova verzija dokumenta
+' dobija svoje redove. Zato tabela nema Stornirano (v. modSchemaGuard.BEZ_STORNA).
+Public Const COL_ZBI_ID As String = "ZbirnaIzvorID"
+Public Const COL_ZBI_ZBIRNA_ID As String = "ZbirnaID"
+Public Const COL_ZBI_OTPREMNICA_ID As String = "OtpremnicaID"
 
 ' --- tblZbirnaStavke (PR3: dokument = header + stavke) ---
 '

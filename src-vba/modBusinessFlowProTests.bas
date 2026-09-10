@@ -168,6 +168,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_NedostajuciObavezniKljucPada
     Test_PR3_OcekivanoKojeSeNeSlazePada
     Test_PR3_AmbalazaMoraBitiCeoBroj
+    Test_PR3_ClanstvoJeZapisanoPoVerziji
+    Test_PR3_PokazivacSeSlazeSaClanstvom
+    Test_PR3_PrazanIzvorIDNeProlazi
     Test_PR3_OtpremnicaImaZbirnaID
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
@@ -6070,6 +6073,122 @@ EH:
     LogFatal "Test_PR3_PrazanStavkaIDNeProlazi", Err.Number, Err.description
 End Sub
 
+' Sastav verzije se cita iz tblZbirnaIzvori, ne iz trenutnog stanja otpremnica.
+'
+' Ovo je tabela zbog koje jedan mutable FK nije dovoljan: posle ispravke jedne
+' otpremnice nastaje NOVA verzija zbirne, a sestre koje se nisu menjale pripadaju
+' i staroj i novoj. Otpremnica.ZbirnaID moze da pokaze samo jednu.
+Private Sub Test_PR3_ClanstvoJeZapisanoPoVerziji()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3CL")
+
+    Dim a As String, b As String, c As String
+    a = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3C1-" & scenario, KLASA_I, 400#, 20)
+    b = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3C2-" & scenario, KLASA_I, 250#, 12)
+    c = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3C3-" & scenario, KLASA_II, 600#, 30)
+
+    Dim izvor As Collection
+    Set izvor = New Collection
+    izvor.Add a
+    izvor.Add b
+    izvor.Add c
+
+    Dim zbrID As String
+    zbrID = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3C-" & scenario), izvor)
+    AssertTrue Len(zbrID) > 0, "PR3 clanstvo: dokument napravljen"
+
+    AssertEquals "3", CStr(Pr3BrojIzvora(zbrID)), _
+                 "PR3 clanstvo: tri zapisa clanstva"
+    AssertTrue Pr3JeIzvor(zbrID, a), "PR3 clanstvo: prva otpremnica u sastavu"
+    AssertTrue Pr3JeIzvor(zbrID, b), "PR3 clanstvo: druga otpremnica u sastavu"
+    AssertTrue Pr3JeIzvor(zbrID, c), "PR3 clanstvo: treca otpremnica u sastavu"
+
+    ' Sastav se cita BEZ gledanja trenutnog stanja otpremnica -- to je i ceo
+    ' smisao tabele. Ovde su jos identicni; posle ispravke (PR4) nece biti.
+    AssertEquals zbrID, Pr3OtpZbirnaID(a), "PR3 clanstvo: pokazivac se slaze"
+    AssertEquals zbrID, Pr3OtpZbirnaID(b), "PR3 clanstvo: pokazivac se slaze (b)"
+    AssertEquals zbrID, Pr3OtpZbirnaID(c), "PR3 clanstvo: pokazivac se slaze (c)"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_ClanstvoJeZapisanoPoVerziji", Err.Number, Err.description
+End Sub
+
+' Otpremnica.ZbirnaID je IMENOVAN KES (A5) nad tblZbirnaIzvori: mora se poklapati
+' sa jedinim zapisom clanstva u aktivnoj zbirnoj. Test koji to ne proverava
+' pretvara kes u drugi izvor istine.
+Private Sub Test_PR3_PokazivacSeSlazeSaClanstvom()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3PK")
+
+    Dim a As String, b As String
+    a = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3P1-" & scenario, KLASA_I, 400#, 20)
+    b = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3P2-" & scenario, KLASA_II, 600#, 30)
+
+    Dim zbrID As String
+    zbrID = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
+                            Pr3Izvor(a, b))
+    AssertTrue Len(zbrID) > 0, "PR3 pokazivac: dokument napravljen"
+
+    AssertEquals Pr3ZbirnaIzClanstva(a), Pr3OtpZbirnaID(a), _
+                 "PR3 pokazivac: kes i clanstvo daju istu zbirnu (a)"
+    AssertEquals Pr3ZbirnaIzClanstva(b), Pr3OtpZbirnaID(b), _
+                 "PR3 pokazivac: kes i clanstvo daju istu zbirnu (b)"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_PokazivacSeSlazeSaClanstvom", Err.Number, Err.description
+End Sub
+
+' Zapis clanstva nosi opaque ID i fail-closed je, kao header i stavka.
+Private Sub Test_PR3_PrazanIzvorIDNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3IZ")
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3IZ-" & scenario, KLASA_I, 400#, 20)
+
+    Dim preH As Long, preI As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+    preI = Pr3BrojRedova(TBL_ZBIRNA_IZVORI)
+
+    Dim rez As String, razlog As String
+    Dim prevMode As Boolean
+    prevMode = IsTestMode()
+    SetTestMode True
+
+    ' header (1) + stavka (1) prolaze, clanstvo pada
+    modDataAccess.NewEntityIDPadniTest True, 2
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IZ-" & scenario), _
+                          Pr3Izvor(otp, ""), razlog)
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+
+    AssertEquals "", rez, "PR3 prazan ZBI: upis odbijen"
+    AssertTrue InStr(1, razlog, "nije vratio ZbirnaIzvorID", vbTextCompare) > 0, _
+               "PR3 prazan ZBI: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 prazan ZBI: header je rollback-ovan"
+    AssertEquals CStr(preI), CStr(Pr3BrojRedova(TBL_ZBIRNA_IZVORI)), _
+                 "PR3 prazan ZBI: clanstvo nije ostalo"
+    AssertEquals "", Pr3OtpZbirnaID(otp), "PR3 prazan ZBI: otpremnica nije vezana"
+
+    Exit Sub
+
+EH:
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+    LogFatal "Test_PR3_PrazanIzvorIDNeProlazi", Err.Number, Err.description
+End Sub
+
 ' --- PR3 pomocne -------------------------------------------------------------
 
 ' Header BEZ vrste/sorte/tipa ambalaze -- oni se izvode iz izvornih otpremnica.
@@ -6183,6 +6302,50 @@ Private Function Pr3StavkaBroj(ByVal zbirnaID As String, ByVal klasa As String, 
     Dim t As String
     t = Pr3StavkaPolje(zbirnaID, klasa, columnName)
     If IsNumeric(t) Then Pr3StavkaBroj = CDbl(t)
+End Function
+
+Private Function Pr3BrojIzvora(ByVal zbirnaID As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbirnaID)
+    If redovi Is Nothing Then Exit Function
+    Pr3BrojIzvora = redovi.count
+End Function
+
+Private Function Pr3JeIzvor(ByVal zbirnaID As String, ByVal otpID As String) As Boolean
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cZbr As Long, cOtp As Long, i As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, "Pr3JeIzvor")
+    cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, "Pr3JeIzvor")
+
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cZbr), "")), zbirnaID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cOtp), "")), otpID, vbTextCompare) = 0 Then
+                Pr3JeIzvor = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Kojoj zbirnoj otpremnica pripada PO ZAPISU CLANSTVA (ne po kesu).
+Private Function Pr3ZbirnaIzClanstva(ByVal otpID As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cZbr As Long, cOtp As Long, i As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, "Pr3ZbirnaIzClanstva")
+    cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, "Pr3ZbirnaIzClanstva")
+
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cOtp), "")), otpID, vbTextCompare) = 0 Then
+            Pr3ZbirnaIzClanstva = Trim$(nz(d(i, cZbr), ""))
+            Exit Function
+        End If
+    Next i
 End Function
 
 Private Function NewScenarioCode(ByVal scenarioName As String) As String

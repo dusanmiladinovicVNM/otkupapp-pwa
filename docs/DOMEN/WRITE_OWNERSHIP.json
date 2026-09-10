@@ -278,6 +278,17 @@
       "modDokumenta"
     ]
   },
+  "tblZbirnaIzvori": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
   "tblZbirnaStavke": {
     "row_owner": [
       "modDokumenta"
