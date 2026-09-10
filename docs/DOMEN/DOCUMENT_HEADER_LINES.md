@@ -457,14 +457,44 @@ Otpremnica je **izvedeni dokument**, isto kao zbirna. Zato njen kanonski writer
 prima **izvore**, a ne stavke:
 
 ```
-CreateOtpremnicaIzIzvora_TX(h, izvoriOtkupID, outGreska)
-
   stavke     IZVEDENE   po klasi: SUM(Kolicina), SUM(KolAmbalaze), SUM(BrutoKg)
-             nad otkupnim stavkama svih clanova
-  header     IZVEDEN    VrstaVoca, SortaVoca, TipAmbalaze, StanicaID
-  header     PRIMLJEN   Datum, VozacID, BrojOtpremnice
-  clanstvo   tblOtpremnicaIzvori, u ISTOJ transakciji
+             nad otkupnim stavkama svih clanova; racunaju se PRI IZDAVANJU
+  header     IZVEDEN    VrstaVoca, SortaVoca, TipAmbalaze  (pri izdavanju)
+  header     PRIMLJEN   Datum, StanicaID, VozacID, BrojOtpremnice
+  clanstvo   tblOtpremnicaIzvori, u ISTOJ transakciji kao header
 ```
+
+**`StanicaID` se PRIMA, pa proverava** — ne izvodi se. Draft nastaje pre ijednog
+izvora, a izvođenje nad praznim skupom nije definisano; stanicu uostalom i zna
+onaj ko dokument otvara (zaključana sesija, §4.1f). Svaki izvor koji se posle
+doda mora da joj odgovara.
+
+#### Dva ulaza, jedan core
+
+Otpremnica **ima persistentan `DRAFT`** — za razliku od otkupa, kod koga je forma
+draft (§4.1e). To nije izbor implementacije nego zatečeni glavni desktop tok:
+panel napravi otpremnicu praznu i blokovi se kače naknadno
+(`modOtkupBlok.LinkOtkupIDsToOtpremnica`).
+
+```
+CreateOtpremnicaDraft_TX(h, outGreska)          -> OTP-...  DRAFT, bez stavki
+DodajOtpremnicaIzvor_TX(otpID, otkupID, ...)       samo DRAFT
+UkloniOtpremnicaIzvor_TX(otpID, otkupID, ...)     samo DRAFT
+IzdajOtpremnicu_TX(otpID, outGreska)            -> izvede stavke, IZDATO
+
+CreateOtpremnicaIzIzvora_TX(h, izvori, ...)     jedan potez: draft + izvori +
+                                                izdavanje, u JEDNOJ transakciji
+```
+
+Jednopotezni ulaz nije druga implementacija nego **isti core**: auto-lanac
+(`modAutoHladnjaca`) i PWA prave otpremnicu bez ijednog međukoraka, pa bi ih tri
+poziva naterala da drže tuđe stanje.
+
+**`DRAFT` je jedino stanje u kom se članstvo menja** (A14, A15). Posle izdavanja
+`Dodaj`/`Ukloni` dižu grešku — sastav izdatog dokumenta je istorijska činjenica,
+a izmena je nova verzija (A13). Izdavanje je i trenutak u kom stavke nastaju:
+draft ih **nema**, jer bi inače postojale dve istine o istoj količini — jedna u
+stavkama, druga u članstvu koje se još menja.
 
 **Izvedeno, ne primljeno** — isti razlog kao kod zbirne (PR3): polje koje writer
 prima a moglo je da izračuna je drugi izvor istine, i tiho se razilazi sa prvim.

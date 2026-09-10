@@ -38,7 +38,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "01D602FA"
+Public Const SCHEMA_FINGERPRINT As String = "BD0E98FD"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -497,6 +497,8 @@ Private Function BuildRegistry() As Object
     SpecOtkup reg
     SpecOtkupStavke reg
     SpecOtpremnica reg
+    SpecOtpremnicaStavke reg
+    SpecOtpremnicaIzvori reg
     SpecPaleta reg
     SpecPaletaStavka reg
     SpecParcele reg
@@ -964,6 +966,36 @@ Private Sub SpecOtpremnica(ByVal reg As Object)
     k.Add "GeneracijaID"
     k.Add "ZbirnaGeneracijaID"
     RegistrujTabelu reg, TBL_OTPREMNICA, "Otpremnica", k
+End Sub
+
+Private Sub SpecOtpremnicaStavke(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "OtpremnicaStavkaID"
+    k.Add "OtpremnicaID"
+    k.Add "RedniBroj"
+    k.Add "Klasa"
+    k.Add "Kolicina"
+    k.Add "KolAmbalaze"
+    k.Add "BrutoKg"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_OTPREMNICA_STAVKE, "OtpremnicaStavke", k
+End Sub
+
+Private Sub SpecOtpremnicaIzvori(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "OtpremnicaIzvorID"
+    k.Add "OtpremnicaID"
+    k.Add "OtkupID"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_OTPREMNICA_IZVORI, "OtpremnicaIzvori", k
 End Sub
 
 Private Sub SpecPaleta(ByVal reg As Object)

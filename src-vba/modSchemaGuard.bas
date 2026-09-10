@@ -256,6 +256,17 @@ Public Function TabelaBrojKolona(ByVal tableName As String) As Long
     Next ws
 End Function
 
+' Brisanje koje ne sme tiho da ne uspe. Isti razlog kao RequireUpdateCell:
+' False iz primitiva u transakciji znaci da je stanje ostalo pola-pola.
+Public Sub RequireDeleteRow(ByVal tableName As String, _
+                            ByVal rowIndex As Long, _
+                            ByVal sourceName As String)
+    If Not DeleteRow(tableName, rowIndex) Then
+        Err.Raise vbObjectError + 7401, sourceName, _
+                  "DeleteRow nije uspeo: " & tableName & ", red " & CStr(rowIndex)
+    End If
+End Sub
+
 Public Sub RequireUpdateCell(ByVal tableName As String, _
                               ByVal rowIndex As Long, _
                               ByVal columnName As String, _

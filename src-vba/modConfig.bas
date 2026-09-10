@@ -42,6 +42,8 @@ Public Const TBL_KULTURE As String = "tblKulture"
 Public Const TBL_OTKUP As String = "tblOtkup"
 Public Const TBL_OTKUP_STAVKE As String = "tblOtkupStavke"
 Public Const TBL_OTPREMNICA As String = "tblOtpremnica"
+Public Const TBL_OTPREMNICA_STAVKE As String = "tblOtpremnicaStavke"
+Public Const TBL_OTPREMNICA_IZVORI As String = "tblOtpremnicaIzvori"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
 Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
 Public Const TBL_ZBIRNA_IZVORI As String = "tblZbirnaIzvori"
@@ -270,6 +272,34 @@ Public Const COL_ZBR_KLASA As String = "Klasa"
 Public Const COL_ZBI_ID As String = "ZbirnaIzvorID"
 Public Const COL_ZBI_ZBIRNA_ID As String = "ZbirnaID"
 Public Const COL_ZBI_OTPREMNICA_ID As String = "OtpremnicaID"
+
+' --- tblOtpremnicaIzvori (PR5) ---
+'
+' KOJI OTKUPI CINE OVU VERZIJU OTPREMNICE. Isto pravilo kao tblZbirnaIzvori
+' (A15): promenljivo dok je otpremnica DRAFT, zamrznuto pri izdavanju.
+'
+' Otkup.OtpremnicaID i dalje postoji i skela ga NE dira -- 39 ne-test citalaca
+' u 15 modula, od toga 5 pisaca. Kolona odlazi u PR7, sa svojim pisacima
+' (DOCUMENT_HEADER_LINES S4.2b).
+Public Const COL_OPI_ID As String = "OtpremnicaIzvorID"
+Public Const COL_OPI_OTPREMNICA_ID As String = "OtpremnicaID"
+Public Const COL_OPI_OTKUP_ID As String = "OtkupID"
+
+' --- tblOtpremnicaStavke (PR5) ---
+'
+' Stavka NEMA Stornirano (isti razlog kao zbirna) i NEMA Cena: otpremnica je
+' izveden dokument, a njeni izvori mogu imati razlicite cene -- jedna cena na
+' stavci bila bi drugi izvor istine o novcu (DOCUMENT_HEADER_LINES S4.2).
+'
+' BrutoKg POSTOJI, za razliku od zbirne: bruto je zamrznuta cinjenica otkupa i
+' prenosi se kroz lanac dok se roba ne prepakuje.
+Public Const COL_OPS_ID As String = "OtpremnicaStavkaID"
+Public Const COL_OPS_OTPREMNICA_ID As String = "OtpremnicaID"
+Public Const COL_OPS_RB As String = "RedniBroj"
+Public Const COL_OPS_KLASA As String = "Klasa"
+Public Const COL_OPS_KOLICINA As String = "Kolicina"
+Public Const COL_OPS_KOL_AMB As String = "KolAmbalaze"
+Public Const COL_OPS_BRUTO As String = "BrutoKg"
 
 ' --- tblZbirnaStavke (PR3: dokument = header + stavke) ---
 '
