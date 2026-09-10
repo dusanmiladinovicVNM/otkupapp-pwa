@@ -1,6 +1,7 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: 12 registrovano i zaključano; D1 čeka poslovnu odluku (§10).**
+> **Status: 12 registrovano i zaključano. D1 ima odluku (§10 — rekalkulacija),
+> ali čeka PR4 da je implementira; do tada nije registrovan.**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -139,7 +140,7 @@ FAKTURA
 
 ---
 
-## 4) Scenariji (12 registrovanih + D1 pending)
+## 4) Scenariji (12 registrovanih + D1 čeka PR4)
 
 ### A — Fresh Fruit Flow
 
@@ -169,7 +170,7 @@ FAKTURA
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| D1 | Storno otpremnice → zbirna se rekalkuliše | **NIJE registrovan — §10** |
+| D1 | Storno otpremnice → zbirna se rekalkuliše; prazna zbirna se stornira | **odluka pala, kod još ne — registruje ga PR4 (§10)** |
 | D2 | Storno prijemnice koja je fakturisana | kaskada |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
@@ -193,7 +194,7 @@ FAKTURA
 | Pitanje | Odluka |
 |---|---|
 | Rečnik tvrdnji (§2) | prihvaćen; dopunjen sa **brojem logičkih dokumenata** kao dozvoljenom činjenicom i **brojem ID-eva** kao zabranjenom |
-| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 pending (§10) |
+| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 čeka PR4 (§10) |
 
 ### 5b) Nijedan scenario ne sme da bude trajno crvena centralna kapija
 
@@ -205,7 +206,10 @@ Zato scenario čije poslovno pravilo **još nije odlučeno** ostaje **neregistro
 i bez goldena**, a razlog se piše ovde. Golden pisan na neodlučenu semantiku je
 gori od nijednog: zamrzava pretpostavku kao ugovor.
 
-Trenutno tako stoji **D1** (§10). Ranije su tako uklonjeni B1 i B4 (§8).
+Tako stoji **D1** (§10): pravilo je od 10.09.2026. odlučeno, ali ga kod još ne
+sprovodi. Golden pisan na odluku koju kod ne poštuje bio bi trajno crven, pa D1
+čeka PR4 — i tada postaje **dokaz da je pravilo sprovedeno**, ne samo zapisano.
+Ranije su iz drugog razloga uklonjeni B1 i B4 (§8).
 
 ---
 
@@ -333,9 +337,41 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 
 ---
 
-## 10) D1 — nedorečen lifecycle, ne bug u testu
+## 10) D1 — storno otpremnice: odluka je **C, rekalkulacija**
 
-Prva verzija D1 je **zaključala kvar kao očekivano ponašanje**. Golden je glasio:
+> **Odluka doneta 10.09.2026.** Implementacija ide u **PR4**, zajedno sa
+> prelaskom invarijante na `ZbirnaID`. Do tada D1 nije registrovan.
+
+### Pravilo
+
+Storno otpremnice koja pripada aktivnoj zbirnoj:
+
+1. zbirna se **rekalkuliše** na preostale aktivne otpremnice;
+2. ako više nijedna ne ostane, zbirna se **stornira** — ne ostaje aktivna sa
+   nulama;
+3. ako nizvodno postoji prijemnica ili paleta, i dalje se diže pun dijalog i
+   operater bira (`CorrectionNeedsDialog`, `modStornoFlow.bas:250`). To se ne
+   menja.
+
+Malina mod prestaje da bude poseban slučaj: tamo je otpremnica 1:1 sa zbirnom,
+pa rekalkulacija sama daje praznu zbirnu i pravilo 2 je obara. **C sadrži B.**
+
+### Zašto ne A ni B
+
+**B — kaskada** uništava tuđe podatke: zbirna sa četiri otpremnice, storniram
+jednu pogrešnu, a ostale tri ostaju bez zbirne bez ikakvog razloga.
+
+**A — zabrana** blokira legitimnu ispravku. Operater je video grešku na jednoj
+otpremnici; terati ga da prvo razmontira ceo transport znači više upisa i više
+prilika za grešku, i to zbog čisto tehničkog ograničenja.
+
+**C** je jedina opcija koja čuva definiciju: zbirna **jeste** agregat svojih
+otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2). A i B tu definiciju zaobilaze —
+jedna zabranom, druga rušenjem.
+
+### Šta je zatečeno stanje (i zašto je D1 uopšte nastao)
+
+Prva verzija D1 je **zaključala kvar kao očekivano ponašanje**:
 
 ```
 otpremnica  aktivnih 0  storniranih 1
@@ -349,26 +385,29 @@ ZBIRNA
 Time je mreža tvrdila: *„posle legalne poslovne operacije dozvoljeno je da
 kanonska invarijanta bude PUKLA."* To je suprotno od njene svrhe.
 
-Uzrok nije u testu. `StornoOtpremnica_TX` stornira otpremnicu i njenu ambalažu i
-**namerno nema kaskadu** ka zbirnoj — `modStorno` to i kaže. Ali zbirna je
-agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa ostaje bez
-izvora.
+Uzrok nije u testu. Merenjem je nađeno **troje**:
 
-### Odluka koja nedostaje
-
-Otpremnica ima aktivnu zbirnu (i eventualno prijemnicu). Storno otpremnice:
-
-| Opcija | Posledica |
+| Nalaz | Gde |
 |---|---|
-| **A — zabrani** | storno pada dok zbirna postoji; operater prvo mora da razveže |
-| **B — kaskadiraj** | storno povlači zbirnu (i prijemnicu) nizvodno |
-| **C — rekalkuliši** | zbirna se automatski umanji za storniranu otpremnicu |
+| `StornoOtpremnica_TX` / `StornoOtpremnicaByBroj_TX` nemaju kaskadu ka zbirnoj van malina moda | `modStorno.bas:254`, `:304` |
+| Produkciona putanja običnog storna ide bas tuda, bez ijedne rekalkulacije | `modScrStorno.ObicanStorno` → `modStornoDok.StornoIzvrsi` → `StornoOtpremnicaByBroj_TX` |
+| **Ispravka već postoji i mrtva je** | `modStornoFlow.RunSimpleStornoOtpremnica` (komentar: *„obican storno + tiha zastita invarijante"*) radi tačno pravilo C — i **nema nijednog produkcionog pozivaoca** |
 
-Šta god se izabere, ishod **ne sme** biti „operacija uspela, sistem
-nekonzistentan".
+Dakle nije bilo da pravilo nije smišljeno. Napisana su **dva različita odgovora**
+(kaskada u malina modu, rekalkulacija u flow sloju) i nijedan nije dosledno
+primenjen na putanju kojom operater stvarno prolazi.
 
-Do te odluke D1 nije registrovan i nema golden. Kad odluka padne, D1 se piše na
-**odlučeno** ponašanje i registruje — i time postaje dokaz da pravilo važi.
+### Šta PR4 mora da uradi
+
+1. Pravilo C **u writeru**, ne u flow sloju — da se ne može zaobići drugim
+   ulazom. Vlasnik je `modDokumenta` (A11, `WRITE_OWNERSHIP.json`).
+2. Rekalkulacija po **`ZbirnaID`**, ne po `BrojZbirne`. Usput nestaje
+   `ZbirnaMutRazlog` kapija, koja danas **odbija rekalkulaciju kad je broj
+   dvosmislen** — sa FK po ID-u to stanje strukturno ne postoji.
+3. `RunSimpleStornoOtpremnica` → obrisati ili zakaciti; mrtva kopija pravila je
+   gora od nijedne.
+4. Tek tada D1 dobija golden na **odlučeno** ponašanje i registruje se — i time
+   postaje dokaz da pravilo važi.
 
 ---
 

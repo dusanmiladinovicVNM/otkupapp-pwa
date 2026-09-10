@@ -386,6 +386,33 @@ pita headeru. Jedna funkcija po dokumentu, ne ponavljati join na 40 mesta.
 Žurnal storna identifikuje operaciju preko `DocumentID`; poslovni broj ostaje kao
 display podatak u zapisu.
 
+### 7.1) Storno otpremnice → **rekalkulacija zbirne** (odluka, 10.09.2026)
+
+```
+StornoOtpremnica(otpremnicaID)
+  1. otpremnica + njena ambalaza -> Stornirano
+  2. AKO ima ZbirnaID:  rekalkulisi zbirnu na preostale AKTIVNE otpremnice
+  3. AKO vise nijedna ne ostane: stornirati i zbirnu
+```
+
+Zbirna **jeste** agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa
+je rekalkulacija jedina opcija koja tu definiciju drži tačnom. Kaskada bi
+oborila zbirnu i kad na njoj ima drugih aktivnih otpremnica; zabrana bi
+blokirala legitimnu ispravku jedne otpremnice. Puna argumentacija i zatečeno
+stanje: `docs/DOMEN/GOLDEN_SCENARIJI.md` §10.
+
+Tri stvari koje ovaj korak menja u zatečenom kodu:
+
+| Danas | Posle |
+|---|---|
+| malina mod kaskadira, ostali modovi ne rade ništa (`modStorno.bas:370`) | jedno pravilo; malina prestaje da bude poseban slučaj — prazna zbirna se stornira, što je isti ishod |
+| rekalkulacija ide **po broju** i staje na dvosmislen broj (`ZbirnaMutRazlog`) | po `ZbirnaID`; ta kapija nema više posao |
+| `modStornoFlow.RunSimpleStornoOtpremnica` sadrži tačno ovo pravilo i **nema nijednog produkcionog pozivaoca** | pravilo živi u writeru; mrtva kopija se briše |
+
+Pravilo ide u **writer**, ne u flow sloj — inače ga zaobiđe svaki drugi ulaz,
+što je tačno ono što se i desilo. Nizvodni dijalog kad postoji prijemnica ili
+paleta (`CorrectionNeedsDialog`) ostaje nepromenjen.
+
 ---
 
 ## 8) Zbirna invarijanta
@@ -625,7 +652,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, stavke, outGreska)`, opaque `ZbirnaID`. **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je videla samo naredbeni oblik `AppendRow`, pa je 22 poziva bilo nevidljivo (v. §13a) | 2 |
-| 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, print, izveštaji, testovi. **Briše `ZbirnaIdent*` i `ZbirnaGeneracija*`.** | 3 |
+| 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, **rekalkulacija zbirne pri stornu otpremnice (§7.1)**, print, izveštaji, testovi. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje golden D1. | 3 · **§7.1 odlučen** |
 | 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
 | 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
