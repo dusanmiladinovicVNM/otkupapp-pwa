@@ -38,7 +38,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "E8615857"
+Public Const SCHEMA_FINGERPRINT As String = "01D602FA"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -495,6 +495,7 @@ Private Function BuildRegistry() As Object
     SpecMGMT reg
     SpecNovac reg
     SpecOtkup reg
+    SpecOtkupStavke reg
     SpecOtpremnica reg
     SpecPaleta reg
     SpecPaletaStavka reg
@@ -912,7 +913,26 @@ Private Sub SpecOtkup(ByVal reg As Object)
     k.Add "BrojOtpremnice"
     k.Add "GeneracijaID"
     k.Add "ZbirnaGeneracijaID"
+    k.Add "SourceCreatedAt"
     RegistrujTabelu reg, TBL_OTKUP, "Otkup", k
+End Sub
+
+Private Sub SpecOtkupStavke(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "OtkupStavkaID"
+    k.Add "OtkupID"
+    k.Add "RedniBroj"
+    k.Add "Klasa"
+    k.Add "Kolicina"
+    k.Add "Cena"
+    k.Add "KolAmbalaze"
+    k.Add "BrutoKg"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_OTKUP_STAVKE, "OtkupStavke", k
 End Sub
 
 Private Sub SpecOtpremnica(ByVal reg As Object)

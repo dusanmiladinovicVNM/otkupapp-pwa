@@ -705,13 +705,13 @@ Pre-Flight je platio odluke koje ništa još ne meri. Skela ih mora zaključati:
 | `LosaDrugaStavkaRollback` | pad na drugoj stavci ne ostavlja header ni prvu |
 | `PrazanOtkupIDFailClosed` | `NewEntityID` vrati `""` → upis odbijen |
 | `PrazanOtkupStavkaIDFailClosed` | isto za `OKS-`, sa header-om već upisanim → rollback |
-| `OtkupNemaVozacID` | kanonska pozicija `"VozacID"` u `tblOtkup` je **0** |
-| `OtkupNemaIsplaceno` | isto za `"Isplaceno"` / `"DatumIsplate"` / `"VremeUnosa"` |
+| `HeaderNeNosiLinePolja` | nov writer ostavlja `Kolicina` / `Cena` / `Klasa` / `KolAmbalaze` / `BrutoKg` / `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa` **prazne** |
 | `KolAmbIzdataJeHeader` | polje je na headeru i preživi oba klasna reda |
 
-Poslednja tri su „test tvrdi da kolone **nema**" — isti oblik kao
-`Test_PR3_OtpremnicaNemaZbirnaID`, i postoje zato što bi ih inače neko vratio
-„jer su bile korisne".
+> **Zašto „prazno", a ne „kolone nema".** U skeli te kolone **još postoje** — stari
+> writer ih puni i brišu se tek u cutover-u. Tvrdnja `kanonska pozicija = 0`
+> (oblik `Test_PR3_OtpremnicaNemaZbirnaID`) postaje moguća **posle** Otkup
+> cutover-a, i tada zamenjuje ovu. Do tada bi bila trajno crvena.
 
 Dokaz u oba smera (pokvari → pukne **po imenu** → vrati → zeleno) obavezan za:
 `SemaKapija`, `BrojNijeIdentitet`, `ZbirnaClanstvo`, `NovacBezPrimary` — kritične

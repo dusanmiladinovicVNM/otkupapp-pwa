@@ -46,7 +46,8 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
 Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
     "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & _
-    "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & "|"
+    "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
+    "|" & TBL_OTKUP_STAVKE & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
 '
@@ -214,6 +215,43 @@ Public Sub RequireColumns(ByVal tableName As String, _
         End If
     Next i
 End Sub
+
+' ============================================================
+' Gradnja reda PO IMENU KOLONE
+'
+' AppendRow pise POZICIONO, a pisci su nekad gradili goli Array(...) sa 22
+' vrednosti -- kolona ubacena u sredinu tada tiho salje sve iza sebe u pogresna
+' polja. Ova dva helpera su protivotrov: pozivalac imenuje kolonu, indeks
+' racuna RequireColumnIndex, a nepostojeca kolona pada odmah i po imenu.
+'
+' Zive OVDE, a ne u pojedinacnom modulu, jer ih koristi svaki Create*_TX.
+' Do sada su bili Private u modDokumenta; treca kopija u modOtkup bi bila
+' treca stvar koja moze da divergira.
+' ============================================================
+Public Sub SetRowValueByColumn(ByRef rowData() As Variant, _
+                               ByVal tableName As String, _
+                               ByVal columnName As String, _
+                               ByVal value As Variant, _
+                               ByVal sourceName As String)
+    Dim colIndex As Long
+    colIndex = RequireColumnIndex(tableName, columnName, sourceName)
+
+    rowData(colIndex - 1) = value
+End Sub
+
+Public Function TabelaBrojKolona(ByVal tableName As String) As Long
+    Dim ws As Worksheet
+    Dim lo As ListObject
+
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
+                TabelaBrojKolona = lo.ListColumns.count
+                Exit Function
+            End If
+        Next lo
+    Next ws
+End Function
 
 Public Sub RequireUpdateCell(ByVal tableName As String, _
                               ByVal rowIndex As Long, _

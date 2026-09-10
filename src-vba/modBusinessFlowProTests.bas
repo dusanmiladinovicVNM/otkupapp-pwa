@@ -180,6 +180,23 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_PrazanIzvorIDNeProlazi
     Test_PR3_OtpremnicaNemaZbirnaID
 
+    ' Otkup skela -- header + stavke. Nov pisac jos nema pozivaoca;
+    ' citaoci, ambalaza i novac su Otkup cutover.
+    Test_OTK_HeaderIStavke
+    Test_OTK_HeaderNeNosiLinePolja
+    Test_OTK_KulturaSeNeFabrikuje
+    Test_OTK_KulturaSeMoraSlagatiSaVrstom
+    Test_OTK_ParcelaPripadaKooperantu
+    Test_OTK_BrutoINetoSuZamrznuti
+    Test_OTK_CenaJeStvarnoPrimenjena
+    Test_OTK_DuplaKlasaPada
+    Test_OTK_LosaDrugaStavkaRollback
+    Test_OTK_PrazanIDFailClosed
+    Test_OTK_KolAmbIzdataJeHeader
+    Test_OTK_NepoznatKljucUHeaderuPada
+    Test_OTK_BezStavkiNeProlazi
+    Test_OTK_AmbalazaMoraBitiCeoBroj
+
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
@@ -6435,6 +6452,599 @@ Private Sub Test_PR3_RucniUnosTraziOcekivano()
 EH:
     LogFatal "Test_PR3_RucniUnosTraziOcekivano", Err.Number, Err.description
 End Sub
+
+' ============================================================
+' OTKUP skela -- header + stavke
+' ============================================================
+'
+' Sta se meri:  da CreateOtkup_TX pravi JEDAN header i N stavki, da KulturaID
+'               PRIMA a ne fabrikuje, da parcela mora biti kooperantova, i da
+'               bruto/neto i cena ostaju zamrznute cinjenice.
+' Sta se NE meri: ponasanje citalaca, ambalaza i novac -- to je Otkup cutover.
+'               Do tada je stari writer (SaveOtkupMulti_TX) jedini put, a golden
+'               scenariji to dokazuju nepromenjeni.
+
+Private Sub Test_OTK_HeaderIStavke()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKHS")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-" & scenario), _
+                           OtkStavke(400#, 50#, 20, 600#, 40#, 30))
+
+    AssertTrue Len(otkID) > 0, "OTK: CreateOtkup_TX vraca ID"
+
+    Dim headeri As Collection
+    Set headeri = FindRows(TBL_OTKUP, COL_OTK_ID, otkID)
+    AssertTrue Not headeri Is Nothing, "OTK: header pronadjen"
+    AssertEquals "1", CStr(headeri.count), "OTK: tacno jedan header red"
+
+    AssertEquals TEST_KOOP_ID, OtkPolje(otkID, COL_OTK_KOOPERANT), "OTK: KooperantID"
+    AssertEquals TEST_ST_ID, OtkPolje(otkID, COL_OTK_STANICA), "OTK: StanicaID"
+    AssertEquals TEST_KULTURA_ID, OtkPolje(otkID, COL_OTK_KULTURA), "OTK: KulturaID"
+    AssertEquals TEST_VRSTA, OtkPolje(otkID, COL_OTK_VRSTA), "OTK: VrstaVoca"
+
+    AssertEquals "2", CStr(OtkBrojStavki(otkID)), "OTK: dve stavke"
+    AssertEquals "1", OtkStavkaPolje(otkID, KLASA_I, COL_OKS_RB), "OTK: I ima RB 1"
+    AssertEquals "2", OtkStavkaPolje(otkID, KLASA_II, COL_OKS_RB), "OTK: II ima RB 2"
+
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
+               "OTK: Klasa I kolicina 400"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_CENA) - 50#) < 0.001, _
+               "OTK: Klasa I cena 50"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_II, COL_OKS_KOLICINA) - 600#) < 0.001, _
+               "OTK: Klasa II kolicina 600"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_II, COL_OKS_CENA) - 40#) < 0.001, _
+               "OTK: Klasa II cena 40 (razlicita od Klase I)"
+
+    AssertEquals otkID, OtkStavkaPolje(otkID, KLASA_I, COL_OKS_OTKUP_ID), _
+                 "OTK: stavka pokazuje na OtkupID"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_HeaderIStavke", Err.Number, Err.description
+End Sub
+
+' Header ne nosi nista sto je stavka, ni polja koja u ciljnom modelu ne postoje.
+'
+' Kolone JOS postoje u tabeli -- stari writer ih puni i brisu se tek u cutover-u.
+' Zato se ovde meri da ih NOV writer ostavlja prazne. Tvrdnja "kolone nema"
+' postaje moguca tek posle cutover-a.
+Private Sub Test_OTK_HeaderNeNosiLinePolja()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKHP")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HP-" & scenario), _
+                           OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK header: dokument napravljen"
+
+    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), "OTK header: Kolicina prazna"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_CENA), "OTK header: Cena prazna"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_KLASA), "OTK header: Klasa prazna"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_KOL_AMB), "OTK header: KolAmbalaze prazna"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_BRUTO), "OTK header: BrutoKg prazan"
+
+    AssertEquals "", OtkPolje(otkID, COL_OTK_VOZAC), _
+                 "OTK header: VozacID prazan (vozac pripada otpremnici)"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_ISPLACENO), _
+                 "OTK header: Isplaceno prazno (read-model)"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_DATUM_ISPLATE), _
+                 "OTK header: DatumIsplate prazan"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_VREME_UNOSA), _
+                 "OTK header: VremeUnosa prazno (CreatedAt/SourceCreatedAt)"
+
+    If GetColumnIndex(TBL_OTKUP, COL_GENERACIJA_ID) > 0 Then
+        AssertEquals "", OtkPolje(otkID, COL_GENERACIJA_ID), _
+                     "OTK header: GeneracijaID se ne pise"
+    End If
+
+    AssertEquals IZDATO_IZDATO, OtkPolje(otkID, COL_TRACE_IZDATO_STATUS), _
+                 "OTK header: IzdatoStatus je upisan eksplicitno"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_HeaderNeNosiLinePolja", Err.Number, Err.description
+End Sub
+
+' KulturaID se PRIMA, ne fabrikuje.
+'
+' Zatecen kod na dva mesta sklopi "vrsta-sorta" string kad lookup ne uspe
+' (modOtkup.bas:556, modMasterSync.bas:1959) -- to izgleda kao FK a ne pokazuje
+' ni na sta. Nov writer takav ID odbija jer takvog reda u tblKulture nema.
+Private Sub Test_OTK_KulturaSeNeFabrikuje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKF")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-KF-" & scenario)
+    h("KulturaID") = TEST_VRSTA & "-" & TEST_SORTA     ' tacno oblik koji stari kod pravi
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK kultura: fabrikovan ID odbijen"
+    AssertTrue InStr(1, razlog, "KulturaID ne postoji", vbTextCompare) > 0, _
+               "OTK kultura: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK kultura: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_KulturaSeNeFabrikuje", Err.Number, Err.description
+End Sub
+
+' Postojeci KulturaID nije dovoljan -- snapshot vrsta/sorta mora da mu odgovara.
+'
+' Bez ove provere bi dokument nosio jednu vrstu u tekstu a drugu preko FK-a, pa
+' bi izvestaj po kulturi i izvestaj po vrsti davali razlicite brojeve.
+Private Sub Test_OTK_KulturaSeMoraSlagatiSaVrstom()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKS")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-KS-" & scenario)
+    h("VrstaVoca") = TEST_VRSTA & " DRUGA"
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK kultura/vrsta: upis odbijen"
+    AssertTrue InStr(1, razlog, "ne slazu sa kulturom", vbTextCompare) > 0, _
+               "OTK kultura/vrsta: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_KulturaSeMoraSlagatiSaVrstom", Err.Number, Err.description
+End Sub
+
+' Tudja parcela ne prolazi kanonski writer (HARD, S4.1f).
+Private Sub Test_OTK_ParcelaPripadaKooperantu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPP")
+
+    ' Ista parcela, ali otkup za DRUGOG kooperanta.
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-PP-" & scenario)
+    h("ParcelaID") = TEST_PAR_ID
+    h("KooperantID") = TEST_KOOP_ID & "-TUDJI"
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK parcela: tudja parcela odbijena"
+    AssertTrue InStr(1, razlog, "pripada kooperantu", vbTextCompare) > 0, _
+               "OTK parcela: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK parcela: header nije ostao"
+
+    ' Kontrola: ISTA parcela sa SVOJIM kooperantom prolazi -- inace bi kapija
+    ' koja uvek odbija izgledala isto kao kapija koja radi.
+    Dim h2 As Object
+    Set h2 = OtkHeader(TEST_PREFIX & "-OTK-PP2-" & scenario)
+    h2("ParcelaID") = TEST_PAR_ID
+
+    AssertTrue Len(CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0))) > 0, _
+               "OTK parcela: svoja parcela prolazi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_ParcelaPripadaKooperantu", Err.Number, Err.description
+End Sub
+
+' Bruto unos cuva OBA broja; neto unos ne izmislja bruto.
+'
+' Prazan BrutoKg je PODATAK ("unet je neto"), ne nula. Tezina gajbice se koristi
+' samo u trenutku nastanka -- izdat dokument se nikad ne rekalkulise (S4.1d).
+Private Sub Test_OTK_BrutoINetoSuZamrznuti()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKBN")
+
+    ' bruto 1100, ambalaza 100 -> neto 1000 (tara 1 kg/gajbi u trenutku unosa)
+    Dim sBruto As Collection
+    Set sBruto = New Collection
+    sBruto.Add OtkStavka(KLASA_I, 1000#, 50#, 100, 1100#)
+
+    Dim brutoID As String
+    brutoID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BN1-" & scenario), sBruto)
+    AssertTrue Len(brutoID) > 0, "OTK bruto: dokument napravljen"
+
+    AssertTrue Abs(OtkStavkaBrojP(brutoID, KLASA_I, COL_OKS_BRUTO) - 1100#) < 0.001, _
+               "OTK bruto: BrutoKg je tacno ono sto je uneto"
+    AssertTrue Abs(OtkStavkaBrojP(brutoID, KLASA_I, COL_OKS_KOLICINA) - 1000#) < 0.001, _
+               "OTK bruto: Kolicina je neto"
+
+    ' neto unos -> BrutoKg ostaje PRAZAN
+    Dim netoID As String
+    netoID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BN2-" & scenario), _
+                            OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertEquals "", OtkStavkaPolje(netoID, KLASA_I, COL_OKS_BRUTO), _
+                 "OTK neto: BrutoKg ostaje prazan, ne nula"
+
+    ' bruto manji od neta = zamenjene vrednosti, ne rubni slucaj
+    Dim sLos As Collection
+    Set sLos = New Collection
+    sLos.Add OtkStavka(KLASA_I, 1000#, 50#, 100, 900#)
+
+    Dim razlog As String
+    AssertEquals "", CreateOtkup_TX( _
+        OtkHeader(TEST_PREFIX & "-OTK-BN3-" & scenario), sLos, razlog), _
+        "OTK bruto: bruto manji od neta je odbijen"
+    AssertTrue InStr(1, razlog, "manji od neto", vbTextCompare) > 0, _
+               "OTK bruto: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_BrutoINetoSuZamrznuti", Err.Number, Err.description
+End Sub
+
+' Cenovnik je PREDLOG. Writer trazi samo Cena > 0 -- override je legitiman i
+' sacuvana cena je istorijska cinjenica dokumenta.
+Private Sub Test_OTK_CenaJeStvarnoPrimenjena()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKCE")
+
+    ' cena koja sigurno nije iz cenovnika
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-CE-" & scenario), _
+                           OtkStavke(400#, 137.5, 20, 0#, 0#, 0))
+
+    AssertTrue Len(otkID) > 0, "OTK cena: override prolazi"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_CENA) - 137.5) < 0.001, _
+               "OTK cena: sacuvana je bas uneta cena"
+
+    Dim razlog As String
+    AssertEquals "", CreateOtkup_TX( _
+        OtkHeader(TEST_PREFIX & "-OTK-CE0-" & scenario), _
+        OtkStavke(400#, 0#, 20, 0#, 0#, 0), razlog), _
+        "OTK cena: nula je odbijena"
+    AssertTrue InStr(1, razlog, "Cena mora biti veca od nule", vbTextCompare) > 0, _
+               "OTK cena: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_CenaJeStvarnoPrimenjena", Err.Number, Err.description
+End Sub
+
+' Dve stavke iste klase su bas bug koji header+stavke uklanja.
+Private Sub Test_OTK_DuplaKlasaPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKDK")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_I, 400#, 50#, 20, 0#)
+    stavke.Add OtkStavka(KLASA_I, 600#, 40#, 30, 0#)
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-DK-" & scenario), stavke, razlog)
+
+    AssertEquals "", rez, "OTK dupla klasa: upis odbijen"
+    AssertTrue InStr(1, razlog, "Dve stavke iste klase", vbTextCompare) > 0, _
+               "OTK dupla klasa: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK dupla klasa: header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "OTK dupla klasa: stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_DuplaKlasaPada", Err.Number, Err.description
+End Sub
+
+' Neispravna DRUGA stavka ne sme da ostavi header i prvu stavku.
+Private Sub Test_OTK_LosaDrugaStavkaRollback()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKLS")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_I, 400#, 50#, 20, 0#)
+    stavke.Add OtkStavka(KLASA_II, 0#, 40#, 30, 0#)      ' kolicina 0
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-LS-" & scenario), stavke, razlog)
+
+    AssertEquals "", rez, "OTK losa stavka: upis odbijen"
+    AssertTrue InStr(1, razlog, "Kolicina mora biti veca od nule", vbTextCompare) > 0, _
+               "OTK losa stavka: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK losa stavka: header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "OTK losa stavka: prva stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_LosaDrugaStavkaRollback", Err.Number, Err.description
+End Sub
+
+' Red bez identiteta je gori od pada. Seam broji pozive, pa se header i stavka
+' mere odvojeno.
+Private Sub Test_OTK_PrazanIDFailClosed()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKID")
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim prevMode As Boolean
+    prevMode = IsTestMode()
+    SetTestMode True
+
+    ' 1) header ID pada odmah
+    Dim rez As String, razlog As String
+    modDataAccess.NewEntityIDPadniTest True
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ID1-" & scenario), _
+                         OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+    modDataAccess.NewEntityIDPadniTest False
+
+    AssertEquals "", rez, "OTK prazan ID: header ID odbijen"
+    AssertTrue InStr(1, razlog, "nije vratio OtkupID", vbTextCompare) > 0, _
+               "OTK prazan ID: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' 2) header prodje, stavka padne -> header mora biti rollback-ovan
+    modDataAccess.NewEntityIDPadniTest True, 1
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ID2-" & scenario), _
+                         OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+
+    AssertEquals "", rez, "OTK prazan OKS: upis odbijen"
+    AssertTrue InStr(1, razlog, "nije vratio OtkupStavkaID", vbTextCompare) > 0, _
+               "OTK prazan OKS: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK prazan ID: nijedan header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "OTK prazan ID: nijedna stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+    LogFatal "Test_OTK_PrazanIDFailClosed", Err.Number, Err.description
+End Sub
+
+' Izdata ambalaza je dokument-level cinjenica sa otkupnog lista, ne stavka.
+Private Sub Test_OTK_KolAmbIzdataJeHeader()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAI")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-AI-" & scenario)
+    h("KolAmbIzdata") = 45
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 600#, 40#, 30))
+
+    AssertTrue Len(otkID) > 0, "OTK izdata: dokument napravljen"
+    AssertEquals "45", OtkPolje(otkID, COL_OTK_KOL_AMB_IZDATA), _
+                 "OTK izdata: vrednost je na HEADERU"
+    AssertEquals "2", CStr(OtkBrojStavki(otkID)), _
+                 "OTK izdata: dve stavke, a izdata ambalaza se ne deli po klasi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_KolAmbIzdataJeHeader", Err.Number, Err.description
+End Sub
+
+' Nepoznat kljuc u headeru je GRESKA -- ukljucujuci polja koja su u STAROM
+' modelu bila na headeru. Pozivalac koji salje VozacID ili Kolicina radi po
+' starom modelu i mora to da cuje.
+Private Sub Test_OTK_NepoznatKljucUHeaderuPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKNK")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-NK-" & scenario)
+    h.Add "VozacID", TEST_VOZ_ID
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK nepoznat kljuc: upis odbijen"
+    AssertTrue InStr(1, razlog, "nepoznat kljuc", vbTextCompare) > 0 And _
+               InStr(1, razlog, "VozacID", vbTextCompare) > 0, _
+               "OTK nepoznat kljuc: kapija imenuje kljuc (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK nepoznat kljuc: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_NepoznatKljucUHeaderuPada", Err.Number, Err.description
+End Sub
+
+' Otkup bez ijedne stavke nije dokument.
+Private Sub Test_OTK_BezStavkiNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKBS")
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BS-" & scenario), _
+                         New Collection, razlog)
+
+    AssertEquals "", rez, "OTK bez stavki: upis odbijen"
+    AssertTrue InStr(1, razlog, "bar jednu stavku", vbTextCompare) > 0, _
+               "OTK bez stavki: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK bez stavki: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_BezStavkiNeProlazi", Err.Number, Err.description
+End Sub
+
+' Ambalaza je BROJ KOMADA. Isto pravilo kao na zbirnoj -- odbija se, ne
+' zaokruzuje: "20.5 gajbica" je kvar u izvoru, a tiha ispravka ga sakriva.
+Private Sub Test_OTK_AmbalazaMoraBitiCeoBroj()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAM")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_I, 400#, 50#, 1.5, 0#)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-AM-" & scenario), stavke, razlog)
+
+    AssertEquals "", rez, "OTK ambalaza: upis odbijen"
+    AssertTrue InStr(1, razlog, "mora biti ceo broj", vbTextCompare) > 0, _
+               "OTK ambalaza: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_AmbalazaMoraBitiCeoBroj", Err.Number, Err.description
+End Sub
+
+' --- OTK pomocne -------------------------------------------------------------
+
+Private Function OtkHeader(ByVal brDok As String) As Object
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", NextTestDate()
+    h.Add "KooperantID", TEST_KOOP_ID
+    h.Add "StanicaID", TEST_ST_ID
+    h.Add "KulturaID", TEST_KULTURA_ID
+    h.Add "VrstaVoca", TEST_VRSTA
+    h.Add "SortaVoca", TEST_SORTA
+    h.Add "TipAmbalaze", TEST_TIP_AMB
+    h.Add "BrojDokumenta", brDok
+    Set OtkHeader = h
+End Function
+
+Private Function OtkStavka(ByVal klasa As String, ByVal kol As Double, _
+                           ByVal cena As Double, ByVal amb As Double, _
+                           ByVal bruto As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", amb
+    If bruto > 0 Then s.Add "BrutoKg", bruto
+    Set OtkStavka = s
+End Function
+
+' Klasa II se izostavlja kad je kolII = 0 -- dokument sme da ima samo jednu klasu.
+Private Function OtkStavke(ByVal kolI As Double, ByVal cenaI As Double, _
+                           ByVal ambI As Double, ByVal kolII As Double, _
+                           ByVal cenaII As Double, ByVal ambII As Double) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    If kolI > 0 Then c.Add OtkStavka(KLASA_I, kolI, cenaI, ambI, 0#)
+    If kolII > 0 Then c.Add OtkStavka(KLASA_II, kolII, cenaII, ambII, 0#)
+    Set OtkStavke = c
+End Function
+
+Private Function OtkPolje(ByVal otkupID As String, ByVal columnName As String) As String
+    OtkPolje = Trim$(CStr(nz(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkupID, columnName), "")))
+End Function
+
+Private Function OtkBrojRedova(ByVal tblName As String) As Long
+    Dim d As Variant
+    d = GetTableData(tblName)
+    If Not IsArray(d) Then Exit Function
+    OtkBrojRedova = UBound(d, 1)
+End Function
+
+Private Function OtkBrojStavki(ByVal otkupID As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkupID)
+    If redovi Is Nothing Then Exit Function
+    OtkBrojStavki = redovi.count
+End Function
+
+Private Function OtkStavkaPolje(ByVal otkupID As String, ByVal klasa As String, _
+                                ByVal columnName As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKlasa As Long, cTraz As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, "OtkStavkaPolje")
+    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, "OtkStavkaPolje")
+    cTraz = RequireColumnIndex(TBL_OTKUP_STAVKE, columnName, "OtkStavkaPolje")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cOtk), "")), otkupID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cKlasa), "")), klasa, vbTextCompare) = 0 Then
+                OtkStavkaPolje = Trim$(CStr(nz(d(i, cTraz), "")))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function OtkStavkaBrojP(ByVal otkupID As String, ByVal klasa As String, _
+                                ByVal columnName As String) As Double
+    Dim t As String
+    t = OtkStavkaPolje(otkupID, klasa, columnName)
+    If IsNumeric(t) Then OtkStavkaBrojP = CDbl(t)
+End Function
 
 ' --- PR3 pomocne -------------------------------------------------------------
 
