@@ -451,6 +451,84 @@ aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 
 ---
 
+### 4.2a Članstvo i izvedena polja
+
+Otpremnica je **izvedeni dokument**, isto kao zbirna. Zato njen kanonski writer
+prima **izvore**, a ne stavke:
+
+```
+CreateOtpremnicaIzIzvora_TX(h, izvoriOtkupID, outGreska)
+
+  stavke     IZVEDENE   po klasi: SUM(Kolicina), SUM(KolAmbalaze), SUM(BrutoKg)
+             nad otkupnim stavkama svih clanova
+  header     IZVEDEN    VrstaVoca, SortaVoca, TipAmbalaze, StanicaID
+  header     PRIMLJEN   Datum, VozacID, BrojOtpremnice
+  clanstvo   tblOtpremnicaIzvori, u ISTOJ transakciji
+```
+
+**Izvedeno, ne primljeno** — isti razlog kao kod zbirne (PR3): polje koje writer
+prima a moglo je da izračuna je drugi izvor istine, i tiho se razilazi sa prvim.
+Neslaganje među izvorima time postaje **greška pri izvođenju**, ne zaseban
+validator koji neko može da zaobiđe.
+
+Tvrde kapije za ulazak otkupa u otpremnicu:
+
+| Pravilo | Zašto |
+|---|---|
+| otkup postoji i **nije storniran** | storniran dokument nije roba |
+| otkup **nije već u drugoj aktivnoj otpremnici** | isto pravilo kao `AktivnoClanstvoPoKanonu` za zbirnu (A15) |
+| svi izvori sa **iste stanice** | grain je *jedna isporuka **sa otkupnog mesta*** — header nosi jedan `StanicaID`, pa dve stanice ne mogu ni da se predstave |
+| svi izvori iste `(VrstaVoca, SortaVoca)` | header nosi jedan par; izvođenje na neslaganju **diže grešku**, ne bira prvi |
+| bar jedan izvor | otpremnica bez ijednog otkupa nije isporuka |
+
+`VozacID` je **na headeru i prima se** — vozač je odluka otpreme, ne svojstvo
+otkupa (§4.1c). Zato izvori o vozaču ne govore ništa i nema šta da se poklapa.
+
+---
+
+### 4.2b Šta je mereno pre skele
+
+**1. Jedna poslovna otpremnica su danas N redova, i dva pisca ih vezuju
+različito.** `modAutoHladnjaca:213,258` zove `SaveOtpremnica_TX` **dvaput** sa
+istim `brOtp` — jedan red po klasi, dva različita `OtpremnicaID`. Ali:
+
+```
+modAutoHladnjaca   Klasa I -> otpID     Klasa II -> otpID2    (podela po klasi)
+modOtkupBlok:1425  SVI otkupi bloka  -> jedan mActiveOtpID    (bez podele)
+```
+
+Isti pojam („koja otpremnica nosi ovaj otkup") ima **dva različita odgovora**
+zavisno od toga koji ga je pisač upisao. To nije rubni slučaj nego posledica
+toga što otpremnica nema jedan identitet.
+
+**2. Broj → ID razrešenje bira PRVI red.** `modScrDokumenti:502`
+(`OtpIdZaBroj`) radi `LookupValue(tblOtpremnica, BrojOtpremnice, broj,
+OtpremnicaID)`, a `LookupValue` (`modDataAccess:608`) vraća **prvi pogodak i
+izlazi**. Kada broj nosi dva reda, izbor je proizvoljan. Rezultat ide u
+`PrintSpecifikacija` → `RenderSpec`, koji filtrira otkupe po `OtpremnicaID`.
+
+> **Status: nije reprodukovano.** Iz koda sledi da specifikacija štampana za
+> otpremnicu čije su klase razdvojene (auto-hladnjača put) prikazuje samo jednu
+> klasu. Nije izmereno nad podacima, pa se vodi kao **rizik**, ne kao nalaz.
+> Header+stavke ga uklanja bez zasebne ispravke: broj tada nosi jedan red.
+
+**3. `Otkup.OtpremnicaID` se NE briše u skeli.** Mereno: **39** ne-test
+korišćenja u **15** modula, od toga **5 pisača** (`modAutoHladnjaca:374`,
+`modDokumenta:5413`, `modMasterSync:2434`, `modOtkupBlok:1459`,
+`modStornoFlow:2569`).
+
+> Razlika u odnosu na `Otpremnica.ZbirnaID`, koji je u PR3 obrisan odmah: tamo
+> je čitalaca bilo malo i svi su imali imenovanog naslednika. Ovde bi brisanje
+> u skeli oborilo izveštaje, štampu i storno tok. Kolona odlazi u **PR7**,
+> zajedno sa svojim pisačima.
+
+**4. Danas ne postoji nijedno pravilo članstva.**
+`ReassignOtkupToOtpremnica_TX` (`modDokumenta:5382`) proverava samo da cilj
+postoji i da nije storniran — ni stanicu, ni vrstu/sortu, ni da li je otkup već
+negde. Pravila iz §4.2a su zato **nova**, ne prepisana.
+
+---
+
 ### 4.3 `tblZbirna` — **grain: jedan transport ka kupcu/hladnjači**
 
 `ZbirnaID` (PK `ZBR-`), `BrojZbirne` (labela, scoped po vozaču), `Datum`,
@@ -778,7 +856,14 @@ Otvoreno ostaje samo ono što po redosledu tek dolazi:
 | Pitanje | Kad se rešava |
 |---|---|
 | iz čega se računa `manjak` posle uklanjanja `Otpremnica.Cena` iz obračuna | Otpremnica cutover (§13b) |
-| da li draft-first tok dobija `CreateZbirnaDraft_TX` / `CreateOtpremnicaDraft_TX` | kad UI dobije otvoren dokument |
+| da li draft-first tok dobija `CreateZbirnaDraft_TX` / `CreateOtpremnicaDraft_TX` | **Otpremnica skela (PR5)** — v. ispod |
+
+> **Za otpremnicu ovo pitanje nije odloživo kao za otkup.** Kod otkupa je forma
+> njegov draft, pa persistentnog `DRAFT`-a nema (§4.1e). Kod otpremnice je
+> draft-first **glavni desktop tok**: panel napravi otpremnicu, pa se blokovi
+> naknadno kače na `mActiveOtpID` (`modOtkupBlok.LinkOtkupIDsToOtpremnica`).
+> Writer koji ume samo „izvori → izdato" nema gde da primi taj tok, a cutover
+> otpremnice je PR7 — dakle pitanje stiže za dva koraka, ne „nekad".
 
 ---
 

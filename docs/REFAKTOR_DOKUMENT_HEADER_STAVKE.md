@@ -747,6 +747,50 @@ prijavljuje kao **neverifikovana**, nikad kao zelena.
 
 ---
 
+### Otpremnica skela (PR5) — pre-flight verdikt
+
+Kapija `pre-flight` je pokrenuta pre ijedne linije koda. **Nije sve zeleno**, i to
+je bio smisao:
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP** | draft-first je *glavni* desktop tok otpremnice (`modOtkupBlok.LinkOtkupIDsToOtpremnica`), a specificiran writer zna samo „izvori → izdato" — v. §9 modela |
+| `IDENTITY` | **RISK** | `OtpIdZaBroj` (`modScrDokumenti:502`) razrešava broj u ID preko `LookupValue`, koji vraća **prvi** pogodak (`modDataAccess:608`) |
+| `CARDINALITY` | PROVEN | Otkup → Otpremnica N:1 promenljiva; `ReassignOtkupToOtpremnica_TX` (`modDokumenta:5382`) dokazuje premeštanje |
+| `INVARIANTS/OWNER` | **GAP** | danas **nijedno** pravilo članstva: reassign proverava samo da cilj postoji i nije storniran |
+| `WRITERS` | PROVEN | `row_owner` = `modDokumenta`; 4 schema pisca; 3 produkciona poziva `SaveOtpremnica_TX` (`modAutoHladnjaca:213,258`, `modMasterSync:877`) |
+| `DOWNSTREAM` | PROVEN | `Otkup.OtpremnicaID`: **39** ne-test korišćenja, **15** modula, **5 pisača** → kolona ostaje do PR7 |
+| `EVENTS` | PROVEN | fizički: roba napušta otkupno mesto · poslovni: otpremnica nastaje · finansijski: **ne postoji** — `Otpremnica.Cena` je prefill predlog (§13b), ne obračun |
+| `CAPABILITY` | N/A | skela je aditivna, nijedna sposobnost se ne seli |
+| `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
+| `LANDING` | **RISK** | PR4 (#306) još nije merge-ovan; PR5 bi bio stacked nad njim |
+
+`GAP` na `DOMAIN` i `INVARIANTS/OWNER` znači: **nema produkcionog koda** dok se te
+dve stvari ne zaključaju. Pravila članstva su zaključana u §4.2a modela. Ostaje
+draft — jedina odluka koja menja **oblik API-ja**, pa ne sme da se izabere usput.
+
+#### Mreža za Otpremnica skelu — imenovano, pre writer-a
+
+| Test | Tvrdnja |
+|---|---|
+| `JedanBrojJedanHeader` | dvoklasna otpremnica = **jedan** `OtpremnicaID` + dve stavke |
+| `StavkeSuIzvedene` | zbir po klasi dolazi iz otkupnih stavki; podmetnute stavke se ne primaju |
+| `ClanstvoUIstojTransakciji` | pad pri upisu člana ne ostavlja header |
+| `IzvorNeSmeDvaPutaAktivno` | otkup već u aktivnoj otpremnici se odbija |
+| `StorniranIzvorNeUlazi` | storniran otkup se odbija |
+| `DveStaniceNeProlaze` | izvori sa dve stanice — greška, ne „uzmi prvu" |
+| `DveVrsteNeProlaze` | isto za `(VrstaVoca, SortaVoca)` |
+| `BezIzvoraNeProlazi` | otpremnica bez ijednog otkupa nije isporuka |
+| `VozacSePrima` | vozač dolazi sa headera, izvori o njemu ne govore ništa |
+| `PrazanIDFailClosed` | `OPS-` i `OPI-` prazan → upis odbijen, rollback |
+| `HeaderNeNosiLinePolja` | `Kolicina` / `KolAmbalaze` / `Klasa` / `BrutoKg` ostaju prazne |
+| `OtkupOtpremnicaIDNetaknut` | skela **ne** dira staru kolonu — 39 čitalaca je i dalje na njoj |
+
+Poslednji je jedini te vrste do sada: tvrdi da nova skela **nije** promenila staro
+polje. Bez njega bi „aditivno" bila namera, ne mereno svojstvo.
+
+---
+
 ## 13) Statičke kapije
 
 Ne „repo-wide search treba da pokaže", nego imenovana `vba_check` pravila sa
