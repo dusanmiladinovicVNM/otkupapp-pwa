@@ -5,7 +5,8 @@ konstrukciji: sto nije u kodu, nije ni u mapi.
 
 Dva izvora, oba mehanicka -- ali NE znace isto:
 
-  1. MUTATE: AppendRow / UpdateCell / RequireUpdateCell TBL_X
+  1. MUTATE: AppendRow / UpdateCell / RequireUpdateCell nad TBL_X -- i kao
+     naredba (AppendRow TBL_X, ...) i kao funkcija (x = AppendRow(TBL_X, ...))
      Modul stvarno MENJA redove. Samo ovo je vlasnistvo (ugovor A11), i samo
      ovo meri --check-ownership.
   2. TX: clsTransaction.AddTableSnapshot TBL_X
@@ -55,9 +56,18 @@ VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 # \bUpdateCell, a u "RequireUpdateCell" pre "UpdateCell" nema granice reci.
 # Time je 220 poziva -- 29 nad tblFakture, 26 nad tblPaleta, 12 nad tblOtkup --
 # prolazilo kroz mapu neopazeno.
+#
+# Druga rupa istog oblika, nadjena u PR3: AppendRow je FUNKCIJA i pola koda je
+# zove kao funkciju --  newRow = AppendRow(TBL_ZBIRNA, rowData)  -- gde posle
+# imena stoji "(", a ne razmak. Regex je trazio \s+, pa je 22 poziva bilo
+# NEVIDLJIVO kapiji, medju njima produkcioni upisi nad tblZbirna (modDokumenta,
+# modMasterSync), tblOtkup (modOtkup, modMasterSync), tblPrijemnica,
+# tblOtpremnica, tblNovac i tblFakturaStavke. Kapija koja ne vidi pola poziva
+# ne meri vlasnistvo nego stil pisanja poziva.
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
 MUTATE_RE = re.compile(
-    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
+    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
+    re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
 # pa nisu vlasnici podataka i ne treba da zamagle pravu sliku.
@@ -233,6 +243,50 @@ def check_ownership(writers: dict, path: str) -> int:
     return 0
 
 
+# --- self-test: kapija koja ne vidi poziv ne meri vlasnistvo -----------------
+#
+# A11 stoji na jednom regexu. Dva puta je taj regex vec bio slep -- prvo na
+# RequireUpdateCell (nema granice reci), pa na funkcijski oblik AppendRow(...).
+# Oba puta je kapija bila ZELENA dok je propustala stotine poziva. Zato oblik
+# poziva ima svoje slucajeve, i pozitivne i negativne.
+MUTATE_CASES = [
+    ("naredba",            "AppendRow TBL_ZBIRNA, rowData",              "tblZbirna"),
+    ("naredba dva razmaka", "AppendRow  TBL_ZBIRNA, rowData",            "tblZbirna"),
+    ("funkcija",           "newRow = AppendRow(TBL_ZBIRNA, rowData)",    "tblZbirna"),
+    ("funkcija sa Call",   "Call AppendRow(TBL_OTKUP, rowData)",         "tblOtkup"),
+    ("funkcija sa razmakom", "n = AppendRow( TBL_OTKUP, rowData)",       "tblOtkup"),
+    ("literal ime",        'UpdateCell "tblZbirna", r, c, v',            "tblZbirna"),
+    ("Require naredba",    "RequireUpdateCell TBL_FAKTURE, r, c, v",     "tblFakture"),
+    ("Require funkcija",   "RequireUpdateCell(TBL_FAKTURE, r, c, v)",    "tblFakture"),
+    # negativni: ime koje samo POCINJE isto, i sopstvena definicija
+    ("drugo ime funkcije", "x = AppendRowToLog(TBL_ZBIRNA, rowData)",    None),
+    ("definicija",         "Public Function AppendRow(ByVal t As String)", None),
+]
+
+
+def self_test() -> int:
+    const2tbl = table_constants()
+    palo = []
+    for naziv, linija, ocekivano in MUTATE_CASES:
+        m = MUTATE_RE.search(linija)
+        if m is None:
+            dobijeno = None
+        else:
+            token = m.group(1)
+            dobijeno = const2tbl.get(token, m.group(2) or token)
+        if dobijeno != ocekivano:
+            palo.append(f"  MUTATE/{naziv}: ocekivano {ocekivano!r}, "
+                        f"dobijeno {dobijeno!r}  <- {linija}")
+
+    if palo:
+        print("who_writes --self-test: PALO", file=sys.stderr)
+        for p in palo:
+            print(p, file=sys.stderr)
+        return 2
+    print(f"who_writes --self-test: {len(MUTATE_CASES)} slucajeva, cisto")
+    return 0
+
+
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description="Mapa vlasnistva nad tabelama, iz koda.")
     ap.add_argument("--out", nargs="?", const=DEFAULT_OUT,
@@ -241,7 +295,12 @@ def main(argv) -> int:
                     help="exit 2 ako se generisan sadrzaj razlikuje od fajla")
     ap.add_argument("--check-ownership", action="store_true",
                     help="exit 2 ako tabelu pise modul van WRITE_OWNERSHIP.json")
+    ap.add_argument("--self-test", action="store_true",
+                    help="exit 2 ako MUTATE_RE ne vidi neki oblik poziva")
     args = ap.parse_args(argv)
+
+    if args.self_test:
+        return self_test()
 
     writers = scan()
 

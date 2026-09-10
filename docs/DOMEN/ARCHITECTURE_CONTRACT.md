@@ -117,6 +117,21 @@ koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
 
+**Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
+zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
+(`AppendRow TBL_ZBIRNA, rowData`). Do PR3 je regex tražio razmak posle imena, pa
+je **22 poziva bilo nevidljivo** — među njima produkcioni upisi nad `tblZbirna`,
+`tblOtkup`, `tblPrijemnica`, `tblOtpremnica`, `tblNovac` i `tblFakturaStavke`, a
+sedam tabela (`tblCenovnik`, `tblKooperanti`, `tblMagacin`, `tblPartnerMap`,
+`tblSEFEventLog`, `tblStornoZurnal`, `tblVozaci`) uopšte nije bilo u registru.
+Kapija je sve to vreme bila **zelena**.
+
+To je isti kvar kao raniji `RequireUpdateCell` (nema granice reči pre
+`UpdateCell`) — dva puta ista bolest, oba puta nevidljiva. Zato oblik poziva sada
+ima **sopstvene slučajeve**: `who_writes.py --self-test`, pozitivne i negativne,
+u CI-ju. Kapija koja vidi samo jedan način pisanja poziva ne meri vlasništvo nego
+stil.
+
 **Kapija proverava isključivo `row_owner`.** `schema_owner` je zaseban pojam
 (ko sme da napravi tabelu ili kolonu) i **ne učestvuje** u proveri mutacije reda
 — unija dva spiska bi bila poznat bypass: propuštala bi baš ono što ugovor
