@@ -508,7 +508,7 @@ ZBR1 sastav:  OTP1, OTP2, OTP3     <- i dalje, nepromenjeno
 ```
 
 `OTP2` i `OTP3` se nisu menjale, a pripadaju **oba** sastava. Jedan
-`Otpremnica.ZbirnaID` može da pokaže samo jednu od dve zbirne — zato sastav živi
+jedna FK kolona bi mogla da pokaže samo jednu od dve zbirne — zato sastav živi
 u `tblZbirnaIzvori`, a FK je degradiran na pokazivač „gde je sada" (A15).
 
 **Ako ovaj scenario ne prođe bez gubitka istorije, model veze nije dovoljan** —

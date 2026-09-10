@@ -8,7 +8,7 @@
 >
 > | Dokument | Stanje |
 > |---|---|
-> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `tblZbirnaIzvori`, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u Zbirna cutover |
+> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `tblZbirnaIzvori`, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX`. Nov pisač još nema pozivaoca — stari (`SaveZbirnaMulti_TX`) je jedini put; čitaoci, invarijanta i storno idu u Zbirna cutover |
 > | Otpremnica / Otkup / Prijemnica | specifikacija |
 >
 > Kontekst: nema legacy transakcionih podataka. Zatečena šema **nema pravo veta**
@@ -226,8 +226,8 @@ aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 > **`Otpremnica.ZbirnaID` ne postoji.** Pripadnost zna isključivo ova tabela;
 > „na kojoj je *aktivnoj* zbirnoj otpremnica sada" računa
 > `modDokumenta.AktivnaZbirnaZaOtpremnicu`. Razlog za tabelu umesto kolone:
-> sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a jedan FK
-> može da pokaže samo jednu (A15).
+> sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a **jedna FK
+> kolona bi mogla da pokaže samo jednu** (A15).
 
 > **Zbirna nema cenu.** `tblZbirna` je nikad nije imala i `SaveZbirnaMulti_TX` je
 > ne prima (`modDokUnos.bas:422`). Ne dodavati je.

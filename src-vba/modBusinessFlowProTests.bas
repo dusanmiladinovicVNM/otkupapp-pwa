@@ -153,7 +153,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_AutoLinkMustNotCrossBrojZbirne
     Test_NoCrossZbirnaLinksAudit
 
-    ' PR3 -- Zbirna: header + stavke.  Nov pisac je jos van produkcione putanje;
+    ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
     ' cutover citalaca, invarijante i storna je Zbirna cutover.
     Test_PR3_CreateZbirnaHeaderIStavke
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
@@ -178,7 +178,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_ClanstvoJeZapisanoPoVerziji
     Test_PR3_CitacDajeIstuZbirnuKaoClanstvo
     Test_PR3_PrazanIzvorIDNeProlazi
-    Test_PR3_OtpremnicaImaZbirnaID
+    Test_PR3_OtpremnicaNemaZbirnaID
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
@@ -5465,12 +5465,11 @@ End Sub
 ' Sta se ovde MERI, a sta ne:
 '
 '   meri se     da CreateZbirna_TX pravi JEDAN header, IZVODI stavke iz izvornih
-'               otpremnica, postavlja Otpremnica.ZbirnaID u ISTOJ transakciji, i
-'               da header vise ne nosi kolicinu
+'               otpremnica, upisuje clanstvo u tblZbirnaIzvori u ISTOJ
+'               transakciji, i da header vise ne nosi kolicinu
 '   ne meri se  ponasanje citalaca, invarijante i storna -- to je Zbirna
-'               cutover. Do tada
-'               produkcija ide starim putem (SaveZbirnaMulti_TX) i golden
-'               scenariji to i dalje dokazuju, nepromenjeni.
+'               cutover. Do tada je stari writer (SaveZbirnaMulti_TX) jedini
+'               put, a golden scenariji to i dalje dokazuju, nepromenjeni.
 
 Private Sub Test_PR3_CreateZbirnaHeaderIStavke()
     On Error GoTo EH
@@ -5957,9 +5956,9 @@ EH:
     LogFatal "Test_PR3_AmbalazaMoraBitiCeoBroj", Err.Number, Err.description
 End Sub
 
-' Otpremnica dobija kanonsku membership vezu ka zbirnoj, i to na KRAJU tabele:
-' AppendRow pise poziciono.
-Private Sub Test_PR3_OtpremnicaImaZbirnaID()
+' Otpremnica NEMA kolonu koja pokazuje na zbirnu -- pripadnost je u
+' tblZbirnaIzvori. Test to i tvrdi: kanonska pozicija "ZbirnaID" je nula.
+Private Sub Test_PR3_OtpremnicaNemaZbirnaID()
     On Error GoTo EH
 
     ' Clanstvo je jedina veza -- otpremnica NEMA kolonu koja pokazuje na zbirnu.
@@ -5981,7 +5980,7 @@ Private Sub Test_PR3_OtpremnicaImaZbirnaID()
     Exit Sub
 
 EH:
-    LogFatal "Test_PR3_OtpremnicaImaZbirnaID", Err.Number, Err.description
+    LogFatal "Test_PR3_OtpremnicaNemaZbirnaID", Err.Number, Err.description
 End Sub
 
 ' Red bez identiteta je gori od pada: niko ga posle ne moze ni naci ni vezati.

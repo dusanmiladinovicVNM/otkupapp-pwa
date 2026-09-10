@@ -1208,7 +1208,7 @@ End Function
 ' GeneracijaID se NE pise. Ta masinerija je kompenzacija za nepostojeci header i
 ' brise se u Zbirna cutover-u; nov pisac je ne sme ozivljavati.
 '
-' PR3 je ADITIVAN. Produkcioni pozivaoci (modDokUnos.bas:533, modAutoHladnjaca,
+' PR3 je ADITIVAN. Zatecen tok (modDokUnos.bas:533, modAutoHladnjaca,
 ' modMasterSync) i dalje idu starim putem; cutover citalaca, invarijante i storna
 ' je Zbirna cutover. Zato header NAMERNO ostavlja UkupnoKolicina /
 ' UkupnoAmbalaze / Klasa
