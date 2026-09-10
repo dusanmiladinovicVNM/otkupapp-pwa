@@ -194,14 +194,19 @@ PrijemnicaID              <- ostaje denormalizovan (read-modeli, poruke)
 
 ```
 tblOtkup ──1:N──> tblOtkupStavke
-   │ OtpremnicaID (nullable)
-   │ ZbirnaID (nullable, denorm)
-   v
+   ^                       ^
+   │ OtpremnicaID          │ OtkupID
+   │ (pokazivac)           │
+   │                  tblOtpremnicaIzvori   <── SASTAV verzije otpremnice
+   │                       v
 tblOtpremnica ──1:N──> tblOtpremnicaStavke
-   │ ZbirnaID (nullable, POKAZIVAC na aktivnu)
-   v
+   │ ZbirnaID (pokazivac na aktivnu)
+   │                  tblZbirnaIzvori       <── SASTAV verzije zbirne
+   v                       v
 tblZbirna ──1:N──> tblZbirnaStavke
-   ^ ──1:N──> tblZbirnaIzvori ──N:1──> tblOtpremnica   (sastav verzije)
+
+KANON za sastav: tabele *Izvori.  Kolone *ID na detetu su POKAZIVACI
+("gde je sada"), imenovan kes u smislu A5.
    ^
    │ ZbirnaID
 tblPrijemnica ──1:N──> tblPrijemnicaStavke
@@ -712,26 +717,54 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
-| 4 | **Zbirna cutover**: invarijanta po ID-u (preko `tblZbirnaIzvori`), `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, **rekalkulacija zbirne pri stornu otpremnice (§7.1)**, **propagacija ispravke = nova verzija (A13)**, print, izveštaji, testovi. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. | 3 · **§7.1, A13–A15 odlučeni** |
-| 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
-| 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |
+| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX`, opaque `OtkupID` po **bloku**, ne po klasi | 3 |
+| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
+| 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument koji stvarno prelazi u produkciju | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
-| 7 | **Otpremnica** header+stavke + cutover | 6 |
-| 8 | **Prijemnica** header+stavke + cutover | 7 |
-| 9 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 8 |
-| 10 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 8 |
-| 11 | **Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink | 10 |
-| 12 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 9 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 11 |
+| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže | 6 |
+| 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
+| 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
+| 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
+| 11 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 9 |
+| 12 | **Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink | 11 |
+| 13 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 10 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 12 |
 | — | `CLAUDE.md` §3 (obrtanje pravila o izvoru istine šeme) | zaseban process PR |
 
-PR 12 je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
+PR 13 je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
 runtime mehanizam, refaktor nije završen — to je dual identity model, gori od
 sadašnjeg.
 
+### Zašto je redosled promenjen posle PR3
+
+Prvobitni plan je išao **Zbirna → Otkup → Otpremnica**, jer je zbirna najmanja
+transakcija. Verzionisano članstvo (A15) je to obesmislilo:
+
+> `tblZbirnaIzvori` beleži `ZbirnaID → OtpremnicaID`. Ali otpremnica danas **nema
+> jedan identitet** — `SaveOtpremnicaMulti_TX` pravi red po klasi i vraća
+> `"OTP-1 + OTP-2"`. Kanonsko članstvo bi time zapisivalo *koji fizički klasni
+> redovi* čine zbirnu, a A15 traži *koje verzije poslovnih otpremnica*.
+
+To nisu iste stvari. Zato važi pravilo koje generiše redosled:
+
+> **Dokument sme u cutover tek kad svi dokumenti na koje pokazuje po ID-u imaju
+> svoj header identitet.**
+
+Skele (nove tabele + writer, aditivno) smeju bilo kojim redom — PR3 je to i
+uradio. **Cutover** ide uzvodno-nadole: `Otkup → Otpremnica → Zbirna`.
+
+Cena promene je nula danas: `tblZbirnaIzvori` još nema nijednog produkcionog
+pisca, pa nema ni jednog reda sa pogrešnim grain-om. Da je Zbirna otišla u
+cutover pre Otpremnice, kanonsko članstvo bi se punilo identitetom za koji već
+znamo da je pogrešan.
+
 ### 14.1) Kapija odluke posle PR 6
 
-Posle Zbirne i Otkupa — dva najreprezentativnija slajsa — donosi se formalna
-odluka: **nastavak u mestu** ili **novo stablo koda**. Kriterijumi su merljivi,
+Posle Otkupa u produkciji i skele za Otpremnicu i Zbirnu donosi se formalna
+odluka: **nastavak u mestu** ili **novo stablo koda**.
+
+> Kapija je posle promene redosleda **jača nego ranije**: Otkup je dokument sa
+> najviše pisača (danas 9) i najviše integracija, pa se kriterijumi mere na
+> najtežem slajsu umesto na najlakšem. Kriterijumi su merljivi,
 sa alatima koji već postoje.
 
 **Nastavljamo u mestu ako:**

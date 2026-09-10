@@ -1189,12 +1189,17 @@ End Function
 ' otpremnica, koje moraju biti saglasne. Dokument ima jednu vrstu, jednu sortu i
 ' jedan tip ambalaze (REFAKTOR_DOKUMENT_HEADER_STAVKE.md S2).
 '
-' MEMBERSHIP SE POSTAVLJA U ISTOJ TRANSAKCIJI.
+' CLANSTVO SE UPISUJE U ISTOJ TRANSAKCIJI.
 '
-' Otpremnica.ZbirnaID je kanonska veza. Da je writer ne postavlja, PR4 bi morao
-' "CreateZbirna_TX; commit; pa povezi otpremnice" -- a pad drugog koraka ostavlja
-' zbirnu bez izvora. Zato header, stavke i ZbirnaID na otpremnicama idu kroz
-' JEDAN snapshot: ili sve, ili nista.
+' Kanonski sastav je tblZbirnaIzvori -- "od kojih je otpremnica ova VERZIJA
+' sastavljena" (A15). Otpremnica.ZbirnaID je samo POKAZIVAC na trenutno aktivnu
+' zbirnu, imenovan kes u smislu A5. Jedan FK ne moze da nosi istoriju: posle
+' ispravke jedne otpremnice sestre koje se nisu menjale pripadaju i staroj i
+' novoj verziji.
+'
+' Oboje ide kroz JEDAN snapshot -- ili sve, ili nista. Da writer ne upisuje
+' clanstvo, cutover bi morao "commit; pa povezi", a pad drugog koraka ostavlja
+' zbirnu bez izvora.
 '
 ' ZbirnaID je OPAQUE (NewEntityID), ne GetNextID: broj vise nije identitet, pa
 ' ni ID ne sme da bude brojac po kome se pogadja "sledeci".
@@ -1211,6 +1216,13 @@ End Function
 '
 ' Iz istog razloga se NE pise ni Otpremnica.BrojZbirne: veza je ZbirnaID. Stara
 ' broj-veza ostaje netaknuta na dokumentima koje je napravio stari put.
+'
+' OVAJ WRITER PRAVI I ODMAH FINALIZUJE DOKUMENT (IzdatoStatus = IZDATO).
+'
+' Zato trazi bar jednu izvornu otpremnicu: zbirna bez izvora nije izdat dokument.
+' Draft-first tok -- gde operater prvo otvori zbirnu pa vezuje otpremnice -- je
+' zasebna funkcija koja jos ne postoji (CreateZbirnaDraft_TX). Dok je nema,
+' kanonski tok je JEDAN: otpremnice postoje, pa se zbirna napravi i izda.
 '
 ' Argumenti:
 '   h                 Scripting.Dictionary. Obavezno: Datum, VozacID,
@@ -1371,6 +1383,7 @@ Private Function CreateZbirna(ByVal h As Object, _
     Dim cID As Long, cKlasa As Long, cKol As Long, cAmb As Long
     Dim cVrsta As Long, cSorta As Long, cTip As Long
     Dim cStorno As Long, cZbrID As Long, cZbrBroj As Long
+    Dim cVozac As Long
 
     cID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
@@ -1379,6 +1392,7 @@ Private Function CreateZbirna(ByVal h As Object, _
     cVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
     cSorta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
     cTip = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
+    cVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
     cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
     cZbrID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID, SRC)
     cZbrBroj = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
@@ -1435,6 +1449,12 @@ Private Function CreateZbirna(ByVal h As Object, _
                           "Otpremnica je vec na zbirnoj (broj): " & otpID
             End If
         End If
+
+        ' Zbirna je JEDAN transport JEDNOG vozaca. Otpremnica drugog vozaca u
+        ' istoj zbirnoj je korupcija domena, ne rubni slucaj: BrojZbirne je
+        ' scoped po vozacu, pa bi takav dokument bio i nepretraziv.
+        RequireIstoPolje vozacID, Trim$(NzToText(data(r, cVozac))), _
+                         "VozacID", otpID, SRC
 
         ' Dokument ima JEDNU vrstu, sortu i tip ambalaze. Otpremnica koja se ne
         ' slaze ne pripada ovoj zbirnoj -- i to je strukturno, ne stvar ukusa.
@@ -1785,6 +1805,18 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
 
     If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
         SetRowValueByColumn rowData, TBL_ZBIRNA, COL_STORNIRANO, "", SRC
+    End If
+
+    ' IZDATO se pise EKSPLICITNO.
+    '
+    ' Legacy konvencija je "prazno = IZDATO" (modDokumentInvariant.DocIsIssued,
+    ' konzervativno). Nov model se na nju ne oslanja: ovaj writer pravi i odmah
+    ' FINALIZUJE dokument, pa to i kaze. Kad se pojavi draft-first tok, on ce
+    ' imati svoj ulaz (CreateZbirnaDraft_TX) i pisati DRAFT -- a razlika izmedju
+    ' "niko nije upisao" i "izdato" tada vise nije pretpostavka.
+    If GetColumnIndex(TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, _
+                            IZDATO_IZDATO, SRC
     End If
 
     BuildZbirnaHeaderRowData = rowData

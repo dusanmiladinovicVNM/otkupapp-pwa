@@ -59,6 +59,8 @@ Private m_Report As String
 Private Const TEST_ST_ID As String = "ST-90001"
 Private Const TEST_KOOP_ID As String = "KOOP-90001"
 Private Const TEST_VOZ_ID As String = "VOZ-90001"
+' Drugi vozac: zbirna sme da nosi otpremnice SAMO svog vozaca (A15/domen).
+Private Const TEST_VOZ_ID_B As String = "VOZ-90002"
 Private Const TEST_KUP_ID As String = "KUP-90001"
 Private Const TEST_KULTURA_ID As String = "KUL-90001"
 Private Const TEST_PAR_ID As String = "PAR-90001"
@@ -163,6 +165,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_VecVezanaOtpremnicaSeNePreuzima
     Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
     Test_PR3_RazlicitaVrstaNeProlazi
+    Test_PR3_RazlicitVozacNeProlazi
+    Test_PR3_HeaderJeEksplicitnoIzdat
     Test_PR3_ZbirnaBezIzvoraNeProlazi
     Test_PR3_NepoznatKljucUHeaderuPada
     Test_PR3_NedostajuciObavezniKljucPada
@@ -6189,6 +6193,68 @@ EH:
     LogFatal "Test_PR3_PrazanIzvorIDNeProlazi", Err.Number, Err.description
 End Sub
 
+' Zbirna je JEDAN transport JEDNOG vozaca.
+'
+' BrojZbirne je scoped po vozacu, pa bi zbirna sa otpremnicama dva vozaca bila i
+' nepretraziva. Bez ove kapije je bilo moguce napraviti header sa VOZ-A, a sve
+' izvore sa VOZ-B -- korupcija domena koju nista ne prijavljuje.
+Private Sub Test_PR3_RazlicitVozacNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3VZ")
+
+    Dim otp As String
+    otp = Pr3OtpremnicaVozac(TEST_PREFIX & "-OTP-PR3VZ-" & scenario, KLASA_I, _
+                             400#, 20, TEST_VOZ_ID_B)
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String, razlog As String
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3VZ-" & scenario), _
+                          Pr3Izvor(otp, ""), razlog)
+
+    AssertEquals "", rez, "PR3 vozac: upis odbijen"
+    AssertTrue InStr(1, razlog, "VozacID", vbTextCompare) > 0, _
+               "PR3 vozac: kapija imenuje polje (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 vozac: header nije ostao"
+    AssertEquals "", Pr3OtpZbirnaID(otp), "PR3 vozac: otpremnica nije vezana"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_RazlicitVozacNeProlazi", Err.Number, Err.description
+End Sub
+
+' Nov model ne koristi legacy konvenciju "prazno = IZDATO".
+'
+' Ovaj writer pravi i ODMAH finalizuje dokument, pa to i upisuje. Kad se pojavi
+' draft-first tok, razlika izmedju "niko nije upisao" i "izdato" vise ne sme da
+' bude pretpostavka citaoca.
+Private Sub Test_PR3_HeaderJeEksplicitnoIzdat()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3IZD")
+
+    Dim zbrID As String
+    zbrID = CreateZbirna_TX( _
+        Pr3Header(TEST_PREFIX & "-ZBR-PR3IZD-" & scenario), _
+        Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3IZD-" & scenario, _
+                               KLASA_I, 400#, 20), ""))
+
+    AssertTrue Len(zbrID) > 0, "PR3 izdato: dokument napravljen"
+    AssertEquals IZDATO_IZDATO, ZbrPolje(zbrID, COL_TRACE_IZDATO_STATUS), _
+                 "PR3 izdato: IzdatoStatus je upisan eksplicitno"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_HeaderJeEksplicitnoIzdat", Err.Number, Err.description
+End Sub
+
 ' --- PR3 pomocne -------------------------------------------------------------
 
 ' Header BEZ vrste/sorte/tipa ambalaze -- oni se izvode iz izvornih otpremnica.
@@ -6346,6 +6412,14 @@ Private Function Pr3ZbirnaIzClanstva(ByVal otpID As String) As String
             Exit Function
         End If
     Next i
+End Function
+
+Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String, _
+                                    ByVal kol As Double, ByVal amb As Long, _
+                                    ByVal vozac As String) As String
+    Pr3OtpremnicaVozac = SaveOtpremnica_TX(NextTestDate(), TEST_ST_ID, vozac, _
+                                           broj, "", TEST_VRSTA, TEST_SORTA, _
+                                           kol, 50#, TEST_TIP_AMB, amb, klasa)
 End Function
 
 Private Function NewScenarioCode(ByVal scenarioName As String) As String
@@ -6721,6 +6795,19 @@ Public Sub HardDeleteBusinessFlowTestRows()
     total = total + deleted
     Debug.Print "tblPrijemnica: " & deleted & " obrisano"
 
+    ' Deca zbirne PRE roditelja, i po FK -- ne po markeru: tblZbirnaStavke i
+    ' tblZbirnaIzvori nemaju nijednu kolonu sa TST-PRO tekstom, pa bi ih
+    ' DeleteTestRowsFromTable preskocio i ostavio orphan redove.
+    deleted = DeleteChildRowsByParent(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, _
+                                      TBL_ZBIRNA, COL_ZBR_ID, "BrojZbirne")
+    total = total + deleted
+    Debug.Print "tblZbirnaStavke: " & deleted & " obrisano"
+
+    deleted = DeleteChildRowsByParent(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, _
+                                      TBL_ZBIRNA, COL_ZBR_ID, "BrojZbirne")
+    total = total + deleted
+    Debug.Print "tblZbirnaIzvori: " & deleted & " obrisano"
+
     deleted = DeleteTestRowsFromTable(TBL_ZBIRNA, Array("BrojZbirne"))
     total = total + deleted
     Debug.Print "tblZbirna: " & deleted & " obrisano"
@@ -6755,6 +6842,65 @@ Public Sub HardDeleteBusinessFlowTestRows()
 EH:
     MsgBox "Greska pri brisanju: " & Err.description, vbCritical
 End Sub
+
+' Obrisi decu cija je RODITELJSKA vrednost test red.
+'
+' DeleteTestRowsFromTable trazi TST-PRO u koloni same tabele; tabele stavki i
+' clanstva nose samo ID-eve, pa im marker mora doci od roditelja.
+Private Function DeleteChildRowsByParent(ByVal childTable As String, _
+                                         ByVal childFkCol As String, _
+                                         ByVal parentTable As String, _
+                                         ByVal parentIdCol As String, _
+                                         ByVal parentMarkerCol As String) As Long
+    On Error GoTo EH
+
+    Dim pd As Variant
+    pd = GetTableData(parentTable)
+    If Not IsArray(pd) Then Exit Function
+
+    Dim cPid As Long, cMark As Long
+    cPid = GetColumnIndex(parentTable, parentIdCol)
+    cMark = GetColumnIndex(parentTable, parentMarkerCol)
+    If cPid = 0 Or cMark = 0 Then Exit Function
+
+    Dim meta As Object
+    Set meta = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    For i = 1 To UBound(pd, 1)
+        If InStr(1, CStr(pd(i, cMark)), "TST-PRO", vbTextCompare) > 0 Then
+            meta(UCase$(Trim$(nz(pd(i, cPid), "")))) = True
+        End If
+    Next i
+    If meta.count = 0 Then Exit Function
+
+    Dim lo As ListObject
+    Set lo = GetTable(childTable)
+    If lo Is Nothing Then Exit Function
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim cFk As Long
+    cFk = GetColumnIndex(childTable, childFkCol)
+    If cFk = 0 Then Exit Function
+
+    Dim cd As Variant
+    cd = lo.DataBodyRange.Value2
+    If IsEmpty(cd) Then Exit Function
+
+    Dim obrisano As Long
+    For i = UBound(cd, 1) To 1 Step -1
+        If meta.Exists(UCase$(Trim$(nz(cd(i, cFk), "")))) Then
+            lo.ListRows(i).Delete
+            obrisano = obrisano + 1
+        End If
+    Next i
+
+    DeleteChildRowsByParent = obrisano
+    Exit Function
+
+EH:
+    Debug.Print "DeleteChildRowsByParent greska (" & childTable & "): " & Err.description
+End Function
 
 Private Function DeleteTestRowsFromTable(ByVal tableName As String, _
                                          ByVal markerColumns As Variant) As Long

@@ -357,14 +357,24 @@ dokumentu**.
 
 ```
 za svaku klasu K:
-  SUM(OtpremnicaStavke.Kolicina)  gde Otpremnica.ZbirnaID = X i aktivna
+  SUM(OtpremnicaStavke.Kolicina)
+      gde OtpremnicaID IN (tblZbirnaIzvori gde ZbirnaID = X)
   ==
-  ZbirnaStavke.Kolicina           gde ZbirnaID = X i Klasa = K
+  ZbirnaStavke.Kolicina
+      gde ZbirnaID = X i Klasa = K
 ```
 
 KG po klasi → **hard**. Ambalaža ukupno → hard, po klasi → soft.
-(Nepromenjeno pravilo; menja se samo ključ spajanja — `ZbirnaID` umesto
-`BrojZbirne`.)
+
+> **Spaja se preko `tblZbirnaIzvori`, NE preko `Otpremnica.ZbirnaID`.** Pokazivač
+> se pri ispravci pomera na novu verziju: čim `OTP50.ZbirnaID` ode sa `ZBR18` na
+> `ZBR19`, invarijanta stare `ZBR18` više ne bi mogla da se reprodukuje. Tabela
+> članstva pamti sastav svake verzije (A15), pa invarijanta ostaje proverljiva i
+> za istorijski dokument.
+>
+> Filtriranje po `aktivna` važi samo dok je zbirna `DRAFT`. Za izdatu verziju se
+> uzimaju **tačno one otpremnice koje su u njoj bile** — njihov kasniji storno je
+> razlog za novu verziju (A13), ne za menjanje ove.
 
 Ista `BrojZbirne` na drugom `ZbirnaID` **više nije problem integriteta**.
 

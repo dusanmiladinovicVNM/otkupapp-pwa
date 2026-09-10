@@ -239,10 +239,19 @@ dozvoljena.** Sve preko toga ide kroz storno + reizdavanje (A9, A13). Kad UI
 dobije „otvoren dokument", `DRAFT` prestaje da bude rezervisan i ovo pravilo je
 već tu.
 
-Redosled unosa **nije** domenska invarijanta: operater sme prvo da napravi
-otpremnicu pa otkupe, ili prvo zbirnu pa otpremnice. Dok je dokument `DRAFT`,
-smisleno je prikazivati `očekivano / povezano / preostalo`. Finalizacija je ta
-koja zamrzava sastav i količine.
+Redosled unosa **nije** domenska invarijanta: model ne zabranjuje da operater
+prvo napravi zbirnu pa otpremnice. Dok je dokument `DRAFT`, smisleno je
+prikazivati `očekivano / povezano / preostalo`. Finalizacija je ta koja zamrzava
+sastav i količine.
+
+> **Ali današnji kod podržava samo jedan redosled.** `CreateZbirna_TX` pravi i
+> **odmah finalizuje** dokument iz postojećih izvora (`IzdatoStatus = IZDATO`,
+> upisano eksplicitno) i zato traži bar jednu izvornu otpremnicu. Draft-first tok
+> je **buduća funkcija** sa svojim ulazom (`CreateZbirnaDraft_TX`); dok je nema,
+> kanonski tok je: otpremnice postoje → zbirna se napravi i izda.
+>
+> Ovo je razlika između *modela* (dozvoljava oba) i *isporučenog* (podržava
+> jedan). Dokumentacija ne sme tvrditi ono prvo kao da je već tu.
 
 *Provera:* `DocIsIssued` gate; `IZDATO_DRAFT` / `IZDATO_IZDATO` /
 `IZDATO_PROSLEDJENO` u `modConfig`.
@@ -272,15 +281,31 @@ tblZbirnaIzvori        ZbirnaID + OtpremnicaID       (PR3, postoji)
 tblOtpremnicaIzvori    OtpremnicaID + OtkupID        (uz refaktor Otpremnice)
 ```
 
-Redovi su **nepromenljivi**: ne menjaju se i ne brišu. Nova verzija dokumenta
-dobija svoje redove. Zato te tabele nemaju `Stornirano` i stoje u
-`modSchemaGuard.BEZ_STORNA` sa tim obrazloženjem.
+**Nepromenljivost počinje pri izdavanju, ne pri upisu.** Ranija formulacija
+(„redovi se nikad ne menjaju") bila je u sukobu sa A14: dok je dokument `DRAFT`,
+operater sme da doda i skloni izvor. Tačno pravilo:
+
+| Stanje roditelja | Članstvo |
+|---|---|
+| `DRAFT` | **promenljivo** — dodaje se, sklanja, prepravlja slobodno |
+| `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove, stara zadržava svoje |
+
+Ne pravi se verzija za svaku klik-izmenu drafta; verzionisanje počinje kad
+dokument postane izdat. Zato te tabele nemaju `Stornirano` (storno verzije ne
+briše njen sastav) i stoje u `modSchemaGuard.BEZ_STORNA` sa tim obrazloženjem.
 
 **Odluka o `Otpremnica.ZbirnaID`:** ostaje, ali **degradiran na pokazivač** —
 „na kojoj je *aktivnoj* zbirnoj ova otpremnica sada". Kanonski sastav je
 `tblZbirnaIzvori`. Pokazivač je time **imenovan keš u smislu A5** i nosi test
 koji dokazuje da se poklapa sa članstvom. Drži se jer čini proveru „već vezana"
 i čitanje u UI-ju jednim čitanjem umesto spajanja.
+
+> **Pokazivac je oznacen kao PRELAZAN.** On je jedini invariant koji se mora
+> odrzavati pri svakoj korekciji, a Excel nema milione redova — „na kojoj je
+> aktivnoj zbirnoj otpremnica sada" moze se racunati u memoriji iz tabele
+> clanstva. Zadrzan je zbog cene citanja, ali se **preispituje** kad propagacija
+> ispravke bude napisana (PR7/PR8). Ako se ispostavi da ga odrzavanje kosta vise
+> nego sto stedi, brise se i ostaje samo `tblZbirnaIzvori`.
 
 Za svaki dokument mora se moći odgovoriti — **bez gledanja trenutnog stanja
 sistema**:

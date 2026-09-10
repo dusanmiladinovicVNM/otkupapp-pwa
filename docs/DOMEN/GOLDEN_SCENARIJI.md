@@ -342,19 +342,31 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 > **Odluka doneta 10.09.2026.** Implementacija ide u **PR4**, zajedno sa
 > prelaskom invarijante na `ZbirnaID`. Do tada D1 nije registrovan.
 
-### Pravilo
+### Pravilo — grana po stanju zbirne (usklađeno sa A13)
 
-Storno otpremnice koja pripada aktivnoj zbirnoj:
+Prva verzija ovog pravila je glasila „rekalkuliši postojeću zbirnu". To je
+**u sukobu sa A13**: izdat dokument se ne prepisuje. Tačno pravilo:
 
-1. zbirna se **rekalkuliše** na preostale aktivne otpremnice;
-2. ako više nijedna ne ostane, zbirna se **stornira** — ne ostaje aktivna sa
-   nulama;
-3. ako nizvodno postoji prijemnica ili paleta, i dalje se diže pun dijalog i
-   operater bira (`CorrectionNeedsDialog`, `modStornoFlow.bas:250`). To se ne
-   menja.
+**Zbirna je `DRAFT`:**
 
-Malina mod prestaje da bude poseban slučaj: tamo je otpremnica 1:1 sa zbirnom,
-pa rekalkulacija sama daje praznu zbirnu i pravilo 2 je obara. **C sadrži B.**
+1. zbirna se **rekalkuliše** na preostale aktivne otpremnice — in-place, jer
+   draft još nije poslovna činjenica.
+
+**Zbirna je `IZDATO` / `PROSLEDJENO`:**
+
+1. stara zbirna ostaje **nepromenjena** i biva superseded/stornirana;
+2. nastaje **nova verzija**: nov `ZbirnaID`, nov `BrojZbirne`, `IspravkaOdID` na
+   staru, isti `CorrectionID` kao ostatak korekcije, **novi `tblZbirnaIzvori`** i
+   **nove `ZbirnaStavke`**;
+3. ako posle storna ne ostane nijedna otpremnica, **nema naslednika** — stara se
+   stornira i tu se lanac završava. Prazna nova verzija nema smisla.
+
+U oba slučaja: ako nizvodno postoji prijemnica ili paleta, i dalje se diže pun
+dijalog i operater bira (`CorrectionNeedsDialog`, `modStornoFlow.bas:250`). To se
+ne menja. Prijemnica se **ne** menja automatski (A13).
+
+Pošto lanac danas **nema draft fazu**, u praksi važi druga grana. Malina mod time
+prestaje da bude poseban slučaj: njegova kaskada je specijalni slučaj tačke 3.
 
 ### Zašto ne A ni B
 
@@ -368,6 +380,10 @@ prilika za grešku, i to zbog čisto tehničkog ograničenja.
 **C** je jedina opcija koja čuva definiciju: zbirna **jeste** agregat svojih
 otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2). A i B tu definiciju zaobilaze —
 jedna zabranom, druga rušenjem.
+
+> Ono što se promenilo posle A13 nije **da li** se zbirna usklađuje sa izvorima,
+> nego **gde** rezultat sleti: u isti red (draft) ili u novu verziju (izdato).
+> Odluka „C" i dalje stoji; samo više nije in-place za izdat dokument.
 
 ### Šta je zatečeno stanje (i zašto je D1 uopšte nastao)
 
