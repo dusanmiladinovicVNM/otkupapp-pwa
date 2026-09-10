@@ -149,6 +149,7 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 | `VrstaVoca`, `SortaVoca`, `TipAmbalaze` | H — u potpisu stoje jednom |
 | `KolAmbIzdata` | H — OM izdao prazne kooperantu; **stvarna činjenica sa otkupnog lista** |
 | `ClientRecordID`, `SyncSource` | eksterni identitet i poreklo (PWA); v. §7 i §4.1c |
+| `SourceCreatedAt` | vreme nastanka **na izvoru** (PWA `GS_CREATED_AT`); prazno za desktop |
 | `Stornirano`, `IzdatoStatus` | lifecycle |
 | `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID` | correction |
 | audit ×4 | |
@@ -231,10 +232,18 @@ Mereni čitaoci danas i njihova zamena:
 
 | Tok | Nosilac vremena |
 |---|---|
-| desktop unos | `CreatedAt` — isto značenje, kolona je bila udvajanje |
+| desktop unos | `CreatedAt` — isto značenje, kolona je bila udvajanje; `SourceCreatedAt` ostaje prazno |
 | PWA uvoz | `CreatedAt` je vreme **uvoza**; vreme unosa na terenu je druga činjenica → **`SourceCreatedAt`** |
 
-Štampa čita naslednika po toku. Dvosmisleno „vreme unosa" ne ostaje.
+Štampa ne bira po toku nego po popunjenosti:
+
+```
+PrikazVremena = SourceCreatedAt  ako postoji
+                CreatedAt        inace
+```
+
+`SourceCreatedAt` nije izmišljen podatak — PWA sheet ga već nosi kao
+`GS_CREATED_AT`. Dvosmisleno „vreme unosa" ne ostaje.
 
 ---
 
@@ -269,6 +278,55 @@ Isto važi za cenu:
 Operater sme da je pregazi. Writer nema pravo da traži `Cena = Cenovnik.Cena`;
 njegovo pravilo je `Cena > 0`. Promena cenovnika **ne menja** već izdat otkup —
 štampa i danas računa iz cene sa samog otkupa, što je ta semantika.
+
+---
+
+### 4.1f Matični podaci — kultura i parcela
+
+**`KulturaID` se RAZREŠAVA, nikad ne fabrikuje.**
+
+Zatečeno stanje je gore nego što izgleda — fabrikuje se na **dva** mesta, i to
+jedno od njih nije uvoz nego sam desktop writer:
+
+```
+modOtkup.bas:556      kulturaID = LookupValue(tblKulture, "VrstaVoca", vrsta, "KulturaID")
+modOtkup.bas:559      If Len(kulturaID) = 0 Then kulturaID = vrsta & "-" & sorta
+modMasterSync.bas:1959-1960   isti obrazac
+```
+
+Oba traže **samo po `VrstaVoca`** (sorta se ignoriše), a kad ne nađu — sklope
+string koji izgleda kao FK a ne pokazuje ni na šta. Takav „ID" onda uđe u
+dokument i preživi zauvek.
+
+Ciljno pravilo:
+
+```
+(VrstaVoca, SortaVoca)  ->  TACNO jedan KulturaID
+
+0 pogodaka   -> GRESKA
+2+ pogodaka  -> GRESKA
+1 pogodak    -> koristi taj ID
+```
+
+**Razrešavanje radi adapter, ne writer.** `CreateOtkup_TX` prima gotov
+`KulturaID`; desktop i PWA adapter su ti koji iz UI vrednosti dolaze do matičnog
+podatka. Writer proverava dvoje: da FK postoji, i da se snapshot
+`VrstaVoca`/`SortaVoca` na dokumentu slaže sa tom kulturom.
+
+Razlog za tu podelu: writer koji sam radi lookup mora da poznaje UI semantiku
+(šta znači prazna sorta, šta se radi sa razmacima), a to je tačno mesto na kom
+je fabrikovanje i nastalo.
+
+**Parcela mora pripadati kooperantu — HARD.**
+
+```
+ako je ParcelaID zadat:
+    Parcela.KooperantID = Otkup.KooperantID     obavezno
+```
+
+Tuđa parcela ne prolazi kanonski writer. Neslaganje **kulture** parcele ostaje
+`warning` sa override-om, kao danas — za tvrdo pravilo tu nema dovoljno osnova, a
+operater ima legitimne slučajeve.
 
 ---
 
@@ -480,13 +538,12 @@ red već nosi `Klasa`/`VrstaVoca`/`SortaVoca`, tj. grain mu je klasa. Kolone
 ```
 KOOPERANT ─┐
 PARCELA   ─┤
-KULTURA   ─┤
-STANICA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
-VOZAC     ─┘        ^
+KULTURA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
+STANICA   ─┘        ^
                     │ OtkupID
               tblOtpremnicaIzvori          <== SASTAV verzije otpremnice (KANON)
                     v
-              tblOtpremnica ──1:N──> tblOtpremnicaStavke
+                  VOZAC ────> tblOtpremnica ──1:N──> tblOtpremnicaStavke
                     ^
                     │ OtpremnicaID
                tblZbirnaIzvori             <== SASTAV verzije zbirne (KANON)
@@ -646,13 +703,18 @@ ovde da adapter kasnije ne izmišlja pravilo.
 
 ## 9) Otvoreno
 
-Ništa od gornjeg nije pretpostavka. Jedina stavka koja čeka odluku van koda:
+**Za Otkup i Zbirnu: ništa.** Sve što je ranije stajalo ovde je odlučeno.
 
-| Pitanje | Zašto kod ne odgovara | Predlog |
-|---|---|---|
-| Da li `Otkup.OtpremnicaID` sme da se razlikuje po klasi | Šema je dozvoljavala, ali nema podataka koji bi rekli da li se dešavalo | **Ne** — header, po §3.2 |
+Poslednja stavka — *„sme li `Otkup.OtpremnicaID` da se razlikuje po klasi"* — je
+zatvorena time što **kolone nema**: pripadnost je `tblOtpremnicaIzvori`, na nivou
+jednog otkup headera (§4.1e). Pitanje je prestalo da postoji, nije odgovoreno.
 
-Ako se ne slažeš sa tim predlogom, to je jedino mesto u modelu koje se menja.
+Otvoreno ostaje samo ono što po redosledu tek dolazi:
+
+| Pitanje | Kad se rešava |
+|---|---|
+| iz čega se računa `manjak` posle uklanjanja `Otpremnica.Cena` iz obračuna | Otpremnica cutover (§13b) |
+| da li draft-first tok dobija `CreateZbirnaDraft_TX` / `CreateOtpremnicaDraft_TX` | kad UI dobije otvoren dokument |
 
 ---
 

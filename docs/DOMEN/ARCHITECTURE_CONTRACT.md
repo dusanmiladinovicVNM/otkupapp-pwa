@@ -265,6 +265,31 @@ aktivne zbirne — ali bi poruka izgledala kao kvar u kapiji članstva umesto ka
 greška u redosledu. Zato je korak 1 pre koraka 2 **deo ugovora**, ne detalj
 implementacije.
 
+**Redosled sam po sebi nije dovoljan — cela korekcija je JEDNA transakcija.**
+
+```
+storniraj staru  +  ZamenjenSaID
+napravi novu     +  IspravkaOdID  +  isti CorrectionID
+upisi novo clanstvo
+        sve u JEDNOM snapshotu
+```
+
+Pad između koraka ostavlja **ispravljen dokument storniran bez naslednika** —
+stanje koje operater vidi kao „dokument je nestao", a nijedna kapija ga ne
+prijavljuje jer je svaki pojedinačni korak legalan. Propagacija kroz više
+dokumenata (`OTK → OTP → ZBR`) je time jedna use-case transakcija, ne tri.
+
+**`ClientRecordID` se NE prenosi na novu verziju.** On identifikuje konkretan
+eksterni zapis, ne lineage korekcije:
+
+| Slučaj | `ClientRecordID` nove verzije |
+|---|---|
+| korekcija stigla kao **nov PWA zapis** | svoj, nov CRID |
+| **lokalna** korekcija PWA-importovanog dokumenta | prazan — lineage nose `IspravkaOdID` / `CorrectionID` |
+
+Kopiran CRID bi napravio dva dokumenta koja tvrde da su isti eksterni zapis, pa
+bi sledeći uvoz imao dva kandidata za idempotency.
+
 Invarijanta u jednoj rečenici:
 
 > **Napravi novu verziju dokumenta iz novih aktivnih izvora — ne prepisuj
