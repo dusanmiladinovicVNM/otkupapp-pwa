@@ -16,7 +16,9 @@
     "",
     "Test moduli se ne broje: pisu uz rollback i nisu vlasnici podataka.",
     "",
-    "PR3: baseline prosiren jer je MUTATE_RE do tada gledao samo naredbeni oblik (AppendRow TBL_X); funkcijski (x = AppendRow(TBL_X)) je bio nevidljiv. Dodati pisci nisu novi -- bili su neizmereni."
+    "PR3: baseline prosiren jer je MUTATE_RE do tada gledao samo naredbeni oblik (AppendRow TBL_X); funkcijski (x = AppendRow(TBL_X)) je bio nevidljiv. Dodati pisci nisu novi -- bili su neizmereni.",
+    "",
+    "PR3: cilj za tblZbirna je SAMO modDokumenta. modDokumentInvariant racuna i validira, ali ne pise -- RecalculateZbirna_TX zivi u modDokumenta i prima izracunat rezultat (v. DOCUMENT_HEADER_LINES S4.3)."
   ],
   "tblAmbalaza": {
     "row_owner": [

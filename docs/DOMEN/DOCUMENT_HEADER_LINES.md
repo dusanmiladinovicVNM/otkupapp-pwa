@@ -185,12 +185,34 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 **Izvor istine:** zbirna je **agregat** — otpremnice su izvor. Njene stavke su
 **keš** (A5), i invarijanta §6.2 to dokazuje pri svakoj izmeni.
 
-**Vlasnik upisa:** `modDokumenta` + `modDokumentInvariant` (rekalkulacija).
-Danas 5 pisaca.
+**Vlasnik upisa (A11): samo `modDokumenta`.** Danas 3 pisca
+(`modDokumentInvariant`, `modDokumenta`, `modMasterSync`).
+
+> Ranija verzija je ovde pisala „`modDokumenta` + `modDokumentInvariant`
+> (rekalkulacija)", što je bilo u suprotnosti sa `WRITE_OWNERSHIP.json`, gde je
+> `cilj` samo `modDokumenta`. Kontradikcija se razrešava u korist registra:
+>
+> **`modDokumentInvariant` računa i validira; `modDokumenta` jedini fizički
+> piše.** `RecalculateZbirna_TX` živi u `modDokumenta` i prima izračunat
+> rezultat. To je čisto A11 vlasništvo — jedan pisač, jedan ulaz — umesto dva
+> modula koji pišu istu tabelu po svojim pravilima.
 
 > **Stanje posle PR3.** Obe tabele postoje u kanonu i u svesci, a
-> `CreateZbirna_TX(h, stavke, outGreska)` piše header + stavke u jednoj
-> transakciji. `ZbirnaID` je opaque (`NewEntityID`), `GeneracijaID` se ne piše.
+> `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` piše header,
+> stavke **i `Otpremnica.ZbirnaID`** u jednoj transakciji. `ZbirnaID` je opaque
+> (`NewEntityID`), `GeneracijaID` se ne piše.
+>
+> **Količine se ne primaju — izvode se.** Writer prima *izvorne otpremnice* i
+> računa stavke iz njih; `VrstaVoca` / `SortaVoca` / `TipAmbalaze` takođe dolaze
+> iz otpremnica, koje moraju biti saglasne. Prva verzija je primala gotove
+> stavke, pa je bilo legalno napraviti zbirnu od izmišljenih 400+600 kg **bez
+> ijedne otpremnice** — keš koji se ne slaže sa izvorom, i to kroz kanonski
+> writer. Opcioni argument `ocekivano` nosi ono što je operater otkucao i služi
+> samo kao unakrsna provera protiv izvedenog.
+>
+> **Membership ide u istoj transakciji.** Da writer ne postavlja
+> `Otpremnica.ZbirnaID`, PR4 bi morao „`CreateZbirna_TX`; commit; pa poveži
+> otpremnice" — a pad drugog koraka ostavlja zbirnu bez izvora.
 >
 > Header koji taj pisač napravi **namerno ostavlja `UkupnoKolicina`,
 > `UkupnoAmbalaze` i `Klasa` prazne** — to su kolone koje u ovom modelu ne

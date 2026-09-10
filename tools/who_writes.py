@@ -81,6 +81,40 @@ def table_constants() -> dict:
     return dict(re.findall(r'Public Const (TBL_\w+)\s+As String = "(\w+)"', text))
 
 
+def logicke_linije(text: str):
+    """VBA fizicke linije -> LOGICKE, sa spojenim ' _' nastavcima.
+
+    Treca rupa istog roda (v. MUTATE_RE): skener je citao red po red, pa mu je
+
+        n = AppendRow( _
+                TBL_ZBIRNA, rowData)
+
+    nevidljivo -- ime mutatora je na jednoj liniji, tabela na sledecoj. Danas
+    takav oblik u src-vba/ ne postoji, ali kapija ne sme da zavisi od toga gde
+    je neko prelomio red; prvi koji ga napise otvorio bi rupu bez ijedne poruke.
+    """
+    buf = ""
+    for raw in text.splitlines():
+        deo = raw.strip()
+        # Komentar se NE nastavlja, i to je vazno u drugom smeru: bez ove
+        # provere bi "' objasnjenje _" progutalo sledecu liniju, pa bi pravi
+        # AppendRow ispod komentara postao nevidljiv. Popravka bi otvorila novu
+        # rupu umesto da zatvori staru.
+        if not buf and deo.startswith("'"):
+            yield deo
+            continue
+        # Nastavak reda u VBA je razmak + donja crta na KRAJU linije. Linija
+        # koja je SAMO donja crta je isto nastavak -- posle strip()-a pred njom
+        # nema razmaka, pa je uslov mora imenovati posebno.
+        if deo == "_" or deo.endswith(" _"):
+            buf += deo[:-1]
+            continue
+        yield (buf + deo) if buf else deo
+        buf = ""
+    if buf:
+        yield buf
+
+
 def scan() -> dict:
     const2tbl = table_constants()
     writers = collections.defaultdict(lambda: collections.defaultdict(set))
@@ -90,15 +124,15 @@ def scan() -> dict:
             continue
         module = name.rsplit(".", 1)[0]
         with open(os.path.join(SRC, name), encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped.startswith("'"):        # komentar
-                    continue
-                for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
-                    for m in regex.finditer(stripped):
-                        token = m.group(1)
-                        table = const2tbl.get(token, m.group(2) or token)
-                        writers[table][kind].add(module)
+            text = fh.read()
+        for linija in logicke_linije(text):
+            if linija.startswith("'"):        # komentar
+                continue
+            for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
+                for m in regex.finditer(linija):
+                    token = m.group(1)
+                    table = const2tbl.get(token, m.group(2) or token)
+                    writers[table][kind].add(module)
     return writers
 
 
@@ -258,25 +292,40 @@ MUTATE_CASES = [
     ("literal ime",        'UpdateCell "tblZbirna", r, c, v',            "tblZbirna"),
     ("Require naredba",    "RequireUpdateCell TBL_FAKTURE, r, c, v",     "tblFakture"),
     ("Require funkcija",   "RequireUpdateCell(TBL_FAKTURE, r, c, v)",    "tblFakture"),
+    # prelomljen red -- ime mutatora gore, tabela dole
+    ("nastavak posle zagrade",
+     "n = AppendRow( _\n        TBL_ZBIRNA, rowData)",                   "tblZbirna"),
+    ("nastavak posle imena",
+     "RequireUpdateCell _\n    TBL_OTKUP, r, c, v",                      "tblOtkup"),
+    ("nastavak u dva koraka",
+     "n = AppendRow( _\n     _\n    TBL_PRIJEMNICA, rowData)",           "tblPrijemnica"),
     # negativni: ime koje samo POCINJE isto, i sopstvena definicija
     ("drugo ime funkcije", "x = AppendRowToLog(TBL_ZBIRNA, rowData)",    None),
     ("definicija",         "Public Function AppendRow(ByVal t As String)", None),
+    ("komentar",           "' AppendRow TBL_ZBIRNA, rowData",            None),
+    # komentar sa "_" na kraju NE sme da proguta sledecu liniju -- inace bi
+    # popravka nastavaka otvorila novu rupu umesto da zatvori staru
+    ("komentar sa nastavkom ne guta kod",
+     "' objasnjenje _\nAppendRow TBL_ZBIRNA, rowData",                   "tblZbirna"),
 ]
 
 
 def self_test() -> int:
     const2tbl = table_constants()
     palo = []
-    for naziv, linija, ocekivano in MUTATE_CASES:
-        m = MUTATE_RE.search(linija)
-        if m is None:
-            dobijeno = None
-        else:
-            token = m.group(1)
-            dobijeno = const2tbl.get(token, m.group(2) or token)
+    for naziv, izvor, ocekivano in MUTATE_CASES:
+        dobijeno = None
+        for linija in logicke_linije(izvor):
+            if linija.startswith("'"):
+                continue
+            m = MUTATE_RE.search(linija)
+            if m is not None:
+                token = m.group(1)
+                dobijeno = const2tbl.get(token, m.group(2) or token)
+                break
         if dobijeno != ocekivano:
             palo.append(f"  MUTATE/{naziv}: ocekivano {ocekivano!r}, "
-                        f"dobijeno {dobijeno!r}  <- {linija}")
+                        f"dobijeno {dobijeno!r}  <- {izvor!r}")
 
     if palo:
         print("who_writes --self-test: PALO", file=sys.stderr)

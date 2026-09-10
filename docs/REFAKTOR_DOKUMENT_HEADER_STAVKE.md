@@ -1,8 +1,11 @@
 # Refaktor: dokument = header + stavke
 
-> Status: PLAN, nije implementirano. Kontekst: **nema migracije i nema legacy
-> podataka** — sezona je prošla, nijedan klijent nije na starom programu, novi
-> korisnici kreću sa novom šemom. Zato se stari model **briše**, ne prevodi.
+> Status: **PR0–PR2 mergovani, PR3 u reviziji; od PR4 nadalje je plan.** Tačno
+> stanje po stavkama: §14 „PR-ovi".
+>
+> Kontekst: **nema migracije i nema legacy podataka** — sezona je prošla,
+> nijedan klijent nije na starom programu, novi korisnici kreću sa novom šemom.
+> Zato se stari model **briše**, ne prevodi.
 >
 > Ovaj fajl je i model (šta dokumenti postaju) i plan (kojim redom). Kad se
 > implementira, model deo prelazi u `docs/DOMEN/DOCUMENT_HEADER_LINES.md`, a ovaj
@@ -413,6 +416,29 @@ Pravilo ide u **writer**, ne u flow sloj — inače ga zaobiđe svaki drugi ulaz
 što je tačno ono što se i desilo. Nizvodni dijalog kad postoji prijemnica ili
 paleta (`CorrectionNeedsDialog`) ostaje nepromenjen.
 
+#### Šta znači da klasa nestane iz keša
+
+Otvoreno pitanje koje rekalkulacija otvara, i koje mora biti rešeno **pre** nego
+što se PR4 napiše:
+
+```
+Zbirna ima:  I = 400,  II = 600
+stornira se POSLEDNJA otpremnica Klase II
+posle:       I = 400,  II = ?
+```
+
+`tblZbirnaStavke` nema `Stornirano`, a writer zabranjuje količinu 0 — dakle
+„II = 0" nije legalno stanje.
+
+**Odluka: rekalkulator briše red keša koji više nema izvor.** Stavke su izvedeni
+keš (§4.3); kad klasa nestane iz izvora, nestaje i iz keša. Line-level storno se
+**ne uvodi** — status i dalje drži header, a `BEZ_STORNA` registar ostaje tačan.
+Brisanje ide u istoj transakciji kao i rekalkulacija ostalih klasa.
+
+Alternativa (ostaviti red sa nulom) bila bi gora na dva načina: pravila bi
+razliku između „nije bilo Klase II" i „bila pa nestala" tamo gde je izvor već
+nosi, i probila bi sopstveno pravilo da količina mora biti veća od nule.
+
 ---
 
 ## 8) Zbirna invarijanta
@@ -617,6 +643,20 @@ negativni, u CI-ju.
 neizmereni; baseline je bio zamrznut prema slepom skeneru, pa je zamrzao
 nepotpunu stvarnost. Ništa nije uklonjeno.
 
+**Treća rupa istog roda, nađena u reviziji PR3:** skener je čitao **red po red**,
+pa mu je prelomljen poziv bio nevidljiv:
+
+```vba
+n = AppendRow( _
+        TBL_ZBIRNA, rowData)
+```
+
+Takav oblik danas u `src-vba/` ne postoji, ali kapija ne sme da zavisi od toga
+gde je neko prelomio red. Sada se VBA nastavci (` _`) spajaju pre regexa —
+pažljivo, jer bi naivna verzija otvorila **novu** rupu: komentar koji se završava
+sa ` _` progutao bi sledeću liniju i sakrio pravi `AppendRow` ispod sebe. I to
+ima svoj slučaj u `--self-test`.
+
 > Pouka koja važi i za ostatak refaktora: kapija koja nikad nije pokazana crvena
 > ne dokazuje da išta meri — a kapija koja stoji na jednom regexu meri tačno
 > onoliko oblika koliko je taj regex video kad je pisan.
@@ -651,7 +691,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
-| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, stavke, outGreska)`, opaque `ZbirnaID`. **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je videla samo naredbeni oblik `AppendRow`, pa je 22 poziva bilo nevidljivo (v. §13a) | 2 |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` i `ZbirnaStavkaID` oba fail-closed. **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
 | 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, **rekalkulacija zbirne pri stornu otpremnice (§7.1)**, print, izveštaji, testovi. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje golden D1. | 3 · **§7.1 odlučen** |
 | 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
 | 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |

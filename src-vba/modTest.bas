@@ -554,6 +554,9 @@ Private Sub ResetSeamova()
     ' Podmetnut ishod uvoza mora da se ugasi i kad tvrdnja padne pre kraja testa
     ' -- inace bi sledeci test merio lazni uvoz.
     modScrBankaUvoz.Scr_BuTestReset
+    ' Podmetnut pad generatora ID-a: zaostao seam bi svakom sledecem upisu dao
+    ' prazan ID.
+    modDataAccess.NewEntityIDPadniTest False
     Err.Clear
 End Sub
 
