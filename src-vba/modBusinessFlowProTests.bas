@@ -164,8 +164,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_IstaOtpremnicaDvaputNeProlazi
     Test_PR3_VecVezanaOtpremnicaSeNePreuzima
     Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen
-    Test_PR3_DriftPokazivacaStajeGlasno
     Test_PR3_DvaAktivnaClanstvaSuGreska
+    Test_PR3_DupliIstiZapisClanstvaJeGreska
     Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
     Test_PR3_RazlicitaVrstaNeProlazi
     Test_PR3_RazlicitVozacNeProlazi
@@ -5961,15 +5961,15 @@ End Sub
 Private Sub Test_PR3_OtpremnicaImaZbirnaID()
     On Error GoTo EH
 
-    Dim idx As Long
-    idx = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID)
-    AssertTrue idx > 0, "PR3: tblOtpremnica ima kolonu ZbirnaID"
+    ' Clanstvo je jedina veza -- otpremnica NEMA kolonu koja pokazuje na zbirnu.
+    ' Kanon je izvor: kolona je izbacena iz schema.json, pa nova sveska je nema.
+    ' Zatecena razvojna sveska moze imati mrtvu kolonu iza kanonskog prefiksa;
+    ' to je bezopasno i nestaje pri sledecoj izgradnji fixture-a.
+    AssertEquals "0", CStr(Pr3KanonskaPozicija(TBL_OTPREMNICA, "ZbirnaID")), _
+                 "PR3: ZbirnaID nije u kanonu tblOtpremnica"
 
-    Dim lo As ListObject
-    Set lo = modDataAccess.GetTable(TBL_OTPREMNICA)
-    AssertTrue Not lo Is Nothing, "PR3: tblOtpremnica postoji"
-    AssertEquals CStr(lo.ListColumns.count), CStr(idx), _
-                 "PR3: ZbirnaID je POSLEDNJA kolona (nove idu na kraj)"
+    AssertTrue GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID) > 0, _
+               "PR3: clanstvo nosi OtpremnicaID"
 
     ' Stavke nemaju svoj Stornirano: line-level storno u domenu ne postoji,
     ' status drzi header. Kolona koje nema ne moze da se filtrira, pa je tabela
@@ -6263,13 +6263,13 @@ EH:
     LogFatal "Test_PR3_HeaderJeEksplicitnoIzdat", Err.Number, Err.description
 End Sub
 
-' Odluku o clanstvu donosi KANON, ne kes.
+' Clanstvo je JEDINI zapis veze -- i to je i cela poenta.
 '
-' Postojeci test "vec vezana otpremnica" ovo NE hvata: prva zbirna postavi i
-' clanstvo i pokazivac, pa druga pada vec na pokazivacu -- kanon se nikad ne
-' pita. Ovde se pokazivac namerno isprazni, a zapis clanstva ostavi netaknut:
-' ako writer veruje kesu, ista otpremnica ulazi u DVE aktivne zbirne dok
-' kanonski zapis o prvoj i dalje postoji.
+' Ranija verzija je uz clanstvo drzala i kolonu Otpremnica.ZbirnaID, pa je ovaj
+' test morao da je isprazni da bi dokazao da odluku donosi kanon. Kolone vise
+' nema: nema sta da odluta, nema drifta, nema druge provere. Ostaje tvrdnja da
+' druga zbirna ne moze da preuzme vec vezanu otpremnicu -- i da odgovor na
+' "gde je sada" dolazi iz clanstva.
 Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
     On Error GoTo EH
 
@@ -6284,10 +6284,9 @@ Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
                            Pr3Izvor(otp, ""))
     AssertTrue Len(prva) > 0, "PR3 kanon: prva zbirna napravljena"
 
-    ' Kes se gubi, kanon ostaje.
-    Pr3ObrisiPokazivac otp
-    AssertEquals "", Pr3OtpZbirnaID(otp), "PR3 kanon: pokazivac je ispraznjen"
-    AssertEquals prva, Pr3ZbirnaIzClanstva(otp), "PR3 kanon: clanstvo je netaknuto"
+    AssertEquals prva, Pr3ZbirnaIzClanstva(otp), "PR3 kanon: clanstvo je zapisano"
+    AssertEquals prva, Pr3OtpZbirnaID(otp), _
+                 "PR3 kanon: citac racuna istu zbirnu iz clanstva"
 
     Dim preH As Long
     preH = Pr3BrojRedova(TBL_ZBIRNA)
@@ -6308,39 +6307,52 @@ EH:
     LogFatal "Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen", Err.Number, Err.description
 End Sub
 
-' Obrnut smer: pokazivac tvrdi vezu za koju kanon ne zna.
+' Dva zapisa clanstva za istu otpremnicu -- cak i kad pokazuju na ISTU zbirnu.
 '
-' Ne bira se "verniji" izvor -- staje se glasno. Tiho biranje je nacin da se
-' nesaglasnost naseli i posle vise ne moze da se rekonstruise ko je bio u pravu.
-Private Sub Test_PR3_DriftPokazivacaStajeGlasno()
+' Pravilo je "tacno 0 ili 1 aktivan zapis", bez izuzetka. Dupli red iste veze ne
+' menja kojoj zbirnoj otpremnica pripada, ali bi ga obican join sabrao DVAPUT --
+' pa bi zbirna dobila dvostruku kolicinu iz jedne otpremnice.
+Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
     On Error GoTo EH
 
     Dim scenario As String
-    scenario = NewScenarioCode("PR3DR")
+    scenario = NewScenarioCode("PR3DI")
 
     Dim otp As String
-    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DR-" & scenario, KLASA_I, 400#, 20)
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DI-" & scenario, KLASA_I, 400#, 20)
 
-    ' Pokazivac na zbirnu koja ne postoji ni u jednom zapisu clanstva.
-    Pr3PostaviPokazivac otp, "ZBR-DRIFT-" & scenario
+    Dim zbr As String
+    zbr = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3DI-" & scenario), _
+                          Pr3Izvor(otp, ""))
+    AssertTrue Len(zbr) > 0, "PR3 dupli par: zbirna napravljena"
 
-    Dim preH As Long
-    preH = Pr3BrojRedova(TBL_ZBIRNA)
+    ' Isti par (ZbirnaID, OtpremnicaID) jos jednom.
+    Pr3DodajClanstvo zbr, otp
+    AssertEquals "2", CStr(Pr3BrojClanstavaZa(otp)), _
+                 "PR3 dupli par: dva zapisa iste veze"
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3DR-" & scenario), _
-                          Pr3Izvor(otp, ""), razlog)
+    rez = CreateZbirna_TX( _
+        Pr3Header(TEST_PREFIX & "-ZBR-PR3DIX-" & scenario), _
+        Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DIX-" & scenario, _
+                               KLASA_I, 100#, 5), ""), razlog)
 
-    AssertEquals "", rez, "PR3 drift: upis odbijen"
-    AssertTrue InStr(1, razlog, "cache drift", vbTextCompare) > 0, _
-               "PR3 drift: kapija imenuje neslaganje (bilo: " & razlog & ")"
-    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
-                 "PR3 drift: header nije ostao"
+    ' Ciscenje PRE tvrdnji -- korumpiran kanon obara svaki sledeci test.
+    Pr3UkloniClanstvo zbr, otp
+    AssertEquals "1", CStr(Pr3BrojClanstavaZa(otp)), _
+                 "PR3 dupli par: kanon vracen u konzistentno stanje"
+
+    AssertEquals "", rez, "PR3 dupli par: upis odbijen"
+    AssertTrue InStr(1, razlog, "dva aktivna zapisa", vbTextCompare) > 0, _
+               "PR3 dupli par: kapija imenuje dupli zapis (bilo: " & razlog & ")"
 
     Exit Sub
 
 EH:
-    LogFatal "Test_PR3_DriftPokazivacaStajeGlasno", Err.Number, Err.description
+    On Error Resume Next
+    Pr3UkloniClanstvo zbr, otp
+    On Error GoTo 0
+    LogFatal "Test_PR3_DupliIstiZapisClanstvaJeGreska", Err.Number, Err.description
 End Sub
 
 ' Ista otpremnica u DVE aktivne zbirne je korupcija kanona, ne rubni slucaj.
@@ -6468,9 +6480,13 @@ Private Sub Pr3PostaviAmbalazu(ByVal otpID As String, ByVal amb As Double)
                       "Pr3PostaviAmbalazu"
 End Sub
 
+' Na kojoj je AKTIVNOJ zbirnoj otpremnica -- kroz PRODUKCIONI citac.
+'
+' Ranije je citalo kolonu Otpremnica.ZbirnaID. Kolone vise nema: clanstvo je
+' jedini zapis, a odgovor se racuna. Test namerno ide kroz javni API, da citac
+' koji zamenjuje kolonu ima pokrice.
 Private Function Pr3OtpZbirnaID(ByVal otpID As String) As String
-    Pr3OtpZbirnaID = Trim$(CStr(nz(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, _
-                                                 otpID, COL_OTP_ZBIRNA_ID), "")))
+    Pr3OtpZbirnaID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
 End Function
 
 ' Prefiks + tacno 32 hex znaka. NE proverava "nije broj": 32 hex znaka smeju
@@ -6583,18 +6599,6 @@ Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String,
                                            kol, 50#, TEST_TIP_AMB, amb, klasa)
 End Function
 
-Private Sub Pr3PostaviPokazivac(ByVal otpID As String, ByVal vrednost As String)
-    Dim redovi As Collection
-    Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
-    If redovi Is Nothing Then Exit Sub
-    If redovi.count <> 1 Then Exit Sub
-    RequireUpdateCell TBL_OTPREMNICA, CLng(redovi(1)), COL_OTP_ZBIRNA_ID, _
-                      vrednost, "Pr3PostaviPokazivac"
-End Sub
-
-Private Sub Pr3ObrisiPokazivac(ByVal otpID As String)
-    Pr3PostaviPokazivac otpID, ""
-End Sub
 
 ' Rucno ubaci zapis clanstva -- SAMO za test korupcije kanona. Produkcioni put
 ' je iskljucivo CreateZbirna_TX.
@@ -6640,6 +6644,22 @@ Private Sub Pr3UkloniClanstvo(ByVal zbirnaID As String, ByVal otpremnicaID As St
         End If
     Next i
 End Sub
+
+' Pozicija kolone u KANONU (modSchema), ne u zatecenoj svesci. Nula = nema je.
+Private Function Pr3KanonskaPozicija(ByVal tblName As String, _
+                                     ByVal colName As String) As Long
+    Dim kolone As Collection
+    Set kolone = modSchema.SchemaTableColumns(tblName)
+    If kolone Is Nothing Then Exit Function
+
+    Dim i As Long
+    For i = 1 To kolone.count
+        If StrComp(CStr(kolone(i)), colName, vbTextCompare) = 0 Then
+            Pr3KanonskaPozicija = i
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Function Pr3BrojClanstavaZa(ByVal otpID As String) As Long
     Dim redovi As Collection

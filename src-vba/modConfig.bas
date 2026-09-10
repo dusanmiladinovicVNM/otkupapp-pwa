@@ -209,14 +209,6 @@ Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTP_KLASA As String = "Klasa"
 Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
-' POKAZIVAC na trenutno aktivnu zbirnu -- NE kanonska veza (A15).
-'
-' Kanonski sastav je tblZbirnaIzvori; ovo je imenovan kes u smislu A5, drzan
-' zbog jeftine provere i citanja. Writer odluku donosi po KANONU, a neslaganje
-' izmedju kesa i kanona prijavljuje kao drift.
-'
-' BrojZbirne ostaje kao LABELA dok Zbirna cutover ne prebaci citaoce.
-Public Const COL_OTP_ZBIRNA_ID As String = "ZbirnaID"
 
 Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
 

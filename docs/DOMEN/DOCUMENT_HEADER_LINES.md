@@ -82,8 +82,8 @@ današnjem formatu (`12/090926`) i ostaju **labele** (A2).
 | Veza | Kardinalitet | Izvor | Nosilac FK |
 |---|---|---|---|
 | Otkup → OtkupStavke | 1:N | model | `OtkupStavka.OtkupID` |
-| Otkup → Otpremnica | **N:1, promenljiva** | `docs/DOMEN/README.md` §1 („više blokova → jedna otpremnica"); `ReassignOtkupToOtpremnica_TX` (`modDokumenta.bas:4266`) dokazuje da se blok može premestiti | `Otkup.OtpremnicaID` (header) |
-| Otpremnica → Zbirna | **N:1, promenljiva** | jedna `BrojZbirne` kolona danas; `RelinkOtpremniceToZbirna_TX` | `Otpremnica.ZbirnaID` |
+| Otkup → Otpremnica | **N:1, promenljiva** | `docs/DOMEN/README.md` §1 („više blokova → jedna otpremnica"); `ReassignOtkupToOtpremnica_TX` (`modDokumenta.bas:4266`) dokazuje da se blok može premestiti | **`tblOtpremnicaIzvori`** |
+| Otpremnica → Zbirna | **N:1, promenljiva** | jedna `BrojZbirne` kolona danas; `RelinkOtpremniceToZbirna_TX` | **`tblZbirnaIzvori`** |
 | Zbirna → Prijemnica | **1:N** (namera 1:1, ali **nije tvrdo**) | v. §3.1 | `Prijemnica.ZbirnaID` |
 | PrijemnicaStavka → FakturaStavka | **1:1, puna količina** | `CreateFaktura` uzima celu `Kolicina` reda; `IsPrijemnicaAvailableForFaktura` sprečava drugo fakturisanje (`modFaktura.bas:232, 896`) | `FakturaStavka.PrijemnicaStavkaID` |
 | PrijemnicaStavka → PaletaStavka | 1:N | `tblPaletaStavka` već nosi `PrijemnicaID` **i** `Klasa`/`VrstaVoca`/`SortaVoca` → grain je klasa, ne dokument | `PaletaStavka.PrijemnicaStavkaID` |
@@ -150,8 +150,8 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 | `KolAmbIzdata` | H — OM izdao prazne kooperantu |
 | ~~`Novac`, `PrimalacNovca`~~ | **BRIŠU SE** — keš se ne vezuje za otkupni list; v. §4.1b |
 | `Isplaceno`, `DatumIsplate` | H — **izvedeno** iz `tblNovac` vs `SUM(stavke.Kolicina × Cena)`; v. §6.1 |
-| `OtpremnicaID` | → `tblOtpremnica`, nullable |
-| `ZbirnaID` | → `tblZbirna`, nullable, **denormalizovano** (nasleđeno od otpremnice) — nije kanonska membership |
+| ~~`OtpremnicaID`~~ | **ne postoji** — pripadnost zna `tblOtpremnicaIzvori` |
+| ~~`ZbirnaID`~~ | **ne postoji** — pripadnost zna `tblZbirnaIzvori` preko otpremnice |
 | `VremeUnosa`, `Stornirano` | |
 | `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID`, `IzdatoStatus` | |
 | `ClientRecordID` | eksterni identitet (PWA); v. §7 |
@@ -172,8 +172,11 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 ### 4.2 `tblOtpremnica` — **grain: jedna isporuka sa otkupnog mesta**
 
 `OtpremnicaID` (PK `OTP-`), `BrojOtpremnice` (labela, scoped po stanici), `Datum`,
-`StanicaID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`,
-`ZbirnaID` → nullable, `Stornirano`, trace ×4, audit ×4.
+`StanicaID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`, `Cena`
+(ne-finansijski predlog, §13b plana), `Stornirano`, trace ×4, audit ×4.
+
+**Bez `ZbirnaID`.** Pripadnost zbirnoj zna `tblZbirnaIzvori`; „na kojoj je
+aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 
 **`tblOtpremnicaStavke`** — grain: **jedna klasa jedne otpremnice**
 `OtpremnicaStavkaID` (PK `OPS-`), `OtpremnicaID` →, `RedniBroj`, `Klasa`,

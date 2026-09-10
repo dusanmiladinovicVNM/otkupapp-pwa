@@ -453,8 +453,7 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID",
-        "ZbirnaID"
+        "ZbirnaGeneracijaID"
       ]
     },
     {

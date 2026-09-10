@@ -47,7 +47,7 @@ delimična fakturisanost. **Stavka.**
 | Dokument | Kolone stavke | Napomena |
 |---|---|---|
 | Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
-| Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
+| Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze`, `BrutoKg` | **bez `Cena`** — izvedeni dokument, izvori mogu imati različite cene (§13b) |
 | Zbirna | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze` | zbirna **nema** cenu (`modDokUnos.bas:422`) |
 | Prijemnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, `Fakturisano`, `FakturaID` | |
 
@@ -99,10 +99,6 @@ TipAmbalaze
 KolAmbIzdata      dokument-level (OM izdao prazne kooperantu)
 VozacID           FK
 BrojDokumenta     poslovni broj -- LABELA
-Novac             snapshot isplacene gotovine
-PrimalacNovca
-OtpremnicaID      FK, nullable   <- ODLUKA, v. 3.1
-ZbirnaID          FK, nullable   <- zamenjuje BrojZbirne (denorm)
 Isplaceno
 DatumIsplate
 VremeUnosa
@@ -129,15 +125,18 @@ BrutoKg
 ```
 OtpremnicaID  PK "OTP-" | Datum | StanicaID | VozacID | BrojOtpremnice
 VrstaVoca | SortaVoca | TipAmbalaze
-ZbirnaID      FK, nullable   <- NOVO, zamenjuje BrojZbirne
+Cena          predlog za prefill blokova -- NE-FINANSIJSKO polje (S13b)
 Stornirano | trace | audit
 ```
+
+Bez `ZbirnaID`: pripadnost zbirnoj zna **`tblZbirnaIzvori`**, ne kolona na
+otpremnici.
 
 ### `tblOtpremnicaStavke`
 
 ```
 OtpremnicaStavkaID PK "OPS-" | OtpremnicaID FK | RedniBroj
-Klasa | Kolicina | Cena | KolAmbalaze | BrutoKg
+Klasa | Kolicina | KolAmbalaze | BrutoKg
 ```
 
 ### `tblZbirna` (header)
@@ -194,19 +193,19 @@ PrijemnicaID              <- ostaje denormalizovan (read-modeli, poruke)
 
 ```
 tblOtkup ──1:N──> tblOtkupStavke
-   ^                       ^
-   │ OtpremnicaID          │ OtkupID
-   │ (pokazivac)           │
-   │                  tblOtpremnicaIzvori   <── SASTAV verzije otpremnice
-   │                       v
+   ^
+   │ OtkupID
+tblOtpremnicaIzvori          <── SASTAV verzije otpremnice
+   v
 tblOtpremnica ──1:N──> tblOtpremnicaStavke
-   │ ZbirnaID (pokazivac na aktivnu)
-   │                  tblZbirnaIzvori       <── SASTAV verzije zbirne
-   v                       v
+   ^
+   │ OtpremnicaID
+tblZbirnaIzvori              <── SASTAV verzije zbirne
+   v
 tblZbirna ──1:N──> tblZbirnaStavke
 
-KANON za sastav: tabele *Izvori.  Kolone *ID na detetu su POKAZIVACI
-("gde je sada"), imenovan kes u smislu A5.
+Pripadnost drze ISKLJUCIVO tabele *Izvori. Nema pratecih kolona na deci --
+ni Otkup.OtpremnicaID ni Otpremnica.ZbirnaID.
    ^
    │ ZbirnaID
 tblPrijemnica ──1:N──> tblPrijemnicaStavke
@@ -219,28 +218,38 @@ tblNovac.OtkupID        -> header ID
 tblPaletaStavka         -> ZbirnaID (bilo BrojZbirne)
 ```
 
-### 3.1) `Otkup.OtpremnicaID` — header, i to je ODLUKA
+### 3.1) Pripadnost se ne drži kolonom — ni na otkupu ni na otpremnici
 
-Danas se piše po fizičkom (klasnom) redu — `modDokumenta.bas:4266`,
-`modMasterSync.bas:2381` — pa šema **dozvoljava** da dve klase istog bloka odu na
-dve otpremnice. Bez postojećih podataka to se više ne može pročitati iz baze.
+Zatečeno stanje: `Otkup.OtpremnicaID` se piše po fizičkom (klasnom) redu
+(`modDokumenta.bas:4266`, `modMasterSync.bas:2381`), a `Otpremnica.BrojZbirne` je
+labela u ulozi veze.
 
-Odluka: **header**. Otkupni blok je „jedan otkup od jednog kooperanta, na jednom
-otkupnom mestu, jednog dana" (`docs/DOMEN/README.md` §1) i fizički ide na jednu
-otpremnicu. Ako se ikad pojavi potreba za delimičnom alokacijom, uvodi se
-eksplicitna alokaciona tabela — ne rasplinjava se FK na stavku „za svaki slučaj".
+**Odluka: obe kolone nestaju.** Pripadnost živi u tabelama članstva:
 
-Isto važi za `ZbirnaID` na otkupu: header, denormalizovan (nasleđen od
-otpremnice), i **ne** koristi se kao kanonska membership veza.
+```
+tblOtpremnicaIzvori   OtpremnicaID + OtkupID
+tblZbirnaIzvori       ZbirnaID     + OtpremnicaID
+```
 
-> **Ispravka ranije formulacije.** Ovde je stajalo „kanonska membership je uvek
-> `Otpremnica.ZbirnaID`". To više ne važi: kanonski sastav je **`tblZbirnaIzvori`**,
-> a `Otpremnica.ZbirnaID` je **pokazivač** na trenutno aktivnu zbirnu — imenovan
-> keš u smislu A5, sa testom koji dokazuje da se poklapa sa članstvom.
+> **Dvaput ispravljena formulacija, i vredi zapisati zašto.**
 >
-> Razlog je scenario sa sestrama (A15): posle ispravke jedne otpremnice, one
-> koje se nisu menjale pripadaju **i** staroj **i** novoj verziji zbirne. Jedan
-> FK može da pokaže samo jednu — istorija se gubi tiho.
+> Prvo je ovde stajalo „kanonska membership je uvek `Otpremnica.ZbirnaID`" — to
+> je palo na scenariju sa sestrama (A15): posle ispravke jedne otpremnice, one
+> koje se nisu menjale pripadaju **i** staroj **i** novoj verziji zbirne, a jedan
+> FK može da pokaže samo jednu.
+>
+> Zatim je kolona zadržana kao **pokazivač** („gde je sada"), uz test koji
+> dokazuje da se poklapa sa članstvom. I to je palo: pokazivač je jedno jeftinije
+> čitanje po ceni cele nove klase problema — drift između kanona i keša, provera
+> tog drifta, snapshot još jedne tabele, još jedan upis i još dva testa. Bez
+> produkcionih podataka nema nikoga kome se to plaća.
+>
+> Odgovor na „gde je sada" računa se iz članstva
+> (`modDokumenta.AktivnaZbirnaZaOtpremnicu`).
+
+Delimična alokacija — da jedna otkupna stavka delimično završi u više otpremnica
+— i dalje **nije** modelovana; ako se pojavi, ide zasebna tabela sa `Kg`
+(`DOCUMENT_HEADER_LINES.md` §3.2). Članstvo i alokacija nisu isti pojam.
 
 ---
 
@@ -524,8 +533,18 @@ Append-only + storno + reizdavanje ostaje. Identitet postaje ID-based:
 | `ZamenjenSa` (nosi **broj**) | `ZamenjenSaID` |
 | `CorrectionID` | ostaje |
 
-Nova verzija dobija **nov** `DocumentID` i kad poslovni broj ostaje isti. Time
+Nova verzija dobija **nov `DocumentID` i nov poslovni broj** (A9). Time
 `GeneracijaID` gubi i poslednji posao — razlikovanje originala od ispravke.
+
+> Ranija formulacija je glasila „nov `DocumentID` **i kad poslovni broj ostaje
+> isti**", što je ostavljalo prostor da dve verzije dele broj. Za lanac
+> `Otkup → Otpremnica → Zbirna` to nije opcija: broj je labela koju operater vidi
+> na papiru, pa dva papira sa istim brojem i različitim sadržajem nisu razlučiva
+> izvan sistema.
+
+Kolone se u cutover-u **stvarno preimenuju** (`IspravkaOd` → `IspravkaOdID`), ne
+pretumače: kolona koja se zove `IspravkaOd` a nosi ID je tačno vrsta
+dvosmislenosti koju refaktor uklanja.
 
 ---
 

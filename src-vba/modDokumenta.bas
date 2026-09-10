@@ -1189,17 +1189,18 @@ End Function
 ' otpremnica, koje moraju biti saglasne. Dokument ima jednu vrstu, jednu sortu i
 ' jedan tip ambalaze (REFAKTOR_DOKUMENT_HEADER_STAVKE.md S2).
 '
-' CLANSTVO SE UPISUJE U ISTOJ TRANSAKCIJI.
+' CLANSTVO JE JEDINA VEZA, I UPISUJE SE U ISTOJ TRANSAKCIJI.
 '
-' Kanonski sastav je tblZbirnaIzvori -- "od kojih je otpremnica ova VERZIJA
-' sastavljena" (A15). Otpremnica.ZbirnaID je samo POKAZIVAC na trenutno aktivnu
-' zbirnu, imenovan kes u smislu A5. Jedan FK ne moze da nosi istoriju: posle
-' ispravke jedne otpremnice sestre koje se nisu menjale pripadaju i staroj i
-' novoj verziji.
+' tblZbirnaIzvori je JEDINI zapis clanstva -- "od kojih je otpremnica ova VERZIJA
+' sastavljena" (A15). Nema pratioca -- ni jedne kolone na otpremnici.
 '
-' Oboje ide kroz JEDAN snapshot -- ili sve, ili nista. Da writer ne upisuje
-' clanstvo, cutover bi morao "commit; pa povezi", a pad drugog koraka ostavlja
-' zbirnu bez izvora.
+' Ranija verzija je uz clanstvo drzala i Otpremnica.ZbirnaID kao kes. To je bilo
+' jedno jeftinije citanje po ceni cele nove klase problema: drift izmedju kanona
+' i kesa, provera tog drifta, snapshot jos jedne tabele, jos jedan upis i jos
+' dva testa. Bez produkcionih podataka nema nikoga kome to placamo.
+'
+' Pitanje "na kojoj je aktivnoj zbirnoj otpremnica sada" racuna se iz clanstva --
+' AktivnaZbirnaZaOtpremnicu.
 '
 ' ZbirnaID je OPAQUE (NewEntityID), ne GetNextID: broj vise nije identitet, pa
 ' ni ID ne sme da bude brojac po kome se pogadja "sledeci".
@@ -1254,6 +1255,7 @@ Public Function CreateZbirna_TX(ByVal h As Object, _
     ' pogresnom rasporedu tiho salje vrednosti u pogresna polja. Ide PRE BeginTx:
     ' kapija sme da digne gresku, a nema smisla otvarati transakciju koja se
     ' odmah rollback-uje.
+    ' tblOtpremnica se CITA, ne menja -- zato nije u snapshotu.
     modSchema.SchemaReadyOrFail "CreateZbirna_TX", _
         TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
         "|" & TBL_OTPREMNICA
@@ -1262,7 +1264,6 @@ Public Function CreateZbirna_TX(ByVal h As Object, _
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
-    tx.AddTableSnapshot TBL_OTPREMNICA
 
     CreateZbirna_TX = CreateZbirna(h, izvorOtpremnice, ocekivano)
 
@@ -1360,7 +1361,6 @@ Private Function CreateZbirna(ByVal h As Object, _
     RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, SRC
 
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID, SRC
 
     HdrProveriKljuceve h, SRC
 
@@ -1383,8 +1383,7 @@ Private Function CreateZbirna(ByVal h As Object, _
 
     Dim cID As Long, cKlasa As Long, cKol As Long, cAmb As Long
     Dim cVrsta As Long, cSorta As Long, cTip As Long
-    Dim cStorno As Long, cZbrID As Long, cZbrBroj As Long
-    Dim cVozac As Long
+    Dim cStorno As Long, cVozac As Long
 
     cID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
@@ -1395,8 +1394,6 @@ Private Function CreateZbirna(ByVal h As Object, _
     cTip = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
     cVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
     cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
-    cZbrID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID, SRC)
-    cZbrBroj = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
 
     ' Kanonsko clanstvo se cita JEDNOM, pre petlje.
     Dim clanstvo As Object
@@ -1440,43 +1437,15 @@ Private Function CreateZbirna(ByVal h As Object, _
                       "Otpremnica je stornirana: " & otpID
         End If
 
-        ' Fail-closed na vec vezanu otpremnicu -- ali PO KANONU.
+        ' Fail-closed na vec vezanu otpremnicu. Jedini izvor je clanstvo.
         '
-        ' Odluku donosi tblZbirnaIzvori, ne Otpremnica.ZbirnaID. Pokazivac je
-        ' kes (A15) i sme da odluta; da mu writer veruje, izgubljen kes bi
-        ' otvorio put da ista otpremnica ude u DVE aktivne zbirne, a kanonski
-        ' zapis o prvoj i dalje postoji.
-        '
-        ' Kad se dva izvora ne slazu, ne bira se nijedan: to je drift i staje se
-        ' glasno. Tiho biranje "vernijeg" je nacin da se nesaglasnost naseli.
-        Dim kanonZbr As String
-        Dim pokazivac As String
-
-        kanonZbr = ""
-        If clanstvo.Exists(UCase$(otpID)) Then kanonZbr = CStr(clanstvo(UCase$(otpID)))
-        pokazivac = Trim$(NzToText(data(r, cZbrID)))
-
-        If Len(kanonZbr) > 0 Then
+        ' BrojZbirne se NE gleda: on nikad nije bio veza nego labela, a stari
+        ' writer koji ga puni nema sta da stiti -- nema produkcionih podataka.
+        ' Nov kanonski writer ne sme da poznaje stari model odnosa.
+        If clanstvo.Exists(UCase$(otpID)) Then
             Err.Raise vbObjectError + 1228, SRC, _
                       "Otpremnica je vec u sastavu aktivne zbirne: " & otpID & _
-                      " -> " & kanonZbr
-        End If
-
-        If Len(pokazivac) > 0 Then
-            Err.Raise vbObjectError + 1259, SRC, _
-                      "Neslaganje clanstva (cache drift): pokazivac kaze " & _
-                      pokazivac & ", a tblZbirnaIzvori ne zna za tu vezu. " & _
-                      "Otpremnica=" & otpID
-        End If
-
-        ' Prelazni period: dokumenti koje je napravio STARI put nose broj-vezu i
-        ' nemaju nijedan zapis clanstva. Ne smeju se tiho preuzeti. Ova polovina
-        ' provere odlazi zajedno sa broj-vezom, u Zbirna cutover-u.
-        If cZbrBroj > 0 Then
-            If Len(Trim$(NzToText(data(r, cZbrBroj)))) > 0 Then
-                Err.Raise vbObjectError + 1229, SRC, _
-                          "Otpremnica je vec na zbirnoj (broj): " & otpID
-            End If
+                      " -> " & CStr(clanstvo(UCase$(otpID)))
         End If
 
         ' Zbirna je JEDAN transport JEDNOG vozaca. Otpremnica drugog vozaca u
@@ -1591,16 +1560,9 @@ Private Function CreateZbirna(ByVal h As Object, _
 
     ' --- clanstvo, u ISTOJ transakciji kao header i stavke -------------------
     '
-    ' Dva zapisa, i NISU isti pojam:
-    '
-    '   tblZbirnaIzvori        od kojih je otpremnica ova VERZIJA sastavljena.
-    '                          Nepromenljivo. Posle ispravke jedne otpremnice
-    '                          nastaje nova verzija zbirne, a sestre koje se nisu
-    '                          menjale pripadaju i staroj i novoj -- jedan FK to
-    '                          ne moze da pokaze.
-    '   Otpremnica.ZbirnaID    na kojoj je AKTIVNOJ zbirnoj otpremnica sada.
-    '                          Izvedeno iz gornjeg (A5: imenovan kes), drzi se
-    '                          zbog jeftine provere "vec vezana" i citalaca.
+    ' Od kojih je otpremnica ova VERZIJA sastavljena. Posle ispravke jedne
+    ' otpremnice nastaje nova verzija zbirne, a sestre koje se nisu menjale
+    ' pripadaju i staroj i novoj -- jedan FK to ne bi mogao da pokaze.
     Dim kljuc As Variant
     Dim izvorID As String
 
@@ -1618,9 +1580,6 @@ Private Function CreateZbirna(ByVal h As Object, _
             Err.Raise vbObjectError + 1257, SRC, _
                       "AppendRow nije upisao clanstvo otpremnice."
         End If
-
-        RequireUpdateCell TBL_OTPREMNICA, CLng(redPoID(kljuc)), _
-                          COL_OTP_ZBIRNA_ID, zbirnaID, SRC
     Next kljuc
 
     CreateZbirna = zbirnaID
@@ -1851,19 +1810,36 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     BuildZbirnaHeaderRowData = rowData
 End Function
 
+' Na kojoj je AKTIVNOJ zbirnoj otpremnica sada. "" = ni na jednoj.
+'
+' Ovo je zamena za obrisanu kolonu Otpremnica.ZbirnaID: isto pitanje, ali
+' racunato iz jedinog zapisa clanstva umesto cuvano na drugom mestu.
+Public Function AktivnaZbirnaZaOtpremnicu(ByVal otpremnicaID As String) As String
+    Const SRC As String = "AktivnaZbirnaZaOtpremnicu"
+
+    Dim mapa As Object
+    Set mapa = AktivnoClanstvoPoKanonu(SRC)
+
+    Dim kljuc As String
+    kljuc = UCase$(Trim$(otpremnicaID))
+    If mapa.Exists(kljuc) Then AktivnaZbirnaZaOtpremnicu = CStr(mapa(kljuc))
+End Function
+
 ' Kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za AKTIVNE zbirne.
 '
 ' Posle A13 ista otpremnica sme da ima VISE zapisa clanstva -- po jedan za svaku
 ' verziju zbirne kroz koju je prosla. Zauzeta je samo ako je clan zbirne koja
 ' NIJE stornirana; clanstvo u superseded verziji je istorija, ne prepreka.
 '
-' DVA AKTIVNA CLANSTVA SU TVRDA GRESKA, NE "POSLEDNJI POBEDJUJE".
+' DVA AKTIVNA ZAPISA ZA ISTU OTPREMNICU SU TVRDA GRESKA.
+'
+' Pravilo je prosto: jedna otpremnica ima TACNO 0 ili 1 aktivan zapis clanstva.
+' Drugi zapis je greska bez obzira da li pokazuje na DRUGU ili na ISTU zbirnu --
+' dupli red iste veze bi kasnije obican join sabrao dvaput.
 '
 ' Prva verzija je radila prosto mapa(otpID) = zbrID, pa bi drugi red tiho
-' pregazio prvi. Writer bi i tada odbio novu upotrebu te otpremnice -- ali bi
-' precutao mnogo vazniju cinjenicu: da otpremnica VEC pripada dvema aktivnim
-' zbirnama. To je bas kardinalitet koji A15 cuva, pa loader koji ga normalizuje
-' u legalno stanje radi protiv sebe.
+' pregazio prvi. Druga je hvatala samo razlicit ZbirnaID. Loader koji nelegalno
+' stanje normalizuje u legalno radi protiv kardinaliteta koji A15 cuva.
 Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Dim mapa As Object
     Set mapa = CreateObject("Scripting.Dictionary")
@@ -1905,15 +1881,12 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
         If Len(zbrID) > 0 And Len(otpID) > 0 Then
             If Not stornirane.Exists(UCase$(zbrID)) Then
                 If mapa.Exists(otpID) Then
-                    If StrComp(CStr(mapa(otpID)), zbrID, vbTextCompare) <> 0 Then
-                        Err.Raise vbObjectError + 1260, src, _
-                                  "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
-                                  otpID & " pripada aktivnim zbirnama " & _
-                                  CStr(mapa(otpID)) & " i " & zbrID & "."
-                    End If
-                Else
-                    mapa.Add otpID, zbrID
+                    Err.Raise vbObjectError + 1260, src, _
+                              "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
+                              otpID & " ima dva aktivna zapisa clanstva (" & _
+                              CStr(mapa(otpID)) & " i " & zbrID & ")."
                 End If
+                mapa.Add otpID, zbrID
             End If
         End If
     Next i

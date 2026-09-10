@@ -315,19 +315,17 @@ Ne pravi se verzija za svaku klik-izmenu drafta; verzionisanje počinje kad
 dokument postane izdat. Zato te tabele nemaju `Stornirano` (storno verzije ne
 briše njen sastav) i stoje u `modSchemaGuard.BEZ_STORNA` sa tim obrazloženjem.
 
-**Odluka o `Otpremnica.ZbirnaID`:** ostaje, ali **degradiran na pokazivač** —
-„na kojoj je *aktivnoj* zbirnoj ova otpremnica sada". Kanonski sastav je
-`tblZbirnaIzvori`. Pokazivač je time **imenovan keš u smislu A5** i nosi test
-koji dokazuje da se poklapa sa članstvom. Drži se jer čini proveru „već vezana"
-i čitanje u UI-ju jednim čitanjem umesto spajanja.
+**Odluka o `Otpremnica.ZbirnaID`: obrisan.** Tabela članstva je **jedina**
+persistentna veza. „Na kojoj je *aktivnoj* zbirnoj ova otpremnica sada" računa se
+iz nje (`modDokumenta.AktivnaZbirnaZaOtpremnicu`).
 
-> **Pokazivac je oznacen kao PRELAZAN.** On je jedini invariant koji se mora
-> odrzavati pri svakoj korekciji, a Excel nema milione redova — „na kojoj je
-> aktivnoj zbirnoj otpremnica sada" moze se racunati u memoriji iz tabele
-> clanstva. Zadrzan je zbog cene citanja, ali se **preispituje** kad propagacija
-> ispravke bude napisana (Otpremnica i Zbirna cutover). Ako se ispostavi da ga
-> odrzavanje kosta vise
-> nego sto stedi, brise se i ostaje samo `tblZbirnaIzvori`.
+> Kolona je jedan krug postojala kao „prelazni keš". Cena tog jednog jeftinijeg
+> čitanja bila je cela nova klasa problema: drift između kanona i keša, provera
+> tog drifta, snapshot još jedne tabele u writeru, još jedan upis i još dva
+> testa. Bez produkcionih podataka nema nikoga kome se to plaća, pa je uklonjena
+> pre nego što je iko počeo da je čita.
+>
+> Isto pravilo važi za `Otkup.OtpremnicaID` kad dobije `tblOtpremnicaIzvori`.
 
 Za svaki dokument mora se moći odgovoriti — **bez gledanja trenutnog stanja
 sistema**:
