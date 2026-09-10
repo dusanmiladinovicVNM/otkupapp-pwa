@@ -6,7 +6,9 @@
 > najmanji potreban delta.
 
 **Default stav:** `reuse > new` · `extend > duplicate` · `verify > conclude` ·
-`inspect before propose` · `minimal change over idealized redesign`.
+`inspect before propose` · `minimal change over idealized redesign` — uz
+`model > kompenzacija`: „minimalno“ se meri preko **svih** zakrpa koje isti
+nedostatak modela traži, ne preko jedne (`.claude/rules/model-pre-zakrpe.md`).
 
 **Ljuska korisnika je Git Bash, i samo Git Bash.** Svaka komanda koja mu se da
 ide u **bash obliku sa `/`** — nikad PowerShell oblik, nikad `\` u putanji.
@@ -80,6 +82,7 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 | VBA izvor (ASCII, deklaracije, duplikati) | ceo `src-vba/` | `.claude/rules/vba-izvor.md` |
 | Testovi i verifikacija | `mod*Tests`, `tools/vba_check.py`, `tools/run_vba.py` | `.claude/rules/testovi.md` |
 | Git, PR, release | `tools/release.sh`, `docs/RELEASE_*` | `.claude/rules/git-i-release.md` |
+| Kompenzacija: zakrpa umesto ispravke modela | `docs/DOMEN/KOMPENZACIJE.md` | `.claude/rules/model-pre-zakrpe.md` |
 | Kapija pre veće izmene (nova tabela/kolona, nov writer, identitet, storno, schema, SEF/banka) | — | skill `pre-flight` |
 
 Fajlovi u `.claude/rules/` imaju `paths:` frontmatter (koja putanja ih aktivira).
