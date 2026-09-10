@@ -60,6 +60,12 @@ Ako se vrednost može izvesti iz stavki, ona je **izvedena** ili **eksplicitno
 označen keš**. Nikad dva ravnopravna izvora. Keš se imenuje kao keš u nazivu
 kolone ili komentaru, i ima test koji dokazuje da se poklapa sa izvorom.
 
+> **Granica: „izvedeno" prestaje da važi kad dokument bude izdat.** Sadržaj
+> izdatog dokumenta je istorijska činjenica, ne keš — v. **A13**. A5 govori o
+> tome da se ista vrednost ne drži dvaput; A13 o tome da se izdata vrednost ne
+> prepisuje. Nisu u sukobu: dok je dokument otvoren, stavke se izvode; kad se
+> izda, one **postaju** sadržaj te verzije.
+
 *Provera:* invarijantni testovi po dokumentu (`DOCUMENT_HEADER_LINES.md` §6).
 
 ## A6 — identitet zaliha je `LagerJedinicaID`
@@ -83,10 +89,31 @@ registri `STORNO_TABELE` / `BEZ_STORNA`.
 
 ## A9 — ispravka je nov ID
 
-Nova verzija dokumenta dobija **nov** `DocumentID` i kad poslovni broj ostaje isti.
-Veza je `IspravkaOdID` / `ZamenjenSaID`, po ID-u — nikad po broju.
+Nova verzija dokumenta dobija **nov** `DocumentID`. Veza je `IspravkaOdID` /
+`ZamenjenSaID`, po ID-u — nikad po broju.
 
-*Provera:* acceptance test `IspravkaID`.
+**Za lanac `Otkup → Otpremnica → Zbirna` menja se i poslovni broj.** Zaključano
+da se reused-number logika ne bi vratila na mala vrata:
+
+```
+correction OTK / OTP / ZBR
+   -> nov DocumentID
+   -> nov BrojDokumenta
+   -> IspravkaOdID   (na prethodnu verziju)
+   -> ZamenjenSaID   (na prethodnoj verziji)
+   -> isti CorrectionID kroz ceo propagirani lanac
+```
+
+Ranija formulacija je govorila „nov ID **i kad poslovni broj ostaje isti**", što
+je ostavljalo prostor da dve verzije istog dokumenta dele broj. Za lanac to više
+nije opcija: broj je labela koju operater vidi na papiru, pa dva papira sa istim
+brojem i različitim sadržajem nisu razlučiva izvan sistema.
+
+Van lanca (npr. matični podaci) pravilo o broju se ne primenjuje — tamo broja i
+nema.
+
+*Provera:* acceptance test `IspravkaID`; scenariji H1/H2 (`GOLDEN_SCENARIJI.md`
+§12) tvrde i nov broj, ne samo nov ID.
 
 ## A10 — sync ima nepromenljiv eksterni ID
 
@@ -116,6 +143,21 @@ ume da vrati ovu tabelu", ne „ja sam pišem". Ciljna arhitektura ima koordinat
 koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
+
+**Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
+zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
+(`AppendRow TBL_ZBIRNA, rowData`). Do PR3 je regex tražio razmak posle imena, pa
+je **22 poziva bilo nevidljivo** — među njima produkcioni upisi nad `tblZbirna`,
+`tblOtkup`, `tblPrijemnica`, `tblOtpremnica`, `tblNovac` i `tblFakturaStavke`, a
+sedam tabela (`tblCenovnik`, `tblKooperanti`, `tblMagacin`, `tblPartnerMap`,
+`tblSEFEventLog`, `tblStornoZurnal`, `tblVozaci`) uopšte nije bilo u registru.
+Kapija je sve to vreme bila **zelena**.
+
+To je isti kvar kao raniji `RequireUpdateCell` (nema granice reči pre
+`UpdateCell`) — dva puta ista bolest, oba puta nevidljiva. Zato oblik poziva sada
+ima **sopstvene slučajeve**: `who_writes.py --self-test`, pozitivne i negativne,
+u CI-ju. Kapija koja vidi samo jedan način pisanja poziva ne meri vlasništvo nego
+stil.
 
 **Kapija proverava isključivo `row_owner`.** `schema_owner` je zaseban pojam
 (ko sme da napravi tabelu ili kolonu) i **ne učestvuje** u proveri mutacije reda
@@ -153,6 +195,146 @@ domen.
 ownership listi domen-tabela.
 
 ---
+
+---
+
+## A13 — izvedeni dokument nije mutable keš
+
+Lanac nema svuda isti semantički status:
+
+```
+OTKUP  ->  OTPREMNICA  ->  ZBIRNA  ->  PRIJEMNICA
+izvor      izvedeno        izvedeno     NOVA cinjenica
+```
+
+**Otkup je primarna činjenica** — količine nastaju neposrednim unosom.
+**Otpremnica i Zbirna su izvedeni poslovni dokumenti:** `Otpremnica = zbir svojih
+Otkupa`, `Zbirna = zbir svojih Otpremnica`.
+
+Ali izvedeno **nije** isto što i keš:
+
+> Kad je dokument jednom **izdat**, njegov sadržaj postaje istorijska poslovna
+> činjenica. Ne sme se tiho prepisati zato što se izvor kasnije promenio.
+
+Ispravka izvora zato ne menja postojeći dokument, nego **pravi novu verziju**:
+
+```
+OTK 120  STORNIRAN          OTK 121  IspravkaOdID = OTK120
+OTP 44   ZAMENJENA          OTP 45   IspravkaOdID = OTP44
+ZBR 18   ZAMENJENA          ZBR 19   IspravkaOdID = ZBR18
+```
+
+Sva tri nova dokumenta nose **isti `CorrectionID`** — nastala su iz jedne
+poslovne korekcije. Stare verzije ostaju zauvek čitljive.
+
+Invarijanta u jednoj rečenici:
+
+> **Napravi novu verziju dokumenta iz novih aktivnih izvora — ne prepisuj
+> istorijski dokument.**
+
+**Propagacija staje pred prvom nezavisnom činjenicom.** Prijemnica je količina
+koja je **stvarno primljena** kod kupca; ona se ne menja zato što se promenila
+Zbirna. Razlika (`Zbirna 980` vs `Prijemnica 975`) je kalo, gubitak ili drugi
+stvaran događaj i **mora ostati vidljiva**.
+
+*Provera:* acceptance scenariji `CorrectionPropagation` i `CorrectionSestre`
+(`GOLDEN_SCENARIJI.md` §12). Registruju se u Zbirna cutover-u, kad propagacija postoji.
+
+---
+
+## A14 — dokument ima tri stanja, i to je već u kodu
+
+```
+DRAFT          otvoren; izvori se vezuju, sadrzaj se jos racuna
+IZDATO         izdat; sadrzaj te verzije je zamrznut
+PROSLEDJENO    izdat i poslat dalje (PWA/kupac)
+```
+
+Ovo **nije nov state machine** — `IzdatoStatus` sa te tri vrednosti postoji od
+ADR-0001, a `modDokumentInvariant.DocIsIssued` je kapija koja brani in-place
+izmenu izdatog dokumenta. Prazno se čita kao `IZDATO` (konzervativno), jer
+lanac dokumenata danas **nema** draft fazu.
+
+Šta ugovor dodaje: **`DRAFT` je jedino stanje u kom je in-place izmena
+dozvoljena.** Sve preko toga ide kroz storno + reizdavanje (A9, A13). Kad UI
+dobije „otvoren dokument", `DRAFT` prestaje da bude rezervisan i ovo pravilo je
+već tu.
+
+Redosled unosa **nije** domenska invarijanta: model ne zabranjuje da operater
+prvo napravi zbirnu pa otpremnice. Dok je dokument `DRAFT`, smisleno je
+prikazivati `očekivano / povezano / preostalo`. Finalizacija je ta koja zamrzava
+sastav i količine.
+
+> **Ali današnji kod podržava samo jedan redosled.** `CreateZbirna_TX` pravi i
+> **odmah finalizuje** dokument iz postojećih izvora (`IzdatoStatus = IZDATO`,
+> upisano eksplicitno) i zato traži bar jednu izvornu otpremnicu. Draft-first tok
+> je **buduća funkcija** sa svojim ulazom (`CreateZbirnaDraft_TX`); dok je nema,
+> kanonski tok je: otpremnice postoje → zbirna se napravi i izda.
+>
+> Ovo je razlika između *modela* (dozvoljava oba) i *isporučenog* (podržava
+> jedan). Dokumentacija ne sme tvrditi ono prvo kao da je već tu.
+
+*Provera:* `DocIsIssued` gate; `IZDATO_DRAFT` / `IZDATO_IZDATO` /
+`IZDATO_PROSLEDJENO` u `modConfig`.
+
+---
+
+## A15 — članstvo se pamti po verziji, ne pokazivačem
+
+Mutable FK ne može da nosi istoriju sastava. Dokaz je slučaj sa sestrama:
+
+```
+ZBR18 = OTP44 + OTP50 + OTP51
+ispravi se OTP44  ->  OTP45
+
+ZBR19 = OTP45 + OTP50 + OTP51
+```
+
+`OTP50` i `OTP51` se **nisu menjale**, a istorijski pripadaju **i** sastavu
+`ZBR18` **i** sastavu `ZBR19`. Jedan `Otpremnica.ZbirnaID` može da pokaže samo
+jednu od te dve: ili se stara verzija raspadne, ili nova nema sestre. U oba
+slučaja istorija se gubi **tiho**.
+
+Zato sastav živi u eksplicitnoj tabeli članstva:
+
+```
+tblZbirnaIzvori        ZbirnaID + OtpremnicaID       (PR3, postoji)
+tblOtpremnicaIzvori    OtpremnicaID + OtkupID        (uz refaktor Otpremnice)
+```
+
+**Nepromenljivost počinje pri izdavanju, ne pri upisu.** Ranija formulacija
+(„redovi se nikad ne menjaju") bila je u sukobu sa A14: dok je dokument `DRAFT`,
+operater sme da doda i skloni izvor. Tačno pravilo:
+
+| Stanje roditelja | Članstvo |
+|---|---|
+| `DRAFT` | **promenljivo** — dodaje se, sklanja, prepravlja slobodno |
+| `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove, stara zadržava svoje |
+
+Ne pravi se verzija za svaku klik-izmenu drafta; verzionisanje počinje kad
+dokument postane izdat. Zato te tabele nemaju `Stornirano` (storno verzije ne
+briše njen sastav) i stoje u `modSchemaGuard.BEZ_STORNA` sa tim obrazloženjem.
+
+**Odluka o `Otpremnica.ZbirnaID`: obrisan.** Tabela članstva je **jedina**
+persistentna veza. „Na kojoj je *aktivnoj* zbirnoj ova otpremnica sada" računa se
+iz nje (`modDokumenta.AktivnaZbirnaZaOtpremnicu`).
+
+> Kolona je jedan krug postojala kao „prelazni keš". Cena tog jednog jeftinijeg
+> čitanja bila je cela nova klasa problema: drift između kanona i keša, provera
+> tog drifta, snapshot još jedne tabele u writeru, još jedan upis i još dva
+> testa. Bez produkcionih podataka nema nikoga kome se to plaća, pa je uklonjena
+> pre nego što je iko počeo da je čita.
+>
+> Isto pravilo važi za `Otkup.OtpremnicaID` kad dobije `tblOtpremnicaIzvori`.
+
+Za svaki dokument mora se moći odgovoriti — **bez gledanja trenutnog stanja
+sistema**:
+
+> „Od kojih je tačno dokumenata ova verzija bila sastavljena?"
+
+*Provera:* `Test_PR3_ClanstvoJeZapisanoPoVerziji`,
+`Test_PR3_PokazivacSeSlazeSaClanstvom`; sabotaža „ne upisuj članstvo" obara
+prvi po imenu.
 
 ## Četiri tvrde kapije
 

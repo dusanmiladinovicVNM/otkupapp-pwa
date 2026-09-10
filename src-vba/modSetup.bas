@@ -1172,6 +1172,24 @@ End Sub
 
 Public Sub EnsureRuntimeSchema()
     On Error Resume Next
+
+    ' PRVO kanon, pa rucne dopune.
+    '
+    ' Sve ispod ove tacke je rucno odrzavan spisak: svaka nova kolona je morala
+    ' da se DODA i ovde, inace bi je klijent posle self-update-a KODA dobio tek
+    ' rucnim Alt+F8. Otkad je sema kanon u gitu (schema/schema.json), taj posao
+    ' radi modSchema.EnsureAllTables -- pravi tabele kojih nema i dopunjava
+    ' kolone koje fale, iz istog izvora iz kog se generise modSchema.bas.
+    '
+    ' Isti obrazac kao modMain.StartApp: prvo se PITA, pa se leci samo ako
+    ' odstupa. SchemaCheckOnStart samo cita, pa je jeftin kad je sve u redu, a
+    ' EnsureAllTables PISE i ne sme da se vrti bez potrebe.
+    '
+    ' NE unutar transakcije: clsTransaction.RestoreTable dize gresku na
+    ' neslaganje broja kolona. EnsureRuntimeSchema se zove pre svakog rada, van
+    ' transakcije.
+    If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
+
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK

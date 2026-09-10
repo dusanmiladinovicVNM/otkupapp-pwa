@@ -14,10 +14,15 @@
     "",
     "    python tools/who_writes.py --check-ownership",
     "",
-    "Test moduli se ne broje: pisu uz rollback i nisu vlasnici podataka."
+    "Test moduli se ne broje: pisu uz rollback i nisu vlasnici podataka.",
+    "",
+    "PR3: baseline prosiren jer je MUTATE_RE do tada gledao samo naredbeni oblik (AppendRow TBL_X); funkcijski (x = AppendRow(TBL_X)) je bio nevidljiv. Dodati pisci nisu novi -- bili su neizmereni.",
+    "",
+    "PR3: cilj za tblZbirna je SAMO modDokumenta. modDokumentInvariant racuna i validira, ali ne pise -- RecalculateZbirna_TX zivi u modDokumenta i prima izracunat rezultat (v. DOCUMENT_HEADER_LINES S4.3)."
   ],
   "tblAmbalaza": {
     "row_owner": [
+      "modAmbalaza",
       "modStornoRecovery"
     ],
     "schema_owner": [],
@@ -32,8 +37,16 @@
   },
   "tblBankaImport": {
     "row_owner": [
+      "modBankaImport",
       "modBankaMapiranje",
       "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblCenovnik": {
+    "row_owner": [
+      "modCenovnik"
     ],
     "schema_owner": [],
     "cilj": []
@@ -41,6 +54,7 @@
   "tblFakturaStavke": {
     "row_owner": [
       "modDokumenta",
+      "modFaktura",
       "modStorno",
       "modUtovar"
     ],
@@ -51,7 +65,15 @@
     "row_owner": [
       "modFaktura",
       "modSEFPersistance",
-      "modStorno"
+      "modStorno",
+      "modUtovar"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblKooperanti": {
+    "row_owner": [
+      "modKooperant"
     ],
     "schema_owner": [],
     "cilj": []
@@ -61,6 +83,13 @@
       "modAuth",
       "modMaticniKorisnici",
       "modSetup"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblMagacin": {
+    "row_owner": [
+      "modAgrohemija"
     ],
     "schema_owner": [],
     "cilj": []
@@ -91,11 +120,33 @@
       "modOtkup"
     ]
   },
+  "tblOtkupStavke": {
+    "row_owner": [
+      "modOtkup"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modOtkup"
+    ]
+  },
   "tblOtpremnica": {
     "row_owner": [
       "modDokumenta"
     ],
     "schema_owner": [],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
+  "tblOtpremnicaStavke": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
     "cilj": [
       "modDokumenta"
     ]
@@ -123,6 +174,13 @@
     "schema_owner": [],
     "cilj": []
   },
+  "tblPartnerMap": {
+    "row_owner": [
+      "modNovac"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
   "tblPrevoznici": {
     "row_owner": [
       "modUtovar"
@@ -141,9 +199,27 @@
       "modDokumenta"
     ]
   },
+  "tblPrijemnicaStavke": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
   "tblSEFConfig": {
     "row_owner": [
       "modConfig"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblSEFEventLog": {
+    "row_owner": [
+      "modSEFPersistance"
     ],
     "schema_owner": [],
     "cilj": []
@@ -158,6 +234,13 @@
   "tblStornoVeze": {
     "row_owner": [
       "modStornoContext"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblStornoZurnal": {
+    "row_owner": [
+      "modStornoZurnal"
     ],
     "schema_owner": [],
     "cilj": []
@@ -177,38 +260,25 @@
     "schema_owner": [],
     "cilj": []
   },
+  "tblVozaci": {
+    "row_owner": [
+      "modMalina"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
   "tblZbirna": {
     "row_owner": [
-      "modDokumentInvariant"
+      "modDokumentInvariant",
+      "modDokumenta",
+      "modMasterSync"
     ],
     "schema_owner": [],
     "cilj": [
       "modDokumenta"
     ]
   },
-  "tblOtkupStavke": {
-    "row_owner": [
-      "modOtkup"
-    ],
-    "schema_owner": [
-      "modSchema"
-    ],
-    "cilj": [
-      "modOtkup"
-    ]
-  },
-  "tblOtpremnicaStavke": {
-    "row_owner": [
-      "modDokumenta"
-    ],
-    "schema_owner": [
-      "modSchema"
-    ],
-    "cilj": [
-      "modDokumenta"
-    ]
-  },
-  "tblPrijemnicaStavke": {
+  "tblZbirnaIzvori": {
     "row_owner": [
       "modDokumenta"
     ],

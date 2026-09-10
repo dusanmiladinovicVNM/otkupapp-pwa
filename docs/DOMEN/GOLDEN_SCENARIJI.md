@@ -1,6 +1,7 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: 12 registrovano i zaključano; D1 čeka poslovnu odluku (§10).**
+> **Status: 12 registrovano i zaključano. D1 ima odluku (§10 — rekalkulacija),
+> ali čeka Zbirna cutover da je implementira; do tada nije registrovan.**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -12,7 +13,7 @@
 
 ## 1) Čemu služe
 
-Sigurnosna mreža za PR3–PR12. Kad Zbirna postane header+stavke, moram da mogu da
+Sigurnosna mreža za ceo refaktor. Kad Zbirna postane header+stavke, moram da mogu da
 dokažem da se **poslovni ishod nije promenio** — a ne da se tabela i dalje isto
 zove.
 
@@ -70,10 +71,10 @@ svojoj transakciji.
 |---|---|
 | broj **redova** u tabeli | menja se u PR3 po definiciji |
 | broj **ID-eva** koje writer vrati | dvoklasni dokument danas vraća dva — to je broj redova prerušen u broj dokumenata |
-| `GeneracijaID` bilo gde | mehanizam koji PR12 briše |
+| `GeneracijaID` bilo gde | mehanizam koji završni korak briše |
 | poslovni broj kao **ključ pretrage** | A2 — broj je labela |
 | indeks kolone, redosled kolona | to meri `VerifySchema`, ne poslovni test |
-| format vraćenog ID-a (`"OTK-1 + OTK-2"`) | nestaje u PR5 |
+| format vraćenog ID-a (`"OTK-1 + OTK-2"`) | nestaje u Otkup cutover-u |
 | „primarni red" bilo koje vrste | primary-row hack je bug koji uklanjamo |
 
 **Praktično pravilo:** ako se tvrdnja ne može izgovoriti kooperantu ili
@@ -135,18 +136,18 @@ FAKTURA
 ```
 
 `otkupa 1` iako dvoklasni otkup danas fizički daje dva reda — broji se
-**poziv writer-a**, ne ID. Posle PR5 taj broj ostaje 1 i golden se ne menja.
+**poziv writer-a**, ne ID. Posle Otkup cutover-a taj broj ostaje 1 i golden se ne menja.
 
 ---
 
-## 4) Scenariji (12 registrovanih + D1 pending)
+## 4) Scenariji (12 registrovanih + D1 čeka cutover)
 
 ### A — Fresh Fruit Flow
 
 | # | Scenario | Šta hvata |
 |---|---|---|
 | A1 | Jednoklasni otkup kroz ceo lanac do fakture | baseline; sve ostalo je odstupanje od njega |
-| A2 | **Dvoklasni** otkup kroz ceo lanac | scenario koji PR5 najviše menja iznutra, a ishod mora ostati isti |
+| A2 | **Dvoklasni** otkup kroz ceo lanac | scenario koji Otkup cutover najviše menja iznutra, a ishod mora ostati isti |
 | A3 | Više blokova → jedna otpremnica | N:1 kardinalitet |
 | A4 | Više otpremnica → jedna zbirna | agregat; §6.2 invarijanta |
 | A5 | Kalo: poslato 1200, primljeno 1175 | razlika je poslovna činjenica, ne greška |
@@ -169,7 +170,7 @@ FAKTURA
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| D1 | Storno otpremnice → zbirna se rekalkuliše | **NIJE registrovan — §10** |
+| D1 | Storno otpremnice → zbirna se rekalkuliše; prazna zbirna se stornira | **odluka pala, kod još ne — registruje ga Zbirna cutover (§10)** |
 | D2 | Storno prijemnice koja je fakturisana | kaskada |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
@@ -193,7 +194,7 @@ FAKTURA
 | Pitanje | Odluka |
 |---|---|
 | Rečnik tvrdnji (§2) | prihvaćen; dopunjen sa **brojem logičkih dokumenata** kao dozvoljenom činjenicom i **brojem ID-eva** kao zabranjenom |
-| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 pending (§10) |
+| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 čeka Zbirna cutover (§10) |
 
 ### 5b) Nijedan scenario ne sme da bude trajno crvena centralna kapija
 
@@ -205,7 +206,10 @@ Zato scenario čije poslovno pravilo **još nije odlučeno** ostaje **neregistro
 i bez goldena**, a razlog se piše ovde. Golden pisan na neodlučenu semantiku je
 gori od nijednog: zamrzava pretpostavku kao ugovor.
 
-Trenutno tako stoji **D1** (§10). Ranije su tako uklonjeni B1 i B4 (§8).
+Tako stoji **D1** (§10): pravilo je od 10.09.2026. odlučeno, ali ga kod još ne
+sprovodi. Golden pisan na odluku koju kod ne poštuje bio bi trajno crven, pa D1
+čeka Zbirna cutover — i tada postaje **dokaz da je pravilo sprovedeno**, ne samo zapisano.
+Ranije su iz drugog razloga uklonjeni B1 i B4 (§8).
 
 ---
 
@@ -228,7 +232,7 @@ pregledaju pre nego što se zaključaju.
 | 2 | scenario je koristio `KOOP-TEST-1` iz fixture-a | `placeno 1000.00` u svih pet, iako nijedan ništa ne plaća — zatečen avans |
 | 3 | format broja lokalno zavisan (`1720,00`) | golden pada na mašini sa drugom decimalnom oznakom; test meri Control Panel |
 | 4 | ambalaža nije usklađena otpremnica ↔ zbirna | `invarijanta PUKLA` zabeležena kao da je sistem kriv |
-| 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u PR5 |
+| 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u Otkup cutover-u |
 | 6 | `DOKUMENTI` je brojao **pozive testa** (`m_nOtp = m_nOtp + 1`) | tautologija: A3 je dokazivao „test je jednom pozvao `GldOtpremnica`", ne „sistem je napravio jednu otpremnicu"; bug koji od jednog poziva napravi dve otpremnice po 500 kg ostavio bi agregat isti i test **zelen** |
 | 8 | seed rezervisanih identiteta bio fail-open | zatečen `STA-GLD-1` sa drugim nazivom ili `Aktivan=Ne` prihvatio bi se — scenario opet ne poseduje ceo svoj ulaz |
 | 7 | preduslov je proveravao samo identitet, ne ključ scenarija | zatečena otpremnica sa `BrojZbirne = GLD-A1` ušla bi u rezultat i kad kooperant nema nijedan stari otkup |
@@ -253,7 +257,7 @@ poslato 1000.00          <- agregat NEPROMENJEN
 golden [otpremnica 1] vs tekuci [otpremnica 2]   <- pada OVDE
 ```
 
-Posle PR5 adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
+Posle Otkup cutover-a adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
 
 ### Ugovor izolacije, u celini
 
@@ -333,9 +337,57 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 
 ---
 
-## 10) D1 — nedorečen lifecycle, ne bug u testu
+## 10) D1 — storno otpremnice: odluka je **C, rekalkulacija**
 
-Prva verzija D1 je **zaključala kvar kao očekivano ponašanje**. Golden je glasio:
+> **Odluka doneta 10.09.2026.** Implementacija ide u **Zbirna cutover**, zajedno sa
+> prelaskom invarijante na `ZbirnaID`. Do tada D1 nije registrovan.
+
+### Pravilo — grana po stanju zbirne (usklađeno sa A13)
+
+Prva verzija ovog pravila je glasila „rekalkuliši postojeću zbirnu". To je
+**u sukobu sa A13**: izdat dokument se ne prepisuje. Tačno pravilo:
+
+**Zbirna je `DRAFT`:**
+
+1. zbirna se **rekalkuliše** na preostale aktivne otpremnice — in-place, jer
+   draft još nije poslovna činjenica.
+
+**Zbirna je `IZDATO` / `PROSLEDJENO`:**
+
+1. stara zbirna ostaje **nepromenjena** i biva superseded/stornirana;
+2. nastaje **nova verzija**: nov `ZbirnaID`, nov `BrojZbirne`, `IspravkaOdID` na
+   staru, isti `CorrectionID` kao ostatak korekcije, **novi `tblZbirnaIzvori`** i
+   **nove `ZbirnaStavke`**;
+3. ako posle storna ne ostane nijedna otpremnica, **nema naslednika** — stara se
+   stornira i tu se lanac završava. Prazna nova verzija nema smisla.
+
+U oba slučaja: ako nizvodno postoji prijemnica ili paleta, i dalje se diže pun
+dijalog i operater bira (`CorrectionNeedsDialog`, `modStornoFlow.bas:250`). To se
+ne menja. Prijemnica se **ne** menja automatski (A13).
+
+Pošto lanac danas **nema draft fazu**, u praksi važi druga grana. Malina mod time
+prestaje da bude poseban slučaj: njegova kaskada je specijalni slučaj tačke 3.
+
+### Zašto ne A ni B
+
+**B — kaskada** uništava tuđe podatke: zbirna sa četiri otpremnice, storniram
+jednu pogrešnu, a ostale tri ostaju bez zbirne bez ikakvog razloga.
+
+**A — zabrana** blokira legitimnu ispravku. Operater je video grešku na jednoj
+otpremnici; terati ga da prvo razmontira ceo transport znači više upisa i više
+prilika za grešku, i to zbog čisto tehničkog ograničenja.
+
+**C** je jedina opcija koja čuva definiciju: zbirna **jeste** agregat svojih
+otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2). A i B tu definiciju zaobilaze —
+jedna zabranom, druga rušenjem.
+
+> Ono što se promenilo posle A13 nije **da li** se zbirna usklađuje sa izvorima,
+> nego **gde** rezultat sleti: u isti red (draft) ili u novu verziju (izdato).
+> Odluka „C" i dalje stoji; samo više nije in-place za izdat dokument.
+
+### Šta je zatečeno stanje (i zašto je D1 uopšte nastao)
+
+Prva verzija D1 je **zaključala kvar kao očekivano ponašanje**:
 
 ```
 otpremnica  aktivnih 0  storniranih 1
@@ -349,26 +401,29 @@ ZBIRNA
 Time je mreža tvrdila: *„posle legalne poslovne operacije dozvoljeno je da
 kanonska invarijanta bude PUKLA."* To je suprotno od njene svrhe.
 
-Uzrok nije u testu. `StornoOtpremnica_TX` stornira otpremnicu i njenu ambalažu i
-**namerno nema kaskadu** ka zbirnoj — `modStorno` to i kaže. Ali zbirna je
-agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa ostaje bez
-izvora.
+Uzrok nije u testu. Merenjem je nađeno **troje**:
 
-### Odluka koja nedostaje
-
-Otpremnica ima aktivnu zbirnu (i eventualno prijemnicu). Storno otpremnice:
-
-| Opcija | Posledica |
+| Nalaz | Gde |
 |---|---|
-| **A — zabrani** | storno pada dok zbirna postoji; operater prvo mora da razveže |
-| **B — kaskadiraj** | storno povlači zbirnu (i prijemnicu) nizvodno |
-| **C — rekalkuliši** | zbirna se automatski umanji za storniranu otpremnicu |
+| `StornoOtpremnica_TX` / `StornoOtpremnicaByBroj_TX` nemaju kaskadu ka zbirnoj van malina moda | `modStorno.bas:254`, `:304` |
+| Produkciona putanja običnog storna ide bas tuda, bez ijedne rekalkulacije | `modScrStorno.ObicanStorno` → `modStornoDok.StornoIzvrsi` → `StornoOtpremnicaByBroj_TX` |
+| **Ispravka već postoji i mrtva je** | `modStornoFlow.RunSimpleStornoOtpremnica` (komentar: *„obican storno + tiha zastita invarijante"*) radi tačno pravilo C — i **nema nijednog produkcionog pozivaoca** |
 
-Šta god se izabere, ishod **ne sme** biti „operacija uspela, sistem
-nekonzistentan".
+Dakle nije bilo da pravilo nije smišljeno. Napisana su **dva različita odgovora**
+(kaskada u malina modu, rekalkulacija u flow sloju) i nijedan nije dosledno
+primenjen na putanju kojom operater stvarno prolazi.
 
-Do te odluke D1 nije registrovan i nema golden. Kad odluka padne, D1 se piše na
-**odlučeno** ponašanje i registruje — i time postaje dokaz da pravilo važi.
+### Šta Zbirna cutover mora da uradi
+
+1. Pravilo C **u writeru**, ne u flow sloju — da se ne može zaobići drugim
+   ulazom. Vlasnik je `modDokumenta` (A11, `WRITE_OWNERSHIP.json`).
+2. Rekalkulacija po **`ZbirnaID`**, ne po `BrojZbirne`. Usput nestaje
+   `ZbirnaMutRazlog` kapija, koja danas **odbija rekalkulaciju kad je broj
+   dvosmislen** — sa FK po ID-u to stanje strukturno ne postoji.
+3. `RunSimpleStornoOtpremnica` → obrisati ili zakaciti; mrtva kopija pravila je
+   gora od nijedne.
+4. Tek tada D1 dobija golden na **odlučeno** ponašanje i registruje se — i time
+   postaje dokaz da pravilo važi.
 
 ---
 
@@ -379,7 +434,7 @@ Dva razloga, oba naučena na sopstvenoj grešci.
 **Prvi:** `ZBIRNA` računa preko `SumOtpremniceByKlasa(BrojZbirne)` i
 `IsZbirnaConsistent(BrojZbirne)`. Broj sam ne razlikuje dve logičke zbirne, pa
 je rezultat bio `invarijanta PUKLA` — i to je bilo **zaključano kao očekivano**.
-Posle PR4, kad invarijanta počne da prima `ZbirnaID`, ispravka arhitekture bi
+Posle Zbirna cutover-a, kad invarijanta počne da prima `ZbirnaID`, ispravka arhitekture bi
 oborila golden koji je treba da štiti. Isti oblik greške kao D1 (§10).
 
 **Drugi:** `aktivnih 1 / storniranih 1` ne kaže **koja** je stornirana. Bug koji
@@ -393,8 +448,79 @@ IDENTITET ZBIRNE
   druga  kg=600.00  AKTIVNA
 ```
 
-Nijedan ID se ne ispisuje — ni današnji ni budući. Posle PR4 adapter traži red po
+Nijedan ID se ne ispisuje — ni današnji ni budući. Posle Zbirna cutover-a adapter traži red po
 `ZbirnaID`; golden ostaje identičan.
 
 **Dokaz:** storno druge umesto prve → golden pada na `IDENTITET ZBIRNE`, dok
 `STATUS` ostaje nepromenjen (`aktivnih 1 / storniranih 1`).
+
+---
+
+## 12) Propagacija ispravke — dva scenarija, oba čekaju cutover
+
+Zaključano ugovorom **A13** (izvedeni dokument nije mutable keš), **A14**
+(lifecycle) i **A15** (verzionisano članstvo). Ovde stoje kao **specifikacija**;
+registruju se kad propagacija bude implementirana — golden pisan na ponašanje
+koje kod još nema bio bi trajno crven (§5b).
+
+### H1 — `CorrectionPropagation`
+
+```
+OTK1 -> OTP1 -> ZBR1
+ispravka OTK1 -> OTK2
+```
+
+Očekivano:
+
+```
+OTP1   ostaje istorijski NEPROMENJENA, superseded
+OTP2   nov ID + nov broj + IspravkaOdID = OTP1
+ZBR1   ostaje istorijski NEPROMENJENA, superseded
+ZBR2   nov ID + nov broj + IspravkaOdID = ZBR1
+
+nov lanac:  OTK2 -> OTP2 -> ZBR2
+sva tri nova dokumenta nose isti CorrectionID
+```
+
+Tvrdnja koja se lako previdi: **stari lanac mora ostati potpuno
+rekonstruišljiv** — ne samo da postoji, nego da se iz njega može pročitati
+sastav i količine kakve su bile pri izdavanju.
+
+Prijemnica se **ne dira**. Ako je postojala, ostaje sa svojom količinom; razlika
+prema novoj zbirnoj je poslovna činjenica (kalo/gubitak), ne greška.
+
+### H2 — `CorrectionSestre`
+
+Ovo je scenario koji obara mutable FK model:
+
+```
+ZBR1 = OTP1 + OTP2 + OTP3
+menja se izvor SAMO ispod OTP1  ->  OTP4 zamenjuje OTP1
+
+ZBR2 = OTP4 + OTP2 + OTP3
+```
+
+Očekivano:
+
+```
+ZBR2 sastav:  OTP4, OTP2, OTP3
+ZBR1 sastav:  OTP1, OTP2, OTP3     <- i dalje, nepromenjeno
+```
+
+`OTP2` i `OTP3` se nisu menjale, a pripadaju **oba** sastava. Jedan
+jedna FK kolona bi mogla da pokaže samo jednu od dve zbirne — zato sastav živi
+u `tblZbirnaIzvori`, a FK je degradiran na pokazivač „gde je sada" (A15).
+
+**Ako ovaj scenario ne prođe bez gubitka istorije, model veze nije dovoljan** —
+i to je ceo razlog zbog kog tabela članstva postoji.
+
+### Šta od toga već stoji
+
+PR3 je isporučio tabelu i upis: `tblZbirnaIzvori` nastaje u istoj transakciji
+kao header i stavke, sastav se čita bez gledanja trenutnog stanja otpremnica, a
+pokazivač ima test koji dokazuje da se poklapa sa članstvom
+(`Test_PR3_ClanstvoJeZapisanoPoVerziji`, `Test_PR3_PokazivacSeSlazeSaClanstvom`).
+
+Ono što nedostaje je sama propagacija — pravljenje nove verzije nizvodnih
+dokumenata pri ispravci izvora. To je Zbirna cutover.
+

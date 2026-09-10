@@ -116,6 +116,12 @@ jobs:
       - name: A11 -- vlasnistvo nad upisom
         run: python3 tools/who_writes.py --check-ownership
 
+      # Cela A11 kapija stoji na jednom regexu, i taj regex je vec dva puta bio
+      # slep dok je bio zelen: prvo na RequireUpdateCell, pa na funkcijski oblik
+      # x = AppendRow(TBL_X, ...). Self-test drzi oba oblika poziva.
+      - name: who_writes self-test
+        run: python3 tools/who_writes.py --self-test
+
       # Kanon seme je schema/schema.json u gitu; modSchema.bas je njegov
       # generisan artefakt. Ako se raziju, sveska bi se lecila po zastareloj
       # semi, a otisak na startu bi prijavljivao drift koji niko ne moze da

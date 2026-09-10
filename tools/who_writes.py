@@ -5,7 +5,8 @@ konstrukciji: sto nije u kodu, nije ni u mapi.
 
 Dva izvora, oba mehanicka -- ali NE znace isto:
 
-  1. MUTATE: AppendRow / UpdateCell / RequireUpdateCell TBL_X
+  1. MUTATE: AppendRow / UpdateCell / RequireUpdateCell nad TBL_X -- i kao
+     naredba (AppendRow TBL_X, ...) i kao funkcija (x = AppendRow(TBL_X, ...))
      Modul stvarno MENJA redove. Samo ovo je vlasnistvo (ugovor A11), i samo
      ovo meri --check-ownership.
   2. TX: clsTransaction.AddTableSnapshot TBL_X
@@ -55,9 +56,18 @@ VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 # \bUpdateCell, a u "RequireUpdateCell" pre "UpdateCell" nema granice reci.
 # Time je 220 poziva -- 29 nad tblFakture, 26 nad tblPaleta, 12 nad tblOtkup --
 # prolazilo kroz mapu neopazeno.
+#
+# Druga rupa istog oblika, nadjena u PR3: AppendRow je FUNKCIJA i pola koda je
+# zove kao funkciju --  newRow = AppendRow(TBL_ZBIRNA, rowData)  -- gde posle
+# imena stoji "(", a ne razmak. Regex je trazio \s+, pa je 22 poziva bilo
+# NEVIDLJIVO kapiji, medju njima produkcioni upisi nad tblZbirna (modDokumenta,
+# modMasterSync), tblOtkup (modOtkup, modMasterSync), tblPrijemnica,
+# tblOtpremnica, tblNovac i tblFakturaStavke. Kapija koja ne vidi pola poziva
+# ne meri vlasnistvo nego stil pisanja poziva.
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
 MUTATE_RE = re.compile(
-    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
+    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
+    re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
 # pa nisu vlasnici podataka i ne treba da zamagle pravu sliku.
@@ -71,6 +81,40 @@ def table_constants() -> dict:
     return dict(re.findall(r'Public Const (TBL_\w+)\s+As String = "(\w+)"', text))
 
 
+def logicke_linije(text: str):
+    """VBA fizicke linije -> LOGICKE, sa spojenim ' _' nastavcima.
+
+    Treca rupa istog roda (v. MUTATE_RE): skener je citao red po red, pa mu je
+
+        n = AppendRow( _
+                TBL_ZBIRNA, rowData)
+
+    nevidljivo -- ime mutatora je na jednoj liniji, tabela na sledecoj. Danas
+    takav oblik u src-vba/ ne postoji, ali kapija ne sme da zavisi od toga gde
+    je neko prelomio red; prvi koji ga napise otvorio bi rupu bez ijedne poruke.
+    """
+    buf = ""
+    for raw in text.splitlines():
+        deo = raw.strip()
+        # Komentar se NE nastavlja, i to je vazno u drugom smeru: bez ove
+        # provere bi "' objasnjenje _" progutalo sledecu liniju, pa bi pravi
+        # AppendRow ispod komentara postao nevidljiv. Popravka bi otvorila novu
+        # rupu umesto da zatvori staru.
+        if not buf and deo.startswith("'"):
+            yield deo
+            continue
+        # Nastavak reda u VBA je razmak + donja crta na KRAJU linije. Linija
+        # koja je SAMO donja crta je isto nastavak -- posle strip()-a pred njom
+        # nema razmaka, pa je uslov mora imenovati posebno.
+        if deo == "_" or deo.endswith(" _"):
+            buf += deo[:-1]
+            continue
+        yield (buf + deo) if buf else deo
+        buf = ""
+    if buf:
+        yield buf
+
+
 def scan() -> dict:
     const2tbl = table_constants()
     writers = collections.defaultdict(lambda: collections.defaultdict(set))
@@ -80,15 +124,15 @@ def scan() -> dict:
             continue
         module = name.rsplit(".", 1)[0]
         with open(os.path.join(SRC, name), encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped.startswith("'"):        # komentar
-                    continue
-                for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
-                    for m in regex.finditer(stripped):
-                        token = m.group(1)
-                        table = const2tbl.get(token, m.group(2) or token)
-                        writers[table][kind].add(module)
+            text = fh.read()
+        for linija in logicke_linije(text):
+            if linija.startswith("'"):        # komentar
+                continue
+            for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
+                for m in regex.finditer(linija):
+                    token = m.group(1)
+                    table = const2tbl.get(token, m.group(2) or token)
+                    writers[table][kind].add(module)
     return writers
 
 
@@ -233,6 +277,65 @@ def check_ownership(writers: dict, path: str) -> int:
     return 0
 
 
+# --- self-test: kapija koja ne vidi poziv ne meri vlasnistvo -----------------
+#
+# A11 stoji na jednom regexu. Dva puta je taj regex vec bio slep -- prvo na
+# RequireUpdateCell (nema granice reci), pa na funkcijski oblik AppendRow(...).
+# Oba puta je kapija bila ZELENA dok je propustala stotine poziva. Zato oblik
+# poziva ima svoje slucajeve, i pozitivne i negativne.
+MUTATE_CASES = [
+    ("naredba",            "AppendRow TBL_ZBIRNA, rowData",              "tblZbirna"),
+    ("naredba dva razmaka", "AppendRow  TBL_ZBIRNA, rowData",            "tblZbirna"),
+    ("funkcija",           "newRow = AppendRow(TBL_ZBIRNA, rowData)",    "tblZbirna"),
+    ("funkcija sa Call",   "Call AppendRow(TBL_OTKUP, rowData)",         "tblOtkup"),
+    ("funkcija sa razmakom", "n = AppendRow( TBL_OTKUP, rowData)",       "tblOtkup"),
+    ("literal ime",        'UpdateCell "tblZbirna", r, c, v',            "tblZbirna"),
+    ("Require naredba",    "RequireUpdateCell TBL_FAKTURE, r, c, v",     "tblFakture"),
+    ("Require funkcija",   "RequireUpdateCell(TBL_FAKTURE, r, c, v)",    "tblFakture"),
+    # prelomljen red -- ime mutatora gore, tabela dole
+    ("nastavak posle zagrade",
+     "n = AppendRow( _\n        TBL_ZBIRNA, rowData)",                   "tblZbirna"),
+    ("nastavak posle imena",
+     "RequireUpdateCell _\n    TBL_OTKUP, r, c, v",                      "tblOtkup"),
+    ("nastavak u dva koraka",
+     "n = AppendRow( _\n     _\n    TBL_PRIJEMNICA, rowData)",           "tblPrijemnica"),
+    # negativni: ime koje samo POCINJE isto, i sopstvena definicija
+    ("drugo ime funkcije", "x = AppendRowToLog(TBL_ZBIRNA, rowData)",    None),
+    ("definicija",         "Public Function AppendRow(ByVal t As String)", None),
+    ("komentar",           "' AppendRow TBL_ZBIRNA, rowData",            None),
+    # komentar sa "_" na kraju NE sme da proguta sledecu liniju -- inace bi
+    # popravka nastavaka otvorila novu rupu umesto da zatvori staru
+    ("komentar sa nastavkom ne guta kod",
+     "' objasnjenje _\nAppendRow TBL_ZBIRNA, rowData",                   "tblZbirna"),
+]
+
+
+def self_test() -> int:
+    const2tbl = table_constants()
+    palo = []
+    for naziv, izvor, ocekivano in MUTATE_CASES:
+        dobijeno = None
+        for linija in logicke_linije(izvor):
+            if linija.startswith("'"):
+                continue
+            m = MUTATE_RE.search(linija)
+            if m is not None:
+                token = m.group(1)
+                dobijeno = const2tbl.get(token, m.group(2) or token)
+                break
+        if dobijeno != ocekivano:
+            palo.append(f"  MUTATE/{naziv}: ocekivano {ocekivano!r}, "
+                        f"dobijeno {dobijeno!r}  <- {izvor!r}")
+
+    if palo:
+        print("who_writes --self-test: PALO", file=sys.stderr)
+        for p in palo:
+            print(p, file=sys.stderr)
+        return 2
+    print(f"who_writes --self-test: {len(MUTATE_CASES)} slucajeva, cisto")
+    return 0
+
+
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description="Mapa vlasnistva nad tabelama, iz koda.")
     ap.add_argument("--out", nargs="?", const=DEFAULT_OUT,
@@ -241,7 +344,12 @@ def main(argv) -> int:
                     help="exit 2 ako se generisan sadrzaj razlikuje od fajla")
     ap.add_argument("--check-ownership", action="store_true",
                     help="exit 2 ako tabelu pise modul van WRITE_OWNERSHIP.json")
+    ap.add_argument("--self-test", action="store_true",
+                    help="exit 2 ako MUTATE_RE ne vidi neki oblik poziva")
     args = ap.parse_args(argv)
+
+    if args.self_test:
+        return self_test()
 
     writers = scan()
 

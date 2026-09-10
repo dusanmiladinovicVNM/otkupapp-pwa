@@ -25,12 +25,28 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
     "|" & TBL_PRERADA_STAVKA & _
     "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & "|"
 
-' Tabele koje storno pojam NEMAJU -- maticni podaci. Prolaz kroz filter je za
-' njih tacan ishod, ne propust, i navedene su izricito da se "nije u spisku"
-' ne bi moglo procitati kao "zaboravljeno".
+' Tabele koje storno pojam NEMAJU. Prolaz kroz filter je za njih tacan ishod,
+' ne propust, i navedene su izricito da se "nije u spisku" ne bi moglo
+' procitati kao "zaboravljeno".
+'
+' Dva razloga da tabela bude ovde, i nisu isti:
+'
+'   1. MATICNI PODACI -- kooperant, kupac, vozac: dokument se stornira, sifarnik
+'      ne.
+'   2. STAVKE DOKUMENTA (PR3 nadalje) -- tblZbirnaStavke i sestre. One nisu
+'      maticni podaci nego DECA cija je aktivnost pitanje za roditelja: stavka
+'      je aktivna ako i samo ako je njen header aktivan. Line-level storno u
+'      domenu ne postoji (v. REFAKTOR_DOKUMENT_HEADER_STAVKE.md S7), pa stavka
+'      nema kolonu Stornirano -- i ExcludeStornirano nad njom bi trazio kolonu
+'      koje nema. Citac aktivnih stavki filtrira po FK i pita header.
+'   3. ISTORIJSKI ZAPIS -- tblZbirnaIzvori. Redovi su NEPROMENLJIVI: kazu od
+'      kojih je otpremnica bila sastavljena JEDNA VERZIJA zbirne. Storno te
+'      verzije ne brise njen sastav; nova verzija dobija svoje redove. Filtrirati
+'      ih po stornu znacilo bi izgubiti bas ono zbog cega tabela postoji.
 Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
-    "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & "|"
+    "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & _
+    "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
 '

@@ -1163,6 +1163,933 @@ EH:
               "Source=" & errSrc & " | " & errDesc
 End Function
 
+' ============================================================
+' ZBIRNA -- header + stavke (PR3)
+' ============================================================
+'
+' Jedan javni ulaz koji vraca JEDAN ID, i koji obuhvata CELU poslovnu operaciju.
+' Obrazac je CreateFaktura_TX (modFaktura.bas:11): _TX drzi transakciju i
+' monitoring, Private core radi posao, kompletna prevalidacija PRE ijednog upisa.
+'
+' Sta se menja u odnosu na SaveZbirnaMulti_TX:
+'
+'   staro:  dva reda u tblZbirna (Klasa I i Klasa II), dva ID-a, pa string
+'           "ZBR-1 + ZBR-2" koji pozivalac posle parsira
+'   novo:   JEDAN header u tblZbirna + N redova u tblZbirnaStavke, jedan ID
+'
+' KOLICINE SE NE PRIMAJU -- IZVODE SE.
+'
+' Zbirna je agregat svojih otpremnica (DOCUMENT_HEADER_LINES.md S4.3: stavke su
+' kes, otpremnice su izvor istine). Zato writer prima IZVORNE OTPREMNICE, a
+' stavke racuna iz njih. Prva verzija je primala gotove stavke, pa je bilo
+' legalno napraviti zbirnu od izmisljenih 400+600 kg bez ijedne otpremnice --
+' kes koji se ne slaze sa izvorom, i to kroz kanonski writer.
+'
+' Iz istog razloga VrstaVoca / SortaVoca / TipAmbalaze NISU u headeru: dolaze iz
+' otpremnica, koje moraju biti saglasne. Dokument ima jednu vrstu, jednu sortu i
+' jedan tip ambalaze (REFAKTOR_DOKUMENT_HEADER_STAVKE.md S2).
+'
+' CLANSTVO JE JEDINA VEZA, I UPISUJE SE U ISTOJ TRANSAKCIJI.
+'
+' tblZbirnaIzvori je JEDINI zapis clanstva -- "od kojih je otpremnica ova VERZIJA
+' sastavljena" (A15). Nema pratioca -- ni jedne kolone na otpremnici.
+'
+' Ranija verzija je uz clanstvo drzala i Otpremnica.ZbirnaID kao kes. To je bilo
+' jedno jeftinije citanje po ceni cele nove klase problema: drift izmedju kanona
+' i kesa, provera tog drifta, snapshot jos jedne tabele, jos jedan upis i jos
+' dva testa. Bez produkcionih podataka nema nikoga kome to placamo.
+'
+' Pitanje "na kojoj je aktivnoj zbirnoj otpremnica sada" racuna se iz clanstva --
+' AktivnaZbirnaZaOtpremnicu.
+'
+' ZbirnaID je OPAQUE (NewEntityID), ne GetNextID: broj vise nije identitet, pa
+' ni ID ne sme da bude brojac po kome se pogadja "sledeci".
+'
+' GeneracijaID se NE pise. Ta masinerija je kompenzacija za nepostojeci header i
+' brise se u Zbirna cutover-u; nov pisac je ne sme ozivljavati.
+'
+' PR3 je ADITIVAN. Zatecen tok (modDokUnos.bas:533, modAutoHladnjaca,
+' modMasterSync) i dalje idu starim putem; cutover citalaca, invarijante i storna
+' je Zbirna cutover. Zato header NAMERNO ostavlja UkupnoKolicina /
+' UkupnoAmbalaze / Klasa
+' prazne -- to su kolone koje u ciljnoj semi ne postoje jer kolicina zivi na
+' stavci. Ko ih procita dobija prazno, i to je tacan odgovor: nije "nula
+' kilograma", nego "ne pitaj header za kolicinu".
+'
+' BrojZbirne se pise na HEADER zbirne -- to je poslovna labela dokumenta i
+' operater je vidi na papiru. Ono sto se ne radi: broj se ne koristi kao VEZA.
+' Pripadnost otpremnice zbirnoj zna iskljucivo tblZbirnaIzvori; broj nije ni
+' relacija ni rezervni put.
+'
+' OVAJ WRITER PRAVI I ODMAH FINALIZUJE DOKUMENT (IzdatoStatus = IZDATO).
+'
+' Zato trazi bar jednu izvornu otpremnicu: zbirna bez izvora nije izdat dokument.
+' Draft-first tok -- gde operater prvo otvori zbirnu pa vezuje otpremnice -- je
+' zasebna funkcija koja jos ne postoji (CreateZbirnaDraft_TX). Dok je nema,
+' kanonski tok je JEDAN: otpremnice postoje, pa se zbirna napravi i izda.
+'
+' DVA JAVNA ULAZA, JEDNO JEZGRO -- namera se vidi na callsite-u.
+'
+'   CreateZbirna_TX           rucni poslovni unos. "ocekivano" je OBAVEZNO:
+'                             ono sto je operater otkucao mora da se poredi sa
+'                             izvedenim iz otpremnica.
+'   CreateZbirnaIzIzvora_TX   automatski tok (auto-hladnjaca, malina). Nema
+'                             nezavisnog ocekivanja, i to se KAZE.
+'
+' Ranije je bio jedan ulaz sa Optional ocekivano, pa se kontrola mogla iskljuciti
+' time sto se argument prosto ne prosledi -- tiho, bez traga na pozivu. Sada se
+' ne moze iskljuciti; moze se samo izabrati drugi ulaz, i to se vidi.
+'
+' Argumenti:
+'   h                 Scripting.Dictionary. Obavezno: Datum, VozacID,
+'                     BrojZbirne, KupacID. Opciono: Hladnjaca, Pogon.
+'                     Nepoznat kljuc je GRESKA (v. HdrProveriKljuceve).
+'   izvorOtpremnice   Collection OtpremnicaID-jeva. Bar jedan.
+'   ocekivano         Collection diktova {Klasa, Kolicina, KolAmbalaze} -- ono
+'                     sto je operater OTKUCAO. Neslaganje sa izvedenim obara upis.
+'   outGreska         RAZLOG odbijanja, ne samo cinjenica.
+'
+' outGreska postoji jer se bez njega ne moze razlikovati "kapija je odbila upis"
+' od "upis je pukao iz drugog razloga pa je ispalo isto". Nije teorijska
+' razlika: sabotaza koja je iskljucila proveru duple klase ostavila je suite
+' ZELEN, jer je posao preuzeo Dictionary.Add svojom greskom o duplom kljucu.
+Public Function CreateZbirna_TX(ByVal h As Object, _
+                                ByVal izvorOtpremnice As Collection, _
+                                ByVal ocekivano As Collection, _
+                                Optional ByRef outGreska As String) As String
+    CreateZbirna_TX = ZbirnaUpis(h, izvorOtpremnice, ocekivano, True, outGreska)
+End Function
+
+' Izvedeno bez nezavisne kontrole -- za automatske tokove koji nemaju sta da
+' unakrsno provere. Izricito, ne prece prosledjivanjem Nothing.
+Public Function CreateZbirnaIzIzvora_TX(ByVal h As Object, _
+                                        ByVal izvorOtpremnice As Collection, _
+                                        Optional ByRef outGreska As String) As String
+    CreateZbirnaIzIzvora_TX = ZbirnaUpis(h, izvorOtpremnice, Nothing, False, outGreska)
+End Function
+
+Private Function ZbirnaUpis(ByVal h As Object, _
+                            ByVal izvorOtpremnice As Collection, _
+                            ByVal ocekivano As Collection, _
+                            ByVal ocekivanoObavezno As Boolean, _
+                            ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili u
+    ' pogresnom rasporedu tiho salje vrednosti u pogresna polja. Ide PRE BeginTx:
+    ' kapija sme da digne gresku, a nema smisla otvarati transakciju koja se
+    ' odmah rollback-uje.
+    ' tblOtpremnica se CITA, ne menja -- zato nije u snapshotu.
+    modSchema.SchemaReadyOrFail "CreateZbirna_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
+        "|" & TBL_OTPREMNICA
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ZbirnaUpis = CreateZbirna(h, izvorOtpremnice, ocekivano, ocekivanoObavezno)
+
+    If ZbirnaUpis = "" Then
+        Err.Raise vbObjectError + 1220, "CreateZbirna_TX", _
+                  "CreateZbirna nije vratio ZbirnaID."
+    End If
+
+    tx.CommitTx
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError "CreateZbirna_TX", errDesc, errNum
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="CreateZbirna_TX", _
+        entityType:="Zbirna", _
+        entityID:=ZbirnaUpis, _
+        correlationId:=ZbirnaUpis, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="CreateZbirna_TX failed. Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="CreateZbirna_TX", _
+        entityType:="Zbirna", _
+        entityID:=ZbirnaUpis, _
+        correlationId:=ZbirnaUpis
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    ZbirnaUpis = ""
+    outGreska = errDesc
+
+    PrintTxFailure "CreateZbirna_TX", errSrc, errNum, errDesc
+End Function
+
+' Core -- NE zovi spolja. Ulazi su CreateZbirna_TX i CreateZbirnaIzIzvora_TX,
+' oba preko ZbirnaUpis koji drzi snapshot transakciju; direktan poziv bi kod
+' greske ostavio pola dokumenta.
+Private Function CreateZbirna(ByVal h As Object, _
+                              ByVal izvorOtpremnice As Collection, _
+                              ByVal ocekivano As Collection, _
+                              ByVal ocekivanoObavezno As Boolean) As String
+    Const SRC As String = "CreateZbirna"
+
+    On Error GoTo EH
+
+    If h Is Nothing Then
+        Err.Raise vbObjectError + 1221, SRC, "Header nije prosledjen."
+    End If
+
+    If izvorOtpremnice Is Nothing Then
+        Err.Raise vbObjectError + 1222, SRC, _
+                  "Izvorne otpremnice nisu prosledjene."
+    End If
+
+    If izvorOtpremnice.count = 0 Then
+        Err.Raise vbObjectError + 1223, SRC, _
+                  "Zbirna mora imati bar jednu izvornu otpremnicu."
+    End If
+
+    ' Rucni unos MORA da donese ono sto je operater otkucao. Prazna kolekcija je
+    ' isto sto i nijedna -- inace bi se kontrola gasila praznim argumentom.
+    If ocekivanoObavezno Then
+        If ocekivano Is Nothing Then
+            Err.Raise vbObjectError + 1261, SRC, _
+                      "Ocekivane vrednosti su obavezne za rucni unos. Za " & _
+                      "automatski tok koristi CreateZbirnaIzIzvora_TX."
+        End If
+        If ocekivano.count = 0 Then
+            Err.Raise vbObjectError + 1262, SRC, _
+                      "Ocekivane vrednosti su prazne. Za automatski tok " & _
+                      "koristi CreateZbirnaIzIzvora_TX."
+        End If
+    End If
+
+    ' Fail-fast nad semom pre ijednog upisa.
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_DATUM, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_VOZAC, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_BROJ, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KUPAC, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_TIP_AMB, SRC
+
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_RB, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, SRC
+
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, SRC
+
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
+
+    HdrProveriKljuceve h, SRC
+
+    Dim datum As Date
+    Dim vozacID As String
+    Dim brojZbirne As String
+    Dim kupacID As String
+
+    datum = HdrDatum(h, "Datum", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
+    kupacID = HdrObavezan(h, "KupacID", SRC)
+
+    ' --- izvor: procitaj, proveri, izvedi ------------------------------------
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(data) Then
+        Err.Raise vbObjectError + 1224, SRC, "Tabela otpremnica je prazna."
+    End If
+
+    Dim cID As Long, cKlasa As Long, cKol As Long, cAmb As Long
+    Dim cVrsta As Long, cSorta As Long, cTip As Long
+    Dim cStorno As Long, cVozac As Long
+
+    cID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, SRC)
+    cVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+    cSorta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
+    cTip = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
+    cVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+
+    ' Kanonsko clanstvo se cita JEDNOM, pre petlje.
+    Dim clanstvo As Object
+    Set clanstvo = AktivnoClanstvoPoKanonu(SRC)
+
+    Dim redPoID As Object
+    Dim kolPoKlasi As Object
+    Dim ambPoKlasi As Object
+    Set redPoID = CreateObject("Scripting.Dictionary")
+    Set kolPoKlasi = CreateObject("Scripting.Dictionary")
+    Set ambPoKlasi = CreateObject("Scripting.Dictionary")
+
+    Dim vrsta As String, sorta As String, tipAmb As String
+    Dim prvi As Boolean
+    Dim i As Long, r As Long
+    Dim otpID As String, klasa As String
+    Dim kolRed As Double, ambRed As Double
+
+    prvi = True
+
+    For i = 1 To izvorOtpremnice.count
+        otpID = Trim$(NzToText(izvorOtpremnice(i)))
+        If Len(otpID) = 0 Then
+            Err.Raise vbObjectError + 1225, SRC, _
+                      "Prazan OtpremnicaID na poziciji " & CStr(i) & "."
+        End If
+
+        If redPoID.Exists(UCase$(otpID)) Then
+            Err.Raise vbObjectError + 1226, SRC, _
+                      "Ista otpremnica navedena dvaput: " & otpID
+        End If
+
+        r = NadjiJedanRedOtpremnice(data, cID, otpID, SRC)
+        redPoID.Add UCase$(otpID), r
+
+        ' IsStorniranoValue je Private u modStorno -- odavde nevidljiv.
+        ' Poredjenje je case-insensitive, kao tamo.
+        If StrComp(Trim$(NzToText(data(r, cStorno))), "Da", _
+                   vbTextCompare) = 0 Then
+            Err.Raise vbObjectError + 1227, SRC, _
+                      "Otpremnica je stornirana: " & otpID
+        End If
+
+        ' Fail-closed na vec vezanu otpremnicu. Jedini izvor je clanstvo.
+        '
+        ' BrojZbirne se NE gleda: on nikad nije bio veza nego labela, a stari
+        ' writer koji ga puni nema sta da stiti -- nema produkcionih podataka.
+        ' Nov kanonski writer ne sme da poznaje stari model odnosa.
+        If clanstvo.Exists(UCase$(otpID)) Then
+            Err.Raise vbObjectError + 1228, SRC, _
+                      "Otpremnica je vec u sastavu aktivne zbirne: " & otpID & _
+                      " -> " & CStr(clanstvo(UCase$(otpID)))
+        End If
+
+        ' Zbirna je JEDAN transport JEDNOG vozaca. Otpremnica drugog vozaca u
+        ' istoj zbirnoj je korupcija domena, ne rubni slucaj: BrojZbirne je
+        ' scoped po vozacu, pa bi takav dokument bio i nepretraziv.
+        RequireIstoPolje vozacID, Trim$(NzToText(data(r, cVozac))), _
+                         "VozacID", otpID, SRC
+
+        ' Dokument ima JEDNU vrstu, sortu i tip ambalaze. Otpremnica koja se ne
+        ' slaze ne pripada ovoj zbirnoj -- i to je strukturno, ne stvar ukusa.
+        If prvi Then
+            vrsta = Trim$(NzToText(data(r, cVrsta)))
+            sorta = Trim$(NzToText(data(r, cSorta)))
+            tipAmb = Trim$(NzToText(data(r, cTip)))
+            prvi = False
+        Else
+            RequireIstoPolje vrsta, Trim$(NzToText(data(r, cVrsta))), _
+                             "VrstaVoca", otpID, SRC
+            RequireIstoPolje sorta, Trim$(NzToText(data(r, cSorta))), _
+                             "SortaVoca", otpID, SRC
+            RequireIstoPolje tipAmb, Trim$(NzToText(data(r, cTip))), _
+                             "TipAmbalaze", otpID, SRC
+        End If
+
+        klasa = Trim$(NzToText(data(r, cKlasa)))
+        RequireValidDocumentClass klasa, SRC
+        klasa = UCase$(klasa)
+
+        If Not IsNumeric(data(r, cKol)) Then
+            Err.Raise vbObjectError + 1230, SRC, _
+                      "Kolicina nije broj na otpremnici: " & otpID
+        End If
+        kolRed = CDbl(data(r, cKol))
+
+        ambRed = 0
+        If IsNumeric(data(r, cAmb)) Then ambRed = CDbl(data(r, cAmb))
+
+        If Not kolPoKlasi.Exists(klasa) Then
+            kolPoKlasi.Add klasa, 0#
+            ambPoKlasi.Add klasa, 0#
+        End If
+        kolPoKlasi(klasa) = CDbl(kolPoKlasi(klasa)) + kolRed
+        ambPoKlasi(klasa) = CDbl(ambPoKlasi(klasa)) + ambRed
+    Next i
+
+    ' --- izvedene stavke moraju biti smislene --------------------------------
+    Dim klase As Collection
+    Set klase = KlaseUKanonskomRedu(kolPoKlasi)
+
+    Dim k As Long
+    For k = 1 To klase.count
+        klasa = CStr(klase(k))
+        If CDbl(kolPoKlasi(klasa)) <= 0 Then
+            Err.Raise vbObjectError + 1231, SRC, _
+                      "Zbir kolicine za klasu " & klasa & " nije veci od nule."
+        End If
+        If CDbl(ambPoKlasi(klasa)) < 0 Then
+            Err.Raise vbObjectError + 1232, SRC, _
+                      "Zbir ambalaze za klasu " & klasa & " je negativan."
+        End If
+        ' Ambalaza je BROJ KOMADA, ne tezina. Legacy ValidateZbirnaInput je to
+        ' drzao tipom (ukupnoAmb As Long); rec/nista drugo to vise ne cuva, pa
+        ' se trazi ovde. Odbija se, ne zaokruzuje: "20.5 gajbica" je kvar u
+        ' izvoru, a tiha ispravka ga sakriva.
+        RequireCeoBroj CDbl(ambPoKlasi(klasa)), _
+                       "Ambalaza za klasu " & klasa, SRC
+    Next k
+
+    RequireOcekivanoSeSlaze ocekivano, kolPoKlasi, ambPoKlasi, SRC
+
+    ' --- upis ----------------------------------------------------------------
+    Dim zbirnaID As String
+    zbirnaID = NewEntityID("ZBR-")
+
+    If zbirnaID = "" Then
+        Err.Raise vbObjectError + 1233, SRC, _
+                  "NewEntityID nije vratio ZbirnaID."
+    End If
+
+    Dim rowData As Variant
+    rowData = BuildZbirnaHeaderRowData(zbirnaID, datum, vozacID, brojZbirne, _
+                                       kupacID, HdrOpcion(h, "Hladnjaca"), _
+                                       HdrOpcion(h, "Pogon"), vrsta, sorta, _
+                                       tipAmb)
+
+    If AppendRow(TBL_ZBIRNA, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1234, SRC, _
+                  "AppendRow nije upisao header u tblZbirna."
+    End If
+
+    Dim stavkaID As String
+    For k = 1 To klase.count
+        klasa = CStr(klase(k))
+
+        ' Fail-closed: NewEntityID vraca "" kad CoCreateGuid ne uspe. Red bez
+        ' identiteta je gori od pada -- niko ga posle ne moze ni naci ni vezati.
+        stavkaID = NewEntityID("ZBS-")
+        If stavkaID = "" Then
+            Err.Raise vbObjectError + 1235, SRC, _
+                      "NewEntityID nije vratio ZbirnaStavkaID za klasu " & klasa & "."
+        End If
+
+        rowData = BuildZbirnaStavkaRowData(stavkaID, zbirnaID, k, klasa, _
+                                           CDbl(kolPoKlasi(klasa)), _
+                                           CDbl(ambPoKlasi(klasa)))
+
+        If AppendRow(TBL_ZBIRNA_STAVKE, rowData) <= 0 Then
+            Err.Raise vbObjectError + 1236, SRC, _
+                      "AppendRow nije upisao stavku za klasu " & klasa & "."
+        End If
+    Next k
+
+    ' --- clanstvo, u ISTOJ transakciji kao header i stavke -------------------
+    '
+    ' Od kojih je otpremnica ova VERZIJA sastavljena. Posle ispravke jedne
+    ' otpremnice nastaje nova verzija zbirne, a sestre koje se nisu menjale
+    ' pripadaju i staroj i novoj -- jedan FK to ne bi mogao da pokaze.
+    Dim kljuc As Variant
+    Dim izvorID As String
+
+    For Each kljuc In redPoID.Keys
+        izvorID = NewEntityID("ZBI-")
+        If izvorID = "" Then
+            Err.Raise vbObjectError + 1256, SRC, _
+                      "NewEntityID nije vratio ZbirnaIzvorID."
+        End If
+
+        rowData = BuildZbirnaIzvorRowData(izvorID, zbirnaID, _
+                                          IDIzRedaOtpremnice(data, cID, _
+                                                             CLng(redPoID(kljuc))))
+        If AppendRow(TBL_ZBIRNA_IZVORI, rowData) <= 0 Then
+            Err.Raise vbObjectError + 1257, SRC, _
+                      "AppendRow nije upisao clanstvo otpremnice."
+        End If
+    Next kljuc
+
+    CreateZbirna = zbirnaID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError SRC, errDesc, errNum
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' Tacno jedan red za dati OtpremnicaID. Nula i vise od jednog su oba greska:
+' tihi "uzmi prvi pogodak" je klasa buga zbog koje CreateFaktura ima
+' RequireSingleFakturaRow.
+Private Function NadjiJedanRedOtpremnice(ByRef data As Variant, _
+                                         ByVal colID As Long, _
+                                         ByVal otpID As String, _
+                                         ByVal src As String) As Long
+    Dim i As Long, nadjen As Long, koliko As Long
+
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, colID))), otpID, vbTextCompare) = 0 Then
+            nadjen = i
+            koliko = koliko + 1
+        End If
+    Next i
+
+    If koliko = 0 Then
+        Err.Raise vbObjectError + 1237, src, _
+                  "Otpremnica nije pronadjena: " & otpID
+    End If
+    If koliko > 1 Then
+        Err.Raise vbObjectError + 1238, src, _
+                  "Duplikat OtpremnicaID=" & otpID & "; Count=" & CStr(koliko)
+    End If
+
+    NadjiJedanRedOtpremnice = nadjen
+End Function
+
+Private Sub RequireIstoPolje(ByVal ocekivano As String, ByVal stvarno As String, _
+                             ByVal polje As String, ByVal otpID As String, _
+                             ByVal src As String)
+    If StrComp(ocekivano, stvarno, vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1239, src, _
+                  "Otpremnica " & otpID & " ima drugo polje " & polje & _
+                  ": ocekivano '" & ocekivano & "', naslo '" & stvarno & "'."
+    End If
+End Sub
+
+Private Sub RequireCeoBroj(ByVal v As Double, ByVal opis As String, _
+                           ByVal src As String)
+    If Abs(v - Fix(v)) > 0.0000001 Then
+        Err.Raise vbObjectError + 1240, src, _
+                  opis & " mora biti ceo broj, a nije: " & Fmt2Zbr(v)
+    End If
+End Sub
+
+' Klase u kanonskom redu: I, pa II, pa sve ostalo azbucno. RedniBroj mora biti
+' determinisan -- Dictionary.Keys cuva redosled ubacivanja, a on zavisi od
+' redosleda otpremnica u pozivu.
+Private Function KlaseUKanonskomRedu(ByVal kolPoKlasi As Object) As Collection
+    Dim c As Collection
+    Set c = New Collection
+
+    If kolPoKlasi.Exists(UCase$(KLASA_I)) Then c.Add UCase$(KLASA_I)
+    If kolPoKlasi.Exists(UCase$(KLASA_II)) Then c.Add UCase$(KLASA_II)
+
+    Dim kljuc As Variant
+    Dim ostatak As Collection
+    Set ostatak = New Collection
+
+    For Each kljuc In kolPoKlasi.Keys
+        If StrComp(CStr(kljuc), UCase$(KLASA_I), vbTextCompare) <> 0 And _
+           StrComp(CStr(kljuc), UCase$(KLASA_II), vbTextCompare) <> 0 Then
+            ostatak.Add CStr(kljuc)
+        End If
+    Next kljuc
+
+    Dim i As Long, j As Long, tmp As String
+    Dim arr() As String
+    If ostatak.count > 0 Then
+        ReDim arr(1 To ostatak.count)
+        For i = 1 To ostatak.count
+            arr(i) = CStr(ostatak(i))
+        Next i
+        For i = 1 To UBound(arr) - 1
+            For j = i + 1 To UBound(arr)
+                If StrComp(arr(i), arr(j), vbTextCompare) > 0 Then
+                    tmp = arr(i): arr(i) = arr(j): arr(j) = tmp
+                End If
+            Next j
+        Next i
+        For i = 1 To UBound(arr)
+            c.Add arr(i)
+        Next i
+    End If
+
+    Set KlaseUKanonskomRedu = c
+End Function
+
+' Unakrsna provera: ono sto je operater otkucao mora da se slaze sa onim sto je
+' izvedeno iz otpremnica. Neslaganje je danas tiha greska -- ekran prikaze svoje
+' brojeve, tabela nosi druge.
+Private Sub RequireOcekivanoSeSlaze(ByVal ocekivano As Collection, _
+                                    ByVal kolPoKlasi As Object, _
+                                    ByVal ambPoKlasi As Object, _
+                                    ByVal src As String)
+    If ocekivano Is Nothing Then Exit Sub
+    If ocekivano.count = 0 Then Exit Sub
+
+    Dim vidjene As Object
+    Set vidjene = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    Dim s As Object
+    Dim klasa As String
+    Dim kol As Double, amb As Double
+
+    For i = 1 To ocekivano.count
+        If Not IsObject(ocekivano(i)) Then
+            Err.Raise vbObjectError + 1241, src, _
+                      "Ocekivana stavka " & CStr(i) & " nije Dictionary."
+        End If
+        Set s = ocekivano(i)
+
+        klasa = UCase$(Trim$(NzToText(StavkaVrednost(s, "Klasa", i, src))))
+        If vidjene.Exists(klasa) Then
+            Err.Raise vbObjectError + 1242, src, _
+                      "Dve ocekivane stavke iste klase: " & klasa
+        End If
+        vidjene.Add klasa, True
+
+        If Not kolPoKlasi.Exists(klasa) Then
+            Err.Raise vbObjectError + 1243, src, _
+                      "Ocekivana klasa " & klasa & " ne postoji na izvornim otpremnicama."
+        End If
+
+        kol = StavkaBroj(s, "Kolicina", i, src)
+        amb = StavkaBroj(s, "KolAmbalaze", i, src)
+
+        If Abs(kol - CDbl(kolPoKlasi(klasa))) > 0.001 Then
+            Err.Raise vbObjectError + 1244, src, _
+                      "Kolicina za klasu " & klasa & " se ne slaze sa otpremnicama: " & _
+                      "uneto " & Fmt2Zbr(kol) & ", izvedeno " & Fmt2Zbr(CDbl(kolPoKlasi(klasa))) & "."
+        End If
+        If Abs(amb - CDbl(ambPoKlasi(klasa))) > 0.001 Then
+            Err.Raise vbObjectError + 1245, src, _
+                      "Ambalaza za klasu " & klasa & " se ne slaze sa otpremnicama: " & _
+                      "uneto " & Fmt2Zbr(amb) & ", izvedeno " & Fmt2Zbr(CDbl(ambPoKlasi(klasa))) & "."
+        End If
+    Next i
+
+    If vidjene.count <> kolPoKlasi.count Then
+        Err.Raise vbObjectError + 1246, src, _
+                  "Ocekivano ima " & CStr(vidjene.count) & " klasa, a otpremnice daju " & _
+                  CStr(kolPoKlasi.count) & "."
+    End If
+End Sub
+
+' Broj u poruku, nezavisno od Windows locale-a (decimalna tacka uvek).
+Private Function Fmt2Zbr(ByVal v As Double) As String
+    Fmt2Zbr = Replace(Format$(v, "0.00"), ",", ".")
+End Function
+
+' Header ciljne seme: BEZ UkupnoKolicina / UkupnoAmbalaze / Klasa. Te kolone jos
+' postoje u tabeli (brisu se u cutover-u) i ostaju prazne namerno -- v. gore
+' CreateZbirna_TX. GeneracijaID se ne pise.
+Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
+                                          ByVal datum As Date, _
+                                          ByVal vozacID As String, _
+                                          ByVal brojZbirne As String, _
+                                          ByVal kupacID As String, _
+                                          ByVal hladnjaca As String, _
+                                          ByVal pogon As String, _
+                                          ByVal vrstaVoca As String, _
+                                          ByVal sortaVoca As String, _
+                                          ByVal tipAmb As String) As Variant
+    Const SRC As String = "BuildZbirnaHeaderRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1247, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirna."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_SORTA, sortaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, tipAmb, SRC
+
+    If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_STORNIRANO, "", SRC
+    End If
+
+    ' IZDATO se pise EKSPLICITNO.
+    '
+    ' Legacy konvencija je "prazno = IZDATO" (modDokumentInvariant.DocIsIssued,
+    ' konzervativno). Nov model se na nju ne oslanja: ovaj writer pravi i odmah
+    ' FINALIZUJE dokument, pa to i kaze. Kad se pojavi draft-first tok, on ce
+    ' imati svoj ulaz (CreateZbirnaDraft_TX) i pisati DRAFT -- a razlika izmedju
+    ' "niko nije upisao" i "izdato" tada vise nije pretpostavka.
+    If GetColumnIndex(TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, _
+                            IZDATO_IZDATO, SRC
+    End If
+
+    BuildZbirnaHeaderRowData = rowData
+End Function
+
+' Na kojoj je AKTIVNOJ zbirnoj otpremnica sada. "" = ni na jednoj.
+'
+' Ovo je zamena za obrisanu kolonu Otpremnica.ZbirnaID: isto pitanje, ali
+' racunato iz jedinog zapisa clanstva umesto cuvano na drugom mestu.
+Public Function AktivnaZbirnaZaOtpremnicu(ByVal otpremnicaID As String) As String
+    Const SRC As String = "AktivnaZbirnaZaOtpremnicu"
+
+    Dim mapa As Object
+    Set mapa = AktivnoClanstvoPoKanonu(SRC)
+
+    Dim kljuc As String
+    kljuc = UCase$(Trim$(otpremnicaID))
+    If mapa.Exists(kljuc) Then AktivnaZbirnaZaOtpremnicu = CStr(mapa(kljuc))
+End Function
+
+' Kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za AKTIVNE zbirne.
+'
+' Posle A13 ista otpremnica sme da ima VISE zapisa clanstva -- po jedan za svaku
+' verziju zbirne kroz koju je prosla. Zauzeta je samo ako je clan zbirne koja
+' NIJE stornirana; clanstvo u superseded verziji je istorija, ne prepreka.
+'
+' DVA AKTIVNA ZAPISA ZA ISTU OTPREMNICU SU TVRDA GRESKA.
+'
+' Pravilo je prosto: jedna otpremnica ima TACNO 0 ili 1 aktivan zapis clanstva.
+' Drugi zapis je greska bez obzira da li pokazuje na DRUGU ili na ISTU zbirnu --
+' dupli red iste veze bi kasnije obican join sabrao dvaput.
+'
+' Prva verzija je radila prosto mapa(otpID) = zbrID, pa bi drugi red tiho
+' pregazio prvi. Druga je hvatala samo razlicit ZbirnaID. Loader koji nelegalno
+' stanje normalizuje u legalno radi protiv kardinaliteta koji A15 cuva.
+Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
+    Dim mapa As Object
+    Set mapa = CreateObject("Scripting.Dictionary")
+    Set AktivnoClanstvoPoKanonu = mapa
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+
+    Dim cIzvZbr As Long, cIzvOtp As Long
+    cIzvZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, src)
+    cIzvOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, src)
+
+    ' Skup storniranih zbirnih -- jedan prolaz, pa provera po kljucu.
+    Dim stornirane As Object
+    Set stornirane = CreateObject("Scripting.Dictionary")
+
+    Dim zbr As Variant
+    zbr = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbr) Then
+        Dim cZbrPk As Long, cZbrSt As Long, k As Long
+        cZbrPk = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, src)
+        cZbrSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+        If cZbrSt > 0 Then
+            For k = 1 To UBound(zbr, 1)
+                If StrComp(Trim$(NzToText(zbr(k, cZbrSt))), "Da", vbTextCompare) = 0 Then
+                    stornirane(UCase$(Trim$(NzToText(zbr(k, cZbrPk))))) = True
+                End If
+            Next k
+        End If
+    End If
+
+    Dim i As Long
+    Dim zbrID As String, otpID As String
+
+    For i = 1 To UBound(izv, 1)
+        zbrID = Trim$(NzToText(izv(i, cIzvZbr)))
+        otpID = UCase$(Trim$(NzToText(izv(i, cIzvOtp))))
+        If Len(zbrID) > 0 And Len(otpID) > 0 Then
+            If Not stornirane.Exists(UCase$(zbrID)) Then
+                If mapa.Exists(otpID) Then
+                    Err.Raise vbObjectError + 1260, src, _
+                              "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
+                              otpID & " ima dva aktivna zapisa clanstva (" & _
+                              CStr(mapa(otpID)) & " i " & zbrID & ")."
+                End If
+                mapa.Add otpID, zbrID
+            End If
+        End If
+    Next i
+End Function
+
+' Clanstvo se pise ORIGINALNIM OtpremnicaID-em iz tabele, ne kljucem recnika:
+' kljuc je UCase$ normalizovan da bi duplikat bio uhvatljiv, a u tabelu mora da
+' ode ono sto tamo stvarno stoji.
+Private Function IDIzRedaOtpremnice(ByRef data As Variant, ByVal colID As Long, _
+                                    ByVal red As Long) As String
+    IDIzRedaOtpremnice = Trim$(NzToText(data(red, colID)))
+End Function
+
+Private Function BuildZbirnaIzvorRowData(ByVal izvorID As String, _
+                                         ByVal zbirnaID As String, _
+                                         ByVal otpremnicaID As String) As Variant
+    Const SRC As String = "BuildZbirnaIzvorRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_IZVORI)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1258, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirnaIzvori."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_ID, izvorID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, _
+                        otpremnicaID, SRC
+
+    BuildZbirnaIzvorRowData = rowData
+End Function
+
+Private Function BuildZbirnaStavkaRowData(ByVal stavkaID As String, _
+                                          ByVal zbirnaID As String, _
+                                          ByVal redniBroj As Long, _
+                                          ByVal klasa As String, _
+                                          ByVal kolicina As Double, _
+                                          ByVal kolAmb As Double) As Variant
+    Const SRC As String = "BuildZbirnaStavkaRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_STAVKE)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1248, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirnaStavke."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ID, stavkaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_RB, redniBroj, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, klasa, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, kolicina, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, kolAmb, SRC
+
+    BuildZbirnaStavkaRowData = rowData
+End Function
+
+' --- citanje DTO-a ----------------------------------------------------------
+'
+' Nedostajuci kljuc je GRESKA, ne prazna vrednost: Dictionary(k) nad nepostojecim
+' kljucem tiho vraca Empty i doda kljuc, pa bi tipfeler u imenu polja prosao kao
+' "korisnik nije uneo".
+
+' Sve sto nije na spisku je greska.
+'
+' Provera obaveznih kljuceva hvata samo pola problema: tipfeler u OPCIONOM polju
+' ("Hladnjca") ne obara nista, samo tiho ostavi prazno. Zato spisak.
+'
+' VrstaVoca / SortaVoca / TipAmbalaze NISU na spisku namerno -- izvode se iz
+' izvornih otpremnica. Pozivalac koji ih salje pravi drugi izvor istine.
+Private Function HdrKljucPoznat(ByVal kljuc As String) As Boolean
+    Select Case LCase$(Trim$(kljuc))
+        Case "datum", "vozacid", "brojzbirne", "kupacid", "hladnjaca", "pogon"
+            HdrKljucPoznat = True
+    End Select
+End Function
+
+Private Sub HdrProveriKljuceve(ByVal h As Object, ByVal src As String)
+    Dim kljuc As Variant
+
+    For Each kljuc In h.Keys
+        If Not HdrKljucPoznat(CStr(kljuc)) Then
+            Err.Raise vbObjectError + 1249, src, _
+                      "Header ima nepoznat kljuc: " & CStr(kljuc) & _
+                      ". Dozvoljeni: Datum, VozacID, BrojZbirne, KupacID, " & _
+                      "Hladnjaca, Pogon. Vrsta/sorta/tip ambalaze dolaze iz otpremnica."
+        End If
+    Next kljuc
+End Sub
+
+Private Function HdrObavezan(ByVal h As Object, ByVal kljuc As String, _
+                             ByVal src As String) As String
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1250, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    HdrObavezan = Trim$(NzToText(h(kljuc)))
+
+    If Len(HdrObavezan) = 0 Then
+        Err.Raise vbObjectError + 1251, src, _
+                  "Header polje je prazno: " & kljuc
+    End If
+End Function
+
+Private Function HdrOpcion(ByVal h As Object, ByVal kljuc As String) As String
+    If h.Exists(kljuc) Then HdrOpcion = Trim$(NzToText(h(kljuc)))
+End Function
+
+Private Function HdrDatum(ByVal h As Object, ByVal kljuc As String, _
+                          ByVal src As String) As Date
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1252, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    If Not IsDate(h(kljuc)) Then
+        Err.Raise vbObjectError + 1253, src, _
+                  "Header polje nije datum: " & kljuc
+    End If
+
+    HdrDatum = CDate(h(kljuc))
+End Function
+
+Private Function StavkaVrednost(ByVal s As Object, ByVal kljuc As String, _
+                                ByVal idx As Long, ByVal src As String) As Variant
+    If Not s.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1254, src, _
+                  "Stavka " & CStr(idx) & " nema kljuc: " & kljuc
+    End If
+
+    StavkaVrednost = s(kljuc)
+End Function
+
+Private Function StavkaBroj(ByVal s As Object, ByVal kljuc As String, _
+                            ByVal idx As Long, ByVal src As String) As Double
+    Dim v As Variant
+    v = StavkaVrednost(s, kljuc, idx, src)
+
+    If Not IsNumeric(v) Then
+        Err.Raise vbObjectError + 1255, src, _
+                  "Stavka " & CStr(idx) & ", polje " & kljuc & _
+                  " nije broj: " & NzToText(v)
+    End If
+
+    StavkaBroj = CDbl(v)
+End Function
+
 Public Function GetZbirnaByKupac(ByVal kupacID As String, _
                                   Optional ByVal datumOd As Date = 0, _
                                   Optional ByVal datumDo As Date = 0) As Variant

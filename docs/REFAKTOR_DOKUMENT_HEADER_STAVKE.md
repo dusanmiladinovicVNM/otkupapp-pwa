@@ -1,8 +1,11 @@
 # Refaktor: dokument = header + stavke
 
-> Status: PLAN, nije implementirano. Kontekst: **nema migracije i nema legacy
-> podataka** — sezona je prošla, nijedan klijent nije na starom programu, novi
-> korisnici kreću sa novom šemom. Zato se stari model **briše**, ne prevodi.
+> Status: **PR0–PR2 mergovani, PR3 u reviziji; od Otkup skele nadalje je plan.** Tačno
+> stanje po stavkama: §14 „PR-ovi".
+>
+> Kontekst: **nema migracije i nema legacy podataka** — sezona je prošla,
+> nijedan klijent nije na starom programu, novi korisnici kreću sa novom šemom.
+> Zato se stari model **briše**, ne prevodi.
 >
 > Ovaj fajl je i model (šta dokumenti postaju) i plan (kojim redom). Kad se
 > implementira, model deo prelazi u `docs/DOMEN/DOCUMENT_HEADER_LINES.md`, a ovaj
@@ -44,7 +47,7 @@ delimična fakturisanost. **Stavka.**
 | Dokument | Kolone stavke | Napomena |
 |---|---|---|
 | Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
-| Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
+| Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze`, `BrutoKg` | **bez `Cena`** — izvedeni dokument, izvori mogu imati različite cene (§13b) |
 | Zbirna | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze` | zbirna **nema** cenu (`modDokUnos.bas:422`) |
 | Prijemnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, `Fakturisano`, `FakturaID` | |
 
@@ -96,10 +99,6 @@ TipAmbalaze
 KolAmbIzdata      dokument-level (OM izdao prazne kooperantu)
 VozacID           FK
 BrojDokumenta     poslovni broj -- LABELA
-Novac             snapshot isplacene gotovine
-PrimalacNovca
-OtpremnicaID      FK, nullable   <- ODLUKA, v. 3.1
-ZbirnaID          FK, nullable   <- zamenjuje BrojZbirne (denorm)
 Isplaceno
 DatumIsplate
 VremeUnosa
@@ -126,15 +125,18 @@ BrutoKg
 ```
 OtpremnicaID  PK "OTP-" | Datum | StanicaID | VozacID | BrojOtpremnice
 VrstaVoca | SortaVoca | TipAmbalaze
-ZbirnaID      FK, nullable   <- NOVO, zamenjuje BrojZbirne
+Cena          predlog za prefill blokova -- NE-FINANSIJSKO polje (S13b)
 Stornirano | trace | audit
 ```
+
+Bez `ZbirnaID`: pripadnost zbirnoj zna **`tblZbirnaIzvori`**, ne kolona na
+otpremnici.
 
 ### `tblOtpremnicaStavke`
 
 ```
 OtpremnicaStavkaID PK "OPS-" | OtpremnicaID FK | RedniBroj
-Klasa | Kolicina | Cena | KolAmbalaze | BrutoKg
+Klasa | Kolicina | KolAmbalaze | BrutoKg
 ```
 
 ### `tblZbirna` (header)
@@ -151,6 +153,25 @@ Stornirano | trace | audit
 ZbirnaStavkaID PK "ZBS-" | ZbirnaID FK | RedniBroj
 Klasa | Kolicina | KolAmbalaze
 ```
+
+### Tabele članstva — sastav VERZIJE dokumenta
+
+```
+tblZbirnaIzvori        ZbirnaIzvorID PK "ZBI-" | ZbirnaID FK | OtpremnicaID FK
+tblOtpremnicaIzvori    OtpremnicaIzvorID PK "OPI-" | OtpremnicaID FK | OtkupID FK
+```
+
+Odgovaraju na pitanje koje kolona ne može: *„od kojih je tačno dokumenata ova
+verzija bila sastavljena"* — bez gledanja trenutnog stanja sistema.
+
+**Nepromenljivost počinje pri izdavanju, ne pri upisu** (A15):
+
+| Stanje roditelja | Članstvo |
+|---|---|
+| `DRAFT` | **promenljivo** — izvori se dodaju i sklanjaju slobodno |
+| `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove |
+
+Puno obrazloženje: `ARCHITECTURE_CONTRACT.md` **A15**.
 
 ### `tblPrijemnica` (header)
 
@@ -180,13 +201,19 @@ PrijemnicaID              <- ostaje denormalizovan (read-modeli, poruke)
 
 ```
 tblOtkup ──1:N──> tblOtkupStavke
-   │ OtpremnicaID (nullable)
-   │ ZbirnaID (nullable, denorm)
+   ^
+   │ OtkupID
+tblOtpremnicaIzvori          <── SASTAV verzije otpremnice
    v
 tblOtpremnica ──1:N──> tblOtpremnicaStavke
-   │ ZbirnaID (nullable)
+   ^
+   │ OtpremnicaID
+tblZbirnaIzvori              <── SASTAV verzije zbirne
    v
 tblZbirna ──1:N──> tblZbirnaStavke
+
+Pripadnost drze ISKLJUCIVO tabele *Izvori. Nema pratecih kolona na deci --
+ni Otkup.OtpremnicaID ni Otpremnica.ZbirnaID.
    ^
    │ ZbirnaID
 tblPrijemnica ──1:N──> tblPrijemnicaStavke
@@ -196,23 +223,41 @@ tblPrijemnica ──1:N──> tblPrijemnicaStavke
 
 tblAmbalaza.DokumentID  -> header ID (Otkup / Otpremnica / Prijemnica)
 tblNovac.OtkupID        -> header ID
-tblPaletaStavka         -> ZbirnaID (bilo BrojZbirne)
+tblPaletaStavka         -> PrijemnicaStavkaID (bilo BrojZbirne)
 ```
 
-### 3.1) `Otkup.OtpremnicaID` — header, i to je ODLUKA
+### 3.1) Pripadnost se ne drži kolonom — ni na otkupu ni na otpremnici
 
-Danas se piše po fizičkom (klasnom) redu — `modDokumenta.bas:4266`,
-`modMasterSync.bas:2381` — pa šema **dozvoljava** da dve klase istog bloka odu na
-dve otpremnice. Bez postojećih podataka to se više ne može pročitati iz baze.
+Zatečeno stanje: `Otkup.OtpremnicaID` se piše po fizičkom (klasnom) redu
+(`modDokumenta.bas:4266`, `modMasterSync.bas:2381`), a `Otpremnica.BrojZbirne` je
+labela u ulozi veze.
 
-Odluka: **header**. Otkupni blok je „jedan otkup od jednog kooperanta, na jednom
-otkupnom mestu, jednog dana" (`docs/DOMEN/README.md` §1) i fizički ide na jednu
-otpremnicu. Ako se ikad pojavi potreba za delimičnom alokacijom, uvodi se
-eksplicitna alokaciona tabela — ne rasplinjava se FK na stavku „za svaki slučaj".
+**Odluka: obe kolone nestaju.** Pripadnost živi u tabelama članstva:
 
-Isto važi za `ZbirnaID` na otkupu: header, denormalizovan (nasleđen od
-otpremnice), i **ne** koristi se kao kanonska membership veza. Kanonska
-membership je uvek `Otpremnica.ZbirnaID`.
+```
+tblOtpremnicaIzvori   OtpremnicaID + OtkupID
+tblZbirnaIzvori       ZbirnaID     + OtpremnicaID
+```
+
+> **Dvaput ispravljena formulacija, i vredi zapisati zašto.**
+>
+> Prvo je ovde stajalo „kanonska membership je uvek `Otpremnica.ZbirnaID`" — to
+> je palo na scenariju sa sestrama (A15): posle ispravke jedne otpremnice, one
+> koje se nisu menjale pripadaju **i** staroj **i** novoj verziji zbirne, a jedan
+> FK može da pokaže samo jednu.
+>
+> Zatim je kolona zadržana kao **pokazivač** („gde je sada"), uz test koji
+> dokazuje da se poklapa sa članstvom. I to je palo: pokazivač je jedno jeftinije
+> čitanje po ceni cele nove klase problema — drift između kanona i keša, provera
+> tog drifta, snapshot još jedne tabele, još jedan upis i još dva testa. Bez
+> produkcionih podataka nema nikoga kome se to plaća.
+>
+> Odgovor na „gde je sada" računa se iz članstva
+> (`modDokumenta.AktivnaZbirnaZaOtpremnicu`).
+
+Delimična alokacija — da jedna otkupna stavka delimično završi u više otpremnica
+— i dalje **nije** modelovana; ako se pojavi, ide zasebna tabela sa `Kg`
+(`DOCUMENT_HEADER_LINES.md` §3.2). Članstvo i alokacija nisu isti pojam.
 
 ---
 
@@ -322,7 +367,15 @@ Po jedan javni ulaz po dokumentu, koji vraća **jedan** ID:
 ```vba
 Public Function CreateOtkup_TX(ByRef h As Object, ByVal stavke As Collection) As String
 Public Function CreateOtpremnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
-Public Function CreateZbirna_TX(ByRef h As Object, ByVal stavke As Collection) As String
+Public Function CreateZbirna_TX(ByVal h As Object, _
+                                ByVal izvorOtpremnice As Collection, _
+                                ByVal ocekivano As Collection, _
+                                Optional ByRef outGreska As String) As String
+
+' automatski tok -- bez nezavisnog ocekivanja, i to izricito
+Public Function CreateZbirnaIzIzvora_TX(ByVal h As Object, _
+                                        ByVal izvorOtpremnice As Collection, _
+                                        Optional ByRef outGreska As String) As String
 Public Function CreatePrijemnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
 ```
 
@@ -331,8 +384,13 @@ Obrazac je već u repou i radi: `CreateFaktura_TX(kupacID, stavke As Collection)
 posao, kompletna prevalidacija pre ijednog upisa, `RequireColumnIndex` fail-fast.
 Kopira se, ne izmišlja.
 
-**DTO:** `Scripting.Dictionary` za header, `Collection` diktova za stavke. Bez
-novih klasa, bez nasleđivanja, bez generičkog repozitorijuma.
+**Stavke se ne primaju — izvode se.** Zbirna i Otpremnica su izvedeni
+dokumenti, pa njihovi writeri primaju **izvorne dokumente**, a stavke računaju iz
+njih (A13). Otkup, kao primarna činjenica, i dalje prima stavke.
+
+**DTO:** `Scripting.Dictionary` za header, `Collection` ID-eva za izvore,
+`Collection` diktova za očekivano. Bez novih klasa, bez nasleđivanja, bez
+generičkog repozitorijuma.
 
 **Adapter:** `modOtkupUnos` / `modDokUnos` i dalje čitaju F1–F4 polja iz forme i
 prave DTO. Cutover površina je iznenađujuće mala — **po jedan stvarni callsite po
@@ -386,6 +444,67 @@ pita headeru. Jedna funkcija po dokumentu, ne ponavljati join na 40 mesta.
 Žurnal storna identifikuje operaciju preko `DocumentID`; poslovni broj ostaje kao
 display podatak u zapisu.
 
+### 7.1) Storno otpremnice → **rekalkulacija zbirne** (odluka, 10.09.2026)
+
+```
+StornoOtpremnica(otpremnicaID)
+  1. otpremnica + njena ambalaza -> Stornirano
+  2. nadji zbirne cije clanstvo (tblZbirnaIzvori) sadrzi ovu otpremnicu
+     i koje NISU stornirane
+
+     zbirna je DRAFT   -> rekalkulisi je in-place iz preostalih izvora
+     zbirna je IZDATO  -> stara ostaje NEPROMENJENA i biva superseded;
+                          nastaje NOVA verzija (nov ZbirnaID, nov BrojZbirne,
+                          IspravkaOdID, isti CorrectionID, novi izvori i stavke)
+
+  3. AKO vise nijedna otpremnica ne ostane: stara se stornira BEZ naslednika
+```
+
+Pošto lanac danas nema draft fazu, u praksi važi druga grana. **Nema in-place
+rekalkulacije izdatog dokumenta** (A13); puno obrazloženje i tri opcije:
+`GOLDEN_SCENARIJI.md` §10.
+
+Zbirna **jeste** agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa
+je rekalkulacija jedina opcija koja tu definiciju drži tačnom. Kaskada bi
+oborila zbirnu i kad na njoj ima drugih aktivnih otpremnica; zabrana bi
+blokirala legitimnu ispravku jedne otpremnice. Puna argumentacija i zatečeno
+stanje: `docs/DOMEN/GOLDEN_SCENARIJI.md` §10.
+
+Tri stvari koje ovaj korak menja u zatečenom kodu:
+
+| Danas | Posle |
+|---|---|
+| malina mod kaskadira, ostali modovi ne rade ništa (`modStorno.bas:370`) | jedno pravilo; malina prestaje da bude poseban slučaj — prazna zbirna se stornira, što je isti ishod |
+| rekalkulacija ide **po broju** i staje na dvosmislen broj (`ZbirnaMutRazlog`) | po `ZbirnaID`; ta kapija nema više posao |
+| `modStornoFlow.RunSimpleStornoOtpremnica` sadrži tačno ovo pravilo i **nema nijednog produkcionog pozivaoca** | pravilo živi u writeru; mrtva kopija se briše |
+
+Pravilo ide u **writer**, ne u flow sloj — inače ga zaobiđe svaki drugi ulaz,
+što je tačno ono što se i desilo. Nizvodni dijalog kad postoji prijemnica ili
+paleta (`CorrectionNeedsDialog`) ostaje nepromenjen.
+
+#### Šta znači da klasa nestane iz keša
+
+Otvoreno pitanje koje rekalkulacija otvara, i koje mora biti rešeno **pre** nego
+što se cutover napiše:
+
+```
+Zbirna ima:  I = 400,  II = 600
+stornira se POSLEDNJA otpremnica Klase II
+posle:       I = 400,  II = ?
+```
+
+`tblZbirnaStavke` nema `Stornirano`, a writer zabranjuje količinu 0 — dakle
+„II = 0" nije legalno stanje.
+
+**Odluka: rekalkulator briše red keša koji više nema izvor.** Stavke su izvedeni
+keš (§4.3); kad klasa nestane iz izvora, nestaje i iz keša. Line-level storno se
+**ne uvodi** — status i dalje drži header, a `BEZ_STORNA` registar ostaje tačan.
+Brisanje ide u istoj transakciji kao i rekalkulacija ostalih klasa.
+
+Alternativa (ostaviti red sa nulom) bila bi gora na dva načina: pravila bi
+razliku između „nije bilo Klase II" i „bila pa nestala" tamo gde je izvor već
+nosi, i probila bi sopstveno pravilo da količina mora biti veća od nule.
+
 ---
 
 ## 8) Zbirna invarijanta
@@ -395,13 +514,18 @@ Menja se samo identitet preko kog se računa.
 
 ```
 pre:   SumOtpremniceByKlasa(brojZbirne)   -- join po BrojZbirne
-posle: SumOtpremniceByKlasa(zbirnaID)     -- join po Otpremnica.ZbirnaID
+posle: SumOtpremniceByKlasa(zbirnaID)     -- join po tblZbirnaIzvori
 ```
 
-1. headeri otpremnica sa `ZbirnaID = X`, aktivni
+1. `tblZbirnaIzvori` gde `ZbirnaID = X` → **tačni `OtpremnicaID`-evi te verzije**
 2. njihove stavke
 3. suma po klasi
 4. poredi sa `tblZbirnaStavke` gde `ZbirnaID = X`
+
+> **Tabela članstva je jedini zapis pripadnosti** — kolone na otpremnici nema.
+> Da postoji, pomerala bi se pri ispravci sa `ZBR18` na `ZBR19` i invarijanta
+> stare više se ne bi mogla reprodukovati. Ovako sastav svake verzije ostaje
+> proverljiv (A15).
 
 Isti `BrojZbirne` na drugom `ZbirnaID` više nije problem integriteta — pa
 `RequireJedanVlasnikIkadPoBroju`, `historicalOwnerCount`, `activeLogicalCount` i
@@ -423,8 +547,18 @@ Append-only + storno + reizdavanje ostaje. Identitet postaje ID-based:
 | `ZamenjenSa` (nosi **broj**) | `ZamenjenSaID` |
 | `CorrectionID` | ostaje |
 
-Nova verzija dobija **nov** `DocumentID` i kad poslovni broj ostaje isti. Time
+Nova verzija dobija **nov `DocumentID` i nov poslovni broj** (A9). Time
 `GeneracijaID` gubi i poslednji posao — razlikovanje originala od ispravke.
+
+> Ranija formulacija je glasila „nov `DocumentID` **i kad poslovni broj ostaje
+> isti**", što je ostavljalo prostor da dve verzije dele broj. Za lanac
+> `Otkup → Otpremnica → Zbirna` to nije opcija: broj je labela koju operater vidi
+> na papiru, pa dva papira sa istim brojem i različitim sadržajem nisu razlučiva
+> izvan sistema.
+
+Kolone se u cutover-u **stvarno preimenuju** (`IspravkaOd` → `IspravkaOdID`), ne
+pretumače: kolona koja se zove `IspravkaOd` a nosi ID je tačno vrsta
+dvosmislenosti koju refaktor uklanja.
 
 ---
 
@@ -469,7 +603,7 @@ Dalje, po repou:
 - `RequireJedanVlasnikPoBroju`, `RequireJedanVlasnikIkadPoBroju`, `VlasniciPoBroju`
 - `FindSingleActiveRow`, `ZbirnaVlasnikKljuc`
 - `BackfillDeteZbirnaGeneracija`
-- `PoveziDeteNaZbirnu`, `ZavrsiVezuOtpremniceNaZbirnu` (postaju običan FK upis)
+- `PoveziDeteNaZbirnu`, `ZavrsiVezuOtpremniceNaZbirnu` — **nestaju**; pripadnost se upisuje u `tblZbirnaIzvori` kroz writer, ne kolonom na detetu
 - kolone `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN` i njihovi
   `EnsureKolonaSaTragom` pozivi
 
@@ -519,7 +653,7 @@ Obavezni scenariji:
 | `DveKlase_JedanID` | dvoklasni upis → jedan header, dve stavke, jedan vraćen ID |
 | `SamoKlasaI` / `SamoKlasaII` | jedan header, jedna stavka |
 | `BrojNijeIdentitet` | dva dokumenta sa istim brojem: storno jednog ne dira drugi, print jednog ne čita drugi, invarijanta jednog ne vidi drugi |
-| `ZbirnaFK` | otpremnica sa `ZbirnaID=X` ulazi u invarijantu; ista `BrojZbirne` na `ZbirnaID=Y` ne ulazi |
+| `ZbirnaClanstvo` | otpremnica upisana u `tblZbirnaIzvori(ZBR-X, OTP-A)` ulazi u sastav `ZBR-X`; ista `BrojZbirne` na drugoj zbirnoj ne menja ništa |
 | `StornoPoID` | jedan storno headera = jedan logički dokument |
 | `IspravkaID` | original i ispravka imaju različite ID-eve i vezu `IspravkaOdID` |
 | `PrintDvoklasni` | dvoklasni dokument se štampa kao jedan sa dve stavke |
@@ -531,7 +665,7 @@ Obavezni scenariji:
 | `AutoHladnjaca` | postojeći auto-lanac funkcionalno identičan |
 
 Dokaz u oba smera (pokvari → pukne **po imenu** → vrati → zeleno) obavezan za:
-`SemaKapija`, `BrojNijeIdentitet`, `ZbirnaFK`, `NovacBezPrimary` — kritične
+`SemaKapija`, `BrojNijeIdentitet`, `ZbirnaClanstvo`, `NovacBezPrimary` — kritične
 poslovne invarijante i nov checker.
 
 **Fixture:** `tests/fixtures/otkup_test.xlsm` se regeneriše. Redosled: donor →
@@ -562,19 +696,76 @@ pisci).
 
 ---
 
+## 13a) Kapija je merila stil pisanja poziva, ne vlasništvo (nađeno u PR3)
+
+Pre nego što je PR3 dodao nov pisač nad `tblZbirna`, provera je pokazala da A11
+kapija **ne vidi polovinu upisa**. `AppendRow` je funkcija i pola koda je zove
+kao funkciju:
+
+```vba
+AppendRow TBL_ZBIRNA, rowData          ' naredba  -- kapija je videla
+n = AppendRow(TBL_ZBIRNA, rowData)     ' funkcija -- kapija NIJE videla
+```
+
+Regex je tražio razmak posle imena mutatora. Posledica: **22 poziva nevidljivo**,
+među njima produkcioni upisi nad `tblZbirna` (`modDokumenta`, `modMasterSync`),
+`tblOtkup` (`modOtkup`, `modMasterSync`), `tblPrijemnica`, `tblOtpremnica`,
+`tblNovac`, `tblFakturaStavke` — a **sedam tabela** (`tblCenovnik`,
+`tblKooperanti`, `tblMagacin`, `tblPartnerMap`, `tblSEFEventLog`,
+`tblStornoZurnal`, `tblVozaci`) uopšte nije bilo u registru vlasništva. Kapija je
+sve to vreme bila **zelena**.
+
+Isti kvar kao raniji `RequireUpdateCell` (nema granice reči pre `UpdateCell`) —
+dva puta ista bolest, oba puta nevidljiva, oba puta nađena slučajno. Zato oblik
+poziva sada ima **sopstvene slučajeve**: `who_writes.py --self-test`, pozitivni i
+negativni, u CI-ju.
+
+`WRITE_OWNERSHIP.json` je re-baseline-ovan. Dodati pisači **nisu novi** — bili su
+neizmereni; baseline je bio zamrznut prema slepom skeneru, pa je zamrzao
+nepotpunu stvarnost. Ništa nije uklonjeno.
+
+**Treća rupa istog roda, nađena u reviziji PR3:** skener je čitao **red po red**,
+pa mu je prelomljen poziv bio nevidljiv:
+
+```vba
+n = AppendRow( _
+        TBL_ZBIRNA, rowData)
+```
+
+Takav oblik danas u `src-vba/` ne postoji, ali kapija ne sme da zavisi od toga
+gde je neko prelomio red. Sada se VBA nastavci (` _`) spajaju pre regexa —
+pažljivo, jer bi naivna verzija otvorila **novu** rupu: komentar koji se završava
+sa ` _` progutao bi sledeću liniju i sakrio pravi `AppendRow` ispod sebe. I to
+ima svoj slučaj u `--self-test`.
+
+> Pouka koja važi i za ostatak refaktora: kapija koja nikad nije pokazana crvena
+> ne dokazuje da išta meri — a kapija koja stoji na jednom regexu meri tačno
+> onoliko oblika koliko je taj regex video kad je pisan.
+
+---
+
 ## 14) Redosled
 
 Merena cena po dokumentu:
 
-| Dokument | Tabela u TX | Produkcionih pisaca | Redosled |
-|---|---|---|---|
-| Zbirna | 1 | 5 | **1.** |
-| Otpremnica | 2 | 4 | **2.** |
-| Otkup | 3 | 12 | **3.** |
-| Prijemnica | 6 | 4 | **4.** |
+| Dokument | Tabela u TX | Produkcionih pisaca | Skela | **Cutover** |
+|---|---|---|---|---|
+| Zbirna | 1 | 3 | **1.** ✅ | **3.** |
+| Otkup | 3 | 9 | 2. | **1.** |
+| Otpremnica | 2 | 1 | 3. | **2.** |
+| Prijemnica | 6 | 4 | 4. | 4. |
 
-Zbirna prva: najmanja transakcija, a u njoj živi **cela** kompenzaciona mašinerija
-koju brišemo. Prijemnica poslednja: šest tabela, i njene stavke hrane fakturu.
+**Skela i cutover više nisu isti redosled**, i to je posledica A15.
+
+Skela (nove tabele + writer, aditivno) sme bilo kojim redom — Zbirna je bila
+prva jer ima najmanju transakciju, i to je i dalje bio dobar izbor.
+
+**Cutover** ide **uzvodno-nadole**: dokument sme u produkciju tek kad svi
+dokumenti na koje pokazuje po ID-u imaju svoj header identitet. `tblZbirnaIzvori`
+pokazuje na `OtpremnicaID`, a otpremnica danas nema jedan identitet — v. „Zašto
+je redosled promenjen posle PR3" ispod tabele PR-ova.
+
+Prijemnica ostaje poslednja: šest tabela, i njene stavke hrane fakturu.
 
 ### PR-ovi
 
@@ -589,28 +780,178 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 |---|---|---|
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
-| 2 | Regenerisan donor + fixture; golden scenariji (temelj za §12.1); testovi `SemaSamoLeci` / `SemaKapija` | 1 |
-| 3 | **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`, opaque `ZbirnaID` | 2 |
-| 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, print, izveštaji, testovi. **Briše `ZbirnaIdent*` i `ZbirnaGeneracija*`.** | 3 |
-| 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
-| 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |
+| 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
+| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX`, opaque `OtkupID` po **bloku**, ne po klasi | 3 |
+| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
+| 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument koji stvarno prelazi u produkciju | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
-| 7 | **Otpremnica** header+stavke + cutover | 6 |
-| 8 | **Prijemnica** header+stavke + cutover | 7 |
-| 9 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 8 |
-| 10 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 8 |
-| 11 | **Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink | 10 |
-| 12 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 9 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 11 |
+| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže | 6 |
+| 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
+| 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
+| 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
+| 11 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 9 |
+| 12 | **Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink | 11 |
+| 13 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 10 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 12 |
 | — | `CLAUDE.md` §3 (obrtanje pravila o izvoru istine šeme) | zaseban process PR |
 
-PR 12 je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
+Završni korak (red 13) je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
 runtime mehanizam, refaktor nije završen — to je dual identity model, gori od
 sadašnjeg.
 
-### 14.1) Kapija odluke posle PR 6
+### Zašto je redosled promenjen posle PR3
 
-Posle Zbirne i Otkupa — dva najreprezentativnija slajsa — donosi se formalna
-odluka: **nastavak u mestu** ili **novo stablo koda**. Kriterijumi su merljivi,
+Prvobitni plan je išao **Zbirna → Otkup → Otpremnica**, jer je zbirna najmanja
+transakcija. Verzionisano članstvo (A15) je to obesmislilo:
+
+> `tblZbirnaIzvori` beleži `ZbirnaID → OtpremnicaID`. Ali otpremnica danas **nema
+> jedan identitet** — `SaveOtpremnicaMulti_TX` pravi red po klasi i vraća
+> `"OTP-1 + OTP-2"`. Kanonsko članstvo bi time zapisivalo *koji fizički klasni
+> redovi* čine zbirnu, a A15 traži *koje verzije poslovnih otpremnica*.
+
+To nisu iste stvari. Zato važi pravilo koje generiše redosled:
+
+> **Dokument sme u cutover tek kad svi dokumenti na koje pokazuje po ID-u imaju
+> svoj header identitet.**
+
+Skele (nove tabele + writer, aditivno) smeju bilo kojim redom — PR3 je to i
+uradio. **Cutover** ide uzvodno-nadole: `Otkup → Otpremnica → Zbirna`.
+
+Cena promene je nula danas: `tblZbirnaIzvori` još nema nijednog produkcionog
+pisca, pa nema ni jednog reda sa pogrešnim grain-om. Da je Zbirna otišla u
+cutover pre Otpremnice, kanonsko članstvo bi se punilo identitetom za koji već
+znamo da je pogrešan.
+
+### 13b) Dve odluke pre Otpremnice
+
+Obe moraju biti rešene pre nego što se napiše `CreateOtpremnica_TX`.
+
+#### „Očekivano" nema svoju tabelu — to su stavke drafta
+
+Realan tok je: operater prvo otvori otpremnicu, pa unosi otkupne listove pod
+njom, gledajući `očekivano / povezano / preostalo`. Gde živi „očekivano":
+
+```
+DRAFT OtpremnicaStavke        ono sto je operater UNEO (ocekuje)
+SUM(tblOtpremnicaIzvori -> OtkupStavke)   ono sto je POVEZANO
+preostalo = ocekivano - povezano
+
+FINALIZE: zahteva  ocekivano = povezano
+IZDATO:   stavke se zamrzavaju (A13)
+```
+
+**Bez dodatne `Expected` tabele.** Stavke drafta *jesu* očekivanje; pri
+finalizaciji prestaju to da budu i postaju sadržaj verzije. To je isti prelaz
+koji A5/A13 već opisuju („keš dok je draft, činjenica kad je izdato"), samo
+gledan sa ulazne strane.
+
+#### `Cena` ne ide na `OtpremnicaStavke`
+
+Pitanje: ako jedna otpremnica sabira pet otkupnih listova iste klase sa
+**različitim cenama**, šta znači jedna `Cena` na stavci?
+
+Mereno u zatečenom kodu — `Otpremnica.Cena` danas **nije agregat**, nego
+**seed za prefill blokova**: `modOtkupBlok.bas:688` i `modScrDokumenti.bas:1067`
+prvo pitaju `ExistingBlokCena(otpID)`, pa tek ako je 0 padaju na `Otpremnica.Cena`.
+Uz to je čitaju izveštaji i štampa.
+
+**Odluka:**
+
+| | |
+|---|---|
+| `OtpremnicaStavka.Cena` | **ne postoji.** Vrednost dokumenta je `SUM(izvorne otkupne stavke)` |
+| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u ono što jeste** — predlog cene za blokove, izričito **ne-finansijsko polje** |
+| zabrana | nigde se vrednost otpremnice ne računa kao `Kolicina × Cena` |
+
+Poslednja tačka nije teorijska: `modDokumenta.CalculateManjakByOtpremnica`
+(`:3618`) danas čita **i** `Kolicina` **i** `Cena` sa otpremnice. Posle refaktora
+bi ta cifra mogla da se ne slaže sa zbirom izvornih otkupa. Otpremnica cutover
+mora da odluči iz čega se `manjak` računa — iz izvora, ne iz denormalizovanog
+para.
+
+Da je `Cena` prosto nasleđena „jer je legacy `SaveOtpremnica` ima", model bi
+dobio drugi izvor istine za novac.
+
+#### `ocekivano` ne sme da ostane `Optional`
+
+Danas: `Optional ByVal ocekivano As Collection`, a `RequireOcekivanoSeSlaze`
+izlazi na `Nothing`. To znači da se kontrola **može isključiti time što se ne
+prosledi** — a poslovno pravilo je da ono što je operater otkucao mora da se
+poredi sa izvedenim.
+
+Istovremeno postoje legitimni automatski tokovi (auto-hladnjača, malina) gde
+nezavisnog ručnog očekivanja **nema**.
+
+**Odluka:** razdvojiti namere u dva javna ulaza nad istim `Private` core-om.
+
+```
+CreateZbirna_TX            ocekivano OBAVEZNO   (operater unosi papirnu zbirnu)
+CreateZbirnaIzIzvora_TX    bez ocekivanog       (izricito "derived-only")
+```
+
+Ne dva writera — dva **potpisa** koji izražavaju nameru. Kontrola se time ne
+može isključiti slučajno; može se samo odabrati drugi ulaz, i to se vidi na
+callsite-u.
+
+**Zašto tek u cutover-u, a ne sada:** skela nema nijednog produkcionog
+pozivaoca, pa danas ništa ne može da je isključi. Kad se pojavi prvi, potpis
+mora već biti podeljen.
+
+#### Pre prvog mutable-DRAFT članstva: A11 mora da meri i brisanje
+
+A14/A15 kažu da je članstvo promenljivo dok je dokument `DRAFT`. Uklanjanje
+izvora iz drafta znači **fizičko brisanje reda** članstva.
+
+Ali `who_writes.py` meri `AppendRow` / `UpdateCell` / `RequireUpdateCell` — **ne
+i brisanje**. Kod koji radi `lo.ListRows(i).Delete` bio bi A11 kapiji nevidljiv,
+isto kao što su ranije bili funkcijski i prelomljeni `AppendRow`.
+
+> To bi bila **treća** pojava iste klase rupe. Prve dve su nađene slučajno.
+
+**Odluka:** pre nego što se napiše prvi API koji menja članstvo drafta, moraju
+postojati **oba**:
+
+1. kanonski `Delete`/membership API (brisanje ne ide direktno po `ListRows`);
+2. `who_writes.py` koji brisanje meri kao mutaciju, sa slučajevima u
+   `--self-test` — i za `lo.ListRows(i).Delete` i za novi API.
+
+#### Referencijalni integritet članstva (P2)
+
+`AktivnoClanstvoPoKanonu` proverava da otpremnica nema dva aktivna zapisa, ali
+**ne** proverava da `ZbirnaID` iz zapisa zaista postoji u `tblZbirna`. Orphan
+zapis se time tretira kao aktivan.
+
+Ishod je fail-closed — takva otpremnica se ne može ponovo upotrebiti — pa nije
+blokada za skelu. Ali pre cutover-a mora u health/invariant mrežu:
+
+```
+za svaki red tblZbirnaIzvori:
+    ZbirnaID     postoji TACNO jednom u tblZbirna
+    OtpremnicaID postoji TACNO jednom u tblOtpremnica
+```
+
+Isto važi za `tblOtpremnicaIzvori` kad nastane.
+
+#### Correction polja u šemi se moraju preimenovati, ne pretumačiti
+
+A9 govori o `IspravkaOdID` / `ZamenjenSaID`, a kanon (`schema/schema.json`) i
+dalje fizički nosi `IspravkaOd` / `ZamenjenSa` / `CorrectionID`.
+
+Dok produkcija koristi stari model to se ne dira. Ali cutover mora ta polja
+**stvarno preimenovati** — nije dovoljno reći „ovo sad znači ID". Kolona koja se
+zove `IspravkaOd` a nosi ID je tačno vrsta dvosmislenosti koju refaktor uklanja.
+
+---
+
+### 14.1) Kapija odluke posle Otkup cutover-a
+
+Posle Otkupa u produkciji i skele za Otpremnicu i Zbirnu (tabela PR-ova: red 6)
+donosi se formalna
+odluka: **nastavak u mestu** ili **novo stablo koda**.
+
+> Kapija je posle promene redosleda **jača nego ranije**: Otkup je dokument sa
+> najviše pisača (danas 9) i najviše integracija, pa se kriterijumi mere na
+> najtežem slajsu umesto na najlakšem. Kriterijumi su merljivi,
 sa alatima koji već postoje.
 
 **Nastavljamo u mestu ako:**
@@ -655,7 +996,7 @@ slajsa kao specifikacijom, umesto sa osećajem.
 ## 16) Definicija gotovog
 
 - „ZBR-123 je jedan red u `tblZbirna`, njene klase su redovi u `tblZbirnaStavke`."
-- „`Otpremnica.ZbirnaID = ZBR-123` je prava veza."
+- „`tblZbirnaIzvori` je jedini zapis pripadnosti; kolone `Otpremnica.ZbirnaID` nema, a „gde je sada" se računa iz članstva."
 - „PRJ-789 je jedna prijemnica bez obzira ima li jednu ili dve klase."
 - „Faktura stavka zna tačnu `PrijemnicaStavkaID`."
 - „Storno prima `DocumentID`. Štampa prima `DocumentID`. Invarijanta prima `ZbirnaID`."

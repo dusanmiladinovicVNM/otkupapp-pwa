@@ -3,8 +3,13 @@
 > Ciljni model posle refaktora „header + stavke". Ugovor koji ga uokviruje:
 > `ARCHITECTURE_CONTRACT.md`. Plan isporuke: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md`.
 >
-> Status: **model usvojen, nije implementirano.** Ovo je specifikacija za
-> implementaciju, ne opis koda.
+> Status: **model usvojen; implementacija u toku.** Ovo je i dalje specifikacija,
+> ne opis koda — osim tamo gde red kaže drugačije.
+>
+> | Dokument | Stanje |
+> |---|---|
+> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `tblZbirnaIzvori`, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX`. Nov pisač još nema pozivaoca — stari (`SaveZbirnaMulti_TX`) je jedini put; čitaoci, invarijanta i storno idu u Zbirna cutover |
+> | Otpremnica / Otkup / Prijemnica | specifikacija |
 >
 > Kontekst: nema legacy transakcionih podataka. Zatečena šema **nema pravo veta**
 > nad ovim modelom. Gde postojeći kod ne podržava model — kod se adaptira ili
@@ -77,8 +82,8 @@ današnjem formatu (`12/090926`) i ostaju **labele** (A2).
 | Veza | Kardinalitet | Izvor | Nosilac FK |
 |---|---|---|---|
 | Otkup → OtkupStavke | 1:N | model | `OtkupStavka.OtkupID` |
-| Otkup → Otpremnica | **N:1, promenljiva** | `docs/DOMEN/README.md` §1 („više blokova → jedna otpremnica"); `ReassignOtkupToOtpremnica_TX` (`modDokumenta.bas:4266`) dokazuje da se blok može premestiti | `Otkup.OtpremnicaID` (header) |
-| Otpremnica → Zbirna | **N:1, promenljiva** | jedna `BrojZbirne` kolona danas; `RelinkOtpremniceToZbirna_TX` | `Otpremnica.ZbirnaID` |
+| Otkup → Otpremnica | **N:1, promenljiva** | `docs/DOMEN/README.md` §1 („više blokova → jedna otpremnica"); `ReassignOtkupToOtpremnica_TX` (`modDokumenta.bas:4266`) dokazuje da se blok može premestiti | **`tblOtpremnicaIzvori`** |
+| Otpremnica → Zbirna | **N:1, promenljiva** | jedna `BrojZbirne` kolona danas; `RelinkOtpremniceToZbirna_TX` | **`tblZbirnaIzvori`** |
 | Zbirna → Prijemnica | **1:N** (namera 1:1, ali **nije tvrdo**) | v. §3.1 | `Prijemnica.ZbirnaID` |
 | PrijemnicaStavka → FakturaStavka | **1:1, puna količina** | `CreateFaktura` uzima celu `Kolicina` reda; `IsPrijemnicaAvailableForFaktura` sprečava drugo fakturisanje (`modFaktura.bas:232, 896`) | `FakturaStavka.PrijemnicaStavkaID` |
 | PrijemnicaStavka → PaletaStavka | 1:N | `tblPaletaStavka` već nosi `PrijemnicaID` **i** `Klasa`/`VrstaVoca`/`SortaVoca` → grain je klasa, ne dokument | `PaletaStavka.PrijemnicaStavkaID` |
@@ -103,13 +108,27 @@ Ne pretvarati ovo u tvrdo 1:1 u ovom refaktoru — to bi bila izmena poslovnog
 ponašanja koja nije potrebna za identitet. Upozorenje ostaje, samo se pita po
 `ZbirnaID` umesto po `BrojZbirne`.
 
-### 3.2) Delimična alokacija — namerno NE modelujemo
+### 3.2) Članstvo i alokacija su dva različita pojma
 
-Pitanje „može li jedna `OtkupStavka` delimično da završi u više Otpremnica"
-danas nema poslovni zahtev, a šema ga ne podržava (`Otkup.OtpremnicaID` je jedno
-polje). **ODLUKA:** ostaje prost FK na headeru otkupa. Ako se potreba pojavi,
-uvodi se eksplicitna tabela `tblOtpremnicaIzvori (OtpremnicaStavkaID,
-OtkupStavkaID, Kg)` — ne rasplinjava se FK „za svaki slučaj".
+Lako se pomešaju jer oba „vezuju otkup za otpremnicu". Nisu isto:
+
+| | Pitanje na koje odgovara | Status |
+|---|---|---|
+| **`tblOtpremnicaIzvori`**<br>`(OtpremnicaID, OtkupID)` | *Koji otkupi čine ovu **verziju** otpremnice?* | **potrebno sada** (A15) |
+| **`tblOtpremnicaAlokacije`**<br>`(OtpremnicaStavkaID, OtkupStavkaID, Kg)` | *Koliko je kilograma iz ovog otkupa otišlo na ovu otpremnicu?* | **samo ako se pojavi poslovni zahtev** |
+
+**Članstvo je celobrojno i obavezno:** otkup pripada otpremnici ili ne pripada.
+Ono postoji zato što ispravka pravi novu verziju, a nepromenjene sestre moraju
+ostati vidljive u sastavu **obe** — to nema veze sa deljenjem količina.
+
+**Delimična alokacija** — da jedna `OtkupStavka` delimično završi u više
+otpremnica — danas nema poslovni zahtev i **ne modelujemo je**. Ako se pojavi,
+uvodi se zasebna tabela sa `Kg`; ne rasplinjava se članstvo „za svaki slučaj",
+i ne dodaje se `Kg` u tabelu članstva.
+
+> Ranija verzija ovog odeljka je koristila ime `tblOtpremnicaIzvori` za
+> **alokacionu** tabelu i time ga sudarila sa članstvom. Alokacija se od sada
+> zove `tblOtpremnicaAlokacije`.
 
 ---
 
@@ -131,8 +150,8 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 | `KolAmbIzdata` | H — OM izdao prazne kooperantu |
 | ~~`Novac`, `PrimalacNovca`~~ | **BRIŠU SE** — keš se ne vezuje za otkupni list; v. §4.1b |
 | `Isplaceno`, `DatumIsplate` | H — **izvedeno** iz `tblNovac` vs `SUM(stavke.Kolicina × Cena)`; v. §6.1 |
-| `OtpremnicaID` | → `tblOtpremnica`, nullable |
-| `ZbirnaID` | → `tblZbirna`, nullable, **denormalizovano** (nasleđeno od otpremnice) — nije kanonska membership |
+| ~~`OtpremnicaID`~~ | **ne postoji** — pripadnost zna `tblOtpremnicaIzvori` |
+| ~~`ZbirnaID`~~ | **ne postoji** — pripadnost zna `tblZbirnaIzvori` preko otpremnice |
 | `VremeUnosa`, `Stornirano` | |
 | `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID`, `IzdatoStatus` | |
 | `ClientRecordID` | eksterni identitet (PWA); v. §7 |
@@ -153,12 +172,29 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 ### 4.2 `tblOtpremnica` — **grain: jedna isporuka sa otkupnog mesta**
 
 `OtpremnicaID` (PK `OTP-`), `BrojOtpremnice` (labela, scoped po stanici), `Datum`,
-`StanicaID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`,
-`ZbirnaID` → nullable, `Stornirano`, trace ×4, audit ×4.
+`StanicaID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`, `Cena`
+(ne-finansijski predlog, §13b plana), `Stornirano`, trace ×4, audit ×4.
+
+**Bez `ZbirnaID`.** Pripadnost zbirnoj zna `tblZbirnaIzvori`; „na kojoj je
+aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 
 **`tblOtpremnicaStavke`** — grain: **jedna klasa jedne otpremnice**
 `OtpremnicaStavkaID` (PK `OPS-`), `OtpremnicaID` →, `RedniBroj`, `Klasa`,
-`Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`.
+`Kolicina`, `KolAmbalaze`, `BrutoKg`.
+
+> **Bez `Cena`.** Otpremnica je izvedeni dokument: njena vrednost je zbir
+> izvornih otkupnih stavki, koje mogu imati **različite cene**. Jedna `Cena` na
+> stavci bi bila drugi izvor istine za novac. Zatečena `Otpremnica.Cena` nije
+> agregat nego **predlog za prefill otkupnih blokova**
+> (`modOtkupBlok.bas:688`) — ostaje na headeru kao izričito ne-finansijsko
+> polje. Puno obrazloženje: `REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §13b.
+
+**`tblOtpremnicaIzvori`** — grain: **jedan otkup u sastavu jedne verzije otpremnice**
+`OtpremnicaIzvorID` (PK `OPI-`), `OtpremnicaID` →, `OtkupID` →, audit ×4.
+
+> Isti obrazac i isto pravilo kao `tblZbirnaIzvori` (A15): promenljivo dok je
+> otpremnica `DRAFT`, zamrznuto pri izdavanju. `Otkup.OtpremnicaID` u ciljnom
+> modelu **ne postoji** — pripadnost zna isključivo ova tabela.
 
 **Vlasnik upisa:** `modDokumenta` (ili nov `modOtpremnica`). Danas 4 pisca.
 
@@ -174,14 +210,82 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 `ZbirnaStavkaID` (PK `ZBS-`), `ZbirnaID` →, `RedniBroj`, `Klasa`, `Kolicina`,
 `KolAmbalaze`.
 
+**`tblZbirnaIzvori`** — grain: **jedna otpremnica u sastavu jedne verzije zbirne**
+`ZbirnaIzvorID` (PK `ZBI-`), `ZbirnaID` →, `OtpremnicaID` →, audit ×4.
+
+> **Nepromenljivost počinje pri izdavanju, ne pri upisu** (A15):
+>
+> | Stanje zbirne | Članstvo |
+> |---|---|
+> | `DRAFT` | **promenljivo** — izvori se dodaju i sklanjaju slobodno |
+> | `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove, stara zadržava svoje |
+>
+> Zato tabela nema `Stornirano` (storno verzije ne briše njen sastav) i stoji u
+> `BEZ_STORNA`.
+>
+> **`Otpremnica.ZbirnaID` ne postoji.** Pripadnost zna isključivo ova tabela;
+> „na kojoj je *aktivnoj* zbirnoj otpremnica sada" računa
+> `modDokumenta.AktivnaZbirnaZaOtpremnicu`. Razlog za tabelu umesto kolone:
+> sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a **jedna FK
+> kolona bi mogla da pokaže samo jednu** (A15).
+
 > **Zbirna nema cenu.** `tblZbirna` je nikad nije imala i `SaveZbirnaMulti_TX` je
 > ne prima (`modDokUnos.bas:422`). Ne dodavati je.
 
-**Izvor istine:** zbirna je **agregat** — otpremnice su izvor. Njene stavke su
-**keš** (A5), i invarijanta §6.2 to dokazuje pri svakoj izmeni.
+**Izvor istine:** zbirna je **agregat** — otpremnice su izvor. Ali „izvedeno"
+prestaje da važi kad dokument bude izdat:
 
-**Vlasnik upisa:** `modDokumenta` + `modDokumentInvariant` (rekalkulacija).
-Danas 5 pisaca.
+| Stanje dokumenta | Šta su stavke |
+|---|---|
+| `DRAFT` | **keš** (A5) — izvode se iz izvora, invarijanta §6.2 to dokazuje pri svakoj izmeni |
+| `IZDATO` / `PROSLEDJENO` | **sadržaj te verzije** — istorijska činjenica, ne prepisuje se (A13) |
+
+Kad se izvor promeni posle izdavanja, ne menja se ovaj dokument nego se pravi
+**nova verzija** (A13). Lanac dokumenata danas nema draft fazu, pa je u praksi
+svaki dokument odmah izdat — što znači da je drugi red pravilo, a prvi
+priprema za trenutak kad UI dobije „otvoren dokument".
+
+**Vlasnik upisa (A11): samo `modDokumenta`.** Danas 3 pisca
+(`modDokumentInvariant`, `modDokumenta`, `modMasterSync`).
+
+> Ranija verzija je ovde pisala „`modDokumenta` + `modDokumentInvariant`
+> (rekalkulacija)", što je bilo u suprotnosti sa `WRITE_OWNERSHIP.json`, gde je
+> `cilj` samo `modDokumenta`. Kontradikcija se razrešava u korist registra:
+>
+> **`modDokumentInvariant` računa i validira; `modDokumenta` jedini fizički
+> piše.** `RecalculateZbirna_TX` živi u `modDokumenta` i prima izračunat
+> rezultat. To je čisto A11 vlasništvo — jedan pisač, jedan ulaz — umesto dva
+> modula koji pišu istu tabelu po svojim pravilima.
+
+> **Stanje posle PR3.** Sve tri tabele postoje u kanonu i u svesci, a writer
+> piše header, stavke **i članstvo** u jednoj transakciji. `ZbirnaID` je opaque
+> (`NewEntityID`), `GeneracijaID` se ne piše.
+>
+> Dva javna ulaza, jedno jezgro:
+> `CreateZbirna_TX(h, izvor, ocekivano, outGreska)` za ručni unos (očekivano je
+> **obavezno**) i `CreateZbirnaIzIzvora_TX(h, izvor, outGreska)` za automatski
+> tok. Kontrola „očekivano vs izvedeno" se time ne može isključiti time što se
+> argument ne prosledi.
+>
+> **Količine se ne primaju — izvode se.** Writer prima *izvorne otpremnice* i
+> računa stavke iz njih; `VrstaVoca` / `SortaVoca` / `TipAmbalaze` takođe dolaze
+> iz otpremnica, koje moraju biti saglasne. Prva verzija je primala gotove
+> stavke, pa je bilo legalno napraviti zbirnu od izmišljenih 400+600 kg **bez
+> ijedne otpremnice** — keš koji se ne slaže sa izvorom, i to kroz kanonski
+> writer. Opcioni argument `ocekivano` nosi ono što je operater otkucao i služi
+> samo kao unakrsna provera protiv izvedenog.
+>
+> **Članstvo ide u istoj transakciji.** Da writer ne upisuje `tblZbirnaIzvori`,
+> cutover bi morao „napravi zbirnu; commit; pa poveži otpremnice" — a pad drugog
+> koraka ostavlja zbirnu bez izvora.
+>
+> Header koji taj pisač napravi **namerno ostavlja `UkupnoKolicina`,
+> `UkupnoAmbalaze` i `Klasa` prazne** — to su kolone koje u ovom modelu ne
+> postoje; količina živi na stavci. Prazno je tačan odgovor („ne pitaj header za
+> količinu"), i test to zaključava da neko u cutover-u ne bi „za svaki slučaj" upisao i
+> zbir na header i time napravio dva izvora istine za istu vrednost.
+>
+> Kolone se brišu u Zbirna cutover-u, zajedno sa `ZbirnaIdent*` / `ZbirnaGeneracija*`.
 
 ---
 
@@ -243,17 +347,22 @@ KOOPERANT ─┐
 PARCELA   ─┤
 KULTURA   ─┤
 STANICA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
-VOZAC     ─┘        │
-                    │ OtpremnicaID (N:1, promenljiva)
+VOZAC     ─┘        ^
+                    │ OtkupID
+              tblOtpremnicaIzvori          <== SASTAV verzije otpremnice (KANON)
                     v
               tblOtpremnica ──1:N──> tblOtpremnicaStavke
-                    │
-                    │ ZbirnaID (N:1, promenljiva)
+                    ^
+                    │ OtpremnicaID
+               tblZbirnaIzvori             <== SASTAV verzije zbirne (KANON)
                     v
-                tblZbirna ──1:N──> tblZbirnaStavke        [agregat / kes]
+                tblZbirna ──1:N──> tblZbirnaStavke   [sadrzaj verzije]
                     ^
                     │ ZbirnaID (1:N -- namera 1:1, meko)
               tblPrijemnica ──1:N──> tblPrijemnicaStavke
+
+  Pripadnost drze ISKLJUCIVO tabele *Izvori. U ciljnom modelu nema kolona
+  Otkup.OtpremnicaID ni Otpremnica.ZbirnaID -- "gde je sada" se racuna.
                                             │
                           ┌─────────────────┼─────────────────┐
                           │ 1:1             │ 1:N             │
@@ -295,14 +404,33 @@ dokumentu**.
 
 ```
 za svaku klasu K:
-  SUM(OtpremnicaStavke.Kolicina)  gde Otpremnica.ZbirnaID = X i aktivna
+  SUM(OtpremnicaStavke.Kolicina)
+      gde OtpremnicaID IN (tblZbirnaIzvori gde ZbirnaID = X)
   ==
-  ZbirnaStavke.Kolicina           gde ZbirnaID = X i Klasa = K
+  ZbirnaStavke.Kolicina
+      gde ZbirnaID = X i Klasa = K
 ```
 
-KG po klasi → **hard**. Ambalaža ukupno → hard, po klasi → soft.
-(Nepromenjeno pravilo; menja se samo ključ spajanja — `ZbirnaID` umesto
-`BrojZbirne`.)
+KG po klasi → **hard**. Ambalaža po klasi → **hard**; ukupno je posledica.
+
+> **Ispravka ranije formulacije** („ambalaža ukupno hard, po klasi soft").
+> Zbirna fizički nosi gajbice po klasama, a kg i gajbice zajedno služe za
+> zatvaranje i kontrolu transporta — neslaganje po klasi je stvarna greška, ne
+> zaokruživanje. Zatečeni writer to i potvrđuje: `SaveZbirnaMulti_TX` prima
+> `ukupnoAmb` **i** `ukupnoAmbII`, dakle ambalaža je oduvek bila per-klasa
+> podatak.
+>
+> `RequireOcekivanoSeSlaze` u novom writeru već poredi obe veličine po klasi;
+> ovim se dokument usklađuje sa kodom, a ne obrnuto.
+
+> **Spaja se preko `tblZbirnaIzvori`** — to je jedini zapis pripadnosti, kolone
+> na otpremnici nema. Da postoji, pomerala bi se pri ispravci sa `ZBR18` na
+> `ZBR19` i invarijanta stare `ZBR18` više se ne bi mogla reprodukovati. Ovako
+> sastav svake verzije ostaje proverljiv i za istorijski dokument (A15).
+>
+> Filtriranje po `aktivna` važi samo dok je zbirna `DRAFT`. Za izdatu verziju se
+> uzimaju **tačno one otpremnice koje su u njoj bile** — njihov kasniji storno je
+> razlog za novu verziju (A13), ne za menjanje ove.
 
 Ista `BrojZbirne` na drugom `ZbirnaID` **više nije problem integriteta**.
 

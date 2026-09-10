@@ -19,6 +19,22 @@ Private mTableCacheDepth As Long
 Private mExclCache As Object        ' kes ExcludeStornirano rezultata (po tblName), isti prozor
 Private mColCache As Object         ' kes GetColumnIndex ("tbl|col" -> index), isti prozor
 
+' Test seam: NewEntityID se ponasa kao da je CoCreateGuid pao.
+'
+' Ugovor NewEntityID-a je fail-closed -- vraca "" i pozivalac MORA da stane,
+' jer je red bez identiteta gori od pada: niko ga posle ne moze ni naci ni
+' vezati. Ta grana se u praksi nikad ne desi, pa je i provera kod pozivaoca
+' nedokaziva: sabotaza koja je ukloni ostavlja suite zelen. Provera koja nikad
+' nije pokazana crvena ne dokazuje da ista meri.
+'
+' Dejstvo je vezano za test rezim (v. IsTestMode), pa je van suite inertno.
+'
+' Seam BROJI pozive, ne samo pali/gasi: header i stavke traze ID istim putem, pa
+' bi prosto "uvek padni" oborilo header i stavka se ne bi ni pokusala -- merila
+' bi se ista kapija dvaput.
+Private mNewEntityIDPad As Boolean
+Private mNewEntityIDPadPosle As Long
+
 ' --- NewEntityID: neprozirni PK za transakcione dokumente (PR1) ---
 ' GetNextID skenira CELU tabelu i uzima max+1. To je O(n) po upisu, i -- vaznije
 ' -- trazi centralni brojac, pa dva uredjaja offline ne mogu da naprave identitet
@@ -421,11 +437,32 @@ End Function
 ' Fail-closed: ako CoCreateGuid ne uspe, vraca se PRAZAN string. Pozivalac koji
 ' prazan ID upise napravio bi red bez identiteta -- gore od pada upisa -- pa se
 ' prazno mora proveriti na mestu poziva, isto kao kod GetNextID.
+' Podmetni pad generatora ID-a. ISKLJUCIVO iz test modula; ugasi ga i na putu
+' greske, inace sledeci test pada bez svoje krivice.
+'
+'   NewEntityIDPadniTest True        prvi sledeci poziv vec vraca ""
+'   NewEntityIDPadniTest True, 1     prvi poziv prolazi, od drugog pada
+'   NewEntityIDPadniTest False       ugaseno
+Public Sub NewEntityIDPadniTest(ByVal onOff As Boolean, _
+                                Optional ByVal posleKoliko As Long = 0)
+    mNewEntityIDPad = onOff
+    mNewEntityIDPadPosle = posleKoliko
+End Sub
+
 Public Function NewEntityID(ByVal prefix As String) As String
     Dim g As GUID_T
     Dim hr As Long
     Dim i As Long
     Dim hex32 As String
+
+    ' Seam pre svega ostalog, i tvrdo gejtovan test rezimom.
+    If mNewEntityIDPad And IsTestMode() Then
+        If mNewEntityIDPadPosle <= 0 Then
+            NewEntityID = ""
+            Exit Function
+        End If
+        mNewEntityIDPadPosle = mNewEntityIDPadPosle - 1
+    End If
 
     On Error GoTo EH
 
