@@ -423,8 +423,14 @@ otkup **headera**.
 ### 4.2 `tblOtpremnica` — **grain: jedna isporuka sa otkupnog mesta**
 
 `OtpremnicaID` (PK `OTP-`), `BrojOtpremnice` (labela, scoped po stanici), `Datum`,
-`StanicaID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`, `Cena`
-(ne-finansijski predlog, §13b plana), `Stornirano`, trace ×4, audit ×4.
+`StanicaID`, `VozacID`, **`KulturaID`**, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`,
+**`PredlogCena`**, `Stornirano`, trace ×4, audit ×4.
+
+> **`Cena` → `PredlogCena` je deo ciljne šeme, ne kozmetika.** §13b je već odlučio
+> da polje ostaje ali „preimenovano u ono što jeste"; ime `Cena` je semantički
+> mamak, a legacy štampa tu kolonu već koristi kao pravu finansijsku cenu. Skela
+> je **ne preimenuje** — rename je posao Otpremnica cutover-a, zajedno sa
+> čitaocima. Do tada nov pisač piše u zatečenu `Cena`, a spec nosi ciljno ime.
 
 **Bez `ZbirnaID`.** Pripadnost zbirnoj zna `tblZbirnaIzvori`; „na kojoj je
 aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
@@ -447,6 +453,19 @@ aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 > otpremnica `DRAFT`, zamrznuto pri izdavanju. `Otkup.OtpremnicaID` u ciljnom
 > modelu **ne postoji** — pripadnost zna isključivo ova tabela.
 
+**`BrutoKg` se ne sabira parcijalno.** Bruto je poznat samo kad je unos bio bruto;
+prazno polje **nije nula**. Da se sabira kao nula, otpremnica bi dobila fizički
+nemoguć red — jedan izvor `500 bruto / 480 neto`, drugi `300 neto` bez bruta, i
+rezultat bi bio `Kolicina 780, BrutoKg 500`, dakle bruto manji od neta. Pravilo:
+
+```
+OtpremnicaStavka.BrutoKg = SUM(izvori) samo ako SVAKA izvorna stavka te klase
+                           ima poznat bruto; cim je jedna prazna -> PRAZNO
+```
+
+Ne rekonstruiše se iz težine ambalaže: tara je poznata samo u trenutku nastanka
+otkupa (§4.1d).
+
 **Vlasnik upisa:** `modDokumenta` (ili nov `modOtpremnica`). Danas 4 pisca.
 
 ---
@@ -457,17 +476,49 @@ Otpremnica je **izvedeni dokument**, isto kao zbirna. Zato njen kanonski writer
 prima **izvore**, a ne stavke:
 
 ```
-  stavke     IZVEDENE   po klasi: SUM(Kolicina), SUM(KolAmbalaze), SUM(BrutoKg)
-             nad otkupnim stavkama svih clanova; racunaju se PRI IZDAVANJU
-  header     IZVEDEN    VrstaVoca, SortaVoca, TipAmbalaze  (pri izdavanju)
-  header     PRIMLJEN   Datum, StanicaID, VozacID, BrojOtpremnice
-  clanstvo   tblOtpremnicaIzvori, u ISTOJ transakciji kao header
+  stavke     OCEKIVANJE  ono sto je operater prijavio da otpremnica nosi;
+                         upisuju se ODMAH, sa draftom
+  clanstvo   POVEZANO    SUM nad otkupnim stavkama clanova
+  preostalo  = ocekivano - povezano, po klasi
+  header     PRIMLJEN    Datum, StanicaID, VozacID, BrojOtpremnice,
+                         KulturaID + snapshot VrstaVoca/SortaVoca/TipAmbalaze
+  izdavanje  zahteva ocekivano = povezano, pa ZAMRZAVA stavke
 ```
 
-**`StanicaID` se PRIMA, pa proverava** — ne izvodi se. Draft nastaje pre ijednog
-izvora, a izvođenje nad praznim skupom nije definisano; stanicu uostalom i zna
-onaj ko dokument otvara (zaključana sesija, §4.1f). Svaki izvor koji se posle
-doda mora da joj odgovara.
+**Stavke drafta su OCEKIVANJE, ne izvedeni keš.** To nisu dva izvora istine nego
+**dve različite činjenice**: šta je vozač/operater prijavio da nosi, naspram šta
+su otkupni listovi dokumentovali. Njihov *mismatch* je koristan poslovni signal —
+on je i razlog zašto panel postoji.
+
+Mereno u zatečenom kodu: „očekivano" danas živi na `Otpremnica.Kolicina`, i to
+čitaju **četiri** sposobnosti panela:
+
+| Mesto | Sposobnost |
+|---|---|
+| `modOtkupBlok:223` | upozorenje na prekoračenje pri unosu bloka |
+| `modOtkupBlok:262` | auto-deselekcija kad `Preostalo` padne na 0 |
+| `modOtkupBlok:500` | kolona „Ostatak" + filter „samo nezavršene" |
+| `modOtkupBlok:1384` | sažetak `Ukupno / Napisano / Preostalo` |
+
+Pošto `Kolicina` u ciljnom modelu **odlazi sa headera na stavku**, očekivanje bez
+stavki drafta nema gde da živi — i sve četiri bi pale na cutover-u.
+
+Pri izdavanju stavke **prestaju** da budu očekivanje i postaju sadržaj verzije;
+isti prelaz koji A5/A13 opisuju, gledan sa ulazne strane (`REFAKTOR` §13b).
+
+**`StanicaID` i `KulturaID` se PRIMAJU, pa proveravaju** — ne izvode se. Draft
+nastaje pre ijednog izvora, a izvođenje nad praznim skupom nije definisano.
+
+Kod kulture to nije samo pitanje praznog skupa nego **smera podataka**: zatečeni
+glavni tok ide *otpremnica → otkup*, ne obrnuto. Operater klikne otpremnicu, a
+ona **prefiluje** formu otkupa stanicom, vrstom, sortom, vozačem i cenom
+(`modOtkupBlok.PrefillLeftForm:706-730`). Otpremnica koja kulturu saznaje tek pri
+izdavanju ne bi imala čime da prefiluje prvi otkup — a taj otkup treba da je od
+nje i dobije.
+
+`KulturaID` je relaciona istina, `VrstaVoca`/`SortaVoca`/`TipAmbalaze` su njen
+snapshot na dokumentu — isti par kao na otkupu (§4.1f). Svaki izvor koji se posle
+doda mora da se slaže sa stanicom **i** sa `KulturaID`.
 
 #### Dva ulaza, jedan core
 
@@ -477,14 +528,37 @@ panel napravi otpremnicu praznu i blokovi se kače naknadno
 (`modOtkupBlok.LinkOtkupIDsToOtpremnica`).
 
 ```
-CreateOtpremnicaDraft_TX(h, outGreska)          -> OTP-...  DRAFT, bez stavki
-DodajOtpremnicaIzvor_TX(otpID, otkupID, ...)       samo DRAFT
-UkloniOtpremnicaIzvor_TX(otpID, otkupID, ...)     samo DRAFT
-IzdajOtpremnicu_TX(otpID, outGreska)            -> izvede stavke, IZDATO
+CreateOtpremnicaDraft_TX(h, ocekivano)   -> OTP-...  DRAFT + stavke ocekivanja
+UpdateOtpremnicaDraft_TX(otpID, h, ocekivano)      samo DRAFT
 
-CreateOtpremnicaIzIzvora_TX(h, izvori, ...)     jedan potez: draft + izvori +
-                                                izdavanje, u JEDNOJ transakciji
+DodajOtpremnicaIzvor_TX(otpID, otkupID)            samo DRAFT
+UkloniOtpremnicaIzvor_TX(otpID, otkupID)           samo DRAFT
+
+GetOtpremnicaProgress(otpID)             -> ocekivano / povezano / preostalo
+                                            po klasi
+
+IzdajOtpremnicu_TX(otpID)                -> REVALIDIRA izvore,
+                                            zahteva ocekivano = povezano,
+                                            zamrzne stavke, IZDATO
+
+CreateOtpremnicaIzIzvora_TX(h, izvori)      jedan potez, JEDNA transakcija;
+                                            ocekivanje IZVEDENO iz izvora
 ```
+
+Jednopotezni ulaz sme da izvede očekivanje iz samih izvora **jer tu nezavisnog
+operaterskog očekivanja nema** — auto-lanac i PWA ne prijavljuju šta nose, oni to
+znaju. Ručni tok bez očekivanja bi ostao bez svoje jedine kontrole.
+
+#### Izdavanje revalidira, ne veruje `Dodaj`-u
+
+Između `Dodaj` i `Izdaj` prolazi vreme — u panelu i po nekoliko sati. Otkup se u
+međuvremenu može stornirati ili ispraviti. Zato `IzdajOtpremnicu_TX` ponavlja
+**ceo** skup provera nad svakim članom, nezavisno od toga šta je `Dodaj` proverio:
+postoji tačno jednom, nije storniran, ista stanica, ista kultura, i kanonsko
+članstvo ga i dalje veže baš za **ovu** otpremnicu.
+
+Bez toga je `DRAFT → dodaj OTK1 → storno OTK1 → Izdaj` izdavao dokument iz
+storniranog izvora. Klasičan TOCTOU: provera i upotreba nisu u istom trenutku.
 
 Jednopotezni ulaz nije druga implementacija nego **isti core**: auto-lanac
 (`modAutoHladnjaca`) i PWA prave otpremnicu bez ijednog međukoraka, pa bi ih tri

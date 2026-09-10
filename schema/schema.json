@@ -473,7 +473,8 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID"
+        "ZbirnaGeneracijaID",
+        "KulturaID"
       ]
     },
     {

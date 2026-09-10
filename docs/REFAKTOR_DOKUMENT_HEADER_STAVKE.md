@@ -769,6 +769,32 @@ je bio smisao:
 dve stvari ne zaključaju. Pravila članstva su zaključana u §4.2a modela. Ostaje
 draft — jedina odluka koja menja **oblik API-ja**, pa ne sme da se izabere usput.
 
+#### Postmortem: pre-flight je merio kod, ne već donete odluke
+
+Prva verzija skele otpremnice je zaključala **pogrešan** domenski model: draft
+bez stavki, stavke izvedene tek pri izdavanju. Test `DraftNemaStavke` ga je i
+učvrstio.
+
+Odgovor je sve vreme stajao u **§13b istog ovog fajla**, u odeljku koji doslovno
+kaže da mora biti rešen *pre nego što se napiše* `CreateOtpremnica_TX`:
+očekivano su stavke drafta, povezano je `SUM(izvori)`, finalizacija zahteva
+jednakost.
+
+Kapija `pre-flight` je odrađena — i vratila je `GAP` na dve ose — ali je merila
+**zatečeni kod** (39 čitalaca, dva pisca, `LookupValue` prvi pogodak), a ne
+**već donete odluke**. Osa `DOMAIN` je zaključena čitanjem `DOCUMENT_HEADER_LINES`
+§4.2 i §9, u kojima tog pravila nema.
+
+> **Pravilo koje iz ovoga sledi:** `DOMAIN` je zatvoren tek kad su pročitana
+> **oba** izvora — model dokumenta *i* odeljak plana koji nosi otvorene odluke za
+> taj dokument. „Nema toga u modelu" nije dokaz da odluka nije doneta.
+
+Cena greške bila bi vidljiva tek na cutover-u: očekivanje danas živi na
+`Otpremnica.Kolicina`, koja u ciljnom modelu odlazi na stavku, pa bi četiri
+sposobnosti panela ostale bez izvora (`DOCUMENT_HEADER_LINES` §4.2a).
+
+---
+
 #### Mreža za Otpremnica skelu — imenovano, pre writer-a
 
 | Test | Tvrdnja |
@@ -793,7 +819,12 @@ Uz njih idu i četiri koje nosi odluka o draft-u:
 
 | Test | Tvrdnja |
 |---|---|
-| `DraftNemaStavke` | draft nema ni stavke ni izvedena polja; stavke nastaju **pri izdavanju** |
+| `DraftNosiOcekivanje` | draft **ima** stavke — ono što je operater prijavio; `povezano` je još 0 |
+| `NapredakPoKlasi` | `očekivano / povezano / preostalo` po klasi, kroz dodavanje izvora |
+| `IzdavanjeTraziJednakost` | manjak i višak po klasi oba obaraju izdavanje |
+| `IzdavanjeRevalidiraIzvore` | `dodaj → storno izvora → izdaj` **pada** (TOCTOU) |
+| `BrutoSeNeSabiraParcijalno` | jedan izvor bez bruta → stavka ostaje **bez** bruta |
+| `KulturaSeSlaziSaIzvorima` | izvor druge kulture odbijen; draft je zna od otvaranja |
 | `ClanstvoMutabilnoUDraftu` | dodaj → ukloni → dodaj; uklonjen izvor je **slobodan** za drugu otpremnicu |
 | `PosleIzdavanjaClanstvoZamrznuto` | `Dodaj`/`Ukloni`/ponovno izdavanje — sva tri odbijena |
 | `StariOtkupNeUlazi` | otkup bez `tblOtkupStavke` (stari pisač) ne može u kanonsku otpremnicu |
@@ -909,10 +940,10 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — stari pisač je i dalje jedini put, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
 | 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
-| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **pet ulaza** — `CreateOtpremnicaDraft_TX` / `Dodaj` / `Ukloni` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
+| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument kod kog nov pisač postaje jedini put | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
-| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže | 6 |
+| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih 5 pisača; **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -1000,7 +1031,7 @@ Uz to je čitaju izveštaji i štampa.
 | | |
 |---|---|
 | `OtpremnicaStavka.Cena` | **ne postoji.** Vrednost dokumenta je `SUM(izvorne otkupne stavke)` |
-| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u ono što jeste** — predlog cene za blokove, izričito **ne-finansijsko polje** |
+| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u `PredlogCena`** — predlog cene za blokove, izričito **ne-finansijsko polje** |
 | zabrana | nigde se vrednost otpremnice ne računa kao `Kolicina × Cena` |
 
 Poslednja tačka nije teorijska: `modDokumenta.CalculateManjakByOtpremnica`
