@@ -562,6 +562,40 @@ pisci).
 
 ---
 
+## 13a) Kapija je merila stil pisanja poziva, ne vlasništvo (nađeno u PR3)
+
+Pre nego što je PR3 dodao nov pisač nad `tblZbirna`, provera je pokazala da A11
+kapija **ne vidi polovinu upisa**. `AppendRow` je funkcija i pola koda je zove
+kao funkciju:
+
+```vba
+AppendRow TBL_ZBIRNA, rowData          ' naredba  -- kapija je videla
+n = AppendRow(TBL_ZBIRNA, rowData)     ' funkcija -- kapija NIJE videla
+```
+
+Regex je tražio razmak posle imena mutatora. Posledica: **22 poziva nevidljivo**,
+među njima produkcioni upisi nad `tblZbirna` (`modDokumenta`, `modMasterSync`),
+`tblOtkup` (`modOtkup`, `modMasterSync`), `tblPrijemnica`, `tblOtpremnica`,
+`tblNovac`, `tblFakturaStavke` — a **sedam tabela** (`tblCenovnik`,
+`tblKooperanti`, `tblMagacin`, `tblPartnerMap`, `tblSEFEventLog`,
+`tblStornoZurnal`, `tblVozaci`) uopšte nije bilo u registru vlasništva. Kapija je
+sve to vreme bila **zelena**.
+
+Isti kvar kao raniji `RequireUpdateCell` (nema granice reči pre `UpdateCell`) —
+dva puta ista bolest, oba puta nevidljiva, oba puta nađena slučajno. Zato oblik
+poziva sada ima **sopstvene slučajeve**: `who_writes.py --self-test`, pozitivni i
+negativni, u CI-ju.
+
+`WRITE_OWNERSHIP.json` je re-baseline-ovan. Dodati pisači **nisu novi** — bili su
+neizmereni; baseline je bio zamrznut prema slepom skeneru, pa je zamrzao
+nepotpunu stvarnost. Ništa nije uklonjeno.
+
+> Pouka koja važi i za ostatak refaktora: kapija koja nikad nije pokazana crvena
+> ne dokazuje da išta meri — a kapija koja stoji na jednom regexu meri tačno
+> onoliko oblika koliko je taj regex video kad je pisan.
+
+---
+
 ## 14) Redosled
 
 Merena cena po dokumentu:
@@ -589,8 +623,8 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 |---|---|---|
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
-| 2 | Regenerisan donor + fixture; golden scenariji (temelj za §12.1); testovi `SemaSamoLeci` / `SemaKapija` | 1 |
-| 3 | **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`, opaque `ZbirnaID` | 2 |
+| 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, stavke, outGreska)`, opaque `ZbirnaID`. **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je videla samo naredbeni oblik `AppendRow`, pa je 22 poziva bilo nevidljivo (v. §13a) | 2 |
 | 4 | **Zbirna cutover**: invarijanta po ID-u, `StornoZbirna_TX(id)`, `RecalculateZbirna_TX(id)`, print, izveštaji, testovi. **Briše `ZbirnaIdent*` i `ZbirnaGeneracija*`.** | 3 |
 | 5 | **Otkup header+stavke**: `tblOtkupStavke`, `CreateOtkup_TX` | 4 |
 | 6 | **Otkup integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača | 5 |

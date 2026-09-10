@@ -3,8 +3,13 @@
 > Ciljni model posle refaktora „header + stavke". Ugovor koji ga uokviruje:
 > `ARCHITECTURE_CONTRACT.md`. Plan isporuke: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md`.
 >
-> Status: **model usvojen, nije implementirano.** Ovo je specifikacija za
-> implementaciju, ne opis koda.
+> Status: **model usvojen; implementacija u toku.** Ovo je i dalje specifikacija,
+> ne opis koda — osim tamo gde red kaže drugačije.
+>
+> | Dokument | Stanje |
+> |---|---|
+> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u PR4 |
+> | Otpremnica / Otkup / Prijemnica | specifikacija |
 >
 > Kontekst: nema legacy transakcionih podataka. Zatečena šema **nema pravo veta**
 > nad ovim modelom. Gde postojeći kod ne podržava model — kod se adaptira ili
@@ -182,6 +187,18 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 
 **Vlasnik upisa:** `modDokumenta` + `modDokumentInvariant` (rekalkulacija).
 Danas 5 pisaca.
+
+> **Stanje posle PR3.** Obe tabele postoje u kanonu i u svesci, a
+> `CreateZbirna_TX(h, stavke, outGreska)` piše header + stavke u jednoj
+> transakciji. `ZbirnaID` je opaque (`NewEntityID`), `GeneracijaID` se ne piše.
+>
+> Header koji taj pisač napravi **namerno ostavlja `UkupnoKolicina`,
+> `UkupnoAmbalaze` i `Klasa` prazne** — to su kolone koje u ovom modelu ne
+> postoje; količina živi na stavci. Prazno je tačan odgovor („ne pitaj header za
+> količinu"), i test to zaključava da neko u PR4 ne bi „za svaki slučaj" upisao i
+> zbir na header i time napravio dva izvora istine za istu vrednost.
+>
+> Kolone se brišu u PR4, zajedno sa `ZbirnaIdent*` / `ZbirnaGeneracija*`.
 
 ---
 
