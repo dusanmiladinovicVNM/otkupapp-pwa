@@ -1216,8 +1216,10 @@ End Function
 ' stavci. Ko ih procita dobija prazno, i to je tacan odgovor: nije "nula
 ' kilograma", nego "ne pitaj header za kolicinu".
 '
-' BrojZbirne se ne pise i ne cita: veza je iskljucivo tblZbirnaIzvori. Broj nije
-' ni relacija ni rezervni put -- on je labela.
+' BrojZbirne se pise na HEADER zbirne -- to je poslovna labela dokumenta i
+' operater je vidi na papiru. Ono sto se ne radi: broj se ne koristi kao VEZA.
+' Pripadnost otpremnice zbirnoj zna iskljucivo tblZbirnaIzvori; broj nije ni
+' relacija ni rezervni put.
 '
 ' OVAJ WRITER PRAVI I ODMAH FINALIZUJE DOKUMENT (IzdatoStatus = IZDATO).
 '
@@ -1345,8 +1347,9 @@ EH:
     PrintTxFailure "CreateZbirna_TX", errSrc, errNum, errDesc
 End Function
 
-' Core -- NE zovi spolja. Jedini ulaz je CreateZbirna_TX, koji drzi snapshot
-' transakciju; direktan poziv bi kod greske ostavio pola dokumenta.
+' Core -- NE zovi spolja. Ulazi su CreateZbirna_TX i CreateZbirnaIzIzvora_TX,
+' oba preko ZbirnaUpis koji drzi snapshot transakciju; direktan poziv bi kod
+' greske ostavio pola dokumenta.
 Private Function CreateZbirna(ByVal h As Object, _
                               ByVal izvorOtpremnice As Collection, _
                               ByVal ocekivano As Collection, _

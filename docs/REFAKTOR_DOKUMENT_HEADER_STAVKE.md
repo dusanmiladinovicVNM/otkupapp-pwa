@@ -161,9 +161,17 @@ tblZbirnaIzvori        ZbirnaIzvorID PK "ZBI-" | ZbirnaID FK | OtpremnicaID FK
 tblOtpremnicaIzvori    OtpremnicaIzvorID PK "OPI-" | OtpremnicaID FK | OtkupID FK
 ```
 
-Redovi su **nepromenljivi**. Odgovaraju na pitanje koje pokazivač ne može:
-*„od kojih je tačno dokumenata ova verzija bila sastavljena"* — bez gledanja
-trenutnog stanja sistema. Puno obrazloženje: `ARCHITECTURE_CONTRACT.md` **A15**.
+Odgovaraju na pitanje koje kolona ne može: *„od kojih je tačno dokumenata ova
+verzija bila sastavljena"* — bez gledanja trenutnog stanja sistema.
+
+**Nepromenljivost počinje pri izdavanju, ne pri upisu** (A15):
+
+| Stanje roditelja | Članstvo |
+|---|---|
+| `DRAFT` | **promenljivo** — izvori se dodaju i sklanjaju slobodno |
+| `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove |
+
+Puno obrazloženje: `ARCHITECTURE_CONTRACT.md` **A15**.
 
 ### `tblPrijemnica` (header)
 

@@ -163,7 +163,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_PrazanStavkaIDNeProlazi
     Test_PR3_IstaOtpremnicaDvaputNeProlazi
     Test_PR3_VecVezanaOtpremnicaSeNePreuzima
-    Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen
     Test_PR3_DvaAktivnaClanstvaSuGreska
     Test_PR3_DupliIstiZapisClanstvaJeGreska
     Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
@@ -177,7 +176,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_RucniUnosTraziOcekivano
     Test_PR3_AmbalazaMoraBitiCeoBroj
     Test_PR3_ClanstvoJeZapisanoPoVerziji
-    Test_PR3_PokazivacSeSlazeSaClanstvom
+    Test_PR3_CitacDajeIstuZbirnuKaoClanstvo
     Test_PR3_PrazanIzvorIDNeProlazi
     Test_PR3_OtpremnicaImaZbirnaID
 
@@ -5697,14 +5696,15 @@ Private Sub Test_PR3_VecVezanaOtpremnicaSeNePreuzima()
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 preuzimanje: druga zbirna odbijena"
-    ' Poruka dolazi iz KANONSKE grane: posle A15 odluku donosi
-    ' tblZbirnaIzvori, pa se pokazivac ni ne pita. Da kapija ostane samo na
-    ' pokazivacu, ovaj test bi i dalje prolazio -- zato postoji
-    ' Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen.
+
+    ' Poruka mora doci iz KANONSKE grane -- iz tblZbirnaIzvori. Tvrdnja ide na
+    ' tekst razloga, ne samo na ishod: kad bi kapija odbila upis iz nekog drugog
+    ' razloga, ovaj test bi i dalje bio zelen a clanstvo neprovereno.
     AssertTrue InStr(1, razlog, "u sastavu aktivne zbirne", vbTextCompare) > 0, _
                "PR3 preuzimanje: kapija imenuje razlog (bilo: " & razlog & ")"
     AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
                  "PR3 preuzimanje: drugi header nije ostao"
+    ' Citac i dalje daje PRVU zbirnu -- odbijen pokusaj nije nista pomerio.
     AssertEquals prva, Pr3OtpZbirnaID(otp), _
                  "PR3 preuzimanje: otpremnica ostaje na prvoj zbirnoj"
 
@@ -6118,11 +6118,10 @@ Private Sub Test_PR3_ClanstvoJeZapisanoPoVerziji()
     AssertTrue Pr3JeIzvor(zbrID, b), "PR3 clanstvo: druga otpremnica u sastavu"
     AssertTrue Pr3JeIzvor(zbrID, c), "PR3 clanstvo: treca otpremnica u sastavu"
 
-    ' Sastav se cita BEZ gledanja trenutnog stanja otpremnica -- to je i ceo
-    ' smisao tabele. Ovde su jos identicni; posle propagacije ispravke nece biti.
-    AssertEquals zbrID, Pr3OtpZbirnaID(a), "PR3 clanstvo: pokazivac se slaze"
-    AssertEquals zbrID, Pr3OtpZbirnaID(b), "PR3 clanstvo: pokazivac se slaze (b)"
-    AssertEquals zbrID, Pr3OtpZbirnaID(c), "PR3 clanstvo: pokazivac se slaze (c)"
+    ' Isti odgovor i kroz javni citac, koji ga RACUNA iz clanstva.
+    AssertEquals zbrID, Pr3OtpZbirnaID(a), "PR3 clanstvo: citac daje istu zbirnu"
+    AssertEquals zbrID, Pr3OtpZbirnaID(b), "PR3 clanstvo: citac daje istu zbirnu (b)"
+    AssertEquals zbrID, Pr3OtpZbirnaID(c), "PR3 clanstvo: citac daje istu zbirnu (c)"
 
     Exit Sub
 
@@ -6130,10 +6129,13 @@ EH:
     LogFatal "Test_PR3_ClanstvoJeZapisanoPoVerziji", Err.Number, Err.description
 End Sub
 
-' Otpremnica.ZbirnaID je IMENOVAN KES (A5) nad tblZbirnaIzvori: mora se poklapati
-' sa jedinim zapisom clanstva u aktivnoj zbirnoj. Test koji to ne proverava
-' pretvara kes u drugi izvor istine.
-Private Sub Test_PR3_PokazivacSeSlazeSaClanstvom()
+' Javni citac daje ISTU zbirnu koju kaze zapis clanstva.
+'
+' AktivnaZbirnaZaOtpremnicu je jedina zamena za obrisanu kolonu
+' Otpremnica.ZbirnaID -- racuna odgovor iz tblZbirnaIzvori umesto da ga cuva na
+' drugom mestu. Test poredi citac sa sirovim zapisom, da racunanje ne bi tiho
+' odgovaralo drugacije od kanona.
+Private Sub Test_PR3_CitacDajeIstuZbirnuKaoClanstvo()
     On Error GoTo EH
 
     Dim scenario As String
@@ -6146,17 +6148,17 @@ Private Sub Test_PR3_PokazivacSeSlazeSaClanstvom()
     Dim zbrID As String
     zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
                             Pr3Izvor(a, b))
-    AssertTrue Len(zbrID) > 0, "PR3 pokazivac: dokument napravljen"
+    AssertTrue Len(zbrID) > 0, "PR3 citac: dokument napravljen"
 
     AssertEquals Pr3ZbirnaIzClanstva(a), Pr3OtpZbirnaID(a), _
-                 "PR3 pokazivac: kes i clanstvo daju istu zbirnu (a)"
+                 "PR3 citac: citac i clanstvo daju istu zbirnu (a)"
     AssertEquals Pr3ZbirnaIzClanstva(b), Pr3OtpZbirnaID(b), _
-                 "PR3 pokazivac: kes i clanstvo daju istu zbirnu (b)"
+                 "PR3 citac: citac i clanstvo daju istu zbirnu (b)"
 
     Exit Sub
 
 EH:
-    LogFatal "Test_PR3_PokazivacSeSlazeSaClanstvom", Err.Number, Err.description
+    LogFatal "Test_PR3_CitacDajeIstuZbirnuKaoClanstvo", Err.Number, Err.description
 End Sub
 
 ' Zapis clanstva nosi opaque ID i fail-closed je, kao header i stavka.
@@ -6262,50 +6264,6 @@ Private Sub Test_PR3_HeaderJeEksplicitnoIzdat()
 
 EH:
     LogFatal "Test_PR3_HeaderJeEksplicitnoIzdat", Err.Number, Err.description
-End Sub
-
-' Clanstvo je JEDINI zapis veze -- i to je i cela poenta.
-'
-' Ranija verzija je uz clanstvo drzala i kolonu Otpremnica.ZbirnaID, pa je ovaj
-' test morao da je isprazni da bi dokazao da odluku donosi kanon. Kolone vise
-' nema: nema sta da odluta, nema drifta, nema druge provere. Ostaje tvrdnja da
-' druga zbirna ne moze da preuzme vec vezanu otpremnicu -- i da odgovor na
-' "gde je sada" dolazi iz clanstva.
-Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("PR3KN")
-
-    Dim otp As String
-    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3KN-" & scenario, KLASA_I, 400#, 20)
-
-    Dim prva As String
-    prva = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN1-" & scenario), _
-                           Pr3Izvor(otp, ""))
-    AssertTrue Len(prva) > 0, "PR3 kanon: prva zbirna napravljena"
-
-    AssertEquals prva, Pr3ZbirnaIzClanstva(otp), "PR3 kanon: clanstvo je zapisano"
-    AssertEquals prva, Pr3OtpZbirnaID(otp), _
-                 "PR3 kanon: citac racuna istu zbirnu iz clanstva"
-
-    Dim preH As Long
-    preH = Pr3BrojRedova(TBL_ZBIRNA)
-
-    Dim rez As String, razlog As String
-    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN2-" & scenario), _
-                          Pr3Izvor(otp, ""), razlog)
-
-    AssertEquals "", rez, "PR3 kanon: druga zbirna odbijena PO KANONU"
-    AssertTrue InStr(1, razlog, "u sastavu aktivne zbirne", vbTextCompare) > 0, _
-               "PR3 kanon: kapija se poziva na clanstvo (bilo: " & razlog & ")"
-    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
-                 "PR3 kanon: drugi header nije ostao"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen", Err.Number, Err.description
 End Sub
 
 ' Dva zapisa clanstva za istu otpremnicu -- cak i kad pokazuju na ISTU zbirnu.

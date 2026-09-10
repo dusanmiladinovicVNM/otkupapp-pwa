@@ -411,7 +411,17 @@ za svaku klasu K:
       gde ZbirnaID = X i Klasa = K
 ```
 
-KG po klasi → **hard**. Ambalaža ukupno → hard, po klasi → soft.
+KG po klasi → **hard**. Ambalaža po klasi → **hard**; ukupno je posledica.
+
+> **Ispravka ranije formulacije** („ambalaža ukupno hard, po klasi soft").
+> Zbirna fizički nosi gajbice po klasama, a kg i gajbice zajedno služe za
+> zatvaranje i kontrolu transporta — neslaganje po klasi je stvarna greška, ne
+> zaokruživanje. Zatečeni writer to i potvrđuje: `SaveZbirnaMulti_TX` prima
+> `ukupnoAmb` **i** `ukupnoAmbII`, dakle ambalaža je oduvek bila per-klasa
+> podatak.
+>
+> `RequireOcekivanoSeSlaze` u novom writeru već poredi obe veličine po klasi;
+> ovim se dokument usklađuje sa kodom, a ne obrnuto.
 
 > **Spaja se preko `tblZbirnaIzvori`** — to je jedini zapis pripadnosti, kolone
 > na otpremnici nema. Da postoji, pomerala bi se pri ispravci sa `ZBR18` na
