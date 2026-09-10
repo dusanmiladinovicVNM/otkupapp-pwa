@@ -182,9 +182,15 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 **`tblZbirnaIzvori`** — grain: **jedna otpremnica u sastavu jedne verzije zbirne**
 `ZbirnaIzvorID` (PK `ZBI-`), `ZbirnaID` →, `OtpremnicaID` →, audit ×4.
 
-> Redovi su **nepromenljivi** — ne menjaju se i ne brišu. Nova verzija zbirne
-> dobija svoje redove; stara zadržava svoje. Zato tabela nema `Stornirano` i
-> stoji u `BEZ_STORNA`.
+> **Nepromenljivost počinje pri izdavanju, ne pri upisu** (A15):
+>
+> | Stanje zbirne | Članstvo |
+> |---|---|
+> | `DRAFT` | **promenljivo** — izvori se dodaju i sklanjaju slobodno |
+> | `IZDATO` / `PROSLEDJENO` | **zamrznuto** — nova verzija dobija svoje redove, stara zadržava svoje |
+>
+> Zato tabela nema `Stornirano` (storno verzije ne briše njen sastav) i stoji u
+> `BEZ_STORNA`.
 >
 > **`Otpremnica.ZbirnaID` je degradiran na pokazivač** („na kojoj je *aktivnoj*
 > zbirnoj otpremnica sada"), i time imenovan keš u smislu A5 — sa testom koji
@@ -305,17 +311,22 @@ KOOPERANT ─┐
 PARCELA   ─┤
 KULTURA   ─┤
 STANICA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
-VOZAC     ─┘        │
-                    │ OtpremnicaID (N:1, promenljiva)
+VOZAC     ─┘        ^
+                    │ OtkupID
+              tblOtpremnicaIzvori          <== SASTAV verzije otpremnice (KANON)
                     v
               tblOtpremnica ──1:N──> tblOtpremnicaStavke
-                    │
-                    │ ZbirnaID (N:1, promenljiva)
+                    ^
+                    │ OtpremnicaID
+               tblZbirnaIzvori             <== SASTAV verzije zbirne (KANON)
                     v
-                tblZbirna ──1:N──> tblZbirnaStavke        [agregat / kes]
+                tblZbirna ──1:N──> tblZbirnaStavke   [sadrzaj verzije]
                     ^
                     │ ZbirnaID (1:N -- namera 1:1, meko)
               tblPrijemnica ──1:N──> tblPrijemnicaStavke
+
+  Otkup.OtpremnicaID i Otpremnica.ZbirnaID su POKAZIVACI ("gde je sada"),
+  imenovan kes u smislu A5 -- NE kanonska veza. Sastav se cita iz *Izvori.
                                             │
                           ┌─────────────────┼─────────────────┐
                           │ 1:1             │ 1:N             │

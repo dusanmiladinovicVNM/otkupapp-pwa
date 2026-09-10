@@ -1205,11 +1205,12 @@ End Function
 ' ni ID ne sme da bude brojac po kome se pogadja "sledeci".
 '
 ' GeneracijaID se NE pise. Ta masinerija je kompenzacija za nepostojeci header i
-' brise se u PR4; nov pisac je ne sme ozivljavati.
+' brise se u Zbirna cutover-u; nov pisac je ne sme ozivljavati.
 '
 ' PR3 je ADITIVAN. Produkcioni pozivaoci (modDokUnos.bas:533, modAutoHladnjaca,
 ' modMasterSync) i dalje idu starim putem; cutover citalaca, invarijante i storna
-' je PR4. Zato header NAMERNO ostavlja UkupnoKolicina / UkupnoAmbalaze / Klasa
+' je Zbirna cutover. Zato header NAMERNO ostavlja UkupnoKolicina /
+' UkupnoAmbalaze / Klasa
 ' prazne -- to su kolone koje u ciljnoj semi ne postoje jer kolicina zivi na
 ' stavci. Ko ih procita dobija prazno, i to je tacan odgovor: nije "nula
 ' kilograma", nego "ne pitaj header za kolicinu".
@@ -1397,6 +1398,10 @@ Private Function CreateZbirna(ByVal h As Object, _
     cZbrID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID, SRC)
     cZbrBroj = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
 
+    ' Kanonsko clanstvo se cita JEDNOM, pre petlje.
+    Dim clanstvo As Object
+    Set clanstvo = AktivnoClanstvoPoKanonu(SRC)
+
     Dim redPoID As Object
     Dim kolPoKlasi As Object
     Dim ambPoKlasi As Object
@@ -1435,14 +1440,38 @@ Private Function CreateZbirna(ByVal h As Object, _
                       "Otpremnica je stornirana: " & otpID
         End If
 
-        ' Fail-closed na vec vezanu otpremnicu. BrojZbirne se gleda samo dok
-        ' traje prelazni period: dokumenti koje je napravio stari put nose
-        ' broj-vezu, i ne smeju se tiho preuzeti. PR4 brise tu polovinu provere
-        ' zajedno sa broj-vezom.
-        If Len(Trim$(NzToText(data(r, cZbrID)))) > 0 Then
+        ' Fail-closed na vec vezanu otpremnicu -- ali PO KANONU.
+        '
+        ' Odluku donosi tblZbirnaIzvori, ne Otpremnica.ZbirnaID. Pokazivac je
+        ' kes (A15) i sme da odluta; da mu writer veruje, izgubljen kes bi
+        ' otvorio put da ista otpremnica ude u DVE aktivne zbirne, a kanonski
+        ' zapis o prvoj i dalje postoji.
+        '
+        ' Kad se dva izvora ne slazu, ne bira se nijedan: to je drift i staje se
+        ' glasno. Tiho biranje "vernijeg" je nacin da se nesaglasnost naseli.
+        Dim kanonZbr As String
+        Dim pokazivac As String
+
+        kanonZbr = ""
+        If clanstvo.Exists(UCase$(otpID)) Then kanonZbr = CStr(clanstvo(UCase$(otpID)))
+        pokazivac = Trim$(NzToText(data(r, cZbrID)))
+
+        If Len(kanonZbr) > 0 Then
             Err.Raise vbObjectError + 1228, SRC, _
-                      "Otpremnica je vec na zbirnoj: " & otpID
+                      "Otpremnica je vec u sastavu aktivne zbirne: " & otpID & _
+                      " -> " & kanonZbr
         End If
+
+        If Len(pokazivac) > 0 Then
+            Err.Raise vbObjectError + 1259, SRC, _
+                      "Neslaganje clanstva (cache drift): pokazivac kaze " & _
+                      pokazivac & ", a tblZbirnaIzvori ne zna za tu vezu. " & _
+                      "Otpremnica=" & otpID
+        End If
+
+        ' Prelazni period: dokumenti koje je napravio STARI put nose broj-vezu i
+        ' nemaju nijedan zapis clanstva. Ne smeju se tiho preuzeti. Ova polovina
+        ' provere odlazi zajedno sa broj-vezom, u Zbirna cutover-u.
         If cZbrBroj > 0 Then
             If Len(Trim$(NzToText(data(r, cZbrBroj)))) > 0 Then
                 Err.Raise vbObjectError + 1229, SRC, _
@@ -1767,7 +1796,7 @@ Private Function Fmt2Zbr(ByVal v As Double) As String
 End Function
 
 ' Header ciljne seme: BEZ UkupnoKolicina / UkupnoAmbalaze / Klasa. Te kolone jos
-' postoje u tabeli (brisu se u PR4) i ostaju prazne namerno -- v. komentar iznad
+' postoje u tabeli (brisu se u cutover-u) i ostaju prazne namerno -- v. gore
 ' CreateZbirna_TX. GeneracijaID se ne pise.
 Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
                                           ByVal datum As Date, _
@@ -1820,6 +1849,55 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     End If
 
     BuildZbirnaHeaderRowData = rowData
+End Function
+
+' Kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za AKTIVNE zbirne.
+'
+' Posle A13 ista otpremnica sme da ima VISE zapisa clanstva -- po jedan za svaku
+' verziju zbirne kroz koju je prosla. Zauzeta je samo ako je clan zbirne koja
+' NIJE stornirana; clanstvo u superseded verziji je istorija, ne prepreka.
+Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
+    Dim mapa As Object
+    Set mapa = CreateObject("Scripting.Dictionary")
+    Set AktivnoClanstvoPoKanonu = mapa
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+
+    Dim cIzvZbr As Long, cIzvOtp As Long
+    cIzvZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, src)
+    cIzvOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, src)
+
+    ' Skup storniranih zbirnih -- jedan prolaz, pa provera po kljucu.
+    Dim stornirane As Object
+    Set stornirane = CreateObject("Scripting.Dictionary")
+
+    Dim zbr As Variant
+    zbr = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbr) Then
+        Dim cZbrPk As Long, cZbrSt As Long, k As Long
+        cZbrPk = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, src)
+        cZbrSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+        If cZbrSt > 0 Then
+            For k = 1 To UBound(zbr, 1)
+                If StrComp(Trim$(NzToText(zbr(k, cZbrSt))), "Da", vbTextCompare) = 0 Then
+                    stornirane(UCase$(Trim$(NzToText(zbr(k, cZbrPk))))) = True
+                End If
+            Next k
+        End If
+    End If
+
+    Dim i As Long
+    Dim zbrID As String, otpID As String
+
+    For i = 1 To UBound(izv, 1)
+        zbrID = Trim$(NzToText(izv(i, cIzvZbr)))
+        otpID = UCase$(Trim$(NzToText(izv(i, cIzvOtp))))
+        If Len(zbrID) > 0 And Len(otpID) > 0 Then
+            If Not stornirane.Exists(UCase$(zbrID)) Then mapa(otpID) = zbrID
+        End If
+    Next i
 End Function
 
 ' Clanstvo se pise ORIGINALNIM OtpremnicaID-em iz tabele, ne kljucem recnika:

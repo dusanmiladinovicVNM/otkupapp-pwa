@@ -419,9 +419,20 @@ display podatak u zapisu.
 ```
 StornoOtpremnica(otpremnicaID)
   1. otpremnica + njena ambalaza -> Stornirano
-  2. AKO ima ZbirnaID:  rekalkulisi zbirnu na preostale AKTIVNE otpremnice
-  3. AKO vise nijedna ne ostane: stornirati i zbirnu
+  2. nadji zbirne cije clanstvo (tblZbirnaIzvori) sadrzi ovu otpremnicu
+     i koje NISU stornirane
+
+     zbirna je DRAFT   -> rekalkulisi je in-place iz preostalih izvora
+     zbirna je IZDATO  -> stara ostaje NEPROMENJENA i biva superseded;
+                          nastaje NOVA verzija (nov ZbirnaID, nov BrojZbirne,
+                          IspravkaOdID, isti CorrectionID, novi izvori i stavke)
+
+  3. AKO vise nijedna otpremnica ne ostane: stara se stornira BEZ naslednika
 ```
+
+Pošto lanac danas nema draft fazu, u praksi važi druga grana. **Nema in-place
+rekalkulacije izdatog dokumenta** (A13); puno obrazloženje i tri opcije:
+`GOLDEN_SCENARIJI.md` §10.
 
 Zbirna **jeste** agregat svojih otpremnica (`DOCUMENT_HEADER_LINES.md` §6.2), pa
 je rekalkulacija jedina opcija koja tu definiciju drži tačnom. Kaskada bi
@@ -473,13 +484,17 @@ Menja se samo identitet preko kog se računa.
 
 ```
 pre:   SumOtpremniceByKlasa(brojZbirne)   -- join po BrojZbirne
-posle: SumOtpremniceByKlasa(zbirnaID)     -- join po Otpremnica.ZbirnaID
+posle: SumOtpremniceByKlasa(zbirnaID)     -- join po tblZbirnaIzvori
 ```
 
-1. headeri otpremnica sa `ZbirnaID = X`, aktivni
+1. `tblZbirnaIzvori` gde `ZbirnaID = X` → **tačni `OtpremnicaID`-evi te verzije**
 2. njihove stavke
 3. suma po klasi
 4. poredi sa `tblZbirnaStavke` gde `ZbirnaID = X`
+
+> **Ne preko `Otpremnica.ZbirnaID`.** Pokazivač se pri ispravci pomera na novu
+> verziju; čim ode sa `ZBR18` na `ZBR19`, invarijanta stare više ne bi mogla da
+> se reprodukuje. Tabela članstva pamti sastav svake verzije (A15).
 
 Isti `BrojZbirne` na drugom `ZbirnaID` više nije problem integriteta — pa
 `RequireJedanVlasnikIkadPoBroju`, `historicalOwnerCount`, `activeLogicalCount` i
@@ -692,15 +707,24 @@ ima svoj slučaj u `--self-test`.
 
 Merena cena po dokumentu:
 
-| Dokument | Tabela u TX | Produkcionih pisaca | Redosled |
-|---|---|---|---|
-| Zbirna | 1 | 5 | **1.** |
-| Otpremnica | 2 | 4 | **2.** |
-| Otkup | 3 | 12 | **3.** |
-| Prijemnica | 6 | 4 | **4.** |
+| Dokument | Tabela u TX | Produkcionih pisaca | Skela | **Cutover** |
+|---|---|---|---|---|
+| Zbirna | 1 | 3 | **1.** ✅ | **3.** |
+| Otkup | 3 | 9 | 2. | **1.** |
+| Otpremnica | 2 | 1 | 3. | **2.** |
+| Prijemnica | 6 | 4 | 4. | 4. |
 
-Zbirna prva: najmanja transakcija, a u njoj živi **cela** kompenzaciona mašinerija
-koju brišemo. Prijemnica poslednja: šest tabela, i njene stavke hrane fakturu.
+**Skela i cutover više nisu isti redosled**, i to je posledica A15.
+
+Skela (nove tabele + writer, aditivno) sme bilo kojim redom — Zbirna je bila
+prva jer ima najmanju transakciju, i to je i dalje bio dobar izbor.
+
+**Cutover** ide **uzvodno-nadole**: dokument sme u produkciju tek kad svi
+dokumenti na koje pokazuje po ID-u imaju svoj header identitet. `tblZbirnaIzvori`
+pokazuje na `OtpremnicaID`, a otpremnica danas nema jedan identitet — v. „Zašto
+je redosled promenjen posle PR3" ispod tabele PR-ova.
+
+Prijemnica ostaje poslednja: šest tabela, i njene stavke hrane fakturu.
 
 ### PR-ovi
 
@@ -756,6 +780,58 @@ Cena promene je nula danas: `tblZbirnaIzvori` još nema nijednog produkcionog
 pisca, pa nema ni jednog reda sa pogrešnim grain-om. Da je Zbirna otišla u
 cutover pre Otpremnice, kanonsko članstvo bi se punilo identitetom za koji već
 znamo da je pogrešan.
+
+### 13b) Dve odluke pre Otpremnice
+
+Obe moraju biti rešene pre nego što se napiše `CreateOtpremnica_TX`.
+
+#### „Očekivano" nema svoju tabelu — to su stavke drafta
+
+Realan tok je: operater prvo otvori otpremnicu, pa unosi otkupne listove pod
+njom, gledajući `očekivano / povezano / preostalo`. Gde živi „očekivano":
+
+```
+DRAFT OtpremnicaStavke        ono sto je operater UNEO (ocekuje)
+SUM(tblOtpremnicaIzvori -> OtkupStavke)   ono sto je POVEZANO
+preostalo = ocekivano - povezano
+
+FINALIZE: zahteva  ocekivano = povezano
+IZDATO:   stavke se zamrzavaju (A13)
+```
+
+**Bez dodatne `Expected` tabele.** Stavke drafta *jesu* očekivanje; pri
+finalizaciji prestaju to da budu i postaju sadržaj verzije. To je isti prelaz
+koji A5/A13 već opisuju („keš dok je draft, činjenica kad je izdato"), samo
+gledan sa ulazne strane.
+
+#### `Cena` ne ide na `OtpremnicaStavke`
+
+Pitanje: ako jedna otpremnica sabira pet otkupnih listova iste klase sa
+**različitim cenama**, šta znači jedna `Cena` na stavci?
+
+Mereno u zatečenom kodu — `Otpremnica.Cena` danas **nije agregat**, nego
+**seed za prefill blokova**: `modOtkupBlok.bas:688` i `modScrDokumenti.bas:1067`
+prvo pitaju `ExistingBlokCena(otpID)`, pa tek ako je 0 padaju na `Otpremnica.Cena`.
+Uz to je čitaju izveštaji i štampa.
+
+**Odluka:**
+
+| | |
+|---|---|
+| `OtpremnicaStavka.Cena` | **ne postoji.** Vrednost dokumenta je `SUM(izvorne otkupne stavke)` |
+| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u ono što jeste** — predlog cene za blokove, izričito **ne-finansijsko polje** |
+| zabrana | nigde se vrednost otpremnice ne računa kao `Kolicina × Cena` |
+
+Poslednja tačka nije teorijska: `modDokumenta.CalculateManjakByOtpremnica`
+(`:3618`) danas čita **i** `Kolicina` **i** `Cena` sa otpremnice. Posle refaktora
+bi ta cifra mogla da se ne slaže sa zbirom izvornih otkupa. Otpremnica cutover
+mora da odluči iz čega se `manjak` računa — iz izvora, ne iz denormalizovanog
+para.
+
+Da je `Cena` prosto nasleđena „jer je legacy `SaveOtpremnica` ima", model bi
+dobio drugi izvor istine za novac.
+
+---
 
 ### 14.1) Kapija odluke posle PR 6
 

@@ -154,7 +154,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_NoCrossZbirnaLinksAudit
 
     ' PR3 -- Zbirna: header + stavke.  Nov pisac je jos van produkcione putanje;
-    ' cutover citalaca, invarijante i storna je PR4.
+    ' cutover citalaca, invarijante i storna je Zbirna cutover.
     Test_PR3_CreateZbirnaHeaderIStavke
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -163,6 +163,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_PrazanStavkaIDNeProlazi
     Test_PR3_IstaOtpremnicaDvaputNeProlazi
     Test_PR3_VecVezanaOtpremnicaSeNePreuzima
+    Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen
+    Test_PR3_DriftPokazivacaStajeGlasno
     Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
     Test_PR3_RazlicitaVrstaNeProlazi
     Test_PR3_RazlicitVozacNeProlazi
@@ -5464,7 +5466,8 @@ End Sub
 '   meri se     da CreateZbirna_TX pravi JEDAN header, IZVODI stavke iz izvornih
 '               otpremnica, postavlja Otpremnica.ZbirnaID u ISTOJ transakciji, i
 '               da header vise ne nosi kolicinu
-'   ne meri se  ponasanje citalaca, invarijante i storna -- to je PR4. Do tada
+'   ne meri se  ponasanje citalaca, invarijante i storna -- to je Zbirna
+'               cutover. Do tada
 '               produkcija ide starim putem (SaveZbirnaMulti_TX) i golden
 '               scenariji to i dalje dokazuju, nepromenjeni.
 
@@ -5522,7 +5525,7 @@ Private Sub Test_PR3_CreateZbirnaHeaderIStavke()
                  "PR3: stavka pokazuje na ZbirnaID"
 
     ' MEMBERSHIP: obe izvorne otpremnice nose novi ZbirnaID. Bez ovoga bi zbirna
-    ' postojala bez ijednog izvora, a invarijanta u PR4 nema sta da sabira.
+    ' postojala bez ijednog izvora, a invarijanta nema sta da sabira.
     AssertEquals zbrID, Pr3OtpZbirnaID(otpI), "PR3: otpremnica I vezana za zbirnu"
     AssertEquals zbrID, Pr3OtpZbirnaID(otpII), "PR3: otpremnica II vezana za zbirnu"
 
@@ -5567,7 +5570,7 @@ End Sub
 ' Header NE nosi kolicinu, ambalazu ni klasu -- to su kolone koje u ciljnoj semi
 ' ne postoje. Prazno je tacan odgovor: "ne pitaj header za kolicinu".
 '
-' Bez ovog testa bi neko u PR4 mogao "za svaki slucaj" da upise i zbir na header
+' Bez ovog testa bi neko u cutover-u mogao "za svaki slucaj" da upise i zbir
 ' i time napravio dva izvora istine za istu vrednost -- tacno bolest koju
 ' header+stavke uklanja.
 Private Sub Test_PR3_HeaderNeNosiKolicinu()
@@ -5591,7 +5594,7 @@ Private Sub Test_PR3_HeaderNeNosiKolicinu()
     AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KLASA), _
                  "PR3 header: Klasa ostaje prazna"
 
-    ' GeneracijaID je kompenzacija za nepostojeci header i brise se u PR4.
+    ' GeneracijaID je kompenzacija za nepostojeci header i brise se u cutover-u.
     ' Nov pisac je ne sme ozivljavati.
     If GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID) > 0 Then
         AssertEquals "", ZbrPolje(zbrID, COL_GENERACIJA_ID), _
@@ -5692,7 +5695,11 @@ Private Sub Test_PR3_VecVezanaOtpremnicaSeNePreuzima()
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 preuzimanje: druga zbirna odbijena"
-    AssertTrue InStr(1, razlog, "vec na zbirnoj", vbTextCompare) > 0, _
+    ' Poruka dolazi iz KANONSKE grane: posle A15 odluku donosi
+    ' tblZbirnaIzvori, pa se pokazivac ni ne pita. Da kapija ostane samo na
+    ' pokazivacu, ovaj test bi i dalje prolazio -- zato postoji
+    ' Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen.
+    AssertTrue InStr(1, razlog, "u sastavu aktivne zbirne", vbTextCompare) > 0, _
                "PR3 preuzimanje: kapija imenuje razlog (bilo: " & razlog & ")"
     AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
                  "PR3 preuzimanje: drugi header nije ostao"
@@ -6110,7 +6117,7 @@ Private Sub Test_PR3_ClanstvoJeZapisanoPoVerziji()
     AssertTrue Pr3JeIzvor(zbrID, c), "PR3 clanstvo: treca otpremnica u sastavu"
 
     ' Sastav se cita BEZ gledanja trenutnog stanja otpremnica -- to je i ceo
-    ' smisao tabele. Ovde su jos identicni; posle ispravke (PR4) nece biti.
+    ' smisao tabele. Ovde su jos identicni; posle propagacije ispravke nece biti.
     AssertEquals zbrID, Pr3OtpZbirnaID(a), "PR3 clanstvo: pokazivac se slaze"
     AssertEquals zbrID, Pr3OtpZbirnaID(b), "PR3 clanstvo: pokazivac se slaze (b)"
     AssertEquals zbrID, Pr3OtpZbirnaID(c), "PR3 clanstvo: pokazivac se slaze (c)"
@@ -6253,6 +6260,86 @@ Private Sub Test_PR3_HeaderJeEksplicitnoIzdat()
 
 EH:
     LogFatal "Test_PR3_HeaderJeEksplicitnoIzdat", Err.Number, Err.description
+End Sub
+
+' Odluku o clanstvu donosi KANON, ne kes.
+'
+' Postojeci test "vec vezana otpremnica" ovo NE hvata: prva zbirna postavi i
+' clanstvo i pokazivac, pa druga pada vec na pokazivacu -- kanon se nikad ne
+' pita. Ovde se pokazivac namerno isprazni, a zapis clanstva ostavi netaknut:
+' ako writer veruje kesu, ista otpremnica ulazi u DVE aktivne zbirne dok
+' kanonski zapis o prvoj i dalje postoji.
+Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3KN")
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3KN-" & scenario, KLASA_I, 400#, 20)
+
+    Dim prva As String
+    prva = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN1-" & scenario), _
+                           Pr3Izvor(otp, ""))
+    AssertTrue Len(prva) > 0, "PR3 kanon: prva zbirna napravljena"
+
+    ' Kes se gubi, kanon ostaje.
+    Pr3ObrisiPokazivac otp
+    AssertEquals "", Pr3OtpZbirnaID(otp), "PR3 kanon: pokazivac je ispraznjen"
+    AssertEquals prva, Pr3ZbirnaIzClanstva(otp), "PR3 kanon: clanstvo je netaknuto"
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String, razlog As String
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN2-" & scenario), _
+                          Pr3Izvor(otp, ""), razlog)
+
+    AssertEquals "", rez, "PR3 kanon: druga zbirna odbijena PO KANONU"
+    AssertTrue InStr(1, razlog, "u sastavu aktivne zbirne", vbTextCompare) > 0, _
+               "PR3 kanon: kapija se poziva na clanstvo (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 kanon: drugi header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen", Err.Number, Err.description
+End Sub
+
+' Obrnut smer: pokazivac tvrdi vezu za koju kanon ne zna.
+'
+' Ne bira se "verniji" izvor -- staje se glasno. Tiho biranje je nacin da se
+' nesaglasnost naseli i posle vise ne moze da se rekonstruise ko je bio u pravu.
+Private Sub Test_PR3_DriftPokazivacaStajeGlasno()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3DR")
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DR-" & scenario, KLASA_I, 400#, 20)
+
+    ' Pokazivac na zbirnu koja ne postoji ni u jednom zapisu clanstva.
+    Pr3PostaviPokazivac otp, "ZBR-DRIFT-" & scenario
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String, razlog As String
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3DR-" & scenario), _
+                          Pr3Izvor(otp, ""), razlog)
+
+    AssertEquals "", rez, "PR3 drift: upis odbijen"
+    AssertTrue InStr(1, razlog, "cache drift", vbTextCompare) > 0, _
+               "PR3 drift: kapija imenuje neslaganje (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 drift: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_DriftPokazivacaStajeGlasno", Err.Number, Err.description
 End Sub
 
 ' --- PR3 pomocne -------------------------------------------------------------
@@ -6421,6 +6508,19 @@ Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String,
                                            broj, "", TEST_VRSTA, TEST_SORTA, _
                                            kol, 50#, TEST_TIP_AMB, amb, klasa)
 End Function
+
+Private Sub Pr3PostaviPokazivac(ByVal otpID As String, ByVal vrednost As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    If redovi Is Nothing Then Exit Sub
+    If redovi.count <> 1 Then Exit Sub
+    RequireUpdateCell TBL_OTPREMNICA, CLng(redovi(1)), COL_OTP_ZBIRNA_ID, _
+                      vrednost, "Pr3PostaviPokazivac"
+End Sub
+
+Private Sub Pr3ObrisiPokazivac(ByVal otpID As String)
+    Pr3PostaviPokazivac otpID, ""
+End Sub
 
 Private Function NewScenarioCode(ByVal scenarioName As String) As String
     NewScenarioCode = scenarioName & "-" & m_RunID & "-" & CStr(m_Total + 1)

@@ -209,8 +209,13 @@ Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTP_KLASA As String = "Klasa"
 Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
-' PR3: kanonska membership veza otpremnice ka zbirnoj. BrojZbirne ostaje kao
-' LABELA dok cutover (PR4) ne prebaci citaoce; posle toga FK je jedini put.
+' POKAZIVAC na trenutno aktivnu zbirnu -- NE kanonska veza (A15).
+'
+' Kanonski sastav je tblZbirnaIzvori; ovo je imenovan kes u smislu A5, drzan
+' zbog jeftine provere i citanja. Writer odluku donosi po KANONU, a neslaganje
+' izmedju kesa i kanona prijavljuje kao drift.
+'
+' BrojZbirne ostaje kao LABELA dok Zbirna cutover ne prebaci citaoce.
 Public Const COL_OTP_ZBIRNA_ID As String = "ZbirnaID"
 
 Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
@@ -239,8 +244,10 @@ Public Const COL_ZBR_KLASA As String = "Klasa"
 ' Jedan mutable FK moze da pokaze samo jednu -- ili se stara verzija raspadne
 ' (sestre odu na novu), ili nova nema sestre. Istorija se gubi tiho.
 '
-' Redovi su NEPROMENLJIVI: ne menjaju se i ne brisu. Nova verzija dokumenta
-' dobija svoje redove. Zato tabela nema Stornirano (v. modSchemaGuard.BEZ_STORNA).
+' Nepromenljivost pocinje pri IZDAVANJU, ne pri upisu (A15):
+'   DRAFT   -- clanstvo se menja slobodno (izvori se dodaju i sklanjaju)
+'   IZDATO  -- zamrznuto; nova verzija dobija svoje redove, stara zadrzava svoje
+' Zato tabela nema Stornirano (v. modSchemaGuard.BEZ_STORNA).
 Public Const COL_ZBI_ID As String = "ZbirnaIzvorID"
 Public Const COL_ZBI_ZBIRNA_ID As String = "ZbirnaID"
 Public Const COL_ZBI_OTPREMNICA_ID As String = "OtpremnicaID"

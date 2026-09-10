@@ -89,10 +89,31 @@ registri `STORNO_TABELE` / `BEZ_STORNA`.
 
 ## A9 — ispravka je nov ID
 
-Nova verzija dokumenta dobija **nov** `DocumentID` i kad poslovni broj ostaje isti.
-Veza je `IspravkaOdID` / `ZamenjenSaID`, po ID-u — nikad po broju.
+Nova verzija dokumenta dobija **nov** `DocumentID`. Veza je `IspravkaOdID` /
+`ZamenjenSaID`, po ID-u — nikad po broju.
 
-*Provera:* acceptance test `IspravkaID`.
+**Za lanac `Otkup → Otpremnica → Zbirna` menja se i poslovni broj.** Zaključano
+da se reused-number logika ne bi vratila na mala vrata:
+
+```
+correction OTK / OTP / ZBR
+   -> nov DocumentID
+   -> nov BrojDokumenta
+   -> IspravkaOdID   (na prethodnu verziju)
+   -> ZamenjenSaID   (na prethodnoj verziji)
+   -> isti CorrectionID kroz ceo propagirani lanac
+```
+
+Ranija formulacija je govorila „nov ID **i kad poslovni broj ostaje isti**", što
+je ostavljalo prostor da dve verzije istog dokumenta dele broj. Za lanac to više
+nije opcija: broj je labela koju operater vidi na papiru, pa dva papira sa istim
+brojem i različitim sadržajem nisu razlučiva izvan sistema.
+
+Van lanca (npr. matični podaci) pravilo o broju se ne primenjuje — tamo broja i
+nema.
+
+*Provera:* acceptance test `IspravkaID`; scenariji H1/H2 (`GOLDEN_SCENARIJI.md`
+§12) tvrde i nov broj, ne samo nov ID.
 
 ## A10 — sync ima nepromenljiv eksterni ID
 

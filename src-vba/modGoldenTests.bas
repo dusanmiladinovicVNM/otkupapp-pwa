@@ -8,7 +8,7 @@ Option Explicit
 ' Spec i recnik tvrdnji: docs/DOMEN/GOLDEN_SCENARIJI.md
 '
 ' Kriterijum kvaliteta:
-'   SCENARIO KOJI BI MORAO DA SE MENJA U PR3 JE NAPISAN POGRESNO.
+'   SCENARIO KOJI BI MORAO DA SE MENJA U REFAKTORU JE NAPISAN POGRESNO.
 '
 ' IZOLACIJA ULAZNOG STANJA -- ne samo izlaznog.
 '   Rollback cisti ono sto scenario OSTAVI. Ne cisti ono sto je ZATEKAO.
@@ -319,7 +319,8 @@ End Sub
 '=====================================================================
 ' GOLDEN QUERY ADAPTER
 '
-' Jedino mesto koje zna kako su podaci slozeni. Menja se u PR3+; scenariji i
+' Jedino mesto koje zna kako su podaci slozeni. Menja se u cutover-ima;
+' scenariji i
 ' golden fajlovi ostaju isti.
 '=====================================================================
 
@@ -354,13 +355,13 @@ End Function
 '   1. Ona racuna preko SumOtpremniceByKlasa(BrojZbirne) i
 '      IsZbirnaConsistent(BrojZbirne), a broj sam ne razlikuje dve logicke
 '      zbirne. Rezultat je "invarijanta PUKLA" -- i to bi bilo ZAKLJUCANO kao
-'      ocekivano. Posle PR4, kad invarijanta pocne da prima ZbirnaID, ispravka
+'      ocekivano. Posle Zbirna cutover-a, kad invarijanta pocne da prima ZbirnaID, ispravka
 '      arhitekture bi oborila golden koji je treba da stiti.
 '   2. "aktivnih 1 / storniranih 1" ne kaze KOJA je stornirana. Bug koji
 '      stornira drugu umesto prve ostavlja iste brojeve i test ostaje zelen.
 '
 ' Zato se izvestava kolicina i status po poziciji. ID se NE ispisuje -- ni
-' danasnji ni buduci. Posle PR4 adapter trazi red po ZbirnaID; golden isti.
+' danasnji ni buduci. Posle Zbirna cutover-a adapter trazi red po ZbirnaID; golden isti.
 Private Function GldIdentitetZbirni() As String
     Dim data As Variant
     Dim cID As Long, cKol As Long, cSt As Long
@@ -579,7 +580,7 @@ End Function
 '
 ' Identitet dokumenta danas: GeneracijaID ako ga red nosi, inace poslovni broj.
 ' modOtkup NE pise GeneracijaID, pa se otkup broji po BrojDokumenta; otpremnica,
-' zbirna i prijemnica ga imaju. Posle PR5 sve postaje COUNT(DISTINCT <Doc>ID) --
+' zbirna i prijemnica ga imaju. Posle Otkup cutover-a sve postaje COUNT(DISTINCT <Doc>ID) --
 ' menja se OVAJ adapter, golden ostaje isti.
 Private Function GldBrojDok(ByVal tbl As String, ByVal scopeKol As String, _
                             ByVal scopeVal As String, ByVal brojKol As String) As Long
@@ -710,7 +711,8 @@ Private Function GldOtkupi() As String
 End Function
 
 ' Broj se koristi zato sto ga DANAS traze SumOtpremniceByKlasa i
-' IsZbirnaConsistent -- zatecen API, ne izbor scenarija. Posle PR4 primaju
+' IsZbirnaConsistent -- zatecen API, ne izbor scenarija. Posle Zbirna
+' cutover-a primaju
 ' ZbirnaID, pa se menja OVAJ adapter.
 Private Function GldZbirna(ByVal brojZbirne As String) As String
     Dim sumOtp As Object
@@ -953,7 +955,7 @@ End Function
 ' POSLOVNI POTEZI -- tanki omotaci nad PRODUKCIONIM writer-ima
 '=====================================================================
 
-' Razlaze "OTK-1 + OTK-2". Taj format PR5 uklanja; tada se ovo svodi na
+' Razlaze "OTK-1 + OTK-2". Taj format uklanja Otkup cutover; tada se svodi na
 ' jedan Add, a golden se NE menja.
 Private Sub GldDodaj(ByVal cilj As Collection, ByVal rez As String)
     Dim delovi() As String
@@ -1031,8 +1033,8 @@ End Sub
 '
 ' Scenario kaze POSLOVNU NAMERU ("fakturisi Klasu I"); adapter nalazi sta je to
 ' danas. Ranija verzija je slala m_Prj(1) -- "prva fizicka prijemnica koju je
-' legacy writer vratio" -- pa bi posle PR8 to bio HEADER ID, ne red Klase I, i
-' sam scenario bi morao da se menja. Posle PR8 ovde ide
+' legacy writer vratio" -- pa bi posle cutover-a to bio HEADER ID, ne red
+' Klase I, i sam scenario bi morao da se menja. Posle cutover-a ovde ide
 ' PrijemnicaStavkaID gde je Klasa = zadata; scenario i golden ostaju isti.
 Private Sub GldFakturisiKlasu(ByVal klasa As String)
     Dim data As Variant
@@ -1114,7 +1116,7 @@ Private Sub GldStornoPrijemnice(ByVal idx As Long)
 End Sub
 
 ' Storno CELOG otkupnog bloka po poslovnom broju -- danas je to jedini ulaz koji
-' zahvati obe klase. PR5 ga zamenjuje storno-om po DocumentID.
+' zahvati obe klase. Otkup cutover ga zamenjuje storno-om po DocumentID.
 ' Zbirna za zadatog vozaca -- G2 pravi dve sa istim brojem.
 Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
                               ByVal kolI As Double)
@@ -1131,7 +1133,8 @@ End Sub
 ' Storno JEDNE od vise zbirnih pod istim brojem.
 '
 ' Danas StornoZbirna_TX trazi broj + generaciju, jer broj sam nije identitet --
-' adapter generaciju cita iz reda koji je writer vratio. Posle PR4 ide
+' adapter generaciju cita iz reda koji je writer vratio. Posle Zbirna
+' cutover-a ide
 ' StornoZbirna_TX(ZbirnaID); scenario i golden ostaju isti.
 Private Sub GldStornoZbirne(ByVal idx As Long)
     Dim data As Variant
@@ -1202,7 +1205,7 @@ End Sub
 
 ' A1: baseline CELOG lanca, ukljucujuci Fakturu.
 '
-' Ide do fakture namerno: bas taj deo menja PR9 (FakturaStavka ->
+' Ide do fakture namerno: bas taj deo menja Faktura korak (FakturaStavka ->
 ' PrijemnicaStavkaID), pa baseline koji staje na prijemnici ne bi stitio nista.
 Private Sub Gld_A1_PunLanacDoFakture()
     Dim tx As clsTransaction
@@ -1225,7 +1228,8 @@ EH:
     Err.Raise GLD_ERR, "Gld_A1", gldDesc
 End Sub
 
-' A2: dvoklasni lanac. Scenario koji PR5 najvise menja iznutra -- ishod isti.
+' A2: dvoklasni lanac. Scenario koji Otkup cutover najvise menja iznutra;
+' ishod isti.
 Private Sub Gld_A2_DvoklasniLanac()
     Dim tx As clsTransaction
     Dim gldDesc As String
@@ -1434,8 +1438,9 @@ End Sub
 
 ' D3: storno DVOKLASNOG otkupa -- jedan logicki dokument, obe klase.
 '
-' Ovo je scenario koji PR5 najvise menja: danas se storno radi po poslovnom
-' broju bas zato sto dokument nema jedan ID. Posle refaktora ide po DocumentID,
+' Ovo je scenario koji Otkup cutover najvise menja: danas se storno radi po
+' poslovnom broju bas zato sto dokument nema jedan ID. Posle toga ide po
+' DocumentID,
 ' a golden mora ostati isti.
 Private Sub Gld_D3_StornoDvoklasnogOtkupa()
     Dim tx As clsTransaction
@@ -1525,7 +1530,7 @@ End Sub
 ' G2: DVA dokumenta sa istim poslovnim brojem.
 '
 ' Kapija G2 ugovora: storno jednog ne sme da dirne drugi. Danas to drzi
-' GeneracijaID; posle PR5 drzi DocumentID, a golden ostaje isti.
+' GeneracijaID; posle Otkup cutover-a drzi DocumentID, a golden ostaje isti.
 Private Sub Gld_G2_IstiBrojDvaDokumenta()
     Dim tx As clsTransaction
     Dim gldDesc As String
