@@ -453,7 +453,8 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID"
+        "ZbirnaGeneracijaID",
+        "ZbirnaID"
       ]
     },
     {
@@ -900,6 +901,23 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID"
+      ]
+    },
+    {
+      "table": "tblZbirnaStavke",
+      "const": "TBL_ZBIRNA_STAVKE",
+      "sheet": "ZbirnaStavke",
+      "columns": [
+        "ZbirnaStavkaID",
+        "ZbirnaID",
+        "RedniBroj",
+        "Klasa",
+        "Kolicina",
+        "KolAmbalaze",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
       ]
     }
   ]

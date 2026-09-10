@@ -151,6 +151,17 @@ Public Sub RunBusinessFlowProSuite()
     Test_AutoLinkMustNotCrossBrojZbirne
     Test_NoCrossZbirnaLinksAudit
 
+    ' PR3 -- Zbirna: header + stavke.  Nov pisac je jos van produkcione putanje;
+    ' cutover citalaca, invarijante i storna je PR4.
+    Test_PR3_CreateZbirnaHeaderIStavke
+    Test_PR3_HeaderNeNosiKolicinu
+    Test_PR3_ZbirnaIDJeOpaque
+    Test_PR3_DvaPutaIstaKlasaNeProlazi
+    Test_PR3_LosaStavkaNeOstavljaPolaDokumenta
+    Test_PR3_ZbirnaBezStavkiNeProlazi
+    Test_PR3_NepoznatKljucUHeaderuPada
+    Test_PR3_OtpremnicaImaZbirnaID
+
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
@@ -5428,6 +5439,398 @@ Private Sub ResetCounters()
     m_Failed = 0
     m_Skipped = 0
 End Sub
+
+' ============================================================
+' PR3 -- Zbirna: header + stavke
+' ============================================================
+'
+' Sta se ovde MERI, a sta ne:
+'
+'   meri se     da CreateZbirna_TX pravi JEDAN header i N stavki, sa FK-om i
+'               rednim brojem, i da header vise ne nosi kolicinu
+'   ne meri se  ponasanje citalaca, invarijante i storna -- to je PR4. Do tada
+'               produkcija ide starim putem (SaveZbirnaMulti_TX) i golden
+'               scenariji to i dalje dokazuju, nepromenjeni.
+
+Private Sub Test_PR3_CreateZbirnaHeaderIStavke()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3HS")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-PR3-" & scenario
+
+    Dim zbrID As String
+    zbrID = CreateZbirna_TX(Pr3Header(testDate, brojZbirne), _
+                            Pr3Stavke(400#, 20, 600#, 30))
+
+    AssertTrue Len(zbrID) > 0, "PR3: CreateZbirna_TX vraca ID"
+
+    ' JEDAN header, ne dva reda po klasi.
+    Dim headeri As Collection
+    Set headeri = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbrID)
+    AssertTrue Not headeri Is Nothing, "PR3: header pronadjen"
+    AssertEquals "1", CStr(headeri.count), "PR3: tacno jedan header red"
+
+    AssertEquals brojZbirne, ZbrPolje(zbrID, COL_ZBR_BROJ), "PR3: BrojZbirne"
+    AssertEquals TEST_KUP_ID, ZbrPolje(zbrID, COL_ZBR_KUPAC), "PR3: KupacID"
+    AssertEquals TEST_VOZ_ID, ZbrPolje(zbrID, COL_ZBR_VOZAC), "PR3: VozacID"
+    AssertEquals TEST_TIP_AMB, ZbrPolje(zbrID, COL_ZBR_TIP_AMB), "PR3: TipAmbalaze"
+
+    ' DVE stavke, po jedna po klasi, sa rednim brojem u redosledu predaje.
+    AssertEquals "2", CStr(Pr3BrojStavki(zbrID)), "PR3: dve stavke"
+
+    AssertEquals "1", Pr3StavkaPolje(zbrID, KLASA_I, COL_ZBS_RB), "PR3: I ima RB 1"
+    AssertEquals "2", Pr3StavkaPolje(zbrID, KLASA_II, COL_ZBS_RB), "PR3: II ima RB 2"
+
+    AssertTrue Abs(Pr3StavkaBroj(zbrID, KLASA_I, COL_ZBS_KOLICINA) - 400#) < 0.001, _
+               "PR3: Klasa I kolicina 400"
+    AssertTrue Abs(Pr3StavkaBroj(zbrID, KLASA_II, COL_ZBS_KOLICINA) - 600#) < 0.001, _
+               "PR3: Klasa II kolicina 600"
+    AssertTrue Abs(Pr3StavkaBroj(zbrID, KLASA_I, COL_ZBS_KOL_AMB) - 20#) < 0.001, _
+               "PR3: Klasa I ambalaza 20"
+    AssertTrue Abs(Pr3StavkaBroj(zbrID, KLASA_II, COL_ZBS_KOL_AMB) - 30#) < 0.001, _
+               "PR3: Klasa II ambalaza 30"
+
+    ' FK je stvarni ID headera, ne broj dokumenta.
+    AssertEquals zbrID, Pr3StavkaPolje(zbrID, KLASA_I, COL_ZBS_ZBIRNA_ID), _
+                 "PR3: stavka pokazuje na ZbirnaID"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_CreateZbirnaHeaderIStavke", Err.Number, Err.description
+End Sub
+
+' Header NE nosi kolicinu, ambalazu ni klasu -- to su kolone koje u ciljnoj semi
+' ne postoje. Prazno je tacan odgovor: "ne pitaj header za kolicinu".
+'
+' Bez ovog testa bi neko u PR4 mogao "za svaki slucaj" da upise i zbir na header
+' i time napravio dva izvora istine za istu vrednost -- tacno bolest koju
+' header+stavke uklanja.
+Private Sub Test_PR3_HeaderNeNosiKolicinu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3HP")
+
+    Dim zbrID As String
+    zbrID = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
+        Pr3Stavke(400#, 20, 600#, 30))
+
+    AssertTrue Len(zbrID) > 0, "PR3 header: dokument napravljen"
+
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KOLICINA), _
+                 "PR3 header: UkupnoKolicina ostaje prazna"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KOL_AMB), _
+                 "PR3 header: UkupnoAmbalaze ostaje prazna"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KLASA), _
+                 "PR3 header: Klasa ostaje prazna"
+
+    ' GeneracijaID je kompenzacija za nepostojeci header i brise se u PR4.
+    ' Nov pisac je ne sme ozivljavati.
+    If GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID) > 0 Then
+        AssertEquals "", ZbrPolje(zbrID, COL_GENERACIJA_ID), _
+                     "PR3 header: GeneracijaID se ne pise"
+    End If
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_HeaderNeNosiKolicinu", Err.Number, Err.description
+End Sub
+
+' ZbirnaID je OPAQUE. Stari GetNextID je davao ZBR-1, ZBR-2 ... -- brojac po
+' kome se moze pogoditi "sledeci" i iz koga se cita koliko je dokumenata u
+' sistemu. Novi ID nosi samo identitet.
+Private Sub Test_PR3_ZbirnaIDJeOpaque()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3ID")
+
+    Dim a As String, b As String
+    a = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3A-" & scenario), _
+        Pr3Stavke(100#, 5, 0#, 0))
+    b = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3B-" & scenario), _
+        Pr3Stavke(100#, 5, 0#, 0))
+
+    AssertTrue Len(a) > 0 And Len(b) > 0, "PR3 ID: oba dokumenta napravljena"
+    AssertTrue a <> b, "PR3 ID: dva poziva daju razlicit ID"
+
+    AssertEquals "ZBR-", Left$(a, 4), "PR3 ID: prefiks"
+    AssertEquals "32", CStr(Len(a) - 4), "PR3 ID: 32 hex znaka"
+    AssertTrue Not IsNumeric(Mid$(a, 5)), "PR3 ID: nije brojac"
+
+    Dim i As Long
+    Dim ok As Boolean
+    ok = True
+    For i = 5 To Len(a)
+        If InStr(1, "0123456789ABCDEF", UCase$(Mid$(a, i, 1))) = 0 Then ok = False
+    Next i
+    AssertTrue ok, "PR3 ID: samo hex znaci posle prefiksa"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_ZbirnaIDJeOpaque", Err.Number, Err.description
+End Sub
+
+' Dve stavke iste klase su isti bug koji header+stavke uklanja: jedan logicki
+' dokument rasut na vise redova koje neko posle mora da sabira.
+Private Sub Test_PR3_DvaPutaIstaKlasaNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3DK")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add Pr3Stavka(KLASA_I, 400#, 20)
+    stavke.Add Pr3Stavka(KLASA_I, 600#, 30)
+
+    Dim preH As Long, preS As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+    preS = Pr3BrojRedova(TBL_ZBIRNA_STAVKE)
+
+    Dim rez As String
+    Dim razlog As String
+    rez = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3D-" & scenario), _
+        stavke, razlog)
+
+    AssertEquals "", rez, "PR3 dupla klasa: upis odbijen"
+
+    ' Razlog, ne samo ishod. Sabotaza koja iskljuci ovu proveru ostavlja isti
+    ' ishod -- posao preuzme Dictionary.Add svojom greskom o duplom kljucu -- pa
+    ' bi tvrdnja nad ishodom prosla nad MRTVOM kapijom.
+    AssertTrue InStr(1, razlog, "Dve stavke iste klase", vbTextCompare) > 0, _
+               "PR3 dupla klasa: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 dupla klasa: nijedan header nije ostao"
+    AssertEquals CStr(preS), CStr(Pr3BrojRedova(TBL_ZBIRNA_STAVKE)), _
+                 "PR3 dupla klasa: nijedna stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_DvaPutaIstaKlasaNeProlazi", Err.Number, Err.description
+End Sub
+
+' Neispravna DRUGA stavka ne sme da ostavi header i prvu stavku u tabeli.
+' Prevalidacija ide pre ijednog upisa, a transakcija je mreza ispod nje.
+Private Sub Test_PR3_LosaStavkaNeOstavljaPolaDokumenta()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3LS")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add Pr3Stavka(KLASA_I, 400#, 20)
+    stavke.Add Pr3Stavka(KLASA_II, 0#, 30)      ' kolicina 0 -> odbija se
+
+    Dim preH As Long, preS As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+    preS = Pr3BrojRedova(TBL_ZBIRNA_STAVKE)
+
+    Dim rez As String
+    Dim razlog As String
+    rez = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3L-" & scenario), _
+        stavke, razlog)
+
+    AssertEquals "", rez, "PR3 losa stavka: upis odbijen"
+    AssertTrue InStr(1, razlog, "Kolicina mora biti veca od nule", _
+                     vbTextCompare) > 0, _
+               "PR3 losa stavka: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 losa stavka: header nije ostao"
+    AssertEquals CStr(preS), CStr(Pr3BrojRedova(TBL_ZBIRNA_STAVKE)), _
+                 "PR3 losa stavka: prva stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_LosaStavkaNeOstavljaPolaDokumenta", Err.Number, Err.description
+End Sub
+
+' Dokument bez ijedne stavke nije dokument.
+Private Sub Test_PR3_ZbirnaBezStavkiNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3BS")
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String
+    Dim razlog As String
+    rez = CreateZbirna_TX( _
+        Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3E-" & scenario), _
+        New Collection, razlog)
+
+    AssertEquals "", rez, "PR3 bez stavki: upis odbijen"
+    AssertTrue InStr(1, razlog, "bar jednu stavku", vbTextCompare) > 0, _
+               "PR3 bez stavki: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 bez stavki: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_ZbirnaBezStavkiNeProlazi", Err.Number, Err.description
+End Sub
+
+' Tipfeler u imenu header polja je GRESKA, ne prazna vrednost.
+'
+' Dictionary(k) nad nepostojecim kljucem tiho vraca Empty i jos doda kljuc, pa
+' bi "KupacId" umesto "KupacID" prosao kao "korisnik nije izabrao kupca".
+Private Sub Test_PR3_NepoznatKljucUHeaderuPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3NK")
+
+    Dim h As Object
+    Set h = Pr3Header(NextTestDate(), TEST_PREFIX & "-ZBR-PR3N-" & scenario)
+    h.Remove "KupacID"
+    h.Add "KupacId_", TEST_KUP_ID
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String
+    Dim razlog As String
+    rez = CreateZbirna_TX(h, Pr3Stavke(400#, 20, 0#, 0), razlog)
+
+    AssertEquals "", rez, "PR3 kljuc: upis odbijen"
+    AssertTrue InStr(1, razlog, "KupacID", vbTextCompare) > 0, _
+               "PR3 kljuc: kapija imenuje polje (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 kljuc: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_NepoznatKljucUHeaderuPada", Err.Number, Err.description
+End Sub
+
+' Otpremnica dobija kanonsku membership vezu ka zbirnoj. U PR3 se jos ne
+' popunjava -- citaoce prebacuje PR4 -- ali kolona mora da postoji, i to na
+' KRAJU tabele: AppendRow pise poziciono.
+Private Sub Test_PR3_OtpremnicaImaZbirnaID()
+    On Error GoTo EH
+
+    Dim idx As Long
+    idx = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ZBIRNA_ID)
+    AssertTrue idx > 0, "PR3: tblOtpremnica ima kolonu ZbirnaID"
+
+    Dim lo As ListObject
+    Set lo = modDataAccess.GetTable(TBL_OTPREMNICA)
+    AssertTrue Not lo Is Nothing, "PR3: tblOtpremnica postoji"
+    AssertEquals CStr(lo.ListColumns.count), CStr(idx), _
+                 "PR3: ZbirnaID je POSLEDNJA kolona (nove idu na kraj)"
+
+    ' Stavke nemaju svoj Stornirano: line-level storno u domenu ne postoji,
+    ' status drzi header. Kolona koje nema ne moze da se filtrira, pa je tabela
+    ' u modSchemaGuard.BEZ_STORNA.
+    AssertEquals "0", CStr(GetColumnIndex(TBL_ZBIRNA_STAVKE, COL_STORNIRANO)), _
+                 "PR3: tblZbirnaStavke nema kolonu Stornirano"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_OtpremnicaImaZbirnaID", Err.Number, Err.description
+End Sub
+
+' --- PR3 pomocne -------------------------------------------------------------
+
+Private Function Pr3Header(ByVal datum As Date, ByVal brojZbirne As String) As Object
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", TEST_VOZ_ID
+    h.Add "BrojZbirne", brojZbirne
+    h.Add "KupacID", TEST_KUP_ID
+    h.Add "Hladnjaca", ""
+    h.Add "Pogon", ""
+    h.Add "VrstaVoca", TEST_VRSTA
+    h.Add "SortaVoca", TEST_SORTA
+    h.Add "TipAmbalaze", TEST_TIP_AMB
+    Set Pr3Header = h
+End Function
+
+Private Function Pr3Stavka(ByVal klasa As String, ByVal kolicina As Double, _
+                           ByVal kolAmb As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kolicina
+    s.Add "KolAmbalaze", kolAmb
+    Set Pr3Stavka = s
+End Function
+
+' Klasa II se izostavlja kad je kolII = 0 -- dokument sme da ima samo jednu klasu.
+Private Function Pr3Stavke(ByVal kolI As Double, ByVal ambI As Double, _
+                           ByVal kolII As Double, ByVal ambII As Double) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    If kolI > 0 Then c.Add Pr3Stavka(KLASA_I, kolI, ambI)
+    If kolII > 0 Then c.Add Pr3Stavka(KLASA_II, kolII, ambII)
+    Set Pr3Stavke = c
+End Function
+
+Private Function Pr3BrojRedova(ByVal tblName As String) As Long
+    Dim d As Variant
+    d = GetTableData(tblName)
+    If Not IsArray(d) Then Exit Function
+    Pr3BrojRedova = UBound(d, 1)
+End Function
+
+Private Function Pr3BrojStavki(ByVal zbirnaID As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID)
+    If redovi Is Nothing Then Exit Function
+    Pr3BrojStavki = redovi.count
+End Function
+
+Private Function Pr3StavkaPolje(ByVal zbirnaID As String, ByVal klasa As String, _
+                                ByVal columnName As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cZbr As Long, cKlasa As Long, cTraz As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, "Pr3StavkaPolje")
+    cKlasa = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, "Pr3StavkaPolje")
+    cTraz = RequireColumnIndex(TBL_ZBIRNA_STAVKE, columnName, "Pr3StavkaPolje")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cZbr), "")), zbirnaID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cKlasa), "")), klasa, vbTextCompare) = 0 Then
+                Pr3StavkaPolje = Trim$(CStr(nz(d(i, cTraz), "")))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function Pr3StavkaBroj(ByVal zbirnaID As String, ByVal klasa As String, _
+                               ByVal columnName As String) As Double
+    Dim t As String
+    t = Pr3StavkaPolje(zbirnaID, klasa, columnName)
+    If IsNumeric(t) Then Pr3StavkaBroj = CDbl(t)
+End Function
 
 Private Function NewScenarioCode(ByVal scenarioName As String) As String
     NewScenarioCode = scenarioName & "-" & m_RunID & "-" & CStr(m_Total + 1)

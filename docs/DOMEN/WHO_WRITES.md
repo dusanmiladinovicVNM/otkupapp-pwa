@@ -47,6 +47,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblStornoZurnal` | 1 | `modStornoZurnal` |
 | `tblUtovarStavke` | 1 | `modUtovar` |
 | `tblVozaci` | 1 | `modMalina` |
+| `tblZbirnaStavke` | 1 | `modDokumenta` |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
@@ -79,6 +80,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoVeze`: `modStornoContext`
 - `tblStornoZurnal`: `modStorno`, `modStornoFlow`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
+- `tblZbirnaStavke`: `modDokumenta`
 - `tblPrerada`: `modPaletniList`, `modStorno`
 - `tblPreradaStavka`: `modPaletniList`, `modStorno`
 

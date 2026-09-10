@@ -42,6 +42,7 @@ Public Const TBL_KULTURE As String = "tblKulture"
 Public Const TBL_OTKUP As String = "tblOtkup"
 Public Const TBL_OTPREMNICA As String = "tblOtpremnica"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
+Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
 Public Const TBL_PRIJEMNICA As String = "tblPrijemnica"
 Public Const TBL_FAKTURE As String = "tblFakture"
 Public Const TBL_FAKTURA_STAVKE As String = "tblFakturaStavke"
@@ -207,6 +208,9 @@ Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTP_KLASA As String = "Klasa"
 Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
+' PR3: kanonska membership veza otpremnice ka zbirnoj. BrojZbirne ostaje kao
+' LABELA dok cutover (PR4) ne prebaci citaoce; posle toga FK je jedini put.
+Public Const COL_OTP_ZBIRNA_ID As String = "ZbirnaID"
 
 Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
 
@@ -224,6 +228,20 @@ Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"
 Public Const COL_ZBR_VRSTA As String = "VrstaVoca"
 Public Const COL_ZBR_SORTA As String = "SortaVoca"
 Public Const COL_ZBR_KLASA As String = "Klasa"
+
+' --- tblZbirnaStavke (PR3: dokument = header + stavke) ---
+'
+' Stavka NEMA Stornirano: line-level storno ne postoji u domenu, status drzi
+' header (v. REFAKTOR_DOKUMENT_HEADER_STAVKE.md S7). Zato je tabela u
+' modSchemaGuard.BEZ_STORNA -- inace pravilo STORNO_REGISTAR pada, i tako treba.
+'
+' Zbirna nema Cena: cena se na zbirnoj ne vodi (modDokUnos.bas:422).
+Public Const COL_ZBS_ID As String = "ZbirnaStavkaID"
+Public Const COL_ZBS_ZBIRNA_ID As String = "ZbirnaID"
+Public Const COL_ZBS_RB As String = "RedniBroj"
+Public Const COL_ZBS_KLASA As String = "Klasa"
+Public Const COL_ZBS_KOLICINA As String = "Kolicina"
+Public Const COL_ZBS_KOL_AMB As String = "KolAmbalaze"
 
 ' --- Spaltennamen tblPrijemnica (NEU) ---
 Public Const COL_PRJ_ID As String = "PrijemnicaID"

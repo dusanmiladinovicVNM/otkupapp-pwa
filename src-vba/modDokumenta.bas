@@ -1163,6 +1163,417 @@ EH:
               "Source=" & errSrc & " | " & errDesc
 End Function
 
+' ============================================================
+' ZBIRNA -- header + stavke (PR3)
+' ============================================================
+'
+' Jedan javni ulaz koji vraca JEDAN ID. Obrazac je CreateFaktura_TX
+' (modFaktura.bas:11): _TX drzi transakciju i monitoring, Private core radi
+' posao, kompletna prevalidacija PRE ijednog upisa.
+'
+' Sta se menja u odnosu na SaveZbirnaMulti_TX:
+'
+'   staro:  dva reda u tblZbirna (Klasa I i Klasa II), dva ID-a, pa string
+'           "ZBR-1 + ZBR-2" koji pozivalac posle parsira
+'   novo:   JEDAN header u tblZbirna + N redova u tblZbirnaStavke, jedan ID
+'
+' ZbirnaID je OPAQUE (NewEntityID), ne GetNextID: broj vise nije identitet, pa
+' ni ID ne sme da bude brojac po kome se moze pogadjati "sledeci" ili redosled.
+'
+' GeneracijaID se NE pise. Ta masinerija je kompenzacija za nepostojeci header
+' i brise se u PR4; nov pisac je ne sme ozivljavati.
+'
+' PR3 je ADITIVAN. Produkcioni pozivaoci (modDokUnos.bas:533, modAutoHladnjaca,
+' modMasterSync) i dalje idu starim putem; cutover citalaca, invarijante i
+' storna je PR4. Zato header koji ovaj pisac napravi NAMERNO ostavlja
+' UkupnoKolicina / UkupnoAmbalaze / Klasa prazne -- to su kolone koje u ciljnoj
+' semi ne postoje jer kolicina zivi na stavci. Ko ih procita dobija prazno, i to
+' je tacan odgovor: nije "nula kilograma", nego "ne pitaj header za kolicinu".
+'
+' Header (h) -- Scripting.Dictionary, obavezni kljucevi:
+'   Datum, VozacID, BrojZbirne, KupacID, TipAmbalaze
+' opcioni:
+'   Hladnjaca, Pogon, VrstaVoca, SortaVoca
+'
+' Stavke -- Collection diktova, svaki:
+'   Klasa (I ili II), Kolicina (> 0), KolAmbalaze (>= 0)
+'
+' outGreska: RAZLOG odbijanja, ne samo cinjenica.
+'
+' Bez njega se ne moze razlikovati "kapija je odbila upis" od "upis je pukao iz
+' nekog drugog razloga pa je ispalo isto". To nije teorijska razlika: sabotaza
+' koja je iskljucila proveru duple klase ostavila je suite ZELEN, jer je posao
+' preuzeo Dictionary.Add svojom greskom o duplom kljucu. Test je merio ishod, a
+' ishod je bio isti -- kapija je bila mrtav kod i niko to ne bi video.
+'
+' Poziv bez tog argumenta radi kao i pre.
+Public Function CreateZbirna_TX(ByVal h As Object, _
+                                ByVal stavke As Collection, _
+                                Optional ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili u
+    ' pogresnom rasporedu tiho salje vrednosti u pogresna polja. Ide PRE BeginTx:
+    ' kapija sme da digne gresku, a nema smisla otvarati transakciju koja se
+    ' odmah rollback-uje.
+    modSchema.SchemaReadyOrFail "CreateZbirna_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+
+    CreateZbirna_TX = CreateZbirna(h, stavke)
+
+    If CreateZbirna_TX = "" Then
+        Err.Raise vbObjectError + 1220, "CreateZbirna_TX", _
+                  "CreateZbirna nije vratio ZbirnaID."
+    End If
+
+    tx.CommitTx
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError "CreateZbirna_TX", errDesc, errNum
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="CreateZbirna_TX", _
+        entityType:="Zbirna", _
+        entityID:=CreateZbirna_TX, _
+        correlationId:=CreateZbirna_TX, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="CreateZbirna_TX failed. Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="CreateZbirna_TX", _
+        entityType:="Zbirna", _
+        entityID:=CreateZbirna_TX, _
+        correlationId:=CreateZbirna_TX
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    CreateZbirna_TX = ""
+    outGreska = errDesc
+
+    PrintTxFailure "CreateZbirna_TX", errSrc, errNum, errDesc
+End Function
+
+' Core -- NE zovi spolja. Jedini ulaz je CreateZbirna_TX, koji drzi snapshot
+' transakciju; direktan poziv bi kod greske ostavio header bez stavki.
+Private Function CreateZbirna(ByVal h As Object, _
+                              ByVal stavke As Collection) As String
+    Const SRC As String = "CreateZbirna"
+
+    On Error GoTo EH
+
+    If h Is Nothing Then
+        Err.Raise vbObjectError + 1221, SRC, "Header nije prosledjen."
+    End If
+
+    If stavke Is Nothing Then
+        Err.Raise vbObjectError + 1222, SRC, "Stavke nisu prosledjene."
+    End If
+
+    If stavke.count = 0 Then
+        Err.Raise vbObjectError + 1223, SRC, _
+                  "Zbirna mora imati bar jednu stavku."
+    End If
+
+    ' Fail-fast nad semom pre ijednog upisa.
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_DATUM, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_VOZAC, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_BROJ, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KUPAC, SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_TIP_AMB, SRC
+
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_RB, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, SRC
+    RequireColumnIndex TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, SRC
+
+    Dim datum As Date
+    Dim vozacID As String
+    Dim brojZbirne As String
+    Dim kupacID As String
+    Dim tipAmb As String
+
+    datum = HdrDatum(h, "Datum", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
+    kupacID = HdrObavezan(h, "KupacID", SRC)
+    tipAmb = HdrOpcion(h, "TipAmbalaze")
+
+    ' Prevalidacija SVIH stavki pre bilo kog upisa: dokument sa dve stavke od
+    ' kojih druga ne valja ne sme da ostavi prvu u tabeli. Transakcija bi to
+    ' vratila, ali greska prijavljena pre upisa imenuje bas stavku koja ne valja.
+    Dim vidjeneKlase As Object
+    Set vidjeneKlase = CreateObject("Scripting.Dictionary")
+
+    Dim ukupnoAmb As Double
+    Dim i As Long
+    Dim s As Object
+    Dim klasa As String
+    Dim kolicina As Double
+    Dim kolAmb As Double
+
+    For i = 1 To stavke.count
+        If Not IsObject(stavke(i)) Then
+            Err.Raise vbObjectError + 1224, SRC, _
+                      "Stavka " & CStr(i) & " nije Dictionary."
+        End If
+
+        Set s = stavke(i)
+
+        klasa = Trim$(NzToText(StavkaVrednost(s, "Klasa", i, SRC)))
+        RequireValidDocumentClass klasa, SRC
+
+        ' Dokument ima najvise jednu stavku po klasi. Dve stavke iste klase bi
+        ' bile isti bug koji header+stavke i uklanja: jedan logicki dokument
+        ' rasut na vise redova koje neko posle mora da sabira.
+        If vidjeneKlase.Exists(UCase$(klasa)) Then
+            Err.Raise vbObjectError + 1225, SRC, _
+                      "Dve stavke iste klase: " & klasa
+        End If
+        vidjeneKlase.Add UCase$(klasa), True
+
+        kolicina = StavkaBroj(s, "Kolicina", i, SRC)
+        If kolicina <= 0 Then
+            Err.Raise vbObjectError + 1226, SRC, _
+                      "Kolicina mora biti veca od nule. Stavka " & CStr(i) & _
+                      ", klasa " & klasa & "."
+        End If
+
+        kolAmb = StavkaBroj(s, "KolAmbalaze", i, SRC)
+        If kolAmb < 0 Then
+            Err.Raise vbObjectError + 1227, SRC, _
+                      "Kolicina ambalaze ne sme biti negativna. Stavka " & _
+                      CStr(i) & ", klasa " & klasa & "."
+        End If
+
+        ukupnoAmb = ukupnoAmb + kolAmb
+    Next i
+
+    If ukupnoAmb > 0 And Len(tipAmb) = 0 Then
+        Err.Raise vbObjectError + 1228, SRC, _
+                  "Tip ambalaze je obavezan kada postoji ambalaza."
+    End If
+
+    Dim zbirnaID As String
+    zbirnaID = NewEntityID("ZBR-")
+
+    If zbirnaID = "" Then
+        Err.Raise vbObjectError + 1229, SRC, _
+                  "NewEntityID nije vratio ZbirnaID."
+    End If
+
+    Dim rowData As Variant
+    rowData = BuildZbirnaHeaderRowData(zbirnaID, datum, vozacID, brojZbirne, _
+                                       kupacID, HdrOpcion(h, "Hladnjaca"), _
+                                       HdrOpcion(h, "Pogon"), _
+                                       HdrOpcion(h, "VrstaVoca"), _
+                                       HdrOpcion(h, "SortaVoca"), tipAmb)
+
+    If AppendRow(TBL_ZBIRNA, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1230, SRC, _
+                  "AppendRow nije upisao header u tblZbirna."
+    End If
+
+    For i = 1 To stavke.count
+        Set s = stavke(i)
+        rowData = BuildZbirnaStavkaRowData( _
+            NewEntityID("ZBS-"), zbirnaID, i, _
+            Trim$(NzToText(s("Klasa"))), _
+            StavkaBroj(s, "Kolicina", i, SRC), _
+            StavkaBroj(s, "KolAmbalaze", i, SRC))
+
+        If AppendRow(TBL_ZBIRNA_STAVKE, rowData) <= 0 Then
+            Err.Raise vbObjectError + 1231, SRC, _
+                      "AppendRow nije upisao stavku " & CStr(i) & "."
+        End If
+    Next i
+
+    CreateZbirna = zbirnaID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError SRC, errDesc, errNum
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' Header ciljne seme: BEZ UkupnoKolicina / UkupnoAmbalaze / Klasa. Te kolone jos
+' postoje u tabeli (brisu se u PR4) i ostaju prazne namerno -- v. komentar iznad
+' CreateZbirna_TX. GeneracijaID se ne pise.
+Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
+                                          ByVal datum As Date, _
+                                          ByVal vozacID As String, _
+                                          ByVal brojZbirne As String, _
+                                          ByVal kupacID As String, _
+                                          ByVal hladnjaca As String, _
+                                          ByVal pogon As String, _
+                                          ByVal vrstaVoca As String, _
+                                          ByVal sortaVoca As String, _
+                                          ByVal tipAmb As String) As Variant
+    Const SRC As String = "BuildZbirnaHeaderRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1232, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirna."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_SORTA, sortaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, tipAmb, SRC
+
+    If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_STORNIRANO, "", SRC
+    End If
+
+    BuildZbirnaHeaderRowData = rowData
+End Function
+
+Private Function BuildZbirnaStavkaRowData(ByVal stavkaID As String, _
+                                          ByVal zbirnaID As String, _
+                                          ByVal redniBroj As Long, _
+                                          ByVal klasa As String, _
+                                          ByVal kolicina As Double, _
+                                          ByVal kolAmb As Double) As Variant
+    Const SRC As String = "BuildZbirnaStavkaRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_STAVKE)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1233, SRC, _
+                  "Ne mogu da odredim broj kolona za tblZbirnaStavke."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ID, stavkaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_RB, redniBroj, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, klasa, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, kolicina, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, kolAmb, SRC
+
+    BuildZbirnaStavkaRowData = rowData
+End Function
+
+' --- citanje DTO-a ----------------------------------------------------------
+'
+' Nedostajuci kljuc je GRESKA, ne prazna vrednost: Dictionary(k) nad nepostojecim
+' kljucem tiho vraca Empty i doda kljuc, pa bi tipfeler u imenu polja prosao kao
+' "korisnik nije uneo".
+
+Private Function HdrObavezan(ByVal h As Object, ByVal kljuc As String, _
+                             ByVal src As String) As String
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1234, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    HdrObavezan = Trim$(NzToText(h(kljuc)))
+
+    If Len(HdrObavezan) = 0 Then
+        Err.Raise vbObjectError + 1235, src, _
+                  "Header polje je prazno: " & kljuc
+    End If
+End Function
+
+Private Function HdrOpcion(ByVal h As Object, ByVal kljuc As String) As String
+    If h.Exists(kljuc) Then HdrOpcion = Trim$(NzToText(h(kljuc)))
+End Function
+
+Private Function HdrDatum(ByVal h As Object, ByVal kljuc As String, _
+                          ByVal src As String) As Date
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1236, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    If Not IsDate(h(kljuc)) Then
+        Err.Raise vbObjectError + 1237, src, _
+                  "Header polje nije datum: " & kljuc
+    End If
+
+    HdrDatum = CDate(h(kljuc))
+End Function
+
+Private Function StavkaVrednost(ByVal s As Object, ByVal kljuc As String, _
+                                ByVal idx As Long, ByVal src As String) As Variant
+    If Not s.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1238, src, _
+                  "Stavka " & CStr(idx) & " nema kljuc: " & kljuc
+    End If
+
+    StavkaVrednost = s(kljuc)
+End Function
+
+Private Function StavkaBroj(ByVal s As Object, ByVal kljuc As String, _
+                            ByVal idx As Long, ByVal src As String) As Double
+    Dim v As Variant
+    v = StavkaVrednost(s, kljuc, idx, src)
+
+    If Not IsNumeric(v) Then
+        Err.Raise vbObjectError + 1239, src, _
+                  "Stavka " & CStr(idx) & ", polje " & kljuc & _
+                  " nije broj: " & NzToText(v)
+    End If
+
+    StavkaBroj = CDbl(v)
+End Function
+
 Public Function GetZbirnaByKupac(ByVal kupacID As String, _
                                   Optional ByVal datumOd As Date = 0, _
                                   Optional ByVal datumDo As Date = 0) As Variant
