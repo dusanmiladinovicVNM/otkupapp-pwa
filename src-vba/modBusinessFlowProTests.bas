@@ -165,6 +165,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_VecVezanaOtpremnicaSeNePreuzima
     Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen
     Test_PR3_DriftPokazivacaStajeGlasno
+    Test_PR3_DvaAktivnaClanstvaSuGreska
     Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
     Test_PR3_RazlicitaVrstaNeProlazi
     Test_PR3_RazlicitVozacNeProlazi
@@ -6342,6 +6343,79 @@ EH:
     LogFatal "Test_PR3_DriftPokazivacaStajeGlasno", Err.Number, Err.description
 End Sub
 
+' Ista otpremnica u DVE aktivne zbirne je korupcija kanona, ne rubni slucaj.
+'
+' Loader je ranije radio prosto mapa(otpID) = zbrID, pa bi drugi red tiho
+' pregazio prvi. Upis bi i tada bio odbijen -- ali iz pogresnog razloga i sa
+' pogresnom porukom, a stvarni problem (vec postoje dva clanstva) ostao bi
+' neprijavljen. Kapija koja nelegalno stanje normalizuje u legalno radi protiv
+' sebe.
+Private Sub Test_PR3_DvaAktivnaClanstvaSuGreska()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3D2")
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2-" & scenario, KLASA_I, 400#, 20)
+
+    Dim prva As String
+    prva = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3D2A-" & scenario), _
+                           Pr3Izvor(otp, ""))
+    AssertTrue Len(prva) > 0, "PR3 dva clanstva: prva zbirna napravljena"
+
+    ' Druga AKTIVNA zbirna, pa joj se rucno doda clanstvo iste otpremnice.
+    Dim druga As String
+    druga = CreateZbirna_TX( _
+        Pr3Header(TEST_PREFIX & "-ZBR-PR3D2B-" & scenario), _
+        Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2X-" & scenario, _
+                               KLASA_I, 100#, 5), ""))
+    AssertTrue Len(druga) > 0, "PR3 dva clanstva: druga zbirna napravljena"
+
+    Pr3DodajClanstvo druga, otp
+    AssertEquals "2", CStr(Pr3BrojClanstavaZa(otp)), _
+                 "PR3 dva clanstva: kanon je sada nekonzistentan"
+
+    ' Bilo koji sledeci upis mora da stane i da IMENUJE obe zbirne.
+    '
+    ' "Bilo koji" je namerno: korumpiran kanon blokira SVAKI upis zbirne, ne samo
+    ' onaj koji dira sporni ID. To je tacan fail-closed ishod -- integritet
+    ' clanstva nije pitanje jednog dokumenta.
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim rez As String, razlog As String
+    rez = CreateZbirna_TX( _
+        Pr3Header(TEST_PREFIX & "-ZBR-PR3D2C-" & scenario), _
+        Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2Y-" & scenario, _
+                               KLASA_I, 100#, 5), ""), razlog)
+
+    ' CISCENJE ODMAH: korumpiran kanon ostaje u fixture-u i obara SVAKI sledeci
+    ' test koji pravi zbirnu -- pad bez svoje krivice, i to devet puta zaredom.
+    ' Ide PRE tvrdnji, da ga ne preskoci ni pad tvrdnje.
+    Pr3UkloniClanstvo druga, otp
+    AssertEquals "1", CStr(Pr3BrojClanstavaZa(otp)), _
+                 "PR3 dva clanstva: kanon je vracen u konzistentno stanje"
+
+    AssertEquals "", rez, "PR3 dva clanstva: upis odbijen"
+    AssertTrue InStr(1, razlog, "nekonzistentno", vbTextCompare) > 0, _
+               "PR3 dva clanstva: kapija imenuje nekonzistentnost (bilo: " & razlog & ")"
+    AssertTrue InStr(1, razlog, prva, vbTextCompare) > 0 And _
+               InStr(1, razlog, druga, vbTextCompare) > 0, _
+               "PR3 dva clanstva: poruka imenuje OBE zbirne (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 dva clanstva: header nije ostao"
+
+    Exit Sub
+
+EH:
+    ' I na putu greske -- inace ostatak suite-a pada bez svoje krivice.
+    On Error Resume Next
+    Pr3UkloniClanstvo druga, otp
+    On Error GoTo 0
+    LogFatal "Test_PR3_DvaAktivnaClanstvaSuGreska", Err.Number, Err.description
+End Sub
+
 ' --- PR3 pomocne -------------------------------------------------------------
 
 ' Header BEZ vrste/sorte/tipa ambalaze -- oni se izvode iz izvornih otpremnica.
@@ -6521,6 +6595,58 @@ End Sub
 Private Sub Pr3ObrisiPokazivac(ByVal otpID As String)
     Pr3PostaviPokazivac otpID, ""
 End Sub
+
+' Rucno ubaci zapis clanstva -- SAMO za test korupcije kanona. Produkcioni put
+' je iskljucivo CreateZbirna_TX.
+Private Sub Pr3DodajClanstvo(ByVal zbirnaID As String, ByVal otpremnicaID As String)
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_ZBIRNA_IZVORI)
+    If lo Is Nothing Then Exit Sub
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To lo.ListColumns.count - 1)
+
+    rowData(GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ID) - 1) = _
+        modDataAccess.NewEntityID("ZBI-")
+    rowData(GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID) - 1) = zbirnaID
+    rowData(GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID) - 1) = otpremnicaID
+
+    AppendRow TBL_ZBIRNA_IZVORI, rowData
+End Sub
+
+' Ukloni tacno jedan zapis clanstva. SAMO za ciscenje posle testa korupcije;
+' produkcija zapise clanstva ne brise (A15 -- istorija sastava).
+Private Sub Pr3UkloniClanstvo(ByVal zbirnaID As String, ByVal otpremnicaID As String)
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_ZBIRNA_IZVORI)
+    If lo Is Nothing Then Exit Sub
+    If lo.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim d As Variant
+    d = lo.DataBodyRange.Value2
+    If IsEmpty(d) Then Exit Sub
+
+    Dim cZbr As Long, cOtp As Long, i As Long
+    cZbr = GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID)
+    cOtp = GetColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID)
+    If cZbr = 0 Or cOtp = 0 Then Exit Sub
+
+    For i = UBound(d, 1) To 1 Step -1
+        If StrComp(Trim$(nz(d(i, cZbr), "")), zbirnaID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cOtp), "")), otpremnicaID, vbTextCompare) = 0 Then
+                lo.ListRows(i).Delete
+                Exit Sub
+            End If
+        End If
+    Next i
+End Sub
+
+Private Function Pr3BrojClanstavaZa(ByVal otpID As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, otpID)
+    If redovi Is Nothing Then Exit Function
+    Pr3BrojClanstavaZa = redovi.count
+End Function
 
 Private Function NewScenarioCode(ByVal scenarioName As String) As String
     NewScenarioCode = scenarioName & "-" & m_RunID & "-" & CStr(m_Total + 1)

@@ -238,7 +238,7 @@ Zbirna. Razlika (`Zbirna 980` vs `Prijemnica 975`) je kalo, gubitak ili drugi
 stvaran događaj i **mora ostati vidljiva**.
 
 *Provera:* acceptance scenariji `CorrectionPropagation` i `CorrectionSestre`
-(`GOLDEN_SCENARIJI.md` §12). Registruju se u PR4, kad propagacija postoji.
+(`GOLDEN_SCENARIJI.md` §12). Registruju se u Zbirna cutover-u, kad propagacija postoji.
 
 ---
 
@@ -325,7 +325,8 @@ i čitanje u UI-ju jednim čitanjem umesto spajanja.
 > odrzavati pri svakoj korekciji, a Excel nema milione redova — „na kojoj je
 > aktivnoj zbirnoj otpremnica sada" moze se racunati u memoriji iz tabele
 > clanstva. Zadrzan je zbog cene citanja, ali se **preispituje** kad propagacija
-> ispravke bude napisana (PR7/PR8). Ako se ispostavi da ga odrzavanje kosta vise
+> ispravke bude napisana (Otpremnica i Zbirna cutover). Ako se ispostavi da ga
+> odrzavanje kosta vise
 > nego sto stedi, brise se i ostaje samo `tblZbirnaIzvori`.
 
 Za svaki dokument mora se moći odgovoriti — **bez gledanja trenutnog stanja

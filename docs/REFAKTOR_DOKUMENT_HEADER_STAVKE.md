@@ -1,6 +1,6 @@
 # Refaktor: dokument = header + stavke
 
-> Status: **PR0–PR2 mergovani, PR3 u reviziji; od PR4 nadalje je plan.** Tačno
+> Status: **PR0–PR2 mergovani, PR3 u reviziji; od Otkup skele nadalje je plan.** Tačno
 > stanje po stavkama: §14 „PR-ovi".
 >
 > Kontekst: **nema migracije i nema legacy podataka** — sezona je prošla,
@@ -350,7 +350,10 @@ Po jedan javni ulaz po dokumentu, koji vraća **jedan** ID:
 ```vba
 Public Function CreateOtkup_TX(ByRef h As Object, ByVal stavke As Collection) As String
 Public Function CreateOtpremnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
-Public Function CreateZbirna_TX(ByRef h As Object, ByVal stavke As Collection) As String
+Public Function CreateZbirna_TX(ByVal h As Object, _
+                                ByVal izvorOtpremnice As Collection, _
+                                Optional ByRef outGreska As String, _
+                                Optional ByVal ocekivano As Collection) As String
 Public Function CreatePrijemnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
 ```
 
@@ -359,8 +362,13 @@ Obrazac je već u repou i radi: `CreateFaktura_TX(kupacID, stavke As Collection)
 posao, kompletna prevalidacija pre ijednog upisa, `RequireColumnIndex` fail-fast.
 Kopira se, ne izmišlja.
 
-**DTO:** `Scripting.Dictionary` za header, `Collection` diktova za stavke. Bez
-novih klasa, bez nasleđivanja, bez generičkog repozitorijuma.
+**Stavke se ne primaju — izvode se.** Zbirna i Otpremnica su izvedeni
+dokumenti, pa njihovi writeri primaju **izvorne dokumente**, a stavke računaju iz
+njih (A13). Otkup, kao primarna činjenica, i dalje prima stavke.
+
+**DTO:** `Scripting.Dictionary` za header, `Collection` ID-eva za izvore,
+`Collection` diktova za očekivano. Bez novih klasa, bez nasleđivanja, bez
+generičkog repozitorijuma.
 
 **Adapter:** `modOtkupUnos` / `modDokUnos` i dalje čitaju F1–F4 polja iz forme i
 prave DTO. Cutover površina je iznenađujuće mala — **po jedan stvarni callsite po
@@ -455,7 +463,7 @@ paleta (`CorrectionNeedsDialog`) ostaje nepromenjen.
 #### Šta znači da klasa nestane iz keša
 
 Otvoreno pitanje koje rekalkulacija otvara, i koje mora biti rešeno **pre** nego
-što se PR4 napiše:
+što se cutover napiše:
 
 ```
 Zbirna ima:  I = 400,  II = 600
@@ -754,7 +762,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 13 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 10 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 12 |
 | — | `CLAUDE.md` §3 (obrtanje pravila o izvoru istine šeme) | zaseban process PR |
 
-PR 13 je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
+Završni korak (red 13) je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
 runtime mehanizam, refaktor nije završen — to je dual identity model, gori od
 sadašnjeg.
 
@@ -831,11 +839,64 @@ para.
 Da je `Cena` prosto nasleđena „jer je legacy `SaveOtpremnica` ima", model bi
 dobio drugi izvor istine za novac.
 
+#### `ocekivano` ne sme da ostane `Optional`
+
+Danas: `Optional ByVal ocekivano As Collection`, a `RequireOcekivanoSeSlaze`
+izlazi na `Nothing`. To znači da se kontrola **može isključiti time što se ne
+prosledi** — a poslovno pravilo je da ono što je operater otkucao mora da se
+poredi sa izvedenim.
+
+Istovremeno postoje legitimni automatski tokovi (auto-hladnjača, malina) gde
+nezavisnog ručnog očekivanja **nema**.
+
+**Odluka:** razdvojiti namere u dva javna ulaza nad istim `Private` core-om.
+
+```
+CreateZbirna_TX            ocekivano OBAVEZNO   (operater unosi papirnu zbirnu)
+CreateZbirnaIzIzvora_TX    bez ocekivanog       (izricito "derived-only")
+```
+
+Ne dva writera — dva **potpisa** koji izražavaju nameru. Kontrola se time ne
+može isključiti slučajno; može se samo odabrati drugi ulaz, i to se vidi na
+callsite-u.
+
+**Zašto tek u cutover-u, a ne sada:** skela nema nijednog produkcionog
+pozivaoca, pa danas ništa ne može da je isključi. Kad se pojavi prvi, potpis
+mora već biti podeljen.
+
+#### Pre prvog mutable-DRAFT članstva: A11 mora da meri i brisanje
+
+A14/A15 kažu da je članstvo promenljivo dok je dokument `DRAFT`. Uklanjanje
+izvora iz drafta znači **fizičko brisanje reda** članstva.
+
+Ali `who_writes.py` meri `AppendRow` / `UpdateCell` / `RequireUpdateCell` — **ne
+i brisanje**. Kod koji radi `lo.ListRows(i).Delete` bio bi A11 kapiji nevidljiv,
+isto kao što su ranije bili funkcijski i prelomljeni `AppendRow`.
+
+> To bi bila **treća** pojava iste klase rupe. Prve dve su nađene slučajno.
+
+**Odluka:** pre nego što se napiše prvi API koji menja članstvo drafta, moraju
+postojati **oba**:
+
+1. kanonski `Delete`/membership API (brisanje ne ide direktno po `ListRows`);
+2. `who_writes.py` koji brisanje meri kao mutaciju, sa slučajevima u
+   `--self-test` — i za `lo.ListRows(i).Delete` i za novi API.
+
+#### Correction polja u šemi se moraju preimenovati, ne pretumačiti
+
+A9 govori o `IspravkaOdID` / `ZamenjenSaID`, a kanon (`schema/schema.json`) i
+dalje fizički nosi `IspravkaOd` / `ZamenjenSa` / `CorrectionID`.
+
+Dok produkcija koristi stari model to se ne dira. Ali cutover mora ta polja
+**stvarno preimenovati** — nije dovoljno reći „ovo sad znači ID". Kolona koja se
+zove `IspravkaOd` a nosi ID je tačno vrsta dvosmislenosti koju refaktor uklanja.
+
 ---
 
-### 14.1) Kapija odluke posle PR 6
+### 14.1) Kapija odluke posle Otkup cutover-a
 
-Posle Otkupa u produkciji i skele za Otpremnicu i Zbirnu donosi se formalna
+Posle Otkupa u produkciji i skele za Otpremnicu i Zbirnu (tabela PR-ova: red 6)
+donosi se formalna
 odluka: **nastavak u mestu** ili **novo stablo koda**.
 
 > Kapija je posle promene redosleda **jača nego ranije**: Otkup je dokument sa
@@ -885,7 +946,7 @@ slajsa kao specifikacijom, umesto sa osećajem.
 ## 16) Definicija gotovog
 
 - „ZBR-123 je jedan red u `tblZbirna`, njene klase su redovi u `tblZbirnaStavke`."
-- „`Otpremnica.ZbirnaID = ZBR-123` je prava veza."
+- „`tblZbirnaIzvori` čuva kanonski sastav svake verzije zbirne; `Otpremnica.ZbirnaID`, dok postoji, samo je izvedeni pokazivač na trenutno aktivnu."
 - „PRJ-789 je jedna prijemnica bez obzira ima li jednu ili dve klase."
 - „Faktura stavka zna tačnu `PrijemnicaStavkaID`."
 - „Storno prima `DocumentID`. Štampa prima `DocumentID`. Invarijanta prima `ZbirnaID`."

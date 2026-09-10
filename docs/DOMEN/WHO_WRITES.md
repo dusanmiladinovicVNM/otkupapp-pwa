@@ -110,6 +110,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
+- `tblZbirnaIzvori`: `modBusinessFlowProTests`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`

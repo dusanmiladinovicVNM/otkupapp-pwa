@@ -1,7 +1,7 @@
 # Golden scenariji — specifikacija za pregled
 
 > **Status: 12 registrovano i zaključano. D1 ima odluku (§10 — rekalkulacija),
-> ali čeka PR4 da je implementira; do tada nije registrovan.**
+> ali čeka Zbirna cutover da je implementira; do tada nije registrovan.**
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
@@ -13,7 +13,7 @@
 
 ## 1) Čemu služe
 
-Sigurnosna mreža za PR3–PR12. Kad Zbirna postane header+stavke, moram da mogu da
+Sigurnosna mreža za ceo refaktor. Kad Zbirna postane header+stavke, moram da mogu da
 dokažem da se **poslovni ishod nije promenio** — a ne da se tabela i dalje isto
 zove.
 
@@ -71,10 +71,10 @@ svojoj transakciji.
 |---|---|
 | broj **redova** u tabeli | menja se u PR3 po definiciji |
 | broj **ID-eva** koje writer vrati | dvoklasni dokument danas vraća dva — to je broj redova prerušen u broj dokumenata |
-| `GeneracijaID` bilo gde | mehanizam koji PR12 briše |
+| `GeneracijaID` bilo gde | mehanizam koji završni korak briše |
 | poslovni broj kao **ključ pretrage** | A2 — broj je labela |
 | indeks kolone, redosled kolona | to meri `VerifySchema`, ne poslovni test |
-| format vraćenog ID-a (`"OTK-1 + OTK-2"`) | nestaje u PR5 |
+| format vraćenog ID-a (`"OTK-1 + OTK-2"`) | nestaje u Otkup cutover-u |
 | „primarni red" bilo koje vrste | primary-row hack je bug koji uklanjamo |
 
 **Praktično pravilo:** ako se tvrdnja ne može izgovoriti kooperantu ili
@@ -136,18 +136,18 @@ FAKTURA
 ```
 
 `otkupa 1` iako dvoklasni otkup danas fizički daje dva reda — broji se
-**poziv writer-a**, ne ID. Posle PR5 taj broj ostaje 1 i golden se ne menja.
+**poziv writer-a**, ne ID. Posle Otkup cutover-a taj broj ostaje 1 i golden se ne menja.
 
 ---
 
-## 4) Scenariji (12 registrovanih + D1 čeka PR4)
+## 4) Scenariji (12 registrovanih + D1 čeka cutover)
 
 ### A — Fresh Fruit Flow
 
 | # | Scenario | Šta hvata |
 |---|---|---|
 | A1 | Jednoklasni otkup kroz ceo lanac do fakture | baseline; sve ostalo je odstupanje od njega |
-| A2 | **Dvoklasni** otkup kroz ceo lanac | scenario koji PR5 najviše menja iznutra, a ishod mora ostati isti |
+| A2 | **Dvoklasni** otkup kroz ceo lanac | scenario koji Otkup cutover najviše menja iznutra, a ishod mora ostati isti |
 | A3 | Više blokova → jedna otpremnica | N:1 kardinalitet |
 | A4 | Više otpremnica → jedna zbirna | agregat; §6.2 invarijanta |
 | A5 | Kalo: poslato 1200, primljeno 1175 | razlika je poslovna činjenica, ne greška |
@@ -170,7 +170,7 @@ FAKTURA
 
 | # | Scenario | Šta hvata |
 |---|---|---|
-| D1 | Storno otpremnice → zbirna se rekalkuliše; prazna zbirna se stornira | **odluka pala, kod još ne — registruje ga PR4 (§10)** |
+| D1 | Storno otpremnice → zbirna se rekalkuliše; prazna zbirna se stornira | **odluka pala, kod još ne — registruje ga Zbirna cutover (§10)** |
 | D2 | Storno prijemnice koja je fakturisana | kaskada |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
@@ -194,7 +194,7 @@ FAKTURA
 | Pitanje | Odluka |
 |---|---|
 | Rečnik tvrdnji (§2) | prihvaćen; dopunjen sa **brojem logičkih dokumenata** kao dozvoljenom činjenicom i **brojem ID-eva** kao zabranjenom |
-| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 čeka PR4 (§10) |
+| Obim | 12 registrovanih; C1, C2, E1, F1, G3 izbačeni, B1/B4 uklonjeni (§8), D1 čeka Zbirna cutover (§10) |
 
 ### 5b) Nijedan scenario ne sme da bude trajno crvena centralna kapija
 
@@ -208,7 +208,7 @@ gori od nijednog: zamrzava pretpostavku kao ugovor.
 
 Tako stoji **D1** (§10): pravilo je od 10.09.2026. odlučeno, ali ga kod još ne
 sprovodi. Golden pisan na odluku koju kod ne poštuje bio bi trajno crven, pa D1
-čeka PR4 — i tada postaje **dokaz da je pravilo sprovedeno**, ne samo zapisano.
+čeka Zbirna cutover — i tada postaje **dokaz da je pravilo sprovedeno**, ne samo zapisano.
 Ranije su iz drugog razloga uklonjeni B1 i B4 (§8).
 
 ---
@@ -232,7 +232,7 @@ pregledaju pre nego što se zaključaju.
 | 2 | scenario je koristio `KOOP-TEST-1` iz fixture-a | `placeno 1000.00` u svih pet, iako nijedan ništa ne plaća — zatečen avans |
 | 3 | format broja lokalno zavisan (`1720,00`) | golden pada na mašini sa drugom decimalnom oznakom; test meri Control Panel |
 | 4 | ambalaža nije usklađena otpremnica ↔ zbirna | `invarijanta PUKLA` zabeležena kao da je sistem kriv |
-| 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u PR5 |
+| 5 | broj dokumenata brojan po ID-u | `otkupa 2` za jedan dvoklasni otkup — broj redova prerušen u broj dokumenata; golden bi se menjao u Otkup cutover-u |
 | 6 | `DOKUMENTI` je brojao **pozive testa** (`m_nOtp = m_nOtp + 1`) | tautologija: A3 je dokazivao „test je jednom pozvao `GldOtpremnica`", ne „sistem je napravio jednu otpremnicu"; bug koji od jednog poziva napravi dve otpremnice po 500 kg ostavio bi agregat isti i test **zelen** |
 | 8 | seed rezervisanih identiteta bio fail-open | zatečen `STA-GLD-1` sa drugim nazivom ili `Aktivan=Ne` prihvatio bi se — scenario opet ne poseduje ceo svoj ulaz |
 | 7 | preduslov je proveravao samo identitet, ne ključ scenarija | zatečena otpremnica sa `BrojZbirne = GLD-A1` ušla bi u rezultat i kad kooperant nema nijedan stari otkup |
@@ -257,7 +257,7 @@ poslato 1000.00          <- agregat NEPROMENJEN
 golden [otpremnica 1] vs tekuci [otpremnica 2]   <- pada OVDE
 ```
 
-Posle PR5 adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
+Posle Otkup cutover-a adapter postaje `COUNT(DISTINCT <Doc>ID)`; golden ostaje isti.
 
 ### Ugovor izolacije, u celini
 
@@ -339,7 +339,7 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 
 ## 10) D1 — storno otpremnice: odluka je **C, rekalkulacija**
 
-> **Odluka doneta 10.09.2026.** Implementacija ide u **PR4**, zajedno sa
+> **Odluka doneta 10.09.2026.** Implementacija ide u **Zbirna cutover**, zajedno sa
 > prelaskom invarijante na `ZbirnaID`. Do tada D1 nije registrovan.
 
 ### Pravilo — grana po stanju zbirne (usklađeno sa A13)
@@ -413,7 +413,7 @@ Dakle nije bilo da pravilo nije smišljeno. Napisana su **dva različita odgovor
 (kaskada u malina modu, rekalkulacija u flow sloju) i nijedan nije dosledno
 primenjen na putanju kojom operater stvarno prolazi.
 
-### Šta PR4 mora da uradi
+### Šta Zbirna cutover mora da uradi
 
 1. Pravilo C **u writeru**, ne u flow sloju — da se ne može zaobići drugim
    ulazom. Vlasnik je `modDokumenta` (A11, `WRITE_OWNERSHIP.json`).
@@ -434,7 +434,7 @@ Dva razloga, oba naučena na sopstvenoj grešci.
 **Prvi:** `ZBIRNA` računa preko `SumOtpremniceByKlasa(BrojZbirne)` i
 `IsZbirnaConsistent(BrojZbirne)`. Broj sam ne razlikuje dve logičke zbirne, pa
 je rezultat bio `invarijanta PUKLA` — i to je bilo **zaključano kao očekivano**.
-Posle PR4, kad invarijanta počne da prima `ZbirnaID`, ispravka arhitekture bi
+Posle Zbirna cutover-a, kad invarijanta počne da prima `ZbirnaID`, ispravka arhitekture bi
 oborila golden koji je treba da štiti. Isti oblik greške kao D1 (§10).
 
 **Drugi:** `aktivnih 1 / storniranih 1` ne kaže **koja** je stornirana. Bug koji
@@ -448,7 +448,7 @@ IDENTITET ZBIRNE
   druga  kg=600.00  AKTIVNA
 ```
 
-Nijedan ID se ne ispisuje — ni današnji ni budući. Posle PR4 adapter traži red po
+Nijedan ID se ne ispisuje — ni današnji ni budući. Posle Zbirna cutover-a adapter traži red po
 `ZbirnaID`; golden ostaje identičan.
 
 **Dokaz:** storno druge umesto prve → golden pada na `IDENTITET ZBIRNE`, dok
@@ -456,7 +456,7 @@ Nijedan ID se ne ispisuje — ni današnji ni budući. Posle PR4 adapter traži 
 
 ---
 
-## 12) Propagacija ispravke — dva scenarija, oba čekaju PR4
+## 12) Propagacija ispravke — dva scenarija, oba čekaju cutover
 
 Zaključano ugovorom **A13** (izvedeni dokument nije mutable keš), **A14**
 (lifecycle) i **A15** (verzionisano članstvo). Ovde stoje kao **specifikacija**;
@@ -522,5 +522,5 @@ pokazivač ima test koji dokazuje da se poklapa sa članstvom
 (`Test_PR3_ClanstvoJeZapisanoPoVerziji`, `Test_PR3_PokazivacSeSlazeSaClanstvom`).
 
 Ono što nedostaje je sama propagacija — pravljenje nove verzije nizvodnih
-dokumenata pri ispravci izvora. To je PR4.
+dokumenata pri ispravci izvora. To je Zbirna cutover.
 

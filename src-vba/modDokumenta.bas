@@ -1856,6 +1856,14 @@ End Function
 ' Posle A13 ista otpremnica sme da ima VISE zapisa clanstva -- po jedan za svaku
 ' verziju zbirne kroz koju je prosla. Zauzeta je samo ako je clan zbirne koja
 ' NIJE stornirana; clanstvo u superseded verziji je istorija, ne prepreka.
+'
+' DVA AKTIVNA CLANSTVA SU TVRDA GRESKA, NE "POSLEDNJI POBEDJUJE".
+'
+' Prva verzija je radila prosto mapa(otpID) = zbrID, pa bi drugi red tiho
+' pregazio prvi. Writer bi i tada odbio novu upotrebu te otpremnice -- ali bi
+' precutao mnogo vazniju cinjenicu: da otpremnica VEC pripada dvema aktivnim
+' zbirnama. To je bas kardinalitet koji A15 cuva, pa loader koji ga normalizuje
+' u legalno stanje radi protiv sebe.
 Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Dim mapa As Object
     Set mapa = CreateObject("Scripting.Dictionary")
@@ -1895,7 +1903,18 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
         zbrID = Trim$(NzToText(izv(i, cIzvZbr)))
         otpID = UCase$(Trim$(NzToText(izv(i, cIzvOtp))))
         If Len(zbrID) > 0 And Len(otpID) > 0 Then
-            If Not stornirane.Exists(UCase$(zbrID)) Then mapa(otpID) = zbrID
+            If Not stornirane.Exists(UCase$(zbrID)) Then
+                If mapa.Exists(otpID) Then
+                    If StrComp(CStr(mapa(otpID)), zbrID, vbTextCompare) <> 0 Then
+                        Err.Raise vbObjectError + 1260, src, _
+                                  "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
+                                  otpID & " pripada aktivnim zbirnama " & _
+                                  CStr(mapa(otpID)) & " i " & zbrID & "."
+                    End If
+                Else
+                    mapa.Add otpID, zbrID
+                End If
+            End If
         End If
     Next i
 End Function

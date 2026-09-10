@@ -8,7 +8,7 @@
 >
 > | Dokument | Stanje |
 > |---|---|
-> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u PR4 |
+> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`, `tblZbirnaIzvori`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u Zbirna cutover |
 > | Otpremnica / Otkup / Prijemnica | specifikacija |
 >
 > Kontekst: nema legacy transakcionih podataka. Zatečena šema **nema pravo veta**
@@ -108,13 +108,27 @@ Ne pretvarati ovo u tvrdo 1:1 u ovom refaktoru — to bi bila izmena poslovnog
 ponašanja koja nije potrebna za identitet. Upozorenje ostaje, samo se pita po
 `ZbirnaID` umesto po `BrojZbirne`.
 
-### 3.2) Delimična alokacija — namerno NE modelujemo
+### 3.2) Članstvo i alokacija su dva različita pojma
 
-Pitanje „može li jedna `OtkupStavka` delimično da završi u više Otpremnica"
-danas nema poslovni zahtev, a šema ga ne podržava (`Otkup.OtpremnicaID` je jedno
-polje). **ODLUKA:** ostaje prost FK na headeru otkupa. Ako se potreba pojavi,
-uvodi se eksplicitna tabela `tblOtpremnicaIzvori (OtpremnicaStavkaID,
-OtkupStavkaID, Kg)` — ne rasplinjava se FK „za svaki slučaj".
+Lako se pomešaju jer oba „vezuju otkup za otpremnicu". Nisu isto:
+
+| | Pitanje na koje odgovara | Status |
+|---|---|---|
+| **`tblOtpremnicaIzvori`**<br>`(OtpremnicaID, OtkupID)` | *Koji otkupi čine ovu **verziju** otpremnice?* | **potrebno sada** (A15) |
+| **`tblOtpremnicaAlokacije`**<br>`(OtpremnicaStavkaID, OtkupStavkaID, Kg)` | *Koliko je kilograma iz ovog otkupa otišlo na ovu otpremnicu?* | **samo ako se pojavi poslovni zahtev** |
+
+**Članstvo je celobrojno i obavezno:** otkup pripada otpremnici ili ne pripada.
+Ono postoji zato što ispravka pravi novu verziju, a nepromenjene sestre moraju
+ostati vidljive u sastavu **obe** — to nema veze sa deljenjem količina.
+
+**Delimična alokacija** — da jedna `OtkupStavka` delimično završi u više
+otpremnica — danas nema poslovni zahtev i **ne modelujemo je**. Ako se pojavi,
+uvodi se zasebna tabela sa `Kg`; ne rasplinjava se članstvo „za svaki slučaj",
+i ne dodaje se `Kg` u tabelu članstva.
+
+> Ranija verzija ovog odeljka je koristila ime `tblOtpremnicaIzvori` za
+> **alokacionu** tabelu i time ga sudarila sa članstvom. Alokacija se od sada
+> zove `tblOtpremnicaAlokacije`.
 
 ---
 
@@ -163,7 +177,21 @@ Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
 
 **`tblOtpremnicaStavke`** — grain: **jedna klasa jedne otpremnice**
 `OtpremnicaStavkaID` (PK `OPS-`), `OtpremnicaID` →, `RedniBroj`, `Klasa`,
-`Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`.
+`Kolicina`, `KolAmbalaze`, `BrutoKg`.
+
+> **Bez `Cena`.** Otpremnica je izvedeni dokument: njena vrednost je zbir
+> izvornih otkupnih stavki, koje mogu imati **različite cene**. Jedna `Cena` na
+> stavci bi bila drugi izvor istine za novac. Zatečena `Otpremnica.Cena` nije
+> agregat nego **predlog za prefill otkupnih blokova**
+> (`modOtkupBlok.bas:688`) — ostaje na headeru kao izričito ne-finansijsko
+> polje. Puno obrazloženje: `REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §13b.
+
+**`tblOtpremnicaIzvori`** — grain: **jedan otkup u sastavu jedne verzije otpremnice**
+`OtpremnicaIzvorID` (PK `OPI-`), `OtpremnicaID` →, `OtkupID` →, audit ×4.
+
+> Isti obrazac i isto pravilo kao `tblZbirnaIzvori` (A15): promenljivo dok je
+> otpremnica `DRAFT`, zamrznuto pri izdavanju. `Otkup.OtpremnicaID` je time
+> **pokazivač**, ne kanonska veza.
 
 **Vlasnik upisa:** `modDokumenta` (ili nov `modOtpremnica`). Danas 4 pisca.
 
@@ -240,16 +268,16 @@ priprema za trenutak kad UI dobije „otvoren dokument".
 > samo kao unakrsna provera protiv izvedenog.
 >
 > **Membership ide u istoj transakciji.** Da writer ne postavlja
-> `Otpremnica.ZbirnaID`, PR4 bi morao „`CreateZbirna_TX`; commit; pa poveži
+> `Otpremnica.ZbirnaID`, cutover bi morao „`CreateZbirna_TX`; commit; pa poveži
 > otpremnice" — a pad drugog koraka ostavlja zbirnu bez izvora.
 >
 > Header koji taj pisač napravi **namerno ostavlja `UkupnoKolicina`,
 > `UkupnoAmbalaze` i `Klasa` prazne** — to su kolone koje u ovom modelu ne
 > postoje; količina živi na stavci. Prazno je tačan odgovor („ne pitaj header za
-> količinu"), i test to zaključava da neko u PR4 ne bi „za svaki slučaj" upisao i
+> količinu"), i test to zaključava da neko u cutover-u ne bi „za svaki slučaj" upisao i
 > zbir na header i time napravio dva izvora istine za istu vrednost.
 >
-> Kolone se brišu u PR4, zajedno sa `ZbirnaIdent*` / `ZbirnaGeneracija*`.
+> Kolone se brišu u Zbirna cutover-u, zajedno sa `ZbirnaIdent*` / `ZbirnaGeneracija*`.
 
 ---
 
