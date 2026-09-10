@@ -8,7 +8,7 @@
 >
 > | Dokument | Stanje |
 > |---|---|
-> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX`, `tblZbirnaIzvori`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u Zbirna cutover |
+> | Zbirna | **tabele i pisač postoje** (PR3, aditivno): `tblZbirnaStavke`, `tblZbirnaIzvori`, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX`. Produkcija još ide starim putem; čitaoci, invarijanta i storno idu u Zbirna cutover |
 > | Otpremnica / Otkup / Prijemnica | specifikacija |
 >
 > Kontekst: nema legacy transakcionih podataka. Zatečena šema **nema pravo veta**
@@ -193,8 +193,8 @@ aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 `OtpremnicaIzvorID` (PK `OPI-`), `OtpremnicaID` →, `OtkupID` →, audit ×4.
 
 > Isti obrazac i isto pravilo kao `tblZbirnaIzvori` (A15): promenljivo dok je
-> otpremnica `DRAFT`, zamrznuto pri izdavanju. `Otkup.OtpremnicaID` je time
-> **pokazivač**, ne kanonska veza.
+> otpremnica `DRAFT`, zamrznuto pri izdavanju. `Otkup.OtpremnicaID` u ciljnom
+> modelu **ne postoji** — pripadnost zna isključivo ova tabela.
 
 **Vlasnik upisa:** `modDokumenta` (ili nov `modOtpremnica`). Danas 4 pisca.
 
@@ -223,11 +223,11 @@ aktivnoj zbirnoj sada" računa `modDokumenta.AktivnaZbirnaZaOtpremnicu`.
 > Zato tabela nema `Stornirano` (storno verzije ne briše njen sastav) i stoji u
 > `BEZ_STORNA`.
 >
-> **`Otpremnica.ZbirnaID` je degradiran na pokazivač** („na kojoj je *aktivnoj*
-> zbirnoj otpremnica sada"), i time imenovan keš u smislu A5 — sa testom koji
-> dokazuje da se poklapa sa članstvom. Kanonski sastav je `tblZbirnaIzvori`.
-> Razlog: sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a
-> jedan FK može da pokaže samo jednu (A15).
+> **`Otpremnica.ZbirnaID` ne postoji.** Pripadnost zna isključivo ova tabela;
+> „na kojoj je *aktivnoj* zbirnoj otpremnica sada" računa
+> `modDokumenta.AktivnaZbirnaZaOtpremnicu`. Razlog za tabelu umesto kolone:
+> sestre koje se nisu menjale pripadaju i staroj i novoj verziji, a jedan FK
+> može da pokaže samo jednu (A15).
 
 > **Zbirna nema cenu.** `tblZbirna` je nikad nije imala i `SaveZbirnaMulti_TX` je
 > ne prima (`modDokUnos.bas:422`). Ne dodavati je.
@@ -257,10 +257,15 @@ priprema za trenutak kad UI dobije „otvoren dokument".
 > rezultat. To je čisto A11 vlasništvo — jedan pisač, jedan ulaz — umesto dva
 > modula koji pišu istu tabelu po svojim pravilima.
 
-> **Stanje posle PR3.** Obe tabele postoje u kanonu i u svesci, a
-> `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` piše header,
-> stavke **i `Otpremnica.ZbirnaID`** u jednoj transakciji. `ZbirnaID` je opaque
+> **Stanje posle PR3.** Sve tri tabele postoje u kanonu i u svesci, a writer
+> piše header, stavke **i članstvo** u jednoj transakciji. `ZbirnaID` je opaque
 > (`NewEntityID`), `GeneracijaID` se ne piše.
+>
+> Dva javna ulaza, jedno jezgro:
+> `CreateZbirna_TX(h, izvor, ocekivano, outGreska)` za ručni unos (očekivano je
+> **obavezno**) i `CreateZbirnaIzIzvora_TX(h, izvor, outGreska)` za automatski
+> tok. Kontrola „očekivano vs izvedeno" se time ne može isključiti time što se
+> argument ne prosledi.
 >
 > **Količine se ne primaju — izvode se.** Writer prima *izvorne otpremnice* i
 > računa stavke iz njih; `VrstaVoca` / `SortaVoca` / `TipAmbalaze` takođe dolaze
@@ -270,9 +275,9 @@ priprema za trenutak kad UI dobije „otvoren dokument".
 > writer. Opcioni argument `ocekivano` nosi ono što je operater otkucao i služi
 > samo kao unakrsna provera protiv izvedenog.
 >
-> **Membership ide u istoj transakciji.** Da writer ne postavlja
-> `Otpremnica.ZbirnaID`, cutover bi morao „`CreateZbirna_TX`; commit; pa poveži
-> otpremnice" — a pad drugog koraka ostavlja zbirnu bez izvora.
+> **Članstvo ide u istoj transakciji.** Da writer ne upisuje `tblZbirnaIzvori`,
+> cutover bi morao „napravi zbirnu; commit; pa poveži otpremnice" — a pad drugog
+> koraka ostavlja zbirnu bez izvora.
 >
 > Header koji taj pisač napravi **namerno ostavlja `UkupnoKolicina`,
 > `UkupnoAmbalaze` i `Klasa` prazne** — to su kolone koje u ovom modelu ne
@@ -356,8 +361,8 @@ VOZAC     ─┘        ^
                     │ ZbirnaID (1:N -- namera 1:1, meko)
               tblPrijemnica ──1:N──> tblPrijemnicaStavke
 
-  Otkup.OtpremnicaID i Otpremnica.ZbirnaID su POKAZIVACI ("gde je sada"),
-  imenovan kes u smislu A5 -- NE kanonska veza. Sastav se cita iz *Izvori.
+  Pripadnost drze ISKLJUCIVO tabele *Izvori. U ciljnom modelu nema kolona
+  Otkup.OtpremnicaID ni Otpremnica.ZbirnaID -- "gde je sada" se racuna.
                                             │
                           ┌─────────────────┼─────────────────┐
                           │ 1:1             │ 1:N             │
@@ -408,11 +413,10 @@ za svaku klasu K:
 
 KG po klasi → **hard**. Ambalaža ukupno → hard, po klasi → soft.
 
-> **Spaja se preko `tblZbirnaIzvori`, NE preko `Otpremnica.ZbirnaID`.** Pokazivač
-> se pri ispravci pomera na novu verziju: čim `OTP50.ZbirnaID` ode sa `ZBR18` na
-> `ZBR19`, invarijanta stare `ZBR18` više ne bi mogla da se reprodukuje. Tabela
-> članstva pamti sastav svake verzije (A15), pa invarijanta ostaje proverljiva i
-> za istorijski dokument.
+> **Spaja se preko `tblZbirnaIzvori`** — to je jedini zapis pripadnosti, kolone
+> na otpremnici nema. Da postoji, pomerala bi se pri ispravci sa `ZBR18` na
+> `ZBR19` i invarijanta stare `ZBR18` više se ne bi mogla reprodukovati. Ovako
+> sastav svake verzije ostaje proverljiv i za istorijski dokument (A15).
 >
 > Filtriranje po `aktivna` važi samo dok je zbirna `DRAFT`. Za izdatu verziju se
 > uzimaju **tačno one otpremnice koje su u njoj bile** — njihov kasniji storno je

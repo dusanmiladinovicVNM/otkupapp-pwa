@@ -174,6 +174,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_NepoznatKljucUHeaderuPada
     Test_PR3_NedostajuciObavezniKljucPada
     Test_PR3_OcekivanoKojeSeNeSlazePada
+    Test_PR3_RucniUnosTraziOcekivano
     Test_PR3_AmbalazaMoraBitiCeoBroj
     Test_PR3_ClanstvoJeZapisanoPoVerziji
     Test_PR3_PokazivacSeSlazeSaClanstvom
@@ -5484,7 +5485,7 @@ Private Sub Test_PR3_CreateZbirnaHeaderIStavke()
     AssertTrue Len(otpI) > 0 And Len(otpII) > 0, "PR3: izvorne otpremnice napravljene"
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX( _
+    zbrID = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3-" & scenario), Pr3Izvor(otpI, otpII))
 
     AssertTrue Len(zbrID) > 0, "PR3: CreateZbirna_TX vraca ID"
@@ -5549,7 +5550,7 @@ Private Sub Test_PR3_DveOtpremniceIsteKlaseSeSabiraju()
     b = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3B-" & scenario, KLASA_I, 250#, 12)
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX( _
+    zbrID = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3S-" & scenario), Pr3Izvor(a, b))
 
     AssertTrue Len(zbrID) > 0, "PR3 zbir: dokument napravljen"
@@ -5581,7 +5582,7 @@ Private Sub Test_PR3_HeaderNeNosiKolicinu()
     scenario = NewScenarioCode("PR3HP")
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX( _
+    zbrID = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3P-" & scenario, _
                                KLASA_I, 400#, 20), ""))
@@ -5618,11 +5619,11 @@ Private Sub Test_PR3_ZbirnaIDJeOpaque()
     scenario = NewScenarioCode("PR3ID")
 
     Dim a As String, b As String
-    a = CreateZbirna_TX( _
+    a = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3A-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3IA-" & scenario, _
                                KLASA_I, 100#, 5), ""))
-    b = CreateZbirna_TX( _
+    b = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3B-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3IB-" & scenario, _
                                KLASA_I, 100#, 5), ""))
@@ -5655,7 +5656,7 @@ Private Sub Test_PR3_IstaOtpremnicaDvaputNeProlazi()
     preS = Pr3BrojRedova(TBL_ZBIRNA_STAVKE)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3D-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3D-" & scenario), _
                           Pr3Izvor(otp, otp), razlog)
 
     AssertEquals "", rez, "PR3 duplikat: upis odbijen"
@@ -5684,7 +5685,7 @@ Private Sub Test_PR3_VecVezanaOtpremnicaSeNePreuzima()
     otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3V-" & scenario, KLASA_I, 400#, 20)
 
     Dim prva As String
-    prva = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3V1-" & scenario), _
+    prva = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3V1-" & scenario), _
                            Pr3Izvor(otp, ""))
     AssertTrue Len(prva) > 0, "PR3 preuzimanje: prva zbirna napravljena"
 
@@ -5692,7 +5693,7 @@ Private Sub Test_PR3_VecVezanaOtpremnicaSeNePreuzima()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3V2-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3V2-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 preuzimanje: druga zbirna odbijena"
@@ -5731,7 +5732,7 @@ Private Sub Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta()
     preS = Pr3BrojRedova(TBL_ZBIRNA_STAVKE)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3T-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3T-" & scenario), _
                           Pr3Izvor(dobra, losa), razlog)
 
     AssertEquals "", rez, "PR3 storno: upis odbijen"
@@ -5767,7 +5768,7 @@ Private Sub Test_PR3_RazlicitaVrstaNeProlazi()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3R-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3R-" & scenario), _
                           Pr3Izvor(a, b), razlog)
 
     AssertEquals "", rez, "PR3 vrsta: upis odbijen"
@@ -5797,7 +5798,7 @@ Private Sub Test_PR3_ZbirnaBezIzvoraNeProlazi()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3E-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3E-" & scenario), _
                           New Collection, razlog)
 
     AssertEquals "", rez, "PR3 bez izvora: upis odbijen"
@@ -5835,7 +5836,7 @@ Private Sub Test_PR3_NepoznatKljucUHeaderuPada()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(h, Pr3Izvor(otp, ""), razlog)
+    rez = CreateZbirnaIzIzvora_TX(h, Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 nepoznat kljuc: upis odbijen"
     AssertTrue InStr(1, razlog, "nepoznat kljuc", vbTextCompare) > 0 And _
@@ -5864,7 +5865,7 @@ Private Sub Test_PR3_NedostajuciObavezniKljucPada()
     h.Remove "KupacID"
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(h, Pr3Izvor(otp, ""), razlog)
+    rez = CreateZbirnaIzIzvora_TX(h, Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 obavezan kljuc: upis odbijen"
     AssertTrue InStr(1, razlog, "KupacID", vbTextCompare) > 0, _
@@ -5898,7 +5899,7 @@ Private Sub Test_PR3_OcekivanoKojeSeNeSlazePada()
 
     Dim rez As String, razlog As String
     rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3C-" & scenario), _
-                          Pr3Izvor(otp, ""), razlog, ocek)
+                          Pr3Izvor(otp, ""), ocek, razlog)
 
     AssertEquals "", rez, "PR3 ocekivano: upis odbijen"
     AssertTrue InStr(1, razlog, "ne slaze sa otpremnicama", vbTextCompare) > 0, _
@@ -5914,7 +5915,7 @@ Private Sub Test_PR3_OcekivanoKojeSeNeSlazePada()
 
     AssertTrue Len(CreateZbirna_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3C2-" & scenario), _
-        Pr3Izvor(otp, ""), razlog, ocekOk)) > 0, _
+        Pr3Izvor(otp, ""), ocekOk, razlog)) > 0, _
         "PR3 ocekivano: tacno ocekivanje prolazi"
 
     Exit Sub
@@ -5941,7 +5942,7 @@ Private Sub Test_PR3_AmbalazaMoraBitiCeoBroj()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3M-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3M-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 ambalaza: upis odbijen"
@@ -6012,7 +6013,7 @@ Private Sub Test_PR3_PrazanHeaderIDNeProlazi()
     SetTestMode True
 
     modDataAccess.NewEntityIDPadniTest True          ' pada odmah -> header ID
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IH-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IH-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
     modDataAccess.NewEntityIDPadniTest False
     SetTestMode prevMode
@@ -6063,7 +6064,7 @@ Private Sub Test_PR3_PrazanStavkaIDNeProlazi()
     SetTestMode True
 
     modDataAccess.NewEntityIDPadniTest True, 1       ' header prodje, stavka pada
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IS-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IS-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
     modDataAccess.NewEntityIDPadniTest False
     SetTestMode prevMode
@@ -6108,7 +6109,7 @@ Private Sub Test_PR3_ClanstvoJeZapisanoPoVerziji()
     izvor.Add c
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3C-" & scenario), izvor)
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3C-" & scenario), izvor)
     AssertTrue Len(zbrID) > 0, "PR3 clanstvo: dokument napravljen"
 
     AssertEquals "3", CStr(Pr3BrojIzvora(zbrID)), _
@@ -6143,7 +6144,7 @@ Private Sub Test_PR3_PokazivacSeSlazeSaClanstvom()
     b = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3P2-" & scenario, KLASA_II, 600#, 30)
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3P-" & scenario), _
                             Pr3Izvor(a, b))
     AssertTrue Len(zbrID) > 0, "PR3 pokazivac: dokument napravljen"
 
@@ -6179,7 +6180,7 @@ Private Sub Test_PR3_PrazanIzvorIDNeProlazi()
 
     ' header (1) + stavka (1) prolaze, clanstvo pada
     modDataAccess.NewEntityIDPadniTest True, 2
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IZ-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3IZ-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
     modDataAccess.NewEntityIDPadniTest False
     SetTestMode prevMode
@@ -6220,7 +6221,7 @@ Private Sub Test_PR3_RazlicitVozacNeProlazi()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3VZ-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3VZ-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 vozac: upis odbijen"
@@ -6248,7 +6249,7 @@ Private Sub Test_PR3_HeaderJeEksplicitnoIzdat()
     scenario = NewScenarioCode("PR3IZD")
 
     Dim zbrID As String
-    zbrID = CreateZbirna_TX( _
+    zbrID = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3IZD-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3IZD-" & scenario, _
                                KLASA_I, 400#, 20), ""))
@@ -6280,7 +6281,7 @@ Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
     otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3KN-" & scenario, KLASA_I, 400#, 20)
 
     Dim prva As String
-    prva = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN1-" & scenario), _
+    prva = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN1-" & scenario), _
                            Pr3Izvor(otp, ""))
     AssertTrue Len(prva) > 0, "PR3 kanon: prva zbirna napravljena"
 
@@ -6292,7 +6293,7 @@ Private Sub Test_PR3_KanonOdlucujeIKadJePokazivacIzgubljen()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN2-" & scenario), _
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3KN2-" & scenario), _
                           Pr3Izvor(otp, ""), razlog)
 
     AssertEquals "", rez, "PR3 kanon: druga zbirna odbijena PO KANONU"
@@ -6322,7 +6323,7 @@ Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
     otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DI-" & scenario, KLASA_I, 400#, 20)
 
     Dim zbr As String
-    zbr = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3DI-" & scenario), _
+    zbr = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3DI-" & scenario), _
                           Pr3Izvor(otp, ""))
     AssertTrue Len(zbr) > 0, "PR3 dupli par: zbirna napravljena"
 
@@ -6332,7 +6333,7 @@ Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
                  "PR3 dupli par: dva zapisa iste veze"
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX( _
+    rez = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3DIX-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3DIX-" & scenario, _
                                KLASA_I, 100#, 5), ""), razlog)
@@ -6372,13 +6373,13 @@ Private Sub Test_PR3_DvaAktivnaClanstvaSuGreska()
     otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2-" & scenario, KLASA_I, 400#, 20)
 
     Dim prva As String
-    prva = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3D2A-" & scenario), _
+    prva = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3D2A-" & scenario), _
                            Pr3Izvor(otp, ""))
     AssertTrue Len(prva) > 0, "PR3 dva clanstva: prva zbirna napravljena"
 
     ' Druga AKTIVNA zbirna, pa joj se rucno doda clanstvo iste otpremnice.
     Dim druga As String
-    druga = CreateZbirna_TX( _
+    druga = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3D2B-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2X-" & scenario, _
                                KLASA_I, 100#, 5), ""))
@@ -6397,7 +6398,7 @@ Private Sub Test_PR3_DvaAktivnaClanstvaSuGreska()
     preH = Pr3BrojRedova(TBL_ZBIRNA)
 
     Dim rez As String, razlog As String
-    rez = CreateZbirna_TX( _
+    rez = CreateZbirnaIzIzvora_TX( _
         Pr3Header(TEST_PREFIX & "-ZBR-PR3D2C-" & scenario), _
         Pr3Izvor(Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3D2Y-" & scenario, _
                                KLASA_I, 100#, 5), ""), razlog)
@@ -6426,6 +6427,56 @@ EH:
     Pr3UkloniClanstvo druga, otp
     On Error GoTo 0
     LogFatal "Test_PR3_DvaAktivnaClanstvaSuGreska", Err.Number, Err.description
+End Sub
+
+' Kontrola "ocekivano vs izvedeno" se ne moze iskljuciti.
+'
+' Ranije je bio jedan ulaz sa Optional ocekivano, pa je Nothing (ili prazna
+' kolekcija) tiho preskakao proveru -- bez ikakvog traga na pozivu. Sada rucni
+' ulaz to odbija, a automatski tok ima svoj ulaz koji NAMERU kaze naglas.
+Private Sub Test_PR3_RucniUnosTraziOcekivano()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PR3OB")
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-PR3OB-" & scenario, KLASA_I, 400#, 20)
+
+    Dim preH As Long
+    preH = Pr3BrojRedova(TBL_ZBIRNA)
+
+    ' 1) bez ocekivanog
+    Dim rez As String, razlog As String
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3OB1-" & scenario), _
+                          Pr3Izvor(otp, ""), Nothing, razlog)
+
+    AssertEquals "", rez, "PR3 obavezno ocekivano: Nothing je odbijen"
+    AssertTrue InStr(1, razlog, "obavezne za rucni unos", vbTextCompare) > 0, _
+               "PR3 obavezno ocekivano: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' 2) prazna kolekcija je isto sto i nijedna
+    rez = CreateZbirna_TX(Pr3Header(TEST_PREFIX & "-ZBR-PR3OB2-" & scenario), _
+                          Pr3Izvor(otp, ""), New Collection, razlog)
+
+    AssertEquals "", rez, "PR3 obavezno ocekivano: prazna kolekcija je odbijena"
+    AssertTrue InStr(1, razlog, "prazne", vbTextCompare) > 0, _
+               "PR3 obavezno ocekivano: prazno se imenuje (bilo: " & razlog & ")"
+
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "PR3 obavezno ocekivano: nijedan header nije ostao"
+
+    ' 3) automatski tok ISTU zbirnu pravi bez ocekivanog -- namera je izricita
+    Dim auto As String
+    auto = CreateZbirnaIzIzvora_TX( _
+        Pr3Header(TEST_PREFIX & "-ZBR-PR3OB3-" & scenario), Pr3Izvor(otp, ""))
+    AssertTrue Len(auto) > 0, _
+               "PR3 obavezno ocekivano: automatski ulaz prolazi bez njega"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PR3_RucniUnosTraziOcekivano", Err.Number, Err.description
 End Sub
 
 ' --- PR3 pomocne -------------------------------------------------------------

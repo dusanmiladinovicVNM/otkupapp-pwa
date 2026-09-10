@@ -1216,8 +1216,8 @@ End Function
 ' stavci. Ko ih procita dobija prazno, i to je tacan odgovor: nije "nula
 ' kilograma", nego "ne pitaj header za kolicinu".
 '
-' Iz istog razloga se NE pise ni Otpremnica.BrojZbirne: veza je ZbirnaID. Stara
-' broj-veza ostaje netaknuta na dokumentima koje je napravio stari put.
+' BrojZbirne se ne pise i ne cita: veza je iskljucivo tblZbirnaIzvori. Broj nije
+' ni relacija ni rezervni put -- on je labela.
 '
 ' OVAJ WRITER PRAVI I ODMAH FINALIZUJE DOKUMENT (IzdatoStatus = IZDATO).
 '
@@ -1226,15 +1226,26 @@ End Function
 ' zasebna funkcija koja jos ne postoji (CreateZbirnaDraft_TX). Dok je nema,
 ' kanonski tok je JEDAN: otpremnice postoje, pa se zbirna napravi i izda.
 '
+' DVA JAVNA ULAZA, JEDNO JEZGRO -- namera se vidi na callsite-u.
+'
+'   CreateZbirna_TX           rucni poslovni unos. "ocekivano" je OBAVEZNO:
+'                             ono sto je operater otkucao mora da se poredi sa
+'                             izvedenim iz otpremnica.
+'   CreateZbirnaIzIzvora_TX   automatski tok (auto-hladnjaca, malina). Nema
+'                             nezavisnog ocekivanja, i to se KAZE.
+'
+' Ranije je bio jedan ulaz sa Optional ocekivano, pa se kontrola mogla iskljuciti
+' time sto se argument prosto ne prosledi -- tiho, bez traga na pozivu. Sada se
+' ne moze iskljuciti; moze se samo izabrati drugi ulaz, i to se vidi.
+'
 ' Argumenti:
 '   h                 Scripting.Dictionary. Obavezno: Datum, VozacID,
 '                     BrojZbirne, KupacID. Opciono: Hladnjaca, Pogon.
 '                     Nepoznat kljuc je GRESKA (v. HdrProveriKljuceve).
 '   izvorOtpremnice   Collection OtpremnicaID-jeva. Bar jedan.
+'   ocekivano         Collection diktova {Klasa, Kolicina, KolAmbalaze} -- ono
+'                     sto je operater OTKUCAO. Neslaganje sa izvedenim obara upis.
 '   outGreska         RAZLOG odbijanja, ne samo cinjenica.
-'   ocekivano         Opciono: Collection diktova {Klasa, Kolicina, KolAmbalaze}
-'                     -- ono sto je operater OTKUCAO. Sluzi kao unakrsna
-'                     provera protiv izvedenog; neslaganje obara upis.
 '
 ' outGreska postoji jer se bez njega ne moze razlikovati "kapija je odbila upis"
 ' od "upis je pukao iz drugog razloga pa je ispalo isto". Nije teorijska
@@ -1242,8 +1253,24 @@ End Function
 ' ZELEN, jer je posao preuzeo Dictionary.Add svojom greskom o duplom kljucu.
 Public Function CreateZbirna_TX(ByVal h As Object, _
                                 ByVal izvorOtpremnice As Collection, _
-                                Optional ByRef outGreska As String, _
-                                Optional ByVal ocekivano As Collection) As String
+                                ByVal ocekivano As Collection, _
+                                Optional ByRef outGreska As String) As String
+    CreateZbirna_TX = ZbirnaUpis(h, izvorOtpremnice, ocekivano, True, outGreska)
+End Function
+
+' Izvedeno bez nezavisne kontrole -- za automatske tokove koji nemaju sta da
+' unakrsno provere. Izricito, ne prece prosledjivanjem Nothing.
+Public Function CreateZbirnaIzIzvora_TX(ByVal h As Object, _
+                                        ByVal izvorOtpremnice As Collection, _
+                                        Optional ByRef outGreska As String) As String
+    CreateZbirnaIzIzvora_TX = ZbirnaUpis(h, izvorOtpremnice, Nothing, False, outGreska)
+End Function
+
+Private Function ZbirnaUpis(ByVal h As Object, _
+                            ByVal izvorOtpremnice As Collection, _
+                            ByVal ocekivano As Collection, _
+                            ByVal ocekivanoObavezno As Boolean, _
+                            ByRef outGreska As String) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -1265,9 +1292,9 @@ Public Function CreateZbirna_TX(ByVal h As Object, _
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
-    CreateZbirna_TX = CreateZbirna(h, izvorOtpremnice, ocekivano)
+    ZbirnaUpis = CreateZbirna(h, izvorOtpremnice, ocekivano, ocekivanoObavezno)
 
-    If CreateZbirna_TX = "" Then
+    If ZbirnaUpis = "" Then
         Err.Raise vbObjectError + 1220, "CreateZbirna_TX", _
                   "CreateZbirna nije vratio ZbirnaID."
     End If
@@ -1292,8 +1319,8 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="CreateZbirna_TX", _
         entityType:="Zbirna", _
-        entityID:=CreateZbirna_TX, _
-        correlationId:=CreateZbirna_TX, _
+        entityID:=ZbirnaUpis, _
+        correlationId:=ZbirnaUpis, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
         errorSource:=errSrc
@@ -1306,13 +1333,13 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="CreateZbirna_TX", _
         entityType:="Zbirna", _
-        entityID:=CreateZbirna_TX, _
-        correlationId:=CreateZbirna_TX
+        entityID:=ZbirnaUpis, _
+        correlationId:=ZbirnaUpis
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    CreateZbirna_TX = ""
+    ZbirnaUpis = ""
     outGreska = errDesc
 
     PrintTxFailure "CreateZbirna_TX", errSrc, errNum, errDesc
@@ -1322,7 +1349,8 @@ End Function
 ' transakciju; direktan poziv bi kod greske ostavio pola dokumenta.
 Private Function CreateZbirna(ByVal h As Object, _
                               ByVal izvorOtpremnice As Collection, _
-                              ByVal ocekivano As Collection) As String
+                              ByVal ocekivano As Collection, _
+                              ByVal ocekivanoObavezno As Boolean) As String
     Const SRC As String = "CreateZbirna"
 
     On Error GoTo EH
@@ -1339,6 +1367,21 @@ Private Function CreateZbirna(ByVal h As Object, _
     If izvorOtpremnice.count = 0 Then
         Err.Raise vbObjectError + 1223, SRC, _
                   "Zbirna mora imati bar jednu izvornu otpremnicu."
+    End If
+
+    ' Rucni unos MORA da donese ono sto je operater otkucao. Prazna kolekcija je
+    ' isto sto i nijedna -- inace bi se kontrola gasila praznim argumentom.
+    If ocekivanoObavezno Then
+        If ocekivano Is Nothing Then
+            Err.Raise vbObjectError + 1261, SRC, _
+                      "Ocekivane vrednosti su obavezne za rucni unos. Za " & _
+                      "automatski tok koristi CreateZbirnaIzIzvora_TX."
+        End If
+        If ocekivano.count = 0 Then
+            Err.Raise vbObjectError + 1262, SRC, _
+                      "Ocekivane vrednosti su prazne. Za automatski tok " & _
+                      "koristi CreateZbirnaIzIzvora_TX."
+        End If
     End If
 
     ' Fail-fast nad semom pre ijednog upisa.

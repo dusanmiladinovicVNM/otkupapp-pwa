@@ -215,7 +215,7 @@ tblPrijemnica ──1:N──> tblPrijemnicaStavke
 
 tblAmbalaza.DokumentID  -> header ID (Otkup / Otpremnica / Prijemnica)
 tblNovac.OtkupID        -> header ID
-tblPaletaStavka         -> ZbirnaID (bilo BrojZbirne)
+tblPaletaStavka         -> PrijemnicaStavkaID (bilo BrojZbirne)
 ```
 
 ### 3.1) Pripadnost se ne drži kolonom — ni na otkupu ni na otpremnici
@@ -361,8 +361,13 @@ Public Function CreateOtkup_TX(ByRef h As Object, ByVal stavke As Collection) As
 Public Function CreateOtpremnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
 Public Function CreateZbirna_TX(ByVal h As Object, _
                                 ByVal izvorOtpremnice As Collection, _
-                                Optional ByRef outGreska As String, _
-                                Optional ByVal ocekivano As Collection) As String
+                                ByVal ocekivano As Collection, _
+                                Optional ByRef outGreska As String) As String
+
+' automatski tok -- bez nezavisnog ocekivanja, i to izricito
+Public Function CreateZbirnaIzIzvora_TX(ByVal h As Object, _
+                                        ByVal izvorOtpremnice As Collection, _
+                                        Optional ByRef outGreska As String) As String
 Public Function CreatePrijemnica_TX(ByRef h As Object, ByVal stavke As Collection) As String
 ```
 
@@ -509,9 +514,10 @@ posle: SumOtpremniceByKlasa(zbirnaID)     -- join po tblZbirnaIzvori
 3. suma po klasi
 4. poredi sa `tblZbirnaStavke` gde `ZbirnaID = X`
 
-> **Ne preko `Otpremnica.ZbirnaID`.** Pokazivač se pri ispravci pomera na novu
-> verziju; čim ode sa `ZBR18` na `ZBR19`, invarijanta stare više ne bi mogla da
-> se reprodukuje. Tabela članstva pamti sastav svake verzije (A15).
+> **Tabela članstva je jedini zapis pripadnosti** — kolone na otpremnici nema.
+> Da postoji, pomerala bi se pri ispravci sa `ZBR18` na `ZBR19` i invarijanta
+> stare više se ne bi mogla reprodukovati. Ovako sastav svake verzije ostaje
+> proverljiv (A15).
 
 Isti `BrojZbirne` na drugom `ZbirnaID` više nije problem integriteta — pa
 `RequireJedanVlasnikIkadPoBroju`, `historicalOwnerCount`, `activeLogicalCount` i
@@ -589,7 +595,7 @@ Dalje, po repou:
 - `RequireJedanVlasnikPoBroju`, `RequireJedanVlasnikIkadPoBroju`, `VlasniciPoBroju`
 - `FindSingleActiveRow`, `ZbirnaVlasnikKljuc`
 - `BackfillDeteZbirnaGeneracija`
-- `PoveziDeteNaZbirnu`, `ZavrsiVezuOtpremniceNaZbirnu` (postaju običan FK upis)
+- `PoveziDeteNaZbirnu`, `ZavrsiVezuOtpremniceNaZbirnu` — **nestaju**; pripadnost se upisuje u `tblZbirnaIzvori` kroz writer, ne kolonom na detetu
 - kolone `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN` i njihovi
   `EnsureKolonaSaTragom` pozivi
 
@@ -639,7 +645,7 @@ Obavezni scenariji:
 | `DveKlase_JedanID` | dvoklasni upis → jedan header, dve stavke, jedan vraćen ID |
 | `SamoKlasaI` / `SamoKlasaII` | jedan header, jedna stavka |
 | `BrojNijeIdentitet` | dva dokumenta sa istim brojem: storno jednog ne dira drugi, print jednog ne čita drugi, invarijanta jednog ne vidi drugi |
-| `ZbirnaFK` | otpremnica sa `ZbirnaID=X` ulazi u invarijantu; ista `BrojZbirne` na `ZbirnaID=Y` ne ulazi |
+| `ZbirnaClanstvo` | otpremnica upisana u `tblZbirnaIzvori(ZBR-X, OTP-A)` ulazi u sastav `ZBR-X`; ista `BrojZbirne` na drugoj zbirnoj ne menja ništa |
 | `StornoPoID` | jedan storno headera = jedan logički dokument |
 | `IspravkaID` | original i ispravka imaju različite ID-eve i vezu `IspravkaOdID` |
 | `PrintDvoklasni` | dvoklasni dokument se štampa kao jedan sa dve stavke |
@@ -651,7 +657,7 @@ Obavezni scenariji:
 | `AutoHladnjaca` | postojeći auto-lanac funkcionalno identičan |
 
 Dokaz u oba smera (pokvari → pukne **po imenu** → vrati → zeleno) obavezan za:
-`SemaKapija`, `BrojNijeIdentitet`, `ZbirnaFK`, `NovacBezPrimary` — kritične
+`SemaKapija`, `BrojNijeIdentitet`, `ZbirnaClanstvo`, `NovacBezPrimary` — kritične
 poslovne invarijante i nov checker.
 
 **Fixture:** `tests/fixtures/otkup_test.xlsm` se regeneriše. Redosled: donor →
@@ -767,7 +773,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
-| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, `Otpremnica.ZbirnaID`, `CreateZbirna_TX(h, izvorOtpremnice, outGreska, ocekivano)` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
 | 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX`, opaque `OtkupID` po **bloku**, ne po klasi | 3 |
 | 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
 | 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument koji stvarno prelazi u produkciju | 5 |
@@ -901,6 +907,23 @@ postojati **oba**:
 2. `who_writes.py` koji brisanje meri kao mutaciju, sa slučajevima u
    `--self-test` — i za `lo.ListRows(i).Delete` i za novi API.
 
+#### Referencijalni integritet članstva (P2)
+
+`AktivnoClanstvoPoKanonu` proverava da otpremnica nema dva aktivna zapisa, ali
+**ne** proverava da `ZbirnaID` iz zapisa zaista postoji u `tblZbirna`. Orphan
+zapis se time tretira kao aktivan.
+
+Ishod je fail-closed — takva otpremnica se ne može ponovo upotrebiti — pa nije
+blokada za skelu. Ali pre cutover-a mora u health/invariant mrežu:
+
+```
+za svaki red tblZbirnaIzvori:
+    ZbirnaID     postoji TACNO jednom u tblZbirna
+    OtpremnicaID postoji TACNO jednom u tblOtpremnica
+```
+
+Isto važi za `tblOtpremnicaIzvori` kad nastane.
+
 #### Correction polja u šemi se moraju preimenovati, ne pretumačiti
 
 A9 govori o `IspravkaOdID` / `ZamenjenSaID`, a kanon (`schema/schema.json`) i
@@ -965,7 +988,7 @@ slajsa kao specifikacijom, umesto sa osećajem.
 ## 16) Definicija gotovog
 
 - „ZBR-123 je jedan red u `tblZbirna`, njene klase su redovi u `tblZbirnaStavke`."
-- „`tblZbirnaIzvori` čuva kanonski sastav svake verzije zbirne; `Otpremnica.ZbirnaID`, dok postoji, samo je izvedeni pokazivač na trenutno aktivnu."
+- „`tblZbirnaIzvori` je jedini zapis pripadnosti; kolone `Otpremnica.ZbirnaID` nema, a „gde je sada" se računa iz članstva."
 - „PRJ-789 je jedna prijemnica bez obzira ima li jednu ili dve klase."
 - „Faktura stavka zna tačnu `PrijemnicaStavkaID`."
 - „Storno prima `DocumentID`. Štampa prima `DocumentID`. Invarijanta prima `ZbirnaID`."
