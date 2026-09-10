@@ -708,6 +708,26 @@ Pre-Flight je platio odluke koje ništa još ne meri. Skela ih mora zaključati:
 | `HeaderNeNosiLinePolja` | nov writer ostavlja `Kolicina` / `Cena` / `Klasa` / `KolAmbalaze` / `BrutoKg` / `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa` **prazne** |
 | `KolAmbIzdataJeHeader` | polje je na headeru i preživi oba klasna reda |
 
+
+**Dopuna iz revizije skele.** Prva mreža je merila ono što je Pre-Flight
+odlučio, ali je propustila ono što je writer odlučio **umesto** domena — a to se
+vidi tek nad gotovim kodom:
+
+| Test | Tvrdnja |
+|---|---|
+| `NepoznatKljucUStavciPada` | stavka ima **zatvoren** spisak ključeva; `BruttoKg` ne prolazi kao „nije uneto" |
+| `KooperantMoraPostojati` | `KooperantID` je FK, ne string |
+| `StanicaMoraPostojati` | `StanicaID` je FK — **i** otkup na nematičnoj stanici prolazi |
+| `RedosledKlasaJeKanonski` | ulaz `II, I` daje `I=RB1` — `RedniBroj` nosi dokument, ne redosled poziva |
+| `SamoKlasaII` | jednoklasni blok samo druge klase je legitiman dokument |
+| `SortaPraznaSamoUzKulturuBezSorte` | prazna sorta prolazi tačno uz kulturu bez sorte; ključ koji fali je greška |
+| `TipAmbalazeVezujeSvakaAmbalaza` | obavezan kad ima primljene **ili izdate** ambalaže; bez ambalaže prazan prolazi |
+
+> Tri od njih mere **odsustvo** pooštravanja (`SamoKlasaII`, `SortaPrazna…`,
+> `TipAmbalaze…` slučaj (a)). Takav test je lako napisati kao zelen bez sadržaja,
+> pa svaki nosi i suprotan slučaj u istom telu — inače bi kapija koja **uvek**
+> odbija izgledala isto kao kapija koja radi.
+
 > **Zašto „prazno", a ne „kolone nema".** U skeli te kolone **još postoje** — stari
 > writer ih puni i brišu se tek u cutover-u. Tvrdnja `kanonska pozicija = 0`
 > (oblik `Test_PR3_OtpremnicaNemaZbirnaID`) postaje moguća **posle** Otkup

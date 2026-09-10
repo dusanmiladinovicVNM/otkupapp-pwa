@@ -39,10 +39,13 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
 '      domenu ne postoji (v. REFAKTOR_DOKUMENT_HEADER_STAVKE.md S7), pa stavka
 '      nema kolonu Stornirano -- i ExcludeStornirano nad njom bi trazio kolonu
 '      koje nema. Citac aktivnih stavki filtrira po FK i pita header.
-'   3. ISTORIJSKI ZAPIS -- tblZbirnaIzvori. Redovi su NEPROMENLJIVI: kazu od
-'      kojih je otpremnica bila sastavljena JEDNA VERZIJA zbirne. Storno te
-'      verzije ne brise njen sastav; nova verzija dobija svoje redove. Filtrirati
-'      ih po stornu znacilo bi izgubiti bas ono zbog cega tabela postoji.
+'   3. CLANSTVO -- tblZbirnaIzvori. Sastav je promenljiv dok je zbirna DRAFT i
+'      zamrznut u trenutku izdavanja (A15); od tada red kaze od kojih je
+'      otpremnica bila sastavljena JEDNA VERZIJA zbirne. Ni u jednoj od te dve
+'      faze red nema svoj storno: dok je DRAFT clanstvo se MENJA (red se doda
+'      ili ukloni), a posle izdavanja storno verzije ne brise njen sastav --
+'      nova verzija dobija svoje redove. Filtrirati ih po stornu znacilo bi
+'      izgubiti bas ono zbog cega tabela postoji.
 Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
     "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & _

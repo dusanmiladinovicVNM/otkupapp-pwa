@@ -63,11 +63,17 @@ Private Const TEST_VOZ_ID As String = "VOZ-90001"
 Private Const TEST_VOZ_ID_B As String = "VOZ-90002"
 Private Const TEST_KUP_ID As String = "KUP-90001"
 Private Const TEST_KULTURA_ID As String = "KUL-90001"
+' Drugi kooperant: parcela sme da pripada nekom KO POSTOJI, a nije vlasnik.
+' Bez njega bi test vlasnistva parcele zapravo merio postojanje kooperanta.
+Private Const TEST_KOOP2_ID As String = "KOOP-90002"
+' Kultura BEZ sorte: prazna sorta na dokumentu je legitimna tacno uz nju.
+Private Const TEST_KUL_BEZ_SORTE_ID As String = "KUL-90002"
 Private Const TEST_PAR_ID As String = "PAR-90001"
 
 Private Const TEST_VRSTA As String = "Test Jabuka"
 Private Const TEST_SORTA As String = "Test Sorta"
 Private Const TEST_TIP_AMB As String = "Test Gajba"
+Private Const TEST_VRSTA_BEZ_SORTE As String = "Test Dunja"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
 
@@ -196,6 +202,13 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_NepoznatKljucUHeaderuPada
     Test_OTK_BezStavkiNeProlazi
     Test_OTK_AmbalazaMoraBitiCeoBroj
+    Test_OTK_NepoznatKljucUStavciPada
+    Test_OTK_KooperantMoraPostojati
+    Test_OTK_StanicaMoraPostojati
+    Test_OTK_RedosledKlasaJeKanonski
+    Test_OTK_SamoKlasaII
+    Test_OTK_SortaPraznaSamoUzKulturuBezSorte
+    Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
@@ -1525,7 +1538,9 @@ Private Sub SeedBusinessFlowProMasterData()
     SeedKupac
     SeedKupac2
     SeedKultura
+    SeedKulturaBezSorte
     SeedKooperant
+    SeedKooperant2
     SeedParcelaIfAvailable
 
     LogPass "Seed master data ready"
@@ -4754,6 +4769,23 @@ Private Sub SeedKultura()
     RequireAppend TBL_KULTURE, rowData, "SeedKultura"
 End Sub
 
+' Kultura bez sorte. Postoji u stvarnosti (dunja se ne vodi po sorti), a
+' writer je koristi da dokaze da prazna sorta prolazi TACNO tamo gde je i
+' master prazan -- ne uvek i ne nikad.
+Private Sub SeedKulturaBezSorte()
+    If RowExists(TBL_KULTURE, "KulturaID", TEST_KUL_BEZ_SORTE_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_KULTURE)
+
+    SetRequiredField rowData, TBL_KULTURE, "KulturaID", TEST_KUL_BEZ_SORTE_ID
+    SetRequiredField rowData, TBL_KULTURE, "VrstaVoca", TEST_VRSTA_BEZ_SORTE
+    SetOptionalField rowData, TBL_KULTURE, "SortaVoca", ""
+    SetOptionalField rowData, TBL_KULTURE, "Aktivan", "Aktivan"
+
+    RequireAppend TBL_KULTURE, rowData, "SeedKulturaBezSorte"
+End Sub
+
 Private Sub SeedKooperant()
     If RowExists(TBL_KOOPERANTI, "KooperantID", TEST_KOOP_ID) Then Exit Sub
 
@@ -4844,6 +4876,25 @@ Private Sub SetRequiredField(ByRef rowData As Variant, ByVal tableName As String
     Dim colIdx As Long
     colIdx = RequireCol(tableName, columnName)
     rowData(colIdx) = value
+End Sub
+
+' Drugi kooperant, na ISTOJ stanici -- razlika prema prvom je samo vlasnistvo
+' parcele. Sve ostalo namerno isto, da test vlasnistva ne bi prosao iz nekog
+' drugog razloga.
+Private Sub SeedKooperant2()
+    If RowExists(TBL_KOOPERANTI, "KooperantID", TEST_KOOP2_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_KOOPERANTI)
+
+    SetRequiredField rowData, TBL_KOOPERANTI, "KooperantID", TEST_KOOP2_ID
+    SetRequiredField rowData, TBL_KOOPERANTI, "Ime", "Test"
+    SetRequiredField rowData, TBL_KOOPERANTI, "Prezime", "Kooperant Drugi"
+    SetOptionalField rowData, TBL_KOOPERANTI, "Mesto", "Test Selo"
+    SetRequiredField rowData, TBL_KOOPERANTI, "StanicaID", TEST_ST_ID
+    SetOptionalField rowData, TBL_KOOPERANTI, "Aktivan", "Da"
+
+    RequireAppend TBL_KOOPERANTI, rowData, "SeedKooperant2"
 End Sub
 
 Private Sub SetOptionalField(ByRef rowData As Variant, ByVal tableName As String, _
@@ -6620,11 +6671,16 @@ Private Sub Test_OTK_ParcelaPripadaKooperantu()
     Dim scenario As String
     scenario = NewScenarioCode("OTKPP")
 
-    ' Ista parcela, ali otkup za DRUGOG kooperanta.
+    ' Ista parcela, ali otkup za DRUGOG kooperanta -- koji POSTOJI.
+    ' Sa izmisljenim ID-em bi otkup pao na FK proveri, pa bi test tvrdio
+    ' vlasnistvo a merio postojanje.
+    AssertTrue RowExists(TBL_KOOPERANTI, "KooperantID", TEST_KOOP2_ID), _
+               "OTK parcela: drugi kooperant postoji"
+
     Dim h As Object
     Set h = OtkHeader(TEST_PREFIX & "-OTK-PP-" & scenario)
     h("ParcelaID") = TEST_PAR_ID
-    h("KooperantID") = TEST_KOOP_ID & "-TUDJI"
+    h("KooperantID") = TEST_KOOP2_ID
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
@@ -6960,6 +7016,306 @@ EH:
 End Sub
 
 ' --- OTK pomocne -------------------------------------------------------------
+
+' Stavka ima zatvoren spisak kljuceva -- kao header.
+'
+' Tipfeler bas u OPCIONOM polju je jedini koji nema svoj glas: "BruttoKg" se ne
+' procita, BrutoKg ostane prazan, i bruto unos tiho postane neto. Zato test
+' cilja bas njega, a ne neko obavezno polje koje bi palo i bez whitelist-a.
+Private Sub Test_OTK_NepoznatKljucUStavciPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKNS")
+
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", KLASA_I
+    s.Add "Kolicina", 1000#
+    s.Add "Cena", 50#
+    s.Add "KolAmbalaze", 100#
+    s.Add "BruttoKg", 1100#                  ' tipfeler u opcionom polju
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add s
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NS-" & scenario), stavke, razlog)
+
+    AssertEquals "", rez, "OTK stavka kljuc: upis odbijen"
+    AssertTrue InStr(1, razlog, "nepoznat kljuc", vbTextCompare) > 0 And _
+               InStr(1, razlog, "BruttoKg", vbTextCompare) > 0, _
+               "OTK stavka kljuc: kapija imenuje kljuc (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK stavka kljuc: header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "OTK stavka kljuc: stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_NepoznatKljucUStavciPada", Err.Number, Err.description
+End Sub
+
+' KooperantID je FK, ne string. Neprazan tekst nije dokaz da kooperant postoji.
+Private Sub Test_OTK_KooperantMoraPostojati()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKP")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-KP-" & scenario)
+    h("KooperantID") = "KOOP-NE-POSTOJI-" & scenario
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK kooperant: nepostojeci FK odbijen"
+    AssertTrue InStr(1, razlog, "KooperantID ne postoji", vbTextCompare) > 0, _
+               "OTK kooperant: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK kooperant: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_KooperantMoraPostojati", Err.Number, Err.description
+End Sub
+
+' StanicaID je FK ka tblStanice, i NE izvodi se iz kooperanta.
+'
+' Kontrola na kraju je poslovna, ne kozmeticka: otkup na stanici koja NIJE
+' maticna stanica kooperanta mora da prodje. Kod desktopa stanica dolazi iz
+' zakljucane sesije (modStanicaLock), pa kooperant sme da preda robu bilo gde.
+Private Sub Test_OTK_StanicaMoraPostojati()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSP")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-SP-" & scenario)
+    h("StanicaID") = "ST-NE-POSTOJI-" & scenario
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK stanica: nepostojeci FK odbijen"
+    AssertTrue InStr(1, razlog, "StanicaID ne postoji", vbTextCompare) > 0, _
+               "OTK stanica: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK stanica: header nije ostao"
+
+    ' Stanica koja NIJE maticna stanica kooperanta i dalje prolazi.
+    AssertTrue StrComp(TEST_HLAD_ST_ID, _
+                       Trim$(CStr(nz(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, _
+                                                 TEST_KOOP_ID, COL_KOOP_STANICA), ""))), _
+                       vbTextCompare) <> 0, _
+               "OTK stanica: druga stanica zaista nije maticna (inace kontrola ne meri nista)"
+
+    Dim h2 As Object
+    Set h2 = OtkHeader(TEST_PREFIX & "-OTK-SP2-" & scenario)
+    h2("StanicaID") = TEST_HLAD_ST_ID
+
+    AssertTrue Len(CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0))) > 0, _
+               "OTK stanica: otkup na nematicnoj stanici prolazi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_StanicaMoraPostojati", Err.Number, Err.description
+End Sub
+
+' RedniBroj nosi dokument, ne redosled poziva.
+'
+' Adapter sme da sklopi stavke bilo kojim redom; ista poslovna cinjenica mora
+' dati isti dokument. Test salje II pa I -- suprotno od kanonskog reda, i
+' suprotno od onoga sto OtkStavke() pravi, pa zelena boja ovde nije slucajna.
+Private Sub Test_OTK_RedosledKlasaJeKanonski()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKRK")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_II, 600#, 40#, 30#, 0#)     ' II je PRVA u ulazu
+    stavke.Add OtkStavka(KLASA_I, 400#, 50#, 20#, 0#)
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RK-" & scenario), stavke)
+
+    AssertTrue Len(otkID) > 0, "OTK red klasa: upis prosao"
+    AssertEquals "2", CStr(OtkBrojStavki(otkID)), "OTK red klasa: dve stavke"
+
+    AssertEquals "1", OtkStavkaPolje(otkID, KLASA_I, COL_OKS_RB), _
+                 "OTK red klasa: I ima RB 1 iako je poslata druga"
+    AssertEquals "2", OtkStavkaPolje(otkID, KLASA_II, COL_OKS_RB), _
+                 "OTK red klasa: II ima RB 2 iako je poslata prva"
+
+    ' Preslozen RedniBroj ne sme da preslozi i sadrzaj -- klasa i njeni brojevi
+    ' moraju ostati zajedno.
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
+               "OTK red klasa: I zadrzala svoju kolicinu"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_II, COL_OKS_CENA) - 40#) < 0.001, _
+               "OTK red klasa: II zadrzala svoju cenu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_RedosledKlasaJeKanonski", Err.Number, Err.description
+End Sub
+
+' Otkup samo druge klase je stvaran tok koji zatecen ekran podrzava
+' (modOtkupUnos: Klasa I sme da ostane prazna kad je ukljucena Klasa II).
+Private Sub Test_OTK_SamoKlasaII()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKS2")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-S2-" & scenario), _
+                           OtkStavke(0#, 0#, 0, 600#, 40#, 30))
+
+    AssertTrue Len(otkID) > 0, "OTK samo II: upis prosao"
+    AssertEquals "1", CStr(OtkBrojStavki(otkID)), "OTK samo II: tacno jedna stavka"
+    AssertEquals "1", OtkStavkaPolje(otkID, KLASA_II, COL_OKS_RB), _
+                 "OTK samo II: II ima RB 1 kad je sama"
+    AssertEquals "", OtkStavkaPolje(otkID, KLASA_I, COL_OKS_RB), _
+                 "OTK samo II: stavke klase I nema"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_II, COL_OKS_KOLICINA) - 600#) < 0.001, _
+               "OTK samo II: kolicina na stavci"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), _
+                 "OTK samo II: header i dalje ne nosi kolicinu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_SamoKlasaII", Err.Number, Err.description
+End Sub
+
+' Prazna sorta je legitimna TACNO kad je i sama kultura bez sorte.
+'
+' Writer ne donosi tu odluku: pravilo je "snapshot mora da odgovara kulturi", pa
+' prazno prolazi samo tamo gde je i master prazan. Kljuc ipak mora da postoji --
+' inace bi tipfeler u imenu polja prosao kao "kultura nema sortu".
+Private Sub Test_OTK_SortaPraznaSamoUzKulturuBezSorte()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPS")
+
+    ' (a) kultura IMA sortu -- prazna sorta na dokumentu je neslaganje
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-PS-" & scenario)
+    h("SortaVoca") = ""
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK prazna sorta: uz kulturu SA sortom odbijena"
+    AssertTrue InStr(1, razlog, "ne slazu sa kulturom", vbTextCompare) > 0, _
+               "OTK prazna sorta: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' (b) kultura NEMA sortu -- prazna sorta je tacan podatak
+    Dim h2 As Object
+    Set h2 = OtkHeader(TEST_PREFIX & "-OTK-PS2-" & scenario)
+    h2("KulturaID") = TEST_KUL_BEZ_SORTE_ID
+    h2("VrstaVoca") = TEST_VRSTA_BEZ_SORTE
+    h2("SortaVoca") = ""
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertTrue Len(otkID) > 0, _
+               "OTK prazna sorta: uz kulturu BEZ sorte prolazi (bilo: " & razlog & ")"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_SORTA), _
+                 "OTK prazna sorta: sorta ostaje prazna, ne izmisljena"
+
+    ' (c) kljuc mora da postoji i onda kad sme da bude prazan
+    Dim h3 As Object
+    Set h3 = OtkHeader(TEST_PREFIX & "-OTK-PS3-" & scenario)
+    h3.Remove "SortaVoca"
+
+    rez = CreateOtkup_TX(h3, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK prazna sorta: kljuc koji fali je greska"
+    AssertTrue InStr(1, razlog, "nema obavezan kljuc", vbTextCompare) > 0 And _
+               InStr(1, razlog, "SortaVoca", vbTextCompare) > 0, _
+               "OTK prazna sorta: kapija imenuje kljuc (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_SortaPraznaSamoUzKulturuBezSorte", Err.Number, Err.description
+End Sub
+
+' Tip ambalaze vezuje SVAKA ambalaza -- i primljena na stavkama i izdata na
+' headeru. Bez ambalaze je prazan tip tacan podatak, ne propust.
+'
+' Slucaj (c) je onaj koji je zatecen ekran vec pokrivao (modOtkupUnos:158
+' gleda i kolAmbIzdata), a nov writer umalo nije: izdata ambalaza bez tipa je
+' gajba koja je otisla kooperantu a ne zna se koja.
+Private Sub Test_OTK_TipAmbalazeVezujeSvakaAmbalaza()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKTA")
+
+    ' (a) nema nikakve ambalaze -- prazan tip prolazi
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-TA-" & scenario)
+    h("TipAmbalaze") = ""
+
+    Dim razlog As String
+    Dim otkID As String
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 0, 0#, 0#, 0), razlog)
+
+    AssertTrue Len(otkID) > 0, _
+               "OTK tip ambalaze: bez ambalaze prazan tip prolazi (bilo: " & razlog & ")"
+
+    ' (b) primljena ambalaza na stavci
+    Dim h2 As Object
+    Set h2 = OtkHeader(TEST_PREFIX & "-OTK-TA2-" & scenario)
+    h2("TipAmbalaze") = ""
+
+    Dim rez As String
+    rez = CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK tip ambalaze: primljena ambalaza bez tipa odbijena"
+    AssertTrue InStr(1, razlog, "Tip ambalaze", vbTextCompare) > 0, _
+               "OTK tip ambalaze: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' (c) IZDATA ambalaza, na stavkama je nema
+    Dim h3 As Object
+    Set h3 = OtkHeader(TEST_PREFIX & "-OTK-TA3-" & scenario)
+    h3("TipAmbalaze") = ""
+    h3.Add "KolAmbIzdata", 5#
+
+    rez = CreateOtkup_TX(h3, OtkStavke(400#, 50#, 0, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK tip ambalaze: izdata ambalaza bez tipa odbijena"
+    AssertTrue InStr(1, razlog, "Tip ambalaze", vbTextCompare) > 0, _
+               "OTK tip ambalaze: izdata ambalaza imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_TipAmbalazeVezujeSvakaAmbalaza", Err.Number, Err.description
+End Sub
 
 Private Function OtkHeader(ByVal brDok As String) As Object
     Dim h As Object

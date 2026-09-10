@@ -775,6 +775,7 @@ Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 ' --- tblKulture: podrazumevani tip ambalaze (auto-puni u otkupu/dokumentima) ---
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
 ' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
+Public Const COL_STA_ID As String = "StanicaID"
 Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
 
 ' =========================

@@ -1696,7 +1696,12 @@ End Sub
 ' Klase u kanonskom redu: I, pa II, pa sve ostalo azbucno. RedniBroj mora biti
 ' determinisan -- Dictionary.Keys cuva redosled ubacivanja, a on zavisi od
 ' redosleda otpremnica u pozivu.
-Private Function KlaseUKanonskomRedu(ByVal kolPoKlasi As Object) As Collection
+'
+' Public zbog modOtkup.CreateOtkup: tamo redosled ubacivanja zavisi od adaptera,
+' a ista poslovna cinjenica mora dati isti dokument. Ulaz je Dictionary ciji su
+' KLJUCEVI UCase-ovane klase; vrednosti se ne citaju, pa isti poziv radi i nad
+' mapom klasa->kolicina (zbirna) i nad mapom klasa->indeks stavke (otkup).
+Public Function KlaseUKanonskomRedu(ByVal kolPoKlasi As Object) As Collection
     Dim c As Collection
     Set c = New Collection
 

@@ -44,14 +44,19 @@ Option Explicit
 ' otkupni list, S4.1b).
 '
 ' Header (h) -- Scripting.Dictionary, obavezni kljucevi:
-'   Datum, KooperantID, StanicaID, KulturaID, VrstaVoca, SortaVoca,
-'   TipAmbalaze, BrojDokumenta
+'   Datum, KooperantID, StanicaID, KulturaID, VrstaVoca, BrojDokumenta
+' obavezan KLJUC, vrednost sme biti prazna:
+'   SortaVoca     prazna samo ako je i sama kultura bez sorte
+'   TipAmbalaze   prazan samo ako nema ni primljene ni izdate ambalaze
 ' opcioni:
 '   ParcelaID, KolAmbIzdata, ClientRecordID, SyncSource, SourceCreatedAt
 '
-' Stavke -- Collection diktova, svaki:
+' Stavke -- Collection diktova; spisak kljuceva je ZATVOREN kao i na headeru:
 '   Klasa (I ili II), Kolicina (> 0, NETO), Cena (> 0), KolAmbalaze (>= 0),
 '   BrutoKg (opciono; > 0 samo kad je unos bio bruto)
+'
+' Redosled stavki u Collection-u NE odredjuje RedniBroj -- klase se pisu u
+' kanonskom redu, isto kao kod zbirne.
 Public Function CreateOtkup_TX(ByVal h As Object, _
                                ByVal stavke As Collection, _
                                Optional ByRef outGreska As String) As String
@@ -173,11 +178,27 @@ Private Function CreateOtkup(ByVal h As Object, _
     stanicaID = OtkHdrObavezan(h, "StanicaID", SRC)
     kulturaID = OtkHdrObavezan(h, "KulturaID", SRC)
     vrstaVoca = OtkHdrObavezan(h, "VrstaVoca", SRC)
-    sortaVoca = OtkHdrObavezan(h, "SortaVoca", SRC)
-    tipAmb = OtkHdrObavezan(h, "TipAmbalaze", SRC)
+    ' SortaVoca i TipAmbalaze: KLJUC je obavezan (tipfeler ne sme da prodje kao
+    ' "nije uneto"), ali vrednost sme da bude prazna. Kultura bez sorte postoji, i
+    ' otkup bez ijedne gajbe postoji. Kada sme prazno kaze DOMEN, ne writer:
+    ' sortu razresava RequireKulturaSeSlaze (prazno prolazi tacno kad je i kultura
+    ' bez sorte), tip ambalaze provera nize (obavezan kad ambalaze ima).
+    sortaVoca = OtkHdrObavezanKljuc(h, "SortaVoca", SRC)
+    tipAmb = OtkHdrObavezanKljuc(h, "TipAmbalaze", SRC)
     brDok = OtkHdrObavezan(h, "BrojDokumenta", SRC)
     parcelaID = OtkHdrOpcion(h, "ParcelaID")
 
+    ' FK-ovi ka maticnim podacima. "Neprazan string" nije FK: red koji pokazuje
+    ' na kooperanta koga nema slomljen je isto koliko i fabrikovan KulturaID,
+    ' samo se ne vidi dok neko ne pokusa da ga spoji (DOCUMENT_HEADER_LINES S5).
+    '
+    ' StanicaID se NE izvodi iz kooperanta. To su dve razlicite cinjenice:
+    ' tblKooperanti.StanicaID je maticno otkupno mesto (banka po njemu razvrstava
+    ' uplate), a Otkup.StanicaID je mesto GDE JE OTKUP OBAVLJEN -- kod desktopa
+    ' iz zakljucane sesije (modStanicaLock.gActiveStanica), pa isti kooperant sme
+    ' da preda robu na drugoj stanici (S4.1f).
+    RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, "KooperantID", SRC
+    RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
     RequireKulturaSeSlaze kulturaID, vrstaVoca, sortaVoca, SRC
     RequireParcelaKooperanta parcelaID, kooperantID, SRC
 
@@ -199,6 +220,7 @@ Private Function CreateOtkup(ByVal h As Object, _
         End If
 
         Set s = stavke(i)
+        OtkStavkaProveriKljuceve s, i, SRC
 
         klasa = Trim$(NzToText(OtkStavkaVrednost(s, "Klasa", i, SRC)))
         RequireValidOtkupClass klasa, SRC
@@ -209,7 +231,9 @@ Private Function CreateOtkup(ByVal h As Object, _
             Err.Raise vbObjectError + 1865, SRC, _
                       "Dve stavke iste klase: " & klasa
         End If
-        vidjeneKlase.Add UCase$(klasa), True
+        ' Vrednost je INDEKS stavke -- upis nize ide kanonskim redom klasa, pa
+        ' mora da zna gde je koja stavka u ulaznom Collection-u.
+        vidjeneKlase.Add UCase$(klasa), i
 
         kolicina = OtkStavkaBroj(s, "Kolicina", i, SRC)
         If kolicina <= 0 Then
@@ -250,11 +274,6 @@ Private Function CreateOtkup(ByVal h As Object, _
         End If
     Next i
 
-    If imaAmbalaze And Len(tipAmb) = 0 Then
-        Err.Raise vbObjectError + 1871, SRC, _
-                  "Tip ambalaze je obavezan kada postoji ambalaza."
-    End If
-
     Dim kolAmbIzdata As Double
     kolAmbIzdata = OtkHdrBrojOpcion(h, "KolAmbIzdata", SRC)
     If kolAmbIzdata < 0 Then
@@ -262,6 +281,16 @@ Private Function CreateOtkup(ByVal h As Object, _
                   "Izdata ambalaza ne sme biti negativna."
     End If
     RequireCeoBrojOtk kolAmbIzdata, "Izdata ambalaza", SRC
+
+    ' Tip ambalaze vezuje SVAKA ambalaza -- i primljena (stavke) i izdata
+    ' (header). Isto pravilo drzi zatecen ekran (modOtkupUnos:158), pa nov writer
+    ' ne menja poslovno pravilo usput. Zato provera stoji tek ovde: pre nje se ne
+    ' zna da li izdate ambalaze ima.
+    If (imaAmbalaze Or kolAmbIzdata > 0) And Len(tipAmb) = 0 Then
+        Err.Raise vbObjectError + 1871, SRC, _
+                  "Tip ambalaze je obavezan kada postoji ambalaza " & _
+                  "(primljena na stavkama ili izdata na headeru)."
+    End If
 
     ' --- upis ----------------------------------------------------------------
     Dim otkupID As String
@@ -285,30 +314,41 @@ Private Function CreateOtkup(ByVal h As Object, _
                   "AppendRow nije upisao header u tblOtkup."
     End If
 
+    ' RedniBroj ide po KANONSKOM redu klasa, ne po redosledu u Collection-u.
+    ' Ista poslovna cinjenica (I=400, II=600) mora dati isti dokument bez obzira
+    ' na to kojim ih je redom adapter sklopio -- inace RedniBroj nosi trag poziva,
+    ' a ne dokumenta. Zbirna to pravilo vec drzi, pa se koristi ista funkcija.
+    Dim redKlasa As Collection
+    Set redKlasa = modDokumenta.KlaseUKanonskomRedu(vidjeneKlase)
+
     Dim stavkaID As String
-    For i = 1 To stavke.count
-        Set s = stavke(i)
+    Dim rb As Long, idx As Long
+    For rb = 1 To redKlasa.count
+        ' idx je pozicija u ULAZU -- poruke o gresci moraju da imenuju stavku
+        ' onako kako ju je pozivalac poslao.
+        idx = CLng(vidjeneKlase(CStr(redKlasa(rb))))
+        Set s = stavke(idx)
 
         ' Fail-closed: NewEntityID vraca "" kad CoCreateGuid ne uspe. Red bez
         ' identiteta je gori od pada -- niko ga posle ne moze ni naci ni vezati.
         stavkaID = NewEntityID("OKS-")
         If stavkaID = "" Then
             Err.Raise vbObjectError + 1875, SRC, _
-                      "NewEntityID nije vratio OtkupStavkaID za stavku " & CStr(i) & "."
+                      "NewEntityID nije vratio OtkupStavkaID za stavku " & CStr(idx) & "."
         End If
 
-        rowData = BuildOtkupStavkaRowData(stavkaID, otkupID, i, _
+        rowData = BuildOtkupStavkaRowData(stavkaID, otkupID, rb, _
                     Trim$(NzToText(s("Klasa"))), _
-                    OtkStavkaBroj(s, "Kolicina", i, SRC), _
-                    OtkStavkaBroj(s, "Cena", i, SRC), _
-                    OtkStavkaBroj(s, "KolAmbalaze", i, SRC), _
-                    OtkStavkaBrojOpcion(s, "BrutoKg", i, SRC))
+                    OtkStavkaBroj(s, "Kolicina", idx, SRC), _
+                    OtkStavkaBroj(s, "Cena", idx, SRC), _
+                    OtkStavkaBroj(s, "KolAmbalaze", idx, SRC), _
+                    OtkStavkaBrojOpcion(s, "BrutoKg", idx, SRC))
 
         If AppendRow(TBL_OTKUP_STAVKE, rowData) <= 0 Then
             Err.Raise vbObjectError + 1876, SRC, _
-                      "AppendRow nije upisao stavku " & CStr(i) & "."
+                      "AppendRow nije upisao stavku " & CStr(idx) & "."
         End If
-    Next i
+    Next rb
 
     CreateOtkup = otkupID
     Exit Function
@@ -334,24 +374,35 @@ End Function
 ' Mora postojati tacno jednom, i vrsta/sorta koje dokument nosi kao snapshot
 ' moraju odgovarati toj kulturi. Time fabrikovan "vrsta-sorta" string pada odmah:
 ' takvog reda u tblKulture nema.
+' Veza pokazuje na TACNO JEDAN red maticne tabele.
+'
+' Nula znaci da pokazuje na nesto cega nema, vise od jedan da se ne zna na sta.
+' Oba su tvrda greska: dokument sa slomljenim FK-om izgleda ispravno sve dok ga
+' neko ne spoji sa maticnim podacima, a to je po pravilu izvestaj ili isplata.
+Private Sub RequireTacnoJedan(ByVal tblName As String, ByVal colName As String, _
+                              ByVal vrednost As String, ByVal opis As String, _
+                              ByVal src As String)
+    ' FindRows uvek vraca Collection (svaki izlaz radi Set) -- provera
+    ' "Is Nothing" bi bila mrtav kod koji samo izgleda kao paznja.
+    Dim redovi As Collection
+    Set redovi = FindRows(tblName, colName, vrednost)
+
+    If redovi.count = 0 Then
+        Err.Raise vbObjectError + 1877, src, _
+                  opis & " ne postoji: " & vrednost
+    End If
+    If redovi.count > 1 Then
+        Err.Raise vbObjectError + 1878, src, _
+                  opis & " nije jednoznacan: " & vrednost & _
+                  "; Count=" & CStr(redovi.count)
+    End If
+End Sub
+
 Private Sub RequireKulturaSeSlaze(ByVal kulturaID As String, _
                                   ByVal vrstaVoca As String, _
                                   ByVal sortaVoca As String, _
                                   ByVal src As String)
-    ' FindRows uvek vraca Collection (svaki izlaz radi Set) -- provera
-    ' "Is Nothing" bi bila mrtav kod koji samo izgleda kao paznja.
-    Dim redovi As Collection
-    Set redovi = FindRows(TBL_KULTURE, COL_KUL_ID, kulturaID)
-
-    If redovi.count = 0 Then
-        Err.Raise vbObjectError + 1877, src, _
-                  "KulturaID ne postoji: " & kulturaID
-    End If
-    If redovi.count > 1 Then
-        Err.Raise vbObjectError + 1878, src, _
-                  "KulturaID nije jednoznacan: " & kulturaID & _
-                  "; Count=" & CStr(redovi.count)
-    End If
+    RequireTacnoJedan TBL_KULTURE, COL_KUL_ID, kulturaID, "KulturaID", src
 
     Dim kVrsta As String, kSorta As String
     kVrsta = Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_VRSTA)))
@@ -376,16 +427,7 @@ Private Sub RequireParcelaKooperanta(ByVal parcelaID As String, _
                                      ByVal src As String)
     If Len(parcelaID) = 0 Then Exit Sub
 
-    Dim redovi As Collection
-    Set redovi = FindRows(TBL_PARCELE, COL_PAR_ID, parcelaID)
-
-    If redovi.count = 0 Then
-        Err.Raise vbObjectError + 1880, src, "ParcelaID ne postoji: " & parcelaID
-    End If
-    If redovi.count > 1 Then
-        Err.Raise vbObjectError + 1881, src, _
-                  "ParcelaID nije jednoznacan: " & parcelaID
-    End If
+    RequireTacnoJedan TBL_PARCELE, COL_PAR_ID, parcelaID, "ParcelaID", src
 
     Dim vlasnik As String
     vlasnik = Trim$(NzToText(LookupValue(TBL_PARCELE, COL_PAR_ID, parcelaID, COL_PAR_KOOP)))
@@ -441,14 +483,18 @@ Private Function BuildOtkupHeaderRowData(ByVal otkupID As String, _
     SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, kolAmbIzdata, SRC
     SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_STORNIRANO, "", SRC
 
-    OtkPostaviAkoPostoji rowData, COL_OTK_CLIENT_RECORD_ID, clientRecordID, SRC
-    OtkPostaviAkoPostoji rowData, COL_OTK_SYNC_SOURCE, syncSource, SRC
-    OtkPostaviAkoPostoji rowData, COL_OTK_SOURCE_CREATED_AT, sourceCreatedAt, SRC
+    ' Bez "ako kolona postoji": sve cetiri su KANONSKE, a SchemaReadyOrFail je
+    ' vec potvrdio semu pre transakcije. Tiho preskakanje bi od nedostajuce
+    ' kanonske kolone napravilo prazno polje umesto pada -- i sakrilo bas drift
+    ' zbog kojeg kapija postoji. Nema produkcionih svesaka koje bi to stitilo.
+    SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_CLIENT_RECORD_ID, clientRecordID, SRC
+    SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_SYNC_SOURCE, syncSource, SRC
+    SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_SOURCE_CREATED_AT, sourceCreatedAt, SRC
 
     ' IZDATO se pise EKSPLICITNO -- nov model se ne oslanja na legacy konvenciju
     ' "prazno = IZDATO". Otkup nema persistentan DRAFT: forma je njegov draft, a
     ' dokument nastaje vec izdat (DOCUMENT_HEADER_LINES S4.1e).
-    OtkPostaviAkoPostoji rowData, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+    SetRowValueByColumn rowData, TBL_OTKUP, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
 
     BuildOtkupHeaderRowData = rowData
 End Function
@@ -489,16 +535,6 @@ Private Function BuildOtkupStavkaRowData(ByVal stavkaID As String, _
 
     BuildOtkupStavkaRowData = rowData
 End Function
-
-' Kolona koja u zatecenoj svesci mozda jos ne postoji ne sme da obori upis.
-Private Sub OtkPostaviAkoPostoji(ByRef rowData() As Variant, _
-                                 ByVal columnName As String, _
-                                 ByVal value As Variant, _
-                                 ByVal src As String)
-    If GetColumnIndex(TBL_OTKUP, columnName) > 0 Then
-        SetRowValueByColumn rowData, TBL_OTKUP, columnName, value, src
-    End If
-End Sub
 
 Private Sub RequireCeoBrojOtk(ByVal v As Double, ByVal opis As String, _
                               ByVal src As String)
@@ -559,6 +595,19 @@ Private Function OtkHdrObavezan(ByVal h As Object, ByVal kljuc As String, _
     End If
 End Function
 
+' Kljuc mora postojati, vrednost sme biti prazna. Razlika prema OtkHdrObavezan
+' je namerna: nedostajuci kljuc je uvek greska pozivaoca (tipfeler), a prazna
+' vrednost je legitiman podatak za polja koja domen ne trazi uvek.
+Private Function OtkHdrObavezanKljuc(ByVal h As Object, ByVal kljuc As String, _
+                                     ByVal src As String) As String
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1896, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    OtkHdrObavezanKljuc = Trim$(NzToText(h(kljuc)))
+End Function
+
 Private Function OtkHdrOpcion(ByVal h As Object, ByVal kljuc As String) As String
     If h.Exists(kljuc) Then OtkHdrOpcion = Trim$(NzToText(h(kljuc)))
 End Function
@@ -594,6 +643,32 @@ Private Function OtkHdrDatum(ByVal h As Object, ByVal kljuc As String, _
 
     OtkHdrDatum = CDate(h(kljuc))
 End Function
+
+' Stavka ima ZATVOREN spisak kljuceva, iz istog razloga kao header.
+'
+' Bez ovoga tipfeler u OPCIONOM polju prolazi kao da polja nema: "BruttoKg" se
+' ne procita, BrutoKg ostane prazan, i bruto unos se tiho upise kao neto. Ostala
+' polja tipfeler prijave sama (nedostajuci OBAVEZAN kljuc pada), pa je bas
+' opciono polje jedino mesto gde greska nema svoj glas.
+Private Function OtkStavkaKljucPoznat(ByVal kljuc As String) As Boolean
+    Select Case LCase$(Trim$(kljuc))
+        Case "klasa", "kolicina", "cena", "kolambalaze", "brutokg"
+            OtkStavkaKljucPoznat = True
+    End Select
+End Function
+
+Private Sub OtkStavkaProveriKljuceve(ByVal s As Object, ByVal idx As Long, _
+                                     ByVal src As String)
+    Dim kljuc As Variant
+
+    For Each kljuc In s.Keys
+        If Not OtkStavkaKljucPoznat(CStr(kljuc)) Then
+            Err.Raise vbObjectError + 1897, src, _
+                      "Stavka " & CStr(idx) & " ima nepoznat kljuc: " & CStr(kljuc) & _
+                      ". Dozvoljeni su Klasa / Kolicina / Cena / KolAmbalaze / BrutoKg."
+        End If
+    Next kljuc
+End Sub
 
 Private Function OtkStavkaVrednost(ByVal s As Object, ByVal kljuc As String, _
                                    ByVal idx As Long, ByVal src As String) As Variant

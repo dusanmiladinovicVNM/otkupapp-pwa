@@ -281,7 +281,36 @@ njegovo pravilo je `Cena > 0`. Promena cenovnika **ne menja** već izdat otkup �
 
 ---
 
-### 4.1f Matični podaci — kultura i parcela
+### 4.1f Matični podaci — FK-ovi, kultura i parcela
+
+**Sve četiri veze ka matičnim podacima su pravi FK-ovi.** Neprazan string
+nije dokaz da red postoji, a dokument sa slomljenim FK-om izgleda ispravno sve
+dok ga neko ne spoji sa matičnim podacima — a to je po pravilu izveštaj ili
+isplata.
+
+```
+KooperantID  -> tblKooperanti   TACNO jedan red
+StanicaID    -> tblStanice      TACNO jedan red
+KulturaID    -> tblKulture      TACNO jedan red   (+ snapshot vrsta/sorta)
+ParcelaID    -> tblParcele      TACNO jedan red   (+ vlasnistvo), opciono
+```
+
+Nula pogodaka znači da veza pokazuje na nešto čega nema; dva i više da se ne
+zna na šta pokazuje. Oba su tvrda greška.
+
+**`StanicaID` se NE izvodi iz kooperanta.** To su dve različite činjenice, i
+kod ih drži razdvojene:
+
+| Polje | Šta je | Ko ga postavlja |
+|---|---|---|
+| `tblKooperanti.StanicaID` | **matično** otkupno mesto kooperanta | šifarnik; banka po njemu razvrstava uplate (`modBankaMapiranje:609,1049`) |
+| `tblOtkup.StanicaID` | mesto **gde je otkup obavljen** | desktop: zaključana sesija (`modStanicaLock`, `gActiveStanica`), operater bira `cmbOtkupnoMesto` (`modOtkupBlok:729`) |
+
+PWA ingest (`modMasterSync:1951`) uzima stanicu iz kooperanta **samo zato što
+nema sesiju** — to je fallback jednog adaptera, ne pravilo domena. Zato
+`Kooperant.StanicaID = Otkup.StanicaID` **nije** invarijanta: isti kooperant
+sme da preda robu na drugoj stanici, i `ChangeStanica` postoji baš zato što
+operater menja stanicu unutar iste sesije.
 
 **`KulturaID` se RAZREŠAVA, nikad ne fabrikuje.**
 
@@ -327,6 +356,35 @@ ako je ParcelaID zadat:
 Tuđa parcela ne prolazi kanonski writer. Neslaganje **kulture** parcele ostaje
 `warning` sa override-om, kao danas — za tvrdo pravilo tu nema dovoljno osnova, a
 operater ima legitimne slučajeve.
+
+---
+
+### 4.1g Kada je prazno legitimno — sorta i tip ambalaže
+
+Dva polja smeju da budu prazna, i to **ne odlučuje writer**. Ako writer traži
+više nego domen, tiho je pooštrio poslovno pravilo — a to je ista klasa greške
+kao i da ga je olabavio, samo se prijavljuje kao „ne mogu da snimim".
+
+```
+SortaVoca     kljuc OBAVEZAN, vrednost sme prazna
+              prazna prolazi TACNO kad je i sama kultura bez sorte
+              (pravilo je vec tu: snapshot mora da odgovara kulturi, S4.1f)
+
+TipAmbalaze   kljuc OBAVEZAN, vrednost sme prazna
+              obavezan kad SUM(stavke.KolAmbalaze) > 0 ILI KolAmbIzdata > 0
+```
+
+Oba pravila su **merena nad zatečenim ekranom**, ne izmišljena:
+`modOtkupUnos:120` traži sortu samo kad je `IsValidacijaUnosa()` uključena, a
+`modOtkupUnos:158` traži tip ambalaže kad `kolAmb > 0 Or kolAmbII > 0 Or
+kolAmbIzd > 0` — dakle **i zbog izdate**. Izdata ambalaza bez tipa je gajba koja
+je otišla kooperantu a ne zna se koja.
+
+**Zašto ključ mora da postoji i kad vrednost sme da bude prazna:** bez toga se
+tipfeler u imenu polja ne razlikuje od namerno praznog polja. Isti razlog drži
+zatvoren spisak ključeva — na headeru i na **stavci**. Na stavci je to jedina
+odbrana za `BrutoKg`: ostala polja su obavezna pa tipfeler u njima padne sam od
+sebe, a `BruttoKg` bi se samo ignorisao i bruto unos bi tiho postao neto.
 
 ---
 
@@ -683,6 +741,12 @@ Posledice za model:
 - `ClientRecordID` stoji na **headeru** (`tblOtkup`), ne na stavci.
 - `IsDuplicateInMaster` (`modMasterSync.bas:1824`) skenira `tblOtkup.ClientRecordID`
   — ostaje tačno, jer header ostaje u `tblOtkup`.
+
+**Obaveza za cutover: `SourceCreatedAt` mora biti vreme, ne tekst.** Skela ga
+prima kao `String` i upisuje bez provere, jer u skeli nema pošiljaoca — jedini
+pisač je test. U trenutku kad adapter počne da ga puni, provera formata ide uz
+njega: kolonu čita štampa (§4.1c, `modPrint:591` nasleđuje `VremeUnosa`), pa bi
+proizvoljan string završio na otkupnom listu kao vreme.
 
 Implementacija je van opsega ovog refaktora (radi se isključivo VBA). Model je
 ovde da adapter kasnije ne izmišlja pravilo.
