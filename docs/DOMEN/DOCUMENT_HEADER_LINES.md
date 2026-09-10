@@ -145,27 +145,162 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 |---|---|
 | `OtkupID` | PK, `OTK-<hex>` |
 | `BrojDokumenta` | labela, scoped po otkupnom mestu |
-| `Datum`, `KooperantID`, `StanicaID`, `VozacID`, `ParcelaID`, `KulturaID` | → matični |
+| `Datum`, `KooperantID`, `StanicaID`, `ParcelaID`, `KulturaID` | → matični |
 | `VrstaVoca`, `SortaVoca`, `TipAmbalaze` | H — u potpisu stoje jednom |
-| `KolAmbIzdata` | H — OM izdao prazne kooperantu |
+| `KolAmbIzdata` | H — OM izdao prazne kooperantu; **stvarna činjenica sa otkupnog lista** |
+| `ClientRecordID`, `SyncSource` | eksterni identitet i poreklo (PWA); v. §7 i §4.1c |
+| `Stornirano`, `IzdatoStatus` | lifecycle |
+| `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID` | correction |
+| audit ×4 | |
+| ~~`VozacID`~~ | **ne postoji** — vozač pripada Otpremnici; v. §4.1c |
 | ~~`Novac`, `PrimalacNovca`~~ | **BRIŠU SE** — keš se ne vezuje za otkupni list; v. §4.1b |
-| `Isplaceno`, `DatumIsplate` | H — **izvedeno** iz `tblNovac` vs `SUM(stavke.Kolicina × Cena)`; v. §6.1 |
+| ~~`Isplaceno`, `DatumIsplate`~~ | **ne postoje** — izvedeno iz `tblNovac`; v. §4.1c i §6.1 |
+| ~~`VremeUnosa`~~ | **ne postoji** — `CreatedAt` / `SourceCreatedAt`; v. §4.1c |
 | ~~`OtpremnicaID`~~ | **ne postoji** — pripadnost zna `tblOtpremnicaIzvori` |
 | ~~`ZbirnaID`~~ | **ne postoji** — pripadnost zna `tblZbirnaIzvori` preko otpremnice |
-| `VremeUnosa`, `Stornirano` | |
-| `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID`, `IzdatoStatus` | |
-| `ClientRecordID` | eksterni identitet (PWA); v. §7 |
-| audit ×4 | |
+| ~~`BrojOtpremnice`, `BrojZbirne`~~ | **ne postoje** — broj nije veza (A2) |
+| ~~`Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`~~ | **stavka**, ne header |
 
 **`tblOtkupStavke`** — grain: **jedna klasa jednog bloka**
 
-`OtkupStavkaID` (PK `OKS-`), `OtkupID` →, `RedniBroj`, `Klasa`, `Kolicina`,
-`Cena`, `KolAmbalaze`, `BrutoKg`.
+| Kolona | Semantika |
+|---|---|
+| `OtkupStavkaID` | PK `OKS-` |
+| `OtkupID` → | FK, obavezan |
+| `RedniBroj`, `Klasa` | |
+| `Kolicina` | **uvek NETO kg**, zamrznuto pri izdavanju |
+| `BrutoKg` | zamrznut originalni bruto — popunjen **samo** kad je unos bio bruto |
+| `Cena` | **stvarno primenjena** cena tog dokumenta |
+| `KolAmbalaze` | |
 
-**Vlasnik upisa (A11):** `modOtkup`, `modSetup`.
-Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
-`modBankaMapiranje`, `modMasterSync`, `modOtkupBlok`, `modStornoFlow`,
-`modStornoRecovery`, `modDokumenta`) idu kroz API `modOtkup`-a. **Danas ih je 12.**
+**Vlasnik upisa (A11): samo `modOtkup`.** Danas 9 pisaca
+(`modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`,
+`modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow`) — svi ostali idu
+kroz API `modOtkup`-a.
+
+> `modSetup` je u zatečenom stanju pisač zbog backfill-a `BrojOtpremnice`. Bez
+> podataka koje treba dopuniti taj kod nema posao i briše se u cutover-u;
+> `modSetup` ostaje **`schema_owner`**, ne `row_owner`. `WRITE_OWNERSHIP.json`
+> već nosi `cilj: ["modOtkup"]` — dokument je bio taj koji je kasnio.
+
+#### 4.1c Četiri kolone koje odlaze, i šta ih zamenjuje
+
+Brisanje kolone bez imenovanog naslednika je način da se obori ekran koji ju je
+čitao. Zato svaka nosi zamenu, izmerenu nad zatečenim kodom.
+
+**`VozacID` — vozač nije činjenica otkupa.**
+
+U trenutku nastanka otkupnog lista vozač često nije ni poznat; desktop ga dobija
+iz izabrane otpremnice, a PWA tek naknadno bira koji listovi idu u koju
+otpremnicu i kod kog vozača. Jedno otkupno mesto istog dana ima tri otpremnice sa
+tri vozača — otpremnica je **transportni agregat**, otkup nije.
+
+```
+OTPREMNICA 17  Vozac = VOZ-3        OTPREMNICA 18  Vozac = VOZ-7
+   ├── OTK-101                          ├── OTK-103
+   ├── OTK-102                          └── OTK-104
+   └── OTK-108
+```
+
+Zamena: `Otpremnica.VozacID` + `tblOtpremnicaIzvori`. PWA sme da nosi izabranog
+vozača kroz svoj tok, ali podatak sleće na otpremnicu, ne kao kopija na svakom
+otkupu.
+
+**`Isplaceno` / `DatumIsplate` — read-model, ne kolona.**
+
+```
+Vrednost  = SUM(stavke.Kolicina x stavke.Cena)
+Placeno   = SUM(tblNovac vezan na OtkupID)
+Preostalo = Vrednost - Placeno
+Isplaceno = (Preostalo <= 0)
+```
+
+Mereni čitaoci danas i njihova zamena:
+
+| Čitalac | Šta radi | Posle |
+|---|---|---|
+| `modNovac.GetOpenOtkupi:1355` | `If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextCount` | uslov se **računa**; `BuildIsplataDictByOtkup()` već postoji u istom modulu |
+| `modProductionHealthCheck.Check_OtkupPaymentConsistency:485` | poredi kolonu sa `tblNovac` | **briše se** — postoji samo da uhvati neslaganje kolone i knjige; bez kolone nema šta da se ne slaže |
+| `modNovac:1277,1280,1285,1286` | `RequireUpdateCell` nad `tblOtkup` | **nestaje** — time `modNovac` prestaje da bude pisač otkupa (A11) |
+
+`DatumIsplate` nema nijednog produkcionog čitaoca — samo testove.
+
+**`VremeUnosa` — dva naslednika, ne jedan.**
+
+Čita ga `modPrint:591`, na samom otkupnom listu. Ne može prosto da nestane.
+
+| Tok | Nosilac vremena |
+|---|---|
+| desktop unos | `CreatedAt` — isto značenje, kolona je bila udvajanje |
+| PWA uvoz | `CreatedAt` je vreme **uvoza**; vreme unosa na terenu je druga činjenica → **`SourceCreatedAt`** |
+
+Štampa čita naslednika po toku. Dvosmisleno „vreme unosa" ne ostaje.
+
+---
+
+### 4.1d Bruto/neto i cena — zamrznute činjenice
+
+Ovde se ne uvodi nov mehanizam; zapisuje se onaj koji `OtkupValidiraj` već ima.
+
+```
+Kolicina = UVEK NETO kg
+
+unos NETO   ->  BrutoKg = prazno
+unos BRUTO  ->  BrutoKg = TACNO ono sto je korisnik uneo
+                Kolicina = izracunat neto (bruto - tara)
+```
+
+> **Težina ambalaže se koristi samo u trenutku nastanka dokumenta.** `BrutoKg` i
+> `Kolicina` izdate verzije su **zamrznute činjenice** i nikad se ne
+> rekalkulišu iz `tblTipAmbalaze`.
+>
+> Ako danas `BrutoKg 1100`, `KolAmbalaze 100`, tara `1 kg` daju `Kolicina 1000`,
+> a za dve godine master težina gajbice postane `1.2 kg` — istorijski dokument
+> ostaje `1100 / 1000`. Zasebna `TaraKg` kolona nije potrebna: `BrutoKg`,
+> `Kolicina` i `KolAmbalaze` već nose dovoljno istorije.
+
+Isto važi za cenu:
+
+| | |
+|---|---|
+| `Cenovnik.Cena` | **predlog** — autofill u formu |
+| `OtkupStavka.Cena` | **stvarno primenjena** cena tog izdatog dokumenta |
+
+Operater sme da je pregazi. Writer nema pravo da traži `Cena = Cenovnik.Cena`;
+njegovo pravilo je `Cena > 0`. Promena cenovnika **ne menja** već izdat otkup —
+štampa i danas računa iz cene sa samog otkupa, što je ta semantika.
+
+---
+
+### 4.1e Lifecycle i pripadnost
+
+**Otkup nema persistentan `DRAFT`.** Forma jeste njegov draft:
+
+```
+operater unosi -> koriguje -> Unos -> OTKUP nastaje kao IZDATO
+```
+
+Otpremnica i Zbirna imaju pravi persistentan `DRAFT` jer se njihovo članstvo
+gradi postepeno; otkup tu potrebu nema.
+
+Posledica (A13): ispravka nikad ne menja snimljen otkup.
+
+```
+OTK-101 / broj 17
+      v correction
+OTK-202 / broj 18,  IspravkaOdID = OTK-101
+```
+
+**Pripadnost otpremnici je isključivo `tblOtpremnicaIzvori`.** Jedan otkup sme
+istorijski da pripada i staroj i novoj verziji otpremnice, ali u datom trenutku
+najviše **jednoj aktivnoj**. Dva aktivna članstva su integrity failure (A15).
+
+Delimična alokacija (`OTK-17` 40% → `OTP-A`, 60% → `OTP-B`) **nije modelovana** i
+ne uvodi se dok ne postoji poslovni zahtev; v. §3.2.
+
+Time se zatvara i poslednje otvoreno pitanje iz §9: *„sme li `Otkup.OtpremnicaID`
+da se razlikuje po klasi"*. Ne — kolone nema, a članstvo je na nivou jednog
+otkup **headera**.
 
 ---
 
@@ -397,8 +532,12 @@ dokumentu**.
 > Klasu I, pa Klasa II nikad ne dobije `Isplaceno`. **To nije bug nego mrtav
 > kod** — keš uopšte ne ulazi kroz otkupni list (§4.1b). Putanja koja stvarno
 > postavlja `Isplaceno` je avans, i ona radi ispravno (golden B2/B3).
-> Ostaje da vrednost dokumenta posle refaktora bude `SUM(stavke)`, a
-> `Isplaceno` jedno polje na headeru.
+> Ostaje da vrednost dokumenta posle refaktora bude `SUM(stavke)`.
+
+**`Isplaceno` nije polje.** Ranija verzija ovog odeljka je govorila „jedno polje
+na headeru" -- to je bilo pola koraka. Kolona i knjiga mogu da se raziju, i
+`modProductionHealthCheck.Check_OtkupPaymentConsistency` postoji bas zato da to
+uhvati. Bez kolone nema sta da se ne slaze, pa i ta provera odlazi (S4.1c).
 
 ### 6.2 Zbirna = zbir svojih aktivnih otpremnica
 

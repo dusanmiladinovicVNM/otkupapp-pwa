@@ -46,7 +46,7 @@ delimična fakturisanost. **Stavka.**
 
 | Dokument | Kolone stavke | Napomena |
 |---|---|---|
-| Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
+| Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | `Kolicina` je uvek **neto**; `BrutoKg` samo kod bruto unosa (§4.1d) |
 | Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze`, `BrutoKg` | **bez `Cena`** — izvedeni dokument, izvori mogu imati različite cene (§13b) |
 | Zbirna | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze` | zbirna **nema** cenu (`modDokUnos.bas:422`) |
 | Prijemnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, `Fakturisano`, `FakturaID` | |
@@ -73,9 +73,18 @@ dvoklasnog otkupa red Klase II **nikad ne dobija `Isplaceno`**, iako je kooperan
 plaćen u celosti.
 
 Posle refaktora: vrednost dokumenta = `SUM(stavke.Kolicina × stavke.Cena)`,
-`tblNovac.OtkupID` pokazuje na header, `Isplaceno` je jedno polje na headeru.
-Primary-row hack nestaje. Ovo je jedini slučaj gde refaktor menja zatečeno
-ponašanje — i menja ga zato što je zatečeno ponašanje pogrešno.
+`tblNovac.OtkupID` pokazuje na header, a **`Isplaceno` uopšte nije polje** nego
+read-model:
+
+```
+Placeno   = SUM(tblNovac vezan na OtkupID)
+Isplaceno = (Vrednost - Placeno) <= 0
+```
+
+Primary-row hack nestaje, a `modNovac` prestaje da bude pisač `tblOtkup`.
+Imenovane zamene za dva zatečena čitaoca: `DOCUMENT_HEADER_LINES.md` §4.1c.
+Ovo je jedini slučaj gde refaktor menja zatečeno ponašanje — i menja ga zato što
+je zatečeno ponašanje pogrešno.
 
 ---
 
@@ -88,24 +97,33 @@ Prefiksi po postojećoj konvenciji (`PLS-` za `tblPaletaStavka`): `OKS-`, `OPS-`
 
 ```
 OtkupID           PK, "OTK-"
+BrojDokumenta     poslovni broj -- LABELA
 Datum
 KooperantID       FK
 StanicaID         FK
-KulturaID
+ParcelaID         FK
+KulturaID         FK -- razresen, NIKAD fabrikovan
 VrstaVoca
 SortaVoca
-ParcelaID         FK
 TipAmbalaze
 KolAmbIzdata      dokument-level (OM izdao prazne kooperantu)
-VozacID           FK
-BrojDokumenta     poslovni broj -- LABELA
-Isplaceno
-DatumIsplate
-VremeUnosa
+ClientRecordID    eksterni identitet (PWA)
+SyncSource        poreklo zapisa
 Stornirano
-IspravkaOdID / ZamenjenSaID / CorrectionID / IzdatoStatus
+IzdatoStatus
+IspravkaOdID / ZamenjenSaID / CorrectionID
 CreatedAt / CreatedBy / ModifiedAt / ModifiedBy
+SourceCreatedAt   vreme nastanka na izvoru (PWA); desktop koristi CreatedAt
 ```
+
+Nema: `VozacID` (pripada otpremnici) · `Isplaceno` / `DatumIsplate` (izvedeno iz
+`tblNovac`) · `VremeUnosa` (udvajanje sa `CreatedAt`) · `Novac` /
+`PrimalacNovca` (keš ne ulazi kroz otkup) · `OtpremnicaID` / `ZbirnaID` /
+`BrojOtpremnice` / `BrojZbirne` (pripadnost je `tblOtpremnicaIzvori`) ·
+`Klasa` / `Kolicina` / `Cena` / `KolAmbalaze` / `BrutoKg` (stavka) ·
+`GeneracijaID` / `ZbirnaGeneracijaID`.
+
+Obrazloženje po koloni i imenovane zamene: `DOCUMENT_HEADER_LINES.md` §4.1c.
 
 ### `tblOtkupStavke`
 
@@ -114,11 +132,15 @@ OtkupStavkaID     PK, "OKS-"
 OtkupID           FK, obavezan
 RedniBroj
 Klasa
-Kolicina
-Cena
+Kolicina          UVEK NETO kg -- zamrznuto pri izdavanju
+Cena              STVARNO PRIMENJENA cena (cenovnik je samo predlog)
 KolAmbalaze
-BrutoKg
+BrutoKg           zamrznut original -- popunjen SAMO kad je unos bio bruto
+CreatedAt / CreatedBy / ModifiedAt / ModifiedBy
 ```
+
+Težina ambalaže se koristi samo u trenutku nastanka; `BrutoKg` i `Kolicina` se
+nikad ne rekalkulišu iz `tblTipAmbalaze` (`DOCUMENT_HEADER_LINES.md` §4.1d).
 
 ### `tblOtpremnica` (header)
 
@@ -782,7 +804,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
-| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX`, opaque `OtkupID` po **bloku**, ne po klasi | 3 |
+| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, `ImportOtkupPWA_TX` omotač nad istim jezgrom, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–e: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa` | 3 · **spec zaključan** |
 | 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
 | 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument koji stvarno prelazi u produkciju | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
