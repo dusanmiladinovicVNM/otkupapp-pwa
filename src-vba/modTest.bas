@@ -488,6 +488,8 @@ Public Sub RunAllTests()
     RunOne 198
     RunOne 199
     RunOne 200
+    RunOne 201
+    RunOne 202
     RunOne 124
     RunOne 125
     RunOne 126
@@ -757,6 +759,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 198: TestName = "T_Sema_SveskaOdgovaraKanonu"
         Case 199: TestName = "T_Sema_OtisakVidiRedosled"
         Case 200: TestName = "T_Sema_KapijaBije"
+        Case 201: TestName = "T_Sema_SamoLeci"
+        Case 202: TestName = "T_Sema_PrefiksNijeString"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -965,6 +969,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 198: T_Sema_SveskaOdgovaraKanonu
         Case 199: T_Sema_OtisakVidiRedosled
         Case 200: T_Sema_KapijaBije
+        Case 201: T_Sema_SamoLeci
+        Case 202: T_Sema_PrefiksNijeString
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6625,6 +6631,140 @@ Private Sub T_Sema_KapijaBije()
 
     ' 2) zdrava tabela -> mora da PROPUSTI (kapija koja uvek pada je bezvredna)
     modSchema.SchemaReadyOrFail "T_Sema_KapijaBije", TBL_OTKUP & "|" & TBL_NOVAC
+End Sub
+
+
+' KAPIJA G1: sveska se moze obrisati -- kod je vrati.
+'
+' Ovo je jedina tvrdnja iz ugovora koju nijedan drugi test ne meri. Bez nje je
+' "sema dolazi iz koda" samo dokumentacija: registar moze biti savrsen, a
+' EnsureAllTables da ne ume da napravi tabelu koje nema.
+'
+' Bira se tblMGMT: u kanonu je, nema nijedan red i nijedan citac u kodu -- pa
+' brisanje ne moze da obori drugi test. Vracanje ide i kroz EH, da prekid usred
+' testa ne ostavi fixture bez tabele.
+Private Sub T_Sema_SamoLeci()
+    Dim lo As ListObject
+    Dim ws As Worksheet
+    Dim postojala As Boolean
+    Dim prijavljeno As Boolean
+    Dim odst As Collection
+    Dim i As Long
+    Dim prevAlerts As Boolean
+
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    postojala = Not (lo Is Nothing)
+    If Not postojala Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "preduslov: tblMGMT mora postojati pre testa"
+    End If
+
+    prevAlerts = Application.DisplayAlerts
+
+    On Error GoTo EH
+
+    ' 1) obrisi ceo sheet sa tabelom
+    Set ws = lo.Parent
+    Application.DisplayAlerts = False
+    ws.Delete
+    Application.DisplayAlerts = prevAlerts
+
+    ' 2) VerifySchema MORA da je prijavi -- inace provera ne meri nista
+    Set odst = modSchema.VerifySchema()
+    For i = 1 To odst.count
+        If InStr(1, CStr(odst(i)), TBL_MGMT, vbTextCompare) > 0 Then prijavljeno = True
+    Next i
+
+    ' 3) izleci iz koda
+    modSchema.EnsureAllTables
+
+    ' 4) vratila se, i sema je opet cista
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    On Error GoTo 0
+
+    If Not prijavljeno Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "VerifySchema NIJE prijavila obrisanu tabelu"
+    End If
+    If lo Is Nothing Then
+        Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+                  "EnsureAllTables nije vratio tblMGMT"
+    End If
+
+    AssertEq modSchema.SchemaCheckOnStart(), "", "sema posle lecenja"
+    Exit Sub
+
+EH:
+    ' Fixture ne sme da ostane bez tabele ni kad test pukne.
+    Application.DisplayAlerts = prevAlerts
+    On Error Resume Next
+    modSchema.EnsureAllTables
+    On Error GoTo 0
+    Err.Raise ERR_ASSERT, "T_Sema_SamoLeci", _
+              "greska u toku testa (tabela vracena): " & Err.description
+End Sub
+
+
+' Prefiks se poredi po INDEKSU KOLONE, ne po stringu.
+'
+' Prva verzija je radila InStr(1, stvarno, ocekivano) nad spojenim zaglavljima.
+' To laze bas na POSLEDNJOJ kanonskoj koloni, jer iza nje nema delimitera:
+'
+'     kanon    "|MGMTID|...|PIN"
+'     stvarno  "|MGMTID|...|PINExtra"
+'     InStr    = 1   -> gate PROPUSTA, a kolona PIN ne postoji
+'
+' Nije teorijski: PR2 je vecinu tabela zavrsio sa GeneracijaID /
+' ZbirnaGeneracijaID, pa je tacno ta pozicija bila nezasticena.
+'
+' Meri se nad tblMGMT (nula redova, nijedan citac u kodu), a ime kolone se vraca
+' i kroz EH.
+Private Sub T_Sema_PrefiksNijeString()
+    Dim lo As ListObject
+    Dim staroIme As String
+    Dim zadnja As Long
+    Dim pukla As Boolean
+
+    Set lo = modDataAccess.GetTable(TBL_MGMT)
+    If lo Is Nothing Then
+        Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+                  "preduslov: tblMGMT mora postojati"
+    End If
+
+    zadnja = modSchema.SchemaTableColumns(TBL_MGMT).count
+    staroIme = lo.ListColumns(zadnja).name
+
+    On Error GoTo EH
+
+    ' produzi POSLEDNJU kanonsku kolonu -- string-prefiks bi ovo progutao
+    lo.ListColumns(zadnja).name = staroIme & "Extra"
+
+    On Error Resume Next
+    Err.Clear
+    modSchema.SchemaReadyOrFail "T_Sema_PrefiksNijeString", TBL_MGMT
+    pukla = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    lo.ListColumns(zadnja).name = staroIme
+    On Error GoTo 0
+
+    If Not pukla Then
+        Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+                  "kapija je PROPUSTILA produzeno ime poslednje kolone -- " & _
+                  "poredi se string umesto kolone po indeksu"
+    End If
+
+    ' i posle vracanja mora biti cisto (kapija koja uvek pada je bezvredna)
+    modSchema.SchemaReadyOrFail "T_Sema_PrefiksNijeString", TBL_MGMT
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    lo.ListColumns(zadnja).name = staroIme
+    On Error GoTo 0
+    Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
+              "greska u toku testa (ime vraceno): " & Err.description
 End Sub
 
 

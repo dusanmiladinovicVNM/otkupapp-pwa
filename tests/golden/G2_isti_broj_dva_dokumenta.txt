@@ -1,0 +1,25 @@
+== G2 isti broj dva dokumenta ==
+DOKUMENTI
+  otkupa          0
+  otpremnica      0
+  zbirnih         1
+  prijemnica      0
+  faktura         0
+OTKUP
+  nema
+STATUS
+  otkup           aktivnih 0  storniranih 0
+  otpremnica      aktivnih 0  storniranih 0
+  zbirna          aktivnih 1  storniranih 1
+  prijemnica      aktivnih 0  storniranih 0
+AMBALAZA
+  kooperant 12/1  0
+NOVAC
+  ukupno isplaceno 0.00
+  vezano za otkup  0.00
+  nealocirano      0.00
+FAKTURA
+  nema
+IDENTITET ZBIRNE
+  prva   kg=400.00  STORNIRANA
+  druga  kg=600.00  AKTIVNA

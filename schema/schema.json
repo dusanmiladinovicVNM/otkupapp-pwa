@@ -14,7 +14,7 @@
     "Svesku menja modSchema.EnsureAllTables. Sveska NIJE izvor -- tools/dump_schema.py",
     "sluzi za inspekciju i poredjenje (tools/schema_diff.py), nikad za menjanje kanona."
   ],
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tables": [
     {
       "table": "tblAmbalaza",
@@ -177,7 +177,8 @@
         "IspravkaOd",
         "ZamenjenSa",
         "CorrectionID",
-        "IzdatoStatus"
+        "IzdatoStatus",
+        "GeneracijaID"
       ]
     },
     {
@@ -374,7 +375,8 @@
         "IspravkaOd",
         "ZamenjenSa",
         "CorrectionID",
-        "IzdatoStatus"
+        "IzdatoStatus",
+        "GeneracijaID"
       ]
     },
     {
@@ -417,7 +419,9 @@
         "ZamenjenSa",
         "CorrectionID",
         "IzdatoStatus",
-        "BrojOtpremnice"
+        "BrojOtpremnice",
+        "GeneracijaID",
+        "ZbirnaGeneracijaID"
       ]
     },
     {
@@ -447,7 +451,9 @@
         "IspravkaOd",
         "ZamenjenSa",
         "CorrectionID",
-        "IzdatoStatus"
+        "IzdatoStatus",
+        "GeneracijaID",
+        "ZbirnaGeneracijaID"
       ]
     },
     {
@@ -500,7 +506,8 @@
         "Stornirano",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "ZbirnaGeneracijaID"
       ]
     },
     {
@@ -646,7 +653,9 @@
         "IspravkaOd",
         "ZamenjenSa",
         "CorrectionID",
-        "IzdatoStatus"
+        "IzdatoStatus",
+        "GeneracijaID",
+        "ZbirnaGeneracijaID"
       ]
     },
     {

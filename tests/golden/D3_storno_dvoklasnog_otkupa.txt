@@ -1,0 +1,32 @@
+== D3 storno dvoklasnog otkupa ==
+DOKUMENTI
+  otkupa          0
+  otpremnica      0
+  zbirnih         0
+  prijemnica      0
+  faktura         0
+OTKUP
+  predao          I=0.00  II=0.00
+  vrednost        0.00
+  placeno         0.00
+  od toga avansom 56000.00
+  od toga kesom   0.00
+  isplaceno svi   NE
+ZBIRNA
+  poslato         I=0.00  II=0.00
+  primljeno       I=0.00  II=0.00
+  kalo            I=0.00  II=0.00
+  invarijanta     OK
+STATUS
+  otkup           aktivnih 0  storniranih 1
+  otpremnica      aktivnih 0  storniranih 0
+  zbirna          aktivnih 0  storniranih 0
+  prijemnica      aktivnih 0  storniranih 0
+AMBALAZA
+  kooperant 12/1  0
+NOVAC
+  ukupno isplaceno 56000.00
+  vezano za otkup  0.00
+  nealocirano      56000.00
+FAKTURA
+  nema

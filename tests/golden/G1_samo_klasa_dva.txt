@@ -1,0 +1,32 @@
+== G1 samo klasa II ==
+DOKUMENTI
+  otkupa          1
+  otpremnica      1
+  zbirnih         1
+  prijemnica      1
+  faktura         0
+OTKUP
+  predao          I=0.00  II=200.00
+  vrednost        6000.00
+  placeno         0.00
+  od toga avansom 0.00
+  od toga kesom   0.00
+  isplaceno svi   NE
+ZBIRNA
+  poslato         I=0.00  II=200.00
+  primljeno       I=0.00  II=200.00
+  kalo            I=0.00  II=0.00
+  invarijanta     OK
+STATUS
+  otkup           aktivnih 1  storniranih 0
+  otpremnica      aktivnih 1  storniranih 0
+  zbirna          aktivnih 1  storniranih 0
+  prijemnica      aktivnih 1  storniranih 0
+AMBALAZA
+  kooperant 12/1  0
+NOVAC
+  ukupno isplaceno 0.00
+  vezano za otkup  0.00
+  nealocirano      0.00
+FAKTURA
+  nema
