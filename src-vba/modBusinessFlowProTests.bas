@@ -210,6 +210,25 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_SortaPraznaSamoUzKulturuBezSorte
     Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
 
+    ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
+    ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
+    Test_OTP_JedanBrojJedanHeader
+    Test_OTP_StavkeSuIzvedene
+    Test_OTP_HeaderNeNosiLinePolja
+    Test_OTP_NepoznatKljucUHeaderuPada
+    Test_OTP_HeaderFKovi
+    Test_OTP_DraftNemaStavke
+    Test_OTP_ClanstvoMutabilnoUDraftu
+    Test_OTP_PosleIzdavanjaClanstvoZamrznuto
+    Test_OTP_IzvorNeSmeDvaPutaAktivno
+    Test_OTP_StorniranIzvorNeUlazi
+    Test_OTP_DveStaniceNeProlaze
+    Test_OTP_DveVrsteNeProlaze
+    Test_OTP_BezIzvoraNeProlazi
+    Test_OTP_StariOtkupNeUlazi
+    Test_OTP_PrazanIDFailClosed
+    Test_OTP_OtkupOtpremnicaIDNetaknut
+
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
@@ -7402,6 +7421,681 @@ Private Function OtkStavkaBrojP(ByVal otkupID As String, ByVal klasa As String, 
     If IsNumeric(t) Then OtkStavkaBrojP = CDbl(t)
 End Function
 
+' --- OTPREMNICA skela (PR5) --------------------------------------------------
+'
+' Izvori su otkupi po NOVOM modelu: prave se kroz CreateOtkup_TX, pa ovi testovi
+' usput mere i da se dva nova pisca slazu. Stari otkup (SaveOtkupMulti_TX) nema
+' stavke i mora da bude odbijen -- Test_OTP_StariOtkupNeUlazi.
+
+' Dvoklasni otkup -> otpremnica: JEDAN header, dve stavke, kanonski red klasa.
+Private Sub Test_OTP_JedanBrojJedanHeader()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPJH")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 600#)
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otkID
+
+    Dim razlog As String
+    Dim otpID As String
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-" & scenario), _
+                                        izvori, razlog)
+
+    AssertTrue Len(otpID) > 0, "OTP: upis prosao (bilo: " & razlog & ")"
+
+    Dim headeri As Collection
+    Set headeri = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    AssertEquals "1", CStr(headeri.count), "OTP: tacno jedan header red"
+
+    AssertEquals "2", CStr(OtpBrojStavki(otpID)), "OTP: dve stavke"
+    AssertEquals "1", OtpStavkaPolje(otpID, KLASA_I, COL_OPS_RB), "OTP: I ima RB 1"
+    AssertEquals "2", OtpStavkaPolje(otpID, KLASA_II, COL_OPS_RB), "OTP: II ima RB 2"
+
+    AssertEquals IZDATO_IZDATO, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "OTP: dokument je IZDATO"
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP: jedan clan"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_JedanBrojJedanHeader", Err.Number, Err.description
+End Sub
+
+' Stavke su ZBIR izvornih otkupnih stavki, ne nesto sto pozivalac salje.
+Private Sub Test_OTP_StavkeSuIzvedene()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPIZ")
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario & "A", 400#, 600#)
+    izvori.Add OtpNoviOtkup(scenario & "B", 100#, 50#)
+
+    Dim razlog As String
+    Dim otpID As String
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-IZ-" & scenario), _
+                                        izvori, razlog)
+
+    AssertTrue Len(otpID) > 0, "OTP izvedeno: upis prosao (bilo: " & razlog & ")"
+    AssertEquals "2", CStr(OtpBrojClanova(otpID)), "OTP izvedeno: dva clana"
+
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_I, COL_OPS_KOLICINA) - 500#) < 0.001, _
+               "OTP izvedeno: Klasa I = 400 + 100"
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_II, COL_OPS_KOLICINA) - 650#) < 0.001, _
+               "OTP izvedeno: Klasa II = 600 + 50"
+
+    ' Vrsta/sorta/tip ambalaze dolaze IZ IZVORA, ne sa headera -- header ih ni
+    ' ne prima (zatvoren spisak kljuceva).
+    AssertEquals TEST_VRSTA, OtpPolje(otpID, COL_OTP_VRSTA), "OTP izvedeno: VrstaVoca"
+    AssertEquals TEST_SORTA, OtpPolje(otpID, COL_OTP_SORTA), "OTP izvedeno: SortaVoca"
+    AssertEquals TEST_TIP_AMB, OtpPolje(otpID, COL_OTP_TIP_AMB), "OTP izvedeno: TipAmbalaze"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_StavkeSuIzvedene", Err.Number, Err.description
+End Sub
+
+' Header ne nosi nista sto je stavka.
+Private Sub Test_OTP_HeaderNeNosiLinePolja()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPHP")
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario, 400#, 600#)
+
+    Dim otpID As String
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-HP-" & scenario), _
+                                        izvori)
+
+    AssertTrue Len(otpID) > 0, "OTP header: upis prosao"
+    AssertEquals "", OtpPolje(otpID, COL_OTP_KOLICINA), "OTP header: Kolicina prazna"
+    AssertEquals "", OtpPolje(otpID, COL_OTP_KOL_AMB), "OTP header: KolAmbalaze prazna"
+    AssertEquals "", OtpPolje(otpID, COL_OTP_KLASA), "OTP header: Klasa prazna"
+    AssertEquals "", OtpPolje(otpID, COL_OTP_BRUTO), "OTP header: BrutoKg prazan"
+
+    ' A vozac JESTE na headeru -- otpremnica ga poseduje (S4.1c).
+    AssertEquals TEST_VOZ_ID, OtpPolje(otpID, COL_OTP_VOZAC), "OTP header: VozacID"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_HeaderNeNosiLinePolja", Err.Number, Err.description
+End Sub
+
+' Zatvoren spisak kljuceva: izvedena polja se ne primaju.
+Private Sub Test_OTP_NepoznatKljucUHeaderuPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPNK")
+
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-NK-" & scenario)
+    h.Add "VrstaVoca", TEST_VRSTA
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(h, izvori, razlog)
+
+    AssertEquals "", rez, "OTP nepoznat kljuc: upis odbijen"
+    AssertTrue InStr(1, razlog, "nepoznat kljuc", vbTextCompare) > 0 And _
+               InStr(1, razlog, "VrstaVoca", vbTextCompare) > 0, _
+               "OTP nepoznat kljuc: kapija imenuje kljuc (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_NepoznatKljucUHeaderuPada", Err.Number, Err.description
+End Sub
+
+' DRAFT nema stavke. Da ih ima, postojale bi dve istine o istoj kolicini --
+' jedna u stavkama, druga u clanstvu koje se jos menja.
+Private Sub Test_OTP_DraftNemaStavke()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPDR")
+
+    Dim razlog As String
+    Dim otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-DR-" & scenario), razlog)
+
+    AssertTrue Len(otpID) > 0, "OTP draft: nastao (bilo: " & razlog & ")"
+    AssertEquals IZDATO_DRAFT, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "OTP draft: status je DRAFT"
+    AssertEquals "0", CStr(OtpBrojStavki(otpID)), "OTP draft: nema stavki"
+    AssertEquals "0", CStr(OtpBrojClanova(otpID)), "OTP draft: nema clanova"
+
+    ' Izvedena polja su prazna dok se ne izda.
+    AssertEquals "", OtpPolje(otpID, COL_OTP_VRSTA), "OTP draft: VrstaVoca jos prazna"
+
+    ' Stavke nastaju TEK pri izdavanju.
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, OtpNoviOtkup(scenario, 400#, 0#), razlog), _
+               "OTP draft: izvor dodat (bilo: " & razlog & ")"
+    AssertEquals "0", CStr(OtpBrojStavki(otpID)), _
+                 "OTP draft: ni posle izvora nema stavki"
+
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP draft: izdavanje proslo (bilo: " & razlog & ")"
+    AssertEquals "1", CStr(OtpBrojStavki(otpID)), "OTP draft: stavka nastala pri izdavanju"
+    AssertEquals TEST_VRSTA, OtpPolje(otpID, COL_OTP_VRSTA), _
+                 "OTP draft: VrstaVoca izvedena pri izdavanju"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DraftNemaStavke", Err.Number, Err.description
+End Sub
+
+' Clanstvo je promenljivo DOK je otpremnica DRAFT (A15).
+Private Sub Test_OTP_ClanstvoMutabilnoUDraftu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPMU")
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-MU-" & scenario))
+
+    Dim otkA As String, otkB As String
+    otkA = OtpNoviOtkup(scenario & "A", 400#, 0#)
+    otkB = OtpNoviOtkup(scenario & "B", 100#, 0#)
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkA, razlog), "OTP mutacija: A dodat"
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkB, razlog), "OTP mutacija: B dodat"
+    AssertEquals "2", CStr(OtpBrojClanova(otpID)), "OTP mutacija: dva clana"
+
+    AssertTrue UkloniOtpremnicaIzvor_TX(otpID, otkA, razlog), _
+               "OTP mutacija: A uklonjen (bilo: " & razlog & ")"
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP mutacija: ostao jedan clan"
+
+    ' Uklonjen izvor je SLOBODAN -- moze u drugu otpremnicu. Da je ostao
+    ' tombstone, kapija "vec u aktivnoj otpremnici" bi ga i dalje drzala.
+    Dim otpID2 As String
+    otpID2 = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-MU2-" & scenario))
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID2, otkA, razlog), _
+               "OTP mutacija: uklonjen izvor je slobodan (bilo: " & razlog & ")"
+
+    ' I moze da se vrati.
+    AssertTrue UkloniOtpremnicaIzvor_TX(otpID2, otkA, razlog), "OTP mutacija: A opet uklonjen"
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkA, razlog), "OTP mutacija: A vracen"
+    AssertEquals "2", CStr(OtpBrojClanova(otpID)), "OTP mutacija: opet dva clana"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_ClanstvoMutabilnoUDraftu", Err.Number, Err.description
+End Sub
+
+' Posle izdavanja je sastav istorijska cinjenica (A13).
+Private Sub Test_OTP_PosleIzdavanjaClanstvoZamrznuto()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPZM")
+
+    Dim otpID As String, razlog As String
+    Dim otkA As String, otkB As String
+    otkA = OtpNoviOtkup(scenario & "A", 400#, 0#)
+    otkB = OtpNoviOtkup(scenario & "B", 100#, 0#)
+
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ZM-" & scenario))
+    DodajOtpremnicaIzvor_TX otpID, otkA
+    IzdajOtpremnicu_TX otpID
+
+    AssertEquals IZDATO_IZDATO, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "OTP zamrznuto: dokument je IZDATO"
+
+    AssertTrue Not DodajOtpremnicaIzvor_TX(otpID, otkB, razlog), _
+               "OTP zamrznuto: dodavanje odbijeno"
+    AssertTrue InStr(1, razlog, "nije DRAFT", vbTextCompare) > 0, _
+               "OTP zamrznuto: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    AssertTrue Not UkloniOtpremnicaIzvor_TX(otpID, otkA, razlog), _
+               "OTP zamrznuto: uklanjanje odbijeno"
+    AssertTrue InStr(1, razlog, "nije DRAFT", vbTextCompare) > 0, _
+               "OTP zamrznuto: uklanjanje imenuje razlog (bilo: " & razlog & ")"
+
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP zamrznuto: sastav netaknut"
+
+    ' Ni ponovno izdavanje: to bi napravilo drugi komplet stavki.
+    AssertTrue Not IzdajOtpremnicu_TX(otpID, razlog), "OTP zamrznuto: reizdavanje odbijeno"
+    AssertEquals "1", CStr(OtpBrojStavki(otpID)), "OTP zamrznuto: jedan komplet stavki"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PosleIzdavanjaClanstvoZamrznuto", Err.Number, Err.description
+End Sub
+
+' Jedan otkup ne sme da bude u dve aktivne otpremnice.
+Private Sub Test_OTP_IzvorNeSmeDvaPutaAktivno()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPDV")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otkID
+
+    AssertTrue Len(CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-DV-" & scenario), _
+                                               izvori)) > 0, _
+               "OTP dvaput: prva otpremnica prosla"
+
+    Dim izvori2 As Collection
+    Set izvori2 = New Collection
+    izvori2.Add otkID
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-DV2-" & scenario), _
+                                      izvori2, razlog)
+
+    AssertEquals "", rez, "OTP dvaput: druga otpremnica odbijena"
+    AssertTrue InStr(1, razlog, "vec u sastavu aktivne otpremnice", vbTextCompare) > 0, _
+               "OTP dvaput: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' Isti otkup dvaput u ISTOM pozivu je isto greska.
+    Dim izvori3 As Collection
+    Set izvori3 = New Collection
+    Dim otkC As String: otkC = OtpNoviOtkup(scenario & "C", 400#, 0#)
+    izvori3.Add otkC
+    izvori3.Add otkC
+
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-DV3-" & scenario), _
+                                      izvori3, razlog)
+    AssertEquals "", rez, "OTP dvaput: isti izvor dvaput u istom pozivu odbijen"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_IzvorNeSmeDvaPutaAktivno", Err.Number, Err.description
+End Sub
+
+' Storniran otkup nije roba.
+Private Sub Test_OTP_StorniranIzvorNeUlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPST")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, otkID)
+    RequireUpdateCell TBL_OTKUP, redovi(1), COL_STORNIRANO, "Da", "Test_OTP_StorniranIzvorNeUlazi"
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otkID
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-ST-" & scenario), _
+                                      izvori, razlog)
+
+    AssertEquals "", rez, "OTP storno: storniran izvor odbijen"
+    AssertTrue InStr(1, razlog, "storniran", vbTextCompare) > 0, _
+               "OTP storno: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_StorniranIzvorNeUlazi", Err.Number, Err.description
+End Sub
+
+' Otpremnica je isporuka sa JEDNOG otkupnog mesta.
+Private Sub Test_OTP_DveStaniceNeProlaze()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPS2")
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario & "A", 400#, 0#)
+    izvori.Add OtpNoviOtkupNaStanici(scenario & "B", TEST_HLAD_ST_ID)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-S2-" & scenario), _
+                                      izvori, razlog)
+
+    AssertEquals "", rez, "OTP dve stanice: upis odbijen"
+    AssertTrue InStr(1, razlog, "StanicaID", vbTextCompare) > 0, _
+               "OTP dve stanice: kapija imenuje polje (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DveStaniceNeProlaze", Err.Number, Err.description
+End Sub
+
+' Header nosi JEDAN par (vrsta, sorta) -- dva se ne mogu predstaviti.
+Private Sub Test_OTP_DveVrsteNeProlaze()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPV2")
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario & "A", 400#, 0#)
+    izvori.Add OtpNoviOtkupDrugeKulture(scenario & "B")
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-V2-" & scenario), _
+                                      izvori, razlog)
+
+    AssertEquals "", rez, "OTP dve vrste: upis odbijen"
+    AssertTrue InStr(1, razlog, "VrstaVoca", vbTextCompare) > 0, _
+               "OTP dve vrste: kapija imenuje polje (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DveVrsteNeProlaze", Err.Number, Err.description
+End Sub
+
+' Otpremnica bez otkupa nije isporuka.
+Private Sub Test_OTP_BezIzvoraNeProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPBI")
+
+    Dim prazno As Collection
+    Set prazno = New Collection
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTPREMNICA)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-BI-" & scenario), _
+                                      prazno, razlog)
+
+    AssertEquals "", rez, "OTP bez izvora: upis odbijen"
+    AssertTrue InStr(1, razlog, "nema nijedan izvor", vbTextCompare) > 0, _
+               "OTP bez izvora: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTPREMNICA)), _
+                 "OTP bez izvora: header nije ostao"
+
+    ' Ali DRAFT bez izvora je legitiman -- to je bas ono sto panel pravi.
+    AssertTrue Len(CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BI2-" & scenario))) > 0, _
+               "OTP bez izvora: prazan DRAFT je legitiman"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_BezIzvoraNeProlazi", Err.Number, Err.description
+End Sub
+
+' Otkup po STAROM modelu nema stavke, pa ne moze u kanonsku otpremnicu.
+Private Sub Test_OTP_StariOtkupNeUlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPSM")
+
+    ' Namerno stari pisac -- jedan red po klasi, bez tblOtkupStavke.
+    Dim stariID As String
+    stariID = SaveOtkup_TX(NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
+                           TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
+                           TEST_PREFIX & "-OTK-SM-" & scenario, 0#, "", KLASA_I)
+
+    AssertTrue Len(stariID) > 0, "OTP stari otkup: stari pisac je napravio red"
+    AssertEquals "0", CStr(OtkBrojStavkiZaOtkup(stariID)), _
+                 "OTP stari otkup: nema stavki (inace test ne meri nista)"
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add stariID
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-SM-" & scenario), _
+                                      izvori, razlog)
+
+    AssertEquals "", rez, "OTP stari otkup: upis odbijen"
+    AssertTrue InStr(1, razlog, "nema stavke", vbTextCompare) > 0, _
+               "OTP stari otkup: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_StariOtkupNeUlazi", Err.Number, Err.description
+End Sub
+
+' Prazan ID je fail-closed, i header ne sme da ostane bez stavki.
+Private Sub Test_OTP_PrazanIDFailClosed()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPFC")
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario, 400#, 600#)
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTPREMNICA)
+    preS = OtkBrojRedova(TBL_OTPREMNICA_STAVKE)
+
+    Dim rez As String, razlog As String
+    Dim prevMode As Boolean
+    prevMode = IsTestMode()
+    SetTestMode True
+
+    ' header (1) + clanstvo (2) prodju, STAVKA pada -- ID-evi idu tim redom
+    modDataAccess.NewEntityIDPadniTest True, 2
+    rez = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-FC-" & scenario), _
+                                      izvori, razlog)
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+
+    AssertEquals "", rez, "OTP prazan ID: upis odbijen"
+    AssertTrue InStr(1, razlog, "nije vratio OtpremnicaStavkaID", vbTextCompare) > 0, _
+               "OTP prazan ID: kapija imenuje KOJI id (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTPREMNICA)), _
+                 "OTP prazan ID: header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTPREMNICA_STAVKE)), _
+                 "OTP prazan ID: stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+    LogFatal "Test_OTP_PrazanIDFailClosed", Err.Number, Err.description
+End Sub
+
+' Skela je ADITIVNA: stara kolona ostaje netaknuta.
+'
+' 39 ne-test citalaca u 15 modula jos zivi na Otkup.OtpremnicaID. Bez ove
+' tvrdnje bi "aditivno" bila namera, ne mereno svojstvo.
+Private Sub Test_OTP_OtkupOtpremnicaIDNetaknut()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPNT")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 0#)
+
+    AssertEquals "", Trim$(CStr(nz(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, _
+                                                 COL_OTK_OTPREMNICA_ID), ""))), _
+                 "OTP netaknuto: pre otpremnice je prazno"
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otkID
+
+    Dim otpID As String
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-NT-" & scenario), _
+                                        izvori)
+    AssertTrue Len(otpID) > 0, "OTP netaknuto: otpremnica nastala"
+
+    AssertEquals "", Trim$(CStr(nz(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, _
+                                                 COL_OTK_OTPREMNICA_ID), ""))), _
+                 "OTP netaknuto: nov pisac NE pise staru kolonu"
+    AssertEquals otkID, CStr(OtpClanoviTest(otpID)(1)), _
+                 "OTP netaknuto: pripadnost zna clanstvo, ne kolona"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_OtkupOtpremnicaIDNetaknut", Err.Number, Err.description
+End Sub
+
+' FK-ovi headera: stanica i vozac moraju postojati.
+Private Sub Test_OTP_HeaderFKovi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPFK")
+
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-FK-" & scenario)
+    h("StanicaID") = "ST-NE-POSTOJI-" & scenario
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaDraft_TX(h, razlog)
+    AssertEquals "", rez, "OTP FK: nepostojeca stanica odbijena"
+    AssertTrue InStr(1, razlog, "StanicaID ne postoji", vbTextCompare) > 0, _
+               "OTP FK: stanica imenovana (bilo: " & razlog & ")"
+
+    Dim h2 As Object
+    Set h2 = OtpHeader(TEST_PREFIX & "-OTP-FK2-" & scenario)
+    h2("VozacID") = "VOZ-NE-POSTOJI-" & scenario
+
+    rez = CreateOtpremnicaDraft_TX(h2, razlog)
+    AssertEquals "", rez, "OTP FK: nepostojeci vozac odbijen"
+    AssertTrue InStr(1, razlog, "VozacID ne postoji", vbTextCompare) > 0, _
+               "OTP FK: vozac imenovan (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_HeaderFKovi", Err.Number, Err.description
+End Sub
+
+' --- OTP pomocne -------------------------------------------------------------
+Private Function OtpHeader(ByVal brojOtp As String) As Object
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", NextTestDate()
+    h.Add "StanicaID", TEST_ST_ID
+    h.Add "VozacID", TEST_VOZ_ID
+    h.Add "BrojOtpremnice", brojOtp
+    Set OtpHeader = h
+End Function
+
+' Otkup po NOVOM modelu -- izvor kakav kanonska otpremnica prima.
+Private Function OtpNoviOtkup(ByVal scenario As String, ByVal kolI As Double, _
+                              ByVal kolII As Double) As String
+    OtpNoviOtkup = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-" & scenario), _
+                                  OtkStavke(kolI, 50#, 20, kolII, 40#, 30))
+End Function
+
+Private Function OtpNoviOtkupNaStanici(ByVal scenario As String, _
+                                       ByVal stanicaID As String) As String
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-" & scenario)
+    h("StanicaID") = stanicaID
+    OtpNoviOtkupNaStanici = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+End Function
+
+Private Function OtpNoviOtkupDrugeKulture(ByVal scenario As String) As String
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-" & scenario)
+    h("KulturaID") = TEST_KUL_BEZ_SORTE_ID
+    h("VrstaVoca") = TEST_VRSTA_BEZ_SORTE
+    h("SortaVoca") = ""
+    OtpNoviOtkupDrugeKulture = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+End Function
+
+Private Function OtpPolje(ByVal otpID As String, ByVal columnName As String) As String
+    OtpPolje = Trim$(CStr(nz(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                           columnName), "")))
+End Function
+
+Private Function OtpBrojStavki(ByVal otpID As String) As Long
+    OtpBrojStavki = FindRows(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpID).count
+End Function
+
+Private Function OtpBrojClanova(ByVal otpID As String) As Long
+    OtpBrojClanova = FindRows(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otpID).count
+End Function
+
+Private Function OtkBrojStavkiZaOtkup(ByVal otkupID As String) As Long
+    OtkBrojStavkiZaOtkup = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkupID).count
+End Function
+
+Private Function OtpClanoviTest(ByVal otpID As String) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    Set OtpClanoviTest = c
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtp As Long, cOtk As Long
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, "OtpClanoviTest")
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, "OtpClanoviTest")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cOtp), "")), otpID, vbTextCompare) = 0 Then
+            c.Add Trim$(CStr(nz(d(i, cOtk), "")))
+        End If
+    Next i
+End Function
+
+Private Function OtpStavkaPolje(ByVal otpID As String, ByVal klasa As String, _
+                                ByVal columnName As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtp As Long, cKlasa As Long, cTraz As Long
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, "OtpStavkaPolje")
+    cKlasa = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, "OtpStavkaPolje")
+    cTraz = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, columnName, "OtpStavkaPolje")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cOtp), "")), otpID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cKlasa), "")), klasa, vbTextCompare) = 0 Then
+                OtpStavkaPolje = Trim$(CStr(nz(d(i, cTraz), "")))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function OtpStavkaBrojP(ByVal otpID As String, ByVal klasa As String, _
+                                ByVal columnName As String) As Double
+    Dim t As String
+    t = OtpStavkaPolje(otpID, klasa, columnName)
+    If IsNumeric(t) Then OtpStavkaBrojP = CDbl(t)
+End Function
+
 ' --- PR3 pomocne -------------------------------------------------------------
 
 ' Header BEZ vrste/sorte/tipa ambalaze -- oni se izvode iz izvornih otpremnica.
@@ -8031,6 +8725,17 @@ Public Sub HardDeleteBusinessFlowTestRows()
     deleted = DeleteTestRowsFromTable(TBL_ZBIRNA, Array("BrojZbirne"))
     total = total + deleted
     Debug.Print "tblZbirna: " & deleted & " obrisano"
+
+    ' Deca otpremnice PRE roditelja i po FK -- isti razlog kao kod zbirne.
+    deleted = DeleteChildRowsByParent(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, _
+                                      TBL_OTPREMNICA, COL_OTP_ID, "BrojOtpremnice")
+    total = total + deleted
+    Debug.Print "tblOtpremnicaStavke: " & deleted & " obrisano"
+
+    deleted = DeleteChildRowsByParent(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, _
+                                      TBL_OTPREMNICA, COL_OTP_ID, "BrojOtpremnice")
+    total = total + deleted
+    Debug.Print "tblOtpremnicaIzvori: " & deleted & " obrisano"
 
     deleted = DeleteTestRowsFromTable(TBL_OTPREMNICA, Array("BrojOtpremnice", "BrojZbirne"))
     total = total + deleted

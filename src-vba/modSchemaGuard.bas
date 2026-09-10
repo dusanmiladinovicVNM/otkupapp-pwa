@@ -50,7 +50,8 @@ Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
     "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & _
     "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
-    "|" & TBL_OTKUP_STAVKE & "|"
+    "|" & TBL_OTKUP_STAVKE & "|" & TBL_OTPREMNICA_STAVKE & _
+    "|" & TBL_OTPREMNICA_IZVORI & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
 '
@@ -258,6 +259,33 @@ End Function
 
 ' Brisanje koje ne sme tiho da ne uspe. Isti razlog kao RequireUpdateCell:
 ' False iz primitiva u transakciji znaci da je stanje ostalo pola-pola.
+' Veza pokazuje na TACNO JEDAN red maticne tabele.
+'
+' Nula znaci da pokazuje na nesto cega nema, vise od jedan da se ne zna na sta.
+' Oba su tvrda greska: dokument sa slomljenim FK-om izgleda ispravno sve dok ga
+' neko ne spoji sa maticnim podacima, a to je po pravilu izvestaj ili isplata.
+'
+' Public: koriste ga i modOtkup i modDokumenta. Treca kopija bi bila treca stvar
+' koja moze da divergira -- isti razlog kao SetRowValueByColumn.
+Public Sub RequireTacnoJedan(ByVal tblName As String, ByVal colName As String, _
+                              ByVal vrednost As String, ByVal opis As String, _
+                              ByVal src As String)
+    ' FindRows uvek vraca Collection (svaki izlaz radi Set) -- provera
+    ' "Is Nothing" bi bila mrtav kod koji samo izgleda kao paznja.
+    Dim redovi As Collection
+    Set redovi = FindRows(tblName, colName, vrednost)
+
+    If redovi.count = 0 Then
+        Err.Raise vbObjectError + 1877, src, _
+                  opis & " ne postoji: " & vrednost
+    End If
+    If redovi.count > 1 Then
+        Err.Raise vbObjectError + 1878, src, _
+                  opis & " nije jednoznacan: " & vrednost & _
+                  "; Count=" & CStr(redovi.count)
+    End If
+End Sub
+
 Public Sub RequireDeleteRow(ByVal tableName As String, _
                             ByVal rowIndex As Long, _
                             ByVal sourceName As String)

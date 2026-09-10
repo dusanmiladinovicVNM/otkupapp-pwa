@@ -1680,7 +1680,7 @@ Private Sub RequireIstoPolje(ByVal ocekivano As String, ByVal stvarno As String,
                              ByVal src As String)
     If StrComp(ocekivano, stvarno, vbTextCompare) <> 0 Then
         Err.Raise vbObjectError + 1239, src, _
-                  "Otpremnica " & otpID & " ima drugo polje " & polje & _
+                  "Izvor " & otpID & " ima drugo polje " & polje & _
                   ": ocekivano '" & ocekivano & "', naslo '" & stvarno & "'."
     End If
 End Sub
@@ -2136,6 +2136,854 @@ Public Function GetZbirnaByKupac(ByVal kupacID As String, _
 EH:
     LogErr "modDokumenta.GetZbirnaByKupac"
     GetZbirnaByKupac = Empty
+End Function
+
+' ============================================================
+' OTPREMNICA -- header + stavke + clanstvo (skela, PR5)
+' ============================================================
+'
+' RAZLIKA U ODNOSU NA ZBIRNU I OTKUP: otpremnica ima PERSISTENTAN DRAFT.
+'
+' Kod otkupa je forma njegov draft -- dokument nastaje vec izdat. Kod zbirne je
+' kanonski tok "otpremnice postoje, pa se zbirna napravi i izda". Kod otpremnice
+' nije: zatecen glavni desktop tok pravi otpremnicu PRAZNU i blokovi se kace
+' naknadno (modOtkupBlok.LinkOtkupIDsToOtpremnica). Zato skela nosi oba ulaza:
+'
+'   CreateOtpremnicaDraft_TX(h)              -> OTP-...  DRAFT, bez stavki
+'   DodajOtpremnicaIzvor_TX(otpID, otkupID)     samo DRAFT
+'   UkloniOtpremnicaIzvor_TX(otpID, otkupID)    samo DRAFT
+'   IzdajOtpremnicu_TX(otpID)                -> izvede stavke, IZDATO
+'
+'   CreateOtpremnicaIzIzvora_TX(h, izvori)   jedan potez, JEDNA transakcija
+'
+' Jednopotezni ulaz nije druga implementacija nego ISTI core: auto-lanac i PWA
+' prave otpremnicu bez ijednog medjukoraka, pa bi ih tri poziva naterala da drze
+' tudje stanje izmedju njih.
+'
+' STAVKE NASTAJU PRI IZDAVANJU, ne pri dodavanju izvora. Draft ih NEMA. Inace bi
+' postojale dve istine o istoj kolicini -- jedna u stavkama, druga u clanstvu
+' koje se jos menja (A14, A15).
+'
+' IZVOR MORA BITI PO NOVOM MODELU. Kolicine se citaju iz tblOtkupStavke; otkup
+' koga je napisao stari writer (SaveOtkupMulti_TX) nema stavke i bice odbijen.
+' To je kanon odozdo nagore: nov pisac ne poznaje stari model odnosa.
+'
+' Otkup.OtpremnicaID se NE dira. 39 ne-test citalaca u 15 modula, od toga 5
+' pisaca -- kolona i njeni pisaci odlaze u PR7 (DOCUMENT_HEADER_LINES S4.2b).
+'
+' Header (h) -- Scripting.Dictionary, obavezni kljucevi:
+'   Datum, StanicaID, VozacID, BrojOtpremnice
+' opcioni:
+'   Cena  -- izricito NE-FINANSIJSKO polje: predlog za prefill otkupnih blokova
+'            (modOtkupBlok.bas:688), nikad agregat stavki (S4.2)
+Public Function CreateOtpremnicaDraft_TX(ByVal h As Object, _
+                                         Optional ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "CreateOtpremnicaDraft_TX", TBL_OTPREMNICA
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    CreateOtpremnicaDraft_TX = OtpNapraviDraft(h)
+
+    If CreateOtpremnicaDraft_TX = "" Then
+        Err.Raise vbObjectError + 1280, "CreateOtpremnicaDraft_TX", _
+                  "OtpNapraviDraft nije vratio OtpremnicaID."
+    End If
+
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "CreateOtpremnicaDraft_TX", _
+                                  CreateOtpremnicaDraft_TX)
+    CreateOtpremnicaDraft_TX = ""
+End Function
+
+Public Function DodajOtpremnicaIzvor_TX(ByVal otpremnicaID As String, _
+                                        ByVal otkupID As String, _
+                                        Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "DodajOtpremnicaIzvor_TX", _
+        TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & _
+        "|" & TBL_OTKUP_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+
+    OtpDodajIzvor otpremnicaID, otkupID
+
+    tx.CommitTx
+    Set tx = Nothing
+    DodajOtpremnicaIzvor_TX = True
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "DodajOtpremnicaIzvor_TX", otpremnicaID)
+    DodajOtpremnicaIzvor_TX = False
+End Function
+
+Public Function UkloniOtpremnicaIzvor_TX(ByVal otpremnicaID As String, _
+                                         ByVal otkupID As String, _
+                                         Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "UkloniOtpremnicaIzvor_TX", _
+        TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_IZVORI
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+
+    OtpUkloniIzvor otpremnicaID, otkupID
+
+    tx.CommitTx
+    Set tx = Nothing
+    UkloniOtpremnicaIzvor_TX = True
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "UkloniOtpremnicaIzvor_TX", otpremnicaID)
+    UkloniOtpremnicaIzvor_TX = False
+End Function
+
+Public Function IzdajOtpremnicu_TX(ByVal otpremnicaID As String, _
+                                   Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "IzdajOtpremnicu_TX", _
+        TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & _
+        TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+
+    OtpIzdaj otpremnicaID
+
+    tx.CommitTx
+    Set tx = Nothing
+    IzdajOtpremnicu_TX = True
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "IzdajOtpremnicu_TX", otpremnicaID)
+    IzdajOtpremnicu_TX = False
+End Function
+
+' Jedan potez: draft + izvori + izdavanje, u JEDNOJ transakciji.
+'
+' Pad na trecem izvoru ne sme da ostavi otpremnicu sa dva -- pola sastava je
+' gore od nijednog, jer izgleda kao zavrsen dokument.
+Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
+                                            ByVal izvori As Collection, _
+                                            Optional ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "CreateOtpremnicaIzIzvora_TX", _
+        TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & _
+        TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+
+    If izvori Is Nothing Then
+        Err.Raise vbObjectError + 1281, "CreateOtpremnicaIzIzvora_TX", _
+                  "Izvori nisu prosledjeni."
+    End If
+
+    CreateOtpremnicaIzIzvora_TX = OtpNapraviDraft(h)
+
+    Dim i As Long
+    For i = 1 To izvori.count
+        OtpDodajIzvor CreateOtpremnicaIzIzvora_TX, _
+                      Trim$(NzToText(izvori(i)))
+    Next i
+
+    OtpIzdaj CreateOtpremnicaIzIzvora_TX
+
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "CreateOtpremnicaIzIzvora_TX", _
+                                  CreateOtpremnicaIzIzvora_TX)
+    CreateOtpremnicaIzIzvora_TX = ""
+End Function
+
+' Jedan EH za svih pet ulaza: monitoring, rollback i poruka su im isti, a pet
+' kopija bi bilo pet mesta na kojima se rollback moze zaboraviti.
+Private Function OtpPadTransakcije(ByRef tx As clsTransaction, _
+                                   ByVal ulaz As String, _
+                                   ByVal entitetID As String) As String
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError ulaz, errDesc, errNum
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:=ulaz, _
+        entityType:="Otpremnica", _
+        entityID:=entitetID, _
+        correlationId:=entitetID, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:=ulaz & " failed. Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:=ulaz, _
+        entityType:="Otpremnica", _
+        entityID:=entitetID, _
+        correlationId:=entitetID
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    OtpPadTransakcije = errDesc
+    PrintTxFailure ulaz, errSrc, errNum, errDesc
+End Function
+
+' --- core: draft ------------------------------------------------------------
+Private Function OtpNapraviDraft(ByVal h As Object) As String
+    Const SRC As String = "OtpNapraviDraft"
+
+    If h Is Nothing Then
+        Err.Raise vbObjectError + 1282, SRC, "Header nije prosledjen."
+    End If
+
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_DATUM, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_STANICA, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_VOZAC, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC
+
+    OtpHdrProveriKljuceve h, SRC
+
+    Dim datum As Date
+    Dim stanicaID As String, vozacID As String, brojOtp As String
+
+    datum = HdrDatum(h, "Datum", SRC)
+    stanicaID = HdrObavezan(h, "StanicaID", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojOtp = HdrObavezan(h, "BrojOtpremnice", SRC)
+
+    ' FK-ovi otpremnice. Isti razlog kao kod otkupa (S4.1f): neprazan string nije
+    ' dokaz da red postoji, a slomljena veza se vidi tek kad je neko spoji.
+    RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
+    RequireTacnoJedan TBL_VOZACI, COL_VOZ_ID, vozacID, "VozacID", SRC
+
+    Dim cena As Double
+    cena = OtpHdrBrojOpcion(h, "Cena", SRC)
+    If cena < 0 Then
+        Err.Raise vbObjectError + 1283, SRC, "Cena ne sme biti negativna."
+    End If
+
+    Dim otpID As String
+    otpID = NewEntityID("OTP-")
+
+    If otpID = "" Then
+        Err.Raise vbObjectError + 1284, SRC, "NewEntityID nije vratio OtpremnicaID."
+    End If
+
+    Dim rowData As Variant
+    rowData = BuildOtpremnicaHeaderRowData(otpID, datum, stanicaID, vozacID, _
+                                           brojOtp, cena)
+
+    If AppendRow(TBL_OTPREMNICA, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1285, SRC, _
+                  "AppendRow nije upisao header u tblOtpremnica."
+    End If
+
+    OtpNapraviDraft = otpID
+End Function
+
+' Header DRAFT-a. VrstaVoca / SortaVoca / TipAmbalaze ostaju PRAZNI -- izvode se
+' pri izdavanju, iz izvora. Kolicina / KolAmbalaze / Klasa / BrutoKg su polja
+' stavke i u ciljnoj semi ih na headeru nema (S4.2).
+Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
+                                              ByVal datum As Date, _
+                                              ByVal stanicaID As String, _
+                                              ByVal vozacID As String, _
+                                              ByVal brojOtp As String, _
+                                              ByVal cena As Double) As Variant
+    Const SRC As String = "BuildOtpremnicaHeaderRowData"
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_OTPREMNICA)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1286, SRC, _
+                  "Ne mogu da odredim broj kolona za tblOtpremnica."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_ID, otpID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_STANICA, stanicaID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_VOZAC, vozacID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_STORNIRANO, "", SRC
+
+    If cena > 0 Then
+        SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_CENA, cena, SRC
+    End If
+
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, _
+                        IZDATO_DRAFT, SRC
+
+    BuildOtpremnicaHeaderRowData = rowData
+End Function
+
+' --- core: clanstvo ---------------------------------------------------------
+Private Sub OtpDodajIzvor(ByVal otpremnicaID As String, ByVal otkupID As String)
+    Const SRC As String = "OtpDodajIzvor"
+
+    RequireColumnIndex TBL_OTPREMNICA_IZVORI, COL_OPI_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, SRC
+
+    If Len(otkupID) = 0 Then
+        Err.Raise vbObjectError + 1287, SRC, "Prazan OtkupID."
+    End If
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    ' Izvor mora postojati, biti aktivan i biti PO NOVOM MODELU.
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, otkupID, "OtkupID", SRC
+
+    If StrComp(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                          COL_STORNIRANO))), "Da", _
+               vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1288, SRC, "Otkup je storniran: " & otkupID
+    End If
+
+    Dim stavke As Collection
+    Set stavke = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkupID)
+    If stavke.count = 0 Then
+        Err.Raise vbObjectError + 1289, SRC, _
+                  "Otkup nema stavke: " & otkupID & _
+                  ". Kanonski writer cita kolicine iz tblOtkupStavke, pa otkup " & _
+                  "po starom modelu ne moze da udje u otpremnicu."
+    End If
+
+    ' Otpremnica je isporuka SA JEDNOG otkupnog mesta -- header nosi jedan
+    ' StanicaID, pa dve stanice ne mogu ni da se predstave (S4.2a).
+    RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                otpremnicaID, COL_OTP_STANICA))), _
+                     Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                COL_OTK_STANICA))), _
+                     "StanicaID", otkupID, SRC
+
+    ' Vrsta i sorta se porede sa VEC upisanim clanovima, ne sa headerom: header
+    ' ih dobija tek pri izdavanju, pa bi ga prvi izvor uvek "potvrdio".
+    Dim clanovi As Collection
+    Set clanovi = OtpClanovi(otpremnicaID)
+
+    Dim k As Long, postojeci As String
+    For k = 1 To clanovi.count
+        postojeci = CStr(clanovi(k))
+        If StrComp(postojeci, otkupID, vbTextCompare) = 0 Then
+            Err.Raise vbObjectError + 1290, SRC, _
+                      "Otkup je vec u sastavu ove otpremnice: " & otkupID
+        End If
+        RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                    postojeci, COL_OTK_VRSTA))), _
+                         Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                    otkupID, COL_OTK_VRSTA))), _
+                         "VrstaVoca", otkupID, SRC
+        RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                    postojeci, COL_OTK_SORTA))), _
+                         Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                    otkupID, COL_OTK_SORTA))), _
+                         "SortaVoca", otkupID, SRC
+    Next k
+
+    ' Fail-closed na vec vezan otkup. Jedini izvor je kanonsko clanstvo --
+    ' Otkup.OtpremnicaID se NE gleda: to je stari model, koji skela ne dira.
+    Dim clanstvo As Object
+    Set clanstvo = AktivnoOtpClanstvoPoKanonu(SRC)
+
+    If clanstvo.Exists(UCase$(otkupID)) Then
+        Err.Raise vbObjectError + 1291, SRC, _
+                  "Otkup je vec u sastavu aktivne otpremnice: " & otkupID & _
+                  " -> " & CStr(clanstvo(UCase$(otkupID)))
+    End If
+
+    Dim izvorID As String
+    izvorID = NewEntityID("OPI-")
+
+    If izvorID = "" Then
+        Err.Raise vbObjectError + 1292, SRC, _
+                  "NewEntityID nije vratio OtpremnicaIzvorID za " & otkupID & "."
+    End If
+
+    Dim rowData As Variant
+    rowData = BuildOtpremnicaIzvorRowData(izvorID, otpremnicaID, otkupID)
+
+    If AppendRow(TBL_OTPREMNICA_IZVORI, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1293, SRC, _
+                  "AppendRow nije upisao clanstvo za " & otkupID & "."
+    End If
+End Sub
+
+Private Function BuildOtpremnicaIzvorRowData(ByVal izvorID As String, _
+                                             ByVal otpremnicaID As String, _
+                                             ByVal otkupID As String) As Variant
+    Const SRC As String = "BuildOtpremnicaIzvorRowData"
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_OTPREMNICA_IZVORI)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1294, SRC, _
+                  "Ne mogu da odredim broj kolona za tblOtpremnicaIzvori."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_ID, izvorID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, _
+                        otpremnicaID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, otkupID, SRC
+
+    BuildOtpremnicaIzvorRowData = rowData
+End Function
+
+' Uklanjanje je FIZICKO brisanje reda, i samo dok je otpremnica DRAFT.
+'
+' Izvor uklonjen pre izdavanja nikad nije bio deo dokumenta -- tombstone bi
+' znacio da svaki citalac sastava filtrira redove koji nikad nisu vazili
+' (v. modDataAccess.DeleteRow).
+Private Sub OtpUkloniIzvor(ByVal otpremnicaID As String, ByVal otkupID As String)
+    Const SRC As String = "OtpUkloniIzvor"
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(izv) Then
+        Err.Raise vbObjectError + 1295, SRC, _
+                  "Otkup nije u sastavu ove otpremnice: " & otkupID
+    End If
+
+    Dim cOtp As Long, cOtk As Long
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, SRC)
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, SRC)
+
+    Dim i As Long, nadjen As Long, koliko As Long
+    For i = 1 To UBound(izv, 1)
+        If StrComp(Trim$(NzToText(izv(i, cOtp))), otpremnicaID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(izv(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+                nadjen = i
+                koliko = koliko + 1
+            End If
+        End If
+    Next i
+
+    If koliko = 0 Then
+        Err.Raise vbObjectError + 1296, SRC, _
+                  "Otkup nije u sastavu ove otpremnice: " & otkupID
+    End If
+    If koliko > 1 Then
+        Err.Raise vbObjectError + 1297, SRC, _
+                  "Isti par (otpremnica, otkup) postoji " & CStr(koliko) & _
+                  " puta: " & otpremnicaID & " / " & otkupID
+    End If
+
+    RequireDeleteRow TBL_OTPREMNICA_IZVORI, nadjen, SRC
+End Sub
+
+' --- core: izdavanje --------------------------------------------------------
+Private Sub OtpIzdaj(ByVal otpremnicaID As String)
+    Const SRC As String = "OtpIzdaj"
+
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_RB, SRC
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, SRC
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, SRC
+    RequireColumnIndex TBL_OTPREMNICA_STAVKE, COL_OPS_KOL_AMB, SRC
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    Dim clanovi As Collection
+    Set clanovi = OtpClanovi(otpremnicaID)
+
+    If clanovi.count = 0 Then
+        Err.Raise vbObjectError + 1298, SRC, _
+                  "Otpremnica nema nijedan izvor: " & otpremnicaID & _
+                  ". Otpremnica bez otkupa nije isporuka."
+    End If
+
+    ' --- izvedi zaglavlje i stavke iz izvora ---------------------------------
+    Dim kolPoKlasi As Object, ambPoKlasi As Object, brutoPoKlasi As Object
+    Set kolPoKlasi = CreateObject("Scripting.Dictionary")
+    Set ambPoKlasi = CreateObject("Scripting.Dictionary")
+    Set brutoPoKlasi = CreateObject("Scripting.Dictionary")
+
+    Dim vrsta As String, sorta As String, tipAmb As String
+    Dim prvi As Boolean
+    prvi = True
+
+    Dim sve As Variant
+    sve = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(sve) Then
+        Err.Raise vbObjectError + 1299, SRC, "Tabela otkupnih stavki je prazna."
+    End If
+
+    Dim cOtk As Long, cKlasa As Long, cKol As Long, cAmb As Long, cBruto As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+    cBruto = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO, SRC)
+
+    Dim k As Long, i As Long
+    Dim otkupID As String, klasa As String
+    Dim clanSet As Object
+    Set clanSet = CreateObject("Scripting.Dictionary")
+
+    For k = 1 To clanovi.count
+        otkupID = CStr(clanovi(k))
+        clanSet(UCase$(otkupID)) = True
+
+        ' Snapshot zaglavlja mora biti jedinstven -- inace header ne moze da ga
+        ' predstavi. Neslaganje je greska pri IZVODJENJU, ne "uzmi prvi".
+        If prvi Then
+            vrsta = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VRSTA)))
+            sorta = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_SORTA)))
+            tipAmb = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB)))
+            prvi = False
+        Else
+            RequireIstoPolje vrsta, Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                             otkupID, COL_OTK_VRSTA))), "VrstaVoca", otkupID, SRC
+            RequireIstoPolje sorta, Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                             otkupID, COL_OTK_SORTA))), "SortaVoca", otkupID, SRC
+            RequireIstoPolje tipAmb, Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                             otkupID, COL_OTK_TIP_AMB))), "TipAmbalaze", otkupID, SRC
+        End If
+    Next k
+
+    For i = 1 To UBound(sve, 1)
+        otkupID = Trim$(NzToText(sve(i, cOtk)))
+        If clanSet.Exists(UCase$(otkupID)) Then
+            klasa = UCase$(Trim$(NzToText(sve(i, cKlasa))))
+            If Len(klasa) = 0 Then
+                Err.Raise vbObjectError + 1300, SRC, _
+                          "Otkupna stavka bez klase, otkup " & otkupID & "."
+            End If
+            kolPoKlasi(klasa) = OtpBroj(kolPoKlasi, klasa) + OtpDbl(sve(i, cKol))
+            ambPoKlasi(klasa) = OtpBroj(ambPoKlasi, klasa) + OtpDbl(sve(i, cAmb))
+            brutoPoKlasi(klasa) = OtpBroj(brutoPoKlasi, klasa) + OtpDbl(sve(i, cBruto))
+        End If
+    Next i
+
+    If kolPoKlasi.count = 0 Then
+        Err.Raise vbObjectError + 1301, SRC, _
+                  "Izvori nemaju nijednu stavku: " & otpremnicaID
+    End If
+
+    ' --- upis stavki, kanonskim redom klasa ----------------------------------
+    Dim redKlasa As Collection
+    Set redKlasa = KlaseUKanonskomRedu(kolPoKlasi)
+
+    Dim rowData As Variant
+    Dim stavkaID As String
+    Dim rb As Long
+
+    For rb = 1 To redKlasa.count
+        klasa = CStr(redKlasa(rb))
+
+        stavkaID = NewEntityID("OPS-")
+        If stavkaID = "" Then
+            Err.Raise vbObjectError + 1302, SRC, _
+                      "NewEntityID nije vratio OtpremnicaStavkaID za klasu " & klasa & "."
+        End If
+
+        rowData = BuildOtpremnicaStavkaRowData(stavkaID, otpremnicaID, rb, klasa, _
+                                               OtpBroj(kolPoKlasi, klasa), _
+                                               OtpBroj(ambPoKlasi, klasa), _
+                                               OtpBroj(brutoPoKlasi, klasa))
+
+        If AppendRow(TBL_OTPREMNICA_STAVKE, rowData) <= 0 Then
+            Err.Raise vbObjectError + 1303, SRC, _
+                      "AppendRow nije upisao stavku klase " & klasa & "."
+        End If
+    Next rb
+
+    ' --- zaglavlje: izvedena polja + IZDATO ----------------------------------
+    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_VRSTA, vrsta, SRC
+    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_SORTA, sorta, SRC
+    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_TIP_AMB, tipAmb, SRC
+    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+End Sub
+
+Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
+                                              ByVal otpremnicaID As String, _
+                                              ByVal redniBroj As Long, _
+                                              ByVal klasa As String, _
+                                              ByVal kolicina As Double, _
+                                              ByVal kolAmb As Double, _
+                                              ByVal bruto As Double) As Variant
+    Const SRC As String = "BuildOtpremnicaStavkaRowData"
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_OTPREMNICA_STAVKE)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1304, SRC, _
+                  "Ne mogu da odredim broj kolona za tblOtpremnicaStavke."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_ID, stavkaID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, _
+                        otpremnicaID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_RB, redniBroj, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, klasa, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, kolicina, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KOL_AMB, kolAmb, SRC
+
+    ' BrutoKg ostaje PRAZAN kad ga nijedan izvor nije nosio -- prazno je podatak
+    ' ("unos je bio neto"), ne nula.
+    If bruto > 0 Then
+        SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_BRUTO, bruto, SRC
+    End If
+
+    BuildOtpremnicaStavkaRowData = rowData
+End Function
+
+' --- citanje ----------------------------------------------------------------
+
+' Sastav otpremnice po KANONU (tblOtpremnicaIzvori), redom upisa.
+Private Function OtpClanovi(ByVal otpremnicaID As String) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    Set OtpClanovi = c
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+
+    Dim cOtp As Long, cOtk As Long
+    cOtp = GetColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID)
+    cOtk = GetColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID)
+    If cOtp = 0 Or cOtk = 0 Then Exit Function
+
+    Dim i As Long, otkupID As String
+    For i = 1 To UBound(izv, 1)
+        If StrComp(Trim$(NzToText(izv(i, cOtp))), otpremnicaID, vbTextCompare) = 0 Then
+            otkupID = Trim$(NzToText(izv(i, cOtk)))
+            If Len(otkupID) > 0 Then c.Add otkupID
+        End If
+    Next i
+End Function
+
+' OtkupID -> OtpremnicaID, za sve NEstornirane otpremnice.
+'
+' Dva aktivna zapisa za isti otkup su tvrda greska integriteta, ne stanje koje
+' se normalizuje: citalac koji bi tiho uzeo poslednji pretvorio bi korupciju u
+' odgovor. Isti obrazac kao AktivnoClanstvoPoKanonu za zbirnu.
+Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
+    Dim mapa As Object
+    Set mapa = CreateObject("Scripting.Dictionary")
+    Set AktivnoOtpClanstvoPoKanonu = mapa
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+
+    Dim cOtp As Long, cOtk As Long
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, src)
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src)
+
+    Dim stornirane As Object
+    Set stornirane = StorniraneOtpremnice()
+
+    Dim i As Long, otpID As String, otkupID As String
+    For i = 1 To UBound(izv, 1)
+        otpID = Trim$(NzToText(izv(i, cOtp)))
+        otkupID = Trim$(NzToText(izv(i, cOtk)))
+        If Len(otpID) > 0 And Len(otkupID) > 0 Then
+            If Not stornirane.Exists(UCase$(otpID)) Then
+                If mapa.Exists(UCase$(otkupID)) Then
+                    Err.Raise vbObjectError + 1305, src, _
+                              "Kanonsko clanstvo je nekonzistentno: otkup " & _
+                              otkupID & " ima dva aktivna zapisa clanstva (" & _
+                              CStr(mapa(UCase$(otkupID))) & " i " & otpID & ")."
+                End If
+                mapa.Add UCase$(otkupID), otpID
+            End If
+        End If
+    Next i
+End Function
+
+Private Function StorniraneOtpremnice() As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    Set StorniraneOtpremnice = s
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(data) Then Exit Function
+
+    Dim cID As Long, cStorno As Long
+    cID = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    If cID = 0 Or cStorno = 0 Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cStorno))), "Da", vbTextCompare) = 0 Then
+            s(UCase$(Trim$(NzToText(data(i, cID))))) = True
+        End If
+    Next i
+End Function
+
+Private Function OtpRedHeadera(ByVal otpremnicaID As String, _
+                               ByVal src As String) As Long
+    If Len(Trim$(otpremnicaID)) = 0 Then
+        Err.Raise vbObjectError + 1306, src, "Prazan OtpremnicaID."
+    End If
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(data) Then
+        Err.Raise vbObjectError + 1307, src, "Tabela otpremnica je prazna."
+    End If
+
+    OtpRedHeadera = NadjiJedanRedOtpremnice(data, _
+                        RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, src), _
+                        otpremnicaID, src)
+End Function
+
+' DRAFT je JEDINO stanje u kom se clanstvo menja i u kom dokument sme da se
+' izda. Posle izdavanja je sastav istorijska cinjenica, a izmena je NOVA VERZIJA
+' (A13/A14/A15) -- ne izmena na mestu.
+Private Sub RequireOtpDraft(ByVal otpremnicaID As String, ByVal rOtp As Long, _
+                            ByVal src As String)
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+
+    If StrComp(Trim$(NzToText(data(rOtp, _
+               RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, src)))), _
+               "Da", vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1308, src, _
+                  "Otpremnica je stornirana: " & otpremnicaID
+    End If
+
+    Dim status As String
+    status = UCase$(Trim$(NzToText(data(rOtp, _
+             RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, src)))))
+
+    If status <> UCase$(IZDATO_DRAFT) Then
+        Err.Raise vbObjectError + 1309, src, _
+                  "Otpremnica nije DRAFT nego '" & status & "': " & otpremnicaID & _
+                  ". Sastav izdatog dokumenta je istorijska cinjenica; izmena je " & _
+                  "nova verzija (A13)."
+    End If
+End Sub
+
+' --- sitni helperi ----------------------------------------------------------
+Private Function OtpBroj(ByVal d As Object, ByVal kljuc As String) As Double
+    If d.Exists(kljuc) Then OtpBroj = CDbl(d(kljuc))
+End Function
+
+Private Function OtpDbl(ByVal v As Variant) As Double
+    If IsNumeric(v) Then OtpDbl = CDbl(v)
+End Function
+
+Private Function OtpHdrKljucPoznat(ByVal kljuc As String) As Boolean
+    Select Case LCase$(Trim$(kljuc))
+        Case "datum", "stanicaid", "vozacid", "brojotpremnice", "cena"
+            OtpHdrKljucPoznat = True
+    End Select
+End Function
+
+' Zatvoren spisak kljuceva, kao na otkupu. VrstaVoca / SortaVoca / TipAmbalaze
+' NISU na spisku namerno: izvode se iz izvora, pa pozivalac koji ih salje radi
+' po starom modelu i mora to da cuje.
+Private Sub OtpHdrProveriKljuceve(ByVal h As Object, ByVal src As String)
+    Dim kljuc As Variant
+
+    For Each kljuc In h.Keys
+        If Not OtpHdrKljucPoznat(CStr(kljuc)) Then
+            Err.Raise vbObjectError + 1310, src, _
+                      "Header ima nepoznat kljuc: " & CStr(kljuc) & _
+                      ". VrstaVoca/SortaVoca/TipAmbalaze se IZVODE iz izvora, " & _
+                      "Kolicina/KolAmbalaze/Klasa/BrutoKg idu na STAVKU."
+        End If
+    Next kljuc
+End Sub
+
+Private Function OtpHdrBrojOpcion(ByVal h As Object, ByVal kljuc As String, _
+                                  ByVal src As String) As Double
+    If Not h.Exists(kljuc) Then Exit Function
+
+    Dim v As Variant
+    v = h(kljuc)
+    If IsEmpty(v) Then Exit Function
+    If Len(Trim$(NzToText(v))) = 0 Then Exit Function
+
+    If Not IsNumeric(v) Then
+        Err.Raise vbObjectError + 1311, src, _
+                  "Header polje " & kljuc & " nije broj: " & NzToText(v)
+    End If
+
+    OtpHdrBrojOpcion = CDbl(v)
 End Function
 
 ' ============================================================

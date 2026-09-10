@@ -38,6 +38,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblMagacin` | 1 | `modAgrohemija` |
 | `tblOtkupStavke` | 1 | `modOtkup` |
 | `tblOtpremnica` | 1 | `modDokumenta` |
+| `tblOtpremnicaIzvori` | 1 | `modDokumenta` |
+| `tblOtpremnicaStavke` | 1 | `modDokumenta` |
 | `tblPaletaStavka` | 1 | `modPaletniList` |
 | `tblPartnerMap` | 1 | `modNovac` |
 | `tblPrevoznici` | 1 | `modUtovar` |
@@ -76,6 +78,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
 - `tblOtkupStavke`: `modOtkup`
 - `tblOtpremnica`: `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
+- `tblOtpremnicaIzvori`: `modDokumenta`
+- `tblOtpremnicaStavke`: `modDokumenta`
 - `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblPartnerMap`: `modBankaMapiranje`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`

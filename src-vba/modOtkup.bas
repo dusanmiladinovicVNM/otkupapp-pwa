@@ -374,30 +374,6 @@ End Function
 ' Mora postojati tacno jednom, i vrsta/sorta koje dokument nosi kao snapshot
 ' moraju odgovarati toj kulturi. Time fabrikovan "vrsta-sorta" string pada odmah:
 ' takvog reda u tblKulture nema.
-' Veza pokazuje na TACNO JEDAN red maticne tabele.
-'
-' Nula znaci da pokazuje na nesto cega nema, vise od jedan da se ne zna na sta.
-' Oba su tvrda greska: dokument sa slomljenim FK-om izgleda ispravno sve dok ga
-' neko ne spoji sa maticnim podacima, a to je po pravilu izvestaj ili isplata.
-Private Sub RequireTacnoJedan(ByVal tblName As String, ByVal colName As String, _
-                              ByVal vrednost As String, ByVal opis As String, _
-                              ByVal src As String)
-    ' FindRows uvek vraca Collection (svaki izlaz radi Set) -- provera
-    ' "Is Nothing" bi bila mrtav kod koji samo izgleda kao paznja.
-    Dim redovi As Collection
-    Set redovi = FindRows(tblName, colName, vrednost)
-
-    If redovi.count = 0 Then
-        Err.Raise vbObjectError + 1877, src, _
-                  opis & " ne postoji: " & vrednost
-    End If
-    If redovi.count > 1 Then
-        Err.Raise vbObjectError + 1878, src, _
-                  opis & " nije jednoznacan: " & vrednost & _
-                  "; Count=" & CStr(redovi.count)
-    End If
-End Sub
-
 Private Sub RequireKulturaSeSlaze(ByVal kulturaID As String, _
                                   ByVal vrstaVoca As String, _
                                   ByVal sortaVoca As String, _

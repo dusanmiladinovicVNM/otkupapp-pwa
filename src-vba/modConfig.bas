@@ -806,6 +806,7 @@ Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
 ' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
 Public Const COL_STA_ID As String = "StanicaID"
+Public Const COL_VOZ_ID As String = "VozacID"
 Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
 
 ' =========================

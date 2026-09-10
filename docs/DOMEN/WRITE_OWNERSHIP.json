@@ -140,6 +140,17 @@
       "modDokumenta"
     ]
   },
+  "tblOtpremnicaIzvori": {
+    "row_owner": [
+      "modDokumenta"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modDokumenta"
+    ]
+  },
   "tblOtpremnicaStavke": {
     "row_owner": [
       "modDokumenta"
