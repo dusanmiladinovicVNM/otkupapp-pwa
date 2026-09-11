@@ -226,6 +226,14 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_StornoJednimID
     Test_OTK_PanelNapredakJePauziran
 
+    ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
+    ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
+    Test_PWA_IngestPraviHeaderIStavku
+    Test_PWA_NerazresivaKulturaObaraUvoz
+    Test_PWA_IstiCridIstiSadrzajJeNoOp
+    Test_PWA_IstiCridDrugiSadrzajPada
+    Test_PWA_RazresivacImenujeRazlog
+
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
     Test_OTP_JedanBrojJedanHeader
@@ -8856,6 +8864,236 @@ EH:
     LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
 End Sub
 
+' PWA INGEST IDE KROZ KANONSKI PISAC.
+'
+' Zatecen uvoz je radio AppendRow(TBL_OTKUP) sa golim Array-em od 24 elementa nad
+' tabelom od 39 kolona, fabrikovao KulturaID i NIJE pravio stavke. Bio je drugi
+' put do istog dokumenta -- i drugi model.
+Private Sub Test_PWA_IngestPraviHeaderIStavku()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAIN")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-" & scenario
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWA-" & scenario, 400#, 50#, 20)
+
+    Dim otkID As String
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+
+    AssertTrue Len(otkID) > 0, "PWA: uvoz vratio OtkupID"
+    AssertEquals "1", CStr(FindRows(TBL_OTKUP, COL_OTK_ID, otkID).count), _
+                 "PWA: tacno jedan header"
+    AssertEquals "1", CStr(OtkBrojStavkiZaOtkup(otkID)), "PWA: jedna stavka"
+
+    ' Kultura je RAZRESENA, ne fabrikovana.
+    AssertEquals TEST_KULTURA_ID, OtkPolje(otkID, COL_OTK_KULTURA), _
+                 "PWA: KulturaID je pravi FK, ne 'vrsta-sorta' string"
+
+    ' Brojevi su na stavci, header ih ne nosi.
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
+               "PWA: kolicina na stavci"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), "PWA: header ne nosi kolicinu"
+    AssertEquals "", OtkPolje(otkID, COL_OTK_VOZAC), "PWA: header ne nosi vozaca"
+
+    ' Trag porekla.
+    AssertEquals crid, OtkPolje(otkID, COL_OTK_CLIENT_RECORD_ID), "PWA: ClientRecordID"
+    AssertEquals "PWA", OtkPolje(otkID, COL_OTK_SYNC_SOURCE), "PWA: SyncSource"
+
+    ' Ambalazu knjizi pisac, jednom po dokumentu.
+    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), "PWA: dvojni upis ambalaze"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_IngestPraviHeaderIStavku", Err.Number, Err.description
+End Sub
+
+' Nerazresiva kultura obara uvoz umesto da fabrikuje FK.
+Private Sub Test_PWA_NerazresivaKulturaObaraUvoz()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAKU")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-KU-" & scenario
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKU-" & scenario, 400#, 50#, 20)
+    red(1, 13) = TEST_SORTA & " NEPOSTOJECA"        ' GS_SORTA
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim otkID As String
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+
+    AssertEquals "", otkID, "PWA kultura: uvoz odbijen"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA kultura: nijedan red nije upisan"
+    AssertEquals "", modOtkup.OtkupPoClientRecordID(crid), _
+                 "PWA kultura: CRID nije zauzet neuspelim uvozom"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_NerazresivaKulturaObaraUvoz", Err.Number, Err.description
+End Sub
+
+' ISTI CRID + ISTI SADRZAJ -> NO-OP.
+'
+' Retry i ponovljen sync su normalni; smeju da naprave SAMO JEDAN dokument.
+Private Sub Test_PWA_IstiCridIstiSadrzajJeNoOp()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWANO")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-NO-" & scenario
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWANO-" & scenario, 400#, 50#, 20)
+
+    Dim prvi As String
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    AssertTrue Len(prvi) > 0, "PWA no-op: prvi uvoz prosao"
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim drugi As String
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+
+    AssertEquals prvi, drugi, "PWA no-op: drugi uvoz vraca ISTI OtkupID"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA no-op: nijedan nov red nije nastao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_IstiCridIstiSadrzajJeNoOp", Err.Number, Err.description
+End Sub
+
+' ISTI CRID + DRUGI SADRZAJ -> TVRDA GRESKA.
+'
+' Zatecen kod je svaki poznat CRID preskakao, pa je izmenjen sadrzaj tiho
+' nestajao: PWA misli da je poslala ispravku, master je nema i niko ne sazna.
+' Ispravka ide kroz storno i nov dokument (A13).
+Private Sub Test_PWA_IstiCridDrugiSadrzajPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAKF")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-KF-" & scenario
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 400#, 50#, 20)
+
+    Dim prvi As String
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    AssertTrue Len(prvi) > 0, "PWA konflikt: prvi uvoz prosao"
+
+    ' Isti CRID, promenjena kolicina.
+    Dim izmenjen As Variant
+    izmenjen = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 999#, 50#, 20)
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim drugi As String
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(izmenjen, 1, crid)
+
+    AssertEquals "", drugi, "PWA konflikt: izmenjen sadrzaj pod istim CRID-om odbijen"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA konflikt: nijedan nov red nije nastao"
+
+    ' Postojeci dokument je NETAKNUT -- konflikt ne sme da ga prepise.
+    AssertTrue Abs(OtkStavkaBrojP(prvi, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
+               "PWA konflikt: prvi dokument nepromenjen"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_IstiCridDrugiSadrzajPada", Err.Number, Err.description
+End Sub
+
+' Red kakav PWA salje u OTK sheet-u. Indeksi su GS_* kolone modMasterSync-a;
+' one su Private tamo, pa se ovde imenuju komentarom, ne konstantom.
+Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
+                        ByVal kolicina As Double, ByVal cena As Double, _
+                        ByVal kolAmb As Long) As Variant
+    Dim r As Variant
+    ReDim r(1 To 1, 1 To 23)
+
+    r(1, 1) = crid                  ' GS_CLIENT_RECORD_ID
+    r(1, 6) = "PENDING"             ' GS_SYNC_STATUS
+    r(1, 8) = TEST_ST_ID            ' GS_OTKUPAC_ID
+    r(1, 9) = NextTestDate()        ' GS_DATUM
+    r(1, 10) = TEST_KOOP_ID         ' GS_KOOPERANT_ID
+    r(1, 12) = TEST_VRSTA           ' GS_VRSTA
+    r(1, 13) = TEST_SORTA           ' GS_SORTA
+    r(1, 14) = KLASA_I              ' GS_KLASA
+    r(1, 15) = kolicina             ' GS_KOLICINA
+    r(1, 16) = cena                 ' GS_CENA
+    r(1, 17) = TEST_TIP_AMB         ' GS_TIP_AMB
+    r(1, 18) = kolAmb               ' GS_KOL_AMB
+    r(1, 19) = ""                   ' GS_PARCELA_ID
+    r(1, 20) = ""                   ' GS_VOZAC_ID
+    ' GS_BROJ_DOKUMENTA se NE salje: kanonski format je ^\d+/\d{6}(-\d+)?$ i
+    ' ne trpi test-prefiks, pa ingest generise broj lokalno -- to je i realan
+    ' PWA pre-rollout put (modMasterSync: "BrojDokumenta fallback-generated").
+    r(1, 23) = ""                   ' GS_BROJ_DOKUMENTA
+
+    PwaRed = r
+End Function
+
+' DELJENI RAZRESIVAC (Vrsta, Sorta) -> KulturaID.
+'
+' Meri se ODVOJENO od ingesta, i to je nalaz iz sabotaze: kad adapter fabrikuje
+' kulturu, pisac je odbije kao FK, pa ingest test i dalje prolazi -- odbrana u
+' dubinu radi, ali sam razresivac time ostaje nemeren.
+'
+' Nula i vise od jedan su ISTA greska: izbor se ne prevodi u jedan maticni podatak.
+Private Sub Test_PWA_RazresivacImenujeRazlog()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWARK")
+
+    Dim razlog As String
+
+    ' Postojeci par -> tacno jedan FK.
+    AssertEquals TEST_KULTURA_ID, _
+                 modOtkup.RazresiKulturuIzVrsteSorte(TEST_VRSTA, TEST_SORTA, razlog), _
+                 "PWA razresivac: postojeci par daje FK"
+    AssertEquals "", razlog, "PWA razresivac: bez greske kad je jednoznacno"
+
+    ' Nepostojeca sorta -> prazno I imenovan razlog, ne fabrikovan string.
+    Dim rez As String
+    rez = modOtkup.RazresiKulturuIzVrsteSorte(TEST_VRSTA, TEST_SORTA & " NEMA", razlog)
+    AssertEquals "", rez, "PWA razresivac: nepostojeci par ne daje FK"
+    AssertTrue InStr(1, razlog, "ne prevodi", vbTextCompare) > 0, _
+               "PWA razresivac: imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals "0", CStr(InStr(1, rez, "-")), _
+                 "PWA razresivac: NE sklapa vrsta-sorta string"
+
+    ' Sorta koja pripada DRUGOJ vrsti -> takodje nema pogotka.
+    rez = modOtkup.RazresiKulturuIzVrsteSorte(TEST_VRSTA_BEZ_SORTE, TEST_SORTA, razlog)
+    AssertEquals "", rez, "PWA razresivac: sorta druge vrste ne prolazi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_RazresivacImenujeRazlog", Err.Number, Err.description
+End Sub
+
 ' PANEL BLOKOVA JE PAUZIRAN DO PR7 -- i ovaj test meri ZASTO.
 '
 ' SumKolByOtp sabira tblOtkup.Kolicina po Otkup.OtpremnicaID. Nov pisac tu kolonu
@@ -10239,7 +10477,10 @@ Public Sub HardDeleteBusinessFlowTestRows()
     total = total + deleted
     Debug.Print "tblOtpremnica: " & deleted & " obrisano"
 
-    deleted = DeleteTestRowsFromTable(TBL_OTKUP, Array("BrojDokumenta", "BrojZbirne"))
+    ' ClientRecordID je u spisku zbog PWA uvoza: njihov BrojDokumenta je
+    ' GENERISAN (kanonski format ne trpi TST-PRO), pa marker nosi samo CRID.
+    deleted = DeleteTestRowsFromTable(TBL_OTKUP, _
+                  Array("BrojDokumenta", "BrojZbirne", "ClientRecordID"))
     total = total + deleted
     Debug.Print "tblOtkup: " & deleted & " obrisano"
 

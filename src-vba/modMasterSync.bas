@@ -1646,8 +1646,37 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 GoTo NextImportRow
             End If
 
-            ' Duplikat-Check im Master
+            ' Duplikat-Check im Master.
+            '
+            ' ISTI CRID SA DRUGACIJIM SADRZAJEM NIJE DUPLIKAT NEGO KONFLIKT.
+            ' Zatecen kod je svaki poznat CRID prosto preskakao, pa je izmenjen
+            ' sadrzaj pod istim CRID-om tiho nestajao: PWA misli da je poslala
+            ' ispravku, master je nema i niko ne sazna.
+            '
+            ' Ispravka ide kroz storno i nov dokument (A13), ne kroz ponovni uvoz
+            ' istog CRID-a -- pa se ovde staje glasno.
+            '
+            ' NEIZMERENO, i to je namerno imenovano: ova grana se dostize samo kroz
+            ' ImportOneOTKSheet, koji trazi ceo Google Sheet. Sabotaza koja je gasi
+            ' NE grize -- testovi zovu ImportRowToTblOtkup_RowTX direktno, gde isti
+            ' konflikt hvata kapija u samom ingestu (Test_PWA_IstiCridDrugiSadrzajPada).
+            ' Ingest kapija je ta koja garantuje ispravnost; ova daje operateru
+            ' status umesto tihog preskoka, i bez nje bi izmenjen sadrzaj opet
+            ' nestajao -- zato ostaje.
             If IsDuplicateInMaster(clientRecordID) Then
+                Dim posID As String
+                posID = modOtkup.OtkupPoClientRecordID(clientRecordID)
+                If Len(posID) > 0 Then
+                    If Not PwaIstiSadrzaj(posID, data, i) Then
+                        statusUpdates.Add Array(i, SYNC_STATUS_ERROR & _
+                            ":CRID konflikt -- isti ClientRecordID, drugi sadrzaj (" & _
+                            posID & ")")
+                        outErrors = outErrors + 1
+                        LogError "ImportOneOTKSheet", _
+                                 "CRID konflikt: " & clientRecordID & " -> " & posID
+                        GoTo NextImportRow
+                    End If
+                End If
                 ' Proveri da li je VozacID update (Otprema tab)
                 Dim sheetVozac As String
                 sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
@@ -1821,6 +1850,93 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
     ValidatePWAOtkup = ""
 End Function
 
+' Da li vec uvezen dokument nosi ISTI poslovni sadrzaj kao red koji je stigao.
+'
+' Poredi se ono sto dokument JESTE, ne kako je zapisan: zaglavlje i jedina stavka.
+' OtkupID, CreatedAt i redosled ne ucestvuju -- oni se i ocekuje da se razlikuju.
+' BrojDokumenta takodje ne: kad ga PWA ne posalje, master ga generise lokalno, pa
+' bi poredjenje po njemu prijavljivalo konflikt tamo gde ga nema.
+'
+' Funkcija sama parsira red, da bi je mogla zvati OBA mesta: i ingest, i grana
+' koja duplikat preskace. Dva poredjenja istog pojma bi se razisla.
+Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, _
+                                ByVal row As Long) As Boolean
+    Const SRC As String = "PwaIstiSadrzaj"
+
+    On Error GoTo EH
+
+    Dim kooperantID As String, vrstaVoca As String, sortaVoca As String, klasa As String
+    kooperantID = Trim$(CStr(nz(data(row, GS_KOOPERANT_ID), "")))
+    vrstaVoca = Trim$(CStr(nz(data(row, GS_VRSTA), "")))
+    sortaVoca = Trim$(CStr(nz(data(row, GS_SORTA), "")))
+    klasa = Trim$(CStr(nz(data(row, GS_KLASA), "")))
+    If Len(klasa) = 0 Then klasa = "I"
+
+    If Not IsParsableMasterSyncDate(data(row, GS_DATUM)) Then Exit Function
+
+    Dim datum As Date
+    datum = CDate(data(row, GS_DATUM))
+
+    Dim kultGreska As String, kulturaID As String
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(vrstaVoca, sortaVoca, kultGreska)
+    If Len(kulturaID) = 0 Then Exit Function      ' nerazresivo -> ne moze biti isto
+
+    If Not PwaPoljeJednako(otkupID, COL_OTK_KOOPERANT, kooperantID) Then Exit Function
+    If Not PwaPoljeJednako(otkupID, COL_OTK_KULTURA, kulturaID) Then Exit Function
+
+    Dim dat As Variant
+    dat = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
+    If Not IsDate(dat) Then Exit Function
+    If Int(CDbl(CDate(dat))) <> Int(CDbl(datum)) Then Exit Function
+
+    ' Stavka: PWA salje tacno jednu (S7).
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKlasa As Long, cKol As Long, cCena As Long, cAmb As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+
+    Dim k As Long, nasao As Long
+    For k = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(k, cOtk), "")), otkupID, vbTextCompare) = 0 Then
+            nasao = nasao + 1
+            If nasao > 1 Then Exit Function       ' vise stavki -> nije PWA dokument
+            If StrComp(Trim$(nz(d(k, cKlasa), "")), klasa, vbTextCompare) <> 0 Then Exit Function
+            If Abs(PwaBroj(d(k, cKol)) - CDbl(nz(data(row, GS_KOLICINA), 0))) > 0.0001 Then Exit Function
+            If Abs(PwaBroj(d(k, cCena)) - CDbl(nz(data(row, GS_CENA), 0))) > 0.0001 Then Exit Function
+            If Abs(PwaBroj(d(k, cAmb)) - CDbl(nz(data(row, GS_KOL_AMB), 0))) > 0.0001 Then Exit Function
+        End If
+    Next k
+
+    PwaIstiSadrzaj = (nasao = 1)
+    Exit Function
+
+EH:
+    ' Greska pri poredjenju NIJE "isto" -- fail-closed.
+    LogErr SRC, "OtkupID=" & otkupID
+    PwaIstiSadrzaj = False
+End Function
+
+' Broj iz celije. NumVal postoji, ali je Private u modOtkupBlok i
+' modScrDokumenti -- odavde nevidljiv. vba_check to ne hvata: poziv u
+' IZRAZNOJ poziciji je poznata rupa pravila NEDEFINISAN, pa je greska izasla
+' tek kao break u VBE-u.
+Private Function PwaBroj(ByVal v As Variant) As Double
+    If IsNumeric(v) Then PwaBroj = CDbl(v)
+End Function
+
+Private Function PwaPoljeJednako(ByVal otkupID As String, ByVal kolona As String, _
+                                 ByVal ocekivano As String) As Boolean
+    PwaPoljeJednako = (StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                    kolona), "")), _
+                               Trim$(ocekivano), vbTextCompare) = 0)
+End Function
+
 Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
     If Len(Trim$(clientRecordID)) = 0 Then
         LogError "IsDuplicateInMaster", "ClientRecordID je prazan. Duplicate check nije validan."
@@ -1852,7 +1968,11 @@ End Function
 ' ============================================================
 ' PRIVATE -- Import Row
 ' ============================================================
-Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
+' Public zbog testa: PWA ingest se inace ne moze izmeriti -- jedini put dovde je
+' ImportOneOTKSheet, koji trazi ceo Google Sheet. Kanonski ingest je od Otkup
+' cutover-a produkcioni put, pa ne sme da ostane bez zelenog pokrica
+' (RunMasterSyncSmokeSuite je zatecena crvena i nije u FULL prolazu).
+Public Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
                                            ByVal row As Long, _
                                            ByVal clientRecordID As String) As String
     Dim tx As clsTransaction
@@ -1955,9 +2075,18 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
         stanicaID = otkupacID
     End If
     
-    ' KulturaID Lookup
-    kulturaID = CStr(nz(LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, "KulturaID"), ""))
-    If Len(kulturaID) = 0 Then kulturaID = vrstaVoca & "-" & sortaVoca
+    ' KULTURA SE RAZRESAVA EGZAKTNO, PO (Vrsta, Sorta).
+    '
+    ' Zatecen kod je trazio samo po VrstaVoca -- sorta se ignorisala -- a kad ne
+    ' nadje, sklapao je "vrsta-sorta" string koji IZGLEDA kao FK a ne pokazuje ni
+    ' na sta. Takav "ID" je ulazio u dokument i prezivljavao zauvek (S4.1f).
+    Dim kultGreska As String
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(vrstaVoca, sortaVoca, kultGreska)
+    If Len(kulturaID) = 0 Then
+        Err.Raise vbObjectError + 8106, "ImportRowToTblOtkup", _
+                  "Kultura se ne razresava: " & kultGreska & _
+                  " ClientRecordID=" & clientRecordID
+    End If
     
     ' Fallback: prazno = legacy / PWA pre-rollout.
     ' Validacija formata za PWA-generated brojeve (regex kanonski).
@@ -1977,42 +2106,77 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
         End If
     End If
     
-    ' Neue ID
-    newID = GetNextID(TBL_OTKUP, COL_OTK_ID, "OTK-")
-    If Len(Trim$(newID)) = 0 Then
-        Err.Raise vbObjectError + 8302, "ImportRowToTblOtkup", _
-              "GetNextID nije vratio OtkupID. ClientRecordID=" & clientRecordID
-    End If
-    
-    ' VozacID
-    ' BrojDokumenta = "PWA:" & clientRecordID (fuer Duplikat-Check)
-    ' Novac = 0, PrimalacNovca = ""
-    
-    Dim rowData As Variant
-    rowData = Array(newID, datum, kooperantID, stanicaID, kulturaID, _
-                    vrstaVoca, sortaVoca, kolicina, cena, tipAmb, _
-                    kolAmb, vozacID, brojDokumenta, 0, "", klasa, _
-                    "", "", "", "", "", parcelaID, _
-                    clientRecordID, "PWA")
-    
-    Dim result As Long
-    result = AppendRow(TBL_OTKUP, rowData)
-    
-    If result > 0 Then
-        ' Ambalaza tracken
-        If kolAmb > 0 Then
-            ' Dvojni upis: kooperant IZLAZ (razduzenje) + OM/Stanica ULAZ (zaduzenje OM).
-            TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kooperantID, "Kooperant", , newID, DOK_TIP_OTKUP
-            TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", stanicaID, "Stanica", , newID, DOK_TIP_OTKUP
+    ' IDEMPOTENCIJA PO ClientRecordID.
+    '
+    ' Isti CRID sme da stigne vise puta -- retry, ponovljen sync, prekinut prolaz --
+    ' ali sme da napravi SAMO JEDAN dokument. Zatecen kod je isti CRID prosto
+    ' PRESKAKAO (IsDuplicateInMaster), pa je izmenjen sadrzaj pod istim CRID-om
+    ' tiho nestajao: PWA misli da je poslala ispravku, master je nema.
+    '
+    '   isti CRID + isti sadrzaj    -> NO-OP, vrati postojeci OtkupID
+    '   isti CRID + drugi sadrzaj   -> TVRDA GRESKA
+    Dim postojeci As String
+    postojeci = modOtkup.OtkupPoClientRecordID(clientRecordID)
+
+    If Len(postojeci) > 0 Then
+        If PwaIstiSadrzaj(postojeci, data, row) Then
+            LogInfo "ImportRowToTblOtkup", "NO-OP (isti CRID i sadrzaj): " & _
+                    postojeci & " <- PWA:" & clientRecordID
+            ImportRowToTblOtkup = postojeci
+            Exit Function
         End If
-        
-        LogInfo "ImportRowToTblOtkup", "Importiert: " & newID & " ? PWA:" & clientRecordID & _
-                " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
-        ImportRowToTblOtkup = newID
-    Else
-        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen fuer PWA:" & clientRecordID
-        ImportRowToTblOtkup = ""
+
+        Err.Raise vbObjectError + 8107, "ImportRowToTblOtkup", _
+                  "ClientRecordID " & clientRecordID & " je vec uvezen kao " & _
+                  postojeci & ", ali sa DRUGACIJIM sadrzajem. Ispravka ide kroz " & _
+                  "storno i nov dokument (A13), ne kroz ponovni uvoz istog CRID-a."
     End If
+
+    ' KANONSKI PISAC. Sta vise ne ide u header:
+    '   vozacID   vozac pripada otpremnici (S4.1c)
+    '   novac     kes ne ulazi kroz otkupni list (S4.1b)
+    ' Ambalazu knjizi sam pisac, jednom po dokumentu.
+    '
+    ' Ranije je ovde stajao goli Array(...) od 24 elementa nad tabelom od 39
+    ' kolona -- poziciono, pa bi kolona ubacena u sredinu tiho poslala vrednosti
+    ' u pogresna polja (CLAUDE.md S3).
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "KooperantID", kooperantID
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", kulturaID
+    h.Add "VrstaVoca", vrstaVoca
+    h.Add "SortaVoca", sortaVoca
+    h.Add "TipAmbalaze", tipAmb
+    h.Add "BrojDokumenta", brojDokumenta
+    h.Add "ParcelaID", parcelaID
+    h.Add "ClientRecordID", clientRecordID
+    h.Add "SyncSource", "PWA"
+
+    ' PWA salje JEDAN zapis = JEDNA klasa = ceo dokument (S7).
+    Dim stavka As Object
+    Set stavka = CreateObject("Scripting.Dictionary")
+    stavka.Add "Klasa", klasa
+    stavka.Add "Kolicina", kolicina
+    stavka.Add "Cena", cena
+    stavka.Add "KolAmbalaze", CDbl(kolAmb)
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add stavka
+
+    Dim greska As String
+    newID = CreateOtkup_TX(h, stavke, greska)
+
+    If Len(newID) = 0 Then
+        Err.Raise vbObjectError + 8108, "ImportRowToTblOtkup", _
+                  "CreateOtkup_TX nije vratio OtkupID (CRID=" & clientRecordID & "): " & greska
+    End If
+
+    LogInfo "ImportRowToTblOtkup", "Uvezeno: " & newID & " <- PWA:" & clientRecordID & _
+            " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
+    ImportRowToTblOtkup = newID
     Exit Function
 
 EH:

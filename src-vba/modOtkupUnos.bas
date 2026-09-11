@@ -270,50 +270,16 @@ EH:
     OtkupValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
-' (Vrsta, Sorta) -> KulturaID. RAZRESAVANJE JE POSAO ADAPTERA, ne pisca.
-'
-' Writer koji sam radi lookup mora da poznaje UI semantiku (sta znaci prazna
-' sorta, sta sa razmacima) -- a tu je fabrikovanje "vrsta-sorta" stringa i
-' nastalo (S4.1f). Ovde je to znanje na svom mestu: ekran zna sta je operater
-' izabrao, pa prevodi izbor u FK i pada glasno kad ne moze.
+' (Vrsta, Sorta) -> KulturaID. Razresavanje je posao ADAPTERA, ne pisca (S4.1f),
+' ali pravilo zivi na JEDNOM mestu -- isti razresivac koristi i PWA ingest.
 Private Function RazresiKulturu(ByVal vrsta As String, ByVal sorta As String, _
                                 ByRef outGreska As String) As String
-    outGreska = ""
+    Dim detalj As String
+    RazresiKulturu = modOtkup.RazresiKulturuIzVrsteSorte(vrsta, sorta, detalj)
 
-    Dim kult As Variant
-    kult = GetTableData(TBL_KULTURE)
-    If Not IsArray(kult) Then
+    If Len(RazresiKulturu) = 0 Then
         outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
-        Exit Function
     End If
-
-    Dim cID As Long, cVr As Long, cSo As Long
-    cID = GetColumnIndex(TBL_KULTURE, COL_KUL_ID)
-    cVr = GetColumnIndex(TBL_KULTURE, COL_KUL_VRSTA)
-    cSo = GetColumnIndex(TBL_KULTURE, COL_KUL_SORTA)
-    If cID = 0 Or cVr = 0 Or cSo = 0 Then
-        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
-        Exit Function
-    End If
-
-    Dim i As Long, nadjen As String, koliko As Long
-    For i = 1 To UBound(kult, 1)
-        If StrComp(Trim$(nz(kult(i, cVr), "")), vrsta, vbTextCompare) = 0 Then
-            If StrComp(Trim$(nz(kult(i, cSo), "")), sorta, vbTextCompare) = 0 Then
-                nadjen = Trim$(CStr(nz(kult(i, cID), "")))
-                koliko = koliko + 1
-            End If
-        End If
-    Next i
-
-    ' Nula i vise od jedan su ISTA greska za operatera: izbor se ne prevodi u
-    ' jedan maticni podatak. Tiho uzimanje prvog je bas ono sto je stari kod radio.
-    If koliko <> 1 Then
-        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
-        Exit Function
-    End If
-
-    RazresiKulturu = nadjen
 End Function
 
 Private Function OtkStavkaDTO(ByVal klasa As String, ByVal kol As Double, _

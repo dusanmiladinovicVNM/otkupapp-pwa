@@ -392,6 +392,79 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
+' (Vrsta, Sorta) -> TACNO jedan KulturaID. Za ADAPTERE, ne za pisca.
+'
+' Razresavanje je posao adaptera (S4.1f) -- writer prima gotov FK i samo ga
+' proverava. Ali adaptera ima dva, desktop ekran i PWA ingest, pa pravilo zivi
+' na jednom mestu; dve implementacije istog razresavanja su vec jednom dale dva
+' razlicita ponasanja (modOtkup:556 i modMasterSync:1959 su OBA fabrikovala
+' "vrsta-sorta" string kad lookup ne uspe).
+'
+' Nula i vise od jedan su ISTA greska: izbor se ne prevodi u jedan maticni
+' podatak. Tiho uzimanje prvog je bas ono sto je stari kod radio.
+Public Function RazresiKulturuIzVrsteSorte(ByVal vrsta As String, _
+                                           ByVal sorta As String, _
+                                           ByRef outGreska As String) As String
+    Const SRC As String = "RazresiKulturuIzVrsteSorte"
+    outGreska = ""
+
+    Dim kult As Variant
+    kult = GetTableData(TBL_KULTURE)
+    If Not IsArray(kult) Then
+        outGreska = "Sifarnik kultura je prazan."
+        Exit Function
+    End If
+
+    Dim cID As Long, cVr As Long, cSo As Long
+    cID = RequireColumnIndex(TBL_KULTURE, COL_KUL_ID, SRC)
+    cVr = RequireColumnIndex(TBL_KULTURE, COL_KUL_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_KULTURE, COL_KUL_SORTA, SRC)
+
+    Dim i As Long, nadjen As String, koliko As Long
+    For i = 1 To UBound(kult, 1)
+        If StrComp(Trim$(NzToText(kult(i, cVr))), Trim$(vrsta), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(kult(i, cSo))), Trim$(sorta), vbTextCompare) = 0 Then
+                nadjen = Trim$(NzToText(kult(i, cID)))
+                koliko = koliko + 1
+            End If
+        End If
+    Next i
+
+    If koliko <> 1 Then
+        outGreska = "(" & vrsta & ", " & sorta & ") se ne prevodi u tacno jednu " & _
+                    "kulturu; pogodaka: " & CStr(koliko) & "."
+        Exit Function
+    End If
+
+    RazresiKulturuIzVrsteSorte = nadjen
+End Function
+
+' Otkup koji je vec uvezen pod tim ClientRecordID-em, ili "".
+'
+' Idempotencija PWA uvoza pociva na ovome: isti CRID sme da stigne vise puta
+' (retry, ponovljen sync), ali sme da napravi SAMO JEDAN dokument.
+Public Function OtkupPoClientRecordID(ByVal crid As String) As String
+    Const SRC As String = "OtkupPoClientRecordID"
+
+    If Len(Trim$(crid)) = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cCrid As Long, cID As Long
+    cCrid = RequireColumnIndex(TBL_OTKUP, COL_OTK_CLIENT_RECORD_ID, SRC)
+    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cCrid))), Trim$(crid), vbTextCompare) = 0 Then
+            OtkupPoClientRecordID = Trim$(NzToText(d(i, cID)))
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' Broj otkupnog lista je jedinstven po STANICI I DANU -- KROZ CELU ISTORIJU.
 '
 ' Opseg nije izabran nego procitan iz generatora: GenerateBrojDokumenta racuna
