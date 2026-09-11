@@ -36,6 +36,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblCenovnik` | 1 | `modCenovnik` |
 | `tblKooperanti` | 1 | `modKooperant` |
 | `tblMagacin` | 1 | `modAgrohemija` |
+| `tblOtkupStavke` | 1 | `modOtkup` |
 | `tblOtpremnica` | 1 | `modDokumenta` |
 | `tblPaletaStavka` | 1 | `modPaletniList` |
 | `tblPartnerMap` | 1 | `modNovac` |
@@ -73,6 +74,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblUtovar`: `modStorno`, `modUtovar`
 - `tblKooperanti`: `modKooperant`
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
+- `tblOtkupStavke`: `modOtkup`
 - `tblOtpremnica`: `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblPartnerMap`: `modBankaMapiranje`

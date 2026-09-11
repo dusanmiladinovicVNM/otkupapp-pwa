@@ -145,27 +145,278 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 |---|---|
 | `OtkupID` | PK, `OTK-<hex>` |
 | `BrojDokumenta` | labela, scoped po otkupnom mestu |
-| `Datum`, `KooperantID`, `StanicaID`, `VozacID`, `ParcelaID`, `KulturaID` | → matični |
+| `Datum`, `KooperantID`, `StanicaID`, `ParcelaID`, `KulturaID` | → matični |
 | `VrstaVoca`, `SortaVoca`, `TipAmbalaze` | H — u potpisu stoje jednom |
-| `KolAmbIzdata` | H — OM izdao prazne kooperantu |
+| `KolAmbIzdata` | H — OM izdao prazne kooperantu; **stvarna činjenica sa otkupnog lista** |
+| `ClientRecordID`, `SyncSource` | eksterni identitet i poreklo (PWA); v. §7 i §4.1c |
+| `SourceCreatedAt` | vreme nastanka **na izvoru** (PWA `GS_CREATED_AT`); prazno za desktop |
+| `Stornirano`, `IzdatoStatus` | lifecycle |
+| `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID` | correction |
+| audit ×4 | |
+| ~~`VozacID`~~ | **ne postoji** — vozač pripada Otpremnici; v. §4.1c |
 | ~~`Novac`, `PrimalacNovca`~~ | **BRIŠU SE** — keš se ne vezuje za otkupni list; v. §4.1b |
-| `Isplaceno`, `DatumIsplate` | H — **izvedeno** iz `tblNovac` vs `SUM(stavke.Kolicina × Cena)`; v. §6.1 |
+| ~~`Isplaceno`, `DatumIsplate`~~ | **ne postoje** — izvedeno iz `tblNovac`; v. §4.1c i §6.1 |
+| ~~`VremeUnosa`~~ | **ne postoji** — `CreatedAt` / `SourceCreatedAt`; v. §4.1c |
 | ~~`OtpremnicaID`~~ | **ne postoji** — pripadnost zna `tblOtpremnicaIzvori` |
 | ~~`ZbirnaID`~~ | **ne postoji** — pripadnost zna `tblZbirnaIzvori` preko otpremnice |
-| `VremeUnosa`, `Stornirano` | |
-| `IspravkaOdID`, `ZamenjenSaID`, `CorrectionID`, `IzdatoStatus` | |
-| `ClientRecordID` | eksterni identitet (PWA); v. §7 |
-| audit ×4 | |
+| ~~`BrojOtpremnice`, `BrojZbirne`~~ | **ne postoje** — broj nije veza (A2) |
+| ~~`Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`~~ | **stavka**, ne header |
 
 **`tblOtkupStavke`** — grain: **jedna klasa jednog bloka**
 
-`OtkupStavkaID` (PK `OKS-`), `OtkupID` →, `RedniBroj`, `Klasa`, `Kolicina`,
-`Cena`, `KolAmbalaze`, `BrutoKg`.
+| Kolona | Semantika |
+|---|---|
+| `OtkupStavkaID` | PK `OKS-` |
+| `OtkupID` → | FK, obavezan |
+| `RedniBroj`, `Klasa` | |
+| `Kolicina` | **uvek NETO kg**, zamrznuto pri izdavanju |
+| `BrutoKg` | zamrznut originalni bruto — popunjen **samo** kad je unos bio bruto |
+| `Cena` | **stvarno primenjena** cena tog dokumenta |
+| `KolAmbalaze` | |
 
-**Vlasnik upisa (A11):** `modOtkup`, `modSetup`.
-Svi ostali (`modNovac`, `modStorno`, `modSledljivost`, `modAutoHladnjaca`,
-`modBankaMapiranje`, `modMasterSync`, `modOtkupBlok`, `modStornoFlow`,
-`modStornoRecovery`, `modDokumenta`) idu kroz API `modOtkup`-a. **Danas ih je 12.**
+**Vlasnik upisa (A11): samo `modOtkup`.** Danas 9 pisaca
+(`modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`,
+`modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow`) — svi ostali idu
+kroz API `modOtkup`-a.
+
+> `modSetup` je u zatečenom stanju pisač zbog backfill-a `BrojOtpremnice`. Bez
+> podataka koje treba dopuniti taj kod nema posao i briše se u cutover-u;
+> `modSetup` ostaje **`schema_owner`**, ne `row_owner`. `WRITE_OWNERSHIP.json`
+> već nosi `cilj: ["modOtkup"]` — dokument je bio taj koji je kasnio.
+
+#### 4.1c Četiri kolone koje odlaze, i šta ih zamenjuje
+
+Brisanje kolone bez imenovanog naslednika je način da se obori ekran koji ju je
+čitao. Zato svaka nosi zamenu, izmerenu nad zatečenim kodom.
+
+**`VozacID` — vozač nije činjenica otkupa.**
+
+U trenutku nastanka otkupnog lista vozač često nije ni poznat; desktop ga dobija
+iz izabrane otpremnice, a PWA tek naknadno bira koji listovi idu u koju
+otpremnicu i kod kog vozača. Jedno otkupno mesto istog dana ima tri otpremnice sa
+tri vozača — otpremnica je **transportni agregat**, otkup nije.
+
+```
+OTPREMNICA 17  Vozac = VOZ-3        OTPREMNICA 18  Vozac = VOZ-7
+   ├── OTK-101                          ├── OTK-103
+   ├── OTK-102                          └── OTK-104
+   └── OTK-108
+```
+
+Zamena: `Otpremnica.VozacID` + `tblOtpremnicaIzvori`. PWA sme da nosi izabranog
+vozača kroz svoj tok, ali podatak sleće na otpremnicu, ne kao kopija na svakom
+otkupu.
+
+**`Isplaceno` / `DatumIsplate` — read-model, ne kolona.**
+
+```
+Vrednost  = SUM(stavke.Kolicina x stavke.Cena)
+Placeno   = SUM(tblNovac vezan na OtkupID)
+Preostalo = Vrednost - Placeno
+Isplaceno = (Preostalo <= 0)
+```
+
+Mereni čitaoci danas i njihova zamena:
+
+| Čitalac | Šta radi | Posle |
+|---|---|---|
+| `modNovac.GetOpenOtkupi:1355` | `If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextCount` | uslov se **računa**; `BuildIsplataDictByOtkup()` već postoji u istom modulu |
+| `modProductionHealthCheck.Check_OtkupPaymentConsistency:485` | poredi kolonu sa `tblNovac` | **briše se** — postoji samo da uhvati neslaganje kolone i knjige; bez kolone nema šta da se ne slaže |
+| `modNovac:1277,1280,1285,1286` | `RequireUpdateCell` nad `tblOtkup` | **nestaje** — time `modNovac` prestaje da bude pisač otkupa (A11) |
+
+`DatumIsplate` nema nijednog produkcionog čitaoca — samo testove.
+
+**`VremeUnosa` — dva naslednika, ne jedan.**
+
+Čita ga `modPrint:591`, na samom otkupnom listu. Ne može prosto da nestane.
+
+| Tok | Nosilac vremena |
+|---|---|
+| desktop unos | `CreatedAt` — isto značenje, kolona je bila udvajanje; `SourceCreatedAt` ostaje prazno |
+| PWA uvoz | `CreatedAt` je vreme **uvoza**; vreme unosa na terenu je druga činjenica → **`SourceCreatedAt`** |
+
+Štampa ne bira po toku nego po popunjenosti:
+
+```
+PrikazVremena = SourceCreatedAt  ako postoji
+                CreatedAt        inace
+```
+
+`SourceCreatedAt` nije izmišljen podatak — PWA sheet ga već nosi kao
+`GS_CREATED_AT`. Dvosmisleno „vreme unosa" ne ostaje.
+
+---
+
+### 4.1d Bruto/neto i cena — zamrznute činjenice
+
+Ovde se ne uvodi nov mehanizam; zapisuje se onaj koji `OtkupValidiraj` već ima.
+
+```
+Kolicina = UVEK NETO kg
+
+unos NETO   ->  BrutoKg = prazno
+unos BRUTO  ->  BrutoKg = TACNO ono sto je korisnik uneo
+                Kolicina = izracunat neto (bruto - tara)
+```
+
+> **Težina ambalaže se koristi samo u trenutku nastanka dokumenta.** `BrutoKg` i
+> `Kolicina` izdate verzije su **zamrznute činjenice** i nikad se ne
+> rekalkulišu iz `tblTipAmbalaze`.
+>
+> Ako danas `BrutoKg 1100`, `KolAmbalaze 100`, tara `1 kg` daju `Kolicina 1000`,
+> a za dve godine master težina gajbice postane `1.2 kg` — istorijski dokument
+> ostaje `1100 / 1000`. Zasebna `TaraKg` kolona nije potrebna: `BrutoKg`,
+> `Kolicina` i `KolAmbalaze` već nose dovoljno istorije.
+
+Isto važi za cenu:
+
+| | |
+|---|---|
+| `Cenovnik.Cena` | **predlog** — autofill u formu |
+| `OtkupStavka.Cena` | **stvarno primenjena** cena tog izdatog dokumenta |
+
+Operater sme da je pregazi. Writer nema pravo da traži `Cena = Cenovnik.Cena`;
+njegovo pravilo je `Cena > 0`. Promena cenovnika **ne menja** već izdat otkup —
+štampa i danas računa iz cene sa samog otkupa, što je ta semantika.
+
+---
+
+### 4.1f Matični podaci — FK-ovi, kultura i parcela
+
+**Sve četiri veze ka matičnim podacima su pravi FK-ovi.** Neprazan string
+nije dokaz da red postoji, a dokument sa slomljenim FK-om izgleda ispravno sve
+dok ga neko ne spoji sa matičnim podacima — a to je po pravilu izveštaj ili
+isplata.
+
+```
+KooperantID  -> tblKooperanti   TACNO jedan red
+StanicaID    -> tblStanice      TACNO jedan red
+KulturaID    -> tblKulture      TACNO jedan red   (+ snapshot vrsta/sorta)
+ParcelaID    -> tblParcele      TACNO jedan red   (+ vlasnistvo), opciono
+```
+
+Nula pogodaka znači da veza pokazuje na nešto čega nema; dva i više da se ne
+zna na šta pokazuje. Oba su tvrda greška.
+
+**`StanicaID` se NE izvodi iz kooperanta.** To su dve različite činjenice, i
+kod ih drži razdvojene:
+
+| Polje | Šta je | Ko ga postavlja |
+|---|---|---|
+| `tblKooperanti.StanicaID` | **matično** otkupno mesto kooperanta | šifarnik; banka po njemu razvrstava uplate (`modBankaMapiranje:609,1049`) |
+| `tblOtkup.StanicaID` | mesto **gde je otkup obavljen** | desktop: zaključana sesija (`modStanicaLock`, `gActiveStanica`), operater bira `cmbOtkupnoMesto` (`modOtkupBlok:729`) |
+
+PWA ingest (`modMasterSync:1951`) uzima stanicu iz kooperanta **samo zato što
+nema sesiju** — to je fallback jednog adaptera, ne pravilo domena. Zato
+`Kooperant.StanicaID = Otkup.StanicaID` **nije** invarijanta: isti kooperant
+sme da preda robu na drugoj stanici, i `ChangeStanica` postoji baš zato što
+operater menja stanicu unutar iste sesije.
+
+**`KulturaID` se RAZREŠAVA, nikad ne fabrikuje.**
+
+Zatečeno stanje je gore nego što izgleda — fabrikuje se na **dva** mesta, i to
+jedno od njih nije uvoz nego sam desktop writer:
+
+```
+modOtkup.bas:556      kulturaID = LookupValue(tblKulture, "VrstaVoca", vrsta, "KulturaID")
+modOtkup.bas:559      If Len(kulturaID) = 0 Then kulturaID = vrsta & "-" & sorta
+modMasterSync.bas:1959-1960   isti obrazac
+```
+
+Oba traže **samo po `VrstaVoca`** (sorta se ignoriše), a kad ne nađu — sklope
+string koji izgleda kao FK a ne pokazuje ni na šta. Takav „ID" onda uđe u
+dokument i preživi zauvek.
+
+Ciljno pravilo:
+
+```
+(VrstaVoca, SortaVoca)  ->  TACNO jedan KulturaID
+
+0 pogodaka   -> GRESKA
+2+ pogodaka  -> GRESKA
+1 pogodak    -> koristi taj ID
+```
+
+**Razrešavanje radi adapter, ne writer.** `CreateOtkup_TX` prima gotov
+`KulturaID`; desktop i PWA adapter su ti koji iz UI vrednosti dolaze do matičnog
+podatka. Writer proverava dvoje: da FK postoji, i da se snapshot
+`VrstaVoca`/`SortaVoca` na dokumentu slaže sa tom kulturom.
+
+Razlog za tu podelu: writer koji sam radi lookup mora da poznaje UI semantiku
+(šta znači prazna sorta, šta se radi sa razmacima), a to je tačno mesto na kom
+je fabrikovanje i nastalo.
+
+**Parcela mora pripadati kooperantu — HARD.**
+
+```
+ako je ParcelaID zadat:
+    Parcela.KooperantID = Otkup.KooperantID     obavezno
+```
+
+Tuđa parcela ne prolazi kanonski writer. Neslaganje **kulture** parcele ostaje
+`warning` sa override-om, kao danas — za tvrdo pravilo tu nema dovoljno osnova, a
+operater ima legitimne slučajeve.
+
+---
+
+### 4.1g Kada je prazno legitimno — sorta i tip ambalaže
+
+Dva polja smeju da budu prazna, i to **ne odlučuje writer**. Ako writer traži
+više nego domen, tiho je pooštrio poslovno pravilo — a to je ista klasa greške
+kao i da ga je olabavio, samo se prijavljuje kao „ne mogu da snimim".
+
+```
+SortaVoca     kljuc OBAVEZAN, vrednost sme prazna
+              prazna prolazi TACNO kad je i sama kultura bez sorte
+              (pravilo je vec tu: snapshot mora da odgovara kulturi, S4.1f)
+
+TipAmbalaze   kljuc OBAVEZAN, vrednost sme prazna
+              obavezan kad SUM(stavke.KolAmbalaze) > 0 ILI KolAmbIzdata > 0
+```
+
+Oba pravila su **merena nad zatečenim ekranom**, ne izmišljena:
+`modOtkupUnos:120` traži sortu samo kad je `IsValidacijaUnosa()` uključena, a
+`modOtkupUnos:158` traži tip ambalaže kad `kolAmb > 0 Or kolAmbII > 0 Or
+kolAmbIzd > 0` — dakle **i zbog izdate**. Izdata ambalaza bez tipa je gajba koja
+je otišla kooperantu a ne zna se koja.
+
+**Zašto ključ mora da postoji i kad vrednost sme da bude prazna:** bez toga se
+tipfeler u imenu polja ne razlikuje od namerno praznog polja. Isti razlog drži
+zatvoren spisak ključeva — na headeru i na **stavci**. Na stavci je to jedina
+odbrana za `BrutoKg`: ostala polja su obavezna pa tipfeler u njima padne sam od
+sebe, a `BruttoKg` bi se samo ignorisao i bruto unos bi tiho postao neto.
+
+---
+
+### 4.1e Lifecycle i pripadnost
+
+**Otkup nema persistentan `DRAFT`.** Forma jeste njegov draft:
+
+```
+operater unosi -> koriguje -> Unos -> OTKUP nastaje kao IZDATO
+```
+
+Otpremnica i Zbirna imaju pravi persistentan `DRAFT` jer se njihovo članstvo
+gradi postepeno; otkup tu potrebu nema.
+
+Posledica (A13): ispravka nikad ne menja snimljen otkup.
+
+```
+OTK-101 / broj 17
+      v correction
+OTK-202 / broj 18,  IspravkaOdID = OTK-101
+```
+
+**Pripadnost otpremnici je isključivo `tblOtpremnicaIzvori`.** Jedan otkup sme
+istorijski da pripada i staroj i novoj verziji otpremnice, ali u datom trenutku
+najviše **jednoj aktivnoj**. Dva aktivna članstva su integrity failure (A15).
+
+Delimična alokacija (`OTK-17` 40% → `OTP-A`, 60% → `OTP-B`) **nije modelovana** i
+ne uvodi se dok ne postoji poslovni zahtev; v. §3.2.
+
+Time se zatvara i poslednje otvoreno pitanje iz §9: *„sme li `Otkup.OtpremnicaID`
+da se razlikuje po klasi"*. Ne — kolone nema, a članstvo je na nivou jednog
+otkup **headera**.
 
 ---
 
@@ -345,13 +596,12 @@ red već nosi `Klasa`/`VrstaVoca`/`SortaVoca`, tj. grain mu je klasa. Kolone
 ```
 KOOPERANT ─┐
 PARCELA   ─┤
-KULTURA   ─┤
-STANICA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
-VOZAC     ─┘        ^
+KULTURA   ─┼──> tblOtkup ──1:N──> tblOtkupStavke
+STANICA   ─┘        ^
                     │ OtkupID
               tblOtpremnicaIzvori          <== SASTAV verzije otpremnice (KANON)
                     v
-              tblOtpremnica ──1:N──> tblOtpremnicaStavke
+                  VOZAC ────> tblOtpremnica ──1:N──> tblOtpremnicaStavke
                     ^
                     │ OtpremnicaID
                tblZbirnaIzvori             <== SASTAV verzije zbirne (KANON)
@@ -397,8 +647,12 @@ dokumentu**.
 > Klasu I, pa Klasa II nikad ne dobije `Isplaceno`. **To nije bug nego mrtav
 > kod** — keš uopšte ne ulazi kroz otkupni list (§4.1b). Putanja koja stvarno
 > postavlja `Isplaceno` je avans, i ona radi ispravno (golden B2/B3).
-> Ostaje da vrednost dokumenta posle refaktora bude `SUM(stavke)`, a
-> `Isplaceno` jedno polje na headeru.
+> Ostaje da vrednost dokumenta posle refaktora bude `SUM(stavke)`.
+
+**`Isplaceno` nije polje.** Ranija verzija ovog odeljka je govorila „jedno polje
+na headeru" -- to je bilo pola koraka. Kolona i knjiga mogu da se raziju, i
+`modProductionHealthCheck.Check_OtkupPaymentConsistency` postoji bas zato da to
+uhvati. Bez kolone nema sta da se ne slaze, pa i ta provera odlazi (S4.1c).
 
 ### 6.2 Zbirna = zbir svojih aktivnih otpremnica
 
@@ -488,6 +742,12 @@ Posledice za model:
 - `IsDuplicateInMaster` (`modMasterSync.bas:1824`) skenira `tblOtkup.ClientRecordID`
   — ostaje tačno, jer header ostaje u `tblOtkup`.
 
+**Obaveza za cutover: `SourceCreatedAt` mora biti vreme, ne tekst.** Skela ga
+prima kao `String` i upisuje bez provere, jer u skeli nema pošiljaoca — jedini
+pisač je test. U trenutku kad adapter počne da ga puni, provera formata ide uz
+njega: kolonu čita štampa (§4.1c, `modPrint:591` nasleđuje `VremeUnosa`), pa bi
+proizvoljan string završio na otkupnom listu kao vreme.
+
 Implementacija je van opsega ovog refaktora (radi se isključivo VBA). Model je
 ovde da adapter kasnije ne izmišlja pravilo.
 
@@ -507,13 +767,18 @@ ovde da adapter kasnije ne izmišlja pravilo.
 
 ## 9) Otvoreno
 
-Ništa od gornjeg nije pretpostavka. Jedina stavka koja čeka odluku van koda:
+**Za Otkup i Zbirnu: ništa.** Sve što je ranije stajalo ovde je odlučeno.
 
-| Pitanje | Zašto kod ne odgovara | Predlog |
-|---|---|---|
-| Da li `Otkup.OtpremnicaID` sme da se razlikuje po klasi | Šema je dozvoljavala, ali nema podataka koji bi rekli da li se dešavalo | **Ne** — header, po §3.2 |
+Poslednja stavka — *„sme li `Otkup.OtpremnicaID` da se razlikuje po klasi"* — je
+zatvorena time što **kolone nema**: pripadnost je `tblOtpremnicaIzvori`, na nivou
+jednog otkup headera (§4.1e). Pitanje je prestalo da postoji, nije odgovoreno.
 
-Ako se ne slažeš sa tim predlogom, to je jedino mesto u modelu koje se menja.
+Otvoreno ostaje samo ono što po redosledu tek dolazi:
+
+| Pitanje | Kad se rešava |
+|---|---|
+| iz čega se računa `manjak` posle uklanjanja `Otpremnica.Cena` iz obračuna | Otpremnica cutover (§13b) |
+| da li draft-first tok dobija `CreateZbirnaDraft_TX` / `CreateOtpremnicaDraft_TX` | kad UI dobije otvoren dokument |
 
 ---
 

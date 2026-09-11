@@ -46,7 +46,7 @@ delimična fakturisanost. **Stavka.**
 
 | Dokument | Kolone stavke | Napomena |
 |---|---|---|
-| Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | |
+| Otkup | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg` | `Kolicina` je uvek **neto**; `BrutoKg` samo kod bruto unosa (§4.1d) |
 | Otpremnica | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze`, `BrutoKg` | **bez `Cena`** — izvedeni dokument, izvori mogu imati različite cene (§13b) |
 | Zbirna | `RedniBroj`, `Klasa`, `Kolicina`, `KolAmbalaze` | zbirna **nema** cenu (`modDokUnos.bas:422`) |
 | Prijemnica | `RedniBroj`, `Klasa`, `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, `Fakturisano`, `FakturaID` | |
@@ -73,9 +73,18 @@ dvoklasnog otkupa red Klase II **nikad ne dobija `Isplaceno`**, iako je kooperan
 plaćen u celosti.
 
 Posle refaktora: vrednost dokumenta = `SUM(stavke.Kolicina × stavke.Cena)`,
-`tblNovac.OtkupID` pokazuje na header, `Isplaceno` je jedno polje na headeru.
-Primary-row hack nestaje. Ovo je jedini slučaj gde refaktor menja zatečeno
-ponašanje — i menja ga zato što je zatečeno ponašanje pogrešno.
+`tblNovac.OtkupID` pokazuje na header, a **`Isplaceno` uopšte nije polje** nego
+read-model:
+
+```
+Placeno   = SUM(tblNovac vezan na OtkupID)
+Isplaceno = (Vrednost - Placeno) <= 0
+```
+
+Primary-row hack nestaje, a `modNovac` prestaje da bude pisač `tblOtkup`.
+Imenovane zamene za dva zatečena čitaoca: `DOCUMENT_HEADER_LINES.md` §4.1c.
+Ovo je jedini slučaj gde refaktor menja zatečeno ponašanje — i menja ga zato što
+je zatečeno ponašanje pogrešno.
 
 ---
 
@@ -88,24 +97,33 @@ Prefiksi po postojećoj konvenciji (`PLS-` za `tblPaletaStavka`): `OKS-`, `OPS-`
 
 ```
 OtkupID           PK, "OTK-"
+BrojDokumenta     poslovni broj -- LABELA
 Datum
 KooperantID       FK
 StanicaID         FK
-KulturaID
+ParcelaID         FK
+KulturaID         FK -- razresen, NIKAD fabrikovan
 VrstaVoca
 SortaVoca
-ParcelaID         FK
 TipAmbalaze
 KolAmbIzdata      dokument-level (OM izdao prazne kooperantu)
-VozacID           FK
-BrojDokumenta     poslovni broj -- LABELA
-Isplaceno
-DatumIsplate
-VremeUnosa
+ClientRecordID    eksterni identitet (PWA)
+SyncSource        poreklo zapisa
 Stornirano
-IspravkaOdID / ZamenjenSaID / CorrectionID / IzdatoStatus
+IzdatoStatus
+IspravkaOdID / ZamenjenSaID / CorrectionID
 CreatedAt / CreatedBy / ModifiedAt / ModifiedBy
+SourceCreatedAt   vreme nastanka na izvoru (PWA); desktop koristi CreatedAt
 ```
+
+Nema: `VozacID` (pripada otpremnici) · `Isplaceno` / `DatumIsplate` (izvedeno iz
+`tblNovac`) · `VremeUnosa` (udvajanje sa `CreatedAt`) · `Novac` /
+`PrimalacNovca` (keš ne ulazi kroz otkup) · `OtpremnicaID` / `ZbirnaID` /
+`BrojOtpremnice` / `BrojZbirne` (pripadnost je `tblOtpremnicaIzvori`) ·
+`Klasa` / `Kolicina` / `Cena` / `KolAmbalaze` / `BrutoKg` (stavka) ·
+`GeneracijaID` / `ZbirnaGeneracijaID`.
+
+Obrazloženje po koloni i imenovane zamene: `DOCUMENT_HEADER_LINES.md` §4.1c.
 
 ### `tblOtkupStavke`
 
@@ -114,11 +132,15 @@ OtkupStavkaID     PK, "OKS-"
 OtkupID           FK, obavezan
 RedniBroj
 Klasa
-Kolicina
-Cena
+Kolicina          UVEK NETO kg -- zamrznuto pri izdavanju
+Cena              STVARNO PRIMENJENA cena (cenovnik je samo predlog)
 KolAmbalaze
-BrutoKg
+BrutoKg           zamrznut original -- popunjen SAMO kad je unos bio bruto
+CreatedAt / CreatedBy / ModifiedAt / ModifiedBy
 ```
+
+Težina ambalaže se koristi samo u trenutku nastanka; `BrutoKg` i `Kolicina` se
+nikad ne rekalkulišu iz `tblTipAmbalaze` (`DOCUMENT_HEADER_LINES.md` §4.1d).
 
 ### `tblOtpremnica` (header)
 
@@ -643,8 +665,10 @@ ispravno rešenje za multi-row model. Istorija odluke ostaje čitljiva.
 
 ## 12) Testovi
 
-Baseline: čist `main` je **186/4** (četiri testa već padaju). Svaka tvrdnja o
-zelenom se poredi sa tim, ne sa nulom.
+Baseline: `main` je **zelen na svih 13 suite-ova** (`RunAllTests` 202/0,
+`BusinessFlowPro` 608/0, `RunGoldenSuite` 12/0). Ranije je ovde stajalo „186/4 —
+četiri testa već padaju"; ta četiri su u međuvremenu popravljena, pa se svaka
+tvrdnja o zelenom sada poredi sa **nulom padova**.
 
 Obavezni scenariji:
 
@@ -658,11 +682,56 @@ Obavezni scenariji:
 | `IspravkaID` | original i ispravka imaju različite ID-eve i vezu `IspravkaOdID` |
 | `PrintDvoklasni` | dvoklasni dokument se štampa kao jedan sa dve stavke |
 | `FakturaStavkaSource` | faktura referencira tačnu `PrijemnicaStavkaID`, ne pogrešnu klasu |
-| `NovacBezPrimary` | dvoklasni otkup: `Isplaceno` na headeru, bez dupliranja isplate |
+| `NovacBezPrimary` | dvoklasni otkup ima **jedan** `OtkupID`; vrednost = `SUM(stavke)`; isplata se vezuje za taj header; read-model vraća isplaćeno/neisplaćeno. **Nema persistentnog `Isplaceno`** |
 | `AmbalazaStorno` | storno poništava sva packaging kretanja bez oslanjanja na dva stara row ID-a |
 | `SemaSamoLeci` | obrisana `tblOtkupStavke` → `EnsureAllTables` je vraća; `VerifySchema` je pre toga prijavio |
 | `SemaKapija` | obrisana tabela → `CreateOtkup_TX` pada sa imenom tabele, ne na `AppendRow`-u |
 | `AutoHladnjaca` | postojeći auto-lanac funkcionalno identičan |
+
+#### Mreža za Otkup skelu — imenovano, pre writer-a
+
+Pre-Flight je platio odluke koje ništa još ne meri. Skela ih mora zaključati:
+
+| Test | Tvrdnja |
+|---|---|
+| `KulturaSeNeFabrikuje` | nerazrešena `(Vrsta, Sorta)` **pada**; ne nastaje `"Vrsta-Sorta"` string |
+| `KulturaDvosmislenaPada` | dva pogotka su greška, ne „uzmi prvi" |
+| `ParcelaPripadaKooperantu` | tuđa parcela obara upis |
+| `BrutoUnosCuvaBrutoINeto` | `BrutoKg` = tačno uneto, `Kolicina` = izračunat neto |
+| `NetoUnosNeIzmisljaBruto` | neto unos ostavlja `BrutoKg` prazno |
+| `CenaOverrideJeDozvoljen` | cena različita od cenovnika prolazi; `Cena <= 0` pada |
+| `DveKlaseJedanHeader` | dvoklasni blok = **jedan** `OtkupID` + dve stavke |
+| `DuplaKlasaPada` | dve stavke iste klase su greška |
+| `LosaDrugaStavkaRollback` | pad na drugoj stavci ne ostavlja header ni prvu |
+| `PrazanOtkupIDFailClosed` | `NewEntityID` vrati `""` → upis odbijen |
+| `PrazanOtkupStavkaIDFailClosed` | isto za `OKS-`, sa header-om već upisanim → rollback |
+| `HeaderNeNosiLinePolja` | nov writer ostavlja `Kolicina` / `Cena` / `Klasa` / `KolAmbalaze` / `BrutoKg` / `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa` **prazne** |
+| `KolAmbIzdataJeHeader` | polje je na headeru i preživi oba klasna reda |
+
+
+**Dopuna iz revizije skele.** Prva mreža je merila ono što je Pre-Flight
+odlučio, ali je propustila ono što je writer odlučio **umesto** domena — a to se
+vidi tek nad gotovim kodom:
+
+| Test | Tvrdnja |
+|---|---|
+| `NepoznatKljucUStavciPada` | stavka ima **zatvoren** spisak ključeva; `BruttoKg` ne prolazi kao „nije uneto" |
+| `KooperantMoraPostojati` | `KooperantID` je FK, ne string |
+| `StanicaMoraPostojati` | `StanicaID` je FK — **i** otkup na nematičnoj stanici prolazi |
+| `RedosledKlasaJeKanonski` | ulaz `II, I` daje `I=RB1` — `RedniBroj` nosi dokument, ne redosled poziva |
+| `SamoKlasaII` | jednoklasni blok samo druge klase je legitiman dokument |
+| `SortaPraznaSamoUzKulturuBezSorte` | prazna sorta prolazi tačno uz kulturu bez sorte; ključ koji fali je greška |
+| `TipAmbalazeVezujeSvakaAmbalaza` | obavezan kad ima primljene **ili izdate** ambalaže; bez ambalaže prazan prolazi |
+
+> Tri od njih mere **odsustvo** pooštravanja (`SamoKlasaII`, `SortaPrazna…`,
+> `TipAmbalaze…` slučaj (a)). Takav test je lako napisati kao zelen bez sadržaja,
+> pa svaki nosi i suprotan slučaj u istom telu — inače bi kapija koja **uvek**
+> odbija izgledala isto kao kapija koja radi.
+
+> **Zašto „prazno", a ne „kolone nema".** U skeli te kolone **još postoje** — stari
+> writer ih puni i brišu se tek u cutover-u. Tvrdnja `kanonska pozicija = 0`
+> (oblik `Test_PR3_OtpremnicaNemaZbirnaID`) postaje moguća **posle** Otkup
+> cutover-a, i tada zamenjuje ovu. Do tada bi bila trajno crvena.
 
 Dokaz u oba smera (pokvari → pukne **po imenu** → vrati → zeleno) obavezan za:
 `SemaKapija`, `BrojNijeIdentitet`, `ZbirnaClanstvo`, `NovacBezPrimary` — kritične
@@ -760,8 +829,8 @@ Merena cena po dokumentu:
 Skela (nove tabele + writer, aditivno) sme bilo kojim redom — Zbirna je bila
 prva jer ima najmanju transakciju, i to je i dalje bio dobar izbor.
 
-**Cutover** ide **uzvodno-nadole**: dokument sme u produkciju tek kad svi
-dokumenti na koje pokazuje po ID-u imaju svoj header identitet. `tblZbirnaIzvori`
+**Cutover** ide **uzvodno-nadole**: dokument sme da postane jedini put tek kad
+svi dokumenti na koje pokazuje po ID-u imaju svoj header identitet. `tblZbirnaIzvori`
 pokazuje na `OtpremnicaID`, a otpremnica danas nema jedan identitet — v. „Zašto
 je redosled promenjen posle PR3" ispod tabele PR-ova.
 
@@ -781,10 +850,10 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 0 | ✅ **Ugovor + model** — `ARCHITECTURE_CONTRACT.md`, `DOCUMENT_HEADER_LINES.md` | — |
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
-| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — produkcija još ide starim putem, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
-| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX`, opaque `OtkupID` po **bloku**, ne po klasi | 3 |
+| 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — stari pisač je i dalje jedini put, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
+| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
 | 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
-| 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument koji stvarno prelazi u produkciju | 5 |
+| 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument kod kog nov pisač postaje jedini put | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
 | 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
@@ -798,6 +867,20 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 Završni korak (red 13) je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
 runtime mehanizam, refaktor nije završen — to je dual identity model, gori od
 sadašnjeg.
+
+#### PWA adapter nije u skeli — i to je izbor, ne previd
+
+Roadmap je kratko nosio `ImportOtkupPWA_TX` u redu 4, dok `DOCUMENT_HEADER_LINES`
+§7 i backlog istovremeno kažu da je PWA ingest van opsega. Tri mesta, dve
+tvrdnje.
+
+**Odluka: skela nosi samo `CreateOtkup_TX`.** PWA adapter ima smisla tek kad se
+zaista testira idempotency (isti `ClientRecordID` dvaput → jedan header, jedna
+stavka) i kad stvarno **zamenjuje** `modMasterSync`, a ne stoji pored njega.
+Polovičan omotač koji ne zamenjuje ništa je treći put do istog upisa.
+
+Ide u **Otkup cutover**, zajedno sa uklanjanjem `modMasterSync`-ovog direktnog
+upisa. Tada i test `PWAReimport` postaje merljiv.
 
 ### Zašto je redosled promenjen posle PR3
 
@@ -937,7 +1020,7 @@ Isto važi za `tblOtpremnicaIzvori` kad nastane.
 A9 govori o `IspravkaOdID` / `ZamenjenSaID`, a kanon (`schema/schema.json`) i
 dalje fizički nosi `IspravkaOd` / `ZamenjenSa` / `CorrectionID`.
 
-Dok produkcija koristi stari model to se ne dira. Ali cutover mora ta polja
+Dok stari writer koristi zatečeni model to se ne dira. Ali cutover mora ta polja
 **stvarno preimenovati** — nije dovoljno reći „ovo sad znači ID". Kolona koja se
 zove `IspravkaOd` a nosi ID je tačno vrsta dvosmislenosti koju refaktor uklanja.
 
@@ -945,7 +1028,7 @@ zove `IspravkaOd` a nosi ID je tačno vrsta dvosmislenosti koju refaktor uklanja
 
 ### 14.1) Kapija odluke posle Otkup cutover-a
 
-Posle Otkupa u produkciji i skele za Otpremnicu i Zbirnu (tabela PR-ova: red 6)
+Posle Otkup cutover-a i skele za Otpremnicu i Zbirnu (tabela PR-ova: red 6)
 donosi se formalna
 odluka: **nastavak u mestu** ili **novo stablo koda**.
 
@@ -958,7 +1041,7 @@ sa alatima koji već postoje.
 
 | Metrika | Kako se meri | Prag |
 |---|---|---|
-| Pisaca nad `tblOtkup` | `who_writes.py` | 12 → ≤ 3 |
+| Pisaca nad `tblOtkup` | `who_writes.py` | **9 → 1** (`modOtkup`); `modSetup` ostaje samo `schema_owner` |
 | Linija u jezgru upisa otkupa | `wc -l` nad `CreateOtkup_TX` + core | kraće od zbira `SaveOtkup*` danas |
 | Resolver/fallback logika | `grep` za resolve/fallback/scope u jezgru | 0 |
 | Identitetski testovi | broj `T_ZBR*` / generacija testova | pada, ne raste |

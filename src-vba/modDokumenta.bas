@@ -1696,7 +1696,12 @@ End Sub
 ' Klase u kanonskom redu: I, pa II, pa sve ostalo azbucno. RedniBroj mora biti
 ' determinisan -- Dictionary.Keys cuva redosled ubacivanja, a on zavisi od
 ' redosleda otpremnica u pozivu.
-Private Function KlaseUKanonskomRedu(ByVal kolPoKlasi As Object) As Collection
+'
+' Public zbog modOtkup.CreateOtkup: tamo redosled ubacivanja zavisi od adaptera,
+' a ista poslovna cinjenica mora dati isti dokument. Ulaz je Dictionary ciji su
+' KLJUCEVI UCase-ovane klase; vrednosti se ne citaju, pa isti poziv radi i nad
+' mapom klasa->kolicina (zbirna) i nad mapom klasa->indeks stavke (otkup).
+Public Function KlaseUKanonskomRedu(ByVal kolPoKlasi As Object) As Collection
     Dim c As Collection
     Set c = New Collection
 
@@ -1816,7 +1821,7 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     Const SRC As String = "BuildZbirnaHeaderRowData"
 
     Dim colCount As Long
-    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA)
+    colCount = TabelaBrojKolona(TBL_ZBIRNA)
 
     If colCount <= 0 Then
         Err.Raise vbObjectError + 1247, SRC, _
@@ -1952,7 +1957,7 @@ Private Function BuildZbirnaIzvorRowData(ByVal izvorID As String, _
     Const SRC As String = "BuildZbirnaIzvorRowData"
 
     Dim colCount As Long
-    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_IZVORI)
+    colCount = TabelaBrojKolona(TBL_ZBIRNA_IZVORI)
 
     If colCount <= 0 Then
         Err.Raise vbObjectError + 1258, SRC, _
@@ -1979,7 +1984,7 @@ Private Function BuildZbirnaStavkaRowData(ByVal stavkaID As String, _
     Const SRC As String = "BuildZbirnaStavkaRowData"
 
     Dim colCount As Long
-    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA_STAVKE)
+    colCount = TabelaBrojKolona(TBL_ZBIRNA_STAVKE)
 
     If colCount <= 0 Then
         Err.Raise vbObjectError + 1248, SRC, _
@@ -3332,7 +3337,7 @@ Private Function BuildZbirnaRowData(ByVal zbirnaID As String, _
     Const SRC As String = "BuildZbirnaRowData"
 
     Dim colCount As Long
-    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA)
+    colCount = TabelaBrojKolona(TBL_ZBIRNA)
 
     If colCount <= 0 Then
         Err.Raise vbObjectError + 1011, SRC, _
@@ -3380,7 +3385,7 @@ Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
     Const SRC As String = "BuildPrijemnicaRowData"
 
     Dim colCount As Long
-    colCount = GetDokumentaTableColumnCount(TBL_PRIJEMNICA)
+    colCount = TabelaBrojKolona(TBL_PRIJEMNICA)
 
     If colCount <= 0 Then
         Err.Raise vbObjectError + 1430, SRC, _
@@ -4490,31 +4495,6 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
 
     RequireValidDocumentClass klasa, SRC
 End Sub
-
-Private Sub SetRowValueByColumn(ByRef rowData() As Variant, _
-                                ByVal tableName As String, _
-                                ByVal columnName As String, _
-                                ByVal value As Variant, _
-                                ByVal sourceName As String)
-    Dim colIndex As Long
-    colIndex = RequireColumnIndex(tableName, columnName, sourceName)
-
-    rowData(colIndex - 1) = value
-End Sub
-
-Private Function GetDokumentaTableColumnCount(ByVal tableName As String) As Long
-    Dim ws As Worksheet
-    Dim lo As ListObject
-
-    For Each ws In ThisWorkbook.Worksheets
-        For Each lo In ws.ListObjects
-            If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
-                GetDokumentaTableColumnCount = lo.ListColumns.count
-                Exit Function
-            End If
-        Next lo
-    Next ws
-End Function
 
 Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
                                                ByVal klasa As String, _

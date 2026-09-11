@@ -421,7 +421,27 @@
         "IzdatoStatus",
         "BrojOtpremnice",
         "GeneracijaID",
-        "ZbirnaGeneracijaID"
+        "ZbirnaGeneracijaID",
+        "SourceCreatedAt"
+      ]
+    },
+    {
+      "table": "tblOtkupStavke",
+      "const": "TBL_OTKUP_STAVKE",
+      "sheet": "OtkupStavke",
+      "columns": [
+        "OtkupStavkaID",
+        "OtkupID",
+        "RedniBroj",
+        "Klasa",
+        "Kolicina",
+        "Cena",
+        "KolAmbalaze",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
       ]
     },
     {

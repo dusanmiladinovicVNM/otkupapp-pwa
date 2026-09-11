@@ -227,6 +227,69 @@ ZBR 18   ZAMENJENA          ZBR 19   IspravkaOdID = ZBR18
 Sva tri nova dokumenta nose **isti `CorrectionID`** — nastala su iz jedne
 poslovne korekcije. Stare verzije ostaju zauvek čitljive.
 
+### „Zamenjena" nije četvrto stanje
+
+> **Zamenjena verzija je stornirana istorijska verzija sa `ZamenjenSaID`.**
+> `ZAMENJENA` nije zaseban lifecycle status.
+
+Ovo nije nova konvencija nego pravilo koje kod **već sprovodi**:
+`modStornoFlow.StampIspravkaTrace` piše `ZamenjenSa` isključivo na red koji je
+već `Stornirano = Da` — grana je `ElseIf b = oldBroj And isStorno Then`, a
+komentar iznad procedure to i kaže („`ZamenjenSa` na **storniranom** starom
+redu"). Nezapisano pravilo je sada zapisano.
+
+Time članstvo (A15) ostaje jednostavno: **aktivan roditelj = nije storniran.**
+Nema drugog upita i nema četvrtog stanja koje bi `AktivnoClanstvoPoKanonu`
+morao da poznaje.
+
+*Provera u cutover-u:* `ZamenjenSaID <> "" ⇒ Stornirano = Da`.
+
+> Posledica za UI, ne za model: superseded dokument se operateru prikazuje kao
+> **storniran**. `ZamenjenSaID` ih razlikuje za svakoga ko pita, ali izveštaj
+> koji broji „stornirano" meša otkazane i ispravljene. Tekst u storno pregledu
+> to mora da razdvoji.
+
+### Redosled propagacije nije slobodan
+
+`AktivnoClanstvoPoKanonu` izbacuje samo **stornirane** roditelje. Zato se nova
+verzija ne sme napraviti pre nego što je stara oborena:
+
+```
+POGRESNO:  napravi ZBR19   (OTP50 je jos clan AKTIVNE ZBR18)  -> ODBIJENO
+TACNO:     1. ZBR18: Stornirano = Da, ZamenjenSaID = ZBR19
+           2. ZBR19: nov ID, nov broj, IspravkaOdID, isti CorrectionID
+```
+
+Obrnut redosled je fail-closed — writer legitimno odbija sestru koja je još član
+aktivne zbirne — ali bi poruka izgledala kao kvar u kapiji članstva umesto kao
+greška u redosledu. Zato je korak 1 pre koraka 2 **deo ugovora**, ne detalj
+implementacije.
+
+**Redosled sam po sebi nije dovoljan — cela korekcija je JEDNA transakcija.**
+
+```
+storniraj staru  +  ZamenjenSaID
+napravi novu     +  IspravkaOdID  +  isti CorrectionID
+upisi novo clanstvo
+        sve u JEDNOM snapshotu
+```
+
+Pad između koraka ostavlja **ispravljen dokument storniran bez naslednika** —
+stanje koje operater vidi kao „dokument je nestao", a nijedna kapija ga ne
+prijavljuje jer je svaki pojedinačni korak legalan. Propagacija kroz više
+dokumenata (`OTK → OTP → ZBR`) je time jedna use-case transakcija, ne tri.
+
+**`ClientRecordID` se NE prenosi na novu verziju.** On identifikuje konkretan
+eksterni zapis, ne lineage korekcije:
+
+| Slučaj | `ClientRecordID` nove verzije |
+|---|---|
+| korekcija stigla kao **nov PWA zapis** | svoj, nov CRID |
+| **lokalna** korekcija PWA-importovanog dokumenta | prazan — lineage nose `IspravkaOdID` / `CorrectionID` |
+
+Kopiran CRID bi napravio dva dokumenta koja tvrde da su isti eksterni zapis, pa
+bi sledeći uvoz imao dva kandidata za idempotency.
+
 Invarijanta u jednoj rečenici:
 
 > **Napravi novu verziju dokumenta iz novih aktivnih izvora — ne prepisuj
@@ -332,8 +395,26 @@ sistema**:
 
 > „Od kojih je tačno dokumenata ova verzija bila sastavljena?"
 
+**Referencijalni integritet članstva.** Zapis članstva sme da pokazuje samo na
+dokumente koji postoje:
+
+```
+za svaki red tabele clanstva:
+    parent ID  postoji TACNO jednom
+    child  ID  postoji TACNO jednom
+```
+
+Nula ili više od jednog je integrity failure, isto kao dva aktivna članstva.
+Danas `AktivnoClanstvoPoKanonu` uzima `ZbirnaID` iz zapisa a ne traži da header
+postoji — orphan zapis time izgleda kao aktivan. Ishod je fail-closed (takva
+otpremnica se ne može ponovo upotrebiti), ali se **rešava pre bilo kog
+cutover-a**, ne nosi dalje: bez produkcionih podataka nema razloga za odlaganje.
+
+Isti helper, parametrizovan po tabeli i kolonama, koristi i
+`tblOtpremnicaIzvori` — ne druga kopija pravila.
+
 *Provera:* `Test_PR3_ClanstvoJeZapisanoPoVerziji`,
-`Test_PR3_PokazivacSeSlazeSaClanstvom`; sabotaža „ne upisuj članstvo" obara
+`Test_PR3_CitacDajeIstuZbirnuKaoClanstvo`; sabotaža „ne upisuj članstvo" obara
 prvi po imenu.
 
 ## Četiri tvrde kapije

@@ -40,6 +40,7 @@ Public Const TBL_VOZACI As String = "tblVozaci"
 Public Const TBL_KUPCI As String = "tblKupci"
 Public Const TBL_KULTURE As String = "tblKulture"
 Public Const TBL_OTKUP As String = "tblOtkup"
+Public Const TBL_OTKUP_STAVKE As String = "tblOtkupStavke"
 Public Const TBL_OTPREMNICA As String = "tblOtpremnica"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
 Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
@@ -193,6 +194,32 @@ Public Const COL_OTK_DATUM_ISPLATE As String = "DatumIsplate"
 Public Const COL_OTK_OTPREMNICA_ID As String = "OtpremnicaID"
 Public Const COL_OTK_BROJ_OTPREMNICE As String = "BrojOtpremnice"  ' Faza 7 korak 5: denorm poslovni kljuc (stabilan kroz re-verziju otpremnice)
 Public Const COL_OTK_PARCELA As String = "ParcelaID"
+' Vreme nastanka NA IZVORU (PWA GS_CREATED_AT). Prazno za desktop unos, gde
+' CreatedAt vec ima to znacenje. Stampa bira: SourceCreatedAt ako postoji, inace
+' CreatedAt -- v. DOCUMENT_HEADER_LINES S4.1c. Zamenjuje dvosmisleni VremeUnosa.
+Public Const COL_OTK_SOURCE_CREATED_AT As String = "SourceCreatedAt"
+Public Const COL_OTK_CLIENT_RECORD_ID As String = "ClientRecordID"
+Public Const COL_OTK_SYNC_SOURCE As String = "SyncSource"
+
+' --- tblOtkupStavke (Otkup skela: dokument = header + stavke) ---
+'
+' Otkup je PRIMARNA cinjenica: stavke se PRIMAJU, ne izvode. Zbirna i otpremnica
+' su izvedeni dokumenti i njihovi writeri primaju izvore -- otkup ne.
+'
+' Kolicina je UVEK neto. BrutoKg nosi originalni bruto samo kad je unos bio
+' bruto; oba su zamrznuta pri izdavanju i nikad se ne rekalkulisu iz
+' tblTipAmbalaze (S4.1d). Cena je STVARNO PRIMENJENA cena -- cenovnik je predlog.
+'
+' Bez Stornirano: line-level storno ne postoji, status drzi header
+' (v. modSchemaGuard.BEZ_STORNA).
+Public Const COL_OKS_ID As String = "OtkupStavkaID"
+Public Const COL_OKS_OTKUP_ID As String = "OtkupID"
+Public Const COL_OKS_RB As String = "RedniBroj"
+Public Const COL_OKS_KLASA As String = "Klasa"
+Public Const COL_OKS_KOLICINA As String = "Kolicina"
+Public Const COL_OKS_CENA As String = "Cena"
+Public Const COL_OKS_KOL_AMB As String = "KolAmbalaze"
+Public Const COL_OKS_BRUTO As String = "BrutoKg"
 
 ' --- Spaltennamen tblOtpremnica (NEU) ---
 Public Const COL_OTP_ID As String = "OtpremnicaID"
@@ -281,6 +308,9 @@ Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 ' Paletni list (Phase 2) -- kolone novih tabela
 ' ============================================================
 ' tblKulture extension
+Public Const COL_KUL_ID As String = "KulturaID"
+Public Const COL_KUL_VRSTA As String = "VrstaVoca"
+Public Const COL_KUL_SORTA As String = "SortaVoca"
 Public Const COL_KUL_GAJBICA_PALETA As String = "GajbicaPoPaleti"
 
 ' tblKulture: pragovi proseka neto kg po gajbici (Kolicina / KolAmbalaze).
@@ -745,6 +775,7 @@ Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 ' --- tblKulture: podrazumevani tip ambalaze (auto-puni u otkupu/dokumentima) ---
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
 ' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
+Public Const COL_STA_ID As String = "StanicaID"
 Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
 
 ' =========================
