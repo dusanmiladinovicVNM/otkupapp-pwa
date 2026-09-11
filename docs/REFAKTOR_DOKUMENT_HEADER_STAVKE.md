@@ -872,10 +872,38 @@ pomerio", nego da je ponašanje **namerno** promenjeno tačno tamo gde treba.
 
 ```
 pisac koji se menja      1   modOtkupUnos:275 (jedini produkcioni poziv)
-Split(" + ") potrosaci   9   modAmbalaza, modAutoHladnjaca, modDokUnos,
-                             modOtkupBlok, modPrint
+Split(" + ") potrosaci   4   OTKUPNI: modAmbalaza:359, modAutoHladnjaca:182,
+                             modOtkupBlok:1439, modPrint:594
+                         5   PRIJEMNICA (modDokUnos, modPrint:1090/1359) -- PR9
 A11 konsolidacija       16   upisa u 8 modula -> modOtkup API
 ```
+
+> Prvo merenje je reklo „9" i nije razdvojilo dokumente. Pet od njih parsira
+> **`prijemnicaIDs`**, ne `otkupIDs` — oni padaju u PR9, ne ovde.
+
+**Tri od četiri otkupna `Split`-a su bezbolna:** `Split("OTK-1", " + ")` vraća
+niz od jednog elementa, pa `modAmbalaza`, `modOtkupBlok` i `modPrint` nastavljaju
+da rade i posle prelaska — postaju samo besmisleni, i brišu se kao čišćenje.
+
+#### ⚠ Auto-hladnjača: jedini `Split` koji deli PO KLASI
+
+`modAutoHladnjaca:182` iz `"ID1 + ID2"` vadi `idI` i `idII` i svaku klasu vodi
+kroz **svoj** lanac: otpremnica → zbirna → prijemnica → `LinkOtkupRedNaDokument`.
+Ugovor je izričit u samom kodu (`:337`):
+
+> „Prazan `OtkupID` NIJE legitimno *nema šta da se veže*… dovde se stiže sa
+> ID-jem za svaku aktivnu klasu. Prazno ⇒ prekršen ugovor."
+
+Posle prelaska dvoklasni blok daje **jedan** ID, pa `idII` postaje `""` i noga
+Klase II se prijavljuje kao **neuspeh veze** — upozorenje operateru na svakom
+dvoklasnom unosu u hladnjaču.
+
+Dublje od toga: lanac pravi **otpremnicu po klasi**, a jedan otkup red može da
+drži **jedan** `OtpremnicaID`. Veza je time strukturno gubitna dok otpremnica ne
+pređe na header+stavke (PR7).
+
+To nije bug u lancu nego **sudar dva modela** — i pitanje je za operatera, jer
+menja opseg PR6. Odluka se upisuje ovde pre nego što korak 2 nastavi.
 
 | Kolona koja umire | Ne-test korišćenja | Modula |
 |---|---:|---:|
