@@ -223,6 +223,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_VrednostBezStavkiPada
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
+    Test_OTK_StornoJednimID
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8852,6 +8853,50 @@ Private Sub Test_OTK_EkranPauziraAutoLanac()
 
 EH:
     LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
+End Sub
+
+' STORNO DVOKLASNOG DOKUMENTA JE JEDAN POZIV NAD HEADER-ID.
+'
+' U starom modelu je dvoklasni blok bio dva reda sa istim BrojDokumenta, pa je
+' storno morao da ih grupise -- StornoOtkupByBrDok_TX i GeneracijaID postoje bas
+' zbog toga. Sa jednim headerom ta mehanika nema sta da radi.
+Private Sub Test_OTK_StornoJednimID()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSJ")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-SJ-" & scenario)
+    h.Add "KolAmbIzdata", 7#
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 600#, 40#, 30))
+    AssertTrue Len(otkID) > 0, "OTK storno: dvoklasni dokument upisan"
+    AssertEquals "2", CStr(OtkBrojStavkiZaOtkup(otkID)), "OTK storno: dve stavke"
+
+    ' JEDAN poziv, nad header-ID.
+    AssertTrue StornoOtkup_TX(otkID), "OTK storno: jedan poziv je dovoljan"
+
+    AssertEquals "Da", OtkPolje(otkID, COL_STORNIRANO), "OTK storno: header storniran"
+
+    ' Obe noge ambalaze idu sa dokumentom -- primljena i izdata.
+    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OTKUP, "Izlaz", COL_STORNIRANO), _
+                 "OTK storno: primljena ambalaza stornirana"
+    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz", COL_STORNIRANO), _
+                 "OTK storno: izdata ambalaza stornirana"
+
+    ' Stavke NEMAJU svoj storno: aktivnost stavke je pitanje za header (S7).
+    AssertEquals "2", CStr(OtkBrojStavkiZaOtkup(otkID)), _
+                 "OTK storno: stavke ostaju, njihovu aktivnost drzi header"
+
+    ' Drugi storno istog dokumenta ne prolazi -- nema sta da se stornira dvaput.
+    AssertTrue Not StornoOtkup_TX(otkID), "OTK storno: ponovljeni storno odbijen"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_StornoJednimID", Err.Number, Err.description
 End Sub
 
 ' EKRAN I PISAC IMAJU ISTO PRAVILO ZA BROJ.
