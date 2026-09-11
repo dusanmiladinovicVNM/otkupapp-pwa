@@ -1674,6 +1674,83 @@ ne polovično.
 
 ---
 
+### 14.6) Korak 7 je izmeren i podeljen (ne odložen)
+
+„Reader sweep → brisanje kolona" je u planu stajao kao **jedna** stavka. Merenje
+kaže da je to dve — i da se granica poklapa sa granicom PR-ova, ne sa procenom.
+
+Popis (skripta broji pojave `COL_OTK_*` u kodu, bez komentara):
+
+| Kolone | Pojava | Zašto odlaze | Kad su stvarno slobodne |
+|---|---:|---|---|
+| `OtpremnicaID`, `BrojZbirne`, `VozacID`, `BrojOtpremnice` | 141 | članstvo (A15) / labela (A2) | **PR7** — čitaoci su po-klasna otpremnica |
+| `GeneracijaID` | 69 | identitet; §11.1 briše celu mašineriju | **PR8** (zbirna) |
+| `Kolicina`, `Cena`, `Klasa`, `KolAmbalaze` | 170 | stavke (§4.1) | čitaoci su **isti moduli** kao gore |
+| `Isplaceno`, `DatumIsplate` | 12 | keš izvedenog statusa (korak 4) | **sada** |
+| `Novac`, `PrimalacNovca` | 9 | `tblNovac` | skoro — v. dole |
+
+Ukupno **401 pojava u 27 produkcionih modula**. Od toga **210** pripada
+čitaocima koje PR7/PR8 ionako prepisuju: sweep sada značio bi pisati čitaoce
+protiv modela koji se uklanja — ista greška zbog koje privremeni čitač za
+`TraceByZbirna` nije napravljen.
+
+**Odluka operatera: u PR6 ide samo ono što je stvarno slobodno.**
+
+#### Obrisano
+
+`tblOtkup.Isplaceno` i `tblOtkup.DatumIsplate` — posle koraka 4 nemaju **nijednog
+pisca** i nijednog živog čitaoca. Otisak šeme: `EC04DB7C → A410CF67`, 648 → 646
+kolona.
+
+Uz njih je otišao i `modOtkup.GetSaldoByStation`: sabirao je `Kolicina`, `Novac` i
+`KolAmbalaze` **sa zaglavlja** po kooperantu — tri kolone koje nov pisac ne piše.
+Da ga je iko zvao, vraćao bi nule. Grep po celom `src-vba` daje samo redove unutar
+same funkcije: mrtav čitač mrtve kolone, pa se briše a ne prepisuje.
+
+`Novac` i `PrimalacNovca` **ostaju**: njihov jedini živi čitač je po-klasni lister
+u `modDokumenta:6073`, koji je PR7. Ostala dva su mrtva (`GetSaldoByStation`,
+sada obrisan) i pauzirana (`modOtkupBlok` prefill).
+
+#### Sveska mora da IZGUBI kolonu, ne samo kanon
+
+Ovo je posledica koju je lako prevideti: kolona obrisana iz **sredine** kanona
+pomera sve iza sebe, a `AppendRow` piše **pozicijski**. Zatečena sveska sa viškom
+tada šalje vrednosti u pogrešna polja — `modSchema` to hvata i staje, ali sveska
+ostaje neupotrebljiva dok se višak ne ukloni.
+
+Zato su dva mesta dobila migraciju:
+
+| Gde | Šta radi |
+|---|---|
+| `modSetup.ObrisiKolonuAko` | briše na startu aplikacije, **samo po imenu iz uskog spiska** |
+| `tools/make_fixture.py` `DROP_COLS` | isto, jer generator gradi iz donora a ne pokretanjem aplikacije |
+
+Brisanje je **jedini destruktivan korak** u self-heal-u, pa je i najuži: nema
+petlje po „sve što nije u kanonu" — `EnsureRuntimeSchema` legitimno dodaje kolone
+na kraj pre nego što ih kanon preuzme, pa bi takva petlja brisala tekući rad.
+
+#### Destruktivan put je dobio meru
+
+`ObrisiKolonuAko` i `PreimenujKolonuAko` do sada **nije izvršio niko**: fixture je
+migriran generatorom, pa je VBA put ostao mrtav. Kod koji briše kolonu a nikad
+nije pokrenut je najgora vrsta nemerene odbrane.
+
+`Test_OTK_SelfHealMigracijeKolona` radi nad kolonom koju sam doda **na kraj**
+tabele — višak na kraju ne pomera nijednu kanonsku poziciju (otisak se računa nad
+kanonskim prefiksom), pa ni pad testa ne ostavlja svesku u lošem stanju. Test
+pokriva: preimenovanje, idempotenciju, brisanje, brisanje nepostojeće kolone, i
+slučaj **oba imena odjednom** (stanje koje pravi međuverzija).
+
+Sabotaža: gašenje brisanja obara 4 tvrdnje po imenu, pretvaranje preimenovanja u
+dodavanje 5.
+
+> **Jedna kapija namerno ne bije.** Gašenje provere „već migrirano" ne obara
+> nijednu tvrdnju — mereno. Excel sam odbija drugu `ListColumn` istog imena, pa se
+> ishod ne menja. Kapija štedi `LogError` na **svakom** startu takve sveske, ne
+> podatak; to je razlog zbog kog ostaje, i tako je i imenovana u kodu.
+
+---
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

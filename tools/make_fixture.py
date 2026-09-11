@@ -2193,6 +2193,14 @@ SEED["tblOtkupStavke"] = [
 # pomaze: modSchema poredi i POZICIJU (upis je pozicion), a stara kolona bi ostala
 # tu gde jeste. Preimenovanje na mestu cuva i poziciju i podatke -- isto sto radi
 # modSetup.PreimenujKolonuAko na startu aplikacije.
+# Kolone koje je KANON OBRISAO. Donor ih jos ima, a kolona obrisana iz SREDINE
+# pomera sve iza sebe -- pozicioni AppendRow tada salje vrednosti u pogresna polja.
+# Isto radi modSetup.ObrisiKolonuAko na startu aplikacije.
+DROP_COLS = {
+    # Kes izvedenog statusa isplate (korak 7); istina zivi u tblNovac.
+    "tblOtkup": ["Isplaceno", "DatumIsplate"],
+}
+
 RENAME_COLS = {
     # A9: veza ispravke ide po ID-u; za sada samo tblOtkup.
     "tblOtkup": [("IspravkaOd", "IspravkaOdID"),
@@ -2370,6 +2378,7 @@ def signature() -> str:
         "ENSURE_COLS=" + repr(sorted((t, cols) for t, cols in ENSURE_COLS.items())),
         "ENSURE_TABLES=" + repr(sorted((t, sh, cols) for t, (sh, cols) in ENSURE_TABLES.items())),
         "RENAME_COLS=" + repr(sorted(RENAME_COLS.items())),
+        "DROP_COLS=" + repr(sorted(DROP_COLS.items())),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -2621,6 +2630,21 @@ def build(donor: str, out: str, force: bool) -> int:
                         created_tables.append(f"{table_name}.{h}")
         if created_tables:
             print("Kreirano (tabele/kolone): " + ", ".join(created_tables))
+
+        # Brisanja idu PRVA: preimenovanje i dopuna gledaju pozicije.
+        dropped = []
+        for table_name, kolone in DROP_COLS.items():
+            lo = find_table(wb, table_name)
+            if lo is None:
+                raise SchemaError(f"{table_name} ne postoji u donoru (DROP_COLS)")
+            for ime in kolone:
+                poz = header_index(lo).get(ime.strip().lower())
+                if poz is None:
+                    continue                       # vec obrisana
+                lo.ListColumns(poz).Delete()
+                dropped.append(f"{table_name}.{ime}")
+        if dropped:
+            print("Obrisane kolone: " + ", ".join(dropped))
 
         # Preimenovanja PRE dopune: inace bi ENSURE_COLS dodao novo ime pored
         # starog, pa bi tabela nosila oba oblika.

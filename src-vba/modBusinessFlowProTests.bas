@@ -231,6 +231,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaKapije
     Test_OTK_IspravkaNeGubiNovac
     Test_OTK_IspravkaIzdatRoditeljFailClosed
+    Test_OTK_SelfHealMigracijeKolona
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
@@ -6556,10 +6557,6 @@ Private Sub Test_OTK_HeaderNeNosiLinePolja()
 
     AssertEquals "", OtkPolje(otkID, COL_OTK_VOZAC), _
                  "OTK header: VozacID prazan (vozac pripada otpremnici)"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_ISPLACENO), _
-                 "OTK header: Isplaceno prazno (read-model)"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_DATUM_ISPLATE), _
-                 "OTK header: DatumIsplate prazan"
     AssertEquals "", OtkPolje(otkID, COL_OTK_VREME_UNOSA), _
                  "OTK header: VremeUnosa prazno (CreatedAt/SourceCreatedAt)"
 
@@ -9306,9 +9303,9 @@ Private Sub Test_OTK_StatusIsplateJeIzveden()
 
     AssertTrue OtkUOtvorenim(otkID), "OTK isplata: nov dokument je otvorena obaveza"
 
-    ' Zaglavlje NE nosi status -- niko ga vise ne pise.
-    AssertEquals "", OtkPolje(otkID, COL_OTK_ISPLACENO), _
-                 "OTK isplata: zaglavlje ne nosi Isplaceno"
+    ' Kolone Isplaceno/DatumIsplate vise NE POSTOJE (korak 7), pa se ni ne
+    ' tvrde. Da se vrate, kapija je staticka: kanon i modSchema moraju u korak
+    ' (gen_schema_module --check), a zatecena sveska pada na poziciji kolone.
 
     SaveNovac TEST_PREFIX & "-NOV-D-" & scenario, NextTestDate(), _
               "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
@@ -9623,6 +9620,114 @@ Private Sub Test_OTK_IspravkaIzdatRoditeljFailClosed()
 
 EH:
     LogFatal "Test_OTK_IspravkaIzdatRoditeljFailClosed", Err.Number, Err.description
+End Sub
+
+' SELF-HEAL MIGRACIJE KOLONA -- destruktivan put mora da ima meru.
+'
+' Kanon je u koraku 5 PREIMENOVAO dve kolone na tblOtkup, a u koraku 7 OBRISAO
+' druge dve. Zatecena sveska mora da prati: kolona koja ostane u SREDINI pomera
+' sve iza sebe, a AppendRow pise POZICIONO -- vrednosti bi tiho otisle u pogresna
+' polja. modSchema to hvata i staje, ali sveska ostaje neupotrebljiva.
+'
+' Fixture je migriran generatorom (make_fixture: DROP_COLS / RENAME_COLS), pa
+' VBA put do ovog testa nije izvrsavao NIKO. Kod koji brise kolonu, a nikad nije
+' pokrenut, je najgora vrsta nemerene odbrane.
+'
+' Test radi nad kolonom koju sam doda NA KRAJ tabele: visak na kraju ne pomera
+' nijednu kanonsku poziciju (otisak se racuna nad kanonskim prefiksom), pa ni
+' pad testa ne ostavlja svesku u losem stanju.
+Private Sub Test_OTK_SelfHealMigracijeKolona()
+    On Error GoTo EH
+
+    Const PROBA As String = "ZZTestKolonaProba"
+    Const PROBA2 As String = "ZZTestKolonaProbaID"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_OTKUP)
+    AssertTrue Not lo Is Nothing, "SelfHeal: tblOtkup postoji"
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    ' --- PREIMENOVANJE ---
+    lo.ListColumns.Add().name = PROBA
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, "SelfHeal: proba kolona dodata"
+
+    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
+
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal: staro ime vise ne postoji"
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+               "SelfHeal: novo ime postoji"
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: preimenovanje NE dodaje kolonu"
+
+    ' Idempotentno: drugi prolaz nema sta da radi i ne sme da pogazi.
+    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+               "SelfHeal: drugi prolaz preimenovanja ne kvari nista"
+
+    ' OBA IMENA ODJEDNOM -- stanje koje pravi medjuverzija.
+    '
+    ' Sveska koju je stara grana vec dopunila novim imenom (EnsureColumnOnTable
+    ' dodaje NA KRAJ), a staro jos nosi. Bez kapije 'vec migrirano' preimenovanje
+    ' bi napravilo DVE kolone istog imena -- Excel ih tada sam preimenuje u
+    ' 'ime2' i pozicioni upis dobija polje koje niko ne trazi.
+    '
+    ' MERENO: gasenje kapije 'vec migrirano' NE obara ovaj test, i to je tacan
+    ' rezultat -- Excel sam odbija drugu ListColumn istog imena, pa se ishod ne
+    ' menja. Kapija stedi LogError na svakom startu takve sveske, ne podatak.
+    ' Test zato tvrdi ISHOD (nema duplikata, nista se nije pomerilo), a razlog
+    ' zbog kog kapija ipak stoji pise uz nju u modSetup.
+    Dim loM As ListObject
+    Set loM = GetTable(TBL_OTKUP)
+    loM.ListColumns.Add().name = PROBA
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, "SelfHeal: staro ime vraceno"
+    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: sada postoje OBA imena"
+
+    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
+
+    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: sa oba imena preimenovanje NE radi nista"
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
+               "SelfHeal: staro ime je netaknuto (nema duplikata)"
+
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: pomocna kolona sklonjena"
+
+    ' --- BRISANJE ---
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA2)), _
+                 "SelfHeal: kolona je obrisana"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: tabela je vracena na polazni broj kolona"
+
+    ' Idempotentno i u drugom smeru.
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: brisanje nepostojece kolone ne dira tabelu"
+
+    ' --- KANONSKE KOLONE SE NE DIRAJU ---
+    ' Kapija je uska po imenu, ne po pravilu "sve sto nije u kanonu": modSetup
+    ' legitimno dodaje kolone NA KRAJ pre nego sto ih kanon preuzme.
+    modSetup.ObrisiKolonuAko TBL_OTKUP, "NemaOvakveKolone"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: nepoznato ime ne obara nijednu kanonsku kolonu"
+    AssertTrue GetColumnIndex(TBL_OTKUP, COL_OTK_ID) > 0, _
+               "SelfHeal: OtkupID je netaknut"
+
+    Exit Sub
+
+EH:
+    ' Ciscenje i posle pada -- visak kolone ne sme da ostane iza testa.
+    On Error Resume Next
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+    On Error GoTo 0
+    LogFatal "Test_OTK_SelfHealMigracijeKolona", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTK_VrednostBezStavkiPada()

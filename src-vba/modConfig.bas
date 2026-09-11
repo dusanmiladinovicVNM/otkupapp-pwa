@@ -191,8 +191,9 @@ Public Const COL_OTK_PRIMALAC As String = "PrimalacNovca"
 Public Const COL_OTK_KLASA As String = "Klasa"
 Public Const COL_OTK_STORNIRANO As String = "Stornirano"
 Public Const COL_OTK_BROJ_ZBIRNE As String = "BrojZbirne"
-Public Const COL_OTK_ISPLACENO As String = "Isplaceno"
-Public Const COL_OTK_DATUM_ISPLATE As String = "DatumIsplate"
+' Isplaceno i DatumIsplate su OBRISANI iz tblOtkup (korak 7). Bili su kes
+' obrisanog UpdateOtkupStatus; status isplate je izveden iz vrednosti stavki i
+' zbira isplata u tblNovac (modNovac.GetOpenOtkupi).
 Public Const COL_OTK_OTPREMNICA_ID As String = "OtpremnicaID"
 Public Const COL_OTK_BROJ_OTPREMNICE As String = "BrojOtpremnice"  ' Faza 7 korak 5: denorm poslovni kljuc (stabilan kroz re-verziju otpremnice)
 Public Const COL_OTK_PARCELA As String = "ParcelaID"

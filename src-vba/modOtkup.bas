@@ -1525,8 +1525,6 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                    COL_OTK_KLASA, _
                    COL_OTK_STORNIRANO, _
                    COL_OTK_BROJ_ZBIRNE, _
-                   COL_OTK_ISPLACENO, _
-                   COL_OTK_DATUM_ISPLATE, _
                    COL_OTK_OTPREMNICA_ID, _
                    COL_OTK_PARCELA
 
@@ -1565,8 +1563,6 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
         klasa, _
         "", _
         brojZbirne, _
-        "", _
-        Empty, _
         "", _
         parcelaID _
     )
@@ -1742,88 +1738,14 @@ EH:
     LogErr "modOtkup.GetOtkupByKooperant"
     GetOtkupByKooperant = Empty
 End Function
-Public Function GetSaldoByStation(ByVal stanicaID As String, _
-                                  Optional ByVal datumOd As Date = 0, _
-                                  Optional ByVal datumDo As Date = 0) As Variant
-    On Error GoTo EH
-
-    Dim otkupData As Variant
-    otkupData = GetOtkupByStation(stanicaID, datumOd, datumDo)
-
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-
-    If Not IsEmpty(otkupData) Then
-        Dim colKoop As Long
-        Dim colKol As Long
-        Dim colNovac As Long
-        Dim colAmb As Long
-
-        colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, _
-                                     "modOtkup.GetSaldoByStation")
-        colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, _
-                                    "modOtkup.GetSaldoByStation")
-        colNovac = RequireColumnIndex(TBL_OTKUP, COL_OTK_NOVAC, _
-                                      "modOtkup.GetSaldoByStation")
-        colAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, _
-                                    "modOtkup.GetSaldoByStation")
-
-        Dim i As Long
-        Dim key As String
-        Dim vals As Variant
-
-        For i = 1 To UBound(otkupData, 1)
-            key = CStr(otkupData(i, colKoop))
-
-            If key <> "" Then
-                If Not dict.Exists(key) Then
-                    dict.Add key, Array(0#, 0#, 0#)
-                End If
-
-                vals = dict(key)
-
-                If IsNumeric(otkupData(i, colKol)) Then vals(0) = vals(0) + CDbl(otkupData(i, colKol))
-                If IsNumeric(otkupData(i, colNovac)) Then vals(1) = vals(1) + CDbl(otkupData(i, colNovac))
-                If IsNumeric(otkupData(i, colAmb)) Then vals(2) = vals(2) + CLng(otkupData(i, colAmb))
-
-                dict(key) = vals
-            End If
-        Next i
-    End If
-
-    ' TODO:
-    ' Ovaj helper trenutno racuna samo bruto saldo iz tblOtkup.
-    ' Banka/Novac/Isporuka korekcije treba resiti u posebnom report modulu,
-    ' ne siriti ovaj core save modul bez jasnog accounting pravila.
-
-    If dict.count = 0 Then
-        GetSaldoByStation = Empty
-        Exit Function
-    End If
-
-    Dim result() As Variant
-    ReDim result(1 To dict.count, 1 To 4)
-
-    Dim keys As Variant
-    keys = dict.keys
-
-    For i = 0 To dict.count - 1
-        result(i + 1, 1) = keys(i)
-
-        vals = dict(keys(i))
-        result(i + 1, 2) = vals(0)
-        result(i + 1, 3) = vals(1)
-        result(i + 1, 4) = vals(2)
-    Next i
-
-    GetSaldoByStation = result
-    Exit Function
-
-EH:
-    LogErr "modOtkup.GetSaldoByStation"
-    GetSaldoByStation = Empty
-End Function
-
+' GetSaldoByStation JE OBRISAN (korak 7).
+'
+' Sabirao je Kolicina, Novac i KolAmbalaze SA ZAGLAVLJA po kooperantu -- tri
+' kolone koje nov pisac ne pise. Da ga je iko zvao, vracao bi nule.
+'
+' Nije ga zvao niko: grep po celom src-vba daje samo redove unutar same funkcije.
+' Mrtav citac mrtve kolone -- brise se, ne prepisuje. Saldo po stanici, kad
+' zatreba, ide iz stavki i tblNovac, ne iz zaglavlja.
 
 Private Sub PrintOtkupTxFailure(ByVal sourceName As String, _
                                 ByVal errSrc As String, _

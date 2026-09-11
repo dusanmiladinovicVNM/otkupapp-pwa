@@ -1650,22 +1650,19 @@ Private Sub SeedKooperantSaRacunom(ByVal koopID As String, ByVal ime As String, 
 End Sub
 
 ' Otkup red koji je VEC ISPLACEN -> GetOpenOtkupi ga preskace.
-' ISPLACEN ZNACI PLACEN, ne "oznacen kao placen".
+' ISPLACEN ZNACI PLACEN -- knjizen novac, ne kolona.
 '
-' Kolona Isplaceno je bila kes koji je odrzavao UpdateOtkupStatus; on je obrisan
-' (korak 4), pa je status sada IZVEDEN: otvoreno = vrednost stavki minus zbir
-' isplata iz tblNovac. Fixture zato mora da knjizi i sam novac -- inace "zatvoren
-' red" ostaje otvoren i testovi mere nesto trece.
-'
-' Kolona se i dalje upisuje: jos postoji u semi (brise se u koraku 7), a
-' modProductionHealthCheck je koristi kao DRIFT kapiju.
+' Kolona Isplaceno je bila kes obrisanog UpdateOtkupStatus (korak 4) i vise ne
+' postoji u semi (korak 7). Status je izveden: otvoreno = vrednost stavki minus
+' zbir isplata iz tblNovac. Fixture zato knjizi pokrivajucu isplatu -- inace
+' "zatvoren red" ostaje otvoren i testovi mere nesto trece.
 Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
                               ByVal brDok As String, ByVal kolicina As Double, _
                               ByVal cena As Double, ByVal vrsta As String)
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
-        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
     BitOtkupStavka otkID, kolicina, cena
     SeedIsplataZaOtkup "NOV-PLC-" & brDok, koopID, otkID, kolicina * cena
 End Sub

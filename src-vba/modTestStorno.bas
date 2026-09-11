@@ -1189,8 +1189,8 @@ End Sub
 Private Sub SeedOtkupPlacen(ByVal otkID As String, ByVal kolicina As Double, ByVal cena As Double)
     SvAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_ISPLACENO, COL_OTK_DATUM_ISPLATE), _
-        Array(otkID, otkID, "SVT-KOOP-P", kolicina, cena, STATUS_ISPLACENO, Date)
+              COL_OTK_CENA), _
+        Array(otkID, otkID, "SVT-KOOP-P", kolicina, cena)
     SeedOtkupStavka otkID, kolicina, cena
 End Sub
 
@@ -1336,14 +1336,6 @@ Private Function OtkOtvorenaObaveza(ByVal otkID As String) As Boolean
             Exit Function
         End If
     Next i
-End Function
-
-Private Function OtkIsplaceno(ByVal otkID As String) As String
-    OtkIsplaceno = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_ISPLACENO))
-End Function
-
-Private Function OtkDatumIsplate(ByVal otkID As String) As String
-    OtkDatumIsplate = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM_ISPLATE))
 End Function
 
 Private Function OtkOtpremnicaID(ByVal blkID As String) As String
