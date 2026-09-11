@@ -2,6 +2,7 @@
 paths:
   - "src-vba/modConfig.bas"
   - "src-vba/modDataAccess.bas"
+  - "src-vba/modSchemaGuard.bas"
   - "src-vba/modSetup.bas"
   - "src-vba/modPodesavanja.bas"
   - "src-vba/modHelpers.bas"
@@ -12,6 +13,7 @@ paths:
   - "tools/gen_schema_module.py"
   - "tools/schema_diff.py"
   - "docs/DOMEN/WRITE_OWNERSHIP.json"
+  - "tools/who_writes.py"
 ---
 
 # Podaci, šema tabela i config
@@ -23,7 +25,7 @@ paths:
 | Oblast | Gde |
 |---|---|
 | Tabele / kolone / konstante | `modConfig.bas` (`TBL_*`, `COL_*`) |
-| Pristup podacima | `modDataAccess.bas` (`GetTableData` / `GetColumnIndex` / `UpdateCell` / `AppendRow` / `GetNextID` / `LookupValue`) |
+| Pristup podacima | `modDataAccess.bas` (`GetTableData` / `GetColumnIndex` / `UpdateCell` / `AppendRow` / **`DeleteRow`** / `GetNextID` / `LookupValue`) |
 | Filter/sort/util nad nizovima | `modArrayUtils.bas` (`FilterArray`, `SortArray`), `modHelpers.bas` (`Nz` / `NzToText` / `ExcludeStornirano` / `FillCmb`) |
 | Setup / šeme | `modSetup` (`SetupNewPC`, `Ensure*Schema`; `SetupPopplerInteractive` / `SetupBankFoldersInteractive` pickeri; `RunSetupHealthCheck` uklj. živi `CheckServerLink` / `TestServerLink`), first-run kapija u `StartApp` (nudi `SetupNewPC` dok `APP_SETUP_COMPLETED != DA`), Admin dugmad `modAdmin` (health/googleauth/ensure), dijagnostika `DebugKoloneTabele` |
 
@@ -96,12 +98,43 @@ Od PR #302 to više nije samo upozorenje: redosled je u kanonu, otisak ga meri, 
   tabelu ili kolonu, ali ne i red. `modSetup` sme da napravi `tblOtkup` — ne sme
   da upiše otkup.
 - **Snapshot nije vlasništvo.** `AddTableSnapshot` znači „moja transakcija mora
-  da ume da vrati ovu tabelu". Kapija meri **mutatore** (`AppendRow` /
-  `UpdateCell` / `RequireUpdateCell`).
+  da ume da vrati ovu tabelu". Kapija meri **mutatore**: `AppendRow`,
+  `UpdateCell` i `DeleteRow`, svaki i sa `Require` prefiksom.
 - Lista je **račna**: zamrznuto zatečeno stanje, pa hvata **širenje**. Skraćuje
   se kroz PR-ove ka `cilj`-u. Ne proširuj je da bi prošao — zovi API vlasnika.
 
 Pun ugovor: `docs/DOMEN/ARCHITECTURE_CONTRACT.md`.
+
+## Brisanje reda je RAZRED UPISA, ne pomoćna radnja
+
+`modDataAccess.DeleteRow(tblName, rowIndex)` postoji od PR #307. Do tada se
+poslovni red **nikad nije brisao** — samo označavao `Stornirano = Da`.
+
+**`Stornirano` i dalje važi za dokumente.** Otkup, otpremnica, zbirna,
+prijemnica i novac se ne brišu: append-only + storno je ceo model sledljivosti
+(A9, A13). Danas `DeleteRow` zovu **dva** mesta, oba nad DRAFT otpremnicom
+(`modDokumenta`): stavka očekivanja i red članstva, oba uklonjena **pre
+izdavanja**. Obrazloženje stoji uz sam primitiv: izvor uklonjen pre izdavanja
+nikad nije bio deo dokumenta, pa tombstone ne bi čuvao ništa — samo bi naterao
+svakog čitača sastava da filtrira redove koji nikad nisu važili.
+
+- **Zovi ga kroz `RequireDeleteRow`, ne golo.** `DeleteRow` vraća `False` (ne
+  diže grešku) kad tabele nema, kad je prazna ili kad je indeks van opsega;
+  golo, neprovereno brisanje tada **tiho ne uradi ništa**.
+- **Jednoznačnost je ODVOJENA provera.** `RequireDeleteRow` **ne** proverava
+  koliko redova odgovara ključu — on prima **indeks**. Kad indeks dolazi iz
+  pretrage, pre njega ide `RequireTacnoJedan`; inače je „nađi pa obriši" isti
+  kvar kao „prvi pogodak pobeđuje" kod FK-ova (AUD-026).
+- **Indeks stari.** Posle jednog brisanja svi indeksi iza njega se pomeraju. U
+  petlji se ide **unazad**, ili se indeksi razrešavaju iznova.
+- **Primitiv postoji zbog A11, ne zbog udobnosti.** Kapija meri upise po
+  **imenu mutatora** (`who_writes.py`); `lo.ListRows(i).Delete` sakriven u telu
+  modula bio bi mutacija koju registar vlasništva ne vidi.
+
+Pre nego što dodaš treće mesto koje briše: `BEZ_STORNA` u `modSchemaGuard`
+nabraja tabele kod kojih storno **ne postoji kao koncept** (šifarnici, stavke,
+tabele članstva). Tabela koja nije na toj listi se ne briše bez odluke u
+`docs/DOMEN/`.
 
 ## TRI config tabele — ČITANJE i UPIS moraju u ISTU tabelu
 
