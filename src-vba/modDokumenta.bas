@@ -3353,6 +3353,39 @@ Private Function OtpGajbeIzvora(ByVal otkupID As String, ByVal src As String) As
     Next i
 End Function
 
+' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
+'
+' Pripadnost zivi iskljucivo u tblOtpremnicaIzvori (S4.1e) -- nema kolone na
+' otkupu koja bi na to odgovorila, i to je namerno. Javni ulaz postoji zato sto
+' pisac otkupa mora da pita pre ispravke (A13), a duplirana implementacija istog
+' pitanja je upravo ono sto je kanonsko clanstvo trebalo da ukine.
+'
+' Dva aktivna clanstva podizu gresku, ne vracaju jedno od njih -- v. citac ispod.
+Public Function OtpremnicaZaOtkup(ByVal otkupID As String) As String
+    Const SRC As String = "OtpremnicaZaOtkup"
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim mapa As Object
+    Set mapa = AktivnoOtpClanstvoPoKanonu(SRC)
+    If mapa.Exists(UCase$(otkupID)) Then OtpremnicaZaOtkup = CStr(mapa(UCase$(otkupID)))
+End Function
+
+' Da li je otpremnica IZDATA (nije DRAFT).
+'
+' Prazan status NIJE "izdato": nov pisac ga upisuje eksplicitno (S4.1e), pa je
+' prazno polje zatecen red ili drift -- a tumaciti drift kao izdat dokument bi
+' otvorilo bas kapiju koju A13 zatvara.
+Public Function OtpremnicaJeIzdata(ByVal otpremnicaID As String) As Boolean
+    otpremnicaID = Trim$(otpremnicaID)
+    If Len(otpremnicaID) = 0 Then Exit Function
+
+    OtpremnicaJeIzdata = (UCase$(Trim$(NzToText(LookupValue( _
+                             TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, _
+                             COL_TRACE_IZDATO_STATUS)))) = UCase$(IZDATO_IZDATO))
+End Function
+
 ' OtkupID -> OtpremnicaID, za sve NEstornirane otpremnice.
 '
 ' Dva aktivna zapisa za isti otkup su tvrda greska integriteta, ne stanje koje

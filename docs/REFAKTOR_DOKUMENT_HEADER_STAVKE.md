@@ -1634,6 +1634,46 @@ naslednika 1, izostanak `ZamenjenSaID` 4.
 
 ---
 
+### 14.5) A13 kapija: izdat roditelj se ne menja ispod ruke (korak 6)
+
+Izdata otpremnica je **papir sa sastavom**. Ispravka jednog njenog izvora nije
+lokalna: otpremnica mora dobiti novu verziju sa novim brojem, a za njom i zbirna
+(H1, `GOLDEN_SCENARIJI.md` §12). Ta propagacija je PR7 — do tada se staje glasno.
+
+```
+otkup u IZDATOJ otpremnici  ->  IspravkaOtkupa_TX PADA, imenuje otpremnicu
+otkup u DRAFT otpremnici    ->  ispravka PROLAZI
+otkup bez otpremnice        ->  ispravka PROLAZI
+```
+
+Tiha alternativa bi bila najgora: nov otkup, stara otpremnica netaknuta, i izdat
+papir koji više ne opisuje robu koju nosi.
+
+**DRAFT se namerno ne blokira.** Članstvo drafta je mutabilno po dogovoru, a
+`IzdajOtpremnicu_TX` revalidira izvore pri izdavanju — storniran otkup ne može da
+prođe kroz izdavanje. Kapija koja bi blokirala i draft izgledala bi isto zeleno,
+a oduzela bi operateru ispravku dokumenta koji još niko nije video. Test zato meri
+**obe** strane granice.
+
+#### Pripadnost se pita, ne izvodi
+
+Otkup nema kolonu koja bi rekla kojoj otpremnici pripada — to je §3.1, i namerno.
+`modDokumenta` je zato dobio dva javna čitača nad kanonskim članstvom:
+
+| Ulaz | Vraća | Napomena |
+|---|---|---|
+| `OtpremnicaZaOtkup(otkupID)` | `OtpremnicaID` ili `""` | dva aktivna članstva **podižu grešku**, ne vraćaju jedno |
+| `OtpremnicaJeIzdata(otpremnicaID)` | `True` samo za `IZDATO` | prazan status **nije** „izdato" — nov pisac ga upisuje eksplicitno, pa je prazno polje drift |
+
+Javni ulaz postoji baš zato da pisac otkupa ne dobije **drugu** implementaciju
+istog pitanja — dupliranje je ono što je kanonsko članstvo trebalo da ukine.
+
+Sabotaža: gašenje provere izdatosti obara **6** tvrdnji po imenu — uključujući
+„odbijena ispravka nije upisala nijedan red", koja meri da je odbijanje potpuno, a
+ne polovično.
+
+---
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

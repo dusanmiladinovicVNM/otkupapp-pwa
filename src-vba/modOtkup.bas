@@ -234,6 +234,31 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                   "Dokument je vec storniran, nema sta da se ispravi: " & stariOtkupID
     End If
 
+    ' A13: IZDAT RODITELJ SE NE MENJA ISPOD RUKE.
+    '
+    ' Ako otkup vec ucestvuje u IZDATOJ otpremnici, njegova ispravka nije lokalna:
+    ' otpremnica je izdata sa tim sastavom, pa mora dobiti NOVU VERZIJU sa novim
+    ' brojem (H1 u GOLDEN_SCENARIJI S12), a za njom i zbirna. Ta propagacija je
+    ' PR7; do tada se staje GLASNO.
+    '
+    ' Tiha alternativa bi bila najgora: nov otkup, stara otpremnica netaknuta, i
+    ' izdat papir koji vise ne opisuje robu koju nosi.
+    '
+    ' DRAFT roditelj se NE blokira -- clanstvo drafta je mutabilno po dogovoru, a
+    ' IzdajOtpremnicu_TX revalidira izvore pri izdavanju, pa storniran otkup ne
+    ' moze da prodje kroz izdavanje.
+    Dim roditelj As String
+    roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
+    If Len(roditelj) > 0 Then
+        If modDokumenta.OtpremnicaJeIzdata(roditelj) Then
+            Err.Raise vbObjectError + 1918, SRC, _
+                      "Otkup je u IZDATOJ otpremnici " & roditelj & _
+                      ". Ispravka bi promenila sastav izdatog dokumenta (A13) -- " & _
+                      "propagacija na otpremnicu i zbirnu jos ne postoji. " & _
+                      "Storniraj otpremnicu pa ponovi."
+        End If
+    End If
+
     ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
     ' jedinstvenost broja -- ista greska sa dva razlicita uzroka zbunjuje operatera.
     Dim stariBroj As String, noviBroj As String

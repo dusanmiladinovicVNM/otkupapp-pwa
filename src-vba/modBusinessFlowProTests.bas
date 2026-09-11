@@ -230,6 +230,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaNovDokumentINovBroj
     Test_OTK_IspravkaKapije
     Test_OTK_IspravkaNeGubiNovac
+    Test_OTK_IspravkaIzdatRoditeljFailClosed
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
@@ -9536,6 +9537,92 @@ Private Sub Test_OTK_IspravkaNeGubiNovac()
 
 EH:
     LogFatal "Test_OTK_IspravkaNeGubiNovac", Err.Number, Err.description
+End Sub
+
+' A13: OTKUP U IZDATOJ OTPREMNICI SE NE ISPRAVLJA.
+'
+' Izdata otpremnica je papir sa sastavom. Ispravka jednog njenog izvora nije
+' lokalna: otpremnica mora dobiti novu verziju sa novim brojem, a za njom i
+' zbirna (H1, GOLDEN_SCENARIJI S12). Ta propagacija je PR7.
+'
+' Test meri OBE strane granice -- DRAFT roditelj prolazi, IZDATO ne. Kapija koja
+' bi blokirala i draft izgledala bi isto zeleno, a oduzela bi operateru ispravku
+' dokumenta koji jos niko nije video.
+Private Sub Test_OTK_IspravkaIzdatRoditeljFailClosed()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKA13")
+
+    ' --- DRAFT roditelj: ispravka PROLAZI ---
+    Dim otkD As String
+    otkD = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13D-" & scenario), _
+                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    AssertTrue Len(otkD) > 0, "A13: otkup za draft scenario"
+
+    Dim gD As String
+    Dim draftID As String
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-A13D-" & scenario), _
+                                       OtpOcek(100#, 10#, 0#, 0#), gD)
+    AssertTrue Len(draftID) > 0, "A13: draft otpremnica napravljena (" & gD & ")"
+
+    AssertTrue DodajOtpremnicaIzvor_TX(draftID, otkD, gD), _
+               "A13: otkup je clan drafta (" & gD & ")"
+    AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(otkD), _
+                 "A13: citac vidi pripadnost draftu"
+    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), _
+               "A13: draft nije izdat"
+
+    Dim noviD As String
+    noviD = modOtkup.IspravkaOtkupa_TX(otkD, OtkHeader(TEST_PREFIX & "-OTK-A13D2-" & scenario), _
+                                       OtkStavke(95#, 100#, 10, 0#, 0#, 0), gD)
+    AssertTrue Len(noviD) > 0, _
+               "A13: ispravka otkupa u DRAFT otpremnici prolazi (" & gD & ")"
+
+    ' --- IZDATA otpremnica: ispravka PADA ---
+    Dim otkI As String
+    otkI = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13I-" & scenario), _
+                          OtkStavke(200#, 100#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkI) > 0, "A13: otkup za izdat scenario"
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otkI
+
+    Dim gI As String
+    Dim izdataID As String
+    izdataID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-A13I-" & scenario), _
+                                           izvori, gI)
+    AssertTrue Len(izdataID) > 0, "A13: izdata otpremnica napravljena (" & gI & ")"
+    AssertTrue modDokumenta.OtpremnicaJeIzdata(izdataID), "A13: ta otpremnica JESTE izdata"
+    AssertEquals izdataID, modDokumenta.OtpremnicaZaOtkup(otkI), _
+                 "A13: citac vidi pripadnost izdatoj"
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim r As String
+    r = modOtkup.IspravkaOtkupa_TX(otkI, OtkHeader(TEST_PREFIX & "-OTK-A13I2-" & scenario), _
+                                   OtkStavke(190#, 100#, 19, 0#, 0#, 0), gI)
+
+    AssertEquals "", r, "A13: ispravka otkupa u IZDATOJ otpremnici je ODBIJENA"
+    AssertTrue InStr(1, gI, "IZDATOJ otpremnici", vbTextCompare) > 0, _
+               "A13: poruka imenuje izdatog roditelja (bilo: " & gI & ")"
+    AssertTrue InStr(1, gI, izdataID, vbTextCompare) > 0, _
+               "A13: poruka imenuje BAS tu otpremnicu"
+
+    ' Odbijanje je potpuno: ni nov red, ni storniran izvor.
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "A13: odbijena ispravka nije upisala nijedan red"
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkI), _
+               "A13: izvor je ostao aktivan"
+    AssertEquals "", OtkPolje(otkI, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "A13: izvor nije dobio naslednika"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaIzdatRoditeljFailClosed", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTK_VrednostBezStavkiPada()
