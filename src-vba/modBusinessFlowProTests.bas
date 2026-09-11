@@ -221,6 +221,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaPauziranaNeTrosiPending
     Test_OTK_BrojJedinstvenPoStaniciIDanu
     Test_OTK_VrednostBezStavkiPada
+    Test_OTK_BrojStorniranogSeNePonovoKoristi
+    Test_OTK_EkranIPisacImajuIstoPravilo
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8852,6 +8854,133 @@ EH:
     LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
 End Sub
 
+' EKRAN I PISAC IMAJU ISTO PRAVILO ZA BROJ.
+'
+' Zatecena UI provera je isla kroz CheckDuplicate(broj, datum) -- BEZ stanice --
+' pa je bila UZA od pisca: dokument koji CreateOtkup_TX smatra legalnim (isti
+' broj, druga stanica, isti dan) ekran bi odbio pre nego sto pisac dobije priliku.
+'
+' Test meri bas taj razmak: isti broj na DRUGOJ stanici mora da prodje i kroz
+' ekran, ne samo kroz pisca.
+Private Sub Test_OTK_EkranIPisacImajuIstoPravilo()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKEP")
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-OTK-EP-" & scenario
+
+    Dim p1 As Object
+    Set p1 = OtkEkranParam(broj)
+    p1("kolicinaI") = 400#
+    p1("cenaI") = 50#
+    p1("kolAmb") = 20&
+
+    Dim poruke As String
+    AssertTrue Len(modOtkupUnos.OtkupUpisi(p1, poruke)) > 0, _
+               "OTK isto pravilo: prvi dokument upisan"
+
+    ' ISTA stanica, isti dan, isti broj -> ekran mora da odbije.
+    Dim p2 As Object
+    Set p2 = OtkEkranParam(broj)
+    p2("datum") = p1("datum")
+    p2("kolicinaI") = 400#
+    p2("cenaI") = 50#
+    p2("kolAmb") = 20&
+
+    Dim fokus As String
+    Dim greska As String
+    greska = modOtkupUnos.OtkupValidiraj(p2, fokus)
+
+    AssertTrue Len(greska) > 0, "OTK isto pravilo: ista stanica odbijena na ekranu"
+    AssertEquals "brDok", fokus, "OTK isto pravilo: fokus je na broju"
+
+    ' DRUGA stanica, isti dan, isti broj -> ekran NE sme da odbije, jer pisac ne bi.
+    Dim p3 As Object
+    Set p3 = OtkEkranParam(broj)
+    p3("datum") = p1("datum")
+    p3("stanicaID") = TEST_HLAD_ST_ID
+    p3("kolicinaI") = 400#
+    p3("cenaI") = 50#
+    p3("kolAmb") = 20&
+
+    Dim fokus3 As String
+    Dim greska3 As String
+    greska3 = modOtkupUnos.OtkupValidiraj(p3, fokus3)
+
+    AssertEquals "", fokus3, "OTK isto pravilo: druga stanica NE pada na broju"
+    AssertEquals "", greska3, "OTK isto pravilo: ekran je propustio ono sto pisac dozvoljava"
+
+    ' I pisac ga stvarno prima -- inace bi test dokazao samo da ekran cuti.
+    Dim poruke3 As String
+    AssertTrue Len(modOtkupUnos.OtkupUpisi(p3, poruke3)) > 0, _
+               "OTK isto pravilo: pisac prima drugu stanicu (poruke: " & poruke3 & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_EkranIPisacImajuIstoPravilo", Err.Number, Err.description
+End Sub
+
+' STORNO NE OSLOBADJA POSLOVNI BROJ (A9).
+'
+' Prva verzija kapije je radila ExcludeStornirano, uz obrazlozenje "inace
+' ispravka ne bi mogla da zadrzi isti broj" -- a to je bas ono sto A9 zabranjuje:
+' ispravka lanca dobija NOV BrojDokumenta, da dva papira razlicitog sadrzaja ne
+' bi delila broj.
+'
+'   OTK120  storniran/zamenjen
+'   OTK121  ispravka OTK120     <- nov broj, ne recikliran 120
+Private Sub Test_OTK_BrojStorniranogSeNePonovoKoristi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKBS")
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-OTK-BS-" & scenario
+
+    Dim h1 As Object
+    Set h1 = OtkHeader(broj)
+    Dim datum As Date
+    datum = h1("Datum")
+
+    Dim prvi As String
+    prvi = CreateOtkup_TX(h1, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(prvi) > 0, "OTK broj storno: prvi dokument prosao"
+
+    ' Storno se ovde radi direktno -- StornoOtkup_TX nad headerom je sledeci korak
+    ' cutover-a. Tvrdnja se tice broja, ne mehanike storna.
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, prvi)(1), _
+                      COL_STORNIRANO, "Da", "Test_OTK_BrojStorniranogSeNePonovoKoristi"
+
+    Dim h2 As Object
+    Set h2 = OtkHeader(broj)
+    h2("Datum") = datum
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK broj storno: broj storniranog se NE oslobadja"
+    AssertTrue InStr(1, razlog, "vec izdat", vbTextCompare) > 0, _
+               "OTK broj storno: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertTrue InStr(1, razlog, "A9", vbTextCompare) > 0, _
+               "OTK broj storno: poruka upucuje na pravilo (bilo: " & razlog & ")"
+
+    ' Ispravka sa NOVIM brojem prolazi -- to je put koji A9 predvidja.
+    Dim h3 As Object
+    Set h3 = OtkHeader(broj & "-B")
+    h3("Datum") = datum
+    AssertTrue Len(CreateOtkup_TX(h3, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)) > 0, _
+               "OTK broj storno: ispravka sa novim brojem prolazi (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_BrojStorniranogSeNePonovoKoristi", Err.Number, Err.description
+End Sub
+
 ' Dokument BEZ stavki nije dokument vrednosti nula.
 '
 ' Nula je legitiman odgovor samo kad stavke postoje a zbir im je nula. Bez te
@@ -9027,7 +9156,7 @@ Private Sub Test_OTK_BrojJedinstvenPoStaniciIDanu()
     rez = CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
 
     AssertEquals "", rez, "OTK broj: duplikat na istoj stanici istog dana odbijen"
-    AssertTrue InStr(1, razlog, "vec postoji", vbTextCompare) > 0, _
+    AssertTrue InStr(1, razlog, "vec izdat", vbTextCompare) > 0, _
                "OTK broj: kapija imenuje razlog (bilo: " & razlog & ")"
 
     ' Isti broj, DRUGA stanica, isti dan -> prolazi. Generator skopira po stanici,

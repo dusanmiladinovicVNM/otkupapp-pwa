@@ -223,12 +223,21 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
         fokus = "brDok": OtkupValidiraj = Poruka("OTKUI_ERR_BROJ"): Exit Function
     End If
 
-    ' Dupli broj dokumenta u istom danu.
-    If Len(S(p, "brDok")) > 0 Then
-        Dim dup As String
-        dup = CheckDuplicate(TBL_OTKUP, COL_OTK_BR_DOK, S(p, "brDok"), COL_OTK_DATUM)
-        If Len(dup) > 0 Then
-            fokus = "brDok": OtkupValidiraj = dup: Exit Function
+    ' Dupli broj: ISTA kapija koju drzi pisac, ne druga implementacija.
+    '
+    ' Zatecena provera je isla kroz CheckDuplicate(broj, datum) -- BEZ stanice --
+    ' pa je bila uza od pisca: dokument koji CreateOtkup_TX smatra legalnim (isti
+    ' broj, druga stanica, isti dan) ekran bi odbio pre nego sto pisac dobije
+    ' priliku. Pravilo i opseg zive u modOtkup; ovde je samo rana povratna
+    ' informacija operateru.
+    If Len(S(p, "brDok")) > 0 And Len(S(p, "stanicaID")) > 0 Then
+        Dim zauzeo As String
+        zauzeo = modOtkup.BrojDokumentaZauzet(S(p, "stanicaID"), _
+                                             CDate(p("datum")), S(p, "brDok"))
+        If Len(zauzeo) > 0 Then
+            fokus = "brDok"
+            OtkupValidiraj = Poruka("OTKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
+            Exit Function
         End If
     End If
 
