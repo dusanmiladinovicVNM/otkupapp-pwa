@@ -1432,6 +1432,106 @@ broj bio slobodan tekst), ne uveden; ide u citalacki prolaz, korak 7.
 
 ---
 
+### 14.3) Read-model isplata: status je izveden, ne kesiran (korak 4)
+
+`tblOtkup.Isplaceno` i `tblOtkup.DatumIsplate` bile su **keš** koji je održavao
+`modNovac.UpdateOtkupStatus`. Keš je imao dva problema, i drugi je stariji od
+refaktora:
+
+1. vrednost je računao kao `Kolicina x Cena` **sa zaglavlja**. Posle prelaska na
+   header + stavke to je uvek nula — pa nijedan nov otkup ne bi nikada bio
+   označen kao isplaćen, tiho i bez ijedne greške.
+2. tačnost mu je zavisila od toga da ga **svaki** pisac `tblNovac` pozove. Bilo
+   je četiri takva mesta (`modNovac` ×2, `modBankaMapiranje`, `modDokumenta`) i
+   peto u `modStorno`. Šesto koje bi zaboravilo poziv dalo bi otkup koji je
+   plaćen a izgleda otvoren, ili obrnuto.
+
+`UpdateOtkupStatus` je **obrisan**, sa svih pet poziva. Status je sada izveden:
+
+```
+otvoreno = VrednostOtkupa(id) - SUM(isplate za id)
+```
+
+`GetOpenOtkupi` tako i računa; kolone nemaju pisca i brišu se u koraku 7.
+
+#### Pun ugovor `VrednostOtkupa`
+
+Ugovor je do sada bio **imenovano nepotpun** (komentar ispod funkcije): kapije bi
+oborile 10–33 tvrdnje jer su postojala dva pisca zaglavlja bez stavki. Oba su
+zatvorena — stari pisac obrisan (korak 3), PWA ide kroz `CreateOtkup_TX`
+(korak 2) — pa ugovor sada stoji ceo:
+
+| # | Kapija | Zašto nije kozmetika |
+|---|---|---|
+| 1 | prazan `OtkupID` | računa se vrednost ničega |
+| 2 | zaglavlje **tačno jednom** | dva reda znače da `OtkupID` nije više identitet |
+| 3 | svaka stavka brojčana i **> 0** | isto pravilo koje pisac traži na upisu (`modOtkup:252/261`); citalac koji ga ne drži tiše je od istine |
+| 4 | bar jedna stavka | nula je legitiman odgovor samo kad stavke postoje a zbir im je nula — inače `ApplyAvansToOtkup` čita 0 kao „nema šta da se plati" |
+
+#### Dva neispravna reda, dva različita odgovora
+
+Razlika je **merena**, ne stilska:
+
+| Red | Odgovor `GetOpenOtkupi` | Zašto |
+|---|---|---|
+| bez `OtkupID` | **ostaje u listi**, prisilno | ne može se vrednovati ali se ne sme ni izgubiti — to je kvar FM-0021 #5; imenuje ga `BuildBlokIsplataList` sa `ERR_ISPLATA_PRAZAN_OTKUPID` |
+| sa `OtkupID`, bez stavki | preskače se, uz brojač i **jedan** log red | takav red nije dokument: vrednost živi na stavkama, pa nema obavezu koja bi se izgubila. Nov pisac ga ne pravi. Grana odlazi u koraku 7 |
+
+Ono što se **ne radi** ni u jednom slučaju: računanje vrednosti sa zaglavlja. To
+bi bio compatibility sloj i vraćao bi 0 za svaki nov dokument.
+
+#### Fixture je morao da postane dokument
+
+`tools/make_fixture.py` je sejao 32 `tblOtkup` zaglavlja i **nijednu** stavku —
+tabela `tblOtkupStavke` nije ni postojala u donoru (pravio ju je runtime
+self-heal). Posle prelaska čitalaca na stavke svih 32 su bila „nije dokument", pa
+je pola testova banke ostalo bez ijednog reda.
+
+Generator sada pravi tabelu (`ENSURE_TABLES`, kolone iz kanona) i **izvodi**
+stavke iz zaglavlja. Kolone `Kolicina/Cena/Klasa/KolAmbalaze` na zaglavlju se
+namerno ne brišu — čita ih još petnaestak modula, to je korak 7 — pa fixture nosi
+iste brojeve na oba mesta, a merodavna je stavka.
+
+Isto pravilo je moralo u seed-ove testova: **„isplaćen" sada znači *plaćen***, ne
+„označen kao plaćen". `SeedOtkupIsplacen` (banka) i `SeedOtkupPlacen` (storno)
+zato knjiže i pokrivajuću isplatu u `tblNovac`.
+
+#### Tri tvrdnje koje su nestale, i zašto
+
+| Tvrdnja | Odakle | Zašto ne može da ostane |
+|---|---|---|
+| `T18 (3): zatvoren red bez OtkupID NE obara pregled` | `modTestBanka` | „zatvoren" se čitalo iz kolone; status je sada izveden iz plaćanja, a plaćanje se vezuje **preko** `OtkupID`-a — red bez njega ne može biti plaćen. Stanje više ne postoji, pa ostaje jedno pravilo umesto dva |
+| `ResetNovacOtkupLink recomputes otkup as unpaid` | `modNovacTests` | prepisano na `ResetNovacOtkupLink vraca otkup medju otvorene obaveze` — ista zaštita, merena tamo gde operater gleda |
+| `T27: blok vise nije isplacen` / `datum isplate ocisceni` | `modTestStorno` | prepisano na `posle storna blok je opet otvoren`. Tvrdnja nad kolonom bez pisca bila bi zelena i kad blok ostane nevidljiv — tačno kvar koji test sprečava |
+
+#### Šta stoji umesto njih
+
+| Test | Šta meri |
+|---|---|
+| `Test_OTK_VrednostPunUgovor` | sve četiri kapije, **po poruci** — pad iz drugog razloga ne dokazuje ništa |
+| `Test_OTK_StatusIsplateJeIzveden` | nov dokument je otvoren; delimična isplata ga **ne** zatvara; puna ga zatvara |
+| `Test_ResetNovacOtkupLinkRecomputesStatus` | skidanje veze vraća obavezu u listu |
+| `T27_StornoIzvodaOsvezavaOtkup` | storno izvoda vraća dug |
+
+Sabotaža (dokaz da kapije mere): gašenje pravila „stavka > 0" obara 1 proveru po
+imenu, gašenje provere „zaglavlje tačno jednom" 1, a povratak računa na zaglavlje
+obara 2 — uključujući „nov dokument je otvorena obaveza", tj. baš tihu rupu zbog
+koje je keš i obrisan.
+
+#### Zdravstvena provera više ne meri keš
+
+`Check_OtkupPaymentConsistency` je merio **samo redove koje je keš označio** —
+preplata na neoznačenom redu se nije ni videla. Sada čita stavke i prijavljuje
+preplatu (`isplaceno > vrednost`) nad svakim redom, plus upozorenje za redove bez
+stavki. `Check_KooperantOtkupReconciliation` isto: zbir po kooperantu je išao iz
+zaglavlja, pa bi se posle cutover-a „slagao" — na nuli.
+
+Da kolone ne dobiju novog pisca čuva **statička** kapija (`who_writes
+--check-ownership`, A11), ne runtime provera: zatečen red koji još nosi staru
+vrednost nije kvar, a runtime kapija nad njim bi vikala na podatke umesto na kod.
+
+---
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

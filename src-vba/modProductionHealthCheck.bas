@@ -457,10 +457,51 @@ EH:
     HealthFail "Faktura payment consistency check failed", FormatHealthErr()
 End Sub
 
+' Vrednost dokumenata iz STAVKI: OtkupID -> SUM(Kolicina x Cena).
+'
+' Health check ne sme da zove modNovac.BuildVrednostDictByOtkup: taj pada na
+' neispravnoj stavci, a zdravstvena provera postoji BAS da nadje neispravne
+' podatke -- pad bi je pretvorio u prvi nalaz umesto u izvestaj. Zato svoj,
+' tolerantan prolaz (HealthNumeric vraca 0 za sve sto nije broj).
+Private Function HealthVrednostPoOtkupu() As Object
+    Const SRC As String = "HealthVrednostPoOtkupu"
+
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set HealthVrednostPoOtkupu = dict
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKol As Long, cCena As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+
+    Dim i As Long, oid As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(CStr(d(i, cOtk)))
+        If Len(oid) > 0 Then
+            If Not dict.Exists(oid) Then dict.Add oid, 0#
+            dict(oid) = dict(oid) + HealthNumeric(d(i, cKol)) * HealthNumeric(d(i, cCena))
+        End If
+    Next i
+End Function
+
 ' ============================================================
 ' CHECK 6: OTKUP PAYMENT CONSISTENCY
 ' ============================================================
 
+' Isplaceno i DatumIsplate se ovde NAMERNO vise ne citaju.
+'
+' Bile su kes obrisanog UpdateOtkupStatus (korak 4) i provera je nad njima merila
+' samo redove KOJE JE TAJ KES OZNACIO -- preplata na neoznacenom redu se nije ni
+' videla. Sada se meri sam novac: vrednost stavki prema zbiru isplata.
+'
+' Da kolone ne dobiju novog pisca cuva STATICKA kapija (who_writes --check-
+' ownership, A11), ne ova provera: zatecen red koji jos nosi staru vrednost nije
+' kvar, a runtime kapija nad njim bi vikala na podatke umesto na kod.
 Private Sub Check_OtkupPaymentConsistency()
     On Error GoTo EH
 
@@ -472,57 +513,65 @@ Private Sub Check_OtkupPaymentConsistency()
         Exit Sub
     End If
 
+    Const SRC As String = "Check_OtkupPaymentConsistency"
+
     Dim colID As Long
-    Dim colKol As Long
-    Dim colCena As Long
-    Dim colIsplaceno As Long
-    Dim colDatumIsplate As Long
     Dim colStorno As Long
 
-    colID = RequireColumnIndex(TBL_OTKUP, "OtkupID", "Check_OtkupPaymentConsistency")
-    colKol = RequireColumnIndex(TBL_OTKUP, "Kolicina", "Check_OtkupPaymentConsistency")
-    colCena = RequireColumnIndex(TBL_OTKUP, "Cena", "Check_OtkupPaymentConsistency")
-    colIsplaceno = RequireColumnIndex(TBL_OTKUP, "Isplaceno", "Check_OtkupPaymentConsistency")
-    colDatumIsplate = RequireColumnIndex(TBL_OTKUP, "DatumIsplate", "Check_OtkupPaymentConsistency")
-    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "Check_OtkupPaymentConsistency")
+    colID = RequireColumnIndex(TBL_OTKUP, "OtkupID", SRC)
+    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", SRC)
+
+    Dim vrednostDict As Object
+    Set vrednostDict = HealthVrednostPoOtkupu()
 
     Dim i As Long
     Dim badCount As Long
     Dim otkupID As String
     Dim vrednost As Double
     Dim isplacenoAmount As Double
-    Dim statusText As String
-    Dim datumIsplate As String
+    Dim bezStavki As Long
 
     For i = 1 To UBound(data, 1)
 
         If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
 
         otkupID = Trim$(CStr(data(i, colID)))
-        vrednost = HealthNumeric(data(i, colKol)) * HealthNumeric(data(i, colCena))
+
+        ' Dokument bez stavki nema vrednost -- ispada iz liste otvorenih obaveza.
+        ' Nov pisac ga ne pravi, pa je svaki takav red zatecen ili ostecen.
+        If Len(otkupID) = 0 Then
+            badCount = badCount + 1
+            HealthFail "Otkup row without OtkupID", _
+                       "BrojDokumenta=" & CStr(data(i, colID))
+            GoTo NextRow
+        End If
+
+        If Not vrednostDict.Exists(otkupID) Then
+            bezStavki = bezStavki + 1
+            GoTo NextRow
+        End If
+
+        vrednost = vrednostDict(otkupID)
         isplacenoAmount = HealthGetIsplataForOtkup(otkupID)
 
-        statusText = UCase$(Trim$(CStr(data(i, colIsplaceno))))
-        datumIsplate = Trim$(CStr(data(i, colDatumIsplate)))
-
-        If statusText = UCase$("Da") Or statusText = UCase$(STATUS_ISPLACENO) Then
-            If vrednost <= 0 Or isplacenoAmount + 0.0001 < vrednost Then
-                badCount = badCount + 1
-                HealthFail "Otkup marked paid without enough isplata", _
-                           "OtkupID=" & otkupID & _
-                           " Vrednost=" & CStr(vrednost) & _
-                           " Isplaceno=" & CStr(isplacenoAmount)
-            End If
-
-            If Len(datumIsplate) = 0 Then
-                badCount = badCount + 1
-                HealthWarn "Otkup paid without DatumIsplate", _
-                           "OtkupID=" & otkupID
-            End If
+        ' Preplata: knjizeno je vise nego sto dokument vredi. Ranije se ovo nije ni
+        ' moglo videti -- provera je merila samo redove oznacene kao placene.
+        If isplacenoAmount > vrednost + 0.0001 Then
+            badCount = badCount + 1
+            HealthFail "Otkup paid more than its value", _
+                       "OtkupID=" & otkupID & _
+                       " Vrednost=" & CStr(vrednost) & _
+                       " Isplaceno=" & CStr(isplacenoAmount)
         End If
 
 NextRow:
     Next i
+
+    If bezStavki > 0 Then
+        HealthWarn "Otkup rows without stavke", _
+                   "Redova: " & CStr(bezStavki) & _
+                   " -- takav red nema vrednost i ne ulazi u listu otvorenih obaveza."
+    End If
 
     If badCount = 0 Then
         HealthOk "Otkup payment consistency is valid", ""
@@ -558,15 +607,20 @@ Private Sub Check_KooperantOtkupReconciliation()
         Exit Sub
     End If
 
-    Dim colKoop As Long, colKol As Long, colCena As Long
+    Dim colKoop As Long, colOtkID As Long
     Dim colStanica As Long, colDatum As Long, colStorno As Long
 
     colKoop = RequireColumnIndex(TBL_OTKUP, "KooperantID", "Check_KooperantOtkupReconciliation")
-    colKol = RequireColumnIndex(TBL_OTKUP, "Kolicina", "Check_KooperantOtkupReconciliation")
-    colCena = RequireColumnIndex(TBL_OTKUP, "Cena", "Check_KooperantOtkupReconciliation")
+    colOtkID = RequireColumnIndex(TBL_OTKUP, "OtkupID", "Check_KooperantOtkupReconciliation")
     colStanica = RequireColumnIndex(TBL_OTKUP, "StanicaID", "Check_KooperantOtkupReconciliation")
     colDatum = RequireColumnIndex(TBL_OTKUP, "Datum", "Check_KooperantOtkupReconciliation")
     colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "Check_KooperantOtkupReconciliation")
+
+    ' Vrednost dokumenta zivi na STAVKAMA (S4.1d): dve klase legitimno nose dve
+    ' cene, pa Kolicina x Cena sa zaglavlja posle cutover-a daje nulu za svaki
+    ' nov otkup -- a zbir po kooperantu bi se i dalje "slagao", na nuli.
+    Dim vrednostDict As Object
+    Set vrednostDict = HealthVrednostPoOtkupu()
 
     Dim koopDict As Object: Set koopDict = CreateObject("Scripting.Dictionary")
     Dim staDict As Object: Set staDict = CreateObject("Scripting.Dictionary")
@@ -584,7 +638,9 @@ Private Sub Check_KooperantOtkupReconciliation()
 
         If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
 
-        vrednost = HealthNumeric(data(i, colKol)) * HealthNumeric(data(i, colCena))
+        vrednost = 0#
+        If vrednostDict.Exists(Trim$(CStr(data(i, colOtkID)))) Then _
+            vrednost = vrednostDict(Trim$(CStr(data(i, colOtkID))))
         rawTotal = rawTotal + vrednost
 
         koop = Trim$(CStr(data(i, colKoop)))

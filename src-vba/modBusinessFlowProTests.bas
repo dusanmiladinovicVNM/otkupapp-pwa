@@ -225,6 +225,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaPauziranaNeTrosiPending
     Test_OTK_BrojJedinstvenPoStaniciIDanu
     Test_OTK_VrednostBezStavkiPada
+    Test_OTK_VrednostPunUgovor
+    Test_OTK_StatusIsplateJeIzveden
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
@@ -9208,6 +9210,138 @@ End Sub
 ' Nula je legitiman odgovor samo kad stavke postoje a zbir im je nula. Bez te
 ' razlike ApplyAvansToOtkup cita 0 kao "nema sta da se plati" i TIHO preskoci
 ' primenu avansa -- kvar koji je golden vec jednom prijavio (B2/B3).
+' PUN UGOVOR VREDNOSTI: zaglavlje tacno jednom, stavke brojcane i pozitivne.
+'
+' Ugovor je do koraka 4 bio nepotpun jer su postojala dva pisca zaglavlja bez
+' stavki. Oba su zatvorena, pa kapije sad smeju da stoje -- a test postoji da se
+' ne vrate tiho. Meri se PORUKOM, ne samo padom: kapija koja padne iz drugog
+' razloga ne dokazuje nista.
+Private Sub Test_OTK_VrednostPunUgovor()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKVPU")
+
+    ' --- zaglavlje koje ne postoji ---
+    AssertTrue InStr(1, VrednostGreska("OTK-NE-POSTOJI-" & scenario), _
+                     "ne nalazi tacno jednom", vbTextCompare) > 0, _
+               "OTK ugovor: nepostojece zaglavlje pada po imenu"
+
+    ' --- prazan OtkupID ---
+    AssertTrue InStr(1, VrednostGreska(""), "Prazan OtkupID", vbTextCompare) > 0, _
+               "OTK ugovor: prazan OtkupID pada po imenu"
+
+    ' --- kontrola: ispravan dokument daje broj ---
+    Dim okID As String
+    okID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-VPU-" & scenario), _
+                          OtkStavke(400#, 50#, 20, 100#, 80#, 5))
+    AssertTrue Abs(modOtkup.VrednostOtkupa(okID) - (400# * 50# + 100# * 80#)) < 0.001, _
+               "OTK ugovor: dve stavke se sabiraju (20000 + 8000)"
+
+    ' --- stavka sa nulom: pisac je ne pravi, pa se pravi RUCNO ---
+    ' Nula na stavci nije "dokument vrednosti manje" nego neispravan red: kolicina
+    ' i cena su na upisu vec obavezno > 0 (modOtkup:252/261). Citalac mora da drzi
+    ' ISTO pravilo, inace se razilaze sa piscem i zbir postaje tisi od istine.
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, okID)
+    AssertTrue Not rows Is Nothing, "OTK ugovor: stavke nadjene"
+    RequireUpdateCell TBL_OTKUP_STAVKE, rows(1), COL_OKS_CENA, 0#, "Test_OTK_VrednostPunUgovor"
+
+    AssertTrue InStr(1, VrednostGreska(okID), "vece od nule", vbTextCompare) > 0, _
+               "OTK ugovor: stavka sa cenom 0 pada po imenu"
+
+    RequireUpdateCell TBL_OTKUP_STAVKE, rows(1), COL_OKS_CENA, "n/d", _
+                      "Test_OTK_VrednostPunUgovor"
+
+    AssertTrue InStr(1, VrednostGreska(okID), "nije brojcana", vbTextCompare) > 0, _
+               "OTK ugovor: nebrojcana stavka pada po imenu"
+
+    ' CISCENJE JE DEO TESTA, ne kozmetika: pokvarena stavka ostaje u tabeli i
+    ' obara SVAKI sledeci citalac koji sabira stavke (GetOpenOtkupi je pao bas
+    ' tako). Kvar se pravi namerno, pa se namerno i vraca.
+    RequireUpdateCell TBL_OTKUP_STAVKE, rows(1), COL_OKS_CENA, 50#, _
+                      "Test_OTK_VrednostPunUgovor"
+    AssertTrue Abs(modOtkup.VrednostOtkupa(okID) - (400# * 50# + 100# * 80#)) < 0.001, _
+               "OTK ugovor: vrednost vracena posle ciscenja"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_VrednostPunUgovor", Err.Number, Err.description
+End Sub
+
+' Poruka greske koju VrednostOtkupa podigne, ili "" kad prodje.
+Private Function VrednostGreska(ByVal otkupID As String) As String
+    Dim v As Double
+    On Error Resume Next
+    Err.Clear
+    v = modOtkup.VrednostOtkupa(otkupID)
+    If Err.Number <> 0 Then VrednostGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' STATUS ISPLATE JE IZVEDEN, NE KESIRAN.
+'
+' UpdateOtkupStatus je odrzavao tblOtkup.Isplaceno i racunao vrednost kao
+' Kolicina x Cena SA ZAGLAVLJA -- posle prelaska na stavke to je uvek nula, pa
+' nijedan nov otkup ne bi nikad bio oznacen kao placen, tiho i bez greske.
+'
+' Sada listu otvorenih obaveza odlucuje sam novac. Test to i meri: dokument je
+' otvoren, delimicna isplata ga ostavlja otvorenim, puna ga zatvara.
+Private Sub Test_OTK_StatusIsplateJeIzveden()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKISP")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISP-" & scenario), _
+                           OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK isplata: dokument napravljen"
+
+    AssertTrue OtkUOtvorenim(otkID), "OTK isplata: nov dokument je otvorena obaveza"
+
+    ' Zaglavlje NE nosi status -- niko ga vise ne pise.
+    AssertEquals "", OtkPolje(otkID, COL_OTK_ISPLACENO), _
+                 "OTK isplata: zaglavlje ne nosi Isplaceno"
+
+    SaveNovac TEST_PREFIX & "-NOV-D-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 4000#, "delimicno", otkID
+
+    AssertTrue OtkUOtvorenim(otkID), _
+               "OTK isplata: delimicna isplata NE zatvara obavezu"
+
+    SaveNovac TEST_PREFIX & "-NOV-P-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 6000#, "ostatak", otkID
+
+    AssertTrue Not OtkUOtvorenim(otkID), _
+               "OTK isplata: puna isplata zatvara obavezu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_StatusIsplateJeIzveden", Err.Number, Err.description
+End Sub
+
+Private Function OtkUOtvorenim(ByVal otkupID As String) As Boolean
+    Dim r As Variant
+    r = GetOpenOtkupi("")
+    If Not IsArray(r) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(r, 1)
+        If StrComp(Trim$(CStr(r(i, 2))), otkupID, vbTextCompare) = 0 Then
+            OtkUOtvorenim = True
+            Exit Function
+        End If
+    Next i
+End Function
+
 Private Sub Test_OTK_VrednostBezStavkiPada()
     On Error GoTo EH
 

@@ -408,11 +408,9 @@ Private Sub Test_PartialOtkupAvansSplit()
     AssertNovacDoubleEquals 100#, totalApplied, _
                             "Partial otkup avans applied amount linked to otkup"
 
-    Dim isplaceno As String
-    isplaceno = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_ISPLACENO))
-
-    AssertNovacTextEquals STATUS_ISPLACENO, isplaceno, _
-                          "Partial otkup avans recomputes otkup as paid"
+    ' Dug je namiren -> dokument izlazi iz liste otvorenih obaveza.
+    AssertNovacTrue Not OtkupJeOtvorenaObaveza(otkupID), _
+                    "Partial otkup avans zatvara otvorenu obavezu"
 
     Exit Sub
 
@@ -453,13 +451,8 @@ Private Sub Test_ResetNovacOtkupLinkRecomputesStatus()
         Exit Sub
     End If
 
-    Call UpdateOtkupStatus(otkupID)
-
-    Dim beforeStatus As String
-    beforeStatus = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_ISPLACENO))
-
-    AssertNovacTextEquals STATUS_ISPLACENO, beforeStatus, _
-                          "Setup: otkup is paid before reset"
+    AssertNovacTrue Not OtkupJeOtvorenaObaveza(otkupID), _
+                    "Setup: otkup je namiren pre reset-a"
 
     If Not ResetNovacOtkupLink_TX(otkupID) Then
         LogNovacFail "ResetNovacOtkupLink recomputes status", _
@@ -473,17 +466,10 @@ Private Sub Test_ResetNovacOtkupLinkRecomputesStatus()
     AssertNovacDoubleEquals 0#, afterLinkedAmount, _
                             "ResetNovacOtkupLink removes linked payment amount"
 
-    Dim afterStatus As String
-    afterStatus = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_ISPLACENO))
-
-    AssertNovacTextEquals "", afterStatus, _
-                          "ResetNovacOtkupLink recomputes otkup as unpaid"
-
-    Dim afterDate As String
-    afterDate = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM_ISPLATE))
-
-    AssertNovacTextEquals "", afterDate, _
-                          "ResetNovacOtkupLink clears DatumIsplate"
+    ' Veza je skinuta -> obaveza se VRACA u listu otvorenih. To je tvrdnja koja
+    ' operatera stvarno stiti; kolona Isplaceno je bila samo njen kes.
+    AssertNovacTrue OtkupJeOtvorenaObaveza(otkupID), _
+                    "ResetNovacOtkupLink vraca otkup medju otvorene obaveze"
 
     Exit Sub
 
@@ -521,6 +507,14 @@ Private Sub AppendTestFakturaRow(ByVal fakturaID As String, _
     AppendTestRowByColumnMap TBL_FAKTURE, values, SRC
 End Sub
 
+' Otkup po NOVOM modelu: zaglavlje + JEDNA stavka.
+'
+' Kolicina i cena su cinjenice STAVKE. Zaglavlje ih vise ne nosi, pa ih ni ovaj
+' fixture ne upisuje -- inace bi testovi novca merili kolonu koju niko ne pise i
+' ostajali zeleni i kad je vrednost dokumenta nula.
+'
+' Pisac se ne zove (CreateOtkup_TX) jer bi trazio pravi kooperant, stanicu i
+' kulturu -- ovaj modul radi nad sintetickim sifrarnikom.
 Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
                                ByVal kooperantID As String, _
                                ByVal kolicina As Double, _
@@ -537,21 +531,46 @@ Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
     values.Add COL_OTK_KULTURA, "KUL-TST"
     values.Add COL_OTK_VRSTA, "Test Vrsta"
     values.Add COL_OTK_SORTA, "Test Sorta"
-    values.Add COL_OTK_KOLICINA, kolicina
-    values.Add COL_OTK_CENA, cena
     values.Add COL_OTK_TIP_AMB, "Test Amb"
-    values.Add COL_OTK_KOL_AMB, 0
-    values.Add COL_OTK_VOZAC, "VOZ-TST"
     values.Add COL_OTK_BR_DOK, "TST-OTK-" & otkupID
-    values.Add COL_OTK_NOVAC, 0
     values.Add COL_OTK_PRIMALAC, "TEST"
-    values.Add COL_OTK_KLASA, "I"
     values.Add COL_STORNIRANO, ""
-    values.Add COL_OTK_ISPLACENO, ""
-    values.Add COL_OTK_DATUM_ISPLATE, ""
 
     AppendTestRowByColumnMap TBL_OTKUP, values, SRC
+
+    Dim stavka As Object
+    Set stavka = CreateObject("Scripting.Dictionary")
+
+    stavka.Add COL_OKS_ID, "OKS-TST-" & otkupID
+    stavka.Add COL_OKS_OTKUP_ID, otkupID
+    stavka.Add COL_OKS_RB, 1
+    stavka.Add COL_OKS_KLASA, "I"
+    stavka.Add COL_OKS_KOLICINA, kolicina
+    stavka.Add COL_OKS_CENA, cena
+    stavka.Add COL_OKS_KOL_AMB, 0
+    stavka.Add COL_OKS_BRUTO, 0
+
+    AppendTestRowByColumnMap TBL_OTKUP_STAVKE, stavka, SRC
 End Sub
+
+' Da li otkup jos stoji kao OTVORENA OBAVEZA -- izvedeno, ne iz kolone.
+'
+' Zamenjuje citanje tblOtkup.Isplaceno: ta kolona vise nema pisca (v.
+' obrazlozenje uz obrisan modNovac.UpdateOtkupStatus), pa bi tvrdnja nad njom
+' bila zelena bez obzira na stvarno stanje duga.
+Private Function OtkupJeOtvorenaObaveza(ByVal otkupID As String) As Boolean
+    Dim r As Variant
+    r = GetOpenOtkupi("")
+    If Not IsArray(r) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(r, 1)
+        If StrComp(Trim$(CStr(r(i, 2))), otkupID, vbTextCompare) = 0 Then
+            OtkupJeOtvorenaObaveza = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Sub AppendTestRowByColumnMap(ByVal tableName As String, _
                                      ByVal values As Object, _

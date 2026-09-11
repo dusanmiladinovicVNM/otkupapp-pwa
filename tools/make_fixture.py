@@ -2153,6 +2153,35 @@ SEED = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# tblOtkupStavke SE IZVODI IZ tblOtkup -- fixture mora da opisuje DOKUMENT.
+#
+# Posle Otkup cutover-a vrednost otkupa zivi na stavkama (modOtkup.VrednostOtkupa,
+# modNovac.BuildVrednostDictByOtkup). Zaglavlje bez stavki zato nije dokument
+# vrednosti nula nego NIJE DOKUMENT: ispada iz liste otvorenih obaveza, pa bi
+# fixture bez ovog izvodjenja ostavio pola testova banke bez ijednog reda.
+#
+# Kolone Kolicina/Cena/Klasa/KolAmbalaze na ZAGLAVLJU se namerno NE brisu: jos ih
+# cita petnaestak modula i one odlaze tek u citalackom prolazu (korak 7). Do tada
+# fixture nosi iste brojeve na oba mesta, a merodavna je stavka.
+#
+# Redovi bez pozitivne kolicine i cene NE dobijaju stavku: takvu stavku bi i pisac
+# odbio (modOtkup:252/261), pa bi je fixture lagao u postojanje.
+SEED["tblOtkupStavke"] = [
+    {
+        "OtkupStavkaID": "OKS-" + str(red["OtkupID"]),
+        "OtkupID": red["OtkupID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["Kolicina"],
+        "Cena": red["Cena"],
+        "KolAmbalaze": red.get("KolAmbalaze", 0),
+        "BrutoKg": "",
+    }
+    for red in SEED["tblOtkup"]
+    if float(red.get("Kolicina") or 0) > 0 and float(red.get("Cena") or 0) > 0
+]
+
 # Kolone koje DONOR (produkcijska sveska pre nadogradnje) nema, a fixture
 # mora da ih ima: sejanje ide PO IMENU, pa red sa novom kolonom obara
 # generator; testovi writera (RequireUpdateCell) takodje traze kolonu.
@@ -2204,6 +2233,15 @@ ENSURE_TABLES = {
     "tblPrevoznici": ("Prevoznici",
                       ["PrevoznikID", "Naziv", "Vozac", "Registracija",
                        "Aktivan"]),
+    # Otkup: header + stavke. Donor je nema -- u aplikaciji je pravi self-heal
+    # seme na startu, pa je fixture do sada imao tek u temp kopiji tokom run-a.
+    # Sada mora da postoji PRE sejanja, jer fixture seje i stavke (v. SEED).
+    # Kolone i redosled su iz kanona (schema/schema.json, tblOtkupStavke);
+    # AppendRow pise POZICIONO, pa redosled nije kozmetika.
+    "tblOtkupStavke": ("OtkupStavke",
+                       ["OtkupStavkaID", "OtkupID", "RedniBroj", "Klasa",
+                        "Kolicina", "Cena", "KolAmbalaze", "BrutoKg",
+                        "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)

@@ -1077,11 +1077,9 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
         UpdateFakturaStatus fakturaID
     End If
 
-    ' Obrazac modNovac.ResetNovacOtkupLink_TX: posle promene novca -> rekalk statusa
-    ' otkupa (GetIsplataForOtkup vec iskljucuje stornirane redove).
-    If Len(otkupID) > 0 Then
-        UpdateOtkupStatus otkupID
-    End If
+    ' Status isplate se vise ne odrzava kolonom -- izveden je iz razlike
+    ' VrednostOtkupa - SUM(isplate), a GetIsplataForOtkup vec iskljucuje
+    ' stornirane redove. Storno novca zato nema sta da 'rekalkulise'.
 
     StornoNovac = True
     Exit Function

@@ -7269,9 +7269,6 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                       "SaveNovac fehlgeschlagen"
         End If
 
-        If otkupID <> "" Then
-            UpdateOtkupStatus otkupID
-        End If
     End If
 
     tx.CommitTx

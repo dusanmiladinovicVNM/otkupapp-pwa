@@ -537,18 +537,50 @@ End Sub
 
 ' Vrednost dokumenta = SUM(stavke.Kolicina x stavke.Cena).
 '
-' PRVI od citalaca koji se sele na stavke, i obrazac za ostale: cita se SAMO
-' tblOtkupStavke. Nema fallback-a na header -- to bi bio compatibility sloj za
-' podatke koje ne cuvamo, a tiho bi vracao 0 tamo gde stavki nema umesto da se
-' vidi da dokument nije po novom modelu.
+' Cita se SAMO tblOtkupStavke. Nema fallback-a na header -- to bi bio
+' compatibility sloj za podatke koje ne cuvamo, a tiho bi vracao 0 tamo gde
+' stavki nema umesto da se vidi da dokument nije po novom modelu.
 '
 ' Dokument vise nema JEDNU cenu, pa se vrednost ni ne moze procitati sa headera:
 ' dve klase legitimno nose dve razlicite cene (S4.1d).
+'
+' UGOVOR JE PUN (korak 4). Cetiri kapije, sve fail-closed:
+'
+'   1) prazan OtkupID
+'   2) zaglavlje mora postojati TACNO JEDNOM -- ni nula ni dva
+'   3) svaka stavka ima numericku Kolicinu i Cenu, obe VECE OD NULE
+'      (isto pravilo koje pisac vec trazi na upisu, modOtkup:252/261)
+'   4) bar jedna stavka -- dokument BEZ stavki nije dokument vrednosti nula
+'
+' Zasto (4) nije kozmetika: nula je legitiman odgovor samo kad stavke postoje a
+' zbir im je nula. Bez te razlike ApplyAvansToOtkup cita 0 kao "nema sta da se
+' plati" i TIHO preskoci primenu avansa -- kvar koji je golden vec jednom
+' prijavio (B2/B3).
+'
+' Ranije je ovaj ugovor bio nepotpun i to je bilo IMENOVANO: kapije su obarale
+' 10 do 33 tvrdnje jer su tada jos postojala dva pisca zaglavlja bez stavki
+' (stari multi-pisac i PWA uvoz). Oba su zatvorena -- pisac je obrisan (korak 3),
+' PWA ide kroz CreateOtkup_TX (korak 2) -- pa kapije vise nemaju sta da obore.
 Public Function VrednostOtkupa(ByVal otkupID As String) As Double
     Const SRC As String = "VrednostOtkupa"
 
     If Len(Trim$(otkupID)) = 0 Then
         Err.Raise vbObjectError + 1901, SRC, "Prazan OtkupID."
+    End If
+
+    ' Zaglavlje TACNO JEDNOM. Nula znaci da se racuna vrednost necega sto ne
+    ' postoji; dva znace da je OtkupID prestao da bude identitet -- oba su tisi
+    ' oblik iste greske od pogresnog zbira.
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+
+    Dim koliko As Long
+    If Not hdr Is Nothing Then koliko = hdr.count
+
+    If koliko <> 1 Then
+        Err.Raise vbObjectError + 1902, SRC, _
+                  "Zaglavlje otkupa se ne nalazi tacno jednom: " & otkupID & _
+                  " (pogodaka: " & CStr(koliko) & ")."
     End If
 
     Dim d As Variant
@@ -557,13 +589,7 @@ Public Function VrednostOtkupa(ByVal otkupID As String) As Double
     Dim cOtk As Long, cKol As Long, cCena As Long
     Dim i As Long, nasao As Long
 
-    ' PRAZNA TABELA -> 0, bez greske. Mereno: rani testovi rade pre nego sto
-    ' ijedna stavka uopste postoji, pa bi kapija nize opalila na svakom od njih
-    ' (10 do 33 tvrdnje). To je rupa u ugovoru, i imenovana je ispod funkcije --
-    ' zatvara se kad nestane poslednji proizvodjac otkupa bez stavki.
-    If Not IsArray(d) Then Exit Function
-
-    If True Then
+    If IsArray(d) Then
         cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
         cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
         cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
@@ -571,41 +597,34 @@ Public Function VrednostOtkupa(ByVal otkupID As String) As Double
         For i = 1 To UBound(d, 1)
             If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
                 nasao = nasao + 1
-                If IsNumeric(d(i, cKol)) And IsNumeric(d(i, cCena)) Then
-                    VrednostOtkupa = VrednostOtkupa + CDbl(d(i, cKol)) * CDbl(d(i, cCena))
+
+                If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
+                    Err.Raise vbObjectError + 1903, SRC, _
+                              "Stavka nije brojcana: " & otkupID & _
+                              ", stavka " & CStr(nasao) & "."
                 End If
+
+                Dim kol As Double, cena As Double
+                kol = CDbl(d(i, cKol))
+                cena = CDbl(d(i, cCena))
+
+                If kol <= 0 Or cena <= 0 Then
+                    Err.Raise vbObjectError + 1904, SRC, _
+                              "Kolicina i cena stavke moraju biti vece od nule: " & _
+                              otkupID & ", stavka " & CStr(nasao) & "."
+                End If
+
+                VrednostOtkupa = VrednostOtkupa + kol * cena
             End If
         Next i
     End If
 
-    ' FAIL-CLOSED: dokument BEZ stavki nije dokument vrednosti nula. Nula je
-    ' legitiman odgovor samo kad stavke postoje a zbir im je nula; bez te razlike
-    ' ApplyAvansToOtkup cita 0 kao "nema sta da se plati" i tiho preskoci primenu.
     If nasao = 0 Then
         Err.Raise vbObjectError + 1899, SRC, _
                   "Otkup nema nijednu stavku: " & otkupID & _
                   ". Vrednost dokumenta se racuna iz tblOtkupStavke."
     End If
 End Function
-
-' UGOVOR JOS NIJE POTPUN, i to je mereno -- ne previdjeno.
-'
-' Pun fail-closed trazi jos: header postoji tacno jednom, i svaka stavka ima
-' numericku Kolicinu i Cenu vece od nule. Obe kapije su probane; obaraju zatecene
-' testove -- 10 do 33 tvrdnje, zavisno od kombinacije.
-'
-' Uzrok su HEADER-ONLY PISCI: prave otkup bez ijedne stavke, pa strog read-model
-' i oni ne mogu da koegzistiraju. Bila su DVA; oba su zatvorena:
-'
-'   SaveOtkupMulti_TX   OBRISAN (korak 3)
-'   modMasterSync       PWA import ide kroz CreateOtkup_TX (korak 2)
-'
-' Ostaje SaveOtkup_TX, ali samo kao FIXTURE testova za oblik bez stavki -- iz
-' pogona ga niko ne zove. Zato pun ugovor ovde jos stoji: kapije bi oborile bas
-' te testove, koji i postoje da bi merili odbijanje starog oblika.
-'
-' Pun ugovor ide u koraku 4 (strog VrednostOtkupa + read-model isplata), kad se
-' resi i pitanje sta znaci vrednost dokumenta bez stavki.
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
 '

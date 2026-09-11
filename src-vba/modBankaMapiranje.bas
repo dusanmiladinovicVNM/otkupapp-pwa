@@ -3555,11 +3555,11 @@ Private Sub LinkNovacToOtkupStrict(ByVal novacID As String, _
     Dim rowOtk As Long
 
     rowNov = RequireSingleRow(TBL_NOVAC, COL_NOV_ID, novacID, sourceName)
+    ' Otkup se ne menja, ali MORA postojati tacno jednom -- veza na nepostojeci
+    ' ili dupliran dokument je greska, ne prazna referenca.
     rowOtk = RequireSingleRow(TBL_OTKUP, COL_OTK_ID, otkupID, sourceName)
 
     RequireUpdateCell TBL_NOVAC, rowNov, COL_NOV_OTKUP_ID, otkupID, sourceName
-
-    UpdateOtkupStatus otkupID
 
     Exit Sub
 
