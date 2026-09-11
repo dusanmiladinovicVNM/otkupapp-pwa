@@ -1559,14 +1559,14 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
         End If
     End If
 
-    Dim colKol As Long, colCena As Long
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-
+    ' Vrednost dolazi sa STAVKI, ne sa headera. Dokument vise nema jednu cenu, a
+    ' Kolicina/Cena na headeru u ciljnoj semi ne postoje (S4.1).
+    '
+    ' Nalaz: dok je ovo citalo header, nov pisac je davao vrednost 0, pa je
+    ' "preostalo <= 0 -> Exit Sub" TIHO preskakalo primenu avansa. Golden je to
+    ' prijavio kao B2/B3 placeno 50000 -> 0.
     Dim otkVrednost As Double
-    If IsNumeric(otkData(r, colKol)) And IsNumeric(otkData(r, colCena)) Then
-        otkVrednost = CDbl(otkData(r, colKol)) * CDbl(otkData(r, colCena))
-    End If
+    otkVrednost = modOtkup.VrednostOtkupa(otkupID)
 
     Dim preostalo As Double
     preostalo = otkVrednost - GetUplataForOtkup(otkupID)

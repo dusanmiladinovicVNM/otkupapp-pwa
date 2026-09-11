@@ -63,6 +63,7 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
@@ -1133,6 +1134,21 @@ Private Sub SeedOtkupZaAvans(ByVal otkID As String, ByVal koopID As String, _
     SvAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, COL_OTK_CENA), _
         Array(otkID, otkID, koopID, kolicina, cena)
+    SeedOtkupStavka otkID, kolicina, cena
+End Sub
+
+' Stavka otkupa uz seed header reda.
+'
+' Od Otkup cutover-a vrednost dokumenta je SUM(stavke.Kolicina x Cena)
+' (modOtkup.VrednostOtkupa), pa fixture koji upise samo header pravi otkup
+' vrednosti NULA -- i avans se tiho ne primeni. Bas to je oborilo T16/T23/T25
+' kad je citalac presao na stavke.
+Private Sub SeedOtkupStavka(ByVal otkID As String, ByVal kolicina As Double, _
+                            ByVal cena As Double)
+    SvAppend TBL_OTKUP_STAVKE, _
+        Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
+              COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB), _
+        Array(otkID & "-OKS1", otkID, 1, KLASA_I, kolicina, cena, 0)
 End Sub
 
 ' Avans split naslednik: isti broj i partner kao original, ali BEZ BIM markera

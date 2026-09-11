@@ -97,6 +97,7 @@ Public Sub RunBankaImportTestSuite()
     tx.AddTableSnapshot TBL_BANKA_IMPORT
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_KOOPERANTI
     tx.AddTableSnapshot TBL_STANICE
     tx.AddTableSnapshot TBL_PARTNER_MAP
@@ -1663,6 +1664,7 @@ Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
         Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+    BitOtkupStavka otkID, kolicina, cena
 End Sub
 
 ' Isplata VEZANA za konkretan otkup. Kolona Isplaceno NIJE dovoljna: kandidate
@@ -1757,6 +1759,22 @@ Private Sub SeedOtkup(ByVal otkID As String, ByVal koopID As String, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
         Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
+    BitOtkupStavka otkID, kolicina, cena
+End Sub
+
+' Stavka otkupa uz seed header reda.
+'
+' Od Otkup cutover-a vrednost dokumenta je SUM(stavke.Kolicina x Cena)
+' (modOtkup.VrednostOtkupa), pa fixture koji upise samo header pravi otkup
+' vrednosti NULA -- i avans se tiho ne primeni. Bas to je oborilo T16/T23/T25
+' kad je citalac presao na stavke.
+Private Sub BitOtkupStavka(ByVal otkID As String, ByVal kolicina As Double, _
+                           ByVal cena As Double)
+    If Len(Trim$(otkID)) = 0 Then Exit Sub    ' seed bez ID-a: nema na sta da se veze
+    BitAppend TBL_OTKUP_STAVKE, _
+        Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
+              COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB), _
+        Array(otkID & "-OKS1", otkID, 1, KLASA_I, kolicina, cena, 0)
 End Sub
 
 Private Sub SeedKooperant(ByVal koopID As String, ByVal ime As String, _

@@ -49,6 +49,10 @@ Private Const GLD_KUPAC As String = "KUP-GLD-1"
 Private Const GLD_VRSTA As String = "TESTVOCE"
 Private Const GLD_SORTA As String = "TESTSORTA"
 Private Const GLD_AMB As String = "12/1"
+' Kultura je FK: nov pisac je trazi i proverava da se snapshot vrsta/sorta
+' slaze sa njom (S4.1f). Stari pisac je nije trazio, pa je golden fixture do
+' sada nije ni imao.
+Private Const GLD_KULTURA As String = "GLD-KUL-1"
 
 ' Sta je scenario napravio. Resetuje se na pocetku svakog scenarija.
 Private m_Otk As Collection
@@ -188,6 +192,8 @@ Private Function GldTx() As clsTransaction
     tx.AddTableSnapshot TBL_KOOPERANTI
     tx.AddTableSnapshot TBL_STANICE
     tx.AddTableSnapshot TBL_VOZACI
+    tx.AddTableSnapshot TBL_KULTURE
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_KUPCI
 
     Set GldTx = tx
@@ -213,6 +219,26 @@ Private Sub GldSeed()
     GldSeedRed TBL_VOZACI, "VozacID", GLD_VOZAC2, "Ime", "GOLDEN VOZAC 2"
     GldSeedRed TBL_KUPCI, "KupacID", GLD_KUPAC, "Naziv", "GOLDEN KUPAC"
     GldSeedKooperant
+    GldSeedKultura
+End Sub
+
+' Kultura golden scenarija. Vrsta i sorta MORAJU biti iste kao GLD_VRSTA i
+' GLD_SORTA -- nov pisac odbija dokument ciji se snapshot ne slaze sa kulturom.
+Private Sub GldSeedKultura()
+    Dim rowData As Variant
+
+    GldMoraDaNePostoji TBL_KULTURE, "KulturaID", GLD_KULTURA
+
+    rowData = GldPrazanRed(TBL_KULTURE)
+    GldPolje rowData, TBL_KULTURE, "KulturaID", GLD_KULTURA
+    GldPolje rowData, TBL_KULTURE, "VrstaVoca", GLD_VRSTA
+    GldPolje rowData, TBL_KULTURE, "SortaVoca", GLD_SORTA
+    GldPolje rowData, TBL_KULTURE, "TipAmbalaze", GLD_AMB
+    GldPolje rowData, TBL_KULTURE, "Aktivan", STATUS_AKTIVAN
+
+    If AppendRow(TBL_KULTURE, rowData) <= 0 Then
+        Err.Raise GLD_ERR, "GldSeedKultura", "AppendRow nije uspeo za tblKulture"
+    End If
 End Sub
 
 Private Sub GldSeedRed(ByVal tbl As String, ByVal kljucKol As String, _
@@ -674,24 +700,26 @@ Private Function GldOtkupi() As String
         Exit Function
     End If
 
-    cKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "GldOtkupi")
-    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "GldOtkupi")
-    cCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "GldOtkupi")
-    cIspl = RequireColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO, "GldOtkupi")
     cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "GldOtkupi")
+
+    ' Klasa/Kolicina/Cena se citaju sa STAVKI, ne sa headera. Header ih u ciljnoj
+    ' semi nema (S4.1), a nov pisac ih vec ostavlja prazne -- oracle koji bi ih i
+    ' dalje citao merio bi nulu i zvao je istinom.
+    Dim vrednostReda As Double
 
     For i = 1 To UBound(data, 1)
         id = Trim$(NzToText(data(i, cID)))
         If trazeni.Exists(id) Then
-            If UCase$(Trim$(NzToText(data(i, cKlasa)))) = "II" Then
-                kolII = kolII + SafeD(data(i, cKol))
-            Else
-                kolI = kolI + SafeD(data(i, cKol))
-            End If
-            vrednost = vrednost + SafeD(data(i, cKol)) * SafeD(data(i, cCena))
+            vrednostReda = GldStavkeOtkupa(id, kolI, kolII)
+            vrednost = vrednost + vrednostReda
             placeno = placeno + GetIsplataForOtkup(id)
             imaAktivnih = True
-            If UCase$(Trim$(NzToText(data(i, cIspl)))) <> "DA" Then svePlaceno = False
+
+            ' ISPLACENOST IZ KNJIGE, ne iz kolone. Isplaceno u ciljnom modelu nije
+            ' polje nego izvedeno stanje: placeno = SUM(tblNovac po OtkupID)
+            ' (S4.1c, S6.1). Kolona i knjiga su mogle da se raziju -- bez kolone
+            ' nema sta da se ne slaze.
+            If GetIsplataForOtkup(id) + 0.0001 < vrednostReda Then svePlaceno = False
         End If
     Next i
 
@@ -708,6 +736,37 @@ Private Function GldOtkupi() As String
     s = s & "  isplaceno svi   " & IIf(svePlaceno, "DA", "NE") & vbLf
 
     GldOtkupi = s
+End Function
+
+' Stavke jednog otkupa: dopunjuje kolicine po klasi i vraca vrednost dokumenta.
+'
+' Vrednost je SUM(Kolicina x Cena) po stavkama -- dokument vise nema jednu cenu,
+' pa se ni vrednost ne moze procitati sa headera.
+Private Function GldStavkeOtkupa(ByVal otkupID As String, _
+                                 ByRef kolI As Double, _
+                                 ByRef kolII As Double) As Double
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKlasa As Long, cKol As Long, cCena As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, "GldStavkeOtkupa")
+    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, "GldStavkeOtkupa")
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, "GldStavkeOtkupa")
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, "GldStavkeOtkupa")
+
+    Dim i As Long, kol As Double
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+            kol = SafeD(d(i, cKol))
+            If UCase$(Trim$(NzToText(d(i, cKlasa)))) = "II" Then
+                kolII = kolII + kol
+            Else
+                kolI = kolI + kol
+            End If
+            GldStavkeOtkupa = GldStavkeOtkupa + kol * SafeD(d(i, cCena))
+        End If
+    Next i
 End Function
 
 ' Broj se koristi zato sto ga DANAS traze SumOtpremniceByKlasa i
@@ -971,20 +1030,56 @@ Private Sub GldDodaj(ByVal cilj As Collection, ByVal rez As String)
     Next i
 End Sub
 
+' Otkup golden scenarija -- KANONSKI pisac.
+'
+' brojZbirne se vise NE prosledjuje: broj nikad nije bio veza nego labela (A2),
+' i nov pisac ga ne prima. Golden ga nigde ne cita (mereno: 0 pojava
+' COL_OTK_BROJ_ZBIRNE u ovom modulu), pa nijedan scenario time ne gubi tvrdnju.
+'
+' VozacID takodje odlazi -- vozac pripada otpremnici (S4.1c).
 Private Sub GldOtkup(ByVal brojZbirne As String, ByVal brDok As String, _
                      ByVal kolI As Double, ByVal cenaI As Double, _
                      ByVal kolII As Double, ByVal cenaII As Double)
-    Dim res As String
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", GLD_DATUM
+    h.Add "KooperantID", GLD_KOOP
+    h.Add "StanicaID", GLD_STANICA
+    h.Add "KulturaID", GLD_KULTURA
+    h.Add "VrstaVoca", GLD_VRSTA
+    h.Add "SortaVoca", GLD_SORTA
+    h.Add "TipAmbalaze", GLD_AMB
+    h.Add "BrojDokumenta", brDok
 
-    res = SaveOtkupMulti_TX(GLD_DATUM, GLD_KOOP, GLD_STANICA, GLD_VRSTA, GLD_SORTA, _
-                            kolI, cenaI, GLD_AMB, 50, GLD_VOZAC, brDok, 0#, "", "", _
-                            brojZbirne, (kolII > 0), kolII, cenaII)
+    ' Ambalaza: 50 gajbi na Klasu I, NULA na Klasu II -- tacno onako kako je stari
+    ' poziv radio (kolAmb=50, kolAmbII neprosledjen pa 0). Prva verzija ovog prelaza
+    ' je stavila 50 na SVAKU klasu i golden je to odmah prijavio: saldo kooperanta
+    ' -50 postao -100. Podatak scenarija se ne sme menjati usput.
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If kolI > 0 Then stavke.Add GldStavka(KLASA_I, kolI, cenaI, 50#)
+    If kolII > 0 Then stavke.Add GldStavka(KLASA_II, kolII, cenaII, 0#)
+
+    Dim greska As String
+    Dim res As String
+    res = CreateOtkup_TX(h, stavke, greska)
     If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldOtkup", "SaveOtkupMulti_TX nije vratio ID"
+        Err.Raise GLD_ERR, "GldOtkup", "CreateOtkup_TX nije vratio ID: " & greska
     End If
 
-    GldDodaj m_Otk, res
+    m_Otk.Add res
 End Sub
+
+Private Function GldStavka(ByVal klasa As String, ByVal kol As Double, _
+                           ByVal cena As Double, ByVal amb As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", amb
+    Set GldStavka = s
+End Function
 
 Private Sub GldOtpremnica(ByVal broj As String, ByVal brojOtp As String, _
         ByVal kolI As Double, ByVal cenaI As Double, _

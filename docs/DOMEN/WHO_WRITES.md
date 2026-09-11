@@ -107,6 +107,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
+- `tblOtkupStavke`: `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnicaIzvori`: `modBusinessFlowProTests`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
@@ -118,7 +119,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
-- `tblKulture`: `modTestPalete`
+- `tblKulture`: `modGoldenTests`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblStanice`: `modGoldenTests`, `modTestBanka`

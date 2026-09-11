@@ -70,7 +70,7 @@ Public Function CreateOtkup_TX(ByVal h As Object, _
     ' Sema pre upisa: AppendRow pise POZICIONO. Ide PRE BeginTx -- kapija sme da
     ' digne gresku, a nema smisla otvarati transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "CreateOtkup_TX", _
-        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA
+        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
@@ -79,6 +79,7 @@ Public Function CreateOtkup_TX(ByVal h As Object, _
     ' se iz javnog API-ja ne moze izazvati (svi ulazi su vec provereni), pa je ovo
     ' NEIZMERENA odbrana -- namerno, i tako imenovana.
     tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
 
     CreateOtkup_TX = CreateOtkup(h, stavke)
 
@@ -357,6 +358,17 @@ Private Function CreateOtkup(ByVal h As Object, _
     KnjiziOtkupAmbalazu otkupID, datum, tipAmb, kooperantID, stanicaID, _
                         ZbirAmbalazeStavki(stavke), kolAmbIzdata, SRC
 
+    ' ZATECEN AVANS SE PRIMENJUJE -- jednom po dokumentu.
+    '
+    ' Kes NE ulazi kroz otkupni list (S4.1b) i te parametre nov pisac ni nema,
+    ' ali avans je druga stvar: to je jedini put koji stvarno postavlja placenost
+    ' (S6.1), i zatecen pisac ga primenjuje PO KLASNOM REDU (modOtkup:1043-1044).
+    ' Sa jednim headerom se primenjuje jednom, nad vrednoscu celog dokumenta.
+    '
+    ' Nalaz: prvi prelaz golden mreze na ovog pisca je pao bas ovde --
+    ' B2_avans_primenjen i B3_delimican_avans su prijavili placeno 50000 -> 0.
+    ApplyAvansToOtkup kooperantID, otkupID
+
     CreateOtkup = otkupID
     Exit Function
 
@@ -374,6 +386,37 @@ EH:
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' Vrednost dokumenta = SUM(stavke.Kolicina x stavke.Cena).
+'
+' PRVI od citalaca koji se sele na stavke, i obrazac za ostale: cita se SAMO
+' tblOtkupStavke. Nema fallback-a na header -- to bi bio compatibility sloj za
+' podatke koje ne cuvamo, a tiho bi vracao 0 tamo gde stavki nema umesto da se
+' vidi da dokument nije po novom modelu.
+'
+' Dokument vise nema JEDNU cenu, pa se vrednost ni ne moze procitati sa headera:
+' dve klase legitimno nose dve razlicite cene (S4.1d).
+Public Function VrednostOtkupa(ByVal otkupID As String) As Double
+    Const SRC As String = "VrednostOtkupa"
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKol As Long, cCena As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+            If IsNumeric(d(i, cKol)) And IsNumeric(d(i, cCena)) Then
+                VrednostOtkupa = VrednostOtkupa + CDbl(d(i, cKol)) * CDbl(d(i, cCena))
+            End If
+        End If
+    Next i
 End Function
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
