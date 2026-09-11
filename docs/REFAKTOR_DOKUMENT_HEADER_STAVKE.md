@@ -1342,6 +1342,96 @@ slajsa kao specifikacijom, umesto sa osećajem.
 
 ---
 
+### 14.2) PR7 acceptance mreza — tvrdnje koje je Otkup cutover preselio
+
+Ove tvrdnje su **do Otkup cutover-a bile zelene**, a posle njega se ne mogu
+odrzati bez vracanja starog modela. Nisu obrisane nego **preseljene**: PR7
+(Otpremnica cutover) ih preuzima nad `tblOtpremnicaClanovi`, gde veza vise nije
+pogodjena iz kolona nego upisana.
+
+**PR7 nije gotov dok svaka od njih ne bude zelena — po imenu.**
+
+#### Zasto je veza uopste pukla
+
+`AutoLinkOtkupOtpremnica` (`modSledljivost`) **pogadja** vezu kljucem
+`StanicaID + Datum + VozacID + Klasa + BrojZbirne` **nad `tblOtkup`**. Nov pisac
+ne pise nijedno od tri: vozac je cinjenica otpremnice, klasa cinjenica stavke, a
+broj zbirne je labela tudjeg dokumenta (A2). Kljuc zato vise nikad ne pogadja, pa
+`Otkup.OtpremnicaID` ostaje prazan — a na njemu stoji ceo nizvodni citac:
+
+| Sta | Gde | Stanje posle cutover-a |
+|---|---|---|
+| `AutoLinkOtkupOtpremnica_TX` | dugme „Auto-povezi", `modScrSledljivost:432` | povezuje 0 (toast pokazuje „Povezano: 0") |
+| `TraceByZbirna` | GlobalGAP sledljivost, `modSledljivost:519` | vraca `Empty` za nov otkup |
+| `StampajSledljivostZbirne` | `modIzvestaj:5966` | vraca `"NEMA"` — **ne stampa prazan list** |
+| `GetKooperantiZaZbirnu` | paletni list, `modPaletniList:2614` | prazno polje kooperanata |
+| auto-lanac hladnjace | `modAutoHladnjaca` | **pauziran** u `modOtkupUnos` (odluka operatera) |
+
+Privremen citac se **ne pravi** — to je izricita odluka: kolona
+`Otkup.OtpremnicaID` i kolona `Otkup.BrojZbirne` su bas ono sto refaktor brise
+(S11.3), pa bi shim bio rad u pogresnom smeru.
+
+#### Preseljene tvrdnje
+
+| # | Tvrdnja (izvorno ime) | Odakle | Sta PR7 mora da dokaze |
+|---|---|---|---|
+| 1 | `Otkup class I linked to matching otpremnica` | `Test_FullDocumentChainHappyPath` | dokument je clan otpremnice Klase I |
+| 2 | `Otkup class II linked to matching otpremnica` | isto | **isti** dokument je clan i otpremnice Klase II |
+| 3 | `TraceByZbirna returns rows` | isto | sledljivost cita clanstvo, ne `Otkup.OtpremnicaID` |
+| 4 | `Positive autolink links exact unique scenario` | `Test_AutoLinkPositiveUniqueMatch` | povezivanje je **upis**, ne pogadjanje |
+| 5 | `Auto-link must NOT link otkup with different BrojZbirne` | `Test_AutoLinkMustNotCrossBrojZbirne` | clanstvo ne moze da „precuri" na tudju zbirnu |
+| 6 | `Hladnjaca lanac: otkup red povezan sa otpremnicom` | `Test_HladnjacaChainHappyPath` | lanac vezuje dokument za **obe** svoje otpremnice |
+| 7 | `Hladnjaca lanac: otkup red nosi BrojZbirne` | isto | broj zbirne se **cita kroz clanstvo**, ne prepisuje na otkup |
+
+Tvrdnje 1–3 vazile su nad dva reda po dokumentu; 4–5 nad pogodjenim kljucem;
+6–7 nad back-linkom koji jedno zaglavlje ne moze da nosi za dve klase.
+
+#### Sta u medjuvremenu stoji umesto njih
+
+Gubitak nije tih — svako mesto nosi **imenovano merenje** koje pukne cim se stari
+model vrati:
+
+| Test | Tvrdnja koja stoji danas |
+|---|---|
+| `Test_FullDocumentChainHappyPath` | `Cutover: otkup se vise ne nalazi po (broj, klasa)`, `Cutover: auto-link ne povezuje header+stavke otkup`, `Cutover: TraceByZbirna je prazna bez auto-link veze` |
+| `Test_AutoLinkNeVidiHeaderStavkeOtkup` (nov) | `Auto-link slep: zaglavlje ne nosi Vozaca` / `... ne nosi Klasu` / `savrsen par OSTAJE nepovezan` |
+| `Test_HladnjacaChainHappyPath` | `vraca SAMO poznat cutover gap`, `zaglavlje nosi SAMO otpremnicu Klase I (gubitna veza)`, `otpremnica Klase II postoji ali nije u zaglavlju` |
+| `Test_StornoKaskadaScopePoLancu` | `Kaskada scope: lanac vraca SAMO poznat cutover gap` |
+
+Sabotaza je meren dokaz, ne tvrdnja: vracanje `VozacID` i `Klase` na zaglavlje
+obara **6** tih provera po imenu; obaranje back-linka lanca obara **3**.
+
+#### Obrisani testovi (ne sele se)
+
+| Test | Zasto |
+|---|---|
+| `Test_OtkupAtomicMultiClassSave` | merio „appends exactly two rows" — bas oblik koji se uklanja; zive tvrdnje nose `Test_OTK_HeaderIStavke` i `Test_OTK_LosaDrugaStavkaRollback` |
+| `Test_OtkupClassIIAmbalaza` | merio `KolAmbalaze` po klasi na zaglavlju; zamenjuje ga `Test_OTK_AmbalazaIdeNaDokument` (jedan dvojni upis po dokumentu) |
+| `Test_AutoLinkPositiveUniqueMatch` | tvrdnja preseljena (red 4); sam test meri pogadjanje, koje prestaje da postoji |
+| `Test_AutoLinkMustNotCrossBrojZbirne` | tvrdnja preseljena (red 5), isti razlog |
+
+#### Sta je ostalo od starih pisaca
+
+`SaveOtkupMulti_TX` je **obrisan** — sa njim i posledji pisac koji je jedan unos
+pretvarao u dva reda `tblOtkup`.
+
+`SaveOtkup_TX` **namerno ostaje**, i to nije previd: nijedan produkcioni put ga
+ne zove, ali je jedini posten nacin da test napravi **zaglavlje bez stavki** —
+oblik koji nove kapije moraju da odbiju (`Test_OTK_VrednostBezStavkiPada`,
+`Test_OTP_StariOtkupNeUlazi`). Alternativa bi bila `AppendRow` iz testa, sto
+duplira znanje o semi i cini test pisacem tabele (A11). Odlazi u koraku 7,
+zajedno sa kolonama koje puni.
+
+#### Zatecen nalaz usput (ne dira se u ovom PR-u)
+
+`OtkupIdsByBrDok` (`modScrDokumenti:668`) trazi otkupe **samo po
+`BrojDokumenta`**, bez stanice. Posle `RequireBrojJedinstven`, cija je oblast
+`StanicaID + Datum + Broj`, dve stanice smeju istog dana imati isti broj — pa bi
+stampa spojila dva razlicita dokumenta. Nalaz je **zatecen** (i pre refaktora je
+broj bio slobodan tekst), ne uveden; ide u citalacki prolaz, korak 7.
+
+---
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

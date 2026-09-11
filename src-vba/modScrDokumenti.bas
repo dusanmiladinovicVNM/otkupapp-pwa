@@ -349,9 +349,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
 
     Select Case p(0)
         Case "print"
-            ' Klase I i II dele broj dokumenta, a imaju zasebne OtkupID-eve.
-            ' Stampa ide nad SVIMA - isto kao posle SaveOtkupMulti_TX, koji
-            ' OutputOtkupniList i dobija spojene ID-eve.
+            ' Posle cutover-a jedan broj = jedan dokument = jedan OtkupID, pa
+            ' OtkupIdsByBrDok obicno vrati jedan. Spojen oblik ostaje jer
+            ' ZATECENI redovi jos nose dva ID-a pod istim brojem.
             ids = OtkupIdsByBrDok(broj)
             If Len(ids) = 0 Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_DOK") & " " & broj, True

@@ -389,7 +389,9 @@ End Function
 ' OTKUPNI LIST (zakonski) -- OtkupSablon, dva primerka jedan iznad drugog,
 ' A4 portrait. PDV nadoknada se racuna (CFG_PDV_NADOKNADA_STOPA, default 8%).
 ' Izlaz po CFG_OTKUP_PRINT_MODE: (prazno/PDF) | PRINT | PREVIEW | OFF.
-' otkupIDs = rezultat SaveOtkupMulti_TX (npr. "OTK-1 + OTK-2" ili "OTK-1").
+' otkupIDs: posle cutover-a JEDAN OtkupID -- dokument je jedno zaglavlje sa
+' stavkama. Spojen oblik ("OTK-1 + OTK-2") jos se prihvata jer ga daje
+' OtkupIdsByBrDok nad ZATECENIM redovima; sablon puni prvi razresiv dokument.
 ' ============================================================
 
 ' Implementira stari stub: pojedinacni otkupni list -> izlaz po modu.
@@ -397,7 +399,7 @@ Public Sub PrintOtkupniList(ByVal otkupID As String)
     OutputOtkupniList otkupID
 End Sub
 
-' Glavni ulaz (zove se posle SaveOtkupMulti_TX). Best-effort: greska se loguje.
+' Glavni ulaz (zove se posle CreateOtkup_TX). Best-effort: greska se loguje.
 Public Sub OutputOtkupniList(ByVal otkupIDs As String)
     On Error GoTo EH
     Dim mode As String

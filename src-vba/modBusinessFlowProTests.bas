@@ -99,11 +99,16 @@ Public Sub RunBusinessFlowProSuite()
     SeedBusinessFlowProMasterData
     Test_SeedMasterDataAvailable
 
-    Test_OtkupAtomicMultiClassSave
-    Test_OtkupClassIIAmbalaza
     Test_FullDocumentChainHappyPath
     Test_DuplicateFakturaIsBlocked
     Test_InvalidSavesDoNotAppend
+    ' OBRISANI u Otkup cutover-u: Test_OtkupAtomicMultiClassSave i
+    ' Test_OtkupClassIIAmbalaza su tvrdili PO-KLASNE redove na zaglavlju
+    ' ("appends exactly two rows", KolAmbalaze po klasi, BrojZbirne po
+    ' klasi) -- bas model koji se uklanja. Njihove zive tvrdnje nose:
+    '   jedan header + dve stavke      Test_OTK_HeaderIStavke
+    '   atomicnost dvoklasnog upisa    Test_OTK_LosaDrugaStavkaRollback
+    '   ambalaza dvoklasnog dokumenta  Test_OTK_AmbalazaIdeNaDokument
     Test_OtkupInputValidationHardening
     Test_OtkupReadHelpersExcludeStornirano
     Test_DokumentaInputValidationHardening
@@ -158,8 +163,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_BackfillHladnjacaDeliBrojPoZbirnoj
     Test_BackfillHladnjacaIgnorisePrijemniceDrugogKupca
 
-    Test_AutoLinkPositiveUniqueMatch
-    Test_AutoLinkMustNotCrossBrojZbirne
+    Test_AutoLinkNeVidiHeaderStavkeOtkup
     Test_NoCrossZbirnaLinksAudit
 
     ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
@@ -301,8 +305,7 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
 
     Test_CoreTablesAndColumnsExist
     SeedBusinessFlowProMasterData
-    Test_AutoLinkPositiveUniqueMatch
-    Test_AutoLinkMustNotCrossBrojZbirne
+    Test_AutoLinkNeVidiHeaderStavkeOtkup
     Test_NoCrossZbirnaLinksAudit
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
@@ -409,112 +412,6 @@ EH:
     LogFail "Seed master data available", Err.description
 End Sub
 
-Private Sub Test_OtkupAtomicMultiClassSave()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("OTK")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojDok As String
-    Dim brojZbirne As String
-
-    brojDok = TEST_PREFIX & "-OTK-" & scenario
-    brojZbirne = TEST_PREFIX & "-ZBR-OTK-" & scenario
-
-    Dim beforeOtkup As Long
-    Dim beforeAmb As Long
-    beforeOtkup = CountRows(TBL_OTKUP)
-    beforeAmb = CountRows(TBL_AMBALAZA)
-
-    Dim result As String
-    result = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojDok, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        True, 200#, 80#)
-
-    AssertTrue Len(Trim$(result)) > 0, "Otkup multi wrapper returns ID(s)"
-    AssertEquals CStr(beforeOtkup + 2), CStr(CountRows(TBL_OTKUP)), "Otkup multi wrapper appends exactly two rows"
-    AssertTrue CountRows(TBL_AMBALAZA) >= beforeAmb + 1, "Otkup class I ambalaza movement created"
-
-    Dim otkI As String
-    Dim otkII As String
-    otkI = FindOtkupIDByBrojAndKlasa(brojDok, "I")
-    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
-
-    AssertTrue Len(otkI) > 0, "Otkup class I can be found by document number"
-    AssertTrue Len(otkII) > 0, "Otkup class II can be found by document number"
-
-    AssertEquals "100", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkI, "KolAmbalaze")), _
-                 "Otkup class I carries ambalaza"
-
-    AssertEquals "0", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkII, "KolAmbalaze")), _
-                 "Otkup class II carries zero ambalaza"
-
-    AssertEquals brojZbirne, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkI, "BrojZbirne")), _
-                 "Otkup class I has scenario BrojZbirne"
-
-    AssertEquals brojZbirne, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkII, "BrojZbirne")), _
-                 "Otkup class II has scenario BrojZbirne"
-
-    Exit Sub
-
-EH:
-    LogFail "Otkup atomic multi-class save", Err.description
-End Sub
-
-' #3 Klasa II ima SVOJU kolicinu ambalaze (kolAmbII) -> red Klase II nosi te gajbe
-' i kreira sopstvene pokrete u ambalaznom ledgeru (ranije: uvek 0 na Klasi II).
-Private Sub Test_OtkupClassIIAmbalaza()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("OTK2A")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojDok As String
-    Dim brojZbirne As String
-    brojDok = TEST_PREFIX & "-OTK2A-" & scenario
-    brojZbirne = TEST_PREFIX & "-ZBR-OTK2A-" & scenario
-
-    Dim beforeAmb As Long
-    beforeAmb = CountRows(TBL_AMBALAZA)
-
-    ' Dve klase, OBE sa svojim gajbama (Klasa I = 100, Klasa II = 30).
-    Dim result As String
-    result = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojDok, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        hasKlasaII:=True, kolicinaII:=200#, cenaII:=80#, kolAmbII:=30)
-
-    AssertTrue Len(Trim$(result)) > 0, "Otkup multi (II amb) returns ID(s)"
-
-    Dim otkI As String
-    Dim otkII As String
-    otkI = FindOtkupIDByBrojAndKlasa(brojDok, "I")
-    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
-
-    AssertEquals "100", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkI, "KolAmbalaze")), _
-                 "Otkup class I carries its ambalaza (100)"
-    AssertEquals "30", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkII, "KolAmbalaze")), _
-                 "Otkup class II carries its own ambalaza (30)"
-
-    ' Obe klase sa gajbama -> kreirani su ambalazni pokreti (Klasa II vise nije 0).
-    AssertTrue CountRows(TBL_AMBALAZA) > beforeAmb, _
-               "Two-class otkup with crates creates ambalaza movements"
-
-    Exit Sub
-
-EH:
-    LogFail "Otkup class II ambalaza", Err.description
-End Sub
-
 Private Sub Test_FullDocumentChainHappyPath()
     On Error GoTo EH
 
@@ -547,11 +444,8 @@ Private Sub Test_FullDocumentChainHappyPath()
     beforeStavke = CountRows(TBL_FAKTURA_STAVKE)
 
     Dim otkupResult As String
-    otkupResult = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojOtk, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        True, 200#, 80#)
+    otkupResult = NoviOtkupFixture(testDate, TEST_ST_ID, brojOtk, brojZbirne, _
+                                   1000#, 120#, 100#, 200#, 80#, 0#)
 
     AssertTrue Len(otkupResult) > 0, "Flow setup creates otkup rows"
 
@@ -626,28 +520,26 @@ Private Sub Test_FullDocumentChainHappyPath()
     AssertDoubleNear 1180#, CDbl(manjak(1)), 0.01, "Manjak prijemnica kg"
     AssertDoubleNear 20#, CDbl(manjak(2)), 0.01, "Manjak kg"
 
-    Dim linked As Long
-    linked = AutoLinkOtkupOtpremnica_TX()
-    AssertTrue linked >= 2, "Auto-link links the scenario otkup rows"
+    ' AUTO-LINK NE VIDI HEADER+STAVKE OTKUP -- MERENO, NE PREVIDJENO.
+    '
+    ' AutoLinkOtkupOtpremnica kljuca po Stanica + Datum + VOZAC + KLASA +
+    ' BrojZbirne NAD tblOtkup (modSledljivost:121-127). Nov pisac ne pise ni
+    ' Vozaca ni Klasu na zaglavlju -- vozac je svojstvo otpremnice, klasa svojstvo
+    ' stavke -- pa kljuc vise nikad ne pogadja. Posledica ide nizvodno:
+    ' TraceByZbirna se oslanja na Otkup.OtpremnicaID koji upisuje bas AutoLink,
+    ' pa GlobalGAP sledljivost za nov otkup ostaje prazna.
+    '
+    ' Pravu vezu nosi tblOtpremnicaClanovi (PR5) i u pogon je vodi PR7. Privremen
+    ' citac se NE pravi (odluka operatera). Tvrdnje koje su ovde stajale zive u
+    ' PR7 acceptance mrezi -- docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
+    AutoLinkOtkupOtpremnica_TX
 
-    Dim otkI As String
-    Dim otkII As String
-    otkI = FindOtkupIDByBrojAndKlasa(brojOtk, "I")
-    otkII = FindOtkupIDByBrojAndKlasa(brojOtk, "II")
-
-    AssertEquals otpI, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkI, "OtpremnicaID")), _
-                 "Otkup class I linked to matching otpremnica"
-
-    AssertEquals otpII, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkII, "OtpremnicaID")), _
-                 "Otkup class II linked to matching otpremnica"
-
-    Dim trace As Variant
-    trace = TraceByZbirna(brojZbirne)
-    AssertTrue Not IsEmpty(trace), "TraceByZbirna returns rows"
-
-    If Not IsEmpty(trace) Then
-        AssertTrue UBound(trace, 1) >= 2, "TraceByZbirna returns at least two rows"
-    End If
+    AssertEquals "", FindOtkupIDByBrojAndKlasa(brojOtk, "I"), _
+                 "Cutover: otkup se vise ne nalazi po (broj, klasa)"
+    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkupResult, "OtpremnicaID")), _
+                 "Cutover: auto-link ne povezuje header+stavke otkup"
+    AssertTrue IsEmpty(TraceByZbirna(brojZbirne)), _
+               "Cutover: TraceByZbirna je prazna bez auto-link veze"
 
     Dim stavke As Collection
     Set stavke = New Collection
@@ -781,11 +673,11 @@ Private Sub Test_InvalidOtkupDoesNotAppend()
 
     ' Prazan kooperantID treba da blokira
     Dim result As String
-    result = SaveOtkupMulti_TX( _
-        NextTestDate(), "", TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        100#, 100#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
-        TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BAD"), _
-        0#, "", "", "", False, 0#, 0#)
+    ' Prazan KooperantID -> kanonski pisac ga odbija kao FK (S4.1f).
+    Dim badH As Object
+    Set badH = OtkHeader(TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BAD"))
+    badH("KooperantID") = ""
+    result = CreateOtkup_TX(badH, OtkStavke(100#, 100#, 0, 0#, 0#, 0))
 
     If Len(Trim$(result)) = 0 Then
         AssertEquals CStr(beforeCount), CStr(CountRows(TBL_OTKUP)), _
@@ -793,7 +685,7 @@ Private Sub Test_InvalidOtkupDoesNotAppend()
         Exit Sub
     End If
 
-    LogFail "Invalid otkup rejected", "SaveOtkupMulti_TX returned ID: " & result
+    LogFail "Invalid otkup rejected", "CreateOtkup_TX returned ID: " & result
     Exit Sub
 
 ExpectedError:
@@ -1323,124 +1215,61 @@ End Sub
 ' TRACEABILITY / AUTOLINK REGRESSION TESTS
 ' ============================================================
 
-Private Sub Test_AutoLinkPositiveUniqueMatch()
+' AUTO-LINK JE SLEP ZA NOV MODEL -- i to je tvrdnja, ne propust.
+'
+' Zamenjuje Test_AutoLinkPositiveUniqueMatch i Test_AutoLinkMustNotCrossBrojZbirne.
+' Oba su merila POGADJANJE veze iz (Stanica, Datum, Vozac, Klasa, BrojZbirne) na
+' zaglavlju otkupa. Nov pisac te tri kolone ne pise, pa AutoLink nema po cemu da
+' kljuca -- nijedan od njih se ne moze uciniti zelenim bez vracanja starog modela.
+'
+' Njihove poslovne tvrdnje ("povezi tacno jedan jedinstven par" i "NIKAD ne
+' prelazi preko razlicitog BrojZbirne") nisu izgubljene nego PRESELJENE: PR7 ih
+' preuzima nad tblOtpremnicaClanovi, gde veza vise nije pogodjena nego upisana.
+' Spisak je u docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
+'
+' Ovaj test je kapija u suprotnom smeru: ako iko vrati Vozaca ili Klasu na
+' zaglavlje, AutoLink opet pogodi i test pukne PO IMENU.
+Private Sub Test_AutoLinkNeVidiHeaderStavkeOtkup()
     On Error GoTo EH
 
     Dim scenario As String
-    scenario = NewScenarioCode("LINKOK")
+    scenario = NewScenarioCode("LINKSLEP")
 
     Dim testDate As Date
     testDate = NextTestDate()
 
-    Dim brojOtk As String
-    Dim brojOtp As String
-    Dim brojZbirne As String
-
+    Dim brojOtk As String, brojOtp As String, brojZbirne As String
     brojOtk = TEST_PREFIX & "-OTK-" & scenario
     brojOtp = TEST_PREFIX & "-OTP-" & scenario
     brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
 
+    ' Savrsen par: ista stanica, isti datum, isti BrojZbirne, ista klasa.
     Dim otkupID As String
+    otkupID = NoviOtkupFixture(testDate, TEST_ST_ID, brojOtk, brojZbirne, _
+                               100#, 100#, 10#, 0#, 0#, 0#)
+
     Dim otpID As String
-
-    Dim otkupResult As String
-    otkupResult = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brojOtk, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        False, 0#, 0#)
-
-    otkupID = FindOtkupIDByBrojAndKlasa(brojOtk, "I")
-
     otpID = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
                               TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, "I")
 
-    AssertTrue Len(otkupID) > 0, "Positive autolink fixture otkup exists"
-    AssertTrue Len(otpID) > 0, "Positive autolink fixture otpremnica exists"
+    AssertTrue Len(otkupID) > 0, "Auto-link slep: otkup napravljen novim piscem"
+    AssertTrue Len(otpID) > 0, "Auto-link slep: otpremnica napravljena"
+
+    ' Zaglavlje nema ni jedno od tri polja po kojima AutoLink kljuca.
+    AssertEquals "", CStr(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), "")), _
+                 "Auto-link slep: zaglavlje ne nosi Vozaca"
+    AssertEquals "", CStr(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KLASA), "")), _
+                 "Auto-link slep: zaglavlje ne nosi Klasu"
 
     AutoLinkOtkupOtpremnica_TX
 
-    AssertEquals otpID, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkupID, "OtpremnicaID")), _
-                 "Positive autolink links exact unique scenario"
+    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkupID, "OtpremnicaID")), _
+                 "Auto-link slep: savrsen par OSTAJE nepovezan"
 
     Exit Sub
 
 EH:
-    LogFail "Auto-link positive unique match", Err.description
-End Sub
-
-Private Sub Test_AutoLinkMustNotCrossBrojZbirne()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("LINKBUG")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojOtkA As String
-    Dim brojOtkB As String
-    Dim brojOtpB As String
-
-    Dim brojZbrA As String
-    Dim brojZbrB As String
-
-    brojOtkA = TEST_PREFIX & "-OTK-A-" & scenario
-    brojOtkB = TEST_PREFIX & "-OTK-B-" & scenario
-    brojOtpB = TEST_PREFIX & "-OTP-B-" & scenario
-
-    brojZbrA = TEST_PREFIX & "-ZBR-A-" & scenario
-    brojZbrB = TEST_PREFIX & "-ZBR-B-" & scenario
-
-    ' Two otkup rows share Station/Date/Vozac/Class but have different BrojZbirne.
-    ' Only B has matching otpremnica. A must remain unlinked.
-    Dim resA As String
-    Dim resB As String
-
-    resA = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        100#, 100#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojOtkA, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbrA, _
-        False, 0#, 0#)
-
-    resB = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        100#, 100#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojOtkB, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbrB, _
-        False, 0#, 0#)
-
-    Dim otkA As String
-    Dim otkB As String
-
-    otkA = FindOtkupIDByBrojAndKlasa(brojOtkA, "I")
-    otkB = FindOtkupIDByBrojAndKlasa(brojOtkB, "I")
-
-    Dim otpB As String
-    otpB = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtpB, brojZbrB, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, "I")
-
-    AssertTrue Len(otkA) > 0, "Cross-zbirna fixture A otkup exists"
-    AssertTrue Len(otkB) > 0, "Cross-zbirna fixture B otkup exists"
-    AssertTrue Len(otpB) > 0, "Cross-zbirna fixture B otpremnica exists"
-
-    AutoLinkOtkupOtpremnica_TX
-
-    Dim linkA As String
-    Dim linkB As String
-
-    linkA = CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkA, "OtpremnicaID"))
-    linkB = CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkB, "OtpremnicaID"))
-
-    AssertEquals "", linkA, _
-                 "Auto-link must NOT link otkup with different BrojZbirne"
-
-    AssertEquals otpB, linkB, _
-                 "Auto-link should link matching BrojZbirne row"
-
-    Exit Sub
-
-EH:
-    LogFail "Auto-link must not cross BrojZbirne", Err.description
+    LogFail "Auto-link ne vidi header+stavke otkup", Err.description
 End Sub
 
 Private Sub Test_NoCrossZbirnaLinksAudit()
@@ -4218,7 +4047,8 @@ Private Sub Test_StornoKaskadaScopePoLancu()
 
     Dim brPrij As String, w As String
     w = RunHladnjacaChain(brDok, NextTestDate(), "", brPrij)
-    AssertEquals "", w, "Kaskada scope: hladnjaca lanac kreiran bez upozorenja"
+    AssertEquals HladnjacaOcekivanoUpozorenje(), w, _
+                 "Kaskada scope: lanac vraca SAMO poznat cutover gap"
 
     Dim otpI As String, zbrI As String, prjI As String
     otpI = FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)
@@ -4274,13 +4104,12 @@ Private Sub Test_StornoKaskadaScopePoLancu()
 
     ' Otkup blok na hladnjaca stanici sa istim BrojZbirne (nema aktivne zbirne).
     Dim otkIDs As String
-    otkIDs = SaveOtkupMulti_TX(testDate2, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
-                               100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok2, _
-                               0#, "TEST OPERATOR", GetTestParcelaID(), brDok2)
+    otkIDs = NoviOtkupFixture(testDate2, TEST_HLAD_ST_ID, brDok2, brDok2, _
+                              100#, 100#, 10#, 0#, 0#, 0#)
     AssertTrue Len(otkIDs) > 0, "Kaskada scope: otkup blok bez aktivne zbirne kreiran"
 
     Dim otkID As String
-    otkID = FindOtkupIDByBrojAndKlasa(brDok2, KLASA_I)
+    otkID = FindOtkupIDByBroj(brDok2)
 
     AssertFalse StornoOtkupByBrDok_TX(brDok2), _
                 "Kaskada scope: bez aktivne zbirne uz aktivan child -> storno je ODBIJEN"
@@ -5042,6 +4871,38 @@ EH:
     GetValueByKey = Empty
 End Function
 
+' Otkup po BROJU DOKUMENTA -- bez klase.
+'
+' FindOtkupIDByBrojAndKlasa ispod trazi i Klasu NA ZAGLAVLJU. Posle cutover-a
+' zaglavlje je nema (klasa je svojstvo stavke), pa taj citac vise ne nalazi nista
+' -- i to je merena istina, ne kvar. Testovima kojima treba dokument, a ne red
+' po klasi, sluzi ovaj citac. Broj je jedinstven po stanici i danu, a u testovima
+' nosi i jedinstven scenario prefiks.
+Private Function FindOtkupIDByBroj(ByVal brojDok As String) As String
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colID As Long, colBroj As Long
+    colID = RequireCol(TBL_OTKUP, "OtkupID")
+    colBroj = RequireCol(TBL_OTKUP, "BrojDokumenta")
+
+    Dim i As Long
+    For i = UBound(data, 1) To 1 Step -1
+        If CStr(data(i, colBroj)) = brojDok Then
+            FindOtkupIDByBroj = CStr(data(i, colID))
+            Exit Function
+        End If
+    Next i
+
+    Exit Function
+
+EH:
+    FindOtkupIDByBroj = ""
+End Function
+
 Private Function FindOtkupIDByBrojAndKlasa(ByVal brojDok As String, ByVal klasa As String) As String
     On Error GoTo EH
 
@@ -5205,10 +5066,8 @@ Private Function RunHladnjacaChain(ByVal brDok As String, ByVal testDate As Date
                                    ByVal failStep As String, _
                                    ByRef outBrPrij As String) As String
     Dim otkupIDs As String
-    otkupIDs = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
-                                 100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok, _
-                                 0#, "TEST OPERATOR", GetTestParcelaID(), brDok, _
-                                 True, 50#, 80#, 0, 0#, 5, 0#)
+    otkupIDs = NoviOtkupFixture(testDate, TEST_HLAD_ST_ID, brDok, brDok, _
+                                100#, 100#, 10#, 50#, 80#, 5#)
 
     If Len(failStep) > 0 Then ArmHladnjacaTestFail failStep
 
@@ -5216,6 +5075,28 @@ Private Function RunHladnjacaChain(ByVal brDok As String, ByVal testDate As Date
                                            TEST_VOZ_ID, TEST_TIP_AMB, 10, 100#, 100#, _
                                            True, 50#, 80#, brDok, otkupIDs, _
                                            0#, 5, 0#, outBrPrij)
+End Function
+
+' JEDINI ostatak upozorenja lanca koji je posle cutover-a dozvoljen.
+'
+' Lanac vezuje otkup nazad PO KLASI: iz "ID1 + ID2" vadi idI i idII pa svakoj
+' klasi upisuje njen OtpremnicaID (modAutoHladnjaca:177-189). Nov pisac daje
+' JEDAN OtkupID, pa idII ostaje prazan i veza Klase II se prijavljuje kao pala.
+' Prijava je TACNA -- veza i jeste pala; jedno zaglavlje ne moze da nosi dva
+' OtpremnicaID-a. Zato se ne "popravlja", nego imenuje.
+'
+' U pogonu lanac ovo ne stampa: pauziran je u modOtkupUnos i ne poziva se sa
+' hladnjacke stanice. Testovi ga zovu direktno, da bi ostatak lanca -- fail-fast
+' saga po klasi, deljen broj prijemnice, generacije, backfill -- ostao meren.
+'
+' Poredi se CEO tekst, ne podniz: bilo koji DRUGI pali korak menja string i
+' obara tvrdnju PO IMENU. PR7 mora da ukloni i ovaj ostatak.
+Private Function HladnjacaOcekivanoUpozorenje() As String
+    HladnjacaOcekivanoUpozorenje = _
+        "Otkup je sa" & ChrW(269) & "uvan, ali AUTO-LANAC hladnjace je NEPOTPUN:" & vbCrLf & _
+        "- OTKUP red nije povezan sa dokumentom (Klasa II)." & vbCrLf & _
+        "Najcesci uzrok pada prijemnice: broj prijemnice je ve" & ChrW(263) & _
+        " paletizovan (zaostala stavka u tblPaletaStavka). Detalji su u logu."
 End Function
 
 ' BrojPrijemnice za (BrojZbirne | Klasa | KupacID). FindPrijemnicaIDByBrojAndKlasa
@@ -5259,7 +5140,8 @@ Private Sub Test_HladnjacaChainHappyPath()
     Dim brPrij As String, w As String
     w = RunHladnjacaChain(brDok, NextTestDate(), "", brPrij)
 
-    AssertEquals "", w, "Hladnjaca lanac: kompletan lanac ne vraca upozorenje"
+    AssertEquals HladnjacaOcekivanoUpozorenje(), w, _
+                 "Hladnjaca lanac: vraca SAMO poznat cutover gap"
     AssertTrue Len(brPrij) > 0, "Hladnjaca lanac: outBrPrij izlozen posle kreirane prijemnice"
 
     AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
@@ -5303,10 +5185,21 @@ Private Sub Test_HladnjacaChainHappyPath()
                  DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_II)), _
         "Hladnjaca lanac: otpremnica Kl.II nosi generaciju SVOJE zbirne"
 
-    ' Back-link u otkup red.
-    Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)
-    AssertTrue Len(CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID"))) > 0, _
-        "Hladnjaca lanac: otkup red povezan sa otpremnicom"
+    ' BACK-LINK U OTKUP JE GUBITAN -- MERENO.
+    '
+    ' Dokument ima dve klase i zato dve otpremnice, a zaglavlje ima jednu kolonu
+    ' OtpremnicaID. Lanac upise Klasu I i za Klasu II prijavi pad. Rezultat nije
+    ' "povezan otkup" nego POLU-ISTINA: zaglavlje pokazuje na samo jednu od svoje
+    ' dve otpremnice. Bas zato kolona odlazi u PR7, a lanac je u pogonu pauziran.
+    Dim otkID As String: otkID = FindOtkupIDByBroj(brDok)
+    AssertTrue Len(otkID) > 0, "Hladnjaca lanac: dokument postoji po broju"
+    AssertEquals "", FindOtkupIDByBrojAndKlasa(brDok, KLASA_I), _
+        "Hladnjaca lanac: otkup se vise ne nalazi po (broj, klasa)"
+    AssertEquals FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I), _
+                 CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID")), _
+        "Hladnjaca lanac: zaglavlje nosi SAMO otpremnicu Klase I (gubitna veza)"
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_II)) > 0, _
+        "Hladnjaca lanac: otpremnica Klase II postoji ali nije u zaglavlju"
     AssertEquals brDok, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "BrojZbirne")), _
         "Hladnjaca lanac: otkup red nosi BrojZbirne"
 
@@ -6586,9 +6479,8 @@ End Sub
 ' Sta se meri:  da CreateOtkup_TX pravi JEDAN header i N stavki, da KulturaID
 '               PRIMA a ne fabrikuje, da parcela mora biti kooperantova, i da
 '               bruto/neto i cena ostaju zamrznute cinjenice.
-' Sta se NE meri: ponasanje citalaca, ambalaza i novac -- to je Otkup cutover.
-'               Do tada je stari writer (SaveOtkupMulti_TX) jedini put, a golden
-'               scenariji to dokazuju nepromenjeni.
+' Sta se NE meri: ponasanje citalaca -- ona su predmet Otkup cutover-a, koji je
+'               ambalazu i novac doveo pod isti pisac i obrisao starog.
 
 Private Sub Test_OTK_HeaderIStavke()
     On Error GoTo EH
@@ -9551,6 +9443,50 @@ Private Function PrintListSadrzi(ByVal otkupID As String, ByVal broj As Double) 
     Next c
 End Function
 
+' Otkup po NOVOM modelu, za fixture nizvodnih testova.
+'
+' Zamenjuje SaveOtkupMulti_TX u testovima ciji SUBJEKT nije pisac otkupa nego
+' nesto nizvodno: AutoLink, storno kaskada, hladnjacki lanac, SEF faktura. Otkup
+' se zato pravi kanonski (jedan header + stavke), a BrojZbirne se ZIGOSE posle --
+' nov pisac ga ne prima (broj nije veza, A2), ali kolona jos zivi i ti testovi je
+' citaju. Odlazi u PR8, zajedno sa njihovim tvrdnjama.
+Private Function NoviOtkupFixture(ByVal datum As Date, ByVal stanicaID As String, _
+                                  ByVal brDok As String, ByVal brojZbirne As String, _
+                                  ByVal kolI As Double, ByVal cenaI As Double, _
+                                  ByVal kolAmb As Double, _
+                                  ByVal kolII As Double, ByVal cenaII As Double, _
+                                  ByVal kolAmbII As Double) As String
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "KooperantID", TEST_KOOP_ID
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", TEST_KULTURA_ID
+    h.Add "VrstaVoca", TEST_VRSTA
+    h.Add "SortaVoca", TEST_SORTA
+    h.Add "TipAmbalaze", TEST_TIP_AMB
+    h.Add "BrojDokumenta", brDok
+    h.Add "ParcelaID", GetTestParcelaID()
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If kolI > 0 Then stavke.Add OtkStavka(KLASA_I, kolI, cenaI, kolAmb, 0#)
+    If kolII > 0 Then stavke.Add OtkStavka(KLASA_II, kolII, cenaII, kolAmbII, 0#)
+
+    Dim greska As String
+    NoviOtkupFixture = CreateOtkup_TX(h, stavke, greska)
+    If Len(NoviOtkupFixture) = 0 Then
+        Err.Raise vbObjectError + 9400, "NoviOtkupFixture", _
+                  "CreateOtkup_TX nije vratio ID: " & greska
+    End If
+
+    If Len(Trim$(brojZbirne)) > 0 Then
+        RequireUpdateCell TBL_OTKUP, _
+                          FindRows(TBL_OTKUP, COL_OTK_ID, NoviOtkupFixture)(1), _
+                          COL_OTK_BROJ_ZBIRNE, brojZbirne, "NoviOtkupFixture"
+    End If
+End Function
+
 ' Parametri kakve ekran salje OtkupUpisi -- isti kljucevi kao NoviOtkupUnos.
 Private Function OtkEkranParam(ByVal brDok As String) As Object
     Dim p As Object
@@ -10234,11 +10170,8 @@ Public Function CreateSEFLiveTestFaktura() As String
     brojPrij = TEST_PREFIX & "-PRJ-" & scenario
 
     Dim otkupResult As String
-    otkupResult = SaveOtkupMulti_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojOtk, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        True, 200#, 80#)
+    otkupResult = NoviOtkupFixture(testDate, TEST_ST_ID, brojOtk, brojZbirne, _
+                                   1000#, 120#, 100#, 200#, 80#, 0#)
 
     Dim otpI As String
     Dim otpII As String
@@ -10319,15 +10252,12 @@ Public Function CreateSEFLiveDummyFaktura() As String
     
     Dim otkupResult As String
 
-    otkupResult = SaveOtkupMulti_TX( _
-        d, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
-        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojOtk, _
-        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
-        True, 200#, 80#)
+    otkupResult = NoviOtkupFixture(d, TEST_ST_ID, brojOtk, brojZbirne, _
+                                   1000#, 120#, 100#, 200#, 80#, 0#)
 
     If Len(Trim$(otkupResult)) = 0 Then          ' ? ovde
         Err.Raise vbObjectError + 9301, "CreateSEFLiveDummyFaktura", _
-              "SaveOtkupMulti_TX failed."
+              "NoviOtkupFixture nije vratio OtkupID."
     End If
     
     Dim otpI As String

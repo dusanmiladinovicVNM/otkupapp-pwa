@@ -34,9 +34,13 @@ Option Explicit
 ' Razresavanje (Vrsta, Sorta) -> KulturaID je posao ADAPTERA; writer proverava
 ' da FK postoji i da se snapshot vrsta/sorta slaze sa tom kulturom.
 '
-' VISE NIJE SKELA. Od Otkup cutover-a (korak 2) ovo je JEDINI put kojim nastaje
-' otkup: modOtkupUnos i golden mreza zovu bas njega, a SaveOtkupMulti_TX je ostao
-' samo dok se ne uklone poslednji test pozivaoci.
+' VISE NIJE SKELA, I VISE NEMA TAKMACA. Od Otkup cutover-a ovo je JEDINI put
+' kojim otkup nastaje: ekran (modOtkupUnos), PWA uvoz (modMasterSync) i golden
+' mreza zovu bas njega. Stari pisac po klasi je obrisan (korak 3).
+'
+' Izuzetak je SaveOtkup_TX: nije u pogonu, nego sluzi testovima da naprave
+' zaglavlje BEZ STAVKI -- oblik koji nove kapije moraju da odbiju. Obrazlozenje
+' stoji uz njega.
 '
 ' Header i dalje ostavlja Kolicina / Cena / Klasa / KolAmbalaze / BrutoKg /
 ' VozacID / Isplaceno / DatumIsplate / VremeUnosa prazne -- to su kolone koje u
@@ -591,18 +595,17 @@ End Function
 ' testove -- 10 do 33 tvrdnje, zavisno od kombinacije.
 '
 ' Uzrok su HEADER-ONLY PISCI: prave otkup bez ijedne stavke, pa strog read-model
-' i oni ne mogu da koegzistiraju. Ima ih DVA, ne jedan:
+' i oni ne mogu da koegzistiraju. Bila su DVA; oba su zatvorena:
 '
-'   SaveOtkupMulti_TX      jos ga zovu fixture-i 8 testova (v. REFAKTOR)
-'   modMasterSync:1999     PWA import radi AppendRow(TBL_OTKUP) direktno,
-'                          fabrikuje KulturaID (:1960) i NE pravi stavke
+'   SaveOtkupMulti_TX   OBRISAN (korak 3)
+'   modMasterSync       PWA import ide kroz CreateOtkup_TX (korak 2)
 '
-' Raniji tekst je tvrdio da je SaveOtkupMulti_TX poslednji -- netacno, i to je
-' mereno: grep AppendRow(TBL_OTKUP) u modMasterSync, i nula pojava
-' TBL_OTKUP_STAVKE u tom modulu.
+' Ostaje SaveOtkup_TX, ali samo kao FIXTURE testova za oblik bez stavki -- iz
+' pogona ga niko ne zove. Zato pun ugovor ovde jos stoji: kapije bi oborile bas
+' te testove, koji i postoje da bi merili odbijanje starog oblika.
 '
-' Pun ugovor (header tacno jednom; svaka stavka numericka i > 0) ide tek kad
-' nestanu OBA -- dakle posle PWA cutover-a, ne samo posle brisanja starog pisca.
+' Pun ugovor ide u koraku 4 (strog VrednostOtkupa + read-model isplata), kad se
+' resi i pitanje sta znaci vrednost dokumenta bez stavki.
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
 '
@@ -993,7 +996,7 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
 
     On Error GoTo EH
 
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
     modSchema.SchemaReadyOrFail "SaveOtkup_TX", _
         TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
 
@@ -1075,275 +1078,18 @@ EH:
     PrintOtkupTxFailure "SaveOtkup_TX", errSrc, errNum, errDesc
 End Function
 
-Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
-                                   ByVal kooperantID As String, _
-                                   ByVal stanicaID As String, _
-                                   ByVal vrstaVoca As String, _
-                                   ByVal sortaVoca As String, _
-                                   ByVal kolicinaI As Double, _
-                                   ByVal cenaI As Double, _
-                                   ByVal tipAmb As String, _
-                                   ByVal kolAmb As Long, _
-                                   ByVal vozacID As String, _
-                                   ByVal brDok As String, _
-                                   ByVal novac As Double, _
-                                   ByVal primalac As String, _
-                                   ByVal parcelaID As String, _
-                                   ByVal brojZbirne As String, _
-                                   Optional ByVal hasKlasaII As Boolean = False, _
-                                   Optional ByVal kolicinaII As Double = 0, _
-                                   Optional ByVal cenaII As Double = 0, _
-                                   Optional ByVal kolAmbIzdata As Long = 0, _
-                                   Optional ByVal brutoKgI As Double = 0, _
-                                   Optional ByVal kolAmbII As Long = 0, _
-                                   Optional ByVal brutoKgII As Double = 0) As String
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
-    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
-    ' pada upisa -- greska nastaje u podacima, ne u logu.
-    '
-    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
-    ' transakciju koja se odmah rollback-uje.
-    modSchema.SchemaReadyOrFail "SaveOtkupMulti_TX", _
-        TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
-
-    If Trim$(kooperantID) = "" Then
-        Err.Raise vbObjectError + 1810, "SaveOtkupMulti_TX", _
-                  "KooperantID je obavezan."
-    End If
-
-    If Trim$(stanicaID) = "" Then
-        Err.Raise vbObjectError + 1811, "SaveOtkupMulti_TX", _
-                  "StanicaID je obavezan."
-    End If
-
-    ' Klasa I je opciona (kolicinaI = 0 -> unosi se samo Klasa II). Bar jedna klasa.
-    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
-
-    If Not hasKlasaI And Not hasKlasaII Then
-        Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
-                  "Mora postojati bar jedna klasa (I ili II)."
-    End If
-
-    If hasKlasaI And cenaI <= 0 Then
-        Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
-                  "Cena za Klasu I mora biti veca od nule."
-    End If
-
-    If hasKlasaII Then
-        If kolicinaII <= 0 Or cenaII <= 0 Then
-            Err.Raise vbObjectError + 1813, "SaveOtkupMulti_TX", _
-                      "Koli" & ChrW(269) & "ina i cena za Klasu II moraju biti vece od nule."
-        End If
-    End If
-
-    If kolAmb < 0 Then
-        Err.Raise vbObjectError + 1814, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    If kolAmbIzdata < 0 Then
-        Err.Raise vbObjectError + 1841, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina izdate ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    If kolAmbII < 0 Then
-        Err.Raise vbObjectError + 1842, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e (Klasa II) ne sme biti negativna."
-    End If
-
-    If novac < 0 Then
-        Err.Raise vbObjectError + 1815, "SaveOtkupMulti_TX", _
-                  "Iznos novca ne sme biti negativan."
-    End If
-
-    If (kolAmb > 0 Or kolAmbII > 0) And Trim$(tipAmb) = "" Then
-        Err.Raise vbObjectError + 1816, "SaveOtkupMulti_TX", _
-                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
-    End If
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-
-    Dim resultI As String
-    If hasKlasaI Then
-        resultI = SaveOtkup( _
-            datum:=datum, _
-            kooperantID:=kooperantID, _
-            stanicaID:=stanicaID, _
-            vrstaVoca:=vrstaVoca, _
-            sortaVoca:=sortaVoca, _
-            kolicina:=kolicinaI, _
-            cena:=cenaI, _
-            tipAmb:=tipAmb, _
-            kolAmb:=kolAmb, _
-            vozacID:=vozacID, _
-            brDok:=brDok, _
-            novac:=novac, _
-            primalac:=primalac, _
-            klasa:=KLASA_I, _
-            parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne, _
-            kolAmbIzdata:=kolAmbIzdata, _
-            brutoKg:=brutoKgI)
-
-        If resultI = "" Then
-            Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
-                      "SaveOtkup Klasa I fehlgeschlagen"
-        End If
-    End If
-
-    Dim resultII As String
-
-    ' Kes I izdata ambalaza se belezi na red Klase I; ako Klase I nema (samo II),
-    ' belezi se na Klasu II -- inace bi se izgubili (SaveOtkup Klase I se preskace).
-    Dim novacII As Double
-    Dim kolAmbIzdataII As Long
-    If Not hasKlasaI Then
-        novacII = novac
-        kolAmbIzdataII = kolAmbIzdata
-    End If
-
-    If hasKlasaII Then
-        resultII = SaveOtkup( _
-            datum:=datum, _
-            kooperantID:=kooperantID, _
-            stanicaID:=stanicaID, _
-            vrstaVoca:=vrstaVoca, _
-            sortaVoca:=sortaVoca, _
-            kolicina:=kolicinaII, _
-            cena:=cenaII, _
-            tipAmb:=tipAmb, _
-            kolAmb:=kolAmbII, _
-            vozacID:=vozacID, _
-            brDok:=brDok, _
-            novac:=novacII, _
-            primalac:=primalac, _
-            klasa:=KLASA_II, _
-            parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne, _
-            kolAmbIzdata:=kolAmbIzdataII, _
-            brutoKg:=brutoKgII)
-
-        If resultII = "" Then
-            Err.Raise vbObjectError + 1818, "SaveOtkupMulti_TX", _
-                      "SaveOtkup Klasa II fehlgeschlagen"
-        End If
-    End If
-
-    ' Primarni OtkupID dokumenta (za kes/avans veze): Klasa I ako postoji, inace II.
-    Dim primaryID As String
-    If hasKlasaI Then primaryID = resultI Else primaryID = resultII
-
-    If novac > 0 Then
-        Dim koopNaziv As String
-        koopNaziv = GetKooperantNazivForNovac(kooperantID)
-
-        Dim novacID As String
-        novacID = SaveNovac( _
-            brojDok:=brDok, _
-            datum:=datum, _
-            partner:=koopNaziv, _
-            partnerId:=kooperantID, _
-            entitetTip:="Kooperant", _
-            omID:=stanicaID, _
-            kooperantID:=kooperantID, _
-            fakturaID:="", _
-            vrstaVoca:=vrstaVoca, _
-            tip:=NOV_KES_OTKUPAC_KOOP, _
-            uplata:=0, _
-            isplata:=novac, _
-            napomena:=primalac, _
-            otkupID:=primaryID)
-
-        If novacID = "" Then
-            Err.Raise vbObjectError + 1819, "SaveOtkupMulti_TX", _
-                      "SaveNovac fehlgeschlagen"
-        End If
-    End If
-
-    If hasKlasaI Then ApplyAvansToOtkup kooperantID, resultI
-    If hasKlasaII Then ApplyAvansToOtkup kooperantID, resultII
-
-    tx.CommitTx
-    Set tx = Nothing
-
-    If hasKlasaI And hasKlasaII Then
-        SaveOtkupMulti_TX = resultI & " + " & resultII
-    ElseIf hasKlasaI Then
-        SaveOtkupMulti_TX = resultI
-    Else
-        SaveOtkupMulti_TX = resultII
-    End If
-
-    On Error Resume Next
-    Monitor_Event _
-        eventType:="OTKUP_MULTI_SAVE_SUCCESS", _
-        severity:="INFO", _
-        message:="Otkup multi saved. KooperantID=" & kooperantID & _
-                 "; StanicaID=" & stanicaID & _
-                 "; Vrsta=" & vrstaVoca & _
-                 "; ResultI=" & resultI & _
-                 "; ResultII=" & resultII & _
-                 "; HasKlasaII=" & CStr(hasKlasaII), _
-        userId:="Operator", _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=resultI
-    On Error GoTo 0
-
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    LogErr "SaveOtkupMulti_TX"
-    On Error Resume Next
-    Monitor_Error _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=brDok, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="OTKUP_MULTI_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="Otkup multi save failed. KooperantID=" & kooperantID & _
-                 "; StanicaID=" & stanicaID & _
-                 "; BrDok=" & brDok & _
-                 "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=brDok
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveOtkupMulti_TX = ""
-
-    PrintOtkupTxFailure "SaveOtkupMulti_TX", errSrc, errNum, errDesc
-End Function
+' SaveOtkupMulti_TX JE OBRISAN (Otkup cutover, korak 3).
+'
+' Bio je pisac po klasi: jedan unos je davao DVA reda u tblOtkup, vezana samo
+' zajednickim BrojDokumenta, i vracao "ID1 + ID2" da bi pozivalac mogao da ih
+' razdvoji. To je bila kompenzacija za nedostatak stavki -- tacno ono sto
+' CreateOtkup_TX uklanja. Poslednji pozivi su bili fixture-i testova.
+'
+' SaveOtkup_TX (iznad) NAMERNO ostaje. Nije pisac u pogonu -- niko ga iz UI-ja
+' ne zove -- nego JEDINI posten nacin da test napravi zaglavlje BEZ STAVKI, oblik
+' koji nove kapije moraju da odbiju (Test_OTK_VrednostBezStavkiPada,
+' Test_OTP_StariOtkupNeUlazi). Alternativa bi bila AppendRow iz testa, sto duplira
+' znanje o semi i cini test pisacem tabele. Odlazi zajedno sa kolonama u koraku 7.
 
 ' ============================================================
 ' Kontrola proseka neto kg po gajbici (Kolicina / KolAmbalaze).

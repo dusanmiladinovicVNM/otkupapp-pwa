@@ -14,7 +14,7 @@ Option Explicit
 '   Rollback cisti ono sto scenario OSTAVI. Ne cisti ono sto je ZATEKAO.
 '   Prva verzija je koristila KOOP-TEST-1 iz fixture-a i svih pet golden-a je
 '   javljalo "placeno 1000.00" iako nijedan scenario ne placa nista -- to je bio
-'   zatecen avans, koji SaveOtkupMulti_TX automatski primeni. Izmena tog avansa
+'   zatecen avans, koji pisac otkupa automatski primeni. Izmena tog avansa
 '   u fixture-u oborila bi golden a da niko nije dirao poslovanje.
 '   Zato scenariji koriste SOPSTVENE identitete (KOOP-GLD-1 i dr.) koji nemaju
 '   transakcionu istoriju, a GldPreduslov to i PROVERAVA pre svakog scenarija.

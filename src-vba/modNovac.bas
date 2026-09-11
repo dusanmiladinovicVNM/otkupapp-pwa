@@ -67,7 +67,7 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
 
     On Error GoTo EH
 
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
     modSchema.SchemaReadyOrFail "SaveNovac_TX", _
         TBL_NOVAC
 

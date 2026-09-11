@@ -81,7 +81,15 @@ Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
     IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
 End Function
 
-' Auto-lanac za hladnjacu. Poziva se posle uspesnog SaveOtkupMulti_TX (frmOtkup).
+' Auto-lanac za hladnjacu. PAUZIRAN JE -- modOtkupUnos ga vise ne zove.
+'
+' Ceo modul govori jezikom PO KLASI: prima kolicinaI/cenaI i kolicinaII/cenaII
+' kao zasebne skalare, i ocekuje otkupIDs u obliku "ID1 + ID2" koji je davao
+' obrisani SaveOtkupMulti_TX. Sa jednim zaglavljem po dokumentu veza nazad u
+' tblOtkup postaje gubitna (jedna kolona OtpremnicaID, dve otpremnice), pa je
+' poziv ugasen umesto da se upisuje polovicna veza.
+'
+' Kod ostaje NETAKNUT: PR7 ga vraca u pogon nad tblOtpremnicaClanovi.
 ' Best-effort: greska NE sme da obori potvrdu otkupa. Vraca "" kad je lanac
 ' kompletan; inace tekst upozorenja (frmOtkup ga prikaze operateru).
 Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
@@ -174,7 +182,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     ' Klasa I je opciona (kolicinaI = 0 -> kroz lanac ide samo Klasa II).
     Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
 
-    ' OtkupID-jevi za vezivanje nazad u tblOtkup. Format iz SaveOtkupMulti_TX:
+    ' OtkupID-jevi za vezivanje nazad u tblOtkup. Format obrisanog pisca:
     ' "resultI", "resultI + resultII", ili (samo II klasa) "resultII".
     Dim idI As String, idII As String
     If Len(Trim$(otkupIDs)) > 0 Then
@@ -334,10 +342,13 @@ End Function
 ' (AutoChainHladnjaca) neuspeh ukljucuje u upozorenje, da se otkup bez
 ' OtpremnicaID/BrojZbirne ne prijavi kao uspesan lanac.
 '
-' Prazan OtkupID NIJE legitimno "nema sta da se veze": SaveOtkupMulti_TX radi
-' Err.Raise ako bilo koja aktivna klasa vrati "" i sastavlja "ID1 + ID2", pa se
-' dovde stize sa ID-jem za svaku aktivnu klasu. Prazno => prekrsen ugovor ili
-' pogresno parsiran rezultat -> prijavi se kao neuspeh veze.
+' Prazan OtkupID NIJE legitimno "nema sta da se veze": pisac koji je hranio lanac
+' radio je Err.Raise ako bilo koja aktivna klasa vrati "" i sastavljao "ID1 + ID2",
+' pa se dovde stizalo sa ID-jem za svaku aktivnu klasu. Prazno => prekrsen ugovor
+' ili pogresno parsiran rezultat -> prijavi se kao neuspeh veze.
+'
+' Posle cutover-a taj ugovor NE VAZI: nov pisac daje jedan ID, pa idII ostaje
+' prazan i Klasa II se uvek prijavi kao pala. Zato je lanac i pauziran.
 Private Function LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As String, _
                                         ByVal brZbr As String, ByVal vozacID As String) As Boolean
     Const SRC As String = "modAutoHladnjaca.LinkOtkupRedNaDokument"

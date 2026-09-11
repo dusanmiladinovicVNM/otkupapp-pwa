@@ -13,8 +13,9 @@ Attribute VB_Name = "modOtkupUnos"
 '   OtkupValidiraj(p, fokus)   provere + bruto->neto; vraca poruku o gresci
 '                              ("" = proslo) i LOGICKO ime polja na koje treba
 '                              vratiti fokus
-'   OtkupUpisi(p, poruke)      SaveOtkupMulti_TX + stampa + auto-lanac
-'                              hladnjace; vraca OtkupID (prazno = nije upisano)
+'   OtkupUpisi(p, poruke)      CreateOtkup_TX + stampa; vraca OtkupID (prazno =
+'                              nije upisano). Auto-lanac hladnjace je PAUZIRAN
+'                              do PR7 -- obrazlozenje je uz sam poziv.
 '
 ' Ulaz je RECNIK (Scripting.Dictionary) sa vrednostima polja, da ga moze
 ' napuniti bilo koja forma. Kljucevi su LOGICKI, ne imena kontrola:
