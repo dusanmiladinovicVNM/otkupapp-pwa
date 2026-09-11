@@ -1025,6 +1025,131 @@ je prošla kao osvežavanje.
 
 ---
 
+### Otpremnica cutover (PR7) — pre-flight verdikt
+
+Merenja pre ijedne linije koda, po `.claude/skills/pre-flight`. Rađeno **dok PR6
+čeka merge** — spec ne zavisi od ishoda njegovog review-a.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | §4.2 (grain: jedna isporuka sa otkupnog mesta), §4.2a/b, §3.1 (pripadnost nije kolona), A15 (verzionisano članstvo) |
+| `EVENTS` | **PROVEN** | v. dole |
+| `IDENTITY` | **PROVEN** | `OtpremnicaID` opaque; broj je labela scoped po stanici; članstvo u `tblOtpremnicaIzvori` |
+| `CARDINALITY` | **PROVEN** | 1 otpremnica ← N otkupa; 1 otkup → najviše **jedno aktivno** članstvo (A15); istorijski više |
+| `INVARIANTS/OWNER` | **PROVEN** | `AktivnoOtpClanstvoPoKanonu` diže grešku na dva aktivna zapisa (`modDokumenta:3417`); `IzdajOtpremnicu_TX` revalidira izvore |
+| `WRITERS` | **PROVEN** | v. dole — i tu je prvi nalaz |
+| `DOWNSTREAM` | **PROVEN** | 141 pojava četiri kolone koje odlaze (§14.6), 16 produkcionih modula čita `Otkup.OtpremnicaID` |
+| `CAPABILITY` | **PROVEN** | tri pauzirane sposobnosti + AutoLink + GlobalGAP; v. mapu |
+| `ACCEPTANCE CONTRACT` | v. dole | plan dokaza, ne dokaz |
+| `PLATFORM` | N/A | nema Excel/COM nepoznanice; sve je nad `ListObject`-ima koji već rade |
+| `LANDING` | **RISK** | zavisi od merge-a #308; v. dole |
+
+#### ⚠ NALAZ 1: plan kaže 5 pisača, ima ih 6
+
+Red 7 tabele PR-ova glasi „**briše `Otkup.OtpremnicaID`** sa svih 5 pisača".
+Mereno — šest:
+
+```
+modAutoHladnjaca:385   modDokumenta:6883   modMasterSync:2598
+modOtkupBlok:1480      modSledljivost:255  modStornoFlow:2569
+```
+
+Šesti (`modSledljivost`, AutoLink) je promašen jer mu je poziv **prelomljen u dva
+reda** — tačno slepa mrlja koju §13a već opisuje za `AppendRow`. Ironija je
+potpuna: promašen je baš onaj pisač koji ceo PR7 treba da ukine, jer AutoLink je
+heuristika koju eksplicitno članstvo zamenjuje.
+
+> Pouka za ubuduće: brojevi u planu se mere skriptom, ne grep-om po jednom redu.
+
+#### ⚠ NALAZ 2: otpremnica ima ISTI oblik pisca koji je otkup upravo izgubio
+
+```
+modDokUnos:262  ->  SaveOtpremnicaMulti_TX  ->  SaveOtpremnica x2 (po klasi)
+                                            ->  vraca "ID1 + ID2"
+```
+
+To je linija-po-liniju isti obrazac kao obrisani `SaveOtkupMulti_TX`. Znači i isti
+posao, i ista zamka: pozivalac koji string parsira. Uz njega `SaveOtpremnica_TX`
+(jednoklasni) ima **3 produkciona pozivaoca** — `modAutoHladnjaca` ×2 (pauziran) i
+`modMasterSync` ×1 — i **41 test poziva**.
+
+Ukupno: **44 mesta**, od kojih su 4 produkciona. Isti razred posla kao korak 3 u
+PR6, samo veći test rep.
+
+#### ⚠ NALAZ 3: tri `Split(" + ")` nad OTKUP ID-evima su već mrtva
+
+`CreateOtkup_TX` vraća **jedan** ID od PR6, pa ovi više nikad ne cepaju ništa:
+
+```
+modAmbalaza:359      Split(blockOtkupIDs, " + ")
+modAutoHladnjaca:190 Split(otkupIDs, " + ")
+modOtkupBlok:1460    Split(otkupIDs, " + ")
+```
+
+Nisu bug (jedan element = ceo string), ali su **mrtav aparat koji izgleda živ**.
+Brišu se u PR7 uz svoje pozivaoce; preostalih pet (`modDokUnos` ×3, `modPrint` ×2)
+je prijemnica, dakle PR9.
+
+#### BUSINESS EVENTS
+
+| Događaj | Kada | Šta nastaje | Šta može bez sledećeg |
+|---|---|---|---|
+| **fizički** | roba napušta otkupno mesto i ulazi u vozilo | ništa u bazi po sebi | otprema bez papira ne sme postojati |
+| **poslovni** | otpremnica prelazi u `IZDATO` | dokument sa sastavom; otkupi postaju njeni članovi | **DRAFT sme da stoji** koliko treba — sastav se gradi postepeno |
+| **finansijski** | **nijedan** | — | otpremnica **ne stvara ni dug ni potraživanje** |
+
+Treći red je važan i lako se previdi: kooperant je plaćen po **otkupu**, kupac
+plaća po **fakturi**. Otpremnica je isključivo dokument kretanja robe. Zato PR7
+**ne sme** da dira `tblNovac` — ako se pojavi potreba, to je `DOMAIN GAP`, ne
+implementacioni detalj.
+
+Datum otpremnice je datum **fizičke otpreme**, ne dan unosa i ne dan izdavanja.
+
+#### CAPABILITY MAP — tri pauze koje PR7 mora da podigne
+
+| Sposobnost | Stanje danas | PR7 |
+|---|---|---|
+| Panel napretka bloka | `NapredakBlokaDostupan() = False` (`modOtkupBlok:1572`), tri gejta | `MIGRATED` na `GetOtpremnicaProgress` |
+| Auto-lanac hladnjače | poziv ugašen u `modOtkupUnos:388`, kod netaknut | `MIGRATED` — lanac prima jedan `OtkupID` i pravi članstvo |
+| Wiring correction API-ja | `IspravkaOtkupa_TX` bez produkcionog pozivaoca | `MIGRATED` — stari `OtkupID` mora da otputuje kroz prefill |
+| `AutoLinkOtkupOtpremnica` | povezuje 0 | **`INTENTIONALLY REMOVED`** — heuristika koju članstvo zamenjuje |
+| GlobalGAP sledljivost | `TraceByZbirna` vraća `"NEMA"` za nov otkup | `REPLACED` — čita članstvo, ne `Otkup.OtpremnicaID` |
+
+Četvrti red je jedini `INTENTIONALLY REMOVED` i traži izričitu potvrdu: dugme
+„Auto-poveži" nestaje sa ekrana sledljivosti, jer povezivanje prestaje da bude
+pogađanje.
+
+#### ACCEPTANCE CONTRACT — plan dokaza
+
+**Šta će važiti:** svih **7** tvrdnji iz PR7 acceptance mreže (§14.2) zeleno po
+imenu · `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve · `Otkup.OtpremnicaID`
+i `Otkup.BrojZbirne` **obrisani** iz kanona · `Cena → PredlogCena` sa svih 8
+čitalaca · A11: pisaca nad `tblOtkup` **9 → 1**.
+
+**Šta mora ostati netaknuto:** golden mreža 12/0 sa **nepromenjenim** snapshot-ima
+· `CreateOtkup_TX` ponašanje · storno kaskada · A13 kapija iz PR6.
+
+**Edge koji mora proći:** H2 (`CorrectionSestre`) — `OTP2` i `OTP3` pripadaju
+sastavu **i** stare i nove zbirne. Ako to ne prođe bez gubitka istorije, model
+veze nije dovoljan i to je ceo razlog zbog kog tabela članstva postoji.
+
+**Šta mora biti odbijeno:** dva aktivna članstva za isti otkup · izmena sastava
+`IZDATE` otpremnice · otkup bez stavki kao izvor.
+
+**Čime se dokazuje:** `RunBusinessFlowProSuite` + `RunGoldenSuite`; sabotaža nad
+svakom novom kapijom; `who_writes --check-ownership` kao brojčani dokaz za 9 → 1.
+
+#### LANDING RISK
+
+PR7 dira `modDokumenta`, `modOtkupBlok`, `modAutoHladnjaca`, `modSledljivost` i
+`modDokUnos` — **sve fajlove koje PR6 već menja**. Grana se zato otvara tek kad se
+#308 merge-uje; rad nad njegovom granom bi bio stacked PR koji propada ako se bazni
+merge-uje prvi (poznata zamka).
+
+Do tada je PR7 **spec-only** — ovaj odeljak.
+
+---
+
 ## 13) Statičke kapije
 
 Ne „repo-wide search treba da pokaže", nego imenovana `vba_check` pravila sa
