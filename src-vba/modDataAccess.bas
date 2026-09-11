@@ -334,6 +334,38 @@ ErrHandler:
     UpdateCell = False
 End Function
 
+' Brisanje JEDNOG reda po indeksu.
+'
+' Do PR5 nijedan produkcioni modul nije brisao redove domenskih tabela --
+' brisali su samo testovi (ciscenje), migracija i clsTransaction (rollback).
+' Aplikacija je za domenske podatke bila append-only.
+'
+' Clanstvo otpremnice u DRAFT stanju je prvi slucaj kome to ne odgovara:
+' izvor uklonjen pre izdavanja nikad nije bio deo dokumenta, pa nema sta da
+' ostavi za sobom. Tombstone bi znacio da svaki citalac sastava mora da
+' filtrira redove koji nikad nisu vazili (DOCUMENT_HEADER_LINES S4.2a).
+'
+' Zasto primitiv, a ne .ListRows(i).Delete na licu mesta: A11 kapija meri
+' upise po IMENU mutatora (tools/who_writes.py). Brisanje sakriveno u telu
+' modula bilo bi mutacija koju registar vlasnistva ne vidi -- ista klasa rupe
+' kao funkcijski oblik AppendRow (v. REFAKTOR S13a).
+Public Function DeleteRow(ByVal tblName As String, ByVal rowIndex As Long) As Boolean
+    Dim lo As ListObject
+    Set lo = GetTable(tblName)
+    If lo Is Nothing Then Exit Function
+    If lo.ListRows.count = 0 Then Exit Function
+    If rowIndex < 1 Or rowIndex > lo.ListRows.count Then Exit Function
+
+    On Error GoTo ErrHandler
+    lo.ListRows(rowIndex).Delete
+    DeleteRow = True
+    InvalidateTableCache tblName
+    Exit Function
+
+ErrHandler:
+    DeleteRow = False
+End Function
+
 ' ============================================================
 ' Audit stamp (timestamp + userstamp) - centralno za AppendRow/UpdateCell.
 ' Upisuje direktno u celije (ne preko UpdateCell) -> nema rekurzije.

@@ -747,6 +747,108 @@ prijavljuje kao **neverifikovana**, nikad kao zelena.
 
 ---
 
+### Otpremnica skela (PR5) — pre-flight verdikt
+
+Kapija `pre-flight` je pokrenuta pre ijedne linije koda. **Nije sve zeleno**, i to
+je bio smisao:
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP** | draft-first je *glavni* desktop tok otpremnice (`modOtkupBlok.LinkOtkupIDsToOtpremnica`), a specificiran writer zna samo „izvori → izdato" — v. §9 modela |
+| `IDENTITY` | **RISK** | `OtpIdZaBroj` (`modScrDokumenti:502`) razrešava broj u ID preko `LookupValue`, koji vraća **prvi** pogodak (`modDataAccess:608`) |
+| `CARDINALITY` | PROVEN | Otkup → Otpremnica N:1 promenljiva; `ReassignOtkupToOtpremnica_TX` (`modDokumenta:5382`) dokazuje premeštanje |
+| `INVARIANTS/OWNER` | **GAP** | danas **nijedno** pravilo članstva: reassign proverava samo da cilj postoji i nije storniran |
+| `WRITERS` | PROVEN | `row_owner` = `modDokumenta`; 4 schema pisca; 3 produkciona poziva `SaveOtpremnica_TX` (`modAutoHladnjaca:213,258`, `modMasterSync:877`) |
+| `DOWNSTREAM` | PROVEN | `Otkup.OtpremnicaID`: **39** ne-test korišćenja, **15** modula, **5 pisača** → kolona ostaje do PR7 |
+| `EVENTS` | PROVEN | fizički: roba napušta otkupno mesto · poslovni: otpremnica nastaje · finansijski: **ne postoji** — `Otpremnica.Cena` je prefill predlog (§13b), ne obračun |
+| `CAPABILITY` | N/A | skela je aditivna, nijedna sposobnost se ne seli |
+| `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
+| `LANDING` | **RISK** | PR4 (#306) još nije merge-ovan; PR5 bi bio stacked nad njim |
+
+`GAP` na `DOMAIN` i `INVARIANTS/OWNER` znači: **nema produkcionog koda** dok se te
+dve stvari ne zaključaju. Pravila članstva su zaključana u §4.2a modela. Ostaje
+draft — jedina odluka koja menja **oblik API-ja**, pa ne sme da se izabere usput.
+
+#### Postmortem: pre-flight je merio kod, ne već donete odluke
+
+Prva verzija skele otpremnice je zaključala **pogrešan** domenski model: draft
+bez stavki, stavke izvedene tek pri izdavanju. Test `DraftNemaStavke` ga je i
+učvrstio.
+
+Odgovor je sve vreme stajao u **§13b istog ovog fajla**, u odeljku koji doslovno
+kaže da mora biti rešen *pre nego što se napiše* `CreateOtpremnica_TX`:
+očekivano su stavke drafta, povezano je `SUM(izvori)`, finalizacija zahteva
+jednakost.
+
+Kapija `pre-flight` je odrađena — i vratila je `GAP` na dve ose — ali je merila
+**zatečeni kod** (39 čitalaca, dva pisca, `LookupValue` prvi pogodak), a ne
+**već donete odluke**. Osa `DOMAIN` je zaključena čitanjem `DOCUMENT_HEADER_LINES`
+§4.2 i §9, u kojima tog pravila nema.
+
+> **Pravilo koje iz ovoga sledi:** `DOMAIN` je zatvoren tek kad su pročitana
+> **oba** izvora — model dokumenta *i* odeljak plana koji nosi otvorene odluke za
+> taj dokument. „Nema toga u modelu" nije dokaz da odluka nije doneta.
+
+Cena greške bila bi vidljiva tek na cutover-u: očekivanje danas živi na
+`Otpremnica.Kolicina`, koja u ciljnom modelu odlazi na stavku, pa bi četiri
+sposobnosti panela ostale bez izvora (`DOCUMENT_HEADER_LINES` §4.2a).
+
+---
+
+#### Mreža za Otpremnica skelu — imenovano, pre writer-a
+
+| Test | Tvrdnja |
+|---|---|
+| `JedanBrojJedanHeader` | dvoklasna otpremnica = **jedan** `OtpremnicaID` + dve stavke |
+| `StavkeSuIzvedene` | zbir po klasi dolazi iz otkupnih stavki; podmetnute stavke se ne primaju |
+| `ClanstvoUIstojTransakciji` | pad pri upisu člana ne ostavlja header |
+| `IzvorNeSmeDvaPutaAktivno` | otkup već u aktivnoj otpremnici se odbija |
+| `StorniranIzvorNeUlazi` | storniran otkup se odbija |
+| `DveStaniceNeProlaze` | izvori sa dve stanice — greška, ne „uzmi prvu" |
+| `DveVrsteNeProlaze` | isto za `(VrstaVoca, SortaVoca)` |
+| `BezIzvoraNeProlazi` | otpremnica bez ijednog otkupa nije isporuka |
+| `VozacSePrima` | vozač dolazi sa headera, izvori o njemu ne govore ništa |
+| `PrazanIDFailClosed` | `OPS-` i `OPI-` prazan → upis odbijen, rollback |
+| `HeaderNeNosiLinePolja` | `Kolicina` / `KolAmbalaze` / `Klasa` / `BrutoKg` ostaju prazne |
+| `OtkupOtpremnicaIDNetaknut` | skela **ne** dira staru kolonu — 39 čitalaca je i dalje na njoj |
+
+Poslednji je jedini te vrste do sada: tvrdi da nova skela **nije** promenila staro
+polje. Bez njega bi „aditivno" bila namera, ne mereno svojstvo.
+
+Uz njih idu i četiri koje nosi odluka o draft-u:
+
+| Test | Tvrdnja |
+|---|---|
+| `DraftNosiOcekivanje` | draft **ima** stavke — ono što je operater prijavio; `povezano` je još 0 |
+| `NapredakPoKlasi` | `očekivano / povezano / preostalo` po klasi, kroz dodavanje izvora |
+| `IzdavanjeTraziJednakost` | manjak i višak po klasi oba obaraju izdavanje |
+| `IzdavanjeRevalidiraIzvore` | `dodaj → storno izvora → izdaj` **pada** (TOCTOU) |
+| `BrutoSeNeSabiraParcijalno` | jedan izvor bez bruta → stavka ostaje **bez** bruta |
+| `KulturaSeSlaziSaIzvorima` | izvor druge kulture odbijen; draft je zna od otvaranja |
+| `DraftNothingOcekivanjePada` | `Nothing` je privatan signal automatskog puta — ručni ulaz ga odbija |
+| `UpdateStaniceSaPostojecimIzvoromPada` | izmena zaglavlja ne sme da pokvari već validno članstvo |
+| `UpdateKultureSaPostojecimIzvoromPada` | isto za kulturu, uz kontrolu da bezopasna izmena i dalje prolazi |
+| `DvaTipaAmbalazeNeUlazeUDraft` | homogen `TipAmbalaze` **pri dodavanju**, ne tek pri izdavanju |
+| `NeizdatOtkupNeUlazi` | veza traži `IzdatoStatus = IZDATO`, ne „red koji slučajno ima stavke" |
+| `TipAmbalazeJeHeaderCinjenica` | očekivana ambalaža bez tipa odbijena; DRAFT nosi tip **pre** ijednog izvora |
+| `IzvorBezGajbiNeOdredjujeTip` | otkup sa `KolAmbIzdata` a bez gajbi na stavkama prolazi uprkos drugom tipu |
+| `ClanstvoNaNepostojeciOtkupPada` | read-model **pada**, ne računa manji zbir |
+| `DupliParUClanstvuPada` | dupli par je integritet, ne „jedan član" |
+
+> Poslednja dva pišu korupciju mimo writer-a, pa **čiste je pre tvrdnji**:
+> korumpiran red truje globalni loader za svaki sledeći test u istom prolazu.
+> Oba imaju i kontrolu da read-model posle čišćenja opet radi — inače bi test
+> dokazao samo da nešto puca.
+| `ClanstvoMutabilnoUDraftu` | dodaj → ukloni → dodaj; uklonjen izvor je **slobodan** za drugu otpremnicu |
+| `PosleIzdavanjaClanstvoZamrznuto` | `Dodaj`/`Ukloni`/ponovno izdavanje — sva tri odbijena |
+| `StariOtkupNeUlazi` | otkup bez `tblOtkupStavke` (stari pisač) ne može u kanonsku otpremnicu |
+
+> `ClanstvoMutabilnoUDraftu` je jedini koji dokazuje da `DeleteRow` **stvarno**
+> briše: da ostavlja tombstone, kapija „već u aktivnoj otpremnici" bi uklonjeni
+> izvor i dalje držala, i drugi `Dodaj` bi pao.
+
+---
+
 ## 13) Statičke kapije
 
 Ne „repo-wide search treba da pokaže", nego imenovana `vba_check` pravila sa
@@ -852,10 +954,10 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — stari pisač je i dalje jedini put, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
 | 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
-| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, `CreateOtpremnica_TX` — jedan poslovni dokument = **jedan** `OtpremnicaID` | 4 |
+| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument kod kog nov pisač postaje jedini put | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
-| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže | 6 |
+| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih 5 pisača; **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -943,7 +1045,7 @@ Uz to je čitaju izveštaji i štampa.
 | | |
 |---|---|
 | `OtpremnicaStavka.Cena` | **ne postoji.** Vrednost dokumenta je `SUM(izvorne otkupne stavke)` |
-| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u ono što jeste** — predlog cene za blokove, izričito **ne-finansijsko polje** |
+| `Otpremnica.Cena` (header) | ostaje, ali **preimenovana u `PredlogCena`** — predlog cene za blokove, izričito **ne-finansijsko polje** |
 | zabrana | nigde se vrednost otpremnice ne računa kao `Kolicina × Cena` |
 
 Poslednja tačka nije teorijska: `modDokumenta.CalculateManjakByOtpremnica`

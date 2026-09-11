@@ -473,7 +473,40 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID"
+        "ZbirnaGeneracijaID",
+        "KulturaID"
+      ]
+    },
+    {
+      "table": "tblOtpremnicaStavke",
+      "const": "TBL_OTPREMNICA_STAVKE",
+      "sheet": "OtpremnicaStavke",
+      "columns": [
+        "OtpremnicaStavkaID",
+        "OtpremnicaID",
+        "RedniBroj",
+        "Klasa",
+        "Kolicina",
+        "KolAmbalaze",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
+      "table": "tblOtpremnicaIzvori",
+      "const": "TBL_OTPREMNICA_IZVORI",
+      "sheet": "OtpremnicaIzvori",
+      "columns": [
+        "OtpremnicaIzvorID",
+        "OtpremnicaID",
+        "OtkupID",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
       ]
     },
     {

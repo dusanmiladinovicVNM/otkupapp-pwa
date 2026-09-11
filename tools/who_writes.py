@@ -66,7 +66,7 @@ VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 # ne meri vlasnistvo nego stil pisanja poziva.
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
 MUTATE_RE = re.compile(
-    r'\b(?:Require)?(?:AppendRow|UpdateCell)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
+    r'\b(?:Require)?(?:AppendRow|UpdateCell|DeleteRow)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
     re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
@@ -300,7 +300,11 @@ MUTATE_CASES = [
     ("nastavak u dva koraka",
      "n = AppendRow( _\n     _\n    TBL_PRIJEMNICA, rowData)",           "tblPrijemnica"),
     # negativni: ime koje samo POCINJE isto, i sopstvena definicija
+    ("brisanje naredba",   "DeleteRow TBL_OTPREMNICA_IZVORI, r",        "tblOtpremnicaIzvori"),
+    ("brisanje funkcija",  "ok = DeleteRow(TBL_OTPREMNICA_IZVORI, r)",  "tblOtpremnicaIzvori"),
+    ("Require brisanje",   "RequireDeleteRow TBL_ZBIRNA_IZVORI, r, SRC", "tblZbirnaIzvori"),
     ("drugo ime funkcije", "x = AppendRowToLog(TBL_ZBIRNA, rowData)",    None),
+    ("drugo ime brisanja", "DeleteRowsByParent TBL_ZBIRNA, x",          None),
     ("definicija",         "Public Function AppendRow(ByVal t As String)", None),
     ("komentar",           "' AppendRow TBL_ZBIRNA, rowData",            None),
     # komentar sa "_" na kraju NE sme da proguta sledecu liniju -- inace bi
