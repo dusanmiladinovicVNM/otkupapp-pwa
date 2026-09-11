@@ -583,6 +583,51 @@ def ispisi_bas(rez):
     a("End Function")
     a("")
     a(crta)
+    a("' Jesu li resursi CELI? Prazan string = jesu; inace spisak neslaganja.")
+    a("'")
+    a("' ZASTO POSTOJI: duzina svakog Base64 zapisa PECE SE OVDE, u generisanju.")
+    a("' Modul do klijenta stize kao KOD -- kroz self-update (AddFromString) ili")
+    a("' kroz uvoz u svesku -- a oba puta umeju da upisu telo procedure KRNJE bez")
+    a("' ijedne greske; modSelfUpdate to i kaze: \"Err.Number = 0 posle")
+    a("' AddFromString NIJE dokaz da je telo primenjeno\". Krnj Base64 se dekodira")
+    a("' u neispravan GIF, LoadPicture vrati Nothing, a ljuska mirno nacrta")
+    a("' tekstualni znak -- tacno kao kad masina nema MSXML. Bez ove provere se")
+    a("' okrnjen kod NE RAZLIKUJE od uredne rezervne grane.")
+    a("'")
+    a("' Ne dira disk i ne trazi MSXML ni ADODB, pa radi i tamo gde LogoSlika ne")
+    a("' moze -- i sme da se zove sa bilo koje masine, ukljucujuci klijentovu.")
+    a(crta)
+    a("Public Function LogoResursiProvera() As String")
+    a("    Dim kljuc As Variant, imam As Long, ocekujem As Long, nalaz As String")
+    a("    Dim errDesc As String")
+    a("    On Error GoTo EH")
+    a("    For Each kljuc In Array(%s)" % ", ".join(
+        '"%s"' % k for k, _bg, _nw, _nh, _gif, _pal, _idx in rez))
+    a("        ocekujem = B64Duzina(CStr(kljuc))")
+    a("        imam = Len(Base64Za(CStr(kljuc)))")
+    a("        If imam <> ocekujem Then")
+    a("            nalaz = nalaz & CStr(kljuc) & \": \" & imam & \"/\" & ocekujem & \"  \"")
+    a("        End If")
+    a("    Next kljuc")
+    a("    LogoResursiProvera = RTrim$(nalaz)")
+    a("    Exit Function")
+    a("EH:")
+    a("    errDesc = Err.description")
+    a("    LogErr \"modLogo.LogoResursiProvera\"")
+    a("    LogoResursiProvera = \"provera je pukla: \" & errDesc")
+    a("End Function")
+    a("")
+    a("' Duzina Base64 zapisa u trenutku generisanja. Nepoznat kljuc daje 0, pa")
+    a("' neslaganje izlazi kao nalaz umesto da tiho prodje.")
+    a("Private Function B64Duzina(ByVal kljuc As String) As Long")
+    a("    Select Case kljuc")
+    for kljuc, _bg, _nw, _nh, gif, _pal, _idx in rez:
+        a('        Case "%s": B64Duzina = %d'
+          % (kljuc, len(base64.b64encode(gif).decode("ascii"))))
+    a("    End Select")
+    a("End Function")
+    a("")
+    a(crta)
     a("' Slike. Svaka je svoja procedura -- VBA ima granicu velicine procedure, a")
     a("' jedan zajednicki blok bi je s vremenom probio.")
     a(crta)
@@ -599,6 +644,69 @@ def ispisi_bas(rez):
     return "\r\n".join(L) + "\r\n"
 
 
+def _duzine_iz_modula(tekst):
+    """(stvarno, prijavljeno) po kljucu -- citano iz SAMOG izlaza modula.
+
+    Ne veruje se recniku `rez` nego tekstu koji ce zaista otici u svesku: tabelu
+    duzina proverava ono sto klijent dobija, ne ono sto smo mislili da saljemo.
+    """
+    stvarno, prijavljeno, tekuci = {}, {}, None
+    for red in tekst.split("\r\n"):
+        r = red.strip()
+        if r.startswith("Private Function B64_") and r.endswith("() As String"):
+            tekuci = r[len("Private Function B64_"):-len("() As String")]
+            stvarno[tekuci] = 0
+        elif r.startswith("End Function"):
+            tekuci = None
+        elif tekuci and r.startswith('s = s & "') and r.endswith('"'):
+            stvarno[tekuci] += len(r) - len('s = s & "') - 1
+        if r.startswith('Case "') and ": B64Duzina = " in r:
+            prijavljeno[r.split('"')[1]] = int(r.rsplit("= ", 1)[1])
+    return stvarno, prijavljeno
+
+
+def self_test_duzine(tekst):
+    """Dokaz u oba smera za tabelu duzina (LogoResursiProvera na klijentu).
+
+    Zelena provera koja nikad nije pokazana crvena ne dokazuje da ista meri
+    (CLAUDE.md par.5), pa se ovde trazi OBOJE: da se prijavljena duzina poklapa
+    sa stvarnom, i da okrnjen resurs bude prijavljen BAS PO SVOM IMENU.
+    """
+    stvarno, prijavljeno = _duzine_iz_modula(tekst)
+    ok = sorted(stvarno) == sorted(prijavljeno)
+    if not ok:
+        print("  kljucevi se ne poklapaju: %s vs %s"
+              % (sorted(stvarno), sorted(prijavljeno)))
+    for kljuc in sorted(stvarno):
+        isto = stvarno[kljuc] == prijavljeno.get(kljuc)
+        print("  %-8s stvarno %5d  prijavljeno %5d  %s"
+              % (kljuc, stvarno[kljuc], prijavljeno.get(kljuc, -1),
+                 "ISTO" if isto else "RAZLIKA"))
+        ok = ok and isto
+
+    # Drugi smer: izbaci JEDAN red Base64 -- isti kvar koji pravi krnj
+    # AddFromString -- i trazi da provera javi tacno taj kljuc, ne bilo koji.
+    krivac = sorted(stvarno)[-1]
+    okrnjen, izbacen, u_krivcu = [], False, False
+    for red in tekst.split("\r\n"):
+        r = red.strip()
+        if r.startswith("Private Function B64_%s()" % krivac):
+            u_krivcu = True
+        elif r.startswith("End Function"):
+            u_krivcu = False
+        if u_krivcu and not izbacen and r.startswith('s = s & "'):
+            izbacen = True
+            continue
+        okrnjen.append(red)
+    s2, p2 = _duzine_iz_modula("\r\n".join(okrnjen))
+    pali = sorted(k for k in p2 if s2.get(k) != p2[k])
+    pogodjen = izbacen and pali == [krivac]
+    print("  okrnjen %s -> %s"
+          % (krivac, "PRIJAVLJEN PO IMENU" if pogodjen
+             else "PROVERA NE MERI NISTA (pali: %s)" % pali))
+    return ok and pogodjen
+
+
 def main():
     samo_test = "--proveri" in sys.argv
     w, h, rgba = png_read(SRC_PNG)
@@ -608,11 +716,15 @@ def main():
     if not self_test(rez):
         print("PAD: enkoder nije dokazan -- modLogo.bas NIJE upisan.")
         return 1
+    tekst = ispisi_bas(rez)
+    assert all(ord(c) < 128 for c in tekst), "izlaz nije ASCII"
+    print("self-test tabele duzina:")
+    if not self_test_duzine(tekst):
+        print("PAD: tabela duzina nije dokazana -- modLogo.bas NIJE upisan.")
+        return 1
     if samo_test:
         print("--proveri: nista nije upisano.")
         return 0
-    tekst = ispisi_bas(rez)
-    assert all(ord(c) < 128 for c in tekst), "izlaz nije ASCII"
     open(OUT_BAS, "wb").write(tekst.encode("ascii"))
     print("upisano: %s (%d B)" % (os.path.relpath(OUT_BAS, ROOT), len(tekst)))
     for kljuc, _bg, nw, nh, gif, _pal, _idx in rez:

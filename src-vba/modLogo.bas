@@ -187,6 +187,53 @@ Private Function Base64Za(ByVal kljuc As String) As String
 End Function
 
 '=====================================================================
+' Jesu li resursi CELI? Prazan string = jesu; inace spisak neslaganja.
+'
+' ZASTO POSTOJI: duzina svakog Base64 zapisa PECE SE OVDE, u generisanju.
+' Modul do klijenta stize kao KOD -- kroz self-update (AddFromString) ili
+' kroz uvoz u svesku -- a oba puta umeju da upisu telo procedure KRNJE bez
+' ijedne greske; modSelfUpdate to i kaze: "Err.Number = 0 posle
+' AddFromString NIJE dokaz da je telo primenjeno". Krnj Base64 se dekodira
+' u neispravan GIF, LoadPicture vrati Nothing, a ljuska mirno nacrta
+' tekstualni znak -- tacno kao kad masina nema MSXML. Bez ove provere se
+' okrnjen kod NE RAZLIKUJE od uredne rezervne grane.
+'
+' Ne dira disk i ne trazi MSXML ni ADODB, pa radi i tamo gde LogoSlika ne
+' moze -- i sme da se zove sa bilo koje masine, ukljucujuci klijentovu.
+'=====================================================================
+Public Function LogoResursiProvera() As String
+    Dim kljuc As Variant, imam As Long, ocekujem As Long, nalaz As String
+    Dim errDesc As String
+    On Error GoTo EH
+    For Each kljuc In Array("SPLASH", "SPLASH2", "KARTICA", "KARTICA2", "MINI", "MINI2")
+        ocekujem = B64Duzina(CStr(kljuc))
+        imam = Len(Base64Za(CStr(kljuc)))
+        If imam <> ocekujem Then
+            nalaz = nalaz & CStr(kljuc) & ": " & imam & "/" & ocekujem & "  "
+        End If
+    Next kljuc
+    LogoResursiProvera = RTrim$(nalaz)
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modLogo.LogoResursiProvera"
+    LogoResursiProvera = "provera je pukla: " & errDesc
+End Function
+
+' Duzina Base64 zapisa u trenutku generisanja. Nepoznat kljuc daje 0, pa
+' neslaganje izlazi kao nalaz umesto da tiho prodje.
+Private Function B64Duzina(ByVal kljuc As String) As Long
+    Select Case kljuc
+        Case "SPLASH": B64Duzina = 7264
+        Case "SPLASH2": B64Duzina = 12796
+        Case "KARTICA": B64Duzina = 2684
+        Case "KARTICA2": B64Duzina = 4708
+        Case "MINI": B64Duzina = 2288
+        Case "MINI2": B64Duzina = 3756
+    End Select
+End Function
+
+'=====================================================================
 ' Slike. Svaka je svoja procedura -- VBA ima granicu velicine procedure, a
 ' jedan zajednicki blok bi je s vremenom probio.
 '=====================================================================

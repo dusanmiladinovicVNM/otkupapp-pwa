@@ -490,6 +490,7 @@ Public Sub RunAllTests()
     RunOne 200
     RunOne 201
     RunOne 202
+    RunOne 203
     RunOne 124
     RunOne 125
     RunOne 126
@@ -764,6 +765,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 200: TestName = "T_Sema_KapijaBije"
         Case 201: TestName = "T_Sema_SamoLeci"
         Case 202: TestName = "T_Sema_PrefiksNijeString"
+        Case 203: TestName = "T_Logo_ResursiStizuCeli"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -974,6 +976,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 200: T_Sema_KapijaBije
         Case 201: T_Sema_SamoLeci
         Case 202: T_Sema_PrefiksNijeString
+        Case 203: T_Logo_ResursiStizuCeli
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6482,6 +6485,25 @@ Private Sub T_Faza_SplashIMiniSuFazeIsteLjuske()
     AssertEq krupan, LOGO_SPLASH & "2", "krupan okvir uzima 2x sliku"
     AssertEq (odnosSitan > 2.5 And odnosSitan < 3.5), True, "1x slika ima odnos stranica"
     AssertEq (odnosKrupan > 2.5 And odnosKrupan < 3.5), True, "2x slika ima odnos stranica"
+End Sub
+
+' 203. Logotip stize do klijenta CEO -- ili se to vidi.
+'
+' modLogo putuje kao KOD: kroz self-update (AddFromString) ili kroz uvoz u
+' svesku. Oba puta umeju da upisu telo procedure krnje bez ijedne greske --
+' modSelfUpdate to i kaze: "Err.Number = 0 posle AddFromString NIJE dokaz da
+' je telo primenjeno". Krnj Base64 daje neispravan GIF, LoadPicture vrati
+' Nothing, a ljuska mirno nacrta tekstualni znak -- ISTO kao na masini bez
+' MSXML-a. Bez ove tvrdnje se okrnjen kod NE RAZLIKUJE od uredne rezerve, pa
+' bi splash bez logotipa prosao kao ocekivano ponasanje.
+'
+' Duzine su pecene u modul pri generisanju (tools/logo_to_vba.py), a taj
+' generator ima dokaz u oba smera: okrnjen resurs mora da bude prijavljen BAS
+' po svom imenu, inace se modLogo.bas ne upisuje.
+Private Sub T_Logo_ResursiStizuCeli()
+    Dim nalaz As String
+    nalaz = modLogo.LogoResursiProvera()
+    AssertEq nalaz, "", "svih sest Base64 resursa modLogo-a je celo"
 End Sub
 
 ' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod
