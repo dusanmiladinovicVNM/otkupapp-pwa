@@ -572,27 +572,43 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     Dim d As Variant: d = GetTableData(TBL_OTKUP)
     If IsEmpty(d) Then Exit Function
 
-    Dim iID As Long, iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long
-    Dim iKoop As Long, iSt As Long, iBr As Long, iDat As Long, iTip As Long, iKolAmb As Long
-    Dim iKolAmbIzd As Long, iVreme As Long, iBruto As Long
+    ' HEADER daje samo cinjenice dokumenta. Klasa / Kolicina / Cena / BrutoKg /
+    ' KolAmbalaze su STAVKE i sa headera se vise ne citaju (S4.1).
+    Dim iID As Long, iVr As Long, iSo As Long
+    Dim iKoop As Long, iSt As Long, iBr As Long, iDat As Long, iTip As Long
+    Dim iKolAmbIzd As Long, iCreated As Long, iSrcCreated As Long
     iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     iVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     iSo = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
-    iKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    iKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    iCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     iKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     iSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
     iBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
     iDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     iTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
-    iKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
     iKolAmbIzd = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA)
-    iVreme = GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA)
-    iBruto = GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO)
+    ' VremeUnosa odlazi: CreatedAt (desktop) / SourceCreatedAt (PWA), S4.1c.
+    iCreated = GetColumnIndex(TBL_OTKUP, COL_AUDIT_CREATED_AT)
+    iSrcCreated = GetColumnIndex(TBL_OTKUP, COL_OTK_SOURCE_CREATED_AT)
 
-    Dim ids() As String: ids = Split(otkupIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
+    ' JEDAN dokument, N stavki. Ranije je ovde stajao Split(otkupIDs, " + "):
+    ' stari pisac je vracao spojene ID-eve, po jedan za svaku klasu.
+    Dim otkupID As String: otkupID = Trim$(otkupIDs)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim ds As Variant: ds = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(ds) Then Exit Function
+
+    Dim sOtk As Long, sKlasa As Long, sKol As Long, sCena As Long
+    Dim sAmb As Long, sBruto As Long, sRb As Long
+    sOtk = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID)
+    sKlasa = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA)
+    sKol = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA)
+    sCena = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA)
+    sAmb = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB)
+    sBruto = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO)
+    sRb = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB)
+
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ds, 1), 0 To 6)
     Dim cnt As Long: cnt = 0
     Dim osnovica As Double: osnovica = 0
     ' Cena uneta u formi je BRUTO (vec sadrzi PDV nadoknadu). U otkupnom listu
@@ -601,49 +617,65 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
     Dim koopID As String, stID As String, brDok As String, datum As String
     Dim tipAmb As String, kolAmb As Double, kolAmbIzd As Double
-    Dim j As Long, r As Long
-    For j = 0 To UBound(ids)
-        Dim wantID As String: wantID = Trim$(ids(j))
-        If wantID <> "" Then
-            For r = 1 To UBound(d, 1)
-                If CStr(d(r, iID)) = wantID Then
-                    Dim kol As Double: kol = PrNz(d(r, iKol))
-                    Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
+    ' --- zaglavlje: jedan red -------------------------------------------------
+    Dim r As Long, vrstaSorta As String
+    For r = 1 To UBound(d, 1)
+        If StrComp(Trim$(CStr(d(r, iID))), otkupID, vbTextCompare) = 0 Then
+            koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
+            brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
+            tipAmb = CStr(d(r, iTip))
+            vrstaSorta = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
+            If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
+
+            ' Vreme nastanka: SourceCreatedAt (PWA) ima prednost nad CreatedAt.
+            Dim vreme As Variant
+            If iSrcCreated > 0 Then vreme = d(r, iSrcCreated)
+            If Not IsDate(vreme) Then If iCreated > 0 Then vreme = d(r, iCreated)
+            If IsDate(vreme) Then datum = datum & "  Vreme: " & Format$(CDate(vreme), "hh:nn")
+            Exit For
+        End If
+    Next r
+    If Len(koopID) = 0 And Len(brDok) = 0 Then Exit Function
+
+    ' --- stavke: po jedan red po klasi, kanonskim redosledom ------------------
+    Dim crateW As Double
+    crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
+
+    Dim rb As Long
+    For rb = 1 To UBound(ds, 1)
+        For r = 1 To UBound(ds, 1)
+            If StrComp(Trim$(CStr(ds(r, sOtk))), otkupID, vbTextCompare) = 0 Then
+                If PrNz(ds(r, sRb)) = rb Then
+                    Dim kol As Double: kol = PrNz(ds(r, sKol))
+                    Dim cenBruto As Double: cenBruto = PrNz(ds(r, sCena))
                     Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-                    ' Bruto: zamrznut iz unosa (BrutoKg) ako postoji, inace izvedeno iz
-                    ' trenutne tare gajbice (fallback za stare/neto redove). Zamrznut bruto
-                    ' ostaje tacan i ako se tezina gajbice kasnije promeni u sifarniku.
-                    Dim storedBruto As Double: If iBruto > 0 Then storedBruto = PrNz(d(r, iBruto))
+                    Dim ambStavke As Double: ambStavke = PrNz(ds(r, sAmb))
+
+                    ' Bruto: zamrznut iz unosa ako postoji, inace izveden iz TRENUTNE
+                    ' tare gajbice. Zamrznut ostaje tacan i kad se tara kasnije promeni.
+                    Dim storedBruto As Double: storedBruto = PrNz(ds(r, sBruto))
                     Dim kolBruto As Double
                     If storedBruto > 0 Then
                         kolBruto = storedBruto
                     Else
-                        Dim crateW As Double: crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
-                        kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
+                        kolBruto = kol + ambStavke * crateW
                     End If
-                    stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
-                    stavke(cnt, 1) = CStr(d(r, iKl))
+
+                    stavke(cnt, 0) = vrstaSorta
+                    stavke(cnt, 1) = CStr(ds(r, sKlasa))
                     stavke(cnt, 2) = cenNeto        ' Cena bez PDV
                     stavke(cnt, 3) = cenBruto       ' Cena s PDV
                     stavke(cnt, 4) = kol            ' Kolicina neto
-                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto (neto + gajbice * tara)
+                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto
                     stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
                     osnovica = osnovica + kol * cenNeto
-                    ' Primljena ambalaza = zbir gajbi po SVIM stavkama (Klasa I + II).
-                    kolAmb = kolAmb + PrNz(d(r, iKolAmb))
-                    If koopID = "" Then
-                        koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
-                        brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
-                        If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  Vreme: " & Format$(d(r, iVreme), "hh:nn")
-                        tipAmb = CStr(d(r, iTip))
-                        If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
-                    End If
+                    kolAmb = kolAmb + ambStavke
                     cnt = cnt + 1
                     Exit For
                 End If
-            Next r
-        End If
-    Next j
+            End If
+        Next r
+    Next rb
     If cnt = 0 Then Exit Function
 
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
@@ -676,7 +708,9 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ' pocetno stanje pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz)
     ' - primljeno (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu
     ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
-    Dim ambPoc As Long: ambPoc = GetKooperantAmbOpening(koopID, tipAmb, ids)
+    ' Jedan dokument -> jedan ID. Helper prima i niz i "ID1 + ID2" string, pa mu
+    ' se prosledjuje sam OtkupID (ranije: Split rezultat obe klase).
+    Dim ambPoc As Long: ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID)
     h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
     h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))         ' primljeno (tekuci blok)
     h("ambIzdavanje") = tipAmb & " x " & CStr(CLng(kolAmbIzd))   ' izdato (tekuci blok)

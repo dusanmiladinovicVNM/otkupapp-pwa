@@ -214,6 +214,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
     Test_OTK_AmbalazaIdeNaDokument
     Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
+    Test_OTK_EkranPiseNovimModelom
+    Test_OTK_EkranNerazresivaKulturaPada
+    Test_OTK_EkranPauziraAutoLanac
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8704,6 +8707,176 @@ Private Sub Test_OTK_OdbijenDokumentNeKnjiziAmbalazu()
 EH:
     LogFatal "Test_OTK_OdbijenDokumentNeKnjiziAmbalazu", Err.Number, Err.description
 End Sub
+
+' EKRAN PISE NOVIM MODELOM.
+'
+' OtkupUpisi je jedini produkcioni put do pisca, a zove ga samo ekran
+' (modScrDokumenti:778) -- do sada ga nijedan test nije izvrsavao. Prelazak sa
+' SaveOtkupMulti_TX na CreateOtkup_TX je najveca izmena ponasanja u cutover-u,
+' pa bez ovog testa zelena suite ne bi dokazivala nista o njoj.
+Private Sub Test_OTK_EkranPiseNovimModelom()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKEK")
+
+    Dim p As Object
+    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-EK-" & scenario)
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = 20&
+    p("dveKlase") = True
+    p("kolicinaII") = 600#
+    p("cenaII") = 40#
+    p("kolAmbII") = 30&
+
+    Dim poruke As String
+    Dim res As String
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+
+    AssertTrue Len(res) > 0, "OTK ekran: upis prosao (poruke: " & poruke & ")"
+
+    ' JEDAN ID -- ne "ID1 + ID2".
+    AssertEquals "0", CStr(InStr(1, res, " + ")), "OTK ekran: vraca JEDAN ID, bez spajanja"
+    AssertEquals "1", CStr(FindRows(TBL_OTKUP, COL_OTK_ID, res).count), _
+                 "OTK ekran: tacno jedan header red za dvoklasni blok"
+
+    ' Stavke nose brojeve, header ih ne nosi.
+    AssertEquals "2", CStr(OtkBrojStavkiZaOtkup(res)), "OTK ekran: dve stavke"
+    AssertTrue Abs(OtkStavkaBrojP(res, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
+               "OTK ekran: Klasa I kolicina sa ekrana"
+    AssertTrue Abs(OtkStavkaBrojP(res, KLASA_II, COL_OKS_CENA) - 40#) < 0.001, _
+               "OTK ekran: Klasa II cena sa ekrana"
+    AssertEquals "", OtkPolje(res, COL_OTK_KOLICINA), "OTK ekran: header ne nosi kolicinu"
+    AssertEquals "", OtkPolje(res, COL_OTK_CENA), "OTK ekran: header ne nosi cenu"
+
+    ' Kultura je razresena iz (vrsta, sorta) -- ekran je adapter, ne pisac.
+    AssertEquals TEST_KULTURA_ID, OtkPolje(res, COL_OTK_KULTURA), _
+                 "OTK ekran: KulturaID razresen iz izbora"
+
+    ' Vozac se vise ne pise na otkup.
+    AssertEquals "", OtkPolje(res, COL_OTK_VOZAC), "OTK ekran: header ne nosi vozaca"
+
+    ' Ambalaza: jedan dvojni upis nad zbirom (20 + 30).
+    AssertEquals "2", CStr(AmbBrojRedova(res, DOK_TIP_OTKUP)), "OTK ekran: jedan dvojni upis"
+    AssertTrue Abs(AmbKolicina(res, DOK_TIP_OTKUP, "Izlaz") - 50#) < 0.001, _
+               "OTK ekran: knjizen zbir gajbi obe klase"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_EkranPiseNovimModelom", Err.Number, Err.description
+End Sub
+
+' Nerazresiva kultura obara upis PRE pisca, sa porukom operateru.
+Private Sub Test_OTK_EkranNerazresivaKulturaPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKEN")
+
+    Dim p As Object
+    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-EN-" & scenario)
+    p("sorta") = TEST_SORTA & " NEPOSTOJECA"
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = 20&
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim poruke As String
+    Dim res As String
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+
+    AssertEquals "", res, "OTK ekran kultura: upis odbijen"
+    AssertTrue Len(poruke) > 0, "OTK ekran kultura: operater je dobio poruku"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK ekran kultura: header nije ostao"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_EkranNerazresivaKulturaPada", Err.Number, Err.description
+End Sub
+
+' Auto-lanac hladnjace je PAUZIRAN do PR7, i to se kaze operateru.
+'
+' Lanac deli dokument po klasi, a nov pisac daje jedan OtkupID -- veza bi bila
+' polovicna. Kod lanca ostaje netaknut; pauzira se poziv.
+Private Sub Test_OTK_EkranPauziraAutoLanac()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPL")
+
+    Dim p As Object
+    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-PL-" & scenario)
+    p("stanicaID") = TEST_HLAD_ST_ID
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = 20&
+
+    Dim preOtp As Long
+    preOtp = OtkBrojRedova(TBL_OTPREMNICA)
+
+    Dim poruke As String
+    Dim res As String
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+
+    AssertTrue Len(res) > 0, "OTK lanac: otkup je upisan (poruke: " & poruke & ")"
+    AssertTrue InStr(1, poruke, "PAUZIRAN", vbTextCompare) > 0, _
+               "OTK lanac: operater je obavesten (bilo: " & poruke & ")"
+    AssertEquals CStr(preOtp), CStr(OtkBrojRedova(TBL_OTPREMNICA)), _
+                 "OTK lanac: nijedna otpremnica nije nastala"
+
+    ' Kontrola: van hladnjace nema ni poruke -- inace bi se javljala uvek.
+    Dim p2 As Object
+    Set p2 = OtkEkranParam(TEST_PREFIX & "-OTK-PL2-" & scenario)
+    p2("kolicinaI") = 400#
+    p2("cenaI") = 50#
+    p2("kolAmb") = 20&
+
+    Dim poruke2 As String
+    AssertTrue Len(modOtkupUnos.OtkupUpisi(p2, poruke2)) > 0, "OTK lanac: obican unos prosao"
+    AssertEquals "0", CStr(InStr(1, poruke2, "PAUZIRAN", vbTextCompare)), _
+                 "OTK lanac: van hladnjace nema poruke"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
+End Sub
+
+' Parametri kakve ekran salje OtkupUpisi -- isti kljucevi kao NoviOtkupUnos.
+Private Function OtkEkranParam(ByVal brDok As String) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p.CompareMode = vbTextCompare
+    p("datum") = NextTestDate()
+    p("stanicaID") = TEST_ST_ID
+    p("kooperantID") = TEST_KOOP_ID
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("vozacID") = TEST_VOZ_ID
+    p("brDok") = brDok
+    p("brojZbirne") = ""
+    p("parcelaID") = ""
+    p("primalac") = ""
+    p("kolicinaI") = 0#
+    p("cenaI") = 0#
+    p("kolAmb") = 0&
+    p("kolAmbIzdata") = 0&
+    p("dveKlase") = False
+    p("kolicinaII") = 0#
+    p("cenaII") = 0#
+    p("kolAmbII") = 0&
+    p("novac") = 0#
+    p("brutoKgI") = 0#
+    p("brutoKgII") = 0#
+    Set OtkEkranParam = p
+End Function
 
 ' --- tblAmbalaza, po dokumentu -----------------------------------------------
 Private Function AmbRedovi(ByVal dokID As String, ByVal dokTip As String) As Collection

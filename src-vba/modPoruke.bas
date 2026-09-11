@@ -953,6 +953,8 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_1", "Kultura parcele"
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_2", "ne odgovara izabranoj vrsti"
     UpsertRow lo, existing, "OTKUNOS_MSG_NIJE_HLADNJACA", "Napomena: ovaj unos nije autohladnja" & ChrW(269) & "a lanac " & ChrW(8212) & " palete stornirane prijemnice NISU prevezane:"
+    UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"
+    UpsertRow lo, existing, "OTKUNOS_MSG_LANAC_PAUZIRAN", "Napomena: automatski lanac hladnja" & ChrW(269) & "e je PAUZIRAN dok otpremnica ne pre" & ChrW(273) & "e na nov model. Otpremnicu, zbirnu i prijemnicu unesi ru" & ChrW(269) & "no."
     UpsertRow lo, existing, "OTKUNOS_MSG_NEMA_PRIJEMNICE", "Novi lanac nije kreirao prijemnicu " & ChrW(8212) & " palete NISU prevezane."
     UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_PREVEZANE", "Palete prevezane:"
     UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Auto-prevezivanje paleta nije uspelo:"

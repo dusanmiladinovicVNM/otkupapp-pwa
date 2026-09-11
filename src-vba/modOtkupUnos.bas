@@ -261,6 +261,65 @@ EH:
     OtkupValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
+' (Vrsta, Sorta) -> KulturaID. RAZRESAVANJE JE POSAO ADAPTERA, ne pisca.
+'
+' Writer koji sam radi lookup mora da poznaje UI semantiku (sta znaci prazna
+' sorta, sta sa razmacima) -- a tu je fabrikovanje "vrsta-sorta" stringa i
+' nastalo (S4.1f). Ovde je to znanje na svom mestu: ekran zna sta je operater
+' izabrao, pa prevodi izbor u FK i pada glasno kad ne moze.
+Private Function RazresiKulturu(ByVal vrsta As String, ByVal sorta As String, _
+                                ByRef outGreska As String) As String
+    outGreska = ""
+
+    Dim kult As Variant
+    kult = GetTableData(TBL_KULTURE)
+    If Not IsArray(kult) Then
+        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
+        Exit Function
+    End If
+
+    Dim cID As Long, cVr As Long, cSo As Long
+    cID = GetColumnIndex(TBL_KULTURE, COL_KUL_ID)
+    cVr = GetColumnIndex(TBL_KULTURE, COL_KUL_VRSTA)
+    cSo = GetColumnIndex(TBL_KULTURE, COL_KUL_SORTA)
+    If cID = 0 Or cVr = 0 Or cSo = 0 Then
+        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
+        Exit Function
+    End If
+
+    Dim i As Long, nadjen As String, koliko As Long
+    For i = 1 To UBound(kult, 1)
+        If StrComp(Trim$(nz(kult(i, cVr), "")), vrsta, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(kult(i, cSo), "")), sorta, vbTextCompare) = 0 Then
+                nadjen = Trim$(CStr(nz(kult(i, cID), "")))
+                koliko = koliko + 1
+            End If
+        End If
+    Next i
+
+    ' Nula i vise od jedan su ISTA greska za operatera: izbor se ne prevodi u
+    ' jedan maticni podatak. Tiho uzimanje prvog je bas ono sto je stari kod radio.
+    If koliko <> 1 Then
+        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
+        Exit Function
+    End If
+
+    RazresiKulturu = nadjen
+End Function
+
+Private Function OtkStavkaDTO(ByVal klasa As String, ByVal kol As Double, _
+                              ByVal cena As Double, ByVal amb As Double, _
+                              ByVal bruto As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", amb
+    If bruto > 0 Then s.Add "BrutoKg", bruto
+    Set OtkStavkaDTO = s
+End Function
+
 '------------------------------------------------------------- UPIS
 ' Upisuje otkup i radi sve sto ide uz njega. Vraca OtkupID (ili spojene ID-eve
 ' obe klase); prazno znaci da upis nije uspeo. U "poruke" se skupljaju
@@ -272,31 +331,52 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     On Error GoTo EH
     poruke = ""
 
-    res = SaveOtkupMulti_TX( _
-        datum:=CDate(p("datum")), _
-        kooperantID:=S(p, "kooperantID"), _
-        stanicaID:=S(p, "stanicaID"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        sortaVoca:=S(p, "sorta"), _
-        kolicinaI:=D(p, "kolicinaI"), _
-        cenaI:=D(p, "cenaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        vozacID:=S(p, "vozacID"), _
-        brDok:=S(p, "brDok"), _
-        novac:=D(p, "novac"), _
-        primalac:=S(p, "primalac"), _
-        parcelaID:=S(p, "parcelaID"), _
-        brojZbirne:=S(p, "brojZbirne"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        kolicinaII:=D(p, "kolicinaII"), _
-        cenaII:=D(p, "cenaII"), _
-        kolAmbIzdata:=L(p, "kolAmbIzdata"), _
-        brutoKgI:=D(p, "brutoKgI"), _
-        kolAmbII:=L(p, "kolAmbII"), _
-        brutoKgII:=D(p, "brutoKgII"))
+    ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
+    '
+    '   vozacID     vozac pripada otpremnici, ne otkupu (S4.1c)
+    '   brojZbirne  broj nikad nije bio veza nego labela (A2)
+    '   novac       kes ne ulazi kroz otkupni list (S4.1b). Mereno: ovaj ekran
+    '               p("novac") NIKAD ne postavlja -- polje pripada modNovacUnos,
+    '               pa je grana u starom piscu bila mrtva na izvoru.
+    '   primalac    isto
+    Dim kulturaID As String
+    kulturaID = RazresiKulturu(S(p, "vrsta"), S(p, "sorta"), errDesc)
+    If Len(kulturaID) = 0 Then
+        poruke = poruke & errDesc
+        Exit Function
+    End If
 
-    If Len(res) = 0 Then Exit Function
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(p("datum"))
+    h.Add "KooperantID", S(p, "kooperantID")
+    h.Add "StanicaID", S(p, "stanicaID")
+    h.Add "KulturaID", kulturaID
+    h.Add "VrstaVoca", S(p, "vrsta")
+    h.Add "SortaVoca", S(p, "sorta")
+    h.Add "TipAmbalaze", S(p, "tipAmb")
+    h.Add "BrojDokumenta", S(p, "brDok")
+    h.Add "ParcelaID", S(p, "parcelaID")
+    h.Add "KolAmbIzdata", L(p, "kolAmbIzdata")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If D(p, "kolicinaI") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "cenaI"), _
+                                L(p, "kolAmb"), D(p, "brutoKgI"))
+    End If
+    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "cenaII"), _
+                                L(p, "kolAmbII"), D(p, "brutoKgII"))
+    End If
+
+    Dim greska As String
+    res = CreateOtkup_TX(h, stavke, greska)
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
+    End If
 
     ' Stampa otkupnog lista - best-effort, greska ne sme da obori potvrdu upisa.
     On Error Resume Next
@@ -318,17 +398,19 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     End If
     If doHlRelink Then SetPaletizeSkip True
 
-    On Error Resume Next
-    hlWarn = AutoChainHladnjaca(CDate(p("datum")), S(p, "stanicaID"), S(p, "vrsta"), _
-                                S(p, "sorta"), S(p, "vozacID"), S(p, "tipAmb"), _
-                                L(p, "kolAmb"), D(p, "kolicinaI"), D(p, "cenaI"), _
-                                B(p, "dveKlase"), D(p, "kolicinaII"), D(p, "cenaII"), _
-                                S(p, "brDok"), res, D(p, "brutoKgI"), L(p, "kolAmbII"), _
-                                D(p, "brutoKgII"), hlNewPrij)
-    Err.Clear
-    On Error GoTo EH
-    SetPaletizeSkip False        ' toggle se vraca i kad je lanac pao
-    If Len(hlWarn) > 0 Then poruke = poruke & hlWarn & vbCrLf
+    ' AUTO-LANAC JE PAUZIRAN (Otkup cutover, korak 2).
+    '
+    ' Lanac deli dokument PO KLASI: iz "ID1 + ID2" vadi idI i idII i svaku klasu
+    ' vodi kroz svoju otpremnicu, zbirnu i prijemnicu (modAutoHladnjaca:182).
+    ' Nov pisac daje JEDAN OtkupID, a jedan otkup red drzi JEDAN OtpremnicaID --
+    ' pa je veza strukturno gubitna dok otpremnica ne predje na header+stavke.
+    '
+    ' Odluka operatera: lanac se gasi do PR7, umesto da se upisuje polovicna veza.
+    ' Kod lanca OSTAJE netaknut -- pauzira se poziv, i to glasno.
+    If IsHladnjacaStanica(S(p, "stanicaID")) Then
+        poruke = poruke & Poruka("OTKUNOS_MSG_LANAC_PAUZIRAN") & vbCrLf
+    End If
+    SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
 
     If doHlRelink Then
         SetHladnjacaRelinkPending ""         ' potrosi (idempotentno)
