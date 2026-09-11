@@ -849,6 +849,108 @@ Uz njih idu i četiri koje nosi odluka o draft-u:
 
 ---
 
+### Otkup cutover (PR6) — pre-flight verdikt
+
+Prvi dokument kod kog nov pisač postaje **jedini put**. Do sada je sve bilo
+aditivno; od ovog PR-a nadalje zeleni golden više ne dokazuje „nisam ništa
+pomerio", nego da je ponašanje **namerno** promenjeno tačno tamo gde treba.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | §4.1–4.1g zaključani kroz PR4; keš je odlučen (v. ispod) |
+| `IDENTITY` | PROVEN | `CreateOtkup_TX` daje jedan `OtkupID` po bloku; `Split(" + ")` gubi razlog postojanja |
+| `CARDINALITY` | PROVEN | 1 blok → 1 header → N stavki |
+| `INVARIANTS/OWNER` | **GAP → plan** | A11 cilj je `modOtkup` sam; danas **16 upisa u 8 modula** |
+| `WRITERS` | PROVEN | **jedan** produkcioni poziv starog pisca: `modOtkupUnos:275` |
+| `DOWNSTREAM` | PROVEN | **131** korišćenje kolona koje umiru, ~20 modula (tabela ispod) |
+| `EVENTS` | PROVEN | fizički: roba primljena na otkupnom mestu · poslovni: otkupni list nastaje · finansijski: **ne kroz ovaj dokument** (v. ispod) |
+| `CAPABILITY` | **treba red** | štampa otkupnog lista, panel blokova, auto-hladnjača — svaka mora završiti kao `MIGRATED`, ne „kod još postoji" |
+| `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
+| `LANDING` | RISK | stacked nad #307 |
+
+#### Mereno: šta cutover zapravo dira
+
+```
+pisac koji se menja      1   modOtkupUnos:275 (jedini produkcioni poziv)
+Split(" + ") potrosaci   9   modAmbalaza, modAutoHladnjaca, modDokUnos,
+                             modOtkupBlok, modPrint
+A11 konsolidacija       16   upisa u 8 modula -> modOtkup API
+```
+
+| Kolona koja umire | Ne-test korišćenja | Modula |
+|---|---:|---:|
+| `Kolicina` | 47 | 20 |
+| `Cena` | 33 | 14 |
+| `KolAmbalaze` | 24 | 11 |
+| `Klasa` | 20 | 15 |
+| `BrutoKg` | 7 | 5 |
+| **ukupno** | **131** | |
+
+#### Keš NE ulazi u pisca — i to je merenje, ne pretpostavka
+
+Red 6 u tabeli PR-ova kaže „novac na header", što se lako čita kao „`CreateOtkup_TX`
+mora da piše `tblNovac`". Model kaže suprotno, i to je već odlučeno: §4.1b briše
+`Novac` / `PrimalacNovca`, a §6.1 kaže da **keš uopšte ne ulazi kroz otkupni list** —
+put koji stvarno postavlja `Isplaceno` je avans. Golden `B1`/`B4` su ranije uklonjeni
+baš iz tog razloga.
+
+Legacy `SaveOtkupMulti_TX` ipak snapshot-uje `tblNovac` i ima granu za keš — **mrtav
+kod**, i briše se zajedno sa pisačem.
+
+> Ovo je prvi put da je pravilo iz §13c radilo unapred: da su pročitane samo tabela
+> PR-ova ili samo model, PR6 bi dobio pisca koji knjiži keš i test koji taj mrtav
+> kod čuva.
+
+Ostaje samo **ambalaža**: `TrackAmbalaza` po klasi za primljene gajbe i obrnut smer
+za `KolAmbIzdata` (`modOtkup:1294-1310`).
+
+#### Redosled unutar PR-a
+
+Jedan PR (odluka operatera), ali commit-i idu ovim redom — svaki je celina koja se
+može čitati zasebno:
+
+```
+1  pisac kompletan     ambalaza + StornoOtkup_TX nad headerom + ispravka
+                       jos ADITIVNO: golden 12/0 mora ostati nepromenjen
+2  jedini put          modOtkupUnos:275 -> CreateOtkup_TX
+                       SaveOtkupMulti_TX obrisan, 9x Split(" + ") pada
+                       OVDE golden SME da se promeni -- i mora se objasniti
+3  citaoci             131 koriscenje -> read-model nad tblOtkupStavke
+4  kanon               kolone van schema.json; tvrdnja postaje "kolone nema"
+5  A11                 8 pisaca -> modOtkup API, ratchet na cilj
+```
+
+Korak 2 je jedini koji menja ponašanje bez mreže ispod sebe — zato korak 1 mora
+biti zelen i dokazan **pre** njega.
+
+#### Mreža za Otkup cutover — imenovano, pre writer-a
+
+| Test | Tvrdnja |
+|---|---|
+| `AmbalazaIdeNaHeader` | primljene gajbe se knjiže po klasi, izdate obrnutim smerom; zbir odgovara stavkama |
+| `StornoJednimID` | dvoklasni blok se stornira **jednim** pozivom nad `OtkupID`, ne dva puta po klasi |
+| `IspravkaJeNovaVerzija` | korekcija pravi nov `OtkupID` + `IspravkaOdID` + `ZamenjenSaID`, stara ostaje storniran fakt (A13) |
+| `NovacBezPrimary` | vrednost = `SUM(stavke)`; **nema** persistentnog `Isplaceno`; keš ne ulazi kroz otkupni list |
+| `JedanIDBezSplita` | `CreateOtkup_TX` vraća jedan ID; nijedan potrošač ne parsira `" + "` |
+| `KoloneNema` | `kanonska pozicija = 0` za `Kolicina`/`Cena`/`Klasa`/`KolAmbalaze`/`BrutoKg` — zamenjuje „nov writer ih ostavlja prazne" iz PR4 |
+| `PanelCitaStavke` | „Ostatak", prekoračenje i sažetak čitaju stavke, ne header |
+| `StampaCitaStavke` | otkupni list štampa klase iz `tblOtkupStavke` |
+| `AutoHladnjacaJedanBlok` | auto-lanac dobija jedan `OtkupID` i ne deli po klasi |
+
+Dokaz u oba smera obavezan za `StornoJednimID`, `IspravkaJeNovaVerzija`,
+`NovacBezPrimary` i `KoloneNema` — sve četiri su kritične poslovne invarijante ili
+menjaju premisu zatečenog testa.
+
+#### Golden mreža prestaje da bude „nepromenjena"
+
+Do sada je `RunGoldenSuite 12/0 nepromenjen` bio dokaz da skela ništa nije pomerila.
+U koraku 2 to više ne važi: scenariji koji prolaze kroz otkupni list **moraju** da
+se promene, jer se menja broj redova po bloku. Svaka promena goldena mora da nosi
+obrazloženje u commit-u; golden koji se promenio bez objašnjenja je regresija koja
+je prošla kao osvežavanje.
+
+---
+
 ## 13) Statičke kapije
 
 Ne „repo-wide search treba da pokaže", nego imenovana `vba_check` pravila sa
