@@ -61,6 +61,8 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim okGeo As Boolean
     Dim okOtkup As Boolean
     Dim okOtpremnice As Boolean
+    Dim degradirano As Boolean
+    Dim razlogDegradacije As String
     Dim okZbirne As Boolean
     Dim okStammdaten As Boolean
     Dim okKartice As Boolean
@@ -196,7 +198,12 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
         On Error Resume Next
         Err.Clear
-        Call StampVozacFromStanicaForMalina_TX
+        ' Isti razlog kao kod auto-otpremnice: ovo je PRIPREMA za nju.
+        ' VozacID := StanicaID nad otkup redovima hrani korak koji je pauziran,
+        ' a kolona u ciljnom modelu ne postoji (vozac pripada otpremnici, S4.1c).
+        If modMasterSync.AutoOtpremnicaIzPwaDostupna() Then
+            Call StampVozacFromStanicaForMalina_TX
+        End If
         errNum = Err.Number
         errDesc = Err.description
         On Error GoTo EH
@@ -222,8 +229,13 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     ' cekic nad koracima koji vise ne rade. Prijavljuje se kao NEDOSTUPAN, i to
     ' ne obara ostatak sinhronizacije -- otkupi jesu uvezeni.
     If Not modMasterSync.AutoOtpremnicaIzPwaDostupna() Then
+        ' okOtpremnice ostaje True samo da ostatak lanca sme da nastavi -- otkupi
+        ' JESU uvezeni. Ali ciklus se od ovog trenutka vodi kao DEGRADIRAN, pa
+        ' zavrsni verdikt i monitoring ne smeju da kazu SUCCESS.
         okOtpremnice = True
-        AppendStep summary, True, _
+        degradirano = True
+        razlogDegradacije = "auto-Otpremnice pauzirane do PR7"
+        AppendStepPauza summary, _
             "Auto-create Otpremnice: PAUZIRANO do PR7 -- otpremnice unesi rucno"
         GoTo PosleOtpremnica
     End If
@@ -312,6 +324,11 @@ PosleOtpremnica:
     okMgmt = ExportMgmtReports_Core(False)
     AppendStep summary, okMgmt, "Export MgmtReports -> Google"
 
+    ' DEGRADIRAN CIKLUS NIJE USPESAN CIKLUS.
+    '
+    ' Nijedan korak nije pao, ali jedan nije ni izvrsen. Kad bi se to racunalo
+    ' kao uspeh, pauza bi samo promenila tekst tihe zelene poruke -- sa
+    ' "0 kreirano" na "OK - PAUZIRANO" -- a to je isti kvar koji pauza uklanja.
     SyncPWAFullCycle_Core = _
         okGeo And _
         okOtkup And _
@@ -319,11 +336,20 @@ PosleOtpremnica:
         okZbirne And _
         okStammdaten And _
         okKartice And _
-        okMgmt
+        okMgmt And _
+        Not degradirano
 
-    Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
-                         okStammdaten, okKartice, okMgmt, _
-                         SyncPWAFullCycle_Core
+    ' Monitoring dobija WARNING, ne CRITICAL: degradacija je NAMERNA i poznata,
+    ' pa ne sme da zvoni kao pad -- ali ne sme ni da nestane.
+    If degradirano Then
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, _
+                             False, "WARNING", razlogDegradacije
+    Else
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, _
+                             SyncPWAFullCycle_Core
+    End If
 
     LogInfo ORCH_MODULE, _
         "Full PWA / Google sync cycle completed. " & _
@@ -337,6 +363,8 @@ PosleOtpremnica:
 
     If SyncPWAFullCycle_Core Then
         SyncProgress "Full sync uspe" & ChrW(353) & "no zavr" & ChrW(353) & "en."
+    ElseIf degradirano Then
+        SyncProgress "Full sync zavr" & ChrW(353) & "en DEGRADIRANO: " & razlogDegradacije & "."
     Else
         SyncProgress "Full sync zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kom / partial statusom."
     End If
@@ -345,6 +373,9 @@ PosleOtpremnica:
         If Not pwaLockAcquired Then
             If SyncPWAFullCycle_Core Then
                 MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
+            ElseIf degradirano Then
+                MsgBox summary & vbCrLf & "Status: DEGRADIRANO -- " & razlogDegradacije, _
+                       vbExclamation, APP_NAME
             Else
                 MsgBox summary & vbCrLf & "Status: GRE" & ChrW(352) & "KA / PARTIAL", vbExclamation, APP_NAME
             End If
@@ -421,6 +452,17 @@ EH:
     SyncPWAFullCycle_Core = False
     Resume CleanExit
 End Function
+
+' Korak koji NIJE izvrsen jer je sposobnost pauzirana.
+'
+' Treci ishod postoji zato sto Boolean laze: AppendStep sa True bi ispisao
+' "OK - ... PAUZIRANO", a to je tacno tiho zeleno koje pauza treba da ukine.
+' Ovaj korak nije ni uspeh ni greska -- ostatak sinhronizacije sme da nastavi,
+' ali ciklus vise ne sme da se zove uspesnim.
+Private Sub AppendStepPauza(ByRef summary As String, ByVal stepName As String)
+    summary = summary & "PAUZA - " & stepName & vbCrLf
+    LogInfo ORCH_MODULE, "PAUZA - " & stepName
+End Sub
 
 Private Sub AppendStep(ByRef summary As String, _
                        ByVal ok As Boolean, _

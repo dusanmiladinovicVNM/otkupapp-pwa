@@ -245,6 +245,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_IstiCridIstiSadrzajJeNoOp
     Test_PWA_IstiCridDrugiSadrzajPada
     Test_PWA_RazresivacImenujeRazlog
+    Test_PWA_KonfliktPoParceliITipu
+    Test_PWA_PrenosiVremeNastanka
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8901,9 +8903,12 @@ Private Sub Test_PWA_IstiCridDrugiSadrzajPada()
     prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
     AssertTrue Len(prvi) > 0, "PWA konflikt: prvi uvoz prosao"
 
-    ' Isti CRID, promenjena kolicina.
+    ' Isti CRID, promenjena SAMO kolicina -- kopija, ne nov PwaRed poziv.
+    ' Nov poziv bi pomerio i datum (NextTestDate), pa bi test merio razliku
+    ' datuma umesto razlike kolicine i ostao zelen i sa ugasenom kapijom.
     Dim izmenjen As Variant
-    izmenjen = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 999#, 50#, 20)
+    izmenjen = red
+    izmenjen(1, 15) = 999#                             ' GS_KOLICINA
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
@@ -8927,6 +8932,15 @@ End Sub
 
 ' Red kakav PWA salje u OTK sheet-u. Indeksi su GS_* kolone modMasterSync-a;
 ' one su Private tamo, pa se ovde imenuju komentarom, ne konstantom.
+'
+' ZAMKA: GS_DATUM se puni sa NextTestDate(), koji se POMERA na svaki poziv.
+' Dva poziva PwaRed sa istim argumentima zato daju redove koji se razlikuju u
+' DATUMU. Test koji tako gradi "izmenjen" red meri razliku datuma, ne razliku
+' koju je hteo -- i ostaje zelen i kad se ciljana kapija ugasi (mereno
+' sabotazom nad poredjenjem parcele: nije oborila nijednu tvrdnju).
+'
+' Za konflikt-testove: pozovi JEDNOM, pa kopiraj (VBA niz se kopira dodelom) i
+' promeni tacno jedno polje.
 Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
                         ByVal kolicina As Double, ByVal cena As Double, _
                         ByVal kolAmb As Long) As Variant
@@ -9819,6 +9833,120 @@ EH:
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
     On Error GoTo 0
     LogFatal "Test_OTK_SelfHealMigracijeKolona", Err.Number, Err.description
+End Sub
+
+' CRID KONFLIKT SE MERI I PO PARCELI I PO TIPU AMBALAZE.
+'
+' Poredjenje sadrzaja je prvo gledalo samo kooperanta, kulturu, datum i stavku.
+' Nalaz iz review-a: isti ClientRecordID sa parcele P1 i sa parcele P2 prolazio je
+' kao "isti sadrzaj" -- pa bi ispravljena parcela TIHO nestala. Isto za tip
+' ambalaze, koji odlucuje ceo dvojni upis gajbi.
+'
+' Oba menjaju STA dokument tvrdi, pa oba moraju biti konflikt, ne no-op.
+Private Sub Test_PWA_KonfliktPoParceliITipu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAPT")
+
+    ' --- parcela ---
+    Dim cridP As String
+    cridP = TEST_PREFIX & "-CRID-PAR-" & scenario
+
+    Dim redP As Variant
+    redP = PwaRed(cridP, TEST_PREFIX & "-OTK-PWAPAR-" & scenario, 400#, 50#, 20)
+
+    Dim prviP As String
+    prviP = modMasterSync.ImportRowToTblOtkup_RowTX(redP, 1, cridP)
+    AssertTrue Len(prviP) > 0, "PWA parcela: prvi uvoz prosao"
+
+    ' PwaRed salje PRAZNU parcelu, pa prvi dokument nema parcelu. Drugi je salje.
+    ' Oba su LEGITIMNE vrednosti za istog kooperanta -- test tako meri bas kapiju
+    ' jednakosti, a ne FK proveru parcele (PAR-TEST-2 pripada drugom kooperantu).
+    AssertEquals "", OtkPolje(prviP, COL_OTK_PARCELA), "PWA parcela: prvi je bez parcele"
+
+    ' KOPIJA polaznog reda -- menja se TACNO jedno polje (v. zamku uz PwaRed).
+    Dim izmenjenP As Variant
+    izmenjenP = redP
+    izmenjenP(1, 19) = GetTestParcelaID()              ' GS_PARCELA_ID
+
+    Dim preP As Long: preP = OtkBrojRedova(TBL_OTKUP)
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenP, 1, cridP), _
+                 "PWA parcela: druga parcela pod istim CRID-om je ODBIJENA"
+    AssertEquals CStr(preP), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA parcela: nijedan nov red nije nastao"
+
+    ' --- tip ambalaze ---
+    Dim cridT As String
+    cridT = TEST_PREFIX & "-CRID-TIP-" & scenario
+
+    Dim redT As Variant
+    redT = PwaRed(cridT, TEST_PREFIX & "-OTK-PWATIP-" & scenario, 400#, 50#, 20)
+
+    Dim prviT As String
+    prviT = modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT)
+    AssertTrue Len(prviT) > 0, "PWA tip: prvi uvoz prosao"
+
+    Dim izmenjenT As Variant
+    izmenjenT = redT
+    ' TipAmbalaze NIJE FK (v. modOtkup:474 -- FK su kooperant, stanica, kultura,
+    ' parcela), pa je drugi tip legitiman ulaz i kapija jednakosti je jedino sto
+    ' ga moze odbiti.
+    izmenjenT(1, 17) = TEST_TIP_AMB & "-DRUGI"         ' GS_TIP_AMB
+
+    Dim preT As Long: preT = OtkBrojRedova(TBL_OTKUP)
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT), _
+                 "PWA tip: drugi tip ambalaze pod istim CRID-om je ODBIJEN"
+    AssertEquals CStr(preT), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA tip: nijedan nov red nije nastao"
+
+    ' Kontrola: NEPROMENJEN red je i dalje no-op, ne konflikt.
+    AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT), _
+                 "PWA kontrola: nepromenjen sadrzaj je i dalje NO-OP"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_KonfliktPoParceliITipu", Err.Number, Err.description
+End Sub
+
+' VREME NASTANKA NA TERENU SE PRENOSI, ne baca.
+'
+' PWA sema polje TRAZI (RequireOTKHeaderValue nad GS_CREATED_AT), a CreateOtkup_TX
+' ga prima kao opcion header kljuc -- ali adapter ga nije prosledjivao. Bez njega
+' je jedini vremenski trag CreatedAt, koji nosi trenutak SINHRONIZACIJE; posle
+' prekida veze to ume da bude i nekoliko dana kasnije od stvarnog otkupa.
+Private Sub Test_PWA_PrenosiVremeNastanka()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWASCA")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-SCA-" & scenario
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWASCA-" & scenario, 400#, 50#, 20)
+
+    Dim nastalo As String
+    nastalo = "2026-08-14T06:30:00Z"
+    red(1, 3) = nastalo                                ' GS_CREATED_AT
+
+    Dim otkID As String
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    AssertTrue Len(otkID) > 0, "PWA vreme: uvoz prosao"
+
+    AssertEquals nastalo, OtkPolje(otkID, COL_OTK_SOURCE_CREATED_AT), _
+                 "PWA vreme: SourceCreatedAt nosi vreme sa terena"
+
+    ' Bez prenosa bi polje ostalo prazno -- to je stanje koje je nalaz i opisao.
+    AssertTrue Len(OtkPolje(otkID, COL_OTK_SOURCE_CREATED_AT)) > 0, _
+               "PWA vreme: polje nije ostalo prazno"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_PrenosiVremeNastanka", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTK_VrednostBezStavkiPada()

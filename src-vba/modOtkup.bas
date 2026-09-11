@@ -42,9 +42,13 @@ Option Explicit
 ' zaglavlje BEZ STAVKI -- oblik koji nove kapije moraju da odbiju. Obrazlozenje
 ' stoji uz njega.
 '
-' Header i dalje ostavlja Kolicina / Cena / Klasa / KolAmbalaze / BrutoKg /
-' VozacID / Isplaceno / DatumIsplate / VremeUnosa prazne -- to su kolone koje u
-' ciljnoj semi ne postoje (DOCUMENT_HEADER_LINES S4.1) i brisu se u koraku 4.
+' Header ostavlja prazne kolone koje u ciljnoj semi ne postoje
+' (DOCUMENT_HEADER_LINES S4.1): Kolicina, Cena, Klasa, KolAmbalaze, BrutoKg,
+' VozacID, VremeUnosa.
+'
+' Isplaceno i DatumIsplate vise nisu na tom spisku -- FIZICKI SU OBRISANE iz
+' kanona (korak 7), a self-heal ih uklanja i iz zatecene sveske
+' (modSetup.ObrisiKolonuAko). Status isplate je izveden, v. modNovac.
 '
 ' Transakcija obuhvata tblOtkup, tblOtkupStavke, tblAmbalaza i tblNovac.
 ' Ambalaza se knjizi jednom po dokumentu; tblNovac dira SAMO primena zatecenog

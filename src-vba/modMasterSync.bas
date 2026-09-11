@@ -1708,7 +1708,24 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 If Len(sheetVozac) > 0 Then
                     Dim vozResult As String
                     Dim vozDetail As String
-                    vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+                    ' VozacID NA OTKUPU JE PRIPREMA ZA PAUZIRANOG POTROSACA.
+                    '
+                    ' Jedini citaoci te kolone su AutoLink (mrtav -- kljuc vise ne
+                    ' pogadja) i auto-otpremnica (pauzirana). Upis koji hrani samo
+                    ' pauzirane potrosace je upis u kolonu koju ciljni model nema:
+                    ' vozac pripada OTPREMNICI, ne otkupu (S4.1c).
+                    '
+                    ' Kapija stoji na POZIVNOM MESTU, ne u TryUpdateVozacID:
+                    ' njegova masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/
+                    ' FAILED) je i dalje merena kroz TestHook i PR7 je koristi nad
+                    ' otpremnicom.
+                    If AutoOtpremnicaIzPwaDostupna() Then
+                        vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+                    Else
+                        vozResult = MSVOZ_NOCHANGE
+                        vozDetail = "VozacID se ne utiskuje na otkup: " & _
+                                    "auto-otpremnica je pauzirana do PR7."
+                    End If
 
                     Select Case vozResult
                         Case MSVOZ_UPDATED
@@ -1877,10 +1894,21 @@ End Function
 
 ' Da li vec uvezen dokument nosi ISTI poslovni sadrzaj kao red koji je stigao.
 '
-' Poredi se ono sto dokument JESTE, ne kako je zapisan: zaglavlje i jedina stavka.
-' OtkupID, CreatedAt i redosled ne ucestvuju -- oni se i ocekuje da se razlikuju.
-' BrojDokumenta takodje ne: kad ga PWA ne posalje, master ga generise lokalno, pa
-' bi poredjenje po njemu prijavljivalo konflikt tamo gde ga nema.
+' Poredi se ono sto dokument JESTE, ne kako je zapisan.
+'
+' UCESTVUJU:  KooperantID, KulturaID, Datum, ParcelaID, TipAmbalaze,
+'             i jedina stavka -- Klasa, Kolicina, Cena, KolAmbalaze.
+'
+' NE UCESTVUJU, i za svako postoji razlog:
+'   OtkupID, CreatedAt, redosled   ocekuje se da se razlikuju
+'   BrojDokumenta                  kad ga PWA ne posalje, master ga generise
+'                                  lokalno -- poredjenje bi prijavljivalo konflikt
+'                                  tamo gde ga nema. Ako PWA broj IZRICITO salje,
+'                                  njegova promena jeste konflikt; to trazi da se
+'                                  zna ko je broj dodelio, sto danas nije zapisano
+'                                  -- imenovano ovde, ne preskoceno cutke.
+'   VrstaVoca / SortaVoca          ulaze posredno: iz njih se razresava KulturaID,
+'                                  pa se razlika vidi kroz FK
 '
 ' Funkcija sama parsira red, da bi je mogla zvati OBA mesta: i ingest, i grana
 ' koja duplikat preskace. Dva poredjenja istog pojma bi se razisla.
@@ -1891,11 +1919,14 @@ Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, 
     On Error GoTo EH
 
     Dim kooperantID As String, vrstaVoca As String, sortaVoca As String, klasa As String
+    Dim parcelaID As String, tipAmb As String
     kooperantID = Trim$(CStr(nz(data(row, GS_KOOPERANT_ID), "")))
     vrstaVoca = Trim$(CStr(nz(data(row, GS_VRSTA), "")))
     sortaVoca = Trim$(CStr(nz(data(row, GS_SORTA), "")))
     klasa = Trim$(CStr(nz(data(row, GS_KLASA), "")))
     If Len(klasa) = 0 Then klasa = "I"
+    parcelaID = Trim$(CStr(nz(data(row, GS_PARCELA_ID), "")))
+    tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
 
     If Not IsParsableMasterSyncDate(data(row, GS_DATUM)) Then Exit Function
 
@@ -1908,6 +1939,15 @@ Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, 
 
     If Not PwaPoljeJednako(otkupID, COL_OTK_KOOPERANT, kooperantID) Then Exit Function
     If Not PwaPoljeJednako(otkupID, COL_OTK_KULTURA, kulturaID) Then Exit Function
+
+    ' PARCELA I TIP AMBALAZE SU DEO SADRZAJA, ne ukras.
+    '
+    ' Bez njih je isti CRID sa parcele P1 i sa parcele P2 prolazio kao "isti
+    ' sadrzaj" -- pa bi ispravljena parcela tiho nestala. Parcela je GlobalGAP
+    ' cinjenica (od koje njive je roba), a tip ambalaze odlucuje ceo dvojni upis
+    ' gajbi. Oba menjaju STA dokument tvrdi, dakle oba su konflikt.
+    If Not PwaPoljeJednako(otkupID, COL_OTK_PARCELA, parcelaID) Then Exit Function
+    If Not PwaPoljeJednako(otkupID, COL_OTK_TIP_AMB, tipAmb) Then Exit Function
 
     Dim dat As Variant
     dat = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
@@ -2178,6 +2218,17 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     h.Add "ParcelaID", parcelaID
     h.Add "ClientRecordID", clientRecordID
     h.Add "SyncSource", "PWA"
+
+    ' KAD JE RED NASTAO NA TERENU, ne kad je stigao u master.
+    '
+    ' PWA sema ovo polje TRAZI (RequireOTKHeaderValue nad GS_CREATED_AT), a
+    ' CreateOtkup_TX ga prima kao opcion header kljuc -- ali adapter ga do sada
+    ' nije prosledjivao, pa se bacao na pola puta. Bez njega je jedini vremenski
+    ' trag CreatedAt, koji nosi trenutak SINHRONIZACIJE; posle prekida veze to ume
+    ' da bude i nekoliko dana kasnije.
+    Dim srcCreated As String
+    srcCreated = Trim$(CStr(nz(data(row, GS_CREATED_AT), "")))
+    If Len(srcCreated) > 0 Then h.Add "SourceCreatedAt", srcCreated
 
     ' PWA salje JEDAN zapis = JEDNA klasa = ceo dokument (S7).
     Dim stavka As Object
