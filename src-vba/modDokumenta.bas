@@ -2206,6 +2206,16 @@ Public Function CreateOtpremnicaDraft_TX(ByVal h As Object, _
     modSchema.SchemaReadyOrFail "CreateOtpremnicaDraft_TX", _
         TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & TBL_KULTURE
 
+    ' Nothing je PRIVATAN signal jednopoteznog puta ("ocekivanje izvodim iz
+    ' izvora kasnije"), i ne sme da procuri u javni rucni API. Bez ove kapije
+    ' je CreateOtpremnicaDraft_TX(h, Nothing) pravio validan DRAFT BEZ
+    ' ocekivanja -- dakle draft koji nema sta da meri, a izgleda ispravno.
+    If ocekivano Is Nothing Then
+        Err.Raise vbObjectError + 1329, "CreateOtpremnicaDraft_TX", _
+                  "Ocekivanje nije prosledjeno. Rucni draft mora da prijavi sta " & _
+                  "otpremnica nosi; za automatski tok koristi CreateOtpremnicaIzIzvora_TX."
+    End If
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
@@ -2615,6 +2625,22 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_SORTA, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_CENA, IIf(cena > 0, cena, ""), SRC
+
+    ' Izmena zaglavlja sme da pokvari VEC VALIDNO clanstvo: draft sa stanicom ST1
+    ' i clanom sa ST1 posle prebacivanja na ST2 nosi clana koga Dodaj nikad ne bi
+    ' primio. Izdavanje bi to kasnije uhvatilo, ali invarijanta ne sme da bude
+    ' prekrsena IZMEDJU dva klika -- GetOtpremnicaProgress u medjuvremenu uredno
+    ' racuna nevalidno clanstvo.
+    '
+    ' Provera ide POSLE upisa zaglavlja, nad NOVIM vrednostima; pad ovde rollback-uje
+    ' ceo update, pa staro zaglavlje i staro ocekivanje ostaju netaknuti.
+    Dim clanovi As Collection
+    Set clanovi = OtpClanovi(otpremnicaID)
+
+    Dim k As Long
+    For k = 1 To clanovi.count
+        OtpRequireIzvorValjan otpremnicaID, CStr(clanovi(k)), SRC, False
+    Next k
 End Sub
 
 ' Header DRAFT-a. VrstaVoca/SortaVoca su SNAPSHOT kulture -- upisuju se odmah,
@@ -2836,6 +2862,39 @@ Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
                      Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
                                                 COL_OTK_KULTURA))), _
                      "KulturaID", otkupID, src
+
+    ' Izvor mora biti IZDAT dokument, ne bilo koji red koji slucajno ima stavke.
+    ' Danas svaki otkup iz CreateOtkup_TX jeste IZDATO, pa ovo nije ziv bug --
+    ' ali kanonska veza treba da kaze sta trazi, a ne da se oslanja na to sto
+    ' drugi pisac trenutno ne pravi drugacije redove.
+    Dim izdato As String
+    izdato = UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                               COL_TRACE_IZDATO_STATUS))))
+    If izdato <> UCase$(IZDATO_IZDATO) Then
+        Err.Raise vbObjectError + 1330, src, _
+                  "Otkup nije izdat nego '" & izdato & "': " & otkupID & _
+                  ". Otpremnica se sastavlja od IZDATIH otkupnih listova."
+    End If
+
+    ' Clanovi moraju biti HOMOGENI po tipu ambalaze: header nosi jedan TipAmbalaze,
+    ' pa 20 plasticnih + 30 drvenih gajbi nije 50 gajbi. Provera je OVDE, a ne tek
+    ' pri izdavanju -- inace bi GetOtpremnicaProgress do tada sabirao dve razlicite
+    ' stvari i prikazivao semanticki pogresan broj.
+    Dim clanoviTip As Collection
+    Set clanoviTip = OtpClanovi(otpremnicaID)
+
+    Dim t As Long, drugi As String
+    For t = 1 To clanoviTip.count
+        drugi = CStr(clanoviTip(t))
+        If StrComp(drugi, otkupID, vbTextCompare) <> 0 Then
+            RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                        drugi, COL_OTK_TIP_AMB))), _
+                             Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                        otkupID, COL_OTK_TIP_AMB))), _
+                             "TipAmbalaze", otkupID, src
+            Exit For
+        End If
+    Next t
 
     ' Kanonsko clanstvo je jedini izvor. Otkup.OtpremnicaID se NE gleda: to je
     ' stari model, koji skela ne dira.

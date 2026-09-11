@@ -825,6 +825,11 @@ Uz njih idu i četiri koje nosi odluka o draft-u:
 | `IzdavanjeRevalidiraIzvore` | `dodaj → storno izvora → izdaj` **pada** (TOCTOU) |
 | `BrutoSeNeSabiraParcijalno` | jedan izvor bez bruta → stavka ostaje **bez** bruta |
 | `KulturaSeSlaziSaIzvorima` | izvor druge kulture odbijen; draft je zna od otvaranja |
+| `DraftNothingOcekivanjePada` | `Nothing` je privatan signal automatskog puta — ručni ulaz ga odbija |
+| `UpdateStaniceSaPostojecimIzvoromPada` | izmena zaglavlja ne sme da pokvari već validno članstvo |
+| `UpdateKultureSaPostojecimIzvoromPada` | isto za kulturu, uz kontrolu da bezopasna izmena i dalje prolazi |
+| `DvaTipaAmbalazeNeUlazeUDraft` | homogen `TipAmbalaze` **pri dodavanju**, ne tek pri izdavanju |
+| `NeizdatOtkupNeUlazi` | veza traži `IzdatoStatus = IZDATO`, ne „red koji slučajno ima stavke" |
 | `ClanstvoMutabilnoUDraftu` | dodaj → ukloni → dodaj; uklonjen izvor je **slobodan** za drugu otpremnicu |
 | `PosleIzdavanjaClanstvoZamrznuto` | `Dodaj`/`Ukloni`/ponovno izdavanje — sva tri odbijena |
 | `StariOtkupNeUlazi` | otkup bez `tblOtkupStavke` (stari pisač) ne može u kanonsku otpremnicu |

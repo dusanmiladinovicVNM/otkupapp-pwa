@@ -73,6 +73,9 @@ Private Const TEST_PAR_ID As String = "PAR-90001"
 Private Const TEST_VRSTA As String = "Test Jabuka"
 Private Const TEST_SORTA As String = "Test Sorta"
 Private Const TEST_TIP_AMB As String = "Test Gajba"
+' Drugi tip ambalaze: clanovi otpremnice moraju biti homogeni -- header nosi
+' jedan TipAmbalaze, pa 20 plasticnih + 30 drvenih gajbi nije 50 gajbi.
+Private Const TEST_TIP_AMB_B As String = "Test Letvarica"
 Private Const TEST_VRSTA_BEZ_SORTE As String = "Test Dunja"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
@@ -224,6 +227,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_BrutoSeNeSabiraParcijalno
     Test_OTP_KulturaSeSlaziSaIzvorima
     Test_OTP_UpdateDraftaMenjaOcekivanje
+    Test_OTP_DraftNothingOcekivanjePada
+    Test_OTP_UpdateStaniceSaPostojecimIzvoromPada
+    Test_OTP_UpdateKultureSaPostojecimIzvoromPada
+    Test_OTP_DvaTipaAmbalazeNeUlazeUDraft
+    Test_OTP_NeizdatOtkupNeUlazi
     Test_OTP_ClanstvoMutabilnoUDraftu
     Test_OTP_PosleIzdavanjaClanstvoZamrznuto
     Test_OTP_IzvorNeSmeDvaPutaAktivno
@@ -8245,6 +8253,197 @@ EH:
     LogFatal "Test_OTP_OtkupOtpremnicaIDNetaknut", Err.Number, Err.description
 End Sub
 
+' Nothing je PRIVATAN signal jednopoteznog puta -- javni rucni ulaz ga ne prima.
+'
+' Bez ove kapije je CreateOtpremnicaDraft_TX(h, Nothing) pravio validan DRAFT BEZ
+' ocekivanja: dokument koji nema sta da meri, a izgleda ispravno. Prazna
+' Collection je NESTO DRUGO (i vec je odbijena) -- ovo je bas Nothing.
+Private Sub Test_OTP_DraftNothingOcekivanjePada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPNO")
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTPREMNICA)
+    preS = OtkBrojRedova(TBL_OTPREMNICA_STAVKE)
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-NO-" & scenario), _
+                                   Nothing, razlog)
+
+    AssertEquals "", rez, "OTP Nothing: upis odbijen"
+    AssertTrue InStr(1, razlog, "Ocekivanje nije prosledjeno", vbTextCompare) > 0, _
+               "OTP Nothing: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTPREMNICA)), _
+                 "OTP Nothing: header nije ostao"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTPREMNICA_STAVKE)), _
+                 "OTP Nothing: stavka nije ostala"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DraftNothingOcekivanjePada", Err.Number, Err.description
+End Sub
+
+' Izmena zaglavlja ne sme da pokvari vec validno clanstvo.
+'
+' Draft sa stanicom ST1 i clanom sa ST1, prebacen na ST2, nosio bi clana koga
+' Dodaj nikad ne bi primio -- a GetOtpremnicaProgress bi ga do izdavanja uredno
+' racunao. Invarijanta ne sme da bude prekrsena izmedju dva klika.
+Private Sub Test_OTP_UpdateStaniceSaPostojecimIzvoromPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPUS")
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-US-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#))
+    DodajOtpremnicaIzvor_TX otpID, OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-US-" & scenario)
+    h("StanicaID") = TEST_HLAD_ST_ID
+
+    AssertTrue Not UpdateOtpremnicaDraft_TX(otpID, h, OtpOcek(999#, 30#, 0#, 0#), razlog), _
+               "OTP update stanice: odbijen zbog postojeceg izvora"
+    AssertTrue InStr(1, razlog, "StanicaID", vbTextCompare) > 0, _
+               "OTP update stanice: kapija imenuje polje (bilo: " & razlog & ")"
+
+    ' Rollback mora da vrati I zaglavlje I ocekivanje.
+    AssertEquals TEST_ST_ID, OtpPolje(otpID, COL_OTP_STANICA), _
+                 "OTP update stanice: stara stanica netaknuta"
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_I, COL_OPS_KOLICINA) - 400#) < 0.001, _
+               "OTP update stanice: staro ocekivanje netaknuto"
+    AssertEquals "1", CStr(OtpBrojStavki(otpID)), "OTP update stanice: jedna stavka"
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP update stanice: clan netaknut"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_UpdateStaniceSaPostojecimIzvoromPada", Err.Number, Err.description
+End Sub
+
+Private Sub Test_OTP_UpdateKultureSaPostojecimIzvoromPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPUK")
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-UK-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#))
+    DodajOtpremnicaIzvor_TX otpID, OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-UK-" & scenario)
+    h("KulturaID") = TEST_KUL_BEZ_SORTE_ID
+
+    AssertTrue Not UpdateOtpremnicaDraft_TX(otpID, h, OtpOcek(400#, 20#, 0#, 0#), razlog), _
+               "OTP update kulture: odbijen zbog postojeceg izvora"
+    AssertTrue InStr(1, razlog, "KulturaID", vbTextCompare) > 0, _
+               "OTP update kulture: kapija imenuje polje (bilo: " & razlog & ")"
+
+    AssertEquals TEST_KULTURA_ID, OtpPolje(otpID, COL_OTP_KULTURA), _
+                 "OTP update kulture: stara kultura netaknuta"
+    AssertEquals TEST_VRSTA, OtpPolje(otpID, COL_OTP_VRSTA), _
+                 "OTP update kulture: stari snapshot vrste netaknut"
+
+    ' Kontrola: izmena koja NE dira stanicu ni kulturu i dalje prolazi -- inace bi
+    ' kapija koja sve odbija izgledala isto kao kapija koja radi.
+    Dim h2 As Object
+    Set h2 = OtpHeader(TEST_PREFIX & "-OTP-UK2-" & scenario)
+    AssertTrue UpdateOtpremnicaDraft_TX(otpID, h2, OtpOcek(1000#, 50#, 0#, 0#), razlog), _
+               "OTP update kulture: bezopasna izmena prolazi (bilo: " & razlog & ")"
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_I, COL_OPS_KOLICINA) - 1000#) < 0.001, _
+               "OTP update kulture: ocekivanje promenjeno"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_UpdateKultureSaPostojecimIzvoromPada", Err.Number, Err.description
+End Sub
+
+' Header nosi JEDAN TipAmbalaze, pa 20 plasticnih + 30 drvenih gajbi nije 50.
+'
+' Provera je pri DODAVANJU, ne tek pri izdavanju: do tada bi
+' GetOtpremnicaProgress sabirao dve razlicite stvari i prikazivao broj koji
+' semanticki ne znaci nista.
+Private Sub Test_OTP_DvaTipaAmbalazeNeUlazeUDraft()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPTA")
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-TA-" & scenario), _
+                                     OtpOcek(800#, 40#, 0#, 0#))
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, OtpNoviOtkup(scenario & "A", 400#, 0#), razlog), _
+               "OTP dva tipa: prvi izvor dodat"
+
+    AssertTrue Not DodajOtpremnicaIzvor_TX(otpID, _
+                       OtpNoviOtkupDrugogTipa(scenario & "B"), razlog), _
+               "OTP dva tipa: drugi tip ambalaze odbijen VEC pri dodavanju"
+    AssertTrue InStr(1, razlog, "TipAmbalaze", vbTextCompare) > 0, _
+               "OTP dva tipa: kapija imenuje polje (bilo: " & razlog & ")"
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP dva tipa: clanstvo netaknuto"
+
+    ' Read-model nije stigao da sabere dve razlicite gajbe.
+    Dim p As Object
+    Set p = GetOtpremnicaProgress(otpID)
+    AssertTrue Abs(p(UCase$(KLASA_I))("povezanoAmb") - 20#) < 0.001, _
+               "OTP dva tipa: povezana ambalaza je samo prvog tipa"
+
+    ' Kontrola: isti tip prolazi.
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, OtpNoviOtkup(scenario & "C", 400#, 0#), razlog), _
+               "OTP dva tipa: isti tip prolazi (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DvaTipaAmbalazeNeUlazeUDraft", Err.Number, Err.description
+End Sub
+
+' Otpremnica se sastavlja od IZDATIH otkupnih listova.
+'
+' Danas svaki otkup iz CreateOtkup_TX jeste IZDATO, pa ovo nije ziv bug -- ali
+' kanonska veza treba da kaze sta trazi, a ne da se oslanja na to sto drugi pisac
+' trenutno ne pravi drugacije redove.
+Private Sub Test_OTP_NeizdatOtkupNeUlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPNI")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 0#)
+
+    AssertEquals IZDATO_IZDATO, _
+                 Trim$(CStr(nz(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, _
+                                             COL_TRACE_IZDATO_STATUS), ""))), _
+                 "OTP neizdat: CreateOtkup_TX pise IZDATO (inace test ne meri nista)"
+
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkID)(1), _
+                      COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT, "Test_OTP_NeizdatOtkupNeUlazi"
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-NI-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#))
+
+    AssertTrue Not DodajOtpremnicaIzvor_TX(otpID, otkID, razlog), _
+               "OTP neizdat: neizdat otkup odbijen"
+    AssertTrue InStr(1, razlog, "nije izdat", vbTextCompare) > 0, _
+               "OTP neizdat: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals "0", CStr(OtpBrojClanova(otpID)), "OTP neizdat: clanstvo prazno"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_NeizdatOtkupNeUlazi", Err.Number, Err.description
+End Sub
+
 ' --- OTP pomocne -------------------------------------------------------------
 Private Function OtpHeader(ByVal brojOtp As String) As Object
     Dim h As Object
@@ -8290,6 +8489,13 @@ Private Function OtpNoviOtkupSaBrutom(ByVal scenario As String, ByVal kol As Dou
     Set c = New Collection
     c.Add OtkStavka(KLASA_I, kol, 50#, 20#, bruto)
     OtpNoviOtkupSaBrutom = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-" & scenario), c)
+End Function
+
+Private Function OtpNoviOtkupDrugogTipa(ByVal scenario As String) As String
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB_B
+    OtpNoviOtkupDrugogTipa = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
 End Function
 
 Private Function OtpNoviOtkupNaStanici(ByVal scenario As String, _

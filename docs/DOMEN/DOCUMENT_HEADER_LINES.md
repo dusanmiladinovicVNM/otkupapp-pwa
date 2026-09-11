@@ -549,6 +549,24 @@ Jednopotezni ulaz sme da izvede očekivanje iz samih izvora **jer tu nezavisnog
 operaterskog očekivanja nema** — auto-lanac i PWA ne prijavljuju šta nose, oni to
 znaju. Ručni tok bez očekivanja bi ostao bez svoje jedine kontrole.
 
+Zato „očekivanje izvodim kasnije" ostaje **privatan** signal: `CreateOtpremnicaDraft_TX`
+odbija `Nothing` tvrdo. Da ga prosleđuje u core, ručni ulaz bi umeo da napravi
+`DRAFT` bez ijedne stavke očekivanja — dokument koji nema šta da meri, a izgleda
+ispravno. Prazna `Collection` je **nešto drugo** i takođe je odbijena, ali sa
+svojim razlogom.
+
+#### Izmena zaglavlja revalidira već upisano članstvo
+
+`UpdateOtpremnicaDraft_TX` sme da menja `StanicaID` i `KulturaID` — a upravo po
+njima se sudi da li izvor sme da uđe. Draft sa stanicom `ST1` i članom sa `ST1`,
+prebačen na `ST2`, nosio bi člana koga `Dodaj` **nikad ne bi primio**.
+
+Izdavanje bi to kasnije uhvatilo, ali invarijanta ne sme da bude prekršena
+**između dva klika**: `GetOtpremnicaProgress` u međuvremenu uredno računa
+nevalidno članstvo. Zato izmena, posle upisa novog zaglavlja, revalidira **svakog**
+postojećeg člana prema novim vrednostima; pad rollback-uje ceo update, pa staro
+zaglavlje i staro očekivanje ostaju netaknuti.
+
 #### Izdavanje revalidira, ne veruje `Dodaj`-u
 
 Između `Dodaj` i `Izdaj` prolazi vreme — u panelu i po nekoliko sati. Otkup se u
@@ -580,10 +598,17 @@ Tvrde kapije za ulazak otkupa u otpremnicu:
 | Pravilo | Zašto |
 |---|---|
 | otkup postoji i **nije storniran** | storniran dokument nije roba |
+| otkup je **`IzdatoStatus = IZDATO`** | veza traži *izdat dokument*, ne bilo koji red koji slučajno ima stavke |
 | otkup **nije već u drugoj aktivnoj otpremnici** | isto pravilo kao `AktivnoClanstvoPoKanonu` za zbirnu (A15) |
 | svi izvori sa **iste stanice** | grain je *jedna isporuka **sa otkupnog mesta*** — header nosi jedan `StanicaID`, pa dve stanice ne mogu ni da se predstave |
-| svi izvori iste `(VrstaVoca, SortaVoca)` | header nosi jedan par; izvođenje na neslaganju **diže grešku**, ne bira prvi |
-| bar jedan izvor | otpremnica bez ijednog otkupa nije isporuka |
+| svi izvori iste **`KulturaID`** | header nosi jednu kulturu; vrsta/sorta se poklapaju posledično |
+| svi izvori istog **`TipAmbalaze`** | header nosi jedan tip, pa *20 plastičnih + 30 drvenih gajbi* nije 50 gajbi |
+| bar jedan izvor **pri izdavanju** | otpremnica bez ijednog otkupa nije isporuka; prazan `DRAFT` je legitiman |
+
+**Sve se proveravaju pri `Dodaj`, ne tek pri izdavanju.** Razlog nije urednost
+nego read-model: `GetOtpremnicaProgress` do izdavanja uredno računa ono što u
+članstvu stoji, pa bi nehomogen draft prikazivao broj koji semantički ne znači
+ništa — zbir dve različite gajbe.
 
 `VozacID` je **na headeru i prima se** — vozač je odluka otpreme, ne svojstvo
 otkupa (§4.1c). Zato izvori o vozaču ne govore ništa i nema šta da se poklapa.
