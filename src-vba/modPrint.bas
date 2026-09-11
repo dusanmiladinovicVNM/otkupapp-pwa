@@ -558,7 +558,10 @@ Public Sub RequireOtkupAktivanZaStampu(ByVal otkupID As String, _
 End Sub
 
 ' Popuni OtkupSablon sa dva primerka. Vraca sheet (ili Nothing).
-Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
+' Public zbog testa: invarijanta "bruto se ne rekonstruise" (S4.1d) se inace ne
+' moze izmeriti -- jedini put dovde je OutputOtkupniList, koji stampa ili pravi
+' PDF. Funkcija samo POPUNJAVA list i vraca ga; stampanje je posao pozivaoca.
+Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     On Error GoTo EH
     Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
 
@@ -638,8 +641,6 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     If Len(koopID) = 0 And Len(brDok) = 0 Then Exit Function
 
     ' --- stavke: po jedan red po klasi, kanonskim redosledom ------------------
-    Dim crateW As Double
-    crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
 
     Dim rb As Long
     For rb = 1 To UBound(ds, 1)
@@ -651,22 +652,25 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
                     Dim ambStavke As Double: ambStavke = PrNz(ds(r, sAmb))
 
-                    ' Bruto: zamrznut iz unosa ako postoji, inace izveden iz TRENUTNE
-                    ' tare gajbice. Zamrznut ostaje tacan i kad se tara kasnije promeni.
+                    ' BRUTO SE NE REKONSTRUISE. Zamrznut je ili ga nema.
+                    '
+                    ' Zatecena stampa je za neto unos racunala bruto iz TRENUTNE tare
+                    ' gajbice. To krsi S4.1d: promena tezine gajbice u sifarniku bi
+                    ' godinu dana kasnije dala DRUGI "istorijski" bruto na istom
+                    ' dokumentu. Kad unos nije bio bruto, ta cinjenica ne postoji --
+                    ' i prazno polje to kaze tacnije od izracunatog broja.
                     Dim storedBruto As Double: storedBruto = PrNz(ds(r, sBruto))
-                    Dim kolBruto As Double
-                    If storedBruto > 0 Then
-                        kolBruto = storedBruto
-                    Else
-                        kolBruto = kol + ambStavke * crateW
-                    End If
 
                     stavke(cnt, 0) = vrstaSorta
                     stavke(cnt, 1) = CStr(ds(r, sKlasa))
                     stavke(cnt, 2) = cenNeto        ' Cena bez PDV
                     stavke(cnt, 3) = cenBruto       ' Cena s PDV
                     stavke(cnt, 4) = kol            ' Kolicina neto
-                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto
+                    If storedBruto > 0 Then
+                        stavke(cnt, 5) = storedBruto    ' zamrznut bruto
+                    Else
+                        stavke(cnt, 5) = ""             ' neto unos: bruto ne postoji
+                    End If
                     stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
                     osnovica = osnovica + kol * cenNeto
                     kolAmb = kolAmb + ambStavke

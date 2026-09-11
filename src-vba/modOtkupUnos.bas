@@ -331,6 +331,21 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     On Error GoTo EH
     poruke = ""
 
+    ' ISPRAVKA HLADNJACKOG LANCA JE FAIL-CLOSED DOK LANAC STOJI.
+    '
+    ' Pending relink znaci: operater je stornirao stari hladnjacki dokument i
+    ' izabrao "Uneti ispravku". Ispravka nije samo nov otkup -- ona trazi i nov
+    ' nizvodni lanac, da bi se palete stare prijemnice imale gde prevezati.
+    '
+    ' Lanac je pauziran do PR7, pa se taj drugi deo ne moze izvrsiti. Zato se
+    ' STAJE PRE PISCA: bez ovoga bi nastao nov otkup, pending bi bio POTROSEN, a
+    ' operater bi dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
+    If Len(GetHladnjacaRelinkPending()) > 0 Then
+        poruke = poruke & Poruka("OTKUNOS_MSG_ISPRAVKA_PAUZIRANA") & " " & _
+                 GetHladnjacaRelinkPending() & vbCrLf
+        Exit Function
+    End If
+
     ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
     '
     '   vozacID     vozac pripada otpremnici, ne otkupu (S4.1c)
@@ -384,20 +399,6 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     Err.Clear
     On Error GoTo EH
 
-    ' --- AUTO-LANAC HLADNJACE ---
-    ' Pending relink je postavljen kad je operater posle storna izabrao
-    ' "Uneti ispravku" i forma je prefill-ovana. Ovo je taj unos: sveza
-    ' paletizacija se preskace, a palete stare prijemnice se prevezuju nize.
-    hlPending = GetHladnjacaRelinkPending()
-    doHlRelink = (Len(hlPending) > 0 And IsHladnjacaStanica(S(p, "stanicaID")))
-    If Len(hlPending) > 0 And Not doHlRelink Then
-        ' Operater je promenio stanicu - ispravka otpada; pending se trosi da ne
-        ' okine pogresno na nekom kasnijem unosu.
-        SetHladnjacaRelinkPending ""
-        poruke = poruke & Poruka("OTKUNOS_MSG_NIJE_HLADNJACA") & " " & hlPending & vbCrLf
-    End If
-    If doHlRelink Then SetPaletizeSkip True
-
     ' AUTO-LANAC JE PAUZIRAN (Otkup cutover, korak 2).
     '
     ' Lanac deli dokument PO KLASI: iz "ID1 + ID2" vadi idI i idII i svaku klasu
@@ -412,6 +413,9 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     End If
     SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
 
+    ' Relink aparat je NEDOSTIZAN dok je lanac pauziran: pending se hvata iznad,
+    ' pre pisca, pa dovde nikad ne stigne sa vrednoscu. Ostaje netaknut da ga PR7
+    ' vrati u pogon zajedno sa lancem.
     If doHlRelink Then
         SetHladnjacaRelinkPending ""         ' potrosi (idempotentno)
         If Len(hlNewPrij) = 0 Then

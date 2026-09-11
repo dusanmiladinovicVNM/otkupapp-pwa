@@ -123,7 +123,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblStanice`: `modGoldenTests`, `modTestBanka`
-- `tblTipAmbalaze`: `modTestPalete`
+- `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTestPalete`
 
 ## Sta ovo NE pokriva
 

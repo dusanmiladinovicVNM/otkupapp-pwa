@@ -204,6 +204,7 @@ Private Function CreateOtkup(ByVal h As Object, _
     ' da preda robu na drugoj stanici (S4.1f).
     RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, "KooperantID", SRC
     RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
+    RequireBrojJedinstven stanicaID, datum, brDok, SRC
     RequireKulturaSeSlaze kulturaID, vrstaVoca, sortaVoca, SRC
     RequireParcelaKooperanta parcelaID, kooperantID, SRC
 
@@ -388,6 +389,53 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
+' Broj otkupnog lista je jedinstven po STANICI I DANU.
+'
+' Opseg nije izabran nego procitan iz generatora: GenerateBrojDokumenta racuna
+' sledeci broj kao MaxSeqFromTable(tblOtkup, BrojDokumenta, Datum, StanicaID)
+' (modBrojevi:137) -- dakle StanicaID + Datum + broj. Zatecena UI provera
+' (modOtkupUnos:229) gleda samo broj i datum, pa je UZA od generatora: dve
+' stanice istog dana ne mogu da izdaju isti broj, iako generator to dozvoljava.
+'
+' Provera je OVDE, a ne samo na ekranu: PWA ne prolazi kroz OtkupValidiraj, pa
+' invarijanta koja zivi u UI-ju nije invarijanta nego navika.
+'
+' Broj i dalje NIJE identitet (A2) -- ovo je jedinstvenost labele, ne veza.
+Private Sub RequireBrojJedinstven(ByVal stanicaID As String, ByVal datum As Date, _
+                                  ByVal brDok As String, ByVal src As String)
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+
+    ' Storniran dokument oslobadja svoj broj -- inace ispravka ne bi mogla da
+    ' zadrzi isti broj, a A9 kaze da lancana ispravka dobija NOV broj samo kad
+    ' nastaje nova verzija.
+    d = ExcludeStornirano(d, TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+
+    Dim cBr As Long, cDat As Long, cSt As Long, cID As Long
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, src)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, src)
+    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, src)
+    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, src)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cBr))), brDok, vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(d(i, cSt))), stanicaID, vbTextCompare) = 0 Then
+                If IsDate(d(i, cDat)) Then
+                    If Int(CDbl(CDate(d(i, cDat)))) = Int(CDbl(datum)) Then
+                        Err.Raise vbObjectError + 1898, src, _
+                                  "Broj otkupnog lista " & brDok & " vec postoji na " & _
+                                  "stanici " & stanicaID & " tog dana: " & _
+                                  Trim$(NzToText(d(i, cID))) & "."
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Sub
+
 ' Vrednost dokumenta = SUM(stavke.Kolicina x stavke.Cena).
 '
 ' PRVI od citalaca koji se sele na stavke, i obrazac za ostale: cita se SAMO
@@ -409,14 +457,26 @@ Public Function VrednostOtkupa(ByVal otkupID As String) As Double
     cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
     cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
 
-    Dim i As Long
+    Dim i As Long, nasao As Long
     For i = 1 To UBound(d, 1)
         If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+            nasao = nasao + 1
             If IsNumeric(d(i, cKol)) And IsNumeric(d(i, cCena)) Then
                 VrednostOtkupa = VrednostOtkupa + CDbl(d(i, cKol)) * CDbl(d(i, cCena))
             End If
         End If
     Next i
+
+    ' FAIL-CLOSED: dokument BEZ stavki nije dokument vrednosti nula.
+    '
+    ' Nula je legitiman odgovor samo kad stavke postoje a zbir im je nula.
+    ' Bez ove razlike ApplyAvansToOtkup cita 0 kao "nema sta da se plati" i TIHO
+    ' preskoci primenu avansa -- tacno kvar koji je golden vec jednom prijavio.
+    If nasao = 0 Then
+        Err.Raise vbObjectError + 1899, SRC, _
+                  "Otkup nema nijednu stavku: " & otkupID & _
+                  ". Vrednost dokumenta se racuna iz tblOtkupStavke."
+    End If
 End Function
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.

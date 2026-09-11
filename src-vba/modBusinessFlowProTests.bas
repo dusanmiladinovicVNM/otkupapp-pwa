@@ -217,6 +217,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_EkranPiseNovimModelom
     Test_OTK_EkranNerazresivaKulturaPada
     Test_OTK_EkranPauziraAutoLanac
+    Test_OTK_PrintNetoUnosNeRekonstruiseBruto
+    Test_OTK_IspravkaPauziranaNeTrosiPending
+    Test_OTK_BrojJedinstvenPoStaniciIDanu
+    Test_OTK_VrednostBezStavkiPada
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8847,6 +8851,246 @@ Private Sub Test_OTK_EkranPauziraAutoLanac()
 EH:
     LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
 End Sub
+
+' Dokument BEZ stavki nije dokument vrednosti nula.
+'
+' Nula je legitiman odgovor samo kad stavke postoje a zbir im je nula. Bez te
+' razlike ApplyAvansToOtkup cita 0 kao "nema sta da se plati" i TIHO preskoci
+' primenu avansa -- kvar koji je golden vec jednom prijavio (B2/B3).
+Private Sub Test_OTK_VrednostBezStavkiPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKVS")
+
+    ' Stari pisac pravi red BEZ stavki -- tacno oblik koji kapija mora da uhvati.
+    Dim stariID As String
+    stariID = SaveOtkup_TX(NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
+                           TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
+                           TEST_PREFIX & "-OTK-VS-" & scenario, 0#, "", KLASA_I)
+
+    AssertTrue Len(stariID) > 0, "OTK vrednost: stari red napravljen"
+    AssertEquals "0", CStr(OtkBrojStavkiZaOtkup(stariID)), _
+                 "OTK vrednost: taj red zaista nema stavke"
+
+    Dim greska As String
+    Dim v As Double
+    On Error Resume Next
+    Err.Clear
+    v = modOtkup.VrednostOtkupa(stariID)
+    greska = Err.description
+    If Err.Number = 0 Then greska = ""
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue InStr(1, greska, "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTK vrednost: kapija pada po imenu (bilo: " & greska & ")"
+
+    ' Kontrola: dokument SA stavkama daje broj, ne gresku.
+    Dim noviID As String
+    noviID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-VS2-" & scenario), _
+                            OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Abs(modOtkup.VrednostOtkupa(noviID) - 20000#) < 0.001, _
+               "OTK vrednost: 400 x 50 = 20000"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_VrednostBezStavkiPada", Err.Number, Err.description
+End Sub
+
+' STAMPA NE REKONSTRUISE ISTORIJSKI BRUTO.
+'
+' Zatecena stampa je za neto unos racunala bruto iz TRENUTNE tare gajbice. Test
+' menja taru POSLE nastanka dokumenta -- to je dokaz koji obican assert ne daje:
+' da isti istorijski dokument ne menja smisao kad se sifarnik promeni (S4.1d).
+Private Sub Test_OTK_PrintNetoUnosNeRekonstruiseBruto()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPB")
+
+    SeedTaraGajbice TEST_TIP_AMB, 2#
+
+    ' NETO unos: 400 kg, 20 gajbi. Rekonstrukcija bi dala 400 + 20*2 = 440.
+    Dim netoID As String
+    netoID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-PB-" & scenario), _
+                            OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(netoID) > 0, "OTK print bruto: neto otkup upisan"
+    AssertEquals "", OtkStavkaPolje(netoID, KLASA_I, COL_OKS_BRUTO), _
+                 "OTK print bruto: neto unos nema zamrznut bruto"
+
+    ' BRUTO unos: 480 neto / 500 bruto.
+    Dim brutoStavke As Collection
+    Set brutoStavke = New Collection
+    brutoStavke.Add OtkStavka(KLASA_I, 480#, 50#, 20#, 500#)
+
+    Dim brutoID As String
+    brutoID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-PB2-" & scenario), brutoStavke)
+    AssertTrue Len(brutoID) > 0, "OTK print bruto: bruto otkup upisan"
+
+    AssertTrue Not PrintListSadrzi(netoID, 440#), _
+               "OTK print bruto: neto dokument NE stampa rekonstruisanih 440"
+    AssertTrue PrintListSadrzi(brutoID, 500#), _
+               "OTK print bruto: bruto dokument stampa zamrznutih 500"
+
+    ' Tara se menja POSLE nastanka. Istorijski dokument ne sme da se pomeri.
+    SeedTaraGajbice TEST_TIP_AMB, 3#
+
+    AssertTrue Not PrintListSadrzi(netoID, 460#), _
+               "OTK print bruto: promena tare ne pravi nov 'istorijski' bruto"
+    AssertTrue Not PrintListSadrzi(netoID, 440#), _
+               "OTK print bruto: ni stari rekonstruisani se ne vraca"
+    AssertTrue PrintListSadrzi(brutoID, 500#), _
+               "OTK print bruto: zamrznut bruto je nepromenjen posle izmene tare"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_PrintNetoUnosNeRekonstruiseBruto", Err.Number, Err.description
+End Sub
+
+' Ispravka hladnjackog dokumenta je FAIL-CLOSED dok je lanac pauziran.
+'
+' Bez ove kapije bi nastao nov otkup, pending bi bio POTROSEN, a operater bi
+' dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
+Private Sub Test_OTK_IspravkaPauziranaNeTrosiPending()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKIP")
+
+    Dim stariPending As String
+    stariPending = GetHladnjacaRelinkPending()
+    SetHladnjacaRelinkPending TEST_PREFIX & "-PRJ-STARA-" & scenario
+
+    Dim p As Object
+    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-IP-" & scenario)
+    p("stanicaID") = TEST_HLAD_ST_ID
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = 20&
+
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim poruke As String
+    Dim res As String
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+
+    Dim pendingPosle As String
+    pendingPosle = GetHladnjacaRelinkPending()
+    SetHladnjacaRelinkPending stariPending          ' vrati stanje pre tvrdnji
+
+    AssertEquals "", res, "OTK ispravka: otkup NIJE nastao"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "OTK ispravka: nijedan red nije upisan"
+    AssertEquals TEST_PREFIX & "-PRJ-STARA-" & scenario, pendingPosle, _
+                 "OTK ispravka: pending NIJE potrosen"
+    AssertTrue InStr(1, poruke, "nedostupna", vbTextCompare) > 0, _
+               "OTK ispravka: operater je obavesten (bilo: " & poruke & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaPauziranaNeTrosiPending", Err.Number, Err.description
+End Sub
+
+' Broj otkupnog lista je jedinstven po STANICI I DANU -- i to cuva PISAC.
+'
+' Zatecena provera je bila samo u UI-ju (modOtkupUnos:229) i nije gledala
+' stanicu. Invarijanta koja zivi u UI-ju nije invarijanta nego navika: PWA ne
+' prolazi kroz OtkupValidiraj.
+Private Sub Test_OTK_BrojJedinstvenPoStaniciIDanu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKBJ")
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-OTK-BJ-" & scenario
+
+    Dim h1 As Object
+    Set h1 = OtkHeader(broj)
+    Dim datum As Date
+    datum = h1("Datum")
+
+    AssertTrue Len(CreateOtkup_TX(h1, OtkStavke(400#, 50#, 20, 0#, 0#, 0))) > 0, _
+               "OTK broj: prvi dokument prosao"
+
+    ' Isti broj, ista stanica, isti dan -> odbijeno.
+    Dim h2 As Object
+    Set h2 = OtkHeader(broj)
+    h2("Datum") = datum
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    AssertEquals "", rez, "OTK broj: duplikat na istoj stanici istog dana odbijen"
+    AssertTrue InStr(1, razlog, "vec postoji", vbTextCompare) > 0, _
+               "OTK broj: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' Isti broj, DRUGA stanica, isti dan -> prolazi. Generator skopira po stanici,
+    ' pa dve stanice legitimno mogu imati isti redni broj istog dana.
+    Dim h3 As Object
+    Set h3 = OtkHeader(broj)
+    h3("Datum") = datum
+    h3("StanicaID") = TEST_HLAD_ST_ID
+
+    AssertTrue Len(CreateOtkup_TX(h3, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)) > 0, _
+               "OTK broj: druga stanica istog dana prolazi (bilo: " & razlog & ")"
+
+    ' Isti broj, ista stanica, DRUGI dan -> prolazi.
+    Dim h4 As Object
+    Set h4 = OtkHeader(broj)
+    h4("Datum") = DateAdd("d", 1, datum)
+
+    AssertTrue Len(CreateOtkup_TX(h4, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)) > 0, _
+               "OTK broj: drugi dan na istoj stanici prolazi (bilo: " & razlog & ")"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_BrojJedinstvenPoStaniciIDanu", Err.Number, Err.description
+End Sub
+
+' Tara gajbice u sifarniku -- upisuje se ili azurira.
+Private Sub SeedTaraGajbice(ByVal tip As String, ByVal tezina As Double)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tip)
+    If redovi.count > 0 Then
+        RequireUpdateCell TBL_TIP_AMBALAZE, redovi(1), COL_TAMB_TEZINA, tezina, _
+                          "SeedTaraGajbice"
+        Exit Sub
+    End If
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_TIP_AMBALAZE)
+    SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TIP, tip
+    SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TEZINA, tezina
+    SetOptionalField rowData, TBL_TIP_AMBALAZE, "Aktivan", "Aktivan"
+    RequireAppend TBL_TIP_AMBALAZE, rowData, "SeedTaraGajbice"
+End Sub
+
+' Da li popunjen otkupni list igde sadrzi bas taj broj.
+'
+' Ne trazi se odredjena celija nego PRISUSTVO vrednosti -- tvrdnja je o tome sta
+' dokument kaze, ne o geometriji sablona, pa test ne puca kad se sablon preuredi.
+Private Function PrintListSadrzi(ByVal otkupID As String, ByVal broj As Double) As Boolean
+    Dim ws As Worksheet
+    Set ws = modPrint.FillOtkupSablon(otkupID)
+    If ws Is Nothing Then Exit Function
+
+    Dim c As Range
+    For Each c In ws.UsedRange
+        If IsNumeric(c.value) And Not IsEmpty(c.value) Then
+            If Abs(CDbl(c.value) - broj) < 0.001 Then
+                PrintListSadrzi = True
+                Exit Function
+            End If
+        End If
+    Next c
+End Function
 
 ' Parametri kakve ekran salje OtkupUpisi -- isti kljucevi kao NoviOtkupUnos.
 Private Function OtkEkranParam(ByVal brDok As String) As Object
