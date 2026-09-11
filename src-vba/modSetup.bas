@@ -1282,8 +1282,18 @@ Public Sub EnsureSledljivostSchema()
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
-        EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD
-        EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA
+        ' tblOtkup je presao na vezu PO ID-u (A9, korak 5). Broj-oblik se tu vise
+        ' NE dodaje -- inace bi self-heal vratio kolonu koju je kanon preimenovao,
+        ' pa bi tabela nosila oba oblika i nijedan ne bi bio merodavan.
+        If t = TBL_OTKUP Then
+            PreimenujKolonuAko t, COL_TRACE_ISPRAVKA_OD, COL_TRACE_ISPRAVKA_OD_ID
+            PreimenujKolonuAko t, COL_TRACE_ZAMENJEN_SA, COL_TRACE_ZAMENJEN_SA_ID
+            EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD_ID
+            EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA_ID
+        Else
+            EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD
+            EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA
+        End If
         EnsureKolonaSaTragom t, COL_TRACE_CORRECTION_ID
         EnsureKolonaSaTragom t, COL_TRACE_IZDATO_STATUS
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
@@ -1307,6 +1317,43 @@ Public Sub EnsureSledljivostSchema()
 End Sub
 
 ' Jedna kolona, sa tragom. Pad se zapise i NE zaustavlja ostale kolone.
+' PREIMENOVANJE KOLONE NA MESTU -- ne dodavanje nove.
+'
+' Kanon je na tblOtkup preimenovao IspravkaOd -> IspravkaOdID (A9, korak 5).
+' EnsureColumnOnTable ume samo da DODA kolonu, i to na kraj -- zatecena sveska
+' bi tada nosila oba oblika, a modSchema bi je i dalje odbijao jer se pozicija
+' 32 ne slaze sa kanonom (upis je POZICION).
+'
+' Preimenovanje cuva i podatke i poziciju. Radi se SAMO kad staro ime postoji a
+' novo ne -- inace bi drugi start pregazio vec migriranu kolonu.
+'
+' Sadrzaj se NE prevodi: stara kolona je nosila poslovni BROJ, nova nosi ID, ali
+' na tblOtkup je nikad niko nije ni pisao (StampIspravkaTrace se zove samo za
+' Otpremnicu, Zbirnu i Prijemnicu), pa je svaka zatecena vrednost prazna.
+Private Sub PreimenujKolonuAko(ByVal tbl As String, ByVal staroIme As String, _
+                               ByVal novoIme As String)
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = modDataAccess.GetTable(tbl)
+    If lo Is Nothing Then Exit Sub
+
+    If GetColumnIndex(tbl, novoIme) > 0 Then Exit Sub      ' vec migrirano
+
+    Dim i As Long
+    i = GetColumnIndex(tbl, staroIme)
+    If i <= 0 Then Exit Sub                                ' nema sta da se menja
+
+    lo.ListColumns(i).name = novoIme
+    LogInfo "modSetup.PreimenujKolonuAko", _
+            tbl & ": " & staroIme & " -> " & novoIme & " (pozicija " & CStr(i) & ")"
+    Exit Sub
+EH:
+    LogError "modSetup.PreimenujKolonuAko", _
+             tbl & ": " & staroIme & " -> " & novoIme & " nije uspelo: " & _
+             Err.description, Err.Number
+End Sub
+
 Private Sub EnsureKolonaSaTragom(ByVal tbl As String, ByVal col As String)
     On Error GoTo EH
     EnsureColumnOnTable tbl, col

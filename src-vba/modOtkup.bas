@@ -143,6 +143,231 @@ End Function
 
 ' Core -- NE zovi spolja. Jedini ulaz je CreateOtkup_TX, koji drzi snapshot
 ' transakciju; direktan poziv bi kod greske ostavio header bez stavki.
+' ISPRAVKA OTKUPA -- NOV DOKUMENT, NOV BROJ, VEZA PO ID-u (A9).
+'
+' Ispravka NIKAD ne menja snimljen otkup (A13, S4.1e). Zatecen dokument se
+' stornira, nastaje nov, a veza izmedju njih zivi u tabeli:
+'
+'     OTK-101 / broj 17   Stornirano=Da,  ZamenjenSaID = OTK-202
+'           v
+'     OTK-202 / broj 18   IspravkaOdID = OTK-101
+'     oba nose isti CorrectionID
+'
+' ZASTO NOV BROJ, a ne isti: broj je labela koju operater vidi NA PAPIRU (A2).
+' Dva papira sa istim brojem i razlicitim sadrzajem nisu razlucivi izvan sistema,
+' pa je ista-broj varijanta zakljucana kao greska, ne kao opcija.
+'
+' ZASTO PO ID-u, a ne po broju: modStornoFlow.StampIspravkaTrace to i danas radi
+' po broju za ostale tri tabele -- i zato ne moze da razlikuje dve verzije istog
+' dokumenta. Otkup je prvi koji prelazi; ostali idu u PR7/PR8.
+'
+' NOVAC SE NE PRENOSI SAM -- MERENO, i to je NALAZ, ne osobina ovog pisca.
+'
+' StornoOtkup radi ResetNovacOtkupLink: knjizene isplate se OSLOBADJAJU (OtkupID
+' se prazni), ne stornirju. Ocekivano je bilo da ih nov dokument pokupi kroz
+' ApplyAvansToOtkup -- ne pokupi ih:
+'
+'   modNovac:1624   avans-petlja uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP
+'   modNovac:1982   GetKooperantUnallocatedAvans isto
+'   modNovac:2031   BuildKooperantUnallocatedAvansDict isto
+'
+' Odvezana isplata tipa VirmanFirmaKoop zato ostaje NEVIDLJIVA i za dug (nema
+' OtkupID) i za avans (pogresan tip). Vidi se jos samo u kartici kooperanta
+' (modIzvestaj:2507), gde ulazi u saldo -- pa novac nije izgubljen, ali jeste
+' ispao iz svake masinerije koja odlucuje sta se placa.
+'
+' Ovo NIJE uvedeno ovde: isto radi obican StornoOtkup_TX i radio je oduvek.
+' Ispravka ga samo cini lakse dostizivim. Test ga tvrdi kao ZATECENO stanje, da
+' se ne bi tumacilo kao osobina; odluka o prenosu je poslovna i ceka operatera.
+'
+' JEDNA TRANSAKCIJA obuhvata sve: nov dokument, storno starog, obe veze i
+' correction context. Delimicna ispravka -- nov dokument bez storna starog, ili
+' storno bez naslednika -- gora je od nijedne.
+'
+' NEMA PRODUKCIONOG POZIVAOCA U OVOM PR-u, i to je merena odluka. Da bi ekran
+' zvao ovaj put, stari OtkupID mora da otputuje od prefill-a do pisca; danas
+' prefill ide kroz spec string ciji se kljucevi mapiraju NA KONTROLE
+' (modOtkupUI.ApplyPrefill), pa ID nema gde. Resenje bi bilo modul-stanje u
+' ljusci -- isti oblik in-memory veze koji ovaj korak treba da ukine. Wiring zato
+' ide sa PR7, kad se PrefillIzStorniranog ionako prepisuje sa po-klasnih redova.
+Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
+                                  ByVal h As Object, _
+                                  ByVal stavke As Collection, _
+                                  Optional ByRef outGreska As String) As String
+    Const SRC As String = "IspravkaOtkupa_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail SRC, _
+        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
+
+    stariOtkupID = Trim$(stariOtkupID)
+    If Len(stariOtkupID) = 0 Then
+        Err.Raise vbObjectError + 1910, SRC, "Prazan OtkupID dokumenta koji se ispravlja."
+    End If
+
+    ' Izvor mora postojati TACNO JEDNOM i biti AKTIVAN. Ispravka storniranog
+    ' dokumenta nije ispravka nego nov unos -- za to postoji CreateOtkup_TX.
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, stariOtkupID, "Otkup", SRC
+
+    ' REDOSLED KAPIJA JE MEREN, ne stilski. Vec ispravljen dokument je UVEK i
+    ' storniran, pa bi storno-kapija prva uhvatila oba slucaja i operateru rekla
+    ' manje korisnu istinu ("storniran") umesto korisnije ("zamenjen sa OTK-x --
+    ' ispravi POSLEDNJU verziju"). Specificnija kapija zato ide prva.
+    Dim vecZamenjen As String
+    vecZamenjen = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, _
+                                             COL_TRACE_ZAMENJEN_SA_ID)))
+    If Len(vecZamenjen) > 0 Then
+        Err.Raise vbObjectError + 1912, SRC, _
+                  "Dokument je vec zamenjen dokumentom " & vecZamenjen & _
+                  ". Ispravlja se POSLEDNJA verzija, ne istorijska."
+    End If
+
+    If UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, _
+                                         COL_STORNIRANO)))) = "DA" Then
+        Err.Raise vbObjectError + 1911, SRC, _
+                  "Dokument je vec storniran, nema sta da se ispravi: " & stariOtkupID
+    End If
+
+    ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
+    ' jedinstvenost broja -- ista greska sa dva razlicita uzroka zbunjuje operatera.
+    Dim stariBroj As String, noviBroj As String
+    stariBroj = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, COL_OTK_BR_DOK)))
+    noviBroj = Trim$(OtkHdrOpcion(h, "BrojDokumenta"))
+
+    If StrComp(noviBroj, stariBroj, vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1913, SRC, _
+                  "Ispravka mora dobiti NOV broj dokumenta (A9). Stari: " & stariBroj & "."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' Redosled je bitan: STORNO PRVI. Nov dokument ide kroz istu kapiju
+    ' jedinstvenosti broja kao svaki drugi, a stari jos drzi svoj -- ali kapija
+    ' gleda (Stanica, Datum, Broj) i broj je nov, pa sudara nema. Storno prvi ide
+    ' zbog novca: ResetNovacOtkupLink oslobodi avans PRE nego sto ga
+    ' ApplyAvansToOtkup u novom dokumentu potrazi.
+    If Not modStorno.StornoOtkup(stariOtkupID) Then
+        Err.Raise vbObjectError + 1914, SRC, _
+                  "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
+    End If
+
+    Dim noviID As String
+    noviID = CreateOtkup(h, stavke)
+
+    If Len(noviID) = 0 Then
+        Err.Raise vbObjectError + 1915, SRC, "CreateOtkup nije vratio OtkupID."
+    End If
+
+    ' Correction context: CorrectionID mora biti PRAV ID iz tblStornoVeze, ne broj
+    ' koji ovaj modul izmisli. Kolona je deklarisana kao veza na tu tabelu
+    ' (modConfig:1031); izmisljen ID bi bio visece pokazivanje.
+    Dim cid As String
+    cid = modStornoContext.CreateCorrectionContext( _
+        SV_MODE_ISPRAVKA, DOK_TIP_OTKUP, stariOtkupID, stariBroj, _
+        DOK_TIP_OTKUP, noviID, noviBroj, , , , _
+        "Ispravka otkupa: " & stariBroj & " -> " & noviBroj & ".")
+
+    If Len(cid) = 0 Then
+        Err.Raise vbObjectError + 1916, SRC, "Correction context nije kreiran."
+    End If
+
+    ' Veza na OBA kraja. Redovi se traze ponovo: storno i upis su pomerili tabelu.
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, noviID, "Nov otkup", SRC
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, stariOtkupID, "Stari otkup", SRC
+
+    Dim rNovi As Long, rStari As Long
+    rNovi = FindRows(TBL_OTKUP, COL_OTK_ID, noviID)(1)
+    rStari = FindRows(TBL_OTKUP, COL_OTK_ID, stariOtkupID)(1)
+
+    RequireUpdateCell TBL_OTKUP, rNovi, COL_TRACE_ISPRAVKA_OD_ID, stariOtkupID, SRC
+    RequireUpdateCell TBL_OTKUP, rNovi, COL_TRACE_CORRECTION_ID, cid, SRC
+    RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_ZAMENJEN_SA_ID, noviID, SRC
+    RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_CORRECTION_ID, cid, SRC
+
+    modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
+        "Ispravka otkupa zavrsena: nov dokument " & noviID & "."
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    IspravkaOtkupa_TX = noviID
+    Exit Function
+
+EH:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError SRC, errDesc, errNum
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="IspravkaOtkupa_TX failed. Stari=" & stariOtkupID & "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:=SRC, _
+        entityType:="Otkup", _
+        entityID:=stariOtkupID, _
+        correlationId:=stariOtkupID
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    outGreska = errDesc
+    IspravkaOtkupa_TX = ""
+End Function
+
+' Poslednja ziva verzija dokumenta: prati ZamenjenSaID dok ima kuda.
+'
+' Bez ovoga bi svaki citalac sam sledio lanac -- a lanac ume da bude dublji od
+' jedne karike (ispravka ispravke). Petlja je ogranicena brojem redova: ciklus u
+' podacima ne sme da zavrti citaoca.
+Public Function PoslednjaVerzijaOtkupa(ByVal otkupID As String) As String
+    Const SRC As String = "PoslednjaVerzijaOtkupa"
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim maxKoraka As Long
+    maxKoraka = OtkBrojRedovaTabele(TBL_OTKUP) + 1
+
+    Dim tekuci As String, sledeci As String, korak As Long
+    tekuci = otkupID
+
+    Do
+        sledeci = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, tekuci, _
+                                             COL_TRACE_ZAMENJEN_SA_ID)))
+        If Len(sledeci) = 0 Then Exit Do
+        tekuci = sledeci
+        korak = korak + 1
+        If korak > maxKoraka Then
+            Err.Raise vbObjectError + 1917, SRC, _
+                      "Lanac ispravki nema kraj (ciklus?): " & otkupID
+        End If
+    Loop
+
+    PoslednjaVerzijaOtkupa = tekuci
+End Function
+
+Private Function OtkBrojRedovaTabele(ByVal tblName As String) As Long
+    Dim d As Variant
+    d = GetTableData(tblName)
+    If IsArray(d) Then OtkBrojRedovaTabele = UBound(d, 1)
+End Function
+
 Private Function CreateOtkup(ByVal h As Object, _
                              ByVal stavke As Collection) As String
     Const SRC As String = "CreateOtkup"

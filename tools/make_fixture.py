@@ -2189,6 +2189,16 @@ SEED["tblOtkupStavke"] = [
 # -> na KRAJ tabele); generator radi ISTO, pa je fixture = sveska POSLE
 # nadogradnje. Kolona koja vec postoji se ne dira.
 
+# Kolone koje je KANON preimenovao. Donor nosi staro ime, pa dodavanje novog ne
+# pomaze: modSchema poredi i POZICIJU (upis je pozicion), a stara kolona bi ostala
+# tu gde jeste. Preimenovanje na mestu cuva i poziciju i podatke -- isto sto radi
+# modSetup.PreimenujKolonuAko na startu aplikacije.
+RENAME_COLS = {
+    # A9: veza ispravke ide po ID-u; za sada samo tblOtkup.
+    "tblOtkup": [("IspravkaOd", "IspravkaOdID"),
+                 ("ZamenjenSa", "ZamenjenSaID")],
+}
+
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
                      "Aktivan", "StanicaID"] + KOR_OBLASTI,
@@ -2359,6 +2369,7 @@ def signature() -> str:
                         for t, rows in sorted(SEED.items())]),
         "ENSURE_COLS=" + repr(sorted((t, cols) for t, cols in ENSURE_COLS.items())),
         "ENSURE_TABLES=" + repr(sorted((t, sh, cols) for t, (sh, cols) in ENSURE_TABLES.items())),
+        "RENAME_COLS=" + repr(sorted(RENAME_COLS.items())),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -2610,6 +2621,26 @@ def build(donor: str, out: str, force: bool) -> int:
                         created_tables.append(f"{table_name}.{h}")
         if created_tables:
             print("Kreirano (tabele/kolone): " + ", ".join(created_tables))
+
+        # Preimenovanja PRE dopune: inace bi ENSURE_COLS dodao novo ime pored
+        # starog, pa bi tabela nosila oba oblika.
+        renamed = []
+        for table_name, parovi in RENAME_COLS.items():
+            lo = find_table(wb, table_name)
+            if lo is None:
+                raise SchemaError(f"{table_name} ne postoji u donoru (RENAME_COLS)")
+            idx = header_index(lo)
+            for staro_ime, novo_ime in parovi:
+                if novo_ime.strip().lower() in idx:
+                    continue                       # vec migrirano
+                poz = idx.get(staro_ime.strip().lower())
+                if poz is None:
+                    raise SchemaError(
+                        f"{table_name}: nema ni {staro_ime} ni {novo_ime}")
+                lo.ListColumns(poz).Name = novo_ime
+                renamed.append(f"{table_name}.{staro_ime}->{novo_ime}")
+        if renamed:
+            print("Preimenovane kolone: " + ", ".join(renamed))
 
         # Nadogradnja seme PRE sejanja (v. ENSURE_COLS): nove kolone na KRAJ,
         # isto sto radi modSetup.EnsureColumnOnTable na startu aplikacije.

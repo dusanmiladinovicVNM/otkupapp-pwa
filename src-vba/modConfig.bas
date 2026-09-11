@@ -1028,6 +1028,18 @@ Public Const SV_STATUS_CANCELLED As String = "CANCELLED"
 ' ============================================================
 Public Const COL_TRACE_ISPRAVKA_OD As String = "IspravkaOd"       ' broj STAROG dok. koji ovaj red zamenjuje (na novom redu)
 Public Const COL_TRACE_ZAMENJEN_SA As String = "ZamenjenSa"       ' broj NOVOG dok. koji zamenjuje ovaj (na storniranom redu)
+
+' VEZA ISPRAVKE PO ID-u -- za sada SAMO tblOtkup (A9).
+'
+' Kolone iznad nose POSLOVNI BROJ, i to je bas dvosmislenost koju refaktor
+' uklanja: broj je labela (A2), pa veza po njemu ne moze da razlikuje dve
+' verzije istog dokumenta. Na tblOtkup su zato PREIMENOVANE, ne udvojene --
+' kolona koja se zove IspravkaOd a nosi ID bila bi gora od obe.
+'
+' Ostale tri tabele (Otpremnica, Zbirna, Prijemnica) jos nose broj-oblik i
+' pise ga modStornoFlow.StampIspravkaTrace; prelaze u PR7/PR8.
+Public Const COL_TRACE_ISPRAVKA_OD_ID As String = "IspravkaOdID"   ' OtkupID STARE verzije (na novom redu)
+Public Const COL_TRACE_ZAMENJEN_SA_ID As String = "ZamenjenSaID"   ' OtkupID NOVE verzije (na storniranom redu)
 Public Const COL_TRACE_CORRECTION_ID As String = "CorrectionID"   ' veza na tblStornoVeze (CorrectionID)
 Public Const COL_TRACE_IZDATO_STATUS As String = "IzdatoStatus"   ' DRAFT / IZDATO / PROSLEDJENO (ADR-0001 granica)
 

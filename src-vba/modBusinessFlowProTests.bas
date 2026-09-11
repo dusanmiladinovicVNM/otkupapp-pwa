@@ -227,6 +227,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_VrednostBezStavkiPada
     Test_OTK_VrednostPunUgovor
     Test_OTK_StatusIsplateJeIzveden
+    Test_OTK_IspravkaNovDokumentINovBroj
+    Test_OTK_IspravkaKapije
+    Test_OTK_IspravkaNeGubiNovac
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
@@ -9341,6 +9344,199 @@ Private Function OtkUOtvorenim(ByVal otkupID As String) As Boolean
         End If
     Next i
 End Function
+
+' ISPRAVKA JE NOV DOKUMENT, NOV BROJ I VEZA PO ID-u (A9).
+'
+' Zatecen aparat je vezu drzao POSLOVNIM BROJEM (modStornoFlow.StampIspravkaTrace)
+' -- pa dve verzije istog dokumenta nisu bile razlucive. Ovaj test tvrdi ono sto
+' A9 trazi: nov ID, nov broj, IspravkaOdID na novom, ZamenjenSaID na starom, isti
+' CorrectionID na oba, i CorrectionID koji STVARNO postoji u tblStornoVeze.
+Private Sub Test_OTK_IspravkaNovDokumentINovBroj()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKISPR")
+
+    Dim brStari As String, brNovi As String
+    brStari = TEST_PREFIX & "-OTK-I1-" & scenario
+    brNovi = TEST_PREFIX & "-OTK-I2-" & scenario
+
+    Dim stariID As String
+    stariID = CreateOtkup_TX(OtkHeader(brStari), OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(stariID) > 0, "Ispravka: stari dokument napravljen"
+
+    Dim greska As String
+    Dim noviID As String
+    noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
+                                        OtkStavke(380#, 50#, 19, 0#, 0#, 0), greska)
+
+    AssertTrue Len(noviID) > 0, "Ispravka: nov dokument nastao (" & greska & ")"
+    AssertTrue StrComp(noviID, stariID, vbTextCompare) <> 0, "Ispravka: NOV OtkupID"
+
+    ' Stari je stornirani, nov je aktivan -- jedna ziva verzija.
+    AssertTrue RowIsStornirano(TBL_OTKUP, COL_OTK_ID, stariID), _
+               "Ispravka: stari dokument je storniran"
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, noviID), _
+               "Ispravka: nov dokument je aktivan"
+
+    ' Veza na OBA kraja, po ID-u.
+    AssertEquals stariID, OtkPolje(noviID, COL_TRACE_ISPRAVKA_OD_ID), _
+                 "Ispravka: nov nosi IspravkaOdID"
+    AssertEquals noviID, OtkPolje(stariID, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "Ispravka: stari nosi ZamenjenSaID"
+
+    ' Isti CorrectionID, i to PRAV -- postoji u tblStornoVeze.
+    Dim cid As String
+    cid = OtkPolje(noviID, COL_TRACE_CORRECTION_ID)
+    AssertTrue Len(cid) > 0, "Ispravka: nov nosi CorrectionID"
+    AssertEquals cid, OtkPolje(stariID, COL_TRACE_CORRECTION_ID), _
+                 "Ispravka: oba dokumenta nose ISTI CorrectionID"
+    AssertTrue RowExists(TBL_STORNO_VEZE, COL_SV_ID, cid), _
+               "Ispravka: CorrectionID postoji u tblStornoVeze (nije izmisljen)"
+
+    ' Nov broj je stvarno nov i stoji na novom dokumentu.
+    AssertEquals brNovi, OtkPolje(noviID, COL_OTK_BR_DOK), "Ispravka: nov broj na novom"
+    AssertEquals brStari, OtkPolje(stariID, COL_OTK_BR_DOK), "Ispravka: stari broj netaknut"
+
+    ' Stavke pripadaju NOVOM dokumentu; stari ih zadrzava (istorija je citljiva).
+    AssertEquals "1", CStr(OtkBrojStavkiZaOtkup(noviID)), "Ispravka: nov ima svoju stavku"
+    AssertEquals "1", CStr(OtkBrojStavkiZaOtkup(stariID)), _
+                 "Ispravka: stari zadrzava svoju stavku (istorija se ne brise)"
+    AssertTrue Abs(modOtkup.VrednostOtkupa(noviID) - 19000#) < 0.001, _
+               "Ispravka: vrednost novog je 380 x 50"
+
+    ' Poslednja verzija se cita bez rucnog pracenja lanca.
+    AssertEquals noviID, modOtkup.PoslednjaVerzijaOtkupa(stariID), _
+                 "Ispravka: PoslednjaVerzijaOtkupa vodi na naslednika"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaNovDokumentINovBroj", Err.Number, Err.description
+End Sub
+
+' TRI KAPIJE ISPRAVKE -- svaka po imenu.
+'
+' Kapije se ne mere padom nego PORUKOM: tri razlicita razloga koja daju istu
+' poruku su jedna kapija sa tri ulaza, a ne tri kapije.
+Private Sub Test_OTK_IspravkaKapije()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKISPK")
+
+    Dim br1 As String: br1 = TEST_PREFIX & "-OTK-K1-" & scenario
+    Dim br2 As String: br2 = TEST_PREFIX & "-OTK-K2-" & scenario
+    Dim br3 As String: br3 = TEST_PREFIX & "-OTK-K3-" & scenario
+
+    Dim id1 As String
+    id1 = CreateOtkup_TX(OtkHeader(br1), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(id1) > 0, "Ispravka kapije: polazni dokument"
+
+    ' 1) ISTI BROJ -- A9 trazi nov.
+    Dim g As String
+    Dim r As String
+    r = modOtkup.IspravkaOtkupa_TX(id1, OtkHeader(br1), _
+                                   OtkStavke(100#, 100#, 0, 0#, 0#, 0), g)
+    AssertEquals "", r, "Ispravka kapije: isti broj je odbijen"
+    AssertTrue InStr(1, g, "NOV broj", vbTextCompare) > 0, _
+               "Ispravka kapije: poruka imenuje pravilo o broju (bilo: " & g & ")"
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, id1), _
+               "Ispravka kapije: odbijena ispravka NIJE stornirala izvor"
+
+    ' 2) DRUGI PUT nad istim dokumentom -- prvi je vec dao naslednika.
+    Dim id2 As String
+    id2 = modOtkup.IspravkaOtkupa_TX(id1, OtkHeader(br2), _
+                                     OtkStavke(90#, 100#, 0, 0#, 0#, 0), g)
+    AssertTrue Len(id2) > 0, "Ispravka kapije: prva ispravka prosla"
+
+    r = modOtkup.IspravkaOtkupa_TX(id1, OtkHeader(br3), _
+                                   OtkStavke(80#, 100#, 0, 0#, 0#, 0), g)
+    AssertEquals "", r, "Ispravka kapije: druga ispravka istog dokumenta odbijena"
+    AssertTrue InStr(1, g, "vec zamenjen", vbTextCompare) > 0, _
+               "Ispravka kapije: poruka imenuje postojeceg naslednika (bilo: " & g & ")"
+
+    ' 3) STORNIRAN IZVOR -- to nije ispravka nego nov unos.
+    Dim id3 As String
+    id3 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-K4-" & scenario), _
+                         OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue modStorno.StornoOtkup_TX(id3), "Ispravka kapije: izvor storniran"
+
+    r = modOtkup.IspravkaOtkupa_TX(id3, OtkHeader(TEST_PREFIX & "-OTK-K5-" & scenario), _
+                                   OtkStavke(100#, 100#, 0, 0#, 0#, 0), g)
+    AssertEquals "", r, "Ispravka kapije: storniran izvor odbijen"
+    AssertTrue InStr(1, g, "vec storniran", vbTextCompare) > 0, _
+               "Ispravka kapije: poruka imenuje storno (bilo: " & g & ")"
+
+    ' Lanac ispravki: id1 -> id2 je jedina veza, treca nije nastala.
+    AssertEquals id2, modOtkup.PoslednjaVerzijaOtkupa(id1), _
+                 "Ispravka kapije: lanac ima tacno jednog naslednika"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaKapije", Err.Number, Err.description
+End Sub
+
+' NOVAC SE NE PRENOSI NA ISPRAVKU -- ZATECENO STANJE, izmereno ovim testom.
+'
+' Ocekivanje je bilo suprotno: storno oslobodi isplatu (ResetNovacOtkupLink), pa
+' je nov dokument pokupi kroz ApplyAvansToOtkup. MERENJE kaze da ne pokupi --
+' avans-petlja uzima samo Tip = NOV_VIRMAN_AVANS_KOOP (modNovac:1624), a odvezana
+' isplata je ostala VirmanFirmaKoop.
+'
+' Posledica: taj novac ne vidi ni dug (nema OtkupID) ni avans (pogresan tip).
+' Ostaje samo u kartici kooperanta. Nije uvedeno ispravkom -- isto radi obican
+' StornoOtkup_TX -- pa se ovde tvrdi kao ZATECENO, da se ne bi tumacilo kao
+' osobina novog pisca. Kad se donese odluka o prenosu, ovaj test se OKRECE.
+Private Sub Test_OTK_IspravkaNeGubiNovac()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKISPN")
+
+    Dim brStari As String: brStari = TEST_PREFIX & "-OTK-N1-" & scenario
+    Dim brNovi As String: brNovi = TEST_PREFIX & "-OTK-N2-" & scenario
+
+    Dim stariID As String
+    stariID = CreateOtkup_TX(OtkHeader(brStari), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(stariID) > 0, "Ispravka novac: polazni dokument (vrednost 10000)"
+
+    SaveNovac TEST_PREFIX & "-NOV-I-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 10000#, "isplata pre ispravke", stariID
+
+    AssertTrue Abs(GetIsplataForOtkup(stariID) - 10000#) < 0.001, _
+               "Ispravka novac: stari dokument je placen"
+
+    Dim g As String
+    Dim noviID As String
+    noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
+                                        OtkStavke(100#, 100#, 0, 0#, 0#, 0), g)
+    AssertTrue Len(noviID) > 0, "Ispravka novac: ispravka prosla (" & g & ")"
+
+    ' Stari vise nema vezan novac -- veza je skinuta, ne stornirana.
+    AssertTrue Abs(GetIsplataForOtkup(stariID)) < 0.001, _
+               "Ispravka novac: stari dokument vise ne drzi isplatu"
+
+    ' NOV DOKUMENT JE NE PREUZIMA -- pogresan tip za avans-petlju.
+    AssertTrue Abs(GetIsplataForOtkup(noviID)) < 0.001, _
+               "Ispravka novac: nov dokument NE preuzima odvezanu isplatu"
+
+    ' I ne vidi je ni kao slobodan avans -- dakle nije "cekala negde".
+    AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID)) < 0.001, _
+               "Ispravka novac: odvezana isplata NIJE slobodan avans"
+
+    ' Zato nov dokument stoji kao PUN dug: to je stanje koje operater vidi.
+    AssertTrue OtkUOtvorenim(noviID), _
+               "Ispravka novac: nov dokument je otvorena obaveza u punom iznosu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaNeGubiNovac", Err.Number, Err.description
+End Sub
 
 Private Sub Test_OTK_VrednostBezStavkiPada()
     On Error GoTo EH

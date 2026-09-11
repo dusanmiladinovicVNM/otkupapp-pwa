@@ -1532,6 +1532,108 @@ vrednost nije kvar, a runtime kapija nad njim bi vikala na podatke umesto na kod
 
 ---
 
+### 14.4) Lokalni correction API za otkup (korak 5)
+
+A9 traži vezu **po ID-u**; zatečeni aparat je drži **poslovnim brojem**
+(`modStornoFlow.StampIspravkaTrace`) i zato ne razlikuje dve verzije istog
+dokumenta. Otkup je prvi koji prelazi.
+
+#### Kolone su preimenovane, ne udvojene
+
+Na `tblOtkup`: `IspravkaOd → IspravkaOdID`, `ZamenjenSa → ZamenjenSaID`. Kolona
+koja se zove `IspravkaOd` a nosi ID bila bi gora od obe. Ostale tri tabele
+(Otpremnica, Zbirna, Prijemnica) još nose broj-oblik i prelaze u PR7/PR8.
+
+Preimenovanje nosi tri posledice koje se lako previde:
+
+1. `modSchema` poredi i **poziciju** (upis je pozicioni), pa dodavanje novog imena
+   pored starog ne pomaže — zatečena sveska bi i dalje bila odbijena na poziciji
+   32. Zato `modSetup.PreimenujKolonuAko` menja ime **na mestu**, čuvajući i
+   poziciju i podatke, i radi samo kad staro ime postoji a novo ne.
+2. `modSetup.EnsureSledljivostSchema` je kolone dodavao kroz petlju nad šest
+   tabela — `tblOtkup` je morao da izađe iz te petlje, inače bi self-heal vraćao
+   ime koje je kanon upravo uklonio.
+3. `tools/make_fixture.py` gradi fixture iz **donora**, ne pokretanjem aplikacije,
+   pa je dobio isti aparat (`RENAME_COLS`) i potpis koji ga pokriva.
+
+Sadržaj se **ne prevodi**: na `tblOtkup` te kolone nikad nisu ni pisane
+(`StampIspravkaTrace` se zove samo za druge tri), pa je svaka zatečena vrednost
+prazna.
+
+#### `IspravkaOtkupa_TX` — jedna transakcija
+
+```
+OTK-101 / broj 17   Stornirano=Da,  ZamenjenSaID = OTK-202
+      v
+OTK-202 / broj 18   IspravkaOdID = OTK-101
+oba nose isti CorrectionID
+```
+
+Redosled unutar transakcije je **meren**: storno ide **prvi**, da bi
+`ResetNovacOtkupLink` oslobodio vezan novac pre nego što novi dokument kroz
+`ApplyAvansToOtkup` uopšte potraži avans.
+
+`CorrectionID` je **pravi** ID iz `tblStornoVeze` (`CreateCorrectionContext` +
+`CompleteCorrectionContext` u istoj transakciji), ne broj koji pisac izmisli —
+kolona je deklarisana kao veza na tu tabelu, a izmišljen ID bi bio viseći
+pokazivač. Test to i tvrdi (`RowExists(TBL_STORNO_VEZE, ...)`).
+
+Tri kapije, sve merene **porukom** a ne samo padom:
+
+| Kapija | Poruka imenuje |
+|---|---|
+| isti broj kao stari | pravilo o **novom broju** (A9) — ne jedinstvenost |
+| dokument već zamenjen | **postojećeg naslednika** („ispravlja se POSLEDNJA verzija") |
+| izvor stornirano | storno |
+
+Redosled prve dve je takođe meren: već ispravljen dokument je **uvek** i
+storniran, pa bi storno-kapija prva uhvatila oba slučaja i rekla manje korisnu
+istinu. Specifičnija ide prva.
+
+`PoslednjaVerzijaOtkupa` prati `ZamenjenSaID` do kraja lanca, sa brojem koraka
+ograničenim brojem redova — ciklus u podacima ne sme da zavrti čitaoca.
+
+#### ⚠ NALAZ: novac se **ne** prenosi na ispravku
+
+Očekivanje je bilo suprotno i upisano je u pre-flight kao `PROVEN` na osnovu
+čitanja samo prve polovine lanca. **Merenje kaže drugačije**, i test to sada
+tvrdi:
+
+```
+StornoOtkup -> ResetNovacOtkupLink -> isplati se prazni OtkupID
+ApplyAvansToOtkup -> uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP   (modNovac:1624)
+```
+
+Odvezana isplata tipa `VirmanFirmaKoop` zato ostaje nevidljiva **i** za dug (nema
+`OtkupID`) **i** za avans (pogrešan tip — isti filter je i u
+`GetKooperantUnallocatedAvans:1982` i `BuildKooperantUnallocatedAvansDict:2031`).
+Vidi se još samo u kartici kooperanta (`modIzvestaj:2507`), gde ulazi u saldo.
+
+Novac dakle **nije izgubljen**, ali jeste ispao iz svake mašinerije koja odlučuje
+šta se plaća — operater vidi novi dokument kao pun dug, a plaćeni iznos nigde
+među avansima.
+
+**Ovo nije uvedeno ispravkom** — isto radi običan `StornoOtkup_TX` i radio je
+oduvek. Ispravka ga samo čini lakše dostižnim. Test ga tvrdi kao **zatečeno**
+stanje (`Test_OTK_IspravkaNeGubiNovac`), da se ne bi tumačilo kao osobina novog
+pisca; kad se donese odluka o prenosu, test se **okreće**.
+
+#### Writer nema produkcionog pozivaoca u ovom PR-u
+
+Merena odluka, ne propust. Da bi ekran zvao ovaj put, stari `OtkupID` mora da
+otputuje od prefill-a do pisca. Danas prefill ide kroz spec string
+(`PrefillIzStorniranog` → `modOtkupUI.ApplyPrefill:8452`) čiji se ključevi mapiraju
+**na kontrole** — ID nema gde. Rešenje bi bilo modul-stanje u ljusci, tj. **isti
+oblik in-memory veze** (`mPendingRelinkOldPrij`) koji ovaj korak treba da ukine.
+
+Wiring zato ide sa PR7, kad se `PrefillIzStorniranog` ionako prepisuje sa
+po-klasnih redova. Isti obrazac kao `CreateOtpremnicaDraft_TX` u PR5.
+
+Sabotaža: gašenje A9 kapije o broju obara 5 provera po imenu, dozvola drugog
+naslednika 1, izostanak `ZamenjenSaID` 4.
+
+---
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
