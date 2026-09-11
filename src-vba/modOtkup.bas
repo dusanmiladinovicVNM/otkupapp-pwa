@@ -180,6 +180,8 @@ End Function
 ' Ispravka ga samo cini lakse dostizivim. Test ga tvrdi kao ZATECENO stanje, da
 ' se ne bi tumacilo kao osobina; odluka o prenosu je poslovna i ceka operatera.
 '
+' Opcije, cena svake i preporuka: docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md
+'
 ' JEDNA TRANSAKCIJA obuhvata sve: nov dokument, storno starog, obe veze i
 ' correction context. Delimicna ispravka -- nov dokument bez storna starog, ili
 ' storno bez naslednika -- gora je od nijedne.
