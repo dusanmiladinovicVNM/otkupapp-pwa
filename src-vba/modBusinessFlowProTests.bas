@@ -224,6 +224,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
+    Test_OTK_PanelNapredakJePauziran
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8853,6 +8854,52 @@ Private Sub Test_OTK_EkranPauziraAutoLanac()
 
 EH:
     LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
+End Sub
+
+' PANEL BLOKOVA JE PAUZIRAN DO PR7 -- i ovaj test meri ZASTO.
+'
+' SumKolByOtp sabira tblOtkup.Kolicina po Otkup.OtpremnicaID. Nov pisac tu kolonu
+' ostavlja praznu, pa otkup od 1000 kg panelu izgleda kao NULA. Test to tvrdi
+' izricito, umesto da se oslanja na to sto UI niko ne izvrsava u suite-u.
+'
+' U PR7 ce ovaj test POCRVENETI -- citalac tada prelazi na tblOtpremnicaIzvori i
+' GetOtpremnicaProgress. To je namerno: pauza se tada mora SVESNO skinuti, a ne
+' zaboraviti ukljucenom.
+Private Sub Test_OTK_PanelNapredakJePauziran()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPN")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-PN-" & scenario), _
+                           OtkStavke(1000#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK panel: otkup od 1000 kg upisan"
+    AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_KOLICINA) - 1000#) < 0.001, _
+               "OTK panel: kolicina je NA STAVCI"
+
+    ' Panel vezuje blok za otpremnicu upisom OtpremnicaID -- to i dalje radi.
+    Dim otpID As String
+    otpID = SaveOtpremnica_TX(NextTestDate(), TEST_ST_ID, TEST_VOZ_ID, _
+                              TEST_PREFIX & "-OTP-PN-" & scenario, "", _
+                              TEST_VRSTA, TEST_SORTA, 1000#, 50#, TEST_TIP_AMB, 20)
+    AssertTrue Len(otpID) > 0, "OTK panel: otpremnica napravljena"
+
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkID)(1), _
+                      COL_OTK_OTPREMNICA_ID, otpID, "Test_OTK_PanelNapredakJePauziran"
+
+    ' MERENA REGRESIJA: stari citalac vidi nulu tamo gde je 1000 kg.
+    AssertTrue Abs(modOtkupBlok.SumKolByOtp(otpID)) < 0.001, _
+               "OTK panel: stari citalac vidi 0 -- brojevi su na stavkama"
+
+    ' Zato panel te brojeve NE prikazuje.
+    AssertTrue Not modOtkupBlok.NapredakBlokaDostupan(), _
+               "OTK panel: napredak je pauziran dok citalac ne predje (PR7)"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_PanelNapredakJePauziran", Err.Number, Err.description
 End Sub
 
 ' STORNO DVOKLASNOG DOKUMENTA JE JEDAN POZIV NAD HEADER-ID.

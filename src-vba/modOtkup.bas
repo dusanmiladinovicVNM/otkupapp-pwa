@@ -517,10 +517,19 @@ End Function
 ' numericku Kolicinu i Cenu vece od nule. Obe kapije su probane; obaraju zatecene
 ' testove -- 10 do 33 tvrdnje, zavisno od kombinacije.
 '
-' Uzrok nije kapija nego SaveOtkupMulti_TX: on i dalje pravi otkupe BEZ stavki i
-' zove ApplyAvansToOtkup nad njima. Strog read-model i stari pisac ne mogu da
-' koegzistiraju. Ostatak ugovora zato ide u ISTI commit koji brise starog pisca i
-' seli njegove test pozivaoce -- on je poslednji proizvodjac otkupa bez stavki.
+' Uzrok su HEADER-ONLY PISCI: prave otkup bez ijedne stavke, pa strog read-model
+' i oni ne mogu da koegzistiraju. Ima ih DVA, ne jedan:
+'
+'   SaveOtkupMulti_TX      jos ga zovu fixture-i 8 testova (v. REFAKTOR)
+'   modMasterSync:1999     PWA import radi AppendRow(TBL_OTKUP) direktno,
+'                          fabrikuje KulturaID (:1960) i NE pravi stavke
+'
+' Raniji tekst je tvrdio da je SaveOtkupMulti_TX poslednji -- netacno, i to je
+' mereno: grep AppendRow(TBL_OTKUP) u modMasterSync, i nula pojava
+' TBL_OTKUP_STAVKE u tom modulu.
+'
+' Pun ugovor (header tacno jednom; svaka stavka numericka i > 0) ide tek kad
+' nestanu OBA -- dakle posle PWA cutover-a, ne samo posle brisanja starog pisca.
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
 '
