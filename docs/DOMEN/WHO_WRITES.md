@@ -108,6 +108,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
+- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
 - `tblSEFConfig`: `modTestStorno`

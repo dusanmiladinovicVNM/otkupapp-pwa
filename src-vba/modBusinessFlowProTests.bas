@@ -232,6 +232,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_UpdateKultureSaPostojecimIzvoromPada
     Test_OTP_DvaTipaAmbalazeNeUlazeUDraft
     Test_OTP_NeizdatOtkupNeUlazi
+    Test_OTP_TipAmbalazeJeHeaderCinjenica
+    Test_OTP_IzvorBezGajbiNeOdredjujeTip
+    Test_OTP_ClanstvoNaNepostojeciOtkupPada
+    Test_OTP_DupliParUClanstvuPada
     Test_OTP_ClanstvoMutabilnoUDraftu
     Test_OTP_PosleIzdavanjaClanstvoZamrznuto
     Test_OTP_IzvorNeSmeDvaPutaAktivno
@@ -8444,6 +8448,164 @@ EH:
     LogFatal "Test_OTP_NeizdatOtkupNeUlazi", Err.Number, Err.description
 End Sub
 
+' TipAmbalaze je HEADER cinjenica, primljena pri otvaranju.
+'
+' Ocekivanje "50 gajbi" mora da zna KOJIH 50 vec pri otvaranju -- inace se tip
+' saznaje tek iz prvog izvora. Zatecen posao to vec resava ovako: legacy
+' SaveOtpremnicaMulti_TX prima tipAmb JEDNOM, kao header podatak, i bas njime
+' knjizi ambalazu pri nastanku otpremnice (modDokumenta:382 TrackAmbalaza).
+Private Sub Test_OTP_TipAmbalazeJeHeaderCinjenica()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPTH")
+
+    ' Ocekuje se ambalaza, a tip nije rekao KOJA.
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-TH-" & scenario)
+    h("TipAmbalaze") = ""
+
+    Dim rez As String, razlog As String
+    rez = CreateOtpremnicaDraft_TX(h, OtpOcek(400#, 20#, 0#, 0#), razlog)
+
+    AssertEquals "", rez, "OTP tip header: ocekivana ambalaza bez tipa odbijena"
+    AssertTrue InStr(1, razlog, "Tip ambalaze je obavezan", vbTextCompare) > 0, _
+               "OTP tip header: kapija imenuje razlog (bilo: " & razlog & ")"
+
+    ' Bez ocekivane ambalaze prazan tip je tacan podatak.
+    Dim h2 As Object
+    Set h2 = OtpHeader(TEST_PREFIX & "-OTP-TH2-" & scenario)
+    h2("TipAmbalaze") = ""
+
+    AssertTrue Len(CreateOtpremnicaDraft_TX(h2, OtpOcek(400#, 0#, 0#, 0#), razlog)) > 0, _
+               "OTP tip header: bez ambalaze prazan tip prolazi (bilo: " & razlog & ")"
+
+    ' Sa tipom: DRAFT ga nosi ODMAH, ne tek posle prvog izvora.
+    Dim otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-TH3-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "OTP tip header: sa tipom prolazi (bilo: " & razlog & ")"
+    AssertEquals TEST_TIP_AMB, OtpPolje(otpID, COL_OTP_TIP_AMB), _
+                 "OTP tip header: DRAFT nosi tip pre ijednog izvora"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_TipAmbalazeJeHeaderCinjenica", Err.Number, Err.description
+End Sub
+
+' Izvor koji NE nosi gajbe ne odredjuje transportnu ambalazu.
+'
+' Otkup sme da ima TipAmbalaze zbog KolAmbIzdata -- gajbi koje su OTISLE
+' kooperantu -- a da njegove stavke ne nose nijednu gajbu u otpremnicu.
+' Poredjenje golih header stringova svih otkupa bi takav izvor pogresno odbilo.
+Private Sub Test_OTP_IzvorBezGajbiNeOdredjujeTip()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPBG")
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BG-" & scenario), _
+                                     OtpOcek(800#, 20#, 0#, 0#), razlog)
+
+    ' Nosi gajbe i slaze se sa headerom.
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, OtpNoviOtkup(scenario & "A", 400#, 0#), razlog), _
+               "OTP bez gajbi: izvor sa gajbama dodat"
+
+    ' DRUGI TIP na headeru otkupa, ali NULA gajbi na stavkama -- prolazi.
+    Dim otkB As String
+    otkB = OtpNoviOtkupDrugogTipaBezGajbi(scenario & "B")
+
+    AssertTrue Abs(OtkStavkaBrojP(otkB, KLASA_I, COL_OKS_KOL_AMB)) < 0.001, _
+               "OTP bez gajbi: taj otkup zaista ne nosi gajbe (inace test ne meri nista)"
+    AssertEquals TEST_TIP_AMB_B, _
+                 Trim$(CStr(nz(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkB, _
+                                             COL_OTK_TIP_AMB), ""))), _
+                 "OTP bez gajbi: a header otkupa nosi DRUGI tip"
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkB, razlog), _
+               "OTP bez gajbi: izvor bez gajbi prolazi uprkos drugom tipu (bilo: " & razlog & ")"
+    AssertEquals "2", CStr(OtpBrojClanova(otpID)), "OTP bez gajbi: dva clana"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_IzvorBezGajbiNeOdredjujeTip", Err.Number, Err.description
+End Sub
+
+' Clanstvo na nepostojeci otkup je INTEGRITET, ne manji zbir.
+'
+' Citalac koji tiho izracuna manje pokazuje operateru broj koji izgleda ispravno,
+' a finalizacija istu korupciju prijavi tek sat kasnije.
+Private Sub Test_OTP_ClanstvoNaNepostojeciOtkupPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPCN")
+
+    Dim otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-CN-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#))
+
+    Dim red As Long
+    red = OtpUpisiSirovoClanstvo(otpID, "OTK-NE-POSTOJI-" & scenario)
+
+    Dim greska As String
+    greska = OtpProgressGreska(otpID)
+
+    ' CISCENJE PRE TVRDNJI: korumpiran red truje AktivnoOtpClanstvoPoKanonu za
+    ' svaki sledeci test, pa se sklanja pre nego sto bilo sta moze da padne.
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "OTP clanstvo: read-model pada na nepostojeci otkup (bilo: " & greska & ")"
+    AssertTrue InStr(1, greska, "clanstvo", vbTextCompare) > 0, _
+               "OTP clanstvo: poruka kaze da je rec o clanstvu (bilo: " & greska & ")"
+
+    ' Posle ciscenja read-model opet radi -- inace bi test dokazao samo da nesto puca.
+    AssertEquals "", OtpProgressGreska(otpID), "OTP clanstvo: posle ciscenja read-model radi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_ClanstvoNaNepostojeciOtkupPada", Err.Number, Err.description
+End Sub
+
+' Isti par (otpremnica, otkup) dvaput je korupcija, ne "jedan clan".
+Private Sub Test_OTP_DupliParUClanstvuPada()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPDP")
+
+    Dim otkID As String
+    otkID = OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim otpID As String, razlog As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-DP-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#))
+    DodajOtpremnicaIzvor_TX otpID, otkID
+
+    Dim red As Long
+    red = OtpUpisiSirovoClanstvo(otpID, otkID)
+
+    Dim greska As String
+    greska = OtpProgressGreska(otpID)
+
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+
+    AssertTrue InStr(1, greska, "postoji vise puta", vbTextCompare) > 0, _
+               "OTP dupli par: read-model pada (bilo: " & greska & ")"
+    AssertEquals "", OtpProgressGreska(otpID), "OTP dupli par: posle ciscenja read-model radi"
+    AssertEquals "1", CStr(OtpBrojClanova(otpID)), "OTP dupli par: ostao jedan clan"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_DupliParUClanstvuPada", Err.Number, Err.description
+End Sub
+
 ' --- OTP pomocne -------------------------------------------------------------
 Private Function OtpHeader(ByVal brojOtp As String) As Object
     Dim h As Object
@@ -8452,6 +8614,7 @@ Private Function OtpHeader(ByVal brojOtp As String) As Object
     h.Add "StanicaID", TEST_ST_ID
     h.Add "VozacID", TEST_VOZ_ID
     h.Add "KulturaID", TEST_KULTURA_ID
+    h.Add "TipAmbalaze", TEST_TIP_AMB
     h.Add "BrojOtpremnice", brojOtp
     Set OtpHeader = h
 End Function
@@ -8496,6 +8659,50 @@ Private Function OtpNoviOtkupDrugogTipa(ByVal scenario As String) As String
     Set h = OtkHeader(TEST_PREFIX & "-OTK-" & scenario)
     h("TipAmbalaze") = TEST_TIP_AMB_B
     OtpNoviOtkupDrugogTipa = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+End Function
+
+' Drugi tip ambalaze na headeru otkupa, ali NULA gajbi na stavkama: tip postoji
+' zbog izdate ambalaze (KolAmbIzdata), a u otpremnicu ne ide nijedna gajba.
+Private Function OtpNoviOtkupDrugogTipaBezGajbi(ByVal scenario As String) As String
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB_B
+    h.Add "KolAmbIzdata", 10#
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtkStavka(KLASA_I, 400#, 50#, 0#, 0#)
+    OtpNoviOtkupDrugogTipaBezGajbi = CreateOtkup_TX(h, c)
+End Function
+
+' Sirov upis clanstva, mimo writera -- samo da se napravi korupcija koju
+' strikt loader mora da vidi. Vraca indeks reda, da se moze skloniti.
+Private Function OtpUpisiSirovoClanstvo(ByVal otpID As String, _
+                                        ByVal otkupID As String) As Long
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTPREMNICA_IZVORI)
+
+    SetRequiredField rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_ID, _
+                     "OPI-SAB-" & Format$(Timer * 1000, "0")
+    SetRequiredField rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otpID
+    SetRequiredField rowData, TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, otkupID
+
+    OtpUpisiSirovoClanstvo = AppendRow(TBL_OTPREMNICA_IZVORI, rowData)
+    If OtpUpisiSirovoClanstvo <= 0 Then
+        Err.Raise vbObjectError + 9300, "OtpUpisiSirovoClanstvo", "AppendRow nije uspeo."
+    End If
+End Function
+
+' Greska koju read-model digne, kao tekst -- "" znaci da je prosao.
+Private Function OtpProgressGreska(ByVal otpID As String) As String
+    Dim p As Object
+    On Error Resume Next
+    Err.Clear
+    Set p = GetOtpremnicaProgress(otpID)
+    OtpProgressGreska = Err.description
+    If Err.Number = 0 Then OtpProgressGreska = ""
+    Err.Clear
+    On Error GoTo 0
 End Function
 
 Private Function OtpNoviOtkupNaStanici(ByVal scenario As String, _

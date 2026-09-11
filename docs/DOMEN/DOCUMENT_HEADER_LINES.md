@@ -480,8 +480,8 @@ prima **izvore**, a ne stavke:
                          upisuju se ODMAH, sa draftom
   clanstvo   POVEZANO    SUM nad otkupnim stavkama clanova
   preostalo  = ocekivano - povezano, po klasi
-  header     PRIMLJEN    Datum, StanicaID, VozacID, BrojOtpremnice,
-                         KulturaID + snapshot VrstaVoca/SortaVoca/TipAmbalaze
+  header     PRIMLJEN    Datum, StanicaID, VozacID, BrojOtpremnice, KulturaID,
+                         TipAmbalaze  (VrstaVoca/SortaVoca su snapshot kulture)
   izdavanje  zahteva ocekivano = povezano, pa ZAMRZAVA stavke
 ```
 
@@ -516,9 +516,20 @@ ona **prefiluje** formu otkupa stanicom, vrstom, sortom, vozačem i cenom
 izdavanju ne bi imala čime da prefiluje prvi otkup — a taj otkup treba da je od
 nje i dobije.
 
-`KulturaID` je relaciona istina, `VrstaVoca`/`SortaVoca`/`TipAmbalaze` su njen
-snapshot na dokumentu — isti par kao na otkupu (§4.1f). Svaki izvor koji se posle
-doda mora da se slaže sa stanicom **i** sa `KulturaID`.
+`KulturaID` je relaciona istina, `VrstaVoca`/`SortaVoca` su njen snapshot na
+dokumentu — isti par kao na otkupu (§4.1f).
+
+**`TipAmbalaze` je takođe primljena header činjenica, a ne izvedena.** Očekivanje
+„50 gajbi" mora da zna **kojih** 50 već pri otvaranju; writer koji ga saznaje tek
+iz prvog izvora ostavlja draft u kom je deo očekivanja neizreciv. Zatečeni posao to
+već rešava ovako: legacy `SaveOtpremnicaMulti_TX` prima `tipAmb` **jednom**, kao
+header podatak, i baš njime knjiži ambalažu pri nastanku otpremnice
+(`modDokumenta:382`, `TrackAmbalaza`).
+
+```
+SUM(ocekivano.KolAmbalaze) > 0   ->  TipAmbalaze OBAVEZAN
+SUM(ocekivano.KolAmbalaze) = 0   ->  TipAmbalaze sme prazan
+```
 
 #### Dva ulaza, jedan core
 
@@ -582,16 +593,27 @@ Jednopotezni ulaz nije druga implementacija nego **isti core**: auto-lanac
 (`modAutoHladnjaca`) i PWA prave otpremnicu bez ijednog međukoraka, pa bi ih tri
 poziva naterala da drže tuđe stanje.
 
-**`DRAFT` je jedino stanje u kom se članstvo menja** (A14, A15). Posle izdavanja
-`Dodaj`/`Ukloni` dižu grešku — sastav izdatog dokumenta je istorijska činjenica,
-a izmena je nova verzija (A13). Izdavanje je i trenutak u kom stavke nastaju:
-draft ih **nema**, jer bi inače postojale dve istine o istoj količini — jedna u
-stavkama, druga u članstvu koje se još menja.
+**`DRAFT` je jedino stanje u kom se članstvo i očekivanje menjaju** (A14, A15).
+Posle izdavanja `Dodaj` / `Ukloni` / `Update` dižu grešku — sastav izdatog
+dokumenta je istorijska činjenica, a izmena je nova verzija (A13).
 
-**Izvedeno, ne primljeno** — isti razlog kao kod zbirne (PR3): polje koje writer
-prima a moglo je da izračuna je drugi izvor istine, i tiho se razilazi sa prvim.
-Neslaganje među izvorima time postaje **greška pri izvođenju**, ne zaseban
-validator koji neko može da zaobiđe.
+**Izdavanje NE pravi stavke.** One već postoje od drafta:
+
+```
+DRAFT       stavke POSTOJE i znace OCEKIVANJE
+IZDAVANJE   stavke se NE kreiraju ponovo
+            dokazuje se ocekivano = povezano
+            postojece stavke postaju ZAMRZNUT sadrzaj izdate verzije
+            BrutoKg se DOPISUJE, i to samo kad je potpuno poznat iz izvora
+```
+
+Brojevi se pri izdavanju ne prepisuju — jednakost je upravo dokazana, pa bi
+prepisivanje bilo ili no-op ili tiho gaženje onoga što je dokazano.
+
+**Jednopotezni ulaz je jedini izuzetak.** `CreateOtpremnicaIzIzvora_TX` nema
+nezavisno operatersko očekivanje, pa ga core **prvo izvede iz izvora** i tek onda
+izda. Tu i samo tu važi „izvedeno, ne primljeno" — kod ručnog drafta su stavke
+**primljeno očekivanje**, i to je cela poenta.
 
 Tvrde kapije za ulazak otkupa u otpremnicu:
 
@@ -602,13 +624,33 @@ Tvrde kapije za ulazak otkupa u otpremnicu:
 | otkup **nije već u drugoj aktivnoj otpremnici** | isto pravilo kao `AktivnoClanstvoPoKanonu` za zbirnu (A15) |
 | svi izvori sa **iste stanice** | grain je *jedna isporuka **sa otkupnog mesta*** — header nosi jedan `StanicaID`, pa dve stanice ne mogu ni da se predstave |
 | svi izvori iste **`KulturaID`** | header nosi jednu kulturu; vrsta/sorta se poklapaju posledično |
-| svi izvori istog **`TipAmbalaze`** | header nosi jedan tip, pa *20 plastičnih + 30 drvenih gajbi* nije 50 gajbi |
+| izvor **koji nosi gajbe** ima `TipAmbalaze` **headera** | header nosi jedan tip, pa *20 plastičnih + 30 drvenih* nije 50 gajbi |
 | bar jedan izvor **pri izdavanju** | otpremnica bez ijednog otkupa nije isporuka; prazan `DRAFT` je legitiman |
 
 **Sve se proveravaju pri `Dodaj`, ne tek pri izdavanju.** Razlog nije urednost
 nego read-model: `GetOtpremnicaProgress` do izdavanja uredno računa ono što u
 članstvu stoji, pa bi nehomogen draft prikazivao broj koji semantički ne znači
 ništa — zbir dve različite gajbe.
+
+Poslednje pravilo gleda **stavke izvora, ne njegov header**: otkup sme da nosi
+`TipAmbalaze` zbog `KolAmbIzdata` — gajbi koje su **otišle kooperantu** — a da u
+otpremnicu ne ulazi nijedna gajba. Takav izvor ne određuje transportnu ambalažu,
+pa poređenje golih header stringova svih otkupa nije precizno.
+
+#### Članstvo se čita strogo, i to na jednom mestu
+
+Jedan loader služi i read-model (`GetOtpremnicaProgress`) i sva tri pisca. Čitalac
+koji tiho **normalizuje** korupciju — dupli par u jednog člana, veza na nepostojeći
+otkup u manji zbir — pokazuje operateru brojeve koji izgledaju ispravno, a
+finalizacija istu tu korupciju prijavi tek sat kasnije. Ugovor mora biti isti na
+oba mesta:
+
+```
+roditelj postoji TACNO jednom
+svaki red clanstva:  OtkupID neprazan, dete postoji TACNO jednom
+isti par (OtpremnicaID, OtkupID) dvaput        -> INTEGRITY ERROR
+isti otkup u dve AKTIVNE otpremnice            -> INTEGRITY ERROR
+```
 
 `VozacID` je **na headeru i prima se** — vozač je odluka otpreme, ne svojstvo
 otkupa (§4.1c). Zato izvori o vozaču ne govore ništa i nema šta da se poklapa.

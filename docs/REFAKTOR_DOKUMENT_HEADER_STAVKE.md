@@ -830,6 +830,15 @@ Uz njih idu i četiri koje nosi odluka o draft-u:
 | `UpdateKultureSaPostojecimIzvoromPada` | isto za kulturu, uz kontrolu da bezopasna izmena i dalje prolazi |
 | `DvaTipaAmbalazeNeUlazeUDraft` | homogen `TipAmbalaze` **pri dodavanju**, ne tek pri izdavanju |
 | `NeizdatOtkupNeUlazi` | veza traži `IzdatoStatus = IZDATO`, ne „red koji slučajno ima stavke" |
+| `TipAmbalazeJeHeaderCinjenica` | očekivana ambalaža bez tipa odbijena; DRAFT nosi tip **pre** ijednog izvora |
+| `IzvorBezGajbiNeOdredjujeTip` | otkup sa `KolAmbIzdata` a bez gajbi na stavkama prolazi uprkos drugom tipu |
+| `ClanstvoNaNepostojeciOtkupPada` | read-model **pada**, ne računa manji zbir |
+| `DupliParUClanstvuPada` | dupli par je integritet, ne „jedan član" |
+
+> Poslednja dva pišu korupciju mimo writer-a, pa **čiste je pre tvrdnji**:
+> korumpiran red truje globalni loader za svaki sledeći test u istom prolazu.
+> Oba imaju i kontrolu da read-model posle čišćenja opet radi — inače bi test
+> dokazao samo da nešto puca.
 | `ClanstvoMutabilnoUDraftu` | dodaj → ukloni → dodaj; uklonjen izvor je **slobodan** za drugu otpremnicu |
 | `PosleIzdavanjaClanstvoZamrznuto` | `Dodaj`/`Ukloni`/ponovno izdavanje — sva tri odbijena |
 | `StariOtkupNeUlazi` | otkup bez `tblOtkupStavke` (stari pisač) ne može u kanonsku otpremnicu |

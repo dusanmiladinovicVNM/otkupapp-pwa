@@ -2526,12 +2526,21 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
 
     Dim datum As Date
     Dim stanicaID As String, vozacID As String, brojOtp As String, kulturaID As String
+    Dim tipAmb As String
 
     datum = HdrDatum(h, "Datum", SRC)
     stanicaID = HdrObavezan(h, "StanicaID", SRC)
     vozacID = HdrObavezan(h, "VozacID", SRC)
     kulturaID = HdrObavezan(h, "KulturaID", SRC)
     brojOtp = HdrObavezan(h, "BrojOtpremnice", SRC)
+
+    ' TipAmbalaze je HEADER cinjenica, primljena pri otvaranju. Kljuc je obavezan,
+    ' vrednost sme prazna -- obaveznost zavisi od ocekivane ambalaze i proverava se
+    ' u OtpUpisiOcekivano. Bez ovoga bi ocekivanje glasilo "50 gajbi" a tek bi prvi
+    ' izvor rekao KOJIH 50; zatecen posao to vec resava drugacije -- legacy
+    ' SaveOtpremnicaMulti_TX prima tipAmb JEDNOM, kao header podatak, i bas njime
+    ' knjizi ambalazu pri nastanku otpremnice (modDokumenta:382 TrackAmbalaza).
+    tipAmb = OtpHdrObavezanKljuc(h, "TipAmbalaze", SRC)
 
     ' FK-ovi otpremnice. Isti razlog kao kod otkupa (S4.1f): neprazan string nije
     ' dokaz da red postoji, a slomljena veza se vidi tek kad je neko spoji.
@@ -2554,7 +2563,7 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
 
     Dim rowData As Variant
     rowData = BuildOtpremnicaHeaderRowData(otpID, datum, stanicaID, vozacID, _
-                                           kulturaID, brojOtp, cena)
+                                           kulturaID, tipAmb, brojOtp, cena)
 
     If AppendRow(TBL_OTPREMNICA, rowData) <= 0 Then
         Err.Raise vbObjectError + 1285, SRC, _
@@ -2606,15 +2615,16 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
                   "Ocekivanje nije prosledjeno. Draft bez ocekivanja nema sta da meri."
     End If
 
-    OtpObrisiOcekivano otpremnicaID, SRC
-    OtpUpisiOcekivano otpremnicaID, staroOcek, SRC
-
     Dim cena As Double
     cena = OtpHdrBrojOpcion(h, "Cena", SRC)
     If cena < 0 Then
         Err.Raise vbObjectError + 1315, SRC, "Cena ne sme biti negativna."
     End If
 
+    ' Zaglavlje ide PRE ocekivanja: obaveznost tipa ambalaze se sudi prema NOVOM
+    ' tipu, ne prema starom. Sve je u istoj transakciji, pa pad bilo gde vraca sve.
+    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_TIP_AMB, _
+                      OtpHdrObavezanKljuc(h, "TipAmbalaze", SRC), SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_DATUM, datum, SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_STANICA, stanicaID, SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_VOZAC, vozacID, SRC
@@ -2626,6 +2636,9 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_CENA, IIf(cena > 0, cena, ""), SRC
 
+    OtpObrisiOcekivano otpremnicaID, SRC
+    OtpUpisiOcekivano otpremnicaID, staroOcek, SRC
+
     ' Izmena zaglavlja sme da pokvari VEC VALIDNO clanstvo: draft sa stanicom ST1
     ' i clanom sa ST1 posle prebacivanja na ST2 nosi clana koga Dodaj nikad ne bi
     ' primio. Izdavanje bi to kasnije uhvatilo, ali invarijanta ne sme da bude
@@ -2635,7 +2648,7 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
     ' Provera ide POSLE upisa zaglavlja, nad NOVIM vrednostima; pad ovde rollback-uje
     ' ceo update, pa staro zaglavlje i staro ocekivanje ostaju netaknuti.
     Dim clanovi As Collection
-    Set clanovi = OtpClanovi(otpremnicaID)
+    Set clanovi = OtpClanovi(otpremnicaID, SRC)
 
     Dim k As Long
     For k = 1 To clanovi.count
@@ -2644,8 +2657,8 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
 End Sub
 
 ' Header DRAFT-a. VrstaVoca/SortaVoca su SNAPSHOT kulture -- upisuju se odmah,
-' da panel ima cime da prefiluje formu otkupa. TipAmbalaze se izvodi iz izvora
-' pri izdavanju (gajbu bira operater po otkupu, ne kultura).
+' da panel ima cime da prefiluje formu otkupa. TipAmbalaze je primljena header
+' cinjenica: ocekivanje "50 gajbi" mora da zna KOJIH 50 vec pri otvaranju.
 '
 ' Kolicina / KolAmbalaze / Klasa / BrutoKg su polja stavke i u ciljnoj semi ih
 ' na headeru nema (S4.2).
@@ -2654,6 +2667,7 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
                                               ByVal stanicaID As String, _
                                               ByVal vozacID As String, _
                                               ByVal kulturaID As String, _
+                                              ByVal tipAmb As String, _
                                               ByVal brojOtp As String, _
                                               ByVal cena As Double) As Variant
     Const SRC As String = "BuildOtpremnicaHeaderRowData"
@@ -2674,6 +2688,7 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_STANICA, stanicaID, SRC
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_VOZAC, vozacID, SRC
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_KULTURA, kulturaID, SRC
+    SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_TIP_AMB, tipAmb, SRC
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, SRC
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_STORNIRANO, "", SRC
 
@@ -2746,6 +2761,24 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
         kol(UCase$(klasa)) = k
         amb(UCase$(klasa)) = a
     Next i
+
+    ' Tip ambalaze je obavezan tacno kad se ambalaza i ocekuje. Provera je OVDE
+    ' jer se tek sada zna zbir -- i vazi za oba puta, i rucni draft i izvedeno
+    ' ocekivanje jednopoteznog ulaza.
+    Dim ukupnoAmb As Double
+    Dim kljuc As Variant
+    For Each kljuc In amb.Keys
+        ukupnoAmb = ukupnoAmb + OtpBroj(amb, CStr(kljuc))
+    Next kljuc
+
+    If ukupnoAmb > 0 Then
+        If Len(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                          otpremnicaID, COL_OTP_TIP_AMB)))) = 0 Then
+            Err.Raise vbObjectError + 1331, src, _
+                      "Tip ambalaze je obavezan kada se ambalaza ocekuje (" & _
+                      Fmt2Zbr(ukupnoAmb) & "). Ocekivanje mora da kaze KOJIH gajbi."
+        End If
+    End If
 
     Dim rowData As Variant
     Dim stavkaID As String
@@ -2876,25 +2909,19 @@ Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
                   ". Otpremnica se sastavlja od IZDATIH otkupnih listova."
     End If
 
-    ' Clanovi moraju biti HOMOGENI po tipu ambalaze: header nosi jedan TipAmbalaze,
-    ' pa 20 plasticnih + 30 drvenih gajbi nije 50 gajbi. Provera je OVDE, a ne tek
-    ' pri izdavanju -- inace bi GetOtpremnicaProgress do tada sabirao dve razlicite
-    ' stvari i prikazivao semanticki pogresan broj.
-    Dim clanoviTip As Collection
-    Set clanoviTip = OtpClanovi(otpremnicaID)
-
-    Dim t As Long, drugi As String
-    For t = 1 To clanoviTip.count
-        drugi = CStr(clanoviTip(t))
-        If StrComp(drugi, otkupID, vbTextCompare) <> 0 Then
-            RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
-                                                        drugi, COL_OTK_TIP_AMB))), _
-                             Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
-                                                        otkupID, COL_OTK_TIP_AMB))), _
-                             "TipAmbalaze", otkupID, src
-            Exit For
-        End If
-    Next t
+    ' Tip ambalaze se poredi sa HEADEROM, i to SAMO ako izvor stvarno nosi gajbe.
+    '
+    ' Otkup sme da ima TipAmbalaze zbog KolAmbIzdata -- gajbi koje su OTISLE
+    ' kooperantu -- a da njegove stavke ne nose nijednu gajbu u otpremnicu. Takav
+    ' izvor ne odredjuje transportnu ambalazu, pa poredjenje golih header stringova
+    ' svih otkupa nije precizno.
+    If OtpGajbeIzvora(otkupID, src) > 0 Then
+        RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                    otpremnicaID, COL_OTP_TIP_AMB))), _
+                         Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                    otkupID, COL_OTK_TIP_AMB))), _
+                         "TipAmbalaze", otkupID, src
+    End If
 
     ' Kanonsko clanstvo je jedini izvor. Otkup.OtpremnicaID se NE gleda: to je
     ' stari model, koji skela ne dira.
@@ -2926,7 +2953,7 @@ Private Sub OtpUpisiClanstvo(ByVal otpremnicaID As String, ByVal otkupID As Stri
     RequireColumnIndex TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src
 
     Dim clanovi As Collection
-    Set clanovi = OtpClanovi(otpremnicaID)
+    Set clanovi = OtpClanovi(otpremnicaID, SRC)
 
     Dim k As Long
     For k = 1 To clanovi.count
@@ -3032,7 +3059,7 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
     RequireOtpDraft otpremnicaID, rOtp, SRC
 
     Dim clanovi As Collection
-    Set clanovi = OtpClanovi(otpremnicaID)
+    Set clanovi = OtpClanovi(otpremnicaID, SRC)
 
     If clanovi.count = 0 Then
         Err.Raise vbObjectError + 1298, SRC, _
@@ -3044,22 +3071,9 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
     ' sati -- pa se izvor u medjuvremenu moze stornirati ili ispraviti. Provera i
     ' upotreba moraju biti u istom trenutku, inace je ovo TOCTOU: DRAFT -> dodaj
     ' OTK1 -> storno OTK1 -> Izdaj je izdavao dokument iz storniranog izvora.
-    Dim tipAmb As String
-    Dim prvi As Boolean
-    prvi = True
-
-    Dim k As Long, otkupID As String
+    Dim k As Long
     For k = 1 To clanovi.count
-        otkupID = CStr(clanovi(k))
-        OtpRequireIzvorValjan otpremnicaID, otkupID, SRC, False
-
-        If prvi Then
-            tipAmb = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB)))
-            prvi = False
-        Else
-            RequireIstoPolje tipAmb, Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
-                             otkupID, COL_OTK_TIP_AMB))), "TipAmbalaze", otkupID, SRC
-        End If
+        OtpRequireIzvorValjan otpremnicaID, CStr(clanovi(k)), SRC, False
     Next k
 
     ' --- ocekivano = povezano, po klasi --------------------------------------
@@ -3102,7 +3116,6 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
         End If
     Next i
 
-    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_TIP_AMB, tipAmb, SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
 End Sub
 
@@ -3211,7 +3224,7 @@ Private Sub OtpUcitajPovezano(ByVal otpremnicaID As String, _
     Set povBrutoPun = CreateObject("Scripting.Dictionary")
 
     Dim clanovi As Collection
-    Set clanovi = OtpClanovi(otpremnicaID)
+    Set clanovi = OtpClanovi(otpremnicaID, src)
     If clanovi.count = 0 Then Exit Sub
 
     Dim clanSet As Object
@@ -3266,25 +3279,76 @@ Private Sub OtpUcitajPovezano(ByVal otpremnicaID As String, _
 End Sub
 
 ' Sastav otpremnice po KANONU (tblOtpremnicaIzvori), redom upisa.
-Private Function OtpClanovi(ByVal otpremnicaID As String) As Collection
+'
+' STRIKT LOADER, i to je jedini put do clanstva -- koriste ga i read-model
+' (GetOtpremnicaProgress) i sva tri pisca. Razlog: citalac koji tiho normalizuje
+' korupciju (dupli par -> jedan clan, veza na nepostojeci otkup -> manji zbir)
+' pokazuje operateru brojeve koji izgledaju ispravno, a finalizacija istu tu
+' korupciju prijavi tek sat kasnije. Ugovor mora biti isti na oba mesta.
+Private Function OtpClanovi(ByVal otpremnicaID As String, _
+                            ByVal src As String) As Collection
     Dim c As Collection
     Set c = New Collection
     Set OtpClanovi = c
+
+    ' Roditelj mora da postoji tacno jednom -- clanstvo bez headera nije sastav.
+    RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, "OtpremnicaID", src
 
     Dim izv As Variant
     izv = GetTableData(TBL_OTPREMNICA_IZVORI)
     If Not IsArray(izv) Then Exit Function
 
     Dim cOtp As Long, cOtk As Long
-    cOtp = GetColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID)
-    cOtk = GetColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID)
-    If cOtp = 0 Or cOtk = 0 Then Exit Function
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, src)
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src)
+
+    Dim vidjeni As Object
+    Set vidjeni = CreateObject("Scripting.Dictionary")
 
     Dim i As Long, otkupID As String
     For i = 1 To UBound(izv, 1)
         If StrComp(Trim$(NzToText(izv(i, cOtp))), otpremnicaID, vbTextCompare) = 0 Then
             otkupID = Trim$(NzToText(izv(i, cOtk)))
-            If Len(otkupID) > 0 Then c.Add otkupID
+
+            If Len(otkupID) = 0 Then
+                Err.Raise vbObjectError + 1332, src, _
+                          "Clanstvo bez OtkupID-a, otpremnica " & otpremnicaID & "."
+            End If
+
+            If vidjeni.Exists(UCase$(otkupID)) Then
+                Err.Raise vbObjectError + 1333, src, _
+                          "Kanonsko clanstvo je nekonzistentno: par (" & _
+                          otpremnicaID & ", " & otkupID & ") postoji vise puta."
+            End If
+            vidjeni.Add UCase$(otkupID), True
+
+            ' Dete mora da postoji. Bez ovoga bi veza na nepostojeci otkup dala
+            ' samo MANJI zbir -- tisi ishod od pada, i zato gori.
+            RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, otkupID, "OtkupID (clanstvo)", src
+
+            c.Add otkupID
+        End If
+    Next i
+
+    ' Globalno: isti otkup ne sme da bude u dve aktivne otpremnice.
+    AktivnoOtpClanstvoPoKanonu src
+End Function
+
+' Koliko gajbi izvor stvarno nosi u otpremnicu (zbir po njegovim stavkama).
+' KolAmbIzdata NIJE tu -- to su gajbe koje su otisle kooperantu.
+Private Function OtpGajbeIzvora(ByVal otkupID As String, ByVal src As String) As Double
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cAmb As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, src)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, src)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+            OtpGajbeIzvora = OtpGajbeIzvora + OtpDbl(d(i, cAmb))
         End If
     Next i
 End Function
@@ -3414,14 +3478,14 @@ End Sub
 
 Private Function OtpHdrKljucPoznat(ByVal kljuc As String) As Boolean
     Select Case LCase$(Trim$(kljuc))
-        Case "datum", "stanicaid", "vozacid", "kulturaid", "brojotpremnice", "cena"
+        Case "datum", "stanicaid", "vozacid", "kulturaid", "brojotpremnice", _
+             "tipambalaze", "cena"
             OtpHdrKljucPoznat = True
     End Select
 End Function
 
 ' Zatvoren spisak kljuceva, kao na otkupu. VrstaVoca / SortaVoca NISU na spisku:
-' oni su snapshot KulturaID-a i writer ih sam prepisuje. TipAmbalaze se izvodi
-' iz izvora pri izdavanju.
+' oni su snapshot KulturaID-a i writer ih sam prepisuje.
 Private Sub OtpHdrProveriKljuceve(ByVal h As Object, ByVal src As String)
     Dim kljuc As Variant
 
@@ -3429,8 +3493,8 @@ Private Sub OtpHdrProveriKljuceve(ByVal h As Object, ByVal src As String)
         If Not OtpHdrKljucPoznat(CStr(kljuc)) Then
             Err.Raise vbObjectError + 1310, src, _
                       "Header ima nepoznat kljuc: " & CStr(kljuc) & _
-                      ". VrstaVoca/SortaVoca su snapshot KulturaID-a, TipAmbalaze se " & _
-                      "izvodi iz izvora, Kolicina/KolAmbalaze/Klasa idu na STAVKU."
+                      ". VrstaVoca/SortaVoca su snapshot KulturaID-a, " & _
+                      "Kolicina/KolAmbalaze/Klasa idu na STAVKU."
         End If
     Next kljuc
 End Sub
@@ -3479,6 +3543,19 @@ Private Function OtpStavkaBroj(ByVal s As Object, ByVal kljuc As String, _
     End If
 
     OtpStavkaBroj = CDbl(v)
+End Function
+
+' Kljuc mora postojati, vrednost sme biti prazna. Razlika prema HdrObavezan je
+' namerna: nedostajuci kljuc je uvek greska pozivaoca (tipfeler), a prazna
+' vrednost je legitiman podatak za polja koja domen ne trazi uvek.
+Private Function OtpHdrObavezanKljuc(ByVal h As Object, ByVal kljuc As String, _
+                                     ByVal src As String) As String
+    If Not h.Exists(kljuc) Then
+        Err.Raise vbObjectError + 1334, src, _
+                  "Header nema obavezan kljuc: " & kljuc
+    End If
+
+    OtpHdrObavezanKljuc = Trim$(NzToText(h(kljuc)))
 End Function
 
 Private Function OtpHdrBrojOpcion(ByVal h As Object, ByVal kljuc As String, _
