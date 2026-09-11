@@ -951,6 +951,52 @@ može čitati zasebno:
 Korak 2 je jedini koji menja ponašanje bez mreže ispod sebe — zato korak 1 mora
 biti zelen i dokazan **pre** njega.
 
+#### ⚠ `SaveOtkupMulti_TX` se NE može obrisati u PR6
+
+Korak 2 je predviđao brisanje starog pisca, a korak 5 pun ugovor za
+`VrednostOtkupa` — koji bez toga ne može, jer je stari pisac poslednji
+proizvođač otkupa **bez stavki**. Migracija je pokušana i **izmerena**.
+
+Devet fixture poziva se prevodi mehanički. Ali od 12 tvrdnji koje posle toga
+padnu, **šest nije mehaničko** — one opisuju živo ponašanje koje tek PR7 menja:
+
+```
+Test_FullDocumentChainHappyPath
+    Otkup(klasa I).OtpremnicaID  = otpI
+    Otkup(klasa II).OtpremnicaID = otpII
+```
+
+Dva otkup reda, svaki na **svojoj** otpremnici. Jedan header drži **jedan**
+`OtpremnicaID`, pa je tvrdnja strukturno nemoguća dok otpremnica ne pređe na
+header+stavke i dok pripadnost ne postane `tblOtpremnicaIzvori`.
+
+Isto važi za hladnjački lanac (`RunHladnjacaChain`,
+`Test_HladnjacaChainHappyPath`, `Test_HladnjacaChainLinkFailureIsReported`):
+lanac je u PR6 **pauziran**, pa testovi koji tvrde da se kompletira ne mogu da
+prođu — oni mere sposobnost koja je namerno isključena.
+
+| Tvrdnja koja pada | Zašto |
+|---|---|
+| `Otkup class I/II linked to matching otpremnica` | per-class veza — **PR7** |
+| `TraceByZbirna returns rows` | posledica gornje |
+| `Hladnjaca lanac ... NEPOTPUN` ×2 | lanac pauziran — **PR7** |
+| `Hladnjaca lanac: otkup red povezan sa otpremnicom` | per-class veza — **PR7** |
+| `Hladnjaca lanac: otkup red nosi BrojZbirne` | lanac pauziran — **PR7** |
+
+Preostalih šest (AutoLink fixture, `FindOtkupIDByBrojAndKlasa`) jesu mehaničke.
+
+**Odluka: stari pisac ostaje do PR7.** Alternativa bi bila ugasiti šest tvrdnji
+koje pokrivaju živo ponašanje — a test koji se tiho isključi je gori od testa
+koji nedostaje, jer izgleda kao pokriće.
+
+Posledica: `VrednostOtkupa` ostaje bez punog ugovora do istog trenutka, i to je
+imenovano u samom kodu, ispod funkcije.
+
+> Pokušaj je vraćen u celini (`git checkout`), a ne ostavljen polovičan. Grana
+> je posle toga ponovo zelena: `BusinessFlowPro 945/0`.
+
+---
+
 #### Mreža za Otkup cutover — imenovano, pre writer-a
 
 | Test | Tvrdnja |
