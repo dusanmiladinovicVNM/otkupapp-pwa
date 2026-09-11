@@ -212,6 +212,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_SamoKlasaII
     Test_OTK_SortaPraznaSamoUzKulturuBezSorte
     Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
+    Test_OTK_AmbalazaIdeNaDokument
+    Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -8605,6 +8607,171 @@ Private Sub Test_OTP_DupliParUClanstvuPada()
 EH:
     LogFatal "Test_OTP_DupliParUClanstvuPada", Err.Number, Err.description
 End Sub
+
+' Ambalaza se knjizi JEDNOM po dokumentu, nad zbirom stavki.
+'
+' Zatecen pisac pravi par redova PO KLASI, samo zato sto ima dva OtkupID-a.
+' tblAmbalaza nema kolonu Klasa, pa bi ta dva reda bila dva reda koja se
+' razlikuju samo u kolicini. Sa jednim headerom taj razlog nestaje.
+Private Sub Test_OTK_AmbalazaIdeNaDokument()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAM")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-AM-" & scenario)
+    h.Add "KolAmbIzdata", 7#
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 600#, 40#, 30))
+
+    AssertTrue Len(otkID) > 0, "OTK ambalaza: upis prosao"
+
+    ' Primljene gajbe: 20 + 30 = 50, JEDAN par redova.
+    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), _
+                 "OTK ambalaza: primljeno = jedan dvojni upis, ne po klasi"
+    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Izlaz") - 50#) < 0.001, _
+               "OTK ambalaza: kooperant IZLAZ nosi zbir stavki"
+    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Ulaz") - 50#) < 0.001, _
+               "OTK ambalaza: OM ULAZ nosi isti zbir"
+    AssertEquals TEST_KOOP_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Izlaz"), _
+                 "OTK ambalaza: izlazna noga je kooperantova"
+    AssertEquals TEST_ST_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Ulaz"), _
+                 "OTK ambalaza: ulazna noga je stanicina"
+
+    ' Izdate gajbe: obrnut smer, svoj tip dokumenta.
+    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OM_IZLAZ_KOOP)), _
+                 "OTK ambalaza: izdato = jedan dvojni upis"
+    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz") - 7#) < 0.001, _
+               "OTK ambalaza: kooperant ULAZ prima prazne"
+
+    ' Vozac se NE zigose -- otkup ga u ciljnom modelu nema.
+    AssertEquals "", AmbVozac(otkID, DOK_TIP_OTKUP, "Izlaz"), _
+                 "OTK ambalaza: nema vozaca na otkupnoj nozi"
+
+    ' Bez gajbi nema ni reda -- prazan upis nije nula, nego odsustvo.
+    Dim otkID2 As String
+    otkID2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-AM2-" & scenario), _
+                            OtkStavke(400#, 50#, 0, 0#, 0#, 0))
+    AssertEquals "0", CStr(AmbBrojRedova(otkID2, DOK_TIP_OTKUP)), _
+                 "OTK ambalaza: bez gajbi nema reda"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_AmbalazaIdeNaDokument", Err.Number, Err.description
+End Sub
+
+' Odbijen dokument ne knjizi ambalazu.
+'
+' IME JE ISPRAVLJENO POSLE SABOTAZE. Prvo se zvao "AmbalazaUIstojTransakciji" i
+' tvrdio da rollback vraca redove ambalaze -- ali sabotaza koja SKLONI
+' AddTableSnapshot TBL_AMBALAZA nije ugrizla. Razlog: pad je u prevalidaciji, PRE
+' ijednog knjizenja, pa nema sta ni da se vrati. Test je merio odsustvo upisa, a
+' tvrdio rollback.
+'
+' Ono sto sada tvrdi je i dalje vredno: knjizenje se ne sme pomeriti ISPRED
+' validacije. Pad IZMEDJU dva TrackAmbalaza poziva snapshot stvarno pokriva, ali
+' se iz javnog API-ja ne moze izazvati bez novog seam-a -- to je namerno
+' neizmereno, a ne previdjeno.
+Private Sub Test_OTK_OdbijenDokumentNeKnjiziAmbalazu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAT")
+
+    Dim preA As Long
+    preA = OtkBrojRedova(TBL_AMBALAZA)
+
+    ' Druga stavka ne valja -> ceo dokument pada, pa i ambalaza prve.
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_I, 400#, 50#, 20#, 0#)
+    stavke.Add OtkStavka(KLASA_II, 600#, 0#, 30#, 0#)      ' cena 0 -> odbijeno
+
+    Dim rez As String, razlog As String
+    rez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-AT-" & scenario), stavke, razlog)
+
+    AssertEquals "", rez, "OTK ambalaza tx: upis odbijen"
+    AssertTrue InStr(1, razlog, "Cena", vbTextCompare) > 0, _
+               "OTK ambalaza tx: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(preA), CStr(OtkBrojRedova(TBL_AMBALAZA)), _
+                 "OTK ambalaza: odbijen dokument nije knjizio nijedan red"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_OdbijenDokumentNeKnjiziAmbalazu", Err.Number, Err.description
+End Sub
+
+' --- tblAmbalaza, po dokumentu -----------------------------------------------
+Private Function AmbRedovi(ByVal dokID As String, ByVal dokTip As String) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    Set AmbRedovi = c
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cDok As Long, cTip As Long
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "AmbRedovi")
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "AmbRedovi")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(i, cDok), "")), dokID, vbTextCompare) = 0 Then
+            If StrComp(Trim$(nz(d(i, cTip), "")), dokTip, vbTextCompare) = 0 Then
+                c.Add i
+            End If
+        End If
+    Next i
+End Function
+
+Private Function AmbBrojRedova(ByVal dokID As String, ByVal dokTip As String) As Long
+    AmbBrojRedova = AmbRedovi(dokID, dokTip).count
+End Function
+
+Private Function AmbPolje(ByVal dokID As String, ByVal dokTip As String, _
+                          ByVal smer As String, ByVal columnName As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSmer As Long, cTraz As Long
+    cSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "AmbPolje")
+    cTraz = RequireColumnIndex(TBL_AMBALAZA, columnName, "AmbPolje")
+
+    Dim redovi As Collection
+    Set redovi = AmbRedovi(dokID, dokTip)
+
+    Dim k As Long, i As Long
+    For k = 1 To redovi.count
+        i = CLng(redovi(k))
+        If StrComp(Trim$(nz(d(i, cSmer), "")), smer, vbTextCompare) = 0 Then
+            AmbPolje = Trim$(CStr(nz(d(i, cTraz), "")))
+            Exit Function
+        End If
+    Next k
+End Function
+
+Private Function AmbKolicina(ByVal dokID As String, ByVal dokTip As String, _
+                             ByVal smer As String) As Double
+    Dim t As String
+    t = AmbPolje(dokID, dokTip, smer, COL_AMB_KOLICINA)
+    If IsNumeric(t) Then AmbKolicina = CDbl(t)
+End Function
+
+Private Function AmbEntitet(ByVal dokID As String, ByVal dokTip As String, _
+                            ByVal smer As String) As String
+    AmbEntitet = AmbPolje(dokID, dokTip, smer, COL_AMB_ENTITET)
+End Function
+
+Private Function AmbVozac(ByVal dokID As String, ByVal dokTip As String, _
+                          ByVal smer As String) As String
+    AmbVozac = AmbPolje(dokID, dokTip, smer, COL_AMB_VOZAC)
+End Function
 
 ' --- OTP pomocne -------------------------------------------------------------
 Private Function OtpHeader(ByVal brojOtp As String) As Object

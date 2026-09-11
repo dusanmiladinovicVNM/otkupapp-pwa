@@ -70,11 +70,15 @@ Public Function CreateOtkup_TX(ByVal h As Object, _
     ' Sema pre upisa: AppendRow pise POZICIONO. Ide PRE BeginTx -- kapija sme da
     ' digne gresku, a nema smisla otvarati transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "CreateOtkup_TX", _
-        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE
+        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    ' Ambalaza je u snapshotu zbog pada IZMEDJU dva TrackAmbalaza poziva. Taj pad
+    ' se iz javnog API-ja ne moze izazvati (svi ulazi su vec provereni), pa je ovo
+    ' NEIZMERENA odbrana -- namerno, i tako imenovana.
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     CreateOtkup_TX = CreateOtkup(h, stavke)
 
@@ -350,6 +354,9 @@ Private Function CreateOtkup(ByVal h As Object, _
         End If
     Next rb
 
+    KnjiziOtkupAmbalazu otkupID, datum, tipAmb, kooperantID, stanicaID, _
+                        ZbirAmbalazeStavki(stavke), kolAmbIzdata, SRC
+
     CreateOtkup = otkupID
     Exit Function
 
@@ -367,6 +374,59 @@ EH:
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
+'
+' RAZLIKA: knjizi se JEDNOM po dokumentu, nad ZBIROM stavki, a ne po klasi.
+' tblAmbalaza nema kolonu Klasa, pa bi dva reda po klasi bila dva reda koja se
+' razlikuju samo u kolicini -- a zbir je isti. Zatecen pisac ih pravi dva samo
+' zato sto ima dva OtkupID-a; sa jednim headerom taj razlog nestaje. Storno time
+' dobija jedan DokumentID umesto dva.
+'
+' VOZAC SE NE ZIGOSE. Zatecen kod salje vozacID na kooperantovu nogu iako mu
+' sopstveni komentar kaze "otkup nema vozaca na OM-strani" (modOtkup:1294).
+' U ciljnom modelu otkup vozaca ni nema -- gajbe idu kooperant -> OM, a vozac
+' dolazi tek sa otpremnicom (S4.1c). Posledica je merena: saldo ambalaze po
+' vozacu gubi otkupnu nogu (modAmbalaza:499, modIzvestaj:1975, 3011, 4153).
+Private Sub KnjiziOtkupAmbalazu(ByVal otkupID As String, ByVal datum As Date, _
+                                ByVal tipAmb As String, _
+                                ByVal kooperantID As String, _
+                                ByVal stanicaID As String, _
+                                ByVal primljeno As Double, _
+                                ByVal izdato As Double, _
+                                ByVal src As String)
+    If primljeno > 0 Then
+        ' Kooperant predaje pune gajbe na OM:
+        '   kooperant IZLAZ (razduzuje se), OM ULAZ (zaduzuje se).
+        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Izlaz", _
+                      kooperantID, "Kooperant", "", _
+                      otkupID, DOK_TIP_OTKUP
+        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Ulaz", _
+                      stanicaID, "Stanica", "", _
+                      otkupID, DOK_TIP_OTKUP
+    End If
+
+    If izdato > 0 Then
+        ' OM izdaje prazne gajbe kooperantu uz otkup:
+        '   kooperant ULAZ (dobija prazne), OM IZLAZ (razduzuje se).
+        ' Isti DokumentID -> storno otkupa hvata i ovu nogu (modStorno).
+        TrackAmbalaza datum, tipAmb, CLng(izdato), "Ulaz", _
+                      kooperantID, "Kooperant", "", _
+                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
+        TrackAmbalaza datum, tipAmb, CLng(izdato), "Izlaz", _
+                      stanicaID, "Stanica", "", _
+                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
+    End If
+End Sub
+
+' Zbir ambalaze svih stavki -- primljene gajbe dokumenta.
+Private Function ZbirAmbalazeStavki(ByVal stavke As Collection) As Double
+    Dim i As Long
+    For i = 1 To stavke.count
+        ZbirAmbalazeStavki = ZbirAmbalazeStavki + _
+            OtkStavkaBroj(stavke(i), "KolAmbalaze", i, "ZbirAmbalazeStavki")
+    Next i
 End Function
 
 ' KulturaID se NE razresava ovde -- proverava se.
