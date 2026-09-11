@@ -1256,7 +1256,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — stari pisač je i dalje jedini put, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
 | 4 | ✅ **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
-| 6 | ✅ **Otkup cutover + integracije** (PR #308): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača i panel bloka **pauzirani** do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
+| 6 | 🟡 **Otkup cutover + integracije** (PR #308 — otvoren, ceka merge): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
 | 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
@@ -1471,7 +1471,7 @@ slajsa kao specifikacijom, umesto sa osećajem.
 
 Ove tvrdnje su **do Otkup cutover-a bile zelene**, a posle njega se ne mogu
 odrzati bez vracanja starog modela. Nisu obrisane nego **preseljene**: PR7
-(Otpremnica cutover) ih preuzima nad `tblOtpremnicaClanovi`, gde veza vise nije
+(Otpremnica cutover) ih preuzima nad `tblOtpremnicaIzvori`, gde veza vise nije
 pogodjena iz kolona nego upisana.
 
 **PR7 nije gotov dok svaka od njih ne bude zelena — po imenu.**
@@ -1496,20 +1496,39 @@ Privremen citac se **ne pravi** — to je izricita odluka: kolona
 `Otkup.OtpremnicaID` i kolona `Otkup.BrojZbirne` su bas ono sto refaktor brise
 (S11.3), pa bi shim bio rad u pogresnom smeru.
 
-#### Preseljene tvrdnje
+#### Preseljene tvrdnje — čuva se ISHOD, ne staro ime
 
-| # | Tvrdnja (izvorno ime) | Odakle | Sta PR7 mora da dokaze |
-|---|---|---|---|
-| 1 | `Otkup class I linked to matching otpremnica` | `Test_FullDocumentChainHappyPath` | dokument je clan otpremnice Klase I |
-| 2 | `Otkup class II linked to matching otpremnica` | isto | **isti** dokument je clan i otpremnice Klase II |
-| 3 | `TraceByZbirna returns rows` | isto | sledljivost cita clanstvo, ne `Otkup.OtpremnicaID` |
-| 4 | `Positive autolink links exact unique scenario` | `Test_AutoLinkPositiveUniqueMatch` | povezivanje je **upis**, ne pogadjanje |
-| 5 | `Auto-link must NOT link otkup with different BrojZbirne` | `Test_AutoLinkMustNotCrossBrojZbirne` | clanstvo ne moze da „precuri" na tudju zbirnu |
-| 6 | `Hladnjaca lanac: otkup red povezan sa otpremnicom` | `Test_HladnjacaChainHappyPath` | lanac vezuje dokument za **obe** svoje otpremnice |
-| 7 | `Hladnjaca lanac: otkup red nosi BrojZbirne` | isto | broj zbirne se **cita kroz clanstvo**, ne prepisuje na otkup |
+> **Ispravljeno posle review-a.** Prva verzija ove tabele je tvrdnje prenela
+> doslovno, pa je tražila da isti otkup bude član „otpremnice Klase I" **i**
+> „otpremnice Klase II". To bi u PR7 ponovo uvelo **dokument po klasi** — tačno
+> model koji se uklanja. Ime stare tvrdnje ne sme da zaključa pogrešan grain.
 
-Tvrdnje 1–3 vazile su nad dva reda po dokumentu; 4–5 nad pogodjenim kljucem;
-6–7 nad back-linkom koji jedno zaglavlje ne moze da nosi za dve klase.
+Ciljni grain (§4.2, i PR5 API to već tako radi — `CreateOtpremnicaIzIzvora_TX`
+prima **kolekciju izvora** i sam izvodi stavke):
+
+```
+OTK1  ├ I   400 kg          OTP1  ├ I   400 kg
+      └ II  600 kg                └ II  600 kg
+
+tblOtpremnicaIzvori:  OTP1 -> OTK1        JEDAN red, ne dva
+```
+
+| # | Ishod koji PR7 mora da dokaže | Izvorna tvrdnja |
+|---|---|---|
+| 1 | dvoklasni otkup je član **tačno jedne** otpremnice | `Otkup class I linked to matching otpremnica` |
+| 2 | ta otpremnica nosi **obe klase kao svoje stavke**, sa istim količinama | `Otkup class II linked to matching otpremnica` |
+| 3 | sledljivost čita **članstvo**, ne `Otkup.OtpremnicaID` | `TraceByZbirna returns rows` |
+| 4 | povezivanje je **upis**, ne pogađanje — nema heuristike po `Stanica+Datum+Vozac+Klasa` | `Positive autolink links exact unique scenario` |
+| 5 | dva **aktivna** članstva za isti otkup su tvrda greška (A15) | `Auto-link must NOT link otkup with different BrojZbirne` |
+| 6 | hladnjački lanac vezuje dokument za **jednu** otpremnicu koju je sam napravio | `Hladnjaca lanac: otkup red povezan sa otpremnicom` |
+| 7 | broj zbirne se **čita kroz lanac članstva**, ne prepisuje na otkup | `Hladnjaca lanac: otkup red nosi BrojZbirne` |
+
+Red 5 je namerno preformulisan: stara tvrdnja je čuvala da heuristika ne „precuri"
+na tuđu zbirnu. Kad povezivanje prestane da bude pogađanje, precurivanja nema —
+ostaje jača invarijanta koju `AktivnoOtpClanstvoPoKanonu` već drži.
+
+Red 6 isto: **jedna** otpremnica, ne „obe svoje otpremnice". Lanac koji za jedan
+otkup pravi dva izvedena dokumenta po klasi je stari model.
 
 #### Sta u medjuvremenu stoji umesto njih
 

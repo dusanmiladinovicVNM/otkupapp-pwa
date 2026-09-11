@@ -230,7 +230,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaNovDokumentINovBroj
     Test_OTK_IspravkaKapije
     Test_OTK_IspravkaNeGubiNovac
-    Test_OTK_IspravkaIzdatRoditeljFailClosed
+    Test_OTK_IspravkaRoditeljFailClosed
+    Test_OTK_IspravkaRollbackVracaSve
     Test_OTK_SelfHealMigracijeKolona
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
@@ -536,7 +537,7 @@ Private Sub Test_FullDocumentChainHappyPath()
     ' TraceByZbirna se oslanja na Otkup.OtpremnicaID koji upisuje bas AutoLink,
     ' pa GlobalGAP sledljivost za nov otkup ostaje prazna.
     '
-    ' Pravu vezu nosi tblOtpremnicaClanovi (PR5) i u pogon je vodi PR7. Privremen
+    ' Pravu vezu nosi tblOtpremnicaIzvori (PR5) i u pogon je vodi PR7. Privremen
     ' citac se NE pravi (odluka operatera). Tvrdnje koje su ovde stajale zive u
     ' PR7 acceptance mrezi -- docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
     AutoLinkOtkupOtpremnica_TX
@@ -1231,7 +1232,7 @@ End Sub
 '
 ' Njihove poslovne tvrdnje ("povezi tacno jedan jedinstven par" i "NIKAD ne
 ' prelazi preko razlicitog BrojZbirne") nisu izgubljene nego PRESELJENE: PR7 ih
-' preuzima nad tblOtpremnicaClanovi, gde veza vise nije pogodjena nego upisana.
+' preuzima nad tblOtpremnicaIzvori, gde veza vise nije pogodjena nego upisana.
 ' Spisak je u docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
 '
 ' Ovaj test je kapija u suprotnom smeru: ako iko vrati Vozaca ili Klasu na
@@ -1754,7 +1755,12 @@ Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
     AppendRF28OtkupFixture otkTipAmb, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, TEST_SORTA, tipAmbB
 
     ' Scope na test-dan -- run ne sme da zahvati nepovezane otkupe u svesci.
-    Call AutoCreateOtpremniceFromPWA_TX(testDate)
+    '
+    ' Zove se JEZGRO, ne _TX ulaz: produkcioni ulaz je PAUZIRAN do PR7
+    ' (modMasterSync.AutoOtpremnicaIzPwaDostupna). Pravilo grupisanja koje ovaj
+    ' test meri je i dalje ziv kod koji PR7 prepisuje, pa ostaje mereno; a test
+    ' ionako drzi sopstvenu transakciju (iznad), pa mu _TX omotac nista ne daje.
+    Call modMasterSync.AutoCreateOtpremniceFromPWA(testDate)
 
     Dim otpBase As String, otpCena As String, otpVrsta As String
     Dim otpSorta As String, otpTipAmb As String
@@ -9536,22 +9542,23 @@ EH:
     LogFatal "Test_OTK_IspravkaNeGubiNovac", Err.Number, Err.description
 End Sub
 
-' A13: OTKUP U IZDATOJ OTPREMNICI SE NE ISPRAVLJA.
+' A13: OTKUP KOJI IMA RODITELJA SE NE ISPRAVLJA -- NI IZDATOG, NI DRAFT.
 '
-' Izdata otpremnica je papir sa sastavom. Ispravka jednog njenog izvora nije
-' lokalna: otpremnica mora dobiti novu verziju sa novim brojem, a za njom i
-' zbirna (H1, GOLDEN_SCENARIJI S12). Ta propagacija je PR7.
+' Ranija verzija ovog testa je DRAFT roditelja pustala kroz, uz obrazlozenje da je
+' clanstvo drafta mutabilno. Merenje iz review-a je pokazalo da to nije dovoljno:
+' IspravkaOtkupa_TX ne dira tblOtpremnicaIzvori, pa bi draft ostao sa izvorom koji
+' pokazuje na STORNIRAN otkup, dok naslednik stoji van njega.
 '
-' Test meri OBE strane granice -- DRAFT roditelj prolazi, IZDATO ne. Kapija koja
-' bi blokirala i draft izgledala bi isto zeleno, a oduzela bi operateru ispravku
-' dokumenta koji jos niko nije video.
-Private Sub Test_OTK_IspravkaIzdatRoditeljFailClosed()
+' To je isto medjustanje koje je PR5 vec odbio kod UpdateOtpremnicaDraft_TX:
+' invarijanta mora da vazi IZMEDJU dva klika, ne tek pri izdavanju. Test zato sada
+' meri OBA stanja kao ODBIJENA, i u oba slucaja tvrdi da je odbijanje POTPUNO.
+Private Sub Test_OTK_IspravkaRoditeljFailClosed()
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("OTKA13")
 
-    ' --- DRAFT roditelj: ispravka PROLAZI ---
+    ' --- DRAFT roditelj ---
     Dim otkD As String
     otkD = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13D-" & scenario), _
                           OtkStavke(100#, 100#, 10, 0#, 0#, 0))
@@ -9565,18 +9572,15 @@ Private Sub Test_OTK_IspravkaIzdatRoditeljFailClosed()
 
     AssertTrue DodajOtpremnicaIzvor_TX(draftID, otkD, gD), _
                "A13: otkup je clan drafta (" & gD & ")"
+    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), "A13: draft nije izdat"
+
+    IspravkaOdbijena otkD, draftID, "DRAFT", scenario & "-D"
+
+    ' Clanstvo je NETAKNUTO -- draft i dalje pokazuje na ISTI, aktivan otkup.
     AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(otkD), _
-                 "A13: citac vidi pripadnost draftu"
-    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), _
-               "A13: draft nije izdat"
+                 "A13: draft i dalje ima svoj izvor"
 
-    Dim noviD As String
-    noviD = modOtkup.IspravkaOtkupa_TX(otkD, OtkHeader(TEST_PREFIX & "-OTK-A13D2-" & scenario), _
-                                       OtkStavke(95#, 100#, 10, 0#, 0#, 0), gD)
-    AssertTrue Len(noviD) > 0, _
-               "A13: ispravka otkupa u DRAFT otpremnici prolazi (" & gD & ")"
-
-    ' --- IZDATA otpremnica: ispravka PADA ---
+    ' --- IZDATA otpremnica ---
     Dim otkI As String
     otkI = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13I-" & scenario), _
                           OtkStavke(200#, 100#, 20, 0#, 0#, 0))
@@ -9592,34 +9596,121 @@ Private Sub Test_OTK_IspravkaIzdatRoditeljFailClosed()
                                            izvori, gI)
     AssertTrue Len(izdataID) > 0, "A13: izdata otpremnica napravljena (" & gI & ")"
     AssertTrue modDokumenta.OtpremnicaJeIzdata(izdataID), "A13: ta otpremnica JESTE izdata"
-    AssertEquals izdataID, modDokumenta.OtpremnicaZaOtkup(otkI), _
-                 "A13: citac vidi pripadnost izdatoj"
 
-    Dim preH As Long
-    preH = OtkBrojRedova(TBL_OTKUP)
-
-    Dim r As String
-    r = modOtkup.IspravkaOtkupa_TX(otkI, OtkHeader(TEST_PREFIX & "-OTK-A13I2-" & scenario), _
-                                   OtkStavke(190#, 100#, 19, 0#, 0#, 0), gI)
-
-    AssertEquals "", r, "A13: ispravka otkupa u IZDATOJ otpremnici je ODBIJENA"
-    AssertTrue InStr(1, gI, "IZDATOJ otpremnici", vbTextCompare) > 0, _
-               "A13: poruka imenuje izdatog roditelja (bilo: " & gI & ")"
-    AssertTrue InStr(1, gI, izdataID, vbTextCompare) > 0, _
-               "A13: poruka imenuje BAS tu otpremnicu"
-
-    ' Odbijanje je potpuno: ni nov red, ni storniran izvor.
-    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
-                 "A13: odbijena ispravka nije upisala nijedan red"
-    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkI), _
-               "A13: izvor je ostao aktivan"
-    AssertEquals "", OtkPolje(otkI, COL_TRACE_ZAMENJEN_SA_ID), _
-                 "A13: izvor nije dobio naslednika"
+    IspravkaOdbijena otkI, izdataID, "IZDATA", scenario & "-I"
 
     Exit Sub
 
 EH:
-    LogFatal "Test_OTK_IspravkaIzdatRoditeljFailClosed", Err.Number, Err.description
+    LogFatal "Test_OTK_IspravkaRoditeljFailClosed", Err.Number, Err.description
+End Sub
+
+' Ispravka otkupa sa roditeljem mora biti odbijena POTPUNO -- i poruka mora da
+' imenuje otpremnicu, a NE da nudi obilazak.
+Private Sub IspravkaOdbijena(ByVal otkupID As String, ByVal otpID As String, _
+                             ByVal stanje As String, ByVal scenario As String)
+    Dim preH As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+
+    Dim g As String
+    Dim r As String
+    r = modOtkup.IspravkaOtkupa_TX(otkupID, OtkHeader(TEST_PREFIX & "-OTK-A13X-" & scenario), _
+                                   OtkStavke(90#, 100#, 9, 0#, 0#, 0), g)
+
+    AssertEquals "", r, "A13 " & stanje & ": ispravka je ODBIJENA"
+    AssertTrue InStr(1, g, otpID, vbTextCompare) > 0, _
+               "A13 " & stanje & ": poruka imenuje BAS tu otpremnicu (bilo: " & g & ")"
+    AssertTrue InStr(1, g, "nije dostupna do PR7", vbTextCompare) > 0, _
+               "A13 " & stanje & ": poruka upucuje na PR7"
+
+    ' KAPIJA NAD PORUKOM: ranija verzija je govorila "storniraj otpremnicu pa
+    ' ponovi" -- uputstvo za obilazak same kapije, jer OtpremnicaZaOtkup gleda samo
+    ' AKTIVNE otpremnice. Test to sada zabranjuje po tekstu.
+    AssertTrue InStr(1, g, "Storniraj otpremnicu", vbTextCompare) = 0, _
+               "A13 " & stanje & ": poruka NE nudi obilazak preko storna roditelja"
+
+    ' Odbijanje je potpuno: ni nov red, ni storniran izvor, ni naslednik.
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "A13 " & stanje & ": nijedan red nije upisan"
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkupID), _
+               "A13 " & stanje & ": izvor je ostao aktivan"
+    AssertEquals "", OtkPolje(otkupID, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "A13 " & stanje & ": izvor nije dobio naslednika"
+End Sub
+
+' JEDNA TRANSAKCIJA -- dokazano padom IZMEDJU storna i naslednika.
+'
+' IspravkaOtkupa_TX prvo stornira stari dokument, pa tek onda pravi nov. Ako pisac
+' novog padne, sve mora nazad. Do review-a #308 to NIJE bilo tacno: transakcija
+' nije snapshotovala tblStornoZurnal, u koji StornoOtkup pise kroz JournalCell --
+' pa je posle rollback-a ostajao zapis storna koji se nije desio, i "Ponisti
+' storno" bi nudio operaciju nad dokumentom koji je i dalje aktivan.
+'
+' Pad se izaziva BEZ test seam-a: stavka sa cenom nula prolazi sve kapije ispravke
+' (roditelj, naslednik, storno, nov broj) i pada tek u CreateOtkup (modOtkup:261).
+' Seam bi merio granu koja u pogonu ne postoji; ovako pada pravi pisac.
+Private Sub Test_OTK_IspravkaRollbackVracaSve()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKROLL")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RB-" & scenario), _
+                           OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "Rollback: polazni dokument"
+
+    ' Vezan novac -- da rollback ima sta da vrati i na toj strani.
+    SaveNovac TEST_PREFIX & "-NOV-RB-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 10000#, "pre rollbacka", otkID
+
+    Dim preH As Long: preH = OtkBrojRedova(TBL_OTKUP)
+    Dim preS As Long: preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+    Dim preA As Long: preA = OtkBrojRedova(TBL_AMBALAZA)
+    Dim preV As Long: preV = OtkBrojRedova(TBL_STORNO_VEZE)
+    Dim preZ As Long: preZ = OtkBrojRedova(TBL_STORNO_ZURNAL)
+    Dim preN As Double: preN = GetIsplataForOtkup(otkID)
+
+    AssertTrue Abs(preN - 10000#) < 0.001, "Rollback: novac je vezan pre pada"
+
+    ' Cena nula -> pisac odbija stavku, ali TEK POSLE storna starog dokumenta.
+    Dim g As String
+    Dim r As String
+    r = modOtkup.IspravkaOtkupa_TX(otkID, OtkHeader(TEST_PREFIX & "-OTK-RB2-" & scenario), _
+                                   OtkStavke(90#, 0#, 9, 0#, 0#, 0), g)
+
+    AssertEquals "", r, "Rollback: ispravka je pala"
+    AssertTrue InStr(1, g, "Cena mora biti veca od nule", vbTextCompare) > 0, _
+               "Rollback: pala je BAS na stavci (bilo: " & g & ")"
+
+    ' --- sve mora biti kao pre ---
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkID), _
+               "Rollback: stari dokument je opet AKTIVAN"
+    AssertEquals "", OtkPolje(otkID, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "Rollback: stari nema naslednika"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "Rollback: nema novog otkup reda"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "Rollback: nema novih stavki"
+    AssertEquals CStr(preA), CStr(OtkBrojRedova(TBL_AMBALAZA)), _
+                 "Rollback: ambalaza vracena"
+    AssertEquals CStr(preV), CStr(OtkBrojRedova(TBL_STORNO_VEZE)), _
+                 "Rollback: tblStornoVeze bez ostatka"
+    AssertEquals CStr(preZ), CStr(OtkBrojRedova(TBL_STORNO_ZURNAL)), _
+                 "Rollback: tblStornoZurnal bez ostatka (fantom zapis storna)"
+    AssertTrue Abs(GetIsplataForOtkup(otkID) - 10000#) < 0.001, _
+               "Rollback: novac je i dalje vezan za stari dokument"
+
+    ' Dokument je i dalje upotrebljiv -- rollback ga nije ostavio polu-mrtvog.
+    AssertTrue Abs(modOtkup.VrednostOtkupa(otkID) - 10000#) < 0.001, _
+               "Rollback: vrednost starog dokumenta netaknuta"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IspravkaRollbackVracaSve", Err.Number, Err.description
 End Sub
 
 ' SELF-HEAL MIGRACIJE KOLONA -- destruktivan put mora da ima meru.

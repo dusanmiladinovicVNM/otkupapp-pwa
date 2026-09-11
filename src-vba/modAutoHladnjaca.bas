@@ -89,7 +89,7 @@ End Function
 ' tblOtkup postaje gubitna (jedna kolona OtpremnicaID, dve otpremnice), pa je
 ' poziv ugasen umesto da se upisuje polovicna veza.
 '
-' Kod ostaje NETAKNUT: PR7 ga vraca u pogon nad tblOtpremnicaClanovi.
+' Kod ostaje NETAKNUT: PR7 ga vraca u pogon nad tblOtpremnicaIzvori.
 ' Best-effort: greska NE sme da obori potvrdu otkupa. Vraca "" kad je lanac
 ' kompletan; inace tekst upozorenja (frmOtkup ga prikaze operateru).
 Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _

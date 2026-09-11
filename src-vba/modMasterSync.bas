@@ -696,6 +696,24 @@ End Function
 ' nepovezani (produkcioni poziv iz modGoogleSyncOrchestrator). Scope koriste
 ' testovi, isto kao samoBrojOtp u AutoCreateZbirnaFromOtpremnice, da run ne
 ' zahvati nepovezane otkupe u svesci.
+' AUTO-OTPREMNICA IZ PWA OTKUPA JE PAUZIRANA (Otkup cutover).
+'
+' Uvoz otkupa JESTE presao na kanonski pisac, ali ovaj korak nije: cita
+' VozacID, OtpremnicaID, Klasu, Kolicinu, Cenu i KolAmbalaze SA ZAGLAVLJA
+' (modMasterSync:759-767) i zove po-klasni SaveOtpremnica_TX. Nov pisac te
+' kolone ne pise -- vozac pripada otpremnici, klasa stavci -- pa bi korak nad
+' novim otkupima nasao NULA kandidata.
+'
+' Nula nije uspeh. Bez ove kapije pun sync bi prijavio "0 kreirano" i zeleno
+' cekirao korak koji vise ne radi nista -- tiho, i bas na putu koji operater ne
+' gleda red po red. Zato se sposobnost izricito proglasava NEDOSTUPNOM, isto
+' kao panel bloka i auto-lanac hladnjace.
+'
+' Kod ispod OSTAJE netaknut: PR7 ga vraca u pogon nad tblOtpremnicaIzvori.
+Public Function AutoOtpremnicaIzPwaDostupna() As Boolean
+    AutoOtpremnicaIzPwaDostupna = False
+End Function
+
 Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date = 0) As Long
     Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
 
@@ -703,6 +721,13 @@ Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date 
     Dim createdCount As Long
 
     On Error GoTo EH
+
+    If Not AutoOtpremnicaIzPwaDostupna() Then
+        Err.Raise vbObjectError + 8130, SRC, _
+                  "Auto-kreiranje otpremnica iz PWA otkupa je PAUZIRANO dok " & _
+                  "otpremnica ne predje na header + stavke (PR7). Otkupi su " & _
+                  "uvezeni; otpremnice unesi rucno."
+    End If
 
     Set tx = New clsTransaction
     tx.BeginTx

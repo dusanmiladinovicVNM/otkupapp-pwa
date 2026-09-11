@@ -236,29 +236,39 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                   "Dokument je vec storniran, nema sta da se ispravi: " & stariOtkupID
     End If
 
-    ' A13: IZDAT RODITELJ SE NE MENJA ISPOD RUKE.
+    ' A13: OTKUP KOJI IMA RODITELJA SE NE ISPRAVLJA LOKALNO -- NIJEDAN.
     '
-    ' Ako otkup vec ucestvuje u IZDATOJ otpremnici, njegova ispravka nije lokalna:
-    ' otpremnica je izdata sa tim sastavom, pa mora dobiti NOVU VERZIJU sa novim
-    ' brojem (H1 u GOLDEN_SCENARIJI S12), a za njom i zbirna. Ta propagacija je
-    ' PR7; do tada se staje GLASNO.
+    ' Ispravka menja koji dokument postoji. Ako otkup ucestvuje u otpremnici, ta
+    ' promena nije lokalna ni u jednom od dva stanja:
     '
-    ' Tiha alternativa bi bila najgora: nov otkup, stara otpremnica netaknuta, i
-    ' izdat papir koji vise ne opisuje robu koju nosi.
+    '   IZDATO   otpremnica je izdata sa tim sastavom, pa mora dobiti NOVU
+    '            VERZIJU sa novim brojem (H1, GOLDEN_SCENARIJI S12), a za njom i
+    '            zbirna. Tiha alternativa je najgora: nov otkup, stara otpremnica
+    '            netaknuta, i izdat papir koji vise ne opisuje robu koju nosi.
     '
-    ' DRAFT roditelj se NE blokira -- clanstvo drafta je mutabilno po dogovoru, a
-    ' IzdajOtpremnicu_TX revalidira izvore pri izdavanju, pa storniran otkup ne
-    ' moze da prodje kroz izdavanje.
+    '   DRAFT    clanstvo JESTE mutabilno, ali ovaj pisac ga NE dira. Rezultat bi
+    '            bio draft ciji izvor pokazuje na STORNIRAN otkup, dok naslednik
+    '            stoji van njega. To je isto medjustanje koje je PR5 vec odbio kod
+    '            UpdateOtpremnicaDraft_TX: invarijanta mora da vazi IZMEDJU dva
+    '            klika, ne tek pri izdavanju. Revalidacija u IzdajOtpremnicu_TX
+    '            hvata posledicu prekasno -- posao je do tada vec izgubljen.
+    '
+    ' Ispravno resenje za DRAFT je ATOMSKA zamena clanstva (ukloni stari izvor,
+    ' dodaj naslednika, revalidiraj stanicu/kulturu/ambalazu) u istoj transakciji.
+    ' To trazi pisca otpremnice, dakle PR7 -- pa se do tada staje GLASNO za oba.
     Dim roditelj As String
     roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
     If Len(roditelj) > 0 Then
-        If modDokumenta.OtpremnicaJeIzdata(roditelj) Then
-            Err.Raise vbObjectError + 1918, SRC, _
-                      "Otkup je u IZDATOJ otpremnici " & roditelj & _
-                      ". Ispravka bi promenila sastav izdatog dokumenta (A13) -- " & _
-                      "propagacija na otpremnicu i zbirnu jos ne postoji. " & _
-                      "Storniraj otpremnicu pa ponovi."
-        End If
+        ' Poruka NE nudi "storniraj otpremnicu pa ponovi". To bi bilo uputstvo za
+        ' obilazak same kapije: OtpremnicaZaOtkup gleda samo AKTIVNE otpremnice,
+        ' pa bi posle storna roditelja lokalna ispravka prosla -- i dala otkup bez
+        ' naslednika otpremnice, sto NIJE propagacija nego gubitak lanca.
+        Err.Raise vbObjectError + 1918, SRC, _
+                  "Otkup ucestvuje u otpremnici " & roditelj & _
+                  IIf(modDokumenta.OtpremnicaJeIzdata(roditelj), " (IZDATA)", " (DRAFT)") & _
+                  ". Ispravka bi promenila sastav izvedenog dokumenta (A13), a " & _
+                  "propagacija na otpremnicu i zbirnu jos ne postoji -- " & _
+                  "operacija nije dostupna do PR7."
     End If
 
     ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
@@ -278,6 +288,15 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' ZURNAL JE DEO OVE TRANSAKCIJE, ne tudja briga.
+    '
+    ' StornoOtkup otvara storno operaciju (BeginStornoOp) i pise JournalCell
+    ' redove -- zato ih StornoOtkup_TX izricito snapshotuje (modStorno:54). Bez
+    ' istog snapshota ovde, pad IZMEDJU storna i uspesnog naslednika ostavlja
+    ' zurnal sa zapisom storna koji se posle rollback-a nije desio: undo bi
+    ' nudio ponistenje operacije nad dokumentom koji je i dalje aktivan.
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
     ' Redosled je bitan: STORNO PRVI. Nov dokument ide kroz istu kapiju
     ' jedinstvenosti broja kao svaki drugi, a stari jos drzi svoj -- ali kapija

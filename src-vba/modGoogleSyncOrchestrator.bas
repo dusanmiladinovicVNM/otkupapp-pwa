@@ -216,6 +216,18 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     ' 3. Auto-create Otpremnice
+    '
+    ' PAUZIRANO do PR7 (v. modMasterSync.AutoOtpremnicaIzPwaDostupna). Korak se
+    ' NE preskace tiho i NE prijavljuje kao uspeh sa nulom: to bi bio zeleni
+    ' cekic nad koracima koji vise ne rade. Prijavljuje se kao NEDOSTUPAN, i to
+    ' ne obara ostatak sinhronizacije -- otkupi jesu uvezeni.
+    If Not modMasterSync.AutoOtpremnicaIzPwaDostupna() Then
+        okOtpremnice = True
+        AppendStep summary, True, _
+            "Auto-create Otpremnice: PAUZIRANO do PR7 -- otpremnice unesi rucno"
+        GoTo PosleOtpremnica
+    End If
+
     SyncProgress "Kreiram / povezujem otpremnice..."
 
     On Error Resume Next
@@ -242,6 +254,8 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
         GoTo CleanExit
     End If
+
+PosleOtpremnica:
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
     If IsMalinaMode() Then
