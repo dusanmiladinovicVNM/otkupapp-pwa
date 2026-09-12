@@ -48,6 +48,9 @@ Private m_SaveScheduled As Boolean
 ' Postavlja se ISKLJUCIVO iz test modula; produkcioni tok ga nikad ne dira.
 Private m_TestModeQuiet As Boolean
 
+' Ubrizgavanje kvara u AutoSaveAfterCommit -- samo test rezim (AutoSaveTestKvar).
+Private mTestKvarAutoSave As Boolean
+
 Public Sub SetTestModeQuiet(ByVal onOff As Boolean)
     m_TestModeQuiet = onOff
 End Sub
@@ -451,7 +454,17 @@ Public Function BackupVremeIzImena(ByVal ime As String, ByVal baza As String) As
     If h > 23 Or mi > 59 Or sek > 59 Then Exit Function
 
     On Error GoTo EH
-    BackupVremeIzImena = DateSerial(g, m, d) + TimeSerial(h, mi, sek)
+
+    ' Round-trip provera: DateSerial NORMALIZUJE nemoguc datum umesto da pukne --
+    ' DateSerial(2026, 2, 31) daje 3. mart. Bez ove provere bi rucno ili osteceno
+    ' nazvan fajl "<baza>_2026-02-31_0845.xlsm" prosao kao kanonska kopija i usao
+    ' u retention, dakle mogao biti OBRISAN. Generator app-a takvo ime nikad ne
+    ' pravi, ali po ovoj vrednosti se brise fajl, pa se ne oslanja na to.
+    Dim dt As Date
+    dt = DateSerial(g, m, d)
+    If Year(dt) <> g Or Month(dt) <> m Or Day(dt) <> d Then Exit Function
+
+    BackupVremeIzImena = dt + TimeSerial(h, mi, sek)
     Exit Function
 EH:
     BackupVremeIzImena = 0
@@ -648,7 +661,9 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
                                Optional ByVal force As Boolean = False)
     Dim prevAlerts As Boolean
     Dim alertsTouched As Boolean
-    
+    Dim errNo As Long
+    Dim errDesc As String
+
     On Error GoTo EH
     
     ' Reentrancy guard -- set BEFORE any other check.
@@ -696,7 +711,12 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
     prevAlerts = Application.DisplayAlerts
     Application.DisplayAlerts = False
     alertsTouched = True
-    
+
+    ' Ubrizgavanje kvara -- SAMO test rezim, tvrdo gejtovano (v. AutoSaveTestKvar).
+    ' Stoji bas OVDE, dok je alertsTouched True: to je jedini prozor u kome EH blok
+    ' dodiruje Application.DisplayAlerts, dakle jedini u kome moze i sam da pukne.
+    If mTestKvarAutoSave Then Err.Raise 5, "AutoSaveAfterCommit", "test: ubrizgan kvar"
+
     ThisWorkbook.Save
     
     Application.DisplayAlerts = prevAlerts
@@ -717,11 +737,42 @@ EH:
     ' Critical: AutoSave failure must NEVER propagate. The TX is already
     ' committed in memory; operator must not see save failure for a save
     ' that succeeded at the business-logic level.
-    LogErr "AutoSaveAfterCommit"
-    
+    '
+    ' Gard ide PRVI, pre logovanja i pre dodira Application. Greska podignuta u
+    ' rukovaocu greske je NEUHVACENA i izlazi iz procedure -- a pozivalac
+    ' AutoSaveTick je Application.OnTime callback BEZ ijednog rukovaoca, pa bi
+    ' operater dobio VBA dijalog usred rada.
+    '
+    ' Gora je druga steta: bez garda se "m_AutoSaveInProgress = False" ispod ne bi
+    ' izvrsilo, pa bi reentrancy prekidac ostao True do kraja sesije i svaki
+    ' sledeci AutoSave tiho izlazio na prvoj liniji -- dok CommitTx i dalje
+    ' prijavljuje uspeh, a nista se ne snima. Tih gubitak podataka.
+    '
+    ' LogError sa SACUVANIM vrednostima, ne LogErr: "On Error Resume Next" resetuje
+    ' Err (vba_check pravilo MRTAV_LOG), pa bi LogErr posle garda upisao prazno.
+    errNo = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    LogError "AutoSaveAfterCommit", errDesc, errNo
+
     If alertsTouched Then Application.DisplayAlerts = prevAlerts
     m_AutoSaveInProgress = False
     ' Intentionally no Err.Raise.
+End Sub
+
+' Je li reentrancy prekidac trenutno podignut. Javno ZBOG TESTA: steta od
+' zaglavljenog prekidaca je tiha -- autosave prestane da radi, a nista ne pukne
+' niti se prijavi. Bez ovog citaca se ta steta ne moze izmeriti.
+Public Function AutoSaveUToku() As Boolean
+    AutoSaveUToku = m_AutoSaveInProgress
+End Function
+
+' Ubrizgaj kvar u AutoSaveAfterCommit, tacno u prozoru u kome je alertsTouched
+' True. Tvrdo gejtovano IsTestMode-om -- isti obrazac kao modScrDokumenti.Scr_OtpTestSet
+' (.claude/rules/testovi.md S4). Van test rezima ne radi nista.
+Public Sub AutoSaveTestKvar(ByVal ukljuci As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mTestKvarAutoSave = ukljuci
 End Sub
 
 ' ============================================================
