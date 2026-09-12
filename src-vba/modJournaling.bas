@@ -357,8 +357,22 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    LogErr "modJournaling.BackupFileOnStart"
+    ' On Error Resume Next ide ODMAH posle citanja Err, PRE logovanja i
+    ' monitoringa. Ugovor ove procedure je "NIKAD NE PODIZE GRESKU", pa unutar EH
+    ' bloka nista ne sme da ga ponisti. Greska podignuta u rukovaocu greske je
+    ' NEUHVACENA i izlazi iz procedure -- a StartApp bi tada opet pao, sto je
+    ' tacno kvar koji se ovde leci.
+    '
+    ' Mereno: LogErr danas ne moze da pukne (LogError pocinje sa On Error Resume
+    ' Next i sav upis je unutra). Ali ugovor ne sme da visi o TUDJEM internom
+    ' rukovanju greskom -- dovoljno je da neko skloni taj gard iz modLogError i
+    ' ova tvrdnja tiho prestane da vazi, bas na punom disku gde se najvise racuna.
+    ' LogError sa SACUVANIM vrednostima, ne LogErr: "On Error Resume Next" resetuje
+    ' Err, a LogErr pise samo dok je Err.Number <> 0 -- posle garda bi upisao
+    ' PRAZNO. Zamku hvata vba_check pravilom MRTAV_LOG; bez toga bi ova izmena
+    ' utisala log bas u trenutku kvara koji se loguje.
     On Error Resume Next
+    LogError "modJournaling.BackupFileOnStart", errDesc, errNo
     If IsTestMode() Then GoTo BezMonitoringa      ' v. gard na uspesnom putu
 
     Monitor_Backup _
