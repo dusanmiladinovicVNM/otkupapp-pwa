@@ -219,6 +219,11 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
     Dim total As Double: total = kol + k2
     If total <= 0 Then Exit Function
 
+    ' Pauzirano: bez tacnog "napisano" nema cime da se sudi o prekoracenju, a
+    ' upozorenje racunato iz praznih kolona bi javljalo prekoracenje na svakom
+    ' prvom bloku (napisano bi uvek bilo 0).
+    If Not NapredakBlokaDostupan() Then Exit Function
+
     Dim ukupno As Double
     ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
     Dim preost As Double: preost = ukupno - SumKolByOtp(mActiveOtpID)
@@ -258,6 +263,11 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
     RefreshSummary
 
     ' auto-deselekcija kad je otpremnica popunjena (zastita od pogresnog vezivanja)
+    '
+    ' Pauzirano: sa praznim kolonama bi "popunjena" bilo tacno kad otpremnica ima
+    ' 0 kg, pa bi se deselekcija okidala na svakom prvom bloku.
+    If Not NapredakBlokaDostupan() Then Exit Sub
+
     Dim ukupno As Double
     ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
     If ukupno - SumKolByOtp(mActiveOtpID) <= 0.0001 Then
@@ -1395,6 +1405,17 @@ Private Sub RefreshSummary()
     Dim preostaloAmb As Double: preostaloAmb = ukupnoAmb - napisanoAmb
 
     mLblUkupno.caption = "Ukupno kg: " & FmtKgBrutoNeto(ukupnoBruto, ukupno)
+
+    ' Pauzirano do PR7: prazno polje kaze "ne znam", nula bi lagala.
+    If Not NapredakBlokaDostupan() Then
+        mLblNapisano.caption = "U blokovima: -- (pauzirano do prelaska otpremnice)"
+        mLblPreostalo.caption = "Ostatak: --"
+        mLblUkupnoAmb.caption = "Ukupno amb: " & FmtKg(ukupnoAmb)
+        mLblNapisanoAmb.caption = "U blokovima amb: --"
+        mLblPreostaloAmb.caption = "Ostatak amb: --"
+        Exit Sub
+    End If
+
     mLblNapisano.caption = "U blokovima: " & FmtKgBrutoNeto(napisanoBruto, napisano)
     mLblPreostalo.caption = "Ostatak: " & FmtKgBrutoNeto(ukupnoBruto - napisanoBruto, preostalo)
 
@@ -1533,6 +1554,24 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
         End If
     Next i
 End Sub
+
+' NAPREDAK BLOKA JE PAUZIRAN DO PR7.
+'
+' Sum*ByOtp sabiraju tblOtkup.Kolicina / BrutoKg / KolAmbalaze po
+' Otkup.OtpremnicaID. Nov pisac te kolone ostavlja PRAZNE -- brojevi zive u
+' tblOtkupStavke -- pa bi panel svaki nov blok od 1000 kg prikazao kao NULU:
+' "U blokovima 0, Ostatak = cela otpremnica".
+'
+' Pravi model je tblOtpremnicaIzvori + modDokumenta.GetOtpremnicaProgress (PR5
+' skela), ali otpremnica jos nije cutover-ovana. Citalac koji bi mesao staru
+' vezu i nove stavke bio bi compatibility sloj koji se u PR7 odmah brise.
+'
+' Zato se brojevi NE PRIKAZUJU umesto da se prikazu pogresni, upozorenje na
+' prekoracenje se ne izdaje (nema cime da se sudi), a auto-deselekcija ne okida.
+' Vezivanje bloka za otpremnicu i dalje radi -- ono ne zavisi od ovih zbirova.
+Public Function NapredakBlokaDostupan() As Boolean
+    NapredakBlokaDostupan = False
+End Function
 
 Public Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)

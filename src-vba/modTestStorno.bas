@@ -63,6 +63,7 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
@@ -1014,18 +1015,22 @@ End Sub
 Private Sub T27_StornoIzvodaOsvezavaOtkup()
     Const S As String = "T27 storno izvoda osvezava otkup: "
 
-    SeedOtkupPlacen "SVT-OTK-5", 100, 10          ' vrednost 1000, oznacen kao isplacen
+    ' Vrednost 1000, a isplata iz izvoda je tacno pokriva -> dug je nula.
+    SeedOtkupPlacen "SVT-OTK-5", 100, 10
     SeedBimStavka "SVT-BIM-5A", "SVT-IZV-5", "SVT-RAC-5", "SVT-PARTNER-5", 0, 1000
     SeedNovacBim "SVT-NOV-5A", "SVT-IZV-5", "SVT-BIM-5A", "SVT-P5", 0, 1000, "SVT-OTK-5"
 
-    ChkEq OtkIsplaceno("SVT-OTK-5"), STATUS_ISPLACENO, S & "pre storna blok je isplacen"
+    Chk Not OtkOtvorenaObaveza("SVT-OTK-5"), S & "pre storna dug je namiren"
 
     Dim info As String
     Chk StornoIzvod_TX("SVT-IZV-5", "SVT-RAC-5", IZVOD_STORNO_REMAP, info), S & "StornoIzvod_TX uspeo"
 
     ChkEq NovStornirano("SVT-NOV-5A"), "Da", S & "isplata stornirana"
-    ChkEq OtkIsplaceno("SVT-OTK-5"), "", S & "blok vise nije isplacen"
-    ChkEq OtkDatumIsplate("SVT-OTK-5"), "", S & "datum isplate ocisceni"
+
+    ' Sustina testa: dug se VRACA u listu za isplatu. Ranije se to citalo iz
+    ' kolone Isplaceno; ta kolona vise nema pisca, pa bi tvrdnja nad njom bila
+    ' zelena i kad blok ostane nevidljiv -- tacno kvar koji test sprecava.
+    Chk OtkOtvorenaObaveza("SVT-OTK-5"), S & "posle storna blok je opet otvoren"
 End Sub
 
 Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
@@ -1133,6 +1138,21 @@ Private Sub SeedOtkupZaAvans(ByVal otkID As String, ByVal koopID As String, _
     SvAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, COL_OTK_CENA), _
         Array(otkID, otkID, koopID, kolicina, cena)
+    SeedOtkupStavka otkID, kolicina, cena
+End Sub
+
+' Stavka otkupa uz seed header reda.
+'
+' Od Otkup cutover-a vrednost dokumenta je SUM(stavke.Kolicina x Cena)
+' (modOtkup.VrednostOtkupa), pa fixture koji upise samo header pravi otkup
+' vrednosti NULA -- i avans se tiho ne primeni. Bas to je oborilo T16/T23/T25
+' kad je citalac presao na stavke.
+Private Sub SeedOtkupStavka(ByVal otkID As String, ByVal kolicina As Double, _
+                            ByVal cena As Double)
+    SvAppend TBL_OTKUP_STAVKE, _
+        Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
+              COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB), _
+        Array(otkID & "-OKS1", otkID, 1, KLASA_I, kolicina, cena, 0)
 End Sub
 
 ' Avans split naslednik: isti broj i partner kao original, ali BEZ BIM markera
@@ -1158,11 +1178,20 @@ End Sub
 
 ' Otkup blok sa kolicinom/cenom, unapred oznacen kao isplacen (T27 proverava da
 ' storno izvoda to ponisti).
+' Otkup koji je STVARNO placen: zaglavlje + stavka + pokrivajuca isplata.
+'
+' Kolona Isplaceno je bila kes obrisanog UpdateOtkupStatus (korak 4). Status je
+' sada izveden -- vrednost stavki minus zbir isplata iz tblNovac -- pa fixture
+' koji upise samo kolonu pravi otkup koji je i dalje OTVOREN.
+'
+' Isplata se vezuje preko OtkupID-a, isto kao sto to radi StornoIzvod_TX kad je
+' stornira; zato T27 i moze da meri povratak duga.
 Private Sub SeedOtkupPlacen(ByVal otkID As String, ByVal kolicina As Double, ByVal cena As Double)
     SvAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_CENA, _
-              COL_OTK_ISPLACENO, COL_OTK_DATUM_ISPLATE), _
-        Array(otkID, otkID, kolicina, cena, STATUS_ISPLACENO, Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA), _
+        Array(otkID, otkID, "SVT-KOOP-P", kolicina, cena)
+    SeedOtkupStavka otkID, kolicina, cena
 End Sub
 
 ' Append red po IMENU kolone (preskace kolone kojih nema). Vraca nista; raise
@@ -1294,12 +1323,19 @@ Private Function BimStornirano(ByVal bimID As String) As String
     BimStornirano = NzTx(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_STORNIRANO))
 End Function
 
-Private Function OtkIsplaceno(ByVal otkID As String) As String
-    OtkIsplaceno = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_ISPLACENO))
-End Function
+' Da li otkup stoji u listi otvorenih obaveza -- IZVEDENO, ne iz kolone.
+Private Function OtkOtvorenaObaveza(ByVal otkID As String) As Boolean
+    Dim r As Variant
+    r = GetOpenOtkupi("")
+    If Not IsArray(r) Then Exit Function
 
-Private Function OtkDatumIsplate(ByVal otkID As String) As String
-    OtkDatumIsplate = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM_ISPLATE))
+    Dim i As Long
+    For i = 1 To UBound(r, 1)
+        If StrComp(Trim$(CStr(r(i, 2))), otkID, vbTextCompare) = 0 Then
+            OtkOtvorenaObaveza = True
+            Exit Function
+        End If
+    Next i
 End Function
 
 Private Function OtkOtpremnicaID(ByVal blkID As String) As String

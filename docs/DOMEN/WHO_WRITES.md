@@ -20,7 +20,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 | Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblOtkup` | 9 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow` |
+| `tblOtkup` | 8 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow` |
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
@@ -84,8 +84,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPartnerMap`: `modBankaMapiranje`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
-- `tblStornoVeze`: `modStornoContext`
-- `tblStornoZurnal`: `modStorno`, `modStornoFlow`
+- `tblStornoVeze`: `modOtkup`, `modStornoContext`
+- `tblStornoZurnal`: `modOtkup`, `modStorno`, `modStornoFlow`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
 - `tblZbirnaIzvori`: `modDokumenta`
 - `tblZbirnaStavke`: `modDokumenta`
@@ -107,6 +107,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
+- `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnicaIzvori`: `modBusinessFlowProTests`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
@@ -118,11 +119,11 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
-- `tblKulture`: `modTestPalete`
+- `tblKulture`: `modGoldenTests`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblStanice`: `modGoldenTests`, `modTestBanka`
-- `tblTipAmbalaze`: `modTestPalete`
+- `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTestPalete`
 
 ## Sta ovo NE pokriva
 

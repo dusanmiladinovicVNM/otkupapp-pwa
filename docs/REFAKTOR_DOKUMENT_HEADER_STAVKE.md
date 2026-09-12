@@ -759,7 +759,7 @@ je bio smisao:
 | `CARDINALITY` | PROVEN | Otkup → Otpremnica N:1 promenljiva; `ReassignOtkupToOtpremnica_TX` (`modDokumenta:5382`) dokazuje premeštanje |
 | `INVARIANTS/OWNER` | **GAP** | danas **nijedno** pravilo članstva: reassign proverava samo da cilj postoji i nije storniran |
 | `WRITERS` | PROVEN | `row_owner` = `modDokumenta`; 4 schema pisca; 3 produkciona poziva `SaveOtpremnica_TX` (`modAutoHladnjaca:213,258`, `modMasterSync:877`) |
-| `DOWNSTREAM` | PROVEN | `Otkup.OtpremnicaID`: **39** ne-test korišćenja, **15** modula, **5 pisača** → kolona ostaje do PR7 |
+| `DOWNSTREAM` | PROVEN | `Otkup.OtpremnicaID`: **39** ne-test korišćenja, **15** modula, ~~**5 pisača**~~ → **6** (ispravljeno u PR7 pre-flight-u: `modSledljivost` je promašen jer mu je poziv prelomljen u dva reda) → kolona ostaje do PR7 |
 | `EVENTS` | PROVEN | fizički: roba napušta otkupno mesto · poslovni: otpremnica nastaje · finansijski: **ne postoji** — `Otpremnica.Cena` je prefill predlog (§13b), ne obračun |
 | `CAPABILITY` | N/A | skela je aditivna, nijedna sposobnost se ne seli |
 | `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
@@ -846,6 +846,360 @@ Uz njih idu i četiri koje nosi odluka o draft-u:
 > `ClanstvoMutabilnoUDraftu` je jedini koji dokazuje da `DeleteRow` **stvarno**
 > briše: da ostavlja tombstone, kapija „već u aktivnoj otpremnici" bi uklonjeni
 > izvor i dalje držala, i drugi `Dodaj` bi pao.
+
+---
+
+### Otkup cutover (PR6) — pre-flight verdikt
+
+Prvi dokument kod kog nov pisač postaje **jedini put**. Do sada je sve bilo
+aditivno; od ovog PR-a nadalje zeleni golden više ne dokazuje „nisam ništa
+pomerio", nego da je ponašanje **namerno** promenjeno tačno tamo gde treba.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | §4.1–4.1g zaključani kroz PR4; keš je odlučen (v. ispod) |
+| `IDENTITY` | PROVEN | `CreateOtkup_TX` daje jedan `OtkupID` po bloku; `Split(" + ")` gubi razlog postojanja |
+| `CARDINALITY` | PROVEN | 1 blok → 1 header → N stavki |
+| `INVARIANTS/OWNER` | **GAP → plan** | A11 cilj je `modOtkup` sam; danas **16 upisa u 8 modula** |
+| `WRITERS` | PROVEN | **jedan** produkcioni poziv starog pisca: `modOtkupUnos:275` |
+| `DOWNSTREAM` | PROVEN | **131** korišćenje kolona koje umiru, ~20 modula (tabela ispod) |
+| `EVENTS` | PROVEN | fizički: roba primljena na otkupnom mestu · poslovni: otkupni list nastaje · finansijski: **ne kroz ovaj dokument** (v. ispod) |
+| `CAPABILITY` | **treba red** | štampa otkupnog lista, panel blokova, auto-hladnjača — svaka mora završiti kao `MIGRATED`, ne „kod još postoji" |
+| `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
+| `LANDING` | RISK | stacked nad #307 |
+
+#### Mereno: šta cutover zapravo dira
+
+```
+pisac koji se menja      1   modOtkupUnos:275 (jedini produkcioni poziv)
+Split(" + ") potrosaci   4   OTKUPNI: modAmbalaza:359, modAutoHladnjaca:182,
+                             modOtkupBlok:1439, modPrint:594
+                         5   PRIJEMNICA (modDokUnos, modPrint:1090/1359) -- PR9
+A11 konsolidacija       16   upisa u 8 modula -> modOtkup API
+```
+
+> Prvo merenje je reklo „9" i nije razdvojilo dokumente. Pet od njih parsira
+> **`prijemnicaIDs`**, ne `otkupIDs` — oni padaju u PR9, ne ovde.
+
+**Tri od četiri otkupna `Split`-a su bezbolna:** `Split("OTK-1", " + ")` vraća
+niz od jednog elementa, pa `modAmbalaza`, `modOtkupBlok` i `modPrint` nastavljaju
+da rade i posle prelaska — postaju samo besmisleni, i brišu se kao čišćenje.
+
+#### ⚠ Auto-hladnjača: jedini `Split` koji deli PO KLASI
+
+`modAutoHladnjaca:182` iz `"ID1 + ID2"` vadi `idI` i `idII` i svaku klasu vodi
+kroz **svoj** lanac: otpremnica → zbirna → prijemnica → `LinkOtkupRedNaDokument`.
+Ugovor je izričit u samom kodu (`:337`):
+
+> „Prazan `OtkupID` NIJE legitimno *nema šta da se veže*… dovde se stiže sa
+> ID-jem za svaku aktivnu klasu. Prazno ⇒ prekršen ugovor."
+
+Posle prelaska dvoklasni blok daje **jedan** ID, pa `idII` postaje `""` i noga
+Klase II se prijavljuje kao **neuspeh veze** — upozorenje operateru na svakom
+dvoklasnom unosu u hladnjaču.
+
+Dublje od toga: lanac pravi **otpremnicu po klasi**, a jedan otkup red može da
+drži **jedan** `OtpremnicaID`. Veza je time strukturno gubitna dok otpremnica ne
+pređe na header+stavke (PR7).
+
+To nije bug u lancu nego **sudar dva modela** — i pitanje je za operatera, jer
+menja opseg PR6. Odluka se upisuje ovde pre nego što korak 2 nastavi.
+
+| Kolona koja umire | Ne-test korišćenja | Modula |
+|---|---:|---:|
+| `Kolicina` | 47 | 20 |
+| `Cena` | 33 | 14 |
+| `KolAmbalaze` | 24 | 11 |
+| `Klasa` | 20 | 15 |
+| `BrutoKg` | 7 | 5 |
+| **ukupno** | **131** | |
+
+#### Keš NE ulazi u pisca — i to je merenje, ne pretpostavka
+
+Red 6 u tabeli PR-ova kaže „novac na header", što se lako čita kao „`CreateOtkup_TX`
+mora da piše `tblNovac`". Model kaže suprotno, i to je već odlučeno: §4.1b briše
+`Novac` / `PrimalacNovca`, a §6.1 kaže da **keš uopšte ne ulazi kroz otkupni list** —
+put koji stvarno postavlja `Isplaceno` je avans. Golden `B1`/`B4` su ranije uklonjeni
+baš iz tog razloga.
+
+Legacy `SaveOtkupMulti_TX` ipak snapshot-uje `tblNovac` i ima granu za keš — **mrtav
+kod**, i briše se zajedno sa pisačem.
+
+> Ovo je prvi put da je pravilo iz §13c radilo unapred: da su pročitane samo tabela
+> PR-ova ili samo model, PR6 bi dobio pisca koji knjiži keš i test koji taj mrtav
+> kod čuva.
+
+Ostaje samo **ambalaža**: `TrackAmbalaza` po klasi za primljene gajbe i obrnut smer
+za `KolAmbIzdata` (`modOtkup:1294-1310`).
+
+#### Redosled unutar PR-a
+
+Jedan PR (odluka operatera), ali commit-i idu ovim redom — svaki je celina koja se
+može čitati zasebno:
+
+```
+1  pisac kompletan     ambalaza + StornoOtkup_TX nad headerom + ispravka
+                       jos ADITIVNO: golden 12/0 mora ostati nepromenjen
+2  jedini put          modOtkupUnos:275 -> CreateOtkup_TX
+                       SaveOtkupMulti_TX obrisan, 9x Split(" + ") pada
+                       OVDE golden SME da se promeni -- i mora se objasniti
+3  citaoci             131 koriscenje -> read-model nad tblOtkupStavke
+4  kanon               kolone van schema.json; tvrdnja postaje "kolone nema"
+5  A11                 8 pisaca -> modOtkup API, ratchet na cilj
+```
+
+Korak 2 je jedini koji menja ponašanje bez mreže ispod sebe — zato korak 1 mora
+biti zelen i dokazan **pre** njega.
+
+#### ⚠ `SaveOtkupMulti_TX` se NE može obrisati u PR6
+
+Korak 2 je predviđao brisanje starog pisca, a korak 5 pun ugovor za
+`VrednostOtkupa` — koji bez toga ne može, jer je stari pisac poslednji
+proizvođač otkupa **bez stavki**. Migracija je pokušana i **izmerena**.
+
+Devet fixture poziva se prevodi mehanički. Ali od 12 tvrdnji koje posle toga
+padnu, **šest nije mehaničko** — one opisuju živo ponašanje koje tek PR7 menja:
+
+```
+Test_FullDocumentChainHappyPath
+    Otkup(klasa I).OtpremnicaID  = otpI
+    Otkup(klasa II).OtpremnicaID = otpII
+```
+
+Dva otkup reda, svaki na **svojoj** otpremnici. Jedan header drži **jedan**
+`OtpremnicaID`, pa je tvrdnja strukturno nemoguća dok otpremnica ne pređe na
+header+stavke i dok pripadnost ne postane `tblOtpremnicaIzvori`.
+
+Isto važi za hladnjački lanac (`RunHladnjacaChain`,
+`Test_HladnjacaChainHappyPath`, `Test_HladnjacaChainLinkFailureIsReported`):
+lanac je u PR6 **pauziran**, pa testovi koji tvrde da se kompletira ne mogu da
+prođu — oni mere sposobnost koja je namerno isključena.
+
+| Tvrdnja koja pada | Zašto |
+|---|---|
+| `Otkup class I/II linked to matching otpremnica` | per-class veza — **PR7** |
+| `TraceByZbirna returns rows` | posledica gornje |
+| `Hladnjaca lanac ... NEPOTPUN` ×2 | lanac pauziran — **PR7** |
+| `Hladnjaca lanac: otkup red povezan sa otpremnicom` | per-class veza — **PR7** |
+| `Hladnjaca lanac: otkup red nosi BrojZbirne` | lanac pauziran — **PR7** |
+
+Preostalih šest (AutoLink fixture, `FindOtkupIDByBrojAndKlasa`) jesu mehaničke.
+
+**Odluka: stari pisac ostaje do PR7.** Alternativa bi bila ugasiti šest tvrdnji
+koje pokrivaju živo ponašanje — a test koji se tiho isključi je gori od testa
+koji nedostaje, jer izgleda kao pokriće.
+
+Posledica: `VrednostOtkupa` ostaje bez punog ugovora do istog trenutka, i to je
+imenovano u samom kodu, ispod funkcije.
+
+> Pokušaj je vraćen u celini (`git checkout`), a ne ostavljen polovičan. Grana
+> je posle toga ponovo zelena: `BusinessFlowPro 945/0`.
+
+---
+
+#### Mreža za Otkup cutover — imenovano, pre writer-a
+
+| Test | Tvrdnja |
+|---|---|
+| `AmbalazaIdeNaHeader` | primljene gajbe se knjiže po klasi, izdate obrnutim smerom; zbir odgovara stavkama |
+| `StornoJednimID` | dvoklasni blok se stornira **jednim** pozivom nad `OtkupID`, ne dva puta po klasi |
+| `IspravkaJeNovaVerzija` | korekcija pravi nov `OtkupID` + `IspravkaOdID` + `ZamenjenSaID`, stara ostaje storniran fakt (A13) |
+| `NovacBezPrimary` | vrednost = `SUM(stavke)`; **nema** persistentnog `Isplaceno`; keš ne ulazi kroz otkupni list |
+| `JedanIDBezSplita` | `CreateOtkup_TX` vraća jedan ID; nijedan potrošač ne parsira `" + "` |
+| `KoloneNema` | `kanonska pozicija = 0` za `Kolicina`/`Cena`/`Klasa`/`KolAmbalaze`/`BrutoKg` — zamenjuje „nov writer ih ostavlja prazne" iz PR4 |
+| `PanelCitaStavke` | „Ostatak", prekoračenje i sažetak čitaju stavke, ne header |
+| `StampaCitaStavke` | otkupni list štampa klase iz `tblOtkupStavke` |
+| `AutoHladnjacaJedanBlok` | auto-lanac dobija jedan `OtkupID` i ne deli po klasi |
+
+Dokaz u oba smera obavezan za `StornoJednimID`, `IspravkaJeNovaVerzija`,
+`NovacBezPrimary` i `KoloneNema` — sve četiri su kritične poslovne invarijante ili
+menjaju premisu zatečenog testa.
+
+#### Golden mreža prestaje da bude „nepromenjena"
+
+Do sada je `RunGoldenSuite 12/0 nepromenjen` bio dokaz da skela ništa nije pomerila.
+U koraku 2 to više ne važi: scenariji koji prolaze kroz otkupni list **moraju** da
+se promene, jer se menja broj redova po bloku. Svaka promena goldena mora da nosi
+obrazloženje u commit-u; golden koji se promenio bez objašnjenja je regresija koja
+je prošla kao osvežavanje.
+
+---
+
+### Otpremnica cutover (PR7) — pre-flight verdikt
+
+Merenja pre ijedne linije koda, po `.claude/skills/pre-flight`. Rađeno **dok PR6
+čeka merge** — spec ne zavisi od ishoda njegovog review-a.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | §4.2 (grain: jedna isporuka sa otkupnog mesta), §4.2a/b, §3.1 (pripadnost nije kolona), A15 (verzionisano članstvo) |
+| `EVENTS` | **PROVEN** | v. dole |
+| `IDENTITY` | **PROVEN** | `OtpremnicaID` opaque; broj je labela scoped po stanici; članstvo u `tblOtpremnicaIzvori` |
+| `CARDINALITY` | **PROVEN** | 1 otpremnica ← N otkupa; 1 otkup → najviše **jedno aktivno** članstvo (A15); istorijski više |
+| `INVARIANTS/OWNER` | **PROVEN** | `AktivnoOtpClanstvoPoKanonu` diže grešku na dva aktivna zapisa (`modDokumenta:3417`); `IzdajOtpremnicu_TX` revalidira izvore |
+| `WRITERS` | **PROVEN** | v. dole — i tu je prvi nalaz |
+| `DOWNSTREAM` | **PROVEN** | 141 pojava četiri kolone koje odlaze (§14.6), 16 produkcionih modula čita `Otkup.OtpremnicaID` |
+| `CAPABILITY` | **PROVEN** | tri pauzirane sposobnosti + AutoLink + GlobalGAP; v. mapu |
+| `ACCEPTANCE CONTRACT` | v. dole | plan dokaza, ne dokaz |
+| `PLATFORM` | N/A | nema Excel/COM nepoznanice; sve je nad `ListObject`-ima koji već rade |
+| `LANDING` | **RISK** | zavisi od merge-a #308; v. dole |
+
+#### ⚠ NALAZ 1: plan kaže 5 pisača, ima ih 6
+
+Red 7 tabele PR-ova glasi „**briše `Otkup.OtpremnicaID`** sa svih 5 pisača".
+Mereno — šest:
+
+```
+modAutoHladnjaca:385   modDokumenta:6883   modMasterSync:2598
+modOtkupBlok:1480      modSledljivost:255  modStornoFlow:2569
+```
+
+Šesti (`modSledljivost`, AutoLink) je promašen jer mu je poziv **prelomljen u dva
+reda** — tačno slepa mrlja koju §13a već opisuje za `AppendRow`. Ironija je
+potpuna: promašen je baš onaj pisač koji ceo PR7 treba da ukine, jer AutoLink je
+heuristika koju eksplicitno članstvo zamenjuje.
+
+> Pouka za ubuduće: brojevi u planu se mere skriptom, ne grep-om po jednom redu.
+
+#### ⚠ NALAZ 2: otpremnica ima ISTI oblik pisca koji je otkup upravo izgubio
+
+```
+modDokUnos:262  ->  SaveOtpremnicaMulti_TX  ->  SaveOtpremnica x2 (po klasi)
+                                            ->  vraca "ID1 + ID2"
+```
+
+To je linija-po-liniju isti obrazac kao obrisani `SaveOtkupMulti_TX`. Znači i isti
+posao, i ista zamka: pozivalac koji string parsira. Uz njega `SaveOtpremnica_TX`
+(jednoklasni) ima **3 produkciona pozivaoca** — `modAutoHladnjaca` ×2 (pauziran) i
+`modMasterSync` ×1 — i **41 test poziva**.
+
+Ukupno: **44 mesta**, od kojih su 4 produkciona. Isti razred posla kao korak 3 u
+PR6, samo veći test rep.
+
+#### ⚠ NALAZ 3: tri `Split(" + ")` nad OTKUP ID-evima su već mrtva
+
+`CreateOtkup_TX` vraća **jedan** ID od PR6, pa ovi više nikad ne cepaju ništa:
+
+```
+modAmbalaza:359      Split(blockOtkupIDs, " + ")
+modAutoHladnjaca:190 Split(otkupIDs, " + ")
+modOtkupBlok:1460    Split(otkupIDs, " + ")
+```
+
+Nisu bug (jedan element = ceo string), ali su **mrtav aparat koji izgleda živ**.
+Brišu se u PR7 uz svoje pozivaoce; preostalih pet (`modDokUnos` ×3, `modPrint` ×2)
+je prijemnica, dakle PR9.
+
+#### BUSINESS EVENTS
+
+| Događaj | Kada | Šta nastaje | Šta može bez sledećeg |
+|---|---|---|---|
+| **fizički** | roba napušta otkupno mesto i ulazi u vozilo | ništa u bazi po sebi | otprema bez papira ne sme postojati |
+| **poslovni** | otpremnica prelazi u `IZDATO` | dokument sa sastavom; otkupi postaju njeni članovi | **DRAFT sme da stoji** koliko treba — sastav se gradi postepeno |
+| **finansijski** | **nijedan** | — | otpremnica **ne stvara ni dug ni potraživanje** |
+
+Treći red je važan i lako se previdi: kooperant je plaćen po **otkupu**, kupac
+plaća po **fakturi**. Otpremnica je isključivo dokument kretanja robe. Zato PR7
+**ne sme** da dira `tblNovac` — ako se pojavi potreba, to je `DOMAIN GAP`, ne
+implementacioni detalj.
+
+Datum otpremnice je datum **fizičke otpreme**, ne dan unosa i ne dan izdavanja.
+
+#### CAPABILITY MAP — tri pauze koje PR7 mora da podigne
+
+| Sposobnost | Stanje danas | PR7 |
+|---|---|---|
+| Panel napretka bloka | `NapredakBlokaDostupan() = False` (`modOtkupBlok:1572`), tri gejta | `MIGRATED` na `GetOtpremnicaProgress` |
+| Auto-lanac hladnjače | poziv ugašen u `modOtkupUnos:388`, kod netaknut | `MIGRATED` — lanac prima jedan `OtkupID` i pravi članstvo |
+| Wiring correction API-ja | `IspravkaOtkupa_TX` bez produkcionog pozivaoca | `MIGRATED` — stari `OtkupID` mora da otputuje kroz prefill |
+| `AutoLinkOtkupOtpremnica` | povezuje 0 | **`INTENTIONALLY REMOVED`** — heuristika koju članstvo zamenjuje |
+| GlobalGAP sledljivost | `TraceByZbirna` vraća `"NEMA"` za nov otkup | `REPLACED` — čita članstvo, ne `Otkup.OtpremnicaID` |
+
+Četvrti red je jedini `INTENTIONALLY REMOVED` i traži izričitu potvrdu: dugme
+„Auto-poveži" nestaje sa ekrana sledljivosti, jer povezivanje prestaje da bude
+pogađanje.
+
+#### ACCEPTANCE CONTRACT — plan dokaza
+
+**Šta će važiti:** svih **7** tvrdnji iz PR7 acceptance mreže (§14.2) zeleno po
+imenu · `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve · `Otkup.OtpremnicaID`
+i `Otkup.BrojZbirne` **obrisani** iz kanona · `Cena → PredlogCena` sa svih 8
+čitalaca · A11: pisaca nad `tblOtkup` **9 → 1**.
+
+**Šta mora ostati netaknuto:** golden mreža 12/0 sa **nepromenjenim** snapshot-ima
+· `CreateOtkup_TX` ponašanje · storno kaskada · A13 kapija iz PR6.
+
+**Edge koji mora proći:** H2 (`CorrectionSestre`) — `OTP2` i `OTP3` pripadaju
+sastavu **i** stare i nove zbirne. Ako to ne prođe bez gubitka istorije, model
+veze nije dovoljan i to je ceo razlog zbog kog tabela članstva postoji.
+
+**Šta mora biti odbijeno:** dva aktivna članstva za isti otkup · izmena sastava
+`IZDATE` otpremnice · otkup bez stavki kao izvor.
+
+**Čime se dokazuje:** `RunBusinessFlowProSuite` + `RunGoldenSuite`; sabotaža nad
+svakom novom kapijom; `who_writes --check-ownership` kao brojčani dokaz za 9 → 1.
+
+#### ⚠ PR7 NE SME SAMO DA OTKLJUČA ZAJEDNIČKU KAPIJU
+
+PR6 je ceo izvedeni lanac stavio iza **jedne** kapije:
+
+```vb
+Public Function IzvedeniLanacIzPwaDostupan() As Boolean
+    IzvedeniLanacIzPwaDostupan = False
+End Function
+```
+
+Za PR6 je to ispravno — maksimalno fail-closed, jer sva tri legacy ulaza pišu
+nazad na zaglavlje otkupa. **Za PR7 nije.** Kapija pokriva tri koraka koji se
+oslobađaju u **dva različita PR-a**:
+
+| Korak | Oslobađa |
+|---|---|
+| auto-Otpremnica iz PWA | **PR7** |
+| Malina auto-Zbirna iz Otpremnice | **PR8** |
+| VOZ/Zbirna import + legacy backlink | **PR8** |
+
+Ako PR7 samo napiše `= True`, zajedno sa novom otpremnicom se **istog trenutka
+vraćaju i dva legacy zbirna koraka** koji i dalje pišu `Otkup.BrojZbirne` — i
+kontaminacija koju je PR6 upravo zatvorio se vraća na mala vrata.
+
+**Obavezno u PR7:** kapija se **deli**, ne otključava.
+
+```
+PR7:   PwaOtpremnicaDostupna = True
+       PwaZbirnaDostupna     = False
+
+PR8:   PwaZbirnaDostupna     = True
+```
+
+Svaki od tri ulaza tada gleda **svoju** kapiju. Test `Test_PWA_IzvedeniLanacJePauziran`
+se u PR7 razdvaja na isti način: otpremnica prolazi, dva zbirna ulaza i dalje
+padaju po imenu.
+
+#### Ugovorna nijansa CRID poređenja (zabeleženo, ne otvoreno)
+
+`PwaIstiSadrzaj` sada poredi `BrojDokumenta` **uslovno**: učestvuje samo kad ga
+PWA izričito pošalje, jer prazan incoming broj znači da ga je master generisao
+lokalno.
+
+Time se hvata `77 → 78` (konflikt), ali **ne** i `77 → prazno`: taj slučaj se iz
+trenutnog zaglavlja ne može razlikovati od „broj je oduvek bio prazan pa ga je
+master dodelio". Za doslovan ugovor „isti payload" trebalo bi pamtiti **da li je
+klijent poslao broj**, a to danas nigde ne stoji.
+
+**Ne otvara se u PR6.** Ako PWA posle rollout-a garantuje da jednom dodeljen broj
+ne nestaje iz istog `ClientRecordID`, trenutni model je praktično dovoljan. Ovde
+stoji da se kasnije ne bi mislilo da se iz zaglavlja može dokazati nešto što ne
+može.
+
+#### LANDING RISK
+
+PR7 dira `modDokumenta`, `modOtkupBlok`, `modAutoHladnjaca`, `modSledljivost` i
+`modDokUnos` — **sve fajlove koje PR6 već menja**. Grana se zato otvara tek kad se
+#308 merge-uje; rad nad njegovom granom bi bio stacked PR koji propada ako se bazni
+merge-uje prvi (poznata zamka).
+
+Do tada je PR7 **spec-only** — ovaj odeljak.
 
 ---
 
@@ -953,11 +1307,11 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 1 | ✅ **Temelj**: `modSchema` registar svih tabela + `VerifySchema` + `SchemaReadyOrFail`; `NewEntityID` fabrika; `WRITE_OWNERSHIP.json` + `who_writes.py --check-ownership`; pravilo `SEMA_REGISTAR` + self-test. **Bez ijedne nove tabele.** | 0 |
 | 2 | ✅ **Kanon šeme u gitu** (`schema/schema.json` → `gen_schema_module.py` → `modSchema.bas`) + tri CI kapije; **golden mreža, 12 zaključanih scenarija**; testovi `SemaSamoLeci` / `SemaKapija` / `PrefiksNijeString` | 1 |
 | 3 | ✅ **Zbirna header+stavke**: `tblZbirnaStavke`, **`tblZbirnaIzvori`**, `CreateZbirna_TX` / `CreateZbirnaIzIzvora_TX` — stavke se **izvode iz izvornih otpremnica**, membership ide u **istoj** transakciji, opaque `ZbirnaID` / `ZbirnaStavkaID` / `ZbirnaIzvorID` svi fail-closed; **`tblZbirnaIzvori`** nosi verzionisano članstvo (A15). **Aditivno** — stari pisač je i dalje jedini put, golden 12/0 nepromenjen. Uz to: A11 kapija je bila slepa na funkcijski i na prelomljen oblik `AppendRow` (v. §13a) | 2 |
-| 4 | **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
-| 5 | **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
-| 6 | **Otkup cutover + integracije**: ambalaža na header, novac na header, `Isplaceno` izvedeno, storno, ispravka, print, auto-hladnjača. Prvi dokument kod kog nov pisač postaje jedini put | 5 |
+| 4 | ✅ **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
+| 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
+| 6 | 🟡 **Otkup cutover + integracije** (PR #308 — otvoren, ceka merge): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
-| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih 5 pisača; **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
+| 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -1163,6 +1517,434 @@ i čitljiva operacija, pitanje rewrite-a je zatvoreno. Ako se i tada pojave
 resolveri, scope, historical ownership i dual mode, imamo **empirijski** dokaz da
 šema nije bila jedini problem, i tada je `/agrix2` opravdan — sa dva dokazana
 slajsa kao specifikacijom, umesto sa osećajem.
+
+---
+
+### 14.2) PR7 acceptance mreza — tvrdnje koje je Otkup cutover preselio
+
+Ove tvrdnje su **do Otkup cutover-a bile zelene**, a posle njega se ne mogu
+odrzati bez vracanja starog modela. Nisu obrisane nego **preseljene**: PR7
+(Otpremnica cutover) ih preuzima nad `tblOtpremnicaIzvori`, gde veza vise nije
+pogodjena iz kolona nego upisana.
+
+**PR7 nije gotov dok svaka od njih ne bude zelena — po imenu.**
+
+#### Zasto je veza uopste pukla
+
+`AutoLinkOtkupOtpremnica` (`modSledljivost`) **pogadja** vezu kljucem
+`StanicaID + Datum + VozacID + Klasa + BrojZbirne` **nad `tblOtkup`**. Nov pisac
+ne pise nijedno od tri: vozac je cinjenica otpremnice, klasa cinjenica stavke, a
+broj zbirne je labela tudjeg dokumenta (A2). Kljuc zato vise nikad ne pogadja, pa
+`Otkup.OtpremnicaID` ostaje prazan — a na njemu stoji ceo nizvodni citac:
+
+| Sta | Gde | Stanje posle cutover-a |
+|---|---|---|
+| `AutoLinkOtkupOtpremnica_TX` | dugme „Auto-povezi", `modScrSledljivost:432` | povezuje 0 (toast pokazuje „Povezano: 0") |
+| `TraceByZbirna` | GlobalGAP sledljivost, `modSledljivost:519` | vraca `Empty` za nov otkup |
+| `StampajSledljivostZbirne` | `modIzvestaj:5966` | vraca `"NEMA"` — **ne stampa prazan list** |
+| `GetKooperantiZaZbirnu` | paletni list, `modPaletniList:2614` | prazno polje kooperanata |
+| auto-lanac hladnjace | `modAutoHladnjaca` | **pauziran** u `modOtkupUnos` (odluka operatera) |
+
+Privremen citac se **ne pravi** — to je izricita odluka: kolona
+`Otkup.OtpremnicaID` i kolona `Otkup.BrojZbirne` su bas ono sto refaktor brise
+(S11.3), pa bi shim bio rad u pogresnom smeru.
+
+#### Preseljene tvrdnje — čuva se ISHOD, ne staro ime
+
+> **Ispravljeno posle review-a.** Prva verzija ove tabele je tvrdnje prenela
+> doslovno, pa je tražila da isti otkup bude član „otpremnice Klase I" **i**
+> „otpremnice Klase II". To bi u PR7 ponovo uvelo **dokument po klasi** — tačno
+> model koji se uklanja. Ime stare tvrdnje ne sme da zaključa pogrešan grain.
+
+Ciljni grain (§4.2, i PR5 API to već tako radi — `CreateOtpremnicaIzIzvora_TX`
+prima **kolekciju izvora** i sam izvodi stavke):
+
+```
+OTK1  ├ I   400 kg          OTP1  ├ I   400 kg
+      └ II  600 kg                └ II  600 kg
+
+tblOtpremnicaIzvori:  OTP1 -> OTK1        JEDAN red, ne dva
+```
+
+| # | Ishod koji PR7 mora da dokaže | Izvorna tvrdnja |
+|---|---|---|
+| 1 | dvoklasni otkup je član **tačno jedne** otpremnice | `Otkup class I linked to matching otpremnica` |
+| 2 | ta otpremnica nosi **obe klase kao svoje stavke**, sa istim količinama | `Otkup class II linked to matching otpremnica` |
+| 3 | sledljivost čita **članstvo**, ne `Otkup.OtpremnicaID` | `TraceByZbirna returns rows` |
+| 4 | povezivanje je **upis**, ne pogađanje — nema heuristike po `Stanica+Datum+Vozac+Klasa` | `Positive autolink links exact unique scenario` |
+| 5 | dva **aktivna** članstva za isti otkup su tvrda greška (A15) | `Auto-link must NOT link otkup with different BrojZbirne` |
+| 6 | hladnjački lanac vezuje dokument za **jednu** otpremnicu koju je sam napravio | `Hladnjaca lanac: otkup red povezan sa otpremnicom` |
+| 7 | broj zbirne se **čita kroz lanac članstva**, ne prepisuje na otkup | `Hladnjaca lanac: otkup red nosi BrojZbirne` |
+
+Red 5 je namerno preformulisan: stara tvrdnja je čuvala da heuristika ne „precuri"
+na tuđu zbirnu. Kad povezivanje prestane da bude pogađanje, precurivanja nema —
+ostaje jača invarijanta koju `AktivnoOtpClanstvoPoKanonu` već drži.
+
+Red 6 isto: **jedna** otpremnica, ne „obe svoje otpremnice". Lanac koji za jedan
+otkup pravi dva izvedena dokumenta po klasi je stari model.
+
+#### Sta u medjuvremenu stoji umesto njih
+
+Gubitak nije tih — svako mesto nosi **imenovano merenje** koje pukne cim se stari
+model vrati:
+
+| Test | Tvrdnja koja stoji danas |
+|---|---|
+| `Test_FullDocumentChainHappyPath` | `Cutover: otkup se vise ne nalazi po (broj, klasa)`, `Cutover: auto-link ne povezuje header+stavke otkup`, `Cutover: TraceByZbirna je prazna bez auto-link veze` |
+| `Test_AutoLinkNeVidiHeaderStavkeOtkup` (nov) | `Auto-link slep: zaglavlje ne nosi Vozaca` / `... ne nosi Klasu` / `savrsen par OSTAJE nepovezan` |
+| `Test_HladnjacaChainHappyPath` | `vraca SAMO poznat cutover gap`, `zaglavlje nosi SAMO otpremnicu Klase I (gubitna veza)`, `otpremnica Klase II postoji ali nije u zaglavlju` |
+| `Test_StornoKaskadaScopePoLancu` | `Kaskada scope: lanac vraca SAMO poznat cutover gap` |
+
+Sabotaza je meren dokaz, ne tvrdnja: vracanje `VozacID` i `Klase` na zaglavlje
+obara **6** tih provera po imenu; obaranje back-linka lanca obara **3**.
+
+#### Obrisani testovi (ne sele se)
+
+| Test | Zasto |
+|---|---|
+| `Test_OtkupAtomicMultiClassSave` | merio „appends exactly two rows" — bas oblik koji se uklanja; zive tvrdnje nose `Test_OTK_HeaderIStavke` i `Test_OTK_LosaDrugaStavkaRollback` |
+| `Test_OtkupClassIIAmbalaza` | merio `KolAmbalaze` po klasi na zaglavlju; zamenjuje ga `Test_OTK_AmbalazaIdeNaDokument` (jedan dvojni upis po dokumentu) |
+| `Test_AutoLinkPositiveUniqueMatch` | tvrdnja preseljena (red 4); sam test meri pogadjanje, koje prestaje da postoji |
+| `Test_AutoLinkMustNotCrossBrojZbirne` | tvrdnja preseljena (red 5), isti razlog |
+
+#### Sta je ostalo od starih pisaca
+
+`SaveOtkupMulti_TX` je **obrisan** — sa njim i posledji pisac koji je jedan unos
+pretvarao u dva reda `tblOtkup`.
+
+`SaveOtkup_TX` **namerno ostaje**, i to nije previd: nijedan produkcioni put ga
+ne zove, ali je jedini posten nacin da test napravi **zaglavlje bez stavki** —
+oblik koji nove kapije moraju da odbiju (`Test_OTK_VrednostBezStavkiPada`,
+`Test_OTP_StariOtkupNeUlazi`). Alternativa bi bila `AppendRow` iz testa, sto
+duplira znanje o semi i cini test pisacem tabele (A11). Odlazi u koraku 7,
+zajedno sa kolonama koje puni.
+
+#### Zatecen nalaz usput (ne dira se u ovom PR-u)
+
+`OtkupIdsByBrDok` (`modScrDokumenti:668`) trazi otkupe **samo po
+`BrojDokumenta`**, bez stanice. Posle `RequireBrojJedinstven`, cija je oblast
+`StanicaID + Datum + Broj`, dve stanice smeju istog dana imati isti broj — pa bi
+stampa spojila dva razlicita dokumenta. Nalaz je **zatecen** (i pre refaktora je
+broj bio slobodan tekst), ne uveden; ide u citalacki prolaz, korak 7.
+
+---
+
+### 14.3) Read-model isplata: status je izveden, ne kesiran (korak 4)
+
+`tblOtkup.Isplaceno` i `tblOtkup.DatumIsplate` bile su **keš** koji je održavao
+`modNovac.UpdateOtkupStatus`. Keš je imao dva problema, i drugi je stariji od
+refaktora:
+
+1. vrednost je računao kao `Kolicina x Cena` **sa zaglavlja**. Posle prelaska na
+   header + stavke to je uvek nula — pa nijedan nov otkup ne bi nikada bio
+   označen kao isplaćen, tiho i bez ijedne greške.
+2. tačnost mu je zavisila od toga da ga **svaki** pisac `tblNovac` pozove. Bilo
+   je četiri takva mesta (`modNovac` ×2, `modBankaMapiranje`, `modDokumenta`) i
+   peto u `modStorno`. Šesto koje bi zaboravilo poziv dalo bi otkup koji je
+   plaćen a izgleda otvoren, ili obrnuto.
+
+`UpdateOtkupStatus` je **obrisan**, sa svih pet poziva. Status je sada izveden:
+
+```
+otvoreno = VrednostOtkupa(id) - SUM(isplate za id)
+```
+
+`GetOpenOtkupi` tako i računa; kolone nemaju pisca i brišu se u koraku 7.
+
+#### Pun ugovor `VrednostOtkupa`
+
+Ugovor je do sada bio **imenovano nepotpun** (komentar ispod funkcije): kapije bi
+oborile 10–33 tvrdnje jer su postojala dva pisca zaglavlja bez stavki. Oba su
+zatvorena — stari pisac obrisan (korak 3), PWA ide kroz `CreateOtkup_TX`
+(korak 2) — pa ugovor sada stoji ceo:
+
+| # | Kapija | Zašto nije kozmetika |
+|---|---|---|
+| 1 | prazan `OtkupID` | računa se vrednost ničega |
+| 2 | zaglavlje **tačno jednom** | dva reda znače da `OtkupID` nije više identitet |
+| 3 | svaka stavka brojčana i **> 0** | isto pravilo koje pisac traži na upisu (`modOtkup:252/261`); citalac koji ga ne drži tiše je od istine |
+| 4 | bar jedna stavka | nula je legitiman odgovor samo kad stavke postoje a zbir im je nula — inače `ApplyAvansToOtkup` čita 0 kao „nema šta da se plati" |
+
+#### Dva neispravna reda, dva različita odgovora
+
+Razlika je **merena**, ne stilska:
+
+| Red | Odgovor `GetOpenOtkupi` | Zašto |
+|---|---|---|
+| bez `OtkupID` | **ostaje u listi**, prisilno | ne može se vrednovati ali se ne sme ni izgubiti — to je kvar FM-0021 #5; imenuje ga `BuildBlokIsplataList` sa `ERR_ISPLATA_PRAZAN_OTKUPID` |
+| sa `OtkupID`, bez stavki | preskače se, uz brojač i **jedan** log red | takav red nije dokument: vrednost živi na stavkama, pa nema obavezu koja bi se izgubila. Nov pisac ga ne pravi. Grana odlazi u koraku 7 |
+
+Ono što se **ne radi** ni u jednom slučaju: računanje vrednosti sa zaglavlja. To
+bi bio compatibility sloj i vraćao bi 0 za svaki nov dokument.
+
+#### Fixture je morao da postane dokument
+
+`tools/make_fixture.py` je sejao 32 `tblOtkup` zaglavlja i **nijednu** stavku —
+tabela `tblOtkupStavke` nije ni postojala u donoru (pravio ju je runtime
+self-heal). Posle prelaska čitalaca na stavke svih 32 su bila „nije dokument", pa
+je pola testova banke ostalo bez ijednog reda.
+
+Generator sada pravi tabelu (`ENSURE_TABLES`, kolone iz kanona) i **izvodi**
+stavke iz zaglavlja. Kolone `Kolicina/Cena/Klasa/KolAmbalaze` na zaglavlju se
+namerno ne brišu — čita ih još petnaestak modula, to je korak 7 — pa fixture nosi
+iste brojeve na oba mesta, a merodavna je stavka.
+
+Isto pravilo je moralo u seed-ove testova: **„isplaćen" sada znači *plaćen***, ne
+„označen kao plaćen". `SeedOtkupIsplacen` (banka) i `SeedOtkupPlacen` (storno)
+zato knjiže i pokrivajuću isplatu u `tblNovac`.
+
+#### Tri tvrdnje koje su nestale, i zašto
+
+| Tvrdnja | Odakle | Zašto ne može da ostane |
+|---|---|---|
+| `T18 (3): zatvoren red bez OtkupID NE obara pregled` | `modTestBanka` | „zatvoren" se čitalo iz kolone; status je sada izveden iz plaćanja, a plaćanje se vezuje **preko** `OtkupID`-a — red bez njega ne može biti plaćen. Stanje više ne postoji, pa ostaje jedno pravilo umesto dva |
+| `ResetNovacOtkupLink recomputes otkup as unpaid` | `modNovacTests` | prepisano na `ResetNovacOtkupLink vraca otkup medju otvorene obaveze` — ista zaštita, merena tamo gde operater gleda |
+| `T27: blok vise nije isplacen` / `datum isplate ocisceni` | `modTestStorno` | prepisano na `posle storna blok je opet otvoren`. Tvrdnja nad kolonom bez pisca bila bi zelena i kad blok ostane nevidljiv — tačno kvar koji test sprečava |
+
+#### Šta stoji umesto njih
+
+| Test | Šta meri |
+|---|---|
+| `Test_OTK_VrednostPunUgovor` | sve četiri kapije, **po poruci** — pad iz drugog razloga ne dokazuje ništa |
+| `Test_OTK_StatusIsplateJeIzveden` | nov dokument je otvoren; delimična isplata ga **ne** zatvara; puna ga zatvara |
+| `Test_ResetNovacOtkupLinkRecomputesStatus` | skidanje veze vraća obavezu u listu |
+| `T27_StornoIzvodaOsvezavaOtkup` | storno izvoda vraća dug |
+
+Sabotaža (dokaz da kapije mere): gašenje pravila „stavka > 0" obara 1 proveru po
+imenu, gašenje provere „zaglavlje tačno jednom" 1, a povratak računa na zaglavlje
+obara 2 — uključujući „nov dokument je otvorena obaveza", tj. baš tihu rupu zbog
+koje je keš i obrisan.
+
+#### Zdravstvena provera više ne meri keš
+
+`Check_OtkupPaymentConsistency` je merio **samo redove koje je keš označio** —
+preplata na neoznačenom redu se nije ni videla. Sada čita stavke i prijavljuje
+preplatu (`isplaceno > vrednost`) nad svakim redom, plus upozorenje za redove bez
+stavki. `Check_KooperantOtkupReconciliation` isto: zbir po kooperantu je išao iz
+zaglavlja, pa bi se posle cutover-a „slagao" — na nuli.
+
+Da kolone ne dobiju novog pisca čuva **statička** kapija (`who_writes
+--check-ownership`, A11), ne runtime provera: zatečen red koji još nosi staru
+vrednost nije kvar, a runtime kapija nad njim bi vikala na podatke umesto na kod.
+
+---
+
+### 14.4) Lokalni correction API za otkup (korak 5)
+
+A9 traži vezu **po ID-u**; zatečeni aparat je drži **poslovnim brojem**
+(`modStornoFlow.StampIspravkaTrace`) i zato ne razlikuje dve verzije istog
+dokumenta. Otkup je prvi koji prelazi.
+
+#### Kolone su preimenovane, ne udvojene
+
+Na `tblOtkup`: `IspravkaOd → IspravkaOdID`, `ZamenjenSa → ZamenjenSaID`. Kolona
+koja se zove `IspravkaOd` a nosi ID bila bi gora od obe. Ostale tri tabele
+(Otpremnica, Zbirna, Prijemnica) još nose broj-oblik i prelaze u PR7/PR8.
+
+Preimenovanje nosi tri posledice koje se lako previde:
+
+1. `modSchema` poredi i **poziciju** (upis je pozicioni), pa dodavanje novog imena
+   pored starog ne pomaže — zatečena sveska bi i dalje bila odbijena na poziciji
+   32. Zato `modSetup.PreimenujKolonuAko` menja ime **na mestu**, čuvajući i
+   poziciju i podatke, i radi samo kad staro ime postoji a novo ne.
+2. `modSetup.EnsureSledljivostSchema` je kolone dodavao kroz petlju nad šest
+   tabela — `tblOtkup` je morao da izađe iz te petlje, inače bi self-heal vraćao
+   ime koje je kanon upravo uklonio.
+3. `tools/make_fixture.py` gradi fixture iz **donora**, ne pokretanjem aplikacije,
+   pa je dobio isti aparat (`RENAME_COLS`) i potpis koji ga pokriva.
+
+Sadržaj se **ne prevodi**: na `tblOtkup` te kolone nikad nisu ni pisane
+(`StampIspravkaTrace` se zove samo za druge tri), pa je svaka zatečena vrednost
+prazna.
+
+#### `IspravkaOtkupa_TX` — jedna transakcija
+
+```
+OTK-101 / broj 17   Stornirano=Da,  ZamenjenSaID = OTK-202
+      v
+OTK-202 / broj 18   IspravkaOdID = OTK-101
+oba nose isti CorrectionID
+```
+
+Redosled unutar transakcije je **meren**: storno ide **prvi**, da bi
+`ResetNovacOtkupLink` oslobodio vezan novac pre nego što novi dokument kroz
+`ApplyAvansToOtkup` uopšte potraži avans.
+
+`CorrectionID` je **pravi** ID iz `tblStornoVeze` (`CreateCorrectionContext` +
+`CompleteCorrectionContext` u istoj transakciji), ne broj koji pisac izmisli —
+kolona je deklarisana kao veza na tu tabelu, a izmišljen ID bi bio viseći
+pokazivač. Test to i tvrdi (`RowExists(TBL_STORNO_VEZE, ...)`).
+
+Tri kapije, sve merene **porukom** a ne samo padom:
+
+| Kapija | Poruka imenuje |
+|---|---|
+| isti broj kao stari | pravilo o **novom broju** (A9) — ne jedinstvenost |
+| dokument već zamenjen | **postojećeg naslednika** („ispravlja se POSLEDNJA verzija") |
+| izvor stornirano | storno |
+
+Redosled prve dve je takođe meren: već ispravljen dokument je **uvek** i
+storniran, pa bi storno-kapija prva uhvatila oba slučaja i rekla manje korisnu
+istinu. Specifičnija ide prva.
+
+`PoslednjaVerzijaOtkupa` prati `ZamenjenSaID` do kraja lanca, sa brojem koraka
+ograničenim brojem redova — ciklus u podacima ne sme da zavrti čitaoca.
+
+#### ⚠ NALAZ: novac se **ne** prenosi na ispravku
+
+Očekivanje je bilo suprotno i upisano je u pre-flight kao `PROVEN` na osnovu
+čitanja samo prve polovine lanca. **Merenje kaže drugačije**, i test to sada
+tvrdi:
+
+```
+StornoOtkup -> ResetNovacOtkupLink -> isplati se prazni OtkupID
+ApplyAvansToOtkup -> uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP   (modNovac:1624)
+```
+
+Odvezana isplata tipa `VirmanFirmaKoop` zato ostaje nevidljiva **i** za dug (nema
+`OtkupID`) **i** za avans (pogrešan tip — isti filter je i u
+`GetKooperantUnallocatedAvans:1982` i `BuildKooperantUnallocatedAvansDict:2031`).
+Vidi se još samo u kartici kooperanta (`modIzvestaj:2507`), gde ulazi u saldo.
+
+Novac dakle **nije izgubljen**, ali jeste ispao iz svake mašinerije koja odlučuje
+šta se plaća — operater vidi novi dokument kao pun dug, a plaćeni iznos nigde
+među avansima.
+
+**Ovo nije uvedeno ispravkom** — isto radi običan `StornoOtkup_TX` i radio je
+oduvek. Ispravka ga samo čini lakše dostižnim. Test ga tvrdi kao **zatečeno**
+stanje (`Test_OTK_IspravkaNeGubiNovac`), da se ne bi tumačilo kao osobina novog
+pisca; kad se donese odluka o prenosu, test se **okreće**.
+
+#### Writer nema produkcionog pozivaoca u ovom PR-u
+
+Merena odluka, ne propust. Da bi ekran zvao ovaj put, stari `OtkupID` mora da
+otputuje od prefill-a do pisca. Danas prefill ide kroz spec string
+(`PrefillIzStorniranog` → `modOtkupUI.ApplyPrefill:8452`) čiji se ključevi mapiraju
+**na kontrole** — ID nema gde. Rešenje bi bilo modul-stanje u ljusci, tj. **isti
+oblik in-memory veze** (`mPendingRelinkOldPrij`) koji ovaj korak treba da ukine.
+
+Wiring zato ide sa PR7, kad se `PrefillIzStorniranog` ionako prepisuje sa
+po-klasnih redova. Isti obrazac kao `CreateOtpremnicaDraft_TX` u PR5.
+
+Sabotaža: gašenje A9 kapije o broju obara 5 provera po imenu, dozvola drugog
+naslednika 1, izostanak `ZamenjenSaID` 4.
+
+---
+
+### 14.5) A13 kapija: izdat roditelj se ne menja ispod ruke (korak 6)
+
+Izdata otpremnica je **papir sa sastavom**. Ispravka jednog njenog izvora nije
+lokalna: otpremnica mora dobiti novu verziju sa novim brojem, a za njom i zbirna
+(H1, `GOLDEN_SCENARIJI.md` §12). Ta propagacija je PR7 — do tada se staje glasno.
+
+```
+otkup u IZDATOJ otpremnici  ->  IspravkaOtkupa_TX PADA, imenuje otpremnicu
+otkup u DRAFT otpremnici    ->  ispravka PROLAZI
+otkup bez otpremnice        ->  ispravka PROLAZI
+```
+
+Tiha alternativa bi bila najgora: nov otkup, stara otpremnica netaknuta, i izdat
+papir koji više ne opisuje robu koju nosi.
+
+**DRAFT se namerno ne blokira.** Članstvo drafta je mutabilno po dogovoru, a
+`IzdajOtpremnicu_TX` revalidira izvore pri izdavanju — storniran otkup ne može da
+prođe kroz izdavanje. Kapija koja bi blokirala i draft izgledala bi isto zeleno,
+a oduzela bi operateru ispravku dokumenta koji još niko nije video. Test zato meri
+**obe** strane granice.
+
+#### Pripadnost se pita, ne izvodi
+
+Otkup nema kolonu koja bi rekla kojoj otpremnici pripada — to je §3.1, i namerno.
+`modDokumenta` je zato dobio dva javna čitača nad kanonskim članstvom:
+
+| Ulaz | Vraća | Napomena |
+|---|---|---|
+| `OtpremnicaZaOtkup(otkupID)` | `OtpremnicaID` ili `""` | dva aktivna članstva **podižu grešku**, ne vraćaju jedno |
+| `OtpremnicaJeIzdata(otpremnicaID)` | `True` samo za `IZDATO` | prazan status **nije** „izdato" — nov pisac ga upisuje eksplicitno, pa je prazno polje drift |
+
+Javni ulaz postoji baš zato da pisac otkupa ne dobije **drugu** implementaciju
+istog pitanja — dupliranje je ono što je kanonsko članstvo trebalo da ukine.
+
+Sabotaža: gašenje provere izdatosti obara **6** tvrdnji po imenu — uključujući
+„odbijena ispravka nije upisala nijedan red", koja meri da je odbijanje potpuno, a
+ne polovično.
+
+---
+
+### 14.6) Korak 7 je izmeren i podeljen (ne odložen)
+
+„Reader sweep → brisanje kolona" je u planu stajao kao **jedna** stavka. Merenje
+kaže da je to dve — i da se granica poklapa sa granicom PR-ova, ne sa procenom.
+
+Popis (skripta broji pojave `COL_OTK_*` u kodu, bez komentara):
+
+| Kolone | Pojava | Zašto odlaze | Kad su stvarno slobodne |
+|---|---:|---|---|
+| `OtpremnicaID`, `BrojZbirne`, `VozacID`, `BrojOtpremnice` | 141 | članstvo (A15) / labela (A2) | **PR7** — čitaoci su po-klasna otpremnica |
+| `GeneracijaID` | 69 | identitet; §11.1 briše celu mašineriju | **PR8** (zbirna) |
+| `Kolicina`, `Cena`, `Klasa`, `KolAmbalaze` | 170 | stavke (§4.1) | čitaoci su **isti moduli** kao gore |
+| `Isplaceno`, `DatumIsplate` | 12 | keš izvedenog statusa (korak 4) | **sada** |
+| `Novac`, `PrimalacNovca` | 9 | `tblNovac` | skoro — v. dole |
+
+Ukupno **401 pojava u 27 produkcionih modula**. Od toga **210** pripada
+čitaocima koje PR7/PR8 ionako prepisuju: sweep sada značio bi pisati čitaoce
+protiv modela koji se uklanja — ista greška zbog koje privremeni čitač za
+`TraceByZbirna` nije napravljen.
+
+**Odluka operatera: u PR6 ide samo ono što je stvarno slobodno.**
+
+#### Obrisano
+
+`tblOtkup.Isplaceno` i `tblOtkup.DatumIsplate` — posle koraka 4 nemaju **nijednog
+pisca** i nijednog živog čitaoca. Otisak šeme: `EC04DB7C → A410CF67`, 648 → 646
+kolona.
+
+Uz njih je otišao i `modOtkup.GetSaldoByStation`: sabirao je `Kolicina`, `Novac` i
+`KolAmbalaze` **sa zaglavlja** po kooperantu — tri kolone koje nov pisac ne piše.
+Da ga je iko zvao, vraćao bi nule. Grep po celom `src-vba` daje samo redove unutar
+same funkcije: mrtav čitač mrtve kolone, pa se briše a ne prepisuje.
+
+`Novac` i `PrimalacNovca` **ostaju**: njihov jedini živi čitač je po-klasni lister
+u `modDokumenta:6073`, koji je PR7. Ostala dva su mrtva (`GetSaldoByStation`,
+sada obrisan) i pauzirana (`modOtkupBlok` prefill).
+
+#### Sveska mora da IZGUBI kolonu, ne samo kanon
+
+Ovo je posledica koju je lako prevideti: kolona obrisana iz **sredine** kanona
+pomera sve iza sebe, a `AppendRow` piše **pozicijski**. Zatečena sveska sa viškom
+tada šalje vrednosti u pogrešna polja — `modSchema` to hvata i staje, ali sveska
+ostaje neupotrebljiva dok se višak ne ukloni.
+
+Zato su dva mesta dobila migraciju:
+
+| Gde | Šta radi |
+|---|---|
+| `modSetup.ObrisiKolonuAko` | briše na startu aplikacije, **samo po imenu iz uskog spiska** |
+| `tools/make_fixture.py` `DROP_COLS` | isto, jer generator gradi iz donora a ne pokretanjem aplikacije |
+
+Brisanje je **jedini destruktivan korak** u self-heal-u, pa je i najuži: nema
+petlje po „sve što nije u kanonu" — `EnsureRuntimeSchema` legitimno dodaje kolone
+na kraj pre nego što ih kanon preuzme, pa bi takva petlja brisala tekući rad.
+
+#### Destruktivan put je dobio meru
+
+`ObrisiKolonuAko` i `PreimenujKolonuAko` do sada **nije izvršio niko**: fixture je
+migriran generatorom, pa je VBA put ostao mrtav. Kod koji briše kolonu a nikad
+nije pokrenut je najgora vrsta nemerene odbrane.
+
+`Test_OTK_SelfHealMigracijeKolona` radi nad kolonom koju sam doda **na kraj**
+tabele — višak na kraju ne pomera nijednu kanonsku poziciju (otisak se računa nad
+kanonskim prefiksom), pa ni pad testa ne ostavlja svesku u lošem stanju. Test
+pokriva: preimenovanje, idempotenciju, brisanje, brisanje nepostojeće kolone, i
+slučaj **oba imena odjednom** (stanje koje pravi međuverzija).
+
+Sabotaža: gašenje brisanja obara 4 tvrdnje po imenu, pretvaranje preimenovanja u
+dodavanje 5.
+
+> **Jedna kapija namerno ne bije.** Gašenje provere „već migrirano" ne obara
+> nijednu tvrdnju — mereno. Excel sam odbija drugu `ListColumn` istog imena, pa se
+> ishod ne menja. Kapija štedi `LogError` na **svakom** startu takve sveske, ne
+> podatak; to je razlog zbog kog ostaje, i tako je i imenovana u kodu.
 
 ---
 

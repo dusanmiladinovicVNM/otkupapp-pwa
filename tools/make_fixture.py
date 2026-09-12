@@ -2153,12 +2153,59 @@ SEED = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# tblOtkupStavke SE IZVODI IZ tblOtkup -- fixture mora da opisuje DOKUMENT.
+#
+# Posle Otkup cutover-a vrednost otkupa zivi na stavkama (modOtkup.VrednostOtkupa,
+# modNovac.BuildVrednostDictByOtkup). Zaglavlje bez stavki zato nije dokument
+# vrednosti nula nego NIJE DOKUMENT: ispada iz liste otvorenih obaveza, pa bi
+# fixture bez ovog izvodjenja ostavio pola testova banke bez ijednog reda.
+#
+# Kolone Kolicina/Cena/Klasa/KolAmbalaze na ZAGLAVLJU se namerno NE brisu: jos ih
+# cita petnaestak modula i one odlaze tek u citalackom prolazu (korak 7). Do tada
+# fixture nosi iste brojeve na oba mesta, a merodavna je stavka.
+#
+# Redovi bez pozitivne kolicine i cene NE dobijaju stavku: takvu stavku bi i pisac
+# odbio (modOtkup:252/261), pa bi je fixture lagao u postojanje.
+SEED["tblOtkupStavke"] = [
+    {
+        "OtkupStavkaID": "OKS-" + str(red["OtkupID"]),
+        "OtkupID": red["OtkupID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["Kolicina"],
+        "Cena": red["Cena"],
+        "KolAmbalaze": red.get("KolAmbalaze", 0),
+        "BrutoKg": "",
+    }
+    for red in SEED["tblOtkup"]
+    if float(red.get("Kolicina") or 0) > 0 and float(red.get("Cena") or 0) > 0
+]
+
 # Kolone koje DONOR (produkcijska sveska pre nadogradnje) nema, a fixture
 # mora da ih ima: sejanje ide PO IMENU, pa red sa novom kolonom obara
 # generator; testovi writera (RequireUpdateCell) takodje traze kolonu.
 # U aplikaciji ih dodaje modSetup.EnsurePaletniListSchema (EnsureColumnOnTable
 # -> na KRAJ tabele); generator radi ISTO, pa je fixture = sveska POSLE
 # nadogradnje. Kolona koja vec postoji se ne dira.
+
+# Kolone koje je KANON preimenovao. Donor nosi staro ime, pa dodavanje novog ne
+# pomaze: modSchema poredi i POZICIJU (upis je pozicion), a stara kolona bi ostala
+# tu gde jeste. Preimenovanje na mestu cuva i poziciju i podatke -- isto sto radi
+# modSetup.PreimenujKolonuAko na startu aplikacije.
+# Kolone koje je KANON OBRISAO. Donor ih jos ima, a kolona obrisana iz SREDINE
+# pomera sve iza sebe -- pozicioni AppendRow tada salje vrednosti u pogresna polja.
+# Isto radi modSetup.ObrisiKolonuAko na startu aplikacije.
+DROP_COLS = {
+    # Kes izvedenog statusa isplate (korak 7); istina zivi u tblNovac.
+    "tblOtkup": ["Isplaceno", "DatumIsplate"],
+}
+
+RENAME_COLS = {
+    # A9: veza ispravke ide po ID-u; za sada samo tblOtkup.
+    "tblOtkup": [("IspravkaOd", "IspravkaOdID"),
+                 ("ZamenjenSa", "ZamenjenSaID")],
+}
 
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
@@ -2204,6 +2251,15 @@ ENSURE_TABLES = {
     "tblPrevoznici": ("Prevoznici",
                       ["PrevoznikID", "Naziv", "Vozac", "Registracija",
                        "Aktivan"]),
+    # Otkup: header + stavke. Donor je nema -- u aplikaciji je pravi self-heal
+    # seme na startu, pa je fixture do sada imao tek u temp kopiji tokom run-a.
+    # Sada mora da postoji PRE sejanja, jer fixture seje i stavke (v. SEED).
+    # Kolone i redosled su iz kanona (schema/schema.json, tblOtkupStavke);
+    # AppendRow pise POZICIONO, pa redosled nije kozmetika.
+    "tblOtkupStavke": ("OtkupStavke",
+                       ["OtkupStavkaID", "OtkupID", "RedniBroj", "Klasa",
+                        "Kolicina", "Cena", "KolAmbalaze", "BrutoKg",
+                        "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
@@ -2321,6 +2377,8 @@ def signature() -> str:
                         for t, rows in sorted(SEED.items())]),
         "ENSURE_COLS=" + repr(sorted((t, cols) for t, cols in ENSURE_COLS.items())),
         "ENSURE_TABLES=" + repr(sorted((t, sh, cols) for t, (sh, cols) in ENSURE_TABLES.items())),
+        "RENAME_COLS=" + repr(sorted(RENAME_COLS.items())),
+        "DROP_COLS=" + repr(sorted(DROP_COLS.items())),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -2572,6 +2630,41 @@ def build(donor: str, out: str, force: bool) -> int:
                         created_tables.append(f"{table_name}.{h}")
         if created_tables:
             print("Kreirano (tabele/kolone): " + ", ".join(created_tables))
+
+        # Brisanja idu PRVA: preimenovanje i dopuna gledaju pozicije.
+        dropped = []
+        for table_name, kolone in DROP_COLS.items():
+            lo = find_table(wb, table_name)
+            if lo is None:
+                raise SchemaError(f"{table_name} ne postoji u donoru (DROP_COLS)")
+            for ime in kolone:
+                poz = header_index(lo).get(ime.strip().lower())
+                if poz is None:
+                    continue                       # vec obrisana
+                lo.ListColumns(poz).Delete()
+                dropped.append(f"{table_name}.{ime}")
+        if dropped:
+            print("Obrisane kolone: " + ", ".join(dropped))
+
+        # Preimenovanja PRE dopune: inace bi ENSURE_COLS dodao novo ime pored
+        # starog, pa bi tabela nosila oba oblika.
+        renamed = []
+        for table_name, parovi in RENAME_COLS.items():
+            lo = find_table(wb, table_name)
+            if lo is None:
+                raise SchemaError(f"{table_name} ne postoji u donoru (RENAME_COLS)")
+            idx = header_index(lo)
+            for staro_ime, novo_ime in parovi:
+                if novo_ime.strip().lower() in idx:
+                    continue                       # vec migrirano
+                poz = idx.get(staro_ime.strip().lower())
+                if poz is None:
+                    raise SchemaError(
+                        f"{table_name}: nema ni {staro_ime} ni {novo_ime}")
+                lo.ListColumns(poz).Name = novo_ime
+                renamed.append(f"{table_name}.{staro_ime}->{novo_ime}")
+        if renamed:
+            print("Preimenovane kolone: " + ", ".join(renamed))
 
         # Nadogradnja seme PRE sejanja (v. ENSURE_COLS): nove kolone na KRAJ,
         # isto sto radi modSetup.EnsureColumnOnTable na startu aplikacije.

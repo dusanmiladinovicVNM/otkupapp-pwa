@@ -13,8 +13,9 @@ Attribute VB_Name = "modOtkupUnos"
 '   OtkupValidiraj(p, fokus)   provere + bruto->neto; vraca poruku o gresci
 '                              ("" = proslo) i LOGICKO ime polja na koje treba
 '                              vratiti fokus
-'   OtkupUpisi(p, poruke)      SaveOtkupMulti_TX + stampa + auto-lanac
-'                              hladnjace; vraca OtkupID (prazno = nije upisano)
+'   OtkupUpisi(p, poruke)      CreateOtkup_TX + stampa; vraca OtkupID (prazno =
+'                              nije upisano). Auto-lanac hladnjace je PAUZIRAN
+'                              do PR7 -- obrazlozenje je uz sam poziv.
 '
 ' Ulaz je RECNIK (Scripting.Dictionary) sa vrednostima polja, da ga moze
 ' napuniti bilo koja forma. Kljucevi su LOGICKI, ne imena kontrola:
@@ -223,12 +224,21 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
         fokus = "brDok": OtkupValidiraj = Poruka("OTKUI_ERR_BROJ"): Exit Function
     End If
 
-    ' Dupli broj dokumenta u istom danu.
-    If Len(S(p, "brDok")) > 0 Then
-        Dim dup As String
-        dup = CheckDuplicate(TBL_OTKUP, COL_OTK_BR_DOK, S(p, "brDok"), COL_OTK_DATUM)
-        If Len(dup) > 0 Then
-            fokus = "brDok": OtkupValidiraj = dup: Exit Function
+    ' Dupli broj: ISTA kapija koju drzi pisac, ne druga implementacija.
+    '
+    ' Zatecena provera je isla kroz CheckDuplicate(broj, datum) -- BEZ stanice --
+    ' pa je bila uza od pisca: dokument koji CreateOtkup_TX smatra legalnim (isti
+    ' broj, druga stanica, isti dan) ekran bi odbio pre nego sto pisac dobije
+    ' priliku. Pravilo i opseg zive u modOtkup; ovde je samo rana povratna
+    ' informacija operateru.
+    If Len(S(p, "brDok")) > 0 And Len(S(p, "stanicaID")) > 0 Then
+        Dim zauzeo As String
+        zauzeo = modOtkup.BrojDokumentaZauzet(S(p, "stanicaID"), _
+                                             CDate(p("datum")), S(p, "brDok"))
+        If Len(zauzeo) > 0 Then
+            fokus = "brDok"
+            OtkupValidiraj = Poruka("OTKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
+            Exit Function
         End If
     End If
 
@@ -261,6 +271,31 @@ EH:
     OtkupValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
+' (Vrsta, Sorta) -> KulturaID. Razresavanje je posao ADAPTERA, ne pisca (S4.1f),
+' ali pravilo zivi na JEDNOM mestu -- isti razresivac koristi i PWA ingest.
+Private Function RazresiKulturu(ByVal vrsta As String, ByVal sorta As String, _
+                                ByRef outGreska As String) As String
+    Dim detalj As String
+    RazresiKulturu = modOtkup.RazresiKulturuIzVrsteSorte(vrsta, sorta, detalj)
+
+    If Len(RazresiKulturu) = 0 Then
+        outGreska = Poruka("OTKUNOS_ERR_KULTURA") & " " & vrsta & " / " & sorta
+    End If
+End Function
+
+Private Function OtkStavkaDTO(ByVal klasa As String, ByVal kol As Double, _
+                              ByVal cena As Double, ByVal amb As Double, _
+                              ByVal bruto As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", amb
+    If bruto > 0 Then s.Add "BrutoKg", bruto
+    Set OtkStavkaDTO = s
+End Function
+
 '------------------------------------------------------------- UPIS
 ' Upisuje otkup i radi sve sto ide uz njega. Vraca OtkupID (ili spojene ID-eve
 ' obe klase); prazno znaci da upis nije uspeo. U "poruke" se skupljaju
@@ -272,31 +307,67 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     On Error GoTo EH
     poruke = ""
 
-    res = SaveOtkupMulti_TX( _
-        datum:=CDate(p("datum")), _
-        kooperantID:=S(p, "kooperantID"), _
-        stanicaID:=S(p, "stanicaID"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        sortaVoca:=S(p, "sorta"), _
-        kolicinaI:=D(p, "kolicinaI"), _
-        cenaI:=D(p, "cenaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        vozacID:=S(p, "vozacID"), _
-        brDok:=S(p, "brDok"), _
-        novac:=D(p, "novac"), _
-        primalac:=S(p, "primalac"), _
-        parcelaID:=S(p, "parcelaID"), _
-        brojZbirne:=S(p, "brojZbirne"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        kolicinaII:=D(p, "kolicinaII"), _
-        cenaII:=D(p, "cenaII"), _
-        kolAmbIzdata:=L(p, "kolAmbIzdata"), _
-        brutoKgI:=D(p, "brutoKgI"), _
-        kolAmbII:=L(p, "kolAmbII"), _
-        brutoKgII:=D(p, "brutoKgII"))
+    ' ISPRAVKA HLADNJACKOG LANCA JE FAIL-CLOSED DOK LANAC STOJI.
+    '
+    ' Pending relink znaci: operater je stornirao stari hladnjacki dokument i
+    ' izabrao "Uneti ispravku". Ispravka nije samo nov otkup -- ona trazi i nov
+    ' nizvodni lanac, da bi se palete stare prijemnice imale gde prevezati.
+    '
+    ' Lanac je pauziran do PR7, pa se taj drugi deo ne moze izvrsiti. Zato se
+    ' STAJE PRE PISCA: bez ovoga bi nastao nov otkup, pending bi bio POTROSEN, a
+    ' operater bi dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
+    If Len(GetHladnjacaRelinkPending()) > 0 Then
+        poruke = poruke & Poruka("OTKUNOS_MSG_ISPRAVKA_PAUZIRANA") & " " & _
+                 GetHladnjacaRelinkPending() & vbCrLf
+        Exit Function
+    End If
 
-    If Len(res) = 0 Then Exit Function
+    ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
+    '
+    '   vozacID     vozac pripada otpremnici, ne otkupu (S4.1c)
+    '   brojZbirne  broj nikad nije bio veza nego labela (A2)
+    '   novac       kes ne ulazi kroz otkupni list (S4.1b). Mereno: ovaj ekran
+    '               p("novac") NIKAD ne postavlja -- polje pripada modNovacUnos,
+    '               pa je grana u starom piscu bila mrtva na izvoru.
+    '   primalac    isto
+    Dim kulturaID As String
+    kulturaID = RazresiKulturu(S(p, "vrsta"), S(p, "sorta"), errDesc)
+    If Len(kulturaID) = 0 Then
+        poruke = poruke & errDesc
+        Exit Function
+    End If
+
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(p("datum"))
+    h.Add "KooperantID", S(p, "kooperantID")
+    h.Add "StanicaID", S(p, "stanicaID")
+    h.Add "KulturaID", kulturaID
+    h.Add "VrstaVoca", S(p, "vrsta")
+    h.Add "SortaVoca", S(p, "sorta")
+    h.Add "TipAmbalaze", S(p, "tipAmb")
+    h.Add "BrojDokumenta", S(p, "brDok")
+    h.Add "ParcelaID", S(p, "parcelaID")
+    h.Add "KolAmbIzdata", L(p, "kolAmbIzdata")
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If D(p, "kolicinaI") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "cenaI"), _
+                                L(p, "kolAmb"), D(p, "brutoKgI"))
+    End If
+    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "cenaII"), _
+                                L(p, "kolAmbII"), D(p, "brutoKgII"))
+    End If
+
+    Dim greska As String
+    res = CreateOtkup_TX(h, stavke, greska)
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
+    End If
 
     ' Stampa otkupnog lista - best-effort, greska ne sme da obori potvrdu upisa.
     On Error Resume Next
@@ -304,32 +375,23 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     Err.Clear
     On Error GoTo EH
 
-    ' --- AUTO-LANAC HLADNJACE ---
-    ' Pending relink je postavljen kad je operater posle storna izabrao
-    ' "Uneti ispravku" i forma je prefill-ovana. Ovo je taj unos: sveza
-    ' paletizacija se preskace, a palete stare prijemnice se prevezuju nize.
-    hlPending = GetHladnjacaRelinkPending()
-    doHlRelink = (Len(hlPending) > 0 And IsHladnjacaStanica(S(p, "stanicaID")))
-    If Len(hlPending) > 0 And Not doHlRelink Then
-        ' Operater je promenio stanicu - ispravka otpada; pending se trosi da ne
-        ' okine pogresno na nekom kasnijem unosu.
-        SetHladnjacaRelinkPending ""
-        poruke = poruke & Poruka("OTKUNOS_MSG_NIJE_HLADNJACA") & " " & hlPending & vbCrLf
+    ' AUTO-LANAC JE PAUZIRAN (Otkup cutover, korak 2).
+    '
+    ' Lanac deli dokument PO KLASI: iz "ID1 + ID2" vadi idI i idII i svaku klasu
+    ' vodi kroz svoju otpremnicu, zbirnu i prijemnicu (modAutoHladnjaca:182).
+    ' Nov pisac daje JEDAN OtkupID, a jedan otkup red drzi JEDAN OtpremnicaID --
+    ' pa je veza strukturno gubitna dok otpremnica ne predje na header+stavke.
+    '
+    ' Odluka operatera: lanac se gasi do PR7, umesto da se upisuje polovicna veza.
+    ' Kod lanca OSTAJE netaknut -- pauzira se poziv, i to glasno.
+    If IsHladnjacaStanica(S(p, "stanicaID")) Then
+        poruke = poruke & Poruka("OTKUNOS_MSG_LANAC_PAUZIRAN") & vbCrLf
     End If
-    If doHlRelink Then SetPaletizeSkip True
+    SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
 
-    On Error Resume Next
-    hlWarn = AutoChainHladnjaca(CDate(p("datum")), S(p, "stanicaID"), S(p, "vrsta"), _
-                                S(p, "sorta"), S(p, "vozacID"), S(p, "tipAmb"), _
-                                L(p, "kolAmb"), D(p, "kolicinaI"), D(p, "cenaI"), _
-                                B(p, "dveKlase"), D(p, "kolicinaII"), D(p, "cenaII"), _
-                                S(p, "brDok"), res, D(p, "brutoKgI"), L(p, "kolAmbII"), _
-                                D(p, "brutoKgII"), hlNewPrij)
-    Err.Clear
-    On Error GoTo EH
-    SetPaletizeSkip False        ' toggle se vraca i kad je lanac pao
-    If Len(hlWarn) > 0 Then poruke = poruke & hlWarn & vbCrLf
-
+    ' Relink aparat je NEDOSTIZAN dok je lanac pauziran: pending se hvata iznad,
+    ' pre pisca, pa dovde nikad ne stigne sa vrednoscu. Ostaje netaknut da ga PR7
+    ' vrati u pogon zajedno sa lancem.
     If doHlRelink Then
         SetHladnjacaRelinkPending ""         ' potrosi (idempotentno)
         If Len(hlNewPrij) = 0 Then

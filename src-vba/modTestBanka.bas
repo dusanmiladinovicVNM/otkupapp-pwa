@@ -97,6 +97,7 @@ Public Sub RunBankaImportTestSuite()
     tx.AddTableSnapshot TBL_BANKA_IMPORT
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_KOOPERANTI
     tx.AddTableSnapshot TBL_STANICE
     tx.AddTableSnapshot TBL_PARTNER_MAP
@@ -1461,9 +1462,14 @@ End Sub
 ' upozorenja, dok bi ostali nalozi uredno otisli u fajl. Ekran bi tvrdio da
 ' prikazuje otvorene obaveze, a jedna bi nedostajala.
 '
-' Sada je fail-closed, isto pravilo kao za dupliran OtkupID. Kontrola (3)
-' cuva granicu iz R7: korupcija koja NE moze proizvesti nalog (zatvoren red)
-' ne obara ceo ekran.
+' Sada je fail-closed, isto pravilo kao za dupliran OtkupID.
+'
+' KONTROLA (3) JE UKLONJENA U KORAKU 4, i to nije slabljenje nego posledica.
+' Tvrdila je da ZATVOREN red bez OtkupID ne obara ekran -- a "zatvoren" se tada
+' citalo iz kolone Isplaceno. Status je sada izveden iz placanja, a placanje se
+' vezuje BAS PREKO OtkupID-a: red bez njega ne moze biti placen, pa "zatvoren red
+' bez OtkupID" vise ne postoji kao stanje. Ostaje jedno pravilo umesto dva:
+' red bez identiteta je korupcija i obara pregled.
 ' ============================================================
 Private Sub T18_NepotpunIdentitetNeNestajeTiho()
     Const S As String = "T18 nepotpun identitet: "
@@ -1480,22 +1486,7 @@ Private Sub T18_NepotpunIdentitetNeNestajeTiho()
     Dim errNum As Long
     Dim errDesc As String
 
-    ' --- (3) prvo KONTROLA: zatvoren (isplacen) red bez OtkupID ne sme da
-    '         obori pregled -- GetOpenOtkupi ga i ne vraca, pa nalog iz njega
-    '         ne moze nastati.
-    BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
-        Array("", P & "BLOK-18Z", P & "K-18", 100, 5, "Malina", Date, STATUS_ISPLACENO)
-
-    On Error Resume Next
-    Err.Clear
-    Set lista = BuildBlokIsplataList()
-    errNum = Err.Number
-    On Error GoTo 0
-    ChkEq errNum, 0, S & "zatvoren red bez OtkupID NE obara pregled"
-
-    ' --- (1) OTVOREN blok bez OtkupID -> tvrd pad (ranije: tiho nestajanje).
+    ' --- OTVOREN blok bez OtkupID -> tvrd pad (ranije: tiho nestajanje).
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
@@ -1534,10 +1525,13 @@ Private Sub T19_OtvorenBlokBezKooperantaPada()
     Dim errDesc As String
 
     ' Jedinstven OtkupID, ali BEZ kooperanta -> primalac se ne moze utvrditi.
+    ' Stavka je OBAVEZNA: bez nje dokument nema vrednost, ne ulazi u listu
+    ' otvorenih i kapija nikad ne bi bila ni pozvana -- test bi bio zelen prazan.
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
         Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina", Date)
+    BitOtkupStavka P & "OTK-NOKOOP", 1000, 100
 
     On Error Resume Next
     Err.Clear
@@ -1656,13 +1650,21 @@ Private Sub SeedKooperantSaRacunom(ByVal koopID As String, ByVal ime As String, 
 End Sub
 
 ' Otkup red koji je VEC ISPLACEN -> GetOpenOtkupi ga preskace.
+' ISPLACEN ZNACI PLACEN -- knjizen novac, ne kolona.
+'
+' Kolona Isplaceno je bila kes obrisanog UpdateOtkupStatus (korak 4) i vise ne
+' postoji u semi (korak 7). Status je izveden: otvoreno = vrednost stavki minus
+' zbir isplata iz tblNovac. Fixture zato knjizi pokrivajucu isplatu -- inace
+' "zatvoren red" ostaje otvoren i testovi mere nesto trece.
 Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
                               ByVal brDok As String, ByVal kolicina As Double, _
                               ByVal cena As Double, ByVal vrsta As String)
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
-        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
+    BitOtkupStavka otkID, kolicina, cena
+    SeedIsplataZaOtkup "NOV-PLC-" & brDok, koopID, otkID, kolicina * cena
 End Sub
 
 ' Isplata VEZANA za konkretan otkup. Kolona Isplaceno NIJE dovoljna: kandidate
@@ -1757,6 +1759,22 @@ Private Sub SeedOtkup(ByVal otkID As String, ByVal koopID As String, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
         Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
+    BitOtkupStavka otkID, kolicina, cena
+End Sub
+
+' Stavka otkupa uz seed header reda.
+'
+' Od Otkup cutover-a vrednost dokumenta je SUM(stavke.Kolicina x Cena)
+' (modOtkup.VrednostOtkupa), pa fixture koji upise samo header pravi otkup
+' vrednosti NULA -- i avans se tiho ne primeni. Bas to je oborilo T16/T23/T25
+' kad je citalac presao na stavke.
+Private Sub BitOtkupStavka(ByVal otkID As String, ByVal kolicina As Double, _
+                           ByVal cena As Double)
+    If Len(Trim$(otkID)) = 0 Then Exit Sub    ' seed bez ID-a: nema na sta da se veze
+    BitAppend TBL_OTKUP_STAVKE, _
+        Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
+              COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB), _
+        Array(otkID & "-OKS1", otkID, 1, KLASA_I, kolicina, cena, 0)
 End Sub
 
 Private Sub SeedKooperant(ByVal koopID As String, ByVal ime As String, _

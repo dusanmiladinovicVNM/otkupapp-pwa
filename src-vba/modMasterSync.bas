@@ -696,6 +696,41 @@ End Function
 ' nepovezani (produkcioni poziv iz modGoogleSyncOrchestrator). Scope koriste
 ' testovi, isto kao samoBrojOtp u AutoCreateZbirnaFromOtpremnice, da run ne
 ' zahvati nepovezane otkupe u svesci.
+' IZVEDENI LANAC (otpremnica -> zbirna) JE PAUZIRAN -- CEO, ne samo prvi korak.
+'
+' Uvoz otkupa JESTE presao na kanonski pisac. Sve sto se iz njega IZVODI nije, i
+' svaki od tih koraka PISE NAZAD NA ZAGLAVLJE OTKUPA -- bas ono sto refaktor
+' uklanja. Mereno:
+'
+'   AutoCreateOtpremniceFromPWA        cita VozacID/Klasa/Kolicina/Cena sa
+'                                      zaglavlja (:759-767), pise OtpremnicaID
+'   AutoCreateZbirnaFromOtpremnice     -> BackfillOtkupBrojZbirneByOtpremnica
+'                                      pise Otkup.BrojZbirne
+'   ImportVOZRow_RowTX (VOZ/Zbirna)    -> LinkZbirnaToOtkupAndOtpremnica pise
+'                                      Otkup.BrojZbirne i CITA Otkup.OtpremnicaID
+'
+' Pauzirati samo prvi korak nije dovoljno: druga dva bi i dalje KONTAMINIRALA
+' nov otkup starim backlink modelom. Zato je kapija JEDNA i pokriva ceo lanac.
+'
+' Sta OSTAJE aktivno: uvoz otkupa (canonical) i ceo outbound sync. Ciklus se
+' vodi kao DEGRADIRAN, ne kao uspesan i ne kao pad.
+'
+' Kod ispod OSTAJE netaknut: otpremnicu vraca PR7 (nad tblOtpremnicaIzvori),
+' zbirnu PR8. Ovo NIJE compatibility most nego izricito iskljucenje.
+'
+' PR7 NE SME SAMO DA NAPISE = True.
+'
+' Jedna kapija pokriva tri koraka koji se oslobadjaju u DVA PR-a: otpremnica u
+' PR7, a Malina auto-zbirna i VOZ uvoz tek u PR8. Otkljucavanje ove funkcije u
+' PR7 vratilo bi i dva zbirna koraka koji i dalje pisu Otkup.BrojZbirne -- i
+' kontaminacija koju PR6 zatvara vratila bi se na mala vrata.
+'
+' PR7 kapiju DELI: PwaOtpremnicaDostupna = True, PwaZbirnaDostupna = False.
+' Detalji i test-podela: REFAKTOR S14 (PR7 pre-flight).
+Public Function IzvedeniLanacIzPwaDostupan() As Boolean
+    IzvedeniLanacIzPwaDostupan = False
+End Function
+
 Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date = 0) As Long
     Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
 
@@ -703,6 +738,13 @@ Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date 
     Dim createdCount As Long
 
     On Error GoTo EH
+
+    If Not IzvedeniLanacIzPwaDostupan() Then
+        Err.Raise vbObjectError + 8130, SRC, _
+                  "Auto-kreiranje otpremnica iz PWA otkupa je PAUZIRANO dok " & _
+                  "otpremnica ne predje na header + stavke (PR7). Otkupi su " & _
+                  "uvezeni; otpremnice unesi rucno."
+    End If
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -1026,6 +1068,16 @@ End Function
 ' zahvati nepovezane otvorene otpremnice u svesci.
 Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
+
+    ' Deo PAUZIRANOG izvedenog lanca: BackfillOtkupBrojZbirneByOtpremnica pise
+    ' Otkup.BrojZbirne nazad na zaglavlje. Kapija je OVDE, ne na pozivnom mestu,
+    ' jer se rutina zove i iz orkestratora i sa desktopa (modDokUnos) -- steta je
+    ' ista bez obzira ko je pokrenuo.
+    If Not IzvedeniLanacIzPwaDostupan() Then
+        Err.Raise vbObjectError + 8131, SRC, _
+                  "Auto-zbirna iz otpremnica je PAUZIRANA dok izvedeni lanac ne " & _
+                  "predje na header + stavke (PR7/PR8). Zbirne unesi rucno."
+    End If
 
     Dim tx As clsTransaction
 
@@ -1646,15 +1698,61 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 GoTo NextImportRow
             End If
 
-            ' Duplikat-Check im Master
+            ' Duplikat-Check im Master.
+            '
+            ' ISTI CRID SA DRUGACIJIM SADRZAJEM NIJE DUPLIKAT NEGO KONFLIKT.
+            ' Zatecen kod je svaki poznat CRID prosto preskakao, pa je izmenjen
+            ' sadrzaj pod istim CRID-om tiho nestajao: PWA misli da je poslala
+            ' ispravku, master je nema i niko ne sazna.
+            '
+            ' Ispravka ide kroz storno i nov dokument (A13), ne kroz ponovni uvoz
+            ' istog CRID-a -- pa se ovde staje glasno.
+            '
+            ' NEIZMERENO, i to je namerno imenovano: ova grana se dostize samo kroz
+            ' ImportOneOTKSheet, koji trazi ceo Google Sheet. Sabotaza koja je gasi
+            ' NE grize -- testovi zovu ImportRowToTblOtkup_RowTX direktno, gde isti
+            ' konflikt hvata kapija u samom ingestu (Test_PWA_IstiCridDrugiSadrzajPada).
+            ' Ingest kapija je ta koja garantuje ispravnost; ova daje operateru
+            ' status umesto tihog preskoka, i bez nje bi izmenjen sadrzaj opet
+            ' nestajao -- zato ostaje.
             If IsDuplicateInMaster(clientRecordID) Then
+                Dim posID As String
+                posID = modOtkup.OtkupPoClientRecordID(clientRecordID)
+                If Len(posID) > 0 Then
+                    If Not PwaIstiSadrzaj(posID, data, i) Then
+                        statusUpdates.Add Array(i, SYNC_STATUS_ERROR & _
+                            ":CRID konflikt -- isti ClientRecordID, drugi sadrzaj (" & _
+                            posID & ")")
+                        outErrors = outErrors + 1
+                        LogError "ImportOneOTKSheet", _
+                                 "CRID konflikt: " & clientRecordID & " -> " & posID
+                        GoTo NextImportRow
+                    End If
+                End If
                 ' Proveri da li je VozacID update (Otprema tab)
                 Dim sheetVozac As String
                 sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
                 If Len(sheetVozac) > 0 Then
                     Dim vozResult As String
                     Dim vozDetail As String
-                    vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+                    ' VozacID NA OTKUPU JE PRIPREMA ZA PAUZIRANOG POTROSACA.
+                    '
+                    ' Jedini citaoci te kolone su AutoLink (mrtav -- kljuc vise ne
+                    ' pogadja) i auto-otpremnica (pauzirana). Upis koji hrani samo
+                    ' pauzirane potrosace je upis u kolonu koju ciljni model nema:
+                    ' vozac pripada OTPREMNICI, ne otkupu (S4.1c).
+                    '
+                    ' Kapija stoji na POZIVNOM MESTU, ne u TryUpdateVozacID:
+                    ' njegova masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/
+                    ' FAILED) je i dalje merena kroz TestHook i PR7 je koristi nad
+                    ' otpremnicom.
+                    If IzvedeniLanacIzPwaDostupan() Then
+                        vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+                    Else
+                        vozResult = MSVOZ_NOCHANGE
+                        vozDetail = "VozacID se ne utiskuje na otkup: " & _
+                                    "auto-otpremnica je pauzirana do PR7."
+                    End If
 
                     Select Case vozResult
                         Case MSVOZ_UPDATED
@@ -1821,6 +1919,131 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
     ValidatePWAOtkup = ""
 End Function
 
+' Da li vec uvezen dokument nosi ISTI poslovni sadrzaj kao red koji je stigao.
+'
+' Poredi se ono sto dokument JESTE, ne kako je zapisan.
+'
+' UCESTVUJU:  KooperantID, KulturaID, Datum, ParcelaID, TipAmbalaze,
+'             i jedina stavka -- Klasa, Kolicina, Cena, KolAmbalaze.
+'
+' NE UCESTVUJU, i za svako postoji razlog:
+'   OtkupID, CreatedAt, redosled   ocekuje se da se razlikuju
+'   BrojDokumenta                  USLOVNO: ucestvuje samo kad ga PWA izricito
+'                                  posalje. Prazan incoming broj znaci da ga je
+'                                  master generisao lokalno, pa bi poredjenje
+'                                  prijavljivalo konflikt tamo gde ga nema.
+'   VrstaVoca / SortaVoca          ulaze posredno: iz njih se razresava KulturaID,
+'                                  pa se razlika vidi kroz FK
+'
+' Funkcija sama parsira red, da bi je mogla zvati OBA mesta: i ingest, i grana
+' koja duplikat preskace. Dva poredjenja istog pojma bi se razisla.
+Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, _
+                                ByVal row As Long) As Boolean
+    Const SRC As String = "PwaIstiSadrzaj"
+
+    On Error GoTo EH
+
+    Dim kooperantID As String, vrstaVoca As String, sortaVoca As String, klasa As String
+    Dim parcelaID As String, tipAmb As String
+    kooperantID = Trim$(CStr(nz(data(row, GS_KOOPERANT_ID), "")))
+    vrstaVoca = Trim$(CStr(nz(data(row, GS_VRSTA), "")))
+    sortaVoca = Trim$(CStr(nz(data(row, GS_SORTA), "")))
+    klasa = Trim$(CStr(nz(data(row, GS_KLASA), "")))
+    If Len(klasa) = 0 Then klasa = "I"
+    parcelaID = Trim$(CStr(nz(data(row, GS_PARCELA_ID), "")))
+    tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
+
+    If Not IsParsableMasterSyncDate(data(row, GS_DATUM)) Then Exit Function
+
+    Dim datum As Date
+    datum = CDate(data(row, GS_DATUM))
+
+    Dim kultGreska As String, kulturaID As String
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(vrstaVoca, sortaVoca, kultGreska)
+    If Len(kulturaID) = 0 Then Exit Function      ' nerazresivo -> ne moze biti isto
+
+    If Not PwaPoljeJednako(otkupID, COL_OTK_KOOPERANT, kooperantID) Then Exit Function
+    If Not PwaPoljeJednako(otkupID, COL_OTK_KULTURA, kulturaID) Then Exit Function
+
+    ' PARCELA I TIP AMBALAZE SU DEO SADRZAJA, ne ukras.
+    '
+    ' Bez njih je isti CRID sa parcele P1 i sa parcele P2 prolazio kao "isti
+    ' sadrzaj" -- pa bi ispravljena parcela tiho nestala. Parcela je GlobalGAP
+    ' cinjenica (od koje njive je roba), a tip ambalaze odlucuje ceo dvojni upis
+    ' gajbi. Oba menjaju STA dokument tvrdi, dakle oba su konflikt.
+    If Not PwaPoljeJednako(otkupID, COL_OTK_PARCELA, parcelaID) Then Exit Function
+    If Not PwaPoljeJednako(otkupID, COL_OTK_TIP_AMB, tipAmb) Then Exit Function
+
+    ' BROJ DOKUMENTA: uslovno, i to je jedina postena varijanta.
+    '
+    ' Kad ga PWA NE posalje, master ga generise lokalno -- poredjenje bi tada
+    ' prijavljivalo konflikt tamo gde ga nema, jer se dva generisana broja i
+    ' ocekuje da se razlikuju.
+    '
+    ' Kad ga PWA IZRICITO posalje, on je deo payload-a: isti CRID koji prvi put
+    ' kaze 123 a drugi put 124 tvrdi dve razlicite stvari. Uslov na neprazan
+    ' incoming broj resava to bez ijednog novog polja -- ranije je ovde stajalo da
+    ' bi trebalo znati KO je broj dodelio; ne treba, dovoljno je da li ga je PWA
+    ' poslala.
+    Dim brojIzPwa As String
+    brojIzPwa = Trim$(CStr(nz(data(row, GS_BROJ_DOKUMENTA), "")))
+    If Len(brojIzPwa) > 0 Then
+        If Not PwaPoljeJednako(otkupID, COL_OTK_BR_DOK, brojIzPwa) Then Exit Function
+    End If
+
+    Dim dat As Variant
+    dat = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
+    If Not IsDate(dat) Then Exit Function
+    If Int(CDbl(CDate(dat))) <> Int(CDbl(datum)) Then Exit Function
+
+    ' Stavka: PWA salje tacno jednu (S7).
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cKlasa As Long, cKol As Long, cCena As Long, cAmb As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+
+    Dim k As Long, nasao As Long
+    For k = 1 To UBound(d, 1)
+        If StrComp(Trim$(nz(d(k, cOtk), "")), otkupID, vbTextCompare) = 0 Then
+            nasao = nasao + 1
+            If nasao > 1 Then Exit Function       ' vise stavki -> nije PWA dokument
+            If StrComp(Trim$(nz(d(k, cKlasa), "")), klasa, vbTextCompare) <> 0 Then Exit Function
+            If Abs(PwaBroj(d(k, cKol)) - CDbl(nz(data(row, GS_KOLICINA), 0))) > 0.0001 Then Exit Function
+            If Abs(PwaBroj(d(k, cCena)) - CDbl(nz(data(row, GS_CENA), 0))) > 0.0001 Then Exit Function
+            If Abs(PwaBroj(d(k, cAmb)) - CDbl(nz(data(row, GS_KOL_AMB), 0))) > 0.0001 Then Exit Function
+        End If
+    Next k
+
+    PwaIstiSadrzaj = (nasao = 1)
+    Exit Function
+
+EH:
+    ' Greska pri poredjenju NIJE "isto" -- fail-closed.
+    LogErr SRC, "OtkupID=" & otkupID
+    PwaIstiSadrzaj = False
+End Function
+
+' Broj iz celije. NumVal postoji, ali je Private u modOtkupBlok i
+' modScrDokumenti -- odavde nevidljiv. vba_check to ne hvata: poziv u
+' IZRAZNOJ poziciji je poznata rupa pravila NEDEFINISAN, pa je greska izasla
+' tek kao break u VBE-u.
+Private Function PwaBroj(ByVal v As Variant) As Double
+    If IsNumeric(v) Then PwaBroj = CDbl(v)
+End Function
+
+Private Function PwaPoljeJednako(ByVal otkupID As String, ByVal kolona As String, _
+                                 ByVal ocekivano As String) As Boolean
+    PwaPoljeJednako = (StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                    kolona), "")), _
+                               Trim$(ocekivano), vbTextCompare) = 0)
+End Function
+
 Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
     If Len(Trim$(clientRecordID)) = 0 Then
         LogError "IsDuplicateInMaster", "ClientRecordID je prazan. Duplicate check nije validan."
@@ -1852,7 +2075,11 @@ End Function
 ' ============================================================
 ' PRIVATE -- Import Row
 ' ============================================================
-Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
+' Public zbog testa: PWA ingest se inace ne moze izmeriti -- jedini put dovde je
+' ImportOneOTKSheet, koji trazi ceo Google Sheet. Kanonski ingest je od Otkup
+' cutover-a produkcioni put, pa ne sme da ostane bez zelenog pokrica
+' (RunMasterSyncSmokeSuite je zatecena crvena i nije u FULL prolazu).
+Public Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
                                            ByVal row As Long, _
                                            ByVal clientRecordID As String) As String
     Dim tx As clsTransaction
@@ -1955,9 +2182,18 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
         stanicaID = otkupacID
     End If
     
-    ' KulturaID Lookup
-    kulturaID = CStr(nz(LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, "KulturaID"), ""))
-    If Len(kulturaID) = 0 Then kulturaID = vrstaVoca & "-" & sortaVoca
+    ' KULTURA SE RAZRESAVA EGZAKTNO, PO (Vrsta, Sorta).
+    '
+    ' Zatecen kod je trazio samo po VrstaVoca -- sorta se ignorisala -- a kad ne
+    ' nadje, sklapao je "vrsta-sorta" string koji IZGLEDA kao FK a ne pokazuje ni
+    ' na sta. Takav "ID" je ulazio u dokument i prezivljavao zauvek (S4.1f).
+    Dim kultGreska As String
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(vrstaVoca, sortaVoca, kultGreska)
+    If Len(kulturaID) = 0 Then
+        Err.Raise vbObjectError + 8106, "ImportRowToTblOtkup", _
+                  "Kultura se ne razresava: " & kultGreska & _
+                  " ClientRecordID=" & clientRecordID
+    End If
     
     ' Fallback: prazno = legacy / PWA pre-rollout.
     ' Validacija formata za PWA-generated brojeve (regex kanonski).
@@ -1977,42 +2213,88 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
         End If
     End If
     
-    ' Neue ID
-    newID = GetNextID(TBL_OTKUP, COL_OTK_ID, "OTK-")
-    If Len(Trim$(newID)) = 0 Then
-        Err.Raise vbObjectError + 8302, "ImportRowToTblOtkup", _
-              "GetNextID nije vratio OtkupID. ClientRecordID=" & clientRecordID
-    End If
-    
-    ' VozacID
-    ' BrojDokumenta = "PWA:" & clientRecordID (fuer Duplikat-Check)
-    ' Novac = 0, PrimalacNovca = ""
-    
-    Dim rowData As Variant
-    rowData = Array(newID, datum, kooperantID, stanicaID, kulturaID, _
-                    vrstaVoca, sortaVoca, kolicina, cena, tipAmb, _
-                    kolAmb, vozacID, brojDokumenta, 0, "", klasa, _
-                    "", "", "", "", "", parcelaID, _
-                    clientRecordID, "PWA")
-    
-    Dim result As Long
-    result = AppendRow(TBL_OTKUP, rowData)
-    
-    If result > 0 Then
-        ' Ambalaza tracken
-        If kolAmb > 0 Then
-            ' Dvojni upis: kooperant IZLAZ (razduzenje) + OM/Stanica ULAZ (zaduzenje OM).
-            TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kooperantID, "Kooperant", , newID, DOK_TIP_OTKUP
-            TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", stanicaID, "Stanica", , newID, DOK_TIP_OTKUP
+    ' IDEMPOTENCIJA PO ClientRecordID.
+    '
+    ' Isti CRID sme da stigne vise puta -- retry, ponovljen sync, prekinut prolaz --
+    ' ali sme da napravi SAMO JEDAN dokument. Zatecen kod je isti CRID prosto
+    ' PRESKAKAO (IsDuplicateInMaster), pa je izmenjen sadrzaj pod istim CRID-om
+    ' tiho nestajao: PWA misli da je poslala ispravku, master je nema.
+    '
+    '   isti CRID + isti sadrzaj    -> NO-OP, vrati postojeci OtkupID
+    '   isti CRID + drugi sadrzaj   -> TVRDA GRESKA
+    Dim postojeci As String
+    postojeci = modOtkup.OtkupPoClientRecordID(clientRecordID)
+
+    If Len(postojeci) > 0 Then
+        If PwaIstiSadrzaj(postojeci, data, row) Then
+            LogInfo "ImportRowToTblOtkup", "NO-OP (isti CRID i sadrzaj): " & _
+                    postojeci & " <- PWA:" & clientRecordID
+            ImportRowToTblOtkup = postojeci
+            Exit Function
         End If
-        
-        LogInfo "ImportRowToTblOtkup", "Importiert: " & newID & " ? PWA:" & clientRecordID & _
-                " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
-        ImportRowToTblOtkup = newID
-    Else
-        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen fuer PWA:" & clientRecordID
-        ImportRowToTblOtkup = ""
+
+        Err.Raise vbObjectError + 8107, "ImportRowToTblOtkup", _
+                  "ClientRecordID " & clientRecordID & " je vec uvezen kao " & _
+                  postojeci & ", ali sa DRUGACIJIM sadrzajem. Ispravka ide kroz " & _
+                  "storno i nov dokument (A13), ne kroz ponovni uvoz istog CRID-a."
     End If
+
+    ' KANONSKI PISAC. Sta vise ne ide u header:
+    '   vozacID   vozac pripada otpremnici (S4.1c)
+    '   novac     kes ne ulazi kroz otkupni list (S4.1b)
+    ' Ambalazu knjizi sam pisac, jednom po dokumentu.
+    '
+    ' Ranije je ovde stajao goli Array(...) od 24 elementa nad tabelom od 39
+    ' kolona -- poziciono, pa bi kolona ubacena u sredinu tiho poslala vrednosti
+    ' u pogresna polja (CLAUDE.md S3).
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "KooperantID", kooperantID
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", kulturaID
+    h.Add "VrstaVoca", vrstaVoca
+    h.Add "SortaVoca", sortaVoca
+    h.Add "TipAmbalaze", tipAmb
+    h.Add "BrojDokumenta", brojDokumenta
+    h.Add "ParcelaID", parcelaID
+    h.Add "ClientRecordID", clientRecordID
+    h.Add "SyncSource", "PWA"
+
+    ' KAD JE RED NASTAO NA TERENU, ne kad je stigao u master.
+    '
+    ' PWA sema ovo polje TRAZI (RequireOTKHeaderValue nad GS_CREATED_AT), a
+    ' CreateOtkup_TX ga prima kao opcion header kljuc -- ali adapter ga do sada
+    ' nije prosledjivao, pa se bacao na pola puta. Bez njega je jedini vremenski
+    ' trag CreatedAt, koji nosi trenutak SINHRONIZACIJE; posle prekida veze to ume
+    ' da bude i nekoliko dana kasnije.
+    Dim srcCreated As String
+    srcCreated = Trim$(CStr(nz(data(row, GS_CREATED_AT), "")))
+    If Len(srcCreated) > 0 Then h.Add "SourceCreatedAt", srcCreated
+
+    ' PWA salje JEDAN zapis = JEDNA klasa = ceo dokument (S7).
+    Dim stavka As Object
+    Set stavka = CreateObject("Scripting.Dictionary")
+    stavka.Add "Klasa", klasa
+    stavka.Add "Kolicina", kolicina
+    stavka.Add "Cena", cena
+    stavka.Add "KolAmbalaze", CDbl(kolAmb)
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add stavka
+
+    Dim greska As String
+    newID = CreateOtkup_TX(h, stavke, greska)
+
+    If Len(newID) = 0 Then
+        Err.Raise vbObjectError + 8108, "ImportRowToTblOtkup", _
+                  "CreateOtkup_TX nije vratio OtkupID (CRID=" & clientRecordID & "): " & greska
+    End If
+
+    LogInfo "ImportRowToTblOtkup", "Uvezeno: " & newID & " <- PWA:" & clientRecordID & _
+            " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
+    ImportRowToTblOtkup = newID
     Exit Function
 
 EH:
@@ -2496,11 +2778,40 @@ End Function
 ' ============================================================
 ' PUBLIC -- Hauptfunktion Zbirna Import
 ' ============================================================
+' Javni ulaz (Alt+F8 / dugme u svesci). Census nad src-vba daje NULA pozivalaca,
+' ali Public Sub bez argumenata je tacno oblik koji se vezuje na dugme u .xlsm --
+' a to se iz izvora ne moze dokazati. Zato handler, ne pretpostavka.
+'
+' Bez njega bi operater na pauziranom lancu dobio VBA runtime error umesto
+' uredne poruke, jer _Core namerno BACA (v. kapiju tamo).
 Public Sub ImportZbirneFromPWA()
+    On Error GoTo EH
+
     Call ImportZbirneFromPWA_Core(True)
+    Exit Sub
+
+EH:
+    Dim opis As String
+    opis = Err.description
+    LogError "ImportZbirneFromPWA", opis, Err.Number
+    MsgBox opis, vbExclamation, APP_NAME
 End Sub
 
 Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
+    ' Deo PAUZIRANOG izvedenog lanca: ImportVOZRow_RowTX kroz
+    ' LinkZbirnaToOtkupAndOtpremnica pise Otkup.BrojZbirne i cita
+    ' Otkup.OtpremnicaID -- dve kolone koje nov pisac ne odrzava.
+    '
+    ' BACA, ne vraca False. Merenje: False se ne razlikuje od "nema VOZ fajlova"
+    ' ni od "nema pristupa Drive-u", pa bi i test i operater videli isti ishod za
+    ' tri razlicita razloga -- i sabotaza kapije ne bi oborila nista (probano).
+    ' Ide PRE On Error, da ga sopstveni EH ne pretvori u "fatal sync error".
+    If Not IzvedeniLanacIzPwaDostupan() Then
+        Err.Raise vbObjectError + 8132, "ImportZbirneFromPWA_Core", _
+                  "Uvoz zbirnih (VOZ) je PAUZIRAN dok izvedeni lanac ne predje na " & _
+                  "header + stavke (PR7/PR8). Zbirne unesi rucno."
+    End If
+
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection

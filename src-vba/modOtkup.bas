@@ -34,14 +34,25 @@ Option Explicit
 ' Razresavanje (Vrsta, Sorta) -> KulturaID je posao ADAPTERA; writer proverava
 ' da FK postoji i da se snapshot vrsta/sorta slaze sa tom kulturom.
 '
-' Skela je ADITIVNA: produkcioni pozivaoci i dalje idu starim putem
-' (modOtkupUnos.bas:275), a golden scenariji to dokazuju nepromenjeni. Zato
-' header NAMERNO ostavlja Kolicina / Cena / Klasa / KolAmbalaze / BrutoKg /
-' VozacID / Isplaceno / DatumIsplate / VremeUnosa prazne -- to su kolone koje u
-' ciljnoj semi ne postoje (DOCUMENT_HEADER_LINES S4.1).
+' VISE NIJE SKELA, I VISE NEMA TAKMACA. Od Otkup cutover-a ovo je JEDINI put
+' kojim otkup nastaje: ekran (modOtkupUnos), PWA uvoz (modMasterSync) i golden
+' mreza zovu bas njega. Stari pisac po klasi je obrisan (korak 3).
 '
-' NIJE u skeli: tblAmbalaza (ide u Otkup cutover) i tblNovac (kes ne ulazi kroz
-' otkupni list, S4.1b).
+' Izuzetak je SaveOtkup_TX: nije u pogonu, nego sluzi testovima da naprave
+' zaglavlje BEZ STAVKI -- oblik koji nove kapije moraju da odbiju. Obrazlozenje
+' stoji uz njega.
+'
+' Header ostavlja prazne kolone koje u ciljnoj semi ne postoje
+' (DOCUMENT_HEADER_LINES S4.1): Kolicina, Cena, Klasa, KolAmbalaze, BrutoKg,
+' VozacID, VremeUnosa.
+'
+' Isplaceno i DatumIsplate vise nisu na tom spisku -- FIZICKI SU OBRISANE iz
+' kanona (korak 7), a self-heal ih uklanja i iz zatecene sveske
+' (modSetup.ObrisiKolonuAko). Status isplate je izveden, v. modNovac.
+'
+' Transakcija obuhvata tblOtkup, tblOtkupStavke, tblAmbalaza i tblNovac.
+' Ambalaza se knjizi jednom po dokumentu; tblNovac dira SAMO primena zatecenog
+' avansa -- kes i dalje ne ulazi kroz otkupni list (S4.1b).
 '
 ' Header (h) -- Scripting.Dictionary, obavezni kljucevi:
 '   Datum, KooperantID, StanicaID, KulturaID, VrstaVoca, BrojDokumenta
@@ -70,11 +81,16 @@ Public Function CreateOtkup_TX(ByVal h As Object, _
     ' Sema pre upisa: AppendRow pise POZICIONO. Ide PRE BeginTx -- kapija sme da
     ' digne gresku, a nema smisla otvarati transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "CreateOtkup_TX", _
-        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE
+        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    ' Ambalaza je u snapshotu zbog pada IZMEDJU dva TrackAmbalaza poziva. Taj pad
+    ' se iz javnog API-ja ne moze izazvati (svi ulazi su vec provereni), pa je ovo
+    ' NEIZMERENA odbrana -- namerno, i tako imenovana.
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
 
     CreateOtkup_TX = CreateOtkup(h, stavke)
 
@@ -131,6 +147,277 @@ End Function
 
 ' Core -- NE zovi spolja. Jedini ulaz je CreateOtkup_TX, koji drzi snapshot
 ' transakciju; direktan poziv bi kod greske ostavio header bez stavki.
+' ISPRAVKA OTKUPA -- NOV DOKUMENT, NOV BROJ, VEZA PO ID-u (A9).
+'
+' Ispravka NIKAD ne menja snimljen otkup (A13, S4.1e). Zatecen dokument se
+' stornira, nastaje nov, a veza izmedju njih zivi u tabeli:
+'
+'     OTK-101 / broj 17   Stornirano=Da,  ZamenjenSaID = OTK-202
+'           v
+'     OTK-202 / broj 18   IspravkaOdID = OTK-101
+'     oba nose isti CorrectionID
+'
+' ZASTO NOV BROJ, a ne isti: broj je labela koju operater vidi NA PAPIRU (A2).
+' Dva papira sa istim brojem i razlicitim sadrzajem nisu razlucivi izvan sistema,
+' pa je ista-broj varijanta zakljucana kao greska, ne kao opcija.
+'
+' ZASTO PO ID-u, a ne po broju: modStornoFlow.StampIspravkaTrace to i danas radi
+' po broju za ostale tri tabele -- i zato ne moze da razlikuje dve verzije istog
+' dokumenta. Otkup je prvi koji prelazi; ostali idu u PR7/PR8.
+'
+' NOVAC SE NE PRENOSI SAM -- MERENO, i to je NALAZ, ne osobina ovog pisca.
+'
+' StornoOtkup radi ResetNovacOtkupLink: knjizene isplate se OSLOBADJAJU (OtkupID
+' se prazni), ne stornirju. Ocekivano je bilo da ih nov dokument pokupi kroz
+' ApplyAvansToOtkup -- ne pokupi ih:
+'
+'   modNovac:1624   avans-petlja uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP
+'   modNovac:1982   GetKooperantUnallocatedAvans isto
+'   modNovac:2031   BuildKooperantUnallocatedAvansDict isto
+'
+' Odvezana isplata tipa VirmanFirmaKoop zato ostaje NEVIDLJIVA i za dug (nema
+' OtkupID) i za avans (pogresan tip). Vidi se jos samo u kartici kooperanta
+' (modIzvestaj:2507), gde ulazi u saldo -- pa novac nije izgubljen, ali jeste
+' ispao iz svake masinerije koja odlucuje sta se placa.
+'
+' Ovo NIJE uvedeno ovde: isto radi obican StornoOtkup_TX i radio je oduvek.
+' Ispravka ga samo cini lakse dostizivim. Test ga tvrdi kao ZATECENO stanje, da
+' se ne bi tumacilo kao osobina; odluka o prenosu je poslovna i ceka operatera.
+'
+' Opcije, cena svake i preporuka: docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md
+'
+' JEDNA TRANSAKCIJA obuhvata sve: nov dokument, storno starog, obe veze i
+' correction context. Delimicna ispravka -- nov dokument bez storna starog, ili
+' storno bez naslednika -- gora je od nijedne.
+'
+' NEMA PRODUKCIONOG POZIVAOCA U OVOM PR-u, i to je merena odluka. Da bi ekran
+' zvao ovaj put, stari OtkupID mora da otputuje od prefill-a do pisca; danas
+' prefill ide kroz spec string ciji se kljucevi mapiraju NA KONTROLE
+' (modOtkupUI.ApplyPrefill), pa ID nema gde. Resenje bi bilo modul-stanje u
+' ljusci -- isti oblik in-memory veze koji ovaj korak treba da ukine. Wiring zato
+' ide sa PR7, kad se PrefillIzStorniranog ionako prepisuje sa po-klasnih redova.
+Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
+                                  ByVal h As Object, _
+                                  ByVal stavke As Collection, _
+                                  Optional ByRef outGreska As String) As String
+    Const SRC As String = "IspravkaOtkupa_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail SRC, _
+        TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
+
+    stariOtkupID = Trim$(stariOtkupID)
+    If Len(stariOtkupID) = 0 Then
+        Err.Raise vbObjectError + 1910, SRC, "Prazan OtkupID dokumenta koji se ispravlja."
+    End If
+
+    ' Izvor mora postojati TACNO JEDNOM i biti AKTIVAN. Ispravka storniranog
+    ' dokumenta nije ispravka nego nov unos -- za to postoji CreateOtkup_TX.
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, stariOtkupID, "Otkup", SRC
+
+    ' REDOSLED KAPIJA JE MEREN, ne stilski. Vec ispravljen dokument je UVEK i
+    ' storniran, pa bi storno-kapija prva uhvatila oba slucaja i operateru rekla
+    ' manje korisnu istinu ("storniran") umesto korisnije ("zamenjen sa OTK-x --
+    ' ispravi POSLEDNJU verziju"). Specificnija kapija zato ide prva.
+    Dim vecZamenjen As String
+    vecZamenjen = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, _
+                                             COL_TRACE_ZAMENJEN_SA_ID)))
+    If Len(vecZamenjen) > 0 Then
+        Err.Raise vbObjectError + 1912, SRC, _
+                  "Dokument je vec zamenjen dokumentom " & vecZamenjen & _
+                  ". Ispravlja se POSLEDNJA verzija, ne istorijska."
+    End If
+
+    If UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, _
+                                         COL_STORNIRANO)))) = "DA" Then
+        Err.Raise vbObjectError + 1911, SRC, _
+                  "Dokument je vec storniran, nema sta da se ispravi: " & stariOtkupID
+    End If
+
+    ' A13: OTKUP KOJI IMA RODITELJA SE NE ISPRAVLJA LOKALNO -- NIJEDAN.
+    '
+    ' Ispravka menja koji dokument postoji. Ako otkup ucestvuje u otpremnici, ta
+    ' promena nije lokalna ni u jednom od dva stanja:
+    '
+    '   IZDATO   otpremnica je izdata sa tim sastavom, pa mora dobiti NOVU
+    '            VERZIJU sa novim brojem (H1, GOLDEN_SCENARIJI S12), a za njom i
+    '            zbirna. Tiha alternativa je najgora: nov otkup, stara otpremnica
+    '            netaknuta, i izdat papir koji vise ne opisuje robu koju nosi.
+    '
+    '   DRAFT    clanstvo JESTE mutabilno, ali ovaj pisac ga NE dira. Rezultat bi
+    '            bio draft ciji izvor pokazuje na STORNIRAN otkup, dok naslednik
+    '            stoji van njega. To je isto medjustanje koje je PR5 vec odbio kod
+    '            UpdateOtpremnicaDraft_TX: invarijanta mora da vazi IZMEDJU dva
+    '            klika, ne tek pri izdavanju. Revalidacija u IzdajOtpremnicu_TX
+    '            hvata posledicu prekasno -- posao je do tada vec izgubljen.
+    '
+    ' Ispravno resenje za DRAFT je ATOMSKA zamena clanstva (ukloni stari izvor,
+    ' dodaj naslednika, revalidiraj stanicu/kulturu/ambalazu) u istoj transakciji.
+    ' To trazi pisca otpremnice, dakle PR7 -- pa se do tada staje GLASNO za oba.
+    Dim roditelj As String
+    roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
+    If Len(roditelj) > 0 Then
+        ' Poruka NE nudi "storniraj otpremnicu pa ponovi". To bi bilo uputstvo za
+        ' obilazak same kapije: OtpremnicaZaOtkup gleda samo AKTIVNE otpremnice,
+        ' pa bi posle storna roditelja lokalna ispravka prosla -- i dala otkup bez
+        ' naslednika otpremnice, sto NIJE propagacija nego gubitak lanca.
+        Err.Raise vbObjectError + 1918, SRC, _
+                  "Otkup ucestvuje u otpremnici " & roditelj & _
+                  IIf(modDokumenta.OtpremnicaJeIzdata(roditelj), " (IZDATA)", " (DRAFT)") & _
+                  ". Ispravka bi promenila sastav izvedenog dokumenta (A13), a " & _
+                  "propagacija na otpremnicu i zbirnu jos ne postoji -- " & _
+                  "operacija nije dostupna do PR7."
+    End If
+
+    ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
+    ' jedinstvenost broja -- ista greska sa dva razlicita uzroka zbunjuje operatera.
+    Dim stariBroj As String, noviBroj As String
+    stariBroj = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, COL_OTK_BR_DOK)))
+    noviBroj = Trim$(OtkHdrOpcion(h, "BrojDokumenta"))
+
+    If StrComp(noviBroj, stariBroj, vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1913, SRC, _
+                  "Ispravka mora dobiti NOV broj dokumenta (A9). Stari: " & stariBroj & "."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' ZURNAL JE DEO OVE TRANSAKCIJE, ne tudja briga.
+    '
+    ' StornoOtkup otvara storno operaciju (BeginStornoOp) i pise JournalCell
+    ' redove -- zato ih StornoOtkup_TX izricito snapshotuje (modStorno:54). Bez
+    ' istog snapshota ovde, pad IZMEDJU storna i uspesnog naslednika ostavlja
+    ' zurnal sa zapisom storna koji se posle rollback-a nije desio: undo bi
+    ' nudio ponistenje operacije nad dokumentom koji je i dalje aktivan.
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' Redosled je bitan: STORNO PRVI. Nov dokument ide kroz istu kapiju
+    ' jedinstvenosti broja kao svaki drugi, a stari jos drzi svoj -- ali kapija
+    ' gleda (Stanica, Datum, Broj) i broj je nov, pa sudara nema. Storno prvi ide
+    ' zbog novca: ResetNovacOtkupLink oslobodi avans PRE nego sto ga
+    ' ApplyAvansToOtkup u novom dokumentu potrazi.
+    If Not modStorno.StornoOtkup(stariOtkupID) Then
+        Err.Raise vbObjectError + 1914, SRC, _
+                  "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
+    End If
+
+    Dim noviID As String
+    noviID = CreateOtkup(h, stavke)
+
+    If Len(noviID) = 0 Then
+        Err.Raise vbObjectError + 1915, SRC, "CreateOtkup nije vratio OtkupID."
+    End If
+
+    ' Correction context: CorrectionID mora biti PRAV ID iz tblStornoVeze, ne broj
+    ' koji ovaj modul izmisli. Kolona je deklarisana kao veza na tu tabelu
+    ' (modConfig:1031); izmisljen ID bi bio visece pokazivanje.
+    Dim cid As String
+    cid = modStornoContext.CreateCorrectionContext( _
+        SV_MODE_ISPRAVKA, DOK_TIP_OTKUP, stariOtkupID, stariBroj, _
+        DOK_TIP_OTKUP, noviID, noviBroj, , , , _
+        "Ispravka otkupa: " & stariBroj & " -> " & noviBroj & ".")
+
+    If Len(cid) = 0 Then
+        Err.Raise vbObjectError + 1916, SRC, "Correction context nije kreiran."
+    End If
+
+    ' Veza na OBA kraja. Redovi se traze ponovo: storno i upis su pomerili tabelu.
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, noviID, "Nov otkup", SRC
+    RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, stariOtkupID, "Stari otkup", SRC
+
+    Dim rNovi As Long, rStari As Long
+    rNovi = FindRows(TBL_OTKUP, COL_OTK_ID, noviID)(1)
+    rStari = FindRows(TBL_OTKUP, COL_OTK_ID, stariOtkupID)(1)
+
+    RequireUpdateCell TBL_OTKUP, rNovi, COL_TRACE_ISPRAVKA_OD_ID, stariOtkupID, SRC
+    RequireUpdateCell TBL_OTKUP, rNovi, COL_TRACE_CORRECTION_ID, cid, SRC
+    RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_ZAMENJEN_SA_ID, noviID, SRC
+    RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_CORRECTION_ID, cid, SRC
+
+    modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
+        "Ispravka otkupa zavrsena: nov dokument " & noviID & "."
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    IspravkaOtkupa_TX = noviID
+    Exit Function
+
+EH:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError SRC, errDesc, errNum
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="IspravkaOtkupa_TX failed. Stari=" & stariOtkupID & "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:=SRC, _
+        entityType:="Otkup", _
+        entityID:=stariOtkupID, _
+        correlationId:=stariOtkupID
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    outGreska = errDesc
+    IspravkaOtkupa_TX = ""
+End Function
+
+' Poslednja ziva verzija dokumenta: prati ZamenjenSaID dok ima kuda.
+'
+' Bez ovoga bi svaki citalac sam sledio lanac -- a lanac ume da bude dublji od
+' jedne karike (ispravka ispravke). Petlja je ogranicena brojem redova: ciklus u
+' podacima ne sme da zavrti citaoca.
+Public Function PoslednjaVerzijaOtkupa(ByVal otkupID As String) As String
+    Const SRC As String = "PoslednjaVerzijaOtkupa"
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim maxKoraka As Long
+    maxKoraka = OtkBrojRedovaTabele(TBL_OTKUP) + 1
+
+    Dim tekuci As String, sledeci As String, korak As Long
+    tekuci = otkupID
+
+    Do
+        sledeci = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, tekuci, _
+                                             COL_TRACE_ZAMENJEN_SA_ID)))
+        If Len(sledeci) = 0 Then Exit Do
+        tekuci = sledeci
+        korak = korak + 1
+        If korak > maxKoraka Then
+            Err.Raise vbObjectError + 1917, SRC, _
+                      "Lanac ispravki nema kraj (ciklus?): " & otkupID
+        End If
+    Loop
+
+    PoslednjaVerzijaOtkupa = tekuci
+End Function
+
+Private Function OtkBrojRedovaTabele(ByVal tblName As String) As Long
+    Dim d As Variant
+    d = GetTableData(tblName)
+    If IsArray(d) Then OtkBrojRedovaTabele = UBound(d, 1)
+End Function
+
 Private Function CreateOtkup(ByVal h As Object, _
                              ByVal stavke As Collection) As String
     Const SRC As String = "CreateOtkup"
@@ -199,6 +486,7 @@ Private Function CreateOtkup(ByVal h As Object, _
     ' da preda robu na drugoj stanici (S4.1f).
     RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, "KooperantID", SRC
     RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
+    RequireBrojJedinstven stanicaID, datum, brDok, SRC
     RequireKulturaSeSlaze kulturaID, vrstaVoca, sortaVoca, SRC
     RequireParcelaKooperanta parcelaID, kooperantID, SRC
 
@@ -350,6 +638,20 @@ Private Function CreateOtkup(ByVal h As Object, _
         End If
     Next rb
 
+    KnjiziOtkupAmbalazu otkupID, datum, tipAmb, kooperantID, stanicaID, _
+                        ZbirAmbalazeStavki(stavke), kolAmbIzdata, SRC
+
+    ' ZATECEN AVANS SE PRIMENJUJE -- jednom po dokumentu.
+    '
+    ' Kes NE ulazi kroz otkupni list (S4.1b) i te parametre nov pisac ni nema,
+    ' ali avans je druga stvar: to je jedini put koji stvarno postavlja placenost
+    ' (S6.1), i zatecen pisac ga primenjuje PO KLASNOM REDU (modOtkup:1043-1044).
+    ' Sa jednim headerom se primenjuje jednom, nad vrednoscu celog dokumenta.
+    '
+    ' Nalaz: prvi prelaz golden mreze na ovog pisca je pao bas ovde --
+    ' B2_avans_primenjen i B3_delimican_avans su prijavili placeno 50000 -> 0.
+    ApplyAvansToOtkup kooperantID, otkupID
+
     CreateOtkup = otkupID
     Exit Function
 
@@ -367,6 +669,289 @@ EH:
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' (Vrsta, Sorta) -> TACNO jedan KulturaID. Za ADAPTERE, ne za pisca.
+'
+' Razresavanje je posao adaptera (S4.1f) -- writer prima gotov FK i samo ga
+' proverava. Ali adaptera ima dva, desktop ekran i PWA ingest, pa pravilo zivi
+' na jednom mestu; dve implementacije istog razresavanja su vec jednom dale dva
+' razlicita ponasanja (modOtkup:556 i modMasterSync:1959 su OBA fabrikovala
+' "vrsta-sorta" string kad lookup ne uspe).
+'
+' Nula i vise od jedan su ISTA greska: izbor se ne prevodi u jedan maticni
+' podatak. Tiho uzimanje prvog je bas ono sto je stari kod radio.
+Public Function RazresiKulturuIzVrsteSorte(ByVal vrsta As String, _
+                                           ByVal sorta As String, _
+                                           ByRef outGreska As String) As String
+    Const SRC As String = "RazresiKulturuIzVrsteSorte"
+    outGreska = ""
+
+    Dim kult As Variant
+    kult = GetTableData(TBL_KULTURE)
+    If Not IsArray(kult) Then
+        outGreska = "Sifarnik kultura je prazan."
+        Exit Function
+    End If
+
+    Dim cID As Long, cVr As Long, cSo As Long
+    cID = RequireColumnIndex(TBL_KULTURE, COL_KUL_ID, SRC)
+    cVr = RequireColumnIndex(TBL_KULTURE, COL_KUL_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_KULTURE, COL_KUL_SORTA, SRC)
+
+    Dim i As Long, nadjen As String, koliko As Long
+    For i = 1 To UBound(kult, 1)
+        If StrComp(Trim$(NzToText(kult(i, cVr))), Trim$(vrsta), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(kult(i, cSo))), Trim$(sorta), vbTextCompare) = 0 Then
+                nadjen = Trim$(NzToText(kult(i, cID)))
+                koliko = koliko + 1
+            End If
+        End If
+    Next i
+
+    If koliko <> 1 Then
+        outGreska = "(" & vrsta & ", " & sorta & ") se ne prevodi u tacno jednu " & _
+                    "kulturu; pogodaka: " & CStr(koliko) & "."
+        Exit Function
+    End If
+
+    RazresiKulturuIzVrsteSorte = nadjen
+End Function
+
+' Otkup koji je vec uvezen pod tim ClientRecordID-em, ili "".
+'
+' Idempotencija PWA uvoza pociva na ovome: isti CRID sme da stigne vise puta
+' (retry, ponovljen sync), ali sme da napravi SAMO JEDAN dokument.
+Public Function OtkupPoClientRecordID(ByVal crid As String) As String
+    Const SRC As String = "OtkupPoClientRecordID"
+
+    If Len(Trim$(crid)) = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cCrid As Long, cID As Long
+    cCrid = RequireColumnIndex(TBL_OTKUP, COL_OTK_CLIENT_RECORD_ID, SRC)
+    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cCrid))), Trim$(crid), vbTextCompare) = 0 Then
+            OtkupPoClientRecordID = Trim$(NzToText(d(i, cID)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Broj otkupnog lista je jedinstven po STANICI I DANU -- KROZ CELU ISTORIJU.
+'
+' Opseg nije izabran nego procitan iz generatora: GenerateBrojDokumenta racuna
+' sledeci broj kao MaxSeqFromTable(tblOtkup, BrojDokumenta, Datum, StanicaID)
+' (modBrojevi:137) -- dakle StanicaID + Datum + broj.
+'
+' STORNO NE OSLOBADJA BROJ. Prva verzija ove kapije je radila ExcludeStornirano
+' uz obrazlozenje "inace ispravka ne bi mogla da zadrzi isti broj" -- a to je bas
+' ono sto A9 zabranjuje: za lanac Otkup -> Otpremnica -> Zbirna ispravka dobija
+' NOV BrojDokumenta, da dva papira razlicitog sadrzaja ne bi delila broj.
+'
+'   OTK120  storniran/zamenjen
+'   OTK121  ispravka OTK120        <- nov broj, ne recikliran 120
+'
+' Kapija zato gleda SVE istorijske redove, ukljucujuci stornirane.
+'
+' Broj i dalje NIJE identitet (A2) -- ovo je jedinstvenost labele, ne veza.
+'
+' JEDNA IMPLEMENTACIJA: ekran zove BrojDokumentaZauzet da bi operater dobio
+' povratnu informaciju rano, ali pravilo i opseg zive samo ovde. Dve
+' implementacije istog invarijanta su se vec razisle -- UI je gledao broj+datum
+' bez stanice, pa bi odbio dokument koji je writer smatrao legalnim.
+Public Function BrojDokumentaZauzet(ByVal stanicaID As String, ByVal datum As Date, _
+                                    ByVal brDok As String) As String
+    Const SRC As String = "BrojDokumentaZauzet"
+
+    If Len(Trim$(brDok)) = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cBr As Long, cDat As Long, cSt As Long, cID As Long
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cBr))), Trim$(brDok), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(d(i, cSt))), stanicaID, vbTextCompare) = 0 Then
+                If IsDate(d(i, cDat)) Then
+                    If Int(CDbl(CDate(d(i, cDat)))) = Int(CDbl(datum)) Then
+                        BrojDokumentaZauzet = Trim$(NzToText(d(i, cID)))
+                        Exit Function
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+Private Sub RequireBrojJedinstven(ByVal stanicaID As String, ByVal datum As Date, _
+                                  ByVal brDok As String, ByVal src As String)
+    Dim zauzeo As String
+    zauzeo = BrojDokumentaZauzet(stanicaID, datum, brDok)
+
+    If Len(zauzeo) > 0 Then
+        Err.Raise vbObjectError + 1898, src, _
+                  "Broj otkupnog lista " & brDok & " je vec izdat na stanici " & _
+                  stanicaID & " tog dana: " & zauzeo & ". Storno ne oslobadja broj " & _
+                  "-- ispravka dobija NOV broj (A9)."
+    End If
+End Sub
+
+' Vrednost dokumenta = SUM(stavke.Kolicina x stavke.Cena).
+'
+' Cita se SAMO tblOtkupStavke. Nema fallback-a na header -- to bi bio
+' compatibility sloj za podatke koje ne cuvamo, a tiho bi vracao 0 tamo gde
+' stavki nema umesto da se vidi da dokument nije po novom modelu.
+'
+' Dokument vise nema JEDNU cenu, pa se vrednost ni ne moze procitati sa headera:
+' dve klase legitimno nose dve razlicite cene (S4.1d).
+'
+' UGOVOR JE PUN (korak 4). Cetiri kapije, sve fail-closed:
+'
+'   1) prazan OtkupID
+'   2) zaglavlje mora postojati TACNO JEDNOM -- ni nula ni dva
+'   3) svaka stavka ima numericku Kolicinu i Cenu, obe VECE OD NULE
+'      (isto pravilo koje pisac vec trazi na upisu, modOtkup:252/261)
+'   4) bar jedna stavka -- dokument BEZ stavki nije dokument vrednosti nula
+'
+' Zasto (4) nije kozmetika: nula je legitiman odgovor samo kad stavke postoje a
+' zbir im je nula. Bez te razlike ApplyAvansToOtkup cita 0 kao "nema sta da se
+' plati" i TIHO preskoci primenu avansa -- kvar koji je golden vec jednom
+' prijavio (B2/B3).
+'
+' Ranije je ovaj ugovor bio nepotpun i to je bilo IMENOVANO: kapije su obarale
+' 10 do 33 tvrdnje jer su tada jos postojala dva pisca zaglavlja bez stavki
+' (stari multi-pisac i PWA uvoz). Oba su zatvorena -- pisac je obrisan (korak 3),
+' PWA ide kroz CreateOtkup_TX (korak 2) -- pa kapije vise nemaju sta da obore.
+Public Function VrednostOtkupa(ByVal otkupID As String) As Double
+    Const SRC As String = "VrednostOtkupa"
+
+    If Len(Trim$(otkupID)) = 0 Then
+        Err.Raise vbObjectError + 1901, SRC, "Prazan OtkupID."
+    End If
+
+    ' Zaglavlje TACNO JEDNOM. Nula znaci da se racuna vrednost necega sto ne
+    ' postoji; dva znace da je OtkupID prestao da bude identitet -- oba su tisi
+    ' oblik iste greske od pogresnog zbira.
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+
+    Dim koliko As Long
+    If Not hdr Is Nothing Then koliko = hdr.count
+
+    If koliko <> 1 Then
+        Err.Raise vbObjectError + 1902, SRC, _
+                  "Zaglavlje otkupa se ne nalazi tacno jednom: " & otkupID & _
+                  " (pogodaka: " & CStr(koliko) & ")."
+    End If
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+
+    Dim cOtk As Long, cKol As Long, cCena As Long
+    Dim i As Long, nasao As Long
+
+    If IsArray(d) Then
+        cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+        cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+        cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+
+        For i = 1 To UBound(d, 1)
+            If StrComp(Trim$(NzToText(d(i, cOtk))), otkupID, vbTextCompare) = 0 Then
+                nasao = nasao + 1
+
+                If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
+                    Err.Raise vbObjectError + 1903, SRC, _
+                              "Stavka nije brojcana: " & otkupID & _
+                              ", stavka " & CStr(nasao) & "."
+                End If
+
+                Dim kol As Double, cena As Double
+                kol = CDbl(d(i, cKol))
+                cena = CDbl(d(i, cCena))
+
+                If kol <= 0 Or cena <= 0 Then
+                    Err.Raise vbObjectError + 1904, SRC, _
+                              "Kolicina i cena stavke moraju biti vece od nule: " & _
+                              otkupID & ", stavka " & CStr(nasao) & "."
+                End If
+
+                VrednostOtkupa = VrednostOtkupa + kol * cena
+            End If
+        Next i
+    End If
+
+    If nasao = 0 Then
+        Err.Raise vbObjectError + 1899, SRC, _
+                  "Otkup nema nijednu stavku: " & otkupID & _
+                  ". Vrednost dokumenta se racuna iz tblOtkupStavke."
+    End If
+End Function
+
+' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
+'
+' RAZLIKA: knjizi se JEDNOM po dokumentu, nad ZBIROM stavki, a ne po klasi.
+' tblAmbalaza nema kolonu Klasa, pa bi dva reda po klasi bila dva reda koja se
+' razlikuju samo u kolicini -- a zbir je isti. Zatecen pisac ih pravi dva samo
+' zato sto ima dva OtkupID-a; sa jednim headerom taj razlog nestaje. Storno time
+' dobija jedan DokumentID umesto dva.
+'
+' VOZAC SE NE ZIGOSE. Zatecen kod salje vozacID na kooperantovu nogu iako mu
+' sopstveni komentar kaze "otkup nema vozaca na OM-strani" (modOtkup:1294).
+' U ciljnom modelu otkup vozaca ni nema -- gajbe idu kooperant -> OM, a vozac
+' dolazi tek sa otpremnicom (S4.1c). Posledica je merena: saldo ambalaze po
+' vozacu gubi otkupnu nogu (modAmbalaza:499, modIzvestaj:1975, 3011, 4153).
+Private Sub KnjiziOtkupAmbalazu(ByVal otkupID As String, ByVal datum As Date, _
+                                ByVal tipAmb As String, _
+                                ByVal kooperantID As String, _
+                                ByVal stanicaID As String, _
+                                ByVal primljeno As Double, _
+                                ByVal izdato As Double, _
+                                ByVal src As String)
+    If primljeno > 0 Then
+        ' Kooperant predaje pune gajbe na OM:
+        '   kooperant IZLAZ (razduzuje se), OM ULAZ (zaduzuje se).
+        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Izlaz", _
+                      kooperantID, "Kooperant", "", _
+                      otkupID, DOK_TIP_OTKUP
+        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Ulaz", _
+                      stanicaID, "Stanica", "", _
+                      otkupID, DOK_TIP_OTKUP
+    End If
+
+    If izdato > 0 Then
+        ' OM izdaje prazne gajbe kooperantu uz otkup:
+        '   kooperant ULAZ (dobija prazne), OM IZLAZ (razduzuje se).
+        ' Isti DokumentID -> storno otkupa hvata i ovu nogu (modStorno).
+        TrackAmbalaza datum, tipAmb, CLng(izdato), "Ulaz", _
+                      kooperantID, "Kooperant", "", _
+                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
+        TrackAmbalaza datum, tipAmb, CLng(izdato), "Izlaz", _
+                      stanicaID, "Stanica", "", _
+                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
+    End If
+End Sub
+
+' Zbir ambalaze svih stavki -- primljene gajbe dokumenta.
+Private Function ZbirAmbalazeStavki(ByVal stavke As Collection) As Double
+    Dim i As Long
+    For i = 1 To stavke.count
+        ZbirAmbalazeStavki = ZbirAmbalazeStavki + _
+            OtkStavkaBroj(stavke(i), "KolAmbalaze", i, "ZbirAmbalazeStavki")
+    Next i
 End Function
 
 ' KulturaID se NE razresava ovde -- proverava se.
@@ -705,7 +1290,7 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
 
     On Error GoTo EH
 
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
     modSchema.SchemaReadyOrFail "SaveOtkup_TX", _
         TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
 
@@ -787,275 +1372,18 @@ EH:
     PrintOtkupTxFailure "SaveOtkup_TX", errSrc, errNum, errDesc
 End Function
 
-Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
-                                   ByVal kooperantID As String, _
-                                   ByVal stanicaID As String, _
-                                   ByVal vrstaVoca As String, _
-                                   ByVal sortaVoca As String, _
-                                   ByVal kolicinaI As Double, _
-                                   ByVal cenaI As Double, _
-                                   ByVal tipAmb As String, _
-                                   ByVal kolAmb As Long, _
-                                   ByVal vozacID As String, _
-                                   ByVal brDok As String, _
-                                   ByVal novac As Double, _
-                                   ByVal primalac As String, _
-                                   ByVal parcelaID As String, _
-                                   ByVal brojZbirne As String, _
-                                   Optional ByVal hasKlasaII As Boolean = False, _
-                                   Optional ByVal kolicinaII As Double = 0, _
-                                   Optional ByVal cenaII As Double = 0, _
-                                   Optional ByVal kolAmbIzdata As Long = 0, _
-                                   Optional ByVal brutoKgI As Double = 0, _
-                                   Optional ByVal kolAmbII As Long = 0, _
-                                   Optional ByVal brutoKgII As Double = 0) As String
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
-    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
-    ' pada upisa -- greska nastaje u podacima, ne u logu.
-    '
-    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
-    ' transakciju koja se odmah rollback-uje.
-    modSchema.SchemaReadyOrFail "SaveOtkupMulti_TX", _
-        TBL_OTKUP & "|" & TBL_AMBALAZA & "|" & TBL_NOVAC
-
-    If Trim$(kooperantID) = "" Then
-        Err.Raise vbObjectError + 1810, "SaveOtkupMulti_TX", _
-                  "KooperantID je obavezan."
-    End If
-
-    If Trim$(stanicaID) = "" Then
-        Err.Raise vbObjectError + 1811, "SaveOtkupMulti_TX", _
-                  "StanicaID je obavezan."
-    End If
-
-    ' Klasa I je opciona (kolicinaI = 0 -> unosi se samo Klasa II). Bar jedna klasa.
-    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
-
-    If Not hasKlasaI And Not hasKlasaII Then
-        Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
-                  "Mora postojati bar jedna klasa (I ili II)."
-    End If
-
-    If hasKlasaI And cenaI <= 0 Then
-        Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
-                  "Cena za Klasu I mora biti veca od nule."
-    End If
-
-    If hasKlasaII Then
-        If kolicinaII <= 0 Or cenaII <= 0 Then
-            Err.Raise vbObjectError + 1813, "SaveOtkupMulti_TX", _
-                      "Koli" & ChrW(269) & "ina i cena za Klasu II moraju biti vece od nule."
-        End If
-    End If
-
-    If kolAmb < 0 Then
-        Err.Raise vbObjectError + 1814, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    If kolAmbIzdata < 0 Then
-        Err.Raise vbObjectError + 1841, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina izdate ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    If kolAmbII < 0 Then
-        Err.Raise vbObjectError + 1842, "SaveOtkupMulti_TX", _
-                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e (Klasa II) ne sme biti negativna."
-    End If
-
-    If novac < 0 Then
-        Err.Raise vbObjectError + 1815, "SaveOtkupMulti_TX", _
-                  "Iznos novca ne sme biti negativan."
-    End If
-
-    If (kolAmb > 0 Or kolAmbII > 0) And Trim$(tipAmb) = "" Then
-        Err.Raise vbObjectError + 1816, "SaveOtkupMulti_TX", _
-                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
-    End If
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-
-    Dim resultI As String
-    If hasKlasaI Then
-        resultI = SaveOtkup( _
-            datum:=datum, _
-            kooperantID:=kooperantID, _
-            stanicaID:=stanicaID, _
-            vrstaVoca:=vrstaVoca, _
-            sortaVoca:=sortaVoca, _
-            kolicina:=kolicinaI, _
-            cena:=cenaI, _
-            tipAmb:=tipAmb, _
-            kolAmb:=kolAmb, _
-            vozacID:=vozacID, _
-            brDok:=brDok, _
-            novac:=novac, _
-            primalac:=primalac, _
-            klasa:=KLASA_I, _
-            parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne, _
-            kolAmbIzdata:=kolAmbIzdata, _
-            brutoKg:=brutoKgI)
-
-        If resultI = "" Then
-            Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
-                      "SaveOtkup Klasa I fehlgeschlagen"
-        End If
-    End If
-
-    Dim resultII As String
-
-    ' Kes I izdata ambalaza se belezi na red Klase I; ako Klase I nema (samo II),
-    ' belezi se na Klasu II -- inace bi se izgubili (SaveOtkup Klase I se preskace).
-    Dim novacII As Double
-    Dim kolAmbIzdataII As Long
-    If Not hasKlasaI Then
-        novacII = novac
-        kolAmbIzdataII = kolAmbIzdata
-    End If
-
-    If hasKlasaII Then
-        resultII = SaveOtkup( _
-            datum:=datum, _
-            kooperantID:=kooperantID, _
-            stanicaID:=stanicaID, _
-            vrstaVoca:=vrstaVoca, _
-            sortaVoca:=sortaVoca, _
-            kolicina:=kolicinaII, _
-            cena:=cenaII, _
-            tipAmb:=tipAmb, _
-            kolAmb:=kolAmbII, _
-            vozacID:=vozacID, _
-            brDok:=brDok, _
-            novac:=novacII, _
-            primalac:=primalac, _
-            klasa:=KLASA_II, _
-            parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne, _
-            kolAmbIzdata:=kolAmbIzdataII, _
-            brutoKg:=brutoKgII)
-
-        If resultII = "" Then
-            Err.Raise vbObjectError + 1818, "SaveOtkupMulti_TX", _
-                      "SaveOtkup Klasa II fehlgeschlagen"
-        End If
-    End If
-
-    ' Primarni OtkupID dokumenta (za kes/avans veze): Klasa I ako postoji, inace II.
-    Dim primaryID As String
-    If hasKlasaI Then primaryID = resultI Else primaryID = resultII
-
-    If novac > 0 Then
-        Dim koopNaziv As String
-        koopNaziv = GetKooperantNazivForNovac(kooperantID)
-
-        Dim novacID As String
-        novacID = SaveNovac( _
-            brojDok:=brDok, _
-            datum:=datum, _
-            partner:=koopNaziv, _
-            partnerId:=kooperantID, _
-            entitetTip:="Kooperant", _
-            omID:=stanicaID, _
-            kooperantID:=kooperantID, _
-            fakturaID:="", _
-            vrstaVoca:=vrstaVoca, _
-            tip:=NOV_KES_OTKUPAC_KOOP, _
-            uplata:=0, _
-            isplata:=novac, _
-            napomena:=primalac, _
-            otkupID:=primaryID)
-
-        If novacID = "" Then
-            Err.Raise vbObjectError + 1819, "SaveOtkupMulti_TX", _
-                      "SaveNovac fehlgeschlagen"
-        End If
-    End If
-
-    If hasKlasaI Then ApplyAvansToOtkup kooperantID, resultI
-    If hasKlasaII Then ApplyAvansToOtkup kooperantID, resultII
-
-    tx.CommitTx
-    Set tx = Nothing
-
-    If hasKlasaI And hasKlasaII Then
-        SaveOtkupMulti_TX = resultI & " + " & resultII
-    ElseIf hasKlasaI Then
-        SaveOtkupMulti_TX = resultI
-    Else
-        SaveOtkupMulti_TX = resultII
-    End If
-
-    On Error Resume Next
-    Monitor_Event _
-        eventType:="OTKUP_MULTI_SAVE_SUCCESS", _
-        severity:="INFO", _
-        message:="Otkup multi saved. KooperantID=" & kooperantID & _
-                 "; StanicaID=" & stanicaID & _
-                 "; Vrsta=" & vrstaVoca & _
-                 "; ResultI=" & resultI & _
-                 "; ResultII=" & resultII & _
-                 "; HasKlasaII=" & CStr(hasKlasaII), _
-        userId:="Operator", _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=resultI
-    On Error GoTo 0
-
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    LogErr "SaveOtkupMulti_TX"
-    On Error Resume Next
-    Monitor_Error _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=brDok, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="OTKUP_MULTI_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="Otkup multi save failed. KooperantID=" & kooperantID & _
-                 "; StanicaID=" & stanicaID & _
-                 "; BrDok=" & brDok & _
-                 "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modOtkup", _
-        procedureName:="SaveOtkupMulti_TX", _
-        entityType:="Otkup", _
-        entityID:=SaveOtkupMulti_TX, _
-        correlationId:=brDok
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveOtkupMulti_TX = ""
-
-    PrintOtkupTxFailure "SaveOtkupMulti_TX", errSrc, errNum, errDesc
-End Function
+' SaveOtkupMulti_TX JE OBRISAN (Otkup cutover, korak 3).
+'
+' Bio je pisac po klasi: jedan unos je davao DVA reda u tblOtkup, vezana samo
+' zajednickim BrojDokumenta, i vracao "ID1 + ID2" da bi pozivalac mogao da ih
+' razdvoji. To je bila kompenzacija za nedostatak stavki -- tacno ono sto
+' CreateOtkup_TX uklanja. Poslednji pozivi su bili fixture-i testova.
+'
+' SaveOtkup_TX (iznad) NAMERNO ostaje. Nije pisac u pogonu -- niko ga iz UI-ja
+' ne zove -- nego JEDINI posten nacin da test napravi zaglavlje BEZ STAVKI, oblik
+' koji nove kapije moraju da odbiju (Test_OTK_VrednostBezStavkiPada,
+' Test_OTP_StariOtkupNeUlazi). Alternativa bi bila AppendRow iz testa, sto duplira
+' znanje o semi i cini test pisacem tabele. Odlazi zajedno sa kolonama u koraku 7.
 
 ' ============================================================
 ' Kontrola proseka neto kg po gajbici (Kolicina / KolAmbalaze).
@@ -1222,8 +1550,6 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                    COL_OTK_KLASA, _
                    COL_OTK_STORNIRANO, _
                    COL_OTK_BROJ_ZBIRNE, _
-                   COL_OTK_ISPLACENO, _
-                   COL_OTK_DATUM_ISPLATE, _
                    COL_OTK_OTPREMNICA_ID, _
                    COL_OTK_PARCELA
 
@@ -1262,8 +1588,6 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
         klasa, _
         "", _
         brojZbirne, _
-        "", _
-        Empty, _
         "", _
         parcelaID _
     )
@@ -1439,88 +1763,14 @@ EH:
     LogErr "modOtkup.GetOtkupByKooperant"
     GetOtkupByKooperant = Empty
 End Function
-Public Function GetSaldoByStation(ByVal stanicaID As String, _
-                                  Optional ByVal datumOd As Date = 0, _
-                                  Optional ByVal datumDo As Date = 0) As Variant
-    On Error GoTo EH
-
-    Dim otkupData As Variant
-    otkupData = GetOtkupByStation(stanicaID, datumOd, datumDo)
-
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-
-    If Not IsEmpty(otkupData) Then
-        Dim colKoop As Long
-        Dim colKol As Long
-        Dim colNovac As Long
-        Dim colAmb As Long
-
-        colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, _
-                                     "modOtkup.GetSaldoByStation")
-        colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, _
-                                    "modOtkup.GetSaldoByStation")
-        colNovac = RequireColumnIndex(TBL_OTKUP, COL_OTK_NOVAC, _
-                                      "modOtkup.GetSaldoByStation")
-        colAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, _
-                                    "modOtkup.GetSaldoByStation")
-
-        Dim i As Long
-        Dim key As String
-        Dim vals As Variant
-
-        For i = 1 To UBound(otkupData, 1)
-            key = CStr(otkupData(i, colKoop))
-
-            If key <> "" Then
-                If Not dict.Exists(key) Then
-                    dict.Add key, Array(0#, 0#, 0#)
-                End If
-
-                vals = dict(key)
-
-                If IsNumeric(otkupData(i, colKol)) Then vals(0) = vals(0) + CDbl(otkupData(i, colKol))
-                If IsNumeric(otkupData(i, colNovac)) Then vals(1) = vals(1) + CDbl(otkupData(i, colNovac))
-                If IsNumeric(otkupData(i, colAmb)) Then vals(2) = vals(2) + CLng(otkupData(i, colAmb))
-
-                dict(key) = vals
-            End If
-        Next i
-    End If
-
-    ' TODO:
-    ' Ovaj helper trenutno racuna samo bruto saldo iz tblOtkup.
-    ' Banka/Novac/Isporuka korekcije treba resiti u posebnom report modulu,
-    ' ne siriti ovaj core save modul bez jasnog accounting pravila.
-
-    If dict.count = 0 Then
-        GetSaldoByStation = Empty
-        Exit Function
-    End If
-
-    Dim result() As Variant
-    ReDim result(1 To dict.count, 1 To 4)
-
-    Dim keys As Variant
-    keys = dict.keys
-
-    For i = 0 To dict.count - 1
-        result(i + 1, 1) = keys(i)
-
-        vals = dict(keys(i))
-        result(i + 1, 2) = vals(0)
-        result(i + 1, 3) = vals(1)
-        result(i + 1, 4) = vals(2)
-    Next i
-
-    GetSaldoByStation = result
-    Exit Function
-
-EH:
-    LogErr "modOtkup.GetSaldoByStation"
-    GetSaldoByStation = Empty
-End Function
-
+' GetSaldoByStation JE OBRISAN (korak 7).
+'
+' Sabirao je Kolicina, Novac i KolAmbalaze SA ZAGLAVLJA po kooperantu -- tri
+' kolone koje nov pisac ne pise. Da ga je iko zvao, vracao bi nule.
+'
+' Nije ga zvao niko: grep po celom src-vba daje samo redove unutar same funkcije.
+' Mrtav citac mrtve kolone -- brise se, ne prepisuje. Saldo po stanici, kad
+' zatreba, ide iz stavki i tblNovac, ne iz zaglavlja.
 
 Private Sub PrintOtkupTxFailure(ByVal sourceName As String, _
                                 ByVal errSrc As String, _

@@ -67,7 +67,7 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
 
     On Error GoTo EH
 
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. SaveOtkupMulti_TX).
+        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
     modSchema.SchemaReadyOrFail "SaveNovac_TX", _
         TBL_NOVAC
 
@@ -1221,72 +1221,22 @@ Public Function UplataFakturaProblem(ByVal fakturaID As String, _
     End If
 End Function
 
-Public Sub UpdateOtkupStatus(ByVal otkupID As String)
-    Const SRC As String = "UpdateOtkupStatus"
-
-    If Len(Trim$(otkupID)) = 0 Then
-        Err.Raise vbObjectError + 1043, SRC, _
-                  "OtkupID je obavezan."
-    End If
-
-    Dim otkupData As Variant
-    otkupData = GetTableData(TBL_OTKUP)
-
-    If IsEmpty(otkupData) Then Exit Sub
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-
-    If rows Is Nothing Or rows.count = 0 Then
-        Err.Raise vbObjectError + 1044, SRC, _
-                  "Otkup row not found. OtkupID=" & otkupID
-    End If
-
-    Dim r As Long
-    r = CLng(rows(1))
-
-    Dim colKol As Long
-    Dim colCena As Long
-    Dim colDatumIsplate As Long
-    Dim colStornirano As Long
-
-    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
-    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
-    colDatumIsplate = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM_ISPLATE, SRC)
-
-    colStornirano = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-
-    If colStornirano > 0 Then
-        If UCase$(Trim$(CStr(otkupData(r, colStornirano)))) = "DA" Then
-            Exit Sub
-        End If
-    End If
-
-    Dim vrednost As Double
-    vrednost = 0#
-
-    If IsNumeric(otkupData(r, colKol)) And IsNumeric(otkupData(r, colCena)) Then
-        vrednost = CDbl(otkupData(r, colKol)) * CDbl(otkupData(r, colCena))
-    End If
-
-    Dim placeno As Double
-    placeno = GetIsplataForOtkup(otkupID)
-
-    If vrednost > 0 And placeno >= vrednost Then
-
-        RequireUpdateCell TBL_OTKUP, r, COL_OTK_ISPLACENO, STATUS_ISPLACENO, SRC
-
-        If Len(Trim$(CStr(otkupData(r, colDatumIsplate)))) = 0 Then
-            RequireUpdateCell TBL_OTKUP, r, COL_OTK_DATUM_ISPLATE, Date, SRC
-        End If
-
-    Else
-
-        RequireUpdateCell TBL_OTKUP, r, COL_OTK_ISPLACENO, "", SRC
-        RequireUpdateCell TBL_OTKUP, r, COL_OTK_DATUM_ISPLATE, "", SRC
-
-    End If
-End Sub
+' UpdateOtkupStatus JE OBRISAN (korak 4).
+'
+' Odrzavao je dve kolone na tblOtkup -- Isplaceno i DatumIsplate -- kao KESIRAN
+' odgovor na pitanje koje tblNovac vec zna. Kes je imao dva problema:
+'
+'   1) racunao je vrednost kao Kolicina x Cena SA ZAGLAVLJA. Posle prelaska na
+'      header + stavke to je uvek nula, pa nijedan nov otkup ne bi nikada bio
+'      oznacen kao isplacen -- tiho, bez ijedne greske.
+'   2) tacnost mu je zavisila od toga da ga SVAKI pisac tblNovac pozove. Bilo je
+'      cetiri takva mesta; peto koje bi zaboravilo poziv dalo bi otkup koji je
+'      placen a izgleda otvoren (ili obrnuto).
+'
+' Status je IZVEDEN: otvoreno = VrednostOtkupa(id) - SUM(isplate za id) > 0.
+' GetOpenOtkupi ga tako i racuna, pa kolone vise nemaju pisca i brisu se u
+' koraku 7. Do tada ih modProductionHealthCheck cuva kao DRIFT kapiju: svaka
+' vrednost u njima znaci da je neko vratio kes.
 
 Public Function GetIsplataForOtkup(ByVal otkupID As String) As Double
     GetIsplataForOtkup = GetUplataForOtkup(otkupID)
@@ -1329,6 +1279,80 @@ Public Function BuildIsplataDictByOtkup() As Object
     Set BuildIsplataDictByOtkup = dict
 End Function
 
+' Vrednost SVAKOG dokumenta iz stavki -- jedan prolaz kroz tblOtkupStavke.
+'
+' modOtkup.VrednostOtkupa je kanon za JEDAN dokument i ostaje jedini ulaz kad
+' treba vrednost jednog. Ovde treba vrednost svih otvorenih, pa bi poziv po redu
+' citao celu tabelu n puta -- isti razlog zbog kog vec postoji
+' BuildIsplataDictByOtkup.
+'
+' PRAVILA SU ISTA KAO U KANONU, namerno duplirana kao kapije a ne kao racun:
+' nebrojcana ili nepozitivna stavka PADA umesto da se preskoci. Preskakanje bi
+' umanjilo vrednost dokumenta i time PRIJAVILO MANJI DUG nego sto postoji.
+Public Function BuildVrednostDictByOtkup() As Object
+    Const SRC As String = "BuildVrednostDictByOtkup"
+
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then
+        Set BuildVrednostDictByOtkup = dict
+        Exit Function
+    End If
+
+    Dim cOtk As Long, cKol As Long, cCena As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+
+    Dim i As Long, oid As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(CStr(nz(d(i, cOtk), "")))
+        If Len(oid) > 0 Then
+            If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
+                Err.Raise vbObjectError + 1053, SRC, _
+                          "Stavka nije brojcana: OtkupID=" & oid & "."
+            End If
+            If CDbl(d(i, cKol)) <= 0 Or CDbl(d(i, cCena)) <= 0 Then
+                Err.Raise vbObjectError + 1054, SRC, _
+                          "Kolicina i cena stavke moraju biti vece od nule: " & _
+                          "OtkupID=" & oid & "."
+            End If
+            If Not dict.Exists(oid) Then dict.Add oid, 0#
+            dict(oid) = dict(oid) + CDbl(d(i, cKol)) * CDbl(d(i, cCena))
+        End If
+    Next i
+
+    Set BuildVrednostDictByOtkup = dict
+End Function
+
+' Otkupi sa otvorenom obavezom. Sedam kolona:
+'   1 BrojDokumenta | 2 OtkupID | 3 Vrednost | 4 Isplaceno | 5 Preostalo
+'   6 Datum | 7 StanicaID
+'
+' VREDNOST DOLAZI SA STAVKI, ne sa zaglavlja. Kolona Isplaceno se vise ne cita:
+' status je izveden iz iste razlike koja ionako odlucuje da li red ulazi u listu
+' (v. obrazlozenje uz obrisan UpdateOtkupStatus).
+'
+' DVA NEISPRAVNA REDA, DVA RAZLICITA ODGOVORA -- razlika je merena, ne stilska:
+'
+'   red BEZ OtkupID-a          -> OSTAJE U LISTI, i to prisilno.
+'       Ne moze se vrednovati, ali se ne sme ni preskociti: to je bas kvar
+'       FM-0021 #5 (otvorena obaveza od 100.000 tiho izostane iz pregleda).
+'       Vlasnik greske je BuildBlokIsplataList, koji ga imenuje sa
+'       ERR_ISPLATA_PRAZAN_OTKUPID -- ovde se samo ne gubi.
+'
+'   red SA OtkupID-em a BEZ stavki -> preskace se, uz brojac i jedan log.
+'       Takav red nije dokument: vrednost otkupa zivi na stavkama, pa on nema
+'       obavezu koja bi se mogla izgubiti. Nov pisac ga ne moze napraviti
+'       (CreateOtkup_TX trazi bar jednu stavku), niti PWA uvoz. Preostali su
+'       samo ZATECENI redovi u test svesci. Grana odlazi u koraku 7, sa
+'       kolonama Kolicina/Cena.
+'
+' Ono sto se NE radi ni u jednom slucaju: racunanje vrednosti sa zaglavlja.
+' To bi bio compatibility sloj i vracao bi 0 za svaki nov dokument.
 Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Variant
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
@@ -1345,40 +1369,55 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
     Const SRC As String = "GetOpenOtkupi"
 
     Dim colID As Long, colBrDok As Long, colKoop As Long
-    Dim colKol As Long, colCena As Long, colIspl As Long
     Dim colDatum As Long, colStanica As Long
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
-    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
-    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
-    colIspl = RequireColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO, SRC)
     colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)        ' v6.18+
     colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)    ' v6.18+
     
     Dim isplataDict As Object
     Set isplataDict = BuildIsplataDictByOtkup()
+
+    Dim vrednostDict As Object
+    Set vrednostDict = BuildVrednostDictByOtkup()
     
     Dim filterByKoop As Boolean
     filterByKoop = (LenB(Trim$(kooperantID)) > 0)
     
     ' Zaehlen
     Dim count As Long, i As Long
+    Dim bezStavki As Long
     For i = 1 To UBound(data, 1)
         If filterByKoop Then
             If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextCount
         End If
-        If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextCount
         
+        Dim oid As String
+        oid = Trim$(CStr(data(i, colID)))
         Dim vrednost As Double: vrednost = 0
-        If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
-            vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
-        End If
         Dim isplaceno As Double: isplaceno = 0
-        If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
-        If vrednost - isplaceno > 0 Then count = count + 1
+        Dim uListu As Boolean: uListu = False
+
+        If Len(oid) = 0 Then
+            uListu = True                       ' nevrednovan red NE SME da nestane
+        ElseIf Not vrednostDict.Exists(oid) Then
+            bezStavki = bezStavki + 1           ' nije dokument -- v. zaglavlje
+        Else
+            vrednost = vrednostDict(oid)
+            If isplataDict.Exists(oid) Then isplaceno = isplataDict(oid)
+            uListu = (vrednost - isplaceno > 0)
+        End If
+
+        If uListu Then count = count + 1
 NextCount:
     Next i
+
+    ' Jedan red u logu po pozivu, ne po redu -- zatecenih redova ume da bude vise.
+    If bezStavki > 0 Then
+        LogError SRC, "Preskoceno redova bez stavki: " & CStr(bezStavki) & _
+                 ". Vrednost otkupa se racuna iz tblOtkupStavke."
+    End If
     
     If count = 0 Then
         GetOpenOtkupi = Empty
@@ -1395,18 +1434,24 @@ NextCount:
         If filterByKoop Then
             If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextRow
         End If
-        If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextRow
         
+        oid = Trim$(CStr(data(i, colID)))
         vrednost = 0
-        If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
-            vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
-        End If
         isplaceno = 0
-        If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
-        If vrednost - isplaceno > 0 Then
+        uListu = False
+
+        If Len(oid) = 0 Then
+            uListu = True
+        ElseIf vrednostDict.Exists(oid) Then
+            vrednost = vrednostDict(oid)
+            If isplataDict.Exists(oid) Then isplaceno = isplataDict(oid)
+            uListu = (vrednost - isplaceno > 0)
+        End If
+
+        If uListu Then
             idx = idx + 1
             result(idx, 1) = CStr(data(i, colBrDok))
-            result(idx, 2) = CStr(data(i, colID))
+            result(idx, 2) = oid
             result(idx, 3) = vrednost
             result(idx, 4) = isplaceno
             result(idx, 5) = vrednost - isplaceno
@@ -1559,14 +1604,14 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
         End If
     End If
 
-    Dim colKol As Long, colCena As Long
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-
+    ' Vrednost dolazi sa STAVKI, ne sa headera. Dokument vise nema jednu cenu, a
+    ' Kolicina/Cena na headeru u ciljnoj semi ne postoje (S4.1).
+    '
+    ' Nalaz: dok je ovo citalo header, nov pisac je davao vrednost 0, pa je
+    ' "preostalo <= 0 -> Exit Sub" TIHO preskakalo primenu avansa. Golden je to
+    ' prijavio kao B2/B3 placeno 50000 -> 0.
     Dim otkVrednost As Double
-    If IsNumeric(otkData(r, colKol)) And IsNumeric(otkData(r, colCena)) Then
-        otkVrednost = CDbl(otkData(r, colKol)) * CDbl(otkData(r, colCena))
-    End If
+    otkVrednost = modOtkup.VrednostOtkupa(otkupID)
 
     Dim preostalo As Double
     preostalo = otkVrednost - GetUplataForOtkup(otkupID)
@@ -1639,7 +1684,6 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
 NextAvans:
     Next i
 
-    If preostalo <= 0 Then UpdateOtkupStatus otkupID
 End Sub
 Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
                                       ByVal otkupID As String, _
@@ -1741,12 +1785,11 @@ Public Function ResetNovacOtkupLink_TX(ByVal otkupID As String) As Boolean
                   "OtkupID je obavezan."
     End If
 
+    ' Samo tblNovac: otkup se vise ne dira -- status isplate je izveden.
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
-    tx.AddTableSnapshot TBL_OTKUP
 
     Call ResetNovacOtkupLink(otkupID)
-    Call UpdateOtkupStatus(otkupID)
 
     tx.CommitTx
     Set tx = Nothing

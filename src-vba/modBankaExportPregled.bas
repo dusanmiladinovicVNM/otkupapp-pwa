@@ -133,7 +133,7 @@ Public Function BuildBlokIsplataList( _
         ' ni tekuceg racuna. Raniji tihi "GoTo NextRow" je otvorenu obavezu
         ' izbacivao iz liste bez traga (FM-0021 #5); sada je fail-closed, isto
         ' kao prazan i dupliran OtkupID. Prazan kooperant nije legitimno stanje:
-        ' SaveOtkupMulti_TX ga odbija pri upisu.
+        ' CreateOtkup_TX ga odbija pri upisu (KooperantID je obavezan FK).
         Dim kooperantID As String
         If koopByOtkup.Exists(otkupID) Then kooperantID = Trim$(CStr(koopByOtkup(otkupID)))
         If LenB(kooperantID) = 0 Then

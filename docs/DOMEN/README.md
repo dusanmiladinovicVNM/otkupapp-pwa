@@ -109,6 +109,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Vlasništvo nad upisom (A11) | `docs/DOMEN/WRITE_OWNERSHIP.json` |
 | Plan refaktora, redosled PR-ova, kapija odluke | `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` |
 | Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
+| Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |

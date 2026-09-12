@@ -1282,8 +1282,23 @@ Public Sub EnsureSledljivostSchema()
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
-        EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD
-        EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA
+        ' tblOtkup je presao na vezu PO ID-u (A9, korak 5). Broj-oblik se tu vise
+        ' NE dodaje -- inace bi self-heal vratio kolonu koju je kanon preimenovao,
+        ' pa bi tabela nosila oba oblika i nijedan ne bi bio merodavan.
+        If t = TBL_OTKUP Then
+            ' Kes statusa isplate je obrisan iz kanona (korak 7). Kolona koja
+            ' ostane u svesci POMERA sve iza sebe, pa pozicioni upis puca --
+            ' modSchema to i prijavljuje po poziciji.
+            ObrisiKolonuAko t, "Isplaceno"
+            ObrisiKolonuAko t, "DatumIsplate"
+            PreimenujKolonuAko t, COL_TRACE_ISPRAVKA_OD, COL_TRACE_ISPRAVKA_OD_ID
+            PreimenujKolonuAko t, COL_TRACE_ZAMENJEN_SA, COL_TRACE_ZAMENJEN_SA_ID
+            EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD_ID
+            EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA_ID
+        Else
+            EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD
+            EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA
+        End If
         EnsureKolonaSaTragom t, COL_TRACE_CORRECTION_ID
         EnsureKolonaSaTragom t, COL_TRACE_IZDATO_STATUS
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
@@ -1307,6 +1322,89 @@ Public Sub EnsureSledljivostSchema()
 End Sub
 
 ' Jedna kolona, sa tragom. Pad se zapise i NE zaustavlja ostale kolone.
+' PUBLIC je zbog testa, ne zbog pozivaoca. Obe migracije menjaju STRUKTURU
+' tabele, a to nijedna suite ne moze da izmeri kroz EnsureSledljivostSchema:
+' ona radi nad sest tabela odjednom i nad svesci koja je vec migrirana, pa bi
+' prolaz bio prazan. Test ih zato zove direktno, nad kolonom koju sam doda NA
+' KRAJ -- visak na kraju ne pomera nijednu kanonsku poziciju, pa je i pad testa
+' bezopasan za ostatak suite-a.
+'
+' BRISANJE KOLONE KOJU KANON VISE NEMA.
+'
+' Jedini destruktivan korak u self-heal-u, pa je i najuzi: brise se SAMO kolona
+' koja je imenom navedena ovde i koje u kanonu vise nema. Nema petlje po
+' "sve sto nije u kanonu" -- modSetup.EnsureRuntimeSchema legitimno dodaje kolone
+' NA KRAJ pre nego sto ih kanon preuzme, pa bi takva petlja brisala tekuci rad.
+'
+' Zasto uopste mora: kolona obrisana iz SREDINE kanona pomera sve iza sebe.
+' AppendRow pise POZICIONO, pa zatecena sveska sa viskom kolone salje vrednosti
+' u pogresna polja -- modSchema to hvata i staje, ali sveska ostaje neupotrebljiva
+' dok se visak ne ukloni.
+'
+' Podatak se gubi, i to je namerno: ove dve kolone su bile KES izvedenog statusa
+' (v. modNovac, obrisan UpdateOtkupStatus). Istina o isplatama zivi u tblNovac.
+Public Sub ObrisiKolonuAko(ByVal tbl As String, ByVal ime As String)
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = modDataAccess.GetTable(tbl)
+    If lo Is Nothing Then Exit Sub
+
+    Dim i As Long
+    i = GetColumnIndex(tbl, ime)
+    If i <= 0 Then Exit Sub                          ' vec obrisana
+
+    lo.ListColumns(i).Delete
+    LogInfo "modSetup.ObrisiKolonuAko", _
+            tbl & ": kolona '" & ime & "' obrisana (pozicija " & CStr(i) & ")"
+    Exit Sub
+EH:
+    LogError "modSetup.ObrisiKolonuAko", _
+             tbl & ": kolona '" & ime & "' nije obrisana: " & Err.description, _
+             Err.Number
+End Sub
+
+' PREIMENOVANJE KOLONE NA MESTU -- ne dodavanje nove.
+'
+' Kanon je na tblOtkup preimenovao IspravkaOd -> IspravkaOdID (A9, korak 5).
+' EnsureColumnOnTable ume samo da DODA kolonu, i to na kraj -- zatecena sveska
+' bi tada nosila oba oblika, a modSchema bi je i dalje odbijao jer se pozicija
+' 32 ne slaze sa kanonom (upis je POZICION).
+'
+' Preimenovanje cuva i podatke i poziciju. Radi se SAMO kad staro ime postoji a
+' novo ne -- inace bi drugi start pregazio vec migriranu kolonu.
+'
+' Sadrzaj se NE prevodi: stara kolona je nosila poslovni BROJ, nova nosi ID, ali
+' na tblOtkup je nikad niko nije ni pisao (StampIspravkaTrace se zove samo za
+' Otpremnicu, Zbirnu i Prijemnicu), pa je svaka zatecena vrednost prazna.
+Public Sub PreimenujKolonuAko(ByVal tbl As String, ByVal staroIme As String, _
+                               ByVal novoIme As String)
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = modDataAccess.GetTable(tbl)
+    If lo Is Nothing Then Exit Sub
+
+    ' Vec migrirano -> tiho izlazi. MERENO: bez ove kapije ishod je ISTI, jer
+    ' Excel odbija drugu ListColumn istog imena i EH to uhvati. Razlika je u
+    ' tragu: bez nje bi sveska sa oba imena pisala LogError na SVAKOM startu,
+    ' pa bi realna greska nestala u sumu. Sabotaza je nece oboriti -- namerno.
+    If GetColumnIndex(tbl, novoIme) > 0 Then Exit Sub
+
+    Dim i As Long
+    i = GetColumnIndex(tbl, staroIme)
+    If i <= 0 Then Exit Sub                                ' nema sta da se menja
+
+    lo.ListColumns(i).name = novoIme
+    LogInfo "modSetup.PreimenujKolonuAko", _
+            tbl & ": " & staroIme & " -> " & novoIme & " (pozicija " & CStr(i) & ")"
+    Exit Sub
+EH:
+    LogError "modSetup.PreimenujKolonuAko", _
+             tbl & ": " & staroIme & " -> " & novoIme & " nije uspelo: " & _
+             Err.description, Err.Number
+End Sub
+
 Private Sub EnsureKolonaSaTragom(ByVal tbl As String, ByVal col As String)
     On Error GoTo EH
     EnsureColumnOnTable tbl, col
