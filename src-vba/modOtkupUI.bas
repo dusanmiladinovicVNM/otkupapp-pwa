@@ -4534,6 +4534,13 @@ End Sub
 
 Private Sub DoSaveWorkbook()
     On Error GoTo EH
+    ' I izricit klik na "Snimi" se odbija dok je VBA import prekinut: operater
+    ' ne moze da zna da je projekat nepotpun, a Save ga cini trajnim. Odbijanje
+    ' je GLASNO -- toast kaze i zasto i sta da uradi. Vlasnik markera: modImportState.
+    If modImportState.ImportNijeDovrsen() Then
+        ShowToast Poruka("OTKUI_MSG_WB_IMPORT_PREKINUT"), True
+        Exit Sub
+    End If
     ThisWorkbook.Save
     ShowToast Poruka("OTKUI_MSG_WB_SNIMLJENA"), False
     Exit Sub

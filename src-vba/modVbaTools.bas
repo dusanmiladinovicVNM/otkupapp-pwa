@@ -114,7 +114,8 @@ Private Const SELF_MODULE As String = "modVbaTools"      ' ovaj modul (preskace 
 Private Const ONLY_FORM As String = "frmOtkupUI"         ' jedina UserForm projekta
 
 ' ---------- faza 2 ----------
-Private Const REG_APP As String = "AgriXVbaTools"
+' Ime registra i formula sekcije zive u modImportState -- jedina kopija, jer
+' ih cita i strana koja brani Save (modImportState.ImportNijeDovrsen).
 Private Const PHASE2_PROC As String = "ImportAllVBA_Phase2"
 Private Const PHASE2_SEC As Long = 2
 
@@ -404,7 +405,7 @@ Public Sub ImportAllVBA_Phase2()
     Dim selfNote As String, recNote As String
 
     sec = P2Section()
-    If GetSetting(REG_APP, sec, "pending", "") <> "1" Then
+    If GetSetting(IMPORT_REG_APP, sec, "pending", "") <> "1" Then
         ' nista zakazano (vec obradjeno ili ocisceno) - tiho, bez dijaloga
         mBusy = False
         RestoreRuntimeAfterImport
@@ -413,15 +414,15 @@ Public Sub ImportAllVBA_Phase2()
 
     On Error GoTo EH
 
-    folder = GetSetting(REG_APP, sec, "dir", "")
-    hardCsv = GetSetting(REG_APP, sec, "hard", "")
-    goneCsv = GetSetting(REG_APP, sec, "gone", "")
-    formNew = (GetSetting(REG_APP, sec, "formnew", "0") = "1")
-    savedN = CLng("0" & GetSetting(REG_APP, sec, "hardn", "0"))
-    bkPath = GetSetting(REG_APP, sec, "backup", "")
-    mPrevBackup = GetSetting(REG_APP, sec, "prevbackup", "")
-    phase1Sum = GetSetting(REG_APP, sec, "sum", "")
-    If GetSetting(REG_APP, sec, "phase", "") <> "2" Then
+    folder = GetSetting(IMPORT_REG_APP, sec, "dir", "")
+    hardCsv = GetSetting(IMPORT_REG_APP, sec, "hard", "")
+    goneCsv = GetSetting(IMPORT_REG_APP, sec, "gone", "")
+    formNew = (GetSetting(IMPORT_REG_APP, sec, "formnew", "0") = "1")
+    savedN = CLng("0" & GetSetting(IMPORT_REG_APP, sec, "hardn", "0"))
+    bkPath = GetSetting(IMPORT_REG_APP, sec, "backup", "")
+    mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "prevbackup", "")
+    phase1Sum = GetSetting(IMPORT_REG_APP, sec, "sum", "")
+    If GetSetting(IMPORT_REG_APP, sec, "phase", "") <> "2" Then
         fatal = "2. faza: stanje nije oznaceno kao spremno za 2. fazu" & vbCrLf & _
                 "(marker je iz prekinutog prolaza, ne iz zavrsene 1. faze)."
         GoTo FAIL
@@ -434,8 +435,8 @@ Public Sub ImportAllVBA_Phase2()
     ' "Upozorenje ostaje upisano". Da je faza 2 uopste pokrenuta znaci da je
     ' faza 1 vec uklanjala komponente - dakle mutacija je izvesna.
     mMutated = True
-    selfNote = GetSetting(REG_APP, sec, "selfnote", "")
-    recNote = GetSetting(REG_APP, sec, "recnote", "")
+    selfNote = GetSetting(IMPORT_REG_APP, sec, "selfnote", "")
+    recNote = GetSetting(IMPORT_REG_APP, sec, "recnote", "")
 
     If Len(folder) = 0 Then
         fatal = "2. faza: izgubljen je put do izvora (stanje posle 1. faze nije citljivo)." & vbCrLf & _
@@ -1354,24 +1355,24 @@ Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As S
     ' pre nego sto hard/gone/formnew legnu, zaostao OnTime iz ranijeg prolaza bi
     ' delimican handoff procitao kao kompletan - a phase=1 je uveden bas da to
     ' spreci.
-    SaveSetting REG_APP, sec, "dir", folder
-    SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
-    SaveSetting REG_APP, sec, "hard", mHard
-    SaveSetting REG_APP, sec, "hardn", CStr(CsvCount(mHard))
-    SaveSetting REG_APP, sec, "gone", mGone
-    SaveSetting REG_APP, sec, "formnew", IIf(mFormNew, "1", "0")
-    SaveSetting REG_APP, sec, "backup", bkPath
-    SaveSetting REG_APP, sec, "sum", Cap(mSum, 900)
+    SaveSetting IMPORT_REG_APP, sec, "dir", folder
+    SaveSetting IMPORT_REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting IMPORT_REG_APP, sec, "hard", mHard
+    SaveSetting IMPORT_REG_APP, sec, "hardn", CStr(CsvCount(mHard))
+    SaveSetting IMPORT_REG_APP, sec, "gone", mGone
+    SaveSetting IMPORT_REG_APP, sec, "formnew", IIf(mFormNew, "1", "0")
+    SaveSetting IMPORT_REG_APP, sec, "backup", bkPath
+    SaveSetting IMPORT_REG_APP, sec, "sum", Cap(mSum, 900)
     ' Upozorenje o drift-u modVbaTools-a je najvaznije bas kad faza 2 postoji -
     ' bez ovoga bi ga zavrsna poruka faze 2 progutala.
-    SaveSetting REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
-    SaveSetting REG_APP, sec, "recnote", Cap(mRecNote, 300)
-    SaveSetting REG_APP, sec, "pending", "1"
+    SaveSetting IMPORT_REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
+    SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    SaveSetting IMPORT_REG_APP, sec, "pending", "1"
     ' procitaj nazad ono od cega faza 2 zavisi; tek ako je leglo, otvori kapiju
-    If GetSetting(REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
-    If GetSetting(REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
-    If GetSetting(REG_APP, sec, "hardn", "") <> CStr(CsvCount(mHard)) Then Exit Function
-    SaveSetting REG_APP, sec, "phase", "2"      ' <- kapija, poslednja
+    If GetSetting(IMPORT_REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
+    If GetSetting(IMPORT_REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
+    If GetSetting(IMPORT_REG_APP, sec, "hardn", "") <> CStr(CsvCount(mHard)) Then Exit Function
+    SaveSetting IMPORT_REG_APP, sec, "phase", "2"      ' <- kapija, poslednja
     SaveImportPhase2State = True
     Exit Function
 EH:
@@ -1392,23 +1393,23 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     '      funkciji koja postoji da ga sacuva.
     '   2. phase=1 - zaostao OnTime iz ranijeg prolaza vise ne sme da udje u fazu 2.
     '   3. tek onda podaci ovog prolaza.
-    SaveSetting REG_APP, sec, "prevbackup", mPrevBackup
-    SaveSetting REG_APP, sec, "phase", "1"
+    SaveSetting IMPORT_REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting IMPORT_REG_APP, sec, "phase", "1"
     If Len(mPrevBackup) > 0 Then
         ' procitaj nazad pre nego sto prepises "backup" - ako pokazivac nije legao,
         ' nova transakcija se NE otvara (import se ne pokrece)
-        If GetSetting(REG_APP, sec, "prevbackup", "") <> mPrevBackup Then Exit Function
+        If GetSetting(IMPORT_REG_APP, sec, "prevbackup", "") <> mPrevBackup Then Exit Function
     End If
-    SaveSetting REG_APP, sec, "dir", folder
-    SaveSetting REG_APP, sec, "backup", bkPath
-    SaveSetting REG_APP, sec, "hard", ""
-    SaveSetting REG_APP, sec, "hardn", "0"
-    SaveSetting REG_APP, sec, "gone", ""
-    SaveSetting REG_APP, sec, "formnew", "0"
-    SaveSetting REG_APP, sec, "sum", ""
-    SaveSetting REG_APP, sec, "selfnote", ""
-    SaveSetting REG_APP, sec, "recnote", Cap(mRecNote, 300)
-    SaveSetting REG_APP, sec, "pending", "1"
+    SaveSetting IMPORT_REG_APP, sec, "dir", folder
+    SaveSetting IMPORT_REG_APP, sec, "backup", bkPath
+    SaveSetting IMPORT_REG_APP, sec, "hard", ""
+    SaveSetting IMPORT_REG_APP, sec, "hardn", "0"
+    SaveSetting IMPORT_REG_APP, sec, "gone", ""
+    SaveSetting IMPORT_REG_APP, sec, "formnew", "0"
+    SaveSetting IMPORT_REG_APP, sec, "sum", ""
+    SaveSetting IMPORT_REG_APP, sec, "selfnote", ""
+    SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    SaveSetting IMPORT_REG_APP, sec, "pending", "1"
     BeginImportTransaction = True
     Exit Function
 EH:
@@ -1417,7 +1418,7 @@ End Function
 
 Private Sub ClearImportPhase2State()
     On Error Resume Next
-    DeleteSetting REG_APP, P2Section()
+    DeleteSetting IMPORT_REG_APP, P2Section()
     Err.Clear
 End Sub
 
@@ -1438,12 +1439,12 @@ Private Function RecoverImportState() As String
     Dim sec As String: sec = P2Section()
     On Error Resume Next
     mPrevBackup = ""
-    If GetSetting(REG_APP, sec, "pending", "") = "1" Then
+    If GetSetting(IMPORT_REG_APP, sec, "pending", "") = "1" Then
         ' Backup PREKINUTE transakcije je poslednji snimak za koji znamo da je
         ' nastao pre nego sto je projekat postao nepotpun. Nosi se kroz nov prolaz
         ' (prevbackup) jer novi SaveCopyAs snima VEC nepotpuno stanje.
-        mPrevBackup = GetSetting(REG_APP, sec, "prevbackup", "")
-        If Len(mPrevBackup) = 0 Then mPrevBackup = GetSetting(REG_APP, sec, "backup", "")
+        mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "prevbackup", "")
+        If Len(mPrevBackup) = 0 Then mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "backup", "")
         RecoverImportState = "PAZNJA: zatecen je prekinut raniji import." & vbCrLf & _
             "Projekat je mozda NEPOTPUN. Poslednji siguran backup: " & _
             IIf(Len(mPrevBackup) > 0, mPrevBackup, "?") & vbCrLf & _
@@ -1461,13 +1462,7 @@ End Function
 ' Sekcija u registru scope-ovana po radnoj svesci - dve otvorene kopije ne dele
 ' stanje faze 2.
 Private Function P2Section() As String
-    Dim s As String, i As Long, ch As String, out As String
-    s = ThisWorkbook.name
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-        If (ch >= "0" And ch <= "9") Or (UCase$(ch) >= "A" And UCase$(ch) <= "Z") Then out = out & ch
-    Next i
-    P2Section = "import_" & out
+    P2Section = modImportState.ImportSekcija()
 End Function
 
 ' Workbook-kvalifikovano ime procedure ("'Ime.xlsm'!Proc") - kad su dve kopije

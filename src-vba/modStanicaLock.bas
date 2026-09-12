@@ -150,6 +150,29 @@ Public Sub ReleaseActiveStanicaLock()
     Call ReleaseStanicaLockInternal(gActiveStanica, gActiveDatum, False)
 End Sub
 
+' Otpustanje na IZLASKU iz aplikacije (ThisWorkbook.Workbook_BeforeClose).
+'
+' Bulk push se radi samo kad je izlaz NORMALAN. Pri prekinutom VBA importu
+' sveska se zatvara sa SaveChanges:=False, a to je tacno kombinacija opisana
+' iznad: BulkPushPendingForStanica APPENDUJE red u cloud pa TEK ONDA lokalno
+' upise ClientRecordID. Odbacene promene odnose taj marker, cloud red ostaje, i
+' sledeca sesija salje iste redove PONOVO -- duplikati koje rollback ne vraca.
+'
+' Odluka stoji OVDE, a ne u ThisWorkbook-u: BeforeClose je poslednja brana bez
+' obzira odakle je Close dosao, pa mesto odluke mora biti jedno i testabilno.
+' Efekat (stvaran cloud append) trazi mrezu i meri se rucno; test meri ODLUKU,
+' preko BulkPushNaIzlasku.
+Public Sub ReleaseStanicaLockOnExit()
+    If Len(gActiveStanica) = 0 Then Exit Sub
+    Call ReleaseStanicaLockInternal(gActiveStanica, gActiveDatum, BulkPushNaIzlasku())
+End Sub
+
+' Sme li izlazak da nosi poslovni side effect (push u cloud)? Javno zbog testa:
+' pogresan smer ove odluke ne pravi crven test nego duplikate kod klijenta.
+Public Function BulkPushNaIzlasku() As Boolean
+    BulkPushNaIzlasku = Not modImportState.ImportNijeDovrsen()
+End Function
+
 ' Atomic stanica switch: release stari sa bulk push, acquire novi.
 ' Pozivaj iz cmbOtkupnoMesto_Change u frmOtkup kad korisnik menja
 ' stanicu unutar iste form sesije.

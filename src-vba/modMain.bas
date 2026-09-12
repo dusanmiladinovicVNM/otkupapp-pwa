@@ -359,14 +359,25 @@ End Sub
 ' Snima, kao i legacy "Izlaz" (frmOtkupAPP.btnExit_Click).
 Public Sub ZatvoriAplikaciju()
     On Error Resume Next
+    ' Prekinut VBA import: gasenje je GARANTOVAN put do Save-a (poziva se preko
+    ' Application.OnTime iz ljuske), pa bi tiho zabetoniralo nepotpun projekat --
+    ' tacno onako kako je AutoSave to uradio 12.09.2026. Zatvara se BEZ snimanja
+    ' i operater dobija razlog; nesnimljen red se moze uneti ponovo, polomljen
+    ' projekat prezivi zatvaranje fajla. Vlasnik markera: modImportState.
+    If modImportState.ImportNijeDovrsen() Then
+        MsgBox Poruka("APP_MSG_IMPORT_PREKINUT_NE_SNIMAM"), vbExclamation, APP_NAME
+        ThisWorkbook.Close SaveChanges:=False
+        Exit Sub
+    End If
     ThisWorkbook.Close SaveChanges:=True
 End Sub
 
-Public Sub SaveApp()
-    Application.ScreenUpdating = False
-    ThisWorkbook.Save
-    Application.ScreenUpdating = True
-End Sub
+' SaveApp je OBRISAN (12.09.2026). Bio je Public Sub bez parametara i bez
+' ijednog pozivaoca u src-vba -- dakle cist Save entry point koji je cekao da ga
+' neko zove iz Alt+F8 ili sa dugmeta. Dok postoji marker prekinutog importa,
+' svaki takav ulaz je zaobilaznica kapije. Globalni Workbook_BeforeSave bi ga i
+' pokrio, ali mrtav javan Save nema zasto da postoji.
+' Operaterov put do snimanja je dugme "Snimi" (modOtkupUI.DoSaveWorkbook).
 
 Private Sub ValidateAllTables()
     Dim tblNames As Variant

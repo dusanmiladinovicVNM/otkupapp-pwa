@@ -76,20 +76,55 @@ EH:
     MsgBox Poruka("APP_MSG_GRESKA_PRI_POKRETANJU"), vbCritical
 End Sub
 
+' Globalna kapija nad Save-om. Postoji zato sto tri VBA puta (AutoSave, dugme
+' "Snimi", gasenje aplikacije) NISU sva vrata: Ctrl+S, File > Save i Save As
+' idu mimo svakog od njih. Dok stoji marker prekinutog VBA importa, projekat
+' je mozda nepotpun i Save ga cini TRAJNIM -- 12.09.2026. je tako polomljen
+' modLogo prezivio zatvaranje i ponovno otvaranje fajla.
+'
+' Self-update je izuzet po konstrukciji, ne slucajno:
+' modSelfUpdate.PrepareRuntimeForSelfUpdate radi Application.EnableEvents =
+' False pre ijedne izmene koda, pa ovaj event tada NE opali -- a njegov
+' SaveWorkbookVerified je legitiman snimac popravljenog projekta. Da to ne bi
+' ostalo na nadi, tools/vba_selfupdate_gates.py to i proverava kao kapiju.
+'
+' MsgBox je iza IsTestMode: u nevidljivom Excelu modalni dijalog ne puca nego
+' trajno VISI. Cancel je invarijanta, poruka je samo UI.
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+    On Error GoTo EH
+    If modImportState.ImportNijeDovrsen() Then
+        Cancel = True
+        LogError "ThisWorkbook.Workbook_BeforeSave", _
+                 "Save ODBIJEN: prekinut VBA import, projekat je mozda nepotpun.", 0, "WARN"
+        If Not IsTestMode() Then
+            MsgBox Poruka("APP_MSG_IMPORT_PREKINUT_NE_SNIMAM"), vbExclamation, APP_NAME
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "ThisWorkbook.Workbook_BeforeSave"
+End Sub
+
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error GoTo EH
     
-    ' Final release aktivne stanica lock-a sa bulk push.
-    ' Ako forma nije zatvorena pre Excel close-a, ovde se hvata.
-    ' Fail-soft: ako bulk push padne (offline), lock ce postati stale
-    ' i sledeca sesija ce ga ocistiti kroz CleanupOrphanedLocks.
+    ' Final release aktivne stanica lock-a. Ako forma nije zatvorena pre Excel
+    ' close-a, ovde se hvata. Fail-soft: ako push padne (offline), lock ce
+    ' postati stale i sledeca sesija ce ga ocistiti kroz CleanupOrphanedLocks.
+    '
+    ' Bulk push se NE radi bezuslovno -- odluku nosi modStanicaLock, jer je ovo
+    ' poslednja brana bez obzira odakle je Close dosao. Pri prekinutom importu
+    ' sveska se zatvara sa SaveChanges:=False, a push tada APPENDUJE red u cloud
+    ' pa lokalni ClientRecordID marker -- jedini idempotency guard -- ode sa
+    ' odbacenim promenama. Sledeca sesija bi iste redove poslala PONOVO
+    ' (modStanicaLock.ReleaseActiveStanicaLock, isti razlog kao kod self-update-a).
     On Error Resume Next
     If Len(modStanicaLock.GetActiveStanica()) > 0 Then
         Application.StatusBar = "Sinhronizujem unos pre zatvaranja..."
         Application.Cursor = xlWait
         DoEvents
 
-        modStanicaLock.ReleaseStanicaLock modStanicaLock.GetActiveStanica()
+        modStanicaLock.ReleaseStanicaLockOnExit
 
         Application.StatusBar = False
         Application.Cursor = xlDefault
