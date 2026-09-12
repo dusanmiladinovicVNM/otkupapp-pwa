@@ -5870,6 +5870,7 @@ Public Sub RefreshFromData()
     RefreshKpi mFrm
     OsveziNavBrojace
     FillZbirneCombo mFrm      ' nove zbirne u picker
+    RefillMaticniCombos mFrm  ' nova stanica / vozac u kontekst
     mPartnerFor = ""          ' partner lista se ponovo puni
     ' Skup lista (tabova) sme da zavisi od konteksta ekrana (Izvestaji: tip
     ' entiteta bira koje liste postoje) -- posle promene konteksta geometrija
@@ -6668,6 +6669,56 @@ EH:
     mLoading = False
     Debug.Print "modOtkupUI.FillCombos PAO na koraku [" & st & "]: " & _
                 Err.Number & " " & Err.description
+End Sub
+
+' Combo-i MATICNIH podataka (otkupno mesto, vozac) posle promene podataka.
+'
+' FillCombos ima prekidac mCombosFilled i puni ih TACNO JEDNOM po sesiji Excela:
+' na False ga vraca samo OtkupUI_Release (self-update i testovi), a NE i
+' zatvaranje ekrana (OtkupUI_FormClosed ga ne dira). Posto je od v6-ui-218
+' frmOtkupUI jedina forma, ni prelazak Maticni podaci -> Otkup je ne rusi. Zato
+' stanica ili vozac unet POSLE starta aplikacije nije postojao u padajucoj listi
+' do gasenja Excel fajla. U svezoj svesci se to videlo kao prazna lista, u
+' zatecenoj kao "novi unos nije prosao" -- a upis je svaki put bio uredan.
+'
+' Izbor se cuva po ID-u, ne po tekstu: FillComboDisplayID radi cmb.Clear, a
+' GetComboID cita skrivenu kolonu preko ListIndex-a -- posle punjenja bi
+' ListIndex bio -1, pa bi kontekst (otkupno mesto, vozac) nestajao na SVAKI
+' upis. To bi oborilo pravilo da kontekst otpremnice prezivljava snimanje
+' otkupnog bloka (docs/DOMEN/README.md), i to tise nego bug koji leci.
+'
+' mPopMute je isti gard koji koristi FillCombos: punjenje ne sme da se prijavi
+' kao operaterova promena polja.
+Private Sub RefillMaticniCombos(frm As Object)
+    Dim ctx As Object
+    Dim st As String
+    If frm Is Nothing Then Exit Sub
+    On Error GoTo EH
+    mPopMute = True
+    st = "zCtx":     Set ctx = frm.Controls("zCtx")
+    st = "cbOM":     RefillUzIzbor ctx.Controls("cbOM"), TBL_STANICE, "Naziv", "StanicaID"
+    st = "cbVozac":  RefillUzIzbor ctx.Controls("cbVozac"), TBL_VOZACI, "Ime", "VozacID"
+    mPopMute = False
+    Exit Sub
+EH:
+    ' NE gutati tiho -- isti razlog kao u FillCombos: prazan combo bez poruke je
+    ' bio glavni razlog zasto je izgledalo da "nista nije povezano".
+    mPopMute = False
+    Debug.Print "modOtkupUI.RefillMaticniCombos PAO na koraku [" & st & "]: " & _
+                Err.Number & " " & Err.description
+End Sub
+
+' Napuni combo iz tabele i vrati prethodno izabran red PO ID-u. Ako tog ID-a
+' vise nema (red obrisan ili prebacen u Neaktivan), combo ostaje prazan -- to je
+' tacno, ponuda koju writer odbija je gora od prazne.
+Private Sub RefillUzIzbor(ByVal cmb As MSForms.ComboBox, _
+                          ByVal tabela As String, _
+                          ByVal prikazKol As String, _
+                          ByVal idKol As String)
+    Dim prethodni As String
+    prethodni = GetComboID(cmb)
+    FillComboDisplayID cmb, tabela, prikazKol, idKol
+    If Len(prethodni) > 0 Then SetComboByID cmb, prethodni
 End Sub
 
 Private Sub RefillSorta(frm As Object)

@@ -122,7 +122,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKulture`: `modGoldenTests`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
-- `tblStanice`: `modGoldenTests`, `modTestBanka`
+- `tblStanice`: `modGoldenTests`, `modTest`, `modTestBanka`
 - `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTestPalete`
 
 ## Sta ovo NE pokriva

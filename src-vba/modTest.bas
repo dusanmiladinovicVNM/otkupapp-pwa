@@ -490,6 +490,7 @@ Public Sub RunAllTests()
     RunOne 200
     RunOne 201
     RunOne 202
+    RunOne 203
     RunOne 124
     RunOne 125
     RunOne 126
@@ -764,6 +765,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 200: TestName = "T_Sema_KapijaBije"
         Case 201: TestName = "T_Sema_SamoLeci"
         Case 202: TestName = "T_Sema_PrefiksNijeString"
+        Case 203: TestName = "T_Kontekst_NovaStanicaUlaziUListu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -974,6 +976,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 200: T_Sema_KapijaBije
         Case 201: T_Sema_SamoLeci
         Case 202: T_Sema_PrefiksNijeString
+        Case 203: T_Kontekst_NovaStanicaUlaziUListu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6505,6 +6508,88 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 
     Set NewOtkupUIForm = f
 End Function
+
+' ============================================================
+' 203. Nov maticni podatak mora da stigne u kontekst otkupa
+' ============================================================
+' FillCombos ima prekidac mCombosFilled i puni cbOM/cbVozac TACNO JEDNOM po
+' sesiji Excela. Na False ga vraca samo OtkupUI_Release (self-update i testovi),
+' a NE i zatvaranje ekrana -- OtkupUI_FormClosed ga ne dira. Posto je frmOtkupUI
+' jedina forma, ni prelazak Maticni podaci -> Otkup je ne rusi. Posledica: novo
+' otkupno mesto uneto posle starta aplikacije NIJE postojalo u padajucoj listi
+' do gasenja Excel fajla, iako je upis svaki put bio uredan. Na svezoj svesci se
+' to videlo kao potpuno prazna lista.
+'
+' Test meri POSLEDICU, ne put: posle upisa i RefreshFromData -- isti kanal kojim
+' ljuska javlja "podaci su promenjeni" (modOtkupUI:4170, klik "scrMatSacuvaj") --
+' nova stanica mora biti IZBORLJIVA po ID-u.
+'
+' Drugi smer je jednako obavezan: punjenje ne sme da obrise vec izabrano
+' otkupno mesto. FillComboDisplayID radi cmb.Clear, pa bi naivna popravka
+' ("samo napuni ponovo") brisala kontekst na svaki upis -- a pravilo da kontekst
+' otpremnice prezivljava snimanje otkupnog bloka (docs/DOMEN/README.md) palo bi
+' tise nego bug koji se leci.
+'
+' Tvrdnje idu POSLE Unload-a: dok je forma ziva, njena masinerija brise Err, pa
+' pad stigne kao "greska bez opisa" (isti razlog kao u T_Prefill... ispod).
+Private Sub T_Kontekst_NovaStanicaUlaziUListu()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim red As Variant, iAkt As Long
+    Dim preN As Long, posleN As Long
+    Dim zatecenID As String, posleID As String
+    Dim nasaoNovu As Boolean
+    Dim errNum As Long, errDesc As String
+    Const NOVA_ID As String = "TST-ST-COMBO"
+    Const NOV_NAZIV As String = "TEST OM COMBO"
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    preN = cbOM.ListCount
+    If preN > 0 Then cbOM.ListIndex = 0
+    zatecenID = GetComboID(cbOM)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_STANICE
+
+    ReDim red(1 To GetTable(TBL_STANICE).ListColumns.count)
+    red(RequireColumnIndex(TBL_STANICE, "StanicaID", "modTest")) = NOVA_ID
+    red(RequireColumnIndex(TBL_STANICE, "Naziv", "modTest")) = NOV_NAZIV
+    iAkt = GetColumnIndex(TBL_STANICE, "Aktivan")
+    If iAkt > 0 Then red(iAkt) = "Aktivan"
+    AppendRow TBL_STANICE, red
+
+    modOtkupUI.RefreshFromData
+    posleN = cbOM.ListCount
+    nasaoNovu = SetComboByID(cbOM, NOVA_ID)
+
+    ' Drugi smer: vrati zatecen izbor, pa jos jedan prolaz osvezavanja.
+    SetComboByID cbOM, zatecenID
+    modOtkupUI.RefreshFromData
+    posleID = GetComboID(cbOM)
+
+    tx.RollbackTx
+    txZapoceta = False
+    ReleaseOtkupUIForm f
+
+    AssertEq (preN > 0), True, "preduslov: lista otkupnih mesta nije prazna"
+    AssertEq (Len(zatecenID) > 0), True, "preduslov: otkupno mesto je izabrano"
+    AssertEq posleN, preN + 1, "nova stanica je u listi posle RefreshFromData"
+    AssertEq nasaoNovu, True, "nova stanica je izborljiva po ID-u"
+    AssertEq posleID, zatecenID, _
+             "izabrano otkupno mesto prezivljava osvezavanje liste"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    ReleaseOtkupUIForm f
+    Err.Raise errNum, "modTest.T_Kontekst_NovaStanicaUlaziUListu", errDesc
+End Sub
 
 ' Unload gasi formu (Terminate -> OtkupUI_FormClosed), a OtkupUI_Release pusta i
 ' ono sto ostaje na modulu (Btns, kes tabela, num-polja) -- inace sledeci test
