@@ -6699,12 +6699,39 @@ End Sub
 Private Sub RefillMaticniCombos(frm As Object)
     Dim ctx As Object
     Dim st As String
+    Dim cbVrsta As MSForms.ComboBox, cbAmb As MSForms.ComboBox
+    Dim sortaPre As String
     If frm Is Nothing Then Exit Sub
     On Error GoTo EH
     mPopMute = True
     st = "zCtx":     Set ctx = frm.Controls("zCtx")
     st = "cbOM":     RefillUzIzbor ctx.Controls("cbOM"), TBL_STANICE, "Naziv", "StanicaID"
     st = "cbVozac":  RefillUzIzbor ctx.Controls("cbVozac"), TBL_VOZACI, "Ime", "VozacID"
+
+    ' Prva verzija (PR #311) je osvezavala samo ta dva combo-a, a FillCombos ih
+    ' puni PET -- svih pet iza istog mCombosFilled prekidaca. Nova kultura ili nov
+    ' tip ambalaze uneti dok aplikacija radi i dalje se nisu videli do restarta
+    ' Excela, dakle tacno onaj kvar koji je #311 tvrdio da zatvara, na tri od pet
+    ' polja. Popravlja se cela klasa, ne jos jedno polje.
+    '
+    ' Ovi su JEDNOKOLONSKI (FillCmb, ne FillComboDisplayID), pa se izbor cuva po
+    ' TEKSTU -- skrivene kolone sa ID-em ovde nema.
+    st = "cbVrsta"
+    Set cbVrsta = ctx.Controls("cbVrsta")
+    RefillTekstUzIzbor cbVrsta, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
+
+    ' Sorta je kaskada iz vrste i RefillSorta je vec cita svezu, ali posle
+    ' osvezavanja vrste lista sorti mora da prati izabranu vrstu -- inace bi
+    ' ostala ona od pre. Izbor se cuva oko poziva, jer RefillSorta radi Clear.
+    st = "sorta"
+    sortaPre = CStr(ctx.Controls("cbSorta").value)
+    RefillSorta frm
+    If Len(sortaPre) > 0 Then ctx.Controls("cbSorta").text = sortaPre
+
+    st = "fgTipAmb"
+    Set cbAmb = frm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
+    RefillTekstUzIzbor cbAmb, GetTipAmbalazeOptions()
+
     mPopMute = False
     Exit Sub
 EH:
@@ -6718,6 +6745,17 @@ End Sub
 ' Napuni combo iz tabele i vrati prethodno izabran red PO ID-u. Ako tog ID-a
 ' vise nema (red obrisan ili prebacen u Neaktivan), combo ostaje prazan -- to je
 ' tacno, ponuda koju writer odbija je gora od prazne.
+' Jednokolonski combo: napuni iz niza i vrati prethodni izbor PO TEKSTU.
+' Ovde nema skrivene kolone sa ID-em (FillCmb, ne FillComboDisplayID), pa je tekst
+' jedini identitet koji postoji. Ako vrednosti vise nema u listi, tekst ostaje --
+' operater vidi sta je imao izabrano, a validacija pri upisu to i dalje odbija.
+Private Sub RefillTekstUzIzbor(ByRef cmb As MSForms.ComboBox, ByVal stavke As Variant)
+    Dim prethodni As String
+    prethodni = CStr(cmb.value)
+    FillCmb cmb, stavke
+    If Len(prethodni) > 0 Then cmb.text = prethodni
+End Sub
+
 Private Sub RefillUzIzbor(ByVal cmb As MSForms.ComboBox, _
                           ByVal tabela As String, _
                           ByVal prikazKol As String, _
