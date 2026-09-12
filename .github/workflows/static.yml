@@ -105,6 +105,17 @@ jobs:
       - name: vba_hard_census self-test
         run: python3 tools/vba_hard_census.py --self-test
 
+      # Marker prekinutog importa odlucuje da li sveska sme da se snimi. Njegove
+      # invarijante suite NE MOZE da izmeri: modVbaTools je SELF_MODULE i ne
+      # uvozi se ni u test svesku ni kroz ImportAllVBA. Greska se ne vidi kao
+      # crven test nego kao sveska koja se vise ne moze snimiti (marker koji
+      # blokira previse) ili kao tiho zabetonirano ostecenje (blokira premalo).
+      - name: import marker (sticky mutated, eventi, odluka nad oba kljuca)
+        run: python3 tools/vba_import_marker_gate.py
+
+      - name: vba_import_marker_gate self-test
+        run: python3 tools/vba_import_marker_gate.py --self-test
+
       # Mapa vlasnistva se generise iz koda, pa istruli cim neko doda upis nad
       # novom tabelom. Instant je i ne trazi Excel.
       - name: WHO_WRITES je azuran

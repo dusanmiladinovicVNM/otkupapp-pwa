@@ -329,6 +329,15 @@ Public Sub ImportAllVBA()
     mMutated = True
     SaveSetting IMPORT_REG_APP, P2Section(), "mutated", "1"
 
+    ' Od ove tacke pa nadalje projekat MOZE biti nepotpun, pa jedina globalna
+    ' kapija nad Save-om (ThisWorkbook.Workbook_BeforeSave) mora da moze da
+    ' opali. PrepareRuntimeForImport je ugasio evente, a ako VBE prekine
+    ' izvrsavanje, RestoreRuntimeAfterImport se nikad ne izvrsi i ostaju
+    ' ugaseni -- tada bi Ctrl+S prosao neometano. Pre ove tacke gasenje je
+    ' bezopasno (projekat je netaknut), pa se evenata odricemo samo za
+    ' teardown, ne i za destruktivni deo.
+    Application.EnableEvents = True
+
     ' 6) STALE PRVO: zaostala forma/modul moze da referencira ono cega u novom
     '    izvoru vise nema i da obori compile; ako izvor kaze da ne postoji, nema
     '    razloga da je nosimo kroz ostatak importa.
@@ -451,7 +460,11 @@ Public Sub ImportAllVBA_Phase2()
         GoTo FAIL
     End If
 
-    Application.EnableEvents = False
+    ' Eventi OSTAJU ukljuceni: faza 2 se izvrsava nad projektom kome je faza 1 vec
+    ' uklonila komponente, dakle nepotpunim. Kad bi bili ugaseni, a VBE prekinuo
+    ' izvrsavanje, Ctrl+S bi prosao mimo jedine globalne kapije
+    ' (ThisWorkbook.Workbook_BeforeSave) i zabetonirao to stanje. Isti razlog kao
+    ' u fazi 1, na tacki prve mutacije.
     Application.ScreenUpdating = False
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
@@ -1416,10 +1429,14 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     SaveSetting IMPORT_REG_APP, sec, "sum", ""
     SaveSetting IMPORT_REG_APP, sec, "selfnote", ""
     SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
-    ' Nov prolaz krece sa CISTIM "mutated": sekcija se ponovo koristi, pa bi
-    ' zaostalo "1" iz ranijeg prekinutog prolaza blokiralo Save i posle importa
-    ' koji nista nije dirnuo. Ide PRE "pending", koji se upisuje poslednji.
-    SaveSetting IMPORT_REG_APP, sec, "mutated", ""
+    ' "mutated" se NAMERNO NE resetuje ovde. Nov pokusaj importa NIJE dokaz da
+    ' je raniji popravljen: BeginImportTransaction se izvrsava PRE teardown-a i
+    ' PRE ValidateFormDesigner, pa prolaz koji tu padne nije nista popravio --
+    ' a reset bi ga proglasio bezbednim i pustio Save nad jos uvek nepotpunim
+    ' projektom. Bit je monoton: prva mutacija ga pali, gasi ga samo brisanje
+    ' cele transakcije (ClearImportPhase2State), tj. verifikovan uspeh ili
+    ' dokaz da je projekat vec usaglasen. Isti princip po kome RecoverImportState
+    ' ne brise zatecen marker.
     SaveSetting IMPORT_REG_APP, sec, "pending", "1"
     BeginImportTransaction = True
     Exit Function
