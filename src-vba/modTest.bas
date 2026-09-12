@@ -494,6 +494,7 @@ Public Sub RunAllTests()
     RunOne 204
     RunOne 205
     RunOne 206
+    RunOne 207
     RunOne 124
     RunOne 125
     RunOne 126
@@ -772,6 +773,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 204: TestName = "T_AutoSave_PrekinutImportNeSnima"
         Case 205: TestName = "T_Save_PrekinutImportZatvaraSvaVrata"
         Case 206: TestName = "T_ImportMarker_PendingBezMutacijeNeBlokira"
+        Case 207: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -986,6 +988,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 204: T_AutoSave_PrekinutImportNeSnima
         Case 205: T_Save_PrekinutImportZatvaraSvaVrata
         Case 206: T_ImportMarker_PendingBezMutacijeNeBlokira
+        Case 207: T_Backup_NeObaraStartINeRasteBezGranice
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6516,6 +6519,82 @@ Private Function NewOtkupUIForm() As frmOtkupUI
     End If
 
     Set NewOtkupUIForm = f
+End Function
+
+' ============================================================
+' 207. Backup ne sme ni da obori start ni da raste bez granice
+' ============================================================
+' Dva merena kvara od 12.09.2026:
+'
+'   1. BackupFileOnStart je zavrsavao Err.Raise-om, a zove se iz StartApp -- pun
+'      disk je oborio CELO pokretanje. Operater je dobio "Greska pri pokretanju"
+'      i nije mogao da radi nista, zbog kopije koja je samo sigurnosna mreza.
+'
+'   2. PurgeOldBackups je datum citao sa FIKSNE pozicije (Mid$(ime, tacka-15,10)),
+'      sto radi samo za "<baza>_2026-03-18_0845.xlsm". Kopije koje modVbaTools
+'      pravi pred import imaju sestocifreno vreme, pa im datum nije prepoznavan i
+'      nikad se nisu brisale. Uz to je starost bila jedino pravilo, a backup se
+'      pravi na SVAKI start.
+'
+' Odluke su izdvojene u ciste funkcije bas da bi bile merljive bez fajl-sistema.
+Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
+    Dim danas As Date
+    Dim nista As Variant, prosli As Variant
+    Dim brisi As String
+    Dim uspeoNemoguc As Boolean
+    Dim errNum As Long, errDesc As String
+
+    danas = DateSerial(2026, 9, 12)
+
+    ' --- datum se nalazi u OBA oblika imena, i nigde gde ga nema
+    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova_2026-03-18_0845.xlsm"), _
+             DateSerial(2026, 3, 18), "datum iz redovne kopije"
+    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova_pre-vba-import_2026-09-12_100852.xlsm"), _
+             DateSerial(2026, 9, 12), "datum iz pre-vba-import kopije (sestocifreno vreme)"
+    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova.xlsm"), CDate(0), _
+             "ime bez datuma ne daje datum"
+    AssertEq modJournaling.BackupDatumIzImena("izvestaj_1999-01-01.xlsx"), CDate(0), _
+             "godina van 20xx se ne prihvata"
+
+    ' --- ime bez datuma se NE brise: radije zaostala kopija nego tudj fajl
+    nista = Array("AgriX_DEV_nova.xlsm", "tudji_fajl.xlsx")
+    AssertEq modJournaling.BackupZaBrisanje(nista, danas), "", _
+             "imena bez datuma se ne brisu"
+
+    ' --- starost: 40 dana odlazi, jucerasnja ostaje
+    prosli = Array("AgriX_2026-08-03_0800.xlsm", "AgriX_2026-09-11_0800.xlsm")
+    brisi = modJournaling.BackupZaBrisanje(prosli, danas)
+    AssertEq (InStr(brisi, "2026-08-03") > 0), True, "starija od 30 dana ide na brisanje"
+    AssertEq (InStr(brisi, "2026-09-11") > 0), False, "jucerasnja kopija ostaje"
+
+    ' --- broj: 25 kopija ISTOG dana -- starost ne pomaze, granica broja mora
+    AssertEq (Len(BackupBrojIzTestSpiska(danas, 25)) > 0), True, _
+             "granica broja brise visak i kad su sve kopije nove"
+    AssertEq (Len(BackupBrojIzTestSpiska(danas, 5)) = 0), True, _
+             "ispod granice broja se ne brise nista"
+
+    ' --- fail-soft: nemoguc folder vraca False i NE podize gresku
+    On Error GoTo EH
+    uspeoNemoguc = modJournaling.BackupFileOnStart("Z:\\ne\\postoji\\nikako")
+    On Error GoTo 0
+    AssertEq uspeoNemoguc, False, "backup u nemoguc folder vraca False"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error GoTo 0
+    AssertEq "podigao gresku " & errNum & " " & errDesc, "bez greske", _
+             "BackupFileOnStart NE SME da podigne gresku -- start bi pao"
+End Sub
+
+' n kopija istog dana; vraca sta bi se obrisalo. Odvojeno da tvrdnja gore ostane
+' citljiva -- niz se gradi u petlji, ne rukom.
+Private Function BackupBrojIzTestSpiska(ByVal danas As Date, ByVal n As Long) As String
+    Dim niz() As String, i As Long
+    ReDim niz(0 To n - 1)
+    For i = 0 To n - 1
+        niz(i) = "AgriX_" & Format$(danas, "yyyy-mm-dd") & "_" & Format$(700 + i, "0000") & ".xlsm"
+    Next i
+    BackupBrojIzTestSpiska = modJournaling.BackupZaBrisanje(niz, danas)
 End Function
 
 ' ============================================================

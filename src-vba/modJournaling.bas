@@ -21,6 +21,11 @@ Private Const JOURNAL_FOLDER As String = "Journal"
 Private Const JOURNAL_MAX_DAYS As Long = 30
 Private Const BACKUP_FOLDER As String = "Backup"
 Private Const BACKUP_MAX_DAYS As Long = 30
+' Starost sama nije dovoljna: backup se pravi na SVAKI start, pa 30 dana rada
+' znaci desetine kopija po 10 MB. Mereno 12.09.2026: disk je pao na 1 GB od 233,
+' a pad backupa je tog jutra oborio pokretanje aplikacije. Zato i gornja granica
+' broja kopija -- brise se sto je starije OD BILO KOG od dva pravila.
+Private Const BACKUP_MAX_KEEP As Long = 20
 
 ' ============================================================
 ' AutoSave state -- AR-002
@@ -251,7 +256,20 @@ End Function
 ' PUBLIC - File Backup (aufgerufen aus modMain.StartApp)
 ' ============================================================
 
-Public Sub BackupFileOnStart()
+' Vraca True ako backup postoji posle poziva, False ako nije napravljen.
+'
+' NIKAD NE PODIZE GRESKU. Do 12.09.2026. je zavrsavala sa Err.Raise, a zove se
+' iz StartApp -- pa je pun disk oborio CELO pokretanje aplikacije: operater je
+' dobio "Greska pri pokretanju" i nije mogao da radi nista. Backup je sigurnosna
+' mreza, ne preduslov ispravnosti; njegov izostanak sme da smanji zastitu, ne da
+' oduzme alat. (Suprotno vazi za MakePreImportBackup u modVbaTools: on stoji PRED
+' destruktivnom operacijom, pa je tamo fail-closed tacan izbor.)
+'
+' Neuspeh se NE gubi: LogErr + Monitor_Backup FAILED su i dosad tu, a pozivalac
+' (modMain.StartApp) sada na False javi operateru toast-om.
+'
+' ciljniFolder je test seam -- prazan znaci normalan "<sveska>\Backup".
+Public Function BackupFileOnStart(Optional ByVal ciljniFolder As String = "") As Boolean
 
     Dim t0 As Single
     t0 = Timer
@@ -267,7 +285,11 @@ Public Sub BackupFileOnStart()
     On Error GoTo EH
     
     srcPath = ThisWorkbook.fullName
-    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    If Len(ciljniFolder) > 0 Then
+        backupPath = ciljniFolder
+    Else
+        backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    End If
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(backupPath, vbDirectory) = "" Then
@@ -295,7 +317,8 @@ Public Sub BackupFileOnStart()
     On Error GoTo EH
     
     If existCheck <> "" Then
-        Exit Sub
+        BackupFileOnStart = True      ' kopija za ovaj minut vec postoji
+        Exit Function
     End If
     
     ' Kopieren
@@ -311,8 +334,7 @@ Public Sub BackupFileOnStart()
             errorMessage:=""
     On Error GoTo 0
 
-Exit Sub
-    Exit Sub
+    Exit Function
 EH:
     Dim errNo As Long
     Dim errDesc As String
@@ -343,52 +365,153 @@ EH:
         errorSource:=errSrc
 
 
-    On Error GoTo 0
-    Err.Raise errNo, errSrc, errDesc
-End Sub
+    ' Namerno BEZ Err.Raise -- v. zaglavlje procedure.
+    BackupFileOnStart = False
+End Function
 
-Public Sub PurgeOldBackups()
-    ' Loescht Backup-Dateien die aelter als BACKUP_MAX_DAYS sind
-    ' Basiert auf Dateiname-Datum, nicht File-System-Datum
-    
-    Dim backupPath As String
-    Dim fileName As String
-    Dim filePath As String
-    Dim datePart As String
-    Dim fileDate As Date
-    Dim pos As Long
-    
-    On Error Resume Next
-    
-    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
-    
-    If Dir(backupPath, vbDirectory) = "" Then Exit Sub
-    
-    fileName = Dir(backupPath & "\*.xls*")
-    
-    Do While fileName <> ""
-        ' Datum aus Dateiname extrahieren: ..._2026-03-18_0845.xlsm
-        ' Suche das Muster _YYYY-MM-DD_ (11 Zeichen vor der letzten _HHMM)
-        pos = InStrRev(fileName, ".")
-        If pos > 5 Then
-            ' 5 Zeichen vor dem Punkt: _0845
-            ' 11 Zeichen davor: _2026-03-18
-            datePart = Mid$(fileName, pos - 15, 10)  ' "2026-03-18"
-            
-            If IsDate(datePart) Then
-                fileDate = CDate(datePart)
-                
-                If DateDiff("d", fileDate, Date) > BACKUP_MAX_DAYS Then
-                    filePath = backupPath & "\" & fileName
-                    Kill filePath
-                End If
+' Datum iz imena backup fajla, ili 0 ako ga nema.
+'
+' Trazi obrazac 20YY-MM-DD BILO GDE u imenu, ne na fiksnoj poziciji. Stara
+' verzija je citala Mid$(ime, tacka - 15, 10), sto radi samo za
+' "<baza>_2026-03-18_0845.xlsm". Kopije koje pravi modVbaTools pred import
+' ("<baza>_pre-vba-import_2026-09-12_100852.xlsm") imaju SESTOCIFRENO vreme, pa
+' je prozor promasivao datum -- i te kopije se nikad nisu brisale. Mereno
+' 12.09.2026: u Backup folderu su stajale uz redovne, po 10 MB svaka.
+Public Function BackupDatumIzImena(ByVal ime As String) As Date
+    Dim i As Long, kandidat As String
+    BackupDatumIzImena = 0
+    For i = 1 To Len(ime) - 9
+        kandidat = Mid$(ime, i, 10)
+        If Mid$(kandidat, 5, 1) = "-" And Mid$(kandidat, 8, 1) = "-" Then
+            If Left$(kandidat, 2) = "20" And IsDate(kandidat) Then
+                BackupDatumIzImena = CDate(kandidat)
+                Exit Function
             End If
         End If
-        
+    Next i
+End Function
+
+' Koje kopije idu na brisanje. Cista odluka nad SPISKOM imena -- bez fajl-sistema,
+' pa je merljiva testom.
+'
+' Dva pravila, brise se po BILO KOM:
+'   starost  > BACKUP_MAX_DAYS
+'   pozicija > BACKUP_MAX_KEEP  (racunato od najnovije)
+'
+' Starost sama nije dovoljna: backup se pravi na svaki start, pa 30 dana rada
+' znaci desetine kopija po 10 MB. Broj sam nije dovoljan: sveska koja se retko
+' otvara bi zadrzala kopije od pre godinu dana.
+'
+' Ime bez prepoznatljivog datuma se NE brise. Radije zaostala kopija nego
+' obrisan tudji fajl -- ovaj folder deli mesto sa sveskom, pa u njemu ume da se
+' nadje i nesto sto app nije napravio.
+'
+' Vraca imena razdvojena sa vbLf ("" ako nema sta).
+Public Function BackupZaBrisanje(ByVal imena As Variant, ByVal danas As Date) As String
+    Dim i As Long, j As Long, n As Long
+    Dim ime As Variant
+    Dim spisak() As String, datumi() As Date
+    Dim tS As String, tD As Date
+    Dim out As String
+
+    If Not IsArray(imena) Then Exit Function
+    On Error GoTo EH
+
+    ReDim spisak(0 To UBound(imena) - LBound(imena))
+    ReDim datumi(0 To UBound(imena) - LBound(imena))
+    n = 0
+    For Each ime In imena
+        tD = BackupDatumIzImena(CStr(ime))
+        If tD > 0 Then
+            spisak(n) = CStr(ime)
+            datumi(n) = tD
+            n = n + 1
+        End If
+    Next ime
+    If n = 0 Then Exit Function
+
+    ' opadajuce po datumu; spisak je kratak pa je prosto umetanje dosta
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If datumi(j) > datumi(i) Then
+                tD = datumi(i): datumi(i) = datumi(j): datumi(j) = tD
+                tS = spisak(i): spisak(i) = spisak(j): spisak(j) = tS
+            End If
+        Next j
+    Next i
+
+    For i = 0 To n - 1
+        If DateDiff("d", datumi(i), danas) > BACKUP_MAX_DAYS Or (i + 1) > BACKUP_MAX_KEEP Then
+            If Len(out) > 0 Then out = out & vbLf
+            out = out & spisak(i)
+        End If
+    Next i
+
+    BackupZaBrisanje = out
+    Exit Function
+EH:
+    LogErr "modJournaling.BackupZaBrisanje"
+End Function
+
+' Obrise stare kopije OVE sveske iz Backup foldera.
+'
+' Obuhvat je SUZEN u odnosu na raniju verziju: gleda samo imena koja pocinju
+' imenom ove sveske. Ranije je uzimala svaki "*.xls*" u folderu, pa bi tudji
+' fajl ostavljen tu bio kandidat za brisanje -- a sada kad postoji i granica
+' broja kopija, to vise nije teorijski rizik.
+Public Sub PurgeOldBackups()
+    Dim backupPath As String, baseName As String
+    Dim fileName As String, spisak As Collection
+    Dim zaBrisanje As Variant, x As Variant
+    Dim niz() As String, i As Long
+    Dim obrisano As Long, pali As Long
+    Dim dotPos As Long
+
+    On Error GoTo EH
+
+    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    If Dir(backupPath, vbDirectory) = "" Then Exit Sub
+
+    baseName = ThisWorkbook.name
+    dotPos = InStrRev(baseName, ".")
+    If dotPos > 0 Then baseName = Left$(baseName, dotPos - 1)
+
+    Set spisak = New Collection
+    fileName = Dir(backupPath & "\" & baseName & "*.xls*")
+    Do While fileName <> ""
+        spisak.Add fileName
         fileName = Dir()
     Loop
-    
-    On Error GoTo 0
+    If spisak.count = 0 Then Exit Sub
+
+    ReDim niz(0 To spisak.count - 1)
+    For i = 1 To spisak.count
+        niz(i - 1) = spisak(i)
+    Next i
+
+    zaBrisanje = Split(BackupZaBrisanje(niz, Date), vbLf)
+    For Each x In zaBrisanje
+        If Len(Trim$(CStr(x))) > 0 Then
+            On Error Resume Next
+            Err.Clear
+            Kill backupPath & "\" & CStr(x)
+            If Err.Number = 0 Then obrisano = obrisano + 1 Else pali = pali + 1
+            On Error GoTo EH
+        End If
+    Next x
+
+    ' Neuspelo brisanje se ne precutkuje: folder koji raste bez reci je i doveo
+    ' do punog diska. Jedan zbirni red, ne red po fajlu.
+    If pali > 0 Then
+        LogError "modJournaling.PurgeOldBackups", _
+                 "Backup retention: obrisano " & obrisano & ", NIJE uspelo " & pali & _
+                 " (fajl zauzet ili nema prava).", 0, "WARN"
+    ElseIf obrisano > 0 Then
+        LogInfo "PurgeOldBackups", "Backup retention: obrisano " & obrisano & " kopija."
+    End If
+    Exit Sub
+EH:
+    LogErr "modJournaling.PurgeOldBackups"
 End Sub
 
 ' ============================================================

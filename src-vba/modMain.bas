@@ -166,7 +166,18 @@ Public Sub StartApp()
     modUiFaze.FazaBootSacekaj 1.2
     modOtkupUI.ShowOtkupUI
 
-    Call BackupFileOnStart
+    ' Backup je sigurnosna mreza, ne preduslov rada: do 12.09.2026. je
+    ' BackupFileOnStart zavrsavao Err.Raise-om, pa je pun disk oborio CELO
+    ' pokretanje -- operater je dobio "Greska pri pokretanju" i ostao bez alata.
+    ' Sada je fail-soft, ali NE i tih: ljuska je vec podignuta (ShowOtkupUI
+    ' iznad), pa se izostanak zastite kaze toast-om, uz LogErr i Monitor_Backup
+    ' FAILED koje sama procedura salje.
+    If Not BackupFileOnStart() Then
+        On Error Resume Next
+        modOtkupUI.ShowToast Poruka("APP_MSG_BACKUP_NIJE_USPEO"), True
+        Err.Clear
+        On Error GoTo EH
+    End If
     Call PurgeOldBackups
     Call PurgeOldJournals
     Call PurgeOldLogs
