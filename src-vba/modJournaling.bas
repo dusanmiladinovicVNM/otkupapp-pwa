@@ -21,6 +21,11 @@ Private Const JOURNAL_FOLDER As String = "Journal"
 Private Const JOURNAL_MAX_DAYS As Long = 30
 Private Const BACKUP_FOLDER As String = "Backup"
 Private Const BACKUP_MAX_DAYS As Long = 30
+' Starost sama nije dovoljna: backup se pravi na SVAKI start, pa 30 dana rada
+' znaci desetine kopija po 10 MB. Mereno 12.09.2026: disk je pao na 1 GB od 233,
+' a pad backupa je tog jutra oborio pokretanje aplikacije. Zato i gornja granica
+' broja kopija -- brise se sto je starije OD BILO KOG od dva pravila.
+Private Const BACKUP_MAX_KEEP As Long = 20
 
 ' ============================================================
 ' AutoSave state -- AR-002
@@ -251,7 +256,20 @@ End Function
 ' PUBLIC - File Backup (aufgerufen aus modMain.StartApp)
 ' ============================================================
 
-Public Sub BackupFileOnStart()
+' Vraca True ako backup postoji posle poziva, False ako nije napravljen.
+'
+' NIKAD NE PODIZE GRESKU. Do 12.09.2026. je zavrsavala sa Err.Raise, a zove se
+' iz StartApp -- pa je pun disk oborio CELO pokretanje aplikacije: operater je
+' dobio "Greska pri pokretanju" i nije mogao da radi nista. Backup je sigurnosna
+' mreza, ne preduslov ispravnosti; njegov izostanak sme da smanji zastitu, ne da
+' oduzme alat. (Suprotno vazi za MakePreImportBackup u modVbaTools: on stoji PRED
+' destruktivnom operacijom, pa je tamo fail-closed tacan izbor.)
+'
+' Neuspeh se NE gubi: LogErr + Monitor_Backup FAILED su i dosad tu, a pozivalac
+' (modMain.StartApp) sada na False javi operateru toast-om.
+'
+' ciljniFolder je test seam -- prazan znaci normalan "<sveska>\Backup".
+Public Function BackupFileOnStart(Optional ByVal ciljniFolder As String = "") As Boolean
 
     Dim t0 As Single
     t0 = Timer
@@ -267,7 +285,11 @@ Public Sub BackupFileOnStart()
     On Error GoTo EH
     
     srcPath = ThisWorkbook.fullName
-    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    If Len(ciljniFolder) > 0 Then
+        backupPath = ciljniFolder
+    Else
+        backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    End If
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(backupPath, vbDirectory) = "" Then
@@ -295,24 +317,37 @@ Public Sub BackupFileOnStart()
     On Error GoTo EH
     
     If existCheck <> "" Then
-        Exit Sub
+        BackupFileOnStart = True      ' kopija za ovaj minut vec postoji
+        Exit Function
     End If
     
     ' Kopieren
     ThisWorkbook.SaveCopyAs destPath
+
+    ' Uspeh se TVRDI tek kad fajl stvarno postoji. Bez ovog reda je funkcija
+    ' padala na podrazumevano False i StartApp je na svakom normalnom startu
+    ' javljao operateru da backup nije napravljen -- laz u suprotnom smeru.
+    If Len(Dir(destPath)) = 0 Then
+        Err.Raise 53, "BackupFileOnStart", "SaveCopyAs nije prijavio gresku, ali fajl ne postoji: " & destPath
+    End If
+    BackupFileOnStart = True
     
     LogInfo "BackupFileOnStart", "Backup erstellt: " & destName
+    ' Monitoring ide na mrezu. Iz testa se NE salje: bez ovog garda je RunAllTests
+    ' visio 9 minuta na cekanju endpointa umesto da prijavi rezultat. Isti razlog
+    ' zbog koga postoji IsTestModeQuiet za journal.
     On Error Resume Next
+    If Not IsTestMode() Then
         Monitor_Backup _
             backupType:="STARTUP_BACKUP", _
             status:="SUCCESS", _
             backupLocation:="Startup backup completed", _
             durationMs:=CLng((Timer - t0) * 1000), _
             errorMessage:=""
+    End If
     On Error GoTo 0
 
-Exit Sub
-    Exit Sub
+    Exit Function
 EH:
     Dim errNo As Long
     Dim errDesc As String
@@ -322,8 +357,23 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    LogErr "modJournaling.BackupFileOnStart"
+    ' On Error Resume Next ide ODMAH posle citanja Err, PRE logovanja i
+    ' monitoringa. Ugovor ove procedure je "NIKAD NE PODIZE GRESKU", pa unutar EH
+    ' bloka nista ne sme da ga ponisti. Greska podignuta u rukovaocu greske je
+    ' NEUHVACENA i izlazi iz procedure -- a StartApp bi tada opet pao, sto je
+    ' tacno kvar koji se ovde leci.
+    '
+    ' Mereno: LogErr danas ne moze da pukne (LogError pocinje sa On Error Resume
+    ' Next i sav upis je unutra). Ali ugovor ne sme da visi o TUDJEM internom
+    ' rukovanju greskom -- dovoljno je da neko skloni taj gard iz modLogError i
+    ' ova tvrdnja tiho prestane da vazi, bas na punom disku gde se najvise racuna.
+    ' LogError sa SACUVANIM vrednostima, ne LogErr: "On Error Resume Next" resetuje
+    ' Err, a LogErr pise samo dok je Err.Number <> 0 -- posle garda bi upisao
+    ' PRAZNO. Zamku hvata vba_check pravilom MRTAV_LOG; bez toga bi ova izmena
+    ' utisala log bas u trenutku kvara koji se loguje.
     On Error Resume Next
+    LogError "modJournaling.BackupFileOnStart", errDesc, errNo
+    If IsTestMode() Then GoTo BezMonitoringa      ' v. gard na uspesnom putu
 
     Monitor_Backup _
         backupType:="STARTUP_BACKUP", _
@@ -342,53 +392,217 @@ EH:
         errorDescription:=errDesc, _
         errorSource:=errSrc
 
+BezMonitoringa:
+    ' Namerno BEZ Err.Raise -- v. zaglavlje procedure.
+    BackupFileOnStart = False
+End Function
 
-    On Error GoTo 0
-    Err.Raise errNo, errSrc, errDesc
-End Sub
+' Vreme nastanka iz imena backup kopije -- i ujedno provera VLASNISTVA.
+' Vraca 0 za sve sto nije jedan od dva kanonska oblika OVE sveske:
+'
+'   <baza>_YYYY-MM-DD_HHMM.xls*                     redovni startup backup
+'   <baza>_pre-vba-import_YYYY-MM-DD_HHMMSS.xls*    kopija pred import (modVbaTools)
+'
+' Zasto tacan oblik, a ne prefiks: "<baza>*" bi u istom folderu pokupio i
+' AgriX_DEV2_..., AgriX_DEV_old_..., AgriX_DEV_test_... To nije egzotika nego
+' zatecen nacin rada -- na disku stoji desetak slicno imenovanih DEV kopija.
+' Retention koji brise sme da bude samo NAJUZI moguci.
+'
+' Vreme, ne samo datum: backup se pravi na svaki start, pa dvadeset kopija istog
+' dana ima isti datum. Sortiranje po datumu bi tada zavisilo od redosleda koji
+' vrati Dir(), pa bi "sacuvaj najnovijih 20" cuvalo proizvoljnih 20.
+'
+' DateSerial/TimeSerial umesto CDate: ISO zapis "2026-03-18" kroz CDate zavisi od
+' locale-a masine, a po ovoj vrednosti se BRISE fajl.
+Public Function BackupVremeIzImena(ByVal ime As String, ByVal baza As String) As Date
+    Dim s As String, tacka As Long, rep As String
+    Dim g As Long, m As Long, d As Long, h As Long, mi As Long, sek As Long
 
-Public Sub PurgeOldBackups()
-    ' Loescht Backup-Dateien die aelter als BACKUP_MAX_DAYS sind
-    ' Basiert auf Dateiname-Datum, nicht File-System-Datum
-    
-    Dim backupPath As String
-    Dim fileName As String
-    Dim filePath As String
-    Dim datePart As String
-    Dim fileDate As Date
-    Dim pos As Long
-    
-    On Error Resume Next
-    
-    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
-    
-    If Dir(backupPath, vbDirectory) = "" Then Exit Sub
-    
-    fileName = Dir(backupPath & "\*.xls*")
-    
-    Do While fileName <> ""
-        ' Datum aus Dateiname extrahieren: ..._2026-03-18_0845.xlsm
-        ' Suche das Muster _YYYY-MM-DD_ (11 Zeichen vor der letzten _HHMM)
-        pos = InStrRev(fileName, ".")
-        If pos > 5 Then
-            ' 5 Zeichen vor dem Punkt: _0845
-            ' 11 Zeichen davor: _2026-03-18
-            datePart = Mid$(fileName, pos - 15, 10)  ' "2026-03-18"
-            
-            If IsDate(datePart) Then
-                fileDate = CDate(datePart)
-                
-                If DateDiff("d", fileDate, Date) > BACKUP_MAX_DAYS Then
-                    filePath = backupPath & "\" & fileName
-                    Kill filePath
-                End If
-            End If
+    BackupVremeIzImena = 0
+    If Len(baza) = 0 Then Exit Function
+
+    tacka = InStrRev(ime, ".")
+    If tacka <= 0 Then Exit Function
+    If LCase$(Left$(Mid$(ime, tacka), 4)) <> ".xls" Then Exit Function
+    s = Left$(ime, tacka - 1)
+
+    If StrComp(Left$(s, Len(baza) + 1), baza & "_", vbTextCompare) <> 0 Then Exit Function
+    rep = Mid$(s, Len(baza) + 2)
+
+    If StrComp(Left$(rep, 15), "pre-vba-import_", vbTextCompare) = 0 Then
+        rep = Mid$(rep, 16)
+        If Len(rep) <> 17 Then Exit Function
+        sek = DeoBroj(rep, 16, 2)
+    ElseIf Len(rep) = 15 Then
+        sek = 0
+    Else
+        Exit Function
+    End If
+
+    If Mid$(rep, 5, 1) <> "-" Or Mid$(rep, 8, 1) <> "-" Or Mid$(rep, 11, 1) <> "_" Then Exit Function
+    g = DeoBroj(rep, 1, 4)
+    m = DeoBroj(rep, 6, 2)
+    d = DeoBroj(rep, 9, 2)
+    h = DeoBroj(rep, 12, 2)
+    mi = DeoBroj(rep, 14, 2)
+
+    If g < 2000 Or g > 2999 Then Exit Function
+    If m < 1 Or m > 12 Or d < 1 Or d > 31 Then Exit Function
+    If h > 23 Or mi > 59 Or sek > 59 Then Exit Function
+
+    On Error GoTo EH
+    BackupVremeIzImena = DateSerial(g, m, d) + TimeSerial(h, mi, sek)
+    Exit Function
+EH:
+    BackupVremeIzImena = 0
+End Function
+
+' Ceo isecak mora biti cifra; -1 ako nije, pa provere opsega odbiju ime.
+Private Function DeoBroj(ByVal s As String, ByVal od As Long, ByVal duz As Long) As Long
+    Dim t As String, i As Long
+    t = Mid$(s, od, duz)
+    If Len(t) <> duz Then
+        DeoBroj = -1
+        Exit Function
+    End If
+    For i = 1 To duz
+        If Mid$(t, i, 1) < "0" Or Mid$(t, i, 1) > "9" Then
+            DeoBroj = -1
+            Exit Function
         End If
-        
+    Next i
+    DeoBroj = CLng(t)
+End Function
+
+' Koje kopije idu na brisanje. Cista odluka nad SPISKOM imena -- bez fajl-sistema,
+' pa je merljiva testom.
+'
+' Dva pravila, brise se po BILO KOM:
+'   starost  > BACKUP_MAX_DAYS
+'   pozicija > BACKUP_MAX_KEEP  (od najnovije, po PUNOM vremenu)
+'
+' cuvajPreImport = True PINUJE sve pre-vba-import kopije, bez obzira na starost i
+' broj. Zove se sa modImportState.ImportNijeDovrsen(): dok recovery nije zatvoren,
+' modVbaTools u registru drzi pokazivac "poslednji siguran backup" (prevbackup)
+' bas na jednu od njih, a RecoverImportState ga prikazuje operateru. Retention koji
+' bi je obrisao ostavio bi poruku koja pokazuje na fajl kog nema -- i ponistio bas
+' onu zastitu zbog koje #312 i #313 postoje. Dok traje opasnost, prostor je
+' jeftiniji od oporavka.
+'
+' Vraca imena razdvojena sa vbLf ("" ako nema sta).
+Public Function BackupZaBrisanje(ByVal imena As Variant, ByVal baza As String, _
+                                 ByVal sada As Date, ByVal cuvajPreImport As Boolean) As String
+    Dim i As Long, j As Long, n As Long
+    Dim ime As Variant
+    Dim spisak() As String, vremena() As Date
+    Dim tS As String, tD As Date
+    Dim out As String
+
+    If Not IsArray(imena) Then Exit Function
+    On Error GoTo EH
+
+    ReDim spisak(0 To UBound(imena) - LBound(imena))
+    ReDim vremena(0 To UBound(imena) - LBound(imena))
+    n = 0
+    For Each ime In imena
+        tD = BackupVremeIzImena(CStr(ime), baza)
+        If tD > 0 Then
+            spisak(n) = CStr(ime)
+            vremena(n) = tD
+            n = n + 1
+        End If
+    Next ime
+    If n = 0 Then Exit Function
+
+    ' opadajuce po PUNOM vremenu; spisak je kratak pa je prosto umetanje dosta
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If vremena(j) > vremena(i) Then
+                tD = vremena(i)
+                vremena(i) = vremena(j)
+                vremena(j) = tD
+                tS = spisak(i)
+                spisak(i) = spisak(j)
+                spisak(j) = tS
+            End If
+        Next j
+    Next i
+
+    For i = 0 To n - 1
+        If cuvajPreImport And InStr(1, spisak(i), "_pre-vba-import_", vbTextCompare) > 0 Then
+            ' pinovano: aktivan recovery artefakt
+        ElseIf DateDiff("d", vremena(i), sada) > BACKUP_MAX_DAYS Or (i + 1) > BACKUP_MAX_KEEP Then
+            If Len(out) > 0 Then out = out & vbLf
+            out = out & spisak(i)
+        End If
+    Next i
+
+    BackupZaBrisanje = out
+    Exit Function
+EH:
+    LogErr "modJournaling.BackupZaBrisanje"
+End Function
+
+' Obrise stare kopije OVE sveske iz Backup foldera.
+Public Sub PurgeOldBackups()
+    Dim backupPath As String, baseName As String
+    Dim fileName As String, spisak As Collection
+    Dim zaBrisanje As Variant, x As Variant
+    Dim niz() As String, i As Long
+    Dim obrisano As Long, pali As Long
+    Dim dotPos As Long
+
+    On Error GoTo EH
+
+    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
+    If Dir(backupPath, vbDirectory) = "" Then Exit Sub
+
+    baseName = ThisWorkbook.name
+    dotPos = InStrRev(baseName, ".")
+    If dotPos > 0 Then baseName = Left$(baseName, dotPos - 1)
+
+    Set spisak = New Collection
+    fileName = Dir(backupPath & "\*.xls*")
+    Do While fileName <> ""
+        spisak.Add fileName
         fileName = Dir()
     Loop
-    
-    On Error GoTo 0
+    If spisak.count = 0 Then Exit Sub
+
+    ReDim niz(0 To spisak.count - 1)
+    For i = 1 To spisak.count
+        niz(i - 1) = spisak(i)
+    Next i
+
+    ' Filtar vlasnistva i oblika je u BackupVremeIzImena; ovde se prosledjuje samo
+    ' ime sveske i stanje recovery markera.
+    zaBrisanje = Split(BackupZaBrisanje(niz, baseName, Now, modImportState.ImportNijeDovrsen()), vbLf)
+    For Each x In zaBrisanje
+        If Len(Trim$(CStr(x))) > 0 Then
+            On Error Resume Next
+            Err.Clear
+            Kill backupPath & "\" & CStr(x)
+            If Err.Number = 0 Then
+                obrisano = obrisano + 1
+            Else
+                pali = pali + 1
+            End If
+            On Error GoTo EH
+        End If
+    Next x
+
+    ' Neuspelo brisanje se ne precutkuje: folder koji raste bez reci je i doveo do
+    ' punog diska. Jedan zbirni red, ne red po fajlu.
+    If pali > 0 Then
+        LogError "modJournaling.PurgeOldBackups", _
+                 "Backup retention: obrisano " & obrisano & ", NIJE uspelo " & pali & _
+                 " (fajl zauzet ili nema prava).", 0, "WARN"
+    ElseIf obrisano > 0 Then
+        LogInfo "PurgeOldBackups", "Backup retention: obrisano " & obrisano & " kopija."
+    End If
+    Exit Sub
+EH:
+    LogErr "modJournaling.PurgeOldBackups"
 End Sub
 
 ' ============================================================
