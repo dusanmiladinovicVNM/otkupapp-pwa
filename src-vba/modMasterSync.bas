@@ -717,6 +717,16 @@ End Function
 '
 ' Kod ispod OSTAJE netaknut: otpremnicu vraca PR7 (nad tblOtpremnicaIzvori),
 ' zbirnu PR8. Ovo NIJE compatibility most nego izricito iskljucenje.
+'
+' PR7 NE SME SAMO DA NAPISE = True.
+'
+' Jedna kapija pokriva tri koraka koji se oslobadjaju u DVA PR-a: otpremnica u
+' PR7, a Malina auto-zbirna i VOZ uvoz tek u PR8. Otkljucavanje ove funkcije u
+' PR7 vratilo bi i dva zbirna koraka koji i dalje pisu Otkup.BrojZbirne -- i
+' kontaminacija koju PR6 zatvara vratila bi se na mala vrata.
+'
+' PR7 kapiju DELI: PwaOtpremnicaDostupna = True, PwaZbirnaDostupna = False.
+' Detalji i test-podela: REFAKTOR S14 (PR7 pre-flight).
 Public Function IzvedeniLanacIzPwaDostupan() As Boolean
     IzvedeniLanacIzPwaDostupan = False
 End Function
@@ -2768,8 +2778,23 @@ End Function
 ' ============================================================
 ' PUBLIC -- Hauptfunktion Zbirna Import
 ' ============================================================
+' Javni ulaz (Alt+F8 / dugme u svesci). Census nad src-vba daje NULA pozivalaca,
+' ali Public Sub bez argumenata je tacno oblik koji se vezuje na dugme u .xlsm --
+' a to se iz izvora ne moze dokazati. Zato handler, ne pretpostavka.
+'
+' Bez njega bi operater na pauziranom lancu dobio VBA runtime error umesto
+' uredne poruke, jer _Core namerno BACA (v. kapiju tamo).
 Public Sub ImportZbirneFromPWA()
+    On Error GoTo EH
+
     Call ImportZbirneFromPWA_Core(True)
+    Exit Sub
+
+EH:
+    Dim opis As String
+    opis = Err.description
+    LogError "ImportZbirneFromPWA", opis, Err.Number
+    MsgBox opis, vbExclamation, APP_NAME
 End Sub
 
 Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean

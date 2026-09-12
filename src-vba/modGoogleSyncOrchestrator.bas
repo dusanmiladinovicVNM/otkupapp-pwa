@@ -193,17 +193,20 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     ' 2b. MALINA: VozacID := StanicaID (pre auto-otpremnice; pali okidac)
-    If IsMalinaMode() Then
+    '
+    ' PRIPREMA za auto-otpremnicu, pa deli njenu sudbinu: dok je izvedeni lanac
+    ' pauziran, upis se ne izvrsava -- i summary to MORA da kaze. Ranije je red
+    ' "OK - Malina: VozacID:=StanicaID" isao bezuslovno, pa je izvestaj tvrdio
+    ' korak koji se nije desio. Nema stete nad podacima, ali status laze.
+    If IsMalinaMode() And Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
+        AppendStepPauza summary, _
+            "Malina VozacID:=StanicaID: nije potrebno dok je izvedeni lanac pauziran"
+    ElseIf IsMalinaMode() Then
         SyncProgress "Malina: popunjavam VozacID iz StanicaID..."
 
         On Error Resume Next
         Err.Clear
-        ' Isti razlog kao kod auto-otpremnice: ovo je PRIPREMA za nju.
-        ' VozacID := StanicaID nad otkup redovima hrani korak koji je pauziran,
-        ' a kolona u ciljnom modelu ne postoji (vozac pripada otpremnici, S4.1c).
-        If modMasterSync.IzvedeniLanacIzPwaDostupan() Then
-            Call StampVozacFromStanicaForMalina_TX
-        End If
+        Call StampVozacFromStanicaForMalina_TX
         errNum = Err.Number
         errDesc = Err.description
         On Error GoTo EH

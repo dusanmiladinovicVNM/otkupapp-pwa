@@ -1139,6 +1139,59 @@ veze nije dovoljan i to je ceo razlog zbog kog tabela članstva postoji.
 **Čime se dokazuje:** `RunBusinessFlowProSuite` + `RunGoldenSuite`; sabotaža nad
 svakom novom kapijom; `who_writes --check-ownership` kao brojčani dokaz za 9 → 1.
 
+#### ⚠ PR7 NE SME SAMO DA OTKLJUČA ZAJEDNIČKU KAPIJU
+
+PR6 je ceo izvedeni lanac stavio iza **jedne** kapije:
+
+```vb
+Public Function IzvedeniLanacIzPwaDostupan() As Boolean
+    IzvedeniLanacIzPwaDostupan = False
+End Function
+```
+
+Za PR6 je to ispravno — maksimalno fail-closed, jer sva tri legacy ulaza pišu
+nazad na zaglavlje otkupa. **Za PR7 nije.** Kapija pokriva tri koraka koji se
+oslobađaju u **dva različita PR-a**:
+
+| Korak | Oslobađa |
+|---|---|
+| auto-Otpremnica iz PWA | **PR7** |
+| Malina auto-Zbirna iz Otpremnice | **PR8** |
+| VOZ/Zbirna import + legacy backlink | **PR8** |
+
+Ako PR7 samo napiše `= True`, zajedno sa novom otpremnicom se **istog trenutka
+vraćaju i dva legacy zbirna koraka** koji i dalje pišu `Otkup.BrojZbirne` — i
+kontaminacija koju je PR6 upravo zatvorio se vraća na mala vrata.
+
+**Obavezno u PR7:** kapija se **deli**, ne otključava.
+
+```
+PR7:   PwaOtpremnicaDostupna = True
+       PwaZbirnaDostupna     = False
+
+PR8:   PwaZbirnaDostupna     = True
+```
+
+Svaki od tri ulaza tada gleda **svoju** kapiju. Test `Test_PWA_IzvedeniLanacJePauziran`
+se u PR7 razdvaja na isti način: otpremnica prolazi, dva zbirna ulaza i dalje
+padaju po imenu.
+
+#### Ugovorna nijansa CRID poređenja (zabeleženo, ne otvoreno)
+
+`PwaIstiSadrzaj` sada poredi `BrojDokumenta` **uslovno**: učestvuje samo kad ga
+PWA izričito pošalje, jer prazan incoming broj znači da ga je master generisao
+lokalno.
+
+Time se hvata `77 → 78` (konflikt), ali **ne** i `77 → prazno`: taj slučaj se iz
+trenutnog zaglavlja ne može razlikovati od „broj je oduvek bio prazan pa ga je
+master dodelio". Za doslovan ugovor „isti payload" trebalo bi pamtiti **da li je
+klijent poslao broj**, a to danas nigde ne stoji.
+
+**Ne otvara se u PR6.** Ako PWA posle rollout-a garantuje da jednom dodeljen broj
+ne nestaje iz istog `ClientRecordID`, trenutni model je praktično dovoljan. Ovde
+stoji da se kasnije ne bi mislilo da se iz zaglavlja može dokazati nešto što ne
+može.
+
 #### LANDING RISK
 
 PR7 dira `modDokumenta`, `modOtkupBlok`, `modAutoHladnjaca`, `modSledljivost` i
