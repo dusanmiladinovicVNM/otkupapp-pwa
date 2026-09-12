@@ -247,6 +247,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_RazresivacImenujeRazlog
     Test_PWA_KonfliktPoParceliITipu
     Test_PWA_PrenosiVremeNastanka
+    Test_PWA_IzvedeniLanacJePauziran
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -1759,7 +1760,7 @@ Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
     ' Scope na test-dan -- run ne sme da zahvati nepovezane otkupe u svesci.
     '
     ' Zove se JEZGRO, ne _TX ulaz: produkcioni ulaz je PAUZIRAN do PR7
-    ' (modMasterSync.AutoOtpremnicaIzPwaDostupna). Pravilo grupisanja koje ovaj
+    ' (modMasterSync.IzvedeniLanacIzPwaDostupan). Pravilo grupisanja koje ovaj
     ' test meri je i dalje ziv kod koji PR7 prepisuje, pa ostaje mereno; a test
     ' ionako drzi sopstvenu transakciju (iznad), pa mu _TX omotac nista ne daje.
     Call modMasterSync.AutoCreateOtpremniceFromPWA(testDate)
@@ -4337,9 +4338,15 @@ Private Sub Test_MalinaAutoZbirnaFailSignal()
     Dim brojOtpNema As String
     brojOtpNema = TEST_PREFIX & "-OTP-NEMA-" & scenario
 
+    ' Zove se JEZGRO, ne _TX ulaz: produkcioni ulaz je PAUZIRAN dok izvedeni
+    ' lanac ne predje na nov model (modMasterSync.IzvedeniLanacIzPwaDostupan).
+    ' Obe provere koje ovaj test meri -- raise bez MALINA_DEFAULT_KUPAC i povrat
+    ' 0 bez otvorene otpremnice -- zive u jezgru (modMasterSync:1108-1114), pa se
+    ' nista ne gubi. Da je ostao na _TX ulazu, prva tvrdnja bi prolazila iz
+    ' POGRESNOG razloga: raise bi dolazio od pauze, ne od nedostajuceg configa.
     Dim raised As Boolean
     On Error Resume Next
-    Call AutoCreateZbirnaFromOtpremnice_TX(brojOtpNema)
+    Call modMasterSync.AutoCreateZbirnaFromOtpremnice(brojOtpNema)
     raised = (Err.Number <> 0)
     Err.Clear
     On Error GoTo EH
@@ -4354,7 +4361,7 @@ Private Sub Test_MalinaAutoZbirnaFailSignal()
     zbrBefore = CountRows(TBL_ZBIRNA)
 
     Dim created As Long
-    created = AutoCreateZbirnaFromOtpremnice_TX(brojOtpNema)
+    created = modMasterSync.AutoCreateZbirnaFromOtpremnice(brojOtpNema)
     AssertEquals "0", CStr(created), _
                  "Malina: bez otvorene otpremnice povrat je 0 (forma javlja da zbirna NIJE kreirana)"
     AssertEquals CStr(zbrBefore), CStr(CountRows(TBL_ZBIRNA)), _
@@ -9900,9 +9907,39 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     AssertEquals CStr(preT), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA tip: nijedan nov red nije nastao"
 
-    ' Kontrola: NEPROMENJEN red je i dalje no-op, ne konflikt.
+    ' --- broj dokumenta: USLOVNO poredjenje ---
+    '
+    ' Prazan incoming broj se IGNORISE (master ga generise lokalno), a izricito
+    ' poslat broj JESTE deo payload-a. Test meri obe strane tog uslova.
+    Dim cridB As String
+    cridB = TEST_PREFIX & "-CRID-BR-" & scenario
+
+    Dim redB As Variant
+    redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 400#, 50#, 20)
+    redB(1, 23) = "77/090926"                          ' GS_BROJ_DOKUMENTA
+
+    Dim prviB As String
+    prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB)
+    AssertTrue Len(prviB) > 0, "PWA broj: prvi uvoz sa izricitim brojem prosao"
+    AssertEquals "77/090926", OtkPolje(prviB, COL_OTK_BR_DOK), _
+                 "PWA broj: izricit broj je zapisan"
+
+    Dim izmenjenB As Variant
+    izmenjenB = redB
+    izmenjenB(1, 23) = "78/090926"
+
+    Dim preB As Long: preB = OtkBrojRedova(TBL_OTKUP)
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB), _
+                 "PWA broj: drugi broj pod istim CRID-om je ODBIJEN"
+    AssertEquals CStr(preB), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA broj: nijedan nov red nije nastao"
+
+    ' Kontrola: NEPROMENJEN red je i dalje no-op, ne konflikt -- i za red BEZ
+    ' broja (master ga je generisao), sto dokazuje da uslov ne lomi taj put.
     AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT), _
                  "PWA kontrola: nepromenjen sadrzaj je i dalje NO-OP"
+    AssertEquals prviB, modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB), _
+                 "PWA kontrola: isti izricit broj je i dalje NO-OP"
 
     Exit Sub
 
@@ -9948,6 +9985,60 @@ Private Sub Test_PWA_PrenosiVremeNastanka()
 EH:
     LogFatal "Test_PWA_PrenosiVremeNastanka", Err.Number, Err.description
 End Sub
+
+' IZVEDENI LANAC JE PAUZIRAN NA SVA TRI ULAZA.
+'
+' Nalaz iz review-a: pauzirana je bila samo auto-otpremnica, a nizvodni koraci su
+' nastavljali -- i oba PISU NAZAD NA ZAGLAVLJE OTKUPA:
+'
+'   AutoCreateZbirnaFromOtpremnice  -> BackfillOtkupBrojZbirneByOtpremnica
+'   ImportVOZRow_RowTX              -> LinkZbirnaToOtkupAndOtpremnica
+'
+' Pun PWA sync je time mogao da napravi canonical otkup, pa da ga odmah
+' KONTAMINIRA starim backlink modelom. Kapija je zato JEDNA i pokriva ceo lanac;
+' test tvrdi da nijedan od tri ulaza ne prolazi, i to PO PORUCI.
+Private Sub Test_PWA_IzvedeniLanacJePauziran()
+    On Error GoTo EH
+
+    AssertTrue Not modMasterSync.IzvedeniLanacIzPwaDostupan(), _
+               "Lanac: kapija je zatvorena"
+
+    ' 1) auto-otpremnica
+    AssertTrue InStr(1, UlazPada("OTP"), "PAUZIRANO", vbTextCompare) > 0, _
+               "Lanac: auto-otpremnica iz PWA je pauzirana"
+
+    ' 2) malina auto-zbirna iz otpremnica
+    AssertTrue InStr(1, UlazPada("ZBR"), "PAUZIRANA", vbTextCompare) > 0, _
+               "Lanac: auto-zbirna iz otpremnica je pauzirana"
+
+    ' 3) VOZ/zbirna uvoz -- BACA sa svojom porukom.
+    '
+    ' Ranije je vracao False, pa se pauza nije razlikovala od "nema VOZ fajlova":
+    ' sabotaza kapije nije obarala nista. Tvrdnja je zato po PORUCI.
+    AssertTrue InStr(1, UlazPada("VOZ"), "PAUZIRAN", vbTextCompare) > 0, _
+               "Lanac: VOZ/zbirna uvoz je pauziran"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_IzvedeniLanacJePauziran", Err.Number, Err.description
+End Sub
+
+' Poruka greske sa ulaza koji mora biti pauziran, ili "" ako je prosao.
+Private Function UlazPada(ByVal koji As String) As String
+    On Error Resume Next
+    Err.Clear
+
+    Select Case koji
+        Case "OTP": Call modMasterSync.AutoCreateOtpremniceFromPWA_TX(NextTestDate())
+        Case "ZBR": Call modMasterSync.AutoCreateZbirnaFromOtpremnice_TX("NEMA-" & NewScenarioCode("LNC"))
+        Case "VOZ": Call modMasterSync.ImportZbirneFromPWA_Core(False)
+    End Select
+
+    If Err.Number <> 0 Then UlazPada = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
 
 Private Sub Test_OTK_VrednostBezStavkiPada()
     On Error GoTo EH

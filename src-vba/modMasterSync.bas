@@ -696,22 +696,29 @@ End Function
 ' nepovezani (produkcioni poziv iz modGoogleSyncOrchestrator). Scope koriste
 ' testovi, isto kao samoBrojOtp u AutoCreateZbirnaFromOtpremnice, da run ne
 ' zahvati nepovezane otkupe u svesci.
-' AUTO-OTPREMNICA IZ PWA OTKUPA JE PAUZIRANA (Otkup cutover).
+' IZVEDENI LANAC (otpremnica -> zbirna) JE PAUZIRAN -- CEO, ne samo prvi korak.
 '
-' Uvoz otkupa JESTE presao na kanonski pisac, ali ovaj korak nije: cita
-' VozacID, OtpremnicaID, Klasu, Kolicinu, Cenu i KolAmbalaze SA ZAGLAVLJA
-' (modMasterSync:759-767) i zove po-klasni SaveOtpremnica_TX. Nov pisac te
-' kolone ne pise -- vozac pripada otpremnici, klasa stavci -- pa bi korak nad
-' novim otkupima nasao NULA kandidata.
+' Uvoz otkupa JESTE presao na kanonski pisac. Sve sto se iz njega IZVODI nije, i
+' svaki od tih koraka PISE NAZAD NA ZAGLAVLJE OTKUPA -- bas ono sto refaktor
+' uklanja. Mereno:
 '
-' Nula nije uspeh. Bez ove kapije pun sync bi prijavio "0 kreirano" i zeleno
-' cekirao korak koji vise ne radi nista -- tiho, i bas na putu koji operater ne
-' gleda red po red. Zato se sposobnost izricito proglasava NEDOSTUPNOM, isto
-' kao panel bloka i auto-lanac hladnjace.
+'   AutoCreateOtpremniceFromPWA        cita VozacID/Klasa/Kolicina/Cena sa
+'                                      zaglavlja (:759-767), pise OtpremnicaID
+'   AutoCreateZbirnaFromOtpremnice     -> BackfillOtkupBrojZbirneByOtpremnica
+'                                      pise Otkup.BrojZbirne
+'   ImportVOZRow_RowTX (VOZ/Zbirna)    -> LinkZbirnaToOtkupAndOtpremnica pise
+'                                      Otkup.BrojZbirne i CITA Otkup.OtpremnicaID
 '
-' Kod ispod OSTAJE netaknut: PR7 ga vraca u pogon nad tblOtpremnicaIzvori.
-Public Function AutoOtpremnicaIzPwaDostupna() As Boolean
-    AutoOtpremnicaIzPwaDostupna = False
+' Pauzirati samo prvi korak nije dovoljno: druga dva bi i dalje KONTAMINIRALA
+' nov otkup starim backlink modelom. Zato je kapija JEDNA i pokriva ceo lanac.
+'
+' Sta OSTAJE aktivno: uvoz otkupa (canonical) i ceo outbound sync. Ciklus se
+' vodi kao DEGRADIRAN, ne kao uspesan i ne kao pad.
+'
+' Kod ispod OSTAJE netaknut: otpremnicu vraca PR7 (nad tblOtpremnicaIzvori),
+' zbirnu PR8. Ovo NIJE compatibility most nego izricito iskljucenje.
+Public Function IzvedeniLanacIzPwaDostupan() As Boolean
+    IzvedeniLanacIzPwaDostupan = False
 End Function
 
 Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date = 0) As Long
@@ -722,7 +729,7 @@ Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date 
 
     On Error GoTo EH
 
-    If Not AutoOtpremnicaIzPwaDostupna() Then
+    If Not IzvedeniLanacIzPwaDostupan() Then
         Err.Raise vbObjectError + 8130, SRC, _
                   "Auto-kreiranje otpremnica iz PWA otkupa je PAUZIRANO dok " & _
                   "otpremnica ne predje na header + stavke (PR7). Otkupi su " & _
@@ -1051,6 +1058,16 @@ End Function
 ' zahvati nepovezane otvorene otpremnice u svesci.
 Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
+
+    ' Deo PAUZIRANOG izvedenog lanca: BackfillOtkupBrojZbirneByOtpremnica pise
+    ' Otkup.BrojZbirne nazad na zaglavlje. Kapija je OVDE, ne na pozivnom mestu,
+    ' jer se rutina zove i iz orkestratora i sa desktopa (modDokUnos) -- steta je
+    ' ista bez obzira ko je pokrenuo.
+    If Not IzvedeniLanacIzPwaDostupan() Then
+        Err.Raise vbObjectError + 8131, SRC, _
+                  "Auto-zbirna iz otpremnica je PAUZIRANA dok izvedeni lanac ne " & _
+                  "predje na header + stavke (PR7/PR8). Zbirne unesi rucno."
+    End If
 
     Dim tx As clsTransaction
 
@@ -1719,7 +1736,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                     ' njegova masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/
                     ' FAILED) je i dalje merena kroz TestHook i PR7 je koristi nad
                     ' otpremnicom.
-                    If AutoOtpremnicaIzPwaDostupna() Then
+                    If IzvedeniLanacIzPwaDostupan() Then
                         vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
                     Else
                         vozResult = MSVOZ_NOCHANGE
@@ -1901,12 +1918,10 @@ End Function
 '
 ' NE UCESTVUJU, i za svako postoji razlog:
 '   OtkupID, CreatedAt, redosled   ocekuje se da se razlikuju
-'   BrojDokumenta                  kad ga PWA ne posalje, master ga generise
-'                                  lokalno -- poredjenje bi prijavljivalo konflikt
-'                                  tamo gde ga nema. Ako PWA broj IZRICITO salje,
-'                                  njegova promena jeste konflikt; to trazi da se
-'                                  zna ko je broj dodelio, sto danas nije zapisano
-'                                  -- imenovano ovde, ne preskoceno cutke.
+'   BrojDokumenta                  USLOVNO: ucestvuje samo kad ga PWA izricito
+'                                  posalje. Prazan incoming broj znaci da ga je
+'                                  master generisao lokalno, pa bi poredjenje
+'                                  prijavljivalo konflikt tamo gde ga nema.
 '   VrstaVoca / SortaVoca          ulaze posredno: iz njih se razresava KulturaID,
 '                                  pa se razlika vidi kroz FK
 '
@@ -1948,6 +1963,23 @@ Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, 
     ' gajbi. Oba menjaju STA dokument tvrdi, dakle oba su konflikt.
     If Not PwaPoljeJednako(otkupID, COL_OTK_PARCELA, parcelaID) Then Exit Function
     If Not PwaPoljeJednako(otkupID, COL_OTK_TIP_AMB, tipAmb) Then Exit Function
+
+    ' BROJ DOKUMENTA: uslovno, i to je jedina postena varijanta.
+    '
+    ' Kad ga PWA NE posalje, master ga generise lokalno -- poredjenje bi tada
+    ' prijavljivalo konflikt tamo gde ga nema, jer se dva generisana broja i
+    ' ocekuje da se razlikuju.
+    '
+    ' Kad ga PWA IZRICITO posalje, on je deo payload-a: isti CRID koji prvi put
+    ' kaze 123 a drugi put 124 tvrdi dve razlicite stvari. Uslov na neprazan
+    ' incoming broj resava to bez ijednog novog polja -- ranije je ovde stajalo da
+    ' bi trebalo znati KO je broj dodelio; ne treba, dovoljno je da li ga je PWA
+    ' poslala.
+    Dim brojIzPwa As String
+    brojIzPwa = Trim$(CStr(nz(data(row, GS_BROJ_DOKUMENTA), "")))
+    If Len(brojIzPwa) > 0 Then
+        If Not PwaPoljeJednako(otkupID, COL_OTK_BR_DOK, brojIzPwa) Then Exit Function
+    End If
 
     Dim dat As Variant
     dat = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
@@ -2741,6 +2773,20 @@ Public Sub ImportZbirneFromPWA()
 End Sub
 
 Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
+    ' Deo PAUZIRANOG izvedenog lanca: ImportVOZRow_RowTX kroz
+    ' LinkZbirnaToOtkupAndOtpremnica pise Otkup.BrojZbirne i cita
+    ' Otkup.OtpremnicaID -- dve kolone koje nov pisac ne odrzava.
+    '
+    ' BACA, ne vraca False. Merenje: False se ne razlikuje od "nema VOZ fajlova"
+    ' ni od "nema pristupa Drive-u", pa bi i test i operater videli isti ishod za
+    ' tri razlicita razloga -- i sabotaza kapije ne bi oborila nista (probano).
+    ' Ide PRE On Error, da ga sopstveni EH ne pretvori u "fatal sync error".
+    If Not IzvedeniLanacIzPwaDostupan() Then
+        Err.Raise vbObjectError + 8132, "ImportZbirneFromPWA_Core", _
+                  "Uvoz zbirnih (VOZ) je PAUZIRAN dok izvedeni lanac ne predje na " & _
+                  "header + stavke (PR7/PR8). Zbirne unesi rucno."
+    End If
+
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection

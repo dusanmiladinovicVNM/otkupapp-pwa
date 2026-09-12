@@ -201,7 +201,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         ' Isti razlog kao kod auto-otpremnice: ovo je PRIPREMA za nju.
         ' VozacID := StanicaID nad otkup redovima hrani korak koji je pauziran,
         ' a kolona u ciljnom modelu ne postoji (vozac pripada otpremnici, S4.1c).
-        If modMasterSync.AutoOtpremnicaIzPwaDostupna() Then
+        If modMasterSync.IzvedeniLanacIzPwaDostupan() Then
             Call StampVozacFromStanicaForMalina_TX
         End If
         errNum = Err.Number
@@ -224,11 +224,11 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     ' 3. Auto-create Otpremnice
     '
-    ' PAUZIRANO do PR7 (v. modMasterSync.AutoOtpremnicaIzPwaDostupna). Korak se
+    ' PAUZIRANO do PR7 (v. modMasterSync.IzvedeniLanacIzPwaDostupan). Korak se
     ' NE preskace tiho i NE prijavljuje kao uspeh sa nulom: to bi bio zeleni
     ' cekic nad koracima koji vise ne rade. Prijavljuje se kao NEDOSTUPAN, i to
     ' ne obara ostatak sinhronizacije -- otkupi jesu uvezeni.
-    If Not modMasterSync.AutoOtpremnicaIzPwaDostupna() Then
+    If Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
         ' okOtpremnice ostaje True samo da ostatak lanca sme da nastavi -- otkupi
         ' JESU uvezeni. Ali ciklus se od ovog trenutka vodi kao DEGRADIRAN, pa
         ' zavrsni verdikt i monitoring ne smeju da kazu SUCCESS.
@@ -270,7 +270,11 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 PosleOtpremnica:
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
-    If IsMalinaMode() Then
+    '
+    ' Pauzirana istom kapijom: pise Otkup.BrojZbirne nazad na zaglavlje.
+    If IsMalinaMode() And Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
+        AppendStepPauza summary, "Malina auto-zbirna: PAUZIRANO do PR7/PR8"
+    ElseIf IsMalinaMode() Then
         SyncProgress "Malina: kreiram zbirne iz otpremnica..."
 
         On Error Resume Next
@@ -295,6 +299,16 @@ PosleOtpremnica:
     End If
 
     ' 4. VOZ/Zbirne import
+    '
+    ' Pauziran istom kapijom: LinkZbirnaToOtkupAndOtpremnica pise
+    ' Otkup.BrojZbirne i cita Otkup.OtpremnicaID. Ciklus tece dalje --
+    ' outbound sync ne zavisi od izvedenog lanca -- ali ostaje DEGRADIRAN.
+    If Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
+        okZbirne = True
+        AppendStepPauza summary, "Uvoz zbirnih (VOZ): PAUZIRANO do PR7/PR8"
+        GoTo PosleZbirnih
+    End If
+
     SyncProgress "Uvozim zbirne vozaca..."
     okZbirne = ImportZbirneFromPWA_Core(False)
     AppendStep summary, okZbirne, "Import VOZ/Zbirne -> tblZbirna"
@@ -308,6 +322,8 @@ PosleOtpremnica:
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
         GoTo CleanExit
     End If
+
+PosleZbirnih:
 
     summary = summary & vbCrLf & "[STAMMDATEN / OUTBOUND]" & vbCrLf
 
@@ -371,14 +387,9 @@ PosleOtpremnica:
 
     If showMessages Then
         If Not pwaLockAcquired Then
-            If SyncPWAFullCycle_Core Then
-                MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
-            ElseIf degradirano Then
-                MsgBox summary & vbCrLf & "Status: DEGRADIRANO -- " & razlogDegradacije, _
-                       vbExclamation, APP_NAME
-            Else
-                MsgBox summary & vbCrLf & "Status: GRE" & ChrW(352) & "KA / PARTIAL", vbExclamation, APP_NAME
-            End If
+            MsgBox summary & vbCrLf & _
+                   StatusTekst(SyncPWAFullCycle_Core, degradirano, razlogDegradacije), _
+                   StatusIkona(SyncPWAFullCycle_Core), APP_NAME
             finalMessageAlreadyShown = True
         End If
     End If
@@ -422,11 +433,11 @@ CleanExit:
             SyncProgress "PWA upis je ponovo dozvoljen."
 
             If showMessages And Not finalMessageAlreadyShown Then
-                If SyncPWAFullCycle_Core Then
-                    MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
-                Else
-                    MsgBox summary & vbCrLf & "Status: GRE" & ChrW(352) & "KA / PARTIAL", vbExclamation, APP_NAME
-                End If
+                ' ISTI renderer kao gore -- ovo je NORMALAN put (lock uredno
+                ' skinut), i bas je on ranije gubio treci ishod.
+                MsgBox summary & vbCrLf & _
+                       StatusTekst(SyncPWAFullCycle_Core, degradirano, razlogDegradacije), _
+                       StatusIkona(SyncPWAFullCycle_Core), APP_NAME
                 finalMessageAlreadyShown = True
             End If
         End If
@@ -459,6 +470,30 @@ End Function
 ' "OK - ... PAUZIRANO", a to je tacno tiho zeleno koje pauza treba da ukine.
 ' Ovaj korak nije ni uspeh ni greska -- ostatak sinhronizacije sme da nastavi,
 ' ali ciklus vise ne sme da se zove uspesnim.
+' Status ciklusa kao TEKST -- jedno mesto, tri ishoda.
+'
+' Postojala su DVA odvojena If bloka za finalnu poruku: jedan za put bez
+' lock-a, drugi u CleanExit posle uspesnog unlock-a. Treci ishod je dodat samo
+' u prvi, pa je operater u NORMALNOM toku (lock uredno skinut) za degradiran
+' ciklus dobijao "GRESKA / PARTIAL" -- poruku koja tvrdi kvar tamo gde ga nema.
+'
+' Dva mesta koja renderuju isti pojam se razidju; jedno ne moze.
+Private Function StatusTekst(ByVal cycleOk As Boolean, ByVal degradirano As Boolean, _
+                             ByVal razlog As String) As String
+    If cycleOk Then
+        StatusTekst = "Status: OK"
+    ElseIf degradirano Then
+        StatusTekst = "Status: DEGRADIRANO -- " & razlog
+    Else
+        StatusTekst = "Status: GRE" & ChrW(352) & "KA / PARTIAL"
+    End If
+End Function
+
+' Ikona poruke prati isti tri-state: degradacija nije kriticna, ali nije ni OK.
+Private Function StatusIkona(ByVal cycleOk As Boolean) As Long
+    StatusIkona = IIf(cycleOk, vbInformation, vbExclamation)
+End Function
+
 Private Sub AppendStepPauza(ByRef summary As String, ByVal stepName As String)
     summary = summary & "PAUZA - " & stepName & vbCrLf
     LogInfo ORCH_MODULE, "PAUZA - " & stepName
@@ -529,8 +564,21 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
         sev = IIf(cycleOk, "INFO", "CRITICAL")
     End If
 
+    ' TRI ISHODA, NE DVA. Namerna pauza nije kvar: da se emituje kao
+    ' PWA_FULL_CYCLE_FAIL, na dashboardu bi svaka degradacija izgledala kao
+    ' realan pad i FAIL brojac bi izgubio znacenje. Degradacija se prepoznaje po
+    ' WARNING severity-ju koji pozivalac prosledjuje uz razlog.
+    Dim tipDogadjaja As String
+    If cycleOk Then
+        tipDogadjaja = "PWA_FULL_CYCLE_SUCCESS"
+    ElseIf sev = "WARNING" Then
+        tipDogadjaja = "PWA_FULL_CYCLE_DEGRADED"
+    Else
+        tipDogadjaja = "PWA_FULL_CYCLE_FAIL"
+    End If
+
     Monitor_Event _
-        eventType:=IIf(cycleOk, "PWA_FULL_CYCLE_SUCCESS", "PWA_FULL_CYCLE_FAIL"), _
+        eventType:=tipDogadjaja, _
         severity:=sev, _
         message:=msg, _
         userId:="Operator", _
@@ -540,7 +588,11 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
         entityID:="PWA-FULL-CYCLE", _
         correlationId:=corrId
 
-    If Not cycleOk Then
+    ' Monitor_Error SAMO za pravi pad. Namerna pauza nije greska -- prijavljena je
+    ' kao PWA_FULL_CYCLE_DEGRADED sa WARNING severity-jem iznad, i tu joj je mesto.
+    ' Da ide i kroz Monitor_Error, svaki degradiran ciklus bi upao u listu gresaka
+    ' i razblazio je.
+    If Not cycleOk And tipDogadjaja = "PWA_FULL_CYCLE_FAIL" Then
         Monitor_Error _
             moduleName:=ORCH_MODULE, _
             procedureName:="SyncPWAFullCycle_Core", _
@@ -548,7 +600,7 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
             entityID:="PWA-FULL-CYCLE", _
             correlationId:=corrId, _
             errorNumber:=0, _
-            errorDescription:="PWA full sync cycle failed or completed degraded. " & msg, _
+            errorDescription:="PWA full sync cycle failed. " & msg, _
             errorSource:=ORCH_MODULE
     End If
 
