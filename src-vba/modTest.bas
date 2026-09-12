@@ -493,6 +493,7 @@ Public Sub RunAllTests()
     RunOne 203
     RunOne 204
     RunOne 205
+    RunOne 206
     RunOne 124
     RunOne 125
     RunOne 126
@@ -770,6 +771,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 203: TestName = "T_Kontekst_NovaStanicaUlaziUListu"
         Case 204: TestName = "T_AutoSave_PrekinutImportNeSnima"
         Case 205: TestName = "T_Save_PrekinutImportZatvaraSvaVrata"
+        Case 206: TestName = "T_ImportMarker_PendingBezMutacijeNeBlokira"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -983,6 +985,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 203: T_Kontekst_NovaStanicaUlaziUListu
         Case 204: T_AutoSave_PrekinutImportNeSnima
         Case 205: T_Save_PrekinutImportZatvaraSvaVrata
+        Case 206: T_ImportMarker_PendingBezMutacijeNeBlokira
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6514,6 +6517,31 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 
     Set NewOtkupUIForm = f
 End Function
+
+' ============================================================
+' 206. "Import je pokrenut" NIJE "projekat je pokvaren"
+' ============================================================
+' Prva verzija kapije je citala samo "pending". Merenje registra prave masine:
+' 14 od 14 sekcija je imalo pending=1 -- jer ga BeginImportTransaction upisuje na
+' POCETKU svakog importa, a brise se samo na verifikovanom uspehu. Ostavlja ga
+' klik na "Ne", pao backup i neuspela provera dizajnera, u svim tim slucajevima
+' nad projektom koji NIJE ni dirnut.
+'
+' Kapija bi tako svaku takvu svesku ucinila TRAJNO NESNIMLJIVOM. Zato odluku
+' nose dva kljuca, a ovaj test vrti celu tablicu istinitosti -- ukljucujuci
+' zatecene sekcije bez "mutated", koje moraju prestati da blokiraju.
+Private Sub T_ImportMarker_PendingBezMutacijeNeBlokira()
+    AssertEq modImportState.MarkerBlokira("1", "1"), True, _
+             "pending + mutated: projekat je dirnut i neverifikovan -- blokira"
+    AssertEq modImportState.MarkerBlokira("1", ""), False, _
+             "pending bez mutacije (klik 'Ne', pao backup) -- NE blokira"
+    AssertEq modImportState.MarkerBlokira("1", "0"), False, _
+             "eksplicitno mutated=0 -- NE blokira"
+    AssertEq modImportState.MarkerBlokira("", "1"), False, _
+             "zavrsen import koji je dirao projekat -- NE blokira"
+    AssertEq modImportState.MarkerBlokira("", ""), False, _
+             "cista sekcija -- NE blokira"
+End Sub
 
 ' ============================================================
 ' 205. Save je zatvoren GLOBALNO, ne samo na tri VBA puta

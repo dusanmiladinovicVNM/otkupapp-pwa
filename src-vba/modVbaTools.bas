@@ -321,7 +321,13 @@ Public Sub ImportAllVBA()
     fatal = ValidateFormDesigner()
     If Len(fatal) > 0 Then GoTo FAIL
 
-    mMutated = True     ' od ove tacke pad NE sme da obrise marker transakcije
+    ' Od ove tacke pad NE sme da obrise marker transakcije. Zapisuje se i
+    ' DURABLE: mMutated je module-level i nestaje sa padom, a bas posle pada
+    ' treba znati da li je projekat uopste DIRNUT. Bez toga "pending" znaci samo
+    ' "import je jednom pokrenut" -- mereno 12.09.2026: 14 od 14 sekcija u
+    ' registru je imalo pending=1, jer ga i klik na "Ne" ostavlja upisanog.
+    mMutated = True
+    SaveSetting IMPORT_REG_APP, P2Section(), "mutated", "1"
 
     ' 6) STALE PRVO: zaostala forma/modul moze da referencira ono cega u novom
     '    izvoru vise nema i da obori compile; ako izvor kaze da ne postoji, nema
@@ -435,6 +441,7 @@ Public Sub ImportAllVBA_Phase2()
     ' "Upozorenje ostaje upisano". Da je faza 2 uopste pokrenuta znaci da je
     ' faza 1 vec uklanjala komponente - dakle mutacija je izvesna.
     mMutated = True
+    SaveSetting IMPORT_REG_APP, sec, "mutated", "1"
     selfNote = GetSetting(IMPORT_REG_APP, sec, "selfnote", "")
     recNote = GetSetting(IMPORT_REG_APP, sec, "recnote", "")
 
@@ -1409,6 +1416,10 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     SaveSetting IMPORT_REG_APP, sec, "sum", ""
     SaveSetting IMPORT_REG_APP, sec, "selfnote", ""
     SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    ' Nov prolaz krece sa CISTIM "mutated": sekcija se ponovo koristi, pa bi
+    ' zaostalo "1" iz ranijeg prekinutog prolaza blokiralo Save i posle importa
+    ' koji nista nije dirnuo. Ide PRE "pending", koji se upisuje poslednji.
+    SaveSetting IMPORT_REG_APP, sec, "mutated", ""
     SaveSetting IMPORT_REG_APP, sec, "pending", "1"
     BeginImportTransaction = True
     Exit Function
