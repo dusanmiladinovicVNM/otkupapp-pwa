@@ -14,6 +14,15 @@ Sta se cuva:
               popravio nista. Reset bi zatecen dokaz stete proglasio bezbednim.
               (Tacno ta greska je bila u prvoj verziji, PR #313.)
 
+  NASLEDJIVANJE
+              mMutated NE SME da krene od False. FAIL grana radi "If Not
+              mMutated Then ClearImportPhase2State", a to brise CELU sekciju --
+              dakle i sticky "mutated" iz ranijeg prolaza. Prolaz koji padne pre
+              sopstvene mutacije bi tako obrisao dokaz TUDJE, jos nepopravljene
+              stete. Isti efekat kao RESET, samo napisan drugacije -- i prva
+              verzija ove kapije ga NIJE videla, pa je bila zelena nad kodom koji
+              krsi invarijantu.
+
   MUTACIJA    "mutated" = "1" mora da se upise na OBE tacke mutacije: u fazi 1
               (pre prve destruktivne operacije) i na ulasku u fazu 2.
 
@@ -97,6 +106,24 @@ def proveri(vbatools_txt, importstate_txt):
             "importa nije dokaz da je raniji popravljen -- prolaz koji padne pre "
             "sopstvene mutacije bi zatecenu stetu proglasio bezbednom.")
 
+    # --- NASLEDJIVANJE -----------------------------------------------------
+    # Drugi oblik istog reseta, koji prva verzija ove kapije NIJE videla: ona je
+    # gledala samo doslovno SaveSetting "mutated","". Ali FAIL grana radi
+    # "If Not mMutated Then ClearImportPhase2State", a to brise CELU sekciju --
+    # pa "mMutated = False" na pocetku prolaza ima IDENTICAN efekat: prolaz koji
+    # padne pre sopstvene mutacije obrise dokaz ranije, jos nepopravljene stete.
+    if re.search(r"^\s*mMutated\s*=\s*False\s*$", vt, re.M):
+        nalazi.append(
+            "NASLEDJIVANJE: mMutated se inicijalizuje na False. FAIL grana tada "
+            "brise CELU sekciju i kad je raniji prolaz stvarno mutirao projekat -- "
+            "isti efekat kao reset \"mutated\", samo napisan drugacije. Mora da "
+            "nasledi zateceno nerazreseno stanje (ImportNijeDovrsen).")
+    elif not re.search(r"mMutated\s*=\s*[\w.]*ImportNijeDovrsen", vt):
+        nalazi.append(
+            "NASLEDJIVANJE: mMutated se ne inicijalizuje iz zatecenog stanja "
+            "(ImportNijeDovrsen) -- FAIL grana ne moze da razlikuje benigni marker "
+            "od dokaza ranije mutacije.")
+
     # --- MUTACIJA ----------------------------------------------------------
     n_set = len(RE_SET1.findall(vt))
     if n_set < 2:
@@ -143,6 +170,8 @@ def proveri(vbatools_txt, importstate_txt):
 
 CIST_VBATOOLS = '''
 Private Sub ImportAllVBA()
+    mMutated = modImportState.ImportNijeDovrsen()
+    If Not mMutated Then ClearImportPhase2State
     mMutated = True
     SaveSetting IMPORT_REG_APP, P2Section(), "mutated", "1"
     Application.EnableEvents = True
@@ -179,6 +208,14 @@ SLUCAJEVI = [
     ("faza 2 gasi evente",
      CIST_VBATOOLS.replace("Private Sub ImportAllVBA_Phase2()\n",
                            "Private Sub ImportAllVBA_Phase2()\n    Application.EnableEvents = False\n"),
+     CIST_STATE, 1),
+    ("mMutated krece od False -- FAIL brise tudji dokaz",
+     CIST_VBATOOLS.replace("mMutated = modImportState.ImportNijeDovrsen()",
+                           "mMutated = False"),
+     CIST_STATE, 1),
+    ("mMutated ne nasledjuje zateceno stanje",
+     CIST_VBATOOLS.replace("mMutated = modImportState.ImportNijeDovrsen()",
+                           "mMutated = (1 = 2)"),
      CIST_STATE, 1),
     ("odluka nazad na jedan kljuc",
      CIST_VBATOOLS,
