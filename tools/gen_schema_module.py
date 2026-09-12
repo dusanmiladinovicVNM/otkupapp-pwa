@@ -155,6 +155,66 @@ End Function
 '
 ' NE popravlja REDOSLED: premestanje kolone u postojecoj tabeli bi pomerilo
 ' podatke. Pogresan redosled je nalaz za coveka, ne nesto sto se leci u prolazu.
+' ============================================================
+' FORMAT CELIJE -- deo ugovora, ne kozmetika.
+'
+' Kolona u General formatu Excel TIHO konvertuje pri upisu: "3/2026" postane
+' datum, "0641234567" izgubi vodecu nulu, 18-cifreni racun kroz Double izgubi
+' poslednje cifre. Vrednost se menja u TRENUTKU UPISA, pa naknadno postavljanje
+' formata NE popravlja vec pokvarene celije -- ono ih samo prikaze kao broj.
+' Zato format mora da stoji PRE prvog upisa i da se tera na svaki start:
+' reinstall, self-update i import vracaju kolone na General.
+'
+' Spisak je generisan iz kljuca "formats" u schema/schema.json. Ne dopunjavati
+' ovde -- ovaj modul je artefakt.
+' ============================================================
+Public Sub PrimeniFormateKanona()
+    Dim reg As Object, tblName As Variant
+    Dim kolone As Object, kolName As Variant
+    Dim lo As ListObject
+
+    On Error Resume Next
+    Set reg = FormatRegistry()
+    For Each tblName In reg.keys
+        Set lo = modDataAccess.GetTable(CStr(tblName))
+        If Not lo Is Nothing Then
+            Set kolone = reg(tblName)
+            For Each kolName In kolone.keys
+                PostaviFormatKolone lo, CStr(kolName), CStr(kolone(kolName))
+            Next kolName
+        End If
+    Next tblName
+    Err.Clear
+End Sub
+
+' Format se postavlja na CELU kolonu tabele (ListColumn.Range), ne na
+' DataBodyRange. Prazna tabela nema DataBodyRange, pa bi izlazak na njemu ostavio
+' sveze napravljenu svesku bez formata -- i PRVI upisan red bi bio pokvaren.
+' Tacno to se desilo 12.09.2026. sa sveskom napravljenom iz kanona.
+Private Sub PostaviFormatKolone(ByVal lo As ListObject, ByVal kolName As String, _
+                                ByVal semanticki As String)
+    Dim col As ListColumn
+    Dim fmt As String
+
+    fmt = ExcelFormat(semanticki)
+    If Len(fmt) = 0 Then Exit Sub
+
+    On Error Resume Next
+    Set col = lo.ListColumns(kolName)
+    If col Is Nothing Then Exit Sub
+    col.Range.NumberFormat = fmt
+    Err.Clear
+End Sub
+
+' Semanticko ime -> Excel format. Kanon nosi znacenje, ne sirov Excel string.
+Private Function ExcelFormat(ByVal semanticki As String) As String
+    Select Case LCase$(semanticki)
+        Case "text":     ExcelFormat = "@"
+        Case "decimal2": ExcelFormat = "0.00"
+        Case Else:       ExcelFormat = ""
+    End Select
+End Function
+
 Public Sub EnsureAllTables()
     Dim reg As Object
     Dim tblName As Variant
@@ -164,6 +224,9 @@ Public Sub EnsureAllTables()
     For Each tblName In reg.keys
         EnsureJednuTabelu CStr(tblName)
     Next tblName
+
+    ' Format ide ODMAH po pravljenju tabela, pre ijednog upisa.
+    PrimeniFormateKanona
 End Sub
 
 ' Odstupanja sveske od kanona. NISTA ne menja -- dijagnostika ne sme da
@@ -540,6 +603,29 @@ End Function
 '''
 
 
+def gen_formati(formats) -> str:
+    """Generisi FormatRegistry() iz kljuca "formats" u kanonu."""
+    red = []
+    red.append("' Ugovor o formatu celije, generisan iz schema/schema.json -> \"formats\".")
+    red.append("Private Function FormatRegistry() As Object")
+    red.append("    Dim reg As Object, k As Object")
+    red.append('    Set reg = CreateObject("Scripting.Dictionary")')
+    red.append("    reg.CompareMode = vbTextCompare")
+    for t in sorted(formats):
+        red.append("")
+        red.append('    Set k = CreateObject("Scripting.Dictionary")')
+        red.append("    k.CompareMode = vbTextCompare")
+        for c in sorted(formats[t]):
+            red.append('    k("%s") = "%s"' % (c, formats[t][c]))
+        red.append('    Set reg("%s") = k' % t)
+    red.append("")
+    red.append("    Set FormatRegistry = reg")
+    red.append("End Function")
+    red.append("")
+    red.append("")
+    return "\n".join(red)
+
+
 def gen_registar(tabele) -> str:
     red = []
     red.append("Private Function BuildRegistry() As Object")
@@ -571,6 +657,7 @@ def gen_registar(tabele) -> str:
 def izgradi(kanon_path: str) -> tuple:
     d = json.load(io.open(kanon_path, encoding="utf-8"))
     tabele = d["tables"]
+    formats = d.get("formats", {})
 
     mapa = tbl_konstante(MODCONFIG)
     greske = []
@@ -582,10 +669,25 @@ def izgradi(kanon_path: str) -> tuple:
                           % (t["table"], t["const"], mapa[t["table"]]))
         if not t["columns"]:
             greske.append("  %s: nema nijednu kolonu" % t["table"])
+    # Ugovor o formatu se proverava naspram kolona: tipfeler mora da umre pri
+    # generisanju, ne u runtime-u nad tudjom sveskom. Format nad nepostojecom
+    # kolonom je tise od greske -- nikad se ne primeni, a spisak izgleda pokriven.
+    kol_po_tabeli = {t["table"]: set(t["columns"]) for t in tabele}
+    for t in sorted(formats):
+        if t not in kol_po_tabeli:
+            greske.append("  formats: tabele %s nema u kanonu" % t)
+            continue
+        for c in sorted(formats[t]):
+            if c not in kol_po_tabeli[t]:
+                greske.append("  formats: %s nema kolonu %s" % (t, c))
+            if formats[t][c] not in ("text", "decimal2"):
+                greske.append("  formats: %s.%s ima nepoznat format %r"
+                              % (t, c, formats[t][c]))
     if greske:
         return None, greske
 
     telo = (ZAGLAVLJE.replace("@@OTISAK@@", otisak(tabele))
+            + gen_formati(formats)
             + gen_registar(tabele) + "\n")
 
     ne_ascii = sorted({c for c in telo if ord(c) > 127})

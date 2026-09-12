@@ -22,6 +22,8 @@ Windows + Excel + pywin32. Semu donora ispisuje tools/dump_schema.py.
 import argparse
 import datetime
 import hashlib
+import io
+import json
 import os
 import shutil
 import sys
@@ -2487,6 +2489,30 @@ def strip_rows(wb) -> list:
     return cleared
 
 
+_FORMATI_KES = None
+
+
+def _format_kolone(table_name: str, col_name: str):
+    """Semanticki format kolone iz kanona ("formats"), ili None.
+
+    Kanon je izvor i ovde, kao i za kolone -- fixture ne sme da nosi svoj spisak
+    koji bi se razisao sa `schema/schema.json`.
+    """
+    global _FORMATI_KES
+    if _FORMATI_KES is None:
+        put = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "schema", "schema.json")
+        try:
+            d = json.load(io.open(put, encoding="utf-8"))
+        except Exception:
+            d = {}
+        _FORMATI_KES = {
+            t.lower(): {c.lower(): v for c, v in kol.items()}
+            for t, kol in (d.get("formats") or {}).items()
+        }
+    return _FORMATI_KES.get(table_name.strip().lower(), {}).get(col_name.strip().lower())
+
+
 def add_row(lo, values: dict, table_name: str) -> None:
     idx = header_index(lo)
     missing = [k for k in values if k.strip().lower() not in idx]
@@ -2507,6 +2533,15 @@ def add_row(lo, values: dict, table_name: str) -> None:
             cell.NumberFormat = "General"
             cell.Value = val.v
         else:
+            # Ugovor o formatu iz kanona: "@" PRE dodele. Posle dodele je kasno --
+            # Excel koercira u trenutku upisa, pa "3/2026" vec bude datum i
+            # naknadni format ga samo prikaze kao broj.
+            #
+            # Donor odredjuje format samo dok ga nasledi; sveska napravljena iz
+            # kanona ima sve u General-u. Mereno 12.09.2026: fixture iz takvog
+            # donora je oborio 10 testova koji sa kodom nemaju veze.
+            if _format_kolone(table_name, key) == "text":
+                cell.NumberFormat = "@"
             cell.Value = val
 
 

@@ -497,6 +497,7 @@ Public Sub RunAllTests()
     RunOne 207
     RunOne 208
     RunOne 209
+    RunOne 210
     RunOne 124
     RunOne 125
     RunOne 126
@@ -778,6 +779,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 207: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
         Case 208: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
         Case 209: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
+        Case 210: TestName = "T_Sema_FormatCelijeCuvaVrednost"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -995,6 +997,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 207: T_Backup_NeObaraStartINeRasteBezGranice
         Case 208: T_AutoSave_PadNeZaglavljujePrekidac
         Case 209: T_Kontekst_NovaKulturaITipAmbalazeUlaze
+        Case 210: T_Sema_FormatCelijeCuvaVrednost
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6526,6 +6529,71 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 
     Set NewOtkupUIForm = f
 End Function
+
+' ============================================================
+' 210. Ugovor o formatu celije stvarno cuva vrednost
+' ============================================================
+' Sveska napravljena iz kanona ima sve kolone u General formatu. Excel tada TIHO
+' konvertuje pri upisu: "3/2026" u BrojFakture postane datum 1.3.2026. Mereno
+' 12.09.2026 -- fixture iz takvog donora je oborio 10 testova koji sa kodom nemaju
+' veze, a u produkciji bi GenerateBrojFakture (trazi "/") dao sledecoj fakturi
+' broj koji vec postoji, i takav bi otisao na SEF.
+'
+' Test meri PRAVO PONASANJE EXCELA, u oba smera nad istom kolonom:
+'   General -> vrednost se pokvari      (dokaz da opasnost postoji i da test meri nju)
+'   ugovor  -> vrednost prezivi         (dokaz da ugovor radi)
+'
+' Bez prvog smera bi test bio zelen i na masini gde Excel uopste ne konvertuje.
+Private Sub T_Sema_FormatCelijeCuvaVrednost()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, col As ListColumn
+    Dim red As Variant, iBroj As Long
+    Dim uGeneralu As String, uUgovoru As String
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_FAKTURE)
+    iBroj = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", "modTest")
+    Set col = lo.ListColumns("BrojFakture")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_FAKTURE
+
+    ' --- smer 1: General kvari vrednost
+    col.Range.NumberFormat = "General"
+    ReDim red(1 To lo.ListColumns.count)
+    red(RequireColumnIndex(TBL_FAKTURE, "FakturaID", "modTest")) = "TST-FMT-1"
+    red(iBroj) = OPASNA
+    AppendRow TBL_FAKTURE, red
+    uGeneralu = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iBroj).value)
+
+    ' --- smer 2: ugovor iz kanona cuva vrednost
+    modSchema.PrimeniFormateKanona
+    ReDim red(1 To lo.ListColumns.count)
+    red(RequireColumnIndex(TBL_FAKTURE, "FakturaID", "modTest")) = "TST-FMT-2"
+    red(iBroj) = OPASNA
+    AppendRow TBL_FAKTURE, red
+    uUgovoru = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iBroj).value)
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq (uGeneralu <> OPASNA), True, _
+             "preduslov: u General formatu Excel POKVARI '" & OPASNA & "' (dobio: " & uGeneralu & ")"
+    AssertEq uUgovoru, OPASNA, _
+             "sa ugovorom iz kanona vrednost prezivi upis"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_FormatCelijeCuvaVrednost", errDesc
+End Sub
 
 ' ============================================================
 ' 209. Nova kultura i nov tip ambalaze takodje moraju u kontekst

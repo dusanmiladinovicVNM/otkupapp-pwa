@@ -984,5 +984,128 @@
         "ModifiedBy"
       ]
     }
-  ]
+  ],
+  "_o_formatima": [
+    "FORMAT CELIJE JE DEO UGOVORA, ne kozmetika. Kolona u General formatu Excel",
+    "TIHO konvertuje pri upisu: \"3/2026\" postane datum, \"0641234567\" izgubi vodecu",
+    "nulu, 18-cifreni racun kroz Double izgubi poslednje cifre. Vrednost se time",
+    "menja u TRENUTKU UPISA -- naknadno postavljanje formata je NE popravlja.",
+    "",
+    "Zato ovde stoje samo kolone sa DOKAZANIM piscem ili citaocem u kodu. Kolona",
+    "bez dokazanog kvara se NE dodaje: pravilo koje niko ne ume da brani zastari.",
+    "",
+    "Kljuc je NAMERNO van \"tables\": otisak seme (gen_schema_module.otisak) racuna",
+    "se iz \"tabela|kolone\", a modSchema.SchemaFingerprintActual cita samo imena",
+    "kolona iz sveske. Format u otisku bi znacio da svaka postojeca sveska na",
+    "startu prijavi trajan drift.",
+    "",
+    "Vrednost je SEMANTICKA (\"text\"), ne sirov Excel string -- generator je mapira",
+    "u \"@\". Numericki formati (danas rucno u modSetup.EnsureRuntimeSchema) mogu",
+    "kasnije ovde kao \"decimal2\", pa da mehanizam bude jedan."
+  ],
+  "formats": {
+    "tblAmbalaza": {
+      "DokumentID": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblBankaImport": {
+      "BankaReferenz": "text",
+      "BrojDokumenta": "text",
+      "PozivNaBroj": "text"
+    },
+    "tblFakturaStavke": {
+      "BrojPrerade": "text",
+      "BrojPrijemnice": "text"
+    },
+    "tblFakture": {
+      "BrojFakture": "text",
+      "SEFDocumentId": "text",
+      "SEFPayloadHash": "text"
+    },
+    "tblKooperanti": {
+      "BPGBroj": "text",
+      "JMBG": "text",
+      "Pin": "text",
+      "TekuciRacun": "text",
+      "Telefon": "text"
+    },
+    "tblKorisnici": {
+      "PIN": "text"
+    },
+    "tblKulture": {
+      "TipAmbalaze": "text"
+    },
+    "tblKupci": {
+      "MaticniBroj": "text",
+      "TekuciRacun": "text"
+    },
+    "tblNovac": {
+      "BrojDokumenta": "text"
+    },
+    "tblOtkup": {
+      "BrojDokumenta": "text",
+      "BrojOtpremnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblOtpremnica": {
+      "BrojOtpremnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblPaleta": {
+      "TipAmbalaze": "text"
+    },
+    "tblPaletaStavka": {
+      "BrojPrijemnice": "text",
+      "BrojZbirne": "text"
+    },
+    "tblParcele": {
+      "KatBroj": "text"
+    },
+    "tblPrerada": {
+      "TipKese": "text",
+      "TipKutije": "text"
+    },
+    "tblPrijemnica": {
+      "BrojPrijemnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblSEFSubmission": {
+      "PayloadHash": "text",
+      "SEFDocumentId": "text"
+    },
+    "tblStanice": {
+      "Kontakt": "text",
+      "PIN": "text"
+    },
+    "tblStornoVeze": {
+      "CompletedAt": "text",
+      "CreatedAt": "text",
+      "NewBroj": "text",
+      "OldBroj": "text"
+    },
+    "tblStornoZurnal": {
+      "Broj": "text",
+      "Timestamp": "text"
+    },
+    "tblTipAmbalaze": {
+      "TipAmbalaze": "text"
+    },
+    "tblUtovar": {
+      "VremeUtovara": "text"
+    },
+    "tblUtovarStavke": {
+      "BrojPrerade": "text"
+    },
+    "tblVozaci": {
+      "PIN": "text",
+      "Telefon": "text"
+    },
+    "tblZbirna": {
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    }
+  }
 }

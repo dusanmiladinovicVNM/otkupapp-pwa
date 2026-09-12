@@ -90,6 +90,66 @@ End Function
 '
 ' NE popravlja REDOSLED: premestanje kolone u postojecoj tabeli bi pomerilo
 ' podatke. Pogresan redosled je nalaz za coveka, ne nesto sto se leci u prolazu.
+' ============================================================
+' FORMAT CELIJE -- deo ugovora, ne kozmetika.
+'
+' Kolona u General formatu Excel TIHO konvertuje pri upisu: "3/2026" postane
+' datum, "0641234567" izgubi vodecu nulu, 18-cifreni racun kroz Double izgubi
+' poslednje cifre. Vrednost se menja u TRENUTKU UPISA, pa naknadno postavljanje
+' formata NE popravlja vec pokvarene celije -- ono ih samo prikaze kao broj.
+' Zato format mora da stoji PRE prvog upisa i da se tera na svaki start:
+' reinstall, self-update i import vracaju kolone na General.
+'
+' Spisak je generisan iz kljuca "formats" u schema/schema.json. Ne dopunjavati
+' ovde -- ovaj modul je artefakt.
+' ============================================================
+Public Sub PrimeniFormateKanona()
+    Dim reg As Object, tblName As Variant
+    Dim kolone As Object, kolName As Variant
+    Dim lo As ListObject
+
+    On Error Resume Next
+    Set reg = FormatRegistry()
+    For Each tblName In reg.keys
+        Set lo = modDataAccess.GetTable(CStr(tblName))
+        If Not lo Is Nothing Then
+            Set kolone = reg(tblName)
+            For Each kolName In kolone.keys
+                PostaviFormatKolone lo, CStr(kolName), CStr(kolone(kolName))
+            Next kolName
+        End If
+    Next tblName
+    Err.Clear
+End Sub
+
+' Format se postavlja na CELU kolonu tabele (ListColumn.Range), ne na
+' DataBodyRange. Prazna tabela nema DataBodyRange, pa bi izlazak na njemu ostavio
+' sveze napravljenu svesku bez formata -- i PRVI upisan red bi bio pokvaren.
+' Tacno to se desilo 12.09.2026. sa sveskom napravljenom iz kanona.
+Private Sub PostaviFormatKolone(ByVal lo As ListObject, ByVal kolName As String, _
+                                ByVal semanticki As String)
+    Dim col As ListColumn
+    Dim fmt As String
+
+    fmt = ExcelFormat(semanticki)
+    If Len(fmt) = 0 Then Exit Sub
+
+    On Error Resume Next
+    Set col = lo.ListColumns(kolName)
+    If col Is Nothing Then Exit Sub
+    col.Range.NumberFormat = fmt
+    Err.Clear
+End Sub
+
+' Semanticko ime -> Excel format. Kanon nosi znacenje, ne sirov Excel string.
+Private Function ExcelFormat(ByVal semanticki As String) As String
+    Select Case LCase$(semanticki)
+        Case "text":     ExcelFormat = "@"
+        Case "decimal2": ExcelFormat = "0.00"
+        Case Else:       ExcelFormat = ""
+    End Select
+End Function
+
 Public Sub EnsureAllTables()
     Dim reg As Object
     Dim tblName As Variant
@@ -99,6 +159,9 @@ Public Sub EnsureAllTables()
     For Each tblName In reg.keys
         EnsureJednuTabelu CStr(tblName)
     Next tblName
+
+    ' Format ide ODMAH po pravljenju tabela, pre ijednog upisa.
+    PrimeniFormateKanona
 End Sub
 
 ' Odstupanja sveske od kanona. NISTA ne menja -- dijagnostika ne sme da
@@ -471,6 +534,168 @@ End Function
 '=====================================================================
 ' REGISTAR -- GENERISANO iz schema/schema.json, ne menjaj rukom
 '=====================================================================
+
+' Ugovor o formatu celije, generisan iz schema/schema.json -> "formats".
+Private Function FormatRegistry() As Object
+    Dim reg As Object, k As Object
+    Set reg = CreateObject("Scripting.Dictionary")
+    reg.CompareMode = vbTextCompare
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("DokumentID") = "text"
+    k("TipAmbalaze") = "text"
+    Set reg("tblAmbalaza") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BankaReferenz") = "text"
+    k("BrojDokumenta") = "text"
+    k("PozivNaBroj") = "text"
+    Set reg("tblBankaImport") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojPrerade") = "text"
+    k("BrojPrijemnice") = "text"
+    Set reg("tblFakturaStavke") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojFakture") = "text"
+    k("SEFDocumentId") = "text"
+    k("SEFPayloadHash") = "text"
+    Set reg("tblFakture") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BPGBroj") = "text"
+    k("JMBG") = "text"
+    k("Pin") = "text"
+    k("TekuciRacun") = "text"
+    k("Telefon") = "text"
+    Set reg("tblKooperanti") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("PIN") = "text"
+    Set reg("tblKorisnici") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipAmbalaze") = "text"
+    Set reg("tblKulture") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("MaticniBroj") = "text"
+    k("TekuciRacun") = "text"
+    Set reg("tblKupci") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    Set reg("tblNovac") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    k("BrojOtpremnice") = "text"
+    k("BrojZbirne") = "text"
+    k("TipAmbalaze") = "text"
+    Set reg("tblOtkup") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojOtpremnice") = "text"
+    k("BrojZbirne") = "text"
+    k("TipAmbalaze") = "text"
+    Set reg("tblOtpremnica") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipAmbalaze") = "text"
+    Set reg("tblPaleta") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojPrijemnice") = "text"
+    k("BrojZbirne") = "text"
+    Set reg("tblPaletaStavka") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("KatBroj") = "text"
+    Set reg("tblParcele") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipKese") = "text"
+    k("TipKutije") = "text"
+    Set reg("tblPrerada") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojPrijemnice") = "text"
+    k("BrojZbirne") = "text"
+    k("TipAmbalaze") = "text"
+    Set reg("tblPrijemnica") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("PayloadHash") = "text"
+    k("SEFDocumentId") = "text"
+    Set reg("tblSEFSubmission") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("Kontakt") = "text"
+    k("PIN") = "text"
+    Set reg("tblStanice") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("CompletedAt") = "text"
+    k("CreatedAt") = "text"
+    k("NewBroj") = "text"
+    k("OldBroj") = "text"
+    Set reg("tblStornoVeze") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("Broj") = "text"
+    k("Timestamp") = "text"
+    Set reg("tblStornoZurnal") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipAmbalaze") = "text"
+    Set reg("tblTipAmbalaze") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("VremeUtovara") = "text"
+    Set reg("tblUtovar") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojPrerade") = "text"
+    Set reg("tblUtovarStavke") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("PIN") = "text"
+    k("Telefon") = "text"
+    Set reg("tblVozaci") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojZbirne") = "text"
+    k("TipAmbalaze") = "text"
+    Set reg("tblZbirna") = k
+
+    Set FormatRegistry = reg
+End Function
 
 Private Function BuildRegistry() As Object
     Dim reg As Object
