@@ -454,6 +454,22 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
                 "Workbook read-only. AutoSave skipped. Source=" & sourceName
         GoTo CleanExit
     End If
+
+    ' Prekinut VBA import -> projekat je mozda NEPOTPUN, a Save ga betonira.
+    ' Provera ide POSLE debounce-a i read-only kapije, ali PRE svakog dodira
+    ' sveske. Vlasnik markera i razlog: modImportState.ImportNijeDovrsen.
+    '
+    ' Cena je svesna i ide u log, ne u tisinu: CommitTx prepusta stvarni upis
+    ' ovoj proceduri (clsTransaction.cls), pa dok marker stoji commitovani
+    ' podaci zive samo u memoriji. Nepotpun VBA projekat je gora steta --
+    ' on prezivi zatvaranje fajla, a nesnimljen red se moze uneti ponovo.
+    If modImportState.ImportNijeDovrsen() Then
+        LogWarn "AutoSaveAfterCommit", _
+                "PREKINUT VBA IMPORT -- AutoSave preskocen da ne bi snimio " & _
+                "nepotpun projekat. Dovrsi ImportAllVBA ili vrati backup. " & _
+                "Source=" & sourceName
+        GoTo CleanExit
+    End If
     
     If Len(Trim$(ThisWorkbook.path)) = 0 Then
         LogWarn "AutoSaveAfterCommit", _

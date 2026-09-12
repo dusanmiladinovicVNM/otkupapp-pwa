@@ -2102,6 +2102,9 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_SL_AUTO_GRESKA", ChrW(10007) & " Automatsko povezivanje prekinuto gre" & ChrW(353) & "kom " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano (vidi ErrorLog)"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
+    ' --- Kapija: prekinut VBA import ne sme da se snimi u svesku ---
+    UpsertRow lo, existing, "OTKUI_MSG_WB_IMPORT_PREKINUT", ChrW(10007) & " Nije snimljeno: prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun. Dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati backup, pa snimi."
+    UpsertRow lo, existing, "APP_MSG_IMPORT_PREKINUT_NE_SNIMAM", "Prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun." & vbCrLf & vbCrLf & "Sveska se zatvara BEZ snimanja " & ChrW(8212) & " snimanje bi u" & ChrW(269) & "inilo o" & ChrW(353) & "te" & ChrW(263) & "enje trajnim." & vbCrLf & vbCrLf & "Posle otvaranja: dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati poslednji backup."
 End Sub
 
 

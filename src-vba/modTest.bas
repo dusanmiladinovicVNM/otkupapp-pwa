@@ -491,6 +491,7 @@ Public Sub RunAllTests()
     RunOne 201
     RunOne 202
     RunOne 203
+    RunOne 204
     RunOne 124
     RunOne 125
     RunOne 126
@@ -766,6 +767,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 201: TestName = "T_Sema_SamoLeci"
         Case 202: TestName = "T_Sema_PrefiksNijeString"
         Case 203: TestName = "T_Kontekst_NovaStanicaUlaziUListu"
+        Case 204: TestName = "T_AutoSave_PrekinutImportNeSnima"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -977,6 +979,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 201: T_Sema_SamoLeci
         Case 202: T_Sema_PrefiksNijeString
         Case 203: T_Kontekst_NovaStanicaUlaziUListu
+        Case 204: T_AutoSave_PrekinutImportNeSnima
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6508,6 +6511,59 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 
     Set NewOtkupUIForm = f
 End Function
+
+' ============================================================
+' 204. Prekinut VBA import ne sme da se snimi u svesku
+' ============================================================
+' 12.09.2026: ImportAllVBA je pukao usred pisanja modLogo (odsecen B64_SPLASH2),
+' dijalog je rekao "NE SNIMAJ svesku" -- a AutoSaveAfterCommit je 60s kasnije
+' snimio. Steta je time prezivela zatvaranje i ponovno otvaranje fajla i vise se
+' nije mogla resiti zatvaranjem bez snimanja; jedini izlaz je bio backup.
+'
+' Zastita je do tada bio KOMENTAR: modVbaTools.RecoverImportState pise da bi
+' "sledeci Save ovo zabetonirao bez ijedne reci", ali to nije sprovodio niko.
+'
+' Test meri ISHOD, ne put: da li se sveska snimila. ThisWorkbook.Saved je jedini
+' pouzdan merac -- postavi se na False, pa se posle poziva gleda da li ga je Save
+' vratio na True.
+'
+' Oba smera su obavezna. Kapija koja uvek preskace Save izgledala bi isto tako
+' "zeleno" na tvrdnji o preskakanju, a ubila bi autosave u normalnom radu -- pa
+' prvi deo testa mora da dokaze da se BEZ markera i dalje snima.
+Private Sub T_AutoSave_PrekinutImportNeSnima()
+    Dim snimioBezMarkera As Boolean, snimioSaMarkerom As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    ' --- smer 1: bez markera se snima (kontrola da kapija nije "uvek preskoci")
+    modImportState.ImportPendingTestSet False
+    modJournaling.ResetAutoSaveStateForTests
+    ThisWorkbook.Saved = False
+    modJournaling.AutoSaveAfterCommit "T_AutoSave.bez-markera", True
+    snimioBezMarkera = ThisWorkbook.Saved
+
+    ' --- smer 2: sa markerom se NE snima
+    modImportState.ImportPendingTestSet True
+    modJournaling.ResetAutoSaveStateForTests
+    ThisWorkbook.Saved = False
+    modJournaling.AutoSaveAfterCommit "T_AutoSave.prekinut-import", True
+    snimioSaMarkerom = ThisWorkbook.Saved
+
+    modImportState.ImportPendingTestSet False
+    modJournaling.ResetAutoSaveStateForTests
+
+    AssertEq snimioBezMarkera, True, _
+             "bez markera AutoSave i dalje snima (kapija nije 'uvek preskoci')"
+    AssertEq snimioSaMarkerom, False, _
+             "sa markerom prekinutog importa AutoSave NE snima svesku"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    modImportState.ImportPendingTestSet False
+    modJournaling.ResetAutoSaveStateForTests
+    Err.Raise errNum, "modTest.T_AutoSave_PrekinutImportNeSnima", errDesc
+End Sub
 
 ' ============================================================
 ' 203. Nov maticni podatak mora da stigne u kontekst otkupa
