@@ -9,6 +9,8 @@ paths:
   - "tools/vba_parity_check.py"
   - "tools/vba_selfupdate_gates.py"
   - "tools/vba_hard_census.py"
+  - "tools/who_writes.py"
+  - "tools/gen_schema_module.py"
   - "tools/sabotaza.py"
   - "tools/make_fixture.py"
   - "tools/dump_schema.py"
@@ -47,9 +49,14 @@ JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, tri kapije
 nad self-update motorom (§8), i dve kapije nad šemom i vlasništvom (§9). CI ne
 pokreće Excel i nikad neće.
 
-Svaki od tih alata ima i `--self-test` korak u istom workflow-u. To nije
-udvajanje: zelen checker nad čistim repoom ne razlikuje „nema greške" od
-„provera ništa ne meri".
+**Šest** od tih alata ima i `--self-test` korak u istom workflow-u:
+`vba_check`, `who_writes`, `run_vba`, `vba_parity_check`,
+`vba_selfupdate_gates`, `vba_hard_census`. To nije udvajanje — zelen checker
+nad čistim repoom ne razlikuje „nema greške" od „provera ništa ne meri".
+
+> `gen_schema_module.py` **nema** self-test, i to je poznata rupa a ne izuzetak:
+> `--check` koji nikad nije pokazan crven ne dokazuje da poredi otisak. Ranija
+> formulacija („svaki od tih alata") je tvrdila suprotno.
 
 ## 2) `tools/vba_check.py` — radi svuda, i u Linux sesiji
 
@@ -298,7 +305,8 @@ svesci ili u tuđem modulu.
 
 `AddTableSnapshot` znači „moja transakcija mora da ume da vrati ovu tabelu", ne
 „ja sam pišem". Koordinator sme da snapshotuje tuđu tabelu i pozove API njenog
-vlasnika. Kapija zato broji **`AppendRow` / `UpdateCell` / `RequireUpdateCell`**.
+vlasnika. Kapija zato broji **mutatore**: `AppendRow`, `UpdateCell` i
+`DeleteRow`, svaki i u `Require` obliku.
 
 Prva verzija je merila pomešano, a `RequireUpdateCell` joj je bio **nevidljiv**:
 regex je tražio granicu reči pred `UpdateCell`, a u `RequireUpdateCell` je nema.
