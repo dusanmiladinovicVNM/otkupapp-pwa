@@ -247,6 +247,64 @@ Test seam-ovi koje produkcioni kod nosi zbog ovoga (`Public` umesto `Private`,
 `.claude/rules/testovi.md` §4 — tamo, jer ih mora videti i onaj ko menja formu, a
 ne samo onaj ko piše test.
 
+## Radna DEV sveska od nule — `tools/make_dev_workbook.py`
+
+Ovo **nije** fixture generator i ta dva alata se ne spajaju:
+
+| Alat | Pravi | VBA | Podaci | Za koga |
+|---|---|---|---|---|
+| `make_fixture.py` | test fixture **iz donor** sveske | **stripuje ga** | sintetički `TST-*` + `.sig` | `run_vba` |
+| `make_dev_workbook.py` | radnu svesku **od nule** | **uvozi ga iz `src-vba/`** | nijedan poslovni | operater / DEV mašina |
+
+```bash
+python tools/make_dev_workbook.py --out ~/Desktop/AgriX_DEV.xlsm
+```
+
+Traži Windows + Excel + `pywin32` + „Trust access to the VBA project object
+model" — isto kao `run_vba.py`. `--self-test` radi svuda, bez Excela.
+
+**Zašto postoji.** `ImportAllVBA` radi *merge* nad **zatečenom** sveskom. Kad se
+VBA projekat te sveske ošteti — posle više self-update ciklusa, pada Excela ili
+punog diska — merge pukne sa `AddFromString failed`, **i pukne i ROLLBACK**, pa
+sveska ne primi ni stari kod koji je do maločas radio. Tada uvoz nije popravka;
+takva sveska se odbacuje. Izmereno u toj situaciji: isti `modOtkup.bas` prolazi i
+`Import` i `AddFromString` u **praznoj** svesci, a pada u oštećenoj — kvar je bio
+u svesci, ne u kodu.
+
+Redosled u alatu je nosiv, ne kozmetički:
+
+1. prazna `.xlsm` uz `EnableEvents = False` — `Workbook_Open` se ne sme okinuti
+   nad sveskom koja još nema tabele;
+2. `Import` svih `.bas` / `.cls` / `.frm`;
+3. `ThisWorkbook` preko `AddFromString` — dokument-modul se **ne može** `Import`-ovati;
+4. `EnsureAllTables` — tabele iz `schema/schema.json`;
+5. `tblLocalConfig` + `tblSEFConfig` iz `make_fixture` (licenca off, da se app digne).
+
+**Sheet `CodeName`.** `EnsureAllTables` pravi listove sa Excel-ovim imenima
+(`Sheet2`, `Sheet3`…), ne semantičkim (`sOtkup`, `sZbirna`…), pa `run_vba` javi
+`SKIP N .doccls`. Bezopasno je iz istog razloga kao kod prazne sveske gore — ali
+samo dok ti `.doccls` fajlovi **nemaju kod**. Kad bi ga neko dodao, alat bi ga
+tiho izgubio, pa je to i jedina stvar koju `--self-test` čuva; padne po imenu
+fajla. Sam brojač se meri u oba smera (prazan i pun sintetički `.doccls`), jer
+zelen self-test nad čistim repoom ne razlikuje „listovi su prazni" od „brojač
+uvek vraća nulu" — prva verzija je imala baš obrnutu grešku.
+
+**Lista „Pregled listova"** (dev dugmad: Pokreni program / Otvori VBA / Migracije /
+Očisti tabele / Uvezi VBA) **ne nastaje** — `NapraviPregledListova` završava
+`MsgBox`-om koji bi obesio automatski poziv, i modul sam kaže da se pokreće ručno.
+Posle prvog otvaranja: `Alt+F8 → NapraviPregledListova`. Za rad nije potrebna;
+`Workbook_Open` sam podiže aplikaciju.
+
+Potvrda posle build-a:
+
+```bash
+python tools/schema_diff.py ~/Desktop/AgriX_DEV.xlsm
+python tools/run_vba.py --workbook ~/Desktop/AgriX_DEV.xlsm --suite RunBusinessFlowProSuite
+```
+
+Druga komanda radi nad **temp kopijom**, pa ne prlja isporučenu svesku. Ako suite
+prođe, projekat se i kompajlira — ne bi se pokrenula da ne može.
+
 ## Fixture i golden
 
 `tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
