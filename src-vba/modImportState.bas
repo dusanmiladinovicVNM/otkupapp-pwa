@@ -33,6 +33,15 @@ Private mTestPending As Boolean
 
 ' Sekcija je scope-ovana po IMENU SVESKE: dve otvorene kopije ne dele stanje
 ' faze 2, pa prekinut import u jednoj ne blokira snimanje druge.
+'
+' POZNATO OGRANICENJE, nasledjeno od modVbaTools.P2Section: kljuc je samo
+' sanitizovano ime fajla. "AgriX-DEV.xlsm" i "AgriX_DEV.xlsm" daju ISTI kljuc, a
+' dve sveske istog imena iz dva foldera ga svakako dele. Dok je marker bio samo
+' recovery bookkeeping to je bila kozmetika; sada je granica bezbednosti
+' snimanja, pa je greska u OBA smera moguca -- lazna blokada tudje sveske i
+' propusteno upozorenje nad svojom. Stabilniji identitet (ime + hash pune
+' putanje) je zaseban posao, ne siri se ovde: promena kljuca bi ostavila zive
+' markere prekinutih importa nevidljivim.
 Public Function ImportSekcija() As String
     Dim s As String, i As Long, ch As String, out As String
     s = ThisWorkbook.name
@@ -54,14 +63,26 @@ End Function
 ' (odsecen B64_SPLASH2), dijalog je rekao "NE SNIMAJ svesku", a
 ' AutoSaveAfterCommit je 60s kasnije snimio. Steta je time prezivela zatvaranje
 ' i ponovno otvaranje fajla; jedini izlaz je bio backup.
+' FAIL-OPEN JE NAMERNA POLITIKA, ne slucajan On Error Resume Next.
+' Ako citanje registra pukne, funkcija vraca False i sveska se sme snimiti.
+' Obrnut izbor (fail-closed) bi kvar registra pretvorio u svesku koja se NIKAD
+' vise ne moze snimiti, na svakoj masini gde se to desi -- a bez ijednog nacina
+' da operater to razresi iz aplikacije. Steta koju ova kapija sprecava nastaje
+' samo u uskom prozoru posle prekinutog importa; steta od fail-closed kvara
+' pogadja normalan rad. Zato: propusti, ali ostavi trag.
 Public Function ImportNijeDovrsen() As Boolean
-    On Error Resume Next
+    Dim v As String
     If mTestPending Then
         ImportNijeDovrsen = True
         Exit Function
     End If
-    ImportNijeDovrsen = (GetSetting(IMPORT_REG_APP, ImportSekcija(), "pending", "") = "1")
-    Err.Clear
+    On Error GoTo EH
+    v = GetSetting(IMPORT_REG_APP, ImportSekcija(), "pending", "")
+    ImportNijeDovrsen = (v = "1")
+    Exit Function
+EH:
+    ImportNijeDovrsen = False
+    LogErr "modImportState.ImportNijeDovrsen"
 End Function
 
 ' Test seam, tvrdo gejtovan -- isti obrazac kao modScrDokumenti.Scr_OtpTestSet
