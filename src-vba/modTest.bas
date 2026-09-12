@@ -495,6 +495,7 @@ Public Sub RunAllTests()
     RunOne 205
     RunOne 206
     RunOne 207
+    RunOne 208
     RunOne 124
     RunOne 125
     RunOne 126
@@ -774,6 +775,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 205: TestName = "T_Save_PrekinutImportZatvaraSvaVrata"
         Case 206: TestName = "T_ImportMarker_PendingBezMutacijeNeBlokira"
         Case 207: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
+        Case 208: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -989,6 +991,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 205: T_Save_PrekinutImportZatvaraSvaVrata
         Case 206: T_ImportMarker_PendingBezMutacijeNeBlokira
         Case 207: T_Backup_NeObaraStartINeRasteBezGranice
+        Case 208: T_AutoSave_PadNeZaglavljujePrekidac
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6522,6 +6525,70 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 End Function
 
 ' ============================================================
+' 208. Pad AutoSave-a ne sme da ubije AutoSave do kraja sesije
+' ============================================================
+' AutoSaveAfterCommit nosi ugovor napisan u svom EH bloku: "AutoSave failure must
+' NEVER propagate". Pozivalac AutoSaveTick je Application.OnTime callback BEZ
+' ijednog rukovaoca greske, pa bi propagacija dala VBA dijalog usred rada.
+'
+' Gora je DRUGA steta, i nju ovaj test meri: reentrancy prekidac
+' m_AutoSaveInProgress se cisti na kraju EH bloka. Ako bi greska izasla ranije,
+' prekidac bi ostao True do kraja sesije i svaki sledeci AutoSave bi tiho izlazio
+' na prvoj liniji -- dok CommitTx i dalje prijavljuje uspeh, a nista se ne snima.
+' Tih gubitak podataka, bez ijedne poruke.
+'
+' STA OVAJ TEST NE MOZE: da natera bas EH blok da pukne iznutra (za to bi
+' Application.DisplayAlerts morao da odbije upis). Meri se UGOVOR kroz pravu
+' proceduru -- greska ne izlazi, prekidac se oslobodi, autosave i dalje radi --
+' a ne konkretan pad u rukovaocu. Redosled garda unutar EH bloka ostaje na
+' pregledu koda.
+Private Sub T_AutoSave_PadNeZaglavljujePrekidac()
+    Dim izaslaGreska As Boolean
+    Dim prekidacPosle As Boolean
+    Dim snimioPosleKvara As Boolean
+    Dim errNum As Long, errDesc As String
+
+    modImportState.ImportPendingTestSet False
+    modJournaling.ResetAutoSaveStateForTests
+
+    ' --- ubrizgan kvar: greska NE SME da izadje iz procedure
+    modJournaling.AutoSaveTestKvar True
+    On Error Resume Next
+    Err.Clear
+    modJournaling.AutoSaveAfterCommit "T_AutoSave.kvar", True
+    izaslaGreska = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+    modJournaling.AutoSaveTestKvar False
+
+    ' --- prekidac mora biti oslobodjen, inace je autosave mrtav do kraja sesije
+    prekidacPosle = modJournaling.AutoSaveUToku()
+
+    ' --- i to se dokazuje POSLEDICOM: sledeci poziv stvarno snima
+    modJournaling.ResetAutoSaveStateForTests
+    ThisWorkbook.Saved = False
+    modJournaling.AutoSaveAfterCommit "T_AutoSave.posle-kvara", True
+    snimioPosleKvara = ThisWorkbook.Saved
+
+    modJournaling.ResetAutoSaveStateForTests
+
+    AssertEq izaslaGreska, False, _
+             "greska iz AutoSaveAfterCommit NE izlazi (AutoSaveTick nema rukovaoca)"
+    AssertEq prekidacPosle, False, _
+             "reentrancy prekidac je oslobodjen posle pada"
+    AssertEq snimioPosleKvara, True, _
+             "posle pada AutoSave i dalje radi -- prekidac nije zaglavljen"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modJournaling.AutoSaveTestKvar False
+    modJournaling.ResetAutoSaveStateForTests
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_AutoSave_PadNeZaglavljujePrekidac", errDesc
+End Sub
+
+' ============================================================
 ' 207. Backup ne sme ni da obori start ni da raste bez granice
 ' ============================================================
 ' Dva merena kvara od 12.09.2026:
@@ -6562,6 +6629,11 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
              "bez vremena nije kanonski oblik"
     AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-13-40_9999.xlsm", "AgriX_DEV"), CDate(0), _
              "nemoguc datum se odbija"
+    ' DateSerial NORMALIZUJE nemoguc datum umesto da pukne: DateSerial(2026,2,31)
+    ' daje 3. mart. Bez round-trip provere bi takvo ime proslo kao kanonska kopija
+    ' i uslo u retention -- dakle moglo bi biti OBRISANO.
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-02-31_0845.xlsm", "AgriX_DEV"), CDate(0), _
+             "31. februar se odbija (DateSerial ga inace prevrne u mart)"
     AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-03-18_0845.txt", "AgriX_DEV"), CDate(0), _
              "nije .xls* -- ne dira se"
 
