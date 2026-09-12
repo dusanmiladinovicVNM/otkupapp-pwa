@@ -6538,64 +6538,99 @@ End Function
 '
 ' Odluke su izdvojene u ciste funkcije bas da bi bile merljive bez fajl-sistema.
 Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
-    Dim danas As Date
-    Dim nista As Variant, prosli As Variant
+    Dim sada As Date, i As Long
+    Dim niz(0 To 24) As String, izmesan(0 To 24) As String
     Dim brisi As String
-    Dim uspeoNemoguc As Boolean
+    Dim uspeoNemoguc As Boolean, uspeoValidan As Boolean
+    Dim tmp As String, imaFajl As Boolean
     Dim errNum As Long, errDesc As String
 
-    danas = DateSerial(2026, 9, 12)
+    sada = DateSerial(2026, 9, 12) + TimeSerial(18, 0, 0)
 
-    ' --- datum se nalazi u OBA oblika imena, i nigde gde ga nema
-    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova_2026-03-18_0845.xlsm"), _
-             DateSerial(2026, 3, 18), "datum iz redovne kopije"
-    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova_pre-vba-import_2026-09-12_100852.xlsm"), _
-             DateSerial(2026, 9, 12), "datum iz pre-vba-import kopije (sestocifreno vreme)"
-    AssertEq modJournaling.BackupDatumIzImena("AgriX_DEV_nova.xlsm"), CDate(0), _
-             "ime bez datuma ne daje datum"
-    AssertEq modJournaling.BackupDatumIzImena("izvestaj_1999-01-01.xlsx"), CDate(0), _
-             "godina van 20xx se ne prihvata"
+    ' --- oba kanonska oblika daju PUNO vreme, ne samo datum
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-03-18_0845.xlsm", "AgriX_DEV"), _
+             DateSerial(2026, 3, 18) + TimeSerial(8, 45, 0), "redovna kopija: datum + vreme"
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_pre-vba-import_2026-09-12_100852.xlsm", "AgriX_DEV"), _
+             DateSerial(2026, 9, 12) + TimeSerial(10, 8, 52), "pre-vba-import kopija: sestocifreno vreme"
 
-    ' --- ime bez datuma se NE brise: radije zaostala kopija nego tudj fajl
-    nista = Array("AgriX_DEV_nova.xlsm", "tudji_fajl.xlsx")
-    AssertEq modJournaling.BackupZaBrisanje(nista, danas), "", _
-             "imena bez datuma se ne brisu"
+    ' --- vlasnistvo: slicno ime NIJE nasa kopija
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV2_2026-03-18_0845.xlsm", "AgriX_DEV"), CDate(0), _
+             "AgriX_DEV2 nije kopija sveske AgriX_DEV"
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_old_2026-03-18_0845.xlsm", "AgriX_DEV"), CDate(0), _
+             "AgriX_DEV_old nije kanonski oblik"
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-03-18.xlsm", "AgriX_DEV"), CDate(0), _
+             "bez vremena nije kanonski oblik"
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-13-40_9999.xlsm", "AgriX_DEV"), CDate(0), _
+             "nemoguc datum se odbija"
+    AssertEq modJournaling.BackupVremeIzImena("AgriX_DEV_2026-03-18_0845.txt", "AgriX_DEV"), CDate(0), _
+             "nije .xls* -- ne dira se"
 
     ' --- starost: 40 dana odlazi, jucerasnja ostaje
-    prosli = Array("AgriX_2026-08-03_0800.xlsm", "AgriX_2026-09-11_0800.xlsm")
-    brisi = modJournaling.BackupZaBrisanje(prosli, danas)
+    brisi = modJournaling.BackupZaBrisanje( _
+        Array("AgriX_2026-08-03_0800.xlsm", "AgriX_2026-09-11_0800.xlsm"), "AgriX", sada, False)
     AssertEq (InStr(brisi, "2026-08-03") > 0), True, "starija od 30 dana ide na brisanje"
     AssertEq (InStr(brisi, "2026-09-11") > 0), False, "jucerasnja kopija ostaje"
 
-    ' --- broj: 25 kopija ISTOG dana -- starost ne pomaze, granica broja mora
-    AssertEq (Len(BackupBrojIzTestSpiska(danas, 25)) > 0), True, _
-             "granica broja brise visak i kad su sve kopije nove"
-    AssertEq (Len(BackupBrojIzTestSpiska(danas, 5)) = 0), True, _
-             "ispod granice broja se ne brise nista"
+    ' --- 25 kopija ISTOG dana: mora otici TACNO pet najstarijih, ne bilo kojih pet.
+    '     Ulaz je namerno IZMESAN -- sortiranje po samom datumu bi ovde zavisilo od
+    '     redosleda koji vrati Dir(), pa bi "sacuvaj najnovijih 20" cuvalo proizvoljnih 20.
+    For i = 0 To 24
+        niz(i) = "AgriX_2026-09-12_" & Format$(700 + i, "0000") & ".xlsm"
+    Next i
+    For i = 0 To 24
+        izmesan(i) = niz((i * 7) Mod 25)
+    Next i
+    brisi = vbLf & modJournaling.BackupZaBrisanje(izmesan, "AgriX", sada, False) & vbLf
+    For i = 0 To 24
+        If i <= 4 Then
+            AssertEq (InStr(brisi, vbLf & niz(i) & vbLf) > 0), True, _
+                     "brise se najstarija " & niz(i)
+        Else
+            AssertEq (InStr(brisi, vbLf & niz(i) & vbLf) > 0), False, _
+                     "ostaje u najnovijih 20: " & niz(i)
+        End If
+    Next i
+
+    ' --- PIN: dok recovery nije zatvoren, pre-import kopija se NE brise ni kad je
+    '     stara. Registar (prevbackup) na nju pokazuje kao "poslednji siguran backup".
+    brisi = modJournaling.BackupZaBrisanje( _
+        Array("AgriX_pre-vba-import_2026-01-05_100852.xlsm"), "AgriX", sada, True)
+    AssertEq brisi, "", "pre-import kopija je pinovana dok traje prekinut import"
+    brisi = modJournaling.BackupZaBrisanje( _
+        Array("AgriX_pre-vba-import_2026-01-05_100852.xlsm"), "AgriX", sada, False)
+    AssertEq (InStr(brisi, "pre-vba-import") > 0), True, _
+             "kad recovery nije aktivan, i pre-import kopija se rotira"
 
     ' --- fail-soft: nemoguc folder vraca False i NE podize gresku
     On Error GoTo EH
-    uspeoNemoguc = modJournaling.BackupFileOnStart("Z:\\ne\\postoji\\nikako")
+    ' Nedozvoljeni znaci, ne nepostojece slovo diska: "Z:\..." bi na nekim
+    ' masinama islo u mrezni lookup sa dugim timeout-om.
+    uspeoNemoguc = modJournaling.BackupFileOnStart(Environ$("TEMP") & "\agrix<nemoguce>ime")
+
+    ' --- pozitivan smer: validan folder vraca True I fajl stvarno nastane.
+    '     Bez ove tvrdnje je suite bio zelen nad ugovorom u kome uspesan backup
+    '     prijavljuje neuspeh -- operater bi na svakom startu video lazno upozorenje.
+    tmp = Environ$("TEMP") & "\agrix_backup_test"
+    If Len(Dir(tmp, vbDirectory)) = 0 Then MkDir tmp
+    uspeoValidan = modJournaling.BackupFileOnStart(tmp)
+    imaFajl = (Len(Dir(tmp & "\*.xls*")) > 0)
+    Kill tmp & "\*.*"
+    RmDir tmp
     On Error GoTo 0
+
     AssertEq uspeoNemoguc, False, "backup u nemoguc folder vraca False"
+    AssertEq uspeoValidan, True, "uspesan backup vraca True (ne lazno upozorenje na startu)"
+    AssertEq imaFajl, True, "posle uspesnog backupa fajl stvarno postoji"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    Kill Environ$("TEMP") & "\agrix_backup_test\*.*"
+    RmDir Environ$("TEMP") & "\agrix_backup_test"
     On Error GoTo 0
     AssertEq "podigao gresku " & errNum & " " & errDesc, "bez greske", _
              "BackupFileOnStart NE SME da podigne gresku -- start bi pao"
 End Sub
-
-' n kopija istog dana; vraca sta bi se obrisalo. Odvojeno da tvrdnja gore ostane
-' citljiva -- niz se gradi u petlji, ne rukom.
-Private Function BackupBrojIzTestSpiska(ByVal danas As Date, ByVal n As Long) As String
-    Dim niz() As String, i As Long
-    ReDim niz(0 To n - 1)
-    For i = 0 To n - 1
-        niz(i) = "AgriX_" & Format$(danas, "yyyy-mm-dd") & "_" & Format$(700 + i, "0000") & ".xlsm"
-    Next i
-    BackupBrojIzTestSpiska = modJournaling.BackupZaBrisanje(niz, danas)
-End Function
 
 ' ============================================================
 ' 206. "Import je pokrenut" NIJE "projekat je pokvaren"
