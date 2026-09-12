@@ -71,18 +71,40 @@ End Function
 ' samo u uskom prozoru posle prekinutog importa; steta od fail-closed kvara
 ' pogadja normalan rad. Zato: propusti, ali ostavi trag.
 Public Function ImportNijeDovrsen() As Boolean
-    Dim v As String
+    Dim sek As String
     If mTestPending Then
         ImportNijeDovrsen = True
         Exit Function
     End If
     On Error GoTo EH
-    v = GetSetting(IMPORT_REG_APP, ImportSekcija(), "pending", "")
-    ImportNijeDovrsen = (v = "1")
+    sek = ImportSekcija()
+    ImportNijeDovrsen = MarkerBlokira( _
+        GetSetting(IMPORT_REG_APP, sek, "pending", ""), _
+        GetSetting(IMPORT_REG_APP, sek, "mutated", ""))
     Exit Function
 EH:
     ImportNijeDovrsen = False
     LogErr "modImportState.ImportNijeDovrsen"
+End Function
+
+' Odluka nad dva kljuca, izdvojena iz citanja registra da bi bila testabilna
+' bez dodirivanja registra prave masine.
+'
+' "pending" sam po sebi NIJE dokaz stete. Postavlja ga BeginImportTransaction na
+' POCETKU svakog importa, a brise se samo na verifikovanom uspehu -- pa ga
+' ostavlja i klik na "Ne", i pao backup, i neuspela provera dizajnera, u svim tim
+' slucajevima nad projektom koji NIJE ni dirnut. Mereno 12.09.2026: 14 od 14
+' sekcija u registru je imalo pending=1. Kapija koja bi citala samo njega ucinila
+' bi svaku takvu svesku trajno nesnimljivom.
+'
+' "mutated" je zato drugi uslov: upisuje ga modVbaTools u trenutku prve stvarne
+' izmene projekta (faza 1) i na ulasku u fazu 2. Tek pending + mutated znaci
+' "projekat je dirnut, a nikad nije verifikovan".
+'
+' Zatecene sekcije bez "mutated" time PRESTAJU da blokiraju -- postojece masine
+' se lece same, bez ijedne rucne intervencije u registru.
+Public Function MarkerBlokira(ByVal pending As String, ByVal mutated As String) As Boolean
+    MarkerBlokira = (pending = "1") And (mutated = "1")
 End Function
 
 ' Test seam, tvrdo gejtovan -- isti obrazac kao modScrDokumenti.Scr_OtpTestSet

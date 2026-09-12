@@ -136,7 +136,7 @@ Private mFormNew As Boolean     ' frmOtkupUI ne postoji -> clean import u fazi 2
 Private mSelfNote As String     ' izvestaj o samom modVbaTools
 Private mRecNote As String      ' izvestaj o prekinutoj ranijoj fazi 2
 Private mPrevBackup As String   ' backup ranije PREKINUTE transakcije (poslednji known-good)
-Private mMutated As Boolean     ' je li dirnuta ijedna komponenta u ovom prolazu
+Private mMutated As Boolean     ' postoji li NERAZRESENA mutacija projekta -- ranija ili iz ovog prolaza
 Private mDesignerDeferred As Boolean  ' dizajner nije procitan (forma je bila ucitana)
 Private mSum As String          ' izvestaj faze 1
 Private mRbFail As String       ' komponente kojima ROLLBACK NIJE uspeo
@@ -194,7 +194,13 @@ Public Sub ImportAllVBA()
     '     nedostajuci moduli se ionako vide u novom planu (nema komponente = novo).
     recNote = RecoverImportState()
     mRecNote = recNote              ' mora prezivi fazu 2 (durable stanje)
-    mMutated = False
+    ' NE krece od False. FAIL grana radi "If Not mMutated Then
+    ' ClearImportPhase2State", a to brise CELU sekciju -- i sticky "mutated"
+    ' iz ranijeg prekinutog prolaza. Prolaz koji padne PRE sopstvene mutacije
+    ' (npr. ValidateFormDesigner) time bi obrisao dokaz TUDJE, jos nepopravljene
+    ' stete i pustio Save nad nepotpunim projektom -- ista klasa greske kao
+    ' reset u BeginImportTransaction, samo napisana drugacije.
+    mMutated = modImportState.ImportNijeDovrsen()
     mDesignerDeferred = False
 
     folder = ResolveFolder(SRC_FOLDER, "Izaberi src-vba folder")
@@ -321,7 +327,22 @@ Public Sub ImportAllVBA()
     fatal = ValidateFormDesigner()
     If Len(fatal) > 0 Then GoTo FAIL
 
-    mMutated = True     ' od ove tacke pad NE sme da obrise marker transakcije
+    ' Od ove tacke pad NE sme da obrise marker transakcije. Zapisuje se i
+    ' DURABLE: mMutated je module-level i nestaje sa padom, a bas posle pada
+    ' treba znati da li je projekat uopste DIRNUT. Bez toga "pending" znaci samo
+    ' "import je jednom pokrenut" -- mereno 12.09.2026: 14 od 14 sekcija u
+    ' registru je imalo pending=1, jer ga i klik na "Ne" ostavlja upisanog.
+    mMutated = True
+    SaveSetting IMPORT_REG_APP, P2Section(), "mutated", "1"
+
+    ' Od ove tacke pa nadalje projekat MOZE biti nepotpun, pa jedina globalna
+    ' kapija nad Save-om (ThisWorkbook.Workbook_BeforeSave) mora da moze da
+    ' opali. PrepareRuntimeForImport je ugasio evente, a ako VBE prekine
+    ' izvrsavanje, RestoreRuntimeAfterImport se nikad ne izvrsi i ostaju
+    ' ugaseni -- tada bi Ctrl+S prosao neometano. Pre ove tacke gasenje je
+    ' bezopasno (projekat je netaknut), pa se evenata odricemo samo za
+    ' teardown, ne i za destruktivni deo.
+    Application.EnableEvents = True
 
     ' 6) STALE PRVO: zaostala forma/modul moze da referencira ono cega u novom
     '    izvoru vise nema i da obori compile; ako izvor kaze da ne postoji, nema
@@ -354,7 +375,12 @@ Public Sub ImportAllVBA()
             fatal = "Nije uspeo upis stanja za 2. fazu (SaveSetting)."
             GoTo FAIL
         End If
-        Application.ScreenUpdating = True          ' ekran radi; eventi ostaju off do faze 2
+        ' Eventi su namerno ON od tacke prve mutacije i OSTAJU ON kroz prozor
+        ' izmedju faza -- tu operater moze da pritisne Ctrl+S nad projektom kome
+        ' su komponente vec uklonjene, pa Workbook_BeforeSave mora da moze da
+        ' opali. Ranije su ovde bili ugaseni; komentar koji je to tvrdio je bio
+        ' zastareo pola sata posle izmene.
+        Application.ScreenUpdating = True
         Application.StatusBar = "ImportAllVBA: 2. faza krece za " & PHASE2_SEC & " s - ne diraj Excel..."
         Application.OnTime Now + TimeSerial(0, 0, PHASE2_SEC), QualifiedProc(PHASE2_PROC)
         Exit Sub                                   ' KRAJ makroa -> VBIDE flush-uje Remove
@@ -435,6 +461,7 @@ Public Sub ImportAllVBA_Phase2()
     ' "Upozorenje ostaje upisano". Da je faza 2 uopste pokrenuta znaci da je
     ' faza 1 vec uklanjala komponente - dakle mutacija je izvesna.
     mMutated = True
+    SaveSetting IMPORT_REG_APP, sec, "mutated", "1"
     selfNote = GetSetting(IMPORT_REG_APP, sec, "selfnote", "")
     recNote = GetSetting(IMPORT_REG_APP, sec, "recnote", "")
 
@@ -444,7 +471,13 @@ Public Sub ImportAllVBA_Phase2()
         GoTo FAIL
     End If
 
-    Application.EnableEvents = False
+    ' Eventi se postavljaju EKSPLICITNO, ne nasledjuju: faza 2 je Public i
+    ' safety-critical, a izvrsava se nad projektom kome je faza 1 vec
+    ' uklonila komponente, dakle nepotpunim. Kad bi bili ugaseni, a VBE prekinuo
+    ' izvrsavanje, Ctrl+S bi prosao mimo jedine globalne kapije
+    ' (ThisWorkbook.Workbook_BeforeSave) i zabetonirao to stanje. Isti razlog kao
+    ' u fazi 1, na tacki prve mutacije.
+    Application.EnableEvents = True
     Application.ScreenUpdating = False
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
@@ -1409,6 +1442,14 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     SaveSetting IMPORT_REG_APP, sec, "sum", ""
     SaveSetting IMPORT_REG_APP, sec, "selfnote", ""
     SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    ' "mutated" se NAMERNO NE resetuje ovde. Nov pokusaj importa NIJE dokaz da
+    ' je raniji popravljen: BeginImportTransaction se izvrsava PRE teardown-a i
+    ' PRE ValidateFormDesigner, pa prolaz koji tu padne nije nista popravio --
+    ' a reset bi ga proglasio bezbednim i pustio Save nad jos uvek nepotpunim
+    ' projektom. Bit je monoton: prva mutacija ga pali, gasi ga samo brisanje
+    ' cele transakcije (ClearImportPhase2State), tj. verifikovan uspeh ili
+    ' dokaz da je projekat vec usaglasen. Isti princip po kome RecoverImportState
+    ' ne brise zatecen marker.
     SaveSetting IMPORT_REG_APP, sec, "pending", "1"
     BeginImportTransaction = True
     Exit Function
