@@ -349,6 +349,11 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
     Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
                              kolicina, cena, tipAmb, kolAmb, klasa)
 
+    ' Sudi se SAMO brojOtp. brojZbirne je DECIJI LINK -- kopija broja koji
+    ' pripada vozacu zbirne i legitimno nosi drugog vlasnika i drugi dan.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                     brojOtp, "SaveOtpremnica"
+
     Dim newID As String
     newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
 
@@ -1114,6 +1119,12 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
     Call ValidateZbirnaInput(vozacID, brojZbirne, kupacID, ukupnoKol, _
                          tipAmb, ukupnoAmb, klasa)
 
+    ' Vlasnik niza zbirne je VOZAC. U malina modu je par-vozac mirror
+    ' stanice (VozacID == StanicaID kao string), pa nasledjen broj
+    ' otpremnice prolazi bez posebne grane.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                     brojZbirne, "SaveZbirna"
+
     Dim newID As String
     newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
 
@@ -1419,6 +1430,9 @@ Private Function CreateZbirna(ByVal h As Object, _
     vozacID = HdrObavezan(h, "VozacID", SRC)
     brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
     kupacID = HdrObavezan(h, "KupacID", SRC)
+
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                     brojZbirne, SRC
 
     ' --- izvor: procitaj, proveri, izvedi ------------------------------------
     Dim data As Variant
@@ -2548,6 +2562,11 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
     RequireTacnoJedan TBL_VOZACI, COL_VOZ_ID, vozacID, "VozacID", SRC
     RequireTacnoJedan TBL_KULTURE, COL_KUL_ID, kulturaID, "KulturaID", SRC
 
+    ' Draft sme da promeni stanicu, datum i broj u istom potezu, pa broj
+    ' koji je bio tacan postane tudj bez ijedne druge provere.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                     brojOtp, SRC
+
     Dim cena As Double
     cena = OtpHdrBrojOpcion(h, "Cena", SRC)
     If cena < 0 Then
@@ -2605,6 +2624,11 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
     RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
     RequireTacnoJedan TBL_VOZACI, COL_VOZ_ID, vozacID, "VozacID", SRC
     RequireTacnoJedan TBL_KULTURE, COL_KUL_ID, kulturaID, "KulturaID", SRC
+
+    ' Draft sme da promeni stanicu, datum i broj u istom potezu, pa broj
+    ' koji je bio tacan postane tudj bez ijedne druge provere.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                     brojOtp, SRC
 
     ' Zaglavlje se menja tek posto se zna da je novo ocekivanje ispravno --
     ' inace bi lose ocekivanje ostavilo pola izmenjen header.
@@ -7172,6 +7196,14 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_OTKUP
 
     If kolAmb > 0 Then
+        ' Kapija broja stoji SAMO ovde, u revers grani. Cist gotovinski
+        ' promet (F5 isplata / F6 uplata) prolazi kroz istu proceduru sa
+        ' kolAmb = 0, nema svoj brojevni niz (broj je slobodan unos) i
+        ' tamo stanicaID postaje partner-OM -- kapija nad celom procedurom
+        ' odbijala bi legitimnu isplatu.
+        modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
+                                         brojDok, "SaveOMUlaz_TX"
+
         Select Case koopSmer
         Case "IZDAVANJE"
             ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):

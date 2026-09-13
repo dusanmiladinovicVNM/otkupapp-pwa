@@ -1032,8 +1032,9 @@ End Sub
 
 ' Otkup golden scenarija -- KANONSKI pisac.
 '
-' brojZbirne se vise NE prosledjuje: broj nikad nije bio veza nego labela (A2),
-' i nov pisac ga ne prima. Golden ga nigde ne cita (mereno: 0 pojava
+' brojZbirne se vise NE prosledjuje: broj NE SME da bude veza nego labela (A2) --
+' pravilo, ne opis zatecenog stanja (BrojZbirne je i danas join kljuc u
+' modDokumenta) -- i nov pisac ga ne prima. Golden ga nigde ne cita (mereno: 0 pojava
 ' COL_OTK_BROJ_ZBIRNE u ovom modulu), pa nijedan scenario time ne gubi tvrdnju.
 '
 ' VozacID takodje odlazi -- vozac pripada otpremnici (S4.1c).

@@ -325,7 +325,11 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
     '
     '   vozacID     vozac pripada otpremnici, ne otkupu (S4.1c)
-    '   brojZbirne  broj nikad nije bio veza nego labela (A2)
+    '   brojZbirne  broj NE SME da bude veza nego labela (A2). Pazi na vreme
+    '               glagola: to je pravilo, ne opis zatecenog stanja -- BrojZbirne
+    '               je i danas join kljuc u modDokumenta (indeks lanca dokumenata,
+    '               Otpremnica -> lista BrojOtpremnice, Prijemnica <-> FakturaID,
+    '               osirocene prijemnice). Ovaj pisac ga prosto ne pise.
     '   novac       kes ne ulazi kroz otkupni list (S4.1b). Mereno: ovaj ekran
     '               p("novac") NIKAD ne postavlja -- polje pripada modNovacUnos,
     '               pa je grana u starom piscu bila mrtva na izvoru.

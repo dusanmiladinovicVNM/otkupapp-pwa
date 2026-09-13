@@ -16,15 +16,56 @@
 *Provera:* `vba_check` pravilo `NEMA_ID_PLUS_ID` — nijedan `Create*_TX` ne vraća
 konkatenaciju, nigde `Split(..., " + ")` nad ID stringom.
 
-## A2 — poslovni broj nije identitet
+## A2 — poslovni broj je labela, jedinstvena u SVOM kontekstu
 
 `BrojDokumenta`, `BrojOtpremnice`, `BrojZbirne`, `BrojPrijemnice`, `BrojFakture`
 su **labele**. Smeju za: pretragu, prikaz, generator sledećeg broja, validaciju
 duplikata pri unosu. Ne smeju za: FK, storno target, izbor „svih redova
 dokumenta", rekalkulaciju roditelja, correction identitet, ownership guard.
 
-*Provera:* `vba_check` pravilo `NEMA_BROJA_KAO_FK` (allowlist dozvoljenih
-konteksta) + acceptance test `BrojNijeIdentitet`.
+**Broj NIJE globalno jedinstven.** Jedinstven je u okviru trojke **(vrsta
+dokumenta, vlasnik niza, dan)**. Vlasnik niza je deo domena, ne detalj
+generatora:
+
+| Vrsta | Vlasnik niza | Oblik | Napomena |
+|---|---|---|---|
+| OTK | `StanicaID` | `x/ddmmyy[-n]` | `x` = numerički deo `StanicaID` |
+| OTP | `StanicaID` | `x/ddmmyy[-n]` | |
+| ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
+| PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
+| PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
+| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza` |
+
+Operativni izvor istine za isto pravilo, po ekranima:
+`docs/UI_MIGRACIJA_KATALOG.md` § Z3a.
+
+**Šta ugovor iz ovoga tvrdi:**
+
+1. Isti broj na dva dokumenta **različitih vlasnika** (ili različitog dana) je
+   **legalno stanje**, ne integritetska greška. Kapija koja ga odbija je preuska
+   i odbija dokument koji pisac smatra ispravnim.
+2. Isti broj u **istom** kontekstu je greška. Provera duplikata mora nositi
+   vrstu, vlasnika i dan — ne samo broj, i ne samo broj + datum.
+3. **Oblik nije kontekst.** `modBrojevi.IsValidBrojFormat` proverava isključivo
+   oblik i vraća `False` za `S` prefiks, pa nad zbirnom u malina modu nije
+   upotrebljiv kao kapija.
+4. Storno **ne oslobađa** broj: ispravka dobija nov broj (A9), pa provera
+   duplikata gleda i **stornirane** redove.
+
+*Provera:* `modBrojevi.BrojOdgovaraKontekstu(kind, entityID, datum, broj)`, kao
+kapija na kanonskim piscima (`modOtkup.CreateOtkup`,
+`modDokumenta.SaveOtpremnica` / `SaveZbirna` / `CreateZbirna` /
+`OtpNapraviDraft` / `OtpIzmeniDraft` / `SaveOMUlaz_TX` ambalažna grana) i na PWA
+uvozu. Kapija dokazuje samo **negativ** — da broj pripada drugom vlasniku ili
+drugom danu; string koji nije u kanonskom obliku te vrste se ne sudi. Ne
+proverava jedinstvenost (to je `modOtkup.BrojDokumentaZauzet` i `CheckDuplicate`)
+i ne sudi prijemnicu. Kad je auto-numeracija isključena (`AUTO_BROJ_DOKUMENTA`),
+broj je operaterov i kapija ćuti.
+
+> Ostatak A2 — zabrana broja kao FK — je i dalje **pravilo bez provere**.
+> `NEMA_BROJA_KAO_FK` i acceptance test `BrojNijeIdentitet` **ne postoje** u
+> repou; planirani su u koraku 13 refaktora. Do tada `BrojZbirne` u
+> `modDokumenta` i dalje služi kao join ključ na četiri mesta.
 
 ## A3 — header + stavke
 

@@ -84,6 +84,11 @@ Private Const TEST_PREFIX As String = "TST-PRO"
 ' to NIJE, da ostali testovi ne okinu auto-lanac) i drugi kupac za proveru izolacije
 ' backfill mapa po kupcu.
 Private Const TEST_HLAD_ST_ID As String = "ST-HLADTEST-90001"
+
+' Druga stanica sa DRUGACIJIM numerickim delom -- preduslov svakog dvosmernog
+' dokaza kapije konteksta broja. TEST_ST_ID i TEST_HLAD_ST_ID oba daju 90001,
+' pa nad njima kapija ne moze da razlikuje vlasnike niza.
+Private Const BKTX_ST2 As String = "ST-BKTX-90007"
 Private Const TEST_KUP2_ID As String = "KUP-90002"
 
 ' ============================================================
@@ -236,6 +241,16 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IsplataNaNovDokumentProlazi
     Test_BIM_NovOtkupJeOtvorenBlok
     Test_PWA_StanicaJeUredjajNeKooperant
+    Test_BKTX_NekanonskiBrojNeOdbija
+    Test_BKTX_VlasnikOsaOdbijaTudjuStanicu
+    Test_BKTX_DanOsaOdbijaTudjiDan
+    Test_BKTX_GeneratorUvekProlaziKapiju
+    Test_BKTX_MirrorSPrefiksProlazi
+    Test_BKTX_ZbirnaTudjegVlasnikaOdbijena
+    Test_BKTX_PrijemnicaNikadNeOdbija
+    Test_BKTX_ReversSudiSamoAmbalazu
+    Test_BKTX_RucniBrojNijeSudjen
+    Test_BKTX_UvozOtkupaOdbijaTudjBroj
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -2770,6 +2785,10 @@ Private Sub Test_ZBR_DeteNosiGeneracijuRoditelja()
     scenario = NewScenarioCode("ZBRCHILD")
     testDate = NextTestDate()
     broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    ' Ovaj broj OSTAJE gradjen sa drugim danom, za razliku od ostalih u modulu:
+    ' ide iskljucivo u COL_OTP_BROJ_ZBIRNE, decju link-kolonu. Dete legitimno
+    ' nosi broj zbirne od juce, pa kapija konteksta tu namerno ne sudi -- sudi
+    ' samo sopstveni broj dokumenta.
     brojBezZbirne = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
                     Format$(NextTestDate(), "ddmmyy")
 
@@ -3020,8 +3039,13 @@ Private Sub Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju()
     scenario = NewScenarioCode("ZBRBF")
     testDate = NextTestDate()
     brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-            Format$(NextTestDate(), "ddmmyy")
+
+    ' Drugi broj ISTOG vozaca ISTOG dana -- razlikuje se SEKVENCOM, ne danom.
+    ' Ranije je ovde pomeran datum (NextTestDate) dok se red i dalje snima sa
+    ' testDate, pa je broj tvrdio jedan dan a dokument nosio drugi. To nije bila
+    ' domenska tvrdnja nego nacin da se dobiju dva razlicita stringa; kapija
+    ' konteksta (modBrojevi.RequireBrojUKontekstu) takav broj sada odbija.
+    brojY = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -3276,8 +3300,11 @@ Private Sub Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta()
     scenario = NewScenarioCode("ZBRF3")
     testDate = NextTestDate()
     brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-            Format$(NextTestDate(), "ddmmyy")
+    ' Isti vozac, isti dan, druga sekvenca. Ranije je ovde pomeran datum: red je
+    ' isao kroz PWA uvoz, gde je kapija konteksta fail-soft, pa test NIJE padao --
+    ' ali je svaki prolaz suite pisao dva lazna upozorenja u log i time zatrpavao
+    ' pravo. Broj koji tvrdi drugi dan od dokumenta nije bio deo tvrdnje testa.
+    brojY = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -3521,8 +3548,11 @@ Private Sub Test_ZBR_IspravkaVezeSvojuDecuNeTudju()
     scenario = NewScenarioCode("ZBRF3I")
     testDate = NextTestDate()
     brojStari = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brojNovi = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-               Format$(NextTestDate(), "ddmmyy")
+
+    ' Nov broj ispravke je ISTOG vozaca i ISTOG dana -- razlikuje se sekvencom.
+    ' A9 trazi NOV broj, ne broj drugog dana; ranije je ovde pomeran datum dok je
+    ' dokument ostajao na testDate, pa ga kapija konteksta sada odbija.
+    brojNovi = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -3721,8 +3751,11 @@ Private Sub Test_ZBR_TudjaGeneracijaNeOtvaraKapiju()
     scenario = NewScenarioCode("ZBRPAR")
     testDate = NextTestDate()
     brojX = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brojY = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-            Format$(NextTestDate(), "ddmmyy")
+
+    ' Drugi broj ISTOG vozaca ISTOG dana -- razlikuje se sekvencom, ne danom.
+    ' Y ide u SaveZbirna_TX kao sopstveni broj dokumenta datiranog testDate-om,
+    ' pa broj sa juceradnjim ddmmyy kapija konteksta odbija.
+    brojY = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -3867,8 +3900,9 @@ Private Sub Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta()
     ' Kapija sme da odbija samo dva DOKUMENTA. Ako pocne da odbija i ovo, obara
     ' redovan storno svake dvoklasne zbirne -- pa bi tvrdnje gore bile zelene iz
     ' pogresnog razloga.
-    brojDvoklasna = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
-                    Format$(NextTestDate(), "ddmmyy")
+    ' Isti vozac, isti dan, druga sekvenca -- ranije je ovde pomeran datum dok se
+    ' red i dalje snima sa testDate, sto kapija konteksta sada odbija.
+    brojDvoklasna = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
     zbr1 = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojDvoklasna, TEST_KUP_ID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                          100#, TEST_TIP_AMB, 10, KLASA_I)
@@ -9022,6 +9056,491 @@ EH:
     LogFatal "Test_PWA_BezUredjajaUvozPada", Err.Number, Err.description
 End Sub
 
+
+' ============================================================
+' KAPIJA KONTEKSTA BROJA -- modBrojevi.BrojOdgovaraKontekstu
+'
+' Pravilo: broj dokumenta pripada nizu (vrsta, vlasnik, dan). Kapija ne dokazuje
+' da je broj tacan nego da je TUDJ; sto ne govori kanonski jezik ne sudi se.
+'
+' Zasto je inverzija nosiva: pre nje modBrojevi nije imao NIJEDAN test --
+' FormatBroj, IsValidBrojFormat, ApplyMirrorPrefix i SuggestNextBroj su bili
+' nemereni. Naivna kapija ("broj mora biti kanonski") oborila bi oko 337
+' "TST-PRO-*" brojeva iz ove suite i celu "N/TEST" fixture porodicu.
+'
+' Druga stanica sa DRUGACIJIM numerickim delom je preduslov svakog dvosmernog
+' dokaza: TEST_ST_ID ("ST-90001") i TEST_HLAD_ST_ID ("ST-HLADTEST-90001") oba
+' daju 90001, pa nad njima kapija ne moze da razlikuje vlasnike.
+' ============================================================
+
+' BKTX_ST2 je u deklaracionoj sekciji, uz ostale TEST_* konstante -- VBA ne
+' kompajlira Const ubacen izmedju dve procedure.
+Private Sub SeedBktxDrugaStanica()
+    SeedStanicaByID BKTX_ST2, "TEST BKTX DRUGA STANICA"
+End Sub
+
+' NOSIVI TEST CELOG DIZAJNA. Ako ovaj padne, kapija je postala format-kapija i
+' obara sve sto nije kanonski broj -- ukljucujuci ceo fixture.
+'
+' SABOTAZA: u BrojOdgovaraKontekstu zameni "If Not IsValidBrojFormat(s) Then
+' Exit Function" sa dodelom BROJ_KTX_TUDJ_VLASNIK -> pukne po imenu na prvoj
+' tvrdnji, a za njim padne i veci deo suite.
+Private Sub Test_BKTX_NekanonskiBrojNeOdbija()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("BKTXNK")
+
+    Dim d As Date
+    d = NextTestDate()
+
+    ' Predikat cuti na svemu sto nije nas jezik.
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
+                      TEST_ST_ID, d, TEST_PREFIX & "-OTK-" & scenario)), _
+                 "BKTX nekanonski: test-prefiks se ne sudi"
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTP, _
+                      TEST_ST_ID, d, "HL-130926-143205")), _
+                 "BKTX nekanonski: fallback broj auto-lanca hladnjace se ne sudi"
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTP, _
+                      TEST_ST_ID, d, "8/TEST")), _
+                 "BKTX nekanonski: fixture oblik N/TEST se ne sudi"
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                      TEST_VOZ_ID, d, "ZB-TEST-1")), _
+                 "BKTX nekanonski: fixture broj zbirne se ne sudi"
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
+                      TEST_ST_ID, d, "KUP-RN-2026/117")), _
+                 "BKTX nekanonski: eksterni kupcev broj se ne sudi"
+
+    ' I kroz pisca, ne samo kao predikat.
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-BKTXNK-" & scenario)
+
+    Dim razlog As String
+    AssertTrue Len(CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)) > 0, _
+               "BKTX nekanonski: pisac prima nekanonski broj (bilo: " & razlog & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_NekanonskiBrojNeOdbija", Err.Number, Err.description
+End Sub
+
+' OSA VLASNIKA. Broj koji imenuje drugu stanicu ne sme na ovaj dokument.
+'
+' SABOTAZA: ukloni poredjenje Left$(s, slashPos - 1) <> ocekNum -> pukne po imenu.
+Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    ' Preduslov: bez razlicitog numerickog dela test ne meri nista.
+    AssertTrue modBrojevi.ExtractNumericFromEntityID(BKTX_ST2) <> _
+               modBrojevi.ExtractNumericFromEntityID(TEST_ST_ID), _
+               "BKTX vlasnik: preduslov -- dve stanice imaju razlicit numericki deo"
+
+    Dim h As Object
+    Set h = OtkHeader("")
+    Dim d As Date
+    d = h("Datum")
+
+    h("BrojDokumenta") = modBrojevi.FormatBroj(BKTX_ST2, d, 1)
+
+    Dim razlog As String
+    AssertEquals "", CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog), _
+                 "BKTX vlasnik: broj druge stanice je ODBIJEN"
+    AssertTrue InStr(1, razlog, "vlasnik", vbTextCompare) > 0, _
+               "BKTX vlasnik: kapija imenuje osu (bilo: " & razlog & ")"
+
+    ' Kontrola: isti dan, isti pisac, broj OVE stanice -> prolazi.
+    Dim h2 As Object
+    Set h2 = OtkHeader("")
+    h2("Datum") = d
+    h2("BrojDokumenta") = modBrojevi.FormatBroj(TEST_ST_ID, d, 1)
+
+    AssertTrue Len(CreateOtkup_TX(h2, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)) > 0, _
+               "BKTX vlasnik: broj ove stanice prolazi (bilo: " & razlog & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_VlasnikOsaOdbijaTudjuStanicu", Err.Number, Err.description
+End Sub
+
+' OSA DANA. Broj sa juceradnjim ddmmyy ne sme na danasnji dokument.
+'
+' SABOTAZA: ukloni poredjenje Mid$(s, slashPos + 1, 6) <> Format$(datum,"ddmmyy")
+' -> pukne po imenu.
+Private Sub Test_BKTX_DanOsaOdbijaTudjiDan()
+    On Error GoTo EH
+
+    Dim h As Object
+    Set h = OtkHeader("")
+
+    ' NextTestDate se POMERA na svaki poziv -- dan se pamti u promenljivu.
+    Dim d As Date
+    d = h("Datum")
+
+    h("BrojDokumenta") = modBrojevi.FormatBroj(TEST_ST_ID, DateAdd("d", -1, d), 1)
+
+    Dim razlog As String
+    AssertEquals "", CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog), _
+                 "BKTX dan: broj od juce je ODBIJEN"
+    AssertTrue InStr(1, razlog, "danu", vbTextCompare) > 0, _
+               "BKTX dan: kapija imenuje osu (bilo: " & razlog & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_DanOsaOdbijaTudjiDan", Err.Number, Err.description
+End Sub
+
+' POZITIVNA KONTROLA PROTIV DRIFTA. Sto generator napravi, kapija mora primiti.
+' Bez ovoga bi promena formata u jednom od dva mesta ostala nevidljiva dok
+' neko ne izgubi dan posla.
+'
+' SABOTAZA: u kapiji promeni Format$(datum, "ddmmyy") u "ddmmyyyy", ili
+' ExtractNumericFromEntityID u sopstveni parser -> pukne po imenu za svaku vrstu.
+Private Sub Test_BKTX_GeneratorUvekProlaziKapiju()
+    On Error GoTo EH
+
+    Dim d As Date
+    d = NextTestDate()
+
+    Dim broj As String
+
+    broj = modBrojevi.GenerateBrojDokumenta(TEST_ST_ID, d)
+    AssertTrue Len(broj) > 0, "BKTX generator: OTK broj je generisan"
+    AssertFalse modBrojevi.BrojKontekstOdbija( _
+                    modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
+                                                     TEST_ST_ID, d, broj)), _
+                "BKTX generator: OTK broj prolazi kapiju (" & broj & ")"
+
+    broj = modBrojevi.GenerateBrojOtpremnice(TEST_ST_ID, d)
+    AssertTrue Len(broj) > 0, "BKTX generator: OTP broj je generisan"
+    AssertFalse modBrojevi.BrojKontekstOdbija( _
+                    modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTP, _
+                                                     TEST_ST_ID, d, broj)), _
+                "BKTX generator: OTP broj prolazi kapiju (" & broj & ")"
+
+    ' checkRemote:=False -- suite ne sme da zavisi od Drive lookup-a.
+    broj = modBrojevi.SuggestNextBroj(modBrojevi.KIND_ZBR, TEST_VOZ_ID, d, False)
+    AssertTrue Len(broj) > 0, "BKTX generator: ZBR predlog je generisan"
+    AssertFalse modBrojevi.BrojKontekstOdbija( _
+                    modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                                                     TEST_VOZ_ID, d, broj)), _
+                "BKTX generator: ZBR predlog prolazi kapiju (" & broj & ")"
+
+    broj = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    AssertTrue Len(broj) > 0, "BKTX generator: REV predlog je generisan"
+    AssertFalse modBrojevi.BrojKontekstOdbija( _
+                    modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_REV, _
+                                                     TEST_ST_ID, d, broj)), _
+                "BKTX generator: REV predlog prolazi kapiju (" & broj & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_GeneratorUvekProlaziKapiju", Err.Number, Err.description
+End Sub
+
+' MALINA MOD. Zbirna mirror-stanice nosi "S" prefiks i to je NAMERA, ne propust:
+' u malina modu je otpremnica = zbirna, jer svako otkupno mesto je i vozac.
+' Kapija prefiks skida i ne tumaci -- IsStanicaMirrorVozac je fail-open, pa bi
+' pravilo "S mora biti opravdan" pretvorilo svaki neuspeo lookup u odbijanje.
+'
+' SABOTAZA: ukloni skidanje "S" u ZBR grani -> prve dve tvrdnje puknu po imenu.
+Private Sub Test_BKTX_MirrorSPrefiksProlazi()
+    On Error GoTo EH
+
+    Const MIR_ST As String = "ST-BKTXMIR-90008"
+    SeedStanicaByID MIR_ST, "TEST BKTX MIRROR"
+
+    Dim d As Date
+    d = NextTestDate()
+
+    Dim bez As String
+    bez = modBrojevi.FormatBroj(MIR_ST, d, 1)
+
+    AssertEquals CStr(BROJ_KTX_OK), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                      MIR_ST, d, "S" & bez)), _
+                 "BKTX mirror: S-broj mirror-stanice prolazi"
+
+    AssertEquals CStr(BROJ_KTX_OK), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                      MIR_ST, d, "s" & bez)), _
+                 "BKTX mirror: malo 's' se ponasa isto (poredjenja broja su textcompare)"
+
+    ' PWA nikad ne salje "S" (zbirna.js ne zna za mirror) -- i bez njega prolazi.
+    AssertEquals CStr(BROJ_KTX_OK), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                      MIR_ST, d, bez)), _
+                 "BKTX mirror: isti broj bez prefiksa takodje prolazi"
+
+    ' "S" nije deo jezika drugih vrsta -- tamo string ispada kao "nije nas broj".
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
+                      MIR_ST, d, "S" & bez)), _
+                 "BKTX mirror: S na otkupu se ne sudi (nije nas oblik)"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_MirrorSPrefiksProlazi", Err.Number, Err.description
+End Sub
+
+' SIDRO ZA DUG PR7/PR8, imenovano u komentarima na modMasterSync i
+' modAutoHladnjaca. Oba mesta prave BrojZbirne iz BrojOtpremnice, pa numericki
+' deo pripada STANICI a vlasnik niza je VOZAC. Danas se poklapa samo zato sto je
+' par-vozac mirror (VozacID == StanicaID kao string). Kad se izvedeni lanac
+' odmrzne sa realnim vozacem, kapija ce ga odbiti -- i popravka je na IZVORU
+' (zbirna dobija svoj broj), ne relaksacija kapije.
+'
+' SABOTAZA: relaksiraj ZBR granu da prima i vlasnika-stanicu -> pukne po imenu.
+Private Sub Test_BKTX_ZbirnaTudjegVlasnikaOdbijena()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim d As Date
+    d = NextTestDate()
+
+    ' Broj koji pripada stanici, a vozac je realan (VOZ-90001 -> 90001).
+    Dim brojStanice As String
+    brojStanice = modBrojevi.FormatBroj(BKTX_ST2, d, 1)
+
+    AssertEquals CStr(BROJ_KTX_TUDJ_VLASNIK), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, _
+                      TEST_VOZ_ID, d, brojStanice)), _
+                 "BKTX zbirna: broj stanice u nizu realnog vozaca je TUDJ"
+
+    ' I kroz pisca.
+    AssertEquals "", SaveZbirna_TX(d, TEST_VOZ_ID, brojStanice, TEST_KUP_ID, _
+                                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, _
+                                   TEST_SORTA, 1000#, TEST_TIP_AMB, 100, "I"), _
+                 "BKTX zbirna: pisac odbija broj tudjeg vlasnika"
+
+    ' Kontrola: vozacev sopstveni broj prolazi kroz istog pisca.
+    AssertTrue Len(SaveZbirna_TX(d, TEST_VOZ_ID, _
+                                 modBrojevi.FormatBroj(TEST_VOZ_ID, d, 1), _
+                                 TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+                                 TEST_VRSTA, TEST_SORTA, 1000#, TEST_TIP_AMB, _
+                                 100, "I")) > 0, _
+               "BKTX zbirna: vozacev sopstveni broj prolazi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ZbirnaTudjegVlasnikaOdbijena", Err.Number, Err.description
+End Sub
+
+' PRIJEMNICA SE NE SUDI, NIKAD. Numericki deo prijemnice hladnjace je konstanta
+' "1" (GenerateBrojPrijemnice) i ne kodira kupca; eksterni kupac nosi svoj niz;
+' backfill nasledjuje broj preko dana; fixture nosi 22 broja stare konvencije.
+' Nijedna tvrdnja o PRJ broju nije istinita u SVIM legitimnim slucajevima.
+'
+' SABOTAZA: dodaj KIND_PRJ u Select Case dozvoljenih vrsta -> pukne po imenu.
+Private Sub Test_BKTX_PrijemnicaNikadNeOdbija()
+    On Error GoTo EH
+
+    Dim d As Date
+    d = NextTestDate()
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu("PRJ", TEST_KUP_ID, d, _
+                      "77/010199")), _
+                 "BKTX prijemnica: ni tudj vlasnik ni tudj dan se ne sude"
+
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu("PRJ", TEST_KUP_ID, d, _
+                      modBrojevi.FormatBroj("1", d, 1))), _
+                 "BKTX prijemnica: ni kanonski oblik hladnjace se ne sudi"
+
+    ' Nepoznata vrsta takodje cuti -- kapija ne obara pozivaoca zbog svog neznanja.
+    AssertEquals CStr(BROJ_KTX_NEPRIMENLJIVO), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu("NEPOSTOJECA", TEST_ST_ID, d, _
+                      modBrojevi.FormatBroj(TEST_ST_ID, d, 1))), _
+                 "BKTX prijemnica: nepoznata vrsta se ne sudi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_PrijemnicaNikadNeOdbija", Err.Number, Err.description
+End Sub
+
+' REVERS: kapija sudi SAMO ambalaznu granu. Cist gotovinski promet (F5 isplata /
+' F6 uplata) ide kroz istu proceduru sa kolAmb = 0, nema svoj brojevni niz, a
+' stanicaID tamo postaje partner-OM -- kapija nad celom procedurom odbijala bi
+' legitimnu isplatu na koju je u polju zaostao broj iz prethodnog rezima.
+'
+' SABOTAZA: pomeri poziv kapije iznad "If kolAmb > 0 Then" -> pukne po imenu na
+' trecoj tvrdnji (gotovina).
+Private Sub Test_BKTX_ReversSudiSamoAmbalazu()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim d As Date
+    d = NextTestDate()
+
+    Dim tudjBroj As String
+    tudjBroj = modBrojevi.FormatBroj(BKTX_ST2, d, 1)
+
+    Dim ambPre As Long
+    ambPre = CountRows(TBL_AMBALAZA)
+
+    Dim ok As Boolean
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+
+    AssertFalse ok, "BKTX revers: broj tudje stanice je ODBIJEN"
+    AssertEquals CStr(ambPre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "BKTX revers: odbijen upis nije ostavio ambalaza red"
+
+    ' Kontrola: broj ove stanice prolazi.
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=modBrojevi.FormatBroj(TEST_ST_ID, d, 1), _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+
+    AssertTrue ok, "BKTX revers: broj ove stanice prolazi"
+
+    ' GOTOVINA: isti "tudj" broj, ali kolAmb = 0 -- nema niza, kapija cuti.
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:="", tipAmb:="", kolAmb:=0, _
+                       vrstaVoca:=TEST_VRSTA, novac:=5000#, kooperantID:="", _
+                       primalacDisplay:="Test primalac", otkupID:="", _
+                       tipNovca:=NOV_KES_FIRMA_OTKUPAC, koopSmer:="")
+
+    AssertTrue ok, "BKTX revers: cist gotovinski promet NIJE sudjen po broju"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ReversSudiSamoAmbalazu", Err.Number, Err.description
+End Sub
+
+' RUCNO NUMERISANJE. Kad je auto-broj iskljucen u Podesavanjima, nijedan
+' generator nista nije dodelio -- pa nema ni zastalog predloga koji bi se hvatao.
+' Broj je operaterov i sistem ga ne procenjuje drugi put.
+'
+' SABOTAZA: ukloni "If Not IsAutoBrojDokumenta() Then Exit Sub" iz
+' RequireBrojUKontekstu -> pukne po imenu.
+Private Sub Test_BKTX_RucniBrojNijeSudjen()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim prevMode As String
+    prevMode = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    SetConfigValue CFG_AUTO_BROJ_DOK, "NO"
+
+    Dim h As Object
+    Set h = OtkHeader("")
+    Dim d As Date
+    d = h("Datum")
+    h("BrojDokumenta") = modBrojevi.FormatBroj(BKTX_ST2, d, 1)
+
+    Dim razlog As String
+    Dim rez As String
+    rez = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevMode      ' vrati stanje PRE tvrdnji
+
+    AssertTrue Len(rez) > 0, _
+               "BKTX rucni: sa iskljucenim auto-brojem kapija ne sudi (bilo: " & razlog & ")"
+
+    ' Predikat i dalje govori istinu -- iskljucen je samo POZIV kapije, ne pravilo.
+    AssertEquals CStr(BROJ_KTX_TUDJ_VLASNIK), _
+                 CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
+                      TEST_ST_ID, d, modBrojevi.FormatBroj(BKTX_ST2, d, 1))), _
+                 "BKTX rucni: predikat i dalje prepoznaje tudjeg vlasnika"
+
+    Exit Sub
+EH:
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevMode
+    LogFatal "Test_BKTX_RucniBrojNijeSudjen", Err.Number, Err.description
+End Sub
+
+' PWA UVOZ, OBE OSE TVRDO -- i uvoz i pisac govore isto.
+'
+' Uvoz zove CreateOtkup_TX, gde kapija vec stoji fail-closed. Meka grana na
+' uvozu zato nista ne bi propustila, samo bi pomerila poruku sa mesta koje zna
+' ClientRecordID na mesto koje ga ne zna. Ovaj test cuva bas to: da se dve
+' kapije nad istim brojem ne raziidju.
+'
+' Ponocna trka u PWA (dva citanja sata sa mreznim await-om izmedju) popravljena
+' je na IZVORU u istom PR-u -- otkup-form.js sada cita dan jednom i deli ga i
+' broju i zapisu -- pa nov klijent tu neuskladjenost ne moze da proizvede.
+'
+' DOMET OVOG TESTA, izricito: on meri da broj tudjeg vlasnika ili tudjeg dana NE
+' udje u tabelu kroz PWA put. NE moze da razlikuje da li ga je odbio uvoz
+' (Err 8109, poruka imenuje ClientRecordID) ili nizvodni CreateOtkup -- interni
+' ImportRowToTblOtkup je Private, a _RowTX gresku po ugovoru guta i vraca "".
+' Ta razlika se ovde ne pretvara da je merena.
+'
+' SABOTAZA: ukloni poziv kapije iz CreateOtkup -> prve dve tvrdnje puknu po
+' imenu. Ukloni ga sa uvoza -> ostaju zelene, jer pisac i dalje odbija; to je
+' poznata granica ovog testa, a ne tiha rupa.
+Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim scenario As String
+    scenario = NewScenarioCode("BKTXPWA")
+
+    ' --- osa vlasnika ---
+    Dim cridV As String: cridV = "CRID-BKTXV-" & scenario
+    Dim redV As Variant
+    redV = PwaRed(cridV, "BKTX vlasnik", 100#, 100#, 0)
+    Dim dV As Date: dV = CDate(redV(1, 9))
+    redV(1, 23) = modBrojevi.FormatBroj(BKTX_ST2, dV, 1)
+
+    Dim preV As Long: preV = OtkBrojRedova(TBL_OTKUP)
+
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redV, 1, cridV), _
+                 "BKTX uvoz: broj druge stanice NE vraca OtkupID"
+    AssertEquals CStr(preV), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "BKTX uvoz: odbijen red nije upisan"
+
+    ' --- osa dana ---
+    Dim cridD As String: cridD = "CRID-BKTXD-" & scenario
+    Dim redD As Variant
+    redD = PwaRed(cridD, "BKTX dan", 100#, 100#, 0)
+    Dim dD As Date: dD = CDate(redD(1, 9))
+    redD(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, DateAdd("d", -1, dD), 1)
+
+    Dim preD As Long: preD = OtkBrojRedova(TBL_OTKUP)
+
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redD, 1, cridD), _
+                 "BKTX uvoz: broj od juce NE vraca OtkupID"
+    AssertEquals CStr(preD), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "BKTX uvoz: odbijen dan nije ostavio red"
+
+    ' Kontrola: broj ove stanice i ovog dana prolazi kroz isti put.
+    Dim cridOK As String: cridOK = "CRID-BKTXOK-" & scenario
+    Dim redOK As Variant
+    redOK = PwaRed(cridOK, "BKTX kontrola", 100#, 100#, 0)
+    Dim dOK As Date: dOK = CDate(redOK(1, 9))
+    redOK(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, dOK, 1)
+
+    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK)) > 0, _
+               "BKTX uvoz: kanonski broj ove stanice i ovog dana prolazi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_UvozOtkupaOdbijaTudjBroj", Err.Number, Err.description
+End Sub
+
 ' Red kakav PWA salje u OTK sheet-u. Indeksi su GS_* kolone modMasterSync-a;
 ' one su Private tamo, pa se ovde imenuju komentarom, ne konstantom.
 '
@@ -10295,17 +10814,28 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
 
     Dim redB As Variant
     redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 400#, 50#, 20)
-    redB(1, 23) = "77/090926"                          ' GS_BROJ_DOKUMENTA
+
+    ' Broj se gradi iz stanice i dana SAMOG REDA. Ranije su ovde stajali literali
+    ' "77/090926" i "78/090926" -- oni tvrde stanicu 77, a red nosi ST-90001 i
+    ' datum iz 2090. Test je time merio idempotenciju po CRID-u nad brojem koji
+    ' je i pre kapije konteksta bio pogresan; sada ga modBrojevi kapija odbija na
+    ' uvozu, pa bi tvrdnja o CRID-u prolazila iz pogresnog razloga.
+    Dim datumB As Date
+    datumB = CDate(redB(1, 9))                         ' GS_DATUM
+    Dim brojB As String, brojB2 As String
+    brojB = modBrojevi.FormatBroj(TEST_ST_ID, datumB, 1)
+    brojB2 = modBrojevi.FormatBroj(TEST_ST_ID, datumB, 2)
+    redB(1, 23) = brojB                                ' GS_BROJ_DOKUMENTA
 
     Dim prviB As String
     prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB)
     AssertTrue Len(prviB) > 0, "PWA broj: prvi uvoz sa izricitim brojem prosao"
-    AssertEquals "77/090926", OtkPolje(prviB, COL_OTK_BR_DOK), _
+    AssertEquals brojB, OtkPolje(prviB, COL_OTK_BR_DOK), _
                  "PWA broj: izricit broj je zapisan"
 
     Dim izmenjenB As Variant
     izmenjenB = redB
-    izmenjenB(1, 23) = "78/090926"
+    izmenjenB(1, 23) = brojB2
 
     Dim preB As Long: preB = OtkBrojRedova(TBL_OTKUP)
     AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB), _

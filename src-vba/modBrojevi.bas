@@ -21,6 +21,12 @@ Option Explicit
 '   IsValidBrojFormat(broj)                  -- regex check kanonskog formata
 '   FormatBroj(entityID, datum, seq)         -- kompozit
 '   ClearSpreadsheetIDCache                  -- reset session cache (retko)
+'
+' Kapija konteksta (broj pripada nizu ovog dokumenta, ne tudjem):
+'   BrojOdgovaraKontekstu(kind, entityID, datum, broj) -- verdikt BROJ_KTX_*
+'   BrojKontekstOdbija(verdikt)              -- da li verdikt znaci odbijanje
+'   BrojKontekstOpis(...)                    -- jedan tekst za Err i za LogWarn
+'   RequireBrojUKontekstu(...)               -- fail-closed kapija za pisce
 ' ============================================================
 
 Private gSheetIDCache As Object
@@ -29,6 +35,14 @@ Public Const KIND_OTK As String = "OTK"
 Public Const KIND_OTP As String = "OTP"
 Public Const KIND_ZBR As String = "ZBR"
 Public Const KIND_REV As String = "REV"   ' OM<->koop revers (izdavanje/povrat ambalaze)
+
+' Verdikt kapije konteksta broja. Long, a ne Boolean, iz dva razloga: pozivaocu
+' treba razlika izmedju "kapija tvrdi da je dobro" i "kapija nema sta da tvrdi",
+' a dve ose greske (vlasnik i dan) se na PWA uvozu tretiraju RAZLICITO.
+Public Const BROJ_KTX_OK As Long = 0             ' broj je iz niza (vlasnik, dan) ovog dokumenta
+Public Const BROJ_KTX_NEPRIMENLJIVO As Long = 1  ' kapija nema sta da tvrdi
+Public Const BROJ_KTX_TUDJ_VLASNIK As Long = 2   ' kanonski oblik, numericki deo DRUGOG vlasnika
+Public Const BROJ_KTX_TUDJ_DAN As Long = 3       ' kanonski oblik, vlasnik tacan, ddmmyy DRUGOG dana
 
 ' ============================================================
 ' PUBLIC -- forma prefill
@@ -305,6 +319,172 @@ Public Function ApplyMirrorPrefix(ByVal vozacID As String, ByVal broj As String)
     If IsStanicaMirrorVozac(vozacID) Then ApplyMirrorPrefix = "S" & broj
 End Function
 
+
+' ============================================================
+' PUBLIC -- kapija konteksta broja
+' ============================================================
+
+' Da li broj pripada nizu (vrsta, vlasnik, dan) ovog dokumenta?
+'
+' CENTRALNA INVERZIJA: kapija NE dokazuje da je broj tacan -- dokazuje da je
+' TUDJ. Prvo pitanje nije "da li je broj validan" nego "da li broj uopste govori
+' nas jezik". String koji ne matchuje kanon te vrste NE TVRDI nista o vlasniku
+' ni o danu, pa mu se nema sta odbiti -> BROJ_KTX_NEPRIMENLJIVO.
+'
+' Zasto bas tako: kapija koja bi prvo trazila validan oblik odbila bi oko 337
+' "TST-PRO-*" brojeva iz testova, celu "N/TEST" fixture porodicu, "GLD-*",
+' "ZB-TEST-*", "HL-ddmmyy-hhnnss" iz auto-lanca hladnjace i SVAKI eksterni
+' kupcev broj. Ovako pada tacno ono sto i treba: broj koji tvrdi jednog vlasnika
+' a stoji na dokumentu drugog.
+'
+' Greska koju hvata je ZASTAO PREDLOG: polje popunjeno generatorom za jedan par
+' (vlasnik, dan), pa je operater promenio OM / vozaca ili datum a broj ostao.
+' Imenovana je na dva mesta u kodu -- modOtkupUI.RefreshBrojPredlog (izlazi bez
+' brisanja polja kad generator vrati prazno) i modDokumenta.OtpIzmeniDraft
+' (menja stanicu, datum i broj u istom potezu).
+'
+' Sta kapija NAMERNO ne radi:
+'   - ne proverava JEDINSTVENOST. Isti broj kod dva vlasnika ili u dva dana je
+'     legalno stanje (A2), i devet zatecenih testova to tvrdi kao domen, ne kao
+'     previd. Zauzetost je posao modOtkup.BrojDokumentaZauzet i CheckDuplicate.
+'   - ne sudi "S" prefiks. IsStanicaMirrorVozac je fail-open (On Error Resume
+'     Next), pa bi pravilo "S nije opravdan" pretvorilo svaki neuspeo lookup u
+'     odbijanje legitimne malina zbirne. Prefiks se skida i ne tumaci.
+'   - ne sudi PRIJEMNICU. Numericki deo prijemnice hladnjace je konstanta "1"
+'     (GenerateBrojPrijemnice), ne kodira kupca, a eksterni kupac nosi svoj niz.
+'     Nijedna tvrdnja o PRJ broju nije istinita u SVIM legitimnim slucajevima, a
+'     kapija koja tvrdi nesto neistinito je gora od kapije koje nema.
+'   - ne gleda sekvencu. Rupa u nizu je legalna.
+'
+' MALINA MOD nema svoju granu i ne poziva IsMalinaMode. Par-vozac ima VozacID
+' DOSLOVNO jednak StanicaID (modMalina.EnsureVozacMirrorForStanica upisuje
+' Trim$(stanicaID) kao VozacID), pa ExtractNumericFromEntityID daje isti broj i
+' nasledjen broj otpremnice prolazi bez ijedne posebne linije. To je poznata
+' ZAVISNOST, ne slucajnost: cela mirror detekcija pociva na tom string-identitetu
+' (IsStanicaMirrorVozac trazi vozacID u koloni StanicaID).
+Public Function BrojOdgovaraKontekstu(ByVal kind As String, _
+                                      ByVal entityID As String, _
+                                      ByVal datum As Date, _
+                                      ByVal broj As String) As Long
+    BrojOdgovaraKontekstu = BROJ_KTX_NEPRIMENLJIVO
+
+    Dim s As String
+    s = Trim$(broj)
+    If Len(s) = 0 Then Exit Function
+    If Len(Trim$(entityID)) = 0 Then Exit Function
+
+    Dim vrsta As String
+    vrsta = UCase$(Trim$(kind))
+
+    Select Case vrsta
+        Case KIND_OTK, KIND_OTP, KIND_ZBR, KIND_REV
+            ' vrste ciji broj kodira vlasnika niza
+        Case Else
+            Exit Function
+    End Select
+
+    ' ZBR: skini TACNO JEDNO vodece "S" (i malo "s" -- poredjenja broja su
+    ' vbTextCompare, v. modHelpers.BrojJednak). Za ostale vrste "S" nije deo
+    ' jezika, pa string sa njim ispadne kao "nije nas broj" i ne sudi se.
+    If vrsta = KIND_ZBR Then
+        If UCase$(Left$(s, 1)) = "S" Then s = Mid$(s, 2)
+    End If
+
+    ' Oblik odlucuje NADLEZNOST, ne ispravnost. Reuse postojeceg regexa -- ne
+    ' pravi se cetvrta kopija kanona.
+    If Not IsValidBrojFormat(s) Then Exit Function
+
+    Dim ocekNum As String
+    ocekNum = CStr(ExtractNumericFromEntityID(entityID))
+
+    ' Entitet bez cifara ("VOZ-RF28-OTHER") -- nema se sta dokazati. Isti guard
+    ' koji GenerateBrojDokumenta vec ima.
+    If ocekNum = "0" Then Exit Function
+
+    Dim slashPos As Long
+    slashPos = InStr(s, "/")           ' oblik je gore vec dokazan
+
+    If Left$(s, slashPos - 1) <> ocekNum Then
+        BrojOdgovaraKontekstu = BROJ_KTX_TUDJ_VLASNIK
+        Exit Function
+    End If
+
+    ' Isti izraz koji koristi FormatBroj -- kapija i generator ne mogu da se
+    ' raziidju oko datuma.
+    If Mid$(s, slashPos + 1, 6) <> Format$(datum, "ddmmyy") Then
+        BrojOdgovaraKontekstu = BROJ_KTX_TUDJ_DAN
+        Exit Function
+    End If
+
+    BrojOdgovaraKontekstu = BROJ_KTX_OK
+End Function
+
+' Da li verdikt znaci odbijanje? Postoji da bi nov verdikt mogao da se doda bez
+' diranja svakog pozivnog mesta.
+Public Function BrojKontekstOdbija(ByVal verdikt As Long) As Boolean
+    BrojKontekstOdbija = (verdikt >= BROJ_KTX_TUDJ_VLASNIK)
+End Function
+
+' JEDAN tekst za oba moda (Err.Raise i LogWarn), da se poruka kapije i poruka
+' upozorenja ne raziidju. Prazan string kad verdikt nije odbijanje.
+Public Function BrojKontekstOpis(ByVal verdikt As Long, _
+                                 ByVal kind As String, _
+                                 ByVal entityID As String, _
+                                 ByVal datum As Date, _
+                                 ByVal broj As String) As String
+    If Not BrojKontekstOdbija(verdikt) Then
+        BrojKontekstOpis = ""
+        Exit Function
+    End If
+
+    Dim osa As String
+    If verdikt = BROJ_KTX_TUDJ_DAN Then
+        osa = "drugom danu"
+    Else
+        osa = "drugom vlasniku niza"
+    End If
+
+    Dim rep As String
+    If UCase$(Trim$(kind)) = KIND_ZBR Then
+        rep = " Zbirna u malina modu nosi isti broj sa vodecim 'S'."
+    End If
+
+    BrojKontekstOpis = _
+        "Broj " & Trim$(broj) & " pripada " & osa & ", ne ovom dokumentu " & _
+        "(vrsta " & UCase$(Trim$(kind)) & ", vlasnik " & Trim$(entityID) & _
+        ", dan " & Format$(datum, "dd.mm.yyyy") & "). Ocekivan oblik: " & _
+        FormatBroj(entityID, datum, 1) & ", sa bilo kojom sekvencom." & rep & _
+        " Broj je najverovatnije ostao od prethodnog izbora u formi."
+End Function
+
+' Fail-closed kapija za kanonske pisce.
+'
+' NE sudi kad je auto-broj iskljucen (Podesavanja, CFG_AUTO_BROJ_DOK): tada
+' nijedan generator nije nista dodelio, pa nema ni zastalog predloga koji bi se
+' hvatao -- broj je operaterov i sistem ga ne sme drugi put procenjivati.
+' Provera je OVDE, a ne u BrojOdgovaraKontekstu, da predikat ostane cist i da
+' testovi mogu da ga tvrde bez diranja konfiguracije.
+Public Sub RequireBrojUKontekstu(ByVal kind As String, _
+                                 ByVal entityID As String, _
+                                 ByVal datum As Date, _
+                                 ByVal broj As String, _
+                                 ByVal src As String)
+    If Not IsAutoBrojDokumenta() Then Exit Sub
+
+    Dim verdikt As Long
+    verdikt = BrojOdgovaraKontekstu(kind, entityID, datum, broj)
+    If Not BrojKontekstOdbija(verdikt) Then Exit Sub
+
+    Dim errNum As Long
+    If verdikt = BROJ_KTX_TUDJ_DAN Then
+        errNum = 1921
+    Else
+        errNum = 1920
+    End If
+
+    Err.Raise vbObjectError + errNum, src, _
+              BrojKontekstOpis(verdikt, kind, entityID, datum, broj)
+End Sub
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obrise tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()

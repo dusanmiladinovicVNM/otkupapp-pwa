@@ -445,14 +445,25 @@ async function saveOtkupUnlocked() {
             return;
         }
 
+        // Dan se čita JEDNOM i deli ga i broj i sam zapis.
+        //
+        // Ranije su ga generateBrojDokumenta i buildOtkupRecord čitali odvojeno,
+        // a između njih stoji await nad IndexedDB-om i — kad je uređaj online —
+        // mrežni poziv ka GAS-u. Ako ponoć padne unutar tog round-tripa, broj
+        // nosi jučerašnji ddmmyy a `datum` današnji. VBA uvoz to vidi kao broj
+        // koji ne pripada danu dokumenta, a zapis se ne može popraviti: broj je
+        // zamrznut u IDB redu i retry šalje isti sadržaj pod istim CRID-om.
+        // (zbirna.js ovo od početka radi ispravno — jedan `today` za oboje.)
+        const danIso = getTodayIsoDate();
+
         // PWA-first BrojDokumenta — kanon "x/ddmmyy[-rb]"
-        const brojDokumenta = await generateBrojDokumenta();
+        const brojDokumenta = await generateBrojDokumenta(danIso);
         if (!brojDokumenta) {
             showToast('Greška: nije moguće generisati broj dokumenta', 'error');
             return;
         }
 
-        const record = buildOtkupRecord(input, brojDokumenta);
+        const record = buildOtkupRecord(input, brojDokumenta, danIso);
 
         await dbPut(db, CONFIG.STORE_NAME, record);
 
@@ -490,8 +501,10 @@ async function saveOtkupUnlocked() {
 // PWA save u svakom slučaju neće preći sync (sync-engine ga blokira), pa
 // privremeni "možda zastareli" broj se reconcile-uje pri sync-u.
 // ============================================================
-async function generateBrojDokumenta() {
-    const today = getTodayIsoDate();
+// danIso: dan koji MORA biti isti kao `datum` zapisa. Pozivalac ga čita jednom
+// i prosleđuje i ovamo i u buildOtkupRecord — v. komentar u saveOtkupUnlocked.
+async function generateBrojDokumenta(danIso) {
+    const today = danIso || getTodayIsoDate();
     const otkupacID = CONFIG.OTKUPAC_ID || '';
 
     const stanicaBrojX = parseInt(String(otkupacID).replace(/\D/g, ''), 10);
@@ -640,9 +653,11 @@ function validateOtkupInput(input) {
     return '';
 }
 
-function buildOtkupRecord(input, brojDokumenta) {
+// danIso: v. generateBrojDokumenta. Isti dan mora hraniti i ddmmyy broja i
+// polje `datum`, inače zapis snimljen oko ponoći tvrdi dva različita dana.
+function buildOtkupRecord(input, brojDokumenta, danIso) {
     const nowIso = new Date().toISOString();
-    const today = getTodayIsoDate();
+    const today = danIso || getTodayIsoDate();
 
     return {
         clientRecordID: generateClientRecordID(),

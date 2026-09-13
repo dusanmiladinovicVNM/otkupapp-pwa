@@ -538,6 +538,12 @@ Private Function CreateOtkup(ByVal h As Object, _
     RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, "KooperantID", SRC
     RequireTacnoJedan TBL_STANICE, COL_STA_ID, stanicaID, "StanicaID", SRC
     RequireBrojJedinstven stanicaID, datum, brDok, SRC
+
+    ' Dva razlicita pitanja nad istim brojem: RequireBrojJedinstven pita
+    ' "je li zauzet", kapija konteksta pita "je li nas". Broj koji imenuje
+    ' drugu stanicu ili drugi dan obara saldo OM-a, izvestaje po OM-u i
+    ' station scope u banci -- sve to radi po stanici, ne po broju.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTK, stanicaID, datum, brDok, SRC
     RequireKulturaSeSlaze kulturaID, vrstaVoca, sortaVoca, SRC
     RequireParcelaKooperanta parcelaID, kooperantID, SRC
 
