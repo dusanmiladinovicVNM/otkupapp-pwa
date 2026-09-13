@@ -2598,8 +2598,6 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     Dim colOtkID As Long
     Dim colKoop As Long
     Dim colBrDok As Long
-    Dim colKol As Long
-    Dim colCena As Long
     Dim colVrsta As Long
     Dim colSta As Long
     Dim i As Long
@@ -2630,8 +2628,6 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     colOtkID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     colKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     colBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
 
     ' Zadat scope + nedokaziva kolona = STOP. Pravilo je u BimScopeKolona.
@@ -2644,6 +2640,9 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     ' zbog jednog anomalnog bloka). Sada je 3+ kandidata eksplicitna, uhvatljiva
     ' greska (ERR_BMAP_MANUAL_REQUIRED) koja obara SAMO taj red.
     ReDim result(1 To UBound(data, 1), 1 To 3)
+
+    Dim vrednostDict As Object
+    Set vrednostDict = modNovac.BuildVrednostDictByOtkup()
 
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
@@ -2661,9 +2660,19 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
             Dim uplaceno As Double
             Dim otvoreno As Double
 
+            ' KANONSKI izvor vrednosti (tblOtkupStavke), ne zaglavlje. Nov pisac
+            ' (CreateOtkup_TX) Kolicina i Cena na zaglavlju NE PUNI, pa je ovde
+            ' `vrednost` ostajala 0 za svaki nov dokument -> otvoreno <= 0.009 ->
+            ' count = 0 -> prazan skup kandidata. Posledica NIJE kozmeticka:
+            ' BimBlokBezOtvorenih tada vrati True i uplata se knjizi kao AVANS
+            ' umesto na blok, a stavka izvoda se oznaci obradjenom. Novac ode na
+            ' pogresno mesto, tiho.
+            '
+            ' Dikt se gradi JEDNOM pre petlje: poziv po redu bi nad tblOtkup od
+            ' vise hiljada redova citao stavke iznova za svaki red.
             vrednost = 0
-            If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
-                vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
+            If vrednostDict.exists(Trim$(CStr(data(i, colOtkID)))) Then
+                vrednost = CDbl(vrednostDict(Trim$(CStr(data(i, colOtkID)))))
             End If
 
             uplaceno = GetUplataForOtkup(CStr(data(i, colOtkID)))
