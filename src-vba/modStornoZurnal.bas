@@ -48,6 +48,15 @@ Public Function BeginStornoOp(ByVal docType As String, ByVal broj As String) As 
         End If
         Exit Function                       ' pridruzi se aktivnoj (owns=False)
     End If
+    ' Kapija pred PRVI upis u zurnal, ne posle njega. Zurnal je jedini nosilac
+    ' lossless garancije: JournalCell pise CStr(oldVal)/CStr(newVal), a undo te
+    ' iste stringove poredi sa zivom celijom preko vbBinaryCompare i vraca
+    ' StaruVrednost nazad. Ako StaraVrednost/NovaVrednost nisu pod ugovorom o
+    ' formatu, Excel pri upisu pretvori "3/2026" u datum -- pa undo ili odbije
+    ' operaciju kao drift, ili vrati DRUGACIJU vrednost od one koja je bila.
+    ' Zato se ovde staje pre nego sto ijedna mutacija udje u zurnal.
+    modSchema.SchemaReadyOrFail SRC, TBL_STORNO_ZURNAL
+
     mOpID = GetNextID(TBL_STORNO_ZURNAL, COL_SZ_OP_ID, "SOP-")
     If Len(mOpID) = 0 Then Err.Raise ERR_SZ_BASE + 22, SRC, "OperationID nije generisan (zurnal sema?)."
     Dim zbase As String: zbase = GetNextID(TBL_STORNO_ZURNAL, COL_SZ_ID, "ZUR-")

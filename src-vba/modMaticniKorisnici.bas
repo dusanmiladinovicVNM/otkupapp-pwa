@@ -264,6 +264,12 @@ Public Function KorDodaj(ByVal polja As Object, ByRef noviID As String) As Strin
     adm = JeAdmin(Vred(polja, "uloga"))
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "KorDodaj", TBL_KORISNICI
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_KORISNICI
 
@@ -307,6 +313,12 @@ Public Function KorIzmeni(ByVal red As Long, ByVal polja As Object) As String
     adm = JeAdmin(Vred(polja, "uloga"))
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "KorIzmeni", TBL_KORISNICI
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_KORISNICI
 

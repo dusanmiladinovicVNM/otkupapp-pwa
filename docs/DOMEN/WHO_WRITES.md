@@ -116,7 +116,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
-- `tblStornoZurnal`: `modTestStornoCentar`
+- `tblStornoZurnal`: `modTest`, `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
 - `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`

@@ -307,6 +307,12 @@ Public Function RecalculateZbirnaFromOtpremnice_TX(ByVal brojZbirne As String, _
     End If
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "RecalculateZbirnaFromOtpremnice_TX", TBL_ZBIRNA
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 

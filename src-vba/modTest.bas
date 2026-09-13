@@ -497,6 +497,9 @@ Public Sub RunAllTests()
     RunOne 207
     RunOne 208
     RunOne 209
+    RunOne 210
+    RunOne 211
+    RunOne 212
     RunOne 124
     RunOne 125
     RunOne 126
@@ -778,6 +781,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 207: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
         Case 208: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
         Case 209: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
+        Case 210: TestName = "T_Sema_FormatCelijeCuvaVrednost"
+        Case 211: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
+        Case 212: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -995,6 +1001,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 207: T_Backup_NeObaraStartINeRasteBezGranice
         Case 208: T_AutoSave_PadNeZaglavljujePrekidac
         Case 209: T_Kontekst_NovaKulturaITipAmbalazeUlaze
+        Case 210: T_Sema_FormatCelijeCuvaVrednost
+        Case 211: T_Sema_ZurnalCuvaVrednostKrozJournalCell
+        Case 212: T_Sema_MagacinOdbijaUpisBezUgovora
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6526,6 +6535,266 @@ Private Function NewOtkupUIForm() As frmOtkupUI
 
     Set NewOtkupUIForm = f
 End Function
+
+' ============================================================
+' 210. Ugovor o formatu celije stvarno cuva vrednost
+' ============================================================
+' Sveska napravljena iz kanona ima sve kolone u General formatu. Excel tada TIHO
+' konvertuje pri upisu: "3/2026" u BrojFakture postane datum 1.3.2026. Mereno
+' 12.09.2026 -- fixture iz takvog donora je oborio 10 testova koji sa kodom nemaju
+' veze, a u produkciji bi GenerateBrojFakture (trazi "/") dao sledecoj fakturi
+' broj koji vec postoji, i takav bi otisao na SEF.
+'
+' Test meri PRAVO PONASANJE EXCELA, u oba smera nad istom kolonom:
+'   General -> vrednost se pokvari      (dokaz da opasnost postoji i da test meri nju)
+'   ugovor  -> vrednost prezivi         (dokaz da ugovor radi)
+'
+' Bez prvog smera bi test bio zelen i na masini gde Excel uopste ne konvertuje.
+Private Sub T_Sema_FormatCelijeCuvaVrednost()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, col As ListColumn
+    Dim red As Variant, iBroj As Long
+    Dim uGeneralu As String, uUgovoru As String
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_FAKTURE)
+    iBroj = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", "modTest")
+    Set col = lo.ListColumns("BrojFakture")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_FAKTURE
+
+    ' --- smer 1: General kvari vrednost
+    col.Range.NumberFormat = "General"
+    ReDim red(1 To lo.ListColumns.count)
+    red(RequireColumnIndex(TBL_FAKTURE, "FakturaID", "modTest")) = "TST-FMT-1"
+    red(iBroj) = OPASNA
+    AppendRow TBL_FAKTURE, red
+    uGeneralu = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iBroj).value)
+
+    ' --- smer 2: ugovor iz kanona cuva vrednost
+    modSchema.PrimeniFormateKanona
+    ReDim red(1 To lo.ListColumns.count)
+    red(RequireColumnIndex(TBL_FAKTURE, "FakturaID", "modTest")) = "TST-FMT-2"
+    red(iBroj) = OPASNA
+    AppendRow TBL_FAKTURE, red
+    uUgovoru = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iBroj).value)
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq (uGeneralu <> OPASNA), True, _
+             "preduslov: u General formatu Excel POKVARI '" & OPASNA & "' (dobio: " & uGeneralu & ")"
+    AssertEq uUgovoru, OPASNA, _
+             "sa ugovorom iz kanona vrednost prezivi upis"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_FormatCelijeCuvaVrednost", errDesc
+End Sub
+
+' ============================================================
+' 211. Zurnal storna cuva vrednost -- kroz PRAVI JournalCell
+' ============================================================
+' Zurnal je jedini nosilac lossless garancije za "Vrati storno". JournalCell pise
+' CStr(oldVal) i CStr(newVal) u StaraVrednost / NovaVrednost, a UndoOperation_TX
+' te iste stringove poredi sa zivom celijom preko vbBinaryCompare (drift guard) i
+' vraca StaruVrednost nazad u original.
+'
+' Ako te dve kolone nisu pod ugovorom o formatu, Excel pri upisu pretvori "3/2026"
+' u datum. Posledica NIJE kozmeticka: undo tada ili odbije operaciju kao drift
+' ("stanje se promenilo posle storna"), ili vrati DRUGACIJU vrednost od one koja je
+' zaista bila. Ovaj PR je taj rizik uvecao -- poslovne kolone su usle u ugovor, pa
+' se ziva celija i njena kopija u zurnalu vise ne kvare isto.
+'
+' Meri se kroz PRAVI JournalCell, ne direktnim upisom u celiju: put do stete ide
+' kroz AppendRow sa pozicionim nizom, i bas taj put mora da bude dokazan.
+'
+' Tri tvrdnje, u oba smera:
+'   1. bez ugovora zurnal SE POKVARI            (dokaz da opasnost postoji)
+'   2. sa ugovorom vrednost prezivi round-trip  (dokaz da ugovor radi)
+'   3. BeginStornoOp ODBIJA da otvori operaciju nad zurnalom bez ugovora
+'      (dokaz da je kapija fail-closed, a ne samo prijava)
+Private Sub T_Sema_ZurnalCuvaVrednostKrozJournalCell()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, ws As Worksheet
+    Dim iStara As Long
+    Dim uGeneralu As String, uUgovoru As String
+    Dim vidiKvar As String
+    Dim kapijaBroj As Long, kapijaOpis As String
+    Dim owns As Boolean, zasticen As Boolean
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_STORNO_ZURNAL)
+    Set ws = lo.Parent
+    iStara = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_STARA, "modTest")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' Operacija se otvara dok ugovor JOS VAZI -- inace bi je nova kapija odbila i
+    ' smer 1 se ne bi mogao izmeriti. Format se kvari tek posle otvaranja.
+    modSchema.PrimeniFormateKanona
+    owns = modStornoZurnal.BeginStornoOp("TEST", "TST-ZUR-FMT")
+
+    ' --- smer 1: bez ugovora Excel pokvari zurnal, kroz PRAVI JournalCell
+    lo.ListColumns(COL_SZ_STARA).Range.NumberFormat = "General"
+    lo.ListColumns(COL_SZ_NOVA).Range.NumberFormat = "General"
+    vidiKvar = modSchema.FormatNeslaganje(TBL_STORNO_ZURNAL)
+    modStornoZurnal.JournalCell TBL_OTKUP, "TST-ZUR-R1", COL_OTK_BR_DOK, OPASNA, OPASNA
+    uGeneralu = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iStara).value)
+
+    ' --- smer 2: ugovor iz kanona cuva vrednost kroz isti put
+    modSchema.PrimeniFormateKanona
+    modStornoZurnal.JournalCell TBL_OTKUP, "TST-ZUR-R2", COL_OTK_BR_DOK, OPASNA, OPASNA
+    uUgovoru = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iStara).value)
+
+    ' --- smer 3: kapija je FAIL-CLOSED kad popravka NIJE moguca
+    ' Samo pokvariti format nije dovoljno: kapija po dizajnu PRVO pokusa da izleci
+    ' pa tek onda stane, pa bi ovde uredno popravila i pustila dalje. Zasticen list
+    ' je realan uzrok zbog koga postavljanje formata ne prolazi, i jedini nacin da
+    ' se izmeri sama grana odbijanja.
+    modStornoZurnal.AbortStornoOp
+    lo.ListColumns(COL_SZ_STARA).Range.NumberFormat = "General"
+    ws.Protect
+    zasticen = True
+    On Error Resume Next
+    Err.Clear
+    modStornoZurnal.BeginStornoOp "TEST", "TST-ZUR-FMT-2"
+    kapijaBroj = Err.Number
+    kapijaOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+    ws.Unprotect
+    zasticen = False
+    modStornoZurnal.AbortStornoOp
+
+    tx.RollbackTx
+    txZapoceta = False
+    modSchema.PrimeniFormateKanona
+
+    AssertEq (uGeneralu <> OPASNA), True, _
+             "preduslov: bez ugovora JournalCell POKVARI '" & OPASNA & "' (dobio: " & uGeneralu & ")"
+    AssertEq (InStr(1, vidiKvar, "StaraVrednost", vbTextCompare) > 0), True, _
+             "FormatNeslaganje imenuje bas pokvarenu kolonu (bilo: " & vidiKvar & ")"
+    AssertEq uUgovoru, OPASNA, _
+             "sa ugovorom zurnal cuva vrednost kroz JournalCell"
+    AssertEq (StrComp(uUgovoru, OPASNA, vbBinaryCompare) = 0), True, _
+             "drift guard undo-a (vbBinaryCompare) bi se poklopio"
+    AssertEq (kapijaBroj <> 0), True, _
+             "BeginStornoOp ODBIJA operaciju kad ugovor ne moze da se ispuni"
+    AssertEq (InStr(1, kapijaOpis, "format", vbTextCompare) > 0), True, _
+             "kapija imenuje razlog (bilo: " & kapijaOpis & ")"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If zasticen Then ws.Unprotect
+    modStornoZurnal.AbortStornoOp
+    On Error GoTo 0
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_ZurnalCuvaVrednostKrozJournalCell", errDesc
+End Sub
+
+' ============================================================
+' 212. SaveMagacinCore odbija upis kad ugovor o formatu ne stoji
+' ============================================================
+' Recenzija (13.09.2026) je pokazala da tvrda kapija na 19 writer ulaza NE znaci
+' "fail closed pre poslovnog rada": SaveMagacinCore pise tblMagacin.BrojDokumenta
+' -- contract kolonu -- a nije imao nijednu kapiju. Vrednost dolazi iz slobodnog
+' operaterskog polja (agro unos), pa "3/2026" tu prolazi bez otpora.
+'
+' Test je namerno MALI i meri tacno jednu stvar: da upis STANE pre AppendRow-a.
+' Zasticen list je isti mehanizam kao u testu 211 -- bez njega bi kapija format
+' uredno izlecila i pustila upis, pa tvrdnja ne bi merila odbijanje.
+Private Sub T_Sema_MagacinOdbijaUpisBezUgovora()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, ws As Worksheet
+    Dim iDok As Long, preRedova As Long, posleRedova As Long
+    Dim upisano As String, novID As String
+    Dim kapijaBroj As Long, kapijaOpis As String
+    Dim zasticen As Boolean
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_MAGACIN)
+    Set ws = lo.Parent
+    iDok = RequireColumnIndex(TBL_MAGACIN, COL_MAG_BR_DOK, "modTest")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_MAGACIN
+
+    ' --- smer 1: kolona je General, ali kapija je izleci PRE upisa
+    ' Ovo je jedina tvrdnja koja RAZLIKUJE uzrok. Bez kapije upis prolazi i Excel
+    ' pretvori "3/2026" u datum; sa kapijom vrednost prezivi. Zato ide bez zastite
+    ' lista -- zasticen list bi oborio i sam AppendRow, pa se "kapija je stala" ne
+    ' bi razlikovalo od "list nije dao da se pise".
+    lo.ListColumns(COL_MAG_BR_DOK).Range.NumberFormat = "General"
+    novID = modAgrohemija.SaveMagacinCore(Date, "ART-TEST-1", MAG_ULAZ, 1#, _
+                                          "", "", OPASNA, "", "", 10#, True, True)
+    upisano = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iDok).value)
+
+    ' --- smer 2: kad popravka NIJE moguca, upis se odbija i razlog se imenuje
+    lo.ListColumns(COL_MAG_BR_DOK).Range.NumberFormat = "General"
+    preRedova = lo.ListRows.count
+    ws.Protect
+    zasticen = True
+    On Error Resume Next
+    Err.Clear
+    modAgrohemija.SaveMagacinCore Date, "ART-TEST-1", MAG_ULAZ, 1#, _
+                                  "", "", OPASNA, "", "", 10#, True, True
+    kapijaBroj = Err.Number
+    kapijaOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+    ws.Unprotect
+    zasticen = False
+    posleRedova = lo.ListRows.count
+
+    tx.RollbackTx
+    txZapoceta = False
+    modSchema.PrimeniFormateKanona
+
+    AssertEq (Len(novID) > 0), True, _
+             "preduslov: upis sa PRAVIM artiklom prolazi (inace smer 1 ne meri kapiju)"
+    AssertEq upisano, OPASNA, _
+             "kapija izleci format PRE upisa -- vrednost prezivi iako je kolona bila General"
+    AssertEq (InStr(1, kapijaOpis, "format", vbTextCompare) > 0), True, _
+             "kad popravka nije moguca, razlog imenuje FORMAT (bilo: " & kapijaOpis & ")"
+    ' NAPOMENA: sledeca tvrdnja NE razlikuje uzrok -- zasticen list blokira i sam
+    ' AppendRow. Stoji kao regresiona, i tako je imenovana.
+    AssertEq posleRedova, preRedova, _
+             "regresija: posle odbijenog upisa nije ostao nijedan red"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If zasticen Then ws.Unprotect
+    On Error GoTo 0
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_MagacinOdbijaUpisBezUgovora", errDesc
+End Sub
 
 ' ============================================================
 ' 209. Nova kultura i nov tip ambalaze takodje moraju u kontekst

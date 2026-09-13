@@ -1228,8 +1228,12 @@ Public Sub EnsureRuntimeSchema()
 
     ' Format kolona (schema-drift: reinstall/self-update vrati kolone na General ->
     ' E-notacija/tarabe na dokumentima). Idempotentno, tera se na SVAKI start.
-    ' BPG je identifikator (dug broj), ne racunska vrednost -> Text ("@").
-    SetColumnNumberFormat TBL_KOOPERANTI, COL_KOOP_BPG, "@"
+    '
+    ' TEKSTUALNE kolone vise NISU nabrojane ovde nego u kanonu
+    ' (schema/schema.json -> "formats"), pa ih primenjuje jedan prolaz. BPGBroj je
+    ' bio jedina takva kolona na ovom spisku i sada je u kanonu -- rucni spisak od
+    ' 53 kolone bi zastareo prvom novom tabelom, a generator ga proverava.
+    modSchema.PrimeniFormateKanona
     ' Prerada: tezine su Double (samo prikaz) -> fiksni decimalni format spreci General/E.
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_BRUTO, "0.00"
@@ -1565,6 +1569,11 @@ End Sub
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "BackfillOtkupBrojOtpremnice", TBL_OTKUP
     Dim od As Variant: od = GetTableData(TBL_OTPREMNICA)
     Dim map As Object: Set map = CreateObject("Scripting.Dictionary")
     If IsArray(od) Then
@@ -1694,16 +1703,21 @@ Private Sub BackfillColumn(ByVal tblName As String, ByVal colName As String, ByV
 End Sub
 
 ' Postavi NumberFormat kolone (no-op ako tabela/kolona ne postoji).
+' Format se postavlja na CELU kolonu tabele (ListColumn.Range), ne na DataBodyRange.
+'
+' Ranije je stajalo "If lo.DataBodyRange Is Nothing Then Exit Sub", pa SVEZE
+' napravljena prazna tabela nikad nije dobila format -- a bas prvi upisan red je
+' onaj koji Excel pokvari. Mereno 12.09.2026: sveska napravljena iz kanona je
+' upisala "3/2026" u BrojFakture kao datum i oborila 10 testova.
 Private Sub SetColumnNumberFormat(ByVal tblName As String, ByVal colName As String, ByVal fmt As String)
     On Error Resume Next
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
     If lo Is Nothing Then Exit Sub
-    If lo.DataBodyRange Is Nothing Then Exit Sub
     Dim col As ListColumn
     Set col = lo.ListColumns(colName)
     If col Is Nothing Then Exit Sub
-    col.DataBodyRange.NumberFormat = fmt
+    col.Range.NumberFormat = fmt
 End Sub
 
 ' ============================================================
@@ -1742,6 +1756,12 @@ Public Sub KreirajPrvogAdmina()
     End If
 
     EnsureKorisniciSchema
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "KreirajPrvogAdmina", TBL_KORISNICI
 
     Dim u As String, pin As String, ime As String
     u = Trim$(InputBox("Korisnicko ime za ADMINA:", APP_NAME, "admin"))

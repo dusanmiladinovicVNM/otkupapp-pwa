@@ -151,6 +151,13 @@ Public Function PaletizePrijemnica( _
 
     If brGajbica <= 0 Then Exit Function       ' nema gajbica (Klasa II / bez ambalaze)
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "PaletizePrijemnica", _
+        TBL_PALETA & "|" & TBL_PALETA_STAVKA
+
     RequirePaletaSchema SRC
     RequirePaletaStavkaSchema SRC
     EnsurePrijemnicaNotAlreadyPaletized prijemnicaID, SRC
@@ -1738,6 +1745,13 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     End If
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "ReassignPaleteToPrijemnica_TX", _
+        TBL_PALETA & "|" & TBL_PALETA_STAVKA
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
@@ -2314,6 +2328,13 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
 
     ' --- MUTACIJA (transakciono) ---
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "AdjustPaletaGajbiceZaPrijemnicu_TX", _
+        TBL_PALETA & "|" & TBL_PALETA_STAVKA
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
@@ -2922,6 +2943,13 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     EnsurePreradaCols
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "SavePrerada_TX", _
+        TBL_PRERADA & "|" & TBL_PRERADA_STAVKA
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRERADA
     tx.AddTableSnapshot TBL_PRERADA_STAVKA

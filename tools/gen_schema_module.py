@@ -88,8 +88,11 @@ Option Explicit
 ' Javni ulazi:
 '   EnsureAllTables      kreira sto fali, dopunjava kolone. Idempotentno.
 '   VerifySchema         prijavljuje odstupanja; NISTA ne menja.
-'   SchemaReadyOrFail    tvrda kapija pred upis, nad zadatim tabelama.
+'   SchemaReadyOrFail    tvrda kapija pred upis, nad zadatim tabelama (redosled
+'                        kolona I ugovor o formatu celije).
 '   SchemaCheckOnStart   jeftina provera pri pokretanju (otisak).
+'   PrimeniFormateKanona primeni ugovor o formatu i vrati sta NIJE leglo.
+'   FormatNeslaganje     procitaj stvarni format jedne tabele; nista ne menja.
 '   SchemaRegistry       registar, za testove i alate.
 '
 ' NE zvati EnsureAllTables unutar otvorene transakcije: clsTransaction.RestoreTable
@@ -155,6 +158,145 @@ End Function
 '
 ' NE popravlja REDOSLED: premestanje kolone u postojecoj tabeli bi pomerilo
 ' podatke. Pogresan redosled je nalaz za coveka, ne nesto sto se leci u prolazu.
+' ============================================================
+' FORMAT CELIJE -- deo ugovora, ne kozmetika.
+'
+' Kolona u General formatu Excel TIHO konvertuje pri upisu: "3/2026" postane
+' datum, "0641234567" izgubi vodecu nulu, 18-cifreni racun kroz Double izgubi
+' poslednje cifre. Vrednost se menja u TRENUTKU UPISA, pa naknadno postavljanje
+' formata NE popravlja vec pokvarene celije -- ono ih samo prikaze kao broj.
+' Zato format mora da stoji PRE prvog upisa i da se tera na svaki start:
+' reinstall, self-update i import vracaju kolone na General.
+'
+' Spisak je generisan iz kljuca "formats" u schema/schema.json. Ne dopunjavati
+' ovde -- ovaj modul je artefakt.
+' ============================================================
+' Primeni ugovor i PROVERI da je legao. Vraca opis neslaganja koja su prezivela
+' primenu ("" = sve u redu). Ne dize gresku -- odluku nosi pozivalac, jer se ovo
+' zove i sa starta (gde fail-soft mora da ostane) i iz tvrde kapije pred upisom.
+'
+' Ranije je cela procedura bila Sub pod jednim "On Error Resume Next" i nije
+' vracala nista. Ugovor je time prakticno glasio "pokusaj da postavis @, pa
+' nastavi rad" -- a kolona koja nije "@" TIHO menja vrednost pri prvom upisu,
+' dakle bas ono zbog cega ugovor postoji. Sada se rezultat MERI.
+Public Function PrimeniFormateKanona() As String
+    Dim reg As Object, tblName As Variant
+    Dim kolone As Object, kolName As Variant
+    Dim lo As ListObject
+    Dim lose As String
+
+    Set reg = FormatRegistry()
+    For Each tblName In reg.keys
+        Set lo = Nothing
+        On Error Resume Next
+        Set lo = modDataAccess.GetTable(CStr(tblName))
+        On Error GoTo 0
+        If Not lo Is Nothing Then
+            Set kolone = reg(tblName)
+            For Each kolName In kolone.keys
+                If Not PostaviFormatKolone(lo, CStr(kolName), CStr(kolone(kolName))) Then
+                    If Len(lose) > 0 Then lose = lose & ", "
+                    lose = lose & CStr(tblName) & "." & CStr(kolName)
+                End If
+            Next kolName
+        End If
+    Next tblName
+
+    If Len(lose) > 0 Then PrimeniFormateKanona = "format nije legao: " & lose
+End Function
+
+' Format se postavlja na CELU kolonu tabele (ListColumn.Range), ne na
+' DataBodyRange. Prazna tabela nema DataBodyRange, pa bi izlazak na njemu ostavio
+' sveze napravljenu svesku bez formata -- i PRVI upisan red bi bio pokvaren.
+' Tacno to se desilo 12.09.2026. sa sveskom napravljenom iz kanona.
+'
+' Vraca True samo ako je format STVARNO na koloni. Upis koji "nije pukao" nije
+' dokaz: zasticen list, spojene celije ili drugi COM klijent mogu da ga odbiju bez
+' VBA greske, a mesan format nad opsegom vrati Null (pa CStr pukne pod Resume Next
+' i ostane prazno -- sto se ovde racuna kao neslaganje, i tako treba).
+Private Function PostaviFormatKolone(ByVal lo As ListObject, ByVal kolName As String, _
+                                     ByVal semanticki As String) As Boolean
+    Dim col As ListColumn
+    Dim fmt As String
+    Dim stvarni As String
+
+    fmt = ExcelFormat(semanticki)
+    ' Nepoznat semanticki naziv obara GENERISANJE (gen_schema_module), pa ovde ne
+    ' moze da stigne; ako ipak stigne, nije neslaganje formata nego nema sta da se
+    ' postavi.
+    If Len(fmt) = 0 Then PostaviFormatKolone = True: Exit Function
+
+    Set col = Nothing
+    On Error Resume Next
+    Set col = lo.ListColumns(kolName)
+    On Error GoTo 0
+    ' Kolone nema u zatecenoj svesci -- to prijavljuje sema, ne ugovor o formatu.
+    ' Nepostojeca kolona ne moze da pokvari nijednu vrednost.
+    If col Is Nothing Then PostaviFormatKolone = True: Exit Function
+
+    On Error Resume Next
+    col.Range.NumberFormat = fmt
+    stvarni = CStr(col.Range.NumberFormat)
+    On Error GoTo 0
+
+    PostaviFormatKolone = (StrComp(stvarni, fmt, vbTextCompare) = 0)
+End Function
+
+' Neslaganje ugovora za JEDNU tabelu -- cita STVARNI NumberFormat sa kolone, ne
+' pamti sta je primena pokusala. "" = tabela je u skladu.
+'
+' Postoji odvojeno od PrimeniFormateKanona jer tvrda kapija pred upisom mora da
+' ume da PITA, bez sporednog efekta i bez prolaza kroz svih 30 tabela.
+Public Function FormatNeslaganje(ByVal tblName As String) As String
+    Dim reg As Object, kolone As Object, kolName As Variant
+    Dim lo As ListObject, col As ListColumn
+    Dim fmt As String, stvarni As String, lose As String
+
+    Set reg = FormatRegistry()
+    If Not reg.Exists(tblName) Then Exit Function
+    Set kolone = reg(tblName)
+
+    Set lo = Nothing
+    On Error Resume Next
+    Set lo = modDataAccess.GetTable(tblName)
+    On Error GoTo 0
+    ' Nepostojecu tabelu prijavljuje SchemaReadyOrFail svojom porukom -- ovde bi
+    ' druga poruka o istom stanju samo zbunila.
+    If lo Is Nothing Then Exit Function
+
+    For Each kolName In kolone.keys
+        fmt = ExcelFormat(CStr(kolone(kolName)))
+        If Len(fmt) > 0 Then
+            Set col = Nothing
+            On Error Resume Next
+            Set col = lo.ListColumns(CStr(kolName))
+            On Error GoTo 0
+            If Not col Is Nothing Then
+                stvarni = ""
+                On Error Resume Next
+                stvarni = CStr(col.Range.NumberFormat)
+                On Error GoTo 0
+                If StrComp(stvarni, fmt, vbTextCompare) <> 0 Then
+                    If Len(lose) > 0 Then lose = lose & ", "
+                    lose = lose & tblName & "." & CStr(kolName) & " je '" & _
+                           IIf(Len(stvarni) > 0, stvarni, "mesano") & "', ocekivano '" & fmt & "'"
+                End If
+            End If
+        End If
+    Next kolName
+
+    FormatNeslaganje = lose
+End Function
+
+' Semanticko ime -> Excel format. Kanon nosi znacenje, ne sirov Excel string.
+Private Function ExcelFormat(ByVal semanticki As String) As String
+    Select Case LCase$(semanticki)
+        Case "text":     ExcelFormat = "@"
+        Case "decimal2": ExcelFormat = "0.00"
+        Case Else:       ExcelFormat = ""
+    End Select
+End Function
+
 Public Sub EnsureAllTables()
     Dim reg As Object
     Dim tblName As Variant
@@ -164,6 +306,9 @@ Public Sub EnsureAllTables()
     For Each tblName In reg.keys
         EnsureJednuTabelu CStr(tblName)
     Next tblName
+
+    ' Format ide ODMAH po pravljenju tabela, pre ijednog upisa.
+    PrimeniFormateKanona
 End Sub
 
 ' Odstupanja sveske od kanona. NISTA ne menja -- dijagnostika ne sme da
@@ -364,6 +509,31 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
                           "modSchema.EnsureAllTables; ako i posle toga odstupa, " & _
                           "redosled se mora popraviti rucno."
             End If
+
+            ' FORMAT je deo ugovora koliko i redosled, i opasniji je od njega:
+            ' pogresan redosled posalje vrednost u pogresnu kolonu i to se vidi,
+            ' a kolona koja nije "@" TIHO promeni samu vrednost pri upisu
+            ' ("3/2026" -> datum, vodeca nula otpadne) -- posle cega nijedna
+            ' kasnija provera nema sa cim da uporedi.
+            '
+            ' Primena je fail-soft po dizajnu (start ne sme da se zakljuca, isti
+            ' razlog kao za semu), pa DOKAZ mora da stoji ovde -- pred upisom,
+            ' gde greska stvarno nastaje i gde je pozivalac ne guta nego prekida
+            ' _TX. Prvo se POKUSAVA lecenje, kao i za kolone; tvrdo se staje tek
+            ' ako format ni posle primene nije legao.
+            neslaganje = FormatNeslaganje(tblName)
+            If Len(neslaganje) > 0 Then
+                PrimeniFormateKanona
+                neslaganje = FormatNeslaganje(tblName)
+            End If
+            If Len(neslaganje) > 0 Then
+                Err.Raise vbObjectError + 9406, sourceName, _
+                          "Ugovor o formatu celije nije ispunjen (" & neslaganje & _
+                          "). Excel bi pri upisu TIHO promenio vrednost, pa je " & _
+                          "upis odbijen. Pokreni modSchema.EnsureAllTables; ako i " & _
+                          "posle toga odstupa, list je verovatno zasticen ili je " & _
+                          "kolona rucno preformatirana."
+            End If
         End If
     Next i
 End Sub
@@ -540,6 +710,29 @@ End Function
 '''
 
 
+def gen_formati(formats) -> str:
+    """Generisi FormatRegistry() iz kljuca "formats" u kanonu."""
+    red = []
+    red.append("' Ugovor o formatu celije, generisan iz schema/schema.json -> \"formats\".")
+    red.append("Private Function FormatRegistry() As Object")
+    red.append("    Dim reg As Object, k As Object")
+    red.append('    Set reg = CreateObject("Scripting.Dictionary")')
+    red.append("    reg.CompareMode = vbTextCompare")
+    for t in sorted(formats):
+        red.append("")
+        red.append('    Set k = CreateObject("Scripting.Dictionary")')
+        red.append("    k.CompareMode = vbTextCompare")
+        for c in sorted(formats[t]):
+            red.append('    k("%s") = "%s"' % (c, formats[t][c]))
+        red.append('    Set reg("%s") = k' % t)
+    red.append("")
+    red.append("    Set FormatRegistry = reg")
+    red.append("End Function")
+    red.append("")
+    red.append("")
+    return "\n".join(red)
+
+
 def gen_registar(tabele) -> str:
     red = []
     red.append("Private Function BuildRegistry() As Object")
@@ -571,6 +764,7 @@ def gen_registar(tabele) -> str:
 def izgradi(kanon_path: str) -> tuple:
     d = json.load(io.open(kanon_path, encoding="utf-8"))
     tabele = d["tables"]
+    formats = d.get("formats", {})
 
     mapa = tbl_konstante(MODCONFIG)
     greske = []
@@ -582,10 +776,82 @@ def izgradi(kanon_path: str) -> tuple:
                           % (t["table"], t["const"], mapa[t["table"]]))
         if not t["columns"]:
             greske.append("  %s: nema nijednu kolonu" % t["table"])
+    # Ugovor o formatu se proverava naspram kolona: tipfeler mora da umre pri
+    # generisanju, ne u runtime-u nad tudjom sveskom. Format nad nepostojecom
+    # kolonom je tise od greske -- nikad se ne primeni, a spisak izgleda pokriven.
+    #
+    # OBLIK se proverava prvi. Bez toga "formats": "text" ili lista umesto mape
+    # dize goli TypeError iz dubine generatora -- poruka koja ne imenuje ni kljuc
+    # ni tabelu, pa covek trazi gresku u alatu umesto u kanonu.
+    kol_po_tabeli = {t["table"]: set(t["columns"]) for t in tabele}
+    if not isinstance(formats, dict):
+        return None, ['  formats: mora biti mapa {tabela: {kolona: format}}, '
+                      'a jeste %s' % type(formats).__name__]
+    for t in sorted(formats):
+        if not isinstance(formats[t], dict):
+            greske.append("  formats: %s mora biti mapa {kolona: format}, a jeste %s"
+                          % (t, type(formats[t]).__name__))
+            continue
+        if t not in kol_po_tabeli:
+            greske.append("  formats: tabele %s nema u kanonu" % t)
+            continue
+        for c in sorted(formats[t]):
+            if c not in kol_po_tabeli[t]:
+                greske.append("  formats: %s nema kolonu %s" % (t, c))
+            if formats[t][c] not in ("text", "decimal2"):
+                greske.append("  formats: %s.%s ima nepoznat format %r"
+                              % (t, c, formats[t][c]))
+
+    # UJEDNACENOST IMENA. Join je jak koliko i njegova slabija strana: dok su obe
+    # kolone bile General, obe su se kvarile isto i poredjenje se poklapalo.
+    # Ugovor nad samo jednom stranom pravi ASIMETRIJU -- tj. REGRESIJU u odnosu na
+    # stanje pre ugovora. Mereno 13.09.2026: kljuc sifarnika tblKese.TipKese je
+    # ostao van ugovora dok je FK tblPrerada.TipKese usao.
+    #
+    # Namerno neujednaceno ime mora stajati u "formatsIzuzeci", i to sa razlogom:
+    # izuzetak bez obrazlozenja je spisak imena bez znacenja, tj. sledeca rupa.
+    #
+    # STA OVA KAPIJA NE VIDI, i ne pretvara se da vidi: vezu izmedju kolona
+    # RAZLICITOG imena koje nose ISTU vrednost. tblStornoVeze.ParentBroj drzi isti
+    # broj kao tblZbirna.BrojZbirne, a ime mu je jedinstveno u kanonu -- kad izadje
+    # iz ugovora, nijedna druga tabela nema kolonu tog imena, pa kapija nema sta da
+    # poredi i cuti. Tu asimetriju je nasao covek (recenzija 13.09.2026), ne alat.
+    # Da bi je alat video, kanon bi morao da nosi imenovane vrednosne domene -- to
+    # je zaseban posao, ne uzgredna dopuna ovog pravila.
+    izuzeci = d.get("formatsIzuzeci", {})
+    if not isinstance(izuzeci, dict):
+        return None, ['  formatsIzuzeci: mora biti mapa {ime kolone: razlog}']
+    for ime in sorted(izuzeci):
+        if not str(izuzeci[ime]).strip():
+            greske.append("  formatsIzuzeci: %s nema obrazlozenje" % ime)
+    pod_ugovorom = {c for t in formats if isinstance(formats[t], dict)
+                    for c in formats[t]}
+    for ime in sorted(pod_ugovorom - set(izuzeci)):
+        rupe = sorted(t["table"] for t in tabele
+                      if ime in t["columns"] and ime not in formats.get(t["table"], {}))
+        if rupe:
+            nosi = sorted(t for t in formats if ime in formats[t])
+            greske.append("  formats: '%s' je pod ugovorom u %s, a NIJE u %s "
+                          "-- join po toj koloni bi bio asimetrican "
+                          "(ili dodaj kolone, ili upisi ime u formatsIzuzeci uz razlog)"
+                          % (ime, ", ".join(nosi), ", ".join(rupe)))
+
+    # Imena idu DOSLOVNO u VBA string literal ("%s"), pa navodnik u imenu pravi
+    # nezatvoren literal i modul koji se ne kompajlira -- a modul koji se ne
+    # kompajlira obara CEO projekat, pa greska stigne kao "Cannot run the macro"
+    # na bilo kom makrou. Simptom ne pokazuje na krivca; ova kapija pokazuje.
+    for t in sorted(formats):
+        if not isinstance(formats[t], dict):
+            continue
+        for ime in [t] + sorted(formats[t]):
+            if '"' in ime or "\n" in ime or "\r" in ime:
+                greske.append("  formats: ime %r sadrzi navodnik ili prelom reda "
+                              "-- generisani VBA literal bi ostao nezatvoren" % ime)
     if greske:
         return None, greske
 
     telo = (ZAGLAVLJE.replace("@@OTISAK@@", otisak(tabele))
+            + gen_formati(formats)
             + gen_registar(tabele) + "\n")
 
     ne_ascii = sorted({c for c in telo if ord(c) > 127})
@@ -609,9 +875,18 @@ def main(argv) -> int:
     if a.iz_dumpa:
         src = json.load(io.open(a.iz_dumpa, encoding="utf-8"))
         mapa = tbl_konstante(MODCONFIG)
-        doc = collections.OrderedDict()
-        stari = json.load(io.open(a.kanon, encoding="utf-8"))
-        doc["_o_fajlu"] = stari["_o_fajlu"]
+        # KRECE OD ZATECENOG KANONA, ne od praznog dokumenta. Ranije je ovde
+        # stajao doc = OrderedDict() u koji su se rucno prenosila TRI kljuca
+        # (_o_fajlu, schemaVersion, tables) -- pa je svaki kljuc uveden posle toga
+        # tiho nestajao pri reseed-u. Konkretno "formats": ceo ugovor o formatu bi
+        # se izgubio, sve kapije bi ostale ZELENE (--check poredi kanon sa
+        # modSchema.bas, a oba bi bila prazna; otisak se racuna samo nad
+        # "tables"), i sveska iz kanona bi opet bila u General formatu.
+        # Prolaz kroz zatecen dokument je ista stvar za tri kljuca, a ne moze da
+        # izgubi cetvrti.
+        doc = json.load(io.open(a.kanon, encoding="utf-8"),
+                        object_pairs_hook=collections.OrderedDict)
+        stari = doc
         doc["schemaVersion"] = stari.get("schemaVersion", 1) + 1
         doc["tables"] = [
             collections.OrderedDict([

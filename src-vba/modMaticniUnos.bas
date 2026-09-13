@@ -141,6 +141,12 @@ Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
         End If
     End If
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Tabela se razresava u RUNTIME-u
+    ' (DodajPrazanRed radi AppendRow(tbl, ...) sa promenljivim imenom), pa je ovaj
+    ' upis nevidljiv i za tools/who_writes.py i za svaku staticku pretragu --
+    ' kapija na javnom ulazu je jedina odbrana koja ga pokriva.
+    modSchema.SchemaReadyOrFail SRC, tbl
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot tbl
@@ -224,6 +230,12 @@ Public Function MatIzmeni(ByVal kljuc As String, ByVal red As Long, _
         Exit Function
     End If
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Tabela se razresava u RUNTIME-u
+    ' (DodajPrazanRed radi AppendRow(tbl, ...) sa promenljivim imenom), pa je ovaj
+    ' upis nevidljiv i za tools/who_writes.py i za svaku staticku pretragu --
+    ' kapija na javnom ulazu je jedina odbrana koja ga pokriva.
+    modSchema.SchemaReadyOrFail SRC, tbl
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot tbl
@@ -279,6 +291,12 @@ Public Function MatPromeniStatus(ByVal kljuc As String, ByVal red As Long, _
     Else
         noviStatus = STATUS_NEAKTIVAN
     End If
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Tabela se razresava u RUNTIME-u
+    ' (DodajPrazanRed radi AppendRow(tbl, ...) sa promenljivim imenom), pa je ovaj
+    ' upis nevidljiv i za tools/who_writes.py i za svaku staticku pretragu --
+    ' kapija na javnom ulazu je jedina odbrana koja ga pokriva.
+    modSchema.SchemaReadyOrFail SRC, tbl
 
     Set tx = New clsTransaction
     tx.BeginTx

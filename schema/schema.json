@@ -984,5 +984,166 @@
         "ModifiedBy"
       ]
     }
-  ]
+  ],
+  "_o_formatima": [
+    "FORMAT CELIJE JE DEO UGOVORA, ne kozmetika. Kolona u General formatu Excel",
+    "TIHO konvertuje pri upisu: \"3/2026\" postane datum, \"0641234567\" izgubi vodecu",
+    "nulu, 18-cifreni racun kroz Double izgubi poslednje cifre. Vrednost se time",
+    "menja u TRENUTKU UPISA -- naknadno postavljanje formata je NE popravlja.",
+    "",
+    "Zato ovde stoje samo kolone sa DOKAZANIM piscem ili citaocem u kodu. Kolona",
+    "bez dokazanog kvara se NE dodaje: pravilo koje niko ne ume da brani zastari.",
+    "",
+    "Kljuc je NAMERNO van \"tables\": otisak seme (gen_schema_module.otisak) racuna",
+    "se iz \"tabela|kolone\", a modSchema.SchemaFingerprintActual cita samo imena",
+    "kolona iz sveske. Format u otisku bi znacio da svaka postojeca sveska na",
+    "startu prijavi trajan drift.",
+    "",
+    "Vrednost je SEMANTICKA (\"text\"), ne sirov Excel string -- generator je mapira",
+    "u \"@\". Numericki formati (danas rucno u modSetup.EnsureRuntimeSchema) mogu",
+    "kasnije ovde kao \"decimal2\", pa da mehanizam bude jedan.",
+    "",
+    "PRAVILO UJEDNACENOSTI: ako je ime kolone pod ugovorom u JEDNOJ tabeli, mora",
+    "biti pod ugovorom u SVIM tabelama koje tu kolonu imaju. Join je jak koliko i",
+    "njegova slabija strana -- dok su obe strane bile General, obe su se kvarile",
+    "isto i poredjenje se poklapalo; ugovor nad samo jednom stranom pravi",
+    "ASIMETRIJU, tj. regresiju. Isto vazi za sifarnik i njegov FK: kljuc sifarnika",
+    "bez surogata (tblTipAmbalaze.TipAmbalaze, tblKese.TipKese) mora pod ugovor",
+    "zajedno sa kolonom koja ga referencira.",
+    "",
+    "Pravilo obara GENERISANJE. Ime koje je namerno neujednaceno mora stajati u",
+    "\"formatsIzuzeci\", uz razlog -- izuzetak bez obrazlozenja se ne prima."
+  ],
+  "formats": {
+    "tblAmbalaza": {
+      "DokumentID": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblArtikli": {
+      "BarKod": "text"
+    },
+    "tblBankaImport": {
+      "BankaReferenz": "text",
+      "BrojDokumenta": "text",
+      "PozivNaBroj": "text"
+    },
+    "tblFakturaStavke": {
+      "BrojPrerade": "text",
+      "BrojPrijemnice": "text"
+    },
+    "tblFakture": {
+      "BrojFakture": "text",
+      "SEFDocumentId": "text",
+      "SEFPayloadHash": "text"
+    },
+    "tblKese": {
+      "TipKese": "text"
+    },
+    "tblKooperanti": {
+      "BPGBroj": "text",
+      "JMBG": "text",
+      "Pin": "text",
+      "TekuciRacun": "text",
+      "Telefon": "text"
+    },
+    "tblKorisnici": {
+      "PIN": "text"
+    },
+    "tblKulture": {
+      "TipAmbalaze": "text"
+    },
+    "tblKupci": {
+      "MaticniBroj": "text",
+      "TekuciRacun": "text"
+    },
+    "tblKutije": {
+      "TipKutije": "text"
+    },
+    "tblMGMT": {
+      "JMBG": "text",
+      "PIN": "text",
+      "TekuciRacun": "text",
+      "Telefon": "text"
+    },
+    "tblMagacin": {
+      "BrojDokumenta": "text"
+    },
+    "tblNovac": {
+      "BrojDokumenta": "text"
+    },
+    "tblOtkup": {
+      "BrojDokumenta": "text",
+      "BrojOtpremnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblOtpremnica": {
+      "BrojOtpremnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblPaleta": {
+      "TipAmbalaze": "text"
+    },
+    "tblPaletaStavka": {
+      "BrojPrijemnice": "text",
+      "BrojZbirne": "text"
+    },
+    "tblParcele": {
+      "KatBroj": "text"
+    },
+    "tblPrerada": {
+      "BrojPrerade": "text",
+      "TipKese": "text",
+      "TipKutije": "text"
+    },
+    "tblPrijemnica": {
+      "BrojPrijemnice": "text",
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    },
+    "tblSEFSubmission": {
+      "PayloadHash": "text",
+      "SEFDocumentId": "text"
+    },
+    "tblStanice": {
+      "Kontakt": "text",
+      "PIN": "text"
+    },
+    "tblStornoVeze": {
+      "CompletedAt": "text",
+      "CreatedAt": "text",
+      "NewBroj": "text",
+      "OldBroj": "text",
+      "ParentBroj": "text"
+    },
+    "tblStornoZurnal": {
+      "Broj": "text",
+      "NovaVrednost": "text",
+      "StaraVrednost": "text",
+      "Timestamp": "text"
+    },
+    "tblTipAmbalaze": {
+      "TipAmbalaze": "text"
+    },
+    "tblUtovar": {
+      "BrojNarudzbenice": "text",
+      "Plomba": "text",
+      "VremeUtovara": "text"
+    },
+    "tblUtovarStavke": {
+      "BrojPrerade": "text"
+    },
+    "tblVozaci": {
+      "PIN": "text",
+      "Telefon": "text"
+    },
+    "tblZbirna": {
+      "BrojZbirne": "text",
+      "TipAmbalaze": "text"
+    }
+  },
+  "formatsIzuzeci": {
+    "CreatedAt": "tblStornoVeze.CreatedAt/CompletedAt pisu se kao STRING (Format$(Now, \"yyyy-mm-dd hh:nn:ss\"), modStornoContext.bas:64 i :108), pa moraju biti tekst. Svuda drugde je CreatedAt pravi datum-vreme i tekst bi ga pokvario. Jedino ime u kanonu koje NIJE ujednaceno, i to namerno."
+  }
 }

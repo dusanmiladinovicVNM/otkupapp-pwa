@@ -313,6 +313,12 @@ Public Function CreateSEFSubmission_Row( _
         Err.Raise ERR_SEF_STATE, SRC, "RequestFormat is required."
     End If
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "CreateSEFSubmission_Row", TBL_SEF_SUBMISSION
+
     RequireSEFSubmissionSchema SRC
 
     Dim submissionID As String
@@ -391,6 +397,12 @@ Public Sub SaveSEFSubmissionResult_Row( _
         Err.Raise ERR_SEF_RESPONSE_PARSE, SRC, _
                   "Response object is Nothing."
     End If
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "SaveSEFSubmissionResult_Row", TBL_SEF_SUBMISSION
 
     RequireSEFSubmissionSchema SRC
 

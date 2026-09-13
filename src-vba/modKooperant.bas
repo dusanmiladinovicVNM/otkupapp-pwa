@@ -58,6 +58,12 @@ Public Function ResolveKooperantByText(ByVal nm As String, _
     ' pa forma javlja da kooperant nije pronadjen (bez tihog kreiranja).
     If Not KoopAutoCreate() Then Exit Function
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "ResolveKooperantByText", TBL_KOOPERANTI
+
     Dim newID As String: newID = CreateKooperantByName(nm, stanicaID)
     If Len(newID) > 0 Then created = True
     ResolveKooperantByText = newID
