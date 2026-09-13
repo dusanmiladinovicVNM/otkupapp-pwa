@@ -68,6 +68,12 @@ Public Function CreateCorrectionContext(ByVal mode As String, _
     rowData(17) = ""                        ' RecoveryAction
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "CreateCorrectionContext", TBL_STORNO_VEZE
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_STORNO_VEZE
     If AppendRow(TBL_STORNO_VEZE, rowData) = 0 Then

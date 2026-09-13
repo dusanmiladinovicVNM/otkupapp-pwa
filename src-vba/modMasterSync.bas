@@ -2822,6 +2822,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
     Dim filesCount As Long
 
     On Error GoTo EH
+    ' Ugovor o formatu + redosled kolona PRE upisa. Ovaj put je danas TVRDO
+    ' PAUZIRAN (izvedeni lanac ceka PR7/PR8), pa kapija nista ne kosta -- ali
+    ' se odpauziranjem ne sme otvoriti rupa koju ostatak ugovora zatvara.
+    modSchema.SchemaReadyOrFail "ImportZbirneFromPWA_Core", TBL_ZBIRNA
+
 
     ImportZbirneFromPWA_Core = False
     mLastPWAFatalSyncError = False

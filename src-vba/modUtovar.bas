@@ -536,6 +536,12 @@ Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
 
     On Error GoTo EH
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "UpdateUtovarPrevoz_TX", TBL_UTOVAR
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_UTOVAR
 
@@ -923,6 +929,13 @@ Public Function CreateUtovarSaFakturom_TX(ByVal kupacID As String, _
 
     On Error GoTo EH
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "CreateUtovarSaFakturom_TX", _
+        TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & "|" & TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_UTOVAR
     tx.AddTableSnapshot TBL_UTOVAR_STAVKE
@@ -1006,6 +1019,13 @@ Public Function CreateUtovar_TX(ByVal kupacID As String, _
     Set tx = New clsTransaction
 
     On Error GoTo EH
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "CreateUtovar_TX", _
+        TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_UTOVAR
@@ -1326,6 +1346,13 @@ Public Function CreateFakturaIzUtovara_TX(ByVal utovarID As String, _
     Set tx = New clsTransaction
 
     On Error GoTo EH
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "CreateFakturaIzUtovara_TX", _
+        TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_UTOVAR
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_UTOVAR

@@ -144,6 +144,12 @@ Public Sub ImportBankaInbox_TX(Optional ByRef outUvezeno As Long, _
     Set errorMoves = New Collection
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "ImportBankaInbox_TX", TBL_BANKA_IMPORT
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
 
@@ -424,6 +430,12 @@ Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
     Set errorMoves = New Collection
 
     Set tx = New clsTransaction
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "ImportOnePdfIntoBankaImport", TBL_BANKA_IMPORT
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
 

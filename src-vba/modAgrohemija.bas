@@ -92,6 +92,12 @@ Public Function SaveMagacinCore(ByVal datum As Date, ByVal artikalID As String, 
                              Optional ByVal allowNoStock As Boolean = False, _
                              Optional ByVal allowZeroValue As Boolean = False) As String
 
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "SaveMagacinCore", TBL_MAGACIN
+
     Call ValidateMagacinInput( _
         datum:=datum, _
         artikalID:=artikalID, _

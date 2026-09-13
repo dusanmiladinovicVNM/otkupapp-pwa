@@ -1569,6 +1569,11 @@ End Sub
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "BackfillOtkupBrojOtpremnice", TBL_OTKUP
     Dim od As Variant: od = GetTableData(TBL_OTPREMNICA)
     Dim map As Object: Set map = CreateObject("Scripting.Dictionary")
     If IsArray(od) Then
@@ -1751,6 +1756,12 @@ Public Sub KreirajPrvogAdmina()
     End If
 
     EnsureKorisniciSchema
+
+    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
+    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
+    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
+    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
+    modSchema.SchemaReadyOrFail "KreirajPrvogAdmina", TBL_KORISNICI
 
     Dim u As String, pin As String, ime As String
     u = Trim$(InputBox("Korisnicko ime za ADMINA:", APP_NAME, "admin"))

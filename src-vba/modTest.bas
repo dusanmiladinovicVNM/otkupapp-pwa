@@ -499,6 +499,7 @@ Public Sub RunAllTests()
     RunOne 209
     RunOne 210
     RunOne 211
+    RunOne 212
     RunOne 124
     RunOne 125
     RunOne 126
@@ -782,6 +783,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 209: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
         Case 210: TestName = "T_Sema_FormatCelijeCuvaVrednost"
         Case 211: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
+        Case 212: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -1001,6 +1003,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 209: T_Kontekst_NovaKulturaITipAmbalazeUlaze
         Case 210: T_Sema_FormatCelijeCuvaVrednost
         Case 211: T_Sema_ZurnalCuvaVrednostKrozJournalCell
+        Case 212: T_Sema_MagacinOdbijaUpisBezUgovora
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6706,6 +6709,91 @@ EH:
     modSchema.PrimeniFormateKanona
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_Sema_ZurnalCuvaVrednostKrozJournalCell", errDesc
+End Sub
+
+' ============================================================
+' 212. SaveMagacinCore odbija upis kad ugovor o formatu ne stoji
+' ============================================================
+' Recenzija (13.09.2026) je pokazala da tvrda kapija na 19 writer ulaza NE znaci
+' "fail closed pre poslovnog rada": SaveMagacinCore pise tblMagacin.BrojDokumenta
+' -- contract kolonu -- a nije imao nijednu kapiju. Vrednost dolazi iz slobodnog
+' operaterskog polja (agro unos), pa "3/2026" tu prolazi bez otpora.
+'
+' Test je namerno MALI i meri tacno jednu stvar: da upis STANE pre AppendRow-a.
+' Zasticen list je isti mehanizam kao u testu 211 -- bez njega bi kapija format
+' uredno izlecila i pustila upis, pa tvrdnja ne bi merila odbijanje.
+Private Sub T_Sema_MagacinOdbijaUpisBezUgovora()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, ws As Worksheet
+    Dim iDok As Long, preRedova As Long, posleRedova As Long
+    Dim upisano As String, novID As String
+    Dim kapijaBroj As Long, kapijaOpis As String
+    Dim zasticen As Boolean
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_MAGACIN)
+    Set ws = lo.Parent
+    iDok = RequireColumnIndex(TBL_MAGACIN, COL_MAG_BR_DOK, "modTest")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_MAGACIN
+
+    ' --- smer 1: kolona je General, ali kapija je izleci PRE upisa
+    ' Ovo je jedina tvrdnja koja RAZLIKUJE uzrok. Bez kapije upis prolazi i Excel
+    ' pretvori "3/2026" u datum; sa kapijom vrednost prezivi. Zato ide bez zastite
+    ' lista -- zasticen list bi oborio i sam AppendRow, pa se "kapija je stala" ne
+    ' bi razlikovalo od "list nije dao da se pise".
+    lo.ListColumns(COL_MAG_BR_DOK).Range.NumberFormat = "General"
+    novID = modAgrohemija.SaveMagacinCore(Date, "ART-TEST-1", MAG_ULAZ, 1#, _
+                                          "", "", OPASNA, "", "", 10#, True, True)
+    upisano = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iDok).value)
+
+    ' --- smer 2: kad popravka NIJE moguca, upis se odbija i razlog se imenuje
+    lo.ListColumns(COL_MAG_BR_DOK).Range.NumberFormat = "General"
+    preRedova = lo.ListRows.count
+    ws.Protect
+    zasticen = True
+    On Error Resume Next
+    Err.Clear
+    modAgrohemija.SaveMagacinCore Date, "ART-TEST-1", MAG_ULAZ, 1#, _
+                                  "", "", OPASNA, "", "", 10#, True, True
+    kapijaBroj = Err.Number
+    kapijaOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+    ws.Unprotect
+    zasticen = False
+    posleRedova = lo.ListRows.count
+
+    tx.RollbackTx
+    txZapoceta = False
+    modSchema.PrimeniFormateKanona
+
+    AssertEq (Len(novID) > 0), True, _
+             "preduslov: upis sa PRAVIM artiklom prolazi (inace smer 1 ne meri kapiju)"
+    AssertEq upisano, OPASNA, _
+             "kapija izleci format PRE upisa -- vrednost prezivi iako je kolona bila General"
+    AssertEq (InStr(1, kapijaOpis, "format", vbTextCompare) > 0), True, _
+             "kad popravka nije moguca, razlog imenuje FORMAT (bilo: " & kapijaOpis & ")"
+    ' NAPOMENA: sledeca tvrdnja NE razlikuje uzrok -- zasticen list blokira i sam
+    ' AppendRow. Stoji kao regresiona, i tako je imenovana.
+    AssertEq posleRedova, preRedova, _
+             "regresija: posle odbijenog upisa nije ostao nijedan red"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If zasticen Then ws.Unprotect
+    On Error GoTo 0
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_MagacinOdbijaUpisBezUgovora", errDesc
 End Sub
 
 ' ============================================================

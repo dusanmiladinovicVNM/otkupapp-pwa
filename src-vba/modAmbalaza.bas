@@ -113,6 +113,7 @@ End Sub
 Private Sub RequireAmbalazaSchema(ByVal sourceName As String)
     ' Fail-fast schema guard. Ne koristimo indekse ovde za rowData,
     ' ali eksplicitno proveravamo da tabela ima ocekivane kolone.
+    modSchema.SchemaReadyOrFail sourceName, TBL_AMBALAZA
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, sourceName)
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, sourceName)
