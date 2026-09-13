@@ -234,6 +234,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaPrijavljujePreplatu
     Test_OTK_IspravkaPrijavljujePreplatuVirmanom
     Test_OTK_IsplataNaNovDokumentProlazi
+    Test_BIM_NovOtkupJeOtvorenBlok
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
     Test_OTK_IspravkaRollbackVracaSve
@@ -9529,6 +9530,57 @@ End Sub
 ' Zasto to nijedan postojeci test nije uhvatio: fixture nosi STARI model -- redovi
 ' otkupa u njemu imaju popunjeno zaglavlje. Kapija je radila nad fixture podacima
 ' i padala samo nad dokumentom iz novog pisca. Zato ovaj test dokument PRAVI.
+' BANKA VIDI NOV OTKUP KAO OTVOREN BLOK.
+'
+' modBankaMapiranje.GetOtkupCandidatesForKooperantBlock je racunao vrednost bloka
+' kao Kolicina * Cena SA ZAGLAVLJA. Nov pisac te kolone ne puni, pa je vrednost
+' ostajala 0, `otvoreno` <= 0.009, i skup kandidata PRAZAN.
+'
+' Posledica nije kozmeticka: BimBlokBezOtvorenih tada vrati True, pa se uplata
+' knjizi kao AVANS umesto na blok, a stavka izvoda se oznaci obradjenom. Novac
+' ode na pogresno mesto i niko ne dobije poruku.
+'
+' Postojeci banka testovi to ne vide jer koriste FX_BIM_BLOK* iz fixture-a --
+' stari model, zaglavlje popunjeno. Ovaj test blok PRAVI kroz CreateOtkup_TX.
+Private Sub Test_BIM_NovOtkupJeOtvorenBlok()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("BIMNOV")
+
+    Dim br As String: br = TEST_PREFIX & "-BIM-" & scenario
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(br), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "Banka nov blok: dokument iz NOVOG pisca napravljen"
+
+    Dim kand As Variant
+    kand = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock(TEST_KOOP_ID, br, True)
+
+    ' Ovo je tvrdnja koja razlikuje uzrok: pre popravke je skup bio PRAZAN.
+    AssertTrue IsArray(kand), "Banka nov blok: skup kandidata NIJE prazan"
+
+    ' I otvoreni iznos mora biti pun -- 10000, iz stavki.
+    '
+    ' Cuvano IsArray-em: kad prva tvrdnja padne (prazan skup), kand nije niz i
+    ' kand(1, 2) obori CEO test sa FATAL 13 Type mismatch -- pa se ostale
+    ' tvrdnje ne izmere i sabotaza prijavi manje nego sto je pokvarila.
+    ' Mereno 13.09.2026: bez ovog garda sabotaza je dala 1 pad + FATAL umesto
+    ' urednog spiska.
+    If IsArray(kand) Then
+        AssertTrue Abs(CDbl(kand(1, 2)) - 10000#) < 0.001, _
+                   "Banka nov blok: otvoreno je 10000 (iz stavki, ne sa zaglavlja)"
+    End If
+
+    ' Drugi smer: mapiranje ga NE sme videti kao blok bez otvorenih stavki --
+    ' to je tacka na kojoj bi uplata otisla u avans.
+    AssertTrue Not modBankaMapiranje.BimBlokBezOtvorenih(TEST_KOOP_ID, br), _
+               "Banka nov blok: NIJE 'blok bez otvorenih' (inace uplata ide u avans)"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BIM_NovOtkupJeOtvorenBlok", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTK_IsplataNaNovDokumentProlazi()
     On Error GoTo EH
 
