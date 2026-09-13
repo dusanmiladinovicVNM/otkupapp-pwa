@@ -20,11 +20,14 @@ Izlaz je 100% ASCII sa CRLF prelomima (CLAUDE.md S3).
 
 import argparse
 import collections
+import contextlib
+import copy
 import io
 import json
 import os
 import re
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_VBA = os.path.join(ROOT, "src-vba")
@@ -861,6 +864,202 @@ def izgradi(kanon_path: str) -> tuple:
     return telo, []
 
 
+# ============================================================
+# SELF-TEST
+# ============================================================
+# Do 13.09.2026. ovaj alat je bio JEDINA CI kapija bez self-testa, i
+# .claude/rules/testovi.md je to imenovao kao poznatu rupu: "--check koji nikad
+# nije pokazan crven ne dokazuje da poredi otisak".
+#
+# Rupa je porasla kad je ugovor o formatu celije doneo PET novih validacija nad
+# kljucem "formats". Scenario koji se hvata: neko refaktorise izgradi() i otkaci
+# jednu granu -- --check ostane ZELEN (kanon i modSchema.bas su i dalje medjusobno
+# u koraku) i niko ne primeti da kapija vise ne meri.
+#
+# Slucajevi idu KROZ izgradi(), istu funkciju koju zove CLI, a jedan ide kroz ceo
+# main() nad pravim fajlom na disku. Isti razlog je zapisan za vba_check:
+# self-test koji zove proveru direktno dokazuje da funkcija radi, ali ne i da je
+# CLI zove -- otkacen jedan red tada ostavlja i repo-run i self-test zelene.
+#
+# Kanon je SINTETICKI (tri prave tabele, minimalne kolone), ne pravi
+# schema/schema.json: slucajevi ne smeju da padnu zato sto je neko legitimno
+# promenio pravi kanon.
+
+def _sinteticki_kanon() -> dict:
+    """Najmanji kanon koji prolazi izgradi(): prave tabele, minimalne kolone."""
+    return collections.OrderedDict([
+        ("_o_fajlu", ["sinteticki kanon za self-test"]),
+        ("schemaVersion", 1),
+        ("tables", [
+            collections.OrderedDict([
+                ("table", "tblKese"), ("const", "TBL_KESE"), ("sheet", "Kese"),
+                ("columns", ["TipKese", "TezinaKg", "Aktivan"]),
+            ]),
+            collections.OrderedDict([
+                ("table", "tblKutije"), ("const", "TBL_KUTIJE"), ("sheet", "Kutije"),
+                ("columns", ["TipKutije", "TezinaKg", "Aktivan"]),
+            ]),
+            collections.OrderedDict([
+                ("table", "tblPrerada"), ("const", "TBL_PRERADA"), ("sheet", "Prerada"),
+                ("columns", ["BrojPrerade", "TipKese", "TipKutije", "CreatedAt"]),
+            ]),
+        ]),
+        ("formats", collections.OrderedDict([
+            ("tblKese", collections.OrderedDict([("TipKese", "text")])),
+            ("tblKutije", collections.OrderedDict([("TipKutije", "text")])),
+            ("tblPrerada", collections.OrderedDict([
+                ("BrojPrerade", "text"), ("TipKese", "text"),
+                ("TipKutije", "text"), ("CreatedAt", "text"),
+            ])),
+        ])),
+        ("formatsIzuzeci", collections.OrderedDict([
+            ("CreatedAt", "u tblPrerada je tekst radi slucaja, drugde je datum"),
+        ])),
+    ])
+
+
+def _bez_ujednacenosti(d):
+    # TipKese postoji u DVE tabele; skini jednu stranu -> kapija mora da vikne
+    del d["formats"]["tblKese"]["TipKese"]
+
+
+def _izuzetak_gasi_pravilo(d):
+    _bez_ujednacenosti(d)
+    d["formatsIzuzeci"]["TipKese"] = "namerno, radi dokaza"
+
+
+def _jedinstveno_ime(d):
+    # IZMERENA GRANICA: BrojPrerade postoji samo u tblPrerada, pa kad izadje iz
+    # ugovora ime vise nije pod ugovorom NIGDE i kapija nema sta da poredi.
+    # Vrednosna veza sa drugom kolonom (drugo ime, ista vrednost) joj je
+    # nevidljiva. Slucaj stoji da niko kasnije ne pripise kapiji ono sto ne radi.
+    del d["formats"]["tblPrerada"]["BrojPrerade"]
+
+
+def _izuzetak_bez_razloga(d):
+    d["formatsIzuzeci"]["CreatedAt"] = "   "
+
+
+def _navodnik_u_imenu(d):
+    d["tables"][0]["columns"].append('Tip"Kese')
+    d["formats"]["tblKese"]['Tip"Kese'] = "text"
+
+
+def _formats_nije_mapa(d):
+    d["formats"] = "text"
+
+
+def _tabela_nije_mapa(d):
+    d["formats"]["tblKese"] = ["TipKese"]
+
+
+def _nepostojeca_kolona(d):
+    d["formats"]["tblKese"]["NemaOve"] = "text"
+
+
+def _nepoznat_format(d):
+    d["formats"]["tblKese"]["TipKese"] = "tekst"
+
+
+def _tabela_van_kanona(d):
+    d["formats"]["tblNemaMe"] = collections.OrderedDict([("X", "text")])
+
+
+def _const_se_ne_poklapa(d):
+    d["tables"][0]["const"] = "TBL_NETACNO"
+
+
+# (naziv, izmena kanona, deo poruke koji MORA da se pojavi; None = mora PROCI)
+SEMA_CASES = [
+    ("cist kanon",                     None,                    None),
+    ("ujednacenost: TipKese izbacen",  _bez_ujednacenosti,      "'TipKese' je pod ugovorom"),
+    ("izuzetak GASI pravilo",          _izuzetak_gasi_pravilo,  None),
+    ("GRANICA: jedinstveno ime cuti",  _jedinstveno_ime,        None),
+    ("izuzetak bez obrazlozenja",      _izuzetak_bez_razloga,   "nema obrazlozenje"),
+    ("navodnik u imenu kolone",        _navodnik_u_imenu,       "nezatvoren"),
+    ("formats nije mapa",              _formats_nije_mapa,      "mora biti mapa"),
+    ("formats[tabela] nije mapa",      _tabela_nije_mapa,       "mora biti mapa {kolona"),
+    ("format nad nepostojecom kolonom", _nepostojeca_kolona,    "nema kolonu NemaOve"),
+    ("nepoznat semanticki format",     _nepoznat_format,        "nepoznat format"),
+    ("tabela iz formats nije u kanonu", _tabela_van_kanona,     "tabele tblNemaMe nema u kanonu"),
+    ("const se ne poklapa sa modConfig", _const_se_ne_poklapa,  "modConfig kaze"),
+]
+
+
+def _pusti_kanon(doc) -> tuple:
+    fd, put = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        with io.open(put, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(doc, fh, indent=2, ensure_ascii=True)
+        return izgradi(put)
+    finally:
+        os.unlink(put)
+
+
+def self_test() -> int:
+    palo = []
+    for naziv, izmeni, mora in SEMA_CASES:
+        doc = copy.deepcopy(_sinteticki_kanon())
+        if izmeni is not None:
+            izmeni(doc)
+        telo, greske = _pusti_kanon(doc)
+        tekst = "\n".join(greske)
+        if mora is None:
+            if telo is None or greske:
+                palo.append("  %s: ocekivano da PRODJE, palo sa: %s" % (naziv, tekst[:200]))
+        else:
+            if telo is not None:
+                palo.append("  %s: ocekivan PAD (%r), a generisanje je proslo" % (naziv, mora))
+            elif mora not in tekst:
+                palo.append("  %s: poruka ne sadrzi %r; dobijeno: %s" % (naziv, mora, tekst[:200]))
+
+    # Jedan slucaj kroz CEO main(), nad pravim fajlovima na disku. Dokazuje da CLI
+    # zaista zove izgradi() i da --check poredi bajtove izlaza, a ne nesto drugo.
+    fd, kput = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    fd, oput = tempfile.mkstemp(suffix=".bas")
+    os.close(fd)
+    try:
+        doc = copy.deepcopy(_sinteticki_kanon())
+        with io.open(kput, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(doc, fh, indent=2, ensure_ascii=True)
+        # main() svoje poruke pise na stdout/stderr; ovde su OCEKIVANE
+        # (jedan poziv MORA da padne), pa bi u CI logu izgledale kao kvar.
+        def tiho(argv):
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 contextlib.redirect_stderr(io.StringIO()):
+                return main(argv)
+
+        rc = tiho(["gen", "--kanon", kput, "--out", oput])
+        if rc != 0:
+            palo.append("  main() nad cistim kanonom: rc=%d, ocekivano 0" % rc)
+        elif tiho(["gen", "--kanon", kput, "--out", oput, "--check"]) != 0:
+            palo.append("  main() --check odmah posle generisanja: nije 0")
+        else:
+            # otkaci izlaz -> --check MORA da padne
+            with open(oput, "ab") as fh:
+                fh.write(b"' drift\r\n")
+            if tiho(["gen", "--kanon", kput, "--out", oput, "--check"]) == 0:
+                palo.append("  main() --check nad IZMENJENIM izlazom vratio 0 "
+                            "-- kapija ne poredi bajtove")
+    finally:
+        for p in (kput, oput):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    if palo:
+        print("gen_schema_module --self-test: PALO", file=sys.stderr)
+        for p in palo:
+            print(p, file=sys.stderr)
+        return 2
+    print("gen_schema_module --self-test: %d slucajeva + main(), cisto"
+          % len(SEMA_CASES))
+    return 0
+
+
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true",
@@ -870,7 +1069,12 @@ def main(argv) -> int:
     ap.add_argument("--iz-dumpa", metavar="JSON",
                     help="SVESNO ponovo zasej kanon iz ispisa sveske "
                          "(tools/dump_schema.py --json). Nije normalan tok.")
+    ap.add_argument("--self-test", action="store_true",
+                    help="exit 2 ako validacije nad kanonom ne grizu")
     a = ap.parse_args(argv[1:])
+
+    if a.self_test:
+        return self_test()
 
     if a.iz_dumpa:
         src = json.load(io.open(a.iz_dumpa, encoding="utf-8"))
