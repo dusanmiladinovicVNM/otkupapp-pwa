@@ -2387,6 +2387,13 @@ def signature() -> str:
         "ENSURE_TABLES=" + repr(sorted((t, sh, cols) for t, (sh, cols) in ENSURE_TABLES.items())),
         "RENAME_COLS=" + repr(sorted(RENAME_COLS.items())),
         "DROP_COLS=" + repr(sorted(DROP_COLS.items())),
+        # Ugovor o formatu iz kanona ULAZI u potpis, iako ne zivi u ovom fajlu:
+        # add_row od njega zavisi, pa je izmena kanona izmena PODATAKA u fixture-u.
+        # Bez ovoga bi dodavanje kolone u "formats" ostavilo sve zatecene fixture-e
+        # sa VAZECIM potpisom i kolonom u General formatu -- ista tiha rupa zbog
+        # koje je FIXTURE_FORMAT_VERSION podignut na 3, samo bez ijedne poluge koju
+        # covek moze da zaboravi.
+        "CANON_FORMATS=" + repr(_formati_kanona()),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -2498,24 +2505,31 @@ def strip_rows(wb) -> list:
 _FORMATI_KES = None
 
 
-def _format_kolone(table_name: str, col_name: str):
-    """Semanticki format kolone iz kanona ("formats"), ili None.
+def _formati_kanona() -> list:
+    """Ugovor o formatu iz kanona, u obliku pogodnom za potpis: [(tabela, [(kolona, format)])].
 
     Kanon je izvor i ovde, kao i za kolone -- fixture ne sme da nosi svoj spisak
     koji bi se razisao sa `schema/schema.json`.
+
+    Nedostupan kanon NIJE prazan ugovor. Ranije se izuzetak gutao u `d = {}`, pa
+    bi fixture napravljen bez kanona dobio POTPIS praznog ugovora i prosao kao
+    ispravan -- a sve kolone bi mu bile u General formatu. Bolje pad build-a.
     """
     global _FORMATI_KES
     if _FORMATI_KES is None:
         put = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schema", "schema.json")
-        try:
-            d = json.load(io.open(put, encoding="utf-8"))
-        except Exception:
-            d = {}
+        d = json.load(io.open(put, encoding="utf-8"))
         _FORMATI_KES = {
             t.lower(): {c.lower(): v for c, v in kol.items()}
             for t, kol in (d.get("formats") or {}).items()
         }
+    return [(t, sorted(_FORMATI_KES[t].items())) for t in sorted(_FORMATI_KES)]
+
+
+def _format_kolone(table_name: str, col_name: str):
+    """Semanticki format kolone iz kanona ("formats"), ili None."""
+    _formati_kanona()
     return _FORMATI_KES.get(table_name.strip().lower(), {}).get(col_name.strip().lower())
 
 
@@ -2530,6 +2544,17 @@ def add_row(lo, values: dict, table_name: str) -> None:
     row = lo.ListRows.Add()
     for key, val in values.items():
         cell = row.Range.Cells(1, idx[key.strip().lower()])
+        # Dve grane ispod POSTAVLJAJU svoj format i time zaobilaze ugovor iz
+        # kanona. Danas nijedan SEED red to ne radi (provereno 13.09.2026: 329
+        # redova, nula sudara), i tako mora da ostane -- tiho zaobidjen ugovor bi
+        # dao fixture koji IZGLEDA pokriven, a jednu kolonu drzi u General-u.
+        # Sudar je greska u SEED-u, ne u alatu, pa se prijavljuje glasno.
+        if _format_kolone(table_name, key) == "text" and isinstance(val, (datetime.date, Sirovo)):
+            raise SchemaError(
+                "%s.%s je pod ugovorom o formatu (\"text\"), a SEED joj salje %s "
+                "-- te grane postavljaju svoj format i zaobisle bi ugovor. "
+                "Ili posalji string, ili izbaci kolonu iz \"formats\" u kanonu."
+                % (table_name, key, type(val).__name__))
         if isinstance(val, datetime.date):
             cell.NumberFormat = ("dd.mm.yyyy hh:mm"
                                  if isinstance(val, datetime.datetime)

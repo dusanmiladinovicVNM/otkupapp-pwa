@@ -549,6 +549,11 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("BarKod") = "text"
+    Set reg("tblArtikli") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
     k("BankaReferenz") = "text"
     k("BrojDokumenta") = "text"
     k("PozivNaBroj") = "text"
@@ -566,6 +571,11 @@ Private Function FormatRegistry() As Object
     k("SEFDocumentId") = "text"
     k("SEFPayloadHash") = "text"
     Set reg("tblFakture") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipKese") = "text"
+    Set reg("tblKese") = k
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
@@ -591,6 +601,24 @@ Private Function FormatRegistry() As Object
     k("MaticniBroj") = "text"
     k("TekuciRacun") = "text"
     Set reg("tblKupci") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("TipKutije") = "text"
+    Set reg("tblKutije") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("JMBG") = "text"
+    k("PIN") = "text"
+    k("TekuciRacun") = "text"
+    k("Telefon") = "text"
+    Set reg("tblMGMT") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    Set reg("tblMagacin") = k
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
@@ -630,6 +658,7 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("BrojPrerade") = "text"
     k("TipKese") = "text"
     k("TipKutije") = "text"
     Set reg("tblPrerada") = k
@@ -659,6 +688,7 @@ Private Function FormatRegistry() As Object
     k("CreatedAt") = "text"
     k("NewBroj") = "text"
     k("OldBroj") = "text"
+    k("ParentBroj") = "text"
     Set reg("tblStornoVeze") = k
 
     Set k = CreateObject("Scripting.Dictionary")
@@ -674,6 +704,8 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("BrojNarudzbenice") = "text"
+    k("Plomba") = "text"
     k("VremeUtovara") = "text"
     Set reg("tblUtovar") = k
 

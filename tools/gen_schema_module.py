@@ -672,8 +672,19 @@ def izgradi(kanon_path: str) -> tuple:
     # Ugovor o formatu se proverava naspram kolona: tipfeler mora da umre pri
     # generisanju, ne u runtime-u nad tudjom sveskom. Format nad nepostojecom
     # kolonom je tise od greske -- nikad se ne primeni, a spisak izgleda pokriven.
+    #
+    # OBLIK se proverava prvi. Bez toga "formats": "text" ili lista umesto mape
+    # dize goli TypeError iz dubine generatora -- poruka koja ne imenuje ni kljuc
+    # ni tabelu, pa covek trazi gresku u alatu umesto u kanonu.
     kol_po_tabeli = {t["table"]: set(t["columns"]) for t in tabele}
+    if not isinstance(formats, dict):
+        return None, ['  formats: mora biti mapa {tabela: {kolona: format}}, '
+                      'a jeste %s' % type(formats).__name__]
     for t in sorted(formats):
+        if not isinstance(formats[t], dict):
+            greske.append("  formats: %s mora biti mapa {kolona: format}, a jeste %s"
+                          % (t, type(formats[t]).__name__))
+            continue
         if t not in kol_po_tabeli:
             greske.append("  formats: tabele %s nema u kanonu" % t)
             continue
@@ -683,6 +694,52 @@ def izgradi(kanon_path: str) -> tuple:
             if formats[t][c] not in ("text", "decimal2"):
                 greske.append("  formats: %s.%s ima nepoznat format %r"
                               % (t, c, formats[t][c]))
+
+    # UJEDNACENOST IMENA. Join je jak koliko i njegova slabija strana: dok su obe
+    # kolone bile General, obe su se kvarile isto i poredjenje se poklapalo.
+    # Ugovor nad samo jednom stranom pravi ASIMETRIJU -- tj. REGRESIJU u odnosu na
+    # stanje pre ugovora. Mereno 13.09.2026: kljuc sifarnika tblKese.TipKese je
+    # ostao van ugovora dok je FK tblPrerada.TipKese usao.
+    #
+    # Namerno neujednaceno ime mora stajati u "formatsIzuzeci", i to sa razlogom:
+    # izuzetak bez obrazlozenja je spisak imena bez znacenja, tj. sledeca rupa.
+    #
+    # STA OVA KAPIJA NE VIDI, i ne pretvara se da vidi: vezu izmedju kolona
+    # RAZLICITOG imena koje nose ISTU vrednost. tblStornoVeze.ParentBroj drzi isti
+    # broj kao tblZbirna.BrojZbirne, a ime mu je jedinstveno u kanonu -- kad izadje
+    # iz ugovora, nijedna druga tabela nema kolonu tog imena, pa kapija nema sta da
+    # poredi i cuti. Tu asimetriju je nasao covek (recenzija 13.09.2026), ne alat.
+    # Da bi je alat video, kanon bi morao da nosi imenovane vrednosne domene -- to
+    # je zaseban posao, ne uzgredna dopuna ovog pravila.
+    izuzeci = d.get("formatsIzuzeci", {})
+    if not isinstance(izuzeci, dict):
+        return None, ['  formatsIzuzeci: mora biti mapa {ime kolone: razlog}']
+    for ime in sorted(izuzeci):
+        if not str(izuzeci[ime]).strip():
+            greske.append("  formatsIzuzeci: %s nema obrazlozenje" % ime)
+    pod_ugovorom = {c for t in formats if isinstance(formats[t], dict)
+                    for c in formats[t]}
+    for ime in sorted(pod_ugovorom - set(izuzeci)):
+        rupe = sorted(t["table"] for t in tabele
+                      if ime in t["columns"] and ime not in formats.get(t["table"], {}))
+        if rupe:
+            nosi = sorted(t for t in formats if ime in formats[t])
+            greske.append("  formats: '%s' je pod ugovorom u %s, a NIJE u %s "
+                          "-- join po toj koloni bi bio asimetrican "
+                          "(ili dodaj kolone, ili upisi ime u formatsIzuzeci uz razlog)"
+                          % (ime, ", ".join(nosi), ", ".join(rupe)))
+
+    # Imena idu DOSLOVNO u VBA string literal ("%s"), pa navodnik u imenu pravi
+    # nezatvoren literal i modul koji se ne kompajlira -- a modul koji se ne
+    # kompajlira obara CEO projekat, pa greska stigne kao "Cannot run the macro"
+    # na bilo kom makrou. Simptom ne pokazuje na krivca; ova kapija pokazuje.
+    for t in sorted(formats):
+        if not isinstance(formats[t], dict):
+            continue
+        for ime in [t] + sorted(formats[t]):
+            if '"' in ime or "\n" in ime or "\r" in ime:
+                greske.append("  formats: ime %r sadrzi navodnik ili prelom reda "
+                              "-- generisani VBA literal bi ostao nezatvoren" % ime)
     if greske:
         return None, greske
 
@@ -711,9 +768,18 @@ def main(argv) -> int:
     if a.iz_dumpa:
         src = json.load(io.open(a.iz_dumpa, encoding="utf-8"))
         mapa = tbl_konstante(MODCONFIG)
-        doc = collections.OrderedDict()
-        stari = json.load(io.open(a.kanon, encoding="utf-8"))
-        doc["_o_fajlu"] = stari["_o_fajlu"]
+        # KRECE OD ZATECENOG KANONA, ne od praznog dokumenta. Ranije je ovde
+        # stajao doc = OrderedDict() u koji su se rucno prenosila TRI kljuca
+        # (_o_fajlu, schemaVersion, tables) -- pa je svaki kljuc uveden posle toga
+        # tiho nestajao pri reseed-u. Konkretno "formats": ceo ugovor o formatu bi
+        # se izgubio, sve kapije bi ostale ZELENE (--check poredi kanon sa
+        # modSchema.bas, a oba bi bila prazna; otisak se racuna samo nad
+        # "tables"), i sveska iz kanona bi opet bila u General formatu.
+        # Prolaz kroz zatecen dokument je ista stvar za tri kljuca, a ne moze da
+        # izgubi cetvrti.
+        doc = json.load(io.open(a.kanon, encoding="utf-8"),
+                        object_pairs_hook=collections.OrderedDict)
+        stari = doc
         doc["schemaVersion"] = stari.get("schemaVersion", 1) + 1
         doc["tables"] = [
             collections.OrderedDict([

@@ -1001,12 +1001,26 @@
     "",
     "Vrednost je SEMANTICKA (\"text\"), ne sirov Excel string -- generator je mapira",
     "u \"@\". Numericki formati (danas rucno u modSetup.EnsureRuntimeSchema) mogu",
-    "kasnije ovde kao \"decimal2\", pa da mehanizam bude jedan."
+    "kasnije ovde kao \"decimal2\", pa da mehanizam bude jedan.",
+    "",
+    "PRAVILO UJEDNACENOSTI: ako je ime kolone pod ugovorom u JEDNOJ tabeli, mora",
+    "biti pod ugovorom u SVIM tabelama koje tu kolonu imaju. Join je jak koliko i",
+    "njegova slabija strana -- dok su obe strane bile General, obe su se kvarile",
+    "isto i poredjenje se poklapalo; ugovor nad samo jednom stranom pravi",
+    "ASIMETRIJU, tj. regresiju. Isto vazi za sifarnik i njegov FK: kljuc sifarnika",
+    "bez surogata (tblTipAmbalaze.TipAmbalaze, tblKese.TipKese) mora pod ugovor",
+    "zajedno sa kolonom koja ga referencira.",
+    "",
+    "Pravilo obara GENERISANJE. Ime koje je namerno neujednaceno mora stajati u",
+    "\"formatsIzuzeci\", uz razlog -- izuzetak bez obrazlozenja se ne prima."
   ],
   "formats": {
     "tblAmbalaza": {
       "DokumentID": "text",
       "TipAmbalaze": "text"
+    },
+    "tblArtikli": {
+      "BarKod": "text"
     },
     "tblBankaImport": {
       "BankaReferenz": "text",
@@ -1021,6 +1035,9 @@
       "BrojFakture": "text",
       "SEFDocumentId": "text",
       "SEFPayloadHash": "text"
+    },
+    "tblKese": {
+      "TipKese": "text"
     },
     "tblKooperanti": {
       "BPGBroj": "text",
@@ -1038,6 +1055,18 @@
     "tblKupci": {
       "MaticniBroj": "text",
       "TekuciRacun": "text"
+    },
+    "tblKutije": {
+      "TipKutije": "text"
+    },
+    "tblMGMT": {
+      "JMBG": "text",
+      "PIN": "text",
+      "TekuciRacun": "text",
+      "Telefon": "text"
+    },
+    "tblMagacin": {
+      "BrojDokumenta": "text"
     },
     "tblNovac": {
       "BrojDokumenta": "text"
@@ -1064,6 +1093,7 @@
       "KatBroj": "text"
     },
     "tblPrerada": {
+      "BrojPrerade": "text",
       "TipKese": "text",
       "TipKutije": "text"
     },
@@ -1084,7 +1114,8 @@
       "CompletedAt": "text",
       "CreatedAt": "text",
       "NewBroj": "text",
-      "OldBroj": "text"
+      "OldBroj": "text",
+      "ParentBroj": "text"
     },
     "tblStornoZurnal": {
       "Broj": "text",
@@ -1094,6 +1125,8 @@
       "TipAmbalaze": "text"
     },
     "tblUtovar": {
+      "BrojNarudzbenice": "text",
+      "Plomba": "text",
       "VremeUtovara": "text"
     },
     "tblUtovarStavke": {
@@ -1107,5 +1140,8 @@
       "BrojZbirne": "text",
       "TipAmbalaze": "text"
     }
+  },
+  "formatsIzuzeci": {
+    "CreatedAt": "tblStornoVeze.CreatedAt/CompletedAt pisu se kao STRING (Format$(Now, \"yyyy-mm-dd hh:nn:ss\"), modStornoContext.bas:64 i :108), pa moraju biti tekst. Svuda drugde je CreatedAt pravi datum-vreme i tekst bi ga pokvario. Jedino ime u kanonu koje NIJE ujednaceno, i to namerno."
   }
 }
