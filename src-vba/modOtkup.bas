@@ -356,20 +356,33 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     ' operater posle ispravke vidi nov dokument kao PUN dug, a placeni iznos
     ' nigde -- VirmanFirmaKoop i KesOtkupacKoop ne vidi nijedna masinerija
     ' koja bira sta se placa.
+    ' Povratna vrednost se NE koristi za odluku o preplati (v. nize) -- prenos
+    ' je ovde zbog KESA, koji avans-petlja namerno ne vidi.
     Dim preneto As Double
     preneto = modNovac.PrevezaNovacNaOtkup(nvIDs, noviID)
 
-    ' Kad ispravka SMANJI iznos, preneseni novac postaje preplata. Odluka je
-    ' da se PRIJAVI a ispravka prodje: blokada bi oduzela operaciju usred
-    ' posla, a cutanje bi ostavilo gresku koja se vidi tek rucnim pregledom
-    ' kartice. Upozorenje NIJE greska -- funkcija vraca nov OtkupID normalno.
-    If preneto > 0 Then
-        Dim dug As Double
-        dug = VrednostOtkupa(noviID)
-        If preneto > dug Then
-            outUpozorenje = Poruka("OTK_UPZ_PREPLATA_ISPRAVKA") & " " & _
-                            Format$(preneto - dug, "#,##0.00")
-        End If
+    ' Kad ispravka SMANJI iznos, placeni novac postaje preplata. Odluka je da se
+    ' PRIJAVI a ispravka prodje: blokada bi oduzela operaciju usred posla, a
+    ' cutanje bi ostavilo gresku koja se vidi tek rucnim pregledom kartice.
+    ' Upozorenje NIJE greska -- funkcija vraca nov OtkupID normalno.
+    '
+    ' Meri se KONACNO STANJE dokumenta, ne povratna vrednost poslednjeg helpera.
+    ' Prva verzija je poredila `preneto > dug` i TIHO je promasivala virman:
+    ' ApplyAvansToOtkup (koji CreateOtkup zove pre ovoga) avans koji je VECI od
+    ' duga DELI -- original smanji na ostatak, a za primenjeni deo napravi NOV
+    ' red vezan za dokument (modNovac.bas, split grana). Posle toga
+    ' PrevezaNovacNaOtkup nad zapamcenim ORIGINALNIM ID-em prenese samo taj
+    ' ostatak, pa je `preneto` bilo 2.000 uz dug od 8.000 -- i uslov nije opalio,
+    ' iako je dokument stvarno placen 10.000.
+    '
+    ' Pitanje nije "koliko je poslednji helper prebacio" nego "koliko novca je
+    ' SADA vezano za dokument naspram njegove vrednosti".
+    Dim placeno As Double, dug As Double
+    placeno = modNovac.GetIsplataForOtkup(noviID)
+    dug = VrednostOtkupa(noviID)
+    If placeno > dug Then
+        outUpozorenje = Poruka("OTK_UPZ_PREPLATA_ISPRAVKA") & " " & _
+                        Format$(placeno - dug, "#,##0.00")
     End If
 
     modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _

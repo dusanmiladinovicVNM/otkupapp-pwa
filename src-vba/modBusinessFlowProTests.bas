@@ -232,6 +232,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaNeGubiNovac
     Test_OTK_IspravkaPrenosiKes
     Test_OTK_IspravkaPrijavljujePreplatu
+    Test_OTK_IspravkaPrijavljujePreplatuVirmanom
     Test_OTK_IsplataNaNovDokumentProlazi
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -9609,6 +9610,71 @@ End Sub
 ' Put A ima posmatriv efekat samo na KesOtkupacKoop, koji D namerno iskljucuje:
 ' kes placen za TAJ posao treba da prati ispravljen dokument, ali ne sme
 ' slobodno da pluta na tudje dokumente.
+' PREPLATA VIRMANOM -- interakcija A + D, koju nijedan raniji test nije merio.
+'
+' Test preplate kesom dokazuje put A izolovano (kes ne ulazi u avans-petlju), i
+' bas zato NE meri ovaj slucaj. Kod virmana rade OBA mehanizma i sudaraju se:
+'
+'   1. NovacIDsZaOtkup zapamti ORIGINALNI NovacID od 10.000
+'   2. storno skine OtkupID
+'   3. CreateOtkup napravi nov dokument od 8.000
+'   4. ApplyAvansToOtkup vidi virman kao avans (put D suzeno) i posto je
+'      10.000 > 8.000, DELI ga: original smanji na 2.000, a za primenjenih
+'      8.000 napravi NOV red vezan za nov dokument
+'   5. PrevezaNovacNaOtkup radi nad ZAPAMCENIM originalnim ID-em i prenese
+'      preostalih 2.000
+'
+' Konacno: nov dokument ima 10.000 placeno na dug od 8.000. Prva verzija koda je
+' upozorenje racunala kao `preneto > dug` -- a `preneto` je u tom trenutku bilo
+' samo 2.000, pa uslov nije opalio i preplata je prosla TIHO. Nadjeno u recenziji
+' 13.09.2026; upozorenje se sada racuna iz konacnog stanja dokumenta.
+Private Sub Test_OTK_IspravkaPrijavljujePreplatuVirmanom()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPRV")
+
+    Dim brStari As String: brStari = TEST_PREFIX & "-OTK-V1-" & scenario
+    Dim brNovi As String: brNovi = TEST_PREFIX & "-OTK-V2-" & scenario
+
+    Dim preAvans As Double
+    preAvans = GetKooperantUnallocatedAvans(TEST_KOOP_ID)
+
+    Dim stariID As String
+    stariID = CreateOtkup_TX(OtkHeader(brStari), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(stariID) > 0, "Preplata virman: polazni dokument (10000)"
+
+    SaveNovac TEST_PREFIX & "-NOV-V-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 10000#, "virman pre ispravke", stariID
+
+    Dim g As String, g2 As String
+    Dim noviID As String
+    noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
+                                        OtkStavke(80#, 100#, 0, 0#, 0#, 0), g, g2)
+
+    AssertTrue Len(noviID) > 0, "Preplata virman: ispravka PROLAZI (" & g & ")"
+
+    ' Sav novac je zavrsio na novom dokumentu -- i split deo i ostatak.
+    AssertTrue Abs(modNovac.GetIsplataForOtkup(noviID) - 10000#) < 0.001, _
+               "Preplata virman: nov dokument drzi SVIH 10000 (split + ostatak)"
+
+    ' Nista nije ostalo da pluta kao slobodan avans kooperanta.
+    AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - preAvans) < 0.001, _
+               "Preplata virman: nema slobodnog ostatka starog placanja"
+
+    ' I operater to MORA da sazna, sa iznosom.
+    AssertTrue Len(Trim$(g2)) > 0, "Preplata virman: operater dobija upozorenje"
+    AssertTrue InStr(1, g2, "2.000,00", vbTextCompare) > 0 _
+               Or InStr(1, g2, "2,000.00", vbTextCompare) > 0, _
+               "Preplata virman: upozorenje imenuje 2000 (bilo: " & g2 & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IspravkaPrijavljujePreplatuVirmanom", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTK_IspravkaPrenosiKes()
     On Error GoTo EH
 
