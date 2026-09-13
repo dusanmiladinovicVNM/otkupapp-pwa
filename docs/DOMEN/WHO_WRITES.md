@@ -119,11 +119,11 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
-- `tblKulture`: `modGoldenTests`, `modTestPalete`
+- `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblStanice`: `modGoldenTests`, `modTest`, `modTestBanka`
-- `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTestPalete`
+- `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTest`, `modTestPalete`
 
 ## Sta ovo NE pokriva
 

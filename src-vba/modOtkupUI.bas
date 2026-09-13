@@ -6699,12 +6699,52 @@ End Sub
 Private Sub RefillMaticniCombos(frm As Object)
     Dim ctx As Object
     Dim st As String
+    Dim cbVrsta As MSForms.ComboBox, cbAmb As MSForms.ComboBox
+    Dim cbSorta As MSForms.ComboBox
+    Dim sortaPre As String
     If frm Is Nothing Then Exit Sub
     On Error GoTo EH
     mPopMute = True
     st = "zCtx":     Set ctx = frm.Controls("zCtx")
     st = "cbOM":     RefillUzIzbor ctx.Controls("cbOM"), TBL_STANICE, "Naziv", "StanicaID"
     st = "cbVozac":  RefillUzIzbor ctx.Controls("cbVozac"), TBL_VOZACI, "Ime", "VozacID"
+
+    ' Prva verzija (PR #311) je osvezavala samo ta dva combo-a, a FillCombos ih
+    ' puni PET -- svih pet iza istog mCombosFilled prekidaca. Nova kultura ili nov
+    ' tip ambalaze uneti dok aplikacija radi i dalje se nisu videli do restarta
+    ' Excela, dakle tacno onaj kvar koji je #311 tvrdio da zatvara, na tri od pet
+    ' polja. Popravlja se cela klasa, ne jos jedno polje.
+    '
+    ' Ovi su JEDNOKOLONSKI (FillCmb, ne FillComboDisplayID), pa se izbor cuva po
+    ' TEKSTU -- skrivene kolone sa ID-em ovde nema.
+    st = "cbVrsta"
+    Set cbVrsta = ctx.Controls("cbVrsta")
+    RefillTekstUzIzbor cbVrsta, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
+
+    ' Sorta je kaskada iz vrste i RefillSorta je vec cita svezu, ali posle
+    ' osvezavanja vrste lista sorti mora da prati izabranu vrstu -- inace bi
+    ' ostala ona od pre. Izbor se cuva oko poziva, jer RefillSorta radi Clear.
+    ' Sorta: isto pravilo, ali POSTENO oznaceno -- NIJE dokazano sabotazom.
+    ' Mereno u dva scenarija (gasenje cele kulture i gasenje samo jedne sorte
+    ' uz aktivnu vrstu): bezuslovno vracanje izbora NE ostavlja vrednost u
+    ' polju, jer ova kontrola ne prima vrednost van svoje liste -- za razliku
+    ' od cbVrsta, gde sabotaza jeste zagrizla. Gard ostaje kao simetrija sa
+    ' vrstom i kao zastita ako se tip kontrole ikad promeni, ali se ne
+    ' predstavlja kao izmerena kapija.
+    st = "sorta"
+    Set cbSorta = ctx.Controls("cbSorta")
+    sortaPre = CStr(cbSorta.value)
+    RefillSorta frm
+    If Len(sortaPre) > 0 And ComboImaStavku(cbSorta, sortaPre) Then
+        cbSorta.value = sortaPre
+    Else
+        cbSorta.value = ""
+    End If
+
+    st = "fgTipAmb"
+    Set cbAmb = frm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
+    RefillTekstUzIzbor cbAmb, GetTipAmbalazeOptions()
+
     mPopMute = False
     Exit Sub
 EH:
@@ -6718,6 +6758,43 @@ End Sub
 ' Napuni combo iz tabele i vrati prethodno izabran red PO ID-u. Ako tog ID-a
 ' vise nema (red obrisan ili prebacen u Neaktivan), combo ostaje prazan -- to je
 ' tacno, ponuda koju writer odbija je gora od prazne.
+' Jednokolonski combo: napuni iz niza i vrati prethodni izbor PO TEKSTU -- ali
+' SAMO ako ga nova lista i dalje nudi.
+'
+' Prva verzija je vracala tekst bezuslovno, uz obrazlozenje da bi upis takvu
+' vrednost odbio. To NIJE tacno i provereno je: resolver
+' modOtkup.RazresiKulturuIzVrsteSorte prolazi kroz SVE redove tblKulture i
+' poredi samo VrstaVoca i SortaVoca -- kolonu Aktivan ne gleda. Kultura
+' deaktivirana u Maticnim podacima bi se time razresila u potpuno validan
+' KulturaID i usla u nov otkup, a operater bi u polju video vrednost koja mu
+' vise nije ponudjena.
+'
+' Zato ista semantika kao kod RefillUzIzbor (OM/vozac): sto vise nije u aktivnoj
+' listi, nestaje iz polja. Prazno polje je postenije od vrednosti koja izgleda
+' legitimno.
+Private Sub RefillTekstUzIzbor(ByRef cmb As MSForms.ComboBox, ByVal stavke As Variant)
+    Dim prethodni As String
+    prethodni = CStr(cmb.value)
+    FillCmb cmb, stavke
+    If Len(prethodni) > 0 And ComboImaStavku(cmb, prethodni) Then
+        cmb.value = prethodni
+    Else
+        cmb.value = ""
+    End If
+End Sub
+
+' Nudi li combo bas tu stavku. Poredjenje je neosetljivo na velicinu slova, kao i
+' sam sifarnik.
+Private Function ComboImaStavku(ByRef cmb As MSForms.ComboBox, ByVal tekst As String) As Boolean
+    Dim i As Long
+    For i = 0 To cmb.ListCount - 1
+        If StrComp(CStr(cmb.List(i)), tekst, vbTextCompare) = 0 Then
+            ComboImaStavku = True
+            Exit Function
+        End If
+    Next i
+End Function
+
 Private Sub RefillUzIzbor(ByVal cmb As MSForms.ComboBox, _
                           ByVal tabela As String, _
                           ByVal prikazKol As String, _
