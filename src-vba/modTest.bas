@@ -6609,9 +6609,10 @@ Private Sub T_Kontekst_NovaKulturaITipAmbalazeUlaze()
 
     ' --- druga polovina: DEAKTIVIRAN maticni podatak mora da NESTANE iz polja.
     '
-    ' Cuvanje izbora ne sme da bude bezuslovno. Resolver (VrstaVoca, SortaVoca) ->
-    ' KulturaID ide kroz LookupValue, koji prolazi kroz SVE redove i NE gleda
-    ' kolonu Aktivan -- pa bi zadrzana deaktivirana kultura otisla u nov otkup kao
+    ' Cuvanje izbora ne sme da bude bezuslovno. Resolver
+    ' modOtkup.RazresiKulturuIzVrsteSorte prolazi kroz SVE redove tblKulture i
+    ' NE gleda kolonu Aktivan -- pa bi zadrzana deaktivirana kultura otisla u
+    ' nov otkup kao
     ' potpuno validan KulturaID, a operater bi u polju video vrednost koja mu vise
     ' nije ponudjena.
     cbVrsta.value = NOVA_VRSTA

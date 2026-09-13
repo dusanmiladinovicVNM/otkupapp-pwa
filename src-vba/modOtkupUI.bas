@@ -6762,11 +6762,12 @@ End Sub
 ' SAMO ako ga nova lista i dalje nudi.
 '
 ' Prva verzija je vracala tekst bezuslovno, uz obrazlozenje da bi upis takvu
-' vrednost odbio. To NIJE tacno i provereno je: resolver (VrstaVoca, SortaVoca) ->
-' KulturaID ide kroz modDataAccess.LookupValue, koji prolazi kroz SVE redove i
-' poredi samo trazenu kolonu -- kolonu Aktivan ne gleda. Kultura deaktivirana u
-' Maticnim podacima bi se time razresila u potpuno validan KulturaID i usla u nov
-' otkup, a operater bi u polju video vrednost koja mu vise nije ponudjena.
+' vrednost odbio. To NIJE tacno i provereno je: resolver
+' modOtkup.RazresiKulturuIzVrsteSorte prolazi kroz SVE redove tblKulture i
+' poredi samo VrstaVoca i SortaVoca -- kolonu Aktivan ne gleda. Kultura
+' deaktivirana u Maticnim podacima bi se time razresila u potpuno validan
+' KulturaID i usla u nov otkup, a operater bi u polju video vrednost koja mu
+' vise nije ponudjena.
 '
 ' Zato ista semantika kao kod RefillUzIzbor (OM/vozac): sto vise nije u aktivnoj
 ' listi, nestaje iz polja. Prazno polje je postenije od vrednosti koja izgleda
