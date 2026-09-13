@@ -1310,7 +1310,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 4 | ✅ **Otkup header+stavke** (skela): `tblOtkupStavke`, `CreateOtkup_TX(h, stavke, outGreska)`, opaque `OtkupID` po **bloku**, ne po klasi. Target šema po §4.1c–f: bez `VozacID` / `Isplaceno` / `DatumIsplate` / `VremeUnosa`; `KulturaID` prima, ne razrešava. **Bez PWA adaptera** — v. napomenu ispod | 3 · **spec zaključan** |
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | 🟡 **Otkup cutover + integracije** (PR #308 — otvoren, ceka merge): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
-| — | **KAPIJA ODLUKE** — v. §14.1 | 6 |
+| — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
 | 7 | **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
@@ -1483,6 +1483,70 @@ zove `IspravkaOd` a nosi ID je tačno vrsta dvosmislenosti koju refaktor uklanja
 ---
 
 ### 14.1) Kapija odluke posle Otkup cutover-a
+
+> **ZATVORENA 13.09.2026. Odluka: NASTAVAK U MESTU.** Mereno, ne procenjeno —
+> svih šest kriterijuma, jedan po jedan, sa komandama. Rezultat:
+> **u mestu 3 · novo stablo 0 · nejasno 3.**
+>
+> Nijedan kriterijum ne pokazuje na novo stablo, i **nijedan od pet okidača** iz
+> liste „Prelazimo na novo stablo ako" nije izmeren: nema compatibility facade-a,
+> nema dual-write putanje, nema paralelnog života dva modela, test corpus je
+> upotrebljiv, jezgro jeste izolovano od stare šeme.
+
+#### Šta je odlučilo
+
+| Kriterijum | Izmereno | Verdikt |
+|---|---|---|
+| Pisaca nad `tblOtkup` | 8, ne 1 — **ali presek kolona je prazan skup**: `modOtkup` piše 16 kolona sadržaja, ostalih sedam piše tačno 5, sve denormalizovane veze ka tuđem dokumentu. Nula upisa u `Kolicina/Cena/Klasa/Kooperant/Datum/Stanica` van legacy `SaveOtkup`. Tri od sedam su strukturno mrtva na nov dokument. | **u mestu** |
+| Resolver/fallback u jezgru | **0.** Naivan grep daje 6 — svih 6 su komentari koji objašnjavaju odsustvo. Resolver živi u UI/adapter sloju i fail-closed je (`If koliko <> 1 Then` → greška). | **u mestu** |
+| Dual model | **nema ga.** Tri upisa u `tblOtkup` ukupno; `SaveOtkup` piše stari plosnat red ali je **write-dead** (nijedan produkcioni pozivalac — postoji da test može napraviti zaglavlje *bez* stavki, oblik koji nove kapije moraju da odbiju). Nov pisac stare kolone ostavlja **prazne**, ne ogleda ih — §14.6 to izričito traži. | **u mestu** |
+| Linije u jezgru | „core" nije definisan: dva razumna čitanja daju **−41%** i **+16%**. | nejasno |
+| Identitetski testovi | prefiks `T_ZBR*` **ne postoji u repou** (0 pogodaka na svakom sidru); meri se nad Zbirna lancem, a presečen je Otkup. | nejasno |
+| Reuse pozivalaca | 10 : 5 nad *dodirnutim* modulima, ali **14 nedirnutih čita kolone koje nov pisac nikad ne puni** — diff od nule broji kao „savršen reuse". | nejasno |
+
+Najjači pojedinačni dokaz nije broj nego **mehanizam**: prelaz 9 → 8 pisaca nije
+nastao prepisivanjem nego brisanjem kolona `Isplaceno` i `DatumIsplate` iz kanona.
+**Pisac nestaje sa kolonom.** Isti potez nad preostalih 5 vezivnih kolona vodi
+8 → 1 mehanički, bez ijednog novog sloja — a taj put je već jednom pređen, na ovoj
+istoj tabeli, u ovom istom ciklusu.
+
+#### Šta merenje NIJE potvrdilo, i mora se reći
+
+Kriterijumi su prikazivali refaktor **gotovijim nego što jeste.** Upis je presečen,
+**čitaoci nisu prešli**:
+
+- `modNovac.IsplataBlokProblem` računa vrednost bloka kao `Kolicina × Cena` sa
+  **zaglavlja** — a te kolone su na nov dokument prazne. Posledica: `preostalo`
+  ispada 0 i **svaka isplata na nov otkup se odbija**. Zovu ga dva živa mesta
+  (`SaveOMUlaz_TX`, ekran novca).
+- 14 nedirnutih modula čita kolone koje nov pisac ne puni: `modBankaMapiranje`
+  (uplata se knjiži kao avans), pet izveštaja u `modIzvestaj` (nula).
+
+**To nije argument za novo stablo** — novo stablo te čitaoce takođe ne bi prevelo.
+Ali znači da je **konverzija čitalaca stvaran, nepopisan posao**, i ona ulazi u
+plan kao imenovana stavka umesto da se podrazumeva.
+
+#### Kriterijumi se ZAMENJUJU, ne relaksiraju
+
+Tri „nejasno" nisu neodlučnost nego **defekti kriterijuma**. Za sledeći slajs
+(Otpremnica, PR7) kapija nosi merljive pragove:
+
+| Umesto | Novi prag | Danas |
+|---|---|---|
+| „kraće od zbira `SaveOtkup*`" | jezgro slajsa **ne sme biti >20% veće** od jezgra `CreateZbirna_TX` (greenfield brat) | 695 vs 770 → **10% manje** |
+| „broj `T_ZBR*` pada" | poimeničan spisak testova koji **moraju nestati**, upisan **pre** početka slajsa | — |
+| „većina modula adaptirana" | populacija se **popisuje** (svi moduli koji čitaju tabelu na baznom commitu); nedirnut modul koji čita nepopunjenu kolonu broji se kao **odložen**, ne kao reuse | 17 konvertovano, **14 odloženo** |
+| „dual model" u jednom redu | dva reda: **dual WRITE** (prag 0, ispunjen) i **dual READ** — produkcioni čitaoci linijskih polja sa zaglavlja (prag 0, **danas nije ispunjen**) | — |
+
+Granica „jezgra" se takođe upisuje, jer bez nje merenje nije ponovljivo:
+**jezgro = `CreateX_TX` + tranzitivno zatvaranje do `Monitor_*`/`LogError`,
+uključujući `ApplyAvansToOtkup`, isključujući deljenu infrastrukturu
+`modDataAccess`/`modSchema`.**
+
+---
+
+#### Original kriterijuma (pre zamene, 13.09.2026)
+
 
 Posle Otkup cutover-a i skele za Otpremnicu i Zbirnu (tabela PR-ova: red 6)
 donosi se formalna
