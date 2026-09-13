@@ -2365,7 +2365,13 @@ FIXTURE_SIG_EXT = ".sig"
 # ostanu isti -- potpis bi tvrdio da je stari fixture i dalje dobar. Tada se
 # ovaj broj podigne za jedan. Jeftinije i tacnije nego hashirati ceo .py, koji
 # bi trazio regeneraciju i na izmenu komentara.
-FIXTURE_FORMAT_VERSION = 2
+#
+# 3 (13.09.2026): add_row primenjuje ugovor o formatu iz kanona ("@" PRE dodele).
+#   Bez podizanja poluge fixture napravljen PRE te izmene ostaje sa VAZECIM
+#   potpisom, a kolone pod ugovorom su mu u General formatu -- tacno stanje u kome
+#   Excel pretvori "3/2026" u datum i obori 10 testova koji sa kodom nemaju veze.
+#   Potpis bi pritom tvrdio da je fixture svez, pa bi se krivac trazio u kodu.
+FIXTURE_FORMAT_VERSION = 3
 
 
 def signature() -> str:
