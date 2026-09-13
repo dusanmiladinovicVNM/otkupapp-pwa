@@ -165,26 +165,31 @@ End Function
 ' po broju za ostale tri tabele -- i zato ne moze da razlikuje dve verzije istog
 ' dokumenta. Otkup je prvi koji prelazi; ostali idu u PR7/PR8.
 '
-' NOVAC SE NE PRENOSI SAM -- MERENO, i to je NALAZ, ne osobina ovog pisca.
+' NOVAC PRATI NASLEDNIKA -- odluka operatera 13.09.2026.
 '
-' StornoOtkup radi ResetNovacOtkupLink: knjizene isplate se OSLOBADJAJU (OtkupID
-' se prazni), ne stornirju. Ocekivano je bilo da ih nov dokument pokupi kroz
-' ApplyAvansToOtkup -- ne pokupi ih:
+' Do te odluke je ovde stajalo suprotno, i bilo je tacno: StornoOtkup radi
+' ResetNovacOtkupLink (isplate se OSLOBADJAJU, ne storniraju), a avans-petlja je
+' uzimala samo Tip = NOV_VIRMAN_AVANS_KOOP -- pa je odvezan VirmanFirmaKoop
+' ostajao nevidljiv i za dug i za avans. Sve tri tvrdnje su sada NETACNE.
 '
-'   modNovac:1624   avans-petlja uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP
-'   modNovac:1982   GetKooperantUnallocatedAvans isto
-'   modNovac:2031   BuildKooperantUnallocatedAvansDict isto
+' Sta vazi danas (docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md, S0 -- spec, ne predlog):
 '
-' Odvezana isplata tipa VirmanFirmaKoop zato ostaje NEVIDLJIVA i za dug (nema
-' OtkupID) i za avans (pogresan tip). Vidi se jos samo u kartici kooperanta
-' (modIzvestaj:2507), gde ulazi u saldo -- pa novac nije izgubljen, ali jeste
-' ispao iz svake masinerije koja odlucuje sta se placa.
+'   - Odvezan VIRMAN postaje raspoloziv avans kooperanta. Pravilo je na jednom
+'     mestu: modNovac.JeAvansKooperanta prima VirmanAvansKoop i VirmanFirmaKoop.
+'   - KES (KesOtkupacKoop) NE postaje avans. Kes na otkupnom mestu je zatvoren
+'     posao; da ga avans-petlja povuce na tudj dokument, novac bi "platio"
+'     nesto sto nije.
+'   - Pri ISPRAVCI sva prethodno vezana placanja prate naslednika. Redovi se
+'     pamte PRE storna (posle njega nema po cemu da se nadju) pa se prevezu
+'     kroz modNovac.PrevezaNovacNaOtkup -- API vlasnika, jer je tblNovac za ovaj
+'     modul tudja tabela (A11).
+'   - PREPLATA se prijavljuje kroz outUpozorenje, a ispravka PROLAZI.
 '
-' Ovo NIJE uvedeno ovde: isto radi obican StornoOtkup_TX i radio je oduvek.
-' Ispravka ga samo cini lakse dostizivim. Test ga tvrdi kao ZATECENO stanje, da
-' se ne bi tumacilo kao osobina; odluka o prenosu je poslovna i ceka operatera.
-'
-' Opcije, cena svake i preporuka: docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md
+' Zasto se preplata meri iz KONACNOG stanja, a ne iz povratne vrednosti prenosa:
+' ApplyAvansToOtkup avans veci od duga DELI (original smanji na ostatak, za
+' primenjeni deo napravi nov red), pa prenos vidi samo taj ostatak. Prva verzija
+' je poredila preneseno sa dugom i tiho promasivala virman -- v. komentar uz sam
+' racun nize.
 '
 ' JEDNA TRANSAKCIJA obuhvata sve: nov dokument, storno starog, obe veze i
 ' correction context. Delimicna ispravka -- nov dokument bez storna starog, ili
@@ -395,6 +400,12 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     Exit Function
 
 EH:
+    ' Upozorenje se postavlja PRE CompleteCorrectionContext i CommitTx. Ako
+    ' nesto posle toga pukne, rollback vrati podatke -- ali bi outUpozorenje
+    ' ostalo popunjeno i pozivalac bi prijavio preplatu na dokumentu koji nije
+    ' ni nastao. Nema stete po podatke, ali je ugovor funkcije necist.
+    outUpozorenje = ""
+
     Dim errNum As Long, errDesc As String, errSrc As String
     errNum = Err.Number
     errDesc = Err.description
