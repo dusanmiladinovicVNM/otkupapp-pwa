@@ -42,6 +42,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblOtpremnicaStavke` | 1 | `modDokumenta` |
 | `tblPaletaStavka` | 1 | `modPaletniList` |
 | `tblPartnerMap` | 1 | `modNovac` |
+| `tblPrerada` | 1 | `modPaletniList` |
+| `tblPreradaStavka` | 1 | `modPaletniList` |
 | `tblPrevoznici` | 1 | `modUtovar` |
 | `tblSEFConfig` | 1 | `modConfig` |
 | `tblSEFEventLog` | 1 | `modSEFPersistance` |
@@ -55,8 +57,6 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
-| `tblPrerada` | 0 | _(samo testovi)_ |
-| `tblPreradaStavka` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
 
@@ -82,6 +82,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnicaStavke`: `modDokumenta`
 - `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblPartnerMap`: `modBankaMapiranje`
+- `tblPrerada`: `modPaletniList`, `modStorno`
+- `tblPreradaStavka`: `modPaletniList`, `modStorno`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblStornoVeze`: `modOtkup`, `modStornoContext`
@@ -89,8 +91,6 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
 - `tblZbirnaIzvori`: `modDokumenta`
 - `tblZbirnaStavke`: `modDokumenta`
-- `tblPrerada`: `modPaletniList`, `modStorno`
-- `tblPreradaStavka`: `modPaletniList`, `modStorno`
 
 ## Test moduli po tabeli
 
@@ -125,10 +125,40 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStanice`: `modGoldenTests`, `modTest`, `modTestBanka`
 - `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTest`, `modTestPalete`
 
+## Upisi koje mapa NE MOZE da pripise (tabela iz promenljive)
+
+Ovi pozivi imaju oblik `AppendRow(tbl, ...)` / `RequireUpdateCell tbl, ...`
+-- ime tabele se zna tek u runtime-u, pa ih nijedna staticka pretraga ne
+moze pripisati redu u tabeli iznad. Nisu greska: to su genericki helperi
+(`modSchemaGuard` je sam omotac, `modMaticniUnos` pise vise maticnih
+tabela kroz jedan ulaz). Stoje ovde da mapa ne izgleda potpunija nego sto
+jeste -- kapija koja precuti sopstvenu granicu je gora od one koja je
+imenuje.
+
+- `modBusinessFlowProTests`: 4
+- `modDokumentInvariant`: 1
+- `modDokumenta`: 4
+- `modFakturaTests`: 1
+- `modGoldenTests`: 1
+- `modMaticniUnos`: 8
+- `modNovacTests`: 1
+- `modPaletniList`: 1
+- `modSEFTests`: 1
+- `modSchemaGuard`: 2
+- `modStorno`: 1
+- `modStornoFlow`: 3
+- `modStornoRecovery`: 1
+- `modStornoZurnal`: 1
+- `modTest`: 1
+- `modTestPalete`: 1
+
+Ukupno: 32 poziva u 16 modula.
+
 ## Sta ovo NE pokriva
 
 - Upis mimo `AddTableSnapshot` i `modDataAccess` (direktan rad nad
   `ListObject`-om). Takav upis je van transakcije i van sloja podataka --
   ako ga nadjes, to je nalaz, ne rupa u mapi.
 - Granularnost je tabela, ne kolona.
+- Upise iz sekcije iznad -- tabela im se ne zna staticki.
 

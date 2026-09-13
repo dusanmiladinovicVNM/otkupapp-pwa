@@ -64,9 +64,33 @@ VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 # modMasterSync), tblOtkup (modOtkup, modMasterSync), tblPrijemnica,
 # tblOtpremnica, tblNovac i tblFakturaStavke. Kapija koja ne vidi pola poziva
 # ne meri vlasnistvo nego stil pisanja poziva.
+#
+# CETVRTA rupa istog roda, nadjena 13.09.2026: LOKALNI OMOTAC. Regex je trazio
+# granicu reci ili doslovan "Require" pred imenom mutatora, pa mu je
+#     PalAppendRow TBL_PRERADA, rowData
+# (modPaletniList.bas:1368, Private Sub oko AppendRow) bilo nevidljivo -- izmedju
+# "l" i "A" nema granice reci. Posledica: mapa je tvrdila
+#     | tblPrerada | 0 | (samo testovi) |
+# za tabelu koju modPaletniList stvarno pise, i to za CETIRI tabele
+# (tblPrerada, tblPreradaStavka, tblPaleta, tblPaletaStavka).
+#
+# Prefiks je zato slobodan (\w*). SUFIKS ostaje strog: posle imena mutatora mora
+# odmah doci razmak ili "(", pa "AppendRowToLog(" i dalje NE broji -- to je
+# druga procedura, ne omotac. Oba smera imaju svoj slucaj u MUTATE_CASES.
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
 MUTATE_RE = re.compile(
-    r'\b(?:Require)?(?:AppendRow|UpdateCell|DeleteRow)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
+    r'\w*(?:AppendRow|UpdateCell|DeleteRow)\s*[\s(]\s*(TBL_\w+|"(\w+)")',
+    re.I)
+
+# Upis kome se tabela NE MOZE pripisati staticki: prvi argument nije ni TBL_
+# konstanta ni literal nego promenljiva.
+#     modMaticniUnos.DodajPrazanRed:  AppendRow(tbl, prazno)
+# Ta jedna procedura pise vise maticnih tabela, a koja je koja zna se tek u
+# runtime-u. Kapija to ne moze da pripise -- ali sme da PRECUTI jos manje, jer bi
+# tise od greske bila mapa koja izgleda potpuna. Zato se takvi upisi broje i
+# ispisuju kao imenovana granica alata.
+MUTATE_DYN_RE = re.compile(
+    r'\w*(?:AppendRow|UpdateCell|DeleteRow)\s*[\s(]\s*([A-Za-z_]\w*)\s*,',
     re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
@@ -115,8 +139,13 @@ def logicke_linije(text: str):
         yield buf
 
 
+# modul -> broj upisa kojima tabela dolazi kroz promenljivu. Puni ga scan().
+DINAMICKI = collections.defaultdict(int)
+
+
 def scan() -> dict:
     const2tbl = table_constants()
+    DINAMICKI.clear()
     writers = collections.defaultdict(lambda: collections.defaultdict(set))
 
     for name in sorted(os.listdir(SRC)):
@@ -128,11 +157,20 @@ def scan() -> dict:
         for linija in logicke_linije(text):
             if linija.startswith("'"):        # komentar
                 continue
+            pripisano = False
             for regex, kind in ((SNAPSHOT_RE, "tx"), (MUTATE_RE, "mutate")):
                 for m in regex.finditer(linija):
                     token = m.group(1)
                     table = const2tbl.get(token, m.group(2) or token)
                     writers[table][kind].add(module)
+                    if kind == "mutate":
+                        pripisano = True
+            # Upis kome tabela dolazi kroz promenljivu se broji ODVOJENO. Ne moze
+            # da se pripise, ali mora da se vidi -- v. MUTATE_DYN_RE.
+            if not pripisano:
+                for m in MUTATE_DYN_RE.finditer(linija):
+                    if not m.group(1).upper().startswith("TBL_"):
+                        DINAMICKI[module] += 1
     return writers
 
 
@@ -189,12 +227,35 @@ def render(writers: dict) -> str:
 
     lines += [
         "",
+        "## Upisi koje mapa NE MOZE da pripise (tabela iz promenljive)",
+        "",
+        "Ovi pozivi imaju oblik `AppendRow(tbl, ...)` / `RequireUpdateCell tbl, ...`",
+        "-- ime tabele se zna tek u runtime-u, pa ih nijedna staticka pretraga ne",
+        "moze pripisati redu u tabeli iznad. Nisu greska: to su genericki helperi",
+        "(`modSchemaGuard` je sam omotac, `modMaticniUnos` pise vise maticnih",
+        "tabela kroz jedan ulaz). Stoje ovde da mapa ne izgleda potpunija nego sto",
+        "jeste -- kapija koja precuti sopstvenu granicu je gora od one koja je",
+        "imenuje.",
+        "",
+    ]
+    if DINAMICKI:
+        for mod in sorted(DINAMICKI):
+            lines.append(f"- `{mod}`: {DINAMICKI[mod]}")
+        lines.append("")
+        lines.append(f"Ukupno: {sum(DINAMICKI.values())} poziva u "
+                     f"{len(DINAMICKI)} modula.")
+    else:
+        lines.append("_(nema ih)_")
+
+    lines += [
+        "",
         "## Sta ovo NE pokriva",
         "",
         "- Upis mimo `AddTableSnapshot` i `modDataAccess` (direktan rad nad",
         "  `ListObject`-om). Takav upis je van transakcije i van sloja podataka --",
         "  ako ga nadjes, to je nalaz, ne rupa u mapi.",
         "- Granularnost je tabela, ne kolona.",
+        "- Upise iz sekcije iznad -- tabela im se ne zna staticki.",
         "",
     ]
     return "\n".join(lines) + "\n"
@@ -304,6 +365,17 @@ MUTATE_CASES = [
     ("brisanje funkcija",  "ok = DeleteRow(TBL_OTPREMNICA_IZVORI, r)",  "tblOtpremnicaIzvori"),
     ("Require brisanje",   "RequireDeleteRow TBL_ZBIRNA_IZVORI, r, SRC", "tblZbirnaIzvori"),
     ("drugo ime funkcije", "x = AppendRowToLog(TBL_ZBIRNA, rowData)",    None),
+    # LOKALNI OMOTAC -- prefiks pred imenom mutatora. Ovo je bila cetvrta rupa
+    # istog roda: modPaletniList.PalAppendRow je cetiri tabele drzao nevidljivim.
+    ("omotac naredba",     "PalAppendRow TBL_PRERADA, rowData",          "tblPrerada"),
+    ("omotac funkcija",    "n = PalAppendRow(TBL_PALETA, rowData)",      "tblPaleta"),
+    ("omotac sa nastavkom",
+     "PalAppendRow TBL_PRERADA_STAVKA, _\n        rowData",              "tblPreradaStavka"),
+    # ... ali SUFIKS mora ostati strog: ime koje se nastavlja posle mutatora je
+    # DRUGA procedura, ne omotac. Bez ovog para, popravka prefiksa bi otvorila
+    # lazne pozitive umesto da zatvori rupu.
+    ("omotac sa sufiksom nije mutator",
+     "x = PalAppendRowToLog(TBL_ZBIRNA, rowData)",                       None),
     ("drugo ime brisanja", "DeleteRowsByParent TBL_ZBIRNA, x",          None),
     ("definicija",         "Public Function AppendRow(ByVal t As String)", None),
     ("komentar",           "' AppendRow TBL_ZBIRNA, rowData",            None),
@@ -314,9 +386,36 @@ MUTATE_CASES = [
 ]
 
 
+# Upis kome tabela dolazi kroz promenljivu MORA da bude prepoznat kao dinamican,
+# a ne tiho ispusten. Drugi smer je isto vazan: poziv sa TBL_ konstantom se broji
+# kao pripisan, ne kao dinamican -- inace bi mapa duplirala svaki upis.
+DYN_CASES = [
+    ("promenljiva naredba",  "RequireUpdateCell tbl, red, kol, v, SRC",   True),
+    ("promenljiva funkcija", "DodajPrazanRed = AppendRow(tbl, prazno)",   True),
+    ("promenljiva u omotacu", "n = PalAppendRow(tblName, rowData)",       True),
+    ("TBL_ konstanta nije dinamicka", "AppendRow TBL_ZBIRNA, rowData",    False),
+    ("literal nije dinamican", 'UpdateCell "tblZbirna", r, c, v',         False),
+]
+
+
 def self_test() -> int:
     const2tbl = table_constants()
     palo = []
+
+    for naziv, izvor, ocekivano in DYN_CASES:
+        dinamican = False
+        for linija in logicke_linije(izvor):
+            if linija.startswith("'"):
+                continue
+            if MUTATE_RE.search(linija):
+                continue
+            for m in MUTATE_DYN_RE.finditer(linija):
+                if not m.group(1).upper().startswith("TBL_"):
+                    dinamican = True
+        if dinamican != ocekivano:
+            palo.append(f"  DYN/{naziv}: ocekivano {ocekivano!r}, "
+                        f"dobijeno {dinamican!r}  <- {izvor!r}")
+
     for naziv, izvor, ocekivano in MUTATE_CASES:
         dobijeno = None
         for linija in logicke_linije(izvor):
@@ -336,7 +435,7 @@ def self_test() -> int:
         for p in palo:
             print(p, file=sys.stderr)
         return 2
-    print(f"who_writes --self-test: {len(MUTATE_CASES)} slucajeva, cisto")
+    print(f"who_writes --self-test: {len(MUTATE_CASES) + len(DYN_CASES)} slucajeva, cisto")
     return 0
 
 

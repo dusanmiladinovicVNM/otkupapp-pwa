@@ -18,7 +18,9 @@
     "",
     "PR3: baseline prosiren jer je MUTATE_RE do tada gledao samo naredbeni oblik (AppendRow TBL_X); funkcijski (x = AppendRow(TBL_X)) je bio nevidljiv. Dodati pisci nisu novi -- bili su neizmereni.",
     "",
-    "PR3: cilj za tblZbirna je SAMO modDokumenta. modDokumentInvariant racuna i validira, ali ne pise -- RecalculateZbirna_TX zivi u modDokumenta i prima izracunat rezultat (v. DOCUMENT_HEADER_LINES S4.3)."
+    "PR3: cilj za tblZbirna je SAMO modDokumenta. modDokumentInvariant racuna i validira, ali ne pise -- RecalculateZbirna_TX zivi u modDokumenta i prima izracunat rezultat (v. DOCUMENT_HEADER_LINES S4.3).",
+    "",
+    "PR #320: baseline prosiren za tblPrerada i tblPreradaStavka jer je MUTATE_RE do tada trazio granicu reci pred imenom mutatora, pa mu je lokalni omotac modPaletniList.PalAppendRow bio nevidljiv. Mapa je zbog toga tvrdila da te dve tabele pise samo test. Dodati pisci nisu novi -- bili su neizmereni, isto kao u PR3."
   ],
   "tblAmbalaza": {
     "row_owner": [
@@ -171,6 +173,20 @@
     "cilj": []
   },
   "tblPaletaStavka": {
+    "row_owner": [
+      "modPaletniList"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblPrerada": {
+    "row_owner": [
+      "modPaletniList"
+    ],
+    "schema_owner": [],
+    "cilj": []
+  },
+  "tblPreradaStavka": {
     "row_owner": [
       "modPaletniList"
     ],
