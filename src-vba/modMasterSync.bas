@@ -2174,12 +2174,32 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     Dim brojDokumenta As String
     brojDokumenta = Trim$(CStr(nz(data(row, GS_BROJ_DOKUMENTA), "")))
     
-    ' StanicaID aus Kooperant holen
-    stanicaID = CStr(nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
-    
-    ' Wenn OtkupacID = StanicaID (wie bei deinem Setup), nutze das
-    If Len(stanicaID) = 0 And Left$(otkupacID, 3) = "ST-" Then
-        stanicaID = otkupacID
+    ' STANICA JE CINJENICA O TOME GDE JE ROBA PREDATA -- zna je uredjaj
+    ' (OtkupacID iz OTK sheet-a), ne kooperant.
+    '
+    ' Kooperant NIJE zakljucan za stanicu: svaki moze da preda na svakoj, a
+    ' otkupni list pripada stanici, ne kooperantu. tblKooperanti.StanicaID je
+    ' MATICNA stanica i ima tacno jednog potrosaca -- filter padajuce liste pri
+    ' unosu (KOOP_FILTER_BY_OM, modOtkupUI.bas:7034). To je pretpostavka gde ce
+    ' kooperant verovatno doci, ne cinjenica gde je dosao.
+    '
+    ' Do 13.09.2026. je ovde bilo obrnuto: stanica se citala IZ KOOPERANTA, a
+    ' uredjaj je bio samo rezerva kad kooperant nema maticnu. Kooperant sa
+    ' maticnom ST-A koji preda na ST-B dobijao je dokument knjizen na ST-A --
+    ' dok mu je broj, koji PWA pravi po uredjaju, tvrdio ST-B.
+    '
+    ' Posledica nije labela nego POGRESNO OTKUPNO MESTO: saldo OM-a, izvestaji po
+    ' OM-u, modNovac.IsplataBlokProblem (poredi stanicu), station scope u banci i
+    ' kapija duplikata broja -- svi rade po stanici.
+    '
+    ' FAIL-CLOSED: bez uredjaja se NE ZNA gde je roba predata, a pogadjanje po
+    ' kooperantu je upravo greska koja se ovde zatvara.
+    stanicaID = Trim$(otkupacID)
+    If Left$(stanicaID, 3) <> "ST-" Then
+        Err.Raise vbObjectError + 8107, "ImportRowToTblOtkup", _
+            "OtkupacID ne imenuje stanicu (dobijeno: '" & otkupacID & "'). " & _
+            "Stanica dokumenta se ne sme pogadjati iz kooperanta -- maticna " & _
+            "stanica je filter pri unosu, ne knjizenje. ClientRecordID=" & clientRecordID
     End If
     
     ' KULTURA SE RAZRESAVA EGZAKTNO, PO (Vrsta, Sorta).
