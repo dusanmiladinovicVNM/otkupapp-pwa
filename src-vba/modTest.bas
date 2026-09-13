@@ -6546,8 +6546,14 @@ Private Sub T_Kontekst_NovaKulturaITipAmbalazeUlaze()
     Dim red As Variant, iAkt As Long
     Dim imaVrstu As Boolean, imaTip As Boolean
     Dim vrstaPre As String, vrstaPosle As String
+    Dim vrstaPosleGasenja As String, sortaPosleGasenja As String
+    Dim cbSorta As MSForms.ComboBox
+    Dim redKulture As Long, redSorte As Long
+    Dim sortaSamoOnaGasena As String, vrstaOstala As String
     Dim errNum As Long, errDesc As String
     Const NOVA_VRSTA As String = "TST-VRSTA-COMBO"
+    Const NOVA_SORTA As String = "TST-SORTA"
+    Const NOVA_SORTA2 As String = "TST-SORTA-2"
     Const NOV_TIP As String = "TST-TIP-COMBO"
 
     Set f = NewOtkupUIForm()
@@ -6572,10 +6578,22 @@ Private Sub T_Kontekst_NovaKulturaITipAmbalazeUlaze()
     ReDim red(1 To GetTable(TBL_KULTURE).ListColumns.count)
     red(RequireColumnIndex(TBL_KULTURE, "KulturaID", "modTest")) = "TST-KUL-COMBO"
     red(RequireColumnIndex(TBL_KULTURE, "VrstaVoca", "modTest")) = NOVA_VRSTA
-    red(RequireColumnIndex(TBL_KULTURE, "SortaVoca", "modTest")) = "TST-SORTA"
+    red(RequireColumnIndex(TBL_KULTURE, "SortaVoca", "modTest")) = NOVA_SORTA
     iAkt = GetColumnIndex(TBL_KULTURE, "Aktivan")
     If iAkt > 0 Then red(iAkt) = "Aktivan"
-    AppendRow TBL_KULTURE, red
+    redKulture = AppendRow(TBL_KULTURE, red)
+
+    ' Druga sorta pod ISTOM vrstom. Bez nje se sorta ne moze deaktivirati sama:
+    ' gasenjem jedine kulture nestane i vrsta, pa bi tvrdnja o sorti merila
+    ' posledicu brisanja vrste, a ne sopstvenu kapiju. Mereno -- sabotaza sorte
+    ' u toj postavci NIJE zagrizla.
+    ReDim red(1 To GetTable(TBL_KULTURE).ListColumns.count)
+    red(RequireColumnIndex(TBL_KULTURE, "KulturaID", "modTest")) = "TST-KUL-COMBO2"
+    red(RequireColumnIndex(TBL_KULTURE, "VrstaVoca", "modTest")) = NOVA_VRSTA
+    red(RequireColumnIndex(TBL_KULTURE, "SortaVoca", "modTest")) = NOVA_SORTA2
+    iAkt = GetColumnIndex(TBL_KULTURE, "Aktivan")
+    If iAkt > 0 Then red(iAkt) = "Aktivan"
+    redSorte = AppendRow(TBL_KULTURE, red)
 
     ReDim red(1 To GetTable(TBL_TIP_AMBALAZE).ListColumns.count)
     red(RequireColumnIndex(TBL_TIP_AMBALAZE, COL_TAMB_TIP, "modTest")) = NOV_TIP
@@ -6589,6 +6607,32 @@ Private Sub T_Kontekst_NovaKulturaITipAmbalazeUlaze()
     imaTip = ComboSadrzi(cbAmb, NOV_TIP)
     vrstaPosle = CStr(cbVrsta.value)
 
+    ' --- druga polovina: DEAKTIVIRAN maticni podatak mora da NESTANE iz polja.
+    '
+    ' Cuvanje izbora ne sme da bude bezuslovno. Resolver (VrstaVoca, SortaVoca) ->
+    ' KulturaID ide kroz LookupValue, koji prolazi kroz SVE redove i NE gleda
+    ' kolonu Aktivan -- pa bi zadrzana deaktivirana kultura otisla u nov otkup kao
+    ' potpuno validan KulturaID, a operater bi u polju video vrednost koja mu vise
+    ' nije ponudjena.
+    cbVrsta.value = NOVA_VRSTA
+    modOtkupUI.RefreshFromData          ' sorta se prepuni za novu vrstu
+    Set cbSorta = f.Controls("zCtx").Controls("cbSorta")
+    cbSorta.value = NOVA_SORTA
+
+    ' --- izolovano: gasi se SAMO jedna sorta, vrsta ostaje aktivna
+    cbSorta.value = NOVA_SORTA2
+    RequireUpdateCell TBL_KULTURE, redSorte, "Aktivan", STATUS_NEAKTIVAN, "modTest"
+    modOtkupUI.RefreshFromData
+    sortaSamoOnaGasena = CStr(cbSorta.value)
+    vrstaOstala = CStr(cbVrsta.value)
+
+    ' --- pa tek onda cela kultura
+    RequireUpdateCell TBL_KULTURE, redKulture, "Aktivan", STATUS_NEAKTIVAN, "modTest"
+    modOtkupUI.RefreshFromData
+
+    vrstaPosleGasenja = CStr(cbVrsta.value)
+    sortaPosleGasenja = CStr(cbSorta.value)
+
     tx.RollbackTx
     txZapoceta = False
     ReleaseOtkupUIForm f
@@ -6597,6 +6641,18 @@ Private Sub T_Kontekst_NovaKulturaITipAmbalazeUlaze()
     AssertEq imaVrstu, True, "nova kultura je u listi vrsta posle RefreshFromData"
     AssertEq imaTip, True, "nov tip ambalaze je u listi posle RefreshFromData"
     AssertEq vrstaPosle, vrstaPre, "izabrana vrsta prezivljava osvezavanje liste"
+    AssertEq vrstaPosleGasenja, "", _
+             "deaktivirana kultura NESTAJE iz polja vrste, ne ostaje kao tekst"
+    AssertEq sortaPosleGasenja, "", _
+             "sorta deaktivirane kulture NESTAJE iz polja"
+    ' Ova dve tvrdnje su REGRESIONE, ne dokaz garda: mereno je da bezuslovno
+    ' vracanje izbora NE obara nijednu od njih -- cbSorta ne prima vrednost van
+    ' svoje liste. Cuvaju zateceno ponasanje, a gard u kodu je oznacen kao
+    ' neizmeren.
+    AssertEq sortaSamoOnaGasena, "", _
+             "deaktivirana SORTA nestaje iz polja i kad vrsta ostaje aktivna"
+    AssertEq vrstaOstala, NOVA_VRSTA, _
+             "vrsta ostaje izabrana kad je gasena samo jedna njena sorta"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
