@@ -230,6 +230,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaNovDokumentINovBroj
     Test_OTK_IspravkaKapije
     Test_OTK_IspravkaNeGubiNovac
+    Test_OTK_IspravkaPrenosiKes
+    Test_OTK_IspravkaPrijavljujePreplatu
+    Test_OTK_IsplataNaNovDokumentProlazi
+    Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
     Test_OTK_IspravkaRollbackVracaSve
     Test_OTK_SelfHealMigracijeKolona
@@ -9514,6 +9518,176 @@ End Sub
 ' Ostaje samo u kartici kooperanta. Nije uvedeno ispravkom -- isto radi obican
 ' StornoOtkup_TX -- pa se ovde tvrdi kao ZATECENO, da se ne bi tumacilo kao
 ' osobina novog pisca. Kad se donese odluka o prenosu, ovaj test se OKRECE.
+' ISPLATA NA NOV DOKUMENT SE NE ODBIJA -- citalac je bio na starom modelu.
+'
+' modNovac.IsplataBlokProblem je racunao vrednost bloka kao Kolicina * Cena SA
+' ZAGLAVLJA. Nov pisac (CreateOtkup_TX) te dve kolone NE PUNI -- pa je `vrednost`
+' ostajala 0, `preostalo` ispadalo 0, i SVAKA isplata bila odbijena kao "veca od
+' ostatka", na oba ziva pozivaoca (SaveOMUlaz_TX i ekran novca).
+'
+' Zasto to nijedan postojeci test nije uhvatio: fixture nosi STARI model -- redovi
+' otkupa u njemu imaju popunjeno zaglavlje. Kapija je radila nad fixture podacima
+' i padala samo nad dokumentom iz novog pisca. Zato ovaj test dokument PRAVI.
+Private Sub Test_OTK_IsplataNaNovDokumentProlazi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKISPL")
+
+    Dim br As String: br = TEST_PREFIX & "-OTK-IB-" & scenario
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(br), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "IsplataBlok: dokument iz NOVOG pisca napravljen"
+
+    ' Preduslov koji objasnjava ceo kvar: zaglavlje NEMA kolicinu.
+    AssertTrue Abs(modOtkup.VrednostOtkupa(otkID) - 10000#) < 0.001, _
+               "IsplataBlok: kanonska vrednost dolazi iz STAVKI (10000)"
+
+    ' Isplata unutar vrednosti mora PROCI. Pre popravke je vracala
+    ' "veci od ostatka", jer je vrednost sa zaglavlja bila 0.
+    AssertEquals "", modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", 5000#), _
+                 "IsplataBlok: isplata unutar vrednosti NIJE odbijena"
+
+    ' Drugi smer: preko vrednosti se i dalje odbija -- kapija nije ukinuta.
+    AssertTrue Len(modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", 15000#)) > 0, _
+               "IsplataBlok: isplata PREKO vrednosti se i dalje odbija"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IsplataNaNovDokumentProlazi", Err.Number, Err.description
+End Sub
+
+' PUT D SUZENO: odvezan VirmanFirmaKoop se VIDI kao raspoloziv avans.
+'
+' Obican storno (bez ispravke) skida OtkupID. Do odluke 13.09.2026. su ga posle
+' toga videli samo citaci VirmanAvansKoop-a, pa je VirmanFirmaKoop ispadao iz
+' svake masinerije koja bira sta se placa. Sada ga vide -- ali KesOtkupacKoop i
+' dalje NE, jer kes na otkupnom mestu nije avans nego zatvoren posao.
+Private Sub Test_OTK_OdvezanVirmanJeRaspolozivAvans()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAVD")
+
+    Dim pre As Double
+    pre = GetKooperantUnallocatedAvans(TEST_KOOP_ID)
+
+    Dim br As String: br = TEST_PREFIX & "-OTK-AV-" & scenario
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(br), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "Odvezan virman: polazni dokument"
+
+    SaveNovac TEST_PREFIX & "-NOV-AV-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, 7000#, "virman firme na blok", otkID
+
+    ' Dok je VEZAN, nije raspoloziv -- inace bi se dvaput trosio.
+    AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre) < 0.001, _
+               "Odvezan virman: dok je vezan za blok NIJE raspoloziv"
+
+    AssertTrue modStorno.StornoOtkup(otkID), "Odvezan virman: storno prosao"
+
+    ' Posle storna JESTE raspoloziv. Pre odluke je ovde bilo 0.
+    AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre - 7000#) < 0.001, _
+               "Odvezan virman: posle storna JESTE raspoloziv avans"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_OdvezanVirmanJeRaspolozivAvans", Err.Number, Err.description
+End Sub
+
+' PUT A meri se KESOM, ne virmanom -- i to je nalaz, ne detalj.
+'
+' Prva verzija ovog dokaza je koristila VirmanFirmaKoop i NIJE merila prenos:
+' sabotaza koja ukloni PrevezaNovacNaOtkup nije oborila nijednu tvrdnju
+' (mereno 13.09.2026). Razlog nije previd u testu nego arhitektura -- put D
+' suzeno cini VirmanFirmaKoop vidljivim kao avans, pa ga ApplyAvansToOtkup
+' unutar CreateOtkup sam pokupi i veze za nov dokument. Za taj tip je prenos
+' SUVISAN.
+'
+' Put A ima posmatriv efekat samo na KesOtkupacKoop, koji D namerno iskljucuje:
+' kes placen za TAJ posao treba da prati ispravljen dokument, ali ne sme
+' slobodno da pluta na tudje dokumente.
+Private Sub Test_OTK_IspravkaPrenosiKes()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKES")
+
+    Dim brStari As String: brStari = TEST_PREFIX & "-OTK-K1-" & scenario
+    Dim brNovi As String: brNovi = TEST_PREFIX & "-OTK-K2-" & scenario
+
+    Dim stariID As String
+    stariID = CreateOtkup_TX(OtkHeader(brStari), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(stariID) > 0, "Ispravka kes: polazni dokument (vrednost 10000)"
+
+    SaveNovac TEST_PREFIX & "-NOV-K-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_KES_OTKUPAC_KOOP, 0#, 10000#, "kes na otkupnom mestu", stariID
+
+    AssertTrue Abs(GetIsplataForOtkup(stariID) - 10000#) < 0.001, _
+               "Ispravka kes: stari dokument je placen kesom"
+
+    Dim g As String, g2 As String
+    Dim noviID As String
+    noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
+                                        OtkStavke(100#, 100#, 0, 0#, 0#, 0), g, g2)
+    AssertTrue Len(noviID) > 0, "Ispravka kes: ispravka prosla (" & g & ")"
+
+    ' OVO meri put A: kes ne moze da stigne kroz avans-masineriju, jer ga
+    ' JeAvansKooperanta namerno iskljucuje. Ako je ovde 10000, preneo ga je
+    ' PrevezaNovacNaOtkup i nista drugo.
+    AssertTrue Abs(GetIsplataForOtkup(noviID) - 10000#) < 0.001, _
+               "Ispravka kes: nov dokument PREUZIMA kes (put A, ne avans-petlja)"
+
+    ' I dalje nije slobodan avans -- kes to nikad ne postaje.
+    AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID)) < 0.001, _
+               "Ispravka kes: kes NIJE postao slobodan avans"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IspravkaPrenosiKes", Err.Number, Err.description
+End Sub
+
+' PREPLATA SE PRIJAVLJUJE, ISPRAVKA PROLAZI (odluka 13.09.2026).
+' Ispravka smanjuje 100 kg na 80 kg, a placeno je punih 10000 -- razlika od 2000
+' mora stici operateru kroz outUpozorenje, a nov dokument mora nastati.
+Private Sub Test_OTK_IspravkaPrijavljujePreplatu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPRE")
+
+    Dim brStari As String: brStari = TEST_PREFIX & "-OTK-P1-" & scenario
+    Dim brNovi As String: brNovi = TEST_PREFIX & "-OTK-P2-" & scenario
+
+    Dim stariID As String
+    stariID = CreateOtkup_TX(OtkHeader(brStari), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
+    AssertTrue Len(stariID) > 0, "Preplata: polazni dokument (10000)"
+
+    SaveNovac TEST_PREFIX & "-NOV-P-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_KES_OTKUPAC_KOOP, 0#, 10000#, "kes pre ispravke", stariID
+
+    Dim g As String, g2 As String
+    Dim noviID As String
+    noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
+                                        OtkStavke(80#, 100#, 0, 0#, 0#, 0), g, g2)
+
+    AssertTrue Len(noviID) > 0, "Preplata: ispravka PROLAZI, ne blokira se (" & g & ")"
+    AssertTrue Len(Trim$(g2)) > 0, "Preplata: operater dobija upozorenje"
+    AssertTrue InStr(1, g2, "2.000,00", vbTextCompare) > 0 _
+               Or InStr(1, g2, "2,000.00", vbTextCompare) > 0, _
+               "Preplata: upozorenje imenuje IZNOS razlike (bilo: " & g2 & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IspravkaPrijavljujePreplatu", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTK_IspravkaNeGubiNovac()
     On Error GoTo EH
 
@@ -9537,25 +9711,33 @@ Private Sub Test_OTK_IspravkaNeGubiNovac()
 
     Dim g As String
     Dim noviID As String
+    Dim g2 As String
     noviID = modOtkup.IspravkaOtkupa_TX(stariID, OtkHeader(brNovi), _
-                                        OtkStavke(100#, 100#, 0, 0#, 0#, 0), g)
+                                        OtkStavke(100#, 100#, 0, 0#, 0#, 0), g, g2)
     AssertTrue Len(noviID) > 0, "Ispravka novac: ispravka prosla (" & g & ")"
 
     ' Stari vise nema vezan novac -- veza je skinuta, ne stornirana.
     AssertTrue Abs(GetIsplataForOtkup(stariID)) < 0.001, _
                "Ispravka novac: stari dokument vise ne drzi isplatu"
 
-    ' NOV DOKUMENT JE NE PREUZIMA -- pogresan tip za avans-petlju.
-    AssertTrue Abs(GetIsplataForOtkup(noviID)) < 0.001, _
-               "Ispravka novac: nov dokument NE preuzima odvezanu isplatu"
+    ' PUT A (odluka 13.09.2026): nov dokument PREUZIMA placeni iznos.
+    ' Do te odluke je ovde stajala obrnuta tvrdnja -- test je namerno merio
+    ' ZATECENO stanje, da nalaz ne zivi u komentaru. Sada je okrenut, ne obrisan.
+    AssertTrue Abs(GetIsplataForOtkup(noviID) - 10000#) < 0.001, _
+               "Ispravka novac: nov dokument PREUZIMA odvezanu isplatu"
 
-    ' I ne vidi je ni kao slobodan avans -- dakle nije "cekala negde".
+    ' Nije ni slobodan avans -- ali sada zato sto je VEZAN za naslednika, a ne
+    ' zato sto je ispao iz svake masinerije. Ista tvrdnja, drugi razlog.
     AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID)) < 0.001, _
-               "Ispravka novac: odvezana isplata NIJE slobodan avans"
+               "Ispravka novac: preneta isplata nije slobodan avans (vezana je)"
 
-    ' Zato nov dokument stoji kao PUN dug: to je stanje koje operater vidi.
-    AssertTrue OtkUOtvorenim(noviID), _
-               "Ispravka novac: nov dokument je otvorena obaveza u punom iznosu"
+    ' Zato nov dokument vise NIJE otvorena obaveza -- placen je.
+    AssertTrue Not OtkUOtvorenim(noviID), _
+               "Ispravka novac: nov dokument NIJE otvorena obaveza (placen je)"
+
+    ' Ista vrednost pre i posle -- nema preplate, pa nema ni upozorenja.
+    AssertTrue Len(Trim$(g2)) = 0, _
+               "Ispravka novac: bez smanjenja iznosa nema upozorenja o preplati (bilo: " & g2 & ")"
 
     Exit Sub
 

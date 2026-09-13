@@ -199,13 +199,15 @@ End Function
 Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                                   ByVal h As Object, _
                                   ByVal stavke As Collection, _
-                                  Optional ByRef outGreska As String) As String
+                                  Optional ByRef outGreska As String, _
+                                  Optional ByRef outUpozorenje As String) As String
     Const SRC As String = "IspravkaOtkupa_TX"
 
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
     outGreska = ""
+    outUpozorenje = ""
 
     On Error GoTo EH
 
@@ -307,6 +309,11 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     ' gleda (Stanica, Datum, Broj) i broj je nov, pa sudara nema. Storno prvi ide
     ' zbog novca: ResetNovacOtkupLink oslobodi avans PRE nego sto ga
     ' ApplyAvansToOtkup u novom dokumentu potrazi.
+    ' Novac se pokuplja PRE storna: StornoOtkup skida OtkupID, pa posle njega
+    ' vise nema po cemu da se nadje ciji je bio.
+    Dim nvIDs As Collection
+    Set nvIDs = modNovac.NovacIDsZaOtkup(stariOtkupID)
+
     If Not modStorno.StornoOtkup(stariOtkupID) Then
         Err.Raise vbObjectError + 1914, SRC, _
                   "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
@@ -344,6 +351,26 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     RequireUpdateCell TBL_OTKUP, rNovi, COL_TRACE_CORRECTION_ID, cid, SRC
     RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_ZAMENJEN_SA_ID, noviID, SRC
     RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_CORRECTION_ID, cid, SRC
+
+    ' PUT A (odluka 13.09.2026): oslobodjen novac ide na naslednika. Bez ovoga
+    ' operater posle ispravke vidi nov dokument kao PUN dug, a placeni iznos
+    ' nigde -- VirmanFirmaKoop i KesOtkupacKoop ne vidi nijedna masinerija
+    ' koja bira sta se placa.
+    Dim preneto As Double
+    preneto = modNovac.PrevezaNovacNaOtkup(nvIDs, noviID)
+
+    ' Kad ispravka SMANJI iznos, preneseni novac postaje preplata. Odluka je
+    ' da se PRIJAVI a ispravka prodje: blokada bi oduzela operaciju usred
+    ' posla, a cutanje bi ostavilo gresku koja se vidi tek rucnim pregledom
+    ' kartice. Upozorenje NIJE greska -- funkcija vraca nov OtkupID normalno.
+    If preneto > 0 Then
+        Dim dug As Double
+        dug = VrednostOtkupa(noviID)
+        If preneto > dug Then
+            outUpozorenje = Poruka("OTK_UPZ_PREPLATA_ISPRAVKA") & " " & _
+                            Format$(preneto - dug, "#,##0.00")
+        End If
+    End If
 
     modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
         "Ispravka otkupa zavrsena: nov dokument " & noviID & "."

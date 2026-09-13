@@ -1,10 +1,43 @@
 # Odluka: šta se dešava sa novcem kad se otkup stornira ili ispravi
 
-> **Status: OTVORENO — čeka operatera.** Ovo je poslovno pravilo, ne bug.
-> Kod danas radi jednu stvar; dokument meri šta tačno, koje su alternative i
-> šta svaka košta. Kad odluka padne, ovaj fajl postaje spec i test se okreće.
+> **Status: ODLUČENO 13.09.2026.** Ovaj fajl je od sada **spec**, ne otvoreno
+> pitanje. Odluku je doneo operater; merenja i alternative ispod su ostavljena
+> jer objašnjavaju **zašto** je izabrano baš ovo — i zašto su ostala tri puta
+> odbačena.
 >
 > Nađeno: 11.09.2026, u PR #308 (Otkup cutover, korak 5). Mereno, ne procenjeno.
+
+## 0) Odluka
+
+**Izabrano: A + D suženo.**
+
+| | Šta se radi |
+|---|---|
+| **A** | `IspravkaOtkupa_TX` posle storna **preveže** oslobođene `tblNovac` redove na nov `OtkupID`, unutar postojeće transakcije |
+| **D suženo** | tri čitača avansa primaju `VirmanAvansKoop` **i** `VirmanFirmaKoop`; **`KesOtkupacKoop` ostaje isključen** |
+
+Zašto baš tako: `VirmanFirmaKoop` i `VirmanAvansKoop` su oba virmanski novac firme
+prema kooperantu — razlika je samo da li je u trenutku uplate bio poznat blok. Keš
+isplaćen na otkupnom mestu **nije avans** nego zatvoren posao, pa se ne sme naći u
+mašineriji koja bira šta se plaća sledeće.
+
+**Preplata kad ispravka smanji iznos: PRIJAVLJUJE SE operateru, ispravka prolazi.**
+
+Ispravka sa 400 kg na 380 kg prenosi ceo plaćeni iznos i onda javlja koliko je
+preplaćeno. Ne blokira svakodnevni rad, ali preplata ne ostaje tiha — a to je
+klasa greške koju ovaj projekat inače ne prihvata.
+
+> Odbačeno uz obrazloženje: **B** (konverzija u avans) laže o kanalu plaćanja;
+> **C** (fail-closed) oduzima operaciju umesto da popravi posledicu; **samo A**
+> ostavlja običan storno bez ispravke i dalje slepim.
+>
+> Odbačeno i za preplatu: *tiho* (greška se otkriva tek ručnim pregledom kartice),
+> *blokiraj* (isti prigovor kao C), *prenesi samo do iznosa* (nema preplate, ali
+> logika deljenja isplate traži svoj model i svoj test — nije isključeno kasnije,
+> nije uslov sada).
+
+**Nezavisno od odluke, i dalje važi:** spojiti dve kopije `ResetNovacOtkupLink` u
+jednu, žurnaliranu (§2b).
 
 ---
 
