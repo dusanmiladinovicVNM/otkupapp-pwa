@@ -63,6 +63,19 @@ jobs:
             bash -n "$f" && echo "OK: $f"
           done
 
+      # Isti razlog, druga fascikla: tools/*.sh su operaterski alati koje niko ne
+      # pokrece u CI-ju, pa bi sintaksna greska u njima cekala do trenutka kad
+      # operateru zatreba -- a to je po pravilu trenutak kad nema vremena.
+      # Kraj reda je pritom prava mina: core.autocrlf na Windows-u pretvara .sh u
+      # CRLF pri checkout-u, sto `bash -n` NE prijavljuje, pa `.gitattributes`
+      # drzi `tools/*.sh text eol=lf`.
+      - name: tools skripte se parsiraju
+        run: |
+          for f in tools/*.sh; do
+            [ -e "$f" ] || continue
+            bash -n "$f" && echo "OK: $f"
+          done
+
       - name: vba_check
         run: python3 tools/vba_check.py
 

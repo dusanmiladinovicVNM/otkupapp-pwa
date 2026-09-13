@@ -26,3 +26,10 @@ src-vba/*.cls text eol=crlf
 src-vba/*.doccls text eol=crlf
 # .frx je binaran (Windows-1250 sadrzaj kontrola) -- nikakva konverzija.
 src-vba/*.frx -text -diff
+
+# Shell skripte moraju biti LF i na Windows-u. core.autocrlf ih pri checkout-u
+# pretvara u CRLF, a CRLF u .sh je klasa greske koja se ne vidi u `bash -n`:
+# skripta se parsira, pa pukne tek na mestu gde \r zavrsi UNUTAR vrednosti
+# (poredjenje, ime grane, putanja). Isti razlog kao za src-vba nize -- alat koji
+# se ponasa razlicito po masini nije alat.
+tools/*.sh text eol=lf
