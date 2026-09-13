@@ -157,6 +157,30 @@ Public Sub StartApp()
             entityType:="Schema", _
             entityID:=modSchema.SCHEMA_FINGERPRINT
     End If
+
+    ' --- Ugovor o formatu celije ---
+    ' Isti obrazac kao za semu: primeni, pa PRIJAVI sta nije leglo. Fail-soft je
+    ' namerno i ovde -- kolona koju sveska ne da da se formatira ne sme da ostavi
+    ' operatera bez alata; ta greska je jednom vec placena kad je BackupFileOnStart
+    ' obarao ceo start. Tvrdo se staje pred upisom (SchemaReadyOrFail), gde je
+    ' steta stvarna i gde je pozivalac ne guta nego prekida transakciju.
+    '
+    ' Nije tiho: InitApp zove EnsureRuntimeSchema pod "On Error Resume Next", pa bi
+    ' bez ovog reda neuspela primena prosla bez ijednog traga.
+    Dim fmtPoruka As String
+    fmtPoruka = modSchema.PrimeniFormateKanona()
+    If Len(fmtPoruka) > 0 Then
+        LogError "modMain.StartApp", "FORMAT: " & fmtPoruka, 0, "WARN"
+        Monitor_Event _
+            eventType:="SCHEMA_DRIFT", _
+            severity:="WARN", _
+            message:="Ugovor o formatu celije: " & fmtPoruka, _
+            userId:="Operator", _
+            moduleName:="modMain", _
+            procedureName:="StartApp", _
+            entityType:="Schema", _
+            entityID:=modSchema.SCHEMA_FINGERPRINT
+    End If
     On Error GoTo EH
 
     ' Splash stoji od pocetka; ovde se samo dopunjava do najmanjeg trajanja, da

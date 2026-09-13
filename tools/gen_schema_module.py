@@ -88,8 +88,11 @@ Option Explicit
 ' Javni ulazi:
 '   EnsureAllTables      kreira sto fali, dopunjava kolone. Idempotentno.
 '   VerifySchema         prijavljuje odstupanja; NISTA ne menja.
-'   SchemaReadyOrFail    tvrda kapija pred upis, nad zadatim tabelama.
+'   SchemaReadyOrFail    tvrda kapija pred upis, nad zadatim tabelama (redosled
+'                        kolona I ugovor o formatu celije).
 '   SchemaCheckOnStart   jeftina provera pri pokretanju (otisak).
+'   PrimeniFormateKanona primeni ugovor o formatu i vrati sta NIJE leglo.
+'   FormatNeslaganje     procitaj stvarni format jedne tabele; nista ne menja.
 '   SchemaRegistry       registar, za testove i alate.
 '
 ' NE zvati EnsureAllTables unutar otvorene transakcije: clsTransaction.RestoreTable
@@ -168,43 +171,122 @@ End Function
 ' Spisak je generisan iz kljuca "formats" u schema/schema.json. Ne dopunjavati
 ' ovde -- ovaj modul je artefakt.
 ' ============================================================
-Public Sub PrimeniFormateKanona()
+' Primeni ugovor i PROVERI da je legao. Vraca opis neslaganja koja su prezivela
+' primenu ("" = sve u redu). Ne dize gresku -- odluku nosi pozivalac, jer se ovo
+' zove i sa starta (gde fail-soft mora da ostane) i iz tvrde kapije pred upisom.
+'
+' Ranije je cela procedura bila Sub pod jednim "On Error Resume Next" i nije
+' vracala nista. Ugovor je time prakticno glasio "pokusaj da postavis @, pa
+' nastavi rad" -- a kolona koja nije "@" TIHO menja vrednost pri prvom upisu,
+' dakle bas ono zbog cega ugovor postoji. Sada se rezultat MERI.
+Public Function PrimeniFormateKanona() As String
     Dim reg As Object, tblName As Variant
     Dim kolone As Object, kolName As Variant
     Dim lo As ListObject
+    Dim lose As String
 
-    On Error Resume Next
     Set reg = FormatRegistry()
     For Each tblName In reg.keys
+        Set lo = Nothing
+        On Error Resume Next
         Set lo = modDataAccess.GetTable(CStr(tblName))
+        On Error GoTo 0
         If Not lo Is Nothing Then
             Set kolone = reg(tblName)
             For Each kolName In kolone.keys
-                PostaviFormatKolone lo, CStr(kolName), CStr(kolone(kolName))
+                If Not PostaviFormatKolone(lo, CStr(kolName), CStr(kolone(kolName))) Then
+                    If Len(lose) > 0 Then lose = lose & ", "
+                    lose = lose & CStr(tblName) & "." & CStr(kolName)
+                End If
             Next kolName
         End If
     Next tblName
-    Err.Clear
-End Sub
+
+    If Len(lose) > 0 Then PrimeniFormateKanona = "format nije legao: " & lose
+End Function
 
 ' Format se postavlja na CELU kolonu tabele (ListColumn.Range), ne na
 ' DataBodyRange. Prazna tabela nema DataBodyRange, pa bi izlazak na njemu ostavio
 ' sveze napravljenu svesku bez formata -- i PRVI upisan red bi bio pokvaren.
 ' Tacno to se desilo 12.09.2026. sa sveskom napravljenom iz kanona.
-Private Sub PostaviFormatKolone(ByVal lo As ListObject, ByVal kolName As String, _
-                                ByVal semanticki As String)
+'
+' Vraca True samo ako je format STVARNO na koloni. Upis koji "nije pukao" nije
+' dokaz: zasticen list, spojene celije ili drugi COM klijent mogu da ga odbiju bez
+' VBA greske, a mesan format nad opsegom vrati Null (pa CStr pukne pod Resume Next
+' i ostane prazno -- sto se ovde racuna kao neslaganje, i tako treba).
+Private Function PostaviFormatKolone(ByVal lo As ListObject, ByVal kolName As String, _
+                                     ByVal semanticki As String) As Boolean
     Dim col As ListColumn
     Dim fmt As String
+    Dim stvarni As String
 
     fmt = ExcelFormat(semanticki)
-    If Len(fmt) = 0 Then Exit Sub
+    ' Nepoznat semanticki naziv obara GENERISANJE (gen_schema_module), pa ovde ne
+    ' moze da stigne; ako ipak stigne, nije neslaganje formata nego nema sta da se
+    ' postavi.
+    If Len(fmt) = 0 Then PostaviFormatKolone = True: Exit Function
 
+    Set col = Nothing
     On Error Resume Next
     Set col = lo.ListColumns(kolName)
-    If col Is Nothing Then Exit Sub
+    On Error GoTo 0
+    ' Kolone nema u zatecenoj svesci -- to prijavljuje sema, ne ugovor o formatu.
+    ' Nepostojeca kolona ne moze da pokvari nijednu vrednost.
+    If col Is Nothing Then PostaviFormatKolone = True: Exit Function
+
+    On Error Resume Next
     col.Range.NumberFormat = fmt
-    Err.Clear
-End Sub
+    stvarni = CStr(col.Range.NumberFormat)
+    On Error GoTo 0
+
+    PostaviFormatKolone = (StrComp(stvarni, fmt, vbTextCompare) = 0)
+End Function
+
+' Neslaganje ugovora za JEDNU tabelu -- cita STVARNI NumberFormat sa kolone, ne
+' pamti sta je primena pokusala. "" = tabela je u skladu.
+'
+' Postoji odvojeno od PrimeniFormateKanona jer tvrda kapija pred upisom mora da
+' ume da PITA, bez sporednog efekta i bez prolaza kroz svih 30 tabela.
+Public Function FormatNeslaganje(ByVal tblName As String) As String
+    Dim reg As Object, kolone As Object, kolName As Variant
+    Dim lo As ListObject, col As ListColumn
+    Dim fmt As String, stvarni As String, lose As String
+
+    Set reg = FormatRegistry()
+    If Not reg.Exists(tblName) Then Exit Function
+    Set kolone = reg(tblName)
+
+    Set lo = Nothing
+    On Error Resume Next
+    Set lo = modDataAccess.GetTable(tblName)
+    On Error GoTo 0
+    ' Nepostojecu tabelu prijavljuje SchemaReadyOrFail svojom porukom -- ovde bi
+    ' druga poruka o istom stanju samo zbunila.
+    If lo Is Nothing Then Exit Function
+
+    For Each kolName In kolone.keys
+        fmt = ExcelFormat(CStr(kolone(kolName)))
+        If Len(fmt) > 0 Then
+            Set col = Nothing
+            On Error Resume Next
+            Set col = lo.ListColumns(CStr(kolName))
+            On Error GoTo 0
+            If Not col Is Nothing Then
+                stvarni = ""
+                On Error Resume Next
+                stvarni = CStr(col.Range.NumberFormat)
+                On Error GoTo 0
+                If StrComp(stvarni, fmt, vbTextCompare) <> 0 Then
+                    If Len(lose) > 0 Then lose = lose & ", "
+                    lose = lose & tblName & "." & CStr(kolName) & " je '" & _
+                           IIf(Len(stvarni) > 0, stvarni, "mesano") & "', ocekivano '" & fmt & "'"
+                End If
+            End If
+        End If
+    Next kolName
+
+    FormatNeslaganje = lose
+End Function
 
 ' Semanticko ime -> Excel format. Kanon nosi znacenje, ne sirov Excel string.
 Private Function ExcelFormat(ByVal semanticki As String) As String
@@ -426,6 +508,31 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
                           "otisle u pogresne kolone. Pokreni " & _
                           "modSchema.EnsureAllTables; ako i posle toga odstupa, " & _
                           "redosled se mora popraviti rucno."
+            End If
+
+            ' FORMAT je deo ugovora koliko i redosled, i opasniji je od njega:
+            ' pogresan redosled posalje vrednost u pogresnu kolonu i to se vidi,
+            ' a kolona koja nije "@" TIHO promeni samu vrednost pri upisu
+            ' ("3/2026" -> datum, vodeca nula otpadne) -- posle cega nijedna
+            ' kasnija provera nema sa cim da uporedi.
+            '
+            ' Primena je fail-soft po dizajnu (start ne sme da se zakljuca, isti
+            ' razlog kao za semu), pa DOKAZ mora da stoji ovde -- pred upisom,
+            ' gde greska stvarno nastaje i gde je pozivalac ne guta nego prekida
+            ' _TX. Prvo se POKUSAVA lecenje, kao i za kolone; tvrdo se staje tek
+            ' ako format ni posle primene nije legao.
+            neslaganje = FormatNeslaganje(tblName)
+            If Len(neslaganje) > 0 Then
+                PrimeniFormateKanona
+                neslaganje = FormatNeslaganje(tblName)
+            End If
+            If Len(neslaganje) > 0 Then
+                Err.Raise vbObjectError + 9406, sourceName, _
+                          "Ugovor o formatu celije nije ispunjen (" & neslaganje & _
+                          "). Excel bi pri upisu TIHO promenio vrednost, pa je " & _
+                          "upis odbijen. Pokreni modSchema.EnsureAllTables; ako i " & _
+                          "posle toga odstupa, list je verovatno zasticen ili je " & _
+                          "kolona rucno preformatirana."
             End If
         End If
     Next i

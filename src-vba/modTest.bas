@@ -498,6 +498,7 @@ Public Sub RunAllTests()
     RunOne 208
     RunOne 209
     RunOne 210
+    RunOne 211
     RunOne 124
     RunOne 125
     RunOne 126
@@ -780,6 +781,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 208: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
         Case 209: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
         Case 210: TestName = "T_Sema_FormatCelijeCuvaVrednost"
+        Case 211: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -998,6 +1000,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 208: T_AutoSave_PadNeZaglavljujePrekidac
         Case 209: T_Kontekst_NovaKulturaITipAmbalazeUlaze
         Case 210: T_Sema_FormatCelijeCuvaVrednost
+        Case 211: T_Sema_ZurnalCuvaVrednostKrozJournalCell
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6593,6 +6596,116 @@ EH:
     modSchema.PrimeniFormateKanona
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_Sema_FormatCelijeCuvaVrednost", errDesc
+End Sub
+
+' ============================================================
+' 211. Zurnal storna cuva vrednost -- kroz PRAVI JournalCell
+' ============================================================
+' Zurnal je jedini nosilac lossless garancije za "Vrati storno". JournalCell pise
+' CStr(oldVal) i CStr(newVal) u StaraVrednost / NovaVrednost, a UndoOperation_TX
+' te iste stringove poredi sa zivom celijom preko vbBinaryCompare (drift guard) i
+' vraca StaruVrednost nazad u original.
+'
+' Ako te dve kolone nisu pod ugovorom o formatu, Excel pri upisu pretvori "3/2026"
+' u datum. Posledica NIJE kozmeticka: undo tada ili odbije operaciju kao drift
+' ("stanje se promenilo posle storna"), ili vrati DRUGACIJU vrednost od one koja je
+' zaista bila. Ovaj PR je taj rizik uvecao -- poslovne kolone su usle u ugovor, pa
+' se ziva celija i njena kopija u zurnalu vise ne kvare isto.
+'
+' Meri se kroz PRAVI JournalCell, ne direktnim upisom u celiju: put do stete ide
+' kroz AppendRow sa pozicionim nizom, i bas taj put mora da bude dokazan.
+'
+' Tri tvrdnje, u oba smera:
+'   1. bez ugovora zurnal SE POKVARI            (dokaz da opasnost postoji)
+'   2. sa ugovorom vrednost prezivi round-trip  (dokaz da ugovor radi)
+'   3. BeginStornoOp ODBIJA da otvori operaciju nad zurnalom bez ugovora
+'      (dokaz da je kapija fail-closed, a ne samo prijava)
+Private Sub T_Sema_ZurnalCuvaVrednostKrozJournalCell()
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim lo As ListObject, ws As Worksheet
+    Dim iStara As Long
+    Dim uGeneralu As String, uUgovoru As String
+    Dim vidiKvar As String
+    Dim kapijaBroj As Long, kapijaOpis As String
+    Dim owns As Boolean, zasticen As Boolean
+    Dim errNum As Long, errDesc As String
+    Const OPASNA As String = "3/2026"
+
+    On Error GoTo EH
+    Set lo = GetTable(TBL_STORNO_ZURNAL)
+    Set ws = lo.Parent
+    iStara = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_STARA, "modTest")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' Operacija se otvara dok ugovor JOS VAZI -- inace bi je nova kapija odbila i
+    ' smer 1 se ne bi mogao izmeriti. Format se kvari tek posle otvaranja.
+    modSchema.PrimeniFormateKanona
+    owns = modStornoZurnal.BeginStornoOp("TEST", "TST-ZUR-FMT")
+
+    ' --- smer 1: bez ugovora Excel pokvari zurnal, kroz PRAVI JournalCell
+    lo.ListColumns(COL_SZ_STARA).Range.NumberFormat = "General"
+    lo.ListColumns(COL_SZ_NOVA).Range.NumberFormat = "General"
+    vidiKvar = modSchema.FormatNeslaganje(TBL_STORNO_ZURNAL)
+    modStornoZurnal.JournalCell TBL_OTKUP, "TST-ZUR-R1", COL_OTK_BR_DOK, OPASNA, OPASNA
+    uGeneralu = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iStara).value)
+
+    ' --- smer 2: ugovor iz kanona cuva vrednost kroz isti put
+    modSchema.PrimeniFormateKanona
+    modStornoZurnal.JournalCell TBL_OTKUP, "TST-ZUR-R2", COL_OTK_BR_DOK, OPASNA, OPASNA
+    uUgovoru = CStr(lo.ListRows(lo.ListRows.count).Range.Cells(1, iStara).value)
+
+    ' --- smer 3: kapija je FAIL-CLOSED kad popravka NIJE moguca
+    ' Samo pokvariti format nije dovoljno: kapija po dizajnu PRVO pokusa da izleci
+    ' pa tek onda stane, pa bi ovde uredno popravila i pustila dalje. Zasticen list
+    ' je realan uzrok zbog koga postavljanje formata ne prolazi, i jedini nacin da
+    ' se izmeri sama grana odbijanja.
+    modStornoZurnal.AbortStornoOp
+    lo.ListColumns(COL_SZ_STARA).Range.NumberFormat = "General"
+    ws.Protect
+    zasticen = True
+    On Error Resume Next
+    Err.Clear
+    modStornoZurnal.BeginStornoOp "TEST", "TST-ZUR-FMT-2"
+    kapijaBroj = Err.Number
+    kapijaOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+    ws.Unprotect
+    zasticen = False
+    modStornoZurnal.AbortStornoOp
+
+    tx.RollbackTx
+    txZapoceta = False
+    modSchema.PrimeniFormateKanona
+
+    AssertEq (uGeneralu <> OPASNA), True, _
+             "preduslov: bez ugovora JournalCell POKVARI '" & OPASNA & "' (dobio: " & uGeneralu & ")"
+    AssertEq (InStr(1, vidiKvar, "StaraVrednost", vbTextCompare) > 0), True, _
+             "FormatNeslaganje imenuje bas pokvarenu kolonu (bilo: " & vidiKvar & ")"
+    AssertEq uUgovoru, OPASNA, _
+             "sa ugovorom zurnal cuva vrednost kroz JournalCell"
+    AssertEq (StrComp(uUgovoru, OPASNA, vbBinaryCompare) = 0), True, _
+             "drift guard undo-a (vbBinaryCompare) bi se poklopio"
+    AssertEq (kapijaBroj <> 0), True, _
+             "BeginStornoOp ODBIJA operaciju kad ugovor ne moze da se ispuni"
+    AssertEq (InStr(1, kapijaOpis, "format", vbTextCompare) > 0), True, _
+             "kapija imenuje razlog (bilo: " & kapijaOpis & ")"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If zasticen Then ws.Unprotect
+    modStornoZurnal.AbortStornoOp
+    On Error GoTo 0
+    If txZapoceta Then tx.RollbackTx
+    On Error Resume Next
+    modSchema.PrimeniFormateKanona
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Sema_ZurnalCuvaVrednostKrozJournalCell", errDesc
 End Sub
 
 ' ============================================================

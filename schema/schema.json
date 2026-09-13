@@ -1119,6 +1119,8 @@
     },
     "tblStornoZurnal": {
       "Broj": "text",
+      "NovaVrednost": "text",
+      "StaraVrednost": "text",
       "Timestamp": "text"
     },
     "tblTipAmbalaze": {
