@@ -153,6 +153,14 @@ jobs:
       - name: modSchema je u koraku sa kanonom
         run: python3 tools/gen_schema_module.py --check
 
+      # Do 13.09.2026. je ovo bila JEDINA kapija bez self-testa, i
+      # .claude/rules/testovi.md je to imenovao kao poznatu rupu. Rupa je porasla
+      # kad je ugovor o formatu celije doneo pet novih validacija nad "formats":
+      # --check ostaje ZELEN i kad neka od njih prestane da meri, jer kanon i
+      # modSchema.bas i dalje budu medjusobno u koraku.
+      - name: gen_schema_module self-test
+        run: python3 tools/gen_schema_module.py --self-test
+
       # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
       # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
       # i videla se tek kao [break] u VBE-u na Windows masini.
