@@ -305,6 +305,45 @@ python tools/run_vba.py --workbook ~/Desktop/AgriX_DEV.xlsm --suite RunBusinessF
 Druga komanda radi nad **temp kopijom**, pa ne prlja isporučenu svesku. Ako suite
 prođe, projekat se i kompajlira — ne bi se pokrenula da ne može.
 
+## Test grana od više PR-ova — `tools/test_grana.sh`
+
+`ImportAllVBA` čita `src-vba/` **zatečene grane** i o tome ne pita ništa. Uvoz
+koda čija se šema ne poklapa sa sveskom šalje **pozicione** upise u pogrešne
+kolone — a to je greška u podacima, ne pad upisa. Ovaj alat pre uvoza kaže šta je
+na disku i da li je bezbedno.
+
+```bash
+bash tools/test_grana.sh 308 311
+bash tools/test_grana.sh --sveska "C:/Users/Dusan/Desktop/AGRIX DEV/AgriX.xlsm" 308 311
+bash tools/test_grana.sh --sta-je-na-disku
+```
+
+Sastavlja **zasebnu** granu `test/sveska` od `origin/main` + head grane zadatih
+PR-ova. Nijedna PR grana se ne dira, a `test/sveska` se sme brisati.
+
+| Korak | Šta radi |
+|---|---|
+| preduslov | odbija rad ako radna kopija nije čista — inače bi se uvezlo nešto što nije ni u jednom commitu |
+| `#broj → grana` | razrešava preko `gh pr view`; nepostojeći PR obara prolaz |
+| merge | `WHO_WRITES.md` je **generisan**, pa se sukob u njemu ne rešava rukom nego regeneracijom; svaki drugi sukob staje i traži ruke |
+| `vba_check` | pad = **ne uvozi** |
+| `gen_schema_module --check` | kanon i `modSchema.bas` moraju biti u koraku — inače bi se sveska lečila po zastareloj šemi |
+| `schema_diff` | samo uz `--sveska`; otvorena sveska (`~$` lock) se **preskače uz poruku**, ne prećutkuje |
+
+**Ne pokreće Excel i ne uvozi ništa.** `ImportAllVBA` i `Debug → Compile
+VBAProject` ostaju ručni koraci — alat samo kaže smeš / ne smeš.
+
+Manifest sastava ide u `.git/test_grana_sadrzaj.txt`, **nikad u radno stablo**:
+untracked fajl u repou bi oborio sopstvenu proveru čiste kopije.
+
+`--sta-je-na-disku` je jedini bezbedan poziv u svakom trenutku — ispisuje granu,
+commit, čistoću radne kopije i sastav poslednje test grane.
+
+> Posle sastavljanja test grane `run_vba` po pravilu traži **regeneraciju
+> fixture-a**: `.xlsm` je gitignored pa ga prelazak grane ne menja, a potpis
+> pokriva i ugovor o formatu iz kanona, koji se sa granom menja. Alat na to
+> podseti komandom na kraju izlaza. To nije kvar nego mehanizam koji radi.
+
 ## Fixture i golden
 
 `tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
