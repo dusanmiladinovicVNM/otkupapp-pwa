@@ -165,26 +165,31 @@ End Function
 ' po broju za ostale tri tabele -- i zato ne moze da razlikuje dve verzije istog
 ' dokumenta. Otkup je prvi koji prelazi; ostali idu u PR7/PR8.
 '
-' NOVAC SE NE PRENOSI SAM -- MERENO, i to je NALAZ, ne osobina ovog pisca.
+' NOVAC PRATI NASLEDNIKA -- odluka operatera 13.09.2026.
 '
-' StornoOtkup radi ResetNovacOtkupLink: knjizene isplate se OSLOBADJAJU (OtkupID
-' se prazni), ne stornirju. Ocekivano je bilo da ih nov dokument pokupi kroz
-' ApplyAvansToOtkup -- ne pokupi ih:
+' Do te odluke je ovde stajalo suprotno, i bilo je tacno: StornoOtkup radi
+' ResetNovacOtkupLink (isplate se OSLOBADJAJU, ne storniraju), a avans-petlja je
+' uzimala samo Tip = NOV_VIRMAN_AVANS_KOOP -- pa je odvezan VirmanFirmaKoop
+' ostajao nevidljiv i za dug i za avans. Sve tri tvrdnje su sada NETACNE.
 '
-'   modNovac:1624   avans-petlja uzima SAMO Tip = NOV_VIRMAN_AVANS_KOOP
-'   modNovac:1982   GetKooperantUnallocatedAvans isto
-'   modNovac:2031   BuildKooperantUnallocatedAvansDict isto
+' Sta vazi danas (docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md, S0 -- spec, ne predlog):
 '
-' Odvezana isplata tipa VirmanFirmaKoop zato ostaje NEVIDLJIVA i za dug (nema
-' OtkupID) i za avans (pogresan tip). Vidi se jos samo u kartici kooperanta
-' (modIzvestaj:2507), gde ulazi u saldo -- pa novac nije izgubljen, ali jeste
-' ispao iz svake masinerije koja odlucuje sta se placa.
+'   - Odvezan VIRMAN postaje raspoloziv avans kooperanta. Pravilo je na jednom
+'     mestu: modNovac.JeAvansKooperanta prima VirmanAvansKoop i VirmanFirmaKoop.
+'   - KES (KesOtkupacKoop) NE postaje avans. Kes na otkupnom mestu je zatvoren
+'     posao; da ga avans-petlja povuce na tudj dokument, novac bi "platio"
+'     nesto sto nije.
+'   - Pri ISPRAVCI sva prethodno vezana placanja prate naslednika. Redovi se
+'     pamte PRE storna (posle njega nema po cemu da se nadju) pa se prevezu
+'     kroz modNovac.PrevezaNovacNaOtkup -- API vlasnika, jer je tblNovac za ovaj
+'     modul tudja tabela (A11).
+'   - PREPLATA se prijavljuje kroz outUpozorenje, a ispravka PROLAZI.
 '
-' Ovo NIJE uvedeno ovde: isto radi obican StornoOtkup_TX i radio je oduvek.
-' Ispravka ga samo cini lakse dostizivim. Test ga tvrdi kao ZATECENO stanje, da
-' se ne bi tumacilo kao osobina; odluka o prenosu je poslovna i ceka operatera.
-'
-' Opcije, cena svake i preporuka: docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md
+' Zasto se preplata meri iz KONACNOG stanja, a ne iz povratne vrednosti prenosa:
+' ApplyAvansToOtkup avans veci od duga DELI (original smanji na ostatak, za
+' primenjeni deo napravi nov red), pa prenos vidi samo taj ostatak. Prva verzija
+' je poredila preneseno sa dugom i tiho promasivala virman -- v. komentar uz sam
+' racun nize.
 '
 ' JEDNA TRANSAKCIJA obuhvata sve: nov dokument, storno starog, obe veze i
 ' correction context. Delimicna ispravka -- nov dokument bez storna starog, ili
@@ -199,13 +204,15 @@ End Function
 Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                                   ByVal h As Object, _
                                   ByVal stavke As Collection, _
-                                  Optional ByRef outGreska As String) As String
+                                  Optional ByRef outGreska As String, _
+                                  Optional ByRef outUpozorenje As String) As String
     Const SRC As String = "IspravkaOtkupa_TX"
 
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
     outGreska = ""
+    outUpozorenje = ""
 
     On Error GoTo EH
 
@@ -307,6 +314,11 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     ' gleda (Stanica, Datum, Broj) i broj je nov, pa sudara nema. Storno prvi ide
     ' zbog novca: ResetNovacOtkupLink oslobodi avans PRE nego sto ga
     ' ApplyAvansToOtkup u novom dokumentu potrazi.
+    ' Novac se pokuplja PRE storna: StornoOtkup skida OtkupID, pa posle njega
+    ' vise nema po cemu da se nadje ciji je bio.
+    Dim nvIDs As Collection
+    Set nvIDs = modNovac.NovacIDsZaOtkup(stariOtkupID)
+
     If Not modStorno.StornoOtkup(stariOtkupID) Then
         Err.Raise vbObjectError + 1914, SRC, _
                   "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
@@ -345,6 +357,39 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_ZAMENJEN_SA_ID, noviID, SRC
     RequireUpdateCell TBL_OTKUP, rStari, COL_TRACE_CORRECTION_ID, cid, SRC
 
+    ' PUT A (odluka 13.09.2026): oslobodjen novac ide na naslednika. Bez ovoga
+    ' operater posle ispravke vidi nov dokument kao PUN dug, a placeni iznos
+    ' nigde -- VirmanFirmaKoop i KesOtkupacKoop ne vidi nijedna masinerija
+    ' koja bira sta se placa.
+    ' Povratna vrednost se NE koristi za odluku o preplati (v. nize) -- prenos
+    ' je ovde zbog KESA, koji avans-petlja namerno ne vidi.
+    Dim preneto As Double
+    preneto = modNovac.PrevezaNovacNaOtkup(nvIDs, noviID)
+
+    ' Kad ispravka SMANJI iznos, placeni novac postaje preplata. Odluka je da se
+    ' PRIJAVI a ispravka prodje: blokada bi oduzela operaciju usred posla, a
+    ' cutanje bi ostavilo gresku koja se vidi tek rucnim pregledom kartice.
+    ' Upozorenje NIJE greska -- funkcija vraca nov OtkupID normalno.
+    '
+    ' Meri se KONACNO STANJE dokumenta, ne povratna vrednost poslednjeg helpera.
+    ' Prva verzija je poredila `preneto > dug` i TIHO je promasivala virman:
+    ' ApplyAvansToOtkup (koji CreateOtkup zove pre ovoga) avans koji je VECI od
+    ' duga DELI -- original smanji na ostatak, a za primenjeni deo napravi NOV
+    ' red vezan za dokument (modNovac.bas, split grana). Posle toga
+    ' PrevezaNovacNaOtkup nad zapamcenim ORIGINALNIM ID-em prenese samo taj
+    ' ostatak, pa je `preneto` bilo 2.000 uz dug od 8.000 -- i uslov nije opalio,
+    ' iako je dokument stvarno placen 10.000.
+    '
+    ' Pitanje nije "koliko je poslednji helper prebacio" nego "koliko novca je
+    ' SADA vezano za dokument naspram njegove vrednosti".
+    Dim placeno As Double, dug As Double
+    placeno = modNovac.GetIsplataForOtkup(noviID)
+    dug = VrednostOtkupa(noviID)
+    If placeno > dug Then
+        outUpozorenje = Poruka("OTK_UPZ_PREPLATA_ISPRAVKA") & " " & _
+                        Format$(placeno - dug, "#,##0.00")
+    End If
+
     modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
         "Ispravka otkupa zavrsena: nov dokument " & noviID & "."
 
@@ -355,6 +400,12 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     Exit Function
 
 EH:
+    ' Upozorenje se postavlja PRE CompleteCorrectionContext i CommitTx. Ako
+    ' nesto posle toga pukne, rollback vrati podatke -- ali bi outUpozorenje
+    ' ostalo popunjeno i pozivalac bi prijavio preplatu na dokumentu koji nije
+    ' ni nastao. Nema stete po podatke, ali je ugovor funkcije necist.
+    outUpozorenje = ""
+
     Dim errNum As Long, errDesc As String, errSrc As String
     errNum = Err.Number
     errDesc = Err.description

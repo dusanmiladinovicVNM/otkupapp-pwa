@@ -2153,37 +2153,14 @@ Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
     Next i
 End Sub
 
-Private Sub ResetNovacOtkupLink(ByVal otkupID As String)
-    Const SRC As String = "ResetNovacOtkupLink"
+' ResetNovacOtkupLink vise NE ZIVI OVDE. Do 13.09.2026. su postojale DVE kopije:
+' privatna ovde (zurnalirana) i javna u modNovac (TIHA). Produkcija je bila
+' bezbedna samo zato sto VBA prvo razresava modul-lokalno ime, pa je StornoOtkup
+' pogadjao ovu. Prvi modul koji bi pozvao javnu dobio bi nepovratan storno bez
+' ijedne poruke -- a vba_check to ne hvata, jer DUPLIKAT gleda dva PUBLIC imena.
+' Spojene su u modNovac.ResetNovacOtkupLink, koja sada zurnalira i preskace
+' stornirane redove. Poziv ispod se sada razresava tamo.
 
-    Dim data As Variant
-    data = GetTableData(TBL_NOVAC)
-
-    If IsEmpty(data) Then Exit Sub
-
-    Dim colOtkupID As Long
-    colOtkupID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
-    ' PK je OBAVEZAN dok je zurnal-op aktivan (lossless zavisi od stabilnog RowID).
-    Dim colNovID As Long
-    If StornoOpActive() Then colNovID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC) _
-                       Else colNovID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
-
-    Dim i As Long
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colOtkupID))) = Trim$(otkupID) Then
-            ' Zurnal: brisanje OtkupID->"" je jedini NEPOVRATNI deo storna otkupa.
-            ' Zabelezi (NovacID, stari OtkupID -> "") PRE brisanja da undo re-linkuje.
-            If StornoOpActive() Then
-                Dim nvID As String: nvID = Trim$(CStr(data(i, colNovID)))
-                If Len(nvID) = 0 Then Err.Raise ERR_STORNO_BASE + 30, SRC, _
-                    "Novac red bez NovacID (PK) -> lossless storno nije moguc. Odbijeno."
-                JournalCell TBL_NOVAC, nvID, COL_NOV_OTKUP_ID, CStr(data(i, colOtkupID)), ""
-            End If
-            RequireUpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, "", SRC
-        End If
-    Next i
-End Sub
 
 Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
                                      ByVal dokumentTip As String)

@@ -1066,7 +1066,6 @@ Public Function IsplataBlokProblem(ByVal otkupID As String, _
     Const SRC As String = "IsplataBlokProblem"
     Dim data As Variant, rows As Collection, r As Long
     Dim colKoop As Long, colSt As Long, colStorno As Long
-    Dim colKol As Long, colCena As Long
     Dim vrednost As Double, preostalo As Double
 
     otkupID = Trim$(otkupID)
@@ -1123,13 +1122,16 @@ Public Function IsplataBlokProblem(ByVal otkupID As String, _
     End If
 
     ' TRENUTNI neisplaceni ostatak -- cita se sada, ne uzima iz parametra.
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    If colKol > 0 And colCena > 0 Then
-        If IsNumeric(data(r, colKol)) And IsNumeric(data(r, colCena)) Then
-            vrednost = CDbl(data(r, colKol)) * CDbl(data(r, colCena))
-        End If
-    End If
+    '
+    ' Vrednost dolazi iz KANONSKOG izvora (modOtkup.VrednostOtkupa cita
+    ' tblOtkupStavke), ne sa zaglavlja. Do 13.09.2026. je ovde stajalo
+    ' Kolicina * Cena SA ZAGLAVLJA -- a nov pisac (CreateOtkup_TX) te dve kolone
+    ' NE PUNI: BuildOtkupHeaderRowData upisuje 16 kolona i medju njima ih nema.
+    ' Posledica je bila da za svaki dokument iz novog pisca `vrednost` ostane 0,
+    ' `preostalo` ispadne 0 ili negativno, i SVAKA isplata bude odbijena kao
+    ' "veca od ostatka" -- na oba ziva pozivaoca (SaveOMUlaz_TX, ekran novca).
+    ' Kolone na zaglavlju odlaze u koraku 7; citalac ne sme da ih ceka.
+    vrednost = modOtkup.VrednostOtkupa(otkupID)
     preostalo = vrednost - GetUplataForOtkup(otkupID)
     If iznos > preostalo Then
         IsplataBlokProblem = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
@@ -1621,7 +1623,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
         If CStr(data(i, colKoopID)) <> kooperantID Then GoTo NextAvans
-        If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextAvans
+        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextAvans
         If CStr(data(i, colOtkID)) <> "" Then GoTo NextAvans
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextAvans
 
@@ -1736,6 +1738,121 @@ EH:
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
+' ============================================================
+' PRENOS NOVCA NA NASLEDNIKA PRI ISPRAVCI (put A)
+' ============================================================
+' Odluka 13.09.2026: docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md, S0.
+'
+' Storno ne brise novac nego mu skine OtkupID. Ispravka posle toga pravi NOV
+' dokument, pa zurnal nema kome da vrati vezu -- i operater vidi pun dug iako je
+' vec placeno. Ove dve procedure prenose vezu na naslednika.
+'
+' Zive u modNovac, ne u modOtkup, jer je tblNovac TUDJA tabela za modOtkup
+' (A11): pozivalac zove API vlasnika umesto da pise sam.
+
+' Redovi novca vezani za otkup, po NovacID. Cita, nista ne menja -- zove se PRE
+' storna, dok veza jos postoji.
+Public Function NovacIDsZaOtkup(ByVal otkupID As String) As Collection
+    Const SRC As String = "NovacIDsZaOtkup"
+    Dim rez As Collection
+    Set rez = New Collection
+    Set NovacIDsZaOtkup = rez
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colOtk As Long, colID As Long, colStorno As Long
+    colOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    colStorno = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If colStorno > 0 Then
+            If UCase$(Trim$(CStr(data(i, colStorno)))) = "DA" Then GoTo Sledeci
+        End If
+        If Trim$(CStr(data(i, colOtk))) = otkupID Then
+            rez.Add Trim$(CStr(data(i, colID)))
+        End If
+Sledeci:
+    Next i
+End Function
+
+' Preveze zadate redove novca na nov OtkupID. Vraca ZBIR prenetog iznosa.
+'
+' Prenose se SVA TRI tipa koja mogu biti vezana za otkup (VirmanFirmaKoop,
+' VirmanAvansKoop, KesOtkupacKoop): novac je placen za taj posao, a ispravljen
+' dokument je isti posao sa ispravljenim papirom. Suzenje na "avansne" tipove
+' vazi za pitanje "sta je RASPOLOZIVO drugom dokumentu" (JeAvansKooperanta), ne
+' za pitanje "cije je ovo placanje".
+'
+' NE zurnalira: ovo nije deo storna nego ispravke, a ispravka se ne ponistava
+' undo-om (S2a odluke -- undo vraca vezu na STARI dokument, koji je storniran).
+' Ceo poziv stoji unutar transakcije ispravke, pa pad znaci rollback.
+Public Function PrevezaNovacNaOtkup(ByVal nvIDs As Collection, _
+                                    ByVal noviOtkupID As String) As Double
+    Const SRC As String = "PrevezaNovacNaOtkup"
+
+    noviOtkupID = Trim$(noviOtkupID)
+    If Len(noviOtkupID) = 0 Then
+        Err.Raise vbObjectError + 1044, SRC, "Nov OtkupID je obavezan."
+    End If
+    If nvIDs Is Nothing Then Exit Function
+    If nvIDs.count = 0 Then Exit Function
+
+    Dim colIznos As Long
+    colIznos = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+
+    Dim zbir As Double
+    Dim k As Long
+    For k = 1 To nvIDs.count
+        Dim nvID As String
+        nvID = Trim$(CStr(nvIDs(k)))
+        If Len(nvID) > 0 Then
+            ' Jednoznacnost je ODVOJENA provera od upisa: "nadji pa pisi" bez
+            ' nje je isti kvar kao "prvi pogodak pobedjuje" (AUD-026).
+            RequireTacnoJedan TBL_NOVAC, COL_NOV_ID, nvID, "Red novca", SRC
+            Dim r As Long
+            r = FindRows(TBL_NOVAC, COL_NOV_ID, nvID)(1)
+            RequireUpdateCell TBL_NOVAC, r, COL_NOV_OTKUP_ID, noviOtkupID, SRC
+
+            Dim data As Variant
+            data = GetTableData(TBL_NOVAC)
+            If Not IsEmpty(data) Then
+                If IsNumeric(data(r, colIznos)) Then zbir = zbir + CDbl(data(r, colIznos))
+            End If
+        End If
+    Next k
+
+    PrevezaNovacNaOtkup = zbir
+End Function
+
+' Da li je red tblNovac RASPOLOZIV kao avans kooperanta.
+'
+' Odluka 13.09.2026. (docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md, put "D suzeno"):
+' VirmanFirmaKoop i VirmanAvansKoop su OBA virmanski novac firme prema
+' kooperantu -- razlika je samo da li je u trenutku uplate bio poznat blok.
+' Kad storno odveze VirmanFirmaKoop, taj novac je i dalje kod kooperanta i mora
+' da se vidi; do ove izmene je ispadao iz SVAKE masinerije koja bira sta se
+' placa, pa je operater posle ispravke video pun dug a placeni iznos nigde.
+'
+' KesOtkupacKoop je NAMERNO iskljucen: kes isplacen na otkupnom mestu nije avans
+' nego zatvoren posao. Kad bi ga ApplyAvansToOtkup povukao na tudj dokument,
+' novac bi "platio" nesto sto nije.
+'
+' Pravilo stoji na JEDNOM mestu jer ga cita troje: primena avansa, zbir
+' raspolozivog i ekran isplata. Tri kopije istog uslova se raziju prvom doradom.
+Private Function JeAvansKooperanta(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case NOV_VIRMAN_AVANS_KOOP, NOV_VIRMAN_FIRMA_KOOP
+            JeAvansKooperanta = True
+    End Select
+End Function
+
 Public Sub ResetNovacOtkupLink(ByVal otkupID As String)
     Const SRC As String = "ResetNovacOtkupLink"
 
@@ -1754,6 +1871,13 @@ Public Sub ResetNovacOtkupLink(ByVal otkupID As String)
 
     colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
     colStornirano = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+    ' PK je OBAVEZAN dok je zurnal-op aktivan (lossless zavisi od stabilnog RowID).
+    Dim colNovID As Long
+    If modStornoZurnal.StornoOpActive() Then
+        colNovID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    Else
+        colNovID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
+    End If
 
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -1765,6 +1889,26 @@ Public Sub ResetNovacOtkupLink(ByVal otkupID As String)
         End If
 
         If Trim$(CStr(data(i, colOtkID))) = Trim$(otkupID) Then
+            ' Zurnal: brisanje OtkupID->"" je jedini NEPOVRATNI deo storna
+            ' otkupa. Zabelezi (NovacID, stari OtkupID -> "") PRE brisanja, da
+            ' UndoOperation_TX ume da re-linkuje.
+            '
+            ' Do 13.09.2026. je zurnaliranje imala SAMO privatna kopija u
+            ' modStorno; ova javna je istu stvar radila TIHO. Produkcija je bila
+            ' bezbedna slucajno -- VBA prvo razresava modul-lokalno ime, pa je
+            ' StornoOtkup pogadjao privatnu. Prvi modul koji bi pozvao javnu
+            ' dobio bi nepovratan storno bez ijedne poruke. Kopije su sada
+            ' spojene: ovo je jedina implementacija.
+            If modStornoZurnal.StornoOpActive() Then
+                Dim nvID As String
+                nvID = Trim$(CStr(data(i, colNovID)))
+                If Len(nvID) = 0 Then
+                    Err.Raise vbObjectError + 1043, SRC, _
+                        "Novac red bez NovacID (PK) -> lossless storno nije moguc. Odbijeno."
+                End If
+                modStornoZurnal.JournalCell TBL_NOVAC, nvID, COL_NOV_OTKUP_ID, _
+                                           CStr(data(i, colOtkID)), ""
+            End If
             RequireUpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, "", SRC
         End If
 
@@ -1979,7 +2123,7 @@ Public Function GetKooperantUnallocatedAvans(ByVal kooperantID As String) As Dou
     
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colKoop))) <> Trim$(kooperantID) Then GoTo NextRow
-        If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextRow
+        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextRow
         If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
         
         If IsNumeric(data(i, colIsplata)) Then
@@ -2028,7 +2172,7 @@ Public Function BuildKooperantUnallocatedAvansDict() As Object
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextRow
+        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextRow
         If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
         
         Dim kID As String

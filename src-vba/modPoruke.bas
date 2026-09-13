@@ -75,6 +75,7 @@ End Sub
 ' je i sadrzaj kataloga nepromenjen. Nov blok se dodaje kad poslednji naraste --
 ' ne dopisivati u nedogled u jedan.
 Private Sub UpsertPoruke01(lo As ListObject, existing As Object)
+    UpsertRow lo, existing, "OTK_UPZ_PREPLATA_ISPRAVKA", "PREPLATA: preneseno je vi" & ChrW(353) & "e nego " & ChrW(353) & "to nov dokument duguje. Razlika:"
     UpsertRow lo, existing, "APP_MSG_GRESKA_PRI_POKRETANJU", "Gre" & ChrW(353) & "ka pri pokretanju aplikacije. Pogledajte log."
     UpsertRow lo, existing, "AGRO_LBL_MAGACIN_IZDAVANJE_ROBE", "Magacin " & ChrW(8212) & " izdavanje robe i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "AGRO_LBL_IZLAZ_IZDAVANJE_ROBE", "Izlaz " & ChrW(8212) & " Izdavanje robe kooperantu"
