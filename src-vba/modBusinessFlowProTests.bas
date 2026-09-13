@@ -235,6 +235,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaPrijavljujePreplatuVirmanom
     Test_OTK_IsplataNaNovDokumentProlazi
     Test_BIM_NovOtkupJeOtvorenBlok
+    Test_PWA_StanicaJeUredjajNeKooperant
+    Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
     Test_OTK_IspravkaRollbackVracaSve
@@ -8941,6 +8943,83 @@ Private Sub Test_PWA_IstiCridDrugiSadrzajPada()
 
 EH:
     LogFatal "Test_PWA_IstiCridDrugiSadrzajPada", Err.Number, Err.description
+End Sub
+
+' STANICA DOKUMENTA JE STANICA UREDJAJA, NE MATICNA STANICA KOOPERANTA.
+'
+' Kooperant nije zakljucan za stanicu -- svaki moze da preda na svakoj, a otkupni
+' list pripada stanici na kojoj je roba predata. tblKooperanti.StanicaID je
+' MATICNA stanica i sluzi samo kao filter padajuce liste pri unosu
+' (KOOP_FILTER_BY_OM, modOtkupUI.bas:7034) -- nikad za knjizenje.
+'
+' Do 13.09.2026. je PWA ingest citao stanicu IZ KOOPERANTA, a uredjaj mu je bio
+' samo rezerva. Dokument je zavrsavao na pogresnom otkupnom mestu, dok mu je broj
+' (koji PWA pravi po uredjaju) tvrdio drugu stanicu.
+Private Sub Test_PWA_StanicaJeUredjajNeKooperant()
+    On Error GoTo EH
+
+    Dim maticna As String
+    maticna = Trim$(CStr(nz(LookupValue(TBL_KOOPERANTI, "KooperantID", _
+                                        TEST_KOOP_ID, COL_KOOP_STANICA), "")))
+
+    ' Preduslov: bez razlicite stanice test ne meri nista.
+    AssertTrue StrComp(maticna, TEST_HLAD_ST_ID, vbTextCompare) <> 0, _
+               "PWA stanica: preduslov -- maticna (" & maticna & ") NIJE stanica uredjaja"
+
+    Dim crid As String: crid = "CRID-STA-" & NewScenarioCode("PWAST")
+    Dim red As Variant
+    red = PwaRed(crid, "PWA stanica", 100#, 100#, 0)
+    red(1, 8) = TEST_HLAD_ST_ID          ' GS_OTKUPAC_ID -- uredjaj DRUGE stanice
+
+    Dim otkID As String
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    AssertTrue Len(otkID) > 0, "PWA stanica: dokument uvezen"
+
+    Dim upisana As String
+    upisana = Trim$(CStr(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_STANICA), "")))
+
+    ' Tvrdnja koja razlikuje uzrok: pre popravke je ovde stajala MATICNA.
+    AssertEquals TEST_HLAD_ST_ID, upisana, _
+                 "PWA stanica: dokument je knjizen na stanicu UREDJAJA"
+
+    Exit Sub
+EH:
+    LogFatal "Test_PWA_StanicaJeUredjajNeKooperant", Err.Number, Err.description
+End Sub
+
+' FAIL-CLOSED: bez uredjaja se ne zna gde je roba predata, pa se dokument NE PRAVI.
+'
+' Pogadjanje po kooperantu je bas greska koja je zatvorena, pa prazan OtkupacID
+' ne sme da se tiho popuni maticnom stanicom.
+'
+' Meri se POVRATNA VREDNOST i odsustvo reda, ne dignuta greska: _RowTX po ugovoru
+' gresku GUTA -- EH loguje, radi rollback i vraca "" (modMasterSync.bas:2105).
+' Prva verzija ovog testa je tvrdila da greska stigne do pozivaoca i pala je iz
+' tog razloga, ne zato sto kapija ne radi. Unutrasnji ImportRowToTblOtkup je
+' Private, pa se imenovan razlog odavde ne moze procitati -- i to se ne
+' pretvara da moze.
+Private Sub Test_PWA_BezUredjajaUvozPada()
+    On Error GoTo EH
+
+    Dim crid As String: crid = "CRID-NOST-" & NewScenarioCode("PWANO")
+    Dim red As Variant
+    red = PwaRed(crid, "PWA bez uredjaja", 100#, 100#, 0)
+    red(1, 8) = ""                        ' GS_OTKUPAC_ID prazan
+
+    Dim pre As Long
+    pre = CountRows(TBL_OTKUP)
+
+    Dim rezultat As String
+    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+
+    AssertEquals "", rezultat, _
+                 "PWA bez uredjaja: uvoz NE vraca OtkupID"
+    AssertTrue CountRows(TBL_OTKUP) = pre, _
+               "PWA bez uredjaja: nijedan red nije upisan (rollback)"
+
+    Exit Sub
+EH:
+    LogFatal "Test_PWA_BezUredjajaUvozPada", Err.Number, Err.description
 End Sub
 
 ' Red kakav PWA salje u OTK sheet-u. Indeksi su GS_* kolone modMasterSync-a;
