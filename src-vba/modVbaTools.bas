@@ -720,7 +720,7 @@ Public Sub ImportAllVBA_MergeStep()
         Application.StatusBar = "ImportAllVBA: code merge " & (qi + 1) & "/" & qn & " - ne diraj Excel..."
         fatal = ApplyMergeStep(koraci(qi), folder)
         If Len(fatal) > 0 Then GoTo FAIL
-        ' fallback u fazu 2 menja hard/gone/sum -> durable PRE sledeceg tika
+        ' korak menja sum (forma) -> durable PRE sledeceg tika
         If Not SaveMergeProgress(qi + 1) Then
             fatal = "Code merge korak: nije uspeo upis napretka (SaveSetting) posle " & koraci(qi) & "."
             GoTo FAIL
@@ -1188,13 +1188,15 @@ Private Function BuildMergeQueue() As String
 End Function
 
 ' Primeni TACNO JEDAN korak lanca (zove ga ImportAllVBA_MergeStep, jedan po
-' makrou). "" = uspeh, ukljucujuci soft merge koji je presao u fazu 2; inace
-' razlog za FAIL. Pravila po vrsti su ista kao pre lanca:
+' makrou). "" = uspeh; inace razlog za FAIL, i lanac STAJE:
 '   doc      code merge u postojecu komponentu; pad = fatalno (uz rollback)
 '   form     code merge frmOtkupUI, NIKAD Remove; kapije se ponavljaju pre izmene
-'   soft     merge; pad sa uspelim rollback-om -> Remove + Import u fazi 2
-'            (Remove + Import podnosi vise od AddFromString-a)
-'   softnew  Add + AddFromString; pad -> nedovrsena se uklanja, Import u fazi 2
+'   soft     merge; pad = fatalno (uz rollback)
+'   softnew  Add + AddFromString; pad -> nedovrsena komponenta se uklanja, fatalno
+' U lancu NEMA fallback-a "Remove sada, Import u fazi 2" koji je postojao dok je
+' sve islo u jednom makrou: uklonjen modul bi ostao van projekta kroz SVE
+' preostale tikove, a tik koji zavisi od njega mozda ne bi mogao ni da se
+' pokrene - bez ijedne FAIL poruke. Zato pad zaustavlja lanac; marker ostaje.
 Private Function ApplyMergeStep(ByVal korak As String, ByVal folder As String) As String
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim p As Long, vrsta As String, fileName As String, nm As String, ext As String
@@ -1282,21 +1284,11 @@ Private Function ApplyMergeStep(ByVal korak As String, ByVal folder As String) A
         ElseIf ReplaceCodeWithRollback(proj.VBComponents(nm), body, errS, rbOk) Then
             ' uspeh
         ElseIf rbOk Then
-            ' stari kod je vracen -> bezbedno je pokusati fazu 2. Remove se
-            ' flush-uje na kraju OVOG makroa, Import ide u fazi 2 posle lanca.
-            mSum = mSum & "  " & nm & ": merge pao (" & errS & ") -> 2. faza" & vbCrLf
-            On Error Resume Next
-            Err.Clear
-            proj.VBComponents.Remove proj.VBComponents(nm)
-            addErr = Err.Number
-            errS = "[" & Err.Number & "] " & Err.description
-            On Error GoTo 0
-            If addErr = 0 Then
-                AddCsv mGone, nm
-                AddCsv mHard, fileName
-            Else
-                ApplyMergeStep = "Fallback Remove '" & nm & "' nije uspeo: " & errS
-            End If
+            ' stari kod je vracen i OSTAJE na mestu - bez Remove + faze 2 (vidi gore)
+            ApplyMergeStep = "Code merge '" & nm & "' nije uspeo: " & errS & vbCrLf & _
+                             "Rollback je uspeo: " & nm & " ima STARI kod, lanac je zaustavljen." & vbCrLf & _
+                             "Ponovi ImportAllVBA; ako opet padne, napravi novu DEV svesku" & vbCrLf & _
+                             "(tools/make_dev_workbook.py)."
         Else
             mRbFail = mRbFail & "  " & nm & vbCrLf
             ApplyMergeStep = "Code merge '" & nm & "' nije uspeo: " & errS
@@ -1316,13 +1308,13 @@ Private Function ApplyMergeStep(ByVal korak As String, ByVal folder As String) A
         errS = "[" & Err.Number & "] " & Err.description
         On Error GoTo 0
         If addErr <> 0 Or StrComp(addedName, nm, vbTextCompare) <> 0 Then
-            ' nedovrsena komponenta se uklanja pa se fajl uvozi u fazi 2
-            mSum = mSum & "  " & nm & ": Add pao (" & errS & ", ime='" & addedName & "') -> 2. faza" & vbCrLf
+            ' nedovrsena komponenta se uklanja i lanac STAJE - preostali tikovi ne
+            ' smeju da rade nad projektom kome fali modul koji izvor ocekuje
             On Error Resume Next
             If Not vbc Is Nothing Then proj.VBComponents.Remove vbc
             On Error GoTo 0
-            If Len(addedName) > 0 Then AddCsv mGone, addedName
-            AddCsv mHard, fileName
+            ApplyMergeStep = "Add nove komponente '" & nm & "' nije uspeo (" & errS & ", ime='" & addedName & "')." & vbCrLf & _
+                             "Nedovrsena komponenta je uklonjena, lanac je zaustavljen. Ponovi ImportAllVBA."
         End If
 
     Case Else
@@ -1345,7 +1337,7 @@ Private Function CompleteAfterMerges(ByVal folder As String, ByVal bkPath As Str
         Exit Function
     End If
 
-    ' tvrdi .bas/.cls (i soft koji je u lancu presao u fazu 2) - Remove sada
+    ' tvrdi .bas/.cls iz plana - Remove sada
     RemovePhase2Components fatal
     If Len(fatal) > 0 Then
         CompleteAfterMerges = fatal
@@ -1744,9 +1736,9 @@ Private Sub ClearImportPhase2State()
     Err.Clear
 End Sub
 
-' Napredak lanca posle JEDNOG koraka. hard/gone/sum idu pre kursora: fallback
-' koraka u fazu 2 ih menja, a kursor koji bi legao bez njih bi fazi 2 sakrio
-' uklonjenu komponentu. False = stanje nije leglo (FAIL, marker ostaje).
+' Napredak lanca posle JEDNOG koraka. hard/gone/sum idu pre kursora, pa kursor
+' nikad ne legne preko stanja koje faza 2 cita. False = stanje nije leglo (FAIL,
+' marker ostaje).
 Private Function SaveMergeProgress(ByVal nextIndex As Long) As Boolean
     Dim sec As String: sec = P2Section()
     On Error GoTo EH
