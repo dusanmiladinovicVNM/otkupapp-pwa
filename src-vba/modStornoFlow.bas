@@ -1214,25 +1214,34 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
         Exit Function
     End If
 
+    ' NewDocID = kanonski ID NOVOG reversa (AmbID noge Stanica); NewBroj = labela.
+    '
+    ' Smer zamene se NE pretpostavlja iz starog reversa: pogresan smer je upravo
+    ' jedan od razloga za ispravku, pa bi trazenje pod starim smerom ostavilo
+    ' ispravku MANUAL iako je zamena snimljena. Uz stanicu i dan iz snimanja zamenu
+    ' nosi JEDNA noga Stanica preko sva cetiri smera (ReversAmbIDStanice sa praznim
+    ' tipom), pa se smer cita iz nje. Bez stanice (legacy/test poziv) vazi smer iz
+    ' konteksta (ParentDocType).
     Dim revSt As String, revDan As Long, revRaz As String
+    Dim newTip As String, newAmbID As String
+    newTip = dokTip
     revSt = Trim$(newStanicaID)
     If Len(revSt) > 0 And IsDate(newDatum) Then
         revDan = Int(CDbl(CDate(newDatum)))
+        newAmbID = ReversAmbIDStanice(newBrDok, "", revSt, revDan, False)
+        If Len(newAmbID) > 0 Then _
+            newTip = NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, newAmbID, COL_AMB_DOK_TIP))
     Else
         revSt = ""
         revRaz = ReversKljucRazresi("", newBrDok, dokTip, revSt, revDan, False)
+        If Len(revRaz) = 0 Then newAmbID = ReversAmbIDStanice(newBrDok, dokTip, revSt, revDan, False)
     End If
+    If Len(revRaz) = 0 And Len(newAmbID) = 0 Then _
+        revRaz = "Novi revers " & newBrDok & " nema jednoznacnu aktivnu nogu Stanica na toj stanici " & _
+                 "tog dana -> identitet zamene nije poznat."
     If Len(revRaz) = 0 Then
-        If Not ActiveAmbalazaDokExists(newBrDok, dokTip, revSt, revDan) Then _
-            revRaz = "Novi revers " & newBrDok & " [" & dokTip & "] nije aktivan."
-    End If
-    ' NewDocID = kanonski ID NOVOG reversa (AmbID noge Stanica); NewBroj = labela.
-    Dim newAmbID As String
-    If Len(revRaz) = 0 Then
-        newAmbID = ReversAmbIDStanice(newBrDok, dokTip, revSt, revDan, False)
-        If Len(newAmbID) = 0 Then _
-            revRaz = "Novi revers " & newBrDok & " [" & dokTip & "] nema jednoznacnu nogu Stanica -> " & _
-                     "identitet zamene nije poznat."
+        If Not ActiveAmbalazaDokExists(newBrDok, newTip, revSt, revDan) Then _
+            revRaz = "Novi revers " & newBrDok & " [" & newTip & "] nije aktivan."
     End If
 
     If Len(revRaz) > 0 Then

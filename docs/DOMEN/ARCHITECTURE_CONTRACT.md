@@ -94,8 +94,12 @@ operatera**:
    susednost je redosled upisa u `SaveOMUlaz_TX`, ne invarijanta.
 2. Red reversa **bez noge Stanica** (sintetički seed — produkcioni pisac je uvek
    piše) broj ne zauzima, a storno i undo ga odbijaju.
-3. Ispravka sme da prebaci revers na **drugu stanicu ili drugi dan**; zamena se
-   proverava tamo i tog dana kad je snimljena.
+3. Ispravka sme da prebaci revers na **drugu stanicu ili drugi dan**, i da mu
+   promeni **smer**; zamena se proverava tamo i tog dana kad je snimljena, a smer
+   se čita iz nje (broj, stanica i dan nose najviše jednu nogu Stanica preko sva
+   četiri smera). Pitanje pre vezivanja zamene imenuje stanicu i dan **oba**
+   reversa (`modDokUnos.ZavrsiIspravkuPitanje`), jer se ispravka bira po tipu, a
+   isti broj legalno nosi i tuđ revers.
 
 Ambalaža uz otkup (`DokumentID` = `OtkupID`, tip `OM-Izlaz-Koop`) nije revers:
 stornira se sa otkupom, a storno reversa je odbija.

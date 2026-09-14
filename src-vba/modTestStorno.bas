@@ -91,6 +91,8 @@ Public Sub RunStornoTestSuite()
     TRev_CompleteReversPoKljucu
     TRev_TragIspravkeNosiAmbID
     TRev_PreviewKliknutogReversa
+    TRev_ZamenaDrugogSmera
+    TRev_PitanjeIspravkeImenujeReverse
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
@@ -598,6 +600,58 @@ Private Sub TRev_PreviewKliknutogReversa()
     p = modStornoFlow.BuildStornoPreview(FLOW_DOC_REVERS, "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, "")
     Chk InStr(1, p, "Kolicina:", vbBinaryCompare) = 0, _
         S & "bez identiteta dvosmislen broj nema pregled jednog dokumenta"
+End Sub
+
+' ============================================================
+' Ispravka reversa sme da promeni SMER -- pogresan smer je cest razlog ispravke.
+' Zamena se trazi po (broj, stanica, dan) preko sva cetiri smera, ne pod smerom
+' starog reversa: inace bi ispravka ostala MANUAL iako je zamena snimljena, a
+' MANUAL revers kontekst se snimanjem vise ne zatvara.
+' SABOTAZA: zamenu traziti pod starim smerom (ParentDocType) -> pukne "zamena
+' drugog smera zatvara ispravku".
+' ============================================================
+Private Sub TRev_ZamenaDrugogSmera()
+    Const S As String = "TRev zamena drugog smera: "
+    Dim res As Object, cid As String
+
+    SeedRevers "SVT-RZ", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KZ", "SVT-SZ", "SVT-A", 9
+    Set res = modStornoFlow.RunReversCorrection("SVT-RZ", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_ISPRAVKA)
+    cid = CStr(res("correctionID"))
+    Chk Len(cid) > 0, S & "context kreiran"
+
+    ' Zamena je POVRAT (OM-Ulaz-Koop), a stari revers je bio izdavanje.
+    SeedRevers "SVT-RZB", DOK_TIP_OM_ULAZ_KOOP, "SVT-KZ", "SVT-SZ", "SVT-A", 9
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-RZB", "SVT-SZ", Date)
+    Chk CBool(res("success")), S & "zamena drugog smera zatvara ispravku"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
+          S & "status COMPLETED, ne MANUAL_REQUIRED"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_NEW_DOCID), "SVT-RZB-S", _
+          S & "NewDocID je noga Stanica zamene"
+End Sub
+
+' ============================================================
+' Pitanje pre vezivanja zamene imenuje OBA reversa po stanici i danu. Ispravka se
+' bira po tipu, pa bi "'SVT-RQ' -> 'SVT-RQ'?" izgledalo isto i za tudj revers istog
+' broja na drugoj stanici -- a jedno "Da" zatvara pogresnu ispravku.
+' SABOTAZA: pitanje bez opisa novog reversa -> pukne "pitanje imenuje stanicu
+' starog i novog reversa".
+' ============================================================
+Private Sub TRev_PitanjeIspravkeImenujeReverse()
+    Const S As String = "TRev pitanje ispravke: "
+    Dim res As Object, cid As String, q As String
+
+    SeedAmb "SVT-RQA-S", "SVT-A", 6, "Ulaz", "SVT-SQA", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA
+    Set res = modStornoFlow.RunReversCorrection("SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_ISPRAVKA, "SVT-RQA-S")
+    cid = CStr(res("correctionID"))
+    Chk Len(cid) > 0, S & "context kreiran"
+
+    ' Tudj revers ISTOG broja na drugoj stanici istog dana -- legalno (A2).
+    SeedAmb "SVT-RQB-S", "SVT-A", 6, "Ulaz", "SVT-SQB", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA
+    q = modDokUnos.ZavrsiIspravkuPitanje(FLOW_DOC_REVERS, cid, "SVT-RQ", "SVT-SQB", Date)
+    Chk InStr(1, q, "SVT-SQA", vbTextCompare) > 0 And InStr(1, q, "SVT-SQB", vbTextCompare) > 0, _
+        S & "pitanje imenuje stanicu starog i novog reversa (bilo: " & Replace(q, vbCrLf, " / ") & ")"
+    Chk InStr(1, q, Format$(Date, "dd.mm.yyyy"), vbBinaryCompare) > 0, S & "pitanje nosi dan reversa"
+    Chk InStr(1, q, "'SVT-RQ'", vbBinaryCompare) > 0, S & "pitanje i dalje nosi broj"
 End Sub
 
 ' ============================================================

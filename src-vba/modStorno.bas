@@ -2562,6 +2562,9 @@ End Function
 ' revers druge stanice ili drugog dana.
 ' "" = noge Stanica nema ili ih je vise -- identitet nije jednoznacan, pozivalac
 ' odbija (fail-closed), a ne upisuje broj umesto ID-a.
+' dokumentTip prazan = bilo koji od cetiri smera: smerovi dele jedan brojevni niz,
+' a zauzetost broja broji i stornirane, pa (broj, stanica, dan) nosi najvise jednu
+' nogu Stanica preko svih smerova. Tako se zamena nalazi i kad joj je smer drugi.
 Public Function ReversAmbIDStanice(ByVal brDok As String, ByVal dokumentTip As String, _
                                    ByVal stanicaID As String, ByVal dan As Long, _
                                    ByVal storniran As Boolean) As String
@@ -2579,10 +2582,15 @@ Public Function ReversAmbIDStanice(ByVal brDok As String, ByVal dokumentTip As S
     cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
     cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
 
-    Dim i As Long, n As Long, nasao As String
+    Dim i As Long, n As Long, nasao As String, tipOk As Boolean
     For i = 1 To UBound(data, 1)
         If BrojJednak(data(i, cDok), brDok) Then
-            If Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip) Then
+            If Len(Trim$(dokumentTip)) = 0 Then
+                tipOk = ReversTipJe(NzToText(data(i, cTip)))
+            Else
+                tipOk = (Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip))
+            End If
+            If tipOk Then
                 If IsStorniranoValue(data(i, cSt)) = storniran Then
                     If ReversNogaStaniceUKljucu(data, i, cEnt, cEntTip, cDat, stanicaID, dan) Then
                         n = n + 1

@@ -1165,7 +1165,7 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
                              ByRef poruke As String, _
                              Optional ByVal stanicaID As String = "", _
                              Optional ByVal datum As Variant = Empty)
-    Dim cnt As Long, cid As String, oldBroj As String, res As Object
+    Dim cnt As Long, cid As String, res As Object
     On Error GoTo EH
     newBroj = Trim$(newBroj)
     If Len(newBroj) = 0 Then Exit Sub
@@ -1182,9 +1182,7 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
 
     ' Potvrda je obavezna: operater je mozda napustio ispravku pa uneo DRUGI
     ' dokument - automatsko vezivanje bi tada spojilo pogresna dva.
-    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
-    If MsgBox(Poruka("DOKUNOS_ASK_ISPRAVKA_1") & " '" & oldBroj & "'." & vbCrLf & vbCrLf & _
-              Poruka("DOKUNOS_ASK_ISPRAVKA_2") & " '" & newBroj & "'?", _
+    If MsgBox(ZavrsiIspravkuPitanje(docType, cid, newBroj, stanicaID, datum), _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
     Select Case docType
@@ -1204,3 +1202,50 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
 EH:
     LogErr "modDokUnos.ZavrsiIspravkuAko"
 End Sub
+
+' Pitanje pre vezivanja zamene za ispravku na cekanju. Ispravka se bira po TIPU
+' (jedna otvorena ispravka tog tipa), pa je ovo pitanje jedina kapija protiv
+' vezivanja pogresnog dokumenta. Za revers zato nosi i STANICU i DAN oba
+' dokumenta: broj reversa je jedinstven tek u nizu (stanica, dan), pa bi
+' "'45' -> '45'?" izgledalo isto i kad je snimljen tudj revers istog broja na
+' drugoj stanici -- a jedno "Da" bi zatvorilo pogresnu ispravku.
+' Stari revers se cita iz traga (OldDocID = AmbID noge Stanica), novi iz snimanja.
+' Za ostale tipove tekst je nepromenjen. PUBLIC zbog testa: MsgBox se ne meri.
+Public Function ZavrsiIspravkuPitanje(ByVal docType As String, ByVal cid As String, _
+                                      ByVal newBroj As String, _
+                                      Optional ByVal stanicaID As String = "", _
+                                      Optional ByVal datum As Variant = Empty) As String
+    Dim oldBroj As String, oldAmb As String, oldOpis As String, newOpis As String
+    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
+    If docType = FLOW_DOC_REVERS Then
+        oldAmb = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID))
+        If Len(oldAmb) > 0 Then
+            oldOpis = ReversOpis(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, oldAmb, COL_AMB_ENTITET)), _
+                                 LookupValue(TBL_AMBALAZA, COL_AMB_ID, oldAmb, COL_AMB_DATUM))
+        End If
+        newOpis = ReversOpis(stanicaID, datum)
+    End If
+    ZavrsiIspravkuPitanje = Poruka("DOKUNOS_ASK_ISPRAVKA_1") & " '" & oldBroj & "'" & oldOpis & "." & _
+                            vbCrLf & vbCrLf & _
+                            Poruka("DOKUNOS_ASK_ISPRAVKA_2") & " '" & Trim$(newBroj) & "'" & newOpis & "?"
+End Function
+
+' " (naziv / StanicaID, dd.mm.yyyy)" -- ID ostaje i uz naziv, jer dve stanice
+' mogu imati slican naziv. "" kad stanica nije poznata.
+Private Function ReversOpis(ByVal stanicaID As String, ByVal datum As Variant) As String
+    Dim naziv As String
+    If Len(Trim$(stanicaID)) = 0 Then Exit Function
+    On Error Resume Next
+    naziv = Trim$(NzToText(LookupValue(TBL_STANICE, "StanicaID", Trim$(stanicaID), "Naziv")))
+    On Error GoTo 0
+    If Len(naziv) = 0 Then
+        naziv = Trim$(stanicaID)
+    Else
+        naziv = naziv & " / " & Trim$(stanicaID)
+    End If
+    If IsDate(datum) Then
+        ReversOpis = " (" & naziv & ", " & Format$(CDate(datum), "dd.mm.yyyy") & ")"
+    Else
+        ReversOpis = " (" & naziv & ")"
+    End If
+End Function
