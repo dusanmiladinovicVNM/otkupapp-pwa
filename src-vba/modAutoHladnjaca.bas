@@ -176,6 +176,15 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     Dim brOtp As String
     brOtp = Trim$(brDok)
     If Len(brOtp) = 0 Then brOtp = "HL-" & Format$(datum, "ddmmyy") & "-" & Format$(Now, "hhnnss")
+    ' DUG ZA PR7. Broj zbirne je NASLEDJEN od otkupa, pa mu numericki deo
+    ' pripada STANICI, a vlasnik niza zbirne je VOZAC. Ovde nema malina kapije:
+    ' lanac je gejtovan sa IsAutoPrijemnicaHladnjaca + IsHladnjacaStanica, a
+    ' mirror guard na :151 vazi samo kad je vozacID == stanicaID. Prosledi li
+    ' pozivalac realnog vozaca, kapija konteksta (modBrojevi.RequireBrojUKontekstu
+    ' u SaveZbirna) odbija ovaj broj kao TUDJ_VLASNIK. Danas se ne vidi jer je
+    ' lanac PAUZIRAN (v. :84) a testovi salju nekanonske "TST-PRO-*" brojeve.
+    ' Kad se lanac vrati u pogon, popravka je na IZVORU (svoj broj kroz
+    ' SuggestNextBroj(KIND_ZBR, vozacID, datum)), ne relaksacija kapije.
     Dim brZbr As String
     brZbr = ApplyMirrorPrefix(vozacID, brOtp)
 

@@ -1184,6 +1184,18 @@ Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As Str
 
             ' Mirror-stanica (VozacID==StanicaID) -> zbirna nosi "S" prefiks
             ' (S1/ddmmyy); otpremnica zadrzava svoj broj (BrojOtpremnice = 1/ddmmyy).
+            '
+            ' DUG ZA PR7/PR8. Ovaj broj je NASLEDJEN od otpremnice, pa mu
+            ' numericki deo pripada STANICI, a vlasnik niza zbirne je VOZAC.
+            ' Danas se poklapa jer je rutina malina-gated a mirror-vozac ima
+            ' VozacID doslovno jednak StanicaID. Ali stamp puni samo PRAZAN
+            ' VozacID, pa PWA sme da ostavi realnog vozaca -- i tada bi kapija
+            ' konteksta (modBrojevi.RequireBrojUKontekstu u SaveZbirna) ovo
+            ' odbila kao TUDJ_VLASNIK. Kad PR7/PR8 odmrzne IzvedeniLanacIzPwaDostupan,
+            ' popravka NIJE relaksacija kapije nego popravka IZVORA: ili se
+            ' tvrdi da je vozac mirror, ili zbirna dobija svoj broj kroz
+            ' SuggestNextBroj(KIND_ZBR, vozacID, datum) umesto nasledjenog.
+            ' Sidro: Test_BKTX_ZbirnaTudjegVlasnikaOdbijena.
             Dim brZbirne As String: brZbirne = ApplyMirrorPrefix(vozacID, brO)
 
             Dim zbrRes As String
@@ -2230,6 +2242,35 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
             Err.Raise vbObjectError + 8104, "ImportRowToTblOtkup", _
                 "Invalid BrojDokumenta format: " & brojDokumenta & _
                 " (CRID=" & clientRecordID & ")"
+        End If
+
+        ' KONTEKST BROJA, OBE OSE TVRDO -- i to je odluka, ne inercija.
+        '
+        ' Ovde je razmatrano da dan-osa bude meka (LogWarn) zbog ponocne trke u
+        ' PWA: otkup-form.js je cital sat DVAPUT, jednom u generateBrojDokumenta
+        ' i jednom u buildOtkupRecord, sa mreznim await-om izmedju, pa je zapis
+        ' snimljen oko ponoci nosio juceradnji ddmmyy uz danasnji Datum.
+        '
+        ' Odustalo se iz dva razloga. Prvi: red odavde ide u CreateOtkup_TX
+        ' (:2348), gde kapija stoji fail-closed -- meka grana ovde ne bi nista
+        ' propustila, samo bi pomerila poruku sa mesta koje zna ClientRecordID
+        ' na mesto koje ga ne zna. Dve kapije nad istim brojem ne smeju da
+        ' govore razlicito. Drugi: izvor je popravljen u istom PR-u (dan se
+        ' sada cita jednom i deli ga broj i zapis), pa nov klijent tu
+        ' neuskladjenost ne moze da proizvede.
+        '
+        ' Preostali rizik je imenovan, ne sakriven: zapis koji je STARA verzija
+        ' PWA snimila unutar tog prozora odbija se pri uvozu. Poruka imenuje i
+        ' broj i ClientRecordID, pa je red nadoknadiv rucno.
+        Dim brojVerdikt As Long
+        brojVerdikt = modBrojevi.BrojOdgovaraKontekstu( _
+                          modBrojevi.KIND_OTK, stanicaID, datum, brojDokumenta)
+
+        If modBrojevi.BrojKontekstOdbija(brojVerdikt) Then
+            Err.Raise vbObjectError + 8109, "ImportRowToTblOtkup", _
+                modBrojevi.BrojKontekstOpis(brojVerdikt, modBrojevi.KIND_OTK, _
+                                            stanicaID, datum, brojDokumenta) & _
+                " ClientRecordID=" & clientRecordID
         End If
     End If
     
@@ -3581,6 +3622,26 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
         ' Validacija formata za PWA-generated broj
         If Not IsValidBrojZbirneFormat(brojZbirne) Then
             LogError "ImportRowToTblZbirna", "Invalid BrojZbirne format: " & brojZbirne & " (CRID=" & clientRecordID & ")"
+            ImportRowToTblZbirna = ""
+            Exit Function
+        End If
+
+        ' KONTEKST BROJA -- fail-closed, isti ishod kao los oblik odmah iznad i
+        ' ista odluka kao na uvozu otkupa.
+        '
+        ' "Ingest je cinjenica, ne komanda" vazi za KOLIZIJU: dva dokumenta sa
+        ' istim brojem su legalno stanje (A2), pa PrijaviKolizijuBrojaZbirne i
+        ' Chk_B8 samo prijavljuju. Ne vazi za broj koji protivreci SOPSTVENOM
+        ' redu -- takav red bi usao u kanonsku tblZbirna kao validan dokument,
+        ' a BrojZbirne je i danas join kljuc u modDokumenta.
+        Dim zbrVerdikt As Long
+        zbrVerdikt = modBrojevi.BrojOdgovaraKontekstu( _
+                         modBrojevi.KIND_ZBR, vozacID, datum, brojZbirne)
+        If modBrojevi.BrojKontekstOdbija(zbrVerdikt) Then
+            LogError "ImportRowToTblZbirna", _
+                modBrojevi.BrojKontekstOpis(zbrVerdikt, modBrojevi.KIND_ZBR, _
+                                            vozacID, datum, brojZbirne) & _
+                " (CRID=" & clientRecordID & ")"
             ImportRowToTblZbirna = ""
             Exit Function
         End If

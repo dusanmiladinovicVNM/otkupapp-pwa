@@ -67,11 +67,21 @@ Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
 ' se plati" nije bezbedan ishod nego protivrecnost. v. MapBankaImportAsKooperantBlockCore.
 Public Const ERR_BMAP_BLOK_PRAZAN As Long = vbObjectError + 2951
 
-' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca). Treci kandidat
-' je anomalija podataka (recikliran broj bloka, duplirani unos) - AUTOMATSKA
-' raspodela se tu ne pogadja, nego se red salje operateru na rucno mapiranje
-' (rucni put sme preko granice, ali samo uz izricitu potvrdu - vidi
-' MapBankaImportAsKooperantBlockManual_TX allowManyCandidates).
+' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca), pa treci
+' kandidat znaci da skup nije jedan poslovni blok.
+'
+' RANIJE JE OVDE PISALO "anomalija podataka". To je netacno bar za AUTO putanju i
+' protivreci objasnjenju scope-a nize u ovom istom fajlu (v. komentar iznad
+' BimScopeKolona): BrojDokumenta je jedinstven PO OTKUPNOM MESTU, isti broj
+' legitimno postoji na dve stanice, a AUTO putanja stanicu nema odakle da zna --
+' poziv na broj je nosi samo posredno. Treci kandidat je tamo ocekivana posledica
+' NEDOSTATKA SCOPE-a, ne pokvaren podatak. Na RUCNOJ putanji, gde je stanica
+' zadata, treci kandidat jeste anomalija (recikliran broj bloka, duplirani unos).
+'
+' Ishod je isti u oba slucaja: automatska raspodela se ne pogadja, nego se red
+' salje operateru na rucno mapiranje (rucni put sme preko granice, ali samo uz
+' izricitu potvrdu - vidi MapBankaImportAsKooperantBlockManual_TX
+' allowManyCandidates).
 Public Const MAX_BLOK_KANDIDATA As Long = 2
 
 ' Vrednosti kolone Obradjeno (v. zaglavlje modula). Do sada su bile literali na

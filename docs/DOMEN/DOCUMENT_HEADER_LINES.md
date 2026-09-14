@@ -144,7 +144,7 @@ Jedan otkup od jednog kooperanta, na jednom otkupnom mestu, jednog dana
 | Kolona | Napomena |
 |---|---|
 | `OtkupID` | PK, `OTK-<hex>` |
-| `BrojDokumenta` | labela, scoped po otkupnom mestu |
+| `BrojDokumenta` | labela, jedinstvena u (OTK, otkupno mesto, dan) — v. A2 |
 | `Datum`, `KooperantID`, `StanicaID`, `ParcelaID`, `KulturaID` | → matični |
 | `VrstaVoca`, `SortaVoca`, `TipAmbalaze` | H — u potpisu stoje jednom |
 | `KolAmbIzdata` | H — OM izdao prazne kooperantu; **stvarna činjenica sa otkupnog lista** |
@@ -422,7 +422,7 @@ otkup **headera**.
 
 ### 4.2 `tblOtpremnica` — **grain: jedna isporuka sa otkupnog mesta**
 
-`OtpremnicaID` (PK `OTP-`), `BrojOtpremnice` (labela, scoped po stanici), `Datum`,
+`OtpremnicaID` (PK `OTP-`), `BrojOtpremnice` (labela, jedinstvena u (OTP, stanica, dan)), `Datum`,
 `StanicaID`, `VozacID`, **`KulturaID`**, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`,
 **`PredlogCena`**, `Stornirano`, trace ×4, audit ×4.
 
@@ -702,7 +702,7 @@ negde. Pravila iz §4.2a su zato **nova**, ne prepisana.
 
 ### 4.3 `tblZbirna` — **grain: jedan transport ka kupcu/hladnjači**
 
-`ZbirnaID` (PK `ZBR-`), `BrojZbirne` (labela, scoped po vozaču), `Datum`,
+`ZbirnaID` (PK `ZBR-`), `BrojZbirne` (labela, jedinstvena u (ZBR, vozač, dan); generator je stroži, v. A2), `Datum`,
 `VozacID`, `KupacID`, `Hladnjaca`, `Pogon`, `VrstaVoca`, `SortaVoca`,
 `TipAmbalaze`, `Stornirano`, trace ×4, audit ×4.
 
@@ -791,7 +791,9 @@ priprema za trenutak kad UI dobije „otvoren dokument".
 
 ### 4.4 `tblPrijemnica` — **grain: jedan prijem robe na odredištu**
 
-`PrijemnicaID` (PK `PRJ-`), `BrojPrijemnice` (labela, scoped **po kupcu**),
+`PrijemnicaID` (PK `PRJ-`), `BrojPrijemnice` (labela; naš niz postoji **samo** za
+hladnjača-kupca, oblik `1/ddmmyy[-n]` sa **fiksnim** `x = 1` — ne izveden iz
+`KupacID`; eksterni kupac nosi svoj broj, slobodan unos; v. A2),
 `Datum`, `KupacID`, `VozacID`, `VrstaVoca`, `SortaVoca`, `TipAmbalaze`,
 `KolAmbVracena` (H — u potpisu stoji jednom), `ZbirnaID` →, `Stornirano`,
 trace ×4, audit ×4.
