@@ -390,14 +390,16 @@ End Function
 ' broju: isti broj dokumenta moze imati vise generacija, pa bi "poslednja po
 ' broju" vracala tudju. Zato je prva kolona liste bas OperationID.
 '
-' Kapija je UndoGuardReason (fail-closed) - ista koju dize i legacy dugme.
+' Kapija je UndoGuardReasonZaOp (fail-closed) -- ista koju UndoOperation_TX dize
+' pre ijedne izmene. Za revers pita KLJUC operacije (stanica, dan), ne broj:
+' isti broj reversa legalno nosi i revers druge stanice ili drugog dana.
 Private Function VratiStorno(ByVal opID As String, ByVal red As Long) As Boolean
     Dim tip As String, broj As String, razlog As String
     On Error GoTo EH
     tip = Trim$(CStr(modOtkupUI.GridCell(red, 3)))
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 4)))
 
-    razlog = UndoGuardReason(tip, broj)
+    razlog = UndoGuardReasonZaOp(opID, tip, broj)
     If Len(razlog) > 0 Then
         MsgBox razlog, vbExclamation, APP_NAME
         Exit Function

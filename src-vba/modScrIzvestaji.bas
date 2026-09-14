@@ -2764,8 +2764,19 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                      DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
                     ' Revers: rekonstrukcija iz dve noge ledgera -- racun
                     ' izdvojen u modIzvestaj.StampajReversAmbalaze (AUD-012:
-                    ' tip ambalaze IZABRANOG reda je deo kljuca).
-                    StampajReversAmbalaze dokID, dokTip, tipAmb
+                    ' tip ambalaze IZABRANOG reda je deo kljuca). Broj reversa
+                    ' je jedinstven tek u nizu (stanica, dan): dan je datum reda
+                    ' (pregled grupise revers po stanici i danu), stanica je
+                    ' otkupno mesto pregleda po OM. U pregledu po vozacu stanica
+                    ' nije poznata -- tada stampa odbija broj koji istog dana
+                    ' nose dva otkupna mesta, umesto da ih spoji.
+                    If mCtxTip = "OM" Then
+                        StampajReversAmbalaze dokID, dokTip, tipAmb, _
+                                              modOtkupUI.GridCell(red, 1), mCtxId
+                    Else
+                        StampajReversAmbalaze dokID, dokTip, tipAmb, _
+                                              modOtkupUI.GridCell(red, 1)
+                    End If
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
             End Select

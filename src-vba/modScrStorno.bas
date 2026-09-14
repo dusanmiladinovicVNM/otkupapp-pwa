@@ -927,7 +927,10 @@ Private Function IzborReda(ByVal red As Long) As Boolean
     mSelDocID = IdentIzReda(red, tip)
 
     ' Dva tipa traze jos jedan podatak koji se iz broja ne vidi.
-    If tip = STIP_REVERSI Then mSelOpcija = ReversSmerZaBroj(broj)
+    ' Revers: smer je DokumentTip KLIKNUTOG reda (identitet = AmbID). Ranije je
+    ' to bio "prvi od cetiri tipa sa aktivnim redom pod ovim brojem" -- a broj
+    ' reversa je jedinstven tek u nizu (stanica, dan), pa bi dao i tudji smer.
+    If tip = STIP_REVERSI Then mSelOpcija = ReversTipReda(mSelDocID)
     ' Izvod: broj sam nije kljuc (isti broj postoji na vise banaka), a treca
     ' kolona liste JESTE broj racuna - odatle "broj/racun" oblik koji
     ' ResolveIzvodZaStorno razume. Cita se iz reda, ne iz mape: mapa bi kod dva
@@ -1032,7 +1035,7 @@ Private Function IdentKolona(ByVal tip As String) As Long
     IdentKolona = UBound(cols) + 1
 End Function
 
-' Kanonski identitet KLIKNUTOG reda. Prazno = tip ga nema (revers, izvod) ili
+' Kanonski identitet KLIKNUTOG reda. Prazno = tip ga nema (izvod) ili
 ' zatecen zapis bez generacije -- tada nizvodno vazi fail-closed kapija nad
 ' jednoznacnoscu broja, ista koju koristi i prevezivanje.
 Private Function IdentIzReda(ByVal red As Long, ByVal tip As String) As String
@@ -1042,20 +1045,18 @@ Private Function IdentIzReda(ByVal red As Long, ByVal tip As String) As String
     IdentIzReda = Trim$(CStr(modOtkupUI.GridCell(red, k)))
 End Function
 
-' Koji je od cetiri smera reversa aktivan pod ovim brojem. Cetiri smera dele
-' jedan brojevni niz (KIND_REV), pa broj sam ne kaze koji je red u tblAmbalaza;
-' pita se istom rutinom kojom legacy proverava postojanje.
-Private Function ReversSmerZaBroj(ByVal broj As String) As String
-    Dim smerovi As Variant, s As Variant
+' Smer reversa = DokumentTip kliknutog reda (AmbID iz nevidljive kolone
+' identiteta). Cetiri smera dele jedan brojevni niz (KIND_REV), a broj je
+' jedinstven tek u nizu (stanica, dan) -- pa ni broj ni "koji smer ima aktivan
+' red pod brojem" ne kazu koji je dokument. Prazno kad red nema identitet ili
+' nije revers: StornoRazlog tada odbija (STORNO_ERR_NEMA_SMERA), ne pogadja.
+Private Function ReversTipReda(ByVal ambID As String) As String
+    Dim t As String
+    If Len(Trim$(ambID)) = 0 Then Exit Function
     On Error Resume Next
-    smerovi = Array(DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-                    DOK_TIP_OM_ULAZ_FIRMA, DOK_TIP_OM_IZLAZ_FIRMA)
-    For Each s In smerovi
-        If ActiveAmbalazaDokExists(broj, CStr(s)) Then
-            ReversSmerZaBroj = CStr(s)
-            Exit Function
-        End If
-    Next s
+    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, Trim$(ambID), COL_AMB_DOK_TIP)))
+    On Error GoTo 0
+    If ReversTipJe(t) Then ReversTipReda = t
 End Function
 
 ' "broj/racun" - jednoznacan kljuc izvoda. Bez racuna se salje goli broj, pa

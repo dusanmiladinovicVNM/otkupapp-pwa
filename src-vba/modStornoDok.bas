@@ -25,6 +25,7 @@ Attribute VB_Name = "modStornoDok"
 '   ResolveIzvodZaStorno      "broj" ili "broj/racun" -> jedan izvod
 '   GetIzvodStornoBlokade     preflight: razlog pre potvrde, ne tih pad
 '   ActiveAmbalazaDokExists   revers po broju I po smeru
+'   ReversKljucRazresi        revers po kljucu (stanica, dan) kliknutog reda
 ' Ovaj modul ih samo redja po tipu. Duplirane provere se ne pisu.
 '
 ' TIP DOKUMENTA je kljuc rezima novog UI-ja (modScrDokumenti.modeKey),
@@ -111,6 +112,7 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
     Dim razlog As String, izvBroj As String, izvRacun As String, errDesc As String
+    Dim revBroj As String, revTip As String, revStanica As String, revDan As Long
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then
@@ -168,6 +170,18 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                 StornoRazlog = Poruka("STORNO_ERR_NEMA_SMERA")
             ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then
                 StornoRazlog = NijePronadjen(broj)
+            Else
+                ' Broj reversa je jedinstven tek u nizu (stanica, dan): kljuc se
+                ' uzima iz kliknutog reda (docID = AmbID), a bez njega mora biti
+                ' jednoznacan po (broj, smer). Pisac (StornoOMKoopByBrDok) razresava
+                ' isto -- ovde je samo da operater razlog vidi pre potvrde.
+                revBroj = broj: revTip = opcija
+                razlog = ReversKljucRazresi(docID, revBroj, revTip, revStanica, revDan, False)
+                If Len(razlog) > 0 Then
+                    StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
+                ElseIf Not ActiveAmbalazaDokExists(revBroj, revTip, revStanica, revDan) Then
+                    StornoRazlog = NijePronadjen(broj)
+                End If
             End If
 
         Case STIP_IZVOD
@@ -286,7 +300,8 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoNovac_TX(novID)
 
         Case STIP_REVERSI
-            ok = StornoOMKoopByBrDok_TX(broj, opcija)
+            ' docID = AmbID kliknutog reda: kljuc (stanica, dan) reversa.
+            ok = StornoOMKoopByBrDok_TX(broj, opcija, docID)
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then
@@ -408,7 +423,7 @@ Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
     Select Case dt
         Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm, docID)
         Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)
-        Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode)
+        Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode, docID)
         ' neDiraj = "ne diraj palete" (samo prijemnica, DUPLI/PONISTENJE):
         ' palete ostaju vezane za storniranu prijemnicu umesto da se odvezu.
         Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj, docID)

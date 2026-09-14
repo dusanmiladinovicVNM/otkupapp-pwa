@@ -1067,6 +1067,12 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "STORNO_ERR_NEMA_SMERA", ChrW(10007) & " Revers bez smera " & ChrW(8212) & " " & _
               ChrW(269) & "etiri smera dele isti brojevni niz"
+    UpsertRow lo, existing, "STORNO_ERR_REV_KLJUC", ChrW(10007) & " Revers se ne mo" & ChrW(382) & _
+              "e jednozna" & ChrW(269) & "no odrediti:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_REV_KOOP_DRUGA_STANICA", ChrW(10007) & " Taj broj reversa sa " & _
+              "kooperantom je ve" & ChrW(263) & " izdat tog dana, za isti smer, na drugom otkupnom mestu. " & _
+              "Noga kooperanta ne nosi otkupno mesto, pa se dva takva reversa ne bi mogla razlikovati " & _
+              "pri stornu " & ChrW(8212) & " izaberi drugi broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "STORNO_ERR_NEMA_ISHODA", ChrW(10007) & " Nije izabran ishod storna izvoda"
     UpsertRow lo, existing, "STORNO_ERR_NEPOZNAT_TIP", ChrW(10007) & " Nepoznat tip dokumenta:"
     UpsertRow lo, existing, "STORNO_ERR_RAZRESENJE", ChrW(10007) & " Gre" & ChrW(353) & "ka pri razre" & ChrW(353) & "avanju dokumenta:"

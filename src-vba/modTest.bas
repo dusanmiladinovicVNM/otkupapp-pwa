@@ -166,7 +166,7 @@ Private Const FX_BIM_SVE As Long = 15       ' 16 redova minus jedan storniran
 Private Const FX_BIM_OTVORENIH As Long = 9  ' status "" ili "Error" (+2 iz izvoda 4)
 Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus + jedan nesaglasan
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
-' tblNovac -- provera duplikata mora da ga propusti.
+' tblNovac -- provera zauzetosti broja reversa mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
 Private Const FX_VRSTA As String = "TESTVOCE"
 Private Const FX_SORTA As String = "TESTSORTA"
@@ -502,6 +502,9 @@ Public Sub RunAllTests()
     RunOne 212
     RunOne 213
     RunOne 214
+    RunOne 215
+    RunOne 216
+    RunOne 217
     RunOne 124
     RunOne 125
     RunOne 126
@@ -788,6 +791,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 212: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
         Case 213: TestName = "T_BrojZauzetUNizu_OpsegIStorno"
         Case 214: TestName = "T_Novac_BrojNijeJedinstven"
+        Case 215: TestName = "T_BrojZauzetUNizu_Revers"
+        Case 216: TestName = "T_ReversValidiraj_BrojUNizu"
+        Case 217: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -1010,6 +1016,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 212: T_Sema_MagacinOdbijaUpisBezUgovora
         Case 213: T_BrojZauzetUNizu_OpsegIStorno
         Case 214: T_Novac_BrojNijeJedinstven
+        Case 215: T_BrojZauzetUNizu_Revers
+        Case 216: T_ReversValidiraj_BrojUNizu
+        Case 217: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3249,14 +3258,23 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     Next i
     AssertEq ima, False, "unosni rezim NE dobija kolonu identiteta"
 
-    ' Tipovi koji identitet nemaju (revers, izvod) ga i ne dobijaju -- kolona bez
-    ' izvora bi mrezi dala prazan string koji izgleda kao "zatecen zapis".
+    ' Revers nema GeneracijaID -- kolona bez izvora bi mrezi dala prazan string
+    ' koji izgleda kao "zatecen zapis".
     cols = modScrDokumenti.GridCols(STIP_REVERSI, True)
     ima = False
     For i = 0 To UBound(cols)
         If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
     Next i
-    AssertEq ima, False, "revers nema kanonski identitet, pa ni kolonu"
+    AssertEq ima, False, "revers nema GeneracijaID, pa ni tu kolonu"
+
+    ' ...ali ima identitet REDA: AmbID kliknute noge. Broj reversa je jedinstven
+    ' tek u nizu (stanica, dan), pa bez njega storno ne zna koji je dokument.
+    ' SABOTAZA: izbaci Case "REVERSI" iz IdKolonaTipa -> pukne po imenu.
+    ima = False
+    For i = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_AMB_ID Then ima = True
+    Next i
+    AssertEq ima, True, "revers nosi AmbID kao kolonu identiteta"
 
     ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
     modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
@@ -17248,8 +17266,9 @@ End Sub
 ' novca prolaze. Novac je i ODVOJEN od reversa: broj koji nosi revers u
 ' tblAmbalaza ne obara isplatu. Ne pise tabele -- zove samo validatore.
 '
-' SABOTAZA: vrati "dup = DuplBroj(...)" blok u IsplataValidiraj -> pukne po imenu
-' na isplati i na broju reversa; isto u UplataValidiraj -> pukne na uplati.
+' SABOTAZA: vrati proveru duplikata (CheckDuplicate nad tblNovac i tblAmbalaza,
+' kao nekadasnji DuplBroj) u IsplataValidiraj -> pukne po imenu na isplati i na
+' broju reversa; isto u UplataValidiraj -> pukne na uplati.
 Private Sub T_Novac_BrojNijeJedinstven()
     Const REV_BROJ As String = "REV-IZV-1"
     Dim p As Object, fokus As String
@@ -17282,6 +17301,138 @@ Private Sub T_Novac_BrojNijeJedinstven()
     AssertEq rIsplata, "", "isplata pod vec postojecim brojem novca prolazi"
     AssertEq rUplata, "", "uplata pod vec postojecim brojem novca prolazi"
     AssertEq rRevBroj, "", "broj reversa ne obara isplatu -- novac je odvojen od reversa"
+End Sub
+
+' ZAUZETOST BROJA REVERSA (modBrojevi.BrojZauzetUNizu, KIND_REV) -- A2 red REV.
+'
+' Meri se nad FIXTURE redovima (normal production state): REV-IZV-2 je povrat
+' (OM-Ulaz-Koop) na FX_STANICA, 15.03.2026, noge AMB-IZV-K3 (Kooperant) i
+' AMB-IZV-S3 (Stanica). Nivo merenja: poslovni broj u nizu (stanica, dan) -- broj
+' zauzima NOGA STANICA, ne bilo koji red tog broja. Storniran revers meri BFP
+' (Test_BKTX_ReversPisacOdbijaZauzet): ovaj test ne pise.
+'
+' Uz to kapija storna (StornoRazlog): identitet reda (AmbID) razresava kljuc, a
+' red koji ne nosi izabrani broj se odbija.
+'
+' SABOTAZE: izbaci filter tipa u BrojZauzetRevers -> pukne "ambalaza otkupa na
+' istoj stanici nije revers"; izbaci poredjenje stanice -> pukne "druga stanica je
+' drugi niz"; izbaci filter noge Stanica -> pukne "noga Kooperant ne zauzima broj".
+Private Sub T_BrojZauzetUNizu_Revers()
+    Dim d As Date
+    d = CDate(FX_DATUM)
+
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-S3", COL_AMB_DOK_ID)), _
+             "REV-IZV-2", "preduslov: fixture noga Stanica reversa REV-IZV-2"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", COL_AMB_ENTITET)), _
+             FX_STANICA, "preduslov: ambalaza otkupa OTK-LEG-A lezi na istoj stanici"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", COL_AMB_ENTITET)), _
+             FX_KOOPERANT, "preduslov: REV-IZV-X ima samo nogu Kooperant"
+
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-IZV-2"), _
+             "AMB-IZV-S3", "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga noga Stanica"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, " " & LCase$(FX_STANICA) & " ", d, _
+                                        "  rev-izv-2 "), _
+             "AMB-IZV-S3", "REV: razmaci i mala slova ne otvaraju rupu"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA_B, d, "REV-IZV-2"), _
+             "", "REV: druga stanica je drugi niz -- isti broj sme (A2)"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, DateAdd("d", 1, d), _
+                                        "REV-IZV-2"), _
+             "", "REV: drugi dan je drugi niz"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "OTK-LEG-A"), _
+             "", "REV: ambalaza otkupa na istoj stanici nije revers"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "OTP-TEST-1"), _
+             "", "REV: ambalaza otpremnice na istoj stanici nije revers"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_KOOPERANT, d, "REV-IZV-X"), _
+             "", "REV: noga Kooperant ne zauzima broj -- ni stornirana (stanicu nosi samo noga Stanica)"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_KOOPERANT, d, "REV-IZV-2"), _
+             "", "REV: noga Kooperant ne zauzima broj -- ni aktivnog reversa"
+    AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-NOV-TEST"), _
+             "", "REV: nov broj je slobodan -- provera ne odbija sve"
+
+    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-2", DOK_TIP_OM_ULAZ_KOOP, "AMB-IZV-K3"), _
+             "", "storno kapija: noga Kooperant nalazi stanicu preko noge Stanica istog dana"
+    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
+             "", "storno kapija: bez identiteta jednoznacan broj prolazi"
+    AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, _
+                                                 "AMB-IZV-K3"), _
+                    Poruka("STORNO_ERR_REV_KLJUC"), vbBinaryCompare) = 1), True, _
+             "storno kapija: red koji ne nosi izabrani broj se odbija"
+End Sub
+
+' F7 REVERS -- PROVERA BROJA PO NIZU (stanica, dan), ista kao u piscu. Zatecena
+' (DuplBroj -> CheckDuplicate nad celom tblAmbalaza) odbijala je isti broj na
+' drugoj stanici ili drugi dan, sto je po A2 legalno. Ne pise tabele.
+'
+' SABOTAZA: vrati CheckDuplicate(TBL_AMBALAZA, ...) u ReversValidiraj -> pukne po
+' imenu na "isti broj na drugoj stanici istog dana prolazi ekran".
+Private Sub T_ReversValidiraj_BrojUNizu()
+    Dim p As Object, fokus As String
+    Dim rZauzet As String, fZauzet As String, rDrugaSt As String, rDrugiDan As String
+
+    Set p = ReversUnosKojiProlazi()
+    p("datum") = CDate(FX_DATUM)
+    p("brDok") = "REV-IZV-2"
+    rZauzet = modNovacUnos.ReversValidiraj(p, fokus)
+    fZauzet = fokus
+
+    p("stanicaID") = FX_STANICA_B
+    p("stanicaTekst") = FX_STANICA_B
+    rDrugaSt = modNovacUnos.ReversValidiraj(p, fokus)
+
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("datum") = DateAdd("d", 1, CDate(FX_DATUM))
+    rDrugiDan = modNovacUnos.ReversValidiraj(p, fokus)
+
+    ' AssertEq prekida test na PRVOM padu. Tvrdnje o osama niza idu prve, da
+    ' sabotaza (vracen CheckDuplicate) padne bas na njima, a ne na obliku poruke.
+    AssertEq rDrugaSt, "", "isti broj na drugoj stanici istog dana prolazi ekran (A2)"
+    AssertEq rDrugiDan, "", "isti broj iste stanice drugog dana prolazi ekran"
+    AssertEq (InStr(1, rZauzet, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
+             "zauzet broj u nizu se odbija na ekranu (bilo: " & rZauzet & ")"
+    AssertEq (InStr(1, rZauzet, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
+             "poruka imenuje nogu koja drzi broj"
+    AssertEq fZauzet, "brDok", "fokus ide na broj"
+End Sub
+
+' F7 KOOP REVERS -- isti (broj, smer, dan) ne sme ni na DRUGOJ stanici: noga
+' Kooperant ne nosi stanicu, pa dva takva reversa storno, undo i stampa ne bi mogli
+' da razlikuju. Drugi smer i FIRMA smerovi ostaju po stanici. Ista provera je u
+' piscu (BFP Test_BKTX_ReversKoopBrojDrugaStanica meri pisac i storno).
+'
+' Fixture (normal production state): REV-IZV-2 je povrat (OM-Ulaz-Koop), REV-IZV-3
+' je OM-Ulaz-Firma, oba na FX_STANICA 15.03.2026. Nivo merenja: poslovni broj u
+' nizu. Ne pise tabele.
+'
+' SABOTAZA: izbaci KOOP proveru iz ReversValidiraj -> pukne po imenu na "KOOP povrat
+' istog broja i dana na drugoj stanici se odbija na ekranu".
+Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
+    Dim p As Object, fokus As String
+    Dim rKoop As String, fKoop As String, rDrugiSmer As String, rFirma As String
+
+    Set p = ReversUnosKojiProlazi()
+    p("datum") = CDate(FX_DATUM)
+    p("stanicaID") = FX_STANICA_B
+    p("stanicaTekst") = FX_STANICA_B
+    p("brDok") = "REV-IZV-2"
+    p("smerRev") = modNovacUnos.SMER_REV_PRI_KOOP
+    rKoop = modNovacUnos.ReversValidiraj(p, fokus)
+    fKoop = fokus
+
+    p("smerRev") = modNovacUnos.SMER_REV_IZD_KOOP
+    rDrugiSmer = modNovacUnos.ReversValidiraj(p, fokus)
+
+    p("brDok") = "REV-IZV-3"
+    p("smerRev") = modNovacUnos.SMER_REV_IZD_OM        ' -> OM-Ulaz-Firma
+    rFirma = modNovacUnos.ReversValidiraj(p, fokus)
+
+    AssertEq (InStr(1, rKoop, Poruka("DOKUNOS_ERR_REV_KOOP_DRUGA_STANICA"), vbBinaryCompare) = 1), True, _
+             "KOOP povrat istog broja i dana na drugoj stanici se odbija na ekranu (bilo: " & rKoop & ")"
+    AssertEq (InStr(1, rKoop, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
+             "poruka imenuje nogu Stanica koja drzi broj"
+    AssertEq fKoop, "brDok", "fokus ide na broj"
+    AssertEq rDrugiSmer, "", "KOOP drugi smer istog broja na drugoj stanici prolazi (uparivanje ide po smeru)"
+    AssertEq rFirma, "", "FIRMA isti broj i dan na drugoj stanici prolazi (nema noge Kooperant)"
 End Sub
 
 ' I2: prijemnica se vezuje SAMO na jednoznacno razresenu zbirnu.

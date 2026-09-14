@@ -1173,13 +1173,17 @@ End Function
 ' Klasa I i II iz istog upisa dele vrednost, sto je tacno "jedan logicki
 ' dokument". Novac i faktura su jednoredni, pa im je identitet sopstveni PK.
 '
-' Revers i izvod nisu ovde: revers vec ide uz SMER (cetiri smera dele brojevni
-' niz), a izvod uz BROJ RACUNA -- oba su vec kompoziti koji razlucuju dokument.
+' Revers je dve noge (Kooperant + Stanica) istog broja, a broj je jedinstven tek
+' u nizu (stanica, dan) -- ni broj ni broj + smer ne razlucuju dokument. Identitet
+' je AmbID kliknute noge; smer, stanica i dan se iz nje citaju nizvodno
+' (modStorno.ReversKljucRazresi). Izvod nije ovde: ide uz BROJ RACUNA, kompozit
+' koji vec razlucuje dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
     Select Case tk
         Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA": IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
+        Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID
         Case Else:                                          IdKolonaTipa = ""
     End Select
 End Function

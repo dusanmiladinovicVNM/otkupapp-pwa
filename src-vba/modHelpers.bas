@@ -239,8 +239,8 @@ End Function
 ' odlucivaci; mutatori (DetachOtpremniceInline, RelinkOtpremniceToZbirna_TX,
 ' RedJeIzabranogDokumenta) namerno ostaju uzi -- kapija >= akter je time
 ' garantovano, a prosirivanje aktera bi diralo redove koje danas ne dira.
-' CheckDuplicate ostaje sirov, imenovano u ugovoru par.3. Od 14.09.2026 ga zovu
-' jos samo prijemnica i revers (do svojih PR-ova); OTK, OTP i ZBR drzi
+' CheckDuplicate ostaje sirov, imenovano u ugovoru par.3. Od 14.09.2026 ga zove
+' jos samo prijemnica (do svog PR-a); OTK, OTP, ZBR i REV drzi
 ' modBrojevi.BrojZauzetUNizu.
 Public Function BrojJednak(ByVal a As Variant, ByVal b As Variant) As Boolean
     BrojJednak = (StrComp(Trim$(NzToText(a)), Trim$(NzToText(b)), vbTextCompare) = 0)

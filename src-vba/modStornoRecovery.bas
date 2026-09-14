@@ -129,7 +129,22 @@ Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
     ' LOSSLESS put: ako postoji storno-zurnal operacija za (docType, broj) -> pravi
     ' inverz preko zurnala (vraca i tblNovac.OtkupID + cilja bas tu generaciju).
     ' Stara storna (pre zurnala) padaju na legacy best-effort ispod.
-    Dim opID As String: opID = LatestOpFor(docType, broj)
+    '
+    ' REVERS: broj je jedinstven tek u nizu (stanica, dan), pa broj sam ne kaze
+    ' KOJI revers se vraca. Kljuc se trazi medju storniranim nogama Stanica; vise
+    ' kljuceva = dvosmisleno -> odbij (ekran Oporavak vraca po OperationID-u).
+    ' I operacija se onda bira po TOM kljucu (LatestOpForRevers), ne kao
+    ' "poslednja po broju": noviji storno reversa iste oznake na drugoj stanici,
+    ' vec vracen, bio bi tudja operacija -- undo bi odbio ovaj revers porukom o tudjem.
+    Dim revSt As String, revDan As Long, revRaz As String
+    Dim opID As String
+    If ReversTipJe(docType) Then
+        revRaz = ReversKljucRazresi("", broj, docType, revSt, revDan, True)
+        If Len(revRaz) > 0 Then Err.Raise ERR_REC_BASE + 7, SRC, "Vrati storno reversa: " & revRaz
+        opID = LatestOpForRevers(docType, broj, revSt, revDan)
+    Else
+        opID = LatestOpFor(docType, broj)
+    End If
     If Len(opID) > 0 Then
         UndoStorno_TX = UndoOperation_TX(opID)
         Exit Function
@@ -171,18 +186,20 @@ Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
             MonUndo SRC, "Otkup", broj, "Vraceno " & n & " redova + ambalaza."
 
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            ' Revers je list (samo tblAmbalaza redovi po broj+dokTip). dokTip = docType.
+            ' Revers je list (samo tblAmbalaza redovi). dokTip = docType; kljuc
+            ' (stanica, dan) je razresen iznad, medju storniranim nogama.
             ' Guard (paralela otkup dup-guardu): ako vec postoji AKTIVAN revers istog
-            ' broj+tip -> reverzija bi duplirala. Odbij. (Ranije je fantomski unmark-ovao
-            ' sve stornirane redove i bez ove provere.)
-            If ActiveAmbalazaDokExists(broj, docType) Then
+            ' KLJUCA -> reverzija bi duplirala. Odbij. Aktivan revers istog broja na
+            ' drugoj stanici ili drugog dana nije duplikat (A2). (Ranije je fantomski
+            ' unmark-ovao sve stornirane redove broja i bez ove provere.)
+            If ActiveAmbalazaDokExists(broj, docType, revSt, revDan) Then
                 Err.Raise ERR_REC_BASE + 6, SRC, "Vec postoji AKTIVAN revers " & broj & _
-                    " [" & docType & "] -> reverzija bi duplirala. Odbijeno."
+                    " [" & docType & "] na istoj stanici istog dana -> reverzija bi duplirala. Odbijeno."
             End If
             Set tx = New clsTransaction
             tx.BeginTx
             tx.AddTableSnapshot TBL_AMBALAZA
-            Dim m As Long: m = UnmarkAmbalazaByDokument(broj, docType, SRC)
+            Dim m As Long: m = UnmarkAmbalazaByDokument(broj, docType, SRC, revSt, revDan)
             If m = 0 Then Err.Raise ERR_REC_BASE + 4, SRC, _
                           "Nema storniranog reversa " & broj & " [" & docType & "]."
             tx.CommitTx: Set tx = Nothing
@@ -311,8 +328,26 @@ EH:
 End Function
 
 ' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
+' Sa kljucem (stanicaID, dan) -- samo REVERS -- vracaju se redovi TOG reversa, ne
+' svi redovi broja: isti broj legalno nosi i revers druge stanice ili drugog dana
+' (A2). Bez kljuca ostaje po (DokID, DokTip): ambalaza uz otkup, gde je DokID
+' OtkupID i vec jedinstven.
 Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As String, _
-                                          ByVal SRC As String) As Long
+                                          ByVal SRC As String, _
+                                          Optional ByVal stanicaID As String = "", _
+                                          Optional ByVal dan As Long = 0) As Long
+    Dim n As Long
+    If Len(stanicaID) > 0 Then
+        Dim redovi As Collection, v As Variant
+        Set redovi = ReversRedoviKljuca(dokID, dokTip, stanicaID, dan, True)
+        For Each v In redovi
+            RequireUpdateCell TBL_AMBALAZA, CLng(v), COL_STORNIRANO, "", SRC
+            n = n + 1
+        Next v
+        UnmarkAmbalazaByDokument = n
+        Exit Function
+    End If
+
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
     Dim cDok As Long, cTip As Long, cSt As Long
@@ -320,7 +355,7 @@ Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As
     cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
     cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
     If cDok = 0 Or cTip = 0 Or cSt = 0 Then Exit Function
-    Dim i As Long, n As Long
+    Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cDok))) = Trim$(dokID) _
            And Trim$(CStr(data(i, cTip))) = Trim$(dokTip) _
@@ -332,36 +367,21 @@ Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As
     UnmarkAmbalazaByDokument = n
 End Function
 
-' Postoji li AKTIVAN (ne-storniran) ambalaza red za dati dokument (broj) + tip?
-' Guard za reverse undo -> spreci duplikat ako revers vec ima zivu verziju.
-' FAIL-CLOSED: nedostajuca sema/greska -> RAISE (UndoGuardReason to hvata i BLOKIRA).
-' Ne sme tiho vratiti False ("nema duplikata") kad provera nije izvedena.
-Private Function ActiveAmbalazaDokExists(ByVal dokID As String, ByVal dokTip As String) As Boolean
-    Const SRC As String = MOD_NAME & ".ActiveAmbalazaDokExists"
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-    Dim cDok As Long, cTip As Long, cSt As Long
-    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cDok))) = Trim$(dokID) _
-           And Trim$(CStr(data(i, cTip))) = Trim$(dokTip) Then
-            Dim isStor As Boolean: isStor = False
-            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA))
-            If Not isStor Then ActiveAmbalazaDokExists = True: Exit Function
-        End If
-    Next i
-End Function
-
-' ZAJEDNICKA broj-level undo garda (i legacy put i zurnal-put UndoOperation_TX).
+' ZAJEDNICKA undo garda (i legacy put i zurnal-put UndoOperation_TX).
 ' Vraca "" ako je bezbedno; inace razlog. Otkup: mrtav-roditelj (fail-closed).
-' Revers (OM): aktivan-dup ambalaze istog broj+tip (#134). Otkup active-dup se NE
-' proverava ovde (bio je broj-level pa je preblokirao parcijalni storno jedne klase)
-' -> zurnal-put to radi PO REDU (OtkupReissueDupExists po (broj,klasa)).
+' Revers (OM): aktivan-dup ambalaze istog KLJUCA (broj, tip, stanica, dan) (#134).
+' Aktivan revers istog broja na drugoj stanici ili drugog dana NIJE duplikat (A2),
+' pa bez kljuca garda ne zna sta pita -> odbija. Kljuc daje pozivalac: zurnal-put
+' iz AmbID-eva operacije (modStornoZurnal.UndoGuardReasonZaOp), legacy put iz
+' storniranih nogu (ReversKljucRazresi). Provera postojanja je javna
+' modStorno.ActiveAmbalazaDokExists -- fail-closed, dize gresku.
+' Otkup active-dup se NE proverava ovde (bio je broj-level pa je preblokirao
+' parcijalni storno jedne klase) -> zurnal-put to radi PO REDU
+' (OtkupReissueDupExists po (broj,klasa)).
 ' FAIL-CLOSED: greska u proveri -> blokirajuci razlog (ne dozvoli tih prolaz).
-Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) As String
+Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String, _
+                                Optional ByVal stanicaID As String = "", _
+                                Optional ByVal dan As Long = 0) As String
     On Error GoTo EH
     Select Case docType
         Case DOK_TIP_OTKUP
@@ -369,9 +389,13 @@ Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) A
             ' (OtkupBlockDeadParentByID) da mrtav roditelj DRUGE generacije istog broja
             ' ne preblokira ovu operaciju. Ovde nema broj-level otkup garde.
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            If ActiveAmbalazaDokExists(broj, docType) Then _
+            If Len(Trim$(stanicaID)) = 0 Then
+                UndoGuardReason = "Revers " & broj & " [" & docType & "]: stanica i dan nisu " & _
+                    "poznati -> undo se ne moze proveriti. Odbijeno (fail-closed)."
+            ElseIf ActiveAmbalazaDokExists(broj, docType, stanicaID, dan) Then
                 UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " [" & docType & _
-                    "] -> undo bi duplirao. Odbijeno."
+                    "] na istoj stanici istog dana -> undo bi duplirao. Odbijeno."
+            End If
     End Select
     Exit Function
 EH:

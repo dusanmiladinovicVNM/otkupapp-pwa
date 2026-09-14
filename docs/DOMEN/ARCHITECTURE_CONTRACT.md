@@ -34,7 +34,7 @@ generatora:
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
 | PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
-| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza` |
+| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. **KOOP smerovi** (izdavanje i povrat kooperantu): noga Kooperant ne nosi stanicu, pa isti (broj, smer, dan) zauzima broj na **svim** stanicama, sa storniranima — dok obe noge ne nose zajednički `ReversID`. FIRMA smerovi ostaju po stanici. |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
 Operativni izvor istine za isto pravilo, po ekranima:
@@ -66,8 +66,49 @@ kapija na kanonskim piscima (`modOtkup.CreateOtkup`,
 uvozu — oba PWA uvoza fail-closed. Kapija dokazuje samo **negativ** — da broj
 pripada drugom vlasniku ili drugom danu; string koji nije u kanonskom obliku te
 vrste se ne sudi. Ne proverava jedinstvenost (to je
-`modBrojevi.BrojZauzetUNizu` za OTK, OTP i ZBR — po nizu, sa storniranima;
-`CheckDuplicate` još za prijemnicu i revers) i ne sudi prijemnicu.
+`modBrojevi.BrojZauzetUNizu` za OTK, OTP, ZBR i REV — po nizu, sa storniranima;
+`CheckDuplicate` još za prijemnicu) i ne sudi prijemnicu.
+
+**Revers: dokument je (broj, tip, stanica, dan)** (14.09.2026). Pošto isti broj
+legalno nose dva reversa (druga stanica ili drugi dan), svaki potrošač koji bira
+revers bira po tom ključu, nikad po (broj, tip): storno
+(`modStorno.StornoOMKoopByBrDok` — identitet je `AmbID` kliknutog reda, ključ
+razrešava `ReversKljucRazresi`), undo (ključ iz `AmbID`-eva operacije,
+`modStornoZurnal.UndoGuardReasonZaOp`), završetak ispravke (stanica i dan zamene
+iz snimanja), pregled i štampa ambalaže (`modIzvestaj.ReversStampaKljuc`), kao i pregled pre potvrde
+(`modStornoFlow.BuildStornoPreview` → `ScanRevers`, isti ključ kao pisac).
+
+**Trajni identitet reversa je `AmbID` njegove noge Stanica**
+(`modStorno.ReversAmbIDStanice`) — pisac piše tačno jednu nogu Stanica po
+dokumentu. Taj ID nosi trag ispravke: `tblStornoVeze.OldDocID` i `NewDocID`;
+broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznačan
+(nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
+upisuje umesto ID-a.
+
+Tri pravila ključa primenjena su po preporuci pre-flight-a i **čekaju potvrdu
+operatera**:
+
+1. Noga Kooperant ne nosi stanicu. Kad isti (broj, tip, dan) nose noge Stanica
+   **dve** stanice, noga Kooperant se ne pripisuje nijednoj — storno, undo i
+   štampa se **odbijaju**. Uparivanje preko susednog `AmbID`-a nije dozvoljeno:
+   susednost je redosled upisa u `SaveOMUlaz_TX`, ne invarijanta.
+   **Pisac takvo stanje ne pravi:** za KOOP smerove isti (broj, smer, dan) na
+   drugoj stanici odbijaju i ekran (`ReversValidiraj`) i pisac
+   (`modBrojevi.RequireReversKoopBrojJedinstven`), sa storniranima. Odbijanje
+   nizvodno ostaje druga linija, za redove nastale mimo pisca. Dugoročno rešenje
+   je zajednički `ReversID` obe noge — tada isti broj na S1/S2 postaje potpuno
+   podržan i ovo ograničenje nestaje.
+2. Red reversa **bez noge Stanica** (sintetički seed — produkcioni pisac je uvek
+   piše) broj ne zauzima, a storno i undo ga odbijaju.
+3. Ispravka sme da prebaci revers na **drugu stanicu ili drugi dan**, i da mu
+   promeni **smer**; zamena se proverava tamo i tog dana kad je snimljena, a smer
+   se čita iz nje (broj, stanica i dan nose najviše jednu nogu Stanica preko sva
+   četiri smera). Pitanje pre vezivanja zamene imenuje stanicu i dan **oba**
+   reversa (`modDokUnos.ZavrsiIspravkuPitanje`), jer se ispravka bira po tipu, a
+   isti broj legalno nosi i tuđ revers.
+
+Ambalaža uz otkup (`DokumentID` = `OtkupID`, tip `OM-Izlaz-Koop`) nije revers:
+stornira se sa otkupom, a storno reversa je odbija.
 
 Pravilo **ne zavisi** od `AUTO_BROJ_DOKUMENTA`. Ručni režim ostaje slobodan
 zato što se slobodan oblik (`MOJ-OTKUP-17`) ne sudi — ali ručno otkucan

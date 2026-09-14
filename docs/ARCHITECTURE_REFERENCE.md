@@ -243,7 +243,7 @@ Canonical surfaces:
 | `UpdateCell()` | standard cell update helper where fail-fast guard is not required |
 | `FindRows()` | row-location helper over full table data; update flows must use full-table row indexes, not filtered arrays |
 | `LookupValue()` | simple lookup helper for non-critical reads |
-| `CheckDuplicate()` | legacy duplicate guard (whole table, raw compare, skips `Stornirano="Da"`). Since 14.09.2026 used only by prijemnica and revers; OTK/OTP/ZBR use `modBrojevi.BrojZauzetUNizu` (per series, stornirani included) |
+| `CheckDuplicate()` | legacy duplicate guard (whole table, raw compare, skips `Stornirano="Da"`). Since 14.09.2026 used only by prijemnica; OTK/OTP/ZBR/REV use `modBrojevi.BrojZauzetUNizu` (per series, stornirani included) |
 | `ExcludeStornirano()` | read-helper filter for active business rows; safe no-op on tables without `Stornirano` |
 
 Critical schema reads and writes must use the fail-fast guard layer:
