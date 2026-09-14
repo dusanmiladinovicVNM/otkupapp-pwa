@@ -158,7 +158,7 @@ activeLogicalCount > 0                                -> BLOCK  (AKTIVNA)
 activeLogicalCount = 0 AND historicalOwnerCount = 0
         AND brojUAktivnojPrijemnici                   -> BLOCK  (SIROCE)
 activeLogicalCount = 0 AND historicalOwnerCount = 0   -> ALLOW
-activeLogicalCount = 0 AND historicalOwnerIsScope     -> ALLOW  (ispravka / re-entry)
+activeLogicalCount = 0 AND historicalOwnerIsScope     -> BLOCK  (STORNIRAN, od 14.09.2026)
 inace                                                 -> BLOCK  (TUDJ)
 ```
 
@@ -174,7 +174,7 @@ tiho bi postala roditelj tuđe prijemnice.
 | Aktivni log. dok. | Istorija vlasnika | Kandidat | Ishod |
 |---|---|---|---|
 | 0 | 0 | bilo koji | ALLOW |
-| 0 | 1, isti | isti | ALLOW — ispravka |
+| 0 | 1, isti | isti | BLOCK — STORNIRAN (od 14.09.2026; ispravka dobija nov broj) |
 | 0 | 1, drugi | bilo koji | BLOCK |
 | 0 | >1 | bilo koji | BLOCK |
 | >0 | bilo šta | bilo ko | BLOCK |
@@ -184,6 +184,9 @@ lomi: `ZbirnaValidiraj` se zove **tačno jednom**, iz `modScrDokumenti.bas:868`,
 tek posle njega ide `ZbirnaUpisi` → `SaveZbirnaMulti_TX` → dva `SaveZbirna` —
 validator nikad ne vidi red koji je sam upravo napisao. Uređivanja zbirne u mestu
 nema; ispravka je storno pa nov unos, pa je tada `activeLogicalCount = 0`.
+Od 14.09.2026 taj nov unos ide pod **novim** brojem (A9): `ZbirnaValidiraj`
+tada izvor traži po **starom** broju iz konteksta ispravke, jer deca do
+`CompleteZbirnaIspravka` nose stari broj.
 
 **Opseg kapije: ovo je UI kapija na F3, ne invarijanta tabele.** `modMasterSync`
 (import) i `modDokumentInvariant` (rekalkulacija) upisuju ne prolazeći kroz
@@ -230,7 +233,7 @@ tek kad prijemnica dobije pravi FK na generaciju (`Prijemnica.ZbirnaGeneracijaID
 | # | Odluka |
 |---|---|
 | D1 | Roditeljstvo preko `GeneracijaID`, ne preko broja. |
-| D2 | `CheckDuplicate` se **ne menja** — nastavlja da preskače stornirane, pa ispravka-workflow na svih 6 tipova ostaje. Rupa se zatvara **pored** njega, ZBR-specifičnom kapijom. |
+| D2 | **POVUČENA 14.09.2026.** Glasila je: „`CheckDuplicate` se ne menja — nastavlja da preskače stornirane, pa ispravka-workflow na svih 6 tipova ostaje." Obrazloženje nije stajalo: framework ispravke poznaje **četiri** tipa, ne šest (`modStornoDok.bas:333`); nijedan redovni put ne traži broj stornirane — generatori ga broje (`modBrojevi.MaxSeqFromTable` i `MaxSeqReversAmbalaza` ne filtriraju storno), a `modStornoDok.PrefillIzStorniranog` broj **ne preuzima** (pravilo 3). D2 je štitila samo ručno prekucan broj stornirane, što A9 zabranjuje. Zamena: provera zauzetosti po (vrsta, vlasnik niza, dan) koja gleda i stornirane — `ARCHITECTURE_CONTRACT.md` A2 tačka 4. |
 | D3 | Otpremnica **nije dete** zbirne. `OtpremnicaValidiraj` se ne dira. |
 | D4 | Nema legacy fallbacka na `broj + vlasnik` kao identitet. AgriX se distribuira novim klijentima sa čistom bazom; prazan `GeneracijaID` je integritetska greška, ne alternativni oblik identiteta. |
 
@@ -277,11 +280,11 @@ pravi sam (privremeno izjednači vozača para) i vraća.
 | A8 | ikad dva vlasnika, aktivan jedan | `UNIQUE` **i** `historicalOwnerCount = 2` istovremeno. F3 kapija: BLOCK. |
 | A9 | `Scr_Save` sa brojem koji drži aktivan drugi vlasnik | Broj redova u `tblZbirna` **nepromenjen**. |
 | A10 | `Scr_Save`, legitimna zbirna | +1 red (odn. +2 za multi-klasu). |
-| A11 | `ZbirnaValidiraj:427` → `CheckDuplicate` | Netaknut; stornirani se preskaču. Brana za D2. |
-| A12 | re-entry posle storna, **isti** vlasnik | Prolazi kroz kapiju. Dobija **NOVU** `GeneracijaID` — posledica `modDokumenta.bas:909`, ne zahtev ugovora. Preduslov: generacija posle ≠ generacija stornirane. |
+| A11 | `ZbirnaValidiraj` → provera zauzetosti | Od 14.09.2026 `modBrojevi.BrojZauzetUNizu` po (vozač, dan), **sa** storniranima; `CheckDuplicate` se više ne zove (D2 povučena). |
+| A12 | re-entry posle storna, **isti** vlasnik | **BLOCK (STORNIRAN)** od 14.09.2026 — ispravka dobija nov broj (A9). Ranije je prolazio kroz kapiju i dobijao novu `GeneracijaID`. |
 | A13 | prijemnica | `PrijemnicaValidiraj:577-597` nepromenjen na obe grane. |
 | A14 | otpremnica | `OtpremnicaValidiraj` nema poziv ka resolveru. Brana za D3. |
-| A15 | aktivan `5/070926` vlasnik A, kandidat `" 5/070926 "` vlasnik **B** | BLOCK. Preduslov: isti par **prolazi** kroz sirovo poređenje u `CheckDuplicate`. |
+| A15 | aktivan `5/070926` vlasnik A, kandidat `" 5/070926 "` vlasnik **B** | BLOCK. Preduslov: isti par **prolazi** kroz sirovo poređenje u `CheckDuplicate` (zbirna ga od 14.09.2026 više ne zove). |
 | A16 | resolver nad varijantama istog broja (razmaci, case) | Isti `normalizedBroj`, isti count-ovi, isti `selectedGeneracijaID`. |
 | A17 | dva aktivna log. dok. **istog** vlasnika | `CURRENT_AMBIGUOUS`; `2 / 1`. Dvosmislenost nije pitanje vlasnika. |
 | A18 | aktivan `5/070926` vlasnik A, kandidat `" 5/070926 "` vlasnik **A** | **BLOCK.** Preduslov: normalizovani brojevi jednaki i vlasnik isti. |
@@ -300,7 +303,8 @@ ne reciklira, da se stariji zapisi ne bi pogrešno čitali.
   dokumenta pod istim brojem i dalje stoje dvaput — namerno; F4 takav broj odbija
   (`CURRENT_AMBIGUOUS`), a B8 ga prijavljuje. Test
   `T_Zbirne_PickerJednaStavkaPoDokumentu`. V. `UI_MIGRACIJA_KATALOG.md` §28.1f.
-- Nema izmene `CheckDuplicate`, `OtpremnicaValidiraj`, `GeneracijaIDZaBrojArr`.
+- Nema izmene `GeneracijaIDZaBrojArr`. (`OtpremnicaValidiraj` i zbirna su od
+  14.09.2026 prešli sa `CheckDuplicate` na `modBrojevi.BrojZauzetUNizu`.)
 - Važe opšta pravila: bez novih `Private WithEvents`, `.frx` se ne dira, VBA
   izvor 100% ASCII, korisnički tekst kroz `modPoruke`.
 
@@ -484,7 +488,7 @@ operatera.
 ### Zašto `historicalLogicalCount` **ne** blokira
 
 Meri se i stoji u DTO-u, ali nije uslov. Razlog je unutar ovog istog ugovora:
-`ZbirnaNovUnosRazlog` ima ALLOW granu
+`ZbirnaNovUnosRazlog` je **do 14.09.2026** imao ALLOW granu
 
 ```
 activeLogicalCount = 0 AND historicalOwnerIsScope  ->  ALLOW  (ispravka / re-entry)
@@ -496,6 +500,11 @@ novu generaciju**. Ispravljena zbirna pod istim brojem zato stoji kao
 bi značila da F3 kaže „smeš ponovo pod ovim brojem", a storno „ne smeš ga više
 dirati" — kontradikcija u istom ugovoru. `modTest` test 34
 (`T_IstiBrojRazliciteGeneracije_NijeIstiDokument`) to stanje tvrdi kao legitimno.
+
+> **Od 14.09.2026 ALLOW grane nema** — ispravka dobija nov broj. Re-entry pod
+> istim brojem sada nastaje samo mimo F3 (`SaveZbirna_TX`, PWA uvoz, malina
+> auto-zbirna), pa je ovo obrazloženje oslabljeno, ali ne i poništeno.
+> Pooštravanje ove kapije ostaje zaseban korak (faza 4).
 
 Uz to je opasnost uža nego što izgleda: `DetachOtpremniceInline` **prazni broj**
 na deci, pa posle prostog storna deca stornirane generacije taj broj više i ne
@@ -656,7 +665,8 @@ GEN-B | ZB-10 | vlasnik X | AKTIVNO      <- resolver kaže UNIQUE = GEN-B
 OTP-A | BrojZbirne = ZB-10 | generacija prazna
 ```
 
-To stanje §5 **izričito dozvoljava** (re-entry istog vlasnika posle storna).
+To stanje je §5 **do 14.09.2026 izričito dozvoljavao** (re-entry istog vlasnika
+posle storna); od tada nastaje samo mimo F3.
 `OTP-A` je istorijski dete `GEN-A`; „sada" bi mu upisalo `GEN-B` i napravilo
 **lažnu sledljivost** — gore od prazne kolone, jer prazna bar ne tvrdi ništa.
 

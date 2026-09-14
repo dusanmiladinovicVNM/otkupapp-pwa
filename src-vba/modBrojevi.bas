@@ -27,6 +27,10 @@ Option Explicit
 '   BrojKontekstOdbija(verdikt)              -- da li verdikt znaci odbijanje
 '   BrojKontekstOpis(...)                    -- jedan tekst za Err i za LogWarn
 '   RequireBrojUKontekstu(...)               -- fail-closed kapija za pisce
+'
+' Zauzetost broja u nizu (vrsta, vlasnik, dan) -- stornirani se broje:
+'   BrojZauzetUNizu(kind, entityID, datum, broj[, izuzmiID]) -- ID ili ""
+'   RequireBrojSlobodanUNizu(...)            -- fail-closed kapija za pisce
 ' ============================================================
 
 Private gSheetIDCache As Object
@@ -346,7 +350,8 @@ End Function
 ' Sta kapija NAMERNO ne radi:
 '   - ne proverava JEDINSTVENOST. Isti broj kod dva vlasnika ili u dva dana je
 '     legalno stanje (A2), i devet zatecenih testova to tvrdi kao domen, ne kao
-'     previd. Zauzetost je posao modOtkup.BrojDokumentaZauzet i CheckDuplicate.
+'     previd. Zauzetost je posao BrojZauzetUNizu (ispod); CheckDuplicate jos
+'     drze samo prijemnica i revers, do svojih PR-ova.
 '   - ne sudi "S" prefiks. IsStanicaMirrorVozac je fail-open (On Error Resume
 '     Next), pa bi pravilo "S nije opravdan" pretvorilo svaki neuspeo lookup u
 '     odbijanje legitimne malina zbirne. Prefiks se skida i ne tumaci.
@@ -494,6 +499,108 @@ Public Sub RequireBrojUKontekstu(ByVal kind As String, _
 
     Err.Raise vbObjectError + errNum, src, _
               BrojKontekstOpis(verdikt, kind, entityID, datum, broj)
+End Sub
+
+' ============================================================
+' PUBLIC -- zauzetost broja u nizu (A2 tacke 2 i 4)
+' ============================================================
+
+' ID dokumenta koji vec drzi broj u nizu (vrsta, vlasnik, dan), ili "" kad je
+' broj slobodan.
+'
+' STORNIRANI SE BROJE. Storno ne oslobadja broj za OTK, OTP i ZBR -- ispravka
+' dobija nov broj (A9, odluke 14.09.2026). Generatori vec rade isto:
+' MaxSeqFromTable ne filtrira storno, pa predlog nikad ne vrati broj stornirane.
+'
+' Opseg je procitan iz generatora, ne izabran: SuggestNextBroj broji po istoj
+' trojci (tabela, kolona vlasnika, dan). Provera uza od generatora odbijala bi
+' broj koji generator smatra slobodnim; sira bi zakljucala isti broj kod drugog
+' vlasnika, a to je po A2 legalno stanje.
+'
+' JEDNA IMPLEMENTACIJA za ekran i pisca. modOtkup.BrojDokumentaZauzet je tanak
+' omotac nad ovim -- dve kopije istog pravila su se vec jednom razisle.
+'
+' izuzmiID: red koji se preskace, da izmena drafta sme da zadrzi SVOJ broj.
+'
+' Nepoznata vrsta je GRESKA, ne "slobodno": prazan odgovor znaci da broj sme, pa
+' ne sme da nastane iz neznanja. REV i PRJ jos nisu ovde -- revers ide u sledeci
+' PR, prijemnica posle prelaska nizvodnih potrosaca na GeneracijaID.
+Public Function BrojZauzetUNizu(ByVal kind As String, _
+                                ByVal entityID As String, _
+                                ByVal datum As Date, _
+                                ByVal broj As String, _
+                                Optional ByVal izuzmiID As String = "") As String
+    Const SRC As String = "BrojZauzetUNizu"
+
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    If Len(Trim$(entityID)) = 0 Then Exit Function
+
+    Dim tbl As String, colBroj As String, colDatum As String
+    Dim colVlasnik As String, colID As String
+
+    Select Case UCase$(Trim$(kind))
+        Case KIND_OTK
+            tbl = TBL_OTKUP: colBroj = COL_OTK_BR_DOK: colDatum = COL_OTK_DATUM
+            colVlasnik = COL_OTK_STANICA: colID = COL_OTK_ID
+        Case KIND_OTP
+            tbl = TBL_OTPREMNICA: colBroj = COL_OTP_BROJ: colDatum = COL_OTP_DATUM
+            colVlasnik = COL_OTP_STANICA: colID = COL_OTP_ID
+        Case KIND_ZBR
+            tbl = TBL_ZBIRNA: colBroj = COL_ZBR_BROJ: colDatum = COL_ZBR_DATUM
+            colVlasnik = COL_ZBR_VOZAC: colID = COL_ZBR_ID
+        Case Else
+            Err.Raise vbObjectError + 1923, SRC, _
+                      "Zauzetost broja nije definisana za vrstu '" & kind & "'."
+    End Select
+
+    Dim d As Variant
+    d = GetTableData(tbl)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cBr As Long, cDat As Long, cVl As Long, cID As Long
+    cBr = RequireColumnIndex(tbl, colBroj, SRC)
+    cDat = RequireColumnIndex(tbl, colDatum, SRC)
+    cVl = RequireColumnIndex(tbl, colVlasnik, SRC)
+    cID = RequireColumnIndex(tbl, colID, SRC)
+
+    Dim dan As Long
+    dan = Int(CDbl(datum))
+
+    Dim i As Long, rowID As String
+    For i = 1 To UBound(d, 1)
+        If BrojJednak(d(i, cBr), broj) Then
+            If BrojJednak(d(i, cVl), entityID) Then
+                If IsDate(d(i, cDat)) Then
+                    If Int(CDbl(CDate(d(i, cDat)))) = dan Then
+                        rowID = Trim$(NzToText(d(i, cID)))
+                        If Len(izuzmiID) = 0 Or Not BrojJednak(rowID, izuzmiID) Then
+                            BrojZauzetUNizu = rowID
+                            Exit Function
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' Fail-closed kapija zauzetosti za pisce. Zove se JEDNOM po dokumentu -- nad
+' zaglavljem ili pre prve klase. U piscu po redu (SaveOtpremnica, SaveZbirna)
+' druga klasa istog dokumenta odbila bi sopstveni prvi red.
+Public Sub RequireBrojSlobodanUNizu(ByVal kind As String, _
+                                    ByVal entityID As String, _
+                                    ByVal datum As Date, _
+                                    ByVal broj As String, _
+                                    ByVal src As String, _
+                                    Optional ByVal izuzmiID As String = "")
+    Dim zauzeo As String
+    zauzeo = BrojZauzetUNizu(kind, entityID, datum, broj, izuzmiID)
+    If Len(zauzeo) = 0 Then Exit Sub
+
+    Err.Raise vbObjectError + 1922, src, _
+              "Broj " & Trim$(broj) & " (vrsta " & UCase$(Trim$(kind)) & ") je vec izdat " & _
+              "vlasniku niza " & Trim$(entityID) & " dana " & Format$(datum, "dd.mm.yyyy") & _
+              ": " & zauzeo & ". Storno ne oslobadja broj -- ispravka dobija NOV broj (A9)."
 End Sub
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obrise tokom rada workbook-a (retko).

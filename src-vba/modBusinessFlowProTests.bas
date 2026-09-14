@@ -252,6 +252,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_BKTX_RucniRezimNeGasiPravilo
     Test_BKTX_UvozOtkupaOdbijaTudjBroj
     Test_BKTX_UvozZbirneOdbijaTudjBroj
+    Test_OTP_BrojZauzetPoStaniciIDanu
+    Test_OTP_DraftBrojIzuzimaSebe
+    Test_ZBR_StorniranBrojIstogVozacaOdbijen
+    Test_ZBR_IspravkaPodNovimBrojem
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -2856,7 +2860,8 @@ Private Sub Test_ZBR_DeteNosiGeneracijuRoditelja()
 
     ' --- E) RE-ENTRY: backfill NE SME da veze staro dete na novu generaciju ---
     '
-    ' Ugovor par.5 izricito dozvoljava da isti vlasnik posle storna ponovo unese
+    ' Ugovor par.5 je do 14.09.2026 kroz F3 dozvoljavao (od tada ne; ovde se ide
+    ' mimo F3) da isti vlasnik posle storna ponovo unese
     ' zbirnu pod ISTIM brojem. Tada pod tim brojem stoje stornirana GEN-A i aktivna
     ' GEN-B, a staro dete (jos bez generacije) istorijski pripada GEN-A.
     '
@@ -3068,7 +3073,7 @@ Private Sub Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju()
                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
     AssertTrue Len(otpX) > 0, "ZBR-BACKFILL preduslov: otpremnica X je snimljena"
 
-    ' --- Y: dve generacije ikad (storno pa re-entry istog vlasnika, ugovor par.5) ---
+    ' --- Y: dve generacije ikad (storno pa re-entry istog vlasnika, mimo F3) ---
     zbrYA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojY, TEST_KUP_ID, _
                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                           80#, TEST_TIP_AMB, 8, KLASA_I)
@@ -3521,6 +3526,267 @@ Private Function RedJeStorniran(ByVal tableName As String, ByVal idColumn As Str
                                 ByVal idValue As String) As Boolean
     RedJeStorniran = (StornoOznaka(tableName, idColumn, idValue) = "DA")
 End Function
+
+' ZAUZETOST BROJA OTPREMNICE -- ekran i pisac, po nizu (stanica, dan), sa
+' storniranima (A2 tacke 2 i 4, odluke 14.09.2026).
+'
+' Nivo merenja: poslovni broj u nizu. Dvoklasna otpremnica je JEDAN dokument na
+' dva reda -- provera je jednom po dokumentu, pa oba reda moraju da se upisu.
+'
+' SABOTAZE: preskoci stornirane u BrojZauzetUNizu -> pukne "storno ne oslobadja
+' broj"; premesti proveru iz Multi_TX u SaveOtpremnica -> pukne "dvoklasna
+' otpremnica upisuje obe klase"; vrati CheckDuplicate u OtpremnicaValidiraj ->
+' pukne "druga stanica istog dana prolazi ekran".
+Private Sub Test_OTP_BrojZauzetPoStaniciIDanu()
+    On Error GoTo EH
+
+    Dim scenario As String: scenario = NewScenarioCode("OTPBZ")
+    Dim d As Date: d = NextTestDate()
+    Dim broj As String: broj = TEST_PREFIX & "-OTP-BZ-" & scenario
+    Dim zauzeto As String: zauzeto = Poruka("DOKUNOS_ERR_BROJ_ZAUZET")
+
+    Dim preRedova As Long: preRedova = CountRows(TBL_OTPREMNICA)
+    Dim res As String
+    res = SaveOtpremnicaMulti_TX(d, TEST_ST_ID, TEST_VOZ_ID, broj, "", _
+                                 TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, _
+                                 True, 50#, 8#)
+    AssertTrue InStr(1, res, " + ", vbBinaryCompare) > 0, _
+               "OTP broj: dvoklasna otpremnica upisuje obe klase (bilo: " & res & ")"
+    AssertEquals CStr(preRedova + 2), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "OTP broj: dvoklasna otpremnica je dva reda"
+
+    Dim idI As String, idII As String
+    idI = FindOtpremnicaIDByBrojAndKlasa(broj, KLASA_I)
+    idII = FindOtpremnicaIDByBrojAndKlasa(broj, KLASA_II)
+
+    ' Unos koji prolazi SVE provere pre provere broja -- inace bi tvrdnje o
+    ' broju pale ili prosle iz pogresnog razloga.
+    Dim p As Object, fokus As String, r As String
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("stanicaID") = TEST_ST_ID
+    p("vozacID") = TEST_VOZ_ID
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 100#
+    p("cenaI") = 10#
+    p("kolAmb") = 10
+    p("datum") = d
+    p("brDok") = broj
+
+    r = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertTrue InStr(1, r, zauzeto, vbBinaryCompare) = 1, _
+               "OTP broj: ekran odbija isti broj, stanicu i dan (bilo: " & r & ")"
+    AssertEquals "brDok", fokus, "OTP broj: fokus ide na broj"
+
+    p("brDok") = "  " & LCase$(broj) & " "
+    r = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertTrue InStr(1, r, zauzeto, vbBinaryCompare) = 1, _
+               "OTP broj: razmaci i mala slova ne otvaraju rupu (bilo: " & r & ")"
+
+    p("brDok") = broj
+    p("stanicaID") = TEST_HLAD_ST_ID
+    r = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertEquals "", r, "OTP broj: druga stanica istog dana prolazi ekran (A2)"
+
+    p("stanicaID") = TEST_ST_ID
+    p("datum") = DateAdd("d", 1, d)
+    r = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertEquals "", r, "OTP broj: drugi dan iste stanice prolazi ekran"
+
+    ' Pisac: isti niz odbijen.
+    preRedova = CountRows(TBL_OTPREMNICA)
+    AssertEquals "", SaveOtpremnicaMulti_TX(d, TEST_ST_ID, TEST_VOZ_ID, broj, "", _
+                                            TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10), _
+                 "OTP broj: pisac odbija isti broj, stanicu i dan"
+    AssertEquals CStr(preRedova), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "OTP broj: odbijen upis nije ostavio red"
+
+    ' Storno ne oslobadja broj.
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", idI
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", idII
+
+    p("datum") = d
+    r = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertTrue InStr(1, r, zauzeto, vbBinaryCompare) = 1, _
+               "OTP broj: storno ne oslobadja broj -- ekran (A9) (bilo: " & r & ")"
+    AssertEquals "", SaveOtpremnicaMulti_TX(d, TEST_ST_ID, TEST_VOZ_ID, broj, "", _
+                                            TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10), _
+                 "OTP broj: storno ne oslobadja broj -- pisac (A9)"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_BrojZauzetPoStaniciIDanu", Err.Number, Err.description
+End Sub
+
+' DRAFT OTPREMNICE: drugi draft istog broja i dana je odbijen, a izmena
+' SOPSTVENOG drafta sme da zadrzi broj (izuzimanje po ID-u).
+'
+' SABOTAZE: ukloni izuzmiID u OtpIzmeniDraft -> pukne "izmena drafta sa svojim
+' brojem prolazi"; ukloni poziv u OtpNapraviDraft -> pukne "drugi draft istog
+' broja i dana odbijen".
+Private Sub Test_OTP_DraftBrojIzuzimaSebe()
+    On Error GoTo EH
+
+    Dim scenario As String: scenario = NewScenarioCode("OTPDRZ")
+    Dim broj As String: broj = TEST_PREFIX & "-OTP-DRZ-" & scenario
+
+    Dim h1 As Object: Set h1 = OtpHeader(broj)
+    Dim razlog As String, id1 As String
+    id1 = CreateOtpremnicaDraft_TX(h1, OtpOcek(1000#, 50#, 500#, 25#), razlog)
+    AssertTrue Len(id1) > 0, "OTP draft broj: prvi draft nastao (bilo: " & razlog & ")"
+
+    ' OtpHeader pomera datum na svaki poziv, pa se dan izricito izjednacava --
+    ' inace drugi draft ide na drugi dan i test ne meri zauzetost.
+    Dim h2 As Object: Set h2 = OtpHeader(broj)
+    h2("Datum") = h1("Datum")
+    Dim razlog2 As String
+    AssertEquals "", CreateOtpremnicaDraft_TX(h2, OtpOcek(1000#, 50#, 500#, 25#), razlog2), _
+                 "OTP draft broj: drugi draft istog broja i dana odbijen"
+    AssertTrue InStr(1, razlog2, id1, vbTextCompare) > 0, _
+               "OTP draft broj: razlog imenuje zauzimaca (bilo: " & razlog2 & ")"
+
+    Dim razlog3 As String
+    AssertTrue UpdateOtpremnicaDraft_TX(id1, h1, OtpOcek(900#, 45#, 500#, 25#), razlog3), _
+               "OTP draft broj: izmena drafta sa svojim brojem prolazi (bilo: " & razlog3 & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_DraftBrojIzuzimaSebe", Err.Number, Err.description
+End Sub
+
+' ZBIRNA: storniran broj ISTOG vozaca istog dana ne sme ponovo (A9, odluka
+' 14.09.2026). Dvoklasna zbirna je jedan dokument na dva reda.
+'
+' SABOTAZE: ukloni poziv u SaveZbirnaMulti_TX -> pukne "storniran broj istog
+' vozaca"; premesti ga u SaveZbirna -> pukne "dvoklasna zbirna upisuje obe klase".
+Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
+    On Error GoTo EH
+
+    Dim scenario As String: scenario = NewScenarioCode("ZBRBZ")
+    Dim d As Date: d = NextTestDate()
+    Dim broj As String: broj = TEST_PREFIX & "-ZBR-BZ-" & scenario
+
+    Dim pre As Long: pre = CountRows(TBL_ZBIRNA)
+    Dim res As String
+    res = SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+                             TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10, True, 50#, 5)
+    AssertTrue InStr(1, res, " + ", vbBinaryCompare) > 0, _
+               "ZBR broj: dvoklasna zbirna upisuje obe klase (bilo: " & res & ")"
+    AssertEquals CStr(pre + 2), CStr(CountRows(TBL_ZBIRNA)), _
+                 "ZBR broj: dvoklasna zbirna je dva reda"
+
+    Dim ids() As String
+    ids = Split(res, " + ")
+    MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, Trim$(ids(0))
+    MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, Trim$(ids(1))
+
+    pre = CountRows(TBL_ZBIRNA)
+    AssertEquals "", SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+                                        TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10), _
+                 "ZBR broj: storniran broj istog vozaca istog dana ne upisuje nov red (A9)"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_ZBIRNA)), _
+                 "ZBR broj: odbijen upis nije ostavio red"
+
+    AssertTrue Len(SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj & "-2", TEST_KUP_ID, "Test Hladnjaca", _
+                                      "Test Pogon", TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10)) > 0, _
+               "ZBR broj: nov broj istog vozaca istog dana prolazi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_StorniranBrojIstogVozacaOdbijen", Err.Number, Err.description
+End Sub
+
+' ISPRAVKA ZBIRNE POD NOVIM BROJEM -- kraj do kraja kroz ekranski validator.
+'
+' Posle storna zbirne deca i dalje nose STARI broj; prevezuje ih
+' CompleteZbirnaIspravka tek posle snimanja zamene. ZbirnaValidiraj zato izvor
+' trazi po starom broju iz konteksta ispravke. Bez toga zamena pod novim brojem
+' uvek pada na proveri zbira, a pod starim je od 14.09.2026 zabranjena -- pa
+' ispravka zbirne ne bi imala prolaz.
+'
+' SABOTAZA: neka ZbirnaBrojIzvora uvek vraca uneti broj -> pukne "zamena pod
+' NOVIM brojem prolazi ekran".
+Private Sub Test_ZBR_IspravkaPodNovimBrojem()
+    Dim tx As clsTransaction
+    Dim scenario As String, testDate As Date
+    Dim brojStari As String, brojNovi As String
+    Dim zbrA As String, genA As String, otpA As String, zbrC As String
+    Dim cid As String, r As Object
+    Dim p As Object, fokus As String, res As String
+
+    On Error GoTo EH
+
+    scenario = NewScenarioCode("ZBRNB")
+    testDate = NextTestDate()
+    brojStari = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 1)
+    brojNovi = modBrojevi.FormatBroj(TEST_VOZ_ID, testDate, 2)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    zbrA = SaveZbirnaMulti_TX(testDate, TEST_VOZ_ID, brojStari, TEST_KUP_ID, "Test Hladnjaca", _
+                              "Test Pogon", TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10)
+    AssertTrue Len(zbrA) > 0, "ZBR ispravka preduslov: stara zbirna snimljena"
+    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-ZNB-" & scenario, brojStari, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(otpA) > 0, "ZBR ispravka preduslov: otpremnica pod starim brojem snimljena"
+
+    Set r = RunZbirnaCorrection(brojStari, SV_MODE_ISPRAVKA, True, genA)
+    cid = CStr(r("correctionID"))
+    AssertTrue (CBool(r("success")) And Len(cid) > 0), _
+               "ZBR ispravka preduslov: ispravka otvorena, stara zbirna stornirana"
+    AssertEquals "1", CStr(modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_ZBIRNA, _
+                                                                            SV_MODE_ISPRAVKA)), _
+                 "ZBR ispravka preduslov: tacno jedna otvorena ispravka zbirne"
+
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("vozacID") = TEST_VOZ_ID
+    p("kupacID") = TEST_KUP_ID
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 100#
+    p("kolAmb") = 10
+    p("datum") = testDate
+
+    p("brDok") = brojNovi
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEquals "", res, "ZBR ispravka: zamena pod NOVIM brojem prolazi ekran"
+
+    p("brDok") = brojStari
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertTrue Len(res) > 0, _
+               "ZBR ispravka: broj stornirane zbirne je zakljucan (bilo prazno)"
+
+    zbrC = SaveZbirnaMulti_TX(testDate, TEST_VOZ_ID, brojNovi, TEST_KUP_ID, "Test Hladnjaca", _
+                              "Test Pogon", TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10)
+    AssertTrue Len(zbrC) > 0, "ZBR ispravka: zamenska zbirna pod novim brojem snimljena"
+
+    Set r = CompleteZbirnaIspravka(cid, brojNovi)
+    AssertTrue CBool(r("success")), _
+               "ZBR ispravka: zavrsetak prolazi (bilo: " & CStr(r("message")) & ")"
+    AssertEquals brojNovi, _
+                 NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+                 "ZBR ispravka: otpremnica je prevezana na novi broj"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "ZBR ispravka pod novim brojem", bfpErrDesc
+End Sub
 
 ' ZBR-CHILD-01 faza 3 / P1: ISPRAVKA uzima identitet STAROG dokumenta.
 '
@@ -4301,14 +4567,27 @@ Private Sub Test_GeneracijaIDNaSavePutanji()
     AssertTrue Len(genI) > 0, "GeneracijaID: Klasa I ima generaciju"
     AssertEquals genI, genII, "GeneracijaID: obe klase jednog upisa dele generaciju"
 
-    ' Generacija 2: ispravka istog broja, samo Klasa I.
+    ' Generacija 2: storno obe klase, pa nov unos istog broja.
     MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_I)
     MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_II)
 
+    ' Isti broj, ista stanica, ISTI dan -- storno ne oslobadja broj (A9, odluka
+    ' 14.09.2026). Do tada je ovaj test tu snimao "ispravku pod istim brojem";
+    ' ta premisa vise ne vazi.
+    Dim preRedova As Long
+    preRedova = CountRows(TBL_OTPREMNICA)
+    AssertEquals "", SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                                            TEST_VRSTA, TEST_SORTA, 120#, 10#, TEST_TIP_AMB, 12), _
+                 "GeneracijaID: broj stornirane otpremnice istog dana je ZAUZET"
+    AssertEquals CStr(preRedova), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "GeneracijaID: odbijen upis nije ostavio red"
+
+    ' Generacija se meri na DRUGOM danu: nasledjivanje ide samo od AKTIVNIH redova
+    ' (po broju i stanici), pa posle storna nema sta da se nasledi.
     Dim res2 As String
-    res2 = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+    res2 = SaveOtpremnicaMulti_TX(NextTestDate(), TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
                                   TEST_VRSTA, TEST_SORTA, 120#, 10#, TEST_TIP_AMB, 12)
-    AssertTrue Len(res2) > 0, "GeneracijaID: ispravka (samo Kl.I) snimljena"
+    AssertTrue Len(res2) > 0, "GeneracijaID: nov unos istog broja drugog dana snimljen"
 
     ' Nasledjivanje ide samo od AKTIVNIH redova -> posle storna nema sta da se
     ' nasledi i ispravka dobija NOVU generaciju.

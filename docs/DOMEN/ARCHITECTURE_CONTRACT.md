@@ -35,6 +35,7 @@ generatora:
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
 | PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
 | REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza` |
+| NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
 Operativni izvor istine za isto pravilo, po ekranima:
 `docs/UI_MIGRACIJA_KATALOG.md` § Z3a.
@@ -49,8 +50,14 @@ Operativni izvor istine za isto pravilo, po ekranima:
 3. **Oblik nije kontekst.** `modBrojevi.IsValidBrojFormat` proverava isključivo
    oblik i vraća `False` za `S` prefiks, pa nad zbirnom u malina modu nije
    upotrebljiv kao kapija.
-4. Storno **ne oslobađa** broj: ispravka dobija nov broj (A9), pa provera
-   duplikata gleda i **stornirane** redove.
+4. Storno **ne oslobađa** broj za **OTK, OTP, ZBR, REV i prijemnicu
+   hladnjače**: ispravka dobija nov broj (A9), pa provera duplikata gleda i
+   **stornirane** redove. **Prijemnica eksternog kupca je izuzetak** — broj je
+   kupčev, pa ispravka našeg pogrešnog unosa **zadržava** kupčev broj, a
+   provera za tog kupca ne broji storniranu prijemnicu koju ispravka zamenjuje.
+   Za **NOV** pravilo ne postoji, jer broj nije jedinstven (tabela iznad).
+   Odluke 14.09.2026. (Ranija formulacija ove tačke nije navodila vrste i time
+   je tvrdila za revers i prijemnicu nešto što nikad nije bilo odlučeno.)
 
 *Provera:* `modBrojevi.BrojOdgovaraKontekstu(kind, entityID, datum, broj)`, kao
 kapija na kanonskim piscima (`modOtkup.CreateOtkup`,
@@ -59,7 +66,8 @@ kapija na kanonskim piscima (`modOtkup.CreateOtkup`,
 uvozu — oba PWA uvoza fail-closed. Kapija dokazuje samo **negativ** — da broj
 pripada drugom vlasniku ili drugom danu; string koji nije u kanonskom obliku te
 vrste se ne sudi. Ne proverava jedinstvenost (to je
-`modOtkup.BrojDokumentaZauzet` i `CheckDuplicate`) i ne sudi prijemnicu.
+`modBrojevi.BrojZauzetUNizu` za OTK, OTP i ZBR — po nizu, sa storniranima;
+`CheckDuplicate` još za prijemnicu i revers) i ne sudi prijemnicu.
 
 Pravilo **ne zavisi** od `AUTO_BROJ_DOKUMENTA`. Ručni režim ostaje slobodan
 zato što se slobodan oblik (`MOJ-OTKUP-17`) ne sudi — ali ručno otkucan
@@ -158,6 +166,14 @@ Ranija formulacija je govorila „nov ID **i kad poslovni broj ostaje isti**", �
 je ostavljalo prostor da dve verzije istog dokumenta dele broj. Za lanac to više
 nije opcija: broj je labela koju operater vidi na papiru, pa dva papira sa istim
 brojem i različitim sadržajem nisu razlučiva izvan sistema.
+
+**Isto pravilo o broju važi i za revers (REV) i prijemnicu hladnjače** (odluka
+14.09.2026): i njihova ispravka dobija nov poslovni broj.
+
+**Izuzetak: prijemnica eksternog kupca.** Njen broj nije naš niz nego kupčev, pa
+ispravka našeg pogrešnog unosa **zadržava** kupčev broj — nov je samo
+`DocumentID` (A2 tačka 4). Za novac (F5/F6) broj nije jedinstven ni pre storna,
+pa se pravilo ne primenjuje.
 
 Van lanca (npr. matični podaci) pravilo o broju se ne primenjuje — tamo broja i
 nema.

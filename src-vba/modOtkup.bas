@@ -825,33 +825,11 @@ End Function
 ' bez stanice, pa bi odbio dokument koji je writer smatrao legalnim.
 Public Function BrojDokumentaZauzet(ByVal stanicaID As String, ByVal datum As Date, _
                                     ByVal brDok As String) As String
-    Const SRC As String = "BrojDokumentaZauzet"
-
-    If Len(Trim$(brDok)) = 0 Then Exit Function
-
-    Dim d As Variant
-    d = GetTableData(TBL_OTKUP)
-    If Not IsArray(d) Then Exit Function
-
-    Dim cBr As Long, cDat As Long, cSt As Long, cID As Long
-    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
-    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
-    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
-    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
-
-    Dim i As Long
-    For i = 1 To UBound(d, 1)
-        If StrComp(Trim$(NzToText(d(i, cBr))), Trim$(brDok), vbTextCompare) = 0 Then
-            If StrComp(Trim$(NzToText(d(i, cSt))), stanicaID, vbTextCompare) = 0 Then
-                If IsDate(d(i, cDat)) Then
-                    If Int(CDbl(CDate(d(i, cDat)))) = Int(CDbl(datum)) Then
-                        BrojDokumentaZauzet = Trim$(NzToText(d(i, cID)))
-                        Exit Function
-                    End If
-                End If
-            End If
-        End If
-    Next i
+    ' Tanak omotac. Pravilo i opseg zive u modBrojevi.BrojZauzetUNizu, jedinoj
+    ' implementaciji za OTK, OTP i ZBR. Potpis ostaje: zovu ga ekran
+    ' (modOtkupUnos) i RequireBrojJedinstven.
+    BrojDokumentaZauzet = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_OTK, _
+                                                     stanicaID, datum, brDok)
 End Function
 
 Private Sub RequireBrojJedinstven(ByVal stanicaID As String, ByVal datum As Date, _

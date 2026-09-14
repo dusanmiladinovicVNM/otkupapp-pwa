@@ -987,6 +987,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_AKTIVNA", ChrW(10007) & " Pod tim brojem ve" & ChrW(263) & " postoji aktivna zbirna " & ChrW(8212) & " storniraj je pa unesi ispravku."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_TUDJ", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " pripadao drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " izaberi drugi broj."
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_STORNIRAN", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat pa storniran " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Ispravku unesi pod NOVIM brojem."
+    UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_ZAUZET", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat u ovom nizu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_SIROCE", ChrW(10007) & " Taj broj ve" & ChrW(263) & " koristi aktivna prijemnica, a zbirne pod njim nema " & ChrW(8212) & " izaberi drugi broj."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_INTEGRITET", ChrW(10007) & " Zbirna pod tim brojem nema GeneracijaID " & ChrW(8212) & " pokreni provere integriteta."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_DVOSMISLEN", ChrW(10007) & " Pod tim brojem postoji vi" & ChrW(353) & "e aktivnih zbirnih " & ChrW(8212) & " ne mo" & ChrW(382) & "e se utvrditi na koju se prijemnica ve" & ChrW(382) & "e."
