@@ -263,13 +263,18 @@ python tools/make_dev_workbook.py --out ~/Desktop/AgriX_DEV.xlsm
 Traži Windows + Excel + `pywin32` + „Trust access to the VBA project object
 model" — isto kao `run_vba.py`. `--self-test` radi svuda, bez Excela.
 
-**Zašto postoji.** `ImportAllVBA` radi *merge* nad **zatečenom** sveskom. Kad se
-VBA projekat te sveske ošteti — posle više self-update ciklusa, pada Excela ili
-punog diska — merge pukne sa `AddFromString failed`, **i pukne i ROLLBACK**, pa
-sveska ne primi ni stari kod koji je do maločas radio. Tada uvoz nije popravka;
-takva sveska se odbacuje. Izmereno u toj situaciji: isti `modOtkup.bas` prolazi i
-`Import` i `AddFromString` u **praznoj** svesci, a pada u oštećenoj — kvar je bio
-u svesci, ne u kodu.
+**Zašto postoji.** `ImportAllVBA` radi *merge* nad **zatečenom** sveskom, a
+sveska od nule je ponekad brža polazna tačka od popravke zatečene.
+
+**Potpis `AddFromString failed` + `ROLLBACK PAO … Out of memory` sam po sebi NE
+dokazuje oštećenu svesku.** Izmereno 14.09.2026 nad kopijom DEV sveske (delta od
+21 soft modula): isti plan nad **istom** sveskom pada samo kad svi merge-ovi idu
+u **jednom makrou** nad kompajliranim projektom, a prolazi kad makro izađe između
+merge-ova. Sam `modIzvestaj`, sam `modTest` (17.7k linija) i plan bez
+`modIzvestaj` prolaze. Zato `ImportAllVBA` od tada spaja kroz lanac
+`Application.OnTime`, jedan merge po makrou (zaglavlje `modVbaTools.bas`, „FAZE").
+Stariji nalaz — isti `modOtkup.bas` prolazi u praznoj svesci, a pada u zatečenoj —
+taj mehanizam ne isključuje i nije ponovljen posle ove izmene.
 
 Redosled u alatu je nosiv, ne kozmetički:
 

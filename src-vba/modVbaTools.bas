@@ -37,6 +37,7 @@ Option Explicit
 '   .doccls               code merge u postojecu komponentu; nema je = FATALNO
 '                         (Document modul se NIKAD ne uklanja i ne dodaje)
 '   soft .bas/.cls        code merge; nova komponenta = Add + AddFromString
+'   (svaki code merge / Add je SVOJ makro u lancu - vidi FAZE ispod)
 '   tvrd .bas/.cls        Remove (faza 1) -> OnTime -> Import (faza 2)
 '   komponenta van izvora Remove (stale), samo tip 1/2/3, nikad tip 100
 '
@@ -47,7 +48,7 @@ Option Explicit
 ' Detekcija je ista kao modSelfUpdate.IsHardModuleBody (dokazan obrazac).
 '
 ' ------------------------------------------------------------
-' DVE FAZE - i zasto DoEvents nije resenje
+' FAZE - i zasto DoEvents nije resenje
 ' ------------------------------------------------------------
 ' Izmedju Remove-a i Import-a mora da se zavrsi PRVA VBA procedura i vrati
 ' kontrola Excel/VBE message loop-u. DoEvents to NE radi (stack ostaje). Zato:
@@ -55,6 +56,44 @@ Option Explicit
 ' Application.OnTime i IZADJE; faza 2 (Public, workbook-kvalifikovana) uvozi i
 ' verifikuje. Faza 1 zbog toga NE sme da prikaze MsgBox kad je faza 2 zakazana -
 ' modalni dijalog drzi makro na stack-u i Remove se ne bi flush-ovao.
+'
+' Isto vazi i za CODE MERGE, iz drugog razloga. Mereno 14.09.2026 (kopija DEV
+' sveske, delta PR #328, 21 soft merge): nad KOMPAJLIRANIM projektom vise
+' DeleteLines + AddFromString u JEDNOM makrou nakupi VBE stanje - posle 5 merge-ova
+' AddFromString modIzvestaj padne [-2147417848], rollback starim telom padne
+' [-2147024882] Out of memory, a Excel zatim padne u VBE7.DLL. Nije velicina
+' (sam modIzvestaj, sam modTest od 17.7k linija i plan bez modIzvestaj prolaze)
+' i nije ostecena sveska (ista sveska, isti plan u DVA makroa prolazi). Jedan
+' merge po OnTime tiku: 21/21. Zato redosled izgleda ovako:
+'   faza 1          plan, backup, teardown, stale Remove, zakazi lanac
+'   lanac merge-a   ImportAllVBA_MergeStep - TACNO JEDAN korak po makrou
+'   kraj lanca      tvrdi Remove, pa faza 2 (ili zavrsna verifikacija)
+'   faza 2          Import tvrdih + zavrsna verifikacija
+' Izmena koda brise module-level promenljive SVIH modula (izmereno i u lancu:
+' brojac u probi je bio 1 u svakom tiku), pa svaki tik stanje cita iz registra,
+' ukljucujuci i vreme zakazanog tika (CancelPendingImportTick).
+'
+' IZMEDJU TIKOVA je projekat ZIV (eventi ON, Excel slobodan) i MESAVINA starog i
+' novog koda. Zato:
+'   - tik izvrsava SAMO modVbaTools, koji se nikad ne merge-uje: kljuc registra
+'     racuna svojom kopijom formule (P2Section), a ImportAllVBA na startu, dok je
+'     projekat ceo, proveri da je ista kao u modImportState (ImportKeyMismatch);
+'   - redosled lanca je soft -> modImportState -> frmOtkupUI -> .doccls: novi
+'     ThisWorkbook (Workbook_BeforeSave, jedina Save kapija) ide POSLEDNJI, pa ne
+'     ceka pozvane procedure koje jos nisu stigle (BuildMergeQueue);
+'   - izvor koji MENJA kljuc registra (IMPORT_REG_APP / ImportSekcija) preflight
+'     odbija pre ijedne izmene (ImportKeyChangeInPlan) - takva migracija ide
+'     rucno; posle poslednjeg koraka izvrsi se jos i NOVI modImportState kao
+'     rezerva (KeyChangedByImport: marker pod oba kljuca, FAIL);
+'   - tik mora da nadje token sesije (skriveno ime IMPORT_TOKEN_NAME); zaostao
+'     tik nad zatvorenom pa ponovo otvorenom sveskom ga nema i ne dira nista.
+' GRANICA (nije mereno): delta koja uklanja, preimenuje ili PREMESTA u drugi modul
+' Public ime koje STARI ThisWorkbook ili STARI modImportState razresava i dalje
+' otvara prozor u kome se BeforeSave ne kompajlira - stale Remove ide pre lanca,
+' a soft moduli idu redom izvora, ne redom zavisnosti (ime nedostaje, ili je
+' "Ambiguous name", dok oba modula ne stignu). Uz iskljucen "Compile On Demand"
+' tik kompajlira ceo projekat, pa svaka medjumodulska delta moze da obori tik
+' bez poruke. Pravilo ostaje: izostanak poruke = crveno, NE snimati.
 '
 ' ------------------------------------------------------------
 ' STA ALAT NE RADI
@@ -113,11 +152,27 @@ Private Const EXPORT_FOLDER As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExp
 Private Const SELF_MODULE As String = "modVbaTools"      ' ovaj modul (preskace se)
 Private Const ONLY_FORM As String = "frmOtkupUI"         ' jedina UserForm projekta
 
+' ---------- registar transakcije ----------
+' Kanon imena registra i formule sekcije je modImportState - cita ga strana koja
+' brani Save (modImportState.ImportNijeDovrsen). modVbaTools nosi KOPIJU, jer tik
+' lanca ne sme da izvrsava drugi modul (vidi FAZE); ImportAllVBA na svakom startu,
+' dok je projekat jos ceo, proveri da su iste (ImportKeyMismatch).
+Private Const IMP_REG_APP As String = "AgriXVbaTools"
+Private Const IMPORT_STATE_MODULE As String = "modImportState"
+' Skriveno ime sveske sa tokenom sesije lanca. Prezivi izmenu koda, ali NE i
+' zatvaranje bez snimanja - pa ga zaostao tik nad ponovo otvorenom sveskom nema.
+Private Const IMPORT_TOKEN_NAME As String = "AgriXVbaImportTok"
+
 ' ---------- faza 2 ----------
-' Ime registra i formula sekcije zive u modImportState -- jedina kopija, jer
-' ih cita i strana koja brani Save (modImportState.ImportNijeDovrsen).
 Private Const PHASE2_PROC As String = "ImportAllVBA_Phase2"
 Private Const PHASE2_SEC As Long = 2
+
+' ---------- lanac code merge-a (jedan merge po makrou, mereno 14.09.2026) ----------
+' PHASE_MERGE je vrednost kljuca "phase" dok je lanac zakazan: faza 2 je odbija
+' (trazi "2"), a tik lanca odbija sve osim nje.
+Private Const MERGE_STEP_PROC As String = "ImportAllVBA_MergeStep"
+Private Const MERGE_SEC As Long = 1
+Private Const PHASE_MERGE As String = "m"
 
 ' ---------- plan tekuceg importa ----------
 ' Jedan import u jednom trenutku (mBusy brani re-entry), pa plan zivi kao stanje
@@ -125,7 +180,6 @@ Private Const PHASE2_SEC As Long = 2
 ' WithEvents / As MSForms. deklaracije - modul mora ostati "soft".
 Private mBusy As Boolean
 Private mAct As Object          ' lname -> akcija (same/doc/form/formnew/soft/softnew/hard/self)
-Private mBody As Object         ' lname -> novo telo iz izvora
 Private mSrcMap As Object       ' lname -> ekstenzija izvora
 Private mSrcFile As Object      ' lname -> pun put do izvornog fajla
 Private mSrcName As Object      ' lname -> ime komponente (case sa diska)
@@ -140,6 +194,8 @@ Private mMutated As Boolean     ' postoji li NERAZRESENA mutacija projekta -- ra
 Private mDesignerDeferred As Boolean  ' dizajner nije procitan (forma je bila ucitana)
 Private mSum As String          ' izvestaj faze 1
 Private mRbFail As String       ' komponente kojima ROLLBACK NIJE uspeo
+Private mMergeQueue As String   ' csv koraka lanca "vrsta:Ime.ext" (soft -> modImportState -> form -> doc)
+Private mMergeToken As String   ' token sesije lanca (registar "tok" + skriveno ime sveske)
 
 ' ============================================================
 ' EXPORT
@@ -174,13 +230,15 @@ End Sub
 ' ============================================================
 
 ' Usaglasi VBAProject sa canonical izvorom u src-vba. Jedan korisnicki potez:
-' Alt+F8 -> ImportAllVBA. Ako je potrebna faza 2, ona se nastavlja sama.
+' Alt+F8 -> ImportAllVBA. Lanac code merge-a i faza 2 se nastavljaju sami;
+' kraj je UVEK poruka (uspeh ili NIJE uspeo) - izostanak poruke je crveno.
 Public Sub ImportAllVBA()
     Dim problem As String, bkPath As String, folder As String
     Dim fatal As String, recNote As String, appTornDown As Boolean
 
-    ' 0) re-entry brana. mBusy ostaje True kroz prozor faze 1 -> faze 2; ako je
-    '    faza 2 prekinuta (Esc, greska u dispatch-u), operater sme da je odblokira.
+    ' 0) re-entry brana u ISTOM makrou. mBusy je module-level, pa NE prezivljava
+    '    prozor izmedju tikova (izmena koda brise module-level stanje) - trajnu
+    '    branu drzi CancelPendingImportTick ispod, nad vremenom tika iz registra.
     If mBusy Then
         If MsgBox("ImportAllVBA je vec u toku (2. faza je zakazana)." & vbCrLf & vbCrLf & _
                   "Ako je prethodni prolaz prekinut, potvrdi da se stanje ocisti " & _
@@ -190,7 +248,23 @@ Public Sub ImportAllVBA()
 
     If Not VBAProjectAccessible() Then Exit Sub
 
-    ' 0b) zaostalo stanje prekinute faze 2 se NE nastavlja slepo - cisti se, a
+    ' 0a) Kljuc registra: alat nosi SVOJU kopiju formule (tik lanca ne sme da
+    '     izvrsava modImportState), pa se ovde, dok je projekat jos ceo, proveri
+    '     da je ista kao kanon u modImportState. Razlika = odbijeno, nista menjano.
+    problem = ImportKeyMismatch()
+    If Len(problem) > 0 Then
+        MsgBox "ImportAllVBA NIJE pokrenut - NISTA nije menjano." & vbCrLf & vbCrLf & problem, _
+               vbCritical, "ImportAllVBA"
+        Exit Sub
+    End If
+
+    ' 0b) Tik lanca ili faze 2 koji je zakazao raniji prolaz se OTKAZUJE pre
+    '     ijednog dijaloga. Inace bi, dok operater cita plan (ili posle nove
+    '     transakcije), stari tik opalio nad tudjim stanjem. Marker se ne dira -
+    '     prekinut prolaz prijavljuje RecoverImportState.
+    CancelPendingImportTick
+
+    ' 0c) zaostalo stanje prekinute faze 2 se NE nastavlja slepo - cisti se, a
     '     nedostajuci moduli se ionako vide u novom planu (nema komponente = novo).
     recNote = RecoverImportState()
     mRecNote = recNote              ' mora prezivi fazu 2 (durable stanje)
@@ -211,6 +285,7 @@ Public Sub ImportAllVBA()
     If Len(problem) = 0 Then problem = ValidateSourceLayout(folder)
     If Len(problem) = 0 Then problem = ValidateTargetShape()
     If Len(problem) = 0 Then problem = BuildPlan()
+    If Len(problem) = 0 Then problem = ImportKeyChangeInPlan()
     If Len(problem) > 0 Then
         ' recNote MORA i ovde: RecoverImportState se zove PRE preflight-a, pa bi
         ' prolaz koji padne na kapiji potrosio i obrisao pending marker, a operater
@@ -277,9 +352,13 @@ Public Sub ImportAllVBA()
 
     ' recNote MORA i ovde: ako operater klikne Ne, marker ostaje (ne brise se vise
     ' u RecoverImportState), ali mora bar jednom da procita zasto.
+    mMergeQueue = BuildMergeQueue()
     If MsgBox("ImportAllVBA ce uskladiti projekat sa izvorom:" & vbCrLf & vbCrLf & _
               IIf(Len(recNote) > 0, recNote & vbCrLf & vbCrLf, "") & _
-              Cap(mSum, 700) & vbCrLf & vbCrLf & "Nastaviti?", _
+              Cap(mSum, 700) & vbCrLf & _
+              IIf(Len(mMergeQueue) > 0, "Code merge: " & CsvCount(mMergeQueue) & _
+                  " komponenti, po jedna u makrou (ne diraj Excel do poruke)." & vbCrLf, "") & _
+              vbCrLf & "Nastaviti?", _
               vbYesNo + vbQuestion, "ImportAllVBA") <> vbYes Then Exit Sub
 
     mBusy = True
@@ -333,7 +412,7 @@ Public Sub ImportAllVBA()
     ' "import je jednom pokrenut" -- mereno 12.09.2026: 14 od 14 sekcija u
     ' registru je imalo pending=1, jer ga i klik na "Ne" ostavlja upisanog.
     mMutated = True
-    SaveSetting IMPORT_REG_APP, P2Section(), "mutated", "1"
+    SaveSetting IMP_REG_APP, P2Section(), "mutated", "1"
 
     ' Od ove tacke pa nadalje projekat MOZE biti nepotpun, pa jedina globalna
     ' kapija nad Save-om (ThisWorkbook.Workbook_BeforeSave) mora da moze da
@@ -350,56 +429,38 @@ Public Sub ImportAllVBA()
     RemoveStaleComponents fatal
     If Len(fatal) > 0 Then GoTo FAIL
 
-    ' 7) .doccls (ThisWorkbook / Sheet) - samo code merge, nikad Remove/Add
-    MergeDocumentModules fatal
-    If Len(fatal) > 0 Then GoTo FAIL
-
-    ' 8) frmOtkupUI - code merge nad postojecom ljuskom
-    MergeOnlyForm fatal
-    If Len(fatal) > 0 Then GoTo FAIL
-
-    ' 9) soft .bas/.cls
-    MergeBasCls fatal
-    If Len(fatal) > 0 Then GoTo FAIL
-
-    ' 10) tvrdi .bas/.cls - Remove sada, Import u fazi 2
-    RemovePhase2Components fatal
-    If Len(fatal) > 0 Then GoTo FAIL
-
-    ' 11) ima li uklanjanja ili clean importa? Onda faza 2 - i zato NEMA MsgBox-a:
-    '     modalni dijalog bi zadrzao makro na stack-u i Remove se ne bi flush-ovao.
-    '     Zavrsna verifikacija (broj formi, prisustvo komponenti) ima smisla tek
-    '     POSLE flush-a, pa je i ona u fazi 2.
-    If Len(mHard) > 0 Or Len(mGone) > 0 Or mFormNew Then
-        If Not SaveImportPhase2State(folder, bkPath) Then
-            fatal = "Nije uspeo upis stanja za 2. fazu (SaveSetting)."
+    ' 7) CODE MERGE (.doccls -> frmOtkupUI -> soft .bas/.cls) NE ide u ovom
+    '    makrou nego u lancu ImportAllVBA_MergeStep, TACNO jedan korak po makrou
+    '    (mereno 14.09.2026 - vidi FAZE u zaglavlju). Zato posle zakazivanja
+    '    NEMA MsgBox-a: modalni dijalog bi zadrzao makro na stack-u, pa se ni
+    '    stale Remove ne bi flush-ovao, ni tik ne bi opalio.
+    '    Eventi su namerno ON od tacke prve mutacije i OSTAJU ON kroz prozor
+    '    izmedju tikova -- tu operater moze da pritisne Ctrl+S nad projektom koji
+    '    je napola usaglasen, pa Workbook_BeforeSave mora da moze da opali.
+    If Len(mMergeQueue) > 0 Then
+        ' token sesije: bez njega tik ne dira projekat (zaostao tik nad ponovo
+        ' otvorenom sveskom ga nema - vidi ImportAllVBA_MergeStep)
+        mMergeToken = NewImportToken()
+        If Len(mMergeToken) = 0 Then
+            fatal = "Nije uspeo upis tokena sesije lanca (skriveno ime sveske " & IMPORT_TOKEN_NAME & ")."
             GoTo FAIL
         End If
-        ' Eventi su namerno ON od tacke prve mutacije i OSTAJU ON kroz prozor
-        ' izmedju faza -- tu operater moze da pritisne Ctrl+S nad projektom kome
-        ' su komponente vec uklonjene, pa Workbook_BeforeSave mora da moze da
-        ' opali. Ranije su ovde bili ugaseni; komentar koji je to tvrdio je bio
-        ' zastareo pola sata posle izmene.
+        If Not SaveImportPhase2State(folder, bkPath, PHASE_MERGE) Then
+            fatal = "Nije uspeo upis stanja za lanac code merge-a (SaveSetting)."
+            GoTo FAIL
+        End If
         Application.ScreenUpdating = True
-        Application.StatusBar = "ImportAllVBA: 2. faza krece za " & PHASE2_SEC & " s - ne diraj Excel..."
-        Application.OnTime Now + TimeSerial(0, 0, PHASE2_SEC), QualifiedProc(PHASE2_PROC)
-        Exit Sub                                   ' KRAJ makroa -> VBIDE flush-uje Remove
+        Application.StatusBar = "ImportAllVBA: code merge krece za " & MERGE_SEC & " s - ne diraj Excel..."
+        If Not ScheduleImportTick(MERGE_STEP_PROC, MERGE_SEC) Then
+            fatal = "Nije uspelo zakazivanje lanca code merge-a (Application.OnTime)."
+            GoTo FAIL
+        End If
+        Exit Sub                                   ' KRAJ makroa -> VBIDE flush-uje stale Remove
     End If
 
-    On Error GoTo 0
-
-    ' 12) bez uklanjanja: verifikuj odmah i zavrsi
-    problem = VerifyFinalProject(folder)
-    RestoreRuntimeAfterImport
-    DeleteImportLogs folder
-    mBusy = False
-    If Len(problem) > 0 Then
-        ' verifikacija pala nad IZMENJENIM projektom -> marker ostaje
-        ShowImportFailure "Zavrsna provera projekta NIJE prosla:" & vbCrLf & problem, bkPath
-    Else
-        ClearImportPhase2State      ' verifikovan uspeh - transakcija je zatvorena
-        ShowImportSuccess mSum & vbCrLf & mSelfNote & IIf(Len(recNote) > 0, vbCrLf & recNote, ""), bkPath
-    End If
+    ' 8) bez code merge-a: tvrdi Remove, pa faza 2 ili zavrsna verifikacija
+    fatal = CompleteAfterMerges(folder, bkPath)
+    If Len(fatal) > 0 Then GoTo FAIL
     Exit Sub
 
 FAIL:
@@ -431,7 +492,7 @@ Public Sub ImportAllVBA_Phase2()
     Dim selfNote As String, recNote As String
 
     sec = P2Section()
-    If GetSetting(IMPORT_REG_APP, sec, "pending", "") <> "1" Then
+    If GetSetting(IMP_REG_APP, sec, "pending", "") <> "1" Then
         ' nista zakazano (vec obradjeno ili ocisceno) - tiho, bez dijaloga
         mBusy = False
         RestoreRuntimeAfterImport
@@ -440,15 +501,15 @@ Public Sub ImportAllVBA_Phase2()
 
     On Error GoTo EH
 
-    folder = GetSetting(IMPORT_REG_APP, sec, "dir", "")
-    hardCsv = GetSetting(IMPORT_REG_APP, sec, "hard", "")
-    goneCsv = GetSetting(IMPORT_REG_APP, sec, "gone", "")
-    formNew = (GetSetting(IMPORT_REG_APP, sec, "formnew", "0") = "1")
-    savedN = CLng("0" & GetSetting(IMPORT_REG_APP, sec, "hardn", "0"))
-    bkPath = GetSetting(IMPORT_REG_APP, sec, "backup", "")
-    mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "prevbackup", "")
-    phase1Sum = GetSetting(IMPORT_REG_APP, sec, "sum", "")
-    If GetSetting(IMPORT_REG_APP, sec, "phase", "") <> "2" Then
+    folder = GetSetting(IMP_REG_APP, sec, "dir", "")
+    hardCsv = GetSetting(IMP_REG_APP, sec, "hard", "")
+    goneCsv = GetSetting(IMP_REG_APP, sec, "gone", "")
+    formNew = (GetSetting(IMP_REG_APP, sec, "formnew", "0") = "1")
+    savedN = CLng("0" & GetSetting(IMP_REG_APP, sec, "hardn", "0"))
+    bkPath = GetSetting(IMP_REG_APP, sec, "backup", "")
+    mPrevBackup = GetSetting(IMP_REG_APP, sec, "prevbackup", "")
+    phase1Sum = GetSetting(IMP_REG_APP, sec, "sum", "")
+    If GetSetting(IMP_REG_APP, sec, "phase", "") <> "2" Then
         fatal = "2. faza: stanje nije oznaceno kao spremno za 2. fazu" & vbCrLf & _
                 "(marker je iz prekinutog prolaza, ne iz zavrsene 1. faze)."
         GoTo FAIL
@@ -461,9 +522,9 @@ Public Sub ImportAllVBA_Phase2()
     ' "Upozorenje ostaje upisano". Da je faza 2 uopste pokrenuta znaci da je
     ' faza 1 vec uklanjala komponente - dakle mutacija je izvesna.
     mMutated = True
-    SaveSetting IMPORT_REG_APP, sec, "mutated", "1"
-    selfNote = GetSetting(IMPORT_REG_APP, sec, "selfnote", "")
-    recNote = GetSetting(IMPORT_REG_APP, sec, "recnote", "")
+    SaveSetting IMP_REG_APP, sec, "mutated", "1"
+    selfNote = GetSetting(IMP_REG_APP, sec, "selfnote", "")
+    recNote = GetSetting(IMP_REG_APP, sec, "recnote", "")
 
     If Len(folder) = 0 Then
         fatal = "2. faza: izgubljen je put do izvora (stanje posle 1. faze nije citljivo)." & vbCrLf & _
@@ -577,6 +638,116 @@ FAIL:
     Exit Sub
 EH:
     fatal = "Neocekivana greska u 2. fazi: [" & Err.Number & "] " & Err.description
+    Resume FAIL
+End Sub
+
+' ============================================================
+' CODE MERGE - lanac (Application.OnTime; TACNO jedan korak po makrou)
+' ============================================================
+
+' Public zbog Application.OnTime. Svaki tik primeni jedan korak lanca iz durable
+' stanja, upise napredak i zakaze sledeci tik, pa IZADJE - VBE otpusta stanje
+' merge-a tek kad se makro zavrsi (mereno 14.09.2026, zaglavlje: FAZE). Posle
+' poslednjeg koraka ide CompleteAfterMerges (tvrdi Remove -> faza 2, ili zavrsna
+' verifikacija). Module-level stanje se na ulazu PUNI iz registra: izmena koda
+' u prethodnom tiku ga je obrisala.
+Public Sub ImportAllVBA_MergeStep()
+    Dim sec As String, folder As String, bkPath As String, queueCsv As String
+    Dim koraci() As String, qi As Long, qn As Long, fatal As String
+
+    sec = P2Section()
+    If GetSetting(IMP_REG_APP, sec, "pending", "") <> "1" Then
+        ' nista zakazano (vec obradjeno ili ocisceno) - tiho, bez dijaloga
+        mBusy = False
+        RestoreRuntimeAfterImport
+        Exit Sub
+    End If
+
+    On Error GoTo EH
+
+    bkPath = GetSetting(IMP_REG_APP, sec, "backup", "")
+    mPrevBackup = GetSetting(IMP_REG_APP, sec, "prevbackup", "")
+    If GetSetting(IMP_REG_APP, sec, "phase", "") <> PHASE_MERGE Then
+        fatal = "Code merge korak: stanje nije oznaceno kao lanac code merge-a" & vbCrLf & _
+                "(tik je iz prekinutog ili zamenjenog prolaza)."
+        GoTo FAIL
+    End If
+
+    ' Mutacija je izvesna: faza 1 je lanac zakazala tek posle mutated=1, a
+    ' mMutated iz faze 1 je izbrisan (module-level). Isti razlog kao u fazi 2.
+    mMutated = True
+    SaveSetting IMP_REG_APP, sec, "mutated", "1"
+
+    ' Token sesije PRE ijedne izmene projekta. Registar je kljucan samo imenom
+    ' fajla, pa bi zaostao tik nad zatvorenom (bez snimanja) pa ponovo otvorenom
+    ' sveskom - sa podignutom aplikacijom - inace krenuo da menja kod ispod nje.
+    If Not ImportTokenMatches(sec) Then
+        fatal = "Code merge korak: tik ne pripada ovoj otvorenoj svesci (nema tokena" & vbCrLf & _
+                "sesije - sveska zatvorena bez snimanja pa ponovo otvorena?)." & vbCrLf & _
+                "U ovom tiku NISTA nije menjano u projektu. Pokreni ImportAllVBA ponovo."
+        GoTo FAIL
+    End If
+
+    ' Eventi EKSPLICITNO ON: projekat je napola usaglasen, a ako VBE prekine
+    ' izvrsavanje, Ctrl+S mora da naleti na Workbook_BeforeSave. Kao faza 2.
+    Application.EnableEvents = True
+    Application.ScreenUpdating = False
+
+    folder = GetSetting(IMP_REG_APP, sec, "dir", "")
+    mHard = GetSetting(IMP_REG_APP, sec, "hard", "")
+    mGone = GetSetting(IMP_REG_APP, sec, "gone", "")
+    mFormNew = (GetSetting(IMP_REG_APP, sec, "formnew", "0") = "1")
+    mSum = GetSetting(IMP_REG_APP, sec, "sum", "")
+    mSelfNote = GetSetting(IMP_REG_APP, sec, "selfnote", "")
+    mRecNote = GetSetting(IMP_REG_APP, sec, "recnote", "")
+    queueCsv = GetSetting(IMP_REG_APP, sec, "queue", "")
+    qn = CLng("0" & GetSetting(IMP_REG_APP, sec, "qn", "0"))
+    qi = CLng("0" & GetSetting(IMP_REG_APP, sec, "qi", "0"))
+
+    If Len(folder) = 0 Then
+        fatal = "Code merge korak: izgubljen je put do izvora (stanje nije citljivo)."
+        GoTo FAIL
+    End If
+    ' integritet handoff-a: skracena/pokvarena lista = koraci koji se tiho ne rade
+    If qn < 1 Or CsvCount(queueCsv) <> qn Or qi > qn Then
+        fatal = "Code merge korak: lista koraka je izmenjena (" & CsvCount(queueCsv) & _
+                " != " & qn & ", korak " & qi & ")."
+        GoTo FAIL
+    End If
+
+    If qi < qn Then
+        koraci = Split(queueCsv, ",")
+        Application.StatusBar = "ImportAllVBA: code merge " & (qi + 1) & "/" & qn & " - ne diraj Excel..."
+        fatal = ApplyMergeStep(koraci(qi), folder)
+        If Len(fatal) > 0 Then GoTo FAIL
+        ' korak menja sum (forma) -> durable PRE sledeceg tika
+        If Not SaveMergeProgress(qi + 1) Then
+            fatal = "Code merge korak: nije uspeo upis napretka (SaveSetting) posle " & koraci(qi) & "."
+            GoTo FAIL
+        End If
+        Application.ScreenUpdating = True
+        If Not ScheduleImportTick(MERGE_STEP_PROC, MERGE_SEC) Then
+            fatal = "Code merge korak: nije uspelo zakazivanje sledeceg koraka (Application.OnTime)."
+            GoTo FAIL
+        End If
+        Exit Sub                                   ' KRAJ makroa -> VBE otpusta stanje merge-a
+    End If
+
+    ' svi koraci su primenjeni
+    mSum = mSum & "Code merge: " & qn & " komponenti, jedna po makrou" & vbCrLf
+    fatal = CompleteAfterMerges(folder, bkPath)
+    If Len(fatal) > 0 Then GoTo FAIL
+    Exit Sub
+
+FAIL:
+    On Error Resume Next          ' greska u samoj FAIL grani ne sme da vrti EH -> FAIL
+    ' Marker se NE brise: lanac je zakazan tek posle prve mutacije.
+    RestoreRuntimeAfterImport
+    mBusy = False
+    ShowImportFailure fatal, bkPath
+    Exit Sub
+EH:
+    fatal = "Neocekivana greska u code merge koraku: [" & Err.Number & "] " & Err.description
     Resume FAIL
 End Sub
 
@@ -789,7 +960,6 @@ Private Function BuildPlan() As String
     Dim declName As String
 
     Set mAct = CreateObject("Scripting.Dictionary")
-    Set mBody = CreateObject("Scripting.Dictionary")
     mStale = "": mHard = "": mGone = "": mSum = "": mSelfNote = "": mRbFail = ""
     mFormNew = False
 
@@ -877,7 +1047,6 @@ Private Function BuildPlan() As String
                 Exit Function
             End If
             mAct(lname) = "doc"
-            mBody(lname) = body
             nDoc = nDoc + 1
         ElseIf ext = "frm" Then
             If IsHardModuleBody(body) Then
@@ -888,7 +1057,6 @@ Private Function BuildPlan() As String
             End If
             If exists Then
                 mAct(lname) = "form"
-                mBody(lname) = body
                 nForm = nForm + 1
             Else
                 mAct(lname) = "formnew"
@@ -902,11 +1070,9 @@ Private Function BuildPlan() As String
             nHard = nHard + 1
         ElseIf exists Then
             mAct(lname) = "soft"
-            mBody(lname) = body
             nSoft = nSoft + 1
         Else
             mAct(lname) = "softnew"
-            mBody(lname) = body
             nNew = nNew + 1
         End If
     Next k
@@ -991,140 +1157,224 @@ Private Sub RemoveStaleComponents(ByRef fatal As String)
     If Len(mGone) > 0 Then mSum = mSum & "Uklonjeno (van izvora): " & CsvCount(mGone) & " komponenti" & vbCrLf
 End Sub
 
-' .doccls: samo code merge u postojecu komponentu. Pad = fatalno (uz rollback).
-Private Sub MergeDocumentModules(ByRef fatal As String)
-    Dim proj As Object: Set proj = ThisWorkbook.VBProject
-    Dim k As Variant, nm As String, errS As String, rbOk As Boolean, n As Long
+' Lanac code merge-a iz plana. Korak je "vrsta:Ime.ext" (imena komponenti nemaju
+' ni ":" ni ","). Redosled NIJE isti kao kad je sve islo u jednom makrou, jer je
+' izmedju tikova projekat ziv i mesovit (vidi FAZE):
+'   1. soft/softnew po redu izvora  - red foldera, NE analiza zavisnosti (vidi GRANICA)
+'   2. modImportState               - Save kapija i kljuc registra, kad su njegovi
+'                                     pozivani moduli vec stigli
+'   3. frmOtkupUI
+'   4. .doccls (ThisWorkbook)       - Workbook_BeforeSave poslednji: njegov NOV kod
+'                                     ne sme da ceka procedure koje jos nisu stigle
+Private Function BuildMergeQueue() As String
+    Dim k As Variant, q As String, prolaz As Long, act As String, jeStanje As Boolean
+    For prolaz = 1 To 4
+        For Each k In mAct.Keys
+            act = CStr(mAct(k))
+            jeStanje = (CStr(k) = LCase$(IMPORT_STATE_MODULE))
+            Select Case prolaz
+                Case 1
+                    If (act = "soft" Or act = "softnew") And Not jeStanje Then AddCsv q, act & ":" & mSrcName(k) & "." & mSrcMap(k)
+                Case 2
+                    If (act = "soft" Or act = "softnew") And jeStanje Then AddCsv q, act & ":" & mSrcName(k) & "." & mSrcMap(k)
+                Case 3
+                    If act = "form" Then AddCsv q, "form:" & mSrcName(k) & ".frm"
+                Case 4
+                    If act = "doc" Then AddCsv q, "doc:" & mSrcName(k) & ".doccls"
+            End Select
+        Next k
+    Next prolaz
+    BuildMergeQueue = q
+End Function
 
-    For Each k In mAct.Keys
-        If mAct(k) = "doc" Then
-            nm = mSrcName(k)
-            If Not ComponentExists(proj, nm) Then
-                fatal = fatal & "Document modul '" & nm & "' je nestao tokom importa." & vbCrLf
-                Exit Sub
-            End If
-            If ReplaceCodeWithRollback(proj.VBComponents(nm), CStr(mBody(k)), errS, rbOk) Then
-                n = n + 1
-            Else
-                If Not rbOk Then mRbFail = mRbFail & "  " & nm & vbCrLf
-                fatal = fatal & "Code merge document modula '" & nm & "' nije uspeo: " & errS & vbCrLf
-                Exit Sub
-            End If
+' Primeni TACNO JEDAN korak lanca (zove ga ImportAllVBA_MergeStep, jedan po
+' makrou). "" = uspeh; inace razlog za FAIL, i lanac STAJE:
+'   doc      code merge u postojecu komponentu; pad = fatalno (uz rollback)
+'   form     code merge frmOtkupUI, NIKAD Remove; kapije se ponavljaju pre izmene
+'   soft     merge; pad = fatalno (uz rollback)
+'   softnew  Add + AddFromString; pad -> nedovrsena komponenta se uklanja, fatalno
+' U lancu NEMA fallback-a "Remove sada, Import u fazi 2" koji je postojao dok je
+' sve islo u jednom makrou: uklonjen modul bi ostao van projekta kroz SVE
+' preostale tikove, a tik koji zavisi od njega mozda ne bi mogao ni da se
+' pokrene - bez ijedne FAIL poruke. Zato pad zaustavlja lanac; marker ostaje.
+Private Function ApplyMergeStep(ByVal korak As String, ByVal folder As String) As String
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim p As Long, vrsta As String, fileName As String, nm As String, ext As String
+    Dim body As String, errS As String, rbOk As Boolean, vbc As Object
+    Dim ctlN As Long, okOut As Boolean, addedName As String, addErr As Long, cur As String
+
+    p = InStr(1, korak, ":")
+    If p < 2 Then
+        ApplyMergeStep = "Neispravan korak lanca: '" & korak & "'."
+        Exit Function
+    End If
+    vrsta = Left$(korak, p - 1)
+    fileName = Mid$(korak, p + 1)
+    nm = BaseNameOf(fileName)
+    ext = LCase$(ExtOf(fileName))
+
+    ' Telo se cita TEK SADA, iz fajla - plan je iz faze 1, a izvor je mogao da
+    ' se promeni izmedju tikova. Prazno ili tvrdo telo se odbija kao i u planu;
+    ' ostale razlike prema planu hvata drift provera u VerifyFinalProject.
+    body = ExtractModuleCode(folder & fileName)
+    If Len(body) = 0 Then
+        ApplyMergeStep = "Izvor " & fileName & " je sada PRAZAN - menjan tokom importa? Ponovi import."
+        Exit Function
+    End If
+    If vrsta <> "doc" And IsHardModuleBody(body) Then
+        ApplyMergeStep = "Izvor " & fileName & " sada ima MODULE-LEVEL WithEvents ili 'As MSForms.'" & vbCrLf & _
+                         "- menjan tokom importa? Ponovi import."
+        Exit Function
+    End If
+
+    ' modImportState: kljuc registra se proverava i OVDE - izvor je mogao da se
+    ' promeni posle preflight-a. U projektu je jos STARI modul, pa je staticko
+    ' poredjenje ispravno; odbijanje ostavlja stari kljuc, pod kojim marker vec
+    ' blokira Save.
+    If StrComp(nm, IMPORT_STATE_MODULE, vbTextCompare) = 0 And ComponentExists(proj, nm) Then
+        cur = ComponentCode(proj.VBComponents(nm), okOut)
+        If Not okOut Then
+            ApplyMergeStep = "Ne moze da se procita kod komponente " & nm & "."
+            Exit Function
         End If
-    Next k
-    If n > 0 Then mSum = mSum & "Document moduli azurirani: " & n & vbCrLf
-End Sub
-
-' frmOtkupUI: iskljucivo code merge nad postojecom komponentom. NIKAD Remove.
-Private Sub MergeOnlyForm(ByRef fatal As String)
-    Dim lname As String: lname = LCase$(ONLY_FORM)
-    If Not mAct.Exists(lname) Then Exit Sub
-    If mAct(lname) <> "form" Then Exit Sub
-
-    Dim proj As Object: Set proj = ThisWorkbook.VBProject
-    Dim vbc As Object, errS As String, rbOk As Boolean, ctlN As Long, okOut As Boolean
-
-    If Not ComponentExists(proj, ONLY_FORM) Then
-        fatal = "Forma " & ONLY_FORM & " je nestala tokom importa."
-        Exit Sub
-    End If
-    Set vbc = proj.VBComponents(ONLY_FORM)
-
-    ' ponovi kapije neposredno pre izmene (stanje se moglo promeniti)
-    If vbc.Type <> 3 Then
-        fatal = ONLY_FORM & " nije UserForm (tip " & vbc.Type & ") - merge otkazan."
-        Exit Sub
-    End If
-    ctlN = DesignerControlCount(vbc, okOut)
-    If Not okOut Or ctlN <> 0 Then
-        fatal = ONLY_FORM & ": dizajner nije prazan (kontrola: " & ctlN & ") ili nije citljiv - merge otkazan."
-        Exit Sub
+        If ImportKeyDiffers(cur, body) Then
+            ApplyMergeStep = "Izvor " & fileName & " je TOKOM importa promenio kljuc registra." & vbCrLf & _
+                             "U ovom tiku nista nije menjano; marker pod starim kljucem blokira Save." & vbCrLf & _
+                             "Ponovi ImportAllVBA (preflight ce objasniti rucnu migraciju)."
+            Exit Function
+        End If
     End If
 
-    If ReplaceCodeWithRollback(vbc, CStr(mBody(lname)), errS, rbOk) Then
-        mSum = mSum & ONLY_FORM & ": code merge OK (forma NIJE uklanjana)" & vbCrLf
-    Else
-        If Not rbOk Then mRbFail = mRbFail & "  " & ONLY_FORM & vbCrLf
-        fatal = "Code merge forme " & ONLY_FORM & " nije uspeo: " & errS
-    End If
-End Sub
+    Select Case vrsta
 
-' Soft .bas/.cls: merge u postojecu ili Add za novu. Pad -> rollback pa fallback
-' na fazu 2 (Remove + Import podnosi vise od AddFromString-a).
-Private Sub MergeBasCls(ByRef fatal As String)
-    Dim proj As Object: Set proj = ThisWorkbook.VBProject
-    Dim k As Variant, lname As String, nm As String, ext As String
-    Dim errS As String, rbOk As Boolean, n As Long, nAdd As Long
-    Dim vbc As Object, addedName As String, addErr As Long
+    Case "doc"
+        If Not ComponentExists(proj, nm) Then
+            ApplyMergeStep = "Document modul '" & nm & "' je nestao tokom importa."
+        ElseIf Not ReplaceCodeWithRollback(proj.VBComponents(nm), body, errS, rbOk) Then
+            If Not rbOk Then mRbFail = mRbFail & "  " & nm & vbCrLf
+            ApplyMergeStep = "Code merge document modula '" & nm & "' nije uspeo: " & errS
+        End If
 
-    For Each k In mAct.Keys
-        lname = CStr(k)
-        Select Case mAct(lname)
+    Case "form"
+        If Not ComponentExists(proj, ONLY_FORM) Then
+            ApplyMergeStep = "Forma " & ONLY_FORM & " je nestala tokom importa."
+            Exit Function
+        End If
+        Set vbc = proj.VBComponents(ONLY_FORM)
+        ' ponovi kapije neposredno pre izmene (stanje se moglo promeniti)
+        If vbc.Type <> 3 Then
+            ApplyMergeStep = ONLY_FORM & " nije UserForm (tip " & vbc.Type & ") - merge otkazan."
+            Exit Function
+        End If
+        ctlN = DesignerControlCount(vbc, okOut)
+        If Not okOut Or ctlN <> 0 Then
+            ApplyMergeStep = ONLY_FORM & ": dizajner nije prazan (kontrola: " & ctlN & ") ili nije citljiv - merge otkazan."
+            Exit Function
+        End If
+        If ReplaceCodeWithRollback(vbc, body, errS, rbOk) Then
+            mSum = mSum & ONLY_FORM & ": code merge OK (forma NIJE uklanjana)" & vbCrLf
+        Else
+            If Not rbOk Then mRbFail = mRbFail & "  " & ONLY_FORM & vbCrLf
+            ApplyMergeStep = "Code merge forme " & ONLY_FORM & " nije uspeo: " & errS
+        End If
 
-        Case "soft"
-            nm = mSrcName(lname)
-            ext = mSrcMap(lname)
-            If Not ComponentExists(proj, nm) Then
-                fatal = "Komponenta '" & nm & "' je nestala tokom importa."
-                Exit Sub
-            End If
-            If ReplaceCodeWithRollback(proj.VBComponents(nm), CStr(mBody(lname)), errS, rbOk) Then
-                n = n + 1
-            ElseIf rbOk Then
-                ' stari kod je vracen -> bezbedno je pokusati fazu 2
-                mSum = mSum & "  " & nm & ": merge pao (" & errS & ") -> 2. faza" & vbCrLf
-                On Error Resume Next
-                Err.Clear
-                proj.VBComponents.Remove proj.VBComponents(nm)
-                If Err.Number = 0 Then
-                    AddCsv mGone, nm
-                    AddCsv mHard, nm & "." & ext
-                Else
-                    fatal = "Fallback Remove '" & nm & "' nije uspeo: [" & Err.Number & "] " & Err.description
-                End If
-                On Error GoTo 0
-                If Len(fatal) > 0 Then Exit Sub
-            Else
-                mRbFail = mRbFail & "  " & nm & vbCrLf
-                fatal = "Code merge '" & nm & "' nije uspeo: " & errS
-                Exit Sub
-            End If
+    Case "soft"
+        If Not ComponentExists(proj, nm) Then
+            ApplyMergeStep = "Komponenta '" & nm & "' je nestala tokom importa."
+        ElseIf ReplaceCodeWithRollback(proj.VBComponents(nm), body, errS, rbOk) Then
+            ' uspeh
+        ElseIf rbOk Then
+            ' stari kod je vracen i OSTAJE na mestu - bez Remove + faze 2 (vidi gore)
+            ApplyMergeStep = "Code merge '" & nm & "' nije uspeo: " & errS & vbCrLf & _
+                             "Rollback je uspeo: " & nm & " ima STARI kod, lanac je zaustavljen." & vbCrLf & _
+                             "Ponovi ImportAllVBA; ako opet padne, napravi novu DEV svesku" & vbCrLf & _
+                             "(tools/make_dev_workbook.py)."
+        Else
+            mRbFail = mRbFail & "  " & nm & vbCrLf
+            ApplyMergeStep = "Code merge '" & nm & "' nije uspeo: " & errS
+        End If
 
-        Case "softnew"
-            nm = mSrcName(lname)
-            ext = mSrcMap(lname)
-            Set vbc = Nothing
-            addedName = ""
+    Case "softnew"
+        Set vbc = Nothing
+        On Error Resume Next
+        Err.Clear
+        Set vbc = proj.VBComponents.Add(TypeForExt(ext))
+        If Err.Number = 0 Then
+            vbc.name = nm
+            vbc.CodeModule.AddFromString body
+            addedName = vbc.name
+        End If
+        addErr = Err.Number
+        errS = "[" & Err.Number & "] " & Err.description
+        On Error GoTo 0
+        If addErr <> 0 Or StrComp(addedName, nm, vbTextCompare) <> 0 Then
+            ' nedovrsena komponenta se uklanja i lanac STAJE - preostali tikovi ne
+            ' smeju da rade nad projektom kome fali modul koji izvor ocekuje
             On Error Resume Next
-            Err.Clear
-            Set vbc = proj.VBComponents.Add(TypeForExt(ext))
-            If Err.Number = 0 Then
-                vbc.name = nm
-                If Len(CStr(mBody(lname))) > 0 Then vbc.CodeModule.AddFromString CStr(mBody(lname))
-                addedName = vbc.name
-            End If
-            addErr = Err.Number
-            errS = "[" & Err.Number & "] " & Err.description
+            If Not vbc Is Nothing Then proj.VBComponents.Remove vbc
             On Error GoTo 0
+            ApplyMergeStep = "Add nove komponente '" & nm & "' nije uspeo (" & errS & ", ime='" & addedName & "')." & vbCrLf & _
+                             "Nedovrsena komponenta je uklonjena, lanac je zaustavljen. Ponovi ImportAllVBA."
+        End If
 
-            If addErr = 0 And StrComp(addedName, nm, vbTextCompare) = 0 Then
-                nAdd = nAdd + 1
-            Else
-                ' nedovrsena komponenta se uklanja pa se fajl uvozi u fazi 2
-                mSum = mSum & "  " & nm & ": Add pao (" & errS & ", ime='" & addedName & "') -> 2. faza" & vbCrLf
-                On Error Resume Next
-                If Not vbc Is Nothing Then proj.VBComponents.Remove vbc
-                On Error GoTo 0
-                If Len(addedName) > 0 Then AddCsv mGone, addedName
-                AddCsv mHard, nm & "." & ext
-            End If
+    Case Else
+        ApplyMergeStep = "Nepoznata vrsta koraka lanca: '" & vrsta & "'."
 
-        End Select
-    Next k
+    End Select
+End Function
 
-    If n > 0 Or nAdd > 0 Then _
-        mSum = mSum & "Soft moduli: azurirano " & n & ", novih " & nAdd & vbCrLf
-End Sub
+' Kraj code merge-a (ili plan bez njega): tvrdi Remove, pa faza 2 ili zavrsna
+' verifikacija sa porukom. "" = obradjeno (zakazana faza 2 ILI prikazana
+' poruka); inace razlog za FAIL pozivaoca. Zovu je faza 1 i poslednji tik
+' lanca, pa cita module-level stanje koje je pozivalac napunio.
+Private Function CompleteAfterMerges(ByVal folder As String, ByVal bkPath As String) As String
+    Dim fatal As String, problem As String
+
+    ' kljuc registra posle svih merge-ova (novi modImportState je sada u projektu)
+    fatal = KeyChangedByImport()
+    If Len(fatal) > 0 Then
+        CompleteAfterMerges = fatal
+        Exit Function
+    End If
+
+    ' tvrdi .bas/.cls iz plana - Remove sada
+    RemovePhase2Components fatal
+    If Len(fatal) > 0 Then
+        CompleteAfterMerges = fatal
+        Exit Function
+    End If
+
+    ' Ima li uklanjanja ili clean importa? Onda faza 2 - i zato NEMA MsgBox-a:
+    ' modalni dijalog bi zadrzao makro na stack-u i Remove se ne bi flush-ovao.
+    ' Zavrsna verifikacija (broj formi, prisustvo komponenti) ima smisla tek
+    ' POSLE flush-a, pa je i ona u fazi 2. Eventi ostaju ON kroz prozor izmedju
+    ' faza (Workbook_BeforeSave mora da moze da opali).
+    If Len(mHard) > 0 Or Len(mGone) > 0 Or mFormNew Then
+        If Not SaveImportPhase2State(folder, bkPath, "2") Then
+            CompleteAfterMerges = "Nije uspeo upis stanja za 2. fazu (SaveSetting)."
+            Exit Function
+        End If
+        Application.ScreenUpdating = True
+        Application.StatusBar = "ImportAllVBA: 2. faza krece za " & PHASE2_SEC & " s - ne diraj Excel..."
+        If Not ScheduleImportTick(PHASE2_PROC, PHASE2_SEC) Then
+            CompleteAfterMerges = "Nije uspelo zakazivanje 2. faze (Application.OnTime)."
+        End If
+        Exit Function                              ' pozivalac izlazi -> VBIDE flush-uje Remove
+    End If
+
+    ' bez uklanjanja: verifikuj odmah i zavrsi
+    problem = VerifyFinalProject(folder)
+    RestoreRuntimeAfterImport
+    DeleteImportLogs folder
+    mBusy = False
+    If Len(problem) > 0 Then
+        ' verifikacija pala nad IZMENJENIM projektom -> marker ostaje
+        ShowImportFailure "Zavrsna provera projekta NIJE prosla:" & vbCrLf & problem, bkPath
+    Else
+        ClearImportPhase2State      ' verifikovan uspeh - transakcija je zatvorena
+        ShowImportSuccess mSum & vbCrLf & mSelfNote & IIf(Len(mRecNote) > 0, vbCrLf & mRecNote, ""), bkPath
+    End If
+End Function
 
 ' Ukloni tvrde .bas/.cls (faza 1). Import ide u fazi 2, posle flush-a.
 Private Sub RemovePhase2Components(ByRef fatal As String)
@@ -1379,7 +1629,12 @@ End Sub
 ' ============================================================
 
 ' pending="1" se upisuje POSLEDNJI - polovicno stanje se ne racuna kao zakazano.
-Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As String) As Boolean
+'
+' gate = vrednost kljuca "phase" koja se upisuje POSLEDNJA: "2" (faza 2 je
+' zakazana) ili PHASE_MERGE (lanac code merge-a je zakazan; tada idu i lista
+' koraka i kursor). Isti handoff, jer lanac na kraju prelazi u fazu 2.
+Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As String, _
+                                       ByVal gate As String) As Boolean
     Dim sec As String: sec = P2Section()
     On Error GoTo EH
     ' phase="2" ide POSLEDNJI - on je readiness kapija, ne pending. pending je
@@ -1388,24 +1643,37 @@ Private Function SaveImportPhase2State(ByVal folder As String, ByVal bkPath As S
     ' pre nego sto hard/gone/formnew legnu, zaostao OnTime iz ranijeg prolaza bi
     ' delimican handoff procitao kao kompletan - a phase=1 je uveden bas da to
     ' spreci.
-    SaveSetting IMPORT_REG_APP, sec, "dir", folder
-    SaveSetting IMPORT_REG_APP, sec, "prevbackup", mPrevBackup
-    SaveSetting IMPORT_REG_APP, sec, "hard", mHard
-    SaveSetting IMPORT_REG_APP, sec, "hardn", CStr(CsvCount(mHard))
-    SaveSetting IMPORT_REG_APP, sec, "gone", mGone
-    SaveSetting IMPORT_REG_APP, sec, "formnew", IIf(mFormNew, "1", "0")
-    SaveSetting IMPORT_REG_APP, sec, "backup", bkPath
-    SaveSetting IMPORT_REG_APP, sec, "sum", Cap(mSum, 900)
+    SaveSetting IMP_REG_APP, sec, "dir", folder
+    SaveSetting IMP_REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting IMP_REG_APP, sec, "hard", mHard
+    SaveSetting IMP_REG_APP, sec, "hardn", CStr(CsvCount(mHard))
+    SaveSetting IMP_REG_APP, sec, "gone", mGone
+    SaveSetting IMP_REG_APP, sec, "formnew", IIf(mFormNew, "1", "0")
+    SaveSetting IMP_REG_APP, sec, "backup", bkPath
+    SaveSetting IMP_REG_APP, sec, "sum", Cap(mSum, 900)
     ' Upozorenje o drift-u modVbaTools-a je najvaznije bas kad faza 2 postoji -
     ' bez ovoga bi ga zavrsna poruka faze 2 progutala.
-    SaveSetting IMPORT_REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
-    SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
-    SaveSetting IMPORT_REG_APP, sec, "pending", "1"
-    ' procitaj nazad ono od cega faza 2 zavisi; tek ako je leglo, otvori kapiju
-    If GetSetting(IMPORT_REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
-    If GetSetting(IMPORT_REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
-    If GetSetting(IMPORT_REG_APP, sec, "hardn", "") <> CStr(CsvCount(mHard)) Then Exit Function
-    SaveSetting IMPORT_REG_APP, sec, "phase", "2"      ' <- kapija, poslednja
+    SaveSetting IMP_REG_APP, sec, "selfnote", Cap(mSelfNote, 300)
+    SaveSetting IMP_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    If gate = PHASE_MERGE Then
+        If Len(mMergeToken) = 0 Then Exit Function
+        SaveSetting IMP_REG_APP, sec, "queue", mMergeQueue
+        SaveSetting IMP_REG_APP, sec, "qn", CStr(CsvCount(mMergeQueue))
+        SaveSetting IMP_REG_APP, sec, "qi", "0"
+        SaveSetting IMP_REG_APP, sec, "tok", mMergeToken
+    End If
+    SaveSetting IMP_REG_APP, sec, "pending", "1"
+    ' procitaj nazad ono od cega sledeci tik zavisi; tek ako je leglo, otvori kapiju
+    If GetSetting(IMP_REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
+    If GetSetting(IMP_REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
+    If GetSetting(IMP_REG_APP, sec, "hardn", "") <> CStr(CsvCount(mHard)) Then Exit Function
+    If gate = PHASE_MERGE Then
+        If GetSetting(IMP_REG_APP, sec, "queue", Chr$(1)) <> mMergeQueue Then Exit Function
+        If GetSetting(IMP_REG_APP, sec, "qn", "") <> CStr(CsvCount(mMergeQueue)) Then Exit Function
+        If GetSetting(IMP_REG_APP, sec, "qi", "") <> "0" Then Exit Function
+        If GetSetting(IMP_REG_APP, sec, "tok", Chr$(1)) <> mMergeToken Then Exit Function
+    End If
+    SaveSetting IMP_REG_APP, sec, "phase", gate     ' <- kapija, poslednja
     SaveImportPhase2State = True
     Exit Function
 EH:
@@ -1426,22 +1694,26 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     '      funkciji koja postoji da ga sacuva.
     '   2. phase=1 - zaostao OnTime iz ranijeg prolaza vise ne sme da udje u fazu 2.
     '   3. tek onda podaci ovog prolaza.
-    SaveSetting IMPORT_REG_APP, sec, "prevbackup", mPrevBackup
-    SaveSetting IMPORT_REG_APP, sec, "phase", "1"
+    SaveSetting IMP_REG_APP, sec, "prevbackup", mPrevBackup
+    SaveSetting IMP_REG_APP, sec, "phase", "1"
     If Len(mPrevBackup) > 0 Then
         ' procitaj nazad pre nego sto prepises "backup" - ako pokazivac nije legao,
         ' nova transakcija se NE otvara (import se ne pokrece)
-        If GetSetting(IMPORT_REG_APP, sec, "prevbackup", "") <> mPrevBackup Then Exit Function
+        If GetSetting(IMP_REG_APP, sec, "prevbackup", "") <> mPrevBackup Then Exit Function
     End If
-    SaveSetting IMPORT_REG_APP, sec, "dir", folder
-    SaveSetting IMPORT_REG_APP, sec, "backup", bkPath
-    SaveSetting IMPORT_REG_APP, sec, "hard", ""
-    SaveSetting IMPORT_REG_APP, sec, "hardn", "0"
-    SaveSetting IMPORT_REG_APP, sec, "gone", ""
-    SaveSetting IMPORT_REG_APP, sec, "formnew", "0"
-    SaveSetting IMPORT_REG_APP, sec, "sum", ""
-    SaveSetting IMPORT_REG_APP, sec, "selfnote", ""
-    SaveSetting IMPORT_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    SaveSetting IMP_REG_APP, sec, "dir", folder
+    SaveSetting IMP_REG_APP, sec, "backup", bkPath
+    SaveSetting IMP_REG_APP, sec, "hard", ""
+    SaveSetting IMP_REG_APP, sec, "hardn", "0"
+    SaveSetting IMP_REG_APP, sec, "gone", ""
+    SaveSetting IMP_REG_APP, sec, "formnew", "0"
+    SaveSetting IMP_REG_APP, sec, "sum", ""
+    SaveSetting IMP_REG_APP, sec, "selfnote", ""
+    SaveSetting IMP_REG_APP, sec, "recnote", Cap(mRecNote, 300)
+    SaveSetting IMP_REG_APP, sec, "queue", ""
+    SaveSetting IMP_REG_APP, sec, "qn", "0"
+    SaveSetting IMP_REG_APP, sec, "qi", "0"
+    SaveSetting IMP_REG_APP, sec, "tok", ""
     ' "mutated" se NAMERNO NE resetuje ovde. Nov pokusaj importa NIJE dokaz da
     ' je raniji popravljen: BeginImportTransaction se izvrsava PRE teardown-a i
     ' PRE ValidateFormDesigner, pa prolaz koji tu padne nije nista popravio --
@@ -1450,7 +1722,7 @@ Private Function BeginImportTransaction(ByVal folder As String, ByVal bkPath As 
     ' cele transakcije (ClearImportPhase2State), tj. verifikovan uspeh ili
     ' dokaz da je projekat vec usaglasen. Isti princip po kome RecoverImportState
     ' ne brise zatecen marker.
-    SaveSetting IMPORT_REG_APP, sec, "pending", "1"
+    SaveSetting IMP_REG_APP, sec, "pending", "1"
     BeginImportTransaction = True
     Exit Function
 EH:
@@ -1459,9 +1731,216 @@ End Function
 
 Private Sub ClearImportPhase2State()
     On Error Resume Next
-    DeleteSetting IMPORT_REG_APP, P2Section()
+    DeleteSetting IMP_REG_APP, P2Section()
+    ThisWorkbook.Names(IMPORT_TOKEN_NAME).Delete   ' token lanca ne ide u snimljenu svesku
     Err.Clear
 End Sub
+
+' Napredak lanca posle JEDNOG koraka. hard/gone/sum idu pre kursora, pa kursor
+' nikad ne legne preko stanja koje faza 2 cita. False = stanje nije leglo (FAIL,
+' marker ostaje).
+Private Function SaveMergeProgress(ByVal nextIndex As Long) As Boolean
+    Dim sec As String: sec = P2Section()
+    On Error GoTo EH
+    SaveSetting IMP_REG_APP, sec, "hard", mHard
+    SaveSetting IMP_REG_APP, sec, "hardn", CStr(CsvCount(mHard))
+    SaveSetting IMP_REG_APP, sec, "gone", mGone
+    SaveSetting IMP_REG_APP, sec, "sum", Cap(mSum, 900)
+    If GetSetting(IMP_REG_APP, sec, "hard", Chr$(1)) <> mHard Then Exit Function
+    If GetSetting(IMP_REG_APP, sec, "gone", Chr$(1)) <> mGone Then Exit Function
+    SaveSetting IMP_REG_APP, sec, "qi", CStr(nextIndex)
+    SaveMergeProgress = (GetSetting(IMP_REG_APP, sec, "qi", "") = CStr(nextIndex))
+    Exit Function
+EH:
+    SaveMergeProgress = False
+End Function
+
+' Zakazi tik importa (lanac ili faza 2) i upisi TACNO vreme i proceduru u
+' registar. Vreme ide kroz tekst "yyyy-mm-dd hh:nn:ss" - zakazivanje i
+' otkazivanje tada koriste isti CDate (obrazac iz modOtkupUI toast-a).
+' Module-level vreme ne bi preziveo izmenu koda, pa bi otkazivanje tiho promasilo.
+Private Function ScheduleImportTick(ByVal procName As String, ByVal delaySec As Long) As Boolean
+    Dim sec As String, dueS As String
+    sec = P2Section()
+    On Error GoTo EH
+    dueS = Format$(Now + TimeSerial(0, 0, delaySec), "yyyy-mm-dd hh:nn:ss")
+    SaveSetting IMP_REG_APP, sec, "due", dueS
+    SaveSetting IMP_REG_APP, sec, "dueproc", procName
+    Application.OnTime CDate(dueS), QualifiedProc(procName)
+    ScheduleImportTick = True
+    Exit Function
+EH:
+    ScheduleImportTick = False
+End Function
+
+' Otkazi tik koji je zakazao raniji prolaz (vreme i procedura iz registra).
+' Fail-soft: tik koji je vec opalio, ili ga nema, tiho se preskace. Marker i
+' ostalo stanje se NE diraju.
+Private Sub CancelPendingImportTick()
+    Dim sec As String, dueS As String, procName As String
+    sec = P2Section()
+    On Error Resume Next
+    dueS = GetSetting(IMP_REG_APP, sec, "due", "")
+    procName = GetSetting(IMP_REG_APP, sec, "dueproc", "")
+    If Len(dueS) > 0 And Len(procName) > 0 Then
+        Application.OnTime EarliestTime:=CDate(dueS), Procedure:=QualifiedProc(procName), Schedule:=False
+    End If
+    Err.Clear
+End Sub
+
+' Nov token sesije lanca, upisan u skriveno ime sveske (registar ga dobija u
+' SaveImportPhase2State). Ime prezivi izmenu koda, ali ne i zatvaranje bez
+' snimanja. "" = ime nije leglo.
+Private Function NewImportToken() As String
+    Dim tok As String
+    On Error GoTo EH
+    Randomize
+    tok = Format$(Now, "yyyymmddhhnnss") & "-" & CStr(Int(Rnd() * 1000000000#))
+    ThisWorkbook.Names.Add IMPORT_TOKEN_NAME, "=""" & tok & """", False
+    If ImportTokenName() = tok Then NewImportToken = tok
+    Exit Function
+EH:
+    NewImportToken = ""
+End Function
+
+' Token iz skrivenog imena sveske; "" kad ga nema.
+Private Function ImportTokenName() As String
+    Dim refTxt As String
+    On Error Resume Next
+    refTxt = ThisWorkbook.Names(IMPORT_TOKEN_NAME).RefersTo
+    On Error GoTo 0
+    If Len(refTxt) > 3 And Left$(refTxt, 2) = "=""" And Right$(refTxt, 1) = """" Then
+        ImportTokenName = Mid$(refTxt, 3, Len(refTxt) - 3)
+    End If
+End Function
+
+' Da li ova otvorena sveska nosi token lanca koji je zapisan u registru.
+Private Function ImportTokenMatches(ByVal sec As String) As Boolean
+    Dim tok As String
+    tok = GetSetting(IMP_REG_APP, sec, "tok", "")
+    ImportTokenMatches = (Len(tok) > 0 And ImportTokenName() = tok)
+End Function
+
+' Faza 1, PRE ijedne izmene, dok je projekat jos ceo: da li kopija kljuca u
+' modVbaTools (IMP_REG_APP + P2Section) i kanon u modImportState daju isto.
+' Inace bi Save kapija i alat gledali razlicite markere. "" = isti.
+Private Function ImportKeyMismatch() As String
+    Dim kanonApp As String, kanonSec As String
+    On Error GoTo EH
+    kanonApp = modImportState.IMPORT_REG_APP
+    kanonSec = modImportState.ImportSekcija()
+    If StrComp(kanonApp, IMP_REG_APP, vbBinaryCompare) <> 0 Or _
+       StrComp(kanonSec, P2Section(), vbBinaryCompare) <> 0 Then
+        ImportKeyMismatch = "Kljuc registra importa u modVbaTools (" & IMP_REG_APP & " / " & P2Section() & ")" & vbCrLf & _
+            "nije isti kao u modImportState (" & kanonApp & " / " & kanonSec & ")." & vbCrLf & _
+            "Save kapija i alat bi gledali razlicite markere." & vbCrLf & vbCrLf & _
+            "Ako si upravo ubacio NOVI modVbaTools: ubaci i modImportState.bas iz istog" & vbCrLf & _
+            "src-vba. Inace ubaci modVbaTools iz src-vba. Oba paste-om u VBE, pa ponovi." & vbCrLf & _
+            "Ako su OBA vec iz istog src-vba: izvor je nedosledan (P2Section/IMP_REG_APP" & vbCrLf & _
+            "u modVbaTools.bas protiv ImportSekcija/IMPORT_REG_APP) - popravlja se u izvoru."
+    End If
+    Exit Function
+EH:
+    ImportKeyMismatch = "Provera kljuca registra nije uspela: [" & Err.Number & "] " & Err.description
+End Function
+
+' PREFLIGHT: da li izvor menja kljuc registra importa (modImportState)? Takav
+' import lanac NE sme da vodi: od tika koji spoji novi modImportState do kraja
+' lanca Save kapija bi citala sekciju bez markera, a pad u tom delu bi je ostavio
+' otvorenu zauvek. Poredi se STATICKI, bez izvrsavanja (ImportKeyDiffers); isto
+' poredjenje ponavlja i tik koji spaja modImportState (izvor se mogao promeniti
+' posle preflight-a). "" = kljuc isti ili modImportState nije u planu.
+Private Function ImportKeyChangeInPlan() As String
+    Dim lname As String, okOut As Boolean, cur As String, novo As String
+    lname = LCase$(IMPORT_STATE_MODULE)
+    If Not mAct.Exists(lname) Then Exit Function
+    If mAct(lname) <> "soft" Then Exit Function
+    cur = ComponentCode(ThisWorkbook.VBProject.VBComponents(IMPORT_STATE_MODULE), okOut)
+    If Not okOut Then
+        ImportKeyChangeInPlan = "Ne moze da se procita kod komponente " & IMPORT_STATE_MODULE & "."
+        Exit Function
+    End If
+    novo = ExtractModuleCode(CStr(mSrcFile(lname)))
+    If Not ImportKeyDiffers(cur, novo) Then Exit Function
+    ImportKeyChangeInPlan = "Izvor MENJA kljuc registra importa (" & IMPORT_STATE_MODULE & ": IMPORT_REG_APP" & vbCrLf & _
+        "ili ImportSekcija). Lanac code merge-a to ne sme da vodi: od tika koji spoji" & vbCrLf & _
+        "novi " & IMPORT_STATE_MODULE & " do kraja lanca Save kapija bi citala sekciju bez markera." & vbCrLf & vbCrLf & _
+        "Rucno, jednom: ubaci " & IMPORT_STATE_MODULE & ".bas i " & SELF_MODULE & ".bas iz istog src-vba" & vbCrLf & _
+        "(paste u VBE), pa pokreni ImportAllVBA."
+End Function
+
+' True = kljuc registra u kodu projekta i u telu iz izvora NIJE isti (ili ga u
+' izvoru nema). Poredjenje je strogo, kao u ImportKeyMismatch/KeyChangedByImport.
+Private Function ImportKeyDiffers(ByVal projCode As String, ByVal srcBody As String) As Boolean
+    Dim f As String
+    f = ImportKeyFragment(srcBody)
+    ImportKeyDiffers = (Len(f) = 0 Or StrComp(ImportKeyFragment(projCode), f, vbBinaryCompare) <> 0)
+End Function
+
+' Kljuc registra kako ga kod modImportState definise: linija sa IMPORT_REG_APP i
+' telo funkcije ImportSekcija. Nastavci reda (" _") spojeni, komentari skinuti,
+' mala slova i sazet razmak IZVAN stringova (VBE re-casing identifikatora), a
+' string literali ostaju netaknuti - "a" i "A" u formuli nisu isti kljuc.
+Private Function ImportKeyFragment(ByVal code As String) As String
+    Dim arr() As String, i As Long, u As String, uFn As Boolean, out As String, red As String
+    arr = Split(Replace$(Replace$(code, vbCrLf, vbLf), vbCr, vbLf), vbLf)
+    For i = 0 To UBound(arr)
+        red = red & arr(i)
+        If Right$(RTrim$(red), 2) = " _" Then
+            red = Left$(RTrim$(red), Len(RTrim$(red)) - 1)
+        Else
+            u = Trim$(LowerOutsideStrings(CodeWithoutComment(red)))
+            red = ""
+            If uFn Then
+                If Len(u) > 0 Then out = out & u & vbLf
+                If u Like "end function*" Then uFn = False
+            ElseIf InStr(1, u, "const import_reg_app ") > 0 Then
+                out = out & u & vbLf
+            ElseIf u Like "*function importsekcija(*" Then
+                uFn = True
+                out = out & u & vbLf
+            End If
+        End If
+    Next i
+    ImportKeyFragment = out
+End Function
+
+' Kodni deo linije: sve do prvog apostrofa van stringa, bez promene slova.
+Private Function CodeWithoutComment(ByVal s As String) As String
+    Dim i As Long, inQ As Boolean, ch As String
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch = """" Then inQ = Not inQ
+        If ch = "'" And Not inQ Then
+            CodeWithoutComment = Left$(s, i - 1)
+            Exit Function
+        End If
+    Next i
+    CodeWithoutComment = s
+End Function
+
+' Kraj lanca, REZERVA iza ImportKeyChangeInPlan: projekat je sada ceo, pa se NOVI
+' modImportState sme izvrsiti. Ako je kljuc ipak promenjen (npr. promena koju
+' staticko poredjenje ne vidi), Save kapija od sada gleda DRUGU sekciju - marker
+' se upisuje i tamo, pa FAIL: alat sa starom formulom ne sme dalje da vodi
+' transakciju. "" = kljuc isti.
+Private Function KeyChangedByImport() As String
+    Dim newApp As String, newSec As String
+    On Error GoTo EH
+    newApp = modImportState.IMPORT_REG_APP
+    newSec = modImportState.ImportSekcija()
+    If StrComp(newApp, IMP_REG_APP, vbBinaryCompare) = 0 And _
+       StrComp(newSec, P2Section(), vbBinaryCompare) = 0 Then Exit Function
+    SaveSetting newApp, newSec, "pending", "1"
+    SaveSetting newApp, newSec, "mutated", "1"
+    KeyChangedByImport = "Izvor je PROMENIO kljuc registra importa (modImportState):" & vbCrLf & _
+        "  bio " & IMP_REG_APP & " / " & P2Section() & ", sada " & newApp & " / " & newSec & vbCrLf & _
+        "Marker je upisan pod OBA kljuca - Save ostaje blokiran." & vbCrLf & _
+        "Ubaci novi modVbaTools (paste iz src-vba), pa ponovi ImportAllVBA."
+    Exit Function
+EH:
+    KeyChangedByImport = "Provera kljuca registra posle merge-a nije uspela: [" & Err.Number & "] " & Err.description
+End Function
 
 ' Zaostalo stanje prekinute faze 2: PROCITAJ i prijavi, ali NE BRISI.
 '
@@ -1470,22 +1949,25 @@ End Sub
 ' ili operater klikne Ne na potvrdu. Tada bi upozorenje nestalo, a projekat ostao
 ' nepotpun; sledeci Save bi ga zabetonirao bez ijedne reci.
 '
-' Marker se brise na TACNO tri mesta, i nijedno nije "backup je uspeo":
+' Marker se brise samo ovde, i nijedno mesto nije "backup je uspeo":
 '   1. plan bez ijedne razlike i bez viska (dokaz da je projekat vec usaglasen),
-'   2. verifikovan uspeh faze 1 (kad faza 2 nije potrebna),
-'   3. verifikovan uspeh faze 2.
-' Pad posle prve mutacije ga NIKAD ne brise.
+'   2. verifikovan uspeh bez faze 2 (CompleteAfterMerges - iz faze 1 ili sa
+'      kraja lanca code merge-a),
+'   3. verifikovan uspeh faze 2,
+'   4. pad faze 1 PRE ijedne mutacije, i to samo kad ni raniji prolaz nije
+'      ostavio nerazresenu mutaciju (mMutated nasledjen iz ImportNijeDovrsen).
+' Pad posle prve mutacije ga NIKAD ne brise - ni u lancu, ni u fazi 2.
 ' Vraca napomenu za izvestaj ("" ako nije bilo nicega).
 Private Function RecoverImportState() As String
     Dim sec As String: sec = P2Section()
     On Error Resume Next
     mPrevBackup = ""
-    If GetSetting(IMPORT_REG_APP, sec, "pending", "") = "1" Then
+    If GetSetting(IMP_REG_APP, sec, "pending", "") = "1" Then
         ' Backup PREKINUTE transakcije je poslednji snimak za koji znamo da je
         ' nastao pre nego sto je projekat postao nepotpun. Nosi se kroz nov prolaz
         ' (prevbackup) jer novi SaveCopyAs snima VEC nepotpuno stanje.
-        mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "prevbackup", "")
-        If Len(mPrevBackup) = 0 Then mPrevBackup = GetSetting(IMPORT_REG_APP, sec, "backup", "")
+        mPrevBackup = GetSetting(IMP_REG_APP, sec, "prevbackup", "")
+        If Len(mPrevBackup) = 0 Then mPrevBackup = GetSetting(IMP_REG_APP, sec, "backup", "")
         RecoverImportState = "PAZNJA: zatecen je prekinut raniji import." & vbCrLf & _
             "Projekat je mozda NEPOTPUN. Poslednji siguran backup: " & _
             IIf(Len(mPrevBackup) > 0, mPrevBackup, "?") & vbCrLf & _
@@ -1501,9 +1983,17 @@ Private Function RecoverImportState() As String
 End Function
 
 ' Sekcija u registru scope-ovana po radnoj svesci - dve otvorene kopije ne dele
-' stanje faze 2.
+' stanje. KOPIJA modImportState.ImportSekcija (ista formula, znak po znak): tik
+' lanca je zove nad projektom koji je mesavina starog i novog koda, pa ne sme da
+' izvrsava modImportState. Istovetnost proverava ImportKeyMismatch na startu.
 Private Function P2Section() As String
-    P2Section = modImportState.ImportSekcija()
+    Dim s As String, i As Long, ch As String, out As String
+    s = ThisWorkbook.name
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If (ch >= "0" And ch <= "9") Or (UCase$(ch) >= "A" And UCase$(ch) <= "Z") Then out = out & ch
+    Next i
+    P2Section = "import_" & out
 End Function
 
 ' Workbook-kvalifikovano ime procedure ("'Ime.xlsm'!Proc") - kad su dve kopije

@@ -14,9 +14,12 @@ Attribute VB_Name = "modImportState"
 '   kapije je zvala modVbaTools.ImportNijeDovrsen direktno i RunAllTests je
 '   visila 389s umesto da prijavi ijedan rezultat.
 '
-' Formula sekcije i ime registra zive OVDE, a modVbaTools ih koristi -- dve
-' kopije istog kljuca su tacno ona vrsta divergencije zbog koje postoji
-' tools/vba_parity_check.py.
+' Formula sekcije i ime registra su KANON ovde. modVbaTools nosi kopiju, jer
+' tik lanca code merge-a ne sme da izvrsava ovaj modul (izmedju tikova je
+' projekat mesavina starog i novog koda) -- a da kopija ne bi tiho divergirala,
+' ImportAllVBA na svakom startu uporedi obe i odbije import pre ijedne izmene
+' (modVbaTools.ImportKeyMismatch), a CI staticki trazi da su iste
+' (tools/vba_import_marker_gate.py, pravilo KLJUC).
 '
 ' NAMERNO ne pokriva self-update: njegov marker je u drugom registru
 ' ("AgriXSelfUpdate", modSelfUpdate), a njegov SaveWorkbookVerified je
@@ -55,8 +58,8 @@ End Function
 ' True dok stoji marker prekinutog importa.
 '
 ' Marker znaci "raniji prolaz je mozda ostavio projekat nepotpun". Postavlja ga
-' BeginImportTransaction, a brise se na tacno tri mesta (modVbaTools:
-' RecoverImportState), i nijedno nije "backup je uspeo".
+' BeginImportTransaction, a brise se samo na mestima popisanim u
+' modVbaTools.RecoverImportState, i nijedno nije "backup je uspeo".
 '
 ' 12.09.2026: zastita je do tada bio KOMENTAR u modVbaTools -- "sledeci Save bi
 ' ga zabetonirao bez ijedne reci". Import je pukao usred pisanja modLogo
