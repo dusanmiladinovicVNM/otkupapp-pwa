@@ -142,9 +142,9 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
     Next i
     If rows.count = 0 Then Err.Raise ERR_SZ_BASE + 3, SRC, "Operacija nije nadjena: " & opID
 
-    ' Garde (broj-level): dead-parent (otkup) + active-dup ambalaze (revers). Otkup
-    ' active-dup se proverava PO REDU nize (parcijalna klasa).
-    Dim gr As String: gr = UndoGuardReason(docType, broj)
+    ' Garde: dead-parent (otkup) + active-dup ambalaze (revers, po KLJUCU iz redova
+    ' ove operacije). Otkup active-dup se proverava PO REDU nize (parcijalna klasa).
+    Dim gr As String: gr = UndoGuardReasonZaOp(opID, docType, broj)
     If Len(gr) > 0 Then Err.Raise ERR_SZ_BASE + 4, SRC, gr
 
     ' Pre-validacija (SVE-ILI-NISTA) PRE ijedne mutacije:
@@ -198,6 +198,94 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     UndoOperation_TX = False
+End Function
+
+' Undo garda za KONKRETNU operaciju -- ista kapija za UndoOperation_TX i za ekran
+' Oporavak (VratiStorno). Za revers kljuc (stanica, dan) dolazi iz redova koje je
+' BAS ova operacija stornirala (noga Stanica), ne iz broja: isti broj reversa
+' legalno nosi i revers druge stanice ili drugog dana (A2), pa bi garda po broju
+' odbila legitiman undo ili pustila duplikat.
+' FAIL-CLOSED: operacija bez noge Stanica, sa vise kljuceva, ili greska -> razlog.
+Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As String, _
+                                    ByVal broj As String) As String
+    Dim st As String, dan As Long, raz As String
+    On Error GoTo EH
+    If Not ReversTipJe(docType) Then
+        UndoGuardReasonZaOp = UndoGuardReason(docType, broj)
+        Exit Function
+    End If
+    raz = ReversKljucOperacije(opID, st, dan)
+    If Len(raz) > 0 Then
+        UndoGuardReasonZaOp = raz
+        Exit Function
+    End If
+    UndoGuardReasonZaOp = UndoGuardReason(docType, broj, st, dan)
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".UndoGuardReasonZaOp"
+    UndoGuardReasonZaOp = "Greska pri proveri undo garde -> odbijeno (fail-closed)."
+End Function
+
+' (stanica, dan) reversa iz AmbID-eva koje je operacija opID stornirala.
+' "" = tacno jedan kljuc (ByRef popunjen); inace razlog.
+Private Function ReversKljucOperacije(ByVal opID As String, ByRef stanicaID As String, _
+                                      ByRef dan As Long) As String
+    Const SRC As String = MOD_NAME & ".ReversKljucOperacije"
+    Dim ids As Object: Set ids = CreateObject("Scripting.Dictionary")
+    ids.CompareMode = vbTextCompare
+    Dim i As Long
+    stanicaID = ""
+
+    Dim z As Variant: z = GetTableData(TBL_STORNO_ZURNAL)
+    If IsArray(z) Then
+        Dim cOp As Long, cTbl As Long, cRow As Long
+        cOp = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID, SRC)
+        cTbl = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA, SRC)
+        cRow = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID, SRC)
+        For i = 1 To UBound(z, 1)
+            If Trim$(NzToText(z(i, cOp))) = Trim$(opID) Then
+                If StrComp(Trim$(NzToText(z(i, cTbl))), TBL_AMBALAZA, vbTextCompare) = 0 Then
+                    ids(Trim$(NzToText(z(i, cRow)))) = True
+                End If
+            End If
+        Next i
+    End If
+    If ids.count = 0 Then
+        ReversKljucOperacije = "Operacija " & opID & " nema redova ambalaze -> kljuc " & _
+                               "reversa nije poznat. Odbijeno."
+        Exit Function
+    End If
+
+    Dim nasao As String, k As String
+    Dim a As Variant: a = GetTableData(TBL_AMBALAZA)
+    If IsArray(a) Then
+        Dim cID As Long, cEnt As Long, cEntTip As Long, cDat As Long
+        cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
+        cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+        cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+        cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+        For i = 1 To UBound(a, 1)
+            If ids.Exists(Trim$(NzToText(a(i, cID)))) Then
+                If Trim$(NzToText(a(i, cEntTip))) = "Stanica" And IsDate(a(i, cDat)) Then
+                    k = UCase$(Trim$(NzToText(a(i, cEnt)))) & "|" & CStr(Int(CDbl(CDate(a(i, cDat)))))
+                    If Len(nasao) = 0 Then
+                        nasao = k
+                        stanicaID = Trim$(NzToText(a(i, cEnt)))
+                        dan = Int(CDbl(CDate(a(i, cDat))))
+                    ElseIf k <> nasao Then
+                        stanicaID = ""
+                        ReversKljucOperacije = "Operacija " & opID & " je stornirala noge Stanica " & _
+                                               "vise stanica ili dana -> undo nije jednoznacan. Odbijeno."
+                        Exit Function
+                    End If
+                End If
+            End If
+        Next i
+    End If
+    If Len(nasao) = 0 Then
+        ReversKljucOperacije = "Operacija " & opID & " nije stornirala nogu Stanica -> stanica " & _
+                               "i dan reversa nisu poznati. Odbijeno (fail-closed)."
+    End If
 End Function
 
 Private Sub RestoreCell(ByVal tbl As String, ByVal rowID As String, _
@@ -302,6 +390,55 @@ Public Function LatestOpFor(ByVal docType As String, ByVal broj As String) As St
     Exit Function
 EH:
     LogErr MOD_NAME & ".LatestOpFor"
+End Function
+
+' Najskoriji OperationID za revers (docType, broj) CIJI je kljuc (stanica, dan) --
+' kljuc se cita iz redova koje je operacija stornirala. Broj reversa je jedinstven
+' tek u nizu (stanica, dan), pa "poslednja operacija po broju" (LatestOpFor) moze
+' biti tudja: storno reversa iste oznake na drugoj stanici, i to vec vracen.
+' Poslednja operacija ISTOG kljuca je ona koja drzi trenutno storno: undo ne pravi
+' novu operaciju, a svaki nov storno pravi.
+' "" = nema operacije tog kljuca (storno pre zurnala). Greska se DIZE: bez nje bi
+' pozivalac tiho presao na put bez zurnala.
+Public Function LatestOpForRevers(ByVal docType As String, ByVal broj As String, _
+                                  ByVal stanicaID As String, ByVal dan As Long) As String
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+    Dim cOp As Long, cDoc As Long, cBroj As Long
+    cOp = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID, MOD_NAME & ".LatestOpForRevers")
+    cDoc = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_DOCTYPE, MOD_NAME & ".LatestOpForRevers")
+    cBroj = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_BROJ, MOD_NAME & ".LatestOpForRevers")
+
+    Dim ops As Object: Set ops = CreateObject("Scripting.Dictionary")
+    Dim i As Long, opv As String
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cDoc))), docType, vbTextCompare) = 0 _
+           And StrComp(Trim$(NzToText(data(i, cBroj))), Trim$(broj), vbTextCompare) = 0 Then
+            opv = Trim$(NzToText(data(i, cOp)))
+            If Len(opv) > 0 Then ops(opv) = OpNum4(opv, "SOP-")
+        End If
+    Next i
+
+    Dim best As String, bestN As Long, k As Variant, st As String, dn As Long
+    bestN = -1
+    For Each k In ops.keys
+        If CLng(ops(k)) > bestN Then
+            If Len(ReversKljucOperacije(CStr(k), st, dn)) = 0 Then
+                If StrComp(st, Trim$(stanicaID), vbTextCompare) = 0 And dn = dan Then
+                    best = CStr(k)
+                    bestN = CLng(ops(k))
+                End If
+            End If
+        End If
+    Next k
+    LatestOpForRevers = best
+    Exit Function
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    LogErr MOD_NAME & ".LatestOpForRevers"
+    Err.Raise errNum, MOD_NAME & ".LatestOpForRevers", errDesc
 End Function
 
 ' Numericki deo ID-a sa datim prefiksom (SOP-/ZUR-). 0 ako ne pasuje.

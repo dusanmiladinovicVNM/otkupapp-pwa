@@ -256,6 +256,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_DraftBrojIzuzimaSebe
     Test_ZBR_StorniranBrojIstogVozacaOdbijen
     Test_ZBR_IspravkaPodNovimBrojem
+    Test_BKTX_ReversPisacOdbijaZauzet
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -9728,6 +9729,145 @@ Private Sub Test_BKTX_ReversSudiSamoAmbalazu()
 EH:
     LogFatal "Test_BKTX_ReversSudiSamoAmbalazu", Err.Number, Err.description
 End Sub
+
+' ZAUZETOST BROJA REVERSA U PISCU -- SaveOMUlaz_TX, po nizu (stanica, dan), sa
+' storniranima (A2 red REV, A9). Plus storno i undo po kljucu: isti broj legalno
+' nose reversi druge stanice i drugog dana, pa ni storno ni undo ne biraju po broju.
+'
+' Nivo merenja: poslovni broj u nizu. Smer IZDATO_OM pise JEDNU nogu (Stanica),
+' pa je broj redova tblAmbalaza isto sto i broj dokumenata. Broj je nekanonski,
+' da kapija konteksta ne sudi -- meri se samo zauzetost.
+'
+' SABOTAZE: ukloni RequireBrojSlobodanUNizu iz SaveOMUlaz_TX -> pukne "pisac
+' odbija isti broj, stanicu i dan"; preskoci stornirane u BrojZauzetRevers ->
+' pukne "storno ne oslobadja broj reversa"; u ReversKljucRazresi uzmi prvi
+' pogodak -> pukne "storno bez identiteta odbija dvosmislen broj".
+Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim scenario As String: scenario = NewScenarioCode("REVBZ")
+    Dim d As Date: d = NextTestDate()
+    Dim d2 As Date: d2 = DateAdd("d", 1, d)
+    Dim broj As String: broj = TEST_PREFIX & "-REV-BZ-" & scenario
+
+    Dim ok As Boolean, pre As Long
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+    AssertTrue ok, "REV broj: prvi revers se upisuje"
+
+    pre = CountRows(TBL_AMBALAZA)
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+    AssertFalse ok, "REV broj: pisac odbija isti broj, stanicu i dan"
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="PRIJEM_OD_OM")
+    AssertFalse ok, "REV broj: drugi smer istog broja je isti niz"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV broj: odbijeni upisi nisu ostavili red"
+
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                       stanicaNaziv:="Test OM 2", stanicaID:=BKTX_ST2, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=7, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+    AssertTrue ok, "REV broj: druga stanica istog dana prima isti broj (A2)"
+    ok = SaveOMUlaz_TX(datum:=d2, brojDok:=broj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=9, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+    AssertTrue ok, "REV broj: drugi dan iste stanice prima isti broj"
+
+    Dim ambA As String, ambB As String, ambC As String
+    ambA = AmbIDNogeStanice(broj, TEST_ST_ID, d)
+    ambB = AmbIDNogeStanice(broj, BKTX_ST2, d)
+    ambC = AmbIDNogeStanice(broj, TEST_ST_ID, d2)
+    AssertTrue Len(ambA) > 0 And Len(ambB) > 0 And Len(ambC) > 0, _
+               "REV storno: preduslov -- tri reversa istog broja postoje"
+
+    ' Storno: bez identiteta broj je dvosmislen; sa identitetom pada samo taj revers.
+    AssertFalse StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_FIRMA), _
+                "REV storno: bez identiteta odbija dvosmislen broj"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA) Or _
+                RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambB) Or _
+                RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambC), _
+                "REV storno: odbijen storno nije dirao nijedan revers"
+    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_FIRMA, ambA), _
+               "REV storno: storno po identitetu reda prolazi"
+    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA), _
+               "REV storno: storniran je izabrani revers"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambB), _
+                "REV storno: revers istog broja na drugoj stanici ostaje aktivan"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambC), _
+                "REV storno: revers istog broja drugog dana ostaje aktivan"
+
+    ' Storno ne oslobadja broj (A9): ni pisac ni ekran.
+    pre = CountRows(TBL_AMBALAZA)
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+    AssertFalse ok, "REV broj: storno ne oslobadja broj reversa -- pisac (A9)"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV broj: odbijen upis posle storna nije ostavio red"
+    AssertEquals ambA, modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, TEST_ST_ID, d, broj), _
+                 "REV broj: storno ne oslobadja broj reversa -- provera vraca storniranu nogu"
+
+    ' Undo po operaciji: garda pita kljuc operacije, pa aktivni reversi istog broja
+    ' na drugoj stanici i drugog dana ne blokiraju vracanje.
+    AssertTrue UndoOperation_TX(LatestOpFor(DOK_TIP_OM_ULAZ_FIRMA, broj)), _
+               "REV undo: reversi istog broja drugde ne blokiraju vracanje (garda po kljucu)"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA), _
+                "REV undo: izabrani revers je ponovo aktivan"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ReversPisacOdbijaZauzet", Err.Number, Err.description
+End Sub
+
+' AmbID noge Stanica reversa (broj, stanica, dan) -- identitet reda, onako kako ga
+' salje ekran Storno. Prazno kad nema.
+Private Function AmbIDNogeStanice(ByVal broj As String, ByVal stanicaID As String, _
+                                  ByVal d As Date) As String
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cID As Long, cDok As Long, cEnt As Long, cEntTip As Long, cDat As Long, i As Long
+    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    If cID = 0 Or cDok = 0 Or cEnt = 0 Or cEntTip = 0 Or cDat = 0 Then Exit Function
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cDok))) = broj And Trim$(NzToText(data(i, cEnt))) = stanicaID _
+           And Trim$(NzToText(data(i, cEntTip))) = "Stanica" Then
+            If IsDate(data(i, cDat)) Then
+                If Int(CDbl(CDate(data(i, cDat)))) = Int(CDbl(d)) Then
+                    AmbIDNogeStanice = Trim$(NzToText(data(i, cID)))
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
 
 ' RUCNI REZIM. Kad je auto-broj iskljucen u Podesavanjima, operater kuca svoj
 ' broj -- i ostaje slobodan: broj koji ne govori kanonski jezik se ne sudi. Ali

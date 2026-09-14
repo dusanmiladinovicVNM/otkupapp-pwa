@@ -276,7 +276,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | F7: smer je **obavezan** uz količinu | `ReversValidiraj` | prazan smer je ranije tiho knjižio „OM prima od vozača" |
 | F7: auto-broj reversa kad je polje prazno | `ReversValidiraj` → `SuggestNextBroj(KIND_REV, …)` | posle izbora smera, kao u legacy |
 | F7: PDF revers i završetak ispravke posle upisa | `ReversUpisi` | best-effort, ne obara potvrdu upisa |
-| Broj novca **nije** u zajedničkom prostoru sa reversom (od 14.09.2026) | `DuplBroj` | F5/F6 **nemaju** proveru duplikata broja — broj novca nije jedinstven (izvod, split; `ARCHITECTURE_CONTRACT.md` A2 red NOV). F7 revers i dalje traži duplikat, ali samo u `tblAmbalaza`, do svog PR-a |
+| Broj novca **nije** u zajedničkom prostoru sa reversom (od 14.09.2026) | `DuplBroj` | F5/F6 **nemaju** proveru duplikata broja — broj novca nije jedinstven (izvod, split; `ARCHITECTURE_CONTRACT.md` A2 red NOV). F7 revers proverava zauzetost po nizu (stanica, dan), sa storniranima — `modBrojevi.BrojZauzetUNizu` (`KIND_REV`), ista provera kao u piscu `SaveOMUlaz_TX`; `DuplBroj` je obrisan |
 | **Vozač se za čist novac NE traži** | — | legacy ga traži uz `VALIDACIJA_UNOSA`, ali samo zbog ambalaže u istom dokumentu; `SaveNovac` ga nema, pa se odbacuje. U F7, gde ambalaža postoji, vozač je obavezan i **bez** `VALIDACIJA_UNOSA` (firma↔OM ide preko vozača) |
 | **F5: partner koji je otkupno mesto JESTE entitet novca** | `IsplataValidiraj` | polje se u F5 zove „Primalac". Legacy tu mogućnost nije imao — primalac je bio samo kooperant, a otkupno mesto se podrazumevalo iz konteksta forme. Kad je partner kooperant, entitet ostaje kontekst — tačno kao legacy |
 | **F7 ne prima kupca kao partnera** | `ReversValidiraj` | četiri smera idu isključivo kooperant ↔ OM ↔ firma; ambalaža kupca u legacy ide kroz prijemnicu (povrat) i kupci-izlaz, ne kroz revers |
@@ -384,7 +384,7 @@ je `"STORNO"` bio tih sinonim za `"OTPREMNICA"` u desetak `Col*` funkcija.
 | Izvod: „broj" ili „broj/račun" → jedan izvod | `ResolveIzvodZaStorno` | broj računa se čita iz **treće kolone reda**, ne iz mape — dva izvoda istog broja tako ostaju razlučiva |
 | Izvod: preflight blokada pre potvrde | `GetIzvodStornoBlokade` | razlog se vidi pre „Da", ne kao tih neuspeh posle |
 | Izvod: ishod REMAP vs REIMPORT | ekran (`StornoRedF8`) | to je **odluka operatera o PDF-u**, ne pravilo — zato je u ekranu, a ne u `modStornoDok` |
-| Revers: broj + **smer** | `StornoRazlog` → `ActiveAmbalazaDokExists` | četiri smera dele `KIND_REV`, pa broj sam ne kaže koji je red u `tblAmbalaza`; ekran smer nalazi tako što pita koji od četiri ima aktivan red |
+| Revers: **identitet reda** (smer, stanica, dan) | `IdKolonaTipa("REVERSI")` = `AmbID` → `StornoRazlog` / `StornoOMKoopByBrDok` → `ReversKljucRazresi` | četiri smera dele `KIND_REV`, a broj je jedinstven tek u nizu (stanica, dan) — ni broj ni broj + smer ne kažu koji je dokument. Smer se čita iz kliknutog reda; ranije je ekran uzimao „prvi od četiri tipa sa aktivnim redom pod brojem", što je davalo i tuđi smer (od 14.09.2026) |
 | Zbirna: upozorenje da aktivna prijemnica ostaje vezana | `StornoIzvrsi` | `StornoZbirna` namerno ne kaskadira na prijemnice; bez poruke operater ne zna da mu je ostao posao |
 | **Storno palete i prerade** | **NIJE preneto** | `StornoPaleta_TX` / `StornoPrerada_TX` pripadaju ekranu Palete (F8 nema tip „paleta"); tamo su i danas, kroz `modScrPalete` |
 

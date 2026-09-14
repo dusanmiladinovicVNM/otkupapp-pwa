@@ -523,8 +523,9 @@ End Sub
 ' izuzmiID: red koji se preskace, da izmena drafta sme da zadrzi SVOJ broj.
 '
 ' Nepoznata vrsta je GRESKA, ne "slobodno": prazan odgovor znaci da broj sme, pa
-' ne sme da nastane iz neznanja. REV i PRJ jos nisu ovde -- revers ide u sledeci
-' PR, prijemnica posle prelaska nizvodnih potrosaca na GeneracijaID.
+' ne sme da nastane iz neznanja. PRJ jos nije ovde -- prijemnica ide posle
+' prelaska nizvodnih potrosaca na GeneracijaID. REV ima svoju granu
+' (BrojZauzetRevers): dokument su dve noge u tblAmbalaza, a stanicu nosi samo jedna.
 Public Function BrojZauzetUNizu(ByVal kind As String, _
                                 ByVal entityID As String, _
                                 ByVal datum As Date, _
@@ -548,6 +549,9 @@ Public Function BrojZauzetUNizu(ByVal kind As String, _
         Case KIND_ZBR
             tbl = TBL_ZBIRNA: colBroj = COL_ZBR_BROJ: colDatum = COL_ZBR_DATUM
             colVlasnik = COL_ZBR_VOZAC: colID = COL_ZBR_ID
+        Case KIND_REV
+            BrojZauzetUNizu = BrojZauzetRevers(entityID, datum, broj, izuzmiID)
+            Exit Function
         Case Else
             Err.Raise vbObjectError + 1923, SRC, _
                       "Zauzetost broja nije definisana za vrstu '" & kind & "'."
@@ -602,6 +606,61 @@ Public Sub RequireBrojSlobodanUNizu(ByVal kind As String, _
               "vlasniku niza " & Trim$(entityID) & " dana " & Format$(datum, "dd.mm.yyyy") & _
               ": " & zauzeo & ". Storno ne oslobadja broj -- ispravka dobija NOV broj (A9)."
 End Sub
+
+' REV: niz je (stanica, dan) nad tblAmbalaza. Revers je DVE noge istog broja i
+' tipa, a stanicu nosi samo noga Stanica (noga Kooperant nosi kooperanta), pa
+' broj zauzima samo ona. Tip mora biti jedan od cetiri smera: smerovi dele jedan
+' niz (MaxSeqReversAmbalaza ih ne razlikuje), a ambalaza otkupa ili otpremnice
+' na istoj stanici nije revers. Stornirani se broje (A9).
+'
+' Red reversa bez noge Stanica (sinteticki seed) broj NE zauzima -- zato ga
+' storno i undo odbijaju (modStorno.ReversKljucRazresi), umesto da biraju
+' naslepo. Vraca AmbID noge Stanica koja drzi broj.
+Private Function BrojZauzetRevers(ByVal stanicaID As String, _
+                                  ByVal datum As Date, _
+                                  ByVal broj As String, _
+                                  ByVal izuzmiID As String) As String
+    Const SRC As String = "BrojZauzetRevers"
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cBr As Long, cDat As Long, cEnt As Long, cEntTip As Long
+    Dim cTip As Long, cID As Long
+    cBr = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
+
+    Dim dan As Long
+    dan = Int(CDbl(datum))
+
+    Dim i As Long, rowID As String
+    For i = 1 To UBound(d, 1)
+        If BrojJednak(d(i, cBr), broj) Then
+            If Trim$(NzToText(d(i, cEntTip))) = "Stanica" Then
+                If BrojJednak(d(i, cEnt), stanicaID) Then
+                    Select Case Trim$(NzToText(d(i, cTip)))
+                        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
+                             DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
+                            If IsDate(d(i, cDat)) Then
+                                If Int(CDbl(CDate(d(i, cDat)))) = dan Then
+                                    rowID = Trim$(NzToText(d(i, cID)))
+                                    If Len(izuzmiID) = 0 Or Not BrojJednak(rowID, izuzmiID) Then
+                                        BrojZauzetRevers = rowID
+                                        Exit Function
+                                    End If
+                                End If
+                            End If
+                    End Select
+                End If
+            End If
+        End If
+    Next i
+End Function
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obrise tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
@@ -613,10 +672,10 @@ End Sub
 ' ============================================================
 
 ' Max sekvenca broja za stanicu+datum nad CELOM tblAmbalaza (svi tipovi/noge).
-' Revers deli "x/ddmmyy" namespace sa ostalim ambalaza dokumentima, a btnUnosOMUlaz
-' radi CheckDuplicate nad celom tblAmbalaza -> broji se po PREFIKSU broja da auto-broj
-' nikad ne kolidira (npr. sa rucnim OM-Ulaz brojem istog prefiksa). OTP-/PRJ-/OTK-
-' ID-evi drugih tokova ne odgovaraju prefiksu, pa ne uticu; bare "x/ddmmyy" = seq 1.
+' Broji se po PREFIKSU broja, pa je generator STROZI od provere zauzetosti
+' (BrojZauzetRevers gleda samo nogu Stanica cetiri smera reversa): broj koji
+' generator predlozi nikad nije zauzet u nizu. OTP-/PRJ-/OTK- ID-evi drugih
+' tokova ne odgovaraju prefiksu, pa ne uticu; bare "x/ddmmyy" = seq 1.
 Private Function MaxSeqReversAmbalaza(ByVal stanicaID As String, _
                                      ByVal datum As Date) As Long
     On Error GoTo EH

@@ -88,6 +88,7 @@ Public Sub RunStornoTestSuite()
     T05_PaletaStavkeNovaZbirna
     T06_ReversIspravkaNeDupliraSaldo
     T07_ReversPonistenjeUklanjaSaldo
+    TRev_CompleteReversPoKljucu
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
@@ -473,6 +474,44 @@ Private Sub T13_ReversCompleteSaAktivnimNovimReversom()
     Chk CBool(res("success")), S & "success=True (novi revers aktivan)"
     ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, S & "status COMPLETED"
     ChkEq AmbSaldo("SVT-K13", "Kooperant", "SVT-A"), 12, S & "saldo = 12 (samo novi, NE 22)"
+End Sub
+
+' ============================================================
+' Revers ispravka po KLJUCU: CompleteReversIspravka proverava zamenu po (broj,
+' tip, stanica, dan) iz snimanja -- broj reversa je jedinstven tek u tom nizu
+' (A2 red REV). Zamena sme na drugu stanicu, ali mora postojati BAS tamo i tog
+' dana kad je snimljena.
+' SABOTAZA: u CompleteReversIspravka ignorisi newStanicaID -> pukne "zamena koja
+' ne postoji na datoj stanici NE zatvara ispravku".
+' ============================================================
+Private Sub TRev_CompleteReversPoKljucu()
+    Const S As String = "TRev revers complete po kljucu: "
+    Dim res As Object, cid As String
+
+    ' Zamena na DRUGOJ stanici: sme.
+    SeedRevers "SVT-RK1", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KK1", "SVT-SK1", "SVT-A", 10
+    Set res = modStornoFlow.RunReversCorrection("SVT-RK1", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_ISPRAVKA)
+    cid = CStr(res("correctionID"))
+    Chk Len(cid) > 0, S & "context kreiran (1)"
+    SeedRevers "SVT-RK1B", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KK1", "SVT-SK1X", "SVT-A", 12
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-RK1B", "SVT-SK1X", Date)
+    Chk CBool(res("success")), S & "zamena na drugoj stanici zatvara ispravku"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
+          S & "status COMPLETED (1)"
+
+    ' Zamena koja pod tim brojem postoji samo na DRUGOJ stanici od snimljene: ne zatvara.
+    SeedRevers "SVT-RK2", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KK2", "SVT-SK2", "SVT-A", 10
+    Set res = modStornoFlow.RunReversCorrection("SVT-RK2", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_ISPRAVKA)
+    cid = CStr(res("correctionID"))
+    Chk Len(cid) > 0, S & "context kreiran (2)"
+    SeedRevers "SVT-RK2B", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KK2", "SVT-SK2X", "SVT-A", 12
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-RK2B", "SVT-SK2", Date)
+    Chk Not CBool(res("success")), S & "zamena koja ne postoji na datoj stanici NE zatvara ispravku"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_MANUAL, _
+          S & "status MANUAL_REQUIRED (2)"
+
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-RK2B", "SVT-SK2X", DateAdd("d", 1, Date))
+    Chk Not CBool(res("success")), S & "zamena koja ne postoji tog dana NE zatvara ispravku"
 End Sub
 
 ' ============================================================

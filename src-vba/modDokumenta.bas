@@ -7239,6 +7239,12 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
         modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
                                          brojDok, "SaveOMUlaz_TX"
 
+        ' Zauzetost broja u nizu (stanica, dan), sa storniranima (A9) -- ista
+        ' provera koju ekran zove u ReversValidiraj. Jednom po dokumentu, pre
+        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant.
+        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
+                                            brojDok, "SaveOMUlaz_TX"
+
         Select Case koopSmer
         Case "IZDAVANJE"
             ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):

@@ -16,6 +16,9 @@ Option Explicit
 
 Private m_izvFail As Long
 Private m_izvPass As Long
+' Imena palih provera. Idu u poruku gate-a: runner vidi samo tu poruku, ne
+' Immediate -- bez imena sabotaza ne moze da se potvrdi PO IMENU.
+Private m_izvFailImena As String
 
 ' Deterministicki podaci za end-to-end testove. Datum je namerno van svakog
 ' realnog opsega, pa seed redovi ne mogu da se pomesaju sa produkcijskim.
@@ -46,6 +49,7 @@ Public Sub RunIzvestajTests()
 
     m_izvFail = 0
     m_izvPass = 0
+    m_izvFailImena = ""
 
     Debug.Print String(70, "=")
     Debug.Print "RunIzvestajTests START (RF-06 / AUD-023)"
@@ -83,6 +87,7 @@ Public Sub RunIzvestajTests()
         T_E2E_KlasaIiIINeMesajuPrijem
         T_E2E_ProsecnaCenaZbirniKupac
         T_E2E_AmbPregledRazdvajaTipDokumenta
+        T_E2E_ReversIstiBrojDveStanice
 
         tx.RollbackTx
         Set tx = Nothing
@@ -101,7 +106,7 @@ Public Sub RunIzvestajTests()
     On Error GoTo 0
     Err.Raise vbObjectError + 7610, "modIzvestajTests.RunIzvestajTests", _
               "RunIzvestajTests: " & m_izvFail & " od " & (m_izvFail + m_izvPass) & _
-              " provera palo (detalji u Immediate Window)."
+              " provera palo:" & m_izvFailImena
     Exit Sub
 
 EH:
@@ -870,6 +875,7 @@ Private Sub T_E2E_ProsecnaCenaZbirniKupac()
 
 EH:
     m_izvFail = m_izvFail + 1
+    m_izvFailImena = m_izvFailImena & " | " & S & "ERROR " & Err.description
     Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
 End Sub
 
@@ -935,6 +941,70 @@ Private Sub T_E2E_AmbPregledRazdvajaTipDokumenta()
 
 EH:
     m_izvFail = m_izvFail + 1
+    m_izvFailImena = m_izvFailImena & " | " & S & "ERROR " & Err.description
+    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
+End Sub
+
+' REVERS: ISTI BROJ, DVE STANICE ISTOG DANA (A2 red REV). Broj reversa je
+' jedinstven tek u nizu (stanica, dan), pa pregled po vozacu mora da ih drzi u
+' DVA reda, a stampa ne sme da ih spoji u jedan papir za potpis.
+' Fixture: seed u rollback-u; oblik noge je produkcioni (FIRMA smer pise samo
+' nogu Stanica sa vozacem, KOOP nogu Kooperant + nogu Stanica -- SaveOMUlaz_TX).
+'
+' SABOTAZE: izbaci stanicu i dan iz gkey reversa -> pukne "dva reversa ostaju dva
+' reda"; izbaci proveru "vise" u ReversStampaKljuc -> pukne "stampa bez stanice
+' odbija"; izbaci proveru dve stanice za KOOP -> pukne "KOOP: noga kooperanta".
+Private Sub T_E2E_ReversIstiBrojDveStanice()
+    Const S As String = "E2E revers isti broj, dve stanice: "
+    On Error GoTo EH
+
+    Dim d As Date: d = IZVT_DATUM
+    Const DOK As String = "IZVT-REV-7"
+    Const DOKK As String = "IZVT-REV-8"
+    Const TIPA As String = "IZVT-Letvarica"
+    Const VOZ As String = "IZVT-VZ-REV"
+    Dim cols As Variant
+    cols = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
+                 COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_VOZAC, COL_AMB_DOK_ID, COL_AMB_DOK_TIP)
+
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-A", d, TIPA, 10, "Ulaz", _
+                                      IZVT_STANICA, "Stanica", VOZ, DOK, DOK_TIP_OM_ULAZ_FIRMA)
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-B", d, TIPA, 20, "Ulaz", _
+                                      IZVT_STANICA2, "Stanica", VOZ, DOK, DOK_TIP_OM_ULAZ_FIRMA)
+
+    Dim r As Variant
+    r = ReportAmbalaza("Vozac", VOZ, d, d, False)
+    IzvChk IsArray(r), S & "izvestaj vraca redove"
+    If Not IsArray(r) Then Exit Sub
+    IzvChkEq UBound(r, 1), 3, S & "dva reversa ostaju dva reda (+ UKUPNO)"
+    If UBound(r, 1) >= 3 Then
+        IzvChkEqD NzNum(r(1, 5)) + NzNum(r(1, 6)), 10#, S & "1. red nosi samo svoju kolicinu (10)"
+        IzvChkEqD NzNum(r(2, 5)) + NzNum(r(2, 6)), 20#, S & "2. red nosi samo svoju kolicinu (20)"
+    End If
+
+    Dim st As String, dn As Long, raz As String
+    raz = ReversStampaKljuc(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, d, "", st, dn)
+    IzvChk Len(raz) > 0, S & "stampa bez stanice odbija broj koji istog dana nose dve stanice"
+    raz = ReversStampaKljuc(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, CDbl(d), IZVT_STANICA2, st, dn)
+    IzvChkEqText raz, "", S & "stampa sa stanicom pregleda razresava kljuc (datum kao serijski broj)"
+    IzvChkEqText st, IZVT_STANICA2, S & "kljuc nosi izabranu stanicu"
+
+    ' KOOP: noga Kooperant ne nosi stanicu -- dan sa dve stanice se odbija i uz stanicu.
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-K1", d, TIPA, 5, "Ulaz", _
+                                      "IZVT-KOOP-1", "Kooperant", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP)
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-S1", d, TIPA, 5, "Izlaz", _
+                                      IZVT_STANICA, "Stanica", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP)
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-K2", d, TIPA, 7, "Ulaz", _
+                                      "IZVT-KOOP-2", "Kooperant", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP)
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-S2", d, TIPA, 7, "Izlaz", _
+                                      IZVT_STANICA2, "Stanica", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP)
+    raz = ReversStampaKljuc(DOKK, DOK_TIP_OM_IZLAZ_KOOP, TIPA, d, IZVT_STANICA, st, dn)
+    IzvChk Len(raz) > 0, S & "KOOP: noga kooperanta se ne pripisuje jednoj od dve stanice istog dana"
+    Exit Sub
+
+EH:
+    m_izvFail = m_izvFail + 1
+    m_izvFailImena = m_izvFailImena & " | " & S & "ERROR " & Err.description
     Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
 End Sub
 
@@ -951,6 +1021,7 @@ Private Sub IzvChk(ByVal condition As Boolean, ByVal testName As String)
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1
+        m_izvFailImena = m_izvFailImena & " | " & testName
         Debug.Print "  FAIL | " & testName
     End If
 End Sub
@@ -960,6 +1031,7 @@ Private Sub IzvChkEq(ByVal actual As Long, ByVal expected As Long, ByVal testNam
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1
+        m_izvFailImena = m_izvFailImena & " | " & testName
         Debug.Print "  FAIL | " & testName & " | ocekivano " & expected & ", dobijeno " & actual
     End If
 End Sub
@@ -971,6 +1043,7 @@ Private Sub IzvChkEqC(ByVal actual As Double, ByVal expected As Double, ByVal te
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1
+        m_izvFailImena = m_izvFailImena & " | " & testName
         Debug.Print "  FAIL | " & testName & " | ocekivano " & expected & ", dobijeno " & actual
     End If
 End Sub
@@ -980,6 +1053,7 @@ Private Sub IzvChkEqD(ByVal actual As Double, ByVal expected As Double, ByVal te
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1
+        m_izvFailImena = m_izvFailImena & " | " & testName
         Debug.Print "  FAIL | " & testName & " | ocekivano " & expected & ", dobijeno " & actual
     End If
 End Sub
@@ -989,6 +1063,7 @@ Private Sub IzvChkEqText(ByVal actual As String, ByVal expected As String, ByVal
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1
+        m_izvFailImena = m_izvFailImena & " | " & testName
         Debug.Print "  FAIL | " & testName & " | ocekivano '" & expected & "', dobijeno '" & actual & "'"
     End If
 End Sub

@@ -1157,8 +1157,14 @@ End Sub
 ' PUBLIC je zbog modNovacUnos (revers, F7): pravilo "posle zamenskog dokumenta
 ' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se
 ' prepise u treci modul.
+'
+' stanicaID / datum nosi samo revers: njegov broj je jedinstven tek u nizu
+' (stanica, dan), pa CompleteReversIspravka proverava zamenu po tom kljucu --
+' zamena sme na drugu stanicu ili drugi dan. Ostali tipovi ih ne citaju.
 Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
-                             ByRef poruke As String)
+                             ByRef poruke As String, _
+                             Optional ByVal stanicaID As String = "", _
+                             Optional ByVal datum As Variant = Empty)
     Dim cnt As Long, cid As String, oldBroj As String, res As Object
     On Error GoTo EH
     newBroj = Trim$(newBroj)
@@ -1184,7 +1190,7 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
     Select Case docType
         Case FLOW_DOC_OTPREMNICA: Set res = CompleteOtpremnicaIspravka(cid, newBroj)
         Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
-        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj)
+        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj, stanicaID, datum)
         Case Else: Exit Sub
     End Select
 

@@ -486,6 +486,111 @@ Public Function ReversRedPripada(ByVal rowDokID As String, ByVal rowDokTip As St
     ReversRedPripada = (AmbTipKljuc(rowTipAmb) = AmbTipKljuc(tipAmb))
 End Function
 
+' KLJUC REVERSA ZA STAMPU -- (stanica, dan) izabranog reda pregleda. Broj reversa
+' je jedinstven tek u nizu (stanica, dan) (A2 red REV), pa ReversRedPripada (broj
+' + tip + tip ambalaze) sam ne razlikuje dva dokumenta istog broja.
+'   datumSel   -- datum reda pregleda (Date ili serijski broj); prazno = svi dani
+'   stanicaSel -- otkupno mesto pregleda po OM; prazno = sve stanice
+' Vraca "" i (outStanica, outDan) kad AKTIVNE noge Stanica daju tacno jedan kljuc;
+' inace razlog. Za KOOP smer odbija i dan u kome noge Stanica nose DVE stanice:
+' noga Kooperant stanicu ne nosi, pa bi se upisala u oba papira.
+Public Function ReversStampaKljuc(ByVal dokID As String, ByVal dokTip As String, _
+                                  ByVal tipAmb As String, ByVal datumSel As Variant, _
+                                  ByVal stanicaSel As String, ByRef outStanica As String, _
+                                  ByRef outDan As Long) As String
+    Const SRC As String = "modIzvestaj.ReversStampaKljuc"
+    outStanica = "": outDan = 0
+
+    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then
+        ReversStampaKljuc = "Revers " & dokID & " nije pronadjen."
+        Exit Function
+    End If
+    Dim cDat As Long, cTip As Long, cEnt As Long, cEntTip As Long
+    Dim cDok As Long, cDokTip As Long, cStorno As Long
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+
+    Dim danSel As Long
+    If IsDate(datumSel) Then
+        danSel = Int(CDbl(CDate(datumSel)))
+    ElseIf Not IsEmpty(datumSel) Then
+        If IsNumeric(datumSel) Then danSel = Int(CDbl(datumSel))
+    End If
+
+    Dim staniceDana As Object: Set staniceDana = CreateObject("Scripting.Dictionary")
+    Dim i As Long, dRow As Long, k As String, nasao As String, vise As Boolean
+    For i = 1 To UBound(d, 1)
+        If ReversRedPripada(NzToText(d(i, cDok)), NzToText(d(i, cDokTip)), _
+                            NzToText(d(i, cTip)), dokID, dokTip, tipAmb) Then
+            If Not IzvAmbRedStorniran(d, i, cStorno) Then
+                If Trim$(NzToText(d(i, cEntTip))) = "Stanica" And IsDate(d(i, cDat)) Then
+                    dRow = Int(CDbl(CDate(d(i, cDat))))
+                    k = UCase$(Trim$(NzToText(d(i, cEnt))))
+                    staniceDana(CStr(dRow) & "|" & k) = True
+                    If (danSel <= 0 Or dRow = danSel) And _
+                       (Len(Trim$(stanicaSel)) = 0 Or BrojJednak(d(i, cEnt), stanicaSel)) Then
+                        If Len(nasao) = 0 Then
+                            nasao = k & "|" & CStr(dRow)
+                            outStanica = Trim$(NzToText(d(i, cEnt)))
+                            outDan = dRow
+                        ElseIf k & "|" & CStr(dRow) <> nasao Then
+                            vise = True
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    If vise Then
+        outStanica = "": outDan = 0
+        ReversStampaKljuc = "Broj reversa " & dokID & " nose dokumenti vise otkupnih mesta " & _
+                            "ili dana -- stampa bi ih spojila. Stampaj iz pregleda po otkupnom mestu."
+        Exit Function
+    End If
+    If Len(nasao) = 0 Then
+        ReversStampaKljuc = "Revers nije moguce rekonstruisati (nedostaje OM noga za izabrani red)."
+        Exit Function
+    End If
+
+    If dokTip = DOK_TIP_OM_IZLAZ_KOOP Or dokTip = DOK_TIP_OM_ULAZ_KOOP Then
+        Dim kk As Variant, prefiks As String
+        prefiks = CStr(outDan) & "|"
+        For Each kk In staniceDana.keys
+            If Left$(CStr(kk), Len(prefiks)) = prefiks Then
+                If Mid$(CStr(kk), Len(prefiks) + 1) <> UCase$(outStanica) Then
+                    outStanica = "": outDan = 0
+                    ReversStampaKljuc = "Broj reversa " & dokID & " istog dana nose dva otkupna " & _
+                                        "mesta -- noga kooperanta se ne moze pripisati jednom. Stampa odbijena."
+                    Exit Function
+                End If
+            End If
+        Next kk
+    End If
+End Function
+
+' Pripada li red kljucu reversa (stanica, dan): noga Stanica te stanice tog dana,
+' noga Kooperant tog dana (ReversStampaKljuc je vec odbio dan sa dve stanice).
+Private Function IzvReversNogaUKljucu(ByRef d As Variant, ByVal i As Long, _
+                                      ByVal cEnt As Long, ByVal cEntTip As Long, _
+                                      ByVal cDat As Long, ByVal stanicaID As String, _
+                                      ByVal dan As Long) As Boolean
+    If cDat = 0 Or cEnt = 0 Or cEntTip = 0 Then Exit Function
+    If Not IsDate(d(i, cDat)) Then Exit Function
+    If Int(CDbl(CDate(d(i, cDat)))) <> dan Then Exit Function
+    If Trim$(NzToText(d(i, cEntTip))) = "Stanica" Then
+        IzvReversNogaUKljucu = BrojJednak(d(i, cEnt), stanicaID)
+    Else
+        IzvReversNogaUKljucu = True
+    End If
+End Function
+
 Public Function ReportSaldoOM(ByVal stanicaID As String, _
                               ByVal datumOd As Date, _
                               ByVal datumDo As Date) As Variant
@@ -3174,6 +3279,16 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         ' imao svoj red i bio je NEDOSTUPAN za stampu iz pregleda.
         Dim gkey As String
         gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)
+        ' REVERS: isti broj legalno nose reversi druge stanice ili drugog dana
+        ' (A2 red REV), pa je dokument tek (broj, tip, stanica, dan). Bez ovoga
+        ' pregled po vozacu spaja dva reversa u jedan red sa datumom prvog i
+        ' zbirom kolicina. U pregledu po OM i po vozacu revers daje samo nogu
+        ' Stanica, pa EntitetID reda JESTE stanica.
+        If modStorno.ReversTipJe(dokTipv) Then
+            Dim danKljuc As String: danKljuc = ""
+            If IsDate(filtered(i, colDatum)) Then danKljuc = CStr(Int(CDbl(CDate(filtered(i, colDatum)))))
+            gkey = gkey & "|" & UCase$(Trim$(entID)) & "|" & danKljuc
+        End If
         Dim rec As Variant
         If grp.Exists(gkey) Then
             rec = grp(gkey)
@@ -4130,10 +4245,16 @@ End Function
 '   - STORNIRANI redovi se preskacu INLINE (bez kopije cele tblAmbalaza);
 '   - tip ambalaze je DEO KLJUCA (ReversRedPripada) -- dokument sa dve vrste
 '     gajbica daje dva reversa, ne jedan sa pogresnim zbirom;
-'   - vise od dve noge po tipu se PRIJAVLJUJE operateru, ne sabira tiho.
+'   - vise od dve noge po tipu se PRIJAVLJUJE operateru, ne sabira tiho;
+'   - KLJUC je i (stanica, dan): broj reversa je jedinstven tek u tom nizu
+'     (A2 red REV). datumSel = datum izabranog reda, stanicaSel = otkupno mesto
+'     pregleda po OM. Broj koji nose dva dokumenta se ODBIJA (ReversStampaKljuc),
+'     ne nudi na "Da" -- papir za potpis ne sme da spoji dva reversa.
 ' ============================================================
 Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, _
-                                 ByVal tipSel As String)
+                                 ByVal tipSel As String, _
+                                 Optional ByVal datumSel As Variant = Empty, _
+                                 Optional ByVal stanicaSel As String = "")
     Const SRC As String = "modIzvestaj.StampajReversAmbalaze"
     On Error GoTo EH
 
@@ -4176,11 +4297,16 @@ Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, 
         Next i
     End If
 
+    Dim revSt As String, revDan As Long, revRaz As String
+    revRaz = ReversStampaKljuc(dokID, dokTip, tipAmb, datumSel, stanicaSel, revSt, revDan)
+    If Len(revRaz) > 0 Then Err.Raise vbObjectError + 7504, SRC, revRaz
+
     Dim nogeKoop As Long, nogeOM As Long
     For i = 1 To UBound(d, 1)
         If ReversRedPripada(CStr(d(i, cDok)), CStr(d(i, cDokTip)), CStr(d(i, cTip)), _
                             dokID, dokTip, tipAmb) _
-           And Not IzvAmbRedStorniran(d, i, cStorno) Then
+           And Not IzvAmbRedStorniran(d, i, cStorno) _
+           And IzvReversNogaUKljucu(d, i, cEnt, cEntTip, cDat, revSt, revDan) Then
             If Not haveDatum And IsDate(d(i, cDat)) Then
                 datum = CDate(d(i, cDat)): haveDatum = True
             End If

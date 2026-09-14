@@ -175,14 +175,19 @@ Private Function NerazresenIzbor(ByVal tekst As String, ByVal iD As String) As B
     NerazresenIzbor = (Len(Trim$(tekst)) > 0 And Len(Trim$(iD)) = 0)
 End Function
 
-' Duplikat broja REVERSA. Do 14.09.2026 je broj bio "zajednicki namespace" za
-' ambalazu i za novac, pa se trazio u obe tabele. Novac je odvojen (A2 red NOV):
-' njegov broj nije jedinstven, pa ne sme ni da blokira revers. Revers do svog PR-a
-' ostaje na CheckDuplicate nad tblAmbalaza; tamo prelazi na proveru po nizu
-' (stanica, dan) tek kad storno i undo reversa nauce stanicu.
-Private Function DuplBroj(ByVal brDok As String) As String
-    If Len(brDok) = 0 Then Exit Function
-    DuplBroj = CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, brDok, COL_AMB_DATUM)
+' Broj reversa zauzet u svom nizu (stanica, dan), sa storniranima (A9) -- ISTA
+' provera koju drzi pisac (SaveOMUlaz_TX), jedna implementacija u modBrojevi.
+' Zatecena (DuplBroj) je isla kroz CheckDuplicate nad celom tblAmbalaza: odbijala
+' je isti broj na drugoj stanici ili drugi dan (po A2 legalno), a pustala broj
+' storniranog reversa. Novac je od 14.09.2026 odvojen (A2 red NOV).
+' Prazno = slobodan; inace poruka sa AmbID-em noge koja drzi broj.
+Private Function ReversBrojZauzet(ByVal p As Object) As String
+    Dim zauzeo As String
+    If Len(S(p, "brDok")) = 0 Then Exit Function
+    zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, S(p, "stanicaID"), _
+                                        CDate(p("datum")), S(p, "brDok"))
+    If Len(zauzeo) > 0 Then _
+        ReversBrojZauzet = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
 End Function
 
 '=====================================================================
@@ -433,7 +438,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
         fokus = "vrsta": ReversValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
     End If
 
-    dup = DuplBroj(S(p, "brDok"))
+    dup = ReversBrojZauzet(p)
     If Len(dup) > 0 Then
         fokus = "brDok": ReversValidiraj = dup: Exit Function
     End If
@@ -477,7 +482,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' tek posle izbora smera - zato je ovde, a ne pre njega.
     If Len(S(p, "brDok")) = 0 Then
         p("brDok") = SuggestNextBroj(KIND_REV, S(p, "stanicaID"), CDate(p("datum")))
-        dup = DuplBroj(S(p, "brDok"))
+        dup = ReversBrojZauzet(p)
         If Len(dup) > 0 Then
             fokus = "brDok": ReversValidiraj = dup: Exit Function
         End If
@@ -529,8 +534,11 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
         koopSmer:=SmerRevKljuc(smer)) Then Exit Function
 
     ' ISPRAVKA reversa (druga faza): ako je revers-ispravka na cekanju,
-    ' upravo snimljeni revers je njena zamena. No-op inace.
-    modDokUnos.ZavrsiIspravkuAko FLOW_DOC_REVERS, brDok, poruke
+    ' upravo snimljeni revers je njena zamena. No-op inace. Stanica i dan idu
+    ' uz broj: broj reversa je jedinstven tek u nizu (stanica, dan), a zamena
+    ' sme na drugu stanicu ili drugi dan.
+    modDokUnos.ZavrsiIspravkuAko FLOW_DOC_REVERS, brDok, poruke, _
+                                 S(p, "stanicaID"), CDate(p("datum"))
 
     ' PDF revers - best-effort, isto kao u legacy: pad stampe ne sme da
     ' obori potvrdu upisa (rutina loguje sama).
