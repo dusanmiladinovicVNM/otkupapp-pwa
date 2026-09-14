@@ -351,16 +351,16 @@ već koriste (`modScrOporavak`, registrovan u `modUiScreens.ScrRows`).
 | Cilj se bira klikom na red i stoji u zoni gore | isti obrazac kao aktivna otpremnica u F1 i aktivna paleta na ekranu Palete; legacy je za to imao combo u panelu — ovde je lista, pa se cilj može i pretražiti i sortirati |
 | Liste ciljeva nude **samo aktivne** dokumente, jedan red po broju | prevezivanje na storniran cilj bi napravilo drugu siroticu umesto da reši prvu; klase I i II dele broj, a cilj JESTE broj |
 | Liste ciljeva nude **samo aktivne** dokumente | prevezivanje na storniran cilj bi napravilo drugu siroticu umesto da reši prvu |
-| Jedan red po **dokumentu** (broj + vlasnik), ne po broju | klase I i II dele broj **i vlasnika** → jedan dokument, jedan red. Dva kupca sa istim brojem → **dva** dokumenta, dva reda: `BrojPrijemnice` se računa po kupcu, pa je kolizija svakodnevna. Kolona VLASNIK je zato vidljiva. |
+| Jedan red po **dokumentu** (broj + vlasnik), ne po broju | klase I i II dele broj **i vlasnika** → jedan dokument, jedan red. Dva kupca sa istim brojem → **dva** dokumenta, dva reda: naš niz prijemnica postoji samo za hladnjaču (`1/ddmmyy[-n]`, `x` fiksno `1`), a eksterni kupci kucaju svoj broj, pa je kolizija svakodnevna (A2). Kolona VLASNIK je zato vidljiva. |
 | Liste nose **GeneracijaID** i prosleđuju ga u akciju — i izvorne i **ciljne** | broj je labela, identitet je generacija; `Reassign*_TX` po njoj bira redove, pa dokument koji deli broj ne može biti zahvaćen |
-| Cilj se bira po identitetu, ne po broju (`newGeneracijaID`, `zbirnaGeneracijaID`) | `BrojPrijemnice` se generiše po kupcu: kod kolizije je `newById(klasa)` uzimao red koji je slučajno poslednji u tabeli, pa je roba mogla da ode tuđem kupcu (v6-ui-124) |
+| Cilj se bira po identitetu, ne po broju (`newGeneracijaID`, `zbirnaGeneracijaID`) | `BrojPrijemnice` nema niz po kupcu (hladnjača ima fiksno `1/ddmmyy`, eksterni kupac kuca svoj broj), pa je kolizija česta: kod kolizije je `newById(klasa)` uzimao red koji je slučajno poslednji u tabeli, pa je roba mogla da ode tuđem kupcu (v6-ui-124) |
 | Labela se čita iz izabranog dokumenta, ne od pozivaoca | neusklađen par (broj jednog, generacija drugog) inače tiho upisuje tuđi broj |
 | Propagacija u `tblPaletaStavka` ide po `PrijemnicaID` | prvi upis je bio po identitetu a drugi po broju, pa je tuđi dokument ostajao sam sebi protivrečan — prijemnica na staroj zbirni, njena paleta na novoj (v6-ui-125) |
 | Zadata generacija koje nema → **STOP**, ne fallback po broju | prazan argument (legacy zapis) i „baš taj dokument, a nema ga” su dva različita stanja |
 | Ciljna lista zbirnih grupiše po **generaciji**, vlasnik je vozač + kupac | sa samim kupcem bi dva dokumenta istog broja pala u jedan red i operater ne bi mogao da izabere pravi |
 | „Jedini vlasnik" zbirne se meri **dokumentima**, ne distinct brojevima | zbirna je zbir svih svojih otpremnica, a broj otpremnice je scoped po stanici — dve otpremnice istog broja sa različitih stanica davale su jedan distinct broj, pa je PONIŠTENJE ulazilo u punu kaskadu i obaralo tuđu |
 | Deca zbirne **nisu** nerešiva, samo još nisu scoped | otpremnica kaskada već ume `BrojZbirne + VozacID`, prijemnica `+ KupacID`, palete nose `PrijemnicaID`. Fail-closed je bezbedan izbor **dok se child mutacije ne dovedu dotle**, ne dokaz nemogućnosti |
-| **Broj zbirne je jedinstven, broj prijemnice nije** | `SuggestNextBroj` za `ZBR` bumpuje sekvencu dok `BrojZbirneExists` ne kaže da je slobodan; `GenerateBrojPrijemnice` ima fiksan prefiks `1`, broji po kupcu i **nema takvu proveru**. Kod zbirne je identitet pojas za ručni unos, kod prijemnice je nužnost |
+| **Generator zbirne izbegava kolizije, generator prijemnice ne** — to je politika generatora, ne pravilo jedinstvenosti | `SuggestNextBroj` za `ZBR` bumpuje sekvencu dok `BrojZbirneExists` ne kaže da je slobodan u **celoj** `tblZbirna`; `GenerateBrojPrijemnice` ima fiksan prefiks `1`, broji po kupcu i **nema takvu proveru**. Po domenu (`ARCHITECTURE_CONTRACT.md` A2) broj **nije** globalno jedinstven — jedinstven je po (vrsta, vlasnik niza, dan), pa je isti broj zbirne kod dva vozača legalno stanje koje se razrešava po generaciji, kao i svi redovi iznad. Stroži generator je pojas dok je `BrojZbirne` još join ključ. Kod zbirne je identitet pojas za ručni unos, kod prijemnice je nužnost |
 | Presuda o relabelu ide nad **već razrešenim** dokumentima (`PresudiPaletaReassign`) | writer je birao po generaciji, a `EvaluatePaletaReassign` ga je ponovo tražila po broju — kod kolizije je presuda opisivala tuđi dokument i relabel se tiho preskakao (v6-ui-126) |
 | „Isti dokument” u ekranu se meri **generacijom**, ne brojem | ispravka koja menja kupca dobija isti poslovni broj kao original — poređenje po broju je odbijalo potpuno ispravnu operaciju |
 | Su-stanar na deljenoj paleti je **drugi dokument**, ne drugi broj | dva kupca istog broja i iste robe smeju da dele paletu; poređenje po broju ih je videlo kao istu prijemnicu, pa bi relabel prepravio header cele palete a tuđa roba ostala pogrešno označena (v6-ui-127) |
@@ -3896,8 +3896,8 @@ Istorijska kapija, dakle, **već postoji** — tačno tamo gde je nužna, i samo
 Moja bi je duplirala na ulazu i time zabranila slučajeve koje kod već bezbedno
 razdvaja.
 
-Poslovna cena nije teorijska: broj prijemnice je numerisan **po kupcu**, pa je
-kolizija očekivana, a ne egzotika. Legacy panel u `frmDokumenta` (bez generacije)
+Poslovna cena nije teorijska: broj prijemnice **nema** niz po kupcu (hladnjača
+ima fiksno `1/ddmmyy`, eksterni kupac kuca svoj broj), pa je kolizija očekivana, a ne egzotika. Legacy panel u `frmDokumenta` (bez generacije)
 bi posle te izmene odbio **potpuno rešiv** oporavak čim je isti broj nekad nosio
 storniran dokument drugog kupca — i oterao operatera na ručni rad.
 
@@ -9707,20 +9707,27 @@ Plan je tražio i **de-duplikaciju po broju** i **zbir kg po broju** u
 odbačeno.** Prvi pokušaj obrazloženja te odluke bio je **pogrešan** i ispravljen
 je odmah zatim; ovde stoji tačan.
 
-**Broj je jedinstven, dokument nije red.** Redovni generator `BrojZbirne` drži
-globalno jedinstvenim: format je `x/ddmmyy[-rb]` gde je `x` numerički deo vozača,
-a `SuggestNextBroj` za `ZBR` uz to vrti `Do While BrojZbirneExists(...)` nad
-**celom** tabelom. Dvosmislen broj zato ne nastaje redovnim putem — samo ručnim
-unosom sa ugašenim auto-brojem, uvozom ili ispravkom u tabeli, gde jedinstvenost
-pri upisu **niko ne proverava** (`BrojZbirneExists` je `Private`, zove se samo iz
-predloga). Zato mutacione putanje moraju ostati **fail-closed**.
+**Broj nije identitet, dokument nije red.** Po A2
+(`docs/DOMEN/ARCHITECTURE_CONTRACT.md`) broj zbirne je jedinstven u (vrsta, vozač,
+dan), **ne globalno**. Generator je namerno stroži: format je `x/ddmmyy[-rb]` gde
+je `x` numerički deo vozača, a `SuggestNextBroj` za `ZBR` uz to vrti
+`Do While BrojZbirneExists(...)` nad **celom** tabelom. To je politika generatora
+dok je `BrojZbirne` join ključ, ne pravilo jedinstvenosti — isti broj kod dva
+vozača je legalno stanje koje se razrešava po generaciji.
+
+Kanonski broj **tuđeg** vozača ili dana od PR #326 odbija
+`modBrojevi.RequireBrojUKontekstu`, i u ručnom režimu i na PWA uvozu. Kapija ne
+proverava **zauzetost**, pa kolizija u **istom** kontekstu (ručni unos, uvoz sa dva
+uređaja — KR-001, ispravka u tabeli) i dalje može da nastane
+(`BrojZbirneExists` je `Private`, zove se samo iz predloga). Zato mutacione
+putanje moraju ostati **fail-closed**.
 
 **Tri različite stvari koje se lako pomešaju:**
 
 | | Šta je | Primer |
 |---|---|---|
 | fizički red | red u `tblZbirna` | Klasa I; Klasa II |
-| logički dokument | `GeneracijaID` = broj + vozač + kupac | jedna zbirna, dva reda |
+| logički dokument | `GeneracijaID` — kuje se u opsegu broj + vozač + kupac, ali opseg **nije** identitet | jedna zbirna, dva reda |
 | poslovni broj | `BrojZbirne` | ono što picker prikazuje |
 
 `SaveZbirnaMulti_TX` zove `SaveZbirna` **dvaput sa istim brojem, vozačem i

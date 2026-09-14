@@ -1546,6 +1546,13 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                   "Stanica mora biti izabrana."
     End If
 
+    ' Kapija konteksta broja -- isto pravilo kao kanonski CreateOtkup. Ovaj
+    ' pisac nije u pogonu (zovu ga samo testovi, odlazi u koraku 7), ali je
+    ' Public i pise sopstveni broj u tblOtkup, pa bi bez kapije ostao legalan
+    ' put za broj koji CreateOtkup odbija.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTK, stanicaID, datum, _
+                                     brDok, "SaveOtkup"
+
     If Trim$(vrstaVoca) = "" Then
         Err.Raise vbObjectError + 1822, "SaveOtkup", _
                   "Vrsta vo" & ChrW(263) & "a je obavezna."

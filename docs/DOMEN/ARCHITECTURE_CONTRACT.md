@@ -56,11 +56,20 @@ Operativni izvor istine za isto pravilo, po ekranima:
 kapija na kanonskim piscima (`modOtkup.CreateOtkup`,
 `modDokumenta.SaveOtpremnica` / `SaveZbirna` / `CreateZbirna` /
 `OtpNapraviDraft` / `OtpIzmeniDraft` / `SaveOMUlaz_TX` ambalažna grana) i na PWA
-uvozu. Kapija dokazuje samo **negativ** — da broj pripada drugom vlasniku ili
-drugom danu; string koji nije u kanonskom obliku te vrste se ne sudi. Ne
-proverava jedinstvenost (to je `modOtkup.BrojDokumentaZauzet` i `CheckDuplicate`)
-i ne sudi prijemnicu. Kad je auto-numeracija isključena (`AUTO_BROJ_DOKUMENTA`),
-broj je operaterov i kapija ćuti.
+uvozu — oba PWA uvoza fail-closed. Kapija dokazuje samo **negativ** — da broj
+pripada drugom vlasniku ili drugom danu; string koji nije u kanonskom obliku te
+vrste se ne sudi. Ne proverava jedinstvenost (to je
+`modOtkup.BrojDokumentaZauzet` i `CheckDuplicate`) i ne sudi prijemnicu.
+
+Pravilo **ne zavisi** od `AUTO_BROJ_DOKUMENTA`. Ručni režim ostaje slobodan
+zato što se slobodan oblik (`MOJ-OTKUP-17`) ne sudi — ali ručno otkucan
+`24/150826` na `ST-00023` tvrdi stanicu 24 i odbija se isto kao generisan.
+
+**Generator zbirne je namerno stroži od pravila.** `SuggestNextBroj` za ZBR
+pomera sekvencu dok broj nije slobodan u **celoj** `tblZbirna`, ne samo kod tog
+vozača. To je pojas dok je `BrojZbirne` još join ključ (v. napomenu ispod), ne
+definicija jedinstvenosti: zatečena kolizija dva vozača nije neispravan podatak
+nego stanje koje se razrešava po `GeneracijaID`.
 
 > Ostatak A2 — zabrana broja kao FK — je i dalje **pravilo bez provere**.
 > `NEMA_BROJA_KAO_FK` i acceptance test `BrojNijeIdentitet` **ne postoje** u

@@ -3626,18 +3626,24 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
             Exit Function
         End If
 
-        ' Kontekst je ovde UPOZORENJE, ne blokada -- ingest je cinjenica, ne
-        ' komanda (isti stav kao PrijaviKolizijuBrojaZbirne i Chk_B8).
-        ' Odbacen red gubi terenski podatak i skriva neslaganje; oblik je
-        ' drugo pitanje i on iznad i dalje odbija.
+        ' KONTEKST BROJA -- fail-closed, isti ishod kao los oblik odmah iznad i
+        ' ista odluka kao na uvozu otkupa.
+        '
+        ' "Ingest je cinjenica, ne komanda" vazi za KOLIZIJU: dva dokumenta sa
+        ' istim brojem su legalno stanje (A2), pa PrijaviKolizijuBrojaZbirne i
+        ' Chk_B8 samo prijavljuju. Ne vazi za broj koji protivreci SOPSTVENOM
+        ' redu -- takav red bi usao u kanonsku tblZbirna kao validan dokument,
+        ' a BrojZbirne je i danas join kljuc u modDokumenta.
         Dim zbrVerdikt As Long
         zbrVerdikt = modBrojevi.BrojOdgovaraKontekstu( _
                          modBrojevi.KIND_ZBR, vozacID, datum, brojZbirne)
         If modBrojevi.BrojKontekstOdbija(zbrVerdikt) Then
-            LogWarn "ImportRowToTblZbirna", _
+            LogError "ImportRowToTblZbirna", _
                 modBrojevi.BrojKontekstOpis(zbrVerdikt, modBrojevi.KIND_ZBR, _
                                             vozacID, datum, brojZbirne) & _
-                " CRID=" & clientRecordID
+                " (CRID=" & clientRecordID & ")"
+            ImportRowToTblZbirna = ""
+            Exit Function
         End If
     End If
     

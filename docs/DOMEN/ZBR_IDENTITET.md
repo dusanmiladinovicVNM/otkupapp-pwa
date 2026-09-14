@@ -69,14 +69,20 @@ Ta jedna linija nosi **dva** ponašanja i ne sme da nestane:
   kuje se **nova** generacija. Original i ispravka su **različiti** logički
   dokumenti. Tvrdi to `modTest` `T_IstiBrojRazliciteGeneracije_NijeIstiDokument`.
 
-**Broj je jedinstven redovnim putem.** Format `x/ddmmyy[-rb]` gde je `x`
-numerički deo vozača; `SuggestNextBroj` za `ZBR` uz to vrti
-`Do While BrojZbirneExists(...)` nad celom tabelom.
+**Generator izbegava koliziju, ali broj nije globalno jedinstven.** Format
+`x/ddmmyy[-rb]` nosi vozača i dan, a `SuggestNextBroj` za `ZBR` uz to vrti
+`Do While BrojZbirneExists(...)` nad celom tabelom. To je politika generatora, ne
+pravilo: po A2 (`ARCHITECTURE_CONTRACT.md`) broj je jedinstven u (vrsta, vozač,
+dan), pa isti broj kod dva vozača nije rupa nego legalno stanje koje razrešava
+generacija.
 
-## 3) Rupa — gde jedinstvenost niko ne čuva
+## 3) Rupa — gde dvosmislen broj u istom kontekstu nastaje
 
-Dvosmislen broj **ne nastaje** redovnim putem. Nastaje ručnim unosom sa ugašenim
-auto-brojem, uvozom, ili ispravkom u tabeli. Na tim putevima:
+Kanonski broj **tuđeg** vozača ili dana se od PR #326 odbija — na ručnom unosu, i
+pri `AUTO_BROJ_DOKUMENTA = NO`, i na PWA uvozu (`modBrojevi.RequireBrojUKontekstu`).
+Ono što ta kapija **ne čuva** je zauzetost. Dvosmislen broj u istom kontekstu i
+dalje **ne nastaje** redovnim putem, ali nastaje ručnim unosom, uvozom sa dva
+uređaja (KR-001) ili ispravkom u tabeli. Na tim putevima:
 
 - `BrojZbirneExists` je `Private` i zove se **samo iz predloga**, ne pri upisu.
 - `modDokUnos.ZbirnaValidiraj:427` zove
@@ -332,6 +338,16 @@ Zato `ImportRowToTblZbirna` red **upisuje**, pa zove
 se posle pečaćenja identiteta, ne pre) i piše `LogWarn`. Ta procedura **nikad ne
 diže grešku**: pad detekcije unutar transakcije oborio bi baš onaj upis koji
 treba da sačuva.
+
+**Granica pravila (PR #326).** „Ingest, ne komanda" važi za **koliziju** — dva
+dokumenta sa istim brojem u legalnim kontekstima (A2). Takav red se upisuje i
+prijavljuje. **Ne** važi za broj koji protivreči **sopstvenom** redu: kanonski
+`x/ddmmyy` gde `x` nije vozač reda ili `ddmmyy` nije datum reda. Takav red
+`ImportRowToTblZbirna` odbija fail-closed (`modBrojevi.BrojOdgovaraKontekstu`,
+`TUDJ_VLASNIK` / `TUDJ_DAN`), isti ishod kao loš oblik — jer bi u kanonsku
+`tblZbirna` ušao kao validan dokument, a `BrojZbirne` je i dalje join ključ.
+Cena iz tabele iznad (rollback sync reda) je tu namerna: red koji laže o sebi
+nije podatak koji se čuva.
 
 Trajni trag je u `modIntegritet`: **B8** (broj nosi više aktivnih dokumenata) i
 **B9** (aktivna zbirna bez `GeneracijaID`). Log se izgubi, nalaz ostaje.

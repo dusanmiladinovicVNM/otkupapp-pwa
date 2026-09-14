@@ -404,7 +404,18 @@ Public Function BrojOdgovaraKontekstu(ByVal kind As String, _
     Dim slashPos As Long
     slashPos = InStr(s, "/")           ' oblik je gore vec dokazan
 
-    If Left$(s, slashPos - 1) <> ocekNum Then
+    ' Vlasnik se poredi kao BROJ, ne kao string. "023/140926" na ST-00023
+    ' imenuje bas stanicu 23 (tako moze biti odstampano na papirnom bloku);
+    ' kao string bi dobio TUDJ_VLASNIK, a poruka bi tvrdila drugu stanicu.
+    ' Vodece nule se skidaju nad stringom, ne kroz CLng -- dugacak numericki
+    ' deo ne sme da obori pisca overflow-om.
+    Dim vlasnikIzBroja As String
+    vlasnikIzBroja = Left$(s, slashPos - 1)
+    Do While Len(vlasnikIzBroja) > 1 And Left$(vlasnikIzBroja, 1) = "0"
+        vlasnikIzBroja = Mid$(vlasnikIzBroja, 2)
+    Loop
+
+    If vlasnikIzBroja <> ocekNum Then
         BrojOdgovaraKontekstu = BROJ_KTX_TUDJ_VLASNIK
         Exit Function
     End If
@@ -459,18 +470,17 @@ End Function
 
 ' Fail-closed kapija za kanonske pisce.
 '
-' NE sudi kad je auto-broj iskljucen (Podesavanja, CFG_AUTO_BROJ_DOK): tada
-' nijedan generator nije nista dodelio, pa nema ni zastalog predloga koji bi se
-' hvatao -- broj je operaterov i sistem ga ne sme drugi put procenjivati.
-' Provera je OVDE, a ne u BrojOdgovaraKontekstu, da predikat ostane cist i da
-' testovi mogu da ga tvrde bez diranja konfiguracije.
+' Vazi i kad je auto-broj iskljucen (Podesavanja, CFG_AUTO_BROJ_DOK). Rucni
+' rezim ostaje slobodan bez rupe u pravilu: broj u slobodnom obliku
+' ("MOJ-OTKUP-17") ne govori kanonski jezik i dobija NEPRIMENLJIVO. Ali rucno
+' otkucan "24/150826" na ST-00023 izricito tvrdi stanicu 24 -- ta tvrdnja je
+' neistinita bez obzira ko ju je otkucao. Istina zapisana u broju ne sme da
+' zavisi od globalnog prekidaca.
 Public Sub RequireBrojUKontekstu(ByVal kind As String, _
                                  ByVal entityID As String, _
                                  ByVal datum As Date, _
                                  ByVal broj As String, _
                                  ByVal src As String)
-    If Not IsAutoBrojDokumenta() Then Exit Sub
-
     Dim verdikt As Long
     verdikt = BrojOdgovaraKontekstu(kind, entityID, datum, broj)
     If Not BrojKontekstOdbija(verdikt) Then Exit Sub
