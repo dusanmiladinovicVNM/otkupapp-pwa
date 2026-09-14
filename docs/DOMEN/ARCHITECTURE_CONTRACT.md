@@ -85,8 +85,8 @@ broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznača
 (nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
 upisuje umesto ID-a.
 
-Tri pravila ključa primenjena su po preporuci pre-flight-a i **čekaju potvrdu
-operatera**:
+Tri pravila ključa primenjena su po preporuci pre-flight-a; **operater ih je
+potvrdio 14.09.2026** (PR #328):
 
 1. Noga Kooperant ne nosi stanicu. Kad isti (broj, tip, dan) nose noge Stanica
    **dve** stanice, noga Kooperant se ne pripisuje nijednoj — storno, undo i
