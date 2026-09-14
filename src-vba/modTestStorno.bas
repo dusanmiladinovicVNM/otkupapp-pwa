@@ -89,6 +89,8 @@ Public Sub RunStornoTestSuite()
     T06_ReversIspravkaNeDupliraSaldo
     T07_ReversPonistenjeUklanjaSaldo
     TRev_CompleteReversPoKljucu
+    TRev_TragIspravkeNosiAmbID
+    TRev_PreviewKliknutogReversa
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
@@ -512,6 +514,90 @@ Private Sub TRev_CompleteReversPoKljucu()
 
     Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-RK2B", "SVT-SK2X", DateAdd("d", 1, Date))
     Chk Not CBool(res("success")), S & "zamena koja ne postoji tog dana NE zatvara ispravku"
+End Sub
+
+' ============================================================
+' Trag ispravke reversa nosi KANONSKI ID (AmbID noge Stanica), ne broj. Dva
+' reversa istog broja i smera na dve stanice istog dana (FIRMA: samo noga
+' Stanica) -- dve ispravke moraju imati razlicit OldDocID, a zavrsetak upisuje
+' NewDocID = AmbID noge Stanica NOVOG reversa. Broj ostaje u OldBroj/NewBroj.
+' Nivo merenja: logicki dokument (revers), identitet u tblStornoVeze.
+' SABOTAZE: OldDocID nazad na brDok -> pukne "dve ispravke istog broja nose
+' razlicit OldDocID"; NewDocID nazad na newBrDok -> pukne "NewDocID je AmbID noge
+' Stanica novog reversa"; ReversAmbIDStanice pusti vise nogu -> pukne "revers sa
+' dve noge Stanica nema trag ispravke".
+' ============================================================
+Private Sub TRev_TragIspravkeNosiAmbID()
+    Const S As String = "TRev trag ispravke po AmbID: "
+    Dim res As Object, cidA As String, cidB As String, cidK As String
+    Dim oldA As String, oldB As String
+
+    SeedAmb "SVT-RTA-S", "SVT-A", 10, "Ulaz", "SVT-STA", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RTB-S", "SVT-A", 20, "Ulaz", "SVT-STB", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA
+
+    Set res = modStornoFlow.RunReversCorrection("SVT-RT", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_ISPRAVKA, "SVT-RTA-S")
+    cidA = CStr(res("correctionID"))
+    Set res = modStornoFlow.RunReversCorrection("SVT-RT", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_ISPRAVKA, "SVT-RTB-S")
+    cidB = CStr(res("correctionID"))
+    Chk Len(cidA) > 0 And Len(cidB) > 0, S & "obe ispravke kreirane"
+    oldA = modStornoContext.GetCorrectionField(cidA, COL_SV_OLD_DOCID)
+    oldB = modStornoContext.GetCorrectionField(cidB, COL_SV_OLD_DOCID)
+    ChkEq oldA, "SVT-RTA-S", S & "OldDocID prve ispravke je AmbID noge Stanica S1"
+    ChkEq oldB, "SVT-RTB-S", S & "OldDocID druge ispravke je AmbID noge Stanica S2"
+    Chk oldA <> oldB, S & "dve ispravke istog broja nose razlicit OldDocID"
+    ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_OLD_BROJ), "SVT-RT", S & "OldBroj ostaje labela"
+
+    ' Zamena S1: nov revers na S1.
+    SeedAmb "SVT-RTN-S", "SVT-A", 12, "Ulaz", "SVT-STA", "Stanica", "SVT-RTN", DOK_TIP_OM_ULAZ_FIRMA
+    Set res = modStornoFlow.CompleteReversIspravka(cidA, "SVT-RTN", "SVT-STA", Date)
+    Chk CBool(res("success")), S & "zavrsetak ispravke uspeo"
+    ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_NEW_DOCID), "SVT-RTN-S", _
+          S & "NewDocID je AmbID noge Stanica novog reversa"
+    ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_NEW_BROJ), "SVT-RTN", S & "NewBroj ostaje labela"
+
+    ' KOOP: klik na nogu Kooperant -> OldDocID je ipak noga Stanica tog reversa.
+    SeedRevers "SVT-RTK", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KTK", "SVT-STK", "SVT-A", 5
+    Set res = modStornoFlow.RunReversCorrection("SVT-RTK", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_DUPLI, "SVT-RTK-K")
+    cidK = CStr(res("correctionID"))
+    ChkEq modStornoContext.GetCorrectionField(cidK, COL_SV_OLD_DOCID), "SVT-RTK-S", _
+          S & "klik na nogu Kooperant: OldDocID je noga Stanica"
+
+    ' Dve noge Stanica pod istim kljucem (sinteticki; pisac to ne pravi): identitet
+    ' nije jednoznacan -> nema traga ni storna.
+    SeedAmb "SVT-RTD-S1", "SVT-A", 3, "Ulaz", "SVT-STD", "Stanica", "SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RTD-S2", "SVT-B", 4, "Ulaz", "SVT-STD", "Stanica", "SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA
+    Set res = modStornoFlow.RunReversCorrection("SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_DUPLI, "SVT-RTD-S1")
+    Chk Not CBool(res("success")) And Len(CStr(res("correctionID"))) = 0, _
+        S & "revers sa dve noge Stanica nema trag ispravke"
+    Chk UCase$(NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RTD-S1", COL_STORNIRANO))) = "", _
+        S & "odbijen revers sa dve noge nije storniran"
+End Sub
+
+' ============================================================
+' Pregled reversa pre potvrde vidi KLIKNUTI revers, ne sve redove broja. Dva
+' reversa istog broja i smera, S1 (10 kom) i S2 (77 kom), isti dan.
+' Nivo merenja: logicki dokument -- sta operater vidi pre potvrde.
+' SABOTAZA: BuildStornoPreview ne prosledjuje docID reversu -> pukne "preview
+' kliknutog S1 prikazuje S1".
+' ============================================================
+Private Sub TRev_PreviewKliknutogReversa()
+    Const S As String = "TRev preview po AmbID: "
+    Dim p As String
+
+    SeedAmb "SVT-RPA-S", "SVT-A", 10, "Ulaz", "SVT-SPA", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RPB-S", "SVT-A", 77, "Ulaz", "SVT-SPB", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA
+
+    p = modStornoFlow.BuildStornoPreview(FLOW_DOC_REVERS, "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RPA-S")
+    Chk InStr(1, p, "SVT-SPB", vbTextCompare) = 0 And InStr(1, p, "77", vbBinaryCompare) = 0, _
+        S & "preview kliknutog S1 ne vidi S2 (bilo: " & Replace(p, vbCrLf, " / ") & ")"
+    Chk InStr(1, p, "SVT-SPA", vbTextCompare) > 0 And InStr(1, p, "Kolicina: 10 ", vbBinaryCompare) > 0, _
+        S & "preview kliknutog S1 prikazuje S1"
+    Chk InStr(1, p, "knjiznih redova: 1)", vbBinaryCompare) > 0, _
+        S & "preview broji samo noge kliknutog reversa"
+
+    p = modStornoFlow.BuildStornoPreview(FLOW_DOC_REVERS, "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, "")
+    Chk InStr(1, p, "Kolicina:", vbBinaryCompare) = 0, _
+        S & "bez identiteta dvosmislen broj nema pregled jednog dokumenta"
 End Sub
 
 ' ============================================================

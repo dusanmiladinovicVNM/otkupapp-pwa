@@ -75,8 +75,17 @@ revers bira po tom ključu, nikad po (broj, tip): storno
 (`modStorno.StornoOMKoopByBrDok` — identitet je `AmbID` kliknutog reda, ključ
 razrešava `ReversKljucRazresi`), undo (ključ iz `AmbID`-eva operacije,
 `modStornoZurnal.UndoGuardReasonZaOp`), završetak ispravke (stanica i dan zamene
-iz snimanja), pregled i štampa ambalaže (`modIzvestaj.ReversStampaKljuc`). Tri
-pravila ključa primenjena su po preporuci pre-flight-a i **čekaju potvrdu
+iz snimanja), pregled i štampa ambalaže (`modIzvestaj.ReversStampaKljuc`), kao i pregled pre potvrde
+(`modStornoFlow.BuildStornoPreview` → `ScanRevers`, isti ključ kao pisac).
+
+**Trajni identitet reversa je `AmbID` njegove noge Stanica**
+(`modStorno.ReversAmbIDStanice`) — pisac piše tačno jednu nogu Stanica po
+dokumentu. Taj ID nosi trag ispravke: `tblStornoVeze.OldDocID` i `NewDocID`;
+broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznačan
+(nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
+upisuje umesto ID-a.
+
+Tri pravila ključa primenjena su po preporuci pre-flight-a i **čekaju potvrdu
 operatera**:
 
 1. Noga Kooperant ne nosi stanicu. Kad isti (broj, tip, dan) nose noge Stanica

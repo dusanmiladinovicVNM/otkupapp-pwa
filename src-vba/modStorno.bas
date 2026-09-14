@@ -2554,6 +2554,47 @@ Public Function ReversRedoviKljuca(ByVal brDok As String, ByVal dokumentTip As S
     Next v
 End Function
 
+' KANONSKI ID reversa -- AmbID njegove noge Stanica, za kljuc (broj, tip, stanica,
+' dan) i zadati status storna. Pisac (SaveOMUlaz_TX) pise tacno jednu nogu
+' Stanica po dokumentu, pa je taj AmbID trajan identitet dokumenta, a broj ostaje
+' labela. Nosi ga trag ispravke (tblStornoVeze.OldDocID / NewDocID): po broju taj
+' trag ne bi mogao da kaze KOJI je revers zamenjen, jer isti broj legalno nosi i
+' revers druge stanice ili drugog dana.
+' "" = noge Stanica nema ili ih je vise -- identitet nije jednoznacan, pozivalac
+' odbija (fail-closed), a ne upisuje broj umesto ID-a.
+Public Function ReversAmbIDStanice(ByVal brDok As String, ByVal dokumentTip As String, _
+                                   ByVal stanicaID As String, ByVal dan As Long, _
+                                   ByVal storniran As Boolean) As String
+    Const SRC As String = "modStorno.ReversAmbIDStanice"
+    If Len(Trim$(stanicaID)) = 0 Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cID As Long, cDok As Long, cTip As Long, cDat As Long
+    Dim cEnt As Long, cEntTip As Long, cSt As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+
+    Dim i As Long, n As Long, nasao As String
+    For i = 1 To UBound(data, 1)
+        If BrojJednak(data(i, cDok), brDok) Then
+            If Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip) Then
+                If IsStorniranoValue(data(i, cSt)) = storniran Then
+                    If ReversNogaStaniceUKljucu(data, i, cEnt, cEntTip, cDat, stanicaID, dan) Then
+                        n = n + 1
+                        nasao = Trim$(NzToText(data(i, cID)))
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    If n = 1 Then ReversAmbIDStanice = nasao
+End Function
+
 ' Je li red i noga Stanica reversa (stanica, dan)?
 Private Function ReversNogaStaniceUKljucu(ByRef data As Variant, ByVal i As Long, _
                                           ByVal cEnt As Long, ByVal cEntTip As Long, _
