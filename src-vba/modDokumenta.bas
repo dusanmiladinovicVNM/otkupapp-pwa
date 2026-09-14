@@ -7257,6 +7257,9 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                 Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
                           "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
             End If
+            ' Noga Kooperant ne nosi stanicu: isti (broj, smer, dan) ne sme ni na
+            ' drugoj stanici, inace storno/undo ne mogu da upare noge.
+            modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_IZLAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", kooperantID, "Kooperant", _
                           "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
@@ -7274,6 +7277,8 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                 Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
                           "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
             End If
+            ' Isto kao kod izdavanja: noga Kooperant ne nosi stanicu.
+            modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_ULAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", kooperantID, "Kooperant", _
                           "", brojDok, DOK_TIP_OM_ULAZ_KOOP

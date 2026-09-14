@@ -34,7 +34,7 @@ generatora:
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
 | PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
-| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. |
+| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. **KOOP smerovi** (izdavanje i povrat kooperantu): noga Kooperant ne nosi stanicu, pa isti (broj, smer, dan) zauzima broj na **svim** stanicama, sa storniranima — dok obe noge ne nose zajednički `ReversID`. FIRMA smerovi ostaju po stanici. |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
 Operativni izvor istine za isto pravilo, po ekranima:
@@ -92,6 +92,12 @@ operatera**:
    **dve** stanice, noga Kooperant se ne pripisuje nijednoj — storno, undo i
    štampa se **odbijaju**. Uparivanje preko susednog `AmbID`-a nije dozvoljeno:
    susednost je redosled upisa u `SaveOMUlaz_TX`, ne invarijanta.
+   **Pisac takvo stanje ne pravi:** za KOOP smerove isti (broj, smer, dan) na
+   drugoj stanici odbijaju i ekran (`ReversValidiraj`) i pisac
+   (`modBrojevi.RequireReversKoopBrojJedinstven`), sa storniranima. Odbijanje
+   nizvodno ostaje druga linija, za redove nastale mimo pisca. Dugoročno rešenje
+   je zajednički `ReversID` obe noge — tada isti broj na S1/S2 postaje potpuno
+   podržan i ovo ograničenje nestaje.
 2. Red reversa **bez noge Stanica** (sintetički seed — produkcioni pisac je uvek
    piše) broj ne zauzima, a storno i undo ga odbijaju.
 3. Ispravka sme da prebaci revers na **drugu stanicu ili drugi dan**, i da mu

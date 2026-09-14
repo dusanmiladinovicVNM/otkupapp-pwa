@@ -31,6 +31,9 @@ Option Explicit
 ' Zauzetost broja u nizu (vrsta, vlasnik, dan) -- stornirani se broje:
 '   BrojZauzetUNizu(kind, entityID, datum, broj[, izuzmiID]) -- ID ili ""
 '   RequireBrojSlobodanUNizu(...)            -- fail-closed kapija za pisce
+'   ReversKoopBrojZauzetDrugde(tip, stanica, datum, broj) -- KOOP revers: isti
+'                                              (broj, smer, dan) na DRUGOJ stanici
+'   RequireReversKoopBrojJedinstven(...)     -- fail-closed kapija za pisca
 ' ============================================================
 
 Private gSheetIDCache As Object
@@ -661,6 +664,75 @@ Private Function BrojZauzetRevers(ByVal stanicaID As String, _
         End If
     Next i
 End Function
+' KOOP REVERS: noga Kooperant ne nosi stanicu, pa se sa nogom Stanica uparuje samo
+' preko (broj, smer, dan). Dva KOOP reversa istog (broj, smer, dan) na dve stanice
+' bila bi nerazluciva -- storno, undo i stampa ih zato namerno odbijaju
+' (modStorno.ReversRedoviKljuca, modIzvestaj.ReversStampaKljuc). Pisac takvo stanje
+' ne sme ni da napravi: dok obe noge ne nose zajednicki ReversID, isti (broj, KOOP
+' smer, dan) zauzima broj na SVIM stanicama. Stornirani se broje -- undo bi inace
+' vratio par koji se ne razlucuje. FIRMA smerovi pisu samo nogu Stanica, pa za njih
+' vazi obican niz (stanica, dan) (BrojZauzetRevers).
+' Vraca AmbID noge Stanica na DRUGOJ stanici koja drzi broj, ili "".
+Public Function ReversKoopBrojZauzetDrugde(ByVal dokumentTip As String, _
+                                           ByVal stanicaID As String, _
+                                           ByVal datum As Date, _
+                                           ByVal broj As String) As String
+    Const SRC As String = "ReversKoopBrojZauzetDrugde"
+
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    Select Case Trim$(dokumentTip)
+        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
+        Case Else
+            Exit Function
+    End Select
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cBr As Long, cDat As Long, cEnt As Long, cEntTip As Long
+    Dim cTip As Long, cID As Long
+    cBr = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
+
+    Dim dan As Long
+    dan = Int(CDbl(datum))
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If BrojJednak(d(i, cBr), broj) And Trim$(NzToText(d(i, cTip))) = Trim$(dokumentTip) Then
+            If Trim$(NzToText(d(i, cEntTip))) = "Stanica" And Not BrojJednak(d(i, cEnt), stanicaID) Then
+                If IsDate(d(i, cDat)) Then
+                    If Int(CDbl(CDate(d(i, cDat)))) = dan Then
+                        ReversKoopBrojZauzetDrugde = Trim$(NzToText(d(i, cID)))
+                        Exit Function
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' Fail-closed kapija za pisca (SaveOMUlaz_TX, KOOP grane), pre ijedne noge.
+Public Sub RequireReversKoopBrojJedinstven(ByVal dokumentTip As String, _
+                                           ByVal stanicaID As String, _
+                                           ByVal datum As Date, _
+                                           ByVal broj As String, _
+                                           ByVal src As String)
+    Dim zauzeo As String
+    zauzeo = ReversKoopBrojZauzetDrugde(dokumentTip, stanicaID, datum, broj)
+    If Len(zauzeo) = 0 Then Exit Sub
+
+    Err.Raise vbObjectError + 1924, src, _
+              "Broj " & Trim$(broj) & " [" & Trim$(dokumentTip) & "] je " & Format$(datum, "dd.mm.yyyy") & _
+              " vec izdat na drugoj stanici: " & zauzeo & ". Noga Kooperant ne nosi stanicu, pa se dva " & _
+              "takva reversa ne bi mogla razlikovati pri stornu i vracanju storna. Odbijeno."
+End Sub
+
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obrise tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()

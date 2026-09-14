@@ -257,6 +257,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_StorniranBrojIstogVozacaOdbijen
     Test_ZBR_IspravkaPodNovimBrojem
     Test_BKTX_ReversPisacOdbijaZauzet
+    Test_BKTX_ReversKoopBrojDrugaStanica
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -9843,10 +9844,102 @@ EH:
     LogFatal "Test_BKTX_ReversPisacOdbijaZauzet", Err.Number, Err.description
 End Sub
 
+' KOOP REVERS: pisac ne pravi stanje koje nizvodno ne ume da razresi. Noga
+' Kooperant ne nosi stanicu, pa se KOOP revers sa nogom Stanica uparuje preko
+' (broj, smer, dan); dva takva na dve stanice storno/undo/stampa namerno odbijaju.
+' Zato isti (broj, KOOP smer, dan) pisac odbija i na drugoj stanici -- a sve sto
+' pusti (drugi smer, drugi dan, FIRMA) mora da se stornira NEZAVISNO, sa noge
+' Kooperant, kako ga mreza Storno prikazuje.
+'
+' Nivo merenja: poslovni broj u nizu + logicki dokument (storno). Kroz pravi pisac,
+' ne seed.
+'
+' SABOTAZE: ukloni RequireReversKoopBrojJedinstven iz IZDAVANJE grane -> pukne
+' "REV KOOP: isti broj, smer i dan na drugoj stanici odbijen"; preskoci stornirane
+' u ReversKoopBrojZauzetDrugde -> pukne "REV KOOP: posle storna broj i dalje nije
+' slobodan na drugoj stanici".
+Private Sub Test_BKTX_ReversKoopBrojDrugaStanica()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim scenario As String: scenario = NewScenarioCode("REVKS")
+    Dim d As Date: d = NextTestDate()
+    Dim d2 As Date: d2 = DateAdd("d", 1, d)
+    Dim broj As String: broj = TEST_PREFIX & "-REV-KS-" & scenario
+    Dim brojF As String: brojF = TEST_PREFIX & "-REV-KSF-" & scenario
+    Dim pre As Long
+
+    AssertTrue UpisiReversTest(d, broj, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+               "REV KOOP: prvo izdavanje kooperantu upisano"
+
+    pre = CountRows(TBL_AMBALAZA)
+    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
+                "REV KOOP: isti broj, smer i dan na drugoj stanici odbijen (noga Kooperant ne nosi stanicu)"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP: odbijen upis nije ostavio nijednu nogu"
+
+    AssertTrue UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "PRIJEM"), _
+               "REV KOOP: drugi smer istog broja i dana na drugoj stanici prolazi (uparivanje ide po smeru)"
+    AssertTrue UpisiReversTest(d2, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
+               "REV KOOP: isti broj i smer drugog dana na drugoj stanici prolazi"
+    AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
+               "REV FIRMA: prvi upisan"
+    AssertTrue UpisiReversTest(d, brojF, BKTX_ST2, "", "IZDATO_OM"), _
+               "REV FIRMA: isti broj, smer i dan na dve stanice prolazi (nema noge Kooperant)"
+
+    ' Sve sto je pisac pustio mora da se stornira nezavisno -- sa noge Kooperant.
+    Dim kA As String, kP As String, kB As String
+    kA = AmbIDNoge(broj, TEST_KOOP_ID, "Kooperant", d)
+    kP = AmbIDNoge(broj, TEST_KOOP2_ID, "Kooperant", d)
+    kB = AmbIDNoge(broj, TEST_KOOP2_ID, "Kooperant", d2)
+    AssertTrue Len(kA) > 0 And Len(kP) > 0 And Len(kB) > 0, _
+               "REV KOOP: preduslov -- tri KOOP reversa istog broja postoje"
+
+    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, kA), _
+               "REV KOOP: izdavanje S1 se stornira sa noge Kooperant"
+    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_KOOP, kP), _
+               "REV KOOP: povrat S2 istog broja i dana se stornira nezavisno"
+    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, kB), _
+               "REV KOOP: izdavanje S2 drugog dana se stornira nezavisno"
+    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, AmbIDNogeStanice(broj, TEST_ST_ID, d)), _
+               "REV KOOP: uz nogu Kooperant S1 stornirana je i njena noga Stanica"
+
+    ' Storno ne oslobadja broj ni na drugoj stanici -- undo bi inace vratio par koji
+    ' se ne razlucuje. Treca stanica: njen niz je slobodan, odbija je samo KOOP provera.
+    pre = CountRows(TBL_AMBALAZA)
+    AssertFalse UpisiReversTest(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE"), _
+                "REV KOOP: posle storna broj i dalje nije slobodan na drugoj stanici"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP: odbijen upis posle storna nije ostavio nogu"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ReversKoopBrojDrugaStanica", Err.Number, Err.description
+End Sub
+
+' Revers kroz pravi pisac (SaveOMUlaz_TX): 5 gajbi test tipa, bez novca.
+Private Function UpisiReversTest(ByVal d As Date, ByVal broj As String, _
+                                 ByVal stanicaID As String, ByVal kooperantID As String, _
+                                 ByVal koopSmer As String) As Boolean
+    UpisiReversTest = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
+                                    stanicaNaziv:="Test OM", stanicaID:=stanicaID, _
+                                    vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+                                    vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:=kooperantID, _
+                                    primalacDisplay:="", otkupID:="", tipNovca:="", _
+                                    koopSmer:=koopSmer)
+End Function
+
 ' AmbID noge Stanica reversa (broj, stanica, dan) -- identitet reda, onako kako ga
 ' salje ekran Storno. Prazno kad nema.
 Private Function AmbIDNogeStanice(ByVal broj As String, ByVal stanicaID As String, _
                                   ByVal d As Date) As String
+    AmbIDNogeStanice = AmbIDNoge(broj, stanicaID, "Stanica", d)
+End Function
+
+' AmbID noge reversa (broj, entitet, tip entiteta, dan). Prazno kad nema.
+Private Function AmbIDNoge(ByVal broj As String, ByVal entitetID As String, _
+                           ByVal entitetTip As String, ByVal d As Date) As String
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If Not IsArray(data) Then Exit Function
     Dim cID As Long, cDok As Long, cEnt As Long, cEntTip As Long, cDat As Long, i As Long
@@ -9857,11 +9950,11 @@ Private Function AmbIDNogeStanice(ByVal broj As String, ByVal stanicaID As Strin
     cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
     If cID = 0 Or cDok = 0 Or cEnt = 0 Or cEntTip = 0 Or cDat = 0 Then Exit Function
     For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cDok))) = broj And Trim$(NzToText(data(i, cEnt))) = stanicaID _
-           And Trim$(NzToText(data(i, cEntTip))) = "Stanica" Then
+        If Trim$(NzToText(data(i, cDok))) = broj And Trim$(NzToText(data(i, cEnt))) = entitetID _
+           And Trim$(NzToText(data(i, cEntTip))) = entitetTip Then
             If IsDate(data(i, cDat)) Then
                 If Int(CDbl(CDate(data(i, cDat)))) = Int(CDbl(d)) Then
-                    AmbIDNogeStanice = Trim$(NzToText(data(i, cID)))
+                    AmbIDNoge = Trim$(NzToText(data(i, cID)))
                     Exit Function
                 End If
             End If
