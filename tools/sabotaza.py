@@ -285,7 +285,7 @@ SABOTAZE = {
     ),
     "zbirna-kapija": (
         "modDokUnos.bas",
-        '    If Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n'
+        '    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n'
         '        fokus = "kolicinaI"\n'
         '        ZbirnaValidiraj = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")\n'
         "        Exit Function\n"
@@ -297,10 +297,11 @@ SABOTAZE = {
     # Podmukliji oblik iste greske: kapija ostaje, ali se gejtuje podesavanjem.
     # Sa ukljucenom validacijom (default) sve i dalje radi -- pada tek tvrdnja
     # da kapija vazi i kad je VALIDACIJA_UNOSA iskljucena.
+    # (Od 14.09.2026 izvor je brIzvora, ne S(p, "brDok") -- v. ZbirnaBrojIzvora.)
     "zbirna-kapija-strogo": (
         "modDokUnos.bas",
-        '    If Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n',
-        '    If strogo And Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then   \' SABOTAZA\n',
+        '    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n',
+        '    If strogo And Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then   \' SABOTAZA\n',
         "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama",
         "kapija vazi i kad je VALIDACIJA_UNOSA iskljucena",
     ),

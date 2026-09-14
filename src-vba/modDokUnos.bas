@@ -228,11 +228,18 @@ Public Function OtpremnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "brDok": OtpremnicaValidiraj = Poruka("OTKUI_ERR_BROJ"): Exit Function
     End If
 
+    ' Dupli broj: ISTA provera koju drzi pisac (modBrojevi.BrojZauzetUNizu), po
+    ' nizu (stanica, dan) i sa storniranima. Zatecena je isla kroz CheckDuplicate
+    ' -- cela tabela, sirovo poredjenje, bez storniranih -- pa je odbijala isti
+    ' broj na drugoj stanici, a pustala broj stornirane otpremnice.
     If Len(S(p, "brDok")) > 0 Then
-        Dim dup As String
-        dup = CheckDuplicate(TBL_OTPREMNICA, COL_OTP_BROJ, S(p, "brDok"), COL_OTP_DATUM)
-        If Len(dup) > 0 Then
-            fokus = "brDok": OtpremnicaValidiraj = dup: Exit Function
+        Dim zauzeo As String
+        zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_OTP, S(p, "stanicaID"), _
+                                            CDate(p("datum")), S(p, "brDok"))
+        If Len(zauzeo) > 0 Then
+            fokus = "brDok"
+            OtpremnicaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
+            Exit Function
         End If
     End If
     Exit Function
@@ -367,6 +374,7 @@ Private Function ZbirnaGatePoruka(ByVal razlog As String) As String
     Select Case razlog
         Case ZBR_GATE_AKTIVNA: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_AKTIVNA")
         Case ZBR_GATE_TUDJ: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_TUDJ")
+        Case ZBR_GATE_STORNIRAN: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_STORNIRAN")
         Case ZBR_GATE_SIROCE: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_SIROCE")
         Case Else: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
     End Select
@@ -434,41 +442,54 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' vec u netu; oduzimanje tare i drugi put spustilo bi kilograme ispod izvora
     ' i oborilo bas provere ispod. tblZbirna zato nema ni kolonu BrutoKg.
 
+    ' IZVOR se trazi po broju ZAMENE, osim u ispravci. Posle storna zbirne deca i
+    ' dalje nose STARI broj -- prevezuje ih CompleteZbirnaIspravka tek POSLE
+    ' snimanja zamene. Pod novim brojem izvor bi bio prazan i provera zbira bi
+    ' uvek pala, pa bi ispravka mogla samo pod istim brojem, a to A9 i odluka od
+    ' 14.09.2026 zabranjuju.
+    Dim brIzvora As String
+    brIzvora = ZbirnaBrojIzvora(S(p, "brDok"))
+
     ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->
     ' SaveZbirnaMulti_TX bi dobio hasKlasaII:=False i Kl.II bi se tiho izgubila.
     If Not dveKl Then
-        If ZbirnaIzvorImaKlasuII(S(p, "brDok")) Then
+        If ZbirnaIzvorImaKlasuII(brIzvora) Then
             fokus = "kolicinaII": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_IZVOR_KL2"): Exit Function
         End If
     End If
 
     ' Zbir mora da se poklopi sa izvorom. U legacy je to hard-gate koji NE zavisi
     ' od VALIDACIJA_UNOSA (btnUnosZbr_Click: "If Not UpdateValidacija()").
-    If Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then
+    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then
         fokus = "kolicinaI"
         ZbirnaValidiraj = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")
         Exit Function
     End If
 
-    Dim dup As String
-    dup = CheckDuplicate(TBL_ZBIRNA, COL_ZBR_BROJ, S(p, "brDok"), COL_ZBR_DATUM)
-    If Len(dup) > 0 Then
-        fokus = "brDok": ZbirnaValidiraj = dup: Exit Function
+    ' Zauzetost u nizu (vozac, dan), sa storniranima -- ISTA funkcija koju zove
+    ' pisac (SaveZbirnaMulti_TX, CreateZbirna). Ranije je ovde stajao
+    ' CheckDuplicate: cela tabela, sirovo poredjenje, bez storniranih.
+    Dim zauzeo As String
+    zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, S(p, "vozacID"), _
+                                        CDate(p("datum")), S(p, "brDok"))
+    If Len(zauzeo) > 0 Then
+        fokus = "brDok"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
+        Exit Function
     End If
 
     ' ZBR-ACTIVE-NUMBER-01 (docs/DOMEN/ZBR_IDENTITET.md par.5).
     '
-    ' Ide POSLE CheckDuplicate, ne umesto njega: CheckDuplicate se ne dira (D2),
-    ' jer preskakanje storniranih nosi ispravka-workflow na svih 6 tipova
-    ' dokumenata. Ova kapija hvata ono sto on propusta -- sirovo poredjenje bez
-    ' Trim i case-sensitive (" 5/070926 " prolazi pored "5/070926"), storno pa
-    ' ponovna upotreba od DRUGOG vlasnika, i broj koji drzi aktivna prijemnica
-    ' bez svoje zbirne.
+    ' Ide POSLE provere zauzetosti i SIRA je od nje: ta gleda samo niz (vozac,
+    ' dan), a ova blokira broj ma ciji bio -- aktivan pod drugim vozacem
+    ' (AKTIVNA), storniran pod drugim vlasnikom (TUDJ), storniran pod istim
+    ' (STORNIRAN -- ispravka dobija nov broj, odluka 14.09.2026), i broj koji drzi
+    ' aktivna prijemnica bez svoje zbirne (SIROCE). Sirina je pojas dok je
+    ' BrojZbirne join kljuc. Odluka D2, koja je CheckDuplicate drzala netaknutim,
+    ' povucena je 14.09.2026.
     '
-    ' Strogo je: aktivan logicki dokument pod tim brojem znaci NE, ma ciji bio.
-    ' To ne obara dvoklasnu zbirnu -- ovaj validator se zove TACNO jednom, iz
-    ' modScrDokumenti.Scr_Save, pre SaveZbirnaMulti_TX; nikad ne vidi red koji je
-    ' sam upravo napisao.
+    ' Validator se zove TACNO jednom, iz modScrDokumenti.Scr_Save, pre
+    ' SaveZbirnaMulti_TX; nikad ne vidi red koji je sam upravo napisao.
     Dim zbrId As ZbirnaIdent
     Dim gateRazlog As String
     zbrId = ZbirnaIdentResolve(S(p, "brDok"), S(p, "vozacID"), S(p, "kupacID"))
@@ -485,6 +506,47 @@ EH:
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaValidiraj"
     ZbirnaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+End Function
+
+' Broj po kome ZbirnaValidiraj trazi izvorne otpremnice.
+'
+' Obicno je to uneti broj. Izuzetak je otvorena ISPRAVKA zbirne: posle storna
+' deca jos nose stari broj, a zamena po A9 dobija nov. Tada -- i SAMO kad uneti
+' broj nema nijednu svoju aktivnu otpremnicu -- izvor je stari broj iz konteksta.
+'
+' Uslov "uneti broj nema svoj izvor" nije kozmetika. Dok ispravka ceka, operater
+' sme da unese i nepovezanu zbirnu; njen izvor je njen broj, a stari bi dao
+' lazan zbir. Nepovezana zbirna bez izvora i danas pada na proveri zbira, pa
+' uslov ne otvara nista sto je bilo zatvoreno.
+'
+' Vise otvorenih ispravki zbirne -> nema pogadjanja; isti stav kao
+' ZavrsiIspravkuAko, koji tada odbija da veze zamenu.
+Private Function ZbirnaBrojIzvora(ByVal brDok As String) As String
+    ZbirnaBrojIzvora = brDok
+    On Error GoTo EH
+
+    Dim v As Variant
+    v = ValidateZbirnaPreUnosa(brDok, 0, 0, 0)
+    If IsArray(v) Then
+        If UBound(v) >= 8 Then
+            If CDbl(v(0)) > 0 Or CDbl(v(4)) > 0 Or CDbl(v(8)) > 0 Then Exit Function
+        End If
+    End If
+
+    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_ZBIRNA, _
+                                                         SV_MODE_ISPRAVKA) <> 1 Then Exit Function
+
+    Dim cid As String
+    cid = modStornoContext.FindLatestPending(FLOW_DOC_ZBIRNA, SV_MODE_ISPRAVKA)
+    If Len(cid) = 0 Then Exit Function
+
+    Dim stari As String
+    stari = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ))
+    If Len(stari) > 0 Then ZbirnaBrojIzvora = stari
+    Exit Function
+EH:
+    LogErr "modDokUnos.ZbirnaBrojIzvora"
+    ZbirnaBrojIzvora = brDok
 End Function
 
 ' Verdikt koji u legacy daje frmDokumenta.UpdateValidacija, bez ijednog natpisa:

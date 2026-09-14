@@ -175,13 +175,14 @@ Private Function NerazresenIzbor(ByVal tekst As String, ByVal iD As String) As B
     NerazresenIzbor = (Len(Trim$(tekst)) > 0 And Len(Trim$(iD)) = 0)
 End Function
 
-' Isti par provera kao legacy: broj dokumenta je zajednicki namespace za
-' ambalazu i za novac, pa se duplikat trazi u OBE tabele.
+' Duplikat broja REVERSA. Do 14.09.2026 je broj bio "zajednicki namespace" za
+' ambalazu i za novac, pa se trazio u obe tabele. Novac je odvojen (A2 red NOV):
+' njegov broj nije jedinstven, pa ne sme ni da blokira revers. Revers do svog PR-a
+' ostaje na CheckDuplicate nad tblAmbalaza; tamo prelazi na proveru po nizu
+' (stanica, dan) tek kad storno i undo reversa nauce stanicu.
 Private Function DuplBroj(ByVal brDok As String) As String
     If Len(brDok) = 0 Then Exit Function
     DuplBroj = CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, brDok, COL_AMB_DATUM)
-    If Len(DuplBroj) > 0 Then Exit Function
-    DuplBroj = CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, brDok, COL_NOV_DATUM)
 End Function
 
 '=====================================================================
@@ -193,7 +194,7 @@ End Function
 ' mesta niti razduzuje otkupni blok.
 '=====================================================================
 Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As String
-    Dim strogo As Boolean, novac As Double, dup As String
+    Dim strogo As Boolean, novac As Double
     Dim partTip As String, partID As String
     Dim omSaldo As Double, blokErr As String
     Dim errDesc As String
@@ -217,11 +218,10 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
         fokus = "otkupID": IsplataValidiraj = Poruka("NOVUNOS_ERR_BLOK_NEIZABRAN"): Exit Function
     End If
 
-    ' Duplikat broja se proverava PRE iznosa - isti redosled kao legacy.
-    dup = DuplBroj(S(p, "brDok"))
-    If Len(dup) > 0 Then
-        fokus = "brDok": IsplataValidiraj = dup: Exit Function
-    End If
+    ' Provere duplikata broja NEMA (odluka 14.09.2026, A2 red NOV). Broj novca
+    ' nije jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim
+    ' brojem, a split avansa nasledjuje broj originala. Dvostruku isplatu po bloku
+    ' i dalje zaustavlja IsplataBlokProblem (ostatak).
 
     novac = D(p, "novac")
     If novac <= 0 Then
@@ -326,7 +326,7 @@ End Function
 ' novac nema sta da zatvori, pa red ostaje avans kupca.
 '=====================================================================
 Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As String
-    Dim strogo As Boolean, novac As Double, dup As String
+    Dim strogo As Boolean, novac As Double
     Dim fakErr As String
     Dim errDesc As String
     On Error GoTo EH
@@ -350,10 +350,8 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
         fokus = "vrsta": UplataValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
     End If
 
-    dup = DuplBroj(S(p, "brDok"))
-    If Len(dup) > 0 Then
-        fokus = "brDok": UplataValidiraj = dup: Exit Function
-    End If
+    ' Provere duplikata broja NEMA -- isti razlog kao kod isplate (A2 red NOV).
+    ' Uplatu po fakturi i dalje zaustavlja UplataFakturaProblem.
 
     novac = D(p, "novac")
     If novac <= 0 Then

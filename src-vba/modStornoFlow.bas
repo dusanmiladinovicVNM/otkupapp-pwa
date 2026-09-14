@@ -585,8 +585,12 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     ' pada na broj. Novi dokument jos nema svoju generaciju u context-u, pa je
     ' ovo najuza kapija koja se ovde moze postaviti.
     Dim newOtpID As String
+    '
+    ' Vlasnik je (stanica, DAN), ne samo stanica: od 14.09.2026 isti broj sme na
+    ' istoj stanici drugog dana (A2), pa bi brojanje samo po stanici dalo jednog
+    ' vlasnika i LookupActiveID uzeo otpremnicu pogresnog dana.
     If VlasniciPoBroju(TBL_OTPREMNICA, COL_OTP_BROJ, newBroj, SRC, False, _
-                       Array(COL_OTP_STANICA)).count > 1 Then
+                       Array(COL_OTP_STANICA, COL_OTP_DATUM)).count > 1 Then
         ' MANUAL, ne tiho PENDING: bez ovoga context ostaje otvoren i sledeci
         ' unos otpremnice ponovo pokrece pitanje "je li ovo zamena?".
         MarkCorrectionManual correctionID, _

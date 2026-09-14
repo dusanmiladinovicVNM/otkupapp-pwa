@@ -42,6 +42,10 @@ Public Const ZBR_GATE_INTEGRITET As String = "INTEGRITET"
 Public Const ZBR_GATE_AKTIVNA As String = "AKTIVNA"
 Public Const ZBR_GATE_TUDJ As String = "TUDJ"
 Public Const ZBR_GATE_SIROCE As String = "SIROCE"
+' Broj stornirane zbirne ISTOG vlasnika: storno ne oslobadja broj (A9, odluka
+' 14.09.2026). Nije TUDJ -- ta poruka bi operateru rekla da je broj pripadao
+' drugom vozacu ili kupcu, sto nije tacno.
+Public Const ZBR_GATE_STORNIRAN As String = "STORNIRAN"
 
 ' Razlog odbijanja RODITELJA (F4). Zaseban skup od ZBR_GATE_*: tamo je pitanje
 ' "sme li NOV broj", ovde "sme li se prijemnica vezati na POSTOJECI dokument".
@@ -69,10 +73,12 @@ Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 '                nije ni pravio, jer je stapao generacije; sada ga pravi
 '                ispravno, pa mora i da se vidi.
 '
-' historicalLogicalCount se MERI i prijavljuje, ali NE blokira: ispravka pod
-' istim brojem (ZBR-ACTIVE-NUMBER-01 ALLOW grana) je zakuje na 2 kod svakog
-' redovnog re-entry-ja, a DetachOtpremniceInline pri tom prazni broj na deci
-' stornirane generacije -- pa ona za mutaciju po broju vise i ne konkurisu.
+' historicalLogicalCount se MERI i prijavljuje, ali NE blokira. Obrazlozenje je
+' bilo da ga redovan re-entry pod istim brojem (ALLOW grana ZBR-ACTIVE-NUMBER-01)
+' zakuje na 2. Ta grana je ukinuta 14.09.2026 -- ispravka dobija nov broj -- pa
+' re-entry pod istim brojem sada nastaje samo mimo F3 (SaveZbirna_TX, PWA uvoz,
+' malina auto-zbirna). Postrozavanje ove kapije je zaseban korak
+' (ZBR_IDENTITET.md, faza 4), ne posledica te odluke.
 Public Const ZBR_MUT_INTEGRITET As String = "INTEGRITET"
 Public Const ZBR_MUT_VISE_VLASNIKA As String = "VISE_VLASNIKA"
 Public Const ZBR_MUT_VISE_DOKUMENATA As String = "VISE_DOKUMENATA"
@@ -147,6 +153,12 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
         Err.Raise vbObjectError + 1103, "SaveOtpremnicaMulti_TX", _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
+
+    ' Zauzetost broja JEDNOM po dokumentu, pre prve klase. U SaveOtpremnica ne
+    ' sme: Multi_TX ga zove dvaput pod istim brojem, pa bi Klasa II odbila
+    ' sopstveni red Klase I.
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                        brojOtp, "SaveOtpremnicaMulti_TX"
 
     Dim resultI As String
     If hasKlasaI Then
@@ -479,8 +491,9 @@ End Function
 ' Normalizacija broja zbirne -- JEDNO mesto za ceo ZBR-IDENT lanac.
 '
 ' CheckDuplicate poredi SIROVO (CStr(...) = searchValue, bez Trim, case-sensitive),
-' pa " 5/070926 " prolazi pored "5/070926". Ta rupa se ne zatvara u njemu (D2 --
-' preskakanje storniranih nosi ispravka-workflow na svih 6 tipova), nego OVDE.
+' pa " 5/070926 " prolazi pored "5/070926". Zbirna ga od 14.09.2026 vise ne zove
+' (D2 je povucena): zauzetost drzi modBrojevi.BrojZauzetUNizu, a normalizaciju
+' ZBR-IDENT lanca i dalje OVAJ omotac.
 Public Function ZbirnaBrojNorm(ByVal broj As String) As String
     ZbirnaBrojNorm = Trim$(NzToText(broj))
 End Function
@@ -649,11 +662,11 @@ End Function
 
 ' Kapija ZBR-ACTIVE-NUMBER-01 (ugovor par.5) kao TABELA, na jednom mestu.
 '
-' Strogo, BEZ izuzetka za istog vlasnika: aktivan logicki dokument pod tim brojem
-' znaci NE, ma ciji bio. Isti vlasnik sme tek posle storna, kad aktivnih nema.
-' To nista ne lomi: ZbirnaValidiraj se zove TACNO jednom (modScrDokumenti
-' Scr_Save), pre SaveZbirnaMulti_TX, pa validator nikad ne vidi red koji je sam
-' upravo napisao; izmene zbirne u mestu nema -- ispravka je storno pa nov unos.
+' Strogo, BEZ izuzetka za istog vlasnika: broj koji je IKAD nosila zbirna znaci
+' NE, ma ciji bio i bio aktivan ili storniran. Ispravka je storno pa nov unos pod
+' NOVIM brojem (A9, odluka 14.09.2026). To nista ne lomi: ZbirnaValidiraj se zove
+' TACNO jednom (modScrDokumenti Scr_Save), pre SaveZbirnaMulti_TX, pa validator
+' nikad ne vidi red koji je sam upravo napisao.
 Public Function ZbirnaNovUnosRazlog(ByRef id As ZbirnaIdent) As String
     If id.integrityStatus <> ZBR_INT_OK Then
         ZbirnaNovUnosRazlog = ZBR_GATE_INTEGRITET
@@ -673,8 +686,15 @@ Public Function ZbirnaNovUnosRazlog(ByRef id As ZbirnaIdent) As String
         Exit Function
     End If
 
-    ' Aktivnih nema, a istorija postoji: ispravku sme SAMO isti vlasnik.
-    If Not id.historicalOwnerIsScope Then ZbirnaNovUnosRazlog = ZBR_GATE_TUDJ
+    ' Aktivnih nema, a istorija postoji: broj je zakljucan za SVE. Drugi vlasnik
+    ' dobija TUDJ, isti STORNIRAN -- ispravka zbirne dobija nov broj (A9, odluka
+    ' 14.09.2026), a ZbirnaValidiraj joj izvor trazi po starom broju iz konteksta
+    ' ispravke. Do tada je isti vlasnik ovde smeo ponovo.
+    If id.historicalOwnerIsScope Then
+        ZbirnaNovUnosRazlog = ZBR_GATE_STORNIRAN
+    Else
+        ZbirnaNovUnosRazlog = ZBR_GATE_TUDJ
+    End If
 End Function
 
 ' Tanak omotac nad JEDNOM tabelom iznad -- da druga kopija pravila ne odluta.
@@ -931,6 +951,12 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
         Err.Raise vbObjectError + 1203, "SaveZbirnaMulti_TX", _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
+
+    ' Zauzetost broja JEDNOM po dokumentu, pre prve klase. U SaveZbirna ne sme:
+    ' Multi_TX ga zove dvaput pod istim brojem, pa bi Klasa II odbila sopstveni
+    ' red Klase I.
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                        brojZbirne, "SaveZbirnaMulti_TX"
 
     Dim resultI As String
     If hasKlasaI Then
@@ -1433,6 +1459,8 @@ Private Function CreateZbirna(ByVal h As Object, _
 
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
                                      brojZbirne, SRC
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                        brojZbirne, SRC
 
     ' --- izvor: procitaj, proveri, izvedi ------------------------------------
     Dim data As Variant
@@ -2566,6 +2594,8 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
     ' koji je bio tacan postane tudj bez ijedne druge provere.
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
                                      brojOtp, SRC
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                        brojOtp, SRC
 
     Dim cena As Double
     cena = OtpHdrBrojOpcion(h, "Cena", SRC)
@@ -2629,6 +2659,11 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
     ' koji je bio tacan postane tudj bez ijedne druge provere.
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
                                      brojOtp, SRC
+
+    ' Draft sme da ZADRZI svoj broj i dan, a ne sme da preuzme tudj: sopstveni
+    ' red se izuzima po ID-u, ne po datumu, jer header moze ostati na istom danu.
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_OTP, stanicaID, datum, _
+                                        brojOtp, SRC, otpremnicaID
 
     ' Zaglavlje se menja tek posto se zna da je novo ocekivanje ispravno --
     ' inace bi lose ocekivanje ostavilo pola izmenjen header.

@@ -52,6 +52,11 @@ Private mOtpBroj As String        ' njen broj - za traku i naslov liste
 ' broj otpremnice -> OtpremnicaID; puni ga RowsOtpremnice u istom prolazu.
 ' Mreza prikazuje broj (to je ono sto operater vidi), a ekranu treba ID.
 Private mOtpIds As Object
+' broj otpremnice -> kljuc dokumenta "STANICA|yyyymmdd". Razlikuje Klasu I i II
+' ISTOG dokumenta (legitimno, isti kljuc) od dva dokumenta istog broja (od
+' 14.09.2026 legalno po A2: druga stanica ili drugi dan). Kod drugog slucaja
+' mOtpIds(broj) postaje "" -- broj je dvosmislen i ne razresava se u ID.
+Private mOtpDok As Object
 ' broj bloka -> OtkupID, za listu izgubljenih; puni ga RowsIzgubljeni
 Private mLostIds As Object
 
@@ -249,6 +254,9 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         If Len(broj) = 0 Then Exit Function
         If mOtpIds Is Nothing Then Exit Function
         If Not mOtpIds.Exists(broj) Then Exit Function
+        ' Dvosmislen broj (dva dokumenta) ne bira nijedan -- inace bi se blokovi
+        ' prevezivali na tudju otpremnicu.
+        If Len(CStr(mOtpIds(broj))) = 0 Then Exit Function
         mOtpID = CStr(mOtpIds(broj))
         mOtpBroj = broj
         ' Sve sto otpremnica zna o robi prepisuje se u formu; operateru ostaju
@@ -495,11 +503,46 @@ Private Function OtpIdZaBroj(ByVal broj As String) As String
     If Len(broj) = 0 Then Exit Function
     If Not mOtpIds Is Nothing Then
         If mOtpIds.Exists(broj) Then
+            ' Prazna vrednost znaci DVOSMISLEN broj. Ne pada na tabelu: tamo bi
+            ' isti broj dao prvi red, a to je bas pogadjanje koje mapa odbija.
             OtpIdZaBroj = CStr(mOtpIds(broj))
             Exit Function
         End If
     End If
-    OtpIdZaBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID))
+
+    ' Iz tabele, fail-closed. Ranije LookupValue: PRVI red po sirovom broju,
+    ' ukljucujuci stornirane i tudje stanice -- stampa bi tiho uzela pogresnu
+    ' otpremnicu. Sada: aktivni redovi, i "" cim broj nose dva dokumenta.
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cBr As Long, cID As Long, cSt As Long, cDat As Long, cSto As Long
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cID = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cSt = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
+    cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    cSto = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    If cBr = 0 Or cID = 0 Or cSt = 0 Or cDat = 0 Then Exit Function
+
+    Dim i As Long, kljuc As String, prviID As String, prviKljuc As String
+    For i = 1 To UBound(d, 1)
+        If BrojJednak(d(i, cBr), broj) Then
+            If cSto > 0 Then
+                If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) = 0 Then GoTo Sledeci
+            End If
+            kljuc = UCase$(Trim$(NzToText(d(i, cSt))))
+            If IsDate(d(i, cDat)) Then kljuc = kljuc & "|" & Format$(CDate(d(i, cDat)), "yyyymmdd")
+            If Len(prviID) = 0 Then
+                prviID = Trim$(NzToText(d(i, cID)))
+                prviKljuc = kljuc
+            ElseIf kljuc <> prviKljuc Then
+                Exit Function
+            End If
+        End If
+Sledeci:
+    Next i
+    OtpIdZaBroj = prviID
 End Function
 
 '---------------------------------------------- LISTA: KOOPERANTI (F1)
@@ -649,7 +692,8 @@ Private Function PrintSpecDat(ByVal arg As String) As Boolean
     Set col = New Collection
     If Not mOtpIds Is Nothing Then
         For Each k In mOtpIds.keys
-            col.Add CStr(mOtpIds(k))
+            ' dvosmislen broj ("") se ne stampa -- ne zna se koji je dokument
+            If Len(CStr(mOtpIds(k))) > 0 Then col.Add CStr(mOtpIds(k))
         Next k
     End If
     If col.count = 0 Then
@@ -2066,6 +2110,7 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
     If Not IsArray(src) Then Exit Function
     Set d = modOtkupBlok.BuildNapisanoByOtp()
     Set mOtpIds = CreateObject("Scripting.Dictionary")
+    Set mOtpDok = CreateObject("Scripting.Dictionary")
     Set stan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
 
     iID = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_ID)
@@ -2118,7 +2163,18 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
 
         n = n + 1
         outA(n, 1) = modUiData.CellS(src, r, iBroj)
-        mOtpIds(CStr(outA(n, 1))) = otpID
+        Dim otpKljuc As String
+        otpKljuc = UCase$(Trim$(modUiData.CellS(src, r, iSt))) & "|" & Format$(vDat, "yyyymmdd")
+        If Not mOtpIds.Exists(CStr(outA(n, 1))) Then
+            mOtpIds(CStr(outA(n, 1))) = otpID
+            mOtpDok(CStr(outA(n, 1))) = otpKljuc
+        ElseIf CStr(mOtpDok(CStr(outA(n, 1)))) <> otpKljuc Then
+            ' Dva DOKUMENTA istog broja -- ranije je poslednji tiho pobedjivao, pa
+            ' su izbor reda i stampa uzimali tudju otpremnicu.
+            mOtpIds(CStr(outA(n, 1))) = ""
+        ElseIf Len(CStr(mOtpIds(CStr(outA(n, 1))))) > 0 Then
+            mOtpIds(CStr(outA(n, 1))) = otpID
+        End If
         outA(n, 2) = modUiData.CellDate(src, r, iDat)
         outA(n, 3) = kup
         outA(n, 4) = modUiData.CellS(src, r, iVr)

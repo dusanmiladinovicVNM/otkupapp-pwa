@@ -500,6 +500,8 @@ Public Sub RunAllTests()
     RunOne 210
     RunOne 211
     RunOne 212
+    RunOne 213
+    RunOne 214
     RunOne 124
     RunOne 125
     RunOne 126
@@ -784,6 +786,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 210: TestName = "T_Sema_FormatCelijeCuvaVrednost"
         Case 211: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
         Case 212: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
+        Case 213: TestName = "T_BrojZauzetUNizu_OpsegIStorno"
+        Case 214: TestName = "T_Novac_BrojNijeJedinstven"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -1004,6 +1008,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 210: T_Sema_FormatCelijeCuvaVrednost
         Case 211: T_Sema_ZurnalCuvaVrednostKrozJournalCell
         Case 212: T_Sema_MagacinOdbijaUpisBezUgovora
+        Case 213: T_BrojZauzetUNizu_OpsegIStorno
+        Case 214: T_Novac_BrojNijeJedinstven
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -1437,7 +1443,7 @@ Private Sub T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama()
              "zbirna bez unete ambalaze ne prolazi kapiju"
 
     ' Obrnut smer: zbirna koja se u svemu slaze PROLAZI kapiju. Dalje je
-    ' zaustavlja samo duplikat (FX_ZBIRNA vec postoji u fixture-u) -- druga
+    ' zaustavlja zauzetost broja (FX_ZBIRNA vec postoji u fixture-u) -- druga
     ' provera i druga poruka, pa je razlika merljiva.
     Set p = ZbirnaUnosKojiSeSlaze()
     res = modDokUnos.ZbirnaValidiraj(p, fokus)
@@ -1559,8 +1565,8 @@ Private Sub T_ScrSave_RutaPoRezimu()
     AssertEq CStr(p("fokus")), "kupacID", "ekran vraca i polje na koje ide fokus"
 
     ' F5: iznos veci od neisplacenog ostatka bloka -- pravilo koje postoji SAMO
-    ' na putu isplate. Prazan broj dokumenta preskace proveru duplikata, pa ovaj
-    ' test ne dira nijednu tabelu.
+    ' na putu isplate. Isplata nema proveru duplikata broja (A2 red NOV), pa
+    ' ovaj test ne pise nijednu tabelu.
     Set p = PoljaEkrana(modScrDokumenti.modeKey("F5"))
     p("stanicaID") = FX_STANICA
     p("vrsta") = FX_VRSTA
@@ -6224,8 +6230,8 @@ Private Function IsplataUnosKojiProlazi() As Object
     p("partnerTekst") = FX_KOOPERANT
     p("vrsta") = FX_VRSTA
     ' Broj MORA biti popunjen: uz VALIDACIJA_UNOSA (podrazumevano ukljucena)
-    ' prazan broj obara i inace ispravan unos. Vrednost je izmisljena bas da je
-    ' provera duplikata ne nadje ni u tblAmbalaza ni u tblNovac.
+    ' prazan broj obara i inace ispravan unos. Provere duplikata broja isplata
+    ' nema (A2 red NOV), pa vrednost ne mora da bude jedinstvena.
     p("brDok") = FX_BROJ_NOVAC
     p("novac") = 500
     p("otkupID") = FX_BLOK
@@ -17094,9 +17100,10 @@ End Sub
 
 ' ZBR-ACTIVE-NUMBER-01: kapija za nov unos zbirne (ugovor par.5; A15, A18).
 '
-' Strogo pravilo: aktivan logicki dokument pod tim brojem znaci NE, MA CIJI BIO.
-' Isti vlasnik sme tek POSLE storna. Test tvrdi OBA smera -- inace bi bio zelen
-' i kad kapija odbija sve, i kad propusta sve.
+' Strogo pravilo: broj koji je IKAD nosila zbirna znaci NE, MA CIJI BIO -- ni
+' isti vlasnik posle storna (A9, odluka 14.09.2026: ispravka dobija nov broj).
+' Test tvrdi OBA smera -- inace bi bio zelen i kad kapija odbija sve, i kad
+' propusta sve; nov broj mora da prodje.
 Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Dim id As ZbirnaIdent
     Dim rInteg As String, rAktivan As String, rAktivanIsti As String
@@ -17146,7 +17153,7 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     id = ZbirnaIdentResolve("ZB-NOV-TEST", FX_VOZAC, FX_KUPAC)
     rNov = ZbirnaNovUnosRazlog(id)
 
-    ' Ispravka: isti red storniran -> isti vlasnik sme, drugi ne sme.
+    ' Posle storna: isti vlasnik NE sme (STORNIRAN), drugi NE sme (TUDJ).
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, "Da"
     id = ZbirnaIdentResolve(FX_ZBIRNA_MIRNA, FX_VOZAC, FX_KUPAC)
     rIspravka = ZbirnaNovUnosRazlog(id)
@@ -17179,9 +17186,102 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     AssertEq rRazmaci, ZBR_GATE_AKTIVNA, _
              "A15: razmaci ne otvaraju rupu koju sirovo poredjenje pusta"
     AssertEq rNov, "", "nov broj PROLAZI -- kapija ne odbija sve"
-    AssertEq rIspravka, "", "posle storna ISTI vlasnik sme ponovo (ispravka)"
+    AssertEq rIspravka, ZBR_GATE_STORNIRAN, _
+             "posle storna ni ISTI vlasnik ne sme ponovo -- ispravka dobija nov broj (A9)"
     AssertEq rTudj, ZBR_GATE_TUDJ, "posle storna DRUGI vlasnik ne sme"
     AssertEq rSiroce, ZBR_GATE_SIROCE, "I1: broj koji drzi aktivna prijemnica nije slobodan"
+End Sub
+
+' ZAUZETOST BROJA U NIZU (modBrojevi.BrojZauzetUNizu) -- A2 tacke 2 i 4.
+'
+' Meri se nad FIXTURE redom ZBI-TEST-4 (normal production state), koji se
+' privremeno stornira i vraca PRE tvrdnji. Nivo merenja: poslovni broj u nizu
+' (vozac, dan) -- ne logicki dokument ni fizicki red.
+'
+' SABOTAZE: preskoci stornirane u BrojZauzetUNizu -> pukne "stornirana zbirna i
+' dalje drzi broj"; izbaci poredjenje vlasnika -> pukne "drugi vozac je drugi
+' niz"; izbaci poredjenje dana -> pukne "drugi dan je drugi niz"; Case Else u
+' Exit Function -> pukne "nepoznata vrsta nije slobodna".
+Private Sub T_BrojZauzetUNizu_OpsegIStorno()
+    Dim p4 As String, dat As Variant, d As Date
+    Dim rStorno As String, rRazmaci As String, rDrugiVozac As String
+    Dim rDrugiDan As String, rNov As String
+    Dim nepoznataPodigla As Boolean, ignor As String
+
+    dat = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_ZBR_DATUM)
+    AssertEq IsDate(dat), True, "preduslov: fixture red ZBI-TEST-4 ima datum"
+    If Not IsDate(dat) Then Exit Sub
+    d = CDate(dat)
+
+    p4 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, "Da"
+
+    rStorno = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, FX_VOZAC, d, FX_ZBIRNA_MIRNA)
+    rRazmaci = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, " " & LCase$(FX_VOZAC) & " ", _
+                                          d, "  " & LCase$(FX_ZBIRNA_MIRNA) & " ")
+    rDrugiVozac = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, FX_VOZAC2, d, FX_ZBIRNA_MIRNA)
+    rDrugiDan = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, FX_VOZAC, _
+                                           DateAdd("d", 1, d), FX_ZBIRNA_MIRNA)
+    rNov = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, FX_VOZAC, d, "ZB-NOV-TEST")
+
+    On Error Resume Next
+    ignor = modBrojevi.BrojZauzetUNizu("PRJ", FX_KUPAC, d, FX_ZBIRNA_MIRNA)
+    nepoznataPodigla = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_STORNIRANO, p4
+
+    AssertEq rStorno, "ZBI-TEST-4", "ZBR: stornirana zbirna i dalje drzi broj (A9)"
+    AssertEq rRazmaci, "ZBI-TEST-4", "ZBR: razmaci i mala slova ne otvaraju rupu"
+    AssertEq rDrugiVozac, "", "ZBR: drugi vozac je drugi niz -- isti broj sme (A2)"
+    AssertEq rDrugiDan, "", "ZBR: drugi dan je drugi niz"
+    AssertEq rNov, "", "ZBR: nov broj je slobodan -- provera ne odbija sve"
+    AssertEq nepoznataPodigla, True, "nepoznata vrsta nije slobodna (fail-closed)"
+End Sub
+
+' NOVAC NEMA PROVERU DUPLIKATA BROJA (A2 red NOV, odluka 14.09.2026).
+'
+' Broj novca nije jedinstven po konstrukciji (izvod upisuje sve stavke pod istim
+' brojem, split nasledjuje broj), pa isplata i uplata pod vec postojecim brojem
+' novca prolaze. Novac je i ODVOJEN od reversa: broj koji nosi revers u
+' tblAmbalaza ne obara isplatu. Ne pise tabele -- zove samo validatore.
+'
+' SABOTAZA: vrati "dup = DuplBroj(...)" blok u IsplataValidiraj -> pukne po imenu
+' na isplati i na broju reversa; isto u UplataValidiraj -> pukne na uplati.
+Private Sub T_Novac_BrojNijeJedinstven()
+    Const REV_BROJ As String = "REV-IZV-1"
+    Dim p As Object, fokus As String
+    Dim rIsplata As String, rUplata As String, rRevBroj As String
+
+    Set p = IsplataUnosKojiProlazi()
+    p("brDok") = FX_NOVAC_DUPLI
+    rIsplata = modNovacUnos.IsplataValidiraj(p, fokus)
+
+    ' Uplata BEZ fakture (avans kupca). Fixture faktura FAK-TEST-1 je u tom
+    ' trenutku suite vec placena, pa bi UplataFakturaProblem odbio unos iz
+    ' razloga koji nema veze sa brojem -- i tvrdnja ne bi merila proveru
+    ' duplikata (mereno: prva verzija je pala bas tako).
+    Set p = UplataUnosKojiProlazi()
+    p("fakturaID") = ""
+    p("fakturaTekst") = ""
+    p("brDok") = FX_NOVAC_DUPLI
+    rUplata = modNovacUnos.UplataValidiraj(p, fokus)
+
+    Set p = IsplataUnosKojiProlazi()
+    p("brDok") = REV_BROJ
+    rRevBroj = modNovacUnos.IsplataValidiraj(p, fokus)
+
+    ' Preduslovi: brojevi STVARNO postoje, inace tvrdnje ispod ne mere nista.
+    AssertEq (Len(CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, FX_NOVAC_DUPLI, COL_NOV_DATUM)) > 0), True, _
+             "preduslov: broj novca vec postoji u tblNovac"
+    AssertEq (Len(CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, REV_BROJ, COL_AMB_DATUM)) > 0), True, _
+             "preduslov: broj reversa postoji u tblAmbalaza"
+
+    AssertEq rIsplata, "", "isplata pod vec postojecim brojem novca prolazi"
+    AssertEq rUplata, "", "uplata pod vec postojecim brojem novca prolazi"
+    AssertEq rRevBroj, "", "broj reversa ne obara isplatu -- novac je odvojen od reversa"
 End Sub
 
 ' I2: prijemnica se vezuje SAMO na jednoznacno razresenu zbirnu.
