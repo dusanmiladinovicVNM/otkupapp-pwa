@@ -258,6 +258,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_IspravkaPodNovimBrojem
     Test_BKTX_ReversPisacOdbijaZauzet
     Test_BKTX_ReversKoopBrojDrugaStanica
+    Test_BKTX_ReversIDNaSvimNogama
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -9917,6 +9918,101 @@ Private Sub Test_BKTX_ReversKoopBrojDrugaStanica()
 EH:
     LogFatal "Test_BKTX_ReversKoopBrojDrugaStanica", Err.Number, Err.description
 End Sub
+
+' REV-IDENT-01 (Faza 1): identitet logickog reversa je ReversID -- ISTI na svim
+' nogama jednog dokumenta, RAZLICIT izmedju dokumenata. Kroz pravi pisac.
+'
+' Nivo merenja: logicki dokument. Preduslov je fizicki (KOOP revers ima dve noge,
+' FIRMA jednu), pa se tek onda tvrdi da te noge nose isti, neprazan ReversID. Uz to
+' B10 (modIntegritet) prijavljuje nogu kojoj je ReversID obrisan i grupu kojoj time
+' fali noga Kooperant -- a ispravan revers ne prijavljuje.
+'
+' SABOTAZE: izostavi reversID u nozi Kooperant IZDAVANJE grane SaveOMUlaz_TX ->
+' pukne "REV-ID KOOP izdavanje: obe noge nose isti ReversID"; u Chk_B10 preskoci
+' prazan ReversID -> pukne "REV-ID B10: noga bez ReversID prijavljena".
+Private Sub Test_BKTX_ReversIDNaSvimNogama()
+    On Error GoTo EH
+
+    Dim scenario As String: scenario = NewScenarioCode("REVID")
+    Dim d As Date: d = NextTestDate()
+    Dim brojI As String: brojI = TEST_PREFIX & "-REV-IDI-" & scenario
+    Dim brojP As String: brojP = TEST_PREFIX & "-REV-IDP-" & scenario
+    Dim brojF As String: brojF = TEST_PREFIX & "-REV-IDF-" & scenario
+
+    AssertTrue UpisiReversTest(d, brojI, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+               "REV-ID: izdavanje kooperantu upisano"
+    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
+               "REV-ID: povrat od kooperanta upisan"
+    AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
+               "REV-ID: FIRMA revers upisan"
+
+    Dim kI As String, sI As String, kP As String, sP As String, sF As String
+    kI = AmbIDNoge(brojI, TEST_KOOP_ID, "Kooperant", d)
+    sI = AmbIDNogeStanice(brojI, TEST_ST_ID, d)
+    kP = AmbIDNoge(brojP, TEST_KOOP_ID, "Kooperant", d)
+    sP = AmbIDNogeStanice(brojP, TEST_ST_ID, d)
+    sF = AmbIDNogeStanice(brojF, TEST_ST_ID, d)
+    AssertTrue Len(kI) > 0 And Len(sI) > 0 And Len(kP) > 0 And Len(sP) > 0 And Len(sF) > 0, _
+               "REV-ID: preduslov -- KOOP reversi imaju obe noge, FIRMA nogu Stanica"
+    AssertEquals "", AmbIDNoge(brojF, TEST_KOOP_ID, "Kooperant", d), _
+                 "REV-ID: preduslov -- FIRMA revers nema nogu Kooperant"
+
+    Dim ridI As String, ridP As String, ridF As String
+    ridI = ReversIDReda(sI)
+    ridP = ReversIDReda(sP)
+    ridF = ReversIDReda(sF)
+    AssertTrue Len(ridI) > 0 And Len(ridP) > 0 And Len(ridF) > 0, _
+               "REV-ID: svaka noga Stanica nosi ReversID"
+    AssertEquals ridI, ReversIDReda(kI), "REV-ID KOOP izdavanje: obe noge nose isti ReversID"
+    AssertEquals ridP, ReversIDReda(kP), "REV-ID KOOP povrat: obe noge nose isti ReversID"
+    AssertTrue ridI <> ridP And ridI <> ridF And ridP <> ridF, _
+               "REV-ID: tri dokumenta imaju tri razlicita ReversID-a"
+
+    ' B10: identitet se ne pogadja po broju -- noga bez ReversID-a je nalaz.
+    Dim r As Long: r = RedAmbalaze(kP)
+    AssertTrue r > 0, "REV-ID B10: preduslov -- red noge Kooperant povrata nadjen"
+    If r > 0 Then RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_REVERS_ID, "", "Test_BKTX_ReversIDNaSvimNogama"
+    AssertTrue InStr(1, IntegritetRedoviSa(kP), "nema ReversID", vbBinaryCompare) > 0, _
+               "REV-ID B10: noga bez ReversID prijavljena"
+    AssertTrue InStr(1, IntegritetRedoviSa(ridP), "KOOP ocekuje 1", vbBinaryCompare) > 0, _
+               "REV-ID B10: revers kome fali noga Kooperant prijavljen"
+    AssertEquals "", IntegritetRedoviSa(ridI), "REV-ID B10: ispravan revers nije prijavljen"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ReversIDNaSvimNogama", Err.Number, Err.description
+End Sub
+
+' ReversID reda tblAmbalaza po AmbID; prazno kad nema.
+Private Function ReversIDReda(ByVal ambID As String) As String
+    ReversIDReda = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_REVERS_ID)))
+End Function
+
+' Indeks reda tblAmbalaza sa datim AmbID; 0 kad nema.
+Private Function RedAmbalaze(ByVal ambID As String) As Long
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cID As Long, i As Long
+    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    If cID = 0 Then Exit Function
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cID))) = ambID Then
+            RedAmbalaze = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Redovi nalaza integriteta (modIntegritet) koji sadrze dati tekst, spojeni vbLf.
+Private Function IntegritetRedoviSa(ByVal sadrzi As String) As String
+    Dim nal As Variant, i As Long, out As String
+    nal = modIntegritet.GetIntegritetRows()
+    If Not IsArray(nal) Then Exit Function
+    For i = LBound(nal, 1) To UBound(nal, 1)
+        If InStr(1, CStr(nal(i, 2)), sadrzi, vbBinaryCompare) > 0 Then out = out & CStr(nal(i, 2)) & vbLf
+    Next i
+    IntegritetRedoviSa = out
+End Function
 
 ' Revers kroz pravi pisac (SaveOMUlaz_TX): 5 gajbi test tipa, bez novca.
 Private Function UpisiReversTest(ByVal d As Date, ByVal broj As String, _

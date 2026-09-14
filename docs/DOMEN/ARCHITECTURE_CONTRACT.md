@@ -85,6 +85,27 @@ broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznača
 (nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
 upisuje umesto ID-a.
 
+**ReversID — REV-IDENT-01** (odluke operatera 15.09.2026). Identitet logičkog
+reversa je `tblAmbalaza.ReversID` (`RID-00001`), **isti na svim nogama** jednog
+dokumenta: Kooperant + Stanica za KOOP, sama Stanica za FIRMA. Jedini pisac
+(`modDokumenta.SaveOMUlaz_TX`) ga kuje **jednom po dokumentu**
+(`modAmbalaza.NoviReversID`) i nasleđuje u svakoj nozi; `TrackAmbalaza` ga
+upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
+
+1. ReversID **zamenjuje** `AmbID` noge Stanica kao trajni identitet (trag
+   ispravke, undo, pitanje ispravke). `AmbID` ostaje identitet fizičkog reda.
+2. Nose ga **sva četiri** smera.
+3. Aktivan revers **bez** ReversID-a je integritetska greška — bez fallback-a na
+   broj i bez backfill-a (`modIntegritet` B10, isti obrazac kao `GeneracijaID`).
+   B10 proverava i oblik: jedna noga Stanica; KOOP još tačno jedna noga
+   Kooperant, FIRMA nijedna; sve noge istog broja, tipa i dana.
+4. Isporuka u dve faze. **Faza 1 (isporučena):** kolona, pisac, B10 — čitaoci i
+   dalje rade po ključu (broj, tip, stanica, dan), a trajni identitet iz
+   prethodnog pasusa, pravilo 1 i KOOP klauzula u A2 važe **nepromenjeno**.
+   **Faza 2:** storno, pregled, undo, ispravka i štampa prelaze na ReversID, trag
+   ispravke nosi ReversID, zabrana istog KOOP broja na dve stanice nestaje, a
+   zauzetost broja postaje (stanica, dan) za sva četiri smera.
+
 Tri pravila ključa primenjena su po preporuci pre-flight-a; **operater ih je
 potvrdio 14.09.2026** (PR #328):
 

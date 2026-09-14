@@ -1179,32 +1179,35 @@ SEED = {
         # dokumentu (AMB_LETVA): kljuc reversa je DokumentID + DokumentTip +
         # TIP AMBALAZE, pa pregled mora da ih drzi u DVA reda (AUD-012); bez
         # ovog para bi se spajanje tipova vratilo neprimeceno.
+        # ReversID (REV-IDENT-01): pisac pise JEDAN tip ambalaze po pozivu i kuje
+        # jedan ReversID po pozivu, pa je svaki par (Kooperant + Stanica) istog
+        # tipa zaseban identitet. Brojevni sufiks jer ga kuje GetNextID ("RID-").
         {"AmbID": "AMB-IZV-K1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 30, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
          "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop"},
+         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00001"},
         {"AmbID": "AMB-IZV-S1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 30, "Smer": "Izlaz", "EntitetID": STANICA,
          "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop"},
+         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00001"},
         {"AmbID": "AMB-IZV-K2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
          "Kolicina": 5, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
          "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop"},
+         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00002"},
         {"AmbID": "AMB-IZV-S2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
          "Kolicina": 5, "Smer": "Izlaz", "EntitetID": STANICA,
          "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop"},
+         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00002"},
         # Povrat REV-IZV-2: kooperant vratio 10 gajbi -> saldo kooperanta
         # 30 + 5 - 10 = 25; kartica ambalaze ima i Ulaz i Izlaz redove.
         {"AmbID": "AMB-IZV-K3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
          "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-2",
-         "DokumentTip": "OM-Ulaz-Koop"},
+         "DokumentTip": "OM-Ulaz-Koop", "ReversID": "RID-00003"},
         {"AmbID": "AMB-IZV-S3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
          "EntitetTip": "Stanica", "DokumentID": "REV-IZV-2",
-         "DokumentTip": "OM-Ulaz-Koop"},
+         "DokumentTip": "OM-Ulaz-Koop", "ReversID": "RID-00003"},
         # STORNIRAN red sa velikom kolicinom: i izvestaj i kanonski saldo
         # (GetAmbalazeStanje) ga izuzimaju (ExcludeStornirano). Da jedna
         # strana prestane, saldo kooperanta postane 124 i slaganje pukne --
@@ -1212,13 +1215,13 @@ SEED = {
         {"AmbID": "AMB-IZV-KS", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 99, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
          "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-X",
-         "DokumentTip": "OM-Izlaz-Koop", "Stornirano": "Da"},
+         "DokumentTip": "OM-Izlaz-Koop", "Stornirano": "Da", "ReversID": "RID-00004"},
         # Ulaz od firme na OM: lista AMBALAZA za Stanicu ima i Ulaz i Izlaz
         # redove, pa cipovi ulaz/izlaz ne mere prazan skup.
         {"AmbID": "AMB-IZV-S4", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
          "Kolicina": 100, "Smer": "Ulaz", "EntitetID": STANICA,
          "EntitetTip": "Stanica", "DokumentID": "REV-IZV-3",
-         "DokumentTip": "OM-Ulaz-Firma"},
+         "DokumentTip": "OM-Ulaz-Firma", "ReversID": "RID-00005"},
         # KUPAC red: lista AMBALAZA za Kupca nije prazna. DokumentTip
         # Prijemnica -> ResolveDokBroj razresava broj iz tblPrijemnica.
         {"AmbID": "AMB-IZV-KP1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
@@ -2229,6 +2232,10 @@ ENSURE_COLS = {
     # invarijanta se drzi zbirne -- tblOtpremnica namerno ima red bez generacije
     # (OTP-LEG-A), koji T_ZavrsetakIspravke_NeDegradiraOldDocID tvrdi kao preduslov.
     "tblZbirna": ["GeneracijaID"],
+    # REV-IDENT-01: identitet logickog reversa. Kanon ga drzi kao poslednju
+    # kolonu tblAmbalaza, a donor (stari fixture) je nema -- bez nje sejanje po
+    # imenu obara red, jer SEED upisuje ReversID na revers noge.
+    "tblAmbalaza": ["ReversID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
