@@ -1328,7 +1328,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | ✅ **Otkup cutover + integracije** (PR #308, merge 12.09.2026): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
-| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9, ponovljen popis sa proverom, odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
+| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom, odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -2245,7 +2245,7 @@ mora da sprovede — ne samo izbor.
 
 | Kvar | Gde se rešava | Zašto |
 |---|---|---|
-| 2 pill plaćanja · 3 vrednost otkupa u izveštajima (saldo OM, kartica, otkupne liste, prosečna cena, zbirni OM — bez „roba po OM“, čiji manjak ide po otpremnici) · 9 testovi slaganja izveštaja | **mali PR pre PR7** | čitaju Kolicina × Cena sa zaglavlja otkupa i ne zavise od otpremnice; vrednost je na `tblOtkupStavke` (obrazac `VrednostOtkupa`, §14.3) |
+| 2 pill plaćanja · 3 vrednost otkupa u izveštajima (saldo OM, kartica, otkupne liste, prosečna cena, zbirni OM — bez „roba po OM“, čiji manjak ide po otpremnici) · 9 testovi slaganja izveštaja | **mali PR pre PR7** — ✅ #334 | čitaju Kolicina × Cena sa zaglavlja otkupa i ne zavise od otpremnice; vrednost je na `tblOtkupStavke` (obrazac `VrednostOtkupa`, §14.3) |
 | 1 napredak bloka u F1 · 5 KG-RAZLIKA u sledljivosti | **PR7** | čitaju `Otkup.OtpremnicaID`, koji PR7 zamenjuje članstvom |
 | 4 izvoz za PWA menadžment | **zaseban mali pre-flight** | menja oblik izvoznih redova koje čitaju GAS i PWA |
 | 6 ispravka otpremnice iz F2 uvek u MANUAL | **PR7** | PR7 prepisuje F2 put; test koji vozi baš taj put ide u PR7 |
@@ -2265,8 +2265,8 @@ mora da sprovede — ne samo izbor.
 
 #### Redosled do koda PR7
 
-1. merge ovog pre-flight-a (#333);
-2. mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke;
+1. ✅ merge ovog pre-flight-a (#333);
+2. ✅ mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke (#334), uz KPI „danas“;
 3. popis ponovo meren na novom `main`-u, sa nezavisnom proverom svih celina —
    posle koraka 2, jer on menja deo popisa (15.09 je provera stigla za 1 od 11);
 4. odluke iz „Još otvoreno“;
