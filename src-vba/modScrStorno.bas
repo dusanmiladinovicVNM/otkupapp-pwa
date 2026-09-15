@@ -529,6 +529,10 @@ Private Sub OsveziZaglavlje(ByVal z As Object)
         ' promasio red.
         If Len(mUvidGreska) > 0 Then
             z.Controls("stDok").caption = mUvidGreska
+        ElseIf mSelTip = STIP_REVERSI And Len(mSelDocID) > 0 Then
+            ' Revers nema uvid po prirodi -- zaglavlje ipak imenuje izabran dokument sa
+            ' stanicom i danom (REV-IDENT-01 Faza 2b).
+            z.Controls("stDok").caption = modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID)
         Else
             z.Controls("stDok").caption = Poruka("OTKUI_SCRST_NEMA")
         End If
@@ -537,7 +541,7 @@ Private Sub OsveziZaglavlje(ByVal z As Object)
     End If
     Set hd = mImpact("header")
     Set sm = mImpact("summary")
-    s = modStornoDok.TipNaziv(mSelTip, mSelOpcija) & " " & mSelBroj
+    s = modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID)
     If Len(CStr(hd("partner"))) > 0 Then s = s & "  " & ChrW(183) & "  " & CStr(hd("partner"))
     If Len(CStr(hd("datum"))) > 0 Then s = s & "  " & ChrW(183) & "  " & FmtDat(hd("datum"))
     If Len(CStr(hd("kolicina"))) > 0 Then s = s & "  " & ChrW(183) & "  " & CStr(hd("kolicina")) & " kg"
@@ -1104,6 +1108,18 @@ EH:
     Err.Clear
 End Function
 
+' Tekst potvrde storna izabranog dokumenta -- izdvojen da bi se merio (MsgBox u
+' headless run-u visi). Za revers nosi stanicu i dan (DokumentOpis): revers nema
+' uvid, a isti KOOP broj, smer i dan legalno nose reversi dve stanice (Faza 2b).
+' mode = SV_MODE_ISPRAVKA dodaje objasnjenje zamene reversa.
+Public Function StornoPotvrdaTekst(Optional ByVal mode As String = "") As String
+    Dim s As String
+    s = modPoruke.Poruka("STORNO_ASK") & " " & _
+        modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID) & "?"
+    If mode = SV_MODE_ISPRAVKA Then s = s & vbCrLf & vbCrLf & modPoruke.Poruka("OTKUI_SCRST_H_REV_ISPR")
+    StornoPotvrdaTekst = s
+End Function
+
 ' Obican storno: bez framework-a ispravke. Posledice su vec u zoni, pa je
 ' potvrda kratka -- izvod je izuzetak, jer njegov izbor ishoda za staging redove
 ' JESTE odluka operatera o PDF-u, a ne pravilo (zato je ovde, a ne u modStornoDok).
@@ -1133,8 +1149,9 @@ Private Function ObicanStorno() As Boolean
         Exit Function
     End If
 
-    If MsgBox(modPoruke.Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(mSelTip, opcija) & _
-              " " & mSelBroj & "?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+    ' Revers: tekst imenuje i stanicu i dan -- isti KOOP broj, smer i dan legalno
+    ' nose reversi dve stanice (REV-IDENT-01 Faza 2b), a ovo je poslednja kapija.
+    If MsgBox(StornoPotvrdaTekst(), vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
     If Not modStornoDok.StornoIzvrsi(mSelTip, mSelBroj, opcija, poruka, mSelDocID) Then
         modOtkupUI.ShowToast poruka, True
         Exit Function
@@ -1165,6 +1182,13 @@ Private Function StornoPoModu(ByVal mode As String) As Boolean
     ' na novi dokument, pa se ne postuje ni ako je ostao ukljucen.
     neDiraj = (mNeDiraj And mSelTip = STIP_PRIJEMNICA And _
                (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE))
+
+    ' Revers nema uvid, a ISPRAVKA odmah stornira stari revers -- potvrda pre toga
+    ' imenuje stanicu i dan, jer isti KOOP broj, smer i dan legalno nose reversi dve
+    ' stanice (REV-IDENT-01 Faza 2b). Drugi modovi reversu nisu ponudjeni.
+    If mSelTip = STIP_REVERSI Then
+        If MsgBox(StornoPotvrdaTekst(mode), vbQuestion + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+    End If
 
     Set res = modStornoDok.StornoIzvrsiMod(mSelTip, mSelBroj, mSelOpcija, mode, _
                                            False, neDiraj, mSelDocID)

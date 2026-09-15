@@ -7242,7 +7242,9 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 
         ' Zauzetost broja u nizu (stanica, dan), sa storniranima (A9) -- ista
         ' provera koju ekran zove u ReversValidiraj. Jednom po dokumentu, pre
-        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant.
+        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant. Vazi za SVA
+        ' CETIRI smera, i jedina je provera broja: isti KOOP broj, smer i dan na
+        ' drugoj stanici je legalan (REV-IDENT-01 Faza 2b -- noge povezuje ReversID).
         modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
                                             brojDok, "SaveOMUlaz_TX"
 
@@ -7263,9 +7265,6 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                 Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
                           "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
             End If
-            ' Noga Kooperant ne nosi stanicu: isti (broj, smer, dan) ne sme ni na
-            ' drugoj stanici, inace storno/undo ne mogu da upare noge.
-            modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_IZLAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", kooperantID, "Kooperant", _
                           "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
@@ -7283,8 +7282,6 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                 Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
                           "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
             End If
-            ' Isto kao kod izdavanja: noga Kooperant ne nosi stanicu.
-            modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_ULAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", kooperantID, "Kooperant", _
                           "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID

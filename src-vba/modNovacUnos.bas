@@ -190,20 +190,6 @@ Private Function ReversBrojZauzet(ByVal p As Object) As String
         ReversBrojZauzet = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
 End Function
 
-' KOOP revers: broj zauzet za isti smer istog dana na DRUGOJ stanici -- ista
-' provera koju drzi pisac (modBrojevi.RequireReversKoopBrojJedinstven). Noga
-' Kooperant ne nosi stanicu, pa bi dva takva reversa bila nerazluciva za storno.
-' Prazno = slobodan; inace poruka sa AmbID-em noge Stanica koja drzi broj.
-Private Function ReversKoopBrojDrugde(ByVal p As Object, ByVal smer As Long) As String
-    Dim tip As String, zauzeo As String
-    If Len(S(p, "brDok")) = 0 Then Exit Function
-    If smer = SMER_REV_IZD_KOOP Then tip = DOK_TIP_OM_IZLAZ_KOOP Else tip = DOK_TIP_OM_ULAZ_KOOP
-    zauzeo = modBrojevi.ReversKoopBrojZauzetDrugde(tip, S(p, "stanicaID"), _
-                                                   CDate(p("datum")), S(p, "brDok"))
-    If Len(zauzeo) > 0 Then _
-        ReversKoopBrojDrugde = Poruka("DOKUNOS_ERR_REV_KOOP_DRUGA_STANICA") & " " & zauzeo
-End Function
-
 '=====================================================================
 ' F5 ISPLATE - novac izlazi
 '
@@ -502,15 +488,9 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
         End If
     End If
 
-    ' KOOP smer: isti (broj, smer, dan) ne sme ni na DRUGOJ stanici -- noga
-    ' Kooperant ne nosi stanicu, pa bi dva takva reversa bila nerazluciva za
-    ' storno, undo i stampu. Ista provera stoji u piscu (SaveOMUlaz_TX).
-    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
-        dup = ReversKoopBrojDrugde(p, smer)
-        If Len(dup) > 0 Then
-            fokus = "brDok": ReversValidiraj = dup: Exit Function
-        End If
-    End If
+    ' KOOP smer nema posebnu proveru druge stanice (REV-IDENT-01 Faza 2b): noge
+    ' jednog reversa povezuje ReversID, pa broj zauzima samo niz (stanica, dan) za
+    ' sva cetiri smera -- ReversBrojZauzet iznad, ista provera kao u piscu.
 
     If strogo And Len(S(p, "brDok")) = 0 Then
         fokus = "brDok": ReversValidiraj = Poruka("OTKUI_ERR_BROJ"): Exit Function

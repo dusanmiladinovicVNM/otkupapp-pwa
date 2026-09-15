@@ -1234,7 +1234,9 @@ End Function
 
 ' " (naziv / StanicaID, dd.mm.yyyy)" -- ID ostaje i uz naziv, jer dve stanice
 ' mogu imati slican naziv. "" kad stanica nije poznata.
-Private Function ReversOpis(ByVal stanicaID As String, ByVal datum As Variant) As String
+' Public: isti opis nose potvrda storna reversa i "Vrati storno" (REV-IDENT-01
+' Faza 2b -- isti KOOP broj, smer i dan legalno nose reversi dve stanice).
+Public Function ReversOpis(ByVal stanicaID As String, ByVal datum As Variant) As String
     Dim naziv As String
     If Len(Trim$(stanicaID)) = 0 Then Exit Function
     On Error Resume Next

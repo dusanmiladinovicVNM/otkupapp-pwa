@@ -49,8 +49,11 @@ Public Function GetNedovrseno() As Collection
         For i = 1 To ctx.count
             Dim c As Object: Set c = ctx(i)
             Dim oB As String: oB = CStr(c("oldBroj"))
+            ' Ispravka reversa nosi i stanicu i dan (IspravkaReversOpis): dve ispravke
+            ' istog broja na dve stanice inace imaju isti red (REV-IDENT-01 Faza 2b).
             AddNedRowFull result, "CONTEXT/" & CStr(c("mode")), oB, CStr(c("status")), _
-                CStr(c("message")), CStr(c("recoveryAction")), _
+                CStr(c("message")) & modStornoDok.IspravkaReversOpis(CStr(c("id"))), _
+                CStr(c("recoveryAction")), _
                 CStr(c("id")), CStr(c("oldDocType")), CStr(c("newBroj")), CStr(c("mode")), "CONTEXT"
             ' brojevi koje context vec pokriva -> osirocene za njih preskoci (dedup).
             If Len(oB) > 0 Then seen(oB) = True

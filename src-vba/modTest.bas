@@ -3489,6 +3489,17 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
+    ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu i
+    ' dan: od REV-IDENT-01 Faze 2b isti KOOP broj, smer i dan legalno nose reversi dve
+    ' stanice. MsgBox se ne meri -- meri se tekst koji mu se predaje. Fixture
+    ' REV-IZV-2, klik na nogu Kooperant. SABOTAZA: StornoPotvrdaTekst po (tip, broj)
+    ' -> pukne "potvrda storna reversa imenuje stanicu".
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-IZV-2", "AMB-IZV-K3", DOK_TIP_OM_ULAZ_KOOP
+    AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(), FX_STANICA, vbBinaryCompare) > 0), True, _
+             "potvrda storna reversa imenuje stanicu"
+    AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(SV_MODE_ISPRAVKA), FX_STANICA, vbBinaryCompare) > 0), True, _
+             "potvrda zamene reversa (ISPRAVKA) imenuje stanicu"
+
     modScrStorno.Scr_ResetCache
 End Sub
 ' ============================================================
@@ -17397,20 +17408,23 @@ Private Sub T_ReversValidiraj_BrojUNizu()
     AssertEq fZauzet, "brDok", "fokus ide na broj"
 End Sub
 
-' F7 KOOP REVERS -- isti (broj, smer, dan) ne sme ni na DRUGOJ stanici: noga
-' Kooperant ne nosi stanicu, pa dva takva reversa storno, undo i stampa ne bi mogli
-' da razlikuju. Drugi smer i FIRMA smerovi ostaju po stanici. Ista provera je u
-' piscu (BFP Test_BKTX_ReversKoopBrojDrugaStanica meri pisac i storno).
+' F7 KOOP REVERS -- isti (broj, smer, dan) na DRUGOJ stanici PROLAZI ekran
+' (REV-IDENT-01 Faza 2b): noge jednog reversa povezuje ReversID, pa zabrana iz
+' ranijih faza vise ne postoji. ISTA stanica istog dana i dalje odbija -- niz je
+' (stanica, dan) za sva cetiri smera. Pisac isto meri BFP
+' Test_BKTX_ReversKoopIstiBrojDveStanice.
 '
 ' Fixture (normal production state): REV-IZV-2 je povrat (OM-Ulaz-Koop), REV-IZV-3
 ' je OM-Ulaz-Firma, oba na FX_STANICA 15.03.2026. Nivo merenja: poslovni broj u
 ' nizu. Ne pise tabele.
 '
-' SABOTAZA: izbaci KOOP proveru iz ReversValidiraj -> pukne po imenu na "KOOP povrat
-' istog broja i dana na drugoj stanici se odbija na ekranu".
+' SABOTAZA: vrati u ReversValidiraj odbijanje KOOP broja i smera koji vec nosi
+' aktivan revers -> pukne po imenu na "KOOP povrat istog broja, smera i dana na
+' drugoj stanici prolazi ekran (Faza 2b)".
 Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     Dim p As Object, fokus As String
-    Dim rKoop As String, fKoop As String, rDrugiSmer As String, rFirma As String
+    Dim rKoop As String, rDrugiSmer As String, rFirma As String
+    Dim rIstaSt As String, fIstaSt As String
 
     Set p = ReversUnosKojiProlazi()
     p("datum") = CDate(FX_DATUM)
@@ -17419,7 +17433,6 @@ Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     p("brDok") = "REV-IZV-2"
     p("smerRev") = modNovacUnos.SMER_REV_PRI_KOOP
     rKoop = modNovacUnos.ReversValidiraj(p, fokus)
-    fKoop = fokus
 
     p("smerRev") = modNovacUnos.SMER_REV_IZD_KOOP
     rDrugiSmer = modNovacUnos.ReversValidiraj(p, fokus)
@@ -17428,13 +17441,22 @@ Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     p("smerRev") = modNovacUnos.SMER_REV_IZD_OM        ' -> OM-Ulaz-Firma
     rFirma = modNovacUnos.ReversValidiraj(p, fokus)
 
-    AssertEq (InStr(1, rKoop, Poruka("DOKUNOS_ERR_REV_KOOP_DRUGA_STANICA"), vbBinaryCompare) = 1), True, _
-             "KOOP povrat istog broja i dana na drugoj stanici se odbija na ekranu (bilo: " & rKoop & ")"
-    AssertEq (InStr(1, rKoop, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
+    ' Kontrola da prolaz nije placebo: ISTA stanica, isti broj, smer i dan.
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("brDok") = "REV-IZV-2"
+    p("smerRev") = modNovacUnos.SMER_REV_PRI_KOOP
+    rIstaSt = modNovacUnos.ReversValidiraj(p, fokus)
+    fIstaSt = fokus
+
+    AssertEq rKoop, "", "KOOP povrat istog broja, smera i dana na drugoj stanici prolazi ekran (Faza 2b)"
+    AssertEq rDrugiSmer, "", "KOOP drugi smer istog broja na drugoj stanici prolazi"
+    AssertEq rFirma, "", "FIRMA isti broj i dan na drugoj stanici prolazi"
+    AssertEq (InStr(1, rIstaSt, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
+             "KOOP povrat istog broja, smera i dana na ISTOJ stanici se odbija (bilo: " & rIstaSt & ")"
+    AssertEq (InStr(1, rIstaSt, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
              "poruka imenuje nogu Stanica koja drzi broj"
-    AssertEq fKoop, "brDok", "fokus ide na broj"
-    AssertEq rDrugiSmer, "", "KOOP drugi smer istog broja na drugoj stanici prolazi (uparivanje ide po smeru)"
-    AssertEq rFirma, "", "FIRMA isti broj i dan na drugoj stanici prolazi (nema noge Kooperant)"
+    AssertEq fIstaSt, "brDok", "fokus ide na broj"
 End Sub
 
 ' I2: prijemnica se vezuje SAMO na jednoznacno razresenu zbirnu.
