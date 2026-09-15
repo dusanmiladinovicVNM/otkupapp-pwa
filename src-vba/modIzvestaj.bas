@@ -524,6 +524,15 @@ Public Function ReversStampaNoge(ByVal dokID As String, ByVal dokTip As String, 
                            "jednoznacan (integritet B10). Stampa odbijena."
         Exit Function
     End If
+    If Not uzOtkup Then
+        ' Granica dokumenta: papir ne sme da pokupi red tudjeg dokumenta sa istim
+        ' ReversID-om, pa ni da se sklopi preko njega (modStorno.ReversIDGranica).
+        Dim granica As String: granica = modStorno.ReversIDGranica(reversID)
+        If Len(granica) > 0 Then
+            ReversStampaNoge = granica & " Stampa odbijena."
+            Exit Function
+        End If
+    End If
 
     Dim i As Long
     For i = 1 To UBound(d, 1)

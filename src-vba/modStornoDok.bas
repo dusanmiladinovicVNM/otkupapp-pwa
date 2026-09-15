@@ -177,6 +177,7 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                 ' razlog vidi pre potvrde.
                 revBroj = broj: revTip = opcija
                 razlog = ReversIDRazresi(docID, revBroj, revTip, revID, False)
+                If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
                 If Len(razlog) > 0 Then
                     StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
                 ElseIf ReversRedoviRID(revID, False).count = 0 Then

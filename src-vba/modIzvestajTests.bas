@@ -958,8 +958,10 @@ End Sub
 ' SABOTAZE: izbaci ReversID iz gkey reversa -> pukne "dva reversa ostaju dva
 ' reda"; u ReversStampaNoge ne poredi ReversID -> pukne "stampa FIRMA bira samo
 ' nogu svog ReversID-a"; pusti prazan ReversID -> pukne "stampa odbija revers bez
-' ReversID-a"; izbaci proveru broja -> pukne "stampa odbija ReversID koji nose
-' redovi drugog broja".
+' ReversID-a"; izbaci granicu dokumenta iz ReversStampaNoge -> pukne "stampa odbija
+' ReversID koji nosi i red koji nije revers" (red DRUGOG BROJA pod istim ReversID-om
+' hvataju i granica i petlja nogu -- dva sloja, pa "stampa odbija ReversID koji nose
+' redovi drugog broja" nije dokaz ni jedne od njih).
 Private Sub T_E2E_ReversIstiBrojDveStanice()
     Const S As String = "E2E revers isti broj, dve stanice: "
     On Error GoTo EH
@@ -1030,6 +1032,15 @@ Private Sub T_E2E_ReversIstiBrojDveStanice()
                                       DOK_TIP_OM_IZLAZ_KOOP, ridK1)
     raz = ReversStampaNoge(DOKK, DOK_TIP_OM_IZLAZ_KOOP, TIPA, ridK1, noge)
     IzvChk Len(raz) > 0, S & "stampa odbija ReversID koji nose redovi drugog broja"
+
+    ' Fault injection: red koji nije revers (otpremnica, sopstveni tip ambalaze) sa
+    ' ReversID-om reversa B. Tip ambalaze je drugi, pa ga petlja nogu ne bi ni
+    ' videla -- papir odbija granica dokumenta.
+    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-BX", d, TIPC, 2, "Izlaz", _
+                                      IZVT_STANICA2, "Stanica", "", "IZVT-OTP-BX", _
+                                      DOK_TIP_OTPREMNICA, ridB)
+    raz = ReversStampaNoge(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, ridB, noge)
+    IzvChk Len(raz) > 0, S & "stampa odbija ReversID koji nosi i red koji nije revers"
     Exit Sub
 
 EH:

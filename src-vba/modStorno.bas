@@ -2306,7 +2306,8 @@ EH:
     LogAndReraise SRC
 End Function
 
-' Zauzima li AKTIVAN revers broj. Sa (stanicaID, dan) pita niz: aktivnu nogu
+' Zauzima li AKTIVAN revers broj. dokumentTip prazan = bilo koji od cetiri smera
+' reversa (dele jedan niz). Sa (stanicaID, dan) pita niz: aktivnu nogu
 ' Stanica tog broja i smera na toj stanici, tog dana -- to je pitanje duplikata
 ' (undo garda), ne identiteta dokumenta. Bez stanice odgovara na sire pitanje
 ' "ima li ijedan aktivan red (broj, tip)" -- dovoljno za poruku "nije pronadjen",
@@ -2333,10 +2334,14 @@ Public Function ActiveAmbalazaDokExists(ByVal brDok As String, _
     colEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
     Dim saKljucem As Boolean: saKljucem = (Len(Trim$(stanicaID)) > 0)
-    Dim i As Long
+    Dim i As Long, tipOk As Boolean
     For i = 1 To UBound(data, 1)
-        If BrojJednak(data(i, colDokID), brDok) And _
-           Trim$(NzToText(data(i, colDokTip))) = Trim$(dokumentTip) Then
+        If Len(Trim$(dokumentTip)) = 0 Then
+            tipOk = ReversTipJe(NzToText(data(i, colDokTip)))
+        Else
+            tipOk = (Trim$(NzToText(data(i, colDokTip))) = Trim$(dokumentTip))
+        End If
+        If BrojJednak(data(i, colDokID), brDok) And tipOk Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 If Not saKljucem Then
                     ActiveAmbalazaDokExists = True
@@ -2486,12 +2491,19 @@ End Function
 ' statusa storna -- sve noge dokumenta, svih tipova ambalaze. Nema uparivanja nogu:
 ' noga Kooperant pripada dokumentu jer nosi njegov ReversID, ne zato sto je istog
 ' broja i dana kao neka noga Stanica. Prazan ReversID ne bira nista.
+' GRANICA: pre izbora se proverava da SVI redovi koji nose taj ReversID cine jedan
+' revers (ReversIDGranica). ReversID bira redove za mutaciju, pa red tudjeg
+' dokumenta sa istim ReversID-om ne sme da se tiho pokupi -- Err.Raise, nijedan red
+' nije izabran.
 Public Function ReversRedoviRID(ByVal reversID As String, ByVal storniran As Boolean) As Collection
     Const SRC As String = "modStorno.ReversRedoviRID"
     Dim res As Collection: Set res = New Collection
     Set ReversRedoviRID = res
     reversID = Trim$(reversID)
     If Len(reversID) = 0 Then Exit Function
+
+    Dim granica As String: granica = ReversIDGranica(reversID)
+    If Len(granica) > 0 Then Err.Raise ERR_STORNO_BASE + 24, SRC, granica
 
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If Not IsArray(data) Then Exit Function
@@ -2503,6 +2515,106 @@ Public Function ReversRedoviRID(ByVal reversID As String, ByVal storniran As Boo
             If IsStorniranoValue(data(i, cSt)) = storniran Then res.Add i
         End If
     Next i
+End Function
+
+' GRANICA DOKUMENTA -- svi redovi tblAmbalaza koji nose ReversID (i stornirani)
+' moraju biti JEDAN revers, jer ReversID bira redove za storno, undo i stampu:
+'   - svaki red je jedan od cetiri smera reversa (red drugog prometa ambalaze,
+'     npr. otpremnica, sa istim ReversID-om nije noga);
+'   - nijedan red nije ambalaza uz otkup (DokumentID = OtkupID);
+'   - svi redovi nose isti broj, tip dokumenta i dan, i istog vozaca;
+'   - noge Stanica istu stanicu, noge Kooperant istog kooperanta; red drugog tipa
+'     entiteta nije noga reversa.
+' Isti ugovor meri B10 (modIntegritet) nad aktivnim redovima; ovde je kapija pred
+' mutacijom i stampom, fail-closed. Broj nogu po tipu ambalaze NIJE granica:
+' revers kome fali noga ne dira tudj red -- to prijavljuje B10.
+' "" = granica cista; inace razlog. Prazan ReversID i ReversID bez redova ovde
+' nisu nalaz -- to proveravaju pozivaoci (ReversIDRazresi, ReversRedoviRID).
+Public Function ReversIDGranica(ByVal reversID As String) As String
+    Const SRC As String = "modStorno.ReversIDGranica"
+    reversID = Trim$(reversID)
+    If Len(reversID) = 0 Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cID As Long, cDok As Long, cTip As Long, cDat As Long
+    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cRid As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
+
+    Dim i As Long, n As Long, amb As String, tip As String, entTip As String, ent As String
+    Dim dok As String, tipDok As String, dan As Long, danReda As Long
+    Dim stanica As String, koop As String, vozac As String
+    Dim imaSt As Boolean, imaKoop As Boolean
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
+            amb = Trim$(NzToText(data(i, cID)))
+            tip = Trim$(NzToText(data(i, cTip)))
+            If Not ReversTipJe(tip) Then
+                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije revers (tip '" & _
+                                  tip & "') -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            End If
+            If Not IsDate(data(i, cDat)) Then
+                ReversIDGranica = "Red ambalaze " & amb & " reversa " & reversID & " nema datum -> granica " & _
+                                  "dokumenta nije proverljiva. Odbijeno."
+                Exit Function
+            End If
+            danReda = Int(CDbl(CDate(data(i, cDat))))
+            n = n + 1
+            If n = 1 Then
+                dok = Trim$(NzToText(data(i, cDok)))
+                tipDok = tip
+                dan = danReda
+                vozac = Trim$(NzToText(data(i, cVoz)))
+            ElseIf Not BrojJednak(data(i, cDok), dok) Or tip <> tipDok Or danReda <> dan Then
+                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a drugi broj, smer ili dan (" & _
+                                  Trim$(NzToText(data(i, cDok))) & " [" & tip & "], ocekivano " & dok & " [" & tipDok & _
+                                  "]) -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            ElseIf StrComp(Trim$(NzToText(data(i, cVoz))), vozac, vbBinaryCompare) <> 0 Then
+                ReversIDGranica = "Noge reversa " & reversID & " nose razlicite vozace (" & amb & ") -> granica " & _
+                                  "dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            End If
+            entTip = Trim$(NzToText(data(i, cEntTip)))
+            ent = Trim$(NzToText(data(i, cEnt)))
+            Select Case entTip
+                Case "Stanica"
+                    If Not imaSt Then
+                        stanica = ent: imaSt = True
+                    ElseIf StrComp(ent, stanica, vbBinaryCompare) <> 0 Then
+                        ReversIDGranica = "Noge Stanica reversa " & reversID & " nose razlicite stanice (" & amb & _
+                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                        Exit Function
+                    End If
+                Case "Kooperant"
+                    If Not imaKoop Then
+                        koop = ent: imaKoop = True
+                    ElseIf StrComp(ent, koop, vbBinaryCompare) <> 0 Then
+                        ReversIDGranica = "Noge Kooperant reversa " & reversID & " nose razlicite kooperante (" & amb & _
+                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                        Exit Function
+                    End If
+                Case Else
+                    ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije noga reversa " & _
+                                      "(EntitetTip '" & entTip & "') -> granica dokumenta je narusena. Odbijeno."
+                    Exit Function
+            End Select
+        End If
+    Next i
+
+    If n > 0 Then
+        If Len(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, dok, COL_OTK_ID))) > 0 Then
+            ReversIDGranica = "ReversID " & reversID & " nose redovi ambalaze uz otkup " & dok & _
+                              " -> to nije revers (integritet B10). Odbijeno."
+        End If
+    End If
 End Function
 
 ' (stanica, dan) reversa -- iz njegovih nogu Stanica, bez obzira na storno.

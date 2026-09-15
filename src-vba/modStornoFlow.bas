@@ -374,6 +374,7 @@ Public Function RunSimpleStornoRevers(ByVal brDok As String, ByVal dokumentTip A
     brDok = Trim$(brDok)
     Dim revID As String, revRaz As String
     revRaz = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(revID)
     If Len(revRaz) > 0 Then r("message") = revRaz: Exit Function
     If ReversRedoviRID(revID, False).count = 0 Then
         r("message") = "Aktivan revers nije pronadjen: " & brDok & " [" & dokumentTip & "]"
@@ -1117,6 +1118,7 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
     brDok = Trim$(brDok)
     Dim revID As String, revRaz As String
     revRaz = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(revID)
     If Len(revRaz) > 0 Then
         r("message") = "Revers nije jednoznacan: " & revRaz
         Exit Function
@@ -1224,6 +1226,8 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
     Else
         revRaz = ReversIDRazresi("", newBrDok, dokTip, newID, False)
     End If
+    ' Trag ne sme da pokazuje na ReversID cija granica dokumenta nije cista.
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(newID)
 
     If Len(revRaz) > 0 Then
         MarkCorrectionManual correctionID, "Snimi novi revers pa ponovi zavrsetak ispravke.", _
@@ -3039,6 +3043,7 @@ Private Function ScanRevers(ByVal brDok As String, ByVal dokumentTip As String, 
 
     Dim revID As String, st As String, dan As Long, razlog As String
     razlog = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
     If Len(razlog) > 0 Then
         d("razlog") = razlog
         Exit Function

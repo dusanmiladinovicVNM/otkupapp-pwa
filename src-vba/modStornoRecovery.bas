@@ -367,7 +367,9 @@ End Function
 
 ' ZAJEDNICKA undo garda (i legacy put i zurnal-put UndoOperation_TX).
 ' Vraca "" ako je bezbedno; inace razlog. Otkup: mrtav-roditelj (fail-closed).
-' Revers (OM): aktivan-dup broja u nizu (stanica, dan) (#134). Dokument koji se
+' Revers (OM): najpre granica dokumenta (ReversIDGranica), pa aktivan-dup broja u
+' nizu (stanica, dan) u BILO KOM od cetiri smera -- smerovi dele jedan niz
+' (#134). Dokument koji se
 ' vraca bira ReversID; stanica i dan se citaju iz njegovih nogu Stanica
 ' (ReversStanicaDan), jer je duplikat pitanje niza, ne identiteta. Aktivan revers
 ' istog broja na drugoj stanici ili drugog dana NIJE duplikat (A2). Bez ReversID-a
@@ -394,12 +396,15 @@ Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String, _
                     "poznat -> undo se ne moze proveriti. Odbijeno (fail-closed)."
                 Exit Function
             End If
-            revRaz = ReversStanicaDan(reversID, revSt, revDan)
+            revRaz = ReversIDGranica(reversID)
+            If Len(revRaz) = 0 Then revRaz = ReversStanicaDan(reversID, revSt, revDan)
             If Len(revRaz) > 0 Then
                 UndoGuardReason = "Revers " & broj & " [" & docType & "]: " & revRaz
-            ElseIf ActiveAmbalazaDokExists(broj, docType, revSt, revDan) Then
-                UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " [" & docType & _
-                    "] na istoj stanici istog dana -> undo bi duplirao. Odbijeno."
+            ElseIf ActiveAmbalazaDokExists(broj, "", revSt, revDan) Then
+                ' Cetiri smera dele jedan niz (stanica, dan): aktivan revers tog broja u
+                ' BILO KOM smeru je duplikat, ne samo u smeru koji se vraca.
+                UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " na istoj stanici istog dana " & _
+                    "(bilo koji od cetiri smera) -> undo bi duplirao. Odbijeno."
             End If
     End Select
     Exit Function

@@ -80,7 +80,8 @@ Kooperant sa nogom Stanica preko (broj, dan):
   identiteta reda `ReversID` po (broj, tip) mora biti jednoznačan;
 - undo — `ReversID` iz `AmbID`-eva operacije (`modStornoZurnal.UndoGuardReasonZaOp`,
   `LatestOpForRevers`); duplikat se i dalje meri u nizu (stanica, dan), koji daju
-  noge Stanica tog `ReversID`-a (`ReversStanicaDan`);
+  noge Stanica tog `ReversID`-a (`ReversStanicaDan`), i to u **bilo kom od četiri
+  smera** — smerovi dele jedan niz;
 - završetak ispravke — `ReversID` zamene po (broj, stanica, dan) iz snimanja
   (`ReversIDStanice`), jer pisac vraća samo uspeh;
 - pregled i štampa ambalaže — red pregleda nosi `ReversID`, noge papira bira
@@ -89,6 +90,15 @@ Kooperant sa nogom Stanica preko (broj, dan):
   kao pisac).
 
 Revers **bez** `ReversID`-a svi ovi potrošači odbijaju, bez fallback-a.
+
+**Granica dokumenta** (`modStorno.ReversIDGranica`). `ReversID` bira redove za
+mutaciju, pa pre storna, undo-a, ispravke, pregleda i štampe **svi** redovi koji ga
+nose — i stornirani — moraju biti jedan revers: svaki red je jedan od četiri smera
+i nije ambalaža uz otkup; svi nose isti broj, smer, dan i vozača; noge Stanica istu
+stanicu, noge Kooperant istog kooperanta; drugi tip entiteta nije noga. Red tuđeg
+dokumenta sa istim `ReversID`-om obara **celu** operaciju (`ReversRedoviRID` diže
+grešku, nijedan red se ne menja) — ne preskače se tiho. Broj nogu po tipu
+ambalaže nije granica (revers kome fali noga ne dira tuđ red); to prijavljuje B10.
 
 **Trag ispravke nosi `ReversID`**: `tblStornoVeze.OldDocID` i `NewDocID`; broj ide
 u `OldBroj` / `NewBroj` i ostaje labela. Pitanje pre vezivanja zamene čita stanicu
@@ -115,7 +125,9 @@ upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
    ReversID sve noge nose isti broj, tip dokumenta i dan, **istu stanicu** (sve
    noge Stanica), **istog kooperanta** (sve noge Kooperant) i **istog vozača** —
    ključ koji ReversID zamenjuje nosi stanicu, pa je identitet ne sme izgubiti,
-   niti sme da spoji delove dva dokumenta.
+   niti sme da spoji delove dva dokumenta. B10 prijavljuje i `ReversID` na redu
+   koji **nije** revers (drugi promet ambalaže, ambalaža uz otkup); isti ugovor je
+   kapija pred mutacijom (`ReversIDGranica`, pasus „Granica dokumenta").
 5. Jedan revers **sme da nosi više tipova ambalaže** (futureproofing). Grain je
    ReversID = logički dokument, `AmbID` = fizički red, broj = labela. Današnji
    pisac piše jedan tip po dokumentu — to je granica API-ja, ne grain dokumenta;
