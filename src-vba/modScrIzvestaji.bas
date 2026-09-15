@@ -782,7 +782,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HD_VREDNOST||rsd|100|1")
             End If
         Case IZ_AMB
-            ' Datum | Mesto | Tip | Dokument | Ulaz | Izlaz | [DokTip] | [DokID]
+            ' Datum | Mesto | Tip | Dokument | Ulaz | Izlaz | [DokTip] | [DokID] |
+            ' [ReversID]
             ' Ulaz/Izlaz su txt (ekran formatira): nula se prikazuje PRAZNO,
             ' kao u legacy pregledu.
             IzKoloneZaListu = Array( _
@@ -793,7 +794,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 "OTKUI_HDA_ULAZ||txt|60|1", _
                 "OTKUI_HDA_IZLAZ||txt|60|1", _
                 "OTKUI_HDI_DOKTIP||txt|1|4", _
-                "OTKUI_HDI_DOKID||txt|1|4")
+                "OTKUI_HDI_DOKID||txt|1|4", _
+                "OTKUI_HDI_REF||txt|1|4")
         Case IZ_ISPL
             ' Kooperant | Kes otkupac | Virman firma | Virman avans | Ukupno
             ' Kanali su "rest": nula = prazno (isplata tim kanalom ne postoji).
@@ -1435,10 +1437,12 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
             outA(n, 4) = NzS(src(i, 4))
             outA(n, 5) = GajbeIliPrazno(src(i, 5))
             outA(n, 6) = GajbeIliPrazno(src(i, 6))
-            ' "AMB|<DokTip>|<DokID>" -> dve prenosne kolone (ruta stampe trazi
-            ' oba; tip ambalaze je vidljiva kolona 3 istog reda).
+            ' "AMB|<DokTip>|<DokID>[|<ReversID>]" -> tri prenosne kolone (ruta
+            ' stampe trazi tip i broj, a revers i ReversID -- REV-IDENT-01; tip
+            ' ambalaze je vidljiva kolona 3 istog reda).
             outA(n, 7) = ""
             outA(n, 8) = ""
+            outA(n, 9) = ""
             ref = NzS(src(i, 7))
             If Left$(ref, 4) = "AMB|" Then
                 p = Split(ref, "|")
@@ -1446,6 +1450,7 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                     outA(n, 7) = p(1)
                     outA(n, 8) = p(2)
                 End If
+                If UBound(p) >= 3 Then outA(n, 9) = p(3)
             End If
         Case IZ_ISPL
             outA(n, 1) = NzS(src(i, 1))
@@ -2762,21 +2767,14 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     OutputOtpremnicaPDF dokID
                 Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
                      DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-                    ' Revers: rekonstrukcija iz dve noge ledgera -- racun
-                    ' izdvojen u modIzvestaj.StampajReversAmbalaze (AUD-012:
-                    ' tip ambalaze IZABRANOG reda je deo kljuca). Broj reversa
-                    ' je jedinstven tek u nizu (stanica, dan): dan je datum reda
-                    ' (pregled grupise revers po stanici i danu), stanica je
-                    ' otkupno mesto pregleda po OM. U pregledu po vozacu stanica
-                    ' nije poznata -- tada stampa odbija broj koji istog dana
-                    ' nose dva otkupna mesta, umesto da ih spoji.
-                    If mCtxTip = "OM" Then
-                        StampajReversAmbalaze dokID, dokTip, tipAmb, _
-                                              modOtkupUI.GridCell(red, 1), mCtxId
-                    Else
-                        StampajReversAmbalaze dokID, dokTip, tipAmb, _
-                                              modOtkupUI.GridCell(red, 1)
-                    End If
+                    ' Revers: rekonstrukcija iz nogu ledgera -- racun izdvojen
+                    ' u modIzvestaj.StampajReversAmbalaze (AUD-012: tip
+                    ' ambalaze IZABRANOG reda je deo kljuca). Identitet je
+                    ' ReversID reda (skrivena kolona 9, REV-IDENT-01): isti broj
+                    ' legalno nose reversi druge stanice ili drugog dana, pa se
+                    ' dokument ne trazi po broju, stanici ni danu.
+                    StampajReversAmbalaze dokID, dokTip, tipAmb, _
+                                          NzS(modOtkupUI.GridCell(red, 9))
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
             End Select

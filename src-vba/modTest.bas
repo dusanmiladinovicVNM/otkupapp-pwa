@@ -11820,8 +11820,10 @@ Private Sub T_Izv_IdentitetURedu_NeCrtaSe()
     AssertEq p(4), "4", "ref-kljuc KARTICE se ne crta (prio 4)"
     kolone = modScrIzvestaji.IzKoloneZaListu("AMBALAZA", "OM")
     p = Split(CStr(kolone(UBound(kolone))), "|")
-    AssertEq p(4), "4", "DokID AMBALAZE se ne crta (prio 4)"
+    AssertEq p(4), "4", "ReversID AMBALAZE se ne crta (prio 4)"
     p = Split(CStr(kolone(UBound(kolone) - 1)), "|")
+    AssertEq p(4), "4", "DokID AMBALAZE se ne crta (prio 4)"
+    p = Split(CStr(kolone(UBound(kolone) - 2)), "|")
     AssertEq p(4), "4", "DokTip AMBALAZE se ne crta (prio 4)"
 
     ' Agregatne liste NEMAJU radnju -- red bez dokumenta ne sme da dobije
@@ -17311,8 +17313,8 @@ End Sub
 ' zauzima NOGA STANICA, ne bilo koji red tog broja. Storniran revers meri BFP
 ' (Test_BKTX_ReversPisacOdbijaZauzet): ovaj test ne pise.
 '
-' Uz to kapija storna (StornoRazlog): identitet reda (AmbID) razresava kljuc, a
-' red koji ne nosi izabrani broj se odbija.
+' Uz to kapija storna (StornoRazlog): identitet reda (AmbID) daje ReversID
+' dokumenta, a red koji ne nosi izabrani broj se odbija.
 '
 ' SABOTAZE: izbaci filter tipa u BrojZauzetRevers -> pukne "ambalaza otkupa na
 ' istoj stanici nije revers"; izbaci poredjenje stanice -> pukne "druga stanica je
@@ -17350,7 +17352,7 @@ Private Sub T_BrojZauzetUNizu_Revers()
              "", "REV: nov broj je slobodan -- provera ne odbija sve"
 
     AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-2", DOK_TIP_OM_ULAZ_KOOP, "AMB-IZV-K3"), _
-             "", "storno kapija: noga Kooperant nalazi stanicu preko noge Stanica istog dana"
+             "", "storno kapija: noga Kooperant nosi ReversID dokumenta"
     AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
              "", "storno kapija: bez identiteta jednoznacan broj prolazi"
     AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, _

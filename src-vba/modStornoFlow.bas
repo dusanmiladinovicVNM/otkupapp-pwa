@@ -97,8 +97,8 @@ End Function
 
 ' Pregled reversa pre potvrde -- za KLIKNUTI revers (docID = AmbID), ne za sve redove
 ' broja: isti broj legalno nosi revers druge stanice ili drugog dana, pa bi pregled
-' po (broj, tip) pokazao tudj dokument bas tamo gde operater odlucuje. Kljuc i noge
-' bira isti kod kao pisac (ReversKljucRazresi, ReversRedoviKljuca).
+' po (broj, tip) pokazao tudj dokument bas tamo gde operater odlucuje. ReversID i
+' noge bira isti kod kao pisac (ReversIDRazresi, ReversRedoviRID).
 Private Function PreviewRevers(ByVal broj As String, ByVal dokumentTip As String, _
                                Optional ByVal docID As String = "") As String
     Dim s As Object: Set s = ScanRevers(broj, dokumentTip, docID)
@@ -364,17 +364,19 @@ EH:
 End Function
 
 ' Revers: obican storno (saldo vec iskljucuje stornirano -> auto koreguje).
-' ambID = identitet reda; bez njega kljuc (stanica, dan) mora biti jednoznacan.
+' ambID = identitet reda (iz njega se cita ReversID); bez njega ReversID po (broj,
+' tip) mora biti jednoznacan.
 Public Function RunSimpleStornoRevers(ByVal brDok As String, ByVal dokumentTip As String, _
                                       Optional ByVal ambID As String = "") As Object
     Dim r As Object: Set r = NewRes("SIMPLE")
     Set RunSimpleStornoRevers = r
     On Error GoTo EH
     brDok = Trim$(brDok)
-    Dim revSt As String, revDan As Long, revRaz As String
-    revRaz = ReversKljucRazresi(ambID, brDok, dokumentTip, revSt, revDan, False)
+    Dim revID As String, revRaz As String
+    revRaz = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(revID)
     If Len(revRaz) > 0 Then r("message") = revRaz: Exit Function
-    If Not ActiveAmbalazaDokExists(brDok, dokumentTip, revSt, revDan) Then
+    If ReversRedoviRID(revID, False).count = 0 Then
         r("message") = "Aktivan revers nije pronadjen: " & brDok & " [" & dokumentTip & "]"
         Exit Function
     End If
@@ -1102,9 +1104,9 @@ End Function
 ' storno = uklanjanje iz salda; bez kontra-stavke, bez duplog salda).
 ' ============================================================
 '
-' ambID = AmbID kliknutog reda (ekran Storno). Broj reversa je jedinstven tek u
-' nizu (stanica, dan), pa se kljuc razresava PRE konteksta i storna: iz reda kad
-' je dat, inace po (broj, tip) -- i tada mora biti jednoznacan, inace odbijeno.
+' ambID = AmbID kliknutog reda (ekran Storno). Broj reversa je labela, pa se
+' ReversID razresava PRE konteksta i storna: iz reda kad je dat, inace po (broj,
+' tip) -- i tada mora biti jednoznacan, inace odbijeno.
 Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As String, _
                                     ByVal mode As String, _
                                     Optional ByVal ambID As String = "") As Object
@@ -1114,39 +1116,31 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
     On Error GoTo EH
 
     brDok = Trim$(brDok)
-    Dim revSt As String, revDan As Long, revRaz As String
-    revRaz = ReversKljucRazresi(ambID, brDok, dokumentTip, revSt, revDan, False)
+    Dim revID As String, revRaz As String
+    revRaz = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(revID)
     If Len(revRaz) > 0 Then
         r("message") = "Revers nije jednoznacan: " & revRaz
         Exit Function
     End If
-    If Not ActiveAmbalazaDokExists(brDok, dokumentTip, revSt, revDan) Then
+    If ReversRedoviRID(revID, False).count = 0 Then
         r("message") = "Aktivan revers nije pronadjen: " & brDok & " [" & dokumentTip & "]"
         Exit Function
     End If
 
-    ' Trag ispravke nosi KANONSKI ID reversa (AmbID noge Stanica), ne broj: isti
-    ' broj legalno nosi revers druge stanice ili drugog dana, pa OldDocID po broju
-    ' ne bi mogao da kaze KOJI je revers zamenjen. Cita se PRE storna, dok je
-    ' noga aktivna. Broj ide u OldBroj -- labela.
-    Dim oldAmbID As String
-    oldAmbID = ReversAmbIDStanice(brDok, dokumentTip, revSt, revDan, False)
-    If Len(oldAmbID) = 0 Then
-        r("message") = "Revers " & brDok & " [" & dokumentTip & "] nema jednoznacnu nogu Stanica -> " & _
-                       "identitet za trag ispravke nije poznat. Odbijeno."
-        Exit Function
-    End If
-
+    ' Trag ispravke nosi ReversID (REV-IDENT-01), ne broj: isti broj legalno nosi
+    ' revers druge stanice ili drugog dana, pa OldDocID po broju ne bi mogao da
+    ' kaze KOJI je revers zamenjen. Broj ide u OldBroj -- labela.
     Select Case mode
         Case SV_MODE_RESI_KASNIJE
-            r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_REVERS, oldAmbID, brDok, _
+            r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_REVERS, revID, brDok, _
                 , , , dokumentTip, , , "Revers parkiran za kasnije.")
             r("success") = (Len(CStr(r("correctionID"))) > 0)
             r("message") = "Kreiran recovery zapis (RESI_KASNIJE)."
 
         Case SV_MODE_ISPRAVKA
             Dim cid As String
-            cid = CreateCorrectionContext(mode, FLOW_DOC_REVERS, oldAmbID, brDok, FLOW_DOC_REVERS, , , _
+            cid = CreateCorrectionContext(mode, FLOW_DOC_REVERS, revID, brDok, FLOW_DOC_REVERS, , , _
                 dokumentTip, , , "Ispravka reversa: storno stari, ceka novi.")
             r("correctionID") = cid
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
@@ -1162,7 +1156,7 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
 
         Case SV_MODE_DUPLI, SV_MODE_PONISTENJE
             Dim cidX As String
-            cidX = CreateCorrectionContext(mode, FLOW_DOC_REVERS, oldAmbID, brDok, , , , _
+            cidX = CreateCorrectionContext(mode, FLOW_DOC_REVERS, revID, brDok, , , , _
                 dokumentTip, , , IIf(mode = SV_MODE_DUPLI, "Dupli/fantom revers.", "Ponistenje reversa."))
             r("correctionID") = cidX
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
@@ -1185,17 +1179,18 @@ EH:
     r("message") = "Greska: " & errDescEH
 End Function
 
-' Zavrsi ISPRAVKA reversa: veze novi revers u context -- NewDocID je AmbID noge
-' Stanica novog reversa, NewBroj njegov broj (labela). Saldo je vec tacan
-' (stari storniran, novi aktivan) -> nema dupliranja. Context postaje COMPLETED
-' SAMO ako novi revers stvarno postoji kao AKTIVAN (inace MANUAL_REQUIRED).
+' Zavrsi ISPRAVKA reversa: veze novi revers u context -- NewDocID je ReversID
+' novog reversa, NewBroj njegov broj (labela). Saldo je vec tacan (stari
+' storniran, novi aktivan) -> nema dupliranja. Context postaje COMPLETED SAMO ako
+' novi revers stvarno postoji kao AKTIVAN (inace MANUAL_REQUIRED).
 ' dokumentTip se cita iz konteksta (upisan u ParentDocType pri RunReversCorrection).
 '
 ' newStanicaID / newDatum: stanica i dan NOVOG reversa iz snimanja
-' (ZavrsiIspravkuAko <- ReversUpisi). Broj reversa je jedinstven tek u nizu
-' (stanica, dan), a zamena sme na drugu stanicu ili drugi dan -- pa se proverava
-' bas taj revers, ne "ima li aktivan red pod ovim brojem". Bez njih (legacy/test
-' poziv) kljuc se trazi po (broj, tip) i mora biti jednoznacan, inace MANUAL.
+' (ZavrsiIspravkuAko <- ReversUpisi). Pisac vraca samo uspeh, pa se ReversID
+' zamene nalazi po (broj, stanica, dan); zamena sme na drugu stanicu ili drugi
+' dan, pa se proverava bas taj revers, ne "ima li aktivan red pod ovim brojem".
+' Bez njih (legacy/test poziv) ReversID se trazi po (broj, tip) i mora biti
+' jednoznacan, inace MANUAL.
 Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBrDok As String, _
                                        Optional ByVal newStanicaID As String = "", _
                                        Optional ByVal newDatum As Variant = Empty) As Object
@@ -1214,35 +1209,25 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
         Exit Function
     End If
 
-    ' NewDocID = kanonski ID NOVOG reversa (AmbID noge Stanica); NewBroj = labela.
+    ' NewDocID = ReversID NOVOG reversa; NewBroj = labela.
     '
     ' Smer zamene se NE pretpostavlja iz starog reversa: pogresan smer je upravo
     ' jedan od razloga za ispravku, pa bi trazenje pod starim smerom ostavilo
     ' ispravku MANUAL iako je zamena snimljena. Uz stanicu i dan iz snimanja zamenu
-    ' nosi JEDNA noga Stanica preko sva cetiri smera (ReversAmbIDStanice sa praznim
-    ' tipom), pa se smer cita iz nje. Bez stanice (legacy/test poziv) vazi smer iz
-    ' konteksta (ParentDocType).
-    Dim revSt As String, revDan As Long, revRaz As String
-    Dim newTip As String, newAmbID As String
-    newTip = dokTip
-    revSt = Trim$(newStanicaID)
-    If Len(revSt) > 0 And IsDate(newDatum) Then
-        revDan = Int(CDbl(CDate(newDatum)))
-        newAmbID = ReversAmbIDStanice(newBrDok, "", revSt, revDan, False)
-        If Len(newAmbID) > 0 Then _
-            newTip = NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, newAmbID, COL_AMB_DOK_TIP))
+    ' nosi JEDAN ReversID preko sva cetiri smera (ReversIDStanice sa praznim tipom).
+    ' Bez stanice (legacy/test poziv) vazi smer iz konteksta (ParentDocType).
+    ' Oba puta gledaju samo AKTIVNE redove, pa nadjen ReversID jeste aktivan revers.
+    Dim revRaz As String, newID As String
+    If Len(Trim$(newStanicaID)) > 0 And IsDate(newDatum) Then
+        newID = ReversIDStanice(newBrDok, "", Trim$(newStanicaID), Int(CDbl(CDate(newDatum))), False)
+        If Len(newID) = 0 Then _
+            revRaz = "Novi revers " & newBrDok & " nema jednoznacan aktivan ReversID na toj stanici " & _
+                     "tog dana -> identitet zamene nije poznat."
     Else
-        revSt = ""
-        revRaz = ReversKljucRazresi("", newBrDok, dokTip, revSt, revDan, False)
-        If Len(revRaz) = 0 Then newAmbID = ReversAmbIDStanice(newBrDok, dokTip, revSt, revDan, False)
+        revRaz = ReversIDRazresi("", newBrDok, dokTip, newID, False)
     End If
-    If Len(revRaz) = 0 And Len(newAmbID) = 0 Then _
-        revRaz = "Novi revers " & newBrDok & " nema jednoznacnu aktivnu nogu Stanica na toj stanici " & _
-                 "tog dana -> identitet zamene nije poznat."
-    If Len(revRaz) = 0 Then
-        If Not ActiveAmbalazaDokExists(newBrDok, newTip, revSt, revDan) Then _
-            revRaz = "Novi revers " & newBrDok & " [" & newTip & "] nije aktivan."
-    End If
+    ' Trag ne sme da pokazuje na ReversID cija granica dokumenta nije cista.
+    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(newID)
 
     If Len(revRaz) > 0 Then
         MarkCorrectionManual correctionID, "Snimi novi revers pa ponovi zavrsetak ispravke.", _
@@ -1251,7 +1236,7 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
         Exit Function
     End If
 
-    CompleteCorrectionContext correctionID, newAmbID, newBrDok, "Ispravka reversa: novi revers " & newBrDok & "."
+    CompleteCorrectionContext correctionID, newID, newBrDok, "Ispravka reversa: novi revers " & newBrDok & "."
     r("success") = True
     r("message") = "Ispravka reversa zavrsena. Saldo racuna samo novi revers."
     Exit Function
@@ -3037,10 +3022,11 @@ EH:
     If strict Then Err.Raise errNum, MOD_NAME & ".ScanZbirna", errDesc
 End Function
 
-' Uvid u JEDAN revers -- kljuc (broj, tip, stanica, dan) iz ambID-a kliknutog reda,
-' ili jednoznacno po (broj, tip). Nedvosmislen kljuc + noge ovog dokumenta, isto
-' kao pisac. razlog <> "" = kljuc nije razresen (dvosmislen broj, red bez noge
-' Stanica, ambalaza uz otkup): uvid tada ne prikazuje NIJEDAN dokument.
+' Uvid u JEDAN revers -- ReversID iz ambID-a kliknutog reda, ili jednoznacno po
+' (broj, tip). Noge ovog dokumenta bira isti kod kao pisac (ReversIDRazresi,
+' ReversRedoviRID). razlog <> "" = identitet nije razresen (dvosmislen broj, red
+' bez ReversID-a, ambalaza uz otkup, noge Stanica bez jedne stanice i dana): uvid
+' tada ne prikazuje NIJEDAN dokument.
 ' FAIL-CLOSED: greska se DIZE (BuildStornoPreview je prikaze), ne pretvara se u
 ' "nije pronadjen".
 Private Function ScanRevers(ByVal brDok As String, ByVal dokumentTip As String, _
@@ -3055,16 +3041,25 @@ Private Function ScanRevers(ByVal brDok As String, ByVal dokumentTip As String, 
     d("exists") = False: d("razlog") = "": d("stanica") = "": d("dan") = 0&
     d("tip") = "": d("kolicina") = 0&: d("smer") = "": d("entitet") = "": d("redova") = 0&
 
-    Dim st As String, dan As Long, razlog As String
-    razlog = ReversKljucRazresi(ambID, brDok, dokumentTip, st, dan, False)
+    Dim revID As String, st As String, dan As Long, razlog As String
+    razlog = ReversIDRazresi(ambID, brDok, dokumentTip, revID, False)
+    If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
     If Len(razlog) > 0 Then
+        d("razlog") = razlog
+        Exit Function
+    End If
+    Dim redovi As Collection, v As Variant, i As Long
+    Set redovi = ReversRedoviRID(revID, False)
+    d("exists") = (redovi.count > 0)
+    If Not CBool(d("exists")) Then Exit Function
+    razlog = ReversStanicaDan(revID, st, dan)
+    If Len(razlog) > 0 Then
+        d("exists") = False
         d("razlog") = razlog
         Exit Function
     End If
     d("stanica") = st
     d("dan") = dan
-    d("exists") = ActiveAmbalazaDokExists(brDok, dokumentTip, st, dan)
-    If Not CBool(d("exists")) Then Exit Function
 
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
@@ -3074,8 +3069,6 @@ Private Function ScanRevers(ByVal brDok As String, ByVal dokumentTip As String, 
     cSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
     cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
 
-    Dim redovi As Collection, v As Variant, i As Long
-    Set redovi = ReversRedoviKljuca(brDok, dokumentTip, st, dan, False)
     For Each v In redovi
         i = CLng(v)
         d("tip") = NzTx(data(i, cTip))

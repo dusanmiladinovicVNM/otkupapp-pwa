@@ -2207,15 +2207,15 @@ End Sub
 ' OM <-> KOOPERANT AMBALAZA (revers): izdavanje (OM-Izlaz-Koop) i povrat
 ' (OM-Ulaz-Koop), plus firma <-> OM (OM-Ulaz-Firma / OM-Izlaz-Firma).
 '
-' Revers je dokument (broj, tip, STANICA, DAN): broj je jedinstven tek u nizu
-' (stanica, dan) (ARCHITECTURE_CONTRACT A2 red REV), pa isti broj legalno nose
-' reversi druge stanice ili drugog dana. Storno zato bira po tom kljucu, nikad po
-' (broj, tip) -- tako bi stornirao i tudji revers istog broja. Kljuc razresava
-' ReversKljucRazresi, noge dokumenta bira ReversRedoviKljuca. Novac unet uz isti
-' broj stornira se zasebno ("Novac").
+' Identitet reversa je ReversID (REV-IDENT-01): isti na svim nogama jednog
+' dokumenta. Broj je labela -- isti broj legalno nose reversi druge stanice ili
+' drugog dana (A2 red REV) -- pa storno nikad ne bira po (broj, tip). ReversID
+' razresava ReversIDRazresi, noge dokumenta bira ReversRedoviRID. Novac unet uz
+' isti broj stornira se zasebno ("Novac").
 '
-' ambID = identitet kliknutog reda (ekran Storno, IdKolonaTipa REVERSI). Bez
-' njega se kljuc trazi po (broj, tip) i mora biti jednoznacan, inace odbijeno.
+' ambID = identitet kliknutog reda (ekran Storno, IdKolonaTipa REVERSI); ReversID
+' se cita iz njega, koja god da je noga. Bez njega se ReversID trazi po (broj,
+' tip) i mora biti jednoznacan, inace odbijeno.
 ' ============================================================
 
 Public Function StornoOMKoopByBrDok_TX(ByVal brDok As String, _
@@ -2250,10 +2250,9 @@ EH:
     StornoOMKoopByBrDok_TX = False
 End Function
 
-' Markira AKTIVNE tblAmbalaza redove reversa (broj, tip, stanica, dan). Raise ako
-' kljuc nije jednoznacan, ako aktivnog reda nema, ili ako se noga Kooperant ne
-' moze upariti sa stanicom (forma prikazuje gresku). Nijedan red nije promenjen
-' pre nego sto je ceo skup nogu poznat.
+' Markira AKTIVNE tblAmbalaza redove jednog ReversID-a. Raise ako ReversID nije
+' jednoznacan ili ga red nema, i ako aktivnog reda nema (forma prikazuje gresku).
+' Nijedan red nije promenjen pre nego sto je ceo skup nogu poznat.
 Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
                                     ByVal dokumentTip As String, _
                                     Optional ByVal ambID As String = "") As Boolean
@@ -2275,20 +2274,20 @@ Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
     colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
     colAmbID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
 
-    Dim stanicaID As String, dan As Long, razlog As String
-    razlog = ReversKljucRazresi(ambID, brDok, dokumentTip, stanicaID, dan, False)
+    Dim reversID As String, razlog As String
+    razlog = ReversIDRazresi(ambID, brDok, dokumentTip, reversID, False)
     If Len(razlog) > 0 Then Err.Raise ERR_STORNO_BASE + 23, SRC, razlog
 
     Dim redovi As Collection
-    Set redovi = ReversRedoviKljuca(brDok, dokumentTip, stanicaID, dan, False)
+    Set redovi = ReversRedoviRID(reversID, False)
     If redovi.count = 0 Then
         Err.Raise ERR_STORNO_BASE + 21, SRC, _
                   "Aktivan revers nije pronadjen. Broj=" & brDok & " Tip=" & dokumentTip & _
-                  " Stanica=" & stanicaID & " Dan=" & Format$(CDate(dan), "dd.mm.yyyy")
+                  " ReversID=" & reversID
     End If
 
     ' Zurnal op po broju reversa (lossless undo; revers je cist soft-delete
-    ' ambalaze). Kljuc (stanica, dan) undo cita iz AmbID-eva ove operacije.
+    ' ambalaze). ReversID undo cita iz AmbID-eva ove operacije.
     owns = BeginStornoOp(dokumentTip, brDok)
 
     Dim v As Variant, i As Long
@@ -2307,10 +2306,13 @@ EH:
     LogAndReraise SRC
 End Function
 
-' Postoji li AKTIVAN revers. Sa kljucem (stanicaID, dan) pita tacno taj dokument:
-' aktivnu nogu Stanica te stanice, tog dana. Bez kljuca odgovara na sire pitanje
-' "ima li ijedan aktivan red (broj, tip)" -- to je dovoljno za poruku "nije
-' pronadjen" i za pregled (ScanRevers), ali ne za odluku o mutaciji.
+' Zauzima li AKTIVAN revers broj. dokumentTip prazan = bilo koji od cetiri smera
+' reversa (dele jedan niz). Sa (stanicaID, dan) pita niz: aktivnu nogu
+' Stanica tog broja i smera na toj stanici, tog dana -- to je pitanje duplikata
+' (undo garda), ne identiteta dokumenta. Bez stanice odgovara na sire pitanje
+' "ima li ijedan aktivan red (broj, tip)" -- dovoljno za poruku "nije pronadjen",
+' ali ne za odluku o mutaciji. Da li je BAS JEDAN revers aktivan pita se po
+' ReversID-u (ReversRedoviRID).
 '
 ' FAIL-CLOSED: greska se DIZE. Ranije je vracala False, a "nema aktivnog" je
 ' ovde odgovor koji pusta undo i zavrsetak ispravke.
@@ -2332,10 +2334,14 @@ Public Function ActiveAmbalazaDokExists(ByVal brDok As String, _
     colEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
     Dim saKljucem As Boolean: saKljucem = (Len(Trim$(stanicaID)) > 0)
-    Dim i As Long
+    Dim i As Long, tipOk As Boolean
     For i = 1 To UBound(data, 1)
-        If BrojJednak(data(i, colDokID), brDok) And _
-           Trim$(NzToText(data(i, colDokTip))) = Trim$(dokumentTip) Then
+        If Len(Trim$(dokumentTip)) = 0 Then
+            tipOk = ReversTipJe(NzToText(data(i, colDokTip)))
+        Else
+            tipOk = (Trim$(NzToText(data(i, colDokTip))) = Trim$(dokumentTip))
+        End If
+        If BrojJednak(data(i, colDokID), brDok) And tipOk Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 If Not saKljucem Then
                     ActiveAmbalazaDokExists = True
@@ -2362,227 +2368,334 @@ Public Function ReversTipJe(ByVal dokumentTip As String) As Boolean
     End Select
 End Function
 
-' KLJUC REVERSA -- (broj, tip, stanica, dan). Vraca "" kad je kljuc jednoznacan
-' (i popunjava ByRef polja), inace RAZLOG. Ne menja podatke.
+' IDENTITET REVERSA -- ReversID (REV-IDENT-01). Vraca "" kad je ReversID
+' jednoznacan (i popunjava ByRef polja), inace RAZLOG. Ne menja podatke.
 '
-'   ambID zadat  -> kljuc je kljuc TOG reda. Noga Stanica nosi stanicu sama.
-'                   Noga Kooperant je nema, pa se stanica trazi medju nogama
-'                   Stanica istog (broj, tip, dan) i istog statusa storna.
-'   ambID prazan -> sa zadatom stanicom kljuc je vec dat: vraca "".
-'                   Bez stanice se trazi po (broj, tip) medju nogama Stanica
-'                   statusa "storniran"; mora biti tacno jedan (stanica, dan).
+'   ambID zadat  -> ReversID TOG reda, koja god da je noga (Kooperant ili
+'                   Stanica); broj i smer se citaju iz reda. Status storna se
+'                   ovde ne gleda: da li je dokument aktivan pita pozivalac
+'                   (ReversRedoviRID).
+'   ambID prazan -> ReversID se trazi medju redovima (broj, tip) zadatog statusa
+'                   storna; mora biti tacno jedan.
 '
-' Noga Kooperant se sa stanicom uparuje SAMO preko noge Stanica istog dana, ne
-' preko susednog AmbID-a: susednost proizlazi iz redosleda upisa u SaveOMUlaz_TX,
-' nije invarijanta. Vise stanica ili dana = dvosmisleno -> razlog. Red bez noge
-' Stanica (sinteticki seed) nema kljuc -> razlog (fail-closed). Ambalaza uz otkup
-' (DokumentID = OtkupID) nije revers: stornira se sa otkupom -> razlog.
-Public Function ReversKljucRazresi(ByVal ambID As String, ByRef brDok As String, _
-                                   ByRef dokumentTip As String, ByRef stanicaID As String, _
-                                   ByRef dan As Long, ByVal storniran As Boolean) As String
-    Const SRC As String = "modStorno.ReversKljucRazresi"
+' Red bez ReversID-a se odbija -- bez fallback-a na broj, stanicu ili dan (B10).
+' Ambalaza uz otkup (DokumentID = OtkupID) nije revers: stornira se sa otkupom ->
+' razlog, i to PRE provere ReversID-a, koji ona ni nema.
+Public Function ReversIDRazresi(ByVal ambID As String, ByRef brDok As String, _
+                                ByRef dokumentTip As String, ByRef reversID As String, _
+                                ByVal storniran As Boolean) As String
+    Const SRC As String = "modStorno.ReversIDRazresi"
     Dim data As Variant, i As Long, r As Long
-    Dim cID As Long, cDok As Long, cTip As Long, cDat As Long
-    Dim cEnt As Long, cEntTip As Long, cSt As Long
-    Dim nasao As String, kljucReda As String, danReda As Long, vise As Boolean
+    Dim cID As Long, cDok As Long, cTip As Long, cSt As Long, cRid As Long
+    Dim rid As String, nadjeni As Object, bezID As String
 
+    reversID = ""
     ambID = Trim$(ambID)
-    If Len(ambID) = 0 And Len(Trim$(stanicaID)) > 0 Then Exit Function
 
     data = GetTableData(TBL_AMBALAZA)
     If Not IsArray(data) Then
-        ReversKljucRazresi = "Revers " & brDok & " nije pronadjen (tblAmbalaza je prazna)."
+        ReversIDRazresi = "Revers " & brDok & " nije pronadjen (tblAmbalaza je prazna)."
         Exit Function
     End If
     cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
     cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
     cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
     cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
 
-    stanicaID = ""
     If Len(ambID) > 0 Then
         For i = 1 To UBound(data, 1)
             If BrojJednak(data(i, cID), ambID) Then
                 If r > 0 Then
-                    ReversKljucRazresi = "Dva reda ambalaze nose AmbID " & ambID & _
-                                         " -> identitet reda nije jednoznacan."
+                    ReversIDRazresi = "Dva reda ambalaze nose AmbID " & ambID & _
+                                      " -> identitet reda nije jednoznacan."
                     Exit Function
                 End If
                 r = i
             End If
         Next i
         If r = 0 Then
-            ReversKljucRazresi = "Red ambalaze " & ambID & " nije pronadjen."
+            ReversIDRazresi = "Red ambalaze " & ambID & " nije pronadjen."
             Exit Function
         End If
         If Not ReversTipJe(NzToText(data(r, cTip))) Then
-            ReversKljucRazresi = "Red ambalaze " & ambID & " nije revers (tip '" & _
-                                 NzToText(data(r, cTip)) & "')."
+            ReversIDRazresi = "Red ambalaze " & ambID & " nije revers (tip '" & _
+                              NzToText(data(r, cTip)) & "')."
             Exit Function
         End If
         If Len(Trim$(brDok)) > 0 And Not BrojJednak(data(r, cDok), brDok) Then
-            ReversKljucRazresi = "Red ambalaze " & ambID & " ne nosi broj " & brDok & "."
+            ReversIDRazresi = "Red ambalaze " & ambID & " ne nosi broj " & brDok & "."
             Exit Function
         End If
         If Len(Trim$(dokumentTip)) > 0 And _
            Trim$(NzToText(data(r, cTip))) <> Trim$(dokumentTip) Then
-            ReversKljucRazresi = "Red ambalaze " & ambID & " nije smer " & dokumentTip & "."
-            Exit Function
-        End If
-        If Not IsDate(data(r, cDat)) Then
-            ReversKljucRazresi = "Red ambalaze " & ambID & " nema datum -> dan reversa nije poznat."
+            ReversIDRazresi = "Red ambalaze " & ambID & " nije smer " & dokumentTip & "."
             Exit Function
         End If
         brDok = Trim$(NzToText(data(r, cDok)))
         dokumentTip = Trim$(NzToText(data(r, cTip)))
-        dan = Int(CDbl(CDate(data(r, cDat))))
-        storniran = IsStorniranoValue(data(r, cSt))
-        If Trim$(NzToText(data(r, cEntTip))) = "Stanica" Then
-            stanicaID = Trim$(NzToText(data(r, cEnt)))
-        End If
     ElseIf Not ReversTipJe(dokumentTip) Then
-        ReversKljucRazresi = "Tip '" & dokumentTip & "' nije smer reversa."
+        ReversIDRazresi = "Tip '" & dokumentTip & "' nije smer reversa."
         Exit Function
     End If
 
     If Len(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, Trim$(brDok), COL_OTK_ID))) > 0 Then
-        stanicaID = ""
-        ReversKljucRazresi = "Ambalaza " & brDok & " je knjizena uz otkup -- stornira se " & _
-                             "sa otkupom, ne kao revers."
+        ReversIDRazresi = "Ambalaza " & brDok & " je knjizena uz otkup -- stornira se " & _
+                          "sa otkupom, ne kao revers."
         Exit Function
     End If
 
-    If Len(stanicaID) > 0 Then Exit Function
-
-    For i = 1 To UBound(data, 1)
-        If BrojJednak(data(i, cDok), brDok) Then
-            If Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip) And _
-               Trim$(NzToText(data(i, cEntTip))) = "Stanica" Then
-                If (IsStorniranoValue(data(i, cSt)) = storniran) And IsDate(data(i, cDat)) Then
-                    danReda = Int(CDbl(CDate(data(i, cDat))))
-                    If Len(ambID) = 0 Or danReda = dan Then
-                        kljucReda = UCase$(Trim$(NzToText(data(i, cEnt)))) & "|" & CStr(danReda)
-                        If Len(nasao) = 0 Then
-                            nasao = kljucReda
-                            stanicaID = Trim$(NzToText(data(i, cEnt)))
-                            dan = danReda
-                        ElseIf kljucReda <> nasao Then
-                            vise = True
-                        End If
-                    End If
-                End If
-            End If
+    If r > 0 Then
+        rid = Trim$(NzToText(data(r, cRid)))
+        If Len(rid) = 0 Then
+            ReversIDRazresi = "Red ambalaze " & ambID & " nema ReversID -> identitet reversa " & _
+                              "nije poznat (integritet B10). Odbijeno."
+            Exit Function
         End If
-    Next i
-
-    If vise Then
-        stanicaID = ""
-        ReversKljucRazresi = "Broj reversa " & brDok & " [" & dokumentTip & "] nose dokumenti " & _
-                             "vise stanica ili dana -> izaberi red iz liste ili resi rucno."
-    ElseIf Len(nasao) = 0 Then
-        ReversKljucRazresi = "Revers " & brDok & " [" & dokumentTip & "] nema nogu Stanica" & _
-                             IIf(storniran, " medju storniranima", "") & _
-                             " -> stanica i dan nisu poznati. Odbijeno."
+        reversID = rid
+        Exit Function
     End If
-End Function
 
-' Indeksi redova tblAmbalaza (= indeksi u GetTableData) reversa (broj, tip,
-' stanica, dan) zadatog statusa storna:
-'   noga Stanica   -- ta stanica, taj dan;
-'   noga Kooperant -- KOOP smerovi: isti (broj, tip, dan), i samo kad taj dan
-'                     postoji noga Stanica ove stanice.
-' Ako isti (broj, tip, dan, status) nosi i noga Stanica DRUGE stanice, noga
-' Kooperant se ne moze upariti ni sa jednom -> Err.Raise (fail-closed): storno
-' ili undo tada ne dira ni tudju ni svoju nogu kooperanta.
-Public Function ReversRedoviKljuca(ByVal brDok As String, ByVal dokumentTip As String, _
-                                   ByVal stanicaID As String, ByVal dan As Long, _
-                                   ByVal storniran As Boolean) As Collection
-    Const SRC As String = "modStorno.ReversRedoviKljuca"
-    Dim res As Collection: Set res = New Collection
-    Set ReversRedoviKljuca = res
-    If Len(Trim$(stanicaID)) = 0 Then Exit Function
-
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cDok As Long, cTip As Long, cDat As Long, cEnt As Long, cEntTip As Long, cSt As Long
-    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-
-    Dim koop As Collection: Set koop = New Collection
-    Dim drugaStanica As Boolean, i As Long, v As Variant
+    Set nadjeni = CreateObject("Scripting.Dictionary")
+    nadjeni.CompareMode = vbTextCompare
     For i = 1 To UBound(data, 1)
         If BrojJednak(data(i, cDok), brDok) Then
             If Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip) Then
-                If (IsStorniranoValue(data(i, cSt)) = storniran) And IsDate(data(i, cDat)) Then
-                    If Int(CDbl(CDate(data(i, cDat)))) = dan Then
-                        Select Case Trim$(NzToText(data(i, cEntTip)))
-                            Case "Stanica"
-                                If BrojJednak(data(i, cEnt), stanicaID) Then
-                                    res.Add i
-                                Else
-                                    drugaStanica = True
-                                End If
-                            Case "Kooperant"
-                                koop.Add i
-                        End Select
+                If IsStorniranoValue(data(i, cSt)) = storniran Then
+                    rid = Trim$(NzToText(data(i, cRid)))
+                    If Len(rid) = 0 Then
+                        If Len(bezID) = 0 Then bezID = Trim$(NzToText(data(i, cID)))
+                    Else
+                        nadjeni(rid) = True
                     End If
                 End If
             End If
         End If
     Next i
 
-    If koop.count = 0 Or res.count = 0 Then Exit Function
-    Select Case Trim$(dokumentTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
-        Case Else
-            Exit Function
-    End Select
-    If drugaStanica Then
-        Err.Raise ERR_STORNO_BASE + 23, SRC, _
-                  "Revers " & brDok & " [" & dokumentTip & "] istog dana nose noge Stanica " & _
-                  "vise stanica -> noga Kooperant se ne moze upariti ni sa jednom. Odbijeno; resi rucno."
+    If Len(bezID) > 0 Then
+        ReversIDRazresi = "Revers " & brDok & " [" & dokumentTip & "] ima red bez ReversID-a (" & _
+                          bezID & ") -> identitet reversa nije poznat (integritet B10). Odbijeno."
+    ElseIf nadjeni.count > 1 Then
+        ReversIDRazresi = "Broj reversa " & brDok & " [" & dokumentTip & "] nosi " & nadjeni.count & _
+                          " dokumenta -> izaberi red iz liste ili resi rucno."
+    ElseIf nadjeni.count = 0 Then
+        ReversIDRazresi = "Revers " & brDok & " [" & dokumentTip & "] nije pronadjen" & _
+                          IIf(storniran, " medju storniranima", "") & "."
+    Else
+        reversID = CStr(nadjeni.keys()(0))
     End If
-    For Each v In koop
-        res.Add v
-    Next v
 End Function
 
-' KANONSKI ID reversa -- AmbID njegove noge Stanica, za kljuc (broj, tip, stanica,
-' dan) i zadati status storna. Pisac (SaveOMUlaz_TX) pise tacno jednu nogu
-' Stanica po dokumentu, pa je taj AmbID trajan identitet dokumenta, a broj ostaje
-' labela. Nosi ga trag ispravke (tblStornoVeze.OldDocID / NewDocID): po broju taj
-' trag ne bi mogao da kaze KOJI je revers zamenjen, jer isti broj legalno nosi i
-' revers druge stanice ili drugog dana.
-' "" = noge Stanica nema ili ih je vise -- identitet nije jednoznacan, pozivalac
-' odbija (fail-closed), a ne upisuje broj umesto ID-a.
-' dokumentTip prazan = bilo koji od cetiri smera: smerovi dele jedan brojevni niz,
-' a zauzetost broja broji i stornirane, pa (broj, stanica, dan) nosi najvise jednu
-' nogu Stanica preko svih smerova. Tako se zamena nalazi i kad joj je smer drugi.
-Public Function ReversAmbIDStanice(ByVal brDok As String, ByVal dokumentTip As String, _
-                                   ByVal stanicaID As String, ByVal dan As Long, _
-                                   ByVal storniran As Boolean) As String
-    Const SRC As String = "modStorno.ReversAmbIDStanice"
-    If Len(Trim$(stanicaID)) = 0 Then Exit Function
+' Indeksi redova tblAmbalaza (= indeksi u GetTableData) jednog ReversID-a zadatog
+' statusa storna -- sve noge dokumenta, svih tipova ambalaze. Nema uparivanja nogu:
+' noga Kooperant pripada dokumentu jer nosi njegov ReversID, ne zato sto je istog
+' broja i dana kao neka noga Stanica. Prazan ReversID ne bira nista.
+' GRANICA: pre izbora se proverava da SVI redovi koji nose taj ReversID cine jedan
+' revers (ReversIDGranica). ReversID bira redove za mutaciju, pa red tudjeg
+' dokumenta sa istim ReversID-om ne sme da se tiho pokupi -- Err.Raise, nijedan red
+' nije izabran.
+Public Function ReversRedoviRID(ByVal reversID As String, ByVal storniran As Boolean) As Collection
+    Const SRC As String = "modStorno.ReversRedoviRID"
+    Dim res As Collection: Set res = New Collection
+    Set ReversRedoviRID = res
+    reversID = Trim$(reversID)
+    If Len(reversID) = 0 Then Exit Function
+
+    Dim granica As String: granica = ReversIDGranica(reversID)
+    If Len(granica) > 0 Then Err.Raise ERR_STORNO_BASE + 24, SRC, granica
+
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cRid As Long, cSt As Long, i As Long
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
+            If IsStorniranoValue(data(i, cSt)) = storniran Then res.Add i
+        End If
+    Next i
+End Function
+
+' GRANICA DOKUMENTA -- svi redovi tblAmbalaza koji nose ReversID (i stornirani)
+' moraju biti JEDAN revers, jer ReversID bira redove za storno, undo i stampu:
+'   - svaki red je jedan od cetiri smera reversa (red drugog prometa ambalaze,
+'     npr. otpremnica, sa istim ReversID-om nije noga);
+'   - nijedan red nije ambalaza uz otkup (DokumentID = OtkupID);
+'   - svi redovi nose isti broj, tip dokumenta i dan, i istog vozaca;
+'   - noge Stanica istu stanicu, noge Kooperant istog kooperanta; red drugog tipa
+'     entiteta nije noga reversa.
+' Isti ugovor meri B10 (modIntegritet) nad aktivnim redovima; ovde je kapija pred
+' mutacijom i stampom, fail-closed. Broj nogu po tipu ambalaze NIJE granica:
+' revers kome fali noga ne dira tudj red -- to prijavljuje B10.
+' "" = granica cista; inace razlog. Prazan ReversID i ReversID bez redova ovde
+' nisu nalaz -- to proveravaju pozivaoci (ReversIDRazresi, ReversRedoviRID).
+Public Function ReversIDGranica(ByVal reversID As String) As String
+    Const SRC As String = "modStorno.ReversIDGranica"
+    reversID = Trim$(reversID)
+    If Len(reversID) = 0 Then Exit Function
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If Not IsArray(data) Then Exit Function
     Dim cID As Long, cDok As Long, cTip As Long, cDat As Long
-    Dim cEnt As Long, cEntTip As Long, cSt As Long
+    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cRid As Long
     cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
     cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
     cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
     cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
     cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
     cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
 
-    Dim i As Long, n As Long, nasao As String, tipOk As Boolean
+    Dim i As Long, n As Long, amb As String, tip As String, entTip As String, ent As String
+    Dim dok As String, tipDok As String, dan As Long, danReda As Long
+    Dim stanica As String, koop As String, vozac As String
+    Dim imaSt As Boolean, imaKoop As Boolean
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
+            amb = Trim$(NzToText(data(i, cID)))
+            tip = Trim$(NzToText(data(i, cTip)))
+            If Not ReversTipJe(tip) Then
+                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije revers (tip '" & _
+                                  tip & "') -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            End If
+            If Not IsDate(data(i, cDat)) Then
+                ReversIDGranica = "Red ambalaze " & amb & " reversa " & reversID & " nema datum -> granica " & _
+                                  "dokumenta nije proverljiva. Odbijeno."
+                Exit Function
+            End If
+            danReda = Int(CDbl(CDate(data(i, cDat))))
+            n = n + 1
+            If n = 1 Then
+                dok = Trim$(NzToText(data(i, cDok)))
+                tipDok = tip
+                dan = danReda
+                vozac = Trim$(NzToText(data(i, cVoz)))
+            ElseIf Not BrojJednak(data(i, cDok), dok) Or tip <> tipDok Or danReda <> dan Then
+                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a drugi broj, smer ili dan (" & _
+                                  Trim$(NzToText(data(i, cDok))) & " [" & tip & "], ocekivano " & dok & " [" & tipDok & _
+                                  "]) -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            ElseIf StrComp(Trim$(NzToText(data(i, cVoz))), vozac, vbBinaryCompare) <> 0 Then
+                ReversIDGranica = "Noge reversa " & reversID & " nose razlicite vozace (" & amb & ") -> granica " & _
+                                  "dokumenta je narusena (integritet B10). Odbijeno."
+                Exit Function
+            End If
+            entTip = Trim$(NzToText(data(i, cEntTip)))
+            ent = Trim$(NzToText(data(i, cEnt)))
+            Select Case entTip
+                Case "Stanica"
+                    If Not imaSt Then
+                        stanica = ent: imaSt = True
+                    ElseIf StrComp(ent, stanica, vbBinaryCompare) <> 0 Then
+                        ReversIDGranica = "Noge Stanica reversa " & reversID & " nose razlicite stanice (" & amb & _
+                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                        Exit Function
+                    End If
+                Case "Kooperant"
+                    If Not imaKoop Then
+                        koop = ent: imaKoop = True
+                    ElseIf StrComp(ent, koop, vbBinaryCompare) <> 0 Then
+                        ReversIDGranica = "Noge Kooperant reversa " & reversID & " nose razlicite kooperante (" & amb & _
+                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
+                        Exit Function
+                    End If
+                Case Else
+                    ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije noga reversa " & _
+                                      "(EntitetTip '" & entTip & "') -> granica dokumenta je narusena. Odbijeno."
+                    Exit Function
+            End Select
+        End If
+    Next i
+
+    If n > 0 Then
+        If Len(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, dok, COL_OTK_ID))) > 0 Then
+            ReversIDGranica = "ReversID " & reversID & " nose redovi ambalaze uz otkup " & dok & _
+                              " -> to nije revers (integritet B10). Odbijeno."
+        End If
+    End If
+End Function
+
+' (stanica, dan) reversa -- iz njegovih nogu Stanica, bez obzira na storno.
+' Identitet dokumenta je ReversID; stanica i dan trebaju zauzetosti broja (undo
+' garda) i opisu dokumenta (pregled, pitanje ispravke).
+' "" = noge Stanica nose jednu stanicu i jedan dan (ByRef popunjen); inace razlog.
+' Revers bez noge Stanica ili sa dve stanice je nalaz B10 -- ovde se odbija.
+Public Function ReversStanicaDan(ByVal reversID As String, ByRef stanicaID As String, _
+                                 ByRef dan As Long) As String
+    Const SRC As String = "modStorno.ReversStanicaDan"
+    stanicaID = "": dan = 0
+    reversID = Trim$(reversID)
+    If Len(reversID) = 0 Then
+        ReversStanicaDan = "Revers bez ReversID-a -> stanica i dan nisu poznati. Odbijeno."
+        Exit Function
+    End If
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then
+        ReversStanicaDan = "Revers " & reversID & " nije pronadjen (tblAmbalaza je prazna)."
+        Exit Function
+    End If
+    Dim cRid As Long, cEnt As Long, cEntTip As Long, cDat As Long
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+
+    Dim i As Long, k As String, nasao As String
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
+            If Trim$(NzToText(data(i, cEntTip))) = "Stanica" Then
+                If Not IsDate(data(i, cDat)) Then
+                    stanicaID = "": dan = 0
+                    ReversStanicaDan = "Noga Stanica reversa " & reversID & " nema datum -> dan nije poznat. Odbijeno."
+                    Exit Function
+                End If
+                k = UCase$(Trim$(NzToText(data(i, cEnt)))) & "|" & CStr(Int(CDbl(CDate(data(i, cDat)))))
+                If Len(nasao) = 0 Then
+                    nasao = k
+                    stanicaID = Trim$(NzToText(data(i, cEnt)))
+                    dan = Int(CDbl(CDate(data(i, cDat))))
+                ElseIf k <> nasao Then
+                    stanicaID = "": dan = 0
+                    ReversStanicaDan = "Noge Stanica reversa " & reversID & " nose vise stanica ili dana " & _
+                                       "(integritet B10). Odbijeno."
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+    If Len(nasao) = 0 Then
+        ReversStanicaDan = "Revers " & reversID & " nema nogu Stanica -> stanica i dan nisu poznati. Odbijeno."
+    End If
+End Function
+
+' ReversID dokumenta koji nosi broj u nizu (stanica, dan), zadatog statusa storna.
+' Broj ovde nije identitet nego ulaz iz snimanja: pisac vraca samo uspeh, pa
+' zavrsetak ispravke zamenu nalazi po (broj, stanica, dan) -- a zauzetost broja
+' (BrojZauzetRevers, sa storniranima) drzi najvise jedan dokument preko sva cetiri
+' smera. dokumentTip prazan = bilo koji smer. Vise nogu Stanica istog ReversID-a
+' (vise tipova ambalaze) je JEDAN dokument.
+' "" = nijedan, vise razlicitih ReversID-a, ili noga bez ReversID-a -- identitet
+' nije jednoznacan, pozivalac odbija (fail-closed), a ne upisuje broj umesto ID-a.
+Public Function ReversIDStanice(ByVal brDok As String, ByVal dokumentTip As String, _
+                                ByVal stanicaID As String, ByVal dan As Long, _
+                                ByVal storniran As Boolean) As String
+    Const SRC As String = "modStorno.ReversIDStanice"
+    If Len(Trim$(stanicaID)) = 0 Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cDok As Long, cTip As Long, cDat As Long, cEnt As Long, cEntTip As Long
+    Dim cSt As Long, cRid As Long
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
+
+    Dim i As Long, tipOk As Boolean, rid As String, nasao As String
     For i = 1 To UBound(data, 1)
         If BrojJednak(data(i, cDok), brDok) Then
             If Len(Trim$(dokumentTip)) = 0 Then
@@ -2593,14 +2706,19 @@ Public Function ReversAmbIDStanice(ByVal brDok As String, ByVal dokumentTip As S
             If tipOk Then
                 If IsStorniranoValue(data(i, cSt)) = storniran Then
                     If ReversNogaStaniceUKljucu(data, i, cEnt, cEntTip, cDat, stanicaID, dan) Then
-                        n = n + 1
-                        nasao = Trim$(NzToText(data(i, cID)))
+                        rid = Trim$(NzToText(data(i, cRid)))
+                        If Len(rid) = 0 Then Exit Function
+                        If Len(nasao) = 0 Then
+                            nasao = rid
+                        ElseIf StrComp(rid, nasao, vbTextCompare) <> 0 Then
+                            Exit Function
+                        End If
                     End If
                 End If
             End If
         End If
     Next i
-    If n = 1 Then ReversAmbIDStanice = nasao
+    ReversIDStanice = nasao
 End Function
 
 ' Je li red i noga Stanica reversa (stanica, dan)?

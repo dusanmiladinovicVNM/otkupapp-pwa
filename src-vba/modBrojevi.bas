@@ -616,9 +616,9 @@ End Sub
 ' niz (MaxSeqReversAmbalaza ih ne razlikuje), a ambalaza otkupa ili otpremnice
 ' na istoj stanici nije revers. Stornirani se broje (A9).
 '
-' Red reversa bez noge Stanica (sinteticki seed) broj NE zauzima -- zato ga
-' storno i undo odbijaju (modStorno.ReversKljucRazresi), umesto da biraju
-' naslepo. Vraca AmbID noge Stanica koja drzi broj.
+' Red reversa bez noge Stanica (sinteticki seed) broj NE zauzima. Identitet
+' dokumenta je ReversID (modStorno.ReversIDRazresi), ne ovaj niz. Vraca AmbID
+' noge Stanica koja drzi broj.
 Private Function BrojZauzetRevers(ByVal stanicaID As String, _
                                   ByVal datum As Date, _
                                   ByVal broj As String, _
@@ -664,11 +664,10 @@ Private Function BrojZauzetRevers(ByVal stanicaID As String, _
         End If
     Next i
 End Function
-' KOOP REVERS: noga Kooperant ne nosi stanicu, pa se sa nogom Stanica uparuje samo
-' preko (broj, smer, dan). Dva KOOP reversa istog (broj, smer, dan) na dve stanice
-' bila bi nerazluciva -- storno, undo i stampa ih zato namerno odbijaju
-' (modStorno.ReversRedoviKljuca, modIzvestaj.ReversStampaKljuc). Pisac takvo stanje
-' ne sme ni da napravi: dok obe noge ne nose zajednicki ReversID, isti (broj, KOOP
+' KOOP REVERS: ogranicenje iz vremena kad se noga Kooperant sa nogom Stanica
+' uparivala preko (broj, smer, dan), pa bi dva KOOP reversa istog (broj, smer, dan)
+' na dve stanice bila nerazluciva. Od REV-IDENT-01 Faze 2a storno, undo i stampa
+' biraju noge po ReversID-u; ogranicenje odlazi u Fazi 2b. Do tada isti (broj, KOOP
 ' smer, dan) zauzima broj na SVIM stanicama. Stornirani se broje -- undo bi inace
 ' vratio par koji se ne razlucuje. FIRMA smerovi pisu samo nogu Stanica, pa za njih
 ' vazi obican niz (stanica, dan) (BrojZauzetRevers).

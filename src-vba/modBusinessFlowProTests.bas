@@ -9743,8 +9743,8 @@ End Sub
 '
 ' SABOTAZE: ukloni RequireBrojSlobodanUNizu iz SaveOMUlaz_TX -> pukne "pisac
 ' odbija isti broj, stanicu i dan"; preskoci stornirane u BrojZauzetRevers ->
-' pukne "storno ne oslobadja broj reversa"; u ReversKljucRazresi uzmi prvi
-' pogodak -> pukne "storno bez identiteta odbija dvosmislen broj".
+' pukne "storno ne oslobadja broj reversa"; u ReversIDRazresi uzmi prvi
+' ReversID -> pukne "storno bez identiteta odbija dvosmislen broj".
 Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     On Error GoTo EH
 
@@ -9846,12 +9846,12 @@ EH:
     LogFatal "Test_BKTX_ReversPisacOdbijaZauzet", Err.Number, Err.description
 End Sub
 
-' KOOP REVERS: pisac ne pravi stanje koje nizvodno ne ume da razresi. Noga
-' Kooperant ne nosi stanicu, pa se KOOP revers sa nogom Stanica uparuje preko
-' (broj, smer, dan); dva takva na dve stanice storno/undo/stampa namerno odbijaju.
-' Zato isti (broj, KOOP smer, dan) pisac odbija i na drugoj stanici -- a sve sto
-' pusti (drugi smer, drugi dan, FIRMA) mora da se stornira NEZAVISNO, sa noge
-' Kooperant, kako ga mreza Storno prikazuje.
+' KOOP REVERS: ogranicenje pisca iz vremena kad se noga Kooperant sa nogom Stanica
+' uparivala preko (broj, smer, dan). Od REV-IDENT-01 Faze 2a storno, undo i stampa
+' biraju noge po ReversID-u; ogranicenje (i ovaj test) menja Faza 2b. Do tada isti
+' (broj, KOOP smer, dan) pisac odbija i na drugoj stanici -- a sve sto pusti (drugi
+' smer, drugi dan, FIRMA) mora da se stornira NEZAVISNO, sa noge Kooperant, kako
+' ga mreza Storno prikazuje.
 '
 ' Nivo merenja: poslovni broj u nizu + logicki dokument (storno). Kroz pravi pisac,
 ' ne seed.

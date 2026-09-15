@@ -1175,8 +1175,8 @@ End Function
 '
 ' Revers je dve noge (Kooperant + Stanica) istog broja, a broj je jedinstven tek
 ' u nizu (stanica, dan) -- ni broj ni broj + smer ne razlucuju dokument. Identitet
-' je AmbID kliknute noge; smer, stanica i dan se iz nje citaju nizvodno
-' (modStorno.ReversKljucRazresi). Izvod nije ovde: ide uz BROJ RACUNA, kompozit
+' reda je AmbID kliknute noge; ReversID dokumenta se iz nje cita nizvodno
+' (modStorno.ReversIDRazresi). Izvod nije ovde: ide uz BROJ RACUNA, kompozit
 ' koji vec razlucuje dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
     Select Case tk

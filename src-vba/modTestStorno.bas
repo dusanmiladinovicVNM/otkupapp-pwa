@@ -89,7 +89,7 @@ Public Sub RunStornoTestSuite()
     T06_ReversIspravkaNeDupliraSaldo
     T07_ReversPonistenjeUklanjaSaldo
     TRev_CompleteReversPoKljucu
-    TRev_TragIspravkeNosiAmbID
+    TRev_TragIspravkeNosiReversID
     TRev_PreviewKliknutogReversa
     TRev_ZamenaDrugogSmera
     TRev_PitanjeIspravkeImenujeReverse
@@ -481,10 +481,10 @@ Private Sub T13_ReversCompleteSaAktivnimNovimReversom()
 End Sub
 
 ' ============================================================
-' Revers ispravka po KLJUCU: CompleteReversIspravka proverava zamenu po (broj,
-' tip, stanica, dan) iz snimanja -- broj reversa je jedinstven tek u tom nizu
-' (A2 red REV). Zamena sme na drugu stanicu, ali mora postojati BAS tamo i tog
-' dana kad je snimljena.
+' Revers ispravka: CompleteReversIspravka nalazi ReversID zamene po (broj,
+' stanica, dan) iz snimanja -- pisac vraca samo uspeh, a zauzetost broja drzi
+' najvise jedan dokument u tom nizu (A2 red REV). Zamena sme na drugu stanicu,
+' ali mora postojati BAS tamo i tog dana kad je snimljena.
 ' SABOTAZA: u CompleteReversIspravka ignorisi newStanicaID -> pukne "zamena koja
 ' ne postoji na datoj stanici NE zatvara ispravku".
 ' ============================================================
@@ -519,23 +519,26 @@ Private Sub TRev_CompleteReversPoKljucu()
 End Sub
 
 ' ============================================================
-' Trag ispravke reversa nosi KANONSKI ID (AmbID noge Stanica), ne broj. Dva
+' Trag ispravke reversa nosi ReversID (REV-IDENT-01), ne broj ni AmbID. Dva
 ' reversa istog broja i smera na dve stanice istog dana (FIRMA: samo noga
 ' Stanica) -- dve ispravke moraju imati razlicit OldDocID, a zavrsetak upisuje
-' NewDocID = AmbID noge Stanica NOVOG reversa. Broj ostaje u OldBroj/NewBroj.
+' NewDocID = ReversID NOVOG reversa. Broj ostaje u OldBroj/NewBroj. Revers sa dva
+' tipa ambalaze (dve noge Stanica, jedan ReversID) je JEDAN dokument.
 ' Nivo merenja: logicki dokument (revers), identitet u tblStornoVeze.
 ' SABOTAZE: OldDocID nazad na brDok -> pukne "dve ispravke istog broja nose
-' razlicit OldDocID"; NewDocID nazad na newBrDok -> pukne "NewDocID je AmbID noge
-' Stanica novog reversa"; ReversAmbIDStanice pusti vise nogu -> pukne "revers sa
-' dve noge Stanica nema trag ispravke".
+' razlicit OldDocID"; NewDocID nazad na newBrDok -> pukne "NewDocID je ReversID
+' novog reversa"; pusti prazan ReversID u ReversIDRazresi I u ReversRedoviRID (dva
+' sloja) -> pukne "revers bez ReversID-a nema trag ispravke".
 ' ============================================================
-Private Sub TRev_TragIspravkeNosiAmbID()
-    Const S As String = "TRev trag ispravke po AmbID: "
-    Dim res As Object, cidA As String, cidB As String, cidK As String
-    Dim oldA As String, oldB As String
+Private Sub TRev_TragIspravkeNosiReversID()
+    Const S As String = "TRev trag ispravke po ReversID: "
+    Dim res As Object, cidA As String, cidB As String, cidK As String, cidM As String
+    Dim oldA As String, oldB As String, oldK As String
+    Dim ridA As String, ridB As String, ridN As String, ridM As String
+    ridA = NoviReversID(): ridB = NoviReversID(): ridN = NoviReversID(): ridM = NoviReversID()
 
-    SeedAmb "SVT-RTA-S", "SVT-A", 10, "Ulaz", "SVT-STA", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA
-    SeedAmb "SVT-RTB-S", "SVT-A", 20, "Ulaz", "SVT-STB", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RTA-S", "SVT-A", 10, "Ulaz", "SVT-STA", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA, ridA
+    SeedAmb "SVT-RTB-S", "SVT-A", 20, "Ulaz", "SVT-STB", "Stanica", "SVT-RT", DOK_TIP_OM_ULAZ_FIRMA, ridB
 
     Set res = modStornoFlow.RunReversCorrection("SVT-RT", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_ISPRAVKA, "SVT-RTA-S")
     cidA = CStr(res("correctionID"))
@@ -544,35 +547,48 @@ Private Sub TRev_TragIspravkeNosiAmbID()
     Chk Len(cidA) > 0 And Len(cidB) > 0, S & "obe ispravke kreirane"
     oldA = modStornoContext.GetCorrectionField(cidA, COL_SV_OLD_DOCID)
     oldB = modStornoContext.GetCorrectionField(cidB, COL_SV_OLD_DOCID)
-    ChkEq oldA, "SVT-RTA-S", S & "OldDocID prve ispravke je AmbID noge Stanica S1"
-    ChkEq oldB, "SVT-RTB-S", S & "OldDocID druge ispravke je AmbID noge Stanica S2"
+    ChkEq oldA, ridA, S & "OldDocID prve ispravke je ReversID reversa S1"
+    ChkEq oldB, ridB, S & "OldDocID druge ispravke je ReversID reversa S2"
     Chk oldA <> oldB, S & "dve ispravke istog broja nose razlicit OldDocID"
     ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_OLD_BROJ), "SVT-RT", S & "OldBroj ostaje labela"
 
     ' Zamena S1: nov revers na S1.
-    SeedAmb "SVT-RTN-S", "SVT-A", 12, "Ulaz", "SVT-STA", "Stanica", "SVT-RTN", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RTN-S", "SVT-A", 12, "Ulaz", "SVT-STA", "Stanica", "SVT-RTN", DOK_TIP_OM_ULAZ_FIRMA, ridN
     Set res = modStornoFlow.CompleteReversIspravka(cidA, "SVT-RTN", "SVT-STA", Date)
     Chk CBool(res("success")), S & "zavrsetak ispravke uspeo"
-    ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_NEW_DOCID), "SVT-RTN-S", _
-          S & "NewDocID je AmbID noge Stanica novog reversa"
+    ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_NEW_DOCID), ridN, _
+          S & "NewDocID je ReversID novog reversa"
     ChkEq modStornoContext.GetCorrectionField(cidA, COL_SV_NEW_BROJ), "SVT-RTN", S & "NewBroj ostaje labela"
 
-    ' KOOP: klik na nogu Kooperant -> OldDocID je ipak noga Stanica tog reversa.
+    ' KOOP: klik na nogu Kooperant -> OldDocID je ReversID dokumenta (nose ga obe noge).
     SeedRevers "SVT-RTK", DOK_TIP_OM_IZLAZ_KOOP, "SVT-KTK", "SVT-STK", "SVT-A", 5
     Set res = modStornoFlow.RunReversCorrection("SVT-RTK", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_DUPLI, "SVT-RTK-K")
     cidK = CStr(res("correctionID"))
-    ChkEq modStornoContext.GetCorrectionField(cidK, COL_SV_OLD_DOCID), "SVT-RTK-S", _
-          S & "klik na nogu Kooperant: OldDocID je noga Stanica"
+    oldK = modStornoContext.GetCorrectionField(cidK, COL_SV_OLD_DOCID)
+    Chk Left$(oldK, 4) = "RID-", S & "klik na nogu Kooperant: OldDocID je ReversID (bilo: " & oldK & ")"
+    ChkEq oldK, NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RTK-S", COL_AMB_REVERS_ID)), _
+          S & "klik na nogu Kooperant: OldDocID je ReversID koji nosi i noga Stanica"
 
-    ' Dve noge Stanica pod istim kljucem (sinteticki; pisac to ne pravi): identitet
-    ' nije jednoznacan -> nema traga ni storna.
+    ' Jedan revers sa dva tipa ambalaze (odluka 15.09.2026): trag i storno obuhvataju
+    ' obe noge, jer ih bira ReversID, a ne broj noga Stanica.
+    SeedAmb "SVT-RTM-S1", "SVT-A", 3, "Ulaz", "SVT-STM", "Stanica", "SVT-RTM", DOK_TIP_OM_ULAZ_FIRMA, ridM
+    SeedAmb "SVT-RTM-S2", "SVT-B", 4, "Ulaz", "SVT-STM", "Stanica", "SVT-RTM", DOK_TIP_OM_ULAZ_FIRMA, ridM
+    Set res = modStornoFlow.RunReversCorrection("SVT-RTM", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_DUPLI, "SVT-RTM-S1")
+    cidM = CStr(res("correctionID"))
+    Chk CBool(res("success")), S & "revers sa dva tipa ambalaze ima trag ispravke"
+    ChkEq modStornoContext.GetCorrectionField(cidM, COL_SV_OLD_DOCID), ridM, _
+          S & "dva tipa ambalaze: OldDocID je jedan ReversID"
+    Chk UCase$(NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RTM-S1", COL_STORNIRANO))) = "DA" And _
+        UCase$(NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RTM-S2", COL_STORNIRANO))) = "DA", _
+        S & "dva tipa ambalaze: stornirane su obe noge"
+
+    ' Red bez ReversID-a (fault injection): identitet nije poznat -> nema traga ni storna.
     SeedAmb "SVT-RTD-S1", "SVT-A", 3, "Ulaz", "SVT-STD", "Stanica", "SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA
-    SeedAmb "SVT-RTD-S2", "SVT-B", 4, "Ulaz", "SVT-STD", "Stanica", "SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA
     Set res = modStornoFlow.RunReversCorrection("SVT-RTD", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_DUPLI, "SVT-RTD-S1")
     Chk Not CBool(res("success")) And Len(CStr(res("correctionID"))) = 0, _
-        S & "revers sa dve noge Stanica nema trag ispravke"
+        S & "revers bez ReversID-a nema trag ispravke"
     Chk UCase$(NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RTD-S1", COL_STORNIRANO))) = "", _
-        S & "odbijen revers sa dve noge nije storniran"
+        S & "odbijen revers bez ReversID-a nije storniran"
 End Sub
 
 ' ============================================================
@@ -586,8 +602,8 @@ Private Sub TRev_PreviewKliknutogReversa()
     Const S As String = "TRev preview po AmbID: "
     Dim p As String
 
-    SeedAmb "SVT-RPA-S", "SVT-A", 10, "Ulaz", "SVT-SPA", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA
-    SeedAmb "SVT-RPB-S", "SVT-A", 77, "Ulaz", "SVT-SPB", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RPA-S", "SVT-A", 10, "Ulaz", "SVT-SPA", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, NoviReversID()
+    SeedAmb "SVT-RPB-S", "SVT-A", 77, "Ulaz", "SVT-SPB", "Stanica", "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, NoviReversID()
 
     p = modStornoFlow.BuildStornoPreview(FLOW_DOC_REVERS, "SVT-RP", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RPA-S")
     Chk InStr(1, p, "SVT-SPB", vbTextCompare) = 0 And InStr(1, p, "77", vbBinaryCompare) = 0, _
@@ -625,8 +641,11 @@ Private Sub TRev_ZamenaDrugogSmera()
     Chk CBool(res("success")), S & "zamena drugog smera zatvara ispravku"
     ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
           S & "status COMPLETED, ne MANUAL_REQUIRED"
-    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_NEW_DOCID), "SVT-RZB-S", _
-          S & "NewDocID je noga Stanica zamene"
+    Chk Left$(modStornoContext.GetCorrectionField(cid, COL_SV_NEW_DOCID), 4) = "RID-", _
+        S & "NewDocID je ReversID"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_NEW_DOCID), _
+          NzTx(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RZB-S", COL_AMB_REVERS_ID)), _
+          S & "NewDocID je ReversID zamene"
 End Sub
 
 ' ============================================================
@@ -640,13 +659,13 @@ Private Sub TRev_PitanjeIspravkeImenujeReverse()
     Const S As String = "TRev pitanje ispravke: "
     Dim res As Object, cid As String, q As String
 
-    SeedAmb "SVT-RQA-S", "SVT-A", 6, "Ulaz", "SVT-SQA", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RQA-S", "SVT-A", 6, "Ulaz", "SVT-SQA", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA, NoviReversID()
     Set res = modStornoFlow.RunReversCorrection("SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA, SV_MODE_ISPRAVKA, "SVT-RQA-S")
     cid = CStr(res("correctionID"))
     Chk Len(cid) > 0, S & "context kreiran"
 
     ' Tudj revers ISTOG broja na drugoj stanici istog dana -- legalno (A2).
-    SeedAmb "SVT-RQB-S", "SVT-A", 6, "Ulaz", "SVT-SQB", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA
+    SeedAmb "SVT-RQB-S", "SVT-A", 6, "Ulaz", "SVT-SQB", "Stanica", "SVT-RQ", DOK_TIP_OM_ULAZ_FIRMA, NoviReversID()
     q = modDokUnos.ZavrsiIspravkuPitanje(FLOW_DOC_REVERS, cid, "SVT-RQ", "SVT-SQB", Date)
     Chk InStr(1, q, "SVT-SQA", vbTextCompare) > 0 And InStr(1, q, "SVT-SQB", vbTextCompare) > 0, _
         S & "pitanje imenuje stanicu starog i novog reversa (bilo: " & Replace(q, vbCrLf, " / ") & ")"
@@ -1269,21 +1288,26 @@ Private Sub SeedOtkupBlok(ByVal blkID As String, ByVal otpID As String, ByVal br
         Array(blkID, otpID, brojZbirne, blkID)
 End Sub
 
-' Revers = dvojni upis (kooperant Ulaz + stanica Izlaz), oba dele DokumentID+Tip.
+' Revers = dvojni upis (kooperant Ulaz + stanica Izlaz), oba dele DokumentID+Tip i
+' JEDAN ReversID (REV-IDENT-01), kovan produkcionom fabrikom kao u piscu.
 Private Sub SeedRevers(ByVal brDok As String, ByVal dokTip As String, _
                        ByVal koopID As String, ByVal stanicaID As String, _
                        ByVal tipAmb As String, ByVal kol As Long)
-    SeedAmb brDok & "-K", tipAmb, kol, "Ulaz", koopID, "Kooperant", brDok, dokTip
-    SeedAmb brDok & "-S", tipAmb, kol, "Izlaz", stanicaID, "Stanica", brDok, dokTip
+    Dim rid As String: rid = NoviReversID()
+    SeedAmb brDok & "-K", tipAmb, kol, "Ulaz", koopID, "Kooperant", brDok, dokTip, rid
+    SeedAmb brDok & "-S", tipAmb, kol, "Izlaz", stanicaID, "Stanica", brDok, dokTip, rid
 End Sub
 
+' rid = ReversID noge reversa; prazan = red bez identiteta (fault injection).
 Private Sub SeedAmb(ByVal id As String, ByVal tip As String, ByVal kol As Long, _
                     ByVal smer As String, ByVal entID As String, ByVal entTip As String, _
-                    ByVal dokID As String, ByVal dokTip As String)
+                    ByVal dokID As String, ByVal dokTip As String, _
+                    Optional ByVal rid As String = "")
     SvAppend TBL_AMBALAZA, _
         Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
-              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-        Array(id, Date, tip, kol, smer, entID, entTip, dokID, dokTip)
+              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, _
+              COL_AMB_REVERS_ID), _
+        Array(id, Date, tip, kol, smer, entID, entTip, dokID, dokTip, rid)
 End Sub
 
 ' --- Banka izvod (staging + novac) ---

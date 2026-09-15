@@ -34,7 +34,7 @@ generatora:
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
 | PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
-| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. **KOOP smerovi** (izdavanje i povrat kooperantu): noga Kooperant ne nosi stanicu, pa isti (broj, smer, dan) zauzima broj na **svim** stanicama, sa storniranima — dok obe noge ne nose zajednički `ReversID`. FIRMA smerovi ostaju po stanici. |
+| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. **KOOP smerovi** (izdavanje i povrat kooperantu): noga Kooperant ne nosi stanicu, pa isti (broj, smer, dan) zauzima broj na **svim** stanicama, sa storniranima — dok to Faza 2b REV-IDENT-01 ne ukloni (od Faze 2a noge već nose zajednički `ReversID`). FIRMA smerovi ostaju po stanici. |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
 Operativni izvor istine za isto pravilo, po ekranima:
@@ -69,21 +69,42 @@ vrste se ne sudi. Ne proverava jedinstvenost (to je
 `modBrojevi.BrojZauzetUNizu` za OTK, OTP, ZBR i REV — po nizu, sa storniranima;
 `CheckDuplicate` još za prijemnicu) i ne sudi prijemnicu.
 
-**Revers: dokument je (broj, tip, stanica, dan)** (14.09.2026). Pošto isti broj
-legalno nose dva reversa (druga stanica ili drugi dan), svaki potrošač koji bira
-revers bira po tom ključu, nikad po (broj, tip): storno
-(`modStorno.StornoOMKoopByBrDok` — identitet je `AmbID` kliknutog reda, ključ
-razrešava `ReversKljucRazresi`), undo (ključ iz `AmbID`-eva operacije,
-`modStornoZurnal.UndoGuardReasonZaOp`), završetak ispravke (stanica i dan zamene
-iz snimanja), pregled i štampa ambalaže (`modIzvestaj.ReversStampaKljuc`), kao i pregled pre potvrde
-(`modStornoFlow.BuildStornoPreview` → `ScanRevers`, isti ključ kao pisac).
+**Revers: identitet je `ReversID`, broj je labela** (REV-IDENT-01, Faza 2a,
+15.09.2026; do tada je dokument bio ključ (broj, tip, stanica, dan)). Pošto isti
+broj legalno nose dva reversa (druga stanica ili drugi dan), svaki potrošač koji
+bira revers bira po `ReversID`-u — nikad po (broj, tip) i nikad uparivanjem noge
+Kooperant sa nogom Stanica preko (broj, dan):
 
-**Trajni identitet reversa je `AmbID` njegove noge Stanica**
-(`modStorno.ReversAmbIDStanice`) — pisac piše tačno jednu nogu Stanica po
-dokumentu. Taj ID nosi trag ispravke: `tblStornoVeze.OldDocID` i `NewDocID`;
-broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznačan
-(nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
-upisuje umesto ID-a.
+- storno (`modStorno.StornoOMKoopByBrDok`) — `ReversID` se čita iz `AmbID`-a
+  kliknutog reda (`ReversIDRazresi`), noge bira `ReversRedoviRID`; bez
+  identiteta reda `ReversID` po (broj, tip) mora biti jednoznačan;
+- undo — `ReversID` iz `AmbID`-eva operacije (`modStornoZurnal.UndoGuardReasonZaOp`,
+  `LatestOpForRevers`); duplikat se i dalje meri u nizu (stanica, dan), koji daju
+  noge Stanica tog `ReversID`-a (`ReversStanicaDan`), i to u **bilo kom od četiri
+  smera** — smerovi dele jedan niz;
+- završetak ispravke — `ReversID` zamene po (broj, stanica, dan) iz snimanja
+  (`ReversIDStanice`), jer pisac vraća samo uspeh;
+- pregled i štampa ambalaže — red pregleda nosi `ReversID`, noge papira bira
+  `modIzvestaj.ReversStampaNoge`;
+- pregled pre potvrde (`modStornoFlow.BuildStornoPreview` → `ScanRevers`, isti kod
+  kao pisac).
+
+Revers **bez** `ReversID`-a svi ovi potrošači odbijaju, bez fallback-a.
+
+**Granica dokumenta** (`modStorno.ReversIDGranica`). `ReversID` bira redove za
+mutaciju, pa pre storna, undo-a, ispravke, pregleda i štampe **svi** redovi koji ga
+nose — i stornirani — moraju biti jedan revers: svaki red je jedan od četiri smera
+i nije ambalaža uz otkup; svi nose isti broj, smer, dan i vozača; noge Stanica istu
+stanicu, noge Kooperant istog kooperanta; drugi tip entiteta nije noga. Red tuđeg
+dokumenta sa istim `ReversID`-om obara **celu** operaciju (`ReversRedoviRID` diže
+grešku, nijedan red se ne menja) — ne preskače se tiho. Broj nogu po tipu
+ambalaže nije granica (revers kome fali noga ne dira tuđ red); to prijavljuje B10.
+
+**Trag ispravke nosi `ReversID`**: `tblStornoVeze.OldDocID` i `NewDocID`; broj ide
+u `OldBroj` / `NewBroj` i ostaje labela. Pitanje pre vezivanja zamene čita stanicu
+i dan starog reversa iz njegovog `ReversID`-a. Kad `ReversID` nije jednoznačan,
+ispravka se odbija pre storna — broj se ne upisuje umesto ID-a. Ambalaža uz otkup
+`ReversID` nema; njen identitet je `OtkupID` (`DokumentID`).
 
 **ReversID — REV-IDENT-01** (odluke operatera 15.09.2026). Identitet logičkog
 reversa je `tblAmbalaza.ReversID`, **isti na svim nogama** jednog dokumenta:
@@ -104,37 +125,41 @@ upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
    ReversID sve noge nose isti broj, tip dokumenta i dan, **istu stanicu** (sve
    noge Stanica), **istog kooperanta** (sve noge Kooperant) i **istog vozača** —
    ključ koji ReversID zamenjuje nosi stanicu, pa je identitet ne sme izgubiti,
-   niti sme da spoji delove dva dokumenta.
+   niti sme da spoji delove dva dokumenta. B10 prijavljuje i `ReversID` na redu
+   koji **nije** revers (drugi promet ambalaže, ambalaža uz otkup); isti ugovor je
+   kapija pred mutacijom (`ReversIDGranica`, pasus „Granica dokumenta").
 5. Jedan revers **sme da nosi više tipova ambalaže** (futureproofing). Grain je
    ReversID = logički dokument, `AmbID` = fizički red, broj = labela. Današnji
    pisac piše jedan tip po dokumentu — to je granica API-ja, ne grain dokumenta;
    fixture `REV-IZV-1` (12/1 + LETVA pod jednim ReversID-om) drži višetipni oblik
    kao legitiman.
-4. Isporuka u dve faze. **Faza 1 (isporučena):** kolona, pisac, B10 — čitaoci i
-   dalje rade po ključu (broj, tip, stanica, dan), a trajni identitet iz
-   prethodnog pasusa, pravilo 1 i KOOP klauzula u A2 važe **nepromenjeno**.
-   **Faza 2:** storno, pregled, undo, ispravka i štampa prelaze na ReversID, trag
-   ispravke nosi ReversID, zabrana istog KOOP broja na dve stanice nestaje, a
-   zauzetost broja postaje (stanica, dan) za sva četiri smera.
+4. Isporuka u fazama. **Faza 1 (isporučena, PR #330):** kolona, pisac, B10.
+   **Faza 2a (isporučena 15.09.2026):** storno, pregled, undo, ispravka i štampa
+   prelaze na ReversID, trag ispravke nosi ReversID (pasus „Revers: identitet je
+   `ReversID`" iznad). **Faza 2b:** zabrana istog KOOP broja na dve stanice
+   nestaje (pravilo 1, KOOP klauzula u A2), a zauzetost broja postaje (stanica,
+   dan) za sva četiri smera.
 
 Tri pravila ključa primenjena su po preporuci pre-flight-a; **operater ih je
 potvrdio 14.09.2026** (PR #328):
 
-1. Noga Kooperant ne nosi stanicu. Kad isti (broj, tip, dan) nose noge Stanica
-   **dve** stanice, noga Kooperant se ne pripisuje nijednoj — storno, undo i
-   štampa se **odbijaju**. Uparivanje preko susednog `AmbID`-a nije dozvoljeno:
-   susednost je redosled upisa u `SaveOMUlaz_TX`, ne invarijanta.
-   **Pisac takvo stanje ne pravi:** za KOOP smerove isti (broj, smer, dan) na
-   drugoj stanici odbijaju i ekran (`ReversValidiraj`) i pisac
-   (`modBrojevi.RequireReversKoopBrojJedinstven`), sa storniranima. Odbijanje
-   nizvodno ostaje druga linija, za redove nastale mimo pisca. Dugoročno rešenje
-   je zajednički `ReversID` obe noge — tada isti broj na S1/S2 postaje potpuno
-   podržan i ovo ograničenje nestaje.
+1. Noga Kooperant ne nosi stanicu. Do Faze 2a se, kad isti (broj, tip, dan) nose
+   noge Stanica **dve** stanice, noga Kooperant nije pripisivala nijednoj, pa su
+   storno, undo i štampa **odbijani**. **Od Faze 2a** noge jednog reversa
+   povezuje `ReversID`, pa ti potrošači biraju tačan dokument. Uparivanje preko
+   susednog `AmbID`-a i dalje nije dozvoljeno: susednost je redosled upisa u
+   `SaveOMUlaz_TX`, ne invarijanta.
+   **Pisac to stanje još ne pravi (do Faze 2b):** za KOOP smerove isti (broj,
+   smer, dan) na drugoj stanici odbijaju i ekran (`ReversValidiraj`) i pisac
+   (`modBrojevi.RequireReversKoopBrojJedinstven`), sa storniranima. Faza 2b to
+   ograničenje uklanja — isti broj na S1/S2 tada postaje potpuno podržan.
 2. Red reversa **bez noge Stanica** (sintetički seed — produkcioni pisac je uvek
-   piše) broj ne zauzima, a storno i undo ga odbijaju.
+   piše) broj ne zauzima; stanica i dan mu nisu poznati, pa ga undo i pregled pre
+   potvrde odbijaju, a B10 prijavljuje. Red **bez `ReversID`-a** odbijaju storno,
+   undo, ispravka, pregled i štampa.
 3. Ispravka sme da prebaci revers na **drugu stanicu ili drugi dan**, i da mu
    promeni **smer**; zamena se proverava tamo i tog dana kad je snimljena, a smer
-   se čita iz nje (broj, stanica i dan nose najviše jednu nogu Stanica preko sva
+   se čita iz nje (broj, stanica i dan nose najviše jedan `ReversID` preko sva
    četiri smera). Pitanje pre vezivanja zamene imenuje stanicu i dan **oba**
    reversa (`modDokUnos.ZavrsiIspravkuPitanje`), jer se ispravka bira po tipu, a
    isti broj legalno nosi i tuđ revers.

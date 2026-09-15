@@ -447,7 +447,9 @@ End Sub
 ' modAmbalaza.TrackAmbalaza) ga pecati na svaku nogu, pa produkcija ovo stanje
 ' ne pravi -- ali stariji redovi, seed i rucna izmena mogu. Prazan ReversID NIJE
 ' drugi oblik identiteta: nema fallback-a na broj. Ambalaza uz otkup (DokumentID
-' = OtkupID) nosi tip OM-Izlaz-Koop, a nije revers.
+' = OtkupID) nosi tip OM-Izlaz-Koop, a nije revers. ReversID na redu koji NIJE
+' revers (drugi promet ambalaze, ambalaza uz otkup) je takodje nalaz: ReversID bira
+' redove za mutaciju (modStorno.ReversIDGranica).
 ' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026), pa se noge
 ' broje PO TIPU unutar ReversID-a: po tipu tacno jedna noga Stanica; KOOP jos
 ' tacno jedna noga Kooperant po tipu, FIRMA nijedna. Za ceo ReversID sve noge
@@ -524,6 +526,11 @@ Private Sub Chk_B10_ReversBezID()
                 End Select
                 noge(nk) = g
             End If
+        ElseIf Len(Trim$(NzToText(data(r, cRid)))) > 0 Then
+            ' ReversID bira redove za mutaciju (modStorno.ReversIDGranica), pa red koji
+            ' nije revers -- drugi promet ambalaze ili ambalaza uz otkup -- ne sme da ga nosi.
+            bad.Add Array(NzToText(data(r, cId)), dok, tip, _
+                          "ReversID na redu koji nije revers (" & Trim$(NzToText(data(r, cRid))) & ")")
         End If
     Next r
 
