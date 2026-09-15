@@ -25,7 +25,7 @@ Attribute VB_Name = "modStornoDok"
 '   ResolveIzvodZaStorno      "broj" ili "broj/racun" -> jedan izvod
 '   GetIzvodStornoBlokade     preflight: razlog pre potvrde, ne tih pad
 '   ActiveAmbalazaDokExists   revers po broju I po smeru
-'   ReversKljucRazresi        revers po kljucu (stanica, dan) kliknutog reda
+'   ReversIDRazresi           revers po ReversID-u kliknutog reda (REV-IDENT-01)
 ' Ovaj modul ih samo redja po tipu. Duplirane provere se ne pisu.
 '
 ' TIP DOKUMENTA je kljuc rezima novog UI-ja (modScrDokumenti.modeKey),
@@ -112,7 +112,7 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
     Dim razlog As String, izvBroj As String, izvRacun As String, errDesc As String
-    Dim revBroj As String, revTip As String, revStanica As String, revDan As Long
+    Dim revBroj As String, revTip As String, revID As String
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then
@@ -171,15 +171,15 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then
                 StornoRazlog = NijePronadjen(broj)
             Else
-                ' Broj reversa je jedinstven tek u nizu (stanica, dan): kljuc se
-                ' uzima iz kliknutog reda (docID = AmbID), a bez njega mora biti
-                ' jednoznacan po (broj, smer). Pisac (StornoOMKoopByBrDok) razresava
-                ' isto -- ovde je samo da operater razlog vidi pre potvrde.
+                ' Identitet reversa je ReversID: uzima se iz kliknutog reda (docID =
+                ' AmbID), a bez njega mora biti jednoznacan po (broj, smer). Pisac
+                ' (StornoOMKoopByBrDok) razresava isto -- ovde je samo da operater
+                ' razlog vidi pre potvrde.
                 revBroj = broj: revTip = opcija
-                razlog = ReversKljucRazresi(docID, revBroj, revTip, revStanica, revDan, False)
+                razlog = ReversIDRazresi(docID, revBroj, revTip, revID, False)
                 If Len(razlog) > 0 Then
                     StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
-                ElseIf Not ActiveAmbalazaDokExists(revBroj, revTip, revStanica, revDan) Then
+                ElseIf ReversRedoviRID(revID, False).count = 0 Then
                     StornoRazlog = NijePronadjen(broj)
                 End If
             End If
@@ -300,7 +300,7 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoNovac_TX(novID)
 
         Case STIP_REVERSI
-            ' docID = AmbID kliknutog reda: kljuc (stanica, dan) reversa.
+            ' docID = AmbID kliknutog reda: iz njega se cita ReversID dokumenta.
             ok = StornoOMKoopByBrDok_TX(broj, opcija, docID)
 
         Case STIP_IZVOD

@@ -214,9 +214,10 @@ dokumenta više ne ostavlja drugu klasu nestorniranu.
 
 > Storno-UI: `OM-Izlaz-Koop` (revers izdavanje) i `OM-Ulaz-Koop` (revers povrat) imaju
 > putanju u storno comboboxu („Revers izdavanje koop." / „Revers povrat koop.") —
-> `modStorno.StornoOMKoopByBrDok_TX(brDok, dokumentTip[, ambID])` markira **obe noge** po ključu
-> (broj, tip, stanica, dan) — isti broj legalno nosi i revers druge stanice ili dana (A2), pa ne po golom broju
-> dokumenta (broj je obavezan; unos bez broja nema jedinstven ključ). Novac unet uz isti
+> `modStorno.StornoOMKoopByBrDok_TX(brDok, dokumentTip[, ambID])` markira **sve noge** jednog
+> `ReversID`-a (REV-IDENT-01; `ReversID` se čita iz kliknutog reda) — isti broj legalno nosi i revers
+> druge stanice ili dana (A2), pa ne po golom broju dokumenta (broj je obavezan; bez identiteta reda
+> `ReversID` po (broj, tip) mora biti jednoznačan). Novac unet uz isti
 > broj stornira se zasebno („Novac"). Preostala praznina: plain `OMUlaz` (prijem na OM od
 > vozača) i dalje nije u storno comboboxu. Napomena: storno OM-koop reversa se još ne
 > prikazuje u „Pregled storniranih" (`GetStorniraniByTip` je po prodajnim tabelama).
@@ -251,5 +252,5 @@ nedostajućih redova). Pokrenuti **tačno jednom** i tek **posle** re-importa ko
 | OM-Ulaz / OM-izdavanje / OM-prijem-koop | `frmDokumenta.SaveOMUlaz_TX` + runtime toggle-i `tglIzdKoop` (izdato) i `tglPrijemKoop` (prijem/povrat); smer = parametar `koopSmer` |
 | Broj reversa (auto) | `modBrojevi.SuggestNextBroj(KIND_REV, stanicaID, datum)` → `x/ddmmyy[-N]`; poštuje toggle `AUTO_BROJ_DOKUMENTA` (`IsAutoBrojDokumenta`); sopstveni dnevni niz po stanici (scan `tblAmbalaza`, OM-koop tokovi) |
 | Vozač/entitet izveštaji | `modIzvestaj.ReportAmbalaza` (+ `ReportAmbalazePojedinacni`/`Zbirni`) |
-| Storno | `modStorno.StornoAmbalazaByDokument`; standalone revers: `StornoOMKoopByBrDok_TX(brDok, dokumentTip[, ambID])` po ključu (broj, tip, stanica, dan); pregled: `modDokumenta.GetStorniraniRevers` |
+| Storno | `modStorno.StornoAmbalazaByDokument`; standalone revers: `StornoOMKoopByBrDok_TX(brDok, dokumentTip[, ambID])` po `ReversID`-u (`ReversIDRazresi` + `ReversRedoviRID`); pregled: `modDokumenta.GetStorniraniRevers` |
 | Konstante tipova | `modConfig` (`DOK_TIP_OTKUP`, `DOK_TIP_OTPREMNICA`, `DOK_TIP_PRIJEMNICA`, `DOK_TIP_IZLAZ_KUPCI`, `DOK_TIP_OM_ULAZ`, `DOK_TIP_OM_IZLAZ_KOOP`, `DOK_TIP_OM_ULAZ_KOOP`) |

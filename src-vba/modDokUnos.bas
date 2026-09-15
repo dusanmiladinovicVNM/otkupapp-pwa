@@ -1158,8 +1158,8 @@ End Sub
 ' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se
 ' prepise u treci modul.
 '
-' stanicaID / datum nosi samo revers: njegov broj je jedinstven tek u nizu
-' (stanica, dan), pa CompleteReversIspravka proverava zamenu po tom kljucu --
+' stanicaID / datum nosi samo revers: pisac vraca samo uspeh, pa
+' CompleteReversIspravka ReversID zamene nalazi po (broj, stanica, dan) --
 ' zamena sme na drugu stanicu ili drugi dan. Ostali tipovi ih ne citaju.
 Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
                              ByRef poruke As String, _
@@ -1209,19 +1209,21 @@ End Sub
 ' dokumenta: broj reversa je jedinstven tek u nizu (stanica, dan), pa bi
 ' "'45' -> '45'?" izgledalo isto i kad je snimljen tudj revers istog broja na
 ' drugoj stanici -- a jedno "Da" bi zatvorilo pogresnu ispravku.
-' Stari revers se cita iz traga (OldDocID = AmbID noge Stanica), novi iz snimanja.
+' Stari revers se cita iz traga (OldDocID = ReversID; stanica i dan iz njegovih
+' nogu Stanica), novi iz snimanja.
 ' Za ostale tipove tekst je nepromenjen. PUBLIC zbog testa: MsgBox se ne meri.
 Public Function ZavrsiIspravkuPitanje(ByVal docType As String, ByVal cid As String, _
                                       ByVal newBroj As String, _
                                       Optional ByVal stanicaID As String = "", _
                                       Optional ByVal datum As Variant = Empty) As String
-    Dim oldBroj As String, oldAmb As String, oldOpis As String, newOpis As String
+    Dim oldBroj As String, oldID As String, oldOpis As String, newOpis As String
+    Dim oldSt As String, oldDan As Long
     oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
     If docType = FLOW_DOC_REVERS Then
-        oldAmb = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID))
-        If Len(oldAmb) > 0 Then
-            oldOpis = ReversOpis(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, oldAmb, COL_AMB_ENTITET)), _
-                                 LookupValue(TBL_AMBALAZA, COL_AMB_ID, oldAmb, COL_AMB_DATUM))
+        oldID = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID))
+        If Len(oldID) > 0 Then
+            If Len(modStorno.ReversStanicaDan(oldID, oldSt, oldDan)) = 0 Then _
+                oldOpis = ReversOpis(oldSt, CDate(oldDan))
         End If
         newOpis = ReversOpis(stanicaID, datum)
     End If
