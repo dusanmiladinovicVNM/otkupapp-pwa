@@ -112,7 +112,7 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
     Dim razlog As String, izvBroj As String, izvRacun As String, errDesc As String
-    Dim revBroj As String, revTip As String, revID As String
+    Dim revBroj As String, revTip As String, revID As String, revSt As String, revDan As Long
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then
@@ -178,6 +178,10 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                 revBroj = broj: revTip = opcija
                 razlog = ReversIDRazresi(docID, revBroj, revTip, revID, False)
                 If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
+                ' Stanica i dan moraju biti poznati: potvrda ih imenuje, jer isti KOOP
+                ' broj, smer i dan legalno nose reversi dve stanice (Faza 2b). Ista
+                ' fail-closed kapija kao undo garda (UndoGuardReason).
+                If Len(razlog) = 0 Then razlog = ReversStanicaDan(revID, revSt, revDan)
                 If Len(razlog) > 0 Then
                     StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
                 ElseIf ReversRedoviRID(revID, False).count = 0 Then
@@ -793,6 +797,46 @@ Public Function TipNaziv(ByVal tip As String, ByVal opcija As String) As String
         Case STIP_REVERSI:    TipNaziv = ReversNaziv(opcija)
         Case Else:            TipNaziv = tip
     End Select
+End Function
+
+' Opis izabranog dokumenta za zaglavlje i potvrdu: ime tipa i broj, a za revers i
+' otkupno mesto i dan. REV-IDENT-01 Faza 2b: isti KOOP broj, smer i dan legalno
+' nose reversi dve stanice (i istog kooperanta), pa "Revers izdavanje 5" ne kaze
+' KOJI -- a operater potvrdjuje bas taj. Stanica i dan se citaju iz ReversID-a
+' kliknutog reda (docID = AmbID); kad identitet nije razresiv, ostaje tip i broj
+' (kapija StornoRazlog tada vec odbija).
+Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
+                             ByVal opcija As String, Optional ByVal docID As String = "") As String
+    Dim opis As String, revBroj As String, revTip As String, revID As String
+    Dim st As String, dan As Long
+    opis = TipNaziv(tip, opcija) & " " & broj
+    DokumentOpis = opis
+    On Error GoTo EH
+    If tip <> STIP_REVERSI Or Len(Trim$(docID)) = 0 Then Exit Function
+    revBroj = broj: revTip = opcija
+    If Len(modStorno.ReversIDRazresi(docID, revBroj, revTip, revID, False)) > 0 Then Exit Function
+    If Len(modStorno.ReversStanicaDan(revID, st, dan)) > 0 Then Exit Function
+    DokumentOpis = opis & modDokUnos.ReversOpis(st, CDate(dan))
+    Exit Function
+EH:
+    DokumentOpis = opis
+End Function
+
+' Opis reversa iz traga ispravke (OldDocID = ReversID): " (naziv / StanicaID, dan)",
+' ili "" kad kontekst nije revers ili stanica i dan nisu poznati. Dve otvorene
+' ispravke reversa istog broja na dve stanice (od REV-IDENT-01 Faze 2b i KOOP) se u
+' listi Nedovrseno i u potvrdi "Odbaci" inace ne razlikuju.
+Public Function IspravkaReversOpis(ByVal correctionID As String) As String
+    Dim rid As String, st As String, dan As Long
+    On Error GoTo EH
+    If Len(Trim$(correctionID)) = 0 Then Exit Function
+    If modStornoContext.GetCorrectionField(correctionID, COL_SV_OLD_DOCTYPE) <> FLOW_DOC_REVERS Then Exit Function
+    rid = Trim$(modStornoContext.GetCorrectionField(correctionID, COL_SV_OLD_DOCID))
+    If Len(modStorno.ReversStanicaDan(rid, st, dan)) > 0 Then Exit Function
+    IspravkaReversOpis = modDokUnos.ReversOpis(st, CDate(dan))
+    Exit Function
+EH:
+    IspravkaReversOpis = ""
 End Function
 
 Private Function ReversNaziv(ByVal dokTip As String) As String

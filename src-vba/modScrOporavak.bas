@@ -391,8 +391,18 @@ End Function
 ' broju" vracala tudju. Zato je prva kolona liste bas OperationID.
 '
 ' Kapija je UndoGuardReasonZaOp (fail-closed) -- ista koju UndoOperation_TX dize
-' pre ijedne izmene. Za revers pita KLJUC operacije (stanica, dan), ne broj:
-' isti broj reversa legalno nosi i revers druge stanice ili drugog dana.
+' pre ijedne izmene. Za revers pita ReversID operacije, ne broj: isti broj reversa
+' legalno nosi i revers druge stanice ili drugog dana -- od Faze 2b i isti KOOP
+' broj, smer i dan. Zato potvrda imenuje stanicu i dan (UndoOpisOperacije).
+Public Function UndoPotvrdaTekst(ByVal opID As String, ByVal tip As String, _
+                                 ByVal broj As String) As String
+    ' Tekst potvrde "Vrati storno" -- izdvojen da bi se merio (MsgBox u headless
+    ' run-u visi). Za revers imenuje stanicu i dan (UndoOpisOperacije): od
+    ' REV-IDENT-01 Faze 2b isti KOOP broj, smer i dan legalno nose reversi dve stanice.
+    UndoPotvrdaTekst = Poruka("OTKUI_ASK_OPO_UNDO") & " " & UndoOpisOperacije(opID, tip, broj) & "?" & _
+                       vbCrLf & vbCrLf & Poruka("OTKUI_ASK_OPO_UNDO2")
+End Function
+
 Private Function VratiStorno(ByVal opID As String, ByVal red As Long) As Boolean
     Dim tip As String, broj As String, razlog As String
     On Error GoTo EH
@@ -405,8 +415,7 @@ Private Function VratiStorno(ByVal opID As String, ByVal red As Long) As Boolean
         Exit Function
     End If
 
-    If MsgBox(Poruka("OTKUI_ASK_OPO_UNDO") & " " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
-              Poruka("OTKUI_ASK_OPO_UNDO2"), vbExclamation + vbYesNo + vbDefaultButton2, _
+    If MsgBox(UndoPotvrdaTekst(opID, tip, broj), vbExclamation + vbYesNo + vbDefaultButton2, _
               APP_NAME) = vbNo Then Exit Function
 
     If UndoOperation_TX(opID) Then
@@ -534,8 +543,10 @@ Private Function OdbaciIspravku(ByVal red As Long) As Boolean
     End If
     LogInfo MOD_TRAG, "Odbacivanje ispravke " & cid & " (red " & red & ") -- ceka potvrdu."
 
+    ' Za ispravku reversa i stanica i dan: dve otvorene ispravke istog broja na dve
+    ' stanice (od REV-IDENT-01 Faze 2b i KOOP) inace izgledaju isto.
     opis = Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
-           Trim$(CStr(modOtkupUI.GridCell(red, 2)))
+           Trim$(CStr(modOtkupUI.GridCell(red, 2))) & modStornoDok.IspravkaReversOpis(cid)
     If MsgBox(Poruka("OTKUI_OPO_ODBACI_ASK") & vbCrLf & vbCrLf & opis, _
               vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then
         LogInfo MOD_TRAG, "Odbacivanje " & cid & " otkazano na potvrdi."

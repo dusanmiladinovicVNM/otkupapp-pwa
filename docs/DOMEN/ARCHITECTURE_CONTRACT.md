@@ -34,7 +34,7 @@ generatora:
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
 | PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
-| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. **KOOP smerovi** (izdavanje i povrat kooperantu): noga Kooperant ne nosi stanicu, pa isti (broj, smer, dan) zauzima broj na **svim** stanicama, sa storniranima — dok to Faza 2b REV-IDENT-01 ne ukloni (od Faze 2a noge već nose zajednički `ReversID`). FIRMA smerovi ostaju po stanici. |
+| REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. Niz je (stanica, dan) za **sva četiri** smera, sa storniranima — i za KOOP smerove: isti (broj, smer, dan) na drugoj stanici je legalan, i za istog kooperanta, jer noge jednog reversa povezuje `ReversID` (REV-IDENT-01, Faza 2b). |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
 Operativni izvor istine za isto pravilo, po ekranima:
@@ -134,11 +134,13 @@ upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
    fixture `REV-IZV-1` (12/1 + LETVA pod jednim ReversID-om) drži višetipni oblik
    kao legitiman.
 4. Isporuka u fazama. **Faza 1 (isporučena, PR #330):** kolona, pisac, B10.
-   **Faza 2a (isporučena 15.09.2026):** storno, pregled, undo, ispravka i štampa
-   prelaze na ReversID, trag ispravke nosi ReversID (pasus „Revers: identitet je
-   `ReversID`" iznad). **Faza 2b:** zabrana istog KOOP broja na dve stanice
-   nestaje (pravilo 1, KOOP klauzula u A2), a zauzetost broja postaje (stanica,
-   dan) za sva četiri smera.
+   **Faza 2a (isporučena, PR #331):** storno, pregled, undo, ispravka i štampa
+   prelaze na ReversID, trag ispravke nosi ReversID, granica dokumenta
+   (`ReversIDGranica`) i undo duplikat preko sva četiri smera (pasusi „Revers:
+   identitet je `ReversID`" i „Granica dokumenta" iznad). **Faza 2b (isporučena
+   15.09.2026):** zabrana istog KOOP broja na dve stanice je uklonjena (ekran,
+   pisac, poruka), zauzetost broja je (stanica, dan) za sva četiri smera, a potvrde
+   storna i „Vrati storno" imenuju stanicu i dan reversa (pravilo 1).
 
 Tri pravila ključa primenjena su po preporuci pre-flight-a; **operater ih je
 potvrdio 14.09.2026** (PR #328):
@@ -149,10 +151,14 @@ potvrdio 14.09.2026** (PR #328):
    povezuje `ReversID`, pa ti potrošači biraju tačan dokument. Uparivanje preko
    susednog `AmbID`-a i dalje nije dozvoljeno: susednost je redosled upisa u
    `SaveOMUlaz_TX`, ne invarijanta.
-   **Pisac to stanje još ne pravi (do Faze 2b):** za KOOP smerove isti (broj,
-   smer, dan) na drugoj stanici odbijaju i ekran (`ReversValidiraj`) i pisac
-   (`modBrojevi.RequireReversKoopBrojJedinstven`), sa storniranima. Faza 2b to
-   ograničenje uklanja — isti broj na S1/S2 tada postaje potpuno podržan.
+   **Od Faze 2b** to stanje prave i ekran i pisac: isti KOOP (broj, smer, dan) na
+   drugoj stanici je legalan, i za istog kooperanta, jer broj zauzima samo niz
+   (stanica, dan) za sva četiri smera. Pošto se takva dva reversa u listi po broju
+   i smeru ne razlikuju, **stanicu i dan** reversa imenuju zaglavlje zone Storno,
+   potvrda storna i zamene (ISPRAVKA), potvrda „Vrati storno" i lista Nedovrseno sa
+   potvrdom „Odbaci" (`modStornoDok.DokumentOpis`, `IspravkaReversOpis`,
+   `modStornoZurnal.UndoOpisOperacije`). Kapija storna odbija revers kome stanica i
+   dan nisu poznati (isto kao undo garda) — potvrda bez njih bila bi dvosmislena.
 2. Red reversa **bez noge Stanica** (sintetički seed — produkcioni pisac je uvek
    piše) broj ne zauzima; stanica i dan mu nisu poznati, pa ga undo i pregled pre
    potvrde odbijaju, a B10 prijavljuje. Red **bez `ReversID`-a** odbijaju storno,

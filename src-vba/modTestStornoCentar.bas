@@ -42,6 +42,7 @@ Public Sub Test_StornoCentar_All()
     Test_StornoJournalReversGuard_Auto
     Test_StornoReversPoStanici_Auto
     Test_StornoReversGranicaRID_Auto
+    Test_StornoReversOpisStanice_Auto
     Test_StornoJournalUndoValidation_Auto
     Test_StornoJournalDrift_Auto
     Test_StornoJournalPartialClass_Auto
@@ -378,7 +379,8 @@ End Sub
 ' noga Kooperant + noga Stanica, sve noge jednog dokumenta nose jedan ReversID iz
 ' NoviReversID); seed u rollback-u. Fault injection su red bez ReversID-a i
 ' ambalaza uz otkup SA ReversID-om -- oba storno mora da odbije. KOOP isti broj na
-' dve stanice istog dana pisac jos odbija (do Faze 2b); ovde se meri citalac.
+' dve stanice istog dana od Faze 2b pravi i pisac (BFP
+' Test_BKTX_ReversKoopIstiBrojDveStanice); ovde se meri citalac nad seed-om.
 ' Nivo merenja: fizicki red (koja noga je stornirana).
 '
 ' SABOTAZE: u ReversRedoviRID ne poredi ReversID -> pukne "revers ISTOG broja na
@@ -640,6 +642,109 @@ Public Sub Test_StornoReversGranicaRID_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_StornoReversGranicaRID_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' REV-IDENT-01 Faza 2b: isti KOOP broj, smer i dan legalno nose reversi DVE stanice,
+' i to istog kooperanta. Red liste Storno i red liste "Vrati storno" ih po (tip,
+' broj) ne razlikuju, pa opis koji operater potvrdjuje mora da imenuje stanicu i
+' dan. MsgBox se u headless run-u ne meri -- meri se tekst koji mu se predaje
+' (modStornoDok.DokumentOpis, modStornoZurnal.UndoOpisOperacije).
+' Fixture: produkcioni oblik nogu (Kooperant + Stanica, jedan ReversID), seed u
+' rollback-u. Nivo merenja: logicki dokument -- tekst potvrde po dokumentu.
+'
+' SABOTAZE: DokumentOpis bez ReversOpis-a -> pukne "storno opis: dva reversa istog
+' broja, smera i dana razlikuju se po stanici"; UndoOpisOperacije bez ReversOpis-a
+' -> pukne "undo opis: dve operacije istog broja razlikuju se po stanici";
+' UndoPotvrdaTekst po (tip, broj) -> pukne "undo potvrda: tekst MsgBox-a imenuje
+' stanicu"; izbaci ReversStanicaDan iz StornoRazlog -> pukne "storno kapija: revers
+' bez noge Stanica se odbija pre potvrde"; IspravkaReversOpis bez opisa -> pukne
+' "ispravka opis: dve ispravke istog broja razlikuju se po stanici"; izbaci
+' IspravkaReversOpis iz GetNedovrseno -> pukne "Nedovrseno: redovi dve ispravke
+' istog broja razlikuju se po stanici".
+Public Sub Test_StornoReversOpisStanice_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    Dim d As Date: d = DateSerial(2031, 7, 9)
+    Dim ridA As String: ridA = NoviReversID()
+    Dim ridB As String: ridB = NoviReversID()
+    TcSeedRevNoga "SVT-OP-KA", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridA
+    TcSeedRevNoga "SVT-OP-SA", d, "SVT-ST-OPA", "Stanica", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridA
+    TcSeedRevNoga "SVT-OP-KB", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
+    TcSeedRevNoga "SVT-OP-SB", d, "SVT-ST-OPB", "Stanica", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
+
+    Dim opisA As String, opisB As String
+    opisA = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KA")
+    opisB = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KB")
+    TcChk InStr(1, opisA, "SVT-ST-OPA", vbBinaryCompare) > 0 And _
+          InStr(1, opisB, "SVT-ST-OPB", vbBinaryCompare) > 0 And opisA <> opisB, _
+          "storno opis: dva reversa istog broja, smera i dana razlikuju se po stanici"
+    TcChk InStr(1, opisA, Format$(d, "dd.mm.yyyy"), vbBinaryCompare) > 0, "storno opis: nosi dan reversa"
+    TcChk InStr(1, opisA, "SVT-OP-7", vbBinaryCompare) > 0, "storno opis: i dalje nosi broj"
+
+    Dim opA As String, opB As String, uA As String, uB As String
+    TcChk StornoOMKoopByBrDok_TX("SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KA") = True, _
+          "undo opis: preduslov -- storno reversa A"
+    opA = LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
+    TcChk StornoOMKoopByBrDok_TX("SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KB") = True, _
+          "undo opis: preduslov -- storno reversa B"
+    opB = LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
+    TcChk Len(opA) > 0 And Len(opB) > 0 And opA <> opB, "undo opis: preduslov -- dve operacije istog broja"
+    uA = UndoOpisOperacije(opA, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
+    uB = UndoOpisOperacije(opB, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
+    TcChk InStr(1, uA, "SVT-ST-OPA", vbBinaryCompare) > 0 And _
+          InStr(1, uB, "SVT-ST-OPB", vbBinaryCompare) > 0 And uA <> uB, _
+          "undo opis: dve operacije istog broja razlikuju se po stanici"
+    TcChk InStr(1, modScrOporavak.UndoPotvrdaTekst(opA, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7"), "SVT-ST-OPA", _
+                vbBinaryCompare) > 0, "undo potvrda: tekst MsgBox-a imenuje stanicu"
+
+    ' Dve otvorene ispravke reversa istog broja, smera i dana na dve stanice: u listi
+    ' Nedovrseno i u potvrdi "Odbaci" razlikuju ih stanica i dan (OldDocID = ReversID).
+    Dim ridD As String: ridD = NoviReversID()
+    Dim ridE As String: ridE = NoviReversID()
+    TcSeedRevNoga "SVT-OP-KD", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridD
+    TcSeedRevNoga "SVT-OP-SD", d, "SVT-ST-OPD", "Stanica", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridD
+    TcSeedRevNoga "SVT-OP-KE", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridE
+    TcSeedRevNoga "SVT-OP-SE", d, "SVT-ST-OPE", "Stanica", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridE
+    Dim resD As Object, resE As Object, cidD As String, cidE As String
+    Set resD = modStornoFlow.RunReversCorrection("SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_RESI_KASNIJE, "SVT-OP-KD")
+    Set resE = modStornoFlow.RunReversCorrection("SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_RESI_KASNIJE, "SVT-OP-KE")
+    cidD = CStr(resD("correctionID"))
+    cidE = CStr(resE("correctionID"))
+    TcChk Len(cidD) > 0 And Len(cidE) > 0 And cidD <> cidE, _
+          "ispravka opis: preduslov -- dve otvorene ispravke istog broja"
+    TcChk InStr(1, modStornoDok.IspravkaReversOpis(cidD), "SVT-ST-OPD", vbBinaryCompare) > 0 And _
+          InStr(1, modStornoDok.IspravkaReversOpis(cidE), "SVT-ST-OPE", vbBinaryCompare) > 0, _
+          "ispravka opis: dve ispravke istog broja razlikuju se po stanici"
+    ' Isto u redovima liste Nedovrseno (GetNedovrseno) -- iz njih operater bira.
+    Dim ned As Collection, nr As Long, opisD As String, opisE As String
+    Set ned = modStornoRecovery.GetNedovrseno()
+    For nr = 1 To ned.count
+        If CStr(ned(nr)("correctionID")) = cidD Then opisD = CStr(ned(nr)("opis"))
+        If CStr(ned(nr)("correctionID")) = cidE Then opisE = CStr(ned(nr)("opis"))
+    Next nr
+    TcChk InStr(1, opisD, "SVT-ST-OPD", vbBinaryCompare) > 0 And _
+          InStr(1, opisE, "SVT-ST-OPE", vbBinaryCompare) > 0, _
+          "Nedovrseno: redovi dve ispravke istog broja razlikuju se po stanici"
+
+    ' Revers bez noge Stanica (B10 nalaz): stanica i dan nisu poznati, pa ga kapija
+    ' storna odbija PRE potvrde -- potvrda bez stanice bila bi upravo dvosmislena.
+    Dim ridC As String: ridC = NoviReversID()
+    TcSeedRevNoga "SVT-OP-KC", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-8", DOK_TIP_OM_IZLAZ_KOOP, ridC
+    TcChk Len(modStornoDok.StornoRazlog(STIP_REVERSI, "SVT-OP-8", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KC")) > 0, _
+          "storno kapija: revers bez noge Stanica se odbija pre potvrde"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoReversOpisStanice_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' P2 5: undo je SVE-ILI-NISTA -> zurnal red sa nepostojecim ciljem -> undo False, bez mutacije.

@@ -229,7 +229,7 @@ End Function
 ' ReversID reversa iz AmbID-eva koje je operacija opID stornirala -- svaka noga
 ' ga nosi, pa nema uparivanja preko noge Stanica.
 ' "" = tacno jedan ReversID (ByRef popunjen); inace razlog.
-Private Function ReversIDOperacije(ByVal opID As String, ByRef reversID As String) As String
+Public Function ReversIDOperacije(ByVal opID As String, ByRef reversID As String) As String
     Const SRC As String = MOD_NAME & ".ReversIDOperacije"
     Dim ids As Object: Set ids = CreateObject("Scripting.Dictionary")
     ids.CompareMode = vbTextCompare
@@ -286,6 +286,26 @@ Private Function ReversIDOperacije(ByVal opID As String, ByRef reversID As Strin
     Else
         reversID = nasao
     End If
+End Function
+
+' Opis operacije za potvrdu "Vrati storno": tip i broj, a za revers i otkupno mesto
+' i dan njegovog ReversID-a. REV-IDENT-01 Faza 2b: isti KOOP broj, smer i dan
+' legalno nose reversi dve stanice (i istog kooperanta), pa lista i potvrda po
+' (tip, broj) ne kazu KOJI se vraca. Kad ReversID operacije nije razresiv, ostaje
+' tip i broj -- garda (UndoGuardReasonZaOp) tada vec odbija.
+Public Function UndoOpisOperacije(ByVal opID As String, ByVal docType As String, _
+                                  ByVal broj As String) As String
+    Dim opis As String, rid As String, st As String, dan As Long
+    opis = Trim$(docType) & " " & Trim$(broj)
+    UndoOpisOperacije = opis
+    On Error GoTo EH
+    If Not ReversTipJe(docType) Then Exit Function
+    If Len(ReversIDOperacije(opID, rid)) > 0 Then Exit Function
+    If Len(ReversStanicaDan(rid, st, dan)) > 0 Then Exit Function
+    UndoOpisOperacije = opis & modDokUnos.ReversOpis(st, CDate(dan))
+    Exit Function
+EH:
+    UndoOpisOperacije = opis
 End Function
 
 Private Sub RestoreCell(ByVal tbl As String, ByVal rowID As String, _

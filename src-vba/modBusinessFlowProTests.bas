@@ -257,7 +257,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_StorniranBrojIstogVozacaOdbijen
     Test_ZBR_IspravkaPodNovimBrojem
     Test_BKTX_ReversPisacOdbijaZauzet
-    Test_BKTX_ReversKoopBrojDrugaStanica
+    Test_BKTX_ReversKoopIstiBrojDveStanice
     Test_BKTX_ReversIDNaSvimNogama
     Test_BKTX_ReversIDJedanDokument
     Test_PWA_BezUredjajaUvozPada
@@ -9846,79 +9846,127 @@ EH:
     LogFatal "Test_BKTX_ReversPisacOdbijaZauzet", Err.Number, Err.description
 End Sub
 
-' KOOP REVERS: ogranicenje pisca iz vremena kad se noga Kooperant sa nogom Stanica
-' uparivala preko (broj, smer, dan). Od REV-IDENT-01 Faze 2a storno, undo i stampa
-' biraju noge po ReversID-u; ogranicenje (i ovaj test) menja Faza 2b. Do tada isti
-' (broj, KOOP smer, dan) pisac odbija i na drugoj stanici -- a sve sto pusti (drugi
-' smer, drugi dan, FIRMA) mora da se stornira NEZAVISNO, sa noge Kooperant, kako
-' ga mreza Storno prikazuje.
+' KOOP REVERS, ISTI BROJ NA DVE STANICE (REV-IDENT-01 Faza 2b). Zabrana istog
+' (broj, KOOP smer, dan) na drugoj stanici je uklonjena: noge jednog reversa povezuje
+' ReversID, pa su dva takva reversa -- i za ISTOG kooperanta -- dva nezavisna
+' dokumenta. Broj i dalje zauzima niz (stanica, dan) za SVA CETIRI smera, sa
+' storniranima (A2, A9).
 '
-' Nivo merenja: poslovni broj u nizu + logicki dokument (storno). Kroz pravi pisac,
-' ne seed.
+' Nivo merenja: poslovni broj u nizu + logicki dokument (storno, undo). Kroz pravi
+' pisac, ne seed; noge se nalaze po ReversID-u, jer (broj, kooperant, dan) vise
+' nije jednoznacan.
 '
-' SABOTAZE: ukloni RequireReversKoopBrojJedinstven iz IZDAVANJE grane -> pukne
-' "REV KOOP: isti broj, smer i dan na drugoj stanici odbijen"; preskoci stornirane
-' u ReversKoopBrojZauzetDrugde -> pukne "REV KOOP: posle storna broj i dalje nije
-' slobodan na drugoj stanici".
-Private Sub Test_BKTX_ReversKoopBrojDrugaStanica()
+' SABOTAZE: vrati u SaveOMUlaz_TX (IZDAVANJE) odbijanje broja i smera koji vec nosi
+' aktivan revers -> pukne "REV KOOP 2b: isti broj, smer i dan na drugoj stanici se
+' upisuje (i za istog kooperanta)"; isto u grani PRIJEM -> pukne "REV KOOP 2b: povrat
+' istog broja i dana na drugoj stanici se upisuje"; u ReversRedoviRID ne poredi ReversID -> pukne
+' "REV KOOP 2b: storno S2 ne dira revers S1"; izbaci RequireBrojSlobodanUNizu iz
+' SaveOMUlaz_TX -> pukne "REV KOOP 2b: drugi smer istog broja na istoj stanici i
+' danu je isti niz".
+Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     On Error GoTo EH
 
     SeedBktxDrugaStanica
 
     Dim scenario As String: scenario = NewScenarioCode("REVKS")
     Dim d As Date: d = NextTestDate()
-    Dim d2 As Date: d2 = DateAdd("d", 1, d)
     Dim broj As String: broj = TEST_PREFIX & "-REV-KS-" & scenario
-    Dim brojF As String: brojF = TEST_PREFIX & "-REV-KSF-" & scenario
     Dim pre As Long
 
     AssertTrue UpisiReversTest(d, broj, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
-               "REV KOOP: prvo izdavanje kooperantu upisano"
+               "REV KOOP 2b: izdavanje kooperantu na S1 upisano"
+    pre = CountRows(TBL_AMBALAZA)
+    AssertTrue UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP_ID, "IZDAVANJE"), _
+               "REV KOOP 2b: isti broj, smer i dan na drugoj stanici se upisuje (i za istog kooperanta)"
+    AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP 2b: revers na S2 ima obe noge"
 
+    Dim s1 As String, s2 As String, rid1 As String, rid2 As String, k1 As String, k2 As String
+    s1 = AmbIDNogeStanice(broj, TEST_ST_ID, d)
+    s2 = AmbIDNogeStanice(broj, BKTX_ST2, d)
+    AssertTrue Len(s1) > 0 And Len(s2) > 0, "REV KOOP 2b: preduslov -- noge Stanica oba reversa postoje"
+    rid1 = ReversIDReda(s1)
+    rid2 = ReversIDReda(s2)
+    AssertTrue Len(rid1) > 0 And Len(rid2) > 0 And rid1 <> rid2, _
+               "REV KOOP 2b: dva reversa istog broja nose razlicit ReversID"
+    k1 = NogaPoReversID(rid1, "Kooperant")
+    k2 = NogaPoReversID(rid2, "Kooperant")
+    AssertTrue Len(k1) > 0 And Len(k2) > 0 And k1 <> k2, _
+               "REV KOOP 2b: svaki revers ima svoju nogu Kooperant"
+
+    ' Niz (stanica, dan) i dalje vazi za sva cetiri smera.
+    pre = CountRows(TBL_AMBALAZA)
+    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "PRIJEM"), _
+                "REV KOOP 2b: drugi smer istog broja na istoj stanici i danu je isti niz"
+    AssertFalse UpisiReversTest(d, broj, TEST_ST_ID, "", "IZDATO_OM"), _
+                "REV KOOP 2b: FIRMA smer istog broja na istoj stanici i danu je isti niz"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP 2b: odbijeni upisi nisu ostavili red"
+
+    ' Isto za povrat (PRIJEM), zasebna grana pisca: isti broj, smer i dan na dve
+    ' stanice, drugi broj niza.
+    Dim brojP As String: brojP = TEST_PREFIX & "-REV-KSP-" & scenario
+    pre = CountRows(TBL_AMBALAZA)
+    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
+               "REV KOOP 2b: povrat od kooperanta na S1 upisan"
+    AssertTrue UpisiReversTest(d, brojP, BKTX_ST2, TEST_KOOP_ID, "PRIJEM"), _
+               "REV KOOP 2b: povrat istog broja i dana na drugoj stanici se upisuje"
+    AssertEquals CStr(pre + 4), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP 2b: oba povrata imaju obe noge"
+
+    ' Bez identiteta reda broj je dvosmislen -- odbija se, nista se ne dira.
+    AssertFalse StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP), _
+                "REV KOOP 2b: storno bez identiteta reda odbija broj koji nose dva reversa"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
+                "REV KOOP 2b: odbijen storno nije dirao nijedan revers"
+
+    ' Storno sa noge Kooperant S2 dira samo S2 -- isti kooperant, broj, smer i dan.
+    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, k2), _
+               "REV KOOP 2b: storno S2 sa noge Kooperant prolazi"
+    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k2) And RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
+               "REV KOOP 2b: stornirane su obe noge S2"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1), _
+                "REV KOOP 2b: storno S2 ne dira revers S1"
+
+    ' Storno ne oslobadja broj u nizu S2 (A9), a treca stanica ga istog dana prima.
     pre = CountRows(TBL_AMBALAZA)
     AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
-                "REV KOOP: isti broj, smer i dan na drugoj stanici odbijen (noga Kooperant ne nosi stanicu)"
-    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP: odbijen upis nije ostavio nijednu nogu"
+                "REV KOOP 2b: storno ne oslobadja broj u nizu S2 (A9)"
+    AssertTrue UpisiReversTest(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE"), _
+               "REV KOOP 2b: treca stanica istog dana prima isti broj -- niz je (stanica, dan)"
+    AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV KOOP 2b: noge je ostavio samo upis trece stanice"
 
-    AssertTrue UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "PRIJEM"), _
-               "REV KOOP: drugi smer istog broja i dana na drugoj stanici prolazi (uparivanje ide po smeru)"
-    AssertTrue UpisiReversTest(d2, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
-               "REV KOOP: isti broj i smer drugog dana na drugoj stanici prolazi"
-    AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
-               "REV FIRMA: prvi upisan"
-    AssertTrue UpisiReversTest(d, brojF, BKTX_ST2, "", "IZDATO_OM"), _
-               "REV FIRMA: isti broj, smer i dan na dve stanice prolazi (nema noge Kooperant)"
-
-    ' Sve sto je pisac pustio mora da se stornira nezavisno -- sa noge Kooperant.
-    Dim kA As String, kP As String, kB As String
-    kA = AmbIDNoge(broj, TEST_KOOP_ID, "Kooperant", d)
-    kP = AmbIDNoge(broj, TEST_KOOP2_ID, "Kooperant", d)
-    kB = AmbIDNoge(broj, TEST_KOOP2_ID, "Kooperant", d2)
-    AssertTrue Len(kA) > 0 And Len(kP) > 0 And Len(kB) > 0, _
-               "REV KOOP: preduslov -- tri KOOP reversa istog broja postoje"
-
-    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, kA), _
-               "REV KOOP: izdavanje S1 se stornira sa noge Kooperant"
-    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_KOOP, kP), _
-               "REV KOOP: povrat S2 istog broja i dana se stornira nezavisno"
-    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, kB), _
-               "REV KOOP: izdavanje S2 drugog dana se stornira nezavisno"
-    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, AmbIDNogeStanice(broj, TEST_ST_ID, d)), _
-               "REV KOOP: uz nogu Kooperant S1 stornirana je i njena noga Stanica"
-
-    ' Storno ne oslobadja broj ni na drugoj stanici -- undo bi inace vratio par koji
-    ' se ne razlucuje. Treca stanica: njen niz je slobodan, odbija je samo KOOP provera.
-    pre = CountRows(TBL_AMBALAZA)
-    AssertFalse UpisiReversTest(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE"), _
-                "REV KOOP: posle storna broj i dalje nije slobodan na drugoj stanici"
-    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP: odbijen upis posle storna nije ostavio nogu"
+    ' Undo po operaciji vraca S2, a S1 ostaje netaknut.
+    AssertTrue UndoOperation_TX(LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, broj)), _
+               "REV KOOP 2b: undo storna S2 prolazi"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k2) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
+                "REV KOOP 2b: undo je vratio obe noge S2"
+    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1), _
+                "REV KOOP 2b: undo S2 ne dira revers S1"
 
     Exit Sub
 EH:
-    LogFatal "Test_BKTX_ReversKoopBrojDrugaStanica", Err.Number, Err.description
+    LogFatal "Test_BKTX_ReversKoopIstiBrojDveStanice", Err.Number, Err.description
 End Sub
+
+' AmbID noge date vrste entiteta pod ReversID-om; prazno kad nema. Od Faze 2b
+' (broj, kooperant, dan) nije jednoznacan -- noge jednog reversa nalazi ReversID.
+Private Function NogaPoReversID(ByVal rid As String, ByVal entitetTip As String) As String
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    Dim cID As Long, cR As Long, cET As Long, i As Long
+    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cR = GetColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID)
+    cET = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    If cID = 0 Or cR = 0 Or cET = 0 Then Exit Function
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cR))) = rid And Trim$(NzToText(data(i, cET))) = entitetTip Then
+            NogaPoReversID = Trim$(NzToText(data(i, cID)))
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' REV-IDENT-01 (Faza 1): identitet logickog reversa je ReversID -- ISTI na svim
 ' nogama jednog dokumenta, RAZLICIT izmedju dokumenata. Kroz pravi pisac.
