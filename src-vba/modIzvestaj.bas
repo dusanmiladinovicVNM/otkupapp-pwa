@@ -584,11 +584,15 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)
             
             If IsArray(otkupData) Then
-                Dim colKoop As Long, colKol As Long, colCena As Long, colAmb As Long
+                Dim colKoop As Long, colOtkID As Long
                 colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "modIzvestaj.ReportSaldoOM")
-                colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportSaldoOM")
-                colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "modIzvestaj.ReportSaldoOM")
-                colAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "modIzvestaj.ReportSaldoOM")
+                colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "modIzvestaj.ReportSaldoOM")
+
+                ' Kolicina i vrednost dokumenta su na STAVKAMA: CreateOtkup_TX
+                ' linijska polja zaglavlja ostavlja prazna (REFAKTOR S14.7, kvar 3).
+                ' Kolona Ambalaza je saldo iz tblAmbalaza (nize), ne zbir zaglavlja.
+                Dim stavkeZbir As Object
+                Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
                 
                 For i = 1 To UBound(otkupData, 1)
                     Dim key As String
@@ -600,11 +604,12 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                         Dim vals As Variant
                         vals = dict(key)
                         
-                        If IsNumeric(otkupData(i, colKol)) Then vals(0) = vals(0) + CDbl(otkupData(i, colKol))
-                        If IsNumeric(otkupData(i, colKol)) And IsNumeric(otkupData(i, colCena)) Then
-                            vals(1) = vals(1) + CDbl(otkupData(i, colKol)) * CDbl(otkupData(i, colCena))
+                        Dim zSal As Variant
+                        If stavkeZbir.Exists(Trim$(CStr(otkupData(i, colOtkID)))) Then
+                            zSal = stavkeZbir(Trim$(CStr(otkupData(i, colOtkID))))
+                            vals(0) = vals(0) + CDbl(zSal(0))
+                            vals(1) = vals(1) + CDbl(zSal(1))
                         End If
-                        If IsNumeric(otkupData(i, colAmb)) Then vals(2) = vals(2) + CLng(otkupData(i, colAmb))
                         
                         dict(key) = vals
                     End If
@@ -884,25 +889,26 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
         otkData = ExcludeStornirano(otkData, TBL_OTKUP)
         If IsArray(otkData) Then
             Dim colOtkDat As Long, colOtkKoop As Long
-            Dim colOtkKol As Long, colOtkCena As Long
-            Dim colOtkVrsta As Long, colOtkKlasa As Long
+            Dim colOtkVrsta As Long
             Dim colOtkBrDok As Long, colParcela As Long
             Dim colOtkID As Long
 
             colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "modIzvestaj.ReportKarticaKooperanta")
             colOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "modIzvestaj.ReportKarticaKooperanta")
             colOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "modIzvestaj.ReportKarticaKooperanta")
-            colOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportKarticaKooperanta")
-            colOtkCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "modIzvestaj.ReportKarticaKooperanta")
             colOtkVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "modIzvestaj.ReportKarticaKooperanta")
-            colOtkKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "modIzvestaj.ReportKarticaKooperanta")
             colOtkBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, "modIzvestaj.ReportKarticaKooperanta")
             colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, "modIzvestaj.ReportKarticaKooperanta")
 
-            ' Ambalaza (gajbe) za running saldo: Primljena (koop->OM) i Izdata (OM->koop).
-            ' KolAmbIzdata je noviji stup -> GetColumnIndex (0 = stara sema, tretiraj kao 0).
-            Dim colOtkAmb As Long, colOtkAmbIzd As Long
-            colOtkAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "modIzvestaj.ReportKarticaKooperanta")
+            ' Kolicina, vrednost, klase i PRIMLJENE gajbe dokumenta su na STAVKAMA
+            ' (CreateOtkup_TX ih na zaglavlju ostavlja prazne -- REFAKTOR S14.7,
+            ' kvar 3). Red kartice ostaje DOKUMENT; klase se nabrajaju u opisu.
+            Dim stavkeZbir As Object
+            Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+
+            ' Izdate gajbe su header cinjenica (S3). KolAmbIzdata je noviji stup ->
+            ' GetColumnIndex (0 = stara sema, tretiraj kao 0).
+            Dim colOtkAmbIzd As Long
             colOtkAmbIzd = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA)
 
             For i = 1 To UBound(otkData, 1)
@@ -912,31 +918,28 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                         otkDatum = CDate(otkData(i, colOtkDat))
                         
                         If otkDatum <= datumDo Then
-                            Dim vr As Double
-                            Dim otkKol As Double
+                            Dim vr As Double, otkKol As Double, otkKlase As String
+                            Dim ambPrimljena As Double, ambIzdata As Double
+                            vr = 0: otkKol = 0: otkKlase = ""
+                            ambPrimljena = 0: ambIzdata = 0
 
-                            vr = 0
-                            otkKol = 0
-
-                            If IsNumeric(otkData(i, colOtkKol)) Then
-                                otkKol = CDbl(otkData(i, colOtkKol))
-                            End If
-
-                            If IsNumeric(otkData(i, colOtkCena)) Then
-                                vr = otkKol * CDbl(otkData(i, colOtkCena))
+                            Dim zKar As Variant, oidKar As String
+                            oidKar = Trim$(CStr(otkData(i, colOtkID)))
+                            If stavkeZbir.Exists(oidKar) Then
+                                zKar = stavkeZbir(oidKar)
+                                otkKol = CDbl(zKar(0))
+                                vr = CDbl(zKar(1))
+                                ambPrimljena = CDbl(zKar(2))
+                                otkKlase = CStr(zKar(3))
                             End If
 
                             Dim opis As String
                             opis = "Otkup " & CStr(otkData(i, colOtkVrsta)) & " " & _
-                                   CStr(otkData(i, colOtkKlasa)) & " " & _
+                                   otkKlase & " " & _
                                    FmtKolicina(otkKol) & "kg"
 
                             ' Saldo ambalaze (gajbe): Izdata (OM->koop) - Primljena (koop->OM).
                             ' Isti smer kao kanonski entitetski saldo (modAmbalaza.GetAmbalazeStanje).
-                            Dim ambPrimljena As Double, ambIzdata As Double
-                            ambPrimljena = 0
-                            ambIzdata = 0
-                            If IsNumeric(otkData(i, colOtkAmb)) Then ambPrimljena = CDbl(otkData(i, colOtkAmb))
                             If colOtkAmbIzd > 0 Then
                                 If IsNumeric(otkData(i, colOtkAmbIzd)) Then ambIzdata = CDbl(otkData(i, colOtkAmbIzd))
                             End If
@@ -1232,17 +1235,17 @@ Public Function ReportKarticaRobaRekap(ByVal kooperantID As String, _
     otkData = ExcludeStornirano(otkData, TBL_OTKUP)
     If Not IsArray(otkData) Then Exit Function
 
-    Dim cDat As Long, cKoop As Long, cKol As Long
-    Dim cVrsta As Long, cKlasa As Long, cSorta As Long
+    Dim cDat As Long, cKoop As Long, cId As Long
+    Dim cVrsta As Long, cSorta As Long
     cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
     cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
-    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
-    cKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
     cSorta = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)   ' opciono (schema drift -> 0)
 
-    Dim agg As Object
-    Set agg = CreateObject("Scripting.Dictionary")
+    ' Dokumenti kooperanta u periodu: OtkupID -> (vrsta, sorta) sa zaglavlja.
+    Dim docs As Object
+    Set docs = CreateObject("Scripting.Dictionary")
 
     Dim i As Long
     For i = 1 To UBound(otkData, 1)
@@ -1250,28 +1253,44 @@ Public Function ReportKarticaRobaRekap(ByVal kooperantID As String, _
             If IsDate(otkData(i, cDat)) Then
                 Dim d As Date: d = CDate(otkData(i, cDat))
                 If d >= datumOd And d <= datumDo Then
-                    Dim vrsta As String, sorta As String, klasa As String
-                    vrsta = Trim$(CStr(otkData(i, cVrsta)))
-                    klasa = Trim$(CStr(otkData(i, cKlasa)))
+                    Dim sorta As String
                     sorta = ""
                     If cSorta > 0 Then sorta = Trim$(CStr(otkData(i, cSorta)))
-
-                    Dim kg As Double: kg = 0
-                    If IsNumeric(otkData(i, cKol)) Then kg = CDbl(otkData(i, cKol))
-
-                    Dim key As String: key = vrsta & "|" & sorta & "|" & klasa
-                    Dim rec As Variant
-                    If agg.Exists(key) Then
-                        rec = agg(key)
-                        rec(3) = CDbl(rec(3)) + kg
-                    Else
-                        rec = Array(vrsta, sorta, klasa, kg)
-                    End If
-                    agg(key) = rec
+                    docs(Trim$(CStr(otkData(i, cId)))) = _
+                        Array(Trim$(CStr(otkData(i, cVrsta))), sorta)
                 End If
             End If
         End If
     Next i
+
+    ' Klasa i kilaza su na STAVKAMA (REFAKTOR S14.7, kvar 3): red rekapitulacije
+    ' je (vrsta, sorta, klasa STAVKE), pa dvoklasni dokument daje dva reda.
+    Dim agg As Object
+    Set agg = CreateObject("Scripting.Dictionary")
+
+    Dim st As Variant
+    st = modOtkup.StavkeOtkupaRedovi()
+    If IsArray(st) Then
+        For i = 1 To UBound(st, 1)
+            If docs.Exists(CStr(st(i, 1))) Then
+                Dim vs As Variant
+                vs = docs(CStr(st(i, 1)))
+                Dim klasa As String, kg As Double
+                klasa = CStr(st(i, 3))
+                kg = CDbl(st(i, 4))
+
+                Dim key As String: key = CStr(vs(0)) & "|" & CStr(vs(1)) & "|" & klasa
+                Dim rec As Variant
+                If agg.Exists(key) Then
+                    rec = agg(key)
+                    rec(3) = CDbl(rec(3)) + kg
+                Else
+                    rec = Array(CStr(vs(0)), CStr(vs(1)), klasa, kg)
+                End If
+                agg(key) = rec
+            End If
+        Next i
+    End If
 
     If agg.count = 0 Then Exit Function
 
@@ -1510,7 +1529,7 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
     ' Bez zasebnog ExcludeStornirano -> storno se preskace u glavnoj petlji nize
     ' (izbegnuta jos jedna kopija cele tblOtkup).
     Dim cId As Long, cDat As Long, cBr As Long, cSt As Long, cKoop As Long
-    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
+    Dim cVr As Long, cStorno As Long
     cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
     cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
@@ -1518,9 +1537,13 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
     cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
     cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
     cVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
-    cKl = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
-    cCe = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
+
+    ' Red liste je DOKUMENT (REFAKTOR S14.7, kvar 3): kolicina, vrednost i klase
+    ' su na stavkama, jer ih CreateOtkup_TX na zaglavlju ostavlja prazne. Klase
+    ' dokumenta se nabrajaju ("I, II"); linije po klasi nosi detalj reda
+    ' (modScrIzvestaji.IzDetaljOtkupLista).
+    Dim stavkeZbir As Object
+    Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
 
     ' KooperantID -> "Ime Prezime (ID)" jednim prolazom (bez per-row LookupValue).
     Dim koopDict As Object
@@ -1545,19 +1568,24 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
                         koopNm = koopID
                     End If
 
-                    Dim kol As Double, cena As Double
-                    kol = 0: cena = 0
-                    If IsNumeric(d(i, cKol)) Then kol = CDbl(d(i, cKol))
-                    If IsNumeric(d(i, cCe)) Then cena = CDbl(d(i, cCe))
+                    Dim kol As Double, vrednost As Double, klase As String
+                    kol = 0: vrednost = 0: klase = ""
+                    Dim zLst As Variant
+                    If stavkeZbir.Exists(Trim$(NzToText(d(i, cId)))) Then
+                        zLst = stavkeZbir(Trim$(NzToText(d(i, cId))))
+                        kol = CDbl(zLst(0))
+                        vrednost = CDbl(zLst(1))
+                        klase = CStr(zLst(3))
+                    End If
 
                     moves.Add Array( _
                         dt, _
                         NzToText(d(i, cBr)), _
                         koopNm, _
                         NzToText(d(i, cVr)), _
-                        NzToText(d(i, cKl)), _
+                        klase, _
                         kol, _
-                        kol * cena, _
+                        vrednost, _
                         "OTK|" & NzToText(d(i, cId)))
                 End If
             End If
@@ -3448,19 +3476,24 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
             Exit Function
         End If
         
-        Dim colVrsta As Long, colKol As Long, colCena As Long
+        Dim colVrsta As Long, colOtkID As Long
         colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "modIzvestaj.ReportProsecnaCena")
-        colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportProsecnaCena")
-        colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "modIzvestaj.ReportProsecnaCena")
-        
+        colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "modIzvestaj.ReportProsecnaCena")
+
+        ' Kolicina i vrednost su na STAVKAMA (REFAKTOR S14.7, kvar 3).
+        Dim stavkeZbir As Object
+        Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+
         For i = 1 To UBound(otkData, 1)
             Dim key As String
             key = CStr(otkData(i, colVrsta))
             If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
             vals = dict(key)
-            If IsNumeric(otkData(i, colKol)) Then vals(0) = vals(0) + CDbl(otkData(i, colKol))
-            If IsNumeric(otkData(i, colKol)) And IsNumeric(otkData(i, colCena)) Then
-                vals(1) = vals(1) + CDbl(otkData(i, colKol)) * CDbl(otkData(i, colCena))
+            Dim zPc As Variant
+            If stavkeZbir.Exists(Trim$(CStr(otkData(i, colOtkID)))) Then
+                zPc = stavkeZbir(Trim$(CStr(otkData(i, colOtkID))))
+                vals(0) = vals(0) + CDbl(zPc(0))
+                vals(1) = vals(1) + CDbl(zPc(1))
             End If
             dict(key) = vals
         Next i
@@ -3782,12 +3815,15 @@ Private Function ReportZbirniOM(ByVal datumOd As Date, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colStation As Long, colVrsta As Long, colKol As Long, colCena As Long
+    Dim colStation As Long, colVrsta As Long, colOtkID As Long
     colStation = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, "modIzvestaj.ReportZbirniOM")
     colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "modIzvestaj.ReportZbirniOM")
-    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportZbirniOM")
-    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "modIzvestaj.ReportZbirniOM")
-    
+    colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "modIzvestaj.ReportZbirniOM")
+
+    ' Kolicina i vrednost su na STAVKAMA (REFAKTOR S14.7, kvar 3).
+    Dim stavkeZbir As Object
+    Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+
     Dim i As Long
     For i = 1 To UBound(filtered, 1)
         Dim key As String
@@ -3795,9 +3831,11 @@ Private Function ReportZbirniOM(ByVal datumOd As Date, _
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
         Dim vals As Variant
         vals = dict(key)
-        If IsNumeric(filtered(i, colKol)) Then vals(0) = vals(0) + CDbl(filtered(i, colKol))
-        If IsNumeric(filtered(i, colKol)) And IsNumeric(filtered(i, colCena)) Then
-            vals(1) = vals(1) + CDbl(filtered(i, colKol)) * CDbl(filtered(i, colCena))
+        Dim zZb As Variant
+        If stavkeZbir.Exists(Trim$(CStr(filtered(i, colOtkID)))) Then
+            zZb = stavkeZbir(Trim$(CStr(filtered(i, colOtkID))))
+            vals(0) = vals(0) + CDbl(zZb(0))
+            vals(1) = vals(1) + CDbl(zZb(1))
         End If
         dict(key) = vals
     Next i

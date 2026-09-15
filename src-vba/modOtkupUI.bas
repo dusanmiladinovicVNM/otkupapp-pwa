@@ -3857,7 +3857,9 @@ Private Sub RefreshKpi(frm As Object)
     On Error GoTo EH
     st = "zKpi": Set z = frm.Controls("zKpi")
 
-    st = "danas": z.Controls("kpiV0").caption = FmtBroj(SumKgForDate(TBL_OTKUP, COL_OTK_DATUM, COL_OTK_KOLICINA, Int(Now)), 0)
+    ' kg dana je zbir STAVKI: zaglavlje novog otkupa ne nosi kolicinu, pa je
+    ' plocica za nov dokument pokazivala 0 (REFAKTOR S14.7).
+    st = "danas": z.Controls("kpiV0").caption = FmtBroj(modOtkup.KgOtkupaZaDan(Int(Now)), 0)
     ' 0 kg je TACAN podatak, ne odsustvo podatka - zato ostaje nula, a ne crta
     KpiSub z, 0, CountForDate(TBL_OTKUP, COL_OTK_DATUM, Int(Now)) & " " & Poruka("OTKUI_KPI_SUB_DOK")
 
@@ -7552,18 +7554,6 @@ Private Sub SetOstatak(ByVal v As Double)
     On Error Resume Next
     mFrm.Controls("zForm").Controls("fgOstatak").Controls("fgOstatakV").caption = FmtBroj(v, 0)
 End Sub
-
-Private Function SumKgForDate(ByVal tbl As String, ByVal datCol As String, _
-                              ByVal kgCol As String, ByVal dKey As Double) As Double
-    Dim src As Variant, iD As Long, iK As Long, r As Long
-    src = CachedTable(tbl)
-    If Not IsArray(src) Then Exit Function
-    iD = ColIdx(tbl, datCol): iK = ColIdx(tbl, kgCol)
-    If iD < 1 Or iK < 1 Then Exit Function
-    For r = 1 To UBound(src, 1)
-        If CellDate(src, r, iD) = dKey Then SumKgForDate = SumKgForDate + CellD(src, r, iK)
-    Next r
-End Function
 
 Private Function CountForDate(ByVal tbl As String, ByVal datCol As String, _
                               ByVal dKey As Double) As Long

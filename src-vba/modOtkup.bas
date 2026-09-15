@@ -936,6 +936,151 @@ Public Function VrednostOtkupa(ByVal otkupID As String) As Double
     End If
 End Function
 
+' Stavke SVIH otkupa -- jedan prolaz kroz tblOtkupStavke, sa kapijama kanona.
+'
+' Vraca 2D niz (1..n, 1..6), redosledom tabele (= redosledom upisa):
+'   1 OtkupID | 2 RedniBroj | 3 Klasa | 4 Kolicina | 5 Cena | 6 KolAmbalaze
+' ili Empty kad nijedna stavka nema OtkupID.
+'
+' ZASTO POSTOJI: kolicina, klasa, cena i primljene gajbe dokumenta zive na
+' stavkama, a CreateOtkup_TX ta polja zaglavlja ostavlja PRAZNA. Citaoci koji
+' su ih sabirali sa zaglavlja (izvestaji, mreza otkupa, rang, KPI) davali su za
+' nov dokument 0 kg i 0 dinara, bez ijedne greske (REFAKTOR S14.7, kvarovi
+' 2/3/9). Oni sada citaju ovde.
+'
+' PRAVILA SU ISTA KAO U VrednostOtkupa, namerno ponovljena kao kapije (isti
+' obrazac kao modNovac.BuildVrednostDictByOtkup): nebrojcana ili nepozitivna
+' Kolicina/Cena PADA umesto da se preskoci -- preskakanje bi izvestaju tiho
+' umanjilo kolicinu i vrednost. KolAmbalaze sme biti prazna (0 gajbi).
+Public Function StavkeOtkupaRedovi() As Variant
+    Const SRC As String = "StavkeOtkupaRedovi"
+
+    StavkeOtkupaRedovi = Empty
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOtk As Long, cRb As Long, cKl As Long
+    Dim cKol As Long, cCena As Long, cAmb As Long
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cRb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB, SRC)
+    cKl = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+
+    ' Prvi prolaz: kapije i broj redova (2D niz se ne skracuje po redovima).
+    Dim i As Long, n As Long, oid As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(NzToText(d(i, cOtk)))
+        If Len(oid) > 0 Then
+            If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
+                Err.Raise vbObjectError + 1905, SRC, _
+                          "Stavka nije brojcana: OtkupID=" & oid & "."
+            End If
+            If CDbl(d(i, cKol)) <= 0 Or CDbl(d(i, cCena)) <= 0 Then
+                Err.Raise vbObjectError + 1906, SRC, _
+                          "Kolicina i cena stavke moraju biti vece od nule: " & _
+                          "OtkupID=" & oid & "."
+            End If
+            n = n + 1
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 6)
+    n = 0
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(NzToText(d(i, cOtk)))
+        If Len(oid) > 0 Then
+            n = n + 1
+            res(n, 1) = oid
+            res(n, 2) = d(i, cRb)
+            res(n, 3) = Trim$(NzToText(d(i, cKl)))
+            res(n, 4) = CDbl(d(i, cKol))
+            res(n, 5) = CDbl(d(i, cCena))
+            If IsNumeric(d(i, cAmb)) Then res(n, 6) = CDbl(d(i, cAmb)) Else res(n, 6) = 0#
+        End If
+    Next i
+
+    StavkeOtkupaRedovi = res
+End Function
+
+' Zbir stavki po dokumentu. Kljuc je OtkupID, vrednost Array(kg, vrednost, gajbe, klase):
+'   kg       = SUM(Kolicina)
+'   vrednost = SUM(Kolicina x Cena)  -- isti racun kao VrednostOtkupa za jedan
+'   gajbe    = SUM(KolAmbalaze)      -- primljene gajbe dokumenta
+'   klase    = klase stavki redom upisa, bez ponavljanja ("I, II")
+'
+' Dokument BEZ stavki NIJE u recniku: citalac ga racuna kao 0 kg i 0 dinara, isto
+' kao GetOpenOtkupi koji ga preskace (REFAKTOR S14.3); nov pisac ga ne pravi.
+' Kapije stavki su u StavkeOtkupaRedovi.
+Public Function ZbirStavkiPoOtkupu() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZbirStavkiPoOtkupu = dict
+
+    Dim s As Variant
+    s = StavkeOtkupaRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, oid As String, kl As String, rec As Variant
+    For i = 1 To UBound(s, 1)
+        oid = CStr(s(i, 1))
+        If dict.Exists(oid) Then
+            rec = dict(oid)
+        Else
+            rec = Array(0#, 0#, 0#, "")
+        End If
+        rec(0) = CDbl(rec(0)) + CDbl(s(i, 4))
+        rec(1) = CDbl(rec(1)) + CDbl(s(i, 4)) * CDbl(s(i, 5))
+        rec(2) = CDbl(rec(2)) + CDbl(s(i, 6))
+        kl = CStr(s(i, 3))
+        If Len(kl) > 0 Then
+            If InStr(1, ", " & CStr(rec(3)) & ", ", ", " & kl & ", ", vbBinaryCompare) = 0 Then
+                If Len(CStr(rec(3))) > 0 Then rec(3) = CStr(rec(3)) & ", "
+                rec(3) = CStr(rec(3)) & kl
+            End If
+        End If
+        dict(oid) = rec
+    Next i
+End Function
+
+' Kilogrami otkupa jednog dana -- plocica "danas" u ljusci (modOtkupUI.RefreshKpi).
+' Obuhvat je NAMERNO isti kao zatecen brojac dokumenata na istoj plocici
+' (CountForDate): svi redovi zaglavlja tog dana, bez filtera storna. Menja se
+' samo IZVOR kilograma -- stavke, ne zaglavlje.
+Public Function KgOtkupaZaDan(ByVal dan As Date) As Double
+    Const SRC As String = "KgOtkupaZaDan"
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long, cDat As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+
+    Dim zbir As Object
+    Set zbir = ZbirStavkiPoOtkupu()
+
+    Dim i As Long, oid As String, z As Variant, danKljuc As Long
+    danKljuc = Int(CDbl(dan))
+    For i = 1 To UBound(d, 1)
+        If IsDate(d(i, cDat)) Then
+            If Int(CDbl(CDate(d(i, cDat)))) = danKljuc Then
+                oid = Trim$(NzToText(d(i, cId)))
+                If zbir.Exists(oid) Then
+                    z = zbir(oid)
+                    KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.
 '
 ' RAZLIKA: knjizi se JEDNOM po dokumentu, nad ZBIROM stavki, a ne po klasi.
