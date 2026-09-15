@@ -86,8 +86,10 @@ broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznača
 upisuje umesto ID-a.
 
 **ReversID — REV-IDENT-01** (odluke operatera 15.09.2026). Identitet logičkog
-reversa je `tblAmbalaza.ReversID` (`RID-00001`), **isti na svim nogama** jednog
-dokumenta: Kooperant + Stanica za KOOP, sama Stanica za FIRMA. Jedini pisac
+reversa je `tblAmbalaza.ReversID`, **isti na svim nogama** jednog dokumenta:
+Kooperant + Stanica za KOOP, sama Stanica za FIRMA. Format je transakcioni,
+opaque `RID-<32 hex>` iz centralne fabrike `NewEntityID` — ne `GetNextID`
+(`max+1` ostaje za matične podatke, `DOCUMENT_HEADER_LINES.md` §2). Jedini pisac
 (`modDokumenta.SaveOMUlaz_TX`) ga kuje **jednom po dokumentu**
 (`modAmbalaza.NoviReversID`) i nasleđuje u svakoj nozi; `TrackAmbalaza` ga
 upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:

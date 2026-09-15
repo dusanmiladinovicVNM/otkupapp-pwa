@@ -9928,8 +9928,11 @@ End Sub
 ' fali noga Kooperant -- a ispravan revers ne prijavljuje.
 '
 ' SABOTAZE: izostavi reversID u nozi Kooperant IZDAVANJE grane SaveOMUlaz_TX ->
-' pukne "REV-ID KOOP izdavanje: obe noge nose isti ReversID"; u Chk_B10 preskoci
-' prazan ReversID -> pukne "REV-ID B10: noga bez ReversID prijavljena".
+' pukne "REV-ID KOOP izdavanje: obe noge nose isti ReversID"; izostavi ga u
+' PRIJEM_OD_OM grani -> pukne "REV-ID FIRMA prijem od OM: noga Stanica nosi
+' ReversID"; u Chk_B10 preskoci prazan ReversID -> pukne "REV-ID B10: noga bez
+' ReversID prijavljena"; vrati GetNextID u NoviReversID -> pukne "REV-ID: format
+' je opaque RID-<32 hex>".
 Private Sub Test_BKTX_ReversIDNaSvimNogama()
     On Error GoTo EH
 
@@ -9938,35 +9941,43 @@ Private Sub Test_BKTX_ReversIDNaSvimNogama()
     Dim brojI As String: brojI = TEST_PREFIX & "-REV-IDI-" & scenario
     Dim brojP As String: brojP = TEST_PREFIX & "-REV-IDP-" & scenario
     Dim brojF As String: brojF = TEST_PREFIX & "-REV-IDF-" & scenario
+    Dim brojO As String: brojO = TEST_PREFIX & "-REV-IDO-" & scenario
 
     AssertTrue UpisiReversTest(d, brojI, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
                "REV-ID: izdavanje kooperantu upisano"
     AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
                "REV-ID: povrat od kooperanta upisan"
     AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
-               "REV-ID: FIRMA revers upisan"
+               "REV-ID: FIRMA izdato OM upisan"
+    AssertTrue UpisiReversTest(d, brojO, TEST_ST_ID, "", "PRIJEM_OD_OM"), _
+               "REV-ID: FIRMA prijem od OM upisan"
 
-    Dim kI As String, sI As String, kP As String, sP As String, sF As String
+    Dim kI As String, sI As String, kP As String, sP As String, sF As String, sO As String
     kI = AmbIDNoge(brojI, TEST_KOOP_ID, "Kooperant", d)
     sI = AmbIDNogeStanice(brojI, TEST_ST_ID, d)
     kP = AmbIDNoge(brojP, TEST_KOOP_ID, "Kooperant", d)
     sP = AmbIDNogeStanice(brojP, TEST_ST_ID, d)
     sF = AmbIDNogeStanice(brojF, TEST_ST_ID, d)
-    AssertTrue Len(kI) > 0 And Len(sI) > 0 And Len(kP) > 0 And Len(sP) > 0 And Len(sF) > 0, _
+    sO = AmbIDNogeStanice(brojO, TEST_ST_ID, d)
+    AssertTrue Len(kI) > 0 And Len(sI) > 0 And Len(kP) > 0 And Len(sP) > 0 And Len(sF) > 0 And Len(sO) > 0, _
                "REV-ID: preduslov -- KOOP reversi imaju obe noge, FIRMA nogu Stanica"
     AssertEquals "", AmbIDNoge(brojF, TEST_KOOP_ID, "Kooperant", d), _
                  "REV-ID: preduslov -- FIRMA revers nema nogu Kooperant"
 
-    Dim ridI As String, ridP As String, ridF As String
+    Dim ridI As String, ridP As String, ridF As String, ridO As String
     ridI = ReversIDReda(sI)
     ridP = ReversIDReda(sP)
     ridF = ReversIDReda(sF)
+    ridO = ReversIDReda(sO)
     AssertTrue Len(ridI) > 0 And Len(ridP) > 0 And Len(ridF) > 0, _
                "REV-ID: svaka noga Stanica nosi ReversID"
+    AssertTrue Len(ridO) > 0, "REV-ID FIRMA prijem od OM: noga Stanica nosi ReversID"
+    AssertTrue ridI Like "RID-" & String$(32, "?") And Len(ridI) = 36 And Not (Mid$(ridI, 5) Like "*[!0-9A-F]*"), _
+               "REV-ID: format je opaque RID-<32 hex>"
     AssertEquals ridI, ReversIDReda(kI), "REV-ID KOOP izdavanje: obe noge nose isti ReversID"
     AssertEquals ridP, ReversIDReda(kP), "REV-ID KOOP povrat: obe noge nose isti ReversID"
-    AssertTrue ridI <> ridP And ridI <> ridF And ridP <> ridF, _
-               "REV-ID: tri dokumenta imaju tri razlicita ReversID-a"
+    AssertTrue ridI <> ridP And ridI <> ridF And ridP <> ridF And ridO <> ridI And ridO <> ridP And ridO <> ridF, _
+               "REV-ID: cetiri dokumenta imaju cetiri razlicita ReversID-a"
 
     ' B10: identitet se ne pogadja po broju -- noga bez ReversID-a je nalaz.
     Dim r As Long: r = RedAmbalaze(kP)

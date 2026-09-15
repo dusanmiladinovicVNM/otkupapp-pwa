@@ -48,7 +48,7 @@ Append-only tabela. Relevantne kolone:
 | `VozacID` | vozač uključen u kretanje (prazno kad ga nema) |
 | `DokumentID` / `DokumentTip` | izvorni dokument (`OTK-…`/`OTP-…`/`PRJ-…` + tip) |
 | `Stornirano` | oznaka storna |
-| `ReversID` | identitet logičkog reversa (`RID-…`), isti na svim nogama jednog reversa; prazno za kretanja koja nisu revers. Poslednja kolona, upisuje se po imenu (REV-IDENT-01, `docs/DOMEN/ARCHITECTURE_CONTRACT.md`) |
+| `ReversID` | identitet logičkog reversa (`RID-<32 hex>`, `NewEntityID`), isti na svim nogama jednog reversa; prazno za kretanja koja nisu revers. Poslednja kolona, upisuje se po imenu (REV-IDENT-01, `docs/DOMEN/ARCHITECTURE_CONTRACT.md`) |
 
 Sav upis ide kroz **jednu** proceduru: `modAmbalaza.TrackAmbalaza(datum, tipAmb, kolicina,
 smer, entitetID, entitetTip, [vozacID], [dokumentID], [dokumentTip], [reversID])`. Poziva se iz većih

@@ -130,18 +130,18 @@ End Sub
 ' WRITE
 ' ============================================================
 
-' Nov identitet logickog reversa ("RID-00001"). JEDAN po dokumentu: pisac ga
-' kuje jednom i daje svim nogama (REV-IDENT-01, ARCHITECTURE_CONTRACT.md).
+' Nov identitet logickog reversa: opaque "RID-<32 hex>" iz centralne fabrike
+' NewEntityID. Transakcioni identitet, ne max+1 -- GetNextID ostaje za maticne
+' podatke (DOCUMENT_HEADER_LINES.md par. 2). JEDAN po dokumentu: pisac ga kuje
+' jednom i daje svim nogama (REV-IDENT-01, ARCHITECTURE_CONTRACT.md).
 Public Function NoviReversID() As String
     Const SRC As String = "modAmbalaza.NoviReversID"
 
-    RequireColumnIndex TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC
-
-    NoviReversID = GetNextID(TBL_AMBALAZA, COL_AMB_REVERS_ID, "RID-")
+    NoviReversID = NewEntityID("RID-")
 
     If Len(Trim$(NoviReversID)) = 0 Then
         Err.Raise vbObjectError + 4408, SRC, _
-                  "GetNextID nije vratio ReversID."
+                  "NewEntityID nije vratio ReversID."
     End If
 End Function
 
