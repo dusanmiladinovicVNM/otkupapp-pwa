@@ -130,12 +130,28 @@ End Sub
 ' WRITE
 ' ============================================================
 
+' Nov identitet logickog reversa: opaque "RID-<32 hex>" iz centralne fabrike
+' NewEntityID. Transakcioni identitet, ne max+1 -- GetNextID ostaje za maticne
+' podatke (DOCUMENT_HEADER_LINES.md par. 2). JEDAN po dokumentu: pisac ga kuje
+' jednom i daje svim nogama (REV-IDENT-01, ARCHITECTURE_CONTRACT.md).
+Public Function NoviReversID() As String
+    Const SRC As String = "modAmbalaza.NoviReversID"
+
+    NoviReversID = NewEntityID("RID-")
+
+    If Len(Trim$(NoviReversID)) = 0 Then
+        Err.Raise vbObjectError + 4408, SRC, _
+                  "NewEntityID nije vratio ReversID."
+    End If
+End Function
+
 Public Sub TrackAmbalaza(ByVal datum As Date, ByVal tipAmb As String, _
                          ByVal kolicina As Long, ByVal smer As String, _
                          ByVal entitetID As String, ByVal entitetTip As String, _
                          Optional ByVal vozacID As String = "", _
                          Optional ByVal dokumentID As String = "", _
-                         Optional ByVal dokumentTip As String = "")
+                         Optional ByVal dokumentTip As String = "", _
+                         Optional ByVal reversID As String = "")
 
     Const SRC As String = "modAmbalaza.TrackAmbalaza"
 
@@ -168,9 +184,18 @@ Public Sub TrackAmbalaza(ByVal datum As Date, ByVal tipAmb As String, _
         Trim$(dokumentID), _
         Trim$(dokumentTip))
 
-    If AppendRow(TBL_AMBALAZA, rowData) <= 0 Then
+    Dim rowIdx As Long
+    rowIdx = AppendRow(TBL_AMBALAZA, rowData)
+    If rowIdx <= 0 Then
         Err.Raise vbObjectError + 4407, SRC, _
                   "AppendRow nije uspeo za tblAmbalaza."
+    End If
+
+    ' ReversID (REV-IDENT-01) ide PO IMENU: kolona stoji iza Stornirano i audit
+    ' kolona, pa je pozicioni niz ne doseze. Pecat je u istom modulu, pa vlasnik
+    ' reda ostaje jedan (A11).
+    If Len(Trim$(reversID)) > 0 Then
+        RequireUpdateCell TBL_AMBALAZA, rowIdx, COL_AMB_REVERS_ID, Trim$(reversID), SRC
     End If
 
     Exit Sub

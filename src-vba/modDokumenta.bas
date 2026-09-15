@@ -7216,6 +7216,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal tipNovca As String, _
                               ByVal koopSmer As String) As Boolean
     Dim tx As clsTransaction
+    Dim reversID As String
     Set tx = New clsTransaction
 
     On Error GoTo EH
@@ -7245,6 +7246,11 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
         modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
                                             brojDok, "SaveOMUlaz_TX"
 
+        ' REV-IDENT-01: JEDAN identitet po dokumentu, zajednicki svim nogama
+        ' (Kooperant + Stanica za KOOP, sama Stanica za FIRMA). Kuje se jednom i
+        ' NASLEDJUJE u svakoj nozi -- nikad po nozi.
+        reversID = modAmbalaza.NoviReversID()
+
         Select Case koopSmer
         Case "IZDAVANJE"
             ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
@@ -7262,10 +7268,10 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_IZLAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
         Case "PRIJEM"
             ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
             '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
@@ -7281,10 +7287,10 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             modBrojevi.RequireReversKoopBrojJedinstven DOK_TIP_OM_ULAZ_KOOP, stanicaID, datum, brojDok, "SaveOMUlaz_TX"
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
+                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
+                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
         Case "IZDATO_OM"
             ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
             ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
@@ -7299,7 +7305,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             End If
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA
+                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA, reversID
         Case "PRIJEM_OD_OM"
             ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
             ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
@@ -7314,7 +7320,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             End If
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA
+                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA, reversID
         Case Else
             ' Smer je OBAVEZAN uz kolicinu ambalaze. Ranije je ovde tiho knjizen
             ' legacy "OM prima od vozaca" (Stanica ULAZ, DOK_TIP_OM_ULAZ), pa je

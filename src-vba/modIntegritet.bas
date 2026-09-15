@@ -103,6 +103,7 @@ Private Sub RunAllChecks()
     Chk_B7_ZbirnaNulaKg
     Chk_B8_DvosmislenBrojZbirne
     Chk_B9_ZbirnaBezGeneracije
+    Chk_B10_ReversBezID
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
@@ -437,6 +438,141 @@ Private Sub Chk_B9_ZbirnaBezGeneracije()
 EH:
     WriteErr "B9", Err.description
 End Sub
+
+' ============================================================
+' CHECK B10: AKTIVAN REVERS BEZ ISPRAVNOG ReversID
+' ============================================================
+' REV-IDENT-01: identitet logickog reversa je ReversID, zajednicki svim nogama
+' jednog dokumenta. Jedini pisac (modDokumenta.SaveOMUlaz_TX ->
+' modAmbalaza.TrackAmbalaza) ga pecati na svaku nogu, pa produkcija ovo stanje
+' ne pravi -- ali stariji redovi, seed i rucna izmena mogu. Prazan ReversID NIJE
+' drugi oblik identiteta: nema fallback-a na broj. Ambalaza uz otkup (DokumentID
+' = OtkupID) nosi tip OM-Izlaz-Koop, a nije revers.
+' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026), pa se noge
+' broje PO TIPU unutar ReversID-a: po tipu tacno jedna noga Stanica; KOOP jos
+' tacno jedna noga Kooperant po tipu, FIRMA nijedna. Za ceo ReversID sve noge
+' nose isti broj, tip dokumenta i dan, ISTU stanicu (sve noge Stanica), ISTOG
+' kooperanta (sve noge Kooperant) i ISTOG vozaca -- kljuc koji ReversID zamenjuje
+' nosi stanicu, pa je identitet ne sme izgubiti, niti spojiti delove dva dokumenta.
+Private Sub Chk_B10_ReversBezID()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cId As Long, cDok As Long, cTip As Long, cEntTip As Long, cDat As Long, cRid As Long
+    Dim cTipAmb As Long, cEnt As Long, cVoz As Long
+    cId = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, "Chk_B10")
+    cTipAmb = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "Chk_B10")
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "Chk_B10")
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, "Chk_B10")
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "Chk_B10")
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "Chk_B10")
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "Chk_B10")
+    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "Chk_B10")
+    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, "Chk_B10")
+
+    ' OtkupID-evi: ambalaza uz otkup ima tip reversa, ali nije revers
+    Dim otkupi As Object: Set otkupi = CreateObject("Scripting.Dictionary")
+    Dim od As Variant, cOtk As Long, i As Long
+    od = GetTableData(TBL_OTKUP)
+    If IsArray(od) Then
+        cOtk = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "Chk_B10")
+        For i = 1 To UBound(od, 1)
+            If Len(Trim$(NzToText(od(i, cOtk)))) > 0 Then otkupi(Trim$(NzToText(od(i, cOtk)))) = True
+        Next i
+    End If
+
+    Dim bad As Collection: Set bad = New Collection
+    ' grupe: ReversID -> (kljuc dokumenta "broj|tip|dan", tip dokumenta, stanica,
+    '        kooperant, vozac) -- svako polje jedno za ceo dokument ili "#RAZLICITO"
+    ' noge:  "ReversID|TipAmbalaze" -> (nogu Stanica, nogu Kooperant)
+    ' Dva ravna recnika, ne recnik u recniku (Set d(k) = objekat puca nad late-bound
+    ' Dictionary).
+    Dim grupe As Object: Set grupe = CreateObject("Scripting.Dictionary")
+    Dim noge As Object: Set noge = CreateObject("Scripting.Dictionary")
+    Dim r As Long, tip As String, dok As String, rid As String, kljuc As String
+    Dim dan As Long, g As Variant, nk As String
+    For r = 1 To UBound(data, 1)
+        tip = Trim$(NzToText(data(r, cTip)))
+        dok = Trim$(NzToText(data(r, cDok)))
+        If modStorno.ReversTipJe(tip) And Not otkupi.Exists(dok) Then
+            rid = Trim$(NzToText(data(r, cRid)))
+            If Len(rid) = 0 Then
+                bad.Add Array(NzToText(data(r, cId)), dok, tip, "nema ReversID")
+            Else
+                If IsDate(data(r, cDat)) Then dan = Int(CDbl(CDate(data(r, cDat)))) Else dan = -1
+                kljuc = dok & "|" & tip & "|" & CStr(dan)
+                If Not grupe.Exists(rid) Then grupe(rid) = Array(kljuc, tip, Chr$(1), Chr$(1), Chr$(1))
+                g = grupe(rid)
+                g(0) = UskladiReversPolje(g(0), kljuc)
+                Select Case Trim$(NzToText(data(r, cEntTip)))
+                    Case "Stanica": g(2) = UskladiReversPolje(g(2), Trim$(NzToText(data(r, cEnt))))
+                    Case "Kooperant": g(3) = UskladiReversPolje(g(3), Trim$(NzToText(data(r, cEnt))))
+                End Select
+                g(4) = UskladiReversPolje(g(4), Trim$(NzToText(data(r, cVoz))))
+                grupe(rid) = g
+                nk = rid & "|" & Trim$(NzToText(data(r, cTipAmb)))
+                If Not noge.Exists(nk) Then noge(nk) = Array(0, 0)
+                g = noge(nk)
+                Select Case Trim$(NzToText(data(r, cEntTip)))
+                    Case "Stanica": g(0) = g(0) + 1
+                    Case "Kooperant": g(1) = g(1) + 1
+                End Select
+                noge(nk) = g
+            End If
+        End If
+    Next r
+
+    Dim k As Variant, razlog As String, koop As Boolean
+    Dim p As Long, tipAmb As String, c As Variant
+    For Each k In grupe.Keys
+        g = grupe(k)
+        If g(0) = "#RAZLICITO" Then bad.Add Array(CStr(k), "", CStr(g(1)), "noge nisu istog broja, tipa i dana")
+        If g(2) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge Stanica nose razlicite stanice")
+        If g(3) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge Kooperant nose razlicite kooperante")
+        If g(4) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge nose razlicite vozace")
+    Next k
+    For Each k In noge.Keys
+        p = InStr(1, CStr(k), "|")
+        rid = Left$(CStr(k), p - 1)
+        tipAmb = Mid$(CStr(k), p + 1)
+        g = grupe(rid)
+        c = noge(k)
+        koop = (g(1) = DOK_TIP_OM_IZLAZ_KOOP Or g(1) = DOK_TIP_OM_ULAZ_KOOP)
+        razlog = ""
+        If c(0) <> 1 Then
+            razlog = "tip " & tipAmb & ": nogu Stanica " & CStr(c(0)) & " (ocekivano 1)"
+        ElseIf koop And c(1) <> 1 Then
+            razlog = "tip " & tipAmb & ": nogu Kooperant " & CStr(c(1)) & " (KOOP ocekuje 1)"
+        ElseIf Not koop And c(1) <> 0 Then
+            razlog = "tip " & tipAmb & ": FIRMA revers ima nogu Kooperant"
+        End If
+        If Len(razlog) > 0 Then bad.Add Array(rid, Split(CStr(g(0)), "|")(0), CStr(g(1)), razlog)
+    Next k
+
+    WriteBlock "B10", "Aktivan revers bez ispravnog ReversID (identitet reversa)", _
+               Array("AmbID / ReversID", "DokumentID", "DokumentTip", "Razlog"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "B10", Err.description
+End Sub
+
+' Jedna vrednost za ceo ReversID: prva vidjena ostaje, svaka razlicita daje
+' "#RAZLICITO" (koji ostaje). Chr$(1) = jos nijedna noga te vrste.
+Private Function UskladiReversPolje(ByVal dosad As Variant, ByVal nova As String) As String
+    If CStr(dosad) = Chr$(1) Then
+        UskladiReversPolje = nova
+    ElseIf CStr(dosad) = "#RAZLICITO" Or CStr(dosad) = nova Then
+        UskladiReversPolje = CStr(dosad)
+    Else
+        UskladiReversPolje = "#RAZLICITO"
+    End If
+End Function
 
 ' ============================================================
 ' CHECK B6: BrojZbirne case-mismatch (za normalizaciju)

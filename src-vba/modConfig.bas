@@ -618,6 +618,9 @@ Public Const COL_AMB_ENTITET_TIP As String = "EntitetTip"
 Public Const COL_AMB_VOZAC As String = "VozacID"
 Public Const COL_AMB_DOK_ID As String = "DokumentID"
 Public Const COL_AMB_DOK_TIP As String = "DokumentTip"
+' REV-IDENT-01: identitet logickog reversa, isti na svim nogama jednog reversa;
+' prazno za kretanja koja nisu revers (otkup, otpremnica, prijemnica).
+Public Const COL_AMB_REVERS_ID As String = "ReversID"
 
 ' --- tblNovac ---
 Public Const COL_NOV_ID As String = "NovacID"

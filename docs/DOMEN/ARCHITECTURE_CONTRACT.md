@@ -85,8 +85,40 @@ broj ide u `OldBroj` / `NewBroj` i ostaje labela. Kad identitet nije jednoznača
 (nema noge Stanica ili ih je više), ispravka se odbija pre storna — broj se ne
 upisuje umesto ID-a.
 
-Tri pravila ključa primenjena su po preporuci pre-flight-a i **čekaju potvrdu
-operatera**:
+**ReversID — REV-IDENT-01** (odluke operatera 15.09.2026). Identitet logičkog
+reversa je `tblAmbalaza.ReversID`, **isti na svim nogama** jednog dokumenta:
+Kooperant + Stanica za KOOP, sama Stanica za FIRMA. Format je transakcioni,
+opaque `RID-<32 hex>` iz centralne fabrike `NewEntityID` — ne `GetNextID`
+(`max+1` ostaje za matične podatke, `DOCUMENT_HEADER_LINES.md` §2). Jedini pisac
+(`modDokumenta.SaveOMUlaz_TX`) ga kuje **jednom po dokumentu**
+(`modAmbalaza.NoviReversID`) i nasleđuje u svakoj nozi; `TrackAmbalaza` ga
+upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
+
+1. ReversID **zamenjuje** `AmbID` noge Stanica kao trajni identitet (trag
+   ispravke, undo, pitanje ispravke). `AmbID` ostaje identitet fizičkog reda.
+2. Nose ga **sva četiri** smera.
+3. Aktivan revers **bez** ReversID-a je integritetska greška — bez fallback-a na
+   broj i bez backfill-a (`modIntegritet` B10, isti obrazac kao `GeneracijaID`).
+   B10 proverava i oblik, **po tipu ambalaže** unutar ReversID-a: tačno jedna
+   noga Stanica; KOOP još tačno jedna noga Kooperant, FIRMA nijedna. Za ceo
+   ReversID sve noge nose isti broj, tip dokumenta i dan, **istu stanicu** (sve
+   noge Stanica), **istog kooperanta** (sve noge Kooperant) i **istog vozača** —
+   ključ koji ReversID zamenjuje nosi stanicu, pa je identitet ne sme izgubiti,
+   niti sme da spoji delove dva dokumenta.
+5. Jedan revers **sme da nosi više tipova ambalaže** (futureproofing). Grain je
+   ReversID = logički dokument, `AmbID` = fizički red, broj = labela. Današnji
+   pisac piše jedan tip po dokumentu — to je granica API-ja, ne grain dokumenta;
+   fixture `REV-IZV-1` (12/1 + LETVA pod jednim ReversID-om) drži višetipni oblik
+   kao legitiman.
+4. Isporuka u dve faze. **Faza 1 (isporučena):** kolona, pisac, B10 — čitaoci i
+   dalje rade po ključu (broj, tip, stanica, dan), a trajni identitet iz
+   prethodnog pasusa, pravilo 1 i KOOP klauzula u A2 važe **nepromenjeno**.
+   **Faza 2:** storno, pregled, undo, ispravka i štampa prelaze na ReversID, trag
+   ispravke nosi ReversID, zabrana istog KOOP broja na dve stanice nestaje, a
+   zauzetost broja postaje (stanica, dan) za sva četiri smera.
+
+Tri pravila ključa primenjena su po preporuci pre-flight-a; **operater ih je
+potvrdio 14.09.2026** (PR #328):
 
 1. Noga Kooperant ne nosi stanicu. Kad isti (broj, tip, dan) nose noge Stanica
    **dve** stanice, noga Kooperant se ne pripisuje nijednoj — storno, undo i
