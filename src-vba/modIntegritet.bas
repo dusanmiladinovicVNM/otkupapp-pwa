@@ -448,8 +448,10 @@ End Sub
 ' ne pravi -- ali stariji redovi, seed i rucna izmena mogu. Prazan ReversID NIJE
 ' drugi oblik identiteta: nema fallback-a na broj. Ambalaza uz otkup (DokumentID
 ' = OtkupID) nosi tip OM-Izlaz-Koop, a nije revers.
-' Oblik grupe jednog ReversID-a: tacno jedna noga Stanica; KOOP jos tacno jedna
-' noga Kooperant, FIRMA nijedna; sve noge istog broja, tipa i dana.
+' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026), pa se noge
+' broje PO TIPU unutar ReversID-a: po tipu tacno jedna noga Stanica; KOOP jos
+' tacno jedna noga Kooperant po tipu, FIRMA nijedna. Za ceo ReversID sve noge
+' nose isti broj, tip dokumenta i dan.
 Private Sub Chk_B10_ReversBezID()
     On Error GoTo EH
 
@@ -460,7 +462,9 @@ Private Sub Chk_B10_ReversBezID()
     If Not IsArray(data) Then Exit Sub
 
     Dim cId As Long, cDok As Long, cTip As Long, cEntTip As Long, cDat As Long, cRid As Long
+    Dim cTipAmb As Long
     cId = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, "Chk_B10")
+    cTipAmb = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "Chk_B10")
     cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "Chk_B10")
     cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "Chk_B10")
     cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "Chk_B10")
@@ -479,9 +483,14 @@ Private Sub Chk_B10_ReversBezID()
     End If
 
     Dim bad As Collection: Set bad = New Collection
+    ' grupe: ReversID -> (kljuc dokumenta "broj|tip|dan", tip dokumenta)
+    ' noge:  "ReversID|TipAmbalaze" -> (nogu Stanica, nogu Kooperant)
+    ' Dva ravna recnika, ne recnik u recniku (Set d(k) = objekat puca nad late-bound
+    ' Dictionary).
     Dim grupe As Object: Set grupe = CreateObject("Scripting.Dictionary")
+    Dim noge As Object: Set noge = CreateObject("Scripting.Dictionary")
     Dim r As Long, tip As String, dok As String, rid As String, kljuc As String
-    Dim dan As Long, g As Variant
+    Dim dan As Long, g As Variant, nk As String
     For r = 1 To UBound(data, 1)
         tip = Trim$(NzToText(data(r, cTip)))
         dok = Trim$(NzToText(data(r, cDok)))
@@ -492,34 +501,46 @@ Private Sub Chk_B10_ReversBezID()
             Else
                 If IsDate(data(r, cDat)) Then dan = Int(CDbl(CDate(data(r, cDat)))) Else dan = -1
                 kljuc = dok & "|" & tip & "|" & CStr(dan)
-                ' (kljuc, nogu Stanica, nogu Kooperant, tip)
-                If Not grupe.Exists(rid) Then grupe(rid) = Array(kljuc, 0, 0, tip)
+                If Not grupe.Exists(rid) Then grupe(rid) = Array(kljuc, tip)
                 g = grupe(rid)
-                If g(0) <> kljuc Then g(0) = "#RAZLICITO"
+                If g(0) <> kljuc Then
+                    g(0) = "#RAZLICITO"
+                    grupe(rid) = g
+                End If
+                nk = rid & "|" & Trim$(NzToText(data(r, cTipAmb)))
+                If Not noge.Exists(nk) Then noge(nk) = Array(0, 0)
+                g = noge(nk)
                 Select Case Trim$(NzToText(data(r, cEntTip)))
-                    Case "Stanica": g(1) = g(1) + 1
-                    Case "Kooperant": g(2) = g(2) + 1
+                    Case "Stanica": g(0) = g(0) + 1
+                    Case "Kooperant": g(1) = g(1) + 1
                 End Select
-                grupe(rid) = g
+                noge(nk) = g
             End If
         End If
     Next r
 
     Dim k As Variant, razlog As String, koop As Boolean
+    Dim p As Long, tipAmb As String, c As Variant
     For Each k In grupe.Keys
         g = grupe(k)
-        koop = (g(3) = DOK_TIP_OM_IZLAZ_KOOP Or g(3) = DOK_TIP_OM_ULAZ_KOOP)
+        If g(0) = "#RAZLICITO" Then bad.Add Array(CStr(k), "", CStr(g(1)), "noge nisu istog broja, tipa i dana")
+    Next k
+    For Each k In noge.Keys
+        p = InStr(1, CStr(k), "|")
+        rid = Left$(CStr(k), p - 1)
+        tipAmb = Mid$(CStr(k), p + 1)
+        g = grupe(rid)
+        c = noge(k)
+        koop = (g(1) = DOK_TIP_OM_IZLAZ_KOOP Or g(1) = DOK_TIP_OM_ULAZ_KOOP)
         razlog = ""
-        If g(0) = "#RAZLICITO" Then
-            razlog = "noge nisu istog broja, tipa i dana"
-        ElseIf g(1) <> 1 Then
-            razlog = "nogu Stanica: " & CStr(g(1)) & " (ocekivano 1)"
-        ElseIf koop And g(2) <> 1 Then
-            razlog = "nogu Kooperant: " & CStr(g(2)) & " (KOOP ocekuje 1)"
-        ElseIf Not koop And g(2) <> 0 Then
-            razlog = "FIRMA revers ima nogu Kooperant"
+        If c(0) <> 1 Then
+            razlog = "tip " & tipAmb & ": nogu Stanica " & CStr(c(0)) & " (ocekivano 1)"
+        ElseIf koop And c(1) <> 1 Then
+            razlog = "tip " & tipAmb & ": nogu Kooperant " & CStr(c(1)) & " (KOOP ocekuje 1)"
+        ElseIf Not koop And c(1) <> 0 Then
+            razlog = "tip " & tipAmb & ": FIRMA revers ima nogu Kooperant"
         End If
-        If Len(razlog) > 0 Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(3)), razlog)
+        If Len(razlog) > 0 Then bad.Add Array(rid, Split(CStr(g(0)), "|")(0), CStr(g(1)), razlog)
     Next k
 
     WriteBlock "B10", "Aktivan revers bez ispravnog ReversID (identitet reversa)", _

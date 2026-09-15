@@ -9989,9 +9989,41 @@ Private Sub Test_BKTX_ReversIDNaSvimNogama()
                "REV-ID B10: revers kome fali noga Kooperant prijavljen"
     AssertEquals "", IntegritetRedoviSa(ridI), "REV-ID B10: ispravan revers nije prijavljen"
 
+    ' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026). Fixture
+    ' REV-IZV-1 (12/1 + LETVA) je jedan dokument pod jednim ReversID-om: cetiri
+    ' aktivne noge, dva tipa. B10 broji noge PO TIPU, pa ga ne prijavljuje.
+    Const RID_DVA_TIPA As String = "RID-00000000000000000000000000000001"
+    Dim nNogu As Long, nTipova As Long
+    NogeReversID RID_DVA_TIPA, nNogu, nTipova
+    AssertTrue nNogu = 4 And nTipova = 2, _
+               "REV-ID: preduslov -- fixture REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om"
+    AssertEquals "", IntegritetRedoviSa(RID_DVA_TIPA), _
+                 "REV-ID B10: revers sa dva tipa ambalaze nije prijavljen"
+
     Exit Sub
 EH:
     LogFatal "Test_BKTX_ReversIDNaSvimNogama", Err.Number, Err.description
+End Sub
+
+' Aktivne noge tblAmbalaza pod datim ReversID-om: broj nogu i broj razlicitih
+' tipova ambalaze.
+Private Sub NogeReversID(ByVal rid As String, ByRef nNogu As Long, ByRef nTipova As Long)
+    nNogu = 0
+    nTipova = 0
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Sub
+    Dim cR As Long, cT As Long, i As Long, tipovi As Object
+    cR = GetColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID)
+    cT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    If cR = 0 Or cT = 0 Then Exit Sub
+    Set tipovi = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cR))) = rid Then
+            nNogu = nNogu + 1
+            tipovi(Trim$(NzToText(data(i, cT)))) = True
+        End If
+    Next i
+    nTipova = tipovi.count
 End Sub
 
 ' ReversID reda tblAmbalaza po AmbID; prazno kad nema.
