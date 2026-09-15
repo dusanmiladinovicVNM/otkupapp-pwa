@@ -101,7 +101,10 @@ upisuje po imenu. Ambalaža uz otkup ga nema. Odluke:
    broj i bez backfill-a (`modIntegritet` B10, isti obrazac kao `GeneracijaID`).
    B10 proverava i oblik, **po tipu ambalaže** unutar ReversID-a: tačno jedna
    noga Stanica; KOOP još tačno jedna noga Kooperant, FIRMA nijedna. Za ceo
-   ReversID sve noge nose isti broj, tip dokumenta i dan.
+   ReversID sve noge nose isti broj, tip dokumenta i dan, **istu stanicu** (sve
+   noge Stanica), **istog kooperanta** (sve noge Kooperant) i **istog vozača** —
+   ključ koji ReversID zamenjuje nosi stanicu, pa je identitet ne sme izgubiti,
+   niti sme da spoji delove dva dokumenta.
 5. Jedan revers **sme da nosi više tipova ambalaže** (futureproofing). Grain je
    ReversID = logički dokument, `AmbID` = fizički red, broj = labela. Današnji
    pisac piše jedan tip po dokumentu — to je granica API-ja, ne grain dokumenta;

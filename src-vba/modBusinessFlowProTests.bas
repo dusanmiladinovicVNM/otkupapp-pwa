@@ -259,6 +259,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_BKTX_ReversPisacOdbijaZauzet
     Test_BKTX_ReversKoopBrojDrugaStanica
     Test_BKTX_ReversIDNaSvimNogama
+    Test_BKTX_ReversIDJedanDokument
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaRoditeljFailClosed
@@ -10003,6 +10004,95 @@ Private Sub Test_BKTX_ReversIDNaSvimNogama()
     Exit Sub
 EH:
     LogFatal "Test_BKTX_ReversIDNaSvimNogama", Err.Number, Err.description
+End Sub
+
+' REV-IDENT-01, B10 kao ugovor kome ce Faza 2 verovati: ReversID je JEDAN dokument.
+' Sme da nosi vise tipova ambalaze, ali ne sme da spoji delove dva dokumenta --
+' drugu stanicu, drugog kooperanta ili drugog vozaca.
+'
+' To stanje pisac ne moze da napravi (jedan tip i jedan ReversID po pozivu), pa se
+' prave dva ISPRAVNA reversa i drugi se PREPISE u prvi: isti ReversID, broj i dan,
+' drugi tip ambalaze. Po tipu i po kljucu oblik ostaje ispravan (preduslov), pa
+' nalaz mora biti bas stanica / kooperant / vozac.
+'
+' SABOTAZE: u Chk_B10 ne uskladjuj stanicu -> pukne "REV-ID B10: jedan ReversID na
+' dve stanice prijavljen"; ne uskladjuj kooperanta -> "REV-ID B10: jedan KOOP
+' ReversID sa dva kooperanta prijavljen"; ne uskladjuj vozaca -> "REV-ID B10: jedan
+' FIRMA ReversID sa dva vozaca prijavljen".
+Private Sub Test_BKTX_ReversIDJedanDokument()
+    On Error GoTo EH
+
+    SeedBktxDrugaStanica
+
+    Dim scenario As String: scenario = NewScenarioCode("REVJD")
+    Dim d As Date: d = NextTestDate()
+    Dim brojA As String: brojA = TEST_PREFIX & "-REV-JDA-" & scenario
+    Dim brojB As String: brojB = TEST_PREFIX & "-REV-JDB-" & scenario
+    Dim brojF1 As String: brojF1 = TEST_PREFIX & "-REV-JDF1-" & scenario
+    Dim brojF2 As String: brojF2 = TEST_PREFIX & "-REV-JDF2-" & scenario
+    Dim tipB As String: tipB = TEST_TIP_AMB & "-B10"
+
+    AssertTrue UpisiReversTest(d, brojA, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+               "REV-ID JD: KOOP revers A upisan"
+    AssertTrue UpisiReversTest(d, brojB, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
+               "REV-ID JD: KOOP revers B (druga stanica i kooperant) upisan"
+    AssertTrue UpisiReversTest(d, brojF1, TEST_ST_ID, "", "IZDATO_OM"), _
+               "REV-ID JD: FIRMA revers F1 upisan"
+    AssertTrue UpisiReversTest(d, brojF2, TEST_ST_ID, "", "IZDATO_OM"), _
+               "REV-ID JD: FIRMA revers F2 upisan"
+
+    Dim kA As String, sA As String, kB As String, sB As String, sF1 As String, sF2 As String
+    kA = AmbIDNoge(brojA, TEST_KOOP_ID, "Kooperant", d)
+    sA = AmbIDNogeStanice(brojA, TEST_ST_ID, d)
+    kB = AmbIDNoge(brojB, TEST_KOOP2_ID, "Kooperant", d)
+    sB = AmbIDNogeStanice(brojB, BKTX_ST2, d)
+    sF1 = AmbIDNogeStanice(brojF1, TEST_ST_ID, d)
+    sF2 = AmbIDNogeStanice(brojF2, TEST_ST_ID, d)
+    AssertTrue Len(kA) > 0 And Len(sA) > 0 And Len(kB) > 0 And Len(sB) > 0 And Len(sF1) > 0 And Len(sF2) > 0, _
+               "REV-ID JD: preduslov -- sve noge postoje"
+
+    Dim ridA As String: ridA = ReversIDReda(sA)
+    Dim ridF As String: ridF = ReversIDReda(sF1)
+    AssertEquals "", IntegritetRedoviSa(ridA), "REV-ID JD: preduslov -- ispravan KOOP revers A nije nalaz"
+    AssertEquals "", IntegritetRedoviSa(ridF), "REV-ID JD: preduslov -- ispravan FIRMA revers F1 nije nalaz"
+
+    ' B se prepise u A (druga stanica, drugi kooperant); F2 u F1 (ista stanica, drugi vozac).
+    PrepisiNoguURevers kB, ridA, brojA, tipB
+    PrepisiNoguURevers sB, ridA, brojA, tipB
+    PrepisiNoguURevers sF2, ridF, brojF1, tipB
+    If RedAmbalaze(sF2) > 0 Then RequireUpdateCell TBL_AMBALAZA, RedAmbalaze(sF2), COL_AMB_VOZAC, _
+                                                     "VOZ-B10-DRUGI", "Test_BKTX_ReversIDJedanDokument"
+
+    Dim nalA As String: nalA = IntegritetRedoviSa(ridA)
+    Dim nalF As String: nalF = IntegritetRedoviSa(ridF)
+    AssertTrue InStr(1, nalA & nalF, "nogu ", vbBinaryCompare) = 0 And _
+               InStr(1, nalA & nalF, "nisu istog", vbBinaryCompare) = 0, _
+               "REV-ID JD: preduslov -- po tipu i po kljucu oblik je ispravan"
+    AssertTrue InStr(1, nalA, "razlicite stanice", vbBinaryCompare) > 0, _
+               "REV-ID B10: jedan ReversID na dve stanice prijavljen"
+    AssertTrue InStr(1, nalA, "razlicite kooperante", vbBinaryCompare) > 0, _
+               "REV-ID B10: jedan KOOP ReversID sa dva kooperanta prijavljen"
+    AssertTrue InStr(1, nalF, "razlicite vozace", vbBinaryCompare) > 0, _
+               "REV-ID B10: jedan FIRMA ReversID sa dva vozaca prijavljen"
+    AssertTrue InStr(1, nalF, "razlicite stanice", vbBinaryCompare) = 0, _
+               "REV-ID B10: FIRMA revers iste stanice nije nalaz za stanicu"
+
+    Exit Sub
+EH:
+    LogFatal "Test_BKTX_ReversIDJedanDokument", Err.Number, Err.description
+End Sub
+
+' Test-only adversarijalno stanje: noga se prepise u drugi revers (ReversID, broj,
+' tip ambalaze). Kroz pisac se ne moze napraviti.
+Private Sub PrepisiNoguURevers(ByVal ambID As String, ByVal rid As String, _
+                               ByVal broj As String, ByVal tipAmb As String)
+    Dim r As Long: r = RedAmbalaze(ambID)
+    If r <= 0 Then
+        Err.Raise vbObjectError + 9901, "PrepisiNoguURevers", "Noga " & ambID & " nije nadjena."
+    End If
+    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_REVERS_ID, rid, "PrepisiNoguURevers"
+    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_DOK_ID, broj, "PrepisiNoguURevers"
+    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_TIP, tipAmb, "PrepisiNoguURevers"
 End Sub
 
 ' Aktivne noge tblAmbalaza pod datim ReversID-om: broj nogu i broj razlicitih

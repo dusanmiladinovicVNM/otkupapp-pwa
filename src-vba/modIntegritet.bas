@@ -451,7 +451,9 @@ End Sub
 ' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026), pa se noge
 ' broje PO TIPU unutar ReversID-a: po tipu tacno jedna noga Stanica; KOOP jos
 ' tacno jedna noga Kooperant po tipu, FIRMA nijedna. Za ceo ReversID sve noge
-' nose isti broj, tip dokumenta i dan.
+' nose isti broj, tip dokumenta i dan, ISTU stanicu (sve noge Stanica), ISTOG
+' kooperanta (sve noge Kooperant) i ISTOG vozaca -- kljuc koji ReversID zamenjuje
+' nosi stanicu, pa je identitet ne sme izgubiti, niti spojiti delove dva dokumenta.
 Private Sub Chk_B10_ReversBezID()
     On Error GoTo EH
 
@@ -462,9 +464,11 @@ Private Sub Chk_B10_ReversBezID()
     If Not IsArray(data) Then Exit Sub
 
     Dim cId As Long, cDok As Long, cTip As Long, cEntTip As Long, cDat As Long, cRid As Long
-    Dim cTipAmb As Long
+    Dim cTipAmb As Long, cEnt As Long, cVoz As Long
     cId = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, "Chk_B10")
     cTipAmb = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "Chk_B10")
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "Chk_B10")
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, "Chk_B10")
     cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "Chk_B10")
     cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "Chk_B10")
     cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "Chk_B10")
@@ -483,7 +487,8 @@ Private Sub Chk_B10_ReversBezID()
     End If
 
     Dim bad As Collection: Set bad = New Collection
-    ' grupe: ReversID -> (kljuc dokumenta "broj|tip|dan", tip dokumenta)
+    ' grupe: ReversID -> (kljuc dokumenta "broj|tip|dan", tip dokumenta, stanica,
+    '        kooperant, vozac) -- svako polje jedno za ceo dokument ili "#RAZLICITO"
     ' noge:  "ReversID|TipAmbalaze" -> (nogu Stanica, nogu Kooperant)
     ' Dva ravna recnika, ne recnik u recniku (Set d(k) = objekat puca nad late-bound
     ' Dictionary).
@@ -501,12 +506,15 @@ Private Sub Chk_B10_ReversBezID()
             Else
                 If IsDate(data(r, cDat)) Then dan = Int(CDbl(CDate(data(r, cDat)))) Else dan = -1
                 kljuc = dok & "|" & tip & "|" & CStr(dan)
-                If Not grupe.Exists(rid) Then grupe(rid) = Array(kljuc, tip)
+                If Not grupe.Exists(rid) Then grupe(rid) = Array(kljuc, tip, Chr$(1), Chr$(1), Chr$(1))
                 g = grupe(rid)
-                If g(0) <> kljuc Then
-                    g(0) = "#RAZLICITO"
-                    grupe(rid) = g
-                End If
+                g(0) = UskladiReversPolje(g(0), kljuc)
+                Select Case Trim$(NzToText(data(r, cEntTip)))
+                    Case "Stanica": g(2) = UskladiReversPolje(g(2), Trim$(NzToText(data(r, cEnt))))
+                    Case "Kooperant": g(3) = UskladiReversPolje(g(3), Trim$(NzToText(data(r, cEnt))))
+                End Select
+                g(4) = UskladiReversPolje(g(4), Trim$(NzToText(data(r, cVoz))))
+                grupe(rid) = g
                 nk = rid & "|" & Trim$(NzToText(data(r, cTipAmb)))
                 If Not noge.Exists(nk) Then noge(nk) = Array(0, 0)
                 g = noge(nk)
@@ -524,6 +532,9 @@ Private Sub Chk_B10_ReversBezID()
     For Each k In grupe.Keys
         g = grupe(k)
         If g(0) = "#RAZLICITO" Then bad.Add Array(CStr(k), "", CStr(g(1)), "noge nisu istog broja, tipa i dana")
+        If g(2) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge Stanica nose razlicite stanice")
+        If g(3) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge Kooperant nose razlicite kooperante")
+        If g(4) = "#RAZLICITO" Then bad.Add Array(CStr(k), Split(CStr(g(0)), "|")(0), CStr(g(1)), "noge nose razlicite vozace")
     Next k
     For Each k In noge.Keys
         p = InStr(1, CStr(k), "|")
@@ -550,6 +561,18 @@ Private Sub Chk_B10_ReversBezID()
 EH:
     WriteErr "B10", Err.description
 End Sub
+
+' Jedna vrednost za ceo ReversID: prva vidjena ostaje, svaka razlicita daje
+' "#RAZLICITO" (koji ostaje). Chr$(1) = jos nijedna noga te vrste.
+Private Function UskladiReversPolje(ByVal dosad As Variant, ByVal nova As String) As String
+    If CStr(dosad) = Chr$(1) Then
+        UskladiReversPolje = nova
+    ElseIf CStr(dosad) = "#RAZLICITO" Or CStr(dosad) = nova Then
+        UskladiReversPolje = CStr(dosad)
+    Else
+        UskladiReversPolje = "#RAZLICITO"
+    End If
+End Function
 
 ' ============================================================
 ' CHECK B6: BrojZbirne case-mismatch (za normalizaciju)
