@@ -83,6 +83,14 @@ spajanja unosi u `MAPA_SPOSOBNOSTI.md`. Ulazne fajlove ne menjati.
   vezuje palete na prijemnicu po poslovnom broju, ne po `PrijemnicaID`; tvrdu branu administracije nose samo
   `modAdmin` i `modPodesavanja` — `SetupNewPC`, `RunSelfUpdate`, `PublishReleaseToDrive`, `RollbackReleaseTo`,
   `OcistiTabele` i `MigrirajPodatkeIzStarog` se iz Alt+F8 pokreću bez provere prava.
+- **F2:** reference i format čisti (43 sposobnosti, F-053..F-095). Pri spajanju: popravka podataka starog modela nije
+  sposobnost korisnika (pravilo „bez migracija i backfill-a“) — `MigrirajPodatkeIzStarog` (F-061),
+  `BackfillDeteZbirnaGeneracija` (F-091), `BackfillOtkupBrojOtpremnice` (F-092), `BackfillPrijemniceHladnjaca` (F-090) i
+  naknadno usklađivanje paleta po broju prijemnice (F-093) prebaciti u listu za brisanje, ne u mapu; `OcistiTabele`
+  (F-062) ostaje. Provereni nalazi: `Check_CoreTablesAndColumns` ručno traži linijska polja na zaglavljima
+  (`modProductionHealthCheck.bas:120-137`) i pašće na svakom slajsu — spisak treba da dođe iz kanona; 15 od 22 provere
+  integriteta postoje samo zbog starog modela; makroi `SetupNewPC`, `RunSelfUpdate`, `PublishReleaseToDrive`,
+  `RollbackReleaseTo`, `OcistiTabele`, `MigrirajPodatkeIzStarog` nemaju proveru prava.
 - **Nalazi E za redosled slajseva:** `ExportOtkupiAll` hrani ceo PWA menadžment i pregled otkupca a čita zaglavlje;
   `btnSync` uvek javlja neuspeh dok je izvedeni lanac pauziran; dodela vozača iz PWA završava kao terminalni
   `Duplicate` (`modMasterSync.bas:1775`); ekran vozača filtrira po `Otkup.VozacID` (`gas/Code.gs:1962`).
