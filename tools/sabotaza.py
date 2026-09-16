@@ -4625,6 +4625,13 @@ SABOTAZE = {
         "Test_OTK_ZaglavljeBezIDObaraCitaoce",
         "OTK bez ID: kandidat bloka pada po imenu, ne knjizi uplatu kao avans",
     ),
+    "otk-kapija-dupli-otkupid": (
+        "modOtkup.bas",
+        "    RequireJedinstvenZaglavljeOtkupa zagl, SRC\n",
+        "    ' SABOTAZA: dupli OtkupID prolazi kroz centralni citalac\n",
+        "Test_OTK_DupliOtkupIDObaraCitaoce",
+        "OTK dupli ID: zbir stavki pada po imenu",
+    ),
     # Pregled ambalaze pokazuje POSLOVNI broj dokumenta; bez mape prijemnica
     # red nosi interni ID -- operater njime ne moze nista (par. 9.5 princip).
     "izvestaji-amb-broj-ostaje-id": (

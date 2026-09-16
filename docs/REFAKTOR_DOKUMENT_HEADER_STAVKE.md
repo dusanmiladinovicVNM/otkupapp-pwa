@@ -1781,6 +1781,7 @@ Od #334 svi idu kroz **jedan** prolaz — `modOtkup.StavkeOtkupaRedovi` — koji
 | 4 | `Kolicina` i `Cena` brojčane i > 0 | 1905/1906 | isto pravilo koje pisac traži na upisu |
 | 5 | `Klasa` je I ili II | 1830 | **ista procedura** koju zove pisac (`RequireValidOtkupClass`) |
 | 6 | `KolAmbalaze` brojčana, ≥ 0, ceo broj | 1919/1920/1886 | pisac traži isto; čitalac je nebrojčanu vrednost tiho čitao kao 0, pa su gajbe nestajale |
+| 7 | zaglavlje se nalazi **tačno jednom** | 1921 | čitaoci iteriraju zaglavlja, pa dva reda sa istim ID-em isti teret broje **dvaput** — a sa različitim `KooperantID` ga pripišu **dvojici** kooperanata |
 
 Nijedan čitalac više nema granu `If dict.Exists(id) … Else 0`: ključ se traži
 kroz `modOtkup.ZbirStavkiZaOtkup` (odnosno `modNovac.VrednostOtkupaIzDikta`),
@@ -1792,17 +1793,27 @@ kopiju pravila, pa lista za isplatu i kandidati banke padaju na istom mestu na
 kom padaju izveštaji. Ranije je banka nedostajuću vrednost čitala kao 0, blok
 je ispadao iz kandidata, a uplata se knjižila kao **avans** — tiho.
 
-**Dva roda su namerno izuzeta, i oba imaju imenovanog vlasnika:**
+**Jedan rod je namerno izuzet, i ima imenovanog vlasnika:** **prazan `OtkupID`
+na zaglavlju** — red ostaje u listi za isplatu (FM-0021 #5) i imenuje ga
+`BuildBlokIsplataList` (`ERR_ISPLATA_PRAZAN_OTKUPID`); čitaoce vrednosti obara
+`ZbirStavkiZaOtkup` na mestu upotrebe, pa ni tamo nije nula.
 
-- **prazan `OtkupID` na zaglavlju** — red ostaje u listi za isplatu (FM-0021 #5)
-  i imenuje ga `BuildBlokIsplataList` (`ERR_ISPLATA_PRAZAN_OTKUPID`); čitaoce
-  vrednosti obara `ZbirStavkiZaOtkup` na mestu upotrebe, pa ni tamo nije nula;
-- **dupli `OtkupID`** (dva zaglavlja, isti ID) — drže ga `ERR_ISPLATA_DUPLI_OTKUPID`
-  (`BuildOpenAmountDict`, `BuildOtkupOwnerIndex`), `VrednostOtkupa` (1902) i
-  `ApplyAvansToOtkup`, a `modTestBanka` **T17** dokazuje da novac tada ne krene
-  pogrešnom primaocu. Da bulk čitalac pada i na njemu, istorijski duplikat bi
-  oborio **ceo** pregled isplata i ukinuo baš taj dokaz — to je poslovna odluka
-  za operatera, ne usputna izmena u ovom PR-u.
+**Dupli `OtkupID` je u drugom krugu review-a prešao iz izuzetka u kapiju.**
+Prvi predlog je bio da ga i dalje drže samo finansijske kapije
+(`ERR_ISPLATA_DUPLI_OTKUPID`, `VrednostOtkupa` 1902, `BuildOtkupOwnerIndex`).
+To je bilo pogrešno iz jednog konkretnog razloga: te kapije čuvaju **svoje**
+putanje, a izveštaji, KPI i mreža iteriraju zaglavlja — dva reda sa istim ID-em
+tamo daju **2× kg** nad jednom fizičkom stavkom, a sa različitim `KooperantID`
+iste kilograme pripišu dvojici. Tolerancija u novom centralnom čitaocu je zato
+uklonjena; `RequireJedinstvenZaglavljeOtkupa` pada pre agregacije.
+
+Cena je izgovorena: **jedan** duplirani `OtkupID` bilo gde — uključujući
+istorijski, plaćeni — zaustavlja svakog čitaoca vrednosti dok se podatak ne
+ispravi. Prihvatljivo je jer nema produkcionih podataka, `NewEntityID` je
+opaque pa ga nijedan pisac ne može proizvesti, a `modProductionHealthCheck`
+ostaje tolerantan baš zato da takav red **imenuje** umesto da padne na njemu.
+`ERR_ISPLATA_DUPLI_OTKUPID` ne gubi dokaz: `modTestBanka` **T15** je dokazuje
+direktno nad `BuildOpenAmountDict`, a **T17** sada tvrdi raniji, jači pad.
 
 Regresija: `Test_OTK_ZaglavljeBezStavkiObaraCitaoce` (dokument se isplati do
 kraja, pa mu se stavke obrišu — mreža, saldo OM i lista za isplatu moraju pasti

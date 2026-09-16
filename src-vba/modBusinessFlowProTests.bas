@@ -244,6 +244,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_ZaglavljeBezStavkiObaraCitaoce
     Test_OTK_StavkaBezZaglavljaObaraCitaoce
     Test_OTK_ZaglavljeBezIDObaraCitaoce
+    Test_OTK_DupliOtkupIDObaraCitaoce
     Test_BIM_NovOtkupJeOtvorenBlok
     Test_PWA_StanicaJeUredjajNeKooperant
     Test_BKTX_NekanonskiBrojNeOdbija
@@ -11412,6 +11413,123 @@ EH:
     On Error GoTo 0
     LogFatal "Test_OTK_ZaglavljeBezIDObaraCitaoce", errNum2, errDesc2
 End Sub
+
+' DUPLI OtkupID: isti teret se ne sme izbrojati dvaput (review #334, drugi krug).
+'
+' Dokument-level citaoci iteriraju ZAGLAVLJA i za svako uzimaju zbir po ID-u
+' (ReportSaldoOM, KPI, mreza, rang). Dva zaglavlja sa istim OtkupID zato daju
+' 2x kg nad JEDNOM fizickom stavkom, a kad nose razlicit KooperantID, iste
+' kilograme pripisu dvojici kooperanata. Centralni citalac zato pada PRE zbira.
+'
+' Kontrola meri i tacan broj: pre duplikata dan nosi 1000 kg i posle vracanja
+' opet 1000 -- nikad 2000.
+Private Sub Test_OTK_DupliOtkupIDObaraCitaoce()
+    Const SRC As String = "Test_OTK_DupliOtkupIDObaraCitaoce"
+    Const OCEK_KG As Double = 1000#
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, brDok As String, otkID As String, dan As Date
+    scenario = NewScenarioCode("OTKDUP")
+    brDok = TEST_PREFIX & "-OTK-DUP-" & scenario
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(OCEK_KG, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK dupli ID: dokument napravljen"
+    If Len(otkID) = 0 Then Exit Sub
+    dan = CDate(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM))
+
+    ' Drugi dokument -- njegovo ZAGLAVLJE postaje duplikat prvog.
+    Dim drugiID As String
+    drugiID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-DUP2-" & scenario), _
+                             OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(drugiID) > 0, "OTK dupli ID: drugi dokument napravljen"
+    If Len(drugiID) = 0 Then Exit Sub
+
+    ' Kontrola PRE: dan nosi tacno jedan dokument i njegovih 1000 kg.
+    Dim r As Variant, u As Long
+    r = ReportSaldoOM(TEST_ST_ID, dan, dan)
+    AssertTrue IsArray(r), "OTK dupli ID: kontrola -- saldo OM postoji"
+    If IsArray(r) Then
+        u = UBound(r, 1)
+        AssertTrue Abs(CDbl(r(u, 2)) - OCEK_KG) < 0.001, _
+                   "OTK dupli ID: kontrola -- dan nosi 1000 kg pre duplikata"
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+
+    ' REDOSLED JE DEO TESTA: prvo se brisu stavke drugog dokumenta, pa mu se
+    ' zaglavlju upisuje TUDJ OtkupID. Obrnuto bi njegove stavke ostale siroce
+    ' i pao bi drugi kvar (1908), pa test ne bi merio duplikat.
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, drugiID)
+    AssertTrue Not rows Is Nothing, "OTK dupli ID: stavke drugog dokumenta nadjene"
+    If rows Is Nothing Then Exit Sub
+
+    Dim k As Long
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), SRC
+    Next k
+
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTKUP, COL_OTK_ID, drugiID)
+    AssertTrue Not hdr Is Nothing, "OTK dupli ID: zaglavlje drugog dokumenta nadjeno"
+    If hdr Is Nothing Then Exit Sub
+    RequireUpdateCell TBL_OTKUP, CLng(hdr(1)), COL_OTK_ID, otkID, SRC
+    ' Isti dan kao original -- bez kapije bi izvestaj tog dana vratio 2000 kg.
+    RequireUpdateCell TBL_OTKUP, CLng(hdr(1)), COL_OTK_DATUM, dan, SRC
+
+    AssertEquals "2", CStr(OtkBrojZaglavlja(otkID)), _
+                 "OTK dupli ID: preduslov -- dva zaglavlja nose isti OtkupID"
+    AssertEquals "1", CStr(OtkBrojStavki(otkID)), _
+                 "OTK dupli ID: preduslov -- stavka je i dalje jedna"
+
+    ' Nijedan citalac ne sme da vrati zbir -- svi padaju i imenuju ID.
+    AssertTrue InStr(1, ZbirStavkiGreska(), "ne nalazi tacno jednom", vbTextCompare) > 0, _
+               "OTK dupli ID: zbir stavki pada po imenu"
+    AssertTrue InStr(1, ZbirStavkiGreska(), otkID, vbTextCompare) > 0, _
+               "OTK dupli ID: poruka imenuje sporan OtkupID"
+    AssertTrue InStr(1, SaldoOMGreska(dan), "ne nalazi tacno jednom", vbTextCompare) > 0, _
+               "OTK dupli ID: saldo OM pada umesto da vrati 2x kg"
+    AssertTrue InStr(1, MrezaGreska(brDok), "ne nalazi tacno jednom", vbTextCompare) > 0, _
+               "OTK dupli ID: mreza pada po imenu"
+    AssertTrue InStr(1, OtvoreniGreska(), "ne nalazi tacno jednom", vbTextCompare) > 0, _
+               "OTK dupli ID: lista za isplatu pada po imenu"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' Posle vracanja: opet 1000 kg, nikad 2000.
+    AssertEquals "", ZbirStavkiGreska(), "OTK dupli ID: zbir prolazi posle vracanja"
+    r = ReportSaldoOM(TEST_ST_ID, dan, dan)
+    AssertTrue IsArray(r), "OTK dupli ID: saldo OM postoji posle vracanja"
+    If IsArray(r) Then
+        u = UBound(r, 1)
+        AssertTrue Abs(CDbl(r(u, 2)) - OCEK_KG) < 0.001, _
+                   "OTK dupli ID: posle vracanja dan opet nosi 1000 kg, ne 2000"
+    End If
+
+    Exit Sub
+
+EH:
+    Dim errNum3 As Long, errDesc3 As String
+    errNum3 = Err.Number
+    errDesc3 = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTK_DupliOtkupIDObaraCitaoce", errNum3, errDesc3
+End Sub
+
+' Koliko ZAGLAVLJA nosi dati OtkupID (2 = kvar identiteta).
+Private Function OtkBrojZaglavlja(ByVal otkupID As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If redovi Is Nothing Then Exit Function
+    OtkBrojZaglavlja = redovi.count
+End Function
 
 ' STATUS ISPLATE JE IZVEDEN, NE KESIRAN.
 '

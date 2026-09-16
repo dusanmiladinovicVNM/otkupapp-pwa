@@ -962,6 +962,10 @@ End Function
 ' ga prikazivali kao prazan red. Tiha nula je gora od pada: pad imenuje
 ' dokument, nula ga sakriva.
 '
+' DUPLI OtkupID pada PRE agregacije (RequireJedinstvenZaglavljeOtkupa), jer
+' dokument-level citaoci iteriraju ZAGLAVLJA: dva reda sa istim ID-em isti
+' teret broje dvaput, a sa razlicitim KooperantID ga pripisu dvojici.
+'
 ' PRAZAN OtkupID NA ZAGLAVLJU je poseban rod i NE pada ovde: taj red ne sme
 ' da nestane iz liste za isplatu (FM-0021 #5, S14.3), pa ga imenuje
 ' BuildBlokIsplataList. Citaoca vrednosti obara ZbirStavkiZaOtkup, na mestu
@@ -973,6 +977,10 @@ Public Function StavkeOtkupaRedovi() As Variant
 
     Dim zagl As Object
     Set zagl = ZaglavljaOtkupaPoID(SRC)
+
+    ' IDENTITET PRE AGREGACIJE: dupli OtkupID pada odmah, pre nego sto
+    ' ijedan zbir nastane (review #334, drugi krug).
+    RequireJedinstvenZaglavljeOtkupa zagl, SRC
 
     Dim imaStavku As Object
     Set imaStavku = CreateObject("Scripting.Dictionary")
@@ -1050,6 +1058,35 @@ Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String) As Object
     Next i
 End Function
 
+' JEDAN LOGICKI DOKUMENT = JEDAN ID (A1/S4). Dva zaglavlja sa istim OtkupID
+' obaraju citaoca PRE ijednog zbira (review #334, drugi krug).
+'
+' ZASTO PADA: dokument-level citaoci (ReportSaldoOM, KPI, mreza otkupa, rang,
+' otkupne liste) iteriraju ZAGLAVLJA i za svako uzimaju zbir po ID-u. Dva
+' zaglavlja sa istim ID-em zato isti fizicki teret broje DVAPUT, a kad nose
+' razlicit KooperantID, iste kilograme pripisu DVOJICI kooperanata. To je
+' tisi kvar od nule koju je ovaj PR zatvorio -- ne sme kroz istu granicu.
+'
+' ZASTO OVDE, A NE U RequireStavkaUgovor: provera po stavci bi gadjala samo
+' ID-eve koji IMAJU stavke, pa bi duplikat bez stavki izlazio kao pogresan
+' kvar ("nema stavki"). Ovako pada jednom, po imenu, pre agregacije.
+'
+' Tipizirana ERR_ISPLATA_DUPLI_OTKUPID ovim NE nestaje: BuildOpenAmountDict
+' je i dalje dize, a modTestBanka T15 je dokazuje direktno (gradi kolekciju
+' blokova, ne ide kroz GetOpenOtkupi).
+Private Sub RequireJedinstvenZaglavljeOtkupa(ByVal zagl As Object, _
+                                             ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If CLng(zagl(k)) <> 1 Then
+            Err.Raise vbObjectError + 1921, sourceName, _
+                      "Zaglavlje otkupa se ne nalazi tacno jednom: " & CStr(k) & _
+                      " (headera: " & CStr(zagl(k)) & "). OtkupID je identitet " & _
+                      "dokumenta -- dva reda sa istim ID-em nisu dokument."
+        End If
+    Next k
+End Sub
+
 ' Ugovor JEDNE stavke. Kapije su iste kao piscev upis -- klasa ide kroz istu
 ' proceduru (RequireValidOtkupClass), pa se pisac i citalac ne mogu raziici.
 Private Sub RequireStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
@@ -1063,14 +1100,7 @@ Private Sub RequireStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
     End If
 
     ' SIROCE = stavka cijeg zaglavlja NEMA. Pada, jer se ne moze vrednovati.
-    '
-    ' DUPLIKAT zaglavlja (dva reda sa istim OtkupID) se ovde NE obara, i to je
-    ' merena odluka a ne previd: taj rod ima svoje imenovane vlasnike --
-    ' VrednostOtkupa (kanon, po dokumentu, 1902), BuildOpenAmountDict i
-    ' BuildOtkupOwnerIndex (ERR_ISPLATA_DUPLI_OTKUPID) i ApplyAvansToOtkup --
-    ' a modTestBanka T17 dokazuje da novac tada ne krene pogresnom primaocu.
-    ' Obaranje SVAKOG citaoca zbog istorijskog duplikata bi ukinulo bas taj
-    ' dokaz, pa je to zasebna poslovna odluka (v. odgovor na review #334).
+    ' DUPLIKAT zaglavlja pada ranije -- RequireJedinstvenZaglavljeOtkupa.
     If Not zagl.Exists(oid) Then
         Err.Raise vbObjectError + 1908, sourceName, _
                   "Zaglavlje otkupa ne postoji: " & oid & ", stavka u redu " & _
