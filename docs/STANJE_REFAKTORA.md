@@ -42,6 +42,28 @@
 2. Sesija: spaja ih u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` i proverava pokrivenost ulaznih tačaka alatom
    (`python tools/popis_citalaca.py --procedura modul.Procedura` za lanac i status).
 
+## Ispravke za PR spajanja mape (iz pregleda izlaza A–E)
+
+Mehanički pregled (reference, format presude, imena na linijama) je urađen; ovo su preostale ispravke koje sesija
+spajanja unosi u `MAPA_SPOSOBNOSTI.md`. Ulazne fajlove ne menjati.
+
+- **A:** dopune — A-015 štampa po broju bez stanice (AUD-057); A-013 KPI čita kolonu 5 (AUD-056);
+  A-020 `Reassign` piše i `Otkup.BrojZbirne` (`modDokumenta.bas:6943-6945`).
+- **B:** B-034 `modScrStorno.bas:1370-1377` je van fajla → `StornirajBlokoveAko:1255` (~1300-1312);
+  `tblPaletaStavke` → `tblPaletaStavka`; opsezi `modStornoFlow.bas:477-516`, `:518-576` i `modStorno.StornoOtkup:220-241`
+  suziti na ≤20 linija; presuda B-009 = „ne“, B-036 = „da“.
+- **C:** neescapovan `|` lomi redove C-005, C-006, C-019, C-026, C-029, C-031; C-037 dopuniti — `Reassign` piše
+  `BrojZbirne`; C-046 ostaje NEPROVERENO.
+- **D:** `modUiScreens.ScrRedovi` → `ScrRows` (`:113`); presude „vidi D-xxx“ u D-003, D-036, D-037, D-044, D-045, D-046,
+  D-048 zameniti sa da/ne/delimično.
+- **E:** presude „oblast E-0xx“ (E-030, E-041, E-042, E-065, E-072, E-074, E-076, E-077) zameniti sa da/ne/delimično
+  (npr. E-030 = da, push zavisi od E-027); spojiti GAS/PWA parove u jednu sposobnost sa dve implementacije:
+  E-050/E-079, E-051/E-080, E-043/E-067, E-044/E-062, E-018/E-047/E-068; `otkupni-list.js:237` ne sadrži `signedAt`;
+  u NEPROVERENO razlog „web sesija“ → „traži Google/OAuth“.
+- **Nalazi E za redosled slajseva:** `ExportOtkupiAll` hrani ceo PWA menadžment i pregled otkupca a čita zaglavlje;
+  `btnSync` uvek javlja neuspeh dok je izvedeni lanac pauziran; dodela vozača iz PWA završava kao terminalni
+  `Duplicate` (`modMasterSync.bas:1775`); ekran vozača filtrira po `Otkup.VozacID` (`gas/Code.gs:1962`).
+
 ## Otvorene odluke domena (posle mape)
 
 - ambalaža otpremnice: ko i kada knjiži izlaz gajbi stanica → vozač (`DOMAIN GAP`);
