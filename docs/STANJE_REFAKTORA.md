@@ -31,7 +31,7 @@
 
 ## Sledeći korak: mapa sposobnosti
 
-1. Korisnik pušta `C:/Users/Dusan/Documents/p7b_ulazi/prompt_mapa_sposobnosti.md` po oblasti (A Dokumenti · B Storno/Oporavak ·
+1. Korisnik pušta `docs/DOMEN/PROMPT_MAPA_SPOSOBNOSTI.md` po oblasti (A Dokumenti · B Storno/Oporavak ·
    C Izveštaji/Sledljivost/Palete · D Fakture/Banka/Novac/Agro/Analiza · E Sync/PWA/GAS/izvozi · F Admin/makroi/integritet/setup)
    i čuva izlaze kao `A.md` … `F.md`.
 2. Sesija: spaja ih u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` i proverava pokrivenost ulaznih tačaka alatom
