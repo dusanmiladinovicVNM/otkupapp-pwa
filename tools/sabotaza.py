@@ -4395,7 +4395,7 @@ SABOTAZE = {
         "            r = ReportSaldoOM(stID, datumOd, datumDo)\n"
         "            uk = 1   ' SABOTAZA: prvi red umesto UKUPNO\n",
         "T_Izv_ZbirniSadrzaj",
-        "zbirni saldo: kg stanice = rucni prolaz tblOtkup",
+        "zbirni saldo: kg stanice = rucni prolaz tblOtkupStavke",
     ),
     # Promena rezima MORA da prebaci listu koje u novom rezimu nema --
     # inace je prvi utisak zbirnog rezima prazan ekran sa hintom (krug 9).
@@ -4425,14 +4425,212 @@ SABOTAZE = {
         "T_Izv_DetaljICipKontekst",
         "nedostupna kombinacija nema cipove",
     ),
-    # Detalj reda je legacy "Detalji otkupa": SVE stavke dokumenta (broj +
-    # stanica), ne samo izabrana linija -- Klasa I i II dele dokument.
+    # Detalj reda nosi STAVKE IZABRANOG dokumenta (po OtkupID). Do REFAKTOR
+    # S14.7 (kvar 3) je nosio sve redove ZAGLAVLJA istog broja i stanice -- ali
+    # broj je labela, pa bi to spajalo razlicite dokumente. Filter koji pusti
+    # stavke svih dokumenata je isti kvar u drugom obliku.
     "izvestaji-detalj-bez-stavki": (
         "modScrIzvestaji.bas",
-        "        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then\n",
-        "        If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then   ' SABOTAZA: samo izabrana linija\n",
+        "            If StrComp(CStr(st(i, 1)), Trim$(otkupID), vbTextCompare) = 0 Then\n",
+        "            If Len(CStr(st(i, 1))) > 0 Then   ' SABOTAZA: stavke svih dokumenata\n",
         "T_Izv_DetaljICipKontekst",
-        "detalj nosi SVE stavke bloka",
+        "detalj nosi stavke SAMO izabranog dokumenta, ne svih zaglavlja istog broja",
+    ),
+    # ------------------------------------------------------------------
+    # REFAKTOR S14.7, kvarovi 2/3/9: citaoci kolicine i vrednosti otkupa
+    # citaju STAVKE, jer CreateOtkup_TX linijska polja zaglavlja ostavlja
+    # prazna. Svaka sabotaza vraca jedan citalac na "nista sa stavki" -- isti
+    # ishod koji je citanje praznog zaglavlja davalo za nov dokument. BFP
+    # sabotaze gadjaju Test_OTK_CitaociCitajuStavke (dokument koji vrednost
+    # nosi SAMO na stavkama); T_Izv sabotaze gadjaju rucne prolaze kroz
+    # tblOtkupStavke, koji su do tada poredili zaglavlje sa zaglavljem.
+    # ------------------------------------------------------------------
+    "otk-citaoci-kapija-nepozitivna": (
+        "modOtkup.bas",
+        "    If CDbl(kol) <= 0 Or CDbl(cena) <= 0 Then\n",
+        "    If False Then   ' SABOTAZA: nepozitivna stavka prolazi\n",
+        "Test_OTK_CitaociStavkiFailClosed",
+        "OTK citaoci kapija: stavka sa cenom 0 obara zbir po imenu",
+    ),
+    "otk-citaoci-kpi-kg": (
+        "modOtkup.bas",
+        "                KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))\n",
+        "                KgOtkupaZaDan = KgOtkupaZaDan   ' SABOTAZA: kg stavki ne ulazi\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: KPI kg dana = zbir stavki",
+    ),
+    "otk-citaoci-saldo-vrednost": (
+        "modIzvestaj.bas",
+        "                        vals(1) = vals(1) + CDbl(zSal(1))\n",
+        "                        vals(1) = vals(1)   ' SABOTAZA: vrednost stavki ne ulazi u saldo\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: saldo OM vrednost = zbir stavki",
+    ),
+    "otk-citaoci-kartica-vrednost": (
+        "modIzvestaj.bas",
+        "                            vr = CDbl(zKar(1))\n",
+        "                            vr = 0   ' SABOTAZA: kartica ne zaduzuje stavke\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: kartica zaduzuje vrednost stavki",
+    ),
+    "otk-citaoci-kartica-gajbe": (
+        "modIzvestaj.bas",
+        "                            ambPrimljena = CDbl(zKar(2))\n",
+        "                            ambPrimljena = 0   ' SABOTAZA: primljene gajbe ostaju na zaglavlju\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: kartica razduzuje primljene gajbe iz stavki",
+    ),
+    "otk-citaoci-rekap-klasa": (
+        "modIzvestaj.bas",
+        "                klasa = CStr(st(i, 3))\n",
+        "                klasa = \"\"   ' SABOTAZA: klasa sa zaglavlja (prazna)\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: rekapitulacija = klasa I + klasa II + UKUPNO",
+    ),
+    "otk-citaoci-liste-klase": (
+        "modIzvestaj.bas",
+        "                    klase = CStr(zLst(3))\n",
+        "                    klase = \"\"   ' SABOTAZA: klase sa zaglavlja (prazne)\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: otkupne liste nabrajaju klase stavki",
+    ),
+    "otk-citaoci-prosecna-vrednost": (
+        "modIzvestaj.bas",
+        "            vals(1) = vals(1) + CDbl(zPc(1))\n",
+        "            vals(1) = vals(1)   ' SABOTAZA: vrednost stavki ne ulazi u prosecnu cenu\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: prosecna cena vrednost = zbir stavki",
+    ),
+    "otk-citaoci-zbirni-vrednost": (
+        "modIzvestaj.bas",
+        "        vals(1) = vals(1) + CDbl(zZb(1))\n",
+        "        vals(1) = vals(1)   ' SABOTAZA: vrednost stavki ne ulazi u zbirni OM\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: zbirni OM vrednost = zbir stavki",
+    ),
+    "otk-citaoci-rang-kg": (
+        "modOtkupBlok.bas",
+        "            kg = CDbl(zRang(0))\n",
+        "            kg = 0   ' SABOTAZA: rang ne vidi kg stavki\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: rang kg = zbir stavki",
+    ),
+    "otk-citaoci-detalj-ukupno": (
+        "modScrIzvestaji.bas",
+        "    If linije.count > 1 Then\n",
+        "    If linije.count > 99 Then   ' SABOTAZA: dvoklasni dokument bez UKUPNO\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: detalj = dve stavke + UKUPNO",
+    ),
+    "otk-citaoci-pilula-duguje": (
+        "modScrDokumenti.bas",
+        "                duguje = CDbl(zStav(1))\n",
+        "                duguje = 0#   ' SABOTAZA: duguje sa zaglavlja (prazno)\n",
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: pilula -- delimicna isplata je DELIMICNO, ne placeno",
+    ),
+    "otk-citaoci-mreza-kg": (
+        "modScrDokumenti.bas",
+        '                    Case "kg":  cell = CDbl(zStav(0))\n',
+        '                    Case "kg":  cell = 0#   \' SABOTAZA: kg sa zaglavlja (prazno)\n',
+        "Test_OTK_CitaociCitajuStavke",
+        "OTK citaoci: mreza kg = zbir stavki",
+    ),
+    "izvestaji-liste-vrednost-stavki": (
+        "modIzvestaj.bas",
+        "                    vrednost = CDbl(zLst(1))\n",
+        "                    vrednost = kol   ' SABOTAZA: vrednost = kg\n",
+        "T_Izv_SlaganjeOtkupOM",
+        "otkupni listovi: zbir vrednosti = rucni prolaz kroz tblOtkupStavke",
+    ),
+    "izvestaji-kartica-vrednost-stavki": (
+        "modIzvestaj.bas",
+        "                            vr = CDbl(zKar(1))\n",
+        "                            vr = otkKol   ' SABOTAZA: vrednost = kg\n",
+        "T_Izv_SlaganjeKartica",
+        "zbir zaduzenja kartice = rucni zbir kg x cena iz tblOtkupStavke",
+    ),
+    "izvestaji-rang-vrednost-stavki": (
+        "modOtkupBlok.bas",
+        "            vred = CDbl(zRang(1))\n",
+        "            vred = kg   ' SABOTAZA: iznos = kg\n",
+        "T_Izv_RangKooperanata",
+        "zbir ranga = rucni zbir kg x cena iz tblOtkupStavke",
+    ),
+    # ------------------------------------------------------------------
+    # Review #334 P1: dokumentski ugovor citaoca (modOtkup.StavkeOtkupaRedovi).
+    # Svaka sabotaza vraca JEDNU kapiju na tiho ponasanje: zaglavlje bez
+    # stavki kao 0 kg / 0 din i "placeno", siroce stavka preskocena, klasa i
+    # KolAmbalaze blaze nego kod pisca, red bez stavki preskocen u listi za
+    # isplatu.
+    # ------------------------------------------------------------------
+    "otk-kapija-zaglavlje-bez-stavki": (
+        "modOtkup.bas",
+        "        If Not imaStavku.Exists(CStr(k)) Then\n",
+        "        If False Then   ' SABOTAZA: zaglavlje bez stavki prolazi kao 0\n",
+        "Test_OTK_ZaglavljeBezStavkiObaraCitaoce",
+        "OTK bez stavki: zbir stavki pada po imenu",
+    ),
+    "otk-kapija-stavka-bez-id": (
+        "modOtkup.bas",
+        "    If Len(oid) = 0 Then\n        Err.Raise vbObjectError + 1907, sourceName, _\n                  \"Stavka otkupa bez OtkupID-a: \" & TBL_OTKUP_STAVKE & \", red \" & _\n",
+        "    If False Then   ' SABOTAZA: stavka bez OtkupID-a se preskace\n        Err.Raise vbObjectError + 1907, sourceName, _\n                  \"Stavka otkupa bez OtkupID-a: \" & TBL_OTKUP_STAVKE & \", red \" & _\n",
+        "Test_OTK_StavkaBezZaglavljaObaraCitaoce",
+        "OTK siroce: stavka bez OtkupID-a obara citaoca po imenu",
+    ),
+    "otk-kapija-siroce-stavka": (
+        "modOtkup.bas",
+        "    If Not zagl.Exists(oid) Then\n",
+        "    If False Then   ' SABOTAZA: stavka bez zaglavlja prolazi\n",
+        "Test_OTK_StavkaBezZaglavljaObaraCitaoce",
+        "OTK siroce: stavka bez zaglavlja obara citaoca po imenu",
+    ),
+    "otk-kapija-klasa-stavke": (
+        "modOtkup.bas",
+        "    RequireValidOtkupClass Trim$(NzToText(klasa)), _\n                           sourceName & \" (OtkupID=\" & oid & \")\"\n",
+        "    ' SABOTAZA: klasa stavke se ne proverava\n",
+        "Test_OTK_StavkaBezZaglavljaObaraCitaoce",
+        "OTK siroce: nevalidna klasa stavke obara citaoca po imenu",
+    ),
+    "otk-kapija-amb-stavke": (
+        "modOtkup.bas",
+        "    RequireKolAmbalazeStavke amb, oid, sourceName\n",
+        "    ' SABOTAZA: KolAmbalaze stavke se ne proverava\n",
+        "Test_OTK_StavkaBezZaglavljaObaraCitaoce",
+        "OTK siroce: nebrojcana KolAmbalaze obara citaoca (pisac je vec odbija)",
+    ),
+    "otk-kapija-mreza-tiha-nula": (
+        "modScrDokumenti.bas",
+        "            zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _\n                        \"modScrDokumenti.RedoviZaTip\")\n",
+        "            If dStav.Exists(CellS(src, r, iStavID)) Then\n                zStav = dStav(CellS(src, r, iStavID))\n            Else\n                zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n            End If\n",
+        "Test_OTK_ZaglavljeBezIDObaraCitaoce",
+        "OTK bez ID: mreza pada po imenu, ne crta 0 kg",
+    ),
+    # Preskok u GetOpenOtkupi je posle ove izmene NEDOSTIZAN -- izvor
+    # (StavkeOtkupaRedovi) pada pre njega, pa sabotaza nad tom granom ne moze
+    # da pokaze crveno; tu tvrdnju meri otk-kapija-zaglavlje-bez-stavki.
+    # Druga brana citaoca stoji SAMA samo kod praznog OtkupID-a na zaglavlju,
+    # koji izvor namerno pusta (FM-0021 #5) -- nju mere sledece dve.
+    "otk-kapija-saldo-tiha-nula": (
+        "modIzvestaj.bas",
+        "                        zSal = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, _\n                                   CStr(otkupData(i, colOtkID)), \"modIzvestaj.ReportSaldoOM\")\n",
+        "                        zSal = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n                        If stavkeZbir.Exists(Trim$(CStr(otkupData(i, colOtkID)))) Then _\n                            zSal = stavkeZbir(Trim$(CStr(otkupData(i, colOtkID))))\n",
+        "Test_OTK_ZaglavljeBezIDObaraCitaoce",
+        "OTK bez ID: saldo OM pada po imenu, ne sabira nulu",
+    ),
+    "otk-kapija-banka-tiha-nula": (
+        "modBankaMapiranje.bas",
+        "            vrednost = modNovac.VrednostOtkupaIzDikta(vrednostDict, _\n                           CStr(data(i, colOtkID)), _\n                           \"GetOtkupCandidatesForKooperantBlock\")\n",
+        "            vrednost = 0   ' SABOTAZA: tiha nula -> blok ispada iz kandidata\n            If vrednostDict.exists(Trim$(CStr(data(i, colOtkID)))) Then _\n                vrednost = CDbl(vrednostDict(Trim$(CStr(data(i, colOtkID)))))\n",
+        "Test_OTK_ZaglavljeBezIDObaraCitaoce",
+        "OTK bez ID: kandidat bloka pada po imenu, ne knjizi uplatu kao avans",
+    ),
+    "otk-kapija-dupli-otkupid": (
+        "modOtkup.bas",
+        "    RequireJedinstvenZaglavljeOtkupa zagl, SRC\n",
+        "    ' SABOTAZA: dupli OtkupID prolazi kroz centralni citalac\n",
+        "Test_OTK_DupliOtkupIDObaraCitaoce",
+        "OTK dupli ID: zbir stavki pada po imenu",
     ),
     # Pregled ambalaze pokazuje POSLOVNI broj dokumenta; bez mape prijemnica
     # red nosi interni ID -- operater njime ne moze nista (par. 9.5 princip).

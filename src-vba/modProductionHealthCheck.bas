@@ -570,7 +570,8 @@ NextRow:
     If bezStavki > 0 Then
         HealthWarn "Otkup rows without stavke", _
                    "Redova: " & CStr(bezStavki) & _
-                   " -- takav red nema vrednost i ne ulazi u listu otvorenih obaveza."
+                   " -- takav red obara SVAKOG citaoca vrednosti otkupa " & _
+                   "(izvestaji, mreza, lista za isplatu) dok se ne ispravi."
     End If
 
     If badCount = 0 Then

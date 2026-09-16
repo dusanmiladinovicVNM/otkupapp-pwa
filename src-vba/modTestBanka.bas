@@ -1389,6 +1389,16 @@ End Sub
 '
 ' Test zato daje kooperantima ocigledno razlicite racune i tvrdi da nikakav
 ' payload nije nastao -- ne samo da je iznos tacan.
+'
+' OD REVIEW-a #334 (drugi krug) PAD DOLAZI RANIJE I JACI JE: dupli OtkupID
+' obara centralni citalac (modOtkup.StavkeOtkupaRedovi, 1921) pre nego sto
+' lista uopste nastane. Zato se ovde vise ne meri BROJ greske nego to da
+' pregled STANE i da poruka imenuje duplikat. Tipiziranu
+' ERR_ISPLATA_DUPLI_OTKUPID i dalje dokazuje T15, direktno nad
+' BuildOpenAmountDict (gradi kolekciju blokova, ne ide kroz GetOpenOtkupi).
+'
+' I istorijski (zatvoren) duplikat sada obara pregled: dva reda sa istim ID-em
+' nisu dokument, bez obzira na to da li je neki od njih placen.
 ' ============================================================
 Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
     Const S As String = "T17 sakriven duplikat: "
@@ -1417,8 +1427,10 @@ Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
     Err.Clear
     Set lista = BuildBlokIsplataList()
     errNum = Err.Number
+    errDesc = Err.description
     On Error GoTo 0
-    ChkEq errNum, 0, S & "zatvoren (istorijski) duplikat NE obara pregled"
+    Chk errNum <> 0, S & "zatvoren (istorijski) duplikat OBARA pregled"
+    Chk InStr(errDesc, P & "OTK-HIST") > 0, S & "poruka imenuje istorijski duplikat"
 
     ' --- (2) Sada pravi slucaj: red A isplacen (duplikat je skriven od
     '         GetOpenOtkupi), red B otvoren i na DRUGOG kooperanta.
@@ -1432,8 +1444,11 @@ Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
     errDesc = Err.description
     On Error GoTo 0
 
-    ChkEq errNum, ERR_ISPLATA_DUPLI_OTKUPID, S & "otvoren blok sa dupliranim OtkupID obara listu"
-    Chk InStr(errDesc, P & "OTK-HID") > 0, S & "poruka imenuje sporan OtkupID"
+    ' Citalac staje na PRVOM duplikatu u tabeli, a to je OTK-HIST iz koraka (1),
+    ' pa se ovde tvrdi da pregled stane i da poruka imenuje duplikat -- ne moze
+    ' se traziti bas OTK-HID dok raniji duplikat jos stoji.
+    Chk errNum <> 0, S & "otvoren blok sa dupliranim OtkupID obara listu"
+    Chk InStr(errDesc, P & "OTK-") > 0, S & "poruka imenuje sporan OtkupID"
 
     ' --- (3) I cela CSV putanja mora ostati bez fajla. Nalog se pravi za
     '         BLOK-17B (otvoren red), a GenerisiNalogeCSV interno gradi svezu
@@ -1448,7 +1463,11 @@ Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
 
     ChkEq putanja, "", S & "nijedan CSV fajl nije napravljen"
     Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
-    Chk InStr(odbijeno, P & "OTK-HID") > 0, S & "razlog imenuje sporan OtkupID"
+    ' Isti razlog kao u koraku (2): pad stize sa PRVOG duplikata u tabeli
+    ' (OTK-HIST iz koraka 1), pa se trazi da razlog imenuje duplikat -- ne bas
+    ' OTK-HID. Ono sto se ovde meri je da payload NE nastane i da operater dobije
+    ' imenovan razlog, a to obe tvrdnje iznad i dalje drze.
+    Chk InStr(odbijeno, P & "OTK-") > 0, S & "razlog imenuje sporan OtkupID"
 
     tx.RollbackTx
     Set tx = Nothing
@@ -1625,11 +1644,17 @@ End Sub
 ' jednog testa obarali KONTROLNE slucajeve sledecih -- npr. otvoren duplikat iz
 ' T17 bi oborio "zdravu" proveru u T18 -- jer se spoljni rollback radi tek na
 ' kraju suite-a. Isti obrazac koriste storno testovi.
+' TBL_OTKUP_STAVKE IDE SA TBL_OTKUP, uvek. Seed-ovi ovog modula (SeedOtkup ->
+' BitOtkupStavka) pisu i zaglavlje i stavku, pa je rollback bez stavki vracao
+' SAMO zaglavlja -- a stavke su ostajale kao SIROCAD, vezane za OtkupID koji vise
+' ne postoji. To je bilo nevidljivo dok je citalac siroce tiho preskakao; od
+' review-a #334 (P1) ga imenuje, pa je izolacija morala da postane potpuna.
 Private Function BeginIsolatedTx() As clsTransaction
     Dim tx As clsTransaction
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_KOOPERANTI
     tx.AddTableSnapshot TBL_STANICE

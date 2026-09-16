@@ -11565,6 +11565,67 @@ Private Function IzvDoD() As Date
     IzvDoD = DateSerial(2026, 12, 31)
 End Function
 
+' RUCNI prolaz kroz tblOtkupStavke za izvestajne testove -- nezavisan od
+' modOtkup citaoca koji izvestaji koriste. Dokument ulazi kad je nestorniran, u
+' opsegu IzvOdD..IzvDoD i (kad je zadato) na stanici / kod kooperanta;
+' samoSaKooperantom trazi neprazan KooperantID (obuhvat ranga). Vraca broj
+' dokumenata; kg i vrednost idu kroz ByRef.
+'
+' Stavke, ne zaglavlje: CreateOtkup_TX zaglavlje ostavlja bez kolicine i cene,
+' pa bi poredjenje izvestaja sa zaglavljem bilo zeleno i nad nulom -- fixture
+' nosi iste brojeve na oba mesta i razliku ne pokazuje (REFAKTOR S14.7, kvar 9).
+Private Function IzvStavkeZbir(ByVal stanica As String, ByVal kooperant As String, _
+                               ByVal samoSaKooperantom As Boolean, _
+                               ByRef kg As Double, ByRef vr As Double) As Long
+    Dim otk As Variant, st As Variant, i As Long, docs As Object
+    Dim cId As Long, cSt As Long, cKoop As Long, cDat As Long, cStorno As Long
+    Dim sId As Long, sKol As Long, sCena As Long
+
+    kg = 0: vr = 0
+    Set docs = CreateObject("Scripting.Dictionary")
+    otk = GetTableData(TBL_OTKUP)
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    For i = 1 To UBound(otk, 1)
+        If CStr(otk(i, cStorno)) <> "Da" And IsDate(otk(i, cDat)) Then
+            If CDate(otk(i, cDat)) >= IzvOdD() And CDate(otk(i, cDat)) <= IzvDoD() Then
+                If (Len(stanica) = 0 Or Trim$(CStr(otk(i, cSt))) = stanica) And _
+                   (Len(kooperant) = 0 Or Trim$(CStr(otk(i, cKoop))) = kooperant) And _
+                   (Not samoSaKooperantom Or Len(Trim$(CStr(otk(i, cKoop)))) > 0) Then
+                    docs(Trim$(CStr(otk(i, cId)))) = True
+                End If
+            End If
+        End If
+    Next i
+    IzvStavkeZbir = docs.count
+
+    st = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(st) Then Exit Function
+    sId = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID)
+    sKol = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA)
+    sCena = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA)
+    For i = 1 To UBound(st, 1)
+        If docs.Exists(Trim$(CStr(st(i, sId)))) Then
+            kg = kg + CDbl(st(i, sKol))
+            vr = vr + CDbl(st(i, sKol)) * CDbl(st(i, sCena))
+        End If
+    Next i
+End Function
+
+' Broj stavki dokumenta u tblOtkupStavke -- rucni prolaz za izvestajne testove.
+Private Function IzvBrojStavki(ByVal otkupID As String) As Long
+    Dim st As Variant, i As Long, sId As Long
+    st = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(st) Then Exit Function
+    sId = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID)
+    For i = 1 To UBound(st, 1)
+        If Trim$(CStr(st(i, sId))) = otkupID Then IzvBrojStavki = IzvBrojStavki + 1
+    Next i
+End Function
+
 Private Function IzvOdS() As Double
     IzvOdS = CDbl(IzvOdD())
 End Function
@@ -11976,8 +12037,8 @@ Private Sub T_Izv_SlaganjeOtkupOM()
         Next i
     Next s
 
-    ' (2) OTKUPNI LISTOVI se slazu sa RUCNIM prolazom kroz tblOtkup
-    ' (stanica + opseg + bez storna): broj redova, kg i vrednost.
+    ' (2) OTKUPNI LISTOVI se slazu sa RUCNIM prolazom kroz tblOtkupStavke
+    ' (stanica + opseg + bez storna): red = DOKUMENT, kg i vrednost sa stavki.
     ol = ReportOtkupListe(FX_STANICA, IzvOdD(), IzvDoD())
     sumKg = 0: sumVr = 0: brRedova = 0
     For i = 1 To UBound(ol, 1)
@@ -11985,31 +12046,12 @@ Private Sub T_Izv_SlaganjeOtkupOM()
         sumKg = sumKg + CDbl(ol(i, 6))
         sumVr = sumVr + CDbl(ol(i, 7))
     Next i
-    otk = GetTableData(TBL_OTKUP)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    nzKg = 0: nzVr = 0: nzBr = 0
-    For i = 1 To UBound(otk, 1)
-        If CStr(otk(i, cStorno)) <> "Da" And Trim$(CStr(otk(i, cSt))) = FX_STANICA Then
-            If IsDate(otk(i, cDat)) Then
-                If CDate(otk(i, cDat)) >= IzvOdD() And CDate(otk(i, cDat)) <= IzvDoD() Then
-                    nzBr = nzBr + 1
-                    If IsNumeric(otk(i, cKol)) Then nzKg = nzKg + CDbl(otk(i, cKol))
-                    If IsNumeric(otk(i, cKol)) And IsNumeric(otk(i, cCena)) Then
-                        nzVr = nzVr + CDbl(otk(i, cKol)) * CDbl(otk(i, cCena))
-                    End If
-                End If
-            End If
-        End If
-    Next i
-    AssertEq brRedova, nzBr, "otkupni listovi: red = blok linija, nista ne fali"
+    nzBr = IzvStavkeZbir(FX_STANICA, "", False, nzKg, nzVr)
+    AssertEq brRedova, nzBr, "otkupni listovi: red = dokument, nista ne fali"
     AssertEq Format$(sumKg, "0.00"), Format$(nzKg, "0.00"), _
-             "otkupni listovi: zbir kg = rucni prolaz kroz tblOtkup"
+             "otkupni listovi: zbir kg = rucni prolaz kroz tblOtkupStavke"
     AssertEq Format$(sumVr, "0.00"), Format$(nzVr, "0.00"), _
-             "otkupni listovi: zbir vrednosti = rucni prolaz"
+             "otkupni listovi: zbir vrednosti = rucni prolaz kroz tblOtkupStavke"
 
     ' (3) ROBA/OM UKUPNO: otpremljeno = rucni prolaz kroz tblOtpremnica,
     ' blokovi = rucni prolaz kroz tblOtkup vezan za te otpremnice.
@@ -12037,6 +12079,7 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     Next i
     AssertEq Format$(CDbl(roba(ukup, 6)), "0.00"), Format$(nzKg, "0.00"), _
              "roba OM: UKUPNO otpremljeno = rucni prolaz kroz otpremnice"
+    otk = GetTableData(TBL_OTKUP)
     cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
@@ -12280,37 +12323,17 @@ Private Sub T_Izv_SlaganjeKartica()
              "zavrsni ambalazni saldo kartice = kanonski saldo iz ledgera"
     AssertEq (CDbl(kk(n, 8)) <> 0), True, "vozilo: ambalazni saldo != 0"
 
-    ' (2) Zbir zaduzenja = rucni prolaz kroz tblOtkup (kg x cena).
-    otk = GetTableData(TBL_OTKUP)
-    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    nzKg = 0: nzVr = 0
-    For i = 1 To UBound(otk, 1)
-        If CStr(otk(i, cStorno)) <> "Da" And Trim$(CStr(otk(i, cKoop))) = FX_KOOPERANT Then
-            If IsDate(otk(i, cDat)) Then
-                If CDate(otk(i, cDat)) >= IzvOdD() And CDate(otk(i, cDat)) <= IzvDoD() Then
-                    If IsNumeric(otk(i, cKol)) Then
-                        nzKg = nzKg + CDbl(otk(i, cKol))
-                        If IsNumeric(otk(i, cCena)) Then
-                            nzVr = nzVr + CDbl(otk(i, cKol)) * CDbl(otk(i, cCena))
-                        End If
-                    End If
-                End If
-            End If
-        End If
-    Next i
+    ' (2) Zbir zaduzenja = rucni prolaz kroz tblOtkupStavke (kg x cena).
+    IzvStavkeZbir "", FX_KOOPERANT, False, nzKg, nzVr
     AssertEq Format$(totZ, "0.00"), Format$(nzVr, "0.00"), _
-             "zbir zaduzenja kartice = rucni zbir kg x cena iz tblOtkup"
+             "zbir zaduzenja kartice = rucni zbir kg x cena iz tblOtkupStavke"
 
     ' (3) REKAPITULACIJA ROBE: UKUPNO kg = isti rucni prolaz (kg).
     rr = ReportKarticaRobaRekap(FX_KOOPERANT, IzvOdD(), IzvDoD())
     AssertEq IsArray(rr), True, "rekapitulacija postoji"
     AssertEq CStr(rr(UBound(rr, 1), 1)), "UKUPNO", "poslednji red rekapa je UKUPNO"
     AssertEq Format$(CDbl(rr(UBound(rr, 1), 4)), "0.00"), Format$(nzKg, "0.00"), _
-             "rekap kg = rucni zbir kg iz tblOtkup"
+             "rekap kg = rucni zbir kg iz tblOtkupStavke"
 
     ' (4) KARTICA AMBALAZE: running po redu; zavrsni saldo = kanonski.
     ka = ReportKarticaAmbalaze(FX_KOOPERANT, IzvOdD(), IzvDoD())
@@ -12720,11 +12743,13 @@ Private Sub T_Izv_DetaljICipKontekst()
     Dim nzStavki As Long
     Dim ap As Variant, ocekBroj As String, nasao As Boolean
 
-    ' (1) Detalj otkupnog lista nosi SVE stavke dokumenta (broj + stanica),
-    ' ne samo izabranu liniju -- to je i bila poenta legacy panela. Vozilo:
-    ' BLK-BIM-3 ima TRI nestornirane linije. Od kruga 5 detalj nosi SAMO ono
-    ' sto red liste ne kaze: bez kooperanta (kolona reda), stavke sa CENOM,
-    ' UKUPNO dokumenta na kraju (red pokazuje jednu liniju).
+    ' (1) Detalj otkupnog lista nosi STAVKE IZABRANOG dokumenta (po OtkupID), sa
+    ' CENOM, i vozaca/zbirnu kao kontekst. Vozilo: BLK-BIM-3 su TRI zaglavlja
+    ' istog broja i stanice -- u modelu zaglavlje + stavke to su TRI dokumenta
+    ' (broj je labela, REFAKTOR S4), pa detalj jednog NE SME da nosi linije
+    ' druga dva. Vise stavki i UKUPNO meri
+    ' modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke nad pravim dvoklasnim
+    ' dokumentom (fixture izvodi jednu stavku po zaglavlju).
     det = modScrIzvestaji.IzDetaljOtkupLista("OTK-BIM-3A")
     AssertEq IsArray(det), True, "detalj bloka postoji"
     otk = GetTableData(TBL_OTKUP)
@@ -12737,14 +12762,12 @@ Private Sub T_Izv_DetaljICipKontekst()
            Trim$(CStr(otk(i, cSt))) = FX_STANICA And _
            CStr(otk(i, cStorno)) <> "Da" Then nzStavki = nzStavki + 1
     Next i
-    AssertEq (nzStavki >= 3), True, "vozilo: blok sa vise linija postoji"
-    ' stavke + UKUPNO + kontekst linija (vozac; BIM blok nema zbirnu)
-    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 2, _
-             "detalj nosi SVE stavke bloka"
+    AssertEq (nzStavki >= 3), True, "vozilo: tri zaglavlja istog broja i stanice"
+    ' stavke OTK-BIM-3A (rucno iz tblOtkupStavke) + kontekst linija (vozac)
+    AssertEq UBound(det) - LBound(det) + 1, IzvBrojStavki("OTK-BIM-3A") + 1, _
+             "detalj nosi stavke SAMO izabranog dokumenta, ne svih zaglavlja istog broja"
     AssertEq (InStr(1, CStr(det(LBound(det))), " x ", vbTextCompare) > 0), _
              True, "prva linija detalja je stavka sa cenom"
-    AssertEq (InStr(1, IzvDetSpoj(det), "UKUPNO", vbTextCompare) > 0), _
-             True, "detalj viselinijskog nosi UKUPNO"
     AssertEq (InStr(1, IzvDetSpoj(det), "Voza", vbTextCompare) > 0), _
              True, "detalj otkupa imenuje vozaca (smoke krug 5)"
     ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto):
@@ -12937,32 +12960,30 @@ Private Sub T_Izv_RangKooperanata()
     n = CLng(d(2))
     sumVal = CDbl(d(4))
     redovi = d(1)
-    Dim otk As Variant, cKoop As Long, cKol As Long, cCe As Long
+    ' Obuhvat ranga (kooperanti sa otkupom u opsegu) sa zaglavlja; iznos sa
+    ' STAVKI (v. IzvStavkeZbir).
+    Dim otk As Variant, cKoop As Long
     Dim cDat As Long, cStorno As Long
-    Dim koopSet As Object, rVal As Double, dv As Date
+    Dim koopSet As Object, rVal As Double, rKg As Double, dv As Date
     Set koopSet = CreateObject("Scripting.Dictionary")
     otk = GetTableData(TBL_OTKUP)
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
     For i = 1 To UBound(otk, 1)
         If CStr(otk(i, cStorno)) <> "Da" And Len(Trim$(CStr(otk(i, cKoop)))) > 0 Then
             If IsDate(otk(i, cDat)) Then
                 dv = CDate(otk(i, cDat))
-                If dv >= IzvOdD() And dv <= IzvDoD() Then
-                    koopSet(Trim$(CStr(otk(i, cKoop)))) = True
-                    rVal = rVal + CDbl(otk(i, cKol)) * CDbl(otk(i, cCe))
-                End If
+                If dv >= IzvOdD() And dv <= IzvDoD() Then koopSet(Trim$(CStr(otk(i, cKoop)))) = True
             End If
         End If
     Next i
+    IzvStavkeZbir "", "", True, rKg, rVal
     AssertEq (koopSet.count > 1), True, "vozilo: vise kooperanata sa otkupom"
     AssertEq n, koopSet.count, _
              "rang broji tacno kooperante sa otkupom u opsegu"
     AssertEq Format$(sumVal, "0.00"), Format$(rVal, "0.00"), _
-             "zbir ranga = rucni zbir kg x cena iz tblOtkup"
+             "zbir ranga = rucni zbir kg x cena iz tblOtkupStavke"
     ' Sortiranost: iznos ne raste niz listu; rang broj = pozicija.
     For i = 2 To n
         AssertEq (CDbl(redovi(i, 4)) <= CDbl(redovi(i - 1, 4))), True, _
@@ -12991,7 +13012,7 @@ Private Sub T_Izv_ZbirniSadrzaj()
     Dim r As Variant, uk As Long
 
     ' (1) SALDO zbirno = red po stanici; red STA-TEST-2 se slaze sa rucnim
-    ' racunom te stanice (kg iz tblOtkup; isplaceno = svi kanali tblNovac).
+    ' racunom te stanice (kg iz tblOtkupStavke; isplaceno = svi kanali tblNovac).
     modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", True, "", IzvOdS(), IzvDoS()
     d = modScrIzvestaji.Scr_Rows("", "")
     n = CLng(d(2))
@@ -12999,27 +13020,17 @@ Private Sub T_Izv_ZbirniSadrzaj()
     AssertEq (n >= 2), True, "vozilo: bar dve stanice sa podacima"
     Dim rKg As Double, rIspl As Double, nasla As Boolean
     Dim otk As Variant, cSt As Long, cKol As Long, cDat As Long, cStorno As Long
+    Dim rVrStav As Double
     Dim dv As Date, pj As Variant, pu As Long, j As Long
-    otk = GetTableData(TBL_OTKUP)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    For i = 1 To UBound(otk, 1)
-        If Trim$(CStr(otk(i, cSt))) = FX_STANICA_B And CStr(otk(i, cStorno)) <> "Da" Then
-            If IsDate(otk(i, cDat)) Then
-                dv = CDate(otk(i, cDat))
-                If dv >= IzvOdD() And dv <= IzvDoD() Then rKg = rKg + CDbl(otk(i, cKol))
-            End If
-        End If
-    Next i
+    ' kg stanice: rucni prolaz kroz STAVKE nestorniranih dokumenata u opsegu.
+    IzvStavkeZbir FX_STANICA_B, "", False, rKg, rVrStav
     ' Rucni zbir sva tri kanala ka kooperantima po OMID (obrazac T138).
     rIspl = IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_KES_OTKUPAC_KOOP) + _
             IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_VIRMAN_FIRMA_KOOP) + _
             IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_VIRMAN_AVANS_KOOP)
     ' Red stanice = UKUPNO red pojedinacnog ReportSaldoOM te stanice --
     ' zbirni oblik nista ne racuna sam (pojedinacni je vezan za rucne
-    ' prolaze u T135); kg dodatno i direktno na tblOtkup.
+    ' prolaze u T135); kg dodatno i direktno na tblOtkupStavke.
     pj = ReportSaldoOM(FX_STANICA_B, IzvOdD(), IzvDoD())
     pu = 0
     For i = 1 To UBound(pj, 1)
@@ -13030,7 +13041,7 @@ Private Sub T_Izv_ZbirniSadrzaj()
         If InStr(1, CStr(redovi(i, 8)), FX_STANICA_B, vbTextCompare) > 0 Then
             nasla = True
             AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rKg, "0.00"), _
-                     "zbirni saldo: kg stanice = rucni prolaz tblOtkup"
+                     "zbirni saldo: kg stanice = rucni prolaz tblOtkupStavke"
             For j = 2 To 7
                 AssertEq Format$(CDbl(redovi(i, j)), "0.00"), _
                          Format$(NzD2(pj(pu, j)), "0.00"), _

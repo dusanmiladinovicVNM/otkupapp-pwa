@@ -2077,62 +2077,59 @@ Private Function DetIznosKartice(ByVal red As Long) As String
 End Function
 
 ' STAVKE OTKUPNOG LISTA -- legacy "Detalji otkupa" sustina, kao cist racun
-' (testabilan bez forme): sve nestornirane linije ISTOG dokumenta (broj +
-' stanica, kao ReprintOtkupniListByOtkupID koji stampa ceo BrDok), po
+' (testabilan bez forme): sve stavke IZABRANOG dokumenta (po OtkupID), po
 ' linija "Vrsta Klasa  kg x cena = vrednost". Detalj nosi SAMO ono sto red
 ' liste NE pokazuje (smoke krug 4): kooperant je vec kolona reda pa se ne
-' ponavlja, a UKUPNO dokumenta ide samo kad linija ima VISE (red pokazuje
-' jednu) -- jednolinijski dokument bi njime dublirao sopstveni red.
+' ponavlja, a UKUPNO dokumenta ide samo kad stavki ima VISE -- jednolinijski
+' dokument bi njime dublirao sopstveni red.
 Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Dim d As Variant, i As Long
-    Dim cId As Long, cBr As Long, cSt As Long
-    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
+    Dim cId As Long, cVr As Long
     Dim cVoz As Long, cZb As Long
-    Dim brDok As String, stanica As String, vozId As String, brZb As String
+    Dim nasao As Boolean, vrsta As String, vozId As String, brZb As String
     Dim linije As Collection, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
+    Dim st As Variant
     On Error GoTo EH
 
     d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Function
     cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
     cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
     cVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
     cZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
 
-    ' Dokument izabrane linije (broj je scoped po stanici). Vozac i zbirna su
-    ' dokumentski (sve linije ih dele) -- citaju se sa izabrane.
+    ' Zaglavlje izabranog dokumenta: vrsta, vozac i zbirna su dokumentski.
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then
-            brDok = NzS(d(i, cBr))
-            stanica = NzS(d(i, cSt))
+            nasao = True
+            vrsta = NzS(d(i, cVr))
             vozId = NzS(d(i, cVoz))
             brZb = NzS(d(i, cZb))
             Exit For
         End If
     Next i
-    If Len(brDok) = 0 Then Exit Function
+    If Not nasao Then Exit Function
 
+    ' Linije su STAVKE tog OtkupID-a (REFAKTOR S14.7, kvar 3), redosledom upisa.
+    ' Ranije su to bili redovi ZAGLAVLJA istog broja i stanice -- ali broj je
+    ' labela (S4) i isti broj sme na istoj stanici drugog dana, pa bi takvo
+    ' spajanje sabralo dva dokumenta.
     Set linije = New Collection
-    For i = 1 To UBound(d, 1)
-        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then
-            If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
-                kg = NzD(d(i, cKol))
-                cena = NzD(d(i, cCe))
-                linije.Add NzS(d(i, cVr)) & " " & NzS(d(i, cKl)) & "  " & _
+    st = modOtkup.StavkeOtkupaRedovi()
+    If IsArray(st) Then
+        For i = 1 To UBound(st, 1)
+            If StrComp(CStr(st(i, 1)), Trim$(otkupID), vbTextCompare) = 0 Then
+                kg = CDbl(st(i, 4))
+                cena = CDbl(st(i, 5))
+                linije.Add vrsta & " " & CStr(st(i, 3)) & "  " & _
                            FmtKolicina(kg) & " x " & Format$(cena, "#,##0.00") & _
                            " = " & Format$(kg * cena, "#,##0.00")
                 totKg = totKg + kg
                 totVr = totVr + kg * cena
             End If
-        End If
-    Next i
+        Next i
+    End If
     If linije.count = 0 Then Exit Function
     If linije.count > 1 Then
         linije.Add "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _

@@ -1726,6 +1726,28 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         If kind(c) = "kg" Then iKg = c
     Next c
 
+    ' OTKUP: kolicina, gajbe, klase i vrednost dokumenta su na STAVKAMA, ne na
+    ' zaglavlju -- CreateOtkup_TX ih tamo ostavlja prazne, pa je mreza za nov
+    ' dokument pokazivala 0 kg i pilulu "placeno" posle prve delimicne isplate
+    ' (REFAKTOR S14.7, kvar 2). Opis kolona ostaje isti; menja se samo izvor tih
+    ' celija. Stavke se citaju JEDNOM po pozivu, kao i novac ispod.
+    Dim otkStav As Boolean, dStav As Object, ovStav() As String, iStavID As Long
+    ReDim ovStav(0 To colN - 1)
+    otkStav = (mk = "OTKUP")
+    If otkStav Then
+        mStep = "stavke otkupa"
+        Set dStav = modOtkup.ZbirStavkiPoOtkupu()
+        iStavID = ColIdx(tblName, COL_OTK_ID)
+        For c = 0 To colN - 1
+            Select Case ColF(CStr(cols(c)), 1)
+                Case COL_OTK_KOLICINA: ovStav(c) = "kg"
+                Case COL_OTK_CENA:     ovStav(c) = "vr"
+                Case COL_OTK_KOL_AMB:  ovStav(c) = "amb"
+                Case COL_OTK_KLASA:    ovStav(c) = "kl"
+            End Select
+        Next c
+    End If
+
     mStep = "indeksi kolona"
     iStorno = ColIdx(tblName, COL_STORNIRANO)
     iZbir = ColIdx(tblName, ColBrojZbirne(mk))
@@ -1758,15 +1780,13 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' Za otkup je vezivanje direktno (tblNovac.OtkupID); za prijemnicu ide preko
     ' fakture, pa se stanje cita NA NIVOU FAKTURE - vidi PayCode.
     Dim pay As Boolean, dPay As Object, dFakIzn As Object
-    Dim iPayID As Long, iPayKol As Long, iPayCena As Long
+    Dim iPayID As Long
     mStep = "placanje"
     pay = (mk = "OTKUP" Or mk = "PRIJEMNICA")
     If pay Then
         If mk = "OTKUP" Then
             Set dPay = modNovac.BuildIsplataDictByOtkup()
             iPayID = ColIdx(tblName, COL_OTK_ID)
-            iPayKol = ColIdx(tblName, COL_OTK_KOLICINA)
-            iPayCena = ColIdx(tblName, COL_OTK_CENA)
         Else
             Set dPay = modNovac.BuildUplataDictByFaktura()
             Set dFakIzn = FakturaIznosMap()
@@ -1798,6 +1818,15 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         vDatK = 0
         vKgRow = 0
         hay = ""
+        Dim zStav As Variant
+        zStav = Empty
+        If otkStav Then
+            ' Nedostajuci kljuc NIJE nula (review #334, P1): red dokumenta bez
+            ' stavki pada po imenu. Ranije je takav red imao duguje = 0, pa je
+            ' pilula pokazivala "placeno" na dokumentu bez ijedne stavke.
+            zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
+                        "modScrDokumenti.RedoviZaTip")
+        End If
         If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
 
         Dim pCode As Long, pRest As Double, duguje As Double, placeno As Double
@@ -1807,7 +1836,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             duguje = 0: placeno = 0
             payKey = CellS(src, r, iPayID)
             If mk = "OTKUP" Then
-                duguje = CellD(src, r, iPayKol) * CellD(src, r, iPayCena)
+                duguje = CDbl(zStav(1))
                 If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
                 pCode = PayCode(duguje, placeno)
             ElseIf Len(payKey) = 0 Then
@@ -1870,6 +1899,17 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Case Else
                     cell = ""
             End Select
+            ' OTKUP: izvor ovih celija su stavke (ovStav iznad), ne zaglavlje.
+            If otkStav Then
+                Select Case ovStav(c)
+                    Case "kg":  cell = CDbl(zStav(0))
+                    Case "vr":  cell = CDbl(zStav(1))
+                    Case "amb": cell = CDbl(zStav(2))
+                    Case "kl"
+                        cell = CStr(zStav(3))
+                        hay = hay & "|" & cell
+                End Select
+            End If
             outA(n + 1, c + 1) = cell
         Next c
 

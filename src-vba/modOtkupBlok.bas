@@ -1998,12 +1998,15 @@ Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
     data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
 
-    Dim cKoop As Long, cKol As Long, cCena As Long, cDat As Long
+    Dim cKoop As Long, cId As Long, cDat As Long
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Function
+    If cKoop = 0 Or cId = 0 Then Exit Function
+
+    ' Iznos i kilaza dokumenta su na STAVKAMA: CreateOtkup_TX ih na zaglavlju
+    ' ostavlja prazne, pa je rang za nov dokument sabirao nulu (REFAKTOR S14.7).
+    Dim stavkeZbir As Object: Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
 
     Dim agg As Object: Set agg = CreateObject("Scripting.Dictionary")
     Dim i As Long, uKrug As Boolean, dSer As Double
@@ -2020,8 +2023,11 @@ Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
             uKrug = (cDat = 0 Or RowYear(data(i, cDat)) = yr)
         End If
         If uKrug Then
-            Dim kg As Double: kg = NumVal(data(i, cKol))
-            Dim vred As Double: vred = kg * NumVal(data(i, cCena))
+            Dim kg As Double, vred As Double, zRang As Variant
+            zRang = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, CStr(data(i, cId)), _
+                        "modOtkupBlok.KoopRangRows")
+            kg = CDbl(zRang(0))
+            vred = CDbl(zRang(1))
             rawKg = rawKg + kg
             rawVal = rawVal + vred
             Dim k As String: k = Trim$(CStr(data(i, cKoop)))

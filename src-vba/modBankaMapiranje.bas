@@ -2680,10 +2680,12 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
             '
             ' Dikt se gradi JEDNOM pre petlje: poziv po redu bi nad tblOtkup od
             ' vise hiljada redova citao stavke iznova za svaki red.
-            vrednost = 0
-            If vrednostDict.exists(Trim$(CStr(data(i, colOtkID)))) Then
-                vrednost = CDbl(vrednostDict(Trim$(CStr(data(i, colOtkID)))))
-            End If
+            ' Nedostajuci kljuc NIJE nula (review #334, P1): red bez stavki ili
+            ' bez OtkupID-a pada po imenu i ide na RUCNO, umesto da tiho ispadne
+            ' iz kandidata pa se uplata proknjizi kao AVANS.
+            vrednost = modNovac.VrednostOtkupaIzDikta(vrednostDict, _
+                           CStr(data(i, colOtkID)), _
+                           "GetOtkupCandidatesForKooperantBlock")
 
             uplaceno = GetUplataForOtkup(CStr(data(i, colOtkID)))
             otvoreno = vrednost - uplaceno

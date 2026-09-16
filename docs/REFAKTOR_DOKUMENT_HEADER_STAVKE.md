@@ -1328,7 +1328,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | ✅ **Otkup cutover + integracije** (PR #308, merge 12.09.2026): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
-| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9, ponovljen popis sa proverom, odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
+| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom, odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -1757,10 +1757,70 @@ Razlika je **merena**, ne stilska:
 | Red | Odgovor `GetOpenOtkupi` | Zašto |
 |---|---|---|
 | bez `OtkupID` | **ostaje u listi**, prisilno | ne može se vrednovati ali se ne sme ni izgubiti — to je kvar FM-0021 #5; imenuje ga `BuildBlokIsplataList` sa `ERR_ISPLATA_PRAZAN_OTKUPID` |
-| sa `OtkupID`, bez stavki | preskače se, uz brojač i **jedan** log red | takav red nije dokument: vrednost živi na stavkama, pa nema obavezu koja bi se izgubila. Nov pisac ga ne pravi. Grana odlazi u koraku 7 |
+| sa `OtkupID`, bez stavki | **pada po imenu** (review #334, P1) | do tog review-a se preskakao, uz brojač i jedan log red. I to je tišina: red nestane iz liste za isplatu kao da je plaćen, dok ga mreža istovremeno prikazuje sa 0 kg i pilulom „plaćeno“. Kapija je sada **jedna** -- `modOtkup.StavkeOtkupaRedovi` -- pa ovaj čitalac pada tamo gde padaju i izveštaji |
 
 Ono što se **ne radi** ni u jednom slučaju: računanje vrednosti sa zaglavlja. To
 bi bio compatibility sloj i vraćao bi 0 za svaki nov dokument.
+
+#### Dokumentski ugovor bulk čitaoca (review #334, P1)
+
+`VrednostOtkupa` drži ugovor za **jedan** dokument. Čitaoci koji vrednuju **sve**
+dokumente odjednom (mreža, izveštaji, KPI, rang, lista za isplatu, kandidati
+banke) išli su kroz slabiju kopiju pravila, pa je dokument bez stavki izlazio
+kao **0 kg i 0 dinara** — a u mreži i kao **„plaćeno“**: `duguje` se računao iz
+zbira stavki kojih nema, pa je ispadao 0, a `PayCode(0, plaćeno > 0)` vraća
+PLAĆENO. Header-only korupcija je tako izgledala kao uredno zatvoren dokument.
+
+Od #334 svi idu kroz **jedan** prolaz — `modOtkup.StavkeOtkupaRedovi` — koji drži:
+
+| # | Kapija | Broj | Zašto nije kozmetika |
+|---|---|---|---|
+| 1 | stavka ima neprazan `OtkupID` | 1907 | stavka bez dokumenta se ne može vrednovati; ranije tiho preskočena, pa je zbir bio manji nego što jeste |
+| 2 | stavka ima **zaglavlje** | 1908 | siroče se ne sme sabrati ni u čiji zbir |
+| 3 | zaglavlje sa `OtkupID`-em ima **bar jednu stavku** | 1909 | „nema ključa u rečniku“ je davalo 0 kg / 0 din i pilulu „plaćeno“ |
+| 4 | `Kolicina` i `Cena` brojčane i > 0 | 1905/1906 | isto pravilo koje pisac traži na upisu |
+| 5 | `Klasa` je I ili II | 1830 | **ista procedura** koju zove pisac (`RequireValidOtkupClass`) |
+| 6 | `KolAmbalaze` brojčana, ≥ 0, ceo broj | 1919/1920/1886 | pisac traži isto; čitalac je nebrojčanu vrednost tiho čitao kao 0, pa su gajbe nestajale |
+| 7 | zaglavlje se nalazi **tačno jednom** | 1921 | čitaoci iteriraju zaglavlja, pa dva reda sa istim ID-em isti teret broje **dvaput** — a sa različitim `KooperantID` ga pripišu **dvojici** kooperanata |
+
+Nijedan čitalac više nema granu `If dict.Exists(id) … Else 0`: ključ se traži
+kroz `modOtkup.ZbirStavkiZaOtkup` (odnosno `modNovac.VrednostOtkupaIzDikta`),
+koji nedostatak prijavljuje **po imenu**. To je druga brana — izvor već pada —
+ali grana koja nulu vraća kao podatak ne sme da postoji nigde.
+
+Isti prolaz koristi i put novca: `BuildVrednostDictByOtkup` više nema svoju
+kopiju pravila, pa lista za isplatu i kandidati banke padaju na istom mestu na
+kom padaju izveštaji. Ranije je banka nedostajuću vrednost čitala kao 0, blok
+je ispadao iz kandidata, a uplata se knjižila kao **avans** — tiho.
+
+**Jedan rod je namerno izuzet, i ima imenovanog vlasnika:** **prazan `OtkupID`
+na zaglavlju** — red ostaje u listi za isplatu (FM-0021 #5) i imenuje ga
+`BuildBlokIsplataList` (`ERR_ISPLATA_PRAZAN_OTKUPID`); čitaoce vrednosti obara
+`ZbirStavkiZaOtkup` na mestu upotrebe, pa ni tamo nije nula.
+
+**Dupli `OtkupID` je u drugom krugu review-a prešao iz izuzetka u kapiju.**
+Prvi predlog je bio da ga i dalje drže samo finansijske kapije
+(`ERR_ISPLATA_DUPLI_OTKUPID`, `VrednostOtkupa` 1902, `BuildOtkupOwnerIndex`).
+To je bilo pogrešno iz jednog konkretnog razloga: te kapije čuvaju **svoje**
+putanje, a izveštaji, KPI i mreža iteriraju zaglavlja — dva reda sa istim ID-em
+tamo daju **2× kg** nad jednom fizičkom stavkom, a sa različitim `KooperantID`
+iste kilograme pripišu dvojici. Tolerancija u novom centralnom čitaocu je zato
+uklonjena; `RequireJedinstvenZaglavljeOtkupa` pada pre agregacije.
+
+Cena je izgovorena: **jedan** duplirani `OtkupID` bilo gde — uključujući
+istorijski, plaćeni — zaustavlja svakog čitaoca vrednosti dok se podatak ne
+ispravi. Prihvatljivo je jer nema produkcionih podataka, `NewEntityID` je
+opaque pa ga nijedan pisac ne može proizvesti, a `modProductionHealthCheck`
+ostaje tolerantan baš zato da takav red **imenuje** umesto da padne na njemu.
+`ERR_ISPLATA_DUPLI_OTKUPID` ne gubi dokaz: `modTestBanka` **T15** je dokazuje
+direktno nad `BuildOpenAmountDict`, a **T17** sada tvrdi raniji, jači pad.
+
+Regresija: `Test_OTK_ZaglavljeBezStavkiObaraCitaoce` (dokument se isplati do
+kraja, pa mu se stavke obrišu — mreža, saldo OM i lista za isplatu moraju pasti
+po imenu, a pilula ne sme reći „plaćeno“) i
+`Test_OTK_StavkaBezZaglavljaObaraCitaoce` (siroče, klasa, `KolAmbalaze`). Oba
+čiste za sobom (`clsTransaction` + rollback), kao i četiri zatečena testa koja
+su ostavljala zaglavlje bez stavki.
 
 #### Fixture je morao da postane dokument
 
@@ -2245,7 +2305,7 @@ mora da sprovede — ne samo izbor.
 
 | Kvar | Gde se rešava | Zašto |
 |---|---|---|
-| 2 pill plaćanja · 3 vrednost otkupa u izveštajima (saldo OM, kartica, otkupne liste, prosečna cena, zbirni OM — bez „roba po OM“, čiji manjak ide po otpremnici) · 9 testovi slaganja izveštaja | **mali PR pre PR7** | čitaju Kolicina × Cena sa zaglavlja otkupa i ne zavise od otpremnice; vrednost je na `tblOtkupStavke` (obrazac `VrednostOtkupa`, §14.3) |
+| 2 pill plaćanja · 3 vrednost otkupa u izveštajima (saldo OM, kartica, otkupne liste, prosečna cena, zbirni OM — bez „roba po OM“, čiji manjak ide po otpremnici) · 9 testovi slaganja izveštaja | **mali PR pre PR7** — ✅ #334 (+ P1 iz review-a: jedan fail-closed prolaz za sve čitaoce vrednosti, §14.3) | čitaju Kolicina × Cena sa zaglavlja otkupa i ne zavise od otpremnice; vrednost je na `tblOtkupStavke` (obrazac `VrednostOtkupa`, §14.3) |
 | 1 napredak bloka u F1 · 5 KG-RAZLIKA u sledljivosti | **PR7** | čitaju `Otkup.OtpremnicaID`, koji PR7 zamenjuje članstvom |
 | 4 izvoz za PWA menadžment | **zaseban mali pre-flight** | menja oblik izvoznih redova koje čitaju GAS i PWA |
 | 6 ispravka otpremnice iz F2 uvek u MANUAL | **PR7** | PR7 prepisuje F2 put; test koji vozi baš taj put ide u PR7 |
@@ -2265,8 +2325,10 @@ mora da sprovede — ne samo izbor.
 
 #### Redosled do koda PR7
 
-1. merge ovog pre-flight-a (#333);
-2. mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke;
+1. ✅ merge ovog pre-flight-a (#333);
+2. ✅ mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke (#334), uz KPI „danas“;
+   review P1 zatvoren u istom PR-u: dokumentski ugovor u jednom prolazu, bez
+   grane „nema ključa = 0“ u ijednom čitaocu (§14.3);
 3. popis ponovo meren na novom `main`-u, sa nezavisnom proverom svih celina —
    posle koraka 2, jer on menja deo popisa (15.09 je provera stigla za 1 od 11);
 4. odluke iz „Još otvoreno“;
