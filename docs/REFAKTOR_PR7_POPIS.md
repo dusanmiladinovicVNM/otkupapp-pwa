@@ -1,316 +1,447 @@
 # PR7 pre-flight — popis čitalaca i testova starog modela
 
-> **Prilog uz `REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.7.** Generisano 15.09.2026 nad `main` `a173c134`. Ovo je popis koji §14.1 traži **pre** slajsa: populacija čitalaca na baznom commitu i poimeničan spisak testova. Ne menja se ručno — ako se kod pomeri, popis se meri ponovo.
+> **Prilog uz `REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.7.** **Premeren 16.09.2026 nad `main` `c2be85e8`** (posle #334), sa nezavisnom proverom **6 od 12 celina** (ostale je prekinuo limit 16.09 — v. „Kako je mereno“). Zamenjuje verziju od 15.09.2026 nad `a173c134` (jednoprolazna; ostaje u istoriji gita). Ovo je popis koji §14.1 traži **pre** slajsa: populacija čitalaca na baznom commitu i poimeničan spisak testova. Ne menja se ručno — ako se kod pomeri, meri se ponovo: `python tools/popis_citalaca.py`.
 
 ## Kako je mereno — i koliko mu verovati
 
-1. **Zatvoren spisak mesta** — regex nad konstantama (bez komentara, bez `modConfig`/`modSchema`) daje fajl:linija:procedura za svaku pojavu. Grupe i konstante su u zaglavlju svake tabele ispod. Ukupno **520 produkcionih mesta** i **100 test procedura**.
-2. **Klasifikacija** — po jedan agent po celini (8 celina čitalaca, 3 celine testova), sa lancem pozivalaca do ulazne tačke ili kapije. Pokrivenost je merena kodom: svaka celina je vratila tačno onoliko mesta koliko spisak ima, `NEPROVERENO` = 0.
-3. **Nezavisna provera stigla je za 1 od 11 celina** (`otk_linija_2`, 65 mesta): **5 spornih (8%)**, 3 propuštena nalaza, 1 netačan. Ostalih 10 provera je prekinuto limitom sesije. **Klasifikacija je zato jednoprolazna** — tvrdnje koje se u §14.7 koriste za odluku su dodatno ručno proverene (tamo su označene).
-4. **Kritičar pokrivenosti** je tražio ono što regex ne vidi (literali imena kolona, omotači, prosleđeni indeksi, `tools/`, GAS/PWA) — 18 produkcionih mesta, 17 test procedura i 8 stavki van VBA; spisak je na kraju.
+1. **Zatvoren spisak mesta** — `tools/popis_citalaca.py` nad `src-vba` (kod bez komentara, bez `modConfig`/`modSchema`). Osnovne grupe su **iste kao 15.09** (uporedivost): **490 produkcionih mesta** i **232 test mesta** na `c2be85e8` (15.09 na `a173c134`: 510 i 235; zaglavlje stare verzije je tvrdilo 520 — v. POP7-01). Proširene grupe (`x_*`) hvataju ono što konstante ne vide: `x_saveotkup` 35 PROD / 10 TEST, `x_vreme_unosa` 3 PROD / 1 TEST, `x_trace` 12 PROD / 2 TEST, `x_literal` 15 PROD / 20 TEST, `x_indeks` 2 PROD / 1 TEST.
+2. **Prolaz 1 (P1)** — isti alat gradi **graf poziva** sa imenovanim ulaznim tačkama (forma, instancirane `WithEvents` klase, ugovor ekrana, registar panela, `Run`/`OnTime`/`OnAction` stringovi, `Workbook_*`, Alt+F8 makro) i kapijama pauze (`KAPIJE`, `UGASENI` u alatu, provera da i dalje vraćaju `False`). Presude 15.09 su vezane za današnja mesta **po sadržaju** (ne po broju linije), a čitano je sve što je #334 dirao i svako mesto na kom se alat ne slaže sa 15.09. Kalibracija alata nad `a173c134`: **487/510** mesta se slaže sa statusom 15.09; ostatak su dva imenovana uzroka (javni hook-ovi uklonjene forme `frmOtkup` vidljivi u Alt+F8; otkup grana prefill-a ispravke).
+3. **Prolaz 2 (P2) — nezavisna provera** — po celini jedan slepi čitač koji nije video popis 15.09, §14.7 ni alat; dobio je samo zatvoren spisak mesta, rečnik i odluke operatera 15.09. **Stigla je za 6 od 12 celina** (`otk_veze_1/2`, `otk_linija_1/2`, `otp_linija_1/2` — 338 od 490 mesta). Za `otp_brojzbirne` (62 mesta), `otp_pisci` (90 mesta), `testovi_1`–`testovi_3` (102 procedure) i kritičar pokrivenosti čitače je prekinuo limit sesije 16.09; te celine nose **samo P1** (alat + presude 15.09) i u koloni Provera piše „P1 (P2 nije stigla)“.
+4. **Poređenje i rešavanje** — skripta poredi P2 sa P1 i sa 15.09 po polju, posle zapisane normalizacije rečnika (podvrste živog puta, pristup čitanje/upis/ostalo, tiha nula po proceduri, PR po kofama). **338 mesta:** saglasno 247, saglasno uz razliku samo u rečniku pristupa 10, **rešeno čitanjem koda 81** (19 rešenja R-NN), **nerešeno 0**. Pobednik rešenja: P2 11 · 15.09 3 · treće 4 · P1 1. Jedno razrešenje prvog prolaza je oboreno (prefill hladnjačkog otkupa, R-03) — dokaz da drugi prolaz meri, a ne potvrđuje.
 
-Rečnik: **ZIV** = dostižno iz produkcione ulazne tačke bez ugašene kapije · **PAUZIRAN** = samo kroz kapiju koja vraća `False` ili izričito ugašen poziv · **MRTAV** = nema produkcionog pozivaoca. `BRISE_SE_SA_POZIVAOCEM` = mesto nestaje zajedno sa procedurom koju PR7 briše. **Tiha nula** = živ čitalac koji za dokument iz `CreateOtkup_TX` **danas** dobija prazno/0 i od toga računa nešto što operater vidi.
+Rečnik statusa: **ZIV_UI** — dostižno iz korisničkog interfejsa · **ZIV_SYNC** — iz sinhronizacije, tajmera ili `Workbook_*` · **ZIV_MAKRO** — samo iz produkcionog Alt+F8 makroa · **PAUZIRAN** — svaki put ide kroz kapiju koja danas vraća `False` ili kroz izričito ugašen poziv · **SAMO_TEST** — zovu ga samo testovi · **MRTAV** — nema pozivaoca. `BRISE_SE_SA_POZIVAOCEM` = mesto nestaje zajedno sa procedurom koja se ionako briše. **Tiha nula** = živo mesto koje za dokument današnjeg pisca dobija prazno/0 i od toga računa ili prikazuje nešto što operater vidi (uključujući izostalo upozorenje); vodi se po proceduri.
 
-## Pregled po grupi
+Kolona **Provera**: ✔ oba prolaza saglasna · ◐ R-NN nesklad rešen čitanjem koda (sekcija „Nesklad prolaza“) · ✗ nerešeno. Kolona **#334**: `telo` — #334 je menjao telo procedure · `lanac` — menjao je proceduru na lancu do nje · `novo` — mesto je nastalo u #334 · — nije dirao.
 
-| Grupa | Mesta | ZIV | PAUZIRAN | MRTAV | → PR7 | → PR8 | van opsega / sa pozivaocem | tiha nula danas |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Veze otkupa ka tuđem dokumentu | 100 | 66 | 20 | 14 | 82 | 0 | 18 | 21 |
-| Linijska polja sa zaglavlja otkupa — dual READ | 130 | 82 | 12 | 36 | 79 | 0 | 51 | 65 |
-| Po-klasna polja na zaglavlju otpremnice | 128 | 77 | 6 | 45 | 49 | 11 | 68 | 0 |
-| `Otpremnica.BrojZbirne` kao veza na zbirnu | 62 | 49 | 6 | 7 | 12 | 48 | 2 | 5 |
-| Stari pisci otpremnice, AutoLink, kapije pauze, `Split(" + ")` | 90 | 65 | 20 | 5 | 31 | 4 | 55 | 5 |
+## Šta je #334 promenio (`a173c134` → `c2be85e8`)
+
+Između baze prošlog popisa i današnjeg `main`-a `src-vba` menja samo #334 (14 fajlova). Stablo `c2be85e8` je identično `8dfde3b3`, pa baseline testova sa te grane važi bez ponovnog pokretanja.
+
+| Grupa | PROD a173c134 | PROD c2be85e8 | TEST a173c134 | TEST c2be85e8 |
+|---|---:|---:|---:|---:|
+| `otk_veze` | 100 | 100 | 34 | 34 |
+| `otk_linija` | 130 | 110 | 58 | 55 |
+| `otp_linija` | 114 | 114 | 39 | 39 |
+| `otp_cena` | 14 | 14 | 3 | 3 |
+| `otp_brojzbirne` | 62 | 62 | 36 | 36 |
+| `otp_stari_pisac` | 68 | 68 | 61 | 61 |
+| `pauza` | 15 | 15 | 2 | 2 |
+| `split_plus` | 7 | 7 | 2 | 2 |
+| `x_saveotkup` | 35 | 35 | 10 | 10 |
+| `x_vreme_unosa` | 3 | 3 | 1 | 1 |
+| `x_trace` | 12 | 12 | 2 | 2 |
+| `x_literal` | 15 | 15 | 20 | 20 |
+| `x_indeks` | 2 | 2 | 1 | 1 |
+
+Mesta koja su nestala ili nastala (sva u `otk_linija`):
+
+| Procedura | Nestalo | Nastalo | Šta se desilo |
+|---|---:|---:|---|
+| `modBusinessFlowProTests.OtkMrezaRed` | 0 | 2 | nov test pomoćnik: ključevi kolona mreže (MAPA) |
+| `modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke` | 0 | 2 | nov test; tvrdi i „zaglavlje prazno“ (placebo ako kolona ode) |
+| `modIzvestaj.ReportKarticaKooperanta` | 4 | 0 | kg i vrednost sa stavki (`ZbirStavkiZaOtkup`); ostaje `KolAmbIzdata` (zaglavlje) |
+| `modIzvestaj.ReportKarticaRobaRekap` | 2 | 0 | kg po klasi iz `StavkeOtkupaRedovi` |
+| `modIzvestaj.ReportOtkupListe` | 3 | 0 | klasa, kg i vrednost sa stavki |
+| `modIzvestaj.ReportProsecnaCena` | 2 | 0 | kg i vrednost sa stavki |
+| `modIzvestaj.ReportSaldoOM` | 3 | 0 | vrednost sa stavki; mrtav račun gajbi uklonjen |
+| `modIzvestaj.ReportZbirniOM` | 2 | 0 | kg i vrednost sa stavki |
+| `modOtkupBlok.KoopRangRows` | 2 | 0 | kg i iznos sa stavki |
+| `modOtkupUI.RefreshKpi` | 1 | 0 | KPI „danas“ kroz `KgOtkupaZaDan` |
+| `modScrDokumenti.RedoviZaTip` | 2 | 4 | ćelije kg/vrednost/gajbe/klasa prepisuju se iz stavki; nova mesta su ključevi kolona (MAPA), ne čitanje |
+| `modScrIzvestaji.IzDetaljOtkupLista` | 3 | 0 | linije dokumenta iz `StavkeOtkupaRedovi`; vozač i zbirna sa zaglavlja ostaju (`otk_veze`) |
+| `modTest.T_Izv_RangKooperanata` | 2 | 0 | ručni zbir iz stavki |
+| `modTest.T_Izv_SlaganjeKartica` | 2 | 0 | ručni zbir iz stavki |
+| `modTest.T_Izv_SlaganjeOtkupOM` | 2 | 0 | otkupni deo iz stavki; deo otpremnice ostaje |
+| `modTest.T_Izv_ZbirniSadrzaj` | 1 | 0 | kg stanice iz stavki; kg vozača ostaje |
+
+Alat ni jednoj proceduri iz popisa nije promenio status između dva commita (0 promena). #334 je dirao 53 procedure u `src-vba`; od onih koje i dalje nose mesta starog modela telo su mu menjane samo `modIzvestaj.ReportKarticaKooperanta`, `modScrDokumenti.RedoviZaTip` i `modScrIzvestaji.IzDetaljOtkupLista`.
+
+## Pregled po grupi (`c2be85e8`)
+
+| Grupa | Mesta | ZIV_UI/SYNC | ZIV_MAKRO | PAUZIRAN | SAMO_TEST | MRTAV | → PR7 | → PR8 | briše se sa pozivaocem | van opsega / netaknut | procedura sa tihom nulom | ✔ / ◐ / ✗ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Veze otkupa ka tuđem dokumentu | 100 | 61 | 5 | 20 | 5 | 9 | 87 | 0 | 13 | 0 | 18 | 94 / 6 / 0 |
+| Linijska polja zaglavlja otkupa | 110 | 69 | 0 | 5 | 10 | 26 | 50 | 0 | 36 | 22 | 26 | 91 / 19 / 0 |
+| Po-klasna polja zaglavlja otpremnice | 128 | 69 | 8 | 6 | 24 | 21 | 32 | 37 | 22 | 37 | 9 | 72 / 56 / 0 |
+
+## Kapija §14.1 za PR7 — merenja
+
+| Prag | Izmereno na `c2be85e8` | Verdikt |
+|---|---|---|
+| jezgro slajsa ≤ 120% jezgra `CreateZbirna_TX` | Čitanje A (zatvaranje poziva unutar modula — jedino koje ponavlja 695 iz 13.09): `CreateZbirna_TX` 770 · jednopotezni `CreateOtpremnicaIzIzvora_TX` **1075 (+39,6%)** · `CreateOtpremnicaDraft_TX` 517 (−32,9%) · šest ulaza skele 1373 (+78,3%). Čitanje B (kako §14.1 piše: preko modula, bez `modDataAccess`/`modSchema`): 1691 · 2024 (+19,7%) · 1456 (−13,9%) · 2330 (+37,8%). Na `1bb49cb1` B daje Otkup 2118 naspram Zbirne 1408 (+50%), A 695 naspram 765. | **prag nije primenljiv kako je zapisan** (POP7-03) |
+| poimeničan spisak testova koji moraju nestati | spisak 15.09 (NESTAJE 13 testova + 6 pomoćnih) — **jednoprolazan, nezavisna provera nije stigla**; P1 dopuna: univerzum 139 procedura, 39 van spiska 15.09, 12 menjano u #334 (tabela u sekciji testova) | **otvoren** — zatvara ga P2 test celina |
+| popis populacije čitalaca na baznom commitu | 28 produkcionih modula nosi mesta starog modela, 26 sa bar jednim živim mestom (tabela ispod); presuda PR po mestu nezavisno potvrđena za 338 od 490 mesta | **izmeren**; klasifikacija 6/8 čitalačkih celina |
+| dual READ = 0 | linijska polja zaglavlja (otkup `Kolicina/Cena/Klasa/KolAmbalaze/BrutoKg`, otpremnica `Kolicina/Klasa/KolAmbalaze/BrutoKg`): 155 referenci u produkciji; **102 živih u 49 procedura** (ZIV_UI 98, ZIV_MAKRO 4), PAUZIRAN 7, SAMO_TEST 12, MRTAV 34. Merenje: `python tools/popis_citalaca.py` (red DUAL READ) | **baseline**; prag PR7 = 0 živih referenci osim imenovanih izuzetaka (MAPA), dokaz prepisom mesta, ne padom testova (POP7-10) |
+| A11 (uz kapiju) | `who_writes --check-ownership`: `tblOtkup` ima 8 pisaca (`modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStornoFlow`); `Otkup.OtpremnicaID` 6 produkcionih (POP7-08) | cilj PR7 8 → 1 stoji |
+
+### Populacija po modulu (alat + rešenja statusa)
+
+| Modul | Mesta (osnovna / proširena) | Procedura | Statusi mesta |
+|---|---|---:|---|
+| `modAutoHladnjaca` | 17 (17 / 0) | 4 | PAUZIRAN 8, ZIV_MAKRO 9 |
+| `modDokUnos` | 4 (4 / 0) | 3 | ZIV_UI 4 |
+| `modDokumentInvariant` | 7 (7 / 0) | 1 | ZIV_UI 7 |
+| `modDokumenta` | 102 (102 / 0) | 21 | MRTAV 14, PAUZIRAN 14, SAMO_TEST 25, ZIV_UI 49 |
+| `modGoogleSyncOrchestrator` | 4 (4 / 0) | 1 | ZIV_UI 4 |
+| `modHelpers` | 5 (5 / 0) | 1 | MRTAV 5 |
+| `modIntegritet` | 13 (11 / 2) | 6 | ZIV_UI 13 |
+| `modIzvestaj` | 26 (24 / 2) | 7 | ZIV_UI 26 |
+| `modMarza` | 4 (4 / 0) | 2 | MRTAV 4 |
+| `modMasterSync` | 41 (41 / 0) | 14 | PAUZIRAN 35, ZIV_MAKRO 1, ZIV_UI 5 |
+| `modOtkup` | 50 (14 / 36) | 3 | SAMO_TEST 48, ZIV_UI 2 |
+| `modOtkupBlok` | 56 (56 / 0) | 22 | MRTAV 40, ZIV_UI 16 |
+| `modPaletniList` | 4 (4 / 0) | 1 | ZIV_UI 4 |
+| `modPrint` | 13 (11 / 2) | 4 | ZIV_UI 13 |
+| `modProductionHealthCheck` | 13 (0 / 13) | 4 | ZIV_UI 13 |
+| `modScrDokumenti` | 44 (44 / 0) | 18 | MRTAV 5, ZIV_UI 39 |
+| `modScrIzvestaji` | 4 (4 / 0) | 2 | ZIV_UI 4 |
+| `modScrSledljivost` | 1 (1 / 0) | 1 | ZIV_UI 1 |
+| `modSetup` | 21 (15 / 6) | 4 | ZIV_MAKRO 6, ZIV_UI 15 |
+| `modSledljivost` | 33 (33 / 0) | 5 | ZIV_UI 33 |
+| `modStammdatenSync` | 15 (15 / 0) | 3 | ZIV_UI 15 |
+| `modStanicaLock` | 6 (6 / 0) | 1 | ZIV_UI 6 |
+| `modStorno` | 4 (4 / 0) | 4 | ZIV_UI 4 |
+| `modStornoDok` | 18 (18 / 0) | 11 | PAUZIRAN 7, ZIV_UI 11 |
+| `modStornoFlow` | 43 (39 / 4) | 20 | ZIV_UI 43 |
+| `modStornoImpact` | 4 (2 / 2) | 2 | ZIV_UI 4 |
+| `modStornoRecovery` | 4 (4 / 0) | 2 | SAMO_TEST 2, ZIV_UI 2 |
+| `modStornoZurnal` | 1 (1 / 0) | 1 | ZIV_UI 1 |
 
 ## Veze otkupa ka tuđem dokumentu
 
-`COL_OTK_OTPREMNICA_ID`, `COL_OTK_BROJ_ZBIRNE`, `COL_OTK_VOZAC`, `COL_OTK_BROJ_OTPREMNICE` — PR7 ih briše iz kanona.
+`COL_OTK_OTPREMNICA_ID`, `COL_OTK_BROJ_ZBIRNE`, `COL_OTK_VOZAC`, `COL_OTK_BROJ_OTPREMNICE` — PR7 ih briše iz kanona (odluka 5).
 
-| Modul.procedura | Linije | Status | PR | Tiha nula | Zamena |
-|---|---|---|---|:-:|---|
-| `modAutoHladnjaca.LinkOtkupRedNaDokument` | 381, 394, 396, 399 | PAUZIRAN | PR7 |  | Brise se zajedno sa LinkOtkupRedNaDokument. Auto-lanac u PR7 pravi clanstvo preko CreateOtpremnicaIzIzvora_TX (modDokumenta:2408), a vozac zivi samo na zaglavlju otpremnice. |
-| `modDokumenta.GetLostOtkupBlokovi` | 6588 | ZIV | PR7 | da | Izgubljen blok = otkup cije clanstvo u tblOtpremnicaIzvori pokazuje na storniranu otpremnicu (A15 istorija, AktivnoOtpClanstvoPoKanonu/OtpremnicaZaOtkup) umesto Otkup.OtpremnicaID. Kg se racuna iz tblOtkupStavke. |
-| `modDokumenta.GetStorniraniByTip` | 6133 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se zajedno sa GetStorniraniGrupisano. Ako se ipak zadrzi: zbirna preko OtpremnicaZaOtkup, pa Otpremnica.BrojZbirne. |
-| `modDokumenta.ReassignOtkupToOtpremnica_TX` | 6939, 6942, 6944 | ZIV | PR7 |  | hasZbr guard se brise. Reassign postaje premestanje clanstva u tblOtpremnicaIzvori (Ukloni sa stare, Dodaj na novu, uz kapije IZDATO/A15); broj zbirne se vise ne kopira na otkup. |
-| `modDokumenta.SetOtkupBrojOtpremnice` | 6904, 6908 | ZIV | PR7 |  | Brise se cela procedura sa svih 5 poziva. BrojOtpremnice na otkupu nema nijednog citaoca u src-vba; broj otpremnice se cita sa zaglavlja otpremnice iz clanstva. |
-| `modHelpers.CheckVerwaisteDokumente` | 498 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se cela funkcija, bez portovanja. Njen sadrzaj pokrivaju GetNedovrseno i modIntegritet B2/B3. |
-| `modIntegritet.Chk_B6_ZbirnaCaseMismatch` | 603 | ZIV | PR7 |  | Brisanje reda Otkup iz B6 - otkup vise ne nosi broj zbirne; B6 ostaje za otpremnicu/prijemnicu/paletu. |
-| `modIntegritet.ProizvodjacByZbirna` | 1400, 1401 | ZIV | PR7 |  | Kooperanti zbirne lancem clanstva: zbirna -> otpremnice (Otpremnica.BrojZbirne u PR7, tblZbirnaIzvori u PR8) -> tblOtpremnicaIzvori -> OtkupID -> KooperantID. Primarni put po Otkup.BrojZbirne se brise. |
-| `modIzvestaj.ReportOtkupRobaOM` | 2719 | ZIV | PR7 | da | Kg blokova po otpremnici = zbir tblOtkupStavke za OtkupID iz clanstva tblOtpremnicaIzvori (GetOtpremnicaProgress), umesto Otkup.OtpremnicaID i Otkup.Kolicina. |
-| `modIzvestaj.ReportSledljivostLanac` | 5094, 5095 | ZIV | PR7 | da | Karika 2 se razresava preko OtpremnicaZaOtkup (tblOtpremnicaIzvori). blokSum se racuna iz tblOtkupStavke po clanstvu. |
-| `modIzvestaj.ReportSledljivostProblemi` | 5657, 5658 | ZIV | PR7 | da | SLEDP_BEZ_OTPREMNICE = otkup bez aktivnog clanstva (OtpremnicaZaOtkup vraca ""). Kg se racuna iz stavki. |
-| `modMasterSync.AutoCreateOtpremniceFromPWA` | 801, 802 | PAUZIRAN | PR7 |  | Vozac iz PWA reda ide direktno na zaglavlje otpremnice kroz CreateOtpremnicaIzIzvora_TX; grupisanje ne cita otkup. Kapija PwaOtpremnicaDostupna. |
-| `modMasterSync.BackfillOtkupBrojZbirneByOtpremnica` | 1247, 1248, 1259 | PAUZIRAN | PR7 |  | Backfill se brise u PR7 (kolone odlaze iako je zbirni korak pauziran do PR8); clanstvo otkupa u zbirnoj se izvodi lancem otkup -> tblOtpremnicaIzvori -> otpremnica -> tblZbirnaIzvori (PR8). |
-| `modMasterSync.LinkOtkupToOtpremnicaStrict` | 2777 | PAUZIRAN | PR7 |  | Red u tblOtpremnicaIzvori kroz CreateOtpremnicaIzIzvora_TX / DodajOtpremnicaIzvor_TX; SetOtkupBrojOtpremnice (:2780) se brise. |
-| `modMasterSync.LinkZbirnaToOtkupAndOtpremnica` | 3809, 3810, 3813, 3949, 3953 | PAUZIRAN | PR7 |  | Otpremnica otkupa = OtpremnicaZaOtkup(otkupID); veza otpremnice sa zbirnom u PR8 kroz tblZbirnaIzvori. U PR7 citanje kolone mora da nestane iako VOZ uvoz ostaje iza PwaZbirnaDostupna=False. |
-| `modMasterSync.StampVozacFromStanicaForMalina` | 1010, 1037 | PAUZIRAN | BRISE_SE_SA_POZIVAOCEM |  | Brise se u PR7 zajedno sa korakom 2b orkestratora; mirror-vozac (StanicaID) upisuje se na zaglavlje otpremnice u CreateOtpremnicaIzIzvora_TX, ne na otkup. |
-| `modMasterSync.TryUpdateVozacID` | 2516, 2554, 2563 | PAUZIRAN | PR7 |  | Masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/FAILED) nad Otpremnica.VozacID: OtkupPoClientRecordID -> OtpremnicaZaOtkup -> COL_OTP_VOZAC (komentar :1759 to najavljuje). |
-| `modOtkup.SaveOtkup` | 1588, 1594, 1595 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa SaveOtkup_TX u koraku kolona (plan :1683); testovima zaglavlja bez stavki treba drugi fixture koji ne duplira pozicioni niz. |
-| `modOtkupBlok.BuildFirstBlokCena` | 1668 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa panelom. |
-| `modOtkupBlok.BuildKoopIdByOtp` | 1717 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa panelom. |
-| `modOtkupBlok.BuildNapisanoByOtp` | 1690 | ZIV | PR7 | da | GetOtpremnicaProgress po otpremnici, ili jedan prolaz nad tblOtpremnicaIzvori + tblOtkupStavke. |
-| `modOtkupBlok.ExistingBlokZbirna` | 1642 | ZIV | PR7 | da | Brisanje fallback-a; zbirna je samo ono sto otpremnica zna (COL_OTP_BROJ_ZBIRNE u PR7, AktivnaZbirnaZaOtpremnicu u PR8). |
-| `modOtkupBlok.FirstBlokVal` | 1650 | ZIV | PR7 | da | Prvi aktivni izvor iz tblOtpremnicaIzvori + cena sa tblOtkupStavke (ili Otpremnica.PredlogCena). |
-| `modOtkupBlok.LinkOtkupIDsToOtpremnica` | 1476, 1480 | ZIV | PR7 |  | Guard = OtpremnicaZaOtkup(otkupID) <> ""; ceo vez kroz DodajOtpremnicaIzvor_TX nad DRAFT otpremnicom. |
-| `modOtkupBlok.LoadBlokovi` | 624 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa legacy panelom; zivi ekvivalent je modScrDokumenti.RowsBlokovi. |
-| `modOtkupBlok.PrefillOtkupFromStornirano` | 946 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa panelom. |
-| `modOtkupBlok.RenderSpec` | 1254 | ZIV | PR7 | da | Sastav otpremnice iz tblOtpremnicaIzvori (aktivno clanstvo po OtpremnicaID) + kg/cena/amb iz tblOtkupStavke; broj zbirne sa otpremnice. |
-| `modOtkupBlok.StornoSelectedBlok` | 854 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa panelom; zivi par je modScrDokumenti.HladnjacaLanac. |
-| `modOtkupBlok.SumAmbByOtp` | 1624 | ZIV | PR7 | da | GetOtpremnicaProgress (gajbe izvora, v. modDokumenta.OtpGajbeIzvora nad tblOtkupStavke). |
-| `modOtkupBlok.SumBrutoByOtp` | 1601 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Brise se sa panelom. |
-| `modOtkupBlok.SumKolByOtp` | 1583 | ZIV | PR7 | da | modDokumenta.GetOtpremnicaProgress(otpID) - povezano/preostalo. |
-| `modScrDokumenti.ColBrojZbirne` | 1384 | ZIV | PR7 | da | Za OTKUP status zbirne izveden lancem clanstva (OtpremnicaZaOtkup -> Otpremnica.BrojZbirne), ili prazna kolona za OTKUP uz odluku da otkup nema status zbirne. |
-| `modScrDokumenti.ColumnSpec` | 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | ColumnSpec i ColSpecIdx se brisu zajedno. |
-| `modScrDokumenti.HladnjacaLanac` | 287 | ZIV | PR7 | da | Pre storna: OtpremnicaZaOtkup(otkupID) -> Otpremnica.BrojZbirne (PR7) / AktivnaZbirnaZaOtpremnicu (PR8) -> prijemnica -> palete. Trazi po OtkupID, ne po BrDok. |
-| `modScrDokumenti.RowsBlokovi` | 2343 | ZIV | PR7 | da | Sastav iz tblOtpremnicaIzvori (aktivno clanstvo za mOtpID) + kg/amb/cena iz tblOtkupStavke. |
-| `modScrIzvestaji.IzDetaljOtkupLista` | 2106, 2107 | ZIV | PR7 | da | Vozac se cita sa otpremnice clanstva (OtpremnicaZaOtkup, pa COL_OTP_VOZAC); linije dokumenta idu iz tblOtkupStavke. |
-| `modScrIzvestaji.IzDetaljOtpremnice` | 2203 | ZIV | PR7 |  | Broj blokova = broj aktivnih redova clanstva tblOtpremnicaIzvori za otpremnicu (GetOtpremnicaProgress). |
-| `modSetup.BackfillDeteZbirnaGeneracija_Core` | 1472 | ZIV | PR7 |  | TBL_OTKUP/COL_OTK_BROJ_ZBIRNE izlaze iz nizova :1471-1472; cela masinerija generacije se brise u PR8. |
-| `modSetup.BackfillOtkupBrojOtpremnice` | 1571, 1593, 1594, 1601 | ZIV | PR7 |  | Cela procedura se brise (nema produkcionih podataka za migraciju); ostavljena bi posle PR7 na pokretanje vratila obrisanu kolonu. |
-| `modSetup.EnsureSledljivostSchema` | 1313 | ZIV | PR7 |  | Linija se brise i dodaje se ObrisiKolonuAko TBL_OTKUP za OtpremnicaID/BrojZbirne/VozacID/BrojOtpremnice (obrazac :1296-1297); inace self-heal na startu vraca obrisanu kolonu. COL_DETE_ZBIRNA_GEN na otkupu (:1325) ide sa njom. |
-| `modSledljivost.AutoLinkOtkupOtpremnica` | 124, 125, 127, 256 | ZIV | BRISE_SE_SA_POZIVAOCEM | da | PR7: INTENTIONALLY REMOVED. Brise se cela heuristika zajedno sa dugmetom scrSlAuto; povezivanje ide iskljucivo kroz eksplicitno clanstvo. |
-| `modSledljivost.GetUnlinkedOtkupi` | 362, 370 | ZIV | PR7 | da | Vozac otkupa kao pojam nestaje: kolona 4 rezultata se izbacuje ili ostaje prazna po ugovoru. Nepovezanost se meri clanstvom. |
-| `modSledljivost.TraceByZbirna` | 612 | ZIV | PR7 | da | Lanac: zbirna, pa otpremnice (Otpremnica.BrojZbirne do PR8), pa tblOtpremnicaIzvori (OtkupID), pa tblOtkupStavke (kg/klasa). REPLACED po planu. |
-| `modStammdatenSync.ExportOtkupiAll` | 676, 679, 680 | ZIV | PR7 | da | Vozac sa otpremnice: OtpremnicaZaOtkup -> COL_OTP_VOZAC (mapa jednim prolazom). |
-| `modStanicaLock.BuildOTKSheetRowForOtkup` | 529 | ZIV | PR7 | da | Kolona 20 GAS reda (pozicioni ugovor 23 kolone) puni se vozacem otpremnice preko OtpremnicaZaOtkup ili stalno "" uz odluku u ugovoru PWA. |
-| `modStorno.StornoOtkupByBrDok_TX` | 138 | ZIV | PR7 |  | Hladnjaca kaskada nalazi zbirne preko clanstva: OtkupID, pa OtpremnicaZaOtkup, pa Otpremnica.BrojZbirne (u PR8 tblZbirnaIzvori). Mora u istom PR-u koji vraca auto-lanac. |
-| `modStornoDok.ColBrojZbirneZaPrefill` | 680 | ZIV | PR7 |  | Case STIP_OTKUP se brise ili se brzbirne za otkup razresava kroz clanstvo stornirane otpremnice (OtpremnicaZaOtkup, pa Otpremnica.BrojZbirne). |
-| `modStornoDok.ColVozacZaPrefill` | 634 | ZIV | PR7 | da | Case STIP_OTKUP se brise; prefill otkupa se prepisuje sa stavki (modOtkup:203 komentar), a vozac se za otkup ne prefiluje. |
-| `modStornoFlow.ActiveOtkupIDsByZbirna` | 1613, 1619 | ZIV | PR7 |  | Blokovi zbirne: aktivne otpremnice sa Otpremnica.BrojZbirne (u PR8 tblZbirnaIzvori), pa tblOtpremnicaIzvori (OtkupID aktivnog clanstva). |
-| `modStornoFlow.CompleteZbirnaIspravka` | 1010 | ZIV | PR7 |  | Otkup noga se uklanja iz uslova genOp; ostaju otpremnica i prijemnica. Cela GeneracijaID odluka odlazi u PR8. |
-| `modStornoFlow.DetachOtpremniceInline` | 2305, 2319 | ZIV | PR7 |  | Blok denorm otkupa (:2301-2322) se brise; odvezivanje otpremnica ostaje (PR8 ga seli na tblZbirnaIzvori). |
-| `modStornoFlow.FirstLiveOtpremnicaForBlocks` | 2059 | ZIV | PR7 |  | Ziva otpremnica bloka = OtpremnicaZaOtkup(OtkupID) sa aktivnim zaglavljem. Fail-closed na nedostupno clanstvo. |
-| `modStornoFlow.FreeOtkupBloksInline` | 2632, 2634, 2639, 2640 | ZIV | PR7 |  | Oslobadjanje bloka = clanstvo u tblOtpremnicaIzvori postaje neaktivno uz storno otpremnice (A15 verzionisano, S7.1), ne brisanje kolone na otkupu. |
-| `modStornoFlow.GetBlokOtkupIDs` | 2887, 2893 | ZIV | PR7 |  | Blokovi otpremnice = OtkupID iz tblOtpremnicaIzvori po OtpremnicaID (aktivno clanstvo; GetOtpremnicaProgress). |
-| `modStornoFlow.RelinkOtpremniceToZbirna_TX` | 2210, 2242, 2256 | ZIV | PR7 |  | Otkup noga odluke genEff se brise; ostaje otpremnica. Relink zbirne kroz tblZbirnaIzvori je PR8. |
-| `modStornoFlow.StornoZbirnaIDetach_TX` | 2358 | ZIV | PR7 |  | Otkup noga uslova se brise; genEff ostaje nad otpremnicom do PR8. |
-| `modStornoRecovery.OtkupBlockDeadParent` | 260, 261 | MRTAV | PR7 |  | Isti prepis kao OtkupBlockDeadParentByID (mrtav roditelj iz poslednjeg clanstva u tblOtpremnicaIzvori), ili brisanje zajedno sa fallback granom UndoStorno_TX ako se test-hook ukida. |
-| `modStornoRecovery.OtkupBlockDeadParentByID` | 301, 302 | ZIV | PR7 |  | Mrtav roditelj = otpremnica iz poslednjeg (istorijskog, A15) reda clanstva tog OtkupID u tblOtpremnicaIzvori nije aktivna. Fail-closed kad clanstvo nije citljivo. |
+| Modul.procedura | Linije @c2be85e8 | Status | PR | Tiha nula | #334 | Provera | Zamena |
+|---|---|---|---|:-:|---|---|---|
+| `modAutoHladnjaca.LinkOtkupRedNaDokument` | 381, 394, 396, 399 | PAUZIRAN | PR7 |  | — | ✔ | *(Zamena 15.09 protivreči odluci 3 — ovde obrazloženje P2.)* Otkupna grana pauziranog hladnjackog lanca (odluka 1: citanja Otkup.VozacID u hladnjackom lancu nestaju u PR7; odluka 5: VozacID odlazi iz kanona). Cela procedura je otkupna grana (upis veze nazad u tblOtkup, 392-400), pa nestaje u PR7; zb … |
+| `modDokumenta.GetLostOtkupBlokovi` | 6588 | ZIV_UI | PR7 | da | — | ✔ | Izgubljen blok = otkup cije clanstvo u tblOtpremnicaIzvori pokazuje na storniranu otpremnicu (A15 istorija, AktivnoOtpClanstvoPoKanonu/OtpremnicaZaOtkup) umesto Otkup.OtpremnicaID. Kg se racuna iz tblOtkupStavke. |
+| `modDokumenta.GetStorniraniByTip` | 6133 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se zajedno sa GetStorniraniGrupisano. Ako se ipak zadrzi: zbirna preko OtpremnicaZaOtkup, pa Otpremnica.BrojZbirne. |
+| `modDokumenta.ReassignOtkupToOtpremnica_TX` | 6939, 6942, 6944 | ZIV_UI | PR7 |  | — | ✔ | hasZbr guard se brise. Reassign postaje premestanje clanstva u tblOtpremnicaIzvori (Ukloni sa stare, Dodaj na novu, uz kapije IZDATO/A15); broj zbirne se vise ne kopira na otkup. |
+| `modDokumenta.SetOtkupBrojOtpremnice` | 6904, 6908 | ZIV_UI | PR7 |  | — | ✔ | Brise se cela procedura sa svih 5 poziva. BrojOtpremnice na otkupu nema nijednog citaoca u src-vba; broj otpremnice se cita sa zaglavlja otpremnice iz clanstva. |
+| `modHelpers.CheckVerwaisteDokumente` | 498 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se cela funkcija, bez portovanja. Njen sadrzaj pokrivaju GetNedovrseno i modIntegritet B2/B3. |
+| `modIntegritet.Chk_B6_ZbirnaCaseMismatch` | 603 | ZIV_UI | PR7 |  | — | ✔ | Brisanje reda Otkup iz B6 - otkup vise ne nosi broj zbirne; B6 ostaje za otpremnicu/prijemnicu/paletu. |
+| `modIntegritet.ProizvodjacByZbirna` | 1400, 1401 | ZIV_UI | PR7 |  | — | ✔ | Kooperanti zbirne lancem clanstva: zbirna -> otpremnice (Otpremnica.BrojZbirne u PR7, tblZbirnaIzvori u PR8) -> tblOtpremnicaIzvori -> OtkupID -> KooperantID. Primarni put po Otkup.BrojZbirne se brise. |
+| `modIzvestaj.ReportOtkupRobaOM` | 2744 | ZIV_UI | PR7 | da | — | ✔ | Kg blokova po otpremnici = zbir tblOtkupStavke za OtkupID iz clanstva tblOtpremnicaIzvori (GetOtpremnicaProgress), umesto Otkup.OtpremnicaID i Otkup.Kolicina. |
+| `modIzvestaj.ReportSledljivostLanac` | 5127, 5128 | ZIV_UI | PR7 | da | — | ✔ | Karika 2 se razresava preko OtpremnicaZaOtkup (tblOtpremnicaIzvori). blokSum se racuna iz tblOtkupStavke po clanstvu. |
+| `modIzvestaj.ReportSledljivostProblemi` | 5690, 5691 | ZIV_UI | PR7 | da | — | ✔ | SLEDP_BEZ_OTPREMNICE = otkup bez aktivnog clanstva (OtpremnicaZaOtkup vraca ""). Kg se racuna iz stavki. |
+| `modMasterSync.AutoCreateOtpremniceFromPWA` | 801, 802 | PAUZIRAN | PR7 |  | — | ✔ | Vozac iz PWA reda ide direktno na zaglavlje otpremnice kroz CreateOtpremnicaIzIzvora_TX; grupisanje ne cita otkup. Kapija PwaOtpremnicaDostupna. |
+| `modMasterSync.BackfillOtkupBrojZbirneByOtpremnica` | 1247, 1248, 1259 | PAUZIRAN | PR7 |  | — | ✔ | Backfill se brise u PR7 (kolone odlaze iako je zbirni korak pauziran do PR8); clanstvo otkupa u zbirnoj se izvodi lancem otkup -> tblOtpremnicaIzvori -> otpremnica -> tblZbirnaIzvori (PR8). |
+| `modMasterSync.LinkOtkupToOtpremnicaStrict` | 2777 | PAUZIRAN | PR7 |  | — | ✔ | Red u tblOtpremnicaIzvori kroz CreateOtpremnicaIzIzvora_TX / DodajOtpremnicaIzvor_TX; SetOtkupBrojOtpremnice (:2780) se brise. |
+| `modMasterSync.LinkZbirnaToOtkupAndOtpremnica` | 3809, 3810, 3813, 3949, 3953 | PAUZIRAN | PR7 |  | — | ✔ | Otpremnica otkupa = OtpremnicaZaOtkup(otkupID); veza otpremnice sa zbirnom u PR8 kroz tblZbirnaIzvori. U PR7 citanje kolone mora da nestane iako VOZ uvoz ostaje iza PwaZbirnaDostupna=False. |
+| `modMasterSync.StampVozacFromStanicaForMalina` | 1010, 1037 | PAUZIRAN | PR7 |  | — | ✔ | Brise se u PR7 zajedno sa korakom 2b orkestratora; mirror-vozac (StanicaID) upisuje se na zaglavlje otpremnice u CreateOtpremnicaIzIzvora_TX, ne na otkup. |
+| `modMasterSync.TryUpdateVozacID` | 2516, 2554, 2563 | PAUZIRAN | PR7 |  | — | ✔ | Masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/FAILED) nad Otpremnica.VozacID: OtkupPoClientRecordID -> OtpremnicaZaOtkup -> COL_OTP_VOZAC (komentar :1759 to najavljuje). |
+| `modOtkup.SaveOtkup` | 1925, 1931, 1932 | SAMO_TEST | PR7 |  | — | ✔ | Brise se sa SaveOtkup_TX u koraku kolona (plan :1683); testovima zaglavlja bez stavki treba drugi fixture koji ne duplira pozicioni niz. |
+| `modOtkupBlok.BuildFirstBlokCena` | 1668 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa panelom. |
+| `modOtkupBlok.BuildKoopIdByOtp` | 1717 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa panelom. |
+| `modOtkupBlok.BuildNapisanoByOtp` | 1690 | ZIV_UI | PR7 | da | — | ✔ | GetOtpremnicaProgress po otpremnici, ili jedan prolaz nad tblOtpremnicaIzvori + tblOtkupStavke. |
+| `modOtkupBlok.ExistingBlokZbirna` | 1642 | ZIV_UI | PR7 |  | — | ◐ R-08 | Brisanje fallback-a; zbirna je samo ono sto otpremnica zna (COL_OTP_BROJ_ZBIRNE u PR7, AktivnaZbirnaZaOtpremnicu u PR8). |
+| `modOtkupBlok.FirstBlokVal` | 1650 | ZIV_UI | PR7 |  | — | ◐ R-09 | Prvi aktivni izvor iz tblOtpremnicaIzvori + cena sa tblOtkupStavke (ili Otpremnica.PredlogCena). |
+| `modOtkupBlok.LinkOtkupIDsToOtpremnica` | 1476, 1480 | ZIV_UI | PR7 |  | — | ✔ | Guard = OtpremnicaZaOtkup(otkupID) <> ""; ceo vez kroz DodajOtpremnicaIzvor_TX nad DRAFT otpremnicom. |
+| `modOtkupBlok.LoadBlokovi` | 624 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa legacy panelom; zivi ekvivalent je modScrDokumenti.RowsBlokovi. |
+| `modOtkupBlok.PrefillOtkupFromStornirano` | 946 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa panelom. |
+| `modOtkupBlok.RenderSpec` | 1254 | ZIV_UI | PR7 | da | — | ✔ | Sastav otpremnice iz tblOtpremnicaIzvori (aktivno clanstvo po OtpremnicaID) + kg/cena/amb iz tblOtkupStavke; broj zbirne sa otpremnice. |
+| `modOtkupBlok.StornoSelectedBlok` | 854 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa panelom; zivi par je modScrDokumenti.HladnjacaLanac. |
+| `modOtkupBlok.SumAmbByOtp` | 1624 | ZIV_UI | PR7 | da | — | ✔ | GetOtpremnicaProgress (gajbe izvora, v. modDokumenta.OtpGajbeIzvora nad tblOtkupStavke). |
+| `modOtkupBlok.SumBrutoByOtp` | 1601 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Brise se sa panelom. |
+| `modOtkupBlok.SumKolByOtp` | 1583 | ZIV_UI | PR7 | da | — | ✔ | modDokumenta.GetOtpremnicaProgress(otpID) - povezano/preostalo. |
+| `modScrDokumenti.ColBrojZbirne` | 1384 | ZIV_UI | PR7 | da | lanac | ✔ | Za OTKUP status zbirne izveden lancem clanstva (OtpremnicaZaOtkup -> Otpremnica.BrojZbirne), ili prazna kolona za OTKUP uz odluku da otkup nema status zbirne. |
+| `modScrDokumenti.ColumnSpec` | 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se zajedno sa ColSpecIdx |
+| `modScrDokumenti.HladnjacaLanac` | 287 | ZIV_UI | PR7 | da | — | ◐ R-10 | Pre storna: OtpremnicaZaOtkup(otkupID) -> Otpremnica.BrojZbirne (PR7) / AktivnaZbirnaZaOtpremnicu (PR8) -> prijemnica -> palete. Trazi po OtkupID, ne po BrDok. |
+| `modScrDokumenti.RowsBlokovi` | 2383 | ZIV_UI | PR7 | da | — | ✔ | Sastav iz tblOtpremnicaIzvori (aktivno clanstvo za mOtpID) + kg/amb/cena iz tblOtkupStavke. |
+| `modScrIzvestaji.IzDetaljOtkupLista` | 2099, 2100 | ZIV_UI | PR7 | da | telo | ✔ | Vozac se cita sa otpremnice clanstva (OtpremnicaZaOtkup, pa COL_OTP_VOZAC); linije dokumenta idu iz tblOtkupStavke. |
+| `modScrIzvestaji.IzDetaljOtpremnice` | 2200 | ZIV_UI | PR7 |  | — | ✔ | Broj blokova = broj aktivnih redova clanstva tblOtpremnicaIzvori za otpremnicu (GetOtpremnicaProgress). |
+| `modSetup.BackfillDeteZbirnaGeneracija_Core` | 1472 | ZIV_MAKRO | PR7 |  | — | ✔ | TBL_OTKUP/COL_OTK_BROJ_ZBIRNE izlaze iz nizova :1471-1472; cela masinerija generacije se brise u PR8. |
+| `modSetup.BackfillOtkupBrojOtpremnice` | 1571, 1593, 1594, 1601 | ZIV_MAKRO | PR7 |  | — | ✔ | Cela procedura se brise (nema produkcionih podataka za migraciju); ostavljena bi posle PR7 na pokretanje vratila obrisanu kolonu. |
+| `modSetup.EnsureSledljivostSchema` | 1313 | ZIV_UI | PR7 |  | — | ✔ | Linija se brise i dodaje se ObrisiKolonuAko TBL_OTKUP za OtpremnicaID/BrojZbirne/VozacID/BrojOtpremnice (obrazac :1296-1297); inace self-heal na startu vraca obrisanu kolonu. COL_DETE_ZBIRNA_GEN na otkupu (:1325) ide sa njom. |
+| `modSledljivost.AutoLinkOtkupOtpremnica` | 124, 125, 127, 256 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM | da | — | ✔ | PR7: INTENTIONALLY REMOVED. Brise se cela heuristika zajedno sa dugmetom scrSlAuto; povezivanje ide iskljucivo kroz eksplicitno clanstvo. |
+| `modSledljivost.GetUnlinkedOtkupi` | 362, 370 | ZIV_UI | PR7 | da | — | ✔ | Vozac otkupa kao pojam nestaje: kolona 4 rezultata se izbacuje ili ostaje prazna po ugovoru. Nepovezanost se meri clanstvom. |
+| `modSledljivost.TraceByZbirna` | 612 | ZIV_UI | PR7 | da | — | ✔ | Lanac: zbirna, pa otpremnice (Otpremnica.BrojZbirne do PR8), pa tblOtpremnicaIzvori (OtkupID), pa tblOtkupStavke (kg/klasa). REPLACED po planu. |
+| `modStammdatenSync.ExportOtkupiAll` | 676, 679, 680 | ZIV_UI | PR7 | da | — | ✔ | Vozac sa otpremnice: OtpremnicaZaOtkup -> COL_OTP_VOZAC (mapa jednim prolazom). |
+| `modStanicaLock.BuildOTKSheetRowForOtkup` | 529 | ZIV_UI | PR7 | da | — | ✔ | Kolona 20 GAS reda (pozicioni ugovor 23 kolone) puni se vozacem otpremnice preko OtpremnicaZaOtkup ili stalno "" uz odluku u ugovoru PWA. |
+| `modStorno.StornoOtkupByBrDok_TX` | 138 | ZIV_UI | PR7 |  | — | ✔ | *(Zamena 15.09 protivreči odluci 3 — ovde obrazloženje P2.)* Otkupna grana hladnjackog lanca (kaskada storna po Otkup.BrojZbirne) -- odluka 1 (citanja Otkup.BrojZbirne u hladnjackom lancu nestaju u PR7) i odluka 5. |
+| `modStornoDok.ColBrojZbirneZaPrefill` | 680 | ZIV_UI | PR7 |  | — | ✔ | Case STIP_OTKUP se brise ili se brzbirne za otkup razresava kroz clanstvo stornirane otpremnice (OtpremnicaZaOtkup, pa Otpremnica.BrojZbirne). |
+| `modStornoDok.ColVozacZaPrefill` | 634 | ZIV_UI | PR7 |  | — | ◐ R-11 | Case STIP_OTKUP se brise; prefill otkupa se prepisuje sa stavki (modOtkup:203 komentar), a vozac se za otkup ne prefiluje. |
+| `modStornoFlow.ActiveOtkupIDsByZbirna` | 1613, 1619 | ZIV_UI | PR7 | da | — | ◐ R-12 | Blokovi zbirne: aktivne otpremnice sa Otpremnica.BrojZbirne (u PR8 tblZbirnaIzvori), pa tblOtpremnicaIzvori (OtkupID aktivnog clanstva). |
+| `modStornoFlow.CompleteZbirnaIspravka` | 1010 | ZIV_UI | PR7 |  | — | ✔ | Otkup noga se uklanja iz uslova genOp; ostaju otpremnica i prijemnica. Cela GeneracijaID odluka odlazi u PR8. |
+| `modStornoFlow.DetachOtpremniceInline` | 2305, 2319 | ZIV_UI | PR7 |  | — | ✔ | Blok denorm otkupa (:2301-2322) se brise; odvezivanje otpremnica ostaje (PR8 ga seli na tblZbirnaIzvori). |
+| `modStornoFlow.FirstLiveOtpremnicaForBlocks` | 2059 | ZIV_UI | PR7 |  | — | ✔ | Ziva otpremnica bloka = OtpremnicaZaOtkup(OtkupID) sa aktivnim zaglavljem. Fail-closed na nedostupno clanstvo. |
+| `modStornoFlow.FreeOtkupBloksInline` | 2632, 2634, 2639, 2640 | ZIV_UI | PR7 |  | — | ✔ | Oslobadjanje bloka = clanstvo u tblOtpremnicaIzvori postaje neaktivno uz storno otpremnice (A15 verzionisano, S7.1), ne brisanje kolone na otkupu. |
+| `modStornoFlow.GetBlokOtkupIDs` | 2887, 2893 | ZIV_UI | PR7 |  | — | ✔ | Blokovi otpremnice = OtkupID iz tblOtpremnicaIzvori po OtpremnicaID (aktivno clanstvo; GetOtpremnicaProgress). |
+| `modStornoFlow.RelinkOtpremniceToZbirna_TX` | 2210, 2242, 2256 | ZIV_UI | PR7 |  | — | ✔ | Otkup noga odluke genEff se brise; ostaje otpremnica. Relink zbirne kroz tblZbirnaIzvori je PR8. |
+| `modStornoFlow.StornoZbirnaIDetach_TX` | 2358 | ZIV_UI | PR7 |  | — | ✔ | Otkup noga uslova se brise; genEff ostaje nad otpremnicom do PR8. |
+| `modStornoRecovery.OtkupBlockDeadParent` | 260, 261 | SAMO_TEST | PR7 |  | — | ✔ | Isti prepis kao OtkupBlockDeadParentByID (mrtav roditelj iz poslednjeg clanstva u tblOtpremnicaIzvori), ili brisanje zajedno sa fallback granom UndoStorno_TX ako se test-hook ukida. |
+| `modStornoRecovery.OtkupBlockDeadParentByID` | 301, 302 | ZIV_UI | PR7 |  | — | ✔ | Mrtav roditelj = otpremnica iz poslednjeg (istorijskog, A15) reda clanstva tog OtkupID u tblOtpremnicaIzvori nije aktivna. Fail-closed kad clanstvo nije citljivo. |
 
 ## Linijska polja sa zaglavlja otkupa — dual READ
 
 `COL_OTK_KOLICINA`, `CENA`, `KLASA`, `KOL_AMB`, `KOL_AMB_IZDATA`, `BRUTO`, `NOVAC`, `PRIMALAC`, `TIP_AMB` (TipAmbalaze i KolAmbIzdata ostaju na zaglavlju po §3 → `VAN_OPSEGA`).
 
-| Modul.procedura | Linije | Status | PR | Tiha nula | Zamena |
-|---|---|---|---|:-:|---|
-| `modDokumenta.GetLostOtkupBlokovi` | 6587 | ZIV | PR7 |  | nestaje zajedno sa Otkup.OtpremnicaID (A15 clanstvo u tblOtpremnicaIzvori, S7.1). Ako lista ostane, kg iz tblOtkupStavke; takav citac danas ne postoji. |
-| `modDokumenta.GetStorniraniByTip` | 6129, 6130, 6131, 6132 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se zajedno sa GetStorniraniGrupisano |
-| `modDokumenta.OtpRequireIzvorValjan` | 2981 | MRTAV | VAN_OPSEGA |  | nema, TipAmbalaze ostaje na headeru (PR7 skelu cini jedinim putem) |
-| `modHelpers.CheckVerwaisteDokumente` | 500 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se (zamenjen listom Nedovrseno) |
-| `modIzvestaj.ReportKarticaKooperanta` | 895, 896, 898, 905, 906 | ZIV | PR7/VAN_OPSEGA | da | kg iz tblOtkupStavke po OtkupID; red kartice ide po dokumentu, opis bira stavke |
-| `modIzvestaj.ReportKarticaRobaRekap` | 1239, 1241 | ZIV | PR7 | da | kg po (vrsta, sorta, klasa) iz tblOtkupStavke, uz vrstu i sortu sa headera |
-| `modIzvestaj.ReportOtkupListe` | 1521, 1522, 1523 | ZIV | PR7 | da | Klasa iz tblOtkupStavke |
-| `modIzvestaj.ReportOtkupRobaOM` | 2720 | ZIV | PR7 | da | modDokumenta.GetOtpremnicaProgress ('povezano' po klasi, clanstvo iz tblOtpremnicaIzvori + stavke) |
-| `modIzvestaj.ReportProsecnaCena` | 3453, 3454 | ZIV | PR7 | da | kg iz tblOtkupStavke po OtkupID |
-| `modIzvestaj.ReportSaldoOM` | 589, 590, 591 | ZIV | PR7 | da | kg po otkupu iz tblOtkupStavke. Javnog bulk citaca kg nema; dodati ga pored modNovac.BuildVrednostDictByOtkup (isti prolaz, ista pravila) |
-| `modIzvestaj.ReportSledljivostLanac` | 5091, 5092 | ZIV | PR7 | da | Klasa iz tblOtkupStavke (red po stavci ili nabrajanje klasa dokumenta) |
-| `modIzvestaj.ReportSledljivostProblemi` | 5655 | ZIV | PR7 | da | kg iz tblOtkupStavke; zbir po otpremnici: modDokumenta.GetOtpremnicaProgress |
-| `modIzvestaj.ReportZbirniOM` | 3788, 3789 | ZIV | PR7 | da | kg iz tblOtkupStavke po OtkupID |
-| `modMarza.AggregateOtkupByVrsta` | 384, 385 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | brise se; ako ANALIZA dobije ekran, vrednost daje VrednostOtkupa (modOtkup:874) |
-| `modMarza.AggregateOtkupByVrstaFiltered` | 416, 417 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | brise se; ako ANALIZA dobije ekran, VrednostOtkupa (modOtkup:874) |
-| `modMasterSync.AutoCreateOtpremniceFromPWA` | 803, 806, 807, 808, 809 | PAUZIRAN | PR7/VAN_OPSEGA |  | PR7 zamenjuje telo putem nad tblOtpremnicaIzvori (CreateOtpremnicaIzIzvora_TX) i klasom iz tblOtkupStavke; kapija se deli (PwaOtpremnicaDostupna) |
-| `modMasterSync.PwaIstiSadrzaj` | 1987 | ZIV | VAN_OPSEGA |  | nema, ostaje header |
-| `modOtkup.BuildOtkupHeaderRowData` | 1076, 1079 | ZIV | VAN_OPSEGA |  | nema, TipAmbalaze ostaje na headeru |
-| `modOtkup.SaveOtkup` | 1584, 1585, 1586, 1587, 1590, 1591, 1592, 1647, 1654 | MRTAV | BRISE_SE_SA_POZIVAOCEM/VAN_OPSEGA |  | nema. Testovi Test_OTK_VrednostBezStavkiPada i Test_OTP_StariOtkupNeUlazi traze drugi nacin da naprave header bez stavki. |
-| `modOtkupBlok.BuildFirstBlokCena` | 1669 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se sa panelom |
-| `modOtkupBlok.BuildNapisanoByOtp` | 1691 | ZIV | PR7 | da | modDokumenta.GetOtpremnicaProgress (:2468), ili isti racun u jednom prolazu nad tblOtpremnicaIzvori + tblOtkupStavke |
-| `modOtkupBlok.ExistingBlokCena` | 1635 | ZIV | PR7 | da | Otpremnica.PredlogCena (S3/S13b); cena stavki iz tblOtkupStavke preko clanstva. Citac ne postoji. |
-| `modOtkupBlok.KoopPrometYear` | 1914, 1915 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se sa panelom |
-| `modOtkupBlok.KoopRangRows` | 2003, 2004 | ZIV | PR7 | da | iznos preko VrednostOtkupa (modOtkup:874) po otkupu; kg iz tblOtkupStavke (citac ne postoji) |
-| `modOtkupBlok.LoadBlokovi` | 626, 627, 630 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, mrtva polovina legacy panela; mora otici najkasnije u PR7 jer cita kolone koje se brisu |
-| `modOtkupBlok.PrefillOtkupFromStornirano` | 943, 949, 950, 951, 952, 953, 955, 956 | MRTAV | BRISE_SE_SA_POZIVAOCEM/VAN_OPSEGA |  | nema; ekvivalent u ljusci je modStornoDok.PrefillIzStorniranog |
-| `modOtkupBlok.RenderSpec` | 1256, 1257 | ZIV | PR7 | da | izbor otkupa kroz tblOtpremnicaIzvori; red po stavci iz tblOtkupStavke; vrednost preko VrednostOtkupa (modOtkup:874). Citac kg stavki ne postoji. |
-| `modOtkupBlok.SumAmbByOtp` | 1625 | ZIV | PR7 | da | modDokumenta.GetOtpremnicaProgress (:2468) |
-| `modOtkupBlok.SumBrutoByOtp` | 1602, 1603 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se sa panelom (napredak ide kroz GetOtpremnicaProgress) |
-| `modOtkupBlok.SumKolByOtp` | 1584 | ZIV | PR7 | da | modDokumenta.GetOtpremnicaProgress (:2468) nad tblOtpremnicaIzvori |
-| `modOtkupUI.RefreshKpi` | 3860 | ZIV | PR7 | da | zbir tblOtkupStavke.Kolicina po datumu zaglavlja; citac ne postoji (SumKgForDate je jednotabelarni) |
-| `modPaletniList.GetOtkupiZaPalete` | 2731, 2732, 2733, 2734 | ZIV | PR7/VAN_OPSEGA | da | kg iz tblOtkupStavke; clanstvo iz tblOtpremnicaIzvori (TraceByZbirna je REPLACED u PR7) |
-| `modPrint.FillOtkupSablon` | 592, 593 | ZIV | VAN_OPSEGA |  | nema, ostaje na headeru |
-| `modScrDokumenti.ColCena` | 1376 | ZIV | PR7 | da | modNovac.BuildVrednostDictByOtkup (direktna vrednost umesto cena x kg) |
-| `modScrDokumenti.ColKlasa` | 1339 | ZIV | PR7 | da | Klasa iz tblOtkupStavke (red mreze = dokument, klase se nabrajaju) |
-| `modScrDokumenti.ColKolAmb` | 1357 | ZIV | PR7 | da | zbir KolAmbalaze stavki po OtkupID |
-| `modScrDokumenti.ColKolicina` | 1348 | ZIV | PR7 | da | kg iz tblOtkupStavke po OtkupID (bulk citac pored BuildVrednostDictByOtkup) |
-| `modScrDokumenti.ColTipAmb` | 1366 | ZIV | VAN_OPSEGA |  | nema, ostaje header |
-| `modScrDokumenti.ColumnSpec` | 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | nema, brise se zajedno sa ColSpecIdx |
-| `modScrDokumenti.RedoviZaTip` | 1768, 1769 | ZIV | PR7 | da | modNovac.BuildVrednostDictByOtkup kao duguje |
-| `modScrDokumenti.RowsBlokovi` | 2347, 2348, 2349 | ZIV | PR7 | da | clanstvo iz tblOtpremnicaIzvori + kg iz stavki; zbir: modDokumenta.GetOtpremnicaProgress |
-| `modScrIzvestaji.IzDetaljOtkupLista` | 2102, 2103, 2104 | ZIV | PR7 | da | stavke iz tblOtkupStavke po OtkupID (obrazac inline citaca u modPrint:603-614) |
-| `modSetup.EnsureDoradeSchema` | 1643, 1649, 1650, 1658, 1659 | ZIV | PR7/VAN_OPSEGA |  | ukloniti red kad kolona ode iz kanona (schema.json je izvor) |
-| `modSledljivost.AutoLinkOtkupOtpremnica` | 126 | ZIV | PR7 | da | nema, heuristika se brise namerno (INTENTIONALLY REMOVED); clanstvo ide kroz DodajOtpremnicaIzvor_TX (modDokumenta:2314) |
-| `modSledljivost.GetUnlinkedOtkupi` | 366 | ZIV | PR7 | da | otkup bez aktivnog clanstva preko AktivnoOtpClanstvoPoKanonu (modDokumenta); kg iz tblOtkupStavke (citac ne postoji) |
-| `modSledljivost.TraceByZbirna` | 608, 614 | ZIV | PR7 | da | clanstvo tblOtpremnicaIzvori umesto Otkup.OtpremnicaID + red po stavci iz tblOtkupStavke (kg) |
-| `modStammdatenSync.ExportOtkupPoOM` | 554, 555, 556, 557 | ZIV | PR7 | da | Klasa iz tblOtkupStavke |
-| `modStammdatenSync.ExportOtkupiAll` | 671, 672, 673, 674, 675 | ZIV | PR7/VAN_OPSEGA | da | Klasa iz tblOtkupStavke (red po stavci ili po dokumentu) |
-| `modStammdatenSync.ExportSaldoOMDetail` | 1080, 1081, 1082 | ZIV | PR7 | da | kg iz tblOtkupStavke |
-| `modStanicaLock.BuildOTKSheetRowForOtkup` | 525, 526, 527, 528, 531 | ZIV | PR7/VAN_OPSEGA | da | kg iz tblOtkupStavke (PWA red = jedna stavka, obrazac PwaIstiSadrzaj:2012-2031) |
-| `modStornoDok.ColAmbPrZaPrefill` | 729 | PAUZIRAN | VAN_OPSEGA |  | nema, ostaje na headeru |
-| `modStornoDok.ColBrutoZaPrefill` | 719 | PAUZIRAN | PR7 |  | tblOtkupStavke.BrutoKg po klasi |
-| `modStornoDok.ColCenaZaPrefill` | 710 | PAUZIRAN | PR7 |  | tblOtkupStavke.Cena po klasi |
-| `modStornoDok.ColKlasaZaPrefill` | 643 | PAUZIRAN | PR7 |  | stavke po klasi iz tblOtkupStavke; stari OtkupID treba provesti kroz prefill do IspravkaOtkupa_TX (S14.4) |
-| `modStornoDok.ColKolAmbZaPrefill` | 699 | PAUZIRAN | PR7 |  | tblOtkupStavke.KolAmbalaze po klasi |
-| `modStornoDok.ColKolicinaZaPrefill` | 689 | PAUZIRAN | PR7 |  | tblOtkupStavke.Kolicina po klasi |
-| `modStornoDok.ColTipAmbZaPrefill` | 670 | PAUZIRAN | VAN_OPSEGA |  | nema, ostaje na headeru |
-| `modStornoFlow.GetStornoBlockRows` | 1762, 1763 | ZIV | PR7 | da | clanstvo iz tblOtpremnicaIzvori + zbir kg stavki po OtkupID |
-| `modStornoZurnal.OtkupReissueDupExists` | 331 | ZIV | PR7 |  | duplikat = aktivan header istog (stanica, BrDok); klasa vise nije atribut headera |
+| Modul.procedura | Linije @c2be85e8 | Status | PR | Tiha nula | #334 | Provera | Zamena |
+|---|---|---|---|:-:|---|---|---|
+| `modDokumenta.GetLostOtkupBlokovi` | 6587 | ZIV_UI | PR7 | da | — | ✔ | nestaje zajedno sa Otkup.OtpremnicaID (A15 clanstvo u tblOtpremnicaIzvori, S7.1). Ako lista ostane, kg iz tblOtkupStavke; takav citac danas ne postoji. |
+| `modDokumenta.GetStorniraniByTip` | 6129, 6130, 6131, 6132 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se zajedno sa GetStorniraniGrupisano |
+| `modDokumenta.OtpRequireIzvorValjan` | 2981 | SAMO_TEST | VAN_OPSEGA |  | — | ✔ | nema, TipAmbalaze ostaje na headeru (PR7 skelu cini jedinim putem) |
+| `modHelpers.CheckVerwaisteDokumente` | 500 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se (zamenjen listom Nedovrseno) |
+| `modIzvestaj.ReportKarticaKooperanta` | 911 | ZIV_UI | VAN_OPSEGA |  | telo | ✔ | nema, ostaje header |
+| `modIzvestaj.ReportOtkupRobaOM` | 2745 | ZIV_UI | PR7 | da | — | ✔ | modDokumenta.GetOtpremnicaProgress ('povezano' po klasi, clanstvo iz tblOtpremnicaIzvori + stavke) |
+| `modIzvestaj.ReportSledljivostLanac` | 5124, 5125 | ZIV_UI | PR7 | da | — | ✔ | Klasa iz tblOtkupStavke (red po stavci ili nabrajanje klasa dokumenta) |
+| `modIzvestaj.ReportSledljivostProblemi` | 5688 | ZIV_UI | PR7 | da | — | ✔ | kg iz tblOtkupStavke; zbir po otpremnici: modDokumenta.GetOtpremnicaProgress |
+| `modMarza.AggregateOtkupByVrsta` | 384, 385 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | brise se; ako ANALIZA dobije ekran, vrednost daje VrednostOtkupa (modOtkup:874) |
+| `modMarza.AggregateOtkupByVrstaFiltered` | 416, 417 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | brise se; ako ANALIZA dobije ekran, VrednostOtkupa (modOtkup:874) |
+| `modMasterSync.AutoCreateOtpremniceFromPWA` | 803, 806, 807, 808, 809 | PAUZIRAN | PR7/VAN_OPSEGA |  | — | ✔ | PR7 zamenjuje telo putem nad tblOtpremnicaIzvori (CreateOtpremnicaIzIzvora_TX) i klasom iz tblOtkupStavke; kapija se deli (PwaOtpremnicaDostupna) |
+| `modMasterSync.PwaIstiSadrzaj` | 1987 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | nema, ostaje header |
+| `modOtkup.BuildOtkupHeaderRowData` | 1413, 1416 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | nema, TipAmbalaze ostaje na headeru |
+| `modOtkup.SaveOtkup` | 1921, 1922, 1923, 1924, 1927, 1928, 1929, 1984, 1991 | SAMO_TEST | BRISE_SE_SA_POZIVAOCEM/zavisi od odluke 'Jos otvoreno 3' |  | — | ◐ R-07 | Test-only legacy pisac. Pozicioni red (modOtkup.bas:1951-1972) nosi VozacID/BrojZbirne/OtpremnicaID na pozicijama 12/18/19 (kanon modSchema.bas:1258, 1264, 1265), a RequireColumns trazi COL_OTK_VOZAC/BROJ_ZBIRNE/OTPREMNICA_ID (:1925, :1931, :1932) -- kolone koje PR7 brise (odluka 5), pa procedura u … |
+| `modOtkupBlok.BuildFirstBlokCena` | 1669 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se sa panelom |
+| `modOtkupBlok.BuildNapisanoByOtp` | 1691 | ZIV_UI | PR7 | da | — | ✔ | modDokumenta.GetOtpremnicaProgress (:2468), ili isti racun u jednom prolazu nad tblOtpremnicaIzvori + tblOtkupStavke |
+| `modOtkupBlok.ExistingBlokCena` | 1635 | ZIV_UI | PR7 | da | — | ✔ | Otpremnica.PredlogCena (S3/S13b); cena stavki iz tblOtkupStavke preko clanstva. Citac ne postoji. |
+| `modOtkupBlok.KoopPrometYear` | 1914, 1915 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se sa panelom |
+| `modOtkupBlok.LoadBlokovi` | 626, 627, 630 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, mrtva polovina legacy panela; mora otici najkasnije u PR7 jer cita kolone koje se brisu |
+| `modOtkupBlok.PrefillOtkupFromStornirano` | 943, 949, 950, 951, 952, 953, 955, 956 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ◐ R-06 | Procedura mrtvog ostrva panela (OfferHladnjacaIspravka <- StornoSelectedBlok <- clsBlokUI). |
+| `modOtkupBlok.RenderSpec` | 1256, 1257 | ZIV_UI | PR7 | da | — | ✔ | izbor otkupa kroz tblOtpremnicaIzvori; red po stavci iz tblOtkupStavke; vrednost preko VrednostOtkupa (modOtkup:874). Citac kg stavki ne postoji. |
+| `modOtkupBlok.SumAmbByOtp` | 1625 | ZIV_UI | PR7 | da | — | ✔ | modDokumenta.GetOtpremnicaProgress (:2468) |
+| `modOtkupBlok.SumBrutoByOtp` | 1602, 1603 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se sa panelom (napredak ide kroz GetOtpremnicaProgress) |
+| `modOtkupBlok.SumKolByOtp` | 1584 | ZIV_UI | PR7 | da | — | ✔ | modDokumenta.GetOtpremnicaProgress (:2468) nad tblOtpremnicaIzvori |
+| `modPaletniList.GetOtkupiZaPalete` | 2731, 2732, 2733, 2734 | ZIV_UI | PR7/VAN_OPSEGA | da | — | ✔ | kg iz tblOtkupStavke; clanstvo iz tblOtpremnicaIzvori (TraceByZbirna je REPLACED u PR7) |
+| `modPrint.FillOtkupSablon` | 592, 593 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | nema, ostaje na headeru |
+| `modScrDokumenti.ColCena` | 1376 | ZIV_UI | NETAKNUT |  | — | ◐ R-01, R-14 | Kao :1339 -- kljuc/oznaka, ne citanje; vrednost vec iz stavki. |
+| `modScrDokumenti.ColKlasa` | 1339 | ZIV_UI | NETAKNUT |  | — | ◐ R-01 | Mesto ne cita vrednost, a prikaz vec ide iz tblOtkupStavke. Ni brisanje kolone ga ne obara: ColIdx vraca 0 (modUiData.bas:91-95), CellS/CellD za c<1 vracaju prazno/0 (modUiData.bas:97-108), prepis iz stavki i dalje vazi. V. nalaz P3 o odbacenom citanju zaglavlja. |
+| `modScrDokumenti.ColKolAmb` | 1357 | ZIV_UI | NETAKNUT |  | — | ◐ R-01 | Kao :1339 -- kljuc/oznaka, ne citanje; prikaz vec iz stavki. |
+| `modScrDokumenti.ColKolicina` | 1348 | ZIV_UI | NETAKNUT |  | — | ◐ R-01 | Kao :1339 -- kljuc/oznaka, ne citanje; prikaz vec iz stavki. |
+| `modScrDokumenti.ColTipAmb` | 1366 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | nema, ostaje header |
+| `modScrDokumenti.ColumnSpec` | 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | nema, brise se zajedno sa ColSpecIdx |
+| `modScrDokumenti.RedoviZaTip` | 1743, 1744, 1745, 1746 | ZIV_UI | NETAKNUT |  | telo novo | ✔ | Mesto ne cita zaglavlje, nego mapira ime kolone na vrednost iz stavki; ne mora se menjati ni ako kolona ode iz kanona. Odbaceno citanje zaglavlja kroz ix(c)/vKgRow (:1725, :1830, :1875-1883) ostaje -- v. nalaz P3. |
+| `modScrDokumenti.RowsBlokovi` | 2387, 2388, 2389 | ZIV_UI | PR7 | da | — | ✔ | clanstvo iz tblOtpremnicaIzvori + kg iz stavki; zbir: modDokumenta.GetOtpremnicaProgress |
+| `modSetup.EnsureDoradeSchema` | 1643, 1649, 1650, 1658, 1659 | ZIV_UI | USLOVNO PR7 (odluka 5)/VAN_OPSEGA |  | — | ◐ R-05, R-16 | Nije citalac; SetColumnNumberFormat je no-op kad kolone nema (modSetup.bas:1712-1720). Da li Kolicina ostaje na zaglavlju otkupa nije odluceno (odluka 5) -- red postaje ostatak tek ako se kolona izbaci iz kanona. |
+| `modSledljivost.AutoLinkOtkupOtpremnica` | 126 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM | da | — | ✔ | nema, heuristika se brise namerno (INTENTIONALLY REMOVED); clanstvo ide kroz DodajOtpremnicaIzvor_TX (modDokumenta:2314) |
+| `modSledljivost.GetUnlinkedOtkupi` | 366 | ZIV_UI | PR7 | da | — | ✔ | otkup bez aktivnog clanstva preko AktivnoOtpClanstvoPoKanonu (modDokumenta); kg iz tblOtkupStavke (citac ne postoji) |
+| `modSledljivost.TraceByZbirna` | 608, 614 | ZIV_UI | PR8 + PR7 (uklanjanje zavisnosti od kolona koje PR7 brise) | da | — | ◐ R-04 | Odluka 4: 'Sledljivost zbirne (TraceByZbirna) -> PR8'; zbirni citalac po Otpremnica.BrojZbirne (modSledljivost.bas:548, 558), odluka 1. Protivrecnost sa odlukom 5 -- v. nalaz. |
+| `modStammdatenSync.ExportOtkupPoOM` | 554, 555, 556, 557 | ZIV_UI | PR7 | da | — | ✔ | Klasa iz tblOtkupStavke |
+| `modStammdatenSync.ExportOtkupiAll` | 671, 672, 673, 674, 675 | ZIV_UI | PR7/VAN_OPSEGA | da | — | ✔ | Klasa iz tblOtkupStavke (red po stavci ili po dokumentu) |
+| `modStammdatenSync.ExportSaldoOMDetail` | 1080, 1081, 1082 | ZIV_UI | PR7 | da | — | ✔ | kg iz tblOtkupStavke |
+| `modStanicaLock.BuildOTKSheetRowForOtkup` | 525, 526, 527, 528, 531 | ZIV_UI | PR7/VAN_OPSEGA | da | — | ✔ | kg iz tblOtkupStavke (PWA red = jedna stavka, obrazac PwaIstiSadrzaj:2012-2031) |
+| `modStornoDok.ColAmbPrZaPrefill` | 729 | ZIV_UI | PR7 | da | — | ◐ R-03 | nema, ostaje na headeru |
+| `modStornoDok.ColBrutoZaPrefill` | 719 | ZIV_UI | PR7 | da | — | ◐ R-03, R-14 | tblOtkupStavke.BrutoKg po klasi |
+| `modStornoDok.ColCenaZaPrefill` | 710 | ZIV_UI | PR7 | da | — | ◐ R-03, R-13 | tblOtkupStavke.Cena po klasi |
+| `modStornoDok.ColKlasaZaPrefill` | 643 | ZIV_UI | PR7 | da | — | ◐ R-03, R-14 | stavke po klasi iz tblOtkupStavke; stari OtkupID treba provesti kroz prefill do IspravkaOtkupa_TX (S14.4) |
+| `modStornoDok.ColKolAmbZaPrefill` | 699 | ZIV_UI | PR7 | da | — | ◐ R-03, R-14 | tblOtkupStavke.KolAmbalaze po klasi |
+| `modStornoDok.ColKolicinaZaPrefill` | 689 | ZIV_UI | PR7 | da | — | ◐ R-03, R-14 | tblOtkupStavke.Kolicina po klasi |
+| `modStornoDok.ColTipAmbZaPrefill` | 670 | ZIV_UI | PR7 | da | — | ◐ R-03 | nema, ostaje na headeru |
+| `modStornoFlow.GetStornoBlockRows` | 1762, 1763 | ZIV_UI | PR7 | da | — | ✔ | clanstvo iz tblOtpremnicaIzvori + zbir kg stavki po OtkupID |
+| `modStornoZurnal.OtkupReissueDupExists` | 331 | ZIV_UI | PR7 |  | — | ✔ | duplikat = aktivan header istog (stanica, BrDok); klasa vise nije atribut headera |
 
 ## Po-klasna polja na zaglavlju otpremnice
 
-`COL_OTP_KOLICINA`, `KLASA`, `KOL_AMB`, `BRUTO`, `TIP_AMB`, `SORTA`, `VRSTA`, `KULTURA`, `CENA` (Vrsta/Sorta/TipAmbalaze ostaju na zaglavlju → `VAN_OPSEGA`; Cena → PredlogCena).
+`COL_OTP_KOLICINA`, `KLASA`, `KOL_AMB`, `BRUTO`, `TIP_AMB`, `SORTA`, `VRSTA`, `KULTURA`, `CENA` (Vrsta/Sorta/TipAmbalaze/Kultura ostaju na zaglavlju → `VAN_OPSEGA`; Cena → PredlogCena).
 
-| Modul.procedura | Linije | Status | PR | Tiha nula | Zamena |
-|---|---|---|---|:-:|---|
-| `modAutoHladnjaca.BackfillPrijemniceHladnjacaCore` | 486, 487, 488, 489, 490, 491, 492, 493 | ZIV | PR7/VAN_OPSEGA |  | VrstaVoca ostaje na headeru (S3) |
-| `modDokumentInvariant.SumOtpremniceByKlasa` | 59, 60, 61, 63, 64, 65 | ZIV | PR8/VAN_OPSEGA |  | LEGACY ZBIRNA, granica PR7/PR8. U PR8 ide SUM(tblOtpremnicaStavke.Kolicina) po Klasi, za otpremnice iz tblZbirnaIzvori. Ako PR7 isprazni ili ukloni header Kolicina pre PR8, onda PR7 mora ovde da sabira stavke (po OtpremnicaID, za header-e sa BrojZbirne) ili da … |
-| `modDokumenta.BuildOtpremnicaHeaderRowData` | 2749, 2750, 2754, 2756, 2760 | MRTAV | PR7/VAN_OPSEGA |  | ostaje header polje |
-| `modDokumenta.BuildZbirnaVrstaCache` | 5817 | ZIV | VAN_OPSEGA |  | VrstaVoca ostaje; kljuc kesa je Otpremnica.BrojZbirne (PR8 -> tblZbirna.VrstaVoca/tblZbirnaIzvori). Nove otpremnice bez BrojZbirne -> '(Nepoznato)' u izvestaju |
-| `modDokumenta.CalculateManjakByOtpremnica` | 5270, 5272 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | brise se (legacy zbirna manjak po BrojZbirne); ako manjak zatreba -- iz izvora, ne Kolicina x Cena (S13b) |
-| `modDokumenta.CalculateProsekGajbe` | 5323, 5325, 5330, 5331 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | brise se sa testom |
-| `modDokumenta.CreateZbirna` | 1477, 1478, 1479, 1480, 1481, 1482 | MRTAV | PR8/VAN_OPSEGA |  | LEGACY-MODEL U KANONSKOJ SKELI ZBIRNE (granica PR7/PR8): izvor mora da cita tblOtpremnicaStavke.Klasa po OtpremnicaID (S8). Posle PR7 nova otpremnica pada glasno na RequireValidDocumentClass (:1562) |
-| `modDokumenta.GetStorniraniByTip` | 6141, 6142, 6143, 6144, 6145 | MRTAV | BRISE_SE_SA_POZIVAOCEM/VAN_OPSEGA |  | header polje ostaje; funkcija je mrtva |
-| `modDokumenta.GetVerwaisteOtpremnice` | 5503, 5505 | ZIV | PR7/VAN_OPSEGA |  | VrstaVoca ostaje na headeru |
-| `modDokumenta.OtpIzmeniDraft` | 2685, 2690, 2692, 2694, 2696 | MRTAV | PR7/VAN_OPSEGA |  | ostaje header polje |
-| `modDokumenta.OtpNapraviDraft` | 2563 | MRTAV | VAN_OPSEGA |  | KulturaID je header cinjenica skele (fail-fast nad semom) |
-| `modDokumenta.OtpRequireIzvorValjan` | 2953, 2979 | MRTAV | VAN_OPSEGA |  | header KulturaID |
-| `modDokumenta.OtpUpisiOcekivano` | 2835 | MRTAV | VAN_OPSEGA |  | header TipAmbalaze, cita se ispravno po OtpremnicaID |
-| `modDokumenta.SaveOtpremnica` | 402 | ZIV | BRISE_SE_SA_POZIVAOCEM |  | Legacy pisac po klasi odlazi u PR7; BrutoKg zivi na tblOtpremnicaStavke i upisuje ga OtpIzdaj iz izvora (modDokumenta:3171-3173) |
-| `modDokumenta.ValidateZbirna` | 3691, 3693 | ZIV | PR7 |  | LEGACY ZBIRNA invarijanta (granica PR7/PR8): suma sa po-klasnih redova po BrojZbirne; u PR7 kolicina -> SUM tblOtpremnicaStavke, a join po ZbirnaID preko tblZbirnaIzvori je PR8 (S8). Nove otpremnice nemaju BrojZbirne pa u A1 ne ulaze (slepilo, ne lazna nula) |
-| `modDokumenta.ValidateZbirnaPreUnosa` | 3763, 3765, 3767 | ZIV | PR7 |  | LEGACY ZBIRNA (granica PR7/PR8): izvor po Otpremnica.BrojZbirne + po-klasni redovi; novi header pisac (modDokumenta:2724-2767) ne pise ni BrojZbirne ni Kolicina -> zbir 0 -> F3 pada na DOK_MSG_VALIDACIJA_NIJE_PROSLA. PR7 mora eksplicitno pauzirati rucnu zbirnu … |
-| `modHelpers.CheckVerwaisteDokumente` | 530, 531 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | brise se u PR7 (cita i COL_OTK_OTPREMNICA_ID :498 bez Require, koji PR7 brise) |
-| `modIntegritet.Chk_B4_DanglingBrojZbirne` | 272 | ZIV | PR8 |  | LEGACY ZBIRNA: sama provera BrojZbirne prelazi na tblZbirnaIzvori u PR8. Kolonu prikaza PR7 menja u SUM(tblOtpremnicaStavke.Kolicina) po OtpremnicaID ili je izbacuje, i daje jedan red po header-u. Ako PR7 fizicki ukloni kolonu, RequireColumnIndex obara B4 u Wr … |
-| `modIntegritet.Chk_B5b_OtpremnicaBezZbirne` | 307 | ZIV | PR8 |  | Isto kao :272: provera odlazi u PR8, kolonu prikaza PR7 menja u SUM stavki ili je izbacuje. |
-| `modIzvestaj.ReportOtkupRobaOM` | 2700, 2701, 2704 | ZIV | PR7/VAN_OPSEGA |  | VrstaVoca ostaje na header-u. |
-| `modIzvestaj.ReportOtkupRobaVozac` | 2995, 2996, 2997 | ZIV | PR7/VAN_OPSEGA |  | VrstaVoca ostaje na header-u. |
-| `modIzvestaj.ReportRobaVozaciZbirni` | 1979, 1980 | ZIV | PR7 |  | kg = SUM(tblOtpremnicaStavke.Kolicina) po header-u sa VozacID (VozacID ostaje na header-u po S3). |
-| `modIzvestaj.ReportSledljivostProblemi` | 5708 | ZIV | PR7 |  | Jedan red po header-u. otpKg = SUM stavki. Razliku prema blokovima meri GetOtpremnicaProgress (ocekivano prema napisano iz izvora), ne blokSum iz tblOtkup.Kolicina. |
-| `modIzvestaj.SledOtpMapa` | 4946, 4947 | ZIV | PR7 |  | Klasa iz tblOtpremnicaStavke. Kljuc mape po OtpremnicaID vise ne nosi jednu klasu, pa manjak po klasi u lancu mora da ide po stavci. Deo sa BrojZbirne je PR8. |
-| `modMasterSync.AutoCreateZbirnaFromOtpremnice` | 1142, 1143, 1144, 1145, 1146, 1147 | PAUZIRAN | PR8/VAN_OPSEGA |  | VrstaVoca ostaje na headeru; funkcija je malina auto-zbirna (PR8) |
-| `modOtkupBlok.LoadOtpremnice` | 510, 511 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema. Ziva lista je modScrDokumenti.RowsOtpremnice. |
-| `modOtkupBlok.OtkupBlok_AfterUnos` | 272 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema. Auto-deselekcija popunjene otpremnice nema zivog nastavljaca. |
-| `modOtkupBlok.OtkupBlok_ConfirmUnos` | 228 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema zamene u ovom modulu. Zivu ulogu ima modScrDokumenti.PotvrdiPrekoracenje; ona prelazi na GetOtpremnicaProgress. |
-| `modOtkupBlok.PrefillLeftForm` | 730, 731 | MRTAV | VAN_OPSEGA |  | Kolona ostaje na header-u. Sama procedura je mrtva, a njeno brisanje je zasebna odluka (UI_MIGRACIJA_KATALOG §27.10). |
-| `modOtkupBlok.RefreshSummary` | 1394, 1396, 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema. Ziva traka je modScrDokumenti.Scr_OtpInfo. |
-| `modOtkupBlok.SelectOtpFromList` | 698 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema. Ziv ekvivalent je modScrDokumenti.PrefillSpec:1111. |
-| `modPrint.FillOtpremnicaSablon` | 244, 245, 247, 248, 249, 260, 261 | ZIV | PR7/VAN_OPSEGA |  | stavke PDF-a iz tblOtpremnicaStavke (red po klasi) umesto jedne stavke sa headera; posle PR7 bez toga PDF tiho stampa 0 kg |
-| `modScrDokumenti.ColCena` | 1377 | ZIV | PR7 |  | S13b zabranjuje Kolicina x Cena. Za OTPREMNICA vratiti prazno (bez kolone vrednosti, kao zbirna) ili dati izvedenu vrednost iz SUM izvornih otkupnih stavki. Ne prelazi se mehanicki na PredlogCena. |
-| `modScrDokumenti.ColKlasa` | 1340 | ZIV | PR7 |  | Za mk = OTPREMNICA vratiti prazno (kolona ispada), a za prikaz klase po stavci treba poseban red detalja. Posle PR7 je jedan red mreze jedan header. |
-| `modScrDokumenti.ColKolAmb` | 1358 | ZIV | PR7 |  | SUM(tblOtpremnicaStavke.KolAmbalaze) po header-u, kao izvedena kolona. |
-| `modScrDokumenti.ColKolicina` | 1349 | ZIV | PR7 |  | Kolona kg za OTPREMNICA ne moze biti ime kolone header-a. Treba izvedena vrednost SUM(tblOtpremnicaStavke.Kolicina) po OtpremnicaID, pa RedoviZaTip mora da dobije mapu umesto ColIdx. |
-| `modScrDokumenti.ColSorta` | 1331 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modScrDokumenti.ColTipAmb` | 1367 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modScrDokumenti.ColVrsta` | 1322 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modScrDokumenti.ColumnSpec` | 1406, 1406 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Nema. Brise se zajedno sa ColSpecIdx. |
-| `modScrDokumenti.PotvrdiPrekoracenje` | 1087 | ZIV | PR7 |  | ostatak = GetOtpremnicaProgress(mOtpID) (ocekivano - napisano). |
-| `modScrDokumenti.PrefillSpec` | 1111, 1120, 1121, 1124 | ZIV | PR7/VAN_OPSEGA |  | COL_OTP_PREDLOG_CENA sa header-a. To je legitimna upotreba (seed za prefill, S13b). ExistingBlokCena treba da ide iz tblOtkupStavke preko izvora. |
-| `modScrDokumenti.RowsOtpremnice` | 2124, 2125, 2126, 2127 | ZIV | PR7/VAN_OPSEGA |  | Ostaje na header-u. |
-| `modScrDokumenti.Scr_OtpInfo` | 166, 167 | ZIV | PR7 |  | GetOtpremnicaProgress(mOtpID): ukupno = ocekivano iz tblOtpremnicaStavke, u blokovima = napisano iz izvora (tblOtpremnicaIzvori -> tblOtkupStavke), ostatak = razlika. |
-| `modSetup.EnsureDoradeSchema` | 1644, 1662, 1663 | ZIV | PR7 |  | Format preusmeriti na tblOtpremnicaStavke.Kolicina ili liniju ukloniti. Neprovereno je sta SetColumnNumberFormat radi nad nepostojecom kolonom; ako digne gresku, EH (:1677) prekida ostatak Ensure-a. |
-| `modSledljivost.AutoLinkOtkupOtpremnica` | 141 | ZIV | BRISE_SE_SA_POZIVAOCEM |  | Plan PR7: INTENTIONALLY REMOVED. Brise se procedura, _TX omotac, AutoPovezi i dugme scrSlAuto. Pripadnost pise eksplicitno clanstvo (tblOtpremnicaIzvori). |
-| `modSledljivost.GetOtpremnicaKandidatiZaOtkup` | 466, 467 | ZIV | PR7 |  | Kandidati su header-i (DRAFT) iste stanice i datuma. kg = GetOtpremnicaProgress (ocekivano/napisano). Upis ide kroz clanstvo, ne kroz Otkup.OtpremnicaID. |
-| `modStornoDok.ColBrutoZaPrefill` | 720 | ZIV | PR7 |  | tblOtpremnicaStavke.BrutoKg po Klasi. |
-| `modStornoDok.ColCenaZaPrefill` | 711 | ZIV | PR7 |  | Jedna COL_OTP_PREDLOG_CENA sa header-a. cena2 po klasi za otpremnicu vise ne postoji. |
-| `modStornoDok.ColKlasaZaPrefill` | 644 | ZIV | PR7 |  | rI i rII iz tblOtpremnicaStavke starog OtpremnicaID po Klasi. Posle PR7 je cKlasa = 0; ponasanje PickPrefillRows sa 0 NIJE provereno i verovatno daje tih prazan prefill kroz EH. |
-| `modStornoDok.ColKolAmbZaPrefill` | 700 | ZIV | PR7 |  | tblOtpremnicaStavke.KolAmbalaze po Klasi. |
-| `modStornoDok.ColKolicinaZaPrefill` | 690 | ZIV | PR7 |  | kol1/kol2 = tblOtpremnicaStavke.Kolicina starog OtpremnicaID po Klasi. |
-| `modStornoDok.ColSortaZaPrefill` | 662 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modStornoDok.ColTipAmbZaPrefill` | 671 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modStornoDok.ColVrstaZaPrefill` | 653 | ZIV | VAN_OPSEGA |  | Ostaje na header-u. |
-| `modStornoFlow.GetActiveDocumentsForStorno` | 1846 | ZIV | PR7 |  | SUM tblOtpremnicaStavke.Kolicina po OtpremnicaID; distinct po OtpremnicaID, ne po broju (broj je labela po stanici). Posle PR7 bez toga lista tiho pokazuje prazno/0 kg |
-| `modStornoImpact.ImpactHeader` | 146 | ZIV | PR7 |  | SUM(tblOtpremnicaStavke.Kolicina) za header razresen iz izabranog dokumenta. Razresavanje po GeneracijaID je masinerija za PR8. |
+| Modul.procedura | Linije @c2be85e8 | Status | PR | Tiha nula | #334 | Provera | Zamena |
+|---|---|---|---|:-:|---|---|---|
+| `modAutoHladnjaca.BackfillPrijemniceHladnjacaCore` | 486, 487, 488, 489, 490, 491, 492, 493 | ZIV_MAKRO | PR8 |  | — | ◐ R-16 | VrstaVoca ostaje na zaglavlju otpremnice (ciljna sema); citanje headera se ne menja. |
+| `modDokumentInvariant.SumOtpremniceByKlasa` | 59, 60, 61, 63, 64, 65 | ZIV_UI | PR8/VAN_OPSEGA |  | — | ✔ | LEGACY ZBIRNA, granica PR7/PR8. U PR8 ide SUM(tblOtpremnicaStavke.Kolicina) po Klasi, za otpremnice iz tblZbirnaIzvori. Ako PR7 isprazni ili ukloni header Kolicina pre PR8, onda PR7 mora ovde da sabira stavke (po OtpremnicaID, za header-e sa BrojZbirne) ili da ugasi rekalkulaciju. U suprotnom Recalc … |
+| `modDokumenta.BuildOtpremnicaHeaderRowData` | 2749, 2750, 2754, 2756, 2760 | SAMO_TEST | PR7/VAN_OPSEGA |  | — | ✔ | ostaje header polje |
+| `modDokumenta.BuildZbirnaVrstaCache` | 5817 | ZIV_UI | VAN_OPSEGA |  | lanac | ✔ | VrstaVoca ostaje; kljuc kesa je Otpremnica.BrojZbirne (PR8 -> tblZbirna.VrstaVoca/tblZbirnaIzvori). Nove otpremnice bez BrojZbirne -> '(Nepoznato)' u izvestaju |
+| `modDokumenta.CalculateManjakByOtpremnica` | 5270, 5272 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | brise se (legacy zbirna manjak po BrojZbirne); ako manjak zatreba -- iz izvora, ne Kolicina x Cena (S13b) |
+| `modDokumenta.CalculateProsekGajbe` | 5323, 5325, 5330, 5331 | SAMO_TEST | PR8 |  | — | ◐ R-16 | Provera prisustva kolone (rezultat se ne koristi). Nije ziv citalac, pa PR7 prag ('zivi citaoci otpremnice prelaze na stavke', odluka 2) ne vazi; jedini test gradi fixture test-only piscem SaveOtpremnica_TX (modBusinessFlowProTests.bas:2422-2425) koji ostaje do PR8, pa PR7 ne obara test. Po-klasne k … |
+| `modDokumenta.CreateZbirna` | 1477, 1478, 1479, 1480, 1481, 1482 | SAMO_TEST | PR8/VAN_OPSEGA |  | — | ✔ | LEGACY-MODEL U KANONSKOJ SKELI ZBIRNE (granica PR7/PR8): izvor mora da cita tblOtpremnicaStavke.Klasa po OtpremnicaID (S8). Posle PR7 nova otpremnica pada glasno na RequireValidDocumentClass (:1562) |
+| `modDokumenta.GetStorniraniByTip` | 6141, 6142, 6143, 6144, 6145 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ◐ R-17 | Procedura je (tranzitivno) mrtva i nestaje sa sobom. (Sama kolona VrstaVoca ostaje na zaglavlju.) |
+| `modDokumenta.GetVerwaisteOtpremnice` | 5503, 5505 | ZIV_UI | PR8 |  | — | ◐ R-16 | VrstaVoca ostaje na zaglavlju otpremnice (ciljna sema). |
+| `modDokumenta.OtpIzmeniDraft` | 2685, 2690, 2692, 2694, 2696 | SAMO_TEST | PR7/VAN_OPSEGA |  | — | ✔ | ostaje header polje |
+| `modDokumenta.OtpNapraviDraft` | 2563 | SAMO_TEST | VAN_OPSEGA |  | — | ✔ | KulturaID je header cinjenica skele (fail-fast nad semom) |
+| `modDokumenta.OtpRequireIzvorValjan` | 2953, 2979 | SAMO_TEST | VAN_OPSEGA |  | — | ✔ | header KulturaID |
+| `modDokumenta.OtpUpisiOcekivano` | 2835 | SAMO_TEST | VAN_OPSEGA |  | — | ✔ | header TipAmbalaze, cita se ispravno po OtpremnicaID |
+| `modDokumenta.SaveOtpremnica` | 402 | ZIV_UI | PR8 |  | — | ◐ R-16 | Odluka 2: SaveOtpremnica/_TX/Multi_TX ostaju kao test-only pisac do PR8, a po-klasne kolone (ukljucujuci BrutoKg) ostaju u kanonu do PR8. U PR7 se sece POZIVALAC (modDokUnos.bas:269), ne ovaj upis; upis nestaje u PR8 sa starim piscem. |
+| `modDokumenta.ValidateZbirna` | 3691, 3693 | ZIV_UI | PR8 |  | — | ◐ R-16 | Odluka 1: 'integritet zbirne' po Otpremnica.BrojZbirne (Chk_A1, modIntegritet.bas:124-138) se u PR7 ne dira -> PR8; po-klasne kolone ostaju u kanonu do PR8 (odluka 2). |
+| `modDokumenta.ValidateZbirnaPreUnosa` | 3763, 3765, 3767 | ZIV_UI | PR8 |  | — | ◐ R-16 | Odluka 1: rucna zbirna F3 je imenovano pauzirana do PR8, a zbirni citaoci po Otpremnica.BrojZbirne se u PR7 ne diraju; po-klasne kolone ostaju u kanonu do PR8 (odluka 2). |
+| `modHelpers.CheckVerwaisteDokumente` | 530, 531 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | brise se u PR7 (cita i COL_OTK_OTPREMNICA_ID :498 bez Require, koji PR7 brise) |
+| `modIntegritet.Chk_B4_DanglingBrojZbirne` | 272 | ZIV_UI | PR8 |  | — | ✔ | LEGACY ZBIRNA: sama provera BrojZbirne prelazi na tblZbirnaIzvori u PR8. Kolonu prikaza PR7 menja u SUM(tblOtpremnicaStavke.Kolicina) po OtpremnicaID ili je izbacuje, i daje jedan red po header-u. Ako PR7 fizicki ukloni kolonu, RequireColumnIndex obara B4 u WriteErr. |
+| `modIntegritet.Chk_B5b_OtpremnicaBezZbirne` | 307 | ZIV_UI | PR8 |  | — | ◐ R-14 | Isto kao :272: provera odlazi u PR8, kolonu prikaza PR7 menja u SUM stavki ili je izbacuje. |
+| `modIzvestaj.ReportOtkupRobaOM` | 2725, 2726, 2729 | ZIV_UI | PR7/VAN_OPSEGA | da | — | ✔ | VrstaVoca ostaje na header-u. |
+| `modIzvestaj.ReportOtkupRobaVozac` | 3020, 3021, 3022 | ZIV_UI | PR8/VAN_OPSEGA |  | — | ◐ R-19 | Odluka 3: VrstaVoca ostaje na zaglavlju. |
+| `modIzvestaj.ReportRobaVozaciZbirni` | 2004, 2005 | ZIV_UI | PR7 |  | — | ◐ R-14 | kg = SUM(tblOtpremnicaStavke.Kolicina) po header-u sa VozacID (VozacID ostaje na header-u po S3). |
+| `modIzvestaj.ReportSledljivostProblemi` | 5741 | ZIV_UI | PR7 | da | — | ✔ | Jedan red po header-u. otpKg = SUM stavki. Razliku prema blokovima meri GetOtpremnicaProgress (ocekivano prema napisano iz izvora), ne blokSum iz tblOtkup.Kolicina. |
+| `modIzvestaj.SledOtpMapa` | 4979, 4980 | ZIV_UI | PR7/PR8 |  | — | ◐ R-14, R-16 | Odluka 1: klasa se ovde cita samo za karike otpremnica->zbirna po (BrojZbirne\|Klasa) -- zbirni citalac. |
+| `modMasterSync.AutoCreateZbirnaFromOtpremnice` | 1142, 1143, 1144, 1145, 1146, 1147 | PAUZIRAN | PR8/VAN_OPSEGA |  | — | ✔ | VrstaVoca ostaje na headeru; funkcija je malina auto-zbirna (PR8) |
+| `modOtkupBlok.LoadOtpremnice` | 510, 511 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema. Ziva lista je modScrDokumenti.RowsOtpremnice. |
+| `modOtkupBlok.OtkupBlok_AfterUnos` | 272 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema. Auto-deselekcija popunjene otpremnice nema zivog nastavljaca. |
+| `modOtkupBlok.OtkupBlok_ConfirmUnos` | 228 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema zamene u ovom modulu. Zivu ulogu ima modScrDokumenti.PotvrdiPrekoracenje; ona prelazi na GetOtpremnicaProgress. |
+| `modOtkupBlok.PrefillLeftForm` | 730, 731 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ◐ R-17 | Procedura je mrtva; mesto nestaje s njom (polje samo po sebi ostaje na zaglavlju po odluci 3). |
+| `modOtkupBlok.RefreshSummary` | 1394, 1396, 1403 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema. Ziva traka je modScrDokumenti.Scr_OtpInfo. |
+| `modOtkupBlok.SelectOtpFromList` | 698 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema. Ziv ekvivalent je modScrDokumenti.PrefillSpec:1111. |
+| `modPrint.FillOtpremnicaSablon` | 244, 245, 247, 248, 249, 260, 261 | ZIV_UI | PR7/VAN_OPSEGA |  | — | ◐ R-14 | stavke PDF-a iz tblOtpremnicaStavke (red po klasi) umesto jedne stavke sa headera; posle PR7 bez toga PDF tiho stampa 0 kg |
+| `modScrDokumenti.ColCena` | 1377 | ZIV_UI | PR7 |  | — | ◐ R-01, R-14 | S13b zabranjuje Kolicina x Cena. Za OTPREMNICA vratiti prazno (bez kolone vrednosti, kao zbirna) ili dati izvedenu vrednost iz SUM izvornih otkupnih stavki. Ne prelazi se mehanicki na PredlogCena. |
+| `modScrDokumenti.ColKlasa` | 1340 | ZIV_UI | PR7 | da | — | ✔ | Za mk = OTPREMNICA vratiti prazno (kolona ispada), a za prikaz klase po stavci treba poseban red detalja. Posle PR7 je jedan red mreze jedan header. |
+| `modScrDokumenti.ColKolAmb` | 1358 | ZIV_UI | PR7 | da | — | ✔ | SUM(tblOtpremnicaStavke.KolAmbalaze) po header-u, kao izvedena kolona. |
+| `modScrDokumenti.ColKolicina` | 1349 | ZIV_UI | PR7 | da | — | ✔ | Kolona kg za OTPREMNICA ne moze biti ime kolone header-a. Treba izvedena vrednost SUM(tblOtpremnicaStavke.Kolicina) po OtpremnicaID, pa RedoviZaTip mora da dobije mapu umesto ColIdx. |
+| `modScrDokumenti.ColSorta` | 1331 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modScrDokumenti.ColTipAmb` | 1367 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modScrDokumenti.ColVrsta` | 1322 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modScrDokumenti.ColumnSpec` | 1406 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | ✔ | Nema. Brise se zajedno sa ColSpecIdx. |
+| `modScrDokumenti.PotvrdiPrekoracenje` | 1087 | ZIV_UI | PR7 | da | — | ◐ R-15 | ostatak = GetOtpremnicaProgress(mOtpID) (ocekivano - napisano). |
+| `modScrDokumenti.PrefillSpec` | 1111, 1120, 1121, 1124 | ZIV_UI | PR7 (samo preimenovanje Cena -> PredlogCena)/VAN_OPSEGA |  | — | ◐ R-18 | Cena -> PredlogCena: ovde se koristi upravo kao predlog cene (ne vrednost otpremnice); znacenje mesta ostaje (eventualno mehanicko preimenovanje konstante, vidi nalaz). |
+| `modScrDokumenti.RowsOtpremnice` | 2164, 2165, 2166, 2167 | ZIV_UI | PR7/VAN_OPSEGA | da | — | ◐ R-15 | Ostaje na header-u. |
+| `modScrDokumenti.Scr_OtpInfo` | 166, 167 | ZIV_UI | PR7 | da | — | ◐ R-15 | GetOtpremnicaProgress(mOtpID): ukupno = ocekivano iz tblOtpremnicaStavke, u blokovima = napisano iz izvora (tblOtpremnicaIzvori -> tblOtkupStavke), ostatak = razlika. |
+| `modSetup.EnsureDoradeSchema` | 1644, 1662, 1663 | ZIV_UI | PR8 |  | — | ◐ R-05, R-16 | DRUGO (format kolone). Kolona Kolicina na tblOtpremnica ostaje u kanonu do PR8 (odluka 2); u PR8 poziv nad obrisanom kolonom mora da ode. |
+| `modSledljivost.AutoLinkOtkupOtpremnica` | 141 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM | da | — | ✔ | Plan PR7: INTENTIONALLY REMOVED. Brise se procedura, _TX omotac, AutoPovezi i dugme scrSlAuto. Pripadnost pise eksplicitno clanstvo (tblOtpremnicaIzvori). |
+| `modSledljivost.GetOtpremnicaKandidatiZaOtkup` | 466, 467 | ZIV_UI | PR7 |  | — | ◐ R-14 | Kandidati su header-i (DRAFT) iste stanice i datuma. kg = GetOtpremnicaProgress (ocekivano/napisano). Upis ide kroz clanstvo, ne kroz Otkup.OtpremnicaID. |
+| `modStornoDok.ColBrutoZaPrefill` | 720 | ZIV_UI | PR7 |  | — | ◐ R-03, R-14 | tblOtpremnicaStavke.BrutoKg po Klasi. |
+| `modStornoDok.ColCenaZaPrefill` | 711 | ZIV_UI | PR7 |  | — | ◐ R-03, R-13 | Cena -> PredlogCena: prefill predloga cene u formu ispravke, ne vrednost otpremnice; znacenje mesta ostaje (cena2 po redu klase II :549 nestaje sa redovima klasa, ali to je posledica mesta ColKlasaZaPrefill). |
+| `modStornoDok.ColKlasaZaPrefill` | 644 | ZIV_UI | PR7 |  | — | ◐ R-03, R-14 | rI i rII iz tblOtpremnicaStavke starog OtpremnicaID po Klasi. Posle PR7 je cKlasa = 0; ponasanje PickPrefillRows sa 0 NIJE provereno i verovatno daje tih prazan prefill kroz EH. |
+| `modStornoDok.ColKolAmbZaPrefill` | 700 | ZIV_UI | PR7 |  | — | ◐ R-03, R-14 | tblOtpremnicaStavke.KolAmbalaze po Klasi. |
+| `modStornoDok.ColKolicinaZaPrefill` | 690 | ZIV_UI | PR7 |  | — | ◐ R-03, R-14 | kol1/kol2 = tblOtpremnicaStavke.Kolicina starog OtpremnicaID po Klasi. |
+| `modStornoDok.ColSortaZaPrefill` | 662 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modStornoDok.ColTipAmbZaPrefill` | 671 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modStornoDok.ColVrstaZaPrefill` | 653 | ZIV_UI | VAN_OPSEGA |  | — | ✔ | Ostaje na header-u. |
+| `modStornoFlow.GetActiveDocumentsForStorno` | 1846 | ZIV_UI | PR7 |  | — | ◐ R-14 | SUM tblOtpremnicaStavke.Kolicina po OtpremnicaID; distinct po OtpremnicaID, ne po broju (broj je labela po stanici). Posle PR7 bez toga lista tiho pokazuje prazno/0 kg |
+| `modStornoImpact.ImpactHeader` | 146 | ZIV_UI | PR7 |  | — | ◐ R-14 | SUM(tblOtpremnicaStavke.Kolicina) za header razresen iz izabranog dokumenta. Razresavanje po GeneracijaID je masinerija za PR8. |
 
 ## `Otpremnica.BrojZbirne` kao veza na zbirnu
 
-`COL_OTP_BROJ_ZBIRNE` — po planu nestaje u PR8 (`tblZbirnaIzvori`).
+`COL_OTP_BROJ_ZBIRNE` — kao veza nestaje u PR8 (`tblZbirnaIzvori`); zbirni čitaoci se u PR7 ne diraju (odluka 1).
 
-| Modul.procedura | Linije | Status | PR | Tiha nula | Zamena |
-|---|---|---|---|:-:|---|
-| `modAutoHladnjaca.BackfillPrijemniceHladnjacaCore` | 485 | ZIV | PR7 |  | Pod jednim headerom nema kljuca BrojZbirne\|Klasa ni linije na redu: PR7 prepisuje kandidate na header(BrojZbirne) x tblOtpremnicaStavke (cena iz PredlogCena) ili brise alat uz migraciju auto-lanca. BrojZbirne kao veza nestaje u PR8 (tblZbirnaIzvori). |
-| `modAutoHladnjaca.ZavrsiVezuOtpremniceNaZbirnu` | 658 | PAUZIRAN | PR8 |  | Radi i nad headerom (jedan red po OtpremnicaID); u PR7 se menja samo pozivalac (jedna otpremnica umesto dve po klasi, :230/:275). Brise se sa PoveziDeteNaZbirnu u PR8 (S11.1) -> clanstvo u tblZbirnaIzvori. |
-| `modDokumentInvariant.SumOtpremniceByKlasa` | 58 | ZIV | PR7 |  | PR7: header po BrojZbirne -> tblOtpremnicaStavke po OtpremnicaID (tvrda suma po klasi mora ostati tacna, S8). PR8: SumOtpremniceByKlasa(zbirnaID) preko tblZbirnaIzvori. |
-| `modDokumenta.BuildChainIndex` | 6497 | MRTAV | PR8 |  | Header BrojZbirne -> BrojOtpremnice prezivljava (DictAppend dedupira klasne redove); mrtvo, brisati sa GetStornirani*. |
-| `modDokumenta.BuildZbirnaVrstaCache` | 5815 | ZIV | PR8 |  | BrojZbirne -> VrstaVoca su oba header polja; prezivljava PR7. PR8: vrsta sa zbirnog headera ili preko tblZbirnaIzvori. |
-| `modDokumenta.GetOtpremniceByZbirna` | 448 | ZIV | PR8 |  | Filter vraca header redove i prezivljava PR7 ako header nosi BrojZbirne; pozivaoci citaju Kolicina/KolAmb/Klasa sa vracenih redova (modDokumenta:3691-3699, :3763-3781) i prelaze na stavke u PR7 (otp_linija). PR8: izvori zbirne iz tblZbirnaIzvori. |
-| `modDokumenta.GetStorniraniByTip` | 6146 | MRTAV | PR8 |  | Linija (GetColumnIndex, meka) ne puca; ali isti Case blok nosi COL_OTP_KLASA/KOLICINA/CENA (:6143-6145) -- ako PR7 preimenuje COL_OTP_CENA u PredlogCena, mrtav blok obara compile. Brisati lanac GetStornirani*/BuildChainIndex u PR7 umesto portovati. |
-| `modDokumenta.GetVerwaisteOtpremnice` | 5501 | ZIV | PR8 |  | BrojZbirne kao header cinjenica prezivljava; izlazna Kolicina (:5505, :5541) je linija -> PR7 u otp_linija. PR8: storniranost zbirne po ZbirnaID/izvorima. |
-| `modDokumenta.ReassignOtkupToOtpremnica_TX` | 6930 | ZIV | PR7 |  | Oba odredista (Otkup.OtpremnicaID, Otkup.BrojZbirne) odlaze u PR7 (S14.6), pa procedura postaje Dodaj/UkloniOtpremnicaIzvor_TX; citanje Otpremnica.BrojZbirne gubi svrhu i nestaje u PR7. |
-| `modDokumenta.SaveOtpremnica` | 393 | ZIV | BRISE_SE_SA_POZIVAOCEM |  | Legacy pisac odlazi u PR7 (S11.2). Nov pisac OtpNapraviDraft (modDokumenta:2551-2629) BrojZbirne ne prima ni ne pise -- v. nalaz: PR7 mora preneti BrojZbirne u header do PR8 ili zbirna ostaje bez izvora. |
-| `modHelpers.CheckVerwaisteDokumente` | 528 | MRTAV | PR8 |  | Linija (meka) ne puca; procedura nosi COL_OTK_OTPREMNICA_ID/COL_OTK_KOLICINA (:498-500) i COL_OTP_KOLICINA (:530) -- ako PR7 brise konstante, mrtva funkcija obara compile. Brisati u PR7. |
-| `modIntegritet.Chk_A1_OtpremnicaVsZbirna` | 129 | ZIV | PR8 |  | Distinct skup brojeva radi nad headerima; suma u ValidateZbirna prelazi na stavke u PR7 (otp_linija). PR8: A1 po ZbirnaID preko tblZbirnaIzvori. |
-| `modIntegritet.Chk_B4_DanglingBrojZbirne` | 272 | ZIV | PR7 |  | PR7: kolicina sa headera nestaje/prazna -> izbaciti COL_OTP_KOLICINA iz poziva ili sabrati stavke; BrojZbirne deo ostaje do PR8 (dangling po ZbirnaID). |
-| `modIntegritet.Chk_B5b_OtpremnicaBezZbirne` | 307 | ZIV | PR7 |  | Kao B4: PR7 menja argument kolicine (stavke). Ako PR7 pisac ne puni header BrojZbirne, B5b prijavljuje svaku novu otpremnicu. PR8: 'bez zbirne' = nema aktivnog clanstva u tblZbirnaIzvori. |
-| `modIntegritet.Chk_B6_ZbirnaCaseMismatch` | 600 | ZIV | PR8 |  | Nad headerom radi isto; red :603 (Otkup) pripada otk_veze. PR8: provera nestaje sa brojem kao vezom. |
-| `modIntegritet.OtkupnoMestoByZbirna` | 1327 | ZIV | PR8 |  | Prezivljava PR7; PR8 preko tblZbirnaIzvori -> Otpremnica.StanicaID. |
-| `modIntegritet.ProizvodjacByZbirna` | 1384 | ZIV | PR8 |  | Mapa prezivljava; ali oba kljuca otkupa (Otkup.BrojZbirne :1400, Otkup.OtpremnicaID :1401) odlaze u PR7 kroz meku GetColumnIndex -> bez prepisa na tblOtpremnicaIzvori proizvodjac tiho nestaje (otk_veze). PR8: tblZbirnaIzvori. |
-| `modIzvestaj.ReportOtkupRobaOM` | 2707 | ZIV | PR7 | da | Pod headerom nema klase na redu: red izvestaja postaje header(BrojZbirne) x stavka po klasi iz tblOtpremnicaStavke, blokovi iz izvora + OtkupStavke. PR8: prijem po ZbirnaID/izvorima. |
-| `modIzvestaj.ReportSledljivostProblemi` | 5706 | ZIV | PR8 | da | Header provera prezivljava; kg karika (:5708, :5735-5742) ide na stavke/izvore u PR7. PR8: 'bez zbirne' iz tblZbirnaIzvori. |
-| `modIzvestaj.SledOtpMapa` | 4944 | ZIV | PR8 |  | BrojZbirne u mapi prezivljava; Klasa/Kolicina iz istog reda (:4946-4956) prelaze na stavke u PR7 (otp_linija); da li potrosac u ReportSledljivostLanac spaja po klasi nije provereno. PR8: izvori. |
-| `modMasterSync.AutoCreateZbirnaFromOtpremnice` | 1138, 1216 | PAUZIRAN | PR8 |  | Obrada po klasnom redu (:1165-1203) pod headerom ne radi, ali malina auto-zbirna je PR8; PR7 ne sme da je otkljuca (kapija ide na PwaZbirnaDostupna). PR8: CreateZbirnaIzIzvora_TX nad izvorima. |
-| `modMasterSync.LinkOtpremnicaToBrojZbirneStrict` | 2804, 2808 | PAUZIRAN | PR8 |  | Red po OtpremnicaID (RequireSingleMasterSyncRow :2800) radi nad headerom; VOZ import je PR8. |
-| `modMasterSync.LinkZbirnaToOtkupAndOtpremnica` | 3815 | PAUZIRAN | PR8 |  | Linija prezivljava; ali ista procedura trazi COL_OTK_OTPREMNICA_ID (:3809) i COL_OTK_BROJ_ZBIRNE (:3813) i do otpremnice stize preko Otkup.OtpremnicaID (:3957) -- sve odlazi u PR7, pa pauziran kod u PR7 mora izgubiti te reference (compile) ili pada na RequireC … |
-| `modOtkupBlok.LoadOtpremnice` | 509 | MRTAV | PR8 |  | Linija (meka) prezivljava; mrtav legacy panel nosi COL_OTP_KOLICINA/COL_OTP_CENA (:510-511) -> brisati panel u PR7 umesto portovati. |
-| `modOtkupBlok.PrefillLeftForm` | 726 | MRTAV | PR8 |  | Mrtvo; zivi ekvivalent je modScrDokumenti.PrefillSpec:1117. Brisati sa panelom. |
-| `modOtkupBlok.RefreshSummary` | 1372 | MRTAV | PR8 |  | Mrtvo; stavka PR7 'panel -> GetOtpremnicaProgress' treba da cilja ziv ekran (modScrDokumenti), a ovaj panel da se obrise. |
-| `modOtkupBlok.RenderSpec` | 1240 | ZIV | PR8 | da | Mapa prezivljava; izbor blokova po Otkup.OtpremnicaID i kg/cena sa zaglavlja otkupa prelaze na izvore + OtkupStavke u PR7. PR8: zbirna preko izvora. |
-| `modScrDokumenti.ColBrojZbirne` | 1385 | ZIV | PR8 |  | Mapa kolone po rezimu; nad headerom radi (jedan red po dokumentu umesto po klasi). PR8: status iz tblZbirnaIzvori. |
-| `modScrDokumenti.ColumnSpec` | 1406 | MRTAV | PR7 |  | Ista naredba nosi COL_OTP_KOLICINA i COL_OTP_CENA; PR7 preimenuje Cena u PredlogCena -> obrisati ColumnSpec + ColSpecIdx u PR7 (mrtvo), ne portovati. |
-| `modScrDokumenti.PrefillSpec` | 1117 | ZIV | PR8 |  | Prezivljava ako header nosi BrojZbirne; fallback ExistingBlokZbirna (:1118) cita Otkup.BrojZbirne koji odlazi u PR7 (otk_veze). PR8: zbirna preko izvora. |
-| `modScrIzvestaji.IzDetaljOtpremnice` | 2189 | ZIV | PR8 |  | Header prezivljava; broj blokova po Otkup.OtpremnicaID (:2203-2211) prelazi na izvore u PR7. PR8: zbirna preko izvora. |
-| `modSetup.BackfillDeteZbirnaGeneracija_Core` | 1472 | ZIV | PR7 |  | Isti niz nosi COL_OTK_BROJ_ZBIRNE (Otkup.BrojZbirne odlazi u PR7); runtime neutralno (GetColumnIndex=0 preskace :1485), ali ako PR7 brise konstantu (presedan fe97b817 za COL_OTK_ISPLACENO) naredba obara compile -> izbaciti otkup iz nizova :1471-1472. Ceo backf … |
-| `modSledljivost.AutoLinkOtkupOtpremnica` | 142 | ZIV | BRISE_SE_SA_POZIVAOCEM | da | INTENTIONALLY REMOVED u PR7 (pre-flight CAPABILITY MAP): povezivanje postaje upis u tblOtpremnicaIzvori, dugme 'Auto-povezi' nestaje. |
-| `modSledljivost.GetOtpremnicaKandidatiZaOtkup` | 465 | ZIV | PR8 |  | Kandidat po stanici+datumu; BrojZbirne je header podatak i prezivljava. Kolicina/Klasa po klasnom redu (:466-467, :486-487) i povezivanje preko ReassignOtkupToOtpremnica_TX prelaze na header+stavke/clanstvo u PR7. |
-| `modSledljivost.TraceByZbirna` | 548 | ZIV | PR8 | da | Korak 1 (BrojZbirne -> OtpremnicaID) radi nad headerom; korak 2 (Otkup.OtpremnicaID :612/:640, kolicina/klasa sa zaglavlja otkupa) je REPLACED u PR7 (clanstvo + OtkupStavke). PR8: korak 1 preko tblZbirnaIzvori. |
-| `modStorno.ResolveZbirnaChainScope` | 463 | ZIV | PR8 |  | Brojanje aktivnih zavisnih prezivljava header; PR8 scope po ZbirnaID. |
-| `modStorno.StornoOtpremnicaByBroj_TX` | 340 | ZIV | PR8 |  | Skup brojeva po headeru radi isto; procedura je na spisku za brisanje (S11.1, *ByBroj_TX). PR8: storno otpremnice po ID + rekalk/nova verzija zbirne po izvorima (S7.1). |
-| `modStorno.StornoOtpremnicaCascade` | 552 | ZIV | PR8 |  | Izbor otpremnica po header BrojZbirne+vozac prezivljava; ulaz Otkup.BrojZbirne odlazi u PR7 -> PR7 mora hladnjaca kaskadu voditi otkup -> tblOtpremnicaIzvori -> otpremnica (otk_veze). PR8: zbirna po izvorima. |
-| `modStornoDok.ColBrojZbirneZaPrefill` | 681 | ZIV | PR8 |  | Mapa kolone; prefill 'brzbirne' iz header reda prezivljava (izbor rI/rII po klasi je otp_linija, PR7). |
-| `modStornoFlow.ActiveOtpIDsByZbirna` | 2578 | ZIV | PR8 |  | Vraca OtpremnicaID po headeru (jedan po dokumentu). PR8: izvori. |
-| `modStornoFlow.BuildStationsByZbirna` | 1916 | ZIV | PR8 |  | BrojZbirne -> stanice, oba header polja; PR8 preko izvora. |
-| `modStornoFlow.CompleteOtpremnicaIspravka` | 633, 700, 781 | ZIV | PR8 |  | Linija prezivljava samo ako nov pisac puni header BrojZbirne; inace newZbirna='' vodi u granu :758-787 (stara zbirna stornirana ili rekalkulisana bez nove otpremnice) -- v. nalaz. PR8: nova verzija zbirne po izvorima (A13). |
-| `modStornoFlow.CompleteZbirnaIspravka` | 1009, 1052 | ZIV | PR7/PR8 |  | Ista If-naredba nosi SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) (:1010); runtime neutralno (vraca True bez kolone, modDokumenta:4184-4185), ali uz brisanje konstante obara compile -> PR7 brise otkup-klauzulu. Otpremnicki deo odlazi u PR8 sa G … |
-| `modStornoFlow.DetachOtpremniceInline` | 2287, 2298 | ZIV | PR8 |  | Header; otkup deo :2302-2322 u PR7 (otk_veze). PR8: izvori. |
-| `modStornoFlow.GetActiveDocumentsForStorno` | 1846 | ZIV | PR7 |  | PR7: kg sa headera nestaje -> zbir stavki po dokumentu; BrojZbirne argument ostaje do PR8. (Danas dedupe po broju :1883-1892 prikazuje kg samo prvog klasnog reda.) |
-| `modStornoFlow.OtpremnicaIsSoleOwner` | 2455 | ZIV | PR8 |  | Kljuc dokumenta = GeneracijaID ili PK (:2469-2471); header daje jedan kljuc po dokumentu, pa odluka ostaje tacna. PR8: izvori. |
-| `modStornoFlow.PonistiZbirnaChain_TX` | 2698 | ZIV | PR8 |  | Samo otpremnicka klauzula (prijemnica/paleta su zasebna naredba :2700-2701); GeneracijaID masinerija PR8. |
-| `modStornoFlow.RecalcOrStornoEmptyZbirna_TX` | 2560 | ZIV | PR8 |  | CountActive nad headerom; PR8 storno otpremnice po S7.1 (rekalk/nova verzija po izvorima). |
-| `modStornoFlow.RelinkOtpremniceToZbirna_TX` | 2203, 2209, 2235 | ZIV | PR7/PR8 |  | Izbor aktivnih otpremnica po broju radi nad headerom (otpremnica bez header BrojZbirne ne bi bila prevezana). Otkup denorm deo (:2239-2259) odlazi u PR7 (otk_veze). PR8: ispravka zbirne = nova verzija sa izvorima (A13). |
-| `modStornoFlow.ScanOtpremnica` | 2943 | ZIV | PR8 |  | Lookup po OtpremnicaID (header). PR8: roditelj iz izvora. |
-| `modStornoFlow.ScanPrijemnica` | 1506 | ZIV | PR8 |  | Broj otpremnica zbirne; nad headerom broji dokumente. PR8: izvori. |
-| `modStornoFlow.ScanZbirna` | 3007 | ZIV | PR8 |  | otpCount danas broji klasne redove, posle PR7 dokumente (tacnije). PR8: izvori. |
-| `modStornoFlow.StornoZbirnaIDetach_TX` | 2357 | ZIV | PR7 |  | Ista If-naredba nosi COL_OTK_BROJ_ZBIRNE (:2358) -> PR7 brise otkup-klauzulu; otpremnicki deo PR8 (GeneracijaID). |
-| `modStornoImpact.ImpactPalete` | 234 | ZIV | PR8 |  | Header; u PR8 zbirna otpremnice iz tblZbirnaIzvori (palete po BrojZbirne do PR11). |
+| Modul.procedura | Linije @c2be85e8 | Status | PR | Tiha nula | #334 | Provera | Zamena |
+|---|---|---|---|:-:|---|---|---|
+| `modAutoHladnjaca.BackfillPrijemniceHladnjacaCore` | 485 | ZIV_MAKRO | PR7 |  | — | P1 (P2 nije stigla) | *(Zamena 15.09 protivreči odluci 3 — nije prepisana jer P2 nije stigla.)* Pod jednim headerom nema kljuca BrojZbirne\|Klasa ni linije na redu: PR7 prepisuje kandidate na header(BrojZbirne) x tblOtpremnicaStavke (cena iz PredlogCena) ili brise alat uz migraciju auto-lanca. BrojZbirne kao veza nestaje … |
+| `modAutoHladnjaca.ZavrsiVezuOtpremniceNaZbirnu` | 658 | PAUZIRAN | PR8 |  | — | P1 (P2 nije stigla) | Radi i nad headerom (jedan red po OtpremnicaID); u PR7 se menja samo pozivalac (jedna otpremnica umesto dve po klasi, :230/:275). Brise se sa PoveziDeteNaZbirnu u PR8 (S11.1) -> clanstvo u tblZbirnaIzvori. |
+| `modDokumentInvariant.SumOtpremniceByKlasa` | 58 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | PR7: header po BrojZbirne -> tblOtpremnicaStavke po OtpremnicaID (tvrda suma po klasi mora ostati tacna, S8). PR8: SumOtpremniceByKlasa(zbirnaID) preko tblZbirnaIzvori. |
+| `modDokumenta.BuildChainIndex` | 6497 | MRTAV | PR8 |  | — | P1 (P2 nije stigla) | Header BrojZbirne -> BrojOtpremnice prezivljava (DictAppend dedupira klasne redove); mrtvo, brisati sa GetStornirani*. |
+| `modDokumenta.BuildZbirnaVrstaCache` | 5815 | ZIV_UI | PR8 |  | lanac | P1 (P2 nije stigla) | BrojZbirne -> VrstaVoca su oba header polja; prezivljava PR7. PR8: vrsta sa zbirnog headera ili preko tblZbirnaIzvori. |
+| `modDokumenta.GetOtpremniceByZbirna` | 448 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Filter vraca header redove i prezivljava PR7 ako header nosi BrojZbirne; pozivaoci citaju Kolicina/KolAmb/Klasa sa vracenih redova (modDokumenta:3691-3699, :3763-3781) i prelaze na stavke u PR7 (otp_linija). PR8: izvori zbirne iz tblZbirnaIzvori. |
+| `modDokumenta.GetStorniraniByTip` | 6146 | MRTAV | PR8 |  | — | P1 (P2 nije stigla) | Linija (GetColumnIndex, meka) ne puca; ali isti Case blok nosi COL_OTP_KLASA/KOLICINA/CENA (:6143-6145) -- ako PR7 preimenuje COL_OTP_CENA u PredlogCena, mrtav blok obara compile. Brisati lanac GetStornirani*/BuildChainIndex u PR7 umesto portovati. |
+| `modDokumenta.GetVerwaisteOtpremnice` | 5501 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | BrojZbirne kao header cinjenica prezivljava; izlazna Kolicina (:5505, :5541) je linija -> PR7 u otp_linija. PR8: storniranost zbirne po ZbirnaID/izvorima. |
+| `modDokumenta.ReassignOtkupToOtpremnica_TX` | 6930 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | Oba odredista (Otkup.OtpremnicaID, Otkup.BrojZbirne) odlaze u PR7 (S14.6), pa procedura postaje Dodaj/UkloniOtpremnicaIzvor_TX; citanje Otpremnica.BrojZbirne gubi svrhu i nestaje u PR7. |
+| `modDokumenta.SaveOtpremnica` | 393 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM |  | — | P1 (P2 nije stigla) | *(Zamena 15.09 protivreči odluci 2 — nije prepisana jer P2 nije stigla.)* Legacy pisac odlazi u PR7 (S11.2). Nov pisac OtpNapraviDraft (modDokumenta:2551-2629) BrojZbirne ne prima ni ne pise -- v. nalaz: PR7 mora preneti BrojZbirne u header do PR8 ili zbirna ostaje bez izvora. |
+| `modHelpers.CheckVerwaisteDokumente` | 528 | MRTAV | PR8 |  | — | P1 (P2 nije stigla) | Linija (meka) ne puca; procedura nosi COL_OTK_OTPREMNICA_ID/COL_OTK_KOLICINA (:498-500) i COL_OTP_KOLICINA (:530) -- ako PR7 brise konstante, mrtva funkcija obara compile. Brisati u PR7. |
+| `modIntegritet.Chk_A1_OtpremnicaVsZbirna` | 129 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Distinct skup brojeva radi nad headerima; suma u ValidateZbirna prelazi na stavke u PR7 (otp_linija). PR8: A1 po ZbirnaID preko tblZbirnaIzvori. |
+| `modIntegritet.Chk_B4_DanglingBrojZbirne` | 272 | ZIV_UI | PR7/PR8 |  | — | P1 (P2 nije stigla) | LEGACY ZBIRNA: sama provera BrojZbirne prelazi na tblZbirnaIzvori u PR8. Kolonu prikaza PR7 menja u SUM(tblOtpremnicaStavke.Kolicina) po OtpremnicaID ili je izbacuje, i daje jedan red po header-u. Ako PR7 fizicki ukloni kolonu, RequireColumnIndex obara B4 u WriteErr. |
+| `modIntegritet.Chk_B5b_OtpremnicaBezZbirne` | 307 | ZIV_UI | PR7/PR8 |  | — | P1 (P2 nije stigla) | Isto kao :272: provera odlazi u PR8, kolonu prikaza PR7 menja u SUM stavki ili je izbacuje. |
+| `modIntegritet.Chk_B6_ZbirnaCaseMismatch` | 600 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Nad headerom radi isto; red :603 (Otkup) pripada otk_veze. PR8: provera nestaje sa brojem kao vezom. |
+| `modIntegritet.OtkupnoMestoByZbirna` | 1327 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Prezivljava PR7; PR8 preko tblZbirnaIzvori -> Otpremnica.StanicaID. |
+| `modIntegritet.ProizvodjacByZbirna` | 1384 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Mapa prezivljava; ali oba kljuca otkupa (Otkup.BrojZbirne :1400, Otkup.OtpremnicaID :1401) odlaze u PR7 kroz meku GetColumnIndex -> bez prepisa na tblOtpremnicaIzvori proizvodjac tiho nestaje (otk_veze). PR8: tblZbirnaIzvori. |
+| `modIzvestaj.ReportOtkupRobaOM` | 2732 | ZIV_UI | PR7 | da | — | P1 (P2 nije stigla) | Pod headerom nema klase na redu: red izvestaja postaje header(BrojZbirne) x stavka po klasi iz tblOtpremnicaStavke, blokovi iz izvora + OtkupStavke. PR8: prijem po ZbirnaID/izvorima. |
+| `modIzvestaj.ReportSledljivostProblemi` | 5739 | ZIV_UI | PR8 | da | — | P1 (P2 nije stigla) | Header provera prezivljava; kg karika (:5708, :5735-5742) ide na stavke/izvore u PR7. PR8: 'bez zbirne' iz tblZbirnaIzvori. |
+| `modIzvestaj.SledOtpMapa` | 4977 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | BrojZbirne u mapi prezivljava; Klasa/Kolicina iz istog reda (:4946-4956) prelaze na stavke u PR7 (otp_linija); da li potrosac u ReportSledljivostLanac spaja po klasi nije provereno. PR8: izvori. |
+| `modMasterSync.AutoCreateZbirnaFromOtpremnice` | 1138, 1216 | PAUZIRAN | PR8 |  | — | P1 (P2 nije stigla) | Obrada po klasnom redu (:1165-1203) pod headerom ne radi, ali malina auto-zbirna je PR8; PR7 ne sme da je otkljuca (kapija ide na PwaZbirnaDostupna). PR8: CreateZbirnaIzIzvora_TX nad izvorima. |
+| `modMasterSync.LinkOtpremnicaToBrojZbirneStrict` | 2804, 2808 | PAUZIRAN | PR8 |  | — | P1 (P2 nije stigla) | Red po OtpremnicaID (RequireSingleMasterSyncRow :2800) radi nad headerom; VOZ import je PR8. |
+| `modMasterSync.LinkZbirnaToOtkupAndOtpremnica` | 3815 | PAUZIRAN | PR8 |  | — | P1 (P2 nije stigla) | Linija prezivljava; ali ista procedura trazi COL_OTK_OTPREMNICA_ID (:3809) i COL_OTK_BROJ_ZBIRNE (:3813) i do otpremnice stize preko Otkup.OtpremnicaID (:3957) -- sve odlazi u PR7, pa pauziran kod u PR7 mora izgubiti te reference (compile) ili pada na RequireColumnIndex pri otkljucavanju. PR8: VOZ i … |
+| `modOtkupBlok.LoadOtpremnice` | 509 | MRTAV | PR8 |  | — | P1 (P2 nije stigla) | Linija (meka) prezivljava; mrtav legacy panel nosi COL_OTP_KOLICINA/COL_OTP_CENA (:510-511) -> brisati panel u PR7 umesto portovati. |
+| `modOtkupBlok.PrefillLeftForm` | 726 | MRTAV | PR8 |  | — | P1 (P2 nije stigla) | Mrtvo; zivi ekvivalent je modScrDokumenti.PrefillSpec:1117. Brisati sa panelom. |
+| `modOtkupBlok.RefreshSummary` | 1372 | ZIV_MAKRO | PR8 |  | — | P1 (P2 nije stigla) | Mrtvo; stavka PR7 'panel -> GetOtpremnicaProgress' treba da cilja ziv ekran (modScrDokumenti), a ovaj panel da se obrise. |
+| `modOtkupBlok.RenderSpec` | 1240 | ZIV_UI | PR8 | da | — | P1 (P2 nije stigla) | Mapa prezivljava; izbor blokova po Otkup.OtpremnicaID i kg/cena sa zaglavlja otkupa prelaze na izvore + OtkupStavke u PR7. PR8: zbirna preko izvora. |
+| `modScrDokumenti.ColBrojZbirne` | 1385 | ZIV_UI | PR8 |  | lanac | P1 (P2 nije stigla) | Mapa kolone po rezimu; nad headerom radi (jedan red po dokumentu umesto po klasi). PR8: status iz tblZbirnaIzvori. |
+| `modScrDokumenti.ColumnSpec` | 1406 | MRTAV | BRISE_SE_SA_POZIVAOCEM/PR7 |  | — | P1 (P2 nije stigla) | Nema. Brise se zajedno sa ColSpecIdx. |
+| `modScrDokumenti.PrefillSpec` | 1117 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Prezivljava ako header nosi BrojZbirne; fallback ExistingBlokZbirna (:1118) cita Otkup.BrojZbirne koji odlazi u PR7 (otk_veze). PR8: zbirna preko izvora. |
+| `modScrIzvestaji.IzDetaljOtpremnice` | 2186 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Header prezivljava; broj blokova po Otkup.OtpremnicaID (:2203-2211) prelazi na izvore u PR7. PR8: zbirna preko izvora. |
+| `modSetup.BackfillDeteZbirnaGeneracija_Core` | 1472 | ZIV_MAKRO | PR7 |  | — | P1 (P2 nije stigla) | TBL_OTKUP/COL_OTK_BROJ_ZBIRNE izlaze iz nizova :1471-1472; cela masinerija generacije se brise u PR8. |
+| `modSledljivost.AutoLinkOtkupOtpremnica` | 142 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM | da | — | P1 (P2 nije stigla) | INTENTIONALLY REMOVED u PR7 (pre-flight CAPABILITY MAP): povezivanje postaje upis u tblOtpremnicaIzvori, dugme 'Auto-povezi' nestaje. |
+| `modSledljivost.GetOtpremnicaKandidatiZaOtkup` | 465 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Kandidat po stanici+datumu; BrojZbirne je header podatak i prezivljava. Kolicina/Klasa po klasnom redu (:466-467, :486-487) i povezivanje preko ReassignOtkupToOtpremnica_TX prelaze na header+stavke/clanstvo u PR7. |
+| `modSledljivost.TraceByZbirna` | 548 | ZIV_UI | PR8 | da | — | P1 (P2 nije stigla) | Korak 1 (BrojZbirne -> OtpremnicaID) radi nad headerom; korak 2 (Otkup.OtpremnicaID :612/:640, kolicina/klasa sa zaglavlja otkupa) je REPLACED u PR7 (clanstvo + OtkupStavke). PR8: korak 1 preko tblZbirnaIzvori. |
+| `modStorno.ResolveZbirnaChainScope` | 463 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Brojanje aktivnih zavisnih prezivljava header; PR8 scope po ZbirnaID. |
+| `modStorno.StornoOtpremnicaByBroj_TX` | 340 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Skup brojeva po headeru radi isto; procedura je na spisku za brisanje (S11.1, *ByBroj_TX). PR8: storno otpremnice po ID + rekalk/nova verzija zbirne po izvorima (S7.1). |
+| `modStorno.StornoOtpremnicaCascade` | 552 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Izbor otpremnica po header BrojZbirne+vozac prezivljava; ulaz Otkup.BrojZbirne odlazi u PR7 -> PR7 mora hladnjaca kaskadu voditi otkup -> tblOtpremnicaIzvori -> otpremnica (otk_veze). PR8: zbirna po izvorima. |
+| `modStornoDok.ColBrojZbirneZaPrefill` | 681 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Mapa kolone; prefill 'brzbirne' iz header reda prezivljava (izbor rI/rII po klasi je otp_linija, PR7). |
+| `modStornoFlow.ActiveOtpIDsByZbirna` | 2578 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Vraca OtpremnicaID po headeru (jedan po dokumentu). PR8: izvori. |
+| `modStornoFlow.BuildStationsByZbirna` | 1916 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | BrojZbirne -> stanice, oba header polja; PR8 preko izvora. |
+| `modStornoFlow.CompleteOtpremnicaIspravka` | 633, 700, 781 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Linija prezivljava samo ako nov pisac puni header BrojZbirne; inace newZbirna='' vodi u granu :758-787 (stara zbirna stornirana ili rekalkulisana bez nove otpremnice) -- v. nalaz. PR8: nova verzija zbirne po izvorima (A13). |
+| `modStornoFlow.CompleteZbirnaIspravka` | 1009, 1052 | ZIV_UI | PR7/PR8 |  | — | P1 (P2 nije stigla) | Ista If-naredba nosi SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) (:1010); runtime neutralno (vraca True bez kolone, modDokumenta:4184-4185), ali uz brisanje konstante obara compile -> PR7 brise otkup-klauzulu. Otpremnicki deo odlazi u PR8 sa GeneracijaID. |
+| `modStornoFlow.DetachOtpremniceInline` | 2287, 2298 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Header; otkup deo :2302-2322 u PR7 (otk_veze). PR8: izvori. |
+| `modStornoFlow.GetActiveDocumentsForStorno` | 1846 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | SUM tblOtpremnicaStavke.Kolicina po OtpremnicaID; distinct po OtpremnicaID, ne po broju (broj je labela po stanici). Posle PR7 bez toga lista tiho pokazuje prazno/0 kg |
+| `modStornoFlow.OtpremnicaIsSoleOwner` | 2455 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Kljuc dokumenta = GeneracijaID ili PK (:2469-2471); header daje jedan kljuc po dokumentu, pa odluka ostaje tacna. PR8: izvori. |
+| `modStornoFlow.PonistiZbirnaChain_TX` | 2698 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Samo otpremnicka klauzula (prijemnica/paleta su zasebna naredba :2700-2701); GeneracijaID masinerija PR8. |
+| `modStornoFlow.RecalcOrStornoEmptyZbirna_TX` | 2560 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | CountActive nad headerom; PR8 storno otpremnice po S7.1 (rekalk/nova verzija po izvorima). |
+| `modStornoFlow.RelinkOtpremniceToZbirna_TX` | 2203, 2209, 2235 | ZIV_UI | PR7/PR8 |  | — | P1 (P2 nije stigla) | Izbor aktivnih otpremnica po broju radi nad headerom (otpremnica bez header BrojZbirne ne bi bila prevezana). Otkup denorm deo (:2239-2259) odlazi u PR7 (otk_veze). PR8: ispravka zbirne = nova verzija sa izvorima (A13). |
+| `modStornoFlow.ScanOtpremnica` | 2943 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Lookup po OtpremnicaID (header). PR8: roditelj iz izvora. |
+| `modStornoFlow.ScanPrijemnica` | 1506 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Broj otpremnica zbirne; nad headerom broji dokumente. PR8: izvori. |
+| `modStornoFlow.ScanZbirna` | 3007 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | otpCount danas broji klasne redove, posle PR7 dokumente (tacnije). PR8: izvori. |
+| `modStornoFlow.StornoZbirnaIDetach_TX` | 2357 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | Ista If-naredba nosi COL_OTK_BROJ_ZBIRNE (:2358) -> PR7 brise otkup-klauzulu; otpremnicki deo PR8 (GeneracijaID). |
+| `modStornoImpact.ImpactPalete` | 234 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | Header; u PR8 zbirna otpremnice iz tblZbirnaIzvori (palete po BrojZbirne do PR11). |
 
 ## Stari pisci otpremnice, AutoLink, kapije pauze, `Split(" + ")`
 
 `SaveOtpremnica*`, `AutoLinkOtkupOtpremnica*`, `NapredakBlokaDostupan`, `IzvedeniLanacIzPwaDostupan`, `Split(x, " + ")`.
 
-| Modul.procedura | Linije | Status | PR | Tiha nula | Zamena |
-|---|---|---|---|:-:|---|
-| `modAutoHladnjaca.AutoChainHladnjaca` | 199, 230, 275 | PAUZIRAN | PR7 |  | Split se brise; lanac prima jedan OtkupID i zove CreateOtpremnicaIzIzvora_TX(h, izvori={OtkupID}) |
-| `modDokUnos.OtpremnicaUpisi` | 269 | ZIV | PR7 |  | CreateOtpremnicaDraft_TX(h, ocekivano Collection{Klasa,Kolicina,KolAmbalaze}) -> jedan OtpremnicaID; izvori kasnije DodajOtpremnicaIzvor_TX, zatvaranje IzdajOtpremnicu_TX. Malina auto-zbirna :295 ostaje iza kapije do PR8 |
-| `modDokUnos.PreveziPaleteIspravke` | 1084, 1100 | ZIV | PR9 |  | Jedan PrijemnicaID (PR9) |
-| `modDokUnos.PrijemnicaUpisi` | 1041 | ZIV | PR9 |  | Jedan PrijemnicaID posle prijemnica cutover-a; Split se brise u PR9 |
-| `modDokumenta.SaveOtpremnica` | 350, 367, 373, 394, 403, 405, 420, 423 | ZIV | BRISE_SE_SA_POZIVAOCEM/PR7 |  | OtpNapraviDraft + tblOtpremnicaStavke (header bez Kolicina/Klasa/KolAmbalaze/BrutoKg; Cena -> PredlogCena) |
-| `modDokumenta.SaveOtpremnicaMulti_TX` | 115, 143, 153, 161, 165, 181, 182, 188, 204, 205, 210, 212, 214, 236, 240, 242, 251, 259, 261, 268 | ZIV | BRISE_SE_SA_POZIVAOCEM/PR7 |  | CreateOtpremnicaDraft_TX(h, ocekivano) (modDokumenta.bas:2238) |
-| `modDokumenta.SaveOtpremnica_TX` | 271, 285, 292, 296, 297, 298, 316, 319, 321, 330, 337, 339, 345, 347 | PAUZIRAN | BRISE_SE_SA_POZIVAOCEM/PR7 |  | CreateOtpremnicaIzIzvora_TX(h, izvori) (modDokumenta.bas:2408) |
-| `modGoogleSyncOrchestrator.SyncPWAFullCycle_Core` | 201, 234, 278, 309 | ZIV | PR7/PR8 |  | Korak 2b i StampVozacFromStanicaForMalina_TX se brisu (Otkup.VozacID odlazi u PR7); malina mirror vozac ide u h('VozacID') nove otpremnice. Ne vezivati na PwaOtpremnicaDostupna |
-| `modMasterSync.AutoCreateOtpremniceFromPWA` | 919, 936 | PAUZIRAN | BRISE_SE_SA_POZIVAOCEM/PR7 |  | Prepis nad tblOtkupStavke + clanstvom (OtpremnicaZaOtkup :3423 umesto Otkup.OtpremnicaID) -> CreateOtpremnicaIzIzvora_TX(h, izvori=OtkupID-evi grupe); izvor vozaca mora biti definisan (zaglavlje ga vise nema) |
-| `modMasterSync.AutoCreateOtpremniceFromPWA_TX` | 742 | PAUZIRAN | PR7 |  | If Not PwaOtpremnicaDostupna() |
-| `modMasterSync.AutoCreateZbirnaFromOtpremnice_TX` | 1076 | ZIV | PR8 |  | If Not PwaZbirnaDostupna() -- gasi i desktop malina ulaz, ne samo PWA |
-| `modMasterSync.ImportOneOTKSheet` | 1761 | ZIV | PR7 |  | Grana se brise sa kolonom Otkup.VozacID; vozac iz PWA ide na otpremnicu (h.VozacID / UpdateOtpremnicaDraft_TX) -- tok NEPROVEREN u planu |
-| `modMasterSync.ImportZbirneFromPWA_Core` | 2870 | ZIV | PR8 |  | If Not PwaZbirnaDostupna() |
-| `modMasterSync.IzvedeniLanacIzPwaDostupan` | 730, 731 | ZIV | PR7 |  | Deli se: PwaOtpremnicaDostupna=True (orch:234, :742) i PwaZbirnaDostupna=False (orch:278/:309, :1076, :2870); orch:201 i :1761 se prepisuju jer pune Otkup.VozacID; PR8 PwaZbirnaDostupna=True |
-| `modOtkupBlok.LinkOtkupIDsToOtpremnica` | 1460 | ZIV | PR7 |  | DodajOtpremnicaIzvor_TX(mOtpID, otkupID) (clanstvo u tblOtpremnicaIzvori); Split i upis Otkup.OtpremnicaID se brisu |
-| `modOtkupBlok.NapredakBlokaDostupan` | 1572, 1573 | MRTAV | PR7 |  | Brise se sa legacy panelom; PR7 prebacuje modScrDokumenti (Scr_OtpInfo/PotvrdiPrekoracenje/RowsOtpremnice) na GetOtpremnicaProgress |
-| `modOtkupBlok.OtkupBlok_AfterUnos` | 269 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | - |
-| `modOtkupBlok.OtkupBlok_ConfirmUnos` | 225 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Zivi ekvivalent je NEGEJTOVAN modScrDokumenti.PotvrdiPrekoracenje :1088 -> prelazi na GetOtpremnicaProgress(mOtpID) |
-| `modOtkupBlok.RefreshSummary` | 1410 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | Zivi ekvivalent: modScrDokumenti.Scr_OtpInfo :171-172 (traka modOtkupUI.bas:874/:8824) -> GetOtpremnicaProgress |
-| `modPrint.FillGrupniOtkupSablon` | 1130 | ZIV | PR9 |  | Jedan PrijemnicaID + tblPrijemnicaStavke (PR9) |
-| `modPrint.FillPrijemnicaSablon` | 1399 | ZIV | PR9 |  | Jedan PrijemnicaID + tblPrijemnicaStavke (PR9) |
-| `modScrDokumenti.SaveOtpremnica` | 847, 869, 875 | ZIV | PR7/VAN_OPSEGA |  | Ekran i dalje samo prevodi polja; modDokUnos gradi h + ocekivano za CreateOtpremnicaDraft_TX |
-| `modScrDokumenti.Scr_Save` | 753 | ZIV | VAN_OPSEGA |  | Dispatch ostaje; menja se telo SaveOtpremnica (:847) |
-| `modScrSledljivost.AutoPovezi` | 432 | ZIV | PR7 | da | INTENTIONALLY REMOVED: dugme i AutoPovezi se brisu; povezivanje = DodajOtpremnicaIzvor_TX |
-| `modSledljivost.AutoLinkOtkupOtpremnica` | 91, 94, 264 | ZIV | BRISE_SE_SA_POZIVAOCEM/PR7 | da | Brise se (S14.2 red 4: povezivanje je upis, ne pogadjanje) |
-| `modSledljivost.AutoLinkOtkupOtpremnica_TX` | 19, 30, 37, 38, 41, 44, 59, 65, 68, 76, 79, 82, 88 | ZIV | BRISE_SE_SA_POZIVAOCEM/PR7 | da | Brise se (heuristiku zamenjuje clanstvo u tblOtpremnicaIzvori) |
+| Modul.procedura | Linije @c2be85e8 | Status | PR | Tiha nula | #334 | Provera | Zamena |
+|---|---|---|---|:-:|---|---|---|
+| `modAutoHladnjaca.AutoChainHladnjaca` | 199, 230, 275 | PAUZIRAN | PR7 |  | — | P1 (P2 nije stigla) | *(Zamena 15.09 protivreči odluci 3 — nije prepisana jer P2 nije stigla.)* Split se brise; lanac prima jedan OtkupID i zove CreateOtpremnicaIzIzvora_TX(h, izvori={OtkupID}) |
+| `modDokUnos.OtpremnicaUpisi` | 269 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | CreateOtpremnicaDraft_TX(h, ocekivano Collection{Klasa,Kolicina,KolAmbalaze}) -> jedan OtpremnicaID; izvori kasnije DodajOtpremnicaIzvor_TX, zatvaranje IzdajOtpremnicu_TX. Malina auto-zbirna :295 ostaje iza kapije do PR8 |
+| `modDokUnos.PreveziPaleteIspravke` | 1084, 1100 | ZIV_UI | PR9 |  | — | P1 (P2 nije stigla) | Jedan PrijemnicaID (PR9) |
+| `modDokUnos.PrijemnicaUpisi` | 1041 | ZIV_UI | PR9 |  | — | P1 (P2 nije stigla) | Jedan PrijemnicaID posle prijemnica cutover-a; Split se brise u PR9 |
+| `modDokumenta.SaveOtpremnica` | 350, 367, 373, 394, 403, 405, 420, 423 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM/PR7 |  | — | P1 (P2 nije stigla) | OtpNapraviDraft + tblOtpremnicaStavke (header bez Kolicina/Klasa/KolAmbalaze/BrutoKg; Cena -> PredlogCena) |
+| `modDokumenta.SaveOtpremnicaMulti_TX` | 115, 143, 153, 161, 165, 181, 182, 188, 204, 205, 210, 212, 214, 236, 240, 242, 251, 259, 261, 268 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM/PR7 |  | — | P1 (P2 nije stigla) | CreateOtpremnicaDraft_TX(h, ocekivano) (modDokumenta.bas:2238) |
+| `modDokumenta.SaveOtpremnica_TX` | 271, 285, 292, 296, 297, 298, 316, 319, 321, 330, 337, 339, 345, 347 | PAUZIRAN | BRISE_SE_SA_POZIVAOCEM/PR7 |  | — | P1 (P2 nije stigla) | CreateOtpremnicaIzIzvora_TX(h, izvori) (modDokumenta.bas:2408) |
+| `modGoogleSyncOrchestrator.SyncPWAFullCycle_Core` | 201, 234, 278, 309 | ZIV_UI | PR7/PR8 |  | — | P1 (P2 nije stigla) | Korak 2b i StampVozacFromStanicaForMalina_TX se brisu (Otkup.VozacID odlazi u PR7); malina mirror vozac ide u h('VozacID') nove otpremnice. Ne vezivati na PwaOtpremnicaDostupna |
+| `modMasterSync.AutoCreateOtpremniceFromPWA` | 919, 936 | PAUZIRAN | BRISE_SE_SA_POZIVAOCEM/PR7 |  | — | P1 (P2 nije stigla) | Prepis nad tblOtkupStavke + clanstvom (OtpremnicaZaOtkup :3423 umesto Otkup.OtpremnicaID) -> CreateOtpremnicaIzIzvora_TX(h, izvori=OtkupID-evi grupe); izvor vozaca mora biti definisan (zaglavlje ga vise nema) |
+| `modMasterSync.AutoCreateOtpremniceFromPWA_TX` | 742 | PAUZIRAN | PR7 |  | — | P1 (P2 nije stigla) | If Not PwaOtpremnicaDostupna() |
+| `modMasterSync.AutoCreateZbirnaFromOtpremnice_TX` | 1076 | ZIV_UI | PR8 |  | — | P1 (P2 nije stigla) | If Not PwaZbirnaDostupna() -- gasi i desktop malina ulaz, ne samo PWA |
+| `modMasterSync.ImportOneOTKSheet` | 1761 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | Grana se brise sa kolonom Otkup.VozacID; vozac iz PWA ide na otpremnicu (h.VozacID / UpdateOtpremnicaDraft_TX) -- tok NEPROVEREN u planu |
+| `modMasterSync.ImportZbirneFromPWA_Core` | 2870 | ZIV_MAKRO | PR8 |  | — | P1 (P2 nije stigla) | If Not PwaZbirnaDostupna() |
+| `modMasterSync.IzvedeniLanacIzPwaDostupan` | 730, 731 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | Deli se: PwaOtpremnicaDostupna=True (orch:234, :742) i PwaZbirnaDostupna=False (orch:278/:309, :1076, :2870); orch:201 i :1761 se prepisuju jer pune Otkup.VozacID; PR8 PwaZbirnaDostupna=True |
+| `modOtkupBlok.LinkOtkupIDsToOtpremnica` | 1460 | ZIV_UI | PR7 |  | — | P1 (P2 nije stigla) | DodajOtpremnicaIzvor_TX(mOtpID, otkupID) (clanstvo u tblOtpremnicaIzvori); Split i upis Otkup.OtpremnicaID se brisu |
+| `modOtkupBlok.NapredakBlokaDostupan` | 1572, 1573 | ZIV_MAKRO | PR7 |  | — | P1 (P2 nije stigla) | Brise se sa legacy panelom; PR7 prebacuje modScrDokumenti (Scr_OtpInfo/PotvrdiPrekoracenje/RowsOtpremnice) na GetOtpremnicaProgress |
+| `modOtkupBlok.OtkupBlok_AfterUnos` | 269 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | P1 (P2 nije stigla) | - |
+| `modOtkupBlok.OtkupBlok_ConfirmUnos` | 225 | MRTAV | BRISE_SE_SA_POZIVAOCEM |  | — | P1 (P2 nije stigla) | Zivi ekvivalent je NEGEJTOVAN modScrDokumenti.PotvrdiPrekoracenje :1088 -> prelazi na GetOtpremnicaProgress(mOtpID) |
+| `modOtkupBlok.RefreshSummary` | 1410 | ZIV_MAKRO | BRISE_SE_SA_POZIVAOCEM |  | — | P1 (P2 nije stigla) | Zivi ekvivalent: modScrDokumenti.Scr_OtpInfo :171-172 (traka modOtkupUI.bas:874/:8824) -> GetOtpremnicaProgress |
+| `modPrint.FillGrupniOtkupSablon` | 1130 | ZIV_UI | PR9 |  | — | P1 (P2 nije stigla) | Jedan PrijemnicaID + tblPrijemnicaStavke (PR9) |
+| `modPrint.FillPrijemnicaSablon` | 1399 | ZIV_UI | PR9 |  | — | P1 (P2 nije stigla) | Jedan PrijemnicaID + tblPrijemnicaStavke (PR9) |
+| `modScrDokumenti.SaveOtpremnica` | 847, 869, 875 | ZIV_UI | PR7/VAN_OPSEGA |  | — | P1 (P2 nije stigla) | Ekran i dalje samo prevodi polja; modDokUnos gradi h + ocekivano za CreateOtpremnicaDraft_TX |
+| `modScrDokumenti.Scr_Save` | 753 | ZIV_UI | VAN_OPSEGA |  | — | P1 (P2 nije stigla) | Dispatch ostaje; menja se telo SaveOtpremnica (:847) |
+| `modScrSledljivost.AutoPovezi` | 432 | ZIV_UI | PR7 | da | — | P1 (P2 nije stigla) | INTENTIONALLY REMOVED: dugme i AutoPovezi se brisu; povezivanje = DodajOtpremnicaIzvor_TX |
+| `modSledljivost.AutoLinkOtkupOtpremnica` | 91, 94, 264 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM/PR7 | da | — | P1 (P2 nije stigla) | Brise se (S14.2 red 4: povezivanje je upis, ne pogadjanje) |
+| `modSledljivost.AutoLinkOtkupOtpremnica_TX` | 19, 30, 37, 38, 41, 44, 59, 65, 68, 76, 79, 82, 88 | ZIV_UI | BRISE_SE_SA_POZIVAOCEM/PR7 | da | — | P1 (P2 nije stigla) | Brise se (heuristiku zamenjuje clanstvo u tblOtpremnicaIzvori) |
 
-## Poimeničan spisak testova (§14.1)
+## Poimeničan spisak testova (§14.1) — 15.09, jednoprolazno
+
+> **Nezavisna provera test celina nije stigla (limit 16.09).** Klase ispod su iz popisa od 15.09 — jednoprolazne i pisane **pre** odluka operatera (POP7-02). Linije u starim tabelama su sa `a173c134`. Prolaz 1 je ovde izmerio samo ono što se meri bez klasifikacije:
+
+| Procedura | Izvor na spisku | Sidra danas | #334 dirao telo | Pozivaoci (registracija) |
+|---|---|---|:-:|---|
+| `modBusinessFlowProTests.OtkMrezaRed` | sidro | otk_linija 2 | da | modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke:10983, modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke:10998, modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke:11011 |
+| `modBusinessFlowProTests.Test_BKTX_VlasnikOsaOdbijaTudjuStanicu` | kriticar1509, sidro | x_saveotkup 4 | da | modBusinessFlowProTests.RunBusinessFlowProSuite:251 |
+| `modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke` | sidro | otk_linija 2 | da | modBusinessFlowProTests.RunBusinessFlowProSuite:242 |
+| `modBusinessFlowProTests.Test_OTK_VrednostBezStavkiPada` | kriticar1509, sidro | x_saveotkup 1 | da | modBusinessFlowProTests.RunBusinessFlowProSuite:232 |
+| `modBusinessFlowProTests.Test_OTP_StariOtkupNeUlazi` | kriticar1509, sidro | x_saveotkup 1 | da | modBusinessFlowProTests.RunBusinessFlowProSuite:319 |
+| `modBusinessFlowProTests.Test_OtkupReadHelpersExcludeStornirano` | kriticar1509, sidro | x_saveotkup 2 | da | modBusinessFlowProTests.RunBusinessFlowProSuite:118 |
+| `modTest.T_Izv_DetaljICipKontekst` | 1509, sidro | otk_veze 1, otp_brojzbirne 1 | da | modTest.InvokeTest:947 |
+| `modTest.T_Izv_RangKooperanata` | 1509 | — | da | modTest.InvokeTest:949 |
+| `modTest.T_Izv_SlaganjeKartica` | 1509 | — | da | modTest.InvokeTest:942 |
+| `modTest.T_Izv_SlaganjeOtkupOM` | 1509, sidro | otk_linija 1, otk_veze 1, otp_linija 1 | da | modTest.InvokeTest:940 |
+| `modTest.T_Izv_ZbirniSadrzaj` | 1509, sidro | otp_linija 1 | da | modTest.InvokeTest:950 |
+| `modTestStorno.SeedOtkupBlok` | 1509, sidro | otk_veze 1 | da | modTestStorno.T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete:408, modTestStorno.T16_DupliOtpremniceOslobadjaBlokove:736, modTestStorno.T21_PonistenjeOtpremniceJedinaKaskadaCeoTok:865 |
+| `modBusinessFlowProTests.FindOtkupIDByBroj` | kriticar1509 | — |  | modBusinessFlowProTests.Test_HladnjacaChainHappyPath:5565, modBusinessFlowProTests.Test_StornoKaskadaScopePoLancu:4464 |
+| `modBusinessFlowProTests.FindOtkupIDByBrojAndKlasa` | kriticar1509, sidro | x_literal 1 |  | modBusinessFlowProTests.Test_FullDocumentChainHappyPath:586, modBusinessFlowProTests.Test_HladnjacaChainHappyPath:5567, modBusinessFlowProTests.Test_HladnjacaChainLinkFailureIsReported:5692 |
+| `modBusinessFlowProTests.FindOtpremnicaIDByBrojAndKlasa` | kriticar1509, sidro | x_literal 1 |  | modBusinessFlowProTests.OtpGeneracija:4667, modBusinessFlowProTests.Test_DualClassDocumentWrappers:1209, modBusinessFlowProTests.Test_DualClassDocumentWrappers:1210 |
+| `modBusinessFlowProTests.HardDeleteBusinessFlowTestRows` | kriticar1509, sidro | x_literal 2 |  |  |
+| `modBusinessFlowProTests.OtpGeneracija` | kriticar1509 | — |  | modBusinessFlowProTests.Test_GeneracijaIDNaSavePutanji:4591, modBusinessFlowProTests.Test_GeneracijaIDNaSavePutanji:4592, modBusinessFlowProTests.Test_GeneracijaIDNaSavePutanji:4621 |
+| `modBusinessFlowProTests.PwaRed` | kriticar1509 | — |  | modBusinessFlowProTests.Test_BKTX_UvozOtkupaOdbijaTudjBroj:10381, modBusinessFlowProTests.Test_BKTX_UvozOtkupaOdbijaTudjBroj:10395, modBusinessFlowProTests.Test_BKTX_UvozOtkupaOdbijaTudjBroj:10409 |
+| `modBusinessFlowProTests.RunHladnjacaChain` | kriticar1509 | — |  | modBusinessFlowProTests.Test_HladnjacaChainFailFastOtpremnica:5594, modBusinessFlowProTests.Test_HladnjacaChainFailFastZbirna:5624, modBusinessFlowProTests.Test_HladnjacaChainHappyPath:5512 |
+| `modBusinessFlowProTests.SoftStornoBusinessFlowTestRows` | kriticar1509, sidro | x_literal 2 |  |  |
+| `modBusinessFlowProTests.Test_CoreTablesAndColumnsExist` | kriticar1509, sidro | x_literal 4 |  | modBusinessFlowProTests.RunBusinessFlowProAuditOnly:374, modBusinessFlowProTests.RunBusinessFlowProSeedOnly:337, modBusinessFlowProTests.RunBusinessFlowProSuite:103 |
+| `modBusinessFlowProTests.Test_HladnjacaChainFailFastOtpremnica` | kriticar1509 | — |  | modBusinessFlowProTests.RunBusinessFlowProSuite:164 |
+| `modBusinessFlowProTests.Test_HladnjacaChainHappyPath` | kriticar1509, sidro | x_literal 2 |  | modBusinessFlowProTests.RunBusinessFlowProSuite:163 |
+| `modBusinessFlowProTests.Test_HladnjacaChainLinkFailureIsReported` | sidro | x_literal 1 |  | modBusinessFlowProTests.RunBusinessFlowProSuite:167 |
+| `modBusinessFlowProTests.Test_InvalidOtkupInvalidClassDoesNotAppend` | kriticar1509, sidro | x_saveotkup 1 |  | modBusinessFlowProTests.Test_OtkupInputValidationHardening:799 |
+| `modBusinessFlowProTests.Test_InvalidOtkupNegativeCenaDoesNotAppend` | kriticar1509, sidro | x_saveotkup 1 |  | modBusinessFlowProTests.Test_OtkupInputValidationHardening:798 |
+| `modBusinessFlowProTests.Test_NoCrossZbirnaLinksAudit` | kriticar1509, sidro | x_literal 3 |  | modBusinessFlowProTests.RunBusinessFlowProAuditOnly:375, modBusinessFlowProTests.RunBusinessFlowProSuite:172, modBusinessFlowProTests.RunBusinessFlowProTraceabilityOnly:358 |
+| `modBusinessFlowProTests.Test_OTK_EkranPauziraAutoLanac` | kriticar1509 | — |  | modBusinessFlowProTests.RunBusinessFlowProSuite:228 |
+| `modBusinessFlowProTests.Test_StornoKaskadaScopePoLancu` | kriticar1509 | — |  | modBusinessFlowProTests.RunBusinessFlowProSuite:156 |
+| `modGoldenTests.GldBrojDok` | kriticar1509 | — |  | modGoldenTests.GldDokumenti:587, modGoldenTests.GldStatus:475 |
+| `modGoldenTests.GldStornoOtpremnice` | kriticar1509 | — |  | modGoldenTests.Gld_D1_StornoOtpremnice:1499 |
+| `modGoldenTests.GldTx` | kriticar1509 | — |  | modGoldenTests.GldPocni:1290 |
+| `modGoogleSyncSmokeTests.BuildOTKFixtureData` | kriticar1509 | — |  | modGoogleSyncSmokeTests.Test_MasterSyncCrossSheetFailureKeepsEarlierRows:932, modGoogleSyncSmokeTests.Test_MasterSyncDuplicateClientRecordID:518, modGoogleSyncSmokeTests.Test_MasterSyncFixtureImportAndWriteBack:474 |
+| `modGoogleSyncSmokeTests.RunMasterSyncSmokeSuite` | kriticar1509 | — |  |  |
+| `modTest.T_BlokoviF8_PoIdentitetu` | kriticar1509 | — |  | modTest.InvokeTest:1026 |
+| `modTest.T_PrefillIzStorniranog_CitaSvojuTabelu` | kriticar1509 | — |  | modTest.InvokeTest:846 |
+| `modTest.T_Sled_FailClosed` | kriticar1509 | — |  | modTest.InvokeTest:956 |
+| `modTest.T_Sled_MeteSledljivosti` | kriticar1509 | — |  | modTest.InvokeTest:961 |
+| `modTest.T_Sled_PovezivanjeKandidati` | kriticar1509 | — |  | modTest.InvokeTest:960 |
+| `modTest.T_StorniranSibling_ZadrzavaSvojBlok` | kriticar1509 | — |  | modTest.InvokeTest:1025 |
+| `modTest.T_StornoImpact_BlokSekcijaDriftJeInvalidna` | kriticar1509 | — |  | modTest.InvokeTest:869 |
+| `modTest.T_StornoImpact_NestaoIdentitetJeInvalidan` | kriticar1509 | — |  | modTest.InvokeTest:874 |
+| `modTest.T_ZavrsetakIspravke_NeDegradiraOldDocID` | kriticar1509 | — |  | modTest.InvokeTest:1033 |
+| `modTestStorno.RunStornoTestSuite` | kriticar1509 | — |  |  |
+| `modTestStornoCentar.Test_StampIspravkaTrace_Auto` | kriticar1509, sidro | x_trace 2 |  | modTestStornoCentar.Test_StornoCentar_All:29 |
+
+Posle #334: `T_Izv_RangKooperanata` i `T_Izv_SlaganjeKartica` više ne čitaju zaglavlje otkupa; `T_Izv_SlaganjeOtkupOM`, `T_Izv_ZbirniSadrzaj` i `T_Izv_DetaljICipKontekst` zadržavaju samo deo otpremnice/vozača. `Test_OTK_CitaociCitajuStavke` (`modBusinessFlowProTests:10866-10868`) tvrdi „zaglavlje Kolicina/Cena prazno“ — placebo ako PR7 obriše kolone. `SaveOtkup_TX` zovu šest testova (POP7-09).
+
 
 | Klasa | Testova | Pomoćnih procedura |
 |---|---:|---:|
@@ -451,7 +582,31 @@ Rečnik: **ZIV** = dostižno iz produkcione ulazne tačke bez ugašene kapije ·
 | `modGoldenTests.GldDodaj` | pomocna | RunGoldenSuite | Split(rez, ' + ') (:1026) i dalje razlaze rezultate SaveZbirnaMulti_TX, SavePrijemnicaMulti_TX i fakture (:1117, :1125, :1170, :1189, :1226) do PR8/PR9. U PR7 otpada samo poziv iz GldOtpremnica (:1099), jer nov pisac vraca jedan ID; sama procedura se ne menja. Nestaje zajedno sa poslednjim Multi piscem (§13 NEMA_ID_PLU … |  |
 | `modNovacTests.AppendTestOtkupRow` | pomocna | RunNovacSmokeSuite (Test_PartialOtkupAva … | Fixture je vec novi model: header i jedna stavka (:518-554). Pogodak na COL_OTK_TIP_AMB je lazan, jer TipAmbalaze ostaje na headeru (S3 :108). Vrednost PrimalacNovca = 'TEST' (:536) niko ne cita: osim konstante i registra seme (modConfig:190, modSchema:1261), kolonu pominju samo pauziran prefill modOtkupBlok:956 i Requ … |  |
 
-## Van popisa: šta regex ne vidi (kritičar pokrivenosti)
+## Van popisa: šta regex ne vidi — 15.09, premereno prolazom 1
+
+> Nezavisni kritičar nije stigao (limit 16.09). Prolaz 1: sve imenovane procedure iz stavki 15.09 postoje na `c2be85e8`, #334 nije dirao nijednu; proširena sidra alata (`x_literal`, `x_indeks`, `x_saveotkup`, `x_vreme_unosa`, `x_trace`) sada ih delom drže u zatvorenom spisku. Linije u tabelama 15.09 su sa `a173c134`.
+
+| Stavka 15.09 | Procedure danas (status alata, sidra x_*) |
+|---|---|
+| src-vba/modProductionHealthCheck.bas:121-128 (Check_CoreTablesAndColumns) | `modProductionHealthCheck.Check_CoreTablesAndColumns` 109-160 ZIV_UI x_literal 4; `modAdmin.AdminPanel_OnClick` 215-253 ZIV_UI; `modProductionHealthCheck.RunProductionHealthCheck` 28-57 ZIV_UI |
+| src-vba/modProductionHealthCheck.bas:848-916 (Check_OtkupOtpremnicaCrossZbirnaLinks), :865-866, :885, :890 | `modProductionHealthCheck.Check_OtkupOtpremnicaCrossZbirnaLinks` 849-917 ZIV_UI x_literal 3; `modProductionHealthCheck.GetValueByKeySafe` 1537-1570 ZIV_UI; `modProductionHealthCheck.RunProductionHealthCheck` 28-57 ZIV_UI |
+| src-vba/modProductionHealthCheck.bas:1020-1023 (Check_DocumentSoftDeleteReferences) i :1163-1173 (Check_Google | `modProductionHealthCheck.Check_DocumentSoftDeleteReferences` 1016-1044 ZIV_UI x_literal 2; `modProductionHealthCheck.Check_GoogleSyncMasterSchema` 1155-1188 ZIV_UI x_literal 4; `modProductionHealthCheck.CountActiveReferencesToStornirano` 1228-1278 ZIV_UI; `modProductionHealthCheck.HealthRequireColumns` 1405-1414 ZIV_UI |
+| src-vba/modIntegritet.bas:229-256 (Chk_B2_UnlinkedOtkupi, Chk_B3_IzgubljeniBlokovi); :207-221 i :265-312 (B1/B | `modIntegritet.Chk_B2_UnlinkedOtkupi` 229-239 ZIV_UI; `modIntegritet.Chk_B3_IzgubljeniBlokovi` 247-256 ZIV_UI; `modIntegritet.DanglingDocs` 1183-1209 ZIV_UI; `modIntegritet.DocsBezZbirne` 1212-1235 ZIV_UI |
+| src-vba/modStammdatenSync.bas:652-661, :686-715, :737-768, :794-795 (ExportOtkupiAll); :546-548, :578-592 (Exp | `modStammdatenSync.ExportOtkupiAll` 617-810 ZIV_UI; `modStammdatenSync.ExportOtkupPoOM` 535-615 ZIV_UI; `modStammdatenSync.ExportMgmtReports_Core` 463-534 ZIV_UI |
+| src-vba/modMasterSync.bas:71-77 (GS_KLASA=14 ... GS_VOZAC_ID=20), :651-679 BuildOTKOperationalHeaders_, :1470- | `modMasterSync.BuildOTKOperationalHeaders_` 651-679 ZIV_MAKRO; `modMasterSync.ImportRowToTblOtkup` 2125-2376 ZIV_UI; `modMasterSync.TryUpdateVozacID` 2499-2578 PAUZIRAN; `modMasterSync.IzvedeniLanacIzPwaDostupan` 730-732 ZIV_UI |
+| src-vba/modStornoDok.bas:486-560 PrefillIzStorniranog, :742 KolicinaReda; src-vba/modDokumenta.bas:4360 PickPr | `modStornoDok.PrefillIzStorniranog` 486-560 ZIV_UI; `modStornoDok.KolicinaReda` 742-752 ZIV_UI; `modDokumenta.PickPrefillRows` 4360-4408 ZIV_UI; `modDokumenta.RowKlasaII` 4465-4469 ZIV_UI |
+| src-vba/modStornoFlow.bas:2089-2119 StampIspravkaTrace (poziv :811 u CompleteOtpremnicaIspravka); src-vba/modP | `modStornoFlow.StampIspravkaTrace` 2089-2119 ZIV_UI x_trace 4; `modStornoFlow.CompleteOtpremnicaIspravka` 590-826 ZIV_UI; `modDokUnos.ZavrsiIspravkuAko` 1164-1204 ZIV_UI |
+| src-vba/modSetup.bas:1283-1311 EnsureSledljivostSchema (Else grana :1302-1304; :1310; :1322) | `modSetup.EnsureSledljivostSchema` 1283-1326 ZIV_UI x_trace 4; `modSetup.PreimenujKolonuAko` 1384-1410 ZIV_UI; `modMain.InitApp` 300-337 ZIV_UI; `modSetup.EnsureRuntimeSchema` 1173-1265 ZIV_UI |
+| src-vba/modStornoFlow.bas:424-586 RunOtpremnicaCorrection, :2128-2178 StornoOtpremnicaBrojAtomic_TX, :2810-285 | `modStornoFlow.RunOtpremnicaCorrection` 424-586 ZIV_UI; `modStornoFlow.StornoOtpremnicaBrojAtomic_TX` 2128-2178 ZIV_UI; `modStornoFlow.GetOtpremnicaIDsByBroj` 2810-2856 ZIV_UI; `modStornoFlow.ActiveBlocksForFlow` 1550-1587 ZIV_UI |
+| src-vba/modScrDokumenti.bas:71 (lista IZGUBLJENI), :109-111, :450-494 PreuzmiBlok, :607-664 LostGridCols/RowsI | `modScrDokumenti.PreuzmiBlok` 450-494 ZIV_UI; `modScrDokumenti.LostGridCols` 607-614 ZIV_UI; `modScrDokumenti.RowsIzgubljeni` 616-664 ZIV_UI; `modStornoRecovery.GetNedovrseno` 37-76 ZIV_UI |
+| src-vba/modScrSledljivost.bas:314-385 RadnjaNadRedom/PoveziRed (:378), :390-424 NapuniPovKandidate | `modScrSledljivost.RadnjaNadRedom` 314-332 ZIV_UI; `modScrSledljivost.PoveziRed` 341-385 ZIV_UI; `modScrSledljivost.NapuniPovKandidate` 390-424 ZIV_UI; `modScrSledljivost.Scr_Event` 239-252 ZIV_UI |
+| src-vba/modIzvestaj.bas:6051-6159 StampajSledljivostZbirne; :4963-4976 SledBlokSumMapa (pozivi :5100, :5659) | `modIzvestaj.StampajSledljivostZbirne` 6084-6192 ZIV_UI; `modIzvestaj.SledBlokSumMapa` 4996-5009 ZIV_UI; `modScrSledljivost.StampajSledljivostReda` 447-484 ZIV_UI; `modScrSledljivost.StampajMetu` 501-521 ZIV_UI |
+| src-vba/modPaletniList.bas:2631-2650 GetKooperantiZaZbirnu | `modPaletniList.GetKooperantiZaZbirnu` 2631-2650 MRTAV |
+| src-vba/modOtkup.bas:1312 SaveOtkup_TX -> :1503 SaveOtkup, pozicioni Array :1614-1635, AppendRow :1638, :1651  | `modOtkup.SaveOtkup_TX` 1649-1745 SAMO_TEST x_saveotkup 16; `modOtkup.SaveOtkup` 1840-2036 SAMO_TEST x_saveotkup 19,x_vreme_unosa 1 |
+| src-vba/modPregledListova.bas:131-139 OcistiTabele | `modPregledListova.OcistiTabele` 131-172 ZIV_UI |
+| src-vba/modScrDokumenti.bas:411-440 PrintSpec, :501-546 OtpIdZaBroj; src-vba/modOtkupBlok.bas:1167 PrintSpecif | `modScrDokumenti.PrintSpec` 411-440 ZIV_UI; `modScrDokumenti.OtpIdZaBroj` 501-546 ZIV_UI; `modOtkupBlok.PrintSpecifikacija` 1167-1183 ZIV_UI; `modOtkupBlok.RenderSpec` 1233-1361 ZIV_UI |
+| src-vba/modOtkup.bas:1651; src-vba/modSetup.bas:1653-1654 (EnsureDoradeSchema); src-vba/modBusinessFlowProTest | `modSetup.EnsureDoradeSchema` 1619-1680 ZIV_UI x_vreme_unosa 2; `modOtkup.SaveOtkup` 1840-2036 SAMO_TEST x_saveotkup 19,x_vreme_unosa 1 |
+
 
 Ovo **nije** klasifikovano drugim prolazom. Svaka stavka je ulaz za PR7, ne zaključak.
 
@@ -513,7 +668,62 @@ Ovo **nije** klasifikovano drugim prolazom. Svaka stavka je ulaz za PR7, ne zakl
 | tools/otkup_kolone_popis.py:19-34 (ODLAZE), :43-44 | Alat popisa broji samo COL_OTK_* konstante. Nema COL_OTK_VREME_UNOSA, ne broji nijednu COL_OTP_* kolonu, ne vidi literale ni omotace/prosledjene indekse. Komentar se odseca na prvom apostrofu i unutar stringa. | Iz njega je izveden prag "dual READ = 0" iz S14.1 i broj 141/170 iz S14.6. Sve stavke iz ovog izvestaja su van tog merenja, pa prag mora da se meri prosirenim alatom. |
 | tests/golden/*.txt (A2_dvoklasni_lanac, A3_vise_blokova_jedna_otpremnica, A4_vise_otpremnica_jedna_zbirna, D3, G1 ...) | Snapshot-i ne nose po-klasne otpremnice. DOKUMENTI/STATUS broje logicki dokument (GeneracijaID ili "BR:"+BrojOtpremnice u opsegu Otpremnica.BrojZbirne, modGoldenTests:479-481, :590-591, :611-640). | PR7 ih ne sme menjati (acceptance: 12/0, nepromenjeni). Menja se adapter (GldTx snapshot novih tabela, GldOtpremnica preko novog pisca), a opseg po Otpremnica.BrojZbirne ostaje do PR8. |
 
-## Svi nalazi klasifikacije (jednoprolazno)
+## Nalazi 7b
+
+ID je stabilan i greppable (`POP7-NN`). Ozbiljnost: P1 — menja odluku ili ugovor PR7 · P2 — živ kvar ili mina koju PR7 mora da obradi · P3 — dokumentacija, komentar, sitna netačnost.
+
+| ID | Ozbiljnost | Nalaz | Dokaz | Izvor / provera |
+|---|---|---|---|---|
+| POP7-01 | P3 | **Popis 15.09 tvrdi 520 produkcionih mesta; njegova tabela i isti regex daju 510** | docs/REFAKTOR_PR7_POPIS.md:7 ('Ukupno 520 produkcionih mesta') naspram :18-22 (100+130+128+62+90 = 510); `python tools/popis_citalaca.py --commit a173c134` -> osnovne grupe PROD 510. | P1 (alat) + citanje dokumenta — potvrdjeno merenjem |
+| POP7-02 | P2 | **Klasifikacija 15.09 je starija od odluka operatera; kolone PR/Zamena i klase testova nisu ponovo primenjene** | git log: 3d4c8298 (popis) pa 9179ea09 (odluke 15.09). Primer: modAutoHladnjaca.LinkOtkupRedNaDokument, Zamena 'Auto-lanac u PR7 pravi clanstvo preko CreateOtpremnicaIzIzvora_TX' protivreci odluci 3 (lanac ceo pauziran do PR8). | P1 citanje — potvrdjeno; obim merim poredjenjem sa P2 |
+| POP7-03 | P1 | **Prag jezgra iz S14.1 nije ponovljiv kako je zapisan, a za PR7 je i pre slajsa prekoracen na greenfield kodu** | Citanje A (zatvaranje unutar modula) ponavlja 695 za CreateOtkup_TX @1bb49cb1 (26 procedura); CreateZbirna_TX @1bb49cb1 = 765 (13.09 zapis: 770; @c2be85e8 = 770). Citanje B (kako pise S14.1: preko modula, bez modDataAccess/modSchema, do Monitor_*/LogError, sa ApplyAvansToOtkup) @1bb49cb1: 2118 vs 1408 = +50%. @c2be85e8, prema CreateZbirna_TX: A -- jednopotezni CreateOtpremnicaIzIzvora_TX 1075 vs 770 (+39.6%), CreateOtpremnicaDraft_TX 517 (-32.9%), skela 6 ulaza 1373 (+78.3%); B -- 2024 vs 1691 (+19.7%), 1456 (-13.9%), 2330 (+37.8%). Zatvaranje A za IzIzvora: 39 procedura modDokumenta, sve Otp* skela iz PR5 (nema laznih ivica). | P1 (scratchpad p1_jezgro.py, graf alata) — mereno |
+| POP7-04 | P2 | **Admin health check i dalje trazi Isplaceno/DatumIsplate obrisane u PR6 (kvar 7) -- bez AUD reda** | src-vba/modProductionHealthCheck.bas:121-124 HealthRequireColumns TBL_OTKUP (..., "Isplaceno", "DatumIsplate", "OtpremnicaID"); :1409-1411 dize gresku na nedostajucu kolonu; ulaz modAdmin.bas:238 'healthprod'. Nije pokrenuto. | P1 citanje + P2 otk_veze_1 — potvrdjeno citanjem, nije pokrenuto |
+| POP7-05 | P2 | **KPI 'OM saldo' cita kolonu 5 (agro zaduzenje) umesto 6 (saldo) (kvar 8) -- bez AUD reda** | src-vba/modOtkupUI.bas:7580-7581 SaldoOMUkupno = res(UBound, 5) uz komentar 'kolona 5 = Saldo'; src-vba/modIzvestaj.bas:849 result(rowCount, 5) = totAgro, :850 result(rowCount, 6) = totVr - totNov - totAgro. | P1 citanje — potvrdjeno citanjem, nije reprodukovano u Excelu |
+| POP7-06 | P3 | **Stampa otkupnog lista iz mreze trazi dokumente samo po BrojDokumenta, bez stanice i dana** | src-vba/modScrDokumenti.bas:712-732 OtkupIdsByBrDok poredi samo COL_OTK_BR_DOK (+ Stornirano); poziv RowAction 'print' :363 -> modPrint.OutputOtkupniList ids. Jedinstvenost broja drzi samo (StanicaID, dan): modOtkup.RequireBrojJedinstven -> modBrojevi.BrojZauzetUNizu(KIND_OTK, stanicaID, datum, broj). Generisan broj nosi broj stanice (modBrojevi.FormatBroj:292-306), pa sudar trazi rucno kucan broj, PWA broj ili stanice sa istim numerickim delom ID-a. Nije reprodukovano. | P1 citanje (zatecen nalaz S14.2) — potvrdjeno citanjem, nije reprodukovano |
+| POP7-07 | P1 | **Pauza NapredakBlokaDostupan stiti samo mrtav panel; ziva ljuska racuna napredak iz praznih kolona (kvar 1)** | Kapija samo u modOtkupBlok.OtkupBlok_ConfirmUnos:225, OtkupBlok_AfterUnos:269, RefreshSummary:1410; AttachOtkupBlokPanel (:103) nema pozivaoca (alat: prod_pozivaoci=0). Zivi bez kapije: modScrDokumenti.Scr_OtpInfo:171-172 (SumKolByOtp/SumAmbByOtp), PotvrdiPrekoracenje:1088, RowsOtpremnice:2155 (BuildNapisanoByOtp). Lanac alata: frmOtkupUI.UserForm_KeyDown -> modOtkupUI.HandleGlobalKey -> SelectMode -> SelectModeCore -> RefreshOtpTraka -> modScrDokumenti.Scr_OtpInfo:171 -> modOtkupBlok.SumKolByOtp. | P1 (alat) + P2 otk_veze_1 (P1 nalaz) — oba prolaza |
+| POP7-08 | P2 | **NALAZ 1 stoji: Otkup.OtpremnicaID ima 6 produkcionih pisaca, linije nepromenjene posle #334** | RequireUpdateCell TBL_OTKUP ... COL_OTK_OTPREMNICA_ID: modAutoHladnjaca.bas:394, modDokumenta.bas:6942, modMasterSync.bas:2777, modOtkupBlok.bas:1480, modSledljivost.bas:255-256, modStornoFlow.bas:2639. Test-only: modOtkup.SaveOtkup (RequireColumns :1932). | P1 grep + alat — potvrdjeno |
+| POP7-09 | P2 | **SaveOtkup_TX pada sa kolonama PR7 i nosi 8 poziva u 6 testova, ne 2; #334 vec pokazuje drugi put za zaglavlje bez stavki** | Alat: modOtkup.SaveOtkup_TX SAMO_TEST, pozivaoci modBusinessFlowProTests: Test_BKTX_VlasnikOsaOdbijaTudjuStanicu:9517/:9521, Test_InvalidOtkupInvalidClassDoesNotAppend:839, Test_InvalidOtkupNegativeCenaDoesNotAppend:814, Test_OTK_VrednostBezStavkiPada:12588, Test_OtkupReadHelpersExcludeStornirano:1133/:1140, Test_OTP_StariOtkupNeUlazi:8442. S14.7 'Jos otvoreno 3' imenuje samo dva. Drugi put: Test_OTK_ZaglavljeBezStavkiObaraCitaoce (#334) pravi dokument CreateOtkup_TX, pa RequireDeleteRow TBL_OTKUP_STAVKE pod clsTransaction + rollback; who_writes --check-ownership prolazi. | P1 (alat, citanje) + P2 otk_veze_1 — oba prolaza |
+| POP7-10 | P1 | **Posle brisanja kolona vecina mekih citalaca otkazuje tiho -- zelena suite posle brisanja nije dokaz 'dual READ = 0'** | Tiho: modScrDokumenti.RowsBlokovi (ColIdx 0 -> modUiData.CellS/CellD vracaju prazno za c < 1, modUiData.bas:98/:105), Scr_OtpInfo (On Error Resume Next, modScrDokumenti.bas:163), modOtkupBlok.FirstBlokVal (FindRows prazno), modIntegritet.ProizvodjacByZbirna (GetColumnIndex 0), modStanicaLock.BuildOTKSheetRowForOtkup (:521-532, :562-566). Glasno: RequireColumnIndex putevi (npr. modStammdatenSync.ExportOtkupiAll :676-680). Posledica za kapiju: prag se dokazuje prepisom svakog mesta i merenjem alata, ne padom testova. | P2 otk_veze_1 (P2 nalaz) + P1 citanje modUiData — potvrdjeno citanjem |
+| POP7-11 | P3 | **Pauza malina pecata VozacID stoji samo na pozivnom mestu orkestratora, ne u _TX** | src-vba/modMasterSync.bas:968-1000 StampVozacFromStanicaForMalina_TX proverava samo IsMalinaMode (:975); kapija IzvedeniLanacIzPwaDostupan je na modGoogleSyncOrchestrator.bas:201. AutoCreateOtpremniceFromPWA_TX (:742) i AutoCreateZbirnaFromOtpremnice_TX (:1076) kapiju nose u sebi. Nov pozivalac _TX bi zaobisao pauzu i pisao Otkup.VozacID. | P2 otk_veze_1 + P1 citanje — oba prolaza |
+| POP7-12 | P3 | **Komentar kapije IzvedeniLanacIzPwaDostupan citira zastarele linije** | src-vba/modMasterSync.bas:705-706 '(:759-767)'; citanja AutoCreateOtpremniceFromPWA su na :801-807. | P2 otk_linija_2 + P1 grep — oba prolaza |
+| POP7-13 | P3 | **Kriticar 15.09 pripisuje PwaRed modulu modGoogleSyncSmokeTests; procedura je u modBusinessFlowProTests** | src-vba/modBusinessFlowProTests.bas:10480 Private Function PwaRed; REFAKTOR_PR7_POPIS.md 'Test procedure bez sidra' red BuildOTKFixtureData / PwaRed -> modGoogleSyncSmokeTests.bas. | P1 grep — potvrdjeno |
+| POP7-14 | P3 | **Mapa kolona mreze za OTKUP vise nije tiha nula ni PR7 -- #334 je prepisuje iz stavki** | v. p3/resenja.json: modScrDokumenti.RedoviZaTip:1739 / :1743-1746 / :1826-1827; Col* su kljuc kolone (MAPA). Ostaje sintaksno citanje zaglavlja koje se prepisuje (RedoviZaTip ix/vKgRow) -- broji se u referencama dual READ dok se ne ukloni. | P2 otk_linija_2 + P1 citanje — oba prolaza |
+| POP7-15 | P1 | **Odluke 4 i 5 se sudaraju: TraceByZbirna je PR8, a trazi otkupe po Otkup.OtpremnicaID koju PR7 brise -- paletni list tiho gubi stavke** | modSledljivost.TraceByZbirna: RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID) :612, spoj po koloni :640/:675, Kolicina/Klasa zaglavlja :608/:614, EH vraca Empty :723-725. Zivi pozivaoci: PDF sledljivosti zbirne (modScrSledljivost:296 -> :458 -> :505 -> modIzvestaj.StampajSledljivostZbirne:6105-6108 vraca 'NEMA') i paletni/preradni list (modPaletniList.GetOtkupiZaPalete:2712 <- FillPaletaSablon:983 <- modScrPalete:448/:452; EH :2656, :2765-2766). Posle brisanja kolone oba izlaza su tiha: 'NEMA' i list bez kooperanata/parcela. PR7 mora bar da prevede spoj otkup->otpremnica na tblOtpremnicaIzvori ili da izricito pauzira ove izlaze. | P2 otk_linija_1 + otk_linija_2 + otk_veze_2 (tri nezavisna citaca) + P1 citanje — tri citaca + P1 |
+| POP7-16 | P2 | **Storno i ispravka zbirne/prijemnice ne vide otkupne blokove novog dokumenta** | modStornoFlow.ActiveOtkupIDsByZbirna:1595-1631 bira otkupe po Otkup.BrojZbirne; glavni put vezivanja (modOtkupBlok.LinkOtkupIDsToOtpremnica:1480-1482) tu kolonu ne pise. Pozivaoci: ScanPrijemnica:1516 (blockCount za uvid), ActiveBlocksForFlow:1567/:1578. Operater vidi 0 blokova, tok ih ne dira, bez poruke. | P2 otk_veze_2 + P1 citanje — oba prolaza |
+| POP7-17 | P2 | **Storno novog otkupa na hladnjackoj stanici ne nudi ispravku paleta i ne pokrece kaskadu** | modScrDokumenti.HladnjacaLanac i modStorno.StornoOtkupByBrDok_TX:138 traze lanac po Otkup.BrojZbirne; nov otkup vezan kroz F1 nosi samo OtpremnicaID. RowAction 'storno' (modScrDokumenti:385-395) tada pokazuje samo 'Stornirano' -- palete prijemnice i dalje broje robu storniranog bloka. | P2 otk_veze_1 (opis) + 15.09 (tiha nula) + P1 citanje — presuda citanjem (v. resenja) |
+| POP7-18 | P3 | **Prefill ispravke hladnjackog otkupa dolazi bez kolicine i cene; snimanje je imenovano pauzirano** | modStornoDok.PrefillIzStorniranog(STIP_OTKUP) :541/:547 KolicinaReda cita Kolicina zaglavlja, BrojUTekst guta nulu :770-773; put RowAction 'storno' -> PonudiHladnjacaIspravku:316 je ziv i za nov otkup (Otkup.BrojZbirne upisuje ReassignOtkupToOtpremnica_TX :6943-6945). Snimanje staje: modOtkupUnos.OtkupUpisi:319-323 (OTKUNOS_MSG_ISPRAVKA_PAUZIRANA). P1 je ovaj put proglasio nedostiznim -- oborio ga je P2. | P2 otk_linija_1 + P1 citanje (P1 razresenje oboreno) — oba prolaza |
+| POP7-19 | P3 | **Komentari hladnjackog lanca obecavaju povratak u PR7, a odluka 3 kaze PR8** | modAutoHladnjaca.bas:92 ('PR7 ga vraca u pogon nad tblOtpremnicaIzvori'); modOtkupUnos.bas:316 ('pauziran do PR7'), :389 ('lanac se gasi do PR7'), :396-398 ('da ga PR7 vrati u pogon'); modGoogleSyncOrchestrator/modMasterSync poruke 'PAUZIRANO do PR7'. | P2 otk_veze_2 + P1 citanje — oba prolaza |
+| POP7-20 | P3 | **Komentari navode mrtve potrosace kao zive i obrnuto** | modDokumenta.bas:6545-6546 (GetLostOtkupBlokovi 'Koriste: modHelpers.CheckVerwaisteDokumente i panel' -- oba mrtva; zivi su F1 lista IZGUBLJENI modScrDokumenti:623, Oporavak modStornoRecovery:71, Integritet B3 modIntegritet:251); modDokumenta.bas:6064-6066 (pregled storniranih 'u panelu frmDokumenta' -- GetStorniraniGrupisano bez pozivaoca); modMasterSync.bas:1752 zove AutoLink 'mrtav', a dugme scrSlAuto je zivo (modScrSledljivost:297, :1160) -- samo ne pogadja. | P2 otk_veze_2 + otk_linija_1 + P1 citanje — oba prolaza |
+
+## Nesklad prolaza — svaki rešen čitanjem koda
+
+P1 = alat + presude 15.09 vezane po sadržaju + čitanje prvog prolaza · P2 = slepi čitač celine. „Pobednik“ je prolaz čija se tvrdnja pokazala tačnom u kodu; TREĆE = oba su bila nepotpuna.
+
+| ID | Procedure | Presuda | Pobednik | Uzrok | Dokaz |
+|---|---|---|---|---|---|
+| R-01 | `modScrDokumenti.ColKlasa`, `modScrDokumenti.ColKolicina`, `modScrDokumenti.ColKolAmb`, `modScrDokumenti.ColCena` | {"pr": "NETAKNUT", "tiha_nula": false, "pristup": "MAPA"} | P2 | #334 promenio stvarnost; presuda 15.09 zastarela | Za OTKUP mreza celije kg/vrednost/gajbe/klase prepisuje iz stavki: modScrDokumenti.RedoviZaTip:1739 Set dStav = modOtkup.ZbirStavkiPoOtkupu(), :1741-1747 mapa ovStav po imenu kolone, :1826-1827 zStav = modOtkup.ZbirStavkiZaOtkup(...). Col* je kljuc kolone mreze, ne citanje vrednosti. I ako PR7 obrise kolonu iz kanona: ColIdx vraca 0, a modUiData.CellD/CellS vracaju prazno za c < 1 (modUiData:98, :105) -- prepis iz stavki ostaje. NETAKNUT vazi bez obzira na odluku 5. |
+| R-02 | `modOtkupBlok.LoadBlokovi`, `modOtkupBlok.SumBrutoByOtp`, `modOtkupBlok.KoopPrometYear`, `modOtkupBlok.RefreshSummary`, `modOtkupBlok.NapredakBlokaDostupan` | {"status": "MRTAV"} | P2 i 1509 (alat ZIV_MAKRO) | definicija makroa u alatu | v. p1/razresenja.json -- koreni su javni hook-ovi uklonjene forme frmOtkup (modOtkupBlok:5-27, :769, :1856). P2 otk_veze_1 isto (dokaz_statusa LoadBlokovi: clsBlokUI instance nastaju samo u modOtkupBlok.WireBtn/WireTxt/WireLst, a lanac do njih je mrtav). |
+| R-03 | `modStornoDok.ColKlasaZaPrefill`, `modStornoDok.ColTipAmbZaPrefill`, `modStornoDok.ColKolicinaZaPrefill`, `modStornoDok.ColKolAmbZaPrefill`, `modStornoDok.ColCenaZaPrefill`, `modStornoDok.ColBrutoZaPrefill`, `modStornoDok.ColAmbPrZaPrefill` | {"status": "ZIV_UI", "tiha_nula": true, "pr": "PR7", "napomena": "tok ispravke hladnjackog otkupa imenovano pauziran pri snimanju (modOtkupUnos:319-323)"} | P2 (P1 razresenje i 15.09 PAUZIRAN oboreni) | put zavisan od podataka, a ne od kapije; P1 ga je proglasio nedostiznim bez dokaza da podatak ne moze nastati | Storno centar za otkup ne stize do prefill-a (modStornoDok.StornoIzvrsiMod:419-439 nema granu za otkup). Ali mreza F1: modScrDokumenti.RowAction 'storno':385-392 -> HladnjacaLanac (trazi Otkup.BrojZbirne) -> PonudiHladnjacaIspravku:302-316 -> modStornoDok.PrefillIzStorniranog(STIP_OTKUP):486-560. Otkup.BrojZbirne novom otkupu upisuje zivi ReassignOtkupToOtpremnica_TX (modDokumenta:6936-6945 PoveziDeteNaZbirnu) kroz 'Preuzmi' (modScrDokumenti:478) i 'Povezi' (modScrSledljivost:378). Na hladnjackoj stanici sa prijemnicom i paletama te zbirne operater dobija prefill ispravke bez kolicine i cene (KolicinaReda -> 0, modStornoDok:541/:547, :771-773). NIJANSA (P2 otk_linija_1, provereno): posle prefill-a snimanje ispravke je GLASNO pauzirano -- modOtkupUnos.OtkupUpisi:310-323 staje pre pisca dok postoji hladnjacki pending relink (poruka OTKUNOS_MSG_ISPRAVKA_PAUZIRANA). Citanje se izvrsava zivo (forma se popuni bez kolicine i cene), ali tok ispravke ne moze da se zavrsi; zato je 15.09 'PAUZIRAN' delimicno opravdan za SPOSOBNOST, ne za mesto. |
+| R-04 | `modSledljivost.TraceByZbirna` | {"pr": "PR8 + PR7 (uklanjanje zavisnosti od kolona koje PR7 brise)"} | TRECE (P2 po odluci 4 + protivrecnost sa odlukom 5) | odluke 4 i 5 se sudaraju | Odluka 4: sledljivost zbirne (TraceByZbirna) -> PR8. Odluka 5: PR7 brise Otkup.OtpremnicaID. TraceByZbirna trazi otkupe po Otkup.OtpremnicaID kroz RequireColumnIndex (modSledljivost:612) i cita Kolicina/Klasa sa zaglavlja (:608, :614). Ziv pozivalac van sledljivosti: modPaletniList.GetOtkupiZaPalete:2712 (<- FillPaletaSablon:983 <- stampa paletnog lista). Posle brisanja kolone GetOtkupiZaPalete hvata gresku (On Error GoTo EH, modPaletniList:2656, :2765-2766) i vraca Empty -> paletni list i prerada se stampaju bez stavki, tiho. |
+| R-05 | `modSetup.EnsureDoradeSchema` | {"pr": "USLOVNO PR7 (odluka 5)"} | TRECE (i 15.09 PR7 i P2 NETAKNUT su uslovni) | sudbina Otkup.Kolicina/BrutoKg u kanonu nije odlucena | EnsureDoradeSchema:1643 SetColumnNumberFormat Kolicina, :1658 EnsureColumnOnTable BrutoKg, :1659 format BrutoKg (P2: format je no-op kad kolone nema, modSetup:1712-1720; EnsureColumnOnTable dodaje kolonu, :2011-2032). Ako PR7 izbaci BrutoKg iz kanona, Admin 'ensure' (modAdmin:236 -> AdminEnsureEverything:295) je vraca -- red mora u isti PR. Ako ostane, NETAKNUT. |
+| R-06 | `modOtkupBlok.PrefillOtkupFromStornirano` | {"pr": "BRISE_SE_SA_POZIVAOCEM"} | P2 | mesto u mrtvoj proceduri: kolona ostaje, procedura odlazi | PrefillOtkupFromStornirano je u mrtvom panelu modOtkupBlok (v. razresenje hook-ova frmOtkup); 15.09 za ostala mesta iste procedure vec kaze 'brise se sa panelom'. |
+| R-07 | `modOtkup.SaveOtkup` | {"pr": "zavisi od odluke 'Jos otvoreno 3'"} | TRECE | sudbina test-only pisca nije odlucena | Ako SaveOtkup odlazi (zamena: CreateOtkup_TX + brisanje stavki pod clsTransaction, obrazac Test_OTK_ZaglavljeBezStavkiObaraCitaoce), mesto nestaje sa procedurom; ako se prepisuje bez kolona PR7, TipAmbalaze ostaje (VAN_OPSEGA). |
+| R-08 | `modOtkupBlok.ExistingBlokZbirna` | {"tiha_nula": false} | P2 | fallback se zove samo kad ni otpremnica ne zna zbirnu | modScrDokumenti.PrefillSpec:1117-1118: zbirna = Otpremnica.BrojZbirne, a ExistingBlokZbirna samo ako je to prazno. Nov otkup dobija Otkup.BrojZbirne jedino preko ReassignOtkupToOtpremnica_TX, koji kopira broj otpremnice (modDokumenta:6930, :6943-6944) -- kad otpremnica nema broj, nema ga ni blok; prazno je tacan odgovor, ne nula. |
+| R-09 | `modOtkupBlok.FirstBlokVal` | {"tiha_nula": false} | P2 | genericki pomocnik; tiha nula se vodi na pozivaocu | FirstBlokVal (modOtkupBlok:1647-1657) vraca vrednost trazene kolone prvog bloka; spoj po Otkup.OtpremnicaID radi za nov blok (upis modOtkupBlok:1480 iz Scr_Save modScrDokumenti:830). Nula nastaje u ExistingBlokCena (:1635, COL_OTK_CENA) -> Scr_OtpInfo:173 traka CENA 0,00 -- tamo je tiha nula (P2 otk_linija_1: true). |
+| R-10 | `modScrDokumenti.HladnjacaLanac` | {"tiha_nula": true} | 1509 | izostanak upozorenja je tihi ishod koji operater vidi | HladnjacaLanac trazi zbirnu po Otkup.BrojZbirne (modScrDokumenti.HladnjacaLanac, LookupValue ... COL_OTK_BROJ_ZBIRNE) i izlazi kad je prazno. Nov otkup vezan kroz F1 (modScrDokumenti:830 -> modOtkupBlok.LinkOtkupIDsToOtpremnica:1480-1482) nosi samo OtpremnicaID/BrojOtpremnice. Ako otpremnica ima zbirnu (F3 po Otpremnica.BrojZbirne, ziv) sa prijemnicom i paletama na hladnjackoj stanici, storno iz mreze (RowAction 'storno' :385-395) pokazuje samo 'Stornirano' -- ponuda ispravke paleta izostaje, a ni kaskada ne radi (modStorno.StornoOtkupByBrDok_TX:138 cita istu kolonu). Palete i dalje broje robu storniranog bloka. |
+| R-11 | `modStornoDok.ColVozacZaPrefill` | {"tiha_nula": false, "pristup": "MAPA"} | P2 | prazan vozac je tacan odgovor za otkup | ColVozacZaPrefill je mapa kolone (modStornoDok:634); vrednost cita PrefillIzStorniranog:535 kroz CelijaAko. Vozac nije atribut otkupa u ciljnom modelu, a otkupni pisac ga ionako odbacuje (modOtkupUnos:325-327). |
+| R-12 | `modStornoFlow.ActiveOtkupIDsByZbirna` | {"tiha_nula": true} | P2 | blokovi novih otkupa ispadaju iz storno toka zbirne/prijemnice | ActiveOtkupIDsByZbirna (modStornoFlow:1595-1631) bira otkupe po Otkup.BrojZbirne; nov otkup ga nema na glavnom putu. Pozivaoci: ScanPrijemnica:1516 (blockCount za uvid storna) i ActiveBlocksForFlow:1567/:1578 (blokovi koje storno/ispravka zbirne ili prijemnice obradjuje) -- operater vidi 0 blokova i tok ih ne dira. |
+| R-13 | `modStornoDok.ColCenaZaPrefill` | {"pr": "PR7", "tiha_nula": false, "napomena": "latentna tiha nula posle PR7"} | 1509 | grana otpremnice menja oblik, ne samo ime | ColCenaZaPrefill za STIP_OTPREMNICA (modStornoDok:711) daje Cena po klasnom redu; PrefillIzStorniranog iz nje pravi cena i cena2 (:543, :549). Zaglavlje novog oblika nosi jednu PredlogCena, a cena2 po klasi ne postoji -- grana se u PR7 prepisuje, ne samo preimenuje. Danas legacy red nosi cenu, pa nije tiha nula. |
+| R-14 | `modPrint.FillOtpremnicaSablon`, `modStornoFlow.GetActiveDocumentsForStorno`, `modIntegritet.Chk_B5b_OtpremnicaBezZbirne`, `modIzvestaj.ReportRobaVozaciZbirni`, `modSledljivost.GetOtpremnicaKandidatiZaOtkup`, `modStornoImpact.ImpactHeader`, `modIzvestaj.SledOtpMapa`, `modScrDokumenti.ColCena`, `modStornoDok.ColKlasaZaPrefill`, `modStornoDok.ColKolicinaZaPrefill`, `modStornoDok.ColKolAmbZaPrefill`, `modStornoDok.ColBrutoZaPrefill` | {"tiha_nula": false, "napomena": "latentna tiha nula posle PR7"} | 1509 (P2 oznaka LATENTNO prihvacena kao napomena) | definicija 'danas' naspram 'posle PR7' | LATENTNO: danas nijedan produkcioni put ne pravi otpremnicu novog oblika -- CreateOtpremnicaDraft_TX i CreateOtpremnicaIzIzvora_TX su SAMO_TEST (alat: prod_pozivaoci=0; modDokumenta:2238, :2408), a jedini zivi AppendRow u tblOtpremnica je legacy SaveOtpremnica (po-klasni red sa Kolicinom). Mesto ce postati tiha nula cim PR7 ucini skelu jedinim putem -- zato je PR7. P2 za svako od ovih mesta sam pise 'LATENTNO' i 'danas NE postoji ziv put koji pravi otpremnicu novog oblika'. |
+| R-15 | `modScrDokumenti.Scr_OtpInfo`, `modScrDokumenti.PotvrdiPrekoracenje`, `modScrDokumenti.RowsOtpremnice` | {"tiha_nula": true} | P2 | nula dolazi iz otkupnih blokova (kvar 1), ne iz zaglavlja otpremnice | Scr_OtpInfo:171-173 -> SumKolByOtp/SumAmbByOtp/ExistingBlokCena (traka 'U BLOK 0', 'CENA 0,00', modOtkupUI:896-910); PotvrdiPrekoracenje:1088 -> SumKolByOtp (ostatak = cela otpremnica, upozorenje izostaje); RowsOtpremnice:2155 -> BuildNapisanoByOtp ('U blokovima 0', cip 'otvorene'). Blokovi iz CreateOtkup_TX nemaju Kolicinu/Cenu na zaglavlju. Tiha nula po proceduri = true; mesta nad zaglavljem otpremnice sama nisu tiha nula. |
+| R-16 | `modAutoHladnjaca.BackfillPrijemniceHladnjacaCore`, `modDokumenta.SaveOtpremnica`, `modDokumenta.ValidateZbirna`, `modDokumenta.ValidateZbirnaPreUnosa`, `modDokumenta.GetVerwaisteOtpremnice`, `modIzvestaj.SledOtpMapa`, `modDokumenta.CalculateProsekGajbe`, `modSetup.EnsureDoradeSchema` | {"pr": "PR8"} | P2 (odluke 1-3; presuda 15.09 im prethodi) | klasifikacija 15.09 pisana pre odluka operatera (POP7 klasifikacija-pre-odluka) | Odluka 1: zbirni citaoci po Otpremnica.BrojZbirne (ValidateZbirna, ValidateZbirnaPreUnosa -- F3, GetVerwaisteOtpremnice, SledOtpMapa) se u PR7 ne diraju. Odluka 2: SaveOtpremnica ostaje test-only pisac do PR8, po-klasne kolone tblOtpremnica (Kolicina/Klasa/KolAmbalaze/BrutoKg) ostaju u kanonu do PR8 -- pa ni EnsureDoradeSchema za otpremnicu (:1644, :1662-1663) ni mrtav CalculateProsekGajbe (SAMO_TEST, odlazi sa testom) nisu posao PR7. Odluka 3: hladnjacki lanac i njegov backfill ceo do PR8. |
+| R-17 | `modDokumenta.GetStorniraniByTip`, `modOtkupBlok.PrefillLeftForm` | {"pr": "BRISE_SE_SA_POZIVAOCEM"} | P2 | mesto u mrtvoj proceduri | Obe procedure su MRTAV u oba prolaza (GetStorniraniByTip <- GetStorniraniGrupisano bez pozivaoca; PrefillLeftForm u ostrvu legacy panela modOtkupBlok). Kolona ostaje na zaglavlju, procedura odlazi. |
+| R-18 | `modScrDokumenti.PrefillSpec` | {"pr": "PR7 (samo preimenovanje Cena -> PredlogCena)"} | TRECE | znacenje ostaje, konstanta se preimenuje | PrefillSpec:1111 koristi Otpremnica.Cena kao predlog cene otkupnog lista (If cena > 0, :1125) -- tacno znacenje PredlogCena (S13b). Menja se samo ime kolone/konstante u PR7. |
+| R-19 | `modIzvestaj.ReportOtkupRobaVozac` | {"status": "ZIV_UI"} | P1 (alat) | P2 nije nasao pozivaoca | modIzvestaj.ReportOtkupRoba:2694 zove ReportOtkupRobaVozac; lanac alata: modScrIzvestaji.RedoviZaListu:941 -> ReportOtkupRoba -> ReportOtkupRobaVozac (ekran IZVESTAJI). PR ostaje VAN_OPSEGA za VrstaVoca. |
+
+## Nalazi klasifikacije 15.09 (istorijat, jednoprolazno)
+
+> Zatečeni nalazi 15.09. Oni koje je 7b potvrdio, oborio ili dopunio imaju ID `POP7-NN` u sekciji „Nalazi 7b“; kvarovi 2/3/9 su zatvoreni u #334.
 
 Ozbiljnost je ona koju je dao agent koji je nalaz prijavio; skale nisu ujednačene (`P1–P3` i opisne). Nalazi koji ulaze u odluku su ručno provereni u §14.7.
 
@@ -620,7 +830,7 @@ Ozbiljnost je ona koju je dao agent koji je nalaz prijavio; skale nisu ujednače
 | testovi_2 | nisko | **Brisanje AutoLink-a obara compile test modula ako ostanu pozivi iz rucnih makroa** — CreateSEFLiveTestFaktura i CreateSEFLiveDummyFaktura nemaju pozivaoca u kodu (rucni fixture, instructions/Test Protokol.md), ali zovu AutoLinkOtkupOtpremnica_TX. Ako PR7 obrise AutoLink, a ova dva poziva ostanu, modBusinessFlowProTests se ne kompajlira i cela RunBusinessFlowProSuite visi. AUDIT_FM_TRIJAZA 87.26 ionako preporucuje brisanje jedne od dve varijante. | modBusinessFlowProTests.bas:12813, :12921 (i :578, :1307) |
 | testovi_2 | nisko | **Neiskorisceni podaci starog modela u fixture-ima novca i fakture** — AppendTestOtkupRow u modFakturaTests upisuje Klasa/Kolicina/Cena na zaglavlje, a test cita samo OtkupID i Stornirano. U modNovacTests vrednost PrimalacNovca = 'TEST' niko ne cita. Obe pomocne ostaju zelene i posle brisanja kolona (upis po mapi kolona ih preskace), ali opisuju model kojeg vise nema. Brisanje konstanti bi ih oborilo na compile-u. | modFakturaTests.bas:722-724; modNovacTests.bas:536 |
 
-## Jedina nezavisna provera koja je stigla (`otk_linija_2`)
+## Jedina nezavisna provera od 15.09 (`otk_linija_2`, istorijat)
 
 | Mesto | Polje | Bilo | Treba | Dokaz |
 |---|---|---|---|---|
@@ -634,4 +844,5 @@ Ozbiljnost je ona koju je dao agent koji je nalaz prijavio; skale nisu ujednače
 - **Propušten nalaz (P2):** KPI 'OM saldo' prikazuje zbir agro zaduzenja, ne saldo — ReportSaldoOM vraca 7 kolona (Kooperant\|Kolicina\|Vrednost\|Isplaceno\|AgroZaduzenje\|Saldo\|Ambalaza). SaldoOMUkupno i dalje cita kolonu 5 uz komentar 'kolona 5 = Saldo', zaostao iz starog 6-kolonskog oblika (:568). Plocica zato pokazuje AgroZaduzenje (>= 0), a boja i natpis dug/potrazivanje (:3868-3869) ne reaguju ni na otkup ni na isplate. Nije reprodukovano u Excelu; dokaz je iz koda i iz modTest.bas:12061 (saldo = kol. 6). Nezavisno od PR7, ali obara KPI deo nalaza 2.
 - **Propušten nalaz (P2):** U Malina rezimu auto-otpremnica otkljucana nad starim telom obara ceo sync ciklus — Scenario: pri podeli kapije korak 2b (StampVozacFromStanicaForMalina_TX) krene zajedno sa otpremnicom. Tada VozacID postoji, grupe se prave, a totalKol = 0 sa headera ide u SaveOtpremnica_TX. ValidateOtpremnicaInput dize 'Kolicina mora biti veca od nule', pa orkestrator prekida ciklus pre outbound exporta (:261-270). Nalaz 6 ('tihih 0 kreirano') vazi samo van Maline.
 - **Netačan nalaz:** KPI 'OM saldo' i finansijski izvestaji tiho racunaju vrednost otkupa 0 — Deo o KPI ne stoji. SaldoOMUkupno (modOtkupUI.bas:7591) cita kolonu 5 = AgroZaduzenje (modIzvestaj.bas:845), ne Saldo (:846). KPI zato ne postaje '-isplate' i ne boji se po vrednosti otkupa. Deo o izvestajima stoji: saldo OM na ekranu IZVESTAJI i zbirni, kartica, otkupne liste, prosecna cena, zbirni OM. Netacna je i tvrdnja sajta :591 da kolona Ambalaza u saldu OM dolazi sa headera; dolazi iz tblAmbalaza (:746-770, :808-810).
+
 

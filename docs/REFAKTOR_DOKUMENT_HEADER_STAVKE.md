@@ -1328,7 +1328,7 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | ✅ **Otkup cutover + integracije** (PR #308, merge 12.09.2026): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
-| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom, odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
+| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom (🟡 7b 16.09: premeren, nezavisno 6/12 celina), odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
 | 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
@@ -2329,12 +2329,53 @@ mora da sprovede — ne samo izbor.
 2. ✅ mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke (#334), uz KPI „danas“;
    review P1 zatvoren u istom PR-u: dokumentski ugovor u jednom prolazu, bez
    grane „nema ključa = 0“ u ijednom čitaocu (§14.3);
-3. popis ponovo meren na novom `main`-u, sa nezavisnom proverom svih celina —
+3. 🟡 popis ponovo meren na novom `main`-u, sa nezavisnom proverom svih celina —
    posle koraka 2, jer on menja deo popisa (15.09 je provera stigla za 1 od 11);
+   **16.09 (7b): popis premeren na `c2be85e8`, nezavisna provera stigla za 6 od 12 celina** — v. „7b“ ispod;
 4. odluke iz „Još otvoreno“;
 5. PR7 kod.
 
 Paralelno i bez blokiranja: kvarovi 7 i 8, pre-flight za kvar 4.
+
+#### 7b — popis premeren na `c2be85e8` (16.09.2026) — 🟡 nezavisna provera 6 od 12 celina
+
+Popis (`docs/REFAKTOR_PR7_POPIS.md`) je ponovo izmeren posle #334 i sada ima alat: **`tools/popis_citalaca.py`** (samo čita
+`src-vba`; osnovne grupe sidara iste kao 15.09, proširene `x_*` za literale, prosleđene indekse, `SaveOtkup*`, `VremeUnosa`,
+trace kolone; graf poziva sa imenovanim ulaznim tačkama i kapijama pauze; red DUAL READ). Isti alat meri kraj PR7.
+
+| Šta | Rezultat |
+|---|---|
+| delta #334 | osnovna sidra PROD 510 → **490** (−24 nestala, +4 nova ključa kolona u `RedoviZaTip`, sve u `otk_linija`); TEST 235 → 232; nijedna procedura popisa nije promenila status |
+| P1 | alat + presude 15.09 vezane po sadržaju (486/490) + čitanje svega što je #334 dirao; kalibracija alata nad `a173c134`: 487/510 |
+| P2 (slepi čitači) | **6 od 12 celina, 338 od 490 mesta**: saglasno 257, rešeno čitanjem koda **81** (19 rešenja R-NN), nerešeno **0**; pobednik P2 11 · 15.09 3 · treće 4 · P1 1. Jedno razrešenje prvog prolaza oboreno. |
+| nije stiglo | `otp_brojzbirne` (62 mesta), `otp_pisci` (90 mesta), `testovi_1`–`testovi_3` (102 procedure) i kritičar pokrivenosti — limit sesije 16.09; te celine nose samo P1 |
+
+**Kapija §14.1 za PR7 (zamenjeni pragovi):**
+
+| Prag | Verdikt | Dokaz |
+|---|---|---|
+| jezgro ≤ 120% `CreateZbirna_TX` | **nije primenljiv kako je zapisan** | POP7-03: jedino čitanje koje ponavlja 695 je „unutar modula“, a ono za jednopotezni pisac otpremnice daje 1075 naspram 770 (+39,6%) — na greenfield skeli iz PR5, pre ijednog reda PR7. Po tekstu §14.1 (preko modula) Otkup bi 13.09 bio +50%. |
+| spisak testova koji nestaju | **otvoren** | spisak 15.09 važi jednoprolazno; P2 test celina nije stigla. P1: POP7-09, placebo `Test_OTK_CitaociCitajuStavke` |
+| populacija na baznom commitu | **izmerena** | 28 produkcionih modula, 26 sa živim mestom; tabela po modulu u prilogu |
+| dual READ = 0 | **baseline** | 155 referenci u produkciji; **102 živih u 49 procedura** (ZIV_UI 98, ZIV_MAKRO 4), PAUZIRAN 7, SAMO_TEST 12, MRTAV 34; prag se dokazuje alatom i prepisom mesta, ne zelenom suite-om posle brisanja kolone (POP7-10) |
+| A11 | cilj 8 → 1 stoji | `tblOtkup` 8 pisaca; `Otkup.OtpremnicaID` 6 (POP7-08) |
+
+**Zatečeni nalazi:** NALAZ 1 (6 pisaca) **potvrđen** (POP7-08) · `OtkupIdsByBrDok` **potvrđen**, sada AUD-057
+(POP7-06) · pauza `NapredakBlokaDostupan` samo u mrtvom panelu **potvrđena** u oba prolaza (POP7-07) ·
+`SaveOtkup_TX` **potvrđen i dopunjen**: 6 testova, a #334 već pokazuje drugi put za zaglavlje bez stavki (POP7-09).
+
+**Novo za odluku operatera pre PR7 koda:**
+
+1. **Prag jezgra** (POP7-03): zapisati ulaz (jednopotezni ili svi ulazi skele) i čitanje, ili zameniti prag rastom skele u
+   PR7 (npr. ≤ 20% naspram današnjih 1075/1373).
+2. **Odluke 4 i 5 se sudaraju** (POP7-15) — tri nezavisna čitača: `TraceByZbirna` je PR8, a spaja otkupe po
+   `Otkup.OtpremnicaID` koju PR7 briše; posle brisanja PDF sledljivosti zbirne kaže „NEMA“, a paletni list tiho gubi kooperante.
+   PR7 mora bar da prevede taj spoj na `tblOtpremnicaIzvori` ili da izričito pauzira te izlaze.
+3. **Završetak 7b:** P2 za `otp_brojzbirne` (62 mesta), `otp_pisci` (90 mesta), `testovi_1`–`testovi_3` (102 procedure) i kritičar pokrivenosti. Ulazi i brief su spremni; ništa od ovoga ne zahteva nov kod.
+
+Živi kvarovi van PR7 dobili su redove u `docs/KNOWN_ISSUES.md` §8.10: AUD-055 (kvar 7, POP7-04), AUD-056 (kvar 8,
+POP7-05), AUD-057 (POP7-06). Klasifikacija 15.09 je starija od odluka operatera; u popisu je 19
+rešenja sa imenovanim pobednikom, a zamene koje protivreče odlukama 2/3 su označene (POP7-02).
 
 ---
 
