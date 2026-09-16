@@ -2,6 +2,8 @@
 
 > **Prilog uz `REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.7.** **Premeren 16.09.2026 nad `main` `c2be85e8`** (posle #334), sa nezavisnom proverom **6 od 12 celina** (ostale je prekinuo limit 16.09 — v. „Kako je mereno“). Zamenjuje verziju od 15.09.2026 nad `a173c134` (jednoprolazna; ostaje u istoriji gita). Ovo je popis koji §14.1 traži **pre** slajsa: populacija čitalaca na baznom commitu i poimeničan spisak testova. Ne menja se ručno — ako se kod pomeri, meri se ponovo: `python tools/popis_citalaca.py`.
 
+> **ZAMENJENO 16.09.2026** (`REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.7 „Odluke operatera 16.09“): legacy se ne čuva živim između faza, pa kolone PR, pauze i živosti ispod važe samo kao istorijat. Ostaje korisno: zatvoren spisak mesta starog modela (spisak za brisanje; `python tools/popis_citalaca.py`), nalazi `POP7-NN` koji opisuju sposobnosti i AUD-055..057.
+
 ## Kako je mereno — i koliko mu verovati
 
 1. **Zatvoren spisak mesta** — `tools/popis_citalaca.py` nad `src-vba` (kod bez komentara, bez `modConfig`/`modSchema`). Osnovne grupe su **iste kao 15.09** (uporedivost): **490 produkcionih mesta** i **232 test mesta** na `c2be85e8` (15.09 na `a173c134`: 510 i 235; zaglavlje stare verzije je tvrdilo 520 — v. POP7-01). Proširene grupe (`x_*`) hvataju ono što konstante ne vide: `x_saveotkup` 35 PROD / 10 TEST, `x_vreme_unosa` 3 PROD / 1 TEST, `x_trace` 12 PROD / 2 TEST, `x_literal` 15 PROD / 20 TEST, `x_indeks` 2 PROD / 1 TEST.

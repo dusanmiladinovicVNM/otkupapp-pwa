@@ -1328,8 +1328,8 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 5 | ✅ **Otpremnica header+stavke** (skela): `tblOtpremnicaStavke`, **`tblOtpremnicaIzvori`**, **sedam ulaza** — `CreateOtpremnicaDraft_TX(h, očekivano)` / `Update` / `Dodaj` / `Ukloni` / `GetOtpremnicaProgress` / `IzdajOtpremnicu_TX` + jednopotezni `CreateOtpremnicaIzIzvora_TX`. **Stavke drafta su očekivanje** (§13b), izdavanje traži `očekivano = povezano` i revalidira izvore. Otpremnica ima **persistentan `DRAFT`**, za razliku od otkupa. Uz to: prvi **meren** put brisanja reda (`DeleteRow` + A11 kapija) | 4 · **spec zaključan** |
 | 6 | ✅ **Otkup cutover + integracije** (PR #308, merge 12.09.2026): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
-| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica odlučena (A): zbirni tokovi i auto-lanac hladnjače pauzirani do PR8, `SaveOtpremnica*` samo za testove. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom (🟡 7b 16.09: premeren, nezavisno 6/12 celina), odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
-| 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
+| 7 | 🟡 **pre-flight 15.09 (§14.7) — granica A, pauze i test-only pisci oboreni 16.09 (§14.7 „Odluke operatera 16.09“): legacy se ne čuva živim, čuva se mapa sposobnosti. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom (🟡 7b 16.09: premeren, nezavisno 6/12 celina), odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
+| 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7 — oboreno 16.09, slajsovi se seku po novom modelu):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
 | 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
 | 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
 | 11 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 9 |
@@ -2240,7 +2240,7 @@ nepopisan posao; 6–8 su zatečeni i ne zavise od PR7.
 | komentar `NapredakBlokaDostupan`: brojevi napretka se ne prikazuju | prikazuju se, iz praznih kolona — kvar 1 ✔ |
 | LANDING: grana čeka #308 | merge-ovan 12.09 ✔ |
 
-#### Odluke operatera (15.09.2026)
+#### Odluke operatera (15.09.2026) — premisa oborena 16.09 (v. „Odluke operatera 16.09“)
 
 Paket preporuke je prihvaćen u celini. Uz svaku odluku stoji posledica koju PR7
 mora da sprovede — ne samo izbor.
@@ -2323,7 +2323,7 @@ mora da sprovede — ne samo izbor.
 4. **PWA vozač** (`src/js/features/vozac/zbirna.js`): izvor liste otpremnica za
    zbirnu nije praćen.
 
-#### Redosled do koda PR7
+#### Redosled do koda PR7 (15.09 — zamenjen 16.09)
 
 1. ✅ merge ovog pre-flight-a (#333);
 2. ✅ mali PR: kvarovi 2, 3 i 9 — čitaoci vrednosti otkupa na stavke (#334), uz KPI „danas“;
@@ -2337,7 +2337,9 @@ mora da sprovede — ne samo izbor.
 
 Paralelno i bez blokiranja: kvarovi 7 i 8, pre-flight za kvar 4.
 
-#### 7b — popis premeren na `c2be85e8` (16.09.2026) — 🟡 nezavisna provera 6 od 12 celina
+#### 7b — popis premeren na `c2be85e8` (16.09.2026) — zamenjen odlukama 16.09
+
+> **Zamenjeno istog dana** (v. „Odluke operatera 16.09“ ispod): PR/pauza klasifikacija i preostale provere se ne dovršavaju. Ostaju alat, spisak mesta kao spisak za brisanje, AUD-055..057 i nalazi koji opisuju sposobnosti.
 
 Popis (`docs/REFAKTOR_PR7_POPIS.md`) je ponovo izmeren posle #334 i sada ima alat: **`tools/popis_citalaca.py`** (samo čita
 `src-vba`; osnovne grupe sidara iste kao 15.09, proširene `x_*` za literale, prosleđene indekse, `SaveOtkup*`, `VremeUnosa`,
@@ -2376,6 +2378,42 @@ trace kolone; graf poziva sa imenovanim ulaznim tačkama i kapijama pauze; red D
 Živi kvarovi van PR7 dobili su redove u `docs/KNOWN_ISSUES.md` §8.10: AUD-055 (kvar 7, POP7-04), AUD-056 (kvar 8,
 POP7-05), AUD-057 (POP7-06). Klasifikacija 15.09 je starija od odluka operatera; u popisu je 19
 rešenja sa imenovanim pobednikom, a zamene koje protivreče odlukama 2/3 su označene (POP7-02).
+
+#### Odluke operatera (16.09.2026) — legacy je samo mapa sposobnosti
+
+> Obaraju premisu odluka od 15.09 (1, 2, 3). Nema produkcije ni podataka koje treba štititi; radi se iznova.
+
+**Pravilo.** Legacy kod ne mora da radi dok novi kod na novom modelu ne proradi, i ne pravi se ništa što ga čuva između faza:
+imenovane pauze, podela kapija, test-only pisci, kolone ostavljene u kanonu za pauzirane čitaoce, mostovi, dvojni putevi.
+**Apsolutno se čuva samo mapa sposobnosti:** svaka sposobnost koju operater danas ima (radnja, ekran, izveštaj, PDF, izvoz,
+sync, makro) mora imati mesto u novom modelu i PR koji je vraća.
+
+**Jedno tehničko ograničenje:** posle svakog PR-a projekat mora da se kompajlira — jedan modul koji se ne kompajlira obara ceo
+`run_vba`, pa se ni novi kod ne može testirati. Legacy se zato **briše**, ne ostavlja polomljen.
+
+| Odluka 15.09 | 16.09 |
+|---|---|
+| 1 — granica A: zbirni tokovi imenovano pauzirani do PR8, kapija se deli, F3 sa svojom pauzom i testom | **oborena** — bez pauza i podele kapije; sposobnost koja pukne vodi se u mapi kao „prekinuto do PRn“, ne u kodu |
+| 2 — `SaveOtpremnica*` samo za testove do PR8, po-klasne kolone ostaju u kanonu, golden nepromenjen | **oborena** — stari pisci i po-klasne kolone se brišu u slajsu otpremnice; testovi legacy mehanizma se brišu; golden se preformuliše na novom modelu, do tada je imenovano isključen |
+| 3 — auto-lanac hladnjače ceo pauziran do PR8 | **oborena** — lanac je stavka mape; kod i aparat pauze (ugašen poziv, poruke o pauzi, fail-closed pending relink) se brišu, lanac se gradi nad novim modelom |
+| 4 — tvrdnje §14.2 raspoređene PR7/PR8 po granici pauze | tvrdnje ostaju ugovor novog modela; raspoređuju se po slajsu novog modela |
+| 5 — kvarovi 1/5/6 u PR7, kvar 4 zaseban pre-flight | kao kvarovi nevažni (nema operatera); ostaju kao stavke mape. AUD-055..057 su tačni, nisu hitni |
+
+**Kapija §14.1 za sledeći slajs.** Prag jezgra se **uklanja** — merio je trošak rada u mestu naspram rada iz nule, a novi model se
+ionako piše iznova (POP7-03). „Dual READ = 0“ ostaje u jačem obliku: kolone starog modela izbačene iz kanona, njihove konstante
+obrisane (kompajler meri), `tools/popis_citalaca.py` bez preostale reference. „Spisak testova koji nestaju“ postaje: za svaki test
+legacy mehanizma u mapu se upisuje **ishod** koji je tvrdio, a test se briše. Sukob odluka 4 i 5 (POP7-15) više ne postoji.
+
+**7b je zamenjen.** `docs/REFAKTOR_PR7_POPIS.md` ostaje spisak za brisanje i istorijat; PR/pauza klasifikacija i preostale provere
+(`otp_brojzbirne`, `otp_pisci`, test celine, kritičar u obliku 15.09) se ne dovršavaju — kritičar se preliva u mapu sposobnosti.
+#334 nije bačen rad: čitaoci vrednosti otkupa sa stavki su već novi model.
+
+**Novi redosled do koda:**
+
+1. **mapa sposobnosti** (`docs/DOMEN/MAPA_SPOSOBNOSTI.md`) — prikuplja se spolja po promptu, spaja i proverava pokrivenost ulaznih tačaka alatom;
+2. **odluke domena** koje traže sposobnosti: ambalaža otpremnice (`DOMAIN GAP`), `cenaII` naspram jedne `PredlogCena`, kucani bruto, ko pravi radnju „Izdaj“, PWA vozač i otpremnica;
+3. **slajsovi po novom modelu** — svaki briše legacy svog dela (pisce, kolone, čitaoce) i ostavlja projekat koji se kompajlira; otpremnica i zbirna smeju zajedno, jer je razlog da budu odvojene (živa zbirna između njih) nestao; tabela PR-ova se piše ponovo;
+4. kod.
 
 ---
 
