@@ -1288,46 +1288,56 @@ End Function
 ' citao celu tabelu n puta -- isti razlog zbog kog vec postoji
 ' BuildIsplataDictByOtkup.
 '
-' PRAVILA SU ISTA KAO U KANONU, namerno duplirana kao kapije a ne kao racun:
-' nebrojcana ili nepozitivna stavka PADA umesto da se preskoci. Preskakanje bi
-' umanjilo vrednost dokumenta i time PRIJAVILO MANJI DUG nego sto postoji.
+' KAPIJA JE JEDNA I ZAJEDNICKA: prolaz je modOtkup.StavkeOtkupaRedovi, isti
+' koji citaju mreza i izvestaji (review #334, P1). Ranije je ovde stajala
+' DRUGA kopija pravila -- brojcana i pozitivna stavka -- koja nije proveravala
+' ni siroce stavke ni zaglavlje bez stavki, pa je put novca imao slabiju
+' kapiju od izvestaja nad istim podatkom.
+'
+' Nista se ne preskace: nebrojcana, nepozitivna i siroca stavka PADAJU. Tiho
+' preskakanje bi umanjilo vrednost dokumenta i PRIJAVILO MANJI DUG.
 Public Function BuildVrednostDictByOtkup() As Object
-    Const SRC As String = "BuildVrednostDictByOtkup"
-
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
+    Set BuildVrednostDictByOtkup = dict
 
-    Dim d As Variant
-    d = GetTableData(TBL_OTKUP_STAVKE)
-    If Not IsArray(d) Then
-        Set BuildVrednostDictByOtkup = dict
-        Exit Function
-    End If
-
-    Dim cOtk As Long, cKol As Long, cCena As Long
-    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
-    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
-    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+    Dim s As Variant
+    s = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(s) Then Exit Function
 
     Dim i As Long, oid As String
-    For i = 1 To UBound(d, 1)
-        oid = Trim$(CStr(nz(d(i, cOtk), "")))
-        If Len(oid) > 0 Then
-            If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
-                Err.Raise vbObjectError + 1053, SRC, _
-                          "Stavka nije brojcana: OtkupID=" & oid & "."
-            End If
-            If CDbl(d(i, cKol)) <= 0 Or CDbl(d(i, cCena)) <= 0 Then
-                Err.Raise vbObjectError + 1054, SRC, _
-                          "Kolicina i cena stavke moraju biti vece od nule: " & _
-                          "OtkupID=" & oid & "."
-            End If
-            If Not dict.Exists(oid) Then dict.Add oid, 0#
-            dict(oid) = dict(oid) + CDbl(d(i, cKol)) * CDbl(d(i, cCena))
-        End If
+    For i = 1 To UBound(s, 1)
+        oid = CStr(s(i, 1))
+        If Not dict.Exists(oid) Then dict.Add oid, 0#
+        dict(oid) = CDbl(dict(oid)) + CDbl(s(i, 4)) * CDbl(s(i, 5))
     Next i
+End Function
 
-    Set BuildVrednostDictByOtkup = dict
+' Vrednost JEDNOG dokumenta iz recnika -- nedostajuci kljuc je GRESKA.
+' Blizanac modOtkup.ZbirStavkiZaOtkup, za recnik vrednosti (Double).
+Public Function VrednostOtkupaIzDikta(ByVal vrednostDict As Object, _
+                                      ByVal otkupID As String, _
+                                      ByVal sourceName As String) As Double
+    Dim oid As String
+    oid = Trim$(otkupID)
+
+    If Len(oid) = 0 Then
+        Err.Raise vbObjectError + 1055, sourceName, _
+                  "Zaglavlje otkupa bez OtkupID-a se ne moze vrednovati."
+    End If
+
+    If vrednostDict Is Nothing Then
+        Err.Raise vbObjectError + 1056, sourceName, _
+                  "Recnik vrednosti otkupa nije izgradjen."
+    End If
+
+    If Not vrednostDict.Exists(oid) Then
+        Err.Raise vbObjectError + 1056, sourceName, _
+                  "Otkup nema nijednu stavku: " & oid & _
+                  ". Vrednost dokumenta se racuna iz " & TBL_OTKUP_STAVKE & "."
+    End If
+
+    VrednostOtkupaIzDikta = CDbl(vrednostDict(oid))
 End Function
 
 ' Otkupi sa otvorenom obavezom. Sedam kolona:
@@ -1346,12 +1356,12 @@ End Function
 '       Vlasnik greske je BuildBlokIsplataList, koji ga imenuje sa
 '       ERR_ISPLATA_PRAZAN_OTKUPID -- ovde se samo ne gubi.
 '
-'   red SA OtkupID-em a BEZ stavki -> preskace se, uz brojac i jedan log.
-'       Takav red nije dokument: vrednost otkupa zivi na stavkama, pa on nema
-'       obavezu koja bi se mogla izgubiti. Nov pisac ga ne moze napraviti
-'       (CreateOtkup_TX trazi bar jednu stavku), niti PWA uvoz. Preostali su
-'       samo ZATECENI redovi u test svesci. Grana odlazi u koraku 7, sa
-'       kolonama Kolicina/Cena.
+'   red SA OtkupID-em a BEZ stavki -> PADA PO IMENU (review #334, P1).
+'       Do tog review-a se preskakao uz brojac i jedan log. Merenje je
+'       pokazalo da je i to tisina: red nestane iz liste za isplatu kao da
+'       je placen, dok ga mreza istovremeno pokazuje sa 0 kg. Kapija je
+'       sada JEDNA, u modOtkup.StavkeOtkupaRedovi, pa ovaj citalac pada na
+'       istom mestu na kom padaju izvestaji.
 '
 ' Ono sto se NE radi ni u jednom slucaju: racunanje vrednosti sa zaglavlja.
 ' To bi bio compatibility sloj i vracao bi 0 za svaki nov dokument.
@@ -1389,7 +1399,6 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
     
     ' Zaehlen
     Dim count As Long, i As Long
-    Dim bezStavki As Long
     For i = 1 To UBound(data, 1)
         If filterByKoop Then
             If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextCount
@@ -1403,10 +1412,8 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
 
         If Len(oid) = 0 Then
             uListu = True                       ' nevrednovan red NE SME da nestane
-        ElseIf Not vrednostDict.Exists(oid) Then
-            bezStavki = bezStavki + 1           ' nije dokument -- v. zaglavlje
         Else
-            vrednost = vrednostDict(oid)
+            vrednost = VrednostOtkupaIzDikta(vrednostDict, oid, SRC)
             If isplataDict.Exists(oid) Then isplaceno = isplataDict(oid)
             uListu = (vrednost - isplaceno > 0)
         End If
@@ -1415,12 +1422,6 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
 NextCount:
     Next i
 
-    ' Jedan red u logu po pozivu, ne po redu -- zatecenih redova ume da bude vise.
-    If bezStavki > 0 Then
-        LogError SRC, "Preskoceno redova bez stavki: " & CStr(bezStavki) & _
-                 ". Vrednost otkupa se racuna iz tblOtkupStavke."
-    End If
-    
     If count = 0 Then
         GetOpenOtkupi = Empty
         Exit Function
@@ -1444,8 +1445,8 @@ NextCount:
 
         If Len(oid) = 0 Then
             uListu = True
-        ElseIf vrednostDict.Exists(oid) Then
-            vrednost = vrednostDict(oid)
+        Else
+            vrednost = VrednostOtkupaIzDikta(vrednostDict, oid, SRC)
             If isplataDict.Exists(oid) Then isplaceno = isplataDict(oid)
             uListu = (vrednost - isplaceno > 0)
         End If

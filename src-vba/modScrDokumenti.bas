@@ -1821,7 +1821,11 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         Dim zStav As Variant
         zStav = Empty
         If otkStav Then
-            If dStav.Exists(CellS(src, r, iStavID)) Then zStav = dStav(CellS(src, r, iStavID))
+            ' Nedostajuci kljuc NIJE nula (review #334, P1): red dokumenta bez
+            ' stavki pada po imenu. Ranije je takav red imao duguje = 0, pa je
+            ' pilula pokazivala "placeno" na dokumentu bez ijedne stavke.
+            zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
+                        "modScrDokumenti.RedoviZaTip")
         End If
         If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
 
@@ -1832,7 +1836,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             duguje = 0: placeno = 0
             payKey = CellS(src, r, iPayID)
             If mk = "OTKUP" Then
-                If IsArray(zStav) Then duguje = CDbl(zStav(1))
+                duguje = CDbl(zStav(1))
                 If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
                 pCode = PayCode(duguje, placeno)
             ElseIf Len(payKey) = 0 Then
@@ -1898,18 +1902,11 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             ' OTKUP: izvor ovih celija su stavke (ovStav iznad), ne zaglavlje.
             If otkStav Then
                 Select Case ovStav(c)
-                    Case "kg", "vr", "amb"
-                        cell = 0#
-                        If IsArray(zStav) Then
-                            Select Case ovStav(c)
-                                Case "kg":  cell = CDbl(zStav(0))
-                                Case "vr":  cell = CDbl(zStav(1))
-                                Case "amb": cell = CDbl(zStav(2))
-                            End Select
-                        End If
+                    Case "kg":  cell = CDbl(zStav(0))
+                    Case "vr":  cell = CDbl(zStav(1))
+                    Case "amb": cell = CDbl(zStav(2))
                     Case "kl"
-                        cell = ""
-                        If IsArray(zStav) Then cell = CStr(zStav(3))
+                        cell = CStr(zStav(3))
                         hay = hay & "|" & cell
                 End Select
             End If

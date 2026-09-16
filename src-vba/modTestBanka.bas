@@ -1625,11 +1625,17 @@ End Sub
 ' jednog testa obarali KONTROLNE slucajeve sledecih -- npr. otvoren duplikat iz
 ' T17 bi oborio "zdravu" proveru u T18 -- jer se spoljni rollback radi tek na
 ' kraju suite-a. Isti obrazac koriste storno testovi.
+' TBL_OTKUP_STAVKE IDE SA TBL_OTKUP, uvek. Seed-ovi ovog modula (SeedOtkup ->
+' BitOtkupStavka) pisu i zaglavlje i stavku, pa je rollback bez stavki vracao
+' SAMO zaglavlja -- a stavke su ostajale kao SIROCAD, vezane za OtkupID koji vise
+' ne postoji. To je bilo nevidljivo dok je citalac siroce tiho preskakao; od
+' review-a #334 (P1) ga imenuje, pa je izolacija morala da postane potpuna.
 Private Function BeginIsolatedTx() As clsTransaction
     Dim tx As clsTransaction
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_KOOPERANTI
     tx.AddTableSnapshot TBL_STANICE

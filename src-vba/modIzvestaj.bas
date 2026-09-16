@@ -605,11 +605,10 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                         vals = dict(key)
                         
                         Dim zSal As Variant
-                        If stavkeZbir.Exists(Trim$(CStr(otkupData(i, colOtkID)))) Then
-                            zSal = stavkeZbir(Trim$(CStr(otkupData(i, colOtkID))))
-                            vals(0) = vals(0) + CDbl(zSal(0))
-                            vals(1) = vals(1) + CDbl(zSal(1))
-                        End If
+                        zSal = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, _
+                                   CStr(otkupData(i, colOtkID)), "modIzvestaj.ReportSaldoOM")
+                        vals(0) = vals(0) + CDbl(zSal(0))
+                        vals(1) = vals(1) + CDbl(zSal(1))
                         
                         dict(key) = vals
                     End If
@@ -925,13 +924,12 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
 
                             Dim zKar As Variant, oidKar As String
                             oidKar = Trim$(CStr(otkData(i, colOtkID)))
-                            If stavkeZbir.Exists(oidKar) Then
-                                zKar = stavkeZbir(oidKar)
-                                otkKol = CDbl(zKar(0))
-                                vr = CDbl(zKar(1))
-                                ambPrimljena = CDbl(zKar(2))
-                                otkKlase = CStr(zKar(3))
-                            End If
+                            zKar = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, oidKar, _
+                                       "modIzvestaj.ReportKarticaKooperanta")
+                            otkKol = CDbl(zKar(0))
+                            vr = CDbl(zKar(1))
+                            ambPrimljena = CDbl(zKar(2))
+                            otkKlase = CStr(zKar(3))
 
                             Dim opis As String
                             opis = "Otkup " & CStr(otkData(i, colOtkVrsta)) & " " & _
@@ -1571,12 +1569,11 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
                     Dim kol As Double, vrednost As Double, klase As String
                     kol = 0: vrednost = 0: klase = ""
                     Dim zLst As Variant
-                    If stavkeZbir.Exists(Trim$(NzToText(d(i, cId)))) Then
-                        zLst = stavkeZbir(Trim$(NzToText(d(i, cId))))
-                        kol = CDbl(zLst(0))
-                        vrednost = CDbl(zLst(1))
-                        klase = CStr(zLst(3))
-                    End If
+                    zLst = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, NzToText(d(i, cId)), _
+                               "modIzvestaj.ReportOtkupListe")
+                    kol = CDbl(zLst(0))
+                    vrednost = CDbl(zLst(1))
+                    klase = CStr(zLst(3))
 
                     moves.Add Array( _
                         dt, _
@@ -3490,11 +3487,10 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
             If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
             vals = dict(key)
             Dim zPc As Variant
-            If stavkeZbir.Exists(Trim$(CStr(otkData(i, colOtkID)))) Then
-                zPc = stavkeZbir(Trim$(CStr(otkData(i, colOtkID))))
-                vals(0) = vals(0) + CDbl(zPc(0))
-                vals(1) = vals(1) + CDbl(zPc(1))
-            End If
+            zPc = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, CStr(otkData(i, colOtkID)), _
+                      "modIzvestaj.ReportProsecnaCena")
+            vals(0) = vals(0) + CDbl(zPc(0))
+            vals(1) = vals(1) + CDbl(zPc(1))
             dict(key) = vals
         Next i
 
@@ -3832,11 +3828,10 @@ Private Function ReportZbirniOM(ByVal datumOd As Date, _
         Dim vals As Variant
         vals = dict(key)
         Dim zZb As Variant
-        If stavkeZbir.Exists(Trim$(CStr(filtered(i, colOtkID)))) Then
-            zZb = stavkeZbir(Trim$(CStr(filtered(i, colOtkID))))
-            vals(0) = vals(0) + CDbl(zZb(0))
-            vals(1) = vals(1) + CDbl(zZb(1))
-        End If
+        zZb = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, CStr(filtered(i, colOtkID)), _
+                  "modIzvestaj.ReportZbirniOM")
+        vals(0) = vals(0) + CDbl(zZb(0))
+        vals(1) = vals(1) + CDbl(zZb(1))
         dict(key) = vals
     Next i
     

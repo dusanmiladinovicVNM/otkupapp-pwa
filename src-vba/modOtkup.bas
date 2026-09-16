@@ -940,7 +940,7 @@ End Function
 '
 ' Vraca 2D niz (1..n, 1..6), redosledom tabele (= redosledom upisa):
 '   1 OtkupID | 2 RedniBroj | 3 Klasa | 4 Kolicina | 5 Cena | 6 KolAmbalaze
-' ili Empty kad nijedna stavka nema OtkupID.
+' ili Empty kad nema nijedne stavke i nijednog zaglavlja.
 '
 ' ZASTO POSTOJI: kolicina, klasa, cena i primljene gajbe dokumenta zive na
 ' stavkama, a CreateOtkup_TX ta polja zaglavlja ostavlja PRAZNA. Citaoci koji
@@ -948,65 +948,194 @@ End Function
 ' nov dokument 0 kg i 0 dinara, bez ijedne greske (REFAKTOR S14.7, kvarovi
 ' 2/3/9). Oni sada citaju ovde.
 '
-' PRAVILA SU ISTA KAO U VrednostOtkupa, namerno ponovljena kao kapije (isti
-' obrazac kao modNovac.BuildVrednostDictByOtkup): nebrojcana ili nepozitivna
-' Kolicina/Cena PADA umesto da se preskoci -- preskakanje bi izvestaju tiho
-' umanjilo kolicinu i vrednost. KolAmbalaze sme biti prazna (0 gajbi).
+' UGOVOR JE DOKUMENTSKI, NE STAVKARSKI (review #334, P1). Isti onaj koji
+' VrednostOtkupa drzi za JEDAN dokument, samo u jednom prolazu za sve:
+'   1) svaka stavka ima neprazan OtkupID i zaglavlje TACNO JEDNOM;
+'   2) svako zaglavlje sa OtkupID-em ima BAR JEDNU stavku;
+'   3) polja stavke drze ISTA pravila koja pisac trazi na upisu: klasa I/II
+'      (RequireValidOtkupClass, ista kapija), Kolicina i Cena > 0, a
+'      KolAmbalaze ceo broj >= 0 (prazno = 0 gajbi).
+'
+' ZASTO PADA UMESTO DA PRESKOCI: nedostajuca stavka je ranije izlazila kao
+' 0 kg i 0 dinara. Takav dokument je u mrezi otkupa imao duguje = 0, pa je
+' pilula pokazivala PLACENO na dokumentu bez ijedne stavke, a izvestaji su
+' ga prikazivali kao prazan red. Tiha nula je gora od pada: pad imenuje
+' dokument, nula ga sakriva.
+'
+' PRAZAN OtkupID NA ZAGLAVLJU je poseban rod i NE pada ovde: taj red ne sme
+' da nestane iz liste za isplatu (FM-0021 #5, S14.3), pa ga imenuje
+' BuildBlokIsplataList. Citaoca vrednosti obara ZbirStavkiZaOtkup, na mestu
+' upotrebe -- nijedan od njih ga ne cita kao nulu.
 Public Function StavkeOtkupaRedovi() As Variant
     Const SRC As String = "StavkeOtkupaRedovi"
 
     StavkeOtkupaRedovi = Empty
 
+    Dim zagl As Object
+    Set zagl = ZaglavljaOtkupaPoID(SRC)
+
+    Dim imaStavku As Object
+    Set imaStavku = CreateObject("Scripting.Dictionary")
+
     Dim d As Variant
     d = GetTableData(TBL_OTKUP_STAVKE)
-    If Not IsArray(d) Then Exit Function
 
     Dim cOtk As Long, cRb As Long, cKl As Long
     Dim cKol As Long, cCena As Long, cAmb As Long
-    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
-    cRb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB, SRC)
-    cKl = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
-    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
-    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
-
-    ' Prvi prolaz: kapije i broj redova (2D niz se ne skracuje po redovima).
     Dim i As Long, n As Long, oid As String
-    For i = 1 To UBound(d, 1)
-        oid = Trim$(NzToText(d(i, cOtk)))
-        If Len(oid) > 0 Then
-            If Not IsNumeric(d(i, cKol)) Or Not IsNumeric(d(i, cCena)) Then
-                Err.Raise vbObjectError + 1905, SRC, _
-                          "Stavka nije brojcana: OtkupID=" & oid & "."
-            End If
-            If CDbl(d(i, cKol)) <= 0 Or CDbl(d(i, cCena)) <= 0 Then
-                Err.Raise vbObjectError + 1906, SRC, _
-                          "Kolicina i cena stavke moraju biti vece od nule: " & _
-                          "OtkupID=" & oid & "."
-            End If
+
+    If IsArray(d) Then
+        cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+        cRb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB, SRC)
+        cKl = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+        cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+        cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+        cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+
+        ' Prvi prolaz: kapije i broj redova (2D niz se ne skracuje po redovima).
+        For i = 1 To UBound(d, 1)
+            oid = Trim$(NzToText(d(i, cOtk)))
+            RequireStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), _
+                                d(i, cAmb), i, SRC
+            imaStavku(oid) = True
             n = n + 1
-        End If
-    Next i
+        Next i
+    End If
+
+    ' Zaglavlje bez stavki nije dokument vrednosti nula -- pada po imenu.
+    RequireZaglavljaSaStavkama zagl, imaStavku, SRC
+
     If n = 0 Then Exit Function
 
     Dim res() As Variant
     ReDim res(1 To n, 1 To 6)
     n = 0
     For i = 1 To UBound(d, 1)
-        oid = Trim$(NzToText(d(i, cOtk)))
-        If Len(oid) > 0 Then
-            n = n + 1
-            res(n, 1) = oid
-            res(n, 2) = d(i, cRb)
-            res(n, 3) = Trim$(NzToText(d(i, cKl)))
-            res(n, 4) = CDbl(d(i, cKol))
-            res(n, 5) = CDbl(d(i, cCena))
-            If IsNumeric(d(i, cAmb)) Then res(n, 6) = CDbl(d(i, cAmb)) Else res(n, 6) = 0#
-        End If
+        n = n + 1
+        res(n, 1) = Trim$(NzToText(d(i, cOtk)))
+        res(n, 2) = d(i, cRb)
+        res(n, 3) = Trim$(NzToText(d(i, cKl)))
+        res(n, 4) = CDbl(d(i, cKol))
+        res(n, 5) = CDbl(d(i, cCena))
+        res(n, 6) = KolAmbalazeStavke(d(i, cAmb))
     Next i
 
     StavkeOtkupaRedovi = res
 End Function
+
+' Zaglavlja otkupa: OtkupID -> broj redova sa tim ID-em. Prazan OtkupID se NE
+' broji -- on nije kljuc nego kvar sa svojim vlasnikom (v. StavkeOtkupaRedovi).
+Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZaglavljaOtkupaPoID = dict
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, sourceName)
+
+    Dim i As Long, oid As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(NzToText(d(i, cId)))
+        If Len(oid) > 0 Then
+            If dict.Exists(oid) Then
+                dict(oid) = CLng(dict(oid)) + 1
+            Else
+                dict.Add oid, 1&
+            End If
+        End If
+    Next i
+End Function
+
+' Ugovor JEDNE stavke. Kapije su iste kao piscev upis -- klasa ide kroz istu
+' proceduru (RequireValidOtkupClass), pa se pisac i citalac ne mogu raziici.
+Private Sub RequireStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
+                                ByVal klasa As Variant, ByVal kol As Variant, _
+                                ByVal cena As Variant, ByVal amb As Variant, _
+                                ByVal red As Long, ByVal sourceName As String)
+    If Len(oid) = 0 Then
+        Err.Raise vbObjectError + 1907, sourceName, _
+                  "Stavka otkupa bez OtkupID-a: " & TBL_OTKUP_STAVKE & ", red " & _
+                  CStr(red) & ". Stavka bez dokumenta se ne moze vrednovati."
+    End If
+
+    ' SIROCE = stavka cijeg zaglavlja NEMA. Pada, jer se ne moze vrednovati.
+    '
+    ' DUPLIKAT zaglavlja (dva reda sa istim OtkupID) se ovde NE obara, i to je
+    ' merena odluka a ne previd: taj rod ima svoje imenovane vlasnike --
+    ' VrednostOtkupa (kanon, po dokumentu, 1902), BuildOpenAmountDict i
+    ' BuildOtkupOwnerIndex (ERR_ISPLATA_DUPLI_OTKUPID) i ApplyAvansToOtkup --
+    ' a modTestBanka T17 dokazuje da novac tada ne krene pogresnom primaocu.
+    ' Obaranje SVAKOG citaoca zbog istorijskog duplikata bi ukinulo bas taj
+    ' dokaz, pa je to zasebna poslovna odluka (v. odgovor na review #334).
+    If Not zagl.Exists(oid) Then
+        Err.Raise vbObjectError + 1908, sourceName, _
+                  "Zaglavlje otkupa ne postoji: " & oid & ", stavka u redu " & _
+                  CStr(red) & ". Stavka bez dokumenta se ne moze vrednovati."
+    End If
+
+    If Not IsNumeric(kol) Or Not IsNumeric(cena) Then
+        Err.Raise vbObjectError + 1905, sourceName, _
+                  "Stavka nije brojcana: OtkupID=" & oid & "."
+    End If
+
+    If CDbl(kol) <= 0 Or CDbl(cena) <= 0 Then
+        Err.Raise vbObjectError + 1906, sourceName, _
+                  "Kolicina i cena stavke moraju biti vece od nule: " & _
+                  "OtkupID=" & oid & "."
+    End If
+
+    RequireValidOtkupClass Trim$(NzToText(klasa)), _
+                           sourceName & " (OtkupID=" & oid & ")"
+    RequireKolAmbalazeStavke amb, oid, sourceName
+End Sub
+
+' KolAmbalaze stavke: prazno je 0 gajbi, ali nebrojcano, negativno i decimalno
+' su kvar -- ISTA tri pravila koja pisac trazi na upisu (modOtkup:1865+).
+' Citalac koji nebrojcanu ambalazu tiho pretvori u 0 razilazi se sa piscem.
+Private Sub RequireKolAmbalazeStavke(ByVal v As Variant, ByVal oid As String, _
+                                     ByVal sourceName As String)
+    If IsEmpty(v) Then Exit Sub
+    If Len(Trim$(NzToText(v))) = 0 Then Exit Sub
+
+    If Not IsNumeric(v) Then
+        Err.Raise vbObjectError + 1919, sourceName, _
+                  "KolAmbalaze stavke nije brojcana: OtkupID=" & oid & _
+                  ", vrednost: " & NzToText(v)
+    End If
+
+    If CDbl(v) < 0 Then
+        Err.Raise vbObjectError + 1920, sourceName, _
+                  "KolAmbalaze stavke ne sme biti negativna: OtkupID=" & oid & "."
+    End If
+
+    RequireCeoBrojOtk CDbl(v), "KolAmbalaze stavke (OtkupID=" & oid & ")", sourceName
+End Sub
+
+' Prazna KolAmbalaze je 0 gajbi. Vrednost je vec prosla RequireKolAmbalazeStavke.
+Private Function KolAmbalazeStavke(ByVal v As Variant) As Double
+    If IsEmpty(v) Then Exit Function
+    If Len(Trim$(NzToText(v))) = 0 Then Exit Function
+    KolAmbalazeStavke = CDbl(v)
+End Function
+
+' Svako zaglavlje sa OtkupID-em mora imati bar jednu stavku. Poruka je ista
+' kao u kanonu (VrednostOtkupa), pa citalac i kanon govore istim recima.
+Private Sub RequireZaglavljaSaStavkama(ByVal zagl As Object, _
+                                       ByVal imaStavku As Object, _
+                                       ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If Not imaStavku.Exists(CStr(k)) Then
+            Err.Raise vbObjectError + 1909, sourceName, _
+                      "Otkup nema nijednu stavku: " & CStr(k) & _
+                      ". Vrednost dokumenta se racuna iz " & TBL_OTKUP_STAVKE & "."
+        End If
+    Next k
+End Sub
 
 ' Zbir stavki po dokumentu. Kljuc je OtkupID, vrednost Array(kg, vrednost, gajbe, klase):
 '   kg       = SUM(Kolicina)
@@ -1014,9 +1143,10 @@ End Function
 '   gajbe    = SUM(KolAmbalaze)      -- primljene gajbe dokumenta
 '   klase    = klase stavki redom upisa, bez ponavljanja ("I, II")
 '
-' Dokument BEZ stavki NIJE u recniku: citalac ga racuna kao 0 kg i 0 dinara, isto
-' kao GetOpenOtkupi koji ga preskace (REFAKTOR S14.3); nov pisac ga ne pravi.
-' Kapije stavki su u StavkeOtkupaRedovi.
+' SVAKI kanonski dokument JE u recniku: zaglavlje bez stavki obara citaoca u
+' StavkeOtkupaRedovi, pa "nema kljuca" vise ne moze da znaci 0 kg i 0 dinara
+' (review #334, P1). Citaoci zato kljuc traze kroz ZbirStavkiZaOtkup, koji
+' nedostatak prijavljuje po imenu umesto da vrati nulu.
 Public Function ZbirStavkiPoOtkupu() As Object
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
@@ -1072,13 +1202,45 @@ Public Function KgOtkupaZaDan(ByVal dan As Date) As Double
         If IsDate(d(i, cDat)) Then
             If Int(CDbl(CDate(d(i, cDat)))) = danKljuc Then
                 oid = Trim$(NzToText(d(i, cId)))
-                If zbir.Exists(oid) Then
-                    z = zbir(oid)
-                    KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))
-                End If
+                z = ZbirStavkiZaOtkup(zbir, oid, SRC)
+                KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))
             End If
         End If
     Next i
+End Function
+
+' Zbir stavki JEDNOG dokumenta iz recnika -- nedostajuci kljuc je GRESKA.
+'
+' Postoji zato sto je `If dict.Exists(id) Then ... Else 0` u citaocu isti kvar
+' koji je ovaj PR zatvorio na izvoru: dokument bez stavki je tiho postajao
+' 0 kg i 0 dinara, a u mrezi otkupa i "placeno" (duguje 0). Kapija je ovde
+' druga brana: izvor vec pada u StavkeOtkupaRedovi, ali nijedan citalac ne sme
+' da ima granu koja nulu vraca kao podatak (review #334, P1).
+'
+' Prazan OtkupID pada ovde, a ne u izvoru: red bez ID-a ostaje u listi za
+' isplatu (FM-0021 #5), ali se NE moze vrednovati.
+Public Function ZbirStavkiZaOtkup(ByVal zbir As Object, ByVal otkupID As String, _
+                                  ByVal sourceName As String) As Variant
+    If zbir Is Nothing Then
+        Err.Raise vbObjectError + 1909, sourceName, _
+                  "Zbir stavki otkupa nije izgradjen."
+    End If
+
+    Dim oid As String
+    oid = Trim$(otkupID)
+
+    If Len(oid) = 0 Then
+        Err.Raise vbObjectError + 1907, sourceName, _
+                  "Zaglavlje otkupa bez OtkupID-a se ne moze vrednovati."
+    End If
+
+    If Not zbir.Exists(oid) Then
+        Err.Raise vbObjectError + 1909, sourceName, _
+                  "Otkup nema nijednu stavku: " & oid & _
+                  ". Vrednost dokumenta se racuna iz " & TBL_OTKUP_STAVKE & "."
+    End If
+
+    ZbirStavkiZaOtkup = zbir(oid)
 End Function
 
 ' Ambalaza otkupa -- dvojni upis, isti obrazac kao zatecen pisac.

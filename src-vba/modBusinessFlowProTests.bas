@@ -241,6 +241,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IsplataNaNovDokumentProlazi
     Test_OTK_CitaociCitajuStavke
     Test_OTK_CitaociStavkiFailClosed
+    Test_OTK_ZaglavljeBezStavkiObaraCitaoce
+    Test_OTK_StavkaBezZaglavljaObaraCitaoce
+    Test_OTK_ZaglavljeBezIDObaraCitaoce
     Test_BIM_NovOtkupJeOtvorenBlok
     Test_PWA_StanicaJeUredjajNeKooperant
     Test_BKTX_NekanonskiBrojNeOdbija
@@ -1096,7 +1099,12 @@ EH:
     LogFail "Dokumenta read helpers exclude stornirano", Err.description
 End Sub
 
+' Legacy pisac (SaveOtkup_TX) pravi ZAGLAVLJE BEZ STAVKI. Od review-a #334
+' takav red obara svakog citaoca vrednosti otkupa, pa test radi u sopstvenoj
+' transakciji i ROLLBACK-uje se -- ciscenje je deo testa, ne kozmetika.
 Private Sub Test_OtkupReadHelpersExcludeStornirano()
+    Dim tx As clsTransaction
+
     On Error GoTo EH
 
     Dim scenario As String
@@ -1115,6 +1123,11 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
 
     Dim activeID As String
     Dim stornoID As String
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     activeID = SaveOtkup_TX( _
         testDate, TEST_KOOP_ID, TEST_ST_ID, _
@@ -1143,10 +1156,17 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
                                       TBL_OTKUP, "OtkupID", stornoID), _
                 "GetOtkupByKooperant excludes stornirano"
 
+    tx.RollbackTx
+    Set tx = Nothing
     Exit Sub
 
 EH:
-    LogFail "Otkup read helpers exclude stornirano", Err.description
+    Dim errDesc As String
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "Otkup read helpers exclude stornirano", errDesc
 End Sub
 
 Private Sub Test_DualClassDocumentWrappers()
@@ -8403,10 +8423,19 @@ End Sub
 
 ' Otkup po STAROM modelu nema stavke, pa ne moze u kanonsku otpremnicu.
 Private Sub Test_OTP_StariOtkupNeUlazi()
+    Dim tx As clsTransaction
+
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("OTPSM")
+
+    ' Zaglavlje bez stavki se od review-a #334 ne sme ostaviti u svesci:
+    ' oborilo bi svakog sledeceg citaoca vrednosti u suite-u.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     Dim stariID As String
     stariID = SaveOtkup_TX(NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
@@ -8429,10 +8458,18 @@ Private Sub Test_OTP_StariOtkupNeUlazi()
     AssertTrue InStr(1, razlog, "nema stavke", vbTextCompare) > 0, _
                "OTP stari otkup: kapija imenuje razlog (bilo: " & razlog & ")"
 
+    tx.RollbackTx
+    Set tx = Nothing
     Exit Sub
 
 EH:
-    LogFatal "Test_OTP_StariOtkupNeUlazi", Err.Number, Err.description
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_StariOtkupNeUlazi", errNum, errDesc
 End Sub
 
 ' Prazan ID je fail-closed, i header ne sme da ostane bez stavki.
@@ -9423,9 +9460,19 @@ End Sub
 '
 ' SABOTAZA: ukloni poredjenje Left$(s, slashPos - 1) <> ocekNum -> pukne po imenu.
 Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
+    Dim tx As clsTransaction
+
     On Error GoTo EH
 
     SeedBktxDrugaStanica
+
+    ' Legacy SaveOtkup_TX (dole) pravi zaglavlje BEZ STAVKI -- od review-a
+    ' #334 takav red obara citaoce vrednosti, pa se test vraca rollback-om.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     ' Preduslov: bez razlicitog numerickog dela test ne meri nista.
     AssertTrue modBrojevi.ExtractNumericFromEntityID(BKTX_ST2) <> _
@@ -9475,9 +9522,17 @@ Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
                                 modBrojevi.FormatBroj(TEST_ST_ID, d, 2), 0#, "", KLASA_I)) > 0, _
                "BKTX vlasnik: legacy SaveOtkup prima broj ove stanice"
 
+    tx.RollbackTx
+    Set tx = Nothing
     Exit Sub
 EH:
-    LogFatal "Test_BKTX_VlasnikOsaOdbijaTudjuStanicu", Err.Number, Err.description
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_BKTX_VlasnikOsaOdbijaTudjuStanicu", errNum, errDesc
 End Sub
 
 ' OSA DANA. Broj sa juceradnjim ddmmyy ne sme na danasnji dokument.
@@ -11051,6 +11106,313 @@ Private Function ZbirStavkiGreska() As String
     On Error GoTo 0
 End Function
 
+' Poruka greske koju saldo OM podigne, ili "" kad prodje.
+Private Function SaldoOMGreska(ByVal dan As Date) As String
+    Dim r As Variant
+    On Error Resume Next
+    Err.Clear
+    r = ReportSaldoOM(TEST_ST_ID, dan, dan)
+    If Err.Number <> 0 Then SaldoOMGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Poruka greske koju mreza otkupa podigne, ili "" kad prodje. Isti poziv
+' koji crta ekran -- greska ide kroz RedoviZaTip i nosi ime koraka.
+Private Function MrezaGreska(ByVal brDok As String) As String
+    Dim d As Variant
+    On Error Resume Next
+    Err.Clear
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("OTKUP", "", brDok)
+    If Err.Number <> 0 Then MrezaGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Poruka greske koju lista otvorenih obaveza podigne, ili "" kad prodje.
+Private Function OtvoreniGreska() As String
+    Dim r As Variant
+    On Error Resume Next
+    Err.Clear
+    r = GetOpenOtkupi("")
+    If Err.Number <> 0 Then OtvoreniGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' ZAGLAVLJE BEZ STAVKI NE SME DA IZGLEDA PLACENO (review #334, P1).
+'
+' Dokument se napravi kanonski i isplati DO KRAJA, pa mu se stavke OBRISU --
+' tacno oblik koji je ranije prolazio tiho: duguje se racunao iz zbira stavki
+' kojih nema, pa je ispadao 0, a PayCode(0, placeno > 0) je pilulu bojio u
+' PLACENO. Izvestaji su isti dokument prikazivali sa 0 kg i 0 dinara, a lista
+' za isplatu ga je preskakala uz jedan red u logu.
+'
+' Meri se PORUKOM, ne samo padom: citalac koji padne iz drugog razloga ne
+' dokazuje nista. Brisanje je u transakciji i vraca se ROLLBACK-om.
+Private Sub Test_OTK_ZaglavljeBezStavkiObaraCitaoce()
+    Const OCEK_VR As Double = 20000#
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, brDok As String, otkID As String, dan As Date
+    scenario = NewScenarioCode("OTKHBS")
+    brDok = TEST_PREFIX & "-OTK-HBS-" & scenario
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK bez stavki: dokument napravljen"
+    If Len(otkID) = 0 Then Exit Sub
+    dan = CDate(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM))
+
+    ' Placen DO KRAJA: bez toga se "placeno" ne razlikuje od "nema duga".
+    SaveNovac TEST_PREFIX & "-NOV-HBS-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_VIRMAN_FIRMA_KOOP, 0#, OCEK_VR, "puna isplata", otkID
+
+    Dim g As Variant
+    g = OtkMrezaRed(brDok)
+    AssertTrue IsArray(g), "OTK bez stavki: kontrola -- mreza ima red dokumenta"
+    If IsArray(g) Then
+        AssertEquals CStr(PAY_PLACENO), CStr(g(4)), _
+                     "OTK bez stavki: kontrola -- placen dokument je PLACENO dok stavke postoje"
+    End If
+
+    ' --- stavke se BRISU: dokument postaje zaglavlje bez stavki ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    AssertTrue Not rows Is Nothing, "OTK bez stavki: stavke nadjene"
+    If rows Is Nothing Then Exit Sub
+
+    Dim k As Long
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), _
+                         "Test_OTK_ZaglavljeBezStavkiObaraCitaoce"
+    Next k
+    AssertEquals "0", CStr(OtkBrojStavki(otkID)), _
+                 "OTK bez stavki: preduslov -- dokument je ostao bez stavki"
+
+    ' Svaki citalac PADA i imenuje dokument -- nijedan ne vraca nulu.
+    AssertTrue InStr(1, ZbirStavkiGreska(), "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTK bez stavki: zbir stavki pada po imenu"
+    AssertTrue InStr(1, ZbirStavkiGreska(), otkID, vbTextCompare) > 0, _
+               "OTK bez stavki: poruka imenuje sporan dokument"
+    AssertTrue InStr(1, SaldoOMGreska(dan), "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTK bez stavki: saldo OM pada po imenu, ne vraca 0 kg"
+    AssertTrue InStr(1, MrezaGreska(brDok), "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTK bez stavki: mreza pada po imenu -- pilula ne moze da kaze placeno"
+    AssertTrue InStr(1, OtvoreniGreska(), "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTK bez stavki: lista za isplatu pada po imenu, ne preskace red"
+
+    ' --- vracanje: isti citaoci su opet zeleni ---
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", ZbirStavkiGreska(), _
+                 "OTK bez stavki: zbir prolazi posle vracanja stavki"
+    g = OtkMrezaRed(brDok)
+    AssertTrue IsArray(g), "OTK bez stavki: mreza opet ima red dokumenta"
+    If IsArray(g) Then
+        AssertEquals CStr(PAY_PLACENO), CStr(g(4)), _
+                     "OTK bez stavki: pilula je opet PLACENO posle vracanja stavki"
+    End If
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTK_ZaglavljeBezStavkiObaraCitaoce", errNum, errDesc
+End Sub
+
+' STAVKA MORA IMATI SVOJ DOKUMENT, I POLJA KAO KOD PISCA (review #334, P1).
+'
+' Citalac je stavku bez OtkupID-a TIHO PRESKAKAO, a nebrojcanu KolAmbalaze
+' pretvarao u 0 -- iako pisac oba odbija na upisu (RequireValidOtkupClass,
+' kolAmb >= 0, RequireCeoBrojOtk). Razlika izmedju pisca i citaoca je bila
+' tiha: kolicina dokumenta u izvestaju manja nego sto jeste, gajbe nestale.
+'
+' DUPLIKAT zaglavlja se ovde NE meri: taj rod ima svoje imenovane kapije
+' (ERR_ISPLATA_DUPLI_OTKUPID, VrednostOtkupa) i svoj dokaz (modTestBanka T17).
+Private Sub Test_OTK_StavkaBezZaglavljaObaraCitaoce()
+    Const SRC As String = "Test_OTK_StavkaBezZaglavljaObaraCitaoce"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, otkID As String
+    scenario = NewScenarioCode("OTKSBZ")
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-SBZ-" & scenario), _
+                           OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK siroce: dokument napravljen"
+    If Len(otkID) = 0 Then Exit Sub
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    AssertTrue Not rows Is Nothing, "OTK siroce: stavka nadjena"
+    If rows Is Nothing Then Exit Sub
+
+    Dim red As Long
+    red = CLng(rows(1))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+
+    ' --- stavka bez OtkupID-a: ranije tiho preskocena ---
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_OTKUP_ID, "", SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "bez OtkupID-a", vbTextCompare) > 0, _
+               "OTK siroce: stavka bez OtkupID-a obara citaoca po imenu"
+
+    ' --- stavka ciji dokument ne postoji ---
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_OTKUP_ID, _
+                      "OTK-NE-POSTOJI-" & scenario, SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "Zaglavlje otkupa ne postoji", vbTextCompare) > 0, _
+               "OTK siroce: stavka bez zaglavlja obara citaoca po imenu"
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_OTKUP_ID, otkID, SRC
+
+    ' --- klasa: ISTA kapija koju pisac trazi na upisu ---
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_KLASA, "III", SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "Neispravna klasa", vbTextCompare) > 0, _
+               "OTK siroce: nevalidna klasa stavke obara citaoca po imenu"
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_KLASA, KLASA_I, SRC
+
+    ' --- KolAmbalaze: broj, nenegativan, ceo -- kao kod pisca ---
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_KOL_AMB, "n/d", SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "KolAmbalaze stavke nije brojcana", vbTextCompare) > 0, _
+               "OTK siroce: nebrojcana KolAmbalaze obara citaoca (pisac je vec odbija)"
+
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_KOL_AMB, -1#, SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "ne sme biti negativna", vbTextCompare) > 0, _
+               "OTK siroce: negativna KolAmbalaze obara citaoca"
+
+    RequireUpdateCell TBL_OTKUP_STAVKE, red, COL_OKS_KOL_AMB, 2.5, SRC
+    AssertTrue InStr(1, ZbirStavkiGreska(), "mora biti ceo broj", vbTextCompare) > 0, _
+               "OTK siroce: decimalna KolAmbalaze obara citaoca"
+
+    ' CISCENJE JE DEO TESTA: pokvarena stavka obara svaki sledeci citalac.
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", ZbirStavkiGreska(), _
+                 "OTK siroce: citalac prolazi posle vracanja stavke"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTK_StavkaBezZaglavljaObaraCitaoce", errNum, errDesc
+End Sub
+
+' Poruka greske koju kandidat bloka u banci podigne, ili "" kad prodje.
+Private Function BankaKandidatGreska(ByVal koopID As String, _
+                                     ByVal brDok As String) As String
+    Dim k As Variant
+    On Error Resume Next
+    Err.Clear
+    k = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock(koopID, brDok, True)
+    If Err.Number <> 0 Then BankaKandidatGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' PRAZAN OtkupID NA ZAGLAVLJU: dva citaoca, dva razlicita odgovora (FM-0021 #5).
+'
+' Takav red se NE moze vrednovati, ali se ne sme ni izgubiti iz liste za
+' isplatu -- to je bas taj kvar (otvorena obaveza tiho izostane iz pregleda).
+' Zato ga StavkeOtkupaRedovi NAMERNO pusta, a obara ga ZbirStavkiZaOtkup na
+' MESTU UPOTREBE: mreza, izvestaj i kandidat bloka padaju po imenu, dok lista
+' otvorenih obaveza red zadrzava i prepusta ga imenovanom vlasniku
+' (BuildBlokIsplataList -> ERR_ISPLATA_PRAZAN_OTKUPID).
+'
+' ZASTO BAS OVAJ SLUCAJ: ovo je JEDINI test koji meri drugu branu samu za sebe.
+' Za dokument bez stavki izvor pada ranije, pa sabotaza nad citaocem tamo ne
+' pokazuje crveno -- dokaz.py je to i prijavio (NE OBARA NISTA).
+Private Sub Test_OTK_ZaglavljeBezIDObaraCitaoce()
+    Const SRC As String = "Test_OTK_ZaglavljeBezIDObaraCitaoce"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, brDok As String, otkID As String, dan As Date
+    scenario = NewScenarioCode("OTKBID")
+    brDok = TEST_PREFIX & "-OTK-BID-" & scenario
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK bez ID: dokument napravljen"
+    If Len(otkID) = 0 Then Exit Sub
+    dan = CDate(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+
+    ' REDOSLED JE DEO TESTA: prvo se brisu stavke, pa se prazni ID. Obrnuto bi
+    ' stavka ostala siroce i pao bi IZVOR -- a ovde se meri druga brana.
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    AssertTrue Not rows Is Nothing, "OTK bez ID: stavke nadjene"
+    If rows Is Nothing Then Exit Sub
+
+    Dim k As Long
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), SRC
+    Next k
+
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTKUP, COL_OTK_ID, otkID)
+    AssertTrue Not hdr Is Nothing, "OTK bez ID: zaglavlje nadjeno"
+    If hdr Is Nothing Then Exit Sub
+    RequireUpdateCell TBL_OTKUP, CLng(hdr(1)), COL_OTK_ID, "", SRC
+
+    ' Izvor NAMERNO cuti: red bez ID-a i bez stavki nije ni u recniku.
+    AssertEquals "", ZbirStavkiGreska(), _
+                 "OTK bez ID: izvor namerno ne pada na redu bez OtkupID-a"
+
+    ' Druga brana pada, i to po imenu.
+    AssertTrue InStr(1, MrezaGreska(brDok), "bez OtkupID-a", vbTextCompare) > 0, _
+               "OTK bez ID: mreza pada po imenu, ne crta 0 kg"
+    AssertTrue InStr(1, SaldoOMGreska(dan), "bez OtkupID-a", vbTextCompare) > 0, _
+               "OTK bez ID: saldo OM pada po imenu, ne sabira nulu"
+    AssertTrue InStr(1, BankaKandidatGreska(TEST_KOOP_ID, brDok), _
+                     "bez OtkupID-a", vbTextCompare) > 0, _
+               "OTK bez ID: kandidat bloka pada po imenu, ne knjizi uplatu kao avans"
+
+    ' A lista otvorenih obaveza ga NE gubi i NE obara se (FM-0021 #5).
+    AssertEquals "", OtvoreniGreska(), _
+                 "OTK bez ID: lista otvorenih ne pada -- red bez ID-a se ne sme izgubiti"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", ZbirStavkiGreska(), "OTK bez ID: citalac prolazi posle vracanja"
+
+    Exit Sub
+
+EH:
+    Dim errNum2 As Long, errDesc2 As String
+    errNum2 = Err.Number
+    errDesc2 = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTK_ZaglavljeBezIDObaraCitaoce", errNum2, errDesc2
+End Sub
+
 ' STATUS ISPLATE JE IZVEDEN, NE KESIRAN.
 '
 ' UpdateOtkupStatus je odrzavao tblOtkup.Isplaceno i racunao vrednost kao
@@ -12088,10 +12450,20 @@ Private Function UlazPada(ByVal koji As String) As String
 End Function
 
 Private Sub Test_OTK_VrednostBezStavkiPada()
+    Dim tx As clsTransaction
+
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("OTKVS")
+
+    ' Red bez stavki se pravi NAMERNO, pa se namerno i vraca: od review-a
+    ' #334 on obara svakog citaoca vrednosti, ne samo kanon ispod.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     ' Stari pisac pravi red BEZ stavki -- tacno oblik koji kapija mora da uhvati.
     Dim stariID As String
@@ -12123,10 +12495,18 @@ Private Sub Test_OTK_VrednostBezStavkiPada()
     AssertTrue Abs(modOtkup.VrednostOtkupa(noviID) - 20000#) < 0.001, _
                "OTK vrednost: 400 x 50 = 20000"
 
+    tx.RollbackTx
+    Set tx = Nothing
     Exit Sub
 
 EH:
-    LogFatal "Test_OTK_VrednostBezStavkiPada", Err.Number, Err.description
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTK_VrednostBezStavkiPada", errNum, errDesc
 End Sub
 
 ' STAMPA NE REKONSTRUISE ISTORIJSKI BRUTO.

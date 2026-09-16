@@ -2024,12 +2024,10 @@ Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
         End If
         If uKrug Then
             Dim kg As Double, vred As Double, zRang As Variant
-            kg = 0: vred = 0
-            If stavkeZbir.Exists(Trim$(CStr(data(i, cId)))) Then
-                zRang = stavkeZbir(Trim$(CStr(data(i, cId))))
-                kg = CDbl(zRang(0))
-                vred = CDbl(zRang(1))
-            End If
+            zRang = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, CStr(data(i, cId)), _
+                        "modOtkupBlok.KoopRangRows")
+            kg = CDbl(zRang(0))
+            vred = CDbl(zRang(1))
             rawKg = rawKg + kg
             rawVal = rawVal + vred
             Dim k As String: k = Trim$(CStr(data(i, cKoop)))
