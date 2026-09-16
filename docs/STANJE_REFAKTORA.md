@@ -63,6 +63,14 @@ spajanja unosi u `MAPA_SPOSOBNOSTI.md`. Ulazne fajlove ne menjati.
   (npr. E-030 = da, push zavisi od E-027); spojiti GAS/PWA parove u jednu sposobnost sa dve implementacije:
   E-050/E-079, E-051/E-080, E-043/E-067, E-044/E-062, E-018/E-047/E-068; `otkupni-list.js:237` ne sadrži `signedAt`;
   u NEPROVERENO razlog „web sesija“ → „traži Google/OAuth“.
+- **F1:** tabela ima dodatnu kolonu `KO` (pri spajanju poravnati sa ostalim oblastima); `tblVrstaGP` →
+  `tblVrstaGotovihProizvoda`; linije: `T_Faza_PrijavaNeGradiLjusku:6405` → `:6409`, `PrimeniNovaPrava:4610` → `:4619`,
+  `AlatkaSme:4479` → `:4480`, `NazadUAplikaciju:296` → `:421`; opsezi >20 linija suziti: `modBusinessFlowProTests.bas:1716-1737`,
+  `modLicenseTests.bas:46-105`, `modMain.StartApp:136-158` i `:215-236`, `modUiScreens.bas:161-183`,
+  `modMaticniEkran.bas:1088-1126`. Nalazi (provereni): F1 bez ijedne zavisnosti od starog modela; makroi
+  `modMain.OpenExcel`/`CloseExcel` zaobilaze pravo `OtvoriExcel`; kolona statusa se proba nad sveskom umesto iz kanona
+  (`tblTipAmbalaze`, `tblTipPalete`, `tblKutije`, `tblKese` imaju `Aktivan`), `RokMeseci` se ne nudi na ekranu; parcela
+  status „Da“ pri unosu vs „Aktivan/Neaktivan“; ručna geo tačka se beleži kao `GeoSource = "selenium"` (`modGeoParcele.bas:78`).
 - **Nalazi E za redosled slajseva:** `ExportOtkupiAll` hrani ceo PWA menadžment i pregled otkupca a čita zaglavlje;
   `btnSync` uvek javlja neuspeh dok je izvedeni lanac pauziran; dodela vozača iz PWA završava kao terminalni
   `Duplicate` (`modMasterSync.bas:1775`); ekran vozača filtrira po `Otkup.VozacID` (`gas/Code.gs:1962`).
