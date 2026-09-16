@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 16.09.2026, `main` `7ef2f7c2` (posle #337).
+**Ažurirano:** 16.09.2026, `main` `a826268` (posle #344, mapa F2).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -24,7 +24,7 @@
 | Kapija odluke §14.1 (nastavak u istom repou) | ✅ |
 | #333 pre-flight PR7 · #334 čitaoci vrednosti otkupa na stavke | ✅ |
 | #335 alat `tools/popis_citalaca.py` + odluke 16.09 | ✅ |
-| **Mapa sposobnosti** | ⏳ u toku — A, B, C, D, E i F1 gotove (`docs/DOMEN/mapa_sposobnosti_ulazi/`), ostaje F2 |
+| **Mapa sposobnosti** | ✅ A–F gotove (`docs/DOMEN/mapa_sposobnosti_ulazi/`); sledeći korak = spajanje u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` sa ispravkama iz liste ispod |
 | Odluke domena (ispod) | ⏳ |
 | Nova tabela PR-ova po novom modelu | ⏳ |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
@@ -38,14 +38,17 @@
 0e. Gotovo: **E Sync/PWA/GAS/izvozi** — `docs/DOMEN/mapa_sposobnosti_ulazi/E.md` (81 sposobnost, 69 sa NEPROVERENO, 6 pauziranih).
 0f. Gotovo: **F1 Matični podaci i prijava** — `docs/DOMEN/mapa_sposobnosti_ulazi/F.md`
    (52 sposobnosti, 18 sa NEPROVERENO; sve presude „ne“ — F1 je jedina oblast bez zavisnosti od starog modela).
-   Ostaje **F2**: admin panel, podešavanja, setup, self-update i izdanja, integritet, health, hladnjača, ostali makroi.
-1. Korisnik pušta `docs/DOMEN/PROMPT_MAPA_SPOSOBNOSTI.md` po oblasti (A Dokumenti · B Storno/Oporavak ·
-   C Izveštaji/Sledljivost/Palete · D Fakture/Banka/Novac/Agro/Analiza · E Sync/PWA/GAS/izvozi · F Admin/makroi/integritet/setup)
-   i čuva izlaze kao `A.md` … `F.md`.
-2. Sesija: spaja ih u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` i proverava pokrivenost ulaznih tačaka alatom
-   (`python tools/popis_citalaca.py --procedura modul.Procedura` za lanac i status).
+0g. Gotovo: **F2 Admin/podešavanja/setup/ažuriranje/integritet/health/makroi** — isti fajl, sekcije F2a–F2f
+   (43 sposobnosti F-053…F-095, 42 sa NEPROVERENO; 206 makroa razvrstano). Presude „da“: integritet (15 od 22
+   provere), health (`Check_CoreTablesAndColumns`, `Check_OtkupOtpremnicaCrossZbirnaLinks`,
+   `Check_DocumentSoftDeleteReferences`, `Check_GoogleSyncMasterSchema`), `BackfillPrijemniceHladnjaca`,
+   `BackfillOtkupBrojOtpremnice`, `BackfillDeteZbirnaGeneracija`, `PaletaAdjust_Prompt`, migracija iz starog fajla.
+1. Ulazi su gotovi: `A.md` … `F.md` u `docs/DOMEN/mapa_sposobnosti_ulazi/`.
+2. **Sledeći korak:** sesija koja ih spaja u `docs/DOMEN/MAPA_SPOSOBNOSTI.md`, unosi ispravke iz liste ispod,
+   poravna kolonu `KO` (ima je samo F) i proverava pokrivenost ulaznih tačaka alatom
+   (`python tools/popis_citalaca.py --procedura modul.Procedura` za lanac i status). Ulazne fajlove ne menjati.
 
-## Ispravke za PR spajanja mape (iz pregleda izlaza A–E)
+## Ispravke za PR spajanja mape (iz pregleda izlaza A–F)
 
 Mehanički pregled (reference, format presude, imena na linijama) je urađen; ovo su preostale ispravke koje sesija
 spajanja unosi u `MAPA_SPOSOBNOSTI.md`. Ulazne fajlove ne menjati.
@@ -71,6 +74,15 @@ spajanja unosi u `MAPA_SPOSOBNOSTI.md`. Ulazne fajlove ne menjati.
   `modMain.OpenExcel`/`CloseExcel` zaobilaze pravo `OtvoriExcel`; kolona statusa se proba nad sveskom umesto iz kanona
   (`tblTipAmbalaze`, `tblTipPalete`, `tblKutije`, `tblKese` imaju `Aktivan`), `RokMeseci` se ne nudi na ekranu; parcela
   status „Da“ pri unosu vs „Aktivan/Neaktivan“; ručna geo tačka se beleži kao `GeoSource = "selenium"` (`modGeoParcele.bas:78`).
+- **F2:** nema mehaničkih ispravki iz ovog prolaza. Nalazi (provereni): `Check_CoreTablesAndColumns:109` nosi
+  ručno kucan spisak kolona i traži linijska polja na zaglavljima — već pada na ispravnoj svesci (AUD-055), dok
+  `Check_OtkupPaymentConsistency:505` i `Check_KooperantOtkupReconciliation:600` u istom modulu vrednost već
+  čitaju sa stavki; 15 od 22 provere integriteta postoji samo zbog starog modela (`BrojZbirne` kao veza u četiri
+  tabele, linijska polja, `Otkup.OtpremnicaID`), a sedam koje presuđuju „ne“ su palete i prerada — jedine celine
+  već po novom modelu; `BackfillPrijemniceHladnjaca:439` radi po ključu `BrojZbirne|Klasa`; `PaletaAdjust_Prompt`
+  vezuje palete na prijemnicu po poslovnom broju, ne po `PrijemnicaID`; tvrdu branu administracije nose samo
+  `modAdmin` i `modPodesavanja` — `SetupNewPC`, `RunSelfUpdate`, `PublishReleaseToDrive`, `RollbackReleaseTo`,
+  `OcistiTabele` i `MigrirajPodatkeIzStarog` se iz Alt+F8 pokreću bez provere prava.
 - **Nalazi E za redosled slajseva:** `ExportOtkupiAll` hrani ceo PWA menadžment i pregled otkupca a čita zaglavlje;
   `btnSync` uvek javlja neuspeh dok je izvedeni lanac pauziran; dodela vozača iz PWA završava kao terminalni
   `Duplicate` (`modMasterSync.bas:1775`); ekran vozača filtrira po `Otkup.VozacID` (`gas/Code.gs:1962`).
