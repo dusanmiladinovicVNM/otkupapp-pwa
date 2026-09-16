@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 16.09.2026, `main` `155b6ed4` (posle #335).
+**Ažurirano:** 16.09.2026, `main` `7ef2f7c2` (posle #337).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -24,7 +24,7 @@
 | Kapija odluke §14.1 (nastavak u istom repou) | ✅ |
 | #333 pre-flight PR7 · #334 čitaoci vrednosti otkupa na stavke | ✅ |
 | #335 alat `tools/popis_citalaca.py` + odluke 16.09 | ✅ |
-| **Mapa sposobnosti** | ⏳ u toku — oblast A gotova (`docs/DOMEN/mapa_sposobnosti_ulazi/A.md`), ostaju B–F |
+| **Mapa sposobnosti** | ⏳ u toku — oblasti A i B gotove (`docs/DOMEN/mapa_sposobnosti_ulazi/`), ostaju C–F |
 | Odluke domena (ispod) | ⏳ |
 | Nova tabela PR-ova po novom modelu | ⏳ |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
@@ -32,6 +32,7 @@
 ## Sledeći korak: mapa sposobnosti
 
 0. Gotovo: **A Dokumenti** — `docs/DOMEN/mapa_sposobnosti_ulazi/A.md` (38 sposobnosti, 27 NEPROVERENO).
+0b. Gotovo: **B Storno/Oporavak** — `docs/DOMEN/mapa_sposobnosti_ulazi/B.md` (48 sposobnosti, 20 NEPROVERENO).
 1. Korisnik pušta `docs/DOMEN/PROMPT_MAPA_SPOSOBNOSTI.md` po oblasti (A Dokumenti · B Storno/Oporavak ·
    C Izveštaji/Sledljivost/Palete · D Fakture/Banka/Novac/Agro/Analiza · E Sync/PWA/GAS/izvozi · F Admin/makroi/integritet/setup)
    i čuva izlaze kao `A.md` … `F.md`.
