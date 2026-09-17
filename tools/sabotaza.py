@@ -4277,6 +4277,23 @@ SABOTAZE = {
         "T_Izv_CipoviVrstaSorta",
         "nepostojeca vrsta = nula redova",
     ),
+    # Push stavki otkupa je idempotentan po OtkupStavkaID (review #357, P1):
+    # indeks taba bez postojecih stavki salje ih ponovo -> dva reda iste stavke.
+    "push-stavke-retry-dupla": (
+        "modStanicaLock.bas",
+        "            indeks.Add id, kljuc\n",
+        "            ' SABOTAZA: postojeca stavka se ne pamti\n",
+        "Test_OTK_PushStavkiIdempotentan",
+        "OTK push retry: tacno jedan red po stavci",
+    ),
+    # Naslov OTK_STAVKE mora biti tacno ugovor, istim redom (review #357, P2).
+    "push-stavke-naslov-bez-provere": (
+        "modStanicaLock.bas",
+        "            If CStr(data(LBound(data, 1), lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then\n",
+        "            If False Then   ' SABOTAZA: naslov se ne poredi\n",
+        "Test_OTK_PushStavkiIdempotentan",
+        "OTK push retry: pogresan redosled naslova pada",
+    ),
     # KPI saldo OM cita kolonu SALDA (6), ne agrohemiju (5) -- AUD-056.
     "kpi-saldo-om-kolona-agro": (
         "modOtkupUI.bas",

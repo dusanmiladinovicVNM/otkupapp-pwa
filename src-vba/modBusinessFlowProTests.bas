@@ -276,6 +276,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_PrefillStornaBezStavkiPada
     Test_OTK_IzvozDveKlaseIzStavki
     Test_OTK_IzvozBezStavkiPada
+    Test_OTK_PushStavkiIdempotentan
 
     ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
     ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
@@ -10607,6 +10608,122 @@ Private Function IzvozGreska(ByVal koji As String, ByVal samo As Object) As Stri
     If Err.Number <> 0 Then IzvozGreska = Err.description
     Err.Clear
     On Error GoTo 0
+End Function
+
+' PUSH STAVKI JE IDEMPOTENTAN PO OtkupStavkaID (review #357, P1).
+'
+' Scenario mreznog pada: prva stavka ode, druga padne, zaglavlje se ne salje.
+' Ponovljen pokusaj mora da da TACNO jedan red po stavci i tacnu kolicinu --
+' ne 200 kg iz dva reda iste stavke. Isti ID sa drugim sadrzajem je konflikt
+' bez upisa; naslov taba u pogresnom redosledu pada (P2).
+' Google se simulira kroz TestHook_OtkStavkeSimulacija; indeks se svaki put
+' gradi iz "taba" istim putem kao u produkciji (OtkStavkeIndeksIzTaba).
+Private Sub Test_OTK_PushStavkiIdempotentan()
+    On Error GoTo EH
+
+    Dim otkID As String, brDok As String
+    brDok = TEST_PREFIX & "-OTK-PI-" & NewScenarioCode("OTKPI")
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(100#, 50#, 5, 40#, 30#, 2))
+    AssertTrue Len(otkID) > 0, "OTK push retry: dvoklasni otkup upisan"
+
+    Dim poOtk As Object, stavke As Collection
+    Set poOtk = modMasterSync.OtkStavkeRedoviPoOtkupu()
+    Set stavke = poOtk(otkID)
+    AssertEquals "2", CStr(stavke.count), "OTK push retry: preduslov -- dve stavke"
+
+    Dim tab As Collection, greska As String, ok As Boolean
+    Set tab = New Collection
+
+    ' 1) prvi pokusaj: druga stavka padne
+    modStanicaLock.TestHook_OtkStavkeSimulacija tab, 2
+    ok = modStanicaLock.PosaljiStavkeOtkupa("SIM", _
+            modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(tab)), stavke, greska)
+    AssertTrue Not ok, "OTK push retry: pad druge stavke vraca neuspeh"
+    AssertEquals "1", CStr(tab.count), "OTK push retry: posle pada u tabu je prva stavka"
+
+    ' 2) retry bez pada: tab se cita ponovo, prva stavka se NE salje opet
+    modStanicaLock.TestHook_OtkStavkeSimulacija tab, 0
+    ok = modStanicaLock.PosaljiStavkeOtkupa("SIM", _
+            modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(tab)), stavke, greska)
+    AssertTrue ok, "OTK push retry: ponovljen pokusaj zavrsava (" & greska & ")"
+    AssertEquals "2", CStr(tab.count), "OTK push retry: tacno jedan red po stavci"
+
+    ' 3) treci pokusaj (npr. palo zaglavlje): nista novo
+    ok = modStanicaLock.PosaljiStavkeOtkupa("SIM", _
+            modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(tab)), stavke, greska)
+    AssertTrue ok And tab.count = 2, "OTK push retry: treci pokusaj ne dodaje redove"
+
+    Dim kol As Variant, k As Long, cId As Long, cKol As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    For k = LBound(kol) To UBound(kol)
+        If CStr(kol(k)) = COL_OKS_ID Then cId = k - LBound(kol)
+        If CStr(kol(k)) = COL_OKS_KOLICINA Then cKol = k - LBound(kol)
+    Next k
+    Dim red As Variant, ids As Object, kg As Double
+    Set ids = CreateObject("Scripting.Dictionary")
+    For Each red In tab
+        AssertTrue Not ids.Exists(CStr(red(cId))), "OTK push retry: OtkupStavkaID jedinstven u tabu"
+        ids(CStr(red(cId))) = True
+        kg = kg + CDbl(red(cKol))
+    Next red
+    AssertEquals "140", CStr(kg), "OTK push retry: kolicina = 140 kg, ne dupla"
+
+    ' 4) isti ID, drugi sadrzaj -> konflikt, bez upisa
+    Dim lazni As Collection, izmenjen As Variant
+    Set lazni = New Collection
+    izmenjen = tab(1)
+    izmenjen(cKol) = 999
+    lazni.Add izmenjen
+    modStanicaLock.TestHook_OtkStavkeSimulacija lazni, 0
+    ok = modStanicaLock.PosaljiStavkeOtkupa("SIM", _
+            modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(lazni)), stavke, greska)
+    AssertTrue Not ok And InStr(1, greska, "konflikt", vbTextCompare) > 0, _
+               "OTK push retry: isti ID sa drugim sadrzajem je konflikt (" & greska & ")"
+    AssertEquals "1", CStr(lazni.count), "OTK push retry: konflikt ne upisuje nista"
+
+    ' 5) naslov taba u pogresnom redosledu pada po imenu (P2)
+    Dim pogresan As Variant
+    pogresan = SimTabStavki(tab)
+    Dim tmp As Variant
+    tmp = pogresan(1, 1)
+    pogresan(1, 1) = pogresan(1, 2)
+    pogresan(1, 2) = tmp
+    Dim errOpis As String
+    On Error Resume Next
+    Set ids = modStanicaLock.OtkStavkeIndeksIzTaba(pogresan)
+    errOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue InStr(1, errOpis, "Naslov taba", vbTextCompare) > 0, _
+               "OTK push retry: pogresan redosled naslova pada (" & errOpis & ")"
+
+    modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
+    Exit Sub
+
+EH:
+    modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
+    LogFatal "Test_OTK_PushStavkiIdempotentan", Err.Number, Err.description
+End Sub
+
+' Simulirani OTK_STAVKE kao sto ga TryReadSheetData vraca: 2D, red 1 = naslov.
+Private Function SimTabStavki(ByVal redovi As Collection) As Variant
+    Dim kol As Variant, nk As Long, k As Long, r As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+    Dim out() As Variant
+    ReDim out(1 To redovi.count + 1, 1 To nk)
+    For k = 1 To nk
+        out(1, k) = kol(LBound(kol) + k - 1)
+    Next k
+    Dim red As Variant
+    r = 1
+    For Each red In redovi
+        r = r + 1
+        For k = 1 To nk
+            out(r, k) = red(LBound(red) + k - 1)
+        Next k
+    Next red
+    SimTabStavki = out
 End Function
 
 ' STORNO DVOKLASNOG DOKUMENTA JE JEDAN POZIV NAD HEADER-ID.

@@ -2745,7 +2745,7 @@ Svaki izvoz čita tu granicu ili `ZbirStavkiPoOtkupu`/`ZbirStavkiZaOtkup` — za
 | `OtkupiAll` | red po **zaglavlju**; `Klasa/Kolicina/Cena/KolAmbalaze` izbačeni, dodat `KolAmbIzdata`; raspored kolona na jednom mestu (`OtkupiAllKolone`) | `modStammdatenSync.ExportOtkupiAll` |
 | `OtkupiAllStavke` (nov tab MgmtReports) | red po stavci, raspored `modMasterSync.OtkStavkeKolone` | `OtkupiAllStavkeRedovi`; izvoz 5 → 6 tabova |
 | `SaldoOMDetail` | kg/vrednost/gajbe po kooperantu iz `ZbirStavkiZaOtkup` | `OtkupSaldoPoKooperantu` |
-| Push ka stanici | stavke → tab `OTK_STAVKE`, pa zaglavlje → `Sheet1` sa **praznim** linijskim poljima; zaglavlje je oznaka završenog push-a (stavka bez zaglavlja = nedovršen pokušaj, S5 ključa po `OtkupStavkaID`) | `modStanicaLock.BulkPushPendingForStanica`, `BuildOTKSheetRowForOtkup` (po imenu), `EnsureOtkStavkeTab` |
+| Push ka stanici | stavke → tab `OTK_STAVKE`, pa zaglavlje → `Sheet1` sa **praznim** linijskim poljima; zaglavlje je oznaka završenog push-a; slanje stavki je **idempotentno po `OtkupStavkaID`** (ugovor ispod) | `modStanicaLock.BulkPushPendingForStanica`, `BuildOTKSheetRowForOtkup` (po imenu), `EnsureOtkStavkeTab` |
 | Raspored OTK kolona | **jedno mesto**: `modMasterSync.OtkZaglavljeKolone` / `OtkStavkeKolone`; `BuildOTKOperationalHeaders_` i graditelj reda čitaju odatle (nalaz E-5 zatvoren) | `modMasterSync` |
 | `PwaIstiSadrzaj` | već poredi stavku (fail-closed, tačno jedna) — bez izmene | — |
 | Health `healthprod` | `Check_CoreTablesAndColumns` i `Check_GoogleSyncMasterSchema` traže kolone **iz kanona** (`HealthRequireKanon` → `modSchema.SchemaTableColumns`), i za `tblOtkupStavke` | AUD-055 zatvoren |
@@ -2763,6 +2763,15 @@ SaldoOMDetail i push), `Test_OTK_IzvozBezStavkiPada` (kontrola, pa brisanje stav
 
 **Merenje:** `popis_citalaca.py` `x_otk_stavka` 22 → **0** u PROD; `x_literal` 15 → 7 (ostatak su veze
 `BrojZbirne`/`OtpremnicaID` u `modIntegritet` i dve health provere — S3/S4, ne otkup).
+
+**Ugovor `OTK_STAVKE` (review #357, P1/P2):** tab ima **tačno jedan red po `OtkupStavkaID`**. Pisac pre slanja jednom
+pročita tab (`OtkStavkeIndeksIzTaba`), ne šalje stavku koja već postoji sa istim sadržajem, a isti ID sa drugačijim
+sadržajem je **konflikt**: ne šalje se ništa od tog otkupa (ni stavke ni zaglavlje). Ponovljen push posle mrežnog pada
+zato ne može da promeni količinu. Naslov taba mora biti tačno `OtkStavkeKolone` istim redom, inače push staje
+(pisanje je poziciono). Čitalac u S5 sme dupli `OtkupStavkaID` da tretira kao kvar, ne kao zbir. Indeks važi za jedan
+prolaz: push radi pod lock-om stanice, a PWA do S5 ne piše u `OTK_STAVKE` (kad S5 uvede PWA pisca, ugovor se proširuje).
+Test `Test_OTK_PushStavkiIdempotentan`: prva stavka prođe, druga padne, retry → 2 reda, 140 kg; konflikt bez upisa;
+pogrešan redosled naslova pada. Sabotaže `push-stavke-retry-dupla`, `push-stavke-naslov-bez-provere`.
 
 Sledeći korak: **S1d**.
 

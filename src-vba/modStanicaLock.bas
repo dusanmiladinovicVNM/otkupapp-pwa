@@ -43,6 +43,12 @@ Private gActiveDatum As Date
 Private gHeartbeatScheduled As Boolean
 Private gNextHeartbeatTime As Date
 
+' TestHook_OtkStavkeSimulacija: kad je postavljen, append u OTK_STAVKE ide u ovu
+' kolekciju umesto u Google, a poziv broj mSimPadNa se ponasa kao neuspeo.
+Private mSimRedovi As Collection
+Private mSimPadNa As Long
+Private mSimPoziva As Long
+
 ' ============================================================
 ' PUBLIC -- Acquire
 ' ============================================================
@@ -409,8 +415,9 @@ End Sub
 ' Za svaki red (S1c: zaglavlje + stavke, REFAKTOR S14.8 t. 13):
 '   1. Stavke otkupa -> tab OTK_STAVKE, red po stavci
 '   2. Zaglavlje -> Sheet1, TEK kad su sve stavke upisane. Zaglavlje je
-'      oznaka zavrsenog push-a: stavka bez zaglavlja je nedovrsen pokusaj
-'      koji se ponavlja (citalac u S5 kljuca po OtkupStavkaID).
+'      oznaka zavrsenog push-a: stavka bez zaglavlja je nedovrsen pokusaj.
+'      Ponovljen pokusaj NE dupla stavku: OTK_STAVKE je jedinstven po
+'      OtkupStavkaID (v. PosaljiStavkeOtkupa).
 '   3. Na uspeh: upisi ClientRecordID = "VBA:" & OtkupID + SyncSource = "VBA"
 '      (sledeci bulk push nece ga ponovo pokusati)
 '   4. Na fail: ostavi ClientRecordID empty ? retry pri sledecem unlock-u
@@ -467,6 +474,7 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
     Dim stavkePoOtkupu As Object
     Set stavkePoOtkupu = modMasterSync.OtkStavkeRedoviPoOtkupu()
     Dim tabStavkiSpreman As Boolean
+    Dim indeksStavki As Object
     
     Dim r As Long
     For r = 1 To lo.DataBodyRange.rows.count
@@ -498,23 +506,16 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
             GoTo NextRow
         End If
         If Not tabStavkiSpreman Then
-            If Not EnsureOtkStavkeTab(spreadsheetID) Then
+            If Not PripremiOtkStavkeTab(spreadsheetID, indeksStavki) Then
                 LogWarn SRC, "Tab " & OTK_STAVKE_TAB & " nije spreman; push odlozen."
                 Exit For
             End If
             tabStavkiSpreman = True
         End If
-        Dim stavka As Variant, stavkeOk As Boolean
-        stavkeOk = True
-        For Each stavka In stavkePoOtkupu(otkupID)
-            If Not AppendRowToSheet(spreadsheetID, OTK_STAVKE_TAB, stavka) Then
-                stavkeOk = False
-                Exit For
-            End If
-        Next stavka
-        If Not stavkeOk Then
-            LogWarn SRC, "Push stavki failed za OtkupID=" & otkupID & _
-                         ", zaglavlje se ne salje, retry pri sledecem unlock-u"
+        Dim greskaStavki As String
+        If Not PosaljiStavkeOtkupa(spreadsheetID, indeksStavki, stavkePoOtkupu(otkupID), greskaStavki) Then
+            LogWarn SRC, "Push stavki nije zavrsen za OtkupID=" & otkupID & _
+                         " (" & greskaStavki & "), zaglavlje se ne salje"
             GoTo NextRow
         End If
 
@@ -616,12 +617,29 @@ Private Function OtkCelija(ByVal lo As ListObject, ByVal rowIdx As Long, _
         RequireColumnIndex(TBL_OTKUP, kolona, "BuildOTKSheetRowForOtkup")).value
 End Function
 
-' Tab OTK_STAVKE postoji i nosi red naslova (modMasterSync.OtkStavkeKolone).
-' Neuspelo citanje NIJE "prazan tab": False, push se odlaze (fail-closed).
-Private Function EnsureOtkStavkeTab(ByVal spreadsheetID As String) As Boolean
-    Const SRC As String = "EnsureOtkStavkeTab"
+' ============================================================
+' OTK_STAVKE -- UGOVOR: JEDAN RED PO OtkupStavkaID (review #357, P1)
+'
+' Pisac je IDEMPOTENTAN. Pre slanja se tab procita jednom; stavka ciji ID vec
+' postoji sa ISTIM sadrzajem se ne salje ponovo, a isti ID sa DRUGACIJIM
+' sadrzajem je konflikt: otkup se ne salje (ni stavke ni zaglavlje) i ostaje
+' za operatera. Zato ponovljen push posle mreznog pada ne moze da promeni
+' kolicinu: tab nikad ne dobije drugi red istog ID-a iz ovog pisca.
+'
+' Citalac (S5) sme da tretira dupli OtkupStavkaID kao kvar, ne kao zbir.
+' Indeks vazi za jedan prolaz: push radi pod lock-om stanice, a PWA do S5 ne
+' pise u OTK_STAVKE.
+' ============================================================
+
+' Tab postoji, naslov je TACNO modMasterSync.OtkStavkeKolone (istim redom), i
+' outIndeks nosi postojece stavke. Neuspelo citanje nije "prazan tab", a tudji
+' naslov nije "dovoljno blizu": False, push se odlaze (fail-closed, review #357 P2).
+Private Function PripremiOtkStavkeTab(ByVal spreadsheetID As String, _
+                                      ByRef outIndeks As Object) As Boolean
+    Const SRC As String = "PripremiOtkStavkeTab"
     On Error GoTo EH
 
+    Set outIndeks = Nothing
     If Not AddSheetTab(spreadsheetID, OTK_STAVKE_TAB, True) Then Exit Function
 
     Dim postojece As Variant
@@ -631,13 +649,164 @@ Private Function EnsureOtkStavkeTab(ByVal spreadsheetID As String) As Boolean
                                 modMasterSync.OtkStavkeKolone()) Then Exit Function
     End If
 
-    EnsureOtkStavkeTab = True
+    Set outIndeks = OtkStavkeIndeksIzTaba(postojece)
+    PripremiOtkStavkeTab = True
     Exit Function
 
 EH:
     LogErr SRC
-    EnsureOtkStavkeTab = False
+    PripremiOtkStavkeTab = False
 End Function
+
+' Sadrzaj OTK_STAVKE (2D, red 1 = naslov; Empty = prazan tab) -> indeks
+' OtkupStavkaID -> kljuc sadrzaja. Pada po imenu na: naslov koji nije tacno
+' OtkStavkeKolone, red bez OtkupStavkaID, isti ID sa razlicitim sadrzajem.
+Public Function OtkStavkeIndeksIzTaba(ByVal data As Variant) As Object
+    Const SRC As String = "OtkStavkeIndeksIzTaba"
+
+    Dim indeks As Object
+    Set indeks = CreateObject("Scripting.Dictionary")
+    Set OtkStavkeIndeksIzTaba = indeks
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Variant, nk As Long, k As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim lb2 As Long, ub2 As Long
+    lb2 = LBound(data, 2)
+    ub2 = UBound(data, 2)
+    If ub2 - lb2 + 1 < nk Then
+        Err.Raise vbObjectError + 8144, SRC, _
+                  "Naslov taba " & OTK_STAVKE_TAB & " ima manje kolona od ugovora."
+    End If
+    For k = 0 To ub2 - lb2
+        If k < nk Then
+            If CStr(data(LBound(data, 1), lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then
+                Err.Raise vbObjectError + 8144, SRC, _
+                          "Naslov taba " & OTK_STAVKE_TAB & " kolona " & (k + 1) & " je '" & _
+                          CStr(data(LBound(data, 1), lb2 + k)) & "', ugovor trazi '" & _
+                          CStr(kol(LBound(kol) + k)) & "'."
+            End If
+        ElseIf Len(Trim$(CStr(data(LBound(data, 1), lb2 + k)))) > 0 Then
+            Err.Raise vbObjectError + 8144, SRC, _
+                      "Naslov taba " & OTK_STAVKE_TAB & " ima kolonu van ugovora: " & _
+                      CStr(data(LBound(data, 1), lb2 + k))
+        End If
+    Next k
+
+    Dim r As Long, red() As Variant, id As String, kljuc As String
+    ReDim red(0 To nk - 1)
+    For r = LBound(data, 1) + 1 To UBound(data, 1)
+        For k = 0 To nk - 1
+            red(k) = data(r, lb2 + k)
+        Next k
+        id = OtkStavkaIdReda(red)
+        If Len(id) = 0 Then
+            Err.Raise vbObjectError + 8145, SRC, _
+                      "Red " & r & " taba " & OTK_STAVKE_TAB & " nema OtkupStavkaID."
+        End If
+        kljuc = OtkStavkaKljuc(red)
+        If indeks.Exists(id) Then
+            If indeks(id) <> kljuc Then
+                Err.Raise vbObjectError + 8146, SRC, _
+                          "Konflikt u " & OTK_STAVKE_TAB & ": OtkupStavkaID " & id & _
+                          " ima dva razlicita sadrzaja."
+            End If
+        Else
+            indeks.Add id, kljuc
+        End If
+    Next r
+End Function
+
+' Salje stavke jednog otkupa idempotentno po OtkupStavkaID i azurira indeks.
+' True = sve stavke su u tabu (sada ili od ranije). False + outGreska: pad
+' appenda (ostatak se salje pri sledecem pokusaju) ili konflikt (nista se ne
+' salje -- konflikt se proverava za SVE stavke pre prvog upisa).
+Public Function PosaljiStavkeOtkupa(ByVal spreadsheetID As String, ByVal indeks As Object, _
+                                    ByVal stavke As Collection, ByRef outGreska As String) As Boolean
+    outGreska = ""
+    If indeks Is Nothing Then
+        outGreska = "indeks " & OTK_STAVKE_TAB & " nije procitan"
+        Exit Function
+    End If
+
+    Dim red As Variant, id As String
+    For Each red In stavke
+        id = OtkStavkaIdReda(red)
+        If Len(id) = 0 Then
+            outGreska = "stavka bez OtkupStavkaID"
+            Exit Function
+        End If
+        If indeks.Exists(id) Then
+            If indeks(id) <> OtkStavkaKljuc(red) Then
+                outGreska = "konflikt: OtkupStavkaID " & id & " u " & OTK_STAVKE_TAB & _
+                            " ima drugaciji sadrzaj"
+                Exit Function
+            End If
+        End If
+    Next red
+
+    For Each red In stavke
+        id = OtkStavkaIdReda(red)
+        If Not indeks.Exists(id) Then
+            If Not OtkStavkaAppend(spreadsheetID, red) Then
+                outGreska = "append nije uspeo za OtkupStavkaID " & id
+                Exit Function
+            End If
+            indeks.Add id, OtkStavkaKljuc(red)
+        End If
+    Next red
+
+    PosaljiStavkeOtkupa = True
+End Function
+
+Private Function OtkStavkaIdReda(ByVal red As Variant) As String
+    Dim kol As Variant, k As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    For k = LBound(kol) To UBound(kol)
+        If CStr(kol(k)) = COL_OKS_ID Then
+            OtkStavkaIdReda = Trim$(CStr(red(LBound(red) + k - LBound(kol))))
+            Exit Function
+        End If
+    Next k
+    Err.Raise vbObjectError + 8147, "OtkStavkaIdReda", "OtkStavkeKolone nema " & COL_OKS_ID
+End Function
+
+' Kljuc sadrzaja stavke. Broj se normalizuje (Sheets vraca 100 ili "100"),
+' tekst se trimuje; prazno ostaje prazno. Normalizacija koja pogresi daje
+' LAZAN konflikt (push staje), nikad tihi duplikat.
+Private Function OtkStavkaKljuc(ByVal red As Variant) As String
+    Dim k As Long, v As Variant, s As String
+    For k = LBound(red) To UBound(red)
+        v = red(k)
+        If IsNumeric(v) And Len(Trim$(CStr(v))) > 0 Then
+            s = s & "|" & CStr(CDbl(v))
+        Else
+            s = s & "|" & Trim$(CStr(v))
+        End If
+    Next k
+    OtkStavkaKljuc = s
+End Function
+
+Private Function OtkStavkaAppend(ByVal spreadsheetID As String, ByVal red As Variant) As Boolean
+    If mSimRedovi Is Nothing Then
+        OtkStavkaAppend = AppendRowToSheet(spreadsheetID, OTK_STAVKE_TAB, red)
+        Exit Function
+    End If
+    mSimPoziva = mSimPoziva + 1
+    If mSimPoziva = mSimPadNa Then Exit Function
+    mSimRedovi.Add red
+    OtkStavkaAppend = True
+End Function
+
+' Test: append u OTK_STAVKE ide u redovi; poziv broj padNa (1-based, od
+' postavljanja) vraca neuspeh. Nothing = razoruzaj.
+Public Sub TestHook_OtkStavkeSimulacija(ByVal redovi As Collection, ByVal padNa As Long)
+    Set mSimRedovi = redovi
+    mSimPadNa = padNa
+    mSimPoziva = 0
+End Sub
 
 ' ============================================================
 ' PRIVATE -- SyncControl read/write helperi
