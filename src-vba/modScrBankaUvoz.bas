@@ -820,6 +820,8 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     Dim greska As String
     Dim izabran As String
     Dim iznos As Double
+    Dim visakPotvrdjen As Boolean
+    Dim prijavljeno As Boolean
 
     ' AKO LISTA BLOKOVA NIJE UCITANA, prazan izbor NE znaci "operater nije birao
     ' blok". Fallback na poziv na broj bi tada bio pogadjanje. Ako se poziv na
@@ -878,6 +880,13 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
                 modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_AVANS_OK"), False
                 RucnoKooperant = True
                 Exit Function
+            Case Else
+                ' SAGLASNOST PUTUJE DO PISCA. Pitanje je postavljeno nad stanjem
+                ' iz trenutka prikaza, a pisac dug racuna u trenutku upisa -- bez
+                ' ove zastavice bi avans nastao i kad ga operater nije odobrio
+                ' (dug se u medjuvremenu smanjio), i obrnuto: pisac ne sme da
+                ' pretpostavi da je pitan.
+                visakPotvrdjen = True
         End Select
     End If
 
@@ -886,10 +895,14 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' duplikat nego namera: modul unosa sudi po listi kakva je bila kad je
     ' punjena, a writer po stanju u trenutku upisa.
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
-            bimID, kooperantID, otkupID, True, CiljJeIzabran(izabran))
+            bimID, kooperantID, otkupID, True, CiljJeIzabran(izabran), _
+            visakPotvrdjen, prijavljeno)
 
     If n <= 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
+        ' Pisac je vec rekao KONKRETNO sta ne valja (npr. dug se promenio pa
+        ' visak nije potvrdjen); genericki toast preko toga bi bio drugi dijalog
+        ' o istoj stvari.
+        If Not prijavljeno Then modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
         Exit Function
     End If
 

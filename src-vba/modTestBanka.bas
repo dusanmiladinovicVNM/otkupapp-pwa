@@ -124,6 +124,7 @@ Public Sub RunBankaImportTestSuite()
     T21_IzabranPlacenBlokNijeAvans
     T23_BatchAvansRazdvajaIshode
     T24_BlokTudjegKooperantaIStorniran
+    T25_VisakTraziPotvrduOperatera
 
     tx.RollbackTx
     Set tx = Nothing
@@ -459,7 +460,10 @@ Private Sub T03_DvosmislenPozivNeObaraBatch()
     ' 4) Red oznacen "za rucno" mora stvarno da se ZAVRSI rucnom putanjom -- sa
     ' OtkupID-em izabranog dokumenta, ne sa brojem. Bez ovoga bi red bio trajno
     ' nezavrsiv: broj bi i na rucnom putu ostao dvosmislen.
-    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-2OM", P & "K-1", P & "OTK-B", False, True)
+    ' Poslednji argument je SAGLASNOST za visak (operater je video podelu i
+    ' potvrdio). Bez nje pisac ne sme da napravi avans -- v. T25.
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-2OM", P & "K-1", P & "OTK-B", _
+                                                False, True, True)
 
     ChkEq n, 2, S & "rucno po OtkupID-u knjizi blok + visak [n=" & CStr(n) & "]"
     ChkEq BimObradjeno(P & "BIM-2OM"), "Da", S & "posle rucnog mapiranja red je zatvoren"
@@ -748,7 +752,8 @@ Private Sub T11_RucniKooperantBezIzboraBloka()
 
     gBankaSilentBatch = True
     n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-Q", P & "K-6", _
-                                                BimEfektivniOtkup(P & "BIM-Q", P & "K-6", ""), False)
+                                                BimEfektivniOtkup(P & "BIM-Q", P & "K-6", ""), _
+                                                False, False, True)
     gBankaSilentBatch = False
 
     ChkEq n, 2, S & "knjizen blok + visak [n=" & CStr(n) & "]"
@@ -976,6 +981,65 @@ Private Sub T24_BlokTudjegKooperantaIStorniran()
     ChkEq n, 1, S & "vlasnik bloka ga uredno placa"
     ChkEqD GetUplataForOtkup(P & "OTK-24A"), 1000, S & "...i dug je zatvoren"
     ChkEq NovacOMZaOtkup(P & "OTK-24A"), P & "OM-24", S & "...na otkupnom mestu dokumenta"
+End Sub
+
+' ============================================================
+' T25 - VISAK KAO AVANS JE ODLUKA OPERATERA, NE OSTATAK DELJENJA.
+'
+' Ekran pita kad je isplata veca od duga (BimOtkupTraziPotvrdu -> PitajZaPodelu),
+' ali pitanje se postavlja nad stanjem iz trenutka PRIKAZA, a pisac dug racuna u
+' trenutku UPISA. Dok saglasnost nije ARGUMENT pisca, pravilo je puka UI
+' konvencija: svaki drugi pozivalac (i isti ekran nad promenjenim stanjem) moze
+' da napravi avans koji niko nije odobrio.
+'
+' Ovaj test meri bas to razilazenje: u trenutku prikaza dug je bio ceo iznos
+' isplate (pitanja nema, saglasnosti nema), a do upisa je deo duga vec zatvoren
+' drugom isplatom -- pa bi pisac sam od sebe napravio avans.
+' ============================================================
+Private Sub T25_VisakTraziPotvrduOperatera()
+    Const S As String = "T25 visak trazi potvrdu: "
+
+    Dim n As Long
+
+    SeedStanica P & "OM-25", P & "Stanica 25"
+    SeedKooperant P & "K-25", "Test", "Visak", P & "OM-25"
+
+    ' Dug 3000; izvod nosi tacno 3000 -- ekran u tom trenutku NE pita nista.
+    SeedOtkup P & "OTK-25", P & "K-25", P & "BLOK-25", 100, 30, "Malina", P & "OM-25"
+    SeedBim P & "BIM-25", P & "IZV-25", P & "RAC-1", P & "PARTNER-25", 0, 3000, "", "", ""
+
+    ChkEqD BimOtvorenoNaOtkupu(P & "OTK-25"), 3000, S & "u trenutku prikaza dug je ceo iznos"
+    ChkEq BimOtkupTraziPotvrdu(P & "OTK-25", 3000, vbNullString), False, _
+          S & "ekran nema sta da pita -- isplata je tacno do duga"
+
+    ' STANJE SE MENJA izmedju prikaza i upisa: deo duga je zatvoren drugom
+    ' isplatom. Sada bi od 3000 samo 1000 islo na blok, a 2000 u avans.
+    SeedIsplataZaOtkup P & "NOV-25", P & "K-25", P & "OTK-25", 2000
+    ChkEqD BimOtvorenoNaOtkupu(P & "OTK-25"), 1000, S & "do upisa je dug pao na 1000"
+
+    ' (a) BEZ saglasnosti -> STOP, i to PRE ijednog upisa.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-25", P & "K-25", P & "OTK-25", _
+                                                False, True, False)
+    gBankaSilentBatch = False
+
+    ChkEq n, 0, S & "bez potvrde se NE knjizi nista"
+    ChkEq NovacZaBim(P & "BIM-25"), 0, S & "nijedan red u tblNovac -- ni blok ni avans"
+    ChkEq BimObradjeno(P & "BIM-25"), "", S & "stavka ostaje OTVORENA, vraca se operateru"
+    ChkEqD GetUplataForOtkup(P & "OTK-25"), 2000, S & "dug je netaknut (samo ranija isplata)"
+
+    ' (b) ISTI podaci, ali operater je video tacne iznose i potvrdio podelu.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-25", P & "K-25", P & "OTK-25", _
+                                                False, True, True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 2, S & "sa potvrdom: blok + avans [n=" & CStr(n) & "]"
+    ChkEq BimObradjeno(P & "BIM-25"), "Da", S & "stavka je zatvorena"
+    ChkEqD IsplataZaBim(P & "BIM-25"), 3000, S & "ukupno knjizeno = iznos iz izvoda"
+    ChkEqD GetUplataForOtkup(P & "OTK-25"), 3000, S & "blok je dobio tacno ostatak duga (1000)"
+    ChkEqD IsplataZaBimPoTipu(P & "BIM-25", NOV_VIRMAN_AVANS_KOOP), 2000, _
+           S & "visak je knjizen kao avans kooperanta"
 End Sub
 
 ' ============================================================
@@ -2142,6 +2206,33 @@ Private Function IsplataZaBim(ByVal bimID As String) As Double
     For i = 1 To UBound(data, 1)
         If BimIdFromNapomena(CStr(NzTb(data(i, colNap)))) = bimID Then
             IsplataZaBim = IsplataZaBim + CDbl(nz(data(i, colIsplata), "0"))
+        End If
+    Next i
+End Function
+
+' Zbir ISPLATA sa BIM markerom, po tipu novca. SumNovacZaBim sabira kolonu
+' Uplata (kupac), a kooperantski redovi nose iznos u koloni Isplata -- ista
+' tvrdnja nad pogresnom kolonom bi uvek bila nula, pa bi prosla i bez avansa.
+Private Function IsplataZaBimPoTipu(ByVal bimID As String, ByVal tipNovca As String) As Double
+    Dim data As Variant
+    Dim colNap As Long, colIsplata As Long, colTip As Long
+    Dim i As Long
+
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    colNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
+    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
+
+    For i = 1 To UBound(data, 1)
+        If BimIdFromNapomena(CStr(NzTb(data(i, colNap)))) = bimID Then
+            If tipNovca = "" Or Trim$(CStr(NzTb(data(i, colTip)))) = tipNovca Then
+                IsplataZaBimPoTipu = IsplataZaBimPoTipu + CDbl(nz(data(i, colIsplata), "0"))
+            End If
         End If
     Next i
 End Function

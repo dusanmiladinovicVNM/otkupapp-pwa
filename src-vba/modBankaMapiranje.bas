@@ -82,6 +82,20 @@ Public Const ERR_BMAP_BLOK_BEZ_ID As Long = vbObjectError + 2954
 ' pogadjanje. Do S2 je isti slucaj zaustavljao ekran (scope), jer je stanica
 ' tamo sluzila kao deo kljuca; sad je kapija tamo gde se pise.
 Public Const ERR_BMAP_BLOK_BEZ_OM As Long = vbObjectError + 2955
+
+' VISAK PREKO DUGA BEZ POTVRDE OPERATERA.
+'
+' Pretvaranje dela isplate u avans je poslovna odluka, ne racunska posledica:
+' novac prestaje da zatvara dug i postaje slobodan. Ekran to pita (v.
+' BimOtkupTraziPotvrdu / PitajZaPodelu), ali pitanje se postavlja nad stanjem u
+' trenutku PRIKAZA, a writer racuna dug u trenutku UPISA. Izmedju to dvoje dug
+' moze da se smanji (druga isplata, ispravka stavki), pa bi writer napravio
+' avans koji njegov pozivalac nikad nije odobrio -- odluka i radnja se raziduju.
+'
+' Zato je saglasnost ARGUMENT, a podrazumevano je NE. Rucni put je prosledjuje
+' samo ako je stvarno pitao i dobio "Da". Automatsko mapiranje je prosledjuje
+' izricito, jer je tamo "dug + ostatak u avans" namerno pravilo (D-033).
+Public Const ERR_BMAP_VISAK_BEZ_POTVRDE As Long = vbObjectError + 2956
 Public Const ERR_BMAP_BLOK_STORNIRAN As Long = vbObjectError + 2953
 
 ' Prag "jos duguje". Novac se poredi na dve decimale (v. ZaokruziNovac u
@@ -874,9 +888,12 @@ End Function
 Private Function MapBankaImportAsKooperantBlock(ByVal bankaImportID As String, _
                                                ByVal kooperantID As String, _
                                                Optional ByVal savePartnerMapFlag As Boolean = True) As Long
+    ' dozvoliVisakKaoAvans:=True -- na automatskom putu je avans NAMERNO pravilo
+    ' (dok je poreklo dvosmisleno, avans je bezbedan izlaz), pa operater nije ni
+    ' pitan. Pise se izricito da se ta razlika vidi na mestu odluke.
     MapBankaImportAsKooperantBlock = MapBankaImportAsKooperantBlockCore( _
         bankaImportID, kooperantID, BimOtkupIzPozivaNaBroj(kooperantID, bankaImportID), _
-        savePartnerMapFlag)
+        savePartnerMapFlag, False, True)
 End Function
 
 Public Function MapBankaImportAsKooperantBlock_TX(ByVal bankaImportID As String, _
@@ -946,9 +963,10 @@ Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As Str
                                                      ByVal kooperantID As String, _
                                                      ByVal otkupID As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                     Optional ByVal blokIzabran As Boolean = False) As Long
+                                                     Optional ByVal blokIzabran As Boolean = False, _
+                                                     Optional ByVal dozvoliVisakKaoAvans As Boolean = False) As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
@@ -956,6 +974,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
                                                         ByVal otkupID As String, _
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                         Optional ByVal blokIzabran As Boolean = False, _
+                                                        Optional ByVal dozvoliVisakKaoAvans As Boolean = False, _
                                                         Optional ByRef outPrijavljeno As Boolean) As Long
     Dim tx As clsTransaction
 
@@ -971,7 +990,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     tx.AddTableSnapshot TBL_PARTNER_MAP
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
-        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans)
     
     tx.CommitTx
 
@@ -1027,7 +1046,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
                                                     ByVal kooperantID As String, _
                                                     ByVal otkupID As String, _
                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                    Optional ByVal blokIzabran As Boolean = False) As Long
+                                                    Optional ByVal blokIzabran As Boolean = False, _
+                                                    Optional ByVal dozvoliVisakKaoAvans As Boolean = False) As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
@@ -1147,6 +1167,19 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         zaBlok = otvoreno
     Else
         zaBlok = isplataUkupno
+    End If
+
+    ' VISAK JE ODLUKA, NE OSTATAK DELJENJA. Bez saglasnosti pozivaoca se ne pise
+    ' NISTA -- greska se dize PRE prvog SaveNovac-a. Dug je ovde racunat NAD
+    ' TRENUTNIM stanjem, pa ova kapija hvata i slucaj kad je ekran pitanje
+    ' preskocio zato sto je u trenutku prikaza duga bilo dovoljno.
+    If (isplataUkupno - zaBlok) > BIM_OTVORENO_PRAG And Not dozvoliVisakKaoAvans Then
+        Err.Raise ERR_BMAP_VISAK_BEZ_POTVRDE, "MapBankaImportAsKooperantBlockCore", _
+                  "Isplata je ve" & ChrW(263) & "a od duga na bloku (dug " & _
+                  Format$(otvoreno, "#,##0.00") & ", isplata " & Format$(isplataUkupno, "#,##0.00") & _
+                  "). Vi" & ChrW(353) & "ak bi bio knji" & ChrW(382) & "en kao avans kooperanta, " & _
+                  "a to nije potvr" & ChrW(273) & "eno " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. " & _
+                  "Osve" & ChrW(382) & "i listu i potvrdi podelu sa ta" & ChrW(269) & "nim iznosima."
     End If
 
     ' Vezan red nosi otkupno mesto DOKUMENTA (blokOmID), avansni redovi ispod i

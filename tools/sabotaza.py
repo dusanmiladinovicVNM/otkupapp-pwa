@@ -4567,6 +4567,17 @@ SABOTAZE = {
 
     # Blok bez upisanog otkupnog mesta nema vlasnika kupovine. Bez kapije bi se
     # isplata proknjizila sa praznim OMID-em -- saldo nijednog mesta je ne vidi.
+    # VISAK KAO AVANS JE ODLUKA OPERATERA. Bez saglasnosti u argumentu je pravilo
+    # puka UI konvencija: pisac racuna dug u trenutku upisa, pa pravi avans koji
+    # niko nije odobrio kad se dug u medjuvremenu smanji.
+    "banka-writer-visak-bez-potvrde": (
+        "modBankaMapiranje.bas",
+        "    If (isplataUkupno - zaBlok) > BIM_OTVORENO_PRAG And Not dozvoliVisakKaoAvans Then\n",
+        "    If False Then   ' SABOTAZA: visak postaje avans bez potvrde\n",
+        "T25_VisakTraziPotvrduOperatera",
+        "bez potvrde se NE knjizi nista",
+    ),
+
     "banka-writer-blok-bez-om": (
         "modBankaMapiranje.bas",
         "    If Len(outStanica) = 0 Then\n",

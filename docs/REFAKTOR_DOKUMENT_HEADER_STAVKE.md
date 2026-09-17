@@ -2865,11 +2865,14 @@ kroz `COL_OKS_*`.
 | **Vlasništvo OM-a:** vezan red `tblNovac` nosi `StanicaID` **dokumenta**, ne matično mesto kooperanta; avans (i višak) nose matično mesto — odluka izrečena i merena | `MapBankaImportAsKooperantBlockCore` |
 | „Otvoreno“ po dokumentu na jednom mestu: `BimOtvorenoNaOtkupu` (stavke − isplate); `BimOtkupBezOtvorenog` zamenjuje `BimBlokBezOtvorenih` | `modBankaMapiranje` |
 | Okidač potvrde: **isplata veća od duga na bloku** (`BimOtkupTraziPotvrdu`), umesto „3+ otvorenih stavki“ | `modBankaMapiranje`, `modScrBankaUvoz.PitajZaPodelu` / `TekstPodele` |
+| **Saglasnost je argument pisca**, ne UI konvencija: `dozvoliVisakKaoAvans` (podrazumevano **ne**); bez nje višak = `ERR_BMAP_VISAK_BEZ_POTVRDE` pre ijednog upisa. Auto put je prosleđuje izričito (tamo je avans namerno pravilo) | `MapBankaImportAsKooperantBlock*` |
 | Obrisano: `GetOtkupCandidatesForKooperantBlock`, `PlanBlokRaspodela`, `SortKandidatiPoOtvorenomDesc`, `MAX_BLOK_KANDIDATA`, `BimScopeKolona`, `BimBlokTraziPotvrdu`, `TryResolveOtkupForKooperant` (mrtav), `BuScopeNedostaje`, `IzabranaStanicaCilja`, `ScopeIzbora`, `Scr_BuScopeBlokaTest`, `Scr_BuStopBezOmTest`, poruke `OTKUI_*_BU_BLOK_BEZ_OM` | — |
 
 **Šta je scope bio i zašto ga više nema:** otkupno mesto je u mapiranje uvedeno zato što `(kooperant, broj)` nije bio jednoznačan.
 Kad red liste nosi `OtkupID`, dvosmislenosti nema — pa nema ni scope-a, ni kapije „blok bez otkupnog mesta“, ni schema-drift
 grane u kojoj scope tiho otpada. Tri stanja praznog stringa iz `BuScopeNedostaje` nestaju sa uzrokom.
+
+**Višak u avans je odluka, ne ostatak deljenja (review #360, drugi P1):** ekran pita nad stanjem iz trenutka **prikaza**, a pisac dug računa u trenutku **upisa**. Dok saglasnost nije bila argument, pisac je mogao da napravi avans koji njegov pozivalac nikad nije odobrio — dovoljno je da se dug u međuvremenu smanji (druga isplata, ispravka stavki). Sada `dozvoliVisakKaoAvans` putuje od mesta odluke do pisca, podrazumevano je **ne**, a bez nje se ne piše ništa i stavka izvoda ostaje otvorena da operater dobije pitanje sa tačnim brojevima (`T25`, sabotaža `banka-writer-visak-bez-potvrde`).
 
 **Vlasništvo nije isto što i identitet (review #360, P1):** pisac je znao tačan `OtkupID`, ali je `OMID` uzimao iz `tblKooperanti.StanicaID` — matičnog mesta. Za kooperanta koji predaje na dva mesta to daje red sa **tačnim** `OtkupID`-em i **pogrešnim** `OMID`-em, pa saldo tuđeg otkupnog mesta nosi kupovinu. Vezani red sada nosi `StanicaID` dokumenta (`T03`: `OTK-B@OM-1B → Novac.OMID = OM-1B`), a dokument bez otkupnog mesta se odbija (`ERR_BMAP_BLOK_BEZ_OM`, `T24`) — time je kapija „blok bez OM“ prešla sa ekrana (gde je bila deo scope-a) na mesto gde se piše. Avans i višak ostaju na matičnom mestu: nisu vezani ni za jedan dokument i mogu se kasnije primeniti na blok bilo kog mesta.
 
