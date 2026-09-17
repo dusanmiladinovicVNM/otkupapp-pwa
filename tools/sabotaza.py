@@ -851,25 +851,7 @@ SABOTAZE = {
         "T_StornoImpact_IdentitetNeDegradira",
         "generacija koja pripada DRUGOM broju ne tumaci ovaj dokument",
     ),
-    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
-    # rundu duze: bez kolone OtkupID spisak blokova ispadne prazan, sto operateru
-    # znaci 'nema pogodjenih blokova' -- nad odlukom koja blokove STORNIRA.
-    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
-    # rundu duze: bez strict-a GetBlokOtkupIDs proguta drift, vrati prazan skup,
-    # GetStornoBlockRows izadje na 'ids.count = 0' PRE svoje kapije -- i uvid
-    # zavrsi kao valid sa praznim spiskom. Operateru to znaci 'nema pogodjenih
-    # blokova', nad odlukom koja blokove STORNIRA.
-    #
-    # Sabotaza gadja bas propagaciju, ne kapiju ispod nje: kapija u
-    # GetStornoBlockRows se na ovom putu i ne dostigne, pa bi njeno gasenje bilo
-    # zeleno-bez-crvenog (zamka 5).
-    "uvid-blok-sekcija-guta": (
-        "modStornoFlow.bas",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID), strict)\n",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
-        "T_StornoImpact_BlokSekcijaDriftJeInvalidna",
-        "necitljiva block sekcija obara CEO uvid",
-    ),
+    # uvid-blok-sekcija-guta: obrisana u S1b-1 (storno otkupnih blokova, stari model; vraca S3).
     # Err ziv posle uspesne radnje. "On Error Resume Next" prigusuje gresku ali je
     # NE brise, pa prigusena greska iz OtvoriIspravku prezivi povratak i stigne do
     # modUiScreens.ScrEvent, koji je onda prijavi kao 'Radnja nije uspela' -- preko
@@ -882,25 +864,7 @@ SABOTAZE = {
         "T_StornoEkran_NeCuriGreska",
         "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla",
     ),
-    # Druga i treca grana istog dispecera (zbirna, prijemnica) idu kroz
-    # ActiveOtkupIDsByZbirna, gde se strict gubio jos jednu rundu duze nego kod
-    # otpremnice. Bez njega drift nad tblOtkup vrati prazan skup, GetStornoBlockRows
-    # izadje na 'ids.count = 0' PRE svoje kapije, i uvid zavrsi kao valid.
-    "uvid-blok-zbirna-guta": (
-        "modStornoFlow.bas",
-        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj, strict)\n",
-        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)   ' SABOTAZA\n",
-        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
-        "necitljiva blok sekcija ZBIRNE obara CEO uvid",
-    ),
-    # Ista rupa, grana prijemnice (preko njene zbirne).
-    "uvid-blok-prijemnica-guta": (
-        "modStornoFlow.bas",
-        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz, strict)\n",
-        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)\n",
-        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
-        "necitljiva blok sekcija PRIJEMNICE obara CEO uvid",
-    ),
+    # uvid-blok-prijemnica-guta: obrisana u S1b-1 (storno otkupnih blokova, stari model; vraca S3).
     # Upozorenje uz USPESAN upis mora da nosi oznaku ChrW(10007) -- po njoj
     # CommitDokument odlucuje da li ide i u MsgBox. Bez oznake se tiho gubi: toast
     # sece rep, a uspesan toast se jos i sam sakrije posle cetiri sekunde, pa
@@ -1032,23 +996,7 @@ SABOTAZE = {
         "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu",
         "poruka imenuje prijemnicu koja je ostala vezana",
     ),
-    # Spisak blokova za F8 po golom broju: u korpu ulazi i blok drugog dokumenta,
-    # a odatle ide pravo u StornoSelectedBlocks_TX.
-    "blokovi-po-broju": (
-        "modStornoFlow.bas",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID), strict)\n",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj), strict)   ' SABOTAZA\n",
-        "T_StorniranSibling_ZadrzavaSvojBlok",
-        "blok storniranog siblinga je ostao AKTIVAN",
-    ),
-    # Ista rupa u pregledu: blockCount po broju, pa dijalog nudi tudje blokove.
-    "blockcount-po-broju": (
-        "modStornoFlow.bas",
-        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj, gen)\n",
-        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj)   ' SABOTAZA\n",
-        "T_BlokoviF8_PoIdentitetu",
-        "pregled broji blokove IZABRANOG dokumenta, ne svih tog broja",
-    ),
+    # blockcount-po-broju: obrisana u S1b-1 (storno otkupnih blokova, stari model; vraca S3).
     # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
     "zbirna-ispravka-cilj-bez-kapije": (
         "modStornoFlow.bas",
@@ -1402,29 +1350,7 @@ SABOTAZE = {
         "T_StornoEfekat_TekstIzKataloga",
         "razlicit efekat nosi OBA prefiksa u istom redu",
     ),
-    # Lista otkupnih blokova radi kao legacy panel: podrazumevano NIJEDAN nije
-    # oznacen, oznacen znaci DODATNO storniran. Do v6-ui-149 je nov ekran na
-    # potvrdu stornirao SVE -- destruktivnije od legacy-ja, i to slucajno.
-    "blokovi-svi-oznaceni": (
-        "modScrStorno.bas",
-        "        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), \"\")\n",
-        "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "red 1 nije oznacen bez izricitog izbora",
-    ),
-    # Oznake pripadaju dokumentu nad kojim su napravljene. Ako prezive promenu
-    # izbora, sledeci storno gadja blokove koje operater nikad nije video.
-    #
-    # Zamena nosi oznaku ' SABOTAZA namerno (zamka 8): prva verzija je uklanjala
-    # red i ostavljala `mSelTip = ""`, koji postoji i u ZDRAVOM kodu -- pa ga je
-    # --vrati nasao tamo i dodao jos jedan `Set mBlokOznaceni = Nothing`.
-    "blokovi-oznake-prezive-izbor": (
-        "modScrStorno.bas",
-        "    Set mBlokOznaceni = Nothing\n",
-        "    ' SABOTAZA: oznake prezive promenu izabranog dokumenta\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "promena izbora dokumenta ponistava oznacene blokove",
-    ),
+    # blokovi-oznake-prezive-izbor: obrisana u S1b-1 (lista otkupnih blokova u stornu je prazna; vraca S3).
     # Oznaka upozorenja je SIGNAL ZA RUTIRANJE, ne deo recenice: kaze sloju iznad
     # da poruku treba pokazati u dijalogu. MsgBox crta kroz ANSI kodnu stranu u
     # kojoj ChrW(10007) ne postoji, pa ju je operater video kao vodece '?' ispred
@@ -1436,16 +1362,7 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake",
     ),
-    # Red o blokovima u zoni je jedini koji trazi odluku, a odluka se donosi u
-    # drugoj listi. Ako ne prati izbor, operater i posle stikliranja cita isti
-    # poziv na izbor -- pa ne zna da li je odluka uopste zabelezena.
-    "blok-status-ne-prati-izbor": (
-        "modScrStorno.bas",
-        "    iz = BlokOznacenihBroj()\n",
-        "    iz = 0   ' SABOTAZA: izbor se ne vidi u zoni\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "sa izborom red prijavljuje KOLIKO ih je izabrano",
-    ),
+    # blok-status-ne-prati-izbor: obrisana u S1b-1 (lista otkupnih blokova u stornu je prazna; vraca S3).
     # Brojac uz stavku menija ide kroz ugovor, kasno vezano -- ljuska ne sme da
     # sazna nijedan ekran po imenu. Poziv GetNedovrseno direktno bi radio, i to je
     # bas ono sto ceo ugovor izbegava: sledeci ekran koji ima zaostatak morao bi
@@ -5222,17 +5139,8 @@ SABOTAZE = {
         "T_Sled_GpLanacIStanja",
         "zavrsna GP faktura zauzima kolonu Faktura",
     ),
-    # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
-    # tudje generacije u jedan dokument sledljivosti.
-    "sledljivost-sablon-dvosmislen-broj": (
-        "modIzvestaj.bas",
-        "    If SledVlasnikaBroja(brojZbirne) > 1 Then\n"
-        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
-        "    If False Then   ' SABOTAZA: dvosmislen broj prolazi na sablon\n"
-        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
-        "T_Sled_MeteSledljivosti",
-        "sablon odbija dvosmislen broj zbirne",
-    ),
+    # sledljivost-sablon-dvosmislen-broj: obrisana u S1b-1 zajedno sa
+    # StampajSledljivostZbirne (TraceByZbirna, stari model; vraca S9).
     # Krug 8 R4: nevalidan datum tiho sakriven iz ponude -- ugovor kaze
     # da anomalija ostaje VIDLJIVA.
     "sledljivost-dokumenti-nevalidan-datum-skriven": (

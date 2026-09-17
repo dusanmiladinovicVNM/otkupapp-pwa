@@ -29,13 +29,13 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S1b-1 (brisanje čitalaca starog modela)
+## Sledeći korak: S1b-2 (posle provere S1b-1 u Excelu)
 
-1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight i S1a: §14.10.
-2. S1a spojen (#352): stari pisac otkupa i mrtvi lanci obrisani, pun `run_vba` zelen.
-3. **Odluka 17.09:** procedure starog modela koje čitaju polja stavki otkupa se u S1 **brišu**, ne prevode —
-   spisak i lanac pozivalaca: §14.10 „S1b — odluka operatera i spisak“. **Sledeće: S1b-1** (brisanje), pa S1b-2
-   (prevođenje preostalih čitalaca na stavke).
+1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
+2. **S1b-1 urađen** (§14.10 „S1b-1 — urađeno“): obrisani AutoLink, `TraceByZbirna`, `GetUnlinkedOtkupi`,
+   `GetLostOtkupBlokovi`, `GetStornoBlockRows`, `OtkupReissueDupExists` sa granama pozivalaca i testovima;
+   `x_otk_stavka` 74 → 63. Pre merge-a: pun `run_vba` + Compile.
+3. **Sledeće:** S1b-2 — preostali desktop čitaoci na stavke (§14.10).
 
 ## Alati i kapije
 

@@ -294,7 +294,6 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
         Case "scrSlPrint": StampajIzvestaj
         Case "scrSlLanac": StampajLanacIzabranog
         Case "scrSlSab":   StampajSledljivostReda
-        Case "scrSlAuto":  ObradiKlik = AutoPovezi()
     End Select
 End Function
 
@@ -423,21 +422,6 @@ Private Sub NapuniPovKandidate(ByVal otkupID As String)
     mDokFill = False
 End Sub
 
-' AUTOMATSKO povezivanje -- legacy btnAutoLink, isti TX. Krug 8 R7:
-' pravilo je GLOBALNO (svi periodi, ne prikazani opseg -- poruka to i
-' kaze), a greska/rollback se razlikuje od legitimne nule kroz ByRef.
-' True kad je nesto povezano -> ljuska osvezava liste.
-Private Function AutoPovezi() As Boolean
-    Dim n As Long, greska As Boolean
-    n = modSledljivost.AutoLinkOtkupOtpremnica_TX(greska)
-    If greska Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_AUTO_GRESKA"), True
-        Exit Function
-    End If
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZANO") & " " & CStr(n), False
-    AutoPovezi = (n > 0)
-End Function
-
 ' "Sledljivost (PDF)" (smoke krug 3b): 1) RAZRESEN izbor u polju
 ' "Dokument sledljivosti" ide prvi; 2) kucan a nerazresen tekst ODBIJA
 ' porukom -- ne pogadja se (pravilo nerazresenog izbora, testovi.md par. 5);
@@ -502,12 +486,9 @@ Private Sub StampajMetu(ByVal tip As String, ByVal iD As String)
     Dim ishod As String
     Select Case tip
         Case SLEDM_ZBIRNA
-            ishod = StampajSledljivostZbirne(iD)
-            Select Case ishod
-                Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
-                Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
-                Case "DVOSMISLEN": modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_DVOSMISLENA"), True
-            End Select
+            ' Sablon sledljivosti zbirne (StampajSledljivostZbirne nad TraceByZbirna)
+            ' je obrisan u S1b-1 -- veza preko Otkup.OtpremnicaID; vraca S9.
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
         Case SLEDM_NEJASNA
             ' Krug 8 R3: broj dele razliciti vlasnici -- nema stampe.
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_DVOSMISLENA"), True
@@ -1149,16 +1130,14 @@ Public Sub Scr_Build(ByVal z As Object)
 
     ' Stampa aktivne liste (house PDF) + lanac izabranog reda (house PDF sa
     ' kontekst-linijom: koren, opseg, kompletnost) + sledljivost zbirne po
-    ' POSTOJECEM sablonu + auto-povezivanje (samo NEPOTPUNI -- vidljivost
-    ' daje raspored). Smoke krug 2.
+    ' POSTOJECEM sablonu. Smoke krug 2. Auto-povezivanje (AutoLink) je obrisano u
+    ' S1b-1: heuristika starog modela; nov model ima eksplicitne izvore (S3).
     modUiKit.BtnV z, "scrSlPrint", Poruka("OTKUI_BTN_IZ_PRINT"), PAD, SL_Y_BTN, _
                   156, SL_BTN_H, "primary"
     modUiKit.BtnV z, "scrSlLanac", Poruka("OTKUI_BTN_SL_LANACPDF"), PAD + 164, SL_Y_BTN, _
                   120, SL_BTN_H, "soft"
     modUiKit.BtnV z, "scrSlSab", Poruka("OTKUI_BTN_SL_SABLON"), PAD + 292, SL_Y_BTN, _
                   158, SL_BTN_H, "soft"
-    modUiKit.BtnV z, "scrSlAuto", Poruka("OTKUI_BTN_SL_AUTO"), PAD + 458, SL_Y_BTN, _
-                  132, SL_BTN_H, "soft"
 
     modUiKit.NewLbl z, "slLnB", "", 0, SL_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
@@ -1219,10 +1198,6 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     modUiKit.MoveBtn z, "scrSlPrint", PAD, SL_Y_BTN
     modUiKit.MoveBtn z, "scrSlLanac", PAD + 164, SL_Y_BTN
     modUiKit.MoveBtn z, "scrSlSab", PAD + 292, SL_Y_BTN
-    modUiKit.MoveBtn z, "scrSlAuto", PAD + 458, SL_Y_BTN
-    ' Auto-povezivanje je posao liste NEPOTPUNI -- na ostalima je mrtvo
-    ' dugme i ne crta se (kontekstna dugmad, obrazac scrIzKartPdf).
-    modUiKit.BoxShow z, "scrSlAuto", (Scr_Lista() = SL_NEP)
 
     z.Controls("slLnB").width = w
 End Sub

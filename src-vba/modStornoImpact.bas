@@ -70,7 +70,9 @@ Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String,
     tHdr = Timer
     Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID, strict)
     tChn = Timer
-    Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID, strict)
+    ' Sekcija otkupnih blokova (GetStornoBlockRows nad Otkup.Kolicina/Klasa i
+    ' vezom preko broja) je obrisana u S1b-1 -- stari model; vraca S3.
+    Set d("blocks") = New Collection
     tBlk = Timer
     Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID, strict)
     tFlg = Timer

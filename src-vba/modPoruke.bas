@@ -875,7 +875,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_FILTERI", "Filteri"
     UpsertRow lo, existing, "OTKUI_BTN_RED_PRINT", ChrW(352) & "tampaj list"
     UpsertRow lo, existing, "OTKUI_BTN_RED_STORNO", "Storniraj"
-    UpsertRow lo, existing, "OTKUI_BTN_RED_PREUZMI", "Preuzmi"
     UpsertRow lo, existing, "OTKUI_BTN_RED_MARK", "Izaberi vi" & ChrW(353) & "e"
     UpsertRow lo, existing, "OTKUI_BTN_RED_SPEC", ChrW(352) & "tampaj specifikaciju"
     UpsertRow lo, existing, "OTKUI_BTN_RED_SPECDAT", "Po datumu"
@@ -1038,11 +1037,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_RADNJA", ChrW(10007) & " Radnja nije uspela:"
     UpsertRow lo, existing, "OTKUI_MSG_STAMPA", ChrW(10003) & " Poslato na " & ChrW(353) & "tampu:"
     UpsertRow lo, existing, "OTKUI_MSG_STORNIRANO", ChrW(10003) & " Storniran dokument"
-    UpsertRow lo, existing, "OTKUI_ASK_PREUZMI", "Preuzeti blok br."
-    UpsertRow lo, existing, "OTKUI_ASK_PREUZMI2", "na otpremnicu"
-    UpsertRow lo, existing, "OTKUI_MSG_PREUZET", ChrW(10003) & " Preuzet blok"
-    UpsertRow lo, existing, "OTKUI_ERR_PREUZMI", ChrW(10007) & " Preuzimanje nije uspelo (cilj je mo" & ChrW(382) & "da storniran):"
-    UpsertRow lo, existing, "OTKUI_ERR_NEMA_AKT_OTP", ChrW(10007) & " Prvo izaberi ciljnu otpremnicu u listi Otpremnice"
     UpsertRow lo, existing, "OTKUI_ASK_STORNO", "Stornirati ceo otkup br."
     UpsertRow lo, existing, "OTKUI_ASK_STORNO2", "?" & vbCrLf & _
               "Storno obuhvata SVE klase istog dokumenta."
@@ -1165,8 +1159,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     ' izabran znaci DODATNO storniran. Zato poruke govore o izboru, ne o svemu.
     UpsertRow lo, existing, "OTKUI_SCRST_BLOK_NEMA", "Izaberi dokument da vidi" & ChrW(353) & " njegove otkupne blokove"
     UpsertRow lo, existing, "OTKUI_SCRST_BLOK_PRAZNO", "Izabrani dokument nema samostalnih otkupnih blokova"
-    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK", "Storniraj i ozna" & ChrW(269) & "ene otkupne blokove?"
-    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK2", "Neozna" & ChrW(269) & "eni ostaju AKTIVNI i osloba" & ChrW(273) & "aju se za drugi dokument."
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FAKTURA", "Postoje" & ChrW(263) & "e fakture"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZVOD", "Uvezeni bankovni izvodi"
     UpsertRow lo, existing, "OTKUI_HD_IZNOS", "IZNOS"
@@ -1203,10 +1195,6 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ASK_BLOKOVI_3", "Stornirati i NJIH?" & vbCrLf & vbCrLf & _
               "DA = roba nije otkupljena " & ChrW(8212) & " blokovi padaju sa dokumentom" & vbCrLf & _
               "NE = blokovi ostaju (oslobo" & ChrW(273) & "eni; vide se u listi Izgubljeni)"
-    UpsertRow lo, existing, "STORNO_MSG_BLOKOVI_OK", ChrW(10003) & " Stornirano otkupnih blokova:"
-    UpsertRow lo, existing, "STORNO_ERR_BLOKOVI", ChrW(10007) & " Storno otkupnih blokova nije uspeo." & vbCrLf & vbCrLf & _
-              "Dokument JESTE storniran. Blokove storniraj ru" & ChrW(269) & "no " & ChrW(8212) & _
-              " zadatak je zabele" & ChrW(382) & "en u: Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     ' --- ispravka prijemnice (prevezivanje paleta) ---
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ", "Postoji VI" & ChrW(352) & "E ispravki prijemnice na " & ChrW(269) & "ekanju." & vbCrLf & _
               "Palete NISU automatski prevezane (da se ne pove" & ChrW(382) & "e pogre" & ChrW(353) & "na)." & vbCrLf & _
@@ -1409,7 +1397,6 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SEG_LS_SVI", "Svi listovi"
     UpsertRow lo, existing, "OTKUI_SEG_LS_OTP", "Otpremnice"
     UpsertRow lo, existing, "OTKUI_SEG_LS_BLOK", "Blokovi otpremnice"
-    UpsertRow lo, existing, "OTKUI_SEG_LS_LOST", "Izgubljeni"
     UpsertRow lo, existing, "OTKUI_SEG_LS_KOOP", "Kooperanti"
     UpsertRow lo, existing, "OTKUI_OTP_TRAKA", "Aktivna otpremnica"
     UpsertRow lo, existing, "OTKUI_OTP_NEMA", "Nema izabrane otpremnice " & ChrW(8212) & " izaberi je u listi Otpremnice"
@@ -1420,13 +1407,11 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OTP_AMB", "amb"
     UpsertRow lo, existing, "OTKUI_OTP_PO_OTP", "po otpremnici"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_BLOKOVI", "Blokovi otpremnice"
-    UpsertRow lo, existing, "OTKUI_GRID_TITLE_LOST", "Izgubljeni blokovi"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_KOOP", "Kooperanti po iznosu otkupa"
     UpsertRow lo, existing, "OTKUI_HDK_RANG", "RANG"
     UpsertRow lo, existing, "OTKUI_HDK_KOOPERANT", "KOOPERANT"
     UpsertRow lo, existing, "OTKUI_HDK_IZNOS", "IZNOS RSD"
     UpsertRow lo, existing, "OTKUI_HD_OM", "OTKUPNO MESTO"
-    UpsertRow lo, existing, "OTKUI_HDL_STARA", "STARA OTPREMNICA"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"
@@ -1990,10 +1975,8 @@ Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SL_POTPUN", "lanac potpun"
     ' --- Sledljivost smoke krug 2: povezivanje + sablon PDF ---
     UpsertRow lo, existing, "OTKUI_BTN_SL_POVEZI", "Pove" & ChrW(382) & "i" & ChrW(8230)
-    UpsertRow lo, existing, "OTKUI_BTN_SL_AUTO", "Pove" & ChrW(382) & "i automatski"
     UpsertRow lo, existing, "OTKUI_BTN_SL_SABLON", "Sledljivost (PDF)"
     UpsertRow lo, existing, "OTKUI_HDS_KLASAKOD", "KLASA KOD"
-    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa (SVI periodi, ne samo prikazani):"
     UpsertRow lo, existing, "OTKUI_MSG_SL_NEMA_KANDIDATA", ChrW(10007) & " Nema nestorniranih otpremnica istog datuma na stanici otkupa"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_OK", "Otkup povezan sa otpremnicom"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_NEUSPEH", ChrW(10007) & " Povezivanje nije uspelo " & ChrW(8212) & " ciljna otpremnica ne postoji ili je stornirana"
@@ -2104,7 +2087,6 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
     UpsertRow lo, existing, "OTKUI_SL_META_NEJASNA", "Zbirna " & ChrW(8212) & " nejasan vlasnik"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DVOSMISLENA", ChrW(10007) & " Broj zbirne dele razli" & ChrW(269) & "iti vlasnici " & ChrW(8212) & " sledljivost po tom broju bi me" & ChrW(353) & "ala tokove (v. Nepotpune)"
-    UpsertRow lo, existing, "OTKUI_ERR_SL_AUTO_GRESKA", ChrW(10007) & " Automatsko povezivanje prekinuto gre" & ChrW(353) & "kom " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano (vidi ErrorLog)"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     UpsertRow lo, existing, "APP_MSG_BACKUP_NIJE_USPEO", ChrW(9888) & " Sigurnosna kopija pri pokretanju NIJE napravljena (nema mesta na disku ili folder nije upisiv). Aplikacija radi, ali dana" & ChrW(353) & "nji rad nije za" & ChrW(353) & ChrW(263) & "i" & ChrW(263) & "en kopijom. Oslobodi prostor pa restartuj."
