@@ -780,7 +780,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 42: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
         Case 41: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
         Case 40: TestName = "T_SoleOwner_MeriDokumenteNeBrojeve"
-        Case 39: TestName = "T_OtkupBezGeneracije_NeStorniraTudjeOM"
+        Case 39: TestName = "T_OtkupStornoPoID_NeDiraTudjeOM"
         Case 38: TestName = "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje"
         Case 37: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
         Case 36: TestName = "T_Preflight_KoristiIdentitet"
@@ -991,7 +991,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 42: T_ZamenaZbirne_NeDiraDecuTudje
         Case 41: T_ZbirnaKaskada_StajeNaDvosmislenom
         Case 40: T_SoleOwner_MeriDokumenteNeBrojeve
-        Case 39: T_OtkupBezGeneracije_NeStorniraTudjeOM
+        Case 39: T_OtkupStornoPoID_NeDiraTudjeOM
         Case 38: T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje
         Case 37: T_IspravkaPrijemnice_PodKolizijomBroja
         Case 36: T_Preflight_KoristiIdentitet
@@ -2677,42 +2677,46 @@ Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
 End Sub
 
 ' ============================================================
-' 39. Otkup bez generacije NE SME da stornira oba otkupna mesta
+' 39. Storno otkupa ide po OtkupID-u i ne dira tudje otkupno mesto (S1e)
 ' ============================================================
 ' BrojDokumenta otkupa je scoped PO OTKUPNOM MESTU (KIND_OTK, entitet je
-' stanica), pa isti broj na dva OM-a postoji legitimno. Writer je do sada bez
-' generacije skupljao SVE aktivne redove tog broja -- zatecen zapis bez
-' generacije je tako mogao da obori i tudji dokument.
+' stanica), pa isti broj na dva OM-a postoji legitimno (fixture 7/150326:
+' OTK-KOL-A na STANICA, OTK-KOL-B na STANICA2). Otkup je jedno zaglavlje po
+' dokumentu, pa ekran salje OtkupID reda i on putuje do mutacije.
 '
-' Test je na WRITERU, ne na preflight-u: preflight se moze zaobici (legacy
-' forma, kaskada), writer ne moze.
-Private Sub T_OtkupBezGeneracije_NeStorniraTudjeOM()
-    Dim ok As Boolean, greska As String
+' Mereno kroz F8 ulaz (StornoRazlog + StornoIzvrsi): bez OtkupID-a se ne
+' razresava po broju, a sa ID-em dokumenta B se stornira B -- ne prvi red tog
+' broja (A).
+Private Sub T_OtkupStornoPoID_NeDiraTudjeOM()
+    Dim ok As Boolean, msg As String
 
     AssertEq VlasniciPoBroju(TBL_OTKUP, COL_OTK_BR_DOK, FX_OTKUP_KOLIZIJA, _
                              "T_Otk", False, Array(COL_OTK_STANICA)).count, 2, _
              "preduslov: isti broj na DVA otkupna mesta"
 
-    ' BEZ generacije -- mora stati, i nista ne sme da se promeni.
-    On Error Resume Next
-    ok = StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA)
-    greska = Err.description
-    On Error GoTo 0
-    AssertEq ok, False, "bez generacije dvosmislen broj otkupa se odbija"
+    ' BEZ OtkupID-a -- kapija i izvrsenje staju, nista se ne menja.
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", "")) > 0), True, _
+             "otkup bez OtkupID-a se ne razresava po broju (kapija)"
+    ok = modStornoDok.StornoIzvrsi(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", msg, "")
+    AssertEq ok, False, "otkup bez OtkupID-a se ne stornira"
     AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), False, _
              "posle odbijanja dokument A nije diran"
     AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
              "posle odbijanja dokument B nije diran"
 
-    ' SA generacijom -- prolazi, i dira samo svoj dokument.
-    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A", "GEN-OTK-A"
-    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B", "GEN-OTK-B"
-    AssertEq StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA, "GEN-OTK-A"), True, _
-             "sa generacijom storno prolazi"
-    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), True, _
-             "storniran je izabran dokument"
-    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
-             "dokument drugog otkupnog mesta OSTAJE aktivan"
+    ' SA OtkupID-em dokumenta B -- stornira se B, A ostaje.
+    AssertEq modStornoDok.StornoRazlog(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", "OTK-KOL-B"), "", _
+             "kapija pusta izabran dokument po OtkupID-u"
+    ok = modStornoDok.StornoIzvrsi(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", msg, "OTK-KOL-B")
+    AssertEq ok, True, "storno po OtkupID-u prolazi"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), True, _
+             "storniran je izabran dokument (B)"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), False, _
+             "prvi red istog broja sa drugog otkupnog mesta (A) OSTAJE aktivan"
+
+    ' Storniran ID se ne stornira ponovo.
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", "OTK-KOL-B")) > 0), True, _
+             "storniran OtkupID ne prolazi kapiju"
 End Sub
 
 ' ============================================================
@@ -3364,7 +3368,7 @@ End Sub
 ' StornoRazlog to ne hvata: on pita sme li se dokument stornirati, ne da li sada
 ' treba framework ispravke.
 Private Sub T_StornoAkcije_RefreshInvalidiraOdluku()
-    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BIM_BLOK1_BR, FX_BLOK, ""
 
     ' Odluka se izracuna i kesira.
     AssertEq (modScrStorno.Scr_BrojAkcija() > 0), True, _
@@ -3414,7 +3418,7 @@ Private Sub T_StornoBezUvida_NemaAkcije()
 
     ' Tip koji uvid i NEMA (otkup nije framework tip) i dalje nudi obican storno --
     ' inace bi kapija zakljucala i ono sto uvid nikad nije ni imalo.
-    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BIM_BLOK1_BR, FX_BLOK, ""
     AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "tip bez uvida i dalje nudi obican storno"
 
@@ -3751,7 +3755,7 @@ End Sub
 Private Sub T_StornoEkran_NeCuriGreska()
     Dim brojPosle As Long
 
-    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BIM_BLOK1_BR, FX_BLOK, ""
 
     ' Handler koji je gresku PROGUTAO -- bez toga se Err.Clear u Scr_Event ne
     ' moze izmeriti: nijedna danasnja grana ne ostavlja Err ziv, pa je tvrdnja

@@ -2799,7 +2799,43 @@ kroz `COL_OKS_*`.
 **Merenje:** `popis_citalaca.py` `x_otk_stavka` 0 (PROD i TEST), `x_vreme_unosa` 0; `gen_schema_module.py --check` u koraku;
 `who_writes --check` / `--check-ownership` 0. Preostalih 15 `otk_linija` su polja koja ostaju na zaglavlju (`TipAmbalaze`, `KolAmbIzdata`).
 
-**S1 je završen.** Sledeći slajs po §14.9: **S2 — banka po ID-u**.
+**S1 nije završen bez S1e** (review #358): S1d fizički završava stari data grain, ali storno i štampa još nose model
+„više zaglavlja po klasi“. Sledeći korak: **S1e**.
+
+#### S1e — identitet otkupa: UI → `OtkupID` → mutacija (17.09.2026)
+
+**Pre-flight (review #358):**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | otkup = jedno zaglavlje + 1..2 stavke (§14.10 S1d); broj je labela, jedinstven tek po (OM, dan) — `KIND_OTK` |
+| `IDENTITY` | PROVEN posle S1e | F1 i F8 nose nevidljiv `OtkupID` (`modScrDokumenti.IdKolonaTipa("OTKUP") = COL_OTK_ID`); `GeneracijaID` otkupni pisac ne upisuje, pa je F8 za OTKUP stvarno radio po broju |
+| `CARDINALITY` | PROVEN | jedan dokument = jedan `OtkupID`; nema „svih redova broja“ |
+| `INVARIANTS/OWNER` | PROVEN | `modStorno.StornoOtkup` (zurnal op, ambalaža, novac) nepromenjen; kaskada autohladnjače pripada `StornoOtkup_TX` |
+| `WRITERS` | PROVEN | isti pisac (`StornoOtkup`); menja se samo ulaz. `StornoOtkupByBrDok_TX` i `StornoSelectedBlocks_TX` obrisani |
+| `DOWNSTREAM` | PROVEN | zurnal op i dalje nosi broj kao LABELU (`BeginStornoOp` u `StornoOtkup`), `RowID` = `OtkupID`; undo u Oporavku ide po `OperationID`. F8 za OTKUP nema tok ispravke ni uvid (`TipUFlowDoc` = "") |
+| `CAPABILITY` | PROVEN | štampa i storno iz F1, storno iz F8, ponuda ispravke autohladnjače, reprint iz izveštaja — ostaju; dodatni storno blokova (bez UI pozivaoca od S1b-1) vraća S3 |
+| `ACCEPTANCE` | plan → test | `T_OtkupStornoPoID_NeDiraTudjeOM`: isti broj na dva OM-a, bez ID-a odbija, sa ID-em B stornira B a A ostaje; sabotaža `otkup-storno-po-broju` |
+| `PLATFORM` | N/A | nema nove Excel/COM pretpostavke; nevidljiva kolona je postojeći mehanizam F8 |
+| `LANDING` | stack na S1d (#358) | PR se otvara posle merge-a #358 |
+
+**Izmene:**
+
+| Tačka review-a | Šta | Gde |
+|---|---|---|
+| 1. F1 red nosi `OtkupID` | `Scr_Rows` traži kolonu identiteta za OTKUP; `RowAction` čita `OtkupID` iz nje (`IdentKolonaIndeks`, deljen sa F8); štampa `OutputOtkupniList otkupID`; prazan ID = „nema reda“ | `modScrDokumenti` |
+| 2. kanonski storno po ID-u | `StornoOtkup_TX(otkupID)` nosi i kaskadu autohladnjače (stanica i `BrojZbirne` sa istog zaglavlja); `StornoOtkupByBrDok_TX` obrisan | `modStorno` |
+| 3. `HladnjacaLanac` po ID-u | stanica i zbirna se čitaju po `OtkupID`; ponuda ispravke prefiluje po `OtkupID` | `modScrDokumenti` |
+| 4. F8 `docID` = `OtkupID` | `StornoRazlog`/`StornoIzvrsi` za OTKUP: `OtkupAktivanPoID(docID)`, prazan ID se ne razrešava po broju | `modStornoDok` |
+| 5. brisanje broj-ulaza | `OtkupIdsByBrDok`, `StornoOtkupByBrDok_TX`, `StornoSelectedBlocks_TX` (bez UI pozivaoca, grupisao po broju) | — |
+| — | reprint iz izveštaja više ne širi na sve redove istog broja | `modPrint.ReprintOtkupniListByOtkupID` |
+| 6. testovi dva zaglavlja | obrisani `Test_StornoJournalDualClass_Auto`, `Test_StornoJournalPartialClass_Auto`, `Test_StornoJournalEmptyBrDok_Auto`, `Test_StornoSelectedBlocks_Auto`; `T_OtkupBezGeneracije_NeStorniraTudjeOM` → `T_OtkupStornoPoID_NeDiraTudjeOM`; F8 seam testovi šalju (broj, `OtkupID`); `Test_StornoKaskadaScopePoLancu` i golden D3 storniraju po ID-u | testovi |
+
+**Ostaje (svesno, van S1e):** zurnal ključ operacije otkupa je i dalje (tip, broj) kao labela — `LatestOpFor`/`UndoStorno_TX(tip, broj)`
+(samo makro `Test_UndoStorno`) traže po broju; UI oporavka ide po `OperationID`. Testovi „isti broj, dva dokumenta“
+(`ReusedBroj`, `DeadParentOtherGen`) ostaju: mere ponovno korišćen broj, ne model po klasi. → S9.
+
+Sledeći korak: **S2 — banka po ID-u** (posle provere S1d + S1e u Excelu).
 
 ## 15) Backlog — namerno van opsega
 

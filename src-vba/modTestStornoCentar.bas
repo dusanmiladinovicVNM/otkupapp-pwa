@@ -32,22 +32,18 @@ Public Sub Test_StornoCentar_All()
     Test_OtkupBlockDeadParent_Auto
     Test_BuildStornoImpact_Auto
     Test_GetActiveDocumentsForStorno_Auto
-    Test_StornoSelectedBlocks_Auto
     Test_GetNedovrseno_Auto
     Test_UndoReverseGuard_Auto
     Test_ZbirnaRecalcInPlace_Auto
     Test_PonistenjePrijemniceKaskada_Auto
     Test_StornoJournalUndo_Auto
-    Test_StornoJournalDualClass_Auto
     Test_StornoJournalReversGuard_Auto
     Test_StornoReversPoStanici_Auto
     Test_StornoReversGranicaRID_Auto
     Test_StornoReversOpisStanice_Auto
     Test_StornoJournalUndoValidation_Auto
     Test_StornoJournalDrift_Auto
-    Test_StornoJournalPartialClass_Auto
     Test_StornoJournalMixedOp_Auto
-    Test_StornoJournalEmptyBrDok_Auto
     Test_StornoJournalReusedBroj_Auto
     Test_StornoJournalDeadParentOtherGen_Auto
     Test_StornoJournalEmptyBrDokUndo_Auto
@@ -195,34 +191,6 @@ EH:
     Debug.Print "FAIL Test_StornoJournalDrift_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
-' P2 partial-class: storno SAMO Klase I; Klasa II ostaje aktivna; undo Klase I mora
-' PROCI (per (broj,klasa) guard, ne broj-level koji bi preblokirao).
-Public Sub Test_StornoJournalPartialClass_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
-
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-PC-1", "SVT-PC-B")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-PC-2", "SVT-PC-B")
-    ' storniraj SAMO Klasu I (selektivno)
-    Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-PC-1"
-    TcChk StornoSelectedBlocks_TX(sel) = 1, "selektivni storno Klase I -> 1"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-PC-2", COL_STORNIRANO))) <> "DA", "Klasa II ostaje aktivna"
-    ' undo Klase I MORA proci iako je Klasa II aktivna (nije dup po (broj,klasa))
-    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-PC-B") = True, "undo Klase I uz aktivnu Klasu II -> PROLAZI"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-PC-1", COL_STORNIRANO))) <> "DA", "Klasa I vracena"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoJournalPartialClass_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
 ' P2 pomesana operacija: jedan OperationID sa dva razlicita Broja -> undo odbijen (corrupt).
 Public Sub Test_StornoJournalMixedOp_Auto()
     Dim tx As clsTransaction
@@ -243,30 +211,6 @@ Public Sub Test_StornoJournalMixedOp_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_StornoJournalMixedOp_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' P2 prazan BrDok: dva unbound bloka (bez broja) -> DVE odvojene operacije (ne spajaju se).
-Public Sub Test_StornoJournalEmptyBrDok_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
-
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-EB-1", "")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-EB-2", "")
-    Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-EB-1": sel.Add "SVT-EB-2"
-    TcChk StornoSelectedBlocks_TX(sel) = 2, "storno 2 unbound bloka -> 2"
-    ' oba zurnalisana pod ZASEBNIM OperationID (broj je "" ali RowID/PK ih razdvaja)
-    TcChk TcDistinctOpsForRow(TBL_OTKUP, "SVT-EB-1") <> TcDistinctOpsForRow(TBL_OTKUP, "SVT-EB-2"), "unbound blokovi -> razliciti OperationID (ne spojeni)"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoJournalEmptyBrDok_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Storno-zurnal: LOSSLESS "Vrati storno" za otkup -> storno obrise tblNovac.OtkupID,
@@ -311,35 +255,6 @@ Public Sub Test_StornoJournalUndo_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_StornoJournalUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' Blocker 3 fix: dvoklasni otkup (StornoOtkupByBrDok_TX) -> JEDAN OperationID ->
-' undo vraca OBE klase (ranije je LatestOpFor davao samo poslednju klasu).
-Public Sub Test_StornoJournalDualClass_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL
-
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DC-1", "SVT-DC-B")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DC-2", "SVT-DC-B")
-
-    TcChk StornoOtkupByBrDok_TX("SVT-DC-B") = True, "StornoOtkupByBrDok_TX (dvoklasni) -> True"
-    TcChk Len(LatestOpFor(DOK_TIP_OTKUP, "SVT-DC-B")) > 0, "dvoklasni -> zabelezen op"
-    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-DC-B") = True, "undo dvoklasnog -> True"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-DC-1", COL_STORNIRANO))) <> "DA", "Klasa I vracena"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-DC-2", COL_STORNIRANO))) <> "DA", "Klasa II vracena (isti op)"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoJournalDualClass_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Blocker 2 fix: journaled revers undo NE zaobilazi #134 dup-gardu.
@@ -1037,35 +952,6 @@ Public Sub Test_GetActiveDocumentsForStorno_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_GetActiveDocumentsForStorno_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' StornoSelectedBlocks_TX: atomican storno N blokova; -1 + rollback na los ID.
-Public Sub Test_StornoSelectedBlocks_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-1", "SVT-SB-D1")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-2", "SVT-SB-D2")
-
-    Dim good As Collection: Set good = New Collection: good.Add "SVT-SB-1": good.Add "SVT-SB-2"
-    TcChk StornoSelectedBlocks_TX(good) = 2, "storno 2 bloka -> vraca 2"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-1", COL_STORNIRANO))) = "DA", "blok 1 storniran"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-2", COL_STORNIRANO))) = "DA", "blok 2 storniran"
-
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-3", "SVT-SB-D3")
-    Dim mix As Collection: Set mix = New Collection: mix.Add "SVT-SB-3": mix.Add "SVT-SB-BAD"
-    TcChk StornoSelectedBlocks_TX(mix) = -1, "los ID -> -1 (rollback)"
-    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-3", COL_STORNIRANO))) <> "DA", "atomicnost: blok 3 ostao AKTIVAN"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoSelectedBlocks_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' IzdatoStatus gate: prazno/IZDATO -> izdato; DRAFT -> nije izdato.

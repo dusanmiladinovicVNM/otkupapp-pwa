@@ -273,7 +273,7 @@ End Function
 ' Prva kolona nosi kvacicu i menja se klikom na red; poslednja je NEVIDLJIVA i
 ' nosi OtkupID. Izbor se drzi po ID-u, ne po broju otkupa: broj se racuna po
 ' kooperantu i dva bloka lako dele isti, a ovaj spisak zavrsava u mutaciji
-' (StornoSelectedBlocks_TX).
+' (dodatni storno blokova; StornoSelectedBlocks_TX obrisan u S1e, vraca S3).
 '
 ' Redovi se citaju iz vec izgradjenog uvida (mImpact), ne ponovnim skeniranjem:
 ' isti model na osnovu koga zona tvrdi posledice mora da bude i izvor spiska nad
@@ -1033,10 +1033,7 @@ End Function
 ' Indeks nevidljive kolone identiteta: uvek POSLEDNJA koju je GridCols dodao.
 ' Racuna se iz istog niza koji je mreza dobila, pa ne moze da se razidje sa njim.
 Private Function IdentKolona(ByVal tip As String) As Long
-    If Len(modScrDokumenti.IdKolonaTipa(tip)) = 0 Then Exit Function
-    Dim cols As Variant: cols = modScrDokumenti.GridCols(tip, True)
-    If Not IsArray(cols) Then Exit Function
-    IdentKolona = UBound(cols) + 1
+    IdentKolona = modScrDokumenti.IdentKolonaIndeks(tip)
 End Function
 
 ' Kanonski identitet KLIKNUTOG reda. Prazno = tip ga nema (izvod) ili

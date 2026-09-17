@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S2 — banka po ID-u (posle provere S1d u Excelu)
+## Sledeći korak: S2 — banka po ID-u (posle provere S1d i S1e u Excelu)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -41,8 +41,11 @@
    (`OTK_STAVKE`) čitaju kanonske stavke; raspored OTK kolona na jednom mestu; `AutoCreateOtpremniceFromPWA` obrisan;
    health iz kanona (AUD-055); `x_otk_stavka` = 0; push `OTK_STAVKE` idempotentan po `OtkupStavkaID`. Spojen (#357).
 6. **S1d urađen** (§14.10 „S1d“): 8 kolona obrisano iz `tblOtkup` u kanonu i konstante `COL_OTK_*` iz `modConfig`;
-   zatečena sveska ih gubi kroz self-heal (`ObrisiKolonuAko`). Pre merge-a: pun `run_vba` + Compile. **S1 završen.**
-7. **Sledeće:** S2 — banka po ID-u (§14.9): poziv na broj se jednom razreši u `OtkupID`.
+   zatečena sveska ih gubi kroz self-heal (`ObrisiKolonuAko`). Pre merge-a: pun `run_vba` + Compile + self-heal nad sveskom.
+7. **S1e urađen** (review #358, §14.10 „S1e“): identitet otkupa UI → `OtkupID` → mutacija — F1 red nosi `OtkupID`,
+   štampa/storno/F8/hladnjača po ID-u; `StornoOtkupByBrDok_TX`, `OtkupIdsByBrDok`, `StornoSelectedBlocks_TX` obrisani;
+   testovi sa dva zaglavlja po klasi obrisani. Stack na S1d. **S1 završen posle S1e.**
+8. **Sledeće:** S2 — banka po ID-u (§14.9): poziv na broj se jednom razreši u `OtkupID`.
 
 ## Alati i kapije
 

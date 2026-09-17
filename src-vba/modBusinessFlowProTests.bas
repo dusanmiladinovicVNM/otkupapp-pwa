@@ -4209,7 +4209,7 @@ End Sub
 
 ' Kaskade mutiraju tblOtpremnica/tblPrijemnica po BrojZbirne, a vlasnik se cita iz
 ' zbirne -- zato se scope lanca razresava JEDNOM pre prve mutacije i child redovi se
-' filtriraju po njemu. Pokriva javni ulaz (StornoOtkupByBrDok_TX), sve tri kaskade,
+' filtriraju po njemu. Pokriva javni ulaz (StornoOtkup_TX po OtkupID-u), sve tri kaskade,
 ' single-owner happy path i fail-closed granu bez aktivnog parenta.
 Private Sub Test_StornoKaskadaScopePoLancu()
     Dim prevAuto As String, prevKupac As String
@@ -4242,7 +4242,10 @@ Private Sub Test_StornoKaskadaScopePoLancu()
                                   TEST_VRSTA, TEST_SORTA, 60#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
     AssertTrue Len(tudjaPrij) > 0, "Kaskada scope: tudja prijemnica na isti BrojZbirne kreirana"
 
-    AssertTrue StornoOtkupByBrDok_TX(brDok), _
+    Dim otkLanac As String
+    otkLanac = FindOtkupIDByBroj(brDok)
+    AssertTrue Len(otkLanac) > 0, "Kaskada scope: otkup lanca postoji"
+    AssertTrue StornoOtkup_TX(otkLanac), _
                "Kaskada scope: storno otkup bloka (single owner) prolazi"
 
     AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpI), _
@@ -4289,7 +4292,8 @@ Private Sub Test_StornoKaskadaScopePoLancu()
     Dim otkID As String
     otkID = FindOtkupIDByBroj(brDok2)
 
-    AssertFalse StornoOtkupByBrDok_TX(brDok2), _
+    AssertTrue Len(otkID) > 0, "Kaskada scope: otkup bez aktivne zbirne nadjen"
+    AssertFalse StornoOtkup_TX(otkID), _
                 "Kaskada scope: bez aktivne zbirne uz aktivan child -> storno je ODBIJEN"
     AssertTrue Len(orphanPrij) > 0 And Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, orphanPrij), _
                "Kaskada scope: osirocena prijemnica ostaje netaknuta"

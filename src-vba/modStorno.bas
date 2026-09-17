@@ -39,6 +39,14 @@ Private mTestFailPosleRelease As Boolean
 ' OTKUP
 ' ============================================================
 
+' KANONSKI ULAZ STORNA OTKUPA: po OtkupID-u (S1e). Otkup je jedno zaglavlje po
+' dokumentu, pa nema "svih redova broja" koje treba skupiti -- ID iz reda koji je
+' operater izabrao putuje do mutacije bez ponovnog trazenja po broju.
+'
+' Autohladnjaca: lanac (otpremnica + zbirna + prijemnica) je auto-generisan iz
+' ovog otkupa i deli njegov BrojZbirne, pa storno otkupa povlaci i njih. Stanica
+' i BrojZbirne se citaju sa ISTOG zaglavlja (po ID-u). Gejt je stanica-hladnjaca
+' (struktura), ne toggle: bez lanca je kaskada no-op.
 Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
     Const SRC As String = "StornoOtkup_TX"
 
@@ -47,15 +55,45 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
 
     On Error GoTo EH
 
+    RequireNonBlank otkupID, "OtkupID", SRC
+
+    Dim stanicaID As String, brojZbirne As String
+    stanicaID = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA)))
+    brojZbirne = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE)))
+
+    Dim hladnjacaBlock As Boolean
+    hladnjacaBlock = (Len(stanicaID) > 0) And (Len(brojZbirne) > 0)
+    If hladnjacaBlock Then hladnjacaBlock = IsHladnjacaStanica(stanicaID)
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_STORNO_ZURNAL    ' zurnal upisi teku u istoj TX -> rollback ih povlaci
+    If hladnjacaBlock Then
+        tx.AddTableSnapshot TBL_OTPREMNICA
+        tx.AddTableSnapshot TBL_ZBIRNA
+        tx.AddTableSnapshot TBL_PRIJEMNICA
+        tx.AddTableSnapshot TBL_FAKTURE
+        tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    End If
 
+    ' StornoOtkup otvara i zatvara SVOJ zurnal op, pa kaskada ispod NE ulazi u
+    ' operaciju otkupa.
     If Not StornoOtkup(otkupID) Then
         Err.Raise ERR_STORNO_BASE + 1, SRC, _
                   "StornoOtkup nije uspeo. OtkupID=" & otkupID
+    End If
+
+    ' Kaskada: faktura se NAMERNO ne dira. Scope se razresava JEDNOM, pre prve
+    ' mutacije: prva kaskada obara zbirnu, pa bi kasnije razresavanje videlo
+    ' "nema aktivnog parenta".
+    If hladnjacaBlock Then
+        Dim scVoz As String, scKup As String, scOK As Boolean
+        scOK = ResolveZbirnaChainScope(brojZbirne, SRC, scVoz, scKup)
+        StornoOtpremnicaCascade brojZbirne, SRC, scVoz, scOK
+        StornoZbirnaCascade brojZbirne, SRC, scVoz, scKup, scOK
+        StornoPrijemnicaCascade brojZbirne, SRC, scVoz, scKup, scOK
     End If
 
     tx.CommitTx
@@ -71,9 +109,6 @@ EH:
     StornoOtkup_TX = False
 End Function
 
-' Storno SVIH otkup redova za dati broj dokumenta. Klasa I i Klasa II dele isti
-' BrDok (zaseban OtkupID po klasi) -> storno dokumenta mora obuhvatiti OBE.
-' Atomicno: jedna transakcija, unutra reuse StornoOtkup po svakom OtkupID.
 ' ============================================================
 ' Pripada li red IZABRANOM dokumentu
 ' ============================================================
@@ -98,123 +133,6 @@ Private Function RedJeIzabranogDokumenta(ByRef data As Variant, ByVal i As Long,
                   COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
     End If
     RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
-End Function
-
-Public Function StornoOtkupByBrDok_TX(ByVal brDok As String, _
-                                      Optional ByVal generacijaID As String = "") As Boolean
-    Const SRC As String = "StornoOtkupByBrDok_TX"
-
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    RequireNonBlank brDok, "BrDok", SRC
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL    ' StornoOtkup usput journalise -> rollback ga povlaci
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then
-        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTKUP
-    End If
-
-    Dim colBr As Long, colID As Long, colStorno As Long, colSta As Long, colZbr As Long
-    ' BEZ GENERACIJE -> kapija nad brojem. BrojDokumenta otkupa je scoped po
-    ' OTKUPNOM MESTU (KIND_OTK, entitet = stanica), pa isti broj kod dva OM-a
-    ' postoji legitimno. Bez ovoga bi zatecen zapis bez generacije stornirao oba.
-    If Len(Trim$(generacijaID)) = 0 Then _
-        RequireJedanVlasnikPoBroju TBL_OTKUP, COL_OTK_BR_DOK, brDok, SRC, COL_OTK_STANICA
-
-    colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
-    Dim colGen As Long: colGen = GetColumnIndex(TBL_OTKUP, COL_GENERACIJA_ID)
-    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
-    colStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
-    colSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    colZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-
-    ' Sakupi OtkupID-jeve SVIH aktivnih redova za ovaj broj dokumenta (obe klase).
-    ' Usput zapamti stanicu i BrojZbirne (za autohladnjaca kaskadu nize).
-    Dim ids As Collection: Set ids = New Collection
-    Dim zbrSet As Object: Set zbrSet = CreateObject("Scripting.Dictionary")
-    Dim stanicaID As String
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brDok, generacijaID, SRC) Then
-            If Not IsStorniranoValue(data(i, colStorno)) Then
-                ids.Add Trim$(CStr(data(i, colID)))
-                If colSta > 0 Then stanicaID = Trim$(CStr(data(i, colSta)))
-                If colZbr > 0 Then
-                    Dim bz As String: bz = Trim$(CStr(data(i, colZbr)))
-                    If bz <> "" Then zbrSet(bz) = True
-                End If
-            End If
-        End If
-    Next i
-
-    If ids.count = 0 Then
-        Err.Raise ERR_STORNO_BASE + 9, SRC, _
-                  "Nema aktivnog otkupa za broj dokumenta: " & brDok
-    End If
-
-    ' Autohladnjaca: ceo lanac (otpremnica+zbirna+prijemnica) je auto-generisan iz
-    ' ovog bloka i deli njegov BrojZbirne -> storno bloka povlaci i njih. Gejt je
-    ' stanica-hladnjaca (struktura), ne toggle: ako lanca nema, kaskada je no-op.
-    Dim hladnjacaBlock As Boolean
-    hladnjacaBlock = (Len(stanicaID) > 0) And IsHladnjacaStanica(stanicaID)
-    If hladnjacaBlock Then
-        tx.AddTableSnapshot TBL_OTPREMNICA
-        tx.AddTableSnapshot TBL_ZBIRNA
-        tx.AddTableSnapshot TBL_PRIJEMNICA
-        tx.AddTableSnapshot TBL_FAKTURE
-        tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    End If
-
-    ' JEDNA zurnal operacija za CEO dokument (obe klase istog broja) -> dvoklasni
-    ' otkup se vraca kao celina (LatestOpFor daje jedan OperationID). Inner StornoOtkup
-    ' pozivi vide aktivan op (owns=False) i dodaju celije istom OperationID-u.
-    ' Zatvara se PRE kaskade da otpremnica/zbirna/prijemnica NE udju u otkup op.
-    Dim ownsOp As Boolean: ownsOp = BeginStornoOp(DOK_TIP_OTKUP, brDok)
-    Dim k As Long
-    For k = 1 To ids.count
-        If Not StornoOtkup(CStr(ids(k))) Then
-            Err.Raise ERR_STORNO_BASE + 1, SRC, _
-                      "StornoOtkup nije uspeo. OtkupID=" & CStr(ids(k))
-        End If
-    Next k
-    EndStornoOp ownsOp
-
-    ' Autohladnjaca kaskada: za svaki BrojZbirne bloka obori otpremnicu, zbirnu i
-    ' prijemnicu (idempotentno; faktura se NAMERNO ne dira). Van hladnjace: preskace.
-    If hladnjacaBlock Then
-        Dim z As Variant
-        Dim scVoz As String, scKup As String, scOK As Boolean
-        For Each z In zbrSet.Keys
-            ' Scope se razresava JEDNOM, pre prve mutacije: prva kaskada obara
-            ' zbirnu, pa bi kasnije razresavanje videlo "nema aktivnog parenta".
-            scOK = ResolveZbirnaChainScope(CStr(z), SRC, scVoz, scKup)
-            StornoOtpremnicaCascade CStr(z), SRC, scVoz, scOK
-            StornoZbirnaCascade CStr(z), SRC, scVoz, scKup, scOK
-            StornoPrijemnicaCascade CStr(z), SRC, scVoz, scKup, scOK
-        Next z
-    End If
-
-    tx.CommitTx
-
-    StornoOtkupByBrDok_TX = True
-    MonitorStornoSuccess SRC, "Otkup", brDok
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    EndStornoOp ownsOp                     ' ne ostavi op-kontekst otvoren posle greske
-    HandleStornoTxError SRC, "Otkup", brDok, tx
-    StornoOtkupByBrDok_TX = False
 End Function
 
 Public Function StornoOtkup(ByVal otkupID As String) As Boolean

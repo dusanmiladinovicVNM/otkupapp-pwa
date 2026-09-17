@@ -108,6 +108,15 @@ Private Function AktivanPoIdentitetu(ByVal tblName As String, ByVal brojCol As S
         LookupValue(tblName, idCol, CStr(ids.Keys()(0)), COL_STORNIRANO)))) <> "DA")
 End Function
 
+' Otkup po PK: postoji i nije storniran. Prazan ID = False (fail-closed).
+Private Function OtkupAktivanPoID(ByVal otkupID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    If FindRows(TBL_OTKUP, COL_OTK_ID, Trim$(otkupID)).count <> 1 Then Exit Function
+    OtkupAktivanPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_OTKUP, COL_OTK_ID, Trim$(otkupID), COL_STORNIRANO)))) <> "DA")
+End Function
+
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
@@ -122,8 +131,9 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
 
     Select Case tip
         Case STIP_OTKUP
-            If Not AktivanPoIdentitetu(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_ID, broj, docID) Then _
-                StornoRazlog = NijePronadjen(broj)
+            ' Identitet otkupa je OtkupID izabranog reda (S1e). Bez njega se ne
+            ' pogadja po broju: broj je jedinstven tek po (OM, dan).
+            If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)
 
         Case STIP_OTPREMNICA
             If Not AktivanPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, docID) Then _
@@ -251,9 +261,13 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
 
     Select Case tip
         Case STIP_OTKUP
-            ' Klasa I i II dele isti BrDok (zaseban red po klasi) -> stornira
-            ' se ceo dokument, ne jedan red. Isto sto radi F1 lista.
-            ok = StornoOtkupByBrDok_TX(broj, docID)
+            ' Jedan dokument = jedno zaglavlje = jedan OtkupID (S1e). Prazan ID
+            ' se ne razresava po broju.
+            If Not OtkupAktivanPoID(docID) Then
+                poruka = NijePronadjen(broj)
+                Exit Function
+            End If
+            ok = StornoOtkup_TX(Trim$(docID))
 
         Case STIP_OTPREMNICA
             ' i ovde klase dele broj

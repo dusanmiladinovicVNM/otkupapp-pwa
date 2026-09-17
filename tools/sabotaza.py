@@ -592,12 +592,8 @@ SABOTAZE = {
     # --- kapije storna ------------------------------------------------------
     "storno-nema-dok": (
         "modStornoDok.bas",
-        "        Case STIP_OTKUP\n"
-        "            If Not AktivanPoIdentitetu(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_ID, broj, docID) Then _\n"
-        "                StornoRazlog = NijePronadjen(broj)\n",
-        "        Case STIP_OTKUP\n"
-        "            ' SABOTAZA: nepostojeci otkup prolazi kapiju\n"
-        "            If False Then StornoRazlog = NijePronadjen(broj)\n",
+        "            If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)\n",
+        "            If False Then StornoRazlog = NijePronadjen(broj)   ' SABOTAZA: nepostojeci otkup prolazi kapiju\n",
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument",
     ),
@@ -1085,15 +1081,14 @@ SABOTAZE = {
         "T_ZavrsetakIspravke_NeDegradiraOldDocID",
         "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici",
     ),
-    # Otkup bez generacije bez kapije nad brojem. BrojDokumenta je scoped po
-    # otkupnom mestu, pa storno po broju hvata i tudje OM.
-    "otkup-bez-kapije": (
-        "modStorno.bas",
-        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
-        "        RequireJedanVlasnikPoBroju TBL_OTKUP, COL_OTK_BR_DOK, brDok, SRC, COL_OTK_STANICA\n",
-        "    ' SABOTAZA: dvosmislen broj otkupa vise ne zaustavlja storno\n",
-        "T_OtkupBezGeneracije_NeStorniraTudjeOM",
-        "bez generacije dvosmislen broj otkupa se odbija",
+    # Storno otkupa po BROJU umesto po OtkupID-u izabranog reda (S1e): broj je
+    # scoped po otkupnom mestu, pa prvi red broja moze biti tudji dokument.
+    "otkup-storno-po-broju": (
+        "modStornoDok.bas",
+        "            ok = StornoOtkup_TX(Trim$(docID))\n",
+        "            ok = StornoOtkup_TX(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID))   ' SABOTAZA: po broju\n",
+        "T_OtkupStornoPoID_NeDiraTudjeOM",
+        "prvi red istog broja sa drugog otkupnog mesta (A) OSTAJE aktivan",
     ),
     # "Jedini vlasnik" po distinct BROJU umesto po dokumentima.
     "sole-owner-po-broju": (
