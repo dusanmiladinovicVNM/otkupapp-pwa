@@ -2775,6 +2775,32 @@ pogrešan redosled naslova pada. Sabotaže `push-stavke-retry-dupla`, `push-stav
 
 Sledeći korak: **S1d**.
 
+#### S1d — urađeno: linijske kolone obrisane iz `tblOtkup` (17.09.2026)
+
+**Kanon:** iz `schema/schema.json` (`tblOtkup`) obrisano 8 kolona — `Kolicina`, `Cena`, `Klasa`, `KolAmbalaze`, `BrutoKg`
+(polja stavke, `tblOtkupStavke`), `Novac`, `PrimalacNovca` (pripadaju `tblNovac`), `VremeUnosa` (zamenjen sa
+`CreatedAt`/`SourceCreatedAt`); `modSchema.bas` regenerisan (37 → 29 kolona, otisak `5EC25CB1`). Iz `modConfig` obrisane
+konstante `COL_OTK_KOLICINA/CENA/KLASA/KOL_AMB/BRUTO/NOVAC/PRIMALAC/VREME_UNOSA` — **kompajl bez njih je dokaz nula čitalaca**.
+
+**Zatečena sveska:** kolone su obrisane iz SREDINE kanona, a upis je pozicioni (`SchemaReadyOrFail` poredi po indeksu).
+Self-heal na startu (`modSetup.EnsureSledljivostSchema`, grana `tblOtkup`) ih briše kroz postojeći `ObrisiKolonuAko`, isto kao
+`Isplaceno`/`DatumIsplate` u PR6; `run_vba` zove `EnsureRuntimeSchema` posle uvoza. Podatak u njima se gubi namerno (nema
+produkcije; istina je na stavkama). `EnsureDoradeSchema` više ne dodaje `VremeUnosa`.
+
+**Testovi (samo fixture-i, bez izmene ponašanja):** seed-ovi otkupa u `modTestBanka` (4), `modTestStorno` (2),
+`modTestStornoCentar` (16), `modFakturaTests`, `modNovacTests` i RF-28 fixture (`AppendRF28OtkupFixture` bez `klasa`/`cena`)
+ne pišu obrisane kolone — nijedan produkcioni čitalac ih više nije čitao, pa se merenje ne menja.
+`Test_OTK_HeaderNeNosiLinePolja` sada tvrdi da **kolone ne postoje** (ne da su prazne); tvrdnje „zaglavlje ne nosi
+količinu“ u 4 testa obrisane (pokriva ih prethodni). Obrisan `FindOtkupIDByBrojAndKlasa` i dve tvrdnje „ne nalazi se po
+(broj, klasa)“. `Test_HladnjacaChainLinkFailureIsReported` sada nalazi otkup po broju — ranije je tražio po klasi, dobijao
+prazan ID i tvrdnja „otkup NIJE povezan“ je prolazila nad praznim ključem (lažno zeleno). `OtkMrezaRed` čita kolone mreže
+kroz `COL_OKS_*`.
+
+**Merenje:** `popis_citalaca.py` `x_otk_stavka` 0 (PROD i TEST), `x_vreme_unosa` 0; `gen_schema_module.py --check` u koraku;
+`who_writes --check` / `--check-ownership` 0. Preostalih 15 `otk_linija` su polja koja ostaju na zaglavlju (`TipAmbalaze`, `KolAmbIzdata`).
+
+**S1 je završen.** Sledeći slajs po §14.9: **S2 — banka po ID-u**.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

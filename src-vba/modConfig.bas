@@ -177,20 +177,15 @@ Public Const COL_OTK_STANICA As String = "StanicaID"
 Public Const COL_OTK_KULTURA As String = "KulturaID"
 Public Const COL_OTK_VRSTA As String = "VrstaVoca"
 Public Const COL_OTK_SORTA As String = "SortaVoca"
-Public Const COL_OTK_KOLICINA As String = "Kolicina"
-Public Const COL_OTK_CENA As String = "Cena"
 Public Const COL_OTK_TIP_AMB As String = "TipAmbalaze"
-Public Const COL_OTK_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTK_KOL_AMB_IZDATA As String = "KolAmbIzdata"   ' OM izdao prazne kooperantu uz otkup (OM-Izlaz-Koop)
-Public Const COL_OTK_VREME_UNOSA As String = "VremeUnosa"        ' timestamp snimanja otkupa (Now() pri upisu)
-Public Const COL_OTK_BRUTO As String = "BrutoKg"                 ' bruto tezina uneta na otkupu (kad je OTKUP_BRUTO_UNOS); prazno = unet neto
 Public Const COL_OTK_VOZAC As String = "VozacID"
 Public Const COL_OTK_BR_DOK As String = "BrojDokumenta"
-Public Const COL_OTK_NOVAC As String = "Novac"
-Public Const COL_OTK_PRIMALAC As String = "PrimalacNovca"
-Public Const COL_OTK_KLASA As String = "Klasa"
 Public Const COL_OTK_STORNIRANO As String = "Stornirano"
 Public Const COL_OTK_BROJ_ZBIRNE As String = "BrojZbirne"
+' Kolicina, Cena, Klasa, KolAmbalaze i BrutoKg su polja STAVKE (tblOtkupStavke,
+' COL_OKS_*); Novac/PrimalacNovca pripadaju tblNovac; VremeUnosa je zamenjen
+' sa CreatedAt/SourceCreatedAt. Sve je obrisano iz tblOtkup u S1d.
 ' Isplaceno i DatumIsplate su OBRISANI iz tblOtkup (korak 7). Bili su kes
 ' obrisanog UpdateOtkupStatus; status isplate je izveden iz vrednosti stavki i
 ' zbira isplata u tblNovac (modNovac.GetOpenOtkupi).

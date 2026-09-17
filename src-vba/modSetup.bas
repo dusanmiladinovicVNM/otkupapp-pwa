@@ -1295,6 +1295,18 @@ Public Sub EnsureSledljivostSchema()
             ' modSchema to i prijavljuje po poziciji.
             ObrisiKolonuAko t, "Isplaceno"
             ObrisiKolonuAko t, "DatumIsplate"
+            ' S1d: polja stavke (Kolicina, Cena, Klasa, KolAmbalaze, BrutoKg) zive u
+            ' tblOtkupStavke; Novac/PrimalacNovca pripadaju tblNovac; VremeUnosa je
+            ' zamenjen sa CreatedAt/SourceCreatedAt. Obrisani iz kanona iz SREDINE,
+            ' pa zatecena sveska mora da ih izgubi pre prvog pozicionog upisa.
+            ObrisiKolonuAko t, "Kolicina"
+            ObrisiKolonuAko t, "Cena"
+            ObrisiKolonuAko t, "KolAmbalaze"
+            ObrisiKolonuAko t, "Novac"
+            ObrisiKolonuAko t, "PrimalacNovca"
+            ObrisiKolonuAko t, "Klasa"
+            ObrisiKolonuAko t, "VremeUnosa"
+            ObrisiKolonuAko t, "BrutoKg"
             PreimenujKolonuAko t, COL_TRACE_ISPRAVKA_OD, COL_TRACE_ISPRAVKA_OD_ID
             PreimenujKolonuAko t, COL_TRACE_ZAMENJEN_SA, COL_TRACE_ZAMENJEN_SA_ID
             EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD_ID
@@ -1647,10 +1659,6 @@ Public Sub EnsureDoradeSchema()
     ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA
     BackfillColumn TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
-
-    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_VREME_UNOSA
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
 
     ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
     ' Prazno = unet neto (bruto == neto). Otkup nosi bruto NA STAVCI (kanon,

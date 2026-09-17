@@ -1342,8 +1342,8 @@ End Sub
 Private Sub SeedOtkupZaAvans(ByVal otkID As String, ByVal koopID As String, _
                              ByVal kolicina As Double, ByVal cena As Double)
     SvAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, COL_OTK_CENA), _
-        Array(otkID, otkID, koopID, kolicina, cena)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT), _
+        Array(otkID, otkID, koopID)
     SeedOtkupStavka otkID, kolicina, cena
 End Sub
 
@@ -1394,9 +1394,8 @@ End Sub
 ' stornira; zato T27 i moze da meri povratak duga.
 Private Sub SeedOtkupPlacen(ByVal otkID As String, ByVal kolicina As Double, ByVal cena As Double)
     SvAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA), _
-        Array(otkID, otkID, "SVT-KOOP-P", kolicina, cena)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT), _
+        Array(otkID, otkID, "SVT-KOOP-P")
     SeedOtkupStavka otkID, kolicina, cena
 End Sub
 

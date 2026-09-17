@@ -571,8 +571,6 @@ Private Sub Test_FullDocumentChainHappyPath()
     AssertDoubleNear 20#, CDbl(manjak(2)), 0.01, "Manjak kg"
 
     ' AutoLink i TraceByZbirna su obrisani u S1b-1 (stari model; vraca S3/S9).
-    AssertEquals "", FindOtkupIDByBrojAndKlasa(brojOtk, "I"), _
-                 "Cutover: otkup se vise ne nalazi po (broj, klasa)"
 
     Dim stavke As Collection
     Set stavke = New Collection
@@ -1857,7 +1855,7 @@ Private Sub Test_RF28_LinkKonfliktNePrepisuje()
     tx.AddTableSnapshot TBL_OTPREMNICA
 
     ' Otkup je VEC vezan na zbirnu A.
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid, brojA
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid, brojA
     AppendRF28ZbirnaFixture zbrID, testDate, TEST_VOZ_ID, brojB
 
     Dim raised As Boolean
@@ -1923,7 +1921,7 @@ Private Sub Test_RF28_MembershipKoristiSvojuZbirnu()
     AppendRF28ZbirnaFixture zbrStara, testDate, vozacDrugi, brojIsti
     AppendRF28ZbirnaFixture zbrNova, testDate, TEST_VOZ_ID, brojIsti
 
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid
 
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrNova, brojIsti, crid
 
@@ -1978,14 +1976,14 @@ Private Sub Test_RF28_MembershipDanskiProzor()
     AppendRF28ZbirnaFixture zbrID, zbrDate, TEST_VOZ_ID, brojZ
 
     ' Susedni dan -> dozvoljeno (samo LogWarn).
-    AppendRF28OtkupFixture otkBlizu, zbrDate - 1, TEST_VOZ_ID, "I", 100#, cridBlizu
+    AppendRF28OtkupFixture otkBlizu, zbrDate - 1, TEST_VOZ_ID, cridBlizu
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojZ, cridBlizu
 
     AssertEquals brojZ, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkBlizu, COL_OTK_BROJ_ZBIRNE))), _
         "RF-28 AUD-043b: otkup od prethodnog dana prolazi (post-midnight)"
 
     ' 10 dana razlike -> nije membership.
-    AppendRF28OtkupFixture otkDaleko, zbrDate - 10, TEST_VOZ_ID, "I", 100#, cridDaleko
+    AppendRF28OtkupFixture otkDaleko, zbrDate - 10, TEST_VOZ_ID, cridDaleko
 
     Dim raised As Boolean
     On Error Resume Next
@@ -2078,9 +2076,9 @@ Private Sub Test_RF28_VozacIDUpdateIshodi()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
 
-    AppendRF28OtkupFixture otkPrazan, testDate, "", "I", 100#, cridPrazan
-    AppendRF28OtkupFixture otkZauzet, testDate, TEST_VOZ_ID, "I", 100#, cridZauzet
-    AppendRF28OtkupFixture otkPad, testDate, "", "I", 100#, cridPad
+    AppendRF28OtkupFixture otkPrazan, testDate, "", cridPrazan
+    AppendRF28OtkupFixture otkZauzet, testDate, TEST_VOZ_ID, cridZauzet
+    AppendRF28OtkupFixture otkPad, testDate, "", cridPad
 
     Dim detail As String
 
@@ -2137,8 +2135,6 @@ End Sub
 Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
                                    ByVal datum As Date, _
                                    ByVal vozacID As String, _
-                                   ByVal klasa As String, _
-                                   ByVal cena As Double, _
                                    ByVal clientRecordID As String, _
                                    Optional ByVal brojZbirne As String = "", _
                                    Optional ByVal vrsta As String = TEST_VRSTA, _
@@ -2153,12 +2149,8 @@ Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_STANICA, TEST_ST_ID
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_VRSTA, vrsta
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_SORTA, sorta
-    SetRequiredField rowData, TBL_OTKUP, COL_OTK_KOLICINA, 100#
-    SetRequiredField rowData, TBL_OTKUP, COL_OTK_CENA, cena
-    SetRequiredField rowData, TBL_OTKUP, COL_OTK_KLASA, klasa
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_KULTURA, TEST_KULTURA_ID
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_TIP_AMB, tipAmb
-    SetOptionalField rowData, TBL_OTKUP, COL_OTK_KOL_AMB, 0
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_VOZAC, vozacID
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_BR_DOK, "RF28-" & otkupID
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, brojZbirne
@@ -3055,7 +3047,7 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
         "ZBR-FK preduslov: dva dokumenta pod istim brojem nose RAZLICITE generacije"
 
     AppendRF28OtpremnicaFixture otpID, testDate, TEST_VOZ_ID, brojOtp
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid, ""
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid, ""
     VeziOtkupZaOtpremnicuFixture otkID, otpID
 
     ' --- 1) prvi link DOVRSAVA praznu vezu ---
@@ -3084,7 +3076,7 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
     ' --- 3) ista kapija na otpremnickom pozivnom mestu ---
     ' Otkup2 je cist, pa njegova kapija pusta; otpremnica na koju pokazuje je vec
     ' dete GEN-A. Bez ovog koraka drugo pozivno mesto ostaje nemereno.
-    AppendRF28OtkupFixture otkID2, testDate, TEST_VOZ_ID, "I", 100#, crid2, ""
+    AppendRF28OtkupFixture otkID2, testDate, TEST_VOZ_ID, crid2, ""
     VeziOtkupZaOtpremnicuFixture otkID2, otpID
 
     raised = False
@@ -3794,8 +3786,8 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
 
     AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OA-" & scenario
     AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OB-" & scenario
-    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, "I", 100#, cridA, ""
-    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, "I", 100#, cridB, ""
+    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, cridA, ""
+    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, cridB, ""
     VeziOtkupZaOtpremnicuFixture otkA, otpA
     VeziOtkupZaOtpremnicuFixture otkB, otpB
 
@@ -5071,10 +5063,8 @@ End Function
 
 ' Otkup po BROJU DOKUMENTA -- bez klase.
 '
-' FindOtkupIDByBrojAndKlasa ispod trazi i Klasu NA ZAGLAVLJU. Posle cutover-a
-' zaglavlje je nema (klasa je svojstvo stavke), pa taj citac vise ne nalazi nista
-' -- i to je merena istina, ne kvar. Testovima kojima treba dokument, a ne red
-' po klasi, sluzi ovaj citac. Broj je jedinstven po stanici i danu, a u testovima
+' Klasa je svojstvo stavke; kolona Klasa na zaglavlju ne postoji od S1d.
+' Testovima kojima treba dokument sluzi ovaj citac. Broj je jedinstven po stanici i danu, a u testovima
 ' nosi i jedinstven scenario prefiks.
 Private Function FindOtkupIDByBroj(ByVal brojDok As String) As String
     On Error GoTo EH
@@ -5099,36 +5089,6 @@ Private Function FindOtkupIDByBroj(ByVal brojDok As String) As String
 
 EH:
     FindOtkupIDByBroj = ""
-End Function
-
-Private Function FindOtkupIDByBrojAndKlasa(ByVal brojDok As String, ByVal klasa As String) As String
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-
-    Dim colID As Long
-    Dim colBroj As Long
-    Dim colKlasa As Long
-
-    colID = RequireCol(TBL_OTKUP, "OtkupID")
-    colBroj = RequireCol(TBL_OTKUP, "BrojDokumenta")
-    colKlasa = RequireCol(TBL_OTKUP, "Klasa")
-
-    Dim i As Long
-    For i = UBound(data, 1) To 1 Step -1
-        If CStr(data(i, colBroj)) = brojDok _
-           And CStr(data(i, colKlasa)) = klasa Then
-            FindOtkupIDByBrojAndKlasa = CStr(data(i, colID))
-            Exit Function
-        End If
-    Next i
-
-    Exit Function
-
-EH:
-    FindOtkupIDByBrojAndKlasa = ""
 End Function
 
 Private Function GetTestParcelaID() As String
@@ -5391,8 +5351,6 @@ Private Sub Test_HladnjacaChainHappyPath()
     ' dve otpremnice. Bas zato kolona odlazi u PR7, a lanac je u pogonu pauziran.
     Dim otkID As String: otkID = FindOtkupIDByBroj(brDok)
     AssertTrue Len(otkID) > 0, "Hladnjaca lanac: dokument postoji po broju"
-    AssertEquals "", FindOtkupIDByBrojAndKlasa(brDok, KLASA_I), _
-        "Hladnjaca lanac: otkup se vise ne nalazi po (broj, klasa)"
     AssertEquals FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I), _
                  CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID")), _
         "Hladnjaca lanac: zaglavlje nosi SAMO otpremnicu Klase I (gubitna veza)"
@@ -5516,7 +5474,8 @@ Private Sub Test_HladnjacaChainLinkFailureIsReported()
     AssertTrue InStr(w, "nije povezan sa dokumentom") > 0, _
         "Pad linka: upozorenje prijavljuje nepovezan otkup red"
 
-    Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)
+    Dim otkID As String: otkID = FindOtkupIDByBroj(brDok)
+    AssertTrue Len(otkID) > 0, "Pad linka: dokument postoji po broju"
     AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID")), _
         "Pad linka: otkup red stvarno NIJE povezan"
 
@@ -6726,9 +6685,7 @@ End Sub
 
 ' Header ne nosi nista sto je stavka, ni polja koja u ciljnom modelu ne postoje.
 '
-' Kolone JOS postoje u tabeli -- stari writer ih puni i brisu se tek u cutover-u.
-' Zato se ovde meri da ih NOV writer ostavlja prazne. Tvrdnja "kolone nema"
-' postaje moguca tek posle cutover-a.
+' Od S1d kolone stavke na zaglavlju ne postoje (kanon), pa se tvrdi njihovo odsustvo.
 Private Sub Test_OTK_HeaderNeNosiLinePolja()
     On Error GoTo EH
 
@@ -6740,16 +6697,18 @@ Private Sub Test_OTK_HeaderNeNosiLinePolja()
                            OtkStavke(400#, 50#, 20, 0#, 0#, 0))
     AssertTrue Len(otkID) > 0, "OTK header: dokument napravljen"
 
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), "OTK header: Kolicina prazna"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_CENA), "OTK header: Cena prazna"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KLASA), "OTK header: Klasa prazna"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KOL_AMB), "OTK header: KolAmbalaze prazna"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_BRUTO), "OTK header: BrutoKg prazan"
+    ' S1d: kolone stavke i polja kojih u ciljnom modelu nema su OBRISANE iz
+    ' kanona (schema.json) i iz sveske -- tvrdi se da ih nema, ne da su prazne.
+    Dim odlazi As Variant, k As Long
+    odlazi = Array("Kolicina", "Cena", "Klasa", "KolAmbalaze", "BrutoKg", _
+                   "Novac", "PrimalacNovca", "VremeUnosa")
+    For k = LBound(odlazi) To UBound(odlazi)
+        AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, CStr(odlazi(k)))), _
+                     "OTK header: kolona " & CStr(odlazi(k)) & " ne postoji na zaglavlju"
+    Next k
 
     AssertEquals "", OtkPolje(otkID, COL_OTK_VOZAC), _
                  "OTK header: VozacID prazan (vozac pripada otpremnici)"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_VREME_UNOSA), _
-                 "OTK header: VremeUnosa prazno (CreatedAt/SourceCreatedAt)"
 
     If GetColumnIndex(TBL_OTKUP, COL_GENERACIJA_ID) > 0 Then
         AssertEquals "", OtkPolje(otkID, COL_GENERACIJA_ID), _
@@ -7359,8 +7318,6 @@ Private Sub Test_OTK_SamoKlasaII()
                  "OTK samo II: stavke klase I nema"
     AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_II, COL_OKS_KOLICINA) - 600#) < 0.001, _
                "OTK samo II: kolicina na stavci"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), _
-                 "OTK samo II: header i dalje ne nosi kolicinu"
 
     Exit Sub
 
@@ -8868,8 +8825,6 @@ Private Sub Test_OTK_EkranPiseNovimModelom()
                "OTK ekran: Klasa I kolicina sa ekrana"
     AssertTrue Abs(OtkStavkaBrojP(res, KLASA_II, COL_OKS_CENA) - 40#) < 0.001, _
                "OTK ekran: Klasa II cena sa ekrana"
-    AssertEquals "", OtkPolje(res, COL_OTK_KOLICINA), "OTK ekran: header ne nosi kolicinu"
-    AssertEquals "", OtkPolje(res, COL_OTK_CENA), "OTK ekran: header ne nosi cenu"
 
     ' Kultura je razresena iz (vrsta, sorta) -- ekran je adapter, ne pisac.
     AssertEquals TEST_KULTURA_ID, OtkPolje(res, COL_OTK_KULTURA), _
@@ -9001,7 +8956,6 @@ Private Sub Test_PWA_IngestPraviHeaderIStavku()
     ' Brojevi su na stavci, header ih ne nosi.
     AssertTrue Abs(OtkStavkaBrojP(otkID, KLASA_I, COL_OKS_KOLICINA) - 400#) < 0.001, _
                "PWA: kolicina na stavci"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), "PWA: header ne nosi kolicinu"
     AssertEquals "", OtkPolje(otkID, COL_OTK_VOZAC), "PWA: header ne nosi vozaca"
 
     ' Trag porekla.
@@ -10997,11 +10951,8 @@ Private Sub Test_OTK_CitaociCitajuStavke()
     If Len(otkID) = 0 Then Exit Sub
     dan = CDate(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM))
 
-    ' Preduslov: vrednost je SAMO na stavkama -- bez ovoga test ne meri izvor.
-    AssertEquals "", OtkPolje(otkID, COL_OTK_KOLICINA), _
-                 "OTK citaoci: preduslov -- zaglavlje ne nosi kolicinu"
-    AssertEquals "", OtkPolje(otkID, COL_OTK_CENA), _
-                 "OTK citaoci: preduslov -- zaglavlje ne nosi cenu"
+    ' Vrednost je SAMO na stavkama: zaglavlje od S1d nema kolone Kolicina/Cena
+    ' (Test_OTK_HeaderNeNosiLinePolja).
 
     Dim r As Variant, i As Long, u As Long, nasao As Boolean
 
@@ -11178,8 +11129,8 @@ Private Function OtkMrezaRed(ByVal brDok As String) As Variant
             Case "rest":    iRest = c + 1
         End Select
         Select Case modScrDokumenti.ColF(CStr(cols(c)), 1)
-            Case COL_OTK_KOL_AMB: iAmb = c + 1
-            Case COL_OTK_KLASA:   iKl = c + 1
+            Case COL_OKS_KOL_AMB: iAmb = c + 1
+            Case COL_OKS_KLASA:   iKl = c + 1
         End Select
     Next c
     If iKg = 0 Or iVr = 0 Or iAmb = 0 Or iKl = 0 Or iPill = 0 Or iRest = 0 Then Exit Function
