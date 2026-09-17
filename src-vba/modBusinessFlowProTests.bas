@@ -296,6 +296,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaZbirnaPauzirana
+    Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_StavkeSuIzvedene
     Test_OTP_HeaderNeNosiLinePolja
     Test_OTP_NepoznatKljucUHeaderuPada
@@ -7844,6 +7845,100 @@ EH:
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
     LogFatal "Test_OTP_MalinaZbirnaPauzirana", Err.Number, Err.description
+End Sub
+
+' NOV NACRT NIJE ZAMENA ZA STORNIRANU OTPREMNICU (S3a, review #361 P1).
+'
+' Do S3a je F2 posle upisa zvao ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok
+' nije zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+' preko ReassignOtkupToOtpremnica_TX upisuje Otkup.OtpremnicaID i BrojZbirne, pa
+' rekalkulise zbirnu.
+'
+' Nad upravo otvorenim NACRTOM to je dvostruko pogresno: nov dokument bi se
+' vezivao STAROM vezom, i dokument koji jos nema nijedan izvor ni status IZDATO
+' bio bi proglasen zamenom izdate otpremnice -- a zamena sme da bude gotova tek
+' posle clanstva, jednakosti i izdavanja.
+'
+' Tvrdnja ima cetiri dela, i svaki meri po jednu posledicu tog poziva.
+Private Sub Test_OTP_NacrtNijeZavrsetakIspravke()
+    Dim cid As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPISP")
+
+    ' Stara, uredno IZDATA otpremnica sa jednim izvorom.
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add izvor
+
+    Dim razlog As String
+    Dim staraOtp As String
+    staraOtp = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-IS-" & scenario), _
+                                           izvori, razlog)
+    AssertTrue Len(staraOtp) > 0, "OTP ispravka: stara otpremnica izdata (bilo: " & razlog & ")"
+
+    ' SYNTHETIC ANOMALY: stara veza Otkup.OtpremnicaID. Nijedan ziv pisac je vise
+    ' ne postavlja (kolona odlazi u S3e) -- postavlja se rucno bas zato da bi se
+    ' videlo da je legacy tok NE dira.
+    VeziOtkupZaOtpremnicuFixture izvor, staraOtp
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                   staraOtp, OtpPolje(staraOtp, COL_OTP_BROJ))
+    AssertTrue Len(cid) > 0, "OTP ispravka: correction kontekst napravljen"
+
+    Dim zbrPre As Long
+    zbrPre = CountRows(TBL_ZBIRNA)
+
+    ' F2: operater unosi novu otpremnicu dok ispravka stoji na cekanju.
+    Dim p As Object, fokus As String, poruke As String, res As String
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = NextTestDate()
+    p("stanicaID") = TEST_ST_ID
+    p("vozacID") = TEST_VOZ_ID
+    p("brDok") = TEST_PREFIX & "-OTP-ISN-" & scenario
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 400#
+    p("cenaI") = 250#
+    p("kolAmb") = 20
+
+    Call modDokUnos.OtpremnicaValidiraj(p, fokus)
+    res = modDokUnos.OtpremnicaUpisi(p, poruke)
+    AssertTrue Len(res) > 0, "OTP ispravka: nacrt otvoren (bilo: " & poruke & ")"
+
+    ' (1) Kontekst ostaje otvoren -- nacrt nije zamena.
+    AssertEquals SV_STATUS_PENDING, _
+                 modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), _
+                 "OTP ispravka: correction NIJE zavrsen nad nacrtom"
+
+    ' (2) Stara veza je netaknuta -- legacy relink nije radio.
+    AssertEquals staraOtp, OtkPolje(izvor, COL_OTK_OTPREMNICA_ID), _
+                 "OTP ispravka: Otkup.OtpremnicaID se NE prevezuje na nacrt"
+
+    ' (3) Zbirna nije dirana.
+    AssertEquals CStr(zbrPre), CStr(CountRows(TBL_ZBIRNA)), _
+                 "OTP ispravka: zbirna se NE rekalkulise"
+
+    ' (4) Operater to ZNA. Tiho preskakanje bi znacilo da misli da je ispravka
+    ' zavrsena, a ona i dalje ceka na ekranu Oporavak.
+    AssertTrue InStr(1, poruke, Poruka("DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA"), _
+                     vbTextCompare) > 0, _
+               "OTP ispravka: operater je OBAVESTEN da ispravka ceka (bilo: " & poruke & ")"
+
+    Call modStornoContext.CancelCorrectionContext(cid, "S3a test cleanup")
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Len(cid) > 0 Then Call modStornoContext.CancelCorrectionContext(cid, "S3a test cleanup")
+    On Error GoTo 0
+    LogFatal "Test_OTP_NacrtNijeZavrsetakIspravke", Err.Number, Err.description
 End Sub
 
 ' Jednopotezni ulaz izvodi ocekivanje iz izvora -- tu nezavisnog operaterskog

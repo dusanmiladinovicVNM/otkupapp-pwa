@@ -57,6 +57,10 @@
     zaglavlje je više ne prima (ključ se odbija); **ambalaža se knjiži pri izdavanju**, ne na nacrtu; malina
     auto-zbirna pauzirana uz poruku (vraća S4). Stari pisac (`SaveOtpremnica*`) ostao bez živog pozivaoca —
     briše se u S3e. Pre merge-a: pun `run_vba` + Compile.
+    **Review #361 P1:** uklonjen i `ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA` — ispravka otpremnice (B-038) je
+    **pauzirana**, ne prevedena: stari tok je preko `ReassignOtkupToOtpremnica_TX` pisao `Otkup.OtpremnicaID` i
+    proglašavao nacrt bez izvora zamenom izdate otpremnice. Vraća S3c, po ID-u.
+    **Pravilo od S3a:** nijedan nov kod ni test ne sme da zove `SaveOtpremnica*`.
 12. **Sledeće:** S3b — čitaoci otpremnice na stavke + panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“.
 
 ## Alati i kapije

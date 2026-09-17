@@ -4567,6 +4567,20 @@ SABOTAZE = {
 
     # PAUZA MORA DA BUDE GLASNA. Tiha pauza znaci da malina operater ceka zbirnu
     # koja nikad nece doci -- gore od greske, jer nema sta da prijavi.
+    # NACRT NIJE ZAMENA. Vracanje legacy correction completion-a nad upravo
+    # otvorenim nacrtom prevezuje Otkup.OtpremnicaID (stara veza) i zatvara
+    # correction kontekst nad dokumentom koji jos nema izvore ni status IZDATO.
+    "otp-nacrt-zavrsava-ispravku": (
+        "modDokUnos.bas",
+        "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
+        # Legacy poziv se VRACA ispred kapije, koja ostaje -- inace bi se merilo
+        # brisanje poruke umesto vracanja starog toka.
+        "    ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA, S(p, \"brDok\"), poruke\n"
+        + "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
+        "Test_OTP_NacrtNijeZavrsetakIspravke",
+        "correction NIJE zavrsen nad nacrtom",
+    ),
+
     "otp-malina-pauza-cuti": (
         "modDokUnos.bas",
         "        poruke = poruke & Poruka(\"DOKUNOS_MSG_ZBIRNA_PAUZIRANA\") & vbCrLf\n",

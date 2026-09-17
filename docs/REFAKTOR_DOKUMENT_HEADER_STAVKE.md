@@ -2937,6 +2937,7 @@ ide zajedno sa panelom (S3b) i identitetom (S3c), a ne ranije.
 | Ambalaža pri izdavanju, kao zbir stavki | **nova** `OtpKnjiziAmbalazu`, zvana iz `OtpIzdaj` |
 | F2 otvara nacrt; kultura se razrešava u adapteru | `modDokUnos.OtpremnicaUpisi` |
 | Malina auto-zbirna pauzirana uz poruku | isto, `DOKUNOS_MSG_ZBIRNA_PAUZIRANA` |
+| **Ispravka otpremnice pauzirana** (review #361 P1) — `ZavrsiIspravkuAko` uklonjen | isto, `DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA` |
 | Ekran čuva ID, prikazuje broj | `modScrDokumenti.SaveOtpremnica` |
 
 **Merenje posle:** `otp_stari_pisac` — sva tri tela starog pisca (`SaveOtpremnica`, `SaveOtpremnica_TX`,
@@ -2947,6 +2948,31 @@ rutina preimenuje, ili popis dobije izuzetak za `modScr*`.
 
 **Šta S3a namerno NE radi:** nacrt se ne može izdati dok S3b ne vrati vezivanje blokova. To nije regresija — veza
 `Otkup.OtpremnicaID` iz F1 obrisana je u S1b-3, pa nijedna otpremnica ni danas nema izvore.
+
+#### Ispravka otpremnice — pauzirana, ne prevedena (review #361, P1)
+
+Prva verzija S3a je posle otvaranja nacrta i dalje zvala `ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA`. To nije zatvaranje
+konteksta nego **pisac starog modela**: `CompleteOtpremnicaIspravka` → `ReassignOtkupToOtpremnica_TX` upisuje
+`Otkup.OtpremnicaID` i `BrojZbirne`, pa rekalkuliše ili stornira zbirnu. Nad upravo otvorenim nacrtom to je bilo
+pogrešno dvaput:
+
+1. nov model bi se vezivao **starom vezom** — tačno most koji se po §14.7 ne pravi;
+2. dokument koji **nema nijedan izvor** i nije `IZDATO` bio bi proglašen zamenom izdate otpremnice, a correction
+   kontekst zatvoren. Lifecycle je: `DRAFT → članstvo → očekivano = povezano → IZDATO → tek onda zamena.`
+
+Poziv je uklonjen. Sposobnost **B-038** je `PAUZIRAN` i vraća se u **S3c**, nad `OtpremnicaID`-em i
+`tblOtpremnicaIzvori`, bez ijednog dodira `Otkup.OtpremnicaID`. Operater dobija poruku da ispravka i dalje čeka na
+ekranu Oporavak — tiho preskakanje bi značilo da misli da je završena.
+
+#### Stari pisac: zašto tek S3e (review #361, P2)
+
+Izmereno posle S3a: `SaveOtpremnica` (76), `SaveOtpremnica_TX` (78), `SaveOtpremnicaMulti_TX` (155) — **309 linija
+bez ijednog živog produkcionog pozivaoca**. Brisanje sada nije mali diff: 54 poziva u `modBusinessFlowProTests`,
+1 u `modGoldenTests`, i **2 u `modAutoHladnjaca`** — a taj drugi je pauzirani auto-lanac čiju sudbinu (vraća se kroz
+`CreateOtpremnicaIzIzvora_TX` ili se briše) odlučuje **S3d**. Brisanje sada bi tu odluku nametnulo prerano.
+
+**Pravilo od S3a:** nijedan nov kod ni nov test ne sme da zove `SaveOtpremnica*`. Kandidat za mehaničku kapiju u
+S3b: `popis_citalaca.py` da nauči prag po grupi (`otp_stari_pisac` ne sme da raste), umesto pravila u dokumentu.
 
 Sledeći korak: **S3b — čitaoci otpremnice na stavke + panel blokova**.
 

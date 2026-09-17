@@ -341,11 +341,27 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
         poruke = poruke & Poruka("DOKUNOS_MSG_ZBIRNA_PAUZIRANA") & vbCrLf
     End If
 
-    ' ISPRAVKA_ODMAH: ako na cekanju stoji ispravka otpremnice, upravo otvorena
-    ' je njena zamena. Ide BROJ, ne ID: ceo tok ispravke jos radi po broju
-    ' (CompleteOtpremnicaIspravka), a prelazak na ID je S3c. Slanje ID-a ovde
-    ' bilo bi tiho -- tok bi trazio dokument sa brojem "OTP-000123".
-    ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA, S(p, "brDok"), poruke
+    ' ISPRAVKA OTPREMNICE JE PAUZIRANA (S3a), ne prevedena.
+    '
+    ' Ovde je do S3a stajalo ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok nije
+    ' zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+    ' preko GetBlokOtkupIDs zove ReassignOtkupToOtpremnica_TX, koji upisuje
+    ' Otkup.OtpremnicaID i BrojZbirne, pa rekalkulise ili stornira zbirnu.
+    '
+    ' Pustiti ga nad upravo otvorenim NACRTOM znacilo bi dve stvari, obe lose:
+    '   - nov model bi se vezivao starom vezom (Otkup.OtpremnicaID), a to je
+    '     tacno most koji se po pravilu refaktora ne pravi;
+    '   - dokument koji jos NEMA nijedan izvor i nije IZDATO bio bi proglasen
+    '     zamenom izdate otpremnice, a correction kontekst zatvoren. Zamena sme
+    '     da bude gotova tek posle: clanstvo -> ocekivano = povezano -> IZDATO.
+    '
+    ' Sposobnost se vraca u S3c, nad kanonskom vezom (tblOtpremnicaIzvori i
+    ' IspravkaOd/ZamenjenSa po ID-u). Do tada operater mora da ZNA da kontekst
+    ' stoji otvoren -- inace bi mislio da je ispravka zavrsena.
+    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _
+                                                         SV_MODE_ISPRAVKA) > 0 Then
+        poruke = poruke & Poruka("DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA") & vbCrLf
+    End If
 
     OtpremnicaUpisi = res
     Exit Function
