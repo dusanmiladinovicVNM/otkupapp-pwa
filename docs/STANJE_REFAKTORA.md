@@ -29,15 +29,13 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S1a
+## Sledeći korak: S1b (posle provere S1a u Excelu)
 
-1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke domena: plan §14.8 (t. 13: otkup ka PWA = zaglavlje + stavke,
-   PWA/GAS tek u S5). Slajsovi: §14.9.
-2. **Pre-flight S1 je gotov: plan §14.10** — 163 PROD mesta u 56 procedura; čitaoci danas čitaju prazna polja
-   zaglavlja (jedini pisac ih ne puni). Podela: **S1a** brisanje `SaveOtkup(_TX)` + mrtvih procedura, testovi na
-   `CreateOtkup_TX`, podela grupe u `popis_citalaca` · **S1b** desktop čitaoci na stavke · **S1c** sync/izvozi (VBA) +
-   health iz kanona · **S1d** brisanje kolona i konstanti (kompajler = dokaz).
-3. **Sledeće:** S1a u novoj sesiji, po §14.10.
+1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight S1: §14.10.
+2. **S1a urađen** (§14.10 „S1a — urađeno“): obrisan stari pisac otkupa i zatvoreni mrtvi lanci, testovi na
+   `CreateOtkup_TX`, nova grupa `x_otk_stavka` u `popis_citalaca` (74 PROD mesta). `run_vba` i kompajl još nisu
+   pokrenuti — `python tools/run_vba.py --suite RunBusinessFlowProSuite` + `Debug → Compile VBAProject`.
+3. **Sledeće:** S1b — desktop čitaoci na stavke (§14.10), uključujući mrtvi panel `modOtkupBlok`.
 
 ## Alati i kapije
 

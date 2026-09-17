@@ -1394,47 +1394,6 @@ Public Function ColF(ByVal spec As String, ByVal idx As Long) As String
     ColF = CStr(p(idx))
 End Function
 
-' 0=broj 1=datum 2=partner 3=kolicina 4=cena 5=brojZbirne 6=direktna vrednost
-Public Function ColumnSpec(ByVal mk As String) As Variant
-    Select Case mk
-        Case "OTKUP"
-            ' partner na otkupu je KOOPERANT (ranije je stajao BrojOtpremnice)
-            ColumnSpec = Array(COL_OTK_BR_DOK, COL_OTK_DATUM, COL_OTK_KOOPERANT, _
-                               COL_OTK_KOLICINA, COL_OTK_CENA, COL_OTK_BROJ_ZBIRNE, "")
-        Case "OTPREMNICA"
-            ColumnSpec = Array(COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, _
-                               COL_OTP_KOLICINA, COL_OTP_CENA, COL_OTP_BROJ_ZBIRNE, "")
-        Case "ZBIRNA"
-            ' 5. slot (cena) - tblZbirna NEMA kolonu Cena, pa je VREDNOST 0.
-            ' 6. slot prazan: ranije je pokazivao na samu sebe (COL_ZBR_BROJ),
-            ' pa je svaka zbirna dobijala status "Poslato".
-            ColumnSpec = Array(COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_KUPAC, _
-                               COL_ZBR_KOLICINA, "", "", "")
-        Case "PRIJEMNICA"
-            ColumnSpec = Array(COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KUPAC, _
-                               COL_PRJ_KOLICINA, COL_PRJ_CENA, COL_PRJ_BROJ_ZBIRNE, "")
-        Case "AMB_ISPLATE"
-            ' tblNovac nema kolicinu/cenu - vrednost je sam iznos isplate
-            ColumnSpec = Array(COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER, _
-                               "", "", "", COL_NOV_ISPLATA)
-        Case "AMB_UPLATE"
-            ColumnSpec = Array(COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER, _
-                               "", "", "", COL_NOV_UPLATA)
-        Case "REVERSI"
-            ' broj reversa zivi u DokumentID ("x/ddmmyy" namespace, vidi
-            ' modBrojevi.MaxSeqReversAmbalaza) - tblAmbalaza nema BrojDokumenta.
-            ' 4. kolona = tip ambalaze (tekst), 5. = kolicina u komadima.
-            ColumnSpec = Array(COL_AMB_DOK_ID, COL_AMB_DATUM, COL_AMB_ENTITET, _
-                               COL_AMB_TIP, "", "", COL_AMB_KOLICINA)
-        Case "FAKTURA"
-            ' 6. slot (direktna vrednost) je iznos fakture; kolicine i cene nema
-            ColumnSpec = Array(COL_FAK_BROJ, COL_FAK_DATUM, COL_FAK_KUPAC, _
-                               "", "", "", COL_FAK_IZNOS)
-        Case Else
-            ColumnSpec = Array("", "", "", "", "", "", "")
-    End Select
-End Function
-
 Public Function StatusCode(ByVal isStorno As Boolean, ByVal bezZbirne As Boolean) As Long
     If isStorno Then
         StatusCode = 2

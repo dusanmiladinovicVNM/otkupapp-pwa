@@ -5896,26 +5896,6 @@ Public Sub RefreshFromData()
     ReloadGrid
 End Sub
 
-' Kljuc kesa je REZIM, ne tabela: F5 i F6 citaju istu tblNovac ali razlicite
-' kolone vrednosti (Isplata / Uplata), pa bi kes po imenu tabele dao jednom
-' rezimu tudje indekse.
-Private Function ColSpecIdx(ByVal mk As String, ByVal tblName As String) As Variant
-    Dim spec As Variant, ix(0 To 7) As Long, i As Long
-    If mColSpec Is Nothing Then Set mColSpec = CreateObject("Scripting.Dictionary")
-    If mColSpec.Exists(mk) Then
-        ColSpecIdx = mColSpec(mk)
-        Exit Function
-    End If
-    spec = ColumnSpec(mk)
-    For i = 0 To 5
-        ix(i) = ColIdx(tblName, CStr(spec(i)))
-    Next i
-    ix(6) = ColIdx(tblName, COL_STORNIRANO)
-    ix(7) = ColIdx(tblName, CStr(spec(6)))   ' direktna vrednost (umesto kg * cena)
-    mColSpec(mk) = ix
-    ColSpecIdx = ix
-End Function
-
 '=====================================================================
 ' OPIS KOLONA MREZE
 ' Mreza vise nema fiksnih 6 kolona - svaki rezim opisuje svoje. Zapis je

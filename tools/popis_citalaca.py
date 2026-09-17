@@ -84,6 +84,10 @@ GRUPE_X = collections.OrderedDict([
     ("x_saveotkup", re.compile(r"\bSaveOtkup(_TX)?\b")),
     ("x_vreme_unosa", re.compile(r"\bCOL_OTK_VREME_UNOSA\b")),
     ("x_trace", re.compile(r"\bCOL_TRACE_(ISPRAVKA_OD|ZAMENJEN_SA)\b")),
+    # Prag S1 (plan S14.10): linijska polja otkupa BEZ cinjenica zaglavlja.
+    # otk_linija ostaje radi uporedivosti, ali nosi i TIP_AMB / KOL_AMB_IZDATA,
+    # koje su H (DOCUMENT_HEADER_LINES) i ne silaze na nulu.
+    ("x_otk_stavka", re.compile(r"\bCOL_OTK_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO|NOVAC|PRIMALAC)\b")),
 ])
 # Literal imena kolone u naredbi koja pominje tabelu starog modela.
 LITERAL_KOLONE = {
