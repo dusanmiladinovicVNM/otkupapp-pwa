@@ -578,14 +578,13 @@ End Sub
 ' trag. (Dokazano: sabotaza parcela-tekst obarala je i T_ClearForm_Ugovor, sa
 ' Err.Number=0 i praznim opisom.)
 '
-' Ciscenje je idempotentno (OtkupUI_Release je ceo pod On Error Resume Next,
-' Scr_OtpOtkazi samo prazni tri promenljive), pa je bezbedno i posle testa koji
+' Ciscenje je idempotentno (OtkupUI_Release je ceo pod On Error Resume Next),
+' pa je bezbedno i posle testa koji
 ' formu nikad nije napravio. Samu formu otpusta odmotavanje steka -- ovde ostaje
 ' ono sto zivi na MODULIMA i sto odmotavanje ne dira.
 Private Sub CleanupPosleTesta()
     On Error Resume Next
     modOtkupUI.OtkupUI_Release
-    modScrDokumenti.Scr_OtpOtkazi
     ResetSeamova
 End Sub
 
@@ -1312,13 +1311,13 @@ Private Sub T_ParcelaID_IzSkriveneKolone()
     Unload f
 End Sub
 
-' UGOVOR ClearForm-a, isti kao frmOtkup.ClearOtkupFields (.claude/rules/
-' otkup-i-dokumenta.md odeljak 1 i 5): datum i broj zbirne su KONTEKST
-' otpremnice i ostaju, partner se brise. Uz to i nova razlika koju legacy nema:
-' bez aktivne otpremnice datum se vraca na danas.
+' UGOVOR ClearForm-a (.claude/rules/otkup-i-dokumenta.md odeljak 1 i 5): posle
+' snimanja partner i podaci dokumenta se brisu, datum se vraca na danas, a broj
+' zbirne ostaje (kontekst).
 '
-' Zasto datum: otpremnica 8/220726 od 22.07 dobijala je blok 8/110826 od 11.08 --
-' vracanje na danas je i broj i datum bloka odvlacilo iz niza otpremnice.
+' Izuzetak "dok je otpremnica aktivna datum i zbirna ostaju" otisao je u S1b-3
+' zajedno sa radnim stolom otpremnice (stara veza Otkup.OtpremnicaID); S3 ga
+' vraca preko tblOtpremnicaIzvori.
 Private Sub T_ClearForm_Ugovor()
     Dim f As frmOtkupUI, zf As Object, ctx As Object
     Dim datumBloka As String, danas As String
@@ -1326,55 +1325,32 @@ Private Sub T_ClearForm_Ugovor()
     Set zf = f.Controls("zForm")
     Set ctx = f.Controls("zCtx")
 
-    ' Datum se izvodi iz danasnjeg, da NIKAD ne bude jednak "danas" -- zakucan
-    ' datum bi jednog dana u godini prosao test i kad pravilo ne radi.
+    ' Datum se izvodi iz danasnjeg, da NIKAD ne bude jednak "danas".
     datumBloka = Format$(Date - 30, "dd.mm.yyyy")
 
-    ' Blok koji se upravo snimio nad aktivnom otpremnicom.
-    '
-    ' Datum i zbirna se postavljaju kroz ApplyPrefill, ne pisanjem u kontrolu:
-    ' to je put kojim ih i produkcija dobija (izbor otpremnice), i jedini koji
-    ' ide pod mLoading. Direktan upis u fgDatum okine OnDatumChanged, a on trazi
-    ' stanica-lock i predlog broja SA PITANJEM GOOGLE-U -- mreza u testu.
-    ' Kilogrami i ambalaza su TextBox-evi: njihova promena samo preracunava
-    ' vrednost, pa idu direktno.
-    modScrDokumenti.Scr_OtpTestSet FX_OTP_ID, FX_BROJ_OTP
+    ' ApplyPrefill ide pod mLoading -- direktan upis u fgDatum okine
+    ' OnDatumChanged, a on trazi stanica-lock i predlog broja (mreza u testu).
     modOtkupUI.ApplyPrefill "datum=" & datumBloka & "|brzbirne=" & FX_ZBIRNA
     SetPolje zf, "fgKgI", "123,4"
     SetPolje zf, "fgKolAmb", "10"
     ctx.Controls("cbKupac").value = FX_KOOPERANT
 
-    ' Preduslovi: bez njih bi test bio zelen i kad kontrole uopste ne primaju
-    ' vrednost, pa ne bi merio nista.
-    AssertEq Polje(zf, "fgDatum"), datumBloka, "preduslov: datum otpremnice je upisan"
+    ' Preduslovi: bez njih bi test bio zelen i kad kontrole ne primaju vrednost.
+    AssertEq Polje(zf, "fgDatum"), datumBloka, "preduslov: datum je upisan"
     AssertEq Polje(zf, "fgBrZbir"), FX_ZBIRNA, "preduslov: broj zbirne je upisan"
     AssertEq Polje(zf, "fgKgI"), "123,4", "preduslov: kilogrami su upisani"
     AssertEq ctx.Controls("cbKupac").value, FX_KOOPERANT, "preduslov: partner je upisan"
 
     modOtkupUI.ClearForm
 
-    ' 1) DATUM OSTAJE -- sledeci blok ide u niz istog datuma otpremnice.
-    AssertEq Polje(zf, "fgDatum"), datumBloka, _
-             "dok je otpremnica aktivna datum se NE vraca na danas"
-    ' 2) BROJ ZBIRNE OSTAJE -- svi blokovi jedne otpremnice idu na istu zbirnu.
+    danas = Format$(Date, "dd.mm.yyyy")
+    AssertEq Polje(zf, "fgDatum"), danas, "posle snimanja datum se vraca na danas"
     AssertEq Polje(zf, "fgBrZbir"), FX_ZBIRNA, _
              "broj zbirne je kontekst -- ne brise se posle snimanja"
-    ' 3) PARTNER SE BRISE -- sledeci unos je nov kooperant. Obrnut smer od prva
-    '    dva: ovde je brisanje trazeno ponasanje.
     AssertEq ctx.Controls("cbKupac").value, "", _
              "partner mora da bude obrisan posle snimanja"
-    ' ... a podaci bloka odlaze sa njim.
     AssertEq Polje(zf, "fgKgI"), "", "kilogrami se brisu posle snimanja"
     AssertEq Polje(zf, "fgKolAmb"), "", "kolicina ambalaze se brise posle snimanja"
-
-    ' BEZ AKTIVNE OTPREMNICE datum se vraca na danas: prazno ili staro polje bi
-    ' bila greska koju operater mora da ispravlja pri svakom novom dokumentu.
-    modScrDokumenti.Scr_OtpOtkazi
-    modOtkupUI.ApplyPrefill "datum=" & datumBloka & "|brzbirne=" & FX_ZBIRNA
-    danas = Format$(Date, "dd.mm.yyyy")
-    modOtkupUI.ClearForm
-    AssertEq Polje(zf, "fgDatum"), danas, _
-             "bez aktivne otpremnice datum se vraca na danas"
 
     Unload f
 End Sub
@@ -4443,20 +4419,6 @@ Private Sub T_CipoviEkrana_UgovorIFilter()
     AssertEq otv + zat, uk, "Otvorene i Zatvorene zajedno daju sve palete"
     AssertEq (otv < uk Or zat < uk), True, "cip stvarno suzava, ne vraca sve"
 
-    ' 5) Unosni ekran: lista otpremnica nosi svoje cipove, lista dokumenata NE --
-    ' njeni cipovi zavise od rezima (zbirna, faktura) pa ostaju ljuskini.
-    ' Lista otpremnica postoji samo u rezimu OTKUP, pa se sam ugovor ne moze
-    ' dovesti u to stanje bez forme -- meri se pravilo, koje je zato izdvojeno.
-    spec = modScrDokumenti.CipoviZaListu("OTPREMNICE")
-    AssertEq (InStr(spec, "otvorene:") > 0), True, _
-             "lista otpremnica prijavljuje svoj cip Neraspodeljene"
-    AssertEq modScrDokumenti.CipoviZaListu("SVI"), "", _
-             "lista dokumenata prepusta cipove ljusci -- oni zavise od rezima"
-    ' i ugovor stvarno ide kroz to pravilo, a ne pored njega
-    AssertEq modScrDokumenti.Scr_Cipovi(), _
-             modScrDokumenti.CipoviZaListu(modScrDokumenti.Scr_Lista()), _
-             "Scr_Cipovi vraca bas ono sto pravilo kaze za aktivnu listu"
-
     modScrPalete.Scr_PalTestSet "PALETE"
 End Sub
 
@@ -7129,12 +7091,10 @@ End Sub
 
 ' Unload gasi formu (Terminate -> OtkupUI_FormClosed), a OtkupUI_Release pusta i
 ' ono sto ostaje na modulu (Btns, kes tabela, num-polja) -- inace sledeci test
-' gradi ekran nad ostacima prethodnog. Aktivna otpremnica zivi u TRECEM modulu
-' (modScrDokumenti) i nju OtkupUI_Release ne dira, pa se otpusta ovde.
+' gradi ekran nad ostacima prethodnog.
 Private Sub ReleaseOtkupUIForm(f As frmOtkupUI)
     Unload f
     modOtkupUI.OtkupUI_Release
-    modScrDokumenti.Scr_OtpOtkazi
 End Sub
 
 ' Polja novog UI-ja su ugnjezdena: zona -> okvir polja -> kontrola (ime + "T").

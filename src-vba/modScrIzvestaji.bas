@@ -742,6 +742,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
             If tip = "OM" Then
                 ' Datum | BrOtp | Vrsta | Klasa | Vozac | Otp kg | Blokovi kg |
                 ' Razlika | Prijemnica | Manjak kg | Manjak % | [OTP|id]
+                ' Blokovi kg i Razlika su prazni od S1b-3 (txt, da prazno ne
+                ' postane "0,00"); S3 ih puni iz tblOtpremnicaIzvori.
                 ' Legacy je Manjak kg i % SPAJAO u jednu kolonu (ListBox limit
                 ' 10) -- mreza ima MAX_COLS 14, pa su razdvojene. Prijemnica/
                 ' manjak kolone su txt: prazno kad nema prijema je PORUKA, a
@@ -753,8 +755,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_KLASA||txt|40|2", _
                     "OTKUI_HDI_VOZAC||txt|100|3", _
                     "OTKUI_HDI_OTPKG||kg|72|1", _
-                    "OTKUI_HDI_BLOKKG||kg|72|1", _
-                    "OTKUI_HDI_RAZLIKA||kg|66|2", _
+                    "OTKUI_HDI_BLOKKG||txt|72|1", _
+                    "OTKUI_HDI_RAZLIKA||txt|66|2", _
                     "OTKUI_HDI_PRIJKG||txt|76|1", _
                     "OTKUI_HDI_MANJKG||txt|70|1", _
                     "OTKUI_HDI_MANJPCT||txt|84|1", _
@@ -1386,8 +1388,8 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 outA(n, 4) = NzS(src(i, 4))
                 outA(n, 5) = NzS(src(i, 5))
                 outA(n, 6) = NzD(src(i, 6))
-                outA(n, 7) = NzD(src(i, 7))
-                outA(n, 8) = NzD(src(i, 8))
+                outA(n, 7) = NzS(src(i, 7))   ' prazno od S1b-3 (S3)
+                outA(n, 8) = NzS(src(i, 8))   ' prazno od S1b-3 (S3)
                 ' Prazno kad nema prijema JE poruka (RF-06) -- ne "0,00".
                 outA(n, 9) = FmtIliPrazno(src(i, 9))
                 outA(n, 10) = FmtIliPrazno(src(i, 10))

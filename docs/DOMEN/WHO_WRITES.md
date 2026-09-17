@@ -20,7 +20,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 | Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblOtkup` | 7 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modStornoFlow` |
+| `tblOtkup` | 6 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modSetup`, `modStornoFlow` |
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
@@ -62,7 +62,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Ucesnici transakcije (snapshot, NE vlasnistvo)
 
-- `tblOtkup`: `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
+- `tblOtkup`: `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`

@@ -2731,10 +2731,10 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, "modIzvestaj.ReportOtkupRobaOM")
     colBrZbirne = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIzvestaj.ReportOtkupRobaOM")
     
-    ' --- kg blokova po OtpremnicaID, sa STAVKI (S1b-2) ---
-    ' Isti bilans koji ekran DOKUMENTI prikazuje uz otpremnicu; racun se ne duplira.
-    Dim otkupDict As Object
-    Set otkupDict = modOtkupBlok.BuildNapisanoByOtp()
+    ' Kolone 7 (kg blokova) i 8 (razlika) ostaju PRAZNE od S1b-3: racunale su se
+    ' preko veze Otkup.OtpremnicaID, koju S3 zamenjuje sa tblOtpremnicaIzvori.
+    ' Oblik rezultata se ne menja (ekran i stampa citaju kolone po polozaju);
+    ' S3 ih puni iz novog modela.
 
     ' --- Manjak pro Zbirna ---
     Dim manjakDict As Object
@@ -2747,8 +2747,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim result() As Variant
     ReDim result(1 To rowCount + 1, 1 To 12)   ' +Prijemnica kg (9), +skriveni OTP|<id> (12)
     
-    Dim totOtp As Double, totBlokovi As Double
-    Dim totRazlika As Double, totManjak As Double
+    Dim totOtp As Double, totManjak As Double
     Dim totPrijemnica As Double
     Dim totOtpSaPrijemom As Double   ' osnovica za UKUPNO manjak % (samo redovi sa prijemom)
     Dim malinaMode As Boolean: malinaMode = IsMalinaMode()
@@ -2764,12 +2763,6 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         Dim thisOtpID As String
         thisOtpID = CStr(otpData(i, colOtpID))
         
-        Dim kgBlokovi As Double: kgBlokovi = 0
-        If otkupDict.Exists(Trim$(thisOtpID)) Then kgBlokovi = otkupDict(Trim$(thisOtpID))
-        
-        Dim razlika As Double
-        razlika = kgBlokovi - kgOtp
-
         ' Manjak proportional berechnen
         Dim thisBrZbirne As String
         thisBrZbirne = Trim$(CStr(otpData(i, colBrZbirne)))
@@ -2881,8 +2874,8 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         result(i, 4) = CStr(otpData(i, colKlasa))
         result(i, 5) = vozNaziv
         result(i, 6) = kgOtp
-        result(i, 7) = kgBlokovi
-        result(i, 8) = razlika
+        result(i, 7) = ""               ' kg blokova -- S3
+        result(i, 8) = ""               ' razlika    -- S3
         result(i, 9) = mStavka(0)      ' Prijemnica kg (prazno kad nema prijema)
         result(i, 10) = mStavka(1)     ' Manjak kg     (prazno kad nema prijema)
         If imaPrijem Then
@@ -2893,8 +2886,6 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         result(i, 12) = "OTP|" & thisOtpID
 
         totOtp = totOtp + kgOtp
-        totBlokovi = totBlokovi + kgBlokovi
-        totRazlika = totRazlika + razlika
 
         ' Manjak-total ide SAMO preko redova sa prijemom; inace bi otpremnice bez
         ' prijemnice pomerale i zbir i procenat manjka.
@@ -2908,8 +2899,8 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     ' UKUPNO
     result(rowCount + 1, 2) = "UKUPNO"
     result(rowCount + 1, 6) = totOtp
-    result(rowCount + 1, 7) = totBlokovi
-    result(rowCount + 1, 8) = totRazlika
+    result(rowCount + 1, 7) = ""
+    result(rowCount + 1, 8) = ""
     result(rowCount + 1, 9) = totPrijemnica
     result(rowCount + 1, 10) = totManjak
     If totOtpSaPrijemom > 0 Then result(rowCount + 1, 11) = totManjak / totOtpSaPrijemom * 100

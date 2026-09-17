@@ -251,10 +251,10 @@ SABOTAZE = {
     # --- ClearForm ----------------------------------------------------------
     "clear-datum": (
         "modOtkupUI.bas",
-        '    If Not imaOtp Then SetDatumDanas mFrm.Controls("zForm")\n',
-        '    SetDatumDanas mFrm.Controls("zForm")   \' SABOTAZA\n',
+        '    SetDatumDanas mFrm.Controls("zForm")\n',
+        '    \' SABOTAZA: datum se ne vraca na danas\n',
         "T_ClearForm_Ugovor",
-        "dok je otpremnica aktivna datum se NE vraca na danas",
+        "posle snimanja datum se vraca na danas",
     ),
     "clear-zbirna": (
         "modOtkupUI.bas",

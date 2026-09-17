@@ -570,42 +570,75 @@ EH:
 End Function
 
 ' Stavke storniranog otkupa u spec prefill-a: klasa I -> kol1/amb1/cena,
-' klasa II -> kol2/amb2/cena2, dveklase po broju klasa. U bruto rezimu ide
-' BrutoKg stavke kad postoji (isto pravilo kao KolicinaReda).
+' klasa II -> kol2/amb2/cena2, dveklase po broju klasa.
+'
+' Cita KANONSKE stavke (modOtkup.StavkeOtkupaRedovi), ne sirovu tabelu: ta granica
+' vec obara zaglavlje bez stavki, stavku bez zaglavlja i nevazecu klasu. Otkup
+' bez ijedne stavke ovde PADA po imenu -- delimican spec (datum i partner bez
+' kolicine) izgledao bi kao legitimna prazna ispravka. PrefillIzStorniranog tada
+' ne vraca nista.
+'
+' Bruto rezim: StavkeOtkupaRedovi ne nosi BrutoKg, pa se u bruto rezimu cita
+' kolona stavke po redu -- isto pravilo kao KolicinaReda (bruto kad postoji).
 Private Function StavkeOtkupaZaPrefill(ByVal res As String, ByVal otkupID As String, _
                                        ByVal brutoMode As Boolean) As String
     Const SRC As String = "modStornoDok.StavkeOtkupaZaPrefill"
-    Dim d As Variant, i As Long, kl As String, imaII As Boolean
-    Dim cOtk As Long, cKl As Long, cKol As Long, cCena As Long, cAmb As Long, cBruto As Long
+    Dim s As Variant, i As Long, kl As String, kol As Double, nI As Long, nII As Long
 
-    StavkeOtkupaZaPrefill = res
-    If Len(otkupID) = 0 Then Exit Function
+    If Len(otkupID) = 0 Then Err.Raise vbObjectError + 1931, SRC, "Prazan OtkupID zaglavlja."
+    s = modOtkup.StavkeOtkupaRedovi()
+
+    If IsArray(s) Then
+        For i = 1 To UBound(s, 1)
+            If CStr(s(i, 1)) = otkupID Then
+                kl = CStr(s(i, 3))
+                kol = CDbl(s(i, 4))
+                If brutoMode Then kol = BrutoStavkeIliNeto(otkupID, s(i, 2), kol)
+                Select Case kl
+                    Case KLASA_I
+                        nI = nI + 1
+                        res = Spoji(res, "kol1", BrojUTekst(kol))
+                        res = Spoji(res, "amb1", BrojUTekst(CDbl(s(i, 6))))
+                        res = Spoji(res, "cena", BrojUTekst(CDbl(s(i, 5))))
+                    Case KLASA_II
+                        nII = nII + 1
+                        res = Spoji(res, "kol2", BrojUTekst(kol))
+                        res = Spoji(res, "amb2", BrojUTekst(CDbl(s(i, 6))))
+                        res = Spoji(res, "cena2", BrojUTekst(CDbl(s(i, 5))))
+                    Case Else
+                        Err.Raise vbObjectError + 1932, SRC, _
+                                  "Otkup " & otkupID & ": nevazeca klasa stavke '" & kl & "'."
+                End Select
+            End If
+        Next i
+    End If
+
+    If nI + nII = 0 Then
+        Err.Raise vbObjectError + 1933, SRC, "Otkup " & otkupID & " nema nijednu stavku."
+    End If
+    If nI > 1 Or nII > 1 Then
+        Err.Raise vbObjectError + 1934, SRC, "Otkup " & otkupID & ": dve stavke iste klase."
+    End If
+    StavkeOtkupaZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
+End Function
+
+' BrutoKg stavke (otkup, redni broj) kad postoji i > 0; inace neto.
+Private Function BrutoStavkeIliNeto(ByVal otkupID As String, ByVal rb As Variant, _
+                                    ByVal neto As Double) As Double
+    Dim d As Variant, i As Long, cOtk As Long, cRb As Long, cBr As Long
+    BrutoStavkeIliNeto = neto
+    cBr = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO)
+    If cBr = 0 Then Exit Function
     d = GetTableData(TBL_OTKUP_STAVKE)
     If Not IsArray(d) Then Exit Function
-
-    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
-    cKl = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
-    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
-    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
-    cBruto = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO)
-
+    cOtk = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID)
+    cRb = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cOtk))) = otkupID Then
-            kl = UCase$(Trim$(NzToText(d(i, cKl))))
-            If kl = KLASA_II Then
-                imaII = True
-                res = Spoji(res, "kol2", BrojUTekst(KolicinaReda(d, i, cKol, cBruto, brutoMode)))
-                res = Spoji(res, "amb2", BrojUTekst(CeliBroj(d, i, cAmb)))
-                res = Spoji(res, "cena2", BrojUTekst(CeliBrojD(d, i, cCena)))
-            Else
-                res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, i, cKol, cBruto, brutoMode)))
-                res = Spoji(res, "amb1", BrojUTekst(CeliBroj(d, i, cAmb)))
-                res = Spoji(res, "cena", BrojUTekst(CeliBrojD(d, i, cCena)))
-            End If
+        If Trim$(NzToText(d(i, cOtk))) = otkupID And CStr(d(i, cRb)) = CStr(rb) Then
+            If NzD(d(i, cBr)) > 0 Then BrutoStavkeIliNeto = NzD(d(i, cBr))
+            Exit Function
         End If
     Next i
-    StavkeOtkupaZaPrefill = Spoji(res, "dveklase", IIf(imaII, "2", "1"))
 End Function
 
 '--------------------------------------------------- mape kolona po tipu

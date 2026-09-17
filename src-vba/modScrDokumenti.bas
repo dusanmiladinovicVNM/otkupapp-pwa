@@ -37,27 +37,15 @@ Private mMonthStart As Double
 ' njeno privatno telo. Prazni ga Scr_ResetCache.
 Private mMape As Object
 
-'--------------------------------------------------- RADNI STO OTPREMNICE
-' F1 nije obicna "forma + lista". Otpremnica je IZVOR robe, a otkupni listovi
-' (blokovi) su njena raspodela po kooperantima; ekran postoji da operater vidi
-' koliko je od otpremnice jos neraspodeljeno. Zato F1 ima tri liste umesto
-' jedne, i one se biraju prekidacem u zoni mreze.
+'--------------------------------------------------------- LISTE F1
+' F1 ima dve liste: dokumenti i rang kooperanata.
 '
-' Stanje je OVDE, a ne u modOtkupBlok - taj drzi svoje mActiveOtpID vezano za
-' frmOtkup, pa bi dva ziva ekrana delila istu promenljivu. Racun bilansa se
-' NE duplira: zovu se njegove funkcije (SumKolByOtp i ostale, javne od F1).
-Private mLista As String          ' "SVI" | "OTPREMNICE" | "BLOKOVI"
-Private mOtpID As String          ' aktivna otpremnica (OtpremnicaID)
-Private mOtpBroj As String        ' njen broj - za traku i naslov liste
-' broj otpremnice -> OtpremnicaID; puni ga RowsOtpremnice u istom prolazu.
-' Mreza prikazuje broj (to je ono sto operater vidi), a ekranu treba ID.
-Private mOtpIds As Object
-' broj otpremnice -> kljuc dokumenta "STANICA|yyyymmdd". Razlikuje Klasu I i II
-' ISTOG dokumenta (legitimno, isti kljuc) od dva dokumenta istog broja (od
-' 14.09.2026 legalno po A2: druga stanica ili drugi dan). Kod drugog slucaja
-' mOtpIds(broj) postaje "" -- broj je dvosmislen i ne razresava se u ID.
-Private mOtpDok As Object
-' Lista IZGUBLJENI i radnja preuzmi obrisane u S1b-1 (Otkup.OtpremnicaID; vraca S3).
+' Radni sto otpremnice (liste OTPREMNICE i BLOKOVI, aktivna otpremnica, traka
+' bilansa, upozorenje na prekoracenje, vezivanje bloka posle unosa i
+' specifikacija) obrisan je u S1b-3: stajao je na vezi Otkup.OtpremnicaID koju
+' S3 zamenjuje sa tblOtpremnicaIzvori. Lista IZGUBLJENI je otisla u S1b-1.
+' Sposobnost vraca S3, preko novog modela.
+Private mLista As String          ' "SVI" | "KOOPERANTI"
 
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
@@ -65,45 +53,15 @@ Public Function Scr_Liste() As Variant
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Scr_Liste = Array( _
         "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTKUP|96", _
-        "OTPREMNICE|OTKUI_SEG_LS_OTP|OTKUI_GRID_TITLE_OTPREMNICA|96", _
-        "BLOKOVI|OTKUI_SEG_LS_BLOK|OTKUI_GRID_TITLE_BLOKOVI|110", _
         "KOOPERANTI|OTKUI_SEG_LS_KOOP|OTKUI_GRID_TITLE_KOOP|100")
-End Function
-
-' Dopuna naslova mreze: u listi blokova stoji broj aktivne otpremnice.
-Public Function Scr_NaslovDopuna() As String
-    If Scr_Lista() = "BLOKOVI" Then Scr_NaslovDopuna = mOtpBroj
-End Function
-
-' Radnje nad redom za AKTIVNU listu:
-'   kljuc : natpis : sirina : stil : trebaRed
-' Kljuc se vraca u Scr_Event kao "act:<kljuc>:<red>"; "mark" obradjuje sama
-' ljuska (oznacavanje je stanje mreze).
-Public Function Scr_Cipovi() As String
-    Scr_Cipovi = CipoviZaListu(Scr_Lista())
-End Function
-
-' Cipovi po listi. Izdvojeno iz Scr_Cipovi da bi pravilo moglo da se izmeri:
-' lista otpremnica postoji samo u rezimu OTKUP, pa je Scr_Lista() van tog
-' rezima uvek 'SVI' i sam ugovor ne bi mogao da se dovede u to stanje.
-'
-' Lista dokumenata ('SVI') NE prijavljuje cipove: njeni zavise od rezima
-' (ima li zbirnu, ima li fakturu), pa ostaju ljuskini -- vidljivost im
-' postavlja SelectMode.
-Public Function CipoviZaListu(ByVal lista As String) As String
-    If lista = "OTPREMNICE" Then _
-        CipoviZaListu = "sve:OTKUI_CHIP_SVE:40|otvorene:OTKUI_CHIP_OTVORENE:132"
 End Function
 
 Public Function Scr_Radnje() As String
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case Scr_Lista()
-        Case "SVI", "BLOKOVI"
+        Case "SVI"
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
                          "storno:OTKUI_BTN_RED_STORNO:88:danger:1"
-        Case "OTPREMNICE"
-            Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
-                         "spec:OTKUI_BTN_RED_SPEC:152:ghost:0"
     End Select
 End Function
 
@@ -116,94 +74,6 @@ Public Function Scr_Lista() As String
     Else
         Scr_Lista = mLista
     End If
-End Function
-
-' Opis aktivne otpremnice za traku iznad forme. Prazno = nema izabrane.
-' Oblik: broj | kupac | datum | ukupnoKg | uBlokKg | ostatakKg |
-'        ukupnoAmb | uBlokAmb | ostatakAmb | cena
-' Stanica aktivne otpremnice. Ljuska time proverava da li je promena otkupnog
-' mesta izasla iz konteksta otpremnice (legacy cmbOtkupnoMesto_Change).
-Public Function Scr_OtpStanica() As String
-    On Error Resume Next
-    If Len(mOtpID) = 0 Then Exit Function
-    Scr_OtpStanica = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
-                                                mOtpID, COL_OTP_STANICA)))
-End Function
-
-' Napusti otpremnicu: njen datum, zbirna i roba vise ne vaze, pa se lista vraca
-' na otpremnice. Legacy par: OtkupBlok_ClearActiveOtp + ResetDatumKontekst.
-Public Sub Scr_OtpOtkazi()
-    mOtpID = ""
-    mOtpBroj = ""
-    mLista = "OTPREMNICE"
-End Sub
-
-' TEST SEAM -- suprotan smer od Scr_OtpOtkazi, i JEDINI nacin da test dobije
-' aktivnu otpremnicu. Produkcija je bira klikom na red (Scr_Event "row:N"), sto
-' trazi ucitanu mrezu, filtere i strane -- previse za proveru jednog pravila.
-' A bas to pravilo je glavna polovina ugovora ClearForm-a: dok je otpremnica
-' aktivna, svi njeni blokovi nose NJEN datum (v. modOtkupUI.ClearForm).
-'
-' Gard je tvrd: van test-rezima ovo ne radi NISTA, pa se ne moze upotrebiti kao
-' precica u produkcionom toku. IsTestMode postavlja iskljucivo test modul.
-Public Sub Scr_OtpTestSet(ByVal otpID As String, ByVal broj As String)
-    If Not IsTestMode() Then Exit Sub
-    mOtpID = otpID
-    mOtpBroj = broj
-End Sub
-
-Public Function Scr_OtpInfo() As String
-    Dim ukKg As Double, blKg As Double, ukAmb As Double, blAmb As Double
-    Dim kupac As String, dat As String, cena As Double
-    On Error Resume Next
-    If Len(mOtpID) = 0 Then Exit Function
-
-    ukKg = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_KOLICINA))
-    ukAmb = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_KOL_AMB))
-    kupac = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_STANICA))
-    dat = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_DATUM))
-    If IsDate(dat) Then dat = Format$(CDate(dat), "dd.mm.yyyy.")
-    blKg = modOtkupBlok.SumKolByOtp(mOtpID)
-    blAmb = modOtkupBlok.SumAmbByOtp(mOtpID)
-    cena = modOtkupBlok.ExistingBlokCena(mOtpID)
-
-    ' Brojevi IDU KROZ NumStr, ne kroz prosto nadovezivanje. Nadovezivanje
-    ' Double-a na String koristi LOKALNI decimalni znak, pa je 60,6 kg putovalo
-    ' kao "60,6"; ljuska taj niz cita sa Val(), koji je locale-nezavistan i
-    ' staje na zarezu - u traci se pojavljivalo 60,00, a ostatak 0,6 kg je
-    ' postajao 0,00 i gasio crveni semafor. Str$ uvek pise tacku, pa se par
-    ' Str$/Val poklapa.
-    Scr_OtpInfo = mOtpBroj & "|" & OtpKupacNaziv(kupac) & "|" & dat & "|" & _
-                  NumStr(ukKg) & "|" & NumStr(blKg) & "|" & NumStr(ukKg - blKg) & "|" & _
-                  NumStr(ukAmb) & "|" & NumStr(blAmb) & "|" & NumStr(ukAmb - blAmb) & _
-                  "|" & NumStr(cena)
-End Function
-
-' Broj iz Variant-a. modOtkupBlok ima svoj NumVal ali je Private; ovde je
-' jeftinije imati tri linije nego otvarati jos jedan simbol u produkcionom
-' modulu samo zbog konverzije.
-Private Function NumVal(ByVal v As Variant) As Double
-    If IsNumeric(v) Then NumVal = CDbl(v)
-End Function
-
-' Broj u niz koji ne zavisi od lokalnih podesavanja - Str$ uvek pise tacku
-' kao decimalni znak i nikad ne grupise hiljade, tacno onako kako ga Val()
-' na drugoj strani i ocekuje.
-Private Function NumStr(ByVal v As Double) As String
-    NumStr = Trim$(Str$(v))
-End Function
-
-Private Function OtpKupacNaziv(ByVal stanicaID As String) As String
-    OtpKupacNaziv = stanicaID
-    If Len(stanicaID) = 0 Then Exit Function
-    On Error Resume Next
-    OtpKupacNaziv = NzToText(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"))
-    If Len(OtpKupacNaziv) = 0 Then OtpKupacNaziv = stanicaID
-End Function
-
-' Broj otpremnice - stoji u naslovu liste blokova.
-Public Function Scr_OtpBroj() As String
-    Scr_OtpBroj = mOtpBroj
 End Function
 
 '--------------------------------------------------------- UGOVOR EKRANA
@@ -221,11 +91,8 @@ End Function
 
 ' Radnje ovog ekrana. Ljuska ne zna nijednu - prosledjuje tag i, ako je ekran
 ' vratio True, osvezi mrezu i traku.
-'   lsSVI / lsOTPREMNICE / lsBLOKOVI - prekidac liste u F1
-'   row:<n>                          - izabran red; u listi otpremnica to
-'                                      BIRA aktivnu otpremnicu
+'   lsSVI / lsKOOPERANTI - prekidac liste u F1
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
-    Dim broj As String
     On Error Resume Next
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
 
@@ -242,25 +109,6 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     If Left$(tag, 4) = "act:" Then
         Scr_Event = RowAction(tag)
         Exit Function
-    End If
-
-    If Left$(tag, 4) = "row:" And Scr_Lista() = "OTPREMNICE" Then
-        broj = CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1))
-        If Len(broj) = 0 Then Exit Function
-        If mOtpIds Is Nothing Then Exit Function
-        If Not mOtpIds.Exists(broj) Then Exit Function
-        ' Dvosmislen broj (dva dokumenta) ne bira nijedan -- inace bi se blokovi
-        ' prevezivali na tudju otpremnicu.
-        If Len(CStr(mOtpIds(broj))) = 0 Then Exit Function
-        mOtpID = CStr(mOtpIds(broj))
-        mOtpBroj = broj
-        ' Sve sto otpremnica zna o robi prepisuje se u formu; operateru ostaju
-        ' kooperant i kolicine. Isto sto legacy radi u PrefillLeftForm, samo sto
-        ' ovde ekran salje LOGICKA imena polja, a ljuska zna gde koje stoji.
-        modOtkupUI.ApplyPrefill PrefillSpec(mOtpID)
-        ' izbor otpremnice vodi pravo na njene blokove - to je sledeci potez
-        mLista = "BLOKOVI"
-        Scr_Event = True
     End If
 End Function
 
@@ -335,12 +183,8 @@ Private Function RowAction(ByVal tag As String) As Boolean
     p = Split(Mid$(tag, 5), ":")
     If UBound(p) < 1 Then Exit Function
     red = CLng(val(p(1)))
-    ' NEMA provere "red < 1" - radnja ne mora da radi nad redom. Specifikacija
-    ' po datumu se salje sa red=0 (stampa se cela filtrirana lista), pa ju je
-    ' ta provera obarala u tisini, pre nego sto je uopste stigla do racuna.
-    ' Ko trazi red, trazi ga sam - odmah ispod.
-    ' Prva kolona je BROJ dokumenta u listama u kojima radnje nad redom postoje
-    ' (svi listovi, blokovi otpremnice); GridCell na red 0 vraca prazno.
+    ' Ko trazi red, trazi ga sam - odmah ispod. Prva kolona je BROJ dokumenta;
+    ' GridCell na red 0 vraca prazno.
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     Select Case p(0)
         Case "print", "storno"
@@ -362,12 +206,6 @@ Private Function RowAction(ByVal tag As String) As Boolean
             End If
             modPrint.OutputOtkupniList ids
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_STAMPA") & " " & broj, False
-
-        Case "spec"
-            RowAction = PrintSpec(red)
-
-        Case "specdat"
-            RowAction = PrintSpecDat("")
 
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
@@ -395,92 +233,6 @@ Private Function RowAction(ByVal tag As String) As Boolean
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-' Specifikacija otkupnih blokova za OZNACENE otpremnice; ako nijedna nije
-' oznacena, za onu na izabranom redu. Posao radi postojeci
-' modOtkupBlok.PrintSpecifikacija - ovde se samo skupljaju ID-evi.
-Private Function PrintSpec(ByVal red As Long) As Boolean
-    Dim keys As String, k As Variant, col As Collection, broj As String
-    Dim oid As String
-    On Error GoTo EH
-    Set col = New Collection
-    keys = modOtkupUI.MarkedKeys()
-    If Len(keys) > 0 Then
-        For Each k In Split(keys, "|")
-            oid = OtpIdZaBroj(CStr(k))
-            If Len(oid) > 0 Then col.Add oid
-        Next k
-    ElseIf red > 0 Then
-        broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-        oid = OtpIdZaBroj(broj)
-        If Len(oid) > 0 Then col.Add oid
-    End If
-    If col.count = 0 Then
-        ' Sta je tacno izostalo - oznake ili razresenje broja u ID - vidi se
-        ' samo ovde; toast operateru kaze sta da uradi, Immediate kaze zasto.
-        Debug.Print "modScrDokumenti.PrintSpec: red=" & red & " oznake=[" & keys & _
-                    "] mapa=" & IIf(mOtpIds Is Nothing, "nema", CStr(mOtpIds.count))
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
-        Exit Function
-    End If
-    modOtkupBlok.PrintSpecifikacija col
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
-    Exit Function
-EH:
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-' Broj otpremnice -> OtpremnicaID. Prvo iz mape koju puni lista (jeftino), pa
-' iz same tabele. Drugi put postoji jer mapa zivi u modulu: dovoljno je da se
-' lista jednom ne procita (drugi rezim, drugi ekran, greska u citanju) pa da
-' oznaceni redovi vise ne mogu da se razrese - a broj otpremnice je u tabeli
-' sve vreme.
-Private Function OtpIdZaBroj(ByVal broj As String) As String
-    On Error Resume Next
-    If Len(broj) = 0 Then Exit Function
-    If Not mOtpIds Is Nothing Then
-        If mOtpIds.Exists(broj) Then
-            ' Prazna vrednost znaci DVOSMISLEN broj. Ne pada na tabelu: tamo bi
-            ' isti broj dao prvi red, a to je bas pogadjanje koje mapa odbija.
-            OtpIdZaBroj = CStr(mOtpIds(broj))
-            Exit Function
-        End If
-    End If
-
-    ' Iz tabele, fail-closed. Ranije LookupValue: PRVI red po sirovom broju,
-    ' ukljucujuci stornirane i tudje stanice -- stampa bi tiho uzela pogresnu
-    ' otpremnicu. Sada: aktivni redovi, i "" cim broj nose dva dokumenta.
-    Dim d As Variant
-    d = GetTableData(TBL_OTPREMNICA)
-    If Not IsArray(d) Then Exit Function
-
-    Dim cBr As Long, cID As Long, cSt As Long, cDat As Long, cSto As Long
-    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
-    cID = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
-    cSt = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
-    cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
-    cSto = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
-    If cBr = 0 Or cID = 0 Or cSt = 0 Or cDat = 0 Then Exit Function
-
-    Dim i As Long, kljuc As String, prviID As String, prviKljuc As String
-    For i = 1 To UBound(d, 1)
-        If BrojJednak(d(i, cBr), broj) Then
-            If cSto > 0 Then
-                If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) = 0 Then GoTo Sledeci
-            End If
-            kljuc = UCase$(Trim$(NzToText(d(i, cSt))))
-            If IsDate(d(i, cDat)) Then kljuc = kljuc & "|" & Format$(CDate(d(i, cDat)), "yyyymmdd")
-            If Len(prviID) = 0 Then
-                prviID = Trim$(NzToText(d(i, cID)))
-                prviKljuc = kljuc
-            ElseIf kljuc <> prviKljuc Then
-                Exit Function
-            End If
-        End If
-Sledeci:
-    Next i
-    OtpIdZaBroj = prviID
 End Function
 
 '---------------------------------------------- LISTA: KOOPERANTI (F1)
@@ -535,50 +287,6 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsKooperanti[" & mStep & "]", Err.description
-End Function
-
-' Datum iz proizvoljne celije u serijski broj koji mreza ocekuje.
-Private Function DatSerijski(ByVal v As Variant) As Double
-    On Error Resume Next
-    If IsDate(v) Then
-        DatSerijski = Int(CDbl(CDate(v)))
-    ElseIf IsNumeric(v) Then
-        DatSerijski = Int(CDbl(v))
-    End If
-End Function
-
-' Datum kao GRANICA opsega; 0 = nema granice. Prazan ili nepotpun unos nije
-' greska - dok operater kuca "21." nema smisla praznjenje liste.
-Private Function DatGranica(ByVal s As String) As Double
-    Dim d As Date
-    On Error Resume Next
-    If Len(Trim$(s)) = 0 Then Exit Function
-    If TryParseDateValue(s, d) Then DatGranica = Int(CDbl(d))
-End Function
-
-' "Po datumu" stampa SVE STO JE FILTRIRANO - dakle tacno one otpremnice koje
-' operater u tom trenutku vidi u listi (opseg datuma + cip + pretraga zajedno),
-' bez obzira na strane. Mapa mOtpIds je vec upravo taj skup: puni je
-' RowsOtpremnice iz istog prolaza kroz filter.
-Private Function PrintSpecDat(ByVal arg As String) As Boolean
-    Dim k As Variant, col As Collection
-    On Error GoTo EH
-    Set col = New Collection
-    If Not mOtpIds Is Nothing Then
-        For Each k In mOtpIds.keys
-            ' dvosmislen broj ("") se ne stampa -- ne zna se koji je dokument
-            If Len(CStr(mOtpIds(k))) > 0 Then col.Add CStr(mOtpIds(k))
-        Next k
-    End If
-    If col.count = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_FILT"), True
-        Exit Function
-    End If
-    modOtkupBlok.PrintSpecifikacija col
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
-    Exit Function
-EH:
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
 ' Svi nestornirani OtkupID-evi jednog broja dokumenta, spojeni onako kako ih
@@ -685,23 +393,11 @@ Public Function Scr_Save(ByVal polja As Object) As String
         Exit Function
     End If
 
-    ' Upozorenje na prekoracenje aktivne otpremnice - isto sto legacy radi kroz
-    ' OtkupBlok_ConfirmUnos, samo nad ovdasnjim stanjem. Kolicine su vec NETO
-    ' (OtkupValidiraj je oduzeo taru), pa se porede sa neto ostatkom.
-    If Not PotvrdiPrekoracenje(CDbl(p("kolicinaI")) + CDbl(p("kolicinaII"))) Then
-        Scr_Save = " "
-        Exit Function
-    End If
-
     res = modOtkupUnos.OtkupUpisi(p, poruke)
     If Len(res) = 0 Then
         Scr_Save = Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
-
-    ' Vezivanje za aktivnu otpremnicu - bez toga blok ne pripada nijednoj i
-    ' pojavljuje se medju "izgubljenima".
-    If Len(mOtpID) > 0 Then modOtkupBlok.LinkOtkupIDsToOtpremnica res, mOtpID
 
     ' Nov kooperant je kreiran tokom upisa - lista partnera mora da ga vidi
     ' odmah, bez zatvaranja ekrana.
@@ -949,68 +645,6 @@ Private Function SaveRevers(ByVal polja As Object) As String
     Scr_ResetCache
     polja("rezultat") = res
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
-End Function
-
-' Pita operatera kad blok prelazi ono sto je od otpremnice ostalo. Bez aktivne
-' otpremnice nema sta da se poredi.
-Private Function PotvrdiPrekoracenje(ByVal kg As Double) As Boolean
-    Dim ukKg As Double, blKg As Double, ost As Double
-    PotvrdiPrekoracenje = True
-    On Error Resume Next
-    If Len(mOtpID) = 0 Then Exit Function
-    ukKg = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_KOLICINA))
-    blKg = modOtkupBlok.SumKolByOtp(mOtpID)
-    ost = ukKg - blKg
-    If kg <= ost + 0.0001 Then Exit Function
-    PotvrdiPrekoracenje = (MsgBox(Poruka("OTKUI_ASK_PREKORACENJE_1") & " " & _
-                                  Format$(kg - ost, "#,##0.00") & " kg " & _
-                                  Poruka("OTKUI_ASK_PREKORACENJE_2"), _
-                                  vbQuestion + vbYesNo, APP_NAME) = vbYes)
-End Function
-
-' Sta se sa otpremnice moze prepisati u formu otkupnog lista. Vrednosti se
-' citaju iz tblOtpremnica; cena je ona po kojoj su vec pisani blokovi te
-' otpremnice (ExistingBlokCena), a tek ako njih nema - cena sa otpremnice.
-' Broj otkupnog lista se ne izmislja nego trazi od kanonskog generatora
-' (SuggestNextBroj), isto kao u legacy panelu.
-Private Function PrefillSpec(ByVal otpID As String) As String
-    Dim vDat As Variant, stanica As String, cena As Double, res As String
-    Dim zbirna As String
-    On Error Resume Next
-    If Len(otpID) = 0 Then Exit Function
-
-    vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
-    stanica = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
-    cena = modOtkupBlok.ExistingBlokCena(otpID)
-    If cena <= 0 Then cena = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_CENA))
-
-    If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
-    ' Zbirna: prvo ono sto otpremnica zna o sebi, a ako je ne zna (veza sa
-    ' zbirnom se cesto pravi tek kasnije) - ono sto nose vec napisani blokovi.
-    ' Isti odnos kao kod cene.
-    zbirna = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)))
-    If Len(zbirna) = 0 Then zbirna = modOtkupBlok.ExistingBlokZbirna(otpID)
-    res = Dodaj(res, "brzbirne", zbirna)
-    res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA)))
-    res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA)))
-    res = Dodaj(res, "omid", stanica)
-    res = Dodaj(res, "vozacid", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC)))
-    res = Dodaj(res, "tipamb", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
-    If cena > 0 Then res = Dodaj(res, "cena", Format$(cena, "0.00"))
-
-    ' Broj otkupnog lista: otkupno mesto + datum otpremnice, kanonski generator.
-    ' Kad je auto-broj iskljucen u Podesavanjima, generator vrati prazno i polje
-    ' ostaje operateru - isto kao u legacy panelu.
-    If Len(stanica) > 0 And IsDate(vDat) Then
-        res = Dodaj(res, "brdok", SuggestNextBroj(KIND_OTK, stanica, CDate(vDat), False))
-    End If
-    PrefillSpec = res
-End Function
-
-Private Function Dodaj(ByVal res As String, ByVal k As String, ByVal v As String) As String
-    Dodaj = res
-    If Len(v) = 0 Then Exit Function
-    Dodaj = res & IIf(Len(res) > 0, "|", "") & k & "=" & v
 End Function
 
 ' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
@@ -1460,11 +1094,8 @@ End Function
 ' (mView, mViewN, mSumKg, mCnt*), pa je mreza mogla da sluzi samo njega.
 ' Sada vraca - i mreza je time postala neutralna. Sortiranje radi ljuska.
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
-    ' F1 ima tri liste. Dve su svoje - otpremnice kao izvor i blokovi aktivne
-    ' otpremnice; treca je zatecena lista dokumenata, ista za svih osam rezima.
+    ' F1: rang kooperanata je svoja lista; ostalo je lista dokumenata rezima.
     Select Case Scr_Lista()
-        Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
-        Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
     End Select
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
@@ -1944,134 +1575,6 @@ Public Sub Scr_ResetCache()
     Set mMape = Nothing
 End Sub
 
-'------------------------------------------------- LISTA: OTPREMNICE (F1)
-' Otpremnice kao IZVOR robe. Kljucna kolona je OSTATAK - koliko od otpremnice
-' jos nije raspodeljeno u blokove. Zbir po otpremnici se racuna JEDNIM
-' prolazom kroz tblOtkup (modOtkupBlok.BuildNapisanoByOtp), ne pozivom po
-' redu: 867 otpremnica puta 1625 otkupa bi bilo milion i po poredjenja.
-Private Function OtpGridCols() As Variant
-    OtpGridCols = Array( _
-        "OTKUI_HD_BROJ||txt|110|1", _
-        "OTKUI_HD_DATUM||date|62|1", _
-        "OTKUI_HDO_KUPAC||part|0|1", _
-        "OTKUI_HD_VRSTA||txt|80|2", _
-        "OTKUI_HD_SORTA||txt|100|2", _
-        "OTKUI_HD_KG||kg|66|1", _
-        "OTKUI_HDO_UBLOK||kg|76|1", _
-        "OTKUI_HDO_OSTATAK||kg|76|1", _
-        "OTKUI_HD_KOL_AMB||num|54|3")
-End Function
-
-' Filter "otvorene" = otpremnice koje jos nisu do kraja rasknjizene u otkupne
-' listove (ostatak kg razlicit od nule). To je jedini filter koji ova lista
-' poznaje; svaki drugi (cipovi liste dokumenata) znaci "sve".
-Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Variant
-    Dim src As Variant, r As Long, n As Long, nRows As Long
-    Dim outA() As Variant, d As Object, stan As Object
-    Dim iID As Long, iBroj As Long, iDat As Long, iSt As Long, iVr As Long
-    Dim iSo As Long, iKol As Long, iAmb As Long, iStorno As Long
-    Dim otpID As String, ukKg As Double, blKg As Double, hay As String
-    Dim sumOst As Double, ost As Double, jeOtvorena As Boolean
-    Dim samoOtvorene As Boolean, cntOtvor As Long
-    Dim dOd As Double, dDo As Double, vDat As Double
-    samoOtvorene = (filter = "otvorene")
-    ' Opseg datuma iznad liste. Nula znaci "nema granice" - tako se nepotpun
-    ' datum tokom kucanja ponasa kao da ga nema, umesto da isprazni listu.
-    dOd = DatGranica(modOtkupUI.GridDatOd())
-    dDo = DatGranica(modOtkupUI.GridDatDo())
-    On Error GoTo EH
-    mStep = "otpremnice"
-
-    src = modUiData.CachedTable(TBL_OTPREMNICA)
-    If Not IsArray(src) Then Exit Function
-    Set d = modOtkupBlok.BuildNapisanoByOtp()
-    Set mOtpIds = CreateObject("Scripting.Dictionary")
-    Set mOtpDok = CreateObject("Scripting.Dictionary")
-    Set stan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
-
-    iID = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_ID)
-    iBroj = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_BROJ)
-    iDat = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_DATUM)
-    iSt = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_STANICA)
-    iVr = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_VRSTA)
-    iSo = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_SORTA)
-    iKol = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_KOLICINA)
-    iAmb = modUiData.ColIdx(TBL_OTPREMNICA, COL_OTP_KOL_AMB)
-    iStorno = modUiData.ColIdx(TBL_OTPREMNICA, COL_STORNIRANO)
-
-    nRows = UBound(src, 1)
-    ReDim outA(1 To nRows, 1 To 9)
-    For r = 1 To nRows
-        If iStorno > 0 Then
-            If UCase$(modUiData.CellS(src, r, iStorno)) = "DA" Then GoTo Sledeca
-        End If
-        vDat = modUiData.CellDate(src, r, iDat)
-        If dOd > 0 Then
-            If vDat < dOd Then GoTo Sledeca
-        End If
-        If dDo > 0 Then
-            If vDat > dDo Then GoTo Sledeca
-        End If
-
-        otpID = modUiData.CellS(src, r, iID)
-        ukKg = modUiData.CellD(src, r, iKol)
-        blKg = 0
-        If d.Exists(otpID) Then blKg = CDbl(d(otpID))
-        ost = ukKg - blKg
-        ' Prag je 0,001 kg: ostatak nastaje oduzimanjem decimalnih vrednosti,
-        ' pa "nula" prakticno nikad nije tacna nula.
-        jeOtvorena = (Abs(ost) > 0.001)
-        ' brojac ide preko SVIH otpremnica - i kad je cip ugasen
-        If jeOtvorena Then cntOtvor = cntOtvor + 1
-        If samoOtvorene And Not jeOtvorena Then GoTo Sledeca
-
-        hay = modUiData.CellS(src, r, iBroj) & "|" & modUiData.CellS(src, r, iVr) & _
-              "|" & modUiData.CellS(src, r, iSo)
-        Dim kup As String
-        kup = modUiData.CellS(src, r, iSt)
-        If Not stan Is Nothing Then
-            If stan.Exists(kup) Then kup = CStr(stan(kup))
-        End If
-        hay = hay & "|" & kup
-        If Len(q) > 0 Then
-            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeca
-        End If
-
-        n = n + 1
-        outA(n, 1) = modUiData.CellS(src, r, iBroj)
-        Dim otpKljuc As String
-        otpKljuc = UCase$(Trim$(modUiData.CellS(src, r, iSt))) & "|" & Format$(vDat, "yyyymmdd")
-        If Not mOtpIds.Exists(CStr(outA(n, 1))) Then
-            mOtpIds(CStr(outA(n, 1))) = otpID
-            mOtpDok(CStr(outA(n, 1))) = otpKljuc
-        ElseIf CStr(mOtpDok(CStr(outA(n, 1)))) <> otpKljuc Then
-            ' Dva DOKUMENTA istog broja -- ranije je poslednji tiho pobedjivao, pa
-            ' su izbor reda i stampa uzimali tudju otpremnicu.
-            mOtpIds(CStr(outA(n, 1))) = ""
-        ElseIf Len(CStr(mOtpIds(CStr(outA(n, 1))))) > 0 Then
-            mOtpIds(CStr(outA(n, 1))) = otpID
-        End If
-        outA(n, 2) = modUiData.CellDate(src, r, iDat)
-        outA(n, 3) = kup
-        outA(n, 4) = modUiData.CellS(src, r, iVr)
-        outA(n, 5) = modUiData.CellS(src, r, iSo)
-        outA(n, 6) = ukKg
-        outA(n, 7) = blKg
-        outA(n, 8) = ost
-        outA(n, 9) = modUiData.CellD(src, r, iAmb)
-        sumOst = sumOst + ost
-Sledeca:
-    Next r
-
-    mStep = "OK"
-    ' cetvrti brojac je cip "Neraspodeljene"; prva tri pripadaju listi
-    ' dokumenata i ovde su uvek nula
-    RowsOtpremnice = Array(OtpGridCols(), outA, n, sumOst, 0#, Array(0, 0, 0, cntOtvor))
-    Exit Function
-EH:
-    Err.Raise Err.Number, "modScrDokumenti.RowsOtpremnice[" & mStep & "]", Err.description
-End Function
-
 '--------------------------------------------------------- LISTA: IZVODI
 ' Bankovni izvod je jedini stornirljiv "dokument" koji NIJE red tabele: tblBankaImport
 ' cuva pojedinacne stavke izvoda, a stornira se ceo izvod. Zato ova lista
@@ -2177,92 +1680,4 @@ SledeciIzvod:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsIzvodi[" & mStep & "]", Err.description
-End Function
-
-'---------------------------------------------------- LISTA: BLOKOVI (F1)
-' Otkupni listovi AKTIVNE otpremnice. Bez izabrane otpremnice lista je prazna
-' - to je tacno, ne greska.
-Private Function BlokGridCols() As Variant
-    BlokGridCols = Array( _
-        "OTKUI_HD_BROJ||txt|110|1", _
-        "OTKUI_HD_DATUM||date|62|1", _
-        "OTKUI_HD_PARTNER||part|0|1", _
-        "OTKUI_HD_KG||kg|66|1", _
-        "OTKUI_HD_KOL_AMB||num|54|2", _
-        "OTKUI_HD_CENA||num|70|2", _
-        "OTKUI_HD_VREDNOST||mult|96|1")
-End Function
-
-Private Function RowsBlokovi(ByVal q As String) As Variant
-    Dim src As Variant, r As Long, n As Long, nRows As Long
-    Dim outA() As Variant, koop As Object
-    Dim iOtp As Long, iBroj As Long, iDat As Long, iKoop As Long
-    Dim iId As Long, iStorno As Long, zbir As Object, z As Variant
-    Dim kg As Double, vr As Double, cena As Double, hay As String
-    Dim sumKg As Double, sumVal As Double, ime As String
-    On Error GoTo EH
-    mStep = "blokovi"
-
-    If Len(mOtpID) = 0 Then
-        RowsBlokovi = Array(BlokGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
-        Exit Function
-    End If
-
-    src = modUiData.CachedTable(TBL_OTKUP)
-    If Not IsArray(src) Then Exit Function
-    Set koop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-
-    iOtp = modUiData.ColIdx(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    iBroj = modUiData.ColIdx(TBL_OTKUP, COL_OTK_BR_DOK)
-    iDat = modUiData.ColIdx(TBL_OTKUP, COL_OTK_DATUM)
-    iKoop = modUiData.ColIdx(TBL_OTKUP, COL_OTK_KOOPERANT)
-    iId = modUiData.ColIdx(TBL_OTKUP, COL_OTK_ID)
-    iStorno = modUiData.ColIdx(TBL_OTKUP, COL_STORNIRANO)
-
-    ' Kolicina, gajbe i vrednost bloka su na STAVKAMA (S1b-2). Dokument sa dve
-    ' klase nema jednu cenu, pa je cena reda prosek (vrednost / kg).
-    mStep = "stavke blokova"
-    Set zbir = modOtkup.ZbirStavkiPoOtkupu()
-    mStep = "blokovi"
-
-    nRows = UBound(src, 1)
-    ReDim outA(1 To nRows, 1 To 7)
-    For r = 1 To nRows
-        If modUiData.CellS(src, r, iOtp) <> mOtpID Then GoTo Sledeci
-        If iStorno > 0 Then
-            If UCase$(modUiData.CellS(src, r, iStorno)) = "DA" Then GoTo Sledeci
-        End If
-        ime = modUiData.CellS(src, r, iKoop)
-        If Not koop Is Nothing Then
-            If koop.Exists(ime) Then ime = CStr(koop(ime))
-        End If
-        hay = modUiData.CellS(src, r, iBroj) & "|" & ime
-        If Len(q) > 0 Then
-            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
-        End If
-
-        z = modOtkup.ZbirStavkiZaOtkup(zbir, modUiData.CellS(src, r, iId), _
-                                       "modScrDokumenti.RowsBlokovi")
-        kg = CDbl(z(0))
-        vr = CDbl(z(1))
-        cena = 0
-        If kg > 0 Then cena = vr / kg
-        n = n + 1
-        outA(n, 1) = modUiData.CellS(src, r, iBroj)
-        outA(n, 2) = modUiData.CellDate(src, r, iDat)
-        outA(n, 3) = ime
-        outA(n, 4) = kg
-        outA(n, 5) = CDbl(z(2))
-        outA(n, 6) = cena
-        outA(n, 7) = vr
-        sumKg = sumKg + kg
-        sumVal = sumVal + vr
-Sledeci:
-    Next r
-
-    mStep = "OK"
-    RowsBlokovi = Array(BlokGridCols(), outA, n, sumKg, sumVal, Array(0, 0, 0))
-    Exit Function
-EH:
-    Err.Raise Err.Number, "modScrDokumenti.RowsBlokovi[" & mStep & "]", Err.description
 End Function
