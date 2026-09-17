@@ -67,7 +67,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
 - `tblKorisnici`: `modMaticniKorisnici`
-- `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
 - `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
 - `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblAmbalaza`: `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
@@ -87,7 +87,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblStornoVeze`: `modOtkup`, `modStornoContext`
-- `tblStornoZurnal`: `modOtkup`, `modStorno`, `modStornoFlow`
+- `tblStornoZurnal`: `modOtkup`, `modStorno`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
 - `tblZbirnaIzvori`: `modDokumenta`
 - `tblZbirnaStavke`: `modDokumenta`

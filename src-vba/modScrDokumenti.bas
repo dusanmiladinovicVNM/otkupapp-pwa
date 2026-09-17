@@ -121,13 +121,13 @@ End Function
 ' posle njega otkup vise nije aktivan pa se veza ka prijemnici gubi.
 ' Prazan palInfo znaci "nema sta da se pita" (nije hladnjaca, nema zbirne
 ' ili prijemnica nije paletizovana).
-Private Sub HladnjacaLanac(ByVal brDok As String, ByRef prijBroj As String, _
+Private Sub HladnjacaLanac(ByVal otkupID As String, ByRef prijBroj As String, _
                            ByRef palInfo As String)
     Dim stanica As String, zbirna As String
     On Error Resume Next
     prijBroj = "": palInfo = ""
-    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_STANICA))
-    zbirna = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_BROJ_ZBIRNE))
+    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA))
+    zbirna = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE))
     If Len(zbirna) = 0 Then Exit Sub
     If Not IsHladnjacaStanica(stanica) Then Exit Sub
     prijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, zbirna, COL_PRJ_BROJ))
@@ -142,8 +142,8 @@ End Sub
 '   NE     DUPLI UNOS - roba nije primljena dvaput, pa se fantomske stavke
 '          odmah skidaju; paleta koja ostane prazna se stornira
 '   OTKAZI nista - palete ostaju osirocene i dalje broje robu
-Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal prijBroj As String, _
-                                    ByVal palInfo As String)
+Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal otkupID As String, _
+                                    ByVal prijBroj As String, ByVal palInfo As String)
     Dim odg As VbMsgBoxResult, info As String, spec As String
     On Error GoTo EH
     odg = MsgBox(Poruka("OTKUI_MSG_HLAD_LANAC") & vbCrLf & _
@@ -153,10 +153,9 @@ Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal prijBroj As Str
     If odg = vbYes Then
         SetHladnjacaRelinkPending prijBroj
         ' Prefill bez correction context-a: ovaj tok ne stvara zapis u
-        ' tblStornoVeza (veza se cuva kroz pending relink), pa se polazi od
-        ' broja. PickPrefillRows tada uzima poslednje upisan red tog broja i
-        ' ostaje unutar njegove generacije.
-        spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, "")
+        ' tblStornoVeza (veza se cuva kroz pending relink). Polazi se od
+        ' OtkupID-a storniranog reda, ne od broja (S1e).
+        spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkupID)
         If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_HLAD_ISPRAVKA"), False
     ElseIf odg = vbNo Then
@@ -177,8 +176,12 @@ End Sub
 
 ' Vraca True ako je radnja PROMENILA podatke (pa mreza mora ponovo da se cita).
 ' Stampa vraca False - ona nista ne menja.
+'
+' IDENTITET REDA JE OtkupID iz nevidljive kolone (S1e), ne broj: broj je
+' jedinstven tek po (otkupno mesto, dan), pa stampa ili storno po broju hvata i
+' tudji dokument (AUD-057). Broj sluzi samo za poruke operateru.
 Private Function RowAction(ByVal tag As String) As Boolean
-    Dim p() As String, red As Long, broj As String, ids As String
+    Dim p() As String, red As Long, broj As String, otkupID As String
     On Error GoTo EH
     p = Split(Mid$(tag, 5), ":")
     If UBound(p) < 1 Then Exit Function
@@ -186,9 +189,10 @@ Private Function RowAction(ByVal tag As String) As Boolean
     ' Ko trazi red, trazi ga sam - odmah ispod. Prva kolona je BROJ dokumenta;
     ' GridCell na red 0 vraca prazno.
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTKUP"))))
     Select Case p(0)
         Case "print", "storno"
-            If Len(broj) = 0 Then
+            If Len(otkupID) = 0 Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
                 Exit Function
             End If
@@ -196,15 +200,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
 
     Select Case p(0)
         Case "print"
-            ' Posle cutover-a jedan broj = jedan dokument = jedan OtkupID, pa
-            ' OtkupIdsByBrDok obicno vrati jedan. Spojen oblik ostaje jer
-            ' ZATECENI redovi jos nose dva ID-a pod istim brojem.
-            ids = OtkupIdsByBrDok(broj)
-            If Len(ids) = 0 Then
-                modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_DOK") & " " & broj, True
-                Exit Function
-            End If
-            modPrint.OutputOtkupniList ids
+            modPrint.OutputOtkupniList otkupID
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_STAMPA") & " " & broj, False
 
         Case "storno"
@@ -214,12 +210,12 @@ Private Function RowAction(ByVal tag As String) As Boolean
             ' Autohladnjaca: kontekst lanca se cita PRE storna - posle njega
             ' otkup vise nije aktivan, pa se veza ka prijemnici ne bi nasla.
             Dim hlPrij As String, hlPal As String
-            HladnjacaLanac broj, hlPrij, hlPal
-            If modStorno.StornoOtkupByBrDok_TX(broj) Then
+            HladnjacaLanac otkupID, hlPrij, hlPal
+            If modStorno.StornoOtkup_TX(otkupID) Then
                 Scr_ResetCache
                 RowAction = True
                 If Len(hlPal) > 0 Then
-                    PonudiHladnjacaIspravku broj, hlPrij, hlPal
+                    PonudiHladnjacaIspravku broj, otkupID, hlPrij, hlPal
                 Else
                     modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
                 End If
@@ -287,30 +283,6 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsKooperanti[" & mStep & "]", Err.description
-End Function
-
-' Svi nestornirani OtkupID-evi jednog broja dokumenta, spojeni onako kako ih
-' modPrint ocekuje (" + ").
-Private Function OtkupIdsByBrDok(ByVal broj As String) As String
-    Dim src As Variant, r As Long, iBr As Long, iID As Long, iSt As Long
-    Dim res As String
-    On Error Resume Next
-    src = modUiData.CachedTable(TBL_OTKUP)
-    If Not IsArray(src) Then Exit Function
-    iBr = modUiData.ColIdx(TBL_OTKUP, COL_OTK_BR_DOK)
-    iID = modUiData.ColIdx(TBL_OTKUP, COL_OTK_ID)
-    iSt = modUiData.ColIdx(TBL_OTKUP, COL_STORNIRANO)
-    If iBr < 1 Or iID < 1 Then Exit Function
-    For r = 1 To UBound(src, 1)
-        If modUiData.CellS(src, r, iBr) = broj Then
-            If iSt < 1 Then
-                res = res & IIf(Len(res) > 0, " + ", "") & modUiData.CellS(src, r, iID)
-            ElseIf UCase$(modUiData.CellS(src, r, iSt)) <> "DA" Then
-                res = res & IIf(Len(res) > 0, " + ", "") & modUiData.CellS(src, r, iID)
-            End If
-        End If
-    Next r
-    OtkupIdsByBrDok = res
 End Function
 
 '--------------------------------------------------------------- UPIS
@@ -688,12 +660,25 @@ End Function
 ' koji vec razlucuje dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
     Select Case tk
-        Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA": IdKolonaTipa = COL_GENERACIJA_ID
+        ' Otkup je JEDNO zaglavlje po dokumentu (S1e): identitet je OtkupID.
+        ' GeneracijaID otkupni pisac ne upisuje, pa bi kolona bila prazna.
+        Case "OTKUP":                                     IdKolonaTipa = COL_OTK_ID
+        Case "OTPREMNICA", "ZBIRNA", "PRIJEMNICA":         IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
         Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID
         Case Else:                                          IdKolonaTipa = ""
     End Select
+End Function
+
+' Indeks nevidljive kolone identiteta u mrezi tipa: uvek POSLEDNJA koju
+' GridCols(tk, True) doda. Racuna se iz istog niza koji mreza dobija, pa ne moze
+' da se razidje sa njim. 0 = tip identitet nema.
+Public Function IdentKolonaIndeks(ByVal tk As String) As Long
+    If Len(IdKolonaTipa(tk)) = 0 Then Exit Function
+    Dim cols As Variant: cols = GridCols(tk, True)
+    If Not IsArray(cols) Then Exit Function
+    IdentKolonaIndeks = UBound(cols) + 1
 End Function
 
 Public Function GridCols(ByVal mk As String, Optional ByVal saIdentitetom As Boolean = False) As Variant
@@ -1099,9 +1084,10 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
     End Select
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
-    ' unosi. Identitet ne trazi: nevidljiva kolona postoji zbog radnje storna,
-    ' a ovde radnje storna nad tudjim tipom nema.
-    Scr_Rows = RedoviZaTip(modeKey(ActiveMode), filter, q)
+    ' unosi. OTKUP nosi nevidljiv OtkupID: radnje reda (stampa, storno) idu po
+    ' njemu, ne po broju (S1e). Ostali tipovi ovde radnje reda nemaju.
+    Dim mk As String: mk = modeKey(ActiveMode)
+    Scr_Rows = RedoviZaTip(mk, filter, q, (mk = "OTKUP"))
 End Function
 
 ' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista

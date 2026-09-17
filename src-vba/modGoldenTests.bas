@@ -1268,7 +1268,14 @@ Private Sub GldStornoZbirne(ByVal idx As Long)
 End Sub
 
 Private Sub GldStornoOtkupa(ByVal brDok As String)
-    If Not StornoOtkupByBrDok_TX(brDok) Then
+    ' Storno ide po OtkupID-u (S1e). Broj se ovde razresava samo zato sto ga
+    ' scenario zna; golden meri posledice storna, ne izbor dokumenta.
+    Dim otkupID As String
+    otkupID = LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_ID)
+    If Len(otkupID) = 0 Then
+        Err.Raise GLD_ERR, "GldStornoOtkupa", "otkup " & brDok & " nije nadjen"
+    End If
+    If Not StornoOtkup_TX(otkupID) Then
         Err.Raise GLD_ERR, "GldStornoOtkupa", "storno otkupa nije uspeo"
     End If
 End Sub

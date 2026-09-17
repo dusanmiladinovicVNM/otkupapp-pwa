@@ -457,32 +457,10 @@ Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
     RequireOtkupAktivanZaStampu otkupID, SRC
     On Error GoTo EH
 
-    Dim d As Variant: d = GetTableData(TBL_OTKUP)
-    If Not IsArray(d) Then Exit Sub
-    d = ExcludeStornirano(d, TBL_OTKUP)
-    If Not IsArray(d) Then Exit Sub
-
-    Dim iID As Long, iBr As Long
-    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    iBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    If iID = 0 Or iBr = 0 Then Exit Sub
-
-    Dim brDok As String, r As Long
-    For r = 1 To UBound(d, 1)
-        If CStr(d(r, iID)) = otkupID Then brDok = CStr(d(r, iBr)): Exit For
-    Next r
-
-    Dim ids As String
-    If brDok <> "" Then
-        For r = 1 To UBound(d, 1)
-            If CStr(d(r, iBr)) = brDok Then
-                If ids = "" Then ids = CStr(d(r, iID)) Else ids = ids & " + " & CStr(d(r, iID))
-            End If
-        Next r
-    End If
-    If ids = "" Then ids = otkupID   ' fallback: bar taj red
-
-    OutputOtkupniList ids
+    ' Stampa TAJ dokument (S1e). Ranije se sirilo na sve aktivne redove istog
+    ' broja -- ostatak modela "red po klasi", koji je hvatao i tudji dokument
+    ' istog broja sa drugog otkupnog mesta.
+    OutputOtkupniList otkupID
     Exit Sub
 
 BLOKADA:
