@@ -29,14 +29,15 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: pre-flight S1 „Otkup do kraja“
+## Sledeći korak: S1a
 
-1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md` (387 sposobnosti). Odluke domena: plan §14.8.
-2. **Tabela slajsova: plan §14.9** — S1 Otkup do kraja · S2 Banka po ID-u · S3 Otpremnica (desktop) · S4 Zbirna ·
-   S5 PWA i sync · S6 Prijemnica · S7 Faktura · S8 Paleta i prerada · S9 Sledljivost + brisanje.
-   Prag svakog slajsa: grupe `popis_citalaca` = 0; spisak sposobnosti po slajsu je ulaz za njegov pre-flight.
-3. **Sledeće:** pre-flight S1 (skill `pre-flight`) u novoj sesiji — proveri sposobnosti S1 red po red, izmeri
-   `otk_linija`/`x_saveotkup`/`x_vreme_unosa`/`x_indeks`/health, predloži podelu na PR-ove ako je prevelik.
+1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke domena: plan §14.8 (t. 13: otkup ka PWA = zaglavlje + stavke,
+   PWA/GAS tek u S5). Slajsovi: §14.9.
+2. **Pre-flight S1 je gotov: plan §14.10** — 163 PROD mesta u 56 procedura; čitaoci danas čitaju prazna polja
+   zaglavlja (jedini pisac ih ne puni). Podela: **S1a** brisanje `SaveOtkup(_TX)` + mrtvih procedura, testovi na
+   `CreateOtkup_TX`, podela grupe u `popis_citalaca` · **S1b** desktop čitaoci na stavke · **S1c** sync/izvozi (VBA) +
+   health iz kanona · **S1d** brisanje kolona i konstanti (kompajler = dokaz).
+3. **Sledeće:** S1a u novoj sesiji, po §14.10.
 
 ## Alati i kapije
 
