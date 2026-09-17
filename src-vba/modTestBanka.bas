@@ -1000,6 +1000,7 @@ Private Sub T25_VisakTraziPotvrduOperatera()
     Const S As String = "T25 visak trazi potvrdu: "
 
     Dim n As Long
+    Dim razlog As String
 
     SeedStanica P & "OM-25", P & "Stanica 25"
     SeedKooperant P & "K-25", "Test", "Visak", P & "OM-25"
@@ -1009,7 +1010,7 @@ Private Sub T25_VisakTraziPotvrduOperatera()
     SeedBim P & "BIM-25", P & "IZV-25", P & "RAC-1", P & "PARTNER-25", 0, 3000, "", "", ""
 
     ChkEqD BimOtvorenoNaOtkupu(P & "OTK-25"), 3000, S & "u trenutku prikaza dug je ceo iznos"
-    ChkEq BimOtkupTraziPotvrdu(P & "OTK-25", 3000, vbNullString), False, _
+    ChkEq BimOtkupTraziPotvrdu(P & "OTK-25", 3000, razlog), False, _
           S & "ekran nema sta da pita -- isplata je tacno do duga"
 
     ' STANJE SE MENJA izmedju prikaza i upisa: deo duga je zatvoren drugom
