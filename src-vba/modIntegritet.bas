@@ -94,8 +94,6 @@ Private Sub RunAllChecks()
     Chk_A1_OtpremnicaVsZbirna
     Chk_A2_ManjakAnomalije
     Chk_B1_Verwaiste
-    Chk_B2_UnlinkedOtkupi
-    Chk_B3_IzgubljeniBlokovi
     Chk_B4_DanglingBrojZbirne
     Chk_B5_PrijemnicaBezZbirne
     Chk_B5b_OtpremnicaBezZbirne
@@ -220,40 +218,11 @@ EH:
     WriteErr "B1", Err.description
 End Sub
 
-' ============================================================
-' CHECK B2: OTKUPI bez otpremnice (unlinked)
-' ============================================================
 ' Reuse GetUnlinkedOtkupi: aktivan otkup bez OtpremnicaID
 ' (prava "razlika otkup vs otpremnica").
 
-Private Sub Chk_B2_UnlinkedOtkupi()
-    On Error GoTo EH
-
-    WriteBlock "B2", "Otkupi bez otpremnice (unlinked)", _
-               Array("OtkupID", "Datum", "StanicaID", "VozacID", "KooperantID", "Kolicina", "VrstaVoca"), _
-               GetUnlinkedOtkupi()
-    Exit Sub
-
-EH:
-    WriteErr "B2", Err.description
-End Sub
-
-' ============================================================
-' CHECK B3: izgubljeni otkup blokovi
-' ============================================================
 ' Aktivan otkup ciji OtpremnicaID pokazuje na storniranu/nepostojecu
 ' otpremnicu (reuse GetLostOtkupBlokovi; frmOtkupAPP baner ovo prikazuje).
-
-Private Sub Chk_B3_IzgubljeniBlokovi()
-    On Error GoTo EH
-    WriteBlock "B3", "Izgubljeni otkup blokovi (OtpremnicaID -> stornirana/nepostojeca otpremnica)", _
-               Array("OtkupID", "BrojDokumenta", "KooperantID", "Datum", "Kolicina", "OtpremnicaID", "StaraOtpremnica"), _
-               GetLostOtkupBlokovi()
-    Exit Sub
-
-EH:
-    WriteErr "B3", Err.description
-End Sub
 
 ' ============================================================
 ' CHECK B4: DANGLING BrojZbirne (zbirna uopste ne postoji)

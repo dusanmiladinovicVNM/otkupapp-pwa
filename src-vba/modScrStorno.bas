@@ -1218,9 +1218,8 @@ Private Function StornoPoModu(ByVal mode As String) As Boolean
 
     If CBool(res("success")) Then
         MsgBox CStr(res("message")), vbInformation, APP_NAME
-        ' Blokovi se storniraju POSLE dokumenta: kapija gleda da li je roditeljska
-        ' otpremnica jos aktivna, a to zavisi od toga sta je upravo odradjeno.
-        StornirajBlokoveAko mode, CStr(res("correctionID"))
+        ' Storno otkupnih blokova uz dokument (StornirajBlokoveAko) je obrisan u
+        ' S1b-1 -- stari model; vraca S3.
         StornoPoModu = True
         Exit Function
     End If
@@ -1236,82 +1235,6 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
     Err.Clear
 End Function
-
-' Dodatni storno otkupnih blokova koji vise o dokumentu.
-'
-' Dozvoljen je SAMO uz DUPLI/PONISTENJE - roba tada stvarno nestaje. Uz ISPRAVKU
-' blokovi ostaju: storno pa ponovni unos dokumenta je celina, a blokovi se
-' prevezuju na novi. Uz RESI KASNIJE se ne dira nista.
-'
-' RAZLIKA U ODNOSU NA LEGACY, i to je jedino sto od panela nije preneto: legacy
-' nudi multiselect - operater cekira KOJE blokove stornira, a ostali se
-' oslobadjaju. Ovde je sve-ili-nista, ali se pre pitanja ispise pun spisak
-' (broj, klasa, kilogrami, kooperant), pa operater vidi tacno nad cim odlucuje.
-' Delimican izbor ostaje na ekranu Oporavak, gde izgubljeni blokovi imaju svoju
-' listu i radnju po redu. Kolona sa checkbox-om je Korak 2.
-'
-' Kapija BlockStornoDriftReason ostaje ista (ADR-0001): blok vezan za ZIVU
-' otpremnicu se ne stornira, jer bi je ostavio precenjenu.
-Private Sub StornirajBlokoveAko(ByVal mode As String, ByVal correctionID As String)
-    Dim dt As String, blokovi As Collection, ids As Collection
-    Dim spisak As String, i As Long, red As Variant, n As Long, razlog As String
-    On Error GoTo EH
-    If mode <> SV_MODE_DUPLI And mode <> SV_MODE_PONISTENJE Then Exit Sub
-    dt = modStornoDok.TipUFlowDoc(mSelTip)
-    If Len(dt) = 0 Then Exit Sub
-
-    ' Identitet izabranog reda ide i ovde: spisak koji operater potvrdjuje
-    ' zavrsava u StornoSelectedBlocks_TX, dakle u MUTACIJI.
-    Set blokovi = GetStornoBlockRows(dt, mSelBroj, mSelOpcija, mSelDocID)
-    If blokovi Is Nothing Then Exit Sub
-    If blokovi.count = 0 Then Exit Sub
-
-    ' SAMO OZNACENI. Podrazumevano nijedan nije oznacen, pa se bez izricitog izbora
-    ' u listi ne stornira nijedan blok -- isto kao legacy panel. Do v6-ui-149 je
-    ' potvrda ovde stornirala SVE, sto je bilo destruktivnije od legacy-ja.
-    Set ids = New Collection
-    For i = 1 To blokovi.count
-        red = blokovi(i)
-        If BlokOznacen(Trim$(CStr(red(0)))) Then
-            ids.Add CStr(red(0))
-            spisak = spisak & vbCrLf & "  " & CStr(red(1)) & "  " & ChrW(183) & " Kl." & _
-                     CStr(red(3)) & "  " & ChrW(183) & " " & CStr(red(2)) & " kg  " & _
-                     ChrW(183) & " " & CStr(red(4))
-        End If
-    Next i
-    If ids.count = 0 Then Exit Sub
-
-    ' Potvrda i dalje postoji: spisak je kratak (samo oznaceni), pa operater pred
-    ' mutacijom jos jednom vidi TACNO nad cim odlucuje.
-    If MsgBox(Poruka("OTKUI_SCRST_BLOK_ASK") & spisak & vbCrLf & vbCrLf & _
-              Poruka("OTKUI_SCRST_BLOK_ASK2"), _
-              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
-
-    razlog = BlockStornoDriftReason(dt, mode, ids)
-    If Len(razlog) > 0 Then
-        MsgBox razlog, vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    n = StornoSelectedBlocks_TX(ids)
-    If n > 0 Then
-        modOtkupUI.ShowToast Poruka("STORNO_MSG_BLOKOVI_OK") & " " & n, False
-        Exit Sub
-    End If
-
-    ' Storno dokumenta je vec komitovan; ako blok-storno padne, posao se ne gubi
-    ' u poruci koja prodje nego ostaje vidljiv kao MANUAL zadatak.
-    MsgBox Poruka("STORNO_ERR_BLOKOVI"), vbExclamation, APP_NAME
-    If Len(correctionID) > 0 Then
-        modStornoContext.MarkCorrectionManual correctionID, _
-            "Storniraj otkupne blokove rucno.", _
-            "Posle " & mode & " nad " & dt & " " & mSelBroj & " storno blokova nije uspeo."
-    End If
-    Exit Sub
-EH:
-    LogErr "modScrStorno.StornirajBlokoveAko"
-    Err.Clear
-End Sub
 
 '--------------------------------------------------- PREDAJA UNOSNOM EKRANU
 ' Otvori unos zamenskog dokumenta: predji na EKRAN dokumenata, pa u njegov

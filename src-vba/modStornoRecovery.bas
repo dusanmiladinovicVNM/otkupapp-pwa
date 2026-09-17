@@ -68,8 +68,8 @@ Public Function GetNedovrseno() As Collection
         "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
     AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
         "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
-    AddOsiroceneRows result, GetLostOtkupBlokovi(), "IZGUBLJEN_BLOK", 2, _
-        "Otkupni blok", "BLOK", "Otkupni blokovi (Preuzmi / prevezi)", seen
+    ' Vrsta IZGUBLJEN_BLOK (GetLostOtkupBlokovi nad Otkup.OtpremnicaID) je
+    ' obrisana u S1b-1 -- stari model; vraca S3.
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"

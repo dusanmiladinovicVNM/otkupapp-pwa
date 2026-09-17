@@ -605,10 +605,6 @@ End Sub
 
 Private Sub LoadBlokovi()
     On Error GoTo EH
-    If mLostMode Then
-        LoadLostBlokovi
-        Exit Sub
-    End If
     mLstBlok.Clear
     If Len(mActiveOtpID) = 0 Then Exit Sub
 
@@ -1025,29 +1021,6 @@ Private Sub PrefillOtkupFromStornirano(ByVal brDok As String)
 EH:
     mPrefilling = False
     LogErr "modOtkupBlok.PrefillOtkupFromStornirano"
-End Sub
-
-' Sekcija "Izgubljeni blokovi": blokovi cija je otpremnica stornirana/nestala.
-Private Sub LoadLostBlokovi()
-    On Error GoTo EH
-    mLstBlok.Clear
-    Dim lost As Variant: lost = GetLostOtkupBlokovi()
-    If Not IsArray(lost) Then Exit Sub
-
-    Dim dKo As Object: Set dKo = BuildKoopNames()
-    Dim i As Long, r As Long
-    For i = 1 To UBound(lost, 1)
-        mLstBlok.AddItem CStr(lost(i, 1))                  ' col0 (skriveno) = OtkupID
-        r = mLstBlok.ListCount - 1
-        mLstBlok.List(r, 1) = CStr(lost(i, 2))             ' br. bloka
-        mLstBlok.List(r, 2) = DictVal(dKo, Trim$(CStr(lost(i, 3))))  ' kooperant
-        mLstBlok.List(r, 3) = FmtDate(lost(i, 4))          ' datum
-        mLstBlok.List(r, 4) = FmtKgDec(NumVal(lost(i, 5))) ' kolicina
-        mLstBlok.List(r, 6) = "stara otp: " & CStr(lost(i, 7))       ' kol. "Vrednost"
-    Next i
-    Exit Sub
-EH:
-    LogErr "modOtkupBlok.LoadLostBlokovi"
 End Sub
 
 ' Toggle prikaza izgubljenih blokova u listi BLOKOVI.

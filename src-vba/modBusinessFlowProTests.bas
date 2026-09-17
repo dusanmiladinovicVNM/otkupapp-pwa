@@ -168,7 +168,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_BackfillHladnjacaDeliBrojPoZbirnoj
     Test_BackfillHladnjacaIgnorisePrijemniceDrugogKupca
 
-    Test_AutoLinkNeVidiHeaderStavkeOtkup
     Test_NoCrossZbirnaLinksAudit
 
     ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
@@ -354,7 +353,6 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
 
     Test_CoreTablesAndColumnsExist
     SeedBusinessFlowProMasterData
-    Test_AutoLinkNeVidiHeaderStavkeOtkup
     Test_NoCrossZbirnaLinksAudit
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
@@ -569,26 +567,9 @@ Private Sub Test_FullDocumentChainHappyPath()
     AssertDoubleNear 1180#, CDbl(manjak(1)), 0.01, "Manjak prijemnica kg"
     AssertDoubleNear 20#, CDbl(manjak(2)), 0.01, "Manjak kg"
 
-    ' AUTO-LINK NE VIDI HEADER+STAVKE OTKUP -- MERENO, NE PREVIDJENO.
-    '
-    ' AutoLinkOtkupOtpremnica kljuca po Stanica + Datum + VOZAC + KLASA +
-    ' BrojZbirne NAD tblOtkup (modSledljivost:121-127). Nov pisac ne pise ni
-    ' Vozaca ni Klasu na zaglavlju -- vozac je svojstvo otpremnice, klasa svojstvo
-    ' stavke -- pa kljuc vise nikad ne pogadja. Posledica ide nizvodno:
-    ' TraceByZbirna se oslanja na Otkup.OtpremnicaID koji upisuje bas AutoLink,
-    ' pa GlobalGAP sledljivost za nov otkup ostaje prazna.
-    '
-    ' Pravu vezu nosi tblOtpremnicaIzvori (PR5) i u pogon je vodi PR7. Privremen
-    ' citac se NE pravi (odluka operatera). Tvrdnje koje su ovde stajale zive u
-    ' PR7 acceptance mrezi -- docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
-    AutoLinkOtkupOtpremnica_TX
-
+    ' AutoLink i TraceByZbirna su obrisani u S1b-1 (stari model; vraca S3/S9).
     AssertEquals "", FindOtkupIDByBrojAndKlasa(brojOtk, "I"), _
                  "Cutover: otkup se vise ne nalazi po (broj, klasa)"
-    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkupResult, "OtpremnicaID")), _
-                 "Cutover: auto-link ne povezuje header+stavke otkup"
-    AssertTrue IsEmpty(TraceByZbirna(brojZbirne)), _
-               "Cutover: TraceByZbirna je prazna bez auto-link veze"
 
     Dim stavke As Collection
     Set stavke = New Collection
@@ -1288,63 +1269,6 @@ End Sub
 ' ============================================================
 ' TRACEABILITY / AUTOLINK REGRESSION TESTS
 ' ============================================================
-
-' AUTO-LINK JE SLEP ZA NOV MODEL -- i to je tvrdnja, ne propust.
-'
-' Zamenjuje Test_AutoLinkPositiveUniqueMatch i Test_AutoLinkMustNotCrossBrojZbirne.
-' Oba su merila POGADJANJE veze iz (Stanica, Datum, Vozac, Klasa, BrojZbirne) na
-' zaglavlju otkupa. Nov pisac te tri kolone ne pise, pa AutoLink nema po cemu da
-' kljuca -- nijedan od njih se ne moze uciniti zelenim bez vracanja starog modela.
-'
-' Njihove poslovne tvrdnje ("povezi tacno jedan jedinstven par" i "NIKAD ne
-' prelazi preko razlicitog BrojZbirne") nisu izgubljene nego PRESELJENE: PR7 ih
-' preuzima nad tblOtpremnicaIzvori, gde veza vise nije pogodjena nego upisana.
-' Spisak je u docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md, S14.2.
-'
-' Ovaj test je kapija u suprotnom smeru: ako iko vrati Vozaca ili Klasu na
-' zaglavlje, AutoLink opet pogodi i test pukne PO IMENU.
-Private Sub Test_AutoLinkNeVidiHeaderStavkeOtkup()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("LINKSLEP")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojOtk As String, brojOtp As String, brojZbirne As String
-    brojOtk = TEST_PREFIX & "-OTK-" & scenario
-    brojOtp = TEST_PREFIX & "-OTP-" & scenario
-    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
-
-    ' Savrsen par: ista stanica, isti datum, isti BrojZbirne, ista klasa.
-    Dim otkupID As String
-    otkupID = NoviOtkupFixture(testDate, TEST_ST_ID, brojOtk, brojZbirne, _
-                               100#, 100#, 10#, 0#, 0#, 0#)
-
-    Dim otpID As String
-    otpID = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
-                              TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, "I")
-
-    AssertTrue Len(otkupID) > 0, "Auto-link slep: otkup napravljen novim piscem"
-    AssertTrue Len(otpID) > 0, "Auto-link slep: otpremnica napravljena"
-
-    ' Zaglavlje nema ni jedno od tri polja po kojima AutoLink kljuca.
-    AssertEquals "", CStr(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), "")), _
-                 "Auto-link slep: zaglavlje ne nosi Vozaca"
-    AssertEquals "", CStr(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KLASA), "")), _
-                 "Auto-link slep: zaglavlje ne nosi Klasu"
-
-    AutoLinkOtkupOtpremnica_TX
-
-    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkupID, "OtpremnicaID")), _
-                 "Auto-link slep: savrsen par OSTAJE nepovezan"
-
-    Exit Sub
-
-EH:
-    LogFail "Auto-link ne vidi header+stavke otkup", Err.description
-End Sub
 
 Private Sub Test_NoCrossZbirnaLinksAudit()
     On Error GoTo EH
@@ -13609,7 +13533,6 @@ Public Function CreateSEFLiveTestFaktura() As String
     prjII = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
                               TEST_VRSTA, TEST_SORTA, 190#, 80#, TEST_TIP_AMB, 0, 0, "II")
 
-    AutoLinkOtkupOtpremnica_TX
 
     Dim stavke As Collection
     Set stavke = New Collection
@@ -13717,7 +13640,6 @@ Public Function CreateSEFLiveDummyFaktura() As String
               "SavePrijemnica_TX failed."
     End If
 
-    AutoLinkOtkupOtpremnica_TX
 
     Dim stavke As Collection
     Set stavke = New Collection

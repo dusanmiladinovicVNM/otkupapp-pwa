@@ -978,9 +978,9 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     End If
 
     ' --- stavke: jedan red po OTKUPU (sifra kooperanta, neto, ambalaza) ---
-    Dim ids As Collection: Set ids = New Collection
-    ids.Add palID
-    Dim o As Variant: o = GetOtkupiZaPalete(ids)
+    ' Izvor (GetOtkupiZaPalete nad TraceByZbirna i Otkup.Klasa/Kolicina) je
+    ' obrisan u S1b-1 -- stari model; stavke po otkupu vraca S8.
+    Dim o As Variant
 
     Dim outR As Long, rb As Long
     outR = startRow: rb = 0
@@ -2627,145 +2627,6 @@ Private Sub RecomputePaletaFromStavke(ByVal palID As String, ByVal SRC As String
     End If
 End Sub
 
-' Distinct kooperanti za zbirnu (reuse modSledljivost.TraceByZbirna, kol.1).
-Private Function GetKooperantiZaZbirnu(ByVal brojZbirne As String) As String
-    On Error Resume Next
-
-    Dim t As Variant
-    t = TraceByZbirna(brojZbirne)
-    If IsEmpty(t) Then Exit Function
-
-    Dim dic As Object
-    Set dic = CreateObject("Scripting.Dictionary")
-
-    Dim r As Long, k As String
-    For r = LBound(t, 1) To UBound(t, 1)
-        k = Trim$(CStr(t(r, 1)))
-        If Len(k) > 0 Then
-            If Not dic.Exists(k) Then dic.Add k, True
-        End If
-    Next r
-
-    If dic.count > 0 Then GetKooperantiZaZbirnu = Join(dic.keys, ", ")
-End Function
-
-' Otkupi za skup paleta: preko njihovih zbirni (tblPaletaStavka.BrojZbirne) ->
-' tblOtkup, filtrirano po klasi tih paleta, dedup po OtkupID. Vraca 1-based 2D:
-' 1 KooperantID(sifra), 2 VrstaVoca, 3 Kolicina(neto), 4 KolAmbalaze, 5 TipAmbalaze.
-Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
-    On Error GoTo EH
-    If paletaIDs Is Nothing Then Exit Function
-    If paletaIDs.count = 0 Then Exit Function
-
-    Dim palSet As Object: Set palSet = CreateObject("Scripting.Dictionary")
-    Dim v As Variant
-    For Each v In paletaIDs
-        palSet(CStr(v)) = True
-    Next v
-
-    ' zbirne tih paleta (iz stavki)
-    Dim zbSet As Object: Set zbSet = CreateObject("Scripting.Dictionary")
-    Dim sp As Variant: sp = GetTableData(TBL_PALETA_STAVKA)
-    Dim r As Long
-    If Not IsEmpty(sp) Then
-        Dim spPal As Long, spZb As Long, spStorno As Long
-        spPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-        spZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-        spStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-        For r = 1 To UBound(sp, 1)
-            If palSet.Exists(CStr(SafeCell(sp, r, spPal))) _
-               And UCase$(Trim$(CStr(SafeCell(sp, r, spStorno)))) <> "DA" Then
-                Dim zb As String: zb = Trim$(CStr(SafeCell(sp, r, spZb)))
-                If zb <> "" Then zbSet(zb) = True
-            End If
-        Next r
-    End If
-    If zbSet.count = 0 Then Exit Function
-
-    ' klase tih paleta
-    Dim klSet As Object: Set klSet = CreateObject("Scripting.Dictionary")
-    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
-    If Not IsEmpty(dp) Then
-        Dim pid As Long, pKl As Long
-        pid = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
-        pKl = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
-        For r = 1 To UBound(dp, 1)
-            If palSet.Exists(CStr(SafeCell(dp, r, pid))) Then
-                klSet(UCase$(Trim$(CStr(SafeCell(dp, r, pKl))))) = True
-            End If
-        Next r
-    End If
-
-    ' klasa filter samo ako paleta ima definisanu klasu (legacy palete bez klase
-    ' -> ne filtriraj po klasi, da lista ne bude prazna)
-    Dim filterKlasa As Boolean
-    Dim kk As Variant
-    For Each kk In klSet.keys
-        If Trim$(CStr(kk)) <> "" Then filterKlasa = True
-    Next kk
-
-    ' OtkupID-jevi preko zbirne: zbirna -> otpremnice -> otkupi (reuse TraceByZbirna).
-    ' Otkup nije direktno vezan za BrojZbirne, nego preko OtpremnicaID.
-    Dim wantOtk As Object: Set wantOtk = CreateObject("Scripting.Dictionary")
-    Dim z As Variant
-    For Each z In zbSet.keys
-        Dim t As Variant: t = TraceByZbirna(CStr(z))
-        If Not IsEmpty(t) Then
-            Dim tr As Long
-            For tr = LBound(t, 1) To UBound(t, 1)
-                Dim tid As String: tid = Trim$(CStr(t(tr, 6)))   ' OtkupID = kolona 6
-                If tid <> "" Then wantOtk(tid) = True
-            Next tr
-        End If
-    Next z
-    If wantOtk.count = 0 Then Exit Function
-
-    ' detalji otkupa iz tblOtkup po OtkupID (+ klasa filter), dedup
-    Dim o As Variant: o = GetTableData(TBL_OTKUP)
-    If IsEmpty(o) Then Exit Function
-    Dim oid As Long, oKoop As Long, oVr As Long, oKol As Long
-    Dim oAmb As Long, oTip As Long, oKl As Long, oStorno As Long
-    oid = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    oVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    oKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    oAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
-    oTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
-    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    oStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
-
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    Dim rows As Collection: Set rows = New Collection
-    For r = 1 To UBound(o, 1)
-        Dim otkID As String: otkID = CStr(SafeCell(o, r, oid))
-        If wantOtk.Exists(otkID) _
-           And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
-           And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
-            If Not seen.Exists(otkID) Then
-                seen(otkID) = True
-                rows.Add r
-            End If
-        End If
-    Next r
-    If rows.count = 0 Then Exit Function
-
-    Dim res As Variant: ReDim res(1 To rows.count, 1 To 5)
-    Dim k As Long
-    For k = 1 To rows.count
-        r = rows(k)
-        res(k, 1) = CStr(SafeCell(o, r, oKoop))
-        res(k, 2) = CStr(SafeCell(o, r, oVr))
-        res(k, 3) = NzD(SafeCell(o, r, oKol))
-        res(k, 4) = NzL(SafeCell(o, r, oAmb))
-        res(k, 5) = CStr(SafeCell(o, r, oTip))
-    Next k
-
-    GetOtkupiZaPalete = res
-    Exit Function
-EH:
-    LogErr "modPaletniList.GetOtkupiZaPalete"
-End Function
-
 ' Public (reuse iz frmDokumenta recovery panela i modOtkupBlok prefill-a; nema duplikata).
 Public Function NzD(ByVal v As Variant) As Double
     On Error Resume Next
@@ -3168,7 +3029,8 @@ Private Function FillPreradaSablon(ByVal preID As String, _
         Next sr
     End If
 
-    Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
+    ' Izvor otkupa (GetOtkupiZaPalete) obrisan u S1b-1 -- vraca S8.
+    Dim o As Variant
 
     ' Naslov vrste: SAMO tekst iz comboa "Gotov proizvod:" (tip gotovog
     ' proizvoda sa prerade, COL_PRE_TIP_GP). Vrsta/sorta iz izabranih paleta

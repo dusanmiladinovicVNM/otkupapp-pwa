@@ -57,8 +57,7 @@ Private mOtpIds As Object
 ' 14.09.2026 legalno po A2: druga stanica ili drugi dan). Kod drugog slucaja
 ' mOtpIds(broj) postaje "" -- broj je dvosmislen i ne razresava se u ID.
 Private mOtpDok As Object
-' broj bloka -> OtkupID, za listu izgubljenih; puni ga RowsIzgubljeni
-Private mLostIds As Object
+' Lista IZGUBLJENI i radnja preuzmi obrisane u S1b-1 (Otkup.OtpremnicaID; vraca S3).
 
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
@@ -68,7 +67,6 @@ Public Function Scr_Liste() As Variant
         "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTKUP|96", _
         "OTPREMNICE|OTKUI_SEG_LS_OTP|OTKUI_GRID_TITLE_OTPREMNICA|96", _
         "BLOKOVI|OTKUI_SEG_LS_BLOK|OTKUI_GRID_TITLE_BLOKOVI|110", _
-        "IZGUBLJENI|OTKUI_SEG_LS_LOST|OTKUI_GRID_TITLE_LOST|104", _
         "KOOPERANTI|OTKUI_SEG_LS_KOOP|OTKUI_GRID_TITLE_KOOP|100")
 End Function
 
@@ -106,9 +104,6 @@ Public Function Scr_Radnje() As String
         Case "OTPREMNICE"
             Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
                          "spec:OTKUI_BTN_RED_SPEC:152:ghost:0"
-        Case "IZGUBLJENI"
-            Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
-                         "preuzmi:OTKUI_BTN_RED_PREUZMI:96:soft:1"
     End Select
 End Function
 
@@ -374,9 +369,6 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "specdat"
             RowAction = PrintSpecDat("")
 
-        Case "preuzmi"
-            RowAction = PreuzmiBlok(broj)
-
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
@@ -434,60 +426,6 @@ Private Function PrintSpec(ByVal red As Long) As Boolean
     End If
     modOtkupBlok.PrintSpecifikacija col
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
-    Exit Function
-EH:
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-' Preuzimanje izgubljenog bloka na AKTIVNU otpremnicu. Sav posao radi
-' postojeci modDokumenta.ReassignOtkupToOtpremnica_TX - menja se samo veza,
-' OtkupID, uplate i ambalaza ostaju.
-'
-' Za razliku od legacy-ja, ciljna otpremnica se ne bira posebno: to je ona iz
-' trake gore, koja se cele vreme vidi. Legacy je trazio da se prvo klikne
-' otpremnica u levoj listi, pa je poruka "prvo izaberi ciljnu otpremnicu" bila
-' najcesci ishod prvog pokusaja.
-Private Function PreuzmiBlok(ByVal broj As String) As Boolean
-    Dim otkupID As String, ciljBroj As String
-    On Error GoTo EH
-    If Len(broj) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
-        Exit Function
-    End If
-    If Len(mOtpID) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_AKT_OTP"), True
-        Exit Function
-    End If
-    otkupID = ""
-    If Not mLostIds Is Nothing Then
-        If mLostIds.Exists(broj) Then otkupID = CStr(mLostIds(broj))
-    End If
-    If Len(otkupID) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_DOK") & " " & broj, True
-        Exit Function
-    End If
-
-    ciljBroj = mOtpBroj
-    If MsgBox(Poruka("OTKUI_ASK_PREUZMI") & " " & broj & " " & _
-              Poruka("OTKUI_ASK_PREUZMI2") & " " & ciljBroj & "?", _
-              vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
-
-    Dim idv As Variant, sviOK As Boolean
-    sviOK = True
-    For Each idv In Split(otkupID, "|")
-        If Not ReassignOtkupToOtpremnica_TX(CStr(idv), mOtpID) Then sviOK = False
-    Next idv
-
-    If sviOK Then
-        Scr_ResetCache
-        modOtkupUI.ShowToast Poruka("OTKUI_MSG_PREUZET") & " " & broj & " " & _
-                             Poruka("OTKUI_ASK_PREUZMI2") & " " & ciljBroj, False
-        PreuzmiBlok = True
-    Else
-        ' i delimican uspeh trazi osvezavanje - jedna klasa je mozda presla
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_PREUZMI") & " " & broj, True
-        PreuzmiBlok = True
-    End If
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
@@ -597,70 +535,6 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsKooperanti[" & mStep & "]", Err.description
-End Function
-
-'----------------------------------------------- LISTA: IZGUBLJENI (F1)
-' Blokovi cija je otpremnica stornirana ili je vise nema. Racun radi postojeci
-' modDokumenta.GetLostOtkupBlokovi (1-bazirano, 7 kolona):
-'   1 OtkupID | 2 BrDok | 3 KooperantID | 4 Datum | 5 Kolicina | 6 stari OtpID
-'   7 broj stare otpremnice
-Private Function LostGridCols() As Variant
-    LostGridCols = Array( _
-        "OTKUI_HD_BROJ||txt|110|1", _
-        "OTKUI_HD_DATUM||date|62|1", _
-        "OTKUI_HD_PARTNER||part|0|1", _
-        "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDL_STARA||txt|150|2")
-End Function
-
-Private Function RowsIzgubljeni(ByVal q As String) As Variant
-    Dim src As Variant, r As Long, n As Long, outA() As Variant
-    Dim koop As Object, ime As String, hay As String, sumKg As Double, kg As Double
-    On Error GoTo EH
-    mStep = "izgubljeni"
-
-    Set mLostIds = CreateObject("Scripting.Dictionary")
-    src = GetLostOtkupBlokovi()
-    If Not IsArray(src) Then
-        RowsIzgubljeni = Array(LostGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
-        Exit Function
-    End If
-    Set koop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-
-    ReDim outA(1 To UBound(src, 1), 1 To 5)
-    For r = 1 To UBound(src, 1)
-        ime = Trim$(CStr(src(r, 3)))
-        If Not koop Is Nothing Then
-            If koop.Exists(ime) Then ime = CStr(koop(ime))
-        End If
-        hay = CStr(src(r, 2)) & "|" & ime & "|" & CStr(src(r, 7))
-        If Len(q) > 0 Then
-            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
-        End If
-        kg = NumVal(src(r, 5))
-        n = n + 1
-        outA(n, 1) = CStr(src(r, 2))
-        ' Klase I i II dele broj dokumenta a imaju zasebne OtkupID-eve, pa mapa
-        ' cuva SVE ID-eve tog broja. Preuzimanje onda vodi ceo dokument, isto
-        ' kao sto storno stornira sve njegove klase.
-        If mLostIds.Exists(CStr(outA(n, 1))) Then
-            mLostIds(CStr(outA(n, 1))) = CStr(mLostIds(CStr(outA(n, 1)))) & "|" & CStr(src(r, 1))
-        Else
-            mLostIds(CStr(outA(n, 1))) = CStr(src(r, 1))
-        End If
-        outA(n, 2) = DatSerijski(src(r, 4))
-        outA(n, 3) = ime
-        outA(n, 4) = kg
-        outA(n, 5) = CStr(src(r, 7))
-        sumKg = sumKg + kg
-Sledeci:
-    Next r
-
-    mStep = "OK"
-    RowsIzgubljeni = Array(LostGridCols(), outA, n, sumKg, 0#, Array(0, 0, 0))
-    Exit Function
-EH:
-    Err.Raise Err.Number, "modScrDokumenti.RowsIzgubljeni[" & mStep & "]", Err.description
 End Function
 
 ' Datum iz proizvoljne celije u serijski broj koji mreza ocekuje.
@@ -1591,7 +1465,6 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Select Case Scr_Lista()
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
-        Case "IZGUBLJENI": Scr_Rows = RowsIzgubljeni(q): Exit Function
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
     End Select
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu

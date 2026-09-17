@@ -2644,7 +2644,36 @@ S4 (zbirna) ili S9 (sledljivost, integritet); do tada ne radi (§14.7). S1d osta
 `OfferHladnjacaIspravka` → `PrefillOtkupFromStornirano`) koji se briše. Izvor: `modOtkup.ZbirStavkiPoOtkupu` /
 `StavkeOtkupaRedovi`; bruto samo iz `StavkeOtkupaRedovi`.
 
-Sledeći korak: **S1b-1**.
+#### S1b-1 — urađeno (17.09.2026)
+
+**Obrisane procedure starog modela i grane pozivalaca** (grep posle brisanja: nula poziva):
+
+| Obrisano | Uklonjeno kod pozivalaca | Vraća |
+|---|---|---|
+| `modSledljivost.AutoLinkOtkupOtpremnica(_TX)` | dugme „Poveži automatski“ na ekranu SLEDLJIVOST (`scrSlAuto`, `AutoPovezi`), 3 ključa poruka | nijedan |
+| `modSledljivost.TraceByZbirna`, `modIzvestaj.StampajSledljivostZbirne` | meta ZBIRNA na SLEDLJIVOST sada javlja neuspeh štampe; `modPaletniList.GetOtkupiZaPalete` i `GetKooperantiZaZbirnu` obrisani — paletni i preradni list nemaju stavke po otkupu | S8 / S9 |
+| `modSledljivost.GetUnlinkedOtkupi` | provera integriteta B2 | S3 (provera novog modela) |
+| `modDokumenta.GetLostOtkupBlokovi` | lista IZGUBLJENI i radnja „preuzmi“ na DOKUMENTI (`RowsIzgubljeni`, `LostGridCols`, `PreuzmiBlok`), provera B3, vrsta `IZGUBLJEN_BLOK` u Oporavku, `modOtkupBlok.LoadLostBlokovi`; 9 ključeva poruka | S3 |
+| `modStornoFlow.GetStornoBlockRows` | storno otkupnih blokova posle storna dokumenta (`modScrStorno.StornirajBlokoveAko`); sekcija blokova u uvidu storna je prazna kolekcija (`modStornoImpact`); 4 ključa poruka | S3 |
+| `modStornoZurnal.OtkupReissueDupExists` | provera duplikata (broj, klasa) pri undo | nijedan |
+
+**Testovi obrisani** (merili su obrisano ponašanje): `Test_AutoLinkNeVidiHeaderStavkeOtkup` (BFP), deo
+`Test_FullDocumentChainHappyPath` o AutoLink/TraceByZbirna, tvrdnja šablona u `T_Sled_MeteSledljivosti`,
+`modTest` 50 `T_BlokoviF8_PoIdentitetu`, 51 `T_StorniranSibling_ZadrzavaSvojBlok`, 65
+`T_StornoImpact_BlokSekcijaDriftJeInvalidna`, 67 `T_StornoImpact_PrijemnicaBlokDriftJeInvalidan`. Registar
+`modTest` prenumerisan bez rupa (kapija `REGISTAR`). Katalog sabotaža: uklonjeno 6 unosa koji su gađali obrisan kod
+(`sledljivost-sablon-dvosmislen-broj`, `uvid-blok-sekcija-guta`, `uvid-blok-zbirna-guta`, `uvid-blok-prijemnica-guta`,
+`blokovi-po-broju`, `blockcount-po-broju`).
+
+**Merenje:** `x_otk_stavka` PROD 74 → **63**; `otk_linija` 91 → 79; DUAL READ živih 112 → 100.
+**Ostaje za S3 čišćenje:** pomoćne procedure bloka u `modStornoFlow`/`modScrStorno` (`ActiveBlocksForFlow`,
+`BlokOznacen`, `StornoSelectedBlocks_TX`, `BlockStornoDriftReason`) i prekidač izgubljenih u starom panelu
+`modOtkupBlok` (`ToggleLostMode`) — kompajliraju se, ali više nemaju ulaz.
+
+**Verifikacija:** `vba_check` čisto; `who_writes --check` (regenerisan) i `--check-ownership`; `gen_schema_module --check`.
+**Pre merge-a:** pun `python tools/run_vba.py` + `Debug → Compile VBAProject` (menjaju se ekrani i testovi).
+
+Sledeći korak: **S1b-2**.
 
 ## 15) Backlog — namerno van opsega
 
