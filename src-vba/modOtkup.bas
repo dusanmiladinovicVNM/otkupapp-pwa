@@ -989,7 +989,7 @@ Public Function StavkeOtkupaRedovi() As Variant
     d = GetTableData(TBL_OTKUP_STAVKE)
 
     Dim cOtk As Long, cRb As Long, cKl As Long
-    Dim cKol As Long, cCena As Long, cAmb As Long
+    Dim cKol As Long, cCena As Long, cAmb As Long, cId As Long, cBruto As Long
     Dim i As Long, n As Long, oid As String
 
     If IsArray(d) Then
@@ -999,6 +999,8 @@ Public Function StavkeOtkupaRedovi() As Variant
         cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
         cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
         cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+        cId = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_ID, SRC)
+        cBruto = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO, SRC)
 
         ' Prvi prolaz: kapije i broj redova (2D niz se ne skracuje po redovima).
         For i = 1 To UBound(d, 1)
@@ -1015,8 +1017,11 @@ Public Function StavkeOtkupaRedovi() As Variant
 
     If n = 0 Then Exit Function
 
+    ' Kolone: 1 OtkupID, 2 RedniBroj, 3 Klasa, 4 Kolicina, 5 Cena, 6 KolAmbalaze,
+    ' 7 OtkupStavkaID, 8 BrutoKg (prazno = unet neto). Nove kolone idu NA KRAJ:
+    ' citaoci indeksiraju poziciono.
     Dim res() As Variant
-    ReDim res(1 To n, 1 To 6)
+    ReDim res(1 To n, 1 To 8)
     n = 0
     For i = 1 To UBound(d, 1)
         n = n + 1
@@ -1026,9 +1031,20 @@ Public Function StavkeOtkupaRedovi() As Variant
         res(n, 4) = CDbl(d(i, cKol))
         res(n, 5) = CDbl(d(i, cCena))
         res(n, 6) = KolAmbalazeStavke(d(i, cAmb))
+        res(n, 7) = Trim$(NzToText(d(i, cId)))
+        res(n, 8) = BrutoStavkeIliPrazno(d(i, cBruto))
     Next i
 
     StavkeOtkupaRedovi = res
+End Function
+
+' BrutoKg stavke za izvoz: broj > 0 ili prazno. Prazno znaci da je unet neto
+' (bruto == Kolicina), isto pravilo koje drzi COL_OKS_BRUTO u modConfig.
+Private Function BrutoStavkeIliPrazno(ByVal v As Variant) As Variant
+    BrutoStavkeIliPrazno = ""
+    If IsNumeric(v) Then
+        If CDbl(v) > 0 Then BrutoStavkeIliPrazno = CDbl(v)
+    End If
 End Function
 
 ' Zaglavlja otkupa: OtkupID -> broj redova sa tim ID-em. Prazan OtkupID se NE

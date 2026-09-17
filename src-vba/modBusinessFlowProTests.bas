@@ -123,7 +123,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_MalinaVozacMirror
 
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
-    Test_RF28_AutoOtpremnicaNeMesaArtikle
     Test_RF28_BrojZbirneRupaNeDajeDuplikat
     Test_ZBR_ImportDvaUredjajaNeStapaDokumente
     Test_RF28_LinkKonfliktNePrepisuje
@@ -275,6 +274,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_StornoJednimID
     Test_OTK_PrefillStornaDveKlaseSaStavki
     Test_OTK_PrefillStornaBezStavkiPada
+    Test_OTK_IzvozDveKlaseIzStavki
+    Test_OTK_IzvozBezStavkiPada
 
     ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
     ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
@@ -1698,114 +1699,6 @@ End Sub
 ' literali ("UPDATED"/"NOCHANGE"/"CONFLICT"/"NOTFOUND") -- ako se preimenuju,
 ' ovi testovi moraju da se azuriraju zajedno sa njima.
 ' ============================================================
-
-' AUD-043(a): otkupi istog Stanica|Datum|Vozac|Klasa koji se razlikuju po BILO KOM
-' artikal-atributu moraju dati ZASEBNE otpremnice. Stari kljuc (bez
-' Vrsta|Sorta|Cena|TipAmb) ih je spajao u jednu i citao metadata sa PRVOG reda ->
-' pogresna vrsta, sorta, novac i ambalaza na otpremnici.
-'
-' Testiraju se sva cetiri polja zasebno (jedna promenljiva po redu, baseline je
-' red A) -- da regresija u samo jednom segmentu kljuca ne prode neopazeno.
-Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
-    Dim tx As clsTransaction
-
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("RF28OTP")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim otkBase As String, otkCena As String, otkVrsta As String
-    Dim otkSorta As String, otkTipAmb As String
-
-    otkBase = "OTK-RF28-BASE-" & scenario
-    otkCena = "OTK-RF28-CENA-" & scenario
-    otkVrsta = "OTK-RF28-VRSTA-" & scenario
-    otkSorta = "OTK-RF28-SORTA-" & scenario
-    otkTipAmb = "OTK-RF28-AMB-" & scenario
-
-    Dim vrstaB As String, sortaB As String, tipAmbB As String
-    vrstaB = TEST_VRSTA & " RF28-2"
-    sortaB = TEST_SORTA & " RF28-2"
-    tipAmbB = TEST_TIP_AMB & " RF28-2"
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_AMBALAZA
-
-    ' Svi dele Stanica|Datum|Vozac|Klasa; svaki se od baseline-a razlikuje po
-    ' TACNO JEDNOM artikal-atributu.
-    AppendRF28OtkupFixture otkBase, testDate, TEST_VOZ_ID, "I", 120#, ""
-    AppendRF28OtkupFixture otkCena, testDate, TEST_VOZ_ID, "I", 175#, ""
-    AppendRF28OtkupFixture otkVrsta, testDate, TEST_VOZ_ID, "I", 120#, "", "", vrstaB
-    AppendRF28OtkupFixture otkSorta, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, sortaB
-    AppendRF28OtkupFixture otkTipAmb, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, TEST_SORTA, tipAmbB
-
-    ' Scope na test-dan -- run ne sme da zahvati nepovezane otkupe u svesci.
-    '
-    ' Zove se JEZGRO, ne _TX ulaz: produkcioni ulaz je PAUZIRAN do PR7
-    ' (modMasterSync.IzvedeniLanacIzPwaDostupan). Pravilo grupisanja koje ovaj
-    ' test meri je i dalje ziv kod koji PR7 prepisuje, pa ostaje mereno; a test
-    ' ionako drzi sopstvenu transakciju (iznad), pa mu _TX omotac nista ne daje.
-    Call modMasterSync.AutoCreateOtpremniceFromPWA(testDate)
-
-    Dim otpBase As String, otpCena As String, otpVrsta As String
-    Dim otpSorta As String, otpTipAmb As String
-
-    otpBase = RF28OtpremnicaZaOtkup(otkBase)
-    otpCena = RF28OtpremnicaZaOtkup(otkCena)
-    otpVrsta = RF28OtpremnicaZaOtkup(otkVrsta)
-    otpSorta = RF28OtpremnicaZaOtkup(otkSorta)
-    otpTipAmb = RF28OtpremnicaZaOtkup(otkTipAmb)
-
-    AssertTrue Len(otpBase) > 0 And Len(otpCena) > 0 And Len(otpVrsta) > 0 _
-               And Len(otpSorta) > 0 And Len(otpTipAmb) > 0, _
-        "RF-28 AUD-043a: svih pet otkupa je povezano na otpremnicu"
-
-    ' Pet razlicitih kombinacija -> pet RAZLICITIH otpremnica.
-    Dim jedinstvene As Object
-    Set jedinstvene = CreateObject("Scripting.Dictionary")
-    jedinstvene(otpBase) = True
-    jedinstvene(otpCena) = True
-    jedinstvene(otpVrsta) = True
-    jedinstvene(otpSorta) = True
-    jedinstvene(otpTipAmb) = True
-
-    AssertEquals "5", CStr(jedinstvene.count), _
-        "RF-28 AUD-043a: pet artikal-kombinacija daje PET otpremnica (ne jednu mesanu)"
-
-    ' Svaka otpremnica nosi SVOJ atribut, ne onaj sa prvog reda grupe.
-    AssertDoubleNear 120#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpBase, COL_OTP_CENA)), _
-        0.001, "RF-28 AUD-043a: baseline otpremnica nosi svoju cenu"
-    AssertDoubleNear 175#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpCena, COL_OTP_CENA)), _
-        0.001, "RF-28 AUD-043a: razlicita Cena je zasebna otpremnica sa svojom cenom"
-    AssertEquals vrstaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpVrsta, COL_OTP_VRSTA))), _
-        "RF-28 AUD-043a: razlicita VrstaVoca je zasebna otpremnica sa svojom vrstom"
-    AssertEquals sortaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpSorta, COL_OTP_SORTA))), _
-        "RF-28 AUD-043a: razlicita SortaVoca je zasebna otpremnica sa svojom sortom"
-    AssertEquals tipAmbB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpTipAmb, COL_OTP_TIP_AMB))), _
-        "RF-28 AUD-043a: razlicit TipAmbalaze je zasebna otpremnica sa svojim tipom"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa artikle", bfpErrDesc
-End Sub
-
-Private Function RF28OtpremnicaZaOtkup(ByVal otkupID As String) As String
-    RF28OtpremnicaZaOtkup = _
-        Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_OTPREMNICA_ID)))
-End Function
 
 ' AUD-041(b): rupa u nizu ne sme da proizvede vec zauzet broj. Row-count generator
 ' je za {"N/ddmmyy", "N/ddmmyy-3"} vracao "-3" ponovo; MAX-seq vraca "-4".
@@ -10547,6 +10440,175 @@ EH:
     LogFatal "Test_OTK_PrefillStornaBezStavkiPada", Err.Number, Err.description
 End Sub
 
+' IZVOZ OTKUPA CITA STAVKE (S1c, REFAKTOR S14.8 t. 13).
+'
+' Dvoklasni otkup (I 100 kg x 50, II 40 kg x 30 = 6200) mora u svakom izvozu da
+' se vidi kao dve klase sa tacnim kg i vrednoscu: OtkupPoOM (zbir po klasi),
+' OtkupiAllStavke (red po stavci), SaldoOMDetail (zbir po kooperantu) i push
+' ka stanici (zaglavlje bez linijskih polja + dve stavke u OTK_STAVKE).
+' Opseg je sopstveni OtkupID -- izvoz ne sme da zavisi od ostatka sveske.
+Private Sub Test_OTK_IzvozDveKlaseIzStavki()
+    On Error GoTo EH
+
+    Dim otkID As String, brDok As String
+    brDok = TEST_PREFIX & "-OTK-IZ-" & NewScenarioCode("OTKIZ")
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(100#, 50#, 5, 40#, 30#, 2))
+    AssertTrue Len(otkID) > 0, "OTK izvoz: dvoklasni otkup upisan"
+
+    Dim samo As Object
+    Set samo = CreateObject("Scripting.Dictionary")
+    samo.Add otkID, True
+
+    ' OtkupPoOM: naslov + klasa I + klasa II
+    Dim om As Variant, r As Long, nI As Long, nII As Long
+    om = modStammdatenSync.OtkupPoOMRedovi(samo)
+    AssertEquals "3", CStr(UBound(om, 1)), "OTK izvoz OtkupPoOM: naslov + dve klase"
+    For r = 2 To UBound(om, 1)
+        Select Case CStr(om(r, 3))
+            Case KLASA_I
+                nI = nI + 1
+                AssertEquals "100", CStr(om(r, 4)), "OTK izvoz OtkupPoOM: kg klase I"
+                AssertEquals "5", CStr(om(r, 5)), "OTK izvoz OtkupPoOM: gajbe klase I"
+                AssertEquals "5000", CStr(om(r, 6)), "OTK izvoz OtkupPoOM: vrednost klase I"
+                AssertEquals "1", CStr(om(r, 7)), "OTK izvoz OtkupPoOM: jedan dokument u klasi I"
+            Case KLASA_II
+                nII = nII + 1
+                AssertEquals "40", CStr(om(r, 4)), "OTK izvoz OtkupPoOM: kg klase II"
+                AssertEquals "1200", CStr(om(r, 6)), "OTK izvoz OtkupPoOM: vrednost klase II"
+        End Select
+    Next r
+    AssertTrue nI = 1 And nII = 1, "OTK izvoz OtkupPoOM: tacno po jedan red klase I i II"
+
+    ' OtkupiAllStavke: red po stavci, po imenu kolone
+    Dim st As Variant, kol As Variant, k As Long
+    Dim cOtk As Long, cKl As Long, cId As Long, cKol As Long
+    st = modStammdatenSync.OtkupiAllStavkeRedovi(samo)
+    kol = modMasterSync.OtkStavkeKolone()
+    For k = LBound(kol) To UBound(kol)
+        Select Case CStr(kol(k))
+            Case COL_OKS_OTKUP_ID: cOtk = k - LBound(kol) + 1
+            Case COL_OKS_KLASA: cKl = k - LBound(kol) + 1
+            Case COL_OKS_ID: cId = k - LBound(kol) + 1
+            Case COL_OKS_KOLICINA: cKol = k - LBound(kol) + 1
+        End Select
+    Next k
+    AssertEquals "3", CStr(UBound(st, 1)), "OTK izvoz OtkupiAllStavke: naslov + dve stavke"
+    Dim zbirKg As Double, klase As String
+    For r = 2 To UBound(st, 1)
+        AssertEquals otkID, CStr(st(r, cOtk)), "OTK izvoz OtkupiAllStavke: roditelj je OtkupID"
+        AssertTrue Len(CStr(st(r, cId))) > 0, "OTK izvoz OtkupiAllStavke: stavka nosi OtkupStavkaID"
+        zbirKg = zbirKg + CDbl(st(r, cKol))
+        klase = klase & "|" & CStr(st(r, cKl))
+    Next r
+    AssertEquals "140", CStr(zbirKg), "OTK izvoz OtkupiAllStavke: kg obe stavke"
+    AssertTrue InStr(1, klase & "|", "|" & KLASA_I & "|", vbBinaryCompare) > 0 And _
+               InStr(1, klase & "|", "|" & KLASA_II & "|", vbBinaryCompare) > 0, _
+               "OTK izvoz OtkupiAllStavke: obe klase (" & klase & ")"
+
+    ' SaldoOMDetail: kooperant iz stavki
+    Dim saldo As Object, v As Variant
+    Set saldo = modStammdatenSync.OtkupSaldoPoKooperantu(samo)
+    AssertTrue saldo.Exists(TEST_KOOP_ID), "OTK izvoz SaldoOMDetail: kooperant postoji"
+    v = saldo(TEST_KOOP_ID)
+    AssertEquals "140", CStr(v(1)), "OTK izvoz SaldoOMDetail: kg"
+    AssertEquals "6200", CStr(v(2)), "OTK izvoz SaldoOMDetail: vrednost = zbir stavki"
+    AssertEquals "7", CStr(v(3)), "OTK izvoz SaldoOMDetail: gajbe"
+
+    ' Push ka stanici: zaglavlje bez linijskih polja, dve stavke
+    Dim lo As ListObject, iID As Long, red As Variant, zk As Variant
+    Set lo = GetTable(TBL_OTKUP)
+    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    For r = 1 To lo.DataBodyRange.rows.count
+        If CStr(lo.DataBodyRange.cells(r, iID).value) = otkID Then Exit For
+    Next r
+    red = modStanicaLock.BuildOTKSheetRowForOtkup(otkID, TEST_ST_ID, lo, r, iID)
+    AssertTrue IsArray(red), "OTK push: red zaglavlja sastavljen"
+    zk = modMasterSync.OtkZaglavljeKolone()
+    AssertEquals CStr(UBound(zk) - LBound(zk)), CStr(UBound(red)), "OTK push: red prati spisak kolona"
+    For k = LBound(zk) To UBound(zk)
+        Select Case CStr(zk(k))
+            Case "ServerRecordID"
+                AssertEquals otkID, CStr(red(k - LBound(zk))), "OTK push: ServerRecordID = OtkupID"
+            Case "Klasa", "Kolicina", "Cena", "KolAmbalaze"
+                AssertEquals "", CStr(red(k - LBound(zk))), "OTK push: " & CStr(zk(k)) & " je na stavci, ne u zaglavlju"
+        End Select
+    Next k
+    Dim poOtk As Object
+    Set poOtk = modMasterSync.OtkStavkeRedoviPoOtkupu()
+    AssertEquals "2", CStr(poOtk(otkID).count), "OTK push: dve stavke za OTK_STAVKE"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IzvozDveKlaseIzStavki", Err.Number, Err.description
+End Sub
+
+' IZVOZ OTKUPA BEZ STAVKI PADA PO IMENU, NIKAD 0 KG (S1c).
+'
+' Synthetic anomaly: kanonski otkup, pa brisanje stavki u transakciji testa.
+' Kontrola pre brisanja dokazuje da je pad posle zbog stavki, ne zbog opsega.
+Private Sub Test_OTK_IzvozBezStavkiPada()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+
+    Dim otkID As String, brDok As String
+    brDok = TEST_PREFIX & "-OTK-IB-" & NewScenarioCode("OTKIB")
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK izvoz bez stavki: otkup upisan"
+
+    Dim samo As Object
+    Set samo = CreateObject("Scripting.Dictionary")
+    samo.Add otkID, True
+    AssertEquals "2", CStr(UBound(modStammdatenSync.OtkupPoOMRedovi(samo), 1)), _
+                 "OTK izvoz bez stavki: kontrola -- sa stavkama red postoji"
+
+    Dim rows As Collection, k As Long
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), "Test_OTK_IzvozBezStavkiPada"
+    Next k
+
+    AssertTrue InStr(1, IzvozGreska("POOM", samo), otkID, vbTextCompare) > 0, _
+               "OTK izvoz bez stavki: OtkupPoOM pada po imenu dokumenta"
+    AssertTrue InStr(1, IzvozGreska("STAVKE", samo), otkID, vbTextCompare) > 0, _
+               "OTK izvoz bez stavki: OtkupiAllStavke pada po imenu dokumenta"
+    AssertTrue InStr(1, IzvozGreska("SALDO", samo), otkID, vbTextCompare) > 0, _
+               "OTK izvoz bez stavki: SaldoOMDetail pada po imenu dokumenta"
+    AssertTrue InStr(1, IzvozGreska("PUSH", samo), otkID, vbTextCompare) > 0, _
+               "OTK izvoz bez stavki: push stavki pada po imenu dokumenta"
+
+    tx.RollbackTx
+    Set tx = Nothing
+    Exit Sub
+
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogFatal "Test_OTK_IzvozBezStavkiPada", Err.Number, Err.description
+End Sub
+
+' Poruka greske izvoza ili "" ako je prosao.
+Private Function IzvozGreska(ByVal koji As String, ByVal samo As Object) As String
+    Dim x As Variant
+    On Error Resume Next
+    Err.Clear
+    Select Case koji
+        Case "POOM": x = modStammdatenSync.OtkupPoOMRedovi(samo)
+        Case "STAVKE": x = modStammdatenSync.OtkupiAllStavkeRedovi(samo)
+        Case "SALDO": Set x = modStammdatenSync.OtkupSaldoPoKooperantu(samo)
+        Case "PUSH": Set x = modMasterSync.OtkStavkeRedoviPoOtkupu()
+    End Select
+    If Err.Number <> 0 Then IzvozGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
 ' STORNO DVOKLASNOG DOKUMENTA JE JEDAN POZIV NAD HEADER-ID.
 '
 ' U starom modelu je dvoklasni blok bio dva reda sa istim BrojDokumenta, pa je
@@ -12469,7 +12531,8 @@ EH:
     LogFatal "Test_PWA_PrenosiVremeNastanka", Err.Number, Err.description
 End Sub
 
-' IZVEDENI LANAC JE PAUZIRAN NA SVA TRI ULAZA.
+' IZVEDENI LANAC JE PAUZIRAN NA OBA PREOSTALA ULAZA (auto-otpremnica iz PWA je
+' obrisana u S1c; vraca je S5).
 '
 ' Nalaz iz review-a: pauzirana je bila samo auto-otpremnica, a nizvodni koraci su
 ' nastavljali -- i oba PISU NAZAD NA ZAGLAVLJE OTKUPA:
@@ -12479,16 +12542,12 @@ End Sub
 '
 ' Pun PWA sync je time mogao da napravi canonical otkup, pa da ga odmah
 ' KONTAMINIRA starim backlink modelom. Kapija je zato JEDNA i pokriva ceo lanac;
-' test tvrdi da nijedan od tri ulaza ne prolazi, i to PO PORUCI.
+' test tvrdi da nijedan ulaz ne prolazi, i to PO PORUCI.
 Private Sub Test_PWA_IzvedeniLanacJePauziran()
     On Error GoTo EH
 
     AssertTrue Not modMasterSync.IzvedeniLanacIzPwaDostupan(), _
                "Lanac: kapija je zatvorena"
-
-    ' 1) auto-otpremnica
-    AssertTrue InStr(1, UlazPada("OTP"), "PAUZIRANO", vbTextCompare) > 0, _
-               "Lanac: auto-otpremnica iz PWA je pauzirana"
 
     ' 2) malina auto-zbirna iz otpremnica
     AssertTrue InStr(1, UlazPada("ZBR"), "PAUZIRANA", vbTextCompare) > 0, _
@@ -12513,7 +12572,6 @@ Private Function UlazPada(ByVal koji As String) As String
     Err.Clear
 
     Select Case koji
-        Case "OTP": Call modMasterSync.AutoCreateOtpremniceFromPWA_TX(NextTestDate())
         Case "ZBR": Call modMasterSync.AutoCreateZbirnaFromOtpremnice_TX("NEMA-" & NewScenarioCode("LNC"))
         Case "VOZ": Call modMasterSync.ImportZbirneFromPWA_Core(False)
     End Select

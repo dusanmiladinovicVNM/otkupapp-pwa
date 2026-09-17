@@ -406,9 +406,11 @@ End Sub
 ' ============================================================
 
 ' Iterira tblOtkup za (StanicaID = X, Datum = Y, ClientRecordID is empty).
-' Za svaki red:
-'   1. Sastavi 23-col GAS row (preuzimajuci podatke iz tblOtkup + lookup-ovi)
-'   2. AppendRowToSheet ? OTK-{stanicaID}
+' Za svaki red (S1c: zaglavlje + stavke, REFAKTOR S14.8 t. 13):
+'   1. Stavke otkupa -> tab OTK_STAVKE, red po stavci
+'   2. Zaglavlje -> Sheet1, TEK kad su sve stavke upisane. Zaglavlje je
+'      oznaka zavrsenog push-a: stavka bez zaglavlja je nedovrsen pokusaj
+'      koji se ponavlja (citalac u S5 kljuca po OtkupStavkaID).
 '   3. Na uspeh: upisi ClientRecordID = "VBA:" & OtkupID + SyncSource = "VBA"
 '      (sledeci bulk push nece ga ponovo pokusati)
 '   4. Na fail: ostavi ClientRecordID empty ? retry pri sledecem unlock-u
@@ -459,6 +461,12 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
     
     Dim datumStr As String: datumStr = Format$(datum, "yyyy-mm-dd")
     Dim pushed As Long: pushed = 0
+
+    ' Stavke kroz kanonsku granicu, jednom za ceo prolaz. Pokvaren dokument
+    ' obara ceo push po imenu (EH) -- zaglavlje bez stavki se ne salje.
+    Dim stavkePoOtkupu As Object
+    Set stavkePoOtkupu = modMasterSync.OtkStavkeRedoviPoOtkupu()
+    Dim tabStavkiSpreman As Boolean
     
     Dim r As Long
     For r = 1 To lo.DataBodyRange.rows.count
@@ -484,7 +492,32 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
         Dim rowData As Variant
         rowData = BuildOTKSheetRowForOtkup(otkupID, stanicaID, lo, r, iID)
         If IsEmpty(rowData) Then GoTo NextRow
-        
+
+        If Not stavkePoOtkupu.Exists(otkupID) Then
+            LogError SRC, "Otkup bez stavki se ne salje: OtkupID=" & otkupID
+            GoTo NextRow
+        End If
+        If Not tabStavkiSpreman Then
+            If Not EnsureOtkStavkeTab(spreadsheetID) Then
+                LogWarn SRC, "Tab " & OTK_STAVKE_TAB & " nije spreman; push odlozen."
+                Exit For
+            End If
+            tabStavkiSpreman = True
+        End If
+        Dim stavka As Variant, stavkeOk As Boolean
+        stavkeOk = True
+        For Each stavka In stavkePoOtkupu(otkupID)
+            If Not AppendRowToSheet(spreadsheetID, OTK_STAVKE_TAB, stavka) Then
+                stavkeOk = False
+                Exit For
+            End If
+        Next stavka
+        If Not stavkeOk Then
+            LogWarn SRC, "Push stavki failed za OtkupID=" & otkupID & _
+                         ", zaglavlje se ne salje, retry pri sledecem unlock-u"
+            GoTo NextRow
+        End If
+
         If AppendRowToSheet(spreadsheetID, "Sheet1", rowData) Then
             ' Mark as pushed
             lo.DataBodyRange.cells(r, iCRID).value = "VBA:" & otkupID
@@ -510,30 +543,22 @@ EH:
     BulkPushPendingForStanica = 0
 End Function
 
-' Konstruise 1D Array (23 elementa) za OTK sheet append iz tblOtkup reda.
-Private Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
+' Red zaglavlja otkupa za Sheet1 OTK-* sheet-a, po imenu iz
+' modMasterSync.OtkZaglavljeKolone (jedino mesto rasporeda).
+'
+' Klasa, Kolicina, Cena i KolAmbalaze su PRAZNI: to su polja stavke i idu u
+' OTK_STAVKE. Kolona koju ovaj graditelj ne poznaje pada -- nova kolona u
+' spisku ne sme tiho da ode prazna.
+Public Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
                                            ByVal stanicaID As String, _
                                            ByVal lo As ListObject, _
                                            ByVal rowIdx As Long, _
                                            ByVal iID As Long) As Variant
     On Error GoTo EH
-    
-    Dim iDatum As Long: iDatum = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    Dim iKoop As Long: iKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    Dim iVrsta As Long: iVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    Dim iSorta As Long: iSorta = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
-    Dim iKol As Long: iKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    Dim iCena As Long: iCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    Dim iTipAmb As Long: iTipAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
-    Dim iKolAmb As Long: iKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
-    Dim iVozac As Long: iVozac = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
-    Dim iBrDok As Long: iBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    Dim iKlasa As Long: iKlasa = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    Dim iParcela As Long: iParcela = GetColumnIndex(TBL_OTKUP, COL_OTK_PARCELA)
-    
+
     Dim kooperantID As String
-    kooperantID = CStr(lo.DataBodyRange.cells(rowIdx, iKoop).value)
-    
+    kooperantID = CStr(OtkCelija(lo, rowIdx, COL_OTK_KOOPERANT))
+
     Dim kooperantName As String
     kooperantName = CStr(nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"), ""))
     Dim koopPrezime As String
@@ -541,41 +566,77 @@ Private Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
     If Len(koopPrezime) > 0 Then
         kooperantName = Trim$(kooperantName & " " & koopPrezime)
     End If
-    
+
     Dim nowIso As String: nowIso = Format$(Now, "yyyy-mm-dd\Thh:nn:ss")
-    Dim datumIso As String: datumIso = Format$(CDate(lo.DataBodyRange.cells(rowIdx, iDatum).value), "yyyy-mm-dd")
-    
-    Dim rowOut(0 To 22) As Variant
-    rowOut(0) = "VBA:" & otkupID                                              ' 1  ClientRecordID
-    rowOut(1) = otkupID                                                       ' 2  ServerRecordID
-    rowOut(2) = nowIso                                                        ' 3  CreatedAtClient
-    rowOut(3) = nowIso                                                        ' 4  UpdatedAtClient
-    rowOut(4) = ""                                                            ' 5  UpdatedAtServer
-    rowOut(5) = SYNC_STATUS_MASTER_GOOGLE                                     ' 6  SyncStatus
-    rowOut(6) = DEVICE_ID_VBA                                                 ' 7  DeviceID
-    rowOut(7) = stanicaID                                                     ' 8  OtkupacID
-    rowOut(8) = datumIso                                                      ' 9  Datum
-    rowOut(9) = kooperantID                                                   ' 10 KooperantID
-    rowOut(10) = kooperantName                                                ' 11 KooperantName
-    rowOut(11) = CStr(lo.DataBodyRange.cells(rowIdx, iVrsta).value)           ' 12 VrstaVoca
-    rowOut(12) = CStr(nz(lo.DataBodyRange.cells(rowIdx, iSorta).value, ""))   ' 13 SortaVoca
-    rowOut(13) = CStr(lo.DataBodyRange.cells(rowIdx, iKlasa).value)           ' 14 Klasa
-    rowOut(14) = CDbl(lo.DataBodyRange.cells(rowIdx, iKol).value)             ' 15 Kolicina
-    rowOut(15) = CDbl(lo.DataBodyRange.cells(rowIdx, iCena).value)            ' 16 Cena
-    rowOut(16) = CStr(nz(lo.DataBodyRange.cells(rowIdx, iTipAmb).value, ""))  ' 17 TipAmbalaze
-    rowOut(17) = CLng(nz(lo.DataBodyRange.cells(rowIdx, iKolAmb).value, 0))   ' 18 KolAmbalaze
-    rowOut(18) = CStr(nz(lo.DataBodyRange.cells(rowIdx, iParcela).value, "")) ' 19 ParcelaID
-    rowOut(19) = CStr(nz(lo.DataBodyRange.cells(rowIdx, iVozac).value, ""))   ' 20 VozacID
-    rowOut(20) = ""                                                            ' 21 Napomena
-    rowOut(21) = nowIso                                                        ' 22 ReceivedAt
-    rowOut(22) = CStr(nz(lo.DataBodyRange.cells(rowIdx, iBrDok).value, ""))   ' 23 BrojDokumenta
-    
+
+    Dim kol As Variant
+    kol = modMasterSync.OtkZaglavljeKolone()
+    Dim rowOut() As Variant
+    ReDim rowOut(0 To UBound(kol) - LBound(kol))
+
+    Dim k As Long, v As Variant
+    For k = LBound(kol) To UBound(kol)
+        Select Case CStr(kol(k))
+            Case "ClientRecordID": v = "VBA:" & otkupID
+            Case "ServerRecordID": v = otkupID
+            Case "CreatedAtClient", "UpdatedAtClient", "ReceivedAt": v = nowIso
+            Case "UpdatedAtServer", "Napomena": v = ""
+            Case "SyncStatus": v = SYNC_STATUS_MASTER_GOOGLE
+            Case "DeviceID": v = DEVICE_ID_VBA
+            Case "OtkupacID": v = stanicaID
+            Case "Datum": v = Format$(CDate(OtkCelija(lo, rowIdx, COL_OTK_DATUM)), "yyyy-mm-dd")
+            Case "KooperantID": v = kooperantID
+            Case "KooperantName": v = kooperantName
+            Case "VrstaVoca": v = CStr(OtkCelija(lo, rowIdx, COL_OTK_VRSTA))
+            Case "SortaVoca": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_SORTA), ""))
+            Case "TipAmbalaze": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_TIP_AMB), ""))
+            Case "ParcelaID": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_PARCELA), ""))
+            Case "VozacID": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_VOZAC), ""))
+            Case "BrojDokumenta": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_BR_DOK), ""))
+            Case "Klasa", "Kolicina", "Cena", "KolAmbalaze": v = ""   ' stavka -> OTK_STAVKE
+            Case Else
+                Err.Raise vbObjectError + 8142, "BuildOTKSheetRowForOtkup", _
+                          "Kolona OTK zaglavlja bez izvora: " & CStr(kol(k))
+        End Select
+        rowOut(k - LBound(kol)) = v
+    Next k
+
     BuildOTKSheetRowForOtkup = rowOut
     Exit Function
 
 EH:
     LogErr "BuildOTKSheetRowForOtkup", "otkupID=" & otkupID
     BuildOTKSheetRowForOtkup = Empty
+End Function
+
+' Celija reda tblOtkup po imenu kolone; kolona koja fali pada po imenu.
+Private Function OtkCelija(ByVal lo As ListObject, ByVal rowIdx As Long, _
+                           ByVal kolona As String) As Variant
+    OtkCelija = lo.DataBodyRange.cells(rowIdx, _
+        RequireColumnIndex(TBL_OTKUP, kolona, "BuildOTKSheetRowForOtkup")).value
+End Function
+
+' Tab OTK_STAVKE postoji i nosi red naslova (modMasterSync.OtkStavkeKolone).
+' Neuspelo citanje NIJE "prazan tab": False, push se odlaze (fail-closed).
+Private Function EnsureOtkStavkeTab(ByVal spreadsheetID As String) As Boolean
+    Const SRC As String = "EnsureOtkStavkeTab"
+    On Error GoTo EH
+
+    If Not AddSheetTab(spreadsheetID, OTK_STAVKE_TAB, True) Then Exit Function
+
+    Dim postojece As Variant
+    If Not TryReadSheetData(spreadsheetID, OTK_STAVKE_TAB, postojece) Then Exit Function
+    If IsEmpty(postojece) Then
+        If Not AppendRowToSheet(spreadsheetID, OTK_STAVKE_TAB, _
+                                modMasterSync.OtkStavkeKolone()) Then Exit Function
+    End If
+
+    EnsureOtkStavkeTab = True
+    Exit Function
+
+EH:
+    LogErr SRC
+    EnsureOtkStavkeTab = False
 End Function
 
 ' ============================================================

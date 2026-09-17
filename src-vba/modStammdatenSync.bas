@@ -15,6 +15,8 @@ Option Explicit
 ' ============================================================
 
 Private Const KARTICE_TAB_NAME As String = "Kartice"
+' Stavke otkupa u MgmtReports (S1c): OtkupiAll nosi zaglavlja, ovaj tab stavke.
+Private Const OTKUPI_ALL_STAVKE_TAB As String = "OtkupiAllStavke"
 
 Private Function StammdatenTabs() As Variant
     StammdatenTabs = Array( _
@@ -61,7 +63,8 @@ Private Function MgmtReportTabs() As Variant
         "SaldoKupci", _
         "OtkupPoOM", _
         "PredatoPoKupcu", _
-        "OtkupiAll" _
+        "OtkupiAll", _
+        OTKUPI_ALL_STAVKE_TAB _
     )
 End Function
 
@@ -503,20 +506,21 @@ Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
     If ExportOtkupPoOM(sheetID) Then ok = ok + 1
     If ExportPredatoPoKupcu(sheetID) Then ok = ok + 1
     If ExportOtkupiAll(sheetID) Then ok = ok + 1
+    If ExportOtkupiAllStavke(sheetID) Then ok = ok + 1
 
-    ExportMgmtReports_Core = (ok = 5)
+    ExportMgmtReports_Core = (ok = 6)
     
     If ExportMgmtReports_Core Then
-        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 5/5"
+        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 6/6"
     Else
-        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/5"
+        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/6"
     End If
     
     If showMessages Then
         If ExportMgmtReports_Core Then
-            MsgBox "MgmtReports exportiert: 5/5", vbInformation, APP_NAME
+            MsgBox "MgmtReports exportiert: 6/6", vbInformation, APP_NAME
         Else
-            MsgBox "MgmtReports exportiert: " & CStr(ok) & "/5. Proveri log.", _
+            MsgBox "MgmtReports exportiert: " & CStr(ok) & "/6. Proveri log.", _
                    vbExclamation, APP_NAME
         End If
     End If
@@ -533,69 +537,137 @@ EH:
     ExportMgmtReports_Core = False
 End Function
 Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
-    Dim data As Variant
-    Dim colStanica As Long, colVrsta As Long, colKlasa As Long
-    Dim colKolicina As Long, colAmb As Long, colCena As Long
-    Dim i As Long
-    
     On Error GoTo EH
-    
+    ExportOtkupPoOM = WriteSheetData(sheetID, "OtkupPoOM", OtkupPoOMRedovi())
+    Exit Function
+EH:
+    LogErr "ExportOtkupPoOM"
+    ExportOtkupPoOM = False
+End Function
+
+' ============================================================
+' IZVOZ OTKUPA IZ STAVKI (S1c, REFAKTOR S14.8 t. 13)
+'
+' Otkup je zaglavlje + 1..2 stavke. Kilogrami, cena, klasa i gajbe se citaju
+' iz KANONSKE granice (modOtkup.StavkeOtkupaRedovi / ZbirStavkiPoOtkupu), ne iz
+' sirove tabele: zaglavlje bez stavki pada po imenu, nikad ne izlazi kao 0 kg.
+'
+' samo: opcioni opseg OtkupID -> True (Nothing = svi). Koriste ga testovi, isto
+' kao samoDatum/samoBrojOtp u modMasterSync; produkcija zove bez opsega.
+' ============================================================
+
+' Nestornirana zaglavlja otkupa u opsegu, kao 2D podaci tblOtkup (ili Empty).
+Private Function OtkupZaglavljaZaIzvoz(ByVal samo As Object) As Variant
+    Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then
-        ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
-            "StanicaID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
-            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojOtkupa")
-        Exit Function
-    End If
-    
-    colStanica = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    colKlasa = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    colKolicina = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    
-    ' Aggregieren per Stanica + Vrsta + Klasa
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-    
+    OtkupZaglavljaZaIzvoz = data
+    If IsEmpty(data) Or samo Is Nothing Then Exit Function
+
+    Dim cId As Long, i As Long, j As Long, n As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "OtkupZaglavljaZaIzvoz")
     For i = 1 To UBound(data, 1)
-        Dim key As String
-        key = CStr(data(i, colStanica)) & "|" & CStr(data(i, colVrsta)) & "|" & CStr(data(i, colKlasa))
-        
-        If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#, 0#, 0#) ' Kg, Amb, Vrednost, BrojOtkupa
-        Dim vals As Variant
-        vals = dict(key)
-        vals(0) = vals(0) + CDbl(data(i, colKolicina))
-        vals(1) = vals(1) + CDbl(nz(data(i, colAmb), 0))
-        vals(2) = vals(2) + CDbl(data(i, colKolicina)) * CDbl(data(i, colCena))
-        vals(3) = vals(3) + 1
-        dict(key) = vals
+        If samo.Exists(Trim$(NzToText(data(i, cId)))) Then n = n + 1
     Next i
-    
-    If dict.count = 0 Then
-        ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
-            "StanicaID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
-            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojOtkupa")
+    If n = 0 Then
+        OtkupZaglavljaZaIzvoz = Empty
         Exit Function
     End If
-    
+
+    Dim out() As Variant
+    ReDim out(1 To n, 1 To UBound(data, 2))
+    n = 0
+    For i = 1 To UBound(data, 1)
+        If samo.Exists(Trim$(NzToText(data(i, cId)))) Then
+            n = n + 1
+            For j = 1 To UBound(data, 2)
+                out(n, j) = data(i, j)
+            Next j
+        End If
+    Next i
+    OtkupZaglavljaZaIzvoz = out
+End Function
+
+' Stavke jednog zaglavlja iz indeksa OtkupID -> Collection. Prazan ID i
+' zaglavlje bez stavki padaju po imenu (isti kodovi kao modOtkup.ZbirStavkiZaOtkup).
+Private Function StavkeZaglavljaZaIzvoz(ByVal indeks As Object, ByVal otkupID As String, _
+                                        ByVal sourceName As String) As Collection
+    If Len(otkupID) = 0 Then
+        Err.Raise vbObjectError + 1907, sourceName, _
+                  "Zaglavlje otkupa bez OtkupID-a se ne moze izvesti."
+    End If
+    If Not indeks.Exists(otkupID) Then
+        Err.Raise vbObjectError + 1909, sourceName, _
+                  "Otkup nema nijednu stavku: " & otkupID & _
+                  ". Izvoz cita " & TBL_OTKUP_STAVKE & "."
+    End If
+    Set StavkeZaglavljaZaIzvoz = indeks(otkupID)
+End Function
+
+Private Function OtkupPoOMKolone() As Variant
+    OtkupPoOMKolone = Array("StanicaID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
+                            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojOtkupa")
+End Function
+
+' Tab OtkupPoOM: zbir po Stanica + Vrsta + Klasa STAVKE. Red 1 su naslovi.
+Public Function OtkupPoOMRedovi(Optional ByVal samo As Object = Nothing) As Variant
+    Const SRC As String = "OtkupPoOMRedovi"
+
+    Dim dict As Object, brojani As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set brojani = CreateObject("Scripting.Dictionary")
+
+    Dim zagl As Variant
+    zagl = OtkupZaglavljaZaIzvoz(samo)
+
+    If IsArray(zagl) Then
+        Dim s As Variant, indeks As Object
+        s = modOtkup.StavkeOtkupaRedovi()
+        Set indeks = CreateObject("Scripting.Dictionary")
+        Dim i As Long
+        If IsArray(s) Then
+            For i = 1 To UBound(s, 1)
+                If Not indeks.Exists(CStr(s(i, 1))) Then indeks.Add CStr(s(i, 1)), New Collection
+                indeks(CStr(s(i, 1))).Add i
+            Next i
+        End If
+
+        Dim cId As Long, cSta As Long, cVrsta As Long
+        cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+        cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+        cVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+
+        Dim oid As String, key As String, ri As Variant, vals As Variant
+        For i = 1 To UBound(zagl, 1)
+            oid = Trim$(NzToText(zagl(i, cId)))
+            For Each ri In StavkeZaglavljaZaIzvoz(indeks, oid, SRC)
+                key = CStr(zagl(i, cSta)) & "|" & CStr(zagl(i, cVrsta)) & "|" & CStr(s(ri, 3))
+                If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#, 0#, 0#) ' Kg, Amb, Vrednost, BrojOtkupa
+                vals = dict(key)
+                vals(0) = vals(0) + CDbl(s(ri, 4))
+                vals(1) = vals(1) + CDbl(s(ri, 6))
+                vals(2) = vals(2) + CDbl(s(ri, 4)) * CDbl(s(ri, 5))
+                ' Broj DOKUMENATA po kljucu, ne broj stavki.
+                If Not brojani.Exists(key & "|" & oid) Then
+                    brojani.Add key & "|" & oid, True
+                    vals(3) = vals(3) + 1
+                End If
+                dict(key) = vals
+            Next ri
+        Next i
+    End If
+
+    Dim kol As Variant, k As Long, r As Long
+    kol = OtkupPoOMKolone()
     Dim result() As Variant
-    ReDim result(1 To dict.count + 1, 1 To 7)
-    result(1, 1) = "StanicaID"
-    result(1, 2) = "VrstaVoca"
-    result(1, 3) = "Klasa"
-    result(1, 4) = "Koli" & ChrW(269) & "ina"
-    result(1, 5) = "Ambala" & ChrW(382) & "a"
-    result(1, 6) = "Vrednost"
-    result(1, 7) = "BrojOtkupa"
-    
-    Dim keys As Variant
+    ReDim result(1 To dict.count + 1, 1 To UBound(kol) - LBound(kol) + 1)
+    For k = LBound(kol) To UBound(kol)
+        result(1, k - LBound(kol) + 1) = kol(k)
+    Next k
+
+    Dim keys As Variant, parts() As String
     keys = dict.keys
-    Dim r As Long
     For r = 0 To dict.count - 1
-        Dim parts() As String
         parts = Split(keys(r), "|")
         vals = dict(keys(r))
         result(r + 2, 1) = parts(0)
@@ -606,134 +678,175 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
         result(r + 2, 6) = CStr(vals(2))
         result(r + 2, 7) = CStr(vals(3))
     Next r
-    
-    ExportOtkupPoOM = WriteSheetData(sheetID, "OtkupPoOM", result)
+
+    OtkupPoOMRedovi = result
+End Function
+
+' Tab OtkupiAllStavke: red po stavci u rasporedu modMasterSync.OtkStavkeKolone,
+' za nestornirana zaglavlja iz OtkupiAll. Red 1 su naslovi.
+Public Function OtkupiAllStavkeRedovi(Optional ByVal samo As Object = Nothing) As Variant
+    Const SRC As String = "OtkupiAllStavkeRedovi"
+
+    Dim kol As Variant, nk As Long, k As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim zagl As Variant, poOtk As Object, grupe As Collection
+    Set grupe = New Collection
+    zagl = OtkupZaglavljaZaIzvoz(samo)
+
+    Dim n As Long, i As Long
+    If IsArray(zagl) Then
+        Set poOtk = modMasterSync.OtkStavkeRedoviPoOtkupu()
+        Dim cId As Long, g As Collection
+        cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+        For i = 1 To UBound(zagl, 1)
+            Set g = StavkeZaglavljaZaIzvoz(poOtk, Trim$(NzToText(zagl(i, cId))), SRC)
+            grupe.Add g
+            n = n + g.count
+        Next i
+    End If
+
+    Dim result() As Variant
+    ReDim result(1 To n + 1, 1 To nk)
+    For k = 1 To nk
+        result(1, k) = kol(LBound(kol) + k - 1)
+    Next k
+
+    Dim r As Long, red As Variant
+    r = 1
+    For Each g In grupe
+        For Each red In g
+            r = r + 1
+            For k = 1 To nk
+                result(r, k) = red(LBound(red) + k - 1)
+            Next k
+        Next red
+    Next g
+
+    OtkupiAllStavkeRedovi = result
+End Function
+
+Private Function ExportOtkupiAllStavke(ByVal sheetID As String) As Boolean
+    On Error GoTo EH
+    ExportOtkupiAllStavke = WriteSheetData(sheetID, OTKUPI_ALL_STAVKE_TAB, OtkupiAllStavkeRedovi())
     Exit Function
 EH:
-    LogErr "ExportOtkupPoOM"
-    ExportOtkupPoOM = False
+    LogErr "ExportOtkupiAllStavke"
+    ExportOtkupiAllStavke = False
+End Function
+
+' Otkup po kooperantu iz stavki: KooperantID -> Array(StanicaID, Kolicina,
+' Vrednost, AmbOtkup, Isplaceno = 0, AgroZaduzenje = 0). Vrednost je
+' ZbirStavkiZaOtkup -- ista granica kao novac i kartica.
+Public Function OtkupSaldoPoKooperantu(Optional ByVal samo As Object = Nothing) As Object
+    Const SRC As String = "OtkupSaldoPoKooperantu"
+
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set OtkupSaldoPoKooperantu = dict
+
+    Dim zagl As Variant
+    zagl = OtkupZaglavljaZaIzvoz(samo)
+    If Not IsArray(zagl) Then Exit Function
+
+    Dim zbir As Object
+    Set zbir = modOtkup.ZbirStavkiPoOtkupu()
+
+    Dim cId As Long, cKoop As Long, cSta As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+
+    Dim i As Long, koopID As String, z As Variant, v As Variant
+    For i = 1 To UBound(zagl, 1)
+        koopID = CStr(nz(zagl(i, cKoop), ""))
+        If Len(koopID) > 0 Then
+            z = modOtkup.ZbirStavkiZaOtkup(zbir, NzToText(zagl(i, cId)), SRC)
+            If Not dict.Exists(koopID) Then
+                dict.Add koopID, Array(CStr(zagl(i, cSta)), 0#, 0#, 0#, 0#, 0#)
+            End If
+            v = dict(koopID)
+            v(1) = v(1) + CDbl(z(0))
+            v(2) = v(2) + CDbl(z(1))
+            v(3) = v(3) + CDbl(z(2))
+            dict(koopID) = v
+        End If
+    Next i
+End Function
+
+' Kolone taba OtkupiAll -- jedino mesto. Red po ZAGLAVLJU otkupa (S1c):
+' Klasa/Kolicina/Cena/KolAmbalaze su polja stavke i idu u OtkupiAllStavke.
+Private Function OtkupiAllKolone() As Variant
+    OtkupiAllKolone = Array( _
+        "ClientRecordID", "ServerRecordID", "CreatedAtClient", "UpdatedAtClient", _
+        "UpdatedAtServer", "SyncStatus", "DeviceID", "OtkupacID", "Datum", _
+        "KooperantID", "KooperantName", "VrstaVoca", "SortaVoca", "TipAmbalaze", _
+        "KolAmbIzdata", "ParcelaID", "VozacID", "Napomena", "ReceivedAt", _
+        "BrojZbirne", "OtpremnicaID", "PrijemnicaID", "BrojPrijemnice", "KupacID", _
+        "DatumPrijema", "Primljeno", "TransportStatus")
 End Function
 
 Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     Const TAB_NAME As String = "OtkupiAll"
+    Const SRC As String = "ExportOtkupiAll"
 
     Dim data As Variant
     Dim result() As Variant
+    Dim kol As Variant, nk As Long, k As Long
     Dim i As Long
-    Dim outRow As Long
-
-    Dim colID As Long
-    Dim colDatum As Long
-    Dim colKoop As Long
-    Dim colStanica As Long
-    Dim colVrsta As Long
-    Dim colSorta As Long
-    Dim colKlasa As Long
-    Dim colKolicina As Long
-    Dim colCena As Long
-    Dim colTipAmb As Long
-    Dim colKolAmb As Long
-    Dim colVozac As Long
-    Dim colBrDok As Long
-    Dim colParcela As Long
-    Dim colBrojZbirne As Long
-    Dim colOtpremnicaID As Long
     Dim prjIndex As Object
 
     On Error GoTo EH
 
-    data = GetTableData(TBL_OTKUP)
+    kol = OtkupiAllKolone()
+    nk = UBound(kol) - LBound(kol) + 1
 
-    If Not IsEmpty(data) Then
-        data = ExcludeStornirano(data, TBL_OTKUP)
+    data = OtkupZaglavljaZaIzvoz(Nothing)
+    If IsEmpty(data) Then
+        ReDim result(1 To 1, 1 To nk)
+    Else
+        ReDim result(1 To UBound(data, 1) + 1, 1 To nk)
     End If
+    For k = 1 To nk
+        result(1, k) = kol(LBound(kol) + k - 1)
+    Next k
 
     If IsEmpty(data) Then
-        ExportOtkupiAll = WriteHeaderOnly(sheetID, TAB_NAME, _
-            "ClientRecordID", "ServerRecordID", "CreatedAtClient", _
-            "UpdatedAtClient", "UpdatedAtServer", "SyncStatus", _
-            "DeviceID", "OtkupacID", "Datum", "KooperantID", _
-            "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
-            "Koli" & ChrW(269) & "ina", "Cena", "TipAmbalaze", "KolAmbalaze", _
-            "ParcelaID", "VozacID", "Napomena", "ReceivedAt", _
-            "BrojZbirne", "OtpremnicaID", "PrijemnicaID", _
-            "BrojPrijemnice", "KupacID", "DatumPrijema", _
-            "Primljeno", "TransportStatus")
+        ExportOtkupiAll = WriteSheetData(sheetID, TAB_NAME, result)
         Exit Function
     End If
 
-    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "ExportOtkupiAll")
-    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "ExportOtkupiAll")
-    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "ExportOtkupiAll")
-    colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, "ExportOtkupiAll")
-    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "ExportOtkupiAll")
-    colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, "ExportOtkupiAll")
-    colKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "ExportOtkupiAll")
-    colKolicina = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "ExportOtkupiAll")
-    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "ExportOtkupiAll")
-    colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "ExportOtkupiAll")
-    colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "ExportOtkupiAll")
-    colVozac = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, "ExportOtkupiAll")
-    colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, "ExportOtkupiAll")
-    colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, "ExportOtkupiAll")
-    colBrojZbirne = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, "ExportOtkupiAll")
-    colOtpremnicaID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, "ExportOtkupiAll")
+    Dim colID As Long, colDatum As Long, colKoop As Long, colStanica As Long
+    Dim colVrsta As Long, colSorta As Long, colTipAmb As Long, colAmbIzd As Long
+    Dim colVozac As Long, colBrDok As Long, colParcela As Long
+    Dim colBrojZbirne As Long, colOtpremnicaID As Long
+
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, SRC)
+    colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, SRC)
+    colAmbIzd = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, SRC)
+    colVozac = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
+    colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, SRC)
+    colBrojZbirne = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
+    colOtpremnicaID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
 
     Set prjIndex = BuildPrijemnicaIndexByBrojZbirne()
 
-    ReDim result(1 To UBound(data, 1) + 1, 1 To 30)
-
-    result(1, 1) = "ClientRecordID"
-    result(1, 2) = "ServerRecordID"
-    result(1, 3) = "CreatedAtClient"
-    result(1, 4) = "UpdatedAtClient"
-    result(1, 5) = "UpdatedAtServer"
-    result(1, 6) = "SyncStatus"
-    result(1, 7) = "DeviceID"
-    result(1, 8) = "OtkupacID"
-    result(1, 9) = "Datum"
-    result(1, 10) = "KooperantID"
-    result(1, 11) = "KooperantName"
-    result(1, 12) = "VrstaVoca"
-    result(1, 13) = "SortaVoca"
-    result(1, 14) = "Klasa"
-    result(1, 15) = "Koli" & ChrW(269) & "ina"
-    result(1, 16) = "Cena"
-    result(1, 17) = "TipAmbalaze"
-    result(1, 18) = "KolAmbalaze"
-    result(1, 19) = "ParcelaID"
-    result(1, 20) = "VozacID"
-    result(1, 21) = "Napomena"
-    result(1, 22) = "ReceivedAt"
-    result(1, 23) = "BrojZbirne"
-    result(1, 24) = "OtpremnicaID"
-    result(1, 25) = "PrijemnicaID"
-    result(1, 26) = "BrojPrijemnice"
-    result(1, 27) = "KupacID"
-    result(1, 28) = "DatumPrijema"
-    result(1, 29) = "Primljeno"
-    result(1, 30) = "TransportStatus"
-
-    outRow = 1
-
     For i = 1 To UBound(data, 1)
-        Dim otkupID As String
-        Dim koopID As String
-        Dim koopName As String
-        Dim brojZbirne As String
-        Dim otpremnicaID As String
-        Dim prijemnicaID As String
-        Dim brojPrijemnice As String
-        Dim kupacID As String
-        Dim datumPrijema As String
-        Dim primljeno As String
-        Dim transportStatus As String
-        Dim prjInfo As Variant
+        Dim otkupID As String, koopID As String
+        Dim brojZbirne As String, otpremnicaID As String
+        Dim prijemnicaID As String, brojPrijemnice As String, kupacID As String
+        Dim datumPrijema As String, primljeno As String, transportStatus As String
+        Dim prjInfo As Variant, v As Variant
 
         otkupID = CStr(nz(data(i, colID), ""))
         koopID = CStr(nz(data(i, colKoop), ""))
-        koopName = GetKooperantDisplayNameForExport(koopID)
-        
         brojZbirne = CStr(nz(data(i, colBrojZbirne), ""))
         otpremnicaID = CStr(nz(data(i, colOtpremnicaID), ""))
 
@@ -747,7 +860,6 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
             If Not prjIndex Is Nothing Then
                 If prjIndex.Exists(brojZbirne) Then
                     prjInfo = prjIndex(brojZbirne)
-
                     prijemnicaID = CStr(prjInfo(0))
                     brojPrijemnice = CStr(prjInfo(1))
                     kupacID = CStr(prjInfo(2))
@@ -767,45 +879,46 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
             transportStatus = "unassigned"
         End If
 
-        outRow = outRow + 1
-
-        result(outRow, 1) = "VBA-" & otkupID
-        result(outRow, 2) = otkupID
-        result(outRow, 3) = ""
-        result(outRow, 4) = ""
-        result(outRow, 5) = Now
-        result(outRow, 6) = "Synced>Master"
-        result(outRow, 7) = "VBA"
-        result(outRow, 8) = CStr(nz(data(i, colStanica), ""))
-        result(outRow, 9) = data(i, colDatum)
-        result(outRow, 10) = koopID
-        result(outRow, 11) = koopName
-        result(outRow, 12) = CStr(nz(data(i, colVrsta), ""))
-        result(outRow, 13) = CStr(nz(data(i, colSorta), ""))
-        result(outRow, 14) = CStr(nz(data(i, colKlasa), "I"))
-        result(outRow, 15) = CDbl(nz(data(i, colKolicina), 0))
-        result(outRow, 16) = CDbl(nz(data(i, colCena), 0))
-        result(outRow, 17) = CStr(nz(data(i, colTipAmb), ""))
-        result(outRow, 18) = CLng(nz(data(i, colKolAmb), 0))
-        result(outRow, 19) = CStr(nz(data(i, colParcela), ""))
-        result(outRow, 20) = CStr(nz(data(i, colVozac), ""))
-        result(outRow, 21) = CStr(nz(data(i, colBrDok), ""))
-        result(outRow, 22) = Now
-        result(outRow, 23) = brojZbirne
-        result(outRow, 24) = otpremnicaID
-        result(outRow, 25) = prijemnicaID
-        result(outRow, 26) = brojPrijemnice
-        result(outRow, 27) = kupacID
-        result(outRow, 28) = datumPrijema
-        result(outRow, 29) = primljeno
-        result(outRow, 30) = transportStatus
+        For k = 1 To nk
+            Select Case CStr(kol(LBound(kol) + k - 1))
+                Case "ClientRecordID": v = "VBA-" & otkupID
+                Case "ServerRecordID": v = otkupID
+                Case "CreatedAtClient", "UpdatedAtClient": v = ""
+                Case "UpdatedAtServer", "ReceivedAt": v = Now
+                Case "SyncStatus": v = "Synced>Master"
+                Case "DeviceID": v = "VBA"
+                Case "OtkupacID": v = CStr(nz(data(i, colStanica), ""))
+                Case "Datum": v = data(i, colDatum)
+                Case "KooperantID": v = koopID
+                Case "KooperantName": v = GetKooperantDisplayNameForExport(koopID)
+                Case "VrstaVoca": v = CStr(nz(data(i, colVrsta), ""))
+                Case "SortaVoca": v = CStr(nz(data(i, colSorta), ""))
+                Case "TipAmbalaze": v = CStr(nz(data(i, colTipAmb), ""))
+                Case "KolAmbIzdata": v = CLng(nz(data(i, colAmbIzd), 0))
+                Case "ParcelaID": v = CStr(nz(data(i, colParcela), ""))
+                Case "VozacID": v = CStr(nz(data(i, colVozac), ""))
+                Case "Napomena": v = CStr(nz(data(i, colBrDok), ""))
+                Case "BrojZbirne": v = brojZbirne
+                Case "OtpremnicaID": v = otpremnicaID
+                Case "PrijemnicaID": v = prijemnicaID
+                Case "BrojPrijemnice": v = brojPrijemnice
+                Case "KupacID": v = kupacID
+                Case "DatumPrijema": v = datumPrijema
+                Case "Primljeno": v = primljeno
+                Case "TransportStatus": v = transportStatus
+                Case Else
+                    Err.Raise vbObjectError + 8143, SRC, _
+                              "Kolona OtkupiAll bez izvora: " & CStr(kol(LBound(kol) + k - 1))
+            End Select
+            result(i + 1, k) = v
+        Next k
     Next i
 
     ExportOtkupiAll = WriteSheetData(sheetID, TAB_NAME, result)
     Exit Function
 
 EH:
-    LogErr "ExportOtkupiAll"
+    LogErr SRC
     ExportOtkupiAll = False
 End Function
 
@@ -1064,47 +1177,17 @@ EH:
 End Function
 
 Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
-    Dim otkData As Variant, novData As Variant, magData As Variant
+    Dim novData As Variant, magData As Variant
     Dim i As Long
     
     On Error GoTo EH
     
-    ' --- OTKUP: Kolicina, Vrednost per Kooperant ---
-    otkData = GetTableData(TBL_OTKUP)
-    If Not IsEmpty(otkData) Then otkData = ExcludeStornirano(otkData, TBL_OTKUP)
-    
-    Dim colOtkKoop As Long, colOtkSta As Long, colOtkKg As Long
-    Dim colOtkCena As Long, colOtkAmb As Long
-    colOtkKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    colOtkSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    colOtkKg = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colOtkCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    colOtkAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
-    
-    ' Dict: KoopID ? (StanicaID, Kolicina, Vrednost, AmbOtkup)
+    ' --- OTKUP: Kolicina, Vrednost, AmbOtkup per Kooperant -- iz stavki (S1c) ---
+    ' Dict: KoopID -> (StanicaID, Kolicina, Vrednost, AmbOtkup, Isplaceno, AgroZaduzenje)
     Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-    
-    If Not IsEmpty(otkData) Then
-        For i = 1 To UBound(otkData, 1)
-            Dim koopID As String, staID As String
-            koopID = CStr(otkData(i, colOtkKoop))
-            staID = CStr(otkData(i, colOtkSta))
-            If Len(koopID) > 0 Then
-                If Not dict.Exists(koopID) Then
-                    ' (StanicaID, Kolicina, Vrednost, AmbOtkup, Isplaceno, AgroZaduzenje)
-                    dict.Add koopID, Array(staID, 0#, 0#, 0#, 0#, 0#)
-                End If
-                Dim v As Variant
-                v = dict(koopID)
-                v(1) = v(1) + CDbl(nz(otkData(i, colOtkKg), 0))
-                v(2) = v(2) + CDbl(nz(otkData(i, colOtkKg), 0)) * CDbl(nz(otkData(i, colOtkCena), 0))
-                v(3) = v(3) + CDbl(nz(otkData(i, colOtkAmb), 0))
-                dict(koopID) = v
-            End If
-        Next i
-    End If
-    
+    Set dict = OtkupSaldoPoKooperantu()
+    Dim v As Variant
+
     ' --- NOVAC: Isplaceno per Kooperant ---
     novData = GetTableData(TBL_NOVAC)
     If Not IsEmpty(novData) Then novData = ExcludeStornirano(novData, TBL_NOVAC)

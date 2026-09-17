@@ -110,6 +110,7 @@ Private Sub Check_CoreTablesAndColumns()
     On Error GoTo EH
 
     HealthRequireTable TBL_OTKUP
+    HealthRequireTable TBL_OTKUP_STAVKE
     HealthRequireTable TBL_OTPREMNICA
     HealthRequireTable TBL_ZBIRNA
     HealthRequireTable TBL_PRIJEMNICA
@@ -118,39 +119,18 @@ Private Sub Check_CoreTablesAndColumns()
     HealthRequireTable TBL_NOVAC
     HealthRequireTable TBL_AMBALAZA
 
-    HealthRequireColumns TBL_OTKUP, Array( _
-        "OtkupID", "Datum", "KooperantID", "StanicaID", "Kolicina", "Cena", _
-        "VozacID", "BrojDokumenta", "Klasa", "Stornirano", "BrojZbirne", _
-        "Isplaceno", "DatumIsplate", "OtpremnicaID")
-
-    HealthRequireColumns TBL_OTPREMNICA, Array( _
-        "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
-        "BrojZbirne", "Kolicina", "Cena", "KolAmbalaze", "Klasa", "Stornirano")
-
-    HealthRequireColumns TBL_ZBIRNA, Array( _
-        "ZbirnaID", "Datum", "VozacID", "BrojZbirne", "KupacID", _
-        "UkupnoKolicina", "UkupnoAmbalaze", "Klasa", "Stornirano")
-
-    HealthRequireColumns TBL_PRIJEMNICA, Array( _
-        "PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", _
-        "BrojZbirne", "Kolicina", "Cena", "KolAmbalaze", "kolAmbVracena", _
-        "Klasa", "Fakturisano", "FakturaID", "Stornirano")
-
-    HealthRequireColumns TBL_FAKTURE, Array( _
-        "FakturaID", "BrojFakture", "Datum", "KupacID", "Iznos", _
-        "Status", "DatumPlacanja", "Stornirano")
-
-    ' Stornirano je dodato da se dve deklaracije seme ne bi razisle:
-    ' modSchemaGuard.STORNO_TABELE od sada TRAZI tu kolonu nad ovom tabelom, pa
-    ' bi health check bez nje javljao zdravo stanje za svesku nad kojom
-    ' ExcludeStornirano pada. Bolje da se to vidi ovde, pre rada, nego u radu.
-    HealthRequireColumns TBL_FAKTURA_STAVKE, Array( _
-        "StavkaID", "FakturaID", "PrijemnicaID", "Kolicina", "Cena", _
-        "Klasa", "BrojPrijemnice", "Stornirano")
-
-    HealthRequireColumns TBL_NOVAC, Array( _
-        "NovacID", "Datum", "Partner", "PartnerID", "EntitetTip", _
-        "FakturaID", "OtkupID", "Tip", "Uplata", "Isplata", "Stornirano")
+    ' SPISAK KOLONA DOLAZI IZ KANONA (modSchema), ne iz literala (AUD-055,
+    ' REFAKTOR S14.8 t. 10). Rucni spisak je trazio kolone koje je refaktor vec
+    ' obrisao, pa je ispravna sveska javljala FAIL. Kanon ukljucuje i Stornirano
+    ' koji modSchemaGuard.STORNO_TABELE trazi.
+    HealthRequireKanon TBL_OTKUP
+    HealthRequireKanon TBL_OTKUP_STAVKE
+    HealthRequireKanon TBL_OTPREMNICA
+    HealthRequireKanon TBL_ZBIRNA
+    HealthRequireKanon TBL_PRIJEMNICA
+    HealthRequireKanon TBL_FAKTURE
+    HealthRequireKanon TBL_FAKTURA_STAVKE
+    HealthRequireKanon TBL_NOVAC
 
     HealthOk "Core tables and required columns exist", ""
     Exit Sub
@@ -1161,24 +1141,12 @@ Private Sub Check_GoogleSyncMasterSchema()
     HealthRequireTable TBL_STANICE
     HealthRequireTable TBL_KULTURE
 
-    HealthRequireColumns TBL_OTKUP, Array( _
-        "OtkupID", _
-        "ClientRecordID", _
-        "Datum", _
-        "KooperantID", _
-        "StanicaID", _
-        "Kolicina", _
-        "Cena", _
-        "Klasa", _
-        "Stornirano", _
-        "OtpremnicaID")
-
-    HealthRequireColumns TBL_KOOPERANTI, Array( _
-        "KooperantID", _
-        COL_KOOP_STANICA)
-
-    HealthRequireColumns TBL_STANICE, Array( _
-        "StanicaID")
+    ' Kolone iz kanona (AUD-055); uvoz PWA pise zaglavlje I stavke otkupa.
+    HealthRequireTable TBL_OTKUP_STAVKE
+    HealthRequireKanon TBL_OTKUP
+    HealthRequireKanon TBL_OTKUP_STAVKE
+    HealthRequireKanon TBL_KOOPERANTI
+    HealthRequireKanon TBL_STANICE
 
     HealthOk "Google sync master tables/columns are valid", ""
     Exit Sub
@@ -1411,6 +1379,23 @@ Private Sub HealthRequireColumns(ByVal tableName As String, ByVal columns As Var
                       "Missing column: " & tableName & "." & CStr(columns(i))
         End If
     Next i
+End Sub
+
+' Sve kolone tabele iz kanona (modSchema.SchemaTableColumns). Tabela bez
+' kolona u kanonu je greska provere, ne prazan uspeh.
+Private Sub HealthRequireKanon(ByVal tableName As String)
+    Dim kol As Collection, k As Variant
+    Set kol = modSchema.SchemaTableColumns(tableName)
+    If kol.count = 0 Then
+        Err.Raise vbObjectError + 9603, "HealthRequireKanon", _
+                  "Kanon nema kolone za tabelu: " & tableName
+    End If
+    For Each k In kol
+        If GetColumnIndex(tableName, CStr(k)) = 0 Then
+            Err.Raise vbObjectError + 9602, "HealthRequireKanon", _
+                      "Missing column: " & tableName & "." & CStr(k)
+        End If
+    Next k
 End Sub
 
 Private Sub HealthRequireConfigValue(ByVal configKey As String)

@@ -68,7 +68,6 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim okKartice As Boolean
     Dim okMgmt As Boolean
 
-    Dim createdOtp As Long
     Dim createdZbr As Long
     Dim errNum As Long
     Dim errDesc As String
@@ -227,50 +226,15 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     ' 3. Auto-create Otpremnice
     '
-    ' PAUZIRANO do PR7 (v. modMasterSync.IzvedeniLanacIzPwaDostupan). Korak se
-    ' NE preskace tiho i NE prijavljuje kao uspeh sa nulom: to bi bio zeleni
-    ' cekic nad koracima koji vise ne rade. Prijavljuje se kao NEDOSTUPAN, i to
-    ' ne obara ostatak sinhronizacije -- otkupi jesu uvezeni.
-    If Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
-        ' okOtpremnice ostaje True samo da ostatak lanca sme da nastavi -- otkupi
-        ' JESU uvezeni. Ali ciklus se od ovog trenutka vodi kao DEGRADIRAN, pa
-        ' zavrsni verdikt i monitoring ne smeju da kazu SUCCESS.
-        okOtpremnice = True
-        degradirano = True
-        razlogDegradacije = "auto-Otpremnice pauzirane do PR7"
-        AppendStepPauza summary, _
-            "Auto-create Otpremnice: PAUZIRANO do PR7 -- otpremnice unesi rucno"
-        GoTo PosleOtpremnica
-    End If
-
-    SyncProgress "Kreiram / povezujem otpremnice..."
-
-    On Error Resume Next
-    Err.Clear
-    createdOtp = AutoCreateOtpremniceFromPWA_TX()
-    errNum = Err.Number
-    errDesc = Err.description
-    On Error GoTo EH
-
-    okOtpremnice = (errNum = 0)
-
-    If okOtpremnice Then
-        AppendStep summary, True, _
-            "Auto-create Otpremnice from PWA Otkup (" & CStr(createdOtp) & " kreirano)"
-    Else
-        AppendStep summary, False, _
-            "Auto-create Otpremnice from PWA Otkup | Error=" & errDesc
-
-        LogError ORCH_MODULE, "AutoCreateOtpremniceFromPWA_TX failed: " & errDesc
-
-        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
-                             okStammdaten, okKartice, okMgmt, False
-
-        If showMessages Then MsgBox summary, vbExclamation, APP_NAME
-        GoTo CleanExit
-    End If
-
-PosleOtpremnica:
+    ' OBRISANO u S1c: auto-otpremnica je citala linijska polja sa zaglavlja
+    ' otkupa i pisala Otkup.OtpremnicaID. Vraca je S5 nad tblOtpremnicaIzvori.
+    ' Korak se NE preskace tiho i NE prijavljuje kao uspeh sa nulom: ciklus je
+    ' DEGRADIRAN, ali ne pada -- otkupi jesu uvezeni.
+    okOtpremnice = True
+    degradirano = True
+    razlogDegradacije = "auto-Otpremnice pauzirane do PR7"
+    AppendStepPauza summary, _
+        "Auto-create Otpremnice: PAUZIRANO do PR7 -- otpremnice unesi rucno"
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
     '
