@@ -3070,7 +3070,7 @@ SABOTAZE = {
     # Ciscenje koje se ne moze ponistiti je druga polovina istog ugovora:
     # ---------------------------------------- SEMA: TRAZENJE KOLONE
     # Vraca zatecen oblik: ListColumns(ime) DIZE gresku 9 za nepostojecu
-    # Zatecено ponasanje je poredjenje BEZ obzira na velicinu slova.
+    # ZatecÐµÐ½Ð¾ ponasanje je poredjenje BEZ obzira na velicinu slova.
     # Poruka bez zaglavlja opisuje tri razlicita stanja istim tekstom:
     # kolone nema, tabele nema, zaglavlje je drugacije.
     "kolona-poruka-bez-zaglavlja": (
@@ -4276,6 +4276,14 @@ SABOTAZE = {
         "        CipPropusta = True   ' SABOTAZA: cip vrste propusta sve\n",
         "T_Izv_CipoviVrstaSorta",
         "nepostojeca vrsta = nula redova",
+    ),
+    # KPI saldo OM cita kolonu SALDA (6), ne agrohemiju (5) -- AUD-056.
+    "kpi-saldo-om-kolona-agro": (
+        "modOtkupUI.bas",
+        "    SaldoIzIzvestajaOM = CDbl(res(UBound(res, 1), 6))\n",
+        "    SaldoIzIzvestajaOM = CDbl(res(UBound(res, 1), 5))   ' SABOTAZA: agro umesto salda\n",
+        "T_KpiSaldoOM_CitaKolonuSalda",
+        "KPI saldo OM = kolona 6 poslednjeg reda (ne 5 = agrohemija)",
     ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne

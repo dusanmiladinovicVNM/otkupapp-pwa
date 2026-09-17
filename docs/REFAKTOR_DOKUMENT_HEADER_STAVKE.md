@@ -2675,7 +2675,38 @@ S4 (zbirna) ili S9 (sledljivost, integritet); do tada ne radi (§14.7). S1d osta
 **Verifikacija:** `vba_check` čisto; `who_writes --check` (regenerisan) i `--check-ownership`; `gen_schema_module --check`.
 **Pre merge-a:** pun `python tools/run_vba.py` + `Debug → Compile VBAProject` (menjaju se ekrani i testovi).
 
-Sledeći korak: **S1b-2**.
+#### S1b-2 — urađeno (17.09.2026)
+
+**Prevedeno na stavke** (`modOtkup.ZbirStavkiPoOtkupu` / `ZbirStavkiZaOtkup` / `StavkeOtkupaRedovi`; otkup bez stavki pada po imenu):
+
+| Mesto | Šta čita sada |
+|---|---|
+| `modOtkupBlok.SumKolByOtp`, `SumAmbByOtp`, `BuildNapisanoByOtp` | kg i gajbe blokova otpremnice = zbir stavki (veza `Otkup.OtpremnicaID` ostaje do S3) |
+| `modOtkupBlok.ExistingBlokCena` | cena prve stavke prvog bloka (predlog za nov blok) |
+| `modOtkupBlok.RenderSpec` (specifikacija) | kg i vrednost reda sa stavki; neto cena reda = prosek (dve klase nemaju jednu cenu) |
+| `modScrDokumenti` kolone moda OTKUP + `RowsBlokovi` | opis kolona imenuje kolone stavke (`COL_OKS_*`); blokovi: kg, gajbe, vrednost sa stavki |
+| `modStornoDok.PrefillIzStorniranog` (B-036) | otkup je jedan red zaglavlja; `StavkeOtkupaZaPrefill` daje kol/amb/cena po klasi i `dveklase` |
+| `modIzvestaj.ReportOtkupRobaOM` | kg blokova po otpremnici iz `modOtkupBlok.BuildNapisanoByOtp` (račun se ne duplira) |
+| `modIzvestaj.ReportSledljivostLanac`, `ReportSledljivostProblemi`, `SledBlokSumMapa` | kg i klase otkupa sa stavki (`SledKgStavki`) |
+
+**Obrisano:** ceo stari panel „Otkupni blokovi“ u `modOtkupBlok` (ulaz `AttachOtkupBlokPanel` bez pozivaoca: `LoadOtpremnice`,
+`LoadBlokovi`, `BuildFirstBlokCena`, `OfferHladnjacaIspravka` → `PrefillOtkupFromStornirano`, `ToggleLostMode`, `KoopPrometYear`,
+`SumBrutoByOtp`, `NapredakBlokaDostupan` i ostalo — modul 2230 → 548 linija) i njegov event-omotač `clsBlokUI.cls`
+(izbačen i iz `WHITELIST`-a `vba_hard_census.py`); kapija pauze `NapredakBlokaDostupan` izbačena iz `popis_citalaca.py`.
+
+**AUD-056 zatvoren:** KPI saldo OM čita kolonu 6 (`modOtkupUI.SaldoIzIzvestajaOM`).
+
+**Testovi:** `Test_OTK_PanelNapredakJePauziran` (merio pauzu) → `Test_OTK_BilansOtpremniceSaStavki` (dvoklasni blok: kg 1000,
+gajbe 20, napisano 1000, predlog cene 50); nov `Test_OTK_PrefillStornaDveKlaseSaStavki` (obe stavke u prefill-u); nov
+`modTest` 213 `T_KpiSaldoOM_CitaKolonuSalda` + sabotaža `kpi-saldo-om-kolona-agro`.
+
+**Merenje:** `x_otk_stavka` PROD 63 → **22** (ZIV_UI 18: `modStammdatenSync` izvozi 11, `modStanicaLock.BuildOTKSheetRowForOtkup` 4,
+`modSetup` 3 — S1c/S1d; PAUZIRAN 4: `AutoCreateOtpremniceFromPWA` — briše S1c); `otk_linija` 79 → 37.
+
+**Verifikacija:** `vba_check` čisto; `who_writes --check` / `--check-ownership`; `gen_schema_module --check`; `vba_hard_census`,
+`vba_selfupdate_gates`, `vba_parity_check` zeleni. **Pre merge-a:** pun `python tools/run_vba.py` + `Debug → Compile VBAProject`.
+
+Sledeći korak: **S1c**.
 
 ## 15) Backlog — namerno van opsega
 

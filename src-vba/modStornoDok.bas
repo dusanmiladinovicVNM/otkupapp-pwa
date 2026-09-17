@@ -536,6 +536,16 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     res = Spoji(res, "partnerid", CelijaAko(d, base, GetColumnIndex(tbl, ColPartnerZaPrefill(tip))))
     res = Spoji(res, "parcela", CelijaAko(d, base, GetColumnIndex(tbl, ColParcelaZaPrefill(tip))))
 
+    If tip = STIP_OTKUP Then
+        ' Otkup je JEDAN red zaglavlja; klase, kolicine, cene i gajbe su na
+        ' stavkama (S1b-2). Izdata ambalaza ostaje cinjenica zaglavlja.
+        res = StavkeOtkupaZaPrefill(res, CelijaAko(d, base, cId), brutoMode)
+        res = Spoji(res, "ambpr", BrojUTekst(CeliBroj(d, base, GetColumnIndex(tbl, ColAmbPrZaPrefill(tip)))))
+        res = Spoji(res, "fokus", "kolicina")
+        PrefillIzStorniranog = res
+        Exit Function
+    End If
+
     res = Spoji(res, "dveklase", IIf(rII > 0, "2", "1"))
     If rI > 0 Then
         res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, rI, cKol, cBruto, brutoMode)))
@@ -557,6 +567,45 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     Exit Function
 EH:
     LogErr "modStornoDok.PrefillIzStorniranog"
+End Function
+
+' Stavke storniranog otkupa u spec prefill-a: klasa I -> kol1/amb1/cena,
+' klasa II -> kol2/amb2/cena2, dveklase po broju klasa. U bruto rezimu ide
+' BrutoKg stavke kad postoji (isto pravilo kao KolicinaReda).
+Private Function StavkeOtkupaZaPrefill(ByVal res As String, ByVal otkupID As String, _
+                                       ByVal brutoMode As Boolean) As String
+    Const SRC As String = "modStornoDok.StavkeOtkupaZaPrefill"
+    Dim d As Variant, i As Long, kl As String, imaII As Boolean
+    Dim cOtk As Long, cKl As Long, cKol As Long, cCena As Long, cAmb As Long, cBruto As Long
+
+    StavkeOtkupaZaPrefill = res
+    If Len(otkupID) = 0 Then Exit Function
+    d = GetTableData(TBL_OTKUP_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, SRC)
+    cKl = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
+    cBruto = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO)
+
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cOtk))) = otkupID Then
+            kl = UCase$(Trim$(NzToText(d(i, cKl))))
+            If kl = KLASA_II Then
+                imaII = True
+                res = Spoji(res, "kol2", BrojUTekst(KolicinaReda(d, i, cKol, cBruto, brutoMode)))
+                res = Spoji(res, "amb2", BrojUTekst(CeliBroj(d, i, cAmb)))
+                res = Spoji(res, "cena2", BrojUTekst(CeliBrojD(d, i, cCena)))
+            Else
+                res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, i, cKol, cBruto, brutoMode)))
+                res = Spoji(res, "amb1", BrojUTekst(CeliBroj(d, i, cAmb)))
+                res = Spoji(res, "cena", BrojUTekst(CeliBrojD(d, i, cCena)))
+            End If
+        End If
+    Next i
+    StavkeOtkupaZaPrefill = Spoji(res, "dveklase", IIf(imaII, "2", "1"))
 End Function
 
 '--------------------------------------------------- mape kolona po tipu
@@ -640,7 +689,7 @@ End Function
 
 Private Function ColKlasaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColKlasaZaPrefill = COL_OTK_KLASA
+        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
         Case STIP_OTPREMNICA: ColKlasaZaPrefill = COL_OTP_KLASA
         Case STIP_ZBIRNA:     ColKlasaZaPrefill = COL_ZBR_KLASA
         Case STIP_PRIJEMNICA: ColKlasaZaPrefill = COL_PRJ_KLASA
@@ -686,7 +735,7 @@ End Function
 ' PAZNJA: zbirna ne zove ovo "Kolicina" nego "UkupnoKolicina".
 Private Function ColKolicinaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColKolicinaZaPrefill = COL_OTK_KOLICINA
+        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
         Case STIP_OTPREMNICA: ColKolicinaZaPrefill = COL_OTP_KOLICINA
         Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA
         Case STIP_PRIJEMNICA: ColKolicinaZaPrefill = COL_PRJ_KOLICINA
@@ -696,7 +745,7 @@ End Function
 ' PAZNJA: zbirna ne zove ovo "KolAmbalaze" nego "UkupnoAmbalaze".
 Private Function ColKolAmbZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColKolAmbZaPrefill = COL_OTK_KOL_AMB
+        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
         Case STIP_OTPREMNICA: ColKolAmbZaPrefill = COL_OTP_KOL_AMB
         Case STIP_ZBIRNA:     ColKolAmbZaPrefill = COL_ZBR_KOL_AMB
         Case STIP_PRIJEMNICA: ColKolAmbZaPrefill = COL_PRJ_KOL_AMB
@@ -707,7 +756,7 @@ End Function
 ' obracunatih otpremnica.
 Private Function ColCenaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColCenaZaPrefill = COL_OTK_CENA
+        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
         Case STIP_OTPREMNICA: ColCenaZaPrefill = COL_OTP_CENA
         Case STIP_PRIJEMNICA: ColCenaZaPrefill = COL_PRJ_CENA
     End Select
@@ -716,7 +765,7 @@ End Function
 ' Zbirna NEMA BrutoKg - ona zbraja vec netirane otpremnice.
 Private Function ColBrutoZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColBrutoZaPrefill = COL_OTK_BRUTO
+        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
         Case STIP_OTPREMNICA: ColBrutoZaPrefill = COL_OTP_BRUTO
         Case STIP_PRIJEMNICA: ColBrutoZaPrefill = COL_PRJ_BRUTO
     End Select

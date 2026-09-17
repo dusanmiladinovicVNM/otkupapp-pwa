@@ -29,13 +29,12 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S1b-2 (posle provere S1b-1 u Excelu)
+## Sledeći korak: S1c (posle provere S1b-2 u Excelu)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
-2. **S1b-1 urađen** (§14.10 „S1b-1 — urađeno“): obrisani AutoLink, `TraceByZbirna`, `GetUnlinkedOtkupi`,
-   `GetLostOtkupBlokovi`, `GetStornoBlockRows`, `OtkupReissueDupExists` sa granama pozivalaca i testovima;
-   `x_otk_stavka` 74 → 63. Pre merge-a: pun `run_vba` + Compile.
-3. **Sledeće:** S1b-2 — preostali desktop čitaoci na stavke (§14.10).
+2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
+   `modOtkupBlok` i `clsBlokUI` obrisani, AUD-056 zatvoren; `x_otk_stavka` 63 → 22. Pre merge-a: pun `run_vba` + Compile.
+3. **Sledeće:** S1c — izvozi i push na nov oblik, brisanje `AutoCreateOtpremniceFromPWA`, health iz kanona (§14.10).
 
 ## Alati i kapije
 

@@ -2731,33 +2731,11 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, "modIzvestaj.ReportOtkupRobaOM")
     colBrZbirne = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIzvestaj.ReportOtkupRobaOM")
     
-    ' --- Otkup-Summen pro OtpremnicaID ---
-    Dim otkupData As Variant
-    otkupData = GetTableData(TBL_OTKUP)
+    ' --- kg blokova po OtpremnicaID, sa STAVKI (S1b-2) ---
+    ' Isti bilans koji ekran DOKUMENTI prikazuje uz otpremnicu; racun se ne duplira.
     Dim otkupDict As Object
-    Set otkupDict = CreateObject("Scripting.Dictionary")
-    
-    If IsArray(otkupData) Then
-        otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)
-        If IsArray(otkupData) And Not IsEmpty(otkupData) Then
-            Dim colOtkOtpID As Long, colOtkKol As Long
-            colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, "modIzvestaj.ReportOtkupRobaOM")
-            colOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportOtkupRobaOM")
-            
-            Dim j As Long
-            For j = 1 To UBound(otkupData, 1)
-                Dim otpKey As String
-                otpKey = CStr(otkupData(j, colOtkOtpID))
-                If otpKey <> "" Then
-                    If Not otkupDict.Exists(otpKey) Then otkupDict.Add otpKey, 0#
-                    If IsNumeric(otkupData(j, colOtkKol)) Then
-                        otkupDict(otpKey) = otkupDict(otpKey) + CDbl(otkupData(j, colOtkKol))
-                    End If
-                End If
-            Next j
-        End If
-    End If
-    
+    Set otkupDict = modOtkupBlok.BuildNapisanoByOtp()
+
     ' --- Manjak pro Zbirna ---
     Dim manjakDict As Object
     Set manjakDict = BuildManjakDict()
@@ -2787,7 +2765,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         thisOtpID = CStr(otpData(i, colOtpID))
         
         Dim kgBlokovi As Double: kgBlokovi = 0
-        If otkupDict.Exists(thisOtpID) Then kgBlokovi = otkupDict(thisOtpID)
+        If otkupDict.Exists(Trim$(thisOtpID)) Then kgBlokovi = otkupDict(Trim$(thisOtpID))
         
         Dim razlika As Double
         razlika = kgBlokovi - kgOtp
@@ -4994,7 +4972,8 @@ End Function
 ' Zbir kg NESTORNIRANIH blokova po OtpremnicaID (svi datumi -- kg karike se
 ' poredi nad CELIM dokumentom, ne nad periodom prikaza).
 Private Function SledBlokSumMapa(ByRef otkupData As Variant, ByVal cOtkOtp As Long, _
-                                 ByVal cOtkKol As Long) As Object
+                                 ByVal cOtkId As Long, ByVal zbir As Object, _
+                                 ByVal sourceName As String) As Object
     Dim d As Object, i As Long, oid As String
     Set d = CreateObject("Scripting.Dictionary")
     Set SledBlokSumMapa = d
@@ -5003,9 +4982,15 @@ Private Function SledBlokSumMapa(ByRef otkupData As Variant, ByVal cOtkOtp As Lo
         oid = SledTxt(otkupData(i, cOtkOtp))
         If Len(oid) > 0 Then
             If Not d.Exists(oid) Then d.Add oid, 0#
-            d(oid) = CDbl(d(oid)) + SledDbl(otkupData(i, cOtkKol))
+            d(oid) = CDbl(d(oid)) + SledKgStavki(zbir, otkupData(i, cOtkId), sourceName)
         End If
     Next i
+End Function
+
+' kg otkupa sa STAVKI (S1b-2). Otkup bez stavki pada po imenu -- nikad nula.
+Private Function SledKgStavki(ByVal zbir As Object, ByVal otkupID As Variant, _
+                              ByVal sourceName As String) As Double
+    SledKgStavki = CDbl(modOtkup.ZbirStavkiZaOtkup(zbir, SledTxt(otkupID), sourceName)(0))
 End Function
 
 ' Prijemnice po scope-u razresenja: "B|broj|klasa" (agregat bez vlasnika --
@@ -5114,15 +5099,13 @@ Public Function ReportSledljivostLanac(ByVal datumOd As Date, _
     If Not IsArray(otkupData) Then Exit Function
 
     Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkSt As Long
-    Dim cOtkVr As Long, cOtkKl As Long, cOtkKol As Long, cOtkBr As Long
+    Dim cOtkVr As Long, cOtkBr As Long
     Dim cOtkOtp As Long, cOtkZbr As Long, cOtkPar As Long
     cOtkId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
     cOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
     cOtkSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
     cOtkVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
-    cOtkKl = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
-    cOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
     cOtkBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     cOtkOtp = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
     cOtkZbr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
@@ -5130,7 +5113,9 @@ Public Function ReportSledljivostLanac(ByVal datumOd As Date, _
 
     ' Mape PRE petlje -- nijedan LookupValue po redu (par. 23.11/S5).
     Dim otpMapa As Object: Set otpMapa = SledOtpMapa()
-    Dim blokSum As Object: Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkKol)
+    ' Klasa i kg otkupa su na STAVKAMA (S1b-2).
+    Dim stavkeZbir As Object: Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+    Dim blokSum As Object: Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkId, stavkeZbir, SRC)
     Dim manjakDict As Object: Set manjakDict = BuildManjakDict()
     Dim prijMapa As Object: Set prijMapa = SledPrijMapa()
     Dim parcele As Object: Set parcele = SledParceleMapa()
@@ -5191,7 +5176,7 @@ PreskociBroj:
     Dim nVl As Long, razresen As Boolean, stavkaKey As String
     Dim cntNej As Long, cntPr As Long, prijKg As Double, zbirnaKg As Double
     Dim oznaka As String, kupacID As String, koopID As String, pid As String
-    Dim pz As Variant, pInfo As Variant
+    Dim pz As Variant, pInfo As Variant, zOtk As Variant
     Dim prijC As Collection, fakture As Object
     Dim prikazPrij As String, prikazFak As String
     Dim kg1 As Boolean, kg2 As Boolean
@@ -5218,8 +5203,9 @@ PreskociBroj:
         result(r, 3) = koopID
         If koopMapa.Exists(koopID) Then result(r, 4) = Trim$(CStr(koopMapa(koopID))) Else result(r, 4) = koopID
         result(r, 5) = SledTxt(otkupData(i, cOtkVr))
-        result(r, 6) = KlasaOrDefault(otkupData(i, cOtkKl))
-        result(r, 7) = SledDbl(otkupData(i, cOtkKol))
+        zOtk = modOtkup.ZbirStavkiZaOtkup(stavkeZbir, SledTxt(otkupData(i, cOtkId)), SRC)
+        result(r, 6) = CStr(zOtk(3))
+        result(r, 7) = CDbl(zOtk(0))
         result(r, 15) = SledTxt(otkupData(i, cOtkId))
 
         pid = SledTxt(otkupData(i, cOtkPar))
@@ -5672,9 +5658,9 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
     otkupData = GetTableData(TBL_OTKUP)
     If IsArray(otkupData) Then otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)
 
-    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkKol As Long
+    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long
     Dim cOtkBr As Long, cOtkOtp As Long, cOtkZbr As Long
-    Dim i As Long, dSer As Double
+    Dim i As Long, dSer As Double, kgOtk As Double, stavkeZbir As Object
     Dim koopID As String, otpID As String, blokZbr As String, naziv As String
     Dim oInfo As Variant
 
@@ -5685,11 +5671,12 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
         cOtkId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
         cOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
         cOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
-        cOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
         cOtkBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
         cOtkOtp = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
         cOtkZbr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
-        Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkKol)
+        ' kg otkupa je na STAVKAMA (S1b-2).
+        Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+        Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkId, stavkeZbir, SRC)
 
         For i = 1 To UBound(otkupData, 1)
             If IsDate(otkupData(i, cOtkDat)) Then
@@ -5700,16 +5687,17 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
             If koopMapa.Exists(koopID) Then naziv = Trim$(CStr(koopMapa(koopID))) Else naziv = koopID
             otpID = SledTxt(otkupData(i, cOtkOtp))
             blokZbr = SledTxt(otkupData(i, cOtkZbr))
+            kgOtk = SledKgStavki(stavkeZbir, otkupData(i, cOtkId), SRC)
 
             If Len(otpID) = 0 Then
                 rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
                                SledTxt(otkupData(i, cOtkBr)), naziv, _
-                               SledDbl(otkupData(i, cOtkKol)), "", _
+                               kgOtk, "", _
                                DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
             ElseIf Not otpMapa.Exists(otpID) Then
                 rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
                                SledTxt(otkupData(i, cOtkBr)), naziv, _
-                               SledDbl(otkupData(i, cOtkKol)), _
+                               kgOtk, _
                                "otpremnica stornirana ili ne postoji (" & otpID & ")", _
                                DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
             Else
@@ -5717,7 +5705,7 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
                 If Len(blokZbr) > 0 And UCase$(blokZbr) <> UCase$(CStr(oInfo(1))) Then
                     rows.Add Array(SLEDP_VEZA, otkupData(i, cOtkDat), _
                                    SledTxt(otkupData(i, cOtkBr)), naziv, _
-                                   SledDbl(otkupData(i, cOtkKol)), _
+                                   kgOtk, _
                                    "blok nosi zbirnu " & blokZbr & ", otpremnica " & _
                                    IIf(Len(CStr(oInfo(1))) > 0, CStr(oInfo(1)), "(prazno)"), _
                                    DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), "")

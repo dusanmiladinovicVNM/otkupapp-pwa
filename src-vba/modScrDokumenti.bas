@@ -1210,7 +1210,7 @@ End Function
 
 Public Function ColKlasa(ByVal m As String) As String
     Select Case m
-        Case "OTKUP":                ColKlasa = COL_OTK_KLASA
+        Case "OTKUP":                ColKlasa = COL_OKS_KLASA        ' stavka (ovStav)
         Case "OTPREMNICA":           ColKlasa = COL_OTP_KLASA
         Case "ZBIRNA":               ColKlasa = COL_ZBR_KLASA
         Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
@@ -1219,7 +1219,7 @@ End Function
 
 Public Function ColKolicina(ByVal m As String) As String
     Select Case m
-        Case "OTKUP":                ColKolicina = COL_OTK_KOLICINA
+        Case "OTKUP":                ColKolicina = COL_OKS_KOLICINA  ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolicina = COL_OTP_KOLICINA
         Case "ZBIRNA":               ColKolicina = COL_ZBR_KOLICINA
         Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
@@ -1228,7 +1228,7 @@ End Function
 
 Public Function ColKolAmb(ByVal m As String) As String
     Select Case m
-        Case "OTKUP":                ColKolAmb = COL_OTK_KOL_AMB
+        Case "OTKUP":                ColKolAmb = COL_OKS_KOL_AMB     ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolAmb = COL_OTP_KOL_AMB
         Case "ZBIRNA":               ColKolAmb = COL_ZBR_KOL_AMB
         Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
@@ -1247,7 +1247,7 @@ End Function
 ' Prazno = rezim nema cenu (tblZbirna), pa ni kolonu vrednosti.
 Public Function ColCena(ByVal m As String) As String
     Select Case m
-        Case "OTKUP":                ColCena = COL_OTK_CENA
+        Case "OTKUP":                ColCena = COL_OKS_CENA          ' stavka (ovStav)
         Case "OTPREMNICA":           ColCena = COL_OTP_CENA
         Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
     End Select
@@ -1572,10 +1572,10 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         iStavID = ColIdx(tblName, COL_OTK_ID)
         For c = 0 To colN - 1
             Select Case ColF(CStr(cols(c)), 1)
-                Case COL_OTK_KOLICINA: ovStav(c) = "kg"
-                Case COL_OTK_CENA:     ovStav(c) = "vr"
-                Case COL_OTK_KOL_AMB:  ovStav(c) = "amb"
-                Case COL_OTK_KLASA:    ovStav(c) = "kl"
+                Case COL_OKS_KOLICINA: ovStav(c) = "kg"
+                Case COL_OKS_CENA:     ovStav(c) = "vr"
+                Case COL_OKS_KOL_AMB:  ovStav(c) = "amb"
+                Case COL_OKS_KLASA:    ovStav(c) = "kl"
             End Select
         Next c
     End If
@@ -2197,8 +2197,8 @@ Private Function RowsBlokovi(ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, nRows As Long
     Dim outA() As Variant, koop As Object
     Dim iOtp As Long, iBroj As Long, iDat As Long, iKoop As Long
-    Dim iKol As Long, iAmb As Long, iCena As Long, iStorno As Long
-    Dim kg As Double, cena As Double, hay As String
+    Dim iId As Long, iStorno As Long, zbir As Object, z As Variant
+    Dim kg As Double, vr As Double, cena As Double, hay As String
     Dim sumKg As Double, sumVal As Double, ime As String
     On Error GoTo EH
     mStep = "blokovi"
@@ -2216,10 +2216,14 @@ Private Function RowsBlokovi(ByVal q As String) As Variant
     iBroj = modUiData.ColIdx(TBL_OTKUP, COL_OTK_BR_DOK)
     iDat = modUiData.ColIdx(TBL_OTKUP, COL_OTK_DATUM)
     iKoop = modUiData.ColIdx(TBL_OTKUP, COL_OTK_KOOPERANT)
-    iKol = modUiData.ColIdx(TBL_OTKUP, COL_OTK_KOLICINA)
-    iAmb = modUiData.ColIdx(TBL_OTKUP, COL_OTK_KOL_AMB)
-    iCena = modUiData.ColIdx(TBL_OTKUP, COL_OTK_CENA)
+    iId = modUiData.ColIdx(TBL_OTKUP, COL_OTK_ID)
     iStorno = modUiData.ColIdx(TBL_OTKUP, COL_STORNIRANO)
+
+    ' Kolicina, gajbe i vrednost bloka su na STAVKAMA (S1b-2). Dokument sa dve
+    ' klase nema jednu cenu, pa je cena reda prosek (vrednost / kg).
+    mStep = "stavke blokova"
+    Set zbir = modOtkup.ZbirStavkiPoOtkupu()
+    mStep = "blokovi"
 
     nRows = UBound(src, 1)
     ReDim outA(1 To nRows, 1 To 7)
@@ -2237,18 +2241,22 @@ Private Function RowsBlokovi(ByVal q As String) As Variant
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
 
-        kg = modUiData.CellD(src, r, iKol)
-        cena = modUiData.CellD(src, r, iCena)
+        z = modOtkup.ZbirStavkiZaOtkup(zbir, modUiData.CellS(src, r, iId), _
+                                       "modScrDokumenti.RowsBlokovi")
+        kg = CDbl(z(0))
+        vr = CDbl(z(1))
+        cena = 0
+        If kg > 0 Then cena = vr / kg
         n = n + 1
         outA(n, 1) = modUiData.CellS(src, r, iBroj)
         outA(n, 2) = modUiData.CellDate(src, r, iDat)
         outA(n, 3) = ime
         outA(n, 4) = kg
-        outA(n, 5) = modUiData.CellD(src, r, iAmb)
+        outA(n, 5) = CDbl(z(2))
         outA(n, 6) = cena
-        outA(n, 7) = kg * cena
+        outA(n, 7) = vr
         sumKg = sumKg + kg
-        sumVal = sumVal + kg * cena
+        sumVal = sumVal + vr
 Sledeci:
     Next r
 
