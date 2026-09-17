@@ -1329,12 +1329,12 @@ Prijemnice je lokalna optimizacija jednog dela lanca — tačno način na koji j
 | 6 | ✅ **Otkup cutover + integracije** (PR #308, merge 12.09.2026): ambalaža i novac na header, `Isplaceno` **izvedeno pa obrisano**, storno, ispravka (A9) + A13 kapija, print, PWA ingest. Nov pisač je jedini put. Auto-hladnjača, panel bloka i **PWA auto-otpremnica** pauzirani do 7; reader sweep izmeren i podeljen (§14.6) | 5 |
 | — | ✅ **KAPIJA ODLUKE — ZATVORENA 13.09.2026: nastavak u mestu** (u mestu 3 · novo stablo 0 · nejasno 3; kriterijumi zamenjeni merljivima) — v. §14.1 | 6 |
 | 7 | 🟡 **pre-flight 15.09 (§14.7) — granica A, pauze i test-only pisci oboreni 16.09 (§14.7 „Odluke operatera 16.09“): legacy se ne čuva živim, čuva se mapa sposobnosti. Pre koda: mali PR za kvarove 2/3/9 (✅ #334), ponovljen popis sa proverom (🟡 7b 16.09: premeren, nezavisno 6/12 celina), odluke o F2.** **Otpremnica cutover**: `tblOtpremnicaIzvori` pokazuje na prave `OtkupID`-eve; propagacija ispravke naniže; panel prelazi na `GetOtpremnicaProgress`; **briše `Otkup.OtpremnicaID`** sa svih **6** pisača (ne 5 — v. PR7 pre-flight, NALAZ 1); **rename `Cena` → `PredlogCena`** sa čitaocima (§13b) | 6 |
-| 8 | **Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7 — oboreno 16.09, slajsovi se seku po novom modelu):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4 | 7 · **§7.1, A13–A15 odlučeni** |
-| 9 | **Prijemnica** header+stavke + izvori + cutover | 8 |
-| 10 | **Faktura**: `FakturaStavka.PrijemnicaStavkaID` | 9 |
-| 11 | **Paleta**: `PaletaStavka.PrijemnicaStavkaID` | 9 |
-| 12 | **Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink | 11 |
-| 13 | **E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 10 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded | 12 |
+| 8 | ~~**Zbirna cutover**: invarijanta preko `tblZbirnaIzvori` (sada nad **pravim** `OtpremnicaID`-evima), `StornoZbirna_TX(id)`, storno otpremnice po §7.1, **propagacija ispravke = nova verzija (A13)**, print, izveštaji. **Briše `ZbirnaIdent*`, `ZbirnaGeneracija*` i mrtvu `RunSimpleStornoOtpremnica`.** Registruje goldene D1, H1, H2. **Iz PR7 preuzima (odluka 15.09, §14.7 — oboreno 16.09, slajsovi se seku po novom modelu):** §14.2 tvrdnje 6, 7 i zbirni deo 3, edge H2, podizanje pauze zbirnih tokova (F3, malina, VOZ) i auto-lanca hladnjače, brisanje test-only `SaveOtpremnica*` i po-klasnih kolona `tblOtpremnica`, izmenu golden scenarija A4~~ — **zamenjeno §14.9** | 7 · **§7.1, A13–A15 odlučeni** |
+| 9 | ~~**Prijemnica** header+stavke + izvori + cutover~~ — **zamenjeno §14.9** | 8 |
+| 10 | ~~**Faktura**: `FakturaStavka.PrijemnicaStavkaID`~~ — **zamenjeno §14.9** | 9 |
+| 11 | ~~**Paleta**: `PaletaStavka.PrijemnicaStavkaID`~~ — **zamenjeno §14.9** | 9 |
+| 12 | ~~**Sledljivost kao graf** nad eksplicitnim FK; ukloniti heuristički AutoLink~~ — **zamenjeno §14.9** | 11 |
+| 13 | ~~**E2E + brisanje**: `COL_GENERACIJA_ID`, `COL_DETE_ZBIRNA_GEN`, `*ByBroj_TX`, svih 10 `Split(" + ")`, mrtvi testovi i sabotaže; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; `ZBR_IDENTITET.md` → superseded~~ — **zamenjeno §14.9** | 12 |
 | — | `CLAUDE.md` §3 (obrtanje pravila o izvoru istine šeme) | zaseban process PR |
 
 Završni korak (red 13) je ključan i **ne sme se preskočiti**: dok `GeneracijaID` postoji kao živ
@@ -2440,6 +2440,37 @@ nije posebno pitano i važi dok operater ne kaže drugačije.
 **Ostaje otvoreno:** nijedna odluka domena iz liste „Još otvoreno“ (§14.7). Tačka 3 te liste (testovi sa zaglavljem
 bez stavki) nije domen nego posao slajsa otkupa. Sledeći korak: nova tabela PR-ova (slajsova) po novom modelu, sa
 mapom kao spiskom obaveznih ishoda i ovim odlukama kao ugovorom.
+
+### 14.9) Nova tabela slajsova (17.09.2026) — zamenjuje redove 7–13 u tabeli PR-ova
+
+**Pravila slajsa** (iz §14.7 „Odluke operatera 16.09“ i §14.8):
+
+- Slajs = jedan dokument (ili jedna veza) **do kraja**: pisac, čitaoci, ekran, štampa, izveštaji, storno/ispravka,
+  sync i izvozi tog dokumenta. Na kraju slajsa kolone i procedure starog modela koje on pokriva su **obrisane**.
+- Posle svakog PR-a projekat se kompajlira. Legacy kod koji slajs ne prenosi a koji bi pukao se **briše**, ne
+  pauzira; sposobnost koju je nosio ostaje zapisana u mapi i u koloni „Sadržaj“ piše koji je slajs vraća („vraća Sx“).
+- **Prag slajsa je merljiv:** `python tools/popis_citalaca.py` — grupe iz kolone „Briše“ imaju **0** PROD mesta
+  (danas izmereno na `main` `0e6e3acd`, PROD bez MRTAV). DUAL READ = 0.
+- **Spisak sposobnosti po slajsu je ulaz za pre-flight**, izveden iz `MAPA_SPOSOBNOSTI.md` (redovi sa presudom
+  da/delimično, 120 ukupno) po tabeli i ekranu. Pre-flight slajsa ga proverava red po red i dopisuje koje su
+  sposobnosti vraćene i kojim testom; nijedna ne sme ostati bez slajsa.
+- Svaki slajs dodaje proveru pravila svog dokumenta (§14.8 t. 11), ne prevodi stare provere integriteta.
+
+| # | Slajs | Sadržaj | Odluke §14.8 | Briše (prag = 0) | Sposobnosti (ulaz za pre-flight) | Zavisi od |
+|---|---|---|---|---|---|---|
+| S1 | **Otkup do kraja** (stavke su jedini izvor) | svi čitaoci linijskih polja otkupa prelaze na `tblOtkupStavke`: izveštaji, panel bloka, storno prefill, KPI (AUD-056), štampa, izvozi `ExportOtkupPoOM` / `ExportOtkupiAll` (deo otkupa) / `ExportSaldoOMDetail`, push OTK redova (`BuildOTKSheetRowForOtkup`), GAS/PWA pregled otkupa i menadžment; provera zdravlja iz kanona (AUD-055) | 3, 10 | `otk_linija` (91), `x_saveotkup` (35, stari `SaveOtkup_TX`), `x_vreme_unosa` (3), `x_indeks` (2), `x_literal` u health (13); kolone `Otkup.Kolicina/Cena/Klasa/KolAmbalaze/...` | A-015, B-036 (otkup), C-019, D-057, E-024, E-026, E-027, E-030, E-039, E-040, E-041, E-042, E-053, E-056, E-057, E-070, E-072, E-074, E-075, E-076, E-077, F-089 | PR6 |
+| S2 | **Banka po ID-u** | mapiranje izvoda i nalozi: poziv na broj se jednom razreši u `OtkupID`, blok i otvoreno po bloku rade nad ID-em | 7 | traženje otkupa po poslovnom broju u `modBankaMapiranje` / `modNovac` | D-032, D-033, D-035, D-036, D-037 | S1 |
+| S3 | **Otpremnica cutover — desktop** | F2 kroz nacrt + očekivanje po klasi (sa `PredlogCena` i `BrutoKg` na stavci) + dugme „Izdaj“; ambalaža pri izdavanju; panel blokova i izgubljeni blokovi nad `tblOtpremnicaIzvori`; storno i ispravka otpremnice; auto-hladnjača i malina auto-otpremnica kroz `CreateOtpremnicaIzIzvora_TX`; štampa i izveštaji otpremnice. PWA/sync putevi koji čitaju `Otkup.OtpremnicaID/VozacID` se **brišu** (vraća S5) | 1, 2, 3, 4 | `otp_linija` (101), `otp_cena` (9), `otp_stari_pisac` (68, `SaveOtpremnica*`, AutoLink), `otk_veze` za `OTPREMNICA_ID` / `VOZAC` / `BROJ_OTPREMNICE`; kolone `Otkup.OtpremnicaID/VozacID/BrojOtpremnice`, linijska polja i `Cena` na `tblOtpremnica` | A-001, A-002, A-011, A-012, A-014, A-018..A-029, B-004, B-005, B-010, B-013, B-014, B-022, B-023, B-027, B-032, B-033, B-039, B-041, B-042, B-046, B-047, C-005, C-008, C-010, C-025, C-059 | S1 |
+| S4 | **Zbirna cutover** (stari PR8) | F3 kroz `CreateZbirnaIzIzvora_TX`; storno zbirne i propagacija ispravke = nova verzija (A13); malina auto-zbirna; štampa i izveštaji zbirne; relink u storno toku nad ID-em | 3 | `otp_brojzbirne` (56), `otk_veze` za `BROJ_ZBIRNE`, `x_trace` (12), `GeneracijaID`, `ZbirnaIdent*`, `*ByBroj_TX` zbirne | A-017, A-030, B-001, B-006, B-012, B-015, B-024, B-026, B-028, B-038, B-044, C-004, C-007, C-011, C-016, C-024, C-038, C-060 | S3 |
+| S5 | **PWA i sync na novom modelu** | dodela vozača iz PWA → izdata otpremnica; GAS vozaču servira otpremnice po `VozacID` otpremnice; `VOZ-*` zbirna → zbirna sa izvorima; auto-lanac bez kapije pauze; badge sync-a bez „degradirano“ grane | 5, 6 | `pauza` (13), `IzvedeniLanacIzPwaDostupan`, `NapredakBlokaDostupan`, `TryUpdateVozacID` na otkupu | E-001, E-003, E-019..E-023, E-035, E-044, E-058, E-063, E-064, E-065 | S4 |
+| S6 | **Prijemnica** header + stavke + izvori + cutover | F4; hladnjača auto-prijemnica po zbirnoj (ne po `BrojZbirne\|Klasa`); ambalaža vraćena; štampa, izveštaji, izvoz | 3 | linijska polja `tblPrijemnica`, `Prijemnica.BrojZbirne` kao veza, `split_plus` (7) | A-031, B-029, B-045, C-006, C-014, C-015, C-033, C-039 | S4 |
+| S7 | **Faktura** | `FakturaStavka.PrijemnicaStavkaID`; SEF; kartica kupca | — | veza fakture preko broja prijemnice | C-003, D-031 i redovi D1 koji čitaju prijemnicu (pre-flight) | S6 |
+| S8 | **Paleta i prerada** | `PaletaStavka.PrijemnicaStavkaID`; usklađivanje paleta po ID-u prijemnice | — | `PaletaStavka.BrojZbirne` kao veza, broj prijemnice kao veza | C-040, C-048, C-050, C-051 | S6 |
+| S9 | **Sledljivost kao graf + brisanje** | sledljivost nad eksplicitnim FK; provere pravila novog modela umesto 15 starih provera integriteta; pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID`; 49 pomoćnih procedura iz „Pokrivenost“ u mapi potvrđeno 0; `ZBR_IDENTITET.md` → superseded | 11 | ostatak `x_literal` (integritet), sve grupe popisa = 0 | C-029, C-031, C-032, C-035, C-036, C-037, C-041, C-043, C-044, F-087, F-088 | S7, S8 |
+
+**Van refaktora:** marža i ekran ANALIZA (§14.8 t. 8). **Nije slajs:** makroi bez brane (§14.8 t. 9).
+
+**Sledeći korak:** pre-flight S1 (skill `pre-flight`), jedna sesija.
 
 ## 15) Backlog — namerno van opsega
 
