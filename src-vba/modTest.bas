@@ -399,19 +399,19 @@ Public Sub RunAllTests()
     RunOne 116
     RunOne 117
     RunOne 118
-    RunOne 119
     ' 127-131 (Platni nalozi) idu PRE 124-126: ta tri testa DIRAJU fixture
     ' (zbirne/prijemnice) i moraju ostati POSLEDNJA u nizu izvrsavanja.
     ' Redosled izvrsavanja ne mora da prati brojeve -- brojevi su identitet
     ' testa, ne raspored.
+    RunOne 122
     RunOne 123
     RunOne 124
     RunOne 125
     RunOne 126
     RunOne 127
-    RunOne 128
     ' 133-141 (Izvestaji) su cista citanja i idu PRE mutirajucih 124-126,
     ' iz istog razloga kao 127-132 iznad.
+    RunOne 128
     RunOne 129
     RunOne 130
     RunOne 131
@@ -428,9 +428,9 @@ Public Sub RunAllTests()
     RunOne 142
     RunOne 143
     RunOne 144
-    RunOne 145
     ' 150-157 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
     ' iz istog razloga kao 127-132 i 133-149 iznad.
+    RunOne 145
     RunOne 146
     RunOne 147
     RunOne 148
@@ -440,13 +440,13 @@ Public Sub RunAllTests()
     RunOne 152
     RunOne 153
     RunOne 154
-    RunOne 155
     ' 160-161 (GP grana) su takodje cista citanja (korpa je in-memory).
+    RunOne 155
     RunOne 156
-    RunOne 157
     ' 164-177 (Maticni podaci, M0-M6) su cista citanja -- opis sekcija,
     ' mreza, bazen polja i registri -- pa idu uz Sledljivost, PRE
     ' mutirajucih 124-126.
+    RunOne 159
     RunOne 160
     RunOne 161
     RunOne 162
@@ -500,14 +500,13 @@ Public Sub RunAllTests()
     RunOne 210
     RunOne 211
     RunOne 212
-    RunOne 213
+    RunOne 119
     RunOne 120
     RunOne 121
-    RunOne 122
     ' 162 MUTIRA (CreateFakturaGP_TX + StornoFaktura_TX nad potrosnim
     ' vozilom PRE-GP-W1) -- ide POSLE svih citanja, poslednji.
+    RunOne 157
     RunOne 158
-    RunOne 159
 
     SetTestMode prevMode
     WriteResultFile
@@ -643,151 +642,150 @@ Private Function TestName(ByVal idx As Long) As String
         Case 68: TestName = "T_Oporavak_OdbaciIspravku_GasiSamoSvoj"
         Case 69: TestName = "T_ImpactPalete_ZaglavljeIzPraveVrste"
         Case 70: TestName = "T_StornoEfekat_TekstIzKataloga"
-        Case 71: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
-        Case 72: TestName = "T_NavBrojac_SamoEkranKojiBroji"
-        Case 73: TestName = "T_NovaPrerada_IzborINeto"
-        Case 74: TestName = "T_PaletaDvoklik_OtvaraStavke"
-        Case 75: TestName = "T_CipoviEkrana_UgovorIFilter"
-        Case 76: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
-        Case 77: TestName = "T_BazenLjuske_ViseNegoStoStaje"
-        Case 78: TestName = "T_Agro_UgovorEkrana"
-        Case 79: TestName = "T_Agro_KapijaStanjaBrojiKorpu"
-        Case 80: TestName = "T_Agro_SmartDozaZaokruzujeNagore"
-        Case 81: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
-        Case 82: TestName = "T_Agro_CipoviSuzavajuListu"
-        Case 83: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
-        Case 84: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
-        Case 85: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
-        Case 86: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
-        Case 87: TestName = "T_Agro_KorpaUklanjaPoIdentitetu"
-        Case 88: TestName = "T_Agro_ZnackaPratiKorpuVanKorpeListe"
-        Case 89: TestName = "T_PaleteIdentitet_PoIDNePoBroju"
-        Case 90: TestName = "T_PreradeIdentitet_PoIDNePoBroju"
-        Case 91: TestName = "T_GridTelo_NePokrivaToast"
-        Case 92: TestName = "T_PaleteScrEvent_NeCuriGreska"
-        Case 93: TestName = "T_Fak_UgovorEkrana"
-        Case 94: TestName = "T_Fak_IdentitetURedu_NeCrtaSe"
-        Case 95: TestName = "T_Fak_DostupnostSePrenosiURedu"
-        Case 96: TestName = "T_Fak_KorpaZnackaITraka"
-        Case 97: TestName = "T_Fak_CipoviPrateStatusFakture"
-        Case 98: TestName = "T_Fak_NerazresenKupacNeDiraKorpu"
-        Case 99: TestName = "T_Fak_GreskaNePreziviLogErr"
-        Case 100: TestName = "T_BankaUvoz_UgovorEkrana"
-        Case 101: TestName = "T_BankaUvoz_IdentitetURedu_NeCrtaSe"
-        Case 102: TestName = "T_BankaUvoz_RedNosiSmerIOtvorenost"
-        Case 103: TestName = "T_BankaUvoz_CipJakihPratiBrojac"
-        Case 104: TestName = "T_BankaUvoz_IzvodiSuAgregatPoRacunu"
-        Case 105: TestName = "T_BankaUvoz_RucnoMapiranjePravila"
-        Case 106: TestName = "T_ZonaBankaUvoz_PoljaIRaspored"
-        Case 107: TestName = "T_MrezaDatum_BrojKojiNijeDatum"
-        Case 108: TestName = "T_MrezaGeometrija_PratiOpisKolona"
-        Case 109: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
-        Case 110: TestName = "T_BankaUvoz_UlazakUvoziIzvode"
-        Case 111: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
-        Case 112: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
-        Case 113: TestName = "T_Kolona_TrazenjeNeGutaGresku"
-        Case 114: TestName = "T_MrezaPilula_PozadinaSeCisti"
-        Case 115: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
-        Case 116: TestName = "T_Matic_SekcijaTraziPravo"
-        Case 117: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
-        Case 118: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
-        Case 119: TestName = "T_KesKolone_NeMemoiseNulu"
-        Case 120: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
-        Case 121: TestName = "T_CiljZbirna_NePoPrvomRedu"
-        Case 122: TestName = "T_Prijemnica_PomeraSamoAktivan"
+        Case 71: TestName = "T_NavBrojac_SamoEkranKojiBroji"
+        Case 72: TestName = "T_NovaPrerada_IzborINeto"
+        Case 73: TestName = "T_PaletaDvoklik_OtvaraStavke"
+        Case 74: TestName = "T_CipoviEkrana_UgovorIFilter"
+        Case 75: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
+        Case 76: TestName = "T_BazenLjuske_ViseNegoStoStaje"
+        Case 77: TestName = "T_Agro_UgovorEkrana"
+        Case 78: TestName = "T_Agro_KapijaStanjaBrojiKorpu"
+        Case 79: TestName = "T_Agro_SmartDozaZaokruzujeNagore"
+        Case 80: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
+        Case 81: TestName = "T_Agro_CipoviSuzavajuListu"
+        Case 82: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
+        Case 83: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
+        Case 84: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
+        Case 85: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
+        Case 86: TestName = "T_Agro_KorpaUklanjaPoIdentitetu"
+        Case 87: TestName = "T_Agro_ZnackaPratiKorpuVanKorpeListe"
+        Case 88: TestName = "T_PaleteIdentitet_PoIDNePoBroju"
+        Case 89: TestName = "T_PreradeIdentitet_PoIDNePoBroju"
+        Case 90: TestName = "T_GridTelo_NePokrivaToast"
+        Case 91: TestName = "T_PaleteScrEvent_NeCuriGreska"
+        Case 92: TestName = "T_Fak_UgovorEkrana"
+        Case 93: TestName = "T_Fak_IdentitetURedu_NeCrtaSe"
+        Case 94: TestName = "T_Fak_DostupnostSePrenosiURedu"
+        Case 95: TestName = "T_Fak_KorpaZnackaITraka"
+        Case 96: TestName = "T_Fak_CipoviPrateStatusFakture"
+        Case 97: TestName = "T_Fak_NerazresenKupacNeDiraKorpu"
+        Case 98: TestName = "T_Fak_GreskaNePreziviLogErr"
+        Case 99: TestName = "T_BankaUvoz_UgovorEkrana"
+        Case 100: TestName = "T_BankaUvoz_IdentitetURedu_NeCrtaSe"
+        Case 101: TestName = "T_BankaUvoz_RedNosiSmerIOtvorenost"
+        Case 102: TestName = "T_BankaUvoz_CipJakihPratiBrojac"
+        Case 103: TestName = "T_BankaUvoz_IzvodiSuAgregatPoRacunu"
+        Case 104: TestName = "T_BankaUvoz_RucnoMapiranjePravila"
+        Case 105: TestName = "T_ZonaBankaUvoz_PoljaIRaspored"
+        Case 106: TestName = "T_MrezaDatum_BrojKojiNijeDatum"
+        Case 107: TestName = "T_MrezaGeometrija_PratiOpisKolona"
+        Case 108: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
+        Case 109: TestName = "T_BankaUvoz_UlazakUvoziIzvode"
+        Case 110: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
+        Case 111: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
+        Case 112: TestName = "T_Kolona_TrazenjeNeGutaGresku"
+        Case 113: TestName = "T_MrezaPilula_PozadinaSeCisti"
+        Case 114: TestName = "T_Ljuska_SuzenaPravaStartIAlatke"
+        Case 115: TestName = "T_Matic_SekcijaTraziPravo"
+        Case 116: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
+        Case 117: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
+        Case 118: TestName = "T_KesKolone_NeMemoiseNulu"
+        Case 119: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
+        Case 120: TestName = "T_CiljZbirna_NePoPrvomRedu"
+        Case 121: TestName = "T_Prijemnica_PomeraSamoAktivan"
         ' 127-131: ekran Platni nalozi (v6-ui-185). U RunAllTests se IZVRSAVAJU
         ' pre 124-126, jer ta tri diraju fixture i moraju ostati poslednja.
-        Case 123: TestName = "T_BankaNalozi_UgovorEkrana"
-        Case 124: TestName = "T_BankaNalozi_IdentitetURedu_NeCrtaSe"
-        Case 125: TestName = "T_BankaNalozi_CipoviIKpiPratePravila"
-        Case 126: TestName = "T_BankaNalozi_KorpaIIzvoz"
-        Case 127: TestName = "T_ZonaBankaNalozi_PoljaIRaspored"
-        Case 128: TestName = "T_BankaNalozi_IznosPoBloku"
-        Case 129: TestName = "T_Izv_UgovorEkrana"
-        Case 130: TestName = "T_Izv_MatricaVodiListe"
-        Case 131: TestName = "T_Izv_IdentitetURedu_NeCrtaSe"
-        Case 132: TestName = "T_Izv_SlaganjeOtkupOM"
-        Case 133: TestName = "T_Izv_SlaganjeKupacVozac"
-        Case 134: TestName = "T_Izv_SlaganjeKartica"
-        Case 135: TestName = "T_Izv_SlaganjeIsplataManjakAmb"
-        Case 136: TestName = "T_Izv_KesPretragaIHint"
-        Case 137: TestName = "T_ZonaIzv_PoljaIRaspored"
-        Case 138: TestName = "T_KesGeneracija_UpisInvalidira"
-        Case 139: TestName = "T_Izv_DetaljICipKontekst"
-        Case 140: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
-        Case 141: TestName = "T_Izv_RangKooperanata"
-        Case 142: TestName = "T_Izv_ZbirniSadrzaj"
-        Case 143: TestName = "T_Izv_RangSortIKontekst"
-        Case 144: TestName = "T_Izv_ZbirniOrphanStanica"
-        Case 145: TestName = "T_Izv_CipoviVrstaSorta"
-        Case 146: TestName = "T_Sled_UgovorEkrana"
-        Case 147: TestName = "T_Sled_LanacSlaganje"
-        Case 148: TestName = "T_Sled_FailClosed"
-        Case 149: TestName = "T_Sled_IdentitetURedu_NeCrtaSe"
-        Case 150: TestName = "T_Sled_KesPretragaIHint"
-        Case 151: TestName = "T_ZonaSled_PoljaIRaspored"
-        Case 152: TestName = "T_Sled_PovezivanjeKandidati"
-        Case 153: TestName = "T_Sled_MeteSledljivosti"
-        Case 154: TestName = "T_Sled_DokumentiPonuda"
-        Case 155: TestName = "T_Ljuska_PopupTekstTraka"
-        Case 156: TestName = "T_Sled_GpLanacIStanja"
-        Case 157: TestName = "T_Fak_GpListaIKorpa"
-        Case 158: TestName = "T_FakturaGP_WriterKapijeIStorno"
-        Case 159: TestName = "T_UtovarB_SledIStornoKapije"
-        Case 160: TestName = "T_Sekcija_SidebarNeStajeZajedno"
-        Case 161: TestName = "T_UiPanel_StavkaSidebara"
-        Case 162: TestName = "T_MatIzvor_OpisSekcijaJePotpun"
-        Case 163: TestName = "T_MatIzvor_CipIdentitetIPretraga"
-        Case 164: TestName = "T_MatUnos_OpisPoljaISema"
-        Case 165: TestName = "T_MatUnos_ProveraOdbija"
-        Case 166: TestName = "T_MatEkran_BazenPoljaIVisina"
-        Case 167: TestName = "T_MatEkran_RadnjeIRezim"
-        Case 168: TestName = "T_MatGeo_TekstIAdrese"
-        Case 169: TestName = "T_MatKor_RecnikDaNeIPrava"
-        Case 170: TestName = "T_Maticni_MenijiPokrivajuIsto"
-        Case 171: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
-        Case 172: TestName = "T_MatEkran_KaskadaZavisnogCombo"
-        Case 173: TestName = "T_UiPanel_UgovorIUstupanje"
-        Case 174: TestName = "T_Mreza_DecimalaNeNestaje"
-        Case 175: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
-        Case 176: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
-        Case 177: TestName = "T_UiPanel_ZivotniCiklusIPrava"
-        Case 178: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
-        Case 179: TestName = "T_Analiza_EkranUIzradi"
-        Case 180: TestName = "T_Fak_SefLogJeOpsegFakture"
-        Case 181: TestName = "T_Faza_PrijavaNeGradiLjusku"
-        Case 182: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
-        Case 183: TestName = "T_Zbirna_OdredisteJePoljeF3"
-        Case 184: TestName = "T_Manjak_LinijaIPragSuSamoF4"
-        Case 185: TestName = "T_Zbirne_PickerNeNudiStornirane"
-        Case 186: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
-        Case 187: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
-        Case 188: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
-        Case 189: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
-        Case 190: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
-        Case 191: TestName = "T_BrojKapija_IstoZaSvakiCase"
-        Case 192: TestName = "T_DeteZbirne_ImaKolonuGeneracije"
-        Case 193: TestName = "T_Sema_OtisakParitetSaGeneratorom"
-        Case 194: TestName = "T_Sema_SveskaOdgovaraKanonu"
-        Case 195: TestName = "T_Sema_OtisakVidiRedosled"
-        Case 196: TestName = "T_Sema_KapijaBije"
-        Case 197: TestName = "T_Sema_SamoLeci"
-        Case 198: TestName = "T_Sema_PrefiksNijeString"
-        Case 199: TestName = "T_Kontekst_NovaStanicaUlaziUListu"
-        Case 200: TestName = "T_AutoSave_PrekinutImportNeSnima"
-        Case 201: TestName = "T_Save_PrekinutImportZatvaraSvaVrata"
-        Case 202: TestName = "T_ImportMarker_PendingBezMutacijeNeBlokira"
-        Case 203: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
-        Case 204: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
-        Case 205: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
-        Case 206: TestName = "T_Sema_FormatCelijeCuvaVrednost"
-        Case 207: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
-        Case 208: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
-        Case 209: TestName = "T_BrojZauzetUNizu_OpsegIStorno"
-        Case 210: TestName = "T_Novac_BrojNijeJedinstven"
-        Case 211: TestName = "T_BrojZauzetUNizu_Revers"
-        Case 212: TestName = "T_ReversValidiraj_BrojUNizu"
-        Case 213: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
+        Case 122: TestName = "T_BankaNalozi_UgovorEkrana"
+        Case 123: TestName = "T_BankaNalozi_IdentitetURedu_NeCrtaSe"
+        Case 124: TestName = "T_BankaNalozi_CipoviIKpiPratePravila"
+        Case 125: TestName = "T_BankaNalozi_KorpaIIzvoz"
+        Case 126: TestName = "T_ZonaBankaNalozi_PoljaIRaspored"
+        Case 127: TestName = "T_BankaNalozi_IznosPoBloku"
+        Case 128: TestName = "T_Izv_UgovorEkrana"
+        Case 129: TestName = "T_Izv_MatricaVodiListe"
+        Case 130: TestName = "T_Izv_IdentitetURedu_NeCrtaSe"
+        Case 131: TestName = "T_Izv_SlaganjeOtkupOM"
+        Case 132: TestName = "T_Izv_SlaganjeKupacVozac"
+        Case 133: TestName = "T_Izv_SlaganjeKartica"
+        Case 134: TestName = "T_Izv_SlaganjeIsplataManjakAmb"
+        Case 135: TestName = "T_Izv_KesPretragaIHint"
+        Case 136: TestName = "T_ZonaIzv_PoljaIRaspored"
+        Case 137: TestName = "T_KesGeneracija_UpisInvalidira"
+        Case 138: TestName = "T_Izv_DetaljICipKontekst"
+        Case 139: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
+        Case 140: TestName = "T_Izv_RangKooperanata"
+        Case 141: TestName = "T_Izv_ZbirniSadrzaj"
+        Case 142: TestName = "T_Izv_RangSortIKontekst"
+        Case 143: TestName = "T_Izv_ZbirniOrphanStanica"
+        Case 144: TestName = "T_Izv_CipoviVrstaSorta"
+        Case 145: TestName = "T_Sled_UgovorEkrana"
+        Case 146: TestName = "T_Sled_LanacSlaganje"
+        Case 147: TestName = "T_Sled_FailClosed"
+        Case 148: TestName = "T_Sled_IdentitetURedu_NeCrtaSe"
+        Case 149: TestName = "T_Sled_KesPretragaIHint"
+        Case 150: TestName = "T_ZonaSled_PoljaIRaspored"
+        Case 151: TestName = "T_Sled_PovezivanjeKandidati"
+        Case 152: TestName = "T_Sled_MeteSledljivosti"
+        Case 153: TestName = "T_Sled_DokumentiPonuda"
+        Case 154: TestName = "T_Ljuska_PopupTekstTraka"
+        Case 155: TestName = "T_Sled_GpLanacIStanja"
+        Case 156: TestName = "T_Fak_GpListaIKorpa"
+        Case 157: TestName = "T_FakturaGP_WriterKapijeIStorno"
+        Case 158: TestName = "T_UtovarB_SledIStornoKapije"
+        Case 159: TestName = "T_Sekcija_SidebarNeStajeZajedno"
+        Case 160: TestName = "T_UiPanel_StavkaSidebara"
+        Case 161: TestName = "T_MatIzvor_OpisSekcijaJePotpun"
+        Case 162: TestName = "T_MatIzvor_CipIdentitetIPretraga"
+        Case 163: TestName = "T_MatUnos_OpisPoljaISema"
+        Case 164: TestName = "T_MatUnos_ProveraOdbija"
+        Case 165: TestName = "T_MatEkran_BazenPoljaIVisina"
+        Case 166: TestName = "T_MatEkran_RadnjeIRezim"
+        Case 167: TestName = "T_MatGeo_TekstIAdrese"
+        Case 168: TestName = "T_MatKor_RecnikDaNeIPrava"
+        Case 169: TestName = "T_Maticni_MenijiPokrivajuIsto"
+        Case 170: TestName = "T_Auth_OtkazanaPrijavaNeLazePrikaz"
+        Case 171: TestName = "T_MatEkran_KaskadaZavisnogCombo"
+        Case 172: TestName = "T_UiPanel_UgovorIUstupanje"
+        Case 173: TestName = "T_Mreza_DecimalaNeNestaje"
+        Case 174: TestName = "T_Maticni_KapijeUpisaIZivotniCiklus"
+        Case 175: TestName = "T_Maticni_CitanjeNeMenjaVrednosti"
+        Case 176: TestName = "T_UiPanel_ZivotniCiklusIPrava"
+        Case 177: TestName = "T_BankaUvoz_PlanPrikazaJeIPlanPisca"
+        Case 178: TestName = "T_Analiza_EkranUIzradi"
+        Case 179: TestName = "T_Fak_SefLogJeOpsegFakture"
+        Case 180: TestName = "T_Faza_PrijavaNeGradiLjusku"
+        Case 181: TestName = "T_Faza_SplashIMiniSuFazeIsteLjuske"
+        Case 182: TestName = "T_Zbirna_OdredisteJePoljeF3"
+        Case 183: TestName = "T_Manjak_LinijaIPragSuSamoF4"
+        Case 184: TestName = "T_Zbirne_PickerNeNudiStornirane"
+        Case 185: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
+        Case 186: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
+        Case 187: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
+        Case 188: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
+        Case 189: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
+        Case 190: TestName = "T_BrojKapija_IstoZaSvakiCase"
+        Case 191: TestName = "T_DeteZbirne_ImaKolonuGeneracije"
+        Case 192: TestName = "T_Sema_OtisakParitetSaGeneratorom"
+        Case 193: TestName = "T_Sema_SveskaOdgovaraKanonu"
+        Case 194: TestName = "T_Sema_OtisakVidiRedosled"
+        Case 195: TestName = "T_Sema_KapijaBije"
+        Case 196: TestName = "T_Sema_SamoLeci"
+        Case 197: TestName = "T_Sema_PrefiksNijeString"
+        Case 198: TestName = "T_Kontekst_NovaStanicaUlaziUListu"
+        Case 199: TestName = "T_AutoSave_PrekinutImportNeSnima"
+        Case 200: TestName = "T_Save_PrekinutImportZatvaraSvaVrata"
+        Case 201: TestName = "T_ImportMarker_PendingBezMutacijeNeBlokira"
+        Case 202: TestName = "T_Backup_NeObaraStartINeRasteBezGranice"
+        Case 203: TestName = "T_AutoSave_PadNeZaglavljujePrekidac"
+        Case 204: TestName = "T_Kontekst_NovaKulturaITipAmbalazeUlaze"
+        Case 205: TestName = "T_Sema_FormatCelijeCuvaVrednost"
+        Case 206: TestName = "T_Sema_ZurnalCuvaVrednostKrozJournalCell"
+        Case 207: TestName = "T_Sema_MagacinOdbijaUpisBezUgovora"
+        Case 208: TestName = "T_BrojZauzetUNizu_OpsegIStorno"
+        Case 209: TestName = "T_Novac_BrojNijeJedinstven"
+        Case 210: TestName = "T_BrojZauzetUNizu_Revers"
+        Case 211: TestName = "T_ReversValidiraj_BrojUNizu"
+        Case 212: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 52: TestName = "T_MapaImena_KljucNosiKolone"
         Case 51: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 50: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -866,149 +864,148 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 68: T_Oporavak_OdbaciIspravku_GasiSamoSvoj
         Case 69: T_ImpactPalete_ZaglavljeIzPraveVrste
         Case 70: T_StornoEfekat_TekstIzKataloga
-        Case 71: T_StornoBlokovi_PodrazumevanoNijedan
-        Case 72: T_NavBrojac_SamoEkranKojiBroji
-        Case 73: T_NovaPrerada_IzborINeto
-        Case 74: T_PaletaDvoklik_OtvaraStavke
-        Case 75: T_CipoviEkrana_UgovorIFilter
-        Case 76: T_ZonaPrerade_SvaPoljaVidljiva
-        Case 77: T_BazenLjuske_ViseNegoStoStaje
-        Case 78: T_Agro_UgovorEkrana
-        Case 79: T_Agro_KapijaStanjaBrojiKorpu
-        Case 80: T_Agro_SmartDozaZaokruzujeNagore
-        Case 81: T_ZonaAgro_PoljaPostojeIPrateRezim
-        Case 82: T_Agro_CipoviSuzavajuListu
-        Case 83: T_Agro_BrojacIDvoklikPoIdentitetu
-        Case 84: T_Agro_AbzugMapaPratiPojedinacni
-        Case 85: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
-        Case 86: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
-        Case 87: T_Agro_KorpaUklanjaPoIdentitetu
-        Case 88: T_Agro_ZnackaPratiKorpuVanKorpeListe
-        Case 89: T_PaleteIdentitet_PoIDNePoBroju
-        Case 90: T_PreradeIdentitet_PoIDNePoBroju
-        Case 91: T_GridTelo_NePokrivaToast
-        Case 92: T_PaleteScrEvent_NeCuriGreska
-        Case 93: T_Fak_UgovorEkrana
-        Case 94: T_Fak_IdentitetURedu_NeCrtaSe
-        Case 95: T_Fak_DostupnostSePrenosiURedu
-        Case 96: T_Fak_KorpaZnackaITraka
-        Case 97: T_Fak_CipoviPrateStatusFakture
-        Case 98: T_Fak_NerazresenKupacNeDiraKorpu
-        Case 99: T_Fak_GreskaNePreziviLogErr
-        Case 100: T_BankaUvoz_UgovorEkrana
-        Case 101: T_BankaUvoz_IdentitetURedu_NeCrtaSe
-        Case 102: T_BankaUvoz_RedNosiSmerIOtvorenost
-        Case 103: T_BankaUvoz_CipJakihPratiBrojac
-        Case 104: T_BankaUvoz_IzvodiSuAgregatPoRacunu
-        Case 105: T_BankaUvoz_RucnoMapiranjePravila
-        Case 106: T_ZonaBankaUvoz_PoljaIRaspored
-        Case 107: T_MrezaDatum_BrojKojiNijeDatum
-        Case 108: T_MrezaGeometrija_PratiOpisKolona
-        Case 109: T_MrezaCelija_NeostavljaTudjiTekst
-        Case 110: T_BankaUvoz_UlazakUvoziIzvode
-        Case 111: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
-        Case 112: T_Mreza_PodnozjeDvaNovcanaSlota
-        Case 113: T_Kolona_TrazenjeNeGutaGresku
-        Case 114: T_MrezaPilula_PozadinaSeCisti
-        Case 115: T_Ljuska_SuzenaPravaStartIAlatke
-        Case 116: T_Matic_SekcijaTraziPravo
-        Case 117: T_Ljuska_PadListeNovcaNijeAvans
-        Case 118: T_StornoFilter_NedostajucaKolonaNijeTisina
-        Case 119: T_KesKolone_NeMemoiseNulu
-        Case 120: T_RekalkZbirne_KapijaJeUPrimitivu
-        Case 121: T_CiljZbirna_NePoPrvomRedu
-        Case 122: T_Prijemnica_PomeraSamoAktivan
-        Case 123: T_BankaNalozi_UgovorEkrana
-        Case 124: T_BankaNalozi_IdentitetURedu_NeCrtaSe
-        Case 125: T_BankaNalozi_CipoviIKpiPratePravila
-        Case 126: T_BankaNalozi_KorpaIIzvoz
-        Case 127: T_ZonaBankaNalozi_PoljaIRaspored
-        Case 128: T_BankaNalozi_IznosPoBloku
-        Case 129: T_Izv_UgovorEkrana
-        Case 130: T_Izv_MatricaVodiListe
-        Case 131: T_Izv_IdentitetURedu_NeCrtaSe
-        Case 132: T_Izv_SlaganjeOtkupOM
-        Case 133: T_Izv_SlaganjeKupacVozac
-        Case 134: T_Izv_SlaganjeKartica
-        Case 135: T_Izv_SlaganjeIsplataManjakAmb
-        Case 136: T_Izv_KesPretragaIHint
-        Case 137: T_ZonaIzv_PoljaIRaspored
-        Case 138: T_KesGeneracija_UpisInvalidira
-        Case 139: T_Izv_DetaljICipKontekst
-        Case 140: T_Izv_TabKontekstRobaKupacSaldo
-        Case 141: T_Izv_RangKooperanata
-        Case 142: T_Izv_ZbirniSadrzaj
-        Case 143: T_Izv_RangSortIKontekst
-        Case 144: T_Izv_ZbirniOrphanStanica
-        Case 145: T_Izv_CipoviVrstaSorta
-        Case 146: T_Sled_UgovorEkrana
-        Case 147: T_Sled_LanacSlaganje
-        Case 148: T_Sled_FailClosed
-        Case 149: T_Sled_IdentitetURedu_NeCrtaSe
-        Case 150: T_Sled_KesPretragaIHint
-        Case 151: T_ZonaSled_PoljaIRaspored
-        Case 152: T_Sled_PovezivanjeKandidati
-        Case 153: T_Sled_MeteSledljivosti
-        Case 154: T_Sled_DokumentiPonuda
-        Case 155: T_Ljuska_PopupTekstTraka
-        Case 156: T_Sled_GpLanacIStanja
-        Case 157: T_Fak_GpListaIKorpa
-        Case 158: T_FakturaGP_WriterKapijeIStorno
-        Case 159: T_UtovarB_SledIStornoKapije
-        Case 160: T_Sekcija_SidebarNeStajeZajedno
-        Case 161: T_UiPanel_StavkaSidebara
-        Case 162: T_MatIzvor_OpisSekcijaJePotpun
-        Case 163: T_MatIzvor_CipIdentitetIPretraga
-        Case 164: T_MatUnos_OpisPoljaISema
-        Case 165: T_MatUnos_ProveraOdbija
-        Case 166: T_MatEkran_BazenPoljaIVisina
-        Case 167: T_MatEkran_RadnjeIRezim
-        Case 168: T_MatGeo_TekstIAdrese
-        Case 169: T_MatKor_RecnikDaNeIPrava
-        Case 170: T_Maticni_MenijiPokrivajuIsto
-        Case 171: T_Auth_OtkazanaPrijavaNeLazePrikaz
-        Case 172: T_MatEkran_KaskadaZavisnogCombo
-        Case 173: T_UiPanel_UgovorIUstupanje
-        Case 174: T_Mreza_DecimalaNeNestaje
-        Case 175: T_Maticni_KapijeUpisaIZivotniCiklus
-        Case 176: T_Maticni_CitanjeNeMenjaVrednosti
-        Case 177: T_UiPanel_ZivotniCiklusIPrava
-        Case 178: T_BankaUvoz_PlanPrikazaJeIPlanPisca
-        Case 179: T_Analiza_EkranUIzradi
-        Case 180: T_Fak_SefLogJeOpsegFakture
-        Case 181: T_Faza_PrijavaNeGradiLjusku
-        Case 182: T_Faza_SplashIMiniSuFazeIsteLjuske
-        Case 183: T_Zbirna_OdredisteJePoljeF3
-        Case 184: T_Manjak_LinijaIPragSuSamoF4
-        Case 185: T_Zbirne_PickerNeNudiStornirane
-        Case 186: T_ZbirnaIdent_BrojSeRazresavaUDokument
-        Case 187: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
-        Case 188: T_Prijemnica_VezujeSeSamoNaJednoznacnu
-        Case 189: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
-        Case 190: T_Zbirne_PickerJednaStavkaPoDokumentu
-        Case 191: T_BrojKapija_IstoZaSvakiCase
-        Case 192: T_DeteZbirne_ImaKolonuGeneracije
-        Case 193: T_Sema_OtisakParitetSaGeneratorom
-        Case 194: T_Sema_SveskaOdgovaraKanonu
-        Case 195: T_Sema_OtisakVidiRedosled
-        Case 196: T_Sema_KapijaBije
-        Case 197: T_Sema_SamoLeci
-        Case 198: T_Sema_PrefiksNijeString
-        Case 199: T_Kontekst_NovaStanicaUlaziUListu
-        Case 200: T_AutoSave_PrekinutImportNeSnima
-        Case 201: T_Save_PrekinutImportZatvaraSvaVrata
-        Case 202: T_ImportMarker_PendingBezMutacijeNeBlokira
-        Case 203: T_Backup_NeObaraStartINeRasteBezGranice
-        Case 204: T_AutoSave_PadNeZaglavljujePrekidac
-        Case 205: T_Kontekst_NovaKulturaITipAmbalazeUlaze
-        Case 206: T_Sema_FormatCelijeCuvaVrednost
-        Case 207: T_Sema_ZurnalCuvaVrednostKrozJournalCell
-        Case 208: T_Sema_MagacinOdbijaUpisBezUgovora
-        Case 209: T_BrojZauzetUNizu_OpsegIStorno
-        Case 210: T_Novac_BrojNijeJedinstven
-        Case 211: T_BrojZauzetUNizu_Revers
-        Case 212: T_ReversValidiraj_BrojUNizu
-        Case 213: T_ReversValidiraj_KoopBrojDrugeStanice
+        Case 71: T_NavBrojac_SamoEkranKojiBroji
+        Case 72: T_NovaPrerada_IzborINeto
+        Case 73: T_PaletaDvoklik_OtvaraStavke
+        Case 74: T_CipoviEkrana_UgovorIFilter
+        Case 75: T_ZonaPrerade_SvaPoljaVidljiva
+        Case 76: T_BazenLjuske_ViseNegoStoStaje
+        Case 77: T_Agro_UgovorEkrana
+        Case 78: T_Agro_KapijaStanjaBrojiKorpu
+        Case 79: T_Agro_SmartDozaZaokruzujeNagore
+        Case 80: T_ZonaAgro_PoljaPostojeIPrateRezim
+        Case 81: T_Agro_CipoviSuzavajuListu
+        Case 82: T_Agro_BrojacIDvoklikPoIdentitetu
+        Case 83: T_Agro_AbzugMapaPratiPojedinacni
+        Case 84: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
+        Case 85: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
+        Case 86: T_Agro_KorpaUklanjaPoIdentitetu
+        Case 87: T_Agro_ZnackaPratiKorpuVanKorpeListe
+        Case 88: T_PaleteIdentitet_PoIDNePoBroju
+        Case 89: T_PreradeIdentitet_PoIDNePoBroju
+        Case 90: T_GridTelo_NePokrivaToast
+        Case 91: T_PaleteScrEvent_NeCuriGreska
+        Case 92: T_Fak_UgovorEkrana
+        Case 93: T_Fak_IdentitetURedu_NeCrtaSe
+        Case 94: T_Fak_DostupnostSePrenosiURedu
+        Case 95: T_Fak_KorpaZnackaITraka
+        Case 96: T_Fak_CipoviPrateStatusFakture
+        Case 97: T_Fak_NerazresenKupacNeDiraKorpu
+        Case 98: T_Fak_GreskaNePreziviLogErr
+        Case 99: T_BankaUvoz_UgovorEkrana
+        Case 100: T_BankaUvoz_IdentitetURedu_NeCrtaSe
+        Case 101: T_BankaUvoz_RedNosiSmerIOtvorenost
+        Case 102: T_BankaUvoz_CipJakihPratiBrojac
+        Case 103: T_BankaUvoz_IzvodiSuAgregatPoRacunu
+        Case 104: T_BankaUvoz_RucnoMapiranjePravila
+        Case 105: T_ZonaBankaUvoz_PoljaIRaspored
+        Case 106: T_MrezaDatum_BrojKojiNijeDatum
+        Case 107: T_MrezaGeometrija_PratiOpisKolona
+        Case 108: T_MrezaCelija_NeostavljaTudjiTekst
+        Case 109: T_BankaUvoz_UlazakUvoziIzvode
+        Case 110: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
+        Case 111: T_Mreza_PodnozjeDvaNovcanaSlota
+        Case 112: T_Kolona_TrazenjeNeGutaGresku
+        Case 113: T_MrezaPilula_PozadinaSeCisti
+        Case 114: T_Ljuska_SuzenaPravaStartIAlatke
+        Case 115: T_Matic_SekcijaTraziPravo
+        Case 116: T_Ljuska_PadListeNovcaNijeAvans
+        Case 117: T_StornoFilter_NedostajucaKolonaNijeTisina
+        Case 118: T_KesKolone_NeMemoiseNulu
+        Case 119: T_RekalkZbirne_KapijaJeUPrimitivu
+        Case 120: T_CiljZbirna_NePoPrvomRedu
+        Case 121: T_Prijemnica_PomeraSamoAktivan
+        Case 122: T_BankaNalozi_UgovorEkrana
+        Case 123: T_BankaNalozi_IdentitetURedu_NeCrtaSe
+        Case 124: T_BankaNalozi_CipoviIKpiPratePravila
+        Case 125: T_BankaNalozi_KorpaIIzvoz
+        Case 126: T_ZonaBankaNalozi_PoljaIRaspored
+        Case 127: T_BankaNalozi_IznosPoBloku
+        Case 128: T_Izv_UgovorEkrana
+        Case 129: T_Izv_MatricaVodiListe
+        Case 130: T_Izv_IdentitetURedu_NeCrtaSe
+        Case 131: T_Izv_SlaganjeOtkupOM
+        Case 132: T_Izv_SlaganjeKupacVozac
+        Case 133: T_Izv_SlaganjeKartica
+        Case 134: T_Izv_SlaganjeIsplataManjakAmb
+        Case 135: T_Izv_KesPretragaIHint
+        Case 136: T_ZonaIzv_PoljaIRaspored
+        Case 137: T_KesGeneracija_UpisInvalidira
+        Case 138: T_Izv_DetaljICipKontekst
+        Case 139: T_Izv_TabKontekstRobaKupacSaldo
+        Case 140: T_Izv_RangKooperanata
+        Case 141: T_Izv_ZbirniSadrzaj
+        Case 142: T_Izv_RangSortIKontekst
+        Case 143: T_Izv_ZbirniOrphanStanica
+        Case 144: T_Izv_CipoviVrstaSorta
+        Case 145: T_Sled_UgovorEkrana
+        Case 146: T_Sled_LanacSlaganje
+        Case 147: T_Sled_FailClosed
+        Case 148: T_Sled_IdentitetURedu_NeCrtaSe
+        Case 149: T_Sled_KesPretragaIHint
+        Case 150: T_ZonaSled_PoljaIRaspored
+        Case 151: T_Sled_PovezivanjeKandidati
+        Case 152: T_Sled_MeteSledljivosti
+        Case 153: T_Sled_DokumentiPonuda
+        Case 154: T_Ljuska_PopupTekstTraka
+        Case 155: T_Sled_GpLanacIStanja
+        Case 156: T_Fak_GpListaIKorpa
+        Case 157: T_FakturaGP_WriterKapijeIStorno
+        Case 158: T_UtovarB_SledIStornoKapije
+        Case 159: T_Sekcija_SidebarNeStajeZajedno
+        Case 160: T_UiPanel_StavkaSidebara
+        Case 161: T_MatIzvor_OpisSekcijaJePotpun
+        Case 162: T_MatIzvor_CipIdentitetIPretraga
+        Case 163: T_MatUnos_OpisPoljaISema
+        Case 164: T_MatUnos_ProveraOdbija
+        Case 165: T_MatEkran_BazenPoljaIVisina
+        Case 166: T_MatEkran_RadnjeIRezim
+        Case 167: T_MatGeo_TekstIAdrese
+        Case 168: T_MatKor_RecnikDaNeIPrava
+        Case 169: T_Maticni_MenijiPokrivajuIsto
+        Case 170: T_Auth_OtkazanaPrijavaNeLazePrikaz
+        Case 171: T_MatEkran_KaskadaZavisnogCombo
+        Case 172: T_UiPanel_UgovorIUstupanje
+        Case 173: T_Mreza_DecimalaNeNestaje
+        Case 174: T_Maticni_KapijeUpisaIZivotniCiklus
+        Case 175: T_Maticni_CitanjeNeMenjaVrednosti
+        Case 176: T_UiPanel_ZivotniCiklusIPrava
+        Case 177: T_BankaUvoz_PlanPrikazaJeIPlanPisca
+        Case 178: T_Analiza_EkranUIzradi
+        Case 179: T_Fak_SefLogJeOpsegFakture
+        Case 180: T_Faza_PrijavaNeGradiLjusku
+        Case 181: T_Faza_SplashIMiniSuFazeIsteLjuske
+        Case 182: T_Zbirna_OdredisteJePoljeF3
+        Case 183: T_Manjak_LinijaIPragSuSamoF4
+        Case 184: T_Zbirne_PickerNeNudiStornirane
+        Case 185: T_ZbirnaIdent_BrojSeRazresavaUDokument
+        Case 186: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
+        Case 187: T_Prijemnica_VezujeSeSamoNaJednoznacnu
+        Case 188: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
+        Case 189: T_Zbirne_PickerJednaStavkaPoDokumentu
+        Case 190: T_BrojKapija_IstoZaSvakiCase
+        Case 191: T_DeteZbirne_ImaKolonuGeneracije
+        Case 192: T_Sema_OtisakParitetSaGeneratorom
+        Case 193: T_Sema_SveskaOdgovaraKanonu
+        Case 194: T_Sema_OtisakVidiRedosled
+        Case 195: T_Sema_KapijaBije
+        Case 196: T_Sema_SamoLeci
+        Case 197: T_Sema_PrefiksNijeString
+        Case 198: T_Kontekst_NovaStanicaUlaziUListu
+        Case 199: T_AutoSave_PrekinutImportNeSnima
+        Case 200: T_Save_PrekinutImportZatvaraSvaVrata
+        Case 201: T_ImportMarker_PendingBezMutacijeNeBlokira
+        Case 202: T_Backup_NeObaraStartINeRasteBezGranice
+        Case 203: T_AutoSave_PadNeZaglavljujePrekidac
+        Case 204: T_Kontekst_NovaKulturaITipAmbalazeUlaze
+        Case 205: T_Sema_FormatCelijeCuvaVrednost
+        Case 206: T_Sema_ZurnalCuvaVrednostKrozJournalCell
+        Case 207: T_Sema_MagacinOdbijaUpisBezUgovora
+        Case 208: T_BrojZauzetUNizu_OpsegIStorno
+        Case 209: T_Novac_BrojNijeJedinstven
+        Case 210: T_BrojZauzetUNizu_Revers
+        Case 211: T_ReversValidiraj_BrojUNizu
+        Case 212: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 52: T_MapaImena_KljucNosiKolone
         Case 51: T_KesTabela_NeMemoiseNeuspeh
         Case 50: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4188,74 +4185,6 @@ Private Sub T_StornoEfekat_TekstIzKataloga()
              "isti efekat za oba osnova ide kroz JEDAN spojen prefiks"
     AssertEq (razdvojenih > 0), True, _
              "razlicit efekat nosi OBA prefiksa u istom redu"
-End Sub
-
-' ============================================================
-' 75. Otkupni blokovi: podrazumevano NIJEDAN, i storno gadja bas oznacene
-' ============================================================
-' Legacy panel je imao multiselect: podrazumevano nijedan blok nije cekiran, a
-' cekiran je znacio DODATNO storniran. Nov ekran je taj izbor izgubio i na
-' potvrdu stornirao SVE blokove -- dakle bio je destruktivniji od legacy-ja, i to
-' ne namerno nego zato sto multiselect nije bio prenet.
-'
-' Ovaj test meri dve stvari koje suita inace ne bi videla:
-'   1. da je podrazumevano stanje PRAZNO (nijedan oznacen),
-'   2. da oznacavanje gadja BAS taj blok, po OtkupID-u a ne po broju otkupa.
-'
-' Druga tvrdnja nije formalnost: broj otkupa se racuna po kooperantu, pa dva
-' bloka lako dele isti -- a spisak zavrsava u StornoSelectedBlocks_TX, u mutaciji.
-Private Sub T_StornoBlokovi_PodrazumevanoNijedan()
-    Dim d As Variant, r As Variant, n As Long, i As Long, ident As String
-
-    modScrStorno.Scr_IzborTestSet STIP_OTPREMNICA, FX_BROJ_OTP, "", ""
-    modScrStorno.Scr_TipTestSet "BLOKOVI"
-    d = modScrStorno.Scr_Rows("sve", "")
-    n = CLng(d(2))
-
-    ' PREDUSLOV: dokument stvarno ima blokove. Bez ovoga bi tvrdnje ispod merile
-    ' prazan skup i prolazile iz pogresnog razloga.
-    AssertEq (n > 0), True, "preduslov: izabrana otpremnica nosi otkupne blokove"
-    r = d(1)
-
-    ' NAJVAZNIJE: podrazumevano NIJEDAN nije oznacen. Kolona izbora je prazna u
-    ' svakom redu, i brojac to potvrdjuje.
-    For i = 1 To n
-        AssertEq CStr(r(i, 1)), "", "red " & i & " nije oznacen bez izricitog izbora"
-    Next i
-    AssertEq modScrStorno.BlokOznacenihBroj(), 0, "brojac oznacenih je nula"
-
-    ' Oznaci TACNO jedan, po identitetu iz nevidljive kolone.
-    ident = Trim$(CStr(r(1, modScrStorno.ST_BLOK_COL_ID)))
-    AssertEq (Len(ident) > 0), True, "red nosi OtkupID u nevidljivoj koloni"
-    modScrStorno.Scr_BlokTestSet ident
-
-    d = modScrStorno.Scr_Rows("sve", "")
-    r = d(1)
-    AssertEq modScrStorno.BlokOznacenihBroj(), 1, "oznacen je tacno jedan blok"
-    AssertEq CStr(r(1, 1)), ChrW(10003), "oznaceni red nosi kvacicu"
-    For i = 2 To CLng(d(2))
-        AssertEq CStr(r(i, 1)), "", "ostali redovi ostaju neoznaceni"
-    Next i
-
-    ' Promena izabranog dokumenta PONISTAVA izbor: oznake pripadaju dokumentu nad
-    ' kojim su napravljene. Ostavljene bi na sledecem stornirale blokove koje
-    ' operater nikad nije video.
-    modScrStorno.Scr_IzborTestSet STIP_OTPREMNICA, FX_BROJ_OTP, "", ""
-    AssertEq modScrStorno.BlokOznacenihBroj(), 0, _
-             "promena izbora dokumenta ponistava oznacene blokove"
-
-    ' Red o blokovima u zoni mora da nosi STANJE, ne pravilo. Operater je prijavio
-    ' da cip Blokovi postoji, ali da nista ne kaze da tamo ima sta da se odluci --
-    ' pa taj red menja tekst prema izboru.
-    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) = 1), True, _
-             "bez izbora red poziva na izbor i imenuje listu"
-    modScrStorno.Scr_BlokTestSet ident
-    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_IZABRANO_1")) = 1), True, _
-             "sa izborom red prijavljuje KOLIKO ih je izabrano"
-    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) > 0), False, _
-             "i vise ne poziva na izbor koji je vec napravljen"
-
-    modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
 
 ' ============================================================

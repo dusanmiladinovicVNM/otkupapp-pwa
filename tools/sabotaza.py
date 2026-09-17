@@ -1350,29 +1350,7 @@ SABOTAZE = {
         "T_StornoEfekat_TekstIzKataloga",
         "razlicit efekat nosi OBA prefiksa u istom redu",
     ),
-    # Lista otkupnih blokova radi kao legacy panel: podrazumevano NIJEDAN nije
-    # oznacen, oznacen znaci DODATNO storniran. Do v6-ui-149 je nov ekran na
-    # potvrdu stornirao SVE -- destruktivnije od legacy-ja, i to slucajno.
-    "blokovi-svi-oznaceni": (
-        "modScrStorno.bas",
-        "        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), \"\")\n",
-        "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "red 1 nije oznacen bez izricitog izbora",
-    ),
-    # Oznake pripadaju dokumentu nad kojim su napravljene. Ako prezive promenu
-    # izbora, sledeci storno gadja blokove koje operater nikad nije video.
-    #
-    # Zamena nosi oznaku ' SABOTAZA namerno (zamka 8): prva verzija je uklanjala
-    # red i ostavljala `mSelTip = ""`, koji postoji i u ZDRAVOM kodu -- pa ga je
-    # --vrati nasao tamo i dodao jos jedan `Set mBlokOznaceni = Nothing`.
-    "blokovi-oznake-prezive-izbor": (
-        "modScrStorno.bas",
-        "    Set mBlokOznaceni = Nothing\n",
-        "    ' SABOTAZA: oznake prezive promenu izabranog dokumenta\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "promena izbora dokumenta ponistava oznacene blokove",
-    ),
+    # blokovi-oznake-prezive-izbor: obrisana u S1b-1 (lista otkupnih blokova u stornu je prazna; vraca S3).
     # Oznaka upozorenja je SIGNAL ZA RUTIRANJE, ne deo recenice: kaze sloju iznad
     # da poruku treba pokazati u dijalogu. MsgBox crta kroz ANSI kodnu stranu u
     # kojoj ChrW(10007) ne postoji, pa ju je operater video kao vodece '?' ispred
@@ -1384,16 +1362,7 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake",
     ),
-    # Red o blokovima u zoni je jedini koji trazi odluku, a odluka se donosi u
-    # drugoj listi. Ako ne prati izbor, operater i posle stikliranja cita isti
-    # poziv na izbor -- pa ne zna da li je odluka uopste zabelezena.
-    "blok-status-ne-prati-izbor": (
-        "modScrStorno.bas",
-        "    iz = BlokOznacenihBroj()\n",
-        "    iz = 0   ' SABOTAZA: izbor se ne vidi u zoni\n",
-        "T_StornoBlokovi_PodrazumevanoNijedan",
-        "sa izborom red prijavljuje KOLIKO ih je izabrano",
-    ),
+    # blok-status-ne-prati-izbor: obrisana u S1b-1 (lista otkupnih blokova u stornu je prazna; vraca S3).
     # Brojac uz stavku menija ide kroz ugovor, kasno vezano -- ljuska ne sme da
     # sazna nijedan ekran po imenu. Poziv GetNedovrseno direktno bi radio, i to je
     # bas ono sto ceo ugovor izbegava: sledeci ekran koji ima zaostatak morao bi
