@@ -10,8 +10,8 @@ Attribute VB_Name = "modScrAnaliza"
 ' sa uvodjenjem ovog ekrana (docs/UI_MIGRACIJA_KATALOG.md par.27.15).
 '
 ' Sta ovde treba da stane SIRE je od marze -- poslovno-finansijske analize nad
-' podacima koje aplikacija vec ima. Racun koji je forma zvala i dalje stoji u
-' modMarza, ali ga ovaj ekran NE zove: audit (docs/AUDIT_FM_TRIJAZA.md, FM-0106)
+' podacima koje aplikacija vec ima. Racun koji je forma zvala (modMarza) je
+' obrisan u S1a kao mrtav, i ovaj ekran ga nije zvao: audit (docs/AUDIT_FM_TRIJAZA.md, FM-0106)
 ' je zabelezio da ta tri pogleda mesaju PROCENU sa OSTVARENOM marzom, pa se prvo
 ' bira sta se od toga uopste prikazuje -- a to je posao za sledeci korak, ne za
 ' ovaj.

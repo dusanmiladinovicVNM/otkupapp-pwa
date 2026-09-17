@@ -38,9 +38,9 @@ Option Explicit
 ' kojim otkup nastaje: ekran (modOtkupUnos), PWA uvoz (modMasterSync) i golden
 ' mreza zovu bas njega. Stari pisac po klasi je obrisan (korak 3).
 '
-' Izuzetak je SaveOtkup_TX: nije u pogonu, nego sluzi testovima da naprave
-' zaglavlje BEZ STAVKI -- oblik koji nove kapije moraju da odbiju. Obrazlozenje
-' stoji uz njega.
+' Izuzetaka nema: SaveOtkup_TX i SaveOtkup su obrisani u S1a (plan S14.10).
+' Test kome treba zaglavlje BEZ STAVKI pravi ga kao sinteticku anomaliju
+' (modBusinessFlowProTests.OtkupBezStavkiFixture).
 '
 ' Header ostavlja prazne kolone koje u ciljnoj semi ne postoje
 ' (DOCUMENT_HEADER_LINES S4.1): Kolicina, Cena, Klasa, KolAmbalaze, BrutoKg,

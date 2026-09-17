@@ -1142,6 +1142,9 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     activeID = NoviOtkupFixture(testDate, TEST_ST_ID, brojActive, brojZbirne, _
                                 100#, 10#, 1, 0#, 0#, 0)
@@ -8443,6 +8446,9 @@ Private Sub Test_OTP_StariOtkupNeUlazi()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     Dim stariID As String
     stariID = OtkupBezStavkiFixture(TEST_PREFIX & "-OTK-SM-" & scenario)
@@ -9477,6 +9483,9 @@ Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     ' Preduslov: bez razlicitog numerickog dela test ne meri nista.
     AssertTrue modBrojevi.ExtractNumericFromEntityID(BKTX_ST2) <> _
@@ -12575,6 +12584,9 @@ Private Sub Test_OTK_VrednostBezStavkiPada()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     ' Zaglavlje BEZ stavki (sinteticka anomalija) -- oblik koji kapija mora da uhvati.
     Dim stariID As String

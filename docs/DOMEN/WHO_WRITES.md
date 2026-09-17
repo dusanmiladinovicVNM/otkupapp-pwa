@@ -98,7 +98,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakturaStavke`: `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblFakture`: `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
-- `tblNovac`: `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
+- `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
