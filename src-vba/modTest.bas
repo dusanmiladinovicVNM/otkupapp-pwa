@@ -11612,8 +11612,7 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     AssertEq Format$(sumVr, "0.00"), Format$(nzVr, "0.00"), _
              "otkupni listovi: zbir vrednosti = rucni prolaz kroz tblOtkupStavke"
 
-    ' (3) ROBA/OM UKUPNO: otpremljeno = rucni prolaz kroz tblOtpremnica,
-    ' blokovi = rucni prolaz kroz tblOtkup vezan za te otpremnice.
+    ' (3) ROBA/OM UKUPNO: otpremljeno = rucni prolaz kroz tblOtpremnica.
     roba = ReportOtkupRoba("OM", FX_STANICA, IzvOdD(), IzvDoD())
     AssertEq IsArray(roba), True, "roba OM postoji"
     ukup = UBound(roba, 1)
@@ -11638,20 +11637,10 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     Next i
     AssertEq Format$(CDbl(roba(ukup, 6)), "0.00"), Format$(nzKg, "0.00"), _
              "roba OM: UKUPNO otpremljeno = rucni prolaz kroz otpremnice"
-    otk = GetTableData(TBL_OTKUP)
-    cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    nzVr = 0
-    For i = 1 To UBound(otk, 1)
-        If CStr(otk(i, cStorno)) <> "Da" Then
-            If otpIds.Exists(Trim$(CStr(otk(i, cOtkOtp)))) Then
-                If IsNumeric(otk(i, cKol)) Then nzVr = nzVr + CDbl(otk(i, cKol))
-            End If
-        End If
-    Next i
-    AssertEq Format$(CDbl(roba(ukup, 7)), "0.00"), Format$(nzVr, "0.00"), _
-             "roba OM: UKUPNO blokovi = otkupi vezani za te otpremnice"
+    ' Blokovi i razlika su PRAZNI od S1b-3: racunali su se preko veze
+    ' Otkup.OtpremnicaID, koju S3 zamenjuje sa tblOtpremnicaIzvori.
+    AssertEq CStr(roba(ukup, 7)), "", "roba OM: kolona blokova je prazna do S3 (ne nula)"
+    AssertEq CStr(roba(ukup, 8)), "", "roba OM: kolona razlike je prazna do S3 (ne nula)"
 
     ' (4) SALDO OM: po svakom redu Saldo = Vrednost - Isplaceno - Agro;
     ' 'Isplaceno' kooperanta = rucni prolaz sa NovacRedPripadaStanici;
