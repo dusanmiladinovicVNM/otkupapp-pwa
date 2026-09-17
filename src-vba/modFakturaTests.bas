@@ -719,9 +719,6 @@ Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
     values.Add COL_OTK_ID, otkupID
     values.Add COL_OTK_BR_DOK, brojDokumenta
     values.Add COL_OTK_DATUM, Date
-    values.Add COL_OTK_KLASA, "I"
-    values.Add COL_OTK_KOLICINA, 100#
-    values.Add COL_OTK_CENA, 10#
     values.Add COL_STORNIRANO, stornirano
 
     AppendFakturaTestRowByColumnMap TBL_OTKUP, values, SRC

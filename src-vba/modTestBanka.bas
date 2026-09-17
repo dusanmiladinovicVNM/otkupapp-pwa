@@ -1507,9 +1507,8 @@ Private Sub T18_NepotpunIdentitetNeNestajeTiho()
 
     ' --- OTVOREN blok bez OtkupID -> tvrd pad (ranije: tiho nestajanje).
     BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array("", P & "BLOK-18A", P & "K-18", 1000, 100, "Malina", Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array("", P & "BLOK-18A", P & "K-18", "Malina", Date)
 
     On Error Resume Next
     Err.Clear
@@ -1547,9 +1546,8 @@ Private Sub T19_OtvorenBlokBezKooperantaPada()
     ' Stavka je OBAVEZNA: bez nje dokument nema vrednost, ne ulazi u listu
     ' otvorenih i kapija nikad ne bi bila ni pozvana -- test bi bio zelen prazan.
     BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina", Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", "Malina", Date)
     BitOtkupStavka P & "OTK-NOKOOP", 1000, 100
 
     On Error Resume Next
@@ -1685,9 +1683,8 @@ Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
                               ByVal brDok As String, ByVal kolicina As Double, _
                               ByVal cena As Double, ByVal vrsta As String)
     BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(otkID, brDok, koopID, vrsta, Date)
     BitOtkupStavka otkID, kolicina, cena
     SeedIsplataZaOtkup "NOV-PLC-" & brDok, koopID, otkID, kolicina * cena
 End Sub
@@ -1781,9 +1778,8 @@ Private Sub SeedOtkup(ByVal otkID As String, ByVal koopID As String, _
                       ByVal brDok As String, ByVal kolicina As Double, _
                       ByVal cena As Double, ByVal vrsta As String)
     BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
-              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(otkID, brDok, koopID, vrsta, Date)
     BitOtkupStavka otkID, kolicina, cena
 End Sub
 

@@ -533,7 +533,6 @@ Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
     values.Add COL_OTK_SORTA, "Test Sorta"
     values.Add COL_OTK_TIP_AMB, "Test Amb"
     values.Add COL_OTK_BR_DOK, "TST-OTK-" & otkupID
-    values.Add COL_OTK_PRIMALAC, "TEST"
     values.Add COL_STORNIRANO, ""
 
     AppendTestRowByColumnMap TBL_OTKUP, values, SRC

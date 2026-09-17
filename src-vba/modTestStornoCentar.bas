@@ -95,11 +95,11 @@ Public Sub Test_StornoJournalReusedBroj_Auto()
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-RB-A", "SVT-RB-OTK", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-RB-A", "SVT-RB-OTK")
     TcChk StornoOtkup_TX("SVT-RB-A") = True, "storno gen A -> True"
     Dim opA As String: opA = TcDistinctOpsForRow(TBL_OTKUP, "SVT-RB-A")
     ' druga generacija istog broja (nov aktivan red) -> storno
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-RB-B", "SVT-RB-OTK", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-RB-B", "SVT-RB-OTK")
     TcChk StornoOtkup_TX("SVT-RB-B") = True, "storno gen B (isti broj) -> True"
 
     ' undo STAROG op (A) mora vratiti A, a B ostaje storniran (ne najnoviji!)
@@ -127,9 +127,9 @@ Public Sub Test_StornoJournalDeadParentOtherGen_Auto()
 
     ' gen A: VEC stornirana (bez zurnala), mrtav roditelj (stornirana otpremnica)
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), Array("SVT-DG-OTP", "SVT-DG-OB", "I", "Da")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), Array("SVT-DG-A", "SVT-DG-OTK", "I", "SVT-DG-OTP", "Da")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), Array("SVT-DG-A", "SVT-DG-OTK", "SVT-DG-OTP", "Da")
     ' gen B: unbound aktivna -> storno (journaled)
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-DG-B", "SVT-DG-OTK", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DG-B", "SVT-DG-OTK")
     TcChk StornoOtkup_TX("SVT-DG-B") = True, "storno gen B (unbound) -> True"
 
     ' undo B mora PROCI iako gen A (isti broj) ima mrtvog roditelja
@@ -153,7 +153,7 @@ Public Sub Test_StornoJournalEmptyBrDokUndo_Auto()
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-EU-1", "", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-EU-1", "")
     TcChk StornoOtkup_TX("SVT-EU-1") = True, "storno unbound -> True"
     Dim op As String: op = TcDistinctOpsForRow(TBL_OTKUP, "SVT-EU-1")
     TcChk Len(op) > 0, "unbound -> op zabelezen"
@@ -178,7 +178,7 @@ Public Sub Test_StornoJournalDrift_Auto()
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-DR-OID", "SVT-DR-B", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DR-OID", "SVT-DR-B")
     TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), Array("SVT-DR-NID", "SVT-DR-OID")
     TcChk StornoOtkup_TX("SVT-DR-OID") = True, "storno (drift setup) -> True"
     ' DRIFT: drugi tok re-linkuje isti novac red na drugi otkup
@@ -206,8 +206,8 @@ Public Sub Test_StornoJournalPartialClass_Auto()
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-PC-1", "SVT-PC-B", "I")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-PC-2", "SVT-PC-B", "II")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-PC-1", "SVT-PC-B")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-PC-2", "SVT-PC-B")
     ' storniraj SAMO Klasu I (selektivno)
     Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-PC-1"
     TcChk StornoSelectedBlocks_TX(sel) = 1, "selektivni storno Klase I -> 1"
@@ -255,8 +255,8 @@ Public Sub Test_StornoJournalEmptyBrDok_Auto()
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-EB-1", "", "I")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-EB-2", "", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-EB-1", "")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-EB-2", "")
     Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-EB-1": sel.Add "SVT-EB-2"
     TcChk StornoSelectedBlocks_TX(sel) = 2, "storno 2 unbound bloka -> 2"
     ' oba zurnalisana pod ZASEBNIM OperationID (broj je "" ali RowID/PK ih razdvaja)
@@ -283,8 +283,8 @@ Public Sub Test_StornoJournalUndo_Auto()
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), _
-              Array("SVT-SJ-OID", "SVT-SJ-B", "I", 10)
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
+              Array("SVT-SJ-OID", "SVT-SJ-B")
     TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
               Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP)
     TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), _
@@ -326,8 +326,8 @@ Public Sub Test_StornoJournalDualClass_Auto()
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), Array("SVT-DC-1", "SVT-DC-B", "I", 10)
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), Array("SVT-DC-2", "SVT-DC-B", "II", 5)
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DC-1", "SVT-DC-B")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DC-2", "SVT-DC-B")
 
     TcChk StornoOtkupByBrDok_TX("SVT-DC-B") = True, "StornoOtkupByBrDok_TX (dvoklasni) -> True"
     TcChk Len(LatestOpFor(DOK_TIP_OTKUP, "SVT-DC-B")) > 0, "dvoklasni -> zabelezen op"
@@ -1048,15 +1048,15 @@ Public Sub Test_StornoSelectedBlocks_Auto()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-1", "SVT-SB-D1", 10, "I")
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-2", "SVT-SB-D2", 20, "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-1", "SVT-SB-D1")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-2", "SVT-SB-D2")
 
     Dim good As Collection: Set good = New Collection: good.Add "SVT-SB-1": good.Add "SVT-SB-2"
     TcChk StornoSelectedBlocks_TX(good) = 2, "storno 2 bloka -> vraca 2"
     TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-1", COL_STORNIRANO))) = "DA", "blok 1 storniran"
     TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-2", COL_STORNIRANO))) = "DA", "blok 2 storniran"
 
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-3", "SVT-SB-D3", 30, "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-SB-3", "SVT-SB-D3")
     Dim mix As Collection: Set mix = New Collection: mix.Add "SVT-SB-3": mix.Add "SVT-SB-BAD"
     TcChk StornoSelectedBlocks_TX(mix) = -1, "los ID -> -1 (rollback)"
     TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-3", COL_STORNIRANO))) <> "DA", "atomicnost: blok 3 ostao AKTIVAN"
