@@ -34,7 +34,7 @@
 1. Mapa je gotova: `docs/DOMEN/MAPA_SPOSOBNOSTI.md` — 387 sposobnosti (A 38 · B 48 · C 62 · D 73 · E 76 · F 90).
 2. Odluke domena su donete 17.09.2026: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.8 (ambalaža pri izdavanju,
    predlog cene po klasi na stavci, bruto na stavci svuda, dugme „Izdaj“, PWA dodela pravi otpremnicu, vozač vidi
-   otpremnice i šalje zbirnu kao dokument, banka vezuje po ID-u, marža u slajsu fakture, makroi bez brane).
+   otpremnice i šalje zbirnu kao dokument, banka vezuje po ID-u, marža posle refaktora, makroi bez brane).
 3. **Sledeće:** nova tabela PR-ova (slajsova) po novom modelu — svaki slajs navodi koje sposobnosti iz mape
    pokriva, koje odluke iz §14.8 primenjuje i koje kolone/procedure starog modela briše (uključujući 49 pomoćnih
    procedura iz sekcije „Pokrivenost“ u mapi). Posle svakog PR-a projekat se kompajlira.
