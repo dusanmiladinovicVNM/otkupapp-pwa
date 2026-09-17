@@ -406,10 +406,17 @@ Private Sub Test_CoreTablesAndColumnsExist()
     RequireTableExists TBL_AMBALAZA
     RequireTableExists TBL_NOVAC
 
+    RequireTableExists TBL_OTKUP_STAVKE
+
+    ' Otkup je zaglavlje + stavke (S1d): kolicina, cena, klasa i gajbe su na stavci.
     RequireColumnsExist TBL_OTKUP, Array( _
         "OtkupID", "Datum", "KooperantID", "StanicaID", "VrstaVoca", _
-        "SortaVoca", "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", _
-        "VozacID", "BrojDokumenta", "Klasa", "BrojZbirne", "OtpremnicaID")
+        "SortaVoca", "TipAmbalaze", "VozacID", "BrojDokumenta", "BrojZbirne", _
+        "OtpremnicaID")
+
+    RequireColumnsExist TBL_OTKUP_STAVKE, Array( _
+        COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, COL_OKS_KOLICINA, _
+        COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
 
     RequireColumnsExist TBL_OTPREMNICA, Array( _
         "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
