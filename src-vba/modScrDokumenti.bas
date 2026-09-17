@@ -384,8 +384,11 @@ EH:
 End Function
 
 ' F2 OTPREMNICA. Ekran samo prevodi polja u recnik i vraca poruku - posao radi
-' modDokUnos, isti modul koji ce (kad za to dodje red) moci da zove i legacy
-' forma. Ovde nema nijedne provere: sve sto je provera zivi u modulu.
+' modDokUnos. Ovde nema nijedne provere: sve sto je provera zivi u modulu.
+'
+' Od S3a upis otvara NACRT, pa modDokUnos vraca OtpremnicaID. Operateru se u
+' toast-u i dalje pokazuje BROJ -- identitet je za masinu, broj za coveka. ID
+' ostaje u recniku pod svojim imenom, za radnju "Izdaj" (S3b).
 Private Function SaveOtpremnica(ByVal polja As Object) As String
     Dim p As Object, fokus As String, greska As String, res As String, poruke As String
     Set p = modDokUnos.NoviOtpremnicaUnos()
@@ -419,7 +422,8 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     End If
 
     Scr_ResetCache
-    polja("rezultat") = res
+    polja("otpremnicaID") = res
+    polja("rezultat") = CStr(polja("brDok"))
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 

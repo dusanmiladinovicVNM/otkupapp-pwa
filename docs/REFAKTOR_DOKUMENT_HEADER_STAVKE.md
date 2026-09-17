@@ -2890,6 +2890,66 @@ razrešenje na granici (`OtkupIDoviPoBroju`), prikaz u listi blokova, i `TryReso
 
 Sledeći korak: **S3 — otpremnica cutover (desktop)**.
 
+### 14.12) S3 — otpremnica cutover, rez na pet koraka (17.09.2026)
+
+Merenje pre reza (`popis_citalaca.py` na `main` `5610bfc9`): `otp_linija` 85 PROD mesta, `otp_stari_pisac` 49,
+`otp_cena` 9, `otk_veze` 63 — ~190 mesta u 18 modula. Ali **živa produkciona ulazna tačka starog pisca je tačno
+jedna**: `modDokUnos.OtpremnicaUpisi` → `SaveOtpremnicaMulti_TX`. Sve ostalo su čitaoci, pauzirani putevi ili test
+fixture. Nova skela (`CreateOtpremnicaDraft_TX`, `IzdajOtpremnicu_TX`, `CreateOtpremnicaIzIzvora_TX`,
+`GetOtpremnicaProgress`) postojala je **bez ijednog produkcionog pozivaoca**.
+
+| korak | sadržaj | stanje |
+|---|---|---|
+| **S3a** | F2 otvara **nacrt**: `OtpremnicaUpisi` → `CreateOtpremnicaDraft_TX`; očekivanje po klasi sa `PredlogCena`; ambalaža se knjiži **pri izdavanju**; malina auto-zbirna pauzirana | ovaj PR |
+| **S3b** | čitaoci na stavke: F2 mreža, štampa, izveštaji (i prazne kolone koje čekaju ovaj slajs), invarijante; **panel blokova nad `tblOtpremnicaIzvori`** i radnja „Izdaj“ | |
+| **S3c** | identitet: storno i ispravka otpremnice po `OtpremnicaID`; nevidljiva kolona F2 = `COL_OTP_ID`; brisanje `*ByBroj_TX` | |
+| **S3d** | auto lanci kroz `CreateOtpremnicaIzIzvora_TX`; otvaranje A13 kapije u `IspravkaOtkupa_TX` | |
+| **S3e** | brisanje: `Otkup.OtpremnicaID/VozacID/BrojOtpremnice`, linijska polja i `Cena` na `tblOtpremnica`, `SaveOtpremnica*` | |
+
+**Zašto „Izdaj" nije u S3a.** Odluka §14.8 t. 4 kaže „operater dugmetom kad je ostatak 0“ — a ostatak se vidi tek u
+panelu blokova, i tek tamo postoji izvor koji izdavanje traži (`OtpIzdaj` odbija otpremnicu bez izvora). Radnja nad
+redom bi uz to tražila `OtpremnicaID` u nevidljivoj koloni, a tu kolonu danas čita i `modScrStorno`
+(`IdentKolonaIndeks`) očekujući **`GeneracijaID`** — promena bi mu tiho podmetnula drugi identitet. Zato izdavanje
+ide zajedno sa panelom (S3b) i identitetom (S3c), a ne ranije.
+
+#### Pre-flight S3a
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | otpremnica = zaglavlje + očekivanje po klasi + izvori; odluke §14.8 t. 1–4 |
+| `IDENTITY` | PROVEN | `OtpremnicaUpisi` vraća **`OtpremnicaID`**, ne broj; ekran ga čuva pod `polja("otpremnicaID")`, a operateru prikazuje broj |
+| `CARDINALITY` | PROVEN | dvoklasan unos = **jedan** header + dve stavke (pre: dva reda pod istim brojem) |
+| `INVARIANTS/OWNER` | PROVEN | očekivano = povezano pri izdavanju; ambalaža knjižena jednom, u istoj transakciji (`tx.AddTableSnapshot TBL_AMBALAZA`) |
+| `EVENTS` | PROVEN | fizički (gajbe odlaze) = poslovni (dokument nastaje) = **izdavanje**; finansijskog nema — `PredlogCena` se ne knjiži |
+| `DOWNSTREAM` | PROVEN | izmereno: `otp_cena` 5 živih čitalaca zaglavlja i `otp_linija` 47 od sada čitaju **prazno**; vraća S3b |
+| `CAPABILITY` | PROVEN | A-029 MIGRATED; E-022 (malina auto-zbirna) **pauzirana glasno**; A-011/A-012/A-018..A-028 i dalje odsutni od S1b-3 |
+| `ACCEPTANCE` | testovi | `Test_OTP_F2OtvaraNacrt`, `Test_OTP_PredlogCeneJePoKlasi`, `Test_OTP_AmbalazaSeKnjiziPriIzdavanju`, `Test_OTP_MalinaZbirnaPauzirana` + tri sabotaže |
+| `PLATFORM` | N/A | nema novih Excel/COM pretpostavki |
+| `LANDING` | čisto | grana od `main` `5610bfc9`; menja kanon → `gen_schema_module --check` i obe `who_writes` kapije |
+
+#### Izmene S3a
+
+| Šta | Gde |
+|---|---|
+| `PredlogCena` na `tblOtpremnicaStavke` (kanon + `modSchema`), `COL_OPS_PREDLOG_CENA` | `schema/schema.json`, `modConfig` |
+| Očekivana stavka prima `PredlogCena`; ključ `Cena` na **zaglavlju se odbija** | `modDokumenta.OtpOcekKljucPoznat`, `OtpHdrKljucPoznat` |
+| Zaglavlje više ne piše `COL_OTP_CENA` | `BuildOtpremnicaHeaderRowData`, `OtpIzmeniDraft` |
+| Ambalaža pri izdavanju, kao zbir stavki | **nova** `OtpKnjiziAmbalazu`, zvana iz `OtpIzdaj` |
+| F2 otvara nacrt; kultura se razrešava u adapteru | `modDokUnos.OtpremnicaUpisi` |
+| Malina auto-zbirna pauzirana uz poruku | isto, `DOKUNOS_MSG_ZBIRNA_PAUZIRANA` |
+| Ekran čuva ID, prikazuje broj | `modScrDokumenti.SaveOtpremnica` |
+
+**Merenje posle:** `otp_stari_pisac` — sva tri tela starog pisca (`SaveOtpremnica`, `SaveOtpremnica_TX`,
+`SaveOtpremnicaMulti_TX`, 42 mesta) prešla su iz `ZIV_UI` u **`PAUZIRAN`**: nemaju više nijednog živog pozivaoca.
+Preostala 4 `ZIV_UI` mesta u toj grupi su **sudar imena** — ekranska `modScrDokumenti.SaveOtpremnica` (adapter F2,
+ne pisac) koju popis hvata po imenu `SaveOtpremnica*`. Prag S3e („grupa = 0") mora da računa na to: ili se ekranska
+rutina preimenuje, ili popis dobije izuzetak za `modScr*`.
+
+**Šta S3a namerno NE radi:** nacrt se ne može izdati dok S3b ne vrati vezivanje blokova. To nije regresija — veza
+`Otkup.OtpremnicaID` iz F1 obrisana je u S1b-3, pa nijedna otpremnica ni danas nema izvore.
+
+Sledeći korak: **S3b — čitaoci otpremnice na stavke + panel blokova**.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

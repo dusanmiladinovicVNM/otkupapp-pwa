@@ -4544,6 +4544,37 @@ SABOTAZE = {
     # VLASNISTVO BLOKA: ekran salje OtkupID reda koji je operater video, a stanje
     # se izmedju punjenja liste i potvrde moze promeniti. Bez kapije bi isplata
     # jednom kooperantu zatvorila dug DRUGOG -- uspesna transakcija, pogresan dug.
+    # AMBALAZA PRI IZDAVANJU, NE NA NACRTU (odluka S14.8 t. 1). Nacrt se menja i
+    # sme da ostane neizdat -- knjizenje na nacrtu bi napustenom otpremnicom
+    # trajno umanjilo stanje gajbi na otkupnom mestu.
+    "otp-ambalaza-se-ne-knjizi-pri-izdavanju": (
+        "modDokumenta.bas",
+        "    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC\n",
+        "    ' SABOTAZA: izdavanje ne knjizi gajbe\n",
+        "Test_OTP_AmbalazaSeKnjiziPriIzdavanju",
+        "izdavanje knjizi TACNO jedan red",
+    ),
+
+    # PREDLOG CENE JE PO KLASI. Vracanje kljuca na zaglavlje znaci jedan broj za
+    # obe klase -- tacno ono sto je S3a razdvojio.
+    "otp-predlog-cene-nazad-na-zaglavlje": (
+        "modDokumenta.bas",
+        "             \"tipambalaze\"\n",
+        "             \"tipambalaze\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
+        "Test_OTP_PredlogCeneJePoKlasi",
+        "cena na zaglavlju NE prolazi",
+    ),
+
+    # PAUZA MORA DA BUDE GLASNA. Tiha pauza znaci da malina operater ceka zbirnu
+    # koja nikad nece doci -- gore od greske, jer nema sta da prijavi.
+    "otp-malina-pauza-cuti": (
+        "modDokUnos.bas",
+        "        poruke = poruke & Poruka(\"DOKUNOS_MSG_ZBIRNA_PAUZIRANA\") & vbCrLf\n",
+        "        ' SABOTAZA: pauza bez reci operateru\n",
+        "Test_OTP_MalinaZbirnaPauzirana",
+        "operater je OBAVESTEN da zbirne nema",
+    ),
+
     "banka-writer-blok-tudjeg-kooperanta": (
         "modBankaMapiranje.bas",
         "    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",
