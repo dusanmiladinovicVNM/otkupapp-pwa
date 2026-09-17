@@ -75,6 +75,13 @@ Public Const ERR_BMAP_BLOK_PRAZAN As Long = vbObjectError + 2951
 ' promeni vlasnika ili da bude storniran. Isti obrazac kao modNovac.ApplyAvansToOtkup.
 Public Const ERR_BMAP_BLOK_TUDJ As Long = vbObjectError + 2952
 Public Const ERR_BMAP_BLOK_BEZ_ID As Long = vbObjectError + 2954
+
+' BLOK BEZ OTKUPNOG MESTA. Vezana isplata se knjizi NA OTKUPNO MESTO TOG
+' DOKUMENTA (v. MapBankaImportAsKooperantBlockCore), pa dokument bez upisane
+' stanice nema vlasnika kupovine -- a maticno mesto kooperanta bi bilo
+' pogadjanje. Do S2 je isti slucaj zaustavljao ekran (scope), jer je stanica
+' tamo sluzila kao deo kljuca; sad je kapija tamo gde se pise.
+Public Const ERR_BMAP_BLOK_BEZ_OM As Long = vbObjectError + 2955
 Public Const ERR_BMAP_BLOK_STORNIRAN As Long = vbObjectError + 2953
 
 ' Prag "jos duguje". Novac se poredi na dve decimale (v. ZaokruziNovac u
@@ -257,7 +264,7 @@ End Function
 ' stanje; ona mora da obori batch i pokrene rollback.
 Private Function IsManualRequiredBankaError(ByVal errNum As Long) As Boolean
     Select Case errNum
-        Case ERR_BMAP_MANUAL_REQUIRED       ' 3+ otvorenih stavki u bloku
+        Case ERR_BMAP_MANUAL_REQUIRED       ' broj se razresava u vise dokumenata
             IsManualRequiredBankaError = True
         Case ERR_BMAP_BASE + 51             ' faktura pripada drugom kupcu
             IsManualRequiredBankaError = True
@@ -272,7 +279,7 @@ End Function
 '
 ' Guta SAMO ERR_BMAP_MANUAL_REQUIRED ("ovaj red mora rucno") - svaka druga greska
 ' ide dalje i batch pada/rollback-uje se kao i pre. To je bezbedno jer se ta greska
-' dize PRE ijednog upisa za taj red (resolver kandidata bloka), pa progutan slucaj
+' dize PRE ijednog upisa za taj red (razresenje broja u OtkupID), pa progutan slucaj
 ' ne moze ostaviti pola knjizenja. Ranije je jedan takav red (3+ otvorenih stavki u
 ' bloku) obarao CEO AutoMapAll batch i ponistavao sve vec mapirane redove.
 Private Function AutoMapBankaImportRowBatch(ByVal bankaImportID As String, _
@@ -1024,6 +1031,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
+    Dim blokOmID As String
+    Dim blokOmNaziv As String
     Dim isplataUkupno As Double
     Dim otvoreno As Double
     Dim zaBlok As Double
@@ -1048,6 +1057,9 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     ' izgledao kao "nista se nije desilo"; sada je odbijanje glasno (AUD-025).
     RequireBimSmer bim, "ISPLATA", "MapBankaImportAsKooperantBlockCore"
 
+    ' MATICNO otkupno mesto kooperanta. Vazi za AVANS -- novac koji jos nije vezan
+    ' ni za jedan dokument i moze se kasnije primeniti na blok bilo kog mesta.
+    ' Vezana isplata NE koristi ovo (v. nize).
     omID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     If omID = "" Then
         If Not gBankaSilentBatch Then MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
@@ -1064,8 +1076,17 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     ' kapiju nosio filter. Sada je kapija ovde i gleda stanje u trenutku upisa:
     ' dokument postoji, nije storniran i pripada ovom kooperantu.
     If Len(Trim$(otkupID)) > 0 Then
-        vrstaVoca = OtkupZaKooperantaVrsta(otkupID, kooperantID, _
-                                           "MapBankaImportAsKooperantBlockCore")
+        PotvrdiOtkupZaKooperanta otkupID, kooperantID, _
+                                 "MapBankaImportAsKooperantBlockCore", _
+                                 vrstaVoca, blokOmID
+
+        ' VLASNIK KUPOVINE JE OTKUPNO MESTO TOG DOKUMENTA, ne maticno mesto
+        ' kooperanta. Isti kooperant sme da predaje na dva mesta -- upravo zato
+        ' S2 i postoji. Dok je OM dolazio iz tblKooperanti, red u tblNovac je
+        ' imao tacan OtkupID a pogresan OMID: identitet ispravan, vlasnistvo ne.
+        blokOmNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", blokOmID, "Naziv"))
+        If blokOmNaziv = "" Then blokOmNaziv = blokOmID
+
         otvoreno = BimOtvorenoNaOtkupu(otkupID)
 
         ' Placen dokument je isto sto i "nema kandidata" u starom modelu.
@@ -1128,13 +1149,15 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         zaBlok = isplataUkupno
     End If
 
+    ' Vezan red nosi otkupno mesto DOKUMENTA (blokOmID), avansni redovi ispod i
+    ' iznad nose maticno mesto kooperanta -- razlika je namerna i merena (T03).
     novID = SaveNovac( _
         RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
         CDate(bim(1, 2)), _
-        omNaziv, _
-        omID, _
+        blokOmNaziv, _
+        blokOmID, _
         "OM", _
-        omID, _
+        blokOmID, _
         kooperantID, _
         "", _
         vrstaVoca, _
@@ -1155,6 +1178,11 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     MapBankaImportAsKooperantBlockCore = 1
     preostalo = isplataUkupno - zaBlok
 
+    ' VISAK NIJE DEO KUPOVINE. Ostatak preko duga nije vezan ni za jedan dokument
+    ' (OtkupID ostaje prazan) i kasnije se moze primeniti na blok bilo kog
+    ' otkupnog mesta, pa nosi MATICNO mesto kooperanta -- isto kao cist avans.
+    ' Odluka je izricita, ne posledica: da nosi mesto ovog dokumenta, saldo tog
+    ' OM-a bi prikazivao novac koji mu jos nije pripisan.
     If preostalo > 0 Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
@@ -1185,14 +1213,17 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     End If
 End Function
 
-' VLASNISTVO I ZIVOT DOKUMENTA -- kapija pisca, plus VrstaVoca koju red novca nosi.
+' VLASNISTVO I ZIVOT DOKUMENTA -- kapija pisca, plus dva podatka koja se sa BAS
+' TOG reda uzimaju: VrstaVoca za red novca i StanicaID kao vlasnik kupovine.
 '
-' Zasto jedna procedura za oboje: vrsta se cita sa ISTOG reda nad kojim je
-' kapija upravo presudila. Razdvojeno bi bila dva citanja tblOtkup i dva
-' trenutka -- a izmedju njih dokument moze da bude storniran.
-Private Function OtkupZaKooperantaVrsta(ByVal otkupID As String, _
-                                        ByVal kooperantID As String, _
-                                        ByVal srcName As String) As String
+' Zasto jedna procedura za sve: i kapija i oba podatka citaju se sa ISTOG reda u
+' ISTOM trenutku. Razdvojeno bi bila tri citanja tblOtkup i tri trenutka -- a
+' izmedju njih dokument moze da bude storniran ili prevezan.
+Private Sub PotvrdiOtkupZaKooperanta(ByVal otkupID As String, _
+                                     ByVal kooperantID As String, _
+                                     ByVal srcName As String, _
+                                     ByRef outVrsta As String, _
+                                     ByRef outStanica As String)
     Dim r As Long
     r = RequireSingleRow(TBL_OTKUP, COL_OTK_ID, otkupID, srcName)
 
@@ -1202,9 +1233,10 @@ Private Function OtkupZaKooperantaVrsta(ByVal otkupID As String, _
         Err.Raise ERR_BMAP_BASE + 20, srcName, "Tabela je prazna: " & TBL_OTKUP
     End If
 
-    Dim colKoop As Long, colVrsta As Long, colStorno As Long
+    Dim colKoop As Long, colVrsta As Long, colStanica As Long, colStorno As Long
     colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, srcName)
     colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, srcName)
+    colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, srcName)
     colStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
 
     If colStorno > 0 Then
@@ -1221,8 +1253,16 @@ Private Function OtkupZaKooperantaVrsta(ByVal otkupID As String, _
                   "; TrazeniKooperant=" & kooperantID
     End If
 
-    OtkupZaKooperantaVrsta = Trim$(CStr(NzBIM(data(r, colVrsta), "")))
-End Function
+    outVrsta = Trim$(CStr(NzBIM(data(r, colVrsta), "")))
+    outStanica = Trim$(CStr(NzBIM(data(r, colStanica), "")))
+
+    If Len(outStanica) = 0 Then
+        Err.Raise ERR_BMAP_BLOK_BEZ_OM, srcName, _
+                  "Blok nema upisano otkupno mesto, pa se isplata ne moze pripisati " & _
+                  "vlasniku kupovine. OtkupID=" & otkupID & _
+                  ". Ispravi StanicaID na tom otkupu."
+    End If
+End Sub
 
 
 Private Function SkipBankaImportRow(ByVal bankaImportID As String) As Boolean

@@ -4554,6 +4554,27 @@ SABOTAZE = {
 
     # Storniran dokument vise nije dug. Bez kapije bi se isplata vezala za red koji
     # je izvan posla, pa bi kooperant ostao neplacen a novac evidentiran kao dat.
+    # OM VLASNISTVO: vezan red novca mora da nosi otkupno mesto DOKUMENTA. Kad OM
+    # dolazi iz tblKooperanti (maticno mesto), red ima tacan OtkupID a pogresan
+    # OMID -- identitet ispravan, vlasnistvo ne, i saldo tudjeg OM-a nosi kupovinu.
+    "banka-writer-om-iz-kooperanta": (
+        "modBankaMapiranje.bas",
+        "        blokOmNaziv = CStr(LookupValue(TBL_STANICE, \"StanicaID\", blokOmID, \"Naziv\"))\n",
+        "        blokOmID = omID: blokOmNaziv = omNaziv   ' SABOTAZA: OM iz maticnog mesta kooperanta\n",
+        "T03_DvosmislenPozivNeObaraBatch",
+        "vezan red novca nosi otkupno mesto DOKUMENTA, ne maticno mesto kooperanta",
+    ),
+
+    # Blok bez upisanog otkupnog mesta nema vlasnika kupovine. Bez kapije bi se
+    # isplata proknjizila sa praznim OMID-em -- saldo nijednog mesta je ne vidi.
+    "banka-writer-blok-bez-om": (
+        "modBankaMapiranje.bas",
+        "    If Len(outStanica) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: blok bez otkupnog mesta prolazi\n",
+        "T24_BlokTudjegKooperantaIStorniran",
+        "blok bez otkupnog mesta se NE knjizi",
+    ),
+
     "banka-writer-blok-storniran": (
         "modBankaMapiranje.bas",
         "        If UCase$(Trim$(CStr(data(r, colStorno)))) = \"DA\" Then\n",

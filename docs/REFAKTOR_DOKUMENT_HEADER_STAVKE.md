@@ -2861,7 +2861,8 @@ kroz `COL_OKS_*`.
 | Lista blokova nosi `OtkupID` (kolona 1), broj i otkupno mesto su **prikaz** | `modBankaMapiranje.GetBlokoviZaBimMapiranje`, `modScrBankaUvoz.PuniCiljCombo` |
 | Poziv na broj se razrešava **jednom**: `BimOtkupIzBroja` / `BimOtkupIzPozivaNaBroj`; 0 pogodaka = avans (namerno), >1 = `ERR_BMAP_MANUAL_REQUIRED` | `modBankaMapiranje` |
 | Pisac prima `OtkupID`: `MapBankaImportAsKooperantBlockCore(bimID, koop, otkupID, …)`; na blok ide najviše njegov dug, ostatak u avans | `modBankaMapiranje` |
-| Nova kapija pisca: dokument postoji, **nije storniran** i pripada **tom** kooperantu (`OtkupZaKooperantaVrsta`, `ERR_BMAP_BLOK_TUDJ` / `ERR_BMAP_BLOK_STORNIRAN`) | `modBankaMapiranje` |
+| Nova kapija pisca: dokument postoji, **nije storniran**, pripada **tom** kooperantu i **ima otkupno mesto** (`PotvrdiOtkupZaKooperanta`, `ERR_BMAP_BLOK_TUDJ` / `_STORNIRAN` / `_BEZ_OM`) | `modBankaMapiranje` |
+| **Vlasništvo OM-a:** vezan red `tblNovac` nosi `StanicaID` **dokumenta**, ne matično mesto kooperanta; avans (i višak) nose matično mesto — odluka izrečena i merena | `MapBankaImportAsKooperantBlockCore` |
 | „Otvoreno“ po dokumentu na jednom mestu: `BimOtvorenoNaOtkupu` (stavke − isplate); `BimOtkupBezOtvorenog` zamenjuje `BimBlokBezOtvorenih` | `modBankaMapiranje` |
 | Okidač potvrde: **isplata veća od duga na bloku** (`BimOtkupTraziPotvrdu`), umesto „3+ otvorenih stavki“ | `modBankaMapiranje`, `modScrBankaUvoz.PitajZaPodelu` / `TekstPodele` |
 | Obrisano: `GetOtkupCandidatesForKooperantBlock`, `PlanBlokRaspodela`, `SortKandidatiPoOtvorenomDesc`, `MAX_BLOK_KANDIDATA`, `BimScopeKolona`, `BimBlokTraziPotvrdu`, `TryResolveOtkupForKooperant` (mrtav), `BuScopeNedostaje`, `IzabranaStanicaCilja`, `ScopeIzbora`, `Scr_BuScopeBlokaTest`, `Scr_BuStopBezOmTest`, poruke `OTKUI_*_BU_BLOK_BEZ_OM` | — |
@@ -2869,6 +2870,8 @@ kroz `COL_OKS_*`.
 **Šta je scope bio i zašto ga više nema:** otkupno mesto je u mapiranje uvedeno zato što `(kooperant, broj)` nije bio jednoznačan.
 Kad red liste nosi `OtkupID`, dvosmislenosti nema — pa nema ni scope-a, ni kapije „blok bez otkupnog mesta“, ni schema-drift
 grane u kojoj scope tiho otpada. Tri stanja praznog stringa iz `BuScopeNedostaje` nestaju sa uzrokom.
+
+**Vlasništvo nije isto što i identitet (review #360, P1):** pisac je znao tačan `OtkupID`, ali je `OMID` uzimao iz `tblKooperanti.StanicaID` — matičnog mesta. Za kooperanta koji predaje na dva mesta to daje red sa **tačnim** `OtkupID`-em i **pogrešnim** `OMID`-em, pa saldo tuđeg otkupnog mesta nosi kupovinu. Vezani red sada nosi `StanicaID` dokumenta (`T03`: `OTK-B@OM-1B → Novac.OMID = OM-1B`), a dokument bez otkupnog mesta se odbija (`ERR_BMAP_BLOK_BEZ_OM`, `T24`) — time je kapija „blok bez OM“ prešla sa ekrana (gde je bila deo scope-a) na mesto gde se piše. Avans i višak ostaju na matičnom mestu: nisu vezani ni za jedan dokument i mogu se kasnije primeniti na blok bilo kog mesta.
 
 **Popravljeno usput (identitet, ne kozmetika):** automatski put nije imao otkupno mesto, pa je isti broj na dva otkupna mesta
 ulazio u **jednu** raspodelu — jedna isplata na dva poslovna lanca. Sada takav red ide operateru (`T03`).

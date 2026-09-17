@@ -466,6 +466,17 @@ Private Sub T03_DvosmislenPozivNeObaraBatch()
     ChkEqD IsplataZaBim(P & "BIM-2OM"), 3000, S & "ukupno knjizeno = iznos stavke izvoda"
     ChkEqD GetUplataForOtkup(P & "OTK-B"), 1200, S & "izabran dokument je dobio tacno svoj dug"
     ChkEqD GetUplataForOtkup(P & "OTK-A"), 0, S & "dokument sa drugog otkupnog mesta NIJE diran"
+
+    ' VLASNISTVO, NE SAMO IDENTITET. Red novca sme da nosi tacan OtkupID a
+    ' pogresno otkupno mesto -- ako OM dolazi iz tblKooperanti (maticno mesto),
+    ' a dokument je sa drugog. Saldo OM-1 bi tada nosio kupovinu OM-1B.
+    ChkEq NovacOMZaOtkup(P & "OTK-B"), P & "OM-1B", _
+          S & "vezan red novca nosi otkupno mesto DOKUMENTA, ne maticno mesto kooperanta"
+
+    ' Visak nije deo kupovine: nije vezan ni za jedan dokument, pa nosi maticno
+    ' mesto kooperanta. Odluka je izricita -- bez ove tvrdnje bi bila slucajna.
+    ChkEq NovacOMAvansaZaBim(P & "BIM-2OM"), P & "OM-1", _
+          S & "visak (avans) nosi MATICNO otkupno mesto kooperanta"
 End Sub
 
 ' ============================================================
@@ -595,8 +606,8 @@ Private Sub T08_PaliBatchNePrijavljujeUspeh()
     SeedStanica P & "OM-3", P & "Stanica 3"
     SeedKooperant P & "K-3", "Test", "Batch", P & "OM-3"
 
-    SeedOtkup P & "OTK-G1", P & "K-3", P & "BLOK-G1", 100, 10, "Malina"   ' 1000
-    SeedOtkup P & "OTK-G2", P & "K-3", P & "BLOK-G2", 100, 20, "Malina"   ' 2000
+    SeedOtkup P & "OTK-G1", P & "K-3", P & "BLOK-G1", 100, 10, "Malina", P & "OM-3"   ' 1000
+    SeedOtkup P & "OTK-G2", P & "K-3", P & "BLOK-G2", 100, 20, "Malina", P & "OM-3"   ' 2000
 
     ' Prvi red je ispravan i bio bi mapiran; drugi nema broj izvoda -> pad.
     SeedBim P & "BIM-G1", P & "IZV-17", P & "RAC-1", P & "PARTNER-B", 0, 1000, P & "BLOK-G1", "", ""
@@ -640,8 +651,8 @@ Private Sub T09_AutoBlokIdePoPozivuNaBroj()
     SeedKooperant P & "K-4", "Test", "Auto", P & "OM-4"
 
     ' Dva bloka ISTOG kooperanta; izvod pokazuje na prvi.
-    SeedOtkup P & "OTK-PA", P & "K-4", P & "BLOK-PA", 100, 10, "Malina"   ' 1000
-    SeedOtkup P & "OTK-PB", P & "K-4", P & "BLOK-PB", 100, 10, "Malina"   ' 1000
+    SeedOtkup P & "OTK-PA", P & "K-4", P & "BLOK-PA", 100, 10, "Malina", P & "OM-4"   ' 1000
+    SeedOtkup P & "OTK-PB", P & "K-4", P & "BLOK-PB", 100, 10, "Malina", P & "OM-4"   ' 1000
 
     SeedBim P & "BIM-AUTO", P & "IZV-18", P & "RAC-1", P & "PARTNER-A", 0, 1000, P & "BLOK-PA", "", ""
 
@@ -681,7 +692,7 @@ Private Sub T10_PlacenaFakturaNeObaraBatch()
     ' Zdrav red: kooperant sa jednim otvorenim blokom (mapira se).
     SeedStanica P & "OM-5", P & "Stanica 5"
     SeedKooperant P & "K-5", "Test", "Batch2", P & "OM-5"
-    SeedOtkup P & "OTK-H1", P & "K-5", P & "BLOK-H1", 100, 10, "Malina"
+    SeedOtkup P & "OTK-H1", P & "K-5", P & "BLOK-H1", 100, 10, "Malina", P & "OM-5"
     SeedBim P & "BIM-H1", P & "IZV-19", P & "RAC-1", P & "PARTNER-H", 0, 1000, P & "BLOK-H1", "", ""
 
     ' Problematican red: poziv na broj pogadja fakturu koja je VEC placena.
@@ -831,12 +842,12 @@ Private Sub T23_BatchAvansRazdvajaIshode()
 
     ' K-22A: dva otvorena bloka po 500, ali avans je samo 300 -- taman toliko da
     ' JEDAN blok dobije, a drugi ostane bez promene. Ta razlika je cela poenta.
-    SeedOtkup P & "OTK-22A", P & "K-22A", P & "BLOK-22A", 100, 5, "Malina"
-    SeedOtkup P & "OTK-22B", P & "K-22A", P & "BLOK-22B", 100, 5, "Malina"
+    SeedOtkup P & "OTK-22A", P & "K-22A", P & "BLOK-22A", 100, 5, "Malina", P & "OM-22"
+    SeedOtkup P & "OTK-22B", P & "K-22A", P & "BLOK-22B", 100, 5, "Malina", P & "OM-22"
     SeedAvansKooperanta P & "NOV-22", P & "K-22A", 300
 
     ' K-22B: otvoren blok, ali kooperant nema avans -- kontrolni slucaj.
-    SeedOtkup P & "OTK-22C", P & "K-22B", P & "BLOK-22C", 100, 5, "Malina"
+    SeedOtkup P & "OTK-22C", P & "K-22B", P & "BLOK-22C", 100, 5, "Malina", P & "OM-22"
 
     Dim ids As Object
     Set ids = CreateObject("Scripting.Dictionary")
@@ -936,6 +947,26 @@ Private Sub T24_BlokTudjegKooperantaIStorniran()
     ChkEq NovacZaBim(P & "BIM-24S"), 0, S & "storniran blok nema nijedan red u tblNovac"
     ChkEq BimObradjeno(P & "BIM-24S"), "", S & "stavka ostaje OTVORENA"
 
+    ' (c) Blok BEZ upisanog otkupnog mesta -> STOP. Vezana isplata se pripisuje
+    ' otkupnom mestu dokumenta, pa bez njega nema vlasnika kupovine; maticno
+    ' mesto kooperanta bi bilo pogadjanje. Do S2 je ovo zaustavljao ekran
+    ' (scope), jer je stanica tamo bila deo kljuca.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(P & "OTK-24X", P & "BLOK-24X", P & "K-24A", "Malina", Date)
+    BitOtkupStavka P & "OTK-24X", 100, 10
+
+    SeedBim P & "BIM-24X", P & "IZV-24", P & "RAC-1", P & "PARTNER-24", 0, 1000, "", "", ""
+
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-24X", P & "K-24A", P & "OTK-24X", _
+                                                False, True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 0, S & "blok bez otkupnog mesta se NE knjizi"
+    ChkEq NovacZaBim(P & "BIM-24X"), 0, S & "blok bez OM nema nijedan red u tblNovac"
+    ChkEq BimObradjeno(P & "BIM-24X"), "", S & "stavka ostaje OTVORENA"
+
     ' Kontrola: isti pisac nad ISPRAVNIM blokom prolazi -- kapija ne gasi posao.
     gBankaSilentBatch = True
     n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-24T", P & "K-24A", P & "OTK-24A", _
@@ -944,6 +975,7 @@ Private Sub T24_BlokTudjegKooperantaIStorniran()
 
     ChkEq n, 1, S & "vlasnik bloka ga uredno placa"
     ChkEqD GetUplataForOtkup(P & "OTK-24A"), 1000, S & "...i dug je zatvoren"
+    ChkEq NovacOMZaOtkup(P & "OTK-24A"), P & "OM-24", S & "...na otkupnom mestu dokumenta"
 End Sub
 
 ' ============================================================
@@ -1759,6 +1791,55 @@ Private Sub SeedAvansKooperanta(ByVal novacID As String, ByVal koopID As String,
               COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_ISPLATA, COL_NOV_OTKUP_ID), _
         Array(novacID, Date, koopID, koopID, "Kooperant", NOV_VIRMAN_AVANS_KOOP, iznos, "")
 End Sub
+
+' Otkupno mesto (OMID) upisano na redovima novca vezanim za dati OtkupID.
+' Vraca "" kad nema takvog reda, a "?" kad se redovi ne slazu -- tvrdnja tada
+' pada po imenu umesto da "prvi red pobedjuje".
+Private Function NovacOMZaOtkup(ByVal otkupID As String) As String
+    Dim data As Variant
+    Dim colOtk As Long, colOM As Long
+    Dim i As Long
+    Dim om As String
+
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    colOtk = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    colOM = GetColumnIndex(TBL_NOVAC, COL_NOV_OM_ID)
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colOtk))) = Trim$(otkupID) And Len(Trim$(otkupID)) > 0 Then
+            om = Trim$(CStr(data(i, colOM)))
+            If Len(NovacOMZaOtkup) = 0 Then
+                NovacOMZaOtkup = om
+            ElseIf NovacOMZaOtkup <> om Then
+                NovacOMZaOtkup = "?"
+            End If
+        End If
+    Next i
+End Function
+
+' OMID avansnog reda (bez OtkupID-a) nastalog iz date stavke izvoda.
+Private Function NovacOMAvansaZaBim(ByVal bimID As String) As String
+    Dim data As Variant
+    Dim colOtk As Long, colOM As Long, colNap As Long
+    Dim i As Long
+
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    colOtk = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    colOM = GetColumnIndex(TBL_NOVAC, COL_NOV_OM_ID)
+    colNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+
+    For i = 1 To UBound(data, 1)
+        If InStr(1, CStr(data(i, colNap)), "BIM:" & bimID, vbTextCompare) > 0 Then
+            If Len(Trim$(CStr(data(i, colOtk)))) = 0 Then
+                NovacOMAvansaZaBim = Trim$(CStr(data(i, colOM)))
+            End If
+        End If
+    Next i
+End Function
 
 ' Koliko Novac redova nosi dati OtkupID (0 = nista nije vezano).
 Private Function NovacRedovaSaOtkupID(ByVal otkupID As String) As Long
