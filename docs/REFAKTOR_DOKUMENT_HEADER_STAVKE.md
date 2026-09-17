@@ -2436,6 +2436,7 @@ nije posebno pitano i važi dok operater ne kaže drugačije.
 | 10 | Provera zdravlja sa ručnim spiskom kolona (`Check_CoreTablesAndColumns`) | **[podrazumevano]** spisak kolona iz kanona `schema.json`, kao `Check_SchemaRegistry` | ide u prvi slajs koji briše kolonu; zatvara i AUD-055 |
 | 11 | Provere integriteta starog modela (15 od 22) | **[podrazumevano]** brišu se sa starim modelom; slajs dokumenta dodaje proveru svoje invarijante (zaglavlje = zbir stavki, izvori aktivni) | nema „prevođenja“ starih provera |
 | 12 | Popravke podataka starog modela (F-061, F-090..F-093) | **[podrazumevano]** brišu se, nisu sposobnost (pravilo „bez migracija i backfill-a“) | v. `MAPA_SPOSOBNOSTI.md` „Nije sposobnost“ |
+| 13 | Oblik otkupa između desktopa i PWA (OTK sheet, `OtkupiAll`) — PWA red nosi jednu klasu | **Zaglavlje + zaseban tab stavki; PWA zapis dobija niz stavki.** PWA i GAS se **ne diraju u S1** — ostaje instrukcija (§14.10) | VBA izvoz/push prelazi na nov oblik u S1c; GAS/PWA u S5 |
 
 **Ostaje otvoreno:** nijedna odluka domena iz liste „Još otvoreno“ (§14.7). Tačka 3 te liste (testovi sa zaglavljem
 bez stavki) nije domen nego posao slajsa otkupa. Sledeći korak: nova tabela PR-ova (slajsova) po novom modelu, sa
@@ -2462,7 +2463,7 @@ mapom kao spiskom obaveznih ishoda i ovim odlukama kao ugovorom.
 | S2 | **Banka po ID-u** | mapiranje izvoda i nalozi: poziv na broj se jednom razreši u `OtkupID`, blok i otvoreno po bloku rade nad ID-em | 7 | traženje otkupa po poslovnom broju u `modBankaMapiranje` / `modNovac` | D-032, D-033, D-035, D-036, D-037 | S1 |
 | S3 | **Otpremnica cutover — desktop** | F2 kroz nacrt + očekivanje po klasi (sa `PredlogCena` i `BrutoKg` na stavci) + dugme „Izdaj“; ambalaža pri izdavanju; panel blokova i izgubljeni blokovi nad `tblOtpremnicaIzvori`; storno i ispravka otpremnice; auto-hladnjača i malina auto-otpremnica kroz `CreateOtpremnicaIzIzvora_TX`; štampa i izveštaji otpremnice. PWA/sync putevi koji čitaju `Otkup.OtpremnicaID/VozacID` se **brišu** (vraća S5) | 1, 2, 3, 4 | `otp_linija` (101), `otp_cena` (9), `otp_stari_pisac` (68, `SaveOtpremnica*`, AutoLink), `otk_veze` za `OTPREMNICA_ID` / `VOZAC` / `BROJ_OTPREMNICE`; kolone `Otkup.OtpremnicaID/VozacID/BrojOtpremnice`, linijska polja i `Cena` na `tblOtpremnica` | A-001, A-002, A-011, A-012, A-014, A-018..A-029, B-004, B-005, B-010, B-013, B-014, B-022, B-023, B-027, B-032, B-033, B-039, B-041, B-042, B-046, B-047, C-005, C-008, C-010, C-025, C-059 | S1 |
 | S4 | **Zbirna cutover** (stari PR8) | F3 kroz `CreateZbirnaIzIzvora_TX`; storno zbirne i propagacija ispravke = nova verzija (A13); malina auto-zbirna; štampa i izveštaji zbirne; relink u storno toku nad ID-em | 3 | `otp_brojzbirne` (56), `otk_veze` za `BROJ_ZBIRNE`, `x_trace` (12), `GeneracijaID`, `ZbirnaIdent*`, `*ByBroj_TX` zbirne | A-017, A-030, B-001, B-006, B-012, B-015, B-024, B-026, B-028, B-038, B-044, C-004, C-007, C-011, C-016, C-024, C-038, C-060 | S3 |
-| S5 | **PWA i sync na novom modelu** | dodela vozača iz PWA → izdata otpremnica; GAS vozaču servira otpremnice po `VozacID` otpremnice; `VOZ-*` zbirna → zbirna sa izvorima; auto-lanac bez kapije pauze; badge sync-a bez „degradirano“ grane | 5, 6 | `pauza` (13), `IzvedeniLanacIzPwaDostupan`, `NapredakBlokaDostupan`, `TryUpdateVozacID` na otkupu | E-001, E-003, E-019..E-023, E-035, E-044, E-058, E-063, E-064, E-065 | S4 |
+| S5 | **PWA i sync na novom modelu** | PWA/GAS otkup kao zaglavlje + stavke po instrukciji §14.10; dodela vozača iz PWA → izdata otpremnica; GAS vozaču servira otpremnice po `VozacID` otpremnice; `VOZ-*` zbirna → zbirna sa izvorima; auto-lanac bez kapije pauze; badge sync-a bez „degradirano“ grane | 5, 6 | `pauza` (13), `IzvedeniLanacIzPwaDostupan`, `NapredakBlokaDostupan`, `TryUpdateVozacID` na otkupu | E-001, E-003, E-019..E-023, E-035, E-044, E-058, E-063, E-064, E-065 | S4 |
 | S6 | **Prijemnica** header + stavke + izvori + cutover | F4; hladnjača auto-prijemnica po zbirnoj (ne po `BrojZbirne\|Klasa`); ambalaža vraćena; štampa, izveštaji, izvoz | 3 | linijska polja `tblPrijemnica`, `Prijemnica.BrojZbirne` kao veza, `split_plus` (7) | A-031, B-029, B-045, C-006, C-014, C-015, C-033, C-039 | S4 |
 | S7 | **Faktura** | `FakturaStavka.PrijemnicaStavkaID`; SEF; kartica kupca | — | veza fakture preko broja prijemnice | C-003, D-031 i redovi D1 koji čitaju prijemnicu (pre-flight) | S6 |
 | S8 | **Paleta i prerada** | `PaletaStavka.PrijemnicaStavkaID`; usklađivanje paleta po ID-u prijemnice | — | `PaletaStavka.BrojZbirne` kao veza, broj prijemnice kao veza | C-040, C-048, C-050, C-051 | S6 |
@@ -2471,6 +2472,124 @@ mapom kao spiskom obaveznih ishoda i ovim odlukama kao ugovorom.
 **Van refaktora:** marža i ekran ANALIZA (§14.8 t. 8). **Nije slajs:** makroi bez brane (§14.8 t. 9).
 
 **Sledeći korak:** pre-flight S1 (skill `pre-flight`), jedna sesija.
+
+### 14.10) Pre-flight S1 „Otkup do kraja“ (17.09.2026)
+
+Mereno na `main` `0a2f5e5b` (kod isti kao `0e6e3acd`), `popis_citalaca.py --json`, grupe `otk_linija`,
+`x_saveotkup`, `x_vreme_unosa`, `x_indeks`, `x_literal` u `modProductionHealthCheck`: **163 PROD mesta u 56
+procedura** (ZIV_UI 86 · ZIV_MAKRO 7 · PAUZIRAN 5 · SAMO_TEST 46 · MRTAV 19) + **67 TEST mesta** (najviše
+`modBusinessFlowProTests` 32, `modTestStornoCentar` 16, `modTestBanka` 8).
+
+#### Glavni nalaz — čitaoci danas čitaju prazna polja
+
+Jedini pisac otkupa `CreateOtkup_TX` → `BuildOtkupHeaderRowData` (`modOtkup.bas:1379`) na zaglavlje piše
+`TipAmbalaze` i `KolAmbIzdata`, a **ne** `Kolicina`, `Cena`, `Klasa`, `KolAmbalaze`, `BrutoKg`, `Novac`,
+`PrimalacNovca`, `VremeUnosa` — te kolone su i dalje u kanonu (`schema/schema.json` `tblOtkup`). Svaki živi čitalac
+iz spiska ispod zato za svaki nov otkup danas vidi prazno/0 (npr. `modStammdatenSync.ExportOtkupPoOM:554-557`,
+`modOtkupBlok.SumKolByOtp:1584`, `modScrDokumenti.ColKolicina:1348` za mod OTKUP). To je dozvoljeno stanje po
+§14.7 (legacy ne mora da radi), ali znači da S1 ne „čuva“ ništa — **vraća** sposobnosti.
+
+#### Ispravka praga iz §14.9
+
+Grupa `otk_linija` meša činjenice zaglavlja i stavke. `COL_OTK_TIP_AMB` (8 živih) i `COL_OTK_KOL_AMB_IZDATA`
+(6 živih) su **H** po `DOCUMENT_HEADER_LINES.md` (redovi „`VrstaVoca`, `SortaVoca`, `TipAmbalaze`“ i
+„`KolAmbIzdata`“) i ostaju. Prag S1 je: **`COL_OTK_KOLICINA/CENA/KLASA/KOL_AMB/BRUTO/NOVAC/PRIMALAC/VREME_UNOSA`
+i `SaveOtkup(_TX)` = 0**, a konačni dokaz je da su te konstante **obrisane iz `modConfig`** i kolone iz kanona —
+kompajler je tada checker. Alat `popis_citalaca.py` dobija podelu grupe (`otk_stavka` / `otk_header`); izmena
+checkera traži dokaz u oba smera (CLAUDE.md §5).
+
+#### Verdikt po osama
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | otkup = zaglavlje + 1..2 stavke (`DOCUMENT_HEADER_LINES.md` §4.1); količina, cena, klasa, gajbe, bruto su **L**; `Novac`/`PrimalacNovca` se brišu (§4.1b); bruto na stavci (§14.8 t. 3) |
+| `IDENTITY` | **PROVEN** za desktop · **GAP rešen odlukom** za PWA | desktop: `OtkupID` putuje, stavke po `OtkupStavkaID`. PWA red (`BuildOTKSheetRowForOtkup`, `modStanicaLock.bas:548`) nosi identitet po otkupu i JEDNU klasu → odluka §14.8 t. 13 |
+| `CARDINALITY` | **PROVEN** | 1 otkup : 1..2 stavke; čitaoci po klasi (izvoz po Stanica+Vrsta+Klasa, storno prefill, štampa) moraju iterirati **stavke**, ne zbir |
+| `INVARIANTS/OWNER` | **PROVEN** | „otkup bez stavki pada“ drži `StavkeOtkupaRedovi` (`modOtkup.bas:973`) i `ZbirStavkiZaOtkup` (`modOtkup.bas:1252`), iz #334 |
+| `WRITERS` | **PROVEN** | jedini produkcioni pisac `CreateOtkup_TX` (`modOtkup.bas:71`); `SaveOtkup`/`SaveOtkup_TX` su SAMO_TEST (35 mesta u `modOtkup`, pozivaoci u testovima) — brišu se, testovi prelaze na `CreateOtkup_TX` |
+| `DOWNSTREAM` | **PROVEN** (spisak) | 56 procedura ispod; nizvodno van VBA: OTK sheet i `OtkupiAll` → GAS `getOtkupiForOtkupac:2768`, `mergeOtkupRows_:1521`, PWA pregled/kartica/menadžment (E-039..E-042, E-053..E-057, E-070..E-077) |
+| `CAPABILITY` | **PROVEN** (spisak) | 22 sposobnosti S1 provereno po presudi u mapi — v. dole |
+| `ACCEPTANCE CONTRACT` | **plan** | v. dole |
+| `PLATFORM` | N/A | nema novog Excel/COM ponašanja |
+| `LANDING` | **rizik: šema** | brisanje kolona menja kanon i `modSchema` → S1d ide serijski, sam; ostali PR-ovi S1 ne diraju šemu |
+
+`EVENTS: N/A` — S1 ne menja kada nastaje otkup, ambalaža ni novac; menja samo odakle se čitaju činjenice koje već postoje.
+
+#### Reuse (ne pisati nov sloj)
+
+`modOtkup.StavkeOtkupaRedovi:973` (redovi stavki, pada na otkup bez stavki) · `ZbirStavkiPoOtkupu:1180` →
+`Array(kg, vrednost, gajbe, klase)` · `ZbirStavkiZaOtkup:1252` (nedostajući ključ = greška) ·
+`VrednostOtkupa:874`. Već ih koriste `modIzvestaj` (`:595`, `:906`, `:1270`, `:1544`). Čitalac po klasi ili po
+bruto koristi `StavkeOtkupaRedovi`; zbir po dokumentu koristi `ZbirStavkiPoOtkupu`.
+
+#### Sposobnosti S1 — provera
+
+- **Potvrđeno S1 (20):** B-036 (storno prefill po klasi), C-019, E-024, E-026, E-027, E-030, E-039, E-040, E-041,
+  E-042, E-053, E-056, E-057, E-070, E-072, E-074, E-075, E-076, E-077, F-089 — sve čitaju linijska polja otkupa.
+- **Potvrđeno S1 uz dopunu praga:** A-015 i D-057 zavise od `Split(ID, " + ")` (`modScrDokumenti.bas:725`,
+  `modAmbalaza.bas:343`) — to je više `OtkupID`-ova istog broja iz modela „red po klasi“. Deo `split_plus` koji
+  nosi **otkup** (`modPrint`, `modOtkupBlok`, `modAmbalaza`, `modScrDokumenti.OtkupIdsByBrDok`) ide u S1; deo
+  otpremnice/prijemnice (`modDokUnos`, `modAutoHladnjaca`) ostaje u S3/S6.
+- **Premešteno:** nijedna.
+- **PWA/GAS strana** (E-039..E-042, E-053..E-057, E-070..E-077): po §14.8 t. 13 S1 **ne dira** `gas/` ni `src/`;
+  VBA izvoz prelazi na nov oblik, a PWA/GAS prilagođavanje je instrukcija ispod i posao S5.
+
+#### Mesta bez sposobnosti S1 (čija su)
+
+- **MRTAV — briše S1a:** `modDokumenta.GetStorniraniByTip`, `modHelpers.CheckVerwaisteDokumente`,
+  `modMarza.AggregateOtkupByVrsta(Filtered)` (marža je van refaktora, §14.8 t. 8), `modOtkupBlok.BuildFirstBlokCena`,
+  `modOtkupBlok.PrefillOtkupFromStornirano`, `modScrDokumenti.ColumnSpec`.
+- **Otpremnica (S3), ali čitaju količinu otkupa:** `modOtkupBlok.SumKolByOtp/SumAmbByOtp/SumBrutoByOtp/BuildNapisanoByOtp/ExistingBlokCena/LoadBlokovi/RenderSpec`,
+  `modDokumenta.GetLostOtkupBlokovi`, `modSledljivost.AutoLinkOtkupOtpremnica/GetUnlinkedOtkupi/TraceByZbirna`,
+  `modStornoFlow.GetStornoBlockRows`, `modPaletniList.GetOtkupiZaPalete`, `modMasterSync.AutoCreateOtpremniceFromPWA`
+  (PAUZIRAN). S1 im menja **samo izvor količine/cene/klase** (stavke); vezu `Otkup.OtpremnicaID` ne dira — to je S3.
+  Pauzirani `AutoCreateOtpremniceFromPWA` se **briše** (vraća S5).
+- **Šema/health:** `modSetup.EnsureDoradeSchema` (dodaje stare kolone — briše se deo za otkup),
+  `Check_CoreTablesAndColumns`, `Check_GoogleSyncMasterSchema` → spisak iz kanona (§14.8 t. 10). Literali
+  `Check_OtkupOtpremnicaCrossZbirnaLinks` i `Check_DocumentSoftDeleteReferences` su veze (`OtpremnicaID`/`BrojZbirne`) → S3/S4.
+
+#### Podela S1 na PR-ove (svaki se kompajlira)
+
+| PR | Sadržaj | Prag posle PR-a |
+|---|---|---|
+| **S1a** | brisanje `SaveOtkup`/`SaveOtkup_TX` i MRTAV procedura iznad; testovi koji grade otkup prelaze na `CreateOtkup_TX` (fixture helper jedan, u `modTest`); `popis_citalaca` podela grupe `otk_stavka`/`otk_header` sa dokazom u oba smera | `x_saveotkup` = 0; MRTAV mesta S1 = 0 |
+| **S1b** | desktop čitaoci na stavke: `modScrDokumenti` (kolone moda OTKUP, `RedoviZaTip`, `RowsBlokovi`, `OtkupIdsByBrDok` bez `" + "`), `modStornoDok` prefill po stavkama, `modStornoZurnal.OtkupReissueDupExists`, `modPrint.FillOtkupSablon`, `modIzvestaj` (`ReportKarticaKooperanta`, `ReportOtkupRobaOM`, `ReportSledljivost*` + `x_indeks`), `modAmbalaza` početno stanje po `OtkupID`, izvor količine u `modOtkupBlok`/`modDokumenta`/`modSledljivost`/`modStornoFlow`/`modPaletniList`; KPI `SaldoOMUkupno` (AUD-056) | `otk_stavka` živih u tim modulima = 0 |
+| **S1c** | sync i izvozi, samo VBA: `ExportOtkupPoOM`, `ExportOtkupiAll` (deo otkupa), `ExportSaldoOMDetail`, push `BuildOTKSheetRowForOtkup` → **nov oblik** (zaglavlje + stavke, §14.8 t. 13); `PwaIstiSadrzaj` poredi stavku; brisanje pauziranog `AutoCreateOtpremniceFromPWA`; health iz kanona (AUD-055) | `otk_stavka` = 0 u celom PROD; `x_literal` health za otkup = 0 |
+| **S1d** | brisanje kolona `Kolicina, Cena, Klasa, KolAmbalaze, BrutoKg, Novac, PrimalacNovca, VremeUnosa` iz `tblOtkup` u kanonu + `gen_schema_module.py` + brisanje konstanti `COL_OTK_*` iz `modConfig`; `EnsureDoradeSchema` bez tih kolona | **kompajlira se bez tih konstanti** = dokaz nula čitalaca |
+
+#### Acceptance contract (plan dokaza)
+
+- **Važi posle S1:** otkup sa dve klase (I 100 kg × 50, II 40 kg × 30) se u mreži DOKUMENTI, štampi, izveštaju
+  otkupa po OM, kartici kooperanta i izvozu `OtkupPoOM` vidi kao dve klase sa tačnim kg i vrednošću 6200 —
+  testovi u `modBusinessFlowProTests` nad `CreateOtkup_TX`, po jedan po čitaocu grupe (mreža, štampa, izveštaj, izvoz).
+- **Ostaje netaknuto:** `TipAmbalaze` i `KolAmbIzdata` na zaglavlju; vrednost otkupa u novcu/banci (#334 testovi zeleni);
+  `Otkup.OtpremnicaID/VozacID/BrojZbirne` (S3/S4).
+- **Edge:** otkup sa jednom klasom; storno prefill otkupa sa dve klase vraća obe stavke; ponovna štampa starog broja.
+- **Negativan:** otkup bez stavki u bilo kom čitaocu S1 **pada po imenu** (`StavkeOtkupaRedovi` / `ZbirStavkiZaOtkup`),
+  nikad 0 — test po jedan za izvoz i za štampu.
+- **Merenje:** `popis_citalaca.py` grupa `otk_stavka` = 0 posle S1c; S1d kompajl bez konstanti; `gen_schema_module.py --check`,
+  `who_writes.py --check` i `--check-ownership`; `run_vba` puna suite (menja se jezgro čitanja).
+
+#### Instrukcija za PWA i GAS (§14.8 t. 13 — ne radi se u S1, radi se u S5)
+
+1. **OTK sheet po stanici** postaje dva taba: `OTK` (red po otkupu: `ClientRecordID`, `ServerRecordID` = `OtkupID`,
+   datum, stanica, kooperant, vrsta, sorta, `TipAmbalaze`, `KolAmbIzdata`, parcela, `BrojDokumenta`, sync kolone) i
+   `OTK_STAVKE` (red po stavci: `OtkupStavkaID`, `OtkupID`/`ClientRecordID` roditelja, `RedniBroj`, `Klasa`,
+   `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`). Redosled kolona zapisati na JEDNOM mestu (danas se dva mesta
+   ručno poklapaju: `BuildOTKSheetRowForOtkup` i `BuildOTKOperationalHeaders_`, nalaz E-5).
+2. **PWA zapis otkupa** dobija niz `stavke[]` (1..2); forma otkupa dozvoljava drugu klasu; vrednost = zbir stavki
+   (`otkupni-list.js:254`, kartica, pregled, knjiga polja `kpParseOpisOtkupa:145` čitaju stavke, ne jedan red).
+3. **GAS `doPost action=sync`** prima zaglavlje + stavke u jednom zapisu i upisuje oba taba atomski po
+   `ClientRecordID`; `mergeOtkupRows_:1521` i sadržajni fallback ključ (`gas/Code.gs:2857-2868`) porede zaglavlje +
+   skup stavki, ne jedan red.
+4. **`OtkupiAll` / menadžment** (`getMgmtAll`, `getOtkupiForOtkupac:2768`): isti oblik (zaglavlje + stavke);
+   agregati po OM/klasi računaju iz stavki.
+5. **VBA uvoz** (`ImportRowToTblOtkup`) čita `OTK_STAVKE` i zove `CreateOtkup_TX(h, stavke)` sa svim stavkama;
+   do S5 PWA šalje jednu klasu po zapisu i uvoz pravi otkup sa jednom stavkom (danas radi, E-011 „ne“).
+6. **Između S1c i S5 PWA prikaz desktop otkupa može biti pogrešan** (VBA piše nov oblik, GAS/PWA čitaju stari) —
+   dozvoljeno po §14.7; S5 to zatvara.
+
+**Otvoreno:** ništa od domena. Sledeći korak: **S1a**.
 
 ## 15) Backlog — namerno van opsega
 
