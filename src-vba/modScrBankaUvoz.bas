@@ -18,7 +18,7 @@ Attribute VB_Name = "modScrBankaUvoz"
 '   - jaki kljucevi               -> modBankaMapiranje.AutoMapStrongKeysBankaImport_TX
 '   - rucno mapiranje             -> modBankaMapiranje.MapBankaImportAs*_TX
 '   - preskakanje                 -> modBankaMapiranje.SkipBankaImportRow_TX
-'   - predlog podele po bloku     -> modBankaMapiranje.PlanBlokRaspodela
+'   - razresenje bloka u OtkupID  -> modBankaMapiranje.BimEfektivniOtkup
 '   - smer stavke                 -> modBankaMapiranje.ClassifyBimSmer
 '   - jak kljuc po redu           -> modBankaMapiranje.BimJakiKljucInfo
 '   - redovi mreze                -> modBankaMapiranje.GetBankaImportForGrid
@@ -140,7 +140,6 @@ Private mKpiOK As Boolean
 Private mTipTest As String
 Private mPartnerTest As String
 Private mCiljTest As String
-Private mStanicaTest As String
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -757,20 +756,14 @@ Private Function RucnoKupac(ByVal bimID As String, ByVal kupacID As String) As B
     RucnoKupac = True
 End Function
 
-' FAIL-CLOSED KAPIJA nad listom faktura. Prazna lista i PAD ucitavanja
-' izgledaju isto, a znace suprotno: prazan izbor fakture knjizi AVANS. Odluka
-' "smem li uopste da radim" je zato imenovana i odvojena od crtanja -- inace se
-' ne moze izmeriti, a brisanje jednog If-a se ne bi videlo ni u jednom testu.
 ' Sme li se rucni izbor bloka knjiziti. Odvojeno od RucnoKooperant da bi se
 ' moglo izmeriti bez forme, i da bi se videlo da se kapija primenjuje SAMO na
-' rucni izbor: kad blok dolazi iz poziva na broj, izabranBlok je prazan i
+' rucni izbor: kad blok dolazi iz poziva na broj, izabranOtkup je prazan i
 ' odgovor je False bez ijednog citanja tabele.
-Public Function BuBlokZatvoren(ByVal kooperantID As String, _
-                               ByVal izabranBlok As String, _
-                               ByVal efektivniBlok As String, _
-                               ByVal scope As String) As Boolean
-    If Len(Trim$(izabranBlok)) = 0 Then Exit Function
-    BuBlokZatvoren = modBankaMapiranje.BimBlokBezOtvorenih(kooperantID, efektivniBlok, scope)
+Public Function BuBlokZatvoren(ByVal izabranOtkupID As String, _
+                               ByVal efektivniOtkupID As String) As Boolean
+    If Len(Trim$(izabranOtkupID)) = 0 Then Exit Function
+    BuBlokZatvoren = modBankaMapiranje.BimOtkupBezOtvorenog(efektivniOtkupID)
 End Function
 
 ' KESIRA SE SAMO USPESNO PUNJENJE.
@@ -823,35 +816,36 @@ Private Function CiljUcitan(ByRef outPoruka As String) As Boolean
 End Function
 
 Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As String) As Boolean
-    Dim blok As String, razlog As String, n As Long
-    Dim potvrdjeno As Boolean
-    Dim scope As String
-    Dim stani As Boolean
+    Dim otkupID As String, razlog As String, n As Long
     Dim greska As String
-    Dim izabranBlok As String
+    Dim izabran As String
+    Dim iznos As Double
 
     ' AKO LISTA BLOKOVA NIJE UCITANA, prazan izbor NE znaci "operater nije birao
-    ' blok". Fallback na poziv na broj bi tada bio pogadjanje, a scope bi ispao
-    ' prazan -- pa bi raspodela zahvatila sva otkupna mesta sa tim brojem. Ako
-    ' kandidata uopste nema, ceo iznos se knjizi kao avans kooperanta i stavka
-    ' se oznacava obradjenom: kvar postaje uspesno knjizenje drugog ishoda.
+    ' blok". Fallback na poziv na broj bi tada bio pogadjanje. Ako se poziv na
+    ' broj ni na sta ne razresi, ceo iznos se knjizi kao avans kooperanta i
+    ' stavka se oznacava obradjenom: kvar postaje uspesno knjizenje drugog ishoda.
     If Not CiljUcitan(greska) Then
         modOtkupUI.ShowToast greska, True
         Exit Function
     End If
 
-    ' Tek sad prazan izbor legitimno znaci "uzmi poziv na broj iz izvoda".
-    izabranBlok = IzabraniCiljID()
-    blok = modBankaMapiranje.BimEfektivniBlok(bimID, izabranBlok)
+    ' Tek sad prazan izbor legitimno znaci "uzmi poziv na broj iz izvoda" -- i
+    ' to je jedino mesto gde se broj razresava u OtkupID (S2). Dvosmislen poziv
+    ' na broj tu pada sa ERR_BMAP_MANUAL_REQUIRED, pa se prijavljuje operateru.
+    izabran = IzabraniCiljID()
 
-    ' Scope i odluka o zaustavljanju racunaju se na JEDNOM mestu -- v.
-    ' ScopeIzbora. Izabran blok bez otkupnog mesta staje PRE ijednog citanja
-    ' kandidata.
-    scope = ScopeIzbora(stani)
-    If stani Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_BEZ_OM"), True
+    On Error Resume Next
+    Err.Clear
+    otkupID = modBankaMapiranje.BimEfektivniOtkup(bimID, kooperantID, izabran)
+    If Err.Number <> 0 Then
+        greska = Err.description
+        Err.Clear
+        On Error GoTo 0
+        modOtkupUI.ShowToast greska, True
         Exit Function
     End If
+    On Error GoTo 0
 
     ' RUCNO IZABRAN BLOK BEZ OTVORENIH STAVKI -- STOP.
     ' Lista nudi i potpuno placene blokove, a writer bi takav izbor tiho preveo
@@ -859,19 +853,23 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' placa; "nema sta da se plati" nije bezbedan ishod nego protivrecnost.
     ' Prazan izbor (poziv na broj) NE prolazi kroz ovu kapiju -- tamo avans i
     ' dalje jeste namerno ponasanje.
-    If BuBlokZatvoren(kooperantID, izabranBlok, blok, scope) Then
+    If BuBlokZatvoren(izabran, otkupID) Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_ZATVOREN"), True
         Exit Function
     End If
 
-    If modBankaMapiranje.BimBlokTraziPotvrdu(kooperantID, blok, razlog, scope) Then
-        Select Case PitajZaPodelu(bimID, kooperantID, blok, scope)
+    ' ISPLATA VECA OD DUGA trazi izricitu potvrdu: visak inace tiho zavrsi kao
+    ' avans kooperanta. Tri ishoda, isti kao ranije kod podele bloka.
+    iznos = CDbl(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_ISPLATA), 0#))
+
+    If modBankaMapiranje.BimOtkupTraziPotvrdu(otkupID, iznos, razlog) Then
+        Select Case PitajZaPodelu(otkupID, iznos, razlog)
             Case vbCancel
                 Exit Function
             Case vbNo
-                ' Bezbedan izlaz: dok je poreklo dvosmisleno, nista se ne vezuje
-                ' za otkup. Ceo iznos ide kao avans kooperanta, a vezuje se
-                ' kasnije dugmetom "Primeni avans na blok" u Banka izvestaju.
+                ' Bezbedan izlaz: nista se ne vezuje za otkup. Ceo iznos ide kao
+                ' avans kooperanta, a vezuje se kasnije dugmetom "Primeni avans
+                ' na blok" u Banka izvestaju (pravilo D-036).
                 If Len(modBankaMapiranje.MapBankaImportAsKooperant_TX( _
                         bimID, kooperantID, "", "", True)) = 0 Then
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
@@ -880,8 +878,6 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
                 modOtkupUI.ShowToast Poruka("OTKUI_MSG_BU_AVANS_OK"), False
                 RucnoKooperant = True
                 Exit Function
-            Case Else
-                potvrdjeno = True
         End Select
     End If
 
@@ -890,8 +886,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' duplikat nego namera: modul unosa sudi po listi kakva je bila kad je
     ' punjena, a writer po stanju u trenutku upisa.
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
-            bimID, kooperantID, blok, True, potvrdjeno, scope, _
-            CiljJeIzabran(izabranBlok))
+            bimID, kooperantID, otkupID, True, CiljJeIzabran(izabran))
 
     If n <= 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
@@ -911,61 +906,42 @@ Private Function RucnoOM(ByVal bimID As String, ByVal omID As String) As Boolean
     RucnoOM = True
 End Function
 
-' Blok sa vise otvorenih stavki nego sto automatska raspodela sme da podeli:
-' operater vidi TACNU podelu (isti planer po kome se knjizi) i bira izmedju tri
-' ishoda. Ostaje MsgBox, kao u legacy-ju: tri ishoda nad izracunatim tekstom
-' nisu forma nego pitanje.
-Private Function PitajZaPodelu(ByVal bimID As String, ByVal kooperantID As String, _
-                               ByVal blok As String, ByVal scope As String) As VbMsgBoxResult
-    Dim kandidati As Variant, iznos As Double
-
-    PitajZaPodelu = vbCancel
-
-    ' ISTI scope kao kod knjizenja -- inace bi operater potvrdio jednu podelu, a
-    ' knjizila bi se druga.
-    kandidati = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
-                    kooperantID, blok, True, scope)
-    ' Kandidata nema, a granica je malopre bila prekoracena -- podaci su se
-    ' promenili izmedju dva citanja. Tiho odustajanje bi izgledalo kao dugme
-    ' koje ne radi, pa se prijavljuje.
-    If IsEmpty(kandidati) Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
-        Exit Function
-    End If
-
-    iznos = CDbl(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_ISPLATA), 0#))
-
+' Isplata veca od duga na bloku: operater vidi TACNU podelu (isti iznosi koje
+' writer knjizi) i bira izmedju tri ishoda. Ostaje MsgBox, kao u legacy-ju: tri
+' ishoda nad izracunatim tekstom nisu forma nego pitanje.
+Private Function PitajZaPodelu(ByVal otkupID As String, ByVal iznos As Double, _
+                               ByVal razlog As String) As VbMsgBoxResult
     PitajZaPodelu = MsgBox( _
         Poruka("OTKUI_ASK_BU_PODELA") & vbCrLf & vbCrLf & _
-        blok & "  " & ChrW(183) & "  " & Format$(iznos, "#,##0.00") & vbCrLf & _
-        TekstPodele(kandidati, iznos) & vbCrLf & _
+        razlog & vbCrLf & _
+        TekstPodele(otkupID, iznos) & vbCrLf & _
         Poruka("OTKUI_ASK_BU_PODELA_IZBOR"), _
         vbQuestion + vbYesNoCancel, APP_NAME)
 End Function
 
-' Tekst predlozene podele. Racuna ga PlanBlokRaspodela -- ISTI planer po kome
-' MapBankaImportAsKooperantBlockCore knjizi, pa prikaz i akcija ne mogu da se
-' razidju. Visak preko otvorenih stavki ide u avans, kao i u knjizenju.
-' Odvojen od MsgBox-a da bi se mogao izmeriti bez dijaloga.
-Public Function TekstPodele(ByVal kandidati As Variant, ByVal iznos As Double) As String
-    Dim plan As Variant, s As String, i As Long, podeljeno As Double
+' Tekst podele: na blok ide ono sto duguje, ostatak u avans -- ISTO pravilo po
+' kome knjizi MapBankaImportAsKooperantBlockCore, pa prikaz i akcija ne mogu da
+' se razidju. Odvojen od MsgBox-a da bi se mogao izmeriti bez dijaloga.
+Public Function TekstPodele(ByVal otkupID As String, ByVal iznos As Double) As String
+    Dim otvoreno As Double, zaBlok As Double, visak As Double
 
-    plan = modBankaMapiranje.PlanBlokRaspodela(kandidati, iznos)
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
 
-    If Not IsEmpty(plan) Then
-        For i = 1 To UBound(plan, 1)
-            s = s & " - " & CStr(plan(i, 1)) & ": " & _
-                Format$(CDbl(plan(i, 2)), "#,##0.00") & " (" & CStr(plan(i, 3)) & ")" & vbCrLf
-            podeljeno = podeljeno + CDbl(plan(i, 2))
-        Next i
+    otvoreno = modBankaMapiranje.BimOtvorenoNaOtkupu(otkupID)
+    If otvoreno < 0 Then otvoreno = 0
+
+    If iznos >= otvoreno Then
+        zaBlok = otvoreno
+    Else
+        zaBlok = iznos
     End If
+    visak = iznos - zaBlok
 
-    If iznos - podeljeno > 0.009 Then
-        s = s & " - " & Poruka("OTKUI_ASK_BU_PODELA_VISAK") & " " & _
-            Format$(iznos - podeljeno, "#,##0.00") & " -> " & NOV_VIRMAN_AVANS_KOOP & vbCrLf
+    TekstPodele = " - " & otkupID & ": " & Format$(zaBlok, "#,##0.00") & vbCrLf
+    If visak > 0 Then
+        TekstPodele = TekstPodele & " - " & Poruka("OTKUI_ASK_BU_PODELA_VISAK") & ": " & _
+                      Format$(visak, "#,##0.00") & vbCrLf
     End If
-
-    TekstPodele = s
 End Function
 
 '=====================================================================
@@ -1551,31 +1527,17 @@ Private Sub PuniCiljCombo()
 
         Case BIM_TIP_KOOPERANT
             PostaviNatpisCilja Poruka("OTKUI_FLD_BU_BLOK")
-            ' TRI kolone: prikaz, broj bloka, OTKUPNO MESTO.
-            '
-            ' Broj otkupa je jedinstven PO STANICI, pa isti broj legitimno
-            ' pripada dvama razlicitim blokovima. Kad bi combo nosio samo broj,
-            ' posle izbora se ne bi znalo KOJI je -- a od toga zavisi na koji
-            ' otkupni lanac ide novac. Scope zato ide u SVOJU kolonu; prikaz se
-            ' NE parsira (v. IzabranaStanicaCilja).
-            c.ColumnCount = 3
-            c.ColumnWidths = "180 pt;0 pt;0 pt"
+            ' Red liste JE dokument: skrivena kolona nosi OtkupID (S2). Prikaz
+            ' nosi broj i otkupno mesto, jer je broj dnevni niz PO otkupnom
+            ' mestu -- isti broj legitimno stoji na dva mesta i operater mora da
+            ' vidi razliku. Prikaz se NE parsira; identitet je u koloni 1.
+            c.ColumnCount = 2
+            c.ColumnWidths = "180 pt;0 pt"
             src = modBankaMapiranje.GetBlokoviZaBimMapiranje(partnerID)
             If IsArray(src) Then
                 For i = 1 To UBound(src, 1)
-                    ' Blok bez upisanog otkupnog mesta OSTAJE u listi -- postoji
-                    ' u podacima i precutati ga znacilo bi lagati o tome sta je
-                    ' u tabeli. Ali se OZNACAVA, jer bi inace izgledao samo kao
-                    ' "12" pored "12 . OM Naziv" i operater ne bi imao nacina da
-                    ' zna zasto ga radnja odbija (v. BuScopeNedostaje).
-                    If Len(Trim$(CStr(src(i, 2)))) = 0 Then
-                        c.AddItem CStr(src(i, 1)) & "  " & ChrW(183) & "  " & _
-                                  Poruka("OTKUI_LBL_BU_BLOK_BEZ_OM")
-                    Else
-                        c.AddItem CStr(src(i, 3))
-                    End If
+                    c.AddItem CStr(src(i, 3))
                     c.List(c.ListCount - 1, 1) = CStr(src(i, 1))
-                    c.List(c.ListCount - 1, 2) = CStr(src(i, 2))
                 Next i
             End If
 
@@ -1751,44 +1713,6 @@ Private Function IzabraniPartnerID() As String
     Err.Clear
 End Function
 
-' Vrednost ciljnog polja kao ID (FakturaID) ili kao tekst (broj bloka).
-' RUCNO IZABRAN BLOK MORA DA NOSI OTKUPNO MESTO.
-'
-' Tri stanja danas izgledaju isto -- prazan string -- a znace tri razlicite
-' stvari:
-'   1) scope nije ni trazen  (blok dolazi iz poziva na broj; legitimno bez
-'      scope-a, isto kao automatsko mapiranje),
-'   2) scope je trazen, ali red nema upisanu stanicu  (legacy/uvezen podatak),
-'   3) scope je trazen, ali kolone nema  (schema drift -- resolver to sam
-'      podigne kao gresku, v. GetOtkupCandidatesForKooperantBlock).
-'
-' Drugo stanje je opasno bas zato sto lici na prvo: operater je BIRAO blok, a
-' writer bi dobio prazan scope i raspodelio novac preko svih otkupnih mesta sa
-' tim brojem. Zato ovde stoji STOP, a ne tiho spustanje na nescope-ovan upis.
-'
-' Pravilo je izdvojeno da bi se moglo izmeriti bez forme. Njegovo VEZIVANJE u
-' RucnoKooperant je jedan red i proveren je citanjem, ne testom.
-Public Function BuScopeNedostaje(ByVal ciljID As String, ByVal stanica As String) As Boolean
-    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)
-End Function
-
-' OTKUPNO MESTO izabranog bloka. Cita se iz TRECE kolone combo-a, ne iz prikaza:
-' prikaz je za coveka i sme da se menja, a scope je podatak.
-Private Function IzabranaStanicaCilja() As String
-    Dim c As Object
-    If IsTestMode() Then
-        IzabranaStanicaCilja = mStanicaTest
-        Exit Function
-    End If
-    On Error Resume Next
-    Set c = Kontrola("scrBuCilj")
-    If c Is Nothing Then Exit Function
-    If c.ColumnCount < 3 Then Exit Function
-    If c.ListIndex < 0 Then Exit Function
-    IzabranaStanicaCilja = Trim$(CStr(c.List(c.ListIndex, 2)))
-    Err.Clear
-End Function
-
 Private Function IzabraniCiljID() As String
     Dim c As Object
     If IsTestMode() Then
@@ -1871,46 +1795,12 @@ Public Sub Scr_BuListaTestSet(ByVal kljuc As String)
 End Sub
 
 Public Sub Scr_BuIzborTestSet(ByVal tip As String, ByVal partnerID As String, _
-                              ByVal cilj As String, _
-                              Optional ByVal stanicaCilja As String = "")
+                              ByVal cilj As String)
     If Not IsTestMode() Then Exit Sub
     mTipTest = BuTipIliPrazno(tip)
     mPartnerTest = partnerID
     mCiljTest = cilj
-    mStanicaTest = stanicaCilja
 End Sub
-
-' SCOPE TRENUTNOG IZBORA, i odluka da li radnja sme da ide dalje.
-'
-' Kad je operater izabrao blok iz liste, zna se i sa kog je otkupnog mesta -- i
-' to mora do writera, jer isti broj postoji na vise mesta. Kad blok dolazi iz
-' poziva na broj, scope-a NEMA (poziv ga ne nosi) i ponasanje ostaje kao kod
-' automatskog mapiranja.
-'
-' Racuna se na JEDNOM mestu, koje zovu i radnja i test. Dok je test ponavljao
-' isti izraz, razilazenje to dvoje bi proslo neprimeceno -- sabotaza bi obarala
-' kopiju u testu, a radnja bi i dalje slala prazan scope.
-Private Function ScopeIzbora(ByRef stani As Boolean) As String
-    ScopeIzbora = IzabranaStanicaCilja()
-    If Len(IzabraniCiljID()) = 0 Then ScopeIzbora = ""
-    stani = BuScopeNedostaje(IzabraniCiljID(), ScopeIzbora)
-End Function
-
-' Scope koji bi rucno mapiranje kooperanta poslalo writeru.
-Public Function Scr_BuScopeBlokaTest() As String
-    Dim stani As Boolean
-    If Not IsTestMode() Then Exit Function
-    Scr_BuScopeBlokaTest = ScopeIzbora(stani)
-End Function
-
-' Da li bi rucno mapiranje kooperanta STALO nad trenutnim izborom.
-Public Function Scr_BuStopBezOmTest() As Boolean
-    Dim stani As Boolean
-    Dim scope As String
-    If Not IsTestMode() Then Exit Function
-    scope = ScopeIzbora(stani)
-    Scr_BuStopBezOmTest = stani
-End Function
 
 ' Pad ucitavanja faktura se u testu ne moze izazvati bez lomljenja seme, a
 ' fail-closed grana je najskuplja stvar na ovom ekranu (avans umesto zatvaranja
@@ -1983,7 +1873,6 @@ Public Sub Scr_BuTestReset()
     mTipTest = ""
     mPartnerTest = ""
     mCiljTest = ""
-    mStanicaTest = ""
     mCiljOK = True
     mCiljErr = ""
     mCiljPunjenja = 0

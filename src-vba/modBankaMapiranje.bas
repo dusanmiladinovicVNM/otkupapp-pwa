@@ -67,22 +67,19 @@ Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
 ' se plati" nije bezbedan ishod nego protivrecnost. v. MapBankaImportAsKooperantBlockCore.
 Public Const ERR_BMAP_BLOK_PRAZAN As Long = vbObjectError + 2951
 
-' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca), pa treci
-' kandidat znaci da skup nije jedan poslovni blok.
+' DOKUMENT NE PRIPADA OVOM KOOPERANTU / JE STORNIRAN (S2).
 '
-' RANIJE JE OVDE PISALO "anomalija podataka". To je netacno bar za AUTO putanju i
-' protivreci objasnjenju scope-a nize u ovom istom fajlu (v. komentar iznad
-' BimScopeKolona): BrojDokumenta je jedinstven PO OTKUPNOM MESTU, isti broj
-' legitimno postoji na dve stanice, a AUTO putanja stanicu nema odakle da zna --
-' poziv na broj je nosi samo posredno. Treci kandidat je tamo ocekivana posledica
-' NEDOSTATKA SCOPE-a, ne pokvaren podatak. Na RUCNOJ putanji, gde je stanica
-' zadata, treci kandidat jeste anomalija (recikliran broj bloka, duplirani unos).
-'
-' Ishod je isti u oba slucaja: automatska raspodela se ne pogadja, nego se red
-' salje operateru na rucno mapiranje (rucni put sme preko granice, ali samo uz
-' izricitu potvrdu - vidi MapBankaImportAsKooperantBlockManual_TX
-' allowManyCandidates).
-Public Const MAX_BLOK_KANDIDATA As Long = 2
+' Do S2 je izbor dokumenta radio filter kandidata (po kooperantu, broju i
+' otkupnom mestu), pa writer nije imao sopstvenu kapiju -- primao je broj. Sada
+' prima OtkupID sa ekrana, a ID koji je ekran video moze u medjuvremenu da
+' promeni vlasnika ili da bude storniran. Isti obrazac kao modNovac.ApplyAvansToOtkup.
+Public Const ERR_BMAP_BLOK_TUDJ As Long = vbObjectError + 2952
+Public Const ERR_BMAP_BLOK_BEZ_ID As Long = vbObjectError + 2954
+Public Const ERR_BMAP_BLOK_STORNIRAN As Long = vbObjectError + 2953
+
+' Prag "jos duguje". Novac se poredi na dve decimale (v. ZaokruziNovac u
+' modBankaExportPregled); ispod ovoga je blok placen.
+Public Const BIM_OTVORENO_PRAG As Double = 0.009
 
 ' Vrednosti kolone Obradjeno (v. zaglavlje modula). Do sada su bile literali na
 ' desetak mesta u ovom modulu; nova mesta ih citaju odavde, da ekran (koji je
@@ -864,11 +861,15 @@ Public Function AutoBlockNoForBim(ByVal bankaImportID As String) As String
         LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ), "")))
 End Function
 
+' AUTOMATSKI PUT: dokument se razresava IZ POZIVA NA BROJ, jednom.
+' Dvosmislen poziv na broj dize ERR_BMAP_MANUAL_REQUIRED, pa batch taj red salje
+' na rucno umesto da pogadja (v. BimOtkupIzPozivaNaBroj).
 Private Function MapBankaImportAsKooperantBlock(ByVal bankaImportID As String, _
                                                ByVal kooperantID As String, _
                                                Optional ByVal savePartnerMapFlag As Boolean = True) As Long
     MapBankaImportAsKooperantBlock = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, AutoBlockNoForBim(bankaImportID), savePartnerMapFlag)
+        bankaImportID, kooperantID, BimOtkupIzPozivaNaBroj(kooperantID, bankaImportID), _
+        savePartnerMapFlag)
 End Function
 
 Public Function MapBankaImportAsKooperantBlock_TX(ByVal bankaImportID As String, _
@@ -932,27 +933,21 @@ EH:
     MapBankaImportAsKooperantBlock_TX = 0
 End Function
 
-' allowManyCandidates: operater je video kandidate i predlozenu podelu pa je
-' potvrdio (frmBankaImport). Samo tako blok sa 3+ otvorenih stavki moze da se
-' zavrsi - automatski put ga i dalje odbija (ERR_BMAP_MANUAL_REQUIRED).
+' blokIzabran: operater je izabrao KONKRETAN dokument (nije dosao iz poziva na
+' broj). Writer nad takvim izborom drzi strozu kapiju -- v. Core.
 Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As String, _
                                                      ByVal kooperantID As String, _
-                                                     ByVal brojBloka As String, _
+                                                     ByVal otkupID As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                     Optional ByVal allowManyCandidates As Boolean = False, _
-                                                     Optional ByVal stanicaScope As String = "", _
                                                      Optional ByVal blokIzabran As Boolean = False) As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
-        stanicaScope, blokIzabran)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
                                                         ByVal kooperantID As String, _
-                                                        ByVal brojBloka As String, _
+                                                        ByVal otkupID As String, _
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                        Optional ByVal allowManyCandidates As Boolean = False, _
-                                                        Optional ByVal stanicaScope As String = "", _
                                                         Optional ByVal blokIzabran As Boolean = False, _
                                                         Optional ByRef outPrijavljeno As Boolean) As Long
     Dim tx As clsTransaction
@@ -969,8 +964,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     tx.AddTableSnapshot TBL_PARTNER_MAP
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
-        stanicaScope, blokIzabran)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran)
     
     tx.CommitTx
 
@@ -981,7 +975,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
             resultId:=CStr(MapBankaImportAsKooperantBlockManual_TX), _
             partnerType:="KooperantBlockManual", _
             partnerId:=kooperantID, _
-            linkedEntityId:=brojBloka
+            linkedEntityId:=otkupID
     End If
 
     Exit Function
@@ -1007,7 +1001,7 @@ EH:
         errSrc:=errSrc, _
         partnerType:="KooperantBlockManual", _
         partnerId:=kooperantID, _
-        linkedEntityId:=brojBloka
+        linkedEntityId:=otkupID
 
     If Not tx Is Nothing Then tx.RollbackTx
 
@@ -1024,34 +1018,32 @@ End Function
 
 Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As String, _
                                                     ByVal kooperantID As String, _
-                                                    ByVal blockNo As String, _
+                                                    ByVal otkupID As String, _
                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                    Optional ByVal allowManyCandidates As Boolean = False, _
-                                                    Optional ByVal stanicaScope As String = "", _
                                                     Optional ByVal blokIzabran As Boolean = False) As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
     Dim isplataUkupno As Double
-    Dim preostaloZaRaspodelu As Double
-    Dim kandidati As Variant
-    Dim plan As Variant
-    Dim planCount As Long
-    Dim i As Long
+    Dim otvoreno As Double
+    Dim zaBlok As Double
+    Dim preostalo As Double
+    Dim vrstaVoca As String
+    Dim novID As String
 
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then Exit Function
-    
+
     If Trim$(kooperantID) = "" Then
         MsgBox "KooperantID je obavezan!", vbExclamation, APP_NAME
         Exit Function
     End If
-    
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then
         MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
         Exit Function
     End If
-    
+
     ' Blok kooperanta = isplata. Raniji tihi `Exit Function` na uplati je iz UI
     ' izgledao kao "nista se nije desilo"; sada je odbijanje glasno (AUD-025).
     RequireBimSmer bim, "ISPLATA", "MapBankaImportAsKooperantBlockCore"
@@ -1066,10 +1058,19 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     If omNaziv = "" Then omNaziv = omID
 
     isplataUkupno = CDbl(NzBIM(bim(1, 6), 0#))
-    
-    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo, _
-                                                    allowManyCandidates, stanicaScope)
-    preostaloZaRaspodelu = isplataUkupno
+
+    ' IZABRAN DOKUMENT MORA BITI BAS TAJ. Ekran salje OtkupID reda koji je
+    ' operater video; do S2 je writer dobijao broj i sam trazio kandidate, pa je
+    ' kapiju nosio filter. Sada je kapija ovde i gleda stanje u trenutku upisa:
+    ' dokument postoji, nije storniran i pripada ovom kooperantu.
+    If Len(Trim$(otkupID)) > 0 Then
+        vrstaVoca = OtkupZaKooperantaVrsta(otkupID, kooperantID, _
+                                           "MapBankaImportAsKooperantBlockCore")
+        otvoreno = BimOtvorenoNaOtkupu(otkupID)
+
+        ' Placen dokument je isto sto i "nema kandidata" u starom modelu.
+        If otvoreno <= BIM_OTVORENO_PRAG Then otkupID = ""
+    End If
 
     ' IZABRAN BLOK BEZ OTVORENIH STAVKI JE PROTIVRECNOST, NE AVANS.
     '
@@ -1085,13 +1086,13 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     ' lista punjena, a izmedju punjenja i potvrde se stanje moze promeniti --
     ' i legacy frmBankaImport ovamo ulazi bez ijedne UI provere. Isti obrazac kao
     ' ApplyAvansToOtkup i UplataFakturaProblem (.claude/rules/testovi.md).
-    If IsEmpty(kandidati) And blokIzabran Then
+    If Len(Trim$(otkupID)) = 0 And blokIzabran Then
         Err.Raise ERR_BMAP_BLOK_PRAZAN, "MapBankaImportAsKooperantBlockCore", _
                   "Izabrani blok nema otvorenih stavki " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. " & _
                   "Proveri da li je blok ve" & ChrW(263) & " pla" & ChrW(263) & "en."
     End If
 
-    If IsEmpty(kandidati) Then
+    If Len(Trim$(otkupID)) = 0 Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
@@ -1104,7 +1105,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
             "", _
             NOV_VIRMAN_AVANS_KOOP, _
             0, _
-            preostaloZaRaspodelu, _
+            isplataUkupno, _
             BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
         ) <> "" Then
             MapBankaImportAsKooperantBlockCore = 1
@@ -1117,64 +1118,44 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         End If
         Exit Function
     End If
-    
-    ' Podela je izracunata na JEDNOM mestu (PlanBlokRaspodela) koje koristi i
-    ' preview u formi -- prikaz i knjizenje ne mogu da se razidju.
-    plan = PlanBlokRaspodela(kandidati, isplataUkupno)
 
-    If IsEmpty(plan) Then
-        planCount = 0
+    ' Blok dobija najvise ono sto duguje; ostatak ide u avans kooperanta.
+    ' Do S2 je ovde stajala greedy raspodela preko vise kandidata -- jedan broj
+    ' je nosio red po klasi. Posle S1 dokument je jedan, pa je i podela jedna.
+    If isplataUkupno >= otvoreno Then
+        zaBlok = otvoreno
     Else
-        planCount = UBound(plan, 1)
+        zaBlok = isplataUkupno
     End If
 
-    For i = 1 To planCount
-        If preostaloZaRaspodelu <= 0 Then Exit For
+    novID = SaveNovac( _
+        RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
+        CDate(bim(1, 2)), _
+        omNaziv, _
+        omID, _
+        "OM", _
+        omID, _
+        kooperantID, _
+        "", _
+        vrstaVoca, _
+        NOV_VIRMAN_FIRMA_KOOP, _
+        0, _
+        zaBlok, _
+        BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
+    )
 
-        Dim otkupID As String
-        Dim iznosZaRed As Double
-        Dim vrstaVoca As String
-        Dim novID As String
+    If Len(Trim$(novID)) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
+          "SaveNovac nije vratio NovacID za OtkupID=" & otkupID
+    End If
 
-        otkupID = CStr(plan(i, 1))
-        RequireSingleRow TBL_OTKUP, COL_OTK_ID, otkupID, _
-                 "MapBankaImportAsKooperantBlockCore"
-        iznosZaRed = CDbl(NzBIM(plan(i, 2), 0#))
-        vrstaVoca = CStr(plan(i, 3))
+    LinkNovacToOtkupStrict novID, otkupID, _
+                    "MapBankaImportAsKooperantBlockCore"
 
-        If iznosZaRed <= 0 Then GoTo NextCandidate
+    MapBankaImportAsKooperantBlockCore = 1
+    preostalo = isplataUkupno - zaBlok
 
-        novID = SaveNovac( _
-            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
-            CDate(bim(1, 2)), _
-            omNaziv, _
-            omID, _
-            "OM", _
-            omID, _
-            kooperantID, _
-            "", _
-            vrstaVoca, _
-            NOV_VIRMAN_FIRMA_KOOP, _
-            0, _
-            iznosZaRed, _
-            BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
-        )
-        
-        If Len(Trim$(novID)) = 0 Then
-            Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
-              "SaveNovac nije vratio NovacID za OtkupID=" & otkupID
-        End If
-
-        LinkNovacToOtkupStrict novID, otkupID, _
-                        "MapBankaImportAsKooperantBlockCore"
-
-        MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
-        preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
-
-NextCandidate:
-    Next i
-
-    If preostaloZaRaspodelu > 0 Then
+    If preostalo > 0 Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
@@ -1187,13 +1168,13 @@ NextCandidate:
             "", _
             NOV_VIRMAN_AVANS_KOOP, _
             0, _
-            preostaloZaRaspodelu, _
+            preostalo, _
             BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant-visak") _
         ) <> "" Then
             MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
         End If
     End If
-    
+
     If MapBankaImportAsKooperantBlockCore > 0 Then
         UpdateBankaImportStatus bankaImportID, "Da"
         If savePartnerMapFlag Then
@@ -1202,6 +1183,45 @@ NextCandidate:
     Else
         UpdateBankaImportStatus bankaImportID, "Error"
     End If
+End Function
+
+' VLASNISTVO I ZIVOT DOKUMENTA -- kapija pisca, plus VrstaVoca koju red novca nosi.
+'
+' Zasto jedna procedura za oboje: vrsta se cita sa ISTOG reda nad kojim je
+' kapija upravo presudila. Razdvojeno bi bila dva citanja tblOtkup i dva
+' trenutka -- a izmedju njih dokument moze da bude storniran.
+Private Function OtkupZaKooperantaVrsta(ByVal otkupID As String, _
+                                        ByVal kooperantID As String, _
+                                        ByVal srcName As String) As String
+    Dim r As Long
+    r = RequireSingleRow(TBL_OTKUP, COL_OTK_ID, otkupID, srcName)
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then
+        Err.Raise ERR_BMAP_BASE + 20, srcName, "Tabela je prazna: " & TBL_OTKUP
+    End If
+
+    Dim colKoop As Long, colVrsta As Long, colStorno As Long
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, srcName)
+    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, srcName)
+    colStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    If colStorno > 0 Then
+        If UCase$(Trim$(CStr(data(r, colStorno)))) = "DA" Then
+            Err.Raise ERR_BMAP_BLOK_STORNIRAN, srcName, _
+                      "Blok je storniran, isplata se ne moze knjiziti na njega. OtkupID=" & otkupID
+        End If
+    End If
+
+    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        Err.Raise ERR_BMAP_BLOK_TUDJ, srcName, _
+                  "Blok pripada drugom kooperantu. OtkupID=" & otkupID & _
+                  "; BlokKooperant=" & CStr(data(r, colKoop)) & _
+                  "; TrazeniKooperant=" & kooperantID
+    End If
+
+    OtkupZaKooperantaVrsta = Trim$(CStr(NzBIM(data(r, colVrsta), "")))
 End Function
 
 
@@ -2142,81 +2162,179 @@ End Function
 ' frmAgrohemija -- katalog par. 5 / 7.4).
 ' ============================================================
 
-' Blok koji ce rucno mapiranje stvarno upotrebiti: izbor operatera ako postoji,
-' inace poziv na broj iz izvoda. Prazan izbor NIJE "nema bloka" nego "uzmi ono
-' sto pise u izvodu" -- forma je to naucila tako sto je prazan combo bio DEFAULT
-' slucaj, pa je blok sa 3+ stavki zavrsavao generickom greskom.
-Public Function BimEfektivniBlok(ByVal bankaImportID As String, _
-                                 ByVal izabranBlok As String) As String
-    If Len(Trim$(izabranBlok)) > 0 Then
-        BimEfektivniBlok = Trim$(izabranBlok)
+' Dokument koji ce rucno mapiranje stvarno upotrebiti: izbor operatera ako
+' postoji, inace RAZRESENJE poziva na broj iz izvoda. Prazan izbor NIJE "nema
+' bloka" nego "uzmi ono sto pise u izvodu" -- forma je to naucila tako sto je
+' prazan combo bio DEFAULT slucaj.
+'
+' Ovo je JEDINO mesto na rucnom putu gde broj moze da postane OtkupID, i to
+' samo kad izbora nema.
+Public Function BimEfektivniOtkup(ByVal bankaImportID As String, _
+                                  ByVal kooperantID As String, _
+                                  ByVal izabranOtkupID As String) As String
+    If Len(Trim$(izabranOtkupID)) > 0 Then
+        BimEfektivniOtkup = Trim$(izabranOtkupID)
     Else
-        BimEfektivniBlok = AutoBlockNoForBim(bankaImportID)
+        BimEfektivniOtkup = BimOtkupIzPozivaNaBroj(kooperantID, bankaImportID)
     End If
 End Function
 
-' IMA LI IZABRANI BLOK IJEDNU OTVORENU STAVKU.
+' IMA LI IZABRANI DOKUMENT JOS STA DA PLATI.
 '
-' Lista blokova (GetBlokoviZaBimMapiranje) nudi SVAKI nestorniran broj otkupa
-' kooperanta -- ne proverava da li je blok jos duzan. Kandidati za placanje se
-' pak biraju samo ako je "otvoreno > 0.009", pa potpuno placen blok legitimno
-' postoji u listi a daje NULA kandidata.
+' Lista blokova nudi SVAKI nestorniran otkup kooperanta -- ne proverava da li je
+' blok jos duzan, pa potpuno placen dokument legitimno stoji u listi.
 '
 ' Sto se u writeru ne prijavljuje kao greska: MapBankaImportAsKooperantBlockCore
-' na IsEmpty(kandidati) ceo iznos knjizi kao avans kooperanta i stavku oznacava
+' bez otvorenog iznosa ceo iznos knjizi kao avans kooperanta i stavku oznacava
 ' obradjenom. Za AUTOMATSKO mapiranje je to namerno -- dok je poreklo dvosmisleno,
 ' avans je bezbedan izlaz. Ali kad je operater RUCNO izabrao konkretan blok, on
 ' je rekao KOJI dug placa; "nijedna otvorena stavka" tada nije bezbedan ishod
-' nego protivrecnost, a tiha promena u avans je druga finansijska semantika od
-' one koju je izabrao.
+' nego protivrecnost.
 '
-' Writer to danas ne moze da razlikuje (Manual samo prosledjuje argumente u
-' Core), pa odluku donosi pozivalac koji ZNA da je izbor bio rucan.
-Public Function BimBlokBezOtvorenih(ByVal kooperantID As String, _
-                                    ByVal brojBloka As String, _
-                                    Optional ByVal stanicaScope As String = "") As Boolean
-    Dim kandidati As Variant
-
-    If Len(Trim$(kooperantID)) = 0 Then Exit Function
-    If Len(Trim$(brojBloka)) = 0 Then Exit Function
-
-    ' allowManyCandidates = True: ovde se pita SAMO ima li ih, a 3+ kandidata je
-    ' odluka operatera koju resava BimBlokTraziPotvrdu -- ne sme da pukne ovde.
-    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, True, stanicaScope)
-    BimBlokBezOtvorenih = IsEmpty(kandidati)
+' Prazan ID nije tvrdnja o bloku nego "blok nije izabran" -- odgovor je False,
+' kao i pre (ekran kapiju zove samo za izabran red).
+Public Function BimOtkupBezOtvorenog(ByVal otkupID As String) As Boolean
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    BimOtkupBezOtvorenog = (BimOtvorenoNaOtkupu(otkupID) <= BIM_OTVORENO_PRAG)
 End Function
 
-' Trazi li blok izricitu potvrdu podele (3+ otvorenih stavki). Svaka DRUGA
-' greska se PROPAGIRA: "previse kandidata" se ne sme pomesati sa padom seme ili
-' nedostajucom kolonom -- prvo je odluka operatera, drugo je kvar.
-Public Function BimBlokTraziPotvrdu(ByVal kooperantID As String, _
-                                    ByVal brojBloka As String, _
-                                    ByRef outPoruka As String, _
-                                    Optional ByVal stanicaScope As String = "") As Boolean
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-    Dim probni As Variant
+' TRAZI LI ISPLATA IZRICITU POTVRDU: iznos je veci nego sto blok duguje, pa ce
+' visak zavrsiti kao avans kooperanta.
+'
+' Do S2 je pitanje pokretao "3+ otvorenih stavki u bloku" -- kardinalnost koja je
+' postojala samo zato sto je jedan broj nosio red PO KLASI. Posle S1 dokument je
+' jedan, pa je jedina odluka koja operateru ostaje: da li visak sme u avans.
+' Time se cuva i bezbedan izlaz "ceo iznos kao avans, vezacu ga kasnije"
+' (pravilo D-036), koji je do sada visio o toj istoj kardinalnosti.
+Public Function BimOtkupTraziPotvrdu(ByVal otkupID As String, _
+                                     ByVal iznos As Double, _
+                                     ByRef outPoruka As String) As Boolean
+    Dim otvoreno As Double
 
     outPoruka = ""
 
-    On Error Resume Next
-    probni = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, False, stanicaScope)
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-    If errNum <> 0 Then Err.Clear
-    On Error GoTo 0
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    If iznos <= 0 Then Exit Function
 
-    If errNum = 0 Then Exit Function
+    otvoreno = BimOtvorenoNaOtkupu(otkupID)
+    If otvoreno <= BIM_OTVORENO_PRAG Then Exit Function
+    If iznos <= otvoreno + BIM_OTVORENO_PRAG Then Exit Function
 
-    If errNum = ERR_BMAP_MANUAL_REQUIRED Then
-        outPoruka = errDesc
-        BimBlokTraziPotvrdu = True
-        Exit Function
+    outPoruka = "Blok duguje " & Format$(otvoreno, "#,##0.00") & _
+                ", a isplata je " & Format$(iznos, "#,##0.00") & "."
+    BimOtkupTraziPotvrdu = True
+End Function
+
+' OTVORENO NA DOKUMENTU: vrednost sa STAVKI minus knjizene isplate.
+'
+' Vrednost se NE racuna sa zaglavlja -- tamo je od S1d nema (kolone su obrisane),
+' a dok se racunala, nov pisac je davao 0, pa je blok izgledao placen i uplata je
+' tiho odlazila u AVANS. Dokument bez stavki pada po imenu u
+' modOtkup.ZbirStavkiZaOtkup, ne daje tihu nulu.
+Public Function BimOtvorenoNaOtkupu(ByVal otkupID As String) As Double
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    BimOtvorenoNaOtkupu = modOtkup.VrednostOtkupa(otkupID) - GetUplataForOtkup(otkupID)
+End Function
+
+' ============================================================
+' POZIV NA BROJ -> OtkupID, TACNO JEDNOM (S2)
+'
+' Izvod nosi samo broj. To je jedino mesto gde broj sme da postane identitet, i
+' posle njega niko ne trazi otkup po broju.
+'
+' Broj otkupa je dnevni niz PO OTKUPNOM MESTU (modBrojevi, KIND_OTK), pa isti
+' broj legitimno postoji na dva mesta -- i za istog kooperanta, ako predaje na
+' dva. Automatski put otkupno mesto nema odakle da zna: do S2 je takav slucaj
+' zavrsavao kao raspodela preko OBA poslovna lanca. Sada je to RUCNO.
+' ============================================================
+
+' Nestornirani otkupi kooperanta sa tim brojem dokumenta.
+Private Function OtkupIDoviPoBroju(ByVal kooperantID As String, _
+                                   ByVal broj As String) As Collection
+    Const SRC As String = "OtkupIDoviPoBroju"
+
+    Dim res As Collection
+    Set res = New Collection
+    Set OtkupIDoviPoBroju = res
+
+    If Len(Trim$(kooperantID)) = 0 Then Exit Function
+
+    Dim target As String
+    target = NormalizePozivKey(broj)
+    If Len(target) = 0 Then Exit Function
+
+    ' NEDOSTAJUCA TABELA NIJE "NEMA BLOKA". Prazan rezultat writer knjizi kao
+    ' AVANS i stavku oznacava obradjenom, pa bi kvar instalacije postao drugi
+    ' poslovni ishod -- i to za SVE pozivaoce, ne samo za rucni put: automatsko
+    ' mapiranje ovamo ulazi bez ijedne UI provere.
+    '
+    ' Greska se PROPAGIRA, ne pretvara u "Error" na tom redu:
+    ' AutoMapBankaImportRowBatch guta samo "ovaj red mora rucno"
+    ' (IsManualRequiredBankaError), pa nedostupna tabela obara i rollback-uje CEO
+    ' batch -- nedostupna tblOtkup nije svojstvo jednog bankarskog reda.
+    RequireTable TBL_OTKUP, SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colOtkID As Long, colKoop As Long, colBrDok As Long
+    colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+
+    Dim i As Long
+    Dim oid As String
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(CStr(data(i, colKoop))), Trim$(kooperantID), vbTextCompare) = 0 Then
+            If NormalizePozivKey(CStr(data(i, colBrDok))) = target Then
+                oid = Trim$(CStr(NzBIM(data(i, colOtkID), "")))
+                If Len(oid) = 0 Then
+                    Err.Raise ERR_BMAP_BLOK_BEZ_ID, SRC, _
+                              "Otkup bez OtkupID-a (dokument: " & CStr(data(i, colBrDok)) & _
+                              "). Identitet bloka nije utvrdiv -- nista nije knjizeno; " & _
+                              "pokrenite proveru integriteta podataka."
+                End If
+                res.Add oid
+            End If
+        End If
+    Next i
+End Function
+
+' BROJ -> OtkupID.
+'   "" = nema pogotka (automatski put to knjizi kao AVANS -- namerno ponasanje)
+'   vise pogodaka = ERR_BMAP_MANUAL_REQUIRED: batch taj red salje operateru
+'
+' Odvojeno od citanja izvoda zato sto se drugacije ne moze izmeriti bez reda u
+' tblBankaImport: sama odluka "koji je dokument" ne zavisi od stavke izvoda.
+Public Function BimOtkupIzBroja(ByVal kooperantID As String, _
+                                ByVal broj As String) As String
+    If Len(Trim$(broj)) = 0 Then Exit Function
+
+    Dim ids As Collection
+    Set ids = OtkupIDoviPoBroju(kooperantID, broj)
+
+    If ids.count = 0 Then Exit Function
+
+    If ids.count > 1 Then
+        Err.Raise ERR_BMAP_MANUAL_REQUIRED, "BimOtkupIzBroja", _
+            "Broj " & broj & " (kooperant " & kooperantID & ") pokazuje na " & _
+            CStr(ids.count) & " otkupna dokumenta. Broj otkupa je jedinstven po otkupnom " & _
+            "mestu, pa se iz izvoda ne moze znati koji se placa. Stavka izvoda se mapira " & _
+            "RUCNO (izaberi kooperanta i blok)."
     End If
 
-    Err.Raise errNum, errSrc, errDesc
+    BimOtkupIzBroja = ids(1)
+End Function
+
+' Poziv na broj iz stavke izvoda -> OtkupID. Jedino mesto na automatskom putu
+' gde broj postaje identitet.
+Public Function BimOtkupIzPozivaNaBroj(ByVal kooperantID As String, _
+                                       ByVal bankaImportID As String) As String
+    BimOtkupIzPozivaNaBroj = BimOtkupIzBroja(kooperantID, AutoBlockNoForBim(bankaImportID))
 End Function
 
 ' Otvorene fakture kupca za rucno mapiranje uplate -- sa FAIL-CLOSED zastavicom.
@@ -2307,12 +2425,16 @@ End Function
 
 ' Blokovi kooperanta za rucno mapiranje, bez storniranih.
 '
-' Kljuc je (BrojDokumenta + StanicaID), NE samo broj: broj otkupa je jedinstven
-' po otkupnom mestu, pa isti broj moze pripadati dvama razlicitim blokovima. Ko
-' ponudi samo broj, posle izbora vise ne zna KOJI je -- a od toga zavisi na koji
-' otkupni lanac ide novac.
+' RED LISTE JE DOKUMENT, KLJUC JE OtkupID (S2). Do S2 je lista nosila
+' (BrojDokumenta + StanicaID), pa je writer iz toga PONOVO trazio dokument --
+' display vrednost kao zamena za identitet, plus scope da par uopste bude
+' jednoznacan. Posle S1 je otkup jedno zaglavlje po dokumentu, pa red liste
+' JESTE dokument i njegov ID putuje do pisca.
 '
-' Vraca (1 To n, 1 To 3): BrojBloka | StanicaID | prikaz za operatera.
+' Prikaz i dalje nosi otkupno mesto: broj je dnevni niz PO otkupnom mestu, pa
+' isti broj legitimno stoji na dva mesta i operater mora da vidi razliku.
+'
+' Vraca (1 To n, 1 To 3): OtkupID | BrojDokumenta | prikaz za operatera.
 Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     Const SRC As String = "GetBlokoviZaBimMapiranje"
 
@@ -2331,53 +2453,66 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
 
-    Dim cKoop As Long, cBrDok As Long, cSta As Long
+    Dim cID As Long, cKoop As Long, cBrDok As Long, cSta As Long
+    cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
     cBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
 
-    Dim d As Object
-    Set d = CreateObject("Scripting.Dictionary")
-
     Dim stanice As Object
     Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
 
-    Dim i As Long
-    Dim broj As String, sta As String, kljuc As String
+    Dim buf() As Variant
+    ReDim buf(1 To UBound(data, 1), 1 To 3)
+
+    Dim i As Long, n As Long
+    Dim oid As String, broj As String, sta As String, naziv As String
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cKoop))) = Trim$(kooperantID) Then
+        If StrComp(Trim$(CStr(data(i, cKoop))), Trim$(kooperantID), vbTextCompare) = 0 Then
             broj = Trim$(CStr(NzBIM(data(i, cBrDok), "")))
-            sta = Trim$(CStr(NzBIM(data(i, cSta), "")))
+            oid = Trim$(CStr(NzBIM(data(i, cID), "")))
+
+            ' PRAZAN OtkupID NE SME DA SE PRECUTI. Red postoji i duguje, a bez
+            ' identiteta se ne moze platiti -- tiho izbacivanje bi bilo isto sto
+            ' i "blok je placen". Isto pravilo kao u listi za isplatu
+            ' (BuildBlokIsplataList -> ERR_ISPLATA_PRAZAN_OTKUPID); ekran pad
+            ' punjenja liste vec tretira kao "ne smem da radim".
+            If Len(oid) = 0 Then
+                Err.Raise ERR_BMAP_BLOK_BEZ_ID, SRC, _
+                          "Otkup bez OtkupID-a (dokument: " & broj & ", kooperant " & _
+                          kooperantID & "). Identitet bloka nije utvrdiv -- lista blokova " & _
+                          "nije upotrebljiva; pokrenite proveru integriteta podataka."
+            End If
+
             If Len(broj) > 0 Then
-                kljuc = broj & "|" & sta
-                If Not d.Exists(kljuc) Then d.Add kljuc, Array(broj, sta)
+                sta = Trim$(CStr(NzBIM(data(i, cSta), "")))
+                naziv = sta
+                If Not stanice Is Nothing Then
+                    If stanice.Exists(sta) Then naziv = CStr(stanice(sta))
+                End If
+
+                n = n + 1
+                buf(n, 1) = oid
+                buf(n, 2) = broj
+                If Len(naziv) = 0 Then
+                    buf(n, 3) = broj
+                Else
+                    buf(n, 3) = broj & "  " & ChrW(183) & "  " & naziv
+                End If
             End If
         End If
     Next i
 
-    If d.count = 0 Then Exit Function
+    If n = 0 Then Exit Function
 
     Dim outA() As Variant
-    Dim k As Variant
-    Dim n As Long
-    Dim par As Variant, naziv As String
-    ReDim outA(1 To d.count, 1 To 3)
-    For Each k In d.keys
-        n = n + 1
-        par = d(k)
-        outA(n, 1) = CStr(par(0))
-        outA(n, 2) = CStr(par(1))
-        naziv = CStr(par(1))
-        If Not stanice Is Nothing Then
-            If stanice.Exists(CStr(par(1))) Then naziv = CStr(stanice(CStr(par(1))))
-        End If
-        ' Prikaz nosi i otkupno mesto, jer broj sam po sebi ne razlikuje blokove.
-        If Len(Trim$(naziv)) = 0 Then
-            outA(n, 3) = CStr(par(0))
-        Else
-            outA(n, 3) = CStr(par(0)) & "  " & ChrW(183) & "  " & naziv
-        End If
-    Next k
+    Dim r As Long, c As Long
+    ReDim outA(1 To n, 1 To 3)
+    For r = 1 To n
+        For c = 1 To 3
+            outA(r, c) = buf(r, c)
+        Next c
+    Next r
 
     GetBlokoviZaBimMapiranje = outA
     Exit Function
@@ -2528,286 +2663,6 @@ NextI:
     Next i
     
     If hitCount = 1 Then FakturaZaKupcaIzVrednosti = hitID
-End Function
-
-Private Function TryResolveOtkupForKooperant(ByVal bankaImportID As String, _
-                                             ByVal kooperantID As String) As String
-    Dim pozivNaBroj As String
-    Dim otkData As Variant
-    Dim colBrDok As Long, colOtkID As Long, colKoop As Long
-    Dim i As Long
-    Dim hitCount As Long
-    Dim hitID As String
-    
-    pozivNaBroj = Trim$(CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ)))
-    If pozivNaBroj = "" Then Exit Function
-    
-    otkData = GetTableData(TBL_OTKUP)
-    If IsEmpty(otkData) Then Exit Function
-    
-    otkData = ExcludeStornirano(otkData, TBL_OTKUP)
-    If IsEmpty(otkData) Then Exit Function
-    
-    colBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    colOtkID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    colKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    
-    For i = 1 To UBound(otkData, 1)
-        If CStr(otkData(i, colKoop)) <> kooperantID Then GoTo NextI
-        
-        If NormalizePozivKey(CStr(otkData(i, colBrDok))) = NormalizePozivKey(pozivNaBroj) Then
-            hitCount = hitCount + 1
-            hitID = CStr(otkData(i, colOtkID))
-        End If
-        
-NextI:
-    Next i
-    
-    If hitCount = 1 Then
-        TryResolveOtkupForKooperant = hitID
-    End If
-End Function
-
-' stanicaID je SCOPE, ne filter po ukusu: BrojDokumenta otkupa je jedinstven PO
-' OTKUPNOM MESTU, pa isti broj legitimno postoji na dve stanice -- i za istog
-' kooperanta, ako predaje na dva mesta. Bez scope-a bi kandidati iz dva razlicita
-' poslovna bloka usli u JEDNU raspodelu i novac bi otisao na pogresan lanac.
-'
-' Prazno = bez scope-a, tj. ponasanje kakvo je bilo. AUTO putanja stanicu nema
-' odakle da zna (poziv na broj je nosi samo posredno), pa ostaje nepromenjena;
-' RUCNI put je bira i mora je proslediti.
-' KOLONA OTKUPNOG MESTA ZA SCOPE -- i pravilo sta znaci kad je nema.
-'
-' Kad je scope ZADAT, kolona MORA da postoji. Schema drift bi je inace ostavio
-' na nuli, uslov filtriranja bi otpao, i resolver bi vratio kandidate sa SVIH
-' otkupnih mesta -- tacno ono protiv cega scope postoji. Taj kvar ne bi imao
-' nijedan simptom: pozivalac dobija listu koja izgleda ispravno, a raspodela
-' zahvati dva poslovna lanca. "Ne mogu da dokazem scope" zato znaci STOP, ne
-' "nastavi bez njega". Schema drift je ovde vec bio stvaran uzrok, ne teorija.
-'
-' Kad scope NIJE zadat (automatsko mapiranje, poziv na broj), kolona je opciona
-' kao i pre -- ta grana se ne menja.
-'
-' Ime kolone je argument, a ne konstanta u telu, iz jednog razloga: bez toga se
-' grana "kolone nema" ne moze izmeriti a da se ne razbije sema fixture-a.
-Public Function BimScopeKolona(ByVal stanicaID As String, _
-                               ByVal kolona As String) As Long
-    If Len(Trim$(stanicaID)) > 0 Then
-        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")
-    Else
-        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)
-    End If
-End Function
-
-Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
-                                                     ByVal brojBloka As String, _
-                                                     Optional ByVal allowOverMax As Boolean = False, _
-                                                     Optional ByVal stanicaID As String = "") As Variant
-    Dim data As Variant
-    Dim result() As Variant
-    Dim colOtkID As Long
-    Dim colKoop As Long
-    Dim colBrDok As Long
-    Dim colVrsta As Long
-    Dim colSta As Long
-    Dim i As Long
-    Dim count As Long
-    
-    If Trim$(kooperantID) = "" Then Exit Function
-    If Trim$(brojBloka) = "" Then Exit Function
-    
-    ' NEDOSTAJUCA TABELA NIJE "NEMA KANDIDATA". GetTableData vraca Empty za oba,
-    ' a prazan skup kandidata writer knjizi kao AVANS i stavku oznacava
-    ' obradjenom. Kvar bi tako postao drugi poslovni ishod -- i to za SVE
-    ' pozivaoce, ne samo za rucni put: automatsko mapiranje ovamo ulazi bez
-    ' ijedne UI provere.
-    '
-    ' Greska se PROPAGIRA, ne pretvara u "Error" na tom redu:
-    ' AutoMapBankaImportRowBatch guta samo "ovaj red mora rucno"
-    ' (IsManualRequiredBankaError), pa nedostupna tabela obara i rollback-uje CEO
-    ' batch. Tako i treba -- nedostupna tblOtkup nije svojstvo jednog bankarskog
-    ' reda nego kvar instalacije, i nema smisla oznaciti jedan red a nastaviti.
-    RequireTable TBL_OTKUP, "GetOtkupCandidatesForKooperantBlock"
-    
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    
-    data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    
-    colOtkID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    colKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    colBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-
-    ' Zadat scope + nedokaziva kolona = STOP. Pravilo je u BimScopeKolona.
-    colSta = BimScopeKolona(stanicaID, COL_OTK_STANICA)
-    
-    ' AUD-025: bafer je velicine ulaza, ne fiksnih 2. Raniji `ReDim result(1 To 2)`
-    ' + `If count > 2 Then Exit For` je ostavljao count=3 uz bafer od 2 reda, pa je
-    ' kopiranje u finalResult padalo na "Subscript out of range" - a taj pad je iz
-    ' AutoMapAll rollback-ovao CEO batch (svi vec mapirani redovi se ponistavali
-    ' zbog jednog anomalnog bloka). Sada je 3+ kandidata eksplicitna, uhvatljiva
-    ' greska (ERR_BMAP_MANUAL_REQUIRED) koja obara SAMO taj red.
-    ReDim result(1 To UBound(data, 1), 1 To 3)
-
-    Dim vrednostDict As Object
-    Set vrednostDict = modNovac.BuildVrednostDictByOtkup()
-
-    For i = 1 To UBound(data, 1)
-        If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
-
-        ' SCOPE otkupnog mesta -- v. zaglavlje. Kad je zadat, kandidat sa druge
-        ' stanice NE ulazi u raspodelu, ma koliko broj bloka bio isti. Uslov
-        ' NEMA "And colSta > 0": kolona je gore vec dokazana, pa bi dodatna
-        ' provera samo vratila tihi izlaz koji je upravo zatvoren.
-        If Len(Trim$(stanicaID)) > 0 Then
-            If Trim$(CStr(NzBIM(data(i, colSta), ""))) <> Trim$(stanicaID) Then GoTo NextI
-        End If
-
-        If NormalizePozivKey(CStr(data(i, colBrDok))) = NormalizePozivKey(brojBloka) Then
-            Dim vrednost As Double
-            Dim uplaceno As Double
-            Dim otvoreno As Double
-
-            ' KANONSKI izvor vrednosti (tblOtkupStavke), ne zaglavlje. Nov pisac
-            ' (CreateOtkup_TX) Kolicina i Cena na zaglavlju NE PUNI, pa je ovde
-            ' `vrednost` ostajala 0 za svaki nov dokument -> otvoreno <= 0.009 ->
-            ' count = 0 -> prazan skup kandidata. Posledica NIJE kozmeticka:
-            ' BimBlokBezOtvorenih tada vrati True i uplata se knjizi kao AVANS
-            ' umesto na blok, a stavka izvoda se oznaci obradjenom. Novac ode na
-            ' pogresno mesto, tiho.
-            '
-            ' Dikt se gradi JEDNOM pre petlje: poziv po redu bi nad tblOtkup od
-            ' vise hiljada redova citao stavke iznova za svaki red.
-            ' Nedostajuci kljuc NIJE nula (review #334, P1): red bez stavki ili
-            ' bez OtkupID-a pada po imenu i ide na RUCNO, umesto da tiho ispadne
-            ' iz kandidata pa se uplata proknjizi kao AVANS.
-            vrednost = modNovac.VrednostOtkupaIzDikta(vrednostDict, _
-                           CStr(data(i, colOtkID)), _
-                           "GetOtkupCandidatesForKooperantBlock")
-
-            uplaceno = GetUplataForOtkup(CStr(data(i, colOtkID)))
-            otvoreno = vrednost - uplaceno
-
-            If otvoreno > 0.009 Then
-                count = count + 1
-                result(count, 1) = CStr(data(i, colOtkID))
-                result(count, 2) = otvoreno
-                result(count, 3) = CStr(data(i, colVrsta))
-            End If
-        End If
-
-NextI:
-    Next i
-
-    If count = 0 Then Exit Function
-
-    ' Granica vazi za AUTOMATSKU raspodelu. Rucni put je prosledjuje kao
-    ' allowOverMax:=True tek posto je operater video kandidate i potvrdio podelu
-    ' (inace bi red oznacen "za rucno" bio trajno nezavrsiv - ista greska bi ga
-    ' docekala i na rucnom dugmetu).
-    If count > MAX_BLOK_KANDIDATA And Not allowOverMax Then
-        Err.Raise ERR_BMAP_MANUAL_REQUIRED, "GetOtkupCandidatesForKooperantBlock", _
-            "Blok " & brojBloka & " (kooperant " & kooperantID & ") ima " & CStr(count) & _
-            " otvorene otkupne stavke, a automatska raspodela dozvoljava najvise " & _
-            CStr(MAX_BLOK_KANDIDATA) & ". Stavka izvoda se mapira RUCNO (izaberi " & _
-            "kooperanta i blok, pa potvrdi predlozenu podelu)."
-    End If
-
-    Dim finalResult() As Variant
-    Dim r As Long, c As Long
-
-    ReDim finalResult(1 To count, 1 To 3)
-
-    For r = 1 To count
-        For c = 1 To 3
-            finalResult(r, c) = result(r, c)
-        Next c
-    Next r
-
-    SortKandidatiPoOtvorenomDesc finalResult
-
-    GetOtkupCandidatesForKooperantBlock = finalResult
-End Function
-
-' Veci otvoreni iznos prvi (selection sort - lista je po prirodi kratka).
-' Ranije je ovo bio swap koji je radio samo za tacno 2 reda.
-Private Sub SortKandidatiPoOtvorenomDesc(ByRef kandidati As Variant)
-    Dim i As Long, j As Long, best As Long, c As Long
-    Dim tmp As Variant
-
-    For i = LBound(kandidati, 1) To UBound(kandidati, 1) - 1
-        best = i
-
-        For j = i + 1 To UBound(kandidati, 1)
-            If CDbl(NzBIM(kandidati(j, 2), 0#)) > CDbl(NzBIM(kandidati(best, 2), 0#)) Then best = j
-        Next j
-
-        If best <> i Then
-            For c = 1 To 3
-                tmp = kandidati(i, c)
-                kandidati(i, c) = kandidati(best, c)
-                kandidati(best, c) = tmp
-            Next c
-        End If
-    Next i
-End Sub
-
-' Raspodela iznosa isplate po kandidatima bloka (greedy: veci otvoreni prvi, do
-' iscrpljenja iznosa). JEDAN izvor istine - koriste ga i pisac
-' (MapBankaImportAsKooperantBlockCore) i preview u frmBankaImport, pa operater
-' pre klika vidi TACNO onu podelu koja ce biti proknjizena.
-' Vraca (1 To n, 1 To 3): OtkupID | iznos za taj otkup | VrstaVoca. Redovi sa
-' iznosom 0 se ne vracaju. Visak (iznos - suma plana) racuna pozivalac.
-Public Function PlanBlokRaspodela(ByVal kandidati As Variant, ByVal iznos As Double) As Variant
-    If IsEmpty(kandidati) Then Exit Function
-    If iznos <= 0 Then Exit Function
-
-    Dim plan() As Variant
-    Dim i As Long
-    Dim n As Long
-    Dim preostalo As Double
-    Dim otvoreno As Double
-    Dim zaRed As Double
-
-    ReDim plan(1 To UBound(kandidati, 1), 1 To 3)
-    preostalo = iznos
-
-    For i = 1 To UBound(kandidati, 1)
-        If preostalo <= 0 Then Exit For
-
-        otvoreno = CDbl(NzBIM(kandidati(i, 2), 0#))
-        If otvoreno > 0 Then
-            If preostalo >= otvoreno Then
-                zaRed = otvoreno
-            Else
-                zaRed = preostalo
-            End If
-
-            n = n + 1
-            plan(n, 1) = CStr(kandidati(i, 1))
-            plan(n, 2) = zaRed
-            plan(n, 3) = CStr(kandidati(i, 3))
-
-            preostalo = preostalo - zaRed
-        End If
-    Next i
-
-    If n = 0 Then Exit Function
-
-    Dim finalPlan() As Variant
-    Dim r As Long, c As Long
-
-    ReDim finalPlan(1 To n, 1 To 3)
-
-    For r = 1 To n
-        For c = 1 To 3
-            finalPlan(r, c) = plan(r, c)
-        Next c
-    Next r
-
-    PlanBlokRaspodela = finalPlan
 End Function
 
 ' ============================================================

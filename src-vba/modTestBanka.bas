@@ -105,7 +105,7 @@ Public Sub RunBankaImportTestSuite()
     tx.AddTableSnapshot TBL_KUPCI
 
     T02_DedupeUkljucujeBrojRacuna
-    T03_TriKandidataNeObarajuBatch
+    T03_DvosmislenPozivNeObaraBatch
     T04_SmerGuardOdbijaPogresanTip
     T05_StagingCuvaTypedDatum
     T06_UplataPrekoOtvorenogSeDeli
@@ -123,6 +123,7 @@ Public Sub RunBankaImportTestSuite()
     T20_DupliKooperantIDNeBiraRacun
     T21_IzabranPlacenBlokNijeAvans
     T23_BatchAvansRazdvajaIshode
+    T24_BlokTudjegKooperantaIStorniran
 
     tx.RollbackTx
     Set tx = Nothing
@@ -386,101 +387,85 @@ Private Sub T02_DedupeUkljucujeBrojRacuna()
 End Sub
 
 ' ============================================================
-' T03 - AUD-025: blok sa 3+ otvorenih stavki.
+' T03 - DVOSMISLEN POZIV NA BROJ NE OBARA BATCH.
 '
-' Ranije: ReDim(1 To 2) + count=3 -> "Subscript out of range" iz AutoMapAll ->
-' rollback CELOG batch-a (i vec mapirani redovi se ponistavaju).
-' Sada: jasna greska ERR_BMAP_MANUAL_REQUIRED koja obara SAMO taj red.
+' Broj otkupa je dnevni niz PO OTKUPNOM MESTU (modBrojevi, KIND_OTK), pa isti
+' broj legitimno postoji na dve stanice -- i za istog kooperanta, ako predaje na
+' dva mesta. Automatski put otkupno mesto nema odakle da zna: poziv na broj ga
+' ne nosi.
+'
+' Do S2 su oba dokumenta ulazila u JEDNU raspodelu, pa je jedna isplata isla na
+' dva poslovna lanca. Sada je takav red "za rucno": operater bira dokument.
+' Merenje je da to NE obara batch -- zdrav red u istom batch-u mora proci.
 ' ============================================================
-Private Sub T03_TriKandidataNeObarajuBatch()
-    Const S As String = "T03 3+ kandidata: "
+Private Sub T03_DvosmislenPozivNeObaraBatch()
+    Const S As String = "T03 dvosmislen poziv: "
 
     Dim errNum As Long
     Dim mapped As Long
     Dim manualRequired As Long
-    Dim dummy As Variant
+    Dim dummy As String
+    Dim n As Long
 
     SeedStanica P & "OM-1", P & "Stanica 1"
+    SeedStanica P & "OM-1B", P & "Stanica 1B"
     SeedKooperant P & "K-1", "Test", "Kooperant", P & "OM-1"
 
-    ' Blok sa TRI otvorene stavke -> automatska raspodela se ne pogadja.
-    SeedOtkup P & "OTK-A", P & "K-1", P & "BLOK-3K", 100, 10, "Malina"
-    SeedOtkup P & "OTK-B", P & "K-1", P & "BLOK-3K", 100, 12, "Kupina"
-    SeedOtkup P & "OTK-C", P & "K-1", P & "BLOK-3K", 100, 14, "Visnja"
+    ' ISTI broj, DVA otkupna mesta -> poziv na broj ne razlikuje dokumente.
+    SeedOtkup P & "OTK-A", P & "K-1", P & "BLOK-2OM", 100, 10, "Malina", P & "OM-1"
+    SeedOtkup P & "OTK-B", P & "K-1", P & "BLOK-2OM", 100, 12, "Kupina", P & "OM-1B"
 
-    ' Blok sa JEDNOM otvorenom stavkom -> mora proci u istom batch-u.
-    SeedOtkup P & "OTK-OK", P & "K-1", P & "BLOK-1K", 100, 20, "Malina"
+    ' Blok koji postoji na JEDNOM mestu -> mora proci u istom batch-u.
+    SeedOtkup P & "OTK-OK", P & "K-1", P & "BLOK-1K", 100, 20, "Malina", P & "OM-1"
 
-    ' 1) Resolver kandidata dize jasnu, prepoznatljivu gresku (automatski put).
+    ' 1) Razresenje dize jasnu, prepoznatljivu gresku (automatski put).
     On Error Resume Next
-    dummy = GetOtkupCandidatesForKooperantBlock(P & "K-1", P & "BLOK-3K")
+    dummy = BimOtkupIzBroja(P & "K-1", P & "BLOK-2OM")
     errNum = Err.Number
     Err.Clear
     On Error GoTo 0
 
-    ChkEq errNum, ERR_BMAP_MANUAL_REQUIRED, S & "3 kandidata -> ERR_BMAP_MANUAL_REQUIRED"
+    ChkEq errNum, ERR_BMAP_MANUAL_REQUIRED, S & "dva mesta -> ERR_BMAP_MANUAL_REQUIRED"
 
-    ' ...ali uz izricitu potvrdu (rucni put) vraca punu listu, sortiranu opadajuce.
-    Dim sviKandidati As Variant
+    ' 2) Jednoznacan broj se razresava u BAS taj dokument, bez greske.
     On Error Resume Next
-    sviKandidati = GetOtkupCandidatesForKooperantBlock(P & "K-1", P & "BLOK-3K", True)
+    dummy = BimOtkupIzBroja(P & "K-1", P & "BLOK-1K")
     errNum = Err.Number
     Err.Clear
     On Error GoTo 0
 
-    ChkEq errNum, 0, S & "allowOverMax:=True ne dize gresku"
-    Chk Not IsEmpty(sviKandidati), S & "allowOverMax:=True vraca kandidate"
-
-    If Not IsEmpty(sviKandidati) Then
-        ChkEq UBound(sviKandidati, 1), 3, S & "vracena sva tri kandidata"
-        ChkEqD CDbl(sviKandidati(1, 2)), 1400, S & "sortirano opadajuce (najveci otvoreni prvi)"
-
-        ' Planer koji koristi i preview i pisac: 3000 = 1400 + 1200 + 400.
-        Dim plan As Variant
-        plan = PlanBlokRaspodela(sviKandidati, 3000)
-
-        ChkEq UBound(plan, 1), 3, S & "plan raspodele ima tri reda"
-        ChkEqD CDbl(plan(3, 2)), 400, S & "poslednji red dobija samo ostatak (bez preplate)"
-    End If
-
-    ' 2) Blok sa 2 kandidata i dalje mora da radi (granica se ne pomera).
-    On Error Resume Next
-    dummy = GetOtkupCandidatesForKooperantBlock(P & "K-1", P & "BLOK-1K")
-    errNum = Err.Number
-    Err.Clear
-    On Error GoTo 0
-
-    ChkEq errNum, 0, S & "1 kandidat -> bez greske"
+    ChkEq errNum, 0, S & "jednoznacan broj -> bez greske"
+    ChkEq dummy, P & "OTK-OK", S & "...i to bas taj OtkupID"
 
     ' 3) Batch: jedan red trazi rucno, drugi mora biti mapiran (bez rollback-a svega).
-    SeedBim P & "BIM-3K", P & "IZV-9", P & "RAC-1", P & "PARTNER-K", 0, 3000, P & "BLOK-3K", "", ""
+    SeedBim P & "BIM-2OM", P & "IZV-9", P & "RAC-1", P & "PARTNER-K", 0, 3000, P & "BLOK-2OM", "", ""
     SeedBim P & "BIM-OK", P & "IZV-9", P & "RAC-1", P & "PARTNER-K", 0, 2000, P & "BLOK-1K", "", ""
 
     ' Postojeci backlog se sklanja sa puta da batch bude deterministicki
     ' (rollback suite-a vraca originalne statuse).
-    OstaviOtvorenimSamo Array(P & "BIM-3K", P & "BIM-OK")
+    OstaviOtvorenimSamo Array(P & "BIM-2OM", P & "BIM-OK")
 
     gBankaSilentBatch = True
     mapped = AutoMapAllBankaImport_TX(manualRequired)
     gBankaSilentBatch = False
 
     ChkEq BimObradjeno(P & "BIM-OK"), "Da", S & "zdrav red je mapiran (batch nije rollback-ovan)"
-    ChkEq BimObradjeno(P & "BIM-3K"), "Error", S & "anomalan red je oznacen za rucno"
+    ChkEq BimObradjeno(P & "BIM-2OM"), "Error", S & "dvosmislen red je oznacen za rucno"
     Chk mapped >= 1, S & "batch prijavio bar jedno mapiranje [mapped=" & CStr(mapped) & "]"
     Chk manualRequired >= 1, S & "batch prijavio 'za rucno' [manualRequired=" & CStr(manualRequired) & "]"
     Chk NovacZaBim(P & "BIM-OK") > 0, S & "zdrav red ima red(ove) u tblNovac"
-    Chk NovacZaBim(P & "BIM-3K") = 0, S & "anomalan red NEMA parcijalno knjizenje"
+    ChkEq NovacZaBim(P & "BIM-2OM"), 0, S & "dvosmislen red NEMA parcijalno knjizenje"
 
-    ' 4) Red oznacen "za rucno" mora stvarno da se ZAVRSI rucnom putanjom (istom
-    ' koju zove dugme "Rucno mapiraj red" posle potvrde podele). Bez ovoga bi red
-    ' bio trajno nezavrsiv: rucni wrapper zove isti core i isti resolver.
-    Dim n As Long
-    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-3K", P & "K-1", P & "BLOK-3K", False, True)
+    ' 4) Red oznacen "za rucno" mora stvarno da se ZAVRSI rucnom putanjom -- sa
+    ' OtkupID-em izabranog dokumenta, ne sa brojem. Bez ovoga bi red bio trajno
+    ' nezavrsiv: broj bi i na rucnom putu ostao dvosmislen.
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-2OM", P & "K-1", P & "OTK-B", False, True)
 
-    Chk n >= 3, S & "rucna putanja (potvrdjena podela) knjizi sve stavke [n=" & CStr(n) & "]"
-    ChkEq BimObradjeno(P & "BIM-3K"), "Da", S & "posle rucnog mapiranja red je zatvoren"
-    ChkEq NovacZaBim(P & "BIM-3K"), n, S & "broj redova u tblNovac odgovara vracenom broju"
-    ChkEqD IsplataZaBim(P & "BIM-3K"), 3000, S & "ukupno knjizeno = iznos stavke izvoda (bez preplate)"
+    ChkEq n, 2, S & "rucno po OtkupID-u knjizi blok + visak [n=" & CStr(n) & "]"
+    ChkEq BimObradjeno(P & "BIM-2OM"), "Da", S & "posle rucnog mapiranja red je zatvoren"
+    ChkEqD IsplataZaBim(P & "BIM-2OM"), 3000, S & "ukupno knjizeno = iznos stavke izvoda"
+    ChkEqD GetUplataForOtkup(P & "OTK-B"), 1200, S & "izabran dokument je dobio tacno svoj dug"
+    ChkEqD GetUplataForOtkup(P & "OTK-A"), 0, S & "dokument sa drugog otkupnog mesta NIJE diran"
 End Sub
 
 ' ============================================================
@@ -724,13 +709,11 @@ Private Sub T10_PlacenaFakturaNeObaraBatch()
 End Sub
 
 ' ============================================================
-' T11 - rucni kooperant sa PRAZNIM izborom bloka.
+' T11 - RUCNO BEZ IZBORA BLOKA: poziv na broj se razresi u OtkupID.
 '
-' Lista blokova se puni ali se NE auto-selektuje, pa je prazan combo default
-' slucaj. Ranije je ta grana isla na auto-put (bez potvrde podele), pa je blok sa
-' 3+ otvorenih stavki tu zavrsavao generickom greskom -- "3+ blok ima izlaz" je
-' radilo samo ako operater rucno klikne blok. Sada obe grane koriste ISTI
-' efektivni blok (isti koji preview prikazuje) i isti potvrdjeni put.
+' Prazan izbor u ekranu NIJE "nema bloka" nego "uzmi ono sto pise u izvodu".
+' Posle S2 to razresenje daje OtkupID, i isti ID putuje do pisca -- writer vise
+' ne trazi dokument po broju.
 ' ============================================================
 Private Sub T11_RucniKooperantBezIzboraBloka()
     Const S As String = "T11 rucno bez izbora bloka: "
@@ -740,25 +723,27 @@ Private Sub T11_RucniKooperantBezIzboraBloka()
     SeedStanica P & "OM-6", P & "Stanica 6"
     SeedKooperant P & "K-6", "Test", "Prazno", P & "OM-6"
 
-    ' Blok sa TRI otvorene stavke; izvod pokazuje na njega preko poziva na broj.
-    SeedOtkup P & "OTK-Q1", P & "K-6", P & "BLOK-Q", 100, 10, "Malina"
-    SeedOtkup P & "OTK-Q2", P & "K-6", P & "BLOK-Q", 100, 12, "Kupina"
-    SeedOtkup P & "OTK-Q3", P & "K-6", P & "BLOK-Q", 100, 14, "Visnja"
+    ' Jedan dokument, dug 1000; izvod pokazuje na njega preko poziva na broj i
+    ' nosi VISE nego sto blok duguje.
+    SeedOtkup P & "OTK-Q1", P & "K-6", P & "BLOK-Q", 100, 10, "Malina", P & "OM-6"
 
     SeedBim P & "BIM-Q", P & "IZV-20", P & "RAC-1", P & "PARTNER-Q", 0, 3000, P & "BLOK-Q", "", ""
 
-    ' Efektivni blok kad combo NIJE popunjen = poziv na broj iz izvoda; forma taj
-    ' isti blok salje u potvrdjeni rucni put.
+    ' Efektivni dokument kad combo NIJE popunjen = razresen poziv na broj; forma
+    ' taj isti ID salje u rucni put.
     ChkEq AutoBlockNoForBim(P & "BIM-Q"), P & "BLOK-Q", S & "efektivni blok = poziv na broj"
+    ChkEq BimEfektivniOtkup(P & "BIM-Q", P & "K-6", ""), P & "OTK-Q1", _
+          S & "prazan izbor se razresava u OtkupID dokumenta"
 
     gBankaSilentBatch = True
     n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-Q", P & "K-6", _
-                                                AutoBlockNoForBim(P & "BIM-Q"), False, True)
+                                                BimEfektivniOtkup(P & "BIM-Q", P & "K-6", ""), False)
     gBankaSilentBatch = False
 
-    Chk n >= 3, S & "potvrdjena podela knjizi sve stavke [n=" & CStr(n) & "]"
+    ChkEq n, 2, S & "knjizen blok + visak [n=" & CStr(n) & "]"
     ChkEq BimObradjeno(P & "BIM-Q"), "Da", S & "stavka je zatvorena"
     ChkEqD IsplataZaBim(P & "BIM-Q"), 3000, S & "ukupno knjizeno = iznos iz izvoda"
+    ChkEqD GetUplataForOtkup(P & "OTK-Q1"), 1000, S & "blok je dobio tacno svoj dug, ne vise"
 End Sub
 
 ' ============================================================
@@ -785,22 +770,21 @@ Private Sub T21_IzabranPlacenBlokNijeAvans()
     SeedStanica P & "OM-9", P & "Stanica 9"
     SeedKooperant P & "K-9", "Test", "Placen", P & "OM-9"
 
-    ' Blok koji je U CELOSTI placen -> GetOtkupCandidatesForKooperantBlock ga ne
-    ' vraca, jer bira samo stavke sa "otvoreno > 0.009". Status kolona za to nije
-    ' dovoljna: racuna se vrednost minus zbir Isplata po OtkupID-u.
-    SeedOtkup P & "OTK-P1", P & "K-9", P & "BLOK-P", 100, 10, "Malina"
+    ' Blok koji je U CELOSTI placen -> nema otvorenog iznosa. Status kolona za to
+    ' nije dovoljna: racuna se vrednost stavki minus zbir Isplata po OtkupID-u.
+    SeedOtkup P & "OTK-P1", P & "K-9", P & "BLOK-P", 100, 10, "Malina", P & "OM-9"
     SeedIsplataZaOtkup P & "NOV-P1", P & "K-9", P & "OTK-P1", 1000
 
     SeedBim P & "BIM-P1", P & "IZV-21", P & "RAC-1", P & "PARTNER-P", 0, 1000, "", "", ""
     SeedBim P & "BIM-P2", P & "IZV-21", P & "RAC-1", P & "PARTNER-P", 0, 1000, "", "", ""
 
-    ChkEq IsEmpty(GetOtkupCandidatesForKooperantBlock(P & "K-9", P & "BLOK-P", True)), True, _
-          S & "preduslov: placen blok nema nijednog kandidata"
+    ChkEq BimOtkupBezOtvorenog(P & "OTK-P1"), True, _
+          S & "preduslov: placen blok nema sta da plati"
 
     ' IZABRAN blok -> STOP. Nista se ne knjizi i stavka ostaje otvorena.
     gBankaSilentBatch = True
-    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P1", P & "K-9", P & "BLOK-P", _
-                                                False, True, "", True)
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P1", P & "K-9", P & "OTK-P1", _
+                                                False, True)
     gBankaSilentBatch = False
 
     ChkEq n, 0, S & "izabran placen blok NE knjizi nista"
@@ -811,8 +795,8 @@ Private Sub T21_IzabranPlacenBlokNijeAvans()
     ' avans i dalje JESTE namerno ponasanje. Bez ove polovine bi se pravilo moglo
     ' "ispraviti" gasenjem legitimne grane.
     gBankaSilentBatch = True
-    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P2", P & "K-9", P & "BLOK-P", _
-                                                False, True, "", False)
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P2", P & "K-9", P & "OTK-P1", _
+                                                False, False)
     gBankaSilentBatch = False
 
     ChkEq n, 1, S & "isti blok iz poziva na broj i dalje knjizi avans"
@@ -894,6 +878,72 @@ Private Sub T23_BatchAvansRazdvajaIshode()
 
     tx.RollbackTx
     Set tx = Nothing
+End Sub
+
+' ============================================================
+' T24 - WRITER SUDI O BLOKU KOJI MU JE POSLAT (S2).
+'
+' Od S2 ekran salje OtkupID izabranog reda, a ne broj bloka. Time nestaje filter
+' koji je do sada usput radio kapiju: kandidati su se birali po kooperantu, pa
+' tudji dokument nije ni mogao da udje. Sada kapija mora da stoji u pisacu --
+' i to nad stanjem U TRENUTKU UPISA, jer se izmedju punjenja liste i potvrde
+' vlasnik moze promeniti, a dokument stornirati.
+'
+' Oba ishoda su "uspesna transakcija sa pogresnim dugom" ako kapije nema:
+' kooperant A plati dug kooperanta B, ili se novac veze za dokument koji je
+' izvan posla.
+' ============================================================
+Private Sub T24_BlokTudjegKooperantaIStorniran()
+    Const S As String = "T24 blok tudji/storniran: "
+
+    Dim n As Long
+
+    SeedStanica P & "OM-24", P & "Stanica 24"
+    SeedKooperant P & "K-24A", "Test", "Vlasnik", P & "OM-24"
+    SeedKooperant P & "K-24B", "Test", "Drugi", P & "OM-24"
+
+    ' Dug pripada kooperantu A.
+    SeedOtkup P & "OTK-24A", P & "K-24A", P & "BLOK-24A", 100, 10, "Malina", P & "OM-24"
+
+    ' Storniran dokument kooperanta B -- postoji, ali vise nije dug.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM, _
+              COL_OTK_STANICA, COL_STORNIRANO), _
+        Array(P & "OTK-24S", P & "BLOK-24S", P & "K-24B", "Malina", Date, P & "OM-24", "Da")
+    BitOtkupStavka P & "OTK-24S", 100, 10
+
+    SeedBim P & "BIM-24T", P & "IZV-24", P & "RAC-1", P & "PARTNER-24", 0, 1000, "", "", ""
+    SeedBim P & "BIM-24S", P & "IZV-24", P & "RAC-1", P & "PARTNER-24", 0, 1000, "", "", ""
+
+    ' (a) Blok kooperanta A, a isplata se knjizi kooperantu B -> STOP.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-24T", P & "K-24B", P & "OTK-24A", _
+                                                False, True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 0, S & "blok drugog kooperanta se NE knjizi"
+    ChkEq NovacZaBim(P & "BIM-24T"), 0, S & "tudji blok nema nijedan red u tblNovac"
+    ChkEq BimObradjeno(P & "BIM-24T"), "", S & "stavka ostaje OTVORENA"
+    ChkEqD GetUplataForOtkup(P & "OTK-24A"), 0, S & "dug kooperanta A je netaknut"
+
+    ' (b) Storniran blok -> STOP, i to PRE ijednog upisa.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-24S", P & "K-24B", P & "OTK-24S", _
+                                                False, True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 0, S & "storniran blok se NE knjizi"
+    ChkEq NovacZaBim(P & "BIM-24S"), 0, S & "storniran blok nema nijedan red u tblNovac"
+    ChkEq BimObradjeno(P & "BIM-24S"), "", S & "stavka ostaje OTVORENA"
+
+    ' Kontrola: isti pisac nad ISPRAVNIM blokom prolazi -- kapija ne gasi posao.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-24T", P & "K-24A", P & "OTK-24A", _
+                                                False, True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 1, S & "vlasnik bloka ga uredno placa"
+    ChkEqD GetUplataForOtkup(P & "OTK-24A"), 1000, S & "...i dug je zatvoren"
 End Sub
 
 ' ============================================================
@@ -1774,12 +1824,16 @@ Private Sub SeedBim(ByVal bimID As String, ByVal brojIzvoda As String, _
               isplata, poziv, referenz, "")
 End Sub
 
+' stanicaID je opciono: broj otkupa je dnevni niz PO OTKUPNOM MESTU, pa se isti
+' broj na dva mesta moze zaseliti samo ako fixture ume da upise stanicu.
 Private Sub SeedOtkup(ByVal otkID As String, ByVal koopID As String, _
                       ByVal brDok As String, ByVal kolicina As Double, _
-                      ByVal cena As Double, ByVal vrsta As String)
+                      ByVal cena As Double, ByVal vrsta As String, _
+                      Optional ByVal stanicaID As String = "")
     BitAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array(otkID, brDok, koopID, vrsta, Date)
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_VRSTA, COL_OTK_DATUM, _
+              COL_OTK_STANICA), _
+        Array(otkID, brDok, koopID, vrsta, Date, stanicaID)
     BitOtkupStavka otkID, kolicina, cena
 End Sub
 
