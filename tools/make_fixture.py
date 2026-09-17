@@ -177,8 +177,9 @@ BIM_RACUN_1 = "160-0000000111111-11"
 BIM_RACUN_2 = "265-0000000222222-22"
 BIM_DATUM_1 = datetime.date(2026, 3, 16)
 BIM_DATUM_2 = datetime.date(2026, 3, 17)
-# Blok sa TRI otvorene otkupne stavke -- preko MAX_BLOK_KANDIDATA (2), pa
-# automatska raspodela dize ERR_BMAP_MANUAL_REQUIRED i red ide na rucno.
+# ISTI broj bloka na TRI zaglavlja istog otkupnog mesta. Posle S1 je otkup
+# jedno zaglavlje po dokumentu, pa je ovo anomalija podataka -- razresenje
+# poziva na broj dize ERR_BMAP_MANUAL_REQUIRED i red ide na rucno.
 BIM_BLOK_3 = "BLK-BIM-3"
 # ISTI kooperant, ISTI broj bloka, DVA otkupna mesta. Broj otkupa je
 # jedinstven PO STANICI, pa je ovo legitiman podatak -- i jedini nacin da
@@ -872,12 +873,12 @@ SEED = {
          "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "3/TEST",
          "Klasa": "I", "BrojZbirne": ZBIRNA_U_BLOKU, "OtpremnicaID": "OTP-TEST-3",
          "BrojOtpremnice": "3/TEST", "ParcelaID": "PAR-TEST-2"},
-        # TRI otvorene stavke ISTOG bloka, isti kooperant. Poziv na broj iz
-        # izvoda ga razresava jednoznacno (jedan kooperant = jedan pogodak), ali
-        # GetOtkupCandidatesForKooperantBlock preko MAX_BLOK_KANDIDATA dize
-        # ERR_BMAP_MANUAL_REQUIRED -- red koji je "spreman po jakom kljucu" a
-        # automatski se ipak NE moze zavrsiti. Bez ovog para stanja se cip
-        # "jaki kljucevi" i stvarni ishod auto-mapiranja ne mogu razlikovati.
+        # TRI zaglavlja ISTOG broja i otkupnog mesta, isti kooperant. Jak kljuc
+        # (racun + poziv na broj) ga razresava do KOOPERANTA, ali razresenje
+        # DOKUMENTA (BimOtkupIzBroja) dize ERR_BMAP_MANUAL_REQUIRED -- red koji
+        # je "spreman po jakom kljucu" a automatski se ipak NE moze zavrsiti.
+        # Bez ovog para stanja se cip "jaki kljucevi" i stvarni ishod
+        # auto-mapiranja ne mogu razlikovati.
         {"OtkupID": "OTK-BIM-3A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 20, "Cena": 50.0, "TipAmbalaze": AMB_12_1,

@@ -9193,10 +9193,12 @@ End Sub
 Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     Dim ok As Boolean, greska As String, razlog As String
     Dim src As Variant, i As Long
-    Dim nasao As Boolean
-    Dim omBlokova As Long, omBezStanice As Long
+    Dim omA As Boolean, omB As Boolean
+    Dim omBlokova As Long, bezID As Long
     Dim placenUListi As Boolean
-    Dim errBezKolone As Long, errBezScope As Long
+    Dim errDvosmislen As Long
+    Dim otkOtvoren As String, otkPlacen As String
+    Dim otvorenoBloka As Double
     Dim errNemaTabele As Long, errImaTabele As Long
     Dim punjenoPre As Long
 
@@ -9223,30 +9225,55 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq modScrBankaUvoz.BuTipIliPrazno(BIM_TIP_KOOPERANT), BIM_TIP_KOOPERANT, _
              "razresen tip prolazi"
 
-    ' EFEKTIVNI BLOK: prazan izbor NIJE "nema bloka" nego "uzmi poziv na broj iz
-    ' izvoda". U formi je prazan combo bio DEFAULT slucaj, pa je blok sa 3+
-    ' stavki bez ovog pravila zavrsavao generickom greskom.
-    AssertEq modBankaMapiranje.BimEfektivniBlok(FX_BIM_JAKI_BLOK, ""), FX_BIM_BLOK1_BR, _
-             "prazan izbor uzima poziv na broj iz izvoda"
-    AssertEq modBankaMapiranje.BimEfektivniBlok(FX_BIM_JAKI_BLOK, "BLOK-RUCNO"), "BLOK-RUCNO", _
-             "izbor operatera pobedjuje poziv na broj"
+' EFEKTIVNI DOKUMENT: prazan izbor NIJE "nema bloka" nego "razresi poziv na
+    ' broj iz izvoda". U formi je prazan combo bio DEFAULT slucaj, pa je blok bez
+    ' izbora zavrsavao generickom greskom.
+    otkOtvoren = LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, FX_BIM_BLOK1_BR, COL_OTK_ID)
+    AssertEq (Len(otkOtvoren) > 0), True, "vozilo: blok 1/TEST postoji u fixture-u"
 
-    ' BLOK PREKO GRANICE trazi izricitu potvrdu podele; blok u granicama ne pita.
-    AssertEq modBankaMapiranje.BimBlokTraziPotvrdu(FX_KOOPERANT3, FX_BIM_BLOK3_BR, razlog), _
-             True, "blok sa tri otvorene stavke trazi potvrdu podele"
-    AssertEq (Len(razlog) > 0), True, "razlog imenuje blok -- operater vidi zasto"
-    AssertEq modBankaMapiranje.BimBlokTraziPotvrdu(FX_KOOPERANT, FX_BIM_BLOK1_BR, razlog), _
-             False, "blok sa jednom otvorenom stavkom ne pita nista"
+    AssertEq modBankaMapiranje.BimEfektivniOtkup(FX_BIM_JAKI_BLOK, FX_KOOPERANT, ""), _
+             otkOtvoren, "prazan izbor razresava poziv na broj u OtkupID"
+    AssertEq modBankaMapiranje.BimEfektivniOtkup(FX_BIM_JAKI_BLOK, FX_KOOPERANT, FX_OTK_OM_A), _
+             FX_OTK_OM_A, "izbor operatera pobedjuje poziv na broj"
+
+    ' DVOSMISLEN BROJ NIJE RASPODELA PREKO DVA LANCA, NEGO RUCNO (S2).
+    '
+    ' Isti broj na dva otkupna mesta je LEGITIMAN podatak: broj otkupa je dnevni
+    ' niz po otkupnom mestu, a kooperant sme da predaje na dva mesta. Automatski
+    ' put otkupno mesto nema odakle da zna -- do S2 su oba dokumenta ulazila u
+    ' JEDNU raspodelu, pa je novac isao na dva poslovna lanca odjednom.
+    On Error Resume Next
+    Err.Clear
+    modBankaMapiranje.BimOtkupIzBroja FX_KOOPERANT3, FX_BIM_BLOK_OM
+    errDvosmislen = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    AssertEq errDvosmislen, ERR_BMAP_MANUAL_REQUIRED, _
+             "isti broj na vise otkupnih mesta ide na RUCNO, ne u raspodelu"
+
+    AssertEq modBankaMapiranje.BimOtkupIzBroja(FX_KOOPERANT, FX_BIM_BLOK1_BR), otkOtvoren, _
+             "jednoznacan broj se razresava u tacno taj dokument"
+    AssertEq modBankaMapiranje.BimOtkupIzBroja(FX_KOOPERANT, "NEMA-OVAKVOG-BROJA"), "", _
+             "broj bez pogotka nije greska -- automatski put ga knjizi kao avans"
+
+    ' POTVRDA SE TRAZI KAD ISPLATA PREMASUJE DUG, jer visak zavrsi kao avans.
+    ' Do S2 je pitanje pokretalo "3+ otvorenih stavki u bloku" -- kardinalnost
+    ' koja je postojala samo dok je jedan broj nosio red PO KLASI.
+    otvorenoBloka = modBankaMapiranje.BimOtvorenoNaOtkupu(otkOtvoren)
+    AssertEq (otvorenoBloka > 0), True, "vozilo: blok 1/TEST jos duguje"
+
+    AssertEq modBankaMapiranje.BimOtkupTraziPotvrdu(otkOtvoren, otvorenoBloka * 2, razlog), _
+             True, "isplata veca od duga trazi potvrdu -- visak ide u avans"
+    AssertEq (Len(razlog) > 0), True, "razlog imenuje iznose -- operater vidi zasto"
+    AssertEq modBankaMapiranje.BimOtkupTraziPotvrdu(otkOtvoren, otvorenoBloka, razlog), _
+             False, "isplata tacno do duga ne pita nista"
     AssertEq razlog, "", "kad se ne pita, razloga nema"
 
-    ' PODELA se racuna ISTIM planerom po kome se knjizi, pa operater pre klika
-    ' vidi TACNO onu podelu koja ce biti proknjizena.
-    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
-              FX_KOOPERANT3, FX_BIM_BLOK3_BR, True)
-    AssertEq IsArray(src), True, "blok preko granice ipak vraca kandidate uz allowOverMax"
-    AssertEq UBound(src, 1), 3, "blok ima tri otvorena kandidata"
-    AssertEq (Len(modScrBankaUvoz.TekstPodele(src, 3000)) > 0), True, _
-             "predlog podele nije prazan"
+    ' Predlog se racuna ISTIM pravilom po kome writer knjizi, pa operater pre
+    ' klika vidi TACNO ono sto ce biti proknjizeno.
+    AssertEq (InStr(1, modScrBankaUvoz.TekstPodele(otkOtvoren, otvorenoBloka * 2), _
+                    Format$(otvorenoBloka, "#,##0.00")) > 0), True, _
+             "predlog podele imenuje iznos koji ide na blok"
 
     ' FAKTURE ZA RUCNO MAPIRANJE: samo one sa otvorenim saldom, a "otvoreno" u
     ' listi mora da bude ISTO ono koje writer racuna -- prikaz i knjizenje jedan
@@ -9355,123 +9382,52 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq (modScrBankaUvoz.Scr_BuCiljPunjenoTest() > punjenoPre), True, _
              "kapija PUNI listu cilja pre nego sto presudi"
 
-    ' SCOPE SE NE SME TIHO IZGUBITI KAD KOLONE NEMA.
-    ' Ovo je najtisi moguci kvar: zadat scope, kolona nedokaziva, filtriranje
-    ' otpada, i pozivalac dobija kandidate sa SVIH otkupnih mesta u listi koja
-    ' izgleda savrseno ispravno. Zato "ne mogu da dokazem scope" mora da bude
-    ' greska, a ne tihi nastavak.
-    On Error Resume Next
-    Err.Clear
-    modBankaMapiranje.BimScopeKolona FX_STANICA, "NemaOvakveKoloneUOtkupu"
-    errBezKolone = Err.Number
-    Err.Clear
-    ' A kad scope NIJE zadat, ista nedokaziva kolona je legitimna: automatsko
-    ' mapiranje otkupno mesto nema odakle da zna i radi bez njega, kao i pre.
-    modBankaMapiranje.BimScopeKolona "", "NemaOvakveKoloneUOtkupu"
-    errBezScope = Err.Number
-    Err.Clear
-    On Error GoTo 0
-
-    AssertEq (errBezKolone <> 0), True, _
-             "zadat scope nad nedokazivom kolonom PUCA -- ne vraca nescope-ovane kandidate"
-    AssertEq errBezScope, 0, _
-             "bez zadatog scope-a ista kolona ostaje opciona"
-    AssertEq modBankaMapiranje.BimScopeKolona(FX_STANICA, COL_OTK_STANICA) > 0, True, _
-             "nad zdravom semom scope kolona ima indeks"
-
-    ' BLOKOVI kooperanta. Kljuc je (broj + OTKUPNO MESTO), ne samo broj: broj
-    ' otkupa je jedinstven po stanici, pa isti broj pripada dvama razlicitim
-    ' blokovima. Ko ponudi samo broj, posle izbora ne zna KOJI je -- a od toga
-    ' zavisi na koji otkupni lanac ide novac.
+' BLOKOVI kooperanta. RED LISTE JE DOKUMENT: skrivena kolona nosi OtkupID, a
+    ' prikaz broj i otkupno mesto. Do S2 je lista nosila (broj + StanicaID), pa je
+    ' writer iz toga PONOVO trazio dokument -- display vrednost kao identitet.
     src = modBankaMapiranje.GetBlokoviZaBimMapiranje(FX_KOOPERANT3)
     AssertEq IsArray(src), True, "kooperant ima blokove"
     For i = 1 To UBound(src, 1)
-        If CStr(src(i, 1)) = FX_BIM_BLOK3_BR Then nasao = True
-        If CStr(src(i, 1)) = FX_BIM_BLOK_PLACEN Then placenUListi = True
-        If CStr(src(i, 1)) = FX_BIM_BLOK_OM Then
-            omBlokova = omBlokova + 1
-            If Len(Trim$(CStr(src(i, 2)))) = 0 Then omBezStanice = omBezStanice + 1
-        End If
+        If CStr(src(i, 1)) = FX_OTK_OM_A Then omA = True
+        If CStr(src(i, 1)) = FX_OTK_OM_B Then omB = True
+        If CStr(src(i, 2)) = FX_BIM_BLOK_OM Then omBlokova = omBlokova + 1
+        If CStr(src(i, 2)) = FX_BIM_BLOK_PLACEN Then placenUListi = True
+        If Len(Trim$(CStr(src(i, 1)))) = 0 Then bezID = bezID + 1
     Next i
-    AssertEq nasao, True, "blok sa tri stavke je u listi"
-    AssertEq UBound(src, 1), 5, _
-             "tri stavke istog bloka daju jedan red; blok na tri mesta TRI; placen blok JOS jedan"
+    AssertEq (omA And omB), True, _
+             "ista dva broja sa dva otkupna mesta su DVA reda liste, razlicita po OtkupID-u"
     AssertEq omBlokova, 3, "isti broj bloka na tri otkupna mesta daje TRI reda"
-    ' Red BEZ otkupnog mesta se NE precutkuje -- postoji u podacima, pa se nudi;
-    ' ono sto se menja je da radnja nad njim STAJE (v. nize).
-    AssertEq omBezStanice, 1, "blok bez otkupnog mesta ostaje u listi"
-
-    ' SCOPE STVARNO SUZAVA. Bez njega su kandidati sva tri otkupna mesta -- a to
-    ' je novac na tri razlicita poslovna lanca u JEDNOJ raspodeli.
-    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
-              FX_KOOPERANT3, FX_BIM_BLOK_OM, True)
-    AssertEq UBound(src, 1), 3, "bez scope-a ulaze kandidati sa SVIH otkupnih mesta"
-
-    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
-              FX_KOOPERANT3, FX_BIM_BLOK_OM, True, FX_STANICA)
-    AssertEq UBound(src, 1), 1, "sa scope-om ulazi samo jedno otkupno mesto"
-    AssertEq CStr(src(1, 1)), FX_OTK_OM_A, "i to bas ono koje je izabrano"
-
-    ' Kontrola u drugom smeru: druga stanica daje DRUGI otkup, ne prazno.
-    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
-              FX_KOOPERANT3, FX_BIM_BLOK_OM, True, FX_STANICA_B)
-    AssertEq IsArray(src), True, "druga stanica ima svoje kandidate"
-    AssertEq CStr(src(1, 1)), FX_OTK_OM_B, "scope B nikad ne vraca otkup iz scope-a A"
+    ' Identitet je jedina stvar bez koje red liste ne sme da postoji: writer po
+    ' njemu knjizi. Prazan ID bi znacio "platicu nesto, ne znam sta".
+    AssertEq bezID, 0, "nijedan red liste ne ide bez OtkupID-a"
 
     ' IZABRAN BLOK BEZ OTVORENIH STAVKI -- STOP, ne tihi AVANS.
     '
-    ' Lista blokova nudi SVAKI nestorniran broj otkupa i ne proverava da li blok
-    ' jos duguje; kandidati se biraju samo ako je "otvoreno > 0.009". Placen blok
-    ' zato legitimno stoji u listi a daje NULA kandidata -- a writer na
-    ' IsEmpty(kandidati) ceo iznos knjizi kao avans kooperanta i stavku oznacava
-    ' obradjenom. Operater je rekao KOJI dug placa; tiha promena u avans je druga
-    ' finansijska semantika od one koju je izabrao.
-    AssertEq modBankaMapiranje.BimBlokBezOtvorenih(FX_KOOPERANT3, FX_BIM_BLOK_PLACEN), _
-             True, "potpuno placen blok NEMA otvorenih stavki"
-    AssertEq modBankaMapiranje.BimBlokBezOtvorenih(FX_KOOPERANT3, FX_BIM_BLOK3_BR), _
-             False, "blok sa tri otvorene stavke ima sta da plati"
+    ' Lista blokova nudi SVAKI nestorniran otkup i ne proverava da li blok jos
+    ' duguje. Placen blok zato legitimno stoji u listi, a writer bez otvorenog
+    ' iznosa ceo iznos knjizi kao avans kooperanta i stavku oznacava obradjenom.
+    ' Operater je rekao KOJI dug placa; tiha promena u avans je druga finansijska
+    ' semantika od one koju je izabrao.
+    otkPlacen = LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, FX_BIM_BLOK_PLACEN, COL_OTK_ID)
+    AssertEq (Len(otkPlacen) > 0), True, "vozilo: placen blok postoji u fixture-u"
+    AssertEq modBankaMapiranje.BimOtkupBezOtvorenog(otkPlacen), True, _
+             "potpuno placen blok NEMA sta da plati"
+    AssertEq modBankaMapiranje.BimOtkupBezOtvorenog(otkOtvoren), False, _
+             "blok koji duguje ima sta da plati"
 
     ' Blok JE u listi -- ne precutkuje se, jer postoji u podacima. Ono sto se
     ' menja je da radnja nad njim staje.
     AssertEq placenUListi, True, "placen blok je i dalje u listi blokova"
 
     ' KAPIJA VAZI SAMO ZA RUCNI IZBOR. Kad blok dolazi iz poziva na broj,
-    ' izabranBlok je prazan i avans i dalje JESTE namerno ponasanje -- to je
+    ' izabran je prazan i avans i dalje JESTE namerno ponasanje -- to je
     ' bezbedan izlaz dok je poreklo dvosmisleno.
-    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, FX_BIM_BLOK_PLACEN, _
-                                            FX_BIM_BLOK_PLACEN, ""), True, _
+    AssertEq modScrBankaUvoz.BuBlokZatvoren(otkPlacen, otkPlacen), True, _
              "rucno izabran placen blok ZAUSTAVLJA knjizenje"
-    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, "", _
-                                            FX_BIM_BLOK_PLACEN, ""), False, _
+    AssertEq modScrBankaUvoz.BuBlokZatvoren("", otkPlacen), False, _
              "isti blok iz POZIVA NA BROJ ne prolazi kroz kapiju -- avans ostaje namerno ponasanje"
-    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, FX_BIM_BLOK3_BR, _
-                                            FX_BIM_BLOK3_BR, ""), False, _
+    AssertEq modScrBankaUvoz.BuBlokZatvoren(otkOtvoren, otkOtvoren), False, _
              "blok sa otvorenim stavkama prolazi"
-
-    ' IZABRAN BLOK BEZ OTKUPNOG MESTA -- STOP, ne nescope-ovan upis.
-    ' Ovo je najvaznija tvrdnja ovog dela: prazan scope izgleda isto kao "scope
-    ' nije ni trazen", a znaci nesto sasvim drugo. Da se prazan propusti, writer
-    ' bi raspodelio novac preko sva tri otkupna mesta sa istim brojem bloka.
-    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, FX_KOOPERANT3, _
-                                       FX_BIM_BLOK_OM, ""
-    AssertEq modScrBankaUvoz.Scr_BuStopBezOmTest(), True, _
-             "izabran blok bez otkupnog mesta ZAUSTAVLJA rucno mapiranje"
-
-    ' PRAZAN IZBOR BLOKA NEMA SCOPE, i to NIJE isti slucaj. Blok tada dolazi iz
-    ' poziva na broj, koji otkupno mesto ne nosi -- pa se ekran ponasa kao
-    ' automatsko mapiranje i radnja se NE zaustavlja.
-    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, FX_KOOPERANT3, "", ""
-    AssertEq modScrBankaUvoz.Scr_BuScopeBlokaTest(), "", _
-             "bez izabranog bloka nema ni scope-a"
-    AssertEq modScrBankaUvoz.Scr_BuStopBezOmTest(), False, _
-             "poziv na broj nije 'blok bez otkupnog mesta' -- radnja ide dalje"
-
-    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, FX_KOOPERANT3, _
-                                       FX_BIM_BLOK_OM, FX_STANICA
-    AssertEq modScrBankaUvoz.Scr_BuScopeBlokaTest(), FX_STANICA, _
-             "izabran blok nosi svoje otkupno mesto do writera"
-    AssertEq modScrBankaUvoz.Scr_BuStopBezOmTest(), False, _
-             "blok sa otkupnim mestom prolazi"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub

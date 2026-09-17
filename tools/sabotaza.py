@@ -3268,65 +3268,50 @@ SABOTAZE = {
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
         "nesaglasan izvod dobija SVOJU poruku",
     ),
-    # ---------------------------------------------------- BANKA: WRITER
-    # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
-    # obradjenom. Za AUTOMATSKO mapiranje je to namerno; za IZABRAN blok je
-    # protivrecnost -- operater je rekao KOJI dug placa.
-    #
-    # PROVERA IDE NAD DRUGOM SUITOM: writer pise, pa tvrdnja zivi u
+    # WRITER, ne ekran: izabran placen blok se ne sme tiho pretvoriti u avans.
+    # Kapija stoji na OBA mesta namerno -- ekran sudi po listi kakva je bila kad je
+    # punjena, writer po stanju u trenutku upisa. Meri se u modTestBanka /
     # RunBankaImportTestSuite (transakciona, rollback). Dokaz:
     #   python tools/sabotaza.py banka-writer-placen-blok-je-avans
     #   python tools/run_vba.py --suite RunBankaImportTestSuite   # ocekuj FAIL
     "banka-writer-placen-blok-je-avans": (
         "modBankaMapiranje.bas",
-        "    If IsEmpty(kandidati) And blokIzabran Then\n",
-        "    If IsEmpty(kandidati) And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
+        "    If Len(Trim$(otkupID)) = 0 And blokIzabran Then\n",
+        "    If Len(Trim$(otkupID)) = 0 And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
         "T21_IzabranPlacenBlokNijeAvans",
         "izabran placen blok NE knjizi nista",
     ),
-    # ---------------------------------------------------------------- BANKA UVOZ
-    # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
-    # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja
-    # izgleda savrseno ispravno. Ime kolone je zato argument BimScopeKolona, da
-    # bi se ta grana mogla izmeriti bez razbijanja seme fixture-a.
-    "banka-uvoz-scope-bez-kolone-stanice": (
+    # DVOSMISLEN POZIV NA BROJ SE NE RESAVA POGADJANJEM.
+    #
+    # Broj otkupa je dnevni niz PO OTKUPNOM MESTU, pa isti broj legitimno stoji
+    # na dve stanice. Sabotaza uzima PRVI pogodak umesto da red posalje na rucno
+    # -- novac ode na tudji poslovni lanac, a batch izgleda uredno zavrsen.
+    "banka-uvoz-dvosmislen-poziv-prvi-pobedjuje": (
         "modBankaMapiranje.bas",
-        '        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")\n',
-        "        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)   ' SABOTAZA: scope tiho otpada\n",
+        "    If ids.count > 1 Then\n",
+        "    If ids.count > 99 Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "zadat scope nad nedokazivom kolonom PUCA -- ne vraca nescope-ovane kandidate",
+        "isti broj na vise otkupnih mesta ide na RUCNO, ne u raspodelu",
     ),
-    # Prazan scope izgleda isto kao "scope nije ni trazen", a znaci nesto sasvim
-    # drugo: operater JESTE birao blok, samo taj red nema upisano otkupno mesto.
-    # Propusten prazan scope raspodeli novac preko svih mesta sa istim brojem.
-    # Lista blokova nudi SVAKI nestorniran broj otkupa i ne proverava dug, a
-    # kandidati se biraju samo ako je "otvoreno > 0.009". Placen blok zato stoji
-    # u listi a daje NULA kandidata -- i writer to ne prijavljuje kao gresku nego
-    # knjizi AVANS i stavku oznaci obradjenom. Rucni izbor takvog bloka mora da
-    # stane: operater je rekao KOJI dug placa.
+    # Lista blokova nudi i potpuno placene dokumente (ne proverava dug), a writer
+    # bez otvorenog iznosa ceo iznos knjizi kao AVANS i stavku oznaci obradjenom.
+    # Rucni izbor takvog bloka mora da stane: operater je rekao KOJI dug placa.
     "banka-uvoz-placen-blok-postaje-avans": (
         "modBankaMapiranje.bas",
-        "    BimBlokBezOtvorenih = IsEmpty(kandidati)\n",
-        "    BimBlokBezOtvorenih = Not IsEmpty(kandidati)   ' SABOTAZA: placen blok prolazi\n",
+        "    BimOtkupBezOtvorenog = (BimOtvorenoNaOtkupu(otkupID) <= BIM_OTVORENO_PRAG)\n",
+        "    BimOtkupBezOtvorenog = False   ' SABOTAZA: placen blok prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "potpuno placen blok NEMA otvorenih stavki",
+        "potpuno placen blok NEMA sta da plati",
     ),
-    # Kapija sme da vazi SAMO za rucni izbor. Kad blok dolazi iz poziva na broj,
-    # avans je namerno i dokumentovano ponasanje -- bezbedan izlaz dok je poreklo
-    # dvosmisleno. Sabotaza uklanja tu razliku i gasi legitimnu granu.
+    # Kapija placenog bloka vazi SAMO za rucni izbor. Kad blok dolazi iz poziva na
+    # broj, avans je namerno i dokumentovano ponasanje -- bezbedan izlaz dok je
+    # poreklo dvosmisleno. Sabotaza uklanja tu razliku i gasi legitimnu granu.
     "banka-uvoz-kapija-bloka-i-za-poziv": (
         "modScrBankaUvoz.bas",
-        "    If Len(Trim$(izabranBlok)) = 0 Then Exit Function\n",
-        "    If Len(Trim$(efektivniBlok)) < 0 Then Exit Function   ' SABOTAZA: kapija i za poziv na broj\n",
+        "    If Len(Trim$(izabranOtkupID)) = 0 Then Exit Function\n",
+        "    If Len(Trim$(efektivniOtkupID)) < 0 Then Exit Function   ' SABOTAZA: kapija i za poziv na broj\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
         "isti blok iz POZIVA NA BROJ ne prolazi kroz kapiju -- avans ostaje namerno ponasanje",
-    ),
-    "banka-uvoz-blok-bez-om-prolazi": (
-        "modScrBankaUvoz.bas",
-        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)\n",
-        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) < 0)\n",
-        "T_BankaUvoz_RucnoMapiranjePravila",
-        "izabran blok bez otkupnog mesta zaustavlja rucno mapiranje",
     ),
     # Prvi pad citanja u sesiji. Nula bi kroz BrojacTekst dala PRAZNU znacku, a
     # prazna znacka u ovom UI-ju znaci "nema sta da ceka" -- fail-open, samo tisi.
@@ -3336,16 +3321,6 @@ SABOTAZE = {
         "    BuKpiNepoznato = Array(0, 0, 0, 0#, 0#)   ' SABOTAZA: ne znam postaje nula\n",
         "T_BankaUvoz_CipJakihPratiBrojac",
         "bez ijedne poznate brojke stanje je NEPOZNATO",
-    ),
-    # Broj otkupa je jedinstven PO STANICI, pa isti broj bloka pripada dvama
-    # razlicitim blokovima. Bez scope-a u jednu raspodelu ulaze kandidati sa OBA
-    # otkupna mesta -- novac na dva razlicita poslovna lanca.
-    "banka-uvoz-blok-bez-om-scope": (
-        "modBankaMapiranje.bas",
-        "        If Len(Trim$(stanicaID)) > 0 Then\n",
-        "        If Trim$(stanicaID) = Chr$(0) Then   ' SABOTAZA: scope se ne primenjuje\n",
-        "T_BankaUvoz_RucnoMapiranjePravila",
-        "sa scope-om ulazi samo jedno otkupno mesto",
     ),
     # Znacka odgovara na pitanje "ima li posla". Kvar citanja pretvoren u nulu
     # kaze "nema posla" -- fail-open koji je Storno vec jednom platio.
@@ -3570,15 +3545,15 @@ SABOTAZE = {
         "T_BankaUvoz_RucnoMapiranjePravila",
         "nejasan smer ne prolazi ni za OM",
     ),
-    # Prazan izbor bloka NIJE "nema bloka" nego "uzmi poziv na broj iz izvoda".
-    # U formi je prazan combo bio DEFAULT slucaj, pa je blok sa 3+ stavki bez
-    # ovog pravila zavrsavao generickom greskom umesto ponudjenom podelom.
+    # Prazan izbor u ekranu NIJE "nema bloka" nego "razresi poziv na broj iz
+    # izvoda". U formi je prazan combo bio DEFAULT slucaj, pa je blok bez izbora
+    # zavrsavao generickom greskom umesto knjizenjem.
     "banka-uvoz-prazan-blok-ostaje-prazan": (
         "modBankaMapiranje.bas",
-        "        BimEfektivniBlok = AutoBlockNoForBim(bankaImportID)\n",
-        '        BimEfektivniBlok = ""   \' SABOTAZA: poziv na broj se ne koristi\n',
+        "        BimEfektivniOtkup = BimOtkupIzPozivaNaBroj(kooperantID, bankaImportID)\n",
+        "        BimEfektivniOtkup = \"\"   ' SABOTAZA: poziv na broj se ne koristi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "prazan izbor uzima poziv na broj iz izvoda",
+        "prazan izbor razresava poziv na broj u OtkupID",
     ),
     # FAIL-CLOSED. Prazna lista faktura i PAD ucitavanja izgledaju isto, a znace
     # suprotno: prazan izbor fakture knjizi AVANS umesto zatvaranja duga.
@@ -4555,12 +4530,68 @@ SABOTAZE = {
         "Test_OTK_ZaglavljeBezIDObaraCitaoce",
         "OTK bez ID: saldo OM pada po imenu, ne sabira nulu",
     ),
+    # OTK bez OtkupID-a: razresenje bloka u banci mora da padne PO IMENU. Tiho
+    # preskakanje takvog reda znaci da poziv na broj ne nadje nista, pa writer ceo
+    # iznos knjizi kao AVANS i stavku izvoda oznaci obradjenom.
     "otk-kapija-banka-tiha-nula": (
         "modBankaMapiranje.bas",
-        "            vrednost = modNovac.VrednostOtkupaIzDikta(vrednostDict, _\n                           CStr(data(i, colOtkID)), _\n                           \"GetOtkupCandidatesForKooperantBlock\")\n",
-        "            vrednost = 0   ' SABOTAZA: tiha nula -> blok ispada iz kandidata\n            If vrednostDict.exists(Trim$(CStr(data(i, colOtkID)))) Then _\n                vrednost = CDbl(vrednostDict(Trim$(CStr(data(i, colOtkID)))))\n",
+        "                If Len(oid) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: red bez OtkupID-a se tiho preskace\n",
         "Test_OTK_ZaglavljeBezIDObaraCitaoce",
         "OTK bez ID: kandidat bloka pada po imenu, ne knjizi uplatu kao avans",
+    ),
+
+    # VLASNISTVO BLOKA: ekran salje OtkupID reda koji je operater video, a stanje
+    # se izmedju punjenja liste i potvrde moze promeniti. Bez kapije bi isplata
+    # jednom kooperantu zatvorila dug DRUGOG -- uspesna transakcija, pogresan dug.
+    "banka-writer-blok-tudjeg-kooperanta": (
+        "modBankaMapiranje.bas",
+        "    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: blok tudjeg kooperanta prolazi\n",
+        "T24_BlokTudjegKooperantaIStorniran",
+        "blok drugog kooperanta se NE knjizi",
+    ),
+
+    # Storniran dokument vise nije dug. Bez kapije bi se isplata vezala za red koji
+    # je izvan posla, pa bi kooperant ostao neplacen a novac evidentiran kao dat.
+    # OM VLASNISTVO: vezan red novca mora da nosi otkupno mesto DOKUMENTA. Kad OM
+    # dolazi iz tblKooperanti (maticno mesto), red ima tacan OtkupID a pogresan
+    # OMID -- identitet ispravan, vlasnistvo ne, i saldo tudjeg OM-a nosi kupovinu.
+    "banka-writer-om-iz-kooperanta": (
+        "modBankaMapiranje.bas",
+        "        blokOmNaziv = CStr(LookupValue(TBL_STANICE, \"StanicaID\", blokOmID, \"Naziv\"))\n",
+        "        blokOmID = omID: blokOmNaziv = omNaziv   ' SABOTAZA: OM iz maticnog mesta kooperanta\n",
+        "T03_DvosmislenPozivNeObaraBatch",
+        "vezan red novca nosi otkupno mesto DOKUMENTA, ne maticno mesto kooperanta",
+    ),
+
+    # Blok bez upisanog otkupnog mesta nema vlasnika kupovine. Bez kapije bi se
+    # isplata proknjizila sa praznim OMID-em -- saldo nijednog mesta je ne vidi.
+    # VISAK KAO AVANS JE ODLUKA OPERATERA. Bez saglasnosti u argumentu je pravilo
+    # puka UI konvencija: pisac racuna dug u trenutku upisa, pa pravi avans koji
+    # niko nije odobrio kad se dug u medjuvremenu smanji.
+    "banka-writer-visak-bez-potvrde": (
+        "modBankaMapiranje.bas",
+        "    If (isplataUkupno - zaBlok) > BIM_OTVORENO_PRAG And Not dozvoliVisakKaoAvans Then\n",
+        "    If False Then   ' SABOTAZA: visak postaje avans bez potvrde\n",
+        "T25_VisakTraziPotvrduOperatera",
+        "bez potvrde se NE knjizi nista",
+    ),
+
+    "banka-writer-blok-bez-om": (
+        "modBankaMapiranje.bas",
+        "    If Len(outStanica) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: blok bez otkupnog mesta prolazi\n",
+        "T24_BlokTudjegKooperantaIStorniran",
+        "blok bez otkupnog mesta se NE knjizi",
+    ),
+
+    "banka-writer-blok-storniran": (
+        "modBankaMapiranje.bas",
+        "        If UCase$(Trim$(CStr(data(r, colStorno)))) = \"DA\" Then\n",
+        "        If False Then   ' SABOTAZA: storniran blok prolazi\n",
+        "T24_BlokTudjegKooperantaIStorniran",
+        "storniran blok se NE knjizi",
     ),
     "otk-kapija-dupli-otkupid": (
         "modOtkup.bas",

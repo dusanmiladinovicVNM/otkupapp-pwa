@@ -11416,13 +11416,13 @@ EH:
     LogFatal "Test_OTK_StavkaBezZaglavljaObaraCitaoce", errNum, errDesc
 End Sub
 
-' Poruka greske koju kandidat bloka u banci podigne, ili "" kad prodje.
+' Poruka greske koju razresenje bloka u banci podigne, ili "" kad prodje.
 Private Function BankaKandidatGreska(ByVal koopID As String, _
                                      ByVal brDok As String) As String
-    Dim k As Variant
+    Dim s As String
     On Error Resume Next
     Err.Clear
-    k = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock(koopID, brDok, True)
+    s = modBankaMapiranje.BimOtkupIzBroja(koopID, brDok)
     If Err.Number <> 0 Then BankaKandidatGreska = Err.description
     Err.Clear
     On Error GoTo 0
@@ -11822,34 +11822,13 @@ EH:
     LogFatal "Test_OTK_IspravkaKapije", Err.Number, Err.description
 End Sub
 
-' NOVAC SE NE PRENOSI NA ISPRAVKU -- ZATECENO STANJE, izmereno ovim testom.
-'
-' Ocekivanje je bilo suprotno: storno oslobodi isplatu (ResetNovacOtkupLink), pa
-' je nov dokument pokupi kroz ApplyAvansToOtkup. MERENJE kaze da ne pokupi --
-' avans-petlja uzima samo Tip = NOV_VIRMAN_AVANS_KOOP (modNovac:1624), a odvezana
-' isplata je ostala VirmanFirmaKoop.
-'
-' Posledica: taj novac ne vidi ni dug (nema OtkupID) ni avans (pogresan tip).
-' Ostaje samo u kartici kooperanta. Nije uvedeno ispravkom -- isto radi obican
-' StornoOtkup_TX -- pa se ovde tvrdi kao ZATECENO, da se ne bi tumacilo kao
-' osobina novog pisca. Kad se donese odluka o prenosu, ovaj test se OKRECE.
-' ISPLATA NA NOV DOKUMENT SE NE ODBIJA -- citalac je bio na starom modelu.
-'
-' modNovac.IsplataBlokProblem je racunao vrednost bloka kao Kolicina * Cena SA
-' ZAGLAVLJA. Nov pisac (CreateOtkup_TX) te dve kolone NE PUNI -- pa je `vrednost`
-' ostajala 0, `preostalo` ispadalo 0, i SVAKA isplata bila odbijena kao "veca od
-' ostatka", na oba ziva pozivaoca (SaveOMUlaz_TX i ekran novca).
-'
-' Zasto to nijedan postojeci test nije uhvatio: fixture nosi STARI model -- redovi
-' otkupa u njemu imaju popunjeno zaglavlje. Kapija je radila nad fixture podacima
-' i padala samo nad dokumentom iz novog pisca. Zato ovaj test dokument PRAVI.
 ' BANKA VIDI NOV OTKUP KAO OTVOREN BLOK.
 '
-' modBankaMapiranje.GetOtkupCandidatesForKooperantBlock je racunao vrednost bloka
-' kao Kolicina * Cena SA ZAGLAVLJA. Nov pisac te kolone ne puni, pa je vrednost
-' ostajala 0, `otvoreno` <= 0.009, i skup kandidata PRAZAN.
+' Otvoreni iznos bloka se racunao kao Kolicina * Cena SA ZAGLAVLJA. Nov pisac te
+' kolone ne puni (od S1d ih u semi i nema), pa je vrednost ostajala 0 i blok je
+' izgledao placen.
 '
-' Posledica nije kozmeticka: BimBlokBezOtvorenih tada vrati True, pa se uplata
+' Posledica nije kozmeticka: BimOtkupBezOtvorenog tada vrati True, pa se uplata
 ' knjizi kao AVANS umesto na blok, a stavka izvoda se oznaci obradjenom. Novac
 ' ode na pogresno mesto i niko ne dobije poruku.
 '
@@ -11866,28 +11845,18 @@ Private Sub Test_BIM_NovOtkupJeOtvorenBlok()
     otkID = CreateOtkup_TX(OtkHeader(br), OtkStavke(100#, 100#, 0, 0#, 0#, 0))
     AssertTrue Len(otkID) > 0, "Banka nov blok: dokument iz NOVOG pisca napravljen"
 
-    Dim kand As Variant
-    kand = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock(TEST_KOOP_ID, br, True)
-
-    ' Ovo je tvrdnja koja razlikuje uzrok: pre popravke je skup bio PRAZAN.
-    AssertTrue IsArray(kand), "Banka nov blok: skup kandidata NIJE prazan"
+    ' Broj iz izvoda se razresava u BAS taj dokument -- jednom, na granici (S2).
+    AssertEquals otkID, modBankaMapiranje.BimOtkupIzBroja(TEST_KOOP_ID, br), _
+                 "Banka nov blok: poziv na broj razresen u OtkupID dokumenta"
 
     ' I otvoreni iznos mora biti pun -- 10000, iz stavki.
-    '
-    ' Cuvano IsArray-em: kad prva tvrdnja padne (prazan skup), kand nije niz i
-    ' kand(1, 2) obori CEO test sa FATAL 13 Type mismatch -- pa se ostale
-    ' tvrdnje ne izmere i sabotaza prijavi manje nego sto je pokvarila.
-    ' Mereno 13.09.2026: bez ovog garda sabotaza je dala 1 pad + FATAL umesto
-    ' urednog spiska.
-    If IsArray(kand) Then
-        AssertTrue Abs(CDbl(kand(1, 2)) - 10000#) < 0.001, _
-                   "Banka nov blok: otvoreno je 10000 (iz stavki, ne sa zaglavlja)"
-    End If
+    AssertTrue Abs(modBankaMapiranje.BimOtvorenoNaOtkupu(otkID) - 10000#) < 0.001, _
+               "Banka nov blok: otvoreno je 10000 (iz stavki, ne sa zaglavlja)"
 
-    ' Drugi smer: mapiranje ga NE sme videti kao blok bez otvorenih stavki --
+    ' Drugi smer: mapiranje ga NE sme videti kao blok bez otvorenog --
     ' to je tacka na kojoj bi uplata otisla u avans.
-    AssertTrue Not modBankaMapiranje.BimBlokBezOtvorenih(TEST_KOOP_ID, br), _
-               "Banka nov blok: NIJE 'blok bez otvorenih' (inace uplata ide u avans)"
+    AssertTrue Not modBankaMapiranje.BimOtkupBezOtvorenog(otkID), _
+               "Banka nov blok: NIJE 'blok bez otvorenog' (inace uplata ide u avans)"
 
     Exit Sub
 EH:

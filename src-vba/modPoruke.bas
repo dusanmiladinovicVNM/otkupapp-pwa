@@ -1642,7 +1642,6 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLD_BU_CILJ", "Faktura / blok"
     UpsertRow lo, existing, "OTKUI_FLD_BU_FAKTURA", "Faktura"
     UpsertRow lo, existing, "OTKUI_FLD_BU_BLOK", "Blok otkupa"
-    UpsertRow lo, existing, "OTKUI_LBL_BU_BLOK_BEZ_OM", "bez otkupnog mesta"
     UpsertRow lo, existing, "OTKUI_BTN_BU_AUTO", "Automatski red"
     UpsertRow lo, existing, "OTKUI_BTN_BU_RUCNO", "Ru" & ChrW(269) & "no mapiraj"
     UpsertRow lo, existing, "OTKUI_BTN_BU_SKIP", "Presko" & ChrW(269) & "i"
@@ -1670,7 +1669,7 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_NEJASAN", "nejasan smer"
     UpsertRow lo, existing, "OTKUI_LBL_BU_HINT", "Izaberi red pa radnju."
     UpsertRow lo, existing, "OTKUI_LBL_BU_HINT_AVANS", "Prazna faktura = AVANS kupca."
-    UpsertRow lo, existing, "OTKUI_LBL_BU_HINT_BLOK", "Prazan blok = poziv na broj iz izvoda."
+    UpsertRow lo, existing, "OTKUI_LBL_BU_HINT_BLOK", "Prazan blok = poziv na broj iz izvoda (mora biti jednozna" & ChrW(269) & "an)."
     UpsertRow lo, existing, "OTKUI_LBL_BU_HINT_OM", "Za OM se cilj ne bira."
     UpsertRow lo, existing, "OTKUI_ERR_BU_DVOSMISLEN", ChrW(10007) & " Red nema jednozna" & ChrW(269) & "an identitet " & ChrW(8212) & " isti ID postoji dvaput u tabeli"
     UpsertRow lo, existing, "OTKUI_ERR_BU_ZATVOREN", ChrW(10007) & " Stavka je ve" & ChrW(263) & " obra" & ChrW(273) & "ena ili presko" & ChrW(269) & "ena"
@@ -1683,7 +1682,6 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_BU_SKIP", ChrW(10007) & " Stavka nije presko" & ChrW(269) & "ena"
     UpsertRow lo, existing, "OTKUI_ERR_BU_BATCH", ChrW(10007) & " Mapiranje NIJE izvr" & ChrW(353) & "eno, promene su vra" & ChrW(263) & "ene:"
     UpsertRow lo, existing, "OTKUI_ERR_BU_BLOK_ZATVOREN", ChrW(10007) & " Izabrani blok nema otvorenih stavki " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. Proveri da li je blok ve" & ChrW(263) & " pla" & ChrW(263) & "en."
-    UpsertRow lo, existing, "OTKUI_ERR_BU_BLOK_BEZ_OM", "Blok nema upisano otkupno mesto, pa se ne mo" & ChrW(382) & "e ru" & ChrW(269) & "no mapirati. Isti broj bloka mo" & ChrW(382) & "e da postoji na dva otkupna mesta, pa bi raspodela zahvatila oba. Ispravi StanicaID na otkupnim stavkama tog bloka."
     UpsertRow lo, existing, "OTKUI_MSG_BU_AUTO", ChrW(10003) & " Stavka je automatski mapirana"
     UpsertRow lo, existing, "OTKUI_MSG_BU_RUCNO", ChrW(10003) & " Stavka je ru" & ChrW(269) & "no mapirana"
     UpsertRow lo, existing, "OTKUI_MSG_BU_SKIP", ChrW(10003) & " Stavka je presko" & ChrW(269) & "ena"
@@ -1704,10 +1702,9 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_BU_SVE", "Pokrenuti automatsko mapiranje SVIH otvorenih stavki?"
     UpsertRow lo, existing, "OTKUI_ASK_BU_AVANS", "Nije izabrana faktura." & vbCrLf & vbCrLf & "Uplata se knji" & ChrW(382) & "i kao AVANS kupca, ne kao zatvaranje fakture." & vbCrLf & vbCrLf & "Nastaviti?"
     UpsertRow lo, existing, "OTKUI_ASK_BU_RUCNO", "Ru" & ChrW(269) & "no mapirati stavku"
-    UpsertRow lo, existing, "OTKUI_ASK_BU_PODELA", "Blok ima vi" & ChrW(353) & "e otvorenih otkupnih stavki nego " & _
-        "" & ChrW(353) & "to automatska raspodela sme da podeli." & vbCrLf & _
-        "Predlo" & ChrW(382) & "ena podela zato mo" & ChrW(382) & "e da pogodi POGRE" & ChrW(352) & "AN otkup " & _
-        "(recikliran broj bloka, dupliran unos)."
+    UpsertRow lo, existing, "OTKUI_ASK_BU_PODELA", "Isplata je ve" & ChrW(263) & "a nego " & _
+        "" & ChrW(353) & "to blok duguje." & vbCrLf & _
+        "Vi" & ChrW(353) & "ak se knji" & ChrW(382) & "i kao AVANS kooperanta."
     UpsertRow lo, existing, "OTKUI_ASK_BU_PODELA_IZBOR", "DA = knji" & ChrW(382) & "i ovu podelu" & vbCrLf & "NE = knji" & ChrW(382) & "i ceo iznos kao AVANS kooperanta (ve" & ChrW(382) & "e" & ChrW(353) & " ga kasnije ru" & ChrW(269) & "no)" & vbCrLf & "OTKAZI = ne diraj stavku"
     UpsertRow lo, existing, "OTKUI_ASK_BU_PODELA_VISAK", "vi" & ChrW(353) & "ak"
 

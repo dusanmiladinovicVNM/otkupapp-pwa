@@ -2835,7 +2835,60 @@ kroz `COL_OKS_*`.
 (samo makro `Test_UndoStorno`) traže po broju; UI oporavka ide po `OperationID`. Testovi „isti broj, dva dokumenta“
 (`ReusedBroj`, `DeadParentOtherGen`) ostaju: mere ponovno korišćen broj, ne model po klasi. → S9.
 
-Sledeći korak: **S2 — banka po ID-u** (posle provere S1d + S1e u Excelu).
+**S1 je završen** (S1a–S1e, PR-ovi #354–#359). Sledeći slajs po §14.9: **S2 — banka po ID-u**.
+
+### 14.11) S2 — banka po ID-u (17.09.2026)
+
+**Pre-flight (skill `pre-flight`):**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | posle S1 otkup = jedno zaglavlje po dokumentu; „blok“ u banci = otkupni list = jedan dokument. `BrojDokumenta` je **dnevni niz po otkupnom mestu** (`modBrojevi`, `KIND_OTK` → `MaxSeqFromTable(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_DATUM, COL_OTK_STANICA, …)`, oblik `7/150326`) |
+| `IDENTITY` | GAP → zatvoren u S2 | combo bloka je nosio `(BrojDokumenta + StanicaID)`, pa je pisac iz toga **ponovo tražio** dokument — display vrednost kao zamena za identitet, plus „scope“ da par uopšte bude jednoznačan |
+| `CARDINALITY` | PROVEN | po `(broj, otkupno mesto)` postoji najviše jedan dokument; skup >1 je ili drugo otkupno mesto (legitimno) ili anomalija podataka — u oba slučaja **nije povod za raspodelu**, nego za ručno |
+| `INVARIANTS/OWNER` | PROVEN | `SaveNovac` + `LinkNovacToOtkupStrict` nepromenjeni; dodata kapija vlasništva i storna u pisaču (obrazac `modNovac.ApplyAvansToOtkup`) |
+| `WRITERS` | PROVEN | isti pisci; menja se samo ulaz (`brojBloka` → `otkupID`) |
+| `DOWNSTREAM` | PROVEN | nalozi (`modBankaExportPregled.BuildBlokIsplataList`) i primena avansa (`modNovac.ApplyAvansToOtkup`, `modScrBankaNalozi.BnAvansNadIDovima`) **već rade po `OtkupID`**; broj ostaje labela na nalogu |
+| `CAPABILITY` | PROVEN | D-032, D-033 netaknuti; D-035 greedy raspodela preko više kandidata **REPLACED**; D-036 i D-037 sačuvani (v. niže) |
+| `ACCEPTANCE` | testovi | `T03_DvosmislenPozivNeObaraBatch`, `T11_RucniKooperantBezIzboraBloka`, `T21_IzabranPlacenBlokNijeAvans`, **novi** `T24_BlokTudjegKooperantaIStorniran`, `T_BankaUvoz_RucnoMapiranjePravila`, `Test_BIM_NovOtkupJeOtvorenBlok` |
+| `PLATFORM` | N/A | nema novih Excel/COM pretpostavki |
+| `LANDING` | čisto | grana od `main` posle #358/#359 |
+
+**Izmene:**
+
+| Šta | Gde |
+|---|---|
+| Lista blokova nosi `OtkupID` (kolona 1), broj i otkupno mesto su **prikaz** | `modBankaMapiranje.GetBlokoviZaBimMapiranje`, `modScrBankaUvoz.PuniCiljCombo` |
+| Poziv na broj se razrešava **jednom**: `BimOtkupIzBroja` / `BimOtkupIzPozivaNaBroj`; 0 pogodaka = avans (namerno), >1 = `ERR_BMAP_MANUAL_REQUIRED` | `modBankaMapiranje` |
+| Pisac prima `OtkupID`: `MapBankaImportAsKooperantBlockCore(bimID, koop, otkupID, …)`; na blok ide najviše njegov dug, ostatak u avans | `modBankaMapiranje` |
+| Nova kapija pisca: dokument postoji, **nije storniran**, pripada **tom** kooperantu i **ima otkupno mesto** (`PotvrdiOtkupZaKooperanta`, `ERR_BMAP_BLOK_TUDJ` / `_STORNIRAN` / `_BEZ_OM`) | `modBankaMapiranje` |
+| **Vlasništvo OM-a:** vezan red `tblNovac` nosi `StanicaID` **dokumenta**, ne matično mesto kooperanta; avans (i višak) nose matično mesto — odluka izrečena i merena | `MapBankaImportAsKooperantBlockCore` |
+| „Otvoreno“ po dokumentu na jednom mestu: `BimOtvorenoNaOtkupu` (stavke − isplate); `BimOtkupBezOtvorenog` zamenjuje `BimBlokBezOtvorenih` | `modBankaMapiranje` |
+| Okidač potvrde: **isplata veća od duga na bloku** (`BimOtkupTraziPotvrdu`), umesto „3+ otvorenih stavki“ | `modBankaMapiranje`, `modScrBankaUvoz.PitajZaPodelu` / `TekstPodele` |
+| **Saglasnost je argument pisca**, ne UI konvencija: `dozvoliVisakKaoAvans` (podrazumevano **ne**); bez nje višak = `ERR_BMAP_VISAK_BEZ_POTVRDE` pre ijednog upisa. Auto put je prosleđuje izričito (tamo je avans namerno pravilo) | `MapBankaImportAsKooperantBlock*` |
+| Obrisano: `GetOtkupCandidatesForKooperantBlock`, `PlanBlokRaspodela`, `SortKandidatiPoOtvorenomDesc`, `MAX_BLOK_KANDIDATA`, `BimScopeKolona`, `BimBlokTraziPotvrdu`, `TryResolveOtkupForKooperant` (mrtav), `BuScopeNedostaje`, `IzabranaStanicaCilja`, `ScopeIzbora`, `Scr_BuScopeBlokaTest`, `Scr_BuStopBezOmTest`, poruke `OTKUI_*_BU_BLOK_BEZ_OM` | — |
+
+**Šta je scope bio i zašto ga više nema:** otkupno mesto je u mapiranje uvedeno zato što `(kooperant, broj)` nije bio jednoznačan.
+Kad red liste nosi `OtkupID`, dvosmislenosti nema — pa nema ni scope-a, ni kapije „blok bez otkupnog mesta“, ni schema-drift
+grane u kojoj scope tiho otpada. Tri stanja praznog stringa iz `BuScopeNedostaje` nestaju sa uzrokom.
+
+**Višak u avans je odluka, ne ostatak deljenja (review #360, drugi P1):** ekran pita nad stanjem iz trenutka **prikaza**, a pisac dug računa u trenutku **upisa**. Dok saglasnost nije bila argument, pisac je mogao da napravi avans koji njegov pozivalac nikad nije odobrio — dovoljno je da se dug u međuvremenu smanji (druga isplata, ispravka stavki). Sada `dozvoliVisakKaoAvans` putuje od mesta odluke do pisca, podrazumevano je **ne**, a bez nje se ne piše ništa i stavka izvoda ostaje otvorena da operater dobije pitanje sa tačnim brojevima (`T25`, sabotaža `banka-writer-visak-bez-potvrde`).
+
+**Vlasništvo nije isto što i identitet (review #360, P1):** pisac je znao tačan `OtkupID`, ali je `OMID` uzimao iz `tblKooperanti.StanicaID` — matičnog mesta. Za kooperanta koji predaje na dva mesta to daje red sa **tačnim** `OtkupID`-em i **pogrešnim** `OMID`-em, pa saldo tuđeg otkupnog mesta nosi kupovinu. Vezani red sada nosi `StanicaID` dokumenta (`T03`: `OTK-B@OM-1B → Novac.OMID = OM-1B`), a dokument bez otkupnog mesta se odbija (`ERR_BMAP_BLOK_BEZ_OM`, `T24`) — time je kapija „blok bez OM“ prešla sa ekrana (gde je bila deo scope-a) na mesto gde se piše. Avans i višak ostaju na matičnom mestu: nisu vezani ni za jedan dokument i mogu se kasnije primeniti na blok bilo kog mesta.
+
+**Popravljeno usput (identitet, ne kozmetika):** automatski put nije imao otkupno mesto, pa je isti broj na dva otkupna mesta
+ulazio u **jednu** raspodelu — jedna isplata na dva poslovna lanca. Sada takav red ide operateru (`T03`).
+
+**Sposobnosti:** D-035 gubi greedy raspodelu preko više kandidata (kardinalnost koja ju je pravila nestala je u S1) — ostaje
+„na blok ide njegov dug, višak u avans“. D-036 („ceo iznos kao avans, vežem kasnije“) je **sačuvan**, ali ga sada pokreće višak
+preko duga, a ne broj kandidata; bez te izmene bi jedini put do te radnje nestao sa okidačem. D-037 (izabran plaćen blok = STOP)
+radi nad `OtkupID`-em, na oba mesta (ekran i pisac).
+
+**Merenje:** `COL_OTK_BR_DOK` u bankarskom putu ostaje na tri mesta i nijedno nije traženje dokumenta po broju:
+razrešenje na granici (`OtkupIDoviPoBroju`), prikaz u listi blokova, i `TryResolveKooperantByOtkupPoziv` (poziv na broj →
+**kooperant**, ne dokument). `modNovac.GetOpenOtkupi` broj samo prenosi kao labelu.
+
+Sledeći korak: **S3 — otpremnica cutover (desktop)**.
 
 ## 15) Backlog — namerno van opsega
 
