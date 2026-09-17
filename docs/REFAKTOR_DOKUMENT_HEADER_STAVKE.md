@@ -2734,7 +2734,46 @@ Katalog sabotaža: 37 unosa sledljivosti uklonjeno; `clear-datum` preusmeren na 
 `CFG_SPECIFIKACIJA_PRINT_MODE`, `CFG_SLEDLJIVOST_PRINT_MODE`, `OBL_SLEDLJIVOST`, ikona `IC_SLEDLJ`, ključevi poruka ekrana;
 pisci veze `Otkup.OtpremnicaID` (`modSledljivost.ReassignOtkupToOtpremnica_TX`, `modDokumenta`, `modAutoHladnjaca`) — S3.
 
-Sledeći korak: **S1c**.
+#### S1c — urađeno: izvozi i push na zaglavlje + stavke (17.09.2026)
+
+**Kanon:** `modOtkup.StavkeOtkupaRedovi` nosi i `OtkupStavkaID` (kol. 7) i `BrutoKg` (kol. 8; prazno = neto), na kraju niza.
+Svaki izvoz čita tu granicu ili `ZbirStavkiPoOtkupu`/`ZbirStavkiZaOtkup` — zaglavlje bez stavki pada po imenu, nikad 0 kg.
+
+| Šta | Kako sada | Gde |
+|---|---|---|
+| `OtkupPoOM` | zbir po Stanica + Vrsta + **klasa stavke**; `BrojOtkupa` broji dokumente, ne stavke; oblik taba isti | `modStammdatenSync.OtkupPoOMRedovi` |
+| `OtkupiAll` | red po **zaglavlju**; `Klasa/Kolicina/Cena/KolAmbalaze` izbačeni, dodat `KolAmbIzdata`; raspored kolona na jednom mestu (`OtkupiAllKolone`) | `modStammdatenSync.ExportOtkupiAll` |
+| `OtkupiAllStavke` (nov tab MgmtReports) | red po stavci, raspored `modMasterSync.OtkStavkeKolone` | `OtkupiAllStavkeRedovi`; izvoz 5 → 6 tabova |
+| `SaldoOMDetail` | kg/vrednost/gajbe po kooperantu iz `ZbirStavkiZaOtkup` | `OtkupSaldoPoKooperantu` |
+| Push ka stanici | stavke → tab `OTK_STAVKE`, pa zaglavlje → `Sheet1` sa **praznim** linijskim poljima; zaglavlje je oznaka završenog push-a; slanje stavki je **idempotentno po `OtkupStavkaID`** (ugovor ispod) | `modStanicaLock.BulkPushPendingForStanica`, `BuildOTKSheetRowForOtkup` (po imenu), `EnsureOtkStavkeTab` |
+| Raspored OTK kolona | **jedno mesto**: `modMasterSync.OtkZaglavljeKolone` / `OtkStavkeKolone`; `BuildOTKOperationalHeaders_` i graditelj reda čitaju odatle (nalaz E-5 zatvoren) | `modMasterSync` |
+| `PwaIstiSadrzaj` | već poredi stavku (fail-closed, tačno jedna) — bez izmene | — |
+| Health `healthprod` | `Check_CoreTablesAndColumns` i `Check_GoogleSyncMasterSchema` traže kolone **iz kanona** (`HealthRequireKanon` → `modSchema.SchemaTableColumns`), i za `tblOtkupStavke` | AUD-055 zatvoren |
+| `modSetup.EnsureDoradeSchema` | bez formata `Otkup.Kolicina` i bez `Otkup.BrutoKg` (bruto je na stavci) | — |
+
+**Raspored `Sheet1` OTK taba ostaje 23 kolone:** to je PWA ugovor do S5 (PWA puni, `ImportOneOTKSheet` čita poziciono `GS_*`).
+Između S1c i S5 PWA prikaz desktop otkupa nema kg/cenu u `Sheet1` ni u `OtkupiAll` — dozvoljeno po tački 6 instrukcije iznad.
+
+**Obrisano (vraća S5):** `modMasterSync.AutoCreateOtpremniceFromPWA` i `_TX` (E-020, pauzirano), pisac veze
+`LinkOtkupToOtpremnicaStrict` (ostao bez pozivaoca); korak 3 ciklusa prijavljuje pauzu bez poziva. Testovi:
+`Test_RF28_AutoOtpremnicaNeMesaArtikle` (merio obrisano grupisanje) i ulaz „OTP“ u `Test_PWA_IzvedeniLanacJePauziran`.
+
+**Novi testovi (BFP):** `Test_OTK_IzvozDveKlaseIzStavki` (I 100 × 50 + II 40 × 30 = 6200 kroz OtkupPoOM, OtkupiAllStavke,
+SaldoOMDetail i push), `Test_OTK_IzvozBezStavkiPada` (kontrola, pa brisanje stavki u transakciji → sva četiri puta padaju po `OtkupID`).
+
+**Merenje:** `popis_citalaca.py` `x_otk_stavka` 22 → **0** u PROD; `x_literal` 15 → 7 (ostatak su veze
+`BrojZbirne`/`OtpremnicaID` u `modIntegritet` i dve health provere — S3/S4, ne otkup).
+
+**Ugovor `OTK_STAVKE` (review #357, P1/P2):** tab ima **tačno jedan red po `OtkupStavkaID`**. Pisac pre slanja jednom
+pročita tab (`OtkStavkeIndeksIzTaba`), ne šalje stavku koja već postoji sa istim sadržajem, a isti ID sa drugačijim
+sadržajem je **konflikt**: ne šalje se ništa od tog otkupa (ni stavke ni zaglavlje). Ponovljen push posle mrežnog pada
+zato ne može da promeni količinu. Naslov taba mora biti tačno `OtkStavkeKolone` istim redom, inače push staje
+(pisanje je poziciono). Čitalac u S5 sme dupli `OtkupStavkaID` da tretira kao kvar, ne kao zbir. Indeks važi za jedan
+prolaz: push radi pod lock-om stanice, a PWA do S5 ne piše u `OTK_STAVKE` (kad S5 uvede PWA pisca, ugovor se proširuje).
+Test `Test_OTK_PushStavkiIdempotentan`: prva stavka prođe, druga padne, retry → 2 reda, 140 kg; konflikt bez upisa;
+pogrešan redosled naslova pada. Sabotaže `push-stavke-retry-dupla`, `push-stavke-naslov-bez-provere`.
+
+Sledeći korak: **S1d**.
 
 ## 15) Backlog — namerno van opsega
 

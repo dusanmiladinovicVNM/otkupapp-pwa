@@ -1640,7 +1640,6 @@ Public Sub EnsureDoradeSchema()
     BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
 
     ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
     SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
     SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
@@ -1654,9 +1653,8 @@ Public Sub EnsureDoradeSchema()
     SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
 
     ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
-    ' Prazno = unet neto (bruto == neto); ne backfill-uje se (modPrint tretira >0 kao prisutno).
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BRUTO
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
+    ' Prazno = unet neto (bruto == neto). Otkup nosi bruto NA STAVCI (kanon,
+    ' tblOtkupStavke), pa ovde vise nema reda za tblOtkup (S1c).
     EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
     EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO

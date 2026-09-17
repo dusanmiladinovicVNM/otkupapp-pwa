@@ -102,6 +102,9 @@ Private Const VS_OTKUP_RECORD_IDS As Long = 18  ' R
 Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 
+' Tab stavki otkupa u OTK-* sheet-u stanice (S1c, REFAKTOR S14.8 t. 13).
+Public Const OTK_STAVKE_TAB As String = "OTK_STAVKE"
+
 ' ============================================================
 ' PUBLIC -- Hauptfunktion
 ' ============================================================
@@ -643,38 +646,87 @@ Private Function CreateOTKSheetWithHeader(ByVal sheetName As String, _
 End Function
 
 '======================================================================
-' BuildOTKOperationalHeaders_
+' KOLONE OTK-* SHEET-A -- JEDINO MESTO (REFAKTOR S14.8 t. 13, nalaz E-5)
 '
-' Header schema za operational OTK-* sheetove koje PWA puni, a VBA
-' ImportOtkupFromPWA_Core cita.
+' OtkZaglavljeKolone: tab Sheet1, red po otkupu. Raspored je PWA ugovor do S5:
+' PWA ga puni, ImportOneOTKSheet ga cita poziciono (GS_*). Klasa, Kolicina,
+' Cena i KolAmbalaze su u njemu jos samo zato sto PWA salje jednu klasu po
+' zapisu; VBA push ih ostavlja PRAZNE i pise stavke u OTK_STAVKE.
+'
+' OtkStavkeKolone: tab OTK_STAVKE, red po stavci; roditelj je OtkupID
+' (= ServerRecordID zaglavlja).
+'
+' Graditelji redova (modStanicaLock, izvoz OtkupiAllStavke) slazu vrednosti PO
+' IMENU iz ovih spiskova, ne po poziciji.
 '======================================================================
+Public Function OtkZaglavljeKolone() As Variant
+    OtkZaglavljeKolone = Array( _
+        "ClientRecordID", "ServerRecordID", "CreatedAtClient", "UpdatedAtClient", _
+        "UpdatedAtServer", "SyncStatus", "DeviceID", "OtkupacID", "Datum", _
+        "KooperantID", "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
+        "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", "ParcelaID", "VozacID", _
+        "Napomena", "ReceivedAt", "BrojDokumenta")
+End Function
+
+Public Function OtkStavkeKolone() As Variant
+    OtkStavkeKolone = Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
+                            COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
+End Function
+
+' Red taba OTK_STAVKE za stavku i iz modOtkup.StavkeOtkupaRedovi, po imenu.
+Private Function OtkStavkaPolje(ByVal s As Variant, ByVal i As Long, _
+                                ByVal kolona As String) As Variant
+    Select Case kolona
+        Case COL_OKS_ID: OtkStavkaPolje = s(i, 7)
+        Case COL_OKS_OTKUP_ID: OtkStavkaPolje = s(i, 1)
+        Case COL_OKS_RB: OtkStavkaPolje = s(i, 2)
+        Case COL_OKS_KLASA: OtkStavkaPolje = s(i, 3)
+        Case COL_OKS_KOLICINA: OtkStavkaPolje = s(i, 4)
+        Case COL_OKS_CENA: OtkStavkaPolje = s(i, 5)
+        Case COL_OKS_KOL_AMB: OtkStavkaPolje = s(i, 6)
+        Case COL_OKS_BRUTO: OtkStavkaPolje = s(i, 8)
+        Case Else
+            Err.Raise vbObjectError + 8141, "OtkStavkaPolje", _
+                      "Kolona OTK_STAVKE bez izvora: " & kolona
+    End Select
+End Function
+
+' Stavke otkupa kao redovi taba OTK_STAVKE: OtkupID -> Collection 0-based
+' nizova u rasporedu OtkStavkeKolone.
+'
+' Cita KANONSKU granicu (modOtkup.StavkeOtkupaRedovi): zaglavlje bez stavki,
+' nevazeca stavka ili dupli OtkupID padaju ovde po imenu -- izvoz ne sme da
+' posalje zaglavlje bez stavki kao dokument od nula kilograma.
+Public Function OtkStavkeRedoviPoOtkupu() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set OtkStavkeRedoviPoOtkupu = dict
+
+    Dim s As Variant
+    s = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim kol As Variant, i As Long, k As Long, red() As Variant, oid As String
+    kol = OtkStavkeKolone()
+    For i = 1 To UBound(s, 1)
+        ReDim red(0 To UBound(kol) - LBound(kol))
+        For k = LBound(kol) To UBound(kol)
+            red(k - LBound(kol)) = OtkStavkaPolje(s, i, CStr(kol(k)))
+        Next k
+        oid = CStr(s(i, 1))
+        If Not dict.Exists(oid) Then dict.Add oid, New Collection
+        dict(oid).Add red
+    Next i
+End Function
+
+' Header red za kreiranje OTK-* sheet-a (oblik 1 x N za WriteSheetData).
 Private Function BuildOTKOperationalHeaders_() As Variant
-    Dim headers(1 To 1, 1 To 23) As Variant
-
-    headers(1, 1) = "ClientRecordID"
-    headers(1, 2) = "ServerRecordID"
-    headers(1, 3) = "CreatedAtClient"
-    headers(1, 4) = "UpdatedAtClient"
-    headers(1, 5) = "UpdatedAtServer"
-    headers(1, 6) = "SyncStatus"
-    headers(1, 7) = "DeviceID"
-    headers(1, 8) = "OtkupacID"
-    headers(1, 9) = "Datum"
-    headers(1, 10) = "KooperantID"
-    headers(1, 11) = "KooperantName"
-    headers(1, 12) = "VrstaVoca"
-    headers(1, 13) = "SortaVoca"
-    headers(1, 14) = "Klasa"
-    headers(1, 15) = "Kolicina"
-    headers(1, 16) = "Cena"
-    headers(1, 17) = "TipAmbalaze"
-    headers(1, 18) = "KolAmbalaze"
-    headers(1, 19) = "ParcelaID"
-    headers(1, 20) = "VozacID"
-    headers(1, 21) = "Napomena"
-    headers(1, 22) = "ReceivedAt"
-    headers(1, 23) = "BrojDokumenta"
-
+    Dim kol As Variant, headers() As Variant, k As Long
+    kol = OtkZaglavljeKolone()
+    ReDim headers(1 To 1, 1 To UBound(kol) - LBound(kol) + 1)
+    For k = LBound(kol) To UBound(kol)
+        headers(1, k - LBound(kol) + 1) = kol(k)
+    Next k
     BuildOTKOperationalHeaders_ = headers
 End Function
 
@@ -692,18 +744,14 @@ Private Function IsStanicaActiveForOTK_(ByVal activeValue As Variant) As Boolean
     IsStanicaActiveForOTK_ = Not (s = "NE")
 End Function
 
-' samoDatum: opcioni scope -- obradi SAMO otkupe tog poslovnog dana. 0 = svi
-' nepovezani (produkcioni poziv iz modGoogleSyncOrchestrator). Scope koriste
-' testovi, isto kao samoBrojOtp u AutoCreateZbirnaFromOtpremnice, da run ne
-' zahvati nepovezane otkupe u svesci.
 ' IZVEDENI LANAC (otpremnica -> zbirna) JE PAUZIRAN -- CEO, ne samo prvi korak.
 '
 ' Uvoz otkupa JESTE presao na kanonski pisac. Sve sto se iz njega IZVODI nije, i
 ' svaki od tih koraka PISE NAZAD NA ZAGLAVLJE OTKUPA -- bas ono sto refaktor
 ' uklanja. Mereno:
 '
-'   AutoCreateOtpremniceFromPWA        cita VozacID/Klasa/Kolicina/Cena sa
-'                                      zaglavlja (:759-767), pise OtpremnicaID
+'   AutoCreateOtpremniceFromPWA        OBRISANA u S1c (citala linijska polja sa
+'                                      zaglavlja, pisala OtpremnicaID; vraca S5)
 '   AutoCreateZbirnaFromOtpremnice     -> BackfillOtkupBrojZbirneByOtpremnica
 '                                      pise Otkup.BrojZbirne
 '   ImportVOZRow_RowTX (VOZ/Zbirna)    -> LinkZbirnaToOtkupAndOtpremnica pise
@@ -731,235 +779,11 @@ Public Function IzvedeniLanacIzPwaDostupan() As Boolean
     IzvedeniLanacIzPwaDostupan = False
 End Function
 
-Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date = 0) As Long
-    Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
-
-    Dim tx As clsTransaction
-    Dim createdCount As Long
-
-    On Error GoTo EH
-
-    If Not IzvedeniLanacIzPwaDostupan() Then
-        Err.Raise vbObjectError + 8130, SRC, _
-                  "Auto-kreiranje otpremnica iz PWA otkupa je PAUZIRANO dok " & _
-                  "otpremnica ne predje na header + stavke (PR7). Otkupi su " & _
-                  "uvezeni; otpremnice unesi rucno."
-    End If
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-
-    createdCount = AutoCreateOtpremniceFromPWA(samoDatum)
-
-    tx.CommitTx
-    Set tx = Nothing
-
-    AutoCreateOtpremniceFromPWA_TX = createdCount
-
-    LogInfo SRC, "Auto-create Otpremnice completed. Created=" & CStr(createdCount)
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    LogErr SRC
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
-End Function
-
-Public Function AutoCreateOtpremniceFromPWA(Optional ByVal samoDatum As Date = 0) As Long
-    ' Nach ImportOtkupFromPWA: erstellt Otpremnice fuer PWA-Otkupi mit VozacID
-    ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
-    ' Returns: Anzahl erstellter Otpremnice
-    ' samoDatum: 0 = svi nepovezani; inace scope na taj poslovni dan (vidi _TX).
-    
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    
-    Dim colID As Long, colSt As Long, colDat As Long, colVoz As Long
-    Dim colOtpID As Long, colKlasa As Long, colVrsta As Long, colSorta As Long
-    Dim colKol As Long, colCena As Long, colTipAmb As Long, colKolAmb As Long
-    
-    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "AutoCreateOtpremniceFromPWA")
-    colSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, "AutoCreateOtpremniceFromPWA")
-    colDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "AutoCreateOtpremniceFromPWA")
-    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, "AutoCreateOtpremniceFromPWA")
-    colOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, "AutoCreateOtpremniceFromPWA")
-    colKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "AutoCreateOtpremniceFromPWA")
-    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "AutoCreateOtpremniceFromPWA")
-    colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, "AutoCreateOtpremniceFromPWA")
-    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "AutoCreateOtpremniceFromPWA")
-    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "AutoCreateOtpremniceFromPWA")
-    colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "AutoCreateOtpremniceFromPWA")
-    colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "AutoCreateOtpremniceFromPWA")
-    
-    ' Sammle unverknuepfte Otkupi MIT VozacID ? gruppiere nach Key
-    '
-    ' AUD-043(a): kljuc MORA da nosi i artikal-atribute.
-    ' Key = StanicaID|Datum|VozacID|Klasa|VrstaVoca|SortaVoca|Cena|TipAmbalaze
-    '
-    ' Stari kljuc (Stanica|Datum|Vozac|Klasa) je spajao SVE otkupe istog vozaca
-    ' i dana u jednu otpremnicu, a Vrsta/Sorta/Cena/TipAmbalaze su se citali sa
-    ' PRVOG reda grupe dok su se kolicine sabirale -> jabuke + kruske istog
-    ' vozaca su isle kao "sve jabuke", po ceni jabuka i u ambalazi prvog reda.
-    ' Novi segmenti se DODAJU NA KRAJ kljuca, pa parts(0..3) i dalje znace
-    ' Stanica|Datum|Vozac|Klasa (Split pozicije ostaju iste).
-    Dim groups As Object
-    Set groups = CreateObject("Scripting.Dictionary")
-    
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        Dim vozID As String: vozID = Trim$(CStr(nz(data(i, colVoz), "")))
-        Dim otpID As String: otpID = Trim$(CStr(nz(data(i, colOtpID), "")))
-        
-        ' Nur Otkupi ohne Otpremnica UND mit VozacID
-        Dim inScope As Boolean
-        inScope = True
-        If samoDatum > 0 Then
-            inScope = (Int(CDate(data(i, colDat))) = Int(samoDatum))
-        End If
-
-        If otpID = "" And vozID <> "" And inScope Then
-            Dim gKey As String
-            ' PAZI: parts(0..3) se posle CITAJU iz kljuca i UPISUJU na otpremnicu
-            ' (GenerateBrojOtpremnice + SaveOtpremnica_TX), pa ta cetiri segmenta
-            ' moraju ostati SIROVA -- normalizacija bi upisala izmenjen ID/Klasu.
-            '
-            ' Nova cetiri segmenta se NE citaju kroz parts() (metadata ide sa
-            ' firstRow), pa se tekstualni normalizuju (Trim + UCase) samo za
-            ' grupisanje: PWA ih salje iz <select> lista a frmOtkup iz combo-a, ali
-            ' zaostali space ili razlika u velicini slova (legacy red, GAS upis) ne
-            ' sme da iscepa jednu otpremnicu na dve. Otpremnica i dalje nosi
-            ' ORIGINALNI zapis sa firstRow.
-            gKey = CStr(data(i, colSt)) & "|" & _
-                   Format$(CDate(data(i, colDat)), "YYYY-MM-DD") & "|" & _
-                   vozID & "|" & _
-                   CStr(nz(data(i, colKlasa), "")) & "|" & _
-                   UCase$(Trim$(CStr(nz(data(i, colVrsta), "")))) & "|" & _
-                   UCase$(Trim$(CStr(nz(data(i, colSorta), "")))) & "|" & _
-                   Format$(CDbl(nz(data(i, colCena), 0)), "0.000000") & "|" & _
-                   UCase$(Trim$(CStr(nz(data(i, colTipAmb), ""))))
-            
-            If Not groups.Exists(gKey) Then
-                groups.Add gKey, New Collection
-            End If
-            groups(gKey).Add i  ' Row index in data array
-        End If
-    Next i
-    
-    If groups.count = 0 Then
-        AutoCreateOtpremniceFromPWA = 0
-        Exit Function
-    End If
-    
-    ' Fuer jede Gruppe: Otpremnica erstellen + Otkupi verknuepfen
-    Dim created As Long
-    Dim keys As Variant: keys = groups.keys
-    Dim k As Long
-    
-    ' Otpremnica-Zaehler pro Stanica+Datum vorladen
-    Dim otpAll As Variant
-    otpAll = GetTableData(TBL_OTPREMNICA)
-    If Not IsEmpty(otpAll) Then otpAll = ExcludeStornirano(otpAll, TBL_OTPREMNICA)
-    
-    Dim colOtpSt As Long: colOtpSt = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, "AutoCreateOtpremniceFromPWA")
-    Dim colOtpDat As Long: colOtpDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, "AutoCreateOtpremniceFromPWA")
-    
-    For k = 0 To UBound(keys)
-        Dim parts() As String: parts = Split(keys(k), "|")
-        ' parts(0)=StanicaID, parts(1)=Datum, parts(2)=VozacID, parts(3)=Klasa
-        
-        Dim grpRows As Collection: Set grpRows = groups(keys(k))
-        
-        ' Aggregiere Kolicina, Ambalaza, nehme Vrsta/Sorta/Cena vom ersten.
-        ' AUD-043(a): "vom ersten" je sada bezbedno -- Vrsta/Sorta/Cena/TipAmb su
-        ' deo grupnog kljuca, pa su SVI redovi grupe identicni po tim poljima.
-        Dim totalKol As Double: totalKol = 0
-        Dim totalAmb As Long: totalAmb = 0
-        Dim firstRow As Long: firstRow = grpRows(1)
-        
-        Dim r As Long
-        For r = 1 To grpRows.count
-            Dim ri As Long: ri = grpRows(r)
-
-            RequireSingleMasterSyncRow TBL_OTKUP, COL_OTK_ID, CStr(data(ri, colID)), _
-                               "AutoCreateOtpremniceFromPWA"
-
-            totalKol = totalKol + CDbl(nz(data(ri, colKol), 0))
-            totalAmb = totalAmb + CLng(nz(data(ri, colKolAmb), 0))
-        Next r
-        
-        ' BrojOtpremnice: kanon "x/ddmmyy[-rb]" preko modBrojevi.GenerateBrojOtpremnice.
-        ' Helper interno radi MaxSeqFromTable scan; ne treba lokalni seqDict.
-        Dim brojOtp As String
-        brojOtp = GenerateBrojOtpremnice(parts(0), CDate(parts(1)))
-        
-        If Len(brojOtp) = 0 Then
-            Err.Raise vbObjectError + 8200, "AutoCreateOtpremniceFromPWA", _
-                "GenerateBrojOtpremnice nije vratio broj za stanica=" & parts(0)
-        End If
-        
-        ' Otpremnica erstellen (BrojZbirne leer -- Vozac/Operator setzt spaeter)
-        Dim newOtpID As String
-        newOtpID = SaveOtpremnica_TX( _
-            CDate(parts(1)), _
-            parts(0), _
-            parts(2), _
-            brojOtp, _
-            "", _
-            CStr(nz(data(firstRow, colVrsta), "")), _
-            CStr(nz(data(firstRow, colSorta), "")), _
-            totalKol, _
-            CDbl(nz(data(firstRow, colCena), 0)), _
-            CStr(nz(data(firstRow, colTipAmb), "")), _
-            totalAmb, _
-            parts(3) _
-        )
-        
-        If Len(Trim$(newOtpID)) = 0 Then
-            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 20, "AutoCreateOtpremniceFromPWA", _
-                    "SaveOtpremnica_TX nije vratio OtpremnicaID. BrojOtpremnice=" & brojOtp
-        End If
-
-        RequireSingleMasterSyncRow TBL_OTPREMNICA, COL_OTP_ID, newOtpID, _
-                           "AutoCreateOtpremniceFromPWA"
-
-        For r = 1 To grpRows.count
-            ri = grpRows(r)
-
-            Dim otkupID As String
-            otkupID = CStr(data(ri, colID))
-
-            LinkOtkupToOtpremnicaStrict otkupID, newOtpID, _
-                                        "AutoCreateOtpremniceFromPWA"
-        Next r
-
-        created = created + 1
-    Next k
-    
-    AutoCreateOtpremniceFromPWA = created
-End Function
-
 ' ============================================================
 ' MALINA MOD -- C: VozacID := StanicaID na tblOtkup.
 '
-' AutoCreateOtpremniceFromPWA pravi otpremnice samo za otkupe koji IMAJU
-' VozacID (grupisanje StanicaID|Datum|VozacID|Klasa, vidi filter gore).
+' Auto-otpremnica iz PWA (obrisana u S1c, vraca S5) je pravila otpremnice samo
+' za otkupe koji IMAJU VozacID (grupisanje StanicaID|Datum|VozacID|Klasa).
 ' U malina modu nema vozaca, pa se PRE auto-otpremnice VozacID popunjava
 ' StanicaID-em -- time se okidac pali, a brojevi ostaju konzistentni
 ' (otkupac == stanica). Idempotentno: dira samo prazan VozacID.
@@ -2764,21 +2588,6 @@ Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
 
     RequireSingleMasterSyncRow = CLng(rows(1))
 End Function
-
-Private Sub LinkOtkupToOtpremnicaStrict(ByVal otkupID As String, _
-                                        ByVal otpremnicaID As String, _
-                                        ByVal sourceName As String)
-    Dim rowOtkup As Long
-    Dim rowOtpremnica As Long
-
-    rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, COL_OTK_ID, otkupID, sourceName)
-    rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
-
-    RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_OTPREMNICA_ID, _
-                      otpremnicaID, sourceName
-    ' Faza 7 korak 5: dual-write denorm poslovni kljuc (stabilan kroz re-verziju).
-    SetOtkupBrojOtpremnice rowOtkup, otpremnicaID
-End Sub
 
 ' ZBR-CHILD-01: generaciju PRIMA, ne pogadja.
 '
