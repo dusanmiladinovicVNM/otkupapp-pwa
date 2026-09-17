@@ -29,13 +29,13 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S1b (posle provere S1a u Excelu)
+## Sledeći korak: S1b-1 (brisanje čitalaca starog modela)
 
-1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight S1: §14.10.
-2. **S1a urađen** (§14.10 „S1a — urađeno“): obrisan stari pisac otkupa i zatvoreni mrtvi lanci, testovi na
-   `CreateOtkup_TX`, nova grupa `x_otk_stavka` u `popis_citalaca` (74 PROD mesta). `run_vba` i kompajl još nisu
-   pokrenuti — `python tools/run_vba.py --suite RunBusinessFlowProSuite` + `Debug → Compile VBAProject`.
-3. **Sledeće:** S1b — desktop čitaoci na stavke (§14.10), uključujući mrtvi panel `modOtkupBlok`.
+1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight i S1a: §14.10.
+2. S1a spojen (#352): stari pisac otkupa i mrtvi lanci obrisani, pun `run_vba` zelen.
+3. **Odluka 17.09:** procedure starog modela koje čitaju polja stavki otkupa se u S1 **brišu**, ne prevode —
+   spisak i lanac pozivalaca: §14.10 „S1b — odluka operatera i spisak“. **Sledeće: S1b-1** (brisanje), pa S1b-2
+   (prevođenje preostalih čitalaca na stavke).
 
 ## Alati i kapije
 

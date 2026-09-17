@@ -2615,7 +2615,36 @@ bruto koristi `StavkeOtkupaRedovi`; zbir po dokumentu koristi `ZbirStavkiPoOtkup
   `gen_schema_module --check` u koraku. Prvi krug: `RunBusinessFlowProSuite` 1360/0 i ručni Compile čist.
   **Merge kapija (review #352):** pun `python tools/run_vba.py` 12/12 + `Debug → Compile VBAProject` posle review ispravki.
 
-Sledeći korak: **S1b**.
+#### S1b — odluka operatera i spisak (17.09.2026)
+
+Merenje posle S1a (`x_otk_stavka`, PROD, van sync/izvoza i `modSetup`): 32 mesta u 20 procedura.
+
+**Odluka:** čitaoci polja stavki koji žive u procedurama **starog modela** (veza preko `Otkup.OtpremnicaID`,
+poređenje po klasi reda, pojam „duplikat broj+klasa“) se u S1 **ne prevode nego brišu**, zajedno sa granom
+pozivaoca koja ih koristi. Sposobnost koju su nosili vraća S3 (otpremnica, izgubljeni blokovi, storno blokova),
+S4 (zbirna) ili S9 (sledljivost, integritet); do tada ne radi (§14.7). S1d ostaje posle S1c.
+
+**S1b-1 — brisanje (lanac pozivalaca izmeren grep-om):**
+
+| Briše se | Pozivaoci (procedura) — šta se uklanja iz njih | Vraća |
+|---|---|---|
+| `modSledljivost.AutoLinkOtkupOtpremnica` + `AutoLinkOtkupOtpremnica_TX` | `modScrSledljivost:432` (radnja auto-link na ekranu SLEDLJIVOST); testovi `modBusinessFlowProTests` `:584`, `:1338`, `:13612`, `:13720` | nijedan (heuristika; nov model ima eksplicitne izvore) |
+| `modSledljivost.TraceByZbirna` | `modIzvestaj.StampajSledljivostZbirne:6105`, `modPaletniList.GetKooperantiZaZbirnu:2635`, `modPaletniList.GetOtkupiZaPalete:2712`; test `Test_FullDocumentChainHappyPath:590` | S9 |
+| `modSledljivost.GetUnlinkedOtkupi` | `modIntegritet.Chk_B2_UnlinkedOtkupi:234` (provera odlazi, §14.8 t. 11) | S3 (provera novog modela) |
+| `modDokumenta.GetLostOtkupBlokovi` | `modIntegritet.Chk_B3_IzgubljeniBlokovi:251`, `modOtkupBlok.LoadLostBlokovi:1034`, `modScrDokumenti.RowsIzgubljeni:623` (lista IZGUBLJENI), `modStornoRecovery.GetNedovrseno:71` (vrsta reda `IZGUBLJEN_BLOK`) | S3 |
+| `modStornoFlow.GetStornoBlockRows` | `modScrStorno.StornirajBlokoveAko:1265` (storno blokova uz storno otpremnice); testovi `modTest.T_BlokoviF8_PoIdentitetu:3723-3771` | S3 |
+| `modStornoZurnal.OtkupReissueDupExists` | `modStornoZurnal.UndoOperation_TX:171` (provera duplikata broj+klasa pri undo) | nijedan (pojam nestaje: otkup je jedan dokument) |
+
+**S1b-2 — prevođenje na stavke** (sposobnost ostaje): `modIzvestaj.ReportOtkupRobaOM:2745`,
+`ReportSledljivostLanac:5124-5133`, `ReportSledljivostProblemi:5688-5692` (ako ne padnu uz `TraceByZbirna`),
+`modPaletniList.GetOtkupiZaPalete` (ako ostane), `modScrDokumenti.ColKlasa/ColKolicina/ColKolAmb/ColCena` +
+`RedoviZaTip` + `RowsBlokovi` (mreža), `modStornoDok.Col*ZaPrefill` (storno prefill po stavkama, B-036), živi deo
+`modOtkupBlok` (`SumKolByOtp`, `SumAmbByOtp`, `SumBrutoByOtp`, `BuildNapisanoByOtp`, `ExistingBlokCena`, `RenderSpec`,
+`LoadBlokovi`, `KoopPrometYear`) i mrtvi lanac panela (`LoadOtpremnice`, `BuildFirstBlokCena`,
+`OfferHladnjacaIspravka` → `PrefillOtkupFromStornirano`) koji se briše. Izvor: `modOtkup.ZbirStavkiPoOtkupu` /
+`StavkeOtkupaRedovi`; bruto samo iz `StavkeOtkupaRedovi`.
+
+Sledeći korak: **S1b-1**.
 
 ## 15) Backlog — namerno van opsega
 
