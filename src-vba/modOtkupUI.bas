@@ -7557,8 +7557,15 @@ Private Function SaldoOMUkupno(ByVal stanicaID As String) As Double
     On Error Resume Next
     res = ReportSaldoOM(stanicaID, DateSerial(Year(Date), 1, 1), Date)
     If Not IsArray(res) Then Exit Function
-    ' poslednji red = UKUPNO; kolona 5 = Saldo
-    SaldoOMUkupno = CDbl(res(UBound(res, 1), 5))
+    SaldoOMUkupno = SaldoIzIzvestajaOM(res)
+End Function
+
+' Saldo iz rezultata ReportSaldoOM: poslednji red je UKUPNO, a saldo je kolona 6
+' (2 kg, 3 vrednost, 4 isplaceno, 5 agrohemija, 6 saldo, 7 ambalaza). Plocica je
+' citala kolonu 5 -- agro zaduzenje -- pa nije reagovala ni na otkup ni na
+' isplatu (AUD-056). Javna da test tvrdi polozaj bez podataka u svesci.
+Public Function SaldoIzIzvestajaOM(ByVal res As Variant) As Double
+    SaldoIzIzvestajaOM = CDbl(res(UBound(res, 1), 6))
 End Function
 
 Private Function HeaderStatusText() As String

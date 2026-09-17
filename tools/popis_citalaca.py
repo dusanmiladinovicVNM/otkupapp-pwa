@@ -117,8 +117,8 @@ DUAL_READ = re.compile(r"\bCOL_OTK_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO)\b|\bCOL_O
 
 # --- kapije pauze -----------------------------------------------------------
 # (modul, funkcija): funkcija mora da vraca konstantno False, inace upozorenje.
-KAPIJE = [("modMasterSync", "IzvedeniLanacIzPwaDostupan"),
-          ("modOtkupBlok", "NapredakBlokaDostupan")]
+# modOtkupBlok.NapredakBlokaDostupan obrisana u S1b-2 (bilans otpremnice cita stavke).
+KAPIJE = [("modMasterSync", "IzvedeniLanacIzPwaDostupan")]
 # Izricito ugasen poziv: u modulu stoji poruka o pauzi umesto poziva.
 # (modul sa porukom, kljuc poruke, ciljni modul, ciljna procedura)
 UGASENI = [("modOtkupUnos", "OTKUNOS_MSG_LANAC_PAUZIRAN", "modAutoHladnjaca", "AutoChainHladnjaca")]

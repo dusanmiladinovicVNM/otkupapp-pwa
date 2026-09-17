@@ -500,6 +500,7 @@ Public Sub RunAllTests()
     RunOne 210
     RunOne 211
     RunOne 212
+    RunOne 213
     RunOne 119
     RunOne 120
     RunOne 121
@@ -786,6 +787,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 210: TestName = "T_BrojZauzetUNizu_Revers"
         Case 211: TestName = "T_ReversValidiraj_BrojUNizu"
         Case 212: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
+        Case 213: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 52: TestName = "T_MapaImena_KljucNosiKolone"
         Case 51: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 50: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -1006,6 +1008,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 210: T_BrojZauzetUNizu_Revers
         Case 211: T_ReversValidiraj_BrojUNizu
         Case 212: T_ReversValidiraj_KoopBrojDrugeStanice
+        Case 213: T_KpiSaldoOM_CitaKolonuSalda
         Case 52: T_MapaImena_KljucNosiKolone
         Case 51: T_KesTabela_NeMemoiseNeuspeh
         Case 50: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -17511,3 +17514,20 @@ Public Function NalazSadrzi(ByVal rows As Variant, ByVal sifra As String, _
         End If
     Next i
 End Function
+
+' ============================================================
+' 213. KPI saldo OM cita kolonu SALDA iz ReportSaldoOM (AUD-056)
+' ============================================================
+' Plocica je citala kolonu 5 (agrohemija) umesto 6 (saldo), pa se nije
+' pomerala ni posle otkupa ni posle isplate. Sinteticki red UKUPNO nosi
+' razlicit broj u svakoj koloni, pa pogresan polozaj daje pogresan broj.
+Private Sub T_KpiSaldoOM_CitaKolonuSalda()
+    Dim res(1 To 2, 1 To 7) As Variant, c As Long
+    For c = 1 To 7
+        res(1, c) = 0
+        res(2, c) = c * 100
+    Next c
+    res(2, 1) = "UKUPNO"
+    AssertEq modOtkupUI.SaldoIzIzvestajaOM(res), 600#, _
+             "KPI saldo OM = kolona 6 poslednjeg reda (ne 5 = agrohemija)"
+End Sub

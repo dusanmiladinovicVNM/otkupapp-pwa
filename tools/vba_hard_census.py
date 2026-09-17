@@ -59,7 +59,6 @@ EKSTENZIJE = (".bas", ".cls", ".frm", ".doccls")
 # NIJE vecna -- MRTAV_UNOS pravilo tera da se odrzava.
 WHITELIST = (
     "clsAdminBtn",
-    "clsBlokUI",
     "clsConfigBtn",
     "clsFlatBtn",
     "clsUiSink",
