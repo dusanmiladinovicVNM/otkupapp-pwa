@@ -2589,7 +2589,33 @@ bruto koristi `StavkeOtkupaRedovi`; zbir po dokumentu koristi `ZbirStavkiPoOtkup
 6. **Između S1c i S5 PWA prikaz desktop otkupa može biti pogrešan** (VBA piše nov oblik, GAS/PWA čitaju stari) —
    dozvoljeno po §14.7; S5 to zatvara.
 
-**Otvoreno:** ništa od domena. Sledeći korak: **S1a**.
+**Otvoreno:** ništa od domena.
+
+#### S1a — urađeno (17.09.2026)
+
+- **Obrisano:** `modOtkup.SaveOtkup_TX`, `SaveOtkup`, `GetKooperantNazivForNovac` (bez pozivaoca);
+  zatvoreni mrtvi lanci `modHelpers.CheckVerwaisteDokumente`, `modDokumenta.GetStorniraniGrupisano` →
+  `GetStorniraniByTip`, **ceo modul `modMarza`** (javni `ReportMarza*` bez pozivaoca; ostatak su bili nedostupni privatni helperi; marža je van refaktora, §14.8 t. 8),
+  `modOtkupUI.ColSpecIdx` → `modScrDokumenti.ColumnSpec`. Posle brisanja grep ne nalazi nijedan poziv.
+- **Testovi:** 8 poziva starog pisca u `modBusinessFlowProTests` prešlo je na `CreateOtkup_TX`
+  (`OtkHeader`/`OtkStavka`, `NoviOtkupFixture`); zaglavlje bez stavki pravi nov
+  `OtkupBezStavkiFixture` (synthetic anomaly: kanonski otkup pa brisanje stavki u transakciji testa);
+  deo `Test_BKTX_VlasnikOsaOdbijaTudjuStanicu` koji je merio stari pisac je obrisan. Review #352 (P1):
+  `CreateOtkup_TX` zove `ApplyAvansToOtkup` (`modOtkup.bas:710`), pa svaki test koji se vraća rollback-om a pravi
+  otkup snapshot-uje i **`TBL_NOVAC`** (`Test_OtkupReadHelpersExcludeStornirano`, `Test_OTP_StariOtkupNeUlazi`,
+  `Test_BKTX_VlasnikOsaOdbijaTudjuStanicu`, `Test_OTK_VrednostBezStavkiPada`); `WHO_WRITES.md` regenerisan.
+- **Alat:** `popis_citalaca.py` grupa **`x_otk_stavka`** (`COL_OTK_KOLICINA/CENA/KLASA/KOL_AMB/BRUTO/NOVAC/PRIMALAC`,
+  bez `TIP_AMB`/`KOL_AMB_IZDATA`). Dokaz u oba smera: sabotaža `COL_OTK_KOLICINA` → `x_otk_stavka` 74→75 i
+  `otk_linija` 91→92; sabotaža `COL_OTK_KOL_AMB_IZDATA` → `x_otk_stavka` 74 (ne raste), `otk_linija` 92; vraćeno 74/91.
+- **Prag posle S1a:** `x_saveotkup` = 0; `x_otk_stavka` PROD 74 (ZIV_UI 55 · ZIV_MAKRO 7 · PAUZIRAN 4 · MRTAV 8).
+- **Premešteno u S1b:** mrtvi lanac panela u `modOtkupBlok` (`LoadOtpremnice` ima 6 poziva unutar modula,
+  `BuildFirstBlokCena`, `OfferHladnjacaIspravka` → `PrefillOtkupFromStornirano`) — traži proveru celog starog
+  panela bloka, nije zatvoren lanac.
+- **Verifikacija:** `vba_check` čisto, `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
+  `gen_schema_module --check` u koraku. Prvi krug: `RunBusinessFlowProSuite` 1360/0 i ručni Compile čist.
+  **Merge kapija (review #352):** pun `python tools/run_vba.py` 12/12 + `Debug → Compile VBAProject` posle review ispravki.
+
+Sledeći korak: **S1b**.
 
 ## 15) Backlog — namerno van opsega
 

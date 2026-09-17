@@ -811,13 +811,20 @@ Private Sub Test_InvalidOtkupNegativeCenaDoesNotAppend()
     beforeOtkup = CountRows(TBL_OTKUP)
 
     Dim result As String
-    result = SaveOtkup_TX( _
-        NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, _
-        TEST_VRSTA, TEST_SORTA, _
-        100#, -1#, TEST_TIP_AMB, 1, _
-        TEST_VOZ_ID, TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("NEGPRICE"), _
-        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), _
-        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NEGPRICE"))
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(KLASA_I, 100#, -1#, 1, 0#)
+
+    Dim beforeStavke As Long
+    beforeStavke = CountRows(TBL_OTKUP_STAVKE)
+
+    Dim razlog As String
+    result = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("NEGPRICE")), _
+                            stavke, razlog)
+    AssertTrue InStr(1, razlog, "Cena mora biti veca od nule", vbTextCompare) > 0, _
+               "Invalid otkup negative cena: kapija imenuje razlog (bilo: " & razlog & ")"
+    AssertEquals CStr(beforeStavke), CStr(CountRows(TBL_OTKUP_STAVKE)), _
+                 "Invalid otkup negative cena did not append stavka"
 
     AssertEquals "", result, "Invalid otkup negative cena returns empty"
     AssertEquals CStr(beforeOtkup), CStr(CountRows(TBL_OTKUP)), _
@@ -836,13 +843,19 @@ Private Sub Test_InvalidOtkupInvalidClassDoesNotAppend()
     beforeOtkup = CountRows(TBL_OTKUP)
 
     Dim result As String
-    result = SaveOtkup_TX( _
-        NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, _
-        TEST_VRSTA, TEST_SORTA, _
-        100#, 10#, TEST_TIP_AMB, 1, _
-        TEST_VOZ_ID, TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BADCLASS"), _
-        0#, "TEST OPERATOR", "BAD", GetTestParcelaID(), _
-        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BADCLASS"))
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka("BAD", 100#, 10#, 1, 0#)
+
+    Dim beforeStavke As Long
+    beforeStavke = CountRows(TBL_OTKUP_STAVKE)
+
+    Dim razlog As String
+    result = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BADCLASS")), _
+                            stavke, razlog)
+    AssertTrue Len(razlog) > 0, "Invalid otkup class: kapija vraca razlog"
+    AssertEquals CStr(beforeStavke), CStr(CountRows(TBL_OTKUP_STAVKE)), _
+                 "Invalid otkup class did not append stavka"
 
     AssertEquals "", result, "Invalid otkup class returns empty"
     AssertEquals CStr(beforeOtkup), CStr(CountRows(TBL_OTKUP)), _
@@ -1100,9 +1113,8 @@ EH:
     LogFail "Dokumenta read helpers exclude stornirano", Err.description
 End Sub
 
-' Legacy pisac (SaveOtkup_TX) pravi ZAGLAVLJE BEZ STAVKI. Od review-a #334
-' takav red obara svakog citaoca vrednosti otkupa, pa test radi u sopstvenoj
-' transakciji i ROLLBACK-uje se -- ciscenje je deo testa, ne kozmetika.
+' Fixture je kanonski otkup (CreateOtkup_TX kroz NoviOtkupFixture); test se
+' vraca rollback-om jer markira storno i zigose BrojZbirne.
 Private Sub Test_OtkupReadHelpersExcludeStornirano()
     Dim tx As clsTransaction
 
@@ -1128,21 +1140,17 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
-    activeID = SaveOtkup_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, _
-        TEST_VRSTA, TEST_SORTA, _
-        100#, 10#, TEST_TIP_AMB, 1, _
-        TEST_VOZ_ID, brojActive, _
-        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), brojZbirne)
+    activeID = NoviOtkupFixture(testDate, TEST_ST_ID, brojActive, brojZbirne, _
+                                100#, 10#, 1, 0#, 0#, 0)
 
-    stornoID = SaveOtkup_TX( _
-        testDate, TEST_KOOP_ID, TEST_ST_ID, _
-        TEST_VRSTA, TEST_SORTA, _
-        200#, 10#, TEST_TIP_AMB, 1, _
-        TEST_VOZ_ID, brojStorno, _
-        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), brojZbirne)
+    stornoID = NoviOtkupFixture(testDate, TEST_ST_ID, brojStorno, brojZbirne, _
+                                200#, 10#, 1, 0#, 0#, 0)
 
     AssertTrue Len(activeID) > 0 And Len(stornoID) > 0, _
                "Otkup storno filter fixture rows created"
@@ -8436,14 +8444,16 @@ Private Sub Test_OTP_StariOtkupNeUlazi()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     Dim stariID As String
-    stariID = SaveOtkup_TX(NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
-                           TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
-                           TEST_PREFIX & "-OTK-SM-" & scenario, 0#, "", KLASA_I)
+    stariID = OtkupBezStavkiFixture(TEST_PREFIX & "-OTK-SM-" & scenario)
 
-    AssertTrue Len(stariID) > 0, "OTP stari otkup: stari pisac je napravio red"
+    AssertTrue Len(stariID) > 0, "OTP stari otkup: zaglavlje bez stavki napravljeno"
     AssertEquals "0", CStr(OtkBrojStavkiZaOtkup(stariID)), _
                  "OTP stari otkup: nema stavki (inace test ne meri nista)"
 
@@ -9467,13 +9477,15 @@ Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
 
     SeedBktxDrugaStanica
 
-    ' Legacy SaveOtkup_TX (dole) pravi zaglavlje BEZ STAVKI -- od review-a
-    ' #334 takav red obara citaoce vrednosti, pa se test vraca rollback-om.
+    ' Kontrolni upis prolazi i ostaje u svesci -- test se vraca rollback-om.
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
     ' Preduslov: bez razlicitog numerickog dela test ne meri nista.
     AssertTrue modBrojevi.ExtractNumericFromEntityID(BKTX_ST2) <> _
@@ -9512,16 +9524,6 @@ Private Sub Test_BKTX_VlasnikOsaOdbijaTudjuStanicu()
                  CStr(modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_OTK, _
                       TEST_ST_ID, d, "0" & modBrojevi.FormatBroj(BKTX_ST2, d, 1))), _
                  "BKTX vlasnik: vodeca nula ne sakriva tudjeg vlasnika"
-
-    ' Legacy SaveOtkup je Public i pise isti broj u istu tabelu -- ista kapija.
-    AssertEquals "", SaveOtkup_TX(d, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
-                                  TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
-                                  modBrojevi.FormatBroj(BKTX_ST2, d, 1), 0#, "", KLASA_I), _
-                 "BKTX vlasnik: legacy SaveOtkup odbija broj druge stanice"
-    AssertTrue Len(SaveOtkup_TX(d, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
-                                TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
-                                modBrojevi.FormatBroj(TEST_ST_ID, d, 2), 0#, "", KLASA_I)) > 0, _
-               "BKTX vlasnik: legacy SaveOtkup prima broj ove stanice"
 
     tx.RollbackTx
     Set tx = Nothing
@@ -12582,12 +12584,13 @@ Private Sub Test_OTK_VrednostBezStavkiPada()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
+    ' CreateOtkup_TX zove ApplyAvansToOtkup: fixture sme da potrosi ili
+    ' podeli slobodan avans kooperanta, pa i tblNovac mora nazad.
+    tx.AddTableSnapshot TBL_NOVAC
 
-    ' Stari pisac pravi red BEZ stavki -- tacno oblik koji kapija mora da uhvati.
+    ' Zaglavlje BEZ stavki (sinteticka anomalija) -- oblik koji kapija mora da uhvati.
     Dim stariID As String
-    stariID = SaveOtkup_TX(NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, _
-                           TEST_SORTA, 400#, 50#, TEST_TIP_AMB, 20, TEST_VOZ_ID, _
-                           TEST_PREFIX & "-OTK-VS-" & scenario, 0#, "", KLASA_I)
+    stariID = OtkupBezStavkiFixture(TEST_PREFIX & "-OTK-VS-" & scenario)
 
     AssertTrue Len(stariID) > 0, "OTK vrednost: stari red napravljen"
     AssertEquals "0", CStr(OtkBrojStavkiZaOtkup(stariID)), _
@@ -13089,6 +13092,33 @@ End Function
 
 Private Function OtpBrojClanova(ByVal otpID As String) As Long
     OtpBrojClanova = FindRows(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otpID).count
+End Function
+
+' Zaglavlje otkupa BEZ STAVKI -- synthetic anomaly / fault injection.
+'
+' Jedini pisac (CreateOtkup_TX) takav red ne pravi; kapije koje ga odbijaju se
+' mere tako sto se kanonskom otkupu obrisu stavke. Pozivalac drzi transakciju
+' sa snapshot-om TBL_OTKUP i TBL_OTKUP_STAVKE i vraca je rollback-om.
+Private Function OtkupBezStavkiFixture(ByVal brDok As String) As String
+    Const SRC As String = "OtkupBezStavkiFixture"
+
+    Dim razlog As String
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(400#, 50#, 20, 0#, 0#, 0), razlog)
+    If Len(otkID) = 0 Then
+        Err.Raise vbObjectError + 9401, SRC, "CreateOtkup_TX nije vratio ID: " & razlog
+    End If
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    Dim k As Long
+    If Not rows Is Nothing Then
+        For k = rows.count To 1 Step -1
+            RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), SRC
+        Next k
+    End If
+
+    OtkupBezStavkiFixture = otkID
 End Function
 
 Private Function OtkBrojStavkiZaOtkup(ByVal otkupID As String) As Long
