@@ -25,26 +25,19 @@
 | #333 pre-flight PR7 · #334 čitaoci vrednosti otkupa na stavke | ✅ |
 | #335 alat `tools/popis_citalaca.py` + odluke 16.09 | ✅ |
 | **Mapa sposobnosti** | ✅ spojena u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` (387 sposobnosti; ulazi A–F ostaju u `docs/DOMEN/mapa_sposobnosti_ulazi/`) |
-| Odluke domena (ispod) | ⏳ |
+| Odluke domena | ✅ §14.8 (17.09.2026) |
 | Nova tabela PR-ova po novom modelu | ⏳ |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: odluke domena
+## Sledeći korak: nova tabela slajsova
 
-1. Mapa je gotova: `docs/DOMEN/MAPA_SPOSOBNOSTI.md` — 387 sposobnosti (A 38 · B 48 · C 62 · D 73 · E 76 · F 90),
-   sa presudom zavisnosti od starog modela po redu, nalazima za redosled slajseva, NEPROVERENO i pokrivenošću
-   (49 živih pomoćnih procedura starog modela bez pomena — lista u mapi).
-2. Ispravke iz pregleda A–F primenjene su u `MAPA_SPOSOBNOSTI.md` (spojeno 5 GAS/PWA parova, izbačeno 5 popravki
-   podataka starog modela: F-061, F-090..F-093).
-3. **Sledeće:** odluke domena (ispod), pa nova tabela PR-ova po novom modelu, sa mapom kao spiskom obaveznih ishoda.
-
-## Otvorene odluke domena (posle mape)
-
-- ambalaža otpremnice: ko i kada knjiži izlaz gajbi stanica → vozač (`DOMAIN GAP`);
-- `cenaII` kad zaglavlje otpremnice nosi jednu `PredlogCena`;
-- ostaje li kucani bruto;
-- ko pravi radnju „Izdaj“ (`IzdajOtpremnicu_TX` nema pozivaoca);
-- PWA vozač i otpremnica (`src/js/features/vozac/zbirna.js`).
+1. Mapa je gotova: `docs/DOMEN/MAPA_SPOSOBNOSTI.md` — 387 sposobnosti (A 38 · B 48 · C 62 · D 73 · E 76 · F 90).
+2. Odluke domena su donete 17.09.2026: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.8 (ambalaža pri izdavanju,
+   predlog cene po klasi na stavci, bruto na stavci svuda, dugme „Izdaj“, PWA dodela pravi otpremnicu, vozač vidi
+   otpremnice i šalje zbirnu kao dokument, banka vezuje po ID-u, marža u slajsu fakture, makroi bez brane).
+3. **Sledeće:** nova tabela PR-ova (slajsova) po novom modelu — svaki slajs navodi koje sposobnosti iz mape
+   pokriva, koje odluke iz §14.8 primenjuje i koje kolone/procedure starog modela briše (uključujući 49 pomoćnih
+   procedura iz sekcije „Pokrivenost“ u mapi). Posle svakog PR-a projekat se kompajlira.
 
 ## Alati i kapije
 

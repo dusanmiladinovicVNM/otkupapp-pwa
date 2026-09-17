@@ -2417,6 +2417,30 @@ legacy mehanizma u mapu se upisuje **ishod** koji je tvrdio, a test se briše. S
 
 ---
 
+### 14.8) Odluke domena posle mape sposobnosti (17.09.2026)
+
+Ulaz: `docs/DOMEN/MAPA_SPOSOBNOSTI.md` (387 sposobnosti). Odlučio operater; oznaka **[podrazumevano]** znači da
+nije posebno pitano i važi dok operater ne kaže drugačije.
+
+| # | Pitanje | Odluka | Posledica za slajs |
+|---|---|---|---|
+| 1 | Ambalaža otpremnice (`DOMAIN GAP`): kada se knjiži izlaz gajbi stanica → vozač | **Pri izdavanju.** Količina = zbir `KolAmbalaze` sa stavki izdate otpremnice | `TrackAmbalaza` ide u `IzdajOtpremnicu_TX` / `CreateOtpremnicaIzIzvora_TX`, ne u nacrt; izmena nacrta ne dira `tblAmbalaza` |
+| 2 | `cenaII` kad zaglavlje nosi jednu `PredlogCena` | **Predlog cene po klasi na stavci otpremnice**; zaglavlje nema cenu | očekivana stavka: `Klasa`, `Kolicina`, `KolAmbalaze`, `PredlogCena`; prefill otkupa uzima cenu klase; `Otpremnica.Cena`/`PredlogCena` se briše sa zaglavlja |
+| 3 | Kucani bruto | **Ostaje, `BrutoKg` na stavci** otkupa, otpremnice i prijemnice | bruto→neto (tara po gajbici) po klasi na stavci; isti prekidač `OTKUP_BRUTO_UNOS`; `brutoKgI/II` sa zaglavlja nestaju |
+| 4 | Ko izdaje otpremnicu (`IzdajOtpremnicu_TX` nema pozivaoca) | **Operater dugmetom „Izdaj“** kad je ostatak 0; auto-lanac i PWA koriste jednopotezni `CreateOtpremnicaIzIzvora_TX` | nova radnja na ekranu DOKUMENTI; nacrt se menja do izdavanja |
+| 5 | Dodela vozača iz PWA (E-058; danas `vozacID` na redu otkupa, završava kao terminalni `Duplicate`) | **Dodela pravi otpremnicu**: pri uvozu na desktop postaje izdata otpremnica (stanica, vozač, izabrani otkupi) | PWA čuva dodelu kao zapis dodele, ne kao polje otkupa; uvoz zove `CreateOtpremnicaIzIzvora_TX` |
+| 6 | Zbirna vozača iz PWA (E-044, E-063, E-023) | **Vozač vidi svoje izdate otpremnice; zbirna iz PWA stiže kao dokument** sa izvorima = te otpremnice | GAS servira otpremnice po `VozacID` otpremnice (ne `OTK-*` redove); uvoz `VOZ-*` gradi zbirnu sa `tblZbirnaIzvori` |
+| 7 | Banka: blok raspodele uplate je poslovni broj otkupa (D-035..D-037) | **Broj samo na nalogu, veza po ID-u**: poziv na broj ostaje poslovni broj, pri mapiranju se jednom razreši u `OtkupID` | mapiranje i otvoreno-po-bloku rade nad ID-em; nema traženja po broju posle razrešenja |
+| 8 | ANALIZA / marža (FM-0106) — ekran prazan, marža ne postoji | **Da, u slajsu fakture** | slajs fakture nosi i maržu (otkup → prijemnica/faktura) i puni ekran ANALIZA |
+| 9 | Makroi bez provere prava (`SetupNewPC`, `RunSelfUpdate`, `PublishReleaseToDrive`, `RollbackReleaseTo`, `OcistiTabele`, `MigrirajPodatkeIzStarog`, `OpenExcel`/`CloseExcel`) | **Ostaje kako jeste** — Alt+F8 je alat održavanja | nema brane u makroima; brana ostaje na ekranima |
+| 10 | Provera zdravlja sa ručnim spiskom kolona (`Check_CoreTablesAndColumns`) | **[podrazumevano]** spisak kolona iz kanona `schema.json`, kao `Check_SchemaRegistry` | ide u prvi slajs koji briše kolonu; zatvara i AUD-055 |
+| 11 | Provere integriteta starog modela (15 od 22) | **[podrazumevano]** brišu se sa starim modelom; slajs dokumenta dodaje proveru svoje invarijante (zaglavlje = zbir stavki, izvori aktivni) | nema „prevođenja“ starih provera |
+| 12 | Popravke podataka starog modela (F-061, F-090..F-093) | **[podrazumevano]** brišu se, nisu sposobnost (pravilo „bez migracija i backfill-a“) | v. `MAPA_SPOSOBNOSTI.md` „Nije sposobnost“ |
+
+**Ostaje otvoreno:** nijedna odluka domena iz liste „Još otvoreno“ (§14.7). Tačka 3 te liste (testovi sa zaglavljem
+bez stavki) nije domen nego posao slajsa otkupa. Sledeći korak: nova tabela PR-ova (slajsova) po novom modelu, sa
+mapom kao spiskom obaveznih ishoda i ovim odlukama kao ugovorom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
