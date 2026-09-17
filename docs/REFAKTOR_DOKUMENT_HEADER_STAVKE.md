@@ -2706,6 +2706,34 @@ gajbe 20, napisano 1000, predlog cene 50); nov `Test_OTK_PrefillStornaDveKlaseSa
 **Verifikacija:** `vba_check` čisto; `who_writes --check` / `--check-ownership`; `gen_schema_module --check`; `vba_hard_census`,
 `vba_selfupdate_gates`, `vba_parity_check` zeleni. **Pre merge-a:** pun `python tools/run_vba.py` + `Debug → Compile VBAProject`.
 
+#### S1b-3 — review #355: bez mosta preko `Otkup.OtpremnicaID` (17.09.2026)
+
+**Pravilo (review #355, P1):** novi model otkupa se NE sme čitati kroz staru vezu `Otkup.OtpremnicaID` — takav čitalac je
+most koji S3 opet menja (`tblOtpremnicaIzvori`). Sposobnost koja stoji samo na toj vezi se **briše**, ne prevodi; vraća je S3/S9.
+Ostaje ono što ne zavisi od veze: mreža otkupa, vrednost i plaćanje, prefill ispravke, rang kooperanata, AUD-056.
+
+**Obrisano:**
+
+| Šta | Gde | Vraća |
+|---|---|---|
+| Radni sto otpremnice u F1: liste OTPREMNICE i BLOKOVI, aktivna otpremnica, traka bilansa (`zOtp`), upozorenje na prekoračenje, vezivanje bloka posle unosa (`LinkOtkupIDsToOtpremnica`), specifikacija blokova (i po datumu), izlazak iz konteksta pri promeni OM, izuzetak „datum otpremnice ostaje“ u `ClearForm` | `modScrDokumenti`, `modOtkupUI`, `modOtkupBlok`, `modPrint` (šablon specifikacije) | S3 |
+| Bilans po otpremnici: `SumKolByOtp`, `SumAmbByOtp`, `BuildNapisanoByOtp`, `ExistingBlokCena`, `ExistingBlokZbirna` | `modOtkupBlok` (ostaje samo `KoopRangRows`, 210 linija) | S3 |
+| Kolone „kg blokova“ i „razlika“ u Roba po OM — **prazne**, oblik rezultata isti | `modIzvestaj.ReportOtkupRobaOM`, `modScrIzvestaji` | S3 |
+| Ceo ekran SLEDLJIVOST (`modScrSledljivost.bas`) i izveštaji `ReportSledljivostLanac/Problemi/Mete/Dokumenti` sa `Sled*` pomoćnicima; šablon sledljivosti u `modPrint` | lanac je kretao od otkupa preko `Otkup.OtpremnicaID` | S9 |
+
+**Prefill (review #355, P1):** `modStornoDok.StavkeOtkupaZaPrefill` čita `modOtkup.StavkeOtkupaRedovi` (kanonska granica);
+otkup bez stavki, nevažeća klasa ili dve stavke iste klase padaju po imenu, pa `PrefillIzStorniranog` ne vraća delimičan spec.
+Negativni test `Test_OTK_PrefillStornaBezStavkiPada` (kontrola sa stavkama, pa brisanje stavki u transakciji → prazan spec).
+
+**Testovi:** obrisani `Test_OTK_BilansOtpremniceSaStavki` (BFP) i `modTest` `T_Sled_*` (10) — mere obrisano;
+`T_UtovarB_SledIStornoKapije` → `T_UtovarB_StornoKapije` (deo o lancu obrisan, storno kapije ostaju; poslednji u `RunOne`);
+`T_ClearForm_Ugovor` meri ugovor bez otpremnice; iz testa čipova obrisan deo o listi otpremnica. Registar prenumerisan.
+Katalog sabotaža: 37 unosa sledljivosti uklonjeno; `clear-datum` preusmeren na novo pravilo.
+
+**Ostaci za S3/S9 (bez ulaza, ne čitaju vezu):** konstante `WS_SPECIFIKACIJA_SABLON` (obrisana) / `WS_SLEDLJIVOST_SABLON`,
+`CFG_SPECIFIKACIJA_PRINT_MODE`, `CFG_SLEDLJIVOST_PRINT_MODE`, `OBL_SLEDLJIVOST`, ikona `IC_SLEDLJ`, ključevi poruka ekrana;
+pisci veze `Otkup.OtpremnicaID` (`modSledljivost.ReassignOtkupToOtpremnica_TX`, `modDokumenta`, `modAutoHladnjaca`) — S3.
+
 Sledeći korak: **S1c**.
 
 ## 15) Backlog — namerno van opsega

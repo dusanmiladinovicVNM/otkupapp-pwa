@@ -145,8 +145,7 @@ Public Function ScrRows() As Variant
           "|FINANSIJE|" & OBL_MARZA & "|" & SEK_RAD
     c.Add "IZVESTAJI|modScrIzvestaji|OTKUI_NAV_IZVESTAJI|" & IC_IZVEST & _
           "|ANALITIKA|" & OBL_IZVESTAJI & "|" & SEK_RAD
-    c.Add "SLEDLJIVOST|modScrSledljivost|OTKUI_NAV_SLEDLJIVOST|" & IC_SLEDLJ & _
-          "|ANALITIKA|" & OBL_SLEDLJIVOST & "|" & SEK_RAD
+    ' SLEDLJIVOST obrisana u S1b-3: lanac je krenuo od veze Otkup.OtpremnicaID; vraca S9.
 
     ' ---- SEKCIJA MATICNI ------------------------------------------------
     ' Ono sto danas stoji iza zlatnog dugmeta: frmMaticniPodaci (popup meni,
