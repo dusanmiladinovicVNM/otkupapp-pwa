@@ -29,12 +29,15 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S1c (posle provere S1b-2 u Excelu)
+## Sledeći korak: S1c (posle provere S1b-3 u Excelu)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
-   `modOtkupBlok` i `clsBlokUI` obrisani, AUD-056 zatvoren; `x_otk_stavka` 63 → 22. Pre merge-a: pun `run_vba` + Compile.
-3. **Sledeće:** S1c — izvozi i push na nov oblik, brisanje `AutoCreateOtpremniceFromPWA`, health iz kanona (§14.10).
+   `modOtkupBlok` i `clsBlokUI` obrisani, AUD-056 zatvoren; `x_otk_stavka` 63 → 22. Spojen (#355).
+3. **S1b-3 urađen** (review #355, §14.10 „S1b-3“): bez mosta preko `Otkup.OtpremnicaID` — F1 radni sto otpremnice,
+   bilans po otpremnici i ekran SLEDLJIVOST obrisani (vraćaju S3/S9); prefill ispravke fail-closed. Pre merge-a: pun `run_vba` + Compile.
+4. **Pravilo:** novi model se ne čita kroz staru vezu — takva sposobnost se briše, ne prevodi.
+5. **Sledeće:** S1c — izvozi i push na nov oblik, brisanje `AutoCreateOtpremniceFromPWA`, health iz kanona (§14.10).
 
 ## Alati i kapije
 

@@ -273,8 +273,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_BrojStorniranogSeNePonovoKoristi
     Test_OTK_EkranIPisacImajuIstoPravilo
     Test_OTK_StornoJednimID
-    Test_OTK_BilansOtpremniceSaStavki
     Test_OTK_PrefillStornaDveKlaseSaStavki
+    Test_OTK_PrefillStornaBezStavkiPada
 
     ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
     ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
@@ -10472,48 +10472,6 @@ EH:
     LogFatal "Test_PWA_RazresivacImenujeRazlog", Err.Number, Err.description
 End Sub
 
-' BILANS OTPREMNICE SE CITA SA STAVKI (S1b-2).
-'
-' SumKolByOtp / SumAmbByOtp / BuildNapisanoByOtp su do S1b-2 sabirali
-' tblOtkup.Kolicina / KolAmbalaze, koje CreateOtkup_TX ostavlja prazne -- pa je
-' otkup od 1000 kg ekranu DOKUMENTI izgledao kao nula. Dvoklasni dokument meri
-' da se sabiraju SVE stavke, a ne prva; cena predloga je cena prve stavke.
-' Veza bloka i otpremnice (Otkup.OtpremnicaID) ostaje do S3.
-Private Sub Test_OTK_BilansOtpremniceSaStavki()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("OTKPN")
-
-    Dim otkID As String
-    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-PN-" & scenario), _
-                           OtkStavke(600#, 50#, 12, 400#, 30#, 8))
-    AssertTrue Len(otkID) > 0, "OTK bilans: dvoklasni otkup upisan"
-
-    Dim otpID As String
-    otpID = SaveOtpremnica_TX(NextTestDate(), TEST_ST_ID, TEST_VOZ_ID, _
-                              TEST_PREFIX & "-OTP-PN-" & scenario, "", _
-                              TEST_VRSTA, TEST_SORTA, 1000#, 50#, TEST_TIP_AMB, 20)
-    AssertTrue Len(otpID) > 0, "OTK bilans: otpremnica napravljena"
-
-    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkID)(1), _
-                      COL_OTK_OTPREMNICA_ID, otpID, "Test_OTK_BilansOtpremniceSaStavki"
-
-    AssertTrue Abs(modOtkupBlok.SumKolByOtp(otpID) - 1000#) < 0.001, _
-               "OTK bilans: kg bloka = zbir obe stavke (bilo: " & modOtkupBlok.SumKolByOtp(otpID) & ")"
-    AssertTrue Abs(modOtkupBlok.SumAmbByOtp(otpID) - 20#) < 0.001, _
-               "OTK bilans: gajbe bloka = zbir obe stavke"
-    AssertTrue Abs(CDbl(modOtkupBlok.BuildNapisanoByOtp()(otpID)) - 1000#) < 0.001, _
-               "OTK bilans: napisano po otpremnici = zbir stavki"
-    AssertTrue Abs(modOtkupBlok.ExistingBlokCena(otpID) - 50#) < 0.001, _
-               "OTK bilans: predlog cene = cena prve stavke"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_OTK_BilansOtpremniceSaStavki", Err.Number, Err.description
-End Sub
-
 ' STORNO PREFILL OTKUPA CITA STAVKE (S1b-2, B-036).
 '
 ' Otkup je jedan red zaglavlja; do S1b-2 je prefill trazio red po klasi i citao
@@ -10541,6 +10499,52 @@ Private Sub Test_OTK_PrefillStornaDveKlaseSaStavki()
 
 EH:
     LogFatal "Test_OTK_PrefillStornaDveKlaseSaStavki", Err.Number, Err.description
+End Sub
+
+' STORNO PREFILL OTKUPA BEZ STAVKI NE VRACA DELIMICAN SPEC (review #355, P1).
+'
+' Synthetic anomaly: kanonski otkup, pa brisanje njegovih stavki u transakciji
+' testa. Delimican spec (datum, partner, vrsta -- bez kolicine i cene) izgledao
+' bi operateru kao legitimna prazna ispravka. Kontrola pre brisanja dokazuje da
+' prazan rezultat posle nije "dokument nije nadjen".
+Private Sub Test_OTK_PrefillStornaBezStavkiPada()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+
+    Dim otkID As String, brDok As String, spec As String
+    brDok = TEST_PREFIX & "-OTK-PB-" & NewScenarioCode("OTKPB")
+    otkID = CreateOtkup_TX(OtkHeader(brDok), OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "OTK prefill bez stavki: otkup upisan"
+
+    spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkID)
+    AssertTrue InStr(1, "|" & spec & "|", "|kol1=400|", vbBinaryCompare) > 0, _
+               "OTK prefill bez stavki: kontrola -- sa stavkama spec postoji (spec: " & spec & ")"
+
+    Dim rows As Collection, k As Long
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID)
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(k)), "Test_OTK_PrefillStornaBezStavkiPada"
+    Next k
+    AssertEquals "0", CStr(FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkID).count), _
+                 "OTK prefill bez stavki: stavke zaista obrisane"
+
+    spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkID)
+    AssertEquals "", spec, "OTK prefill bez stavki: NE vraca delimican spec"
+
+    tx.RollbackTx
+    Set tx = Nothing
+    Exit Sub
+
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogFatal "Test_OTK_PrefillStornaBezStavkiPada", Err.Number, Err.description
 End Sub
 
 ' STORNO DVOKLASNOG DOKUMENTA JE JEDAN POZIV NAD HEADER-ID.
