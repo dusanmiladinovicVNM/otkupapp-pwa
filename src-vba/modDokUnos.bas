@@ -11,9 +11,9 @@ Attribute VB_Name = "modDokUnos"
 '   OtpremnicaValidiraj(p, fokus)  provere + bruto->neto; vraca poruku o
 '                                  gresci ("" = proslo) i LOGICKO ime
 '                                  polja na koje treba vratiti fokus
-'   OtpremnicaUpisi(p, poruke)     SaveOtpremnicaMulti_TX + auto-zbirna
-'                                  (MALINA) + zavrsetak ispravke; vraca
-'                                  BrojOtpremnice (prazno = nije upisano)
+'   OtpremnicaUpisi(p, poruke)     CreateOtpremnicaDraft_TX + zavrsetak
+'                                  ispravke; vraca OtpremnicaID (prazno =
+'                                  nije upisano)
 '   ZbirnaValidiraj / ZbirnaUpisi          isto za F3 (SaveZbirnaMulti_TX)
 '   PrijemnicaValidiraj / PrijemnicaUpisi  isto za F4 (SavePrijemnicaMulti_TX)
 '
@@ -25,6 +25,11 @@ Attribute VB_Name = "modDokUnos"
 '
 ' OtpremnicaValidiraj UPISUJE nazad: kolicinaI/kolicinaII postaju NETO, a
 ' brutoKgI/brutoKgII zamrznuti uneti bruto (kad je OTKUP_BRUTO_UNOS ON).
+'
+' Od S3a se taj uneti bruto NE upisuje nigde, i to je odluka a ne propust:
+' BrutoKg na stavci otpremnice je bruto IZVORA, koji izdavanje sabira iz
+' otkupnih blokova. Uneti bruto je ulaz u racun (bruto - tara = neto), pa bi u
+' istoj koloni bile dve razlicite cinjenice pod istim imenom.
 '
 ' RAZLIKE U ODNOSU NA OTKUPNI LIST (nisu greske - tako je u legacy):
 '   - vozac je OBAVEZAN (otkupni list ga ne trazi)
@@ -251,64 +256,112 @@ EH:
     OtpremnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
+' Ocekivana stavka otpremnice: sta operater PRIJAVLJUJE da ce otpremnica nositi.
+' Spisak kljuceva drzi pisac (modDokumenta.OtpOcekKljucPoznat) -- ovde se samo
+' popunjava. PredlogCena se salje samo kad postoji: prazno polje je "cena jos
+' nije dogovorena", a nula bi u prefillu otkupa bila tvrdnja da je cena 0.
+Private Function OtpStavkaDTO(ByVal klasa As String, ByVal kol As Double, _
+                              ByVal amb As Double, ByVal predlogCena As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "KolAmbalaze", amb
+    If predlogCena > 0 Then s.Add "PredlogCena", predlogCena
+    Set OtpStavkaDTO = s
+End Function
+
 '------------------------------------------------------------- UPIS
-' Upisuje otpremnicu i radi sve sto ide uz nju. Vraca broj otpremnice;
+' Otvara otpremnicu kao NACRT i radi sve sto ide uz nju. Vraca OtpremnicaID;
 ' prazno znaci da upis nije uspeo. U "poruke" se skupljaju napomene koje
 ' pozivalac prikazuje posle uspeha.
+'
+' ZASTO NACRT, A NE GOTOV DOKUMENT (S3a, odluka S14.8 t. 4): otpremnica je
+' isporuka otkupnih blokova, pa dok se blokovi ne vezu ona jos ne postoji kao
+' dokument -- postoji kao NAJAVA sta ce nositi. Izdavanje (IzdajOtpremnicu_TX)
+' tek tada poredi najavljeno sa vezanim i knjizi ambalazu.
+'
+' Vraca ID, ne broj: broj je labela jedinstvena tek po (otkupno mesto, dan), a
+' mutacija (izdavanje, izmena nacrta) ide po ID-u. Ekran operateru i dalje
+' pokazuje broj -- to je prikaz, ne identitet.
 Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
-    Dim res As String, brZbrSave As String, createdZbr As Long, autoZbrErr As String
+    Dim res As String, greska As String, kulturaID As String, detalj As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
 
-    ' MALINA: otpremnica se snima sa PRAZNIM BrojZbirne da je auto-zbirna pokupi
-    ' (broj u formi je samo predlog; auto-zbirna dodeli "S" + broj otpremnice).
-    ' Van malina moda ide vrednost iz polja.
-    If IsMalinaMode() Then brZbrSave = "" Else brZbrSave = S(p, "brojZbirne")
-
-    res = SaveOtpremnicaMulti_TX( _
-        datum:=CDate(p("datum")), _
-        stanicaID:=S(p, "stanicaID"), _
-        vozacID:=S(p, "vozacID"), _
-        brojOtp:=S(p, "brDok"), _
-        brojZbirne:=brZbrSave, _
-        vrsta:=S(p, "vrsta"), _
-        sorta:=S(p, "sorta"), _
-        kolicinaI:=D(p, "kolicinaI"), _
-        cenaI:=D(p, "cenaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        kolicinaII:=D(p, "kolicinaII"), _
-        cenaII:=D(p, "cenaII"), _
-        brutoKgI:=D(p, "brutoKgI"), _
-        kolAmbII:=L(p, "kolAmbII"), _
-        brutoKgII:=D(p, "brutoKgII"))
-
-    If Len(res) = 0 Then Exit Function
-
-    ' MALINA: otpremnica JESTE zbirna -> auto-zbirna iz upravo snimljene.
-    ' Upravo snimljena je otvorena (brZbrSave=""), pa mora nastati bar jedna;
-    ' tih pad se prijavljuje, da operater vidi da zbirne nema.
-    If IsMalinaMode() Then
-        On Error Resume Next
-        createdZbr = AutoCreateZbirnaFromOtpremnice_TX()
-        If Err.Number <> 0 Then
-            autoZbrErr = Err.description
-            LogErr "modDokUnos.OtpremnicaUpisi.AutoZbirna"
-            Err.Clear
-        End If
-        On Error GoTo EH
-        If Len(autoZbrErr) > 0 Or createdZbr < 1 Then
-            poruke = poruke & Poruka("DOKUNOS_MSG_ZBIRNA_NIJE")
-            If Len(autoZbrErr) > 0 Then poruke = poruke & " " & autoZbrErr
-            poruke = poruke & vbCrLf
-        End If
+    ' (Vrsta, Sorta) -> KulturaID. Razresavanje je posao ADAPTERA, ne pisca
+    ' (S4.1f) -- isti razresivac koristi i otkupni list.
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(S(p, "vrsta"), S(p, "sorta"), detalj)
+    If Len(kulturaID) = 0 Then
+        poruke = poruke & Poruka("OTKUNOS_ERR_KULTURA") & " " & _
+                 S(p, "vrsta") & " / " & S(p, "sorta")
+        Exit Function
     End If
 
-    ' ISPRAVKA_ODMAH: ako na cekanju stoji ispravka otpremnice, upravo snimljena
-    ' je njena zamena -> prevezi blokove i rekalkulisi zbirnu. No-op inace.
-    ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA, res, poruke
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(p("datum"))
+    h.Add "StanicaID", S(p, "stanicaID")
+    h.Add "VozacID", S(p, "vozacID")
+    h.Add "KulturaID", kulturaID
+    h.Add "BrojOtpremnice", S(p, "brDok")
+    h.Add "TipAmbalaze", S(p, "tipAmb")
+
+    ' BrojZbirne se NE salje: broj ne sme da bude veza nego labela (A2), a
+    ' zbirna svoje otpremnice drzi kroz tblZbirnaIzvori. Do S3a je ovde stajao
+    ' malina trik "snimi sa PRAZNIM brojem da ga auto-zbirna pokupi" -- v. nize
+    ' zasto je i sama auto-zbirna pauzirana.
+    Dim ocek As Collection
+    Set ocek = New Collection
+    If D(p, "kolicinaI") > 0 Then
+        ocek.Add OtpStavkaDTO(KLASA_I, D(p, "kolicinaI"), L(p, "kolAmb"), D(p, "cenaI"))
+    End If
+    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
+        ocek.Add OtpStavkaDTO(KLASA_II, D(p, "kolicinaII"), L(p, "kolAmbII"), D(p, "cenaII"))
+    End If
+
+    res = CreateOtpremnicaDraft_TX(h, ocek, greska)
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
+    End If
+
+    poruke = poruke & Poruka("DOKUNOS_MSG_OTP_NACRT") & vbCrLf
+
+    ' MALINA AUTO-ZBIRNA JE PAUZIRANA (S3a), i to glasno.
+    '
+    ' AutoCreateZbirnaFromOtpremnice cita Kolicina / Klasa / KolAmbalaze sa
+    ' ZAGLAVLJA otpremnice i ne gleda IzdatoStatus. Nad nacrtom bi napravila
+    ' zbirnu sa 0 kg, i to od dokumenta koji jos nije isporuka. Zbirna prelazi na
+    ' nov model u S4 -- do tada je poziv ugasen, umesto da se upise polovicna
+    ' veza. Isti postupak kao sa hladnjackim lancem u S1.
+    If IsMalinaMode() Then
+        poruke = poruke & Poruka("DOKUNOS_MSG_ZBIRNA_PAUZIRANA") & vbCrLf
+    End If
+
+    ' ISPRAVKA OTPREMNICE JE PAUZIRANA (S3a), ne prevedena.
+    '
+    ' Ovde je do S3a stajalo ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok nije
+    ' zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+    ' preko GetBlokOtkupIDs zove ReassignOtkupToOtpremnica_TX, koji upisuje
+    ' Otkup.OtpremnicaID i BrojZbirne, pa rekalkulise ili stornira zbirnu.
+    '
+    ' Pustiti ga nad upravo otvorenim NACRTOM znacilo bi dve stvari, obe lose:
+    '   - nov model bi se vezivao starom vezom (Otkup.OtpremnicaID), a to je
+    '     tacno most koji se po pravilu refaktora ne pravi;
+    '   - dokument koji jos NEMA nijedan izvor i nije IZDATO bio bi proglasen
+    '     zamenom izdate otpremnice, a correction kontekst zatvoren. Zamena sme
+    '     da bude gotova tek posle: clanstvo -> ocekivano = povezano -> IZDATO.
+    '
+    ' Sposobnost se vraca u S3c, nad kanonskom vezom (tblOtpremnicaIzvori i
+    ' IspravkaOd/ZamenjenSa po ID-u). Do tada operater mora da ZNA da kontekst
+    ' stoji otvoren -- inace bi mislio da je ispravka zavrsena.
+    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _
+                                                         SV_MODE_ISPRAVKA) > 0 Then
+        poruke = poruke & Poruka("DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA") & vbCrLf
+    End If
 
     OtpremnicaUpisi = res
     Exit Function

@@ -288,8 +288,19 @@ Public Const COL_OPI_OTKUP_ID As String = "OtkupID"
 ' izveden dokument, a njeni izvori mogu imati razlicite cene -- jedna cena na
 ' stavci bila bi drugi izvor istine o novcu (DOCUMENT_HEADER_LINES S4.2).
 '
+' PredlogCena NIJE ta cena i zato sme da postoji (S3a, odluka S14.8 t. 2). To je
+' cena koju je operater najavio ZA KLASU dok je otvarao otpremnicu, i sluzi
+' iskljucivo da prefiluje formu otkupa. Novac otkupa je i dalje Cena na
+' tblOtkupStavke -- ovo polje se ne sabira, ne knjizi i ne poredi sa isplatama.
+' Ime je deo kapije: "Cena" bi za pola godine neko sabrao.
+'
+' Do S3a je isti predlog stajao na ZAGLAVLJU (Otpremnica.Cena), gde je mogao da
+' nosi samo JEDAN broj -- pa je otpremnica sa dve klase prefilovala obe istom
+' cenom. Kolona na zaglavlju se brise u S3e.
+'
 ' BrutoKg POSTOJI, za razliku od zbirne: bruto je zamrznuta cinjenica otkupa i
-' prenosi se kroz lanac dok se roba ne prepakuje.
+' prenosi se kroz lanac dok se roba ne prepakuje. Upisuje ga IZDAVANJE iz
+' izvora, ne operater.
 Public Const COL_OPS_ID As String = "OtpremnicaStavkaID"
 Public Const COL_OPS_OTPREMNICA_ID As String = "OtpremnicaID"
 Public Const COL_OPS_RB As String = "RedniBroj"
@@ -297,6 +308,7 @@ Public Const COL_OPS_KLASA As String = "Klasa"
 Public Const COL_OPS_KOLICINA As String = "Kolicina"
 Public Const COL_OPS_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OPS_BRUTO As String = "BrutoKg"
+Public Const COL_OPS_PREDLOG_CENA As String = "PredlogCena"
 
 ' --- tblZbirnaStavke (PR3: dokument = header + stavke) ---
 '

@@ -292,6 +292,11 @@ Public Sub RunBusinessFlowProSuite()
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
     Test_OTP_JedanBrojJedanHeader
+    Test_OTP_PredlogCeneJePoKlasi
+    Test_OTP_AmbalazaSeKnjiziPriIzdavanju
+    Test_OTP_F2OtvaraNacrt
+    Test_OTP_MalinaZbirnaPauzirana
+    Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_StavkeSuIzvedene
     Test_OTP_HeaderNeNosiLinePolja
     Test_OTP_NepoznatKljucUHeaderuPada
@@ -7570,6 +7575,372 @@ EH:
     LogFatal "Test_OTP_JedanBrojJedanHeader", Err.Number, Err.description
 End Sub
 
+' PREDLOG CENE JE PO KLASI (S3a, odluka S14.8 t. 2).
+'
+' Do S3a je predlog stajao na zaglavlju, kao JEDAN broj. Otpremnica koja nosi i
+' prvu i drugu klasu je time obe prefilovala istom cenom -- a druga klasa je
+' jeftinija, pa je operater tu cenu ispravljao na svakom otkupnom bloku ili je,
+' gore, ostavljao. Zaglavlje vise cenu ne prima: kljuc se ODBIJA, da pozivalac
+' koji je i dalje salje to i sazna.
+Private Sub Test_OTP_PredlogCeneJePoKlasi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPPC")
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavkaSaCenom(KLASA_I, 400#, 20#, 250#)
+    c.Add OtpOcekStavkaSaCenom(KLASA_II, 600#, 30#, 120#)
+
+    Dim razlog As String
+    Dim otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-PC-" & scenario), _
+                                     c, razlog)
+
+    AssertTrue Len(otpID) > 0, "OTP predlog cene: draft prosao (bilo: " & razlog & ")"
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_I, COL_OPS_PREDLOG_CENA) - 250#) < 0.001, _
+               "OTP predlog cene: Klasa I nosi svoju cenu"
+    AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_II, COL_OPS_PREDLOG_CENA) - 120#) < 0.001, _
+               "OTP predlog cene: Klasa II nosi SVOJU cenu, ne cenu prve"
+    AssertEquals "", OtpPolje(otpID, COL_OTP_CENA), _
+                 "OTP predlog cene: zaglavlje vise ne nosi cenu"
+
+    ' Stavka bez predloga je legitimna ("cena jos nije dogovorena") i ostaje
+    ' PRAZNA -- nula bi u prefillu otkupa bila tvrdnja da je cena nula.
+    Dim otpID2 As String
+    otpID2 = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-PC2-" & scenario), _
+                                      OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID2) > 0, "OTP predlog cene: draft bez cene prosao"
+    AssertEquals "", OtpStavkaPolje(otpID2, KLASA_I, COL_OPS_PREDLOG_CENA), _
+                 "OTP predlog cene: bez predloga celija ostaje PRAZNA, ne 0"
+
+    ' Cena na zaglavlju: odbijena, i to imenovano.
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-PC3-" & scenario)
+    h.Add "Cena", 250#
+
+    Dim razlog2 As String
+    AssertEquals "", CreateOtpremnicaDraft_TX(h, OtpOcek(400#, 20#, 0#, 0#), razlog2), _
+                 "OTP predlog cene: cena na zaglavlju NE prolazi"
+    AssertTrue InStr(1, razlog2, "nepoznat kljuc", vbTextCompare) > 0, _
+               "OTP predlog cene: kapija imenuje razlog (bilo: " & razlog2 & ")"
+
+    ' Negativan predlog je greska, kao i negativna cena na zaglavlju pre S3a.
+    Dim c2 As Collection
+    Set c2 = New Collection
+    c2.Add OtpOcekStavkaSaCenom(KLASA_I, 400#, 20#, -1#)
+
+    Dim razlog3 As String
+    AssertEquals "", CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-PC4-" & scenario), _
+                                              c2, razlog3), _
+                 "OTP predlog cene: negativan predlog NE prolazi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PredlogCeneJePoKlasi", Err.Number, Err.description
+End Sub
+
+' AMBALAZA SE KNJIZI PRI IZDAVANJU, NE PRI OTVARANJU NACRTA (odluka S14.8 t. 1).
+'
+' Gajbe odlaze sa stanice kad ih vozac preuzme. Nacrt je najava: sme da se menja
+' i sme da ostane neizdat. Da se ambalaza knjizila sa nacrtom, napusten nacrt bi
+' trajno umanjio stanje gajbi na otkupnom mestu, a svaka izmena ocekivanja bi
+' trazila storniranje knjizenja.
+Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPAMB")
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+
+    Dim razlog As String
+    Dim otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-AM-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "OTP ambalaza: draft prosao (bilo: " & razlog & ")"
+
+    AssertEquals "0", CStr(AmbRedovaZaDokument(otpID)), _
+                 "OTP ambalaza: NACRT ne knjizi nijednu gajbu"
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), _
+               "OTP ambalaza: izvor vezan (bilo: " & razlog & ")"
+    AssertEquals "0", CStr(AmbRedovaZaDokument(otpID)), _
+                 "OTP ambalaza: ni vezivanje izvora ne knjizi gajbe"
+
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP ambalaza: izdavanje proslo (bilo: " & razlog & ")"
+
+    AssertEquals "1", CStr(AmbRedovaZaDokument(otpID)), _
+                 "OTP ambalaza: izdavanje knjizi TACNO jedan red"
+    AssertTrue Abs(AmbKolicinaZaDokument(otpID) - 20#) < 0.001, _
+               "OTP ambalaza: kolicina je ZBIR STAVKI izdate otpremnice"
+    AssertEquals "Izlaz", AmbPoljeZaDokument(otpID, COL_AMB_SMER), _
+                 "OTP ambalaza: smer je izlaz sa stanice"
+    AssertEquals TEST_ST_ID, AmbPoljeZaDokument(otpID, COL_AMB_ENTITET), _
+                 "OTP ambalaza: gajbe odlaze sa OTKUPNOG MESTA otpremnice"
+    AssertEquals TEST_TIP_AMB, AmbPoljeZaDokument(otpID, COL_AMB_TIP), _
+                 "OTP ambalaza: knjizi se PO TIPU gajbe"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_AmbalazaSeKnjiziPriIzdavanju", Err.Number, Err.description
+End Sub
+
+' F2 OTVARA NACRT (S3a cutover).
+'
+' Ekran je do sada zvao SaveOtpremnicaMulti_TX, koji je pravio GOTOV dokument sa
+' linijskim poljima na zaglavlju -- i to po jedan RED PO KLASI, pod istim brojem.
+' Sada isti unos otvara JEDAN nacrt sa ocekivanjem po klasi.
+'
+' Tvrdnja o povratnoj vrednosti nije kozmeticka: ekran mora da dobije ID, jer se
+' nacrt kasnije izdaje i menja PO ID-u, a broj je jedinstven tek po (otkupno
+' mesto, dan).
+Private Sub Test_OTP_F2OtvaraNacrt()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPF2")
+
+    Dim p As Object, fokus As String, greska As String, poruke As String
+    Dim res As String
+
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = NextTestDate()
+    p("stanicaID") = TEST_ST_ID
+    p("vozacID") = TEST_VOZ_ID
+    p("brDok") = TEST_PREFIX & "-OTP-F2-" & scenario
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 400#
+    p("cenaI") = 250#
+    p("kolAmb") = 20
+    p("dveKlase") = True
+    p("kolicinaII") = 600#
+    p("cenaII") = 120#
+    p("kolAmbII") = 30
+
+    greska = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    AssertEquals "", greska, "OTP F2: unos prosao provere (fokus: " & fokus & ")"
+
+    res = modDokUnos.OtpremnicaUpisi(p, poruke)
+    AssertTrue Len(res) > 0, "OTP F2: upis prosao (bilo: " & poruke & ")"
+    AssertTrue Left$(res, 4) = "OTP-", _
+               "OTP F2: vraca se OtpremnicaID, ne broj dokumenta (bilo: " & res & ")"
+
+    AssertEquals "1", CStr(FindRows(TBL_OTPREMNICA, COL_OTP_ID, res).count), _
+                 "OTP F2: dvoklasan unos je JEDAN header, ne dva reda"
+    AssertEquals IZDATO_DRAFT, OtpPolje(res, COL_TRACE_IZDATO_STATUS), _
+                 "OTP F2: dokument je NACRT dok mu se ne vezu blokovi"
+    AssertEquals "2", CStr(OtpBrojStavki(res)), "OTP F2: dve ocekivane stavke"
+
+    ' Kolicina se poredi sa recnikom POSLE validacije: u bruto rezimu je
+    ' validacija vec pretvorila uneto u neto, pa bi fiksan broj merio rezim.
+    AssertTrue Abs(OtpStavkaBrojP(res, KLASA_I, COL_OPS_KOLICINA) - CDbl(p("kolicinaI"))) < 0.001, _
+               "OTP F2: ocekivana kolicina I je ono sto je operater uneo"
+    AssertTrue Abs(OtpStavkaBrojP(res, KLASA_II, COL_OPS_KOLICINA) - CDbl(p("kolicinaII"))) < 0.001, _
+               "OTP F2: ocekivana kolicina II je ono sto je operater uneo"
+    AssertTrue Abs(OtpStavkaBrojP(res, KLASA_I, COL_OPS_PREDLOG_CENA) - 250#) < 0.001, _
+               "OTP F2: cena I sa ekrana je predlog cene KLASE I"
+    AssertTrue Abs(OtpStavkaBrojP(res, KLASA_II, COL_OPS_PREDLOG_CENA) - 120#) < 0.001, _
+               "OTP F2: cena II sa ekrana je predlog cene KLASE II"
+
+    ' Kulturu razresava ADAPTER iz vrste i sorte -- pisac je samo proverava.
+    AssertEquals TEST_KULTURA_ID, OtpPolje(res, COL_OTP_KULTURA), _
+                 "OTP F2: kultura razresena iz vrste i sorte"
+    AssertEquals CStr(p("brDok")), OtpPolje(res, COL_OTP_BROJ), _
+                 "OTP F2: broj ostaje labela na zaglavlju"
+
+    ' Nacrt ne knjizi gajbe (v. Test_OTP_AmbalazaSeKnjiziPriIzdavanju).
+    AssertEquals "0", CStr(AmbRedovaZaDokument(res)), _
+                 "OTP F2: otvaranje nacrta ne knjizi ambalazu"
+
+    ' Nepoznata vrsta/sorta ne sme da napravi otpremnicu bez kulture.
+    Dim p2 As Object, res2 As String, poruke2 As String
+    Set p2 = modDokUnos.NoviOtpremnicaUnos()
+    p2("datum") = NextTestDate()
+    p2("stanicaID") = TEST_ST_ID
+    p2("vozacID") = TEST_VOZ_ID
+    p2("brDok") = TEST_PREFIX & "-OTP-F2X-" & scenario
+    p2("vrsta") = "NEPOSTOJECA VRSTA " & scenario
+    p2("sorta") = "NEPOSTOJECA SORTA"
+    p2("tipAmb") = TEST_TIP_AMB
+    p2("kolicinaI") = 400#
+    p2("kolAmb") = 20
+
+    Dim preRedova As Long
+    preRedova = CountRows(TBL_OTPREMNICA)
+    res2 = modDokUnos.OtpremnicaUpisi(p2, poruke2)
+    AssertEquals "", res2, "OTP F2: nepoznata kultura ne pravi otpremnicu"
+    AssertEquals CStr(preRedova), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "OTP F2: pad razresavanja ne ostavlja red u tabeli"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_F2OtvaraNacrt", Err.Number, Err.description
+End Sub
+
+' MALINA AUTO-ZBIRNA JE PAUZIRANA, I TO GLASNO (S3a).
+'
+' AutoCreateZbirnaFromOtpremnice cita Kolicina / Klasa / KolAmbalaze sa
+' ZAGLAVLJA otpremnice i ne gleda IzdatoStatus -- nad nacrtom bi napravila
+' zbirnu sa 0 kg, od dokumenta koji jos nije isporuka. Zbirna prelazi na nov
+' model u S4.
+'
+' Tvrdnja ima dva dela i oba su potrebna: da zbirna NIJE nastala, i da je
+' operater o tome OBAVESTEN. Tiha pauza bi znacila da malina operater ceka
+' zbirnu koja nikad nece doci.
+Private Sub Test_OTP_MalinaZbirnaPauzirana()
+    Dim prevMode As String, prevKupac As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPMAL")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    Dim p As Object, fokus As String, poruke As String, res As String
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = NextTestDate()
+    p("stanicaID") = TEST_ST_ID
+    p("vozacID") = TEST_VOZ_ID
+    p("brDok") = TEST_PREFIX & "-OTP-ML-" & scenario
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 400#
+    p("cenaI") = 250#
+    p("kolAmb") = 20
+
+    Call modDokUnos.OtpremnicaValidiraj(p, fokus)
+
+    Dim zbrPre As Long
+    zbrPre = CountRows(TBL_ZBIRNA)
+
+    res = modDokUnos.OtpremnicaUpisi(p, poruke)
+    AssertTrue Len(res) > 0, "OTP malina: nacrt otvoren (bilo: " & poruke & ")"
+
+    AssertEquals CStr(zbrPre), CStr(CountRows(TBL_ZBIRNA)), _
+                 "OTP malina: nad nacrtom NE nastaje zbirna"
+    AssertTrue InStr(1, poruke, Poruka("DOKUNOS_MSG_ZBIRNA_PAUZIRANA"), vbTextCompare) > 0, _
+               "OTP malina: operater je OBAVESTEN da zbirne nema (bilo: " & poruke & ")"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_OTP_MalinaZbirnaPauzirana", Err.Number, Err.description
+End Sub
+
+' NOV NACRT NIJE ZAMENA ZA STORNIRANU OTPREMNICU (S3a, review #361 P1).
+'
+' Do S3a je F2 posle upisa zvao ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok
+' nije zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+' preko ReassignOtkupToOtpremnica_TX upisuje Otkup.OtpremnicaID i BrojZbirne, pa
+' rekalkulise zbirnu.
+'
+' Nad upravo otvorenim NACRTOM to je dvostruko pogresno: nov dokument bi se
+' vezivao STAROM vezom, i dokument koji jos nema nijedan izvor ni status IZDATO
+' bio bi proglasen zamenom izdate otpremnice -- a zamena sme da bude gotova tek
+' posle clanstva, jednakosti i izdavanja.
+'
+' Tvrdnja ima cetiri dela, i svaki meri po jednu posledicu tog poziva.
+Private Sub Test_OTP_NacrtNijeZavrsetakIspravke()
+    Dim cid As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPISP")
+
+    ' Stara, uredno IZDATA otpremnica sa jednim izvorom.
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add izvor
+
+    Dim razlog As String
+    Dim staraOtp As String
+    staraOtp = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-IS-" & scenario), _
+                                           izvori, razlog)
+    AssertTrue Len(staraOtp) > 0, "OTP ispravka: stara otpremnica izdata (bilo: " & razlog & ")"
+
+    ' SYNTHETIC ANOMALY: stara veza Otkup.OtpremnicaID. Nijedan ziv pisac je vise
+    ' ne postavlja (kolona odlazi u S3e) -- postavlja se rucno bas zato da bi se
+    ' videlo da je legacy tok NE dira.
+    VeziOtkupZaOtpremnicuFixture izvor, staraOtp
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                   staraOtp, OtpPolje(staraOtp, COL_OTP_BROJ))
+    AssertTrue Len(cid) > 0, "OTP ispravka: correction kontekst napravljen"
+
+    Dim zbrPre As Long
+    zbrPre = CountRows(TBL_ZBIRNA)
+
+    ' F2: operater unosi novu otpremnicu dok ispravka stoji na cekanju.
+    Dim p As Object, fokus As String, poruke As String, res As String
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = NextTestDate()
+    p("stanicaID") = TEST_ST_ID
+    p("vozacID") = TEST_VOZ_ID
+    p("brDok") = TEST_PREFIX & "-OTP-ISN-" & scenario
+    p("vrsta") = TEST_VRSTA
+    p("sorta") = TEST_SORTA
+    p("tipAmb") = TEST_TIP_AMB
+    p("kolicinaI") = 400#
+    p("cenaI") = 250#
+    p("kolAmb") = 20
+
+    Call modDokUnos.OtpremnicaValidiraj(p, fokus)
+    res = modDokUnos.OtpremnicaUpisi(p, poruke)
+    AssertTrue Len(res) > 0, "OTP ispravka: nacrt otvoren (bilo: " & poruke & ")"
+
+    ' (1) Kontekst ostaje otvoren -- nacrt nije zamena.
+    AssertEquals SV_STATUS_PENDING, _
+                 modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), _
+                 "OTP ispravka: correction NIJE zavrsen nad nacrtom"
+
+    ' (2) Stara veza je netaknuta -- legacy relink nije radio.
+    AssertEquals staraOtp, OtkPolje(izvor, COL_OTK_OTPREMNICA_ID), _
+                 "OTP ispravka: Otkup.OtpremnicaID se NE prevezuje na nacrt"
+
+    ' (3) Zbirna nije dirana.
+    AssertEquals CStr(zbrPre), CStr(CountRows(TBL_ZBIRNA)), _
+                 "OTP ispravka: zbirna se NE rekalkulise"
+
+    ' (4) Operater to ZNA. Tiho preskakanje bi znacilo da misli da je ispravka
+    ' zavrsena, a ona i dalje ceka na ekranu Oporavak.
+    AssertTrue InStr(1, poruke, Poruka("DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA"), _
+                     vbTextCompare) > 0, _
+               "OTP ispravka: operater je OBAVESTEN da ispravka ceka (bilo: " & poruke & ")"
+
+    Call modStornoContext.CancelCorrectionContext(cid, "S3a test cleanup")
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Len(cid) > 0 Then Call modStornoContext.CancelCorrectionContext(cid, "S3a test cleanup")
+    On Error GoTo 0
+    LogFatal "Test_OTP_NacrtNijeZavrsetakIspravke", Err.Number, Err.description
+End Sub
+
 ' Jednopotezni ulaz izvodi ocekivanje iz izvora -- tu nezavisnog operaterskog
 ' ocekivanja nema.
 Private Sub Test_OTP_StavkeSuIzvedene()
@@ -13056,6 +13427,79 @@ Private Function OtpOcekStavka(ByVal klasa As String, ByVal kol As Double, _
     s.Add "Kolicina", kol
     s.Add "KolAmbalaze", amb
     Set OtpOcekStavka = s
+End Function
+
+' Ocekivana stavka SA predlogom cene (S3a). Predlog je izricito ne-finansijsko
+' polje: prefiluje formu otkupa, ne knjizi se i ne sabira.
+Private Function OtpOcekStavkaSaCenom(ByVal klasa As String, ByVal kol As Double, _
+                                      ByVal amb As Double, _
+                                      ByVal predlogCena As Double) As Object
+    Dim s As Object
+    Set s = OtpOcekStavka(klasa, kol, amb)
+    s.Add "PredlogCena", predlogCena
+    Set OtpOcekStavkaSaCenom = s
+End Function
+
+' --- knjizenje ambalaze po dokumentu -----------------------------------------
+' Redovi tblAmbalaza vezani za dati dokument. Trazi se po DokumentID-u, ne po
+' broju: broj otpremnice je jedinstven tek po (otkupno mesto, dan).
+Private Function AmbRedoviZaDokument(ByVal dokID As String) As Collection
+    Dim res As Collection
+    Set res = New Collection
+    Set AmbRedoviZaDokument = res
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cDok As Long
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "AmbRedoviZaDokument")
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cDok))), Trim$(dokID), vbTextCompare) = 0 Then
+            res.Add i
+        End If
+    Next i
+End Function
+
+Private Function AmbRedovaZaDokument(ByVal dokID As String) As Long
+    AmbRedovaZaDokument = AmbRedoviZaDokument(dokID).count
+End Function
+
+Private Function AmbKolicinaZaDokument(ByVal dokID As String) As Double
+    Dim redovi As Collection
+    Set redovi = AmbRedoviZaDokument(dokID)
+    If redovi.count = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cKol As Long
+    cKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, "AmbKolicinaZaDokument")
+
+    Dim i As Long
+    For i = 1 To redovi.count
+        AmbKolicinaZaDokument = AmbKolicinaZaDokument + _
+                                CDbl(nz(d(CLng(redovi(i)), cKol), 0))
+    Next i
+End Function
+
+' Vrednost polja PRVOG reda ambalaze tog dokumenta. Tvrdnje koje ga koriste prvo
+' proveravaju da red postoji tacno jedan.
+Private Function AmbPoljeZaDokument(ByVal dokID As String, _
+                                    ByVal columnName As String) As String
+    Dim redovi As Collection
+    Set redovi = AmbRedoviZaDokument(dokID)
+    If redovi.count = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    AmbPoljeZaDokument = Trim$(NzToText(d(CLng(redovi(1)), _
+                         RequireColumnIndex(TBL_AMBALAZA, columnName, "AmbPoljeZaDokument"))))
 End Function
 
 ' Otkup po NOVOM modelu -- izvor kakav kanonska otpremnica prima.

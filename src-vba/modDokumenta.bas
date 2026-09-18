@@ -2228,13 +2228,13 @@ End Function
 ' Otkup.OtpremnicaID se NE dira -- 39 ne-test citalaca, kolona ide u PR7.
 '
 ' Header (h) -- Scripting.Dictionary, obavezni kljucevi:
-'   Datum, StanicaID, VozacID, KulturaID, BrojOtpremnice
-' opcioni:
-'   Cena  -- izricito NE-FINANSIJSKO polje: predlog za prefill otkupnih blokova.
-'            Ciljno ime je PredlogCena; rename je posao cutover-a (S4.2).
+'   Datum, StanicaID, VozacID, KulturaID, BrojOtpremnice, TipAmbalaze
 '
 ' Ocekivano -- Collection diktova; spisak kljuceva je ZATVOREN:
 '   Klasa (I ili II), Kolicina (> 0), KolAmbalaze (>= 0, ceo broj)
+'   PredlogCena (opciona, >= 0) -- izricito NE-FINANSIJSKO polje: predlog za
+'   prefill otkupnih blokova TE KLASE. Do S3a je stajao na zaglavlju kao jedan
+'   broj, pa je otpremnica sa dve klase obe prefilovala istom cenom.
 Public Function CreateOtpremnicaDraft_TX(ByVal h As Object, _
                                          ByVal ocekivano As Collection, _
                                          Optional ByRef outGreska As String) As String
@@ -2380,11 +2380,16 @@ Public Function IzdajOtpremnicu_TX(ByVal otpremnicaID As String, _
 
     modSchema.SchemaReadyOrFail "IzdajOtpremnicu_TX", _
         TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & _
-        TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE
+        TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & _
+        "|" & TBL_AMBALAZA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    ' Izdavanje knjizi izlaz gajbi (OtpKnjiziAmbalazu), pa tabela mora da ume da
+    ' se vrati: pad na promeni statusa POSLE knjizenja bi ostavio gajbe skinute
+    ' sa stanice, a otpremnicu neizdatu.
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     OtpIzdaj otpremnicaID
 
@@ -2418,12 +2423,14 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
     modSchema.SchemaReadyOrFail "CreateOtpremnicaIzIzvora_TX", _
         TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & _
         TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & _
-        "|" & TBL_KULTURE
+        "|" & TBL_KULTURE & "|" & TBL_AMBALAZA
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    ' Jedan potez se zavrsava izdavanjem, pa i on knjizi gajbe (v. OtpIzdaj).
+    tx.AddTableSnapshot TBL_AMBALAZA
 
     If izvori Is Nothing Then
         Err.Raise vbObjectError + 1281, "CreateOtpremnicaIzIzvora_TX", _
@@ -2597,12 +2604,6 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
     modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_OTP, stanicaID, datum, _
                                         brojOtp, SRC
 
-    Dim cena As Double
-    cena = OtpHdrBrojOpcion(h, "Cena", SRC)
-    If cena < 0 Then
-        Err.Raise vbObjectError + 1283, SRC, "Cena ne sme biti negativna."
-    End If
-
     Dim otpID As String
     otpID = NewEntityID("OTP-")
 
@@ -2612,7 +2613,7 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
 
     Dim rowData As Variant
     rowData = BuildOtpremnicaHeaderRowData(otpID, datum, stanicaID, vozacID, _
-                                           kulturaID, tipAmb, brojOtp, cena)
+                                           kulturaID, tipAmb, brojOtp)
 
     If AppendRow(TBL_OTPREMNICA, rowData) <= 0 Then
         Err.Raise vbObjectError + 1285, SRC, _
@@ -2674,12 +2675,6 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
                   "Ocekivanje nije prosledjeno. Draft bez ocekivanja nema sta da meri."
     End If
 
-    Dim cena As Double
-    cena = OtpHdrBrojOpcion(h, "Cena", SRC)
-    If cena < 0 Then
-        Err.Raise vbObjectError + 1315, SRC, "Cena ne sme biti negativna."
-    End If
-
     ' Zaglavlje ide PRE ocekivanja: obaveznost tipa ambalaze se sudi prema NOVOM
     ' tipu, ne prema starom. Sve je u istoj transakciji, pa pad bilo gde vraca sve.
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_TIP_AMB, _
@@ -2693,7 +2688,6 @@ Private Sub OtpIzmeniDraft(ByVal otpremnicaID As String, ByVal h As Object, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_VRSTA))), SRC
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_SORTA, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
-    RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_OTP_CENA, IIf(cena > 0, cena, ""), SRC
 
     OtpObrisiOcekivano otpremnicaID, SRC
     OtpUpisiOcekivano otpremnicaID, staroOcek, SRC
@@ -2727,8 +2721,7 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
                                               ByVal vozacID As String, _
                                               ByVal kulturaID As String, _
                                               ByVal tipAmb As String, _
-                                              ByVal brojOtp As String, _
-                                              ByVal cena As Double) As Variant
+                                              ByVal brojOtp As String) As Variant
     Const SRC As String = "BuildOtpremnicaHeaderRowData"
 
     Dim colCount As Long
@@ -2756,10 +2749,8 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_SORTA, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
 
-    If cena > 0 Then
-        SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_CENA, cena, SRC
-    End If
-
+    ' COL_OTP_CENA se NE pise od S3a: predlog cene je po klasi, na stavci.
+    ' Kolona ostaje u kanonu do S3e, kad odu i linijska polja zaglavlja.
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, _
                         IZDATO_DRAFT, SRC
 
@@ -2781,12 +2772,13 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
                   "Ocekivanje je prazno. Draft bez ijedne stavke nema sta da meri."
     End If
 
-    Dim kol As Object, amb As Object
+    Dim kol As Object, amb As Object, cena As Object
     Set kol = CreateObject("Scripting.Dictionary")
     Set amb = CreateObject("Scripting.Dictionary")
+    Set cena = CreateObject("Scripting.Dictionary")
 
     Dim i As Long, s As Object, klasa As String
-    Dim k As Double, a As Double
+    Dim k As Double, a As Double, c As Double
 
     For i = 1 To ocekivano.count
         If Not IsObject(ocekivano(i)) Then
@@ -2817,8 +2809,17 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
         End If
         RequireCeoBroj a, "Ocekivana ambalaza, klasa " & klasa, src
 
+        ' Predlog cene sme da izostane (jednopotezni put ga nema -- tamo otkupi
+        ' vec postoje, pa nema sta da se prefiluje), ali ne sme da bude minus.
+        c = OtpStavkaBrojOpcion(s, "PredlogCena", i, src)
+        If c < 0 Then
+            Err.Raise vbObjectError + 1335, src, _
+                      "Predlog cene ne sme biti negativan. Klasa " & klasa & "."
+        End If
+
         kol(UCase$(klasa)) = k
         amb(UCase$(klasa)) = a
+        cena(UCase$(klasa)) = c
     Next i
 
     ' Tip ambalaze je obavezan tacno kad se ambalaza i ocekuje. Provera je OVDE
@@ -2854,7 +2855,8 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
 
         rowData = BuildOtpremnicaStavkaRowData(stavkaID, otpremnicaID, rb, CStr(kl), _
                                                OtpBroj(kol, CStr(kl)), _
-                                               OtpBroj(amb, CStr(kl)), 0#)
+                                               OtpBroj(amb, CStr(kl)), 0#, _
+                                               OtpBroj(cena, CStr(kl)))
 
         If AppendRow(TBL_OTPREMNICA_STAVKE, rowData) <= 0 Then
             Err.Raise vbObjectError + 1303, src, _
@@ -3175,7 +3177,60 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
         End If
     Next i
 
+    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC
+
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+End Sub
+
+' AMBALAZA SE KNJIZI PRI IZDAVANJU, ne pri otvaranju nacrta (odluka S14.8 t. 1).
+'
+' Gajbe fizicki odlaze sa stanice kad ih vozac preuzme, a to je izdavanje. Nacrt
+' je najava: menja se, ispravlja i sme da ostane neizdat -- da je ambalaza isla
+' sa njim, svaka izmena ocekivanja bi trazila i storniranje knjizenja, a
+' napusten nacrt bi trajno umanjio stanje gajbi na stanici.
+'
+' Zato je i kolicina ZBIR STAVKI izdate otpremnice, a ne broj sa zaglavlja: posle
+' S1/S3a zaglavlje kolicinu ambalaze vise i ne nosi.
+Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, _
+                              ByVal ocekAmb As Object, ByVal src As String)
+    Dim ukupno As Double
+    Dim kljuc As Variant
+
+    If Not ocekAmb Is Nothing Then
+        For Each kljuc In ocekAmb.Keys
+            ukupno = ukupno + OtpBroj(ocekAmb, CStr(kljuc))
+        Next kljuc
+    End If
+
+    If ukupno <= 0 Then Exit Sub
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then
+        Err.Raise vbObjectError + 1336, src, _
+                  "Nema zaglavlja otpremnice: " & otpremnicaID
+    End If
+
+    Dim datum As Date
+    Dim tipAmb As String, stanicaID As String, vozacID As String
+
+    datum = CDate(d(rOtp, RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, src)))
+    tipAmb = Trim$(NzToText(d(rOtp, RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, src))))
+    stanicaID = Trim$(NzToText(d(rOtp, RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, src))))
+    vozacID = Trim$(NzToText(d(rOtp, RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, src))))
+
+    ' Tip ambalaze je vec bio uslov da ocekivanje uopste nastane
+    ' (OtpUpisiOcekivano), pa je ovde prazan samo ako je neko posle toga
+    ' ispraznio zaglavlje. Knjizenje bez tipa nije "manje precizno" nego
+    ' neupotrebljivo -- stanje gajbi se vodi PO TIPU.
+    If Len(tipAmb) = 0 Then
+        Err.Raise vbObjectError + 1337, src, _
+                  "Otpremnica " & otpremnicaID & " nema tip ambalaze, a izdaje " & _
+                  Fmt2Zbr(ukupno) & " gajbi."
+    End If
+
+    TrackAmbalaza datum, tipAmb, CLng(ukupno), "Izlaz", stanicaID, "Stanica", _
+                  vozacID, otpremnicaID, DOK_TIP_OTPREMNICA
 End Sub
 
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
@@ -3211,7 +3266,8 @@ Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
                                               ByVal klasa As String, _
                                               ByVal kolicina As Double, _
                                               ByVal kolAmb As Double, _
-                                              ByVal bruto As Double) As Variant
+                                              ByVal bruto As Double, _
+                                              ByVal predlogCena As Double) As Variant
     Const SRC As String = "BuildOtpremnicaStavkaRowData"
 
     Dim colCount As Long
@@ -3237,6 +3293,13 @@ Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
     ' izdavanje, i samo kad ga nosi svaki izvor te klase.
     If bruto > 0 Then
         SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_BRUTO, bruto, SRC
+    End If
+
+    ' Predlog cene: prazno kad ga nema, da prazna celija ostane prazna a ne nula.
+    ' Nula bi u prefillu otkupa izgledala kao "cena je dogovorena i iznosi 0".
+    If predlogCena > 0 Then
+        SetRowValueByColumn rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_PREDLOG_CENA, _
+                            predlogCena, SRC
     End If
 
     BuildOtpremnicaStavkaRowData = rowData
@@ -3571,13 +3634,18 @@ End Sub
 Private Function OtpHdrKljucPoznat(ByVal kljuc As String) As Boolean
     Select Case LCase$(Trim$(kljuc))
         Case "datum", "stanicaid", "vozacid", "kulturaid", "brojotpremnice", _
-             "tipambalaze", "cena"
+             "tipambalaze"
             OtpHdrKljucPoznat = True
     End Select
 End Function
 
 ' Zatvoren spisak kljuceva, kao na otkupu. VrstaVoca / SortaVoca NISU na spisku:
 ' oni su snapshot KulturaID-a i writer ih sam prepisuje.
+'
+' "Cena" je SKINUTA sa spiska u S3a (odluka S14.8 t. 2). Predlog cene je od tada
+' po klasi, na stavci. Kljuc se ODBIJA umesto da se ignorise: pozivalac koji i
+' dalje salje cenu na zaglavlju misli da je poslao cenu, a ona bi nestala bez
+' reci -- a bas zbog tihog gubitka jedan broj za dve klase i menjamo.
 Private Sub OtpHdrProveriKljuceve(ByVal h As Object, ByVal src As String)
     Dim kljuc As Variant
 
@@ -3593,13 +3661,18 @@ End Sub
 
 Private Function OtpOcekKljucPoznat(ByVal kljuc As String) As Boolean
     Select Case LCase$(Trim$(kljuc))
-        Case "klasa", "kolicina", "kolambalaze"
+        Case "klasa", "kolicina", "kolambalaze", "predlogcena"
             OtpOcekKljucPoznat = True
     End Select
 End Function
 
-' Ocekivanje je ono sto operater PRIJAVLJUJE: klasa, kolicina, ambalaza. Cena i
-' bruto tu ne postoje -- cenu nosi otkup, bruto se izvodi iz izvora.
+' Ocekivanje je ono sto operater PRIJAVLJUJE: klasa, kolicina, ambalaza i
+' predlog cene TE KLASE. BrutoKg tu ne postoji -- njega izdavanje izvodi iz
+' izvora, jer ga operater na otpremnici i ne meri.
+'
+' PredlogCena NIJE novac ovog dokumenta (v. modConfig, tblOtpremnicaStavke):
+' ona samo prefiluje formu otkupa. Do S3a je stajala na zaglavlju kao jedan
+' broj za obe klase.
 Private Sub OtpOcekProveriKljuceve(ByVal s As Object, ByVal idx As Long, _
                                    ByVal src As String)
     Dim kljuc As Variant
@@ -3608,10 +3681,25 @@ Private Sub OtpOcekProveriKljuceve(ByVal s As Object, ByVal idx As Long, _
         If Not OtpOcekKljucPoznat(CStr(kljuc)) Then
             Err.Raise vbObjectError + 1326, src, _
                       "Ocekivana stavka " & CStr(idx) & " ima nepoznat kljuc: " & _
-                      CStr(kljuc) & ". Dozvoljeni su Klasa / Kolicina / KolAmbalaze."
+                      CStr(kljuc) & ". Dozvoljeni su Klasa / Kolicina / " & _
+                      "KolAmbalaze / PredlogCena."
         End If
     Next kljuc
 End Sub
+
+' Opcion broj ocekivane stavke: kljuc sme da nedostaje (stariji pozivalac,
+' jednopotezni put), ali ako postoji mora biti broj.
+Private Function OtpStavkaBrojOpcion(ByVal s As Object, ByVal kljuc As String, _
+                                     ByVal idx As Long, ByVal src As String) As Double
+    If Not s.Exists(kljuc) Then Exit Function
+
+    Dim v As Variant
+    v = s(kljuc)
+    If IsEmpty(v) Then Exit Function
+    If Len(Trim$(NzToText(v))) = 0 Then Exit Function
+
+    OtpStavkaBrojOpcion = OtpStavkaBroj(s, kljuc, idx, src)
+End Function
 
 Private Function OtpStavkaVrednost(ByVal s As Object, ByVal kljuc As String, _
                                    ByVal idx As Long, ByVal src As String) As Variant

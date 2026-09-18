@@ -483,7 +483,8 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "PredlogCena"
       ]
     },
     {
