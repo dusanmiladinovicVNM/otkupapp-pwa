@@ -495,8 +495,10 @@ SABOTAZE = {
     # --- kapije storna ------------------------------------------------------
     "storno-nema-dok": (
         "modStornoDok.bas",
-        "            If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)\n",
-        "            If False Then StornoRazlog = NijePronadjen(broj)   ' SABOTAZA: nepostojeci otkup prolazi kapiju\n",
+        "            If Not OtkupAktivanPoID(docID) Then\n"
+        "                StornoRazlog = NijePronadjen(broj)\n",
+        "            If False Then   ' SABOTAZA: nepostojeci otkup prolazi kapiju\n"
+        "                StornoRazlog = NijePronadjen(broj)\n",
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument",
     ),
@@ -547,6 +549,16 @@ SABOTAZE = {
         "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_GENERACIJA_ID   ' SABOTAZA\n",
         "Test_OTP_F8StornoPoID",
         "skrivena kolona identiteta je OtpremnicaID",
+    ),
+    # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
+    "otk-storno-izvora-aktivne-otpremnice": (
+        "modStorno.bas",
+        "    If Len(otpID) > 0 Then\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "    If False Then   ' SABOTAZA: izvor otpremnice se stornira\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "Test_OTK_IzvorAktivneOtpremniceSeNeStornira",
+        "pisac odbija storno izvora",
     ),
     # Pisac opet stornira izvor aktivne kanonske zbirne (review #362, A13/A15).
     "otp-storno-izvora-aktivne-zbirne": (

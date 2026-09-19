@@ -976,6 +976,7 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA", "Unos prijemnice je PAUZIRAN dok prijemnica ne pre" & ChrW(273) & "e na nov model. Prijemnica tra" & ChrW(382) & "i zbirnu, a zbirna se jo" & ChrW(353) & " ne mo" & ChrW(382) & "e uneti."
     UpsertRow lo, existing, "PRINT_OTP_NIJE_IZDATA", "Otpremnica jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa. Otpremnica se " & ChrW(353) & "tampa kad je izdata, sa cenama njenih otkupnih blokova."
     UpsertRow lo, existing, "STORNO_ERR_OTP_IZVOR_ZBIRNE", "Otpremnica je izvor aktivne zbirne " & ChrW(8212) & " storno je pauziran dok zbirna ne pre" & ChrW(273) & "e na nov model. Zbirna:"
+    UpsertRow lo, existing, "STORNO_ERR_OTK_IZVOR_OTP", "Otkup je u sastavu aktivne otpremnice " & ChrW(8212) & " storno izvora nije dozvoljen dok je otkup u njenom sastavu. Otpremnica:"
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_1", ChrW(268) & "eka ISPRAVKA za stornirano"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_2", "Da li je upravo snimljeni dokument ZAMENA za njega?"

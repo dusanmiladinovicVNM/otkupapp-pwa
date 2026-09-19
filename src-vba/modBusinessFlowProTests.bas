@@ -280,6 +280,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_DveStavkeIsteKlaseObaraCitaoce
     Test_OTP_F8StornoPoID
     Test_OTP_IzvorAktivneZbirneSeNeStornira
+    Test_OTK_IzvorAktivneOtpremniceSeNeStornira
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -5973,6 +5974,86 @@ Private Sub Test_OTP_IzvorAktivneZbirneSeNeStornira()
 
 EH:
     LogFatal "Test_OTP_IzvorAktivneZbirneSeNeStornira", Err.Number, Err.description
+End Sub
+
+' IZVOR AKTIVNE OTPREMNICE SE NE STORNIRA (review #362, A13/A15) -- simetrija
+' kapije Otpremnica -> Zbirna, jedan nivo nize.
+'
+' Mere se OBA stanja roditelja, jer oba nose izvor: nacrt (clanstvo bi pokazivalo
+' na storniran otkup) i izdata otpremnica (izdat dokument na storniranom izvoru).
+' Kapija je u PISCU (jezgro StornoOtkup), pa se meri direktnim pozivom pisca; F8
+' razlog je samo poruka ispred nje. Na kraju kontrola u drugom smeru: kad otkup
+' izadje iz nacrta, isti storno prolazi -- kapija gleda clanstvo, ne otkup.
+Private Sub Test_OTK_IzvorAktivneOtpremniceSeNeStornira()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKIZO")
+
+    ' --- DRAFT roditelj ---
+    Dim brOtpD As String, otkD As String, draftID As String, g As String
+    brOtpD = TEST_PREFIX & "-OTP-IZOD-" & scenario
+    otkD = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZOD-" & scenario), _
+                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    AssertTrue Len(otkD) > 0, "OTK izvor otpremnice: otkup za nacrt"
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(brOtpD), OtpOcek(100#, 10#, 0#, 0#), g)
+    AssertTrue Len(draftID) > 0, "OTK izvor otpremnice: nacrt napravljen (" & g & ")"
+    If Len(otkD) = 0 Or Len(draftID) = 0 Then Exit Sub
+    AssertTrue DodajOtpremnicaIzvor_TX(draftID, otkD, g), _
+               "OTK izvor otpremnice: otkup je clan nacrta (" & g & ")"
+
+    ' Pisac je konacna kapija.
+    AssertTrue Not StornoOtkup_TX(otkD), _
+               "OTK izvor otpremnice DRAFT: pisac odbija storno izvora"
+    IzvorOtpremniceOdbijen otkD, draftID, brOtpD, "DRAFT"
+
+    ' --- IZDATA otpremnica ---
+    Dim brOtpI As String, otkI As String, izdataID As String
+    brOtpI = TEST_PREFIX & "-OTP-IZOI-" & scenario
+    otkI = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZOI-" & scenario), _
+                          OtkStavke(200#, 100#, 20, 0#, 0#, 0))
+    AssertTrue Len(otkI) > 0, "OTK izvor otpremnice: otkup za izdatu"
+    If Len(otkI) = 0 Then Exit Sub
+    izdataID = CreateOtpremnicaIzIzvora_TX(OtpHeader(brOtpI), Pr3Izvor(otkI, ""), g)
+    AssertTrue Len(izdataID) > 0, "OTK izvor otpremnice: izdata napravljena (" & g & ")"
+    If Len(izdataID) = 0 Then Exit Sub
+    AssertTrue modDokumenta.OtpremnicaJeIzdata(izdataID), _
+               "OTK izvor otpremnice: preduslov -- roditelj JESTE izdat"
+
+    AssertTrue Not StornoOtkup_TX(otkI), _
+               "OTK izvor otpremnice IZDATO: pisac odbija storno izvora"
+    IzvorOtpremniceOdbijen otkI, izdataID, brOtpI, "IZDATO"
+
+    ' --- kontrola: van sastava storno prolazi ---
+    AssertTrue UkloniOtpremnicaIzvor_TX(draftID, otkD, g), _
+               "OTK izvor otpremnice: otkup izlazi iz nacrta (" & g & ")"
+    AssertEquals "", modStornoDok.StornoRazlog(STIP_OTKUP, "X", "", otkD), _
+                 "OTK izvor otpremnice: van sastava F8 nema razlog"
+    AssertTrue StornoOtkup_TX(otkD), _
+               "OTK izvor otpremnice: van sastava storno prolazi"
+    AssertTrue RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkD), _
+               "OTK izvor otpremnice: otkup van sastava JE storniran"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_IzvorAktivneOtpremniceSeNeStornira", Err.Number, Err.description
+End Sub
+
+' Posle odbijenog storna (pisac, u telu testa): odbijanje je POTPUNO, a F8 isti
+' razlog kaze pre potvrde i imenuje broj otpremnice.
+Private Sub IzvorOtpremniceOdbijen(ByVal otkupID As String, ByVal otpID As String, _
+                                   ByVal brojOtp As String, ByVal stanje As String)
+    AssertTrue InStr(1, modStornoDok.StornoRazlog(STIP_OTKUP, "X", "", otkupID), _
+                     brojOtp, vbTextCompare) > 0, _
+               "OTK izvor otpremnice " & stanje & ": F8 odbija i imenuje otpremnicu"
+
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkupID), _
+               "OTK izvor otpremnice " & stanje & ": otkup ostaje aktivan"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "OTK izvor otpremnice " & stanje & ": otpremnica ostaje aktivna"
+    AssertEquals otpID, modDokumenta.OtpremnicaZaOtkup(otkupID), _
+                 "OTK izvor otpremnice " & stanje & ": clanstvo ostaje netaknuto"
 End Sub
 
 ' Da li mreza F8 za otpremnice (sa kolonom identiteta) ima red sa datim

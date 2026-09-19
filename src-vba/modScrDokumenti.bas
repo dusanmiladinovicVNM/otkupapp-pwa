@@ -204,6 +204,14 @@ Private Function RowAction(ByVal tag As String) As Boolean
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_STAMPA") & " " & broj, False
 
         Case "storno"
+            ' Razlog zbog kog pisac odbija storno (izvor aktivne otpremnice)
+            ' operater cuje PRE potvrde -- isti preflight koji koristi F8.
+            Dim razlog As String
+            razlog = modStornoDok.StornoRazlog(modStornoDok.STIP_OTKUP, broj, "", otkupID)
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
+                Exit Function
+            End If
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
                       APP_NAME) = vbNo Then Exit Function
