@@ -96,6 +96,9 @@
     uvek NACRT, traka sa semaforom po klasi, prekoračenje po klasi, vezivanje posle unosa, veži/ukloni/izdaj;
     izmena nacrta u F2 (odluka: povezano ≠ očekivano se rešava izmenom, ne izjednačavanjem). Prag
     `otp_linija` 24 → 36 (sve činjenice zaglavlja). Pre merge-a: pun `run_vba` + Compile.
+    Review #363, prvi krug: read-model i izdavanje čitaju stavke kroz **stroge kanonske čitače** (dve
+    stavke iste klase više ne postaju IZDATO); izmena nacrta se ne otvara nad delimičnom formom. Pre S5:
+    otkup u `PROSLEDJENO` mora da bude prihvaćen kao izvor (backlog §15).
 17. **Sledeće:** S3b-2b — štampa specifikacije blokova (A-018, A-019, A-021) i lista nevezanih blokova (A-025).
 
 ## Alati i kapije

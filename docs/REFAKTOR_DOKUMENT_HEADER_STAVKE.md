@@ -3353,6 +3353,32 @@ stanica-lock i štampu).
 **Poznato, a namerno nedirano:** posle snimanja bloka `ClearForm` vraća cenu iz cenovnika (`AutoFillCena`), ne
 sa otpremnice — isto ponašanje kao pre S1b-3.
 
+#### Review #363, prvi krug — izdavanje čita strogo (19.09.2026)
+
+**P1.** Read-model (`GetOtpremnicaProgress`) i izdavanje (`OtpIzdaj`) su očekivano i povezano čitali iz **sirovih**
+tabela (`OtpUcitajOcekivano`, `OtpUcitajPovezano`), mimo kanonskih strogih čitača, a nebrojčana vrednost je
+postajala nula (`OtpDbl`). Dve stavke iste klase su se sabirale: nacrt sa 400 + 100 kg klase I i izvorom od 500 kg
+prolazio je jednakost i postajao IZDATO. To je dokument koji `StavkeOtpremniceRedovi` odbija kao korumpiran.
+`Test_OTP_DveStavkeIsteKlaseObaraCitaoce` je merio samo put mreže, pa je suite izgledala kao da je invarijanta
+zatvorena.
+
+**Popravka bez nove runde validacija:** oba učitavanja agregiraju preko postojećih strogih čitača —
+`StavkeOtpremniceRedovi` i `modOtkup.StavkeOtkupaRedovi`. Read-model i izdavanje sada drže isti ugovor stavki kao
+mreža, štampa i izveštaji. Test `Test_OTP_IzdavanjeCitaStrogo`: anomalija u transakciji koja se vraća → read-model
+pada po imenu → pisac odbija sa istim razlogom, status ostaje DRAFT; kontrola posle vraćanja. Sabotaža
+`izdavanje-guta-korupciju` (ukupno 500).
+
+**P2, popravljen jer je kod nov u ovom PR-u:** izmena nacrta u F2 je prefill sastavljala pod `On Error Resume Next`,
+pa je pad strogog čitača mogao da ostavi otvorenu izmenu nad delimičnom formom. Sada `OtvoriIzmenuNacrta` sastavlja
+formu **pre** otvaranja; pad čitača ostavlja izmenu zatvorenu (isti test), a ekran prazni formu prethodne izmene da je
+sledeće snimanje ne bi upisalo kao nov nacrt.
+
+**P2, ostaje za pre S5 (backlog):** `OtpRequireIzvorValjan` prima otkup kao izvor samo kad je status tačno `IZDATO`,
+a životni ciklus je `IZDATO → PROSLEDJENO`. Danas nijedan lokalni put ne prebacuje otkup u `PROSLEDJENO`
+(`CreateOtkup_TX` piše `IZDATO`), pa nije živ kvar. Pre S5 (PWA sync) izvor mora da prizna i `PROSLEDJENO`, sa istom
+eksplicitnom semantikom kao `IzdatoStatusJeIzdato`. Stari `DocIsIssued` se ne koristi, jer prazno stanje tumači
+drugačije.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3362,6 +3388,7 @@ sa otpremnice — isto ponašanje kao pre S1b-3.
 | **App / Repo / Qry slojevi** | **Ne paralelno sa refaktorom** — pokvarilo bi kapiju odluke iz §14.1: dve promenljive odjednom znače da se ne može reći da li je čist ishod zasluga šeme ili slojeva. Uz to, App sloj već postoji neimenovan (`mod*Unos` prima DTO rečnik, `NoviOtpremnicaUnos`), a enforcement daje A11 allowlist, ne ime modula. Jedini sloj koji stvarno nedostaje je **Qry** (`modDokumenta`: 15 javnih čitača pored 21 mesta upisa) — ali dobar deo tih čitača postoji da rekonstruiše dokument po broju i **umire u PR 12**. Revidirati **posle PR 12**, kad se zna koji čitači preživljavaju. Do tada: čitanja u novim writer-ima idu iza imenovanih funkcija, ne inline skenova. |
 | **Delimična alokacija Otkup → Otpremnica** | nema poslovnog zahteva; ako se pojavi — eksplicitna alokaciona tabela |
 | **Mešovit dokument (više vrsta u jednom)** | vrsta/sorta ostaju header; nije zahtev |
+| **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
 
 ---
 

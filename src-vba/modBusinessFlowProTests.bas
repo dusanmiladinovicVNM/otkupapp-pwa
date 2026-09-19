@@ -285,6 +285,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_RadniStoVeziTrakaIzdaj
     Test_OTP_RadniStoListe
     Test_OTP_IzmenaNacrtaF2
+    Test_OTP_IzdavanjeCitaStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6283,6 +6284,86 @@ EH:
     modScrDokumenti.Scr_IzmenaOtkazi
     RadniStoPocetno
     LogFatal "Test_OTP_IzmenaNacrtaF2", Err.Number, Err.description
+End Sub
+
+' IZDAVANJE DRZI ISTI UGOVOR STAVKI KAO CITAOCI (review #363, P1).
+'
+' Read-model i izdavanje su citali tblOtpremnicaStavke mimo strogog citaoca i
+' SABIRALI dve stavke iste klase. Nacrt ocekuje 400 kg klase I, a izvor nosi
+' 500 kg: sinteticka druga stavka klase I od 100 kg (anomalija, u transakciji
+' koja se vraca) dala je 400 + 100 = 500 = povezano, pa bi dokument koji
+' kanonski citalac odbija postao IZDATO. Uz to: izmena nacrta se nad istom
+' korupcijom ne otvara (review #363, P2).
+Private Sub Test_OTP_IzdavanjeCitaStrogo()
+    Const SRC As String = "Test_OTP_IzdavanjeCitaStrogo"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPIZS")
+    modScrDokumenti.Scr_IzmenaOtkazi
+
+    Dim otpID As String, otk As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-IZS-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), g)
+    otk = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZS-" & scenario), _
+                         OtkStavke(500#, 100#, 20, 0#, 0#, 0))
+    AssertTrue Len(otpID) > 0 And Len(otk) > 0, "OTP strogo: preduslovi napravljeni (" & g & ")"
+    If Len(otpID) = 0 Or Len(otk) = 0 Then Exit Sub
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otk, g), "OTP strogo: izvor od 500 kg vezan (" & g & ")"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTPREMNICA_STAVKE)
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_ID, otpID & "-DUPLA"
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpID
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_RB, 2
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, KLASA_I
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, 100#
+    RequireAppend TBL_OTPREMNICA_STAVKE, rowData, SRC
+
+    ' 1) Read-model pada po imenu, ne sabira 2 x I.
+    AssertTrue InStr(1, OtpProgressGreska(otpID), "Dve stavke iste klase", vbTextCompare) > 0, _
+               "OTP strogo: read-model pada po imenu, ne sabira 2 x I"
+
+    ' 2) Pisac odbija, i to zbog korupcije -- status ostaje DRAFT.
+    AssertTrue Not IzdajOtpremnicu_TX(otpID, g), _
+               "OTP strogo: pisac odbija nacrt sa dve stavke iste klase"
+    AssertTrue InStr(1, g, "Dve stavke iste klase", vbTextCompare) > 0, _
+               "OTP strogo: razlog izdavanja imenuje korupciju (bilo: " & g & ")"
+    AssertEquals IZDATO_DRAFT, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "OTP strogo: status ostaje DRAFT"
+
+    ' 3) Izmena nacrta se nad korupcijom ne otvara (P2).
+    Dim spec As String
+    AssertTrue Len(modScrDokumenti.OtvoriIzmenuNacrta(otpID, spec)) > 0, _
+               "OTP strogo: izmena nad korupcijom se ne otvara"
+    AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "OTP strogo: izmena ostaje zatvorena"
+    AssertEquals "", spec, "OTP strogo: nema delimicne forme"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' Kontrola: bez anomalije isti read-model radi -- pad je bio zbog nje.
+    AssertEquals "", OtpProgressGreska(otpID), "OTP strogo: posle vracanja read-model radi"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    modScrDokumenti.Scr_IzmenaOtkazi
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
 End Sub
 
 ' Polja ekrana F2 za izmenu nacrta -- isti kljucevi koje ljuska predaje

@@ -639,6 +639,16 @@ SABOTAZE = {
         "Test_OTP_IzmenaNacrtaF2",
         "F2 izmena: otkazivanje brise izmenu",
     ),
+    # Izdavanje opet cita ocekivano mimo strogog ugovora (review #363, P1).
+    "izdavanje-guta-korupciju": (
+        "modDokumenta.bas",
+        "    ocekRedovi = StavkeOtpremniceRedovi()\n",
+        "    On Error Resume Next   ' SABOTAZA: korupcija stavki se guta\n"
+        "    ocekRedovi = StavkeOtpremniceRedovi()\n"
+        "    On Error GoTo 0\n",
+        "Test_OTP_IzdavanjeCitaStrogo",
+        "OTP strogo: read-model pada po imenu",
+    ),
     # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
     "otk-storno-izvora-aktivne-otpremnice": (
         "modStorno.bas",

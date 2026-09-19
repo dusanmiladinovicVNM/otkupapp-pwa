@@ -3435,28 +3435,33 @@ Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
 End Function
 
 ' --- citanje ----------------------------------------------------------------
+'
+' OBA UCITAVANJA IDU KROZ KANONSKE STROGE CITAOCE (review #363, P1), ne kroz
+' sirove tabele. Ranije su ovde tblOtpremnicaStavke i tblOtkupStavke citani
+' direktno, a nebrojcana vrednost je postajala nula (OtpDbl). Dve stavke iste
+' klase su se SABIRALE: nacrt sa 400 + 100 kg klase I i izvorom od 500 kg
+' prolazio je jednakost i postajao IZDATO -- dokument koji kanonski citalac
+' odbija kao korumpiran. Sada read-model (GetOtpremnicaProgress) i izdavanje
+' drze ISTI ugovor stavki kao mreza, stampa i izvestaji: korupcija pada po
+' imenu, a nijedno pravilo nije napisano drugi put.
 Private Sub OtpUcitajOcekivano(ByVal otpremnicaID As String, _
                                ByRef ocek As Object, ByRef ocekAmb As Object, _
                                ByVal src As String)
     If ocek Is Nothing Then Set ocek = CreateObject("Scripting.Dictionary")
     If ocekAmb Is Nothing Then Set ocekAmb = CreateObject("Scripting.Dictionary")
 
-    Dim d As Variant
-    d = GetTableData(TBL_OTPREMNICA_STAVKE)
-    If Not IsArray(d) Then Exit Sub
-
-    Dim cOtp As Long, cKlasa As Long, cKol As Long, cAmb As Long
-    cOtp = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, src)
-    cKlasa = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, src)
-    cKol = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, src)
-    cAmb = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KOL_AMB, src)
+    ' 1 OtpremnicaID | 3 Klasa | 4 Kolicina | 6 KolAmbalaze -- klasa je vec
+    ' proverena (jedna stavka po klasi), kolicina > 0, gajbe ceo broj >= 0.
+    Dim ocekRedovi As Variant
+    ocekRedovi = StavkeOtpremniceRedovi()
+    If Not IsArray(ocekRedovi) Then Exit Sub
 
     Dim i As Long, klasa As String
-    For i = 1 To UBound(d, 1)
-        If StrComp(Trim$(NzToText(d(i, cOtp))), otpremnicaID, vbTextCompare) = 0 Then
-            klasa = UCase$(Trim$(NzToText(d(i, cKlasa))))
-            ocek(klasa) = OtpBroj(ocek, klasa) + OtpDbl(d(i, cKol))
-            ocekAmb(klasa) = OtpBroj(ocekAmb, klasa) + OtpDbl(d(i, cAmb))
+    For i = 1 To UBound(ocekRedovi, 1)
+        If StrComp(CStr(ocekRedovi(i, 1)), otpremnicaID, vbTextCompare) = 0 Then
+            klasa = UCase$(CStr(ocekRedovi(i, 3)))
+            ocek(klasa) = OtpBroj(ocek, klasa) + CDbl(ocekRedovi(i, 4))
+            ocekAmb(klasa) = OtpBroj(ocekAmb, klasa) + CDbl(ocekRedovi(i, 6))
         End If
     Next i
 End Sub
@@ -3486,16 +3491,12 @@ Private Sub OtpUcitajPovezano(ByVal otpremnicaID As String, _
         clanSet(UCase$(CStr(clanovi(k)))) = True
     Next k
 
+    ' Kanonski strog citac otkupa (modOtkup.StavkeOtkupaRedovi): klasa I/II,
+    ' kolicina i cena > 0, gajbe ceo broj >= 0, svako zaglavlje sa stavkom.
+    ' 1 OtkupID | 3 Klasa | 4 Kolicina | 6 KolAmbalaze | 8 BrutoKg ("" = neto)
     Dim sve As Variant
-    sve = GetTableData(TBL_OTKUP_STAVKE)
+    sve = modOtkup.StavkeOtkupaRedovi()
     If Not IsArray(sve) Then Exit Sub
-
-    Dim cOtk As Long, cKlasa As Long, cKol As Long, cAmb As Long, cBruto As Long
-    cOtk = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, src)
-    cKlasa = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KLASA, src)
-    cKol = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, src)
-    cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, src)
-    cBruto = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO, src)
 
     Dim brojStavki As Object, brojSaBrutom As Object
     Set brojStavki = CreateObject("Scripting.Dictionary")
@@ -3503,18 +3504,14 @@ Private Sub OtpUcitajPovezano(ByVal otpremnicaID As String, _
 
     Dim i As Long, klasa As String, bruto As Double
     For i = 1 To UBound(sve, 1)
-        If clanSet.Exists(UCase$(Trim$(NzToText(sve(i, cOtk))))) Then
-            klasa = UCase$(Trim$(NzToText(sve(i, cKlasa))))
-            If Len(klasa) = 0 Then
-                Err.Raise vbObjectError + 1300, src, _
-                          "Otkupna stavka bez klase, otkup " & _
-                          Trim$(NzToText(sve(i, cOtk))) & "."
-            End If
+        If clanSet.Exists(UCase$(CStr(sve(i, 1)))) Then
+            klasa = UCase$(CStr(sve(i, 3)))
 
-            pov(klasa) = OtpBroj(pov, klasa) + OtpDbl(sve(i, cKol))
-            povAmb(klasa) = OtpBroj(povAmb, klasa) + OtpDbl(sve(i, cAmb))
+            pov(klasa) = OtpBroj(pov, klasa) + CDbl(sve(i, 4))
+            povAmb(klasa) = OtpBroj(povAmb, klasa) + CDbl(sve(i, 6))
 
-            bruto = OtpDbl(sve(i, cBruto))
+            bruto = 0
+            If IsNumeric(sve(i, 8)) Then bruto = CDbl(sve(i, 8))
             povBruto(klasa) = OtpBroj(povBruto, klasa) + bruto
             brojStavki(klasa) = OtpBroj(brojStavki, klasa) + 1
             If bruto > 0 Then brojSaBrutom(klasa) = OtpBroj(brojSaBrutom, klasa) + 1

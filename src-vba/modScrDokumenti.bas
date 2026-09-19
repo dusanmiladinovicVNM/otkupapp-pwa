@@ -207,18 +207,26 @@ Private Function NacrtRazlog(ByVal otpID As String) As String
     If st <> UCase$(IZDATO_DRAFT) Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")
 End Function
 
-' Otvara izmenu nacrta u F2. "" = otvorena (sledece snimanje menja nacrt),
-' inace razlog. Izdata se ne menja: pisac trazi DRAFT, a izdat dokument se
-' ispravlja stornom (S3c).
-Public Function OtvoriIzmenuNacrta(ByVal otpID As String) As String
+' Otvara izmenu nacrta u F2. "" = otvorena (sledece snimanje menja nacrt), a
+' spec je forma nacrta za ApplyPrefill; inace razlog. Izdata se ne menja: pisac
+' trazi DRAFT, a izdat dokument se ispravlja stornom (S3c).
+'
+' Forma se sastavlja PRE otvaranja (review #363, P2): kanonski citalac koji
+' padne prekida otvaranje i ostavlja izmenu ZATVORENU -- nikad otvorena izmena
+' nad delimicnom formom.
+Public Function OtvoriIzmenuNacrta(ByVal otpID As String, Optional ByRef spec As String) As String
+    spec = ""
     On Error GoTo EH
     otpID = Trim$(otpID)
     OtvoriIzmenuNacrta = NacrtRazlog(otpID)
     If Len(OtvoriIzmenuNacrta) > 0 Then Exit Function
+    spec = PrefillNacrta(otpID)
     mIzmenaOtpID = otpID
     mIzmenaBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
     Exit Function
 EH:
+    Scr_IzmenaOtkazi
+    spec = ""
     OtvoriIzmenuNacrta = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
 End Function
 
@@ -645,23 +653,29 @@ End Function
 ' Klik na red liste F2. ID dolazi iz nevidljive kolone reda, ne iz broja.
 ' Izdata otpremnica se samo imenuje (nije greska: lista F2 pokazuje i izdate).
 Private Sub IzaberiNacrtZaIzmenu(ByVal red As Long)
-    Dim otpID As String, razlog As String
+    Dim otpID As String, razlog As String, spec As String
     otpID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTPREMNICA"))))
-    razlog = OtvoriIzmenuNacrta(otpID)
-    If Len(razlog) > 0 Then
-        modOtkupUI.ShowToast razlog, (razlog <> Poruka("OTKUI_ERR_OTP_IZDATA"))
-        Exit Sub
+    razlog = OtvoriIzmenuNacrta(otpID, spec)
+    If Len(razlog) = 0 Then
+        modOtkupUI.ApplyPrefill spec
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZMENA_NACRTA") & " " & mIzmenaBroj, False
+    ElseIf razlog = Poruka("OTKUI_ERR_OTP_IZDATA") Then
+        modOtkupUI.ShowToast razlog, False
+    Else
+        ' Izmena je zatvorena; forma PRETHODNE izmene ne sme da ostane, jer bi
+        ' je sledece snimanje upisalo kao nov nacrt -- duplikat.
+        modOtkupUI.ClearForm
+        modOtkupUI.ShowToast razlog, True
     End If
-    modOtkupUI.ApplyPrefill PrefillNacrta(otpID)
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZMENA_NACRTA") & " " & mIzmenaBroj, False
 End Sub
 
 ' Nacrt u formu F2: zaglavlje i ocekivanje po klasi (kolicina, gajbe, predlog
 ' cene). Dvoklasni unos se ukljucuje pre polja klase II.
+' Greska kanonskog citaoca stavki se PROPAGIRA -- pozivalac (OtvoriIzmenuNacrta)
+' tada ne otvara izmenu.
 Private Function PrefillNacrta(ByVal otpID As String) As String
     Dim res As String, poDok As Object, c As Collection
     Dim red As Variant, i As Long, imaII As Boolean
-    On Error Resume Next
     res = PrefillZaglavlja(otpID)
     res = Dodaj(res, "brdok", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
 
