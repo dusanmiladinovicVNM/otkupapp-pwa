@@ -141,6 +141,26 @@ Public Function StornoOtkup(ByVal otkupID As String) As Boolean
 
     On Error GoTo EH
 
+    ' IZVOR AKTIVNE OTPREMNICE SE NE STORNIRA (review #362, A13/A15) -- ista
+    ' kapija koju StornoOtpremnica drzi jedan nivo vise, prema zbirnoj.
+    '
+    ' Clan otpremnice (tblOtpremnicaIzvori) je osnova njenog sastava, i to u OBA
+    ' stanja roditelja:
+    '   DRAFT  -- storno bi ostavio clanstvo nacrta koje pokazuje na storniran
+    '             otkup (izdavanje ga tek kasnije odbija, a do tada nacrt laze);
+    '   IZDATO -- izdat dokument bi ostao zasnovan na storniranom izvoru.
+    ' Isto pravilo drzi IspravkaOtkupa_TX (modOtkup) za ispravku.
+    '
+    ' Kapija je u JEZGRU, a ne samo u F1 i F8: jezgro zovu i StornoOtkup_TX i
+    ' ispravka otkupa, pa bi kapija na jednom ulazu ostavila ostale otvorene.
+    Dim otpID As String
+    otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+    If Len(otpID) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 72, SRC, _
+                  "Otkup " & otkupID & " je u sastavu aktivne otpremnice " & otpID & _
+                  ". Storno izvora nije dozvoljen dok je otkup u njenom sastavu."
+    End If
+
     Dim rowOtkup As Long
     rowOtkup = RequireStornoAllowed(TBL_OTKUP, otkupID, COL_OTK_ID, SRC)
 

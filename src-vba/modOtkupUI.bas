@@ -133,6 +133,7 @@ Private Const SIDEBAR_W   As Single = 152
 Private Const SIDEBAR_MIN As Single = 36
 Public Const KPI_H       As Single = 56      ' tri reda: naslov, vrednost, kontekst
 Private Const TITLE_H     As Single = 40
+Private Const OTP_H       As Single = 50      ' traka otpremnice (F1)
 ' Zona konteksta ima isti ritam kao grupa polja u formi: eyebrow (2..13),
 ' pa natpis polja (18..30), pa polje (32..58). Sa 14 / 26 su se eyebrow
 ' "OSNOVNI PODACI" i natpis "VRSTA" preklapali za 5pt i citali se kao jedan
@@ -511,6 +512,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     BuildNav frm
     BuildKpi frm
     BuildTitle frm
+    BuildOtpTraka frm
     BuildCtx frm
     BuildForm frm
     BuildGrid frm
@@ -830,6 +832,102 @@ Private Sub BuildTitle(frm As Object)
     z.Controls("titRul").AutoSize = True
     NewLbl z, "titDatum", "-", 0, CenterY(0, TITLE_H, TS_META), 190, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignRight
+End Sub
+
+'------------------------------------------------------------ CTX ----
+' TRAKA OTPREMNICE (F1). Otpremnica je izvor robe; ovde stoji koja je aktivna
+' i koliko od nje jos nije povezano. Vidi se samo u F1 - u ostalim rezimima je
+' zona sakrivena i ne zauzima visinu. Brojeve racuna ekran (Scr_OtpInfo) nad
+' kanonom; ljuska ne zna sta je otpremnica - dobija gotove brojeve i crta ih.
+Private Sub BuildOtpTraka(frm As Object)
+    Dim z As Object, i As Long
+    Set z = NewZone(frm, "zOtp", SIDEBAR_W, 0, 800, OTP_H, C_SOFT_BG)
+    WireZone z
+    NewLbl z, "otpLnB", "", 0, OTP_H - 1, 800, 1, 8, False, 0, C_BORDER
+
+    NewLbl z, "otpCap", UCase$(Poruka("OTKUI_OTP_TRAKA")), PAD, 5, 120, 11, _
+           TS_MICRO, True, C_MUTED, -1
+    NewLbl z, "otpBroj", ChrW(8212), PAD, 17, 260, 18, TS_H1, True, C_FOREST, -1
+    NewLbl z, "otpSub", "", PAD, 34, 260, 13, TS_META, False, C_MUTED, -1
+
+    ' tri meraca + cena; svaki ima natpis, veliku brojku i red ispod
+    For i = 0 To 3
+        NewLbl z, "otpML" & i, "", 0, 5, 120, 11, TS_MICRO, True, C_MUTED, -1
+        NewLbl z, "otpMV" & i, ChrW(8212), 0, 16, 120, 20, TS_KPI, True, C_FOREST, _
+               -1, fmTextAlignLeft, F_NUM
+        NewLbl z, "otpMA" & i, "", 0, 35, 120, 12, TS_MICRO, False, C_MUTED, _
+               -1, fmTextAlignLeft, F_NUM
+    Next i
+    NewLbl z, "otpPrazno", Poruka("OTKUI_OTP_NEMA"), PAD, 20, 420, 16, _
+           TS_META, False, C_MUTED, -1
+End Sub
+
+' Puni traku iz opisa koji daje ekran (Scr_OtpInfo, 13 polja). Opis sa manje
+' polja je greska citanja: ekran tada salje broj i opis greske, pa se crtaju
+' samo oni -- brojke bi lagale.
+Private Sub RefreshOtpTraka(frm As Object)
+    Dim z As Object, info As String, p() As String, i As Long
+    Dim ima As Boolean, puna As Boolean
+    On Error Resume Next
+    Set z = frm.Controls("zOtp")
+    If z Is Nothing Then Exit Sub
+    info = ""
+    If mScreen = "DOKUMENTI" Then _
+        info = CStr(Application.Run("modScrDokumenti.Scr_OtpInfo"))
+    Err.Clear
+    ima = (Len(info) > 0)
+    If ima Then
+        p = Split(info, "|")
+        puna = (UBound(p) >= 12)
+    End If
+
+    z.Controls("otpPrazno").Visible = Not ima
+    z.Controls("otpBroj").Visible = ima
+    z.Controls("otpSub").Visible = ima
+    For i = 0 To 3
+        z.Controls("otpML" & i).Visible = puna
+        z.Controls("otpMV" & i).Visible = puna
+        z.Controls("otpMA" & i).Visible = puna
+    Next i
+    If Not ima Then Exit Sub
+
+    z.Controls("otpBroj").caption = p(0)
+    If Not puna Then
+        If UBound(p) >= 1 Then z.Controls("otpSub").caption = p(1)
+        Exit Sub
+    End If
+    z.Controls("otpSub").caption = p(1) & "  " & ChrW(183) & "  " & p(2)
+
+    z.Controls("otpML0").caption = UCase$(Poruka("OTKUI_OTP_UKUPNO"))
+    z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)
+    z.Controls("otpMA0").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(6))), 0)
+    z.Controls("otpML1").caption = UCase$(Poruka("OTKUI_OTP_UBLOK"))
+    z.Controls("otpMV1").caption = FmtBroj(CDbl(Val(p(4))), 2)
+    z.Controls("otpMA1").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(7))), 0)
+
+    z.Controls("otpML2").caption = UCase$(Poruka("OTKUI_OTP_OSTATAK"))
+    z.Controls("otpMV2").caption = FmtBroj(CDbl(Val(p(5))), 2)
+    ' Ostatak je broj zbog koga traka postoji. Semafor racuna ekran PO KLASI:
+    ' crveno = neka klasa je prekoracena, zeleno = sve klase na nuli (spremna
+    ' za izdavanje), inace u toku. Uz gajbe stoji ostatak po klasi kad ih ima dve.
+    Select Case p(10)
+        Case "-1": z.Controls("otpMV2").ForeColor = C_RUST
+        Case "0":  z.Controls("otpMV2").ForeColor = C_GREEN
+        Case Else: z.Controls("otpMV2").ForeColor = C_FOREST
+    End Select
+    z.Controls("otpMA2").caption = Poruka("OTKUI_OTP_AMB") & " " & _
+                                   FmtBroj(CDbl(Val(p(8))), 0) & _
+                                   IIf(Len(p(11)) > 0, "  " & ChrW(183) & "  " & p(11), "")
+    z.Controls("otpMA2").ForeColor = IIf(p(10) = "-1", C_RUST, C_MUTED)
+
+    ' Cena je po klasi (odluka 14.8 t. 2): druga klasa ide u red ispod.
+    z.Controls("otpML3").caption = UCase$(Poruka("OTKUI_OTP_CENA"))
+    z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
+    If Len(p(12)) > 0 Then
+        z.Controls("otpMA3").caption = "II " & FmtBroj(CDbl(Val(p(12))), 2)
+    Else
+        z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+    End If
 End Sub
 
 ' Koja je lista izabrana. Stanje drzi EKRAN; ljuska ga pita kasno vezano, pa
@@ -1954,10 +2052,24 @@ Public Sub LayoutOtkup(frm As Object)
         PlaceTitleBadge frm
     End With
 
-    ' Traka otpremnice (zOtp) obrisana u S1b-3 -- radni sto otpremnice vraca S3.
-    Dim otpH As Single
+    ' Traka otpremnice stoji izmedju naslova i "Osnovnih podataka": opisuje
+    ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
+    Dim otpH As Single, i2 As Long
     otpH = 0
-
+    If modeKey(ActiveMode) = "OTKUP" And Not mGridMax Then otpH = OTP_H
+    frm.Controls("zOtp").Visible = (otpH > 0)
+    If otpH > 0 Then
+        With frm.Controls("zOtp")
+            .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H
+            .width = ctrW: .Height = OTP_H
+            .Controls("otpLnB").width = ctrW
+            For i2 = 0 To 3
+                .Controls("otpML" & i2).Left = ctrW - PAD - (4 - i2) * 132
+                .Controls("otpMV" & i2).Left = ctrW - PAD - (4 - i2) * 132
+                .Controls("otpMA" & i2).Left = ctrW - PAD - (4 - i2) * 132
+            Next i2
+        End With
+    End If
 
     With frm.Controls("zCtx")
         .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H + otpH: .width = ctrW: .Height = CTX_H
@@ -3430,6 +3542,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     PlaceTitleBadge frm
     frm.Controls("zGrid").Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & k)
     RefreshListSeg frm
+    RefreshOtpTraka frm
     ' Ime tabele je dijagnostika, ne informacija za operatera - u produkciji se
     ' ne prikazuje (UI_DEBUG=DA u tblLocalConfig ili dev build).
     frm.Controls("zGrid").Controls("grdSrc").caption = "list: " & ModeTable(key)
@@ -3468,7 +3581,11 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End If
 
     ClearMarks                       ' oznake pripadaju JEDNOJ listi jednog rezima
+    OtkaziIzmenuNacrta               ' izmena nacrta pripada formi F2
     mFilter = "danas"
+    ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
+    ' listu, a posao za koji ta lista postoji su bas nacrti koji primaju blokove.
+    If ActiveLista() = "OTPREMNICE" Then mFilter = "otvorene"
     mSelRow = 0
     ApplyChipVisual frm.Controls("zGrid")
     ' "Bez zbirne" i "Nefakturisane" nemaju smisla nad zbirnom ni nad
@@ -4730,6 +4847,7 @@ Private Sub RowFromTag(ByVal tag As String)
             RefreshListSeg mFrm
             RefreshGridTitle mFrm
             ReloadGrid
+            RefreshOtpTraka mFrm
             LayoutOtkup mFrm
         End If
     End If
@@ -5244,8 +5362,11 @@ Private Sub ShowZones(frm As Object)
     Next i
     On Error Resume Next
     frm.Controls("zPanel").Visible = mPanelRezim
-    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
-    nmv = Array("zKpi", "zCtx", "zForm", "zRight")
+    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice
+    ' i traka aktivne otpremnice. zOtp MORA biti na ovom spisku: njegovu
+    ' vidljivost inace postavlja samo LayoutOtkup (grana ekrana dokumenata), pa
+    ' bi na ugovornim ekranima ostajao onakav kakav ga je Dokumenta ostavila.
+    nmv = Array("zKpi", "zCtx", "zForm", "zRight", "zOtp")
     For i = 0 To UBound(nmv)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = dok
@@ -5702,6 +5823,8 @@ Public Sub RefreshFromData()
     RefreshListSeg mFrm
     RefreshGridTitle mFrm
     ReloadGrid
+    ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
+    RefreshOtpTraka mFrm
 End Sub
 
 '=====================================================================
@@ -8110,6 +8233,10 @@ Private Sub OnStanicaChanged()
     ' lista kooperanata prati stanicu kad je KOOP_FILTER_BY_OM ukljucen
     RefreshPartnerLista
 
+    ' Promena otkupnog mesta VAN konteksta izabrane otpremnice: njen datum i
+    ' roba vise ne vaze. Isto sto legacy radi u cmbOtkupnoMesto_Change.
+    NapustiOtpremnicu stID
+
     dat = DatumIzPolja()
     If Not AcquireStanicaLock(stID, dat) Then _
         ShowToast Poruka("OTKUI_ERR_STANICA") & " " & stID, True
@@ -8143,6 +8270,38 @@ Private Function PartnerJeKooperant(ByVal mode As String) As Boolean
     If Not IsArray(ord) Then Exit Function
     PartnerJeKooperant = (CStr(ord(LBound(ord))) = "KOOP")
 End Function
+
+' Izlazak iz konteksta otpremnice kad se promeni otkupno mesto: otpremnica je
+' isporuka sa JEDNOG mesta, pa njen datum i roba vise ne vaze. Polja se pisu
+' pod mLoading da ugnjezdeni okidaci (datum, vrsta) ne bi ponovo ulazili u
+' OnStanicaChanged - stanje se sredjuje jednom, na kraju.
+Private Sub NapustiOtpremnicu(ByVal stID As String)
+    Dim otpSt As String
+    On Error Resume Next
+    If mScreen <> "DOKUMENTI" Then Exit Sub
+    otpSt = CStr(Application.Run("modScrDokumenti.Scr_OtpStanica"))
+    Err.Clear
+    If Len(otpSt) = 0 Then Exit Sub
+    If StrComp(otpSt, stID, vbTextCompare) = 0 Then Exit Sub
+
+    Application.Run "modScrDokumenti.Scr_OtpOtkazi"
+    Err.Clear
+
+    mLoading = True
+    SetDatumDanas mFrm.Controls("zForm")
+    ' roba je bila prepisana sa otpremnice - vrati podrazumevanu iz Podesavanja
+    mFrm.Controls("zCtx").Controls("cbVrsta").value = ""
+    mFrm.Controls("zCtx").Controls("cbSorta").value = ""
+    mLoading = False
+    ApplyDefaultRoba
+
+    mSelRow = 0                       ' lista je druga - stari izbor ne vazi
+    RefreshOtpTraka mFrm
+    RefreshListSeg mFrm
+    RefreshGridTitle mFrm
+    ReloadGrid
+    LayoutOtkup mFrm
+End Sub
 
 Private Sub OnDatumChanged()
     Dim dat As Date
@@ -8480,8 +8639,10 @@ End Function
 ' bez voznje celog upisa (koji trazi stanica-lock, PDF izlaz i auto-lanac
 ' hladnjace). Pre izmene ove rutine procitaj sta test tvrdi.
 Public Sub ClearForm()
-    Dim nmv As Variant, i As Long
+    Dim nmv As Variant, i As Long, imaOtp As Boolean
     On Error Resume Next
+    ' Prazna forma nije vise izmena nacrta -- sledece snimanje pravi nov.
+    OtkaziIzmenuNacrta
     mPopMute = True
     mLoading = True
     ' BROJ ZBIRNE se NE prazni - on je kontekst, kao i datum: svi blokovi jedne
@@ -8511,10 +8672,14 @@ Public Sub ClearForm()
     ' otisao na prethodnog. Prazna vrednost okida i FillOpenBlokovi/FillParcele,
     ' koji na prazan partner ciste svoje liste.
     mFrm.Controls("zCtx").Controls("cbKupac").value = ""
-    ' DATUM se vraca na danas: prazno ili staro polje bi bila greska koju
-    ' operater mora da ispravi pri svakom novom dokumentu. (Izuzetak "datum
-    ' aktivne otpremnice ostaje" otisao je sa radnim stolom otpremnice, S1b-3.)
-    SetDatumDanas mFrm.Controls("zForm")
+    ' DATUM: dok je otpremnica aktivna, SVI njeni blokovi nose NJEN datum -
+    ' vracanje na danas bi drugi i svaki sledeci blok upisalo pod danasnjim
+    ' datumom, a RefreshBrojPredlog bi mu dao i danasnji broj. Bez otpremnice
+    ' datum se vraca na danas, jer bi prazno ili staro polje bila greska koju
+    ' operater mora da ispravi pri svakom novom dokumentu.
+    imaOtp = ImaAktivnuOtpremnicu()
+    If Not imaOtp Then SetDatumDanas mFrm.Controls("zForm")
+    If ParseDatum(FldText("fgDatum")) = 0 Then SetDatumDanas mFrm.Controls("zForm")
     SetOstatak 0
     SetKlasa 1
     ' Smer reversa i "isplata iz" su izbori JEDNOG dokumenta, kao i klasa:
@@ -8538,12 +8703,40 @@ Public Sub ClearForm()
     mPopMute = False
     mLoading = False
     MarkClean
+    ' Dok je otpremnica aktivna, sledecem bloku operater unosi samo kooperanta
+    ' i kolicine - zato kursor ide pravo na kooperanta, kao posle prefilla.
+    '
     ' IsTestMode gard: forma koja nije .Show-ovana ne moze da primi fokus, a u
     ' nevidljivom Excelu SetFocus ne puca nego TRAJNO visi (modTestMode).
+    If imaOtp Then
+        If Not IsTestMode() Then mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        Exit Sub
+    End If
     If Len(mPrvoPolje) = 0 Then mPrvoPolje = "fgBrOtpr"
     If Not IsTestMode() Then _
         mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
 End Sub
+
+' Izmena nacrta otpremnice (F2) vazi samo dok je forma ta koju je izbor nacrta
+' popunio: praznjenje forme ili promena rezima je otkazuje, inace bi sledeci
+' "nov" unos tiho izmenio stari nacrt. Kasno vezano (zamka #19).
+Private Sub OtkaziIzmenuNacrta()
+    On Error Resume Next
+    Application.Run "modScrDokumenti.Scr_IzmenaOtkazi"
+    Err.Clear
+End Sub
+
+' Da li je otpremnica jos izabrana. Ista pitalica koju koristi traka otpremnice
+' (Scr_OtpInfo vraca prazno kad otpremnice nema), kasno vezano - ljuska ne sme
+' da rano vezuje modul ekrana (zamka #19).
+Private Function ImaAktivnuOtpremnicu() As Boolean
+    Dim oid As String
+    On Error Resume Next
+    If mScreen <> "DOKUMENTI" Then Exit Function
+    oid = CStr(Application.Run("modScrDokumenti.Scr_OtpID"))
+    Err.Clear
+    ImaAktivnuOtpremnicu = (Len(oid) > 0)
+End Function
 
 ' Vrednost je zbir po klasama - svaka klasa ima svoju cenu, pa se kilogrami
 ' II klase NE mogu sabrati sa kilogramima I klase pre mnozenja.

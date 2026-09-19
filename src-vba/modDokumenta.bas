@@ -3623,6 +3623,17 @@ Public Function OtpremnicaZaOtkup(ByVal otkupID As String) As String
     If mapa.Exists(UCase$(otkupID)) Then OtpremnicaZaOtkup = CStr(mapa(UCase$(otkupID)))
 End Function
 
+' Sastav otpremnice: OtkupID-evi njenih izvora, redom upisa.
+'
+' Isti strog citac koji koriste read-model (GetOtpremnicaProgress) i sva tri
+' pisca -- dupli par, clanstvo bez otkupa ili otkup u dve aktivne otpremnice
+' PADAJU, ne normalizuju se. Javni ulaz postoji za radni sto u F1 (lista
+' BLOKOVI, S3b-2): ekran koji bi tblOtpremnicaIzvori citao sam pokazao bi
+' operateru sastav koji izdavanje kasnije odbije.
+Public Function IzvoriOtpremnice(ByVal otpremnicaID As String) As Collection
+    Set IzvoriOtpremnice = OtpClanovi(Trim$(otpremnicaID), "IzvoriOtpremnice")
+End Function
+
 ' Da li je otpremnica IZDATA (nije DRAFT).
 '
 ' Prazan status NIJE "izdato": nov pisac ga upisuje eksplicitno (S4.1e), pa je
