@@ -285,41 +285,13 @@ End Function
 ' mutacija (izdavanje, izmena nacrta) ide po ID-u. Ekran operateru i dalje
 ' pokazuje broj -- to je prikaz, ne identitet.
 Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
-    Dim res As String, greska As String, kulturaID As String, detalj As String
+    Dim res As String, greska As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
 
-    ' (Vrsta, Sorta) -> KulturaID. Razresavanje je posao ADAPTERA, ne pisca
-    ' (S4.1f) -- isti razresivac koristi i otkupni list.
-    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(S(p, "vrsta"), S(p, "sorta"), detalj)
-    If Len(kulturaID) = 0 Then
-        poruke = poruke & Poruka("OTKUNOS_ERR_KULTURA") & " " & _
-                 S(p, "vrsta") & " / " & S(p, "sorta")
-        Exit Function
-    End If
-
-    Dim h As Object
-    Set h = CreateObject("Scripting.Dictionary")
-    h.Add "Datum", CDate(p("datum"))
-    h.Add "StanicaID", S(p, "stanicaID")
-    h.Add "VozacID", S(p, "vozacID")
-    h.Add "KulturaID", kulturaID
-    h.Add "BrojOtpremnice", S(p, "brDok")
-    h.Add "TipAmbalaze", S(p, "tipAmb")
-
-    ' BrojZbirne se NE salje: broj ne sme da bude veza nego labela (A2), a
-    ' zbirna svoje otpremnice drzi kroz tblZbirnaIzvori. Do S3a je ovde stajao
-    ' malina trik "snimi sa PRAZNIM brojem da ga auto-zbirna pokupi" -- v. nize
-    ' zasto je i sama auto-zbirna pauzirana.
-    Dim ocek As Collection
-    Set ocek = New Collection
-    If D(p, "kolicinaI") > 0 Then
-        ocek.Add OtpStavkaDTO(KLASA_I, D(p, "kolicinaI"), L(p, "kolAmb"), D(p, "cenaI"))
-    End If
-    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
-        ocek.Add OtpStavkaDTO(KLASA_II, D(p, "kolicinaII"), L(p, "kolAmbII"), D(p, "cenaII"))
-    End If
+    Dim h As Object, ocek As Collection
+    If Not OtpremnicaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
 
     res = CreateOtpremnicaDraft_TX(h, ocek, greska)
 
@@ -368,6 +340,69 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaUpisi"
+    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+End Function
+
+' Zaglavlje i ocekivanje nacrta iz unosa F2 -- JEDNO mesto za upis i izmenu
+' nacrta, da dva puta ne bi razlicito citala ista polja. False = unos se ne
+' moze prevesti; razlog je dopisan u "poruke".
+Private Function OtpremnicaNacrtIzUnosa(ByVal p As Object, ByRef h As Object, _
+                                        ByRef ocek As Collection, _
+                                        ByRef poruke As String) As Boolean
+    Dim kulturaID As String, detalj As String
+
+    ' (Vrsta, Sorta) -> KulturaID. Razresavanje je posao ADAPTERA, ne pisca
+    ' (S4.1f) -- isti razresivac koristi i otkupni list.
+    kulturaID = modOtkup.RazresiKulturuIzVrsteSorte(S(p, "vrsta"), S(p, "sorta"), detalj)
+    If Len(kulturaID) = 0 Then
+        poruke = poruke & Poruka("OTKUNOS_ERR_KULTURA") & " " & _
+                 S(p, "vrsta") & " / " & S(p, "sorta")
+        Exit Function
+    End If
+
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(p("datum"))
+    h.Add "StanicaID", S(p, "stanicaID")
+    h.Add "VozacID", S(p, "vozacID")
+    h.Add "KulturaID", kulturaID
+    h.Add "BrojOtpremnice", S(p, "brDok")
+    h.Add "TipAmbalaze", S(p, "tipAmb")
+
+    ' BrojZbirne se NE salje: broj ne sme da bude veza nego labela (A2), a
+    ' zbirna svoje otpremnice drzi kroz tblZbirnaIzvori. Do S3a je ovde stajao
+    ' malina trik "snimi sa PRAZNIM brojem da ga auto-zbirna pokupi" -- v.
+    ' OtpremnicaUpisi zasto je i sama auto-zbirna pauzirana.
+    Set ocek = New Collection
+    If D(p, "kolicinaI") > 0 Then
+        ocek.Add OtpStavkaDTO(KLASA_I, D(p, "kolicinaI"), L(p, "kolAmb"), D(p, "cenaI"))
+    End If
+    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
+        ocek.Add OtpStavkaDTO(KLASA_II, D(p, "kolicinaII"), L(p, "kolAmbII"), D(p, "cenaII"))
+    End If
+    OtpremnicaNacrtIzUnosa = True
+End Function
+
+' IZMENA NACRTA (S3b-2, odluka 19.09.2026). Kad povezano nije jednako
+' ocekivanom -- operater je pogresio ocekivanje, ili je teret stvarno drugaciji
+' -- nacrt se ispravlja ovde, a ne izjednacavanjem pri izdavanju: ocekivanje
+' ostaje nezavisna kontrola. Clanstvo se ne dira (UpdateOtpremnicaDraft_TX), a
+' izdata otpremnica se ne menja (pisac trazi DRAFT).
+Public Function OtpremnicaIzmeniNacrt(ByVal otpremnicaID As String, ByVal p As Object, _
+                                      ByRef poruke As String) As Boolean
+    Dim h As Object, ocek As Collection, greska As String, errDesc As String
+    On Error GoTo EH
+    poruke = ""
+    If Not OtpremnicaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
+    If Not UpdateOtpremnicaDraft_TX(otpremnicaID, h, ocek, greska) Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
+    End If
+    poruke = poruke & Poruka("DOKUNOS_MSG_OTP_NACRT_IZMENJEN") & vbCrLf
+    OtpremnicaIzmeniNacrt = True
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modDokUnos.OtpremnicaIzmeniNacrt"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 

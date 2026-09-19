@@ -129,15 +129,16 @@ KOLONE_STAROG_MODELA = re.compile(
 #   otp_linija     24  -- cinjenice ZAGLAVLJA (Vrsta, Sorta, TipAmbalaze,
 #                         KulturaID) + tri kozmeticka reda u modSetup. Kolicina,
 #                         Klasa, KolAmbalaze i Bruto vise se ne citaju zivo.
-#                         S3b-2 (19.09.2026, plan 14.16): 24 -> 32. Radni sto
+#                         S3b-2 (19.09.2026, plan 14.16): 24 -> 36. Radni sto
 #                         cita cinjenice zaglavlja (lista: Vrsta, Sorta; prefill:
 #                         Vrsta, Sorta, TipAmbalaze = +5), a Dodaj/Izdaj su dobili
 #                         prvog zivog pozivaoca, pa su njihova tri citanja zaglavlja
-#                         (KulturaID, TipAmbalaze) postala ziva. Nijedno linijsko.
+#                         (KulturaID, TipAmbalaze) postala ziva; izmena nacrta u F2
+#                         je ozivela OtpIzmeniDraft (+4). Nijedno linijsko.
 #   otp_cena        0  -- prag slajsa dostignut: zaglavlje nema cenu.
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
-    ("otp_linija", 32),
+    ("otp_linija", 36),
     ("otp_cena", 0),
 ])
 

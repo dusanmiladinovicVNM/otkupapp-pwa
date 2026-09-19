@@ -61,6 +61,13 @@ Private mLista As String          ' "SVI" | "OTPREMNICE" | "BLOKOVI" | "KOOPERAN
 Private mOtpID As String          ' aktivna otpremnica (OtpremnicaID) -- NACRT
 Private mOtpBroj As String        ' njen broj - za traku i naslov liste
 
+' IZMENA NACRTA u F2 (odluka 19.09.2026): klik na nacrt u listi F2 popuni formu,
+' a snimanje tada MENJA taj nacrt (UpdateOtpremnicaDraft_TX) umesto da pravi
+' nov. Prazno = snimanje pravi nov nacrt. Ljuska izmenu otkazuje pri praznjenju
+' forme i promeni rezima (Scr_IzmenaOtkazi).
+Private mIzmenaOtpID As String
+Private mIzmenaBroj As String
+
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
 Public Function Scr_Liste() As Variant
@@ -170,30 +177,60 @@ End Function
 ' sledeci upis bi pao tek na vezivanju. Status se trazi TACNO: prazan ili
 ' nepoznat status nije nacrt (isto pravilo kao RequireOtpDraft u piscu).
 Public Function AktivirajOtpremnicu(ByVal otpID As String) As String
-    Dim st As String
     On Error GoTo EH
     otpID = Trim$(otpID)
-    If Len(otpID) = 0 Then
-        AktivirajOtpremnicu = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
-        Exit Function
-    End If
-    If Len(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_ID)))) = 0 _
-       Or UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
-                                             COL_STORNIRANO)))) = "DA" Then
-        AktivirajOtpremnicu = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
-        Exit Function
-    End If
-    st = UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
-                                           COL_TRACE_IZDATO_STATUS))))
-    If st <> UCase$(IZDATO_DRAFT) Then
-        AktivirajOtpremnicu = Poruka("OTKUI_ERR_OTP_IZDATA")
-        Exit Function
-    End If
+    AktivirajOtpremnicu = NacrtRazlog(otpID)
+    If Len(AktivirajOtpremnicu) > 0 Then Exit Function
     mOtpID = otpID
     mOtpBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
     Exit Function
 EH:
     AktivirajOtpremnicu = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' "" kad je otpremnica aktivan NACRT, inace razlog za operatera. Jedno pravilo
+' za izbor na radnom stolu (F1) i za izmenu nacrta (F2).
+Private Function NacrtRazlog(ByVal otpID As String) As String
+    Dim st As String
+    If Len(otpID) = 0 Then
+        NacrtRazlog = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    If Len(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_ID)))) = 0 _
+       Or UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                             COL_STORNIRANO)))) = "DA" Then
+        NacrtRazlog = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    st = UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                           COL_TRACE_IZDATO_STATUS))))
+    If st <> UCase$(IZDATO_DRAFT) Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")
+End Function
+
+' Otvara izmenu nacrta u F2. "" = otvorena (sledece snimanje menja nacrt),
+' inace razlog. Izdata se ne menja: pisac trazi DRAFT, a izdat dokument se
+' ispravlja stornom (S3c).
+Public Function OtvoriIzmenuNacrta(ByVal otpID As String) As String
+    On Error GoTo EH
+    otpID = Trim$(otpID)
+    OtvoriIzmenuNacrta = NacrtRazlog(otpID)
+    If Len(OtvoriIzmenuNacrta) > 0 Then Exit Function
+    mIzmenaOtpID = otpID
+    mIzmenaBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    Exit Function
+EH:
+    OtvoriIzmenuNacrta = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Otkazuje izmenu nacrta -- sledece snimanje pravi nov nacrt.
+Public Sub Scr_IzmenaOtkazi()
+    mIzmenaOtpID = ""
+    mIzmenaBroj = ""
+End Sub
+
+' OtpremnicaID nacrta koji je otvoren za izmenu ("" = nema).
+Public Function Scr_IzmenaOtpID() As String
+    Scr_IzmenaOtpID = mIzmenaOtpID
 End Function
 
 ' Opis aktivne otpremnice za traku iznad forme. Prazno = nema izabrane.
@@ -392,6 +429,12 @@ End Function
 '   lsSVI / lsKOOPERANTI - prekidac liste u F1
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     On Error Resume Next
+    ' F2: klik na NACRT otvara njegovu izmenu (odluka 19.09.2026). Nista se ne
+    ' upisuje -- forma se samo popuni, pa mreza ne mora da se cita ponovo.
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        If Left$(tag, 4) = "row:" Then IzaberiNacrtZaIzmenu CLng(Mid$(tag, 5))
+        Exit Function
+    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
 
     If Left$(tag, 2) = "ls" Then
@@ -599,6 +642,78 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
+' Klik na red liste F2. ID dolazi iz nevidljive kolone reda, ne iz broja.
+' Izdata otpremnica se samo imenuje (nije greska: lista F2 pokazuje i izdate).
+Private Sub IzaberiNacrtZaIzmenu(ByVal red As Long)
+    Dim otpID As String, razlog As String
+    otpID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTPREMNICA"))))
+    razlog = OtvoriIzmenuNacrta(otpID)
+    If Len(razlog) > 0 Then
+        modOtkupUI.ShowToast razlog, (razlog <> Poruka("OTKUI_ERR_OTP_IZDATA"))
+        Exit Sub
+    End If
+    modOtkupUI.ApplyPrefill PrefillNacrta(otpID)
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZMENA_NACRTA") & " " & mIzmenaBroj, False
+End Sub
+
+' Nacrt u formu F2: zaglavlje i ocekivanje po klasi (kolicina, gajbe, predlog
+' cene). Dvoklasni unos se ukljucuje pre polja klase II.
+Private Function PrefillNacrta(ByVal otpID As String) As String
+    Dim res As String, poDok As Object, c As Collection
+    Dim red As Variant, i As Long, imaII As Boolean
+    On Error Resume Next
+    res = PrefillZaglavlja(otpID)
+    res = Dodaj(res, "brdok", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+
+    Set poDok = modDokumenta.StavkeOtpremnicePoDokumentu()
+    If poDok.Exists(otpID) Then
+        Set c = poDok(otpID)
+        For i = 1 To c.count
+            red = c(i)
+            If UCase$(Trim$(CStr(red(3)))) = KLASA_II Then imaII = True
+        Next i
+        res = Dodaj(res, "dveklase", IIf(imaII, "2", "1"))
+        For i = 1 To c.count
+            red = c(i)
+            Select Case UCase$(Trim$(CStr(red(3))))
+                Case KLASA_I
+                    res = Dodaj(res, "kol1", BrojTekst(red(4)))
+                    res = Dodaj(res, "amb1", BrojTekst(red(6)))
+                    res = Dodaj(res, "cena", BrojTekst(red(5)))
+                Case KLASA_II
+                    res = Dodaj(res, "kol2", BrojTekst(red(4)))
+                    res = Dodaj(res, "amb2", BrojTekst(red(6)))
+                    res = Dodaj(res, "cena2", BrojTekst(red(5)))
+            End Select
+        Next i
+    End If
+    PrefillNacrta = res
+End Function
+
+' Zaglavlje otpremnice kao prefill: datum, roba, otkupno mesto, vozac, tip
+' ambalaze. JEDNO mesto koje oba prefilla citaju -- izbor na radnom stolu (F1)
+' i izmena nacrta (F2).
+Private Function PrefillZaglavlja(ByVal otpID As String) As String
+    Dim vDat As Variant, res As String
+    On Error Resume Next
+    If Len(otpID) = 0 Then Exit Function
+    vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
+    If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
+    res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA)))
+    res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA)))
+    res = Dodaj(res, "omid", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
+    res = Dodaj(res, "vozacid", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC)))
+    res = Dodaj(res, "tipamb", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    PrefillZaglavlja = res
+End Function
+
+' Broj iz celije u tekst polja forme (lokalni zapis); prazno ostaje prazno.
+Private Function BrojTekst(ByVal v As Variant) As String
+    If IsEmpty(v) Or IsNull(v) Then Exit Function
+    If Not IsNumeric(v) Then Exit Function
+    BrojTekst = CStr(CDbl(v))
+End Function
+
 ' Sta se sa otpremnice prepisuje u formu otkupnog lista. Cena je po klasi
 ' (CenaKlase); broj otkupnog lista se trazi od kanonskog generatora, pa kad je
 ' auto-broj iskljucen polje ostaje operateru.
@@ -609,12 +724,7 @@ Private Function PrefillSpec(ByVal otpID As String) As String
 
     vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
     stanica = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
-    If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
-    res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA)))
-    res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA)))
-    res = Dodaj(res, "omid", stanica)
-    res = Dodaj(res, "vozacid", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC)))
-    res = Dodaj(res, "tipamb", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    res = PrefillZaglavlja(otpID)
     cena = CenaKlase(otpID, KLASA_I)
     If cena > 0 Then res = Dodaj(res, "cena", Format$(cena, "0.00"))
     cena = CenaKlase(otpID, KLASA_II)
@@ -847,6 +957,20 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     If Len(greska) > 0 Then
         polja("fokus") = fokus
         SnimiOtpremnicu = greska
+        Exit Function
+    End If
+
+    ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
+    If Len(mIzmenaOtpID) > 0 Then
+        If Not modDokUnos.OtpremnicaIzmeniNacrt(mIzmenaOtpID, p, poruke) Then
+            SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            Exit Function
+        End If
+        Scr_ResetCache
+        polja("otpremnicaID") = mIzmenaOtpID
+        polja("rezultat") = CStr(polja("brDok"))
+        polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+        Scr_IzmenaOtkazi
         Exit Function
     End If
 
@@ -1537,8 +1661,10 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
     ' unosi. OTKUP nosi nevidljiv OtkupID: radnje reda (stampa, storno) idu po
     ' njemu, ne po broju (S1e). Ostali tipovi ovde radnje reda nemaju.
+    ' OTPREMNICA nosi nevidljiv OtpremnicaID: klik na nacrt otvara njegovu
+    ' izmenu po ID-u (S3b-2).
     Dim mk As String: mk = modeKey(ActiveMode)
-    Scr_Rows = RedoviZaTip(mk, filter, q, (mk = "OTKUP"))
+    Scr_Rows = RedoviZaTip(mk, filter, q, (mk = "OTKUP" Or mk = "OTPREMNICA"))
 End Function
 
 ' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista

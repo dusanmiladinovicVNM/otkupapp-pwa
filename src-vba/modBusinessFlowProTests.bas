@@ -284,6 +284,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_RadniStoBiraSamoNacrt
     Test_OTP_RadniStoVeziTrakaIzdaj
     Test_OTP_RadniStoListe
+    Test_OTP_IzmenaNacrtaF2
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6217,6 +6218,97 @@ EH:
     modOtkupUI.ActiveMode = prev
     LogFatal "Test_OTP_RadniStoListe", Err.Number, Err.description
 End Sub
+
+' IZMENA NACRTA U F2 (S3b-2, odluka 19.09.2026): povezano != ocekivano se
+' resava izmenom nacrta, ne izjednacavanjem pri izdavanju.
+'
+' Nacrt ocekuje 100 kg, a povezana su dva otkupa od 60 i 50 kg -- izdavanje je
+' odbijeno. Izmena kroz ISTI ulaz kojim ljuska snima F2 (Scr_Save) menja
+' ocekivanje na 110 kg: nov nacrt ne nastaje, clanstvo ostaje, izdavanje prolazi.
+' Izdata otpremnica se za izmenu ne otvara; otkazana izmena vraca nov upis.
+Private Sub Test_OTP_IzmenaNacrtaF2()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPIZN")
+    RadniStoPocetno
+    modScrDokumenti.Scr_IzmenaOtkazi
+
+    Dim draftID As String, o1 As String, o2 As String
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-IZN-" & scenario), _
+                                       OtpOcek(100#, 10#, 0#, 0#), g)
+    o1 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZNA-" & scenario), _
+                        OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    o2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZNB-" & scenario), _
+                        OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    AssertTrue Len(draftID) > 0 And Len(o1) > 0 And Len(o2) > 0, _
+               "F2 izmena: preduslovi napravljeni (" & g & ")"
+    If Len(draftID) = 0 Or Len(o1) = 0 Or Len(o2) = 0 Then GoTo Kraj
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draftID), "F2 izmena: nacrt izabran"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o1), "F2 izmena: prvi otkup vezan"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o2), "F2 izmena: drugi otkup vezan"
+    AssertTrue Len(modScrDokumenti.IzdajAktivnu()) > 0, _
+               "F2 izmena: preduslov -- 110 povezano na 100 ocekivano se ne izdaje"
+
+    ' Izmena kroz ulaz ljuske.
+    Dim preH As Long, rez As String
+    preH = Pr3BrojRedova(TBL_OTPREMNICA)
+    AssertEquals "", modScrDokumenti.OtvoriIzmenuNacrta(draftID), "F2 izmena: nacrt otvoren za izmenu"
+    rez = modScrDokumenti.Scr_Save(PoljaF2IzNacrta(draftID, 110#, 11))
+    AssertEquals "", rez, "F2 izmena: snimanje uspelo"
+    AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_OTPREMNICA)), _
+                 "F2 izmena: nov nacrt NIJE napravljen"
+    AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "F2 izmena: posle snimanja izmena je zatvorena"
+    AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(o1), "F2 izmena: clanstvo ostaje"
+    AssertEquals "", modScrDokumenti.IzdajAktivnu(), "F2 izmena: posle izmene izdavanje prolazi"
+
+    ' Izdata se ne otvara za izmenu.
+    AssertEquals Poruka("OTKUI_ERR_OTP_IZDATA"), modScrDokumenti.OtvoriIzmenuNacrta(draftID), _
+                 "F2 izmena: izdata se ne menja"
+    AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "F2 izmena: odbijena izmena ne ostaje otvorena"
+
+    ' Otkazana izmena: sledece snimanje pravi NOV nacrt.
+    Dim drugi As String
+    drugi = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-IZN2-" & scenario), _
+                                     OtpOcek(30#, 3#, 0#, 0#), g)
+    AssertEquals "", modScrDokumenti.OtvoriIzmenuNacrta(drugi), "F2 izmena: drugi nacrt otvoren"
+    modScrDokumenti.Scr_IzmenaOtkazi
+    AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "F2 izmena: otkazivanje brise izmenu"
+
+Kraj:
+    modScrDokumenti.Scr_IzmenaOtkazi
+    RadniStoPocetno
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_IzmenaOtkazi
+    RadniStoPocetno
+    LogFatal "Test_OTP_IzmenaNacrtaF2", Err.Number, Err.description
+End Sub
+
+' Polja ekrana F2 za izmenu nacrta -- isti kljucevi koje ljuska predaje
+' Scr_Save; zaglavlje se prepisuje sa samog nacrta, menja se samo klasa I.
+Private Function PoljaF2IzNacrta(ByVal otpID As String, ByVal kolI As Double, _
+                                 ByVal ambI As Long) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p("rezim") = "OTPREMNICA"
+    p("datum") = CDate(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM))
+    p("stanicaID") = OtpPolje(otpID, COL_OTP_STANICA)
+    p("vozacID") = OtpPolje(otpID, COL_OTP_VOZAC)
+    p("brDok") = OtpPolje(otpID, COL_OTP_BROJ)
+    p("brojZbirne") = ""
+    p("vrsta") = OtpPolje(otpID, COL_OTP_VRSTA)
+    p("sorta") = OtpPolje(otpID, COL_OTP_SORTA)
+    p("tipAmb") = OtpPolje(otpID, COL_OTP_TIP_AMB)
+    p("kolicinaI") = kolI
+    p("cenaI") = 100#
+    p("kolAmb") = ambI
+    p("dveKlase") = False
+    p("kolicinaII") = 0#
+    p("cenaII") = 0#
+    p("kolAmbII") = 0
+    Set PoljaF2IzNacrta = p
+End Function
 
 ' Radni sto u pocetno stanje PRODUKCIONIM putem: izlazak iz konteksta
 ' (Scr_OtpOtkazi vodi na listu otpremnica), pa prekidac nazad na listu SVI --

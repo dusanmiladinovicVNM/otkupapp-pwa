@@ -3581,6 +3581,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End If
 
     ClearMarks                       ' oznake pripadaju JEDNOJ listi jednog rezima
+    OtkaziIzmenuNacrta               ' izmena nacrta pripada formi F2
     mFilter = "danas"
     ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
     ' listu, a posao za koji ta lista postoji su bas nacrti koji primaju blokove.
@@ -8640,6 +8641,8 @@ End Function
 Public Sub ClearForm()
     Dim nmv As Variant, i As Long, imaOtp As Boolean
     On Error Resume Next
+    ' Prazna forma nije vise izmena nacrta -- sledece snimanje pravi nov.
+    OtkaziIzmenuNacrta
     mPopMute = True
     mLoading = True
     ' BROJ ZBIRNE se NE prazni - on je kontekst, kao i datum: svi blokovi jedne
@@ -8712,6 +8715,15 @@ Public Sub ClearForm()
     If Len(mPrvoPolje) = 0 Then mPrvoPolje = "fgBrOtpr"
     If Not IsTestMode() Then _
         mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
+End Sub
+
+' Izmena nacrta otpremnice (F2) vazi samo dok je forma ta koju je izbor nacrta
+' popunio: praznjenje forme ili promena rezima je otkazuje, inace bi sledeci
+' "nov" unos tiho izmenio stari nacrt. Kasno vezano (zamka #19).
+Private Sub OtkaziIzmenuNacrta()
+    On Error Resume Next
+    Application.Run "modScrDokumenti.Scr_IzmenaOtkazi"
+    Err.Clear
 End Sub
 
 ' Da li je otpremnica jos izabrana. Ista pitalica koju koristi traka otpremnice

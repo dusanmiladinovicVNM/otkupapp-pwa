@@ -562,8 +562,8 @@ SABOTAZE = {
     # Izdata otpremnica opet moze da postane aktivna.
     "radni-sto-bira-izdatu": (
         "modScrDokumenti.bas",
-        "    If st <> UCase$(IZDATO_DRAFT) Then\n",
-        "    If False Then   ' SABOTAZA: izdata se bira\n",
+        '    If st <> UCase$(IZDATO_DRAFT) Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")\n',
+        '    If False Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")   \' SABOTAZA: izdata se bira\n',
         "Test_OTP_RadniStoBiraSamoNacrt",
         "RS nacrt: izdata se ne bira",
     ),
@@ -620,6 +620,24 @@ SABOTAZE = {
         "        outA(n, 11) = \"\"   ' SABOTAZA: red bez identiteta\n",
         "Test_OTP_RadniStoListe",
         "RS liste: nacrt je u otvorenima, ID u poslednjoj koloni",
+    ),
+    # Otvorena izmena nacrta u F2 opet pravi NOV nacrt umesto izmene.
+    "izmena-nacrta-pravi-nov": (
+        "modScrDokumenti.bas",
+        "    If Len(mIzmenaOtpID) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: izmena pravi nov nacrt\n",
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: nov nacrt NIJE napravljen",
+    ),
+    # Otkazivanje izmene opet ne zatvara izmenu -- sledeci nov unos bi menjao nacrt.
+    "izmena-nacrta-ne-otkazuje": (
+        "modScrDokumenti.bas",
+        "Public Sub Scr_IzmenaOtkazi()\n"
+        "    mIzmenaOtpID = \"\"\n",
+        "Public Sub Scr_IzmenaOtkazi()\n"
+        "    ' SABOTAZA: izmena ostaje otvorena\n",
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: otkazivanje brise izmenu",
     ),
     # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
     "otk-storno-izvora-aktivne-otpremnice": (
