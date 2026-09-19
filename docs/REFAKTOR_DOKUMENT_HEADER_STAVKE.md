@@ -3284,6 +3284,75 @@ model „klasa I/II = dva zaglavlja istog broja“, a `SumActiveOtpStavke` u sta
 `GeneracijaID`. Otpremnica je iz tog okvira izbačena, pa su obe grane uspavane. S3c ih briše ili zamenjuje logikom
 po ID-u.
 
+### 14.16) S3b-2a — radni sto otpremnice nad kanonom, „Izdaj“ i izmena nacrta (19.09.2026)
+
+**Rez S3b-2 (odluka operatera, 19.09.2026).** Radni sto koji je S1b-3 obrisao sa stare veze bio je ~1400 linija
+u četiri modula. Zato je S3b-2 rezan na dva:
+
+| korak | sadržaj | stanje |
+|---|---|---|
+| **S3b-2a** | kapija storna otkupa (review #362, P1); radni sto u F1 (liste OTPREMNICE i BLOKOVI, aktivna otpremnica, traka, prekoračenje, vezivanje posle unosa, veži/ukloni nad redom, „Izdaj“, napuštanje pri promeni OM, datum aktivne otpremnice u `ClearForm`); izmena nacrta u F2 | ovaj PR |
+| **S3b-2b** | štampa specifikacije blokova (A-018, A-019, A-021) i lista nevezanih blokova (A-025) | |
+
+**Odluka (operater, 19.09.2026): povezano ≠ očekivano rešava izmena nacrta u F2.** `IzdajOtpremnicu_TX` traži
+povezano = očekivano po klasi, tačno. Pre S3b-2 nijedan živi put nije menjao očekivanje nacrta, pa bi nacrt sa
+prekoračenjem (ili sa greškom u F2) ostao zaglavljen. Izjednačavanje pri izdavanju je odbijeno: očekivanje bi
+postalo formalnost uz jednu potvrdu.
+
+#### Pre-flight S3b-2a
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | otpremnica = zaglavlje + očekivanje po klasi + izvori (§14.8 t. 1–4); izdaje operater kad je ostatak 0 |
+| `IDENTITY` | PROVEN | red liste OTPREMNICE/BLOKOVI i F2 nosi ID u nevidljivoj poslednjoj koloni (prioritet 4); izbor, vezivanje, uklanjanje, izdavanje i izmena idu po ID-u, nikad po broju |
+| `CARDINALITY` | PROVEN | otkup je u najviše jednoj aktivnoj otpremnici (pisac + `AktivnoOtpClanstvoPoKanonu`); aktivna otpremnica na radnom stolu je jedna i uvek NACRT |
+| `INVARIANTS/OWNER` | PROVEN | A13/A15: otkup u sastavu aktivne otpremnice se ne stornira — kapija u jezgru `modStorno.StornoOtkup` (P1 review #362); sastav i izdavanje piše samo `modDokumenta` |
+| `WRITERS` | PROVEN | nijedan nov pisac: `DodajOtpremnicaIzvor_TX`, `UkloniOtpremnicaIzvor_TX`, `IzdajOtpremnicu_TX`, `UpdateOtpremnicaDraft_TX` dobijaju prvog živog pozivaoca; ekran ne piše tabelu |
+| `EVENTS` | PROVEN | fizički (roba i gajbe odlaze) = poslovni (dokument važi) = izdavanje; finansijskog nema |
+| `DOWNSTREAM` | PROVEN | izdata otpremnica ulazi u izveštaje i štampu (S3b-1 čitaju samo IZDATO); nacrt ne |
+| `CAPABILITY` | PROVEN | A-011, A-012, A-022..A-024, A-027, A-028 vraćeni, A-020 zamenjen radnjom `vezi`; A-018, A-019, A-021, A-025 → S3b-2b |
+| `ACCEPTANCE` | testovi | v. ispod |
+| `PLATFORM` | N/A | runtime kontrole istim obrascem kao pre S1b-3 (`BuildOtpTraka`), bez novih `WithEvents` |
+| `LANDING` | čisto | grana od `main` `a8d3bd1a` |
+
+#### Izmene
+
+| Šta | Gde |
+|---|---|
+| Kapija: otkup u sastavu aktivne otpremnice (nacrt ili izdata) se ne stornira; F1 i F8 kažu razlog pre potvrde | `modStorno.StornoOtkup`, `modStornoDok.StornoRazlog`, `modScrDokumenti.RowAction` |
+| Liste OTPREMNICE (čip „otvorene“ = nacrti; očekivano/povezano/ostatak iz stavki, status) i BLOKOVI (sastav kroz strog čitač) | `modScrDokumenti.RowsOtpremnice`, `RowsBlokovi`; nov `modDokumenta.IzvoriOtpremnice` |
+| Izbor aktivne otpremnice — samo NACRT; prefill sa cenom po klasi (blokovi, pa `PredlogCena`) | `AktivirajOtpremnicu`, `NacrtRazlog`, `PrefillSpec`/`PrefillZaglavlja`, `CenaKlase` |
+| Traka: ukupno / u blokovima / ostatak / cena; semafor **po klasi** (+20 u I i −20 u II nije „spremna“) | `Scr_OtpInfo`; ljuska `BuildOtpTraka`/`RefreshOtpTraka` |
+| Upis bloka: pitanje o prekoračenju po klasi, pa vezivanje; pad vezivanja se kaže imenom, otkup ostaje upisan | `Scr_Save`, `PrekoracenjeOpis`, `VeziZaAktivnu` |
+| Radnje: veži (SVI), ukloni i izdaj (BLOKOVI); posle izdavanja ekran izlazi iz konteksta | `RowAction`, `UkloniIzAktivne`, `IzdajAktivnu` |
+| Promena OM napušta otpremnicu; `ClearForm` zadržava datum aktivne otpremnice | ljuska `NapustiOtpremnicu`, `ClearForm` |
+| Izmena nacrta u F2: klik na nacrt popuni formu, snimanje menja taj nacrt; pražnjenje forme i promena režima otkazuju izmenu | `IzaberiNacrtZaIzmenu`, `PrefillNacrta`, `SnimiOtpremnicu`; `modDokUnos.OtpremnicaIzmeniNacrt` (+ `OtpremnicaNacrtIzUnosa`, jedno mesto za upis i izmenu) |
+
+#### Testovi i sabotaže
+
+`Test_OTK_IzvorAktivneOtpremniceSeNeStornira` (DRAFT i IZDATO roditelj; kontrola: van sastava storno prolazi),
+`Test_OTP_RadniStoBiraSamoNacrt`, `Test_OTP_RadniStoVeziTrakaIzdaj` (traka „u toku“ → „prekoračenje“ →
+„spremna“; izdavanje odbijeno pa prolazi), `Test_OTP_RadniStoListe` (ID u poslednjoj koloni, brojke iz kanona,
+BLOKOVI = samo sastav), `Test_OTP_IzmenaNacrtaF2` (kroz `Scr_Save`: nov nacrt ne nastaje, članstvo ostaje,
+izdavanje posle izmene prolazi), `T_ClearForm_Ugovor` (datum aktivne otpremnice ostaje). Sabotaže: +11,
+`clear-datum` preusmeren na `ClearForm` (sidro je posle vraćanja `NapustiOtpremnicu` pokazivalo na nju);
+ukupno 499.
+
+**Prag popisa `otp_linija` 24 → 36 (odluka u ovom koraku).** Svih 12 novih živih mesta su činjenice ZAGLAVLJA,
+nijedno linijsko polje: radni sto čita `Vrsta`/`Sorta` (lista) i `Vrsta`/`Sorta`/`TipAmbalaze` (prefill, jedno
+mesto za F1 i F2) — +5; pisci koji su tek sada dobili živog pozivaoca (`OtpRequireIzvorValjan`,
+`OtpKnjiziAmbalazu`, `OtpIzmeniDraft`) — +7. Grupa meša linijska polja sa činjenicama zaglavlja; razdvajanje
+ide u S3e, kad se linijske kolone brišu.
+
+**Ručna provera (ne može se automatizovati):** izgled trake i semafora; klik na red liste OTPREMNICE (prefill,
+prelazak na BLOKOVI); upis bloka u F1 sa izabranom otpremnicom — blok je odmah u BLOKOVI, a pri prekoračenju
+stiže pitanje; potvrda „Izdaj“; klik na nacrt u F2 i snimanje izmene. Vezivanje posle unosa je u `Scr_Save`
+tri linije oko `VeziZaAktivnu`; sama funkcija je pokrivena testom, a spoj kroz ceo upis F1 nije (upis traži
+stanica-lock i štampu).
+
+**Poznato, a namerno nedirano:** posle snimanja bloka `ClearForm` vraća cenu iz cenovnika (`AutoFillCena`), ne
+sa otpremnice — isto ponašanje kao pre S1b-3.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
