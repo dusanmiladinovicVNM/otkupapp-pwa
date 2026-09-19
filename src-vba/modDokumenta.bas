@@ -2260,10 +2260,24 @@ Public Function StavkeOtpremniceRedovi() As Variant
         cId = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_ID, SRC)
         cBruto = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_BRUTO, SRC)
 
+        ' Jedna stavka po KLASI po dokumentu -- isto sto pisac trazi
+        ' (OtpUpisiOcekivano odbija dve stavke iste klase, review #362 P2).
+        ' Bez ove kapije bi pokvaren dokument sa dve stavke klase I bio u
+        ' izvestaju sabran kao 2 x I, a u stampi dao dva reda iste klase.
+        Dim parKlasa As Object, kParKl As String
+        Set parKlasa = CreateObject("Scripting.Dictionary")
+
         For i = 1 To UBound(d, 1)
             oid = Trim$(NzToText(d(i, cOtp)))
             RequireOtpStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), _
                                    d(i, cAmb), i, SRC
+            kParKl = UCase$(oid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
+            If parKlasa.Exists(kParKl) Then
+                Err.Raise vbObjectError + 1942, SRC, _
+                          "Dve stavke iste klase na otpremnici: OtpremnicaID=" & oid & _
+                          ", klasa " & Trim$(NzToText(d(i, cKl))) & "."
+            End If
+            parKlasa.Add kParKl, True
             imaStavku(oid) = True
             n = n + 1
         Next i
@@ -3626,12 +3640,29 @@ End Function
 ' JEDNO pravilo za "otpremnica je izdata", nad vrednoscu celije -- da citaoci
 ' koji vec drze red ne rade LookupValue po redu (review #362, P1).
 '
-' Samo IZDATO je otpremljena roba: gajbe su tada knjizene, izvori revalidirani, a
-' ocekivano = povezano. NACRT (i prazan status) je najava -- operativni citaoci
-' (roba po vozacu, roba po otkupnom mestu, stampa) ga NE smeju brojati. Mreza F2
-' ga vidi, jer bas tu operater radi sa nacrtima.
+'   IZDATO       -> izdata: gajbe knjizene, izvori revalidirani, ocekivano = povezano
+'   PROSLEDJENO  -> izdata, i dalje prosledjena (buduci sync ka PWA/kupcu, ADR-0001)
+'   DRAFT        -> nije: najava, bez izvora i bez knjizenih gajbi
+'   prazno       -> nije
+'   nepoznato    -> nije
+'
+' PROSLEDJENO MORA biti izdato: prelaz IZDATO -> PROSLEDJENO kaze samo da je
+' dokument otisao dalje. Da ga pravilo ne broji, sync bi retroaktivno izbrisao
+' vec otpremljenu robu iz izvestaja i zabranio stampu istog fizickog dokumenta
+' (review #362, drugi krug).
+'
+' NAMERNO nije stari ugovor modDokumentInvariant.DocIsIssued ("sve osim DRAFT"):
+' tamo prazan status znaci izdato, jer stari lanac nije imao nacrt. U novom
+' modelu otpremnica nastaje kao nacrt, pa prazan ili nepoznat status nije
+' dokaz izdavanja -- samo imenovani statusi to jesu.
+'
+' Operativni citaoci (roba po vozacu, roba po OM, stampa) broje samo izdate.
+' Mreza F2 vidi i nacrte, jer bas tu operater radi sa njima.
 Public Function IzdatoStatusJeIzdato(ByVal v As Variant) As Boolean
-    IzdatoStatusJeIzdato = (UCase$(Trim$(NzToText(v))) = UCase$(IZDATO_IZDATO))
+    Select Case UCase$(Trim$(NzToText(v)))
+        Case UCase$(IZDATO_IZDATO), UCase$(IZDATO_PROSLEDJENO)
+            IzdatoStatusJeIzdato = True
+    End Select
 End Function
 
 ' OtkupID -> OtpremnicaID, za sve NEstornirane otpremnice.

@@ -83,7 +83,9 @@
     `RunAllTests` 200 (bilo 203), golden 2 scenarija (bilo 12).
 15. **Review #362** (§14.15): `PredlogCena` više nije vrednost — vrednost otpremnice je vrednost njenih
     **izvora**; operativni izveštaji i štampa broje **samo IZDATO**; F4 je **S6**, ne S4. Fixture izvodi
-    `tblOtpremnicaIzvori` iz `Otkup.OtpremnicaID` (17 izdatih) — **regeneracija fixture-a**.
+    `tblOtpremnicaIzvori` iz `Otkup.OtpremnicaID` (17 izdatih) — **regeneracija fixture-a**. Drugi krug:
+    `PROSLEDJENO` je izdato (sync ne sme da briše otpremljenu robu), prazan/nepoznat status nije; čitač
+    stavki odbija dve stavke iste klase.
 16. **Sledeće:** S3b-2 — panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“ (vraća A-011, A-012,
     A-018..A-028).
 

@@ -276,6 +276,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzvestajOMRedPoKlasi
     Test_OTP_OtpremljenoJeSamoIzdato
     Test_OTP_VrednostIzIzvoraNePredlogCene
+    Test_OTP_IzdatoStatusPravilo
+    Test_OTP_DveStavkeIsteKlaseObaraCitaoce
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -5830,6 +5832,92 @@ Private Sub Test_OTP_VrednostIzIzvoraNePredlogCene()
 
 EH:
     LogFatal "Test_OTP_VrednostIzIzvoraNePredlogCene", Err.Number, Err.description
+End Sub
+
+' PRAVILO "IZDATA" ZA SVIH PET STANJA (review #362, drugi krug).
+'
+' Operativni citaoci (roba po vozacu, roba po OM, stampa) odlucuju kroz
+' IzdatoStatusJeIzdato. PROSLEDJENO je izdat dokument koji je i otisao dalje --
+' da ga pravilo ne broji, buduci sync bi retroaktivno izbrisao otpremljenu robu
+' iz izvestaja. Prazan i nepoznat status NISU izdati: u novom modelu otpremnica
+' nastaje kao nacrt, pa samo imenovan status dokazuje izdavanje.
+Private Sub Test_OTP_IzdatoStatusPravilo()
+    On Error GoTo EH
+
+    AssertTrue Not modDokumenta.IzdatoStatusJeIzdato(IZDATO_DRAFT), _
+               "OTP status: DRAFT nije izdat"
+    AssertTrue modDokumenta.IzdatoStatusJeIzdato(IZDATO_IZDATO), _
+               "OTP status: IZDATO je izdat"
+    AssertTrue modDokumenta.IzdatoStatusJeIzdato(IZDATO_PROSLEDJENO), _
+               "OTP status: PROSLEDJENO je izdat -- sync ne brise otpremljenu robu"
+    AssertTrue Not modDokumenta.IzdatoStatusJeIzdato(""), _
+               "OTP status: prazan status nije izdat"
+    AssertTrue Not modDokumenta.IzdatoStatusJeIzdato("NESTO"), _
+               "OTP status: nepoznat status nije izdat"
+
+    ' Celija sme da nosi razmake i mala slova -- pravilo poredi normalizovano.
+    AssertTrue modDokumenta.IzdatoStatusJeIzdato("  " & LCase$(IZDATO_PROSLEDJENO) & " "), _
+               "OTP status: razmaci i mala slova ne menjaju ishod"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_IzdatoStatusPravilo", Err.Number, Err.description
+End Sub
+
+' JEDNA STAVKA PO KLASI -- citalac drzi isto sto i pisac (review #362, P2).
+'
+' Pisac odbija dve stavke iste klase (OtpUpisiOcekivano), pa je dokument sa
+' dve stavke klase I SINTETICKA ANOMALIJA -- pravi se dodavanjem reda u
+' transakciji koja se vraca. Bez kapije u citaocu takav dokument bi u
+' izvestaju bio sabran kao 2 x I, a u stampi dao dva reda iste klase.
+Private Sub Test_OTP_DveStavkeIsteKlaseObaraCitaoce()
+    Const SRC As String = "Test_OTP_DveStavkeIsteKlaseObaraCitaoce"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPDK")
+    broj = TEST_PREFIX & "-OTP-DK-" & scenario
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(broj), OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "OTP dve iste klase: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTPREMNICA_STAVKE)
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_ID, otpID & "-DUPLA"
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpID
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_RB, 2
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, KLASA_I
+    SetRequiredField rowData, TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, 100#
+    RequireAppend TBL_OTPREMNICA_STAVKE, rowData, SRC
+
+    AssertTrue InStr(1, OtpMrezaGreska(broj), "Dve stavke iste klase", vbTextCompare) > 0, _
+               "OTP dve iste klase: mreza pada po imenu, ne sabira 2 x I"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", OtpMrezaGreska(broj), _
+                 "OTP dve iste klase: citalac prolazi posle vracanja"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
 End Sub
 
 ' INVARIJANTA ZBIRNE SABIRA STAVKE (S3b).

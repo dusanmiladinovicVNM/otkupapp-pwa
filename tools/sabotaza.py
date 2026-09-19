@@ -4108,6 +4108,23 @@ SABOTAZE = {
         "Test_OTP_OtpremljenoJeSamoIzdato",
         "nacrt nije otpremljena roba (roba po vozacu)",
     ),
+    # PROSLEDJENO opet nije izdato: sync bi retroaktivno brisao otpremljenu robu
+    # iz izvestaja (review #362, drugi krug).
+    "otp-prosledjeno-nije-izdato": (
+        "modDokumenta.bas",
+        "        Case UCase$(IZDATO_IZDATO), UCase$(IZDATO_PROSLEDJENO)\n",
+        "        Case UCase$(IZDATO_IZDATO)   ' SABOTAZA: prosledjeno ispada\n",
+        "Test_OTP_IzdatoStatusPravilo",
+        "PROSLEDJENO je izdat -- sync ne brise otpremljenu robu",
+    ),
+    # Citalac opet pusta dve stavke iste klase -- slabiji ugovor od pisca (P2).
+    "otp-citalac-pusta-dve-iste-klase": (
+        "modDokumenta.bas",
+        "            If parKlasa.Exists(kParKl) Then\n",
+        "            If False Then   ' SABOTAZA: dve iste klase prolaze\n",
+        "Test_OTP_DveStavkeIsteKlaseObaraCitaoce",
+        "mreza pada po imenu, ne sabira 2 x I",
+    ),
     # Vrednost otpremnice opet dolazi iz zbira stavki -- mesto koje je do review-a
     # #362 nosilo Kolicina x PredlogCena. Predlog nije placena cena.
     "otp-vrednost-iz-predlog-cene": (

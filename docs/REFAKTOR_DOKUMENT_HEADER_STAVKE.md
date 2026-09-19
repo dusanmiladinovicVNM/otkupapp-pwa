@@ -3201,6 +3201,35 @@ kao tekst, pa tvrdnja pada po imenu. Ukupno 482.
 `T_PrijemnicaUnos_PauziranDoS6` i poruka `DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA` sada kažu „dok prijemnica ne pređe
 na nov model“.
 
+#### Drugi krug review-a #362 (19.09.2026)
+
+Pun `run_vba` na `c6e47370` je bio zelen: `RunAllTests` 200/0, BFP 1200/0, Storno 200/0, golden 2/2. Commit
+`c6e47370` je popravio grešku koju je `82cbb480` uveo u mrežu F2. `ColCena("OTPREMNICA")` je postao `""`, pa se
+`Case ColCena(mk)` poklapao sa svakom kolonom bez izvorne kolone (status). `Null` na mestu vrednosti je to oborio
+glasno; nula bi tiho upisala broj u pilulu statusa.
+
+**P1 — `PROSLEDJENO` je izdato.** Pravilo `IzdatoStatusJeIzdato` je priznavalo samo `IZDATO`. Kad sync ubuduće
+prebaci otpremnicu u `PROSLEDJENO`, isti fizički dokument bi nestao iz robe po vozaču i robe po OM, a štampa bi
+ga odbila. Pravilo je sada eksplicitno:
+
+| status | izdat |
+|---|---|
+| `DRAFT` | ne |
+| `IZDATO` | da |
+| `PROSLEDJENO` | da |
+| prazno | ne |
+| nepoznato | ne |
+
+Stari ugovor `modDokumentInvariant.DocIsIssued` („sve osim DRAFT“, prazno = izdato) **namerno nije ponovo
+upotrebljen**. Stari lanac nije imao nacrt, a u novom modelu otpremnica nastaje kao nacrt, pa prazan status
+nije dokaz izdavanja. Test `Test_OTP_IzdatoStatusPravilo` pokriva svih pet stanja; sabotaža je
+`otp-prosledjeno-nije-izdato`.
+
+**P2 — jedna stavka po klasi.** `StavkeOtpremniceRedovi` sada odbija dve stavke iste klase na istoj otpremnici,
+isto kao pisac (`OtpUpisiOcekivano`). Bez toga bi pokvaren dokument u izveštaju bio sabran kao 2 × I, a u štampi
+dao dva reda iste klase. Test `Test_OTP_DveStavkeIsteKlaseObaraCitaoce` (sintetička anomalija u transakciji koja
+se vraća); sabotaža `otp-citalac-pusta-dve-iste-klase`. Ukupno 484 sabotaže.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
