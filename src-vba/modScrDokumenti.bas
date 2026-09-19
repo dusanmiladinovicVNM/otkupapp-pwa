@@ -1210,13 +1210,22 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         ' GridCols. Golim konstantama bi se nabrajala oba tipa, a tblOtkupStavke
         ' i tblOtpremnicaStavke dele imena kolona ("Klasa", "Kolicina",
         ' "KolAmbalaze") -- dve grane bi izgledale kao izbor, a bile isti string.
+        '
+        ' Kolona BEZ izvorne kolone (status, placanje) se preskace: Col* vraca ""
+        ' za rezim koji to polje nema (OTPREMNICA nema cenu, review #362), a
+        ' "Case """ bi se poklopio bas sa njima -- pilula statusa bi dobila
+        ' vrednost dokumenta.
+        Dim izvCol As String
         For c = 0 To colN - 1
-            Select Case ColF(CStr(cols(c)), 1)
-                Case ColKolicina(mk): ovStav(c) = "kg"
-                Case ColCena(mk):     ovStav(c) = "vr"
-                Case ColKolAmb(mk):   ovStav(c) = "amb"
-                Case ColKlasa(mk):    ovStav(c) = "kl"
-            End Select
+            izvCol = ColF(CStr(cols(c)), 1)
+            If Len(izvCol) > 0 Then
+                Select Case izvCol
+                    Case ColKolicina(mk): ovStav(c) = "kg"
+                    Case ColCena(mk):     ovStav(c) = "vr"
+                    Case ColKolAmb(mk):   ovStav(c) = "amb"
+                    Case ColKlasa(mk):    ovStav(c) = "kl"
+                End Select
+            End If
         Next c
     End If
 
