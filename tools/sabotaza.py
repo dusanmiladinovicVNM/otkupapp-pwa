@@ -657,6 +657,22 @@ SABOTAZE = {
         "Test_OTP_IzmenaNacrtaF2",
         "F2 izmena: snimanje uspelo",
     ),
+    # Citalac otkupa opet pusta dve stavke iste klase (review #363, drugi krug).
+    "otk-citalac-dve-iste-klase": (
+        "modOtkup.bas",
+        "            If parKlasa.Exists(kParKl) Then\n",
+        "            If False Then   ' SABOTAZA: dve iste klase otkupa prolaze\n",
+        "Test_OTP_IzdavanjeCitaIzvorStrogo",
+        "OTP strogo izvor: read-model pada po imenu",
+    ),
+    # Citalac otkupa opet pusta bruto manji od neta.
+    "otk-citalac-bruto-manji": (
+        "modOtkup.bas",
+        "    If CDbl(v) > 0 And CDbl(v) < CDbl(kol) Then\n",
+        "    If False Then   ' SABOTAZA: bruto manji od neta prolazi\n",
+        "Test_OTP_IzdavanjeCitaIzvorStrogo",
+        "OTP strogo izvor: bruto manji od neta obara read-model",
+    ),
     # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
     "otk-storno-izvora-aktivne-otpremnice": (
         "modStorno.bas",

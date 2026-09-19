@@ -286,6 +286,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_RadniStoListe
     Test_OTP_IzmenaNacrtaF2
     Test_OTP_IzdavanjeCitaStrogo
+    Test_OTP_IzdavanjeCitaIzvorStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6379,6 +6380,103 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
     modScrDokumenti.Scr_IzmenaOtkazi
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' IZVOR SE CITA PO UGOVORU PISCA OTKUPA (review #363, drugi krug, P1).
+'
+' Druga strana jednacine iz Test_OTP_IzdavanjeCitaStrogo: nacrt ocekuje 500 kg
+' klase I, a izvor nosi 400. Sinteticka druga stavka klase I od 100 kg NA
+' OTKUPU (anomalija, transakcija se vraca) dala bi 400 + 100 = 500 = ocekivano
+' -> IZDATO. Isto za bruto manji od neta: pisac otkupa ga odbija, pa ga citalac
+' ne sme pretvoriti u "neto" i predati otpremnici.
+Private Sub Test_OTP_IzdavanjeCitaIzvorStrogo()
+    Const SRC As String = "Test_OTP_IzdavanjeCitaIzvorStrogo"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPIZI")
+
+    Dim otpID As String, otk As String
+    otk = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-IZI-" & scenario), _
+                         OtkStavke(400#, 100#, 20, 0#, 0#, 0))
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-IZI-" & scenario), _
+                                     OtpOcek(500#, 20#, 0#, 0#), g)
+    AssertTrue Len(otpID) > 0 And Len(otk) > 0, _
+               "OTP strogo izvor: preduslovi napravljeni (" & g & ")"
+    If Len(otpID) = 0 Or Len(otk) = 0 Then Exit Sub
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otk, g), _
+               "OTP strogo izvor: izvor od 400 kg vezan (" & g & ")"
+
+    ' --- dve stavke iste klase na izvoru ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTKUP_STAVKE)
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_ID, otk & "-DUPLA"
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otk
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_RB, 2
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_KLASA, KLASA_I
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_KOLICINA, 100#
+    SetRequiredField rowData, TBL_OTKUP_STAVKE, COL_OKS_CENA, 100#
+    RequireAppend TBL_OTKUP_STAVKE, rowData, SRC
+
+    AssertTrue InStr(1, OtpProgressGreska(otpID), "Dve stavke iste klase na otkupu", _
+                     vbTextCompare) > 0, _
+               "OTP strogo izvor: read-model pada po imenu, ne sabira 2 x I izvora"
+    AssertTrue Not IzdajOtpremnicu_TX(otpID, g), _
+               "OTP strogo izvor: pisac odbija izvor sa dve stavke iste klase"
+    AssertTrue InStr(1, g, "Dve stavke iste klase na otkupu", vbTextCompare) > 0, _
+               "OTP strogo izvor: razlog imenuje korupciju izvora (bilo: " & g & ")"
+    AssertEquals IZDATO_DRAFT, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "OTP strogo izvor: status ostaje DRAFT (dve iste klase)"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- bruto manji od neta na izvoru ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otk)
+    AssertEquals "1", CStr(redovi.count), "OTP strogo izvor: preduslov -- izvor ima jednu stavku"
+    If redovi.count = 1 Then
+        RequireUpdateCell TBL_OTKUP_STAVKE, CLng(redovi(1)), COL_OKS_BRUTO, 300#, SRC
+        AssertTrue InStr(1, OtpProgressGreska(otpID), "manji od neto", vbTextCompare) > 0, _
+                   "OTP strogo izvor: bruto manji od neta obara read-model"
+        AssertTrue Not IzdajOtpremnicu_TX(otpID, g), _
+                   "OTP strogo izvor: pisac odbija izvor sa brutom manjim od neta"
+        AssertEquals IZDATO_DRAFT, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                     "OTP strogo izvor: status ostaje DRAFT (bruto)"
+    End If
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' Kontrola: bez anomalija isti read-model radi -- pad je bio zbog njih.
+    AssertEquals "", OtpProgressGreska(otpID), "OTP strogo izvor: posle vracanja read-model radi"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

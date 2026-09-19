@@ -1003,10 +1003,26 @@ Public Function StavkeOtkupaRedovi() As Variant
         cBruto = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO, SRC)
 
         ' Prvi prolaz: kapije i broj redova (2D niz se ne skracuje po redovima).
+        '
+        ' Uz pravila JEDNE stavke citalac drzi i ona koja pisac drzi nad
+        ' DOKUMENTOM (review #363, P1): najvise jedna stavka po klasi i bruto
+        ' koji nije manji od neta. Bez njih je izdavanje otpremnice sabiralo dve
+        ' stavke klase I istog izvora (400 + 100 = 500 = ocekivano -> IZDATO) i
+        ' zamrzavalo bruto manji od neta -- stanja koja CreateOtkup_TX odbija.
+        Dim parKlasa As Object, kParKl As String
+        Set parKlasa = CreateObject("Scripting.Dictionary")
         For i = 1 To UBound(d, 1)
             oid = Trim$(NzToText(d(i, cOtk)))
             RequireStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), _
                                 d(i, cAmb), i, SRC
+            kParKl = UCase$(oid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
+            If parKlasa.Exists(kParKl) Then
+                Err.Raise vbObjectError + 1924, SRC, _
+                          "Dve stavke iste klase na otkupu: OtkupID=" & oid & _
+                          ", klasa " & Trim$(NzToText(d(i, cKl))) & "."
+            End If
+            parKlasa.Add kParKl, True
+            RequireBrutoStavke d(i, cBruto), d(i, cKol), oid, SRC
             imaStavku(oid) = True
             n = n + 1
         Next i
@@ -1037,6 +1053,33 @@ Public Function StavkeOtkupaRedovi() As Variant
 
     StavkeOtkupaRedovi = res
 End Function
+
+' BrutoKg stavke: ISTA pravila koja pisac trazi na upisu (CreateOtkup_TX).
+' Prazno ili 0 = unet neto -- pisac nulu cita kao "nije bruto unos" i ne
+' upisuje je. Nebrojcano i negativno su kvar, a bruto veci od nule koji je
+' MANJI od neto kolicine znaci zamenjene vrednosti. Citalac koji bi to tiho
+' pretvorio u "neto" dao bi otpremnici bruto manji od neta (review #363, P1).
+' Kolicina je vec prosla RequireStavkaUgovor (broj > 0).
+Private Sub RequireBrutoStavke(ByVal v As Variant, ByVal kol As Variant, _
+                               ByVal oid As String, ByVal sourceName As String)
+    If IsEmpty(v) Then Exit Sub
+    If Len(Trim$(NzToText(v))) = 0 Then Exit Sub
+
+    If Not IsNumeric(v) Then
+        Err.Raise vbObjectError + 1930, sourceName, _
+                  "BrutoKg stavke nije brojcan: OtkupID=" & oid & _
+                  ", vrednost: " & NzToText(v)
+    End If
+    If CDbl(v) < 0 Then
+        Err.Raise vbObjectError + 1930, sourceName, _
+                  "BrutoKg stavke ne sme biti negativan: OtkupID=" & oid & "."
+    End If
+    If CDbl(v) > 0 And CDbl(v) < CDbl(kol) Then
+        Err.Raise vbObjectError + 1939, sourceName, _
+                  "BrutoKg stavke (" & Fmt2Otk(CDbl(v)) & ") je manji od neto kolicine (" & _
+                  Fmt2Otk(CDbl(kol)) & "): OtkupID=" & oid & "."
+    End If
+End Sub
 
 ' BrutoKg stavke za izvoz: broj > 0 ili prazno. Prazno znaci da je unet neto
 ' (bruto == Kolicina), isto pravilo koje drzi COL_OKS_BRUTO u modConfig.

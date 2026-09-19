@@ -3381,6 +3381,36 @@ a životni ciklus je `IZDATO → PROSLEDJENO`. Danas nijedan lokalni put ne preb
 eksplicitnom semantikom kao `IzdatoStatusJeIzdato`. Stari `DocIsIssued` se ne koristi, jer prazno stanje tumači
 drugačije.
 
+#### Review #363, drugi krug — čitač otkupa drži ugovor pisca (19.09.2026)
+
+**P1.** Posle prvog kruga izdavanje čita izvore kroz `modOtkup.StavkeOtkupaRedovi`. Taj čitač je proveravao
+pravila jedne stavke, ali ne i dva pravila koja `CreateOtkup_TX` drži nad dokumentom:
+- najviše jedna stavka po klasi;
+- bruto koji nije manji od neta.
+
+Isti oblik baga je zato ostao na drugoj strani jednačine. Izvor sa 400 + 100 kg klase I prolazio je kao
+500 = očekivano i postajao IZDATO, a bruto manji od neta čitač je tiho pretvarao u „neto“.
+
+**Popravka je u ugovoru čitača, ne u `OtpIzdaj`.** `StavkeOtkupaRedovi` sada odbija:
+- dve stavke iste klase na istom otkupu;
+- nebrojčan ili negativan `BrutoKg`;
+- `BrutoKg` veći od nule a manji od `Kolicina`.
+
+Prazno ili `0` je „unet neto“, isto kako pisac čita nulu (`OtkStavkaBrojOpcion` → ne upisuje je). Pravila tako
+dobijaju svi čitaoci otkupa odjednom: mreža, izveštaji, izvozi, `VrednostIzvoraPoOtpremnici`, read-model i
+izdavanje.
+
+Test `Test_OTP_IzdavanjeCitaIzvorStrogo`:
+- anomalija na izvoru u transakciji koja se vraća, jednom dve iste klase, jednom bruto manji od neta;
+- read-model pada po imenu, pisac odbija, status ostaje DRAFT;
+- kontrola posle vraćanja.
+
+Sabotaže `otk-citalac-dve-iste-klase` i `otk-citalac-bruto-manji` (ukupno 503).
+
+**P2, zapisano, ne menja se u ovom PR-u.** Komanda jednog dokumenta (`IzdajOtpremnicu_TX`) validira **celu** tabelu
+stavki otpremnica i otkupa, jer strogi čitači važe za ceo skup. Pokvaren nepovezan otkup zato može da obori
+izdavanje ispravne otpremnice. To nije kvar podataka (fail-closed), nego granica agregata; v. backlog §15.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3391,6 +3421,8 @@ drugačije.
 | **Delimična alokacija Otkup → Otpremnica** | nema poslovnog zahteva; ako se pojavi — eksplicitna alokaciona tabela |
 | **Mešovit dokument (više vrsta u jednom)** | vrsta/sorta ostaju header; nije zahtev |
 | **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
+| **Granica agregata za komande nad jednim dokumentom** (review #363, drugi krug, P2) | strogi čitači (`StavkeOtpremniceRedovi`, `StavkeOtkupaRedovi`) validiraju ceo skup, pa komanda jednog dokumenta (`IzdajOtpremnicu_TX`, `GetOtpremnicaProgress`) pada i zbog nepovezanog pokvarenog dokumenta. Fail-closed, nije kvar podataka. Kandidat: strogi čitač po dokumentu (ciljna otpremnica + njeni izvori) za komande, a skup za izveštaje i mreže |
+| **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---
 
