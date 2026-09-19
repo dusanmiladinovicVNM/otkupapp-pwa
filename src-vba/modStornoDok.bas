@@ -108,6 +108,16 @@ Private Function AktivanPoIdentitetu(ByVal tblName As String, ByVal brojCol As S
         LookupValue(tblName, idCol, CStr(ids.Keys()(0)), COL_STORNIRANO)))) <> "DA")
 End Function
 
+' Otpremnica po PK: postoji TACNO jednom i nije stornirana. Prazan ID = False
+' (fail-closed) -- dokument se ne pogadja po broju (review #362).
+Private Function OtpremnicaAktivnaPoID(ByVal otpremnicaID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(otpremnicaID)) = 0 Then Exit Function
+    If FindRows(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID)).count <> 1 Then Exit Function
+    OtpremnicaAktivnaPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_STORNIRANO)))) <> "DA")
+End Function
+
 ' Otkup po PK: postoji i nije storniran. Prazan ID = False (fail-closed).
 Private Function OtkupAktivanPoID(ByVal otkupID As String) As Boolean
     On Error Resume Next
@@ -136,8 +146,9 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)
 
         Case STIP_OTPREMNICA
-            If Not AktivanPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, docID) Then _
-                StornoRazlog = NijePronadjen(broj)
+            ' Identitet otpremnice je OtpremnicaID izabranog reda (review #362),
+            ' isto kao otkup od S1e. Bez njega se ne pogadja po broju.
+            If Not OtpremnicaAktivnaPoID(docID) Then StornoRazlog = NijePronadjen(broj)
 
         Case STIP_ZBIRNA
             ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera
@@ -270,8 +281,14 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoOtkup_TX(Trim$(docID))
 
         Case STIP_OTPREMNICA
-            ' i ovde klase dele broj
-            ok = StornoOtpremnicaByBroj_TX(broj, docID)
+            ' Jedan dokument = jedno zaglavlje = jedan OtpremnicaID (review #362).
+            ' Prazan ID se ne razresava po broju: dve stanice istog dana legalno
+            ' nose isti broj.
+            If Not OtpremnicaAktivnaPoID(docID) Then
+                poruka = NijePronadjen(broj)
+                Exit Function
+            End If
+            ok = StornoOtpremnica_TX(Trim$(docID))
 
         Case STIP_ZBIRNA
             ok = StornoZbirna_TX(broj, docID)
@@ -375,9 +392,17 @@ End Function
 '=====================================================================
 
 ' Kljuc tipa -> framework docType. Prazno = tip nije framework tip.
+'
+' OTPREMNICA NIJE framework tip od review-a #362. Okvir ispravke (uvid lanca,
+' izbor moda, ISPRAVKA / DUPLI / PONISTENJE) cita otpremnicu po (broj,
+' GeneracijaID) i odlucuje o nizvodnom lancu preko Otpremnica.BrojZbirne --
+' vezi koju od S3a ne pise nijedan zivi put. Za otpremnicu koju produkcija
+' danas pravi ti modovi nemaju o cemu da odluce, a citanje njenog identiteta
+' kao generacije bi uvid tiho proslo na broj. Zato obican storno po
+' OtpremnicaID-u (kao otkup od S1e), a modovi su PAUZIRANI do S3c/S4 -- kod
+' okvira ostaje dok ga S3c ne prevede na izvore ili ne obrise.
 Public Function TipUFlowDoc(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA
         Case STIP_ZBIRNA:     TipUFlowDoc = FLOW_DOC_ZBIRNA
         Case STIP_PRIJEMNICA: TipUFlowDoc = FLOW_DOC_PRIJEMNICA
         Case STIP_REVERSI:    TipUFlowDoc = FLOW_DOC_REVERS
@@ -969,6 +994,10 @@ Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
     opis = TipNaziv(tip, opcija) & " " & broj
     DokumentOpis = opis
     On Error GoTo EH
+    If tip = STIP_OTPREMNICA And Len(Trim$(docID)) > 0 Then
+        DokumentOpis = opis & OtpremnicaOpis(Trim$(docID))
+        Exit Function
+    End If
     If tip <> STIP_REVERSI Or Len(Trim$(docID)) = 0 Then Exit Function
     revBroj = broj: revTip = opcija
     If Len(modStorno.ReversIDRazresi(docID, revBroj, revTip, revID, False)) > 0 Then Exit Function
@@ -977,6 +1006,31 @@ Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
     Exit Function
 EH:
     DokumentOpis = opis
+End Function
+
+' Opis IZABRANE otpremnice za potvrdu storna: " (stanica, dd.mm.yyyy, N kg)".
+'
+' Otpremnica vise nije framework tip, pa nema ni uvid lanca -- potvrda je
+' jedino mesto gde operater vidi o kom je dokumentu rec. Sve se cita po
+' OtpremnicaID-u, a kilaza sa STAVKI bas tog dokumenta: dve stanice istog dana
+' legalno nose isti broj, pa bi opis po broju sabrao oba (review #362).
+' Greska u citanju ostavlja opis bez zagrade, ne tudju cifru.
+Private Function OtpremnicaOpis(ByVal otpremnicaID As String) As String
+    Dim st As String, stNaziv As String, datV As Variant, z As Variant
+    On Error GoTo EH
+    st = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_STANICA)))
+    stNaziv = Trim$(NzToText(LookupValue(TBL_STANICE, "StanicaID", st, "Naziv")))
+    If Len(stNaziv) = 0 Then stNaziv = st
+    datV = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_DATUM)
+    z = modDokumenta.ZbirStavkiZaOtpremnicu(modDokumenta.ZbirStavkiPoOtpremnici(), _
+                                            otpremnicaID, "modStornoDok.OtpremnicaOpis")
+    Dim dan As String
+    If IsDate(datV) Then dan = Format$(CDate(datV), "dd.mm.yyyy") Else dan = NzToText(datV)
+    OtpremnicaOpis = " (" & stNaziv & ", " & dan & ", " & _
+                     Format$(CDbl(z(0)), "#,##0.##") & " kg)"
+    Exit Function
+EH:
+    OtpremnicaOpis = ""
 End Function
 
 ' Opis reversa iz traga ispravke (OldDocID = ReversID): " (naziv / StanicaID, dan)",

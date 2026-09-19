@@ -86,6 +86,8 @@
     `tblOtpremnicaIzvori` iz `Otkup.OtpremnicaID` (17 izdatih) — **regeneracija fixture-a**. Drugi krug:
     `PROSLEDJENO` je izdato (sync ne sme da briše otpremljenu robu), prazan/nepoznat status nije; čitač
     stavki odbija dve stavke iste klase.
+    Treći krug: F8 stornira otpremnicu **po `OtpremnicaID`-u** (isti rez kao S1e za otkup); otpremnica nije
+    više framework tip, a modovi ISPRAVKA/DUPLI/PONIŠTENJE za nju su **PAUZIRANI do S3c/S4** (B-022..B-025).
 16. **Sledeće:** S3b-2 — panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“ (vraća A-011, A-012,
     A-018..A-028).
 

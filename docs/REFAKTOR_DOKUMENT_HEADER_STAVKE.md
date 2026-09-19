@@ -3230,6 +3230,37 @@ isto kao pisac (`OtpUpisiOcekivano`). Bez toga bi pokvaren dokument u izveštaju
 dao dva reda iste klase. Test `Test_OTP_DveStavkeIsteKlaseObaraCitaoce` (sintetička anomalija u transakciji koja
 se vraća); sabotaža `otp-citalac-pusta-dve-iste-klase`. Ukupno 484 sabotaže.
 
+#### Treći krug review-a #362 — F8 storno otpremnice po `OtpremnicaID`-u (19.09.2026)
+
+**P1.** Nov nacrt nema `GeneracijaID`, a skrivena kolona F8 za otpremnicu je bila `COL_GENERACIJA_ID`. Zato je
+kolona bila prazna, a preflight, uvid i storno su išli **po broju**. Dve stanice istog dana legalno nose isti broj,
+pa je uvid sabirao oba dokumenta. Pisac bi dvosmislen broj odbio, ali operater je gledao posledice tuđeg dokumenta.
+
+**Mereno pre koda.** F8 okvir ispravke je identitet otpremnice čitao kao generaciju na oko 12 mesta u tri modula:
+uvid (zaglavlje, palete, faktura), `PreviewOtpremnica`, `CorrectionNeedsDialog`, lanac i zastavice, i sva tri
+moda (`RunOtpremnicaCorrection`). Sadržaj modova je lanac preko `Otpremnica.BrojZbirne`, a tu vezu od S3a ne piše
+nijedan živi put. Prevod okvira na ID bi značio čitanje novog modela kroz staru vezu.
+
+**Odluka (operater, 19.09.2026): varijanta B, isti rez kao S1e za otkup.**
+
+| Šta | Gde |
+|---|---|
+| Skrivena kolona identiteta otpremnice je `COL_OTP_ID` | `modScrDokumenti.IdKolonaTipa` |
+| Otpremnica **nije framework tip** u F8 — samo običan storno | `modStornoDok.TipUFlowDoc` |
+| Preflight i izvršenje po `OtpremnicaID`-u: prazan ID se ne pogađa po broju, izvršenje ide kroz postojeći `StornoOtpremnica_TX(id)` | `modStornoDok.StornoRazlog`, `StornoIzvrsi`, nova `OtpremnicaAktivnaPoID` |
+| Potvrda imenuje stanicu, dan i kg **baš izabranog** dokumenta (kg iz njegovih stavki) | nova `modStornoDok.OtpremnicaOpis` |
+| Zbir kg u uvidu ne napušta zadat identitet: bez kolone generacije strict diže grešku, inače je kilaža nepoznata, a ne zbir po broju | `modStornoImpact.SumActiveOtpStavke` |
+
+Modovi ISPRAVKA/DUPLI/PONIŠTENJE/REŠI KASNIJE za otpremnicu su **PAUZIRANI do S3c/S4** (B-022..B-025).
+Ispravka je na završetku pauzirana još od S3a (B-038). Kod okvira ostaje dok ga S3c ne prevede na izvore ili
+ne obriše. Zato su testovi koji ga zovu direktno ostali: test 45 sada zove `RunOtpremnicaCorrection` direktno
+umesto kroz F8. `StornoOtpremnicaByBroj_TX` ostaje, jer ga zove taj okvir (`RunSimpleStornoOtpremnica`).
+
+Testovi: `Test_OTP_F8StornoPoID` (isti broj na ST1/ST2 → red nosi `OtpremnicaID` → preflight po ID-u, bez ID-a
+odbijen → potvrda pokazuje samo B kg → storno dira samo B, A ostaje aktivna); `T_FrameworkIspravke_SamoTriTipa`
+(ranije `…SamoCetiriTipa`): otpremnica je na listi „obični“. Sabotaže: `framework-otpremnica-vracen`,
+`otp-f8-identitet-generacija`, `otp-f8-storno-po-broju`; `framework-otkup` je preusmerena na zbirnu. Ukupno 487.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

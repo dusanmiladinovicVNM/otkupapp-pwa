@@ -278,6 +278,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_VrednostIzIzvoraNePredlogCene
     Test_OTP_IzdatoStatusPravilo
     Test_OTP_DveStavkeIsteKlaseObaraCitaoce
+    Test_OTP_F8StornoPoID
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -5864,6 +5865,86 @@ Private Sub Test_OTP_IzdatoStatusPravilo()
 EH:
     LogFatal "Test_OTP_IzdatoStatusPravilo", Err.Number, Err.description
 End Sub
+
+' F8 STORNIRA OTPREMNICU PO OtpremnicaID-u, NE PO BROJU (review #362, isti rez
+' kao S1e za otkup).
+'
+' Broj otpremnice je jedinstven tek po (stanica, dan), pa dve stanice istog dana
+' legalno nose isti broj. Nov nacrt nema GeneracijaID, pa je skrivena kolona F8
+' bila prazna i preflight, opis i storno su isli PO BROJU. Test pravi bas tu
+' koliziju i prati izabran dokument kroz ceo put: red mreze -> preflight -> opis
+' u potvrdi -> storno.
+Private Sub Test_OTP_F8StornoPoID()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String, dan As Date
+    scenario = NewScenarioCode("OTPF8")
+    broj = TEST_PREFIX & "-OTP-F8-" & scenario
+    dan = NextTestDate()
+
+    Dim razlog As String, idA As String, idB As String
+    idA = CreateOtpremnicaDraft_TX(OtpBrojHeader(broj, dan, TEST_ST_ID), _
+                                   OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(idA) > 0, "OTP F8: otpremnica A na ST1 (bilo: " & razlog & ")"
+    idB = CreateOtpremnicaDraft_TX(OtpBrojHeader(broj, dan, TEST_HLAD_ST_ID), _
+                                   OtpOcek(250#, 10#, 0#, 0#), razlog)
+    AssertTrue Len(idB) > 0, "OTP F8: otpremnica B, isti broj, ST2 (bilo: " & razlog & ")"
+    If Len(idA) = 0 Or Len(idB) = 0 Then Exit Sub
+
+    ' Otpremnica je obican tip u F8, bez okvira ispravke.
+    AssertEquals "", modStornoDok.TipUFlowDoc(STIP_OTPREMNICA), _
+                 "OTP F8: otpremnica nije framework tip -- nema modova nad starom vezom"
+
+    ' Red mreze nosi OtpremnicaID u skrivenoj koloni -- ono sto ekran salje dalje.
+    AssertEquals COL_OTP_ID, modScrDokumenti.IdKolonaTipa(STIP_OTPREMNICA), _
+                 "OTP F8: skrivena kolona identiteta je OtpremnicaID"
+    AssertTrue OtpF8RedSaID(broj, idB), _
+               "OTP F8: red otpremnice B nosi SVOJ OtpremnicaID"
+
+    ' Preflight po identitetu; prazan identitet se ne pogadja po broju.
+    AssertEquals "", modStornoDok.StornoRazlog(STIP_OTPREMNICA, broj, "", idB), _
+                 "OTP F8: izabrana B sme da se stornira"
+    AssertTrue Len(modStornoDok.StornoRazlog(STIP_OTPREMNICA, broj, "", "")) > 0, _
+               "OTP F8: bez identiteta nema storna -- broj nije dokument"
+
+    ' Potvrda opisuje BAS B: njena kilaza, ne zbir oba dokumenta istog broja.
+    Dim opis As String
+    opis = modStornoDok.DokumentOpis(STIP_OTPREMNICA, broj, "", idB)
+    AssertTrue InStr(1, opis, "250 kg", vbTextCompare) > 0 And _
+               InStr(1, opis, "650", vbTextCompare) = 0, _
+               "OTP F8: potvrda pokazuje samo B kg (bilo: " & opis & ")"
+
+    Dim poruka As String
+    AssertTrue modStornoDok.StornoIzvrsi(STIP_OTPREMNICA, broj, "", poruka, idB), _
+               "OTP F8: storno B prosao (bilo: " & poruka & ")"
+    AssertEquals "Da", OtpPolje(idB, COL_STORNIRANO), _
+                 "OTP F8: storno dira OTP-B"
+    AssertEquals "", OtpPolje(idA, COL_STORNIRANO), _
+                 "OTP F8: OTP-A istog broja ostaje aktivna"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_F8StornoPoID", Err.Number, Err.description
+End Sub
+
+' Da li mreza F8 za otpremnice (sa kolonom identiteta) ima red sa datim
+' OtpremnicaID-em u poslednjoj, nevidljivoj koloni.
+Private Function OtpF8RedSaID(ByVal broj As String, ByVal otpID As String) As Boolean
+    Dim d As Variant, redovi As Variant, n As Long, i As Long, k As Long
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip(STIP_OTPREMNICA, "", broj, True)
+    If Not IsArray(d) Then Exit Function
+    redovi = d(1)
+    n = CLng(d(2))
+    k = UBound(d(0)) + 1
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, k))) = otpID Then
+            OtpF8RedSaID = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' JEDNA STAVKA PO KLASI -- citalac drzi isto sto i pisac (review #362, P2).
 '

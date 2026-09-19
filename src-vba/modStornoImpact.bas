@@ -509,8 +509,21 @@ Private Function SumActiveOtpStavke(ByVal keyVal As String, _
         Exit Function
     End If
 
+    ' Zadat identitet se NE napusta (review #362): bez kolone generacije ne
+    ' moze da se zna o kom je dokumentu rec, a povratak na sve redove istog
+    ' broja bi uvid sabrao preko tudjeg dokumenta. Strict dize gresku, inace je
+    ' kolicina nepoznata (prazno), ne zbir po broju.
+    If Len(Trim$(docID)) > 0 And cGen = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 33, MOD_NAME & ".SumActiveOtpStavke", _
+                      "Tabela " & TBL_OTPREMNICA & " nema kolonu " & COL_GENERACIJA_ID & _
+                      " -- izabrani dokument se ne moze razlikovati od drugog istog broja."
+        End If
+        Exit Function
+    End If
+
     Dim uzmiID As Boolean
-    uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
+    uzmiID = (Len(Trim$(docID)) > 0)
 
     Dim i As Long, total As Double, found As Boolean, oid As String, rec As Variant
     For i = 1 To UBound(data, 1)

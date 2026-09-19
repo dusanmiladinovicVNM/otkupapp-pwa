@@ -667,7 +667,12 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         ' Otkup je JEDNO zaglavlje po dokumentu (S1e): identitet je OtkupID.
         ' GeneracijaID otkupni pisac ne upisuje, pa bi kolona bila prazna.
         Case "OTKUP":                                     IdKolonaTipa = COL_OTK_ID
-        Case "OTPREMNICA", "ZBIRNA", "PRIJEMNICA":         IdKolonaTipa = COL_GENERACIJA_ID
+        ' Isto za otpremnicu od S3a (review #362): nacrt je jedno zaglavlje sa
+        ' OtpremnicaID-em, a GeneracijaID ne dobija. Sa generacijom bi skrivena
+        ' kolona bila prazna, pa bi F8 dokument trazio PO BROJU -- a broj je
+        ' jedinstven tek po (stanica, dan).
+        Case "OTPREMNICA":                                IdKolonaTipa = COL_OTP_ID
+        Case "ZBIRNA", "PRIJEMNICA":                       IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
         Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID

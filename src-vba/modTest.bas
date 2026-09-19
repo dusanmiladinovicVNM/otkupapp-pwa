@@ -597,7 +597,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 18: TestName = "T_Storno_TipBiraTabeluIKolone"
         Case 19: TestName = "T_StornoDok_KapijePreUpisa"
         Case 20: TestName = "T_PrefillIzStorniranog_CitaSvojuTabelu"
-        Case 21: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
+        Case 21: TestName = "T_FrameworkIspravke_SamoTriTipa"
         Case 22: TestName = "T_Prefill_PoIdentitetuNePoBroju"
         Case 23: TestName = "T_IspravkaDetekcija_FailClosed"
         Case 24: TestName = "T_Oporavak_UgovorIRadnje"
@@ -807,7 +807,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 18: T_Storno_TipBiraTabeluIKolone
         Case 19: T_StornoDok_KapijePreUpisa
         Case 20: T_PrefillIzStorniranog_CitaSvojuTabelu
-        Case 21: T_FrameworkIspravke_SamoCetiriTipa
+        Case 21: T_FrameworkIspravke_SamoTriTipa
         Case 22: T_Prefill_PoIdentitetuNePoBroju
         Case 23: T_IspravkaDetekcija_FailClosed
         Case 24: T_Oporavak_UgovorIRadnje
@@ -1943,20 +1943,25 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
              "izvod se ne prefiluje (nije dokument unosa)"
 End Sub
 
-' FRAMEWORK ISPRAVKE VAZI SAMO ZA CETIRI TIPA.
+' FRAMEWORK ISPRAVKE VAZI SAMO ZA TRI TIPA.
 '
 ' Otkup, novac, faktura i izvod nemaju nizvodni tok o kome se odlucuje, pa
 ' im je storno obican - isto kao u legacy formi, gde TryRunCorrectionFramework
 ' za njih vraca False i posao preuzima obican Select Case.
 '
+' Otpremnica je iz okvira IZASLA u review-u #362: okvir je njen identitet
+' citao kao GeneracijaID i odlucivao o lancu preko Otpremnica.BrojZbirne, a
+' nov nacrt nema ni jedno ni drugo. Storno joj je obican, po OtpremnicaID-u;
+' modovi su pauzirani do S3c/S4.
+'
 ' Pada ako se neki tip ubaci u framework: tada bi npr. storno isplate poceo
 ' da nudi "ISPRAVKA / DUPLIKAT / PONISTENJE", a modStornoFlow za novac nema
 ' nijednu od tih grana - dokument bi ostao neopisan i nestorniran.
-Private Sub T_FrameworkIspravke_SamoCetiriTipa()
+Private Sub T_FrameworkIspravke_SamoTriTipa()
     Dim jesu As Variant, nisu As Variant, i As Long
 
-    jesu = Array(STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, STIP_REVERSI)
-    nisu = Array(STIP_OTKUP, STIP_ISPLATE, STIP_UPLATE, STIP_FAKTURA, STIP_IZVOD)
+    jesu = Array(STIP_ZBIRNA, STIP_PRIJEMNICA, STIP_REVERSI)
+    nisu = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ISPLATE, STIP_UPLATE, STIP_FAKTURA, STIP_IZVOD)
 
     For i = 0 To UBound(jesu)
         AssertEq (Len(modStornoDok.TipUFlowDoc(CStr(jesu(i)))) > 0), True, _
@@ -2825,8 +2830,11 @@ Private Sub T_OtpremnicaNadDvosmislenomZbirnom_Staje()
     AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
              "preduslov: otpremnica visi na tom broju"
 
-    Set res = modStornoDok.StornoIzvrsiMod(STIP_OTPREMNICA, FX_OTPREMNICA_KOLIZIJA, "", _
-                                           SV_MODE_DUPLI, True, False, "GEN-OTP-A")
+    ' Od review-a #362 otpremnica nije framework tip u F8, pa se okvir zove
+    ' DIREKTNO: kod ostaje do S3c (prevod na izvore ili brisanje), i dok postoji,
+    ' ova kapija mora da drzi.
+    Set res = modStornoFlow.RunOtpremnicaCorrection(FX_OTPREMNICA_KOLIZIJA, SV_MODE_DUPLI, _
+                                                   True, "GEN-OTP-A")
     AssertEq CBool(res("success")), False, _
              "DUPLI staje kad je broj roditeljske zbirne dvosmislen"
     AssertEq (InStr(1, CStr(res("message")), "roditeljske zbirne", vbTextCompare) > 0), _

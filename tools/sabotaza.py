@@ -524,10 +524,38 @@ SABOTAZE = {
     ),
     "framework-otkup": (
         "modStornoDok.bas",
-        "        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA\n",
-        "        Case STIP_OTPREMNICA, STIP_OTKUP: TipUFlowDoc = FLOW_DOC_OTPREMNICA   ' SABOTAZA\n",
-        "T_FrameworkIspravke_SamoCetiriTipa",
+        "        Case STIP_ZBIRNA:     TipUFlowDoc = FLOW_DOC_ZBIRNA\n",
+        "        Case STIP_ZBIRNA, STIP_OTKUP: TipUFlowDoc = FLOW_DOC_ZBIRNA   ' SABOTAZA\n",
+        "T_FrameworkIspravke_SamoTriTipa",
         "obican storno, bez framework-a: OTKUP",
+    ),
+    # Otpremnica se vraca u okvir ispravke koji njen identitet cita kao
+    # GeneracijaID (review #362).
+    "framework-otpremnica-vracen": (
+        "modStornoDok.bas",
+        "        Case STIP_ZBIRNA:     TipUFlowDoc = FLOW_DOC_ZBIRNA\n",
+        "        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA   ' SABOTAZA\n"
+        "        Case STIP_ZBIRNA:     TipUFlowDoc = FLOW_DOC_ZBIRNA\n",
+        "T_FrameworkIspravke_SamoTriTipa",
+        "obican storno, bez framework-a: OTPREMNICA",
+    ),
+    # Skrivena kolona F8 opet nosi GeneracijaID -- nov nacrt je nema, pa ceo
+    # put ide po broju (review #362).
+    "otp-f8-identitet-generacija": (
+        "modScrDokumenti.bas",
+        "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_OTP_ID\n",
+        "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_GENERACIJA_ID   ' SABOTAZA\n",
+        "Test_OTP_F8StornoPoID",
+        "skrivena kolona identiteta je OtpremnicaID",
+    ),
+    # Storno otpremnice opet ide po broju -- pisac tada ne zna koju od dve
+    # otpremnice istog broja da uzme.
+    "otp-f8-storno-po-broju": (
+        "modStornoDok.bas",
+        "            ok = StornoOtpremnica_TX(Trim$(docID))\n",
+        "            ok = StornoOtpremnicaByBroj_TX(broj, docID)   ' SABOTAZA\n",
+        "Test_OTP_F8StornoPoID",
+        "storno B prosao",
     ),
     # --- identitet dokumenta i fail-closed grane (hardening posle review-a) ---
     "prefill-fallback-po-broju": (
