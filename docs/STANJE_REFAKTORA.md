@@ -88,6 +88,8 @@
     stavki odbija dve stavke iste klase.
     Treći krug: F8 stornira otpremnicu **po `OtpremnicaID`-u** (isti rez kao S1e za otkup); otpremnica nije
     više framework tip, a modovi ISPRAVKA/DUPLI/PONIŠTENJE za nju su **PAUZIRANI do S3c/S4** (B-022..B-025).
+    Četvrti krug: pisac (`StornoOtpremnica`) **odbija storno izvora aktivne kanonske zbirne** (A13/A15),
+    F8 kaže razlog pre potvrde; kaskada se ne pravi -- odlučuje S4.
 16. **Sledeće:** S3b-2 — panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“ (vraća A-011, A-012,
     A-018..A-028).
 

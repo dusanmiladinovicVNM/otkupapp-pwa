@@ -3261,6 +3261,29 @@ odbijen → potvrda pokazuje samo B kg → storno dira samo B, A ostaje aktivna)
 (ranije `…SamoCetiriTipa`): otpremnica je na listi „obični“. Sabotaže: `framework-otpremnica-vracen`,
 `otp-f8-identitet-generacija`, `otp-f8-storno-po-broju`; `framework-otkup` je preusmerena na zbirnu. Ukupno 487.
 
+#### Četvrti krug review-a #362 — izvor aktivne zbirne se ne stornira (19.09.2026)
+
+Pun prolaz na `7d3d3c3a` je bio zelen (BFP 1220/0). Review je našao P1: `StornoOtpremnica_TX` nije proveravao
+kanonsko članstvo, pa je F8 posle trećeg kruga mogao da stornira otpremnicu koja je izvor **aktivne** zbirne
+(`tblZbirnaIzvori`). Zbirna bi ostala aktivna, sa članstvom koje pokazuje na storniran izvor. To je povreda
+A13/A15.
+
+**Popravka je kapija, ne kaskada.** U jezgru `modStorno.StornoOtpremnica`, pre prve mutacije: ako je otpremnica
+član aktivne zbirne (`AktivnaZbirnaZaOtpremnicu`), storno se odbija i imenuje zbirnu. Kapija je u jezgru, a ne
+samo u `StornoOtpremnica_TX`, jer jezgro zovu i put po broju i kaskade starog okvira. Stari lanac (veza
+`BrojZbirne`) je ne dotiče, jer se članstvo čita isključivo iz kanona. F8 isti razlog daje **pre** potvrde
+(`STORNO_ERR_OTP_IZVOR_ZBIRNE`). Šta storno izvora znači posle S4 (zamena zbirne, nova verzija, kaskada) odlučuje
+S4.
+
+Test `Test_OTP_IzvorAktivneZbirneSeNeStornira`: kanonska otpremnica → kanonska zbirna preko izvora → F8 odbija i
+imenuje zbirnu → pisac odbija → otpremnica i zbirna ostaju aktivne, članstvo netaknuto. Sabotaža:
+`otp-storno-izvora-aktivne-zbirne` (ukupno 488).
+
+**Poznato, a namerno nedirano (review P2, uspavano):** `StornoOtpremnicaByBroj_TX` i deo `modStornoFlow` nose stari
+model „klasa I/II = dva zaglavlja istog broja“, a `SumActiveOtpStavke` u starom okviru uvida `docID` čita kao
+`GeneracijaID`. Otpremnica je iz tog okvira izbačena, pa su obe grane uspavane. S3c ih briše ili zamenjuje logikom
+po ID-u.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

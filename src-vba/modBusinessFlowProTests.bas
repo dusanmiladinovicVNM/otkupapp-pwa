@@ -279,6 +279,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzdatoStatusPravilo
     Test_OTP_DveStavkeIsteKlaseObaraCitaoce
     Test_OTP_F8StornoPoID
+    Test_OTP_IzvorAktivneZbirneSeNeStornira
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -5926,6 +5927,52 @@ Private Sub Test_OTP_F8StornoPoID()
 
 EH:
     LogFatal "Test_OTP_F8StornoPoID", Err.Number, Err.description
+End Sub
+
+' IZVOR AKTIVNE ZBIRNE SE NE STORNIRA (review #362, A13/A15).
+'
+' Otpremnica koja je clan kanonske zbirne (tblZbirnaIzvori) je osnova izvedenog
+' dokumenta. Storno ispod nje bi ostavio aktivnu zbirnu sa clanstvom koje
+' pokazuje na storniran izvor. Kapija je u PISCU (jezgro StornoOtpremnica), pa
+' se meri direktnim pozivom pisca -- F8 razlog je samo lepsa poruka ispred nje.
+Private Sub Test_OTP_IzvorAktivneZbirneSeNeStornira()
+    On Error GoTo EH
+
+    Dim scenario As String, brojOtp As String
+    scenario = NewScenarioCode("OTPIZB")
+    brojOtp = TEST_PREFIX & "-OTP-IZB-" & scenario
+
+    Dim otp As String
+    otp = Pr3Otpremnica(brojOtp, KLASA_I, 400#, 20)
+    AssertTrue Len(otp) > 0, "OTP izvor zbirne: otpremnica napravljena"
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim razlog As String, zbr As String
+    zbr = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZB-" & scenario), _
+                                  Pr3Izvor(otp, ""), razlog)
+    AssertTrue Len(zbr) > 0, "OTP izvor zbirne: kanonska zbirna napravljena (bilo: " & razlog & ")"
+    If Len(zbr) = 0 Then Exit Sub
+    AssertEquals zbr, Pr3OtpZbirnaID(otp), "OTP izvor zbirne: preduslov -- otpremnica je clan"
+
+    ' F8 kaze razlog PRE potvrde.
+    AssertTrue InStr(1, modStornoDok.StornoRazlog(STIP_OTPREMNICA, brojOtp, "", otp), _
+                     zbr, vbTextCompare) > 0, _
+               "OTP izvor zbirne: F8 odbija storno i imenuje zbirnu"
+
+    ' Pisac je konacna kapija.
+    AssertTrue Not StornoOtpremnica_TX(otp), _
+               "OTP izvor zbirne: pisac odbija storno izvora aktivne zbirne"
+    AssertEquals "", OtpPolje(otp, COL_STORNIRANO), _
+                 "OTP izvor zbirne: otpremnica ostaje aktivna"
+    AssertEquals "", Trim$(CStr(nz(GetValueByKey(TBL_ZBIRNA, COL_ZBR_ID, zbr, COL_STORNIRANO), ""))), _
+                 "OTP izvor zbirne: zbirna ostaje aktivna"
+    AssertEquals zbr, Pr3OtpZbirnaID(otp), _
+                 "OTP izvor zbirne: clanstvo ostaje netaknuto"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_IzvorAktivneZbirneSeNeStornira", Err.Number, Err.description
 End Sub
 
 ' Da li mreza F8 za otpremnice (sa kolonom identiteta) ima red sa datim

@@ -148,7 +148,14 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
         Case STIP_OTPREMNICA
             ' Identitet otpremnice je OtpremnicaID izabranog reda (review #362),
             ' isto kao otkup od S1e. Bez njega se ne pogadja po broju.
-            If Not OtpremnicaAktivnaPoID(docID) Then StornoRazlog = NijePronadjen(broj)
+            If Not OtpremnicaAktivnaPoID(docID) Then
+                StornoRazlog = NijePronadjen(broj)
+            ElseIf Len(modDokumenta.AktivnaZbirnaZaOtpremnicu(Trim$(docID))) > 0 Then
+                ' Isti razlog koji pisac dize (modStorno.StornoOtpremnica), ali
+                ' PRE potvrde -- operater ga ne sme saznati tek kao neuspeh.
+                StornoRazlog = Poruka("STORNO_ERR_OTP_IZVOR_ZBIRNE") & " " & _
+                               modDokumenta.AktivnaZbirnaZaOtpremnicu(Trim$(docID))
+            End If
 
         Case STIP_ZBIRNA
             ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera

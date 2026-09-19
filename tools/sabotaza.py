@@ -548,6 +548,16 @@ SABOTAZE = {
         "Test_OTP_F8StornoPoID",
         "skrivena kolona identiteta je OtpremnicaID",
     ),
+    # Pisac opet stornira izvor aktivne kanonske zbirne (review #362, A13/A15).
+    "otp-storno-izvora-aktivne-zbirne": (
+        "modStorno.bas",
+        "    If Len(zbrID) > 0 Then\n"
+        "        Err.Raise ERR_STORNO_BASE + 71, SRC, _\n",
+        "    If False Then   ' SABOTAZA: izvor zbirne se stornira\n"
+        "        Err.Raise ERR_STORNO_BASE + 71, SRC, _\n",
+        "Test_OTP_IzvorAktivneZbirneSeNeStornira",
+        "pisac odbija storno izvora aktivne zbirne",
+    ),
     # Storno otpremnice opet ide po broju -- pisac tada ne zna koju od dve
     # otpremnice istog broja da uzme.
     "otp-f8-storno-po-broju": (
