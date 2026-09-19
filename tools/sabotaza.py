@@ -673,6 +673,22 @@ SABOTAZE = {
         "Test_OTP_IzdavanjeCitaIzvorStrogo",
         "OTP strogo izvor: bruto manji od neta obara read-model",
     ),
+    # Bulk citac clanstva opet pusta clanstvo na NEPOSTOJECI otkup (review #364, P1).
+    "clanstvo-bulk-dete": (
+        "modDokumenta.bas",
+        "        If ClanstvoBrojPoID(brojOtk, otkupID) <> 1 Then\n",
+        "        If False Then   ' SABOTAZA: clanstvo na nepostojeci otkup prolazi\n",
+        "Test_OTP_ClanstvoBulkStrogo",
+        "Bulk clanstvo: specifikacija pada na clanstvo bez otkupa",
+    ),
+    # Bulk citac clanstva opet pusta clanstvo na NEPOSTOJECU otpremnicu.
+    "clanstvo-bulk-roditelj": (
+        "modDokumenta.bas",
+        "        If ClanstvoBrojPoID(brojOtp, otpID) <> 1 Then\n",
+        "        If False Then   ' SABOTAZA: clanstvo na nepostojecu otpremnicu prolazi\n",
+        "Test_OTP_ClanstvoBulkStrogo",
+        "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
+    ),
     # Specifikacija opet stampa NACRT (S3b-2b).
     "spec-nacrt-stampa": (
         "modPrint.bas",

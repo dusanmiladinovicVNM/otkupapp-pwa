@@ -289,6 +289,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzdavanjeCitaIzvorStrogo
     Test_OTP_SpecifikacijaBlokova
     Test_OTP_NevezaniBlokovi
+    Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6579,6 +6580,77 @@ Private Sub Test_OTP_SpecifikacijaBlokova()
 EH:
     LogFatal "Test_OTP_SpecifikacijaBlokova", Err.Number, Err.description
 End Sub
+
+' BULK CITAC CLANSTVA DRZI UGOVOR CITACA JEDNOG DOKUMENTA (review #364, P1).
+'
+' Specifikacija i lista nevezanih citaju clanstvo JEDNIM prolazom. Dok je taj
+' prolaz bio slabiji od OtpClanovi, korupcija je postajala uredan poslovni
+' odgovor. Zato test pravi korupciju MIMO pisca, i to uz VALIDAN sibling izvor:
+' sa jednim jedinim (nepostojecim) izvorom bi kapija "izdata bez izvora" i
+' ovako pukla, pa bag ne bi bio dokazan.
+Private Sub Test_OTP_ClanstvoBulkStrogo()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPBLK")
+
+    Dim otkA As String, otkSlobodan As String, otpID As String, brOtp As String
+    otkA = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BLKA-" & scenario), _
+                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    otkSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BLKS-" & scenario), _
+                                 OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    brOtp = TEST_PREFIX & "-OTP-BLK-" & scenario
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(brOtp), Pr3Izvor(otkA, ""), g)
+    AssertTrue Len(otpID) > 0 And Len(otkSlobodan) > 0, _
+               "Bulk clanstvo: preduslovi napravljeni (" & g & ")"
+    If Len(otpID) = 0 Or Len(otkSlobodan) = 0 Then Exit Sub
+
+    ' Kontrola PRE korupcije: oba citaoca rade, pa pad ispod nije "nesto puca".
+    AssertEquals "", SpecGreska(Pr3Izvor(otpID, "")), _
+                 "Bulk clanstvo: ispravna otpremnica se stampa"
+    AssertEquals "", NevezaniGreska(), "Bulk clanstvo: lista nevezanih radi"
+
+    ' 1) clanstvo na NEPOSTOJECI otkup, uz validan sibling izvor.
+    Dim red As Long, greska As String
+    red = OtpUpisiSirovoClanstvo(otpID, "OTK-NEMA-" & scenario)
+    greska = SpecGreska(Pr3Izvor(otpID, ""))
+    ' CISCENJE PRE TVRDNJI: korumpiran red truje svaki sledeci test.
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "Bulk clanstvo: specifikacija pada na clanstvo bez otkupa (bilo: " & greska & ")"
+    AssertTrue InStr(1, greska, "clanstvo", vbTextCompare) > 0, _
+               "Bulk clanstvo: razlog imenuje clanstvo (bilo: " & greska & ")"
+
+    ' 2) clanstvo na NEPOSTOJECU otpremnicu: slobodan blok bi inace tiho ispao
+    '    sa liste nevezanih kao "zauzet".
+    red = OtpUpisiSirovoClanstvo("OTP-NEMA-" & scenario, otkSlobodan)
+    greska = NevezaniGreska()
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice (bilo: " & _
+               greska & ")"
+
+    ' Kontrola POSLE ciscenja -- pad je bio zbog korupcije, ne zbog testa.
+    AssertEquals "", SpecGreska(Pr3Izvor(otpID, "")), _
+                 "Bulk clanstvo: posle ciscenja specifikacija radi"
+    AssertEquals "", NevezaniGreska(), "Bulk clanstvo: posle ciscenja lista nevezanih radi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_ClanstvoBulkStrogo", Err.Number, Err.description
+End Sub
+
+' Greska koju lista nevezanih (bulk citac clanstva) digne; "" kad je prosla.
+Private Function NevezaniGreska() As String
+    Dim d As Object
+    On Error Resume Next
+    Err.Clear
+    Set d = modDokumenta.NevezaniOtkupi()
+    NevezaniGreska = Err.description
+    If Err.Number = 0 Then NevezaniGreska = ""
+    Err.Clear
+    On Error GoTo 0
+End Function
 
 ' Greska koju specifikacija podigne; "" kad je prosla.
 Private Function SpecGreska(ByVal ids As Collection) As String

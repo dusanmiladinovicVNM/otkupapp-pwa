@@ -3470,6 +3470,38 @@ S4 ne vrati F3**. Stara veza `Otpremnica.BrojZbirne` se ne čita — pravilo „
 „Izaberi više“ → označavanje → „Štampaj specifikaciju“; „Po datumu“ nad opsegom; prekidač NEVEZANI i `veži` sa
 izabranim nacrtom; polja OD/DO se sklanjaju kad u redu radnji nema mesta.
 
+#### Review #364, prvi krug — bulk čitač članstva drži ugovor čitača dokumenta (19.09.2026)
+
+**P1.** Specifikacija i lista nevezanih čitaju članstvo **jednim prolazom**, kroz nov javni ulaz
+`AktivnoClanstvoOtpremnica` → `AktivnoOtpClanstvoPoKanonu`. Taj prolaz je bio **slabiji** od čitača jednog dokumenta
+(`OtpClanovi`): prazne ID-eve je preskakao, a postojanje dokumenata nije proveravao — držao je samo globalnu
+jedinstvenost aktivnog članstva.
+
+Posledica je ista klasa greške koju ovaj refaktor uklanja — čitalac korupciju pretvara u **uredan poslovni odgovor**:
+
+- članstvo na **nepostojeći otkup** ulazi u mapu, ali ispada iz `zag` (zaglavlja se čitaju iz `tblOtkup`), pa
+  specifikacija odštampa PDF **bez tog izvora**. Kapija „izdata bez izvora“ to ne vidi, jer je zadovoljava **validan
+  sibling** izvor;
+- članstvo na **nepostojeću otpremnicu** nije u skupu storniranih, pa se broji kao aktivno: slobodan blok se
+  proglašava zauzetim i **nestaje** sa liste NEVEZANI.
+
+**Popravka je u kanonskom bulk čitaču, ne u `modPrint`.** `AktivnoOtpClanstvoPoKanonu` sada drži isti skup pravila
+kao `OtpClanovi` nad jednim dokumentom: članstvo bez `OtpremnicaID`-a ili bez `OtkupID`-a, roditelj koji ne postoji
+tačno jednom, dete koje ne postoji tačno jednom, isti par dvaput i otkup u dve aktivne otpremnice — sve su **tvrde
+greške**. Postojanje se meri jednim prolazom po tabeli (`BrojRedovaPoID`), ne `RequireTacnoJedan`-om po članu.
+Ugovor tako dobijaju svi bulk čitaoci odjednom: specifikacija, lista nevezanih, `VrednostIzvoraPoOtpremnici`,
+`OtpremnicaZaOtkup` (kapija storna) i budući.
+
+Test `Test_OTP_ClanstvoBulkStrogo` pravi korupciju **mimo pisca**, uz **validan sibling izvor** (bez njega bi i stara
+kapija pukla, pa bag ne bi bio dokazan): članstvo na nepostojeći otkup obara specifikaciju po imenu, članstvo na
+nepostojeću otpremnicu obara listu nevezanih; kontrola pre i posle čišćenja. Sabotaže `clanstvo-bulk-dete` i
+`clanstvo-bulk-roditelj` (ukupno **513**).
+
+**P2, zapisano u backlog, ne menja se ovde.** Specifikacija čita **činjenice zaglavlja otkupa** (broj, datum,
+kooperant, stanica, vrsta, sorta) direktno iz `tblOtkup`, dok stavke idu kroz strog čitač. Naknadno pokvaren
+`BrojDokumenta` tako završi kao prazan broj bloka na papiru umesto kao pad. Pravila pisca se ne prepisuju u
+`modPrint` — traži se (ili gradi) kanonski strog čitač zaglavlja otkupa; v. §15.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3481,6 +3513,7 @@ izabranim nacrtom; polja OD/DO se sklanjaju kad u redu radnji nema mesta.
 | **Mešovit dokument (više vrsta u jednom)** | vrsta/sorta ostaju header; nije zahtev |
 | **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
 | **Granica agregata za komande nad jednim dokumentom** (review #363, drugi krug, P2) | strogi čitači (`StavkeOtpremniceRedovi`, `StavkeOtkupaRedovi`) validiraju ceo skup, pa komanda jednog dokumenta (`IzdajOtpremnicu_TX`, `GetOtpremnicaProgress`) pada i zbog nepovezanog pokvarenog dokumenta. Fail-closed, nije kvar podataka. Kandidat: strogi čitač po dokumentu (ciljna otpremnica + njeni izvori) za komande, a skup za izveštaje i mreže |
+| **Strog čitač ZAGLAVLJA otkupa za čitaoce koji ga sastavljaju** (review #364, P2) | specifikacija blokova čita `BrojDokumenta`, `Datum`, `KooperantID`, `StanicaID`, `VrstaVoca`, `SortaVoca` direktno iz `tblOtkup`, a `CreateOtkup_TX` za te činjenice drži jače invarijante (broj i datum obavezni, kooperant i stanica postoje, kultura usklađena). Naknadno pokvareno zaglavlje zato daje prazan broj bloka na papiru umesto pada. Pravila pisca se **ne prepisuju** u `modPrint`: u sledećem prolazu proveriti postoji li kanonski strog čitač zaglavlja, pa ga koristiti — isti rez kao `StavkeOtkupaRedovi` za stavke |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---
