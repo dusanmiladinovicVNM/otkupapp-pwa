@@ -3411,6 +3411,65 @@ Sabotaže `otk-citalac-dve-iste-klase` i `otk-citalac-bruto-manji` (ukupno 503).
 stavki otpremnica i otkupa, jer strogi čitači važe za ceo skup. Pokvaren nepovezan otkup zato može da obori
 izdavanje ispravne otpremnice. To nije kvar podataka (fail-closed), nego granica agregata; v. backlog §15.
 
+### 14.17) S3b-2b — specifikacija blokova i blokovi bez otpremnice (19.09.2026)
+
+Drugi deo reza S3b-2 (§14.16): sposobnosti koje je S1b-3 obrisao zajedno sa radnim stolom, jer su stajale na
+vezi `Otkup.OtpremnicaID` — štampa specifikacije (A-018, A-019, A-021), opseg datuma nad listom otpremnica
+(ostatak A-022) i lista blokova bez otpremnice (A-025).
+
+**Odluka operatera (19.09.2026): A-025 je lista NEVEZANIH, ne samo „izgubljenih“.** Stara lista je brojala samo
+blok čija je otpremnica stornirana (`GetLostOtkupBlokovi`: „nije vezan → nije izgubljen“). U kanonu blok ostaje bez
+otpremnice na tri načina — upisan bez izabrane otpremnice, uklonjen iz nacrta, oslobođen stornom otpremnice — a
+radnja `veži` važi za sva tri. Prva dva slučaja se do sada nisu videla nigde. Kolona **„bila u“** razlikuje treći:
+nosi broj stornirane otpremnice (članstvo stornirane ostaje kao istorija).
+
+#### Pre-flight S3b-2b
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN (uz odluku iznad) | otpremnica = zaglavlje + očekivanje + izvori (§14.8); specifikacija je spisak onoga što je otišlo, pa se štampa **samo izdata** — isto pravilo kao `OutputOtpremnicaPDF` (review #362, P1) |
+| `IDENTITY` | PROVEN | oznake u ljusci se ključaju po nevidljivoj koloni `OTKUI_HD_IDENT` (`modOtkupUI.RowKeyAt`), ne više po broju iz prve kolone; stari `OtpIdZaBroj` (broj → ID) se **ne vraća**; „po datumu“ čita prikazanu mrežu (`GridBrojRedova` + `GridCell`), ne mapu brojeva; red liste NEVEZANI nosi `OtkupID` |
+| `CARDINALITY` | PROVEN | otkup je u najviše jednoj aktivnoj otpremnici (`AktivnoOtpClanstvoPoKanonu`, 1305); otkupno mesto bloka = otkupno mesto otpremnice (`OtpRequireIzvorValjan`); red specifikacije = **stavka** izvora, a najviše je jedna po klasi (`StavkeOtkupaRedovi`, 1924) |
+| `INVARIANTS/OWNER` | PROVEN | nova invarijanta ne nastaje; čitanja idu kroz kanonske stroge čitače, pa specifikacija ne može da odštampa sastav koji bi izdavanje odbilo |
+| `WRITERS` | N/A | samo čitanje; `veži` iz nove liste ide kroz postojeći `VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX` |
+| `EVENTS` | N/A | štampa i lista, bez poslovnog događaja |
+| `DOWNSTREAM` | PROVEN | od PDF-a ne zavisi ništa; `SPECIFIKACIJA_PRINT_MODE` i folder za PDF su ostali u kanonu; **B-041** (vrsta „izgubljen blok“ u OPORAVKU) ide u **S3c**, uz storno otpremnice po ID-u |
+| `CAPABILITY` | PROVEN | A-018, A-019, A-021, A-025 i ostatak A-022 vraćeni (v. mapu) |
+| `PLATFORM` | N/A | polja OD/DO istim obrascem kao pre S1b-3a (`NewTxt` u `zGrid`, promena kroz postojeći `UiChange`), bez novih `WithEvents`; PDF ostaje ručna provera |
+| `LANDING` | čisto | grana od `main` `0ceccea1` |
+
+#### Izmene
+
+| Šta | Gde |
+|---|---|
+| Podaci specifikacije: red = stavka izvora; strogo (nacrt, stornirana, nepoznata, dupla, izdata bez izvora, storniran izvor → greška po imenu) | nov `modPrint.SpecifikacijaBlokovaRedovi` |
+| Šablon (14 kolona, nova kolona **Klasa**) i izlaz po `SPECIFIKACIJA_PRINT_MODE` | nov `modPrint.EnsureSpecifikacijaSablon` / `FillSpecifikacijaSablon` / `PrintSpecifikacijaBlokova`; `WS_SPECIFIKACIJA_SABLON` vraćen u `modConfig` |
+| Radnje liste otpremnica: `mark`, `spec` (označene ili izabrana), `specdat` (cela prikazana lista) | `modScrDokumenti.Scr_Radnje`, `SpecZaIzbor`, `SpecPoDatumu`, `StampajSpecifikaciju`, `IzdateZaSpecifikaciju` |
+| Oznake se ključaju po identitetu reda; nova vrednost `2` u ugovoru radnji („označeni ili izabrani“) | `modOtkupUI.RowKeyAt`, `IdentKolonaMreze`, `RunRowAction`, `RefreshRowActions` |
+| Opseg datuma OD/DO iznad liste koja ga prijavi (peto polje reda u `Scr_Liste` = `opseg`) | `modOtkupUI` (gradnja, raspored, `ListaImaOpseg`, `ShowOpseg`, `GridDatOd`/`GridDatDo`), `modScrDokumenti.RowsOtpremnice`, `DatGranica` |
+| Lista NEVEZANI + radnja `veži`; skup i kolona „bila u“ iz kanona | `modScrDokumenti.RowsNevezani`; nov `modDokumenta.NevezaniOtkupi` (+ `BivseOtpremniceIzvora`, `AktivnoClanstvoOtpremnica`) |
+
+**Zbirna i kupac na specifikaciji** čitaju se iz kanona zbirne (`AktivnaZbirnaZaOtpremnicu`), pa su **prazni dok
+S4 ne vrati F3**. Stara veza `Otpremnica.BrojZbirne` se ne čita — pravilo „novi model se ne čita kroz staru vezu“.
+
+#### Testovi i sabotaže
+
+- `Test_OTP_SpecifikacijaBlokova`: blok sa dve klase daje **dva reda sa svojim cenama** (prosek bi ih izjednačio),
+  PDV nadoknada je izdvojena i delovi se sabiraju u ukupno, red nosi broj otpremnice, broj bloka i klasu; blok van
+  izabranih otpremnica ne ulazi; nacrt, nepoznata i stornirana otpremnica padaju po imenu; šablon ima kolonu Klasa,
+  kolone broja su tekst, a red UKUPNO sabira odštampano.
+- `Test_OTP_NevezaniBlokovi`: sva tri načina da blok ostane bez otpremnice su u listi, „bila u“ nosi broj stornirane;
+  član nacrta i storniran blok nisu; vezivanje iz liste uklanja blok iz nje.
+- `T_Otp_OpsegIOznake` (nad pravom mrežom): ključ oznake je `OtpremnicaID`, ne broj; „po datumu“ uzima sve prikazane
+  redove; opseg na dan bez otpremnica prazni listu, granica je uključiva, a nepotpun datum nije granica.
+- Sabotaže: +8 (ukupno **511**).
+- Prag `popis_citalaca` se ne pomera: specifikacija čita **činjenice otkupa** (vrsta, sorta, stanica), ne linijska
+  polja otpremnice.
+
+**Ručna provera (ne može se automatizovati):** izgled PDF-a specifikacije (14 kolona, landscape, red UKUPNO);
+„Izaberi više“ → označavanje → „Štampaj specifikaciju“; „Po datumu“ nad opsegom; prekidač NEVEZANI i `veži` sa
+izabranim nacrtom; polja OD/DO se sklanjaju kad u redu radnji nema mesta.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

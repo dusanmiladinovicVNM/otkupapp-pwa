@@ -1390,6 +1390,19 @@ Private Sub BuildGrid(frm As Object)
     For i = 0 To MAX_ACT - 1
         BtnV z, "btnAct" & i, "", 0, 36, 100, 19, "ghost"
     Next i
+    ' OD / DO iznad liste koja ga prijavi (peto polje reda u Scr_Liste je
+    ' "opseg"; danas lista otpremnica u F1 -- specifikacija po datumu, S3b-2b).
+    ' Ovo NISU polja dokumenta nego granice liste, pa ne prljaju formu (UiChange
+    ' ih preskace pri MarkDirty). Pocinju PRAZNA: prazno = bez granice, pa lista
+    ' posle gradnje izgleda isto kao bez opsega (radni sto vidi i jucerasnji
+    ' nacrt).
+    NewLbl z, "specOdL", Poruka("OTKUI_LBL_OD"), 0, 39, 18, 12, TS_MICRO, True, C_MUTED, -1
+    NewShell z, "specOd", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
+    NewTxt z, "specOdT", "", 0, 39, 62, 14, False
+    NewLbl z, "specDoL", Poruka("OTKUI_LBL_DO"), 0, 39, 18, 12, TS_MICRO, True, C_MUTED, -1
+    NewShell z, "specDo", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
+    NewTxt z, "specDoT", "", 0, 39, 62, 14, False
+    ShowOpseg z, False
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -2479,6 +2492,23 @@ SledeciSeg:
 SledecaAkcija:
     Next i
 
+    ' Opseg datuma je jedini deo reda radnji koji nije dugme: stoji levo od
+    ' radnji, samo uz listu koja ga prijavi. Kad levo nema mesta (cipovi drze
+    ' levu stranu reda), ceo par se sklanja -- isto pravilo po kome se sklanjaju
+    ' kolone nizeg prioriteta.
+    Dim dV As Boolean, dx As Single
+    dx = ax + GAP                       ' leva ivica krajnje leve radnje
+    dV = ListaImaOpseg() And (dx - 6 - 190 > PAD + 190)
+    ShowOpseg z, dV
+    If dV Then
+        MoveShell z, "specDo", dx - 6 - 74, 36, 74
+        z.Controls("specDoT").Left = dx - 6 - 74 + 6
+        z.Controls("specDoL").Left = dx - 6 - 74 - 18
+        MoveShell z, "specOd", dx - 6 - 74 - 18 - 6 - 74, 36, 74
+        z.Controls("specOdT").Left = dx - 6 - 74 - 18 - 6 - 74 + 6
+        z.Controls("specOdL").Left = dx - 6 - 74 - 18 - 6 - 74 - 18
+    End If
+
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
     Dim sx As Single: sx = zw - PAD - 88 - GAP - 200
@@ -3141,6 +3171,9 @@ Private Sub RunRowAction(ByVal i As Long)
     End If
 
     trebaRed = (ActField(i, 4) = "1")
+    ' "2" = radnja radi nad OZNACENIM redovima, a bez oznaka nad izabranim
+    ' (specifikacija blokova, S3b-2b) -- trazi bar jedno od dva.
+    If ActField(i, 4) = "2" Then trebaRed = (MarkCount() = 0)
     If trebaRed And mSelRow <= 0 Then
         ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Sub
@@ -3190,10 +3223,12 @@ Private Sub RefreshRowActions()
     If Not IsArray(act) Then Exit Sub
     For i = 0 To BazenStaje(UBound(act) + 1, MAX_ACT, "radnje") - 1
         p = Split(CStr(act(i)), ":")
-        ' peto polje: 1 = radnja trazi izabran red, 0 = radi bez njega
+        ' peto polje: 1 = radnja trazi izabran red, 0 = radi bez njega,
+        ' 2 = oznaceni redovi ili izabran red
         on_ = True
         If UBound(p) >= 4 Then
             If CStr(p(4)) = "1" Then on_ = (mSelRow > 0)
+            If CStr(p(4)) = "2" Then on_ = (MarkCount() > 0 Or mSelRow > 0)
         End If
         ' oznacavanje je jedina radnja koju obradjuje sama ljuska; ono je
         ' "upaljeno" dok traje, i nosi broj oznacenih redova
@@ -3218,12 +3253,35 @@ SledecaR:
 End Sub
 
 '------------------------------------------------------- OZNACENI REDOVI
-' Kljuc reda je njegova PRVA KOLONA (broj otpremnice) - preziveo sortiranje,
-' pretragu i promenu strane, sto redni broj ne bi.
+' Kljuc reda je njegov IDENTITET: nevidljiva kolona OTKUI_HD_IDENT koju lista
+' nosi -- prezivi sortiranje, pretragu i promenu strane, sto redni broj ne bi.
+'
+' Do S3b-2b kljuc je bila PRVA kolona, broj otpremnice. Broj je jedinstven tek
+' po (stanica, dan), pa su dve otpremnice istog broja bile JEDNA oznaka, a ekran
+' je broj posle razresavao nazad u ID. Lista bez kolone identiteta nema oznake:
+' ljuska kljuc ne izmislja.
 Private Function RowKeyAt(ByVal r As Long) As String
+    Dim c As Long
     On Error Resume Next
     If r < 1 Or r > mViewN Then Exit Function
-    RowKeyAt = Trim$(CStr(mView(r, 1)))
+    c = IdentKolonaMreze()
+    If c < 1 Then Exit Function
+    RowKeyAt = Trim$(CStr(mView(r, c)))
+End Function
+
+' Kolona mreze (1-based, kao u mView) koja nosi identitet aktivne liste; 0 kad
+' je lista nema. Prepoznaje se po kljucu naslova OTKUI_HD_IDENT -- istom kojim
+' je ekrani deklarisu kao nevidljivu (prioritet 4).
+Private Function IdentKolonaMreze() As Long
+    Dim i As Long
+    On Error Resume Next
+    If Not IsArray(mCols) Then Exit Function
+    For i = LBound(mCols) To UBound(mCols)
+        If Split(CStr(mCols(i)), "|")(0) = "OTKUI_HD_IDENT" Then
+            IdentKolonaMreze = i - LBound(mCols) + 1
+            Exit Function
+        End If
+    Next i
 End Function
 
 Private Function RowMarked(ByVal r As Long) As Boolean
@@ -3237,25 +3295,97 @@ Private Function MarkCount() As Long
 End Function
 
 Private Sub ToggleMark(ByVal tag As String)
-    Dim i As Long, r As Long, k As String
+    Dim i As Long, r As Long
     i = RowIndexFromTag(tag)
     If i < 0 Then Exit Sub
     r = (mPage - 1) * mPageSize + i + 1
-    k = RowKeyAt(r)
-    If Len(k) = 0 Then Exit Sub
-    If mMark Is Nothing Then Set mMark = CreateObject("Scripting.Dictionary")
-    If mMark.Exists(k) Then mMark.Remove k Else mMark(k) = True
+    If Not OznaciRed(r) Then Exit Sub
     ' Red na koji je kliknuto ostaje i TEKUCI red. Bez toga oznacavanje ostavi
     ' ljusku bez izabranog reda, pa radnja koja ume da radi "nad izabranim" (a
     ' specifikacija ume) nema na cemu da radi cim oznake zataje.
     mSelRow = r
 End Sub
 
+' Ukljuci / iskljuci oznaku reda r ucitane mreze (1..mViewN). False kad red
+' nema identitet -- takav se ne oznacava.
+Private Function OznaciRed(ByVal r As Long) As Boolean
+    Dim k As String
+    k = RowKeyAt(r)
+    If Len(k) = 0 Then Exit Function
+    If mMark Is Nothing Then Set mMark = CreateObject("Scripting.Dictionary")
+    If mMark.Exists(k) Then mMark.Remove k Else mMark(k) = True
+    OznaciRed = True
+End Function
+
+' TEST SEAM: oznaci red r ucitane mreze -- isti put kao klik u rezimu
+' oznacavanja (ToggleMark), bez taga kontrole. Tvrdo gejtovan.
+Public Sub GridOznaciRedTest(ByVal r As Long)
+    If Not IsTestMode() Then Exit Sub
+    OznaciRed r
+End Sub
+
+' TEST SEAM: oznake u pocetno stanje. Tvrdo gejtovan.
+Public Sub GridOcistiOznakeTest()
+    If Not IsTestMode() Then Exit Sub
+    ClearMarks
+End Sub
+
+' TEST SEAM: kolona identiteta ucitane liste (0 = nema je). Tvrdo gejtovan.
+Public Function GridIdentKolonaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    GridIdentKolonaTest = IdentKolonaMreze()
+End Function
+
 ' Prazni i oznake i sam rezim - zove se pri svakoj promeni liste, rezima ili
 ' ekrana, da oznake iz jedne liste ne prezive u drugu.
 Private Sub ClearMarks()
     mMarkOn = False
     Set mMark = Nothing
+End Sub
+
+' Opseg datuma iznad liste. Nije filter ljuske nego PARAMETAR koji ekran cita i
+' primenjuje na svoje redove -- ljuska ne zna sta je datum otpremnice. Isti par
+' cita i specifikacija po datumu, pa se stampa i lista ne mogu razici.
+Public Function GridDatOd() As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Function
+    GridDatOd = Trim$(CStr(mFrm.Controls("zGrid").Controls("specOdT").text))
+End Function
+
+Public Function GridDatDo() As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Function
+    GridDatDo = Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text))
+End Function
+
+' Da li AKTIVNA lista trazi opseg datuma: peto polje njenog reda u prekidacu
+' lista (Scr_Liste) je "opseg". Ljuska ne zna ni ekran ni listu po imenu.
+Private Function ListaImaOpseg() As Boolean
+    Dim seg As Variant, i As Long, p As Variant, akt As String
+    On Error Resume Next
+    seg = SegDefs()
+    If Not IsArray(seg) Then Exit Function
+    akt = ActiveLista()
+    If Len(akt) = 0 Then Exit Function
+    For i = 0 To UBound(seg)
+        p = Split(CStr(seg(i)), "|")
+        If CStr(p(0)) = akt Then
+            If UBound(p) >= 4 Then ListaImaOpseg = (CStr(p(4)) = "opseg")
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Opseg nije jedna kontrola nego osam (dva natpisa, dve kutije od po dve
+' oznake, dva polja) -- BoxShow ume samo dugme, pa ovde ide rucno.
+Private Sub ShowOpseg(z As Object, ByVal vis As Boolean)
+    Dim nmv As Variant, i As Long
+    On Error Resume Next
+    nmv = Array("specOdL", "specOdB", "specOdF", "specOdT", _
+                "specDoL", "specDoB", "specDoF", "specDoT")
+    For i = 0 To UBound(nmv)
+        z.Controls(CStr(nmv(i))).Visible = vis
+    Next i
 End Sub
 
 ' Dijagnostika iz Immediate prozora: ?OtkupUI_DiagMark()
@@ -4740,12 +4870,18 @@ Private Sub UiChange(ByVal tag As String)
     ' (punjenje lista, ClearForm, izbor iz panela) su pod mPopMute - bez toga
     ' bi se panel otvarao sam od sebe pri svakoj promeni rezima.
     If Not mPopMute And Not mBuilding Then PopFromTyping tag
-    ' pretraga nije izmena dokumenta
-    If tag <> "txtSearch" Then MarkDirty
+    ' Pretraga i opseg datuma nisu izmene dokumenta.
+    If tag <> "txtSearch" And Left$(tag, 4) <> "spec" Then MarkDirty
     Select Case tag
         Case "txtSearch"
             mSearch = Trim$(CStr(mFrm.Controls("zGrid").Controls("txtSearch").text))
             mFrm.Controls("zGrid").Controls("lblSearchPh").Visible = (Len(mSearch) = 0)
+            mSelRow = 0
+            ReloadGrid
+        Case "specOdT", "specDoT"
+            ' Opseg suzava listu odmah, kao i pretraga. Nepotpun datum ("2",
+            ' "21.") nije greska nego "jos nema granice" -- ekran ga preskace,
+            ' pa se lista ne prazni dok operater kuca.
             mSelRow = 0
             ReloadGrid
         Case "fgKgIT", "fgKgIIT", "fgCena1T", "fgCena2T"

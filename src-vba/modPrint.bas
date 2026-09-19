@@ -2998,6 +2998,478 @@ End Function
 
 
 ' ============================================================
+' SPECIFIKACIJA OTKUPNIH BLOKOVA (A-018, A-019; S3b-2b) - house-style sablon,
+' landscape, 14 kolona. Vraca sposobnost koju je S1b-3 obrisao sa stare veze
+' Otkup.OtpremnicaID: sastav otpremnice je sada KANON (tblOtpremnicaIzvori).
+'
+' Red je jedna STAVKA izvora (blok x klasa). Blok sa dve klase ima dve cene;
+' prosek koji je S1b-2 privremeno stampao niko nije platio (pre S1 je svaka
+' klasa bila svoj red). Stampa se samo IZDATA otpremnica -- isto pravilo kao
+' OutputOtpremnicaPDF (review #362, P1): nacrt je najava, a specifikacija je
+' spisak onoga sto je stvarno otislo, sa vrednostima.
+'
+' SpecifikacijaBlokovaRedovi (podaci) -> FillSpecifikacijaSablon (sablon) ->
+' PrintSpecifikacijaBlokova (izlaz po SPECIFIKACIJA_PRINT_MODE).
+' ============================================================
+
+' Redovi specifikacije za IZDATE otpremnice iz otpIDs. Kolone:
+'   1 Broj zbirne | 2 Kupac | 3 Broj otpremnice | 4 Otkupno mesto |
+'   5 Broj bloka | 6 Kooperant | 7 Datum bloka | 8 Vrsta i sorta | 9 Klasa |
+'   10 Kolicina | 11 Cena bez PDV | 12 Vrednost | 13 Iznos PDV |
+'   14 Ukupna vrednost | 15 OtkupID (ne stampa se -- identitet reda)
+' Sortirano po (otkupno mesto, datum bloka, broj otpremnice), a unutar toga
+' redom stavki.
+'
+' STROGO, fail-closed -- greska po imenu, nijedan red:
+'   - prazan, nepoznat ili dupli OtpremnicaID, stornirana otpremnica, NACRT;
+'   - izdata otpremnica bez ijedne stavke izvora (izdata bez izvora je kvar,
+'     isto kao VrednostIzvoraZaOtpremnicu);
+'   - storniran izvor ili izvor sa dva zaglavlja.
+' Clanstvo i stavke idu kroz kanonske stroge citace (AktivnoClanstvoOtpremnica,
+' StavkeOtkupaRedovi): specifikacija drzi isti ugovor kao izdavanje i lista
+' blokova, pa ne moze da odstampa sastav koji bi izdavanje odbilo.
+'
+' Broj zbirne i kupac dolaze iz KANONA zbirne (AktivnaZbirnaZaOtpremnicu);
+' prazni su dok F3 ne cuva zbirnu na novom modelu (S4).
+Public Function SpecifikacijaBlokovaRedovi(ByVal otpIDs As Collection) As Variant
+    Const SRC As String = "modPrint.SpecifikacijaBlokovaRedovi"
+
+    If otpIDs Is Nothing Then
+        Err.Raise vbObjectError + 1960, SRC, "Otpremnice za specifikaciju nisu prosledjene."
+    End If
+    If otpIDs.count = 0 Then
+        Err.Raise vbObjectError + 1960, SRC, "Nijedna otpremnica nije izabrana za specifikaciju."
+    End If
+
+    ' --- 1) izabrane otpremnice: svaka TACNO jednom, aktivna i izdata --------
+    Dim otp As Variant
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then
+        Err.Raise vbObjectError + 1961, SRC, "Tabela otpremnica je prazna."
+    End If
+    Dim oId As Long, oBr As Long, oSto As Long, oStat As Long
+    oId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    oBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+    oSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    oStat = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
+
+    Dim sel As Object                   ' UCase(OtpremnicaID) -> broj otpremnice
+    Set sel = CreateObject("Scripting.Dictionary")
+    Dim v As Variant, k As String, j As Long, nasao As Long, rOtp As Long
+    For Each v In otpIDs
+        k = UCase$(Trim$(CStr(v)))
+        If Len(k) = 0 Then
+            Err.Raise vbObjectError + 1961, SRC, "Prazan OtpremnicaID u izboru za specifikaciju."
+        End If
+        If Not sel.Exists(k) Then
+            nasao = 0
+            For j = 1 To UBound(otp, 1)
+                If UCase$(Trim$(NzToText(otp(j, oId)))) = k Then
+                    nasao = nasao + 1
+                    rOtp = j
+                End If
+            Next j
+            If nasao <> 1 Then
+                Err.Raise vbObjectError + 1961, SRC, _
+                          "Otpremnica " & Trim$(CStr(v)) & " postoji " & nasao & " puta u tabeli."
+            End If
+            If StrComp(Trim$(NzToText(otp(rOtp, oSto))), "Da", vbTextCompare) = 0 Then
+                Err.Raise vbObjectError + 1962, SRC, _
+                          "Otpremnica " & Trim$(NzToText(otp(rOtp, oBr))) & " je stornirana."
+            End If
+            If Not modDokumenta.IzdatoStatusJeIzdato(otp(rOtp, oStat)) Then
+                Err.Raise vbObjectError + 1963, SRC, _
+                          "Otpremnica " & Trim$(NzToText(otp(rOtp, oBr))) & _
+                          " nije izdata -- nacrt se ne stampa."
+            End If
+            sel.Add k, Trim$(NzToText(otp(rOtp, oBr)))
+        End If
+    Next v
+
+    ' --- 2) zbirna i kupac po otpremnici, iz kanona zbirne ---------------------
+    Dim zbrBroj As Object, zbrKupac As Object, kup As Object
+    Dim kk As Variant, zbrID As String, kupID As String
+    Set zbrBroj = CreateObject("Scripting.Dictionary")
+    Set zbrKupac = CreateObject("Scripting.Dictionary")
+    Set kup = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    For Each kk In sel.keys
+        zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(CStr(kk))
+        If Len(zbrID) > 0 Then
+            zbrBroj(CStr(kk)) = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+            kupID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))
+            If kup.Exists(kupID) Then
+                zbrKupac(CStr(kk)) = CStr(kup(kupID))
+            Else
+                zbrKupac(CStr(kk)) = kupID
+            End If
+        End If
+    Next kk
+
+    ' --- 3) izvori izabranih otpremnica: kanon clanstva + zaglavlja otkupa -----
+    Dim clan As Object                  ' UCase(OtkupID) -> OtpremnicaID
+    Set clan = modDokumenta.AktivnoClanstvoOtpremnica()
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    Dim cId As Long, cBr As Long, cDat As Long, cKoop As Long, cSt As Long
+    Dim cVr As Long, cSo As Long, cSto As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, SRC)
+    cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+
+    Dim zag As Object                   ' UCase(OtkupID) -> red zaglavlja u otk
+    Set zag = CreateObject("Scripting.Dictionary")
+    Dim i As Long, oidU As String
+    If IsArray(otk) Then
+        For i = 1 To UBound(otk, 1)
+            oidU = UCase$(Trim$(NzToText(otk(i, cId))))
+            If clan.Exists(oidU) Then
+                If sel.Exists(UCase$(CStr(clan(oidU)))) Then
+                    If zag.Exists(oidU) Then
+                        Err.Raise vbObjectError + 1965, SRC, _
+                                  "Izvor otpremnice ima dva zaglavlja: OtkupID=" & _
+                                  Trim$(NzToText(otk(i, cId))) & "."
+                    End If
+                    zag.Add oidU, i
+                End If
+            End If
+        Next i
+    End If
+
+    Dim koop As Object, stan As Object
+    Set koop = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Set stan = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+
+    Dim stopa As Double
+    stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+
+    ' --- 4) red = stavka izvora (strog citac otkupa) ---------------------------
+    Dim s As Variant
+    s = modOtkup.StavkeOtkupaRedovi()
+
+    Dim redovi As Collection, kljucevi As Collection, imaRed As Object
+    Set redovi = New Collection
+    Set kljucevi = New Collection
+    Set imaRed = CreateObject("Scripting.Dictionary")
+
+    Dim otpU As String, r As Long, rec As Variant, dan As Double
+    Dim kol As Double, uk As Double, vred As Double
+    Dim om As String, stID As String, koopID As String, ime As String
+    If IsArray(s) Then
+        For i = 1 To UBound(s, 1)
+            oidU = UCase$(Trim$(CStr(s(i, 1))))
+            If zag.Exists(oidU) Then
+                otpU = UCase$(CStr(clan(oidU)))
+                r = CLng(zag(oidU))
+                If StrComp(Trim$(NzToText(otk(r, cSto))), "Da", vbTextCompare) = 0 Then
+                    Err.Raise vbObjectError + 1966, SRC, _
+                              "Izvor otpremnice " & CStr(sel(otpU)) & " je storniran: OtkupID=" & _
+                              Trim$(CStr(s(i, 1))) & "."
+                End If
+
+                stID = Trim$(NzToText(otk(r, cSt)))
+                om = stID
+                If stan.Exists(stID) Then om = CStr(stan(stID))
+                koopID = Trim$(NzToText(otk(r, cKoop)))
+                ime = koopID
+                If koop.Exists(koopID) Then ime = Trim$(CStr(koop(koopID)))
+                dan = SpecDanSerijski(otk(r, cDat))
+
+                kol = CDbl(s(i, 4))
+                uk = kol * CDbl(s(i, 5))
+                vred = uk / (1 + stopa / 100)
+
+                ReDim rec(1 To 15)
+                If zbrBroj.Exists(otpU) Then rec(1) = CStr(zbrBroj(otpU)) Else rec(1) = ""
+                If zbrKupac.Exists(otpU) Then rec(2) = CStr(zbrKupac(otpU)) Else rec(2) = ""
+                rec(3) = CStr(sel(otpU))
+                rec(4) = om
+                rec(5) = Trim$(NzToText(otk(r, cBr)))
+                rec(6) = ime
+                If dan > 0 Then rec(7) = Format$(CDate(dan), "d.m.yyyy") Else rec(7) = ""
+                rec(8) = Trim$(NzToText(otk(r, cVr)) & " " & NzToText(otk(r, cSo)))
+                rec(9) = CStr(s(i, 3))
+                rec(10) = kol
+                If kol > 0 Then rec(11) = vred / kol Else rec(11) = 0#
+                rec(12) = vred
+                rec(13) = uk - vred
+                rec(14) = uk
+                rec(15) = Trim$(CStr(s(i, 1)))
+
+                redovi.Add rec
+                kljucevi.Add UCase$(om) & "|" & Format$(dan, "000000") & "|" & UCase$(CStr(sel(otpU)))
+                imaRed(otpU) = True
+            End If
+        Next i
+    End If
+
+    ' --- 5) izdata otpremnica bez ijedne stavke izvora je kvar -----------------
+    For Each kk In sel.keys
+        If Not imaRed.Exists(CStr(kk)) Then
+            Err.Raise vbObjectError + 1964, SRC, _
+                      "Izdata otpremnica " & CStr(sel(kk)) & " nema nijedan izvor -- izdata " & _
+                      "otpremnica bez izvora je kvar."
+        End If
+    Next kk
+
+    ' --- 6) redosled (stabilan) i niz ------------------------------------------
+    Dim n As Long, a As Long, b As Long, ti As Long, tk As String, c As Long
+    n = redovi.count
+    Dim idx() As Long, ks() As String
+    ReDim idx(1 To n)
+    ReDim ks(1 To n)
+    For i = 1 To n
+        idx(i) = i
+        ks(i) = CStr(kljucevi(i))
+    Next i
+    For a = 2 To n
+        ti = idx(a): tk = ks(a): b = a - 1
+        Do While b >= 1
+            If ks(b) <= tk Then Exit Do
+            idx(b + 1) = idx(b): ks(b + 1) = ks(b): b = b - 1
+        Loop
+        idx(b + 1) = ti: ks(b + 1) = tk
+    Next a
+
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 15)
+    For i = 1 To n
+        rec = redovi(idx(i))
+        For c = 1 To 15
+            res(i, c) = rec(c)
+        Next c
+    Next i
+    SpecifikacijaBlokovaRedovi = res
+End Function
+
+' Datum iz celije kao serijski dan; 0 kad ga nema.
+Private Function SpecDanSerijski(ByVal v As Variant) As Double
+    On Error Resume Next
+    If IsDate(v) Then
+        SpecDanSerijski = Int(CDbl(CDate(v)))
+    ElseIf IsNumeric(v) Then
+        SpecDanSerijski = Int(CDbl(v))
+    End If
+End Function
+
+Public Sub EnsureSpecifikacijaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "4"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("N1").value) = LAYOUT_VER And ws.Visible = xlSheetVisible Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_SPECIFIKACIJA_SABLON
+    ws.Visible = xlSheetVisible
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 11      ' Broj zbirne
+    ws.columns("B").ColumnWidth = 18      ' Kupac (firma kome ide roba)
+    ws.columns("C").ColumnWidth = 12      ' Broj otpremnice
+    ws.columns("D").ColumnWidth = 16      ' Otkupno mesto
+    ws.columns("E").ColumnWidth = 9       ' br. bloka
+    ws.columns("F").ColumnWidth = 20      ' Ime i prezime
+    ws.columns("G").ColumnWidth = 10      ' Datum
+    ws.columns("H").ColumnWidth = 18      ' Vrsta i sorta
+    ws.columns("I").ColumnWidth = 6       ' Klasa
+    ws.columns("J").ColumnWidth = 9       ' Kolicina
+    ws.columns("K").ColumnWidth = 11      ' Cena bez PDV
+    ws.columns("L").ColumnWidth = 12      ' Vrednost
+    ws.columns("M").ColumnWidth = 11      ' Iznos PDV
+    ws.columns("N").ColumnWidth = 13      ' Ukupna vrednost
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 14, 14)
+    r = DocTitleBlock(ws, r, 14, "Pregled otkupnih blokova po otkupnom mestu", _
+                      "SPECIFIKACIJA OTKUPNIH BLOKOVA")
+
+    Dim subRow As Long: subRow = r
+    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 14)).Merge
+    ws.cells(subRow, 1).name = "SpecSubtitle"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.rows(subRow).RowHeight = 14
+
+    Dim hdr As Long: hdr = subRow + 2
+    ws.cells(hdr, 1).value = "Broj zbirne"
+    ws.cells(hdr, 2).value = "Kupac"
+    ws.cells(hdr, 3).value = "Broj otpremnice"
+    ws.cells(hdr, 4).value = "Otkupno mesto"
+    ws.cells(hdr, 5).value = "br. bloka"
+    ws.cells(hdr, 6).value = "Ime i prezime"
+    ws.cells(hdr, 7).value = "Datum"
+    ws.cells(hdr, 8).value = "Vrsta i sorta"
+    ws.cells(hdr, 9).value = "Klasa"
+    ws.cells(hdr, 10).value = "Koli" & ChrW(269) & "ina"
+    ws.cells(hdr, 11).value = "Cena bez PDV"
+    ws.cells(hdr, 12).value = "Vrednost"
+    ws.cells(hdr, 13).value = "Iznos PDV"
+    ws.cells(hdr, 14).value = "Ukupna vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 14))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "SpecStart"
+
+    ws.Range("N1").value = LAYOUT_VER
+    ws.Range("N1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureSpecifikacijaSablon"
+End Sub
+
+' Popuni SpecifikacijaSablon. spec(1..nRows, 1..14+) = redovi (kolona 15, ID,
+' se ne stampa); cnt = broj blokova; sume za red UKUPNO.
+Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Long, _
+        ByVal subtitle As String, ByVal cnt As Long, _
+        ByVal sumKol As Double, ByVal sumVred As Double, _
+        ByVal sumPdv As Double, ByVal sumUk As Double) As Worksheet
+    On Error GoTo EH
+    EnsureSpecifikacijaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("SpecSubtitle").value = subtitle & "     Blokova: " & cnt
+
+    ' Brise se CEO prethodni sadrzaj ispod zaglavlja, ne fiksnih 1000 redova --
+    ' duza prethodna specifikacija bi inace ostavila svoj rep ispod nove.
+    Dim startRow As Long: startRow = ws.Range("SpecStart").row
+    Dim lastRow As Long
+    lastRow = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    If lastRow < startRow Then lastRow = startRow
+    With ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 14))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    ' Tekstualne kolone su TEKST: broj "3/2026" bi Excel inace procitao kao datum.
+    If nRows > 0 Then
+        ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, 9)).NumberFormat = "@"
+    End If
+
+    Dim i As Long, c As Long, outRow As Long
+    For i = 1 To nRows
+        outRow = startRow + i - 1
+        For c = 1 To 14
+            ws.cells(outRow, c).value = spec(i, c)
+        Next c
+    Next i
+
+    Dim ukRow As Long: ukRow = startRow + nRows
+    ws.cells(ukRow, 6).value = "UKUPNO"
+    ws.cells(ukRow, 10).value = sumKol
+    ws.cells(ukRow, 12).value = sumVred
+    ws.cells(ukRow, 13).value = sumPdv
+    ws.cells(ukRow, 14).value = sumUk
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 14)).Font.Bold = True
+
+    ws.Range(ws.cells(startRow, 9), ws.cells(ukRow, 9)).HorizontalAlignment = xlCenter
+    ws.Range(ws.cells(startRow, 10), ws.cells(ukRow, 10)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(startRow, 11), ws.cells(ukRow, 14)).NumberFormat = "#,##0.00"
+
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 14)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlLandscape
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & (startRow - 1) & ":$" & (startRow - 1)
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 14)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSpecifikacijaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillSpecifikacijaSablon"
+End Function
+
+' Specifikacija izabranih IZDATIH otpremnica: podaci, sablon i izlaz po
+' SPECIFIKACIJA_PRINT_MODE (default PDF). Vraca "" kad je proslo, inace razlog
+' za operatera -- ekran ga prikaze u toastu (MsgBox bi u testu visio).
+Public Function PrintSpecifikacijaBlokova(ByVal otpIDs As Collection) As String
+    Const SRC As String = "modPrint.PrintSpecifikacijaBlokova"
+    Dim spec As Variant, n As Long, i As Long, ws As Worksheet
+    Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double
+    Dim blokovi As Object, mode As String, pdfPath As String, subtitle As String
+    On Error GoTo EH
+
+    spec = SpecifikacijaBlokovaRedovi(otpIDs)
+    n = UBound(spec, 1)
+
+    Set blokovi = CreateObject("Scripting.Dictionary")
+    For i = 1 To n
+        sumKol = sumKol + CDbl(spec(i, 10))
+        sumVred = sumVred + CDbl(spec(i, 12))
+        sumPdv = sumPdv + CDbl(spec(i, 13))
+        sumUk = sumUk + CDbl(spec(i, 14))
+        blokovi(UCase$(CStr(spec(i, 15)))) = True
+    Next i
+
+    subtitle = "Datum " & ChrW(353) & "tampe: " & Format$(Date, "d.m.yyyy") & _
+               "     Otpremnica: " & otpIDs.count
+    Set ws = FillSpecifikacijaSablon(spec, n, subtitle, blokovi.count, _
+                                     sumKol, sumVred, sumPdv, sumUk)
+    If ws Is Nothing Then
+        PrintSpecifikacijaBlokova = Poruka("OTKUI_ERR_SPEC") & " sablon nije pripremljen."
+        Exit Function
+    End If
+
+    mode = DocResolveMode(GetConfigValue(CFG_SPECIFIKACIJA_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            pdfPath = EnsureDocFolder(PDF_DIR_SPECIFIKACIJE) & "\Specifikacija_" & _
+                      Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
+    Exit Function
+EH:
+    Dim errDesc As String
+    errDesc = Err.description
+    Application.ScreenUpdating = True
+    LogErr SRC
+    PrintSpecifikacijaBlokova = Poruka("OTKUI_ERR_SPEC") & " " & errDesc
+End Function
+
+' ============================================================
 ' SPECIFIKACIJA ISPLATA KOOPERANTIMA (banka nalozi) - house-style
 ' sablon, portrait, 9 kolona. Isti pattern kao SpecifikacijaSablon:
 ' EnsureIsplataSpecSablon + FillIsplataSpecSablon; podatke (blokovi +

@@ -495,6 +495,7 @@ Public Sub RunAllTests()
     ' vozilom PRE-GP-W1) -- ide POSLE svih citanja, poslednji.
     RunOne 145
     RunOne 200
+    RunOne 201
 
     SetTestMode prevMode
     WriteResultFile
@@ -762,6 +763,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 198: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 199: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 200: TestName = "T_UtovarB_StornoKapije"
+        Case 201: TestName = "T_Otp_OpsegIOznake"
         Case 50: TestName = "T_MapaImena_KljucNosiKolone"
         Case 49: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 48: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -970,6 +972,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 198: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 199: T_KpiSaldoOM_CitaKolonuSalda
         Case 200: T_UtovarB_StornoKapije
+        Case 201: T_Otp_OpsegIOznake
         Case 50: T_MapaImena_KljucNosiKolone
         Case 49: T_KesTabela_NeMemoiseNeuspeh
         Case 48: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -1278,6 +1281,94 @@ End Sub
 ' (kontekst). Datum: bez aktivne otpremnice se vraca na danas; dok je
 ' otpremnica aktivna OSTAJE -- svi njeni blokovi nose njen datum (radni sto
 ' otpremnice na kanonu, S3b-2).
+' OPSEG DATUMA I OZNAKE NAD LISTOM OTPREMNICA (A-019, A-021, A-022; S3b-2b).
+'
+' Dve tvrdnje koje se mogu izmeriti samo nad PRAVOM mrezom:
+'   1. polja OD / DO suzavaju listu, a nepotpun datum nije granica;
+'   2. kljuc oznake je OtpremnicaID iz nevidljive kolone, ne broj iz prve.
+' Broj otpremnice je jedinstven tek po (stanica, dan), pa bi oznaka po broju
+' spojila dva dokumenta u jednu oznaku -- i specifikacija bi odstampala tudji.
+'
+' Nalazi se skupljaju pa tvrde POSLE Unload-a: pad tvrdnje nad zivom formom
+' ostaje bez poruke.
+Private Sub T_Otp_OpsegIOznake()
+    Dim f As frmOtkupUI, prev As String
+    Dim identKol As Long, n0 As Long, nPrazan As Long, nDan As Long, nKuca As Long
+    Dim ident As String, broj As String, kljuc As String, dan As Double, i As Long
+    Dim uPrikazu As Long, prikazIma As Boolean
+    Dim sviTogDana As Boolean, ids As Collection, v As Variant
+
+    prev = modOtkupUI.ActiveMode
+    Set f = NewOtkupUIForm()
+    modOtkupUI.ActiveMode = "F1"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    modScrDokumenti.Scr_Event "lsOTPREMNICE", "Click"
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+
+    identKol = modOtkupUI.GridIdentKolonaTest()
+    n0 = modOtkupUI.GridBrojRedova()
+    If identKol > 0 And n0 > 0 Then
+        ident = Trim$(CStr(modOtkupUI.GridCell(1, identKol)))
+        broj = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
+        dan = CDbl(val(CStr(modOtkupUI.GridCell(1, 2))))
+
+        ' Oznaka: ista putanja kao klik u rezimu oznacavanja.
+        modOtkupUI.GridOcistiOznakeTest
+        modOtkupUI.GridOznaciRedTest 1
+        kljuc = modOtkupUI.MarkedKeys()
+
+        ' "Po datumu" uzima ono sto mreza drzi, ne svoju listu.
+        Set ids = modScrDokumenti.SpecOtpremniceIzPrikaza()
+        uPrikazu = ids.count
+        For Each v In ids
+            If StrComp(CStr(v), ident, vbTextCompare) = 0 Then prikazIma = True
+        Next v
+
+        ' Dan na kome nijedna otpremnica ne stoji -- opseg ga mora isprazniti.
+        ' (Fixture drzi sve otpremnice na ISTOM danu, pa se suzavanje ne moze
+        ' meriti poredjenjem dva dana u listi.)
+        f.Controls("zGrid").Controls("specOdT").text = Format$(CDate(dan + 1000), "dd.mm.yyyy")
+        f.Controls("zGrid").Controls("specDoT").text = Format$(CDate(dan + 1000), "dd.mm.yyyy")
+        modOtkupUI.GridTestLoad "DOKUMENTI"
+        nPrazan = modOtkupUI.GridBrojRedova()
+
+        ' Isti dan kao red: granica je UKLJUCIVA i lista se vraca.
+        f.Controls("zGrid").Controls("specOdT").text = Format$(CDate(dan), "dd.mm.yyyy")
+        f.Controls("zGrid").Controls("specDoT").text = Format$(CDate(dan), "dd.mm.yyyy")
+        modOtkupUI.GridTestLoad "DOKUMENTI"
+        nDan = modOtkupUI.GridBrojRedova()
+        sviTogDana = (nDan > 0)
+        For i = 1 To nDan
+            If CDbl(val(CStr(modOtkupUI.GridCell(i, 2)))) <> dan Then sviTogDana = False
+        Next i
+
+        ' Nepotpun datum nije granica -- lista se ne prazni dok operater kuca.
+        f.Controls("zGrid").Controls("specOdT").text = "21."
+        f.Controls("zGrid").Controls("specDoT").text = ""
+        modOtkupUI.GridTestLoad "DOKUMENTI"
+        nKuca = modOtkupUI.GridBrojRedova()
+
+        f.Controls("zGrid").Controls("specOdT").text = ""
+        modOtkupUI.GridOcistiOznakeTest
+    End If
+
+    Unload f
+    modOtkupUI.GridOtkaciFormuTest
+    modOtkupUI.ActiveMode = prev
+
+    AssertEq (identKol > 0), True, "lista otpremnica nosi nevidljivu kolonu identiteta"
+    AssertEq (n0 > 0), True, "preduslov: fixture ima otpremnice u listi"
+    AssertEq kljuc, ident, "oznaka se kljuca po OtpremnicaID iz nevidljive kolone"
+    AssertEq (Len(broj) > 0 And kljuc <> broj), True, "...a ne po broju otpremnice"
+    AssertEq uPrikazu, n0, "specifikacija po datumu uzima SVE prikazane redove"
+    AssertEq prikazIma, True, "...ukljucujuci red na kome je oznaka"
+    AssertEq nPrazan, 0, "opseg na dan bez otpremnica prazni listu"
+    AssertEq sviTogDana, True, "opseg OD=DO ostavlja redove TOG dana -- granica je ukljuciva"
+    AssertEq nKuca, n0, "nepotpun datum nije granica -- lista ostaje cela"
+End Sub
+
 Private Sub T_ClearForm_Ugovor()
     Dim f As frmOtkupUI, zf As Object, ctx As Object
     Dim datumBloka As String, danas As String

@@ -590,6 +590,7 @@ Public Const WS_FAKTURA_SABLON As String = "FakturaSablon"
 Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
 Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
+Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
 
 ' --- Dokument-Tipovi ---

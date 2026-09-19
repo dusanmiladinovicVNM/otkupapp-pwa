@@ -673,6 +673,70 @@ SABOTAZE = {
         "Test_OTP_IzdavanjeCitaIzvorStrogo",
         "OTP strogo izvor: bruto manji od neta obara read-model",
     ),
+    # Specifikacija opet stampa NACRT (S3b-2b).
+    "spec-nacrt-stampa": (
+        "modPrint.bas",
+        "            If Not modDokumenta.IzdatoStatusJeIzdato(otp(rOtp, oStat)) Then\n",
+        "            If False Then   ' SABOTAZA: nacrt ide na stampu\n",
+        "Test_OTP_SpecifikacijaBlokova",
+        "Spec: nacrt se ne stampa",
+    ),
+    # Specifikacija opet stampa storniranu otpremnicu.
+    "spec-stornirana-stampa": (
+        "modPrint.bas",
+        '            If StrComp(Trim$(NzToText(otp(rOtp, oSto))), "Da", vbTextCompare) = 0 Then\n',
+        "            If False Then   ' SABOTAZA: stornirana otpremnica se stampa\n",
+        "Test_OTP_SpecifikacijaBlokova",
+        "Spec: stornirana otpremnica se ne stampa",
+    ),
+    # PDV nadoknada opet ostaje u vrednosti (nema razdvajanja osnovice).
+    "spec-pdv-nije-izdvojen": (
+        "modPrint.bas",
+        "                vred = uk / (1 + stopa / 100)\n",
+        "                vred = uk   ' SABOTAZA: PDV nadoknada ostaje u vrednosti\n",
+        "Test_OTP_SpecifikacijaBlokova",
+        "Spec: PDV nadoknada je izdvojena",
+    ),
+    # Kolone broja u sablonu opet nisu tekst -- "3/2026" postaje datum.
+    "spec-kolona-nije-tekst": (
+        "modPrint.bas",
+        '        ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, 9)).NumberFormat = "@"\n',
+        '        ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, 9)).NumberFormat = "General"   \' SABOTAZA\n',
+        "Test_OTP_SpecifikacijaBlokova",
+        "Spec: kolona broja je TEKST",
+    ),
+    # Lista nevezanih opet broji i clanove aktivne otpremnice.
+    "nevezani-clan-nacrta": (
+        "modDokumenta.bas",
+        "                If Not aktivno.Exists(oid) Then\n",
+        "                If True Then   ' SABOTAZA: i clan aktivne otpremnice je nevezan\n",
+        "Test_OTP_NevezaniBlokovi",
+        "Nevezani: clan nacrta NIJE nevezan",
+    ),
+    # Kolona "bila u" opet ne zna broj stornirane otpremnice.
+    "nevezani-bila-u": (
+        "modDokumenta.bas",
+        "            brStor(UCase$(Trim$(NzToText(otp(j, oId))))) = Trim$(NzToText(otp(j, oBr)))\n",
+        "            brStor(UCase$(Trim$(NzToText(otp(j, oId))))) = \"\"   ' SABOTAZA: bez broja stare otpremnice\n",
+        "Test_OTP_NevezaniBlokovi",
+        "Nevezani: 'bila u' nosi broj stornirane otpremnice",
+    ),
+    # Oznaka reda se opet kljuca po BROJU iz prve kolone, ne po identitetu.
+    "oznaka-po-broju": (
+        "modOtkupUI.bas",
+        "    c = IdentKolonaMreze()\n",
+        "    c = 1   ' SABOTAZA: oznaka se opet kljuca po broju\n",
+        "T_Otp_OpsegIOznake",
+        "oznaka se kljuca po OtpremnicaID iz nevidljive kolone",
+    ),
+    # Opseg datuma opet nema granicu (lista se ne suzava).
+    "opseg-nije-granica": (
+        "modScrDokumenti.bas",
+        "    If TryParseDateValue(s, d) Then DatGranica = Int(CDbl(d))\n",
+        "    If False Then DatGranica = Int(CDbl(d))   ' SABOTAZA: opseg nema granicu\n",
+        "T_Otp_OpsegIOznake",
+        "opseg na dan bez otpremnica prazni listu",
+    ),
     # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
     "otk-storno-izvora-aktivne-otpremnice": (
         "modStorno.bas",

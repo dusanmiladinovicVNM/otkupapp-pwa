@@ -3631,6 +3631,112 @@ Public Function IzvoriOtpremnice(ByVal otpremnicaID As String) As Collection
     Set IzvoriOtpremnice = OtpClanovi(Trim$(otpremnicaID), "IzvoriOtpremnice")
 End Function
 
+' Kanonsko clanstvo SVIH aktivnih otpremnica: UCase(OtkupID) -> OtpremnicaID.
+'
+' Javni ulaz za citaoce koji pitaju za MNOGO izvora odjednom (specifikacija
+' blokova, S3b-2b): OtpremnicaZaOtkup po izvoru bi za svaki prosao celu tabelu
+' clanstva. Isti strog citac -- dva aktivna clanstva istog otkupa padaju.
+Public Function AktivnoClanstvoOtpremnica() As Object
+    Set AktivnoClanstvoOtpremnica = AktivnoOtpClanstvoPoKanonu("AktivnoClanstvoOtpremnica")
+End Function
+
+' Otkupi BEZ AKTIVNE OTPREMNICE (A-025, S3b-2b; odluka operatera 19.09.2026:
+' lista "nevezanih", ne samo "izgubljenih").
+'
+' Kljuc: UCase(OtkupID) -> brojevi STORNIRANIH otpremnica ciji je bio izvor,
+' spojeni ", " -- ili "" kad ga storno nije oslobodio. Samo nestornirani otkupi.
+'
+' "Vezan" znaci ISTO sto i za kapiju storna otkupa i za pisca izvora: clan
+' aktivne otpremnice po AktivnoOtpClanstvoPoKanonu. Jedan strog citac, pa lista
+' ne moze da ponudi za vezivanje otkup koji pisac smatra zauzetim. Blok ostaje
+' bez otpremnice na tri nacina: upisan bez izabrane otpremnice, uklonjen iz
+' nacrta, oslobodjen stornom otpremnice -- storno ne brise clanstvo, pa ono
+' ostaje kao istorija ("bila u").
+Public Function NevezaniOtkupi() As Object
+    Const SRC As String = "NevezaniOtkupi"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    Set NevezaniOtkupi = res
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
+
+    Dim aktivno As Object, bila As Object
+    Set aktivno = AktivnoOtpClanstvoPoKanonu(SRC)
+    Set bila = BivseOtpremniceIzvora(SRC)
+
+    Dim cId As Long, cSto As Long, i As Long, oid As String
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(otk, 1)
+        oid = UCase$(Trim$(NzToText(otk(i, cId))))
+        If Len(oid) > 0 Then
+            If StrComp(Trim$(NzToText(otk(i, cSto))), "Da", vbTextCompare) <> 0 Then
+                If Not aktivno.Exists(oid) Then
+                    If bila.Exists(oid) Then
+                        res(oid) = CStr(bila(oid))
+                    Else
+                        res(oid) = ""
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' UCase(OtkupID) -> brojevi STORNIRANIH otpremnica u cijem je sastavu bio,
+' redom clanstva, spojeni ", ". Istorija za kolonu "bila u", ne veza: aktivno
+' clanstvo cita samo AktivnoOtpClanstvoPoKanonu.
+Private Function BivseOtpremniceIzvora(ByVal src As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BivseOtpremniceIzvora = d
+
+    Dim izv As Variant, otp As Variant
+    izv = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then Exit Function
+
+    ' Broj STORNIRANE otpremnice po ID-u.
+    Dim brStor As Object
+    Set brStor = CreateObject("Scripting.Dictionary")
+    Dim oId As Long, oBr As Long, oSto As Long, j As Long
+    oId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, src)
+    oBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, src)
+    oSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, src)
+    For j = 1 To UBound(otp, 1)
+        If StrComp(Trim$(NzToText(otp(j, oSto))), "Da", vbTextCompare) = 0 Then
+            brStor(UCase$(Trim$(NzToText(otp(j, oId))))) = Trim$(NzToText(otp(j, oBr)))
+        End If
+    Next j
+    If brStor.count = 0 Then Exit Function
+
+    ' Par (otkup, otpremnica) se broji jednom -- isti broj dve razlicite
+    ' stornirane otpremnice ostaje dva puta, jer su to dva dokumenta.
+    Dim vidjen As Object
+    Set vidjen = CreateObject("Scripting.Dictionary")
+    Dim cOtp As Long, cOtk As Long, i As Long, otpU As String, otkU As String
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, src)
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src)
+    For i = 1 To UBound(izv, 1)
+        otpU = UCase$(Trim$(NzToText(izv(i, cOtp))))
+        otkU = UCase$(Trim$(NzToText(izv(i, cOtk))))
+        If Len(otkU) > 0 And brStor.Exists(otpU) Then
+            If Not vidjen.Exists(otkU & "|" & otpU) Then
+                vidjen.Add otkU & "|" & otpU, True
+                If d.Exists(otkU) Then
+                    d(otkU) = CStr(d(otkU)) & ", " & CStr(brStor(otpU))
+                Else
+                    d(otkU) = CStr(brStor(otpU))
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 ' Da li je otpremnica IZDATA (nije DRAFT).
 '
 ' Prazan status NIJE "izdato": nov pisac ga upisuje eksplicitno (S4.1e), pa je
