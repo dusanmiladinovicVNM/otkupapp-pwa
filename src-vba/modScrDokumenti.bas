@@ -304,7 +304,7 @@ Public Function Scr_Save(ByVal polja As Object) As String
     Select Case CStr(polja("rezim"))
         Case "OTKUP"        ' nastavlja se ispod
         Case "OTPREMNICA"
-            Scr_Save = SaveOtpremnica(polja)
+            Scr_Save = SnimiOtpremnicu(polja)
             Exit Function
         Case "ZBIRNA"
             Scr_Save = SaveZbirna(polja)
@@ -389,7 +389,7 @@ End Function
 ' Od S3a upis otvara NACRT, pa modDokUnos vraca OtpremnicaID. Operateru se u
 ' toast-u i dalje pokazuje BROJ -- identitet je za masinu, broj za coveka. ID
 ' ostaje u recniku pod svojim imenom, za radnju "Izdaj" (S3b).
-Private Function SaveOtpremnica(ByVal polja As Object) As String
+Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     Dim p As Object, fokus As String, greska As String, res As String, poruke As String
     Set p = modDokUnos.NoviOtpremnicaUnos()
     p("datum") = polja("datum")
@@ -411,13 +411,13 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     greska = modDokUnos.OtpremnicaValidiraj(p, fokus)
     If Len(greska) > 0 Then
         polja("fokus") = fokus
-        SaveOtpremnica = greska
+        SnimiOtpremnicu = greska
         Exit Function
     End If
 
     res = modDokUnos.OtpremnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveOtpremnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
 
@@ -427,7 +427,7 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
-' F3 ZBIRNA. Isti obrazac kao SaveOtpremnica: ekran samo prevodi polja u recnik.
+' F3 ZBIRNA. Isti obrazac kao SnimiOtpremnicu: ekran samo prevodi polja u recnik.
 ' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
 '   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
 '     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";

@@ -270,103 +270,6 @@ SABOTAZE = {
         "T_ClearForm_Ugovor",
         "partner mora da bude obrisan posle snimanja",
     ),
-    # --- upis zbirne (F3) ---------------------------------------------------
-    # Sidra su namerno vise-linijska: OtpremnicaValidiraj u istom fajlu ima
-    # doslovno iste redove, pa jednolinijsko sidro pogadja dva mesta i skripta
-    # odbija da radi (v. zamka 2).
-    "zbirna-vozac": (
-        "modDokUnos.bas",
-        '    If Len(S(p, "vozacID")) = 0 Then\n'
-        '        fokus = "vozacID": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_VOZAC"): Exit Function\n'
-        "    End If\n",
-        "    ' SABOTAZA: zbirna vise ne trazi vozaca\n",
-        "T_ZbirnaValidiraj_TraziVozaca",
-        "zbirna bez vozaca se odbija",
-    ),
-    "zbirna-kapija": (
-        "modDokUnos.bas",
-        '    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n'
-        '        fokus = "kolicinaI"\n'
-        '        ZbirnaValidiraj = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")\n'
-        "        Exit Function\n"
-        "    End If\n",
-        "    ' SABOTAZA: zbir se vise ne poredi sa otpremnicama\n",
-        "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama",
-        "zbirna koja ne prijavljuje sve kilograme otpremnica se odbija",
-    ),
-    # Podmukliji oblik iste greske: kapija ostaje, ali se gejtuje podesavanjem.
-    # Sa ukljucenom validacijom (default) sve i dalje radi -- pada tek tvrdnja
-    # da kapija vazi i kad je VALIDACIJA_UNOSA iskljucena.
-    # (Od 14.09.2026 izvor je brIzvora, ne S(p, "brDok") -- v. ZbirnaBrojIzvora.)
-    "zbirna-kapija-strogo": (
-        "modDokUnos.bas",
-        '    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n',
-        '    If strogo And Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then   \' SABOTAZA\n',
-        "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama",
-        "kapija vazi i kad je VALIDACIJA_UNOSA iskljucena",
-    ),
-    # --- upis prijemnice (F4) -----------------------------------------------
-    "prijemnica-kupac": (
-        "modDokUnos.bas",
-        '    If Len(S(p, "kupacID")) = 0 Then\n'
-        '        fokus = "kupacID": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_KUPAC"): Exit Function\n'
-        "    End If\n",
-        "    ' SABOTAZA: prijemnica vise ne trazi kupca\n",
-        "T_PrijemnicaValidiraj_TraziKupca",
-        "prijemnica bez kupca se odbija",
-    ),
-    # DVA PRAVILA, DVE ZAMENE nad istim sidrom.
-    #
-    # Ranija zamena je brisala SVA TRI reda, pa je rusila i zamrzavanje bruta
-    # i racun neta. Padalo je zamrzavanje -- prvo po redu -- a katalog je
-    # deklarisao racun; otud PALA DRUGA TVRDNJA. Sada svaka gasi jedan red.
-    "bruto-prijemnica": (
-        "modDokUnos.bas",
-        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
-        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
-        "            Exit Function\n"
-        "        End If\n"
-        '        p("brutoKgI") = kolI\n'
-        "        kolI = kolI - tara\n"
-        '        p("kolicinaI") = kolI\n',
-        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
-        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
-        "            Exit Function\n"
-        "        End If\n"
-        "        ' SABOTAZA: bruto se ne zamrzava\n"
-        "        kolI = kolI - tara\n"
-        '        p("kolicinaI") = kolI\n',
-        "T_BrutoNeto_PoRezimu",
-        "uneti bruto Kl.I se zamrzava u BrutoKg",
-    ),
-    "bruto-prijemnica-neto": (
-        "modDokUnos.bas",
-        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
-        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
-        "            Exit Function\n"
-        "        End If\n"
-        '        p("brutoKgI") = kolI\n'
-        "        kolI = kolI - tara\n"
-        '        p("kolicinaI") = kolI\n',
-        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
-        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
-        "            Exit Function\n"
-        "        End If\n"
-        '        p("brutoKgI") = kolI\n'
-        "        ' SABOTAZA: tara se ne oduzima\n"
-        '        p("kolicinaI") = kolI\n',
-        "T_BrutoNeto_PoRezimu",
-        "u Kolicinu Kl.I ide neto (bruto - tara)",
-    ),
-    # Obrnut smer istog pravila: zbirna DOBIJA bruto->neto koji ne sme da ima.
-    "bruto-zbirna": (
-        "modDokUnos.bas",
-        "    ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->\n",
-        '    If OtkupBrutoUnos() And kolAmb > 0 Then kolI = kolI - kolAmb * GetTezinaGajbice(S(p, "tipAmb")): p("kolicinaI") = kolI   \' SABOTAZA\n'
-        "    ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->\n",
-        "T_BrutoNeto_PoRezimu",
-        "zbirna se NE preracunava iz bruta",
-    ),
     # --- upis isplate (F5) --------------------------------------------------
     # Tip novca je jedino sto ovaj rezim odlucuje, pa su sve tri sabotaze o
     # njemu: pogresan tip se ne vidi u formi, nego tek u saldu.
@@ -5079,22 +4982,6 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj",
     ),
-    "zbirna-f4-nije-vezan": (
-        "modDokUnos.bas",
-        "        If Len(rodRazlog) > 0 Then\n",
-        "        If Len(rodRazlog) < 0 Then   \' SABOTAZA: F4 ne proverava roditelja\n",
-        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
-        "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu",
-    ),
-    "zbirna-f4-pusta-tudjeg-vlasnika": (
-        "modDokumenta.bas",
-        "        Case ZBR_RES_OWNER_MISMATCH\n"
-        "            ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ\n",
-        "        Case ZBR_RES_OWNER_MISMATCH\n"
-        "            \' SABOTAZA: tudj vlasnik prolazi kao roditelj\n",
-        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
-        "zbirna drugog vlasnika zaustavlja prijemnicu",
-    ),
     "zbirna-ident-broji-vlasnike-ne-dokumente": (
         "modDokumenta.bas",
         "    res.activeLogicalCount = aktGen.Count\n",
@@ -5116,34 +5003,6 @@ SABOTAZE = {
         "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
         "B9 vidi aktivnu zbirnu bez GeneracijaID",
     ),
-    # A21/KR-001: vraca nasledjivanje generacije u PWA uvoz. Dva uredjaja sa
-    # istim brojem, vozacem i kupcem opet dobijaju ISTU generaciju, pa
-    # activeLogicalCount (broji generacije) ostaje 1 -- resolver kaze UNIQUE,
-    # F4 pusta, B8 cuti. Tvrdnja mora biti TACAN tekst: BFP izlaz nosi naziv
-    # tvrdnje, ne ime Sub-a (v. dokaz.py _pali).
-    # ZBR-MUT-01: skida DOKUMENTNU granu kapije i ostavlja samo vlasnicku --
-    # tacno stanje pre v6-ui-225. Dva aktivna dokumenta istog vlasnika opet
-    # prolaze, pa SIMPLE storno odveze i decu drugog dokumenta.
-    # ZBR-NORM-02: svaki odlucivac se meri ZASEBNO. Jedna sabotaza po mestu, da
-    # se ne moze desiti da dva budu prebacena a treci ostane na starom poredjenju.
-    # ZBR-CHILD-01: tri sabotaze, po jedna na svaki deo invarijante -- postavljanje,
-    # brisanje, i fail-closed razresenje. Jedna bi propustila da su druga dva
-    # pokvarena.
-    # ZBR-CHILD-01 / P1 iz review-a #299: backfill vraca na "ko je roditelj SADA".
-    # Posle re-entry-ja istog vlasnika to je NOVA generacija, pa bi staro dete bilo
-    # vezano na dokument kome nikad nije pripadalo -- lazna sledljivost.
-    #
-    # Prva verzija je gadjala tvrdnju iz Test_ZBR_DeteNosiGeneracijuRoditelja, koja
-    # primitivu zove DIREKTNO -- backfill nije zvao nijedan test, pa je sabotaza
-    # menjala red koda koji se ne izvrsava (dokaz.py: NE OBARA NISTA). Sada gadja
-    # test koji vozi BackfillDeteZbirnaGeneracija_Core.
-    "backfill-veze-staro-dete-na-novu-generaciju": (
-        "modSetup.bas",
-        "        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k), razlogBroja)\n",
-        "        brojevi(k) = ZbirnaGeneracijaZaBroj(CStr(k))   ' SABOTAZA: tekuci, ne istorijski\n",
-        "Test_ZBR_BackfillNeVezeStaroDeteNaNovuGeneraciju",
-        "ZBR-BACKFILL: broj koji je IKAD nosio dve generacije ostaje PRAZAN",
-    ),
     # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
     # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
     # brojem" -- a to je zatecen red pre migracije: broj stoji, generacija prazna,
@@ -5160,31 +5019,6 @@ SABOTAZE = {
         "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
-    ),
-    # ZBR-CHILD-01 lifecycle: gasi dovrsavanje veze u auto-lancu. Helper je
-    # fail-soft i njegov neuspeh ne ulazi u failLink, pa lanac prijavi uspeh a
-    # otpremnica ostane nerazresena. Bez ove sabotaze tvrdnja ne bi dokazala da
-    # meri korak dovrsavanja, nego samo da je veza nekako nastala.
-    "autochain-ne-dovrsava-vezu-otpremnice": (
-        "modAutoHladnjaca.bas",
-        "    If Len(gen) = 0 Then Exit Sub\n",
-        "    If True Then Exit Sub   ' SABOTAZA: veza se ne dovrsava\n",
-        "Test_HladnjacaChainHappyPath",
-        "Hladnjaca lanac: otpremnica Kl.I nosi generaciju SVOJE zbirne",
-    ),
-    # ZBR-CHILD-01 / P1: StornoZbirna bira red ISKLJUCIVO po generaciji, pa bez
-    # ove provere stornira dokument tudjeg broja.
-    #
-    # Prva verzija je imala DVE brane -- i ovu i proveru para u scoped odluci --
-    # pa nijedna nije bila merljiva: dokaz.py skida jednu po jednu, a druga je
-    # svaki put odbila poziv umesto nje (dokaz.py: NE OBARA NISTA za obe). Druga
-    # kopija je uklonjena. Jedna brana, jedno mesto, jedan merljiv test.
-    "storno-zbirne-ne-proverava-par-broj-generacija": (
-        "modStorno.bas",
-        "        If Not ZbirnaGeneracijaPripadaBroju(brojZbirne, generacijaID) Then\n",
-        "        If False Then   ' SABOTAZA: par se ne proverava\n",
-        "Test_ZBR_TudjaGeneracijaNeOtvaraKapiju",
-        "ZBR-PAR: nespojiv par (broj, generacija) ne prolazi",
     ),
     # ZBR-CHILD-01 faza 4: gasi popustanje -- kapija opet staje i kad je izbor
     # scoped. Meri se korist zbog koje su faze 1-3 placene.
@@ -5205,55 +5039,6 @@ SABOTAZE = {
         "Test_ZBR_KapijaPustaKadJeIzborScoped",
         "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
     ),
-    # ZBR-CHILD-01 faza 3 / P1: iskljucuje prijemnice i palete iz odluke, pa rezim
-    # ostaje po TABELI. Kaskada tada sme da bude pola scoped (otpremnice suzene na
-    # GEN-B) a pola po broju (prijemnice padnu, jer je jedna legacy), i dokument
-    # GEN-A zavrsi polovicno ponisten.
-    #
-    # Prva verzija je gadjala PRVI red bloka (scopeOK = ...OTPREMNICA...) i bila
-    # INERTNA: sledeci red (`If scopeOK And ownsChain`) ionako preracuna scopeOK
-    # nad prijemnicama i vrati ga na False, pa je sabotaza sama sebe lecila
-    # (dokaz.py: NE OBARA NISTA). Sidro mora da skine bas UNAKRSNI deo odluke.
-    "rezim-se-odlucuje-po-tabeli": (
-        "modStornoFlow.bas",
-        "        If scopeOK And ownsChain Then\n",
-        "        If False Then   ' SABOTAZA: prijemnice i palete ne ulaze u odluku\n",
-        "Test_ZBR_RezimJeZaCeluOperacijuNePoTabeli",
-        "ZBR-F3X: otpremnica i prijemnica drugog dokumenta zavrse u ISTOM stanju",
-    ),
-    # ZBR-CHILD-01 faza 3 / P1: vraca pogadjanje po broju tamo gde je kanonski ID
-    # vec sacuvan. Na ISPRAVKA lifecycle-u stara zbirna je vec stornirana, pa
-    # resolver vrati generaciju TUDJEG aktivnog dokumenta pod istim brojem.
-    "relink-staru-generaciju-pogadja-po-broju": (
-        "modStornoFlow.bas",
-        "    If Len(Trim$(oldDocID)) > 0 Then _\n"
-        "        genStare = NzToText(GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, oldDocID))\n",
-        "    genStare = ZbirnaGeneracijaZaBroj(oldBroj)   ' SABOTAZA: pogadja po broju\n",
-        "Test_ZBR_IspravkaVezeSvojuDecuNeTudju",
-        "ZBR-F3I: otpremnica drugog dokumenta ostaje NETAKNUTA",
-    ),
-    # ZBR-CHILD-01 faza 3: gasi suzavanje -- kaskada opet dira svu decu pod brojem.
-    # Meri se posledica, ne grana: dete DRUGOG dokumenta ostaje vezano samo ako
-    # suzavanje stvarno radi.
-    "deca-se-biraju-po-broju-a-ne-po-generaciji": (
-        "modDokumenta.bas",
-        "    If kandidati.count = 0 Then Exit Function\n"
-        "    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function\n",
-        "    If kandidati.count = 0 Then Exit Function\n"
-        "    If True Then Exit Function   ' SABOTAZA: nikad ne suzavaj, biraj po broju\n",
-        "Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta",
-        "ZBR-F3: kaskada NE odvezuje dete drugog dokumenta pod istim brojem",
-    ),
-    # Druga strana istog pravila: gasi FALLBACK, pa suzavanje radi i kad jedno dete
-    # nema generaciju. Bez ove sabotaze "sve-ili-nista" bi bilo tvrdnja bez mere --
-    # zeleno bi bilo i da fallback ne postoji.
-    "suzavanje-ignorise-dete-bez-generacije": (
-        "modDokumenta.bas",
-        "        If Len(Trim$(NzToText(data(CLng(kandidati(k)), cGen)))) = 0 Then Exit Function\n",
-        "        If False Then Exit Function   ' SABOTAZA: prazna generacija ne vraca na broj\n",
-        "Test_ZBR_KaskadaNeDiraDecuDrugogDokumenta",
-        "ZBR-F3: jedno dete bez generacije vraca CEO izbor na broj (zatecen ishod)",
-    ),
     # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
     # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
     # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
@@ -5264,39 +5049,6 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
         "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
         "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji",
-    ),
-    "dete-ne-nosi-generaciju-roditelja": (
-        "modDokumenta.bas",
-        "    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName\n",
-        "    ' SABOTAZA: upisuje se samo broj, generacija roditelja se ne pece\n",
-        "Test_ZBR_DeteNosiGeneracijuRoditelja",
-        "ZBR-CHILD: dete nosi generaciju roditelja",
-    ),
-    "odvez-ostavlja-generaciju": (
-        "modDokumenta.bas",
-        "    PoveziDeteNaZbirnu tableName, rowIndex, brojCol, \"\", \"\", sourceName\n",
-        "    RequireUpdateCell tableName, rowIndex, brojCol, \"\", sourceName"
-        "   ' SABOTAZA: brise se samo broj\n",
-        "Test_ZBR_DeteNosiGeneracijuRoditelja",
-        "ZBR-CHILD: odvezivanje brise i generaciju roditelja",
-    ),
-    # Zamenjuje RAZRESAVANJE POGADJANJEM: prvi red pod tim brojem, bez obzira na
-    # storno i na dvosmislenost. Tacno ono protiv cega cela ZBR-IDENT celina
-    # postoji, i najverovatnija "popravka" koju bi neko posle dopisao.
-    #
-    # Cilja granu D testa, ne B: kad zbirne UOPSTE nema, i pogadjanje vrati
-    # prazno, pa bi nad B ova sabotaza bila zelena.
-    "dete-pogadja-generaciju-po-broju": (
-        "modDokumenta.bas",
-        "    id = ZbirnaIdentResolve(broj)\n"
-        "    If id.integrityStatus <> ZBR_INT_OK Then Exit Function\n"
-        "    If id.resolutionStatus <> ZBR_RES_UNIQUE Then Exit Function\n"
-        "    ZbirnaGeneracijaZaBroj = id.selectedGeneracijaID\n",
-        "    ' SABOTAZA: prvi red pod tim brojem, bez razresavanja\n"
-        "    ZbirnaGeneracijaZaBroj = Trim$(NzToText(LookupValue(TBL_ZBIRNA, _\n"
-        "                                COL_ZBR_BROJ, broj, COL_GENERACIJA_ID)))\n",
-        "Test_ZBR_DeteNosiGeneracijuRoditelja",
-        "ZBR-CHILD: stornirana zbirna NIJE roditelj -- generacija ostaje prazna",
     ),
     "vlasnici-poredi-case": (
         "modStorno.bas",
@@ -5328,15 +5080,6 @@ SABOTAZE = {
         "        If StrComp(Trim$(NzToText(data(c, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: razmaci ne menjaju decu",
-    ),
-    "kapija-mutacije-broji-samo-vlasnike": (
-        "modDokumenta.bas",
-        "    If id.activeLogicalCount > 1 Then\n"
-        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA\n",
-        "    If False Then   ' SABOTAZA: samo vlasnicka dvosmislenost blokira\n"
-        "        ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA\n",
-        "Test_ZBR_MutacijaPoBrojuStajeNaDvaDokumenta",
-        "ZBR-MUT: otpremnica NIJE odvezana preko granice dokumenta",
     ),
     "mastersync-nasledjuje-tudju-generaciju": (
         "modMasterSync.bas",

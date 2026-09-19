@@ -79,6 +79,7 @@ Public Sub RunIzvestajTests()
         tx.AddTableSnapshot TBL_ZBIRNA
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA
+        tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
         tx.AddTableSnapshot TBL_OTKUP
         tx.AddTableSnapshot TBL_AMBALAZA
 
@@ -486,17 +487,11 @@ Private Sub T_E2E_RobaOMDvaVlasnikaIstiBroj()
     On Error GoTo EH
 
     ' Zbirne/prijemnice je vec zasejao prethodni test (ista transakcija).
-    IzvSeed TBL_OTPREMNICA, _
-        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
-        Array("IZVT-OTP-A", "IZVT-OTP-A", IZVT_DATUM, IZVT_STANICA, IZVT_VOZAC_A, _
-              IZVT_BROJ, "Malina", "I", 1000#)
+    IzvSeedOtpremnica "IZVT-OTP-A", IZVT_STANICA, IZVT_VOZAC_A, IZVT_BROJ
+    IzvSeedOtpStavka "IZVT-OTP-A", 1, "I", 1000#
 
-    IzvSeed TBL_OTPREMNICA, _
-        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
-        Array("IZVT-OTP-B", "IZVT-OTP-B", IZVT_DATUM, IZVT_STANICA, IZVT_VOZAC_B, _
-              IZVT_BROJ, "Malina", "I", 2000#)
+    IzvSeedOtpremnica "IZVT-OTP-B", IZVT_STANICA, IZVT_VOZAC_B, IZVT_BROJ
+    IzvSeedOtpStavka "IZVT-OTP-B", 1, "I", 2000#
 
     Dim d As Date: d = IZVT_DATUM
     Dim r As Variant
@@ -522,8 +517,9 @@ EH:
     IzvChk False, S & "neocekivana greska: " & Err.description
 End Sub
 
-' Klasa I i II ISTOG dokumenta: isti broj, isti vozac, isti kupac, ali zasebna
-' otpremnica/zbirna/prijemnica po klasi (tako ih pravi auto-lanac hladnjace).
+' Klasa I i II ISTOG dokumenta: isti broj, isti vozac, isti kupac. Zbirna i
+' prijemnica su i dalje red po klasi (stari model, S4), a otpremnica je od
+' S3b-1 JEDNO zaglavlje sa dve stavke -- izvestaj je razvija u dva reda.
 ' Bez Klase u kljucu prijem obe klase se sabere pa dodeli SVAKOJ klasi -- u
 ' malina modu UKUPNO prijem postaje dvostruk.
 Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
@@ -554,16 +550,9 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
         Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 150#, KLASA_II)
 
-    IzvSeed TBL_OTPREMNICA, _
-        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
-        Array("IZVT-OTP-K1", "IZVT-OTP-K1", IZVT_DATUM, IZVT_STANICA2, voz, _
-              brDok, "Malina", KLASA_I, 1000#)
-    IzvSeed TBL_OTPREMNICA, _
-        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
-        Array("IZVT-OTP-K2", "IZVT-OTP-K2", IZVT_DATUM, IZVT_STANICA2, voz, _
-              brDok, "Malina", KLASA_II, 200#)
+    IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, brDok
+    IzvSeedOtpStavka "IZVT-OTP-K", 1, KLASA_I, 1000#
+    IzvSeedOtpStavka "IZVT-OTP-K", 2, KLASA_II, 200#
 
     Dim d As Date: d = IZVT_DATUM
 
@@ -573,8 +562,9 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
     IzvChk IsArray(r), S & "RobaOM vraca redove"
     If Not IsArray(r) Then Exit Sub
 
-    Dim r1 As Long: r1 = IzvFindRowByText(r, 2, "IZVT-OTP-K1")
-    Dim r2 As Long: r2 = IzvFindRowByText(r, 2, "IZVT-OTP-K2")
+    ' JEDNO zaglavlje, DVA reda izvestaja -- po jedan za svaku klasu.
+    Dim r1 As Long: r1 = IzvFindRowBrojKlasa(r, "IZVT-OTP-K", KLASA_I)
+    Dim r2 As Long: r2 = IzvFindRowBrojKlasa(r, "IZVT-OTP-K", KLASA_II)
     IzvChk r1 > 0 And r2 > 0, S & "obe klase su zasebni redovi"
     If r1 = 0 Or r2 = 0 Then Exit Sub
 
@@ -664,6 +654,36 @@ Private Function IzvFindRowByNum(ByRef arr As Variant, ByVal col As Long, _
 End Function
 
 ' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+' Red izvestaja "Otkupljena roba (OM)" za (broj otpremnice, klasa): kolona 2 je
+' broj, kolona 4 klasa. Jedno zaglavlje sa dve klase daje dva reda (S3b-1).
+Private Function IzvFindRowBrojKlasa(ByRef arr As Variant, ByVal broj As String, _
+                                     ByVal klasa As String) As Long
+    Dim i As Long
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        If Trim$(NzToText(arr(i, 2))) = broj And Trim$(NzToText(arr(i, 4))) = klasa Then
+            IzvFindRowBrojKlasa = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Otpremnica u NOVOM obliku (S3b-1): zaglavlje bez linijskih polja + stavke.
+' BrojZbirne je jos veza starog modela -- manjak se po njoj razresava do S4.
+Private Sub IzvSeedOtpremnica(ByVal otpID As String, ByVal stanica As String, _
+                              ByVal vozac As String, ByVal brojZbirne As String)
+    IzvSeed TBL_OTPREMNICA, _
+        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA), _
+        Array(otpID, otpID, IZVT_DATUM, stanica, vozac, brojZbirne, "Malina")
+End Sub
+
+Private Sub IzvSeedOtpStavka(ByVal otpID As String, ByVal rb As Long, _
+                             ByVal klasa As String, ByVal kg As Double)
+    IzvSeed TBL_OTPREMNICA_STAVKE, _
+        Array(COL_OPS_ID, COL_OPS_OTPREMNICA_ID, COL_OPS_RB, COL_OPS_KLASA, COL_OPS_KOLICINA), _
+        Array(otpID & "-S" & CStr(rb), otpID, rb, klasa, kg)
+End Sub
+
 Private Function IzvFindRowByText(ByRef arr As Variant, ByVal col As Long, _
                                   ByVal value As String) As Long
     Dim i As Long

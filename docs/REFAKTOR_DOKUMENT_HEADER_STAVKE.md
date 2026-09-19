@@ -3063,7 +3063,87 @@ iste brojeve na oba mesta, a merodavna je stavka.
 
 To nije migracija podataka (tih nema, §14.7) nego **autorstvo test podataka u novom modelu**.
 
-Sledeci korak: **S3b-2 — panel blokova nad `tblOtpremnicaIzvori` + radnja „Izdaj".**
+Sledeci korak: v. §14.14 (S3b-1 je proširen), pa **S3b-2**.
+
+### 14.14) S3b-1 proširen: stari pisac obrisan, F3/F4 pauzirani do S4 (19.09.2026)
+
+**Nalaz iz prvog punog prolaza S3b-1** (`run_vba`, 19.09): 27 padova u BFP-u, 10 od 12 golden scenarija, 5 u storno suite-u,
+2 u izveštajima. Uzrok je jedan: stari pisac `SaveOtpremnica*` je i dalje pravio otpremnice **samo sa zaglavljem**,
+a zvali su ga testovi — 50 poziva u BFP-u, 1 u golden testovima, plus direktni seed u tri suite-a. Prvi takav
+dokument obara strogi čitač za ceo prolaz.
+
+**Drugi nalaz, dublji, i propust iz S3a:** od #361 **nijedan živi put ne vezuje otpremnicu za zbirnu**. Svi pisci
+`Otpremnica.BrojZbirne` su obrisani ili pauzirani (stari pisac, auto-lanac hladnjače, malina auto-zbirna, uvoz VOZ),
+a F2 nacrt namerno ne šalje `BrojZbirne`. F3 ima tvrdu kapiju „zbir zbirne = zbir vezanih otpremnica“
+(`ZbirnaSeSlazeSaIzvorom`), pa od S3a nijedna zbirna ne može da se sačuva. Za njom staje i F4, koja traži
+postojeću zbirnu. S3a je glasno pauzirao auto-zbirnu za malinu, ali ručnu nije ni pogledao. Mapa je netačno
+tvrdila da su A-030 i A-031 živi.
+
+**Odluka (operater, 19.09.2026):** (a) F3 i F4 su **glasno pauzirani do S4**; (b) testovi starog lanca zbirne se
+**brišu** i upisuju ovde kao spisak koji S4 mora da vrati. **Ne prepravljaju se ručnom vezom `BrojZbirne`**, jer
+bi tako bili zeleni nad vezom koju produkcija ne ume da napravi (⚠ FALSE-GREEN RISK).
+
+**Redosled slajsova se ne menja.** Zbirna u novom modelu sabira izdate otpremnice, a izdavanje dolazi sa panelom
+blokova. Redosled ostaje S3b-2 → S4, a lanac posle F2 stoji do S4.
+
+#### Izmene
+
+| Šta | Gde |
+|---|---|
+| `SaveOtpremnicaMulti_TX`, `SaveOtpremnica_TX`, `SaveOtpremnica`, `ValidateOtpremnicaInput` **obrisani** | `modDokumenta` |
+| Auto-lanac hladnjače obrisan (`AutoChainHladnjaca`, backfill prijemnica, test seam), ostaju samo oznake hladnjače i relink stanje | `modAutoHladnjaca` (675 → 58 linija) |
+| `CalculateProsekGajbe` (po broju otpremnice) obrisan — samo test ga je zvao | `modDokumenta` |
+| **F3 i F4 pauzirani** pre svih provera, uz poruke `DOKUNOS_ERR_ZBIRNA_PAUZIRANA` / `DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA` | `modDokUnos.ZbirnaValidiraj`, `PrijemnicaValidiraj` |
+| `SumOtpremniceByKlasa` **više ne guta grešku**. Progutana je davala nule, a `RecalculateZbirnaFromOtpremnice_TX` je tada upisivao 0 kg u zbirnu (storno T01) | `modDokumentInvariant` |
+| Nacrt nove zbirne (`CreateZbirna_TX`) čita **stavke** otpremnice. Da li prima samo IZDATU odlučuje S4 | `modDokumenta.CreateZbirna` |
+| Ekranski adapter F2 preimenovan u `SnimiOtpremnicu` (bio je sudar imena sa starim piscem) | `modScrDokumenti` |
+| Prag `otp_stari_pisac` **4 → 0** | `tools/popis_citalaca.py` |
+
+#### Testovi koji ostaju, prebačeni na novi oblik
+
+- `Test_PR3_*` (19, nacrt nove zbirne): `Pr3Otpremnica` pravi otpremnicu **produkcionim** piscem
+  (`CreateOtpremnicaDraft_TX`). Druga vrsta = druga kultura (`TEST_KUL_BEZ_SORTE_ID`).
+- `Test_OTP_BrojZauzetPoStaniciIDanu`: broj po (stanica, dan) nad novim piscem. Dvoklasna otpremnica je **jedno**
+  zaglavlje.
+- `modTestStorno`: seed piše zaglavlje i stavku. `BrojZbirne` ostaje veza starog modela za storno okvir;
+  prelazi u S3c (storno po ID-u) i S4 (članstvo).
+- `modIzvestajTests` E2E: seed je novog oblika, a „Klasa I+II istog dokumenta“ je sada **jedno zaglavlje sa dve
+  stavke**, koje izveštaj razvija u dva reda.
+- `modTest`: `T_ZbirnaUnos_PauziranDoS4` i `T_PrijemnicaUnos_PauziranDoS4` mere da pauza stoji **pre** svih
+  provera; `T_ScrSave_RutaPoRezimu` dokazuje rutu porukom pauze. Registar je prenumerisan 1..200, a redosled
+  izvršavanja je proveren po imenu.
+
+#### Spisak za S4 — obrisani testovi i scenariji koje S4 mora da vrati
+
+Tela su u git istoriji (`fc06fa77`, poslednji commit pre brisanja); golden snimci su u `tests/golden/` istog commita.
+
+| Tema | Obrisano | Šta je tvrdilo |
+|---|---|---|
+| **Zbir zbirne = zbir otpremnica** | `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama`; storno T01, T02, T20; sabotaže `zbirna-kapija`, `zbirna-kapija-strogo` | kg i gajbe po klasi moraju da se slože; kapija ne zavisi od `VALIDACIJA_UNOSA`; storno ili poništenje otpremnice rekalkuliše zbirnu i ne obara deljenu |
+| **Redosled provera F3/F4** | `T_ZbirnaValidiraj_TraziVozaca`, `T_PrijemnicaValidiraj_TraziKupca`; sabotaže `zbirna-vozac`, `prijemnica-kupac` | vozač je prva provera zbirne, kupac prva provera prijemnice |
+| **Bruto → neto** | `T_BrutoNeto_PoRezimu`; sabotaže `bruto-prijemnica`, `bruto-prijemnica-neto`, `bruto-zbirna` | prijemnica zamrzava bruto po klasi; zbirna bruto NEMA |
+| **Prijemnica se vezuje samo na jednoznačnu zbirnu** (A13, A14) | `T_Prijemnica_VezujeSeSamoNaJednoznacnu`; sabotaže `zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika` | nema zbirne / dvosmislena / tuđ vlasnik → odbijeno po imenu |
+| **Identitet deteta zbirne** (ZBR-CHILD-01) | `Test_ZBR_DeteNosiGeneracijuRoditelja`, `…BackfillNeVezeStaroDeteNaNovuGeneraciju`, `…KaskadaNeDiraDecuDrugogDokumenta`, `…RezimJeZaCeluOperacijuNePoTabeli`, `…IspravkaPodNovimBrojem`, `…IspravkaVezeSvojuDecuNeTudju`, `…TudjaGeneracijaNeOtvaraKapiju`, `…MutacijaPoBrojuStajeNaDvaDokumenta`, `Test_GeneracijaIDNaSavePutanji`; 10 sabotaža ZBR-CHILD | kaskada dira SVOJU decu, ne svu pod brojem; ispravka uzima identitet starog dokumenta; mutacija po broju staje na dva dokumenta. **U S4 se ovo prevodi na `tblZbirnaIzvori`, ne na generaciju.** |
+| **Storno kaskada lanca** | `Test_StornoGuardNaSvimPutanjama`, `Test_StornoGuardUKaskadi`, `Test_StornoKaskadaScopePoLancu`, `Test_DokumentaReadHelpersExcludeStornirano` | kaskada ne obara tuđi lanac pod istim brojem; čitači izuzimaju stornirane |
+| **Druga klasa** | `Test_ZbirnaKlasaIIGuard`, `Test_DualClassDocumentWrappers` | izvor sa klasom II blokira unos bez „Dve klase“ |
+| **Ekran zbirne → pisac → tabela** (MIG-001) | `Test_ZbirnaEkranNosiOdrediste` | hladnjača i pogon iz rečnika stižu u `tblZbirna` |
+| **Prosek gajbe** | `Test_ProsekGajbeExcludesStornirano` | prosek bez storniranih; `CalculateProsekGajbeByZbirna` (živ u UI) ostao bez testa |
+| **Malina auto-zbirna** (E-022) | `Test_MalinaAutoZbirnaFromOtpremnice` | 1:1 otpremnica → zbirna |
+| **Auto-lanac hladnjače** (A-014) | 5 `Test_HladnjacaChain*`, 2 `Test_BackfillHladnjaca*`; sabotaža `autochain-ne-dovrsava-vezu-otpremnice` | pad koraka zaustavlja lanac; broj prijemnice se deli po zbirnoj. Vraća se samo ako S3d/S4 odluče da se lanac vraća |
+| **Pun lanac do fakture (golden)** | A1, A2, A3, A4, A5, B2, B3, D1, D2, F2, G1 | baseline celog lanca, kardinalnost, kalo, avans, storno fakturisane prijemnice, delimično fakturisanje po klasi. **Golden se snima iznova u S4.** |
+| **Stari pisac** | `Test_FullDocumentChainHappyPath`, tri `Test_InvalidOtpremnica*`; ručni `CreateSEFLive*` | validacija starog pisca. Nema šta da se vrati: novi pisac ima svoje testove (`Test_OTP_*`) |
+
+`modTestStornoCentar` i ostatak `modTestStorno` i dalje seju vezu `BrojZbirne`. Zeleni su jer ne čitaju količinu
+kroz strog čitač. Prelaze u S3c/S4.
+
+#### Merenje posle
+
+`otp_stari_pisac` **0** (PROD i TEST), `otp_cena` živih 0, `otp_linija` živih 24 (činjenice zaglavlja i `modSetup`).
+`vba_check`: 480 sabotaža (20 obrisano zajedno sa svojim testovima), nula nalaza. `RunAllTests` je sada 200 testova
+(bilo 203), golden 2 scenarija (bilo 12).
+
+**Kapija `--check` dokazana i u drugom smeru, sama od sebe:** kad je stari pisac obrisan, grupa je pala na 0, a
+prag je još bio 4. `--check` je vratio `PRAG ZASTAREO` sve dok prag nije spušten.
 
 ## 15) Backlog — namerno van opsega
 

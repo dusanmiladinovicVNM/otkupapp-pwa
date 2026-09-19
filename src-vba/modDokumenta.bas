@@ -110,319 +110,14 @@ Public Type ZbirnaIdent
 End Type
 
 ' ============================================================
-' OTPREMNICA - Station gibt Ware an Fahrer
+' OTPREMNICA
+'
+' S3b-1: stari pisac "red po klasi" (SaveOtpremnicaMulti_TX, SaveOtpremnica_TX,
+' SaveOtpremnica, ValidateOtpremnicaInput) je OBRISAN. Od S3a nije imao
+' produkcionog pozivaoca, a pravio je dokument koji novi citaoci odbijaju:
+' zaglavlje bez stavki, vezano za zbirnu kroz BrojZbirne. Pisci otpremnice su
+' CreateOtpremnicaDraft_TX / CreateOtpremnicaIzIzvora_TX i ostali *_TX nize.
 ' ============================================================
-Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
-                                       ByVal stanicaID As String, _
-                                       ByVal vozacID As String, _
-                                       ByVal brojOtp As String, _
-                                       ByVal brojZbirne As String, _
-                                       ByVal vrsta As String, _
-                                       ByVal sorta As String, _
-                                       ByVal kolicinaI As Double, _
-                                       ByVal cenaI As Double, _
-                                       ByVal tipAmb As String, _
-                                       ByVal kolAmb As Long, _
-                                       Optional ByVal hasKlasaII As Boolean = False, _
-                                       Optional ByVal kolicinaII As Double = 0, _
-                                       Optional ByVal cenaII As Double = 0, _
-                                       Optional ByVal brutoKgI As Double = 0, _
-                                       Optional ByVal kolAmbII As Long = 0, _
-                                       Optional ByVal brutoKgII As Double = 0) As String
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
-    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
-    ' pada upisa -- greska nastaje u podacima, ne u logu.
-    '
-    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
-    ' transakciju koja se odmah rollback-uje.
-    modSchema.SchemaReadyOrFail "SaveOtpremnicaMulti_TX", _
-        TBL_OTPREMNICA & "|" & TBL_AMBALAZA
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_AMBALAZA
-
-    ' Klasa I je opciona (kolicinaI = 0 -> snima se samo Klasa II). Bar jedna klasa.
-    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
-    If Not hasKlasaI And Not hasKlasaII Then
-        Err.Raise vbObjectError + 1103, "SaveOtpremnicaMulti_TX", _
-                  "Mora postojati bar jedna klasa (I ili II)."
-    End If
-
-    ' Zauzetost broja JEDNOM po dokumentu, pre prve klase. U SaveOtpremnica ne
-    ' sme: Multi_TX ga zove dvaput pod istim brojem, pa bi Klasa II odbila
-    ' sopstveni red Klase I.
-    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_OTP, stanicaID, datum, _
-                                        brojOtp, "SaveOtpremnicaMulti_TX"
-
-    Dim resultI As String
-    If hasKlasaI Then
-        resultI = SaveOtpremnica( _
-            datum, _
-            stanicaID, _
-            vozacID, _
-            brojOtp, _
-            brojZbirne, _
-            vrsta, _
-            sorta, _
-            kolicinaI, _
-            cenaI, _
-            tipAmb, _
-            kolAmb, _
-            KLASA_I, _
-            brutoKgI)
-
-        If resultI = "" Then
-            Err.Raise vbObjectError + 1101, "SaveOtpremnicaMulti_TX", _
-                      "SaveOtpremnica Klasa I fehlgeschlagen"
-        End If
-    End If
-
-    Dim resultII As String
-    If hasKlasaII Then
-        resultII = SaveOtpremnica( _
-            datum, _
-            stanicaID, _
-            vozacID, _
-            brojOtp, _
-            brojZbirne, _
-            vrsta, _
-            sorta, _
-            kolicinaII, _
-            cenaII, _
-            tipAmb, _
-            kolAmbII, _
-            KLASA_II, _
-            brutoKgII)
-
-        If resultII = "" Then
-            Err.Raise vbObjectError + 1102, "SaveOtpremnicaMulti_TX", _
-                      "SaveOtpremnica Klasa II fehlgeschlagen"
-        End If
-    End If
-
-    If hasKlasaI And hasKlasaII Then
-        SaveOtpremnicaMulti_TX = resultI & " + " & resultII
-    ElseIf hasKlasaI Then
-        SaveOtpremnicaMulti_TX = resultI
-    Else
-        SaveOtpremnicaMulti_TX = resultII
-    End If
-
-    tx.CommitTx
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    ' Od ovog reda Err je MRTAV: 'On Error Resume Next' ga resetuje (dokazano
-    ' testom 68). Zato se ne sme zvati LogErr, koji pise samo kad je
-    ' Err.Number <> 0 -- tako je pad upisa godinama zavrsavao u PRAZNOM logu, a
-    ' operater dobijao poruku bez razloga. Opis se predaje IZRICITO.
-    On Error Resume Next
-
-    LogError "SaveOtpremnicaMulti_TX", errDesc, errNum
-
-    Monitor_Error _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveOtpremnicaMulti_TX", _
-        entityType:="Otpremnica", _
-        entityID:=SaveOtpremnicaMulti_TX, _
-        correlationId:=brojOtp, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="SaveOtpremnicaMulti_TX failed. BrojOtp=" & brojOtp & _
-                 "; BrojZbirne=" & brojZbirne & _
-                 "; StanicaID=" & stanicaID & _
-                 "; VozacID=" & vozacID & _
-                 "; HasKlasaII=" & CStr(hasKlasaII) & _
-                 "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveOtpremnicaMulti_TX", _
-        entityType:="Otpremnica", _
-        entityID:=SaveOtpremnicaMulti_TX, _
-        correlationId:=brojOtp
-
-    If Not tx Is Nothing Then tx.RollbackTx
-
-    On Error GoTo 0
-
-    SaveOtpremnicaMulti_TX = ""
-End Function
-
-Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String, _
-                                   ByVal vozacID As String, ByVal brojOtp As String, _
-                                   ByVal brojZbirne As String, ByVal vrsta As String, _
-                                   ByVal sorta As String, ByVal kolicina As Double, _
-                                   ByVal cena As Double, ByVal tipAmb As String, _
-                                   ByVal kolAmb As Long, _
-                                   Optional ByVal klasa As String = "I", _
-                                   Optional ByVal brutoKg As Double = 0) As String
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
-    modSchema.SchemaReadyOrFail "SaveOtpremnica_TX", _
-        TBL_OTPREMNICA & "|" & TBL_AMBALAZA
-
-tx.BeginTx
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_AMBALAZA
-
-    SaveOtpremnica_TX = SaveOtpremnica(datum, stanicaID, vozacID, brojOtp, _
-                                        brojZbirne, vrsta, sorta, kolicina, _
-                                        cena, tipAmb, kolAmb, klasa, brutoKg)
-
-    If SaveOtpremnica_TX = "" Then
-        Err.Raise vbObjectError + 1001, "SaveOtpremnica_TX", _
-                  "SaveOtpremnica fehlgeschlagen"
-    End If
-
-    tx.CommitTx
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SaveOtpremnica_TX", errDesc, errNum
-    Monitor_Error _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveOtpremnica_TX", _
-        entityType:="Otpremnica", _
-        entityID:=SaveOtpremnica_TX, _
-        correlationId:=brojOtp, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="SaveOtpremnica_TX failed. BrojOtp=" & brojOtp & _
-                "; BrojZbirne=" & brojZbirne & _
-                "; StanicaID=" & stanicaID & _
-                "; VozacID=" & vozacID & _
-                "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveOtpremnica_TX", _
-        entityType:="Otpremnica", _
-        entityID:=SaveOtpremnica_TX, _
-        correlationId:=brojOtp
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveOtpremnica_TX = ""
-
-    PrintTxFailure "SaveOtpremnica_TX", errSrc, errNum, errDesc
-End Function
-
-Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
-                               ByVal vozacID As String, ByVal brojOtp As String, _
-                               ByVal brojZbirne As String, ByVal vrsta As String, _
-                               ByVal sorta As String, ByVal kolicina As Double, _
-                               ByVal cena As Double, ByVal tipAmb As String, _
-                               ByVal kolAmb As Long, _
-                               Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0) As String
-
-    On Error GoTo EH
-
-    Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
-                             kolicina, cena, tipAmb, kolAmb, klasa)
-
-    ' Sudi se SAMO brojOtp. brojZbirne je DECIJI LINK -- kopija broja koji
-    ' pripada vozacu zbirne i legitimno nosi drugog vlasnika i drugi dan.
-    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_OTP, stanicaID, datum, _
-                                     brojOtp, "SaveOtpremnica"
-
-    Dim newID As String
-    newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
-
-    If Len(Trim$(newID)) = 0 Then
-        Err.Raise vbObjectError + 1002, "SaveOtpremnica", _
-                "GetNextID nije vratio OtpremnicaID."
-    End If
-
-    Dim rowData As Variant
-    rowData = Array(newID, datum, stanicaID, vozacID, brojOtp, _
-                    brojZbirne, vrsta, sorta, kolicina, cena, tipAmb, kolAmb, klasa)
-
-    Dim newRow As Long
-    newRow = AppendRow(TBL_OTPREMNICA, rowData)
-    If newRow > 0 Then
-        ' Generacija: nasledjuje se od aktivnih redova istog broja (Klasa I <-> II),
-        ' inace nova. Vazi za sve pozivaoce -- Multi_TX i pojedinacne _TX putanje.
-        ' ZBR-CHILD-01: generacija RODITELJSKE zbirne na ovom detetu. Prazna je
-        ' pravilo, ne izuzetak: u malina/hladnjaca lancu otpremnica nastaje PRE
-        ' zbirne. Ide kroz PoveziDeteNaZbirnu iako je broj vec u rowData: da
-        ' JEDINI PUT bude stvarno jedini -- prepis iste vrednosti je jeftin,
-        ' a druga putanja bi znacila da se par moze raziciti.
-        ' zbirne (modAutoHladnjaca), pa roditelj tada jos ne postoji -- popunice
-        ' je LinkZbirnaToOtkupAndOtpremnica ili backfill.
-        PoveziDeteNaZbirnu TBL_OTPREMNICA, newRow, COL_OTP_BROJ_ZBIRNE, brojZbirne, _
-                           ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SaveOtpremnica"
-        ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp, _
-                          COL_OTP_STANICA, stanicaID
-
-        If kolAmb > 0 Then
-            TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", stanicaID, "Stanica", vozacID, newID, DOK_TIP_OTPREMNICA
-        End If
-        ' Bruto (kad je unet bruto pa oduzeta ambalaza) -> upis po imenu; prazno = neto.
-        If brutoKg > 0 Then UpdateCell TBL_OTPREMNICA, newRow, COL_OTP_BRUTO, brutoKg
-        SaveOtpremnica = newID
-    Else
-        Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
-                  "AppendRow fehlgeschlagen fuer tblOtpremnica"
-    End If
-    Exit Function
-    
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SaveOtpremnica", errDesc, errNum
-    On Error GoTo 0
-
-    Err.Raise errNum, "SaveOtpremnica", _
-              "Source=" & errSrc & " | " & errDesc
-End Function
 
 Public Function GetOtpremniceByZbirna(ByVal brojZbirne As String) As Variant
     On Error GoTo EH
@@ -1469,14 +1164,11 @@ Private Function CreateZbirna(ByVal h As Object, _
         Err.Raise vbObjectError + 1224, SRC, "Tabela otpremnica je prazna."
     End If
 
-    Dim cID As Long, cKlasa As Long, cKol As Long, cAmb As Long
+    Dim cID As Long
     Dim cVrsta As Long, cSorta As Long, cTip As Long
     Dim cStorno As Long, cVozac As Long
 
     cID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
-    cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
-    cAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, SRC)
     cVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
     cSorta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
     cTip = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
@@ -1486,6 +1178,14 @@ Private Function CreateZbirna(ByVal h As Object, _
     ' Kanonsko clanstvo se cita JEDNOM, pre petlje.
     Dim clanstvo As Object
     Set clanstvo = AktivnoClanstvoPoKanonu(SRC)
+
+    ' Klasa, kolicina i gajbe otpremnice su na STAVKAMA (S3b-1) -- zaglavlje ih
+    ' od S3a ne nosi. Citaju se JEDNOM, kroz kanonski citalac koji zaglavlje bez
+    ' stavki odbija po imenu. Da li zbirna sme da primi samo IZDATU otpremnicu
+    ' odlucuje S4; ovde se menja samo odakle dolaze kilogrami.
+    Dim stavkeOtp As Object
+    Set stavkeOtp = StavkeOtpremnicePoDokumentu()
+    Dim stavkeJedne As Collection, sOtp As Variant, sK As Long
 
     Dim redPoID As Object
     Dim kolPoKlasi As Object
@@ -1558,25 +1258,23 @@ Private Function CreateZbirna(ByVal h As Object, _
                              "TipAmbalaze", otpID, SRC
         End If
 
-        klasa = Trim$(NzToText(data(r, cKlasa)))
-        RequireValidDocumentClass klasa, SRC
-        klasa = UCase$(klasa)
+        Set stavkeJedne = StavkeZaOtpremnicu(stavkeOtp, otpID, SRC)
+        For sK = 1 To stavkeJedne.count
+            sOtp = stavkeJedne(sK)
+            klasa = Trim$(NzToText(sOtp(3)))
+            RequireValidDocumentClass klasa, SRC
+            klasa = UCase$(klasa)
 
-        If Not IsNumeric(data(r, cKol)) Then
-            Err.Raise vbObjectError + 1230, SRC, _
-                      "Kolicina nije broj na otpremnici: " & otpID
-        End If
-        kolRed = CDbl(data(r, cKol))
+            kolRed = CDbl(sOtp(4))
+            ambRed = CDbl(sOtp(6))
 
-        ambRed = 0
-        If IsNumeric(data(r, cAmb)) Then ambRed = CDbl(data(r, cAmb))
-
-        If Not kolPoKlasi.Exists(klasa) Then
-            kolPoKlasi.Add klasa, 0#
-            ambPoKlasi.Add klasa, 0#
-        End If
-        kolPoKlasi(klasa) = CDbl(kolPoKlasi(klasa)) + kolRed
-        ambPoKlasi(klasa) = CDbl(ambPoKlasi(klasa)) + ambRed
+            If Not kolPoKlasi.Exists(klasa) Then
+                kolPoKlasi.Add klasa, 0#
+                ambPoKlasi.Add klasa, 0#
+            End If
+            kolPoKlasi(klasa) = CDbl(kolPoKlasi(klasa)) + kolRed
+            ambPoKlasi(klasa) = CDbl(ambPoKlasi(klasa)) + ambRed
+        Next sK
     Next i
 
     ' --- izvedene stavke moraju biti smislene --------------------------------
@@ -5709,36 +5407,6 @@ End Function
 ' PROSEK GAJBE - Durchschnittsgewicht pro Kaestchen
 ' ============================================================
 
-Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
-    On Error GoTo EH
-
-    If Trim$(brojOtp) = "" Then Exit Function
-
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ, _
-                       "modDokumenta.CalculateProsekGajbe"
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_KOLICINA, _
-                       "modDokumenta.CalculateProsekGajbe"
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_KOL_AMB, _
-                       "modDokumenta.CalculateProsekGajbe"
-
-    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
-    Dim kol As Double, amb As Double
-    kol = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOLICINA)
-    amb = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOL_AMB)
-
-    If amb > 0 Then
-        CalculateProsekGajbe = kol / amb
-    Else
-        CalculateProsekGajbe = 0
-    End If
-
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.CalculateProsekGajbe"
-    CalculateProsekGajbe = 0
-End Function
-
 Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Double
     On Error GoTo EH
 
@@ -6281,53 +5949,6 @@ Private Sub RequireValidDocumentClass(ByVal klasa As String, _
 
     Err.Raise vbObjectError + 1400, sourceName, _
               "Neispravna klasa dokumenta: " & klasa
-End Sub
-
-Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
-                                    ByVal vozacID As String, _
-                                    ByVal brojOtp As String, _
-                                    ByVal brojZbirne As String, _
-                                    ByVal kolicina As Double, _
-                                    ByVal cena As Double, _
-                                    ByVal tipAmb As String, _
-                                    ByVal kolAmb As Long, _
-                                    ByVal klasa As String)
-
-    Const SRC As String = "ValidateOtpremnicaInput"
-
-    If Len(Trim$(stanicaID)) = 0 Then
-        Err.Raise vbObjectError + 1401, SRC, "StanicaID je obavezan."
-    End If
-
-    If Len(Trim$(vozacID)) = 0 Then
-        Err.Raise vbObjectError + 1402, SRC, "VozacID je obavezan."
-    End If
-
-    If Len(Trim$(brojOtp)) = 0 Then
-        Err.Raise vbObjectError + 1403, SRC, "Broj otpremnice je obavezan."
-    End If
-
-    'If Len(Trim$(brojZbirne)) = 0 Then
-    '    Err.Raise vbObjectError + 1404, SRC, "Broj zbirne je obavezan."
-    'End If
-
-    If kolicina <= 0 Then
-        Err.Raise vbObjectError + 1405, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
-    End If
-
-    If cena < 0 Then
-        Err.Raise vbObjectError + 1406, SRC, "Cena ne sme biti negativna."
-    End If
-
-    If kolAmb < 0 Then
-        Err.Raise vbObjectError + 1407, SRC, "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1408, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
-    End If
-
-    RequireValidDocumentClass klasa, SRC
 End Sub
 
 Private Sub ValidateZbirnaInput(ByVal vozacID As String, _

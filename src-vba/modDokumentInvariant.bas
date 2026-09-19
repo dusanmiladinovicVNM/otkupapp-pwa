@@ -110,7 +110,14 @@ Public Function SumOtpremniceByKlasa(ByVal brojZbirne As String) As Object
     Next i
     Exit Function
 EH:
+    ' Greska se PROPUSTA, ne guta (S3b-1). Progutana je ostavljala recnik sa
+    ' nulama, a RecalculateZbirnaFromOtpremnice_TX ga je tada upisivao u zbirnu:
+    ' zbirna je "rekalkulisana" na 0 kg bez ijedne greske. Oba pozivaoca vec
+    ' imaju EH koji pad pretvara u neuspeh (isValid = False / False).
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr SRC
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' Per-klasa suma AKTIVNIH zbirna redova za dati BrojZbirne (isti oblik kao gore,

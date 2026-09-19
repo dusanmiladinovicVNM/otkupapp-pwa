@@ -123,14 +123,15 @@ KOLONE_STAROG_MODELA = re.compile(
 # greske kao sidro sabotaze koje vise ne pokazuje ni na sta.
 #
 # Sta je ostalo na 18.09.2026 (posle S3b):
-#   otp_stari_pisac 4  -- sudar imena: ekranska modScrDokumenti.SaveOtpremnica
-#                         (adapter F2, ne pisac). Pravi pisac nema pozivaoca.
+#   otp_stari_pisac 0  -- prag slajsa dostignut: SaveOtpremnica* je obrisan, a
+#                         ekranski adapter F2 preimenovan u SnimiOtpremnicu (bio je
+#                         sudar imena, ne pisac).
 #   otp_linija     24  -- cinjenice ZAGLAVLJA (Vrsta, Sorta, TipAmbalaze,
 #                         KulturaID) + tri kozmeticka reda u modSetup. Kolicina,
 #                         Klasa, KolAmbalaze i Bruto vise se ne citaju zivo.
 #   otp_cena        0  -- prag slajsa dostignut: zaglavlje nema cenu.
 PRAGOVI = collections.OrderedDict([
-    ("otp_stari_pisac", 4),
+    ("otp_stari_pisac", 0),
     ("otp_linija", 24),
     ("otp_cena", 0),
 ])

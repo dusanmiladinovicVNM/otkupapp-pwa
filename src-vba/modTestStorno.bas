@@ -14,8 +14,8 @@ Option Explicit
 ' Prefiks svih test podataka: "SVT-" (Storno-Veze-Test) -> izolacija.
 '
 ' Pokriva 8 scenarija (vidi zadatak FAZA 5):
-'  T01 storno otpremnice rekalkulise zbirnu
-'  T02 prevezivanje otpremnice validira OBE zbirne
+'  (T01, T02 i T20 -- zbirna rekalkulisana iz VEZANIH otpremnica -- obrisani
+'   u S3b-1: stari lanac zbirne, vraca ih S4 nad tblZbirnaIzvori.)
 '  T03 storno zbirne sa aktivnim otpremnicama ne ostavlja mismatch
 '  T04 ispravka zbirne prevezuje otpremnice i prijemnicu
 '  T05 paleta-stavke dobijaju novu zbirnu pri ispravci
@@ -61,6 +61,7 @@ Public Sub RunStornoTestSuite()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
@@ -81,8 +82,6 @@ Public Sub RunStornoTestSuite()
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, HLAD_KUP
     SetConfigValue CFG_KEY_MALINA_MODE, "NO"
 
-    T01_StornoOtpremniceRekalkuliseZbirnu
-    T02_PrevezivanjeValidiraObeZbirne
     T03_StornoZbirneBezMismatch
     T04_IspravkaZbirnePrevezuje
     T05_PaletaStavkeNovaZbirna
@@ -105,7 +104,6 @@ Public Sub RunStornoTestSuite()
     T17_PonistenjeZbirnaHladnjacaKaskada
     T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu
     T19_DupliVsPonistenjeZbirnaOtpremnice
-    T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu
     T21_PonistenjeOtpremniceJedinaKaskadaCeoTok
     T22_SimpleStornoOtpremniceNeOstavljaZbirnu00
     T23_StornoIzvodaRemapVracaStavkeUObradu
@@ -152,55 +150,6 @@ EH:
 
     Err.Raise ERR_STORNO_SUITE_FAILED, "modTestStorno.RunStornoTestSuite", _
         "RunStornoTestSuite prekinut: " & errDesc
-End Sub
-
-' ============================================================
-' T01 - storno (DUPLI) jedne otpremnice rekalkulise zbirnu na preostale.
-' ============================================================
-Private Sub T01_StornoOtpremniceRekalkuliseZbirnu()
-    Const S As String = "T01 storno otpremnice -> recalc zbirne: "
-
-    SeedZbirna "SVT-Z1", "I", 100, 10
-    SeedOtpremnica "SVT-OA1", "SVT-Z1", "I", 60, 6
-    SeedOtpremnica "SVT-OB1", "SVT-Z1", "I", 40, 4
-
-    ' Pocetno stanje: 100 = 60 + 40 -> OK
-    Chk modDokumentInvariant.IsZbirnaConsistent("SVT-Z1"), S & "pocetni invariant OK"
-
-    ' Storno OB1 kao DUPLI/FANTOM -> zbirna se rekalkulise na preostalu OA1 (60/6).
-    Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OB1", SV_MODE_DUPLI)
-    Chk CBool(res("success")), S & "RunOtpremnicaCorrection(DUPLI) uspeo"
-
-    Dim inv As Object: Set inv = modDokumentInvariant.ValidateZbirnaInvariant("SVT-Z1")
-    ChkEqD CDbl(inv("kgZbrI")), 60, S & "zbirna KG I rekalkulisana na 60"
-    ChkEq CLng(inv("ambZbrTotal")), 6, S & "zbirna AMB rekalkulisana na 6"
-    Chk CBool(inv("isValid")), S & "invariant OK posle storna (nema tihi mismatch)"
-End Sub
-
-' ============================================================
-' T02 - ValidateOtpremnicaZbirnaImpact hvata mismatch na OBE zbirne.
-' ============================================================
-Private Sub T02_PrevezivanjeValidiraObeZbirne()
-    Const S As String = "T02 prevezivanje validira obe zbirne: "
-
-    SeedZbirna "SVT-Z2A", "I", 100, 10
-    SeedOtpremnica "SVT-OA2", "SVT-Z2A", "I", 60, 6
-    SeedOtpremnica "SVT-OB2", "SVT-Z2A", "I", 40, 4
-    SeedZbirna "SVT-Z2B", "I", 50, 5
-    SeedOtpremnica "SVT-OC2", "SVT-Z2B", "I", 50, 5
-
-    Dim impact As Object
-    Set impact = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
-    Chk CBool(impact("bothValid")), S & "obe zbirne validne pre premestaja"
-
-    ' Premesti OB2 (40) sa Z2A na Z2B BEZ rekalkulacije -> obe postaju mismatch.
-    ForceSetOtpremnicaZbirna "SVT-OB2", "SVT-Z2B"
-
-    Set impact = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
-    Chk Not CBool(impact("oldValid")), S & "stara zbirna (Z2A) sada mismatch"
-    Chk Not CBool(impact("newValid")), S & "nova zbirna (Z2B) sada mismatch"
-    Chk Not CBool(impact("bothValid")), S & "bothValid = False (uhvacen mismatch)"
 End Sub
 
 ' ============================================================
@@ -829,29 +778,6 @@ Private Sub T19_DupliVsPonistenjeZbirnaOtpremnice()
 End Sub
 
 ' ============================================================
-' T20 - PONISTENJE JEDNE otpremnice sa DELJENOM zbirnom NE obara zbirnu (sestre):
-' storno te otpremnice + rekalk; sestra + prijemnica prezivljavaju.
-' ============================================================
-Private Sub T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu()
-    Const S As String = "T20 PONISTENJE otpremnice (deljena) ne obara zbirnu: "
-
-    SeedZbirna "SVT-Z20", "I", 100, 10, HLAD_KUP
-    SeedOtpremnica "SVT-OA20", "SVT-Z20", "I", 60, 6
-    SeedOtpremnica "SVT-OB20", "SVT-Z20", "I", 40, 4
-    SeedPrijemnica "SVT-P20", "SVT-Z20", "I", 100, 10
-
-    Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OA20", SV_MODE_PONISTENJE, True)
-    Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OA20", COL_OTP_ID), "", S & "OA20 stornirana"
-    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OB20", COL_OTP_ID) <> "", S & "OB20 PREZIVLJAVA (deljena zbirna)"
-    Chk ZbirnaPostoji("SVT-Z20"), S & "zbirna PREZIVLJAVA (deljena -> nije oborena)"
-    Dim inv As Object: Set inv = modDokumentInvariant.ValidateZbirnaInvariant("SVT-Z20")
-    ChkEqD CDbl(inv("kgZbrI")), 40, S & "zbirna rekalk na 40 (preostala OB20)"
-    Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P20", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (zbirna ziva)"
-End Sub
-
-' ============================================================
 ' T21 - malina 1:1 (blok = okidac celog lanca; stanica=hladnjaca -> NIKAD dve
 ' otpremnice na zbirnoj / dva bloka na otpremnici): PONISTENJE JEDINE otpremnice
 ' ekskluzivno drzi zbirnu -> kaskada celog toka (zbirna+prijemnica+palete),
@@ -1240,14 +1166,24 @@ Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
         Array(broj & "-ID-" & klasa, Date, broj, kupac, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa)
 End Sub
 
+' Otpremnica u NOVOM obliku (S3b-1): zaglavlje + jedna stavka. Citaoci od S3b-1
+' citaju kolicinu, klasu i gajbe sa stavki, a zaglavlje bez stavki odbijaju po
+' imenu -- seed koji bi ga pravio merio bi stanje koje pisac ne moze da napravi.
+'
+' BrojZbirne je i dalje veza STAROG modela: storno okvir ovog suite-a ide po
+' njoj. Taj deo prelazi na clanstvo (tblZbirnaIzvori) u S4, a storno po ID-u u
+' S3c -- do tada seed nosi obe stvari, a merodavna kolicina je na stavci.
 Private Sub SeedOtpremnica(ByVal broj As String, ByVal brojZbirne As String, _
                            ByVal klasa As String, ByVal kg As Double, ByVal amb As Long)
     SvAppend TBL_OTPREMNICA, _
         Array(COL_OTP_ID, COL_OTP_DATUM, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, _
-              COL_OTP_KOLICINA, COL_OTP_TIP_AMB, COL_OTP_KOL_AMB, COL_OTP_VRSTA, _
-              COL_OTP_SORTA, COL_OTP_KLASA), _
-        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, kg, "SVT-A", amb, _
-              "SVT-VOCE", "SVT-SORTA", klasa)
+              COL_OTP_TIP_AMB, COL_OTP_VRSTA, COL_OTP_SORTA), _
+        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, "SVT-A", _
+              "SVT-VOCE", "SVT-SORTA")
+    SvAppend TBL_OTPREMNICA_STAVKE, _
+        Array(COL_OPS_ID, COL_OPS_OTPREMNICA_ID, COL_OPS_RB, COL_OPS_KLASA, _
+              COL_OPS_KOLICINA, COL_OPS_KOL_AMB), _
+        Array(broj & "-ID-" & klasa & "-S1", broj & "-ID-" & klasa, 1, klasa, kg, amb)
 End Sub
 
 Private Sub SeedPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
@@ -1564,15 +1500,6 @@ Private Function AmbSaldo(ByVal entID As String, ByVal entTip As String, ByVal t
 EH:
     AmbSaldo = -99999      ' sentinel -> test vidljivo pada
 End Function
-
-' Direktan upis BrojZbirne na otpremnicu (za T02 simulaciju losega premestaja).
-Private Sub ForceSetOtpremnicaZbirna(ByVal otpBroj As String, ByVal novaZbirna As String)
-    Dim c As Collection: Set c = FindRows(TBL_OTPREMNICA, COL_OTP_BROJ, otpBroj)
-    Dim k As Long
-    For k = 1 To c.count
-        UpdateCell TBL_OTPREMNICA, CLng(c(k)), COL_OTP_BROJ_ZBIRNE, novaZbirna
-    Next k
-End Sub
 
 Private Function NzTx(ByVal v As Variant) As String
     If IsError(v) Or IsNull(v) Or IsEmpty(v) Then NzTx = "" Else NzTx = Trim$(CStr(v))

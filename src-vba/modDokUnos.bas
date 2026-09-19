@@ -440,6 +440,19 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     Dim errDesc As String
     On Error GoTo EH
     fokus = ""
+
+    ' F3 JE PAUZIRAN DO S4 (plan S14.14). Zbirna se ovde poredi sa zbirom
+    ' otpremnica VEZANIH kroz Otpremnica.BrojZbirne, a od S3a tu vezu ne pise
+    ' nijedan zivi put: F2 otvara nacrt bez BrojZbirne, a stari pisac, auto-lanac
+    ' hladnjace, malina auto-zbirna i uvoz VOZ su obrisani ili pauzirani. Zbir je
+    ' zato uvek 0 i provera nize bi odbila SVAKU zbirnu porukom "validacija nije
+    ' prosla" -- koja operatera salje da trazi gresku u kilogramima.
+    '
+    ' Pauza je PRE svih provera i imenuje razlog. Kod ispod ostaje netaknut: S4 ga
+    ' vraca nad tblZbirnaIzvori i izdatim otpremnicama, po ID-u.
+    ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA")
+    Exit Function
+
     strogo = IsValidacijaUnosa()
 
     ' Vozac je entitet NIZA zbirne (Z3a): po njemu se broji i njegova je tura.
@@ -726,6 +739,13 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     Dim postojeca As String, errDesc As String
     On Error GoTo EH
     fokus = ""
+
+    ' F4 JE PAUZIRAN DO S4, iz istog razloga kao F3 (ZbirnaValidiraj): prijemnica
+    ' trazi postojecu zbirnu, a zbirna se od S3a ne moze napraviti. Operater
+    ' dobija razlog umesto poruke o zbirnoj koja "ne postoji".
+    PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA")
+    Exit Function
+
     strogo = IsValidacijaUnosa()
 
     If Len(S(p, "kupacID")) = 0 Then

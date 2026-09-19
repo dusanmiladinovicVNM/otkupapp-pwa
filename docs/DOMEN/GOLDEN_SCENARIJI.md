@@ -1,7 +1,11 @@
 # Golden scenariji — specifikacija za pregled
 
-> **Status: 12 registrovano i zaključano. D1 ima odluku (§10 — rekalkulacija),
-> ali čeka Zbirna cutover da je implementira; do tada nije registrovan.**
+> **Status od 19.09.2026 (S3b-1, plan §14.14): registrovana su 2 — D3 i G2.** Deset
+> scenarija grupa A, B, D2, F2 i G1 vozilo je pun lanac otpremnica → zbirna → prijemnica → faktura
+> kroz stari pisac otpremnice i vezu `BrojZbirne`. Pisac je obrisan, a F3/F4 su pauzirani do S4, pa su
+> ti scenariji **obrisani, ne prepravljeni ručnom vezom**. Snimaju se iznova u S4, nad izdatim
+> otpremnicama i `tblZbirnaIzvori`; stari snimci su u git istoriji (`fc06fa77:tests/golden/`).
+> Specifikacija ispod ostaje merodavna za ono što S4 mora da vrati. D1 ima odluku (§10), takođe za S4.
 > `src-vba/modGoldenTests.bas`, suite `RunGoldenSuite`, goldeni u
 > `tests/golden/`.
 >
