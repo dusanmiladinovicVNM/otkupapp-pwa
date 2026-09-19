@@ -1830,7 +1830,7 @@ Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVa
                         Dim oid As String: oid = Trim$(NzTxC(data, i, cId))
                         If zbirStavki.Exists(oid) Then
                             Dim rec As Variant: rec = zbirStavki(oid)
-                            kol = Format$(CDbl(rec(0)), "#,##0.##")
+                            kol = modStornoDok.KgTekst(CDbl(rec(0)))
                         End If
                     End If
                     If Len(tf) = 0 Or _

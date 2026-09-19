@@ -544,7 +544,7 @@ Private Function SumActiveOtpStavke(ByVal keyVal As String, _
             End If
         End If
     Next i
-    If found Then SumActiveOtpStavke = Format$(total, "#,##0.##")
+    If found Then SumActiveOtpStavke = modStornoDok.KgTekst(total)
 End Function
 
 Private Function SafeDblZ(ByVal v As Variant) As Double

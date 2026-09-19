@@ -1026,11 +1026,21 @@ Private Function OtpremnicaOpis(ByVal otpremnicaID As String) As String
                                             otpremnicaID, "modStornoDok.OtpremnicaOpis")
     Dim dan As String
     If IsDate(datV) Then dan = Format$(CDate(datV), "dd.mm.yyyy") Else dan = NzToText(datV)
-    OtpremnicaOpis = " (" & stNaziv & ", " & dan & ", " & _
-                     Format$(CDbl(z(0)), "#,##0.##") & " kg)"
+    OtpremnicaOpis = " (" & stNaziv & ", " & dan & ", " & KgTekst(CDbl(z(0))) & " kg)"
     Exit Function
 EH:
     OtpremnicaOpis = ""
+End Function
+
+' Kilogrami za prikaz -- isto pravilo kao modOtkupUI.FmtKg: ceo broj bez
+' decimala, inace dve. Format "#,##0.##" u lokalu sa decimalnim zarezom ostavlja
+' VISECI zarez ("250, kg"), jer se separator pise i kad decimala nema.
+Public Function KgTekst(ByVal v As Double) As String
+    If v = Int(v) Then
+        KgTekst = Format$(v, "#,##0")
+    Else
+        KgTekst = Format$(v, "#,##0.00")
+    End If
 End Function
 
 ' Opis reversa iz traga ispravke (OldDocID = ReversID): " (naziv / StanicaID, dan)",
