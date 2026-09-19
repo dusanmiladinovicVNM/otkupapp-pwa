@@ -6268,11 +6268,28 @@ Private Sub Test_OTP_IzmenaNacrtaF2()
                  "F2 izmena: izdata se ne menja"
     AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "F2 izmena: odbijena izmena ne ostaje otvorena"
 
-    ' Otkazana izmena: sledece snimanje pravi NOV nacrt.
-    Dim drugi As String
-    drugi = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-IZN2-" & scenario), _
-                                     OtpOcek(30#, 3#, 0#, 0#), g)
+    ' Izuzima se SAMO sopstveni red: izmena ne sme da preuzme broj drugog
+    ' dokumenta istog niza (stanica, dan). Odbijeno snimanje ostavlja izmenu
+    ' otvorenu -- operater ispravlja broj i snima ponovo.
+    Dim dan As Date, drugi As String, treci As String, brTreci As String, p As Object
+    dan = NextTestDate()
+    brTreci = TEST_PREFIX & "-OTP-IZN3-" & scenario
+    drugi = CreateOtpremnicaDraft_TX(OtpBrojHeader(TEST_PREFIX & "-OTP-IZN2-" & scenario, dan, _
+                                                   TEST_ST_ID), OtpOcek(30#, 3#, 0#, 0#), g)
+    treci = CreateOtpremnicaDraft_TX(OtpBrojHeader(brTreci, dan, TEST_ST_ID), _
+                                     OtpOcek(20#, 2#, 0#, 0#), g)
+    AssertTrue Len(drugi) > 0 And Len(treci) > 0, _
+               "F2 izmena: dva nacrta istog niza napravljena (" & g & ")"
     AssertEquals "", modScrDokumenti.OtvoriIzmenuNacrta(drugi), "F2 izmena: drugi nacrt otvoren"
+    Set p = PoljaF2IzNacrta(drugi, 30#, 3)
+    p("brDok") = brTreci
+    AssertTrue InStr(1, modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), _
+                     vbBinaryCompare) = 1, _
+               "F2 izmena: tudj broj istog niza je odbijen"
+    AssertEquals drugi, modScrDokumenti.Scr_IzmenaOtpID(), _
+                 "F2 izmena: posle odbijenog snimanja izmena ostaje otvorena"
+
+    ' Otkazana izmena: sledece snimanje pravi NOV nacrt.
     modScrDokumenti.Scr_IzmenaOtkazi
     AssertEquals "", modScrDokumenti.Scr_IzmenaOtpID(), "F2 izmena: otkazivanje brise izmenu"
 

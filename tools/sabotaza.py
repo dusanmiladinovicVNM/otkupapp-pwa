@@ -649,6 +649,14 @@ SABOTAZE = {
         "Test_OTP_IzdavanjeCitaStrogo",
         "OTP strogo: read-model pada po imenu",
     ),
+    # Izmena nacrta u F2 opet odbija SOPSTVENI broj (validacija ne izuzima svoj red).
+    "izmena-nacrta-sopstveni-broj": (
+        "modDokUnos.bas",
+        '                                            S(p, "izmenaOtpID"))\n',
+        '                                            "")   \' SABOTAZA: nacrt ne zadrzava svoj broj\n',
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: snimanje uspelo",
+    ),
     # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
     "otk-storno-izvora-aktivne-otpremnice": (
         "modStorno.bas",

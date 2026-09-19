@@ -966,6 +966,8 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     p("kolicinaII") = polja("kolicinaII")
     p("cenaII") = polja("cenaII")
     p("kolAmbII") = polja("kolAmbII")
+    ' Otvorena izmena: validacija broja izuzima sopstveni red nacrta.
+    p("izmenaOtpID") = mIzmenaOtpID
 
     greska = modDokUnos.OtpremnicaValidiraj(p, fokus)
     If Len(greska) > 0 Then

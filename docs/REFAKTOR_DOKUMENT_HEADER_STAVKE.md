@@ -3373,6 +3373,8 @@ pa je pad strogog čitača mogao da ostavi otvorenu izmenu nad delimičnom formo
 formu **pre** otvaranja; pad čitača ostavlja izmenu zatvorenu (isti test), a ekran prazni formu prethodne izmene da je
 sledeće snimanje ne bi upisalo kao nov nacrt.
 
+**Prvi pun prolaz (`2726edd2`): izmena nacrta je odbijala SOPSTVENI broj.** F2 validacija (`modDokUnos.OtpremnicaValidiraj`) je broj proveravala kroz `BrojZauzetUNizu` bez `izuzmiID`, a pisac izmene (`OtpIzmeniDraft`) izuzima svoj red po ID-u. `Test_OTP_IzmenaNacrtaF2` je pao sa „broj je već izdat“, a kao zauzimač je naveden baš nacrt koji se menja. Popravka: unos nosi `izmenaOtpID`, a validacija izuzima samo taj red, isto kao pisac. Test sada meri i drugi smer: tuđi broj istog niza (stanica, dan) se i dalje odbija, a izmena ostaje otvorena. Sabotaža `izmena-nacrta-sopstveni-broj` (ukupno 501). Ostale suite su u tom prolazu bile zelene; testovi strogog izdavanja su prošli (ugnježdena transakcija pisca u test-transakciji radi).
+
 **P2, ostaje za pre S5 (backlog):** `OtpRequireIzvorValjan` prima otkup kao izvor samo kad je status tačno `IZDATO`,
 a životni ciklus je `IZDATO → PROSLEDJENO`. Danas nijedan lokalni put ne prebacuje otkup u `PROSLEDJENO`
 (`CreateOtkup_TX` piše `IZDATO`), pa nije živ kvar. Pre S5 (PWA sync) izvor mora da prizna i `PROSLEDJENO`, sa istom

@@ -81,6 +81,9 @@ Public Function NoviOtpremnicaUnos() As Object
     p("kolAmbII") = 0&
     p("brutoKgI") = 0#
     p("brutoKgII") = 0#
+    ' OtpremnicaID nacrta koji se MENJA (izmena u F2); prazno = nov nacrt.
+    ' Provera broja tada izuzima taj red -- isto kao pisac (OtpIzmeniDraft).
+    p("izmenaOtpID") = ""
     Set NoviOtpremnicaUnos = p
 End Function
 
@@ -237,10 +240,14 @@ Public Function OtpremnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     ' nizu (stanica, dan) i sa storniranima. Zatecena je isla kroz CheckDuplicate
     ' -- cela tabela, sirovo poredjenje, bez storniranih -- pa je odbijala isti
     ' broj na drugoj stanici, a pustala broj stornirane otpremnice.
+    '
+    ' Izmena nacrta izuzima SAMO svoj red (po ID-u), kao i pisac: bez toga je
+    ' nacrt odbijao sopstveni broj, a sa sirim izuzimanjem bi preuzeo tudj.
     If Len(S(p, "brDok")) > 0 Then
         Dim zauzeo As String
         zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_OTP, S(p, "stanicaID"), _
-                                            CDate(p("datum")), S(p, "brDok"))
+                                            CDate(p("datum")), S(p, "brDok"), _
+                                            S(p, "izmenaOtpID"))
         If Len(zauzeo) > 0 Then
             fokus = "brDok"
             OtpremnicaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
