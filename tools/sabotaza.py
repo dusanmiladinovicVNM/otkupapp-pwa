@@ -251,8 +251,8 @@ SABOTAZE = {
     # --- ClearForm ----------------------------------------------------------
     "clear-datum": (
         "modOtkupUI.bas",
-        '    SetDatumDanas mFrm.Controls("zForm")\n',
-        '    \' SABOTAZA: datum se ne vraca na danas\n',
+        '    If Not imaOtp Then SetDatumDanas mFrm.Controls("zForm")\n',
+        '    If False Then SetDatumDanas mFrm.Controls("zForm")   \' SABOTAZA: datum se ne vraca na danas\n',
         "T_ClearForm_Ugovor",
         "posle snimanja datum se vraca na danas",
     ),
@@ -495,8 +495,10 @@ SABOTAZE = {
     # --- kapije storna ------------------------------------------------------
     "storno-nema-dok": (
         "modStornoDok.bas",
-        "            If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)\n",
-        "            If False Then StornoRazlog = NijePronadjen(broj)   ' SABOTAZA: nepostojeci otkup prolazi kapiju\n",
+        "            If Not OtkupAktivanPoID(docID) Then\n"
+        "                StornoRazlog = NijePronadjen(broj)\n",
+        "            If False Then   ' SABOTAZA: nepostojeci otkup prolazi kapiju\n"
+        "                StornoRazlog = NijePronadjen(broj)\n",
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument",
     ),
@@ -547,6 +549,139 @@ SABOTAZE = {
         "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_GENERACIJA_ID   ' SABOTAZA\n",
         "Test_OTP_F8StornoPoID",
         "skrivena kolona identiteta je OtpremnicaID",
+    ),
+    # --- radni sto otpremnice u F1 (S3b-2) --------------------------------------
+    # Dok je otpremnica aktivna, datum bloka se opet vraca na danas.
+    "clear-datum-otpremnice": (
+        "modOtkupUI.bas",
+        '    If Not imaOtp Then SetDatumDanas mFrm.Controls("zForm")\n',
+        '    SetDatumDanas mFrm.Controls("zForm")   \' SABOTAZA: datum otpremnice se gubi\n',
+        "T_ClearForm_Ugovor",
+        "dok je otpremnica aktivna datum se NE vraca na danas",
+    ),
+    # Izdata otpremnica opet moze da postane aktivna.
+    "radni-sto-bira-izdatu": (
+        "modScrDokumenti.bas",
+        '    If st <> UCase$(IZDATO_DRAFT) Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")\n',
+        '    If False Then NacrtRazlog = Poruka("OTKUI_ERR_OTP_IZDATA")   \' SABOTAZA: izdata se bira\n',
+        "Test_OTP_RadniStoBiraSamoNacrt",
+        "RS nacrt: izdata se ne bira",
+    ),
+    # Semafor trake opet ne gleda ostatak (uvek "spremna").
+    "traka-semafor-slep": (
+        "modScrDokumenti.bas",
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then sveNula = False\n',
+        "        ' SABOTAZA: semafor ne gleda ostatak\n",
+        "Test_OTP_RadniStoVeziTrakaIzdaj",
+        "RS tok: traka -- u toku",
+    ),
+    # Prekoracenje neke klase opet ne boji traku.
+    "traka-prekoracenje-nevidljivo": (
+        "modScrDokumenti.bas",
+        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n',
+        "        If False Then prek = True   ' SABOTAZA: prekoracenje se ne vidi\n",
+        "Test_OTP_RadniStoVeziTrakaIzdaj",
+        "RS tok: traka -- prekoracenje je crveno",
+    ),
+    # Klasa koju otpremnica ne ocekuje opet prolazi bez pitanja.
+    "prekoracenje-neocekivana-klasa": (
+        "modScrDokumenti.bas",
+        "    If kg <= ost + 0.0001 Then Exit Function\n",
+        "    If kg <= ost + 0.0001 Or ost = 0 Then Exit Function   ' SABOTAZA: neocekivana klasa prolazi\n",
+        "Test_OTP_RadniStoVeziTrakaIzdaj",
+        "RS tok: klasa koju otpremnica ne ocekuje je prekoracenje",
+    ),
+    # Posle izdavanja ekran opet ostaje u kontekstu izdate otpremnice.
+    "izdaj-ostaje-u-kontekstu": (
+        "modScrDokumenti.bas",
+        "    Scr_OtpOtkazi\n"
+        "    Exit Function\n"
+        "EH:\n"
+        "    IzdajAktivnu = ",
+        "    ' SABOTAZA: kontekst izdate ostaje\n"
+        "    Exit Function\n"
+        "EH:\n"
+        "    IzdajAktivnu = ",
+        "Test_OTP_RadniStoVeziTrakaIzdaj",
+        "RS tok: posle izdavanja nema aktivne",
+    ),
+    # Lista blokova opet pokazuje otkupe van sastava aktivne otpremnice.
+    "blokovi-van-sastava": (
+        "modScrDokumenti.bas",
+        "        If Not clan.Exists(UCase$(oid)) Then GoTo Sledeci\n",
+        "        ' SABOTAZA: svi otkupi su blokovi\n",
+        "Test_OTP_RadniStoListe",
+        "RS liste: u blokovima je SAMO sastav aktivne",
+    ),
+    # Red liste otpremnica opet ne nosi identitet -- izbor bi isao po broju.
+    "otp-lista-bez-identiteta": (
+        "modScrDokumenti.bas",
+        "        outA(n, 11) = otpID\n",
+        "        outA(n, 11) = \"\"   ' SABOTAZA: red bez identiteta\n",
+        "Test_OTP_RadniStoListe",
+        "RS liste: nacrt je u otvorenima, ID u poslednjoj koloni",
+    ),
+    # Otvorena izmena nacrta u F2 opet pravi NOV nacrt umesto izmene.
+    "izmena-nacrta-pravi-nov": (
+        "modScrDokumenti.bas",
+        "    If Len(mIzmenaOtpID) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: izmena pravi nov nacrt\n",
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: nov nacrt NIJE napravljen",
+    ),
+    # Otkazivanje izmene opet ne zatvara izmenu -- sledeci nov unos bi menjao nacrt.
+    "izmena-nacrta-ne-otkazuje": (
+        "modScrDokumenti.bas",
+        "Public Sub Scr_IzmenaOtkazi()\n"
+        "    mIzmenaOtpID = \"\"\n",
+        "Public Sub Scr_IzmenaOtkazi()\n"
+        "    ' SABOTAZA: izmena ostaje otvorena\n",
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: otkazivanje brise izmenu",
+    ),
+    # Izdavanje opet cita ocekivano mimo strogog ugovora (review #363, P1).
+    "izdavanje-guta-korupciju": (
+        "modDokumenta.bas",
+        "    ocekRedovi = StavkeOtpremniceRedovi()\n",
+        "    On Error Resume Next   ' SABOTAZA: korupcija stavki se guta\n"
+        "    ocekRedovi = StavkeOtpremniceRedovi()\n"
+        "    On Error GoTo 0\n",
+        "Test_OTP_IzdavanjeCitaStrogo",
+        "OTP strogo: read-model pada po imenu",
+    ),
+    # Izmena nacrta u F2 opet odbija SOPSTVENI broj (validacija ne izuzima svoj red).
+    "izmena-nacrta-sopstveni-broj": (
+        "modDokUnos.bas",
+        '                                            S(p, "izmenaOtpID"))\n',
+        '                                            "")   \' SABOTAZA: nacrt ne zadrzava svoj broj\n',
+        "Test_OTP_IzmenaNacrtaF2",
+        "F2 izmena: snimanje uspelo",
+    ),
+    # Citalac otkupa opet pusta dve stavke iste klase (review #363, drugi krug).
+    "otk-citalac-dve-iste-klase": (
+        "modOtkup.bas",
+        "            If parKlasa.Exists(kParKl) Then\n",
+        "            If False Then   ' SABOTAZA: dve iste klase otkupa prolaze\n",
+        "Test_OTP_IzdavanjeCitaIzvorStrogo",
+        "OTP strogo izvor: read-model pada po imenu",
+    ),
+    # Citalac otkupa opet pusta bruto manji od neta.
+    "otk-citalac-bruto-manji": (
+        "modOtkup.bas",
+        "    If CDbl(v) > 0 And CDbl(v) < CDbl(kol) Then\n",
+        "    If False Then   ' SABOTAZA: bruto manji od neta prolazi\n",
+        "Test_OTP_IzdavanjeCitaIzvorStrogo",
+        "OTP strogo izvor: bruto manji od neta obara read-model",
+    ),
+    # Pisac opet stornira otkup koji je u sastavu aktivne otpremnice (review #362).
+    "otk-storno-izvora-aktivne-otpremnice": (
+        "modStorno.bas",
+        "    If Len(otpID) > 0 Then\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "    If False Then   ' SABOTAZA: izvor otpremnice se stornira\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "Test_OTK_IzvorAktivneOtpremniceSeNeStornira",
+        "pisac odbija storno izvora",
     ),
     # Pisac opet stornira izvor aktivne kanonske zbirne (review #362, A13/A15).
     "otp-storno-izvora-aktivne-zbirne": (

@@ -143,7 +143,15 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
         Case STIP_OTKUP
             ' Identitet otkupa je OtkupID izabranog reda (S1e). Bez njega se ne
             ' pogadja po broju: broj je jedinstven tek po (OM, dan).
-            If Not OtkupAktivanPoID(docID) Then StornoRazlog = NijePronadjen(broj)
+            If Not OtkupAktivanPoID(docID) Then
+                StornoRazlog = NijePronadjen(broj)
+            ElseIf Len(modDokumenta.OtpremnicaZaOtkup(Trim$(docID))) > 0 Then
+                ' Isti razlog koji pisac dize (modStorno.StornoOtkup), ali PRE
+                ' potvrde. Operateru se imenuje BROJ otpremnice: roditelj je na
+                ' istom otkupnom mestu, pa je broj tu dovoljan da je nadje.
+                StornoRazlog = Poruka("STORNO_ERR_OTK_IZVOR_OTP") & " " & _
+                               OtpremnicaBrojZaID(modDokumenta.OtpremnicaZaOtkup(Trim$(docID)))
+            End If
 
         Case STIP_OTPREMNICA
             ' Identitet otpremnice je OtpremnicaID izabranog reda (review #362),
@@ -1037,6 +1045,14 @@ Private Function OtpremnicaOpis(ByVal otpremnicaID As String) As String
     Exit Function
 EH:
     OtpremnicaOpis = ""
+End Function
+
+' Broj otpremnice za poruku operateru; ID kad broja nema (nikad prazno).
+Private Function OtpremnicaBrojZaID(ByVal otpID As String) As String
+    On Error Resume Next
+    OtpremnicaBrojZaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                    otpID, COL_OTP_BROJ)))
+    If Len(OtpremnicaBrojZaID) = 0 Then OtpremnicaBrojZaID = otpID
 End Function
 
 ' Kilogrami za prikaz -- isto pravilo kao modOtkupUI.FmtKg: ceo broj bez

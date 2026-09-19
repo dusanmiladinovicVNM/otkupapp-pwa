@@ -3284,6 +3284,133 @@ model „klasa I/II = dva zaglavlja istog broja“, a `SumActiveOtpStavke` u sta
 `GeneracijaID`. Otpremnica je iz tog okvira izbačena, pa su obe grane uspavane. S3c ih briše ili zamenjuje logikom
 po ID-u.
 
+### 14.16) S3b-2a — radni sto otpremnice nad kanonom, „Izdaj“ i izmena nacrta (19.09.2026)
+
+**Rez S3b-2 (odluka operatera, 19.09.2026).** Radni sto koji je S1b-3 obrisao sa stare veze bio je ~1400 linija
+u četiri modula. Zato je S3b-2 rezan na dva:
+
+| korak | sadržaj | stanje |
+|---|---|---|
+| **S3b-2a** | kapija storna otkupa (review #362, P1); radni sto u F1 (liste OTPREMNICE i BLOKOVI, aktivna otpremnica, traka, prekoračenje, vezivanje posle unosa, veži/ukloni nad redom, „Izdaj“, napuštanje pri promeni OM, datum aktivne otpremnice u `ClearForm`); izmena nacrta u F2 | ovaj PR |
+| **S3b-2b** | štampa specifikacije blokova (A-018, A-019, A-021) i lista nevezanih blokova (A-025) | |
+
+**Odluka (operater, 19.09.2026): povezano ≠ očekivano rešava izmena nacrta u F2.** `IzdajOtpremnicu_TX` traži
+povezano = očekivano po klasi, tačno. Pre S3b-2 nijedan živi put nije menjao očekivanje nacrta, pa bi nacrt sa
+prekoračenjem (ili sa greškom u F2) ostao zaglavljen. Izjednačavanje pri izdavanju je odbijeno: očekivanje bi
+postalo formalnost uz jednu potvrdu.
+
+#### Pre-flight S3b-2a
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | otpremnica = zaglavlje + očekivanje po klasi + izvori (§14.8 t. 1–4); izdaje operater kad je ostatak 0 |
+| `IDENTITY` | PROVEN | red liste OTPREMNICE/BLOKOVI i F2 nosi ID u nevidljivoj poslednjoj koloni (prioritet 4); izbor, vezivanje, uklanjanje, izdavanje i izmena idu po ID-u, nikad po broju |
+| `CARDINALITY` | PROVEN | otkup je u najviše jednoj aktivnoj otpremnici (pisac + `AktivnoOtpClanstvoPoKanonu`); aktivna otpremnica na radnom stolu je jedna i uvek NACRT |
+| `INVARIANTS/OWNER` | PROVEN | A13/A15: otkup u sastavu aktivne otpremnice se ne stornira — kapija u jezgru `modStorno.StornoOtkup` (P1 review #362); sastav i izdavanje piše samo `modDokumenta` |
+| `WRITERS` | PROVEN | nijedan nov pisac: `DodajOtpremnicaIzvor_TX`, `UkloniOtpremnicaIzvor_TX`, `IzdajOtpremnicu_TX`, `UpdateOtpremnicaDraft_TX` dobijaju prvog živog pozivaoca; ekran ne piše tabelu |
+| `EVENTS` | PROVEN | fizički (roba i gajbe odlaze) = poslovni (dokument važi) = izdavanje; finansijskog nema |
+| `DOWNSTREAM` | PROVEN | izdata otpremnica ulazi u izveštaje i štampu (S3b-1 čitaju samo IZDATO); nacrt ne |
+| `CAPABILITY` | PROVEN | A-011, A-012, A-022..A-024, A-027, A-028 vraćeni, A-020 zamenjen radnjom `vezi`; A-018, A-019, A-021, A-025 → S3b-2b |
+| `ACCEPTANCE` | testovi | v. ispod |
+| `PLATFORM` | N/A | runtime kontrole istim obrascem kao pre S1b-3 (`BuildOtpTraka`), bez novih `WithEvents` |
+| `LANDING` | čisto | grana od `main` `a8d3bd1a` |
+
+#### Izmene
+
+| Šta | Gde |
+|---|---|
+| Kapija: otkup u sastavu aktivne otpremnice (nacrt ili izdata) se ne stornira; F1 i F8 kažu razlog pre potvrde | `modStorno.StornoOtkup`, `modStornoDok.StornoRazlog`, `modScrDokumenti.RowAction` |
+| Liste OTPREMNICE (čip „otvorene“ = nacrti; očekivano/povezano/ostatak iz stavki, status) i BLOKOVI (sastav kroz strog čitač) | `modScrDokumenti.RowsOtpremnice`, `RowsBlokovi`; nov `modDokumenta.IzvoriOtpremnice` |
+| Izbor aktivne otpremnice — samo NACRT; prefill sa cenom po klasi (blokovi, pa `PredlogCena`) | `AktivirajOtpremnicu`, `NacrtRazlog`, `PrefillSpec`/`PrefillZaglavlja`, `CenaKlase` |
+| Traka: ukupno / u blokovima / ostatak / cena; semafor **po klasi** (+20 u I i −20 u II nije „spremna“) | `Scr_OtpInfo`; ljuska `BuildOtpTraka`/`RefreshOtpTraka` |
+| Upis bloka: pitanje o prekoračenju po klasi, pa vezivanje; pad vezivanja se kaže imenom, otkup ostaje upisan | `Scr_Save`, `PrekoracenjeOpis`, `VeziZaAktivnu` |
+| Radnje: veži (SVI), ukloni i izdaj (BLOKOVI); posle izdavanja ekran izlazi iz konteksta | `RowAction`, `UkloniIzAktivne`, `IzdajAktivnu` |
+| Promena OM napušta otpremnicu; `ClearForm` zadržava datum aktivne otpremnice | ljuska `NapustiOtpremnicu`, `ClearForm` |
+| Izmena nacrta u F2: klik na nacrt popuni formu, snimanje menja taj nacrt; pražnjenje forme i promena režima otkazuju izmenu | `IzaberiNacrtZaIzmenu`, `PrefillNacrta`, `SnimiOtpremnicu`; `modDokUnos.OtpremnicaIzmeniNacrt` (+ `OtpremnicaNacrtIzUnosa`, jedno mesto za upis i izmenu) |
+
+#### Testovi i sabotaže
+
+`Test_OTK_IzvorAktivneOtpremniceSeNeStornira` (DRAFT i IZDATO roditelj; kontrola: van sastava storno prolazi),
+`Test_OTP_RadniStoBiraSamoNacrt`, `Test_OTP_RadniStoVeziTrakaIzdaj` (traka „u toku“ → „prekoračenje“ →
+„spremna“; izdavanje odbijeno pa prolazi), `Test_OTP_RadniStoListe` (ID u poslednjoj koloni, brojke iz kanona,
+BLOKOVI = samo sastav), `Test_OTP_IzmenaNacrtaF2` (kroz `Scr_Save`: nov nacrt ne nastaje, članstvo ostaje,
+izdavanje posle izmene prolazi), `T_ClearForm_Ugovor` (datum aktivne otpremnice ostaje). Sabotaže: +11,
+`clear-datum` preusmeren na `ClearForm` (sidro je posle vraćanja `NapustiOtpremnicu` pokazivalo na nju);
+ukupno 499.
+
+**Prag popisa `otp_linija` 24 → 36 (odluka u ovom koraku).** Svih 12 novih živih mesta su činjenice ZAGLAVLJA,
+nijedno linijsko polje: radni sto čita `Vrsta`/`Sorta` (lista) i `Vrsta`/`Sorta`/`TipAmbalaze` (prefill, jedno
+mesto za F1 i F2) — +5; pisci koji su tek sada dobili živog pozivaoca (`OtpRequireIzvorValjan`,
+`OtpKnjiziAmbalazu`, `OtpIzmeniDraft`) — +7. Grupa meša linijska polja sa činjenicama zaglavlja; razdvajanje
+ide u S3e, kad se linijske kolone brišu.
+
+**Ručna provera (ne može se automatizovati):** izgled trake i semafora; klik na red liste OTPREMNICE (prefill,
+prelazak na BLOKOVI); upis bloka u F1 sa izabranom otpremnicom — blok je odmah u BLOKOVI, a pri prekoračenju
+stiže pitanje; potvrda „Izdaj“; klik na nacrt u F2 i snimanje izmene. Vezivanje posle unosa je u `Scr_Save`
+tri linije oko `VeziZaAktivnu`; sama funkcija je pokrivena testom, a spoj kroz ceo upis F1 nije (upis traži
+stanica-lock i štampu).
+
+**Poznato, a namerno nedirano:** posle snimanja bloka `ClearForm` vraća cenu iz cenovnika (`AutoFillCena`), ne
+sa otpremnice — isto ponašanje kao pre S1b-3.
+
+#### Review #363, prvi krug — izdavanje čita strogo (19.09.2026)
+
+**P1.** Read-model (`GetOtpremnicaProgress`) i izdavanje (`OtpIzdaj`) su očekivano i povezano čitali iz **sirovih**
+tabela (`OtpUcitajOcekivano`, `OtpUcitajPovezano`), mimo kanonskih strogih čitača, a nebrojčana vrednost je
+postajala nula (`OtpDbl`). Dve stavke iste klase su se sabirale: nacrt sa 400 + 100 kg klase I i izvorom od 500 kg
+prolazio je jednakost i postajao IZDATO. To je dokument koji `StavkeOtpremniceRedovi` odbija kao korumpiran.
+`Test_OTP_DveStavkeIsteKlaseObaraCitaoce` je merio samo put mreže, pa je suite izgledala kao da je invarijanta
+zatvorena.
+
+**Popravka bez nove runde validacija:** oba učitavanja agregiraju preko postojećih strogih čitača —
+`StavkeOtpremniceRedovi` i `modOtkup.StavkeOtkupaRedovi`. Read-model i izdavanje sada drže isti ugovor stavki kao
+mreža, štampa i izveštaji. Test `Test_OTP_IzdavanjeCitaStrogo`: anomalija u transakciji koja se vraća → read-model
+pada po imenu → pisac odbija sa istim razlogom, status ostaje DRAFT; kontrola posle vraćanja. Sabotaža
+`izdavanje-guta-korupciju` (ukupno 500).
+
+**P2, popravljen jer je kod nov u ovom PR-u:** izmena nacrta u F2 je prefill sastavljala pod `On Error Resume Next`,
+pa je pad strogog čitača mogao da ostavi otvorenu izmenu nad delimičnom formom. Sada `OtvoriIzmenuNacrta` sastavlja
+formu **pre** otvaranja; pad čitača ostavlja izmenu zatvorenu (isti test), a ekran prazni formu prethodne izmene da je
+sledeće snimanje ne bi upisalo kao nov nacrt.
+
+**Prvi pun prolaz (`2726edd2`): izmena nacrta je odbijala SOPSTVENI broj.** F2 validacija (`modDokUnos.OtpremnicaValidiraj`) je broj proveravala kroz `BrojZauzetUNizu` bez `izuzmiID`, a pisac izmene (`OtpIzmeniDraft`) izuzima svoj red po ID-u. `Test_OTP_IzmenaNacrtaF2` je pao sa „broj je već izdat“, a kao zauzimač je naveden baš nacrt koji se menja. Popravka: unos nosi `izmenaOtpID`, a validacija izuzima samo taj red, isto kao pisac. Test sada meri i drugi smer: tuđi broj istog niza (stanica, dan) se i dalje odbija, a izmena ostaje otvorena. Sabotaža `izmena-nacrta-sopstveni-broj` (ukupno 501). Ostale suite su u tom prolazu bile zelene; testovi strogog izdavanja su prošli (ugnježdena transakcija pisca u test-transakciji radi).
+
+**P2, ostaje za pre S5 (backlog):** `OtpRequireIzvorValjan` prima otkup kao izvor samo kad je status tačno `IZDATO`,
+a životni ciklus je `IZDATO → PROSLEDJENO`. Danas nijedan lokalni put ne prebacuje otkup u `PROSLEDJENO`
+(`CreateOtkup_TX` piše `IZDATO`), pa nije živ kvar. Pre S5 (PWA sync) izvor mora da prizna i `PROSLEDJENO`, sa istom
+eksplicitnom semantikom kao `IzdatoStatusJeIzdato`. Stari `DocIsIssued` se ne koristi, jer prazno stanje tumači
+drugačije.
+
+#### Review #363, drugi krug — čitač otkupa drži ugovor pisca (19.09.2026)
+
+**P1.** Posle prvog kruga izdavanje čita izvore kroz `modOtkup.StavkeOtkupaRedovi`. Taj čitač je proveravao
+pravila jedne stavke, ali ne i dva pravila koja `CreateOtkup_TX` drži nad dokumentom:
+- najviše jedna stavka po klasi;
+- bruto koji nije manji od neta.
+
+Isti oblik baga je zato ostao na drugoj strani jednačine. Izvor sa 400 + 100 kg klase I prolazio je kao
+500 = očekivano i postajao IZDATO, a bruto manji od neta čitač je tiho pretvarao u „neto“.
+
+**Popravka je u ugovoru čitača, ne u `OtpIzdaj`.** `StavkeOtkupaRedovi` sada odbija:
+- dve stavke iste klase na istom otkupu;
+- nebrojčan ili negativan `BrutoKg`;
+- `BrutoKg` veći od nule a manji od `Kolicina`.
+
+Prazno ili `0` je „unet neto“, isto kako pisac čita nulu (`OtkStavkaBrojOpcion` → ne upisuje je). Pravila tako
+dobijaju svi čitaoci otkupa odjednom: mreža, izveštaji, izvozi, `VrednostIzvoraPoOtpremnici`, read-model i
+izdavanje.
+
+Test `Test_OTP_IzdavanjeCitaIzvorStrogo`:
+- anomalija na izvoru u transakciji koja se vraća, jednom dve iste klase, jednom bruto manji od neta;
+- read-model pada po imenu, pisac odbija, status ostaje DRAFT;
+- kontrola posle vraćanja.
+
+Sabotaže `otk-citalac-dve-iste-klase` i `otk-citalac-bruto-manji` (ukupno 503).
+
+**P2, zapisano, ne menja se u ovom PR-u.** Komanda jednog dokumenta (`IzdajOtpremnicu_TX`) validira **celu** tabelu
+stavki otpremnica i otkupa, jer strogi čitači važe za ceo skup. Pokvaren nepovezan otkup zato može da obori
+izdavanje ispravne otpremnice. To nije kvar podataka (fail-closed), nego granica agregata; v. backlog §15.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3293,6 +3420,9 @@ po ID-u.
 | **App / Repo / Qry slojevi** | **Ne paralelno sa refaktorom** — pokvarilo bi kapiju odluke iz §14.1: dve promenljive odjednom znače da se ne može reći da li je čist ishod zasluga šeme ili slojeva. Uz to, App sloj već postoji neimenovan (`mod*Unos` prima DTO rečnik, `NoviOtpremnicaUnos`), a enforcement daje A11 allowlist, ne ime modula. Jedini sloj koji stvarno nedostaje je **Qry** (`modDokumenta`: 15 javnih čitača pored 21 mesta upisa) — ali dobar deo tih čitača postoji da rekonstruiše dokument po broju i **umire u PR 12**. Revidirati **posle PR 12**, kad se zna koji čitači preživljavaju. Do tada: čitanja u novim writer-ima idu iza imenovanih funkcija, ne inline skenova. |
 | **Delimična alokacija Otkup → Otpremnica** | nema poslovnog zahteva; ako se pojavi — eksplicitna alokaciona tabela |
 | **Mešovit dokument (više vrsta u jednom)** | vrsta/sorta ostaju header; nije zahtev |
+| **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
+| **Granica agregata za komande nad jednim dokumentom** (review #363, drugi krug, P2) | strogi čitači (`StavkeOtpremniceRedovi`, `StavkeOtkupaRedovi`) validiraju ceo skup, pa komanda jednog dokumenta (`IzdajOtpremnicu_TX`, `GetOtpremnicaProgress`) pada i zbog nepovezanog pokvarenog dokumenta. Fail-closed, nije kvar podataka. Kandidat: strogi čitač po dokumentu (ciljna otpremnica + njeni izvori) za komande, a skup za izveštaje i mreže |
+| **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---
 

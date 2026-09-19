@@ -572,6 +572,7 @@ End Sub
 Private Sub CleanupPosleTesta()
     On Error Resume Next
     modOtkupUI.OtkupUI_Release
+    modScrDokumenti.Scr_OtpTestReset
     ResetSeamova
 End Sub
 
@@ -1273,12 +1274,10 @@ Private Sub T_ParcelaID_IzSkriveneKolone()
 End Sub
 
 ' UGOVOR ClearForm-a (.claude/rules/otkup-i-dokumenta.md odeljak 1 i 5): posle
-' snimanja partner i podaci dokumenta se brisu, datum se vraca na danas, a broj
-' zbirne ostaje (kontekst).
-'
-' Izuzetak "dok je otpremnica aktivna datum i zbirna ostaju" otisao je u S1b-3
-' zajedno sa radnim stolom otpremnice (stara veza Otkup.OtpremnicaID); S3 ga
-' vraca preko tblOtpremnicaIzvori.
+' snimanja partner i podaci dokumenta se brisu, a broj zbirne ostaje
+' (kontekst). Datum: bez aktivne otpremnice se vraca na danas; dok je
+' otpremnica aktivna OSTAJE -- svi njeni blokovi nose njen datum (radni sto
+' otpremnice na kanonu, S3b-2).
 Private Sub T_ClearForm_Ugovor()
     Dim f As frmOtkupUI, zf As Object, ctx As Object
     Dim datumBloka As String, danas As String
@@ -1312,6 +1311,17 @@ Private Sub T_ClearForm_Ugovor()
              "partner mora da bude obrisan posle snimanja"
     AssertEq Polje(zf, "fgKgI"), "", "kilogrami se brisu posle snimanja"
     AssertEq Polje(zf, "fgKolAmb"), "", "kolicina ambalaze se brise posle snimanja"
+
+    ' DOK JE OTPREMNICA AKTIVNA datum ostaje -- sledeci blok ide u niz istog
+    ' datuma otpremnice. Aktivna se postavlja kroz test seam: produkcija je bira
+    ' klikom na red, sto trazi ucitanu mrezu.
+    modScrDokumenti.Scr_OtpTestSet FX_OTP_ID, FX_BROJ_OTP
+    modOtkupUI.ApplyPrefill "datum=" & datumBloka
+    AssertEq Polje(zf, "fgDatum"), datumBloka, "preduslov: datum otpremnice je upisan"
+    modOtkupUI.ClearForm
+    AssertEq Polje(zf, "fgDatum"), datumBloka, _
+             "dok je otpremnica aktivna datum se NE vraca na danas"
+    modScrDokumenti.Scr_OtpTestReset
 
     Unload f
 End Sub
