@@ -53,45 +53,58 @@ Public Function SumOtpremniceByKlasa(ByVal brojZbirne As String) As Object
     data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
 
-    Dim cZbr As Long, cKol As Long, cAmb As Long, cKlasa As Long, cStorno As Long
+    Dim cZbr As Long, cId As Long, cStorno As Long
     Dim cVrsta As Long, cSorta As Long, cTipAmb As Long
     cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
-    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
-    cAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, SRC)
-    cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
     cVrsta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA)
     cSorta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA)
     cTipAmb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB)
 
-    Dim i As Long, klasa As String
+    ' Kilaza i gajbe dolaze sa STAVKI otpremnice (S3b). Zaglavlje ih od S3a ne
+    ' nosi -- invariant koji bi ih odatle citao poredio bi zbirnu sa NULOM i
+    ' proglasavao svaku zbirnu neispravnom. Vrsta, sorta i tip ambalaze ostaju
+    ' na zaglavlju, pa CaptureHeader i dalje dobija red zaglavlja.
+    '
+    ' nRows broji STAVKE, ne zaglavlja: druga strana poredjenja (tblZbirna) je
+    ' i dalje jedan red po klasi, pa je par "stavka <-> red zbirne".
+    Dim stavkeDok As Object
+    Set stavkeDok = modDokumenta.StavkeOtpremnicePoDokumentu()
+
+    Dim i As Long, s As Long, klasa As String
     Dim kol As Double, amb As Long
+    Dim stavke As Collection, stavka As Variant
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne Then
             If Not IsDaFlag(data(i, cStorno)) Then
-                klasa = Trim$(CStr(data(i, cKlasa)))
-                kol = 0#: amb = 0
-                If IsNumeric(data(i, cKol)) Then kol = CDbl(data(i, cKol))
-                If IsNumeric(data(i, cAmb)) Then amb = CLng(data(i, cAmb))
+                Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
+                                 Trim$(NzToText(data(i, cId))), SRC)
+                For s = 1 To stavke.count
+                    stavka = stavke(s)
+                    klasa = Trim$(CStr(stavka(3)))
+                    kol = CDbl(stavka(4))
+                    amb = CLng(stavka(6))
 
-                d("kgTotal") = CDbl(d("kgTotal")) + kol
-                d("ambTotal") = CLng(d("ambTotal")) + amb
-                d("nRows") = CLng(d("nRows")) + 1
+                    d("kgTotal") = CDbl(d("kgTotal")) + kol
+                    d("ambTotal") = CLng(d("ambTotal")) + amb
+                    d("nRows") = CLng(d("nRows")) + 1
 
-                If klasa = KLASA_I Then
-                    d("kgI") = CDbl(d("kgI")) + kol
-                    d("ambI") = CLng(d("ambI")) + amb
-                    d("nRowsI") = CLng(d("nRowsI")) + 1
-                    CaptureHeader d, "I", data, i, cVrsta, cSorta, cTipAmb
-                ElseIf klasa = KLASA_II Then
-                    d("kgII") = CDbl(d("kgII")) + kol
-                    d("ambII") = CLng(d("ambII")) + amb
-                    d("nRowsII") = CLng(d("nRowsII")) + 1
-                    CaptureHeader d, "II", data, i, cVrsta, cSorta, cTipAmb
-                Else
-                    d("kgOther") = CDbl(d("kgOther")) + kol
-                    d("ambOther") = CLng(d("ambOther")) + amb
-                End If
+                    If klasa = KLASA_I Then
+                        d("kgI") = CDbl(d("kgI")) + kol
+                        d("ambI") = CLng(d("ambI")) + amb
+                        d("nRowsI") = CLng(d("nRowsI")) + 1
+                        CaptureHeader d, "I", data, i, cVrsta, cSorta, cTipAmb
+                    ElseIf klasa = KLASA_II Then
+                        d("kgII") = CDbl(d("kgII")) + kol
+                        d("ambII") = CLng(d("ambII")) + amb
+                        d("nRowsII") = CLng(d("nRowsII")) + 1
+                        CaptureHeader d, "II", data, i, cVrsta, cSorta, cTipAmb
+                    Else
+                        d("kgOther") = CDbl(d("kgOther")) + kol
+                        d("ambOther") = CLng(d("ambOther")) + amb
+                    End If
+                Next s
             End If
         End If
     Next i

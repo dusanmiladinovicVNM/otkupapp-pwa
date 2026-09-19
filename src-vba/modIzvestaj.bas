@@ -1996,17 +1996,24 @@ Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
     Const SRC As String = "modIzvestaj.ReportRobaVozaciZbirni"
     On Error GoTo EH
 
+    ' Kilaza i vrednost dolaze sa STAVKI (S3b): zaglavlje od S3a nema ni
+    ' Kolicinu ni Cenu, pa bi ovaj izvestaj svakom vozacu pokazivao 0.
+    ' Vrednost je zbir Kolicina x PredlogCena -- PREDLOG, ne knjizen iznos
+    ' (odluka 14.8 t. 2); otpremnica bez predloga daje 0, kao i pre S3a kad
+    ' zaglavlje nije imalo cenu.
     Dim d As Variant, i As Long
-    Dim cVoz As Long, cKol As Long, cCen As Long, cDat As Long, cStorno As Long
+    Dim cVoz As Long, cId As Long, cDat As Long, cStorno As Long
     d = GetTableData(TBL_OTPREMNICA)
     If Not IsArray(d) Then Exit Function
     cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
-    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
-    cCen = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA, SRC)
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
 
-    Dim kg As Object, vr As Object, k As String, dv As Date
+    Dim zbir As Object
+    Set zbir = modDokumenta.ZbirStavkiPoOtpremnici()
+
+    Dim kg As Object, vr As Object, k As String, dv As Date, z As Variant
     Set kg = CreateObject("Scripting.Dictionary")
     Set vr = CreateObject("Scripting.Dictionary")
     For i = 1 To UBound(d, 1)
@@ -2016,8 +2023,10 @@ Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
                 If dv >= datumOd And dv <= datumDo Then
                     k = Trim$(CStr(d(i, cVoz)))
                     If Len(k) > 0 Then
-                        kg(k) = IzvNum(kg(k)) + IzvNum(d(i, cKol))
-                        vr(k) = IzvNum(vr(k)) + IzvNum(d(i, cKol)) * IzvNum(d(i, cCen))
+                        z = modDokumenta.ZbirStavkiZaOtpremnicu(zbir, _
+                                Trim$(NzToText(d(i, cId))), SRC)
+                        kg(k) = IzvNum(kg(k)) + CDbl(z(0))
+                        vr(k) = IzvNum(vr(k)) + CDbl(z(1))
                     End If
                 End If
             End If
@@ -2719,18 +2728,16 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         Exit Function
     End If
     
-    Dim colVrsta As Long, colKol As Long, colBrOtp As Long
-    Dim colDatum As Long, colKlasa As Long, colVozac As Long
+    Dim colVrsta As Long, colBrOtp As Long
+    Dim colDatum As Long, colVozac As Long
     Dim colOtpID As Long, colBrZbirne As Long
-    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, "modIzvestaj.ReportOtkupRobaOM")
-    colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, "modIzvestaj.ReportOtkupRobaOM")
-    colBrOtp = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, "modIzvestaj.ReportOtkupRobaOM")
-    colDatum = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, "modIzvestaj.ReportOtkupRobaOM")
-    colKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, "modIzvestaj.ReportOtkupRobaOM")
-    colVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, "modIzvestaj.ReportOtkupRobaOM")
-    colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, "modIzvestaj.ReportOtkupRobaOM")
-    colBrZbirne = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIzvestaj.ReportOtkupRobaOM")
-    
+    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+    colBrOtp = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+    colDatum = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+    colVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    colBrZbirne = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
+
     ' Kolone 7 (kg blokova) i 8 (razlika) ostaju PRAZNE od S1b-3: racunale su se
     ' preko veze Otkup.OtpremnicaID, koju S3 zamenjuje sa tblOtpremnicaIzvori.
     ' Oblik rezultata se ne menja (ekran i stampa citaju kolone po polozaju);
@@ -2740,10 +2747,47 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim manjakDict As Object
     Set manjakDict = BuildManjakDict()
     
-    ' --- Ergebnis ---
-    Dim rowCount As Long
-    rowCount = UBound(otpData, 1)
-    
+    ' --- JEDAN RED = JEDNA KLASA (S3b) --------------------------------------
+    ' Klasa i kilaza vise nisu na zaglavlju. Red izvestaja OSTAJE po klasi, i to
+    ' nije kozmetika: manjak se razresava kroz kljuc stavke zbirne, koji nosi
+    ' klasu (v. komentar nize) -- spajanje klasa u jedan red bi prijem obe klase
+    ' sabralo i pripisalo jednoj. Zato se zaglavlja RAZVIJAJU u parove
+    ' (zaglavlje, stavka) pre petlje; sve ostalo racuna kao i pre.
+    Dim stavkeDok As Object
+    Set stavkeDok = modDokumenta.StavkeOtpremnicePoDokumentu()
+
+    Dim mapRed() As Long, mapKlasa() As String, mapKg() As Double
+    Dim rowCount As Long, h As Long, s As Long
+    Dim stavke As Collection, stavka As Variant
+
+    For h = 1 To UBound(otpData, 1)
+        Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
+                         Trim$(NzToText(otpData(h, colOtpID))), SRC)
+        rowCount = rowCount + stavke.count
+    Next h
+
+    If rowCount = 0 Then
+        ReportOtkupRobaOM = Empty
+        Exit Function
+    End If
+
+    ReDim mapRed(1 To rowCount)
+    ReDim mapKlasa(1 To rowCount)
+    ReDim mapKg(1 To rowCount)
+
+    Dim nPar As Long
+    For h = 1 To UBound(otpData, 1)
+        Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
+                         Trim$(NzToText(otpData(h, colOtpID))), SRC)
+        For s = 1 To stavke.count
+            stavka = stavke(s)
+            nPar = nPar + 1
+            mapRed(nPar) = h
+            mapKlasa(nPar) = KlasaOrDefault(stavka(3))
+            mapKg(nPar) = CDbl(stavka(4))
+        Next s
+    Next h
+
     Dim result() As Variant
     ReDim result(1 To rowCount + 1, 1 To 12)   ' +Prijemnica kg (9), +skriveni OTP|<id> (12)
     
@@ -2757,22 +2801,27 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim i As Long
 
     For i = 1 To rowCount
-        Dim kgOtp As Double: kgOtp = 0
-        If IsNumeric(otpData(i, colKol)) Then kgOtp = CDbl(otpData(i, colKol))
-        
+        ' hr = red ZAGLAVLJA kome ovaj red izvestaja pripada; i = par
+        ' (zaglavlje, stavka). Zaglavlje se cita preko hr, stavka preko i.
+        Dim hr As Long
+        hr = mapRed(i)
+
+        Dim kgOtp As Double
+        kgOtp = mapKg(i)
+
         Dim thisOtpID As String
-        thisOtpID = CStr(otpData(i, colOtpID))
-        
+        thisOtpID = CStr(otpData(hr, colOtpID))
+
         ' Manjak proportional berechnen
         Dim thisBrZbirne As String
-        thisBrZbirne = Trim$(CStr(otpData(i, colBrZbirne)))
+        thisBrZbirne = Trim$(CStr(otpData(hr, colBrZbirne)))
 
         ' Vozac i klasa otpremnice -- treba za razresenje STAVKE zbirne (dole) i
         ' za prikaz, pa se citaju pre oba.
         Dim vozID As String
-        vozID = Trim$(CStr(otpData(i, colVozac)))
+        vozID = Trim$(CStr(otpData(hr, colVozac)))
         Dim klasaOtp As String
-        klasaOtp = KlasaOrDefault(otpData(i, colKlasa))
+        klasaOtp = mapKlasa(i)
 
         ' Prijem po otpremnici -- vezan za STAVKU (vlasnik + Klasa), ne za broj.
         ' Otpremnica nosi BrojZbirne, VozacID i Klasu, ali ne i KupacID, pa se
@@ -2868,10 +2917,10 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
             vozNaziv = ""
         End If
         
-        result(i, 1) = CDate(otpData(i, colDatum))
-        result(i, 2) = CStr(otpData(i, colBrOtp))
-        result(i, 3) = CStr(otpData(i, colVrsta))
-        result(i, 4) = CStr(otpData(i, colKlasa))
+        result(i, 1) = CDate(otpData(hr, colDatum))
+        result(i, 2) = CStr(otpData(hr, colBrOtp))
+        result(i, 3) = CStr(otpData(hr, colVrsta))
+        result(i, 4) = klasaOtp
         result(i, 5) = vozNaziv
         result(i, 6) = kgOtp
         result(i, 7) = ""               ' kg blokova -- S3
@@ -2985,11 +3034,14 @@ Private Function ReportOtkupRobaVozac(ByVal vozacID As String, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colVrsta As Long, colKol As Long, colCena As Long
-    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, "modIzvestaj.ReportOtkupRobaVozac")
-    colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, "modIzvestaj.ReportOtkupRobaVozac")
-    colCena = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA, "modIzvestaj.ReportOtkupRobaVozac")
-    
+    ' Vrsta ostaje na zaglavlju; kilaza i vrednost dolaze sa STAVKI (S3b).
+    Dim colVrsta As Long, colOtpID As Long
+    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+    colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+
+    Dim zbir As Object
+    Set zbir = modDokumenta.ZbirStavkiPoOtpremnici()
+
     Dim i As Long
     For i = 1 To UBound(otpData, 1)
         Dim key As String
@@ -2997,13 +3049,14 @@ Private Function ReportOtkupRobaVozac(ByVal vozacID As String, _
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
         Dim vals As Variant
         vals = dict(key)
-        If IsNumeric(otpData(i, colKol)) Then vals(0) = vals(0) + CDbl(otpData(i, colKol))
-        If IsNumeric(otpData(i, colKol)) And IsNumeric(otpData(i, colCena)) Then
-            vals(1) = vals(1) + CDbl(otpData(i, colKol)) * CDbl(otpData(i, colCena))
-        End If
+        Dim z As Variant
+        z = modDokumenta.ZbirStavkiZaOtpremnicu(zbir, _
+                Trim$(NzToText(otpData(i, colOtpID))), SRC)
+        vals(0) = vals(0) + CDbl(z(0))
+        vals(1) = vals(1) + CDbl(z(1))
         dict(key) = vals
     Next i
-    
+
     ReportOtkupRobaVozac = DictToResultArray(dict)
     Exit Function
 

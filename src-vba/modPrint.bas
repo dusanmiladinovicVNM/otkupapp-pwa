@@ -241,31 +241,51 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
 
-    Dim kol As Double: kol = OtpN(d, fr, COL_OTP_KOLICINA)
-    Dim cenBruto As Double: cenBruto = OtpN(d, fr, COL_OTP_CENA)
-    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-    Dim storedBruto As Double: storedBruto = OtpN(d, fr, COL_OTP_BRUTO)
+    ' JEDAN RED = JEDNA STAVKA (S3b). Do S3a je otpremnica sa dve klase bila
+    ' dva zaglavlja pod istim brojem, pa je stampa imala jedan red i stampala
+    ' se dvaput. Sada je jedno zaglavlje sa stavkama, a klasa, kolicina, gajbe
+    ' i predlog cene zive na stavci -- citanje sa zaglavlja bi dalo prazan list.
+    ' Vrsta, sorta i tip ambalaze ostaju na zaglavlju (odluka 14.8, 15).
     Dim tipAmb As String: tipAmb = CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
-    Dim kolAmb As Double: kolAmb = OtpN(d, fr, COL_OTP_KOL_AMB)
-    Dim kolBruto As Double
-    If storedBruto > 0 Then
-        kolBruto = storedBruto
-    Else
-        Dim crateW As Double
-        crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
-        kolBruto = kol + kolAmb * crateW
-    End If
+    Dim crateW As Double
+    crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
 
-    Dim stavke() As Variant: ReDim stavke(0 To 0, 0 To 6)
-    stavke(0, 0) = Trim$(CStr(OtpC(d, fr, COL_OTP_VRSTA)) & " " & CStr(OtpC(d, fr, COL_OTP_SORTA)))
-    stavke(0, 1) = CStr(OtpC(d, fr, COL_OTP_KLASA))
-    stavke(0, 2) = cenNeto
-    stavke(0, 3) = cenBruto
-    stavke(0, 4) = kol
-    stavke(0, 5) = kolBruto
-    stavke(0, 6) = kol * cenNeto
-    Dim cnt As Long: cnt = 1
-    Dim osnovica As Double: osnovica = kol * cenNeto
+    Dim roba As String
+    roba = Trim$(CStr(OtpC(d, fr, COL_OTP_VRSTA)) & " " & CStr(OtpC(d, fr, COL_OTP_SORTA)))
+
+    Dim sveStavke As Object
+    Set sveStavke = modDokumenta.StavkeOtpremnicePoDokumentu()
+    Dim redovi As Collection
+    Set redovi = modDokumenta.StavkeZaOtpremnicu(sveStavke, otpID, "modPrint.FillOtpremnicaSablon")
+
+    Dim stavke() As Variant: ReDim stavke(0 To redovi.count - 1, 0 To 6)
+    Dim kol As Double, kolAmb As Double, osnovica As Double
+    Dim s As Variant, k As Long
+    Dim sKol As Double, sAmb As Double, sBruto As Double
+    Dim cenBruto As Double, cenNeto As Double
+
+    For k = 1 To redovi.count
+        s = redovi(k)
+        sKol = CDbl(s(4))
+        cenBruto = CDbl(s(5))
+        sAmb = CDbl(s(6))
+        sBruto = CDbl(s(8))
+        cenNeto = cenBruto / (1 + stopa / 100)
+        If sBruto <= 0 Then sBruto = sKol + sAmb * crateW
+
+        stavke(k - 1, 0) = roba
+        stavke(k - 1, 1) = CStr(s(3))
+        stavke(k - 1, 2) = cenNeto
+        stavke(k - 1, 3) = cenBruto
+        stavke(k - 1, 4) = sKol
+        stavke(k - 1, 5) = sBruto
+        stavke(k - 1, 6) = sKol * cenNeto
+
+        kol = kol + sKol
+        kolAmb = kolAmb + sAmb
+        osnovica = osnovica + sKol * cenNeto
+    Next k
+    Dim cnt As Long: cnt = redovi.count
 
     Dim stID As String: stID = CStr(OtpC(d, fr, COL_OTP_STANICA))
 

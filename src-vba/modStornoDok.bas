@@ -560,6 +560,15 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
         Exit Function
     End If
 
+    If tip = STIP_OTPREMNICA Then
+        ' Isto vazi za otpremnicu od S3b -- klasa, kolicina, gajbe i predlog
+        ' cene su na stavkama, a zaglavlje ih ne nosi.
+        res = StavkeOtpremniceZaPrefill(res, CelijaAko(d, base, cId))
+        res = Spoji(res, "fokus", "kolicina")
+        PrefillIzStorniranog = res
+        Exit Function
+    End If
+
     res = Spoji(res, "dveklase", IIf(rII > 0, "2", "1"))
     If rI > 0 Then
         res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, rI, cKol, cBruto, brutoMode)))
@@ -634,6 +643,61 @@ Private Function StavkeOtkupaZaPrefill(ByVal res As String, ByVal otkupID As Str
         Err.Raise vbObjectError + 1934, SRC, "Otkup " & otkupID & ": dve stavke iste klase."
     End If
     StavkeOtkupaZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
+End Function
+
+' Stavke stornirane OTPREMNICE u spec prefill-a -- isti oblik i ista pravila
+' kao StavkeOtkupaZaPrefill, nad kanonskim citaocem stavki otpremnice.
+'
+' Predlog cene se prenosi kao "cena"/"cena2": ekran ta polja i dalje zove tako,
+' a otpremnica od S3a nema drugu cenu. Prazan predlog daje praznu celiju, ne
+' nulu -- nula bi u ispravci bila tvrdnja da je cena dogovorena i iznosi 0.
+'
+' Bruto rezim se NE primenjuje: otpremnica se ne unosi u bruto rezimu (to je
+' polje otkupa), pa bi zamena kolicine brutom ovde menjala dokument.
+Private Function StavkeOtpremniceZaPrefill(ByVal res As String, _
+                                           ByVal otpremnicaID As String) As String
+    Const SRC As String = "modStornoDok.StavkeOtpremniceZaPrefill"
+    Dim s As Variant, i As Long, kl As String, nI As Long, nII As Long
+    Dim cena As Double
+
+    If Len(otpremnicaID) = 0 Then _
+        Err.Raise vbObjectError + 1935, SRC, "Prazan OtpremnicaID zaglavlja."
+    s = modDokumenta.StavkeOtpremniceRedovi()
+
+    If IsArray(s) Then
+        For i = 1 To UBound(s, 1)
+            If CStr(s(i, 1)) = otpremnicaID Then
+                kl = CStr(s(i, 3))
+                cena = CDbl(s(i, 5))
+                Select Case kl
+                    Case KLASA_I
+                        nI = nI + 1
+                        res = Spoji(res, "kol1", BrojUTekst(CDbl(s(i, 4))))
+                        res = Spoji(res, "amb1", BrojUTekst(CDbl(s(i, 6))))
+                        If cena > 0 Then res = Spoji(res, "cena", BrojUTekst(cena))
+                    Case KLASA_II
+                        nII = nII + 1
+                        res = Spoji(res, "kol2", BrojUTekst(CDbl(s(i, 4))))
+                        res = Spoji(res, "amb2", BrojUTekst(CDbl(s(i, 6))))
+                        If cena > 0 Then res = Spoji(res, "cena2", BrojUTekst(cena))
+                    Case Else
+                        Err.Raise vbObjectError + 1936, SRC, _
+                                  "Otpremnica " & otpremnicaID & _
+                                  ": nevazeca klasa stavke '" & kl & "'."
+                End Select
+            End If
+        Next i
+    End If
+
+    If nI + nII = 0 Then
+        Err.Raise vbObjectError + 1937, SRC, _
+                  "Otpremnica " & otpremnicaID & " nema nijednu stavku."
+    End If
+    If nI > 1 Or nII > 1 Then
+        Err.Raise vbObjectError + 1938, SRC, _
+                  "Otpremnica " & otpremnicaID & ": dve stavke iste klase."
+    End If
+    StavkeOtpremniceZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
 End Function
 
 ' BrutoKg stavke (otkup, redni broj) kad postoji i > 0; inace neto.
@@ -736,8 +800,7 @@ End Function
 
 Private Function ColKlasaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        Case STIP_OTPREMNICA: ColKlasaZaPrefill = COL_OTP_KLASA
+        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
         Case STIP_ZBIRNA:     ColKlasaZaPrefill = COL_ZBR_KLASA
         Case STIP_PRIJEMNICA: ColKlasaZaPrefill = COL_PRJ_KLASA
     End Select
@@ -782,8 +845,7 @@ End Function
 ' PAZNJA: zbirna ne zove ovo "Kolicina" nego "UkupnoKolicina".
 Private Function ColKolicinaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        Case STIP_OTPREMNICA: ColKolicinaZaPrefill = COL_OTP_KOLICINA
+        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
         Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA
         Case STIP_PRIJEMNICA: ColKolicinaZaPrefill = COL_PRJ_KOLICINA
     End Select
@@ -792,8 +854,7 @@ End Function
 ' PAZNJA: zbirna ne zove ovo "KolAmbalaze" nego "UkupnoAmbalaze".
 Private Function ColKolAmbZaPrefill(ByVal tip As String) As String
     Select Case tip
-        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        Case STIP_OTPREMNICA: ColKolAmbZaPrefill = COL_OTP_KOL_AMB
+        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
         Case STIP_ZBIRNA:     ColKolAmbZaPrefill = COL_ZBR_KOL_AMB
         Case STIP_PRIJEMNICA: ColKolAmbZaPrefill = COL_PRJ_KOL_AMB
     End Select
@@ -803,8 +864,7 @@ End Function
 ' obracunatih otpremnica.
 Private Function ColCenaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        Case STIP_OTPREMNICA: ColCenaZaPrefill = COL_OTP_CENA
+        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
         Case STIP_PRIJEMNICA: ColCenaZaPrefill = COL_PRJ_CENA
     End Select
 End Function
@@ -813,7 +873,8 @@ End Function
 Private Function ColBrutoZaPrefill(ByVal tip As String) As String
     Select Case tip
         ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        Case STIP_OTPREMNICA: ColBrutoZaPrefill = COL_OTP_BRUTO
+        ' STIP_OTPREMNICA: bruto rezim je polje OTKUPA -- otpremnica se u njemu
+        ' ne unosi, pa joj prefill uzima kolicinu, ne bruto (S3b).
         Case STIP_PRIJEMNICA: ColBrutoZaPrefill = COL_PRJ_BRUTO
     End Select
 End Function

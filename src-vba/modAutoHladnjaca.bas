@@ -435,9 +435,21 @@ End Function
 ' Pokretanje: Alt+F8 -> BackfillPrijemniceHladnjaca.
 ' Reuse: SavePrijemnica_TX, GenerateBrojPrijemnice, IsHladnjacaStanica,
 '        GetTableData / RequireColumnIndex / GetColumnIndex.
+'
+' PAUZIRAN OD S3b. Anchor su linijska polja ZAGLAVLJA otpremnice (Klasa,
+' Kolicina, Cena, KolAmbalaze), a od S3a ih zaglavlje ne nosi -- ocekivanje je
+' na stavkama. Nad otpremnicom koju danas pravi F2 ovaj makro bi napravio
+' prijemnice sa 0 kg i cenom 0, i to bez ijedne greske.
+'
+' NE PREVODI SE ovde, nego zajedno sa auto-lancem hladnjace (S3d): taj korak
+' odlucuje da li se lanac vraca kroz CreateOtpremnicaIzIzvora_TX ili se brise.
+' Prevod sada bi tu odluku nametnuo unapred.
+'
+' Jezgro (...Core) ostaje netaknuto: njega zovu testovi koji dokument prave
+' starim piscem, pa i dalje mere ono sto su merili.
 ' ============================================================
 Public Sub BackfillPrijemniceHladnjaca()
-    BackfillPrijemniceHladnjacaCore False
+    MsgBox Poruka("HLAD_MSG_BACKFILL_PAUZIRAN"), vbExclamation, APP_NAME
 End Sub
 
 ' Jezgro backfill-a. TEST SEAM: silent:=True preskace sve MsgBox-ove i vraca

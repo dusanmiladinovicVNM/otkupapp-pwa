@@ -2976,6 +2976,95 @@ S3b: `popis_citalaca.py` da nauči prag po grupi (`otp_stari_pisac` ne sme da ra
 
 Sledeći korak: **S3b — čitaoci otpremnice na stavke + panel blokova**.
 
+### 14.13) S3b-1 — citaoci otpremnice na stavke (18.09.2026)
+
+**S3b je rezan na dva.** §14.12 ga je opisao kao jedan korak („citaoci + panel blokova + Izdaj"), ali to su dve
+razlicite vrste posla i dve razlicite vrste rizika: preusmeravanje **postojecih** citalaca na kanonski izvor, i
+**nov ekran** sa tri produkciona pisca (`DodajOtpremnicaIzvor_TX`, `UkloniOtpremnicaIzvor_TX`, `IzdajOtpremnicu_TX`).
+Uz to panel trazi `OtpremnicaID` u nevidljivoj koloni reda, a tu kolonu danas cita `modScrStorno` ocekujuci
+`GeneracijaID` — isti razlog zbog kojeg „Izdaj" nije usao u S3a. Zato:
+
+| korak | sadrzaj | stanje |
+|---|---|---|
+| **S3b-1** | citaoci na stavke: F2 mreza, stampa, izvestaji, invarijanta zbirne, lista i uvid storna, prefill ispravke | ovaj PR |
+| **S3b-2** | **panel blokova** nad `tblOtpremnicaIzvori` + radnja **„Izdaj"** (odluka §14.8 t. 4); vraca A-011, A-012, A-018..A-028 | |
+
+#### Pre-flight S3b-1
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | otpremnica = zaglavlje (Datum, StanicaID, VozacID, KulturaID, Broj, TipAmbalaze, Vrsta, Sorta) + ocekivanje po klasi na `tblOtpremnicaStavke` |
+| `IDENTITY` | PROVEN | svaki nov citalac trazi `OtpremnicaID`, ne broj (`ZbirStavkiZaOtpremnicu`, `StavkeZaOtpremnicu`); broj ostaje labela |
+| `CARDINALITY` | PROVEN | jedno zaglavlje : N stavki. Mreza crta **jedan red** po dokumentu, izvestaj po otkupnom mestu **jedan red po klasi** (manjak se razresava kroz kljuc stavke zbirne, koji nosi klasu) |
+| `INVARIANTS/OWNER` | PROVEN | „zbirna = zbir svojih aktivnih otpremnica, po klasi" (`modDokumentInvariant`) sada sabira stavke; vlasnik upisa se ne menja (`who_writes --check-ownership`: nema novih pisaca) |
+| `EVENTS` | N/A | read-only slajs — nijedan poslovni dogadjaj se ne pomera |
+| `WRITERS` | N/A | nijedan `_TX` nije dodat ni izmenjen |
+| `DOWNSTREAM` | PROVEN | merenje: `otp_cena` zivih **5 → 0**, `otp_linija` zivih **59 → 24**; preostala 24 su cinjenice ZAGLAVLJA (Vrsta, Sorta, TipAmbalaze, KulturaID) i tri kozmeticka reda u `modSetup` koja odlaze u S3e |
+| `CAPABILITY` | PROVEN | nijedna sposobnost ne menja status — S3b-1 **vraca brojeve** koje je S3a ispraznio. Jedini izuzetak je F-090, a on je vec u tabeli „nije sposobnost" |
+| `ACCEPTANCE` | testovi | `Test_OTP_MrezaCitaStavke`, `Test_OTP_ZaglavljeBezStavkiObaraCitaoce`, `Test_OTP_IzvestajOMRedPoKlasi`, `Test_OTP_InvarijantaSabiraStavke`, `Test_OTP_PrefillIspravkeCitaStavke` + cetiri sabotaze |
+| `PLATFORM` | N/A | nema novih Excel/COM pretpostavki |
+| `LANDING` | **trazi regeneraciju fixture-a** | v. „Fixture" nize — bez nje suite ne moze da prodje |
+
+#### Izmene
+
+| Sta | Gde |
+|---|---|
+| Kanonski citaoci stavki: `StavkeOtpremniceRedovi`, `ZbirStavkiPoOtpremnici`, `ZbirStavkiZaOtpremnicu`, `StavkeOtpremnicePoDokumentu`, `StavkeZaOtpremnicu` | **novo**, `modDokumenta` |
+| F2 mreza: `Col*` za OTPREMNICA na `COL_OPS_*`; jedna `ovStav` staza za oba tipa | `modScrDokumenti.RedoviZaTip` |
+| Stampa: jedan red = jedna stavka (pre: jedan red iz zaglavlja) | `modPrint.FillOtpremnicaSablon` |
+| Izvestaji: vozac zbirno, vozac po vrsti, otkupno mesto (red po klasi) | `modIzvestaj` |
+| Invarijanta zbirne i provera pre unosa; lista siroceta | `modDokumentInvariant.SumOtpremniceByKlasa`, `modDokumenta.ValidateZbirna*`, `GetVerwaisteOtpremnice` |
+| Audit B4a/B5b: kolicina iz stavki, **meko** (audit ne sme da padne na kvaru koji prijavljuje) | `modIntegritet` |
+| F8: lista za storno i uvid pre storna | `modStornoFlow.AddStornoDocs2`, `modStornoImpact.SumActiveOtpStavke` |
+| Prefill ispravke po uzoru na otkup (`StavkeOtkupaZaPrefill`) | **nova** `modStornoDok.StavkeOtpremniceZaPrefill` |
+| Backfill prijemnica hladnjace: javni ulaz **PAUZIRAN** | `modAutoHladnjaca.BackfillPrijemniceHladnjaca` |
+| **Kapija** `popis_citalaca.py --check`: prag zivih mesta po grupi | `tools/popis_citalaca.py` |
+
+#### Ugovor citaoca: zaglavlje bez stavki PADA
+
+Isti ugovor koji otkup nosi od S14.7 (`modOtkup.StavkeOtkupaRedovi`), i iz istog razloga (review #334, P1):
+zaglavlje bez stavki nije dokument kolicine nula nego **nije dokument**. Pisac ga ne moze napraviti —
+`OtpUpisiOcekivano` odbija prazno ocekivanje — pa citalac koji nedostajuci kljuc procita kao nulu laze o
+dokumentu koji ne postoji.
+
+Jedina razlika u odnosu na otkup: **`PredlogCena` sme da bude prazna.** Ona je predlog, ne knjizena cena
+(odluka §14.8 t. 2), pa „nije predlozena" nije kvar. Upisana nula jeste — i odbija se.
+
+Dva mesta namerno citaju **meko**, i to su jedina dva: audit integriteta (`modIntegritet`) i lista za storno.
+Oba postoje da NABROJE pokvarene redove; tvrd pad bi ih ucinio slepim tacno tamo gde su potrebni. Kolona
+kolicine tamo ostaje **prazna**, ne nula.
+
+#### Kapija umesto pravila u dokumentu (review #361, P2)
+
+`popis_citalaca.py --check` nosi prag zivih mesta po grupi (`PRAGOVI`). Prag se **spusta** kad slajs skine
+citaoce i nikad se ne podize bez odluke u planu; merenje **ispod** praga takodje pada, jer bi zastareo prag
+pustio grupu da naraste nazad bez ijednog crvenog — isti rod greske kao sidro sabotaze koje vise ne pokazuje ni
+na sta.
+
+Dokazano u oba smera: jedan nov poziv `SaveOtpremnica_TX` u `modScrDokumenti` digne `otp_stari_pisac` sa
+**4 na 27** (ceo dosad mrtav pisac ozivi) i `--check` vrati exit 1 sa imenima; vracanje izvora vraca exit 0.
+
+Stanje pragova 18.09.2026: `otp_stari_pisac` 4 (sudar imena — ekranski adapter `modScrDokumenti.SaveOtpremnica`,
+ne pisac), `otp_linija` 24 (cinjenice zaglavlja + `modSetup`), `otp_cena` **0**.
+
+#### Fixture — zasto mora da se regenerise
+
+Zateceni `tests/fixtures/otkup_test.xlsm` ima 28 redova `tblOtpremnica` i **nijednu** stavku: tabele
+`tblOtpremnicaStavke` u njemu uopste nema (pravi je self-heal na startu, prazna). Posle ovog PR-a svaki citalac
+kolicine otpremnice trazi stavke, pa bi ti redovi obarali suite — ne zbog koda nego zbog **test podataka u
+starom modelu**.
+
+`tools/make_fixture.py` zato izvodi `tblOtpremnicaStavke` iz `tblOtpremnica`, isto kao sto od S1 izvodi
+`tblOtkupStavke` iz `tblOtkup`: jedna stavka po zaglavlju, `PredlogCena` prazna kad zaglavlje nema cenu.
+**Zaglavlja se NE spajaju po broju** iako fixture drzi dva reda istog `BrojOtpremnice` — to su dva dokumenta sa
+razlicitih stanica i cetiri scenarija se oslanjaju bas na to; spajanje bi bilo izmena scenarija, ne prenos
+podataka u nov model. Kolone `Klasa/Kolicina/KolAmbalaze/Cena` na zaglavlju ostaju do S3e; do tada fixture nosi
+iste brojeve na oba mesta, a merodavna je stavka.
+
+To nije migracija podataka (tih nema, §14.7) nego **autorstvo test podataka u novom modelu**.
+
+Sledeci korak: **S3b-2 — panel blokova nad `tblOtpremnicaIzvori` + radnja „Izdaj".**
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

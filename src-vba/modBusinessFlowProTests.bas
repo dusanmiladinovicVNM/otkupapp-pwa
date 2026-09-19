@@ -297,6 +297,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaZbirnaPauzirana
     Test_OTP_NacrtNijeZavrsetakIspravke
+    Test_OTP_MrezaCitaStavke
+    Test_OTP_ZaglavljeBezStavkiObaraCitaoce
+    Test_OTP_IzvestajOMRedPoKlasi
+    Test_OTP_InvarijantaSabiraStavke
+    Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
     Test_OTP_HeaderNeNosiLinePolja
     Test_OTP_NepoznatKljucUHeaderuPada
@@ -7941,6 +7946,289 @@ EH:
     LogFatal "Test_OTP_NacrtNijeZavrsetakIspravke", Err.Number, Err.description
 End Sub
 
+' === S3b: citaoci otpremnice citaju STAVKE ===================================
+
+' MREZA F2 CITA STAVKE, NE ZAGLAVLJE (S3b).
+'
+' Od S3a zaglavlje otpremnice ostaje bez Klase, Kolicine, KolAmbalaze i Cene --
+' nacrt ih pise na stavke. Mreza koja bi i dalje citala zaglavlje pokazala bi
+' svaki nov dokument kao prazan red: 0 kg, bez klase, bez vrednosti. Isti kvar
+' koji je otkup imao pre S14.7, samo na drugom dokumentu.
+'
+' DVE KLASE = JEDAN RED. Pre S3a su dve klase bile dva zaglavlja pod istim
+' brojem, pa ih je mreza crtala kao dva dokumenta.
+Private Sub Test_OTP_MrezaCitaStavke()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPMR")
+    broj = TEST_PREFIX & "-OTP-MR-" & scenario
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavkaSaCenom(KLASA_I, 400#, 20#, 250#)
+    c.Add OtpOcekStavkaSaCenom(KLASA_II, 600#, 30#, 120#)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(broj), c, razlog)
+    AssertTrue Len(otpID) > 0, "OTP mreza: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    ' Zaglavlje je JEDNO, pa je i red JEDAN -- dve klase nisu dva dokumenta.
+    AssertEquals "1", CStr(OtpMrezaBrojRedova(broj)), _
+                 "OTP mreza: jedan dokument = jedan red"
+
+    Dim red As Variant
+    red = OtpMrezaRed(broj)
+    AssertTrue IsArray(red), "OTP mreza: red dokumenta nadjen"
+    If Not IsArray(red) Then Exit Sub
+
+    AssertTrue Abs(CDbl(red(0)) - 1000#) < 0.001, _
+               "OTP mreza: kg su zbir stavki (400 + 600), ne prazno zaglavlje"
+    AssertTrue Abs(CDbl(red(2)) - 50#) < 0.001, _
+               "OTP mreza: gajbe su zbir stavki (20 + 30)"
+    AssertEquals KLASA_I & ", " & KLASA_II, CStr(red(3)), _
+                 "OTP mreza: kolona klase nabraja obe klase dokumenta"
+    ' 400 x 250 + 600 x 120 = 172000 -- predlog, ne knjizen iznos.
+    AssertTrue Abs(CDbl(red(1)) - 172000#) < 0.001, _
+               "OTP mreza: vrednost je zbir Kolicina x PredlogCena po klasi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_MrezaCitaStavke", Err.Number, Err.description
+End Sub
+
+' DRUGA BRANA CITAOCA: otpremnica bez ijedne stavke PADA PO IMENU.
+'
+' Pisac takav dokument ne moze da napravi (OtpUpisiOcekivano odbija prazno
+' ocekivanje), pa je ovo SINTETICKA ANOMALIJA -- pravi se brisanjem stavki u
+' transakciji koja se vraca. Meri se tacno ono sto je kod otkupa bio kvar
+' (review #334, P1): citalac koji nedostajuci kljuc procita kao nulu nacrta
+' dokument sa 0 kg umesto da kaze koji dokument je pokvaren.
+Private Sub Test_OTP_ZaglavljeBezStavkiObaraCitaoce()
+    Const SRC As String = "Test_OTP_ZaglavljeBezStavkiObaraCitaoce"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPBS")
+    broj = TEST_PREFIX & "-OTP-BS-" & scenario
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(broj), OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "OTP bez stavki: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    AssertEquals "", OtpMrezaGreska(broj), "OTP bez stavki: mreza prolazi pre kvarenja"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpID)
+    AssertTrue Not rows Is Nothing, "OTP bez stavki: stavke nadjene"
+    If rows Is Nothing Then Exit Sub
+
+    Dim k As Long
+    For k = rows.count To 1 Step -1
+        RequireDeleteRow TBL_OTPREMNICA_STAVKE, CLng(rows(k)), SRC
+    Next k
+
+    AssertTrue InStr(1, OtpMrezaGreska(broj), "nema nijednu stavku", vbTextCompare) > 0, _
+               "OTP bez stavki: mreza pada po imenu, ne crta 0 kg"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", OtpMrezaGreska(broj), _
+                 "OTP bez stavki: citalac prolazi posle vracanja"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' IZVESTAJ PO OTKUPNOM MESTU: JEDAN RED PO KLASI (S3b).
+'
+' Manjak se razresava kroz stavku zbirne, a njen kljuc nosi KLASU -- kad bi
+' dvoklasna otpremnica dala jedan red, prijem obe klase bi se sabrao i pripisao
+' jednoj (u malina modu bukvalno duplo). Zato zaglavlje ostaje jedno, a red
+' izvestaja i dalje pripada jednoj klasi; menja se samo odakle klasa dolazi.
+Private Sub Test_OTP_IzvestajOMRedPoKlasi()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPIOM")
+    broj = TEST_PREFIX & "-OTP-IOM-" & scenario
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavka(KLASA_I, 400#, 20#)
+    c.Add OtpOcekStavka(KLASA_II, 600#, 30#)
+
+    Dim h As Object
+    Set h = OtpHeader(broj)
+    Dim dan As Date
+    dan = CDate(h("Datum"))
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(h, c, razlog)
+    AssertTrue Len(otpID) > 0, "OTP izvestaj OM: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    modUiData.ResetCache
+    Dim r As Variant
+    r = ReportOtkupRoba("OM", TEST_ST_ID, dan, dan)
+    AssertTrue IsArray(r), "OTP izvestaj OM: izvestaj je vratio redove"
+    If Not IsArray(r) Then Exit Sub
+
+    ' Kolone: (2) BrOtp (4) Klasa (6) Otp kg -- v. IzKoloneZaListu, tip "OM".
+    Dim i As Long, n As Long, kgI As Double, kgII As Double
+    For i = 1 To UBound(r, 1)
+        If Trim$(CStr(r(i, 2))) = broj Then
+            n = n + 1
+            If Trim$(CStr(r(i, 4))) = KLASA_I Then kgI = CDbl(r(i, 6))
+            If Trim$(CStr(r(i, 4))) = KLASA_II Then kgII = CDbl(r(i, 6))
+        End If
+    Next i
+
+    AssertEquals "2", CStr(n), "OTP izvestaj OM: dvoklasna otpremnica daje DVA reda"
+    AssertTrue Abs(kgI - 400#) < 0.001, "OTP izvestaj OM: red klase I nosi svoju kilazu"
+    AssertTrue Abs(kgII - 600#) < 0.001, "OTP izvestaj OM: red klase II nosi SVOJU kilazu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_IzvestajOMRedPoKlasi", Err.Number, Err.description
+End Sub
+
+' INVARIJANTA ZBIRNE SABIRA STAVKE (S3b).
+'
+' Zbirna je po invarijanti tacno zbir svojih aktivnih otpremnica, PO KLASI. Kad
+' bi taj zbir i dalje dolazio sa zaglavlja, svaka bi zbirna od S3a bila
+' poredjena sa nulom i proglasena neispravnom -- i to ne jednom, nego na svakoj
+' izmeni koja invariant proverava.
+'
+' BrojZbirne se ovde upisuje rucno, u transakciji koja se vraca: vezivanje
+' otpremnice za zbirnu je stari model i prelazi tek u S4.
+Private Sub Test_OTP_InvarijantaSabiraStavke()
+    Const SRC As String = "Test_OTP_InvarijantaSabiraStavke"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String, brZbr As String
+    scenario = NewScenarioCode("OTPINV")
+    broj = TEST_PREFIX & "-OTP-INV-" & scenario
+    brZbr = TEST_PREFIX & "-ZBR-INV-" & scenario
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavka(KLASA_I, 400#, 20#)
+    c.Add OtpOcekStavka(KLASA_II, 600#, 30#)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(broj), c, razlog)
+    AssertTrue Len(otpID) > 0, "OTP invarijanta: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    AssertTrue Not hdr Is Nothing, "OTP invarijanta: zaglavlje nadjeno"
+    If hdr Is Nothing Then Exit Sub
+    RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_BROJ_ZBIRNE, brZbr, SRC
+
+    modUiData.ResetCache
+    Dim d As Object
+    Set d = modDokumentInvariant.SumOtpremniceByKlasa(brZbr)
+
+    AssertTrue Abs(CDbl(d("kgI")) - 400#) < 0.001, _
+               "OTP invarijanta: kg klase I dolaze sa stavke"
+    AssertTrue Abs(CDbl(d("kgII")) - 600#) < 0.001, _
+               "OTP invarijanta: kg klase II dolaze sa stavke"
+    AssertTrue Abs(CDbl(d("kgTotal")) - 1000#) < 0.001, _
+               "OTP invarijanta: ukupno je zbir stavki, ne prazno zaglavlje"
+    AssertEquals "50", CStr(CLng(d("ambTotal"))), _
+                 "OTP invarijanta: gajbe su zbir stavki (20 + 30)"
+    ' Druga strana poredjenja (tblZbirna) je red po klasi, pa i ovde broje STAVKE.
+    AssertEquals "2", CStr(CLng(d("nRows"))), _
+                 "OTP invarijanta: jedno zaglavlje sa dve klase broji DVE stavke"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' PREFILL ISPRAVKE CITA STAVKE (S3b).
+'
+' Ispravka otpremnice je od S3a PAUZIRANA na zavrsetku (B-038 vraca S3c), ali se
+' prefill i dalje nudi kad operater otvori ispravku sa ekrana Oporavak. Prefill
+' sa praznog zaglavlja bi mu ponudio dokument bez kilaze i bez klase, pa bi
+' ispravka "sacuvala" nesto sto stornirani dokument nikad nije bio.
+Private Sub Test_OTP_PrefillIspravkeCitaStavke()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPPF")
+    broj = TEST_PREFIX & "-OTP-PF-" & scenario
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavkaSaCenom(KLASA_I, 400#, 20#, 250#)
+    c.Add OtpOcekStavkaSaCenom(KLASA_II, 600#, 30#, 120#)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(broj), c, razlog)
+    AssertTrue Len(otpID) > 0, "OTP prefill: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    modUiData.ResetCache
+    Dim spec As String
+    spec = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, broj, otpID)
+
+    AssertTrue InStr(1, spec, "kol1=400", vbTextCompare) > 0, _
+               "OTP prefill: klasa I nosi svoju kilazu (bilo: " & spec & ")"
+    AssertTrue InStr(1, spec, "kol2=600", vbTextCompare) > 0, _
+               "OTP prefill: klasa II nosi svoju kilazu"
+    AssertTrue InStr(1, spec, "amb1=20", vbTextCompare) > 0, _
+               "OTP prefill: gajbe klase I dolaze sa stavke"
+    AssertTrue InStr(1, spec, "dveklase=2", vbTextCompare) > 0, _
+               "OTP prefill: broj klasa se broji sa stavki"
+    AssertTrue InStr(1, spec, "cena=250", vbTextCompare) > 0, _
+               "OTP prefill: predlog cene klase I"
+    AssertTrue InStr(1, spec, "cena2=120", vbTextCompare) > 0, _
+               "OTP prefill: predlog cene klase II je SVOJ, ne cena prve"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PrefillIspravkeCitaStavke", Err.Number, Err.description
+End Sub
+
 ' Jednopotezni ulaz izvodi ocekivanje iz izvora -- tu nezavisnog operaterskog
 ' ocekivanja nema.
 Private Sub Test_OTP_StavkeSuIzvedene()
@@ -11519,6 +11807,53 @@ Private Function OtkMrezaRed(ByVal brDok As String) As Variant
 
     OtkMrezaRed = Array(redovi(1, iKg), redovi(1, iVr), redovi(1, iAmb), _
                         redovi(1, iKl), redovi(1, iPill), redovi(1, iRest))
+End Function
+
+' Red dokumenta u mrezi OTPREMNICA -- isti obrazac kao OtkMrezaRed, isti poziv
+' koji crta ekran. Vraca Array(kg, vrednost, gajbe, klasa) ili Empty kad red
+' nije tacno jedan. Vrednost je PREDLOG (Kolicina x PredlogCena), ne dug.
+Private Function OtpMrezaRed(ByVal broj As String) As Variant
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long
+    Dim iKg As Long, iVr As Long, iAmb As Long, iKl As Long
+
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("OTPREMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        Select Case modScrDokumenti.ColF(CStr(cols(c)), 0)
+            Case "OTKUI_HD_KG":        iKg = c + 1
+            Case "OTKUI_HD_VREDNOST":  iVr = c + 1
+            Case "OTKUI_HD_KOL_AMB":   iAmb = c + 1
+            Case "OTKUI_HD_KLASA":     iKl = c + 1
+        End Select
+    Next c
+    If iKg = 0 Or iVr = 0 Or iAmb = 0 Or iKl = 0 Then Exit Function
+
+    OtpMrezaRed = Array(redovi(1, iKg), redovi(1, iVr), redovi(1, iAmb), redovi(1, iKl))
+End Function
+
+Private Function OtpMrezaBrojRedova(ByVal broj As String) As Long
+    Dim d As Variant
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("OTPREMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    OtpMrezaBrojRedova = CLng(d(2))
+End Function
+
+' Poruka greske koju mreza otpremnica podigne, ili "" kad prodje.
+Private Function OtpMrezaGreska(ByVal broj As String) As String
+    Dim d As Variant
+    On Error Resume Next
+    Err.Clear
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("OTPREMNICA", "", broj)
+    If Err.Number <> 0 Then OtpMrezaGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
 End Function
 
 ' Citalac stavki drzi ISTA pravila kao kanon (VrednostOtkupa): pokvarena stavka

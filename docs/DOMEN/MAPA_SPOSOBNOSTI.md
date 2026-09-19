@@ -630,7 +630,7 @@ starim modelom.
 | ID (ulaz F.md) | Sta radi | Zasto nije sposobnost |
 |---|---|---|
 | F-061 | Jednokratno uvesti podatke iz starog OtkupApp fajla, bez tihog prepisa postojecih | migracija podataka iz starog OtkupApp fajla -- nema starih podataka ni korisnika |
-| F-090 | Naknadno napraviti prijemnice za hladnjacke otpremnice koje ih nemaju | backfill prijemnica hladnjace po `BrojZbirne\|Klasa` -- popravka podataka starog modela |
+| F-090 | Naknadno napraviti prijemnice za hladnjacke otpremnice koje ih nemaju | backfill prijemnica hladnjace po `BrojZbirne\|Klasa` -- popravka podataka starog modela. **S3b: javni ulaz PAUZIRAN** (`Poruka("HLAD_MSG_BACKFILL_PAUZIRAN")`) -- anchor su linijska polja zaglavlja otpremnice, a od S3a su prazna, pa bi makro pravio prijemnice sa 0 kg bez ijedne greske. Brise se ili prevodi u **S3d**, zajedno sa auto-lancem hladnjace. |
 | F-091 | Popuniti `GeneracijaID` na dete-zbirnama koje su ostale bez njega | backfill `Zbirna.GeneracijaID` -- kolona starog modela |
 | F-092 | Popuniti `Otkup.BrojOtpremnice` iz otpremnica na koje otkupi pokazuju | backfill `Otkup.BrojOtpremnice` -- kolona starog modela |
 | F-093 | Naknadno uskladiti kolicine na paletama za prijemnicu, kad je pri unosu preskoceno | naknadno uskladjivanje paleta po POSLOVNOM broju prijemnice -- popravka podataka starog modela |

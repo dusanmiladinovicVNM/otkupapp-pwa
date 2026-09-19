@@ -1759,9 +1759,18 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
     If WantTip(tipFilter, FLOW_DOC_PRIJEMNICA) Then _
         AddStornoDocs2 result, TBL_PRIJEMNICA, FLOW_DOC_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
             COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, COL_PRJ_KOLICINA, tf, kupci, vozaci, stByZbr
+    ' Otpremnica: kolicina je na STAVKAMA (S3b), pa umesto kolone zaglavlja ide
+    ' zbir po dokumentu. Meko: lista za storno ne sme da nestane zbog jednog
+    ' pokvarenog dokumenta -- taj red ostaje, bez brojke.
+    Dim zbirOtp As Object
+    On Error Resume Next
+    Set zbirOtp = modDokumenta.ZbirStavkiPoOtpremnici()
+    On Error GoTo EH
+
     If WantTip(tipFilter, FLOW_DOC_OTPREMNICA) Then _
         AddStornoDocs2 result, TBL_OTPREMNICA, FLOW_DOC_OTPREMNICA, COL_OTP_BROJ, COL_OTP_DATUM, _
-            COL_OTP_BROJ_ZBIRNE, "", COL_OTP_VOZAC, COL_OTP_KOLICINA, tf, kupci, vozaci, stByZbr
+            COL_OTP_BROJ_ZBIRNE, "", COL_OTP_VOZAC, "", tf, kupci, vozaci, stByZbr, _
+            zbirOtp, COL_OTP_ID
     If WantTip(tipFilter, FLOW_DOC_ZBIRNA) Then _
         AddStornoDocs2 result, TBL_ZBIRNA, FLOW_DOC_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
             COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_VOZAC, COL_ZBR_KOLICINA, tf, kupci, vozaci, stByZbr
@@ -1780,16 +1789,19 @@ End Function
 Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVal tip As String, _
         ByVal brojCol As String, ByVal datumCol As String, ByVal zbirnaCol As String, _
         ByVal kupacCol As String, ByVal vozacCol As String, ByVal kolCol As String, _
-        ByVal tf As String, ByVal kupci As Object, ByVal vozaci As Object, ByVal stByZbr As Object)
+        ByVal tf As String, ByVal kupci As Object, ByVal vozaci As Object, ByVal stByZbr As Object, _
+        Optional ByVal zbirStavki As Object, Optional ByVal idCol As String = "")
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Sub
     Dim cBr As Long, cDa As Long, cZb As Long, cKu As Long, cVo As Long, cKo As Long, cSt As Long
+    Dim cId As Long
     cBr = GetColumnIndex(tbl, brojCol)
     cDa = GetColumnIndex(tbl, datumCol)
     cZb = GetColumnIndex(tbl, zbirnaCol)
     If Len(kupacCol) > 0 Then cKu = GetColumnIndex(tbl, kupacCol)
     If Len(vozacCol) > 0 Then cVo = GetColumnIndex(tbl, vozacCol)
-    cKo = GetColumnIndex(tbl, kolCol)
+    If Len(kolCol) > 0 Then cKo = GetColumnIndex(tbl, kolCol)
+    If Len(idCol) > 0 Then cId = GetColumnIndex(tbl, idCol)
     cSt = GetColumnIndex(tbl, COL_STORNIRANO)
     If cBr = 0 Then Exit Sub
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
@@ -1807,7 +1819,20 @@ Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVa
                     If cVo > 0 Then voz = DictGet2(vozaci, NzTxC(data, i, cVo), "")
                     Dim mesta As String: mesta = DictGet2(stByZbr, zbr, "")
                     Dim datum As String: datum = FmtDatum(NzTxC(data, i, cDa))
-                    Dim kol As String: kol = NzTxC(data, i, cKo)
+                    ' Kolicina: sa zaglavlja kad je tamo, sa STAVKI kad nije
+                    ' (otpremnica od S3b). Dokument bez stavki ostaje u listi sa
+                    ' praznom kolonom -- storno se radi po identitetu, a nula bi
+                    ' rekla da nema sta da se stornira.
+                    Dim kol As String: kol = ""
+                    If cKo > 0 Then
+                        kol = NzTxC(data, i, cKo)
+                    ElseIf Not zbirStavki Is Nothing And cId > 0 Then
+                        Dim oid As String: oid = Trim$(NzTxC(data, i, cId))
+                        If zbirStavki.Exists(oid) Then
+                            Dim rec As Variant: rec = zbirStavki(oid)
+                            kol = Format$(CDbl(rec(0)), "#,##0.##")
+                        End If
+                    End If
                     If Len(tf) = 0 Or _
                        InStr(LCase$(broj & " " & zbr & " " & kup & " " & mesta & " " & datum), tf) > 0 Then
                         Dim row(0 To 7) As Variant

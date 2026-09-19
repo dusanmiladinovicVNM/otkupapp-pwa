@@ -2511,6 +2511,306 @@ Public Function GetOtpremnicaProgress(ByVal otpremnicaID As String) As Object
     Next k
 End Function
 
+' --- kanonski citaoci stavki otpremnice (S3b) --------------------------------
+'
+' Zaglavlje otpremnice od S3a vise NE nosi Klasu, Kolicinu, KolAmbalaze ni
+' Cenu -- CreateOtpremnicaDraft_TX ih ostavlja prazne, a ocekivanje po klasi
+' pise u tblOtpremnicaStavke. Citaoci koji su te kolone i dalje citali (mreza
+' F2, stampa, izvestaji, invarijanta) od S3a dobijaju PRAZNO. Ovde je jedno
+' mesto sa kojeg svi citaju stavke, po istom obrascu koji otkup ima od S14.7
+' (modOtkup.StavkeOtkupaRedovi / ZbirStavkiPoOtkupu).
+'
+' UGOVOR JE DOKUMENTSKI, NE STAVKARSKI (isti razlog kao kod otkupa, review
+' #334 P1):
+'   1) svaka stavka ima neprazan OtpremnicaID i zaglavlje TACNO JEDNOM;
+'   2) svako zaglavlje sa OtpremnicaID-em ima BAR JEDNU stavku -- pisac to vec
+'      trazi (OtpUpisiOcekivano odbija prazno ocekivanje), pa citalac koji bi
+'      nulu vratio kao podatak laze o dokumentu koji pisac ne moze da napravi;
+'   3) Kolicina > 0, Klasa kroz istu kapiju koju pisac zove (RequireValidKlasa),
+'      KolAmbalaze ceo broj >= 0 (prazno = 0 gajbi).
+'
+' PredlogCena je JEDINI izuzetak od "vece od nule": ona je PREDLOG, ne knjizena
+' cena (odluka 14.8 t. 2), pa prazna kolona znaci "nije predlozena" i to nije
+' greska. Kad postoji, mora biti broj > 0 -- nula bi bila predlog da se roba da
+' besplatno, a to niko nije uneo.
+Public Function StavkeOtpremniceRedovi() As Variant
+    Const SRC As String = "StavkeOtpremniceRedovi"
+
+    StavkeOtpremniceRedovi = Empty
+
+    Dim zagl As Object
+    Set zagl = ZaglavljaOtpremnicePoID(SRC)
+    RequireJedinstvenoZaglavljeOtpremnice zagl, SRC
+
+    Dim imaStavku As Object
+    Set imaStavku = CreateObject("Scripting.Dictionary")
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA_STAVKE)
+
+    Dim cOtp As Long, cRb As Long, cKl As Long, cKol As Long
+    Dim cCena As Long, cAmb As Long, cId As Long, cBruto As Long
+    Dim i As Long, n As Long, oid As String
+
+    If IsArray(d) Then
+        cOtp = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, SRC)
+        cRb = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_RB, SRC)
+        cKl = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KLASA, SRC)
+        cKol = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA, SRC)
+        cCena = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_PREDLOG_CENA, SRC)
+        cAmb = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KOL_AMB, SRC)
+        cId = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_ID, SRC)
+        cBruto = RequireColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_BRUTO, SRC)
+
+        For i = 1 To UBound(d, 1)
+            oid = Trim$(NzToText(d(i, cOtp)))
+            RequireOtpStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), i, SRC
+            imaStavku(oid) = True
+            n = n + 1
+        Next i
+    End If
+
+    RequireZaglavljaOtpremniceSaStavkama zagl, imaStavku, SRC
+
+    If n = 0 Then Exit Function
+
+    ' Kolone: 1 OtpremnicaID, 2 RedniBroj, 3 Klasa, 4 Kolicina, 5 PredlogCena,
+    ' 6 KolAmbalaze, 7 OtpremnicaStavkaID, 8 BrutoKg. Nove kolone idu NA KRAJ:
+    ' citaoci indeksiraju poziciono.
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 8)
+    n = 0
+    For i = 1 To UBound(d, 1)
+        n = n + 1
+        res(n, 1) = Trim$(NzToText(d(i, cOtp)))
+        res(n, 2) = d(i, cRb)
+        res(n, 3) = Trim$(NzToText(d(i, cKl)))
+        res(n, 4) = CDbl(d(i, cKol))
+        res(n, 5) = OtpDbl(d(i, cCena))
+        res(n, 6) = OtpDbl(d(i, cAmb))
+        res(n, 7) = Trim$(NzToText(d(i, cId)))
+        res(n, 8) = OtpDbl(d(i, cBruto))
+    Next i
+
+    StavkeOtpremniceRedovi = res
+End Function
+
+' Zbir stavki po dokumentu. Kljuc je OtpremnicaID, vrednost
+' Array(kg, vrednost, gajbe, klase):
+'   kg       = SUM(Kolicina)
+'   vrednost = SUM(Kolicina x PredlogCena) -- PREDLOG, ne knjizen iznos
+'   gajbe    = SUM(KolAmbalaze)
+'   klase    = klase stavki redom upisa, bez ponavljanja ("I, II")
+'
+' SVAKI kanonski dokument JE u recniku -- zaglavlje bez stavki obara citaoca
+' gore, pa "nema kljuca" ne moze da znaci 0 kg.
+Public Function ZbirStavkiPoOtpremnici() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZbirStavkiPoOtpremnici = dict
+
+    Dim s As Variant
+    s = StavkeOtpremniceRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, oid As String, kl As String, rec As Variant
+    For i = 1 To UBound(s, 1)
+        oid = CStr(s(i, 1))
+        If dict.Exists(oid) Then
+            rec = dict(oid)
+        Else
+            rec = Array(0#, 0#, 0#, "")
+        End If
+        rec(0) = CDbl(rec(0)) + CDbl(s(i, 4))
+        rec(1) = CDbl(rec(1)) + CDbl(s(i, 4)) * CDbl(s(i, 5))
+        rec(2) = CDbl(rec(2)) + CDbl(s(i, 6))
+        kl = CStr(s(i, 3))
+        If Len(kl) > 0 Then
+            If InStr(1, ", " & CStr(rec(3)) & ", ", ", " & kl & ", ", vbBinaryCompare) = 0 Then
+                If Len(CStr(rec(3))) > 0 Then rec(3) = CStr(rec(3)) & ", "
+                rec(3) = CStr(rec(3)) & kl
+            End If
+        End If
+        dict(oid) = rec
+    Next i
+End Function
+
+' Zbir stavki JEDNOG dokumenta iz recnika -- nedostajuci kljuc je GRESKA.
+' Druga brana, kao ZbirStavkiZaOtkup: nijedan citalac ne sme da ima granu koja
+' nulu vraca kao podatak.
+Public Function ZbirStavkiZaOtpremnicu(ByVal zbir As Object, _
+                                       ByVal otpremnicaID As String, _
+                                       ByVal sourceName As String) As Variant
+    If zbir Is Nothing Then
+        Err.Raise vbObjectError + 1929, sourceName, _
+                  "Zbir stavki otpremnice nije izgradjen."
+    End If
+
+    Dim oid As String
+    oid = Trim$(otpremnicaID)
+
+    If Len(oid) = 0 Then
+        Err.Raise vbObjectError + 1927, sourceName, _
+                  "Zaglavlje otpremnice bez OtpremnicaID-a se ne moze citati."
+    End If
+
+    If Not zbir.Exists(oid) Then
+        Err.Raise vbObjectError + 1929, sourceName, _
+                  "Otpremnica nema nijednu stavku: " & oid & _
+                  ". Kolicina dokumenta se racuna iz " & TBL_OTPREMNICA_STAVKE & "."
+    End If
+
+    ZbirStavkiZaOtpremnicu = zbir(oid)
+End Function
+
+' Stavke grupisane po dokumentu -- za citaoce kojima jedan red izlaza pripada
+' JEDNOJ klasi (stampa, izvestaj po otkupnom mestu). Vrednost je Collection
+' redova iz StavkeOtpremniceRedovi, redom upisa.
+Public Function StavkeOtpremnicePoDokumentu() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set StavkeOtpremnicePoDokumentu = dict
+
+    Dim s As Variant
+    s = StavkeOtpremniceRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, j As Long, oid As String, c As Collection, red As Variant
+    For i = 1 To UBound(s, 1)
+        oid = CStr(s(i, 1))
+        If dict.Exists(oid) Then
+            Set c = dict(oid)
+        Else
+            Set c = New Collection
+            dict.Add oid, c
+        End If
+        ReDim red(1 To 8)
+        For j = 1 To 8
+            red(j) = s(i, j)
+        Next j
+        c.Add red
+    Next i
+End Function
+
+' Stavke JEDNOG dokumenta -- nedostajuci kljuc je GRESKA, isti razlog kao gore.
+Public Function StavkeZaOtpremnicu(ByVal poDok As Object, _
+                                   ByVal otpremnicaID As String, _
+                                   ByVal sourceName As String) As Collection
+    If poDok Is Nothing Then
+        Err.Raise vbObjectError + 1929, sourceName, _
+                  "Stavke otpremnice nisu ucitane."
+    End If
+
+    Dim oid As String
+    oid = Trim$(otpremnicaID)
+
+    If Not poDok.Exists(oid) Then
+        Err.Raise vbObjectError + 1929, sourceName, _
+                  "Otpremnica nema nijednu stavku: " & oid & _
+                  ". Stavke se citaju iz " & TBL_OTPREMNICA_STAVKE & "."
+    End If
+
+    Set StavkeZaOtpremnicu = poDok(oid)
+End Function
+
+Private Function ZaglavljaOtpremnicePoID(ByVal sourceName As String) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZaglavljaOtpremnicePoID = dict
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, sourceName)
+
+    Dim i As Long, oid As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(NzToText(d(i, cId)))
+        If Len(oid) > 0 Then
+            If dict.Exists(oid) Then
+                dict(oid) = CLng(dict(oid)) + 1
+            Else
+                dict.Add oid, 1&
+            End If
+        End If
+    Next i
+End Function
+
+' JEDAN LOGICKI DOKUMENT = JEDAN ID. Dva zaglavlja sa istim OtpremnicaID
+' obaraju citaoca PRE ijednog zbira -- dokument-level citaoci iteriraju
+' zaglavlja, pa bi isti teret bio izbrojan dvaput.
+Private Sub RequireJedinstvenoZaglavljeOtpremnice(ByVal zagl As Object, _
+                                                  ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If CLng(zagl(k)) <> 1 Then
+            Err.Raise vbObjectError + 1941, sourceName, _
+                      "Zaglavlje otpremnice se ne nalazi tacno jednom: " & CStr(k) & _
+                      " (headera: " & CStr(zagl(k)) & "). OtpremnicaID je identitet " & _
+                      "dokumenta -- dva reda sa istim ID-em nisu dokument."
+        End If
+    Next k
+End Sub
+
+Private Sub RequireOtpStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
+                                   ByVal klasa As Variant, ByVal kol As Variant, _
+                                   ByVal cena As Variant, ByVal red As Long, _
+                                   ByVal sourceName As String)
+    If Len(oid) = 0 Then
+        Err.Raise vbObjectError + 1927, sourceName, _
+                  "Stavka otpremnice bez OtpremnicaID-a: " & TBL_OTPREMNICA_STAVKE & _
+                  ", red " & CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not zagl.Exists(oid) Then
+        Err.Raise vbObjectError + 1928, sourceName, _
+                  "Zaglavlje otpremnice ne postoji: " & oid & ", stavka u redu " & _
+                  CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not IsNumeric(kol) Then
+        Err.Raise vbObjectError + 1925, sourceName, _
+                  "Kolicina stavke nije brojcana: OtpremnicaID=" & oid & "."
+    End If
+
+    If CDbl(kol) <= 0 Then
+        Err.Raise vbObjectError + 1926, sourceName, _
+                  "Kolicina stavke mora biti veca od nule: OtpremnicaID=" & oid & "."
+    End If
+
+    ' Prazna PredlogCena je uredno stanje (predlog nije dat). Upisana nula ili
+    ' tekst nisu -- to je pokvaren podatak, ne odsustvo predloga.
+    If Len(Trim$(NzToText(cena))) > 0 Then
+        If Not IsNumeric(cena) Then
+            Err.Raise vbObjectError + 1925, sourceName, _
+                      "PredlogCena stavke nije brojcana: OtpremnicaID=" & oid & "."
+        End If
+        If CDbl(cena) <= 0 Then
+            Err.Raise vbObjectError + 1926, sourceName, _
+                      "PredlogCena stavke mora biti veca od nule kad je upisana: " & _
+                      "OtpremnicaID=" & oid & "."
+        End If
+    End If
+
+    RequireValidKlasa Trim$(NzToText(klasa)), _
+                      sourceName & " (OtpremnicaID=" & oid & ")"
+End Sub
+
+Private Sub RequireZaglavljaOtpremniceSaStavkama(ByVal zagl As Object, _
+                                                 ByVal imaStavku As Object, _
+                                                 ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If Not imaStavku.Exists(CStr(k)) Then
+            Err.Raise vbObjectError + 1929, sourceName, _
+                      "Otpremnica nema nijednu stavku: " & CStr(k) & _
+                      ". Kolicina dokumenta se racuna iz " & TBL_OTPREMNICA_STAVKE & "."
+        End If
+    Next k
+End Sub
+
 ' Jedan EH za sve ulaze: monitoring, rollback i poruka su im isti, a sest
 ' kopija bi bilo sest mesta na kojima se rollback moze zaboraviti.
 Private Function OtpPadTransakcije(ByRef tx As clsTransaction, _
@@ -3772,19 +4072,22 @@ Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
     Dim sumaOtpKg As Double
     Dim sumaOtpAmb As Long
 
+    ' Kilaza i gajbe otpremnice su na STAVKAMA (S3b) -- sa zaglavlja bi ova
+    ' provera svaku zbirnu poredila sa nulom i proglasavala je neispravnom.
     If Not IsEmpty(otpData) Then
-        Dim colKol As Long
-        Dim colAmb As Long
+        Dim colOtpID As Long
+        colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
+                                      "modDokumenta.ValidateZbirna")
 
-        colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, _
-                                    "modDokumenta.ValidateZbirna")
-        colAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, _
-                                    "modDokumenta.ValidateZbirna")
+        Dim zbirStav As Object
+        Set zbirStav = ZbirStavkiPoOtpremnici()
 
-        Dim i As Long
+        Dim i As Long, z As Variant
         For i = 1 To UBound(otpData, 1)
-            If IsNumeric(otpData(i, colKol)) Then sumaOtpKg = sumaOtpKg + CDbl(otpData(i, colKol))
-            If IsNumeric(otpData(i, colAmb)) Then sumaOtpAmb = sumaOtpAmb + CLng(otpData(i, colAmb))
+            z = ZbirStavkiZaOtpremnicu(zbirStav, Trim$(NzToText(otpData(i, colOtpID))), _
+                                       "modDokumenta.ValidateZbirna")
+            sumaOtpKg = sumaOtpKg + CDbl(z(0))
+            sumaOtpAmb = sumaOtpAmb + CLng(z(2))
         Next i
     End If
 
@@ -3842,31 +4145,36 @@ Public Function ValidateZbirnaPreUnosa(ByVal brojZbirne As String, _
     Dim sumaKgKlII As Double
     Dim sumaAmb As Long
 
+    ' Klasa, kilaza i gajbe su na STAVKAMA (S3b). Jedna otpremnica moze da nosi
+    ' obe klase, pa red zaglavlja vise ne pripada jednoj klasi.
     If IsArray(otpData) Then
-        Dim colKol As Long
-        Dim colAmb As Long
-        Dim colKlasa As Long
-        Dim i As Long
+        Dim colOtpID As Long
+        Dim i As Long, s As Long
 
-        colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, _
-                                    "modDokumenta.ValidateZbirnaPreUnosa")
-        colAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, _
-                                    "modDokumenta.ValidateZbirnaPreUnosa")
-        colKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, _
+        colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
                                       "modDokumenta.ValidateZbirnaPreUnosa")
 
-        Dim rowKlasa As String
+        Dim stavkeDok As Object
+        Set stavkeDok = StavkeOtpremnicePoDokumentu()
+
+        Dim stavke As Collection, stavka As Variant, rowKlasa As String
 
         For i = 1 To UBound(otpData, 1)
-            rowKlasa = Trim$(CStr(otpData(i, colKlasa)))
+            Set stavke = StavkeZaOtpremnicu(stavkeDok, _
+                             Trim$(NzToText(otpData(i, colOtpID))), _
+                             "modDokumenta.ValidateZbirnaPreUnosa")
+            For s = 1 To stavke.count
+                stavka = stavke(s)
+                rowKlasa = Trim$(CStr(stavka(3)))
 
-            If rowKlasa = KLASA_I Then
-                If IsNumeric(otpData(i, colKol)) Then sumaKgKlI = sumaKgKlI + CDbl(otpData(i, colKol))
-            ElseIf rowKlasa = KLASA_II Then
-                If IsNumeric(otpData(i, colKol)) Then sumaKgKlII = sumaKgKlII + CDbl(otpData(i, colKol))
-            End If
+                If rowKlasa = KLASA_I Then
+                    sumaKgKlI = sumaKgKlI + CDbl(stavka(4))
+                ElseIf rowKlasa = KLASA_II Then
+                    sumaKgKlII = sumaKgKlII + CDbl(stavka(4))
+                End If
 
-            If IsNumeric(otpData(i, colAmb)) Then sumaAmb = sumaAmb + CLng(otpData(i, colAmb))
+                sumaAmb = sumaAmb + CLng(stavka(6))
+            Next s
         Next i
     End If
 
@@ -5579,8 +5887,8 @@ Private Function GetVerwaisteOtpremnice(ByVal storniraneBrojevi As Object) As Va
     Dim colBrOtp As Long
     Dim colBrZbr As Long
     Dim colVrsta As Long
-    Dim colKol As Long
     Dim colStorno As Long
+    Dim zVerw As Variant
 
     colID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
                                "modDokumenta.GetVerwaisteOtpremnice")
@@ -5590,10 +5898,13 @@ Private Function GetVerwaisteOtpremnice(ByVal storniraneBrojevi As Object) As Va
                                   "modDokumenta.GetVerwaisteOtpremnice")
     colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, _
                                   "modDokumenta.GetVerwaisteOtpremnice")
-    colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, _
-                                "modDokumenta.GetVerwaisteOtpremnice")
     colStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, _
                                    "modDokumenta.GetVerwaisteOtpremnice")
+
+    ' Kilaza dolazi sa STAVKI (S3b) -- lista siroceta je lista za oporavak, pa
+    ' bi nula pored svakog dokumenta operateru rekla da nema sta da se vrati.
+    Dim zbirStav As Object
+    Set zbirStav = ZbirStavkiPoOtpremnici()
 
     Dim count As Long
     Dim i As Long
@@ -5625,8 +5936,9 @@ NextCount:
         If storniraneBrojevi.Exists(Trim$(NzToText(data(i, colBrZbr)))) Then
             idx = idx + 1
 
-            kol = 0
-            If IsNumeric(data(i, colKol)) Then kol = CDbl(data(i, colKol))
+            zVerw = ZbirStavkiZaOtpremnicu(zbirStav, Trim$(NzToText(data(i, colID))), _
+                                           "modDokumenta.GetVerwaisteOtpremnice")
+            kol = CDbl(zVerw(0))
 
             result(idx, 1) = NzToText(data(i, colID))
             result(idx, 2) = NzToText(data(i, colBrOtp))

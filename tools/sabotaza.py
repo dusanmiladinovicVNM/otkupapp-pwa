@@ -4513,10 +4513,20 @@ SABOTAZE = {
     ),
     "otk-kapija-mreza-tiha-nula": (
         "modScrDokumenti.bas",
-        "            zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _\n                        \"modScrDokumenti.RedoviZaTip\")\n",
-        "            If dStav.Exists(CellS(src, r, iStavID)) Then\n                zStav = dStav(CellS(src, r, iStavID))\n            Else\n                zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n            End If\n",
+        "                zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _\n                            \"modScrDokumenti.RedoviZaTip\")\n",
+        "                If dStav.Exists(CellS(src, r, iStavID)) Then\n                    zStav = dStav(CellS(src, r, iStavID))\n                Else\n                    zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n                End If\n",
         "Test_OTK_ZaglavljeBezIDObaraCitaoce",
         "OTK bez ID: mreza pada po imenu, ne crta 0 kg",
+    ),
+    # Ista druga brana, drugi dokument (S3b): mreza otpremnica cita stavke, pa
+    # otpremnica bez ijedne stavke mora da padne po imenu umesto da se nacrta
+    # kao 0 kg. Grana je svoja, pa joj treba svoje sidro.
+    "otp-kapija-mreza-tiha-nula": (
+        "modScrDokumenti.bas",
+        "                zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _\n                            \"modScrDokumenti.RedoviZaTip\")\n",
+        "                If dStav.Exists(CellS(src, r, iStavID)) Then\n                    zStav = dStav(CellS(src, r, iStavID))\n                Else\n                    zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n                End If\n",
+        "Test_OTP_ZaglavljeBezStavkiObaraCitaoce",
+        "OTP bez stavki: mreza pada po imenu, ne crta 0 kg",
     ),
     # Preskok u GetOpenOtkupi je posle ove izmene NEDOSTIZAN -- izvor
     # (StavkeOtkupaRedovi) pada pre njega, pa sabotaza nad tom granom ne moze
@@ -4579,6 +4589,35 @@ SABOTAZE = {
         + "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
         "Test_OTP_NacrtNijeZavrsetakIspravke",
         "correction NIJE zavrsen nad nacrtom",
+    ),
+    # --- S3b: citaoci otpremnice citaju stavke -------------------------------
+    # Izvestaj po otkupnom mestu spaja klase u jedan red: prijem obe klase se
+    # tada sabere i pripise jednoj (u malina modu duplo).
+    "otp-izvestaj-om-spaja-klase": (
+        "modIzvestaj.bas",
+        "        For s = 1 To stavke.count\n            stavka = stavke(s)\n            nPar = nPar + 1\n",
+        "        For s = 1 To 1                       ' SABOTAZA: samo prva klasa\n"
+        + "            stavka = stavke(s)\n            nPar = nPar + 1\n",
+        "Test_OTP_IzvestajOMRedPoKlasi",
+        "dvoklasna otpremnica daje DVA reda",
+    ),
+    # Invarijanta zbirne opet cita kilazu sa ZAGLAVLJA -- od S3a prazno, pa bi
+    # svaka zbirna bila poredjena sa nulom i proglasena neispravnom.
+    "otp-invarijanta-cita-zaglavlje": (
+        "modDokumentInvariant.bas",
+        "                    kol = CDbl(stavka(4))\n",
+        "                    kol = 0#                 ' SABOTAZA: zaglavlje je prazno\n",
+        "Test_OTP_InvarijantaSabiraStavke",
+        "ukupno je zbir stavki, ne prazno zaglavlje",
+    ),
+    # Prefill ispravke opet uzima kolicinu sa zaglavlja: operater dobija formu
+    # bez kilaze i bez klase, pa "ispravka" cuva nesto sto original nije bio.
+    "otp-prefill-bez-stavki": (
+        "modStornoDok.bas",
+        "        res = StavkeOtpremniceZaPrefill(res, CelijaAko(d, base, cId))\n",
+        "        res = Spoji(res, \"dveklase\", \"1\")   ' SABOTAZA: bez stavki\n",
+        "Test_OTP_PrefillIspravkeCitaStavke",
+        "klasa I nosi svoju kilazu",
     ),
 
     "otp-malina-pauza-cuti": (

@@ -972,6 +972,7 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_ZBIRNA_PAUZIRANA", "Napomena: automatska zbirna iz otpremnice je PAUZIRANA dok zbirna ne pre" & ChrW(273) & "e na nov model. Unesi je ru" & ChrW(269) & "no (rezim Zbirna)."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA", "Napomena: ISPRAVKA otpremnice je PAUZIRANA dok otpremnica ne pre" & ChrW(273) & "e na nov model. Ova otpremnica NIJE vezana za storniranu " & ChrW(8212) & " ispravka i dalje " & ChrW(269) & "eka na ekranu Oporavak."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT", "Otpremnica je otvorena kao NACRT. Izda" & ChrW(263) & "e se kad joj se vezu otkupni blokovi."
+    UpsertRow lo, existing, "HLAD_MSG_BACKFILL_PAUZIRAN", "Backfill prijemnica hladnja" & ChrW(269) & "e je PAUZIRAN. " & ChrW(268) & "ita kolicinu i cenu sa zaglavlja otpremnice, a one su od S3a na stavkama " & ChrW(8212) & " pokretanje bi napravilo prijemnice sa 0 kg. Vra" & ChrW(263) & "a se sa auto-lancem hladnja" & ChrW(269) & "e."
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_1", ChrW(268) & "eka ISPRAVKA za stornirano"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_2", "Da li je upravo snimljeni dokument ZAMENA za njega?"
