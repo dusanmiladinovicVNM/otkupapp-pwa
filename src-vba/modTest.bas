@@ -1332,6 +1332,11 @@ End Sub
 Private Sub T_ZbirnaUnos_PauziranDoS4()
     Dim p As Object, fokus As String, res As String
 
+    ' Katalog se puni kao na startu aplikacije (InitApp -> EnsurePoruke). Fixture
+    ' nosi tblPoruke iz donora, pa kljuc dodat posle poslednje regeneracije u njemu
+    ' ne postoji -- a bez ovoga bi tvrdnja o katalogu merila fixture, ne kod.
+    modSetup.EnsurePoruke
+
     Set p = ZbirnaUnosKojiSeSlaze()
     res = modDokUnos.ZbirnaValidiraj(p, fokus)
     AssertEq res, Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
@@ -1351,6 +1356,8 @@ End Sub
 ' F4 JE PAUZIRAN DO S4, iz istog razloga: prijemnica trazi postojecu zbirnu.
 Private Sub T_PrijemnicaUnos_PauziranDoS4()
     Dim p As Object, fokus As String, res As String
+
+    modSetup.EnsurePoruke
 
     Set p = PrijemnicaUnosKojiProlazi()
     res = modDokUnos.PrijemnicaValidiraj(p, fokus)

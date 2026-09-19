@@ -3768,10 +3768,18 @@ Private Sub Test_PR3_AmbalazaMoraBitiCeoBroj()
     AssertEquals CStr(preH), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
                  "PR3 ambalaza: header nije ostao"
 
+    ' Pokvarena stavka se VRACA: citalac stavki je strog za celu tabelu, pa bi
+    ' 1,5 gajbe oborio svaki sledeci test koji cita otpremnice.
+    Pr3PostaviAmbalazu otp, 20
     Exit Sub
 
 EH:
-    LogFatal "Test_PR3_AmbalazaMoraBitiCeoBroj", Err.Number, Err.description
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    Pr3PostaviAmbalazu otp, 20
+    On Error GoTo 0
+    LogFatal "Test_PR3_AmbalazaMoraBitiCeoBroj", errNum, errDesc
 End Sub
 
 ' Otpremnica NEMA kolonu koja pokazuje na zbirnu -- pripadnost je u
@@ -11674,12 +11682,15 @@ Private Function Pr3Ocekivano(ByVal klasa As String, ByVal kol As Double, _
     Set Pr3Ocekivano = s
 End Function
 
+' Gajbe otpremnice su na STAVCI (S3b-1) -- zaglavlje ih vise ne nosi, pa bi upis
+' u zaglavlje bio kvar koji niko ne cita. Otpremnica iz Pr3Otpremnica ima tacno
+' jednu stavku.
 Private Sub Pr3PostaviAmbalazu(ByVal otpID As String, ByVal amb As Double)
     Dim redovi As Collection
-    Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    Set redovi = FindRows(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpID)
     If redovi Is Nothing Then Exit Sub
     If redovi.count <> 1 Then Exit Sub
-    RequireUpdateCell TBL_OTPREMNICA, CLng(redovi(1)), COL_OTP_KOL_AMB, amb, _
+    RequireUpdateCell TBL_OTPREMNICA_STAVKE, CLng(redovi(1)), COL_OPS_KOL_AMB, amb, _
                       "Pr3PostaviAmbalazu"
 End Sub
 

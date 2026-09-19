@@ -2262,7 +2262,8 @@ Public Function StavkeOtpremniceRedovi() As Variant
 
         For i = 1 To UBound(d, 1)
             oid = Trim$(NzToText(d(i, cOtp)))
-            RequireOtpStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), i, SRC
+            RequireOtpStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), _
+                                   d(i, cAmb), i, SRC
             imaStavku(oid) = True
             n = n + 1
         Next i
@@ -2454,8 +2455,8 @@ End Sub
 
 Private Sub RequireOtpStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
                                    ByVal klasa As Variant, ByVal kol As Variant, _
-                                   ByVal cena As Variant, ByVal red As Long, _
-                                   ByVal sourceName As String)
+                                   ByVal cena As Variant, ByVal amb As Variant, _
+                                   ByVal red As Long, ByVal sourceName As String)
     If Len(oid) = 0 Then
         Err.Raise vbObjectError + 1927, sourceName, _
                   "Stavka otpremnice bez OtpremnicaID-a: " & TBL_OTPREMNICA_STAVKE & _
@@ -2490,6 +2491,22 @@ Private Sub RequireOtpStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
                       "PredlogCena stavke mora biti veca od nule kad je upisana: " & _
                       "OtpremnicaID=" & oid & "."
         End If
+    End If
+
+    ' Gajbe su KOMADI: prazno je 0, a nebrojcano, negativno i decimalno je kvar --
+    ' isto sto pisac odbija (OtpUpisiOcekivano -> RequireCeoBroj). Citalac koji bi
+    ' 1,5 gajbu sabrao razisao bi se sa piscem, a tiho zaokruzivanje sakriva izvor.
+    If Len(Trim$(NzToText(amb))) > 0 Then
+        If Not IsNumeric(amb) Then
+            Err.Raise vbObjectError + 1925, sourceName, _
+                      "KolAmbalaze stavke nije brojcana: OtpremnicaID=" & oid & "."
+        End If
+        If CDbl(amb) < 0 Then
+            Err.Raise vbObjectError + 1926, sourceName, _
+                      "KolAmbalaze stavke ne sme biti negativna: OtpremnicaID=" & oid & "."
+        End If
+        RequireCeoBroj CDbl(amb), "KolAmbalaze stavke (OtpremnicaID=" & oid & ")", _
+                       sourceName
     End If
 
     RequireValidKlasa Trim$(NzToText(klasa)), _
