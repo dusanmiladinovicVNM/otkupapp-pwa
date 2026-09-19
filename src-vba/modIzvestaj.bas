@@ -1988,7 +1988,7 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
-' Roba po VOZACU zbirno (krug 12): otpremljeno -- Sum kg i Sum kg*cena
+' Roba po VOZACU zbirno (krug 12): OTPREMLJENO -- kg i vrednost IZDATIH,
 ' nestorniranih otpremnica u opsegu, po vozacu; naziv iz tblVozaci sa
 ' fallback-om na ID. (1)=VozacID (2)=Naziv (3)=Kg (4)=Vrednost; UKUPNO.
 Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
@@ -1996,28 +1996,31 @@ Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
     Const SRC As String = "modIzvestaj.ReportRobaVozaciZbirni"
     On Error GoTo EH
 
-    ' Kilaza i vrednost dolaze sa STAVKI (S3b): zaglavlje od S3a nema ni
-    ' Kolicinu ni Cenu, pa bi ovaj izvestaj svakom vozacu pokazivao 0.
-    ' Vrednost je zbir Kolicina x PredlogCena -- PREDLOG, ne knjizen iznos
-    ' (odluka 14.8 t. 2); otpremnica bez predloga daje 0, kao i pre S3a kad
-    ' zaglavlje nije imalo cenu.
+    ' OTPREMLJENO = IZDATO (review #362, P1). Nacrt je najava: nema izvora, gajbe
+    ' nisu knjizene, i sme da ostane neizdat -- u otpremljenu robu ne ulazi.
+    ' Kilaza dolazi sa STAVKI (zaglavlje je od S3a nema). Vrednost je vrednost
+    ' IZVORNIH otkupa (Kolicina x Cena njihovih stavki), NE Kolicina x
+    ' PredlogCena: predlog je polje za prefill, ne finansijska cinjenica.
     Dim d As Variant, i As Long
-    Dim cVoz As Long, cId As Long, cDat As Long, cStorno As Long
+    Dim cVoz As Long, cId As Long, cDat As Long, cStorno As Long, cIzd As Long
     d = GetTableData(TBL_OTPREMNICA)
     If Not IsArray(d) Then Exit Function
     cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+    cIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
 
-    Dim zbir As Object
+    Dim zbir As Object, vredIzv As Object
     Set zbir = modDokumenta.ZbirStavkiPoOtpremnici()
+    Set vredIzv = modDokumenta.VrednostIzvoraPoOtpremnici()
 
     Dim kg As Object, vr As Object, k As String, dv As Date, z As Variant
     Set kg = CreateObject("Scripting.Dictionary")
     Set vr = CreateObject("Scripting.Dictionary")
     For i = 1 To UBound(d, 1)
-        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+        If (cStorno = 0 Or CStr(d(i, cStorno)) <> "Da") And _
+           modDokumenta.IzdatoStatusJeIzdato(d(i, cIzd)) Then
             If IsDate(d(i, cDat)) Then
                 dv = CDate(d(i, cDat))
                 If dv >= datumOd And dv <= datumDo Then
@@ -2026,7 +2029,8 @@ Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
                         z = modDokumenta.ZbirStavkiZaOtpremnicu(zbir, _
                                 Trim$(NzToText(d(i, cId))), SRC)
                         kg(k) = IzvNum(kg(k)) + CDbl(z(0))
-                        vr(k) = IzvNum(vr(k)) + CDbl(z(1))
+                        vr(k) = IzvNum(vr(k)) + modDokumenta.VrednostIzvoraZaOtpremnicu( _
+                                    vredIzv, Trim$(NzToText(d(i, cId))), SRC)
                     End If
                 End If
             End If
@@ -2730,7 +2734,8 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     
     Dim colVrsta As Long, colBrOtp As Long
     Dim colDatum As Long, colVozac As Long
-    Dim colOtpID As Long, colBrZbirne As Long
+    Dim colOtpID As Long, colBrZbirne As Long, colIzd As Long
+    colIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
     colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
     colBrOtp = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
     colDatum = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
@@ -2760,10 +2765,14 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim rowCount As Long, h As Long, s As Long
     Dim stavke As Collection, stavka As Variant
 
+    ' Samo IZDATE otpremnice su otpremljena roba (review #362, P1): nacrt nema
+    ' izvore ni knjizene gajbe, pa u "otkupljeno i otpremljeno" ne ulazi.
     For h = 1 To UBound(otpData, 1)
-        Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
-                         Trim$(NzToText(otpData(h, colOtpID))), SRC)
-        rowCount = rowCount + stavke.count
+        If modDokumenta.IzdatoStatusJeIzdato(otpData(h, colIzd)) Then
+            Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
+                             Trim$(NzToText(otpData(h, colOtpID))), SRC)
+            rowCount = rowCount + stavke.count
+        End If
     Next h
 
     If rowCount = 0 Then
@@ -2777,15 +2786,17 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
 
     Dim nPar As Long
     For h = 1 To UBound(otpData, 1)
-        Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
-                         Trim$(NzToText(otpData(h, colOtpID))), SRC)
-        For s = 1 To stavke.count
-            stavka = stavke(s)
-            nPar = nPar + 1
-            mapRed(nPar) = h
-            mapKlasa(nPar) = KlasaOrDefault(stavka(3))
-            mapKg(nPar) = CDbl(stavka(4))
-        Next s
+        If modDokumenta.IzdatoStatusJeIzdato(otpData(h, colIzd)) Then
+            Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _
+                             Trim$(NzToText(otpData(h, colOtpID))), SRC)
+            For s = 1 To stavke.count
+                stavka = stavke(s)
+                nPar = nPar + 1
+                mapRed(nPar) = h
+                mapKlasa(nPar) = KlasaOrDefault(stavka(3))
+                mapKg(nPar) = CDbl(stavka(4))
+            Next s
+        End If
     Next h
 
     Dim result() As Variant
@@ -3034,16 +3045,21 @@ Private Function ReportOtkupRobaVozac(ByVal vozacID As String, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    ' Vrsta ostaje na zaglavlju; kilaza i vrednost dolaze sa STAVKI (S3b).
-    Dim colVrsta As Long, colOtpID As Long
+    ' Samo IZDATE otpremnice su otpremljena roba (review #362, P1). Vrsta je na
+    ' zaglavlju, kilaza na STAVKAMA, a vrednost je vrednost IZVORNIH otkupa --
+    ' ne Kolicina x PredlogCena.
+    Dim colVrsta As Long, colOtpID As Long, colIzd As Long
     colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
     colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    colIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
 
-    Dim zbir As Object
+    Dim zbir As Object, vredIzv As Object
     Set zbir = modDokumenta.ZbirStavkiPoOtpremnici()
+    Set vredIzv = modDokumenta.VrednostIzvoraPoOtpremnici()
 
     Dim i As Long
     For i = 1 To UBound(otpData, 1)
+        If Not modDokumenta.IzdatoStatusJeIzdato(otpData(i, colIzd)) Then GoTo SledecaOtp
         Dim key As String
         key = CStr(otpData(i, colVrsta))
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
@@ -3053,8 +3069,10 @@ Private Function ReportOtkupRobaVozac(ByVal vozacID As String, _
         z = modDokumenta.ZbirStavkiZaOtpremnicu(zbir, _
                 Trim$(NzToText(otpData(i, colOtpID))), SRC)
         vals(0) = vals(0) + CDbl(z(0))
-        vals(1) = vals(1) + CDbl(z(1))
+        vals(1) = vals(1) + modDokumenta.VrednostIzvoraZaOtpremnicu( _
+                                vredIzv, Trim$(NzToText(otpData(i, colOtpID))), SRC)
         dict(key) = vals
+SledecaOtp:
     Next i
 
     ReportOtkupRobaVozac = DictToResultArray(dict)

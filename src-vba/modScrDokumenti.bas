@@ -867,15 +867,16 @@ Public Function ColTipAmb(ByVal m As String) As String
     End Select
 End Function
 
-' Prazno = rezim nema cenu (tblZbirna), pa ni kolonu vrednosti.
+' Prazno = rezim nema cenu, pa ni kolonu vrednosti.
 '
-' OTPREMNICA nosi PREDLOG cene po klasi (odluka 14.8 t. 2), ne knjizenu cenu:
-' kolona vrednosti je zbir Kolicina x PredlogCena stavki. Otpremnica bez
-' predloga zato pokazuje 0 -- isto kao pre S3a, kad zaglavlje nije imalo cenu.
+' OTPREMNICA je nema (review #362, P1). Njena PredlogCena je predlog za prefill
+' otkupa, izricito NE-finansijsko polje, pa Kolicina x PredlogCena nije vrednost
+' dokumenta. Prava vrednost je vrednost izvornih otkupa, a nju nacrt -- koga
+' ova mreza uglavnom prikazuje -- jos nema. Kolona bi zato bila ili izmisljena
+' cifra, ili nula; oba lazu, pa je nema.
 Public Function ColCena(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColCena = COL_OKS_CENA          ' stavka (ovStav)
-        Case "OTPREMNICA":           ColCena = COL_OPS_PREDLOG_CENA  ' stavka (ovStav)
         Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
     End Select
 End Function

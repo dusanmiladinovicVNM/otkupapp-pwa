@@ -194,6 +194,15 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     mode = DocResolveMode(GetConfigValue(CFG_OTPREMNICA_PRINT_MODE), "PDF")
     If mode = "OFF" Then Exit Sub
 
+    ' NACRT SE NE STAMPA (review #362, P1). Otpremnica je dokument o robi koja je
+    ' otisla; nacrt je najava -- nema izvore, gajbe nisu knjizene i sme da ostane
+    ' neizdat. Stampan, izgledao bi kao prava otpremnica. Razlog se kaze, umesto
+    ' opste poruke "nije pronadjena".
+    If Not modDokumenta.OtpremnicaJeIzdata(otpID) Then
+        MsgBox Poruka("PRINT_OTP_NIJE_IZDATA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim ws As Worksheet: Set ws = FillOtpremnicaSablon(otpID)
     If ws Is Nothing Then
         MsgBox "Otpremnica nije pronadjena ili se ne mo" & ChrW(382) & "e pripremiti (" & otpID & ").", _
@@ -243,9 +252,21 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
 
     ' JEDAN RED = JEDNA STAVKA (S3b). Do S3a je otpremnica sa dve klase bila
     ' dva zaglavlja pod istim brojem, pa je stampa imala jedan red i stampala
-    ' se dvaput. Sada je jedno zaglavlje sa stavkama, a klasa, kolicina, gajbe
-    ' i predlog cene zive na stavci -- citanje sa zaglavlja bi dalo prazan list.
-    ' Vrsta, sorta i tip ambalaze ostaju na zaglavlju (odluka 14.8, 15).
+    ' se dvaput. Sada je jedno zaglavlje sa stavkama, a klasa, kolicina i gajbe
+    ' zive na stavci. Vrsta, sorta i tip ambalaze ostaju na zaglavlju.
+    '
+    ' CENA I VREDNOST DOLAZE IZ IZVORA (review #362, P1), ne iz PredlogCena:
+    ' predlog je polje za prefill otkupa, izricito ne-finansijsko, pa ne sme da
+    ' udje u osnovicu, nadoknadu i ukupno. Cena klase je PROSECNA cena izvornih
+    ' stavki te klase (vrednost / kg), dakle ono sto je stvarno placeno. Stampa
+    ' se samo IZDATA otpremnica, a izdata uvek ima izvore -- klasa bez izvora je
+    ' kvar i obara pripremu lista (Nothing), umesto da odstampa nulu.
+    If Not modDokumenta.IzdatoStatusJeIzdato(OtpC(d, fr, COL_TRACE_IZDATO_STATUS)) Then
+        Exit Function
+    End If
+    Dim vredIzv As Object
+    Set vredIzv = modDokumenta.VrednostIzvoraPoOtpremnici()
+    Dim izvKl As Variant
     Dim tipAmb As String: tipAmb = CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
     Dim crateW As Double
     crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
@@ -267,7 +288,10 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     For k = 1 To redovi.count
         s = redovi(k)
         sKol = CDbl(s(4))
-        cenBruto = CDbl(s(5))
+        izvKl = modDokumenta.VrednostIzvoraKlase(vredIzv, otpID, CStr(s(3)), _
+                                                 "modPrint.FillOtpremnicaSablon")
+        If CDbl(izvKl(0)) <= 0 Then Exit Function
+        cenBruto = CDbl(izvKl(1)) / CDbl(izvKl(0))
         sAmb = CDbl(s(6))
         sBruto = CDbl(s(8))
         cenNeto = cenBruto / (1 + stopa / 100)

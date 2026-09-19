@@ -4082,20 +4082,41 @@ SABOTAZE = {
     ),
     # Roba po vozacu MERI otpremnice bez storniranih -- storno filter
     # koji tiho nestane duplira prevoz.
+    # Od review-a #362 filter nosi i IZDATO; sabotaza gasi SAMO storno deo. Meri
+    # je test nad stvarno izdatom i storniranom otpremnicom -- fixture sa starim
+    # redovima to vise ne moze, jer stornirana nema aktivno clanstvo pa strog
+    # citalac vrednosti padne pre poredjenja kilaze (helper testa vraca GRESKU
+    # kao tekst, pa tvrdnja pada po imenu).
     "izvestaji-roba-vozaci-storno": (
         "modIzvestaj.bas",
-        "        If cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\" Then\n"
-        "            If IsDate(d(i, cDat)) Then\n"
-        "                dv = CDate(d(i, cDat))\n"
-        "                If dv >= datumOd And dv <= datumDo Then\n"
-        "                    k = Trim$(CStr(d(i, cVoz)))\n",
-        "        If True Then   ' SABOTAZA: i stornirane otpremnice\n"
-        "            If IsDate(d(i, cDat)) Then\n"
-        "                dv = CDate(d(i, cDat))\n"
-        "                If dv >= datumOd And dv <= datumDo Then\n"
-        "                    k = Trim$(CStr(d(i, cVoz)))\n",
-        "T_Izv_ZbirniSadrzaj",
-        "roba po vozacu: kg = rucni zbir otpremnica",
+        "        If (cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\") And _\n"
+        "           modDokumenta.IzdatoStatusJeIzdato(d(i, cIzd)) Then\n"
+        "            If IsDate(d(i, cDat)) Then\n",
+        "        If modDokumenta.IzdatoStatusJeIzdato(d(i, cIzd)) Then   ' SABOTAZA: i stornirane\n"
+        "            If IsDate(d(i, cDat)) Then\n",
+        "Test_OTP_OtpremljenoJeSamoIzdato",
+        "stornirana izdata otpremnica ne ulazi",
+    ),
+    # Nacrt opet postaje otpremljena roba: filter IZDATO nestaje (review #362 P1).
+    "otp-nacrt-je-otpremljena-roba": (
+        "modIzvestaj.bas",
+        "        If (cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\") And _\n"
+        "           modDokumenta.IzdatoStatusJeIzdato(d(i, cIzd)) Then\n"
+        "            If IsDate(d(i, cDat)) Then\n",
+        "        If (cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\") Then   ' SABOTAZA: i nacrti\n"
+        "            If IsDate(d(i, cDat)) Then\n",
+        "Test_OTP_OtpremljenoJeSamoIzdato",
+        "nacrt nije otpremljena roba (roba po vozacu)",
+    ),
+    # Vrednost otpremnice opet dolazi iz zbira stavki -- mesto koje je do review-a
+    # #362 nosilo Kolicina x PredlogCena. Predlog nije placena cena.
+    "otp-vrednost-iz-predlog-cene": (
+        "modIzvestaj.bas",
+        "                        vr(k) = IzvNum(vr(k)) + modDokumenta.VrednostIzvoraZaOtpremnicu( _\n"
+        "                                    vredIzv, Trim$(NzToText(d(i, cId))), SRC)\n",
+        "                        vr(k) = IzvNum(vr(k)) + CDbl(z(1))   ' SABOTAZA: predlog kao vrednost\n",
+        "Test_OTP_VrednostIzIzvoraNePredlogCene",
+        "vrednost je ono sto je placeno (300x50 + 200x40), ne 500x999",
     ),
     # Rang se OTVARA po rangu rastuce -- shell sort ugovor (recenzija
     # #245 blocker: izvor sortiran, a ekran presortira po imenu).
@@ -4498,9 +4519,9 @@ SABOTAZE = {
     # tada sabere i pripise jednoj (u malina modu duplo).
     "otp-izvestaj-om-spaja-klase": (
         "modIzvestaj.bas",
-        "        For s = 1 To stavke.count\n            stavka = stavke(s)\n            nPar = nPar + 1\n",
-        "        For s = 1 To 1                       ' SABOTAZA: samo prva klasa\n"
-        + "            stavka = stavke(s)\n            nPar = nPar + 1\n",
+        "            For s = 1 To stavke.count\n                stavka = stavke(s)\n                nPar = nPar + 1\n",
+        "            For s = 1 To 1                       ' SABOTAZA: samo prva klasa\n"
+        + "                stavka = stavke(s)\n                nPar = nPar + 1\n",
         "Test_OTP_IzvestajOMRedPoKlasi",
         "dvoklasna otpremnica daje DVA reda",
     ),

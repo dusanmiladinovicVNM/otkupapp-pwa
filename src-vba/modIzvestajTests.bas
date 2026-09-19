@@ -669,12 +669,14 @@ End Function
 
 ' Otpremnica u NOVOM obliku (S3b-1): zaglavlje bez linijskih polja + stavke.
 ' BrojZbirne je jos veza starog modela -- manjak se po njoj razresava do S4.
+' IZDATA je (review #362): izvestaj "Otkupljena roba (OM)" broji samo izdate
+' otpremnice. Izvori joj nisu potrebni -- ovaj izvestaj ne racuna vrednost.
 Private Sub IzvSeedOtpremnica(ByVal otpID As String, ByVal stanica As String, _
                               ByVal vozac As String, ByVal brojZbirne As String)
     IzvSeed TBL_OTPREMNICA, _
         Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA), _
-        Array(otpID, otpID, IZVT_DATUM, stanica, vozac, brojZbirne, "Malina")
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_TRACE_IZDATO_STATUS), _
+        Array(otpID, otpID, IZVT_DATUM, stanica, vozac, brojZbirne, "Malina", IZDATO_IZDATO)
 End Sub
 
 Private Sub IzvSeedOtpStavka(ByVal otpID As String, ByVal rb As Long, _

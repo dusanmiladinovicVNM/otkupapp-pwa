@@ -2295,11 +2295,19 @@ Public Function StavkeOtpremniceRedovi() As Variant
 End Function
 
 ' Zbir stavki po dokumentu. Kljuc je OtpremnicaID, vrednost
-' Array(kg, vrednost, gajbe, klase):
+' Array(kg, Null, gajbe, klase):
 '   kg       = SUM(Kolicina)
-'   vrednost = SUM(Kolicina x PredlogCena) -- PREDLOG, ne knjizen iznos
+'   (1)      = Null -- mesto VREDNOSTI je namerno prazno (review #362, P1).
+'              PredlogCena je predlog za prefill, izricito NE-finansijsko polje:
+'              "nigde se vrednost otpremnice ne racuna kao Kolicina x Cena".
+'              Vrednost otpremnice je vrednost njenih IZVORA --
+'              VrednostIzvoraPoOtpremnici. Null (ne 0) da slucajna upotreba
+'              padne, a ne da tiho sabere nulu.
 '   gajbe    = SUM(KolAmbalaze)
 '   klase    = klase stavki redom upisa, bez ponavljanja ("I, II")
+'
+' Oblik je isti kao kod ZbirStavkiPoOtkupu, jer mreza F2 za oba tipa cita iste
+' pozicije (kg, gajbe, klase).
 '
 ' SVAKI kanonski dokument JE u recniku -- zaglavlje bez stavki obara citaoca
 ' gore, pa "nema kljuca" ne moze da znaci 0 kg.
@@ -2318,10 +2326,9 @@ Public Function ZbirStavkiPoOtpremnici() As Object
         If dict.Exists(oid) Then
             rec = dict(oid)
         Else
-            rec = Array(0#, 0#, 0#, "")
+            rec = Array(0#, Null, 0#, "")
         End If
         rec(0) = CDbl(rec(0)) + CDbl(s(i, 4))
-        rec(1) = CDbl(rec(1)) + CDbl(s(i, 4)) * CDbl(s(i, 5))
         rec(2) = CDbl(rec(2)) + CDbl(s(i, 6))
         kl = CStr(s(i, 3))
         If Len(kl) > 0 Then
@@ -2410,6 +2417,99 @@ Public Function StavkeZaOtpremnicu(ByVal poDok As Object, _
     End If
 
     Set StavkeZaOtpremnicu = poDok(oid)
+End Function
+
+' VREDNOST OTPREMNICE DOLAZI IZ IZVORA (review #362, P1).
+'
+' Vrednost robe na otpremnici je vrednost njenih IZVORNIH otkupa: zbir
+' Kolicina x Cena njihovih stavki, dakle cene koje su stvarno placene. Dva bloka
+' sa razlicitom cenom ostaju dve cene -- jedna PredlogCena ih ne sme zameniti.
+'
+' Kljucevi:
+'   "OtpremnicaID"        -> ukupna vrednost izvora (Double)
+'   "OtpremnicaID|KLASA"  -> Array(kg, vrednost) izvora te klase
+'
+' Clanstvo se cita iz kanona (tblOtpremnicaIzvori, bez storniranih otpremnica),
+' stavke kroz strog citac otkupa. Otpremnica BEZ clanova nema kljuc: pitanje
+' "koliko vredi" za nju nema odgovor -- strog pristupnik nize ga odbija.
+Public Function VrednostIzvoraPoOtpremnici() As Object
+    Const SRC As String = "VrednostIzvoraPoOtpremnici"
+
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set VrednostIzvoraPoOtpremnici = d
+
+    Dim clanstvo As Object
+    Set clanstvo = AktivnoOtpClanstvoPoKanonu(SRC)
+    If clanstvo.count = 0 Then Exit Function
+
+    Dim s As Variant
+    s = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, otkID As String, otp As String, kl As String
+    Dim kol As Double, vr As Double, kKlasa As String, rec As Variant
+    For i = 1 To UBound(s, 1)
+        otkID = UCase$(Trim$(CStr(s(i, 1))))
+        If clanstvo.Exists(otkID) Then
+            otp = CStr(clanstvo(otkID))
+            kl = UCase$(Trim$(CStr(s(i, 3))))
+            kol = CDbl(s(i, 4))
+            vr = kol * CDbl(s(i, 5))
+
+            If d.Exists(otp) Then
+                d(otp) = CDbl(d(otp)) + vr
+            Else
+                d.Add otp, vr
+            End If
+
+            kKlasa = otp & "|" & kl
+            If d.Exists(kKlasa) Then
+                rec = d(kKlasa)
+            Else
+                rec = Array(0#, 0#)
+            End If
+            rec(0) = CDbl(rec(0)) + kol
+            rec(1) = CDbl(rec(1)) + vr
+            d(kKlasa) = rec
+        End If
+    Next i
+End Function
+
+' Vrednost izvora JEDNE otpremnice -- nedostajuci kljuc je GRESKA. Zove se samo
+' za IZDATE otpremnice, a IzdajOtpremnicu_TX ne izdaje otpremnicu bez izvora:
+' izdata bez izvora je kvar, i nula bi ga sakrila.
+Public Function VrednostIzvoraZaOtpremnicu(ByVal vrednosti As Object, _
+                                           ByVal otpremnicaID As String, _
+                                           ByVal sourceName As String) As Double
+    Dim oid As String
+    oid = Trim$(otpremnicaID)
+    If vrednosti Is Nothing Then
+        Err.Raise vbObjectError + 1946, sourceName, "Vrednosti izvora nisu izgradjene."
+    End If
+    If Not vrednosti.Exists(oid) Then
+        Err.Raise vbObjectError + 1946, sourceName, _
+                  "Otpremnica nema nijedan izvor: " & oid & ". Vrednost otpremnice je " & _
+                  "vrednost njenih izvornih otkupa -- izdata otpremnica bez izvora je kvar."
+    End If
+    VrednostIzvoraZaOtpremnicu = CDbl(vrednosti(oid))
+End Function
+
+' Isto, po klasi: Array(kg, vrednost) izvora te klase. Za stampu.
+Public Function VrednostIzvoraKlase(ByVal vrednosti As Object, _
+                                    ByVal otpremnicaID As String, _
+                                    ByVal klasa As String, _
+                                    ByVal sourceName As String) As Variant
+    Dim k As String
+    k = Trim$(otpremnicaID) & "|" & UCase$(Trim$(klasa))
+    If vrednosti Is Nothing Then
+        Err.Raise vbObjectError + 1946, sourceName, "Vrednosti izvora nisu izgradjene."
+    End If
+    If Not vrednosti.Exists(k) Then
+        Err.Raise vbObjectError + 1946, sourceName, _
+                  "Otpremnica " & Trim$(otpremnicaID) & " nema izvor klase " & klasa & "."
+    End If
+    VrednostIzvoraKlase = vrednosti(k)
 End Function
 
 Private Function ZaglavljaOtpremnicePoID(ByVal sourceName As String) As Object
@@ -3518,9 +3618,20 @@ Public Function OtpremnicaJeIzdata(ByVal otpremnicaID As String) As Boolean
     otpremnicaID = Trim$(otpremnicaID)
     If Len(otpremnicaID) = 0 Then Exit Function
 
-    OtpremnicaJeIzdata = (UCase$(Trim$(NzToText(LookupValue( _
+    OtpremnicaJeIzdata = IzdatoStatusJeIzdato(LookupValue( _
                              TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, _
-                             COL_TRACE_IZDATO_STATUS)))) = UCase$(IZDATO_IZDATO))
+                             COL_TRACE_IZDATO_STATUS))
+End Function
+
+' JEDNO pravilo za "otpremnica je izdata", nad vrednoscu celije -- da citaoci
+' koji vec drze red ne rade LookupValue po redu (review #362, P1).
+'
+' Samo IZDATO je otpremljena roba: gajbe su tada knjizene, izvori revalidirani, a
+' ocekivano = povezano. NACRT (i prazan status) je najava -- operativni citaoci
+' (roba po vozacu, roba po otkupnom mestu, stampa) ga NE smeju brojati. Mreza F2
+' ga vidi, jer bas tu operater radi sa nacrtima.
+Public Function IzdatoStatusJeIzdato(ByVal v As Variant) As Boolean
+    IzdatoStatusJeIzdato = (UCase$(Trim$(NzToText(v))) = UCase$(IZDATO_IZDATO))
 End Function
 
 ' OtkupID -> OtpremnicaID, za sve NEstornirane otpremnice.

@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 19.09.2026 (S3b-1 proširen).
+**Ažurirano:** 19.09.2026 (review #362).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -77,11 +77,14 @@
 14. **S3b-1 proširen** (§14.14, odluka 19.09.2026): prvi pun prolaz je pokazao da stari pisac i dalje pravi
     otpremnice bez stavki (u testovima), i jedan propust iz S3a: **od #361 nijedan živi put ne vezuje otpremnicu
     za zbirnu**, pa F3 ne može da sačuva nijednu zbirnu, a F4 nijednu prijemnicu. Urađeno: `SaveOtpremnica*`
-    **obrisan**, auto-lanac hladnjače obrisan, **F3 i F4 glasno pauzirani do S4**, `SumOtpremniceByKlasa` više ne
+    **obrisan**, auto-lanac hladnjače obrisan, **F3 glasno pauziran do S4, F4 do S6**, `SumOtpremniceByKlasa` više ne
     guta grešku (upisivala je 0 kg u zbirnu). Testovi starog lanca zbirne su **obrisani, ne prepravljeni ručnom
     vezom**, a njihov spisak je u §14.14 kao lista koju S4 mora da vrati. `otp_stari_pisac` = **0**.
     `RunAllTests` 200 (bilo 203), golden 2 scenarija (bilo 12).
-15. **Sledeće:** S3b-2 — panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“ (vraća A-011, A-012,
+15. **Review #362** (§14.15): `PredlogCena` više nije vrednost — vrednost otpremnice je vrednost njenih
+    **izvora**; operativni izveštaji i štampa broje **samo IZDATO**; F4 je **S6**, ne S4. Fixture izvodi
+    `tblOtpremnicaIzvori` iz `Otkup.OtpremnicaID` (17 izdatih) — **regeneracija fixture-a**.
+16. **Sledeće:** S3b-2 — panel blokova nad `tblOtpremnicaIzvori` i radnja „Izdaj“ (vraća A-011, A-012,
     A-018..A-028).
 
 ## Alati i kapije

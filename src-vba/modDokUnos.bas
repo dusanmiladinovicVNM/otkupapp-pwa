@@ -740,7 +740,9 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     On Error GoTo EH
     fokus = ""
 
-    ' F4 JE PAUZIRAN DO S4, iz istog razloga kao F3 (ZbirnaValidiraj): prijemnica
+    ' F4 JE PAUZIRAN DO S6 (Prijemnica cutover; review #362) -- ne do S4: S4 vraca
+    ' zbirnu, a prijemnica dobija svoj header + stavke + izvore tek u S6. Razlog
+    ' pauze je isti kao kod F3 (ZbirnaValidiraj): prijemnica
     ' trazi postojecu zbirnu, a zbirna se od S3a ne moze napraviti. Operater
     ' dobija razlog umesto poruke o zbirnoj koja "ne postoji".
     PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA")

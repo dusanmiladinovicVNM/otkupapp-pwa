@@ -2224,6 +2224,35 @@ SEED["tblOtpremnicaStavke"] = [
     for red in SEED["tblOtpremnica"]
 ]
 
+# tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
+#
+# Od #362 operativni citaoci (roba po vozacu, roba po otkupnom mestu, stampa)
+# broje samo IZDATE otpremnice, a vrednost otpremnice je vrednost njenih
+# IZVORNIH otkupa. Otpremnica je u novom modelu izdata tek kad ima izvore -- pa
+# fixture koji bi zadrzao samo zaglavlje ne bi imao nijednu otpremljenu robu, a
+# testovi slaganja izvestaja bi merili 0 = 0.
+#
+# Veza vec postoji u seed-u otkupa (OtpremnicaID, stari model) i to je ista
+# cinjenica, samo zapisana na drugom mestu: otkup X je deo otpremnice Y. Izvodi
+# se samo kad otpremnica postoji u seed-u -- clanstvo bez zaglavlja nije sastav.
+#
+# Otpremnica SA izvorom je IZDATO; otpremnica bez izvora ostaje bez statusa, pa
+# se za operativne citaoce ne racuna kao otpremljena (NACRT ili stari red).
+_OTP_IDS = {red["OtpremnicaID"] for red in SEED["tblOtpremnica"]}
+SEED["tblOtpremnicaIzvori"] = [
+    {
+        "OtpremnicaIzvorID": "OPI-" + str(red["OtkupID"]),
+        "OtpremnicaID": red["OtpremnicaID"],
+        "OtkupID": red["OtkupID"],
+    }
+    for red in SEED["tblOtkup"]
+    if red.get("OtpremnicaID") in _OTP_IDS
+]
+_IZDATE = {red["OtpremnicaID"] for red in SEED["tblOtpremnicaIzvori"]}
+for _red in SEED["tblOtpremnica"]:
+    if _red["OtpremnicaID"] in _IZDATE:
+        _red["IzdatoStatus"] = "IZDATO"
+
 # Kolone koje DONOR (produkcijska sveska pre nadogradnje) nema, a fixture
 # mora da ih ima: sejanje ide PO IMENU, pa red sa novom kolonom obara
 # generator; testovi writera (RequireUpdateCell) takodje traze kolonu.
@@ -2315,6 +2344,10 @@ ENSURE_TABLES = {
                              "Klasa", "Kolicina", "KolAmbalaze", "BrutoKg",
                              "CreatedAt", "CreatedBy", "ModifiedAt",
                              "ModifiedBy", "PredlogCena"]),
+    # Clanstvo otpremnice (review #362): izvodi se iz Otkup.OtpremnicaID.
+    "tblOtpremnicaIzvori": ("OtpremnicaIzvori",
+                            ["OtpremnicaIzvorID", "OtpremnicaID", "OtkupID",
+                             "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)

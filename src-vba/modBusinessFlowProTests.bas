@@ -274,6 +274,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
     Test_OTP_IzvestajOMRedPoKlasi
+    Test_OTP_OtpremljenoJeSamoIzdato
+    Test_OTP_VrednostIzIzvoraNePredlogCene
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -5597,13 +5599,15 @@ Private Sub Test_OTP_MrezaCitaStavke()
 
     AssertTrue Abs(CDbl(red(0)) - 1000#) < 0.001, _
                "OTP mreza: kg su zbir stavki (400 + 600), ne prazno zaglavlje"
-    AssertTrue Abs(CDbl(red(2)) - 50#) < 0.001, _
+    AssertTrue Abs(CDbl(red(1)) - 50#) < 0.001, _
                "OTP mreza: gajbe su zbir stavki (20 + 30)"
-    AssertEquals KLASA_I & ", " & KLASA_II, CStr(red(3)), _
+    AssertEquals KLASA_I & ", " & KLASA_II, CStr(red(2)), _
                  "OTP mreza: kolona klase nabraja obe klase dokumenta"
-    ' 400 x 250 + 600 x 120 = 172000 -- predlog, ne knjizen iznos.
-    AssertTrue Abs(CDbl(red(1)) - 172000#) < 0.001, _
-               "OTP mreza: vrednost je zbir Kolicina x PredlogCena po klasi"
+
+    ' Kolone vrednosti NEMA (review #362, P1): PredlogCena je predlog za
+    ' prefill, a Kolicina x PredlogCena nije vrednost dokumenta.
+    AssertTrue Not OtpMrezaImaKolonu("OTKUI_HD_VREDNOST"), _
+               "OTP mreza: nema kolone vrednosti -- predlog cene nije finansijska cifra"
 
     Exit Sub
 
@@ -5683,10 +5687,11 @@ Private Sub Test_OTP_IzvestajOMRedPoKlasi()
     scenario = NewScenarioCode("OTPIOM")
     broj = TEST_PREFIX & "-OTP-IOM-" & scenario
 
-    Dim c As Collection
-    Set c = New Collection
-    c.Add OtpOcekStavka(KLASA_I, 400#, 20#)
-    c.Add OtpOcekStavka(KLASA_II, 600#, 30#)
+    ' Izvestaj broji samo IZDATE otpremnice (review #362), pa se ova pravi iz
+    ' izvora -- jednim potezom, koji je i izdaje.
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add OtpNoviOtkup(scenario, 400#, 600#)
 
     Dim h As Object
     Set h = OtpHeader(broj)
@@ -5694,8 +5699,8 @@ Private Sub Test_OTP_IzvestajOMRedPoKlasi()
     dan = CDate(h("Datum"))
 
     Dim razlog As String, otpID As String
-    otpID = CreateOtpremnicaDraft_TX(h, c, razlog)
-    AssertTrue Len(otpID) > 0, "OTP izvestaj OM: nacrt napravljen (bilo: " & razlog & ")"
+    otpID = CreateOtpremnicaIzIzvora_TX(h, izvori, razlog)
+    AssertTrue Len(otpID) > 0, "OTP izvestaj OM: otpremnica izdata (bilo: " & razlog & ")"
     If Len(otpID) = 0 Then Exit Sub
 
     modUiData.ResetCache
@@ -5722,6 +5727,109 @@ Private Sub Test_OTP_IzvestajOMRedPoKlasi()
 
 EH:
     LogFatal "Test_OTP_IzvestajOMRedPoKlasi", Err.Number, Err.description
+End Sub
+
+' OTPREMLJENO JE SAMO IZDATO (review #362, P1).
+'
+' Nacrt je najava: nema izvora, gajbe nisu knjizene i sme da ostane neizdat. Do
+' ovog review-a su "roba po vozacu" i "roba po otkupnom mestu" brojale svaku
+' nestorniranu otpremnicu -- pa je nacrt od 1000 kg, bez ijednog povezanog
+' otkupa, vec bio otpremljena roba. Test prati jedan dokument kroz ceo tok:
+' nacrt ne ulazi, izdat ulazi TACNO jednom, storniran izlazi.
+Private Sub Test_OTP_OtpremljenoJeSamoIzdato()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("OTPIZD")
+    broj = TEST_PREFIX & "-OTP-IZD-" & scenario
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 600#, 400#)      ' I: 600 kg / 20 gajbi, II: 400 / 30
+
+    Dim h As Object
+    Set h = OtpHeader(broj)
+    Dim dan As Date
+    dan = CDate(h("Datum"))
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(h, OtpOcek(600#, 20#, 400#, 30#), razlog)
+    AssertTrue Len(otpID) > 0, "OTP otpremljeno: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    AssertEquals Format$(0#, "0.00"), OtpVozacRoba(dan, 3), _
+                 "OTP otpremljeno: nacrt nije otpremljena roba (roba po vozacu)"
+    AssertEquals "0", CStr(OtpOmRedova(dan, broj)), _
+                 "OTP otpremljeno: nacrt nije otpremljena roba (roba po OM)"
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), _
+               "OTP otpremljeno: izvor vezan (bilo: " & razlog & ")"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP otpremljeno: izdavanje proslo (bilo: " & razlog & ")"
+
+    AssertEquals Format$(1000#, "0.00"), OtpVozacRoba(dan, 3), _
+                 "OTP otpremljeno: izdata ulazi TACNO jednom -- 1000 kg"
+    AssertEquals "2", CStr(OtpOmRedova(dan, broj)), _
+                 "OTP otpremljeno: izdata je u robi po OM, red po klasi"
+
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", otpID
+    AssertEquals Format$(0#, "0.00"), OtpVozacRoba(dan, 3), _
+                 "OTP otpremljeno: stornirana izdata otpremnica ne ulazi"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_OtpremljenoJeSamoIzdato", Err.Number, Err.description
+End Sub
+
+' VREDNOST OTPREMNICE JE VREDNOST NJENIH IZVORA (review #362, P1).
+'
+' Dva otkupna bloka iste klase, placena RAZLICITO (50 i 40 din), idu u jednu
+' otpremnicu ciji je predlog cene 999. Vrednost mora biti ono sto je placeno --
+' 300 x 50 + 200 x 40 = 23000 -- a ne 500 x 999. Predlog je polje za prefill
+' otkupa i ne sme da zameni stvarne cene.
+Private Sub Test_OTP_VrednostIzIzvoraNePredlogCene()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPVRI")
+
+    Dim otkA As String, otkB As String
+    otkA = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-VA-" & scenario), _
+                          OtkStavke(300#, 50#, 10, 0#, 0#, 0))
+    otkB = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-VB-" & scenario), _
+                          OtkStavke(200#, 40#, 10, 0#, 0#, 0))
+    AssertTrue Len(otkA) > 0 And Len(otkB) > 0, "OTP vrednost: izvori napravljeni"
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add OtpOcekStavkaSaCenom(KLASA_I, 500#, 20#, 999#)
+
+    Dim h As Object
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-VRI-" & scenario)
+    Dim dan As Date
+    dan = CDate(h("Datum"))
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(h, c, razlog)
+    AssertTrue Len(otpID) > 0, "OTP vrednost: nacrt napravljen (bilo: " & razlog & ")"
+    If Len(otpID) = 0 Then Exit Sub
+
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkA, razlog), _
+               "OTP vrednost: prvi blok vezan (bilo: " & razlog & ")"
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, otkB, razlog), _
+               "OTP vrednost: drugi blok vezan (bilo: " & razlog & ")"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP vrednost: izdavanje proslo (bilo: " & razlog & ")"
+
+    AssertEquals Format$(500#, "0.00"), OtpVozacRoba(dan, 3), _
+                 "OTP vrednost: kilaza je 300 + 200"
+    AssertEquals Format$(23000#, "0.00"), OtpVozacRoba(dan, 4), _
+                 "OTP vrednost: vrednost je ono sto je placeno (300x50 + 200x40), ne 500x999"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_VrednostIzIzvoraNePredlogCene", Err.Number, Err.description
 End Sub
 
 ' INVARIJANTA ZBIRNE SABIRA STAVKE (S3b).
@@ -9422,11 +9530,11 @@ Private Function OtkMrezaRed(ByVal brDok As String) As Variant
 End Function
 
 ' Red dokumenta u mrezi OTPREMNICA -- isti obrazac kao OtkMrezaRed, isti poziv
-' koji crta ekran. Vraca Array(kg, vrednost, gajbe, klasa) ili Empty kad red
-' nije tacno jedan. Vrednost je PREDLOG (Kolicina x PredlogCena), ne dug.
+' koji crta ekran. Vraca Array(kg, gajbe, klasa) ili Empty kad red nije tacno
+' jedan. Vrednosti nema: otpremnica u mrezi ne nosi finansijsku cifru.
 Private Function OtpMrezaRed(ByVal broj As String) As Variant
     Dim d As Variant, cols As Variant, redovi As Variant, c As Long
-    Dim iKg As Long, iVr As Long, iAmb As Long, iKl As Long
+    Dim iKg As Long, iAmb As Long, iKl As Long
 
     modUiData.ResetCache
     d = modScrDokumenti.RedoviZaTip("OTPREMNICA", "", broj)
@@ -9438,14 +9546,63 @@ Private Function OtpMrezaRed(ByVal broj As String) As Variant
     For c = 0 To UBound(cols)
         Select Case modScrDokumenti.ColF(CStr(cols(c)), 0)
             Case "OTKUI_HD_KG":        iKg = c + 1
-            Case "OTKUI_HD_VREDNOST":  iVr = c + 1
             Case "OTKUI_HD_KOL_AMB":   iAmb = c + 1
             Case "OTKUI_HD_KLASA":     iKl = c + 1
         End Select
     Next c
-    If iKg = 0 Or iVr = 0 Or iAmb = 0 Or iKl = 0 Then Exit Function
+    If iKg = 0 Or iAmb = 0 Or iKl = 0 Then Exit Function
 
-    OtpMrezaRed = Array(redovi(1, iKg), redovi(1, iVr), redovi(1, iAmb), redovi(1, iKl))
+    OtpMrezaRed = Array(redovi(1, iKg), redovi(1, iAmb), redovi(1, iKl))
+End Function
+
+' Da li mreza OTPREMNICA ima kolonu sa datim kljucem naslova.
+Private Function OtpMrezaImaKolonu(ByVal kljuc As String) As Boolean
+    Dim cols As Variant, c As Long
+    cols = modScrDokumenti.GridCols("OTPREMNICA")
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 0) = kljuc Then
+            OtpMrezaImaKolonu = True
+            Exit Function
+        End If
+    Next c
+End Function
+
+' Roba po vozacu (zbirno) za TEST vozaca na JEDAN dan: kg (kolona 3) ili
+' vrednost (kolona 4) njegovog reda, formatirano "0.00". Nema reda = "0.00".
+' Greska izvestaja se VRACA kao tekst, da tvrdnja padne po imenu umesto da
+' ceo test padne na prvom pozivu.
+Private Function OtpVozacRoba(ByVal dan As Date, ByVal kolona As Long) As String
+    Dim r As Variant, i As Long
+    On Error GoTo EH
+    modUiData.ResetCache
+    OtpVozacRoba = Format$(0#, "0.00")
+    r = ReportRobaVozaciZbirni(dan, dan)
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If Trim$(CStr(r(i, 1))) = TEST_VOZ_ID Then
+            OtpVozacRoba = Format$(CDbl(r(i, kolona)), "0.00")
+            Exit Function
+        End If
+    Next i
+    Exit Function
+EH:
+    OtpVozacRoba = "GRESKA: " & Err.description
+End Function
+
+' Broj redova otpremnice (po broju) u izvestaju "Otkupljena roba (OM)" za TEST
+' stanicu na jedan dan; greska izvestaja = -1.
+Private Function OtpOmRedova(ByVal dan As Date, ByVal broj As String) As Long
+    Dim r As Variant, i As Long
+    On Error GoTo EH
+    modUiData.ResetCache
+    r = ReportOtkupRoba("OM", TEST_ST_ID, dan, dan)
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If Trim$(CStr(r(i, 2))) = broj Then OtpOmRedova = OtpOmRedova + 1
+    Next i
+    Exit Function
+EH:
+    OtpOmRedova = -1
 End Function
 
 Private Function OtpMrezaBrojRedova(ByVal broj As String) As Long

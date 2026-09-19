@@ -584,7 +584,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
         Case 7: TestName = "T_ZbirnaUnos_PauziranDoS4"
-        Case 8: TestName = "T_PrijemnicaUnos_PauziranDoS4"
+        Case 8: TestName = "T_PrijemnicaUnos_PauziranDoS6"
         Case 9: TestName = "T_ScrSave_RutaPoRezimu"
         Case 10: TestName = "T_IsplataValidiraj_TipNovcaPoIzboru"
         Case 11: TestName = "T_UplataValidiraj_FakturaOdlucujeTip"
@@ -794,7 +794,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
         Case 7: T_ZbirnaUnos_PauziranDoS4
-        Case 8: T_PrijemnicaUnos_PauziranDoS4
+        Case 8: T_PrijemnicaUnos_PauziranDoS6
         Case 9: T_ScrSave_RutaPoRezimu
         Case 10: T_IsplataValidiraj_TipNovcaPoIzboru
         Case 11: T_UplataValidiraj_FakturaOdlucujeTip
@@ -1353,8 +1353,9 @@ Private Sub T_ZbirnaUnos_PauziranDoS4()
              "F3: pauza je pre provere vozaca"
 End Sub
 
-' F4 JE PAUZIRAN DO S4, iz istog razloga: prijemnica trazi postojecu zbirnu.
-Private Sub T_PrijemnicaUnos_PauziranDoS4()
+' F4 JE PAUZIRAN DO S6 (Prijemnica cutover), ne do S4: S4 vraca samo zbirnu.
+' Razlog je isti kao kod F3 -- prijemnica trazi postojecu zbirnu.
+Private Sub T_PrijemnicaUnos_PauziranDoS6()
     Dim p As Object, fokus As String, res As String
 
     modSetup.EnsurePoruke
@@ -1393,7 +1394,7 @@ Private Sub T_ScrSave_RutaPoRezimu()
 
     ' F3 i F4 su vezani: prazna polja ih zaustavljaju na PRVOM pravilu svog
     ' dokumenta -- a koje je to pravilo, dokazuje do kog modula je poziv stigao.
-    ' Od S3b-1 su F3 i F4 PAUZIRANI (do S4): ruta se dokazuje porukom pauze, koju
+    ' Od S3b-1 su F3 (do S4) i F4 (do S6) PAUZIRANI: ruta se dokazuje porukom pauze, koju
     ' vraca SAMO njihov validator.
     Set p = PoljaEkrana(modScrDokumenti.modeKey("F3"))
     AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
@@ -11473,19 +11474,24 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     AssertEq IsArray(roba), True, "roba OM postoji"
     ukup = UBound(roba, 1)
     AssertEq CStr(roba(ukup, 2)), "UKUPNO", "poslednji red robe je UKUPNO"
+    ' Otpremljeno = IZDATA otpremnica, kilaza sa STAVKI (review #362). Rucni
+    ' prolaz cita sirove tabele, ne citalac koji se meri.
+    Dim kgStav As Object
+    Set kgStav = RucnoKgStavkiOtpremnice()
     otp = GetTableData(TBL_OTPREMNICA)
     cSt = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
     cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
-    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS)
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
     cOtpId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     Set otpIds = CreateObject("Scripting.Dictionary")
     nzKg = 0
     For i = 1 To UBound(otp, 1)
-        If CStr(otp(i, cStorno)) <> "Da" And Trim$(CStr(otp(i, cSt))) = FX_STANICA Then
+        If CStr(otp(i, cStorno)) <> "Da" And Trim$(CStr(otp(i, cSt))) = FX_STANICA _
+           And UCase$(Trim$(CStr(otp(i, cKol)))) = "IZDATO" Then
             If IsDate(otp(i, cDat)) Then
                 If CDate(otp(i, cDat)) >= IzvOdD() And CDate(otp(i, cDat)) <= IzvDoD() Then
-                    If IsNumeric(otp(i, cKol)) Then nzKg = nzKg + CDbl(otp(i, cKol))
+                    nzKg = nzKg + RucnoKg(kgStav, CStr(otp(i, cOtpId)))
                     otpIds(Trim$(CStr(otp(i, cOtpId)))) = True
                 End If
             End If
@@ -11640,17 +11646,22 @@ Private Sub T_Izv_SlaganjeKupacVozac()
     ' matrica ne nudi -- ovo meri Report* API na kom rang/zbirni pocivaju.)
     rv = ReportOtkupRoba("Vozac", FX_VOZAC, IzvOdD(), IzvDoD())
     n = UBound(rv, 1)
+    ' Otpremljeno = IZDATA otpremnica, kilaza sa STAVKI (review #362).
+    Dim kgStavV As Object, cIdV As Long
+    Set kgStavV = RucnoKgStavkiOtpremnice()
     otp = GetTableData(TBL_OTPREMNICA)
     cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
     cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
-    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS)
+    cIdV = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
     nzKg = 0
     For i = 1 To UBound(otp, 1)
-        If CStr(otp(i, cStorno)) <> "Da" And Trim$(CStr(otp(i, cVoz))) = FX_VOZAC Then
+        If CStr(otp(i, cStorno)) <> "Da" And Trim$(CStr(otp(i, cVoz))) = FX_VOZAC _
+           And UCase$(Trim$(CStr(otp(i, cKol)))) = "IZDATO" Then
             If IsDate(otp(i, cDat)) Then
                 If CDate(otp(i, cDat)) >= IzvOdD() And CDate(otp(i, cDat)) <= IzvDoD() Then
-                    If IsNumeric(otp(i, cKol)) Then nzKg = nzKg + CDbl(otp(i, cKol))
+                    nzKg = nzKg + RucnoKg(kgStavV, CStr(otp(i, cIdV)))
                 End If
             End If
         End If
@@ -12604,18 +12615,22 @@ Private Sub T_Izv_ZbirniSadrzaj()
         End If
     Next i
     AssertEq nasla, True, "red za STA-TEST-2 postoji u robi po OM"
+    ' Otpremljeno = IZDATA otpremnica, kilaza sa STAVKI (review #362).
     Dim otp2 As Variant, cV2 As Long, cQ3 As Long, cD3 As Long, cS3 As Long
-    Dim rvKg As Double
+    Dim rvKg As Double, cI3 As Long, kgStav3 As Object
+    Set kgStav3 = RucnoKgStavkiOtpremnice()
     otp2 = GetTableData(TBL_OTPREMNICA)
     cV2 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
-    cQ3 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cQ3 = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS)
+    cI3 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     cD3 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
     cS3 = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
     For i = 1 To UBound(otp2, 1)
-        If Trim$(CStr(otp2(i, cV2))) = FX_VOZAC And CStr(otp2(i, cS3)) <> "Da" Then
+        If Trim$(CStr(otp2(i, cV2))) = FX_VOZAC And CStr(otp2(i, cS3)) <> "Da" _
+           And UCase$(Trim$(CStr(otp2(i, cQ3)))) = "IZDATO" Then
             If IsDate(otp2(i, cD3)) Then
                 If CDate(otp2(i, cD3)) >= IzvOdD() And CDate(otp2(i, cD3)) <= IzvDoD() Then
-                    rvKg = rvKg + CDbl(otp2(i, cQ3))
+                    rvKg = rvKg + RucnoKg(kgStav3, CStr(otp2(i, cI3)))
                 End If
             End If
         End If
@@ -15109,6 +15124,28 @@ End Sub
 
 ' Kljuc koji katalog poruka NE ZNA. Poruka() takav vraca kao "[KLJUC]" i nikad
 ' kao prazan string, pa je 'Len(Poruka(k)) = 0' provera koja ne moze da padne.
+' Kilaza po otpremnici iz SIROVE tabele stavki -- rucni prolaz ne sme da ide
+' kroz citalac koji meri (modDokumenta.ZbirStavkiPoOtpremnici), inace bi test
+' poredio isti racun sa samim sobom.
+Private Function RucnoKgStavkiOtpremnice() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set RucnoKgStavkiOtpremnice = d
+    Dim s As Variant: s = GetTableData(TBL_OTPREMNICA_STAVKE)
+    If Not IsArray(s) Then Exit Function
+    Dim cO As Long, cK As Long, i As Long, k As String
+    cO = GetColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID)
+    cK = GetColumnIndex(TBL_OTPREMNICA_STAVKE, COL_OPS_KOLICINA)
+    For i = 1 To UBound(s, 1)
+        k = Trim$(CStr(s(i, cO)))
+        If IsNumeric(s(i, cK)) Then d(k) = CDbl(d(k)) + CDbl(s(i, cK))
+    Next i
+End Function
+
+Private Function RucnoKg(ByVal d As Object, ByVal otpID As String) As Double
+    Dim k As String: k = Trim$(otpID)
+    If d.Exists(k) Then RucnoKg = CDbl(d(k))
+End Function
+
 Private Function PorukaNedostaje(ByVal k As String) As Boolean
     PorukaNedostaje = (Poruka(k) = "[" & k & "]")
 End Function
