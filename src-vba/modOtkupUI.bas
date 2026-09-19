@@ -7875,7 +7875,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
             If p.Exists("fokus") Then fokus = CStr(p("fokus"))
             ' NEUSPEO UPIS ide I u MsgBox. Toast pise u usko polje akcionog
             ' reda, pa se duga poruka vizuelno sece -- a bas rep nosi RAZLOG:
-            ' SaveOtpremnica lepi "poruke" iza opsteg prefiksa, pa je operater
+            ' SnimiOtpremnicu lepi "poruke" iza opsteg prefiksa, pa je operater
             ' video samo "Greska pri cuvanju otpremnice. Promene su vracene" i
             ' nista o tome ZASTO. Isti obrazac zbog kog upozorenje zbirne vec
             ' ide u MsgBox (v. modScrStorno.ObicanStorno).

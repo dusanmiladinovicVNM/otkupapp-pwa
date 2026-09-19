@@ -82,25 +82,15 @@ Public Sub RunGoldenSuite()
     m_Failed = 0
     m_Report = ""
 
-    GldOne 1
-    GldOne 2
-    GldOne 3
-    GldOne 4
-    GldOne 5
     ' 6 (B1) i 9 (B4) su UKLONJENI: kes se nikad ne vezuje za otkupni list, pa
     ' su merili putanju koja u domenu ne postoji. Ekran otkupnog lista nema polje
     ' za novac, a modOtkupUnos salje novac:=0 uvek -- v. GOLDEN_SCENARIJI.md S8.
-    GldOne 7
-    GldOne 8
     ' 10 (D1) NIJE registrovan: storno otpremnice ostavlja zbirnu bez izvora i
     ' invarijanta puca. Zamrznuti "PUKLA" kao ocekivano znacilo bi da golden
     ' tvrdi kako je posle legalne operacije dozvoljeno nekonzistentno stanje --
     ' suprotno od svrhe mreze. Ceka poslovnu odluku: zabrani / kaskadiraj /
     ' rekalkulisi (GOLDEN_SCENARIJI.md S10).
-    GldOne 11
     GldOne 12
-    GldOne 13
-    GldOne 14
     GldOne 15
 
     SetTestMode prevMode
@@ -117,36 +107,14 @@ End Sub
 
 Private Function GldIme(ByVal idx As Long) As String
     Select Case idx
-        Case 1: GldIme = "A1_pun_lanac_do_fakture"
-        Case 2: GldIme = "A2_dvoklasni_lanac"
-        Case 3: GldIme = "A3_vise_blokova_jedna_otpremnica"
-        Case 4: GldIme = "A4_vise_otpremnica_jedna_zbirna"
-        Case 5: GldIme = "A5_kalo"
-        Case 7: GldIme = "B2_avans_primenjen"
-        Case 8: GldIme = "B3_delimican_avans"
-        Case 10: GldIme = "D1_storno_otpremnice"
-        Case 11: GldIme = "D2_storno_fakturisane_prijemnice"
         Case 12: GldIme = "D3_storno_dvoklasnog_otkupa"
-        Case 13: GldIme = "F2_delimicno_fakturisanje"
-        Case 14: GldIme = "G1_samo_klasa_dva"
         Case 15: GldIme = "G2_isti_broj_dva_dokumenta"
     End Select
 End Function
 
 Private Sub GldPozovi(ByVal idx As Long)
     Select Case idx
-        Case 1: Gld_A1_PunLanacDoFakture
-        Case 2: Gld_A2_DvoklasniLanac
-        Case 3: Gld_A3_ViseBlokova
-        Case 4: Gld_A4_ViseOtpremnica
-        Case 5: Gld_A5_Kalo
-        Case 7: Gld_B2_Avans
-        Case 8: Gld_B3_DelimicanAvans
-        Case 10: Gld_D1_StornoOtpremnice
-        Case 11: Gld_D2_StornoFakturisanePrijemnice
         Case 12: Gld_D3_StornoDvoklasnogOtkupa
-        Case 13: Gld_F2_DelimicnoFakturisanje
-        Case 14: Gld_G1_SamoKlasaDva
         Case 15: Gld_G2_IstiBrojDvaDokumenta
     End Select
 End Sub
@@ -542,39 +510,6 @@ Private Function GldBrojStorno(ByVal tbl As String, ByVal scopeKol As String, _
     Next i
 
     GldBrojStorno = d.count
-End Function
-
-' Fakturisanost PO KLASI -- dokaz da je Fakturisano line-level.
-Private Function GldFakturisanoPoKlasi() As String
-    Dim data As Variant
-    Dim cBr As Long, cKlasa As Long, cFak As Long
-    Dim i As Long
-    Dim fakI As String, fakII As String
-
-    fakI = "-"
-    fakII = "-"
-
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsArray(data) Then
-        data = ExcludeStornirano(data, TBL_PRIJEMNICA)
-        If IsArray(data) Then
-            cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "GldFakPoKlasi")
-            cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "GldFakPoKlasi")
-            cFak = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "GldFakPoKlasi")
-            For i = 1 To UBound(data, 1)
-                If StrComp(Trim$(NzToText(data(i, cBr))), m_Kljuc, vbTextCompare) = 0 Then
-                    If UCase$(Trim$(NzToText(data(i, cKlasa)))) = "II" Then
-                        fakII = IIf(UCase$(Trim$(NzToText(data(i, cFak)))) = "DA", "DA", "NE")
-                    Else
-                        fakI = IIf(UCase$(Trim$(NzToText(data(i, cFak)))) = "DA", "DA", "NE")
-                    End If
-                End If
-            Next i
-        End If
-    End If
-
-    GldFakturisanoPoKlasi = "PRIJEM" & vbLf & _
-        "  fakturisano     I=" & fakI & "  II=" & fakII & vbLf
 End Function
 
 ' Broj LOGICKIH dokumenata koje je scenario napravio.
@@ -983,11 +918,6 @@ Private Sub GldPolje(ByRef rowData As Variant, ByVal tbl As String, _
     If idx > 0 Then rowData(idx) = vrednost
 End Sub
 
-Private Function GldRedPostoji(ByVal tbl As String, ByVal kolona As String, _
-                               ByVal vrednost As String) As Boolean
-    GldRedPostoji = (GldBrojRedova(tbl, kolona, vrednost) > 0)
-End Function
-
 Private Function GldBrojRedova(ByVal tbl As String, ByVal kolona As String, _
                                ByVal vrednost As String) As Long
     Dim data As Variant
@@ -1082,113 +1012,6 @@ Private Function GldStavka(ByVal klasa As String, ByVal kol As Double, _
     Set GldStavka = s
 End Function
 
-Private Sub GldOtpremnica(ByVal broj As String, ByVal brojOtp As String, _
-        ByVal kolI As Double, ByVal cenaI As Double, _
-        ByVal kolII As Double, ByVal cenaII As Double, ByVal ambII As Long)
-    Dim res As String
-
-    ' Ambalaza mora biti ista na otpremnici i na zbirnoj -- inace invarijanta
-    ' puca na TEST PODACIMA, a golden bi zabelezio "PUKLA" kao da je sistem kriv.
-    res = SaveOtpremnicaMulti_TX(GLD_DATUM, GLD_STANICA, GLD_VOZAC, brojOtp, _
-            broj, GLD_VRSTA, GLD_SORTA, kolI, cenaI, GLD_AMB, 50, _
-            (kolII > 0), kolII, cenaII, 0#, ambII, 0#)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldOtpremnica", "otpremnica nije snimljena"
-    End If
-
-    GldDodaj m_Otp, res
-End Sub
-
-' ambI je UKUPNA ambalaza Klase I na zbirnoj -- mora biti ZBIR svih otpremnica
-' tog broja. A4 salje dve otpremnice po 50 gajbi, pa zbirna dobija 100; sa 50
-' bi invarijanta pukla na TEST PODACIMA i golden bi zabelezio "PUKLA" kao da je
-' sistem kriv.
-Private Sub GldZbirnaIPrijemnica(ByVal broj As String, _
-        ByVal kolI As Double, ByVal kolII As Double, _
-        ByVal ambI As Long, ByVal ambII As Long, _
-        ByVal prijI As Double, ByVal prijII As Double)
-    Dim res As String
-
-    res = SaveZbirnaMulti_TX(GLD_DATUM, GLD_VOZAC, broj, GLD_KUPAC, "", "", _
-            GLD_VRSTA, GLD_SORTA, kolI, GLD_AMB, ambI, (kolII > 0), kolII, ambII)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldZbirna", "zbirna nije snimljena"
-    End If
-    GldDodaj m_Zbr, res
-
-    res = SavePrijemnicaMulti_TX(GLD_DATUM, GLD_KUPAC, GLD_VOZAC, broj & "-P", _
-            broj, GLD_VRSTA, GLD_SORTA, prijI, 55#, GLD_AMB, 50, 0, _
-            (prijII > 0), prijII, 35#)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldPrijemnica", "prijemnica nije snimljena"
-    End If
-    GldDodaj m_Prj, res
-End Sub
-
-' Fakturise SAMO zadatu klasu.
-'
-' Scenario kaze POSLOVNU NAMERU ("fakturisi Klasu I"); adapter nalazi sta je to
-' danas. Ranija verzija je slala m_Prj(1) -- "prva fizicka prijemnica koju je
-' legacy writer vratio" -- pa bi posle cutover-a to bio HEADER ID, ne red
-' Klase I, i sam scenario bi morao da se menja. Posle cutover-a ovde ide
-' PrijemnicaStavkaID gde je Klasa = zadata; scenario i golden ostaju isti.
-Private Sub GldFakturisiKlasu(ByVal klasa As String)
-    Dim data As Variant
-    Dim cID As Long, cKlasa As Long
-    Dim i As Long, k As Long
-    Dim stavke As Collection
-    Dim id As String
-    Dim res As String
-
-    Set stavke = New Collection
-
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsArray(data) Then
-        cID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "GldFakturisiKlasu")
-        cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "GldFakturisiKlasu")
-        For i = 1 To UBound(data, 1)
-            id = Trim$(NzToText(data(i, cID)))
-            For k = 1 To m_Prj.count
-                If StrComp(id, Trim$(CStr(m_Prj(k))), vbTextCompare) = 0 Then
-                    If UCase$(Trim$(NzToText(data(i, cKlasa)))) = UCase$(klasa) Then
-                        stavke.Add Array(id)
-                    End If
-                End If
-            Next k
-        Next i
-    End If
-
-    If stavke.count = 0 Then
-        Err.Raise GLD_ERR, "GldFakturisiKlasu", _
-                  "nema prijemnicne stavke klase " & klasa
-    End If
-
-    res = CreateFaktura_TX(GLD_KUPAC, stavke)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldFakturisiKlasu", "CreateFaktura_TX nije vratio ID"
-    End If
-    GldDodaj m_Fak, res
-End Sub
-
-' Faktura nad SVIM prijemnicama koje je scenario napravio.
-Private Sub GldFaktura()
-    Dim stavke As Collection
-    Dim i As Long
-    Dim res As String
-
-    Set stavke = New Collection
-    For i = 1 To m_Prj.count
-        stavke.Add Array(Trim$(CStr(m_Prj(i))))
-    Next i
-
-    res = CreateFaktura_TX(GLD_KUPAC, stavke)
-    If Len(res) = 0 Then
-        Err.Raise GLD_ERR, "GldFaktura", "CreateFaktura_TX nije vratio ID"
-    End If
-
-    GldDodaj m_Fak, res
-End Sub
-
 ' Avans kooperantu -- scenario ga pravi SAM, jer je zatecen avans bio prva
 ' velika rupa u izolaciji (GOLDEN_SCENARIJI.md S1b).
 Private Sub GldAvans(ByVal iznos As Double)
@@ -1196,18 +1019,6 @@ Private Sub GldAvans(ByVal iznos As Double)
             "Kooperant", GLD_STANICA, GLD_KOOP, "", GLD_VRSTA, _
             NOV_VIRMAN_AVANS_KOOP, 0#, iznos)) = 0 Then
         Err.Raise GLD_ERR, "GldAvans", "avans nije snimljen"
-    End If
-End Sub
-
-Private Sub GldStornoOtpremnice(ByVal idx As Long)
-    If Not StornoOtpremnica_TX(Trim$(CStr(m_Otp(idx)))) Then
-        Err.Raise GLD_ERR, "GldStornoOtpremnice", "storno otpremnice nije uspeo"
-    End If
-End Sub
-
-Private Sub GldStornoPrijemnice(ByVal idx As Long)
-    If Not StornoPrijemnica_TX(Trim$(CStr(m_Prj(idx)))) Then
-        Err.Raise GLD_ERR, "GldStornoPrijemnice", "storno prijemnice nije uspeo"
     End If
 End Sub
 
@@ -1280,19 +1091,6 @@ Private Sub GldStornoOtkupa(ByVal brDok As String)
     End If
 End Sub
 
-Private Sub GldLanac(ByVal broj As String, _
-        ByVal kolI As Double, ByVal cenaI As Double, _
-        ByVal kolII As Double, ByVal cenaII As Double, _
-        ByVal prijI As Double, ByVal prijII As Double)
-    Dim ambII As Long
-
-    If kolII > 0 Then ambII = 10
-
-    GldOtkup broj, broj & "-B", kolI, cenaI, kolII, cenaII
-    GldOtpremnica broj, broj & "-O", kolI, cenaI, kolII, cenaII, ambII
-    GldZbirnaIPrijemnica broj, kolI, kolII, 50, ambII, prijI, prijII
-End Sub
-
 Private Sub GldPocni(ByRef tx As clsTransaction, ByVal kljuc As String)
     Set tx = GldTx()
     GldReset
@@ -1306,238 +1104,13 @@ End Sub
 ' GRUPA A -- Fresh Fruit Flow
 '=====================================================================
 
-' A1: baseline CELOG lanca, ukljucujuci Fakturu.
-'
-' Ide do fakture namerno: bas taj deo menja Faktura korak (FakturaStavka ->
-' PrijemnicaStavkaID), pa baseline koji staje na prijemnici ne bi stitio nista.
-Private Sub Gld_A1_PunLanacDoFakture()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-A1"
-    GldPocni tx, broj
-    GldLanac broj, 1000#, 50#, 0#, 0#, 1000#, 0#
-    GldFaktura
-
-    AssertSnapshot GldSnapshot("A1 pun lanac do fakture", broj), GldIme(1)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_A1", gldDesc
-End Sub
-
-' A2: dvoklasni lanac. Scenario koji Otkup cutover najvise menja iznutra;
-' ishod isti.
-Private Sub Gld_A2_DvoklasniLanac()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-A2"
-    GldPocni tx, broj
-    GldLanac broj, 1000#, 50#, 200#, 30#, 1000#, 200#
-    GldFaktura
-
-    AssertSnapshot GldSnapshot("A2 dvoklasni lanac", broj), GldIme(2)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_A2", gldDesc
-End Sub
-
-' A3: DVA otkupna bloka -> JEDNA otpremnica.
-'
-' Kardinalnost je u snapshotu (DOKUMENTI: otkupa 2, otpremnica 1). Bez toga bi
-' bug koji napravi dve otpremnice po 500 kg ostavio agregat isti i test zelen.
-Private Sub Gld_A3_ViseBlokova()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-A3"
-    GldPocni tx, broj
-    GldOtkup broj, broj & "-B1", 400#, 50#, 0#, 0#
-    GldOtkup broj, broj & "-B2", 600#, 50#, 0#, 0#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
-
-    AssertSnapshot GldSnapshot("A3 vise blokova jedna otpremnica", broj), GldIme(3)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_A3", gldDesc
-End Sub
-
-' A4: DVE otpremnice -> JEDNA zbirna. Kardinalnost opet u snapshotu.
-Private Sub Gld_A4_ViseOtpremnica()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-A4"
-    GldPocni tx, broj
-    GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
-    GldOtpremnica broj, broj & "-O1", 400#, 50#, 0#, 0#, 0
-    GldOtpremnica broj, broj & "-O2", 600#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 100, 0, 1000#, 0#
-
-    AssertSnapshot GldSnapshot("A4 vise otpremnica jedna zbirna", broj), GldIme(4)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_A4", gldDesc
-End Sub
-
-' A5: poslato 1000, primljeno 975. Razlika je POSLOVNA CINJENICA (kalo).
-Private Sub Gld_A5_Kalo()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-A5"
-    GldPocni tx, broj
-    GldLanac broj, 1000#, 50#, 0#, 0#, 975#, 0#
-
-    AssertSnapshot GldSnapshot("A5 kalo", broj), GldIme(5)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_A5", gldDesc
-End Sub
-
-
 '=====================================================================
 ' GRUPA B -- Novac
 '=====================================================================
 
-' B2: avans koji je scenario SAM napravio primenjuje se na otkup.
-Private Sub Gld_B2_Avans()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-B2"
-    GldPocni tx, broj
-
-    ' avans pokriva PUNU vrednost (1000 x 50)
-    GldAvans 50000#
-    GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
-
-    AssertSnapshot GldSnapshot("B2 avans primenjen na otkup", broj), GldIme(7)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_B2", gldDesc
-End Sub
-
-' B3: avans pokriva SAMO deo vrednosti.
-'
-' Isplata ide preko avansa, ne kesa: kes se nikad ne vezuje za otkupni list
-' (ekran nema to polje, modOtkupUnos salje novac:=0 uvek).
-Private Sub Gld_B3_DelimicanAvans()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-B3"
-    GldPocni tx, broj
-
-    ' vrednost 50000, avansom pokriveno 20000
-    GldAvans 20000#
-    GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
-
-    AssertSnapshot GldSnapshot("B3 delimican avans", broj), GldIme(8)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_B3", gldDesc
-End Sub
-
 '=====================================================================
 ' GRUPA D -- Storno
 '=====================================================================
-
-' D1: storno otpremnice -- zbirna vise nema svoj izvor.
-Private Sub Gld_D1_StornoOtpremnice()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-D1"
-    GldPocni tx, broj
-
-    GldOtkup broj, broj & "-B", 1000#, 50#, 0#, 0#
-    GldOtpremnica broj, broj & "-O", 1000#, 50#, 0#, 0#, 0
-    GldZbirnaIPrijemnica broj, 1000#, 0#, 50, 0, 1000#, 0#
-    GldStornoOtpremnice 1
-
-    AssertSnapshot GldSnapshot("D1 storno otpremnice", broj), GldIme(10)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_D1", gldDesc
-End Sub
-
-' D2: storno prijemnice koja je vec fakturisana -- kaskada.
-Private Sub Gld_D2_StornoFakturisanePrijemnice()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-D2"
-    GldPocni tx, broj
-
-    GldLanac broj, 1000#, 50#, 0#, 0#, 1000#, 0#
-    GldFaktura
-    GldStornoPrijemnice 1
-
-    AssertSnapshot GldSnapshot("D2 storno fakturisane prijemnice", broj), GldIme(11)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_D2", gldDesc
-End Sub
 
 ' D3: storno DVOKLASNOG otkupa -- jedan logicki dokument, obe klase.
 '
@@ -1575,60 +1148,9 @@ End Sub
 ' GRUPA F -- Faktura
 '=====================================================================
 
-' F2: fakturise se SAMO Klasa I. Dokaz da je Fakturisano line-level --
-' da je na headeru, ovo stanje ne bi moglo ni da postoji.
-Private Sub Gld_F2_DelimicnoFakturisanje()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-F2"
-    GldPocni tx, broj
-
-    GldLanac broj, 1000#, 50#, 200#, 30#, 1000#, 200#
-
-    GldFakturisiKlasu "I"
-
-    AssertSnapshot GldSnapshot("F2 delimicno fakturisanje", broj) & _
-                   GldFakturisanoPoKlasi(), GldIme(13)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_F2", gldDesc
-End Sub
-
-
 '=====================================================================
 ' GRUPA G -- Ivicni
 '=====================================================================
-
-' G1: samo Klasa II, bez Klase I. Grana koju hasKlasaI = False menja.
-Private Sub Gld_G1_SamoKlasaDva()
-    Dim tx As clsTransaction
-    Dim gldDesc As String
-    Dim broj As String
-
-    On Error GoTo EH
-    broj = "GLD-G1"
-    GldPocni tx, broj
-
-    GldOtkup broj, broj & "-B", 0#, 0#, 200#, 30#
-    GldOtpremnica broj, broj & "-O", 0#, 0#, 200#, 30#, 10
-    GldZbirnaIPrijemnica broj, 0#, 200#, 0, 10, 0#, 200#
-
-    AssertSnapshot GldSnapshot("G1 samo klasa II", broj), GldIme(14)
-
-    tx.RollbackTx
-    Exit Sub
-EH:
-    gldDesc = Err.description
-    If Not tx Is Nothing Then tx.RollbackTx
-    Err.Raise GLD_ERR, "Gld_G1", gldDesc
-End Sub
 
 ' G2: DVA dokumenta sa istim poslovnim brojem.
 '

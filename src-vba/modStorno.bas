@@ -204,6 +204,25 @@ Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
 
     On Error GoTo EH
 
+    ' IZVOR AKTIVNE ZBIRNE SE NE STORNIRA (review #362, A13/A15).
+    '
+    ' Clan kanonske zbirne (tblZbirnaIzvori) je osnova izvedenog dokumenta:
+    ' storno ispod nje bi ostavio aktivnu zbirnu zasnovanu na storniranom izvoru,
+    ' sa clanstvom koje i dalje pokazuje na njega. Sta storno tada znaci -- zamenu
+    ' zbirne, novu verziju, kaskadu -- odlucuje S4; do tada se odbija.
+    '
+    ' Kapija je u JEZGRU, a ne samo u F8 i u StornoOtpremnica_TX: jezgro zovu i
+    ' put po broju i kaskade starog okvira, pa bi kapija samo na jednom ulazu
+    ' ostavila ostale otvorene. Stari lanac (veza BrojZbirne) je ne dotice --
+    ' clanstvo se cita iskljucivo iz kanona.
+    Dim zbrID As String
+    zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpremnicaID)
+    If Len(zbrID) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 71, SRC, _
+                  "Otpremnica " & otpremnicaID & " je izvor aktivne zbirne " & zbrID & _
+                  ". Storno izvora je pauziran do S4 (zbirna na novom modelu)."
+    End If
+
     Dim rowOtp As Long
     rowOtp = RequireStornoAllowed(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID, SRC)
 

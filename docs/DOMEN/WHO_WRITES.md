@@ -20,7 +20,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 | Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblOtkup` | 6 | `modAutoHladnjaca`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modSetup`, `modStornoFlow` |
+| `tblOtkup` | 5 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modSetup`, `modStornoFlow` |
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
@@ -62,7 +62,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Ucesnici transakcije (snapshot, NE vlasnistvo)
 
-- `tblOtkup`: `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
+- `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
@@ -110,12 +110,13 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnicaIzvori`: `modBusinessFlowProTests`
+- `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
-- `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
+- `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modTest`, `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`

@@ -238,7 +238,8 @@ Private Sub Chk_B4_DanglingBrojZbirne()
 
     WriteBlock "B4a", "Otpremnice sa BrojZbirne koji ne postoji u tblZbirna", _
                Array("OtpremnicaID", "BrojOtpremnice", "BrojZbirne", "Kolicina"), _
-               DanglingDocs(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KOLICINA, zbrSet)
+               DanglingDocs(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, "", zbrSet, _
+                            ZbirOtpremnicaMeko())
 
     WriteBlock "B4b", "Prijemnice sa BrojZbirne koji ne postoji u tblZbirna", _
                Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne", "Kolicina"), _
@@ -273,7 +274,8 @@ Private Sub Chk_B5b_OtpremnicaBezZbirne()
     On Error GoTo EH
     WriteBlock "B5b", "Otpremnice bez BrojZbirne (nije vezana za zbirnu)", _
                Array("OtpremnicaID", "BrojOtpremnice", "Kolicina"), _
-               DocsBezZbirne(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KOLICINA)
+               DocsBezZbirne(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, "", _
+                             ZbirOtpremnicaMeko())
     Exit Sub
 
 EH:
@@ -1149,9 +1151,12 @@ Private Sub CollectCaseMismatch(ByRef bad As Collection, ByVal labela As String,
 End Sub
 
 ' Zivi dokumenti sa BrojZbirne koji nije u zbrSet. Vraca 2D(1..n,1..4) ili Empty.
+' kolCol = "" znaci da kolicina NIJE na zaglavlju nego na stavkama (otpremnica
+' od S3b) -- tada je daje zbirStavki, po ID-u dokumenta.
 Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
                               ByVal brojCol As String, ByVal zbrCol As String, _
-                              ByVal kolCol As String, ByVal zbrSet As Object) As Variant
+                              ByVal kolCol As String, ByVal zbrSet As Object, _
+                              Optional ByVal zbirStavki As Object) As Variant
     Dim data As Variant: data = GetTableData(tbl)
     If Not IsArray(data) Then DanglingDocs = Empty: Exit Function
     data = ExcludeStornirano(data, tbl)
@@ -1161,7 +1166,7 @@ Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
     cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DanglingDocs")
     cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DanglingDocs")
     cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DanglingDocs")
-    cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DanglingDocs")
+    If Len(kolCol) > 0 Then cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DanglingDocs")
 
     Dim bad As Collection: Set bad = New Collection
     Dim i As Long, b As String
@@ -1169,7 +1174,8 @@ Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
         b = Trim$(CStr(data(i, cZbr)))
         If Len(b) > 0 Then
             If Not zbrSet.Exists(b) Then
-                bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), b, data(i, cKol))
+                bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), b, _
+                              KolicinaZaAudit(data, i, cKol, zbirStavki, CStr(data(i, cId))))
             End If
         End If
     Next i
@@ -1180,7 +1186,8 @@ End Function
 ' Zivi redovi tabele sa praznim BrojZbirne. Vraca 2D(1..n,1..3): ID, Broj, Kolicina.
 Private Function DocsBezZbirne(ByVal tbl As String, ByVal idCol As String, _
                                ByVal brojCol As String, ByVal zbrCol As String, _
-                               ByVal kolCol As String) As Variant
+                               ByVal kolCol As String, _
+                               Optional ByVal zbirStavki As Object) As Variant
     Dim data As Variant: data = GetTableData(tbl)
     If Not IsArray(data) Then DocsBezZbirne = Empty: Exit Function
     data = ExcludeStornirano(data, tbl)
@@ -1190,17 +1197,50 @@ Private Function DocsBezZbirne(ByVal tbl As String, ByVal idCol As String, _
     cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DocsBezZbirne")
     cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DocsBezZbirne")
     cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DocsBezZbirne")
-    cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DocsBezZbirne")
+    If Len(kolCol) > 0 Then cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DocsBezZbirne")
 
     Dim bad As Collection: Set bad = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Len(Trim$(CStr(data(i, cZbr)))) = 0 Then
-            bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), data(i, cKol))
+            bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), _
+                          KolicinaZaAudit(data, i, cKol, zbirStavki, CStr(data(i, cId))))
         End If
     Next i
 
     DocsBezZbirne = CollToArray(bad, 3)
+End Function
+
+' Kolicina za prikaz u auditu: sa zaglavlja kad je tamo, inace iz zbira stavki.
+' Nedostajuci kljuc ostaje PRAZAN, ne nula -- audit postoji da nabroji pokvarene
+' redove, pa dokument bez stavki mora ostati u listi, a njegova kolicina je
+' nepoznata, ne nula.
+Private Function KolicinaZaAudit(ByRef data As Variant, ByVal i As Long, _
+                                 ByVal cKol As Long, ByVal zbirStavki As Object, _
+                                 ByVal dokID As String) As Variant
+    If cKol > 0 Then
+        KolicinaZaAudit = data(i, cKol)
+        Exit Function
+    End If
+
+    KolicinaZaAudit = ""
+    If zbirStavki Is Nothing Then Exit Function
+
+    Dim k As String: k = Trim$(dokID)
+    If Len(k) = 0 Then Exit Function
+    If Not zbirStavki.Exists(k) Then Exit Function
+
+    Dim rec As Variant: rec = zbirStavki(k)
+    KolicinaZaAudit = CDbl(rec(0))
+End Function
+
+' Zbir stavki otpremnica po dokumentu -- MEKO. Audit ne sme da padne na kvaru
+' koji treba da prijavi, pa kanonska greska ovde znaci "nema podatka" i kolona
+' kolicine ostaje prazna. Tvrda kapija zivi u citaocima ekrana i izvestaja.
+Private Function ZbirOtpremnicaMeko() As Object
+    On Error Resume Next
+    Set ZbirOtpremnicaMeko = modDokumenta.ZbirStavkiPoOtpremnici()
+    On Error GoTo 0
 End Function
 
 ' Skup ID-jeva iz tabele (opciono samo aktivni). Vraca Dictionary(id -> True).

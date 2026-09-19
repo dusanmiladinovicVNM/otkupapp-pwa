@@ -194,6 +194,15 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     mode = DocResolveMode(GetConfigValue(CFG_OTPREMNICA_PRINT_MODE), "PDF")
     If mode = "OFF" Then Exit Sub
 
+    ' NACRT SE NE STAMPA (review #362, P1). Otpremnica je dokument o robi koja je
+    ' otisla; nacrt je najava -- nema izvore, gajbe nisu knjizene i sme da ostane
+    ' neizdat. Stampan, izgledao bi kao prava otpremnica. Razlog se kaze, umesto
+    ' opste poruke "nije pronadjena".
+    If Not modDokumenta.OtpremnicaJeIzdata(otpID) Then
+        MsgBox Poruka("PRINT_OTP_NIJE_IZDATA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim ws As Worksheet: Set ws = FillOtpremnicaSablon(otpID)
     If ws Is Nothing Then
         MsgBox "Otpremnica nije pronadjena ili se ne mo" & ChrW(382) & "e pripremiti (" & otpID & ").", _
@@ -241,31 +250,66 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
 
-    Dim kol As Double: kol = OtpN(d, fr, COL_OTP_KOLICINA)
-    Dim cenBruto As Double: cenBruto = OtpN(d, fr, COL_OTP_CENA)
-    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-    Dim storedBruto As Double: storedBruto = OtpN(d, fr, COL_OTP_BRUTO)
-    Dim tipAmb As String: tipAmb = CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
-    Dim kolAmb As Double: kolAmb = OtpN(d, fr, COL_OTP_KOL_AMB)
-    Dim kolBruto As Double
-    If storedBruto > 0 Then
-        kolBruto = storedBruto
-    Else
-        Dim crateW As Double
-        crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
-        kolBruto = kol + kolAmb * crateW
+    ' JEDAN RED = JEDNA STAVKA (S3b). Do S3a je otpremnica sa dve klase bila
+    ' dva zaglavlja pod istim brojem, pa je stampa imala jedan red i stampala
+    ' se dvaput. Sada je jedno zaglavlje sa stavkama, a klasa, kolicina i gajbe
+    ' zive na stavci. Vrsta, sorta i tip ambalaze ostaju na zaglavlju.
+    '
+    ' CENA I VREDNOST DOLAZE IZ IZVORA (review #362, P1), ne iz PredlogCena:
+    ' predlog je polje za prefill otkupa, izricito ne-finansijsko, pa ne sme da
+    ' udje u osnovicu, nadoknadu i ukupno. Cena klase je PROSECNA cena izvornih
+    ' stavki te klase (vrednost / kg), dakle ono sto je stvarno placeno. Stampa
+    ' se samo IZDATA otpremnica, a izdata uvek ima izvore -- klasa bez izvora je
+    ' kvar i obara pripremu lista (Nothing), umesto da odstampa nulu.
+    If Not modDokumenta.IzdatoStatusJeIzdato(OtpC(d, fr, COL_TRACE_IZDATO_STATUS)) Then
+        Exit Function
     End If
+    Dim vredIzv As Object
+    Set vredIzv = modDokumenta.VrednostIzvoraPoOtpremnici()
+    Dim izvKl As Variant
+    Dim tipAmb As String: tipAmb = CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
+    Dim crateW As Double
+    crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
 
-    Dim stavke() As Variant: ReDim stavke(0 To 0, 0 To 6)
-    stavke(0, 0) = Trim$(CStr(OtpC(d, fr, COL_OTP_VRSTA)) & " " & CStr(OtpC(d, fr, COL_OTP_SORTA)))
-    stavke(0, 1) = CStr(OtpC(d, fr, COL_OTP_KLASA))
-    stavke(0, 2) = cenNeto
-    stavke(0, 3) = cenBruto
-    stavke(0, 4) = kol
-    stavke(0, 5) = kolBruto
-    stavke(0, 6) = kol * cenNeto
-    Dim cnt As Long: cnt = 1
-    Dim osnovica As Double: osnovica = kol * cenNeto
+    Dim roba As String
+    roba = Trim$(CStr(OtpC(d, fr, COL_OTP_VRSTA)) & " " & CStr(OtpC(d, fr, COL_OTP_SORTA)))
+
+    Dim sveStavke As Object
+    Set sveStavke = modDokumenta.StavkeOtpremnicePoDokumentu()
+    Dim redovi As Collection
+    Set redovi = modDokumenta.StavkeZaOtpremnicu(sveStavke, otpID, "modPrint.FillOtpremnicaSablon")
+
+    Dim stavke() As Variant: ReDim stavke(0 To redovi.count - 1, 0 To 6)
+    Dim kol As Double, kolAmb As Double, osnovica As Double
+    Dim s As Variant, k As Long
+    Dim sKol As Double, sAmb As Double, sBruto As Double
+    Dim cenBruto As Double, cenNeto As Double
+
+    For k = 1 To redovi.count
+        s = redovi(k)
+        sKol = CDbl(s(4))
+        izvKl = modDokumenta.VrednostIzvoraKlase(vredIzv, otpID, CStr(s(3)), _
+                                                 "modPrint.FillOtpremnicaSablon")
+        If CDbl(izvKl(0)) <= 0 Then Exit Function
+        cenBruto = CDbl(izvKl(1)) / CDbl(izvKl(0))
+        sAmb = CDbl(s(6))
+        sBruto = CDbl(s(8))
+        cenNeto = cenBruto / (1 + stopa / 100)
+        If sBruto <= 0 Then sBruto = sKol + sAmb * crateW
+
+        stavke(k - 1, 0) = roba
+        stavke(k - 1, 1) = CStr(s(3))
+        stavke(k - 1, 2) = cenNeto
+        stavke(k - 1, 3) = cenBruto
+        stavke(k - 1, 4) = sKol
+        stavke(k - 1, 5) = sBruto
+        stavke(k - 1, 6) = sKol * cenNeto
+
+        kol = kol + sKol
+        kolAmb = kolAmb + sAmb
+        osnovica = osnovica + sKol * cenNeto
+    Next k
+    Dim cnt As Long: cnt = redovi.count
 
     Dim stID As String: stID = CStr(OtpC(d, fr, COL_OTP_STANICA))
 

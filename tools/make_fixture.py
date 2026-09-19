@@ -2192,6 +2192,67 @@ SEED["tblOtkupStavke"] = [
     if float(red.get("Kolicina") or 0) > 0 and float(red.get("Cena") or 0) > 0
 ]
 
+# tblOtpremnicaStavke SE IZVODI IZ tblOtpremnica -- isti razlog, drugi dokument.
+#
+# Od S3a ocekivanje otpremnice (klasa, kolicina, gajbe, predlog cene) zivi na
+# stavkama, a citaoci (mreza F2, stampa, izvestaji, invarijanta zbirne, lista za
+# storno) ga od S3b odatle i citaju. Zaglavlje bez ijedne stavke nije dokument
+# kolicine nula nego NIJE DOKUMENT -- pisac ga ne moze napraviti
+# (OtpUpisiOcekivano odbija prazno ocekivanje), pa ga ni fixture ne sme imati.
+#
+# JEDNA STAVKA PO ZAGLAVLJU, ne spajanje po broju: zatecen fixture drzi dva reda
+# istog BrojOtpremnice kao DVA dokumenta (razlicite stanice, razlicite zbirne) i
+# cetiri scenarija se oslanjaju bas na to. Spajanje bi bilo izmena scenarija, ne
+# prenos podataka u nov model.
+#
+# Kolone zaglavlja (Klasa/Kolicina/KolAmbalaze/Cena) se NE brisu -- odlaze u S3e.
+# Do tada fixture nosi iste brojeve na oba mesta, a merodavna je stavka.
+#
+# PredlogCena: prazna kad zaglavlje nema cenu. Nula bi bila predlog "besplatno",
+# a citalac je zato i odbija (RequireOtpStavkaUgovor).
+SEED["tblOtpremnicaStavke"] = [
+    {
+        "OtpremnicaStavkaID": "OPS-" + str(red["OtpremnicaID"]),
+        "OtpremnicaID": red["OtpremnicaID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["Kolicina"],
+        "KolAmbalaze": red.get("KolAmbalaze", 0),
+        "BrutoKg": "",
+        "PredlogCena": red["Cena"] if float(red.get("Cena") or 0) > 0 else "",
+    }
+    for red in SEED["tblOtpremnica"]
+]
+
+# tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
+#
+# Od #362 operativni citaoci (roba po vozacu, roba po otkupnom mestu, stampa)
+# broje samo IZDATE otpremnice, a vrednost otpremnice je vrednost njenih
+# IZVORNIH otkupa. Otpremnica je u novom modelu izdata tek kad ima izvore -- pa
+# fixture koji bi zadrzao samo zaglavlje ne bi imao nijednu otpremljenu robu, a
+# testovi slaganja izvestaja bi merili 0 = 0.
+#
+# Veza vec postoji u seed-u otkupa (OtpremnicaID, stari model) i to je ista
+# cinjenica, samo zapisana na drugom mestu: otkup X je deo otpremnice Y. Izvodi
+# se samo kad otpremnica postoji u seed-u -- clanstvo bez zaglavlja nije sastav.
+#
+# Otpremnica SA izvorom je IZDATO; otpremnica bez izvora ostaje bez statusa, pa
+# se za operativne citaoce ne racuna kao otpremljena (NACRT ili stari red).
+_OTP_IDS = {red["OtpremnicaID"] for red in SEED["tblOtpremnica"]}
+SEED["tblOtpremnicaIzvori"] = [
+    {
+        "OtpremnicaIzvorID": "OPI-" + str(red["OtkupID"]),
+        "OtpremnicaID": red["OtpremnicaID"],
+        "OtkupID": red["OtkupID"],
+    }
+    for red in SEED["tblOtkup"]
+    if red.get("OtpremnicaID") in _OTP_IDS
+]
+_IZDATE = {red["OtpremnicaID"] for red in SEED["tblOtpremnicaIzvori"]}
+for _red in SEED["tblOtpremnica"]:
+    if _red["OtpremnicaID"] in _IZDATE:
+        _red["IzdatoStatus"] = "IZDATO"
+
 # Kolone koje DONOR (produkcijska sveska pre nadogradnje) nema, a fixture
 # mora da ih ima: sejanje ide PO IMENU, pa red sa novom kolonom obara
 # generator; testovi writera (RequireUpdateCell) takodje traze kolonu.
@@ -2274,6 +2335,19 @@ ENSURE_TABLES = {
                        ["OtkupStavkaID", "OtkupID", "RedniBroj", "Klasa",
                         "Kolicina", "Cena", "KolAmbalaze", "BrutoKg",
                         "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
+    # Otpremnica: header + stavke (S3b). Isti razlog kao kod otkupa -- donor je
+    # nema, a fixture sada seje i stavke, pa tabela mora postojati PRE sejanja.
+    # PredlogCena je NA KRAJU, kako je i dodata u kanon (S3a): AppendRow pise
+    # poziciono, pa redosled nije kozmetika.
+    "tblOtpremnicaStavke": ("OtpremnicaStavke",
+                            ["OtpremnicaStavkaID", "OtpremnicaID", "RedniBroj",
+                             "Klasa", "Kolicina", "KolAmbalaze", "BrutoKg",
+                             "CreatedAt", "CreatedBy", "ModifiedAt",
+                             "ModifiedBy", "PredlogCena"]),
+    # Clanstvo otpremnice (review #362): izvodi se iz Otkup.OtpremnicaID.
+    "tblOtpremnicaIzvori": ("OtpremnicaIzvori",
+                            ["OtpremnicaIzvorID", "OtpremnicaID", "OtkupID",
+                             "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)

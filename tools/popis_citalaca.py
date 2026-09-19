@@ -112,6 +112,30 @@ KOLONE_STAROG_MODELA = re.compile(
     r"^COL_OTK_(OTPREMNICA_ID|BROJ_ZBIRNE|VOZAC|BROJ_OTPREMNICE|KOLICINA|CENA|KLASA|KOL_AMB|BRUTO|NOVAC|PRIMALAC|VREME_UNOSA)$"
     r"|^COL_OTP_(KOLICINA|KLASA|KOL_AMB|BRUTO|CENA|BROJ_ZBIRNE)$")
 
+# --- pragovi po grupi (--check) ---------------------------------------------
+# Gornja granica ZIVIH mesta (ZIV_UI + ZIV_MAKRO) po grupi. Postoji zato sto je
+# "nijedan nov kod ni test ne sme da zove SaveOtpremnica*" do S3b bilo pravilo u
+# dokumentu -- a pravilo u dokumentu nije kapija (review #361, P2).
+#
+# Prag se SPUSTA kad slajs skine citaoce, i NIKAD se ne podize bez odluke u
+# planu. Merenje ispod praga takodje pada: zastareo prag bi pustio grupu da
+# naraste nazad do stare granice, a da nijedna provera ne pocrveni -- isti rod
+# greske kao sidro sabotaze koje vise ne pokazuje ni na sta.
+#
+# Sta je ostalo na 18.09.2026 (posle S3b):
+#   otp_stari_pisac 0  -- prag slajsa dostignut: SaveOtpremnica* je obrisan, a
+#                         ekranski adapter F2 preimenovan u SnimiOtpremnicu (bio je
+#                         sudar imena, ne pisac).
+#   otp_linija     24  -- cinjenice ZAGLAVLJA (Vrsta, Sorta, TipAmbalaze,
+#                         KulturaID) + tri kozmeticka reda u modSetup. Kolicina,
+#                         Klasa, KolAmbalaze i Bruto vise se ne citaju zivo.
+#   otp_cena        0  -- prag slajsa dostignut: zaglavlje nema cenu.
+PRAGOVI = collections.OrderedDict([
+    ("otp_stari_pisac", 0),
+    ("otp_linija", 24),
+    ("otp_cena", 0),
+])
+
 # Linijska polja zaglavlja -- prag dual READ.
 DUAL_READ = re.compile(r"\bCOL_OTK_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO)\b|\bCOL_OTP_(KOLICINA|KLASA|KOL_AMB|BRUTO)\b")
 
@@ -913,6 +937,34 @@ def sazetak(moduli, graf, st, spisak, upozorenja, commit):
             print("UPOZORENJE: " + u)
 
 
+def provera(spisak):
+    """--check: nijedna grupa ne sme da naraste preko svog praga.
+
+    Vraca exit kod (0 = prag drzi).
+    """
+    print("popis_citalaca --check: pragovi zivih mesta po grupi")
+    pao = False
+    for g, prag in PRAGOVI.items():
+        ziv = [r for r in spisak if r["grupa"] == g and r["tip"] == "PROD"
+               and r["status_mesta"].startswith("ZIV")]
+        n = len(ziv)
+        if n > prag:
+            pao = True
+            print("  %-16s %3d > prag %d  PAO" % (g, n, prag))
+            for r in sorted(ziv, key=lambda r: (r["modul"], r["linija"]))[:12]:
+                print("      %s.%s:%d  %s" % (r["modul"], r["procedura"], r["linija"],
+                                              ", ".join(r["izrazi"])))
+        elif n < prag:
+            pao = True
+            print("  %-16s %3d < prag %d  PRAG ZASTAREO -- spusti ga u PRAGOVI" % (g, n, prag))
+        else:
+            print("  %-16s %3d = prag %d  ok" % (g, n, prag))
+    if pao:
+        print("\nPrag se SPUSTA kad slajs skine citaoce; nikad se ne podize bez odluke u planu.")
+        return 1
+    return 0
+
+
 def uporedi(stari, novi):
     def kljuc(r):
         return (r["grupa"], r["modul"], r["procedura"], re.sub(r"\s+", " ", r["kod"]))
@@ -937,9 +989,13 @@ def main():
     ap.add_argument("--json", help="pun izlaz u JSON fajl")
     ap.add_argument("--uporedi", metavar="STARI", help="delta mesta: STARI commit -> merena verzija")
     ap.add_argument("--procedura", action="append", default=[], help="modul.Procedura: status, lanac, pozivaoci")
+    ap.add_argument("--check", action="store_true",
+                    help="kapija: ziva mesta po grupi ne smeju preko praga (PRAGOVI)")
     a = ap.parse_args()
 
     moduli, graf, st, spisak, upozorenja = napravi(a.commit)
+    if a.check:
+        return provera(spisak)
     if a.procedura:
         for k in a.procedura:
             s = st.get(k.lower())

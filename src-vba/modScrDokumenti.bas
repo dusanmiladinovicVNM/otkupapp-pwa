@@ -304,7 +304,7 @@ Public Function Scr_Save(ByVal polja As Object) As String
     Select Case CStr(polja("rezim"))
         Case "OTKUP"        ' nastavlja se ispod
         Case "OTPREMNICA"
-            Scr_Save = SaveOtpremnica(polja)
+            Scr_Save = SnimiOtpremnicu(polja)
             Exit Function
         Case "ZBIRNA"
             Scr_Save = SaveZbirna(polja)
@@ -389,7 +389,7 @@ End Function
 ' Od S3a upis otvara NACRT, pa modDokUnos vraca OtpremnicaID. Operateru se u
 ' toast-u i dalje pokazuje BROJ -- identitet je za masinu, broj za coveka. ID
 ' ostaje u recniku pod svojim imenom, za radnju "Izdaj" (S3b).
-Private Function SaveOtpremnica(ByVal polja As Object) As String
+Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     Dim p As Object, fokus As String, greska As String, res As String, poruke As String
     Set p = modDokUnos.NoviOtpremnicaUnos()
     p("datum") = polja("datum")
@@ -411,13 +411,13 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     greska = modDokUnos.OtpremnicaValidiraj(p, fokus)
     If Len(greska) > 0 Then
         polja("fokus") = fokus
-        SaveOtpremnica = greska
+        SnimiOtpremnicu = greska
         Exit Function
     End If
 
     res = modDokUnos.OtpremnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveOtpremnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
 
@@ -427,7 +427,7 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
-' F3 ZBIRNA. Isti obrazac kao SaveOtpremnica: ekran samo prevodi polja u recnik.
+' F3 ZBIRNA. Isti obrazac kao SnimiOtpremnicu: ekran samo prevodi polja u recnik.
 ' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
 '   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
 '     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";
@@ -667,7 +667,12 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         ' Otkup je JEDNO zaglavlje po dokumentu (S1e): identitet je OtkupID.
         ' GeneracijaID otkupni pisac ne upisuje, pa bi kolona bila prazna.
         Case "OTKUP":                                     IdKolonaTipa = COL_OTK_ID
-        Case "OTPREMNICA", "ZBIRNA", "PRIJEMNICA":         IdKolonaTipa = COL_GENERACIJA_ID
+        ' Isto za otpremnicu od S3a (review #362): nacrt je jedno zaglavlje sa
+        ' OtpremnicaID-em, a GeneracijaID ne dobija. Sa generacijom bi skrivena
+        ' kolona bila prazna, pa bi F8 dokument trazio PO BROJU -- a broj je
+        ' jedinstven tek po (stanica, dan).
+        Case "OTPREMNICA":                                IdKolonaTipa = COL_OTP_ID
+        Case "ZBIRNA", "PRIJEMNICA":                       IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
         Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID
@@ -834,7 +839,7 @@ End Function
 Public Function ColKlasa(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKlasa = COL_OKS_KLASA        ' stavka (ovStav)
-        Case "OTPREMNICA":           ColKlasa = COL_OTP_KLASA
+        Case "OTPREMNICA":           ColKlasa = COL_OPS_KLASA        ' stavka (ovStav)
         Case "ZBIRNA":               ColKlasa = COL_ZBR_KLASA
         Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
     End Select
@@ -843,7 +848,7 @@ End Function
 Public Function ColKolicina(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolicina = COL_OKS_KOLICINA  ' stavka (ovStav)
-        Case "OTPREMNICA":           ColKolicina = COL_OTP_KOLICINA
+        Case "OTPREMNICA":           ColKolicina = COL_OPS_KOLICINA  ' stavka (ovStav)
         Case "ZBIRNA":               ColKolicina = COL_ZBR_KOLICINA
         Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
     End Select
@@ -852,7 +857,7 @@ End Function
 Public Function ColKolAmb(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolAmb = COL_OKS_KOL_AMB     ' stavka (ovStav)
-        Case "OTPREMNICA":           ColKolAmb = COL_OTP_KOL_AMB
+        Case "OTPREMNICA":           ColKolAmb = COL_OPS_KOL_AMB     ' stavka (ovStav)
         Case "ZBIRNA":               ColKolAmb = COL_ZBR_KOL_AMB
         Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
     End Select
@@ -867,11 +872,16 @@ Public Function ColTipAmb(ByVal m As String) As String
     End Select
 End Function
 
-' Prazno = rezim nema cenu (tblZbirna), pa ni kolonu vrednosti.
+' Prazno = rezim nema cenu, pa ni kolonu vrednosti.
+'
+' OTPREMNICA je nema (review #362, P1). Njena PredlogCena je predlog za prefill
+' otkupa, izricito NE-finansijsko polje, pa Kolicina x PredlogCena nije vrednost
+' dokumenta. Prava vrednost je vrednost izvornih otkupa, a nju nacrt -- koga
+' ova mreza uglavnom prikazuje -- jos nema. Kolona bi zato bila ili izmisljena
+' cifra, ili nula; oba lazu, pa je nema.
 Public Function ColCena(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColCena = COL_OKS_CENA          ' stavka (ovStav)
-        Case "OTPREMNICA":           ColCena = COL_OTP_CENA
         Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
     End Select
 End Function
@@ -1179,25 +1189,48 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         If kind(c) = "kg" Then iKg = c
     Next c
 
-    ' OTKUP: kolicina, gajbe, klase i vrednost dokumenta su na STAVKAMA, ne na
-    ' zaglavlju -- CreateOtkup_TX ih tamo ostavlja prazne, pa je mreza za nov
-    ' dokument pokazivala 0 kg i pilulu "placeno" posle prve delimicne isplate
-    ' (REFAKTOR S14.7, kvar 2). Opis kolona ostaje isti; menja se samo izvor tih
-    ' celija. Stavke se citaju JEDNOM po pozivu, kao i novac ispod.
+    ' OTKUP i OTPREMNICA: kolicina, gajbe, klase i vrednost dokumenta su na
+    ' STAVKAMA, ne na zaglavlju -- CreateOtkup_TX i CreateOtpremnicaDraft_TX ih
+    ' tamo ostavljaju prazne, pa je mreza za nov dokument pokazivala 0 kg i
+    ' pilulu "placeno" posle prve delimicne isplate (REFAKTOR S14.7, kvar 2).
+    ' Opis kolona ostaje isti; menja se samo izvor tih celija. Stavke se citaju
+    ' JEDNOM po pozivu, kao i novac ispod.
+    '
+    ' Isti mehanizam za oba tipa, jer je i kvar isti: cim jedan tip dobije
+    ' svoju kopiju petlje, sledeci cutover je trece mesto na kome se odlucuje
+    ' odakle dolazi kilaza reda.
     Dim otkStav As Boolean, dStav As Object, ovStav() As String, iStavID As Long
     ReDim ovStav(0 To colN - 1)
-    otkStav = (mk = "OTKUP")
+    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA")
     If otkStav Then
-        mStep = "stavke otkupa"
-        Set dStav = modOtkup.ZbirStavkiPoOtkupu()
-        iStavID = ColIdx(tblName, COL_OTK_ID)
+        mStep = "stavke dokumenta"
+        If mk = "OTKUP" Then
+            Set dStav = modOtkup.ZbirStavkiPoOtkupu()
+            iStavID = ColIdx(tblName, COL_OTK_ID)
+        Else
+            Set dStav = modDokumenta.ZbirStavkiPoOtpremnici()
+            iStavID = ColIdx(tblName, COL_OTP_ID)
+        End If
+        ' Kolone se prepoznaju kroz ISTE Col* funkcije koje su ih i dodale u
+        ' GridCols. Golim konstantama bi se nabrajala oba tipa, a tblOtkupStavke
+        ' i tblOtpremnicaStavke dele imena kolona ("Klasa", "Kolicina",
+        ' "KolAmbalaze") -- dve grane bi izgledale kao izbor, a bile isti string.
+        '
+        ' Kolona BEZ izvorne kolone (status, placanje) se preskace: Col* vraca ""
+        ' za rezim koji to polje nema (OTPREMNICA nema cenu, review #362), a
+        ' "Case """ bi se poklopio bas sa njima -- pilula statusa bi dobila
+        ' vrednost dokumenta.
+        Dim izvCol As String
         For c = 0 To colN - 1
-            Select Case ColF(CStr(cols(c)), 1)
-                Case COL_OKS_KOLICINA: ovStav(c) = "kg"
-                Case COL_OKS_CENA:     ovStav(c) = "vr"
-                Case COL_OKS_KOL_AMB:  ovStav(c) = "amb"
-                Case COL_OKS_KLASA:    ovStav(c) = "kl"
-            End Select
+            izvCol = ColF(CStr(cols(c)), 1)
+            If Len(izvCol) > 0 Then
+                Select Case izvCol
+                    Case ColKolicina(mk): ovStav(c) = "kg"
+                    Case ColCena(mk):     ovStav(c) = "vr"
+                    Case ColKolAmb(mk):   ovStav(c) = "amb"
+                    Case ColKlasa(mk):    ovStav(c) = "kl"
+                End Select
+            End If
         Next c
     End If
 
@@ -1277,8 +1310,13 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             ' Nedostajuci kljuc NIJE nula (review #334, P1): red dokumenta bez
             ' stavki pada po imenu. Ranije je takav red imao duguje = 0, pa je
             ' pilula pokazivala "placeno" na dokumentu bez ijedne stavke.
-            zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
-                        "modScrDokumenti.RedoviZaTip")
+            If mk = "OTKUP" Then
+                zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
+            Else
+                zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
+            End If
         End If
         If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
 

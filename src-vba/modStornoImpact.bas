@@ -145,7 +145,7 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
         Case FLOW_DOC_OTPREMNICA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_OTP_STANICA, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_OTP_DATUM, docID, strict)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_OTP_KOLICINA, docID, strict)
+            h("kolicina") = SumActiveOtpStavke(broj, docID, strict)
         Case FLOW_DOC_ZBIRNA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID, strict)
@@ -461,6 +461,90 @@ Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
         End If
     Next i
     If found Then SumActiveNum = Format$(total, "#,##0.##")
+End Function
+
+' Kolicina OTPREMNICE = zbir njenih STAVKI (S3b). Zaglavlje od S3a nema
+' Kolicinu, pa bi SumActiveNum nad njim u uvidu pre storna pisao "0" -- broj
+' koji operater cita kao "nema sta da se stornira".
+'
+' Redovi se biraju ISTO kao u SumActiveNum (isti broj, opcioni identitet,
+' nestornirano); menja se samo odakle dolazi kilaza. Nedostajuce stavke ovde
+' NE ruse uvid kad strict nije trazen -- uvid je pregled, a tvrda kapija stoji
+' u mrezi i izvestajima.
+Private Function SumActiveOtpStavke(ByVal keyVal As String, _
+                                    Optional ByVal docID As String = "", _
+                                    Optional ByVal strict As Boolean = False) As String
+    Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".SumActiveOtpStavke", _
+                      "Tabela " & TBL_OTPREMNICA & " nije citljiva."
+        End If
+        Exit Function
+    End If
+
+    Dim cKey As Long, cId As Long, cSt As Long, cGen As Long
+    cKey = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cSt = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
+    If cKey = 0 Or cId = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".SumActiveOtpStavke", _
+                      "Kolona " & COL_OTP_BROJ & " ili " & COL_OTP_ID & _
+                      " ne postoji u " & TBL_OTPREMNICA & "."
+        End If
+        Exit Function
+    End If
+
+    Dim zbir As Object
+    On Error Resume Next
+    Set zbir = modDokumenta.ZbirStavkiPoOtpremnici()
+    On Error GoTo 0
+    If zbir Is Nothing Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 32, MOD_NAME & ".SumActiveOtpStavke", _
+                      "Stavke otpremnica se ne mogu procitati."
+        End If
+        Exit Function
+    End If
+
+    ' Zadat identitet se NE napusta (review #362): bez kolone generacije ne
+    ' moze da se zna o kom je dokumentu rec, a povratak na sve redove istog
+    ' broja bi uvid sabrao preko tudjeg dokumenta. Strict dize gresku, inace je
+    ' kolicina nepoznata (prazno), ne zbir po broju.
+    If Len(Trim$(docID)) > 0 And cGen = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 33, MOD_NAME & ".SumActiveOtpStavke", _
+                      "Tabela " & TBL_OTPREMNICA & " nema kolonu " & COL_GENERACIJA_ID & _
+                      " -- izabrani dokument se ne moze razlikovati od drugog istog broja."
+        End If
+        Exit Function
+    End If
+
+    Dim uzmiID As Boolean
+    uzmiID = (Len(Trim$(docID)) > 0)
+
+    Dim i As Long, total As Double, found As Boolean, oid As String, rec As Variant
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
+            Dim uzmi As Boolean: uzmi = True
+            If uzmiID Then uzmi = (Trim$(CStr(data(i, cGen))) = Trim$(docID))
+            If uzmi Then
+                Dim isStor As Boolean: isStor = False
+                If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+                If Not isStor Then
+                    oid = Trim$(NzToText(data(i, cId)))
+                    If zbir.Exists(oid) Then
+                        rec = zbir(oid)
+                        total = total + CDbl(rec(0))
+                        found = True
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    If found Then SumActiveOtpStavke = modStornoDok.KgTekst(total)
 End Function
 
 Private Function SafeDblZ(ByVal v As Variant) As Double
