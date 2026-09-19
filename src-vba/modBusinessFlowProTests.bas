@@ -281,6 +281,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_F8StornoPoID
     Test_OTP_IzvorAktivneZbirneSeNeStornira
     Test_OTK_IzvorAktivneOtpremniceSeNeStornira
+    Test_OTP_RadniStoBiraSamoNacrt
+    Test_OTP_RadniStoVeziTrakaIzdaj
+    Test_OTP_RadniStoListe
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6039,6 +6042,208 @@ Private Sub Test_OTK_IzvorAktivneOtpremniceSeNeStornira()
 EH:
     LogFatal "Test_OTK_IzvorAktivneOtpremniceSeNeStornira", Err.Number, Err.description
 End Sub
+
+' RADNI STO OTPREMNICE (S3b-2): aktivna otpremnica je uvek NACRT.
+'
+' Izdata ne prima izvore; njen izbor bi prevario operatera -- sledeci upis bi
+' pao tek na vezivanju. Meri se produkcioni ulaz (AktivirajOtpremnicu), isti
+' koji zove klik na red liste otpremnica.
+Private Sub Test_OTP_RadniStoBiraSamoNacrt()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPRS1")
+    RadniStoPocetno
+
+    Dim draftID As String, otk As String, izdataID As String
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-RS1D-" & scenario), _
+                                       OtpOcek(100#, 10#, 0#, 0#), g)
+    AssertTrue Len(draftID) > 0, "RS nacrt: nacrt napravljen (" & g & ")"
+    otk = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RS1I-" & scenario), _
+                         OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    izdataID = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-RS1I-" & scenario), _
+                                           Pr3Izvor(otk, ""), g)
+    AssertTrue Len(izdataID) > 0, "RS nacrt: izdata napravljena (" & g & ")"
+    If Len(draftID) = 0 Or Len(izdataID) = 0 Then GoTo Kraj
+
+    AssertEquals Poruka("OTKUI_ERR_OTP_IZDATA"), _
+                 modScrDokumenti.AktivirajOtpremnicu(izdataID), _
+                 "RS nacrt: izdata se ne bira"
+    AssertEquals "", modScrDokumenti.Scr_OtpID(), "RS nacrt: posle odbijanja nema aktivne"
+    AssertEquals Poruka("OTKUI_ERR_OTP_NEPOZNATA"), _
+                 modScrDokumenti.AktivirajOtpremnicu(TEST_PREFIX & "-NEMA-" & scenario), _
+                 "RS nacrt: nepostojeca se ne bira"
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draftID), "RS nacrt: nacrt se bira"
+    AssertEquals draftID, modScrDokumenti.Scr_OtpID(), "RS nacrt: nacrt je aktivan"
+
+Kraj:
+    RadniStoPocetno
+    Exit Sub
+EH:
+    RadniStoPocetno
+    LogFatal "Test_OTP_RadniStoBiraSamoNacrt", Err.Number, Err.description
+End Sub
+
+' RADNI STO OTPREMNICE (S3b-2): vezivanje, traka, prekoracenje, uklanjanje i
+' izdavanje -- kroz iste javne ulaze koje zovu upis F1 i radnje nad redom.
+'
+' Nacrt ocekuje 100 kg / 10 gajbi klase I. Traka kaze "u toku" dok ostatak nije
+' nula, crveno kad je neka klasa prekoracena, zeleno tek kad su sve na nuli.
+' Izdavanje je odbijeno dok povezano nije jednako ocekivanom; kad prodje, ekran
+' izlazi iz konteksta izdate otpremnice.
+Private Sub Test_OTP_RadniStoVeziTrakaIzdaj()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, info() As String
+    scenario = NewScenarioCode("OTPRS2")
+    RadniStoPocetno
+
+    Dim draftID As String, o1 As String, o2 As String, o3 As String
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-RS2-" & scenario), _
+                                       OtpOcek(100#, 10#, 0#, 0#), g)
+    o1 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RS2A-" & scenario), _
+                        OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    o2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RS2B-" & scenario), _
+                        OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    o3 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RS2C-" & scenario), _
+                        OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    AssertTrue Len(draftID) > 0 And Len(o1) > 0 And Len(o2) > 0 And Len(o3) > 0, _
+               "RS tok: preduslovi napravljeni (" & g & ")"
+    If Len(draftID) = 0 Or Len(o1) = 0 Or Len(o2) = 0 Or Len(o3) = 0 Then GoTo Kraj
+
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draftID), "RS tok: nacrt izabran"
+    info = Split(modScrDokumenti.Scr_OtpInfo(), "|")
+    AssertEquals "12", CStr(UBound(info)), "RS tok: traka ima 13 polja"
+    If UBound(info) < 12 Then GoTo Kraj
+    AssertEquals "100", info(3), "RS tok: traka -- ocekivano 100"
+    AssertEquals "0", info(4), "RS tok: traka -- povezano 0"
+    AssertEquals "1", info(10), "RS tok: traka -- u toku"
+
+    ' Prekoracenje po klasi: klasa II nije ocekivana, pa je svaki kg u njoj visak.
+    AssertEquals "", modScrDokumenti.PrekoracenjeOpis(60#, 0#), "RS tok: 60 kg I ne prelazi"
+    AssertTrue InStr(1, modScrDokumenti.PrekoracenjeOpis(120#, 0#), "(I)", vbBinaryCompare) > 0, _
+               "RS tok: 120 kg I prelazi i imenuje klasu"
+    AssertTrue InStr(1, modScrDokumenti.PrekoracenjeOpis(0#, 5#), "(II)", vbBinaryCompare) > 0, _
+               "RS tok: klasa koju otpremnica ne ocekuje je prekoracenje"
+
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o1), "RS tok: prvi otkup vezan"
+    AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(o1), "RS tok: clanstvo je upisano"
+    info = Split(modScrDokumenti.Scr_OtpInfo(), "|")
+    AssertEquals "40", info(5), "RS tok: traka -- ostatak 40"
+
+    ' Nije spremna -- izdavanje odbijeno, kontekst ostaje.
+    AssertTrue Len(modScrDokumenti.IzdajAktivnu()) > 0, "RS tok: izdavanje pre nule je odbijeno"
+    AssertEquals draftID, modScrDokumenti.Scr_OtpID(), "RS tok: posle odbijanja nacrt ostaje aktivan"
+    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), "RS tok: nacrt nije izdat"
+
+    ' 60 + 40 + 10 = 110 > 100 -> crveno.
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o2), "RS tok: drugi otkup vezan"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o3), "RS tok: treci otkup vezan (visak)"
+    info = Split(modScrDokumenti.Scr_OtpInfo(), "|")
+    AssertEquals "-1", info(10), "RS tok: traka -- prekoracenje je crveno"
+
+    ' Uklanjanje vraca ostatak na nulu -> zeleno.
+    AssertEquals "", modScrDokumenti.UkloniIzAktivne(o3), "RS tok: visak uklonjen iz nacrta"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(o3), "RS tok: uklonjen otkup je slobodan"
+    info = Split(modScrDokumenti.Scr_OtpInfo(), "|")
+    AssertEquals "0", info(10), "RS tok: traka -- sve klase na nuli"
+
+    ' Izdavanje prolazi i ekran izlazi iz konteksta.
+    AssertEquals "", modScrDokumenti.IzdajAktivnu(), "RS tok: izdavanje na nuli prolazi"
+    AssertTrue modDokumenta.OtpremnicaJeIzdata(draftID), "RS tok: otpremnica JE izdata"
+    AssertEquals "", modScrDokumenti.Scr_OtpID(), "RS tok: posle izdavanja nema aktivne"
+    AssertEquals "", modScrDokumenti.Scr_OtpInfo(), "RS tok: traka je prazna"
+    AssertEquals Poruka("OTKUI_ERR_NEMA_AKT_OTP"), modScrDokumenti.VeziZaAktivnu(o3), _
+                 "RS tok: bez aktivne nema vezivanja"
+
+Kraj:
+    RadniStoPocetno
+    Exit Sub
+EH:
+    RadniStoPocetno
+    LogFatal "Test_OTP_RadniStoVeziTrakaIzdaj", Err.Number, Err.description
+End Sub
+
+' RADNI STO OTPREMNICE (S3b-2): liste OTPREMNICE i BLOKOVI nose ID u
+' nevidljivoj POSLEDNJOJ koloni (sortiranje ga ne odvaja od reda), a brojke
+' dolaze iz kanona -- ocekivano iz stavki otpremnice, povezano iz stavki izvora.
+Private Sub Test_OTP_RadniStoListe()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, prev As String
+    scenario = NewScenarioCode("OTPRS3")
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
+    RadniStoPocetno
+
+    Dim brD As String, draftID As String, o1 As String
+    brD = TEST_PREFIX & "-OTP-RS3-" & scenario
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(brD), OtpOcek(100#, 10#, 0#, 0#), g)
+    o1 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RS3-" & scenario), _
+                        OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    AssertTrue Len(draftID) > 0 And Len(o1) > 0, "RS liste: preduslovi napravljeni (" & g & ")"
+    If Len(draftID) = 0 Or Len(o1) = 0 Then GoTo Kraj
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draftID), "RS liste: nacrt izabran"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o1), "RS liste: otkup vezan"
+
+    Dim rez As Variant, red As Long
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    AssertTrue modScrDokumenti.Scr_Event("lsOTPREMNICE", "Click"), _
+               "RS liste: prekidac na otpremnice"
+    rez = modScrDokumenti.Scr_Rows("otvorene", brD)
+    red = RsRedSaID(rez, draftID)
+    AssertTrue red > 0, "RS liste: nacrt je u otvorenima, ID u poslednjoj koloni"
+    If red > 0 Then
+        AssertEquals "100", CStr(rez(1)(red, 6)), "RS liste: ocekivano iz stavki otpremnice"
+        AssertEquals "60", CStr(rez(1)(red, 7)), "RS liste: povezano iz stavki izvora"
+        AssertEquals "40", CStr(rez(1)(red, 8)), "RS liste: ostatak"
+        AssertEquals Poruka("OTKUI_OTP_ST_NACRT"), CStr(rez(1)(red, 10)), "RS liste: status nacrt"
+    End If
+
+    AssertTrue modScrDokumenti.Scr_Event("lsBLOKOVI", "Click"), "RS liste: prekidac na blokove"
+    rez = modScrDokumenti.Scr_Rows("", "")
+    red = RsRedSaID(rez, o1)
+    AssertTrue red > 0, "RS liste: vezan otkup je u blokovima, ID u poslednjoj koloni"
+    If red > 0 Then AssertEquals "60", CStr(rez(1)(red, 4)), "RS liste: kg bloka iz stavki"
+    AssertEquals "1", CStr(rez(2)), "RS liste: u blokovima je SAMO sastav aktivne"
+
+Kraj:
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prev
+    Exit Sub
+EH:
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prev
+    LogFatal "Test_OTP_RadniStoListe", Err.Number, Err.description
+End Sub
+
+' Radni sto u pocetno stanje PRODUKCIONIM putem: izlazak iz konteksta
+' (Scr_OtpOtkazi vodi na listu otpremnica), pa prekidac nazad na listu SVI --
+' zaostala lista bi sledecem testu ekrana podmetnula drugu mrezu.
+Private Sub RadniStoPocetno()
+    Dim prev As String
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
+    modScrDokumenti.Scr_OtpOtkazi
+    modScrDokumenti.Scr_Event "lsSVI", "Click"
+    modOtkupUI.ActiveMode = prev
+End Sub
+
+' Red liste ciji je ID (poslednja deklarisana kolona) jednak datom; 0 = nema.
+Private Function RsRedSaID(ByVal rez As Variant, ByVal id As String) As Long
+    Dim a As Variant, i As Long, c As Long
+    If Not IsArray(rez) Then Exit Function
+    a = rez(1)
+    If Not IsArray(a) Then Exit Function
+    c = UBound(rez(0)) + 1
+    For i = 1 To CLng(rez(2))
+        If StrComp(CStr(a(i, c)), id, vbTextCompare) = 0 Then
+            RsRedSaID = i
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Posle odbijenog storna (pisac, u telu testa): odbijanje je POTPUNO, a F8 isti
 ' razlog kaze pre potvrde i imenuje broj otpremnice.
