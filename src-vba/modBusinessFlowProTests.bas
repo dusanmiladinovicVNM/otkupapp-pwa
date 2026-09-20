@@ -289,6 +289,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzdavanjeCitaIzvorStrogo
     Test_OTP_SpecifikacijaBlokova
     Test_OTP_NevezaniBlokovi
+    Test_OTP_IspravkaIzdate
+    Test_OTP_KapijaBlokaPoKanonu
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -5483,7 +5485,7 @@ End Sub
 ' NOV NACRT NIJE ZAMENA ZA STORNIRANU OTPREMNICU (S3a, review #361 P1).
 '
 ' Do S3a je F2 posle upisa zvao ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok
-' nije zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+' nije zatvaranje konteksta nego pisac STAROG modela (obrisan u S3c):
 ' preko ReassignOtkupToOtpremnica_TX upisuje Otkup.OtpremnicaID i BrojZbirne, pa
 ' rekalkulise zbirnu.
 '
@@ -6764,6 +6766,148 @@ EH:
     LogFatal "Test_OTP_NevezaniBlokovi", Err.Number, Err.description
 End Sub
 
+' ============================================================
+' S3c -- ISPRAVKA IZDATE OTPREMNICE: jedan potez, bez prozora.
+'
+' Stara se stornira, a nova nastaje kao NACRT sa istim zaglavljem, istim
+' ocekivanjem i istim blokovima -- sve u jednoj transakciji. Meri se i ono sto
+' se NE sme desiti: nacrt se ne ispravlja (njega menja izmena), broj se ne
+' nasledjuje (A9), a kad kapija padne posle storna, stara mora da ostane
+' AKTIVNA -- inace bi ispravka ostavila obezglavljen dokument, tacno ono zbog
+' cega je stari dvokorak morao da pamti pending kontekst.
+' ============================================================
+Private Sub Test_OTP_IspravkaIzdate()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, gr As String
+    scenario = NewScenarioCode("OTPISP")
+
+    Dim b1 As String, b2 As String, b3 As String
+    b1 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISPA-" & scenario), _
+                        OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    b2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISPB-" & scenario), _
+                        OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    b3 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISPC-" & scenario), _
+                        OtkStavke(25#, 100#, 2, 0#, 0#, 0))
+
+    Dim brStari As String, izdata As String, nacrt As String
+    brStari = TEST_PREFIX & "-OTP-ISPS-" & scenario
+    izdata = CreateOtpremnicaIzIzvora_TX(OtpHeader(brStari), Pr3Izvor(b1, b2), g)
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ISPN-" & scenario), _
+                                     OtpOcek(10#, 1#, 0#, 0#), g)
+    AssertTrue Len(izdata) > 0 And Len(nacrt) > 0 And Len(b3) > 0, _
+               "Ispravka: preduslovi napravljeni (" & g & ")"
+    If Len(izdata) = 0 Or Len(nacrt) = 0 Then GoTo Kraj
+
+    ' --- NACRT SE NE ISPRAVLJA: njega menja izmena nacrta, bez storna ---
+    AssertEquals "", modDokumenta.IspravkaOtpremnice_TX(nacrt, gr), _
+                 "Ispravka: nacrt se ne ispravlja"
+    AssertTrue InStr(1, gr, "IZDATA", vbTextCompare) > 0, _
+               "Ispravka: razlog kaze da se ispravlja samo izdata"
+    AssertEquals IZDATO_DRAFT, OtpPolje(nacrt, COL_TRACE_IZDATO_STATUS), _
+                 "Ispravka: odbijen nacrt ostaje nacrt"
+
+    ' --- ISPRAVKA IZDATE ---
+    Dim nova As String
+    nova = modDokumenta.IspravkaOtpremnice_TX(izdata, gr)
+    AssertTrue Len(nova) > 0, "Ispravka: izdata otpremnica ispravljena (" & gr & ")"
+    If Len(nova) = 0 Then GoTo Kraj
+
+    AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
+    AssertEquals IZDATO_DRAFT, OtpPolje(nova, COL_TRACE_IZDATO_STATUS), _
+                 "Ispravka: nova je NACRT"
+    AssertTrue OtpPolje(nova, COL_OTP_BROJ) <> brStari, "Ispravka: nova nosi NOV broj"
+    AssertTrue Len(OtpPolje(nova, COL_OTP_BROJ)) > 0, "Ispravka: nov broj nije prazan"
+
+    ' Trag ide po identitetu, ne po broju.
+    AssertEquals nova, OtpPolje(izdata, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "Ispravka: stara zna ko je zamenjuje"
+    AssertEquals izdata, OtpPolje(nova, COL_TRACE_ISPRAVKA_OD_ID), _
+                 "Ispravka: nova zna od koje je nastala"
+
+    ' Sastav: oba bloka su presla, i to po KANONU (tblOtpremnicaIzvori).
+    AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(nova).count), _
+                 "Ispravka: nova nosi oba bloka"
+    AssertEquals nova, modDokumenta.OtpremnicaZaOtkup(b1), "Ispravka: prvi blok je na novoj"
+    AssertEquals nova, modDokumenta.OtpremnicaZaOtkup(b2), "Ispravka: drugi blok je na novoj"
+
+    ' Ocekivanje je prepisano DOSLOVNO -- ne izvedeno ponovo iz izvora.
+    Dim prog As Object, kl As Object
+    Set prog = modDokumenta.GetOtpremnicaProgress(nova)
+    AssertTrue prog.Exists(KLASA_I), "Ispravka: nova ima ocekivanje klase I"
+    If prog.Exists(KLASA_I) Then
+        Set kl = prog(KLASA_I)
+        AssertEquals "100", CStr(kl("ocekivano")), "Ispravka: ocekivanje prepisano sa stare"
+        AssertEquals "0", CStr(kl("preostalo")), "Ispravka: nova je odmah puna (isti izvori)"
+    End If
+
+    ' --- PAD POSLE STORNA NE SME DA OSTAVI OBEZGLAVLJEN DOKUMENT ---
+    ' Stanica se kvari MIMO pisca, pa generator broja nema niz: ispravka pada
+    ' tek POSLE storna stare -- tacno na mestu gde je stari dvokorak ostavljao
+    ' storniranu otpremnicu bez zamene.
+    Dim izdata2 As String, hdr As Collection
+    izdata2 = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-ISPP-" & scenario), _
+                                          Pr3Izvor(b3, ""), g)
+    AssertTrue Len(izdata2) > 0, "Ispravka: druga izdata napravljena (" & g & ")"
+    If Len(izdata2) = 0 Then GoTo Kraj
+
+    Set hdr = FindRows(TBL_OTPREMNICA, COL_OTP_ID, izdata2)
+    If hdr.count = 1 Then
+        RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_STANICA, "STA-NEMA-CIFRE", _
+                          "Test_OTP_IspravkaIzdate"
+    End If
+    AssertEquals "", modDokumenta.IspravkaOtpremnice_TX(izdata2, gr), _
+                 "Ispravka: pokvareno zaglavlje ne pravi novu otpremnicu"
+    AssertTrue OtpPolje(izdata2, COL_STORNIRANO) <> "Da", _
+               "Ispravka: stara ostaje AKTIVNA kad ispravka padne"
+    AssertEquals izdata2, modDokumenta.OtpremnicaZaOtkup(b3), _
+                 "Ispravka: blok pale ispravke ostaje na svojoj otpremnici"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_IspravkaIzdate", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S3c -- kapija "blok je u aktivnoj otpremnici" cita KANON.
+'
+' BlockStornoDriftReason je do ovog koraka pitala Otkup.OtpremnicaID -- kolonu
+' koju od S3a ne pise nijedan zivi put. Kapija je zato uvek vracala "bezbedno
+' je", pa je cekiran blok izdate otpremnice prolazio kroz panel bez reci.
+' Ovde se meri da razlog STIZE i da imenuje bas tu otpremnicu.
+' ============================================================
+Private Sub Test_OTP_KapijaBlokaPoKanonu()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPKBL")
+
+    Dim uOtpremnici As String, slobodan As String, br As String
+    uOtpremnici = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-KBLA-" & scenario), _
+                                 OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    slobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-KBLB-" & scenario), _
+                              OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    br = TEST_PREFIX & "-OTP-KBL-" & scenario
+    AssertTrue Len(CreateOtpremnicaIzIzvora_TX(OtpHeader(br), Pr3Izvor(uOtpremnici, ""), g)) > 0, _
+               "Kapija bloka: izdata otpremnica napravljena (" & g & ")"
+
+    Dim vezan As Collection, bez As Collection
+    Set vezan = New Collection: vezan.Add uOtpremnici
+    Set bez = New Collection: bez.Add slobodan
+
+    AssertTrue InStr(1, modStornoFlow.BlockStornoDriftReason(FLOW_DOC_ZBIRNA, SV_MODE_DUPLI, vezan), _
+                     br, vbTextCompare) > 0, _
+               "Kapija bloka: razlog imenuje aktivnu otpremnicu"
+    AssertEquals "", modStornoFlow.BlockStornoDriftReason(FLOW_DOC_ZBIRNA, SV_MODE_DUPLI, bez), _
+                 "Kapija bloka: slobodan blok prolazi"
+    AssertEquals "", modStornoFlow.BlockStornoDriftReason(FLOW_DOC_ZBIRNA, SV_MODE_PONISTENJE, vezan), _
+                 "Kapija bloka: PONISTENJE i samo obara roditelja, pa blok prolazi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_KapijaBlokaPoKanonu", Err.Number, Err.description
+End Sub
 ' Polja ekrana F2 za izmenu nacrta -- isti kljucevi koje ljuska predaje
 ' Scr_Save; zaglavlje se prepisuje sa samog nacrta, menja se samo klasa I.
 Private Function PoljaF2IzNacrta(ByVal otpID As String, ByVal kolI As Double, _

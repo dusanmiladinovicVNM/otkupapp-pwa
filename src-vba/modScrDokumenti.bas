@@ -132,9 +132,13 @@ Public Function Scr_Radnje() As String
             ' Specifikacija (A-018, A-021): "2" znaci da radnja radi nad
             ' OZNACENIM redovima, a bez oznaka nad izabranim. "Po datumu"
             ' (A-019) ne trazi red -- stampa celu prikazanu listu.
+            ' Ispravka izdate (B-022) trazi red: radi nad TACNO jednim
+            ' dokumentom, pa oznake ne uzima -- dve otpremnice se ne
+            ' ispravljaju jednim potezom.
             Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
                          "spec:OTKUI_BTN_RED_SPEC:152:ghost:2|" & _
-                         "specdat:OTKUI_BTN_RED_SPECDAT:96:ghost:0"
+                         "specdat:OTKUI_BTN_RED_SPECDAT:96:ghost:0|" & _
+                         "ispravi:OTKUI_BTN_RED_ISPRAVI:88:danger:1"
         Case "NEVEZANI"
             ' Blok bez otpremnice se vezuje za AKTIVNI nacrt -- isti pisac kao
             ' posle unosa; bez aktivne otpremnice radnje nema.
@@ -679,12 +683,60 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "specdat"
             SpecPoDatumu
 
+        Case "ispravi"
+            RowAction = IspraviIzdatu(red)
+
         Case Else
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Ispravka izdate otpremnice (B-022): jedan potez -- stara se stornira, a nova
+' nastaje kao nacrt sa istim zaglavljem, ocekivanjem i blokovima. Posle toga je
+' nova AKTIVNA otpremnica, pa operater odmah radi nad njom (doda ili ukloni
+' blok, doradi ocekivanje u F2, izda).
+'
+' Identitet je OtpremnicaID iz nevidljive kolone reda, ne broj -- isto pravilo
+' kao specifikacija i storno.
+Private Function IspraviIzdatu(ByVal red As Long) As Boolean
+    Dim oid As String, stariBroj As String, greska As String
+    Dim novaID As String, razlog As String
+
+    If red <= 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    oid = Trim$(CStr(modOtkupUI.GridCell(red, UBound(OtpGridCols()) + 1)))
+    If Len(oid) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+        Exit Function
+    End If
+    stariBroj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+
+    If MsgBox(Poruka("OTKUI_ASK_ISPRAVI") & " " & stariBroj & _
+              Poruka("OTKUI_ASK_ISPRAVI2"), vbQuestion + vbYesNo, _
+              APP_NAME) = vbNo Then Exit Function
+
+    novaID = modDokumenta.IspravkaOtpremnice_TX(oid, greska)
+    If Len(novaID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_ISPRAVI") & " " & greska, True
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    IspraviIzdatu = True
+
+    ' Nova je nacrt, pa sme da bude aktivna. Ako izbor ne uspe, ispravka je
+    ' ipak gotova -- razlog se kaze, a podaci se ne diraju.
+    razlog = AktivirajOtpremnicu(novaID)
+    If Len(razlog) > 0 Then
+        modOtkupUI.ShowToast razlog, True
+        Exit Function
+    End If
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_ISPRAVLJENA") & " " & mOtpBroj, False
 End Function
 
 '--------------------------------------- SPECIFIKACIJA BLOKOVA (A-018, A-019)

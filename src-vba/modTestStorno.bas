@@ -95,17 +95,13 @@ Public Sub RunStornoTestSuite()
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
-    T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete
     T12_ReversCompleteTraziAktivanNoviRevers
     T13_ReversCompleteSaAktivnimNovimReversom
     T14_AutoCompleteNeBiraLatestKadImaVisePending
     T15_PonistenjeUvekTraziPotvrdu
-    T16_DupliOtpremniceOslobadjaBlokove
     T17_PonistenjeZbirnaHladnjacaKaskada
     T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu
     T19_DupliVsPonistenjeZbirnaOtpremnice
-    T21_PonistenjeOtpremniceJedinaKaskadaCeoTok
-    T22_SimpleStornoOtpremniceNeOstavljaZbirnu00
     T23_StornoIzvodaRemapVracaStavkeUObradu
     T24_StornoIzvodaReimportOslobadjaPonovniUvoz
     T25_AvansSplitNasledjujeMarkerIPada
@@ -326,65 +322,21 @@ Private Sub T10_SmartTriggerGate()
     Const S As String = "T10 smart trigger gate: "
 
     SeedZbirna "SVT-Z10", "I", 100, 10
-    SeedOtpremnica "SVT-OA10", "SVT-Z10", "I", 100, 10
 
-    ' Bez prijemnice/paleta -> otpremnica NE trazi dijalog (obican storno).
-    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-OA10"), _
-        S & "otpremnica bez nizvodnog toka -> False"
+    ' Bez prijemnice/paleta -> zbirna NE trazi dijalog (obican storno).
+    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, "SVT-Z10"), _
+        S & "zbirna bez nizvodnog toka -> False"
 
-    ' Dodaj prijemnicu preko zbirne -> sada TRAZI dijalog (odluka o prijemnici).
+    ' Dodaj prijemnicu -> sada TRAZI dijalog (odluka o prijemnici).
+    ' Otpremnica u ovom okviru vise ne postoji (S3c): njen storno je obican, a
+    ' ispravka je jedan potez u F1.
     SeedPrijemnica "SVT-P10", "SVT-Z10", "I", 100, 10
-    Chk modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-OA10"), _
-        S & "otpremnica sa prijemnicom -> True (eskalira na dijalog)"
     Chk modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, "SVT-Z10"), _
-        S & "zbirna sa prijemnicom -> True"
+        S & "zbirna sa prijemnicom -> True (eskalira na dijalog)"
 
     ' Revers nikad ne trazi dijalog (list, bez nizvodnog toka).
     Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_REVERS, "SVT-R10", DOK_TIP_OM_IZLAZ_KOOP), _
         S & "revers -> uvek False (nema lanca)"
-End Sub
-
-' ============================================================
-' T11 - ISPRAVKA otpremnice: prevezuje otkupne listove, prijemnicu I paleta-stavke
-' na novu zbirnu; stara zbirna se STORNIRA (ne ostaje aktivna 0/0). Regres test.
-' ============================================================
-Private Sub T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete()
-    Const S As String = "T11 ispravka otpremnice prevezuje prijemnicu/palete: "
-
-    ' Stara: otpremnica OA11 (kg 100) u zbirni Z11 + otkupni list + prijemnica + paleta-stavka.
-    SeedZbirna "SVT-Z11", "I", 100, 10
-    SeedOtpremnica "SVT-OA11", "SVT-Z11", "I", 100, 10
-    SeedOtkupBlok "SVT-BLK11", "SVT-OA11-ID-I", "SVT-Z11"
-    SeedPrijemnica "SVT-P11", "SVT-Z11", "I", 100, 10
-    SeedPaletaStavka "SVT-PS11", "SVT-P11", "SVT-Z11", "I", 100, 10
-
-    ' Faza 1: ISPRAVKA_ODMAH -> storno stare otpremnice + context.
-    Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OA11", SV_MODE_ISPRAVKA)
-    Chk CBool(res("needsForm")), S & "ISPRAVKA trazi novu otpremnicu"
-    Dim cid As String: cid = CStr(res("correctionID"))
-
-    ' Operater snima NOVU otpremnicu (manji kg 90) sa NOVOM zbirnom (malina 1:1).
-    SeedOtpremnica "SVT-OB11", "SVT-Z11B", "I", 90, 9
-    SeedZbirna "SVT-Z11B", "I", 0, 0
-
-    ' Faza 2: complete -> prevezi blok + prijemnicu/palete, recalc nove, storno stare.
-    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, "SVT-OB11")
-    Chk CBool(res("success")), S & "CompleteOtpremnicaIspravka uspeo"
-
-    ' otkupni listovi na novoj otpremnici
-    ChkEq OtkOtpremnicaID("SVT-BLK11"), "SVT-OB11-ID-I", S & "otkupni list prevezan na novu otpremnicu"
-    ' nova zbirna konzistentna (= zbir svojih otpremnica = 90)
-    Chk modDokumentInvariant.IsZbirnaConsistent("SVT-Z11B"), S & "nova zbirna = zbir otpremnica (90)"
-    ' aktivna prijemnica ima BrojZbirne = nova zbirna
-    ChkEq PrjBrojZbirne("SVT-P11"), "SVT-Z11B", S & "prijemnica.BrojZbirne = nova zbirna"
-    ' paletaStavka ima BrojZbirne = nova zbirna
-    ChkEq PalsBrojZbirne("SVT-PS11"), "SVT-Z11B", S & "paletaStavka.BrojZbirne = nova zbirna"
-    ' stara zbirna NE ostaje aktivna 0/0 -> stornirana
-    Chk Not ZbirnaPostoji("SVT-Z11"), S & "stara zbirna STORNIRANA (ne aktivna 0/0)"
-    ' context COMPLETED (jer je downstream relink uspeo)
-    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
-        S & "context COMPLETED (downstream relink uspeo)"
 End Sub
 
 ' ============================================================
@@ -648,54 +600,28 @@ End Sub
 ' ============================================================
 ' T15 - PONISTENJE UVEK trazi svesnu potvrdu (blocked) pre nego sto bilo sta uradi,
 ' cak i bez zavisnih dokumenata; sa forceConfirm se izvrsava. (Razlika od DUPLI.)
-' NAPOMENA: ovo je BUSINESS-API garancija (RunOtpremnicaCorrection/RunZbirnaCorrection).
-' UI (frmDokumenta) za dokument BEZ nizvodnog toka ide smart-trigger shortcut na
-' obican storno (RunSimpleStorno*) i ne prikazuje 4-mode dijalog -- svesna odluka.
+' NAPOMENA: ovo je BUSINESS-API garancija (RunZbirnaCorrection). Meri se nad
+' ZBIRNOM: otpremnica je iz okvira izasla u S3c, a tvrdnja je o okviru.
+' UI (ekran STORNO) za dokument BEZ nizvodnog toka ide smart-trigger shortcut na
+' obican storno i ne prikazuje 4-mode dijalog -- svesna odluka.
 ' ============================================================
 Private Sub T15_PonistenjeUvekTraziPotvrdu()
     Const S As String = "T15 ponistenje uvek trazi potvrdu: "
 
-    ' Lone otpremnica (zbirna ne postoji) -> nema zavisnih.
-    SeedOtpremnica "SVT-OP15", "SVT-Z15-NEMA", "I", 50, 5
+    ' Zbirna bez ijedne otpremnice -> nema zavisnih.
+    SeedZbirna "SVT-Z15", "I", 50, 5
 
     ' Bez potvrde -> mora BLOKIRATI (prikaz posledica), nista ne dira.
     Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OP15", SV_MODE_PONISTENJE)
+    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z15", SV_MODE_PONISTENJE)
     Chk CBool(res("blocked")), S & "PONISTENJE blokira dok se ne potvrdi (i bez zavisnih)"
     Chk Not CBool(res("success")), S & "nista nije izvrseno pre potvrde"
-    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OP15", COL_OTP_ID) <> "", _
-        S & "otpremnica jos aktivna (nije stornirana)"
+    Chk ZbirnaPostoji("SVT-Z15"), S & "zbirna jos aktivna (nije stornirana)"
 
     ' Sa svesnom potvrdom (forceConfirm) -> izvrsava se.
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OP15", SV_MODE_PONISTENJE, True)
+    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z15", SV_MODE_PONISTENJE, True)
     Chk CBool(res("success")), S & "sa potvrdom (forceConfirm) ponistava"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OP15", COL_OTP_ID), "", _
-        S & "otpremnica sada stornirana"
-End Sub
-
-' ============================================================
-' T16 - DUPLI otpremnica: storno + OSLOBODI otkup blokove (za reveze) + NE dira
-' prijemnicu (nije kaskada); prazna zbirna -> STORNO (ne aktivna 0/0).
-' ============================================================
-Private Sub T16_DupliOtpremniceOslobadjaBlokove()
-    Const S As String = "T16 DUPLI otpremnica oslobadja blokove: "
-
-    SeedZbirna "SVT-Z16", "I", 100, 10, HLAD_KUP
-    SeedOtpremnica "SVT-O16", "SVT-Z16", "I", 100, 10
-    SeedOtkupBlok "SVT-BLK16", "SVT-O16-ID-I", "SVT-Z16"
-    SeedPrijemnica "SVT-P16", "SVT-Z16", "I", 100, 10
-
-    Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-O16", SV_MODE_DUPLI)
-    Chk CBool(res("success")), S & "DUPLI uspeo"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O16", COL_OTP_ID), "", S & "otpremnica stornirana"
-    ' blok OSLOBODJEN (OtpremnicaID prazan) ali i dalje AKTIVAN (realna kupovina).
-    ChkEq OtkOtpremnicaID("SVT-BLK16"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
-    Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK16", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
-    ' DUPLI NE kaskadira -> prijemnica ostaje aktivna (osirocena za reveze).
-    Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P16", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (DUPLI ne kaskadira)"
-    ' prazna zbirna -> STORNO (nulling fix), NE aktivna 0/0.
-    Chk Not ZbirnaPostoji("SVT-Z16"), S & "prazna zbirna STORNIRANA (ne aktivna 0/0)"
+    Chk Not ZbirnaPostoji("SVT-Z15"), S & "zbirna sada stornirana"
 End Sub
 
 ' ============================================================
@@ -775,60 +701,6 @@ Private Sub T19_DupliVsPonistenjeZbirnaOtpremnice()
     SeedOtpremnica "SVT-O19B", "SVT-Z19B", "I", 50, 5
     modStornoFlow.RunZbirnaCorrection "SVT-Z19B", SV_MODE_PONISTENJE, True
     ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O19B", COL_OTP_ID), "", S & "PONISTENJE: otpremnica STORNIRANA"
-End Sub
-
-' ============================================================
-' T21 - malina 1:1 (blok = okidac celog lanca; stanica=hladnjaca -> NIKAD dve
-' otpremnice na zbirnoj / dva bloka na otpremnici): PONISTENJE JEDINE otpremnice
-' ekskluzivno drzi zbirnu -> kaskada celog toka (zbirna+prijemnica+palete),
-' blok oslobodjen (aktivan). Pokriva sole-owner PONISTENJE granu za otpremnicu.
-' ============================================================
-Private Sub T21_PonistenjeOtpremniceJedinaKaskadaCeoTok()
-    Const S As String = "T21 PONISTENJE jedine otpremnice (malina 1:1) kaskada: "
-
-    SeedZbirna "SVT-Z21", "I", 100, 10, HLAD_KUP
-    SeedOtpremnica "SVT-O21", "SVT-Z21", "I", 100, 10
-    SeedOtkupBlok "SVT-BLK21", "SVT-O21-ID-I", "SVT-Z21"
-    SeedPrijemnica "SVT-P21", "SVT-Z21", "I", 100, 10
-    SeedPaleta "SVT-PAL21", 50, 100, 10, 50, PAL_STATUS_ZATVORENA
-    SeedPaletaStavka "SVT-PS21", "SVT-P21", "SVT-Z21", "I", 100, 10, "SVT-PAL21", 50
-
-    Dim res As Object
-    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-O21", SV_MODE_PONISTENJE, True)
-    Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O21", COL_OTP_ID), "", S & "otpremnica stornirana"
-    Chk Not ZbirnaPostoji("SVT-Z21"), S & "zbirna stornirana (jedina otpremnica -> ceo tok)"
-    ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P21", COL_PRJ_ID), "", S & "prijemnica stornirana (kaskada)"
-    ChkEq PalsStornirano("SVT-PS21"), "Da", S & "paletna stavka skinuta"
-    ChkEq PalStornirano("SVT-PAL21"), "Da", S & "prazna paleta STORNIRANA (ne ostaje puna)"
-    ' blok OSLOBODJEN ali AKTIVAN (realna kupovina, za reveze).
-    ChkEq OtkOtpremnicaID("SVT-BLK21"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
-    Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK21", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
-End Sub
-
-' ============================================================
-' T22 - SIMPLE storno otpremnice (bez nizvodnog toka) NE ostavlja aktivnu zbirnu
-' 0/0: jedina otpremnica, bez prijemnice/paleta -> smart trigger ide simple path;
-' prazna zbirna se STORNIRA (nulling fix i u simple putanji, dosledno DUPLI/
-' PONISTENJE grani). Regres za review tacku 1.
-' ============================================================
-Private Sub T22_SimpleStornoOtpremniceNeOstavljaZbirnu00()
-    Const S As String = "T22 simple storno otpremnice ne ostavlja zbirnu 0/0: "
-
-    ' Eksterni kupac + MALINA_MODE=NO (suite) -> nema auto/malina kaskade zbirne;
-    ' zbirnu mora oboriti sam framework (RecalcOrStornoEmptyZbirna_TX).
-    SeedZbirna "SVT-Z22", "I", 100, 10, "SVT-EXT-KUPAC"
-    SeedOtpremnica "SVT-O22", "SVT-Z22", "I", 100, 10
-
-    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-O22"), _
-        S & "CorrectionNeedsDialog = False (nema nizvodnog toka -> simple path)"
-
-    Dim res As Object
-    Set res = modStornoFlow.RunSimpleStornoOtpremnica("SVT-O22")
-    Chk CBool(res("success")), S & "RunSimpleStornoOtpremnica uspeo"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O22", COL_OTP_ID), "", S & "otpremnica stornirana"
-    ' KLJUC: zbirna NIJE ostavljena aktivna 0/0 -> stornirana (nema vise otpremnica).
-    Chk Not ZbirnaPostoji("SVT-Z22"), S & "prazna zbirna STORNIRANA (ne aktivna 0/0)"
 End Sub
 
 ' ============================================================

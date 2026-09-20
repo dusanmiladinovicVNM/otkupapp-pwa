@@ -396,8 +396,10 @@ End Function
 '                         potvrdu)
 '   RESI_KASNIJE          persistentan recovery zapis, ne samo poruka
 '
-' Framework poznaje CETIRI tipa (otpremnica, zbirna, prijemnica, revers).
-' Ostalih pet (otkup, isplate, uplate, faktura, izvod) nemaju nizvodni tok
+' Framework poznaje TRI tipa (zbirna, prijemnica, revers); otpremnica je
+' izasla iz njega u #362, a njen kod je obrisan u S3c.
+' Ostalih sest (otkup, otpremnica, isplate, uplate, faktura, izvod) nemaju
+' nizvodni tok
 ' o kome se odlucuje, pa im je storno obican - kao i u legacy formi, gde
 ' TryRunCorrectionFramework za njih vraca False.
 '
@@ -480,7 +482,6 @@ Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function
     Select Case dt
-        Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm, docID)
         Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)
         Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode, docID)
         ' neDiraj = "ne diraj palete" (samo prijemnica, DUPLI/PONISTENJE):

@@ -3502,6 +3502,67 @@ kooperant, stanica, vrsta, sorta) direktno iz `tblOtkup`, dok stavke idu kroz st
 `BrojDokumenta` tako završi kao prazan broj bloka na papiru umesto kao pad. Pravila pisca se ne prepisuju u
 `modPrint` — traži se (ili gradi) kanonski strog čitač zaglavlja otkupa; v. §15.
 
+### 14.18) S3c — ispravka izdate otpremnice u jednom potezu, brisanje okvira modova (20.09.2026)
+
+**Odluke operatera (20.09.2026), pre koda:**
+
+1. **Ispravka izdate otpremnice je JEDNA radnja i JEDNA transakcija.** U F1, nad izabranom izdatom otpremnicom:
+   storno stare + nov **NACRT** koji nasleđuje zaglavlje, očekivanje i sve izvore. Operater doradi očekivanje i izda.
+2. **DUPLI, PONIŠTENJE i REŠI KASNIJE za otpremnicu se brišu.** DUPLI u kanonu radi tačno ono što i običan storno
+   (blokovi se oslobađaju sami i vide se u listi „Bez otpremnice“), a PONIŠTENJE i REŠI KASNIJE nemaju o čemu da
+   odluče dok F3 (S4) i F4 (S6) ne postoje — vraćaju se tada, nad kanonom.
+
+**Zašto jedan potez, a ne stari dvokorak.** Stari tok je stornirao odmah, pa čekao da operater snimi zamenu:
+između ta dva koraka je postojao prozor u kome je stara oborena a nove nema. Zbog tog prozora su i postojali
+pending kontekst (`tblStornoVeze`), završetak po snimanju (B-037/B-038) i MANUAL zadaci (B-039) za slučaj da se u
+međuvremenu nešto pomeri. U jednoj transakciji prozora nema: padne li bilo koja kapija, ništa nije stornirano.
+Zato je B-039 `INTENTIONALLY REMOVED`, a ne prevedeno.
+
+**Šta nova otpremnica nasleđuje, a šta ne**
+
+| Nasleđuje | Ne nasleđuje |
+|---|---|
+| datum, stanica, vozač, kultura, tip ambalaže | **broj** — storno ne oslobađa broj (A9), nova dobija sledeći slobodan iz niza (stanica, dan) |
+| očekivanje **doslovno** (klasa, količina, gajbe, predlog cene) | status — nova je NACRT, ne izdata |
+| sve izvore (članstvo 1:1, kroz `OtpUpisiClanstvo` i njegove kapije) | knjiženje ambalaže — storno stare ga vraća, nova ga knjiži tek pri izdavanju |
+
+Očekivanje se **prepisuje**, ne izvodi iz izvora: izjednačavanje očekivanog sa povezanim odbijeno je još u
+S3b-2a (očekivanje bi postalo formalnost). Ako je baš očekivanje bilo pogrešno, menja se u F2 — nacrt se ispravlja
+izmenom, a ne novim stornom.
+
+Trag ide po **identitetu**: `tblOtpremnica` dobija `IspravkaOdID` i `ZamenjenSaID` (isti par koji `tblOtkup` ima od
+S1e). Stare kolone `IspravkaOd`/`ZamenjenSa` nose **broj** i niko ih više ne piše — brišu se u S3e.
+
+**Nalaz usput: kapija koja je čitala mrtvu vezu.** `modStornoFlow.BlockStornoDriftReason` odbija storno čekiranog
+bloka koji je u aktivnoj otpremnici. Pitala je `Otkup.OtpremnicaID` — kolonu koju od S3a **ne piše nijedan živi
+put** — pa je uvek vraćala „bezbedno je“ i odbijanje nikad nije stizalo do operatera. Sada čita kanon
+(`modDokumenta.OtpremnicaZaOtkup`) i na grešci strogog čitača odgovara **fail-closed**.
+
+**Obrisano (okvir modova za otpremnicu, ~800 linija):** `RunOtpremnicaCorrection`, `CompleteOtpremnicaIspravka`,
+`RunSimpleStornoOtpremnica`, `StornoOtpremnicaBrojAtomic_TX`, `StornoOtpremnicaByBroj_TX`, `ScanOtpremnica`,
+`GetOtpremnicaIDsByBroj`, `PreviewOtpremnica`, `SumActiveOtpStavke` i sve grane `FLOW_DOC_OTPREMNICA` u uvidu
+(`GetChainFlags`, `BuildPonistenjePosledice`, `CorrectionNeedsDialog`, `GetStornoChainRows`, `ActiveBlocksForFlow`,
+`modStornoImpact`). Tip `FLOW_DOC_OTPREMNICA` **ostaje** — F8 je i dalje lista i stornira otpremnicu (B-014).
+
+**Testovi i kapije**
+
+- `Test_OTP_IspravkaIzdate` — nacrt se odbija po imenu; izdata daje nov NACRT sa **novim** brojem, istim
+  očekivanjem i oba bloka; trag `IspravkaOdID`/`ZamenjenSaID` po identitetu; **pad posle storna ostavlja staru
+  AKTIVNOM** (zaglavlje pokvareno mimo pisca, pa generator broja nema niz).
+- `Test_OTP_KapijaBlokaPoKanonu` — razlog imenuje aktivnu otpremnicu, slobodan blok prolazi, PONIŠTENJE prolazi.
+- Sabotaže: `ispravka-nacrt-prolazi`, `ispravka-bez-clanstva`, `ispravka-ne-stornira-staru`, `ispravka-trag-po-broju`,
+  `ispravka-pad-ostavlja-storniranu`, `kapija-bloka-po-staroj-vezi`. Obrisano osam sabotaža čija je meta nestala
+  (ukupno **511**).
+- Testovi obrisanih modova su **obrisani, ne prepravljeni**: `modTest` 201 → **197** (registar prenumerisan),
+  `modTestStorno` bez T11/T16/T21/T22. Dve tvrdnje o samom okviru (uvid nad nestalim identitetom, tekst efekta iz
+  kataloga) **premerene su nad zbirnom** — okvir je i dalje njen, a tvrdnja nije bila o otpremnici.
+- Prag `otp_linija` 36 → **38**: ispravka prepisuje zaglavlje, pa čita `KulturaID` i `TipAmbalaze`. Obe činjenice
+  ostaju u kanonu i posle S3e; grupa ih ne razlikuje od osuđenih linijskih polja dok se ne podeli (§15).
+- Šema: `tblOtpremnica` + `IspravkaOdID`, `ZamenjenSaID` (na kraj). **Zatečena sveska ih dobija kroz self-heal.**
+
+**Van opsega, zapisano:** vrsta „izgubljen blok“ na ekranu OPORAVAK (B-041) i njen brojač (B-042) idu u **S3c-2** —
+čitač (`modDokumenta.NevezaniOtkupi`) već postoji, ali je OPORAVAK svoja površina i ne staje uz ovaj rez.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
