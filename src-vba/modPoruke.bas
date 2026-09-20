@@ -1438,6 +1438,14 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDK_KOOPERANT", "KOOPERANT"
     UpsertRow lo, existing, "OTKUI_HDK_IZNOS", "IZNOS RSD"
     UpsertRow lo, existing, "OTKUI_HD_OM", "OTKUPNO MESTO"
+    ' --- S3b-2b: specifikacija blokova i blokovi bez otpremnice ---
+    UpsertRow lo, existing, "OTKUI_SEG_LS_NEVEZ", "Bez otpremnice"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_NEVEZANI", "Blokovi bez otpremnice"
+    UpsertRow lo, existing, "OTKUI_HDN_BILA_U", "BILA U"
+    UpsertRow lo, existing, "OTKUI_ERR_SPEC_OPSEG", ChrW(10007) & " Unesi opseg datuma (OD i DO) " & ChrW(8212) & " specifikacija po datumu " & ChrW(353) & "tampa ceo opseg"
+    UpsertRow lo, existing, "OTKUI_ERR_SPEC_NACRT", ChrW(10007) & " Nijedna izabrana otpremnica nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa"
+    UpsertRow lo, existing, "OTKUI_MSG_SPEC_NACRT", ChrW(183) & " nacrt se ne " & ChrW(353) & "tampa, presko" & ChrW(269) & "eno:"
+    UpsertRow lo, existing, "OTKUI_ERR_SPEC", ChrW(10007) & " Specifikacija nije napravljena:"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"

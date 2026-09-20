@@ -3528,8 +3528,11 @@ End Sub
 
 ' Sastav otpremnice po KANONU (tblOtpremnicaIzvori), redom upisa.
 '
-' STRIKT LOADER, i to je jedini put do clanstva -- koriste ga i read-model
-' (GetOtpremnicaProgress) i sva tri pisca. Razlog: citalac koji tiho normalizuje
+' STRIKT LOADER, i to je jedini put do clanstva JEDNOG dokumenta -- koriste ga i
+' read-model (GetOtpremnicaProgress) i sva tri pisca. Isti ugovor nad CELOM
+' tabelom drzi AktivnoOtpClanstvoPoKanonu, koju ova funkcija zove na kraju (i
+' koju citaju bulk citaoci); pravilo je jedno, mesta izvrsavanja dva.
+' Razlog: citalac koji tiho normalizuje
 ' korupciju (dupli par -> jedan clan, veza na nepostojeci otkup -> manji zbir)
 ' pokazuje operateru brojeve koji izgledaju ispravno, a finalizacija istu tu
 ' korupciju prijavi tek sat kasnije. Ugovor mora biti isti na oba mesta.
@@ -3631,6 +3634,113 @@ Public Function IzvoriOtpremnice(ByVal otpremnicaID As String) As Collection
     Set IzvoriOtpremnice = OtpClanovi(Trim$(otpremnicaID), "IzvoriOtpremnice")
 End Function
 
+' Kanonsko clanstvo SVIH aktivnih otpremnica: UCase(OtkupID) -> OtpremnicaID.
+'
+' Javni ulaz za citaoce koji pitaju za MNOGO izvora odjednom (specifikacija
+' blokova, S3b-2b): OtpremnicaZaOtkup po izvoru bi za svaki prosao celu tabelu
+' clanstva. Isti UGOVOR kao OtpClanovi nad jednim dokumentom -- v. kapije u
+' AktivnoOtpClanstvoPoKanonu.
+Public Function AktivnoClanstvoOtpremnica() As Object
+    Set AktivnoClanstvoOtpremnica = AktivnoOtpClanstvoPoKanonu("AktivnoClanstvoOtpremnica")
+End Function
+
+' Otkupi BEZ AKTIVNE OTPREMNICE (A-025, S3b-2b; odluka operatera 19.09.2026:
+' lista "nevezanih", ne samo "izgubljenih").
+'
+' Kljuc: UCase(OtkupID) -> brojevi STORNIRANIH otpremnica ciji je bio izvor,
+' spojeni ", " -- ili "" kad ga storno nije oslobodio. Samo nestornirani otkupi.
+'
+' "Vezan" znaci ISTO sto i za kapiju storna otkupa i za pisca izvora: clan
+' aktivne otpremnice po AktivnoOtpClanstvoPoKanonu. Jedan strog citac, pa lista
+' ne moze da ponudi za vezivanje otkup koji pisac smatra zauzetim. Blok ostaje
+' bez otpremnice na tri nacina: upisan bez izabrane otpremnice, uklonjen iz
+' nacrta, oslobodjen stornom otpremnice -- storno ne brise clanstvo, pa ono
+' ostaje kao istorija ("bila u").
+Public Function NevezaniOtkupi() As Object
+    Const SRC As String = "NevezaniOtkupi"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    Set NevezaniOtkupi = res
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
+
+    Dim aktivno As Object, bila As Object
+    Set aktivno = AktivnoOtpClanstvoPoKanonu(SRC)
+    Set bila = BivseOtpremniceIzvora(SRC)
+
+    Dim cId As Long, cSto As Long, i As Long, oid As String
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(otk, 1)
+        oid = UCase$(Trim$(NzToText(otk(i, cId))))
+        If Len(oid) > 0 Then
+            If StrComp(Trim$(NzToText(otk(i, cSto))), "Da", vbTextCompare) <> 0 Then
+                If Not aktivno.Exists(oid) Then
+                    If bila.Exists(oid) Then
+                        res(oid) = CStr(bila(oid))
+                    Else
+                        res(oid) = ""
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' UCase(OtkupID) -> brojevi STORNIRANIH otpremnica u cijem je sastavu bio,
+' redom clanstva, spojeni ", ". Istorija za kolonu "bila u", ne veza: aktivno
+' clanstvo cita samo AktivnoOtpClanstvoPoKanonu.
+Private Function BivseOtpremniceIzvora(ByVal src As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BivseOtpremniceIzvora = d
+
+    Dim izv As Variant, otp As Variant
+    izv = GetTableData(TBL_OTPREMNICA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then Exit Function
+
+    ' Broj STORNIRANE otpremnice po ID-u.
+    Dim brStor As Object
+    Set brStor = CreateObject("Scripting.Dictionary")
+    Dim oId As Long, oBr As Long, oSto As Long, j As Long
+    oId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, src)
+    oBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, src)
+    oSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, src)
+    For j = 1 To UBound(otp, 1)
+        If StrComp(Trim$(NzToText(otp(j, oSto))), "Da", vbTextCompare) = 0 Then
+            brStor(UCase$(Trim$(NzToText(otp(j, oId))))) = Trim$(NzToText(otp(j, oBr)))
+        End If
+    Next j
+    If brStor.count = 0 Then Exit Function
+
+    ' Par (otkup, otpremnica) se broji jednom -- isti broj dve razlicite
+    ' stornirane otpremnice ostaje dva puta, jer su to dva dokumenta.
+    Dim vidjen As Object
+    Set vidjen = CreateObject("Scripting.Dictionary")
+    Dim cOtp As Long, cOtk As Long, i As Long, otpU As String, otkU As String
+    cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, src)
+    cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src)
+    For i = 1 To UBound(izv, 1)
+        otpU = UCase$(Trim$(NzToText(izv(i, cOtp))))
+        otkU = UCase$(Trim$(NzToText(izv(i, cOtk))))
+        If Len(otkU) > 0 And brStor.Exists(otpU) Then
+            If Not vidjen.Exists(otkU & "|" & otpU) Then
+                vidjen.Add otkU & "|" & otpU, True
+                If d.Exists(otkU) Then
+                    d(otkU) = CStr(d(otkU)) & ", " & CStr(brStor(otpU))
+                Else
+                    d(otkU) = CStr(brStor(otpU))
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 ' Da li je otpremnica IZDATA (nije DRAFT).
 '
 ' Prazan status NIJE "izdato": nov pisac ga upisuje eksplicitno (S4.1e), pa je
@@ -3675,9 +3785,23 @@ End Function
 
 ' OtkupID -> OtpremnicaID, za sve NEstornirane otpremnice.
 '
-' Dva aktivna zapisa za isti otkup su tvrda greska integriteta, ne stanje koje
-' se normalizuje: citalac koji bi tiho uzeo poslednji pretvorio bi korupciju u
-' odgovor. Isti obrazac kao AktivnoClanstvoPoKanonu za zbirnu.
+' STROG LOADER CELOG CLANSTVA, sa ISTIM ugovorom koji OtpClanovi drzi nad jednim
+' dokumentom (review #364, P1):
+'   - clanstvo bez OtpremnicaID-a ili bez OtkupID-a,
+'   - roditelj koji ne postoji tacno jednom,
+'   - dete koje ne postoji tacno jednom,
+'   - isti par (otpremnica, otkup) dvaput,
+'   - otkup u dve AKTIVNE otpremnice
+' su tvrde greske, ne stanja koja se normalizuju.
+'
+' Do S3b-2b je ovaj prolaz bio SLABIJI od citaca jednog dokumenta: prazne ID-eve
+' je preskakao, a postojanje dokumenata nije proveravao. Korupcija je tako
+' postajala UREDAN poslovni odgovor -- specifikacija bi nad clanstvom na
+' nepostojeci otkup odstampala PDF bez tog izvora (validan sibling zadovoljava
+' kapiju "izdata bez izvora"), a lista nevezanih bi slobodan blok sa clanstvom
+' na nepostojecu otpremnicu proglasila zauzetim i sklonila ga. Citalac koji
+' korupciju pretvori u naizgled ispravan odgovor je tacno ono sto ovaj refaktor
+' uklanja, pa ugovor stoji na JEDNOM mestu -- ovde, a ne u svakom pozivaocu.
 Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
     Dim mapa As Object
     Set mapa = CreateObject("Scripting.Dictionary")
@@ -3691,25 +3815,95 @@ Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
     cOtp = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, src)
     cOtk = RequireColumnIndex(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, src)
 
-    Dim stornirane As Object
+    ' Brojevi redova po ID-u: jedan prolaz po tabeli, umesto RequireTacnoJedan
+    ' po clanu (to bi bio pun sken tabele za svaki red clanstva).
+    Dim brojOtp As Object, brojOtk As Object, stornirane As Object
+    Set brojOtp = BrojRedovaPoID(TBL_OTPREMNICA, COL_OTP_ID, src)
+    Set brojOtk = BrojRedovaPoID(TBL_OTKUP, COL_OTK_ID, src)
     Set stornirane = StorniraneOtpremnice()
 
-    Dim i As Long, otpID As String, otkupID As String
+    Dim vidjenPar As Object
+    Set vidjenPar = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long, otpID As String, otkupID As String, par As String
     For i = 1 To UBound(izv, 1)
         otpID = Trim$(NzToText(izv(i, cOtp)))
         otkupID = Trim$(NzToText(izv(i, cOtk)))
-        If Len(otpID) > 0 And Len(otkupID) > 0 Then
-            If Not stornirane.Exists(UCase$(otpID)) Then
-                If mapa.Exists(UCase$(otkupID)) Then
-                    Err.Raise vbObjectError + 1305, src, _
-                              "Kanonsko clanstvo je nekonzistentno: otkup " & _
-                              otkupID & " ima dva aktivna zapisa clanstva (" & _
-                              CStr(mapa(UCase$(otkupID))) & " i " & otpID & ")."
-                End If
-                mapa.Add UCase$(otkupID), otpID
+
+        If Len(otpID) = 0 Then
+            Err.Raise vbObjectError + 1331, src, _
+                      "Clanstvo bez OtpremnicaID-a u " & TBL_OTPREMNICA_IZVORI & _
+                      " (red " & i & ")."
+        End If
+        If Len(otkupID) = 0 Then
+            Err.Raise vbObjectError + 1332, src, _
+                      "Clanstvo bez OtkupID-a, otpremnica " & otpID & "."
+        End If
+
+        ' Roditelj i dete moraju da postoje TACNO jednom: clanstvo na dokument
+        ' koga nema nije "manji zbir" nego kvar.
+        If ClanstvoBrojPoID(brojOtp, otpID) <> 1 Then
+            Err.Raise vbObjectError + 1334, src, _
+                      "Clanstvo pokazuje na otpremnicu koja ne postoji tacno jednom: " & _
+                      otpID & " (nadjeno " & ClanstvoBrojPoID(brojOtp, otpID) & _
+                      ", otkup " & otkupID & ")."
+        End If
+        If ClanstvoBrojPoID(brojOtk, otkupID) <> 1 Then
+            Err.Raise vbObjectError + 1335, src, _
+                      "Clanstvo pokazuje na otkup koji ne postoji tacno jednom: " & _
+                      otkupID & " (nadjeno " & ClanstvoBrojPoID(brojOtk, otkupID) & _
+                      ", otpremnica " & otpID & ")."
+        End If
+
+        par = UCase$(otpID) & "|" & UCase$(otkupID)
+        If vidjenPar.Exists(par) Then
+            Err.Raise vbObjectError + 1333, src, _
+                      "Kanonsko clanstvo je nekonzistentno: par (" & otpID & ", " & _
+                      otkupID & ") postoji vise puta."
+        End If
+        vidjenPar.Add par, True
+
+        If Not stornirane.Exists(UCase$(otpID)) Then
+            If mapa.Exists(UCase$(otkupID)) Then
+                Err.Raise vbObjectError + 1305, src, _
+                          "Kanonsko clanstvo je nekonzistentno: otkup " & _
+                          otkupID & " ima dva aktivna zapisa clanstva (" & _
+                          CStr(mapa(UCase$(otkupID))) & " i " & otpID & ")."
+            End If
+            mapa.Add UCase$(otkupID), otpID
+        End If
+    Next i
+End Function
+
+' UCase(ID) -> broj redova sa tim ID-em, jednim prolazom kroz tabelu.
+Private Function BrojRedovaPoID(ByVal tblName As String, ByVal colName As String, _
+                                ByVal src As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BrojRedovaPoID = d
+
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If Not IsArray(data) Then Exit Function
+
+    Dim c As Long, i As Long, k As String
+    c = RequireColumnIndex(tblName, colName, src)
+    For i = 1 To UBound(data, 1)
+        k = UCase$(Trim$(NzToText(data(i, c))))
+        If Len(k) > 0 Then
+            If d.Exists(k) Then
+                d(k) = CLng(d(k)) + 1
+            Else
+                d.Add k, 1&
             End If
         End If
     Next i
+End Function
+
+Private Function ClanstvoBrojPoID(ByVal brojevi As Object, ByVal id As String) As Long
+    Dim k As String
+    k = UCase$(Trim$(id))
+    If brojevi.Exists(k) Then ClanstvoBrojPoID = CLng(brojevi(k))
 End Function
 
 Private Function StorniraneOtpremnice() As Object

@@ -287,6 +287,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzmenaNacrtaF2
     Test_OTP_IzdavanjeCitaStrogo
     Test_OTP_IzdavanjeCitaIzvorStrogo
+    Test_OTP_SpecifikacijaBlokova
+    Test_OTP_NevezaniBlokovi
+    Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
     Test_OTP_StavkeSuIzvedene
@@ -6479,6 +6482,286 @@ EH:
     Set tx = Nothing
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
+End Sub
+
+' SPECIFIKACIJA BLOKOVA (A-018, A-019; S3b-2b): red je STAVKA izvora.
+'
+' Blok sa dve klase ima DVE cene. Do S1b-2 je specifikacija takav blok stampala
+' u jednom redu, sa prosecnom cenom -- brojem koji niko nije platio; pre S1 je
+' svaka klasa bila svoj red, i tu granulaciju ovaj korak vraca. Sastav se cita
+' iz kanona (tblOtpremnicaIzvori), a stampa se samo IZDATA otpremnica: nacrt je
+' najava (review #362, P1).
+Private Sub Test_OTP_SpecifikacijaBlokova()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPSPC")
+
+    Dim otkA As String, otkB As String, otkC As String
+    Dim brA As String, brB As String, brBlokA As String
+    brBlokA = TEST_PREFIX & "-OTK-SPCA-" & scenario
+    otkA = CreateOtkup_TX(OtkHeader(brBlokA), OtkStavke(100#, 100#, 10, 50#, 60#, 5))
+    otkB = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-SPCB-" & scenario), _
+                          OtkStavke(200#, 100#, 20, 0#, 0#, 0))
+    otkC = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-SPCC-" & scenario), _
+                          OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    brA = TEST_PREFIX & "-OTP-SPCA-" & scenario
+    brB = TEST_PREFIX & "-OTP-SPCB-" & scenario
+
+    Dim otpA As String, otpB As String, nacrt As String
+    otpA = CreateOtpremnicaIzIzvora_TX(OtpHeader(brA), Pr3Izvor(otkA, ""), g)
+    otpB = CreateOtpremnicaIzIzvora_TX(OtpHeader(brB), Pr3Izvor(otkB, ""), g)
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-SPCN-" & scenario), _
+                                     OtpOcek(30#, 3#, 0#, 0#), g)
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0 And Len(nacrt) > 0 And Len(otkC) > 0, _
+               "Spec: preduslovi napravljeni (" & g & ")"
+    If Len(otpA) = 0 Or Len(otpB) = 0 Or Len(nacrt) = 0 Then Exit Sub
+
+    Dim red As Variant, rI As Long, rII As Long, rB As Long
+    red = modPrint.SpecifikacijaBlokovaRedovi(Pr3Izvor(otpA, otpB))
+    AssertEquals "3", CStr(UBound(red, 1)), _
+                 "Spec: red je stavka izvora -- blok sa dve klase daje dva reda"
+    rI = SpecRed(red, otkA, KLASA_I)
+    rII = SpecRed(red, otkA, KLASA_II)
+    rB = SpecRed(red, otkB, KLASA_I)
+    AssertTrue rI > 0 And rII > 0 And rB > 0, "Spec: svaka stavka izvora ima svoj red"
+    AssertEquals "0", CStr(SpecRed(red, otkC, KLASA_I)), _
+                 "Spec: blok van izabranih otpremnica ne ulazi u specifikaciju"
+    If rI > 0 And rII > 0 Then
+        ' Cena je PO KLASI: prosek bi obe klase sveo na istu (86,67 sa PDV-om).
+        AssertEquals "10000", CStr(CDbl(red(rI, 14))), "Spec: ukupno klase I je 100 x 100"
+        AssertEquals "3000", CStr(CDbl(red(rII, 14))), "Spec: ukupno klase II je 50 x 60"
+        AssertTrue CDbl(red(rI, 11)) > CDbl(red(rII, 11)) + 0.001, _
+                   "Spec: skuplja klasa ima vecu cenu -- nije prosek bloka"
+        AssertTrue CDbl(red(rI, 13)) > 0, "Spec: PDV nadoknada je izdvojena"
+        AssertEquals Format$(CDbl(red(rI, 14)), "0.00"), _
+                     Format$(CDbl(red(rI, 12)) + CDbl(red(rI, 13)), "0.00"), _
+                     "Spec: vrednost + PDV = ukupna vrednost"
+        AssertEquals Format$(CDbl(red(rI, 12)), "0.00"), _
+                     Format$(CDbl(red(rI, 10)) * CDbl(red(rI, 11)), "0.00"), _
+                     "Spec: cena bez PDV puta kilogrami = vrednost"
+        AssertEquals brA, CStr(red(rI, 3)), "Spec: red nosi broj svoje otpremnice"
+        AssertEquals brBlokA, CStr(red(rI, 5)), "Spec: red nosi broj bloka"
+        AssertEquals KLASA_II, CStr(red(rII, 9)), "Spec: red nosi klasu stavke"
+    End If
+
+    ' Sablon: klasa je svoja kolona, a red UKUPNO sabira ono sto je odstampano.
+    Dim ws As Worksheet, st As Long, sumKol As Double, sumUk As Double, i As Long
+    For i = 1 To UBound(red, 1)
+        sumKol = sumKol + CDbl(red(i, 10))
+        sumUk = sumUk + CDbl(red(i, 14))
+    Next i
+    Set ws = modPrint.FillSpecifikacijaSablon(red, UBound(red, 1), "test", 2, _
+                                              sumKol, 0#, 0#, sumUk)
+    AssertTrue Not ws Is Nothing, "Spec: sablon je pripremljen"
+    If Not ws Is Nothing Then
+        st = ws.Range("SpecStart").row
+        AssertEquals "Klasa", CStr(ws.cells(st - 1, 9).value), _
+                     "Spec: sablon ima kolonu Klasa"
+        AssertEquals CStr(red(1, 5)), CStr(ws.cells(st, 5).value), _
+                     "Spec: prvi red sablona nosi broj bloka"
+        AssertEquals "@", CStr(ws.cells(st, 5).NumberFormat), _
+                     "Spec: kolona broja je TEKST -- '3/2026' ne sme da postane datum"
+        AssertEquals Format$(sumUk, "0.00"), _
+                     Format$(CDbl(ws.cells(st + UBound(red, 1), 14).value), "0.00"), _
+                     "Spec: red UKUPNO sabira ukupnu vrednost"
+    End If
+
+    ' Nacrt, nepoznata i stornirana otpremnica: greska po imenu, nijedan red.
+    AssertTrue InStr(1, SpecGreska(Pr3Izvor(nacrt, "")), "nacrt se ne stampa", _
+                     vbTextCompare) > 0, "Spec: nacrt se ne stampa"
+    AssertTrue InStr(1, SpecGreska(Pr3Izvor("OTP-NEMA-" & scenario, "")), "postoji 0 puta", _
+                     vbTextCompare) > 0, "Spec: nepoznata otpremnica pada po imenu"
+    AssertTrue StornoOtpremnica_TX(otpB), "Spec: preduslov -- otpremnica je stornirana"
+    AssertTrue InStr(1, SpecGreska(Pr3Izvor(otpB, "")), "stornirana", vbTextCompare) > 0, _
+               "Spec: stornirana otpremnica se ne stampa"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_SpecifikacijaBlokova", Err.Number, Err.description
+End Sub
+
+' BULK CITAC CLANSTVA DRZI UGOVOR CITACA JEDNOG DOKUMENTA (review #364, P1).
+'
+' Specifikacija i lista nevezanih citaju clanstvo JEDNIM prolazom. Dok je taj
+' prolaz bio slabiji od OtpClanovi, korupcija je postajala uredan poslovni
+' odgovor. Zato test pravi korupciju MIMO pisca, i to uz VALIDAN sibling izvor:
+' sa jednim jedinim (nepostojecim) izvorom bi kapija "izdata bez izvora" i
+' ovako pukla, pa bag ne bi bio dokazan.
+Private Sub Test_OTP_ClanstvoBulkStrogo()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPBLK")
+
+    Dim otkA As String, otkSlobodan As String, otpID As String, brOtp As String
+    otkA = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BLKA-" & scenario), _
+                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    otkSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BLKS-" & scenario), _
+                                 OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    brOtp = TEST_PREFIX & "-OTP-BLK-" & scenario
+    otpID = CreateOtpremnicaIzIzvora_TX(OtpHeader(brOtp), Pr3Izvor(otkA, ""), g)
+    AssertTrue Len(otpID) > 0 And Len(otkSlobodan) > 0, _
+               "Bulk clanstvo: preduslovi napravljeni (" & g & ")"
+    If Len(otpID) = 0 Or Len(otkSlobodan) = 0 Then Exit Sub
+
+    ' Kontrola PRE korupcije: oba citaoca rade, pa pad ispod nije "nesto puca".
+    AssertEquals "", SpecGreska(Pr3Izvor(otpID, "")), _
+                 "Bulk clanstvo: ispravna otpremnica se stampa"
+    AssertEquals "", NevezaniGreska(), "Bulk clanstvo: lista nevezanih radi"
+
+    ' 1) clanstvo na NEPOSTOJECI otkup, uz validan sibling izvor.
+    Dim red As Long, greska As String
+    red = OtpUpisiSirovoClanstvo(otpID, "OTK-NEMA-" & scenario)
+    greska = SpecGreska(Pr3Izvor(otpID, ""))
+    ' CISCENJE PRE TVRDNJI: korumpiran red truje svaki sledeci test.
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "Bulk clanstvo: specifikacija pada na clanstvo bez otkupa (bilo: " & greska & ")"
+    AssertTrue InStr(1, greska, "clanstvo", vbTextCompare) > 0, _
+               "Bulk clanstvo: razlog imenuje clanstvo (bilo: " & greska & ")"
+
+    ' 2) clanstvo na NEPOSTOJECU otpremnicu: slobodan blok bi inace tiho ispao
+    '    sa liste nevezanih kao "zauzet".
+    red = OtpUpisiSirovoClanstvo("OTP-NEMA-" & scenario, otkSlobodan)
+    greska = NevezaniGreska()
+    DeleteRow TBL_OTPREMNICA_IZVORI, red
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice (bilo: " & _
+               greska & ")"
+
+    ' Kontrola POSLE ciscenja -- pad je bio zbog korupcije, ne zbog testa.
+    AssertEquals "", SpecGreska(Pr3Izvor(otpID, "")), _
+                 "Bulk clanstvo: posle ciscenja specifikacija radi"
+    AssertEquals "", NevezaniGreska(), "Bulk clanstvo: posle ciscenja lista nevezanih radi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_OTP_ClanstvoBulkStrogo", Err.Number, Err.description
+End Sub
+
+' Greska koju lista nevezanih (bulk citac clanstva) digne; "" kad je prosla.
+Private Function NevezaniGreska() As String
+    Dim d As Object
+    On Error Resume Next
+    Err.Clear
+    Set d = modDokumenta.NevezaniOtkupi()
+    NevezaniGreska = Err.description
+    If Err.Number = 0 Then NevezaniGreska = ""
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Greska koju specifikacija podigne; "" kad je prosla.
+Private Function SpecGreska(ByVal ids As Collection) As String
+    Dim v As Variant
+    On Error Resume Next
+    Err.Clear
+    v = modPrint.SpecifikacijaBlokovaRedovi(ids)
+    SpecGreska = Err.description
+    If Err.Number = 0 Then SpecGreska = ""
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Red specifikacije za (OtkupID, klasa); 0 = nema ga. Trazi se po ID-u bloka
+' (kolona 15), ne po broju.
+Private Function SpecRed(ByVal red As Variant, ByVal otkupID As String, _
+                         ByVal klasa As String) As Long
+    Dim i As Long
+    If Not IsArray(red) Then Exit Function
+    For i = 1 To UBound(red, 1)
+        If StrComp(CStr(red(i, 15)), otkupID, vbTextCompare) = 0 And _
+           StrComp(CStr(red(i, 9)), klasa, vbTextCompare) = 0 Then
+            SpecRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' BLOKOVI BEZ OTPREMNICE (A-025; odluka operatera 19.09.2026).
+'
+' "Nevezan" je blok koji nije u aktivnoj otpremnici, bez obzira kako je tu
+' dospeo: upisan bez izabrane otpremnice, uklonjen iz nacrta ili oslobodjen
+' stornom otpremnice. Stara lista je brojala samo trece ("izgubljeni"), pa se
+' prva dva slucaja nisu videla nigde. Kolona "bila u" razlikuje treci.
+Private Sub Test_OTP_NevezaniBlokovi()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, prev As String
+    scenario = NewScenarioCode("OTPNEV")
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
+    RadniStoPocetno
+
+    Dim nikad As String, uklonjen As String, oslobodjen As String
+    Dim uNacrtu As String, storniran As String
+    nikad = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NEVU-" & scenario), _
+                           OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    uklonjen = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NEVR-" & scenario), _
+                              OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    oslobodjen = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NEVS-" & scenario), _
+                                OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    uNacrtu = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NEVL-" & scenario), _
+                             OtkStavke(20#, 100#, 2, 0#, 0#, 0))
+    storniran = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NEVX-" & scenario), _
+                               OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+
+    Dim nacrt As String, brS As String, izdata As String
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-NEVN-" & scenario), _
+                                     OtpOcek(60#, 6#, 0#, 0#), g)
+    brS = TEST_PREFIX & "-OTP-NEVS-" & scenario
+    izdata = CreateOtpremnicaIzIzvora_TX(OtpHeader(brS), Pr3Izvor(oslobodjen, ""), g)
+    AssertTrue Len(nacrt) > 0 And Len(izdata) > 0 And Len(nikad) > 0 And _
+               Len(uklonjen) > 0 And Len(uNacrtu) > 0 And Len(storniran) > 0, _
+               "Nevezani: preduslovi napravljeni (" & g & ")"
+    If Len(nacrt) = 0 Or Len(izdata) = 0 Then GoTo Kraj
+
+    AssertTrue DodajOtpremnicaIzvor_TX(nacrt, uklonjen, g), "Nevezani: blok je bio u nacrtu"
+    AssertTrue DodajOtpremnicaIzvor_TX(nacrt, uNacrtu, g), "Nevezani: drugi blok ostaje u nacrtu"
+    AssertTrue UkloniOtpremnicaIzvor_TX(nacrt, uklonjen, g), "Nevezani: blok uklonjen iz nacrta"
+    AssertTrue StornoOtpremnica_TX(izdata), "Nevezani: izdata otpremnica stornirana"
+    AssertTrue StornoOtkup_TX(storniran), "Nevezani: kontrolni blok storniran"
+
+    Dim rez As Variant, red As Long
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    AssertTrue modScrDokumenti.Scr_Event("lsNEVEZANI", "Click"), _
+               "Nevezani: prekidac na listu blokova bez otpremnice"
+    rez = modScrDokumenti.Scr_Rows("", "")
+
+    red = RsRedSaID(rez, nikad)
+    AssertTrue red > 0, "Nevezani: blok upisan bez otpremnice je u listi"
+    If red > 0 Then
+        AssertEquals "60", CStr(rez(1)(red, 5)), "Nevezani: kilogrami dolaze sa stavki"
+        AssertEquals "", CStr(rez(1)(red, 8)), "Nevezani: nikad vezan blok nema 'bila u'"
+    End If
+    AssertTrue RsRedSaID(rez, uklonjen) > 0, "Nevezani: blok uklonjen iz nacrta je u listi"
+    red = RsRedSaID(rez, oslobodjen)
+    AssertTrue red > 0, "Nevezani: storno otpremnice oslobadja njen blok"
+    If red > 0 Then
+        AssertEquals brS, CStr(rez(1)(red, 8)), _
+                     "Nevezani: 'bila u' nosi broj stornirane otpremnice"
+    End If
+    AssertEquals "0", CStr(RsRedSaID(rez, uNacrtu)), "Nevezani: clan nacrta NIJE nevezan"
+    AssertEquals "0", CStr(RsRedSaID(rez, storniran)), "Nevezani: storniran blok nije u listi"
+
+    ' Vezivanje iz liste: blok odlazi u aktivan nacrt i izlazi iz nevezanih.
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Nevezani: nacrt je aktivan"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(nikad), "Nevezani: blok vezan iz liste"
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    rez = modScrDokumenti.Scr_Rows("", "")
+    AssertEquals "0", CStr(RsRedSaID(rez, nikad)), "Nevezani: vezan blok nestaje iz liste"
+
+Kraj:
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prev
+    Exit Sub
+EH:
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prev
+    LogFatal "Test_OTP_NevezaniBlokovi", Err.Number, Err.description
 End Sub
 
 ' Polja ekrana F2 za izmenu nacrta -- isti kljucevi koje ljuska predaje

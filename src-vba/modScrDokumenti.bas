@@ -56,7 +56,14 @@ Private mMape As Object
 ' nevidljivoj poslednjoj koloni (prioritet 4), pa ga sortiranje ne odvaja od
 ' reda. Broj otpremnice je jedinstven tek po (stanica, dan).
 '
-' Specifikacija blokova (A-018, A-019, A-021) vraca se u S3b-2b.
+' Specifikacija blokova (A-018, A-019, A-021) stoji nad ISTIM kanonom: oznaci
+' vise otpremnica ili izaberi jednu pa "Stampaj specifikaciju", a "Po datumu"
+' stampa ceo prikazani opseg. Oznaka je OtpremnicaID (ljuska kljuca red po
+' nevidljivoj koloni identiteta), pa se broj nigde ne razresava u dokument.
+'
+' Lista NEVEZANI (A-025) pokazuje blokove bez aktivne otpremnice: upisane bez
+' izabrane, uklonjene iz nacrta i oslobodjene stornom otpremnice. Odatle se
+' vezuju za aktivni nacrt.
 Private mLista As String          ' "SVI" | "OTPREMNICE" | "BLOKOVI" | "KOOPERANTI"
 Private mOtpID As String          ' aktivna otpremnica (OtpremnicaID) -- NACRT
 Private mOtpBroj As String        ' njen broj - za traku i naslov liste
@@ -72,10 +79,14 @@ Private mIzmenaBroj As String
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
 Public Function Scr_Liste() As Variant
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
+    ' Peto polje "opseg" trazi od ljuske polja OD / DO iznad liste (S3b-2b):
+    ' specifikacija po datumu stampa tacno ono sto je u listi, pa granicu
+    ' postavlja isti par koji listu i filtrira.
     Scr_Liste = Array( _
         "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTKUP|96", _
-        "OTPREMNICE|OTKUI_SEG_LS_OTP|OTKUI_GRID_TITLE_OTPREMNICA|96", _
+        "OTPREMNICE|OTKUI_SEG_LS_OTP|OTKUI_GRID_TITLE_OTPREMNICA|96|opseg", _
         "BLOKOVI|OTKUI_SEG_LS_BLOK|OTKUI_GRID_TITLE_BLOKOVI|110", _
+        "NEVEZANI|OTKUI_SEG_LS_NEVEZ|OTKUI_GRID_TITLE_NEVEZANI|104", _
         "KOOPERANTI|OTKUI_SEG_LS_KOOP|OTKUI_GRID_TITLE_KOOP|100")
 End Function
 
@@ -117,6 +128,19 @@ Public Function Scr_Radnje() As String
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
                          "ukloni:OTKUI_BTN_RED_UKLONI:136:danger:1|" & _
                          "izdaj:OTKUI_BTN_RED_IZDAJ:120:soft:0"
+        Case "OTPREMNICE"
+            ' Specifikacija (A-018, A-021): "2" znaci da radnja radi nad
+            ' OZNACENIM redovima, a bez oznaka nad izabranim. "Po datumu"
+            ' (A-019) ne trazi red -- stampa celu prikazanu listu.
+            Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
+                         "spec:OTKUI_BTN_RED_SPEC:152:ghost:2|" & _
+                         "specdat:OTKUI_BTN_RED_SPECDAT:96:ghost:0"
+        Case "NEVEZANI"
+            ' Blok bez otpremnice se vezuje za AKTIVNI nacrt -- isti pisac kao
+            ' posle unosa; bez aktivne otpremnice radnje nema.
+            Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
+            If Len(mOtpID) > 0 Then _
+                Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
     End Select
 End Function
 
@@ -556,12 +580,18 @@ Private Function RowAction(ByVal tag As String) As Boolean
     ' Ko trazi red, trazi ga sam - odmah ispod. Prva kolona je BROJ dokumenta;
     ' GridCell na red 0 vraca prazno.
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    ' OtkupID reda: lista blokova ima svoje kolone, pa i svoj indeks identiteta.
-    If Scr_Lista() = "BLOKOVI" Then
-        otkupID = Trim$(CStr(modOtkupUI.GridCell(red, UBound(BlokGridCols()) + 1)))
-    Else
-        otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTKUP"))))
-    End If
+    ' Identitet reda: svaka lista ima svoje kolone, pa i svoj indeks. Lista
+    ' otpremnica ne nosi otkup nego OtpremnicaID -- cita ga specifikacija.
+    Select Case Scr_Lista()
+        Case "BLOKOVI"
+            otkupID = Trim$(CStr(modOtkupUI.GridCell(red, UBound(BlokGridCols()) + 1)))
+        Case "NEVEZANI"
+            otkupID = Trim$(CStr(modOtkupUI.GridCell(red, UBound(NevGridCols()) + 1)))
+        Case "OTPREMNICE"
+            otkupID = ""
+        Case Else
+            otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTKUP"))))
+    End Select
     Dim razlog As String
     Select Case p(0)
         Case "print", "storno", "vezi", "ukloni"
@@ -642,12 +672,129 @@ Private Function RowAction(ByVal tag As String) As Boolean
             RowAction = True
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZDATA") & " " & brIzd, False
 
+        Case "spec"
+            ' Stampa nista ne menja -- mreza se ne cita ponovo (False).
+            SpecZaIzbor red
+
+        Case "specdat"
+            SpecPoDatumu
+
         Case Else
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+'--------------------------------------- SPECIFIKACIJA BLOKOVA (A-018, A-019)
+' Oznacene otpremnice, a kad oznaka nema -- ona na izabranom redu. Kljuc oznake
+' je OtpremnicaID (ljuska kljuca red po koloni identiteta), pa broja u ovom
+' putu nema: stari tok je oznake drzao po broju i posle ih razresavao nazad u
+' dokument, a broj je jedinstven tek po (stanica, dan).
+Private Sub SpecZaIzbor(ByVal red As Long)
+    Dim ids As Collection, k As Variant, kljucevi As String, oid As String
+    Set ids = New Collection
+    kljucevi = modOtkupUI.MarkedKeys()
+    If Len(kljucevi) > 0 Then
+        For Each k In Split(kljucevi, "|")
+            If Len(Trim$(CStr(k))) > 0 Then ids.Add Trim$(CStr(k))
+        Next k
+    ElseIf red > 0 Then
+        oid = Trim$(CStr(modOtkupUI.GridCell(red, UBound(OtpGridCols()) + 1)))
+        If Len(oid) > 0 Then ids.Add oid
+    End If
+    If ids.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+        Exit Sub
+    End If
+    StampajSpecifikaciju ids
+End Sub
+
+' "Po datumu" stampa SVE STO JE PRIKAZANO: opseg, cip i pretraga zajedno, preko
+' svih strana. ID-evi se citaju iz mreze ljuske -- to je tacno ono sto operater
+' vidi, pa se lista i stampa ne mogu razici. Bez oba datuma nema "po datumu".
+Private Sub SpecPoDatumu()
+    Dim ids As Collection
+    If DatGranica(modOtkupUI.GridDatOd()) = 0 Or DatGranica(modOtkupUI.GridDatDo()) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SPEC_OPSEG"), True
+        Exit Sub
+    End If
+    Set ids = SpecOtpremniceIzPrikaza()
+    If ids.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_FILT"), True
+        Exit Sub
+    End If
+    StampajSpecifikaciju ids
+End Sub
+
+' OtpremnicaID-evi svih redova koje mreza drzi, redom prikaza. Javno zbog testa
+' opsega: mreza je jedino mesto koje zna sta je posle filtera i strana ostalo.
+Public Function SpecOtpremniceIzPrikaza() As Collection
+    Dim c As Collection, r As Long, n As Long, oid As String
+    Set c = New Collection
+    Set SpecOtpremniceIzPrikaza = c
+    If Scr_Lista() <> "OTPREMNICE" Then Exit Function
+    n = modOtkupUI.GridBrojRedova()
+    For r = 1 To n
+        oid = Trim$(CStr(modOtkupUI.GridCell(r, UBound(OtpGridCols()) + 1)))
+        If Len(oid) > 0 Then c.Add oid
+    Next r
+End Function
+
+' Jedna ulazna tacka stampe: izdate idu na stampu, nacrti se preskacu i broje
+' (nacrt se ne stampa -- review #362, P1). Provere i posao su u modPrint; ovde
+' se samo razvrstava i javlja operateru.
+Private Sub StampajSpecifikaciju(ByVal ids As Collection)
+    Dim izdate As Collection, nacrta As Long, razlog As String
+    Set izdate = IzdateZaSpecifikaciju(ids, nacrta)
+    If izdate.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SPEC_NACRT"), True
+        Exit Sub
+    End If
+    razlog = modPrint.PrintSpecifikacijaBlokova(izdate)
+    If Len(razlog) > 0 Then
+        modOtkupUI.ShowToast razlog, True
+        Exit Sub
+    End If
+    razlog = Poruka("OTKUI_MSG_SPEC") & " " & izdate.count
+    If nacrta > 0 Then razlog = razlog & " " & Poruka("OTKUI_MSG_SPEC_NACRT") & " " & nacrta
+    modOtkupUI.ShowToast razlog, False
+End Sub
+
+' Izdate otpremnice iz izbora, redom izbora i bez ponavljanja; nacrta = koliko
+' ih nije izdato. Status se cita po ID-u, istim pravilom kao stampa otpremnice
+' (IzdatoStatusJeIzdato). Javno zbog testa.
+Public Function IzdateZaSpecifikaciju(ByVal ids As Collection, _
+                                      ByRef nacrta As Long) As Collection
+    Dim c As Collection, v As Variant, vidjen As Object, k As String
+    Set c = New Collection
+    Set IzdateZaSpecifikaciju = c
+    Set vidjen = CreateObject("Scripting.Dictionary")
+    nacrta = 0
+    If ids Is Nothing Then Exit Function
+    For Each v In ids
+        k = UCase$(Trim$(CStr(v)))
+        If Len(k) > 0 Then
+            If Not vidjen.Exists(k) Then
+                vidjen.Add k, True
+                If modDokumenta.OtpremnicaJeIzdata(Trim$(CStr(v))) Then
+                    c.Add Trim$(CStr(v))
+                Else
+                    nacrta = nacrta + 1
+                End If
+            End If
+        End If
+    Next v
+End Function
+
+' Datum kao GRANICA opsega; 0 = nema granice. Prazan ili nepotpun unos nije
+' greska -- dok operater kuca "21." nema smisla praznjenje liste.
+Private Function DatGranica(ByVal s As String) As Double
+    Dim d As Date
+    On Error Resume Next
+    If Len(Trim$(s)) = 0 Then Exit Function
+    If TryParseDateValue(s, d) Then DatGranica = Int(CDbl(d))
 End Function
 
 ' Klik na red liste F2. ID dolazi iz nevidljive kolone reda, ne iz broja.
@@ -1672,6 +1819,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Select Case Scr_Lista()
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
+        Case "NEVEZANI":   Scr_Rows = RowsNevezani(q): Exit Function
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
     End Select
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
@@ -2211,7 +2359,12 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
     Dim otpID As String, ocek As Variant, ukKg As Double, blKg As Double
     Dim hay As String, kup As String, st As String, jeNacrt As Boolean
     Dim samoOtvorene As Boolean, cntOtvor As Long, sumOst As Double
+    Dim dOd As Double, dDo As Double, vDat As Double
     samoOtvorene = (filter = "otvorene")
+    ' Opseg datuma iznad liste (A-022; polja drzi ljuska). Nula znaci "nema
+    ' granice", pa prazno polje i nepotpun datum tokom kucanja ne prazne listu.
+    dOd = DatGranica(modOtkupUI.GridDatOd())
+    dDo = DatGranica(modOtkupUI.GridDatDo())
     On Error GoTo EH
     mStep = "otpremnice"
 
@@ -2242,6 +2395,15 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
         If iStorno > 0 Then
             If UCase$(modUiData.CellS(src, r, iStorno)) = "DA" Then GoTo Sledeca
         End If
+        ' Opseg sece i brojac cipa: "otvorenih 3" mora da znaci tri reda koje
+        ' operater u tom opsegu i vidi.
+        vDat = modUiData.CellDate(src, r, iDat)
+        If dOd > 0 Then
+            If vDat < dOd Then GoTo Sledeca
+        End If
+        If dDo > 0 Then
+            If vDat > dDo Then GoTo Sledeca
+        End If
         otpID = modUiData.CellS(src, r, iID)
         st = UCase$(modUiData.CellS(src, r, iStat))
         jeNacrt = (st = UCase$(IZDATO_DRAFT))
@@ -2264,7 +2426,7 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
 
         n = n + 1
         outA(n, 1) = modUiData.CellS(src, r, iBroj)
-        outA(n, 2) = modUiData.CellDate(src, r, iDat)
+        outA(n, 2) = vDat
         outA(n, 3) = kup
         outA(n, 4) = modUiData.CellS(src, r, iVr)
         outA(n, 5) = modUiData.CellS(src, r, iSo)
@@ -2395,6 +2557,101 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsBlokovi[" & mStep & "]", Err.description
+End Function
+
+'--------------------------------------------------- LISTA: NEVEZANI (F1)
+' Blokovi BEZ AKTIVNE OTPREMNICE (A-025, odluka operatera 19.09.2026). Skup
+' racuna kanon (modDokumenta.NevezaniOtkupi) -- ekran ne cita tblOtpremnicaIzvori
+' sam, pa lista ne moze da ponudi za vezivanje otkup koji pisac smatra zauzetim.
+' Kolona "bila u" nosi broj stornirane otpremnice iz koje je blok oslobodjen;
+' prazna je za blok koji nikad nije bio vezan.
+Private Function NevGridCols() As Variant
+    NevGridCols = Array( _
+        "OTKUI_HD_BROJ||txt|110|1", _
+        "OTKUI_HD_DATUM||date|62|1", _
+        "OTKUI_HD_PARTNER||part|0|1", _
+        "OTKUI_HD_OM||txt|120|2", _
+        "OTKUI_HD_KG||kg|66|1", _
+        "OTKUI_HD_KOL_AMB||num|54|3", _
+        "OTKUI_HD_VREDNOST||mult|96|1", _
+        "OTKUI_HDN_BILA_U||txt|110|2", _
+        "OTKUI_HD_IDENT||txt|0|4")
+End Function
+
+Private Function RowsNevezani(ByVal q As String) As Variant
+    Dim src As Variant, r As Long, n As Long, nRows As Long
+    Dim outA() As Variant, koop As Object, stan As Object, nev As Object
+    Dim iBroj As Long, iDat As Long, iKoop As Long, iId As Long, iSt As Long
+    Dim zbir As Object, z As Variant, oid As String, ime As String, om As String
+    Dim bila As String, hay As String, sumKg As Double, sumVal As Double
+    On Error GoTo EH
+    mStep = "nevezani"
+
+    Set nev = modDokumenta.NevezaniOtkupi()
+    If nev.count = 0 Then
+        RowsNevezani = Array(NevGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+
+    src = modUiData.CachedTable(TBL_OTKUP)
+    If Not IsArray(src) Then
+        RowsNevezani = Array(NevGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    Set koop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Set stan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
+
+    iBroj = modUiData.ColIdx(TBL_OTKUP, COL_OTK_BR_DOK)
+    iDat = modUiData.ColIdx(TBL_OTKUP, COL_OTK_DATUM)
+    iKoop = modUiData.ColIdx(TBL_OTKUP, COL_OTK_KOOPERANT)
+    iSt = modUiData.ColIdx(TBL_OTKUP, COL_OTK_STANICA)
+    iId = modUiData.ColIdx(TBL_OTKUP, COL_OTK_ID)
+
+    ' Kilogrami, gajbe i vrednost bloka su na STAVKAMA, kao i u listi blokova.
+    mStep = "stavke nevezanih"
+    Set zbir = modOtkup.ZbirStavkiPoOtkupu()
+    mStep = "nevezani"
+
+    nRows = UBound(src, 1)
+    ReDim outA(1 To nRows, 1 To 9)
+    For r = 1 To nRows
+        oid = modUiData.CellS(src, r, iId)
+        If Not nev.Exists(UCase$(oid)) Then GoTo Sledeci
+        bila = CStr(nev(UCase$(oid)))
+        ime = modUiData.CellS(src, r, iKoop)
+        If Not koop Is Nothing Then
+            If koop.Exists(ime) Then ime = CStr(koop(ime))
+        End If
+        om = modUiData.CellS(src, r, iSt)
+        If Not stan Is Nothing Then
+            If stan.Exists(om) Then om = CStr(stan(om))
+        End If
+        hay = modUiData.CellS(src, r, iBroj) & "|" & ime & "|" & om & "|" & bila
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+
+        z = modOtkup.ZbirStavkiZaOtkup(zbir, oid, "modScrDokumenti.RowsNevezani")
+        n = n + 1
+        outA(n, 1) = modUiData.CellS(src, r, iBroj)
+        outA(n, 2) = modUiData.CellDate(src, r, iDat)
+        outA(n, 3) = ime
+        outA(n, 4) = om
+        outA(n, 5) = CDbl(z(0))
+        outA(n, 6) = CDbl(z(2))
+        outA(n, 7) = CDbl(z(1))
+        outA(n, 8) = bila
+        outA(n, 9) = oid
+        sumKg = sumKg + CDbl(z(0))
+        sumVal = sumVal + CDbl(z(1))
+Sledeci:
+    Next r
+
+    mStep = "OK"
+    RowsNevezani = Array(NevGridCols(), outA, n, sumKg, sumVal, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrDokumenti.RowsNevezani[" & mStep & "]", Err.description
 End Function
 
 '--------------------------------------------------------- LISTA: IZVODI
