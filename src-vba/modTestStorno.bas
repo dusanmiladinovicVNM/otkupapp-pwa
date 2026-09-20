@@ -1089,16 +1089,6 @@ Private Sub SeedPaleta(ByVal palID As String, ByVal gajbe As Long, ByVal neto As
         Array(palID, gajbe, neto, amb, neto + amb, kapacitet, status, "Ne", "I")
 End Sub
 
-' Otkupni blok ("list") vezan za otpremnicu (OtpremnicaID) + denorm. BrojZbirne.
-Private Sub SeedOtkupBlok(ByVal blkID As String, ByVal otpID As String, ByVal brojZbirne As String)
-    SvAppend TBL_OTKUP, _
-        Array(COL_OTK_ID, COL_OTK_OTPREMNICA_ID, COL_OTK_BROJ_ZBIRNE, COL_OTK_BR_DOK), _
-        Array(blkID, otpID, brojZbirne, blkID)
-    ' Zaglavlje bez stavki nije dokument (review #334, P1) i od tada obara
-    ' svakog citaoca vrednosti -- a T29 u ovoj istoj suite-i zove ReportSaldoOM.
-    SeedOtkupStavka blkID, 100, 10
-End Sub
-
 ' Revers = dvojni upis (kooperant Ulaz + stanica Izlaz), oba dele DokumentID+Tip i
 ' JEDAN ReversID (REV-IDENT-01), kovan produkcionom fabrikom kao u piscu.
 Private Sub SeedRevers(ByVal brDok As String, ByVal dokTip As String, _
@@ -1349,10 +1339,6 @@ Private Function OtkOtvorenaObaveza(ByVal otkID As String) As Boolean
             Exit Function
         End If
     Next i
-End Function
-
-Private Function OtkOtpremnicaID(ByVal blkID As String) As String
-    OtkOtpremnicaID = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, blkID, COL_OTK_OTPREMNICA_ID))
 End Function
 
 ' Saldo (Ulaz +, Izlaz -) za entitet+tip -> iz produkcijskog GetAmbalazeStanje.
