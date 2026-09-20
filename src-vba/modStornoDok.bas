@@ -396,12 +396,11 @@ End Function
 '                         potvrdu)
 '   RESI_KASNIJE          persistentan recovery zapis, ne samo poruka
 '
-' Framework poznaje TRI tipa (zbirna, prijemnica, revers); otpremnica je
-' izasla iz njega u #362, a njen kod je obrisan u S3c.
+' Framework poznaje TRI tipa (zbirna, prijemnica, revers); otpremnica je iz
+' njega izasla u #362, a njen kod je obrisan u S3c.
 ' Ostalih sest (otkup, otpremnica, isplate, uplate, faktura, izvod) nemaju
-' nizvodni tok
-' o kome se odlucuje, pa im je storno obican - kao i u legacy formi, gde
-' TryRunCorrectionFramework za njih vraca False.
+' nizvodni tok o kome se odlucuje, pa im je storno obican - kao i u legacy
+' formi, gde TryRunCorrectionFramework za njih vraca False.
 '
 ' Izbor moda NIJE ovde: to je pitanje operateru, a ovaj modul nema
 ' nijednu kontrolu i nijedan MsgBox. Ovde je samo prevod tipa u framework
