@@ -1022,10 +1022,16 @@ Public Sub Test_BlockStornoDriftReason_Auto()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
               Array("SVT-DR-OTP", "SVT-DR-O1", "I")                ' aktivna otpremnica
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_OTPREMNICA_ID, COL_OTK_BR_DOK), _
-              Array("SVT-DR-BLK", "SVT-DR-OTP", "SVT-DR-BD")       ' blok vezan za nju
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
+              Array("SVT-DR-BLK", "SVT-DR-BD")                     ' blok
+    ' Pripadnost ide KANONOM (tblOtpremnicaIzvori), ne kolonom Otkup.OtpremnicaID:
+    ' nju od S3a ne pise nijedan zivi put, pa je kapija citajuci nju uvek
+    ' vracala "bezbedno je" (S3c). Seed mora da govori isti jezik kao kapija.
+    TcSeedRow TBL_OTPREMNICA_IZVORI, Array(COL_OPI_ID, COL_OPI_OTPREMNICA_ID, COL_OPI_OTKUP_ID), _
+              Array("SVT-DR-IZV", "SVT-DR-OTP", "SVT-DR-BLK")      ' blok vezan za nju
 
     Dim ids As Collection: Set ids = New Collection: ids.Add "SVT-DR-BLK"
     TcChk Len(BlockStornoDriftReason(FLOW_DOC_PRIJEMNICA, SV_MODE_DUPLI, ids)) > 0, _

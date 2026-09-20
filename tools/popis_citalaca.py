@@ -135,10 +135,15 @@ KOLONE_STAROG_MODELA = re.compile(
 #                         prvog zivog pozivaoca, pa su njihova tri citanja zaglavlja
 #                         (KulturaID, TipAmbalaze) postala ziva; izmena nacrta u F2
 #                         je ozivela OtpIzmeniDraft (+4). Nijedno linijsko.
+#                         S3c (20.09.2026, plan 14.18): 36 -> 38. Ispravka izdate
+#                         prepisuje zaglavlje stare na novu, pa cita KulturaID i
+#                         TipAmbalaze (+2) -- obe cinjenice ostaju u kanonu i posle
+#                         S3e. Grupa ih ne razlikuje od osudjenih linijskih polja
+#                         dok se ne podeli (backlog 15).
 #   otp_cena        0  -- prag slajsa dostignut: zaglavlje nema cenu.
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
-    ("otp_linija", 36),
+    ("otp_linija", 38),
     ("otp_cena", 0),
 ])
 

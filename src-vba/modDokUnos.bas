@@ -323,7 +323,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     ' ISPRAVKA OTPREMNICE JE PAUZIRANA (S3a), ne prevedena.
     '
     ' Ovde je do S3a stajalo ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok nije
-    ' zatvaranje konteksta nego pisac STAROG modela: CompleteOtpremnicaIspravka
+    ' zatvaranje konteksta nego pisac STAROG modela (obrisan u S3c)
     ' preko GetBlokOtkupIDs zove ReassignOtkupToOtpremnica_TX, koji upisuje
     ' Otkup.OtpremnicaID i BrojZbirne, pa rekalkulise ili stornira zbirnu.
     '
@@ -1303,7 +1303,6 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
     Select Case docType
-        Case FLOW_DOC_OTPREMNICA: Set res = CompleteOtpremnicaIspravka(cid, newBroj)
         Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
         Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj, stanicaID, datum)
         Case Else: Exit Sub

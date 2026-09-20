@@ -2164,6 +2164,62 @@ EH:
     CreateOtpremnicaIzIzvora_TX = ""
 End Function
 
+' ISPRAVKA IZDATE OTPREMNICE -- JEDAN POTEZ (S3c).
+'
+' Stara se stornira, a nova nastaje kao NACRT koji nasledjuje zaglavlje,
+' ocekivanje i sve izvore stare. Sve u jednoj transakciji.
+'
+' Zasto jedan potez, a ne stari dvokorak ("storno odmah, zamenu snimi
+' kasnije"): izmedju ta dva koraka je postojao prozor u kome je stara vec
+' oborena a nove jos nema. Okvir je zato morao da pamti pending kontekst i da
+' pravi MANUAL zadatke kad se u medjuvremenu nesto pomeri (blok ode na drugu
+' otpremnicu, broj postane dvosmislen). Tog prozora ovde nema: padne li bilo
+' koja kapija, transakcija vraca sve i nista nije stornirano.
+'
+' NACRT SE NE ISPRAVLJA -- njega menja UpdateOtpremnicaDraft_TX, bez storna i
+' bez novog broja.
+'
+' Broj se NE nasledjuje: storno ne oslobadja broj (A9, modBrojevi), pa nova
+' dobija sledeci slobodan iz istog niza (stanica, dan).
+'
+' Ocekivanje se prepisuje DOSLOVNO, ne izvodi iz izvora: izjednacavanje
+' ocekivanog sa povezanim odbijeno je u S3b-2a (ocekivanje bi postalo
+' formalnost). Ako je bas ocekivanje bilo pogresno, operater ga doradi u F2.
+'
+' Vraca OtpremnicaID NOVOG nacrta; "" = nista nije promenjeno, razlog je u
+' outGreska.
+Public Function IspravkaOtpremnice_TX(ByVal otpremnicaID As String, _
+                                      Optional ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "IspravkaOtpremnice_TX", _
+        TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE & "|" & _
+        TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & _
+        "|" & TBL_KULTURE & "|" & TBL_AMBALAZA
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    ' Storno stare vraca gajbe koje je njeno izdavanje knjizilo (OtpIzdaj).
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID)
+
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, "IspravkaOtpremnice_TX", otpremnicaID)
+    IspravkaOtpremnice_TX = ""
+End Function
+
 ' Read-model panela: ocekivano / povezano / preostalo po klasi.
 '
 ' Vraca Dictionary klasa -> Dictionary sa kljucevima "ocekivano", "povezano",
@@ -3310,6 +3366,122 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
 
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
 End Sub
+
+' --- core: ispravka izdate -------------------------------------------------
+Private Function OtpIspravi(ByVal staraID As String) As String
+    Const SRC As String = "OtpIspravi"
+
+    Dim rStara As Long
+    rStara = OtpRedHeadera(staraID, SRC)
+
+    ' Samo IZDATA. Nacrt jos nije dokument: on se menja, a ispravka bi ga
+    ' stornirala i potrosila jos jedan broj niza ni za sta.
+    If Not IzdatoStatusJeIzdato(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, _
+                                            COL_TRACE_IZDATO_STATUS)) Then
+        Err.Raise vbObjectError + 1338, SRC, _
+                  "Ispravlja se samo IZDATA otpremnica: " & staraID & _
+                  ". Nacrt se menja (UpdateOtpremnicaDraft_TX), bez storna i novog broja."
+    End If
+
+    ' Sastav i ocekivanje se citaju PRE storna, kroz iste stroge kanonske
+    ' citace koje koristi izdavanje: otpremnicu koju izdavanje ne bi primilo
+    ' ispravka ne sme da prepise u nov nacrt.
+    Dim clanovi As Collection
+    Set clanovi = OtpClanovi(staraID, SRC)
+    If clanovi.count = 0 Then
+        Err.Raise vbObjectError + 1339, SRC, _
+                  "Izdata otpremnica nema nijedan izvor: " & staraID & _
+                  ". Bez izvora nema sta da se prenese na novu."
+    End If
+
+    Dim ocekivano As Collection
+    Set ocekivano = OtpOcekivanjeKolekcija(staraID, SRC)
+
+    Dim datum As Date
+    Dim stanicaID As String, vozacID As String, kulturaID As String, tipAmb As String
+    datum = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_DATUM))
+    stanicaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_STANICA)))
+    vozacID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_VOZAC)))
+    kulturaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_KULTURA)))
+    tipAmb = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_TIP_AMB)))
+
+    ' Storno stare IDE PRE nego sto nova primi izvore: izvor sme da bude u
+    ' tacno jednoj aktivnoj otpremnici (OtpRequireIzvorValjan), pa bi obrnut
+    ' redosled sam sebe odbio. Jezgro nosi i kapiju izvora aktivne zbirne.
+    If Not modStorno.StornoOtpremnica(staraID) Then
+        Err.Raise vbObjectError + 1340, SRC, _
+                  "Storno stare otpremnice nije uspeo: " & staraID
+    End If
+
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanicaID
+    h("VozacID") = vozacID
+    h("KulturaID") = kulturaID
+    h("TipAmbalaze") = tipAmb
+
+    Dim noviBroj As String
+    noviBroj = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
+    If Len(noviBroj) = 0 Then
+        Err.Raise vbObjectError + 1341, SRC, _
+                  "Nov broj otpremnice nije generisan (stanica " & stanicaID & ")."
+    End If
+    h("BrojOtpremnice") = noviBroj
+
+    Dim novaID As String
+    novaID = OtpNapraviDraft(h, ocekivano)
+
+    Dim i As Long
+    For i = 1 To clanovi.count
+        OtpRequireIzvorValjan novaID, CStr(clanovi(i)), SRC, True
+        OtpUpisiClanstvo novaID, CStr(clanovi(i)), SRC
+    Next i
+
+    ' Trag ide po IDENTITETU (kao otkup od S1e), ne po broju -- broj je
+    ' jedinstven tek po (stanica, dan), pa bi veza po broju umela da pokaze na
+    ' tudji dokument.
+    RequireUpdateCell TBL_OTPREMNICA, rStara, COL_TRACE_ZAMENJEN_SA_ID, novaID, SRC
+    RequireUpdateCell TBL_OTPREMNICA, OtpRedHeadera(novaID, SRC), _
+                      COL_TRACE_ISPRAVKA_OD_ID, staraID, SRC
+
+    OtpIspravi = novaID
+End Function
+
+' Ocekivanje jednog dokumenta kao kolekcija stavki za OtpNapraviDraft.
+'
+' Cita se kroz StavkeOtpremniceRedovi -- strog citac koji drzi ugovor pisca
+' (jedna stavka po klasi, kolicina > 0, gajbe ceo broj), pa se prepisuje samo
+' ocekivanje koje bi i sam pisac prihvatio.
+' Kolone: 1 OtpremnicaID, 3 Klasa, 4 Kolicina, 5 PredlogCena, 6 KolAmbalaze.
+Private Function OtpOcekivanjeKolekcija(ByVal otpremnicaID As String, _
+                                        ByVal src As String) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    Set OtpOcekivanjeKolekcija = c
+
+    Dim redovi As Variant
+    redovi = StavkeOtpremniceRedovi()
+
+    Dim i As Long, s As Object
+    If IsArray(redovi) Then
+        For i = 1 To UBound(redovi, 1)
+            If StrComp(CStr(redovi(i, 1)), otpremnicaID, vbTextCompare) = 0 Then
+                Set s = CreateObject("Scripting.Dictionary")
+                s("Klasa") = CStr(redovi(i, 3))
+                s("Kolicina") = CDbl(redovi(i, 4))
+                s("PredlogCena") = CDbl(redovi(i, 5))
+                s("KolAmbalaze") = CDbl(redovi(i, 6))
+                c.Add s
+            End If
+        Next i
+    End If
+
+    If c.count = 0 Then
+        Err.Raise vbObjectError + 1342, src, _
+                  "Otpremnica nema ocekivanje: " & otpremnicaID
+    End If
+End Function
 
 ' AMBALAZA SE KNJIZI PRI IZDAVANJU, ne pri otvaranju nacrta (odluka S14.8 t. 1).
 '

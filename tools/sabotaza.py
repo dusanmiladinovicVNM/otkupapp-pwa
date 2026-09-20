@@ -689,6 +689,64 @@ SABOTAZE = {
         "Test_OTP_ClanstvoBulkStrogo",
         "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
     ),
+    # Ispravka opet prima NACRT (S3c): nacrt se menja, a ne stornira -- inace
+    # svaka izmena trosi jos jedan broj niza i ostavlja storniran dokument.
+    "ispravka-nacrt-prolazi": (
+        "modDokumenta.bas",
+        "    If Not IzdatoStatusJeIzdato(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, _\n"
+        "                                            COL_TRACE_IZDATO_STATUS)) Then\n",
+        "    If False Then   ' SABOTAZA: i nacrt ulazi u ispravku\n",
+        "Test_OTP_IspravkaIzdate",
+        "Ispravka: nacrt se ne ispravlja",
+    ),
+    # Nova otpremnica ostaje bez sastava: blokovi stare vise ne prelaze na nju,
+    # pa ispravka pravi prazan nacrt a blokove ostavlja nevezane.
+    "ispravka-bez-clanstva": (
+        "modDokumenta.bas",
+        "        OtpUpisiClanstvo novaID, CStr(clanovi(i)), SRC\n",
+        "        ' SABOTAZA: clanstvo se ne prenosi na novu\n",
+        "Test_OTP_IspravkaIzdate",
+        "Ispravka: nova nosi oba bloka",
+    ),
+    # Stara ostaje aktivna: dve aktivne otpremnice nad istim blokovima.
+    "ispravka-ne-stornira-staru": (
+        "modDokumenta.bas",
+        "    If Not modStorno.StornoOtpremnica(staraID) Then\n",
+        "    If False Then   ' SABOTAZA: stara se ne stornira\n",
+        "Test_OTP_IspravkaIzdate",
+        "Ispravka: stara je stornirana",
+    ),
+    # Trag ispravke opet ide po BROJU umesto po identitetu (S1e pravilo).
+    "ispravka-trag-po-broju": (
+        "modDokumenta.bas",
+        "    RequireUpdateCell TBL_OTPREMNICA, rStara, COL_TRACE_ZAMENJEN_SA_ID, novaID, SRC\n",
+        "    RequireUpdateCell TBL_OTPREMNICA, rStara, COL_TRACE_ZAMENJEN_SA, novaID, SRC\n",
+        "Test_OTP_IspravkaIzdate",
+        "Ispravka: stara zna ko je zamenjuje",
+    ),
+    # Zaglavlje nije u snimku transakcije: pad posle storna ostavlja storniranu
+    # otpremnicu bez zamene -- tacno prozor zbog kog je stari tok pamtio pending.
+    "ispravka-pad-ostavlja-storniranu": (
+        "modDokumenta.bas",
+        "    tx.AddTableSnapshot TBL_OTPREMNICA\n"
+        "    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE\n"
+        "    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI\n"
+        "    ' Storno stare vraca gajbe koje je njeno izdavanje knjizilo (OtpIzdaj).\n",
+        "    ' SABOTAZA: zaglavlje nije u snimku, pa se storno ne vraca\n"
+        "    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE\n"
+        "    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI\n",
+        "Test_OTP_IspravkaIzdate",
+        "Ispravka: stara ostaje AKTIVNA kad ispravka padne",
+    ),
+    # Kapija cekiranog bloka opet pita MRTVU vezu Otkup.OtpremnicaID -- od S3a je
+    # niko ne pise, pa kapija uvek kaze "bezbedno je".
+    "kapija-bloka-po-staroj-vezi": (
+        "modStornoFlow.bas",
+        "        otpID = modDokumenta.OtpremnicaZaOtkup(Trim$(CStr(blkIds(k))))\n",
+        "        otpID = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, Trim$(CStr(blkIds(k))), COL_OTK_OTPREMNICA_ID))   ' SABOTAZA: stara veza\n",
+        "Test_OTP_KapijaBlokaPoKanonu",
+        "Kapija bloka: razlog imenuje aktivnu otpremnicu",
+    ),
     # Specifikacija opet stampa NACRT (S3b-2b).
     "spec-nacrt-stampa": (
         "modPrint.bas",
@@ -866,51 +924,6 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "stavka je prelabelirana na vrstu ciljnog dokumenta",
     ),
-    # Otpremnica flow mutira roditeljsku zbirnu po golom broju.
-    "otpremnica-bez-kapije-nad-zbirnom": (
-        "modStornoFlow.bas",
-        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        "        Dim razPar As String: razPar = ZbirnaMutRazlog(parentZbirna)\n",
-        "    If False Then   ' SABOTAZA: dvosmislena roditeljska zbirna se ignorise\n"
-        "        Dim razPar As String: razPar = ZbirnaMutRazlog(parentZbirna)\n",
-        "T_OtpremnicaNadDvosmislenomZbirnom_Staje",
-        "DUPLI staje kad je broj roditeljske zbirne dvosmislen",
-    ),
-    # Zatecen PENDING context iz starije verzije zaobilazi kapiju na startu.
-    "zatecen-context-bez-kapije": (
-        "modStornoFlow.bas",
-        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n"
-        "    If Len(razOZ) > 0 Then\n",
-        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n"
-        "    If False Then   ' SABOTAZA: zatecen context prolazi bez provere\n",
-        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
-        "tudja prijemnica NIJE prevezana na novu zbirnu",
-    ),
-    # Ista kapija, ali ono STO proverava: roditelj po poslovnom broju umesto iz
-    # context-a. Vraca tacno diverganciju iz pregleda -- kapija proveri
-    # jednoznacnu zbirnu SIBLINGA, a mutacije nize idu nad oldZbirna izabranog
-    # dokumenta. Guard prolazi, tudja prijemnica se preveze.
-    "stale-parent-po-broju": (
-        "modStornoFlow.bas",
-        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(oldZbirna)\n",
-        "    Dim sabZbirna As String   ' SABOTAZA: roditelj po broju, ne iz context-a\n"
-        "    sabZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE))\n"
-        "    Dim razOZ As String: razOZ = ZbirnaMutRazlog(sabZbirna)\n",
-        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
-        "tudja prijemnica NIJE prevezana na novu zbirnu",
-    ),
-    # Nesimetricna zastita: izvor cuvan, CILJ nije. Nizvodne operacije nad ciljem
-    # idu po golom broju, a zatecena kapija u writeru broji samo AKTIVNE vlasnike
-    # -- pa storniran vlasnik sa aktivnom decom prolazi.
-    "cilj-bez-istorijske-kapije": (
-        "modStornoFlow.bas",
-        "    Dim razNZ As String: razNZ = ZbirnaMutRazlog(newZbirna)\n"
-        "    If Len(razNZ) > 0 Then\n",
-        "    Dim razNZ As String: razNZ = ZbirnaMutRazlog(newZbirna)\n"
-        "    If False Then   ' SABOTAZA: ciljna zbirna se ne proverava\n",
-        "T_CiljnaZbirnaDvosmislena_Staje",
-        "razlog imenuje CILJNU zbirnu, ne staru",
-    ),
     # Kes tabela memoise NEUSPEH -- zatecen incident sa prave instalacije:
     # prazne liste za svaki tip dokumenta, bez ijedne greske, dok je tabela puna.
     "kes-memoise-neuspeh": (
@@ -1027,17 +1040,6 @@ SABOTAZE = {
         '    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", " Vi"',
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
-    ),
-    # PkPoIdentitetu je dobio parametar strict, ali ga NIJE koristio: zadata
-    # generacija koje nema vracala je prazno, pa je nizvodno izgledala kao
-    # 'dokument ne postoji' umesto 'ne mogu da ga razresim' -- a model se posle
-    # svega oznacavao kao valid. Komentar iznad koda je tvrdio suprotno od koda.
-    "identitet-nestao-prolazi": (
-        "modStornoFlow.bas",
-        "        If ids.count = 0 Then\n            If strict Then\n",
-        "        If ids.count = 0 Then\n            If False Then   ' SABOTAZA\n",
-        "T_StornoImpact_NestaoIdentitetJeInvalidan",
-        "nestao identitet OTPREMNICE obara uvid",
     ),
     # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
     # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
@@ -1197,27 +1199,6 @@ SABOTAZE = {
         # kapija ostajala ziva.
         "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
     ),
-    # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
-    # "tudji blok nije pomeren" bez pozitivne kontrole.
-    #
-    # DVE RAZLICITE TACKE, DVE SABOTAZE. Prazan izvor ID-eva ne stigne do
-    # prevezivanja: kapija ga digne kao NERAZRESEN IZVOR, pa completion ne
-    # uspe -- otud pada preduslov, a ne poslovna tvrdnja (zamka 6). Zato
-    # izvor i prevezivanje imaju svaki svoju sabotazu i svoju tvrdnju.
-    "completion-izvor-nerazresen": (
-        "modStornoFlow.bas",
-        "    Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)\n",
-        "    Set oldIDs = New Collection   ' SABOTAZA: izvor se ne razresi\n",
-        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
-        "zavrsetak ispravke je uspeo",
-    ),
-    "completion-ne-prevezuje": (
-        "modStornoFlow.bas",
-        "    Dim blokovi As Collection: Set blokovi = GetBlokOtkupIDs(oldIDs)\n",
-        "    Dim blokovi As Collection: Set blokovi = New Collection   ' SABOTAZA: nijedan blok se ne prevezuje\n",
-        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
-        "MOJ blok JESTE prevezan na zamensku otpremnicu",
-    ),
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
@@ -1226,16 +1207,6 @@ SABOTAZE = {
         "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
         "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
-    ),
-    # Zavrsetak ispravke: tacan OldDocID degradiran u prazan opseg -> broj.
-    "completion-degradira-olddocid": (
-        "modStornoFlow.bas",
-        "        If Len(srcGen) = 0 And Len(oldDocID) > 0 Then _\n"
-        "            srcStanica = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _\n"
-        "                                                COL_OTP_STANICA)))\n",
-        "        ' SABOTAZA: bez generacije se pada na goli broj\n",
-        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
-        "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici",
     ),
     # Storno otkupa po BROJU umesto po OtkupID-u izabranog reda (S1e): broj je
     # scoped po otkupnom mestu, pa prvi red broja moze biti tudji dokument.
@@ -5506,12 +5477,6 @@ _KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
 # istom sabotazom i dalje obara gejt. Spisak citaju i --proveri-sidra i
 # tools/dokaz.py, jer je isti pojam: nalaz koji je priznat, zapisan i ima vlasnika.
 POZNATI_NALAZI = {
-    "stale-parent-po-broju":
-        "deli tvrdnju",   # razdvajanje trazi novu tvrdnju u
-                          # T_ZatecenContext_NePrevezujeTudjePrijemnice: obe
-                          # sabotaze proizvedu isti vidljiv ishod, pa ih test
-                          # bez seam-a nad kapijom ne moze razlikovati.
-
     # Ista klasa, nadjena zetvom tvrdnji: OBE sabotaze obore BAS istu poruku
     # ("isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"), pa test
     # ne moze da kaze koja je od njih pala. Razdvajanje trazi novu tvrdnju u

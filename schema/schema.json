@@ -465,7 +465,9 @@
         "IzdatoStatus",
         "GeneracijaID",
         "ZbirnaGeneracijaID",
-        "KulturaID"
+        "KulturaID",
+        "IspravkaOdID",
+        "ZamenjenSaID"
       ]
     },
     {

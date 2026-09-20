@@ -109,7 +109,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
-- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`
+- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`

@@ -1446,6 +1446,12 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_SPEC_NACRT", ChrW(10007) & " Nijedna izabrana otpremnica nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa"
     UpsertRow lo, existing, "OTKUI_MSG_SPEC_NACRT", ChrW(183) & " nacrt se ne " & ChrW(353) & "tampa, presko" & ChrW(269) & "eno:"
     UpsertRow lo, existing, "OTKUI_ERR_SPEC", ChrW(10007) & " Specifikacija nije napravljena:"
+    ' --- S3c: ispravka izdate otpremnice ---
+    UpsertRow lo, existing, "OTKUI_BTN_RED_ISPRAVI", "Ispravi"
+    UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI", "Ispraviti izdatu otpremnicu"
+    UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI2", "? Stara se stornira, a nova nastaje kao NACRT sa istim blokovima, istim o" & ChrW(269) & "ekivanjem i NOVIM brojem."
+    UpsertRow lo, existing, "OTKUI_MSG_ISPRAVLJENA", "Nova otpremnica (nacrt):"
+    UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"

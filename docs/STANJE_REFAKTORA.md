@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 19.09.2026 (S3b-2b).
+**Ažurirano:** 20.09.2026 (S3c).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S3c — storno i ispravka otpremnice po `OtpremnicaID`-u
+## Sledeći korak: S3c-2 — „izgubljen blok“ u OPORAVKU, pa S3d
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -115,8 +115,19 @@
     članstva su tvrde greške. Bez toga je članstvo na nepostojeći otkup davalo uredan PDF bez tog izvora (validan
     sibling je zadovoljavao kapiju „izdata bez izvora“), a članstvo na nepostojeću otpremnicu sklanjalo slobodan
     blok sa liste NEVEZANI. P2 (strog čitač zaglavlja otkupa za štampu) → backlog §15.
-19. **Sledeće:** S3c — storno i ispravka otpremnice po `OtpremnicaID`-u (B-022..B-025 pauzirani od #362),
-    vrsta „izgubljen blok“ u OPORAVKU (B-041), brisanje uspavanog framework koda.
+19. **S3c urađen** (§14.18): **ispravka izdate otpremnice je jedan potez i jedna transakcija** — storno stare +
+    nov NACRT koji nasleđuje zaglavlje, očekivanje i sve izvore; nacrt se i dalje samo menja (F2), a broj se ne
+    nasleđuje (A9). Trag ide po identitetu: `tblOtpremnica` dobija `IspravkaOdID`/`ZamenjenSaID`.
+    **Odluka operatera:** DUPLI, PONIŠTENJE i REŠI KASNIJE za otpremnicu se **brišu** — DUPLI je u kanonu isto što
+    i običan storno, a druga dva nemaju o čemu da odluče dok F3 (S4) i F4 (S6) ne postoje.
+    Obrisan ceo okvir modova za otpremnicu (~800 linija, uključujući `StornoOtpremnicaByBroj_TX` i grane uvida).
+    **Nalaz:** kapija `BlockStornoDriftReason` je čitala mrtvu vezu `Otkup.OtpremnicaID`, pa od S3a nikad nije
+    odbijala; sada čita kanon i fail-closed je. B-039 (MANUAL zadaci) je `INTENTIONALLY REMOVED` — prozora između
+    storna i zamene više nema. `RunAllTests` 201 → **197** (obrisana četiri testa starog okvira), sabotaža **511**.
+20. **Sledeće:** S3c-2 — vrsta „izgubljen blok“ na ekranu OPORAVAK (B-041) i brojač (B-042) nad kanonom
+    (`NevezaniOtkupi` već postoji). Pa S3d (auto lanci kroz `CreateOtpremnicaIzIzvora_TX`, A13 kapija u
+    `IspravkaOtkupa_TX`) i S3e (brisanje `Otkup.OtpremnicaID` i linijskih polja zaglavlja + podela grupe
+    `otp_linija`).
 
 ## Alati i kapije
 
