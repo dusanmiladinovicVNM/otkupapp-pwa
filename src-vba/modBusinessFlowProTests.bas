@@ -291,6 +291,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_NevezaniBlokovi
     Test_OTP_IspravkaIzdate
     Test_OTP_KapijaBlokaPoKanonu
+    Test_OPO_IzgubljenBlok
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -6908,6 +6909,111 @@ Private Sub Test_OTP_KapijaBlokaPoKanonu()
 EH:
     LogFatal "Test_OTP_KapijaBlokaPoKanonu", Err.Number, Err.description
 End Sub
+
+' ============================================================
+' S3c-2 -- OPORAVAK vidi IZGUBLJEN BLOK (B-041) i broji ga u meniju (B-042).
+'
+' "Izgubljen" je samo blok koji je BIO u otpremnici pa ga je njen storno
+' oslobodio. Blok upisan bez otpremnice i clan aktivnog nacrta nisu nedovrsen
+' posao -- prvi ceka na radnom stolu, drugi je vec na dokumentu.
+'
+' Meri se i da se korupcija clanstva NE guta: strog citac pada, a lista mora da
+' pokaze red sa greskom umesto da tiho bude kraca.
+' ============================================================
+Private Sub Test_OPO_IzgubljenBlok()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OPOBLK")
+
+    Dim oslobodjen As String, nikad As String, uNacrtu As String
+    oslobodjen = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-OPOA-" & scenario), _
+                                OtkStavke(50#, 100#, 5, 0#, 0#, 0))
+    nikad = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-OPOB-" & scenario), _
+                           OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    uNacrtu = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-OPOC-" & scenario), _
+                             OtkStavke(20#, 100#, 2, 0#, 0#, 0))
+
+    Dim brStorn As String, izdata As String, nacrt As String
+    brStorn = TEST_PREFIX & "-OTP-OPOS-" & scenario
+    izdata = CreateOtpremnicaIzIzvora_TX(OtpHeader(brStorn), Pr3Izvor(oslobodjen, ""), g)
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-OPON-" & scenario), _
+                                     OtpOcek(20#, 2#, 0#, 0#), g)
+    AssertTrue Len(izdata) > 0 And Len(nacrt) > 0 And Len(nikad) > 0, _
+               "Oporavak: preduslovi napravljeni (" & g & ")"
+    If Len(izdata) = 0 Or Len(nacrt) = 0 Then GoTo Kraj
+
+    AssertTrue DodajOtpremnicaIzvor_TX(nacrt, uNacrtu, g), "Oporavak: treci blok je u nacrtu"
+    AssertTrue StornoOtpremnica_TX(izdata), "Oporavak: izdata otpremnica stornirana"
+
+    Dim brOslob As String, red As Object
+    brOslob = OtkPolje(oslobodjen, COL_OTK_BR_DOK)
+    Set red = NedRedZaRef(brOslob)
+    AssertTrue Not red Is Nothing, "Oporavak: oslobodjen blok je u listi Nedovrseno"
+    If Not red Is Nothing Then
+        AssertEquals "IZGUBLJEN_BLOK", CStr(red("kind")), _
+                     "Oporavak: vrsta problema je izgubljen blok"
+        AssertTrue InStr(1, CStr(red("opis")), brStorn, vbTextCompare) > 0, _
+                   "Oporavak: opis imenuje storniranu otpremnicu"
+    End If
+
+    AssertTrue NedRedZaRef(OtkPolje(nikad, COL_OTK_BR_DOK)) Is Nothing, _
+               "Oporavak: blok koji nikad nije vezan nije nedovrsen posao"
+    AssertTrue NedRedZaRef(OtkPolje(uNacrtu, COL_OTK_BR_DOK)) Is Nothing, _
+               "Oporavak: clan aktivnog nacrta nije u listi"
+
+    ' B-042: brojac uz stavku menija broji ISTU listu koju ekran crta.
+    AssertEquals CStr(modStornoRecovery.GetNedovrseno().count), _
+                 CStr(modScrOporavak.Scr_Brojac()), _
+                 "Oporavak: brojac menija broji istu listu"
+
+    ' Korupcija clanstva se NE guta: red sa greskom je vidljiv ishod.
+    Dim sirovi As Long, imaGresku As Boolean
+    sirovi = OtpUpisiSirovoClanstvo(nacrt, "OTK-NEMA-" & scenario)
+    imaGresku = NedImaStatus("GRESKA")
+    DeleteRow TBL_OTPREMNICA_IZVORI, sirovi
+    AssertTrue imaGresku, "Oporavak: pokvareno clanstvo daje vidljiv red, ne kracu listu"
+    AssertTrue Not NedImaStatus("GRESKA"), "Oporavak: posle ciscenja greske nema"
+
+    ' Storniran blok izlazi iz liste -- nema sta da se prevezuje.
+    AssertTrue StornoOtkup_TX(oslobodjen), "Oporavak: izgubljen blok storniran"
+    AssertTrue NedRedZaRef(brOslob) Is Nothing, _
+               "Oporavak: storniran blok nije nedovrsen posao"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_OPO_IzgubljenBlok", Err.Number, Err.description
+End Sub
+
+' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.
+Private Function NedRedZaRef(ByVal ref As String) As Object
+    Dim c As Collection, i As Long, d As Object
+    If Len(Trim$(ref)) = 0 Then Exit Function
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If StrComp(CStr(d("ref")), ref, vbTextCompare) = 0 Then
+            Set NedRedZaRef = d
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Da li lista Nedovrseno ima ijedan red datog statusa.
+Private Function NedImaStatus(ByVal status As String) As Boolean
+    Dim c As Collection, i As Long, d As Object
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If StrComp(CStr(d("status")), status, vbTextCompare) = 0 Then
+            NedImaStatus = True
+            Exit Function
+        End If
+    Next i
+End Function
 ' Polja ekrana F2 za izmenu nacrta -- isti kljucevi koje ljuska predaje
 ' Scr_Save; zaglavlje se prepisuje sa samog nacrta, menja se samo klasa I.
 Private Function PoljaF2IzNacrta(ByVal otpID As String, ByVal kolI As Double, _

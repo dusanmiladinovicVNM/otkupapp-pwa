@@ -3563,6 +3563,34 @@ put** — pa je uvek vraćala „bezbedno je“ i odbijanje nikad nije stizalo d
 **Van opsega, zapisano:** vrsta „izgubljen blok“ na ekranu OPORAVAK (B-041) i njen brojač (B-042) idu u **S3c-2** —
 čitač (`modDokumenta.NevezaniOtkupi`) već postoji, ali je OPORAVAK svoja površina i ne staje uz ovaj rez.
 
+### 14.19) S3c-2 — „izgubljen blok“ na ekranu OPORAVAK, nad kanonom (20.09.2026)
+
+Vrsta `IZGUBLJEN_BLOK` u listi `Nedovršeno` (B-041) i njen brojač uz stavku menija (B-042) vraćeni su —
+ali nad kanonskim članstvom, a ne nad `Otkup.OtpremnicaID` na kojem je stajao obrisani `GetLostOtkupBlokovi`.
+
+**Ko je „izgubljen“.** Ne svaki blok bez otpremnice. Blok upisan bez izabrane otpremnice je **normalno stanje**:
+čeka na radnom stolu i vidi se u F1, lista „Bez otpremnice“ (A-025, S3b-2b). U OPORAVAK ulazi samo onaj koji je
+**bio** u otpremnici pa ga je njen storno oslobodio — posao koji je neko započeo i ostavio. Merilo je zato zapis
+istorije („bila u“), a ne sama nevezanost; skup računa `modDokumenta.NevezaniOtkupi`, isti čitač kojim radni sto
+zna šta je slobodno, pa lista ne može da pokaže blok koji je u stvari zauzet.
+
+**Dedup se ne deli sa osirotelim dokumentima.** Broj bloka i broj prijemnice su dva **različita niza istog oblika**
+(`1/ddmmgg`), pa bi zajednički `seen` sakrio red zbog tuđeg broja.
+
+**Pad strogog čitača se ne guta.** Članstvo se čita strogo (od review-a #364), a ovo je ekran koji postoji da
+nabroji ono što nije u redu — tiho kraća lista bila bi najgori mogući ishod baš ovde. Zato greška daje **vidljiv
+red** sa statusom `GRESKA` i porukom čitača.
+
+**Radnja nad redom je pokazivač, ne mutacija:** „Otkup (F1), lista Bez otpremnice: Veži za otpremnicu“. Vezivanje
+ostaje kod kanonskog pisca i identiteta (`OtkupID`), tamo gde i pripada; OPORAVAK je pregled.
+
+**Testovi:** `Test_OPO_IzgubljenBlok` — oslobođen stornom je u listi i **opis imenuje storniranu** · nikad vezan i
+član aktivnog nacrta **nisu** · storniran blok izlazi · brojač menija = broj redova liste (B-042) · pokvareno
+članstvo (sirov upis mimo pisca) daje **red sa greškom**, pa se posle čišćenja gubi. Sabotaže
+`oporavak-blok-nikad-vezan` i `oporavak-blok-guta-gresku` (ukupno **513**).
+
+**Time je S3c zatvoren.** Sledeći je S3d.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

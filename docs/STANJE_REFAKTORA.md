@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S3c-2 — „izgubljen blok“ u OPORAVKU, pa S3d
+## Sledeći korak: S3d — auto lanci kroz `CreateOtpremnicaIzIzvora_TX`
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -124,10 +124,13 @@
     **Nalaz:** kapija `BlockStornoDriftReason` je čitala mrtvu vezu `Otkup.OtpremnicaID`, pa od S3a nikad nije
     odbijala; sada čita kanon i fail-closed je. B-039 (MANUAL zadaci) je `INTENTIONALLY REMOVED` — prozora između
     storna i zamene više nema. `RunAllTests` 201 → **197** (obrisana četiri testa starog okvira), sabotaža **511**.
-20. **Sledeće:** S3c-2 — vrsta „izgubljen blok“ na ekranu OPORAVAK (B-041) i brojač (B-042) nad kanonom
-    (`NevezaniOtkupi` već postoji). Pa S3d (auto lanci kroz `CreateOtpremnicaIzIzvora_TX`, A13 kapija u
-    `IspravkaOtkupa_TX`) i S3e (brisanje `Otkup.OtpremnicaID` i linijskih polja zaglavlja + podela grupe
-    `otp_linija`).
+20. **S3c-2 urađen** (§14.19): vrsta „izgubljen blok“ u listi `Nedovršeno` (B-041) i brojač uz meni (B-042)
+    vraćeni su **nad kanonskim članstvom**. „Izgubljen“ je samo blok koji je **bio** u otpremnici pa ga je njen
+    storno oslobodio — blok upisan bez otpremnice je normalno stanje i čeka na radnom stolu (F1). Pad strogog
+    čitača daje **vidljiv red sa greškom**, ne tiho kraću listu. Radnja nad redom je pokazivač na F1; vezivanje
+    ostaje kod kanonskog pisca. **S3c zatvoren.**
+21. **Sledeće:** S3d — auto lanci kroz `CreateOtpremnicaIzIzvora_TX` i otvaranje A13 kapije u
+    `IspravkaOtkupa_TX`. Pa S3e (brisanje `Otkup.OtpremnicaID` i linijskih polja zaglavlja, `otp_linija` podela).
 
 ## Alati i kapije
 

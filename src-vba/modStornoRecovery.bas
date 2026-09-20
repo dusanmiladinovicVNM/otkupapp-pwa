@@ -68,11 +68,88 @@ Public Function GetNedovrseno() As Collection
         "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
     AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
         "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
-    ' Vrsta IZGUBLJEN_BLOK (GetLostOtkupBlokovi nad Otkup.OtpremnicaID) je
-    ' obrisana u S1b-1 -- stari model; vraca S3.
+    ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
+    AddIzgubljeniBlokovi result
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"
+End Function
+
+' Blokovi koje je STORNO otpremnice ostavio nevezane (B-041).
+'
+' "Izgubljen" nije svaki blok bez otpremnice. Blok upisan bez izabrane otpremnice
+' je normalno stanje -- ceka na radnom stolu i vidi se u F1, lista "Bez
+' otpremnice". Ovde je samo onaj koji je BIO u otpremnici pa ga je njen storno
+' oslobodio: posao koji je neko zapoceo i ostavio. Zato se broji bas zapis
+' istorije ("bila u"), a ne sama nevezanost.
+'
+' Skup racuna KANON (modDokumenta.NevezaniOtkupi) -- isto pravilo po kome radni
+' sto zna sta je slobodno, pa lista ne moze da ponudi blok koji je u stvari
+' zauzet, ni da sakrije onaj koji nije.
+'
+' Dedup `seen` se NAMERNO ne deli sa osirocenim dokumentima: broj bloka i broj
+' prijemnice su dva razlicita niza istog oblika ("1/ddmmgg"), pa bi zajednicki
+' spisak sakrio red zbog tudjeg broja.
+'
+' Strog citac clanstva PADA na korupciji, i to se ovde NE guta: red sa statusom
+' GRESKA je vidljiv ishod, a tiho kraca lista nije -- ovo je ekran koji postoji
+' da nabroji ono sto nije u redu.
+Private Sub AddIzgubljeniBlokovi(ByRef result As Collection)
+    Dim nevezani As Object, brojevi As Object
+    Dim k As Variant, bilaU As String, ref As String
+    Dim errDesc As String
+
+    On Error GoTo EH
+
+    Set nevezani = modDokumenta.NevezaniOtkupi()
+    If nevezani Is Nothing Then Exit Sub
+    If nevezani.count = 0 Then Exit Sub
+
+    Set brojevi = BrojeviOtkupa()
+
+    For Each k In nevezani.keys
+        bilaU = Trim$(CStr(nevezani(k)))
+        If Len(bilaU) > 0 Then
+            ref = ""
+            If brojevi.Exists(CStr(k)) Then ref = Trim$(CStr(brojevi(CStr(k))))
+            If Len(ref) = 0 Then ref = CStr(k)
+            AddNedRowFull result, "IZGUBLJEN_BLOK", ref, "IZGUBLJEN", _
+                Poruka("OTKUI_OPO_BLOK_OPIS") & " " & bilaU, _
+                Poruka("OTKUI_OPO_BLOK_AKCIJA"), _
+                "", "Otkup", "", "", "BLOK"
+        End If
+    Next k
+    Exit Sub
+EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    errDesc = Err.description
+    LogErr MOD_NAME & ".AddIzgubljeniBlokovi"
+    AddNedRowFull result, "IZGUBLJEN_BLOK", "", "GRESKA", _
+        Poruka("OTKUI_OPO_BLOK_GRESKA") & " " & errDesc, _
+        Poruka("OTKUI_OPO_BLOK_AKCIJA_GRESKA"), "", "Otkup", "", "", "BLOK"
+End Sub
+
+' UCase(OtkupID) -> BrojDokumenta, jednim prolazom kroz tabelu. NevezaniOtkupi
+' vraca kljuceve u UCase, pa se i ovde tako kljuca; LookupValue po bloku bi bio
+' jos jedan prolaz po svakom redu liste.
+Private Function BrojeviOtkupa() As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BrojeviOtkupa = d
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If Not IsArray(data) Then Exit Function
+
+    Dim cId As Long, cBr As Long, i As Long, oid As String
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    If cId = 0 Or cBr = 0 Then Exit Function
+
+    For i = 1 To UBound(data, 1)
+        oid = UCase$(Trim$(CStr(data(i, cId))))
+        If Len(oid) > 0 Then d(oid) = Trim$(CStr(data(i, cBr)))
+    Next i
 End Function
 
 Private Sub AddNedRowFull(ByRef col As Collection, ByVal kind As String, ByVal ref As String, _
