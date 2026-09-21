@@ -118,6 +118,35 @@ Private Function OtpremnicaAktivnaPoID(ByVal otpremnicaID As String) As Boolean
         LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_STORNIRANO)))) <> "DA")
 End Function
 
+' Par (identitet, broj) mora da pripada ISTOM dokumentu (review #371, P1).
+'
+' Prost storno zbirne ne ide kroz okvir ispravke, pa se par ovde i proverava:
+' zaglavlje bi se stornuiralo po ID-u, a poruka o vezanoj prijemnici se gradi po
+' BROJU -- razidjen par bi stornirao jedan dokument a izvestavao o drugom.
+' Zastareo izbor u listi (dokument storniran ili prevezan izmedju punjenja liste
+' i klika) je jedini realan izvor takvog para -- ne postoje zatecene sveske u
+' kojima bi par vec bio pokvaren. Zato je poruka o osvezavanju liste, ne o
+' gresci u podacima.
+Private Function ZbirnaParOK(ByVal zbirnaID As String, ByVal broj As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(zbirnaID)) = 0 Then Exit Function
+    If Len(Trim$(broj)) = 0 Then ZbirnaParOK = True: Exit Function
+
+    Dim kanon As String
+    kanon = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_ZBR_BROJ)))
+    ZbirnaParOK = (StrComp(kanon, Trim$(broj), vbTextCompare) = 0)
+End Function
+
+' Zbirna po PK: postoji i nije stornirana. Prazan ID = False (fail-closed).
+' Od S4-2 je identitet zbirne ZbirnaID, pa F8 salje njega iz nevidljive kolone.
+Private Function ZbirnaAktivnaPoID(ByVal zbirnaID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(zbirnaID)) = 0 Then Exit Function
+    If FindRows(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID)).count <> 1 Then Exit Function
+    ZbirnaAktivnaPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_STORNIRANO)))) <> "DA")
+End Function
+
 ' Otkup po PK: postoji i nije storniran. Prazan ID = False (fail-closed).
 Private Function OtkupAktivanPoID(ByVal otkupID As String) As Boolean
     On Error Resume Next
@@ -166,10 +195,18 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_ZBIRNA
-            ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera
-            ' postojanja je ista kao za ostale robne dokumente.
-            If Not AktivanPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, docID) Then _
+            ' ISTI IDENTITET KAO NA IZVRSENJU (review #371, P1).
+            '
+            ' AktivanPoIdentitetu docID tumaci kao GENERACIJU (IdoviGeneracije).
+            ' Od S4-2 F8 salje ZbirnaID, pa je ovaj preflight za svaku kanonsku
+            ' zbirnu (generacija prazna) vracao "nije pronadjen" -- i do ispravnog
+            ' StornoIzvrsi se nije ni stizalo. Preflight i izvrsenje moraju da
+            ' citaju ISTU vrednost na ISTI nacin.
+            If Not ZbirnaAktivnaPoID(docID) Then
                 StornoRazlog = NijePronadjen(broj)
+            ElseIf Not ZbirnaParOK(docID, broj) Then
+                StornoRazlog = modPoruke.Poruka("STORNO_ERR_ZBR_PAR")
+            End If
 
         Case STIP_PRIJEMNICA
             If Not AktivanPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, docID) Then _
@@ -306,7 +343,17 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoOtpremnica_TX(Trim$(docID))
 
         Case STIP_ZBIRNA
-            ok = StornoZbirna_TX(broj, docID)
+            ' Jedan dokument = jedno zaglavlje = jedan ZbirnaID (S4-2). Prazan
+            ' ID se NE razresava po broju: isti broj sme da nose dva vozaca.
+            If Not ZbirnaAktivnaPoID(docID) Then
+                poruka = NijePronadjen(broj)
+                Exit Function
+            End If
+            If Not ZbirnaParOK(docID, broj) Then
+                poruka = modPoruke.Poruka("STORNO_ERR_ZBR_PAR")
+                Exit Function
+            End If
+            ok = StornoZbirna_TX(Trim$(docID))
             If ok Then
                 vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
                 ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",

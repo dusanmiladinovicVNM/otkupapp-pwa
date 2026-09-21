@@ -1646,7 +1646,12 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         ' kolona bila prazna, pa bi F8 dokument trazio PO BROJU -- a broj je
         ' jedinstven tek po (stanica, dan).
         Case "OTPREMNICA":                                IdKolonaTipa = COL_OTP_ID
-        Case "ZBIRNA", "PRIJEMNICA":                       IdKolonaTipa = COL_GENERACIJA_ID
+        ' Zbirna od S4-2: identitet je ZbirnaID, isto kao otkup i otpremnica.
+        ' Kanonski pisac GeneracijaID ne upisuje, pa bi skrivena kolona kod
+        ' kanonskog dokumenta bila prazna -- a radnja bi pala nazad na broj.
+        Case "ZBIRNA":                                      IdKolonaTipa = COL_ZBR_ID
+        ' Prijemnica ostaje na generaciji do S6: njen pisac je jos stari model.
+        Case "PRIJEMNICA":                                  IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
         Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID

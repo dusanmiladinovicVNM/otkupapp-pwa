@@ -1106,7 +1106,9 @@ Private Sub GldStornoZbirne(ByVal idx As Long)
         Err.Raise GLD_ERR, "GldStornoZbirne", "zbirna " & ciljID & " nije nadjena"
     End If
 
-    If Not StornoZbirna_TX(broj, gen) Then
+    ' Storno ide po ZbirnaID-u (S4-2) -- a ciljID je bas on, pa se broj i
+    ' generacija ovde vise ne razresavaju. Broj ostaje samo za poruku ispod.
+    If Not StornoZbirna_TX(ciljID) Then
         Err.Raise GLD_ERR, "GldStornoZbirne", "storno zbirne nije uspeo"
     End If
 End Sub

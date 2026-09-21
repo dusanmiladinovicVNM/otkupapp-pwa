@@ -3910,6 +3910,135 @@ anomalije, svaka pada po imenu, pa se posle vraćanja meri da je čitalac opet �
 **Sledeće:** S4-2 — **prvo identitet (kapija gore)**, pa F3 nad kanonom (ekran bira izdate
 otpremnice, pauza pada, stari pisac se briše).
 
+### 14.24) S4-2a — identitet zbirne je `ZbirnaID` (21.09.2026)
+
+**Ovo je kapija iz §14.23, isporučena pre F3.** Review #370 ju je premestio iz S4-3 u preduslov S4-2, uz
+obrazloženje koje merenje potvrđuje: dok je F3 pauziran ništa ne laže, ali bi između „F3 radi" i
+„identitet je sređen" postojao prozor u kom operater pravi dokument bez stabilnog ključa.
+
+**Zašto S4-2 ide u dva PR-a.** Merenje pred rez: aparatura generacije ima **22 reference samo u
+`modDokumenta`**, plus `modSetup` (4), `modStornoFlow` (5), `modMasterSync`, `modHelpers`,
+`modPaletniList`, `modIntegritet` — a `ZBR-CHILD-01` je vezuje za **decu** (prijemnica, paleta), koja
+ostaju na starom modelu do S6. Potpuno uklanjanje generacije zato nije posao ovog slajsa. Rez je
+uži i tačno pokriva kapiju: **identitet zbirne u ljusci, u stornu i u integritetu**.
+
+#### Urađeno
+
+| Celina | Bilo | Postalo |
+|---|---|---|
+| Nevidljiva kolona identiteta (F8) | `GeneracijaID` — kod kanonskog dokumenta **prazna** | `ZbirnaID` |
+| `modStorno.StornoZbirna` / `_TX` | `(BrojZbirne, GeneracijaID)` | `(ZbirnaID)` — bira **tačno jedan** red |
+| F8 dispečer storna | `StornoZbirna_TX(broj, docID)` | provera `ZbirnaAktivnaPoID` + `StornoZbirna_TX(docID)` |
+| Uvid pred storno | `HLI` po paru (broj, generacija) | `HLZ` po `ZbirnaID`; `ZbirnaKgZaUvid(zbirnaID)` |
+| `Chk_B9` | „aktivna zbirna bez `GeneracijaID`" | „bez `ZbirnaID`-a **ili sa duplim**" |
+
+**Stari okvir se sam prevodi.** `modStornoFlow` i dalje radi po (broj, generacija) i prevodi ih u ID
+kroz `ZbrIdIliGreska` — **fail-closed**: nerazrešen identitet diže grešku umesto da padne na broj.
+Prevod stoji na strani okvira, ne u jezgru, pa okvir može da nestane u S4-3 bez ijedne izmene u jezgru.
+
+**Kapija nad vlasnicima broja je obrisana, ne zaobiđena.** `RequireJedanVlasnikPoBroju` je štitila
+izbor **po broju**; izbora po broju više nema, pa štiti nešto što ne postoji. Umesto nje jezgro diže
+grešku ako dva reda nose isti `ZbirnaID` — to je jedina dvosmislenost koja je u novom modelu moguća.
+
+#### Zašto rešenje nije bilo „dodaj generaciju kanonskom piscu"
+
+Time bi dokument opet imao **dva** identiteta, a ceo refaktor ide u suprotnom smeru:
+
+```
+ZbirnaID      = identitet kanonskog dokumenta
+GeneracijaID  = legacy mehanizam, umire sa okvirom (S4-3) i decom (S6)
+BrojZbirne    = poslovna labela
+```
+
+#### Kapije
+
+`vba_check` (sabotaža **529 → 530**), obe `who_writes`, `gen_schema_module`, `popis_citalaca`
+(pragovi nepromenjeni — merenje je PROD, a identitet se ne meri brojem referenci).
+
+Nov test `Test_ZBR_LjuskaNosiZbirnaID` meri **oba kraja** iste tvrdnje: da red u mreži nosi baš
+`ZbirnaID` (i da kanonski dokument generaciju nema), i da storno tim ID-em obori baš taj dokument.
+Bez druge polovine bi kolona mogla da nosi tačnu vrednost koju niko ne koristi.
+
+Dva zatečena testa su preimenovana jer im je ime tvrdilo staru premisu:
+`T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje` → `…PoIDKaskadaStaje`,
+`T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju` → `…IPrazanIdentitet`. Tvrdnje se **ne menjaju** —
+dvosmislen broj i dalje ne sme da odlučuje koji dokument pada; menja se čime se dokument imenuje.
+
+#### Review #371 (NO-GO, tri P1) — identitet je bio presečen na pola
+
+Prvi prolaz je promenio **krajeve** lanca a ne i sredinu, pa je ista vrednost u dva sloja imala dva
+značenja. Merenje iz review-a:
+
+| P1 | Šta je bilo | Ispravka |
+|---|---|---|
+| `StornoZbirna_TX` je posle preimenovanja parametra i dalje slao `brojZbirne` u monitoring — uz `Option Explicit` to je **compile blocker**, koji statički CI ne vidi | zeleni CI ≠ projekat se kompajlira | monitoring dobija `zbirnaID` |
+| Preflight `StornoRazlog` je za ZBIRNU zvao `AktivanPoIdentitetu`, koji `docID` tumači kao **generaciju** — kanonska zbirna (generacija prazna) je dobijala „nema nestorniranog dokumenta" i do izvršenja se nije ni stizalo | preflight i izvršenje čitali istu vrednost različito | preflight zove `ZbirnaAktivnaPoID`, isti čitač kao izvršenje |
+| Ceo okvir ispravke (`ScanZbirna`, `StornoZbirnaIDetach_TX`, `PonistiZbirnaChain_TX`) je primao `ZbirnaID` a prosleđivao ga kao `gen` | tip/semantika presečeni | okvir prima **`ZbirnaID`**; generaciju **izvodi** iz njega (`GenZaZbirnu`) i koristi je samo za legacy scoping dece |
+
+**Smer je sada jedan**, i to je poenta:
+
+```
+ZbirnaID --> mutacija zaglavlja        (direktno)
+         --> legacy scoping dece       (izvedena generacija)
+```
+
+a ne obrnuto — `ZbirnaID` tretiran kao generacija pa tražen nazad `ZbirnaID`, što bi vratilo
+sekundarni identitet kao autoritet.
+
+**Zrno prevoda je fail-closed.** Jedna legacy generacija legitimno pokriva **dva** reda `tblZbirna`
+(Klasa I i II starog modela), a `StornoZbirna` po ID-u obara **tačno jedan** — `Keys()(0)` bi od
+logičkog dokumenta napravio proizvoljan red i ostavio drugu klasu aktivnom. `ZbrIdIzGeneracije`
+prevodi samo kad je pogodak jednoznačan; `ZbrIdPoBroju` isto, za zatečene putanje koje nose samo broj.
+
+**Zatvorena je i rupa koju je otkrila zastarela sabotaža:** kad identitet stiže gotov iz ljuske, niko
+više nije proveravao da postoji. `RequireZbirnaPostoji` to radi u strict režimu, i sabotaža sada čuva
+baš tu kapiju.
+
+**Nov integration test** `Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument` ide putem kojim ide operater —
+preflight → izbor moda → izvršenje — nad **dva dokumenta istog broja** (različiti vozači). Raniji test
+je merio krajeve lanca i baš zato nije video pokvarenu sredinu.
+
+#### Review #371, drugi krug — par `(BrojZbirne, ZbirnaID)` nije bio proveren
+
+Prvi krug je dao ispravne **tipove** (broj = labela, ID = identitet), ali par niko nije validirao. Bio
+je moguć poziv `(broj = A, zbirnaID = B)`, a posledica nije teorijska:
+
+```
+StornoZbirnaIDetach_TX:
+    StornoZbirna(zbrID)                 -> stornira ZAGLAVLJE B
+    DetachOtpremniceInline(broj, ...)   -> odvezuje DECU A
+                                        -> HEADER A ostaje aktivan
+```
+
+Identitet i članstvo se opet raziđu — baš klasa problema koju refaktor uklanja.
+
+**Ispravka ide korak dalje od validacije para: broj se čita IZ identiteta.** `RequireZbirnaPar` vraća
+kanonski `BrojZbirne` pročitan iz zaglavlja, i nizvodno se koristi **on**; prosleđeni broj je samo
+provera zastarelog izbora. Tako labela nizvodno nema autoritet ni kad je tačna.
+
+```
+zbirnaID -> zaglavlje -> kanonski BrojZbirne -> scoping dece
+```
+
+**Prost storno ne ide kroz okvir**, pa par ima svoju kapiju na granici komande (`ZbirnaParOK` u
+`StornoRazlog` i `StornoIzvrsi`) sa porukom o **osvežavanju liste** — zastareo izbor je jedini realan
+izvor takvog para, pa poruka govori operateru šta da uradi, ne šta je pokvareno.
+
+**Poredak kapija je bitan.** `PonistiZbirnaChain_TX` razrešava ID tek **posle** svoje kapije
+dvosmislenosti; tvrd prevod na vrhu je gutao informativnu poruku („broj je pripadao više vlasnika") i
+operater bi dobio generički neuspeh. Kaskada iz prijemnice zato koristi **meki** prevod generacije
+(`ZbrIdIzGeneracijeAko`).
+
+**Uvid** razrešava identitet jednom, na ulazu (`ZbrIdUvid`): zadat ID se proverava (postoji i nosi baš
+taj broj), a bez njega se ide po broju — i to samo dok je jednoznačan.
+
+**Testovi koji su govorili starim identitetom su prevedeni, ne obrisani:** `ZBR-F4` bira dokument
+`ZbirnaID`-em umesto generacijom (tvrdnja ista — ko kaže *koji* dokument dira, prolazi i kad broj nose
+dva), a prost storno zbirne u `modTest` šalje ID. Nov `Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument`
+meri ukršten par i tvrdi da **ništa** nije dirnuto, uz pozitivnu kontrolu da ispravan par prolazi.
+
+**Sledeće:** S4-2b — F3 nad kanonom (ekran bira izdate otpremnice, pauza pada, stari pisac se briše).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

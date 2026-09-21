@@ -1218,12 +1218,25 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
     ),
+    # S4-2 (review #371, P1): prost storno zbirne ne ide kroz okvir, pa se par
+    # (identitet, broj) proverava na granici komande. Bez te provere bi poziv
+    # (broj A, ID B) stornirao zaglavlje B a izvestavao o dokumentu A.
+    "zbirna-par-nije-proveren": (
+        "modStornoDok.bas",
+        "            If Not ZbirnaParOK(docID, broj) Then\n",
+        "            If False Then   ' SABOTAZA: ukrsten par prolazi\n",
+        "Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument",
+        "ZBR par: ukrsten par (broj A, ID B) se ODBIJA",
+    ),
     # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
     # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
-    "zbirna-ne-prosledjuje-strict": (
+    # S4-2, drugi krug (review #371): identitet stize gotov iz ljuske, pa se
+    # broj mora citati IZ NJEGA -- inace je moguc par (broj A, ID B), koji
+    # stornira zaglavlje B i odvezuje decu A.
+    "zbirna-ne-proverava-par": (
         "modStornoFlow.bas",
-        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)\n",
-        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))   ' SABOTAZA\n",
+        "        broj = RequireZbirnaPar(Trim$(zbirnaID), broj, MOD_NAME & \".ScanZbirna\")\n",
+        "        ' SABOTAZA: par broj/identitet se ne proverava\n",
         "T_StornoImpact_NestaoIdentitetJeInvalidan",
         "nestao identitet ZBIRNE obara uvid",
     ),
@@ -1434,12 +1447,15 @@ SABOTAZE = {
         "ISPRAVKA pod kolizijom broja prolazi kad je identitet poznat",
     ),
     # Zaglavlje zbirne po broju umesto po generaciji.
+    # S4-2: zaglavlje se bira po ZbirnaID-u. Sabotaza vraca izbor po broju,
+    # pa padne bas tvrdnja da tudji dokument istog broja prezivi.
     "zbirna-zaglavlje-po-broju": (
         "modStorno.bas",
-        "        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _\n"
-        "                                   generacijaID, SRC) Then\n",
-        "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then   ' SABOTAZA\n",
-        "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje",
+        "        If StrComp(Trim$(NzToText(data(i, colId))), kljuc, vbTextCompare) = 0 Then\n"
+        "            If foundAny Then\n",
+        "        If Len(kljuc) > 0 Then   ' SABOTAZA: bira sve redove, ne svoj\n"
+        "            If False Then\n",
+        "T_Zbirna_ZaglavljePoIDKaskadaStaje",
         "zbirna drugog vozaca istog broja OSTAJE aktivna",
     ),
     # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
@@ -5434,15 +5450,26 @@ SABOTAZE = {
         "modIntegritet.bas",
         "            If id.activeLogicalCount > 1 Then\n",
         "            If id.activeLogicalCount > 2 Then   \' SABOTAZA: dva se ne broje\n",
-        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
+        "T_Integritet_VidiDvosmislenBrojIPrazanIdentitet",
         "B8 vidi broj sa dva aktivna dokumenta",
     ),
-    "integritet-ne-vidi-praznu-generaciju": (
+    # S4-2: B9 meri identitet, a identitet zbirne je ZbirnaID, ne generacija.
+    "integritet-ne-vidi-prazan-identitet": (
         "modIntegritet.bas",
-        "        If Len(Trim$(NzToText(data(r, cGen)))) = 0 Then\n",
-        "        If False Then   \' SABOTAZA: prazna generacija se ne prijavljuje\n",
-        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
-        "B9 vidi aktivnu zbirnu bez GeneracijaID",
+        "        If Len(zid) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: prazan ZbirnaID se ne prijavljuje\n",
+        "T_Integritet_VidiDvosmislenBrojIPrazanIdentitet",
+        "B9 vidi aktivnu zbirnu bez ZbirnaID-a",
+    ),
+    # S4-2: identitet zbirne u ljusci. Vracanje na generaciju daje PRAZNU
+    # kolonu kod kanonskog dokumenta (pisac je ne upisuje), pa bi radnja
+    # pala nazad na broj -- a broj nije identitet.
+    "zbr-ljuska-po-generaciji": (
+        "modScrDokumenti.bas",
+        "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_ZBR_ID\n",
+        "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_GENERACIJA_ID\n",
+        "Test_ZBR_LjuskaNosiZbirnaID",
+        "red u mrezi F8 nosi ZbirnaID",
     ),
     # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
     # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
@@ -5468,7 +5495,7 @@ SABOTAZE = {
         "    If scopedPoGeneraciji Then Exit Function\n",
         "    If False Then Exit Function   ' SABOTAZA: popustanje se ne desava\n",
         "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno SA generacijom prolazi iako broj nosi dva dokumenta",
+        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta",
     ),
     # Druga strana istog prekidaca: kapija pusta BEZ obzira na to da li akter
     # zna koji dokument dira. Bez ove sabotaze "popusta samo kad je scoped" bi

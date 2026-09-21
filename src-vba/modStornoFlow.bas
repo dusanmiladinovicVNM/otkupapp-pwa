@@ -383,7 +383,13 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             cid = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, FLOW_DOC_ZBIRNA, , , , , , _
                 "Ispravka zbirne: storno stare, ceka snimanje nove.")
             If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram context.": Exit Function
-            If Not StornoZbirna_TX(broj, docID) Then
+            If Len(Trim$(zbrOldID)) = 0 Then
+                FailCorrectionContext cid, "Identitet stare zbirne nije razresen."
+                r("correctionID") = cid
+                r("message") = "Ne mogu da razresim koju zbirnu stornirati."
+                Exit Function
+            End If
+            If Not StornoZbirna_TX(zbrOldID) Then
                 FailCorrectionContext cid, "Storno stare zbirne nije uspeo."
                 r("correctionID") = cid: r("message") = "Storno zbirne nije uspeo."
                 Exit Function
@@ -862,11 +868,22 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
                 ' ZBR-CHILD-01: v. isti obrazac u otpremnickoj grani -- dete zna
                 ' roditelja, pa se ne pogadja po broju.
+                ' Dete nosi GENERACIJU roditelja (ZBR-CHILD-01), a kaskada od
+                ' S4-2 radi po ZbirnaID-u -- prevod je fail-closed: jedna legacy
+                ' generacija legitimno pokriva dva zaglavlja (Klasa I i II), a
+                ' storno po ID-u obara tacno jedno.
                 Dim genP As String
                 genP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
                                             prijID, COL_DETE_ZBIRNA_GEN))
                 If Len(genP) = 0 Then genP = ZbirnaGeneracijaZaBroj(parentZbirna)
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, genP)
+
+                ' Prevod je MEK: kad generacija ne daje jednoznacno zaglavlje,
+                ' ID se ne salje i kaskada staje na svojoj kapiji, koja ume da
+                ' imenuje razlog. Tvrd prevod bi tu poruku pojeo.
+                Dim zbrIdP As String
+                zbrIdP = ZbrIdIzGeneracijeAko(genP)
+
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, zbrIdP)
                 If Not CBool(cascP("ok")) Then
                     ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
                     Dim razlogP As String: razlogP = ""
@@ -936,6 +953,144 @@ End Function
 ' bi se inace napravio TRAJAN recovery zapis nad tudjim dokumentom.
 ' strict: prazan PK tada znaci iskljucivo "nema takvog dokumenta", ne "nisam
 ' umeo da ga nadjem".
+' --- identitet zbirne u okviru: ZbirnaID ulazi, generacija se IZVODI ---------
+'
+' Review #371 (P1): okvir je od F8 dobijao ZbirnaID a prosledjivao ga dalje kao
+' `gen`, pa ga je PkPoIdentitetu tumacio kao generaciju. Ista vrednost je u dva
+' sloja imala dva znacenja -- presecen ugovor, ne rubni slucaj.
+'
+' Smer je sada jedan:
+'
+'     ZbirnaID --> mutacija zaglavlja (direktno)
+'              --> legacy scoping dece (izvedena generacija)
+'
+' a NE obrnuto (ZbirnaID tretiran kao generacija, pa trazen nazad ZbirnaID) --
+' to bi vratilo sekundarni identitet kao autoritet.
+
+' BROJ SE IZVODI IZ IDENTITETA, NE OBRNUTO (review #371, drugi krug).
+'
+' Posle prvog kruga je okvir imao ispravne TIPOVE (broj = labela, ID = identitet)
+' ali par niko nije proveravao. Bio je moguc poziv (broj = A, zbirnaID = B), a
+' posledica nije teorijska: StornoZbirnaIDetach_TX bi stornirao ZAGLAVLJE B i
+' odvezao DECU A -- identitet i clanstvo se opet razidju, tacno ono sto refaktor
+' uklanja.
+'
+' Zato ova funkcija vraca KANONSKI broj procitan iz zaglavlja, i nizvodno se
+' koristi ON. Prosledjen broj je samo provera zastarelog/pokvarenog izbora:
+' ako se ne slaze, staje se -- ne bira se "neki".
+'
+'     zbirnaID -> zaglavlje -> kanonski BrojZbirne -> scoping dece
+'
+' Prazan prosledjen broj je dozvoljen (pozivalac ga nema), i tada se samo cita.
+Private Function RequireZbirnaPar(ByVal zbirnaID As String, ByVal broj As String, _
+                                  ByVal src As String) As String
+    Dim zid As String
+    zid = Trim$(zbirnaID)
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zid)
+
+    Dim n As Long
+    If Not redovi Is Nothing Then n = redovi.count
+
+    If Len(zid) = 0 Or n <> 1 Then
+        Err.Raise ERR_STORNO_FW_BASE + 67, src, _
+                  "ZbirnaID " & zbirnaID & " se nalazi " & CStr(n) & " puta. " & _
+                  "Radnja ne sme da dira dokument koji ne zna."
+    End If
+
+    Dim kanon As String
+    kanon = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zid, COL_ZBR_BROJ)))
+
+    If Len(Trim$(broj)) > 0 Then
+        If StrComp(kanon, Trim$(broj), vbTextCompare) <> 0 Then
+            Err.Raise ERR_STORNO_FW_BASE + 68, src, _
+                      "Broj i identitet ne pripadaju istom dokumentu: " & _
+                      "prosledjen broj " & broj & ", a ZbirnaID " & zbirnaID & _
+                      " nosi broj " & kanon & "."
+        End If
+    End If
+
+    RequireZbirnaPar = kanon
+End Function
+
+' Generacija DOKUMENTA. Prazna je legitimna: kanonski pisac je ne upisuje, pa
+' scoping dece tada ostaje po broju -- kao i za svaki zateceni red bez nje.
+Private Function GenZaZbirnu(ByVal zbirnaID As String) As String
+    GenZaZbirnu = modDokumenta.GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+End Function
+
+' Generacija -> ZbirnaID, fail-closed nad ZRNOM (review #371).
+'
+' Jedna legacy generacija legitimno pokriva VISE redova tblZbirna (Klasa I i
+' Klasa II starog modela). `Keys()(0)` bi od logickog dokumenta napravio
+' proizvoljan red, a StornoZbirna po ID-u stornira TACNO jedan -- druga klasa bi
+' ostala aktivna. Zato: tacno jedan pogodak prevodi, sve ostalo je greska.
+Private Function ZbrIdIzGeneracije(ByVal gen As String, ByVal src As String) As String
+    If Len(Trim$(gen)) = 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 65, src, "Generacija je prazna."
+    End If
+
+    Dim ids As Object
+    Set ids = IdoviGeneracije(TBL_ZBIRNA, COL_ZBR_ID, gen)
+    If ids.count <> 1 Then
+        Err.Raise ERR_STORNO_FW_BASE + 65, src, _
+                  "Generacija " & gen & " pokriva " & CStr(ids.count) & _
+                  " zaglavlja zbirne. Identitet dokumenta je ZbirnaID -- " & _
+                  "prevod iz generacije je bezbedan samo kad je jednoznacan."
+    End If
+    ZbrIdIzGeneracije = CStr(ids.keys()(0))
+End Function
+
+' Generacija -> ZbirnaID kad je jednoznacno, inace "" (bez greske).
+'
+' Za pozivaoce kod kojih nizvodna kapija ume da objasni razlog bolje od prevoda.
+Private Function ZbrIdIzGeneracijeAko(ByVal gen As String) As String
+    If Len(Trim$(gen)) = 0 Then Exit Function
+    On Error Resume Next
+    ZbrIdIzGeneracijeAko = ZbrIdIzGeneracije(gen, MOD_NAME & ".ZbrIdIzGeneracijeAko")
+    On Error GoTo 0
+End Function
+
+' Broj -> ZbirnaID, fail-closed.
+'
+' Postoji zbog POZIVALACA koji jos nose samo broj -- okvir ispravke, koji se
+' brise u S4-3 -- a ne zbog zatecenih podataka: produkcije i legacy sveski nema
+' (v. "Pravila koja vaze" u docs/STANJE_REFAKTORA.md). Kad okvir nestane,
+' nestaje i ova funkcija; dotle je jedini bezbedan prevod onaj koji staje kad
+' broj nije jednoznacan.
+Private Function ZbrIdPoBroju(ByVal broj As String, ByVal src As String) As String
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then
+        Err.Raise ERR_STORNO_FW_BASE + 66, src, "Tabela zbirnih nije citljiva."
+    End If
+
+    Dim cBroj As Long, cId As Long, cSt As Long
+    cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, src)
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, src)
+    cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+
+    Dim i As Long, nadjen As String, n As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cBroj))), Trim$(broj), vbTextCompare) = 0 Then
+            Dim jeStorn As Boolean: jeStorn = False
+            If cSt > 0 Then jeStorn = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
+            If Not jeStorn Then
+                n = n + 1
+                nadjen = Trim$(NzToText(data(i, cId)))
+            End If
+        End If
+    Next i
+
+    If n <> 1 Then
+        Err.Raise ERR_STORNO_FW_BASE + 64, src, _
+                  "Broj " & broj & " nosi " & CStr(n) & " aktivnih zbirnih. " & _
+                  "Storno po broju nije bezbedan -- identitet je ZbirnaID."
+    End If
+    ZbrIdPoBroju = nadjen
+End Function
+
 Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
                                 ByVal idCol As String, ByVal broj As String, _
                                 ByVal gen As String, ByVal vlasnikCols As Variant, _
@@ -1641,7 +1796,7 @@ End Function
 ' ga i RunSimpleStornoZbirna i DUPLI grana (ne dve odvojene transakcije). Vraca
 ' True na uspeh; outDet = broj odvezanih otpremnica.
 Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Long, _
-                                        Optional ByVal gen As String = "") As Boolean
+                                        Optional ByVal zbirnaID As String = "") As Boolean
     Const SRC As String = MOD_NAME & ".StornoZbirnaIDetach_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -1665,6 +1820,18 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' Faza 4: odluka o rezimu se racuna PRE kapije i deli sa akterom. Detach je
     ' do sada odlucivao sam, ispod kapije -- pa je kapija branila i ono sto akter
     ' vise ne moze da pogresi. Isti izraz sada vide oboje.
+    ' Identitet ulazi kao ZbirnaID; generacija se IZVODI iz njega i sluzi samo
+    ' za legacy scoping DECE (deca zbirnu nose kao broj + generaciju roditelja).
+    Dim zbrID As String
+    zbrID = Trim$(zbirnaID)
+    If Len(zbrID) = 0 Then zbrID = ZbrIdPoBroju(broj, SRC)
+
+    ' Deca se odvezuju po BROJU, pa broj mora doci iz ISTOG dokumenta ciji se
+    ' header stornira. Inace: header B storniran, deca A odvezana.
+    broj = RequireZbirnaPar(zbrID, broj, SRC)
+
+    Dim gen As String: gen = GenZaZbirnu(zbrID)
+
     Dim genEff As String: genEff = ""
     If Len(Trim$(gen)) > 0 Then
         If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
@@ -1679,7 +1846,8 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
                   ZbirnaMutPoruka(razMut, "zbirne", broj, _
                                   "Otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan")
     End If
-    If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
+    If Not StornoZbirna(zbrID) Then _
+        Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
     outDet = DetachOtpremniceInline(broj, genEff, SRC)
     tx.CommitTx
     Set tx = Nothing
@@ -1873,7 +2041,8 @@ Private Function RecalcOrStornoEmptyZbirna_TX(ByVal broj As String) As Boolean
     If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) > 0 Then
         RecalcOrStornoEmptyZbirna_TX = RecalculateZbirnaFromOtpremnice_TX(broj)
     Else
-        RecalcOrStornoEmptyZbirna_TX = StornoZbirna_TX(broj)
+        RecalcOrStornoEmptyZbirna_TX = StornoZbirna_TX( _
+            ZbrIdPoBroju(broj, MOD_NAME & ".RecalcOrStornoEmptyZbirna_TX"))
     End If
     Exit Function
 EH:
@@ -1991,7 +2160,7 @@ End Function
 ' kad broj nose dve aktivne zbirne kaskada staje: ponistavanje bi odvezalo i
 ' tudje otpremnice i prijemnice.
 Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsChain As Boolean, _
-                                       Optional ByVal gen As String = "") As Object
+                                       Optional ByVal zbirnaID As String = "") As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res("ok") = False: res("otp") = 0&: res("prij") = 0&: res("pals") = 0&: res("blok") = 0&
@@ -2005,6 +2174,21 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' Do v6-ui-225 je i ovde mera bila vlasnicka, a opasnost dokumentna.
     ' Faza 4: rezim se racuna PRE kapije i deli sa akterom (v. isti obrazac u
     ' StornoZbirnaIDetach_TX).
+    ' Kao u StornoZbirnaIDetach_TX: ZbirnaID je identitet, generacija je izvedena
+    ' i sluzi samo za scoping dece.
+    ' ID se razresava SAMO kad je zadat. Kad nije, razresenje ceka da prodje
+    ' kapija dvosmislenosti ispod -- inace bi fail-closed prevod progutao
+    ' informativnu poruku ("broj je pripadao vise vlasnika") i operater bi dobio
+    ' genericki neuspeh.
+    Dim zbrID As String
+    zbrID = Trim$(zbirnaID)
+
+    Dim gen As String: gen = ""
+    If Len(zbrID) > 0 Then
+        brojZbirne = RequireZbirnaPar(zbrID, brojZbirne, SRC)
+        gen = GenZaZbirnu(zbrID)
+    End If
+
     Dim genOp As String: genOp = ""
     If Len(Trim$(gen)) > 0 Then
         Dim scopeOK As Boolean
@@ -2061,7 +2245,8 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' ali izbor svejedno mora da bude po identitetu: ispravljena zbirna pod istim
     ' brojem ima i storniranu generaciju, i nju ne treba ponovo dirati.
     If ZbirnaPostoji(brojZbirne) Then
-        If Not StornoZbirna(brojZbirne, gen) Then _
+        If Len(zbrID) = 0 Then zbrID = ZbrIdPoBroju(brojZbirne, SRC)
+        If Not StornoZbirna(zbrID) Then _
             Err.Raise ERR_STORNO_FW_BASE + 50, SRC, "StornoZbirna (ponistenje) nije uspeo."
     End If
     Dim k As Long
@@ -2185,7 +2370,7 @@ End Function
 ' ============================================================
 
 Private Function ScanZbirna(ByVal broj As String, _
-                            Optional ByVal gen As String = "", _
+                            Optional ByVal zbirnaID As String = "", _
                             Optional ByVal strict As Boolean = False) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set ScanZbirna = d
@@ -2193,10 +2378,25 @@ Private Function ScanZbirna(ByVal broj As String, _
     broj = Trim$(broj)
     d("broj") = broj
     ' PK izabrane zbirne -- correction context polazi od njega.
-    ' strict ide i ovde: bez njega je bas ZBIRNA prekidala propagaciju na PK
-    ' resolveru, pa je nerazresiv identitet zavrsavao kao prazan zbrID.
-    d("zbrID") = PkPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, gen, _
-                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)
+    '
+    ' Od S4-2 ga ljuska SALJE (nevidljiva kolona reda je ZbirnaID), pa se ovde
+    ' vise ne razresava iz broja i generacije. Zatecene putanje koje nose samo
+    ' broj ga izvode fail-closed: dva aktivna dokumenta istog broja su greska,
+    ' ne "uzmi prvi".
+    If Len(Trim$(zbirnaID)) > 0 Then
+        ' Par se proverava, a broj se dalje cita IZ ZAGLAVLJA: nizvodno brojanje
+        ' dece ne sme da veruje labeli koju je pozivalac poslao.
+        broj = RequireZbirnaPar(Trim$(zbirnaID), broj, MOD_NAME & ".ScanZbirna")
+        d("broj") = broj
+        d("zbrID") = Trim$(zbirnaID)
+    ElseIf strict Then
+        d("zbrID") = ZbrIdPoBroju(broj, MOD_NAME & ".ScanZbirna")
+    Else
+        d("zbrID") = ""
+        On Error Resume Next
+        d("zbrID") = ZbrIdPoBroju(broj, MOD_NAME & ".ScanZbirna")
+        On Error GoTo EH
+    End If
     ' Deca (otpremnice, prijemnice, palete) vezuju zbirnu KOLONOM BrojZbirne --
     ' ZbirnaID im nije strani kljuc nigde u semi. Zato se broje po broju, a kad
     ' broj nose DVE aktivne zbirne, brojke opisuju oba dokumenta. To se ne moze
