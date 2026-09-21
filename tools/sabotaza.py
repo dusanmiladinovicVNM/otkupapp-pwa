@@ -1218,14 +1218,25 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
     ),
+    # S4-2 (review #371, P1): prost storno zbirne ne ide kroz okvir, pa se par
+    # (identitet, broj) proverava na granici komande. Bez te provere bi poziv
+    # (broj A, ID B) stornirao zaglavlje B a izvestavao o dokumentu A.
+    "zbirna-par-nije-proveren": (
+        "modStornoDok.bas",
+        "            If Not ZbirnaParOK(docID, broj) Then\n",
+        "            If False Then   ' SABOTAZA: ukrsten par prolazi\n",
+        "Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument",
+        "ZBR par: ukrsten par (broj A, ID B) se ODBIJA",
+    ),
     # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
     # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
-    # S4-2: identitet vise ne razresava PK resolver nego stize gotov iz ljuske,
-    # pa se ZADAT a nepostojeci ZbirnaID mora odbiti OVDE.
-    "zbirna-ne-proverava-identitet": (
+    # S4-2, drugi krug (review #371): identitet stize gotov iz ljuske, pa se
+    # broj mora citati IZ NJEGA -- inace je moguc par (broj A, ID B), koji
+    # stornira zaglavlje B i odvezuje decu A.
+    "zbirna-ne-proverava-par": (
         "modStornoFlow.bas",
-        "        If strict Then RequireZbirnaPostoji Trim$(zbirnaID), MOD_NAME & \".ScanZbirna\"\n",
-        "        ' SABOTAZA: zadat identitet se ne proverava\n",
+        "        broj = RequireZbirnaPar(Trim$(zbirnaID), broj, MOD_NAME & \".ScanZbirna\")\n",
+        "        ' SABOTAZA: par broj/identitet se ne proverava\n",
         "T_StornoImpact_NestaoIdentitetJeInvalidan",
         "nestao identitet ZBIRNE obara uvid",
     ),
@@ -5484,7 +5495,7 @@ SABOTAZE = {
         "    If scopedPoGeneraciji Then Exit Function\n",
         "    If False Then Exit Function   ' SABOTAZA: popustanje se ne desava\n",
         "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno SA generacijom prolazi iako broj nosi dva dokumenta",
+        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta",
     ),
     # Druga strana istog prekidaca: kapija pusta BEZ obzira na to da li akter
     # zna koji dokument dira. Bez ove sabotaze "popusta samo kad je scoped" bi

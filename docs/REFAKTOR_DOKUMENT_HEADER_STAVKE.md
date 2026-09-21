@@ -3998,6 +3998,45 @@ baš tu kapiju.
 preflight → izbor moda → izvršenje — nad **dva dokumenta istog broja** (različiti vozači). Raniji test
 je merio krajeve lanca i baš zato nije video pokvarenu sredinu.
 
+#### Review #371, drugi krug — par `(BrojZbirne, ZbirnaID)` nije bio proveren
+
+Prvi krug je dao ispravne **tipove** (broj = labela, ID = identitet), ali par niko nije validirao. Bio
+je moguć poziv `(broj = A, zbirnaID = B)`, a posledica nije teorijska:
+
+```
+StornoZbirnaIDetach_TX:
+    StornoZbirna(zbrID)                 -> stornira ZAGLAVLJE B
+    DetachOtpremniceInline(broj, ...)   -> odvezuje DECU A
+                                        -> HEADER A ostaje aktivan
+```
+
+Identitet i članstvo se opet raziđu — baš klasa problema koju refaktor uklanja.
+
+**Ispravka ide korak dalje od validacije para: broj se čita IZ identiteta.** `RequireZbirnaPar` vraća
+kanonski `BrojZbirne` pročitan iz zaglavlja, i nizvodno se koristi **on**; prosleđeni broj je samo
+provera zastarelog izbora. Tako labela nizvodno nema autoritet ni kad je tačna.
+
+```
+zbirnaID -> zaglavlje -> kanonski BrojZbirne -> scoping dece
+```
+
+**Prost storno ne ide kroz okvir**, pa par ima svoju kapiju na granici komande (`ZbirnaParOK` u
+`StornoRazlog` i `StornoIzvrsi`) sa porukom o **osvežavanju liste** — zastareo izbor je jedini realan
+izvor takvog para, pa poruka govori operateru šta da uradi, ne šta je pokvareno.
+
+**Poredak kapija je bitan.** `PonistiZbirnaChain_TX` razrešava ID tek **posle** svoje kapije
+dvosmislenosti; tvrd prevod na vrhu je gutao informativnu poruku („broj je pripadao više vlasnika") i
+operater bi dobio generički neuspeh. Kaskada iz prijemnice zato koristi **meki** prevod generacije
+(`ZbrIdIzGeneracijeAko`).
+
+**Uvid** razrešava identitet jednom, na ulazu (`ZbrIdUvid`): zadat ID se proverava (postoji i nosi baš
+taj broj), a bez njega se ide po broju — i to samo dok je jednoznačan.
+
+**Testovi koji su govorili starim identitetom su prevedeni, ne obrisani:** `ZBR-F4` bira dokument
+`ZbirnaID`-em umesto generacijom (tvrdnja ista — ko kaže *koji* dokument dira, prolazi i kad broj nose
+dva), a prost storno zbirne u `modTest` šalje ID. Nov `Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument`
+meri ukršten par i tvrdi da **ništa** nije dirnuto, uz pozitivnu kontrolu da ispravan par prolazi.
+
 **Sledeće:** S4-2b — F3 nad kanonom (ekran bira izdate otpremnice, pauza pada, stari pisac se briše).
 
 ## 15) Backlog — namerno van opsega

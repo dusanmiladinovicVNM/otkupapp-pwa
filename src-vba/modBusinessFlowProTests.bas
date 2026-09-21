@@ -153,6 +153,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_SadrzajCitaStavkeNeZaglavlje
     Test_ZBR_LjuskaNosiZbirnaID
     Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument
+    Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -2559,10 +2560,14 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
         "ZBR-F4: posle odbijenog storna dokument A je netaknut"
 
-    ' --- SA generacijom: izbor je scoped -> kapija PUSTA ---
-    Set r = RunSimpleStornoZbirna(broj, genB)
+    ' --- SA IDENTITETOM: izbor je scoped -> kapija PUSTA ---
+    '
+    ' Do S4-2 je ovde isla generacija. Tvrdnja je ista -- pozivalac koji KAZE
+    ' koji dokument dira prolazi i kad broj nosi dva -- ali se dokument imenuje
+    ' identitetom, jer generaciju kanonski pisac vise ne upisuje.
+    Set r = RunSimpleStornoZbirna(broj, zbrB)
     AssertTrue CBool(r("success")), _
-        "ZBR-F4: storno SA generacijom prolazi iako broj nosi dva dokumenta"
+        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta"
     AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
         "ZBR-F4: stornira se bas izabrani dokument B"
     AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
@@ -7695,6 +7700,63 @@ End Sub
 ' =====================================================================
 ' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
 ' =====================================================================
+
+' PAR (BROJ, IDENTITET) MORA DA PRIPADA ISTOM DOKUMENTU (review #371, P1).
+'
+' Posle prvog kruga je okvir imao ispravne tipove, ali par niko nije proveravao.
+' Posledica nije teorijska: StornoZbirnaIDetach_TX bira zaglavlje po ID-u a decu
+' po broju, pa bi poziv (broj A, ID B) stornirao ZAGLAVLJE B i odvezao DECU A --
+' identitet i clanstvo se opet razidju.
+'
+' Test salje bas takav par i tvrdi da NISTA nije dirnuto: ni jedno zaglavlje, ni
+' jedna otpremnica. Fail-closed, ne "uzmi neki".
+Private Sub Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPAR")
+
+    Dim brojA As String, brojB As String
+    brojA = TEST_PREFIX & "-ZBR-PA-" & scenario
+    brojB = TEST_PREFIX & "-ZBR-PB-" & scenario
+
+    Dim otpA As String, otpB As String
+    otpA = Pr3Otpremnica(TEST_PREFIX & "-OTP-PA-" & scenario, KLASA_I, 100#, 5)
+    otpB = Pr3Otpremnica(TEST_PREFIX & "-OTP-PB-" & scenario, KLASA_I, 200#, 10)
+
+    Dim zbrA As String, zbrB As String
+    zbrA = CreateZbirnaIzIzvora_TX(Pr3Header(brojA), Pr3Izvor(otpA, ""))
+    zbrB = CreateZbirnaIzIzvora_TX(Pr3Header(brojB), Pr3Izvor(otpB, ""))
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, "ZBR par: dva dokumenta napravljena"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then Exit Sub
+
+    ' UKRSTEN PAR: broj dokumenta A, identitet dokumenta B.
+    Dim izlaz As String
+    AssertTrue Not modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brojA, "", izlaz, zbrB), _
+               "ZBR par: ukrsten par (broj A, ID B) se ODBIJA"
+
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "ZBR par: zaglavlje A je netaknuto"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "ZBR par: zaglavlje B je netaknuto"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+               "ZBR par: otpremnica A je netaknuta"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+               "ZBR par: otpremnica B je netaknuta"
+
+    ' Kontrola: ISPRAVAN par prolazi -- inace bi test bio zelen i da StornoIzvrsi
+    ' uvek vraca False.
+    AssertTrue modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brojB, "", izlaz, zbrB), _
+               "ZBR par: ispravan par (broj B, ID B) prolazi"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "ZBR par: storniran je dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "ZBR par: dokument A i dalje netaknut"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument", Err.Number, Err.description
+End Sub
 
 ' Zaglavlje zbirne za DRUGOG vozaca, isti broj. Broj je scoped po vozacu, pa
 ' dva vozaca legitimno nose isti -- i bas zato broj nije identitet.

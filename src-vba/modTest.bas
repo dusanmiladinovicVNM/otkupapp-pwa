@@ -3465,7 +3465,9 @@ Private Sub T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu()
     AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-OLDU-1"), False, _
              "preduslov: zbirna je aktivna"
 
-    ok = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, FX_ZBIRNA_OLDU, "", msg, "")
+    ' Od S4-2 se dokument imenuje ZbirnaID-em: prazan ID se NE razresava po
+    ' broju (isti broj sme da nose dva vozaca), pa ga ljuska uvek salje.
+    ok = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, FX_ZBIRNA_OLDU, "", msg, "ZBI-OLDU-1")
 
     AssertEq ok, True, "prost storno zbirne je prosao"
     ' StornoZbirna namerno NE kaskadira, pa prijemnica ostaje vezana za storniranu

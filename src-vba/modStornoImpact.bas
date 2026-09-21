@@ -143,9 +143,15 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
         Case FLOW_DOC_ZBIRNA
             ' Identitet zbirne je ZbirnaID (S4-2), pa se red bira njime -- ne
             ' parom (broj, generacija). Kanonski dokument generaciju nema.
-            h("partnerID") = HLZ(COL_ZBR_KUPAC, docID, strict)
-            h("datum") = HLZ(COL_ZBR_DATUM, docID, strict)
-            h("kolicina") = ZbirnaKgZaUvid(docID, strict)
+            '
+            ' ID se razresava JEDNOM, na ulazu: zadat se proverava (postoji i
+            ' nosi BAS taj broj), a kad ga nema -- zatecen poziv po broju --
+            ' izvodi se, i to samo ako je broj jednoznacan.
+            Dim zbrUvid As String
+            zbrUvid = ZbrIdUvid(broj, docID, strict)
+            h("partnerID") = HLZ(COL_ZBR_KUPAC, zbrUvid, strict)
+            h("datum") = HLZ(COL_ZBR_DATUM, zbrUvid, strict)
+            h("kolicina") = ZbirnaKgZaUvid(zbrUvid, strict)
         Case FLOW_DOC_PRIJEMNICA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID, strict)
@@ -156,8 +162,8 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
     If Len(tTbl) > 0 Then
         If docType = FLOW_DOC_ZBIRNA Then
-            h("ispravkaOd") = HLZ(COL_TRACE_ISPRAVKA_OD, docID, strict)
-            h("zamenjenSa") = HLZ(COL_TRACE_ZAMENJEN_SA, docID, strict)
+            h("ispravkaOd") = HLZ(COL_TRACE_ISPRAVKA_OD, zbrUvid, strict)
+            h("zamenjenSa") = HLZ(COL_TRACE_ZAMENJEN_SA, zbrUvid, strict)
         Else
             h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
             h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
@@ -415,6 +421,88 @@ End Function
 ' Izbor redova je ISTI kao u SumActiveNum: aktivni redovi datog broja, suzeni
 ' generacijom kad je docID poznat. Kanonski pisac generaciju ne pise, pa za nov
 ' dokument suzavanja nema -- tada broj bira dokument, kao i pre.
+' ZbirnaID za uvid: zadat se PROVERAVA, odsutan se IZVODI iz broja.
+'
+' Dve tvrdnje u jednoj funkciji, jer su jedna odluka:
+'   1) zadat ID mora da postoji tacno jednom I da nosi bas taj broj -- inace bi
+'      uvid tvrdio posledice jednog dokumenta pod brojem drugog (review #371);
+'   2) bez ID-a se ide po broju, ali samo dok je broj jednoznacan -- zatecen
+'      poziv po broju ostaje moguc, nagadjanje ne.
+'
+' U strict rezimu oba slucaja DIZU gresku: uvid se posle oznacava kao valid, pa
+' tiho prazno ovde znaci model koji tvrdi posledice a ne zna nad cim.
+Private Function ZbrIdUvid(ByVal broj As String, ByVal docID As String, _
+                           ByVal strict As Boolean) As String
+    Const SRC As String = MOD_NAME & ".ZbrIdUvid"
+
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then
+        If strict Then Err.Raise ERR_UI_BASE + 29, SRC, _
+                                 "Tabela " & TBL_ZBIRNA & " nije citljiva."
+        Exit Function
+    End If
+
+    Dim cId As Long, cBroj As Long, cSt As Long
+    cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+    cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+    If cId = 0 Or cBroj = 0 Then
+        If strict Then Err.Raise ERR_UI_BASE + 28, SRC, _
+                                 "Kolona identiteta ili broja ne postoji u " & TBL_ZBIRNA & "."
+        Exit Function
+    End If
+
+    Dim i As Long, nadjen As String, n As Long
+
+    If Len(Trim$(docID)) > 0 Then
+        For i = 1 To UBound(data, 1)
+            If StrComp(Trim$(NzToText(data(i, cId))), Trim$(docID), vbTextCompare) = 0 Then
+                n = n + 1
+                nadjen = Trim$(NzToText(data(i, cBroj)))
+            End If
+        Next i
+
+        If n <> 1 Then
+            If strict Then Err.Raise ERR_UI_BASE + 34, SRC, _
+                                     "ZbirnaID " & docID & " se nalazi " & CStr(n) & " puta."
+            Exit Function
+        End If
+
+        If Len(Trim$(broj)) > 0 Then
+            If StrComp(nadjen, Trim$(broj), vbTextCompare) <> 0 Then
+                If strict Then Err.Raise ERR_UI_BASE + 35, SRC, _
+                                         "Broj i identitet ne pripadaju istom dokumentu: " & _
+                                         "broj " & broj & ", a ZbirnaID " & docID & _
+                                         " nosi broj " & nadjen & "."
+                Exit Function
+            End If
+        End If
+
+        ZbrIdUvid = Trim$(docID)
+        Exit Function
+    End If
+
+    ' Bez identiteta: po broju, i samo dok je jednoznacan.
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cBroj))), Trim$(broj), vbTextCompare) = 0 Then
+            Dim jeStorn As Boolean: jeStorn = False
+            If cSt > 0 Then jeStorn = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
+            If Not jeStorn Then
+                n = n + 1
+                nadjen = Trim$(NzToText(data(i, cId)))
+            End If
+        End If
+    Next i
+
+    If n <> 1 Then
+        If strict Then Err.Raise ERR_UI_BASE + 36, SRC, _
+                                 "Broj " & broj & " nosi " & CStr(n) & " aktivnih zbirnih."
+        Exit Function
+    End If
+
+    ZbrIdUvid = nadjen
+End Function
+
 ' Vrednost kolone zbirne po ZbirnaID-u (S4-2).
 '
 ' HLI bira red po paru (broj, generacija) i tako mora da ostane za prijemnicu,
