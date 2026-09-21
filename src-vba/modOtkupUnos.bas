@@ -379,18 +379,11 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     Err.Clear
     On Error GoTo EH
 
-    ' AUTO-LANAC JE PAUZIRAN (Otkup cutover, korak 2).
-    '
-    ' Lanac deli dokument PO KLASI: iz "ID1 + ID2" vadi idI i idII i svaku klasu
-    ' vodi kroz svoju otpremnicu, zbirnu i prijemnicu (modAutoHladnjaca:182).
-    ' Nov pisac daje JEDAN OtkupID, a jedan otkup red drzi JEDAN OtpremnicaID --
-    ' pa je veza strukturno gubitna dok otpremnica ne predje na header+stavke.
-    '
-    ' Odluka operatera: lanac se gasi do PR7, umesto da se upisuje polovicna veza.
-    ' Kod lanca OSTAJE netaknut -- pauzira se poziv, i to glasno.
-    If IsHladnjacaStanica(S(p, "stanicaID")) Then
-        poruke = poruke & Poruka("OTKUNOS_MSG_LANAC_PAUZIRAN") & vbCrLf
-    End If
+    ' AUTO-LANAC HLADNJACE (A-014) se od S3d vraca u koracima, a pokrece ga
+    ' EKRAN -- posle odluke o vezivanju za aktivni nacrt. Ovde ga nema namerno:
+    ' u ovom trenutku blok jos nije ponudjen radnom stolu, pa bi lanac pretekao
+    ' operaterov izbor. Pravilo ("blok koji je vec u aktivnoj otpremnici ne
+    ' dobija svoju") zivi u modAutoHladnjaca.AutoLanacHladnjaca, ne u pozivaocu.
     SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
 
     ' Relink aparat je NEDOSTIZAN dok je lanac pauziran: pending se hvata iznad,

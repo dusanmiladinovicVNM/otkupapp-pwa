@@ -956,7 +956,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUNOS_ERR_BROJ_ZAUZET", "Taj broj otkupnog lista je ve" & ChrW(263) & " izdat na ovom otkupnom mestu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"
     UpsertRow lo, existing, "OTKUNOS_MSG_ISPRAVKA_PAUZIRANA", "Ispravka hladnja" & ChrW(269) & "kog dokumenta je privremeno nedostupna: nizvodni lanac je pauziran, pa palete ne bi imale gde da se prevezu. Otkup NIJE unet. Storniran dokument:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_LANAC_PAUZIRAN", "Napomena: automatski lanac hladnja" & ChrW(269) & "e je PAUZIRAN dok otpremnica ne pre" & ChrW(273) & "e na nov model. Otpremnicu, zbirnu i prijemnicu unesi ru" & ChrW(269) & "no."
     UpsertRow lo, existing, "OTKUNOS_MSG_NEMA_PRIJEMNICE", "Novi lanac nije kreirao prijemnicu " & ChrW(8212) & " palete NISU prevezane."
     UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_PREVEZANE", "Palete prevezane:"
     UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Auto-prevezivanje paleta nije uspelo:"
@@ -1452,6 +1451,12 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI2", "? Stara se stornira, a nova nastaje kao NACRT sa istim blokovima, istim o" & ChrW(269) & "ekivanjem i NOVIM brojem."
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVLJENA", "Nova otpremnica (nacrt):"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
+    ' --- S3d: auto-lanac hladnjace, korak otpremnice (A-014) ---
+    UpsertRow lo, existing, "OTKUI_MSG_LANAC_OTP", ChrW(183) & " Hladnja" & ChrW(269) & "a: izdata otpremnica"
+    UpsertRow lo, existing, "OTKUI_MSG_LANAC_CEKA", ChrW(8212) & " zbirna i prijemnica se jo" & ChrW(353) & " unose ru" & ChrW(269) & "no"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Otpremnica hladnja" & ChrW(269) & "e nije napravljena:"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_MIRROR", "stanica nema vozaca-ogledalo (VozacID = StanicaID):"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ", "broj otpremnice nije generisan za stanicu"
     ' --- S3c-2: izgubljen blok na ekranu OPORAVAK (B-041) ---
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_OPIS", "Blok je ostao bez otpremnice " & ChrW(8212) & " bila u:"
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA", "Otkup (F1), lista Bez otpremnice: Ve" & ChrW(382) & "i za otpremnicu"

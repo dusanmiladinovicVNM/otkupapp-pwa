@@ -689,6 +689,34 @@ SABOTAZE = {
         "Test_OTP_ClanstvoBulkStrogo",
         "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
     ),
+    # Auto-lanac opet pretekne operatera (S3d): blok koji je vec na nacrtu radnog
+    # stola dobija JOS JEDNU otpremnicu, pa isti teret stoji na dva dokumenta.
+    "lanac-preko-vezanog-bloka": (
+        "modAutoHladnjaca.bas",
+        "    If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: lanac gazi covekov izbor\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: vezan blok ne dobija drugu otpremnicu",
+    ),
+    # Lanac se pali i na OBICNOJ stanici, gde roba nije merena na prijemu -- pa
+    # otpremnica 1:1 nije istina, nego pretpostavka.
+    "lanac-i-na-obicnoj-stanici": (
+        "modAutoHladnjaca.bas",
+        "    If Not IsHladnjacaStanica(stanicaID) Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: lanac na svakoj stanici\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: obicna stanica nema auto-lanac",
+    ),
+    # Storniran blok ulazi u lanac: pisac ga odbije, ali operater dobije grešku
+    # za dokument koji je sam obrisao.
+    "lanac-storniran-blok": (
+        "modAutoHladnjaca.bas",
+        "    If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), \"\")), _\n"
+        "               \"Da\", vbTextCompare) = 0 Then Exit Function\n",
+        "    ' SABOTAZA: storniran blok prolazi u lanac\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: storniran blok ne javlja nista",
+    ),
     # OPORAVAK opet broji SVAKI nevezan blok (S3c-2): blok upisan bez otpremnice
     # nije nedovrsen posao nego normalno stanje, i vec se vidi na radnom stolu.
     "oporavak-blok-nikad-vezan": (

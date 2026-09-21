@@ -3593,6 +3593,48 @@ ostaje kod kanonskog pisca i identiteta (`OtkupID`), tamo gde i pripada; OPORAVA
 
 **Time je S3c zatvoren.** Sledeći je S3d.
 
+### 14.20) S3d-1 — auto-lanac hladnjače se vraća u koracima: otpremnica (20.09.2026)
+
+**Odluka operatera (20.09.2026):** lanac se **ne briše** nego vraća, i to **u koracima**. Uz odluku su stigle i tri
+činjenice koje su njegova specifikacija:
+
+1. roba se **meri pri prijemu u hladnjaču**, pa su kilaža i ambalaža **1:1 sa otkupnim listom**, bez odstupanja;
+2. **vozač je mirror otkupnog mesta** (`VozacID = StanicaID`, `modMalina.EnsureVozacMirrorForStanica`);
+3. **jedan blok = jedan lanac** (1 blok → 1 otpremnica → 1 zbirna → 1 prijemnica).
+
+Zato otpremnica nema šta da čeka: nastaje i **odmah se izdaje** iz tog jednog bloka, kroz
+`CreateOtpremnicaIzIzvora_TX` (jedna transakcija; očekivanje se izvodi iz izvora, pa je „povezano = očekivano“
+zadovoljeno samim nastankom). Zbirna (S4) i prijemnica (S6) dodaju se **u istu funkciju** kad ti dokumenti pređu na
+kanon — ne u nov orkestrator.
+
+**Šta lanac ne sme, i to se meri**
+
+| Pravilo | Zašto |
+|---|---|
+| blok koji je operater vezao za svoj nacrt **ne dobija** drugu otpremnicu | čovekov izbor je jači od automatike; pripadnost se čita iz **kanona** (`OtpremnicaZaOtkup`), ne iz ekrana |
+| obična stanica se ne dira | tamo roba **nije** merena na prijemu, pa 1:1 nije činjenica nego pretpostavka |
+| hladnjača **bez vozača-ogledala** staje i kaže razlog | lanac ne piše matične podatke usput; upis otkupa nije mesto gde nastaje vozač |
+| storniran blok ne pokreće lanac | nema šta da nosi |
+| pad lanca **ne obara upis** | otkup je snimljen svojom transakcijom; blok ostaje i vidi se u „Bez otpremnice“, pa ga operater veže ručno |
+
+**Gde stoji poziv.** Lanac zove **ekran**, i to **posle** odluke o vezivanju za aktivni nacrt — u `modOtkupUnos` ga
+namerno nema, jer bi tamo pretekao operaterov izbor. Samo pravilo („vezan blok se ne dira“) ipak živi u
+orkestratoru, ne u pozivaocu: sledeći pozivalac dobija iste kapije.
+
+**Broj** ide iz niza **stanice**, kao svaka druga otpremnica; mirror prefiks (`ApplyMirrorPrefix`) je pravilo broja
+**zbirne** i ovde se ne primenjuje.
+
+**Testovi:** `Test_HLD_AutoLanacOtpremnica` — izdata otpremnica sa vozačem-ogledalom i kilažom/ambalažom 1:1 bez
+ostatka · vezan blok se ne dira · obična stanica se ne dira · hladnjača bez ogledala daje **razlog koji imenuje
+stanicu** · storniran blok ne javlja ništa. Fixture je dobio vozača-ogledalo i **drugu hladnjačku stanicu namerno
+bez njega** (negativna kontrola). Sabotaže `lanac-preko-vezanog-bloka`, `lanac-i-na-obicnoj-stanici`,
+`lanac-storniran-blok` (ukupno **516**).
+
+**Nije mereno testom, ide u ručnu proveru:** da ekran zaista zove lanac posle upisa (`Scr_Save` nosi štampu
+otkupnog lista, pa se u headless prolazu ne vozi) — isti dogovor kao za vezivanje posle unosa iz S3b-2a.
+
+**Sledeće:** S3d-2 — A13 kapija za NACRT (atomska zamena članstva) i radnja „Ispravi“ nad blokom (B-040).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

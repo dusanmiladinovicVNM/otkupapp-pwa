@@ -84,6 +84,9 @@ Private Const TEST_PREFIX As String = "TST-PRO"
 ' to NIJE, da ostali testovi ne okinu auto-lanac) i drugi kupac za proveru izolacije
 ' backfill mapa po kupcu.
 Private Const TEST_HLAD_ST_ID As String = "ST-HLADTEST-90001"
+' Druga hladnjacka stanica, NAMERNO bez vozaca-ogledala: auto-lanac na njoj mora
+' da stane i da to kaze, umesto da pravi otpremnicu sa nepostojecim vozacem.
+Private Const TEST_HLAD2_ST_ID As String = "ST-HLADTEST-90002"
 
 ' Druga stanica sa DRUGACIJIM numerickim delom -- preduslov svakog dvosmernog
 ' dokaza kapije konteksta broja. TEST_ST_ID i TEST_HLAD_ST_ID oba daju 90001,
@@ -292,6 +295,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IspravkaIzdate
     Test_OTP_KapijaBlokaPoKanonu
     Test_OPO_IzgubljenBlok
+    Test_HLD_AutoLanacOtpremnica
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -1006,6 +1010,8 @@ Private Sub SeedBusinessFlowProMasterData()
 
     SeedStanica
     SeedHladnjacaStanica
+    SeedHladnjacaStanica2
+    SeedHladnjacaVozacMirror
     SeedVozac
     SeedVozac2
     SeedKupac
@@ -1057,6 +1063,43 @@ Private Sub SeedStanicaByID(ByVal stanicaID As String, ByVal naziv As String)
     SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
 
     RequireAppend TBL_STANICE, rowData, "SeedStanicaByID"
+End Sub
+
+' Vozac-OGLEDALO hladnjacke stanice: VozacID = StanicaID (modMalina). Auto-lanac
+' bez njega staje, pa ga fixture mora imati -- isto kao prava instalacija, gde ga
+' pravi EnsureVozacMirrorForStanica pri upisu stanice.
+Private Sub SeedHladnjacaVozacMirror()
+    If RowExists(TBL_VOZACI, "VozacID", TEST_HLAD_ST_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_VOZACI)
+
+    SetRequiredField rowData, TBL_VOZACI, "VozacID", TEST_HLAD_ST_ID
+    SetRequiredField rowData, TBL_VOZACI, "Ime", "Test"
+    SetRequiredField rowData, TBL_VOZACI, "Prezime", "Hladnjaca Ogledalo"
+    SetOptionalField rowData, TBL_VOZACI, "Aktivan", "Aktivan"
+
+    RequireAppend TBL_VOZACI, rowData, "SeedHladnjacaVozacMirror"
+End Sub
+
+' Hladnjacka stanica BEZ vozaca-ogledala -- negativna kontrola auto-lanca.
+Private Sub SeedHladnjacaStanica2()
+    If RowExists(TBL_STANICE, "StanicaID", TEST_HLAD2_ST_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_STANICE)
+
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", TEST_HLAD2_ST_ID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST HLADNJACA BEZ OGLEDALA"
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Kontakt", "Test Kontakt"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, "Ime", "Test"
+    SetOptionalField rowData, TBL_STANICE, "Prezime", "Hladnjaca2"
+    SetOptionalField rowData, TBL_STANICE, "PIN", "9012"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, "Da"
+
+    RequireAppend TBL_STANICE, rowData, "SeedHladnjacaStanica2"
 End Sub
 
 ' Stanica oznacena kao hladnjaca -> IsHladnjacaStanica = True (auto-lanac).
@@ -5101,6 +5144,14 @@ Private Function OtkHeader(ByVal brDok As String) As Object
     Set OtkHeader = h
 End Function
 
+' Isti header, druga stanica -- za hladnjacke scenarije.
+Private Function OtkHeaderNaStanici(ByVal brDok As String, ByVal stanicaID As String) As Object
+    Dim h As Object
+    Set h = OtkHeader(brDok)
+    h("StanicaID") = stanicaID
+    Set OtkHeaderNaStanici = h
+End Function
+
 Private Function OtkStavka(ByVal klasa As String, ByVal kol As Double, _
                            ByVal cena As Double, ByVal amb As Double, _
                            ByVal bruto As Double) As Object
@@ -6984,6 +7035,111 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_OPO_IzgubljenBlok", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S3d -- AUTO-LANAC HLADNJACE, korak otpremnice (A-014).
+'
+' Roba se meri pri prijemu u hladnjacu, pa je otpremnica 1:1 sa otkupnim listom
+' i nema sta da ceka: nastaje i IZDAJE se odmah, sa vozacem-ogledalom stanice.
+'
+' Meri se i sta lanac NE sme: blok koji je operater vec vezao za svoj nacrt ne
+' dobija drugu otpremnicu (covekov izbor je jaci), obicna stanica se ne dira, a
+' hladnjaca bez vozaca-ogledala dobija RAZLOG umesto polovicnog dokumenta.
+' ============================================================
+Private Sub Test_HLD_AutoLanacOtpremnica()
+    On Error GoTo EH
+
+    Dim scenario As String, izvestaj As String, g As String
+    scenario = NewScenarioCode("HLDLAN")
+
+    ' --- 1) hladnjacka stanica, nevezan blok -> izdata otpremnica 1:1 ---
+    Dim blok As String, otpID As String
+    blok = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDA-" & scenario, TEST_HLAD_ST_ID), _
+                          OtkStavke(70#, 100#, 7, 0#, 0#, 0))
+    AssertTrue Len(blok) > 0, "Lanac: blok na hladnjackoj stanici upisan"
+    If Len(blok) = 0 Then GoTo Kraj
+
+    otpID = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertTrue Len(otpID) > 0, "Lanac: otpremnica je napravljena (" & izvestaj & ")"
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    AssertEquals IZDATO_IZDATO, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
+                 "Lanac: otpremnica je odmah IZDATA"
+    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_VOZAC), _
+                 "Lanac: vozac je ogledalo stanice"
+    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_STANICA), _
+                 "Lanac: otpremnica je na stanici bloka"
+    AssertEquals otpID, modDokumenta.OtpremnicaZaOtkup(blok), _
+                 "Lanac: blok je izvor te otpremnice"
+
+    ' 1:1 -- ocekivanje je tacno ono sto blok nosi, bez ostatka.
+    Dim prog As Object, kl As Object
+    Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
+    AssertTrue prog.Exists(KLASA_I), "Lanac: otpremnica ima klasu I"
+    If prog.Exists(KLASA_I) Then
+        Set kl = prog(KLASA_I)
+        AssertEquals "70", CStr(kl("ocekivano")), "Lanac: kilaza je 1:1 sa blokom"
+        AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza je 1:1 sa blokom"
+        AssertEquals "0", CStr(kl("preostalo")), "Lanac: nema ostatka (nema sta da se dovezuje)"
+    End If
+
+    ' --- 2) blok koji je vec u aktivnom nacrtu se NE dira ---
+    Dim uNacrtu As String, nacrt As String, otpDrugi As String
+    uNacrtu = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
+                             OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDN-" & scenario, TEST_HLAD_ST_ID), _
+                                     OtpOcek(40#, 4#, 0#, 0#), g)
+    AssertTrue Len(nacrt) > 0, "Lanac: nacrt na hladnjackoj stanici napravljen (" & g & ")"
+    If Len(nacrt) > 0 Then
+        AssertTrue DodajOtpremnicaIzvor_TX(nacrt, uNacrtu, g), "Lanac: blok vezan za nacrt"
+        izvestaj = "x"
+        otpDrugi = modAutoHladnjaca.AutoLanacHladnjaca(uNacrtu, izvestaj)
+        AssertEquals "", otpDrugi, "Lanac: vezan blok ne dobija drugu otpremnicu"
+        AssertEquals "", izvestaj, "Lanac: vezan blok ne javlja nista operateru"
+        AssertEquals nacrt, modDokumenta.OtpremnicaZaOtkup(uNacrtu), _
+                     "Lanac: blok je ostao u svom nacrtu"
+    End If
+
+    ' --- 3) obicna stanica se ne dira ---
+    Dim obican As String
+    obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDC-" & scenario), _
+                            OtkStavke(20#, 100#, 2, 0#, 0#, 0))
+    izvestaj = "x"
+    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj), _
+                 "Lanac: obicna stanica nema auto-lanac"
+    AssertEquals "", izvestaj, "Lanac: obicna stanica ne javlja nista"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(obican), _
+                 "Lanac: blok obicne stanice ostaje nevezan"
+
+    ' --- 4) hladnjaca BEZ vozaca-ogledala: razlog, ne polovican dokument ---
+    Dim bezOgledala As String
+    bezOgledala = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDD-" & scenario, TEST_HLAD2_ST_ID), _
+                                 OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    izvestaj = ""
+    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj), _
+                 "Lanac: bez vozaca-ogledala otpremnica se ne pravi"
+    AssertTrue InStr(1, izvestaj, TEST_HLAD2_ST_ID, vbTextCompare) > 0, _
+               "Lanac: razlog imenuje stanicu bez ogledala"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(bezOgledala), _
+                 "Lanac: blok ostaje nevezan kad lanac stane"
+
+    ' --- 5) storniran blok nema sta da nosi ---
+    ' Blok je na stanici SA ogledalom i nevezan je, pa je kapija storna jedino
+    ' sto ga zaustavlja -- inace bi merenje palo na tudju kapiju.
+    Dim stornirani As String
+    stornirani = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDE-" & scenario, TEST_HLAD_ST_ID), _
+                                OtkStavke(15#, 100#, 1, 0#, 0#, 0))
+    AssertTrue StornoOtkup_TX(stornirani), "Lanac: kontrolni blok storniran"
+    izvestaj = "x"
+    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(stornirani, izvestaj), _
+                 "Lanac: storniran blok ne pokrece lanac"
+    AssertEquals "", izvestaj, "Lanac: storniran blok ne javlja nista"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
 End Sub
 
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.
@@ -12848,6 +13004,15 @@ Private Function OtpBrojHeader(ByVal brojOtp As String, ByVal dan As Date, _
 End Function
 
 ' Ocekivanje: sta je operater prijavio da otpremnica nosi.
+' Isti header otpremnice, druga stanica -- za hladnjacke scenarije. Vozac ostaje
+' obican: nacrt koji operater pravi rukom nije lanac.
+Private Function OtpHeaderNaStanici(ByVal brojOtp As String, ByVal stanicaID As String) As Object
+    Dim h As Object
+    Set h = OtpHeader(brojOtp)
+    h("StanicaID") = stanicaID
+    Set OtpHeaderNaStanici = h
+End Function
+
 Private Function OtpOcek(ByVal kolI As Double, ByVal ambI As Double, _
                          ByVal kolII As Double, ByVal ambII As Double) As Collection
     Dim c As Collection
