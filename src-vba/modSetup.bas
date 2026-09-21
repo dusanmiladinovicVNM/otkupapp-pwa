@@ -1578,51 +1578,6 @@ EH:
     LogErr "modSetup.BackfillDeteZbirnaGeneracija"
 End Sub
 
-Public Sub BackfillOtkupBrojOtpremnice()
-    On Error GoTo EH
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
-    ' Ugovor o formatu + redosled kolona PRE upisa. Kolona koja nije "@" TIHO
-    ' menja vrednost pri upisu ("3/2026" -> datum, vodeca nula otpadne), pa se
-    ' steta ne vidi ni u jednoj kasnijoj proveri. Primena ugovora je fail-soft
-    ' na startu, zato dokaz stoji ovde -- na writer boundary-ju.
-    modSchema.SchemaReadyOrFail "BackfillOtkupBrojOtpremnice", TBL_OTKUP
-    Dim od As Variant: od = GetTableData(TBL_OTPREMNICA)
-    Dim map As Object: Set map = CreateObject("Scripting.Dictionary")
-    If IsArray(od) Then
-        Dim cOId As Long: cOId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
-        Dim cOBr As Long: cOBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
-        If cOId > 0 And cOBr > 0 Then
-            Dim r As Long
-            For r = 1 To UBound(od, 1)
-                Dim oid As String: oid = Trim$(CStr(od(r, cOId)))
-                If Len(oid) > 0 And Not map.Exists(oid) Then map(oid) = Trim$(CStr(od(r, cOBr)))
-            Next r
-        End If
-    End If
-    Dim kd As Variant: kd = GetTableData(TBL_OTKUP)
-    Dim n As Long: n = 0
-    If IsArray(kd) Then
-        Dim cKOtp As Long: cKOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-        Dim cKBr As Long: cKBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE)
-        If cKOtp > 0 And cKBr > 0 Then
-            Dim i As Long
-            For i = 1 To UBound(kd, 1)
-                If Len(Trim$(CStr(kd(i, cKBr)))) = 0 Then          ' samo prazne (idempotentno)
-                    Dim oid2 As String: oid2 = Trim$(CStr(kd(i, cKOtp)))
-                    If Len(oid2) > 0 And map.Exists(oid2) Then
-                        UpdateCell TBL_OTKUP, i, COL_OTK_BROJ_OTPREMNICE, map(oid2)
-                        n = n + 1
-                    End If
-                End If
-            Next i
-        End If
-    End If
-    MsgBox "Backfill BrojOtpremnice: popunjeno " & n & " otkupnih redova.", vbInformation, APP_NAME
-    Exit Sub
-EH:
-    LogErr "modSetup.BackfillOtkupBrojOtpremnice"
-End Sub
-
 ' ============================================================
 ' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
 ' kolicina) -- jednokratni schema setup. Idempotentno.

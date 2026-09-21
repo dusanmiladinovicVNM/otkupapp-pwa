@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 21.09.2026 (S3d-2).
+**Ažurirano:** 21.09.2026 (S3e-1).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S3e — brisanje stare veze i linijskih polja zaglavlja
+## Sledeći korak: S4 — zbirna na kanon (vraća F3)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -143,9 +143,15 @@
     (`modOtkup.IspravkaOtkupaRazlog`): ekran ih pita pre forme, pisac ih diže kao grešku.
     **B-040 dobija ekran** — radnja „Ispravi“ nad redom u listama SVI i BLOKOVI; pisac je od S1 bio bez ijednog
     živog pozivaoca. **S3d zatvoren.**
-23. **Sledeće:** S3e — brisanje `Otkup.OtpremnicaID`, `VozacID`, `BrojOtpremnice` i linijskih polja zaglavlja
-    otpremnice (`Kolicina`, `Cena`, `Klasa`, `KolAmbalaze`, `BrutoKg`, `IspravkaOd`/`ZamenjenSa` po broju), uz
-    podelu grupe `otp_linija` u popisu čitalaca.
+23. **S3e-1 urađen** (§14.22): **merenje je oborilo pretpostavku koraka** — poslednji živi čitaoci kolona koje
+    S3e treba da obriše su kaskada **zbirne** (S4) i **OTK list za PWA** (S5). Odluka operatera: S3e se deli.
+    Sada je obrisan samo kod bez ijednog živog pozivaoca (`ReassignOtkupToOtpremnica_TX`,
+    `CalculateManjakByOtpremnica`, `BackfillOtkupBrojOtpremnice`, ceo `modSledljivost.bas`), a grupe u popisu su
+    **podeljene** da prag meri nešto što sme na nulu: `otk_veza_otp` (13) i `otp_linija` (3) idu na nulu u S3e-2,
+    `otk_brojzbirne` umire sa S4, a `otp_zaglavlje` namerno **nema prag**. `otp_cena` je dostigla **0**.
+    Usput očišćen `WRITE_OWNERSHIP.json` (tri modula koja `tblOtkup` više ne pišu).
+24. **Sledeće:** **S4** — zbirna na kanon (vraća F3 i pauzirane modove B-023/B-024), pa **S5** (PWA sync, pre njega
+    otkup u `PROSLEDJENO` kao izvor), pa **S3e-2** (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
 
 ## Alati i kapije
 
