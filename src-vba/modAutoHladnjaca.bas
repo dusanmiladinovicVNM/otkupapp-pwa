@@ -217,8 +217,12 @@ End Function
 '
 ' Otkup je vec upisan svojom transakcijom. Ako lanac padne, blok OSTAJE -- ne
 ' brise se i ne stornira. Operater dobija razlog i blok vidi na radnom stolu
-' (lista "Bez otpremnice"), pa ga veze rucno. Tiho preskakanje bi znacilo da
-' misli da je lanac odradjen.
+' (lista "Bez otpremnice"). Tiho preskakanje bi znacilo da misli da je lanac
+' odradjen.
+'
+' OPORAVAK NIJE RUCNO VEZIVANJE: taj blok ne sme da zavrsi u obicnoj otpremnici
+' (kapija je u modScrDokumenti.VeziZaAktivnu). Put je "otkloni uzrok pa PONOVI
+' auto-lanac" -- radnja "Ponovi auto-lanac" u listi "Bez otpremnice".
 '
 ' Vraca OtpremnicaID ("" = nije pravljena); `izvestaj` je ono sto operater cita.
 ' ============================================================
@@ -244,6 +248,18 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     ' drugi "nije hladnjaca".
     If Not HladnjacaStrogo(stanicaID) Then Exit Function
 
+    ' TVRDA KAPIJA ZA S6 -- OVAJ RED SE MORA PREISPITATI PRE PALJENJA LANCA.
+    '
+    ' Dok je lanac samo OTK -> OTP, "otpremnica vec postoji" znaci "posao je
+    ' gotov" i izlazak je tacan. Cim lanac dobije ZBR i PRJ, isti red postaje
+    ' zamka: posle ishoda "OTP uspeo, ZBR pao" ponovljen poziv bi izasao ODMAH i
+    ' lanac se nikad ne bi dovrsio.
+    '
+    ' Pre S6 se bira JEDNO:
+    '   A) ceo lanac je jedna atomska transakcija (nema polovicnog stanja), ili
+    '   B) lanac je nastavljiv: OTP postoji -> proveri/nastavi ZBR, ZBR postoji
+    '      -> proveri/nastavi PRJ.
+    ' Izbor je izlazni uslov S6 (plan 14.20), ne stvar ukusa.
     If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function
 
     If Not modMalina.IsManagedStationMirror(stanicaID) Then
