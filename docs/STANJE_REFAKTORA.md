@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 20.09.2026 (S3c).
+**Ažurirano:** 20.09.2026 (S3d-1).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S3d — auto lanci kroz `CreateOtpremnicaIzIzvora_TX`
+## Sledeći korak: S3d-2 — A13 kapija za nacrt i radnja „Ispravi“ nad blokom
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -129,8 +129,15 @@
     storno oslobodio — blok upisan bez otpremnice je normalno stanje i čeka na radnom stolu (F1). Pad strogog
     čitača daje **vidljiv red sa greškom**, ne tiho kraću listu. Radnja nad redom je pokazivač na F1; vezivanje
     ostaje kod kanonskog pisca. **S3c zatvoren.**
-21. **Sledeće:** S3d — auto lanci kroz `CreateOtpremnicaIzIzvora_TX` i otvaranje A13 kapije u
-    `IspravkaOtkupa_TX`. Pa S3e (brisanje `Otkup.OtpremnicaID` i linijskih polja zaglavlja, `otp_linija` podela).
+21. **S3d-1 urađen** (§14.20), posle **NO-GO review-a #367 i prepravke**: kanonski korak otpremnice postoji, ali
+    je **aktivacija vezana za S6**. Lanac radi samo za OM podešeno kao **hladnjača**, gde je vozač-ogledalo
+    **uvek obavezan** (kooperant sam dovozi robu), i pravi otpremnicu **1:1 po klasi** iz jednog bloka.
+    **Automatika je obavezna:** ekran grana **pre** ručnog vezivanja — hladnjački blok ne ide na radni sto, jer bi
+    postao član tuđeg nacrta sa drugom kilažom. Provera članstva ostaje kao zaštita od dupliranja.
+    **Jedan autoritet nad aktivacijom:** `AUTO_PRIJEMNICA_HLADNJACA` (do sada prekidač koji niko nije čitao) sada
+    odlučuje DA LI lanac radi; default **OFF do S6**, jer se zbirna i prijemnica danas ne mogu doraditi ni ručno.
+22. **Sledeće:** S3d-2 — otvaranje A13 kapije u `IspravkaOtkupa_TX` za **nacrt** (atomska zamena članstva) i
+    radnja „Ispravi“ nad blokom u F1 (B-040: pisac danas nema nijednog živog pozivaoca). Pa S3e.
 
 ## Alati i kapije
 

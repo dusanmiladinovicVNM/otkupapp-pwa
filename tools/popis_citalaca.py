@@ -156,7 +156,10 @@ DUAL_READ = re.compile(r"\bCOL_OTK_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO)\b|\bCOL_O
 KAPIJE = [("modMasterSync", "IzvedeniLanacIzPwaDostupan")]
 # Izricito ugasen poziv: u modulu stoji poruka o pauzi umesto poziva.
 # (modul sa porukom, kljuc poruke, ciljni modul, ciljna procedura)
-UGASENI = [("modOtkupUnos", "OTKUNOS_MSG_LANAC_PAUZIRAN", "modAutoHladnjaca", "AutoChainHladnjaca")]
+# Prazno od S3d: auto-lanac hladnjace vise nije ugasen nego vracen u koracima
+# (modScrDokumenti -> modAutoHladnjaca.AutoLanacHladnjaca). Upis koji opisuje
+# pauzu koje nema bio bi isto sto i zastarelo sidro sabotaze.
+UGASENI = []
 
 STATUS_RED = ["ZIV_UI", "ZIV_SYNC", "ZIV_MAKRO", "PAUZIRAN", "SAMO_TEST", "MRTAV", "TEST"]
 

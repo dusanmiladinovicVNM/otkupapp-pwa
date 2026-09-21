@@ -3593,6 +3593,90 @@ ostaje kod kanonskog pisca i identiteta (`OtkupID`), tamo gde i pripada; OPORAVA
 
 **Time je S3c zatvoren.** Sledeći je S3d.
 
+### 14.20) S3d-1 — auto-lanac hladnjače: kanonski korak otpremnice, aktivacija u S6 (20.09.2026)
+
+**Specifikacija (operater, 20.09.2026).** Auto-lanac postoji **samo za otkupno mesto podešeno kao hladnjača**.
+Robu do hladnjače kooperant dovozi **sam**, pa taj prevoz nema firminog vozača — zato je na hladnjačkoj stanici
+**vozač-ogledalo (`VozacID = StanicaID`) obavezan, bez obzira na režim**. (Ogledalo na *ostalim* stanicama je
+zasebna stvar: malina režim, u kome svaka stanica sama dovozi robu.) Roba se meri **na prijemu u hladnjaču**, pa je
+ceo lanac **1:1 sa otkupnim listom, po klasi**:
+
+```
+OTK  I 700/70  II 120/12
+ └─ OTP  I 700/70  II 120/12
+     └─ ZBR  I 700/70  II 120/12
+         └─ PRJ  I 700/70  II 120/12
+```
+
+i **jedan blok = jedan lanac** (nema agregiranja više blokova u jednu automatsku otpremnicu).
+
+**Review #367: NO-GO, tri P1.** Prva verzija je bila odbijena i prepravljena:
+
+| Nalaz | Šta je bilo | Ispravka |
+|---|---|---|
+| **automatika nije bila obavezna** | ekran je prvo vezivao blok za aktivan ručni nacrt, pa tek onda zvao lanac; lanac je na članstvo izlazio — dakle ručni nacrt je gasio obaveznu automatiku, a blok postajao član tuđeg dokumenta sa sasvim drugom kilažom | grananje ide **pre** ručnog vezivanja (`LanacVaziZaBlok`); provera članstva ostaje, ali kao **zaštita od dupliranja** (retry), ne kao način da ručni tok pobedi |
+| **ogledalo se tražilo, a nije moglo da nastane** | `EnsureVozacMirrorForStanica` je i sam iza `IsMalinaMode()`, pa van malina režima ogledalo za hladnjaču **nijedan put ne bi napravio** — lanac bi tamo uvek stajao | uslov proširen: ogledalo se pravi kad je malina režim **ili** je stanica hladnjača; lanac ga traži kroz taj kanonski idempotentan upis i odlučuje tek po **ponovljenoj** proveri. (Review je predlagao da se zahtev veže za malina režim — operater je precizirao da je vezan za **hladnjaču**, pa je tako i urađeno.) |
+| **palila se polovična automatika** | pravila se samo otpremnica, a poruka je upućivala na ručni unos zbirne i prijemnice — koji je **nemoguć** (F3 i F4 tvrdo odbijaju) | lanac ima **prekidač** i default je **OFF do S6**; poruka o ručnom nastavku je obrisana |
+
+**Jedan autoritet nad aktivacijom.** Postojao je prekidač `AUTO_PRIJEMNICA_HLADNJACA` u Podešavanjima („Auto
+otpremnica+zbirna+prijemnica (OM=hladnjača)“) koji **nijedan red koda nije čitao**, a nov put ga je ignorisao — dva
+gospodara. Sada: **stanica kaže KOJI blok** ide u lanac, **prekidač kaže DA LI lanac radi**
+(`modAutoHladnjaca.LanacUkljucen`). Default OFF ostaje dok lanac ne ume da završi ceo `OTK → OTP → ZBR → PRJ`;
+polovičan lanac je gori od nikakvog, jer operater ostaje sa izdatom otpremnicom i bez ijednog puta napred.
+
+**Drugi krug review-a #367 — routing ide pre SVIH pravila ručnog toka.** Prva ispravka je grananje stavila posle
+upisa, ali je pre njega ostalo pitanje o **prekoračenju aktivnog ručnog nacrta** (`PotvrdiPrekoracenje` →
+`GetOtpremnicaProgress(mOtpID)`). Hladnjački blok tom nacrtu ne pripada, a operater bi na „Ne“ izgubio **ceo upis**
+zbog ograničenja dokumenta sa kojim blok nema veze. Zato sada postoji i router **po stanici**
+(`LanacVaziZaStanicu`), koji odlučuje pre nego što blok uopšte postoji; pitanje se postavlja samo kad se
+**pouzdano** zna da blok ide ručnim tokom — i „ide u lanac“ i „ne može da se utvrdi“ ga preskaču.
+
+**Oporavak hladnjačkog bloka nije ručno vezivanje.** Ako lanac padne, blok ostaje nevezan i vidi se u „Bez
+otpremnice“ — ali odatle ga je jedan klik („Veži“) mogao smestiti u ručnu otpremnicu i time zaobići obavezan lanac.
+Kapija je sada na **granici radnje** (`VeziZaAktivnu` odbija hladnjački blok i blok za koji se put ne zna), a lista
+je dobila radnju **„Ponovi auto-lanac“**. Obe radnje stoje u redu radnji i svaka na svojoj granici odbija blok koji
+joj ne pripada — red još ne može da nosi svoje radnje (ugovor ljuske, §15).
+
+**Jedno pravilo, ne dva.** `AutoLanacHladnjaca` je čitao stanicu kroz `IsHladnjacaStanica` (fail-open, za prikaz),
+dok je router čitao strogo — dve kopije istog pravila koje bi se razišle prvom izmenom. Sada oba koriste isti strog
+primitiv (`HladnjacaStrogo`).
+
+**Prekidač je PRIVREMEN, i to je zapisano.** Dok traje refaktor on znači „implementacija je dovoljno kompletna da
+sme da se pusti“ — tehnička kapija, ne poslovna opcija. Kad S6 zatvori ceo lanac, stanje `JeHladnjača = DA` uz
+`AUTO_PRIJEMNICA_HLADNJACA = NE` postaje **zabranjeno specifikacijom** (za hladnjaču je automatika obavezna), pa
+prekidač ili nestaje ili postaje interni/deployment safety prekidač koji normalan tok ne koristi. To je **izlazni
+uslov S6**, ne preporuka — v. §15.
+
+**IZLAZNI USLOVI S6 — tvrde kapije, ne backlog:**
+
+1. svaki sledeći dokument **izvodi** stavke iz svog kanonskog roditelja (`CreateAutoZbirnaIzOtpremnice_TX(otpID)`,
+   `CreateAutoPrijemnicaIzZbirne_TX(zbrID)`) — lanac im **ne prosleđuje prepisane brojeve**. Tako je 1:1 posledica
+   modela, a ne tri vrednosti koje mogu da se raziđu;
+2. **transakciona i recovery politika mora biti definisana pre paljenja**: „OTP uspeo, ZBR uspeo, PRJ pao“ ne sme da
+   ostane neodlučeno stanje;
+3. jednakost **po klasi** na sva četiri nivoa je domenska invarijanta i nosi svoj test;
+4. **idempotencija se mora preispitati.** Danas `AutoLanacHladnjaca` izlazi čim otpremnica postoji — tačno dok
+   je lanac samo `OTK → OTP`. Sa `ZBR` i `PRJ` isti red postaje zamka: posle ishoda „OTP uspeo, ZBR pao“
+   ponovljen poziv izlazi odmah i lanac se **nikad ne dovrši**. Bira se **A)** ceo lanac kao jedna atomska
+   transakcija ili **B)** nastavljiv lanac (OTP postoji → proveri/nastavi ZBR…). Napomena stoji i **na tom redu
+   u kodu**, da je ne propusti onaj ko pali lanac.
+
+**Testovi:** `Test_HLD_AutoLanacOtpremnica` — isključen prekidač ne pušta blok u lanac i ne pravi ništa · uključen:
+izdata otpremnica sa vozačem-ogledalom, kilaža i ambalaža 1:1 **i za dve klase** · **hladnjački blok ide u svoj
+lanac i kad je aktivan ručni nacrt** (jezgro odluke) · ponovljen poziv ne pravi drugu otpremnicu · obična stanica i
+storniran blok se ne diraju · bez ogledala lanac staje i imenuje stanicu. Sabotaže `lanac-bez-prekidaca`,
+`lanac-dupli-poziv`, `lanac-i-na-obicnoj-stanici`, `lanac-storniran-blok` (ukupno **517**).
+
+**Dokazni jaz, zapisan kao jaz (review #367, P2):** ceo `Scr_Save` scenario — aktivan ručni nacrt sa malim
+ostatkom, pa hladnjački blok veći od njega, **bez pitanja o prekoračenju** i sa sopstvenim lancem — nije
+vožen testom, jer `Scr_Save` povlači ostatak UI/print putanje. Mereni su **suđenje** (`LanacVaziZaStanicu`,
+`LanacVaziZaBlok`) i **ishod** (lanac, kapije), a ne njihov redosled u ekranu; taj red je u ručnoj listi.
+
+**Nije mereno testom, ide u ručnu proveru:** da ekran zaista grana pre vezivanja (`Scr_Save` nosi štampu otkupnog
+lista, pa se u headless prolazu ne vozi) — isti dogovor kao za vezivanje posle unosa iz S3b-2a.
+
+**Sledeće:** S3d-2 — A13 kapija za NACRT (atomska zamena članstva) i radnja „Ispravi“ nad blokom (B-040).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3605,8 +3689,9 @@ ostaje kod kanonskog pisca i identiteta (`OtkupID`), tamo gde i pripada; OPORAVA
 | **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
 | **Granica agregata za komande nad jednim dokumentom** (review #363, drugi krug, P2) | strogi čitači (`StavkeOtpremniceRedovi`, `StavkeOtkupaRedovi`) validiraju ceo skup, pa komanda jednog dokumenta (`IzdajOtpremnicu_TX`, `GetOtpremnicaProgress`) pada i zbog nepovezanog pokvarenog dokumenta. Fail-closed, nije kvar podataka. Kandidat: strogi čitač po dokumentu (ciljna otpremnica + njeni izvori) za komande, a skup za izveštaje i mreže |
 | **Strog čitač ZAGLAVLJA otkupa za čitaoce koji ga sastavljaju** (review #364, P2) | specifikacija blokova čita `BrojDokumenta`, `Datum`, `KooperantID`, `StanicaID`, `VrstaVoca`, `SortaVoca` direktno iz `tblOtkup`, a `CreateOtkup_TX` za te činjenice drži jače invarijante (broj i datum obavezni, kooperant i stanica postoje, kultura usklađena). Naknadno pokvareno zaglavlje zato daje prazan broj bloka na papiru umesto pada. Pravila pisca se **ne prepisuju** u `modPrint`: u sledećem prolazu proveriti postoji li kanonski strog čitač zaglavlja, pa ga koristiti — isti rez kao `StavkeOtkupaRedovi` za stavke |
-| **`NEDOVRSENO` nudi radnju po LISTI, a ne po REDU** (review #366, P2) | `Scr_Radnje` za tu listu vraća jedno `danger` dugme (`odbaci`), pa ga operater dobija i nad redom koji ga ne prima — `IZGUBLJEN_BLOK`, osirotela prijemnica, red sa greškom. Mutacije nema: `OdbaciIspravku` odbija red bez `CorrectionID`-a i još to i zabeleži. Problem je što UI **nudi** radnju za koju unapred zna da nije primenljiva, i što je jedini put do prave radnje rečenica u koloni „akcija“. Read-model to već zna — `GetNedovrseno` nosi `actionCode` (`CONTEXT` / `PRIJ` / `PAL` / `BLOK`) — ali ga `RowsNedovrseno` **ne prenosi u mrežu**, pa ljuska nema čime da bira. Rez: nevidljiva kolona sa `actionCode`-om + radnje po redu (`CONTEXT` → Odbaci ispravku, `BLOK` → otvori F1/Bez otpremnice, `PRIJ`/`PAL` → Preveži, `GRESKA` → bez mutacione radnje). To je **ugovor ljuske**, ne samo ovaj ekran: `trebaRed` danas zna samo „treba red / ne treba / označeni“, a ovde treba „zavisi od vrste reda“. Zato ide kao svoj rez, ne uz S3c-2 |
+| **`NEDOVRSENO` nudi radnju po LISTI, a ne po REDU** (review #366, P2) | `Scr_Radnje` za tu listu vraća jedno `danger` dugme (`odbaci`), pa ga operater dobija i nad redom koji ga ne prima — `IZGUBLJEN_BLOK`, osirotela prijemnica, red sa greškom. Mutacije nema: `OdbaciIspravku` odbija red bez `CorrectionID`-a i još to i zabeleži. Problem je što UI **nudi** radnju za koju unapred zna da nije primenljiva, i što je jedini put do prave radnje rečenica u koloni „akcija“. Read-model to već zna — `GetNedovrseno` nosi `actionCode` (`CONTEXT` / `PRIJ` / `PAL` / `BLOK`) — ali ga `RowsNedovrseno` **ne prenosi u mrežu**, pa ljuska nema čime da bira. Od S3d-1 je isti nedostatak vidljiv i u listi „Bez otpremnice“: red nudi i **„Veži“** i **„Ponovi auto-lanac“**, a svaka radnja tek na svojoj granici odbije blok koji joj ne pripada (podaci su bezbedni, UX nije). Rez: nevidljiva kolona sa `actionCode`-om + radnje po redu (`CONTEXT` → Odbaci ispravku, `BLOK` → otvori F1/Bez otpremnice, `PRIJ`/`PAL` → Preveži, `GRESKA` → bez mutacione radnje). To je **ugovor ljuske**, ne samo ovaj ekran: `trebaRed` danas zna samo „treba red / ne treba / označeni“, a ovde treba „zavisi od vrste reda“. Zato ide kao svoj rez, ne uz S3c-2 |
 | **Rollback `tblAmbalaza` u ispravci nije dokazan testom** (review #365, P2) | `IspravkaOtpremnice_TX` snimi sve četiri tabele (`tblOtpremnica`, `…Stavke`, `…Izvori`, `tblAmbalaza`), a storno stare vraća gajbe koje je njeno izdavanje knjižilo. Test atomarnosti (`Test_OTP_IspravkaIzdate`) meri da stara ostaje AKTIVNA kad ispravka padne, i sabotaža `ispravka-pad-ostavlja-storniranu` to obara — ali **nijedna tvrdnja ne meri stanje ambalaže posle rollback-a**. Implementacija izgleda ispravno; nedokazano je nedokazano. Rez: tvrdnja nad zbirom gajbi pre i posle pale ispravke + sabotaža koja skida `AddTableSnapshot TBL_AMBALAZA` (danas bi prošla neprimećeno) |
+| **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---

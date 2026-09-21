@@ -142,9 +142,16 @@ Public Function Scr_Radnje() As String
         Case "NEVEZANI"
             ' Blok bez otpremnice se vezuje za AKTIVNI nacrt -- isti pisac kao
             ' posle unosa; bez aktivne otpremnice radnje nema.
+            '
+            ' Hladnjacki blok se NE vezuje rucno: njemu je oporavak ponavljanje
+            ' auto-lanca. Obe radnje stoje u redu radnji, a svaka na svojoj
+            ' granici odbija blok koji joj ne pripada -- red jos ne moze da nosi
+            ' svoje radnje (ugovor ljuske, v. plan 15).
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
             If Len(mOtpID) > 0 Then _
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
+            If modAutoHladnjaca.LanacUkljucen() Then _
+                Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
     End Select
 End Function
 
@@ -396,9 +403,24 @@ Private Function PrekoracenjeKlase(ByVal prog As Object, ByVal klasa As String, 
 End Function
 
 ' Veze otkup za aktivnu otpremnicu. "" = vezan, inace razlog za operatera.
+' HLADNJACKI BLOK SE NE VEZUJE RUCNO. Kapija stoji na GRANICI RADNJE, ne samo u
+' tome koje se dugme crta: oporavak posle pale automatike je "ispravi uzrok pa
+' PONOVI lanac", a ne "veze ga za prvu otvorenu otpremnicu". Bez ove kapije bi se
+' obavezan lanac zaobilazio jednim klikom iz liste "Bez otpremnice".
+'
+' Neizvesnost takodje odbija: blok za koji se ne zna kojim putem ide ne sme da
+' zavrsi u rucnom dokumentu.
 Public Function VeziZaAktivnu(ByVal otkupID As String) As String
-    Dim g As String
+    Dim g As String, putGreska As String
     On Error GoTo EH
+    If modAutoHladnjaca.LanacVaziZaBlok(Trim$(otkupID), putGreska) Then
+        VeziZaAktivnu = Poruka("OTKUI_ERR_VEZA_HLADNJACA")
+        Exit Function
+    End If
+    If Len(putGreska) > 0 Then
+        VeziZaAktivnu = putGreska
+        Exit Function
+    End If
     If Len(mOtpID) = 0 Then
         VeziZaAktivnu = Poruka("OTKUI_ERR_NEMA_AKT_OTP")
         Exit Function
@@ -598,7 +620,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
     End Select
     Dim razlog As String
     Select Case p(0)
-        Case "print", "storno", "vezi", "ukloni"
+        Case "print", "storno", "vezi", "ukloni", "ponovi"
             If Len(otkupID) = 0 Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
                 Exit Function
@@ -636,6 +658,25 @@ Private Function RowAction(ByVal tag As String) As Boolean
             Else
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
+
+        Case "ponovi"
+            ' Ponavljanje auto-lanca posle otklonjenog uzroka. Blok koji lancu ne
+            ' pripada se odbija imenom -- ista kapija kao kod vezivanja, samo sa
+            ' druge strane.
+            Dim ponPoruka As String, ponPut As String
+            If Not modAutoHladnjaca.LanacVaziZaBlok(otkupID, ponPut) Then
+                modOtkupUI.ShowToast IIf(Len(ponPut) > 0, ponPut, _
+                                         Poruka("OTKUI_ERR_PONOVI_NIJE_HLAD")), True
+                Exit Function
+            End If
+            If Len(modAutoHladnjaca.AutoLanacHladnjaca(otkupID, ponPoruka)) = 0 Then
+                modOtkupUI.ShowToast IIf(Len(ponPoruka) > 0, ponPoruka, _
+                                         Poruka("OTKUI_ERR_LANAC")), True
+                Exit Function
+            End If
+            Scr_ResetCache
+            RowAction = True
+            modOtkupUI.ShowToast ponPoruka, False
 
         Case "vezi"
             razlog = VeziZaAktivnu(otkupID)
@@ -1107,10 +1148,22 @@ Public Function Scr_Save(ByVal polja As Object) As String
         Exit Function
     End If
 
-    ' Upozorenje na prekoracenje aktivne otpremnice, po klasi.
-    If Not PotvrdiPrekoracenje(CDbl(p("kolicinaI")), CDbl(p("kolicinaII"))) Then
-        Scr_Save = " "
-        Exit Function
+    ' ROUTING PRE SVIH PRAVILA RUCNOG TOKA.
+    '
+    ' Prekoracenje se meri nad AKTIVNIM RUCNIM NACRTOM, a hladnjacki blok tom
+    ' nacrtu ne pripada -- ide u svoj lanac. Da se pitanje postavilo pre nego sto
+    ' se to zna, operater bi na "Ne" izgubio ceo upis zbog ogranicenja dokumenta
+    ' sa kojim blok nema veze.
+    '
+    ' Pita se SAMO kad se pouzdano zna da blok ide rucnim tokom: i "ide u lanac"
+    ' i "ne moze da se utvrdi" preskacu pitanje (fail-closed).
+    Dim putGreska As String, ideULanac As Boolean
+    ideULanac = modAutoHladnjaca.LanacVaziZaStanicu(CStr(polja("stanicaID")), putGreska)
+    If Not ideULanac And Len(putGreska) = 0 Then
+        If Not PotvrdiPrekoracenje(CDbl(p("kolicinaI")), CDbl(p("kolicinaII"))) Then
+            Scr_Save = " "
+            Exit Function
+        End If
     End If
 
     res = modOtkupUnos.OtkupUpisi(p, poruke)
@@ -1123,7 +1176,25 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' transakcija, i otkup postoji i bez otpremnice); ako vezivanje padne,
     ' otkup ostaje van nje i operater to cuje imenom -- radnja "vezi" nad redom
     ' ga kasnije vezuje.
-    If Len(mOtpID) > 0 Then
+    ' HLADNJACKI BLOK NE IDE NA RADNI STO. Njegov lanac je obavezan i pravi
+    ' SVOJ dokument 1:1 sa blokom, pa se grana PRE rucnog vezivanja: aktivan
+    ' nacrt bi inace progutao blok (postao bi jedan clan tudje otpremnice sa
+    ' sasvim drugom kilazom) i automatika se ne bi ni pokrenula.
+    '
+    ' Ceo sud je u modAutoHladnjaca -- ekran samo pita. Lanac ne obara upis:
+    ' otkup je snimljen svojom transakcijom i ostaje i kad otpremnica ne uspe,
+    ' a razlog ide operateru u istu poruku.
+    Dim lanacPoruka As String
+    ideULanac = modAutoHladnjaca.LanacVaziZaBlok(res, putGreska)
+    If Len(putGreska) > 0 Then
+        ' Ne zna se kojim putem blok ide -- ne gura se NI U LANAC NI U NACRT.
+        ' Vezivanje "jer provera nije uspela" bi hladnjacki blok tiho smestilo u
+        ' tudji dokument. Blok je upisan i ceka u listi "Bez otpremnice".
+        poruke = Trim$(poruke & "  " & putGreska)
+    ElseIf ideULanac Then
+        modAutoHladnjaca.AutoLanacHladnjaca res, lanacPoruka
+        If Len(lanacPoruka) > 0 Then poruke = Trim$(poruke & "  " & lanacPoruka)
+    ElseIf Len(mOtpID) > 0 Then
         Dim veza As String
         veza = VeziZaAktivnu(res)
         If Len(veza) > 0 Then poruke = Trim$(poruke & "  " & veza)

@@ -689,6 +689,70 @@ SABOTAZE = {
         "Test_OTP_ClanstvoBulkStrogo",
         "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
     ),
+    # Zastita od dupliranja pada: ponovljen poziv (retry, dvoklik) pravi DRUGU
+    # otpremnicu nad istim blokom, pa isti teret stoji na dva dokumenta.
+    "lanac-dupli-poziv": (
+        "modAutoHladnjaca.bas",
+        "    If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: lanac se pokrece dvaput\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: ponovljen poziv ne pravi drugu otpremnicu",
+    ),
+    # Rucno vezivanje opet prima hladnjacki blok: obavezan lanac se zaobilazi
+    # jednim klikom iz liste "Bez otpremnice", pa blok zavrsi u tudjoj otpremnici.
+    "veza-hladnjackog-bloka-rucno": (
+        "modScrDokumenti.bas",
+        "    If modAutoHladnjaca.LanacVaziZaBlok(Trim$(otkupID), putGreska) Then\n",
+        "    If False Then   ' SABOTAZA: hladnjacki blok se vezuje rucno\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: hladnjacki blok se ne vezuje rucno",
+    ),
+    # Razvodnica opet guta gresku i vraca tiho False: blok za koji se NE ZNA da li
+    # je hladnjacki padne na rucnu stranu i zavrsi u tudjem nacrtu.
+    "lanac-put-tiho-false": (
+        "modAutoHladnjaca.bas",
+        "    LogErr \"modAutoHladnjaca.LanacVaziZaBlok\"\n"
+        "    outGreska = Poruka(\"OTKUI_ERR_LANAC_PUT\") & \" \" & errDesc\n",
+        "    LogErr \"modAutoHladnjaca.LanacVaziZaBlok\"\n"
+        "    ' SABOTAZA: razlog se guta, ostaje tiho False\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: neizvesnost vraca RAZLOG, ne tiho False",
+    ),
+    # Prekidac prestaje da bude autoritet: lanac radi i kad je iskljucen, pa se
+    # parcijalna automatika pali pre nego sto ume da zavrsi ceo lanac.
+    "lanac-bez-prekidaca": (
+        "modAutoHladnjaca.bas",
+        "    If Len(otkupID) = 0 Then Exit Function\n"
+        "    If Not LanacUkljucen() Then Exit Function\n",
+        "    If Len(otkupID) = 0 Then Exit Function\n"
+        "    ' SABOTAZA: prekidac se ne pita\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: iskljucen prekidac ne pravi otpremnicu",
+    ),
+    # Lanac se pali i na OBICNOJ stanici, gde roba nije merena na prijemu -- pa
+    # otpremnica 1:1 nije istina, nego pretpostavka.
+    "lanac-i-na-obicnoj-stanici": (
+        "modAutoHladnjaca.bas",
+        "    LanacVaziZaBlok = HladnjacaStrogo(stanicaID)\n",
+        "    LanacVaziZaBlok = True   ' SABOTAZA: svaka stanica ide u lanac\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: obicna stanica nema auto-lanac",
+    ),
+    # Storniran blok ulazi u lanac: pisac ga odbije, ali operater dobije grešku
+    # za dokument koji je sam obrisao.
+    "lanac-storniran-blok": (
+        "modAutoHladnjaca.bas",
+        "    If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), \"\")), _\n"
+        "               \"Da\", vbTextCompare) = 0 Then Exit Function\n"
+        "\n"
+        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
+        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
+        "    ' SABOTAZA: storniran blok prolazi u lanac\n"
+        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
+        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: storniran blok ne pokrece lanac",
+    ),
     # OPORAVAK opet broji SVAKI nevezan blok (S3c-2): blok upisan bez otpremnice
     # nije nedovrsen posao nego normalno stanje, i vec se vidi na radnom stolu.
     "oporavak-blok-nikad-vezan": (
