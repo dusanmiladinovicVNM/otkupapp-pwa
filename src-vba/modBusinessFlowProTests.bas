@@ -201,7 +201,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
     Test_OTK_EkranPiseNovimModelom
     Test_OTK_EkranNerazresivaKulturaPada
-    Test_OTK_EkranPauziraAutoLanac
+    Test_OTK_UpisNeVodiLanac
     Test_OTK_PrintNetoUnosNeRekonstruiseBruto
     Test_OTK_IspravkaPauziranaNeTrosiPending
     Test_OTK_BrojJedinstvenPoStaniciIDanu
@@ -8899,11 +8899,16 @@ EH:
     LogFatal "Test_OTK_EkranNerazresivaKulturaPada", Err.Number, Err.description
 End Sub
 
-' Auto-lanac hladnjace je PAUZIRAN do PR7, i to se kaze operateru.
+' UPIS OTKUPA NE VODI LANAC -- to je stvar EKRANA (S3d).
 '
-' Lanac deli dokument po klasi, a nov pisac daje jedan OtkupID -- veza bi bila
-' polovicna. Kod lanca ostaje netaknut; pauzira se poziv.
-Private Sub Test_OTK_EkranPauziraAutoLanac()
+' Do S3d je ovde stajala napomena da je auto-lanac pauziran. Lanac vise nije
+' pauziran nego vracen, ali ga pokrece ekran, i to POSLE routinga (hladnjacki
+' blok ne podleze pravilima rucnog nacrta). Pisac zato o lancu ne govori nista i
+' ne pravi nijedan dokument -- ni na hladnjackoj stanici.
+'
+' Bez ove tvrdnje bi se drugi poziv lanca (iz pisca, "da bude sigurno") uvukao
+' neprimetno i pravio drugu otpremnicu nad istim blokom.
+Private Sub Test_OTK_UpisNeVodiLanac()
     On Error GoTo EH
 
     Dim scenario As String
@@ -8924,27 +8929,31 @@ Private Sub Test_OTK_EkranPauziraAutoLanac()
     res = modOtkupUnos.OtkupUpisi(p, poruke)
 
     AssertTrue Len(res) > 0, "OTK lanac: otkup je upisan (poruke: " & poruke & ")"
-    AssertTrue InStr(1, poruke, "PAUZIRAN", vbTextCompare) > 0, _
-               "OTK lanac: operater je obavesten (bilo: " & poruke & ")"
     AssertEquals CStr(preOtp), CStr(OtkBrojRedova(TBL_OTPREMNICA)), _
-                 "OTK lanac: nijedna otpremnica nije nastala"
+                 "OTK lanac: pisac ne pravi otpremnicu ni na hladnjackoj stanici"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(res), _
+                 "OTK lanac: blok posle upisa nije ni u jednoj otpremnici"
+    AssertEquals "0", CStr(InStr(1, poruke, "PAUZIRAN", vbTextCompare)), _
+                 "OTK lanac: nema zastarele napomene o pauzi (bilo: " & poruke & ")"
 
-    ' Kontrola: van hladnjace nema ni poruke -- inace bi se javljala uvek.
+    ' Kontrola: obicna stanica prolazi isto -- pravilo nije "hladnjaca je posebna
+    ' u piscu", nego "pisac o lancu ne odlucuje".
     Dim p2 As Object
     Set p2 = OtkEkranParam(TEST_PREFIX & "-OTK-PL2-" & scenario)
     p2("kolicinaI") = 400#
     p2("cenaI") = 50#
     p2("kolAmb") = 20&
 
-    Dim poruke2 As String
-    AssertTrue Len(modOtkupUnos.OtkupUpisi(p2, poruke2)) > 0, "OTK lanac: obican unos prosao"
-    AssertEquals "0", CStr(InStr(1, poruke2, "PAUZIRAN", vbTextCompare)), _
-                 "OTK lanac: van hladnjace nema poruke"
+    Dim poruke2 As String, res2 As String
+    res2 = modOtkupUnos.OtkupUpisi(p2, poruke2)
+    AssertTrue Len(res2) > 0, "OTK lanac: obican unos prosao"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(res2), _
+                 "OTK lanac: obican blok posle upisa takodje nije vezan"
 
     Exit Sub
 
 EH:
-    LogFatal "Test_OTK_EkranPauziraAutoLanac", Err.Number, Err.description
+    LogFatal "Test_OTK_UpisNeVodiLanac", Err.Number, Err.description
 End Sub
 
 ' PWA INGEST IDE KROZ KANONSKI PISAC.
