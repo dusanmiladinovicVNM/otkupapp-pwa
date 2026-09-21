@@ -55,6 +55,33 @@ Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
     IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
 End Function
 
+
+' Da li je hladnjacki auto-lanac UKLJUCEN. Jedan autoritet, jedno mesto.
+'
+' Stanica (JeHladnjaca) kaze KOJI blok ide u lanac; ovaj prekidac kaze DA LI
+' lanac uopste radi. Do sada su postojala dva gospodara: prekidac u Podesavanjima
+' koji nijedan red koda nije citao, i nov put koji ga je ignorisao.
+'
+' Default je OFF i tako ostaje do S6: lanac sme da se upali tek kad ume da
+' zavrsi ceo OTK -> OTP -> ZBR -> PRJ. Polovican lanac je gori od nikakvog --
+' zbirna i prijemnica se danas ne mogu doraditi ni rucno (F3/F4 su pauzirani),
+' pa bi operater ostao sa izdatom otpremnicom i bez ijednog puta napred.
+Public Function LanacUkljucen() As Boolean
+    LanacUkljucen = IsAutoPrijemnicaHladnjaca()
+End Function
+
+' Da li OVAJ blok ide u auto-lanac umesto na radni sto. Ekran ovim grana PRE
+' rucnog vezivanja; ceo sud je ovde, da ga sledeci pozivalac ne prepisuje.
+Public Function LanacVaziZaBlok(ByVal otkupID As String) As Boolean
+    On Error Resume Next
+    If Not LanacUkljucen() Then Exit Function
+    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), "")), _
+               "Da", vbTextCompare) = 0 Then Exit Function
+    LanacVaziZaBlok = IsHladnjacaStanica( _
+        Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), "")))
+End Function
+
 ' ============================================================
 ' AUTO-LANAC HLADNJACE -- korak otpremnice (A-014, S3d).
 '
@@ -64,12 +91,23 @@ End Function
 ' bloka, u jednoj transakciji (CreateOtpremnicaIzIzvora_TX izvodi ocekivanje iz
 ' izvora, pa je "povezano = ocekivano" zadovoljeno samim nastankom).
 '
-' Vozac je MIRROR stanice (VozacID = StanicaID). Lanac ga ne pravi usput: upis
-' otkupa ne sme da pise maticne podatke. Nema mirrora -> lanac staje i kaze zasto.
+' Vozac je OGLEDALO stanice (VozacID = StanicaID), i to nije podatak o coveku
+' nego PROXY za samu hladnjacu: robu do hladnjace kooperant dovozi SAM, pa taj
+' prevoz nema firminog vozaca. Zato je ogledalo na hladnjackoj stanici OBAVEZNO
+' bez obzira na rezim -- malina rezim je zaseban razlog, i tice se ogledala na
+' OSTALIM stanicama.
 '
-' COVEKOV IZBOR JE JACI OD AUTOMATIKE: blok koji je operater vezao za svoj nacrt
-' na radnom stolu ne dobija jos jednu otpremnicu. Pripadnost se cita iz KANONA
-' (tblOtpremnicaIzvori), ne iz ekrana -- ista cinjenica bez obzira ko zove.
+' Lanac ga sme zatraziti kroz kanonski, idempotentan upis
+' (modMalina.EnsureVozacMirrorForStanica), a odluku donosi tek ponovljena
+' provera: ako ga ni tada nema, staje i kaze na kojoj stanici.
+'
+' AUTOMATIKA JE OBAVEZNA, NE PONUDA: hladnjacki blok ne ide na radni sto nego u
+' SVOJ lanac. Zato ekran grana PRE rucnog vezivanja (LanacVaziZaBlok), a ne posle
+' njega -- aktivan rucni nacrt bi inace progutao blok i lanac se ne bi ni pokrenuo,
+' a blok bi zavrsio kao jedan od clanova tudjeg dokumenta sa sasvim drugom kilazom.
+'
+' Provera clanstva ispod je zato ZASTITA OD DUPLIRANJA (ponovljen poziv, retry),
+' a ne nacin da rucni tok pobedi automatiku.
 '
 ' Otkup je vec upisan svojom transakcijom. Ako lanac padne, blok OSTAJE -- ne
 ' brise se i ne stornira. Operater dobija razlog i blok vidi na radnom stolu
@@ -89,6 +127,7 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
 
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then Exit Function
+    If Not LanacUkljucen() Then Exit Function
 
     If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), "")), _
                "Da", vbTextCompare) = 0 Then Exit Function
@@ -97,6 +136,16 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     If Not IsHladnjacaStanica(stanicaID) Then Exit Function
 
     If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function
+
+    If Not modMalina.IsManagedStationMirror(stanicaID) Then
+        ' Best-effort: Ensure sme da padne (npr. duplikat stanice), ali odluku
+        ' donosi tek ponovljena provera -- "pozvao sam Ensure" nije dokaz.
+        On Error Resume Next
+        modMalina.EnsureVozacMirrorForStanica stanicaID, _
+            Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), "", ""
+        Err.Clear
+        On Error GoTo EH
+    End If
 
     If Not modMalina.IsManagedStationMirror(stanicaID) Then
         izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_MIRROR") & " " & stanicaID
@@ -132,9 +181,10 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
         Exit Function
     End If
 
-    ' Zbirna i prijemnica se ovde dodaju u S4 i S6; do tada operater zna sta jos
-    ' ceka, umesto da misli da je lanac gotov.
-    izvestaj = Poruka("OTKUI_MSG_LANAC_OTP") & " " & broj & " " & Poruka("OTKUI_MSG_LANAC_CEKA")
+    ' Zbirna (S4) i prijemnica (S6) se dodaju OVDE, i svaka izvodi stavke iz svog
+    ' kanonskog roditelja -- ne prima prepisane brojeve. 1:1 je tada posledica
+    ' modela, a ne tri kopirane vrednosti koje mogu da se raziju.
+    izvestaj = Poruka("OTKUI_MSG_LANAC_OTP") & " " & broj
     Exit Function
 
 EH:

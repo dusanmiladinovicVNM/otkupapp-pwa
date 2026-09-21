@@ -7040,26 +7040,52 @@ End Sub
 ' ============================================================
 ' S3d -- AUTO-LANAC HLADNJACE, korak otpremnice (A-014).
 '
-' Roba se meri pri prijemu u hladnjacu, pa je otpremnica 1:1 sa otkupnim listom
-' i nema sta da ceka: nastaje i IZDAJE se odmah, sa vozacem-ogledalom stanice.
+' Roba koju proizvodjac doveze DIREKTNO u hladnjacu meri se na prijemu, pa je
+' otpremnica 1:1 sa otkupnim listom -- po KLASI, ne samo u totalu -- i nema sta
+' da ceka: nastaje i izdaje se odmah, sa vozacem-ogledalom stanice kao proxyjem
+' (taj prevoz nema firminog vozaca).
 '
-' Meri se i sta lanac NE sme: blok koji je operater vec vezao za svoj nacrt ne
-' dobija drugu otpremnicu (covekov izbor je jaci), obicna stanica se ne dira, a
-' hladnjaca bez vozaca-ogledala dobija RAZLOG umesto polovicnog dokumenta.
+' Meri se i sta lanac NE sme:
+'   - da radi dok prekidac nije ukljucen (jedan autoritet nad aktivacijom);
+'   - da ga aktivan RUCNI nacrt presretne -- hladnjacki blok je obavezan da ide
+'     u svoj lanac, inace bi zavrsio kao clan tudje otpremnice sa drugom kilazom;
+'   - da se pokrene dvaput za isti blok (zastita od dupliranja);
+'   - da dira obicnu stanicu ili storniran blok.
 ' ============================================================
 Private Sub Test_HLD_AutoLanacOtpremnica()
     On Error GoTo EH
 
-    Dim scenario As String, izvestaj As String, g As String
+    Dim scenario As String, izvestaj As String, g As String, prevCfg As String
     scenario = NewScenarioCode("HLDLAN")
+    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
 
-    ' --- 1) hladnjacka stanica, nevezan blok -> izdata otpremnica 1:1 ---
+    ' --- 0) PREKIDAC JE JEDAN AUTORITET -----------------------------------
+    ' Dok je iskljucen (default do S6), hladnjacki blok ide radnim stolom kao i
+    ' svaki drugi: ni lanca ni poruke. Stanica kaze KOJI blok, prekidac DA LI.
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Ne"
+
+    Dim ugasen As String
+    ugasen = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLD0-" & scenario, TEST_HLAD_ST_ID), _
+                            OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    AssertTrue Len(ugasen) > 0, "Lanac: blok za provereni prekidac upisan"
+    AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(ugasen), _
+               "Lanac: iskljucen prekidac ne pusta blok u lanac"
+    izvestaj = "x"
+    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(ugasen, izvestaj), _
+                 "Lanac: iskljucen prekidac ne pravi otpremnicu"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(ugasen), _
+                 "Lanac: blok ostaje nevezan dok je prekidac iskljucen"
+
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
+
+    ' --- 1) hladnjacka stanica -> izdata otpremnica 1:1 -------------------
     Dim blok As String, otpID As String
     blok = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDA-" & scenario, TEST_HLAD_ST_ID), _
                           OtkStavke(70#, 100#, 7, 0#, 0#, 0))
     AssertTrue Len(blok) > 0, "Lanac: blok na hladnjackoj stanici upisan"
     If Len(blok) = 0 Then GoTo Kraj
 
+    AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok), "Lanac: hladnjacki blok ide u lanac"
     otpID = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
     AssertTrue Len(otpID) > 0, "Lanac: otpremnica je napravljena (" & izvestaj & ")"
     If Len(otpID) = 0 Then GoTo Kraj
@@ -7073,7 +7099,6 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
     AssertEquals otpID, modDokumenta.OtpremnicaZaOtkup(blok), _
                  "Lanac: blok je izvor te otpremnice"
 
-    ' 1:1 -- ocekivanje je tacno ono sto blok nosi, bez ostatka.
     Dim prog As Object, kl As Object
     Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
     AssertTrue prog.Exists(KLASA_I), "Lanac: otpremnica ima klasu I"
@@ -7084,61 +7109,105 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
         AssertEquals "0", CStr(kl("preostalo")), "Lanac: nema ostatka (nema sta da se dovezuje)"
     End If
 
-    ' --- 2) blok koji je vec u aktivnom nacrtu se NE dira ---
-    Dim uNacrtu As String, nacrt As String, otpDrugi As String
-    uNacrtu = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
-                             OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    ' Zastita od dupliranja: ponovljen poziv nad istim blokom ne pravi drugu.
+    izvestaj = "x"
+    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj), _
+                 "Lanac: ponovljen poziv ne pravi drugu otpremnicu"
+
+    ' --- 2) OBAVEZNOST: rucni nacrt NE presrece hladnjacki blok -----------
+    ' Ovo je jezgro odluke: da je blok prvo ponudjen radnom stolu, zavrsio bi kao
+    ' clan tudje otpremnice sa sasvim drugom kilazom, a lanac se ne bi pokrenuo.
+    Dim nacrt As String, blok2 As String, otp2 As String, prev As String
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
     nacrt = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDN-" & scenario, TEST_HLAD_ST_ID), _
-                                     OtpOcek(40#, 4#, 0#, 0#), g)
-    AssertTrue Len(nacrt) > 0, "Lanac: nacrt na hladnjackoj stanici napravljen (" & g & ")"
+                                     OtpOcek(1500#, 150#, 0#, 0#), g)
+    AssertTrue Len(nacrt) > 0, "Lanac: rucni nacrt napravljen (" & g & ")"
     If Len(nacrt) > 0 Then
-        AssertTrue DodajOtpremnicaIzvor_TX(nacrt, uNacrtu, g), "Lanac: blok vezan za nacrt"
-        izvestaj = "x"
-        otpDrugi = modAutoHladnjaca.AutoLanacHladnjaca(uNacrtu, izvestaj)
-        AssertEquals "", otpDrugi, "Lanac: vezan blok ne dobija drugu otpremnicu"
-        AssertEquals "", izvestaj, "Lanac: vezan blok ne javlja nista operateru"
-        AssertEquals nacrt, modDokumenta.OtpremnicaZaOtkup(uNacrtu), _
-                     "Lanac: blok je ostao u svom nacrtu"
+        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Lanac: rucni nacrt je aktivan"
+        blok2 = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
+                               OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+        AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok2), _
+                   "Lanac: hladnjacki blok ide u lanac i kad je rucni nacrt aktivan"
+        otp2 = modAutoHladnjaca.AutoLanacHladnjaca(blok2, izvestaj)
+        AssertTrue Len(otp2) > 0, "Lanac: blok dobija svoj lanac uprkos aktivnom nacrtu (" & izvestaj & ")"
+        AssertTrue otp2 <> nacrt, "Lanac: to je sopstvena otpremnica, ne rucni nacrt"
+        AssertEquals otp2, modDokumenta.OtpremnicaZaOtkup(blok2), _
+                     "Lanac: blok je u svojoj otpremnici, ne u nacrtu"
+    End If
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prev
+
+    ' --- 3) DVE KLASE: raspodela po klasi je ista, ne samo total ----------
+    Dim dveKlase As String, otp3 As String
+    dveKlase = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDF-" & scenario, TEST_HLAD_ST_ID), _
+                              OtkStavke(70#, 100#, 7, 25#, 90#, 3))
+    otp3 = modAutoHladnjaca.AutoLanacHladnjaca(dveKlase, izvestaj)
+    AssertTrue Len(otp3) > 0, "Lanac: dvoklasni blok je dobio otpremnicu (" & izvestaj & ")"
+    If Len(otp3) > 0 Then
+        Set prog = modDokumenta.GetOtpremnicaProgress(otp3)
+        AssertTrue prog.Exists(KLASA_I) And prog.Exists(KLASA_II), _
+                   "Lanac: otpremnica nosi obe klase"
+        If prog.Exists(KLASA_I) Then
+            Set kl = prog(KLASA_I)
+            AssertEquals "70", CStr(kl("ocekivano")), "Lanac: klasa I je 1:1 sa blokom"
+            AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase I je 1:1"
+        End If
+        If prog.Exists(KLASA_II) Then
+            Set kl = prog(KLASA_II)
+            AssertEquals "25", CStr(kl("ocekivano")), "Lanac: klasa II je 1:1 sa blokom"
+            AssertEquals "3", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase II je 1:1"
+        End If
     End If
 
-    ' --- 3) obicna stanica se ne dira ---
+    ' --- 4) obicna stanica se ne dira -------------------------------------
     Dim obican As String
     obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDC-" & scenario), _
                             OtkStavke(20#, 100#, 2, 0#, 0#, 0))
     izvestaj = "x"
+    AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(obican), "Lanac: obicna stanica nema auto-lanac"
     AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj), _
-                 "Lanac: obicna stanica nema auto-lanac"
-    AssertEquals "", izvestaj, "Lanac: obicna stanica ne javlja nista"
+                 "Lanac: obicna stanica ne dobija otpremnicu"
     AssertEquals "", modDokumenta.OtpremnicaZaOtkup(obican), _
                  "Lanac: blok obicne stanice ostaje nevezan"
 
-    ' --- 4) hladnjaca BEZ vozaca-ogledala: razlog, ne polovican dokument ---
+    ' --- 5) hladnjaca BEZ ogledala: razlog, ne polovican dokument ---------
+    ' Ogledalo je proxy za stanicu, pa ga lanac sme da zatrazi kanonskim upisom.
+    ' Ova stanica ga nema i ne moze da ga dobije (duplikat imena bi pao), pa se
+    ' meri da lanac STANE i imenuje stanicu.
     Dim bezOgledala As String
     bezOgledala = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDD-" & scenario, TEST_HLAD2_ST_ID), _
                                  OtkStavke(10#, 100#, 1, 0#, 0#, 0))
     izvestaj = ""
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj), _
-                 "Lanac: bez vozaca-ogledala otpremnica se ne pravi"
-    AssertTrue InStr(1, izvestaj, TEST_HLAD2_ST_ID, vbTextCompare) > 0, _
-               "Lanac: razlog imenuje stanicu bez ogledala"
-    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(bezOgledala), _
-                 "Lanac: blok ostaje nevezan kad lanac stane"
+    If modMalina.IsManagedStationMirror(TEST_HLAD2_ST_ID) Then
+        ' Ogledalo je nastalo (Ensure je prosao) -- tada lanac SME da radi, pa se
+        ' meri to, a ne izostanak. Tvrdnja ostaje jedna: nema polovicnog ishoda.
+        AssertTrue Len(modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj)) > 0, _
+                   "Lanac: kad ogledalo postoji, otpremnica se pravi"
+    Else
+        AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj), _
+                     "Lanac: bez vozaca-ogledala otpremnica se ne pravi"
+        AssertTrue InStr(1, izvestaj, TEST_HLAD2_ST_ID, vbTextCompare) > 0, _
+                   "Lanac: razlog imenuje stanicu bez ogledala"
+    End If
 
-    ' --- 5) storniran blok nema sta da nosi ---
-    ' Blok je na stanici SA ogledalom i nevezan je, pa je kapija storna jedino
-    ' sto ga zaustavlja -- inace bi merenje palo na tudju kapiju.
+    ' --- 6) storniran blok nema sta da nosi -------------------------------
     Dim stornirani As String
     stornirani = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDE-" & scenario, TEST_HLAD_ST_ID), _
                                 OtkStavke(15#, 100#, 1, 0#, 0#, 0))
     AssertTrue StornoOtkup_TX(stornirani), "Lanac: kontrolni blok storniran"
     izvestaj = "x"
+    AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(stornirani), _
+               "Lanac: storniran blok ne ide u lanac"
     AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(stornirani, izvestaj), _
                  "Lanac: storniran blok ne pokrece lanac"
     AssertEquals "", izvestaj, "Lanac: storniran blok ne javlja nista"
 
 Kraj:
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     Exit Sub
 EH:
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
 End Sub
 

@@ -129,11 +129,13 @@
     storno oslobodio — blok upisan bez otpremnice je normalno stanje i čeka na radnom stolu (F1). Pad strogog
     čitača daje **vidljiv red sa greškom**, ne tiho kraću listu. Radnja nad redom je pokazivač na F1; vezivanje
     ostaje kod kanonskog pisca. **S3c zatvoren.**
-21. **S3d-1 urađen** (§14.20): **auto-lanac hladnjače se vraća u koracima** — odluka operatera. Upis bloka na
-    hladnjačkoj stanici odmah pravi i **izdaje** otpremnicu iz tog bloka (kilaža i ambalaža 1:1, jer se roba meri
-    pri prijemu u hladnjaču; vozač je **mirror stanice**). Zbirna (S4) i prijemnica (S6) dodaju se u istu funkciju.
-    Lanac **ne gazi operatera**: blok koji je vezan za aktivni nacrt se ne dira, obična stanica se ne dira,
-    hladnjača bez vozača-ogledala dobija razlog, a pad lanca ne obara upis bloka.
+21. **S3d-1 urađen** (§14.20), posle **NO-GO review-a #367 i prepravke**: kanonski korak otpremnice postoji, ali
+    je **aktivacija vezana za S6**. Lanac radi samo za OM podešeno kao **hladnjača**, gde je vozač-ogledalo
+    **uvek obavezan** (kooperant sam dovozi robu), i pravi otpremnicu **1:1 po klasi** iz jednog bloka.
+    **Automatika je obavezna:** ekran grana **pre** ručnog vezivanja — hladnjački blok ne ide na radni sto, jer bi
+    postao član tuđeg nacrta sa drugom kilažom. Provera članstva ostaje kao zaštita od dupliranja.
+    **Jedan autoritet nad aktivacijom:** `AUTO_PRIJEMNICA_HLADNJACA` (do sada prekidač koji niko nije čitao) sada
+    odlučuje DA LI lanac radi; default **OFF do S6**, jer se zbirna i prijemnica danas ne mogu doraditi ni ručno.
 22. **Sledeće:** S3d-2 — otvaranje A13 kapije u `IspravkaOtkupa_TX` za **nacrt** (atomska zamena članstva) i
     radnja „Ispravi“ nad blokom u F1 (B-040: pisac danas nema nijednog živog pozivaoca). Pa S3e.
 

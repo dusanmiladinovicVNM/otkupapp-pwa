@@ -1123,21 +1123,23 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' transakcija, i otkup postoji i bez otpremnice); ako vezivanje padne,
     ' otkup ostaje van nje i operater to cuje imenom -- radnja "vezi" nad redom
     ' ga kasnije vezuje.
-    If Len(mOtpID) > 0 Then
+    ' HLADNJACKI BLOK NE IDE NA RADNI STO. Njegov lanac je obavezan i pravi
+    ' SVOJ dokument 1:1 sa blokom, pa se grana PRE rucnog vezivanja: aktivan
+    ' nacrt bi inace progutao blok (postao bi jedan clan tudje otpremnice sa
+    ' sasvim drugom kilazom) i automatika se ne bi ni pokrenula.
+    '
+    ' Ceo sud je u modAutoHladnjaca -- ekran samo pita. Lanac ne obara upis:
+    ' otkup je snimljen svojom transakcijom i ostaje i kad otpremnica ne uspe,
+    ' a razlog ide operateru u istu poruku.
+    Dim lanacPoruka As String
+    If modAutoHladnjaca.LanacVaziZaBlok(res) Then
+        modAutoHladnjaca.AutoLanacHladnjaca res, lanacPoruka
+        If Len(lanacPoruka) > 0 Then poruke = Trim$(poruke & "  " & lanacPoruka)
+    ElseIf Len(mOtpID) > 0 Then
         Dim veza As String
         veza = VeziZaAktivnu(res)
         If Len(veza) > 0 Then poruke = Trim$(poruke & "  " & veza)
     End If
-
-    ' Auto-lanac hladnjace (A-014, S3d) ide POSLE vezivanja: blok koji je
-    ' operater stavio na svoj nacrt ne dobija jos jednu otpremnicu. Sam lanac to
-    ' proverava u kanonu -- ovde se samo postuje redosled odluka.
-    '
-    ' Lanac ne obara upis: otkup je snimljen svojom transakcijom i ostaje i kad
-    ' otpremnica ne uspe. Razlog ide operateru u istu poruku.
-    Dim lanacPoruka As String
-    modAutoHladnjaca.AutoLanacHladnjaca res, lanacPoruka
-    If Len(lanacPoruka) > 0 Then poruke = Trim$(poruke & "  " & lanacPoruka)
 
     ' Nov kooperant je kreiran tokom upisa - lista partnera mora da ga vidi
     ' odmah, bez zatvaranja ekrana.

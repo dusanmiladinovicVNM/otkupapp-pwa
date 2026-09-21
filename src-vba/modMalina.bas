@@ -77,10 +77,23 @@ Public Function EnsureVozacMirrorForStanica(ByVal stanicaID As String, _
     On Error GoTo EH
 
     EnsureVozacMirrorForStanica = False
-    If Not IsMalinaMode() Then Exit Function
 
     Dim sid As String: sid = Trim$(stanicaID)
     If sid = "" Then Exit Function
+
+    ' OGLEDALO POSTOJI IZ DVA RAZLOGA, i prvi NE zavisi od rezima:
+    '
+    '   HLADNJACA   -- robu do hladnjace kooperant dovozi SAM, pa taj prevoz nema
+    '                  firminog vozaca. Ogledalo stanice stoji kao PROXY za nju i
+    '                  zato je na hladnjackoj stanici OBAVEZNO -- uvek (A-014).
+    '   MALINA_MODE -- ogledalo na OSTALIM stanicama: u tom rezimu svaka stanica
+    '                  sama dovozi robu, pa svaka ima svog par-vozaca.
+    '
+    ' Bez prvog uslova hladnjacki lanac van malina rezima ne bi imao cime da se
+    ' izda, jer ogledalo za tu stanicu nijedan put ne bi ni napravio.
+    If Not IsMalinaMode() Then
+        If Not modAutoHladnjaca.IsHladnjacaStanica(sid) Then Exit Function
+    End If
 
     ' Idempotencija: vozac sa VozacID == StanicaID vec postoji?
     If Len(Trim$(nz(LookupValue(TBL_VOZACI, "VozacID", sid, "VozacID"), ""))) > 0 Then

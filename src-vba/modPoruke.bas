@@ -1453,7 +1453,6 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
     ' --- S3d: auto-lanac hladnjace, korak otpremnice (A-014) ---
     UpsertRow lo, existing, "OTKUI_MSG_LANAC_OTP", ChrW(183) & " Hladnja" & ChrW(269) & "a: izdata otpremnica"
-    UpsertRow lo, existing, "OTKUI_MSG_LANAC_CEKA", ChrW(8212) & " zbirna i prijemnica se jo" & ChrW(353) & " unose ru" & ChrW(269) & "no"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Otpremnica hladnja" & ChrW(269) & "e nije napravljena:"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_MIRROR", "stanica nema vozaca-ogledalo (VozacID = StanicaID):"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ", "broj otpremnice nije generisan za stanicu"
