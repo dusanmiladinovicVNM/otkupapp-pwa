@@ -1456,6 +1456,9 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Otpremnica hladnja" & ChrW(269) & "e nije napravljena:"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_MIRROR", "stanica nema vozaca-ogledalo (VozacID = StanicaID):"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ", "broj otpremnice nije generisan za stanicu"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_PONOVI", "Ponovi auto-lanac"
+    UpsertRow lo, existing, "OTKUI_ERR_VEZA_HLADNJACA", ChrW(10007) & " Hladnja" & ChrW(269) & "ki blok ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje nije dozvoljeno; otkloni uzrok pa ponovi auto-lanac"
+    UpsertRow lo, existing, "OTKUI_ERR_PONOVI_NIJE_HLAD", ChrW(10007) & " Auto-lanac va" & ChrW(382) & "i samo za blok na hladnja" & ChrW(269) & "koj stanici"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_PUT", ChrW(10007) & " Ne mo" & ChrW(382) & "e da se utvrdi da li blok ide u hladnja" & ChrW(269) & "ki lanac, pa nije vezan ni za jedan dokument:"
     ' --- S3c-2: izgubljen blok na ekranu OPORAVAK (B-041) ---
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_OPIS", "Blok je ostao bez otpremnice " & ChrW(8212) & " bila u:"

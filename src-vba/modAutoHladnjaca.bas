@@ -70,6 +70,35 @@ Public Function LanacUkljucen() As Boolean
     LanacUkljucen = IsAutoPrijemnicaHladnjaca()
 End Function
 
+' Da li blokovi OVE STANICE idu u auto-lanac. Ista odluka kao LanacVaziZaBlok,
+' samo pre nego sto blok postoji -- ekran je treba PRE svih pravila vezanih za
+' aktivan rucni nacrt (potvrda prekoracenja, vezivanje), jer hladnjacki blok tim
+' pravilima uopste ne podleze.
+'
+' FAIL-CLOSED, isto kao LanacVaziZaBlok: "ne znam" nije "nije hladnjaca" nego
+' razlog. Pozivalac koji dobije razlog ne sme da primeni pravila rucnog toka.
+Public Function LanacVaziZaStanicu(ByVal stanicaID As String, _
+                                   Optional ByRef outGreska As String) As Boolean
+    Dim errDesc As String
+
+    outGreska = ""
+    On Error GoTo EH
+
+    If Not LanacUkljucen() Then Exit Function
+
+    stanicaID = Trim$(stanicaID)
+    If Len(stanicaID) = 0 Then Exit Function
+
+    LanacVaziZaStanicu = HladnjacaStrogo(stanicaID)
+    Exit Function
+
+EH:
+    errDesc = Err.description
+    LogErr "modAutoHladnjaca.LanacVaziZaStanicu"
+    outGreska = Poruka("OTKUI_ERR_LANAC_PUT") & " " & errDesc
+    LanacVaziZaStanicu = False
+End Function
+
 ' Da li OVAJ blok ide u auto-lanac umesto na radni sto. Ekran ovim grana PRE
 ' rucnog vezivanja; ceo sud je ovde, da ga sledeci pozivalac ne prepisuje.
 '
@@ -210,7 +239,10 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
                "Da", vbTextCompare) = 0 Then Exit Function
 
     stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), ""))
-    If Not IsHladnjacaStanica(stanicaID) Then Exit Function
+    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open
+    ' IsHladnjacaStanica) bila bi kandidat za drift -- jedan bi rekao "ne znam",
+    ' drugi "nije hladnjaca".
+    If Not HladnjacaStrogo(stanicaID) Then Exit Function
 
     If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function
 

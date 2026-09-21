@@ -3624,6 +3624,23 @@ gospodara. Sada: **stanica kaže KOJI blok** ide u lanac, **prekidač kaže DA L
 (`modAutoHladnjaca.LanacUkljucen`). Default OFF ostaje dok lanac ne ume da završi ceo `OTK → OTP → ZBR → PRJ`;
 polovičan lanac je gori od nikakvog, jer operater ostaje sa izdatom otpremnicom i bez ijednog puta napred.
 
+**Drugi krug review-a #367 — routing ide pre SVIH pravila ručnog toka.** Prva ispravka je grananje stavila posle
+upisa, ali je pre njega ostalo pitanje o **prekoračenju aktivnog ručnog nacrta** (`PotvrdiPrekoracenje` →
+`GetOtpremnicaProgress(mOtpID)`). Hladnjački blok tom nacrtu ne pripada, a operater bi na „Ne“ izgubio **ceo upis**
+zbog ograničenja dokumenta sa kojim blok nema veze. Zato sada postoji i router **po stanici**
+(`LanacVaziZaStanicu`), koji odlučuje pre nego što blok uopšte postoji; pitanje se postavlja samo kad se
+**pouzdano** zna da blok ide ručnim tokom — i „ide u lanac“ i „ne može da se utvrdi“ ga preskaču.
+
+**Oporavak hladnjačkog bloka nije ručno vezivanje.** Ako lanac padne, blok ostaje nevezan i vidi se u „Bez
+otpremnice“ — ali odatle ga je jedan klik („Veži“) mogao smestiti u ručnu otpremnicu i time zaobići obavezan lanac.
+Kapija je sada na **granici radnje** (`VeziZaAktivnu` odbija hladnjački blok i blok za koji se put ne zna), a lista
+je dobila radnju **„Ponovi auto-lanac“**. Obe radnje stoje u redu radnji i svaka na svojoj granici odbija blok koji
+joj ne pripada — red još ne može da nosi svoje radnje (ugovor ljuske, §15).
+
+**Jedno pravilo, ne dva.** `AutoLanacHladnjaca` je čitao stanicu kroz `IsHladnjacaStanica` (fail-open, za prikaz),
+dok je router čitao strogo — dve kopije istog pravila koje bi se razišle prvom izmenom. Sada oba koriste isti strog
+primitiv (`HladnjacaStrogo`).
+
 **Prekidač je PRIVREMEN, i to je zapisano.** Dok traje refaktor on znači „implementacija je dovoljno kompletna da
 sme da se pusti“ — tehnička kapija, ne poslovna opcija. Kad S6 zatvori ceo lanac, stanje `JeHladnjača = DA` uz
 `AUTO_PRIJEMNICA_HLADNJACA = NE` postaje **zabranjeno specifikacijom** (za hladnjaču je automatika obavezna), pa

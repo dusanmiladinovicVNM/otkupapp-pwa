@@ -698,11 +698,22 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: ponovljen poziv ne pravi drugu otpremnicu",
     ),
+    # Rucno vezivanje opet prima hladnjacki blok: obavezan lanac se zaobilazi
+    # jednim klikom iz liste "Bez otpremnice", pa blok zavrsi u tudjoj otpremnici.
+    "veza-hladnjackog-bloka-rucno": (
+        "modScrDokumenti.bas",
+        "    If modAutoHladnjaca.LanacVaziZaBlok(Trim$(otkupID), putGreska) Then\n",
+        "    If False Then   ' SABOTAZA: hladnjacki blok se vezuje rucno\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: hladnjacki blok se ne vezuje rucno",
+    ),
     # Razvodnica opet guta gresku i vraca tiho False: blok za koji se NE ZNA da li
     # je hladnjacki padne na rucnu stranu i zavrsi u tudjem nacrtu.
     "lanac-put-tiho-false": (
         "modAutoHladnjaca.bas",
+        "    LogErr \"modAutoHladnjaca.LanacVaziZaBlok\"\n"
         "    outGreska = Poruka(\"OTKUI_ERR_LANAC_PUT\") & \" \" & errDesc\n",
+        "    LogErr \"modAutoHladnjaca.LanacVaziZaBlok\"\n"
         "    ' SABOTAZA: razlog se guta, ostaje tiho False\n",
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: neizvesnost vraca RAZLOG, ne tiho False",
@@ -735,10 +746,10 @@ SABOTAZE = {
         "               \"Da\", vbTextCompare) = 0 Then Exit Function\n"
         "\n"
         "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
-        "    If Not IsHladnjacaStanica(stanicaID) Then Exit Function\n",
+        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
         "    ' SABOTAZA: storniran blok prolazi u lanac\n"
         "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
-        "    If Not IsHladnjacaStanica(stanicaID) Then Exit Function\n",
+        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: storniran blok ne pokrece lanac",
     ),
