@@ -4096,6 +4096,24 @@ dodavanje izvora ga ne izdaje → izdavanje menja status), `Test_ZBR_NepokrivenN
 (odbijanje **imenuje** najavu i povezano, pa se dopunom istog nacrta izdavanje dobije — bez te druge
 polovine bi tvrdnja bila zelena i da izdavanje uvek odbija) i `Test_ZBR_IzvorMoraBitiIzdatISlobodan`.
 
+#### Review #372 (NO-GO, četiri P1) — pisac nije imao jedan ugovor
+
+Sve četiri su u **novom** modelu, ne u legacy-u:
+
+| P1 | Šta je bilo | Ispravka |
+|---|---|---|
+| Jednopotezni `CreateZbirna` **nije** proveravao da je izvor izdat, dok put nacrta jeste | ista DRAFT otpremnica odbijena na jednom ulazu, primljena na drugom — i zbirna nastane IZDATA iz robe koja nije otišla | jedna definicija: `RequireOtpValidanIzvorZbirne`, koju zovu **oba** ulaza |
+| Nacrt je vrstu/sortu/tip ambalaže čitao iz zaglavlja, a `HdrProveriKljuceve` ih **izričito ne dozvoljava** | svaki nacrt je nastajao prazan i takav se **izdavao** — zbirna bez vrste i sorte, bez ijedne greške | **prvi izvor ih definiše** (`ZbrPreuzmiCinjenice`), sledeći mora da se poklopi; `DodajZbirnaIzvor_TX` zato snapshotuje i `tblZbirna` |
+| `RequireCeoBroj` meri samo celobrojnost, pa je **−10 gajbi** prolazilo | pisac pravi dokument koji strogi čitalac odbija | eksplicitna provera `< 0` |
+| `NewEntityID` za stavku i članstvo nije proveravan, iako `CreateZbirna` to radi | red bez identiteta prolazi kroz commit — nijedna kasnija radnja ne može da ga pogodi | provera na oba mesta, dokazana seam-om `NewEntityIDPadniTest` |
+
+**Poenta drugog nalaza nije bila prazno polje nego pogrešan izvor istine.** Vrsta, sorta i tip
+ambalaže su činjenica **robe**, a robu donosi izvor — zaglavlje ih zato i ne prima. Nacrt kreće
+prazan i to je ispravno; kvar je bio što ih niko posle nije popunio.
+
+Četiri nova testa, po jedan na svaki nalaz. Onaj o dva ulaza meri **isti izvor kroz oba** — jer je
+kvar bio upravo u razlici među njima. Sabotaža **534 → 537**.
+
 **Sledeće:** S4-2c — ekrani: F3 forma nad nacrtom uz **pregled svih zbirnih**, radni sto za izvore u
 F2 (kao blokovi u F1), direktan izbor otpremnica, skidanje pauze i brisanje starog pisca.
 

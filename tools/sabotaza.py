@@ -502,6 +502,28 @@ SABOTAZE = {
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument",
     ),
+    # --- S4-2b, review #372: jedna definicija izvora, cinjenice, negativne gajbe
+    "zbirna-jedan-potez-prima-nacrt": (
+        "modDokumenta.bas",
+        "        RequireOtpValidanIzvorZbirne data, r, otpID, SRC\n",
+        "        ' SABOTAZA: jednopotezni ulaz ne proverava izvor\n",
+        "Test_ZBR_ObaUlazaTrazeIzdatIzvor",
+        "jedan potez ODBIJA nacrt otpremnice",
+    ),
+    "zbirna-ne-preuzima-cinjenice": (
+        "modDokumenta.bas",
+        "    ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), \"ZbrDodajIzvor\"\n",
+        "    ' SABOTAZA: prvi izvor ne definise cinjenice robe\n",
+        "Test_ZBR_PrviIzvorDefiniseCinjenice",
+        "prvi izvor je definisao vrstu",
+    ),
+    "zbirna-prima-negativne-gajbe": (
+        "modDokumenta.bas",
+        "        If CDbl(s(\"KolAmbalaze\")) < 0 Then\n",
+        "        If False Then   ' SABOTAZA: negativne gajbe prolaze\n",
+        "Test_ZBR_NegativnaAmbalazaSeNeUpisuje",
+        "nacrt je odbijen",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.
