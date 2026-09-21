@@ -2018,10 +2018,15 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "parcela"), "", "otpremnica nema parcelu"
     AssertEq SpecVal(s, "partnerid"), "", "otpremnica nema partnera (njen je stanica)"
 
-    ' --- ZBIRNA: UkupnoKolicina / UkupnoAmbalaze, bez cene i bez zbirne ---
+    ' --- ZBIRNA: kolicina i gajbe sa STAVKE (S4-1), bez cene i bez zbirne ---
+    '
+    ' Do S4-1 je ovde stajalo "cita UkupnoKolicina, ne Kolicina" -- tvrdnja o
+    ' tome koja se KOLONA ZAGLAVLJA cita. Zaglavlje ih vise ne nosi (pisac ih od
+    ' PR3 ostavlja prazne), pa se meri da kolicina dolazi sa stavke. Broj je isti
+    ' jer fixture nosi iste vrednosti na oba mesta; menja se IZVOR.
     s = modStornoDok.PrefillIzStorniranog(STIP_ZBIRNA, FX_ZBIRNA, "")
-    AssertEq SpecVal(s, "kol1"), "1000", "zbirna cita UkupnoKolicina, ne Kolicina"
-    AssertEq SpecVal(s, "amb1"), "100", "zbirna cita UkupnoAmbalaze, ne KolAmbalaze"
+    AssertEq SpecVal(s, "kol1"), "1000", "zbirna cita kolicinu sa STAVKE"
+    AssertEq SpecVal(s, "amb1"), "100", "zbirna cita gajbe sa STAVKE"
     AssertEq SpecVal(s, "cena"), "", "zbirna NEMA cenu (nema je ni tabela)"
     AssertEq SpecVal(s, "brzbirne"), "", "zbirna ne preuzima samu sebe kao broj zbirne"
 

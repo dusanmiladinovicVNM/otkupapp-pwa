@@ -1208,7 +1208,7 @@ Public Function Scr_Save(ByVal polja As Object) As String
             Scr_Save = SnimiOtpremnicu(polja)
             Exit Function
         Case "ZBIRNA"
-            Scr_Save = SaveZbirna(polja)
+            Scr_Save = SnimiZbirnu(polja)
             Exit Function
         Case "PRIJEMNICA"
             Scr_Save = SavePrijemnica(polja)
@@ -1399,12 +1399,15 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
 End Function
 
 ' F3 ZBIRNA. Isti obrazac kao SnimiOtpremnicu: ekran samo prevodi polja u recnik.
+' Ime je SnimiZbirnu, ne SaveZbirna: dok je adapter delio ime sa piscem
+' (modDokumenta.SaveZbirna), popis starog pisca je brojao i ekran kao pisca --
+' isti sudar koji je S3b-1 razresio kod otpremnice.
 ' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
 '   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
 '     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";
 '   - PARTNER je kupac. Ljuska ga skuplja pod kljucem "kooperantID" jer je to
 '     ista kontrola (cbKupac) u svim rezimima; ovde dobija svoje ime.
-Private Function SaveZbirna(ByVal polja As Object) As String
+Private Function SnimiZbirnu(ByVal polja As Object) As String
     Dim p As Object, fokus As String, greska As String, res As String, poruke As String
     Set p = modDokUnos.NoviZbirnaUnos()
     p("datum") = polja("datum")
@@ -1429,13 +1432,13 @@ Private Function SaveZbirna(ByVal polja As Object) As String
     greska = modDokUnos.ZbirnaValidiraj(p, fokus)
     If Len(greska) > 0 Then
         polja("fokus") = fokus
-        SaveZbirna = greska
+        SnimiZbirnu = greska
         Exit Function
     End If
 
     res = modDokUnos.ZbirnaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveZbirna = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
 
@@ -1811,7 +1814,7 @@ Public Function ColKlasa(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKlasa = COL_OKS_KLASA        ' stavka (ovStav)
         Case "OTPREMNICA":           ColKlasa = COL_OPS_KLASA        ' stavka (ovStav)
-        Case "ZBIRNA":               ColKlasa = COL_ZBR_KLASA
+        Case "ZBIRNA":               ColKlasa = COL_ZBS_KLASA        ' stavka (ovStav)
         Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
     End Select
 End Function
@@ -1820,7 +1823,7 @@ Public Function ColKolicina(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolicina = COL_OKS_KOLICINA  ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolicina = COL_OPS_KOLICINA  ' stavka (ovStav)
-        Case "ZBIRNA":               ColKolicina = COL_ZBR_KOLICINA
+        Case "ZBIRNA":               ColKolicina = COL_ZBS_KOLICINA  ' stavka (ovStav)
         Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
     End Select
 End Function
@@ -1829,7 +1832,7 @@ Public Function ColKolAmb(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolAmb = COL_OKS_KOL_AMB     ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolAmb = COL_OPS_KOL_AMB     ' stavka (ovStav)
-        Case "ZBIRNA":               ColKolAmb = COL_ZBR_KOL_AMB
+        Case "ZBIRNA":               ColKolAmb = COL_ZBS_KOL_AMB     ' stavka (ovStav)
         Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
     End Select
 End Function
@@ -2177,15 +2180,18 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' odakle dolazi kilaza reda.
     Dim otkStav As Boolean, dStav As Object, ovStav() As String, iStavID As Long
     ReDim ovStav(0 To colN - 1)
-    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA")
+    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")
     If otkStav Then
         mStep = "stavke dokumenta"
         If mk = "OTKUP" Then
             Set dStav = modOtkup.ZbirStavkiPoOtkupu()
             iStavID = ColIdx(tblName, COL_OTK_ID)
-        Else
+        ElseIf mk = "OTPREMNICA" Then
             Set dStav = modDokumenta.ZbirStavkiPoOtpremnici()
             iStavID = ColIdx(tblName, COL_OTP_ID)
+        Else
+            Set dStav = modDokumenta.ZbirStavkiPoZbirni()
+            iStavID = ColIdx(tblName, COL_ZBR_ID)
         End If
         ' Kolone se prepoznaju kroz ISTE Col* funkcije koje su ih i dodale u
         ' GridCols. Golim konstantama bi se nabrajala oba tipa, a tblOtkupStavke
@@ -2286,11 +2292,16 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             ' Nedostajuci kljuc NIJE nula (review #334, P1): red dokumenta bez
             ' stavki pada po imenu. Ranije je takav red imao duguje = 0, pa je
             ' pilula pokazivala "placeno" na dokumentu bez ijedne stavke.
+            ' Tri tipa, tri pristupnika: poruka o gresci imenuje BAS taj
+            ' dokument i njegovu tabelu stavki (review #370, P2).
             If mk = "OTKUP" Then
                 zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
-            Else
+            ElseIf mk = "OTPREMNICA" Then
                 zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
+            Else
+                zStav = modDokumenta.ZbirStavkiZaZbirnu(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
             End If
         End If

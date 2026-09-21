@@ -120,6 +120,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoZurnal`: `modTest`, `modTestStornoCentar`
 - `tblVozaci`: `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
+- `tblZbirnaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`

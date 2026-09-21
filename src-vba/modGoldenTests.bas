@@ -150,6 +150,7 @@ Private Function GldTx() As clsTransaction
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
@@ -1034,7 +1035,39 @@ Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
     If Len(res) = 0 Then
         Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije snimljena"
     End If
+    ' Zaglavlje bez stavki obara strog citalac zbirne nad CELIM registrom
+    ' (S4-1), a golden se vrti pre ostalih suite-a i ostavlja svoje redove u
+    ' svesci. Stavka ide uz zaglavlje iz istog razloga iz kog je SeedZbirna
+    ' dobija u storno suite-u.
+    GldZbirnaStavka res, KLASA_I, kolI, 50
     GldDodaj m_Zbr, res
+End Sub
+
+' Stavka uz zaglavlje zbirne -- kroz ListRow, kao ostali seed-ovi ovog modula.
+Private Sub GldZbirnaStavka(ByVal zbirnaID As String, ByVal klasa As String, _
+                            ByVal kol As Double, ByVal amb As Long)
+    If kol <= 0 Then Exit Sub
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_ZBIRNA_STAVKE)
+    If lo Is Nothing Then Exit Sub
+
+    Dim nr As ListRow
+    Set nr = lo.ListRows.Add
+
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_ID, zbirnaID & "-S1"
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_RB, 1
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, klasa
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, kol
+    GldCelija nr, TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, amb
+End Sub
+
+Private Sub GldCelija(ByVal nr As ListRow, ByVal tbl As String, _
+                      ByVal kolona As String, ByVal vrednost As Variant)
+    Dim ci As Long
+    ci = GetColumnIndex(tbl, kolona)
+    If ci > 0 Then nr.Range.cells(1, ci).value = vrednost
 End Sub
 
 ' Storno JEDNE od vise zbirnih pod istim brojem.

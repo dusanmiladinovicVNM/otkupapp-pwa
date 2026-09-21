@@ -63,6 +63,7 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
@@ -1029,6 +1030,21 @@ Private Sub T27_StornoIzvodaOsvezavaOtkup()
     Chk OtkOtvorenaObaveza("SVT-OTK-5"), S & "posle storna blok je opet otvoren"
 End Sub
 
+' Zbirna u NOVOM obliku (S4-1): zaglavlje + jedna stavka, kao SeedOtpremnica.
+'
+' Kilaza, gajbe i klasa zive na stavci; citaoci SADRZAJA (liste, ciljna lista
+' Oporavka, uvid i prefill pred storno, izvestaj po vozacu) ih od S4-1 odatle
+' citaju, a strog citalac zaglavlje bez stavki odbija po imenu.
+'
+' Kolone zaglavlja se i dalje pune: storno okvir ovog suite-a ih jos cita
+' (invarijanta, rekalkulacija), a brisu se sa S4-3. Do tada seed nosi iste
+' brojeve na oba mesta, a merodavna je stavka.
+'
+' KG = 0 NE DOBIJA STAVKU. Kanonski pisac zbirnu sa nula kilograma ne moze da
+' napravi (CreateZbirna odbija klasu sa zbirom <= 0), pa bi stavka sa nulom bila
+' dokument koji produkcija ne ume da stvori. Takav seed postoji SAMO za
+' rekalkulaciju u mestu (T04/T05) -- postupak koji je odluka od 21.09.2026
+' zamenila novom verzijom (A13), pa i on odlazi u S4-3.
 Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
                        ByVal kg As Double, ByVal amb As Long, _
                        Optional ByVal kupac As String = "")
@@ -1036,6 +1052,12 @@ Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
         Array(COL_ZBR_ID, COL_ZBR_DATUM, COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_KOLICINA, _
               COL_ZBR_TIP_AMB, COL_ZBR_KOL_AMB, COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KLASA), _
         Array(broj & "-ID-" & klasa, Date, broj, kupac, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa)
+    If kg > 0 Then
+        SvAppend TBL_ZBIRNA_STAVKE, _
+            Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
+                  COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
+            Array(broj & "-ID-" & klasa & "-S1", broj & "-ID-" & klasa, 1, klasa, kg, amb)
+    End If
 End Sub
 
 ' Otpremnica u NOVOM obliku (S3b-1): zaglavlje + jedna stavka. Citaoci od S3b-1

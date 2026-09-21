@@ -4100,11 +4100,16 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colVozac As Long, colBroj As Long, colKol As Long, colAmb As Long
+    Dim colVozac As Long, colBroj As Long, colZbrID As Long
     colVozac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportZbirniVozac")
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIzvestaj.ReportZbirniVozac")
-    colKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, "modIzvestaj.ReportZbirniVozac")
-    colAmb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB, "modIzvestaj.ReportZbirniVozac")
+    colZbrID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIzvestaj.ReportZbirniVozac")
+
+    ' Kilaza i gajbe zbirne su na STAVKAMA (S4-1). Zaglavlje ih od PR3 ne nosi,
+    ' pa bi izvestaj po vozacu za kanonsku zbirnu prijavio 0 kg i 0 gajbi -- i to
+    ' kao uredan izvestaj, ne kao gresku.
+    Dim zbirStavki As Object
+    Set zbirStavki = modDokumenta.ZbirStavkiPoZbirni()
     
     Dim i As Long
     For i = 1 To UBound(zbrFiltered, 1)
@@ -4116,8 +4121,16 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
         Dim vals As Variant
         vals = dict(vozacID)
         
-        If IsNumeric(zbrFiltered(i, colAmb)) Then vals(0) = vals(0) + CLng(zbrFiltered(i, colAmb))
-        If IsNumeric(zbrFiltered(i, colKol)) Then vals(2) = vals(2) + CDbl(zbrFiltered(i, colKol))
+        Dim zbrID As String
+        zbrID = Trim$(NzToText(zbrFiltered(i, colZbrID)))
+        If Not zbirStavki.Exists(zbrID) Then
+            IzvRethrow SRC, vbObjectError + 1964, _
+                       "Zbirna " & zbrID & " nema nijednu stavku.", SRC
+        End If
+        Dim zbrStav As Variant
+        zbrStav = zbirStavki(zbrID)
+        vals(0) = vals(0) + CDbl(zbrStav(2))
+        vals(2) = vals(2) + CDbl(zbrStav(0))
         
         ' Prijemnica-Daten fuer diese Zbirna aus vorgeladenem Array
         Dim brZbr As String

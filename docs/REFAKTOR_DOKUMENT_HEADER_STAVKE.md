@@ -3791,6 +3791,125 @@ module bez upisa ne štiti ništa — sada su uklonjeni, pa bi slučajan upis iz
 
 **Sledeće:** S4 (zbirna na kanon, vraća F3), pa S5 (PWA sync), pa **S3e-2** — brisanje kolona, kad popis pokaže nulu.
 
+### 14.23) S4-1 — sadržaj zbirne se čita sa stavki (21.09.2026)
+
+**Merenje pre reza.** S4 („Zbirna cutover") je prevelik za jedan PR, pa je pre bilo kakve izmene
+izmereno šta stvarno stoji:
+
+| Činjenica | Broj | Posledica |
+|---|---|---|
+| Kanonski pisac (`CreateZbirna_TX` / `…IzIzvora_TX`) postoji od PR3 | — | S4 ne gradi pisca |
+| Kanonske tabele `tblZbirnaStavke`/`tblZbirnaIzvori` čita **samo** `modDokumenta` | 0 | **nijedan kanonski čitalac nije postojao** |
+| Pisac **namerno** ostavlja prazna `UkupnoKolicina`/`UkupnoAmbalaze`/`Klasa` | 48 mesta ih čita | kanonska zbirna se štampa i prikazuje kao **prazna** |
+| Živi čitaoci stare veze `Otpremnica.BrojZbirne` | 39 PROD | 16 u `modStornoFlow` (okvir modova) |
+| Živa ulazna tačka starog pisca `SaveZbirnaMulti_TX` | **jedna** (`modDokUnos.ZbirnaUpisi`) | isti oblik kao S3a kod otpremnice |
+| Živi putevi koji **prave** zbirnu | **nijedan** | F3, malina auto-zbirna i VOZ uvoz su sva tri pauzirana |
+
+Zbog trećeg reda **redosled „F3 pa čitaoci" pada**: da je pauza skinuta prvo, operater bi dobio zbirnu
+koja u bazi postoji a na štampi i u izveštajima je prazna — tačno ona lažno-zelena sposobnost koju
+§14.14 zabranjuje. **Odluka operatera (21.09.2026):** prvo čitaoci (ovaj korak), pa F3 (S4-2), pa
+okvir storna/ispravke (S4-3), pa malina auto-zbirna (S4-4).
+
+**Granica reza je po pitanju koje čitalac postavlja**, ne po modulu:
+
+- **„Šta piše na ovoj zbirnoj?"** (sadržaj) → S4-1, čita `tblZbirnaStavke`.
+- **„Koji dokumenti vise o broju Z?"** (članstvo) → S4-3, zajedno sa okvirom — koji se po odluci
+  ZBR-KANON-03 **briše, ne prevodi**.
+
+#### Urađeno
+
+| Celina | Gde |
+|---|---|
+| Strogi kanonski čitači: `StavkeZbirneRedovi`, `ZbirStavkiPoZbirni`, `StavkeZbirnePoDokumentu`, `StavkeZaZbirnu`, `ZbirnaPoKlasi`, `IzvoriZbirne`, `AktivnoZbrClanstvoPoKanonu` | `modDokumenta` |
+| Liste F8: kilaža, gajbe i klasa zbirne idu kroz isti mehanizam stavki koji otkup i otpremnica već koriste (`ovStav`) | `modScrDokumenti` |
+| Ciljna lista Oporavka (`RowsAktivneZbirne`) — kilaža po ID-u dokumenta; `RowsAktivni` dobio `kgPoDok`, prijemnica ostaje starim putem | `modScrOporavak` |
+| Uvid pred storno (`ZbirnaKgZaUvid`) i prefill stornirane zbirne (`StavkeZbirneZaPrefill`) | `modStornoImpact`, `modStornoDok` |
+| Izveštaj „zbirni po vozaču" | `modIzvestaj` |
+| Integritet B7: umesto „UkupnoKolicina = 0" (što je kod svake kanonske zbirne tačno) meri **zbirnu bez kilaže na stavkama** | `modIntegritet` |
+| Ekranski adapter F3 preimenovan `SaveZbirna` → `SnimiZbirnu` (sudar imena sa piscem, isti rez kao S3b-1) | `modScrDokumenti` |
+| Obrisano mrtvo: `CalculateManjak`, `GetAktivneZbirne` (popis: MRTAV) | `modDokumenta` |
+| `tblZbirnaStavke` se **izvodi iz `tblZbirna`** — fixture se MORA regenerisati | `tools/make_fixture.py` |
+| Domenski ugovor: **ZBR-KANON-01/02/03** | `docs/DOMEN/README.md` |
+
+#### Odluka domena: ZBR-KANON-03 (operater, 21.09.2026)
+
+Kad se izvorna otpremnica promeni ili stornira, zbirna **ne** dobija prepravku u mestu nego **novu
+verziju** — storno stare + nova sa preostalim izvorima, jedan potez, jedna transakcija, trag po ID-u.
+Isto pravilo koje A13 drži za otpremnicu od S3c. `docs/DOMEN/README.md` je do sada tvrdio suprotno
+(„popravi otpremnicu pa rekalkuliši zbirnu"); ispravljeno.
+
+Posledica za S4-3: brišu se `RecalculateZbirnaFromOtpremnice_TX`, `ApplyKlasaRecalc` i grane
+`modStornoFlow`-a koje prevezuju decu po broju — **uključujući test
+`Test_ZbirnaRecalcInPlace_Auto`, koji tvrdi baš ono što je ova odluka ukinula**.
+
+#### Šta NIJE u S4-1 i zašto
+
+| Ostaje | Razlog | Vraća |
+|---|---|---|
+| `ValidateZbirnaInvariant`, `SumZbirnaByKlasa`, `RecalculateZbirnaFromOtpremnice_TX` | pitaju za **članstvo** (zbir otpremnica po broju), a i brišu se po ZBR-KANON-03 | S4-3 |
+| ceo okvir ispravke/poništenja u `modStornoFlow` (27 mesta stare veze) | isto — briše se, ne prevodi | S4-3 |
+| Manjak (`CalculateManjakPreview`, `BuildManjakDict`, `ReportManjak`) i prosek gajbe | spajaju zbirnu i **prijemnicu** po broju; prijemnica prelazi u S6, a polovična konverzija bi ostavila isti join | S6 |
+| Stari pisac `SaveZbirna*` | jedini pozivalac je iza pauze F3 | S4-2 |
+
+#### KAPIJA ZA S4-2 — F3 se ne odmrzava dok identitet zbirne nije `ZbirnaID`
+
+> **Ovo je tvrda kapija, ne stavka liste.** Review #370 je premestio ovaj nalaz iz S4-3 u **preduslov
+> S4-2**, i to je ispravno: između „F3 radi" i „identitet je sređen" ne sme da postoji nijedan commit.
+
+`modScrDokumenti.IdKolonaTipa("ZBIRNA")` je **`GeneracijaID`**, a kanonski pisac generaciju **ne
+upisuje** (`BuildZbirnaHeaderRowData` to i kaže). Dakle kanonska zbirna izgleda ovako:
+
+```
+ZbirnaID      = ZBR-7f...      <- identitet
+BrojZbirne    = 12/210926      <- poslovna labela
+GeneracijaID  = ""             <- ljuska ovo uzima kao identitet reda
+```
+
+Dok je F3 pauziran, to ništa ne laže — nijedan živi put ne pravi kanonsku zbirnu. **Počinje da laže
+tačno u trenutku kad F3 proradi:** operater napravi dokument, ljuska mu ne nađe stabilan ID i radnje
+padnu nazad na `BrojZbirne` — dakle na „poslovni broj = identitet", što je baš ono što ceo refaktor
+uklanja (S1e za otkup, #362 za otpremnicu).
+
+**Ista kontradikcija je već u kodu, na dva mesta:**
+
+| Tvrdnja | Gde |
+|---|---|
+| „GeneracijaID se **ne** piše — identitet je `ZbirnaID`" | `modDokumenta.BuildZbirnaHeaderRowData` |
+| „aktivna zbirna **bez** `GeneracijaID` je integritetska greška" | `modIntegritet.Chk_B9_ZbirnaBezGeneracije` |
+
+Obe ne mogu biti kanon. Pravac je jasan i **rešenje NIJE dodati `GeneracijaID` kanonskom piscu** —
+time bi dokument opet imao dva identiteta:
+
+```
+ZbirnaID      = identitet kanonskog dokumenta
+GeneracijaID  = legacy mehanizam koji se uklanja
+BrojZbirne    = poslovna labela
+```
+
+**S4-2 počinje ovim, pre nego što dotakne pauzu:**
+
+1. `IdKolonaTipa("ZBIRNA")` → `COL_ZBR_ID`;
+2. `Chk_B9` usklađen sa tim ugovorom — redefinisan na legacy redove ili uklonjen; kanonska zbirna sa
+   validnim `ZbirnaID`-em **ne sme** biti proglašena pokvarenom;
+3. okvir storna prestaje da `docID` poredi sa `GeneracijaID`-em (danas to radi
+   `modStornoImpact`/`modStornoFlow`);
+4. **tek onda** `ZbirnaValidiraj` gubi pauzu.
+
+Ne traži zaseban PR — može biti prvi commit S4-2. Traži da bude **prvi**.
+
+#### Kapije
+
+`vba_check` (sabotaža **526 → 529**: dve iste klase, zaglavlje bez stavki, lista čita zaglavlje),
+obe `who_writes`, `gen_schema_module --check`, `popis_citalaca --check` sa dve nove grupe:
+`zbr_linija` **30** i `zbr_stari_pisac` **29**. Obe idu na nulu u S4-2/S4-3 — prag je rok, ne opis.
+
+Novi testovi: `Test_ZBR_SadrzajCitaStavkeNeZaglavlje` (zaglavlje je prazno **i** mreža ipak pokazuje
+pun iznos — obe strane iste tvrdnje) i `Test_ZBR_CitalacStavkiDrziUgovor` (četiri sintetičke
+anomalije, svaka pada po imenu, pa se posle vraćanja meri da je čitalac opet čist).
+
+**Sledeće:** S4-2 — **prvo identitet (kapija gore)**, pa F3 nad kanonom (ekran bira izdate
+otpremnice, pauza pada, stari pisac se briše).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3806,6 +3925,7 @@ module bez upisa ne štiti ništa — sada su uklonjeni, pa bi slučajan upis iz
 | **`NEDOVRSENO` nudi radnju po LISTI, a ne po REDU** (review #366, P2) | `Scr_Radnje` za tu listu vraća jedno `danger` dugme (`odbaci`), pa ga operater dobija i nad redom koji ga ne prima — `IZGUBLJEN_BLOK`, osirotela prijemnica, red sa greškom. Mutacije nema: `OdbaciIspravku` odbija red bez `CorrectionID`-a i još to i zabeleži. Problem je što UI **nudi** radnju za koju unapred zna da nije primenljiva, i što je jedini put do prave radnje rečenica u koloni „akcija“. Read-model to već zna — `GetNedovrseno` nosi `actionCode` (`CONTEXT` / `PRIJ` / `PAL` / `BLOK`) — ali ga `RowsNedovrseno` **ne prenosi u mrežu**, pa ljuska nema čime da bira. Od S3d-1 je isti nedostatak vidljiv i u listi „Bez otpremnice“: red nudi i **„Veži“** i **„Ponovi auto-lanac“**, a svaka radnja tek na svojoj granici odbije blok koji joj ne pripada (podaci su bezbedni, UX nije). Rez: nevidljiva kolona sa `actionCode`-om + radnje po redu (`CONTEXT` → Odbaci ispravku, `BLOK` → otvori F1/Bez otpremnice, `PRIJ`/`PAL` → Preveži, `GRESKA` → bez mutacione radnje). To je **ugovor ljuske**, ne samo ovaj ekran: `trebaRed` danas zna samo „treba red / ne treba / označeni“, a ovde treba „zavisi od vrste reda“. Zato ide kao svoj rez, ne uz S3c-2 |
 | **Rollback `tblAmbalaza` u ispravci nije dokazan testom** (review #365, P2) | `IspravkaOtpremnice_TX` snimi sve četiri tabele (`tblOtpremnica`, `…Stavke`, `…Izvori`, `tblAmbalaza`), a storno stare vraća gajbe koje je njeno izdavanje knjižilo. Test atomarnosti (`Test_OTP_IspravkaIzdate`) meri da stara ostaje AKTIVNA kad ispravka padne, i sabotaža `ispravka-pad-ostavlja-storniranu` to obara — ali **nijedna tvrdnja ne meri stanje ambalaže posle rollback-a**. Implementacija izgleda ispravno; nedokazano je nedokazano. Rez: tvrdnja nad zbirom gajbi pre i posle pale ispravke + sabotaža koja skida `AddTableSnapshot TBL_AMBALAZA` (danas bi prošla neprimećeno) |
 | **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
+| **Strog čitalac je registarski, ne dokumentarni** (review #370, P2) | `StavkeZbirneRedovi` (kao i čitači otkupa i otpremnice) validira **celu tabelu**, pa jedna pokvarena istorijska zbirna obori čitanje svih ostalih — i liste u kojima te zbirne nema. Fail-closed je ovde namerno izabran i ostaje, ali se vredi razdvojiti: **registarski audit → globalno strogo**, **jedan dokument → strogo u opsegu tog dokumenta**. Rez važi za sva tri tipa odjednom, pa ne ide unutar jednog slajsa |
 | **`who_writes` ne prijavljuje MRTAV UNOS u `WRITE_OWNERSHIP.json`** (nalaz S3e-1) | spisak dozvola je nabrajao tri modula koja tabelu odavno ne pišu, a kapija je ćutala: `--check-ownership` proverava samo da je **svaki pisac naveden**, ne i da **svaki naveden piše**. `vba_hard_census` isti problem rešava pravilom `MRTAV_UNOS`. Rez: isto pravilo u `who_writes.py`, pa spisak ne može da istruli neprimećeno |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 

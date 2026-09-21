@@ -143,7 +143,7 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
         Case FLOW_DOC_ZBIRNA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID, strict)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_ZBR_KOLICINA, docID, strict)
+            h("kolicina") = ZbirnaKgZaUvid(broj, docID, strict)
         Case FLOW_DOC_PRIJEMNICA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID, strict)
@@ -396,6 +396,71 @@ Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
             End If
         End If
     Next i
+End Function
+
+' Kilaza zbirne u uvidu dolazi sa STAVKI (S4-1).
+'
+' Zaglavlje je od PR3 prazno, pa bi SumActiveNum nad UkupnoKolicina za svaki
+' kanonski dokument vratio prazno -- a ovo je ekran koji operateru kaze STA
+' stornira. Prazno polje bi tamo znacilo "dokument je prazan", ne "citam
+' pogresno mesto".
+'
+' Izbor redova je ISTI kao u SumActiveNum: aktivni redovi datog broja, suzeni
+' generacijom kad je docID poznat. Kanonski pisac generaciju ne pise, pa za nov
+' dokument suzavanja nema -- tada broj bira dokument, kao i pre.
+Private Function ZbirnaKgZaUvid(ByVal broj As String, ByVal docID As String, _
+                                ByVal strict As Boolean) As String
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".ZbirnaKgZaUvid", _
+                      "Tabela " & TBL_ZBIRNA & " nije citljiva."
+        End If
+        Exit Function
+    End If
+
+    Dim zbirStavki As Object
+    Set zbirStavki = modDokumenta.ZbirStavkiPoZbirni()
+
+    Dim cBroj As Long, cId As Long, cSt As Long, cGen As Long
+    cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+    cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
+    If cBroj = 0 Or cId = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".ZbirnaKgZaUvid", _
+                      "Kolona " & COL_ZBR_BROJ & " ili " & COL_ZBR_ID & _
+                      " ne postoji u " & TBL_ZBIRNA & "."
+        End If
+        Exit Function
+    End If
+
+    Dim uzmiID As Boolean
+    uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
+
+    Dim i As Long, total As Double, found As Boolean, zid As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cBroj))) = Trim$(broj) Then
+            Dim uzmi As Boolean: uzmi = True
+            If uzmiID Then uzmi = (Trim$(NzToText(data(i, cGen))) = Trim$(docID))
+            If uzmi Then
+                Dim isStor As Boolean: isStor = False
+                If cSt > 0 Then isStor = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
+                If Not isStor Then
+                    zid = Trim$(NzToText(data(i, cId)))
+                    If Not zbirStavki.Exists(zid) Then
+                        Err.Raise ERR_UI_BASE + 32, MOD_NAME & ".ZbirnaKgZaUvid", _
+                                  "Zbirna " & zid & " nema nijednu stavku."
+                    End If
+                    total = total + CDbl(zbirStavki(zid)(0))
+                    found = True
+                End If
+            End If
+        End If
+    Next i
+
+    If found Then ZbirnaKgZaUvid = CStr(total)
 End Function
 
 ' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno

@@ -288,20 +288,44 @@ End Sub
 ' Zbirna bez kolicine je sama po sebi anomalija. Komplementarno sa A2:
 ' A2 hvata zbirne-sa-kg-bez-prijema, B7 hvata prazne zbirne.
 
+' B7 u kanonu meri DRUGU stvar nego u starom modelu (S4-1).
+'
+' Staro: zbirna kojoj je UkupnoKolicina 0 ili prazna. Ta kolona je od PR3
+' prazna kod SVAKE kanonske zbirne, pa bi provera prijavila ceo registar.
+'
+' Novo: kilaza se cita sa stavki. Kanonski pisac zbirnu sa nula kilograma ne
+' moze da napravi (CreateZbirna odbija klasu sa zbirom <= 0), pa je svaki nalaz
+' ovde kvar podatka, a ne redovno stanje. Pad strogog citaca je isto nalaz --
+' ide u blok kao vidljiv red, jer prazna tabela "nema nalaza" i "ne umem da
+' procitam" nisu ista poruka.
 Private Sub Chk_B7_ZbirnaNulaKg()
     On Error GoTo EH
 
-    Dim zbrDict As Object: Set zbrDict = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
+    Dim zbirStavki As Object: Set zbirStavki = modDokumenta.ZbirStavkiPoZbirni()
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
     Dim bad As Collection: Set bad = New Collection
 
-    Dim kk As Variant
-    For Each kk In zbrDict.keys
-        If zbrDict(kk) <= 0.005 Then
-            bad.Add Array(CStr(kk), zbrDict(kk))
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_ZBIRNA)
+        If IsArray(data) Then
+            Dim cId As Long, cBroj As Long, i As Long, zid As String
+            cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIntegritet.Chk_B7")
+            cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.Chk_B7")
+            For i = 1 To UBound(data, 1)
+                zid = Trim$(NzToText(data(i, cId)))
+                If Len(zid) > 0 Then
+                    If Not zbirStavki.Exists(zid) Then
+                        bad.Add Array(Trim$(NzToText(data(i, cBroj))), 0#)
+                    ElseIf CDbl(zbirStavki(zid)(0)) <= 0.005 Then
+                        bad.Add Array(Trim$(NzToText(data(i, cBroj))), _
+                                      CDbl(zbirStavki(zid)(0)))
+                    End If
+                End If
+            Next i
         End If
-    Next kk
+    End If
 
-    WriteBlock "B7", "Zbirne sa 0 (ili prazan) UkupnoKolicina", _
+    WriteBlock "B7", "Zbirne bez kilaze na stavkama", _
                Array("BrojZbirne", "ZbirnaUkupnoKg"), CollToArray(bad, 2)
     Exit Sub
 
@@ -376,10 +400,24 @@ End Sub
 ' CHECK B9: AKTIVNA ZBIRNA BEZ GeneracijaID
 ' ============================================================
 ' ZBR-IDENT-01: prazan GeneracijaID na aktivnom redu je integritetska greska,
-' ne alternativni oblik identiteta. Sva tri writer-a (SaveZbirna, modMasterSync,
-' modDokumentInvariant) odmah PECATE validan GeneracijaID -- prva dva ga
-' nasledjuju u svom scope-u, MasterSync ga kuje -- pa produkcija ovo stanje
-' ne pravi -- ali rucna izmena u tabeli i starije sveske mogu.
+' ne alternativni oblik identiteta. Stari pisci (SaveZbirna, modMasterSync,
+' modDokumentInvariant) ga odmah PECATE -- prva dva ga nasledjuju u svom
+' scope-u, MasterSync ga kuje -- pa ga produkcija starog modela nije izostavljala;
+' ostajale su rucna izmena u tabeli i starije sveske.
+'
+' OD PR3 TO VISE NIJE CEO SPISAK PISACA, I DVE TVRDNJE SU U SUKOBU.
+' Kanonski pisac (CreateZbirna_TX) GeneracijaID NAMERNO ne pise -- identitet
+' kanonske zbirne je ZbirnaID (v. BuildZbirnaHeaderRowData). Za takav dokument
+' ova provera tvrdi da je pokvaren, a nije: nema generaciju jer je i ne treba.
+'
+' KAPIJA ZA S4-2 (review #370, P1): pre nego sto se skine pauza sa F3, identitet
+' zbirne u ljusci mora da predje na ZbirnaID (modScrDokumenti.IdKolonaTipa), a
+' B9 da se uskladi sa tim ugovorom -- redefinisati je na LEGACY redove ili je
+' ukloniti. Resenje NIJE dodati GeneracijaID kanonskom piscu: time bi dokument
+' opet imao dva identiteta, sto ceo refaktor uklanja.
+' Danas provera ne laze ni na cemu jer nijedan zivi put ne pravi kanonsku zbirnu
+' (F3, malina auto-zbirna i VOZ uvoz su pauzirani) -- ona pocinje da laze tacno
+' u trenutku kad F3 proradi.
 Private Sub Chk_B9_ZbirnaBezGeneracije()
     On Error GoTo EH
 

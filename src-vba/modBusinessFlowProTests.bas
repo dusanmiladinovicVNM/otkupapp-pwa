@@ -150,6 +150,8 @@ Public Sub RunBusinessFlowProSuite()
     ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
     ' cutover citalaca, invarijante i storna je Zbirna cutover.
     Test_PR3_CreateZbirnaHeaderIStavke
+    Test_ZBR_SadrzajCitaStavkeNeZaglavlje
+    Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
     Test_PR3_ZbirnaIDJeOpaque
@@ -496,7 +498,7 @@ Private Sub Test_DuplicateFakturaIsBlocked()
     ' Minimal prijemnica fixture for faktura duplicate test.
     ' Zbirna mora da postoji pre prijemnice (PRIJEMNICA_ZBIRNA_PROVERA guard).
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, "I")
     AssertTrue Len(zbrFix) > 0, "Duplicate faktura fixture zbirna created"
@@ -702,7 +704,7 @@ Private Sub Test_InvalidZbirnaInvalidClassDoesNotAppend()
     beforeCount = CountRows(TBL_ZBIRNA)
 
     Dim result As String
-    result = SaveZbirna_TX( _
+    result = ZbrStari_TX( _
         NextTestDate(), TEST_VOZ_ID, _
         TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BADCLASS"), _
         TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
@@ -735,7 +737,7 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
     Dim brojZbirne As String: brojZbirne = TEST_PREFIX & "-BAD-ZBR-" & scenario
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Negative ambalaza fixture zbirna created"
@@ -1799,10 +1801,10 @@ Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
     ' Zbirna 300 kg u dva reda (100 + 200) -- manjak se meri po BROJU, ne po
     ' jednom redu; sa jednim redom bi i pogresno "uzmi prvi" prolazilo.
     Dim zbrI As String, zbrII As String
-    zbrI = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrI = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                          100#, TEST_TIP_AMB, 10, KLASA_I)
-    zbrII = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrII = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                           200#, TEST_TIP_AMB, 20, KLASA_II)
     AssertTrue Len(zbrI) > 0 And Len(zbrII) > 0, "Manjak: fixture zbirna I+II kreirana"
@@ -1865,7 +1867,7 @@ Private Sub Test_OpenFaktureExcludeStornirano()
     brojPrij = TEST_PREFIX & "-PRJ-FS-" & scenario
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Storno faktura: fixture zbirna kreirana"
@@ -1984,7 +1986,7 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
     brojZbirne = TEST_PREFIX & "-ZBR-SV-" & scenario
     brojPrij = TEST_PREFIX & "-PRJ-SV-" & scenario     ' ISTI broj za oba kupca
 
-    AssertTrue Len(SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    AssertTrue Len(ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                                  "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                                  100#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
                "Storno guard: fixture zbirna kreirana"
@@ -2084,7 +2086,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     ' --- A) uobicajen redosled: roditelj pa dete ---
-    zbrA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
+    zbrA = ZbrStari_TX(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                          100#, TEST_TIP_AMB, 10, KLASA_I)
     AssertTrue Len(zbrA) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
@@ -2454,7 +2456,7 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
 
     Dim pre As Long: pre = CountRows(TBL_ZBIRNA)
     Dim res As String
-    res = SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+    res = ZbrStariMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                              TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10, True, 50#, 5)
     AssertTrue InStr(1, res, " + ", vbBinaryCompare) > 0, _
                "ZBR broj: dvoklasna zbirna upisuje obe klase (bilo: " & res & ")"
@@ -2467,13 +2469,13 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
     MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, Trim$(ids(1))
 
     pre = CountRows(TBL_ZBIRNA)
-    AssertEquals "", SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+    AssertEquals "", ZbrStariMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                                         TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10), _
                  "ZBR broj: storniran broj istog vozaca istog dana ne upisuje nov red (A9)"
     AssertEquals CStr(pre), CStr(CountRows(TBL_ZBIRNA)), _
                  "ZBR broj: odbijen upis nije ostavio red"
 
-    AssertTrue Len(SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj & "-2", TEST_KUP_ID, "Test Hladnjaca", _
+    AssertTrue Len(ZbrStariMulti_TX(d, TEST_VOZ_ID, broj & "-2", TEST_KUP_ID, "Test Hladnjaca", _
                                       "Test Pogon", TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10)) > 0, _
                "ZBR broj: nov broj istog vozaca istog dana prolazi"
 
@@ -2598,7 +2600,7 @@ Private Sub Test_GeneracijaNePrelaziVlasnika()
     brojPrij = TEST_PREFIX & "-PRJ-VL-" & scenario     ' ISTI broj za oba kupca
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Vlasnik scope: fixture zbirna kreirana"
@@ -2768,7 +2770,7 @@ Private Sub Test_ZbirnaRowDataColumnMapped()
     ' mora zavrsiti u SVOJOJ koloni -- pozicijski Array(...) je to garantovao samo
     ' dok je redosled kolona tacno onakav kakav je kod pretpostavljao.
     Dim zbrID As String
-    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrID = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                           123.45, TEST_TIP_AMB, 7, KLASA_II)
 
@@ -7617,6 +7619,290 @@ Private Sub IzvorOtpremniceOdbijen(ByVal otkupID As String, ByVal otpID As Strin
                  "OTK izvor otpremnice " & stanje & ": clanstvo ostaje netaknuto"
 End Sub
 
+' --- stari pisac zbirne u testovima: zaglavlje + stavka ----------------------
+'
+' MERENJE (pun prolaz na 50884ebe): cetiri provere su pale sa
+' "Zbirna nema nijednu stavku: ZBR-00001". Nijedna nije bila o dokumentu koji
+' test pravi -- pala je zato sto RANIJI test ostavi u svesci zaglavlje koje je
+' napravio STARI pisac, a strog citalac stavki validira CEO registar. Isto je
+' S3b-1 vec izmerio kod otpremnice: "prvi takav dokument obara strogi citac za
+' ceo prolaz".
+'
+' Resenje NIJE oslabiti citaoca (opseg citaoca je zaseban nalaz, backlog S15)
+' niti dopisati stavke u samog pisca (legacy se ne odrzava zivim). Test koji
+' stari pisac koristi kao PREDUSLOV mora da ostavi dokument u obliku koji vazeci
+' model priznaje -- isto sto SeedZbirna vec radi u storno suite-u.
+'
+' Zasto omotac a ne izmena na 15 mesta: potpis je identican, pa se semantika
+' svakog testa ne menja ni za slovo (pisac i dalje radi, generaciju i dalje
+' pecati, negativan slucaj i dalje vraca ""). Menja se samo to sto dokument
+' posle uspesnog upisa ima i stavku.
+Private Function ZbrStari_TX(ByVal datum As Date, ByVal vozacID As String, _
+                             ByVal brojZbirne As String, ByVal kupacID As String, _
+                             ByVal hladnjaca As String, ByVal pogon As String, _
+                             ByVal vrstaVoca As String, ByVal sortaVoca As String, _
+                             ByVal ukupnoKol As Double, ByVal tipAmb As String, _
+                             ByVal ukupnoAmb As Long, _
+                             Optional ByVal klasa As String = "I") As String
+    Dim res As String
+    res = SaveZbirna_TX(datum, vozacID, brojZbirne, kupacID, hladnjaca, pogon, _
+                        vrstaVoca, sortaVoca, ukupnoKol, tipAmb, ukupnoAmb, klasa)
+    ZbrStari_TX = res
+    If Len(res) = 0 Then Exit Function
+    ZbrStavkaUzStarogPisca res, klasa, ukupnoKol, ukupnoAmb
+End Function
+
+Private Function ZbrStariMulti_TX(ByVal datum As Date, ByVal vozacID As String, _
+                                  ByVal brojZbirne As String, ByVal kupacID As String, _
+                                  ByVal hladnjaca As String, ByVal pogon As String, _
+                                  ByVal vrstaVoca As String, ByVal sortaVoca As String, _
+                                  ByVal ukupnoKolI As Double, ByVal tipAmb As String, _
+                                  ByVal ukupnoAmb As Long, _
+                                  Optional ByVal hasKlasaII As Boolean = False, _
+                                  Optional ByVal ukupnoKolII As Double = 0, _
+                                  Optional ByVal ukupnoAmbII As Long = 0) As String
+    Dim res As String
+    res = SaveZbirnaMulti_TX(datum, vozacID, brojZbirne, kupacID, hladnjaca, pogon, _
+                             vrstaVoca, sortaVoca, ukupnoKolI, tipAmb, ukupnoAmb, _
+                             hasKlasaII, ukupnoKolII, ukupnoAmbII)
+    ZbrStariMulti_TX = res
+    If Len(res) = 0 Then Exit Function
+
+    ' Dvoklasni upis vraca "idI + idII" (SaveZbirnaMulti_TX), jednoklasni jedan
+    ' ID -- i to onaj klase koja je stvarno upisana.
+    Dim p As Long
+    p = InStr(1, res, " + ", vbBinaryCompare)
+    If p > 0 Then
+        ZbrStavkaUzStarogPisca Left$(res, p - 1), KLASA_I, ukupnoKolI, ukupnoAmb
+        ZbrStavkaUzStarogPisca Mid$(res, p + 3), KLASA_II, ukupnoKolII, ukupnoAmbII
+    ElseIf ukupnoKolI > 0 Then
+        ZbrStavkaUzStarogPisca res, KLASA_I, ukupnoKolI, ukupnoAmb
+    Else
+        ZbrStavkaUzStarogPisca res, KLASA_II, ukupnoKolII, ukupnoAmbII
+    End If
+End Function
+
+Private Sub ZbrStavkaUzStarogPisca(ByVal zbirnaID As String, ByVal klasa As String, _
+                                   ByVal kol As Double, ByVal amb As Double)
+    If kol <= 0 Then Exit Sub
+    ZbrDodajStavku zbirnaID & "-S1", zbirnaID, _
+                   IIf(UCase$(Trim$(klasa)) = UCase$(KLASA_II), 2, 1), _
+                   klasa, kol, amb, "ZbrStavkaUzStarogPisca"
+End Sub
+
+' =====================================================================
+' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
+' =====================================================================
+
+' Greska koju digne mreza F8 za zbirne -- "" znaci da je citalac prosao.
+Private Function ZbrMrezaGreska(ByVal broj As String) As String
+    Dim d As Variant
+    On Error Resume Next
+    Err.Clear
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("ZBIRNA", "", broj)
+    If Err.Number <> 0 Then ZbrMrezaGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Kilaza koju mreza F8 PRIKAZUJE za dati broj zbirne. Kolone se nalaze po
+' IZVORNOJ koloni iz opisa (drugo polje "kljuc|izvor|stil|sirina|red"), ne po
+' poziciji: pozicija se menja sa rasporedom, a tvrdnja je o izvoru celije.
+'
+' Red se trazi PO BROJU, ne po nevidljivoj koloni identiteta -- za zbirnu je ta
+' kolona GeneracijaID (modScrDokumenti.IdKolonaTipa), a kanonski pisac
+' generaciju NE upisuje, pa je kod kanonskog dokumenta prazna. To je nalaz
+' zapisan za S4-3 (identitet zbirne u ljusci je ZbirnaID, kao OtkupID u S1e i
+' OtpremnicaID u #362); dotle test ne sme da se oslanja na praznu kolonu.
+' Broj scenarija je jedinstven, pa je pogodak jednoznacan.
+Private Function ZbrF8Kg(ByVal broj As String) As Double
+    Dim d As Variant, cols As Variant, redovi As Variant
+    Dim i As Long, c As Long, n As Long, iKg As Long, iBroj As Long
+
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("ZBIRNA", "", broj)
+    If Not IsArray(d) Then Exit Function
+
+    cols = d(0)
+    redovi = d(1)
+    n = CLng(d(2))
+    iKg = -1: iBroj = -1
+    For c = LBound(cols) To UBound(cols)
+        Select Case Split(CStr(cols(c)), "|")(1)
+            Case COL_ZBS_KOLICINA: iKg = c + 1
+            Case COL_ZBR_BROJ:     iBroj = c + 1
+        End Select
+    Next c
+    If iKg < 0 Or iBroj < 0 Then Exit Function
+
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, iBroj))) = broj Then
+            If IsNumeric(redovi(i, iKg)) Then ZbrF8Kg = CDbl(redovi(i, iKg))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' KILAZA ZBIRNE DOLAZI SA STAVKI, NE SA ZAGLAVLJA (S4-1).
+'
+' Kanonski pisac UkupnoKolicina/UkupnoAmbalaze/Klasu na zaglavlju NAMERNO
+' ostavlja prazne. Zato je ovaj test merenje u oba smera odjednom: ako bi neki
+' citalac ostao na zaglavlju, video bi prazno -- a prazno se u mrezi prikazuje
+' kao 0 kg, dakle kao uredan podatak. Test tvrdi i da je zaglavlje prazno
+' (ugovor pisca) i da mreza ipak pokazuje pun iznos (ugovor citaoca).
+Private Sub Test_ZBR_SadrzajCitaStavkeNeZaglavlje()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("ZBRSD")
+    broj = TEST_PREFIX & "-ZBR-SD-" & scenario
+
+    Dim otpI As String, otpII As String
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-SD-" & scenario, KLASA_I, 400#, 20)
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-SD-" & scenario, KLASA_II, 600#, 30)
+
+    Dim zbrID As String
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(broj), Pr3Izvor(otpI, otpII))
+    AssertTrue Len(zbrID) > 0, "ZBR sadrzaj: kanonska zbirna napravljena"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    ' Ugovor PISCA: zaglavlje je prazno.
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KOLICINA), _
+                 "ZBR sadrzaj: zaglavlje NE nosi UkupnoKolicina"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_KLASA), _
+                 "ZBR sadrzaj: zaglavlje NE nosi Klasu"
+
+    ' Ugovor CITAOCA: zbir stavki je pun iznos, obe klase u jednom dokumentu.
+    Dim zbir As Object
+    Set zbir = modDokumenta.ZbirStavkiPoZbirni()
+    AssertTrue zbir.Exists(zbrID), "ZBR sadrzaj: dokument je u zbiru stavki"
+    AssertTrue Abs(CDbl(zbir(zbrID)(0)) - 1000#) < 0.001, _
+               "ZBR sadrzaj: zbir stavki je 1000 kg"
+    AssertTrue Abs(CDbl(zbir(zbrID)(2)) - 50#) < 0.001, _
+               "ZBR sadrzaj: zbir gajbi je 50"
+    AssertTrue InStr(1, CStr(zbir(zbrID)(3)), KLASA_II, vbTextCompare) > 0, _
+               "ZBR sadrzaj: obe klase su na istom dokumentu"
+
+    ' Zbirna NEMA cenu -- mesto vrednosti je Null, da slucajna upotreba padne.
+    AssertTrue IsNull(zbir(zbrID)(1)), _
+               "ZBR sadrzaj: mesto vrednosti je Null (zbirna nema cenu)"
+
+    ' Ista kilaza mora da stigne i do ekrana, ne samo do citaoca.
+    AssertTrue Abs(ZbrF8Kg(broj) - 1000#) < 0.001, _
+               "ZBR sadrzaj: mreza F8 pokazuje 1000 kg sa stavki"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_SadrzajCitaStavkeNeZaglavlje", Err.Number, Err.description
+End Sub
+
+' UGOVOR JE DOKUMENTSKI: pokvaren dokument obara citaoca PO IMENU.
+'
+' Sve tri anomalije su SINTETICKE -- kanonski pisac ih ne moze napraviti
+' (CreateZbirna deli po klasi, odbija zbir <= 0 i ne pise stavku bez zaglavlja).
+' Prave se dodavanjem reda u transakciji koja se vraca, pa se posle vracanja meri
+' da je citalac opet ciste.
+Private Sub Test_ZBR_CitalacStavkiDrziUgovor()
+    Const SRC As String = "Test_ZBR_CitalacStavkiDrziUgovor"
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("ZBRUG")
+    broj = TEST_PREFIX & "-ZBR-UG-" & scenario
+
+    Dim otpI As String
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-UG-" & scenario, KLASA_I, 400#, 20)
+
+    Dim zbrID As String
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(broj), Pr3Izvor(otpI, ""))
+    AssertTrue Len(zbrID) > 0, "ZBR ugovor: kanonska zbirna napravljena"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertEquals "", ZbrMrezaGreska(broj), "ZBR ugovor: ispravan dokument prolazi"
+
+    ' --- (1) dve stavke iste klase ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    ZbrDodajStavku zbrID & "-DUPLA", zbrID, 2, KLASA_I, 100#, 5, SRC
+    AssertTrue InStr(1, ZbrMrezaGreska(broj), "Dve stavke iste klase", vbTextCompare) > 0, _
+               "ZBR ugovor: dve stavke iste klase obaraju citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertEquals "", ZbrMrezaGreska(broj), "ZBR ugovor: posle vracanja opet prolazi"
+
+    ' --- (2) kolicina nula ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    ZbrDodajStavku zbrID & "-NULA", zbrID, 3, KLASA_II, 0#, 0, SRC
+    AssertTrue InStr(1, ZbrMrezaGreska(broj), "veca od nule", vbTextCompare) > 0, _
+               "ZBR ugovor: kolicina nula obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (3) stavka bez zaglavlja ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    ZbrDodajStavku zbrID & "-SIROCE", zbrID & "-NEMA-GA", 1, KLASA_I, 10#, 1, SRC
+    AssertTrue InStr(1, ZbrMrezaGreska(broj), "Zaglavlje zbirne ne postoji", vbTextCompare) > 0, _
+               "ZBR ugovor: stavka bez zaglavlja obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (4) zaglavlje bez stavki ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    ObrisiStavkeZbirne zbrID
+    AssertTrue InStr(1, ZbrMrezaGreska(broj), "nema nijednu stavku", vbTextCompare) > 0, _
+               "ZBR ugovor: zaglavlje bez stavki obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "", ZbrMrezaGreska(broj), "ZBR ugovor: na kraju je citalac cist"
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+Private Sub ZbrDodajStavku(ByVal stavkaID As String, ByVal zbirnaID As String, _
+                           ByVal rb As Long, ByVal klasa As String, _
+                           ByVal kol As Double, ByVal amb As Double, _
+                           ByVal src As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_ZBIRNA_STAVKE)
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ID, stavkaID
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_RB, rb
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, klasa
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, kol
+    SetRequiredField rowData, TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, amb
+    RequireAppend TBL_ZBIRNA_STAVKE, rowData, src
+End Sub
+
+Private Sub ObrisiStavkeZbirne(ByVal zbirnaID As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID)
+    If redovi Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = redovi.count To 1 Step -1
+        DeleteRow TBL_ZBIRNA_STAVKE, CLng(redovi(i))
+    Next i
+End Sub
+
 ' Da li mreza F8 za otpremnice (sa kolonom identiteta) ima red sa datim
 ' OtpremnicaID-em u poslednjoj, nevidljivoj koloni.
 Private Function OtpF8RedSaID(ByVal broj As String, ByVal otpID As String) As Boolean
@@ -9714,13 +10000,13 @@ Private Sub Test_BKTX_ZbirnaTudjegVlasnikaOdbijena()
                  "BKTX zbirna: broj stanice u nizu realnog vozaca je TUDJ"
 
     ' I kroz pisca.
-    AssertEquals "", SaveZbirna_TX(d, TEST_VOZ_ID, brojStanice, TEST_KUP_ID, _
+    AssertEquals "", ZbrStari_TX(d, TEST_VOZ_ID, brojStanice, TEST_KUP_ID, _
                                    "Test Hladnjaca", "Test Pogon", TEST_VRSTA, _
                                    TEST_SORTA, 1000#, TEST_TIP_AMB, 100, "I"), _
                  "BKTX zbirna: pisac odbija broj tudjeg vlasnika"
 
     ' Kontrola: vozacev sopstveni broj prolazi kroz istog pisca.
-    AssertTrue Len(SaveZbirna_TX(d, TEST_VOZ_ID, _
+    AssertTrue Len(ZbrStari_TX(d, TEST_VOZ_ID, _
                                  modBrojevi.FormatBroj(TEST_VOZ_ID, d, 1), _
                                  TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                                  TEST_VRSTA, TEST_SORTA, 1000#, TEST_TIP_AMB, _

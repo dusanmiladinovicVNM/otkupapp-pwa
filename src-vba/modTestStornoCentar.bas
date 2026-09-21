@@ -691,6 +691,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PALETA
@@ -700,8 +701,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     tx.AddTableSnapshot TBL_STORNO_VEZE
 
     ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array("SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10)
+    TcSeedZbirna "SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
               Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
@@ -714,8 +714,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KA-P") = 0, "prijemnica stornirana"
 
     ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array("SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10)
+    TcSeedZbirna "SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
               Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
@@ -744,6 +743,7 @@ Public Sub Test_ZbirnaRecalcInPlace_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     ' izdata (default) aktivna zbirna sa zastarelim totalom, bez otpremnica
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
               Array("SVT-ZR-ID", "SVT-ZR-Z1", "I", 999, 9)
@@ -961,6 +961,7 @@ Public Sub Test_DocIsIssued_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), _
               Array("SVT-IZ-1", "SVT-IZ-EMPTY", "I")                 ' prazan IzdatoStatus
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS), _
@@ -993,6 +994,7 @@ Public Sub Test_StampIspravkaTrace_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_STORNIRANO), _
               Array("SVT-ST-OLD", "SVT-ST-B1", "I", "Da")          ' stari, storniran
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), _
@@ -1059,6 +1061,21 @@ End Sub
 ' ============================================================
 ' HELPERS
 ' ============================================================
+' Zbirna u NOVOM obliku (S4-1): zaglavlje + stavka. Isti razlog kao
+' modTestStorno.SeedZbirna -- strog citalac sadrzaja odbija zaglavlje bez
+' stavki, pa bi golo zaglavlje oborilo svaki test koji dodirne liste, uvid ili
+' prefill. Kolone zaglavlja ostaju popunjene dok ih okvir jos cita (S4-3).
+Private Sub TcSeedZbirna(ByVal zbrID As String, ByVal broj As String, _
+                         ByVal klasa As String, ByVal kg As Double, _
+                         ByVal amb As Long)
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array(zbrID, broj, klasa, kg, amb)
+    TcSeedRow TBL_ZBIRNA_STAVKE, _
+              Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
+                    COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
+              Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
+End Sub
+
 Private Sub TcSeedRow(ByVal tbl As String, ByVal cols As Variant, ByVal vals As Variant)
     Dim lo As ListObject: Set lo = GetTable(tbl)
     If lo Is Nothing Then Exit Sub
