@@ -3708,6 +3708,31 @@ ponovo), a prazna forma ili promena režima je otkazuju — inače bi sledeći �
 **Ispravka ne prolazi kroz routing posle upisa:** članstvo naslednika je već odlučeno u pisčevoj transakciji, pa ni
 hladnjački lanac ni ručno vezivanje nemaju šta da odluče.
 
+#### Review #368 — četiri P1 i dve odluke koje su zaključane
+
+| Nalaz | Šta je bilo | Ispravka |
+|---|---|---|
+| **glavni scenario nije mogao da prođe** | jezgro `modStorno.StornoOtkup` odbija storno bloka koji je u sastavu aktivne otpremnice — a ispravka ga zove **pre** zamene članstva, pa se do zamene nikad nije stizalo | zamena je podeljena na dva koraka: `IzvadiIzvorIzNacrta` **pre** storna, `UvediIzvorUNacrt` **posle** upisa. Kapija nije zaobiđena — posle vađenja je istina da blok nije ni u jednom sastavu. Storno ostaje pre upisa, jer tako oslobađa novac koji naslednik preuzima |
+| **pokvarena ispravka otpremnice iz #365** | isti ključ radnje `ispravi` za dve različite stvari; lista otpremnica nema `OtkupID`, pa ju je nov strážar sa `otkupID = ""` odbijao — a u istom `Select`-u su postojala **dva** `Case "ispravi"`, gde drugi nikad ne dobija red | ključevi su razdvojeni: `ispravblok` (blok) i `ispravi` (otpremnica) |
+| **prekoračenje se pitalo i za ispravku** | ispravka **zamenjuje**, ne dodaje: nacrt koji očekuje 60 i ima izvor 60 posle ispravke na 55 ima povezano 55, ne 115 — pitanje bi tražilo potvrdu za količinu koja ne postoji, a „Ne“ bi prekinuo legitimnu ispravku | ispravka se zna **pre** pitanja i preskače ga, kao i hladnjački blok i neizvestan put |
+| **`GoTo` je preskakao routing i za blok bez roditelja** | „članstvo je već odlučeno“ važi samo kad je stari **bio** u nacrtu; slobodan hladnjački blok bi tako ostao van **obaveznog** lanca | odluka je izdvojena u `RutaPosleUpisa` — deterministična i merljiva bez forme |
+
+**Ugovor rute posle upisa** (`modScrDokumenti.RutaPosleUpisa`):
+
+```
+ispravka bloka koji je BIO u nacrtu   ->  nista   (pisac je clanstvo vec preneo)
+ispravka SLOBODNOG hladnjackog bloka  ->  LANAC   (lanac je obavezan i za nju)
+ispravka slobodnog obicnog bloka      ->  nista   (naslednik ostaje slobodan)
+nov unos                              ->  LANAC ili NACRT, po pravilima
+put se ne zna                         ->  nista + RAZLOG (fail-closed)
+```
+
+Ispravka slobodnog običnog bloka namerno **ne** ulazi u nacrt koji je slučajno otvoren: original nije bio ni u jednom dokumentu, a ispravka menja dokument — ne njegovu pripadnost.
+
+**Preflight sudi po tačnom statusu.** `OtpremnicaJeIzdata` vraća `False` i za nacrt i za prazan/nepoznat status, pa bi preko nje pokvaren roditelj prošao kao „može“, a pisac bi pukao tek na `RequireOtpDraft`. Sada preflight traži **baš `DRAFT`**; izdata dobija put, a nepoznat status svoju rečenicu.
+
+**Zaključana odluka: ispravka izvora NE prepisuje očekivanje nacrta.** Očekivanje je ono što je operater prijavio; da ga dete tiho menja, nestala bi razlika između „prijavljeno“ i „stvarno doneto“ — a upravo ona zaustavlja izdavanje. Test zato meri da posle zamene 60 → 55 ostaje ostatak 5 kg / 1 gajba i da se nacrt **ne izdaje**. Sabotaža `ispravka-prepisuje-ocekivanje` to obara.
+
 **Testovi:** `Test_OTK_IspravkaBlokaUNacrtu` — blok u nacrtu: nacrt pokazuje na naslednika, storniran blok više nije
 izvor, nacrt ima tačno jedan izvor · blok izdate: odbijen, razlog **imenuje tu otpremnicu i put** · **pad ne
 razmontira nacrt** (naslednik na drugoj stanici pukne posle storna i upisa; transakcija vraća sve) · slobodan blok

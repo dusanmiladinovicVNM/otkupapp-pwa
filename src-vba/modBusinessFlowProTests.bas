@@ -297,6 +297,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OPO_IzgubljenBlok
     Test_HLD_AutoLanacOtpremnica
     Test_OTK_IspravkaBlokaUNacrtu
+    Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -7345,6 +7346,28 @@ Private Sub Test_OTK_IspravkaBlokaUNacrtu()
     AssertEquals "1", CStr(modDokumenta.IzvoriOtpremnice(nacrt).count), _
                  "Ispravka bloka: nacrt ima tacno jedan izvor"
 
+    ' ODLUKA KOJU TREBA ZAKLJUCATI: ispravka izvora NE prepisuje ocekivanje
+    ' nacrta. Ocekivanje je ono sto je operater PRIJAVIO; da ga dete tiho menja,
+    ' nestala bi razlika izmedju "prijavljeno" i "stvarno doneto" -- a upravo ona
+    ' zaustavlja izdavanje. Zato posle zamene 60 -> 55 ostaje ostatak, i nacrt se
+    ' NE izdaje dok operater svesno ne izmeni ocekivanje u F2.
+    Dim prog As Object, kl As Object, izdG As String
+    Set prog = modDokumenta.GetOtpremnicaProgress(nacrt)
+    AssertTrue prog.Exists(KLASA_I), "Ispravka bloka: nacrt i dalje ima klasu I"
+    If prog.Exists(KLASA_I) Then
+        Set kl = prog(KLASA_I)
+        AssertEquals "60", CStr(kl("ocekivano")), _
+                     "Ispravka bloka: ocekivanje nacrta se ne prepisuje"
+        AssertEquals "55", CStr(kl("povezano")), _
+                     "Ispravka bloka: povezano je kilaza naslednika"
+        AssertEquals "5", CStr(kl("preostalo")), _
+                     "Ispravka bloka: razlika ostaje vidljiva kao ostatak"
+        AssertEquals "1", CStr(kl("preostaloAmb")), _
+                     "Ispravka bloka: ostatak ambalaze je vidljiv"
+    End If
+    AssertTrue Not IzdajOtpremnicu_TX(nacrt, izdG), _
+               "Ispravka bloka: nacrt sa ostatkom se ne izdaje"
+
     ' --- 2) blok u IZDATOJ: odbijeno, i to sa putem koji postoji ----------
     Dim blok2 As String, izdata As String, razlog As String
     blok2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBC-" & scenario), _
@@ -7407,6 +7430,95 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_OTK_IspravkaBlokaUNacrtu", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S3d-2 -- RUTA POSLE UPISA: jedna odluka, deterministicna (review #368).
+'
+' Posle upisa blok ide u hladnjacki lanac, u aktivan rucni nacrt, ili nigde.
+' Ispravka nije nov unos, pa joj pravila rucnog nacrta ne vaze -- ali OBAVEZNI
+' hladnjacki lanac vazi i njoj. Merilo je ovde, a ne u Scr_Save, jer Scr_Save
+' povlaci stampu i formu.
+' ============================================================
+Private Sub Test_OTK_RutaPosleUpisa()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, greska As String, prevCfg As String, prev As String
+    scenario = NewScenarioCode("OTKRUT")
+    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
+
+    Dim obican As String, hladni As String, nacrt As String
+    obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RUTA-" & scenario), _
+                            OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    hladni = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-RUTH-" & scenario, TEST_HLAD_ST_ID), _
+                            OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    AssertTrue Len(obican) > 0 And Len(hladni) > 0, "Ruta: blokovi napravljeni"
+    If Len(obican) = 0 Or Len(hladni) = 0 Then GoTo Kraj
+
+    ' --- bez aktivnog nacrta ---
+    RadniStoPocetno
+    AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                 "Ruta: nov obican blok bez nacrta ne ide nigde"
+    AssertEquals "", greska, "Ruta: to je pouzdan odgovor, ne neizvesnost"
+
+    AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, False, False, greska), _
+                 "Ruta: nov hladnjacki blok ide u lanac"
+
+    ' --- sa aktivnim rucnim nacrtom ---
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-RUTA-" & scenario), _
+                                     OtpOcek(10#, 1#, 0#, 0#), g)
+    AssertTrue Len(nacrt) > 0, "Ruta: nacrt napravljen (" & g & ")"
+    If Len(nacrt) > 0 Then
+        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Ruta: nacrt je aktivan"
+
+        AssertEquals RUTA_NACRT, modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                     "Ruta: nov obican blok ide u aktivan nacrt"
+        AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, False, False, greska), _
+                     "Ruta: hladnjacki blok i dalje ide u lanac, ne u nacrt"
+
+        ' JEZGRO ODLUKE: ispravka SLOBODNOG obicnog bloka ne upada u nacrt koji
+        ' je slucajno otvoren -- original nije bio ni u jednom dokumentu.
+        AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, True, False, greska), _
+                     "Ruta: ispravka slobodnog bloka ne upada u otvoren nacrt"
+
+        ' A obavezni lanac vazi i ispravci: hladnjacki naslednik ide u svoj lanac.
+        AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, True, False, greska), _
+                     "Ruta: ispravka slobodnog hladnjackog bloka ide u lanac"
+
+        ' Ispravka bloka koji je BIO u nacrtu: clanstvo je pisac vec preneo.
+        AssertEquals "", modScrDokumenti.RutaPosleUpisa(hladni, True, True, greska), _
+                     "Ruta: ispravka clana nacrta ne ide nigde ponovo"
+    End If
+
+    ' --- neizvestan put: ne radi se nista ---
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, obican)
+    If Not redovi Is Nothing Then
+        If redovi.count = 1 Then
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              "ST-NEMA-" & scenario, "Test_OTK_RutaPosleUpisa"
+            greska = ""
+            AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                         "Ruta: neizvestan put ne salje blok nikuda"
+            AssertTrue Len(greska) > 0, "Ruta: neizvestan put vraca RAZLOG"
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              TEST_ST_ID, "Test_OTK_RutaPosleUpisa"
+        End If
+    End If
+
+Kraj:
+    RadniStoPocetno
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    modOtkupUI.ActiveMode = prev
+    Exit Sub
+EH:
+    RadniStoPocetno
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    modOtkupUI.ActiveMode = prev
+    LogFatal "Test_OTK_RutaPosleUpisa", Err.Number, Err.description
 End Sub
 
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.

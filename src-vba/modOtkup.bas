@@ -266,14 +266,24 @@ Private Function IspravkaPrepreka(ByVal stariOtkupID As String) As String
     '
     ' Poruka imenuje put koji OD S3c stvarno postoji. Ranije je govorila "nije
     ' dostupno do PR7" -- uputstvo bez izlaza.
-    Dim roditelj As String
+    ' Status se trazi TACNO, ne posredno. OtpremnicaJeIzdata vraca False i za
+    ' nacrt i za prazan/nepoznat status, pa bi preko nje pokvaren roditelj prosao
+    ' kao "moze" -- operater bi popunio formu, a pisac bi tek onda pukao na
+    ' RequireOtpDraft. Ekran i pisac moraju da sude po istom pitanju.
+    Dim roditelj As String, stat As String
     roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
     If Len(roditelj) > 0 Then
-        If modDokumenta.OtpremnicaJeIzdata(roditelj) Then
+        stat = UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, roditelj, _
+                                                 COL_TRACE_IZDATO_STATUS))))
+        If stat = UCase$(IZDATO_IZDATO) Or stat = UCase$(IZDATO_PROSLEDJENO) Then
             IspravkaPrepreka = "Otkup je izvor IZDATE otpremnice " & roditelj & _
                                ". Sastav izdatog dokumenta se ne menja u mestu (A13): prvo " & _
                                "ispravi otpremnicu -- nastaje NACRT sa istim blokovima -- pa " & _
                                "onda ispravi blok u njemu."
+        ElseIf stat <> UCase$(IZDATO_DRAFT) Then
+            IspravkaPrepreka = "Otpremnica " & roditelj & " nema poznat status (" & stat & _
+                               "). Dok se to ne popravi, blok se ne ispravlja -- ne zna se " & _
+                               "da li je njen sastav jos promenljiv."
         End If
     End If
 End Function
@@ -382,6 +392,13 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     Dim nvIDs As Collection
     Set nvIDs = modNovac.NovacIDsZaOtkup(stariOtkupID)
 
+    ' Stari izvor IZLAZI iz nacrta pre storna. Jezgro StornoOtkup odbija storno
+    ' bloka koji je u sastavu aktivne otpremnice -- posle ovog koraka to vise
+    ' nije slucaj, pa kapija prolazi po istini, a ne po izuzetku.
+    If Len(roditelj) > 0 Then
+        modDokumenta.IzvadiIzvorIzNacrta roditelj, stariOtkupID
+    End If
+
     If Not modStorno.StornoOtkup(stariOtkupID) Then
         Err.Raise vbObjectError + 1914, SRC, _
                   "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
@@ -453,10 +470,11 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                         Format$(placeno - dug, "#,##0.00")
     End If
 
-    ' Nacrt u ISTOM potezu prelazi na naslednika (S3d-2). Ide POSLE upisa novog
-    ' dokumenta -- naslednik mora da postoji da bi prosao kapije izvora.
+    ' Naslednik ULAZI u nacrt (S3d-2). Ide POSLE upisa -- blok mora da postoji da
+    ' bi prosao kapije izvora. Pad ovde vraca ceo potez: stari blok je opet
+    ' aktivan i opet u nacrtu.
     If Len(roditelj) > 0 Then
-        modDokumenta.ZameniOtpremnicaIzvor roditelj, stariOtkupID, noviID
+        modDokumenta.UvediIzvorUNacrt roditelj, noviID
     End If
 
     modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _

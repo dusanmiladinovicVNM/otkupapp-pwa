@@ -3776,39 +3776,57 @@ Private Function OtpGajbeIzvora(ByVal otkupID As String, ByVal src As String) As
     Next i
 End Function
 
-' ZAMENA IZVORA U NACRTU -- core, radi UNUTAR TUDJE transakcije (S3d-2).
+' ZAMENA IZVORA U NACRTU -- DVA KORAKA, oba UNUTAR TUDJE transakcije (S3d-2).
 '
-' Zove je modOtkup.IspravkaOtkupa_TX: ispravka pravi NOV dokument, pa nacrt koji
-' je pokazivao na stari mora u ISTOM potezu da pokazuje na naslednika. Bez toga
-' bi nacrt ostao sa izvorom koji je storniran, a naslednik stajao van njega --
-' medjustanje koje je PR5 vec odbio kod UpdateOtpremnicaDraft_TX: invarijanta
-' mora da vazi IZMEDJU dva klika, ne tek pri izdavanju.
+' Zove ih modOtkup.IspravkaOtkupa_TX, i to razdvojeno, jer izmedju njih mora da
+' stane storno starog bloka:
+'
+'     IzvadiIzvorIzNacrta(nacrt, stari)   <- PRE storna
+'     StornoOtkup(stari)
+'     CreateOtkup(novi)
+'     UvediIzvorUNacrt(nacrt, novi)       <- POSLE upisa
+'
+' ZASTO BAS TIM REDOM. Jezgro modStorno.StornoOtkup ODBIJA storno bloka koji je
+' u sastavu aktivne otpremnice -- i to je tacno pravilo, ne prepreka koju treba
+' zaobici. Zato stari izvor prvo IZADJE iz nacrta; kapija tada prolazi jer je
+' istina da blok vise nije ni u jednom sastavu. Alternativa ("dodaj izuzetak u
+' StornoOtkup") bi otvorila zadnja vrata svakom pozivaocu.
+'
+' Storno ide PRE upisa naslednika i to se ne menja: pisac ispravke tako
+' oslobadja novac i avanse koje naslednik posle preuzima.
 '
 ' NE ZOVI SPOLJA BEZ TRANSAKCIJE. Pozivalac drzi snapshot tblOtpremnicaIzvori;
-' bez njega bi pad posle uklanjanja starog ostavio nacrt BEZ ijednog izvora.
+' bez njega bi pad izmedju dva koraka ostavio nacrt BEZ ijednog izvora -- a
+' upravo to je jedini prozor koji ova podela pravi.
 '
 ' IZDATA SE NE DIRA (RequireOtpDraft): njen sastav je istorijska cinjenica, a
-' zamena bi bila tiha izmena izdatog papira (A13). Za nju je put storno +
+' izmena bi bila tiha promena izdatog papira (A13). Za nju je put storno +
 ' reizdavanje, sto radi ispravka otpremnice (S3c).
-'
-' Redosled je bitan: stari izlazi PRE nego sto naslednik ulazi. Obrnuto bi
-' kapija "izvor sme da bude u tacno jednoj aktivnoj otpremnici" videla oba i
-' odbila sam posao.
-Public Sub ZameniOtpremnicaIzvor(ByVal otpremnicaID As String, _
-                                 ByVal stariOtkupID As String, _
-                                 ByVal noviOtkupID As String)
-    Const SRC As String = "ZameniOtpremnicaIzvor"
+Public Sub IzvadiIzvorIzNacrta(ByVal otpremnicaID As String, _
+                               ByVal otkupID As String)
+    Const SRC As String = "IzvadiIzvorIzNacrta"
 
     Dim rOtp As Long
     rOtp = OtpRedHeadera(otpremnicaID, SRC)
     RequireOtpDraft otpremnicaID, rOtp, SRC
 
-    OtpUkloniIzvor otpremnicaID, Trim$(stariOtkupID)
+    OtpUkloniIzvor otpremnicaID, Trim$(otkupID)
+End Sub
 
-    ' Naslednik prolazi ISTE kapije kao svaki izvor: aktivan, sa stavkama, iste
-    ' stanice i kulture, slobodan. Ispravka ne sme da bude zadnja vrata.
-    OtpRequireIzvorValjan otpremnicaID, Trim$(noviOtkupID), SRC, True
-    OtpUpisiClanstvo otpremnicaID, Trim$(noviOtkupID), SRC
+' Naslednik ulazi u nacrt tek kad postoji, i prolazi ISTE kapije kao svaki izvor
+' (aktivan, sa stavkama, iste stanice i kulture, slobodan). Ispravka ne sme da
+' bude zadnja vrata: blok koji nacrt ne bi primio kroz "Vezi" ne prima se ni
+' ovuda.
+Public Sub UvediIzvorUNacrt(ByVal otpremnicaID As String, _
+                            ByVal otkupID As String)
+    Const SRC As String = "UvediIzvorUNacrt"
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True
+    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC
 End Sub
 
 ' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
