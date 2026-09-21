@@ -243,7 +243,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_BKTX_ReversIDJedanDokument
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
-    Test_OTK_IspravkaRoditeljFailClosed
+    Test_OTK_IspravkaIzdatogRoditeljaFailClosed
     Test_OTK_IspravkaRollbackVracaSve
     Test_OTK_SelfHealMigracijeKolona
     Test_OTK_BrojStorniranogSeNePonovoKoristi
@@ -12487,43 +12487,25 @@ EH:
     LogFatal "Test_OTK_IspravkaNeGubiNovac", Err.Number, Err.description
 End Sub
 
-' A13: OTKUP KOJI IMA RODITELJA SE NE ISPRAVLJA -- NI IZDATOG, NI DRAFT.
+' A13: OTKUP U IZDATOJ OTPREMNICI SE NE ISPRAVLJA, I ODBIJANJE JE POTPUNO.
 '
-' Ranija verzija ovog testa je DRAFT roditelja pustala kroz, uz obrazlozenje da je
-' clanstvo drafta mutabilno. Merenje iz review-a je pokazalo da to nije dovoljno:
-' IspravkaOtkupa_TX ne dira tblOtpremnicaIzvori, pa bi draft ostao sa izvorom koji
-' pokazuje na STORNIRAN otkup, dok naslednik stoji van njega.
+' Ovaj test je do S3d-2 merio OBA stanja kao odbijena. Razlog za DRAFT granu bio
+' je merljiv i tacan u svoje vreme: IspravkaOtkupa_TX nije dirala
+' tblOtpremnicaIzvori, pa bi nacrt ostao sa izvorom koji pokazuje na STORNIRAN
+' otkup, dok naslednik stoji van njega.
 '
-' To je isto medjustanje koje je PR5 vec odbio kod UpdateOtpremnicaDraft_TX:
-' invarijanta mora da vazi IZMEDJU dva klika, ne tek pri izdavanju. Test zato sada
-' meri OBA stanja kao ODBIJENA, i u oba slucaja tvrdi da je odbijanje POTPUNO.
-Private Sub Test_OTK_IspravkaRoditeljFailClosed()
+' S3d-2 je uklonio bas taj razlog -- ispravka sada u ISTOJ transakciji vadi stari
+' izvor iz nacrta i uvodi naslednika. Zato je DRAFT grana ovde OBRISANA, a ne
+' prepravljena u "prolazi": nju u punom obimu meri Test_OTK_IspravkaBlokaUNacrtu
+' (clanstvo, ostatak, izdavanje, pad posle storna). Ovde ostaje ono sto je i dalje
+' tacno i sto nijedan drugi test ne meri: IZDATA se ne dira, odbijanje je POTPUNO
+' (ni nov red, ni storniran izvor, ni naslednik), a poruka imenuje otpremnicu i
+' PUT -- bez nudjenja obilaska preko storna roditelja.
+Private Sub Test_OTK_IspravkaIzdatogRoditeljaFailClosed()
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("OTKA13")
-
-    ' --- DRAFT roditelj ---
-    Dim otkD As String
-    otkD = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13D-" & scenario), _
-                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
-    AssertTrue Len(otkD) > 0, "A13: otkup za draft scenario"
-
-    Dim gD As String
-    Dim draftID As String
-    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-A13D-" & scenario), _
-                                       OtpOcek(100#, 10#, 0#, 0#), gD)
-    AssertTrue Len(draftID) > 0, "A13: draft otpremnica napravljena (" & gD & ")"
-
-    AssertTrue DodajOtpremnicaIzvor_TX(draftID, otkD, gD), _
-               "A13: otkup je clan drafta (" & gD & ")"
-    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), "A13: draft nije izdat"
-
-    IspravkaOdbijena otkD, draftID, "DRAFT", scenario & "-D"
-
-    ' Clanstvo je NETAKNUTO -- draft i dalje pokazuje na ISTI, aktivan otkup.
-    AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(otkD), _
-                 "A13: draft i dalje ima svoj izvor"
 
     ' --- IZDATA otpremnica ---
     Dim otkI As String
@@ -12547,7 +12529,7 @@ Private Sub Test_OTK_IspravkaRoditeljFailClosed()
     Exit Sub
 
 EH:
-    LogFatal "Test_OTK_IspravkaRoditeljFailClosed", Err.Number, Err.description
+    LogFatal "Test_OTK_IspravkaIzdatogRoditeljaFailClosed", Err.Number, Err.description
 End Sub
 
 ' Ispravka otkupa sa roditeljem mora biti odbijena POTPUNO -- i poruka mora da
@@ -12565,8 +12547,12 @@ Private Sub IspravkaOdbijena(ByVal otkupID As String, ByVal otpID As String, _
     AssertEquals "", r, "A13 " & stanje & ": ispravka je ODBIJENA"
     AssertTrue InStr(1, g, otpID, vbTextCompare) > 0, _
                "A13 " & stanje & ": poruka imenuje BAS tu otpremnicu (bilo: " & g & ")"
-    AssertTrue InStr(1, g, "nije dostupna do PR7", vbTextCompare) > 0, _
-               "A13 " & stanje & ": poruka upucuje na PR7"
+    ' Poruka mora da nudi IZLAZ. Do S3d-2 je govorila "nije dostupna do PR7" --
+    ' uputstvo bez puta; sada imenuje postupak koji od S3c stvarno postoji.
+    AssertTrue InStr(1, g, "ispravi otpremnicu", vbTextCompare) > 0, _
+               "A13 " & stanje & ": poruka imenuje put koji postoji"
+    AssertTrue InStr(1, g, "PR7", vbTextCompare) = 0, _
+               "A13 " & stanje & ": poruka ne upucuje na nepostojeci PR7"
 
     ' KAPIJA NAD PORUKOM: ranija verzija je govorila "storniraj otpremnicu pa
     ' ponovi" -- uputstvo za obilazak same kapije, jer OtpremnicaZaOtkup gleda samo
