@@ -2847,8 +2847,11 @@ Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
 
     ' Korak 3: operacija nad B koja dira DECU mora da stane, iako je sada
     ' samo jedan AKTIVAN vlasnik tog broja.
+    ' Dokument se imenuje ZbirnaID-em (S4-2). Tvrdnja testa se ne menja: kapija
+    ' staje jer je broj IKAD pripadao dvama vlasnicima, bez obzira sto je sada
+    ' aktivan samo jedan.
     Set res = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, FX_ZBIRNA_KASK, "", _
-                                           SV_MODE_DUPLI, True, False, "GEN-ZB-K2")
+                                           SV_MODE_DUPLI, True, False, "ZBI-KASK-2")
     AssertEq CBool(res("success")), False, _
              "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima"
     ' Tvrdi se i KOJA kapija je stala: ona na nivou moda staje PRE transakcije i

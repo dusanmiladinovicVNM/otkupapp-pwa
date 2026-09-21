@@ -1052,7 +1052,13 @@ Private Function ZbrIdIzGeneracijeAko(ByVal gen As String) As String
     On Error GoTo 0
 End Function
 
-' Broj -> ZbirnaID, fail-closed. Za zatecene putanje koje nose SAMO broj.
+' Broj -> ZbirnaID, fail-closed.
+'
+' Postoji zbog POZIVALACA koji jos nose samo broj -- okvir ispravke, koji se
+' brise u S4-3 -- a ne zbog zatecenih podataka: produkcije i legacy sveski nema
+' (v. "Pravila koja vaze" u docs/STANJE_REFAKTORA.md). Kad okvir nestane,
+' nestaje i ova funkcija; dotle je jedini bezbedan prevod onaj koji staje kad
+' broj nije jednoznacan.
 Private Function ZbrIdPoBroju(ByVal broj As String, ByVal src As String) As String
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)

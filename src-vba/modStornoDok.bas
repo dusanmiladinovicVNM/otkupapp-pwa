@@ -123,8 +123,10 @@ End Function
 ' Prost storno zbirne ne ide kroz okvir ispravke, pa se par ovde i proverava:
 ' zaglavlje bi se stornuiralo po ID-u, a poruka o vezanoj prijemnici se gradi po
 ' BROJU -- razidjen par bi stornirao jedan dokument a izvestavao o drugom.
-' Zastareo izbor u listi (dokument prevezan ili obrisan u medjuvremenu) je jedini
-' realan izvor takvog para, i zato je poruka o osvezavanju liste, ne o gresci.
+' Zastareo izbor u listi (dokument storniran ili prevezan izmedju punjenja liste
+' i klika) je jedini realan izvor takvog para -- ne postoje zatecene sveske u
+' kojima bi par vec bio pokvaren. Zato je poruka o osvezavanju liste, ne o
+' gresci u podacima.
 Private Function ZbirnaParOK(ByVal zbirnaID As String, ByVal broj As String) As Boolean
     On Error Resume Next
     If Len(Trim$(zbirnaID)) = 0 Then Exit Function

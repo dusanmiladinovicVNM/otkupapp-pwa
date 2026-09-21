@@ -426,8 +426,9 @@ End Function
 ' Dve tvrdnje u jednoj funkciji, jer su jedna odluka:
 '   1) zadat ID mora da postoji tacno jednom I da nosi bas taj broj -- inace bi
 '      uvid tvrdio posledice jednog dokumenta pod brojem drugog (review #371);
-'   2) bez ID-a se ide po broju, ali samo dok je broj jednoznacan -- zatecen
-'      poziv po broju ostaje moguc, nagadjanje ne.
+'   2) bez ID-a se ide po broju, ali samo dok je broj jednoznacan. To NIJE
+'      ustupak zatecenim podacima (njih nema) nego pozivaocima koji jos ne nose
+'      identitet -- okvir ispravke i njegovi testovi, do S4-3.
 '
 ' U strict rezimu oba slucaja DIZU gresku: uvid se posle oznacava kao valid, pa
 ' tiho prazno ovde znaci model koji tvrdi posledice a ne zna nad cim.
