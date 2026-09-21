@@ -68,11 +68,20 @@ EXT = (".bas", ".cls", ".frm", ".doccls")
 BEZ_SIDARA = {"modconfig", "modschema"}
 
 # --- grupe sidara -----------------------------------------------------------
-# Osnovne grupe: IDENTICNE popisu od 15.09.2026 (uporedivost brojeva).
+# Osnovne grupe: do S3e-1 IDENTICNE popisu od 15.09.2026 (uporedivost brojeva).
+#
+# S3e-1 (21.09.2026) DELI dve grupe, i to je namerno raskidanje uporedivosti:
+# prag ima smisla samo ako meri nesto sto SME da padne na nulu. "otk_veze" je
+# mesala vezu na otpremnicu (umire u S3e) sa brojem zbirne (umire u S4), a
+# "otp_linija" linijska polja (umiru) sa cinjenicama zaglavlja (ostaju zauvek).
+# Zbir po starim grupama je zato i dalje citljiv: otk_veza_otp + otk_brojzbirne,
+# odnosno otp_linija + otp_zaglavlje.
 GRUPE = collections.OrderedDict([
-    ("otk_veze", re.compile(r"\bCOL_OTK_(OTPREMNICA_ID|BROJ_ZBIRNE|VOZAC|BROJ_OTPREMNICE)\b")),
+    ("otk_veza_otp", re.compile(r"\bCOL_OTK_(OTPREMNICA_ID|VOZAC|BROJ_OTPREMNICE)\b")),
+    ("otk_brojzbirne", re.compile(r"\bCOL_OTK_BROJ_ZBIRNE\b")),
     ("otk_linija", re.compile(r"\bCOL_OTK_(KOLICINA|CENA|KLASA|KOL_AMB|KOL_AMB_IZDATA|BRUTO|NOVAC|PRIMALAC|TIP_AMB)\b")),
-    ("otp_linija", re.compile(r"\bCOL_OTP_(KOLICINA|KLASA|KOL_AMB|BRUTO|TIP_AMB|SORTA|VRSTA|KULTURA)\b")),
+    ("otp_linija", re.compile(r"\bCOL_OTP_(KOLICINA|KLASA|KOL_AMB|BRUTO)\b")),
+    ("otp_zaglavlje", re.compile(r"\bCOL_OTP_(TIP_AMB|SORTA|VRSTA|KULTURA)\b")),
     ("otp_cena", re.compile(r"\bCOL_OTP_CENA\b")),
     ("otp_brojzbirne", re.compile(r"\bCOL_OTP_BROJ_ZBIRNE\b")),
     ("otp_stari_pisac", re.compile(r"\b(SaveOtpremnica(Multi)?(_TX)?|AutoLinkOtkupOtpremnica\w*)\b")),
@@ -141,9 +150,26 @@ KOLONE_STAROG_MODELA = re.compile(
 #                         S3e. Grupa ih ne razlikuje od osudjenih linijskih polja
 #                         dok se ne podeli (backlog 15).
 #   otp_cena        0  -- prag slajsa dostignut: zaglavlje nema cenu.
+#
+# S3e-1 (21.09.2026, plan 14.22) -- PODELA GRUPA, i s njom nova pragovska logika:
+#
+#   otk_veza_otp   13 -- COL_OTK_(OTPREMNICA_ID|VOZAC|BROJ_OTPREMNICE). Grupa koja
+#                        MORA na nulu, ali tek u S3e-2: poslednji citaoci su
+#                        kaskada zbirne (S4) i OTK list za PWA (S5). Prag broji
+#                        ZIVA mesta (13) i zato brani rast, ne trazi pad.
+#   otp_linija      3 -- SAMO linijska polja zaglavlja otpremnice (Kolicina,
+#                        Klasa, KolAmbalaze, BrutoKg). Zivih 3; bilo je 38 dok je
+#                        grupa nosila i cinjenice zaglavlja.
+#   otp_cena        0 -- dostignuto: poslednji citalac obrisan u S3e-1.
+#
+# otp_zaglavlje NEMA prag, i to je odluka. Vrsta, Sorta, TipAmbalaze i KulturaID
+# ostaju u kanonu; prag nad njima bi samo pravio trenje pri svakoj novoj
+# funkciji (S3c ga je vec jednom morao podici 36 -> 38 zbog ispravke otpremnice),
+# a ne bi stitio nista -- ta grupa nema cilj nula.
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
-    ("otp_linija", 38),
+    ("otk_veza_otp", 13),
+    ("otp_linija", 3),
     ("otp_cena", 0),
 ])
 

@@ -3829,6 +3829,24 @@ Public Sub UvediIzvorUNacrt(ByVal otpremnicaID As String, _
     OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC
 End Sub
 
+' Denormalizovan BrojOtpremnice na bloku -- OSTAJE dok traje kaskada zbirne.
+'
+' S3e-1 je ovo prvo obrisalo kao mrtvo, pa vratilo: `vba_check` je nasao zivog
+' pozivaoca (modStornoFlow.FreeOtkupBloksInline, kaskada PONISTENJA zbirne),
+' koga je moj grep propustio jer poziv nosi komentar na kraju reda. Zapisano
+' namerno -- brisanje "mrtvog" koda po grepu bez kapije je tacno ta klasa greske.
+'
+' Umire zajedno sa kolonom Otkup.BrojOtpremnice u S3e-2, kad S4 prevede kaskadu
+' zbirne na kanon. Do tada: otpID prazan -> ocisti (unbind), guarded na kolonu.
+Public Sub SetOtkupBrojOtpremnice(ByVal rowIndex As Long, ByVal otpID As String)
+    On Error Resume Next
+    If GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) = 0 Then Exit Sub
+    Dim broj As String: broj = ""
+    If Len(Trim$(otpID)) > 0 Then _
+        broj = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    UpdateCell TBL_OTKUP, rowIndex, COL_OTK_BROJ_OTPREMNICE, broj
+End Sub
+
 ' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
 '
 ' Pripadnost zivi iskljucivo u tblOtpremnicaIzvori (S4.1e) -- nema kolone na
@@ -5909,86 +5927,6 @@ EH:
     CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#)
 End Function
 
-Public Function CalculateManjakByOtpremnica(ByVal brojZbirne As String) As Variant
-    On Error GoTo EH
-
-    Dim manjak As Variant
-    manjak = CalculateManjak(brojZbirne)
-
-    Dim zbirnaKg As Double
-    Dim manjakKg As Double
-    Dim manjakPct As Double
-
-    zbirnaKg = CDbl(manjak(0))
-    manjakKg = CDbl(manjak(2))
-    manjakPct = CDbl(manjak(3))
-
-    Dim otpData As Variant
-    otpData = GetOtpremniceByZbirna(brojZbirne)
-
-    If IsEmpty(otpData) Then
-        CalculateManjakByOtpremnica = Empty
-        Exit Function
-    End If
-
-    otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
-
-    If IsEmpty(otpData) Then
-        CalculateManjakByOtpremnica = Empty
-        Exit Function
-    End If
-
-    Dim colBroj As Long
-    Dim colKol As Long
-    Dim colCena As Long
-    Dim colStan As Long
-
-    colBroj = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, _
-                                 "modDokumenta.CalculateManjakByOtpremnica")
-    colStan = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, _
-                                 "modDokumenta.CalculateManjakByOtpremnica")
-    colKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, _
-                                "modDokumenta.CalculateManjakByOtpremnica")
-    colCena = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA, _
-                                 "modDokumenta.CalculateManjakByOtpremnica")
-
-    Dim rowCount As Long
-    rowCount = UBound(otpData, 1)
-
-    Dim result() As Variant
-    ReDim result(1 To rowCount, 1 To 7)
-
-    Dim i As Long
-    For i = 1 To rowCount
-        Dim kol As Double
-        Dim udeo As Double
-        Dim cena As Double
-
-        kol = 0
-        udeo = 0
-        cena = 0
-
-        If IsNumeric(otpData(i, colKol)) Then kol = CDbl(otpData(i, colKol))
-        If zbirnaKg > 0 Then udeo = kol / zbirnaKg
-        If IsNumeric(otpData(i, colCena)) Then cena = CDbl(otpData(i, colCena))
-
-        result(i, 1) = CStr(otpData(i, colBroj))
-        result(i, 2) = CStr(otpData(i, colStan))
-        result(i, 3) = kol
-        result(i, 4) = udeo
-        result(i, 5) = udeo * manjakKg
-        result(i, 6) = manjakPct
-        result(i, 7) = udeo * manjakKg * cena
-    Next i
-
-    CalculateManjakByOtpremnica = result
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.CalculateManjakByOtpremnica"
-    CalculateManjakByOtpremnica = Empty
-End Function
-
 ' ============================================================
 ' PROSEK GAJBE - Durchschnittsgewicht pro Kaestchen
 ' ============================================================
@@ -7220,69 +7158,6 @@ Public Function GetAktivnePrijemnice() As Variant
 EH:
     LogErr "modDokumenta.GetAktivnePrijemnice"
     GetAktivnePrijemnice = Empty
-End Function
-
-' Bezbedan re-point izgubljenog bloka na ciljnu (aktivnu) otpremnicu:
-' menja SAMO OtpremnicaID + BrojZbirne (cuva OtkupID -> uplate/ambalaza ostaju).
-' Transakciono. Vraca False ako cilj ne postoji/storniran ili upis padne.
-' Faza 7 korak 5: dual-write BrojOtpremnice na blok (denorm poslovni kljuc, stabilan
-' kroz re-verziju otpremnice). otpID prazan -> ocisti (unbind). Guarded na kolonu
-' (schema-drift safe) -> non-breaking dok se citanje ne prebaci sa OtpremnicaID.
-Public Sub SetOtkupBrojOtpremnice(ByVal rowIndex As Long, ByVal otpID As String)
-    On Error Resume Next
-    If GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) = 0 Then Exit Sub
-    Dim broj As String: broj = ""
-    If Len(Trim$(otpID)) > 0 Then _
-        broj = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
-    UpdateCell TBL_OTKUP, rowIndex, COL_OTK_BROJ_OTPREMNICE, broj
-End Sub
-
-Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
-                                             ByVal targetOtpID As String) As Boolean
-    Const SRC As String = "modDokumenta.ReassignOtkupToOtpremnica_TX"
-    Dim tx As clsTransaction
-    On Error GoTo EH
-
-    If Len(Trim$(otkupID)) = 0 Or Len(Trim$(targetOtpID)) = 0 Then Exit Function
-
-    ' cilj mora postojati (BrojOtpremnice nikad nije blank) i biti aktivan.
-    ' NB: Stornirano JE blank za aktivnu otpremnicu -> ne sme se koristiti
-    '     za proveru postojanja (LookupValue bi vratio Empty = lazno "ne postoji").
-    Dim tBroj As Variant
-    tBroj = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ)
-    If IsEmpty(tBroj) Then Exit Function                        ' cilj stvarno ne postoji
-    Dim tStor As String
-    tStor = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_STORNIRANO))
-    If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj storniran
-
-    Dim tZbr As String
-    tZbr = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ_ZBIRNE))
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-
-    Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    If rows.count = 0 Then Err.Raise vbObjectError + 2600, SRC, "Otkup nije nadjen: " & otkupID
-
-    Dim hasZbr As Boolean: hasZbr = (GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) > 0)
-    Dim k As Long
-    For k = 1 To rows.count
-        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
-        ' ZBR-CHILD-01: broj i generacija idu zajedno (v. PoveziDeteNaZbirnu).
-        If hasZbr Then PoveziDeteNaZbirnu TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, _
-                                          tZbr, ZbirnaGeneracijaZaBroj(tZbr), SRC
-        SetOtkupBrojOtpremnice rows(k), targetOtpID
-    Next k
-
-    tx.CommitTx
-    Set tx = Nothing
-    ReassignOtkupToOtpremnica_TX = True
-    Exit Function
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
-    ReassignOtkupToOtpremnica_TX = False
 End Function
 
 ' Re-point prijemnice na drugu (aktivnu) zbirnu po BrojZbirne. Koristi se posle

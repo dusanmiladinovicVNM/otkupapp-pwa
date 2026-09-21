@@ -20,9 +20,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 | Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblOtkup` | 5 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modSetup`, `modStornoFlow` |
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
+| `tblOtkup` | 4 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modStornoFlow` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
 | `tblKorisnici` | 3 | `modAuth`, `modMaticniKorisnici`, `modSetup` |
 | `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
@@ -62,9 +62,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Ucesnici transakcije (snapshot, NE vlasnistvo)
 
-- `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
 - `tblKorisnici`: `modMaticniKorisnici`
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
@@ -94,9 +94,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Test moduli po tabeli
 
-- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblFakturaStavke`: `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblFakture`: `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
+- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`

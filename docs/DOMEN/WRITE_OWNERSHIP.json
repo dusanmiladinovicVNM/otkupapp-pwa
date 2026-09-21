@@ -107,13 +107,9 @@
   },
   "tblOtkup": {
     "row_owner": [
-      "modAutoHladnjaca",
       "modDokumenta",
       "modMasterSync",
       "modOtkup",
-      "modOtkupBlok",
-      "modSetup",
-      "modSledljivost",
       "modStornoFlow"
     ],
     "schema_owner": [],

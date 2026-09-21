@@ -3746,6 +3746,51 @@ ručnoj listi, isto kao kod izmene nacrta.
 **Time je S3d zatvoren.** Sledeći je S3e: brisanje `Otkup.OtpremnicaID`, `VozacID`, `BrojOtpremnice` i linijskih
 polja zaglavlja otpremnice, uz podelu grupe `otp_linija`.
 
+### 14.22) S3e-1 — mrtav kod stare veze i podela grupa u popisu (21.09.2026)
+
+**Merenje je oborilo pretpostavku koraka.** Plan je S3e (brisanje `Otkup.OtpremnicaID`, `VozacID`,
+`BrojOtpremnice` i linijskih polja zaglavlja otpremnice) stavio **pre** S4 i S5. Popis čitalaca kaže suprotno:
+poslednji živi čitaoci tih kolona su **kaskada zbirne** (`AutoCreateZbirnaFromOtpremnice`,
+`LinkZbirnaToOtkupAndOtpremnica`, `FreeOtkupBloksInline`, `ProizvodjacByZbirna`) i **OTK list za PWA**
+(`BuildOTKSheetRowForOtkup`, `ExportOtkupiAll`, `StampVozacFromStanicaForMalina`) — dakle S4 i S5.
+
+**Odluka operatera (21.09.2026):** S3e se deli. Sada ide samo ono što nema nijednog živog pozivaoca, plus podela
+grupa u popisu; kolone se brišu u **S3e-2**, kad brojevi padnu na nulu posle S4 i S5.
+
+**Obrisano (bez ijednog živog pozivaoca, provereno i grepom i `vba_check`-om):**
+
+| Celina | Držala | Zašto je mrtva |
+|---|---|---|
+| `modDokumenta.ReassignOtkupToOtpremnica_TX` | `Otkup.OtpremnicaID` | poslednji pozivalac (`CompleteOtpremnicaIspravka`) obrisan u S3c |
+| `modDokumenta.CalculateManjakByOtpremnica` | `Otpremnica.Kolicina`, `Cena` | bez pozivaoca |
+| `modSetup.BackfillOtkupBrojOtpremnice` | `Otkup.BrojOtpremnice` | backfill kolone koja se briše |
+| **ceo `modSledljivost.bas`** | `Otpremnica.Kolicina`, `Klasa` | jedini javni ulaz (`GetOtpremnicaKandidatiZaOtkup`) ostao bez pozivaoca kad je S1b-3 obrisao ekran SLEDLJIVOST |
+
+**Nalaz o samom postupku brisanja.** `SetOtkupBrojOtpremnice` je prvo obrisan kao mrtav, pa **vraćen**: `vba_check`
+je prijavio `NEDEFINISAN` poziv iz `modStornoFlow.FreeOtkupBloksInline` (kaskada poništenja zbirne). Moj grep ga je
+propustio jer poziv nosi komentar na kraju reda, a filter je odbacivao svaki red sa `'`. Zapisano namerno: brisanje
+„mrtvog“ koda po grepu bez kapije je tačno ta klasa greške, i jedino ju je checker uhvatio.
+
+**Podela grupa u popisu — prag mora da meri nešto što SME na nulu.**
+
+| Bilo | Postalo | Cilj |
+|---|---|---|
+| `otk_veze` (OTPREMNICA_ID, VOZAC, BROJ_OTPREMNICE, BROJ_ZBIRNE) | `otk_veza_otp` (prve tri) + `otk_brojzbirne` | prva → **0 u S3e-2**; druga umire sa S4 |
+| `otp_linija` (linijska polja **+** činjenice zaglavlja) | `otp_linija` (Kolicina, Klasa, KolAmbalaze, BrutoKg) + `otp_zaglavlje` (TipAmbalaze, Sorta, Vrsta, KulturaID) | prva → **0 u S3e-2**; druga ostaje u kanonu |
+
+Pragovi: `otp_stari_pisac` 0 · `otk_veza_otp` **13** · `otp_linija` **3** (bilo 38 dok je grupa nosila i zaglavlje)
+· `otp_cena` **0** (dostignuto — poslednji čitalac obrisan ovde).
+
+**`otp_zaglavlje` namerno nema prag.** Vrsta, sorta, tip ambalaže i kultura ostaju u kanonu; prag nad njima pravi
+trenje pri svakoj novoj funkciji (S3c ga je već morao podići 36 → 38 zbog ispravke otpremnice) a ne štiti ništa —
+ta grupa nema cilj nula.
+
+**Vlasništvo upisa očišćeno.** `tblOtkup.row_owner` je nabrajao `modAutoHladnjaca`, `modOtkupBlok` i `modSetup`, a
+nijedan od njih ga više ne piše (lanac obrisan u S3b-1, panel u S1b-2, backfill ovde). Spisak dozvola koji nabraja
+module bez upisa ne štiti ništa — sada su uklonjeni, pa bi slučajan upis iz njih oborio A11.
+
+**Sledeće:** S4 (zbirna na kanon, vraća F3), pa S5 (PWA sync), pa **S3e-2** — brisanje kolona, kad popis pokaže nulu.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3761,6 +3806,7 @@ polja zaglavlja otpremnice, uz podelu grupe `otp_linija`.
 | **`NEDOVRSENO` nudi radnju po LISTI, a ne po REDU** (review #366, P2) | `Scr_Radnje` za tu listu vraća jedno `danger` dugme (`odbaci`), pa ga operater dobija i nad redom koji ga ne prima — `IZGUBLJEN_BLOK`, osirotela prijemnica, red sa greškom. Mutacije nema: `OdbaciIspravku` odbija red bez `CorrectionID`-a i još to i zabeleži. Problem je što UI **nudi** radnju za koju unapred zna da nije primenljiva, i što je jedini put do prave radnje rečenica u koloni „akcija“. Read-model to već zna — `GetNedovrseno` nosi `actionCode` (`CONTEXT` / `PRIJ` / `PAL` / `BLOK`) — ali ga `RowsNedovrseno` **ne prenosi u mrežu**, pa ljuska nema čime da bira. Od S3d-1 je isti nedostatak vidljiv i u listi „Bez otpremnice“: red nudi i **„Veži“** i **„Ponovi auto-lanac“**, a svaka radnja tek na svojoj granici odbije blok koji joj ne pripada (podaci su bezbedni, UX nije). Rez: nevidljiva kolona sa `actionCode`-om + radnje po redu (`CONTEXT` → Odbaci ispravku, `BLOK` → otvori F1/Bez otpremnice, `PRIJ`/`PAL` → Preveži, `GRESKA` → bez mutacione radnje). To je **ugovor ljuske**, ne samo ovaj ekran: `trebaRed` danas zna samo „treba red / ne treba / označeni“, a ovde treba „zavisi od vrste reda“. Zato ide kao svoj rez, ne uz S3c-2 |
 | **Rollback `tblAmbalaza` u ispravci nije dokazan testom** (review #365, P2) | `IspravkaOtpremnice_TX` snimi sve četiri tabele (`tblOtpremnica`, `…Stavke`, `…Izvori`, `tblAmbalaza`), a storno stare vraća gajbe koje je njeno izdavanje knjižilo. Test atomarnosti (`Test_OTP_IspravkaIzdate`) meri da stara ostaje AKTIVNA kad ispravka padne, i sabotaža `ispravka-pad-ostavlja-storniranu` to obara — ali **nijedna tvrdnja ne meri stanje ambalaže posle rollback-a**. Implementacija izgleda ispravno; nedokazano je nedokazano. Rez: tvrdnja nad zbirom gajbi pre i posle pale ispravke + sabotaža koja skida `AddTableSnapshot TBL_AMBALAZA` (danas bi prošla neprimećeno) |
 | **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
+| **`who_writes` ne prijavljuje MRTAV UNOS u `WRITE_OWNERSHIP.json`** (nalaz S3e-1) | spisak dozvola je nabrajao tri modula koja tabelu odavno ne pišu, a kapija je ćutala: `--check-ownership` proverava samo da je **svaki pisac naveden**, ne i da **svaki naveden piše**. `vba_hard_census` isti problem rešava pravilom `MRTAV_UNOS`. Rez: isto pravilo u `who_writes.py`, pa spisak ne može da istruli neprimećeno |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---
