@@ -78,7 +78,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
 - `tblOtkupStavke`: `modOtkup`
 - `tblOtpremnica`: `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
-- `tblOtpremnicaIzvori`: `modDokumenta`
+- `tblOtpremnicaIzvori`: `modDokumenta`, `modOtkup`
 - `tblOtpremnicaStavke`: `modDokumenta`
 - `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblPartnerMap`: `modBankaMapiranje`

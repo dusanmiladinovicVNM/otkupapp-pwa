@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 20.09.2026 (S3d-1).
+**Ažurirano:** 21.09.2026 (S3d-2).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S3d-2 — A13 kapija za nacrt i radnja „Ispravi“ nad blokom
+## Sledeći korak: S3e — brisanje stare veze i linijskih polja zaglavlja
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -136,8 +136,16 @@
     postao član tuđeg nacrta sa drugom kilažom. Provera članstva ostaje kao zaštita od dupliranja.
     **Jedan autoritet nad aktivacijom:** `AUTO_PRIJEMNICA_HLADNJACA` (do sada prekidač koji niko nije čitao) sada
     odlučuje DA LI lanac radi; default **OFF do S6**, jer se zbirna i prijemnica danas ne mogu doraditi ni ručno.
-22. **Sledeće:** S3d-2 — otvaranje A13 kapije u `IspravkaOtkupa_TX` za **nacrt** (atomska zamena članstva) i
-    radnja „Ispravi“ nad blokom u F1 (B-040: pisac danas nema nijednog živog pozivaoca). Pa S3e.
+22. **S3d-2 urađen** (§14.21): **A13 kapija je otvorena za NACRT** — ispravka bloka koji je u nacrtu radi
+    **atomsku zamenu članstva** u istoj transakciji (`modDokumenta.ZameniOtpremnicaIzvor`, core unutar tuđe
+    transakcije); blok **izdate** otpremnice ostaje odbijen, ali poruka sada imenuje put koji od S3c postoji
+    (ispravi otpremnicu → nastaje nacrt → ispravi blok). Kapije su u **jednom izvoru**
+    (`modOtkup.IspravkaOtkupaRazlog`): ekran ih pita pre forme, pisac ih diže kao grešku.
+    **B-040 dobija ekran** — radnja „Ispravi“ nad redom u listama SVI i BLOKOVI; pisac je od S1 bio bez ijednog
+    živog pozivaoca. **S3d zatvoren.**
+23. **Sledeće:** S3e — brisanje `Otkup.OtpremnicaID`, `VozacID`, `BrojOtpremnice` i linijskih polja zaglavlja
+    otpremnice (`Kolicina`, `Cena`, `Klasa`, `KolAmbalaze`, `BrutoKg`, `IspravkaOd`/`ZamenjenSa` po broju), uz
+    podelu grupe `otp_linija` u popisu čitalaca.
 
 ## Alati i kapije
 

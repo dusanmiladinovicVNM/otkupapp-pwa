@@ -707,6 +707,71 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: hladnjacki blok se ne vezuje rucno",
     ),
+    # Stari izvor ne izlazi iz nacrta pre storna: jezgro StornoOtkup tada odbija
+    # storno bloka u sastavu, pa CELA ispravka pada -- a kapija nije zaobidjena
+    # nego pogresno poredjana.
+    "ispravka-bloka-bez-vadjenja": (
+        "modOtkup.bas",
+        "        modDokumenta.IzvadiIzvorIzNacrta roditelj, stariOtkupID\n",
+        "        ' SABOTAZA: stari izvor ostaje u nacrtu preko storna\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: ispravka je prosla",
+    ),
+    # Ocekivanje nacrta se tiho prepisuje po nasledniku, pa razlika izmedju
+    # prijavljenog i donetog nestaje -- a bas ona zaustavlja izdavanje.
+    "ispravka-prepisuje-ocekivanje": (
+        "modDokumenta.bas",
+        "    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True\n"
+        "    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC\n",
+        "    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True\n"
+        "    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC\n"
+        "    OtpUpisiOcekivanjeIzIzvora otpremnicaID   ' SABOTAZA: ocekivanje po detetu\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: ocekivanje nacrta se ne prepisuje",
+    ),
+    # Ispravka slobodnog bloka upada u nacrt koji je slucajno otvoren.
+    "ruta-ispravka-u-tudj-nacrt": (
+        "modScrDokumenti.bas",
+        "    If jeIspravka Then Exit Function\n",
+        "    ' SABOTAZA: ispravka se ponasa kao nov unos\n",
+        "Test_OTK_RutaPosleUpisa",
+        "Ruta: ispravka slobodnog bloka ne upada u otvoren nacrt",
+    ),
+    # Ispravka preskace i OBAVEZAN hladnjacki lanac, ne samo rucni nacrt.
+    "ruta-ispravka-preskace-lanac": (
+        "modScrDokumenti.bas",
+        "    If jeIspravka And imaoRoditelja Then Exit Function\n",
+        "    If jeIspravka Then Exit Function   ' SABOTAZA: ispravka nikad ne ide u lanac\n",
+        "Test_OTK_RutaPosleUpisa",
+        "Ruta: ispravka slobodnog hladnjackog bloka ide u lanac",
+    ),
+    # Ispravka bloka opet ostavlja NACRT na storniranom izvoru: naslednik stoji
+    # van dokumenta, a nacrt drzi otkup koji vise ne postoji.
+    "ispravka-bloka-bez-zamene-clanstva": (
+        "modOtkup.bas",
+        "        modDokumenta.UvediIzvorUNacrt roditelj, noviID\n",
+        "        ' SABOTAZA: naslednik nikad ne udje u nacrt\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: nacrt pokazuje na naslednika",
+    ),
+    # Kapija A13 pada: blok IZDATE otpremnice se ispravlja u mestu, pa izdat papir
+    # vise ne opisuje robu koju nosi.
+    "ispravka-bloka-izdata-prolazi": (
+        "modOtkup.bas",
+        "        If stat = UCase$(IZDATO_IZDATO) Or stat = UCase$(IZDATO_PROSLEDJENO) Then\n",
+        "        If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: izdata otpremnica odbija ispravku",
+    ),
+    # Clanstvo nije u snimku transakcije: pad posle uklanjanja starog izvora
+    # ostavlja nacrt bez njega -- dokument koji je izgubio sastav.
+    "ispravka-bloka-bez-snapshota": (
+        "modOtkup.bas",
+        "    If Len(roditelj) > 0 Then tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI\n",
+        "    ' SABOTAZA: clanstvo nije u snimku transakcije\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: pad ne ostavlja nacrt bez izvora",
+    ),
     # Razvodnica opet guta gresku i vraca tiho False: blok za koji se NE ZNA da li
     # je hladnjacki padne na rucnu stranu i zavrsi u tudjem nacrtu.
     "lanac-put-tiho-false": (

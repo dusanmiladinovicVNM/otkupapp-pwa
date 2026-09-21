@@ -3776,6 +3776,59 @@ Private Function OtpGajbeIzvora(ByVal otkupID As String, ByVal src As String) As
     Next i
 End Function
 
+' ZAMENA IZVORA U NACRTU -- DVA KORAKA, oba UNUTAR TUDJE transakcije (S3d-2).
+'
+' Zove ih modOtkup.IspravkaOtkupa_TX, i to razdvojeno, jer izmedju njih mora da
+' stane storno starog bloka:
+'
+'     IzvadiIzvorIzNacrta(nacrt, stari)   <- PRE storna
+'     StornoOtkup(stari)
+'     CreateOtkup(novi)
+'     UvediIzvorUNacrt(nacrt, novi)       <- POSLE upisa
+'
+' ZASTO BAS TIM REDOM. Jezgro modStorno.StornoOtkup ODBIJA storno bloka koji je
+' u sastavu aktivne otpremnice -- i to je tacno pravilo, ne prepreka koju treba
+' zaobici. Zato stari izvor prvo IZADJE iz nacrta; kapija tada prolazi jer je
+' istina da blok vise nije ni u jednom sastavu. Alternativa ("dodaj izuzetak u
+' StornoOtkup") bi otvorila zadnja vrata svakom pozivaocu.
+'
+' Storno ide PRE upisa naslednika i to se ne menja: pisac ispravke tako
+' oslobadja novac i avanse koje naslednik posle preuzima.
+'
+' NE ZOVI SPOLJA BEZ TRANSAKCIJE. Pozivalac drzi snapshot tblOtpremnicaIzvori;
+' bez njega bi pad izmedju dva koraka ostavio nacrt BEZ ijednog izvora -- a
+' upravo to je jedini prozor koji ova podela pravi.
+'
+' IZDATA SE NE DIRA (RequireOtpDraft): njen sastav je istorijska cinjenica, a
+' izmena bi bila tiha promena izdatog papira (A13). Za nju je put storno +
+' reizdavanje, sto radi ispravka otpremnice (S3c).
+Public Sub IzvadiIzvorIzNacrta(ByVal otpremnicaID As String, _
+                               ByVal otkupID As String)
+    Const SRC As String = "IzvadiIzvorIzNacrta"
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    OtpUkloniIzvor otpremnicaID, Trim$(otkupID)
+End Sub
+
+' Naslednik ulazi u nacrt tek kad postoji, i prolazi ISTE kapije kao svaki izvor
+' (aktivan, sa stavkama, iste stanice i kulture, slobodan). Ispravka ne sme da
+' bude zadnja vrata: blok koji nacrt ne bi primio kroz "Vezi" ne prima se ni
+' ovuda.
+Public Sub UvediIzvorUNacrt(ByVal otpremnicaID As String, _
+                            ByVal otkupID As String)
+    Const SRC As String = "UvediIzvorUNacrt"
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True
+    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC
+End Sub
+
 ' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
 '
 ' Pripadnost zivi iskljucivo u tblOtpremnicaIzvori (S4.1e) -- nema kolone na

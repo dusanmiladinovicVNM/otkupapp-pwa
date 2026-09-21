@@ -243,7 +243,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_BKTX_ReversIDJedanDokument
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
-    Test_OTK_IspravkaRoditeljFailClosed
+    Test_OTK_IspravkaIzdatogRoditeljaFailClosed
     Test_OTK_IspravkaRollbackVracaSve
     Test_OTK_SelfHealMigracijeKolona
     Test_OTK_BrojStorniranogSeNePonovoKoristi
@@ -296,6 +296,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_KapijaBlokaPoKanonu
     Test_OPO_IzgubljenBlok
     Test_HLD_AutoLanacOtpremnica
+    Test_OTK_IspravkaBlokaUNacrtu
+    Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -7296,6 +7298,229 @@ EH:
     LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
 End Sub
 
+' ============================================================
+' S3d-2 -- ISPRAVKA BLOKA KOJI JE U NACRTU: atomska zamena clanstva (A13).
+'
+' Ispravka pravi NOV dokument, pa nacrt koji je pokazivao na stari mora u ISTOM
+' potezu da pokazuje na naslednika. Bez toga bi nacrt drzao storniran izvor, a
+' naslednik stajao van njega -- medjustanje koje je PR5 vec odbio.
+'
+' IZDATA otpremnica ostaje zatvorena: njen sastav je istorijska cinjenica (A13),
+' pa put ide preko ispravke OTPREMNICE (S3c) koja od nje pravi nacrt.
+' ============================================================
+Private Sub Test_OTK_IspravkaBlokaUNacrtu()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, upoz As String
+    scenario = NewScenarioCode("OTKISB")
+
+    ' --- 1) blok u NACRTU: nacrt prelazi na naslednika --------------------
+    Dim blok As String, nacrt As String, novi As String
+    blok = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBA-" & scenario), _
+                          OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBN-" & scenario), _
+                                     OtpOcek(60#, 6#, 0#, 0#), g)
+    AssertTrue Len(blok) > 0 And Len(nacrt) > 0, "Ispravka bloka: preduslovi (" & g & ")"
+    If Len(blok) = 0 Or Len(nacrt) = 0 Then GoTo Kraj
+    AssertTrue DodajOtpremnicaIzvor_TX(nacrt, blok, g), "Ispravka bloka: blok je u nacrtu"
+
+    AssertEquals "", modOtkup.IspravkaOtkupaRazlog(blok), _
+                 "Ispravka bloka: blok u NACRTU se sme ispraviti"
+
+    novi = modOtkup.IspravkaOtkupa_TX(blok, OtkHeader(TEST_PREFIX & "-OTK-ISBB-" & scenario), _
+                                      OtkStavke(55#, 110#, 5, 0#, 0#, 0), g, upoz)
+    AssertTrue Len(novi) > 0, "Ispravka bloka: ispravka je prosla (" & g & ")"
+    If Len(novi) = 0 Then GoTo Kraj
+
+    AssertEquals "Da", OtkPolje(blok, COL_STORNIRANO), "Ispravka bloka: stari je storniran"
+    AssertEquals novi, OtkPolje(blok, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "Ispravka bloka: stari zna ko ga zamenjuje"
+    AssertTrue OtkPolje(novi, COL_OTK_BR_DOK) <> OtkPolje(blok, COL_OTK_BR_DOK), _
+               "Ispravka bloka: naslednik nosi NOV broj"
+
+    ' Jezgro: clanstvo je prelo u ISTOM potezu.
+    AssertEquals nacrt, modDokumenta.OtpremnicaZaOtkup(novi), _
+                 "Ispravka bloka: nacrt pokazuje na naslednika"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(blok), _
+                 "Ispravka bloka: storniran blok vise nije izvor"
+    AssertEquals "1", CStr(modDokumenta.IzvoriOtpremnice(nacrt).count), _
+                 "Ispravka bloka: nacrt ima tacno jedan izvor"
+
+    ' ODLUKA KOJU TREBA ZAKLJUCATI: ispravka izvora NE prepisuje ocekivanje
+    ' nacrta. Ocekivanje je ono sto je operater PRIJAVIO; da ga dete tiho menja,
+    ' nestala bi razlika izmedju "prijavljeno" i "stvarno doneto" -- a upravo ona
+    ' zaustavlja izdavanje. Zato posle zamene 60 -> 55 ostaje ostatak, i nacrt se
+    ' NE izdaje dok operater svesno ne izmeni ocekivanje u F2.
+    Dim prog As Object, kl As Object, izdG As String
+    Set prog = modDokumenta.GetOtpremnicaProgress(nacrt)
+    AssertTrue prog.Exists(KLASA_I), "Ispravka bloka: nacrt i dalje ima klasu I"
+    If prog.Exists(KLASA_I) Then
+        Set kl = prog(KLASA_I)
+        AssertEquals "60", CStr(kl("ocekivano")), _
+                     "Ispravka bloka: ocekivanje nacrta se ne prepisuje"
+        AssertEquals "55", CStr(kl("povezano")), _
+                     "Ispravka bloka: povezano je kilaza naslednika"
+        AssertEquals "5", CStr(kl("preostalo")), _
+                     "Ispravka bloka: razlika ostaje vidljiva kao ostatak"
+        AssertEquals "1", CStr(kl("preostaloAmb")), _
+                     "Ispravka bloka: ostatak ambalaze je vidljiv"
+    End If
+    AssertTrue Not IzdajOtpremnicu_TX(nacrt, izdG), _
+               "Ispravka bloka: nacrt sa ostatkom se ne izdaje"
+
+    ' --- 2) blok u IZDATOJ: odbijeno, i to sa putem koji postoji ----------
+    Dim blok2 As String, izdata As String, razlog As String
+    blok2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBC-" & scenario), _
+                           OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    izdata = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBI-" & scenario), _
+                                         Pr3Izvor(blok2, ""), g)
+    AssertTrue Len(izdata) > 0, "Ispravka bloka: izdata otpremnica napravljena (" & g & ")"
+    If Len(izdata) > 0 Then
+        razlog = modOtkup.IspravkaOtkupaRazlog(blok2)
+        AssertTrue Len(razlog) > 0, "Ispravka bloka: izdata otpremnica odbija ispravku"
+        AssertTrue InStr(1, razlog, izdata, vbTextCompare) > 0, _
+                   "Ispravka bloka: razlog imenuje bas tu otpremnicu"
+        AssertTrue InStr(1, razlog, "ispravi otpremnicu", vbTextCompare) > 0, _
+                   "Ispravka bloka: razlog imenuje put koji postoji"
+
+        AssertEquals "", modOtkup.IspravkaOtkupa_TX(blok2, OtkHeader(TEST_PREFIX & "-OTK-ISBD-" & scenario), _
+                                                    OtkStavke(40#, 100#, 4, 0#, 0#, 0), g, upoz), _
+                     "Ispravka bloka: pisac odbija blok izdate otpremnice"
+        AssertTrue OtkPolje(blok2, COL_STORNIRANO) <> "Da", _
+                   "Ispravka bloka: odbijen blok nije storniran"
+        AssertEquals izdata, modDokumenta.OtpremnicaZaOtkup(blok2), _
+                     "Ispravka bloka: clanstvo izdate je netaknuto"
+    End If
+
+    ' --- 3) PAD ISPRAVKE NE SME DA RAZMONTIRA NACRT ----------------------
+    ' Naslednik na DRUGOJ stanici nacrt ne moze da primi (jedna otpremnica =
+    ' jedno otkupno mesto), pa kapija izvora pukne POSLE storna i upisa novog.
+    ' Transakcija mora da vrati sve: stari blok aktivan i i dalje u nacrtu.
+    Dim blok3 As String, nacrt3 As String, pao As String
+    blok3 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBE-" & scenario), _
+                           OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    nacrt3 = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBP-" & scenario), _
+                                      OtpOcek(30#, 3#, 0#, 0#), g)
+    If Len(blok3) > 0 And Len(nacrt3) > 0 Then
+        AssertTrue DodajOtpremnicaIzvor_TX(nacrt3, blok3, g), "Ispravka bloka: treci blok je u nacrtu"
+
+        pao = modOtkup.IspravkaOtkupa_TX(blok3, _
+                  OtkHeaderNaStanici(TEST_PREFIX & "-OTK-ISBF-" & scenario, TEST_HLAD_ST_ID), _
+                  OtkStavke(30#, 100#, 3, 0#, 0#, 0), g, upoz)
+        AssertEquals "", pao, "Ispravka bloka: naslednik na drugoj stanici ne prolazi"
+        AssertTrue OtkPolje(blok3, COL_STORNIRANO) <> "Da", _
+                   "Ispravka bloka: pad vraca stari blok u aktivno stanje"
+        AssertEquals nacrt3, modDokumenta.OtpremnicaZaOtkup(blok3), _
+                     "Ispravka bloka: pad ne ostavlja nacrt bez izvora"
+        AssertEquals "1", CStr(modDokumenta.IzvoriOtpremnice(nacrt3).count), _
+                     "Ispravka bloka: nacrt posle pada ima tacno jedan izvor"
+    End If
+
+    ' --- 4) kontrola: slobodan blok se ispravlja kao i do sada ------------
+    Dim slobodan As String, noviSlob As String
+    slobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBG-" & scenario), _
+                              OtkStavke(20#, 100#, 2, 0#, 0#, 0))
+    noviSlob = modOtkup.IspravkaOtkupa_TX(slobodan, OtkHeader(TEST_PREFIX & "-OTK-ISBH-" & scenario), _
+                                          OtkStavke(22#, 100#, 2, 0#, 0#, 0), g, upoz)
+    AssertTrue Len(noviSlob) > 0, "Ispravka bloka: slobodan blok se i dalje ispravlja (" & g & ")"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(noviSlob), _
+                 "Ispravka bloka: naslednik slobodnog bloka ostaje slobodan"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IspravkaBlokaUNacrtu", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S3d-2 -- RUTA POSLE UPISA: jedna odluka, deterministicna (review #368).
+'
+' Posle upisa blok ide u hladnjacki lanac, u aktivan rucni nacrt, ili nigde.
+' Ispravka nije nov unos, pa joj pravila rucnog nacrta ne vaze -- ali OBAVEZNI
+' hladnjacki lanac vazi i njoj. Merilo je ovde, a ne u Scr_Save, jer Scr_Save
+' povlaci stampu i formu.
+' ============================================================
+Private Sub Test_OTK_RutaPosleUpisa()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, greska As String, prevCfg As String, prev As String
+    scenario = NewScenarioCode("OTKRUT")
+    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
+    prev = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F1"
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
+
+    Dim obican As String, hladni As String, nacrt As String
+    obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RUTA-" & scenario), _
+                            OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    hladni = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-RUTH-" & scenario, TEST_HLAD_ST_ID), _
+                            OtkStavke(10#, 100#, 1, 0#, 0#, 0))
+    AssertTrue Len(obican) > 0 And Len(hladni) > 0, "Ruta: blokovi napravljeni"
+    If Len(obican) = 0 Or Len(hladni) = 0 Then GoTo Kraj
+
+    ' --- bez aktivnog nacrta ---
+    RadniStoPocetno
+    AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                 "Ruta: nov obican blok bez nacrta ne ide nigde"
+    AssertEquals "", greska, "Ruta: to je pouzdan odgovor, ne neizvesnost"
+
+    AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, False, False, greska), _
+                 "Ruta: nov hladnjacki blok ide u lanac"
+
+    ' --- sa aktivnim rucnim nacrtom ---
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-RUTA-" & scenario), _
+                                     OtpOcek(10#, 1#, 0#, 0#), g)
+    AssertTrue Len(nacrt) > 0, "Ruta: nacrt napravljen (" & g & ")"
+    If Len(nacrt) > 0 Then
+        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Ruta: nacrt je aktivan"
+
+        AssertEquals RUTA_NACRT, modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                     "Ruta: nov obican blok ide u aktivan nacrt"
+        AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, False, False, greska), _
+                     "Ruta: hladnjacki blok i dalje ide u lanac, ne u nacrt"
+
+        ' JEZGRO ODLUKE: ispravka SLOBODNOG obicnog bloka ne upada u nacrt koji
+        ' je slucajno otvoren -- original nije bio ni u jednom dokumentu.
+        AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, True, False, greska), _
+                     "Ruta: ispravka slobodnog bloka ne upada u otvoren nacrt"
+
+        ' A obavezni lanac vazi i ispravci: hladnjacki naslednik ide u svoj lanac.
+        AssertEquals RUTA_LANAC, modScrDokumenti.RutaPosleUpisa(hladni, True, False, greska), _
+                     "Ruta: ispravka slobodnog hladnjackog bloka ide u lanac"
+
+        ' Ispravka bloka koji je BIO u nacrtu: clanstvo je pisac vec preneo.
+        AssertEquals "", modScrDokumenti.RutaPosleUpisa(hladni, True, True, greska), _
+                     "Ruta: ispravka clana nacrta ne ide nigde ponovo"
+    End If
+
+    ' --- neizvestan put: ne radi se nista ---
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, obican)
+    If Not redovi Is Nothing Then
+        If redovi.count = 1 Then
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              "ST-NEMA-" & scenario, "Test_OTK_RutaPosleUpisa"
+            greska = ""
+            AssertEquals "", modScrDokumenti.RutaPosleUpisa(obican, False, False, greska), _
+                         "Ruta: neizvestan put ne salje blok nikuda"
+            AssertTrue Len(greska) > 0, "Ruta: neizvestan put vraca RAZLOG"
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              TEST_ST_ID, "Test_OTK_RutaPosleUpisa"
+        End If
+    End If
+
+Kraj:
+    RadniStoPocetno
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    modOtkupUI.ActiveMode = prev
+    Exit Sub
+EH:
+    RadniStoPocetno
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    modOtkupUI.ActiveMode = prev
+    LogFatal "Test_OTK_RutaPosleUpisa", Err.Number, Err.description
+End Sub
+
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.
 Private Function NedRedZaRef(ByVal ref As String) As Object
     Dim c As Collection, i As Long, d As Object
@@ -12262,43 +12487,25 @@ EH:
     LogFatal "Test_OTK_IspravkaNeGubiNovac", Err.Number, Err.description
 End Sub
 
-' A13: OTKUP KOJI IMA RODITELJA SE NE ISPRAVLJA -- NI IZDATOG, NI DRAFT.
+' A13: OTKUP U IZDATOJ OTPREMNICI SE NE ISPRAVLJA, I ODBIJANJE JE POTPUNO.
 '
-' Ranija verzija ovog testa je DRAFT roditelja pustala kroz, uz obrazlozenje da je
-' clanstvo drafta mutabilno. Merenje iz review-a je pokazalo da to nije dovoljno:
-' IspravkaOtkupa_TX ne dira tblOtpremnicaIzvori, pa bi draft ostao sa izvorom koji
-' pokazuje na STORNIRAN otkup, dok naslednik stoji van njega.
+' Ovaj test je do S3d-2 merio OBA stanja kao odbijena. Razlog za DRAFT granu bio
+' je merljiv i tacan u svoje vreme: IspravkaOtkupa_TX nije dirala
+' tblOtpremnicaIzvori, pa bi nacrt ostao sa izvorom koji pokazuje na STORNIRAN
+' otkup, dok naslednik stoji van njega.
 '
-' To je isto medjustanje koje je PR5 vec odbio kod UpdateOtpremnicaDraft_TX:
-' invarijanta mora da vazi IZMEDJU dva klika, ne tek pri izdavanju. Test zato sada
-' meri OBA stanja kao ODBIJENA, i u oba slucaja tvrdi da je odbijanje POTPUNO.
-Private Sub Test_OTK_IspravkaRoditeljFailClosed()
+' S3d-2 je uklonio bas taj razlog -- ispravka sada u ISTOJ transakciji vadi stari
+' izvor iz nacrta i uvodi naslednika. Zato je DRAFT grana ovde OBRISANA, a ne
+' prepravljena u "prolazi": nju u punom obimu meri Test_OTK_IspravkaBlokaUNacrtu
+' (clanstvo, ostatak, izdavanje, pad posle storna). Ovde ostaje ono sto je i dalje
+' tacno i sto nijedan drugi test ne meri: IZDATA se ne dira, odbijanje je POTPUNO
+' (ni nov red, ni storniran izvor, ni naslednik), a poruka imenuje otpremnicu i
+' PUT -- bez nudjenja obilaska preko storna roditelja.
+Private Sub Test_OTK_IspravkaIzdatogRoditeljaFailClosed()
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("OTKA13")
-
-    ' --- DRAFT roditelj ---
-    Dim otkD As String
-    otkD = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-A13D-" & scenario), _
-                          OtkStavke(100#, 100#, 10, 0#, 0#, 0))
-    AssertTrue Len(otkD) > 0, "A13: otkup za draft scenario"
-
-    Dim gD As String
-    Dim draftID As String
-    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-A13D-" & scenario), _
-                                       OtpOcek(100#, 10#, 0#, 0#), gD)
-    AssertTrue Len(draftID) > 0, "A13: draft otpremnica napravljena (" & gD & ")"
-
-    AssertTrue DodajOtpremnicaIzvor_TX(draftID, otkD, gD), _
-               "A13: otkup je clan drafta (" & gD & ")"
-    AssertTrue Not modDokumenta.OtpremnicaJeIzdata(draftID), "A13: draft nije izdat"
-
-    IspravkaOdbijena otkD, draftID, "DRAFT", scenario & "-D"
-
-    ' Clanstvo je NETAKNUTO -- draft i dalje pokazuje na ISTI, aktivan otkup.
-    AssertEquals draftID, modDokumenta.OtpremnicaZaOtkup(otkD), _
-                 "A13: draft i dalje ima svoj izvor"
 
     ' --- IZDATA otpremnica ---
     Dim otkI As String
@@ -12322,7 +12529,7 @@ Private Sub Test_OTK_IspravkaRoditeljFailClosed()
     Exit Sub
 
 EH:
-    LogFatal "Test_OTK_IspravkaRoditeljFailClosed", Err.Number, Err.description
+    LogFatal "Test_OTK_IspravkaIzdatogRoditeljaFailClosed", Err.Number, Err.description
 End Sub
 
 ' Ispravka otkupa sa roditeljem mora biti odbijena POTPUNO -- i poruka mora da
@@ -12340,8 +12547,12 @@ Private Sub IspravkaOdbijena(ByVal otkupID As String, ByVal otpID As String, _
     AssertEquals "", r, "A13 " & stanje & ": ispravka je ODBIJENA"
     AssertTrue InStr(1, g, otpID, vbTextCompare) > 0, _
                "A13 " & stanje & ": poruka imenuje BAS tu otpremnicu (bilo: " & g & ")"
-    AssertTrue InStr(1, g, "nije dostupna do PR7", vbTextCompare) > 0, _
-               "A13 " & stanje & ": poruka upucuje na PR7"
+    ' Poruka mora da nudi IZLAZ. Do S3d-2 je govorila "nije dostupna do PR7" --
+    ' uputstvo bez puta; sada imenuje postupak koji od S3c stvarno postoji.
+    AssertTrue InStr(1, g, "ispravi otpremnicu", vbTextCompare) > 0, _
+               "A13 " & stanje & ": poruka imenuje put koji postoji"
+    AssertTrue InStr(1, g, "PR7", vbTextCompare) = 0, _
+               "A13 " & stanje & ": poruka ne upucuje na nepostojeci PR7"
 
     ' KAPIJA NAD PORUKOM: ranija verzija je govorila "storniraj otpremnicu pa
     ' ponovi" -- uputstvo za obilazak same kapije, jer OtpremnicaZaOtkup gleda samo
