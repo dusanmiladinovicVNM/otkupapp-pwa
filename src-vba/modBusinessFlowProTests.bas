@@ -151,6 +151,7 @@ Public Sub RunBusinessFlowProSuite()
     ' cutover citalaca, invarijante i storna je Zbirna cutover.
     Test_PR3_CreateZbirnaHeaderIStavke
     Test_ZBR_SadrzajCitaStavkeNeZaglavlje
+    Test_ZBR_LjuskaNosiZbirnaID
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -7693,6 +7694,77 @@ End Sub
 ' =====================================================================
 ' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
 ' =====================================================================
+
+' Vrednost NEVIDLJIVE kolone identiteta u mrezi F8 za dati broj zbirne.
+Private Function ZbrF8Ident(ByVal broj As String) As String
+    Dim d As Variant, cols As Variant, redovi As Variant
+    Dim i As Long, c As Long, n As Long, k As Long, iBroj As Long
+
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("ZBIRNA", "", broj, True)
+    If Not IsArray(d) Then Exit Function
+
+    cols = d(0)
+    redovi = d(1)
+    n = CLng(d(2))
+    k = UBound(cols) + 1              ' kolona identiteta je POSLEDNJA opisana
+    iBroj = -1
+    For c = LBound(cols) To UBound(cols)
+        If Split(CStr(cols(c)), "|")(1) = COL_ZBR_BROJ Then iBroj = c + 1
+    Next c
+    If iBroj < 0 Then Exit Function
+
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, iBroj))) = broj Then
+            ZbrF8Ident = Trim$(CStr(redovi(i, k)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' LJUSKA NOSI ZbirnaID, NE GENERACIJU (S4-2).
+'
+' Ovo je kapija koju je review #370 premestio iz S4-3 u preduslov S4-2. Dok je
+' F3 pauziran, prazna kolona identiteta nista ne lomi -- nijedan zivi put ne
+' pravi kanonsku zbirnu. Pocinje da lomi TACNO kad F3 proradi: operater napravi
+' dokument, ljuska mu ne nadje stabilan kljuc i radnja padne nazad na broj, a
+' broj nije identitet (isti broj sme da nose dva vozaca).
+'
+' Test meri OBA kraja: da red nosi bas ZbirnaID, i da storno tim ID-em pogodi
+' bas taj dokument. Bez druge polovine bi kolona mogla da nosi tacnu vrednost
+' koju niko ne koristi.
+Private Sub Test_ZBR_LjuskaNosiZbirnaID()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("ZBRID")
+    broj = TEST_PREFIX & "-ZBR-ID-" & scenario
+
+    Dim otpI As String
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-ID-" & scenario, KLASA_I, 300#, 15)
+
+    Dim zbrID As String
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(broj), Pr3Izvor(otpI, ""))
+    AssertTrue Len(zbrID) > 0, "ZBR identitet: kanonska zbirna napravljena"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    ' Kanonski pisac generaciju NE pise -- da je ljuska jos na njoj, red bi
+    ' nosio prazno.
+    AssertEquals "", ZbrPolje(zbrID, COL_GENERACIJA_ID), _
+                 "ZBR identitet: kanonska zbirna nema GeneracijaID"
+    AssertEquals zbrID, ZbrF8Ident(broj), _
+                 "ZBR identitet: red u mrezi F8 nosi ZbirnaID"
+
+    ' Drugi kraj: storno tim ID-em obara BAS taj dokument.
+    AssertTrue modStorno.StornoZbirna_TX(zbrID), _
+               "ZBR identitet: storno po ZbirnaID-u prolazi"
+    AssertEquals "Da", ZbrPolje(zbrID, COL_STORNIRANO), _
+                 "ZBR identitet: storniran je dokument koji je red imenovao"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_LjuskaNosiZbirnaID", Err.Number, Err.description
+End Sub
 
 ' Greska koju digne mreza F8 za zbirne -- "" znaci da je citalac prosao.
 Private Function ZbrMrezaGreska(ByVal broj As String) As String

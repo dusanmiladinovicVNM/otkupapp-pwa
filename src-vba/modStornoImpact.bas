@@ -141,9 +141,11 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     End Select
     Select Case docType
         Case FLOW_DOC_ZBIRNA
-            h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID, strict)
-            h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID, strict)
-            h("kolicina") = ZbirnaKgZaUvid(broj, docID, strict)
+            ' Identitet zbirne je ZbirnaID (S4-2), pa se red bira njime -- ne
+            ' parom (broj, generacija). Kanonski dokument generaciju nema.
+            h("partnerID") = HLZ(COL_ZBR_KUPAC, docID, strict)
+            h("datum") = HLZ(COL_ZBR_DATUM, docID, strict)
+            h("kolicina") = ZbirnaKgZaUvid(docID, strict)
         Case FLOW_DOC_PRIJEMNICA
             h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID, strict)
             h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID, strict)
@@ -153,8 +155,13 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
     ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
     If Len(tTbl) > 0 Then
-        h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
-        h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
+        If docType = FLOW_DOC_ZBIRNA Then
+            h("ispravkaOd") = HLZ(COL_TRACE_ISPRAVKA_OD, docID, strict)
+            h("zamenjenSa") = HLZ(COL_TRACE_ZAMENJEN_SA, docID, strict)
+        Else
+            h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
+            h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
+        End If
     End If
     Exit Function
 EH:
@@ -408,13 +415,51 @@ End Function
 ' Izbor redova je ISTI kao u SumActiveNum: aktivni redovi datog broja, suzeni
 ' generacijom kad je docID poznat. Kanonski pisac generaciju ne pise, pa za nov
 ' dokument suzavanja nema -- tada broj bira dokument, kao i pre.
-Private Function ZbirnaKgZaUvid(ByVal broj As String, ByVal docID As String, _
-                                ByVal strict As Boolean) As String
+' Vrednost kolone zbirne po ZbirnaID-u (S4-2).
+'
+' HLI bira red po paru (broj, generacija) i tako mora da ostane za prijemnicu,
+' koja je do S6 na starom modelu. Zbirna od S4-2 ima identitet, pa joj se red
+' bira njime -- kanonski dokument generaciju uopste nema, a broj nije identitet.
+Private Function HLZ(ByVal valCol As String, ByVal zbirnaID As String, _
+                     ByVal strict As Boolean) As String
     Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
     If IsEmpty(data) Then
         If strict Then
-            Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".ZbirnaKgZaUvid", _
+            Err.Raise ERR_UI_BASE + 29, MOD_NAME & ".HLZ", _
                       "Tabela " & TBL_ZBIRNA & " nije citljiva."
+        End If
+        Exit Function
+    End If
+
+    Dim cId As Long, cVal As Long
+    cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+    cVal = GetColumnIndex(TBL_ZBIRNA, valCol)
+    If cId = 0 Or cVal = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 28, MOD_NAME & ".HLZ", _
+                      "Kolona " & COL_ZBR_ID & " ili " & valCol & _
+                      " ne postoji u " & TBL_ZBIRNA & "."
+        End If
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cId))), Trim$(zbirnaID), vbTextCompare) = 0 Then
+            HLZ = Trim$(NzToText(data(i, cVal)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function ZbirnaKgZaUvid(ByVal zbirnaID As String, _
+                                ByVal strict As Boolean) As String
+    Dim zid As String
+    zid = Trim$(zbirnaID)
+    If Len(zid) = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 33, MOD_NAME & ".ZbirnaKgZaUvid", _
+                      "ZbirnaID je obavezan: uvid ne bira dokument po broju."
         End If
         Exit Function
     End If
@@ -422,45 +467,15 @@ Private Function ZbirnaKgZaUvid(ByVal broj As String, ByVal docID As String, _
     Dim zbirStavki As Object
     Set zbirStavki = modDokumenta.ZbirStavkiPoZbirni()
 
-    Dim cBroj As Long, cId As Long, cSt As Long, cGen As Long
-    cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
-    cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
-    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
-    If cBroj = 0 Or cId = 0 Then
+    If Not zbirStavki.Exists(zid) Then
         If strict Then
-            Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".ZbirnaKgZaUvid", _
-                      "Kolona " & COL_ZBR_BROJ & " ili " & COL_ZBR_ID & _
-                      " ne postoji u " & TBL_ZBIRNA & "."
+            Err.Raise ERR_UI_BASE + 32, MOD_NAME & ".ZbirnaKgZaUvid", _
+                      "Zbirna " & zid & " nema nijednu stavku."
         End If
         Exit Function
     End If
 
-    Dim uzmiID As Boolean
-    uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
-
-    Dim i As Long, total As Double, found As Boolean, zid As String
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cBroj))) = Trim$(broj) Then
-            Dim uzmi As Boolean: uzmi = True
-            If uzmiID Then uzmi = (Trim$(NzToText(data(i, cGen))) = Trim$(docID))
-            If uzmi Then
-                Dim isStor As Boolean: isStor = False
-                If cSt > 0 Then isStor = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
-                If Not isStor Then
-                    zid = Trim$(NzToText(data(i, cId)))
-                    If Not zbirStavki.Exists(zid) Then
-                        Err.Raise ERR_UI_BASE + 32, MOD_NAME & ".ZbirnaKgZaUvid", _
-                                  "Zbirna " & zid & " nema nijednu stavku."
-                    End If
-                    total = total + CDbl(zbirStavki(zid)(0))
-                    found = True
-                End If
-            End If
-        End If
-    Next i
-
-    If found Then ZbirnaKgZaUvid = CStr(total)
+    ZbirnaKgZaUvid = CStr(CDbl(zbirStavki(zid)(0)))
 End Function
 
 ' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno

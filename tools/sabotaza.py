@@ -1434,12 +1434,15 @@ SABOTAZE = {
         "ISPRAVKA pod kolizijom broja prolazi kad je identitet poznat",
     ),
     # Zaglavlje zbirne po broju umesto po generaciji.
+    # S4-2: zaglavlje se bira po ZbirnaID-u. Sabotaza vraca izbor po broju,
+    # pa padne bas tvrdnja da tudji dokument istog broja prezivi.
     "zbirna-zaglavlje-po-broju": (
         "modStorno.bas",
-        "        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _\n"
-        "                                   generacijaID, SRC) Then\n",
-        "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then   ' SABOTAZA\n",
-        "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje",
+        "        If StrComp(Trim$(NzToText(data(i, colId))), kljuc, vbTextCompare) = 0 Then\n"
+        "            If foundAny Then\n",
+        "        If Len(kljuc) > 0 Then   ' SABOTAZA: bira sve redove, ne svoj\n"
+        "            If False Then\n",
+        "T_Zbirna_ZaglavljePoIDKaskadaStaje",
         "zbirna drugog vozaca istog broja OSTAJE aktivna",
     ),
     # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
@@ -5434,15 +5437,26 @@ SABOTAZE = {
         "modIntegritet.bas",
         "            If id.activeLogicalCount > 1 Then\n",
         "            If id.activeLogicalCount > 2 Then   \' SABOTAZA: dva se ne broje\n",
-        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
+        "T_Integritet_VidiDvosmislenBrojIPrazanIdentitet",
         "B8 vidi broj sa dva aktivna dokumenta",
     ),
-    "integritet-ne-vidi-praznu-generaciju": (
+    # S4-2: B9 meri identitet, a identitet zbirne je ZbirnaID, ne generacija.
+    "integritet-ne-vidi-prazan-identitet": (
         "modIntegritet.bas",
-        "        If Len(Trim$(NzToText(data(r, cGen)))) = 0 Then\n",
-        "        If False Then   \' SABOTAZA: prazna generacija se ne prijavljuje\n",
-        "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju",
-        "B9 vidi aktivnu zbirnu bez GeneracijaID",
+        "        If Len(zid) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: prazan ZbirnaID se ne prijavljuje\n",
+        "T_Integritet_VidiDvosmislenBrojIPrazanIdentitet",
+        "B9 vidi aktivnu zbirnu bez ZbirnaID-a",
+    ),
+    # S4-2: identitet zbirne u ljusci. Vracanje na generaciju daje PRAZNU
+    # kolonu kod kanonskog dokumenta (pisac je ne upisuje), pa bi radnja
+    # pala nazad na broj -- a broj nije identitet.
+    "zbr-ljuska-po-generaciji": (
+        "modScrDokumenti.bas",
+        "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_ZBR_ID\n",
+        "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_GENERACIJA_ID\n",
+        "Test_ZBR_LjuskaNosiZbirnaID",
+        "red u mrezi F8 nosi ZbirnaID",
     ),
     # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
     # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim

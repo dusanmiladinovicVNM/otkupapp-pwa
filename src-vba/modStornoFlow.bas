@@ -383,7 +383,13 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             cid = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, FLOW_DOC_ZBIRNA, , , , , , _
                 "Ispravka zbirne: storno stare, ceka snimanje nove.")
             If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram context.": Exit Function
-            If Not StornoZbirna_TX(broj, docID) Then
+            If Len(Trim$(zbrOldID)) = 0 Then
+                FailCorrectionContext cid, "Identitet stare zbirne nije razresen."
+                r("correctionID") = cid
+                r("message") = "Ne mogu da razresim koju zbirnu stornirati."
+                Exit Function
+            End If
+            If Not StornoZbirna_TX(zbrOldID) Then
                 FailCorrectionContext cid, "Storno stare zbirne nije uspeo."
                 r("correctionID") = cid: r("message") = "Storno zbirne nije uspeo."
                 Exit Function
@@ -936,6 +942,29 @@ End Function
 ' bi se inace napravio TRAJAN recovery zapis nad tudjim dokumentom.
 ' strict: prazan PK tada znaci iskljucivo "nema takvog dokumenta", ne "nisam
 ' umeo da ga nadjem".
+' (broj, generacija) -> ZbirnaID, fail-closed (S4-2).
+'
+' Jezgro storna zbirne od S4-2 prima ID. Ovaj okvir jos radi po broju i
+' generaciji, pa prevod stoji OVDE, na njegovoj strani -- ne u jezgru. Tako
+' jezgro ne poznaje stari model odnosa, a okvir moze da nestane u S4-3 bez
+' ijedne izmene u jezgru.
+'
+' Nerazresen identitet je GRESKA: storno koji ne zna koji dokument dira ne sme
+' da se izvrsi "po broju".
+Private Function ZbrIdIliGreska(ByVal broj As String, ByVal gen As String, _
+                                ByVal src As String) As String
+    Dim zbrID As String
+    zbrID = PkPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, gen, _
+                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), True)
+    If Len(Trim$(zbrID)) = 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 64, src, _
+                  "Ne mogu da razresim ZbirnaID za broj " & broj & _
+                  IIf(Len(Trim$(gen)) > 0, " (generacija " & gen & ")", "") & _
+                  ". Storno po broju nije bezbedan."
+    End If
+    ZbrIdIliGreska = zbrID
+End Function
+
 Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
                                 ByVal idCol As String, ByVal broj As String, _
                                 ByVal gen As String, ByVal vlasnikCols As Variant, _
@@ -1679,7 +1708,8 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
                   ZbirnaMutPoruka(razMut, "zbirne", broj, _
                                   "Otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan")
     End If
-    If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
+    If Not StornoZbirna(ZbrIdIliGreska(broj, gen, SRC)) Then _
+        Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
     outDet = DetachOtpremniceInline(broj, genEff, SRC)
     tx.CommitTx
     Set tx = Nothing
@@ -1873,7 +1903,8 @@ Private Function RecalcOrStornoEmptyZbirna_TX(ByVal broj As String) As Boolean
     If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) > 0 Then
         RecalcOrStornoEmptyZbirna_TX = RecalculateZbirnaFromOtpremnice_TX(broj)
     Else
-        RecalcOrStornoEmptyZbirna_TX = StornoZbirna_TX(broj)
+        RecalcOrStornoEmptyZbirna_TX = StornoZbirna_TX( _
+            ZbrIdIliGreska(broj, "", MOD_NAME & ".RecalcOrStornoEmptyZbirna_TX"))
     End If
     Exit Function
 EH:
@@ -2061,7 +2092,7 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' ali izbor svejedno mora da bude po identitetu: ispravljena zbirna pod istim
     ' brojem ima i storniranu generaciju, i nju ne treba ponovo dirati.
     If ZbirnaPostoji(brojZbirne) Then
-        If Not StornoZbirna(brojZbirne, gen) Then _
+        If Not StornoZbirna(ZbrIdIliGreska(brojZbirne, gen, SRC)) Then _
             Err.Raise ERR_STORNO_FW_BASE + 50, SRC, "StornoZbirna (ponistenje) nije uspeo."
     End If
     Dim k As Long

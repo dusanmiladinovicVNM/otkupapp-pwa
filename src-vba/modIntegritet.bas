@@ -100,7 +100,7 @@ Private Sub RunAllChecks()
     Chk_B6_ZbirnaCaseMismatch
     Chk_B7_ZbirnaNulaKg
     Chk_B8_DvosmislenBrojZbirne
-    Chk_B9_ZbirnaBezGeneracije
+    Chk_B9_ZbirnaBezIdentiteta
     Chk_B10_ReversBezID
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
@@ -399,26 +399,19 @@ End Sub
 ' ============================================================
 ' CHECK B9: AKTIVNA ZBIRNA BEZ GeneracijaID
 ' ============================================================
-' ZBR-IDENT-01: prazan GeneracijaID na aktivnom redu je integritetska greska,
-' ne alternativni oblik identiteta. Stari pisci (SaveZbirna, modMasterSync,
-' modDokumentInvariant) ga odmah PECATE -- prva dva ga nasledjuju u svom
-' scope-u, MasterSync ga kuje -- pa ga produkcija starog modela nije izostavljala;
-' ostajale su rucna izmena u tabeli i starije sveske.
+' IDENTITET ZBIRNE JE ZbirnaID (S4-2).
 '
-' OD PR3 TO VISE NIJE CEO SPISAK PISACA, I DVE TVRDNJE SU U SUKOBU.
-' Kanonski pisac (CreateZbirna_TX) GeneracijaID NAMERNO ne pise -- identitet
-' kanonske zbirne je ZbirnaID (v. BuildZbirnaHeaderRowData). Za takav dokument
-' ova provera tvrdi da je pokvaren, a nije: nema generaciju jer je i ne treba.
+' Do S4-2 je ova provera merila prazan GeneracijaID. Ta tvrdnja je od PR3 bila u
+' sukobu sa piscem: kanonski pisac (CreateZbirna_TX) generaciju NAMERNO ne pise,
+' pa bi svaka kanonska zbirna ovde bila prijavljena kao pokvarena -- i to tacno
+' od trenutka kad F3 proradi. Resenje nije bilo dodati generaciju piscu (dokument
+' bi opet imao dva identiteta), nego premestiti proveru na pravi identitet.
 '
-' KAPIJA ZA S4-2 (review #370, P1): pre nego sto se skine pauza sa F3, identitet
-' zbirne u ljusci mora da predje na ZbirnaID (modScrDokumenti.IdKolonaTipa), a
-' B9 da se uskladi sa tim ugovorom -- redefinisati je na LEGACY redove ili je
-' ukloniti. Resenje NIJE dodati GeneracijaID kanonskom piscu: time bi dokument
-' opet imao dva identiteta, sto ceo refaktor uklanja.
-' Danas provera ne laze ni na cemu jer nijedan zivi put ne pravi kanonsku zbirnu
-' (F3, malina auto-zbirna i VOZ uvoz su pauzirani) -- ona pocinje da laze tacno
-' u trenutku kad F3 proradi.
-Private Sub Chk_B9_ZbirnaBezGeneracije()
+' Sada se meri ono sto identitet stvarno mora da ispuni: aktivna zbirna ima
+' NEPRAZAN ZbirnaID, i taj ID je JEDINSTVEN. Prazan ID znaci da dokument nema
+' ime po kome ga bilo koja radnja moze pogoditi; dva ista znace da ga pogadjaju
+' dve. Produkcija nijedno ne pravi -- ostaju rucna izmena, uvoz i starije sveske.
+Private Sub Chk_B9_ZbirnaBezIdentiteta()
     On Error GoTo EH
 
     Dim data As Variant
@@ -427,20 +420,27 @@ Private Sub Chk_B9_ZbirnaBezGeneracije()
     data = ExcludeStornirano(data, TBL_ZBIRNA)
     If Not IsArray(data) Then Exit Sub
 
-    Dim cId As Long, cBr As Long, cGen As Long
+    Dim cId As Long, cBr As Long
     cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "Chk_B9")
     cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "Chk_B9")
-    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, "Chk_B9")
 
     Dim bad As Collection: Set bad = New Collection
-    Dim r As Long
+    Dim vidjen As Object: Set vidjen = CreateObject("Scripting.Dictionary")
+    vidjen.CompareMode = vbTextCompare
+
+    Dim r As Long, zid As String
     For r = 1 To UBound(data, 1)
-        If Len(Trim$(NzToText(data(r, cGen)))) = 0 Then
-            bad.Add Array(NzToText(data(r, cId)), NzToText(data(r, cBr)))
+        zid = Trim$(NzToText(data(r, cId)))
+        If Len(zid) = 0 Then
+            bad.Add Array("", NzToText(data(r, cBr)))
+        ElseIf vidjen.Exists(zid) Then
+            bad.Add Array(zid, NzToText(data(r, cBr)))
+        Else
+            vidjen.Add zid, True
         End If
     Next r
 
-    WriteBlock "B9", "Aktivna zbirna bez GeneracijaID (identitet dokumenta nedostaje)", _
+    WriteBlock "B9", "Aktivna zbirna bez ZbirnaID-a ili sa duplim (identitet dokumenta)", _
                Array("ZbirnaID", "BrojZbirne"), CollToArray(bad, 2)
     Exit Sub
 

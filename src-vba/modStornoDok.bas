@@ -118,6 +118,16 @@ Private Function OtpremnicaAktivnaPoID(ByVal otpremnicaID As String) As Boolean
         LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_STORNIRANO)))) <> "DA")
 End Function
 
+' Zbirna po PK: postoji i nije stornirana. Prazan ID = False (fail-closed).
+' Od S4-2 je identitet zbirne ZbirnaID, pa F8 salje njega iz nevidljive kolone.
+Private Function ZbirnaAktivnaPoID(ByVal zbirnaID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(zbirnaID)) = 0 Then Exit Function
+    If FindRows(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID)).count <> 1 Then Exit Function
+    ZbirnaAktivnaPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_STORNIRANO)))) <> "DA")
+End Function
+
 ' Otkup po PK: postoji i nije storniran. Prazan ID = False (fail-closed).
 Private Function OtkupAktivanPoID(ByVal otkupID As String) As Boolean
     On Error Resume Next
@@ -306,7 +316,13 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoOtpremnica_TX(Trim$(docID))
 
         Case STIP_ZBIRNA
-            ok = StornoZbirna_TX(broj, docID)
+            ' Jedan dokument = jedno zaglavlje = jedan ZbirnaID (S4-2). Prazan
+            ' ID se NE razresava po broju: isti broj sme da nose dva vozaca.
+            If Not ZbirnaAktivnaPoID(docID) Then
+                poruka = NijePronadjen(broj)
+                Exit Function
+            End If
+            ok = StornoZbirna_TX(Trim$(docID))
             If ok Then
                 vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
                 ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",

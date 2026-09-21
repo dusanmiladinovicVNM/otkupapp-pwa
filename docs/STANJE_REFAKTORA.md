@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 21.09.2026 (S4-1).
+**Ažurirano:** 21.09.2026 (S4-2a).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S4-2 — F3 nad kanonom (vraća unos zbirne)
+## Sledeći korak: S4-2b — F3 nad kanonom (vraća unos zbirne)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -166,8 +166,16 @@
     pauziran to ništa ne laže; počinje da laže **u trenutku kad F3 proradi**, jer bi ljuska pala nazad na
     `BrojZbirne` kao identitet. **S4-2 počinje** prelaskom `IdKolonaTipa("ZBIRNA")` na `COL_ZBR_ID` i
     usklađivanjem B9, pa tek onda skida pauzu. Rešenje NIJE dodati `GeneracijaID` kanonskom piscu.
-27. **Sledeće:** **S4-2** (identitet → F3 nad kanonom), pa S4-3, S4-4, pa **S5** (PWA sync, pre njega otkup u
-    `PROSLEDJENO` kao izvor), pa **S3e-2** (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
+27. **S4-2a urađen** (§14.24): **identitet zbirne je `ZbirnaID`** — nevidljiva kolona u F8, jezgro storna
+    (`StornoZbirna(zbirnaID)`), uvid pred storno i `Chk_B9` (sada „bez ID-a ili sa duplim"). Stari okvir
+    (`modStornoFlow`) sam prevodi (broj, generacija) → ID kroz `ZbrIdIliGreska`, **fail-closed**, pa jezgro ne
+    poznaje stari model. Kapija `RequireJedanVlasnikPoBroju` je obrisana jer je štitila izbor po broju, kog
+    više nema. Rešenje NIJE bilo dodati generaciju kanonskom piscu (dva identiteta).
+    **Rez u dva PR-a:** aparatura generacije ima 22 reference samo u `modDokumenta`, a `ZBR-CHILD-01` je veže
+    za decu (prijemnica, paleta) koja ostaju do S6 — pa se uklanja identitet zbirne, ne ceo mehanizam.
+28. **Sledeće:** **S4-2b** (F3 nad kanonom), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03), S4-4 (malina
+    auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2** (brisanje kolona
+    kad popis pokaže nulu), pa S6 (prijemnica, F4).
 
 ## Alati i kapije
 

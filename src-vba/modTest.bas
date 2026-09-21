@@ -732,7 +732,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 167: TestName = "T_Zbirne_PickerNeNudiStornirane"
         Case 168: TestName = "T_ZbirnaIdent_BrojSeRazresavaUDokument"
         Case 169: TestName = "T_ZbirnaKapija_AktivanBrojNeSmeDvaput"
-        Case 170: TestName = "T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju"
+        Case 170: TestName = "T_Integritet_VidiDvosmislenBrojIPrazanIdentitet"
         Case 171: TestName = "T_Zbirne_PickerJednaStavkaPoDokumentu"
         Case 172: TestName = "T_BrojKapija_IstoZaSvakiCase"
         Case 173: TestName = "T_DeteZbirne_ImaKolonuGeneracije"
@@ -770,7 +770,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 39: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
         Case 38: TestName = "T_SoleOwner_MeriDokumenteNeBrojeve"
         Case 37: TestName = "T_OtkupStornoPoID_NeDiraTudjeOM"
-        Case 36: TestName = "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje"
+        Case 36: TestName = "T_Zbirna_ZaglavljePoIDKaskadaStaje"
         Case 35: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
         Case 34: TestName = "T_Preflight_KoristiIdentitet"
         Case 33: TestName = "T_F8_IzabranRedOstajeIzabran"
@@ -937,7 +937,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 167: T_Zbirne_PickerNeNudiStornirane
         Case 168: T_ZbirnaIdent_BrojSeRazresavaUDokument
         Case 169: T_ZbirnaKapija_AktivanBrojNeSmeDvaput
-        Case 170: T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju
+        Case 170: T_Integritet_VidiDvosmislenBrojIPrazanIdentitet
         Case 171: T_Zbirne_PickerJednaStavkaPoDokumentu
         Case 172: T_BrojKapija_IstoZaSvakiCase
         Case 173: T_DeteZbirne_ImaKolonuGeneracije
@@ -975,7 +975,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 39: T_ZbirnaKaskada_StajeNaDvosmislenom
         Case 38: T_SoleOwner_MeriDokumenteNeBrojeve
         Case 37: T_OtkupStornoPoID_NeDiraTudjeOM
-        Case 36: T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje
+        Case 36: T_Zbirna_ZaglavljePoIDKaskadaStaje
         Case 35: T_IspravkaPrijemnice_PodKolizijomBroja
         Case 34: T_Preflight_KoristiIdentitet
         Case 33: T_F8_IzabranRedOstajeIzabran
@@ -2653,7 +2653,7 @@ End Sub
 '
 ' Zato: zaglavlje se stornira po generaciji (tacno), a putanje koje bi menjale
 ' DECU staju kad je broj dvosmislen (postene).
-Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
+Private Sub T_Zbirna_ZaglavljePoIDKaskadaStaje()
     Dim ok As Boolean
 
     StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", "GEN-ZB-1"
@@ -2662,8 +2662,11 @@ Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
                              False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
              "preduslov: broj zbirne nose dva aktivna dokumenta"
 
-    ok = StornoZbirna_TX(FX_ZBIRNA_DUPL, "GEN-ZB-2")
-    AssertEq ok, True, "zaglavlje izabrane generacije se stornira"
+    ' Od S4-2 se zaglavlje bira po ZbirnaID-u. Tvrdnja testa se NE menja --
+    ' dvosmislen broj i dalje ne sme da odlucuje koji dokument pada -- menja se
+    ' samo cime se dokument imenuje: identitetom umesto parom (broj, generacija).
+    ok = StornoZbirna_TX("ZBI-DUPL-2")
+    AssertEq ok, True, "zaglavlje izabranog dokumenta se stornira"
     AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
              "ZBI-DUPL-2", COL_STORNIRANO)))) = "DA"), True, _
              "izabrana zbirna je stornirana"
@@ -2831,7 +2834,7 @@ Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
     Dim res As Object
 
     ' Korak 1: storniraj SAMO zaglavlje A.
-    AssertEq StornoZbirna_TX(FX_ZBIRNA_KASK, "GEN-ZB-K1"), True, _
+    AssertEq StornoZbirna_TX("ZBI-KASK-1"), True, _
              "zaglavlje A je stornirano"
     AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), True, _
              "A je stornirana"
@@ -15955,32 +15958,38 @@ End Sub
 ' (ZB-TEST-SLDD, za sledljivost testove), pa B8 uvek nesto prijavljuje. Meri se
 ' da li se pojavio BAS broj koji test napravi -- inace bi tvrdnja bila zelena i
 ' kad provera ne radi nista.
-Private Sub T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju()
+Private Sub T_Integritet_VidiDvosmislenBrojIPrazanIdentitet()
     Dim pre As Variant, posle As Variant
     Dim pGen As String, pTgtA As String
 
     pre = modIntegritet.GetIntegritetRows()
 
-    ' B9: aktivan red bez generacije. B8: drugi vlasnik istog broja ozivljen,
-    ' pa ZB-TEST-TGT dobija DVA aktivna dokumenta.
-    pGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID))
+    ' B9: aktivan red bez IDENTITETA. Od S4-2 je identitet zbirne ZbirnaID, ne
+    ' GeneracijaID -- kanonski pisac generaciju ne upisuje, pa bi provera nad
+    ' njom svaku kanonsku zbirnu proglasila pokvarenom.
+    '
+    ' Red se nalazi PO BROJU, ne po PK-u: PK je bas ono sto se prazni, pa bi se
+    ' posle izmene red vise ne bi mogao naci da se vrati.
+    ' B8: drugi vlasnik istog broja ozivljen, pa ZB-TEST-TGT dobija DVA aktivna
+    ' dokumenta.
+    pGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, COL_ZBR_ID))
     pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, COL_ZBR_ID, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, ""
 
     posle = modIntegritet.GetIntegritetRows()
 
     ' Fixture se vraca PRE tvrdnji.
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", COL_GENERACIJA_ID, pGen
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, COL_ZBR_ID, pGen
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
 
     AssertEq (Len(pGen) > 0), True, _
-             "preduslov/ZBR-IDENT-01: fixture red je NOSIO generaciju pre izmene"
+             "preduslov: fixture red je NOSIO ZbirnaID pre izmene"
 
     AssertEq NalazSadrzi(pre, "B9", FX_ZBIRNA_MIRNA), False, _
-             "preduslov: zatecen fixture nema zbirnu bez generacije"
+             "preduslov: zatecen fixture nema zbirnu bez identiteta"
     AssertEq NalazSadrzi(posle, "B9", FX_ZBIRNA_MIRNA), True, _
-             "B9 vidi aktivnu zbirnu bez GeneracijaID"
+             "B9 vidi aktivnu zbirnu bez ZbirnaID-a"
 
     AssertEq NalazSadrzi(pre, "B8", FX_ZBIRNA_TGT), False, _
              "preduslov: taj broj pre izmene NIJE dvosmislen"

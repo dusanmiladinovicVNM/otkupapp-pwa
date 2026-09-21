@@ -501,8 +501,7 @@ End Function
 ' Do tada je fail-closed bezbedan izbor, ne dokaz nemogucnosti. Kad broj nose dve
 ' aktivne zbirne, kaskada bi dirala i tudju decu, pa te putanje staju
 ' (RequireJedanVlasnikPoBroju). Sam storno zaglavlja je i tada tacan.
-Public Function StornoZbirna_TX(ByVal brojZbirne As String, _
-                                Optional ByVal generacijaID As String = "") As Boolean
+Public Function StornoZbirna_TX(ByVal zbirnaID As String) As Boolean
     Const SRC As String = "StornoZbirna_TX"
 
     Dim tx As clsTransaction
@@ -513,9 +512,9 @@ Public Function StornoZbirna_TX(ByVal brojZbirne As String, _
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 
-    If Not StornoZbirna(brojZbirne, generacijaID) Then
+    If Not StornoZbirna(zbirnaID) Then
         Err.Raise ERR_STORNO_BASE + 3, SRC, _
-                  "StornoZbirna nije uspeo. BrojZbirne=" & brojZbirne
+                  "StornoZbirna nije uspeo. ZbirnaID=" & zbirnaID
     End If
 
     tx.CommitTx
@@ -531,13 +530,26 @@ EH:
     StornoZbirna_TX = False
 End Function
 
-Public Function StornoZbirna(ByVal brojZbirne As String, _
-                             Optional ByVal generacijaID As String = "") As Boolean
+' STORNO ZBIRNE IDE PO ZbirnaID-u (S4-2).
+'
+' Do ovog koraka je jezgro primalo (BrojZbirne, GeneracijaID): broj nije
+' identitet -- isti broj sme da nose dva vozaca -- pa je generacija bila drugi,
+' paralelni identitet koji je razlikovao dokumente pod istim brojem.
+'
+' Kanonski pisac (CreateZbirna_TX) generaciju NE PISE: identitet kanonske zbirne
+' je ZbirnaID. Da je F3 odmrznut nad starim potpisom, operater bi napravio
+' dokument bez generacije, ljuska mu ne bi nasla stabilan kljuc i radnje bi pale
+' nazad na broj -- dakle na "poslovni broj = identitet", tacno ono sto ceo
+' refaktor uklanja. Isti rez je S1e uradio za otkup, a #362 za otpremnicu.
+'
+' Stari okvir ispravke (modStornoFlow) jos radi po (broj, generacija) i sam
+' prevodi u ID pre poziva; on se brise u S4-3.
+Public Function StornoZbirna(ByVal zbirnaID As String) As Boolean
     Const SRC As String = "StornoZbirna"
 
     On Error GoTo EH
 
-    RequireNonBlank brojZbirne, "BrojZbirne", SRC
+    RequireNonBlank zbirnaID, "ZbirnaID", SRC
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -547,42 +559,30 @@ Public Function StornoZbirna(ByVal brojZbirne As String, _
                   "Tabela je prazna: " & TBL_ZBIRNA
     End If
 
-    Dim colBroj As Long
+    Dim colId As Long
     Dim colStorno As Long
 
-    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    colId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
     colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, SRC)
-    Dim colGenZ As Long: colGenZ = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
 
-    ' Guard je u CORE-u (ne u _TX wrapperu): StornoZbirna zovu i SIMPLE/DUPLI
-    ' putanje i kaskade preko StornoZbirnaIDetach_TX, pa sve moraju biti pokrivene.
-    ' Vlasnik zbirne = vozac (broj se generise po vozacu) + kupac (kome pripada).
-    ' Sa generacijom se zaglavlje bira po identitetu, pa kapija nad brojem nije
-    ' potrebna za NJEGA. Ostaje za sve ostalo.
-    If Len(Trim$(generacijaID)) = 0 Then _
-        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
-                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
-
-    ' ZBR-CHILD-01: par (broj, generacija) mora da postoji. RedJeIzabranogDokumenta
-    ' nize bira red ISKLJUCIVO po generaciji -- broj se tada vise i ne gleda -- pa
-    ' bi StornoZbirna("X", "GEN-C") stornirao GEN-C i kad on pripada broju Y.
-    ' Pozivalac koji posalje nespojiv par ne zna koji dokument dira, i to je
-    ' greska, ne alternativni ulaz: fail-closed, ne "padni na broj".
-    If Len(Trim$(generacijaID)) > 0 Then
-        If Not ZbirnaGeneracijaPripadaBroju(brojZbirne, generacijaID) Then
-            Err.Raise ERR_STORNO_BASE + 22, SRC, _
-                      "Generacija ne pripada tom broju zbirne. BrojZbirne=" & brojZbirne & _
-                      "; GeneracijaID=" & generacijaID
-        End If
-    End If
+    ' Nema vise kapije nad vlasnicima broja: ID bira TACNO jedan red, pa
+    ' dvosmislenost broja ovde ne postoji. Kapija koja je to cuvala
+    ' (RequireJedanVlasnikPoBroju) stitila je od izbora po broju -- izbora kog
+    ' vise nema.
+    Dim kljuc As String
+    kljuc = UCase$(Trim$(zbirnaID))
 
     Dim foundAny As Boolean
     Dim changedCount As Long
     Dim i As Long
 
     For i = 1 To UBound(data, 1)
-        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _
-                                   generacijaID, SRC) Then
+        If StrComp(Trim$(NzToText(data(i, colId))), kljuc, vbTextCompare) = 0 Then
+            If foundAny Then
+                Err.Raise ERR_STORNO_BASE + 23, SRC, _
+                          "Dva reda nose isti ZbirnaID: " & zbirnaID & _
+                          ". ZbirnaID je identitet dokumenta."
+            End If
             foundAny = True
 
             If Not IsStorniranoValue(data(i, colStorno)) Then
@@ -594,12 +594,12 @@ Public Function StornoZbirna(ByVal brojZbirne As String, _
 
     If Not foundAny Then
         Err.Raise ERR_STORNO_BASE + 21, SRC, _
-                  "Zbirna nije pronadjena. BrojZbirne=" & brojZbirne
+                  "Zbirna nije pronadjena. ZbirnaID=" & zbirnaID
     End If
 
     If changedCount = 0 Then
         Err.Raise ERR_STORNO_BASE + 22, SRC, _
-                  "Zbirna je ve" & ChrW(263) & " stornirana. BrojZbirne=" & brojZbirne
+                  "Zbirna je ve" & ChrW(263) & " stornirana. ZbirnaID=" & zbirnaID
     End If
 
     StornoZbirna = True
