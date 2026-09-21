@@ -14680,15 +14680,32 @@ Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String,
                                     Optional ByVal kulturaID As String = "") As String
     Dim oh As Object
     Set oh = OtkHeader(broj & "-OTK")
-    If Len(kulturaID) > 0 Then oh("KulturaID") = kulturaID
-
-    Dim otkID As String
-    If StrComp(Trim$(klasa), KLASA_II, vbTextCompare) = 0 Then
-        otkID = CreateOtkup_TX(oh, OtkStavke(0#, 0#, 0#, kol, 100#, CDbl(amb)))
-    Else
-        otkID = CreateOtkup_TX(oh, OtkStavke(kol, 100#, CDbl(amb), 0#, 0#, 0#))
+    If Len(kulturaID) > 0 Then
+        ' VRSTA I SORTA SU SNAPSHOT KULTURE. OtkHeader ih postavlja na
+        ' TEST_VRSTA/TEST_SORTA, pa bi otkup sa drugom kulturom nosio tudju
+        ' vrstu -- a bas "druga vrsta" je ono sto neki testovi mere.
+        oh("KulturaID") = kulturaID
+        oh("VrstaVoca") = Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, _
+                                                     kulturaID, COL_KUL_VRSTA)))
+        oh("SortaVoca") = Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, _
+                                                     kulturaID, COL_KUL_SORTA)))
     End If
-    If Len(otkID) = 0 Then Exit Function
+
+    Dim otkID As String, gOtk As String
+    If StrComp(Trim$(klasa), KLASA_II, vbTextCompare) = 0 Then
+        otkID = CreateOtkup_TX(oh, OtkStavke(0#, 0#, 0#, kol, 100#, CDbl(amb)), gOtk)
+    Else
+        otkID = CreateOtkup_TX(oh, OtkStavke(kol, 100#, CDbl(amb), 0#, 0#, 0#), gOtk)
+    End If
+
+    ' SEED KOJI TIHO VRATI PRAZNO JE GORI OD PADA. Prvi put kad je ovaj helper
+    ' presao na izdavanje, neuspeo otkup je dao praznu otpremnicu, pa je test o
+    ' razlicitoj vrsti merio zbirnu sa JEDNIM izvorom -- i pao sa porukom koja na
+    ' pravi uzrok nije ni pokazivala.
+    If Len(otkID) = 0 Then
+        Err.Raise vbObjectError + 2900, "Pr3OtpremnicaVozac", _
+                  "Izvorni otkup za otpremnicu " & broj & " nije napravljen: " & gOtk
+    End If
 
     Dim h As Object
     Set h = OtpHeader(broj)
