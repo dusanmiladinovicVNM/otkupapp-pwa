@@ -460,7 +460,7 @@ SABOTAZE = {
     "ruta-zbirna": (
         "modScrDokumenti.bas",
         '        Case "ZBIRNA"\n'
-        "            Scr_Save = SaveZbirna(polja)\n"
+        "            Scr_Save = SnimiZbirnu(polja)\n"
         "            Exit Function\n",
         "        ' SABOTAZA: zbirna vise nije vezana na svoj upis\n",
         "T_ScrSave_RutaPoRezimu",
@@ -503,12 +503,40 @@ SABOTAZE = {
         "kapija zaustavlja nepostojeci dokument",
     ),
     # --- prefill posle storna (Z10) -----------------------------------------
-    "prefill-zbirna-kolona": (
+    # --- S4-1: sadrzaj zbirne se cita sa stavki -----------------------------
+    # Tri tvrdnje, tri mesta: ugovor citaoca (dve iste klase / zaglavlje bez
+    # stavki) i put do ekrana (mreza F8 uzima kilazu iz recnika stavki).
+    "zbr-citalac-pusta-dve-iste-klase": (
+        "modDokumenta.bas",
+        "            If parKlasa.Exists(kParKl) Then\n"
+        "                Err.Raise vbObjectError + 1952, SRC, _\n",
+        "            If False Then   ' SABOTAZA: dve iste klase prolaze\n"
+        "                Err.Raise vbObjectError + 1952, SRC, _\n",
+        "Test_ZBR_CitalacStavkiDrziUgovor",
+        "dve stavke iste klase obaraju citaoca po imenu",
+    ),
+    "zbr-citalac-pusta-zaglavlje-bez-stavki": (
+        "modDokumenta.bas",
+        "    RequireZaglavljaZbirneSaStavkama zagl, imaStavku, SRC\n",
+        "    ' SABOTAZA: zaglavlje bez stavki prolazi kao dokument\n",
+        "Test_ZBR_CitalacStavkiDrziUgovor",
+        "zaglavlje bez stavki obara citaoca po imenu",
+    ),
+    "zbr-lista-cita-zaglavlje": (
+        "modScrDokumenti.bas",
+        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")\n',
+        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA")   \' SABOTAZA\n',
+        "Test_ZBR_SadrzajCitaStavkeNeZaglavlje",
+        "mreza F8 pokazuje 1000 kg sa stavki",
+    ),
+    # S4-1: zbirna vise ne cita kolonu zaglavlja nego svoju stavku, pa sabotaza
+    # meri BAS to -- iskljuci citanje stavki i prefill ostane bez kilaze.
+    "prefill-zbirna-stavke": (
         "modStornoDok.bas",
-        "        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA\n",
-        '        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = "Kolicina"   \' SABOTAZA\n',
+        "        res = StavkeZbirneZaPrefill(res, CelijaAko(d, base, cId))\n",
+        "        ' SABOTAZA: zbirna vise ne cita svoje stavke\n",
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
-        "zbirna cita UkupnoKolicina, ne Kolicina",
+        "zbirna cita kolicinu sa STAVKE",
     ),
     "prefill-tabela": (
         "modStornoDok.bas",
@@ -4493,8 +4521,10 @@ SABOTAZE = {
     # Citalac opet pusta dve stavke iste klase -- slabiji ugovor od pisca (P2).
     "otp-citalac-pusta-dve-iste-klase": (
         "modDokumenta.bas",
-        "            If parKlasa.Exists(kParKl) Then\n",
-        "            If False Then   ' SABOTAZA: dve iste klase prolaze\n",
+        "            If parKlasa.Exists(kParKl) Then\n"
+        "                Err.Raise vbObjectError + 1942, SRC, _\n",
+        "            If False Then   ' SABOTAZA: dve iste klase prolaze\n"
+        "                Err.Raise vbObjectError + 1942, SRC, _\n",
         "Test_OTP_DveStavkeIsteKlaseObaraCitaoce",
         "mreza pada po imenu, ne sabira 2 x I",
     ),

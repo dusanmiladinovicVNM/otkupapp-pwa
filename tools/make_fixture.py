@@ -2224,6 +2224,40 @@ SEED["tblOtpremnicaStavke"] = [
     for red in SEED["tblOtpremnica"]
 ]
 
+# tblZbirnaStavke SE IZVODI IZ tblZbirna -- isti razlog, treci dokument (S4-1).
+#
+# Kilaza, gajbe i klasa zbirne od PR3 zive na stavkama; CreateZbirna_TX ih na
+# zaglavlju ostavlja prazne. Citaoci sadrzaja (liste F8, ciljna lista Oporavka,
+# uvid i prefill pred storno, izvestaj po vozacu, integritet B7) ih od S4-1
+# odatle i citaju, a strog citalac zaglavlje bez stavki odbija PO IMENU --
+# dakle fixture sa zaglavljem bez stavke ne bi oborio jedan test nego svaki
+# koji dodirne bilo kog od tih citalaca.
+#
+# JEDNA STAVKA PO ZAGLAVLJU, ne spajanje po broju: zatecen fixture drzi vise
+# redova istog BrojZbirne kao VISE dokumenata (ZB-TEST-DUPL: isti broj, dva
+# vozaca; ZB-TEST-TGT: aktivan + storniran vlasnik) i citavi scenariji storna
+# se oslanjaju bas na to. Spajanje bi bilo izmena scenarija, ne prenos podataka.
+#
+# Kolone zaglavlja (UkupnoKolicina/UkupnoAmbalaze/Klasa) se NE brisu -- odlaze
+# sa S4-3/S3e-2. Do tada fixture nosi iste brojeve na oba mesta, a merodavna je
+# stavka.
+#
+# tblZbirnaIzvori se ovde NE izvodi: clanstvo zbirne (koja otpremnica je u njoj)
+# nijedan citalac iz S4-1 ne cita, a izvodjenje iz Otpremnica.BrojZbirne bi za
+# dvosmislene brojeve iz fixture-a moralo da pogadja vlasnika. To je posao S4-2
+# (F3 bira izvore) i S4-3 (clanstvo i okvir), gde se i meri.
+SEED["tblZbirnaStavke"] = [
+    {
+        "ZbirnaStavkaID": "ZBS-" + str(red["ZbirnaID"]),
+        "ZbirnaID": red["ZbirnaID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["UkupnoKolicina"],
+        "KolAmbalaze": red.get("UkupnoAmbalaze", 0),
+    }
+    for red in SEED["tblZbirna"]
+]
+
 # tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
 #
 # Od #362 operativni citaoci (roba po vozacu, roba po otkupnom mestu, stampa)
@@ -2348,6 +2382,11 @@ ENSURE_TABLES = {
     "tblOtpremnicaIzvori": ("OtpremnicaIzvori",
                             ["OtpremnicaIzvorID", "OtpremnicaID", "OtkupID",
                              "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
+    # Zbirna: header + stavke (S4-1). Donor je nema, a fixture seje i stavke.
+    "tblZbirnaStavke": ("ZbirnaStavke",
+                        ["ZbirnaStavkaID", "ZbirnaID", "RedniBroj", "Klasa",
+                         "Kolicina", "KolAmbalaze", "CreatedAt", "CreatedBy",
+                         "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)

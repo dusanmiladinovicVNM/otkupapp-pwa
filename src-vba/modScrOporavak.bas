@@ -655,6 +655,35 @@ Private Function ZbirOsirocenih() As Long
     If IsArray(b) Then ZbirOsirocenih = ZbirOsirocenih + UBound(b, 1)
 End Function
 
+' Kilaza jednog reda: iz zaglavlja (stari model) ili iz stavki po ID-u.
+'
+' NEDOSTAJUCI KLJUC JE GRESKA, ne nula. Strog citalac stavki vec odbija
+' zaglavlje bez stavki, pa dokument koji nije u recniku znaci da se cita
+' pogresna tabela ili da je red bez ID-a -- a 0 kg bi to sakrila iza podatka
+' koji izgleda uredno.
+Private Function KgDokumenta(ByVal src As Variant, ByVal r As Long, _
+                             ByVal iKol As Long, ByVal kgPoDok As Object, _
+                             ByVal iDokID As Long) As Double
+    If kgPoDok Is Nothing Then
+        KgDokumenta = modUiData.CellD(src, r, iKol)
+        Exit Function
+    End If
+
+    Dim dokID As String
+    dokID = Trim$(modUiData.CellS(src, r, iDokID))
+    If Len(dokID) = 0 Then
+        Err.Raise vbObjectError + 1962, "modScrOporavak.KgDokumenta", _
+                  "Red " & CStr(r) & " nema ID dokumenta, pa mu se kilaza ne moze " & _
+                  "procitati sa stavki."
+    End If
+    If Not kgPoDok.Exists(dokID) Then
+        Err.Raise vbObjectError + 1963, "modScrOporavak.KgDokumenta", _
+                  "Dokument " & dokID & " nema nijednu stavku."
+    End If
+
+    KgDokumenta = CDbl(kgPoDok(dokID)(0))
+End Function
+
 '--- CILJEVI: aktivne zbirne i aktivne prijemnice ---------------------
 Private Function CiljZbirnaGridCols() As Variant
     CiljZbirnaGridCols = Array( _
@@ -671,10 +700,13 @@ Private Function RowsAktivneZbirne(ByVal q As String) As Variant
     ' Vlasnistvo zbirne je VOZAC + KUPAC. Broj zbirne generator drzi
     ' jedinstvenim, pa se dva reda istog broja mogu pojaviti samo iz rucnog
     ' unosa ili uvoza; tada sam kupac ne razlikuje dokumenta.
+    ' Kilaza dolazi sa STAVKI (S4-1), pa se kolona zaglavlja ne prosledjuje --
+    ' prazan colKol je ovde tvrdnja, ne previd.
     RowsAktivneZbirne = RowsAktivni(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
-                                    COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KOLICINA, _
+                                    COL_ZBR_VRSTA, COL_ZBR_SORTA, "", _
                                     Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
-                                    CiljZbirnaGridCols(), q)
+                                    CiljZbirnaGridCols(), q, _
+                                    modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID)
 End Function
 
 Private Function CiljPrijGridCols() As Variant
@@ -714,11 +746,18 @@ End Function
 ' ReassignPrijemnicaToZbirna_TX. Sa samim kupcem bi dve zbirne istog broja i
 ' istog kupca a razlicitih vozaca -- u jezgru dva dokumenta -- pale u JEDAN red,
 ' pa operater ne bi mogao ni da izabere onaj koji mu treba.
+' kgPoDok + colDokID: kilaza dokumenta ne dolazi iz zaglavlja nego iz recnika
+' stavki (kljuc = ID dokumenta u redu). Zbirna od PR3 UkupnoKolicina ostavlja
+' praznu, pa bi bez ovoga cela cilj lista pokazala 0 kg -- a operater bira CILJ
+' ispravke bas po kilazi. Prijemnica (jos stari model) ne salje recnik i ide
+' starim putem, pa ova funkcija ostaje JEDNA za oba tipa.
 Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colDatum As String, ByVal colVrsta As String, _
                              ByVal colSorta As String, ByVal colKol As String, _
                              ByVal colVlasnik As Variant, _
-                             ByVal cols As Variant, ByVal q As String) As Variant
+                             ByVal cols As Variant, ByVal q As String, _
+                             Optional ByVal kgPoDok As Object = Nothing, _
+                             Optional ByVal colDokID As String = "") As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim iBr As Long, iDat As Long, iVr As Long, iSo As Long, iKol As Long
     Dim iSt As Long, iGen As Long
@@ -738,7 +777,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     iDat = modUiData.ColIdx(tbl, colDatum)
     iVr = modUiData.ColIdx(tbl, colVrsta)
     iSo = modUiData.ColIdx(tbl, colSorta)
-    iKol = modUiData.ColIdx(tbl, colKol)
+    ' Prazan colKol je legalan SAMO uz kgPoDok: tada kilaza ne dolazi iz
+    ' zaglavlja, pa se kolona koja je vise ne nosi i ne trazi.
+    If Len(colKol) > 0 Then iKol = modUiData.ColIdx(tbl, colKol)
     If IsArray(colVlasnik) Then
         vlCols = colVlasnik
     Else
@@ -750,6 +791,15 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     Next v
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
     iGen = modUiData.ColIdx(tbl, COL_GENERACIJA_ID)
+    Dim iDokID As Long
+    If Not kgPoDok Is Nothing Then
+        iDokID = modUiData.ColIdx(tbl, colDokID)
+        If iDokID = 0 Then
+            Err.Raise vbObjectError + 1961, "modScrOporavak.RowsAktivni", _
+                      "Kolona " & colDokID & " ne postoji u " & tbl & _
+                      ", a kilaza se cita po ID-u dokumenta."
+        End If
+    End If
     If iBr = 0 Then
         RowsAktivni = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
@@ -795,11 +845,12 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
+        Dim kgReda As Double
+        kgReda = KgDokumenta(src, r, iKol, kgPoDok, iDokID)
         If seen.Exists(kljuc) Then
             ' druga klasa istog dokumenta - samo dopuni kolicinu
-            outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + _
-                                         modUiData.CellD(src, r, iKol)
-            sumKg = sumKg + modUiData.CellD(src, r, iKol)
+            outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + kgReda
+            sumKg = sumKg + kgReda
             GoTo Sledeci
         End If
         n = n + 1
@@ -809,11 +860,11 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         outA(n, 3) = vlasnik
         outA(n, 4) = modUiData.CellS(src, r, iVr)
         outA(n, 5) = modUiData.CellS(src, r, iSo)
-        outA(n, 6) = modUiData.CellD(src, r, iKol)
+        outA(n, 6) = kgReda
         ' Identitet ciljnog dokumenta ide u red: radnja mora da posalje BAS
         ' ovaj dokument, ne "prvi sa tim brojem".
         outA(n, 7) = gen
-        sumKg = sumKg + modUiData.CellD(src, r, iKol)
+        sumKg = sumKg + kgReda
 Sledeci:
     Next r
 

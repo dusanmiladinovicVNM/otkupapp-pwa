@@ -1683,6 +1683,374 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Next i
 End Function
 
+' --- kanonski citaoci stavki zbirne (S4-1) ----------------------------------
+'
+' Zaglavlje zbirne od PR3 NE nosi UkupnoKolicina, UkupnoAmbalaze ni Klasu --
+' CreateZbirna_TX ih namerno ostavlja prazne (v. BuildZbirnaHeaderRowData), a
+' kolicinu po klasi pise u tblZbirnaStavke. Svaki citalac koji je te kolone i
+' dalje citao za kanonsku zbirnu dobija PRAZNO: nula kilograma, prazna klasa,
+' prosek gajbe 0. Ovde je jedno mesto sa kojeg svi citaju, po istom obrascu koji
+' otkup ima od S14.7 (StavkeOtkupaRedovi) i otpremnica od S3b-1.
+'
+' UGOVOR JE DOKUMENTSKI, NE STAVKARSKI (isti razlog kao kod otkupa i
+' otpremnice, review #334 P1):
+'   1) svaka stavka ima neprazan ZbirnaID i zaglavlje TACNO JEDNOM;
+'   2) svako zaglavlje sa ZbirnaID-em ima BAR JEDNU stavku -- pisac to vec trazi
+'      (CreateZbirna odbija klasu sa zbirom <= 0), pa citalac koji bi nulu vratio
+'      kao podatak laze o dokumentu koji pisac ne moze da napravi;
+'   3) Kolicina > 0, Klasa kroz istu kapiju koju pisac zove, KolAmbalaze ceo
+'      broj >= 0 (prazno = 0 gajbi);
+'   4) jedna stavka po KLASI po dokumentu -- pisac deli po klasi
+'      (KlaseUKanonskomRedu), pa dve stavke klase I nisu dokument nego kvar.
+'
+' ZBIRNA NEMA CENU. tblZbirna nema kolonu Cena i nijedan pisac je ne prima
+' (v. modDokUnos, F3). Mesto vrednosti u zbiru zato ostaje Null, ne nula --
+' slucajna upotreba treba da padne, a ne da tiho sabere nulu.
+Public Function StavkeZbirneRedovi() As Variant
+    Const SRC As String = "StavkeZbirneRedovi"
+
+    StavkeZbirneRedovi = Empty
+
+    Dim zagl As Object
+    Set zagl = ZaglavljaZbirnePoID(SRC)
+    RequireJedinstvenoZaglavljeZbirne zagl, SRC
+
+    Dim imaStavku As Object
+    Set imaStavku = CreateObject("Scripting.Dictionary")
+
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA_STAVKE)
+
+    Dim cZbr As Long, cRb As Long, cKl As Long, cKol As Long
+    Dim cAmb As Long, cId As Long
+    Dim i As Long, n As Long, zid As String
+
+    If IsArray(d) Then
+        cZbr = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, SRC)
+        cRb = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_RB, SRC)
+        cKl = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_KLASA, SRC)
+        cKol = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_KOLICINA, SRC)
+        cAmb = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_KOL_AMB, SRC)
+        cId = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_ID, SRC)
+
+        Dim parKlasa As Object, kParKl As String
+        Set parKlasa = CreateObject("Scripting.Dictionary")
+
+        For i = 1 To UBound(d, 1)
+            zid = Trim$(NzToText(d(i, cZbr)))
+            RequireZbrStavkaUgovor zagl, zid, d(i, cKl), d(i, cKol), d(i, cAmb), _
+                                   i, SRC
+            kParKl = UCase$(zid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
+            If parKlasa.Exists(kParKl) Then
+                Err.Raise vbObjectError + 1952, SRC, _
+                          "Dve stavke iste klase na zbirnoj: ZbirnaID=" & zid & _
+                          ", klasa " & Trim$(NzToText(d(i, cKl))) & "."
+            End If
+            parKlasa.Add kParKl, True
+            imaStavku(zid) = True
+            n = n + 1
+        Next i
+    End If
+
+    RequireZaglavljaZbirneSaStavkama zagl, imaStavku, SRC
+
+    If n = 0 Then Exit Function
+
+    ' Kolone: 1 ZbirnaID, 2 RedniBroj, 3 Klasa, 4 Kolicina, 5 KolAmbalaze,
+    ' 6 ZbirnaStavkaID. Nove kolone idu NA KRAJ: citaoci indeksiraju poziciono.
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 6)
+    n = 0
+    For i = 1 To UBound(d, 1)
+        n = n + 1
+        res(n, 1) = Trim$(NzToText(d(i, cZbr)))
+        res(n, 2) = d(i, cRb)
+        res(n, 3) = Trim$(NzToText(d(i, cKl)))
+        res(n, 4) = CDbl(d(i, cKol))
+        res(n, 5) = OtpDbl(d(i, cAmb))
+        res(n, 6) = Trim$(NzToText(d(i, cId)))
+    Next i
+
+    StavkeZbirneRedovi = res
+End Function
+
+Private Function ZaglavljaZbirnePoID(ByVal sourceName As String) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZaglavljaZbirnePoID = dict
+
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, sourceName)
+
+    Dim i As Long, zid As String
+    For i = 1 To UBound(d, 1)
+        zid = Trim$(NzToText(d(i, cId)))
+        If Len(zid) > 0 Then
+            If dict.Exists(zid) Then
+                dict(zid) = CLng(dict(zid)) + 1
+            Else
+                dict.Add zid, 1&
+            End If
+        End If
+    Next i
+End Function
+
+' JEDAN LOGICKI DOKUMENT = JEDAN ID.
+'
+' Stari model je zbirnu sa dve klase drzao kao DVA REDA tblZbirna pod istim
+' BrojZbirne -- zato je i trebao GeneracijaID da razlikuje dokumente. U kanonu
+' je to jedno zaglavlje sa dve stavke, pa dva reda sa istim ZbirnaID nisu
+' dvoklasna zbirna nego kvar: dokument-level citaoci iteriraju zaglavlja, pa bi
+' isti teret bio izbrojan dvaput.
+Private Sub RequireJedinstvenoZaglavljeZbirne(ByVal zagl As Object, _
+                                              ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If CLng(zagl(k)) <> 1 Then
+            Err.Raise vbObjectError + 1951, sourceName, _
+                      "Zaglavlje zbirne se ne nalazi tacno jednom: " & CStr(k) & _
+                      " (headera: " & CStr(zagl(k)) & "). ZbirnaID je identitet " & _
+                      "dokumenta -- dva reda sa istim ID-em nisu dokument."
+        End If
+    Next k
+End Sub
+
+Private Sub RequireZbrStavkaUgovor(ByVal zagl As Object, ByVal zid As String, _
+                                   ByVal klasa As Variant, ByVal kol As Variant, _
+                                   ByVal amb As Variant, ByVal red As Long, _
+                                   ByVal sourceName As String)
+    If Len(zid) = 0 Then
+        Err.Raise vbObjectError + 1953, sourceName, _
+                  "Stavka zbirne bez ZbirnaID-a: " & TBL_ZBIRNA_STAVKE & _
+                  ", red " & CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not zagl.Exists(zid) Then
+        Err.Raise vbObjectError + 1954, sourceName, _
+                  "Zaglavlje zbirne ne postoji: " & zid & ", stavka u redu " & _
+                  CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not IsNumeric(kol) Then
+        Err.Raise vbObjectError + 1955, sourceName, _
+                  "Kolicina stavke nije brojcana: ZbirnaID=" & zid & "."
+    End If
+
+    If CDbl(kol) <= 0 Then
+        Err.Raise vbObjectError + 1956, sourceName, _
+                  "Kolicina stavke mora biti veca od nule: ZbirnaID=" & zid & "."
+    End If
+
+    ' Gajbe su KOMADI: prazno je 0, a nebrojcano, negativno i decimalno je kvar --
+    ' isto sto pisac odbija (CreateZbirna -> RequireCeoBroj).
+    If Len(Trim$(NzToText(amb))) > 0 Then
+        If Not IsNumeric(amb) Then
+            Err.Raise vbObjectError + 1955, sourceName, _
+                      "KolAmbalaze stavke nije brojcana: ZbirnaID=" & zid & "."
+        End If
+        If CDbl(amb) < 0 Then
+            Err.Raise vbObjectError + 1956, sourceName, _
+                      "KolAmbalaze stavke ne sme biti negativna: ZbirnaID=" & zid & "."
+        End If
+        RequireCeoBroj CDbl(amb), "KolAmbalaze stavke (ZbirnaID=" & zid & ")", _
+                       sourceName
+    End If
+
+    RequireValidDocumentClass Trim$(NzToText(klasa)), _
+                              sourceName & " (ZbirnaID=" & zid & ")"
+End Sub
+
+Private Sub RequireZaglavljaZbirneSaStavkama(ByVal zagl As Object, _
+                                             ByVal imaStavku As Object, _
+                                             ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If Not imaStavku.Exists(CStr(k)) Then
+            Err.Raise vbObjectError + 1957, sourceName, _
+                      "Zbirna nema nijednu stavku: " & CStr(k) & _
+                      ". Kolicina dokumenta se racuna iz " & TBL_ZBIRNA_STAVKE & "."
+        End If
+    Next k
+End Sub
+
+' Zbir stavki po dokumentu. Kljuc je ZbirnaID, vrednost Array(kg, Null, gajbe,
+' klase) -- isti oblik koji vec citaju mreza F8 i izvestaji za otkup i
+' otpremnicu, da treci tip ne donese treci raspored pozicija.
+'
+' SVAKI kanonski dokument JE u recniku -- zaglavlje bez stavki obara citaoca
+' gore, pa "nema kljuca" ne moze da znaci 0 kg.
+Public Function ZbirStavkiPoZbirni() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZbirStavkiPoZbirni = dict
+
+    Dim s As Variant
+    s = StavkeZbirneRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, zid As String, kl As String, rec As Variant
+    For i = 1 To UBound(s, 1)
+        zid = CStr(s(i, 1))
+        If dict.Exists(zid) Then
+            rec = dict(zid)
+        Else
+            rec = Array(0#, Null, 0#, "")
+        End If
+        rec(0) = CDbl(rec(0)) + CDbl(s(i, 4))
+        rec(2) = CDbl(rec(2)) + CDbl(s(i, 5))
+        kl = Trim$(CStr(s(i, 3)))
+        If Len(kl) > 0 Then
+            If Len(CStr(rec(3))) = 0 Then
+                rec(3) = kl
+            ElseIf InStr(1, ", " & CStr(rec(3)) & ", ", ", " & kl & ", ", _
+                         vbTextCompare) = 0 Then
+                rec(3) = CStr(rec(3)) & ", " & kl
+            End If
+        End If
+        dict(zid) = rec
+    Next i
+End Function
+
+' Stavke grupisane po dokumentu -- za citaoce koji razvijaju jedan dokument u
+' vise redova (stampa, izvestaj po klasi).
+Public Function StavkeZbirnePoDokumentu() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set StavkeZbirnePoDokumentu = dict
+
+    Dim s As Variant
+    s = StavkeZbirneRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, j As Long, zid As String, c As Collection, red As Variant
+    For i = 1 To UBound(s, 1)
+        zid = CStr(s(i, 1))
+        If dict.Exists(zid) Then
+            Set c = dict(zid)
+        Else
+            Set c = New Collection
+            dict.Add zid, c
+        End If
+        ReDim red(1 To 6)
+        For j = 1 To 6
+            red(j) = s(i, j)
+        Next j
+        c.Add red
+    Next i
+End Function
+
+' Stavke JEDNE zbirne -- nedostajuci kljuc je GRESKA, isti razlog kao gore.
+Public Function StavkeZaZbirnu(ByVal poDok As Object, _
+                               ByVal zbirnaID As String, _
+                               ByVal sourceName As String) As Collection
+    If poDok Is Nothing Then
+        Err.Raise vbObjectError + 1957, sourceName, _
+                  "Stavke zbirne nisu ucitane."
+    End If
+
+    Dim zid As String
+    zid = Trim$(zbirnaID)
+
+    If Not poDok.Exists(zid) Then
+        Err.Raise vbObjectError + 1957, sourceName, _
+                  "Zbirna nema nijednu stavku: " & zid & _
+                  ". Stavke se citaju iz " & TBL_ZBIRNA_STAVKE & "."
+    End If
+
+    Set StavkeZaZbirnu = poDok(zid)
+End Function
+
+' Kolicina i gajbe JEDNE zbirne po klasi: UCase(klasa) -> Array(kg, gajbe).
+' Za citaoce koji porede po klasi (invarijanta, integritet, manjak).
+Public Function ZbirnaPoKlasi(ByVal zbirnaID As String) As Object
+    Const SRC As String = "ZbirnaPoKlasi"
+
+    Dim rez As Object
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set ZbirnaPoKlasi = rez
+
+    Dim stavke As Collection
+    Set stavke = StavkeZaZbirnu(StavkeZbirnePoDokumentu(), zbirnaID, SRC)
+
+    Dim i As Long, red As Variant, kl As String
+    For i = 1 To stavke.count
+        red = stavke(i)
+        kl = UCase$(Trim$(CStr(red(3))))
+        If rez.Exists(kl) Then
+            rez(kl) = Array(CDbl(rez(kl)(0)) + CDbl(red(4)), _
+                            CDbl(rez(kl)(1)) + CDbl(red(5)))
+        Else
+            rez.Add kl, Array(CDbl(red(4)), CDbl(red(5)))
+        End If
+    Next i
+End Function
+
+' Izvori JEDNE zbirne: kolekcija OtpremnicaID-jeva iz tblZbirnaIzvori.
+'
+' Zbirna BEZ izvora je greska, ne prazan dokument: pisac trazi bar jedan izvor
+' (CreateZbirna, 1223), pa bi prazna kolekcija znacila da je clanstvo izgubljeno,
+' a citalac koji to vrati kao "nema izvora" tu stetu sakriva.
+Public Function IzvoriZbirne(ByVal zbirnaID As String) As Collection
+    Const SRC As String = "IzvoriZbirne"
+
+    Dim c As Collection
+    Set c = New Collection
+    Set IzvoriZbirne = c
+
+    Dim zid As String
+    zid = UCase$(Trim$(zbirnaID))
+    If Len(zid) = 0 Then
+        Err.Raise vbObjectError + 1958, SRC, "ZbirnaID je obavezan."
+    End If
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+
+    If IsArray(izv) Then
+        Dim cZbr As Long, cOtp As Long, i As Long, otpID As String
+        Dim vidjen As Object
+        Set vidjen = CreateObject("Scripting.Dictionary")
+
+        cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, SRC)
+        cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, SRC)
+
+        For i = 1 To UBound(izv, 1)
+            If StrComp(Trim$(NzToText(izv(i, cZbr))), zid, vbTextCompare) = 0 Then
+                otpID = Trim$(NzToText(izv(i, cOtp)))
+                If Len(otpID) = 0 Then
+                    Err.Raise vbObjectError + 1959, SRC, _
+                              "Clanstvo bez OtpremnicaID-a: ZbirnaID=" & zbirnaID & _
+                              ", red " & CStr(i) & "."
+                End If
+                If vidjen.Exists(UCase$(otpID)) Then
+                    Err.Raise vbObjectError + 1959, SRC, _
+                              "Ista otpremnica je dvaput clan zbirne " & zbirnaID & _
+                              ": " & otpID & "."
+                End If
+                vidjen.Add UCase$(otpID), True
+                c.Add otpID
+            End If
+        Next i
+    End If
+
+    If c.count = 0 Then
+        Err.Raise vbObjectError + 1960, SRC, _
+                  "Zbirna nema nijedan izvor: " & zbirnaID & _
+                  ". Clanstvo se cita iz " & TBL_ZBIRNA_IZVORI & "."
+    End If
+End Function
+
+' Javni ulaz u kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za
+' AKTIVNE zbirne. Jezgro je privatno jer ga pisac zove sa svojim SRC-om.
+Public Function AktivnoZbrClanstvoPoKanonu(Optional ByVal sourceName As String = _
+                                           "AktivnoZbrClanstvoPoKanonu") As Object
+    Set AktivnoZbrClanstvoPoKanonu = AktivnoClanstvoPoKanonu(sourceName)
+End Function
+
 ' Clanstvo se pise ORIGINALNIM OtpremnicaID-em iz tabele, ne kljucem recnika:
 ' kljuc je UCase$ normalizovan da bi duplikat bio uhvatljiv, a u tabelu mora da
 ' ode ono sto tamo stvarno stoji.
@@ -5792,72 +6160,6 @@ End Function
 ' MANJAK - Schwundberechnung
 ' ============================================================
 
-Public Function CalculateManjak(ByVal brojZbirne As String) As Variant
-    On Error GoTo EH
-
-    Dim zbirnaKg As Double
-    Dim zbrData As Variant
-
-    zbrData = GetTableData(TBL_ZBIRNA)
-
-    If IsArray(zbrData) Then
-        zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
-
-        Dim colBroj As Long
-        Dim colZbrKol As Long
-        Dim j As Long
-
-        colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                     "modDokumenta.CalculateManjak")
-        colZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, _
-                                       "modDokumenta.CalculateManjak")
-
-        For j = 1 To UBound(zbrData, 1)
-            If CStr(zbrData(j, colBroj)) = brojZbirne Then
-                If IsNumeric(zbrData(j, colZbrKol)) Then zbirnaKg = zbirnaKg + CDbl(zbrData(j, colZbrKol))
-            End If
-        Next j
-    End If
-
-    Dim prijKg As Double
-    Dim prijData As Variant
-
-    prijData = GetTableData(TBL_PRIJEMNICA)
-
-    If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
-
-    If Not IsEmpty(prijData) Then
-        Dim colBrZbr As Long
-        Dim colKol As Long
-        Dim i As Long
-
-        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
-                                      "modDokumenta.CalculateManjak")
-        colKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, _
-                                    "modDokumenta.CalculateManjak")
-
-        For i = 1 To UBound(prijData, 1)
-            If CStr(prijData(i, colBrZbr)) = brojZbirne Then
-                If IsNumeric(prijData(i, colKol)) Then prijKg = prijKg + CDbl(prijData(i, colKol))
-            End If
-        Next i
-    End If
-
-    Dim manjakKg As Double
-    Dim manjakPct As Double
-
-    manjakKg = zbirnaKg - prijKg
-
-    If zbirnaKg > 0 Then manjakPct = manjakKg / zbirnaKg * 100
-
-    CalculateManjak = Array(zbirnaKg, prijKg, manjakKg, manjakPct)
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.CalculateManjak"
-    CalculateManjak = Array(0#, 0#, 0#, 0#)
-End Function
-
 Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
                                       ByVal pendingKgKlI As Double, _
                                       ByVal pendingKgKlII As Double) As Variant
@@ -6967,49 +7269,6 @@ Public Function GetOsirocenePrijemnice() As Variant
 EH:
     LogErr "modDokumenta.GetOsirocenePrijemnice"
     GetOsirocenePrijemnice = Empty
-End Function
-
-' Aktivne (ne-stornirane) zbirne, jedan red po BrojZbirne (Klasa I+II dele broj).
-' Za izbor cilja u re-point UI. Kolone 1..5: BrojZbirne|Datum|Vrsta|Sorta|Kolicina
-Public Function GetAktivneZbirne() As Variant
-    On Error GoTo EH
-
-    Dim zd As Variant: zd = GetTableData(TBL_ZBIRNA)
-    If IsEmpty(zd) Then Exit Function
-
-    Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long, cKol As Long, cSt As Long
-    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
-    cVr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
-    cSo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
-    cKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
-    cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
-    If cBr = 0 Then Exit Function
-
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    seen.CompareMode = vbTextCompare
-    Dim rows As Collection: Set rows = New Collection
-    Dim i As Long
-    For i = 1 To UBound(zd, 1)
-        Dim isStor As Boolean: isStor = False
-        If cSt > 0 Then isStor = (UCase$(Trim$(NzToText(zd(i, cSt)))) = "DA")
-        If Not isStor Then
-            Dim bz As String: bz = Trim$(NzToText(zd(i, cBr)))
-            If Len(bz) > 0 Then
-                If Not seen.Exists(bz) Then
-                    seen(bz) = True
-                    rows.Add Array(bz, zd(i, cDat), Trim$(NzToText(zd(i, cVr))), _
-                        Trim$(NzToText(zd(i, cSo))), StornoNumText(zd(i, cKol), "#,##0.00"))
-                End If
-            End If
-        End If
-    Next i
-
-    GetAktivneZbirne = StornoRowsTo2D(rows, 5)
-    Exit Function
-EH:
-    LogErr "modDokumenta.GetAktivneZbirne"
-    GetAktivneZbirne = Empty
 End Function
 
 ' Stornirane prijemnice koje imaju AKTIVNE (osirocene) paleta-stavke. Za P1 pallet

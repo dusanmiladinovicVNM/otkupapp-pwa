@@ -85,6 +85,12 @@ GRUPE = collections.OrderedDict([
     ("otp_cena", re.compile(r"\bCOL_OTP_CENA\b")),
     ("otp_brojzbirne", re.compile(r"\bCOL_OTP_BROJ_ZBIRNE\b")),
     ("otp_stari_pisac", re.compile(r"\b(SaveOtpremnica(Multi)?(_TX)?|AutoLinkOtkupOtpremnica\w*)\b")),
+    # S4: zbirna. Linijska polja zaglavlja (umiru) su odvojena od cinjenica
+    # zaglavlja (Vrsta, Sorta, TipAmb, Hladnjaca, Pogon -- ostaju u kanonu), iz
+    # istog razloga zbog kog je S3e-1 podelio otp_linija: prag ima smisla samo
+    # nad grupom koja SME na nulu.
+    ("zbr_linija", re.compile(r"\bCOL_ZBR_(KOLICINA|KOL_AMB|KLASA)\b")),
+    ("zbr_stari_pisac", re.compile(r"\bSaveZbirna(Multi)?(_TX)?\b")),
     ("pauza", re.compile(r"\b(NapredakBlokaDostupan|IzvedeniLanacIzPwaDostupan)\b")),
     ("split_plus", re.compile(r"Split\([^)]*\"\s\+\s\"")),
 ])
@@ -171,6 +177,12 @@ PRAGOVI = collections.OrderedDict([
     ("otk_veza_otp", 13),
     ("otp_linija", 3),
     ("otp_cena", 0),
+    # S4-1: citaoci SADRZAJA zbirne presli su na tblZbirnaStavke. Ostatak drze
+    # clanstvo i okvir ispravke (modStornoFlow, modDokumentInvariant) -- njih
+    # brise S4-3, pa prag tamo ide na nulu. Stari pisac ostaje samo iza pauze
+    # F3; nulu dostize u S4-2, kad F3 predje na CreateZbirna_TX.
+    ("zbr_linija", 30),
+    ("zbr_stari_pisac", 29),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

@@ -77,6 +77,7 @@ Public Sub RunIzvestajTests()
         Set tx = New clsTransaction
         tx.BeginTx
         tx.AddTableSnapshot TBL_ZBIRNA
+        tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
@@ -535,10 +536,12 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
         Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
               COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
         Array("IZVT-ZBR-K1", brDok, IZVT_DATUM, voz, kup, 1000#, 100, KLASA_I)
+    IzvSeedZbirnaStavka "IZVT-ZBR-K1", KLASA_I, 1000#, 100
     IzvSeed TBL_ZBIRNA, _
         Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
               COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
         Array("IZVT-ZBR-K2", brDok, IZVT_DATUM, voz, kup, 200#, 20, KLASA_II)
+    IzvSeedZbirnaStavka "IZVT-ZBR-K2", KLASA_II, 200#, 20
 
     ' Klasa I i II dele BROJ prijemnice (kao u produkciji), ali su zasebni redovi.
     IzvSeed TBL_PRIJEMNICA, _
@@ -594,6 +597,17 @@ EH:
     IzvChk False, S & "neocekivana greska: " & Err.description
 End Sub
 
+' Stavka uz zaglavlje zbirne (S4-1). Kilaza i klasa zive na stavci, a strog
+' citalac sadrzaja zaglavlje bez stavki odbija po imenu -- seed sa golim
+' zaglavljem bi merio dokument koji pisac ne moze da napravi.
+Private Sub IzvSeedZbirnaStavka(ByVal zbrID As String, ByVal klasa As String, _
+                                ByVal kg As Double, ByVal amb As Long)
+    IzvSeed TBL_ZBIRNA_STAVKE, _
+        Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
+              COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
+        Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
+End Sub
+
 ' Dve aktivne zbirne sa ISTIM BrojZbirne, razliciti vozac+kupac, svaka sa
 ' svojom prijemnicom. Poziva se unutar transakcije pozivaoca.
 Private Sub SeedDveZbirneIstogBroja()
@@ -601,11 +615,13 @@ Private Sub SeedDveZbirneIstogBroja()
         Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
               COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
         Array("IZVT-ZBR-A", IZVT_BROJ, IZVT_DATUM, IZVT_VOZAC_A, IZVT_KUPAC_A, 1000#, 100)
+    IzvSeedZbirnaStavka "IZVT-ZBR-A", KLASA_I, 1000#, 100
 
     IzvSeed TBL_ZBIRNA, _
         Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
               COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
         Array("IZVT-ZBR-B", IZVT_BROJ, IZVT_DATUM, IZVT_VOZAC_B, IZVT_KUPAC_B, 2000#, 200)
+    IzvSeedZbirnaStavka "IZVT-ZBR-B", KLASA_I, 2000#, 200
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _

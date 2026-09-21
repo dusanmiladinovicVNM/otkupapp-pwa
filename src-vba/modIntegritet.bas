@@ -288,20 +288,44 @@ End Sub
 ' Zbirna bez kolicine je sama po sebi anomalija. Komplementarno sa A2:
 ' A2 hvata zbirne-sa-kg-bez-prijema, B7 hvata prazne zbirne.
 
+' B7 u kanonu meri DRUGU stvar nego u starom modelu (S4-1).
+'
+' Staro: zbirna kojoj je UkupnoKolicina 0 ili prazna. Ta kolona je od PR3
+' prazna kod SVAKE kanonske zbirne, pa bi provera prijavila ceo registar.
+'
+' Novo: kilaza se cita sa stavki. Kanonski pisac zbirnu sa nula kilograma ne
+' moze da napravi (CreateZbirna odbija klasu sa zbirom <= 0), pa je svaki nalaz
+' ovde kvar podatka, a ne redovno stanje. Pad strogog citaca je isto nalaz --
+' ide u blok kao vidljiv red, jer prazna tabela "nema nalaza" i "ne umem da
+' procitam" nisu ista poruka.
 Private Sub Chk_B7_ZbirnaNulaKg()
     On Error GoTo EH
 
-    Dim zbrDict As Object: Set zbrDict = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
+    Dim zbirStavki As Object: Set zbirStavki = modDokumenta.ZbirStavkiPoZbirni()
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
     Dim bad As Collection: Set bad = New Collection
 
-    Dim kk As Variant
-    For Each kk In zbrDict.keys
-        If zbrDict(kk) <= 0.005 Then
-            bad.Add Array(CStr(kk), zbrDict(kk))
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_ZBIRNA)
+        If IsArray(data) Then
+            Dim cId As Long, cBroj As Long, i As Long, zid As String
+            cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIntegritet.Chk_B7")
+            cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.Chk_B7")
+            For i = 1 To UBound(data, 1)
+                zid = Trim$(NzToText(data(i, cId)))
+                If Len(zid) > 0 Then
+                    If Not zbirStavki.Exists(zid) Then
+                        bad.Add Array(Trim$(NzToText(data(i, cBroj))), 0#)
+                    ElseIf CDbl(zbirStavki(zid)(0)) <= 0.005 Then
+                        bad.Add Array(Trim$(NzToText(data(i, cBroj))), _
+                                      CDbl(zbirStavki(zid)(0)))
+                    End If
+                End If
+            Next i
         End If
-    Next kk
+    End If
 
-    WriteBlock "B7", "Zbirne sa 0 (ili prazan) UkupnoKolicina", _
+    WriteBlock "B7", "Zbirne bez kilaze na stavkama", _
                Array("BrojZbirne", "ZbirnaUkupnoKg"), CollToArray(bad, 2)
     Exit Sub
 

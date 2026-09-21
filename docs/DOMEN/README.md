@@ -20,7 +20,9 @@ Otkupni blok  ->  Otpremnica  ->  Zbirna  ->  Prijemnica  ->  Faktura
   `BrojOtpremnice`, i nasleđuje `BrojZbirne`.
 - **Otpremnica** — roba koja fizički ide sa otkupnog mesta. Više blokova → jedna
   otpremnica.
-- **Zbirna** — agregat više otpremnica koje idu istom kupcu/hladnjači.
+- **Zbirna** — agregat više otpremnica koje idu istom kupcu/hladnjači. U kanonu je
+  to **zaglavlje `tblZbirna` + stavke `tblZbirnaStavke` (po klasi) + članstvo
+  `tblZbirnaIzvori`**; kilaža, gajbe i klasa **nisu na zaglavlju** (S4-1).
 - **Prijemnica** — prijem robe na odredištu.
 - **Faktura** — obračun prema kupcu.
 
@@ -32,14 +34,34 @@ Uporedo, ne u lancu: **`tblAmbalaza`** (ledger kretanja gajbi), **`tblNovac`**
 Ove su kodirane, ne dogovorene usmeno — izvor je naveden uz svaku.
 
 **Zbirna je agregat, otpremnice su izvor istine.**
-`modDokumentInvariant`:
 
-> ZBIRNA = tačno zbir svih svojih AKTIVNIH otpremnica (po `BrojZbirne`).
-> KG se proverava **po klasi** (I/II) → hard. Ambalaža ukupno → hard, po klasi →
-> soft. Ako se menja otpremnica, mora se validirati i/ili rekalkulisati zbirna.
+> ZBIRNA = tačno zbir svih svojih AKTIVNIH otpremnica.
 
-Praktična posledica: ne „popravljaj" zbirnu upisom u nju. Popravlja se otpremnica,
-pa `RecalculateZbirnaFromOtpremnice_TX`.
+**ZBR-KANON-01 — članstvo je zapis, ne labela (S4-1).** Koje otpremnice ulaze u
+zbirnu piše u `tblZbirnaIzvori`, po `ZbirnaID` i `OtpremnicaID`. `BrojZbirne`
+nikad nije bio veza nego **labela** dokumenta: isti broj sme da nose dva vozača,
+a storniran vlasnik broja i dalje ima aktivnu decu. Nov kod ne sme da izvodi
+pripadnost iz broja.
+
+**ZBR-KANON-02 — sadržaj se čita sa stavki (S4-1).** Kilaža, gajbe i klasa zbirne
+su u `tblZbirnaStavke`, jedna stavka po klasi. `CreateZbirna_TX` ih **izvodi iz
+izvornih otpremnica** i na zaglavlju ostavlja prazno
+`UkupnoKolicina`/`UkupnoAmbalaze`/`Klasa` (te kolone odlaze u S4-3/S3e-2). Čitalac
+je strog nad celom tabelom: zaglavlje bez stavki, stavka bez zaglavlja i dve
+stavke iste klase padaju **po imenu** — `modDokumenta.StavkeZbirneRedovi`.
+
+**ZBR-KANON-03 — izveden dokument nije mutabilni keš (odluka operatera,
+21.09.2026).** Kad se izvor promeni ili stornira, zbirna se **ne prepravlja u
+mestu**: nastaje **nova verzija** — storno stare + nova zbirna sa preostalim
+izvorima, jedan potez i jedna transakcija, sa tragom po ID-u. Isto pravilo koje
+A13 već drži za otpremnicu (S3c).
+
+> Do S4-3 kod još nosi stari postupak (`RecalculateZbirnaFromOtpremnice_TX`
+> prepravlja izdatu zbirnu u mestu, a `modStornoFlow` je preveže po broju). Taj
+> okvir je **nedostižan u produkciji** — nijedan živi put danas ne pravi zbirnu
+> (F3, malina auto-zbirna i VOZ uvoz su pauzirani) — i briše se u S4-3, zajedno
+> sa testom `Test_ZbirnaRecalcInPlace_Auto`, koji tvrdi upravo ono što je ova
+> odluka ukinula.
 
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i

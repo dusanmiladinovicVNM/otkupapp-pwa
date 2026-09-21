@@ -609,6 +609,18 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
         Exit Function
     End If
 
+    If tip = STIP_ZBIRNA Then
+        ' I za zbirnu od PR3: CreateZbirna_TX pise klasu, kolicinu i gajbe u
+        ' tblZbirnaStavke, a UkupnoKolicina/UkupnoAmbalaze/Klasa na zaglavlju
+        ' ostavlja prazne. Bez ove grane bi prefill stornirane kanonske zbirne
+        ' ponudio prazna polja -- a operater bi to procitao kao "dokument je bio
+        ' prazan", ne kao "citam pogresno mesto".
+        res = StavkeZbirneZaPrefill(res, CelijaAko(d, base, cId))
+        res = Spoji(res, "fokus", "kolicina")
+        PrefillIzStorniranog = res
+        Exit Function
+    End If
+
     res = Spoji(res, "dveklase", IIf(rII > 0, "2", "1"))
     If rI > 0 Then
         res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, rI, cKol, cBruto, brutoMode)))
@@ -683,6 +695,55 @@ Private Function StavkeOtkupaZaPrefill(ByVal res As String, ByVal otkupID As Str
         Err.Raise vbObjectError + 1934, SRC, "Otkup " & otkupID & ": dve stavke iste klase."
     End If
     StavkeOtkupaZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
+End Function
+
+' Stavke stornirane ZBIRNE u prefill-u -- isti oblik i ista pravila kao
+' StavkeOtpremniceZaPrefill, nad kanonskim citaocem stavki zbirne (S4-1).
+'
+' CENE NEMA: tblZbirna nema kolonu Cena i nijedan pisac je ne prima, pa se
+' "cena"/"cena2" ne salju. Ranije su dolazile iz zaglavlja koje ih nikad nije
+' ni imalo, dakle kao prazne.
+'
+' Bruto rezim se NE primenjuje: zbirna se ne unosi u bruto rezimu (to je polje
+' otkupa i prijemnice), pa bi zamena kolicine brutom ovde menjala dokument.
+Private Function StavkeZbirneZaPrefill(ByVal res As String, _
+                                       ByVal zbirnaID As String) As String
+    Const SRC As String = "modStornoDok.StavkeZbirneZaPrefill"
+    Dim s As Variant, i As Long, kl As String, nI As Long, nII As Long
+
+    If Len(zbirnaID) = 0 Then _
+        Err.Raise vbObjectError + 1937, SRC, "Prazan ZbirnaID zaglavlja."
+    s = modDokumenta.StavkeZbirneRedovi()
+
+    If IsArray(s) Then
+        For i = 1 To UBound(s, 1)
+            If CStr(s(i, 1)) = zbirnaID Then
+                kl = CStr(s(i, 3))
+                Select Case kl
+                    Case KLASA_I
+                        nI = nI + 1
+                        res = Spoji(res, "kol1", BrojUTekst(CDbl(s(i, 4))))
+                        res = Spoji(res, "amb1", BrojUTekst(CDbl(s(i, 5))))
+                    Case KLASA_II
+                        nII = nII + 1
+                        res = Spoji(res, "kol2", BrojUTekst(CDbl(s(i, 4))))
+                        res = Spoji(res, "amb2", BrojUTekst(CDbl(s(i, 5))))
+                    Case Else
+                        Err.Raise vbObjectError + 1938, SRC, _
+                                  "Zbirna " & zbirnaID & " ima stavku sa klasom " & _
+                                  kl & ", koja nije klasa dokumenta."
+                End Select
+            End If
+        Next i
+    End If
+
+    If nI + nII = 0 Then
+        Err.Raise vbObjectError + 1937, SRC, "Zbirna " & zbirnaID & " nema nijednu stavku."
+    End If
+    If nI > 1 Or nII > 1 Then
+        Err.Raise vbObjectError + 1938, SRC, "Zbirna " & zbirnaID & ": dve stavke iste klase."
+    End If
+    StavkeZbirneZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
 End Function
 
 ' Stavke stornirane OTPREMNICE u spec prefill-a -- isti oblik i ista pravila
@@ -840,8 +901,7 @@ End Function
 
 Private Function ColKlasaZaPrefill(ByVal tip As String) As String
     Select Case tip
-        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_ZBIRNA:     ColKlasaZaPrefill = COL_ZBR_KLASA
+        ' STIP_OTKUP, STIP_OTPREMNICA i STIP_ZBIRNA: sa stavki (Stavke*ZaPrefill)
         Case STIP_PRIJEMNICA: ColKlasaZaPrefill = COL_PRJ_KLASA
     End Select
 End Function
@@ -886,7 +946,6 @@ End Function
 Private Function ColKolicinaZaPrefill(ByVal tip As String) As String
     Select Case tip
         ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA
         Case STIP_PRIJEMNICA: ColKolicinaZaPrefill = COL_PRJ_KOLICINA
     End Select
 End Function
@@ -895,7 +954,6 @@ End Function
 Private Function ColKolAmbZaPrefill(ByVal tip As String) As String
     Select Case tip
         ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_ZBIRNA:     ColKolAmbZaPrefill = COL_ZBR_KOL_AMB
         Case STIP_PRIJEMNICA: ColKolAmbZaPrefill = COL_PRJ_KOL_AMB
     End Select
 End Function
