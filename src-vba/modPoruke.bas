@@ -1452,6 +1452,11 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI2", "? Stara se stornira, a nova nastaje kao NACRT sa istim blokovima, istim o" & ChrW(269) & "ekivanjem i NOVIM brojem."
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVLJENA", "Nova otpremnica (nacrt):"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
+    ' --- S3c-2: izgubljen blok na ekranu OPORAVAK (B-041) ---
+    UpsertRow lo, existing, "OTKUI_OPO_BLOK_OPIS", "Blok je ostao bez otpremnice " & ChrW(8212) & " bila u:"
+    UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA", "Otkup (F1), lista Bez otpremnice: Ve" & ChrW(382) & "i za otpremnicu"
+    UpsertRow lo, existing, "OTKUI_OPO_BLOK_GRESKA", ChrW(268) & "lanstvo otpremnica se ne mo" & ChrW(382) & "e pro" & ChrW(269) & "itati:"
+    UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA_GRESKA", "Popravi " & ChrW(269) & "lanstvo, pa osve" & ChrW(382) & "i listu"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"

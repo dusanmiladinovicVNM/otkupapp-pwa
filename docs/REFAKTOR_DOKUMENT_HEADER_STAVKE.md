@@ -3563,6 +3563,36 @@ put** — pa je uvek vraćala „bezbedno je“ i odbijanje nikad nije stizalo d
 **Van opsega, zapisano:** vrsta „izgubljen blok“ na ekranu OPORAVAK (B-041) i njen brojač (B-042) idu u **S3c-2** —
 čitač (`modDokumenta.NevezaniOtkupi`) već postoji, ali je OPORAVAK svoja površina i ne staje uz ovaj rez.
 
+### 14.19) S3c-2 — „izgubljen blok“ na ekranu OPORAVAK, nad kanonom (20.09.2026)
+
+Vrsta `IZGUBLJEN_BLOK` u listi `Nedovršeno` (B-041) i njen brojač uz stavku menija (B-042) vraćeni su —
+ali nad kanonskim članstvom, a ne nad `Otkup.OtpremnicaID` na kojem je stajao obrisani `GetLostOtkupBlokovi`.
+
+**Ko je „izgubljen“.** Ne svaki blok bez otpremnice. Blok upisan bez izabrane otpremnice je **normalno stanje**:
+čeka na radnom stolu i vidi se u F1, lista „Bez otpremnice“ (A-025, S3b-2b). U OPORAVAK ulazi samo onaj koji je
+**bio** u otpremnici pa ga je njen storno oslobodio — posao koji je neko započeo i ostavio. Merilo je zato zapis
+istorije („bila u“), a ne sama nevezanost; skup računa `modDokumenta.NevezaniOtkupi`, isti čitač kojim radni sto
+zna šta je slobodno, pa lista ne može da pokaže blok koji je u stvari zauzet.
+
+**Dedup se ne deli sa osirotelim dokumentima.** Broj bloka i broj prijemnice su dva **različita niza istog oblika**
+(`1/ddmmgg`), pa bi zajednički `seen` sakrio red zbog tuđeg broja.
+
+**Pad strogog čitača se ne guta.** Članstvo se čita strogo (od review-a #364), a ovo je ekran koji postoji da
+nabroji ono što nije u redu — tiho kraća lista bila bi najgori mogući ishod baš ovde. Zato greška daje **vidljiv
+red** sa statusom `GRESKA` i porukom čitača.
+
+**Radnja nad redom je pokazivač, ne mutacija:** „Otkup (F1), lista Bez otpremnice: Veži za otpremnicu“. Vezivanje
+ostaje kod kanonskog pisca i identiteta (`OtkupID`), tamo gde i pripada; OPORAVAK je pregled.
+
+**Testovi:** `Test_OPO_IzgubljenBlok` — oslobođen stornom je u listi i **opis imenuje storniranu** · nikad vezan i
+član aktivnog nacrta **nisu** · storniran blok izlazi · brojač menija = broj redova liste (B-042) · pokvareno
+članstvo (sirov upis mimo pisca) daje **red sa greškom**, pa se posle čišćenja gubi. Sabotaže
+`oporavak-blok-nikad-vezan` i `oporavak-blok-guta-gresku` (ukupno **513**).
+
+**Zapisano, ne rađeno ovde (review #366, P2):** lista `Nedovršeno` nudi radnju po **listi** (jedno `danger` dugme `odbaci`), pa ga operater dobija i nad redom koji ga ne prima — uključujući ovaj nov. Mutacije nema (`OdbaciIspravku` odbija red bez `CorrectionID`-a), ali UI nudi radnju za koju unapred zna da nije primenljiva. Read-model to već zna (`actionCode`), samo ga `RowsNedovrseno` ne prenosi u mrežu. Rez traži i izmenu **ugovora ljuske** (`trebaRed` ne ume „zavisi od vrste reda“), pa ide kao svoj korak → §15.
+
+**Time je S3c zatvoren.** Sledeći je S3d.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -3575,6 +3605,8 @@ put** — pa je uvek vraćala „bezbedno je“ i odbijanje nikad nije stizalo d
 | **Otkup u statusu `PROSLEDJENO` kao izvor otpremnice** (review #363, P2) | danas nije živ put (`CreateOtkup_TX` piše `IZDATO`); **obavezno pre S5**: `OtpRequireIzvorValjan` priznaje `IZDATO` i `PROSLEDJENO` (semantika `IzdatoStatusJeIzdato`, ne `DocIsIssued`) |
 | **Granica agregata za komande nad jednim dokumentom** (review #363, drugi krug, P2) | strogi čitači (`StavkeOtpremniceRedovi`, `StavkeOtkupaRedovi`) validiraju ceo skup, pa komanda jednog dokumenta (`IzdajOtpremnicu_TX`, `GetOtpremnicaProgress`) pada i zbog nepovezanog pokvarenog dokumenta. Fail-closed, nije kvar podataka. Kandidat: strogi čitač po dokumentu (ciljna otpremnica + njeni izvori) za komande, a skup za izveštaje i mreže |
 | **Strog čitač ZAGLAVLJA otkupa za čitaoce koji ga sastavljaju** (review #364, P2) | specifikacija blokova čita `BrojDokumenta`, `Datum`, `KooperantID`, `StanicaID`, `VrstaVoca`, `SortaVoca` direktno iz `tblOtkup`, a `CreateOtkup_TX` za te činjenice drži jače invarijante (broj i datum obavezni, kooperant i stanica postoje, kultura usklađena). Naknadno pokvareno zaglavlje zato daje prazan broj bloka na papiru umesto pada. Pravila pisca se **ne prepisuju** u `modPrint`: u sledećem prolazu proveriti postoji li kanonski strog čitač zaglavlja, pa ga koristiti — isti rez kao `StavkeOtkupaRedovi` za stavke |
+| **`NEDOVRSENO` nudi radnju po LISTI, a ne po REDU** (review #366, P2) | `Scr_Radnje` za tu listu vraća jedno `danger` dugme (`odbaci`), pa ga operater dobija i nad redom koji ga ne prima — `IZGUBLJEN_BLOK`, osirotela prijemnica, red sa greškom. Mutacije nema: `OdbaciIspravku` odbija red bez `CorrectionID`-a i još to i zabeleži. Problem je što UI **nudi** radnju za koju unapred zna da nije primenljiva, i što je jedini put do prave radnje rečenica u koloni „akcija“. Read-model to već zna — `GetNedovrseno` nosi `actionCode` (`CONTEXT` / `PRIJ` / `PAL` / `BLOK`) — ali ga `RowsNedovrseno` **ne prenosi u mrežu**, pa ljuska nema čime da bira. Rez: nevidljiva kolona sa `actionCode`-om + radnje po redu (`CONTEXT` → Odbaci ispravku, `BLOK` → otvori F1/Bez otpremnice, `PRIJ`/`PAL` → Preveži, `GRESKA` → bez mutacione radnje). To je **ugovor ljuske**, ne samo ovaj ekran: `trebaRed` danas zna samo „treba red / ne treba / označeni“, a ovde treba „zavisi od vrste reda“. Zato ide kao svoj rez, ne uz S3c-2 |
+| **Rollback `tblAmbalaza` u ispravci nije dokazan testom** (review #365, P2) | `IspravkaOtpremnice_TX` snimi sve četiri tabele (`tblOtpremnica`, `…Stavke`, `…Izvori`, `tblAmbalaza`), a storno stare vraća gajbe koje je njeno izdavanje knjižilo. Test atomarnosti (`Test_OTP_IspravkaIzdate`) meri da stara ostaje AKTIVNA kad ispravka padne, i sabotaža `ispravka-pad-ostavlja-storniranu` to obara — ali **nijedna tvrdnja ne meri stanje ambalaže posle rollback-a**. Implementacija izgleda ispravno; nedokazano je nedokazano. Rez: tvrdnja nad zbirom gajbi pre i posle pale ispravke + sabotaža koja skida `AddTableSnapshot TBL_AMBALAZA` (danas bi prošla neprimećeno) |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---

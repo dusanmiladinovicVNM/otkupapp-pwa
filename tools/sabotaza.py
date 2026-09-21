@@ -689,6 +689,26 @@ SABOTAZE = {
         "Test_OTP_ClanstvoBulkStrogo",
         "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
     ),
+    # OPORAVAK opet broji SVAKI nevezan blok (S3c-2): blok upisan bez otpremnice
+    # nije nedovrsen posao nego normalno stanje, i vec se vidi na radnom stolu.
+    "oporavak-blok-nikad-vezan": (
+        "modStornoRecovery.bas",
+        "        If Len(bilaU) > 0 Then\n",
+        "        If True Then   ' SABOTAZA: i nikad vezan blok je 'izgubljen'\n",
+        "Test_OPO_IzgubljenBlok",
+        "Oporavak: blok koji nikad nije vezan nije nedovrsen posao",
+    ),
+    # Pad strogog citaca clanstva se guta, pa lista tiho postane kraca -- bas na
+    # ekranu koji postoji da nabroji ono sto nije u redu.
+    "oporavak-blok-guta-gresku": (
+        "modStornoRecovery.bas",
+        "    AddNedRowFull result, \"IZGUBLJEN_BLOK\", \"\", \"GRESKA\", _\n"
+        "        Poruka(\"OTKUI_OPO_BLOK_GRESKA\") & \" \" & errDesc, _\n"
+        "        Poruka(\"OTKUI_OPO_BLOK_AKCIJA_GRESKA\"), \"\", \"Otkup\", \"\", \"\", \"BLOK\"\n",
+        "    ' SABOTAZA: greska se guta, lista je samo kraca\n",
+        "Test_OPO_IzgubljenBlok",
+        "Oporavak: pokvareno clanstvo daje vidljiv red, ne kracu listu",
+    ),
     # Ispravka opet prima NACRT (S3c): nacrt se menja, a ne stornira -- inace
     # svaka izmena trosi jos jedan broj niza i ostavlja storniran dokument.
     "ispravka-nacrt-prolazi": (
