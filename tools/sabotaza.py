@@ -1220,10 +1220,12 @@ SABOTAZE = {
     ),
     # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
     # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
-    "zbirna-ne-prosledjuje-strict": (
+    # S4-2: identitet vise ne razresava PK resolver nego stize gotov iz ljuske,
+    # pa se ZADAT a nepostojeci ZbirnaID mora odbiti OVDE.
+    "zbirna-ne-proverava-identitet": (
         "modStornoFlow.bas",
-        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)\n",
-        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))   ' SABOTAZA\n",
+        "        If strict Then RequireZbirnaPostoji Trim$(zbirnaID), MOD_NAME & \".ScanZbirna\"\n",
+        "        ' SABOTAZA: zadat identitet se ne proverava\n",
         "T_StornoImpact_NestaoIdentitetJeInvalidan",
         "nestao identitet ZBIRNE obara uvid",
     ),

@@ -176,9 +176,14 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_ZBIRNA
-            ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera
-            ' postojanja je ista kao za ostale robne dokumente.
-            If Not AktivanPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, docID) Then _
+            ' ISTI IDENTITET KAO NA IZVRSENJU (review #371, P1).
+            '
+            ' AktivanPoIdentitetu docID tumaci kao GENERACIJU (IdoviGeneracije).
+            ' Od S4-2 F8 salje ZbirnaID, pa je ovaj preflight za svaku kanonsku
+            ' zbirnu (generacija prazna) vracao "nije pronadjen" -- i do ispravnog
+            ' StornoIzvrsi se nije ni stizalo. Preflight i izvrsenje moraju da
+            ' citaju ISTU vrednost na ISTI nacin.
+            If Not ZbirnaAktivnaPoID(docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_PRIJEMNICA

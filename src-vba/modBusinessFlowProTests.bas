@@ -152,6 +152,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PR3_CreateZbirnaHeaderIStavke
     Test_ZBR_SadrzajCitaStavkeNeZaglavlje
     Test_ZBR_LjuskaNosiZbirnaID
+    Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -7694,6 +7695,77 @@ End Sub
 ' =====================================================================
 ' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
 ' =====================================================================
+
+' Zaglavlje zbirne za DRUGOG vozaca, isti broj. Broj je scoped po vozacu, pa
+' dva vozaca legitimno nose isti -- i bas zato broj nije identitet.
+Private Function Pr3HeaderVozac(ByVal brojZbirne As String, _
+                                ByVal vozac As String) As Object
+    Dim h As Object
+    Set h = Pr3Header(brojZbirne)
+    h("VozacID") = vozac
+    Set Pr3HeaderVozac = h
+End Function
+
+' STORNO KROZ LJUSKU POGADJA SVOJ DOKUMENT (S4-2, review #371).
+'
+' Test_ZBR_LjuskaNosiZbirnaID meri krajeve: kolonu identiteta i jezgro. Ovaj
+' test ide PUTEM KOJIM IDE OPERATER -- preflight (StornoRazlog), izbor moda
+' (StornoTraziIzborModa) pa izvrsenje (StornoIzvrsi) -- jer su bas ti medjuslojevi
+' tumacili docID kao GeneracijaID, pa je preflight za kanonsku zbirnu (generacija
+' prazna) vracao "nema nestorniranog dokumenta" i do jezgra se nije ni stizalo.
+'
+' Scenario je DVA DOKUMENTA ISTOG BROJA (razliciti vozaci): da identitet nije
+' presudio, pao bi pogresan dokument ili oba.
+Private Sub Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument()
+    On Error GoTo EH
+
+    Dim scenario As String, broj As String
+    scenario = NewScenarioCode("ZBRUI")
+    broj = TEST_PREFIX & "-ZBR-UI-" & scenario
+
+    Dim otpA As String, otpB As String
+    otpA = Pr3Otpremnica(TEST_PREFIX & "-OTP-UIA-" & scenario, KLASA_I, 100#, 5)
+    otpB = Pr3OtpremnicaVozac(TEST_PREFIX & "-OTP-UIB-" & scenario, KLASA_I, 200#, 10, _
+                              TEST_VOZ_ID_B)
+
+    Dim zbrA As String, zbrB As String
+    zbrA = CreateZbirnaIzIzvora_TX(Pr3Header(broj), Pr3Izvor(otpA, ""))
+    zbrB = CreateZbirnaIzIzvora_TX(Pr3HeaderVozac(broj, TEST_VOZ_ID_B), Pr3Izvor(otpB, ""))
+
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
+               "ZBR ljuska: dva dokumenta istog broja napravljena"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then Exit Sub
+    AssertTrue zbrA <> zbrB, "ZBR ljuska: to su DVA dokumenta, ne jedan"
+
+    ' Preflight sme da odbije iz poslovnih razloga, ali NE SME da tvrdi da
+    ' dokument ne postoji -- to je bio kvar: ZbirnaID citan kao generacija.
+    Dim razlog As String
+    razlog = modStornoDok.StornoRazlog(STIP_ZBIRNA, broj, "", zbrA)
+    AssertTrue InStr(1, razlog, Poruka("STORNO_ERR_NEMA_DOK"), vbTextCompare) = 0, _
+               "ZBR ljuska: preflight NE tvrdi da kanonska zbirna ne postoji (bilo: " & razlog & ")"
+
+    ' Izbor moda sme da vrati i True i False -- meri se da ne pukne i da ne
+    ' promeni nijedan dokument.
+    modStornoDok.StornoTraziIzborModa STIP_ZBIRNA, broj, "", zbrA
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "ZBR ljuska: pitanje o modu nista ne stornira"
+
+    ' Lokalna promenljiva se NE sme zvati "poruka": zaklonila bi funkciju
+    ' Poruka() u ovoj proceduri (VBA je case-insensitive) i poziv iznad bi
+    ' postao indeksiranje stringa -- compile error "Expected array".
+    Dim izlaz As String
+    AssertTrue modStornoDok.StornoIzvrsi(STIP_ZBIRNA, broj, "", izlaz, zbrA), _
+               "ZBR ljuska: storno kroz ljusku prolazi (" & izlaz & ")"
+
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "ZBR ljuska: storniran je dokument koji je red imenovao"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "ZBR ljuska: dokument drugog vozaca istog broja OSTAJE aktivan"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument", Err.Number, Err.description
+End Sub
 
 ' Vrednost NEVIDLJIVE kolone identiteta u mrezi F8 za dati broj zbirne.
 Private Function ZbrF8Ident(ByVal broj As String) As String

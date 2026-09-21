@@ -520,13 +520,13 @@ Public Function StornoZbirna_TX(ByVal zbirnaID As String) As Boolean
     tx.CommitTx
 
     StornoZbirna_TX = True
-    MonitorStornoSuccess SRC, "Zbirna", brojZbirne
+    MonitorStornoSuccess SRC, "Zbirna", zbirnaID
 
     Set tx = Nothing
     Exit Function
 
 EH:
-    HandleStornoTxError SRC, "Zbirna", brojZbirne, tx
+    HandleStornoTxError SRC, "Zbirna", zbirnaID, tx
     StornoZbirna_TX = False
 End Function
 

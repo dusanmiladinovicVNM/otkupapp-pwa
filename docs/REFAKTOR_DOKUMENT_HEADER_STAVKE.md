@@ -3964,6 +3964,40 @@ Dva zatečena testa su preimenovana jer im je ime tvrdilo staru premisu:
 `T_Integritet_VidiDvosmislenBrojIPraznuGeneraciju` → `…IPrazanIdentitet`. Tvrdnje se **ne menjaju** —
 dvosmislen broj i dalje ne sme da odlučuje koji dokument pada; menja se čime se dokument imenuje.
 
+#### Review #371 (NO-GO, tri P1) — identitet je bio presečen na pola
+
+Prvi prolaz je promenio **krajeve** lanca a ne i sredinu, pa je ista vrednost u dva sloja imala dva
+značenja. Merenje iz review-a:
+
+| P1 | Šta je bilo | Ispravka |
+|---|---|---|
+| `StornoZbirna_TX` je posle preimenovanja parametra i dalje slao `brojZbirne` u monitoring — uz `Option Explicit` to je **compile blocker**, koji statički CI ne vidi | zeleni CI ≠ projekat se kompajlira | monitoring dobija `zbirnaID` |
+| Preflight `StornoRazlog` je za ZBIRNU zvao `AktivanPoIdentitetu`, koji `docID` tumači kao **generaciju** — kanonska zbirna (generacija prazna) je dobijala „nema nestorniranog dokumenta" i do izvršenja se nije ni stizalo | preflight i izvršenje čitali istu vrednost različito | preflight zove `ZbirnaAktivnaPoID`, isti čitač kao izvršenje |
+| Ceo okvir ispravke (`ScanZbirna`, `StornoZbirnaIDetach_TX`, `PonistiZbirnaChain_TX`) je primao `ZbirnaID` a prosleđivao ga kao `gen` | tip/semantika presečeni | okvir prima **`ZbirnaID`**; generaciju **izvodi** iz njega (`GenZaZbirnu`) i koristi je samo za legacy scoping dece |
+
+**Smer je sada jedan**, i to je poenta:
+
+```
+ZbirnaID --> mutacija zaglavlja        (direktno)
+         --> legacy scoping dece       (izvedena generacija)
+```
+
+a ne obrnuto — `ZbirnaID` tretiran kao generacija pa tražen nazad `ZbirnaID`, što bi vratilo
+sekundarni identitet kao autoritet.
+
+**Zrno prevoda je fail-closed.** Jedna legacy generacija legitimno pokriva **dva** reda `tblZbirna`
+(Klasa I i II starog modela), a `StornoZbirna` po ID-u obara **tačno jedan** — `Keys()(0)` bi od
+logičkog dokumenta napravio proizvoljan red i ostavio drugu klasu aktivnom. `ZbrIdIzGeneracije`
+prevodi samo kad je pogodak jednoznačan; `ZbrIdPoBroju` isto, za zatečene putanje koje nose samo broj.
+
+**Zatvorena je i rupa koju je otkrila zastarela sabotaža:** kad identitet stiže gotov iz ljuske, niko
+više nije proveravao da postoji. `RequireZbirnaPostoji` to radi u strict režimu, i sabotaža sada čuva
+baš tu kapiju.
+
+**Nov integration test** `Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument` ide putem kojim ide operater —
+preflight → izbor moda → izvršenje — nad **dva dokumenta istog broja** (različiti vozači). Raniji test
+je merio krajeve lanca i baš zato nije video pokvarenu sredinu.
+
 **Sledeće:** S4-2b — F3 nad kanonom (ekran bira izdate otpremnice, pauza pada, stari pisac se briše).
 
 ## 15) Backlog — namerno van opsega
