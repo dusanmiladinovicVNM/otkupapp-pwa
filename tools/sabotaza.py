@@ -698,6 +698,15 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: ponovljen poziv ne pravi drugu otpremnicu",
     ),
+    # Razvodnica opet guta gresku i vraca tiho False: blok za koji se NE ZNA da li
+    # je hladnjacki padne na rucnu stranu i zavrsi u tudjem nacrtu.
+    "lanac-put-tiho-false": (
+        "modAutoHladnjaca.bas",
+        "    outGreska = Poruka(\"OTKUI_ERR_LANAC_PUT\") & \" \" & errDesc\n",
+        "    ' SABOTAZA: razlog se guta, ostaje tiho False\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: neizvesnost vraca RAZLOG, ne tiho False",
+    ),
     # Prekidac prestaje da bude autoritet: lanac radi i kad je iskljucen, pa se
     # parcijalna automatika pali pre nego sto ume da zavrsi ceo lanac.
     "lanac-bez-prekidaca": (
@@ -713,8 +722,7 @@ SABOTAZE = {
     # otpremnica 1:1 nije istina, nego pretpostavka.
     "lanac-i-na-obicnoj-stanici": (
         "modAutoHladnjaca.bas",
-        "    LanacVaziZaBlok = IsHladnjacaStanica( _\n"
-        "        Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\")))\n",
+        "    LanacVaziZaBlok = HladnjacaStrogo(stanicaID)\n",
         "    LanacVaziZaBlok = True   ' SABOTAZA: svaka stanica ide u lanac\n",
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: obicna stanica nema auto-lanac",
@@ -726,9 +734,11 @@ SABOTAZE = {
         "    If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), \"\")), _\n"
         "               \"Da\", vbTextCompare) = 0 Then Exit Function\n"
         "\n"
-        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n",
+        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
+        "    If Not IsHladnjacaStanica(stanicaID) Then Exit Function\n",
         "    ' SABOTAZA: storniran blok prolazi u lanac\n"
-        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n",
+        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
+        "    If Not IsHladnjacaStanica(stanicaID) Then Exit Function\n",
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: storniran blok ne pokrece lanac",
     ),

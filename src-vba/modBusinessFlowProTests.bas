@@ -7203,6 +7203,35 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
                  "Lanac: storniran blok ne pokrece lanac"
     AssertEquals "", izvestaj, "Lanac: storniran blok ne javlja nista"
 
+    ' --- 7) "NE ZNAM" NIJE "NIJE HLADNJACA" -------------------------------
+    ' Razvodnica bira izmedju OBAVEZNOG lanca i rucnog toka, pa neizvesnost ne
+    ' sme da padne na rucnu stranu: hladnjacki blok bi tiho zavrsio u tudjem
+    ' nacrtu. Stanica bloka se kvari MIMO pisca, pa se vraca -- kontrola posle
+    ' popravke dokazuje da je bas ona bila uzrok.
+    Dim nepoznata As String, redovi As Collection, putGreska As String
+    nepoznata = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDG-" & scenario, TEST_HLAD_ST_ID), _
+                               OtkStavke(12#, 100#, 1, 0#, 0#, 0))
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, nepoznata)
+    If Not redovi Is Nothing Then
+        If redovi.count = 1 Then
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              "ST-NE-POSTOJI-" & scenario, "Test_HLD_AutoLanacOtpremnica"
+
+            putGreska = ""
+            AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(nepoznata, putGreska), _
+                       "Lanac: nepoznata stanica ne prolazi kao hladnjaca"
+            AssertTrue Len(putGreska) > 0, _
+                       "Lanac: neizvesnost vraca RAZLOG, ne tiho False"
+
+            RequireUpdateCell TBL_OTKUP, CLng(redovi(1)), COL_OTK_STANICA, _
+                              TEST_HLAD_ST_ID, "Test_HLD_AutoLanacOtpremnica"
+            putGreska = "x"
+            AssertTrue modAutoHladnjaca.LanacVaziZaBlok(nepoznata, putGreska), _
+                       "Lanac: posle popravke stanice blok opet ide u lanac"
+            AssertEquals "", putGreska, "Lanac: ispravan blok nema razloga za zastoj"
+        End If
+    End If
+
 Kraj:
     SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     Exit Sub

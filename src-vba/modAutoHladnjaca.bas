@@ -72,14 +72,91 @@ End Function
 
 ' Da li OVAJ blok ide u auto-lanac umesto na radni sto. Ekran ovim grana PRE
 ' rucnog vezivanja; ceo sud je ovde, da ga sledeci pozivalac ne prepisuje.
-Public Function LanacVaziZaBlok(ByVal otkupID As String) As Boolean
-    On Error Resume Next
+'
+' FAIL-CLOSED. Ovo nije prikaz nego RAZVODNICA izmedju dva toka, a JeHladnjaca je
+' tvrda poslovna granica: hladnjacki blok MORA u lanac. Zato postoje tri ishoda,
+' ne dva:
+'
+'   sigurno hladnjaca       -> True
+'   sigurno nije hladnjaca  -> False
+'   ne moze da se utvrdi    -> False + RAZLOG (outGreska)
+'
+' Pozivalac koji dobije razlog ne sme da nastavi NI JEDNIM putem: gurnuti blok u
+' rucni nacrt "jer provera nije uspela" znaci da hladnjacki blok tiho zavrsi kao
+' clan tudjeg dokumenta -- tacno ono sto je ovaj PR isao da spreci. Blok je vec
+' upisan svojom transakcijom i ostaje nevezan, vidljiv u listi "Bez otpremnice".
+'
+' Isto pravilo drzi modStornoDok.StornoTraziIzborModa: neizvesnost vodi ka VISE
+' pitanja, ne ka manje.
+Public Function LanacVaziZaBlok(ByVal otkupID As String, _
+                                Optional ByRef outGreska As String) As Boolean
+    Dim stanicaID As String, redovi As Collection, errDesc As String
+
+    outGreska = ""
+    On Error GoTo EH
+
     If Not LanacUkljucen() Then Exit Function
-    If Len(Trim$(otkupID)) = 0 Then Exit Function
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    ' Blok mora da postoji tacno jednom -- inace se o njemu ne zna nista, pa ni
+    ' kojim putem ide.
+    Set redovi = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If redovi Is Nothing Then
+        Err.Raise vbObjectError + 8460, "LanacVaziZaBlok", _
+                  "Citanje otkupa nije uspelo: " & otkupID
+    End If
+    If redovi.count <> 1 Then
+        Err.Raise vbObjectError + 8461, "LanacVaziZaBlok", _
+                  "Otkup ne postoji tacno jednom (" & redovi.count & "): " & otkupID
+    End If
+
     If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), "")), _
                "Da", vbTextCompare) = 0 Then Exit Function
-    LanacVaziZaBlok = IsHladnjacaStanica( _
-        Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), "")))
+
+    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), ""))
+    If Len(stanicaID) = 0 Then
+        Err.Raise vbObjectError + 8462, "LanacVaziZaBlok", _
+                  "Otkup nema otkupno mesto: " & otkupID
+    End If
+
+    ' IsHladnjacaStanica je fail-open (prikaz), pa se ovde NE koristi: stanica
+    ' koja ne postoji davala bi "nije hladnjaca" i blok bi tiho otisao u rucni tok.
+    LanacVaziZaBlok = HladnjacaStrogo(stanicaID)
+    Exit Function
+
+EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    errDesc = Err.description
+    LogErr "modAutoHladnjaca.LanacVaziZaBlok"
+    outGreska = Poruka("OTKUI_ERR_LANAC_PUT") & " " & errDesc
+    LanacVaziZaBlok = False
+End Function
+
+' Je li stanica hladnjaca -- STROGO. Stanica koja ne postoji ili postoji dvaput
+' nije "nije hladnjaca" nego nepoznato stanje, i to se dize kao greska.
+Private Function HladnjacaStrogo(ByVal stanicaID As String) As Boolean
+    Dim redovi As Collection
+
+    Set redovi = FindRows(TBL_STANICE, "StanicaID", stanicaID)
+    If redovi Is Nothing Then
+        Err.Raise vbObjectError + 8463, "HladnjacaStrogo", _
+                  "Citanje stanica nije uspelo: " & stanicaID
+    End If
+    If redovi.count <> 1 Then
+        Err.Raise vbObjectError + 8464, "HladnjacaStrogo", _
+                  "Otkupno mesto ne postoji tacno jednom (" & redovi.count & "): " & stanicaID
+    End If
+
+    If GetColumnIndex(TBL_STANICE, COL_STA_JE_HLADNJACA) = 0 Then
+        Err.Raise vbObjectError + 8465, "HladnjacaStrogo", _
+                  "Kolona " & COL_STA_JE_HLADNJACA & " ne postoji u " & TBL_STANICE
+    End If
+
+    HladnjacaStrogo = (StrComp(Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, _
+                                                    COL_STA_JE_HLADNJACA), "")), _
+                               "Da", vbTextCompare) = 0)
 End Function
 
 ' ============================================================

@@ -1131,8 +1131,14 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' Ceo sud je u modAutoHladnjaca -- ekran samo pita. Lanac ne obara upis:
     ' otkup je snimljen svojom transakcijom i ostaje i kad otpremnica ne uspe,
     ' a razlog ide operateru u istu poruku.
-    Dim lanacPoruka As String
-    If modAutoHladnjaca.LanacVaziZaBlok(res) Then
+    Dim lanacPoruka As String, putGreska As String, ideULanac As Boolean
+    ideULanac = modAutoHladnjaca.LanacVaziZaBlok(res, putGreska)
+    If Len(putGreska) > 0 Then
+        ' Ne zna se kojim putem blok ide -- ne gura se NI U LANAC NI U NACRT.
+        ' Vezivanje "jer provera nije uspela" bi hladnjacki blok tiho smestilo u
+        ' tudji dokument. Blok je upisan i ceka u listi "Bez otpremnice".
+        poruke = Trim$(poruke & "  " & putGreska)
+    ElseIf ideULanac Then
         modAutoHladnjaca.AutoLanacHladnjaca res, lanacPoruka
         If Len(lanacPoruka) > 0 Then poruke = Trim$(poruke & "  " & lanacPoruka)
     ElseIf Len(mOtpID) > 0 Then
