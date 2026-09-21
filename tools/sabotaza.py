@@ -707,6 +707,33 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: hladnjacki blok se ne vezuje rucno",
     ),
+    # Ispravka bloka opet ostavlja NACRT na storniranom izvoru: naslednik stoji
+    # van dokumenta, a nacrt drzi otkup koji vise ne postoji.
+    "ispravka-bloka-bez-zamene-clanstva": (
+        "modOtkup.bas",
+        "        modDokumenta.ZameniOtpremnicaIzvor roditelj, stariOtkupID, noviID\n",
+        "        ' SABOTAZA: clanstvo nacrta ostaje na storniranom izvoru\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: nacrt pokazuje na naslednika",
+    ),
+    # Kapija A13 pada: blok IZDATE otpremnice se ispravlja u mestu, pa izdat papir
+    # vise ne opisuje robu koju nosi.
+    "ispravka-bloka-izdata-prolazi": (
+        "modOtkup.bas",
+        "        If modDokumenta.OtpremnicaJeIzdata(roditelj) Then\n",
+        "        If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: izdata otpremnica odbija ispravku",
+    ),
+    # Clanstvo nije u snimku transakcije: pad posle uklanjanja starog izvora
+    # ostavlja nacrt bez njega -- dokument koji je izgubio sastav.
+    "ispravka-bloka-bez-snapshota": (
+        "modOtkup.bas",
+        "    If Len(roditelj) > 0 Then tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI\n",
+        "    ' SABOTAZA: clanstvo nije u snimku transakcije\n",
+        "Test_OTK_IspravkaBlokaUNacrtu",
+        "Ispravka bloka: pad ne ostavlja nacrt bez izvora",
+    ),
     # Razvodnica opet guta gresku i vraca tiho False: blok za koji se NE ZNA da li
     # je hladnjacki padne na rucnu stranu i zavrsi u tudjem nacrtu.
     "lanac-put-tiho-false": (

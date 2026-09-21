@@ -3677,6 +3677,50 @@ lista, pa se u headless prolazu ne vozi) — isti dogovor kao za vezivanje posle
 
 **Sledeće:** S3d-2 — A13 kapija za NACRT (atomska zamena članstva) i radnja „Ispravi“ nad blokom (B-040).
 
+### 14.21) S3d-2 — A13 kapija za nacrt i „Ispravi“ nad blokom (21.09.2026)
+
+Ispravka otkupa je od S1 imala **pisca bez ijednog živog pozivaoca** (B-040), a A13 kapija ju je odbijala za svaki
+blok koji je u otpremnici — i za nacrt i za izdatu — uz poruku „nije dostupno do PR7“, dakle uputstvo bez izlaza.
+S3d-2 zatvara oboje.
+
+**Nacrt prolazi, izdata ne.**
+
+| Stanje roditelja | Ishod | Zašto |
+|---|---|---|
+| **nema roditelja** | ispravka radi kao i do sada | ništa izvedeno ne zavisi od bloka |
+| **NACRT** | prolazi uz **atomsku zamenu članstva** u istoj transakciji | članstvo nacrta *jeste* mutabilno; stari izvor izlazi, naslednik ulazi i prolazi iste kapije (stanica, kultura, ambalaža, slobodan) |
+| **IZDATO** | odbijeno, ali poruka imenuje **put koji postoji** | sastav izdatog dokumenta je istorijska činjenica (A13): prvo ispravka **otpremnice** (S3c) — nastaje nacrt sa istim blokovima — pa onda ispravka bloka u njemu |
+
+Zamena je `modDokumenta.ZameniOtpremnicaIzvor` — **core koji radi unutar tuđe transakcije**, po istom obrascu kao
+`modStorno.StornoOtpremnica`. Pozivalac drži snapshot `tblOtpremnicaIzvori`; bez njega bi pad posle uklanjanja
+starog izvora ostavio nacrt **bez ijednog izvora**. Redosled je merljiv, ne stilski: stari izlazi **pre** nego što
+naslednik uđe, inače bi kapija „izvor sme da bude u tačno jednoj aktivnoj otpremnici“ videla oba i odbila sam posao.
+
+**Kapije žive u jednom izvoru.** `modOtkup.IspravkaOtkupaRazlog` vraća „“ ili rečenicu za operatera; ekran je pita
+**pre** nego što operater počne da kuca zamenu, a `IspravkaOtkupa_TX` istu funkciju diže kao grešku — pisac ne sme
+da veruje da je iko pitao. Dva spiska istih pravila bi se razišla prvom izmenom.
+
+**Ekran (B-040).** Radnja **„Ispravi“** stoji nad redom u listama `SVI` i `BLOKOVI`. Forma se puni starim blokom
+(`PrefillIzStorniranog`, koji broj namerno izostavlja — ispravka dobija **nov** broj, A9), a sledeće snimanje pravi
+zamenu umesto novog dokumenta. Ispravka se gasi **tek posle uspeha** (na grešku operater popravi polja i snimi
+ponovo), a prazna forma ili promena režima je otkazuju — inače bi sledeći „nov“ unos tiho postao zamena.
+
+**Ispravka ne prolazi kroz routing posle upisa:** članstvo naslednika je već odlučeno u pisčevoj transakciji, pa ni
+hladnjački lanac ni ručno vezivanje nemaju šta da odluče.
+
+**Testovi:** `Test_OTK_IspravkaBlokaUNacrtu` — blok u nacrtu: nacrt pokazuje na naslednika, storniran blok više nije
+izvor, nacrt ima tačno jedan izvor · blok izdate: odbijen, razlog **imenuje tu otpremnicu i put** · **pad ne
+razmontira nacrt** (naslednik na drugoj stanici pukne posle storna i upisa; transakcija vraća sve) · slobodan blok
+radi kao i do sada. Sabotaže `ispravka-bloka-bez-zamene-clanstva`, `ispravka-bloka-izdata-prolazi`,
+`ispravka-bloka-bez-snapshota` (ukupno **522**).
+
+**Nije mereno testom:** da radnja „Ispravi“ zaista puni formu i da sledeće snimanje ide kroz zamenu — `Scr_Save`
+nosi štampu otkupnog lista, pa se u headless prolazu ne vozi. Mereni su **kapije** i **pisac**; ekranski red je u
+ručnoj listi, isto kao kod izmene nacrta.
+
+**Time je S3d zatvoren.** Sledeći je S3e: brisanje `Otkup.OtpremnicaID`, `VozacID`, `BrojOtpremnice` i linijskih
+polja zaglavlja otpremnice, uz podelu grupe `otp_linija`.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

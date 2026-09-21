@@ -3776,6 +3776,41 @@ Private Function OtpGajbeIzvora(ByVal otkupID As String, ByVal src As String) As
     Next i
 End Function
 
+' ZAMENA IZVORA U NACRTU -- core, radi UNUTAR TUDJE transakcije (S3d-2).
+'
+' Zove je modOtkup.IspravkaOtkupa_TX: ispravka pravi NOV dokument, pa nacrt koji
+' je pokazivao na stari mora u ISTOM potezu da pokazuje na naslednika. Bez toga
+' bi nacrt ostao sa izvorom koji je storniran, a naslednik stajao van njega --
+' medjustanje koje je PR5 vec odbio kod UpdateOtpremnicaDraft_TX: invarijanta
+' mora da vazi IZMEDJU dva klika, ne tek pri izdavanju.
+'
+' NE ZOVI SPOLJA BEZ TRANSAKCIJE. Pozivalac drzi snapshot tblOtpremnicaIzvori;
+' bez njega bi pad posle uklanjanja starog ostavio nacrt BEZ ijednog izvora.
+'
+' IZDATA SE NE DIRA (RequireOtpDraft): njen sastav je istorijska cinjenica, a
+' zamena bi bila tiha izmena izdatog papira (A13). Za nju je put storno +
+' reizdavanje, sto radi ispravka otpremnice (S3c).
+'
+' Redosled je bitan: stari izlazi PRE nego sto naslednik ulazi. Obrnuto bi
+' kapija "izvor sme da bude u tacno jednoj aktivnoj otpremnici" videla oba i
+' odbila sam posao.
+Public Sub ZameniOtpremnicaIzvor(ByVal otpremnicaID As String, _
+                                 ByVal stariOtkupID As String, _
+                                 ByVal noviOtkupID As String)
+    Const SRC As String = "ZameniOtpremnicaIzvor"
+
+    Dim rOtp As Long
+    rOtp = OtpRedHeadera(otpremnicaID, SRC)
+    RequireOtpDraft otpremnicaID, rOtp, SRC
+
+    OtpUkloniIzvor otpremnicaID, Trim$(stariOtkupID)
+
+    ' Naslednik prolazi ISTE kapije kao svaki izvor: aktivan, sa stavkama, iste
+    ' stanice i kulture, slobodan. Ispravka ne sme da bude zadnja vrata.
+    OtpRequireIzvorValjan otpremnicaID, Trim$(noviOtkupID), SRC, True
+    OtpUpisiClanstvo otpremnicaID, Trim$(noviOtkupID), SRC
+End Sub
+
 ' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
 '
 ' Pripadnost zivi iskljucivo u tblOtpremnicaIzvori (S4.1e) -- nema kolone na

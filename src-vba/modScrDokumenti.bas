@@ -73,6 +73,10 @@ Private mOtpBroj As String        ' njen broj - za traku i naslov liste
 ' nov. Prazno = snimanje pravi nov nacrt. Ljuska izmenu otkazuje pri praznjenju
 ' forme i promeni rezima (Scr_IzmenaOtkazi).
 Private mIzmenaOtpID As String
+' Otvorena ISPRAVKA BLOKA (B-040, S3d-2): sledece snimanje F1 ne pravi nov
+' dokument nego ZAMENU ovog -- stari se stornira, nastaje nov sa novim brojem.
+Private mIspravkaOtkupID As String
+Private mIspravkaBroj As String
 Private mIzmenaBroj As String
 
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
@@ -116,8 +120,11 @@ Public Function Scr_Radnje() As String
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case Scr_Lista()
         Case "SVI"
+            ' Ispravka bloka (B-040): pisac postoji od S1, a od S3d-2 ima i
+            ' ulaz sa ekrana. Kapije su u modOtkup -- dugme ih ne ponavlja.
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
-                         "storno:OTKUI_BTN_RED_STORNO:88:danger:1"
+                         "storno:OTKUI_BTN_RED_STORNO:88:danger:1|" & _
+                         "ispravi:OTKUI_BTN_RED_ISPRAVI_BLOK:96:soft:1"
             ' Vezivanje postojeceg otkupa za aktivnu otpremnicu: oporavak kad
             ' vezivanje posle unosa nije uspelo, i blok upisan pre izbora.
             If Len(mOtpID) > 0 Then _
@@ -127,6 +134,7 @@ Public Function Scr_Radnje() As String
             ' prvo izlazi iz nacrta. Izdavanje ne trazi red: radi nad aktivnom.
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
                          "ukloni:OTKUI_BTN_RED_UKLONI:136:danger:1|" & _
+                         "ispravi:OTKUI_BTN_RED_ISPRAVI_BLOK:96:soft:1|" & _
                          "izdaj:OTKUI_BTN_RED_IZDAJ:120:soft:0"
         Case "OTPREMNICE"
             ' Specifikacija (A-018, A-021): "2" znaci da radnja radi nad
@@ -263,6 +271,57 @@ EH:
     Scr_IzmenaOtkazi
     spec = ""
     OtvoriIzmenuNacrta = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Otvara ISPRAVKU BLOKA u F1 (B-040). "" = otvorena (sledece snimanje pravi
+' zamenu), a `spec` je forma starog bloka za ApplyPrefill; inace razlog.
+'
+' Kapije se NE prepisuju ovde: pita se modOtkup.IspravkaOtkupaRazlog, isti izvor
+' pravila koji pisac dize kao gresku. Ekran ga zove PRE forme da operater ne
+' kuca zamenu za dokument koji je ne moze primiti (storniran, vec zamenjen, ili
+' izvor IZDATE otpremnice).
+'
+' Forma se sastavlja PRE otvaranja: citalac koji padne prekida otvaranje i
+' ostavlja ispravku ZATVORENU -- nikad otvorena ispravka nad delimicnom formom
+' (isti razlog kao izmena nacrta, review #363 P2).
+'
+' BROJ se ne prenosi: ispravka je nov dokument i dobija NOV broj (A9). To vec
+' drzi PrefillIzStorniranog, koji broj namerno izostavlja.
+Public Function OtvoriIspravkuBloka(ByVal otkupID As String, _
+                                    Optional ByRef spec As String) As String
+    Dim brDok As String
+    spec = ""
+    On Error GoTo EH
+
+    otkupID = Trim$(otkupID)
+    OtvoriIspravkuBloka = modOtkup.IspravkaOtkupaRazlog(otkupID)
+    If Len(OtvoriIspravkuBloka) > 0 Then Exit Function
+
+    brDok = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK)))
+    spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkupID)
+    If Len(spec) = 0 Then
+        OtvoriIspravkuBloka = Poruka("OTKUI_ERR_ISPRAVI_BLOK") & " " & brDok
+        Exit Function
+    End If
+
+    mIspravkaOtkupID = otkupID
+    mIspravkaBroj = brDok
+    Exit Function
+EH:
+    Scr_IspravkaOtkazi
+    spec = ""
+    OtvoriIspravkuBloka = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Otkazuje ispravku bloka -- sledece snimanje opet pravi NOV dokument.
+Public Sub Scr_IspravkaOtkazi()
+    mIspravkaOtkupID = ""
+    mIspravkaBroj = ""
+End Sub
+
+' OtkupID bloka koji je otvoren za ispravku ("" = nema).
+Public Function Scr_IspravkaOtkupID() As String
+    Scr_IspravkaOtkupID = mIspravkaOtkupID
 End Function
 
 ' Otkazuje izmenu nacrta -- sledece snimanje pravi nov nacrt.
@@ -620,7 +679,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
     End Select
     Dim razlog As String
     Select Case p(0)
-        Case "print", "storno", "vezi", "ukloni", "ponovi"
+        Case "print", "storno", "vezi", "ukloni", "ponovi", "ispravi"
             If Len(otkupID) = 0 Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
                 Exit Function
@@ -677,6 +736,19 @@ Private Function RowAction(ByVal tag As String) As Boolean
             Scr_ResetCache
             RowAction = True
             modOtkupUI.ShowToast ponPoruka, False
+
+        Case "ispravi"
+            ' Ispravka bloka: forma se puni starim podacima, a SLEDECE snimanje
+            ' pravi ZAMENU (nov broj, nov ID, stari storniran). Ako je blok u
+            ' NACRTU otpremnice, nacrt u istom potezu prelazi na naslednika.
+            Dim ispSpec As String, ispRazlog As String
+            ispRazlog = OtvoriIspravkuBloka(otkupID, ispSpec)
+            If Len(ispRazlog) > 0 Then
+                modOtkupUI.ShowToast ispRazlog, True
+                Exit Function
+            End If
+            modOtkupUI.ApplyPrefill ispSpec
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_ISPRAVKA_BLOKA") & " " & mIspravkaBroj, False
 
         Case "vezi"
             razlog = VeziZaAktivnu(otkupID)
@@ -1166,11 +1238,19 @@ Public Function Scr_Save(ByVal polja As Object) As String
         End If
     End If
 
-    res = modOtkupUnos.OtkupUpisi(p, poruke)
+    ' Otvorena ispravka: snimanje pravi ZAMENU ovog bloka, ne nov dokument.
+    Dim ispravkaID As String
+    ispravkaID = mIspravkaOtkupID
+
+    res = modOtkupUnos.OtkupUpisi(p, poruke, ispravkaID)
     If Len(res) = 0 Then
         Scr_Save = Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
+
+    ' Ispravka je uspela -- sledece snimanje je opet nov dokument. Gasi se TEK
+    ' posle uspeha: na gresku operater popravi polja i snimi ponovo.
+    If Len(ispravkaID) > 0 Then Scr_IspravkaOtkazi
 
     ' Vezivanje za aktivnu otpremnicu. Otkup je vec upisan (sopstvena
     ' transakcija, i otkup postoji i bez otpremnice); ako vezivanje padne,
@@ -1184,7 +1264,11 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' Ceo sud je u modAutoHladnjaca -- ekran samo pita. Lanac ne obara upis:
     ' otkup je snimljen svojom transakcijom i ostaje i kad otpremnica ne uspe,
     ' a razlog ide operateru u istu poruku.
+    ' Clanstvo naslednika je vec odluceno: ako je stari bio u nacrtu, pisac je
+    ' nacrt u istoj transakciji prebacio na njega. Zato ispravka NE prolazi kroz
+    ' routing -- ni lanac ni rucno vezivanje nemaju sta da odluce.
     Dim lanacPoruka As String
+    If Len(ispravkaID) > 0 Then GoTo PosleVezivanja
     ideULanac = modAutoHladnjaca.LanacVaziZaBlok(res, putGreska)
     If Len(putGreska) > 0 Then
         ' Ne zna se kojim putem blok ide -- ne gura se NI U LANAC NI U NACRT.
@@ -1200,6 +1284,7 @@ Public Function Scr_Save(ByVal polja As Object) As String
         If Len(veza) > 0 Then poruke = Trim$(poruke & "  " & veza)
     End If
 
+PosleVezivanja:
     ' Nov kooperant je kreiran tokom upisa - lista partnera mora da ga vidi
     ' odmah, bez zatvaranja ekrana.
     If koopNov Then modOtkupUI.RefreshPartnerLista

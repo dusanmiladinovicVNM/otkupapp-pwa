@@ -296,6 +296,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_KapijaBlokaPoKanonu
     Test_OPO_IzgubljenBlok
     Test_HLD_AutoLanacOtpremnica
+    Test_OTK_IspravkaBlokaUNacrtu
     Test_OTP_ClanstvoBulkStrogo
     Test_OTP_InvarijantaSabiraStavke
     Test_OTP_PrefillIspravkeCitaStavke
@@ -7294,6 +7295,118 @@ Kraj:
 EH:
     SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S3d-2 -- ISPRAVKA BLOKA KOJI JE U NACRTU: atomska zamena clanstva (A13).
+'
+' Ispravka pravi NOV dokument, pa nacrt koji je pokazivao na stari mora u ISTOM
+' potezu da pokazuje na naslednika. Bez toga bi nacrt drzao storniran izvor, a
+' naslednik stajao van njega -- medjustanje koje je PR5 vec odbio.
+'
+' IZDATA otpremnica ostaje zatvorena: njen sastav je istorijska cinjenica (A13),
+' pa put ide preko ispravke OTPREMNICE (S3c) koja od nje pravi nacrt.
+' ============================================================
+Private Sub Test_OTK_IspravkaBlokaUNacrtu()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, upoz As String
+    scenario = NewScenarioCode("OTKISB")
+
+    ' --- 1) blok u NACRTU: nacrt prelazi na naslednika --------------------
+    Dim blok As String, nacrt As String, novi As String
+    blok = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBA-" & scenario), _
+                          OtkStavke(60#, 100#, 6, 0#, 0#, 0))
+    nacrt = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBN-" & scenario), _
+                                     OtpOcek(60#, 6#, 0#, 0#), g)
+    AssertTrue Len(blok) > 0 And Len(nacrt) > 0, "Ispravka bloka: preduslovi (" & g & ")"
+    If Len(blok) = 0 Or Len(nacrt) = 0 Then GoTo Kraj
+    AssertTrue DodajOtpremnicaIzvor_TX(nacrt, blok, g), "Ispravka bloka: blok je u nacrtu"
+
+    AssertEquals "", modOtkup.IspravkaOtkupaRazlog(blok), _
+                 "Ispravka bloka: blok u NACRTU se sme ispraviti"
+
+    novi = modOtkup.IspravkaOtkupa_TX(blok, OtkHeader(TEST_PREFIX & "-OTK-ISBB-" & scenario), _
+                                      OtkStavke(55#, 110#, 5, 0#, 0#, 0), g, upoz)
+    AssertTrue Len(novi) > 0, "Ispravka bloka: ispravka je prosla (" & g & ")"
+    If Len(novi) = 0 Then GoTo Kraj
+
+    AssertEquals "Da", OtkPolje(blok, COL_STORNIRANO), "Ispravka bloka: stari je storniran"
+    AssertEquals novi, OtkPolje(blok, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "Ispravka bloka: stari zna ko ga zamenjuje"
+    AssertTrue OtkPolje(novi, COL_OTK_BR_DOK) <> OtkPolje(blok, COL_OTK_BR_DOK), _
+               "Ispravka bloka: naslednik nosi NOV broj"
+
+    ' Jezgro: clanstvo je prelo u ISTOM potezu.
+    AssertEquals nacrt, modDokumenta.OtpremnicaZaOtkup(novi), _
+                 "Ispravka bloka: nacrt pokazuje na naslednika"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(blok), _
+                 "Ispravka bloka: storniran blok vise nije izvor"
+    AssertEquals "1", CStr(modDokumenta.IzvoriOtpremnice(nacrt).count), _
+                 "Ispravka bloka: nacrt ima tacno jedan izvor"
+
+    ' --- 2) blok u IZDATOJ: odbijeno, i to sa putem koji postoji ----------
+    Dim blok2 As String, izdata As String, razlog As String
+    blok2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBC-" & scenario), _
+                           OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    izdata = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBI-" & scenario), _
+                                         Pr3Izvor(blok2, ""), g)
+    AssertTrue Len(izdata) > 0, "Ispravka bloka: izdata otpremnica napravljena (" & g & ")"
+    If Len(izdata) > 0 Then
+        razlog = modOtkup.IspravkaOtkupaRazlog(blok2)
+        AssertTrue Len(razlog) > 0, "Ispravka bloka: izdata otpremnica odbija ispravku"
+        AssertTrue InStr(1, razlog, izdata, vbTextCompare) > 0, _
+                   "Ispravka bloka: razlog imenuje bas tu otpremnicu"
+        AssertTrue InStr(1, razlog, "ispravi otpremnicu", vbTextCompare) > 0, _
+                   "Ispravka bloka: razlog imenuje put koji postoji"
+
+        AssertEquals "", modOtkup.IspravkaOtkupa_TX(blok2, OtkHeader(TEST_PREFIX & "-OTK-ISBD-" & scenario), _
+                                                    OtkStavke(40#, 100#, 4, 0#, 0#, 0), g, upoz), _
+                     "Ispravka bloka: pisac odbija blok izdate otpremnice"
+        AssertTrue OtkPolje(blok2, COL_STORNIRANO) <> "Da", _
+                   "Ispravka bloka: odbijen blok nije storniran"
+        AssertEquals izdata, modDokumenta.OtpremnicaZaOtkup(blok2), _
+                     "Ispravka bloka: clanstvo izdate je netaknuto"
+    End If
+
+    ' --- 3) PAD ISPRAVKE NE SME DA RAZMONTIRA NACRT ----------------------
+    ' Naslednik na DRUGOJ stanici nacrt ne moze da primi (jedna otpremnica =
+    ' jedno otkupno mesto), pa kapija izvora pukne POSLE storna i upisa novog.
+    ' Transakcija mora da vrati sve: stari blok aktivan i i dalje u nacrtu.
+    Dim blok3 As String, nacrt3 As String, pao As String
+    blok3 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBE-" & scenario), _
+                           OtkStavke(30#, 100#, 3, 0#, 0#, 0))
+    nacrt3 = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-ISBP-" & scenario), _
+                                      OtpOcek(30#, 3#, 0#, 0#), g)
+    If Len(blok3) > 0 And Len(nacrt3) > 0 Then
+        AssertTrue DodajOtpremnicaIzvor_TX(nacrt3, blok3, g), "Ispravka bloka: treci blok je u nacrtu"
+
+        pao = modOtkup.IspravkaOtkupa_TX(blok3, _
+                  OtkHeaderNaStanici(TEST_PREFIX & "-OTK-ISBF-" & scenario, TEST_HLAD_ST_ID), _
+                  OtkStavke(30#, 100#, 3, 0#, 0#, 0), g, upoz)
+        AssertEquals "", pao, "Ispravka bloka: naslednik na drugoj stanici ne prolazi"
+        AssertTrue OtkPolje(blok3, COL_STORNIRANO) <> "Da", _
+                   "Ispravka bloka: pad vraca stari blok u aktivno stanje"
+        AssertEquals nacrt3, modDokumenta.OtpremnicaZaOtkup(blok3), _
+                     "Ispravka bloka: pad ne ostavlja nacrt bez izvora"
+        AssertEquals "1", CStr(modDokumenta.IzvoriOtpremnice(nacrt3).count), _
+                     "Ispravka bloka: nacrt posle pada ima tacno jedan izvor"
+    End If
+
+    ' --- 4) kontrola: slobodan blok se ispravlja kao i do sada ------------
+    Dim slobodan As String, noviSlob As String
+    slobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-ISBG-" & scenario), _
+                              OtkStavke(20#, 100#, 2, 0#, 0#, 0))
+    noviSlob = modOtkup.IspravkaOtkupa_TX(slobodan, OtkHeader(TEST_PREFIX & "-OTK-ISBH-" & scenario), _
+                                          OtkStavke(22#, 100#, 2, 0#, 0#, 0), g, upoz)
+    AssertTrue Len(noviSlob) > 0, "Ispravka bloka: slobodan blok se i dalje ispravlja (" & g & ")"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(noviSlob), _
+                 "Ispravka bloka: naslednik slobodnog bloka ostaje slobodan"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_OTK_IspravkaBlokaUNacrtu", Err.Number, Err.description
 End Sub
 
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.

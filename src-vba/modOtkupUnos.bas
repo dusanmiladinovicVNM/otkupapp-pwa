@@ -300,7 +300,12 @@ End Function
 ' Upisuje otkup i radi sve sto ide uz njega. Vraca OtkupID (ili spojene ID-eve
 ' obe klase); prazno znaci da upis nije uspeo. U "poruke" se skupljaju
 ' napomene koje pozivalac prikazuje posle uspeha.
-Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
+' `ispravljaOtkupID` != "" -> upis je ISPRAVKA tog dokumenta (nov broj, nov ID,
+' stari se stornira, novac prelazi na naslednika, a nacrt otpremnice u istom
+' potezu menja izvor). Prazno -> obican nov unos. Jedan ulaz namerno: stampa,
+' ambalaza i poruke operateru su isti posao u oba slucaja.
+Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
+                           Optional ByVal ispravljaOtkupID As String = "") As String
     Dim res As String, hlPending As String, hlNewPrij As String, hlWarn As String
     Dim doHlRelink As Boolean, hlRelWarn As String, hlGajbDiff As Boolean
     Dim errDesc As String
@@ -365,8 +370,15 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
                                 L(p, "kolAmbII"), D(p, "brutoKgII"))
     End If
 
-    Dim greska As String
-    res = CreateOtkup_TX(h, stavke, greska)
+    Dim greska As String, upozorenje As String
+    If Len(Trim$(ispravljaOtkupID)) > 0 Then
+        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, greska, upozorenje)
+        ' Upozorenje NIJE greska (preplata posle smanjenja): ispravka prolazi, a
+        ' operater to mora da vidi -- inace preplatu nadje tek na kartici.
+        If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+    Else
+        res = CreateOtkup_TX(h, stavke, greska)
+    End If
 
     If Len(res) = 0 Then
         poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska

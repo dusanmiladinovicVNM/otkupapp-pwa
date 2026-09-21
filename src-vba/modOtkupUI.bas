@@ -8856,9 +8856,15 @@ End Sub
 ' Izmena nacrta otpremnice (F2) vazi samo dok je forma ta koju je izbor nacrta
 ' popunio: praznjenje forme ili promena rezima je otkazuje, inace bi sledeci
 ' "nov" unos tiho izmenio stari nacrt. Kasno vezano (zamka #19).
+'
+' Isto vazi za ISPRAVKU BLOKA (F1, S3d-2): forma je popunjena starim blokom, pa
+' bi posle praznjenja sledeci "nov" unos tiho postao zamena tog bloka -- stari
+' storniran, a operater misli da je uneo nov dokument.
 Private Sub OtkaziIzmenuNacrta()
     On Error Resume Next
     Application.Run "modScrDokumenti.Scr_IzmenaOtkazi"
+    Err.Clear
+    Application.Run "modScrDokumenti.Scr_IspravkaOtkazi"
     Err.Clear
 End Sub
 
