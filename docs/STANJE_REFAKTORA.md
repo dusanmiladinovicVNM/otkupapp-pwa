@@ -180,7 +180,12 @@
     revalidaciju izvora), `ZbirnaJeIzdata`, `ZbrClanovi`. **Izvor zbirne je IZDATA otpremnica** (odluka koju
     je §14.14 ostavila S4); `PROSLEDJENO` se računa kao izdato. Zbirna **ne knjiži ambalažu** — gajbe su
     knjižene na otpremnici i knjiže se ponovo na prijemu (S6).
-29. **Sledeće:** **S4-2c** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
+29. **S4-2c/1 — ulazna kapija nacrta (PR #___).** Kapija koju je review #372 postavio PRED ekrane:
+    `UpdateZbirnaDraft_TX` (izmena najave, članstvo netaknuto; nacrt zadržava svoj broj a ne preuzima
+    tuđi; izmena zaglavlja **revalidira** postojeće članstvo) + odluka operatera **ZBR-KANON-04** —
+    kad članstvo padne na nulu, izvedeni `Vrsta/Sorta/TipAmbalaze` se **brišu**, a dok ima bar jednog
+    člana **ostaju**. Nijedna linija ekrana. Detalji: plan §14.26.
+30. **Sledeće:** **S4-2c/2** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
     direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
     S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
     (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).

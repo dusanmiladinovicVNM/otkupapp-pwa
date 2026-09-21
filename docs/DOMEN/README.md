@@ -63,6 +63,16 @@ A13 već drži za otpremnicu (S3c).
 > sa testom `Test_ZbirnaRecalcInPlace_Auto`, koji tvrdi upravo ono što je ova
 > odluka ukinula.
 
+**ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
+operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu
+zbirne **ne bira operater** — donosi ih **prvi izvor** (`ZbrPreuzmiCinjenice`),
+jer su činjenica robe, a robu donosi otpremnica. Zato, kad članstvo padne na
+**nulu**, te tri vrednosti se **brišu** (`ZbrOcistiCinjeniceBezClanstva`): iza
+njih više ne stoji nijedna otpremnica, a ostavljene bi tiho sužavale prazan nacrt
+na vrstu koju operater nikad nije izabrao niti je na ekranu vidi. Dok ima **bar
+jednog** člana se ne diraju — izvor ih i dalje pokriva, a svaki sledeći se meri
+prema njima (`ZbrRequireIstiAko`).
+
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i
 „postoji". Kaskade (šta storno jednog dokumenta povlači nizvodno) su opisane u
