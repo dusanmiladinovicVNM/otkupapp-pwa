@@ -99,6 +99,7 @@ Public Sub RunPaleteTestSuite()
     tx.AddTableSnapshot TBL_KULTURE
     tx.AddTableSnapshot TBL_TIP_AMBALAZE
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
 
     SeedMasterData
 
@@ -417,14 +418,30 @@ Private Sub T09_AdjustBlokPreradjena()
     ChkEq st(1, 3), 5, S & "stavka netaknuta (5 gajbica)"
 End Sub
 
+' Jedna stavka uz zaglavlje zbirne -- klasa I, bez gajbi (ovaj suite meri
+' vezu prijemnice i palete, ne kilazu zbirne).
+Private Sub TstZbirnaStavka(ByVal zbirnaID As String, ByVal kol As Double)
+    TstAppend TBL_ZBIRNA_STAVKE, _
+              Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
+                    COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
+              Array(zbirnaID & "-S1", zbirnaID, 1, KLASA_I, kol, 0)
+End Sub
+
 ' Zbirna re-point: prijemnica + NJENE PALETNE STAVKE dobijaju novu zbirnu
 ' (sledljivost gap-fix).
 Private Sub T10_ZbirnaRepointStavke()
     Const S As String = "T10 zbirna re-point: "
+    ' Zaglavlje + stavka (S4-1): kilaza zbirne zivi na stavci, a strog citalac
+    ' odbija zaglavlje bez stavki nad CELIM registrom. Ovaj suite se vrti u
+    ' transakciji koja se ponistava, pa danas ne curi u druge suite-e -- ali
+    ' seed koji pravi dokument u obliku koji pisac ne moze da napravi je mina
+    ' za prvi sledeci citalac koji se ovde zatekne.
     TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
               Array("TSTZBR-A", "TST-Z10A", "")
+    TstZbirnaStavka "TSTZBR-A", 50
     TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
               Array("TSTZBR-B", "TST-Z10B", "")
+    TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
     Paletize "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"

@@ -498,7 +498,7 @@ Private Sub Test_DuplicateFakturaIsBlocked()
     ' Minimal prijemnica fixture for faktura duplicate test.
     ' Zbirna mora da postoji pre prijemnice (PRIJEMNICA_ZBIRNA_PROVERA guard).
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, "I")
     AssertTrue Len(zbrFix) > 0, "Duplicate faktura fixture zbirna created"
@@ -704,7 +704,7 @@ Private Sub Test_InvalidZbirnaInvalidClassDoesNotAppend()
     beforeCount = CountRows(TBL_ZBIRNA)
 
     Dim result As String
-    result = SaveZbirna_TX( _
+    result = ZbrStari_TX( _
         NextTestDate(), TEST_VOZ_ID, _
         TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BADCLASS"), _
         TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
@@ -737,7 +737,7 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
     Dim brojZbirne As String: brojZbirne = TEST_PREFIX & "-BAD-ZBR-" & scenario
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Negative ambalaza fixture zbirna created"
@@ -1801,10 +1801,10 @@ Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
     ' Zbirna 300 kg u dva reda (100 + 200) -- manjak se meri po BROJU, ne po
     ' jednom redu; sa jednim redom bi i pogresno "uzmi prvi" prolazilo.
     Dim zbrI As String, zbrII As String
-    zbrI = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrI = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                          100#, TEST_TIP_AMB, 10, KLASA_I)
-    zbrII = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrII = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                           200#, TEST_TIP_AMB, 20, KLASA_II)
     AssertTrue Len(zbrI) > 0 And Len(zbrII) > 0, "Manjak: fixture zbirna I+II kreirana"
@@ -1867,7 +1867,7 @@ Private Sub Test_OpenFaktureExcludeStornirano()
     brojPrij = TEST_PREFIX & "-PRJ-FS-" & scenario
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Storno faktura: fixture zbirna kreirana"
@@ -1986,7 +1986,7 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
     brojZbirne = TEST_PREFIX & "-ZBR-SV-" & scenario
     brojPrij = TEST_PREFIX & "-PRJ-SV-" & scenario     ' ISTI broj za oba kupca
 
-    AssertTrue Len(SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    AssertTrue Len(ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                                  "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                                  100#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
                "Storno guard: fixture zbirna kreirana"
@@ -2086,7 +2086,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     ' --- A) uobicajen redosled: roditelj pa dete ---
-    zbrA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
+    zbrA = ZbrStari_TX(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                          100#, TEST_TIP_AMB, 10, KLASA_I)
     AssertTrue Len(zbrA) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
@@ -2456,7 +2456,7 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
 
     Dim pre As Long: pre = CountRows(TBL_ZBIRNA)
     Dim res As String
-    res = SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+    res = ZbrStariMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                              TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10, True, 50#, 5)
     AssertTrue InStr(1, res, " + ", vbBinaryCompare) > 0, _
                "ZBR broj: dvoklasna zbirna upisuje obe klase (bilo: " & res & ")"
@@ -2469,13 +2469,13 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
     MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, Trim$(ids(1))
 
     pre = CountRows(TBL_ZBIRNA)
-    AssertEquals "", SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+    AssertEquals "", ZbrStariMulti_TX(d, TEST_VOZ_ID, broj, TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                                         TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10), _
                  "ZBR broj: storniran broj istog vozaca istog dana ne upisuje nov red (A9)"
     AssertEquals CStr(pre), CStr(CountRows(TBL_ZBIRNA)), _
                  "ZBR broj: odbijen upis nije ostavio red"
 
-    AssertTrue Len(SaveZbirnaMulti_TX(d, TEST_VOZ_ID, broj & "-2", TEST_KUP_ID, "Test Hladnjaca", _
+    AssertTrue Len(ZbrStariMulti_TX(d, TEST_VOZ_ID, broj & "-2", TEST_KUP_ID, "Test Hladnjaca", _
                                       "Test Pogon", TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10)) > 0, _
                "ZBR broj: nov broj istog vozaca istog dana prolazi"
 
@@ -2600,7 +2600,7 @@ Private Sub Test_GeneracijaNePrelaziVlasnika()
     brojPrij = TEST_PREFIX & "-PRJ-VL-" & scenario     ' ISTI broj za oba kupca
 
     Dim zbrFix As String
-    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrFix = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                            "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                            100#, TEST_TIP_AMB, 0, KLASA_I)
     AssertTrue Len(zbrFix) > 0, "Vlasnik scope: fixture zbirna kreirana"
@@ -2770,7 +2770,7 @@ Private Sub Test_ZbirnaRowDataColumnMapped()
     ' mora zavrsiti u SVOJOJ koloni -- pozicijski Array(...) je to garantovao samo
     ' dok je redosled kolona tacno onakav kakav je kod pretpostavljao.
     Dim zbrID As String
-    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+    zbrID = ZbrStari_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
                           123.45, TEST_TIP_AMB, 7, KLASA_II)
 
@@ -7619,6 +7619,77 @@ Private Sub IzvorOtpremniceOdbijen(ByVal otkupID As String, ByVal otpID As Strin
                  "OTK izvor otpremnice " & stanje & ": clanstvo ostaje netaknuto"
 End Sub
 
+' --- stari pisac zbirne u testovima: zaglavlje + stavka ----------------------
+'
+' MERENJE (pun prolaz na 50884ebe): cetiri provere su pale sa
+' "Zbirna nema nijednu stavku: ZBR-00001". Nijedna nije bila o dokumentu koji
+' test pravi -- pala je zato sto RANIJI test ostavi u svesci zaglavlje koje je
+' napravio STARI pisac, a strog citalac stavki validira CEO registar. Isto je
+' S3b-1 vec izmerio kod otpremnice: "prvi takav dokument obara strogi citac za
+' ceo prolaz".
+'
+' Resenje NIJE oslabiti citaoca (opseg citaoca je zaseban nalaz, backlog S15)
+' niti dopisati stavke u samog pisca (legacy se ne odrzava zivim). Test koji
+' stari pisac koristi kao PREDUSLOV mora da ostavi dokument u obliku koji vazeci
+' model priznaje -- isto sto SeedZbirna vec radi u storno suite-u.
+'
+' Zasto omotac a ne izmena na 15 mesta: potpis je identican, pa se semantika
+' svakog testa ne menja ni za slovo (pisac i dalje radi, generaciju i dalje
+' pecati, negativan slucaj i dalje vraca ""). Menja se samo to sto dokument
+' posle uspesnog upisa ima i stavku.
+Private Function ZbrStari_TX(ByVal datum As Date, ByVal vozacID As String, _
+                             ByVal brojZbirne As String, ByVal kupacID As String, _
+                             ByVal hladnjaca As String, ByVal pogon As String, _
+                             ByVal vrstaVoca As String, ByVal sortaVoca As String, _
+                             ByVal ukupnoKol As Double, ByVal tipAmb As String, _
+                             ByVal ukupnoAmb As Long, _
+                             Optional ByVal klasa As String = "I") As String
+    Dim res As String
+    res = SaveZbirna_TX(datum, vozacID, brojZbirne, kupacID, hladnjaca, pogon, _
+                        vrstaVoca, sortaVoca, ukupnoKol, tipAmb, ukupnoAmb, klasa)
+    ZbrStari_TX = res
+    If Len(res) = 0 Then Exit Function
+    ZbrStavkaUzStarogPisca res, klasa, ukupnoKol, ukupnoAmb
+End Function
+
+Private Function ZbrStariMulti_TX(ByVal datum As Date, ByVal vozacID As String, _
+                                  ByVal brojZbirne As String, ByVal kupacID As String, _
+                                  ByVal hladnjaca As String, ByVal pogon As String, _
+                                  ByVal vrstaVoca As String, ByVal sortaVoca As String, _
+                                  ByVal ukupnoKolI As Double, ByVal tipAmb As String, _
+                                  ByVal ukupnoAmb As Long, _
+                                  Optional ByVal hasKlasaII As Boolean = False, _
+                                  Optional ByVal ukupnoKolII As Double = 0, _
+                                  Optional ByVal ukupnoAmbII As Long = 0) As String
+    Dim res As String
+    res = SaveZbirnaMulti_TX(datum, vozacID, brojZbirne, kupacID, hladnjaca, pogon, _
+                             vrstaVoca, sortaVoca, ukupnoKolI, tipAmb, ukupnoAmb, _
+                             hasKlasaII, ukupnoKolII, ukupnoAmbII)
+    ZbrStariMulti_TX = res
+    If Len(res) = 0 Then Exit Function
+
+    ' Dvoklasni upis vraca "idI + idII" (SaveZbirnaMulti_TX), jednoklasni jedan
+    ' ID -- i to onaj klase koja je stvarno upisana.
+    Dim p As Long
+    p = InStr(1, res, " + ", vbBinaryCompare)
+    If p > 0 Then
+        ZbrStavkaUzStarogPisca Left$(res, p - 1), KLASA_I, ukupnoKolI, ukupnoAmb
+        ZbrStavkaUzStarogPisca Mid$(res, p + 3), KLASA_II, ukupnoKolII, ukupnoAmbII
+    ElseIf ukupnoKolI > 0 Then
+        ZbrStavkaUzStarogPisca res, KLASA_I, ukupnoKolI, ukupnoAmb
+    Else
+        ZbrStavkaUzStarogPisca res, KLASA_II, ukupnoKolII, ukupnoAmbII
+    End If
+End Function
+
+Private Sub ZbrStavkaUzStarogPisca(ByVal zbirnaID As String, ByVal klasa As String, _
+                                   ByVal kol As Double, ByVal amb As Double)
+    If kol <= 0 Then Exit Sub
+    ZbrDodajStavku zbirnaID & "-S1", zbirnaID, _
+                   IIf(UCase$(Trim$(klasa)) = UCase$(KLASA_II), 2, 1), _
+                   klasa, kol, amb, "ZbrStavkaUzStarogPisca"
+End Sub
+
 ' =====================================================================
 ' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
 ' =====================================================================
@@ -9929,13 +10000,13 @@ Private Sub Test_BKTX_ZbirnaTudjegVlasnikaOdbijena()
                  "BKTX zbirna: broj stanice u nizu realnog vozaca je TUDJ"
 
     ' I kroz pisca.
-    AssertEquals "", SaveZbirna_TX(d, TEST_VOZ_ID, brojStanice, TEST_KUP_ID, _
+    AssertEquals "", ZbrStari_TX(d, TEST_VOZ_ID, brojStanice, TEST_KUP_ID, _
                                    "Test Hladnjaca", "Test Pogon", TEST_VRSTA, _
                                    TEST_SORTA, 1000#, TEST_TIP_AMB, 100, "I"), _
                  "BKTX zbirna: pisac odbija broj tudjeg vlasnika"
 
     ' Kontrola: vozacev sopstveni broj prolazi kroz istog pisca.
-    AssertTrue Len(SaveZbirna_TX(d, TEST_VOZ_ID, _
+    AssertTrue Len(ZbrStari_TX(d, TEST_VOZ_ID, _
                                  modBrojevi.FormatBroj(TEST_VOZ_ID, d, 1), _
                                  TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
                                  TEST_VRSTA, TEST_SORTA, 1000#, TEST_TIP_AMB, _
