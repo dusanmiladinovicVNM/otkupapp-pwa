@@ -2292,11 +2292,16 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             ' Nedostajuci kljuc NIJE nula (review #334, P1): red dokumenta bez
             ' stavki pada po imenu. Ranije je takav red imao duguje = 0, pa je
             ' pilula pokazivala "placeno" na dokumentu bez ijedne stavke.
+            ' Tri tipa, tri pristupnika: poruka o gresci imenuje BAS taj
+            ' dokument i njegovu tabelu stavki (review #370, P2).
             If mk = "OTKUP" Then
                 zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
-            Else
+            ElseIf mk = "OTPREMNICA" Then
                 zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
+            Else
+                zStav = modDokumenta.ZbirStavkiZaZbirnu(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
             End If
         End If

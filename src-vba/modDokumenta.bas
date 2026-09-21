@@ -2779,6 +2779,38 @@ Public Function ZbirStavkiPoOtpremnici() As Object
     Next i
 End Function
 
+' Zbir stavki JEDNE zbirne iz recnika -- nedostajuci kljuc je GRESKA.
+'
+' Postoji zato sto PORUKA pripada dokumentu: do review-a #370 je lista F8 za
+' zbirnu isla kroz ZbirStavkiZaOtpremnicu, pa bi pad nad zbirnom rekao
+' "Otpremnica nema nijednu stavku" i uputio na tblOtpremnicaStavke. Racun je bio
+' tacan (strog lookup po kljucu), ali bi dijagnostika slala operatera i
+' programera u pogresnu tabelu.
+Public Function ZbirStavkiZaZbirnu(ByVal zbir As Object, _
+                                   ByVal zbirnaID As String, _
+                                   ByVal sourceName As String) As Variant
+    If zbir Is Nothing Then
+        Err.Raise vbObjectError + 1957, sourceName, _
+                  "Zbir stavki zbirne nije izgradjen."
+    End If
+
+    Dim zid As String
+    zid = Trim$(zbirnaID)
+
+    If Len(zid) = 0 Then
+        Err.Raise vbObjectError + 1953, sourceName, _
+                  "Zaglavlje zbirne bez ZbirnaID-a se ne moze citati."
+    End If
+
+    If Not zbir.Exists(zid) Then
+        Err.Raise vbObjectError + 1957, sourceName, _
+                  "Zbirna nema nijednu stavku: " & zid & _
+                  ". Kolicina dokumenta se racuna iz " & TBL_ZBIRNA_STAVKE & "."
+    End If
+
+    ZbirStavkiZaZbirnu = zbir(zid)
+End Function
+
 ' Zbir stavki JEDNOG dokumenta iz recnika -- nedostajuci kljuc je GRESKA.
 ' Druga brana, kao ZbirStavkiZaOtkup: nijedan citalac ne sme da ima granu koja
 ' nulu vraca kao podatak.

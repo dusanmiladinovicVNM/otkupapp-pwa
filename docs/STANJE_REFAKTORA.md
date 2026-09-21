@@ -161,10 +161,13 @@
     `SnimiZbirnu`. Nove grupe popisa: `zbr_linija` 30, `zbr_stari_pisac` 29.
     **Odluka operatera (ZBR-KANON-03):** izmena izvora ne prepravlja zbirnu u mestu nego pravi **novu verziju**
     (A13); `docs/DOMEN/README.md` je tvrdio suprotno i ispravljen je. Okvir rekalkulacije briše S4-3.
-    **Nalaz:** identitet zbirne u ljusci je još `GeneracijaID`, koju kanonski pisac ne upisuje — prelazi na
-    `ZbirnaID` u S4-3.
-26. **Sledeće:** **S4-2** (F3 nad kanonom), pa S4-3, S4-4, pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO`
-    kao izvor), pa **S3e-2** (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
+26. **KAPIJA ZA S4-2 (review #370, P1):** identitet zbirne u ljusci je još `GeneracijaID`, koju kanonski pisac
+    **ne upisuje** — a `Chk_B9` istovremeno tvrdi da je prazna generacija integritetska greška. Dok je F3
+    pauziran to ništa ne laže; počinje da laže **u trenutku kad F3 proradi**, jer bi ljuska pala nazad na
+    `BrojZbirne` kao identitet. **S4-2 počinje** prelaskom `IdKolonaTipa("ZBIRNA")` na `COL_ZBR_ID` i
+    usklađivanjem B9, pa tek onda skida pauzu. Rešenje NIJE dodati `GeneracijaID` kanonskom piscu.
+27. **Sledeće:** **S4-2** (identitet → F3 nad kanonom), pa S4-3, S4-4, pa **S5** (PWA sync, pre njega otkup u
+    `PROSLEDJENO` kao izvor), pa **S3e-2** (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
 
 ## Alati i kapije
 

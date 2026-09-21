@@ -400,10 +400,24 @@ End Sub
 ' CHECK B9: AKTIVNA ZBIRNA BEZ GeneracijaID
 ' ============================================================
 ' ZBR-IDENT-01: prazan GeneracijaID na aktivnom redu je integritetska greska,
-' ne alternativni oblik identiteta. Sva tri writer-a (SaveZbirna, modMasterSync,
-' modDokumentInvariant) odmah PECATE validan GeneracijaID -- prva dva ga
-' nasledjuju u svom scope-u, MasterSync ga kuje -- pa produkcija ovo stanje
-' ne pravi -- ali rucna izmena u tabeli i starije sveske mogu.
+' ne alternativni oblik identiteta. Stari pisci (SaveZbirna, modMasterSync,
+' modDokumentInvariant) ga odmah PECATE -- prva dva ga nasledjuju u svom
+' scope-u, MasterSync ga kuje -- pa ga produkcija starog modela nije izostavljala;
+' ostajale su rucna izmena u tabeli i starije sveske.
+'
+' OD PR3 TO VISE NIJE CEO SPISAK PISACA, I DVE TVRDNJE SU U SUKOBU.
+' Kanonski pisac (CreateZbirna_TX) GeneracijaID NAMERNO ne pise -- identitet
+' kanonske zbirne je ZbirnaID (v. BuildZbirnaHeaderRowData). Za takav dokument
+' ova provera tvrdi da je pokvaren, a nije: nema generaciju jer je i ne treba.
+'
+' KAPIJA ZA S4-2 (review #370, P1): pre nego sto se skine pauza sa F3, identitet
+' zbirne u ljusci mora da predje na ZbirnaID (modScrDokumenti.IdKolonaTipa), a
+' B9 da se uskladi sa tim ugovorom -- redefinisati je na LEGACY redove ili je
+' ukloniti. Resenje NIJE dodati GeneracijaID kanonskom piscu: time bi dokument
+' opet imao dva identiteta, sto ceo refaktor uklanja.
+' Danas provera ne laze ni na cemu jer nijedan zivi put ne pravi kanonsku zbirnu
+' (F3, malina auto-zbirna i VOZ uvoz su pauzirani) -- ona pocinje da laze tacno
+' u trenutku kad F3 proradi.
 Private Sub Chk_B9_ZbirnaBezGeneracije()
     On Error GoTo EH
 
