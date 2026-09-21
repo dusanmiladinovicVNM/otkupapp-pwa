@@ -1217,13 +1217,10 @@ Private Function CreateZbirna(ByVal h As Object, _
         r = NadjiJedanRedOtpremnice(data, cID, otpID, SRC)
         redPoID.Add UCase$(otpID), r
 
-        ' IsStorniranoValue je Private u modStorno -- odavde nevidljiv.
-        ' Poredjenje je case-insensitive, kao tamo.
-        If StrComp(Trim$(NzToText(data(r, cStorno))), "Da", _
-                   vbTextCompare) = 0 Then
-            Err.Raise vbObjectError + 1227, SRC, _
-                      "Otpremnica je stornirana: " & otpID
-        End If
+        ' Ista definicija valjanog izvora koju koristi i put nacrta: nije
+        ' stornirana I jeste izdata (review #372, P1). Do tada je ovaj ulaz
+        ' primao i DRAFT otpremnicu -- dakle robu koja nije otisla.
+        RequireOtpValidanIzvorZbirne data, r, otpID, SRC
 
         ' Fail-closed na vec vezanu otpremnicu. Jedini izvor je clanstvo.
         '
@@ -1557,7 +1554,8 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
                                           ByVal pogon As String, _
                                           ByVal vrstaVoca As String, _
                                           ByVal sortaVoca As String, _
-                                          ByVal tipAmb As String) As Variant
+                                          ByVal tipAmb As String, _
+                                          Optional ByVal izdatoStatus As String = "") As Variant
     Const SRC As String = "BuildZbirnaHeaderRowData"
 
     Dim colCount As Long
@@ -1594,8 +1592,10 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     ' imati svoj ulaz (CreateZbirnaDraft_TX) i pisati DRAFT -- a razlika izmedju
     ' "niko nije upisao" i "izdato" tada vise nije pretpostavka.
     If GetColumnIndex(TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS) > 0 Then
-        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, _
-                            IZDATO_IZDATO, SRC
+        Dim st As String
+        st = Trim$(izdatoStatus)
+        If Len(st) = 0 Then st = IZDATO_IZDATO
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, st, SRC
     End If
 
     BuildZbirnaHeaderRowData = rowData
@@ -1681,6 +1681,709 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
             End If
         End If
     Next i
+End Function
+
+' =====================================================================
+' NACRT ZBIRNE (S4-2b)
+' =====================================================================
+'
+' Odluka operatera (21.09.2026): zbirna mora da radi na OBA nacina, isto kao
+' otpremnica:
+'
+'   1) NACRT PA POKRIVANJE -- operater prvo najavi sta zbirna nosi (kilaza i
+'      gajbe po klasi), pa dodaje izdate otpremnice dok najava ne bude pokrivena.
+'      Izdavanje trazi TACNU jednakost.
+'   2) JEDAN POTEZ -- operater izabere otpremnice, a ocekivanje se izvodi iz njih
+'      (CreateZbirnaIzIzvora_TX, postoji od PR3).
+'
+' Razlika prema otpremnici je samo u tome STA je izvor: otpremnici su izvor
+' otkupni blokovi, zbirnoj IZDATE OTPREMNICE. Nacrt otpremnice nije roba koja je
+' otisla, pa ne moze da bude deo zbirne -- odluka koju je S14.14 ostavila S4.
+' PROSLEDJENO se racuna kao izdato (review #362): sync ne menja cinjenicu da je
+' roba otpremljena.
+
+Public Function CreateZbirnaDraft_TX(ByVal h As Object, _
+                                     ByVal ocekivano As Collection, _
+                                     Optional ByRef outGreska As String) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "CreateZbirnaDraft_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE
+
+    ' Isti razlog kao kod otpremnice: Nothing je privatan signal jednopoteznog
+    ' puta i ne sme da procuri u rucni API -- inace nastaje DRAFT bez ocekivanja,
+    ' dakle draft koji nema sta da meri a izgleda ispravno.
+    If ocekivano Is Nothing Then
+        Err.Raise vbObjectError + 1340, "CreateZbirnaDraft_TX", _
+                  "Ocekivanje nije prosledjeno. Rucni nacrt mora da prijavi sta " & _
+                  "zbirna nosi; za jedan potez koristi CreateZbirnaIzIzvora_TX."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+
+    CreateZbirnaDraft_TX = ZbrNapraviDraft(h, ocekivano)
+
+    If CreateZbirnaDraft_TX = "" Then
+        Err.Raise vbObjectError + 1341, "CreateZbirnaDraft_TX", _
+                  "ZbrNapraviDraft nije vratio ZbirnaID."
+    End If
+
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    outGreska = ZbrPadTransakcije(tx, "CreateZbirnaDraft_TX", CreateZbirnaDraft_TX)
+    CreateZbirnaDraft_TX = ""
+End Function
+
+Public Function DodajZbirnaIzvor_TX(ByVal zbirnaID As String, _
+                                    ByVal otpremnicaID As String, _
+                                    Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "DodajZbirnaIzvor_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_IZVORI & "|" & TBL_OTPREMNICA & _
+        "|" & TBL_OTPREMNICA_STAVKE
+
+    tx.BeginTx
+    ' Zaglavlje ULAZI u snapshot: prvi izvor definise vrstu, sortu i tip
+    ' ambalaze, pa dodavanje menja i njega. Bez ovoga bi pad posle preuzimanja
+    ' cinjenica ostavio zaglavlje popunjeno, a clanstvo prazno.
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ZbrRequireIzvorValjan zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor", True
+    ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
+    ZbrUpisiClanstvo zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
+
+    tx.CommitTx
+    Set tx = Nothing
+    DodajZbirnaIzvor_TX = True
+    Exit Function
+
+EH:
+    outGreska = ZbrPadTransakcije(tx, "DodajZbirnaIzvor_TX", zbirnaID)
+    DodajZbirnaIzvor_TX = False
+End Function
+
+Public Function UkloniZbirnaIzvor_TX(ByVal zbirnaID As String, _
+                                     ByVal otpremnicaID As String, _
+                                     Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "UkloniZbirnaIzvor_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_IZVORI
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    Dim rZbr As Long
+    rZbr = ZbrRedHeadera(zbirnaID, "ZbrUkloniIzvor")
+    RequireZbrDraft zbirnaID, rZbr, "ZbrUkloniIzvor"
+
+    ZbrUkloniIzvor zbirnaID, Trim$(otpremnicaID), "ZbrUkloniIzvor"
+
+    tx.CommitTx
+    Set tx = Nothing
+    UkloniZbirnaIzvor_TX = True
+    Exit Function
+
+EH:
+    outGreska = ZbrPadTransakcije(tx, "UkloniZbirnaIzvor_TX", zbirnaID)
+    UkloniZbirnaIzvor_TX = False
+End Function
+
+Public Function IzdajZbirnu_TX(ByVal zbirnaID As String, _
+                               Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    modSchema.SchemaReadyOrFail "IzdajZbirnu_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
+        "|" & TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+
+    ' Zbirna NE knjizi ambalazu: gajbe su vec knjizene pri izdavanju otpremnice,
+    ' a knjizice se ponovo pri prijemu (S6). Zbirna je prevozni spisak, ne
+    ' promena stanja gajbi -- zato ovde nema snapshota tblAmbalaza.
+    ZbrIzdaj zbirnaID
+
+    tx.CommitTx
+    Set tx = Nothing
+    IzdajZbirnu_TX = True
+    Exit Function
+
+EH:
+    outGreska = ZbrPadTransakcije(tx, "IzdajZbirnu_TX", zbirnaID)
+    IzdajZbirnu_TX = False
+End Function
+
+Public Function ZbirnaJeIzdata(ByVal zbirnaID As String) As Boolean
+    zbirnaID = Trim$(zbirnaID)
+    If Len(zbirnaID) = 0 Then Exit Function
+
+    ZbirnaJeIzdata = IzdatoStatusJeIzdato(LookupValue( _
+                         TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, _
+                         COL_TRACE_IZDATO_STATUS))
+End Function
+
+' Clanovi JEDNOG nacrta -- prazna kolekcija je uredno stanje (nacrt jos nije
+' pokriven). Za IZDATU zbirnu prazno bi bio kvar, i to hvata IzvoriZbirne.
+Public Function ZbrClanovi(ByVal zbirnaID As String) As Collection
+    Const SRC As String = "ZbrClanovi"
+
+    Dim c As Collection
+    Set c = New Collection
+    Set ZbrClanovi = c
+
+    Dim izv As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+
+    Dim cZbr As Long, cOtp As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, SRC)
+    cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, SRC)
+
+    Dim i As Long, zid As String
+    zid = Trim$(zbirnaID)
+    For i = 1 To UBound(izv, 1)
+        If StrComp(Trim$(NzToText(izv(i, cZbr))), zid, vbTextCompare) = 0 Then
+            c.Add Trim$(NzToText(izv(i, cOtp)))
+        End If
+    Next i
+End Function
+
+' --- core: nacrt ------------------------------------------------------------
+Private Function ZbrNapraviDraft(ByVal h As Object, _
+                                 ByVal ocekivano As Collection) As String
+    Const SRC As String = "ZbrNapraviDraft"
+
+    HdrProveriKljuceve h, SRC
+
+    Dim datum As Date
+    Dim vozacID As String, brojZbirne As String, kupacID As String
+
+    datum = HdrDatum(h, "Datum", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
+    kupacID = HdrObavezan(h, "KupacID", SRC)
+
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                     brojZbirne, SRC
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                        brojZbirne, SRC
+
+    If ocekivano.count = 0 Then
+        Err.Raise vbObjectError + 1342, SRC, _
+                  "Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu."
+    End If
+
+    Dim zbirnaID As String
+    zbirnaID = NewEntityID("ZBR-")
+    If Len(zbirnaID) = 0 Then
+        Err.Raise vbObjectError + 1363, SRC, "NewEntityID nije vratio ZbirnaID."
+    End If
+
+    ' VRSTA, SORTA I TIP AMBALAZE NE DOLAZE IZ ZAGLAVLJA (review #372, P1).
+    '
+    ' HdrProveriKljuceve ih izricito ne dozvoljava -- one su cinjenica ROBE, a
+    ' robu donosi izvor. Nacrt zato krece prazan, a PRVI izvor ih definise
+    ' (ZbrPreuzmiCinjenice); svaki sledeci mora da im se poklopi.
+    '
+    ' Prva verzija ovog koda ih je citala iz h i time uvek dobijala prazno, pa je
+    ' zbirna ostajala bez vrste i sorte i posle izdavanja.
+    Dim rowData As Variant
+    rowData = BuildZbirnaHeaderRowData(zbirnaID, datum, vozacID, brojZbirne, _
+                                       kupacID, HdrOpcion(h, "Hladnjaca"), _
+                                       HdrOpcion(h, "Pogon"), _
+                                       "", "", "", IZDATO_DRAFT)
+
+    If AppendRow(TBL_ZBIRNA, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1343, SRC, "AppendRow za tblZbirna nije uspeo."
+    End If
+
+    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC
+
+    ZbrNapraviDraft = zbirnaID
+End Function
+
+' Ocekivanje -> stavke. Jedna stavka po klasi, u kanonskom redu, isti ugovor
+' koji citalac (StavkeZbirneRedovi) posle trazi.
+Private Sub ZbrUpisiOcekivano(ByVal zbirnaID As String, _
+                              ByVal ocekivano As Collection, _
+                              ByVal src As String)
+    Dim kolPoKlasi As Object, ambPoKlasi As Object
+    Set kolPoKlasi = CreateObject("Scripting.Dictionary")
+    Set ambPoKlasi = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long, s As Object, klasa As String
+    For i = 1 To ocekivano.count
+        Set s = ocekivano(i)
+        klasa = UCase$(Trim$(NzToText(s("Klasa"))))
+        RequireValidDocumentClass klasa, src
+
+        If kolPoKlasi.Exists(klasa) Then
+            Err.Raise vbObjectError + 1344, src, _
+                      "Ocekivanje ima dve stavke iste klase: " & klasa
+        End If
+
+        If CDbl(s("Kolicina")) <= 0 Then
+            Err.Raise vbObjectError + 1345, src, _
+                      "Ocekivana kolicina za klasu " & klasa & " nije veca od nule."
+        End If
+        ' RequireCeoBroj meri SAMO celobrojnost: -10 je savrseno ceo broj, pa je
+        ' bez ove provere pisac primao negativne gajbe koje strog citalac posle
+        ' odbija (RequireZbrStavkaUgovor). Pisac i citalac moraju da traze isto.
+        If CDbl(s("KolAmbalaze")) < 0 Then
+            Err.Raise vbObjectError + 1360, src, _
+                      "Ocekivana ambalaza za klasu " & klasa & " je negativna."
+        End If
+        RequireCeoBroj CDbl(s("KolAmbalaze")), _
+                       "Ocekivana ambalaza za klasu " & klasa, src
+
+        kolPoKlasi.Add klasa, CDbl(s("Kolicina"))
+        ambPoKlasi.Add klasa, CDbl(s("KolAmbalaze"))
+    Next i
+
+    Dim klase As Collection
+    Set klase = KlaseUKanonskomRedu(kolPoKlasi)
+
+    Dim k As Long, rb As Long, stavkaID As String
+    For k = 1 To klase.count
+        klasa = CStr(klase(k))
+        rb = rb + 1
+
+        ' Red bez identiteta je gori od pada: prolazi kroz commit, a nijedna
+        ' kasnija radnja ne moze da ga pogodi. Isti standard vec drzi CreateZbirna.
+        stavkaID = NewEntityID("ZBS-")
+        If Len(stavkaID) = 0 Then
+            Err.Raise vbObjectError + 1361, src, _
+                      "NewEntityID nije vratio ZbirnaStavkaID za klasu " & klasa & "."
+        End If
+
+        If AppendRow(TBL_ZBIRNA_STAVKE, _
+                     BuildZbirnaStavkaRowData(stavkaID, zbirnaID, rb, _
+                                              klasa, CDbl(kolPoKlasi(klasa)), _
+                                              CDbl(ambPoKlasi(klasa)))) <= 0 Then
+            Err.Raise vbObjectError + 1346, src, _
+                      "AppendRow za " & TBL_ZBIRNA_STAVKE & " nije uspeo."
+        End If
+    Next k
+End Sub
+
+' STA JE VALJAN IZVOR ZBIRNE -- jedna definicija za oba kanonska ulaza
+' (review #372, P1).
+'
+' Do ovog reza je pravilo "izvor mora biti IZDATA otpremnica" stajalo samo na
+' putu nacrta (ZbrRequireIzvorValjan), dok ga je jednopotezni CreateZbirna
+' preskakao -- pa je ista DRAFT otpremnica bila odbijena na jednom ulazu i
+' primljena na drugom. Dva kanonska command-a ne smeju da imaju dve definicije
+' istog pojma.
+'
+' Ovde su SAMO tvrdnje o samom izvoru. Tvrdnje o odnosu prema konkretnoj zbirnoj
+' (slobodan, isti vozac, ista vrsta/sorta/ambalaza) ostaju kod pozivaoca, jer
+' zavise od cilja.
+Private Sub RequireOtpValidanIzvorZbirne(ByRef otp As Variant, ByVal rOtp As Long, _
+                                         ByVal otpremnicaID As String, _
+                                         ByVal src As String)
+    If StrComp(Trim$(NzToText(otp(rOtp, _
+               RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, src)))), _
+               "Da", vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1352, src, _
+                  "Otpremnica je stornirana: " & otpremnicaID
+    End If
+
+    If Not OtpremnicaJeIzdata(otpremnicaID) Then
+        Err.Raise vbObjectError + 1353, src, _
+                  "Otpremnica nije izdata: " & otpremnicaID & _
+                  ". Zbirna nosi robu koja je otisla, a nacrt nije otisao."
+    End If
+End Sub
+
+' --- core: nacrt zbirne, clanstvo i izdavanje -------------------------------
+
+Private Function ZbrRedHeadera(ByVal zbirnaID As String, ByVal src As String) As Long
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID))
+
+    Dim n As Long
+    If Not redovi Is Nothing Then n = redovi.count
+
+    If n <> 1 Then
+        Err.Raise vbObjectError + 1347, src, _
+                  "Zaglavlje zbirne se ne nalazi tacno jednom: " & zbirnaID & _
+                  " (nadjeno " & CStr(n) & ")."
+    End If
+
+    ZbrRedHeadera = CLng(redovi(1))
+End Function
+
+' Nacrt se menja, izdata zbirna ne. Ista granica kao kod otpremnice: posle
+' izdavanja dokument je tvrdnja o robi koja je otisla, a ne radna povrsina.
+Private Sub RequireZbrDraft(ByVal zbirnaID As String, ByVal rZbr As Long, _
+                            ByVal src As String)
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+
+    If StrComp(Trim$(NzToText(data(rZbr, _
+               RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, src)))), _
+               "Da", vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1348, src, _
+                  "Zbirna je stornirana: " & zbirnaID
+    End If
+
+    Dim status As String
+    status = UCase$(Trim$(NzToText(data(rZbr, _
+             RequireColumnIndex(TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, src)))))
+
+    If status <> UCase$(IZDATO_DRAFT) Then
+        Err.Raise vbObjectError + 1349, src, _
+                  "Zbirna nije nacrt (status " & status & "): " & zbirnaID & _
+                  ". Izdata zbirna se ne menja -- ispravlja se novom verzijom."
+    End If
+End Sub
+
+' IZVOR ZBIRNE JE IZDATA OTPREMNICA.
+'
+' Odluka koju je S14.14 ostavila S4: nacrt otpremnice je najava, ne roba koja je
+' otisla, pa ne moze da bude deo prevoznog spiska. PROSLEDJENO se racuna kao
+' izdato (review #362).
+'
+' Ostale kapije drze da zbirna bude JEDAN transport JEDNOG vozaca: isti vozac, i
+' ista vrsta/sorta/tip ambalaze koje je nacrt najavio. Zaglavlje koje neku od tih
+' tvrdnji nije dalo se ne poredi -- tada je izvor taj koji je definise.
+Private Sub ZbrRequireIzvorValjan(ByVal zbirnaID As String, _
+                                  ByVal otpremnicaID As String, _
+                                  ByVal src As String, _
+                                  ByVal traziSlobodan As Boolean)
+    If Len(otpremnicaID) = 0 Then
+        Err.Raise vbObjectError + 1350, src, "Prazan OtpremnicaID."
+    End If
+
+    Dim rZbr As Long
+    rZbr = ZbrRedHeadera(zbirnaID, src)
+    RequireZbrDraft zbirnaID, rZbr, src
+
+    Dim zbr As Variant
+    zbr = GetTableData(TBL_ZBIRNA)
+
+    Dim otp As Variant
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then
+        Err.Raise vbObjectError + 1351, src, "Tabela otpremnica je prazna."
+    End If
+
+    Dim cOtpID As Long
+    cOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, src)
+
+    Dim rOtp As Long
+    rOtp = NadjiJedanRedOtpremnice(otp, cOtpID, otpremnicaID, src)
+
+    RequireOtpValidanIzvorZbirne otp, rOtp, otpremnicaID, src
+
+    RequireIstoPolje Trim$(NzToText(zbr(rZbr, _
+                         RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, src)))), _
+                     Trim$(NzToText(otp(rOtp, _
+                         RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, src)))), _
+                     "VozacID", otpremnicaID, src
+
+    ZbrRequireIstiAko zbr, rZbr, COL_ZBR_VRSTA, otp, rOtp, COL_OTP_VRSTA, _
+                      "VrstaVoca", otpremnicaID, src
+    ZbrRequireIstiAko zbr, rZbr, COL_ZBR_SORTA, otp, rOtp, COL_OTP_SORTA, _
+                      "SortaVoca", otpremnicaID, src
+    ZbrRequireIstiAko zbr, rZbr, COL_ZBR_TIP_AMB, otp, rOtp, COL_OTP_TIP_AMB, _
+                      "TipAmbalaze", otpremnicaID, src
+
+    If traziSlobodan Then
+        Dim clanstvo As Object
+        Set clanstvo = AktivnoClanstvoPoKanonu(src)
+        If clanstvo.Exists(UCase$(otpremnicaID)) Then
+            Err.Raise vbObjectError + 1354, src, _
+                      "Otpremnica je vec u sastavu aktivne zbirne: " & otpremnicaID & _
+                      " -> " & CStr(clanstvo(UCase$(otpremnicaID)))
+        End If
+    End If
+End Sub
+
+' Poredi samo kad je zaglavlje tu tvrdnju DALO. Prazno polje na nacrtu znaci
+' "nisam rekao", ne "mora biti prazno kod izvora".
+Private Sub ZbrRequireIstiAko(ByRef zbr As Variant, ByVal rZbr As Long, _
+                              ByVal kolZbr As String, _
+                              ByRef otp As Variant, ByVal rOtp As Long, _
+                              ByVal kolOtp As String, _
+                              ByVal opis As String, ByVal otpremnicaID As String, _
+                              ByVal src As String)
+    Dim ocekivano As String
+    ocekivano = Trim$(NzToText(zbr(rZbr, RequireColumnIndex(TBL_ZBIRNA, kolZbr, src))))
+    If Len(ocekivano) = 0 Then Exit Sub
+
+    RequireIstoPolje ocekivano, _
+                     Trim$(NzToText(otp(rOtp, RequireColumnIndex(TBL_OTPREMNICA, kolOtp, src)))), _
+                     opis, otpremnicaID, src
+End Sub
+
+' Preuzimanje cinjenica nad (zbirnaID, otpremnicaID) -- redove nalazi sam, da
+' pozivaoci ne bi nosili indekse kroz slojeve.
+Private Sub ZbrPreuzmiCinjeniceZaIzvor(ByVal zbirnaID As String, _
+                                       ByVal otpremnicaID As String, _
+                                       ByVal src As String)
+    Dim otp As Variant
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then Exit Sub
+
+    Dim rOtp As Long
+    rOtp = NadjiJedanRedOtpremnice(otp, _
+               RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, src), otpremnicaID, src)
+
+    ZbrPreuzmiCinjenice zbirnaID, ZbrRedHeadera(zbirnaID, src), otp, rOtp, src
+End Sub
+
+' Prvi izvor DEFINISE cinjenice robe koje nacrt nije imao odakle da zna.
+'
+' Poziva se POSLE provere valjanosti, pa se upisuje samo ono sto je vec proslo
+' kapiju poklapanja: polje koje zaglavlje ima mora da se slaze (ZbrRequireIstiAko),
+' a polje koje nema se preuzima. Sledeci izvor tada vise nema sta da definise --
+' meri se prema upisanom.
+Private Sub ZbrPreuzmiCinjenice(ByVal zbirnaID As String, ByVal rZbr As Long, _
+                                ByRef otp As Variant, ByVal rOtp As Long, _
+                                ByVal src As String)
+    ZbrPreuzmiPolje zbirnaID, rZbr, COL_ZBR_VRSTA, otp, rOtp, COL_OTP_VRSTA, src
+    ZbrPreuzmiPolje zbirnaID, rZbr, COL_ZBR_SORTA, otp, rOtp, COL_OTP_SORTA, src
+    ZbrPreuzmiPolje zbirnaID, rZbr, COL_ZBR_TIP_AMB, otp, rOtp, COL_OTP_TIP_AMB, src
+End Sub
+
+Private Sub ZbrPreuzmiPolje(ByVal zbirnaID As String, ByVal rZbr As Long, _
+                            ByVal kolZbr As String, _
+                            ByRef otp As Variant, ByVal rOtp As Long, _
+                            ByVal kolOtp As String, ByVal src As String)
+    Dim zbr As Variant
+    zbr = GetTableData(TBL_ZBIRNA)
+
+    Dim sada As String
+    sada = Trim$(NzToText(zbr(rZbr, RequireColumnIndex(TBL_ZBIRNA, kolZbr, src))))
+    If Len(sada) > 0 Then Exit Sub
+
+    Dim izIzvora As String
+    izIzvora = Trim$(NzToText(otp(rOtp, RequireColumnIndex(TBL_OTPREMNICA, kolOtp, src))))
+    If Len(izIzvora) = 0 Then Exit Sub
+
+    RequireUpdateCell TBL_ZBIRNA, rZbr, kolZbr, izIzvora, src
+End Sub
+
+Private Sub ZbrUpisiClanstvo(ByVal zbirnaID As String, _
+                             ByVal otpremnicaID As String, ByVal src As String)
+    Dim izvorID As String
+    izvorID = NewEntityID("ZBI-")
+    If Len(izvorID) = 0 Then
+        Err.Raise vbObjectError + 1362, src, _
+                  "NewEntityID nije vratio ZbirnaIzvorID."
+    End If
+
+    If AppendRow(TBL_ZBIRNA_IZVORI, _
+                 BuildZbirnaIzvorRowData(izvorID, zbirnaID, otpremnicaID)) <= 0 Then
+        Err.Raise vbObjectError + 1355, src, _
+                  "AppendRow za " & TBL_ZBIRNA_IZVORI & " nije uspeo."
+    End If
+End Sub
+
+Private Sub ZbrUkloniIzvor(ByVal zbirnaID As String, _
+                           ByVal otpremnicaID As String, ByVal src As String)
+    Dim izv As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(izv) Then
+        Err.Raise vbObjectError + 1356, src, _
+                  "Otpremnica nije u sastavu ove zbirne: " & otpremnicaID
+    End If
+
+    Dim cZbr As Long, cOtp As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, src)
+    cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, src)
+
+    Dim i As Long, nadjen As Long, koliko As Long
+    For i = 1 To UBound(izv, 1)
+        If StrComp(Trim$(NzToText(izv(i, cZbr))), Trim$(zbirnaID), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(izv(i, cOtp))), otpremnicaID, vbTextCompare) = 0 Then
+                nadjen = i
+                koliko = koliko + 1
+            End If
+        End If
+    Next i
+
+    If koliko = 0 Then
+        Err.Raise vbObjectError + 1356, src, _
+                  "Otpremnica nije u sastavu ove zbirne: " & otpremnicaID
+    End If
+    If koliko > 1 Then
+        Err.Raise vbObjectError + 1357, src, _
+                  "Isti par (zbirna, otpremnica) postoji " & CStr(koliko) & _
+                  " puta: " & zbirnaID & " / " & otpremnicaID
+    End If
+
+    RequireDeleteRow TBL_ZBIRNA_IZVORI, nadjen, src
+End Sub
+
+' --- core: izdavanje zbirne -------------------------------------------------
+Private Sub ZbrIzdaj(ByVal zbirnaID As String)
+    Const SRC As String = "ZbrIzdaj"
+
+    Dim rZbr As Long
+    rZbr = ZbrRedHeadera(zbirnaID, SRC)
+    RequireZbrDraft zbirnaID, rZbr, SRC
+
+    Dim clanovi As Collection
+    Set clanovi = ZbrClanovi(zbirnaID)
+
+    If clanovi.count = 0 Then
+        Err.Raise vbObjectError + 1358, SRC, _
+                  "Zbirna nema nijedan izvor: " & zbirnaID & _
+                  ". Zbirna bez otpremnica nije prevoz."
+    End If
+
+    ' REVALIDACIJA, isti razlog kao kod otpremnice: izmedju dodavanja i izdavanja
+    ' prolazi vreme, pa izvor moze da bude storniran ili ispravljen. Provera i
+    ' upotreba moraju biti u istom trenutku.
+    Dim k As Long
+    For k = 1 To clanovi.count
+        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False
+    Next k
+
+    Dim ocek As Object, ocekAmb As Object
+    Dim pov As Object, povAmb As Object
+    ZbrUcitajOcekivano zbirnaID, ocek, ocekAmb, SRC
+    ZbrUcitajPovezano zbirnaID, clanovi, pov, povAmb, SRC
+
+    ZbrRequireJednakost zbirnaID, ocek, pov, "Kolicina", SRC
+    ZbrRequireJednakost zbirnaID, ocekAmb, povAmb, "KolAmbalaze", SRC
+
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+End Sub
+
+Private Sub ZbrUcitajOcekivano(ByVal zbirnaID As String, ByRef ocek As Object, _
+                               ByRef ocekAmb As Object, ByVal src As String)
+    Set ocek = CreateObject("Scripting.Dictionary")
+    Set ocekAmb = CreateObject("Scripting.Dictionary")
+
+    Dim stavke As Collection
+    Set stavke = StavkeZaZbirnu(StavkeZbirnePoDokumentu(), zbirnaID, src)
+
+    Dim i As Long, red As Variant, klasa As String
+    For i = 1 To stavke.count
+        red = stavke(i)
+        klasa = UCase$(Trim$(CStr(red(3))))
+        ocek(klasa) = CDbl(red(4))
+        ocekAmb(klasa) = CDbl(red(5))
+    Next i
+End Sub
+
+' Povezano = zbir stavki IZVORNIH otpremnica, po klasi.
+Private Sub ZbrUcitajPovezano(ByVal zbirnaID As String, ByVal clanovi As Collection, _
+                              ByRef pov As Object, ByRef povAmb As Object, _
+                              ByVal src As String)
+    Set pov = CreateObject("Scripting.Dictionary")
+    Set povAmb = CreateObject("Scripting.Dictionary")
+
+    Dim poDok As Object
+    Set poDok = StavkeOtpremnicePoDokumentu()
+
+    Dim k As Long, i As Long, stavke As Collection, red As Variant, klasa As String
+    For k = 1 To clanovi.count
+        Set stavke = StavkeZaOtpremnicu(poDok, CStr(clanovi(k)), src)
+        For i = 1 To stavke.count
+            red = stavke(i)
+            klasa = UCase$(Trim$(CStr(red(3))))
+            If Not pov.Exists(klasa) Then
+                pov.Add klasa, 0#
+                povAmb.Add klasa, 0#
+            End If
+            pov(klasa) = CDbl(pov(klasa)) + CDbl(red(4))
+            povAmb(klasa) = CDbl(povAmb(klasa)) + CDbl(red(6))
+        Next i
+    Next k
+End Sub
+
+' Jednakost PO KLASI, u oba smera: klasa koju je nacrt najavio a izvori je nemaju
+' je isto neslaganje kao klasa koju izvori nose a nacrt je nije najavio.
+Private Sub ZbrRequireJednakost(ByVal zbirnaID As String, ByVal ocek As Object, _
+                                ByVal pov As Object, ByVal opis As String, _
+                                ByVal src As String)
+    Dim sve As Object
+    Set sve = CreateObject("Scripting.Dictionary")
+
+    Dim k As Variant
+    For Each k In ocek.keys
+        If Not sve.Exists(CStr(k)) Then sve.Add CStr(k), True
+    Next k
+    For Each k In pov.keys
+        If Not sve.Exists(CStr(k)) Then sve.Add CStr(k), True
+    Next k
+
+    Dim a As Double, b As Double
+    For Each k In sve.keys
+        a = 0#: b = 0#
+        If ocek.Exists(CStr(k)) Then a = CDbl(ocek(CStr(k)))
+        If pov.Exists(CStr(k)) Then b = CDbl(pov(CStr(k)))
+
+        If Abs(a - b) > 0.0001 Then
+            Err.Raise vbObjectError + 1359, src, _
+                      "Zbirna " & zbirnaID & ": " & opis & " za klasu " & CStr(k) & _
+                      " -- najavljeno " & Fmt2Zbr(a) & ", povezano " & Fmt2Zbr(b) & _
+                      ". Zbirna se izdaje tek kad je najava pokrivena."
+        End If
+    Next k
+End Sub
+
+Private Function ZbrPadTransakcije(ByRef tx As clsTransaction, _
+                                   ByVal ulaz As String, _
+                                   ByVal entitetID As String) As String
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError ulaz, errDesc, errNum
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:=ulaz, _
+        entityType:="Zbirna", _
+        entityID:=entitetID, _
+        correlationId:=entitetID, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    PrintTxFailure ulaz, errSrc, errNum, errDesc
+    ZbrPadTransakcije = errDesc
 End Function
 
 ' --- kanonski citaoci stavki zbirne (S4-1) ----------------------------------

@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 21.09.2026 (S4-2a).
+**Ažurirano:** 21.09.2026 (S4-2b).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -29,7 +29,7 @@
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
 
-## Sledeći korak: S4-2b — F3 nad kanonom (vraća unos zbirne)
+## Sledeći korak: S4-2c — ekrani zbirne (F3 forma + radni sto u F2)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -173,9 +173,17 @@
     više nema. Rešenje NIJE bilo dodati generaciju kanonskom piscu (dva identiteta).
     **Rez u dva PR-a:** aparatura generacije ima 22 reference samo u `modDokumenta`, a `ZBR-CHILD-01` je veže
     za decu (prijemnica, paleta) koja ostaju do S6 — pa se uklanja identitet zbirne, ne ceo mehanizam.
-28. **Sledeće:** **S4-2b** (F3 nad kanonom), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03), S4-4 (malina
-    auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2** (brisanje kolona
-    kad popis pokaže nulu), pa S6 (prijemnica, F4).
+28. **S4-2b urađen** (§14.25): **zbirna dobija NACRT.** Odluka operatera: mora da radi na oba načina kao
+    otpremnica — najava pa pokrivanje izdatim otpremnicama, ali i direktan izbor izvora — a pregled svih
+    zbirnih u F3 je uslov bez kog se ne može. Ovaj PR je **pisac**: `CreateZbirnaDraft_TX`,
+    `DodajZbirnaIzvor_TX`/`UkloniZbirnaIzvor_TX`, `IzdajZbirnu_TX` (najava = povezano po klasi, uz
+    revalidaciju izvora), `ZbirnaJeIzdata`, `ZbrClanovi`. **Izvor zbirne je IZDATA otpremnica** (odluka koju
+    je §14.14 ostavila S4); `PROSLEDJENO` se računa kao izdato. Zbirna **ne knjiži ambalažu** — gajbe su
+    knjižene na otpremnici i knjiže se ponovo na prijemu (S6).
+29. **Sledeće:** **S4-2c** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
+    direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
+    S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
+    (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
 
 ## Alati i kapije
 

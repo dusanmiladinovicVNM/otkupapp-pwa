@@ -4039,6 +4039,84 @@ meri ukršten par i tvrdi da **ništa** nije dirnuto, uz pozitivnu kontrolu da i
 
 **Sledeće:** S4-2b — F3 nad kanonom (ekran bira izdate otpremnice, pauza pada, stari pisac se briše).
 
+### 14.25) S4-2b — zbirna dobija NACRT (21.09.2026)
+
+**Odluka operatera (21.09.2026), na pitanje kako F3 bira izvore:**
+
+> „Treba da postoji isti princip kao i za otpremnicu. Zbirna može da se unese prvo, i onda da se
+> validira unosom otpremnica dok ne bude potpuno pokrivena. A treba i da može bez toga, direktno
+> odabirom otpremnica koje je čine. Svakako u F3 mora da postoji pregled svih zbirnih, kao što u F2
+> mora da postoji pregled svih otpremnica, kao što u F1 mora da postoji pregled svih otkupnih listova.
+> To je conditio sine qua non."
+
+Tri stvari, i sve tri su obavezne:
+
+1. **Nacrt pa pokrivanje** — zbirna nastaje PRE nego što se zna od čega je sastavljena. Operater
+   najavi šta nosi, pa dodaje izdate otpremnice dok najava ne bude pokrivena.
+2. **Jedan potez** — direktno biranje otpremnica; očekivanje se izvodi iz njih
+   (`CreateZbirnaIzIzvora_TX`, postoji od PR3).
+3. **Pregled svih zbirnih u F3 ostaje** — lista dokumenata svog tipa je uslov bez kog se ne može, na
+   sva tri ekrana.
+
+**Rez:** ovaj PR je **pisac**, ne ekran. Lifecycle mora da postoji pre nego što ekran ima šta da zove,
+a mešanje to dvoje je isto što je S3a/S3b-2a već razdvojilo kod otpremnice.
+
+#### Urađeno — lifecycle nacrta
+
+| Ulaz | Šta radi |
+|---|---|
+| `CreateZbirnaDraft_TX(h, ocekivano)` | zaglavlje **DRAFT** + stavke (najava po klasi). `Nothing` kao očekivanje se odbija — to je privatan signal jednopoteznog puta |
+| `DodajZbirnaIzvor_TX` / `UkloniZbirnaIzvor_TX` | članstvo nacrta; uklanjanje traži DRAFT |
+| `IzdajZbirnu_TX` | revalidacija svih izvora, pa **najava = povezano po klasi**, pa status IZDATO |
+| `ZbirnaJeIzdata`, `ZbrClanovi` | čitači stanja; prazno članstvo je kod nacrta uredno, kod izdate kvar |
+
+**Izvor zbirne je IZDATA otpremnica** — odluka koju je §14.14 ostavila S4. Nacrt otpremnice je najava,
+ne roba koja je otišla, pa ne može biti deo prevoznog spiska. `PROSLEDJENO` se računa kao izdato
+(review #362): sync ne menja činjenicu da je roba otpremljena.
+
+**Ostale kapije drže da je zbirna JEDAN transport JEDNOG vozača:** isti vozač, i ista vrsta/sorta/tip
+ambalaže koje je nacrt najavio. Polje koje zaglavlje **nije dalo** se ne poredi — tada ga definiše
+izvor. Tako nacrt ne može da pokupi tuđu robu, a ne mora unapred da zna sve.
+
+**Revalidacija pri izdavanju**, isti razlog kao kod otpremnice: između „dodaj" i „izdaj" prođe vreme,
+pa se izvor u međuvremenu može stornirati ili ispraviti. Provera i upotreba moraju biti u istom
+trenutku — inače je to TOCTOU.
+
+**Zbirna ne knjiži ambalažu.** Gajbe su knjižene pri izdavanju otpremnice i knjižiće se ponovo pri
+prijemu (S6); zbirna je prevozni spisak, ne promena stanja gajbi. Zato `IzdajZbirnu_TX` nema snapshot
+`tblAmbalaza` — a to je i razlika prema `IzdajOtpremnicu_TX`, koja ga ima.
+
+#### Kapije
+
+`vba_check` (sabotaža **531 → 534**: pokrivenost, izvor mora biti izdat, izvor ne sme u dve zbirne),
+obe `who_writes`, `gen_schema_module`, `popis_citalaca`.
+
+Tri nova testa mere luk, ne pojedinačne pozive: `Test_ZBR_NacrtPaPokrivanje` (nacrt nije izdat →
+dodavanje izvora ga ne izdaje → izdavanje menja status), `Test_ZBR_NepokrivenNacrtSeNeIzdaje`
+(odbijanje **imenuje** najavu i povezano, pa se dopunom istog nacrta izdavanje dobije — bez te druge
+polovine bi tvrdnja bila zelena i da izdavanje uvek odbija) i `Test_ZBR_IzvorMoraBitiIzdatISlobodan`.
+
+#### Review #372 (NO-GO, četiri P1) — pisac nije imao jedan ugovor
+
+Sve četiri su u **novom** modelu, ne u legacy-u:
+
+| P1 | Šta je bilo | Ispravka |
+|---|---|---|
+| Jednopotezni `CreateZbirna` **nije** proveravao da je izvor izdat, dok put nacrta jeste | ista DRAFT otpremnica odbijena na jednom ulazu, primljena na drugom — i zbirna nastane IZDATA iz robe koja nije otišla | jedna definicija: `RequireOtpValidanIzvorZbirne`, koju zovu **oba** ulaza |
+| Nacrt je vrstu/sortu/tip ambalaže čitao iz zaglavlja, a `HdrProveriKljuceve` ih **izričito ne dozvoljava** | svaki nacrt je nastajao prazan i takav se **izdavao** — zbirna bez vrste i sorte, bez ijedne greške | **prvi izvor ih definiše** (`ZbrPreuzmiCinjenice`), sledeći mora da se poklopi; `DodajZbirnaIzvor_TX` zato snapshotuje i `tblZbirna` |
+| `RequireCeoBroj` meri samo celobrojnost, pa je **−10 gajbi** prolazilo | pisac pravi dokument koji strogi čitalac odbija | eksplicitna provera `< 0` |
+| `NewEntityID` za stavku i članstvo nije proveravan, iako `CreateZbirna` to radi | red bez identiteta prolazi kroz commit — nijedna kasnija radnja ne može da ga pogodi | provera na oba mesta, dokazana seam-om `NewEntityIDPadniTest` |
+
+**Poenta drugog nalaza nije bila prazno polje nego pogrešan izvor istine.** Vrsta, sorta i tip
+ambalaže su činjenica **robe**, a robu donosi izvor — zaglavlje ih zato i ne prima. Nacrt kreće
+prazan i to je ispravno; kvar je bio što ih niko posle nije popunio.
+
+Četiri nova testa, po jedan na svaki nalaz. Onaj o dva ulaza meri **isti izvor kroz oba** — jer je
+kvar bio upravo u razlici među njima. Sabotaža **534 → 537**.
+
+**Sledeće:** S4-2c — ekrani: F3 forma nad nacrtom uz **pregled svih zbirnih**, radni sto za izvore u
+F2 (kao blokovi u F1), direktan izbor otpremnica, skidanje pauze i brisanje starog pisca.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

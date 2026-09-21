@@ -502,6 +502,54 @@ SABOTAZE = {
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument",
     ),
+    # --- S4-2b, review #372: jedna definicija izvora, cinjenice, negativne gajbe
+    "zbirna-jedan-potez-prima-nacrt": (
+        "modDokumenta.bas",
+        "        RequireOtpValidanIzvorZbirne data, r, otpID, SRC\n",
+        "        ' SABOTAZA: jednopotezni ulaz ne proverava izvor\n",
+        "Test_ZBR_ObaUlazaTrazeIzdatIzvor",
+        "jedan potez ODBIJA nacrt otpremnice",
+    ),
+    "zbirna-ne-preuzima-cinjenice": (
+        "modDokumenta.bas",
+        "    ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), \"ZbrDodajIzvor\"\n",
+        "    ' SABOTAZA: prvi izvor ne definise cinjenice robe\n",
+        "Test_ZBR_PrviIzvorDefiniseCinjenice",
+        "prvi izvor je definisao vrstu",
+    ),
+    "zbirna-prima-negativne-gajbe": (
+        "modDokumenta.bas",
+        "        If CDbl(s(\"KolAmbalaze\")) < 0 Then\n",
+        "        If False Then   ' SABOTAZA: negativne gajbe prolaze\n",
+        "Test_ZBR_NegativnaAmbalazaSeNeUpisuje",
+        "nacrt je odbijen",
+    ),
+    # --- S4-2b: nacrt zbirne ------------------------------------------------
+    # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
+    # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.
+    "zbirna-izdaje-nepokriven-nacrt": (
+        "modDokumenta.bas",
+        "    ZbrRequireJednakost zbirnaID, ocek, pov, \"Kolicina\", SRC\n",
+        "    ' SABOTAZA: pokrivenost se ne proverava\n",
+        "Test_ZBR_NepokrivenNacrtSeNeIzdaje",
+        "nepokrivena zbirna se NE izdaje",
+    ),
+    "zbirna-prima-nacrt-otpremnice": (
+        "modDokumenta.bas",
+        "    If Not OtpremnicaJeIzdata(otpremnicaID) Then\n",
+        "    If False Then   ' SABOTAZA: i nacrt otpremnice ulazi u zbirnu\n",
+        "Test_ZBR_IzvorMoraBitiIzdatISlobodan",
+        "nacrt otpremnice se NE prima u zbirnu",
+    ),
+    "zbirna-prima-tudji-izvor": (
+        "modDokumenta.bas",
+        "        If clanstvo.Exists(UCase$(otpremnicaID)) Then\n"
+        "            Err.Raise vbObjectError + 1354, src, _\n",
+        "        If False Then   ' SABOTAZA: izvor sme u dve zbirne\n"
+        "            Err.Raise vbObjectError + 1354, src, _\n",
+        "Test_ZBR_IzvorMoraBitiIzdatISlobodan",
+        "ista otpremnica ne moze u dve zbirne",
+    ),
     # --- prefill posle storna (Z10) -----------------------------------------
     # --- S4-1: sadrzaj zbirne se cita sa stavki -----------------------------
     # Tri tvrdnje, tri mesta: ugovor citaoca (dve iste klase / zaglavlje bez

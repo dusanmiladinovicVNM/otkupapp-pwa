@@ -154,6 +154,13 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_LjuskaNosiZbirnaID
     Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument
     Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument
+    Test_ZBR_NacrtPaPokrivanje
+    Test_ZBR_NepokrivenNacrtSeNeIzdaje
+    Test_ZBR_IzvorMoraBitiIzdatISlobodan
+    Test_ZBR_ObaUlazaTrazeIzdatIzvor
+    Test_ZBR_PrviIzvorDefiniseCinjenice
+    Test_ZBR_NegativnaAmbalazaSeNeUpisuje
+    Test_ZBR_PrazanIDDetetaNeProlazi
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -7698,6 +7705,345 @@ Private Sub ZbrStavkaUzStarogPisca(ByVal zbirnaID As String, ByVal klasa As Stri
 End Sub
 
 ' =====================================================================
+' S4-2b: NACRT ZBIRNE -- najava, pokrivanje, izdavanje
+' =====================================================================
+
+' IZDATA otpremnica sa jednom stavkom klase I -- izvor kakav zbirna prima.
+Private Function ZbrIzdataOtp(ByVal oznaka As String, ByVal kol As Double, _
+                              ByVal amb As Double) As String
+    ' Jedan put do izdate otpremnice u ovom modulu -- Pr3Otpremnica od S4-2b
+    ' pravi bas takvu.
+    ZbrIzdataOtp = Pr3Otpremnica(TEST_PREFIX & "-OTP-" & oznaka, KLASA_I, _
+                                 kol, CLng(amb))
+End Function
+
+' Ocekivanje nacrta: jedna klasa.
+Private Function ZbrOcek(ByVal klasa As String, ByVal kol As Double, _
+                         ByVal amb As Double) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    c.Add Pr3Ocekivano(klasa, kol, amb)
+    Set ZbrOcek = c
+End Function
+
+' NACRT PA POKRIVANJE (odluka operatera, 21.09.2026).
+'
+' Zbirna sme da nastane PRE nego sto se zna od cega je sastavljena: operater
+' najavi sta nosi, pa dodaje izdate otpremnice dok najava ne bude pokrivena.
+' Izdavanje je trenutak dokaza -- do tada je dokument nacrt i menja se.
+'
+' Test meri ceo luk: nacrt je DRAFT i nije izdat, dodavanje izvora ga ne izdaje,
+' i tek izdavanje menja status.
+Private Sub Test_ZBR_NacrtPaPokrivanje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRNP")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("NP-" & scenario, 400#, 20#)
+    AssertTrue Len(otp) > 0, "ZBR nacrt: izvorna otpremnica je izdata"
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NP-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR nacrt: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR nacrt: nacrt NIJE izdat"
+    AssertEquals "0", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR nacrt: nacrt pocinje bez izvora"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR nacrt: izvor dodat (" & g & ")"
+    AssertEquals "1", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR nacrt: nacrt ima jedan izvor"
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrID), _
+               "ZBR nacrt: dodavanje izvora NE izdaje zbirnu"
+
+    AssertTrue modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR nacrt: pokrivena zbirna se izdaje (" & g & ")"
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR nacrt: zbirna je IZDATA"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NacrtPaPokrivanje", Err.Number, Err.description
+End Sub
+
+' NEPOKRIVEN NACRT SE NE IZDAJE, I ODBIJANJE IMENUJE RAZLIKU.
+'
+' "Nije uspelo" ne govori operateru sta da uradi. Poruka mora da kaze KOJU klasu
+' i KOLIKO fali -- inace covek gleda tri otpremnice i pogadja koja nedostaje.
+Private Sub Test_ZBR_NepokrivenNacrtSeNeIzdaje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRNI")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("NI-" & scenario, 300#, 15#)
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NI-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR nepokriven: izvor dodat"
+
+    AssertTrue Not modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR nepokriven: nepokrivena zbirna se NE izdaje"
+    AssertTrue InStr(1, g, "najavljeno", vbTextCompare) > 0, _
+               "ZBR nepokriven: odbijanje imenuje najavu i povezano (bilo: " & g & ")"
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrID), _
+               "ZBR nepokriven: zbirna ostaje nacrt"
+
+    ' Kad se doda ono sto fali, ista zbirna prolazi -- bez toga bi tvrdnja bila
+    ' zelena i da izdavanje uvek odbija.
+    Dim otp2 As String
+    otp2 = ZbrIzdataOtp("NI2-" & scenario, 100#, 5#)
+    If Len(otp2) = 0 Then Exit Sub
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp2, g), _
+               "ZBR nepokriven: dopunski izvor dodat"
+    AssertTrue modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR nepokriven: kad je najava pokrivena, izdaje se (" & g & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NepokrivenNacrtSeNeIzdaje", Err.Number, Err.description
+End Sub
+
+' IZVOR ZBIRNE JE IZDATA OTPREMNICA, I SAMO JEDNE ZBIRNE.
+'
+' Dve kapije, jedan test, jer su jedna odluka o tome sta je izvor:
+'   - nacrt otpremnice je najava, ne roba koja je otisla;
+'   - otpremnica koja je vec u nekoj zbirnoj ne moze biti i u drugoj, inace bi
+'     ista roba bila prevezena dvaput.
+Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRIZ")
+
+    ' --- nacrt otpremnice se ne prima ---
+    Dim gg As String, nacrtOtp As String
+    nacrtOtp = CreateOtpremnicaDraft_TX( _
+                   OtpHeader(TEST_PREFIX & "-OTP-IZN-" & scenario), _
+                   OtpOcek(200#, 10#, 0#, 0#), gg)
+    AssertTrue Len(nacrtOtp) > 0, "ZBR izvor: nacrt otpremnice napravljen"
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZ-" & scenario), _
+                                 ZbrOcek(KLASA_I, 200#, 10#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
+               "ZBR izvor: nacrt otpremnice se NE prima u zbirnu"
+    AssertTrue InStr(1, g, "nije izdata", vbTextCompare) > 0, _
+               "ZBR izvor: odbijanje kaze da otpremnica nije izdata (bilo: " & g & ")"
+
+    ' --- izdata otpremnica koja je vec u drugoj zbirnoj ---
+    Dim otp As String
+    otp = ZbrIzdataOtp("IZ-" & scenario, 200#, 10#)
+    If Len(otp) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR izvor: izdata otpremnica je primljena"
+
+    Dim zbrB As String
+    zbrB = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZB-" & scenario), _
+                                ZbrOcek(KLASA_I, 200#, 10#), g)
+    If Len(zbrB) = 0 Then Exit Sub
+
+    AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrB, otp, g), _
+               "ZBR izvor: ista otpremnica ne moze u dve zbirne"
+    AssertTrue InStr(1, g, "vec u sastavu", vbTextCompare) > 0, _
+               "ZBR izvor: odbijanje imenuje zbirnu koja je drzi (bilo: " & g & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_IzvorMoraBitiIzdatISlobodan", Err.Number, Err.description
+End Sub
+
+' OBA KANONSKA ULAZA IMAJU ISTU DEFINICIJU VALJANOG IZVORA (review #372, P1).
+'
+' Do ovog reza je ista DRAFT otpremnica bila odbijena na putu nacrta i primljena
+' na jednopoteznom -- pa je zbirna mogla da nastane IZDATA iz robe koja nije
+' otisla. Test meri BAS taj par: isti izvor, dva ulaza, isti ishod.
+Private Sub Test_ZBR_ObaUlazaTrazeIzdatIzvor()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBROU")
+
+    Dim gg As String, nacrtOtp As String
+    nacrtOtp = CreateOtpremnicaDraft_TX( _
+                   OtpHeader(TEST_PREFIX & "-OTP-OU-" & scenario), _
+                   OtpOcek(200#, 10#, 0#, 0#), gg)
+    AssertTrue Len(nacrtOtp) > 0, "ZBR oba ulaza: nacrt otpremnice napravljen"
+    If Len(nacrtOtp) = 0 Then Exit Sub
+
+    ' --- jedan potez ---
+    Dim g As String, rez As String
+    rez = CreateZbirnaIzIzvora_TX(Pr3Header(TEST_PREFIX & "-ZBR-OU1-" & scenario), _
+                                  Pr3Izvor(nacrtOtp, ""), g)
+    AssertEquals "", rez, "ZBR oba ulaza: jedan potez ODBIJA nacrt otpremnice"
+    AssertTrue InStr(1, g, "nije izdata", vbTextCompare) > 0, _
+               "ZBR oba ulaza: jedan potez imenuje razlog (bilo: " & g & ")"
+
+    ' --- nacrt pa dodavanje ---
+    Dim zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-OU2-" & scenario), _
+                                 ZbrOcek(KLASA_I, 200#, 10#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+    AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
+               "ZBR oba ulaza: nacrt zbirne ODBIJA nacrt otpremnice"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_ObaUlazaTrazeIzdatIzvor", Err.Number, Err.description
+End Sub
+
+' PRVI IZVOR DEFINISE VRSTU, SORTU I TIP AMBALAZE (review #372, P1).
+'
+' Nacrt ih ne moze primiti kroz zaglavlje -- HdrProveriKljuceve ih izricito ne
+' dozvoljava, jer su cinjenica ROBE. Zato nacrt krece prazan, prvi izvor ih
+' upisuje, a izdata zbirna ih NOSI. Bez toga bi svaka zbirna zavrsila bez vrste
+' i sorte, a da nijedna kapija ne pisne.
+Private Sub Test_ZBR_PrviIzvorDefiniseCinjenice()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRCI")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("CI-" & scenario, 400#, 20#)
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-CI-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR cinjenice: nacrt krece BEZ vrste"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR cinjenice: izvor dodat (" & g & ")"
+
+    AssertEquals TEST_VRSTA, ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR cinjenice: prvi izvor je definisao vrstu"
+    AssertEquals TEST_SORTA, ZbrPolje(zbrID, COL_ZBR_SORTA), _
+                 "ZBR cinjenice: prvi izvor je definisao sortu"
+    AssertEquals TEST_TIP_AMB, ZbrPolje(zbrID, COL_ZBR_TIP_AMB), _
+                 "ZBR cinjenice: prvi izvor je definisao tip ambalaze"
+
+    AssertTrue modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR cinjenice: zbirna se izdaje (" & g & ")"
+    AssertEquals TEST_VRSTA, ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR cinjenice: izdata zbirna NOSI vrstu"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_PrviIzvorDefiniseCinjenice", Err.Number, Err.description
+End Sub
+
+' PISAC I CITALAC TRAZE ISTO (review #372, P1).
+'
+' RequireCeoBroj meri samo celobrojnost, pa je -10 gajbi prolazilo kroz pisca i
+' padalo tek kod strogog citaoca. Dokument koji pisac napravi a citalac odbija je
+' najgora vrsta kvara: nastaje bez greske, a rusi svaki kasniji prikaz.
+Private Sub Test_ZBR_NegativnaAmbalazaSeNeUpisuje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRNA")
+
+    Dim pre As Long
+    pre = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NA-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, -10#), g)
+
+    AssertEquals "", zbrID, "ZBR negativna ambalaza: nacrt je odbijen"
+    AssertTrue InStr(1, g, "negativna", vbTextCompare) > 0, _
+               "ZBR negativna ambalaza: kapija imenuje razlog (bilo: " & g & ")"
+    AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR negativna ambalaza: zaglavlje nije ostalo"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NegativnaAmbalazaSeNeUpisuje", Err.Number, Err.description
+End Sub
+
+' RED BEZ IDENTITETA JE GORI OD PADA (review #372, P1).
+'
+' Stavka nacrta i red clanstva su do ovog reza legali bez provere PK-a, pa bi
+' prazan NewEntityID prosao kroz commit. Takav red nijedna kasnija radnja ne moze
+' da pogodi. Seam NewEntityIDPadniTest je jedini nacin da se pokaze da kapija
+' stvarno grize.
+Private Sub Test_ZBR_PrazanIDDetetaNeProlazi()
+    Dim prevMode As Boolean
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPI")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("PI-" & scenario, 400#, 20#)
+    If Len(otp) = 0 Then Exit Sub
+
+    prevMode = IsTestMode()
+    SetTestMode True
+
+    ' --- stavka nacrta: zaglavlje prodje, stavka pada ---
+    Dim pre As Long
+    pre = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim g As String, zbrID As String
+    modDataAccess.NewEntityIDPadniTest True, 1
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PI-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    modDataAccess.NewEntityIDPadniTest False
+
+    AssertEquals "", zbrID, "ZBR prazan ID: nacrt sa praznim ID-em stavke je odbijen"
+    AssertTrue InStr(1, g, "ZbirnaStavkaID", vbTextCompare) > 0, _
+               "ZBR prazan ID: kapija imenuje stavku (bilo: " & g & ")"
+    AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR prazan ID: zaglavlje nije ostalo"
+
+    ' --- red clanstva ---
+    Dim dobar As String
+    dobar = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PI2-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    If Len(dobar) > 0 Then
+        Dim preIzv As Long
+        preIzv = Pr3BrojRedova(TBL_ZBIRNA_IZVORI)
+
+        modDataAccess.NewEntityIDPadniTest True
+        AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(dobar, otp, g), _
+                   "ZBR prazan ID: clanstvo sa praznim ID-em je odbijeno"
+        modDataAccess.NewEntityIDPadniTest False
+
+        AssertTrue InStr(1, g, "ZbirnaIzvorID", vbTextCompare) > 0, _
+                   "ZBR prazan ID: kapija imenuje clanstvo (bilo: " & g & ")"
+        AssertEquals CStr(preIzv), CStr(Pr3BrojRedova(TBL_ZBIRNA_IZVORI)), _
+                     "ZBR prazan ID: red clanstva nije ostao"
+    End If
+
+    SetTestMode prevMode
+    Exit Sub
+
+EH:
+    modDataAccess.NewEntityIDPadniTest False
+    SetTestMode prevMode
+    LogFatal "Test_ZBR_PrazanIDDetetaNeProlazi", Err.Number, Err.description
+End Sub
+
+' =====================================================================
 ' S4-1: SADRZAJ ZBIRNE SE CITA SA STAVKI
 ' =====================================================================
 
@@ -14316,21 +14662,58 @@ Private Function Pr3ZbirnaIzClanstva(ByVal otpID As String) As String
     Next i
 End Function
 
+' IZVOR ZBIRNE JE IZDATA OTPREMNICA (S4-2b), pa ovaj helper od S4-2b pravi
+' IZDATU, ne nacrt.
+'
+' Do S4-2b je pravio nacrt, i to je bilo tacno dok pravilo nije postojalo: PR3
+' testovi mere pisca ZBIRNE, a njemu je izvor bio bilo koja otpremnica sa
+' stavkama. Kad je odluceno da izvor mora da bude roba koja je OTISLA, seed koji
+' pravi nacrt pocinje da meri stanje koje produkcija ne moze da napravi.
+'
+' Izdaje se preko izvora (otkup -> CreateOtpremnicaIzIzvora_TX), jer se otpremnica
+' ne izdaje "ni iz cega": ocekivanje se izvodi iz izvornog bloka, pa su stavke
+' tacno (klasa, kol, amb). Kultura se postavlja na OBA dokumenta -- otkup koji ne
+' deli kulturu sa otpremnicom nije njen valjan izvor.
 Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String, _
                                     ByVal kol As Double, ByVal amb As Long, _
                                     ByVal vozac As String, _
                                     Optional ByVal kulturaID As String = "") As String
+    Dim oh As Object
+    Set oh = OtkHeader(broj & "-OTK")
+    If Len(kulturaID) > 0 Then
+        ' VRSTA I SORTA SU SNAPSHOT KULTURE. OtkHeader ih postavlja na
+        ' TEST_VRSTA/TEST_SORTA, pa bi otkup sa drugom kulturom nosio tudju
+        ' vrstu -- a bas "druga vrsta" je ono sto neki testovi mere.
+        oh("KulturaID") = kulturaID
+        oh("VrstaVoca") = Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, _
+                                                     kulturaID, COL_KUL_VRSTA)))
+        oh("SortaVoca") = Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, _
+                                                     kulturaID, COL_KUL_SORTA)))
+    End If
+
+    Dim otkID As String, gOtk As String
+    If StrComp(Trim$(klasa), KLASA_II, vbTextCompare) = 0 Then
+        otkID = CreateOtkup_TX(oh, OtkStavke(0#, 0#, 0#, kol, 100#, CDbl(amb)), gOtk)
+    Else
+        otkID = CreateOtkup_TX(oh, OtkStavke(kol, 100#, CDbl(amb), 0#, 0#, 0#), gOtk)
+    End If
+
+    ' SEED KOJI TIHO VRATI PRAZNO JE GORI OD PADA. Prvi put kad je ovaj helper
+    ' presao na izdavanje, neuspeo otkup je dao praznu otpremnicu, pa je test o
+    ' razlicitoj vrsti merio zbirnu sa JEDNIM izvorom -- i pao sa porukom koja na
+    ' pravi uzrok nije ni pokazivala.
+    If Len(otkID) = 0 Then
+        Err.Raise vbObjectError + 2900, "Pr3OtpremnicaVozac", _
+                  "Izvorni otkup za otpremnicu " & broj & " nije napravljen: " & gOtk
+    End If
+
     Dim h As Object
     Set h = OtpHeader(broj)
     h("VozacID") = vozac
     If Len(kulturaID) > 0 Then h("KulturaID") = kulturaID
 
-    Dim c As Collection
-    Set c = New Collection
-    c.Add OtpOcekStavka(klasa, kol, CDbl(amb))
-
     Dim razlog As String
-    Pr3OtpremnicaVozac = CreateOtpremnicaDraft_TX(h, c, razlog)
+    Pr3OtpremnicaVozac = CreateOtpremnicaIzIzvora_TX(h, Pr3Izvor(otkID, ""), razlog)
 End Function
 
 
