@@ -7711,13 +7711,10 @@ End Sub
 ' IZDATA otpremnica sa jednom stavkom klase I -- izvor kakav zbirna prima.
 Private Function ZbrIzdataOtp(ByVal oznaka As String, ByVal kol As Double, _
                               ByVal amb As Double) As String
-    Dim otkID As String, g As String
-    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-" & oznaka), _
-                           OtkStavke(kol, 100#, amb, 0#, 0#, 0#))
-    If Len(otkID) = 0 Then Exit Function
-
-    ZbrIzdataOtp = CreateOtpremnicaIzIzvora_TX( _
-        OtpHeader(TEST_PREFIX & "-OTP-" & oznaka), Pr3Izvor(otkID, ""), g)
+    ' Jedan put do izdate otpremnice u ovom modulu -- Pr3Otpremnica od S4-2b
+    ' pravi bas takvu.
+    ZbrIzdataOtp = Pr3Otpremnica(TEST_PREFIX & "-OTP-" & oznaka, KLASA_I, _
+                                 kol, CLng(amb))
 End Function
 
 ' Ocekivanje nacrta: jedna klasa.
@@ -14665,21 +14662,41 @@ Private Function Pr3ZbirnaIzClanstva(ByVal otpID As String) As String
     Next i
 End Function
 
+' IZVOR ZBIRNE JE IZDATA OTPREMNICA (S4-2b), pa ovaj helper od S4-2b pravi
+' IZDATU, ne nacrt.
+'
+' Do S4-2b je pravio nacrt, i to je bilo tacno dok pravilo nije postojalo: PR3
+' testovi mere pisca ZBIRNE, a njemu je izvor bio bilo koja otpremnica sa
+' stavkama. Kad je odluceno da izvor mora da bude roba koja je OTISLA, seed koji
+' pravi nacrt pocinje da meri stanje koje produkcija ne moze da napravi.
+'
+' Izdaje se preko izvora (otkup -> CreateOtpremnicaIzIzvora_TX), jer se otpremnica
+' ne izdaje "ni iz cega": ocekivanje se izvodi iz izvornog bloka, pa su stavke
+' tacno (klasa, kol, amb). Kultura se postavlja na OBA dokumenta -- otkup koji ne
+' deli kulturu sa otpremnicom nije njen valjan izvor.
 Private Function Pr3OtpremnicaVozac(ByVal broj As String, ByVal klasa As String, _
                                     ByVal kol As Double, ByVal amb As Long, _
                                     ByVal vozac As String, _
                                     Optional ByVal kulturaID As String = "") As String
+    Dim oh As Object
+    Set oh = OtkHeader(broj & "-OTK")
+    If Len(kulturaID) > 0 Then oh("KulturaID") = kulturaID
+
+    Dim otkID As String
+    If StrComp(Trim$(klasa), KLASA_II, vbTextCompare) = 0 Then
+        otkID = CreateOtkup_TX(oh, OtkStavke(0#, 0#, 0#, kol, 100#, CDbl(amb)))
+    Else
+        otkID = CreateOtkup_TX(oh, OtkStavke(kol, 100#, CDbl(amb), 0#, 0#, 0#))
+    End If
+    If Len(otkID) = 0 Then Exit Function
+
     Dim h As Object
     Set h = OtpHeader(broj)
     h("VozacID") = vozac
     If Len(kulturaID) > 0 Then h("KulturaID") = kulturaID
 
-    Dim c As Collection
-    Set c = New Collection
-    c.Add OtpOcekStavka(klasa, kol, CDbl(amb))
-
     Dim razlog As String
-    Pr3OtpremnicaVozac = CreateOtpremnicaDraft_TX(h, c, razlog)
+    Pr3OtpremnicaVozac = CreateOtpremnicaIzIzvora_TX(h, Pr3Izvor(otkID, ""), razlog)
 End Function
 
 
