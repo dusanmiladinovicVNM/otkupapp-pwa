@@ -1505,8 +1505,8 @@ Private Sub T_ZbirnaKlik_OtvaraSvojDokument()
 
     kgA = ZbrStavkaKgTest(zbrA)
     kgB = ZbrStavkaKgTest(zbrB)
-    brojA = Trim$(CStr(nz(GetValueByKey(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ), "")))
-    brojB = Trim$(CStr(nz(GetValueByKey(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ), "")))
+    brojA = Trim$(CStr(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ), "")))
+    brojB = Trim$(CStr(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ), "")))
 
     If Not f Is Nothing Then Unload f
     modOtkupUI.ActiveMode = prev
@@ -1546,7 +1546,7 @@ End Sub
 ' Kilaza stavke jednoklasnog nacrta, kao tekst. Prazno = nema stavke.
 Private Function ZbrStavkaKgTest(ByVal zbrID As String) As String
     If Len(zbrID) = 0 Then Exit Function
-    ZbrStavkaKgTest = Trim$(CStr(nz(GetValueByKey(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, _
+    ZbrStavkaKgTest = Trim$(CStr(nz(LookupValue(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, _
                                                   zbrID, COL_ZBS_KOLICINA), "")))
 End Function
 
