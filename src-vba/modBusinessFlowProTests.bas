@@ -8693,12 +8693,15 @@ End Sub
 ' EKRAN F3 ZAISTA UPISUJE, I IZMENA POGADJA SVOJ DOKUMENT (S4-2c/2b-2).
 '
 ' Do ovog reza je Scr_Save za ZBIRNA vracao poruku o pauzi. Sada ide kroz
-' modDokUnos do kanonskog nacrta. Meri se ceo put ekrana, ne samo modul unosa:
-' ruta (Scr_Save -> SnimiZbirnu), upis, otvaranje izmene PO ID-u, i to da izmena
-' menja TAJ dokument umesto da pravi nov.
+' modDokUnos do kanonskog nacrta. Meri se put: ruta (Scr_Save -> SnimiZbirnu),
+' upis, otvaranje izmene PO ID-u, i to da izmena menja TAJ dokument umesto da
+' pravi nov -- plus da se izdata ne otvara.
 '
-' Drugi nacrt istog vozaca istog dana postoji namerno: da je izmena isla po
-' broju ili po "poslednjem", pogodila bi njega.
+' STA OVAJ TEST NE DOKAZUJE, i gde se to dokazuje: on zove OtvoriIzmenuZbirne
+' direktno, sa ID-em koji vec drzi. Spoj "red mreze -> nevidljiva kolona ->
+' klik -> izmena" ne prolazi ovuda, kao ni scenario dva dokumenta pod ISTIM
+' brojem. To meri T_ZbirnaKlik_OtvaraSvojDokument u modTest, gde postoji forma
+' (review #376, P2).
 Private Sub Test_ZBR_EkranPraviIMenjaNacrt()
     On Error GoTo EH
 
@@ -8726,7 +8729,9 @@ Private Sub Test_ZBR_EkranPraviIMenjaNacrt()
                "ZBR ekran: ekran pravi NACRT, ne izdatu zbirnu"
     AssertEquals "400", CStr(ZbrKg(zbrA, KLASA_I)), "ZBR ekran: najava je na stavci"
 
-    ' Drugi nacrt ISTOG vozaca istog dana -- meta za pogresno pogadjanje.
+    ' Drugi nacrt istog vozaca istog dana, SA SVOJIM brojem -- meta za izmenu
+    ' koja bi isla po "poslednjem upisanom". Dokument pod ISTIM brojem je drugi
+    ' scenario i meri ga T_ZbirnaKlik_OtvaraSvojDokument.
     Set polja = ZbrPoljaEkrana(dan, TEST_PREFIX & "-ZBR-EKR-B-" & scenario, 700#, 35)
     AssertEquals "", modScrDokumenti.Scr_Save(polja), "ZBR ekran: drugi nacrt prolazi"
 

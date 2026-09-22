@@ -669,6 +669,20 @@ SABOTAZE = {
         "Test_ZBR_EkranPraviIMenjaNacrt",
         "izmena nacrta prolazi kroz ekran",
     ),
+    "zbirna-mreza-bez-identiteta": (
+        "modScrDokumenti.bas",
+        "    Scr_Rows = RedoviZaTip(mk, filter, q, _\n                           (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\"))\n",
+        "    Scr_Rows = RedoviZaTip(mk, filter, q, _\n                           (mk = \"OTKUP\" Or mk = \"OTPREMNICA\"))\n",
+        "T_ZbirnaKlik_OtvaraSvojDokument",
+        "red je nadjen po ZbirnaID-u iz te kolone",
+    ),
+    "zbirna-klik-po-broju": (
+        "modScrDokumenti.bas",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "T_ZbirnaKlik_OtvaraSvojDokument",
+        "klik otvara TAJ dokument, ne prvi sa tim brojem",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

@@ -4412,7 +4412,29 @@ vezuju tek u 2b-2b. Nacrt bez izvora ništa ne kvari i storno postoji.
 `T_ZbirnaUnos_*` je u tri reza merio tri stvari — pauzu u validatoru, pauzu na ekranu, pa rad validatora.
 To nije lutanje nego **zapis gde je kapija živela**; ime testa prati kapiju, ne obrnuto.
 
-Dva nova testa, tri sabotaže (**554 → 557**).
+**Review #376, P2 — PR je tvrdio dokaz koji nije postojao.** `Test_ZBR_EkranPraviIMenjaNacrt` je zvao
+`OtvoriIzmenuZbirne` **direktno, sa ID-em koji je već držao u ruci** — pa je preskočio tačno onaj spoj
+koji ovaj rez uvodi:
+
+```
+Scr_Rows (F3) -> nevidljiva kolona ZbirnaID -> GridCell -> Scr_Event "row:n"
+              -> IzaberiZbirnuZaIzmenu -> OtvoriIzmenuZbirne -> Scr_Save -> pisac
+```
+
+Takav test bi ostao **zelen** i da mreža prestane da nosi identitet, i da se čita pogrešna kolona. Gore
+od toga: komentar u testu je tvrdio „drugi nacrt ISTOG vozača — meta za pogrešno pogađanje", a oba
+nacrta su imala **različite brojeve** — scenario kojim se prelaz na stabilan ID opravdava nije bio ni
+konstruisan.
+
+`T_ZbirnaKlik_OtvaraSvojDokument` (modTest, gde postoje forma i transakcija) prelazi ceo spoj onim
+putem kojim ide operater, nad **dva dokumenta pod ISTIM `BrojZbirne`, različiti vozači**: klik na red
+drugog mora da otvori baš njega, a snimanje da ostavi prvi netaknut. Dve sabotaže gađaju baš tu
+granicu — mreža bez identiteta, i čitanje kolone **broja** umesto identiteta.
+
+> Pravilo: **test koji sam sebi doda ključ ne meri bravu.** Kad rez uvodi spoj, dokaz mora da počne sa
+> one strane sa koje počinje operater.
+
+Tri nova testa, pet sabotaža (**554 → 559**).
 
 ## 15) Backlog — namerno van opsega
 
