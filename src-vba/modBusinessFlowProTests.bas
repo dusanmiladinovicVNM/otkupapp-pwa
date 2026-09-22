@@ -301,6 +301,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
+    Test_OTP_IzdavanjeDelimicanUspeh
+    Test_ZBR_PisacTraziPostojeceVeze
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -5492,6 +5494,139 @@ Private Sub Test_OTP_F2OtvaraNacrt()
 
 EH:
     LogFatal "Test_OTP_F2OtvaraNacrt", Err.Number, Err.description
+End Sub
+
+' IZDAVANJE JE USPELO, AUTO-ZBIRNA NIJE -- I EKRAN TO ZNA (review #383, P2).
+'
+' Izdavanje i auto-zbirna su DVA dogadjaja: prvi je commit-ovan pre nego sto
+' drugi pocne. Dok je IzdajAktivnu vracala samo "razlog", pozivalac je svaki
+' neprazan odgovor citao kao "nista se nije promenilo" -- mrezu nije osvezavao,
+' a otpremnica je vec bila IZDATO. Gore od toga: izuzetak iz jezgra stizao je u
+' EH koji pise "Otpremnica nije izdata", sto je LAZ o poslovnom dogadjaju koji
+' se desio, i operater bi na osnovu nje pokusao ponovo.
+'
+' Pad se pravi STVARNO, ne simulira: prazan MALINA_DEFAULT_KUPAC je bas onaj
+' put na kome je AutoZbirnaUpis dizao gresku PRE pisca.
+'
+' Meri se troje: da je otpremnica stvarno izdata, da to ekran ZNA (outIzdata),
+' i da poruka govori o auto-zbirni a NE tvrdi da izdavanja nije bilo.
+Private Sub Test_OTP_IzdavanjeDelimicanUspeh()
+    Dim prevMode As String, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("OTPDU")
+    RadniStoPocetno
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, ""
+
+    Dim draftID As String, o1 As String
+    draftID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-DU-" & scenario), _
+                                       OtpOcek(100#, 10#, 0#, 0#), g)
+    o1 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-DU-" & scenario), _
+                        OtkStavke(100#, 100#, 10, 0#, 0#, 0))
+    AssertTrue Len(draftID) > 0 And Len(o1) > 0, "DU: preduslovi napravljeni (" & g & ")"
+    If Len(draftID) = 0 Or Len(o1) = 0 Then GoTo Kraj
+
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draftID), "DU: nacrt izabran"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(o1), "DU: otkup vezan"
+
+    Dim razlog As String, izdata As Boolean
+    razlog = modScrDokumenti.IzdajAktivnu(izdata)
+
+    AssertTrue izdata, "DU: ekran ZNA da je otpremnica izdata"
+    AssertTrue modDokumenta.OtpremnicaJeIzdata(draftID), _
+               "DU: otpremnica JE izdata u podacima"
+    AssertTrue Len(razlog) > 0, "DU: pad auto-zbirne se PRIJAVLJUJE"
+    AssertTrue InStr(1, razlog, Poruka("OTKUI_ERR_AUTOZBR"), vbTextCompare) > 0, _
+               "DU: poruka govori o auto-zbirni (bilo: " & razlog & ")"
+    AssertTrue InStr(1, razlog, Poruka("OTKUI_ERR_IZDAJ"), vbTextCompare) = 0, _
+               "DU: poruka NE tvrdi da otpremnica nije izdata"
+
+    ' Jezgro nad istom (sada izdatom i slobodnom) otpremnicom vraca RAZLOG,
+    ' umesto da digne izuzetak koji bi pozivaocu pojeo kontekst.
+    ' Poziv ide POD On Error Resume Next namerno: tvrdnja je da jezgro NE DIZE
+    ' gresku, a to se ne moze izmeriti ako izuzetak sruci ceo test u FATAL --
+    ' tada pada ime testa, ali ne i tvrdnja koja to meri.
+    Dim gJ As String, zJ As String, dizao As Boolean
+    On Error Resume Next
+    Err.Clear
+    zJ = modMasterSync.AutoZbirnaZaOtpremnicu(draftID, gJ)
+    dizao = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue Not dizao, "DU: jezgro vraca razlog, ne dize gresku"
+    AssertEquals "", zJ, "DU: zbirna i dalje nije napravljena"
+    AssertTrue Len(gJ) > 0, "DU: razlog je popunjen, ne prazan"
+
+Kraj:
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    RadniStoPocetno
+    Exit Sub
+
+EH:
+    ' Opis PRE ciscenja -- SetConfigValue i RadniStoPocetno mogu da obrisu Err.
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    RadniStoPocetno
+    On Error GoTo 0
+
+    LogFatal "Test_OTP_IzdavanjeDelimicanUspeh", eN, eD
+End Sub
+
+' PISAC ZBIRNE TRAZI DA VEZE POSTOJE, NE SAMO DA NISU PRAZNE (review #383, P2).
+'
+' Zbirna je jedina od tri dokumenta proveravala samo Len() > 0. Otpremnica i
+' otkup odavno traze RequireTacnoJedan, uz isti razlog: slomljena veza se vidi
+' tek kad je neko spoji -- a zbirna je tada vec IZDATO i finalna.
+'
+' Kapija je u PISCU, ne u auto-putu, pa se F3, uvoz i automatika ne mogu
+' raziici. Test zato ide pravo na pisca, sa ispravnim izvorom i pokvarenim
+' kupcem -- i trazi da razlog IMENUJE polje, jer "upis nije uspeo" operateru ne
+' kazuje da je kriv config.
+Private Sub Test_ZBR_PisacTraziPostojeceVeze()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRFK")
+
+    Dim otpID As String
+    otpID = ZbrIzdataOtp("FK-" & scenario, 100#, 5#)
+    AssertTrue Len(otpID) > 0, "ZBR FK: izvor je izdat"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+
+    Dim h As Object, g As String, zbrID As String
+    Set h = Pr3Header(TEST_PREFIX & "-ZBR-FK-" & scenario)
+    h("KupacID") = "KUP-NE-POSTOJI-" & scenario
+
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(h, izvori, g)
+    AssertEquals "", zbrID, "ZBR FK: nepostojeci kupac NE pravi zbirnu"
+    AssertTrue InStr(1, g, "KupacID", vbTextCompare) > 0, _
+               "ZBR FK: razlog IMENUJE polje (bilo: " & g & ")"
+
+    ' Kontrola u suprotnom smeru: isti poziv sa ISPRAVNIM kupcem prolazi. Bez
+    ' nje bi tvrdnja iznad vazila i da pisac odbija svaku zbirnu.
+    Set h = Pr3Header(TEST_PREFIX & "-ZBR-FK2-" & scenario)
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(h, izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR FK: sa ispravnim kupcem prolazi (" & g & ")"
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZBR_PisacTraziPostojeceVeze", Err.Number, Err.description
 End Sub
 
 ' MALINA AUTO-ZBIRNA NAD KANONOM (S4-4).

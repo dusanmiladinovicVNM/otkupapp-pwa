@@ -630,8 +630,19 @@ End Function
 ' Izdaje aktivnu otpremnicu. "" = izdata, inace razlog -- pisac imenuje klasu i
 ' brojeve kad povezano nije jednako ocekivanom. Posle izdavanja otpremnica vise
 ' ne prima izvore, pa ekran izlazi iz njenog konteksta.
-Public Function IzdajAktivnu() As String
+' outIzdata: DA LI SE PRIMARNA MUTACIJA DESILA (review #383, P2).
+'
+' Izdavanje i auto-zbirna su DVA dogadjaja, i drugi sme da padne posle prvog.
+' Dok je ova funkcija vracala samo "razlog", pozivalac je svaki neprazan odgovor
+' citao kao "nista se nije promenilo": mrezu nije osvezio, a otpremnica je vec
+' bila IZDATO u bazi. Prikaz i podaci bi se razisli, i to tise nego da je pao
+' ceo potez.
+'
+' Zato izlaze DVE stvari. Pozivalac koji vidi outIzdata = True MORA da osvezi,
+' bez obzira na poruku.
+Public Function IzdajAktivnu(Optional ByRef outIzdata As Boolean) As String
     Dim g As String, gZbr As String, autoZbr As String
+    outIzdata = False
     On Error GoTo EH
     If Len(mOtpID) = 0 Then
         IzdajAktivnu = Poruka("OTKUI_ERR_NEMA_AKT_OTP")
@@ -641,6 +652,9 @@ Public Function IzdajAktivnu() As String
         IzdajAktivnu = Poruka("OTKUI_ERR_IZDAJ") & " " & g
         Exit Function
     End If
+
+    ' OD OVOG REDA JE PODATAK PROMENJEN I TO SE NE PONISTAVA.
+    outIzdata = True
 
     ' MALINA: ZBIRNA NASTAJE TEK SADA (S4-4).
     '
@@ -652,16 +666,24 @@ Public Function IzdajAktivnu() As String
     ' ponistava -- ali malina operater mora da zna da zbirne nema, jer bi je
     ' inace trazio tek na kraju dana. Prolaz iz sync-a ume da je dovrsi kasnije.
     autoZbr = modMasterSync.AutoZbirnaZaOtpremnicu(mOtpID, gZbr)
+
+    ' Kontekst se napusta U SVAKOM slucaju: otpremnica vise nije nacrt, pa radni
+    ' sto nema sta da drzi -- ni kad auto-zbirna padne.
+    Scr_OtpOtkazi
+
     If Len(autoZbr) = 0 And Len(gZbr) > 0 Then
         IzdajAktivnu = Poruka("OTKUI_ERR_AUTOZBR") & " " & gZbr
-        Scr_OtpOtkazi
-        Exit Function
     End If
-
-    Scr_OtpOtkazi
     Exit Function
 EH:
-    IzdajAktivnu = Poruka("OTKUI_ERR_IZDAJ") & " " & Err.description
+    ' PORUKA PRATI STA SE STVARNO DESILO. Pad posle izdavanja nije "otpremnica
+    ' nije izdata" -- ona jeste. Ista greska sa pogresnim uvodom je najgori
+    ' oblik: operater na osnovu nje ponovi radnju koja je vec prosla.
+    If outIzdata Then
+        IzdajAktivnu = Poruka("OTKUI_ERR_AUTOZBR") & " " & Err.description
+    Else
+        IzdajAktivnu = Poruka("OTKUI_ERR_IZDAJ") & " " & Err.description
+    End If
 End Function
 
 ' --- mreze radnog stola zbirne --------------------------------------------
@@ -1295,9 +1317,19 @@ Private Function RowAction(ByVal tag As String) As Boolean
                       vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
             Dim brIzd As String
             brIzd = mOtpBroj
-            razlog = IzdajAktivnu()
+
+            ' DELIMICAN USPEH SE OSVEZAVA (review #383, P2). Auto-zbirna sme da
+            ' padne posle izdavanja; otpremnica je tada vec IZDATO. Izlazak bez
+            ' Scr_ResetCache ostavljao bi mrezu da pokazuje nacrt koji vise ne
+            ' postoji -- operater bi ga video i pokusao ponovo.
+            Dim otpJeIzdata As Boolean
+            razlog = IzdajAktivnu(otpJeIzdata)
             If Len(razlog) > 0 Then
                 modOtkupUI.ShowToast razlog, True
+                If otpJeIzdata Then
+                    Scr_ResetCache
+                    RowAction = True
+                End If
                 Exit Function
             End If
             Scr_ResetCache

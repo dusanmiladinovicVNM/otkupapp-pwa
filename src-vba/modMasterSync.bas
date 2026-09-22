@@ -819,11 +819,31 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
     otpremnicaID = Trim$(otpremnicaID)
     If Len(otpremnicaID) = 0 Then Exit Function
 
+    ' JEZGRO NE DIZE GRESKU, VEC JE VRACA (review #383, P2).
+    '
+    ' Pozivalac na izdavanju je vec COMMIT-ovao otpremnicu. Izuzetak koji odavde
+    ' izleti stize u njegov EH i tamo postaje "otpremnica nije izdata" -- laz o
+    ' poslovnom dogadjaju koji se desio. AutoZbirnaUpis pritom die na vise mesta
+    ' PRE pisca (prazan kupac, prazan vozac, nema broja), pa to nije teorijski
+    ' put nego najverovatniji.
+    '
+    ' Ugovor je zato: "" + prazan outGreska = nije bilo posla; "" + neprazan
+    ' outGreska = posla je bilo i NIJE uspeo; ZbirnaID = uspelo.
+    On Error GoTo EH
+
     Dim slobodne As Object
     Set slobodne = modDokumenta.NevezaneOtpremnice()
     If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function
 
     AutoZbirnaZaOtpremnicu = AutoZbirnaUpis(otpremnicaID, outGreska)
+    Exit Function
+EH:
+    ' Opis PRE LogErr-a, isti razlog kao u batch prolazu.
+    Dim errDesc As String
+    errDesc = Err.description
+    LogErr SRC
+    AutoZbirnaZaOtpremnicu = ""
+    If Len(outGreska) = 0 Then outGreska = errDesc
 End Function
 
 ' Upis same zbirne. Odvojeno od AutoZbirnaZaOtpremnicu zato sto batch prolaz vec
@@ -1061,8 +1081,20 @@ Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoOtpID As St
     If n > 0 Then LogInfo SRC, "Malina auto-zbirna created=" & CStr(n)
     Exit Function
 EH:
+    ' OPIS SE CITA PRE LogErr-a -- LogErr usput brise stanje greske (review
+    ' #383, P2). Isti obrazac koji modAutoHladnjaca vec nosi u komentaru.
+    '
+    ' Nije kozmetika: orkestrator odlucuje da li je korak pao BAS po Err.Number
+    ' posle "On Error Resume Next". Re-raise sa vec obrisanim Err-om mu je
+    ' odnosio i broj i razlog -- a sa njima i signal da se nesto desilo.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 ' ============================================================

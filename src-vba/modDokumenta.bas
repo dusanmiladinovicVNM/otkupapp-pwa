@@ -865,10 +865,7 @@ Private Function CreateZbirna(ByVal h As Object, _
     Dim brojZbirne As String
     Dim kupacID As String
 
-    datum = HdrDatum(h, "Datum", SRC)
-    vozacID = HdrObavezan(h, "VozacID", SRC)
-    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
-    kupacID = HdrObavezan(h, "KupacID", SRC)
+    ZbrHdrCitajIProveri h, SRC, datum, vozacID, brojZbirne, kupacID
 
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
                                      brojZbirne, SRC
@@ -1694,10 +1691,7 @@ Private Function ZbrNapraviDraft(ByVal h As Object, _
     Dim datum As Date
     Dim vozacID As String, brojZbirne As String, kupacID As String
 
-    datum = HdrDatum(h, "Datum", SRC)
-    vozacID = HdrObavezan(h, "VozacID", SRC)
-    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
-    kupacID = HdrObavezan(h, "KupacID", SRC)
+    ZbrHdrCitajIProveri h, SRC, datum, vozacID, brojZbirne, kupacID
 
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
                                      brojZbirne, SRC
@@ -1846,10 +1840,7 @@ Private Sub ZbrIzmeniDraft(ByVal zbirnaID As String, ByVal h As Object, _
     Dim datum As Date
     Dim vozacID As String, brojZbirne As String, kupacID As String
 
-    datum = HdrDatum(h, "Datum", SRC)
-    vozacID = HdrObavezan(h, "VozacID", SRC)
-    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
-    kupacID = HdrObavezan(h, "KupacID", SRC)
+    ZbrHdrCitajIProveri h, SRC, datum, vozacID, brojZbirne, kupacID
 
     ' Nacrt sme da promeni vozaca, datum i broj u ISTOM potezu, pa broj koji je
     ' bio tacan postane tudj bez ijedne druge provere.
@@ -2912,6 +2903,32 @@ Private Sub HdrProveriKljuceve(ByVal h As Object, ByVal src As String)
                       "Hladnjaca, Pogon. Vrsta/sorta/tip ambalaze dolaze iz otpremnica."
         End If
     Next kljuc
+End Sub
+
+' ZAGLAVLJE ZBIRNE: PROCITAJ I PROVERI DA VEZE POSTOJE (review #383, P2).
+'
+' Do sada je zbirna jedina od tri dokumenta proveravala samo da su polja
+' NEPRAZNA. Otpremnica i otkup odavno traze da red STVARNO postoji, uz isti
+' razlog koji vazi i ovde: neprazan string nije dokaz da red postoji, a slomljena
+' veza se vidi tek kad je neko spoji -- tada je dokument vec IZDATO i finalan.
+'
+' Konkretan put kojim je to moglo da udje: MALINA_DEFAULT_KUPAC sa typo-om ili
+' zastarelim ID-em. Auto-zbirna je proveravala samo Len() > 0, LookupValue za
+' hladnjacu je za nepostojeceg kupca vracao prazno bez greske, i nastajala bi
+' finalna zbirna sa KupacID-em koji nema pokrice.
+'
+' Kapija stoji OVDE, a ne u auto-putu: svaki pozivalac zbirnog pisca dobija isti
+' razlog, pa se F3, uvoz i automatika ne mogu raziici.
+Private Sub ZbrHdrCitajIProveri(ByVal h As Object, ByVal SRC As String, _
+                                ByRef datum As Date, ByRef vozacID As String, _
+                                ByRef brojZbirne As String, ByRef kupacID As String)
+    datum = HdrDatum(h, "Datum", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
+    kupacID = HdrObavezan(h, "KupacID", SRC)
+
+    RequireTacnoJedan TBL_VOZACI, COL_VOZ_ID, vozacID, "VozacID", SRC
+    RequireTacnoJedan TBL_KUPCI, COL_KUP_ID, kupacID, "KupacID", SRC
 End Sub
 
 Private Function HdrObavezan(ByVal h As Object, ByVal kljuc As String, _
