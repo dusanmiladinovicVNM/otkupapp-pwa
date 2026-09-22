@@ -704,6 +704,13 @@ SABOTAZE = {
         "Test_ZBR_RadniStoVezePoIdentitetu",
         "vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
     ),
+    "zbirna-svi-nudi-vezivanje": (
+        "modScrDokumenti.bas",
+        "            Case \"NEVEZANE\"\n",
+        "            Case \"NEVEZANE\", \"SVI\"\n",
+        "Test_ZBR_SpisakKojiSeNudiNeLaze",
+        "sveobuhvatna lista NE nudi vezivanje",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

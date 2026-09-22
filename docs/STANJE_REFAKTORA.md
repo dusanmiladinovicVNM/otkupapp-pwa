@@ -208,7 +208,10 @@
     aktivnog nacrta klikom (po `ZbirnaID`), veži/ukloni/izdaj kroz kanonske pisce. Nema novih mreža —
     `RedoviZaSkup` sužava `RedoviZaTip`. Zbirna je prvi put **ceo tok**: najava → pokrivanje →
     izdavanje. Detalji: plan §14.30.
-34. **Sledeće:** **S4-2c/2b-2c** (traka napretka iz `GetZbirnaProgress` + uklanjanje polja
+34. **S4-2c/2b-2c-1 — F3 ne traži ono što ne nosi (PR #___).** Cena, tip ambalaže i vrednost skinuti
+    sa F3 kroz `FldShow`; lista `SVI` više ne nudi `Veži` (P3 #377). Drugi P3 (`mZbrID`) se **ne**
+    zatvara brisanjem stanja — kontekst mora da preživi F2↔F3, rešava ga traka. Detalji: plan §14.31.
+35. **Sledeće:** **S4-2c/2b-2c-2** (traka napretka iz `GetZbirnaProgress` + uklanjanje polja
     vrste/sorte/tipa ambalaže iz F3), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03, brisanje
     `GeneracijaID` okvira), S4-4 (malina auto-zbirna), S5, S3e-2, S6.
 

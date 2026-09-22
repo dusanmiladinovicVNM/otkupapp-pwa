@@ -174,6 +174,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_RadniStoVezeIIzdaje
     Test_ZBR_PrazanNacrtNeRusiListu
     Test_ZBR_RadniStoVezePoIdentitetu
+    Test_ZBR_SpisakKojiSeNudiNeLaze
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8691,6 +8692,62 @@ Private Sub Test_ZBR_ValidacijaNadKanonom()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
+End Sub
+
+' SPISAK KOJI SE NUDI MORA DA BUDE SPISAK KOJI PROLAZI (review #377, P3).
+'
+' Lista SVI je namerno sveobuhvatna, pa sadrzi i NACRTE otpremnica. Nacrt nije
+' roba koja je otisla i pisac ga odbija -- ali odbiti tek POSLE klika znaci
+' ponuditi operateru nesto sto ce se sigurno odbiti. Isto pravilo koje
+' NevezaneOtpremnice vec drzi u citaocu sada drzi i ponuda radnji.
+'
+' Druga polovina tvrdnje je da ponuda zavisi od KONTEKSTA, ne samo od liste: bez
+' izabranog nacrta ni prava lista nema sta da veze.
+Private Sub Test_ZBR_SpisakKojiSeNudiNeLaze()
+    Dim prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPON")
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PON-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR ponuda: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    prevMode = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+
+    ' Bez izabranog nacrta ni prava lista ne nudi vezivanje.
+    modScrDokumenti.Scr_Event "lsNEVEZANE", "Click"
+    AssertEquals "0", CStr(InStr(1, modScrDokumenti.Scr_Radnje(), "vezizbr")), _
+                 "ZBR ponuda: bez izabranog nacrta nema sta da se veze"
+
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR ponuda: nacrt je izabran na radni sto"
+
+    modScrDokumenti.Scr_Event "lsNEVEZANE", "Click"
+    AssertTrue InStr(1, modScrDokumenti.Scr_Radnje(), "vezizbr") > 0, _
+               "ZBR ponuda: lista slobodnih izdatih NUDI vezivanje"
+
+    modScrDokumenti.Scr_Event "lsSVI", "Click"
+    AssertEquals "0", CStr(InStr(1, modScrDokumenti.Scr_Radnje(), "vezizbr")), _
+                 "ZBR ponuda: sveobuhvatna lista NE nudi vezivanje ni uz aktivan nacrt"
+
+    ' Uklanjanje iz sastava ostaje samo tamo gde sastav i jeste.
+    modScrDokumenti.Scr_Event "lsIZVORI", "Click"
+    AssertTrue InStr(1, modScrDokumenti.Scr_Radnje(), "uklonizbr") > 0, _
+               "ZBR ponuda: lista sastava nudi uklanjanje"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
+    LogFatal "Test_ZBR_SpisakKojiSeNudiNeLaze", Err.Number, Err.description
 End Sub
 
 ' PRAZAN NACRT NE RUSI LISTU IZVORA (review #377, P1).

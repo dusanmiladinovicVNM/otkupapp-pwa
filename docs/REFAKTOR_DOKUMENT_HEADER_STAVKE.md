@@ -4504,6 +4504,32 @@ bezbedno odbija, a `SVI` je namerno „sve". Ide uz sledeći rez, sa trakom napr
 **Ostaje za sledeći rez:** traka napretka u F2 (`GetZbirnaProgress` — čitalac postoji od 2b-1, prikaz ne)
 i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji P3 iz review-a #376.
 
+### 14.31) S4-2c/2b-2c-1 — F3 prestaje da traži ono što ne nosi (22.09.2026)
+
+Forma F3 je tražila **cenu**, **tip ambalaže** i prikazivala **vrednost** — a `tblZbirna` kolonu `Cena`
+uopšte nema, tip ambalaže je činjenica robe koju donosi prvi izvor (ZBR-KANON-04), a vrednost bi bez
+cene uvek bila nula. **Polje koje prima unos a nigde ga ne čuva je tvrdnja interfejsa bez pokrića**, a
+nula uz robu izgleda kao podatak.
+
+Sve tri idu kroz postojeći `FldShow` mehanizam po režimu — bez `.frx` izmene i bez nove kontrole.
+
+**P3 iz review-a #377 zatvoren:** lista `SVI` više ne nudi `Veži`. Ona je namerno sveobuhvatna, pa
+sadrži i **nacrte** otpremnica; pisac ih odbija, ali odbiti **posle klika** znači ponuditi operateru
+nešto što će se sigurno odbiti. Isto pravilo koje `NevezaneOtpremnice` već drži u čitaocu sada drži i
+ponuda radnji: **spisak koji se nudi mora da bude spisak koji prolazi.**
+
+**Drugi P3 (`mZbrID` preživljava izlazak iz F2) se NE zatvara brisanjem stanja — i to je nalaz.**
+Radni sto zbirne je u F2, a njena forma u F3; radni sto otpremnice je u F1, a forma u F2. Kontekst
+**mora** da preživi prelazak između ta dva ekrana, inače se tok prekida na svakom koraku. Problem nije
+da stanje živi predugo nego da **nije dovoljno vidljivo** — a to rešava traka napretka, ne čišćenje.
+Zato ta stavka prelazi u 2c-2 i nestaje sa njom.
+
+Jedan nov test, jedna sabotaža (**562 → 563**). Vidljivost polja se ne može automatski izmeriti —
+ide na operatersku checklistu (`.claude/rules/testovi.md` §7).
+
+**Ostaje za 2c-2:** traka napretka iz `GetZbirnaProgress` (uz odluku šta pokazuje četvrta grupa mera,
+jer zbirna nema cenu) i vrsta/sorta iz kontekstne zone, koje traže raspored — oba diraju ljusku.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

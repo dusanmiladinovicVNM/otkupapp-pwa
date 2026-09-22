@@ -3478,10 +3478,16 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgNovac", False
             FldShow z, "fgKgI", True
             FldShow z, "fgKgII", True
-            FldShow z, "fgCena", True
+            ' ZBIRNA NEMA CENU: tblZbirna nema kolonu Cena i nijedan pisac je ne
+            ' prima. Polje koje prima unos a nigde ga ne cuva je tvrdnja
+            ' interfejsa bez pokrica (S4-2c/2b-2c).
+            FldShow z, "fgCena", (mode <> "F3")
             FldShow z, "fgKolAmb", True
             FldShow z, "fgKolAmbII", (mKlasa = 2)
-            FldShow z, "fgTipAmb", True
+            ' TIP AMBALAZE ZBIRNE NIJE UNOS nego cinjenica ROBE koju donosi prvi
+            ' izvor (ZBR-KANON-04). Zaglavlje ga nosi, ali ga pisac sa forme ne
+            ' prima -- pa se ni ne trazi.
+            FldShow z, "fgTipAmb", (mode <> "F3")
             ' prazna ambalaza se izdaje uz otkup i vraca uz prijemnicu;
             ' otpremnica i zbirna je ne dodiruju
             FldShow z, "fgAmbPr", (mode = "F1" Or mode = "F4")
@@ -3491,7 +3497,9 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", (mode = "F3")
             FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
-            FldShow z, "fgVrednost", True
+            ' Vrednost se racuna iz cene, koje zbirna nema -- prikaz bi uvek bio
+            ' nula, a nula uz robu izgleda kao podatak.
+            FldShow z, "fgVrednost", (mode <> "F3")
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
             FldShow z, "fgAvans", False
