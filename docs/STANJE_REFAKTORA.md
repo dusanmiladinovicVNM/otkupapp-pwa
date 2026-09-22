@@ -187,7 +187,14 @@
     člana **ostaju**. Review #373 (P1): tvrdnja „nacrt ima bar jednu klasu" preseljena iz wrapper-a u
     jezgro `ZbrUpisiOcekivano` — prazna kolekcija je kroz `Update` pravila zaglavlje bez stavki, koje
     strog čitalac odbija. Nijedna linija ekrana. Detalji: plan §14.26.
-30. **Sledeće:** **S4-2c/2** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
+30. **S4-2c/2a — stari pisac zbirne obrisan (PR #___).** `SaveZbirna*`, `BuildZbirnaRowData`,
+    `ValidateZbirnaInput`, `modDokUnos.ZbirnaUpisi`, `AutoCreateZbirnaFromOtpremnice` +
+    `BackfillOtkupBrojZbirneByOtpremnica`. Oba produkciona pozivaoca bila su iza pauze (izmereno).
+    Ulaz malina auto-zbirne ostaje i pada **glasno**; telo se vraća u S4-4. Testovi: 4 tvrdnje o
+    piscu prešle na kanonski nacrt, 7 + golden na fixture `ZbrZateceniRed` (zatečeni oblik, umire sa
+    S3e-2); golden fajl **nepromenjen**. Popis: `zbr_stari_pisac` 29 → **0**, `zbr_linija` 30 → 27,
+    `otk_brojzbirne` 27 → 25. Detalji: plan §14.27.
+31. **Sledeće:** **S4-2c/2b** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
     direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
     S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
     (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).

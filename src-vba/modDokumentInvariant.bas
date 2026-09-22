@@ -412,11 +412,17 @@ Private Sub ApplyKlasaRecalc(ByVal SRC As String, ByVal brojZbirne As String, _
     Dim newID As String
     newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
 
-    ' NAMERNO se NE zove modDokumenta.SaveZbirna: njegov ValidateZbirnaInput je
-    ' pravilo za OPERATERSKI unos (vozac/kupac obavezni, kg > 0). Rekalkulacija je
-    ' SISTEMSKA korekcija koja mora da odrzi invarijantu i sa retkim zaglavljem
-    ' (nasledjenim iz template reda) -> koristi se direktan AppendRow.
-    ' Redosled kolona je IDENTICAN modDokumenta.SaveZbirna (potvrdjen izvor istine):
+    ' NAMERNO se ne zove kanonski pisac: on trazi OPERATERSKI unos (vozac/kupac
+    ' obavezni, kg > 0). Rekalkulacija je SISTEMSKA korekcija koja mora da odrzi
+    ' invarijantu i sa retkim zaglavljem (nasledjenim iz template reda) ->
+    ' koristi se direktan AppendRow.
+    '
+    ' POZICIONI UPIS BEZ SIDRA (od S4-2c/2a). Do brisanja starog pisca je ovaj
+    ' redosled bio "identican modDokumenta.SaveZbirna" i to se moglo proveriti.
+    ' Sada je jedini izvor istine redosled kolona u schema/schema.json, a nova
+    ' kolona u sredini bi tiho pomerila vrednosti. Cela ova rutina
+    ' (RecalculateZbirnaFromOtpremnice_TX) umire u S4-3 po ZBR-KANON-03, pa se
+    ' ne prepisuje na SetRowValueByColumn nego brise:
     ' ID, Datum, VozacID, BrojZbirne, KupacID, Hladnjaca, Pogon, VrstaVoca,
     ' SortaVoca, UkupnoKolicina, TipAmbalaze, UkupnoAmbalaze, Klasa
     Dim rowData(0 To 12) As Variant
