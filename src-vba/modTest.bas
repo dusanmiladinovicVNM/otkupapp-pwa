@@ -1443,16 +1443,21 @@ Private Sub T_ZbirnaForma_KlasaOstajeBezCene()
 
     Set f = NewOtkupUIForm()
 
-    modOtkupUI.ActiveMode = "F3"
-    modOtkupUI.GridRenderTest f, 1200, 600
+    ' PRAVI PRELAZAK REZIMA, ne samo promena zastavice (review #379, P2).
+    '
+    ' ActiveMode je javna promenljiva; vidljivost polja postavlja
+    ' ApplyFormFields, do koga se stize SAMO kroz SelectMode. GridRenderTest
+    ' radi LayoutGrid i RenderGrid -- mrezu, ne formu. Prvi pokusaj ovog testa
+    ' je menjao zastavicu i crtao mrezu, pa NIJE izvrsavao kod koji tvrdi da
+    ' meri: forma bi ostala u stanju u kom ju je ostavila gradnja (F1).
+    modOtkupUI.SelectMode f, "F3"
     Set z = f.Controls("zForm")
     Set fr = z.Controls("fgCena")
     okvirF3 = fr.Visible
     klasaF3 = fr.Controls("segKlasa2").Visible
     cenaF3 = fr.Controls("fgCena1T").Visible
 
-    modOtkupUI.ActiveMode = "F1"
-    modOtkupUI.GridRenderTest f, 1200, 600
+    modOtkupUI.SelectMode f, "F1"
     Set fr = f.Controls("zForm").Controls("fgCena")
     okvirF1 = fr.Visible
     cenaF1 = fr.Controls("fgCena1T").Visible

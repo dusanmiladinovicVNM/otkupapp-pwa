@@ -4529,7 +4529,22 @@ Radni sto zbirne je u F2, a njena forma u F3; radni sto otpremnice je u F1, a fo
 da stanje živi predugo nego da **nije dovoljno vidljivo** — a to rešava traka napretka, ne čišćenje.
 Zato ta stavka prelazi u 2c-2 i nestaje sa njom.
 
-Jedan nov test, jedna sabotaža (**562 → 563**). Vidljivost polja se ne može automatski izmeriti —
+**Review #379, P1 — sakriven je nosač zajedno sa sadržajem.** `fgCena` nije samo cena: u istom okviru
+žive `segKlasa1`/`segKlasa2`, **jedini operaterski put do dvoklasne najave**. Sakrivanjem okvira se kroz
+F3 više nije mogla napraviti zbirna sa I i II klasom — a pisac je izričito podržava. **Kontrola koja
+postoji u nevidljivom roditelju ne postoji za operatera.** Odluka „zbirna nema cenu" se ne menja; gase
+se **kutije** cene (`KlasaCenaPoRezimu`), a natpis okvira se svodi na klasu.
+
+**Review #379, P2 — test nije izvršavao put koji tvrdi.** Prvi pokušaj je postavljao `ActiveMode` i
+zvao `GridRenderTest` — a to je `LayoutGrid` + `RenderGrid`, dakle **mreža, ne forma**. Vidljivost polja
+postavlja `ApplyFormFields`, do koga se stize samo kroz `SelectMode`. Test je zato merio formu koja je
+ostala u stanju iz gradnje (F1). Sada ide kroz `modOtkupUI.SelectMode f, "F3"` / `"F1"`.
+
+> Treći put u ovom lancu ista klasa: **dokaz presecen pola koraka prerano.** #376 test je sam sebi
+> dodao ključ, #377 nije ponovo učitao mrežu, #379 nije prešao režim. Zajedničko im je da svaki put
+> ostaje ZELENO — pa razlika između „prolazi" i „meri" nije vidljiva iz rezultata.
+
+Dva nova testa, dve sabotaže (**562 → 564**). Vidljivost polja se ne može automatski izmeriti —
 ide na operatersku checklistu (`.claude/rules/testovi.md` §7).
 
 **Ostaje za 2c-2:** traka napretka iz `GetZbirnaProgress` (uz odluku šta pokazuje četvrta grupa mera,
