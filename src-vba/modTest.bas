@@ -581,7 +581,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
-        Case 7: TestName = "T_ZbirnaUnos_PauziranDoS4"
+        Case 7: TestName = "T_ZbirnaUnos_PauzaJeNaEkranu"
         Case 8: TestName = "T_PrijemnicaUnos_PauziranDoS6"
         Case 9: TestName = "T_ScrSave_RutaPoRezimu"
         Case 10: TestName = "T_IsplataValidiraj_TipNovcaPoIzboru"
@@ -788,7 +788,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
-        Case 7: T_ZbirnaUnos_PauziranDoS4
+        Case 7: T_ZbirnaUnos_PauzaJeNaEkranu
         Case 8: T_PrijemnicaUnos_PauziranDoS6
         Case 9: T_ScrSave_RutaPoRezimu
         Case 10: T_IsplataValidiraj_TipNovcaPoIzboru
@@ -1413,33 +1413,51 @@ End Sub
 ' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
 ' ============================================================
 
-' F3 JE PAUZIRAN DO S4 (plan S14.14). Zbirna se poredi sa zbirom otpremnica
-' vezanih kroz BrojZbirne, a tu vezu od S3a ne pise nijedan zivi put -- pa bi
-' provera odbila SVAKU zbirnu porukom "validacija nije prosla". Test meri da
-' pauza stoji PRE svih provera: unos koji bi inace prosao dobija razlog pauze,
-' ne poruku o kilogramima, i nijedan red zbirne ne nastaje.
-Private Sub T_ZbirnaUnos_PauziranDoS4()
-    Dim p As Object, fokus As String, res As String
+' PAUZA F3 SE PRESELILA SA VALIDATORA NA EKRAN (S4-2c/2b-1).
+'
+' Do tog reza je pauzu vracao modDokUnos.ZbirnaValidiraj, i to PRE svake
+' provere: zbirna se poredila sa zbirom otpremnica vezanih kroz BrojZbirne, a tu
+' vezu od S3a ne pise nijedan zivi put, pa bi provera odbila SVAKU zbirnu
+' porukom o kilogramima.
+'
+' Sada validator radi nad kanonskim modelom i MERLJIV je, a operater i dalje ne
+' moze da upise zbirnu: pauza stoji na TACNO jednom mestu, na granici ekrana
+' (modScrDokumenti.SnimiZbirnu), dok S4-2c/2b-2 ne isporuci tok.
+'
+' Test meri OBE polovine te recenice. Da meri samo jednu, pauza bi mogla da
+' nestane sa ekrana ili da se vrati u modul, a da nijedna tvrdnja ne pisne.
+Private Sub T_ZbirnaUnos_PauzaJeNaEkranu()
+    Dim p As Object, fokus As String
 
     ' Katalog se puni kao na startu aplikacije (InitApp -> EnsurePoruke). Fixture
     ' nosi tblPoruke iz donora, pa kljuc dodat posle poslednje regeneracije u njemu
     ' ne postoji -- a bez ovoga bi tvrdnja o katalogu merila fixture, ne kod.
     modSetup.EnsurePoruke
 
+    ' 1) Validator VISE NIJE pauziran -- ispravan unos prolazi.
     Set p = ZbirnaUnosKojiSeSlaze()
-    res = modDokUnos.ZbirnaValidiraj(p, fokus)
-    AssertEq res, Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
-             "F3: zbirna je pauzirana i to se kaze, ne 'validacija nije prosla'"
-    AssertEq (InStr(1, res, "[", vbBinaryCompare) = 1), False, _
-             "F3: poruka pauze postoji u katalogu"
+    AssertEq modDokUnos.ZbirnaValidiraj(p, fokus), "", _
+             "F3: validator radi nad kanonskim modelom, nije vise pauziran"
 
-    ' I nepotpun unos dobija ISTI razlog: pauza je pre prve provere, pa operater
-    ' ne popravlja polja koja ionako ne mogu da prodju.
+    ' ... i stvarno meri: nepotpun unos dobija SVOJE polje, ne pausu.
     Set p = ZbirnaUnosKojiSeSlaze()
     p("vozacID") = ""
-    res = modDokUnos.ZbirnaValidiraj(p, fokus)
-    AssertEq res, Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
-             "F3: pauza je pre provere vozaca"
+    AssertEq modDokUnos.ZbirnaValidiraj(p, fokus), Poruka("DOKUNOS_ERR_VOZAC"), _
+             "F3: validator imenuje polje koje fali"
+    AssertEq fokus, "vozacID", "F3: fokus ide na to polje"
+
+    ' 2) Pauza je na EKRANU, i stoji i za unos koji bi inace prosao do pisca.
+    Dim pe As Object
+    Set pe = PoljaEkrana(modScrDokumenti.modeKey("F3"))
+    pe("vozacID") = FX_VOZAC
+    pe("kooperantID") = FX_KUPAC
+    pe("brDok") = "T-ZBR-PAUZA"
+    pe("kolicinaI") = FX_ZBIRNA_KG
+    pe("kolAmb") = FX_ZBIRNA_AMB
+    AssertEq modScrDokumenti.Scr_Save(pe), Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
+             "F3: ekran i dalje odbija upis i imenuje pauzu"
+    AssertEq (InStr(1, Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), "[", vbBinaryCompare) = 1), _
+             False, "F3: poruka pauze postoji u katalogu"
 End Sub
 
 ' F4 JE PAUZIRAN DO S6 (Prijemnica cutover), ne do S4: S4 vraca samo zbirnu.
@@ -1483,10 +1501,16 @@ Private Sub T_ScrSave_RutaPoRezimu()
 
     ' F3 i F4 su vezani: prazna polja ih zaustavljaju na PRVOM pravilu svog
     ' dokumenta -- a koje je to pravilo, dokazuje do kog modula je poziv stigao.
-    ' Od S3b-1 su F3 (do S4) i F4 (do S6) PAUZIRANI: ruta se dokazuje porukom pauze, koju
-    ' vraca SAMO njihov validator.
+    '
+    ' F3: PORUKA PAUZE VISE NE DOKAZUJE RUTU (S4-2c/2b-1). Pauza je presla na
+    ' granicu ekrana, pa bi je Scr_Save vratio i da poziv NIKAD nije stigao do
+    ' modula unosa -- tvrdnja bi ostala zelena nad pokvarenom rutom. Zato se ruta
+    ' sada dokazuje porukom koju vraca SAMO ZbirnaValidiraj: broj zbirne. Vozac i
+    ' kupac se popunjavaju da bi se stiglo do tog pravila.
     Set p = PoljaEkrana(modScrDokumenti.modeKey("F3"))
-    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
+    p("vozacID") = FX_VOZAC
+    p("kooperantID") = FX_KUPAC
+    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"), _
              "zbirna ide u modDokUnos.ZbirnaValidiraj"
 
     Set p = PoljaEkrana(modScrDokumenti.modeKey("F4"))

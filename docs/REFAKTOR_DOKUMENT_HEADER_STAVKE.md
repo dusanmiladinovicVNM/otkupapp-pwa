@@ -4352,6 +4352,20 @@ ne zahteva, poštuje se **značenje prekidača**, ne prisustvo podataka.
 Uz to je zatvoren i P3: fokus za ambalažu i celobrojnost se razdvaja po klasi (`kolAmb` / `kolAmbII`).
 Validator koji pokaže na pogrešno polje šalje operatera da popravlja ono što nije pokvareno.
 
+**Prvi pun prolaz: dva pada u `RunAllTests`, oba tačna posledica reza — i oba u suite koju BFP ne
+pokriva.** `T_ZbirnaUnos_PauziranDoS4` je merio pauzu **u validatoru**, a ona se preselila na ekran.
+
+Jedan od ta dva pada je otkrio nešto vrednije od sebe: `T_ScrSave_RutaPoRezimu` je **rutu F3 dokazivao
+porukom pauze**. Pauza je sada na granici ekrana, pa bi `Scr_Save` vratio istu poruku i da poziv
+**nikad ne stigne do modula unosa** — tvrdnja bi ostala zelena nad pokvarenom rutom. Ruta se sada
+dokazuje porukom koju vraća **samo** `ZbirnaValidiraj` (broj zbirne).
+
+> Pravilo: kad se kapija preseli, testovi koji su je koristili kao **posrednu** meru prestaju da mere
+> ono što tvrde — i to se ne vidi kao pad nego kao lažno zeleno.
+
+`T_ZbirnaUnos_PauziranDoS4` → `T_ZbirnaUnos_PauzaJeNaEkranu`, i meri **obe** polovine: validator više
+nije pauziran i stvarno meri, a ekran i dalje odbija upis i imenuje pauzu.
+
 Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 
 ## 15) Backlog — namerno van opsega
