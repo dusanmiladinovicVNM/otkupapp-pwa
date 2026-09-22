@@ -711,6 +711,13 @@ SABOTAZE = {
         "Test_ZBR_SpisakKojiSeNudiNeLaze",
         "sveobuhvatna lista NE nudi vezivanje",
     ),
+    "zbirna-forma-krije-prekidac-klase": (
+        "modOtkupUI.bas",
+        "            FldShow z, \"fgCena\", True\n",
+        "            FldShow z, \"fgCena\", (mode <> \"F3\")\n",
+        "T_ZbirnaForma_KlasaOstajeBezCene",
+        "prekidac druge klase je dostupan operateru",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.
