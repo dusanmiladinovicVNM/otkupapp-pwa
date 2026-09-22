@@ -236,8 +236,8 @@ End Function
 ' tako mogli da racunaju razlicito nad istim brojem.
 '
 ' Pravilo: KAPIJA sme da bude SIRA od aktera, nikad uza. Zato ovo koriste
-' odlucivaci; mutatori (DetachOtpremniceInline, RelinkOtpremniceToZbirna_TX,
-' RedJeIzabranogDokumenta) namerno ostaju uzi -- kapija >= akter je time
+' odlucivaci; mutatori (DetachOtpremniceInline, RedJeIzabranogDokumenta)
+' namerno ostaju uzi -- kapija >= akter je time
 ' garantovano, a prosirivanje aktera bi diralo redove koje danas ne dira.
 ' CheckDuplicate ostaje sirov, imenovano u ugovoru par.3. Od 14.09.2026 ga zove
 ' jos samo prijemnica (do svog PR-a); OTK, OTP, ZBR i REV drzi

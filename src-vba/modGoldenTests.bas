@@ -347,11 +347,11 @@ End Function
 '
 ' Dva razloga zasto G2 ne sme da koristi obicnu ZBIRNA sekciju:
 '
-'   1. Ona racuna preko SumOtpremniceByKlasa(BrojZbirne) i
-'      IsZbirnaConsistent(BrojZbirne), a broj sam ne razlikuje dve logicke
-'      zbirne. Rezultat je "invarijanta PUKLA" -- i to bi bilo ZAKLJUCANO kao
-'      ocekivano. Posle Zbirna cutover-a, kad invarijanta pocne da prima ZbirnaID, ispravka
-'      arhitekture bi oborila golden koji je treba da stiti.
+'   1. Ona racuna preko SumOtpremniceByKlasa(BrojZbirne), a broj sam ne
+'      razlikuje dve logicke zbirne -- pa bi brojke dva dokumenta bile
+'      ZAKLJUCANE kao ocekivane. Posle Zbirna cutover-a taj adapter prima
+'      ZbirnaID, pa bi ispravka arhitekture oborila golden koji je treba da
+'      stiti.
 '   2. "aktivnih 1 / storniranih 1" ne kaze KOJA je stornirana. Bug koji
 '      stornira drugu umesto prve ostavlja iste brojeve i test ostaje zelen.
 '
@@ -705,10 +705,14 @@ Private Function GldStavkeOtkupa(ByVal otkupID As String, _
     Next i
 End Function
 
-' Broj se koristi zato sto ga DANAS traze SumOtpremniceByKlasa i
-' IsZbirnaConsistent -- zatecen API, ne izbor scenarija. Posle Zbirna
-' cutover-a primaju
-' ZbirnaID, pa se menja OVAJ adapter.
+' Broj se koristi zato sto ga DANAS trazi SumOtpremniceByKlasa -- zatecen API,
+' ne izbor scenarija. Posle Zbirna cutover-a prima ZbirnaID, pa se menja OVAJ
+' adapter.
+'
+' RED "invarijanta" JE SKINUT U S4-3a. Merio je zaglavlje tblZbirna naspram
+' zbira otpremnica po BrojZbirne -- a kanonski pisac ne upisuje ni jedno ni
+' drugo, pa su obe strane bile nule i red je stajao "OK" nad svakom zbirnom.
+' Golden koji uvek kaze OK ne meri nista, a izgleda kao da meri.
 Private Function GldZbirna(ByVal brojZbirne As String) As String
     Dim sumOtp As Object
     Dim s As String
@@ -745,7 +749,6 @@ Private Function GldZbirna(ByVal brojZbirne As String) As String
     s = s & "  primljeno       I=" & Fmt2(prijI) & "  II=" & Fmt2(prijII) & vbLf
     s = s & "  kalo            I=" & Fmt2(GldDict(sumOtp, "kgI") - prijI) & _
             "  II=" & Fmt2(GldDict(sumOtp, "kgII") - prijII) & vbLf
-    s = s & "  invarijanta     " & IIf(IsZbirnaConsistent(brojZbirne), "OK", "PUKLA") & vbLf
 
     GldZbirna = s
 End Function

@@ -393,6 +393,7 @@ Public Sub RunAllTests()
     RunOne 110
     RunOne 111
     RunOne 112
+    RunOne 113
     ' 127-131 (Platni nalozi) idu PRE 124-126: ta tri testa DIRAJU fixture
     ' (zbirne/prijemnice) i moraju ostati POSLEDNJA u nizu izvrsavanja.
     ' Redosled izvrsavanja ne mora da prati brojeve -- brojevi su identitet
@@ -484,7 +485,6 @@ Public Sub RunAllTests()
     RunOne 193
     RunOne 194
     RunOne 195
-    RunOne 113
     RunOne 114
     RunOne 115
     ' 162 MUTIRA (CreateFakturaGP_TX + StornoFaktura_TX nad potrosnim
@@ -495,7 +495,6 @@ Public Sub RunAllTests()
     RunOne 198
     RunOne 199
     RunOne 200
-    RunOne 201
 
     SetTestMode prevMode
     WriteResultFile
@@ -677,7 +676,6 @@ Private Function TestName(ByVal idx As Long) As String
         Case 110: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 111: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 112: TestName = "T_KesKolone_NeMemoiseNulu"
-        Case 113: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
         Case 114: TestName = "T_CiljZbirna_NePoPrvomRedu"
         Case 115: TestName = "T_Prijemnica_PomeraSamoAktivan"
         ' 127-131: ekran Platni nalozi (v6-ui-185). U RunAllTests se IZVRSAVAJU
@@ -763,7 +761,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 194: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 195: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 196: TestName = "T_UtovarB_StornoKapije"
-        Case 201: TestName = "T_Traka_NatpisiPoRezimu"
+        Case 113: TestName = "T_Zbirna_NemaIspravku"
+        Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 200: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
@@ -771,7 +770,6 @@ Private Function TestName(ByVal idx As Long) As String
         Case 46: TestName = "T_MapaImena_KljucNosiKolone"
         Case 45: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 44: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
-        Case 43: TestName = "T_IspravkaZbirne_KapijaNaObeStrane"
         Case 42: TestName = "T_KapijaZbirne_FailClosedNaSvojuGresku"
         Case 41: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
         Case 40: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
@@ -888,7 +886,6 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 110: T_Ljuska_PadListeNovcaNijeAvans
         Case 111: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 112: T_KesKolone_NeMemoiseNulu
-        Case 113: T_RekalkZbirne_KapijaJeUPrimitivu
         Case 114: T_CiljZbirna_NePoPrvomRedu
         Case 115: T_Prijemnica_PomeraSamoAktivan
         Case 116: T_BankaNalozi_UgovorEkrana
@@ -972,7 +969,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 194: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 195: T_KpiSaldoOM_CitaKolonuSalda
         Case 196: T_UtovarB_StornoKapije
-        Case 201: T_Traka_NatpisiPoRezimu
+        Case 113: T_Zbirna_NemaIspravku
+        Case 43: T_Traka_NatpisiPoRezimu
         Case 200: T_ZbirnaForma_KlasaOstajeBezCene
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
@@ -980,7 +978,6 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 46: T_MapaImena_KljucNosiKolone
         Case 45: T_KesTabela_NeMemoiseNeuspeh
         Case 44: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
-        Case 43: T_IspravkaZbirne_KapijaNaObeStrane
         Case 42: T_KapijaZbirne_FailClosedNaSvojuGresku
         Case 41: T_StorniranVlasnik_JosImaAktivnuDecu
         Case 40: T_ZamenaZbirne_NeDiraDecuTudje
@@ -2513,6 +2510,53 @@ Private Sub T_FrameworkIspravke_SamoTriTipa()
     Next i
 End Sub
 
+' ZBIRNA VISE NE NUDI ISPRAVKU -- A PRIJEMNICA JE JOS NUDI (S4-3a).
+'
+' Ispravka zbirne je bila DVOKORAK: stornira staru sada, zamenu operater snima
+' kasnije. ZBR-KANON-03 taj oblik ukida -- ispravka je jedan potez -- ali za
+' zbirnu jedan potez jos nije moguc: PRIJEMNICE vise na BrojZbirne, a nova
+' zbirna dobija nov broj (A9), pa bi svaka prijemnica ostala siroce. Prijemnica
+' postaje kanonska tek u S6, pa se ispravka zbirne do tada NE NUDI.
+'
+' Meri se na OBA kraja. Sama tvrdnja "nema ISPRAVKE" bi prosla i da je ceo red
+' odluke prazan -- ekran bi tada bio pokvaren, a test zelen. Zato drugi kraj:
+' zbirna i dalje nudi DUPLI i PONISTENJE, a prijemnica i dalje nudi ISPRAVKU.
+Private Sub T_Zbirna_NemaIspravku()
+    Dim zbr As String, prij As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    ' Cita se Scr_AkcijeKljucevi, ne Scr_Radnje: Scr_Radnje na OVOM ekranu je
+    ' prazan stub (red odluke ne ide kroz ugovorni string nego kroz zonu), pa je
+    ' prva verzija ovog testa merila konstantu "". Preduslov ju je uhvatio --
+    ' zato preduslov i postoji.
+    modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA, "ZBI-TEST-1", ""
+    zbr = modScrStorno.Scr_AkcijeKljucevi()
+
+    ' Prijemnica: isti izbor koji T_StornoBezUvida_NemaAkcije vec dokazuje kao
+    ' razresiv, da kontrolna strana ne padne iz nekog treceg razloga.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    prij = modScrStorno.Scr_AkcijeKljucevi()
+
+    AssertEq (Len(zbr) > 1), True, _
+             "preduslov: zbirna uopste nudi red odluke (inace test nista ne meri)"
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_ISPRAVKA & ";", vbTextCompare) > 0), False, _
+             "zbirna NE nudi ispravku"
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_DUPLI & ";", vbTextCompare) > 0), True, _
+             "zbirna i dalje nudi DUPLI -- razvezi otpremnice"
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_PONISTENJE & ";", vbTextCompare) > 0), True, _
+             "zbirna i dalje nudi PONISTENJE -- obori lanac"
+
+    AssertEq (InStr(1, prij, ";" & SV_MODE_ISPRAVKA & ";", vbTextCompare) > 0), True, _
+             "prijemnici ispravka NIJE dirana -- rez je samo nad zbirnom"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    Err.Raise errNum, "T_Zbirna_NemaIspravku", errDesc
+End Sub
+
 ' PREFILL BIRA DOKUMENT PO PK-u, NE PO BROJU.
 '
 ' Fixture ima dve AKTIVNE prijemnice sa istim brojem i razlicitim kupcem
@@ -3223,16 +3267,21 @@ End Sub
 ' ============================================================
 ' 42. Zamena zbirne ne sme da odnese decu TUDJE zbirne
 ' ============================================================
-' Ovo je najtisi kvar u celom lancu. Pocetak ISPRAVKE je tacan: zaglavlje se
-' stornira po generaciji, tudje ostaje aktivno. Ali CompleteZbirnaIspravka --
-' koja se izvrsava TEK POSLE snimanja zamene -- prevezuje otpremnice i
-' prijemnice po BrojZbirne, jer drugog kljuca u semi nema.
+' Ovo je najtisi kvar u celom lancu. Storno zaglavlja je tacan: bira se po
+' identitetu, tudje ostaje aktivno. Ali radnje koje diraju DECU idu po
+' BrojZbirne, jer drugog kljuca u semi nema -- otpremnice, prijemnice i palete
+' ZbirnaID ne nose nigde.
 '
-' Ishod bi bio: storniram tacno SVOJE zaglavlje, pa TUDJOJ zbirni odnesem decu.
+' Ishod bi bio: obori tacno SVOJE zaglavlje, pa TUDJOJ zbirni odnesi decu.
 ' Nista ne izgleda pokvareno u trenutku storna.
 '
 ' Dok child mutacije ne budu scoped, jedina postena opcija je stati PRE nego
 ' sto se ista promeni -- i to je ono sto se ovde tvrdi.
+'
+' S4-3a: mereno je kroz ISPRAVKU, koja je obrisana (ZBR-KANON-03). Tvrdnja NIJE
+' obrisana sa njom -- ista kapija stoji pred DUPLI i PONISTENJEM, koji decu
+' diraju isto tako. Da je test otisao uz mod, invarijanta bi ostala bez ijednog
+' merenja, a to je tiho gubljenje kapije.
 Private Sub T_ZamenaZbirne_NeDiraDecuTudje()
     Dim res As Object
 
@@ -3242,12 +3291,12 @@ Private Sub T_ZamenaZbirne_NeDiraDecuTudje()
     AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
              "preduslov: tudja otpremnica visi na tom broju"
 
-    Set res = modStornoFlow.RunZbirnaCorrection(FX_ZBIRNA_KASK, SV_MODE_ISPRAVKA, _
+    Set res = modStornoFlow.RunZbirnaCorrection(FX_ZBIRNA_KASK, SV_MODE_DUPLI, _
                                                 False, "GEN-ZB-K1")
     AssertEq CBool(res("success")), False, _
-             "ISPRAVKA staje dok broj nose dva aktivna dokumenta"
-    AssertEq CBool(res("needsForm")), False, _
-             "forma za zamenu se NE otvara -- inace bi zamena stigla do relinka"
+             "DUPLI staje dok broj nose dva aktivna dokumenta"
+    AssertEq (Len(CStr(res("message"))) > 0), True, _
+             "razlog se IMENUJE -- tiho odbijanje je isto sto i tiha steta"
 
     ' Nista nije dirano: ni izabrano zaglavlje, ni tudje, ni deca.
     AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), False, _
@@ -3916,46 +3965,6 @@ Private Sub T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu()
     ' zbirnu. Operater to mora da vidi, inace mu sledljivost visi bez upozorenja.
     AssertEq (InStr(1, msg, FX_PRIJEMNICA_OLD_U, vbTextCompare) > 0), True, _
              "poruka imenuje prijemnicu koja je ostala vezana"
-End Sub
-
-' ============================================================
-' 49. Ispravka ZBIRNE: ista kapija, obe strane
-' ============================================================
-' CompleteZbirnaIspravka je imala istu rupu kao ispravka otpremnice, samo sirju:
-' po broju idu i izvor i cilj -- RelinkOtpremniceToZbirna_TX(oldBroj, newBroj),
-' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
-' RecalculateZbirnaFromOtpremnice_TX(newBroj). Nijedna strana nije bila proverena.
-'
-' Dvosmislen CILJ znaci "cije zaglavlje dobija zbir", dvosmislen IZVOR znaci
-' "cija deca se sele". Zato test meri obe grane, jedna po jedna.
-Private Sub T_IspravkaZbirne_KapijaNaObeStrane()
-    Dim cid As String, res As Object
-    Dim preB As Double
-
-    preB = KolicinaZbirne("ZBI-TGT-B")
-
-    ' (a) DVOSMISLEN CILJ: izvor je jednoznacan, cilj je nekad imao dva vlasnika.
-    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
-                                                  "ZBI-OLDU-1", FX_ZBIRNA_OLDU)
-    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_TGT)
-    AssertEq KolicinaZbirne("ZBI-TGT-B"), preB, _
-             "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece"
-    AssertEq ZbirnaNaOtpremnici("OTP-OLD-U"), FX_ZBIRNA_OLDU, _
-             "dvosmislen CILJ: otpremnica izvora nije prevezana"
-    AssertEq CBool(res("success")), False, "dvosmislen CILJ zaustavlja ispravku zbirne"
-    AssertEq (InStr(1, CStr(res("message")), "ciljne zbirne", vbTextCompare) > 0), True, _
-             "razlog imenuje CILJNU stranu"
-
-    ' (b) DVOSMISLEN IZVOR: cilj je jednoznacan, izvor je nekad imao dva vlasnika.
-    ' Bez ove grane bi se selila deca oba vlasnika izvornog broja.
-    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
-                                                  "ZBI-KASK-1", FX_ZBIRNA_KASK)
-    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_STALE)
-    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
-             "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja"
-    AssertEq CBool(res("success")), False, "dvosmislen IZVOR zaustavlja ispravku zbirne"
-    AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
-             "razlog imenuje STARU stranu"
 End Sub
 
 Private Function KolicinaZbirne(ByVal zbrID As String) As Double
@@ -10594,42 +10603,6 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     AssertEq greskaMat, "", "tabela bez storno pojma prolazi bez greske"
     AssertEq (redovaPre > 0), True, "...nad tabelom koja stvarno ima redove"
     AssertEq redovaPosle, redovaPre, "...i vraca sve svoje redove"
-End Sub
-
-' TEST 124: kapija je U PRIMITIVU, a ne oko njega.
-'
-' RecalculateZbirnaFromOtpremnice_TX mutira SVE zbirna redove sa datim brojem,
-' a broj nije identitet -- dva vlasnika mogu nositi isti. Zastita je stajala
-' iskljucivo po call-site-u: ZbirnaBrojJeDvosmislenIkad na sest mesta u
-' modStornoFlow, dok sam primitiv nije imao nijednu. Nov pozivalac je zato bio
-' bezbedan samo ako se autor kapije seti. Katalog je bas to i trazio.
-'
-' MERENO stanje fixture-a na ovom mestu u nizu (sonda, pre izmene):
-'   ikad = 2, aktivnih = 1, primitiv vraca True
-' Zato ovaj test usput dokazuje i da kapija mora da broji IKAD: kapija koja
-' broji samo AKTIVNE ovde ne bi okinula, jer je posle storna aktivan jedan.
-'
-' Stoji POSLEDNJI u nizu namerno: dok je crven, primitiv jos mutira fixture,
-' pa iza njega ne sme da ide test koji na taj fixture racuna.
-Private Sub T_RekalkZbirne_KapijaJeUPrimitivu()
-    Dim ikad As Long, aktivnih As Long
-    Dim ok As Boolean
-
-    ikad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
-                           "T_Rekalk", True, _
-                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-    aktivnih = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
-                               "T_Rekalk", False, _
-                               Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-    AssertEq ikad, 2, "preduslov: broj je IKAD pripadao dvama vlasnicima"
-    AssertEq aktivnih, 1, _
-             "preduslov: AKTIVAN je jedan -- kapija po aktivnima ne bi okinula"
-
-    ' Primitiv se zove DIREKTNO, bez ijedne kapije oko njega. To je cela poenta.
-    ok = modDokumentInvariant.RecalculateZbirnaFromOtpremnice_TX(FX_ZBIRNA_KASK, _
-                                                                 "", "test 124")
-    AssertEq ok, False, _
-             "rekalkulacija po dvosmislenom broju ne prolazi kroz sam primitiv"
 End Sub
 
 ' TEST 125: cilj bez generacije mora biti AKTIVAN i ISTORIJSKI jednoznacan.

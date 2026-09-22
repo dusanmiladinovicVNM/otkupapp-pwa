@@ -34,7 +34,6 @@ Public Sub Test_StornoCentar_All()
     Test_GetActiveDocumentsForStorno_Auto
     Test_GetNedovrseno_Auto
     Test_UndoReverseGuard_Auto
-    Test_ZbirnaRecalcInPlace_Auto
     Test_PonistenjePrijemniceKaskada_Auto
     Test_StornoJournalUndo_Auto
     Test_StornoJournalReversGuard_Auto
@@ -731,43 +730,6 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_PonistenjePrijemniceKaskada_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' 3.2 odluka: auto-recalc IZDATE zbirne ostaje IN-PLACE (izveden agregat), NE
-' re-verzionise se (nov BrojZbirne bi razbio lookup-e; sync je bezbedan ali interni
-' join nije). Audit-trag ide u Monitoring. Test: recalc bez otpremnica -> stara
-' vrednost -> 0 na ISTOM redu, bez novog zbirna reda.
-Public Sub Test_ZbirnaRecalcInPlace_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    ' izdata (default) aktivna zbirna sa zastarelim totalom, bez otpremnica
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array("SVT-ZR-ID", "SVT-ZR-Z1", "I", 999, 9)
-
-    ResetIssuedZbirnaAudit
-    TcChk RecalculateZbirnaFromOtpremnice_TX("SVT-ZR-Z1", "SVT-ZR-COR", "test") = True, "recalk izdate zbirne -> True"
-    TcChk Val(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_ZBR_KOLICINA))) = 0, "total spusten na 0 (nema otpremnica)"
-    TcChk UCase$(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_STORNIRANO))) <> "DA", "isti red ostaje AKTIVAN (in-place, ne re-verzija)"
-    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ZR-Z1") = 1, "nema novog zbirna reda (bez re-verzionisanja)"
-    ' promena izdate zbirne (999->0) -> audit MORA da okine (gate: izdato + promena)
-    TcChk InStr(LastIssuedZbirnaAudit(), "SVT-ZR-Z1") > 0, "audit emitovan za izmenu izdate zbirne"
-
-    ' NEGATIVNO: recalk bez promene (total vec 0) -> audit NE sme da okine
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array("SVT-ZR-ID0", "SVT-ZR-Z0", "I", 0, 0)
-    ResetIssuedZbirnaAudit
-    RecalculateZbirnaFromOtpremnice_TX "SVT-ZR-Z0"
-    TcChk Len(LastIssuedZbirnaAudit()) = 0, "nema audita kad se nista ne menja (0->0)"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_ZbirnaRecalcInPlace_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' #5 undo: reverse dup-guard -> ne vraca revers ako vec postoji AKTIVAN isti broj+tip.

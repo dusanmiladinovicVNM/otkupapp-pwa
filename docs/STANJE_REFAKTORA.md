@@ -204,19 +204,24 @@
     red otvara izmenu nacrta po ID-u, snimanje pravi **ili** menja nacrt. Izdata se ne otvara.
     Ekran ništa ne sudi. Ostaje za 2b-2b: polja vrste/sorte/tipa ambalaže u formi primaju unos koji
     se nigde ne upisuje. Detalji: plan §14.29.
-33. **S4-2c/2b-2b — radni sto zbirne u F2 (PR #___).** Liste `ZBIRNE`/`IZVORI`/`NEVEZANE`, izbor
+33. **S4-2c/2b-2b — radni sto zbirne u F2 (PR #377).** Liste `ZBIRNE`/`IZVORI`/`NEVEZANE`, izbor
     aktivnog nacrta klikom (po `ZbirnaID`), veži/ukloni/izdaj kroz kanonske pisce. Nema novih mreža —
     `RedoviZaSkup` sužava `RedoviZaTip`. Zbirna je prvi put **ceo tok**: najava → pokrivanje →
     izdavanje. Detalji: plan §14.30.
-34. **S4-2c/2b-2c-1 — F3 ne traži ono što ne nosi (PR #___).** Cena, tip ambalaže i vrednost skinuti
+34. **S4-2c/2b-2c-1 — F3 ne traži ono što ne nosi (PR #379).** Cena, tip ambalaže i vrednost skinuti
     sa F3 kroz `FldShow`; lista `SVI` više ne nudi `Veži` (P3 #377). Drugi P3 (`mZbrID`) se **ne**
     zatvara brisanjem stanja — kontekst mora da preživi F2↔F3, rešava ga traka. Detalji: plan §14.31.
-35. **S4-2c/2b-2c-2 — traka napretka zbirne (PR #___).** Traka se crta i u F2, nad aktivnim nacrtom;
+35. **S4-2c/2b-2c-2 — traka napretka zbirne (PR #381).** Traka se crta i u F2, nad aktivnim nacrtom;
     čita `GetZbirnaProgress` — isti par čitača koji koristi izdavanje. **Četvrta mera je BROJ IZVORA**
     (odluka operatera): zbirna nema cenu, a pokrivenost je pitanje članstva. Natpise šalje ekran
     (14. polje ugovora), pa ljuska ne pogađa šta je u kom režimu predmet rada. Detalji: plan §14.32.
-36. **Sledeće:** **S4-3** (članstvo, storno okvir, ZBR-KANON-03, brisanje `GeneracijaID` okvira
-    zbirne i rekalkulacije), pa S4-4 (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
+36. **S4-3a — ispravka zbirne umire, ne seli se (PR #___).** Okvir rekalkulacije u mestu i
+    dvokoraka „storno sada, zamena kasnije" je obrisan (ZBR-KANON-03). **Zamena se ne gradi sada:**
+    jedan potez traži prenos prijemnica, a one vise na `BrojZbirne` do S6 — pa bi nova zbirna
+    (nov broj, A9) ostavila siročad. Odluka operatera: **ispravka zbirne čeka S6**; do tada F8 nudi
+    `DUPLI` i `PONIŠTENJE`. Usput nađeno: `ValidateZbirnaInvariant` je pod kanonom bila **vakuumska**
+    (obe strane nule → uvek `OK`), i u uvidu i u golden snimku. Detalji: plan §14.33.
+37. **Sledeće:** **S4-3b** (čišćenje ostatka `GeneracijaID` okvira zbirne), pa S4-4 (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
     S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.

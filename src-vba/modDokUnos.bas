@@ -1332,8 +1332,10 @@ Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
     If MsgBox(ZavrsiIspravkuPitanje(docType, cid, newBroj, stanicaID, datum), _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
+    ' ZBIRNE VISE NEMA OVDE (S4-3a). Ispravka zbirne je bila DVOKORAK -- storno
+    ' sada, zamena kasnije -- pa je ovo bio "kasnije". ZBR-KANON-03 taj mod
+    ' ukida; do S6 zbirna se ne ispravlja nego stornira (DUPLI/PONISTENJE).
     Select Case docType
-        Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
         Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj, stanicaID, datum)
         Case Else: Exit Sub
     End Select

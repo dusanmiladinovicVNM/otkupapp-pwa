@@ -245,6 +245,25 @@ Public Function Scr_BrojAkcija() As Long
     Scr_BrojAkcija = UBound(akc) + 1
 End Function
 
+' TEST SEAM: KOJE radnje red odluke nudi -- ne samo koliko. Tvrdo gejtovan.
+'
+' Scr_BrojAkcija meri BROJ, i to je tacno onoliko koliko treba za "bez uvida
+' nema odluke". Ali tvrdnja "zbirna vise ne nudi ISPRAVKU" se brojem ne moze
+' izmeriti: da je umesto ispravke nestao DUPLI, broj bi bio isti a tvrdnja
+' lazna. Zato kljucevi, i to ogradjeni tackom-zarezom sa obe strane, da
+' pretraga ne pogodi deo tudjeg imena.
+Public Function Scr_AkcijeKljucevi() As String
+    Dim akc As Variant, i As Long, m As String
+    If Not IsTestMode() Then Exit Function
+    akc = AkcijeZaTip()
+    If Not IsArray(akc) Then Exit Function
+    m = ";"
+    For i = LBound(akc) To UBound(akc)
+        m = m & Split(CStr(akc(i)), "|")(0) & ";"
+    Next i
+    Scr_AkcijeKljucevi = m
+End Function
+
 ' TEST SEAM: kljuc pod kojim je red odluke kesiran. Prazno = kesa nema. Postoji
 ' zato sto se zastarela odluka i sveza odluka spolja ne razlikuju -- obe daju
 ' isti niz dugmadi, a razlika je bas u tome da li je racunata nad tekucim
@@ -725,6 +744,30 @@ Private Function AkcijeRacun() As Variant
 
     If Not modStornoDok.StornoTraziIzborModa(mSelTip, mSelBroj, mSelOpcija, mSelDocID) Then
         AkcijeRacun = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
+        Exit Function
+    End If
+
+    ' ZBIRNA NEMA ISPRAVKU (S4-3a, ZBR-KANON-03).
+    '
+    ' Stari mod je bio DVOKORAK: stornira staru odmah, a zamenu operater snima
+    ' kasnije -- pa je izmedju postojao prozor u kome stare vise nema a nove jos
+    ' nema. Okvir je taj prozor krpio pamcenjem konteksta i MANUAL zadacima.
+    ' Kanon to resava jednim potezom (storno + nova iz istih izvora, jedna
+    ' transakcija), kao IspravkaOtpremnice_TX od S3c.
+    '
+    ' Ali zbirnu vezuju i PRIJEMNICE, kolonom BrojZbirne -- a prijemnica prelazi
+    ' na kanon tek u S6. Nova zbirna dobija nov broj (storno ne oslobadja broj,
+    ' A9), pa bi svaka prijemnica ostala siroce. Odluka operatera (22.09.2026):
+    ' ispravka zbirne SE ODLAZE do S6, umesto da se sada pise relink po broju
+    ' koji S6 odmah brise.
+    '
+    ' Do tada operater ima DUPLI (razvezi otpremnice, zadrzi ih) i PONISTENJE
+    ' (obori ceo lanac) -- obe imenovane radnje, nijedna polovicna.
+    If dt = FLOW_DOC_ZBIRNA Then
+        AkcijeRacun = Array( _
+            SV_MODE_DUPLI & "|OTKUI_SCRST_B_DUPLI|OTKUI_SCRST_H_DUPLI|secondary", _
+            SV_MODE_PONISTENJE & "|OTKUI_SCRST_B_PONISTI|OTKUI_SCRST_H_PONISTI|danger", _
+            SV_MODE_RESI_KASNIJE & "|OTKUI_SCRST_B_KASNIJE|OTKUI_SCRST_H_KASNIJE|ghost")
         Exit Function
     End If
 

@@ -213,7 +213,8 @@ zaključivati iz koda.
 | `btnUnosIzlaz_Click` | upis F6 (uplate kupaca) | **IMA** (`modNovacUnos`, v6-ui-117) |
 | `Prefill*FromStornirana` | ispravka posle storna | **IMA** (`modStornoDok.PrefillIzStorniranog`, v6-ui-120) |
 | `btnStorno_Click` (storno po tipu i broju) | storno bilo kog dokumenta | **IMA** (`modStornoDok` + F8, v6-ui-119) |
-| `TryRunCorrectionFramework` (četiri moda) | ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE | **IMA** (v6-ui-120) — kroz pitanja, ne kroz overlay panel |
+| `TryRunCorrectionFramework` (četiri moda) | ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE | **IMA** (v6-ui-120) — kroz pitanja, ne kroz overlay panel. **Za ZBIRNU od S4-3a bez ISPRAVKE** (v. red ispod) |
+| ISPRAVKA nad **zbirnom** | storno stare + zamena koju operater snima kasnije | **INTENTIONALLY REMOVED — privremeno, do S6** (S4-3a). ZBR-KANON-03 traži jedan potez, a jedan potez za zbirnu traži i prenos **prijemnica**, koje vise na `BrojZbirne` do S6. Umesto relinka po broju koji S6 briše, mod je sklonjen. Operater ima `DUPLI` i `PONIŠTENJE`. Dokaz da je sklonjen i da ostali tipovi nisu: `T_Zbirna_NemaIspravku` |
 | Undo operacija, „Nedovršeno", Recovery | — | **NEMA** — Faza D, stavka 14 |
 
 ---
@@ -299,7 +300,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
 | Prijemnica: auto-štampa + grupni otkupni list samo za hladnjaču | `PrijemnicaUpisi` | best-effort, ne obara potvrdu upisa |
 | Prijemnica: status palete uz potvrdu | `PrijemnicaUpisi` → `GetPaletaStatusForPrijemnica` | |
-| Zbirna: završetak ispravke posle storna | `ZbirnaUpisi` → `ZavrsiIspravkuAko` → `CompleteZbirnaIspravka` | samo nad **persistentnom** ispravkom (`tblStornoVeza`) |
+| ~~Zbirna: završetak ispravke posle storna~~ | ~~`ZbirnaUpisi` → `ZavrsiIspravkuAko` → `CompleteZbirnaIspravka`~~ | **Obrisano u S4-3a.** Bio je drugi korak dvokoraka koji ZBR-KANON-03 ukida; `ZavrsiIspravkuAko` za zbirnu više nema granu. Revers je zadržao svoju |
 | **Prijemnica: ispravka posle storna (relink paleta)** | `PrepoznajIspravkuPrijemnice` (u `PrijemnicaValidiraj`) + `PreveziPaleteIspravke` (u `PrijemnicaUpisi`) | **PRENETO u v6-ui-120.** `SetPaletizeSkip` ide **pre** upisa, pa `ReassignPaleteToPrijemnica_TX` + `PaletaAdjustPrompt` posle njega. Ispravka na čekanju traži se u `tblStornoVeza`, ne u stanju sesije: storno se pokreće u F8, unos u F4, a između to dvoje sme da se zatvori Excel. **Safe-stop:** dve ili više ispravki na čekanju → ne bira se naslepo. |
 
 Uz njih: `LoadZbirneListbox` / `lstZbirne_Click` (izbor zbirne iz liste),
