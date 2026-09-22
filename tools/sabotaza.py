@@ -589,6 +589,35 @@ SABOTAZE = {
         "Test_BKTX_ZbirnaTudjegVlasnikaOdbijena",
         "pisac odbija broj tudjeg vlasnika",
     ),
+    # --- S4-2c/2b-1: citaoci za ekrane zbirne
+    "zbirna-nevezane-nude-nacrt": (
+        "modDokumenta.bas",
+        "                If OtpremnicaJeIzdata(oidRaw) Then\n",
+        "                If True Then   ' SABOTAZA: i nacrt se nudi kao izvor\n",
+        "Test_ZBR_NevezaneSamoIzdateISlobodne",
+        "NACRT otpremnice se ne nudi",
+    ),
+    "zbirna-nevezane-nude-zauzetu": (
+        "modDokumenta.bas",
+        "                    If Not aktivno.Exists(oid) Then\n",
+        "                    If True Then   ' SABOTAZA: clanstvo se ne gleda\n",
+        "Test_ZBR_NevezaneSamoIzdateISlobodne",
+        "otpremnica u sastavu aktivne zbirne se ne nudi",
+    ),
+    "zbirna-napredak-ne-vidi-visak": (
+        "modDokumenta.bas",
+        "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n",
+        "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n    Set pov = CreateObject(\"Scripting.Dictionary\")   ' SABOTAZA: visak nestaje\n",
+        "Test_ZBR_NapredakPokrivanja",
+        "klasa koju izvor nosi a najava ne VIDI se",
+    ),
+    "zbirna-validacija-ne-izuzima-sebe": (
+        "modDokUnos.bas",
+        "                                      datum, S(p, \"brDok\"), zbirnaID)) > 0 Then\n",
+        "                                      datum, S(p, \"brDok\"))) > 0 Then\n",
+        "Test_ZBR_ValidacijaNadKanonom",
+        "nacrt sme da ZADRZI svoj broj",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

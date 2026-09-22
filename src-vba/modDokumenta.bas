@@ -1637,6 +1637,51 @@ Public Function ZbrClanovi(ByVal zbirnaID As String) As Collection
     Next i
 End Function
 
+' NAPREDAK POKRIVANJA NACRTA -- ogledalo GetOtpremnicaProgress.
+'
+' Klase su UNIJA najavljenih i povezanih. Klasa koju izvori nose a nacrt je nije
+' najavio MORA da se vidi kao visak, a ne da nestane iz prikaza: bez unije bi
+' operater gledao uredan spisak i ne bi razumeo zasto izdavanje pada. Isto vazi
+' obrnuto -- najavljena klasa koju nijedan izvor ne nosi ostaje sa preostalim.
+'
+' Cita se ISTIM parom koji izdavanje koristi za jednakost (ZbrUcitajOcekivano /
+' ZbrUcitajPovezano), pa prikaz i kapija ne mogu da se raziju.
+Public Function GetZbirnaProgress(ByVal zbirnaID As String) As Object
+    Const SRC As String = "GetZbirnaProgress"
+
+    Dim rez As Object
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set GetZbirnaProgress = rez
+
+    Dim ocek As Object, ocekAmb As Object
+    Dim pov As Object, povAmb As Object
+    ZbrUcitajOcekivano zbirnaID, ocek, ocekAmb, SRC
+    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC
+
+    Dim sve As Object
+    Set sve = CreateObject("Scripting.Dictionary")
+
+    Dim k As Variant
+    For Each k In ocek.Keys
+        sve(CStr(k)) = True
+    Next k
+    For Each k In pov.Keys
+        sve(CStr(k)) = True
+    Next k
+
+    Dim red As Object
+    For Each k In KlaseUKanonskomRedu(sve)
+        Set red = CreateObject("Scripting.Dictionary")
+        red("ocekivano") = OtpBroj(ocek, CStr(k))
+        red("povezano") = OtpBroj(pov, CStr(k))
+        red("preostalo") = OtpBroj(ocek, CStr(k)) - OtpBroj(pov, CStr(k))
+        red("ocekivanoAmb") = OtpBroj(ocekAmb, CStr(k))
+        red("povezanoAmb") = OtpBroj(povAmb, CStr(k))
+        red("preostaloAmb") = OtpBroj(ocekAmb, CStr(k)) - OtpBroj(povAmb, CStr(k))
+        Set rez(CStr(k)) = red
+    Next k
+End Function
+
 ' --- core: nacrt ------------------------------------------------------------
 Private Function ZbrNapraviDraft(ByVal h As Object, _
                                  ByVal ocekivano As Collection) As String
@@ -2639,6 +2684,110 @@ End Function
 Public Function AktivnoZbrClanstvoPoKanonu(Optional ByVal sourceName As String = _
                                            "AktivnoZbrClanstvoPoKanonu") As Object
     Set AktivnoZbrClanstvoPoKanonu = AktivnoClanstvoPoKanonu(sourceName)
+End Function
+
+' OTPREMNICE KOJE CEKAJU ZBIRNU -- ogledalo NevezaniOtkupi, sa jednom razlikom
+' koja je cela poenta S4: izvor zbirne mora da bude IZDATA otpremnica.
+'
+' Nacrt otpremnice je NAJAVA, ne roba koja je otisla, pa se ovde ne nudi. Da se
+' nudi, operater bi ga vezao i tek bi ga izdavanje zbirne odbilo -- nekoliko
+' klikova kasnije, porukom o dokumentu koji je sam izabrao sa ponudjenog spiska.
+' Kapija koja odbija tek na kraju je losija od spiska koji ne laze.
+'
+' Vrednost je ISTORIJA, ne veza: brojevi STORNIRANIH zbirnih u cijem je sastavu
+' otpremnica bila. Aktivno clanstvo cita samo AktivnoClanstvoPoKanonu.
+Public Function NevezaneOtpremnice() As Object
+    Const SRC As String = "NevezaneOtpremnice"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    Set NevezaneOtpremnice = res
+
+    Dim otp As Variant
+    otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(otp) Then Exit Function
+
+    Dim aktivno As Object, bila As Object
+    Set aktivno = AktivnoClanstvoPoKanonu(SRC)
+    Set bila = BivseZbirneIzvora(SRC)
+
+    Dim cId As Long, cSto As Long, i As Long
+    Dim oidRaw As String, oid As String
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+
+    For i = 1 To UBound(otp, 1)
+        oidRaw = Trim$(NzToText(otp(i, cId)))
+        oid = UCase$(oidRaw)
+        If Len(oid) > 0 Then
+            If StrComp(Trim$(NzToText(otp(i, cSto))), "Da", vbTextCompare) <> 0 Then
+                If OtpremnicaJeIzdata(oidRaw) Then
+                    If Not aktivno.Exists(oid) Then
+                        If bila.Exists(oid) Then
+                            res(oid) = CStr(bila(oid))
+                        Else
+                            res(oid) = ""
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' UCase(OtpremnicaID) -> brojevi STORNIRANIH zbirnih u cijem je sastavu bila,
+' redom clanstva, spojeni ", ". Isti obrazac kao BivseOtpremniceIzvora.
+Private Function BivseZbirneIzvora(ByVal src As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BivseZbirneIzvora = d
+
+    Dim izv As Variant, zbr As Variant
+    izv = GetTableData(TBL_ZBIRNA_IZVORI)
+    If Not IsArray(izv) Then Exit Function
+    zbr = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(zbr) Then Exit Function
+
+    ' Broj STORNIRANE zbirne po ID-u.
+    Dim brStor As Object
+    Set brStor = CreateObject("Scripting.Dictionary")
+
+    ' Imena indeksa NE smeju da lice na 'zbr': VBA je case-insensitive, pa bi
+    ' 'zBr' bila druga deklaracija istog imena i modul se ne bi kompajlirao.
+    Dim cZbrId As Long, cZbrBroj As Long, cZbrSto As Long, j As Long
+    cZbrId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, src)
+    cZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, src)
+    cZbrSto = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, src)
+    For j = 1 To UBound(zbr, 1)
+        If StrComp(Trim$(NzToText(zbr(j, cZbrSto))), "Da", vbTextCompare) = 0 Then
+            brStor(UCase$(Trim$(NzToText(zbr(j, cZbrId))))) = _
+                Trim$(NzToText(zbr(j, cZbrBroj)))
+        End If
+    Next j
+    If brStor.count = 0 Then Exit Function
+
+    ' Par (otpremnica, zbirna) se broji jednom -- isti broj dve razlicite
+    ' stornirane zbirne ostaje dva puta, jer su to dva dokumenta.
+    Dim vidjen As Object
+    Set vidjen = CreateObject("Scripting.Dictionary")
+
+    Dim cZbr As Long, cOtp As Long, i As Long, zbrU As String, otpU As String
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, src)
+    cOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, src)
+    For i = 1 To UBound(izv, 1)
+        zbrU = UCase$(Trim$(NzToText(izv(i, cZbr))))
+        otpU = UCase$(Trim$(NzToText(izv(i, cOtp))))
+        If Len(otpU) > 0 And brStor.Exists(zbrU) Then
+            If Not vidjen.Exists(otpU & "|" & zbrU) Then
+                vidjen.Add otpU & "|" & zbrU, True
+                If d.Exists(otpU) Then
+                    d(otpU) = CStr(d(otpU)) & ", " & CStr(brStor(zbrU))
+                Else
+                    d(otpU) = CStr(brStor(zbrU))
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 ' Clanstvo se pise ORIGINALNIM OtpremnicaID-em iz tabele, ne kljucem recnika:
