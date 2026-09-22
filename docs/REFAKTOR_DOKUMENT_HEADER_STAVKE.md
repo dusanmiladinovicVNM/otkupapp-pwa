@@ -4597,7 +4597,32 @@ grešku, traka je pokazuje kao **stanje**. Isti obrazac koji je #372 uveo za izv
 > Četvrti put u ovom slajsu: **dva mesta racunaju isti sud.** Kad god ekran i kapija odgovaraju na isto
 > pitanje, odgovor mora da ima jedno telo — inace se raziju tiho, a ekran je taj koji laze.
 
-Tri nova testa, tri sabotaže (**564 → 567**).
+**Review #381, drugi krug — ista greška, pomerena za jedan red.** Prva popravka je sklonila `IIf` iz
+**dodela** natpisa i vratila ga **u argument**: `TrakaNatpisi(IIf(UBound(p) >= 13, p(13), ""))`. VBA i
+dalje evaluira obe grane, F1 i dalje šalje tačno 13 polja, `On Error Resume Next` i dalje guta
+`Subscript out of range` — pa je F1 traka i dalje ostajala bez natpisa, ili sa **tuđim** koji su ostali
+iz F2. Pozivno mesto sada nema nijedan uslovni izraz nad poljem koje možda ne postoji:
+
+```vb
+Dim kljucevi As Variant, imaKlj As Boolean, spec As String
+If UBound(p) >= 13 Then spec = CStr(p(13))
+kljucevi = TrakaNatpisi(spec, imaKlj)
+```
+
+**Važniji nalaz je zašto je pobegla dvaput: test je merio POMOĆNIK, a bug je bio u POZIVU.**
+`Test_ZBR_TrakaNatpisi` je zvao `TrakaNatpisi` direktno — zelen, tačan, i potpuno slep za red iznad
+sebe. Zato `modOtkupUI` dobija seam `TrakaRefreshTest`, a `modTest` test **201
+`T_Traka_NatpisiPoRezimu`**, koji ide putem operatera kroz pravo pozivno mesto: **F1 (otpremnica, 13
+polja) → F2 (zbirna, 14 polja) → nazad F1**. Treći korak je onaj koji vredi — meri da se natpisi
+**vraćaju**, a ne da su samo jednom bili tačni. Sabotaža `traka-cita-polje-koje-f1-ne-salje` reprodukuje
+tačno zatečeni bug i obara ga po imenu.
+
+**Review #381, P3 — pola odluke je bilo nevidljivo.** Pozivalac je sam računao `imaKlj` („ekran je poslao
+spec"), a `TrakaNatpisi` je odvojeno odlučivala da li je spec **valjan**. Pokvaren spec je zato dobijao
+podrazumevane natpise **ali custom formatiranje** četvrte mere (ceo broj bez podnaslova). Sada
+`TrakaNatpisi` vraća i `prihvacen`, pa jedna odluka nosi oboje.
+
+Četiri nova testa ukupno u slajsu, pet sabotaža (**564 → 569**); `modTest` 200 → **201**.
 
 ## 15) Backlog — namerno van opsega
 

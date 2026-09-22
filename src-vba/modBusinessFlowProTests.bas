@@ -8928,26 +8928,32 @@ End Sub
 Private Sub Test_ZBR_TrakaNatpisi()
     On Error GoTo EH
 
-    Dim d As Variant
-    d = modOtkupUI.TrakaNatpisi("")
+    Dim d As Variant, uzet As Boolean
+    d = modOtkupUI.TrakaNatpisi("", uzet)
     AssertTrue IsArray(d), "ZBR natpisi: prazan spec daje NIZ, ne prazno"
+    AssertTrue Not uzet, "ZBR natpisi: prazan spec NIJE prihvacen"
     AssertEquals "3", CStr(UBound(d)), "ZBR natpisi: uvek cetiri natpisa"
     AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
                  "ZBR natpisi: bez spec-a stoje podrazumevani (otpremnica)"
     AssertEquals "OTKUI_OTP_CENA", CStr(d(3)), _
                  "ZBR natpisi: cetvrta podrazumevana je cena"
 
-    d = modOtkupUI.TrakaNatpisi("A,B,C,D")
+    d = modOtkupUI.TrakaNatpisi("A,B,C,D", uzet)
     AssertEquals "A", CStr(d(0)), "ZBR natpisi: ekran sme da ih zameni"
     AssertEquals "D", CStr(d(3)), "ZBR natpisi: zamenjena je i cetvrta"
+    AssertTrue uzet, "ZBR natpisi: ispravan spec JE prihvacen"
 
-    ' Pogresna duzina i prazan clan se odbijaju U CELOSTI.
-    d = modOtkupUI.TrakaNatpisi("A,B")
+    ' Pogresna duzina i prazan clan se odbijaju U CELOSTI -- i to se KAZE
+    ' pozivaocu (review #381, P3). Od istog odgovora zavisi format cetvrte
+    ' mere, pa bi "podrazumevani natpisi + custom format" bio pola odluke.
+    d = modOtkupUI.TrakaNatpisi("A,B", uzet)
     AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
                  "ZBR natpisi: nepotpun spec se odbija, ne dopunjava"
-    d = modOtkupUI.TrakaNatpisi("A,,C,D")
+    AssertTrue Not uzet, "ZBR natpisi: odbijen spec se prijavljuje kao odbijen"
+    d = modOtkupUI.TrakaNatpisi("A,,C,D", uzet)
     AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
                  "ZBR natpisi: spec sa praznim clanom se odbija"
+    AssertTrue Not uzet, "ZBR natpisi: i prazan clan obara PRIHVATANJE"
 
     Exit Sub
 EH:

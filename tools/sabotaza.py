@@ -871,6 +871,20 @@ SABOTAZE = {
         "Test_ZBR_TrakaNatpisi",
         "prazan spec daje NIZ, ne prazno",
     ),
+    "traka-cita-polje-koje-f1-ne-salje": (
+        "modOtkupUI.bas",
+        "    If UBound(p) >= 13 Then spec = CStr(p(13))\n",
+        "    spec = CStr(p(13))   ' SABOTAZA: cita polje koje F1 ne salje\n",
+        "T_Traka_NatpisiPoRezimu",
+        "Nazad u F1: prvi natpis je VRACEN, nije ostao ZBR",
+    ),
+    "traka-ne-uzima-natpise-ekrana": (
+        "modOtkupUI.bas",
+        "    TrakaNatpisi = svoji\n",
+        "    ' SABOTAZA: natpisi ekrana se ignorisu\n",
+        "T_Traka_NatpisiPoRezimu",
+        "F2: cetvrta mera je BROJ IZVORA, jer zbirna nema cenu",
+    ),
     "zbirna-traka-ne-gleda-izvore": (
         "modScrDokumenti.bas",
         "    razlogIzvora = modDokumenta.ZbrIzvoriNevaljaniRazlog(mZbrID)\n",

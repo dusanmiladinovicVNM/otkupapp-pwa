@@ -878,8 +878,16 @@ End Sub
 '
 ' Zato niz POSTOJI UVEK. Ekran koji natpise ne salje dobija podrazumevane; niz
 ' pogresne duzine se odbija u celosti -- pola natpisa je gore od nijednog.
-Public Function TrakaNatpisi(ByVal spec As String) As Variant
+'
+' prihvacen: da li je spec ekrana STVARNO uzet (review #381, P3). Izlazi napolje
+' jer od iste odluke zavisi i FORMAT cetvrte mere -- ceo broj bez podnaslova kod
+' zbirne, decimale i "po otpremnici" kod cene. Dok je pozivalac to racunao sam,
+' pokvaren spec je dobijao podrazumevane natpise ALI custom formatiranje: pola
+' odluke, i to ona nevidljiva polovina.
+Public Function TrakaNatpisi(ByVal spec As String, _
+                             Optional ByRef prihvacen As Boolean) As Variant
     Dim podr As Variant, svoji As Variant
+    prihvacen = False
     podr = Array("OTKUI_OTP_UKUPNO", "OTKUI_OTP_UBLOK", _
                  "OTKUI_OTP_OSTATAK", "OTKUI_OTP_CENA")
     TrakaNatpisi = podr
@@ -895,7 +903,19 @@ Public Function TrakaNatpisi(ByVal spec As String) As Variant
     Next i
 
     TrakaNatpisi = svoji
+    prihvacen = True
 End Function
+
+' TEST SEAM: osvezi traku nad datom formom -- tvrdo gejtovan.
+'
+' Postoji zato sto se isti bug dvaput sakrio iza On Error Resume Next u
+' RefreshOtpTraka, a izolovan test pomocne funkcije ga nijednom nije video:
+' greska nije bila U NJOJ nego u POZIVU (review #381). Seam vodi test kroz pravo
+' pozivno mesto, redosledom kojim ide operater: F1 -> F2 -> F1.
+Public Sub TrakaRefreshTest(frm As Object)
+    If Not IsTestMode() Then Exit Sub
+    RefreshOtpTraka frm
+End Sub
 
 Private Sub RefreshOtpTraka(frm As Object)
     Dim z As Object, info As String, p() As String, i As Long
@@ -933,10 +953,13 @@ Private Sub RefreshOtpTraka(frm As Object)
     ' NATPISE BIRA EKRAN, KAD IH POSALJE (14. polje). Zbirna nema cenu, pa
     ' cetvrta grupa kod nje nosi BROJ IZVORA; ljuska ne zna sta je u kom rezimu
     ' predmet rada i ne sme da pogadja. Ekran koji ih ne salje se ponasa kao pre.
-    Dim kljucevi As Variant, imaKlj As Boolean
-    kljucevi = TrakaNatpisi(IIf(UBound(p) >= 13, p(13), ""))
-    imaKlj = (UBound(p) >= 13)
-    If imaKlj Then imaKlj = (Len(p(13)) > 0)
+    ' NIJEDAN IIf NAD POLJEM KOJE MOZDA NE POSTOJI (review #381, drugi krug).
+    ' Prva popravka je sklonila IIf iz dodela natpisa i vratila ga U ARGUMENT:
+    ' IIf(UBound(p) >= 13, p(13), "") i dalje cita p(13) kad ga nema, jer VBA
+    ' evaluira obe grane. Ista greska, pomerena za jedan red -- i opet nema.
+    Dim kljucevi As Variant, imaKlj As Boolean, spec As String
+    If UBound(p) >= 13 Then spec = CStr(p(13))
+    kljucevi = TrakaNatpisi(spec, imaKlj)
 
     z.Controls("otpML0").caption = UCase$(Poruka(CStr(kljucevi(0))))
     z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)

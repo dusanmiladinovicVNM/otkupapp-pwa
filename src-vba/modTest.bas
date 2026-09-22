@@ -495,6 +495,7 @@ Public Sub RunAllTests()
     RunOne 198
     RunOne 199
     RunOne 200
+    RunOne 201
 
     SetTestMode prevMode
     WriteResultFile
@@ -762,6 +763,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 194: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 195: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 196: TestName = "T_UtovarB_StornoKapije"
+        Case 201: TestName = "T_Traka_NatpisiPoRezimu"
         Case 200: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
@@ -970,6 +972,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 194: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 195: T_KpiSaldoOM_CitaKolonuSalda
         Case 196: T_UtovarB_StornoKapije
+        Case 201: T_Traka_NatpisiPoRezimu
         Case 200: T_ZbirnaForma_KlasaOstajeBezCene
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
@@ -1421,6 +1424,133 @@ End Sub
 ' pa se tamo i proverava. Datum se ne postavlja jer ga nijedna provera ne cita
 ' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
 ' ============================================================
+
+' NATPISI TRAKE PRATE REZIM -- NAD PRAVIM POZIVNIM MESTOM (review #381).
+'
+' Zasto ovaj test izgleda skuplje nego sto "izbor cetiri stringa" zasluzuje:
+' isti bug je pobegao DVA PUTA, a oba puta je postojao zelen test nad pomocnom
+' funkcijom. Greska nije bila u njoj:
+'
+'   kljucevi = TrakaNatpisi(IIf(UBound(p) >= 13, p(13), ""))
+'
+' VBA IIf evaluira OBE grane, pa se p(13) cita i kad ga nema. F1 salje tacno 13
+' polja -> "Subscript out of range" -> guta ga On Error Resume Next sa vrha
+' RefreshOtpTraka -> dodela se preskace -> traka ostaje BEZ natpisa ili sa
+' TUDJIM, zaostalim iz F2. Tiho, i samo za operatera koji je presao iz F2.
+'
+' Zato test ide putem operatera kroz produkcioni seam: F1 (otpremnica, 13 polja)
+' -> F2 (zbirna, 14 polja) -> nazad F1. Treci korak je onaj koji vredi: on meri
+' da se natpisi VRACAJU, a ne da su samo jednom bili tacni.
+Private Sub T_Traka_NatpisiPoRezimu()
+    Dim f As frmOtkupUI, prev As String, tx As clsTransaction
+    Dim p As Object, poruke As String, otpID As String, zbrID As String
+    Dim otp1 As String, otp4 As String, zbr1 As String, zbr4 As String
+    Dim nazad1 As String, nazad4 As String
+    Dim errNum As Long, errDesc As String
+
+    prev = modOtkupUI.ActiveMode
+    Set tx = New clsTransaction
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = DateSerial(2026, 11, 19)
+    p("stanicaID") = FX_STANICA
+    p("vozacID") = FX_VOZAC
+    p("brDok") = "T-TRK-OTP"
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = 100#
+    p("cenaI") = 50#
+    p("kolAmb") = 5
+    otpID = modDokUnos.OtpremnicaUpisi(p, poruke)
+
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("datum") = DateSerial(2026, 11, 19)
+    p("vozacID") = FX_VOZAC
+    p("kupacID") = FX_KUPAC
+    p("brDok") = "T-TRK-ZBR"
+    p("kolicinaI") = 100#
+    p("kolAmb") = 5
+    zbrID = modDokUnos.ZbirnaUpisi(p, poruke)
+
+    If Len(otpID) > 0 And Len(zbrID) > 0 Then
+        Set f = NewOtkupUIForm()
+        ' F1: radni sto otpremnice. Ekran salje 13 polja, bez natpisa.
+        modOtkupUI.SelectMode f, "F1"
+        modScrDokumenti.Scr_ResetCache
+        modScrDokumenti.AktivirajOtpremnicu otpID
+        modOtkupUI.GridScreenSetTest "DOKUMENTI"
+        modOtkupUI.TrakaRefreshTest f
+        otp1 = TrakaNatpisTest(f, 0)
+        otp4 = TrakaNatpisTest(f, 3)
+
+        ' F2: radni sto zbirne. Ekran salje 14 polja, sa svojim natpisima.
+        modOtkupUI.SelectMode f, "F2"
+        modScrDokumenti.Scr_ResetCache
+        modScrDokumenti.AktivirajZbirnu zbrID
+        modOtkupUI.GridScreenSetTest "DOKUMENTI"
+        modOtkupUI.TrakaRefreshTest f
+        zbr1 = TrakaNatpisTest(f, 0)
+        zbr4 = TrakaNatpisTest(f, 3)
+
+        ' Nazad u F1: otpremnica je i dalje aktivna, natpisi moraju da se vrate.
+        modOtkupUI.SelectMode f, "F1"
+        modScrDokumenti.Scr_ResetCache
+        modOtkupUI.GridScreenSetTest "DOKUMENTI"
+        modOtkupUI.TrakaRefreshTest f
+        nazad1 = TrakaNatpisTest(f, 0)
+        nazad4 = TrakaNatpisTest(f, 3)
+    End If
+
+    If Not f Is Nothing Then Unload f
+    modOtkupUI.ActiveMode = prev
+    modScrDokumenti.Scr_OtpOtkazi
+    modScrDokumenti.Scr_ZbrOtkazi
+    tx.RollbackTx
+
+    AssertEq (Len(otpID) > 0 And Len(zbrID) > 0), True, _
+             "Traka: nacrt otpremnice i nacrt zbirne su upisani"
+    AssertEq otp1, UCase$(Poruka("OTKUI_OTP_UKUPNO")), _
+             "F1: prva mera nosi podrazumevani natpis"
+    AssertEq otp4, UCase$(Poruka("OTKUI_OTP_CENA")), _
+             "F1: cetvrta mera je CENA -- ekran natpise ne salje"
+    AssertEq zbr1, UCase$(Poruka("OTKUI_OTP_NAJAVLJENO")), _
+             "F2: prvu meru preimenuje ekran zbirne"
+    AssertEq zbr4, UCase$(Poruka("OTKUI_OTP_IZVORA")), _
+             "F2: cetvrta mera je BROJ IZVORA, jer zbirna nema cenu"
+    AssertEq nazad1, UCase$(Poruka("OTKUI_OTP_UKUPNO")), _
+             "Nazad u F1: prvi natpis je VRACEN, nije ostao ZBR"
+    AssertEq nazad4, UCase$(Poruka("OTKUI_OTP_CENA")), _
+             "Nazad u F1: cetvrti natpis je VRACEN, nije ostao ZBR"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+
+    If Not f Is Nothing Then Unload f
+    modOtkupUI.ActiveMode = prev
+    modScrDokumenti.Scr_OtpOtkazi
+    modScrDokumenti.Scr_ZbrOtkazi
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+
+    Err.Raise errNum, "T_Traka_NatpisiPoRezimu", errDesc
+End Sub
+
+' Natpis i-te grupe trake, onako kako ga operater vidi. Prazan string kad
+' kontrole nema -- to je nalaz, ne izuzetak, pa ga tvrdnja i prijavi.
+Private Function TrakaNatpisTest(ByVal f As Object, ByVal i As Long) As String
+    On Error Resume Next
+    TrakaNatpisTest = Trim$(CStr(f.Controls("zOtp").Controls("otpML" & i).caption))
+End Function
 
 ' F3 GUBI CENU, ALI NE I PREKIDAC KLASE (review #379, P1).
 '
