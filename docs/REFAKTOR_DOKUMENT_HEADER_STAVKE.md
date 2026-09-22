@@ -4239,6 +4239,22 @@ upis. „Kod još postoji" nije dokaz da operater ima funkciju — ni obrnuto.
 dalje zovu iz tri druga modula — statička kapija ne vidi pozive kroz module. Preostali pozivi su nađeni
 grep-om. Isti obrazac kao review #371: **statički zeleno nije „projekat se kompajlira"**.
 
+**Nalaz iz prvog prolaza: rollback je vracao POLA dokumenta.** Osam BFP testova je snimalo
+`tblZbirna` a ne i `tblZbirnaStavke`. Rollback bi vratio zaglavlje i ostavio stavku -- siroce koje
+strog citalac prijavljuje u **tudjem** testu, pa je jedan pokvaren red dao 17 padova sa porukom koja
+na uzrok ne pokazuje. Dopunjeno na svih osam mesta; produkcioni rollback-ovi nad `tblZbirna`
+(`modStorno`, `modMasterSync`, `modDokumentInvariant`) **ne pisu stavke**, pa je asimetrija bila
+iskljucivo test-strana. Isto pravilo koje je S4-1 vec primenio na golden, storno, palete i izvestaje.
+
+> Pravilo koje iz ovoga sledi: **ko snima zaglavlje u rollback, snima i njegove stavke.** Dokument
+> je zaglavlje + stavke; vratiti samo jedno znaci proizvesti korupciju, ne ponistiti izmenu.
+
+**P3 iz review-a, svesno ODLOZEN:** komentari u `modDokumenta` jos opisuju stari svet
+(`identitet logickog dokumenta je GeneracijaID`, `aktivan red MORA da nosi generaciju`). Popravljati
+tekst tranzicionog koda **pre** brisanja samog framework-a napravilo bi vecu zabunu nego sto resava.
+Ide u **S4-3**, zajedno sa kodom koji opisuje: `GeneracijaID` ZBR identity framework se brise, i
+njegovi komentari sa njim.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

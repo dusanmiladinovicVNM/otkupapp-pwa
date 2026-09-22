@@ -1304,6 +1304,10 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
 
     idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-A-" & m_RunID, TEST_VOZ_ID, _
                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
@@ -1372,6 +1376,10 @@ Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
 
     ' Niz sa rupom: postoje seq 1 i seq 3 (seq 2 obrisan/storniran).
     AppendRF28ZbirnaFixture "ZBR-RF28G1-" & m_RunID, testDate, TEST_VOZ_ID, baza
@@ -1422,6 +1430,10 @@ Private Sub Test_RF28_LinkKonfliktNePrepisuje()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
 
     ' Otkup je VEC vezan na zbirnu A.
@@ -1485,6 +1497,10 @@ Private Sub Test_RF28_MembershipKoristiSvojuZbirnu()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
 
     ' Redosled je bitan: STARA (tudji vozac) je PRVI match za BrojZbirne.
@@ -1541,6 +1557,10 @@ Private Sub Test_RF28_MembershipDanskiProzor()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
 
     AppendRF28ZbirnaFixture zbrID, zbrDate, TEST_VOZ_ID, brojZ
@@ -2095,6 +2115,10 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
@@ -2232,6 +2256,10 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
 
@@ -2537,6 +2565,10 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
+    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
+    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTKUP
 
