@@ -300,7 +300,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredlogCeneJePoKlasi
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_F2OtvaraNacrt
-    Test_OTP_MalinaZbirnaPauzirana
+    Test_OTP_MalinaAutoZbirna
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -5494,17 +5494,22 @@ EH:
     LogFatal "Test_OTP_F2OtvaraNacrt", Err.Number, Err.description
 End Sub
 
-' MALINA AUTO-ZBIRNA JE PAUZIRANA, I TO GLASNO (S3a).
+' MALINA AUTO-ZBIRNA NAD KANONOM (S4-4).
 '
-' AutoCreateZbirnaFromOtpremnice cita Kolicina / Klasa / KolAmbalaze sa
-' ZAGLAVLJA otpremnice i ne gleda IzdatoStatus -- nad nacrtom bi napravila
-' zbirnu sa 0 kg, od dokumenta koji jos nije isporuka. Zbirna prelazi na nov
-' model u S4.
+' Test nije obrisan sa pauzom nego je u nju urastao. Prva tvrdnja je ISTA i
+' dalje vazi: nad NACRTOM zbirna ne nastaje. To vise nije pauza nego pravilo --
+' izvor zbirne mora biti IZDAT (ZbrRequireIzvorValjan), pa okidac stoji na
+' izdavanju, ne na upisu nacrta. Stari kod je gresio bas tu.
 '
-' Tvrdnja ima dva dela i oba su potrebna: da zbirna NIJE nastala, i da je
-' operater o tome OBAVESTEN. Tiha pauza bi znacila da malina operater ceka
-' zbirnu koja nikad nece doci.
-Private Sub Test_OTP_MalinaZbirnaPauzirana()
+' Ostalo meri sposobnost koja se vraca:
+'   - nad IZDATOM otpremnicom jezgro pravi zbirnu;
+'   - zbirna nosi SVOJ broj iz niza zbirne, ne nasledjen otpremnicin (dug koji
+'     je stari komentar ostavio ovom rezu);
+'   - clanstvo je KANONSKO: otpremnica je u tblZbirnaIzvori, a ne u koloni
+'     BrojZbirne na zaglavlju;
+'   - IDEMPOTENTNO: drugi poziv ne pravi drugu zbirnu. To nije udobnost nego
+'     uslov, jer jezgro zovu dva pozivaoca (izdavanje i batch prolaz).
+Private Sub Test_OTP_MalinaAutoZbirna()
     Dim prevMode As String, prevKupac As String
 
     On Error GoTo EH
@@ -5539,20 +5544,82 @@ Private Sub Test_OTP_MalinaZbirnaPauzirana()
     AssertTrue Len(res) > 0, "OTP malina: nacrt otvoren (bilo: " & poruke & ")"
 
     AssertEquals CStr(zbrPre), CStr(CountRows(TBL_ZBIRNA)), _
-                 "OTP malina: nad nacrtom NE nastaje zbirna"
-    AssertTrue InStr(1, poruke, Poruka("DOKUNOS_MSG_ZBIRNA_PAUZIRANA"), vbTextCompare) > 0, _
-               "OTP malina: operater je OBAVESTEN da zbirne nema (bilo: " & poruke & ")"
+                 "OTP malina: nad NACRTOM ne nastaje zbirna"
 
+    ' --- IZDATA otpremnica: jezgro radi -----------------------------------
+    Dim otpID As String, g As String, zbrID As String
+    otpID = ZbrIzdataOtp("ML-" & scenario, 400#, 20#)
+    AssertTrue Len(otpID) > 0, "OTP malina: izvor je izdat"
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    zbrID = modMasterSync.AutoZbirnaZaOtpremnicu(otpID, g)
+    AssertTrue Len(zbrID) > 0, "OTP malina: zbirna je napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' Broj je SVOJ, ne otpremnicin. Poredi se sa brojem otpremnice: da je
+    ' nasledjen, bio bi jednak (ili jednak sa vodecim "S").
+    Dim brZbr As String, brOtp As String
+    brZbr = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    brOtp = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    AssertTrue Len(brZbr) > 0, "OTP malina: zbirna ima broj"
+    AssertTrue brZbr <> brOtp And brZbr <> "S" & brOtp, _
+               "OTP malina: broj zbirne je IZ NJENOG NIZA, ne nasledjen (" & _
+               brZbr & " vs " & brOtp & ")"
+
+    ' Clanstvo je zapis, ne labela: otpremnica mora biti u tblZbirnaIzvori.
+    Dim izv As Collection
+    Set izv = modDokumenta.IzvoriZbirne(zbrID)
+    AssertEquals "1", CStr(izv.count), "OTP malina: zbirna ima tacno jedan izvor"
+    AssertEquals UCase$(otpID), UCase$(CStr(izv(1))), _
+                 "OTP malina: izvor je BAS ta otpremnica"
+
+    ' IDEMPOTENCIJA SE MERI TISINOM, NE ISHODOM.
+    '
+    ' Prva verzija ove tvrdnje je bila PLACEBO: merila je samo da drugi
+    ' poziv ne vrati ZbirnaID. Ali i bez ikakve kapije u jezgru drugi poziv
+    ' ne bi napravio zbirnu -- pisac (ZbrRequireIzvorValjan) odbija vec
+    ' vezanu otpremnicu. Sabotaza koja skida kapiju jezgra zato NIJE obarala
+    ' nista: tvrdnja je merila TUDJU kapiju.
+    '
+    ' Razlika koja stvarno postoji je u GRESCI: sa kapijom se drugi poziv
+    ' tiho ne desi, bez nje pisac pukne i vrati razlog -- a taj razlog
+    ' operater vidi kao poruku posle sasvim normalnog ponovnog izdavanja.
+    Dim zbrPosle As Long: zbrPosle = CountRows(TBL_ZBIRNA)
+    Dim ponovo As String
+    g = "ZATECENO"
+    ponovo = modMasterSync.AutoZbirnaZaOtpremnicu(otpID, g)
+    AssertEquals "", ponovo, "OTP malina: drugi poziv ne pravi drugu zbirnu"
+    AssertEquals "", g, _
+                 "OTP malina: drugi poziv je TIH -- bez greske operateru"
+    AssertEquals CStr(zbrPosle), CStr(CountRows(TBL_ZBIRNA)), _
+                 "OTP malina: ni jedan red vise posle ponovljenog poziva"
+
+    ' Batch prolaz suzen na TAJ identitet: vec vezana otpremnica mu nije u
+    ' opsegu, pa vraca nulu. Bez suzenja bi pokupio ceo fixture.
+    AssertEquals "0", CStr(modMasterSync.AutoCreateZbirnaFromOtpremnice_TX(otpID)), _
+                 "OTP malina: batch prolaz ne duplira vec vezanu otpremnicu"
+
+Kraj:
+    ' RANI IZLAZAK NE SME DA PRESKOCI VRACANJE CONFIG-A. Malina mod bi
+    ' ostao upaljen za sve testove posle ovog, pa bi oni padali iz razloga
+    ' koji sa njima nema veze -- a trag bi vodio na pogresan test.
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     Exit Sub
 
 EH:
+    ' OPIS SE CITA PRE CISCENJA. On Error Resume Next RESETUJE Err, pa je
+    ' handler koji prvo vraca config a onda cita Err.Number prijavljivao
+    ' "FATAL 0" bez opisa -- i time unistavao jedini trag o pravom padu.
+    Dim eNum2 As Long, eDesc2 As String
+    eNum2 = Err.Number
+    eDesc2 = Err.description
+
     On Error Resume Next
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
-    LogFatal "Test_OTP_MalinaZbirnaPauzirana", Err.Number, Err.description
+    LogFatal "Test_OTP_MalinaAutoZbirna", eNum2, eDesc2
 End Sub
 
 ' NOV NACRT NIJE ZAMENA ZA STORNIRANU OTPREMNICU (S3a, review #361 P1).
@@ -15043,9 +15110,16 @@ Private Sub Test_PWA_IzvedeniLanacJePauziran()
     AssertTrue Not modMasterSync.IzvedeniLanacIzPwaDostupan(), _
                "Lanac: kapija je zatvorena"
 
-    ' 2) malina auto-zbirna iz otpremnica
-    AssertTrue InStr(1, UlazPada("ZBR"), "PAUZIRANA", vbTextCompare) > 0, _
-               "Lanac: auto-zbirna iz otpremnica je pauzirana"
+    ' 2) MALINA AUTO-ZBIRNA VISE NIJE POD OVOM KAPIJOM (S4-4).
+    '
+    ' Bila je zato sto je pisala Otkup.BrojZbirne nazad na zaglavlje. Kanonska
+    ' to ne radi -- clanstvo je zapis u tblZbirnaIzvori -- pa ima svoju kapiju
+    ' (AutoZbirnaDostupna). Tvrdi se da je razdvajanje STVARNO, a ne samo
+    ' preimenovano: van maline ne radi nista, i ne pada.
+    AssertEquals "", UlazPada("ZBR"), _
+                 "Lanac: auto-zbirna vise ne pada na kapiji lanca"
+    AssertTrue Not modMasterSync.AutoZbirnaDostupna(), _
+               "Lanac: van maline auto-zbirna nije dostupna"
 
     ' 3) VOZ/zbirna uvoz -- BACA sa svojom porukom.
     '

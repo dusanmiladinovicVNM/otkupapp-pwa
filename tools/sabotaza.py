@@ -5233,14 +5233,21 @@ SABOTAZE = {
         "klasa I nosi svoju kilazu",
     ),
 
-    "otp-malina-pauza-cuti": (
-        "modDokUnos.bas",
-        "        poruke = poruke & Poruka(\"DOKUNOS_MSG_ZBIRNA_PAUZIRANA\") & vbCrLf\n",
-        "        ' SABOTAZA: pauza bez reci operateru\n",
-        "Test_OTP_MalinaZbirnaPauzirana",
-        "operater je OBAVESTEN da zbirne nema",
-    ),
 
+    "malina-zbirna-nasledjuje-broj": (
+        "modMasterSync.bas",
+        "    brZbirne = modBrojevi.SuggestNextBroj(KIND_ZBR, vozacID, datum, False)\n",
+        "    brZbirne = modBrojevi.ApplyMirrorPrefix(vozacID, Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_BROJ))))   ' SABOTAZA: nasledjen broj\n",
+        "Test_OTP_MalinaAutoZbirna",
+        "broj zbirne je IZ NJENOG NIZA, ne nasledjen",
+    ),
+    "malina-zbirna-nije-idempotentna": (
+        "modMasterSync.bas",
+        "    If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function\n",
+        "    ' SABOTAZA: ne pita da li je otpremnica vec vezana\n",
+        "Test_OTP_MalinaAutoZbirna",
+        "drugi poziv je TIH -- bez greske operateru",
+    ),
     "banka-writer-blok-tudjeg-kooperanta": (
         "modBankaMapiranje.bas",
         "    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",

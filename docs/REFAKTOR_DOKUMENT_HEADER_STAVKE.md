@@ -4673,6 +4673,63 @@ numeraciji testova**; `popis_citalaca` je javio da je prag `zbr_linija` zastareo
 merenje ispod praga pada isto kao iznad, jer zastareo prag pušta grupu da naraste nazad bez ijednog
 crvenog. Sabotaže **569 → 567**.
 
+### 14.34) S4-4 — malina auto-zbirna nad kanonom (23.09.2026)
+
+Sposobnost se **vraća**, ne prevodi. Staro telo (izvučeno iz `f437661c~1`) je šlo **po redu**
+`tblOtpremnica`, uzimalo `Kolicina/Klasa/KolAmbalaze` sa **zaglavlja** — kolone koje od S3b-1 nijedan
+pisac ne puni — **nije gledalo `IzdatoStatus`**, i pisalo staru vezu `Otpremnica.BrojZbirne` plus
+backfill `Otkup.BrojZbirne`.
+
+**Jedno jezgro, dva pozivaoca (odluka operatera, 23.09.2026).** `AutoZbirnaZaOtpremnicu(otpID)` radi nad
+**jednom izdatom** otpremnicom; zovu ga kuka na **izdavanju** (`modScrDokumenti.IzdajAktivnu`) i **batch
+prolaz** iz sync orkestratora, za otpremnice koje stignu kroz PWA i kuku nikad ne prođu.
+
+**Odluka šta sme se ne računa u jezgru** — pita se `modDokumenta.NevezaneOtpremnice`, **ista lista koju
+operater vidi u F2**. Drugo pravilo na tom mestu značilo bi da ekran i automatika mogu da se raziju:
+automatika bi vezala otpremnicu koju spisak ne nudi, ili obrnuto. Ta lista već drži sva tri uslova
+(IZDATA, nestornirana, bez aktivnog članstva), pa je jezgro **idempotentno po konstrukciji** — uslov, ne
+udobnost, jer batch ume da stigne pre kuke.
+
+**Zbirna dobija SVOJ broj (odluka operatera).** Stari kod je pisao `ApplyMirrorPrefix(vozacID, BrojOtpremnice)`
+i sam komentar je to vodio kao **dug**: numerički deo je pripadao **stanici**, a vlasnik niza zbirne je
+**vozač** — prolazilo je samo dok je vozač doslovno mirror-stanica. Sada `SuggestNextBroj(KIND_ZBR, vozacID,
+datum)`, koji mirror prefiks `S` primenjuje sam, pa se **izgled** broja u malini ne menja — menja se **čiji
+je niz**. Dug zatvoren; sidro je bilo `Test_BKTX_ZbirnaTudjegVlasnikaOdbijena`.
+
+**`checkRemote:=False` — auto-zbirna ne pita Google.** Podrazumevano `SuggestNextBroj` gleda i udaljeni
+list. Za batch to znači mrežni poziv **po dokumentu**, a automatika koja zavisi od mreže pada **tiho**
+(generator grešku guta i vraća prazno) — tako je i pao prvi lokalni prolaz. Bezbedno je jer je VOZ/zbirna
+uvoz pauziran; **dug za S5**: kad se uvoz vrati, udaljena osa mora nazad u račun.
+
+**Kapija lanca je razdvojena.** `IzvedeniLanacIzPwaDostupan` je jedna kapija nad celim izvedenim lancem —
+tacna dok je auto-zbirna pisala `Otkup.BrojZbirne` nazad na zaglavlje. Kanonska to ne radi, pa je dobila
+svoju (`AutoZbirnaDostupna`); **VOZ/zbirna uvoz ostaje pauziran**. Kapija koja pokriva više nego što mora
+zaustavlja i ono što je popravljeno, a onda se otvara „u paketu" — tiho puštajući i ono što nije.
+
+#### Nalaz: hladnjački lanac NIJE dobio svoj ZBR korak, i to je namerno
+
+Zaglavlje `modAutoHladnjaca` kaže da se zbirna u S4 dodaje u **istu** funkciju (`AutoLanacHladnjaca`). Ali
+ta funkcija nosi **tvrdu kapiju** koju sama imenuje: rani izlazak `If Len(OtpremnicaZaOtkup(otkupID)) > 0
+Then Exit Function` je tačan dok je lanac samo OTK→OTP, a postaje zamka čim dobije ZBR — posle ishoda
+„OTP uspeo, ZBR pao" ponovljen poziv izlazi odmah i lanac se **nikad ne dovrši**. Izbor između **(A)
+atomski lanac** i **(B) nastavljiv lanac** je izlazni uslov S6 (plan §14.20), izričitno „ne stvar ukusa".
+
+Zato S4-4 dira **samo malina tok**. Kad hladnjački lanac dobije ZBR, mora da zove **isto jezgro** —
+idempotencija je ono što sprečava dve zbirne za istu otpremnicu na stanici koja je i hladnjača i malina.
+
+#### Placebo tvrdnja koju je sabotaža razotkrila
+
+Prva verzija idempotentne tvrdnje merila je samo da drugi poziv ne vrati `ZbirnaID`. **Sabotaža koja skida
+kapiju jezgra nije oborila ništa** — jer i bez nje pisac (`ZbrRequireIzvorValjan`) odbija već vezanu
+otpremnicu. Tvrdnja je merila **tuđu** kapiju. Prava razlika je u **tišini**: sa kapijom se drugi poziv ne
+desi, bez nje pisac pukne i vrati razlog — koji operater vidi kao grešku posle sasvim normalnog ponovnog
+izdavanja. Tvrdnja sada meri `outGreska`. Isti obrazac kao `dvoslojna kapija: sabotaža ne grize`.
+
+Uz to: EH tog testa je radio `On Error Resume Next` **pre** čitanja `Err`, pa je prvi pravi pad prijavio kao
+`FATAL 0` bez opisa — uništivši jedini trag. Popravljeno.
+
+Sabotaže **566 → 568**, BFP **1783 → 1792** (+9, sravnjeno po stavkama).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

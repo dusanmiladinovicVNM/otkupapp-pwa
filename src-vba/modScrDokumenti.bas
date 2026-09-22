@@ -631,7 +631,7 @@ End Function
 ' brojeve kad povezano nije jednako ocekivanom. Posle izdavanja otpremnica vise
 ' ne prima izvore, pa ekran izlazi iz njenog konteksta.
 Public Function IzdajAktivnu() As String
-    Dim g As String
+    Dim g As String, gZbr As String, autoZbr As String
     On Error GoTo EH
     If Len(mOtpID) = 0 Then
         IzdajAktivnu = Poruka("OTKUI_ERR_NEMA_AKT_OTP")
@@ -641,6 +641,23 @@ Public Function IzdajAktivnu() As String
         IzdajAktivnu = Poruka("OTKUI_ERR_IZDAJ") & " " & g
         Exit Function
     End If
+
+    ' MALINA: ZBIRNA NASTAJE TEK SADA (S4-4).
+    '
+    ' Stari kod je auto-zbirnu pravio na UPISU NACRTA otpremnice -- dakle od
+    ' dokumenta koji jos nije isporuka, i citao kolicine sa zaglavlja koje od
+    ' S3b-1 niko ne popunjava. Kanon trazi da izvor bude IZDAT, pa je okidac tu.
+    '
+    ' Neuspeh se PRIJAVLJUJE, ne guta. Otpremnica je vec izdata i to se ne
+    ' ponistava -- ali malina operater mora da zna da zbirne nema, jer bi je
+    ' inace trazio tek na kraju dana. Prolaz iz sync-a ume da je dovrsi kasnije.
+    autoZbr = modMasterSync.AutoZbirnaZaOtpremnicu(mOtpID, gZbr)
+    If Len(autoZbr) = 0 And Len(gZbr) > 0 Then
+        IzdajAktivnu = Poruka("OTKUI_ERR_AUTOZBR") & " " & gZbr
+        Scr_OtpOtkazi
+        Exit Function
+    End If
+
     Scr_OtpOtkazi
     Exit Function
 EH:

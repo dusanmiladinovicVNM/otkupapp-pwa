@@ -450,7 +450,7 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
    (v6-ui-106, `modOtkupUnos`).
 7. ~~F2 → `SaveOtpremnicaMulti_TX` (+ auto-zbirna MALINA, ispravka).~~
    **URAĐENO** (v6-ui-115, `modDokUnos`).
-   **Malina auto-zbirna: INTENTIONALLY REMOVED u S4-2c/2a, vraća se u S4-4.**
+   **Malina auto-zbirna: MIGRATED u S4-4.** Jezgro `modMasterSync.AutoZbirnaZaOtpremnicu`, okidač na **izdavanju** otpremnice (ne na nacrtu) + batch iz sync-a; članstvo kroz `tblZbirnaIzvori`, zbirna dobija **svoj** broj. Dokaz: `Test_OTP_MalinaAutoZbirna`.
    `AutoCreateZbirnaFromOtpremnice` je čitala kilažu/klasu/gajbe sa **zaglavlja
    otpremnice** (kolone koje od S3b-1 niko ne piše) i pisala kroz stari pisac
    zbirne. Bila je pauzirana od PR7; telo je obrisano zajedno sa piscem.

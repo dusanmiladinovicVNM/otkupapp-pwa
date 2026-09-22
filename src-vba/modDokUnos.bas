@@ -314,16 +314,16 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
 
     poruke = poruke & Poruka("DOKUNOS_MSG_OTP_NACRT") & vbCrLf
 
-    ' MALINA AUTO-ZBIRNA JE PAUZIRANA (S3a), i to glasno.
+    ' MALINA AUTO-ZBIRNA VISE NIJE OVDE (S4-4).
     '
-    ' AutoCreateZbirnaFromOtpremnice cita Kolicina / Klasa / KolAmbalaze sa
-    ' ZAGLAVLJA otpremnice i ne gleda IzdatoStatus. Nad nacrtom bi napravila
-    ' zbirnu sa 0 kg, i to od dokumenta koji jos nije isporuka. Zbirna prelazi na
-    ' nov model u S4 -- do tada je poziv ugasen, umesto da se upise polovicna
-    ' veza. Isti postupak kao sa hladnjackim lancem u S1.
-    If IsMalinaMode() Then
-        poruke = poruke & Poruka("DOKUNOS_MSG_ZBIRNA_PAUZIRANA") & vbCrLf
-    End If
+    ' Stajala je tacno na ovom mestu -- posle upisa NACRTA -- i bas zato je bila
+    ' pauzirana: pravila bi zbirnu od dokumenta koji jos nije isporuka, sa 0 kg,
+    ' citajuci kolicine sa zaglavlja koje od S3b-1 niko ne popunjava. Kanon
+    ' trazi IZDAT izvor, pa je okidac presao na izdavanje
+    ' (modScrDokumenti.IzdajAktivnu) i na batch prolaz iz sync-a.
+    '
+    ' Ovde ne ostaje ni poruka: nacrt otpremnice u malini vise nema nikakav
+    ' odnos prema zbirni, pa bi pomen zbirne na ovom ekranu bio samo buka.
 
     ' ISPRAVKA OTPREMNICE JE PAUZIRANA (S3a), ne prevedena.
     '
