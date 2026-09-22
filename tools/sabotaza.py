@@ -848,10 +848,21 @@ SABOTAZE = {
     # Prekoracenje neke klase opet ne boji traku.
     "traka-prekoracenje-nevidljivo": (
         "modScrDokumenti.bas",
-        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n',
-        "        If False Then prek = True   ' SABOTAZA: prekoracenje se ne vidi\n",
+        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n'
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then sveNula = False\n',
+        "        If False Then prek = True   ' SABOTAZA: prekoracenje se ne vidi\n"
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then sveNula = False\n',
         "Test_OTP_RadniStoVeziTrakaIzdaj",
         "RS tok: traka -- prekoracenje je crveno",
+    ),
+    "zbirna-traka-prekoracenje-nevidljivo": (
+        "modScrDokumenti.bas",
+        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n'
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _\n',
+        "        If False Then prek = True   ' SABOTAZA: visak zbirne se ne vidi\n"
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _\n',
+        "Test_ZBR_TrakaNapretka",
+        "prekoracenje je crveno",
     ),
     # Klasa koju otpremnica ne ocekuje opet prolazi bez pitanja.
     "prekoracenje-neocekivana-klasa": (

@@ -175,6 +175,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PrazanNacrtNeRusiListu
     Test_ZBR_RadniStoVezePoIdentitetu
     Test_ZBR_SpisakKojiSeNudiNeLaze
+    Test_ZBR_TrakaNapretka
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8910,6 +8911,83 @@ EH:
     If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
     LogFatal "Test_ZBR_RadniStoVezePoIdentitetu", Err.Number, Err.description
 End Sub
+
+' TRAKA POKAZUJE ISTU ISTINU KOJU MERI IZDAVANJE (S4-2c/2b-2c-2).
+'
+' Traka cita GetZbirnaProgress, a on isti par citaca koji ZbrIzdaj koristi za
+' jednakost -- pa "pokriveno" na ekranu i "pokriveno" na kapiji ne mogu da se
+' raziju. Test meri SEMAFOR u oba smera, jer je to jedini broj zbog kog traka i
+' postoji: 1 = u toku, 0 = spremna, -1 = PREKORACENA.
+'
+' Cetvrto polje mera je BROJ IZVORA (odluka operatera 22.09.2026): zbirna nema
+' cenu, a pokrivenost i jeste pitanje clanstva. Natpise salje EKRAN (14. polje),
+' pa ljuska ne mora da zna sta je u kom rezimu predmet rada.
+Private Sub Test_ZBR_TrakaNapretka()
+    Dim prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRTRK")
+
+    Dim otpA As String, otpB As String
+    otpA = ZbrIzdataOtp("TRK1-" & scenario, 400#, 20#)
+    otpB = ZbrIzdataOtp("TRK2-" & scenario, 100#, 5#)
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "ZBR traka: izvori su izdati"
+    If Len(otpA) = 0 Or Len(otpB) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-TRK-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR traka: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    prevMode = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR traka: nacrt je na radnom stolu"
+
+    ' Prazan nacrt: najavljeno 400, povezano 0, izvora 0, semafor U TOKU.
+    AssertEquals "400", ZbrTrakaPolje(3), "ZBR traka: najavljeno je 400"
+    AssertEquals "0", ZbrTrakaPolje(4), "ZBR traka: povezano je nula"
+    AssertEquals "400", ZbrTrakaPolje(5), "ZBR traka: preostalo je cela najava"
+    AssertEquals "0", ZbrTrakaPolje(9), "ZBR traka: cetvrta mera je BROJ IZVORA"
+    AssertEquals "1", ZbrTrakaPolje(10), "ZBR traka: nepokriven nacrt je U TOKU"
+    AssertTrue InStr(1, ZbrTrakaPolje(13), "OTKUI_OTP_IZVORA", vbTextCompare) > 0, _
+               "ZBR traka: ekran salje natpise, ne ljuska"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpA, g), _
+               "ZBR traka: prvi izvor vezan (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "400", ZbrTrakaPolje(4), "ZBR traka: povezano prati clanstvo"
+    AssertEquals "1", ZbrTrakaPolje(9), "ZBR traka: broj izvora je 1"
+    AssertEquals "0", ZbrTrakaPolje(10), "ZBR traka: pokrivena najava je SPREMNA"
+
+    ' Visak: semafor mora da pocrveni, jer izdavanje bi palo.
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpB, g), _
+               "ZBR traka: drugi izvor vezan (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "-1", ZbrTrakaPolje(10), "ZBR traka: prekoracenje je crveno"
+    AssertEquals "2", ZbrTrakaPolje(9), "ZBR traka: broj izvora je 2"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
+    LogFatal "Test_ZBR_TrakaNapretka", Err.Number, Err.description
+End Sub
+
+' Jedno polje trake, po indeksu iz ugovora (0 = broj, 3 = najavljeno, ...).
+Private Function ZbrTrakaPolje(ByVal idx As Long) As String
+    Dim info As String, p() As String
+    info = modScrDokumenti.Scr_OtpInfo()
+    If Len(info) = 0 Then Exit Function
+    p = Split(info, "|")
+    If idx > UBound(p) Then Exit Function
+    ZbrTrakaPolje = Trim$(p(idx))
+End Function
 
 ' RADNI STO: VEZIVANJE, UKLANJANJE I IZDAVANJE KROZ EKRAN (S4-2c/2b-2b).
 '

@@ -898,14 +898,25 @@ Private Sub RefreshOtpTraka(frm As Object)
     End If
     z.Controls("otpSub").caption = p(1) & "  " & ChrW(183) & "  " & p(2)
 
-    z.Controls("otpML0").caption = UCase$(Poruka("OTKUI_OTP_UKUPNO"))
+    ' NATPISE BIRA EKRAN, KAD IH POSALJE (14. polje). Zbirna nema cenu, pa
+    ' cetvrta grupa kod nje nosi BROJ IZVORA; ljuska ne zna sta je u kom rezimu
+    ' predmet rada i ne sme da pogadja. Ekran koji ih ne salje se ponasa kao pre.
+    Dim kljucevi As Variant, imaKlj As Boolean
+    If UBound(p) >= 13 Then
+        If Len(p(13)) > 0 Then
+            kljucevi = Split(p(13), ",")
+            imaKlj = (UBound(kljucevi) = 3)
+        End If
+    End If
+
+    z.Controls("otpML0").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(0)), "OTKUI_OTP_UKUPNO")))
     z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)
     z.Controls("otpMA0").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(6))), 0)
-    z.Controls("otpML1").caption = UCase$(Poruka("OTKUI_OTP_UBLOK"))
+    z.Controls("otpML1").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(1)), "OTKUI_OTP_UBLOK")))
     z.Controls("otpMV1").caption = FmtBroj(CDbl(Val(p(4))), 2)
     z.Controls("otpMA1").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(7))), 0)
 
-    z.Controls("otpML2").caption = UCase$(Poruka("OTKUI_OTP_OSTATAK"))
+    z.Controls("otpML2").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(2)), "OTKUI_OTP_OSTATAK")))
     z.Controls("otpMV2").caption = FmtBroj(CDbl(Val(p(5))), 2)
     ' Ostatak je broj zbog koga traka postoji. Semafor racuna ekran PO KLASI:
     ' crveno = neka klasa je prekoracena, zeleno = sve klase na nuli (spremna
@@ -921,12 +932,19 @@ Private Sub RefreshOtpTraka(frm As Object)
     z.Controls("otpMA2").ForeColor = IIf(p(10) = "-1", C_RUST, C_MUTED)
 
     ' Cena je po klasi (odluka 14.8 t. 2): druga klasa ide u red ispod.
-    z.Controls("otpML3").caption = UCase$(Poruka("OTKUI_OTP_CENA"))
-    z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
-    If Len(p(12)) > 0 Then
-        z.Controls("otpMA3").caption = "II " & FmtBroj(CDbl(Val(p(12))), 2)
+    ' Kad ekran posalje svoje natpise, cetvrta grupa je CEO BROJ bez podnaslova
+    ' (danas: broj izvora zbirne) -- decimale i "po otpremnici" su cena.
+    z.Controls("otpML3").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(3)), "OTKUI_OTP_CENA")))
+    If imaKlj Then
+        z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 0)
+        z.Controls("otpMA3").caption = ""
     Else
-        z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+        z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
+        If Len(p(12)) > 0 Then
+            z.Controls("otpMA3").caption = "II " & FmtBroj(CDbl(Val(p(12))), 2)
+        Else
+            z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+        End If
     End If
 End Sub
 
@@ -2069,7 +2087,13 @@ Public Sub LayoutOtkup(frm As Object)
     ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
     Dim otpH As Single, i2 As Long
     otpH = 0
-    If modeKey(ActiveMode) = "OTKUP" And Not mGridMax Then otpH = OTP_H
+    ' Traka se crta i u F2: tamo je radni sto ZBIRNE (S4-2c/2b-2c-2). Prazno
+    ' stanje ("nema izabranog") je isto kao u F1 -- ekran vrati prazno, traka
+    ' pokaze poruku umesto brojeva.
+    If Not mGridMax Then
+        If modeKey(ActiveMode) = "OTKUP" Or modeKey(ActiveMode) = "OTPREMNICA" Then _
+            otpH = OTP_H
+    End If
     frm.Controls("zOtp").Visible = (otpH > 0)
     If otpH > 0 Then
         With frm.Controls("zOtp")

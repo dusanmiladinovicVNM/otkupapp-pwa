@@ -4550,6 +4550,36 @@ ide na operatersku checklistu (`.claude/rules/testovi.md` §7).
 **Ostaje za 2c-2:** traka napretka iz `GetZbirnaProgress` (uz odluku šta pokazuje četvrta grupa mera,
 jer zbirna nema cenu) i vrsta/sorta iz kontekstne zone, koje traže raspored — oba diraju ljusku.
 
+### 14.32) S4-2c/2b-2c-2 — traka napretka zbirne (22.09.2026)
+
+Traka iznad forme sada se crta i u **F2**, nad aktivnim nacrtom zbirne. Čita **`GetZbirnaProgress`**,
+a on isti par čitača koji `ZbrIzdaj` koristi za jednakost — pa „pokriveno" na ekranu i „pokriveno" na
+kapiji **ne mogu da se raziđu**.
+
+**Odluka operatera (22.09.2026): četvrta mera je BROJ IZVORA.** Za otkup i otpremnicu je to cena;
+zbirna je nema (`tblZbirna` tu kolonu ni nema), a pokrivenost zbirne **i jeste pitanje članstva** — pa
+je broj izvora jedina mera koja prirodno zauzima to mesto. Odbijeno: sakriti četvrtu grupu (prazan
+prostor, a operater i dalje mora u listu da vidi ima li nacrt ijedan izvor) i prikazati odredište
+(činjenica zaglavlja koja se ne menja dok operater radi — traka postoji za ono što se menja).
+
+**Natpise šalje EKRAN, ne ljuska** — traka je dobila **14. polje**: četiri ključa poruka, zarezom
+razdvojena. Ljuska ostaje glupa: ne zna šta je u kom režimu predmet rada i **ne sme da pogađa**. Ekran
+koji ih ne pošalje ponaša se kao pre, pa F1 nije dirnut. Uz četvrtu meru ide i pravilo prikaza: kad
+ekran pošalje svoje natpise, ta grupa je **ceo broj bez podnaslova** — decimale i „po otpremnici" su
+osobina cene, ne mere.
+
+Prve tri grupe takođe menjaju wording: „u blokovima" nema smisla za zbirnu čiji su izvori otpremnice.
+
+**Semafor je isti ugovor** kao kod otpremnice: `-1` neka klasa **prekoračena**, `0` sve na nuli
+(spremna za izdavanje), `1` u toku. Test ga meri **u oba smera** — prazan nacrt, pokriven, i višak —
+jer je to jedini broj zbog kog traka i postoji.
+
+**Kapija je treći put uhvatila zastarelo sidro:** semafor sada postoji na dva mesta (otpremnica i
+zbirna), pa `traka-prekoracenje-nevidljivo` više nije bilo jednoznačno. Oba sidra nose i sledeći red,
+a novo mesto je dobilo **svoju** sabotažu.
+
+Jedan nov test, jedna sabotaža (**564 → 565**).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

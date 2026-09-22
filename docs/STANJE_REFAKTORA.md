@@ -211,9 +211,15 @@
 34. **S4-2c/2b-2c-1 — F3 ne traži ono što ne nosi (PR #___).** Cena, tip ambalaže i vrednost skinuti
     sa F3 kroz `FldShow`; lista `SVI` više ne nudi `Veži` (P3 #377). Drugi P3 (`mZbrID`) se **ne**
     zatvara brisanjem stanja — kontekst mora da preživi F2↔F3, rešava ga traka. Detalji: plan §14.31.
-35. **Sledeće:** **S4-2c/2b-2c-2** (traka napretka iz `GetZbirnaProgress` + uklanjanje polja
-    vrste/sorte/tipa ambalaže iz F3), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03, brisanje
-    `GeneracijaID` okvira), S4-4 (malina auto-zbirna), S5, S3e-2, S6.
+35. **S4-2c/2b-2c-2 — traka napretka zbirne (PR #___).** Traka se crta i u F2, nad aktivnim nacrtom;
+    čita `GetZbirnaProgress` — isti par čitača koji koristi izdavanje. **Četvrta mera je BROJ IZVORA**
+    (odluka operatera): zbirna nema cenu, a pokrivenost je pitanje članstva. Natpise šalje ekran
+    (14. polje ugovora), pa ljuska ne pogađa šta je u kom režimu predmet rada. Detalji: plan §14.32.
+36. **Sledeće:** **S4-3** (članstvo, storno okvir, ZBR-KANON-03, brisanje `GeneracijaID` okvira
+    zbirne i rekalkulacije), pa S4-4 (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
+    S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
+    **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
+    liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
 
 
 ## Alati i kapije

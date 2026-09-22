@@ -459,6 +459,15 @@ Public Function Scr_OtpInfo() As String
     Dim prek As Boolean, sveNula As Boolean, poKlasi As String, sem As String
     Dim dat As String, cenaII As Double
     On Error GoTo EH
+
+    ' F2 CRTA TRAKU ZBIRNE, ne otpremnice: radni sto zbirne je tamo, kao sto je
+    ' radni sto otpremnice u F1. Ljuska pita isti ekran; ekran zna sta je u kom
+    ' rezimu predmet rada.
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        Scr_OtpInfo = ZbrInfoTrake()
+        Exit Function
+    End If
+
     If Len(mOtpID) = 0 Then Exit Function
 
     Set prog = modDokumenta.GetOtpremnicaProgress(mOtpID)
@@ -753,6 +762,71 @@ End Function
 ' -- pravilo je u citaocu (NevezaneOtpremnice), ne ovde.
 Private Function RowsNevezaneOtp(ByVal q As String) As Variant
     RowsNevezaneOtp = RedoviZaSkup("OTPREMNICA", q, modDokumenta.NevezaneOtpremnice())
+End Function
+
+' Traka aktivnog NACRTA ZBIRNE (S4-2c/2b-2c-2). Isti oblik od 13 polja koji
+' ljuska vec crta, plus ceturnaesto: NATPISE cetiri grupe mera.
+'
+' Zasto natpisi dolaze od ekrana: zbirna NEMA cenu, pa cetvrta grupa ne moze da
+' bude "Cena". Odluka operatera (22.09.2026) je da tu stoji BROJ IZVORA --
+' pokrivenost zbirne i jeste pitanje clanstva. Da je ljuska sama birala natpise,
+' morala bi da zna sta je u kom rezimu predmet rada; ovako ostaje glupa i crta
+' ono sto joj ekran kaze.
+'
+' Prve tri grupe takodje menjaju wording: "u blokovima" nema smisla za zbirnu
+' ciji su izvori otpremnice.
+Private Function ZbrInfoTrake() As String
+    Dim prog As Object, k As Variant, r As Object
+    Dim ukKg As Double, povKg As Double, ukAmb As Double, povAmb As Double
+    Dim prek As Boolean, sveNula As Boolean, poKlasi As String, sem As String
+    Dim dat As String, kupac As String
+    On Error GoTo EH
+    If Len(mZbrID) = 0 Then Exit Function
+
+    Set prog = modDokumenta.GetZbirnaProgress(mZbrID)
+    sveNula = True
+    For Each k In prog.Keys
+        Set r = prog(k)
+        ukKg = ukKg + CDbl(r("ocekivano"))
+        povKg = povKg + CDbl(r("povezano"))
+        ukAmb = ukAmb + CDbl(r("ocekivanoAmb"))
+        povAmb = povAmb + CDbl(r("povezanoAmb"))
+        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True
+        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _
+            sveNula = False
+        If Len(poKlasi) > 0 Then poKlasi = poKlasi & " / "
+        poKlasi = poKlasi & CStr(k) & " " & modStornoDok.KgTekst(CDbl(r("preostalo")))
+    Next k
+    If prog.count < 2 Then poKlasi = ""
+
+    ' Semafor je isti kao kod otpremnice: crveno = neka klasa PREKORACENA,
+    ' zeleno = sve na nuli (spremna za izdavanje), inace u toku.
+    If prek Then
+        sem = "-1"
+    ElseIf sveNula Then
+        sem = "0"
+    Else
+        sem = "1"
+    End If
+
+    dat = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, mZbrID, COL_ZBR_DATUM))
+    If IsDate(dat) Then dat = Format$(CDate(dat), "dd.mm.yyyy.")
+
+    kupac = Trim$(NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, _
+                Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, mZbrID, COL_ZBR_KUPAC))), _
+                COL_KUP_NAZIV)))
+
+    ' Brojevi IDU KROZ NumStr -- isti razlog kao kod otpremnice (Val staje na
+    ' lokalnom zarezu).
+    ZbrInfoTrake = mZbrBroj & "|" & kupac & "|" & dat & "|" & _
+                   NumStr(ukKg) & "|" & NumStr(povKg) & "|" & NumStr(ukKg - povKg) & "|" & _
+                   NumStr(ukAmb) & "|" & NumStr(povAmb) & "|" & NumStr(ukAmb - povAmb) & "|" & _
+                   NumStr(CDbl(modDokumenta.ZbrClanovi(mZbrID).count)) & "|" & _
+                   sem & "|" & poKlasi & "|" & "" & "|" & _
+                   "OTKUI_OTP_NAJAVLJENO,OTKUI_OTP_POVEZANO,OTKUI_OTP_OSTATAK,OTKUI_OTP_IZVORA"
+    Exit Function
+EH:
+    ZbrInfoTrake = mZbrBroj & "|" & Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
 End Function
 
 ' --- RADNI STO ZBIRNE (F2) ------------------------------------------------
