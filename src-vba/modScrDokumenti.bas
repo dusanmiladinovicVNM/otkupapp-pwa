@@ -1399,16 +1399,14 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
 End Function
 
 ' F3 ZBIRNA. Isti obrazac kao SnimiOtpremnicu: ekran samo prevodi polja u recnik.
-' Ime je SnimiZbirnu, ne SaveZbirna: dok je adapter delio ime sa piscem
-' (modDokumenta.SaveZbirna), popis starog pisca je brojao i ekran kao pisca --
-' isti sudar koji je S3b-1 razresio kod otpremnice.
+' Od S4-2c/2a adapter samo VALIDIRA -- pisac iza njega je obrisan (v. dole).
 ' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
 '   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
 '     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";
 '   - PARTNER je kupac. Ljuska ga skuplja pod kljucem "kooperantID" jer je to
 '     ista kontrola (cbKupac) u svim rezimima; ovde dobija svoje ime.
 Private Function SnimiZbirnu(ByVal polja As Object) As String
-    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Dim p As Object, fokus As String, greska As String
     Set p = modDokUnos.NoviZbirnaUnos()
     p("datum") = polja("datum")
     p("vozacID") = polja("vozacID")
@@ -1436,15 +1434,15 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
         Exit Function
     End If
 
-    res = modDokUnos.ZbirnaUpisi(p, poruke)
-    If Len(res) = 0 Then
-        SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
-        Exit Function
-    End If
-
-    Scr_ResetCache
-    polja("rezultat") = res
-    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+    ' UPISA VISE NEMA (S4-2c/2a). Stari pisac je obrisan, a kanonski nacrt
+    ' (CreateZbirnaDraft_TX / UpdateZbirnaDraft_TX ...) ulazi tek u S4-2c/2b.
+    '
+    ' ZbirnaValidiraj je PAUZIRAN i vraca poruku PRE svake provere, pa se dovde
+    ' i ne stize. Red ispod postoji za slucaj da pauza padne pre nego sto ekran
+    ' dobije nov tok: glasno "nije upisano" je bolje od tihog "uspelo je" bez
+    ' ijednog reda u tabeli -- upravo tako je izgledao kvar zbog kog je F3 i
+    ' pauziran.
+    SnimiZbirnu = Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA")
 End Function
 
 ' F4 PRIJEMNICA. Kao gore; ovde broj dokumenta jeste broj prijemnice, a broj

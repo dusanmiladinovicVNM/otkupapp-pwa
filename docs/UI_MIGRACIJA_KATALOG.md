@@ -449,11 +449,21 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
    (v6-ui-106, `modOtkupUnos`).
 7. ~~F2 → `SaveOtpremnicaMulti_TX` (+ auto-zbirna MALINA, ispravka).~~
    **URAĐENO** (v6-ui-115, `modDokUnos`).
+   **Malina auto-zbirna: INTENTIONALLY REMOVED u S4-2c/2a, vraća se u S4-4.**
+   `AutoCreateZbirnaFromOtpremnice` je čitala kilažu/klasu/gajbe sa **zaglavlja
+   otpremnice** (kolone koje od S3b-1 niko ne piše) i pisala kroz stari pisac
+   zbirne. Bila je pauzirana od PR7; telo je obrisano zajedno sa piscem.
+   Ulaz `AutoCreateZbirnaFromOtpremnice_TX` **ostaje i pada glasno** — orkestrator
+   ga zove, pa tiha nula operateru izgleda kao „nema šta da se kreira".
 8. ~~F3/F4 → `SaveZbirnaMulti_TX` (+ `ValidateZbirnaPreUnosa`),
    `SavePrijemnicaMulti_TX` (+ status palete).~~ **URAĐENO** (v6-ui-116,
    `modDokUnos`). Ostaje iz te stavke: **živi prikaz manjka** prijemnice vs
    zbirna (`UpdateManjak`) i **lista zbirnih za izbor**, oboje prikaz a ne upis;
    i **ispravka prijemnice posle storna** (relink paleta), koja pripada Fazi D.
+   **F3 upis: REPLACED (u toku) — pisac obrisan u S4-2c/2a, kanonski nacrt ulazi
+   u S4-2c/2b.** `SaveZbirnaMulti_TX` i `modDokUnos.ZbirnaUpisi` više ne postoje;
+   `SnimiZbirnu` samo validira, a `ZbirnaValidiraj` je pauziran od S3a. F4 upis
+   (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6.
 9. ~~F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.~~ **URAĐENO**
    (v6-ui-117, `modNovacUnos`). Uz upis su došla i dva polja bez kojih upis ne
    bi bio tačan: prekidač „ISPLATA IZ" sa avans saldom OM (F5) i lista

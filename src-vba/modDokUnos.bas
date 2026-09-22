@@ -14,7 +14,9 @@ Attribute VB_Name = "modDokUnos"
 '   OtpremnicaUpisi(p, poruke)     CreateOtpremnicaDraft_TX + zavrsetak
 '                                  ispravke; vraca OtpremnicaID (prazno =
 '                                  nije upisano)
-'   ZbirnaValidiraj / ZbirnaUpisi          isto za F3 (SaveZbirnaMulti_TX)
+'   ZbirnaValidiraj                        F3; PAUZIRAN -- upis je obrisan sa
+'                                          starim piscem (S4-2c/2a), a kanonski
+'                                          nacrt ulazi u S4-2c/2b
 '   PrijemnicaValidiraj / PrijemnicaUpisi  isto za F4 (SavePrijemnicaMulti_TX)
 '
 ' Ulaz je RECNIK sa LOGICKIM imenima polja (NoviOtpremnicaUnos):
@@ -535,7 +537,7 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
         End If
     End If
 
-    ' Cene NEMA: tblZbirna nema kolonu Cena i SaveZbirnaMulti_TX je ne prima.
+    ' Cene NEMA: tblZbirna nema kolonu Cena i nijedan pisac je ne prima.
     If dveKl Then
         If kolII <= 0 Then
             fokus = "kolicinaII": ZbirnaValidiraj = Poruka("OTKUNOS_ERR_KOLICINA_II"): Exit Function
@@ -559,7 +561,7 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     brIzvora = ZbirnaBrojIzvora(S(p, "brDok"))
 
     ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->
-    ' SaveZbirnaMulti_TX bi dobio hasKlasaII:=False i Kl.II bi se tiho izgubila.
+    ' pisac bi dobio hasKlasaII:=False i Kl.II bi se tiho izgubila.
     If Not dveKl Then
         If ZbirnaIzvorImaKlasuII(brIzvora) Then
             fokus = "kolicinaII": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_IZVOR_KL2"): Exit Function
@@ -575,7 +577,7 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     End If
 
     ' Zauzetost u nizu (vozac, dan), sa storniranima -- ISTA funkcija koju zove
-    ' pisac (SaveZbirnaMulti_TX, CreateZbirna). Ranije je ovde stajao
+    ' pisac (CreateZbirna, ZbrNapraviDraft). Ranije je ovde stajao
     ' CheckDuplicate: cela tabela, sirovo poredjenje, bez storniranih.
     Dim zauzeo As String
     zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, S(p, "vozacID"), _
@@ -596,8 +598,8 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' BrojZbirne join kljuc. Odluka D2, koja je CheckDuplicate drzala netaknutim,
     ' povucena je 14.09.2026.
     '
-    ' Validator se zove TACNO jednom, iz modScrDokumenti.Scr_Save, pre
-    ' SaveZbirnaMulti_TX; nikad ne vidi red koji je sam upravo napisao.
+    ' Validator se zove TACNO jednom, iz modScrDokumenti.Scr_Save, PRE upisa;
+    ' nikad ne vidi red koji je sam upravo napisao.
     Dim zbrId As ZbirnaIdent
     Dim gateRazlog As String
     zbrId = ZbirnaIdentResolve(S(p, "brDok"), S(p, "vozacID"), S(p, "kupacID"))
@@ -695,41 +697,6 @@ End Function
 ' prosledjuju writeru. Do tada su isla prazna, pa je svaka zbirna uneta kroz
 ' ljusku imala prazne kolone koje writer i modDokumentInvariant ipak nose.
 ' Prazna vrednost je i dalje legitimna (kupac bez hladnjace, kolone nema).
-Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
-    Dim res As String, errDesc As String
-    On Error GoTo EH
-    poruke = ""
-
-    res = SaveZbirnaMulti_TX( _
-        datum:=CDate(p("datum")), _
-        vozacID:=S(p, "vozacID"), _
-        brojZbirne:=S(p, "brDok"), _
-        kupacID:=S(p, "kupacID"), _
-        hladnjaca:=S(p, "hladnjaca"), _
-        pogon:=S(p, "pogon"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        sortaVoca:=S(p, "sorta"), _
-        ukupnoKolI:=D(p, "kolicinaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        ukupnoAmb:=L(p, "kolAmb"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        ukupnoKolII:=D(p, "kolicinaII"), _
-        ukupnoAmbII:=L(p, "kolAmbII"))
-
-    If Len(res) = 0 Then Exit Function
-
-    ' ISPRAVKA_ODMAH: zavrsetak ide po BROJU zbirne, ne po vracenim ID-evima
-    ' (legacy: TryAutoCompleteIspravka FLOW_DOC_ZBIRNA, txtBrojZbirne.value).
-    ZavrsiIspravkuAko FLOW_DOC_ZBIRNA, S(p, "brDok"), poruke
-
-    ZbirnaUpisi = res
-    Exit Function
-EH:
-    errDesc = Err.description
-    LogErr "modDokUnos.ZbirnaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
-End Function
-
 '=====================================================================
 ' F4 PRIJEMNICA
 '

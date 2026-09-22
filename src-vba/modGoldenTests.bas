@@ -1026,21 +1026,64 @@ End Sub
 ' Storno CELOG otkupnog bloka po poslovnom broju -- danas je to jedini ulaz koji
 ' zahvati obe klase. Otkup cutover ga zamenjuje storno-om po DocumentID.
 ' Zbirna za zadatog vozaca -- G2 pravi dve sa istim brojem.
+'
+' Od S4-2c/2a je ovo SEED, ne pisac. Stari pisac je obrisan, a kanonski nacrt
+' NAMERNO ostavlja Kolicina i Klasa na zaglavlju prazne -- bas te kolone cita
+' GldIdentitetZbirni, pa bi golden izlaz postao "kg=0.00" i sidro bi se pomerilo
+' bez ijedne promene u ponasanju koje ovaj scenario meri.
+'
+' Seed zato pravi ZATECENI oblik reda, isti koji je pisac pravio, i pecati
+' generaciju istim scope-om (broj + vozac + kupac) -- GldStornoZbirne je cita iz
+' reda. I seed i citaoci zaglavlja nestaju zajedno u S3e-2.
 Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
                               ByVal kolI As Double)
-    Dim res As String
-
-    res = SaveZbirnaMulti_TX(GLD_DATUM, vozac, broj, GLD_KUPAC, "", "", _
-            GLD_VRSTA, GLD_SORTA, kolI, GLD_AMB, 50, False, 0#, 0)
-    If Len(res) = 0 Then
+    Dim zbirnaID As String
+    zbirnaID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
+    If Len(zbirnaID) = 0 Then
         Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije snimljena"
     End If
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_ZBIRNA)
+    If lo Is Nothing Then
+        Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "tblZbirna ne postoji"
+    End If
+
+    Dim nr As ListRow
+    Set nr = lo.ListRows.Add
+
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_DATUM, GLD_DATUM
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_VOZAC, vozac
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_BROJ, broj
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_KUPAC, GLD_KUPAC
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_VRSTA, GLD_VRSTA
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_SORTA, GLD_SORTA
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_KOLICINA, kolI
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_TIP_AMB, GLD_AMB
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_KOL_AMB, 50
+    GldCelija nr, TBL_ZBIRNA, COL_ZBR_KLASA, KLASA_I
+
+    ' Red se trazi PO ID-u, ne preko nr.Index: ApplyGeneracijaID ocekuje indeks u
+    ' istoj konvenciji koju vraca AppendRow, a ta dva se ne moraju poklapati.
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+    If redovi Is Nothing Then
+        Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije nadjena posle upisa"
+    End If
+    If redovi.count <> 1 Then
+        Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije nadjena tacno jednom"
+    End If
+
+    ApplyGeneracijaID TBL_ZBIRNA, CLng(redovi(1)), COL_ZBR_BROJ, broj, _
+                      COL_ZBR_VOZAC, vozac, COL_ZBR_KUPAC, GLD_KUPAC
+
     ' Zaglavlje bez stavki obara strog citalac zbirne nad CELIM registrom
     ' (S4-1), a golden se vrti pre ostalih suite-a i ostavlja svoje redove u
     ' svesci. Stavka ide uz zaglavlje iz istog razloga iz kog je SeedZbirna
     ' dobija u storno suite-u.
-    GldZbirnaStavka res, KLASA_I, kolI, 50
-    GldDodaj m_Zbr, res
+    GldZbirnaStavka zbirnaID, KLASA_I, kolI, 50
+    GldDodaj m_Zbr, zbirnaID
 End Sub
 
 ' Stavka uz zaglavlje zbirne -- kroz ListRow, kao ostali seed-ovi ovog modula.

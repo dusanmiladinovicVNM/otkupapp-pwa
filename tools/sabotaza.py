@@ -574,6 +574,21 @@ SABOTAZE = {
         "Test_ZBR_UpdateNePrimaPraznoOcekivanje",
         "izmena bez ijedne klase je odbijena",
     ),
+    # --- S4-2c/2a: kapije broja su se preselile iz obrisanog starog pisca
+    "zbirna-nacrt-prima-zauzet-broj": (
+        "modDokumenta.bas",
+        "    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
+        "    ' SABOTAZA: nacrt ne proverava zauzetost broja\n\n    Dim zbirnaID As String\n",
+        "Test_ZBR_StorniranBrojIstogVozacaOdbijen",
+        "storniran broj istog vozaca istog dana ne upisuje nov red",
+    ),
+    "zbirna-nacrt-prima-tudji-niz": (
+        "modDokumenta.bas",
+        "    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                     brojZbirne, SRC\n    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
+        "    ' SABOTAZA: nacrt ne proverava vlasnika niza brojeva\n    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
+        "Test_BKTX_ZbirnaTudjegVlasnikaOdbijena",
+        "pisac odbija broj tudjeg vlasnika",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

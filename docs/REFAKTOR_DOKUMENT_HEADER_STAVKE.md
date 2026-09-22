@@ -4184,7 +4184,76 @@ je **obrisan**, ne dupliran — dve provere iste stvari su tačno ono što je kv
 > u S4-2c/2) mora da prođe kroz iste helper-e, ne pored njih.
 
 Pet novih testova, sedam sabotaža (**537 → 544**). **Nijedna linija ekrana u ovom PR-u** — F3 forma,
-pregled svih zbirnih, radni sto izvora u F2 i brisanje starog pisca (45 živih mesta) idu u S4-2c/2.
+pregled svih zbirnih, radni sto izvora u F2 i brisanje starog pisca idu u S4-2c/2.
+
+### 14.27) S4-2c/2a — stari pisac zbirne je obrisan (22.09.2026)
+
+S4-2c/2 je isečen na **2a: brisanje starog pisca** i **2b: ekrani**. Razlog je merenje, ne ukus:
+popis je za grupu `zbr_stari_pisac` pokazivao 45 pogodaka, ali regex broji i komentare — **stvarnih
+pozivalaca je bilo dva**, oba iza eksplicitne pauze:
+
+| Pozivalac | Kapija | Provereno |
+|---|---|---|
+| `modDokUnos.ZbirnaUpisi` (F3) | `ZbirnaValidiraj` vraća poruku o pauzi **pre svih provera** | `modDokUnos.bas`, S3a |
+| `modMasterSync.AutoCreateZbirnaFromOtpremnice` (malina) | `IzvedeniLanacIzPwaDostupan() = False`, raise na ulazu | `modMasterSync.bas` |
+
+**Obrisano:** `SaveZbirnaMulti_TX`, `SaveZbirna_TX`, `SaveZbirna`, `BuildZbirnaRowData`,
+`ValidateZbirnaInput` (siroče), `modDokUnos.ZbirnaUpisi`, `AutoCreateZbirnaFromOtpremnice` +
+`BackfillOtkupBrojZbirneByOtpremnica`. Nuspojava koja se ne vidi iz naslova: brisanje backfill-a
+spustilo je i grupu `otk_brojzbirne` (27 → 25 živih), jer je on bio jedan od pisaca te veze.
+
+**`AutoCreateZbirnaFromOtpremnice_TX` je OSTAO** — bez tela, sa glasnim raise-om. Orkestrator ga
+zove iza iste kapije; da smo ga obrisali, malina operater bi dobio tišinu umesto razloga. Isti
+postupak koji je S1c primenio na `AutoCreateOtpremniceFromPWA`.
+
+**Test-strana je bila veći posao od produkcione.** 11 testova je staro pisca koristilo kao preduslov.
+Podela nije bila „koliko ih ima" nego **šta koji tvrdi**:
+
+- **Tvrdnja je bila sam pisac (4 testa) → prešli na kanonski nacrt.** Nevalidna klasa, storniran broj
+  istog vozača (A9), tuđi vlasnik broja, i mapiranje reda po imenu kolone. Ove tvrdnje **nisu smele**
+  da ostanu na fixture-u: fixture ne proverava ništa, pa bi im tvrdnja postala placebo — a suite bi
+  ostao zelen. Jedna tvrdnja je **namerno nestala**: „dvoklasna zbirna je dva reda" u kanonu nema
+  predmet (jedno zaglavlje, dve stavke).
+- **Tvrdnja je nizvodna (7 testova + golden) → fixture `ZbrZateceniRed`.** Manjak, generacija palete,
+  otvorene fakture, storno po broju. Njima treba **red**, ne pisac.
+
+Fixture pravi **zatečeni** oblik (kilaža/klasa/gajbe na zaglavlju + stavka) i pečati generaciju istim
+scope-om (broj + vozač + kupac). To je namerno: čitaoci koji te kolone još čitaju (`zbr_linija`,
+27 živih) dobili bi od kanonskog seed-a **nulu**, pa bi test „prolazio" ne merivši ništa. Fixture i ti
+čitaoci nestaju **zajedno** u S3e-2.
+
+Isti razlog drži golden: `GldZbirnaZaVozaca` je postao seed, pa `tests/golden/G2_isti_broj_dva_dokumenta.txt`
+**ostaje nepromenjen**. Golden fajl koji se menja uz refaktor prestaje da bude sidro.
+
+**Sposobnost koja je nestala, i to upisano:** `Test_MalinaAutoZbirnaFailSignal` je obrisan sa svojom
+rutinom — merio je kapije tela kojeg više nema. U katalog (`UI_MIGRACIJA_KATALOG.md` §5, stavke 7 i 8)
+upisano je `INTENTIONALLY REMOVED (vraća se u S4-4)` za malina auto-zbirnu i `REPLACED (u toku)` za F3
+upis. „Kod još postoji" nije dokaz da operater ima funkciju — ni obrnuto.
+
+**Popis:** `zbr_stari_pisac` **29 → 0** (prag spušten na 0), `zbr_linija` **30 → 27**,
+`otk_brojzbirne` 27 → 25.
+
+**Sabotaža 544 → 546.** Stari pisac **nije imao nijedno sidro** — izmereno pre brisanja, pa se pokriće nije izgubilo. Ali kapije broja (zauzet broj, tuđi vlasnik niza) preselile su se u `ZbrNapraviDraft`, gde pokrića nije bilo, pa su dobile svoja dva sidra. Oba anchor-a mora da uključe i sledeću liniju (`Dim zbirnaID As String`): isti blok poziva stoji i u `CreateZbirna`, pa bi kraće sidro pogodilo dva mesta.
+
+**Nalaz o alatu, ponovo:** `vba_check` je ostao zelen i posle brisanja četiri javne funkcije koje se i
+dalje zovu iz tri druga modula — statička kapija ne vidi pozive kroz module. Preostali pozivi su nađeni
+grep-om. Isti obrazac kao review #371: **statički zeleno nije „projekat se kompajlira"**.
+
+**Nalaz iz prvog prolaza: rollback je vracao POLA dokumenta.** Osam BFP testova je snimalo
+`tblZbirna` a ne i `tblZbirnaStavke`. Rollback bi vratio zaglavlje i ostavio stavku -- siroce koje
+strog citalac prijavljuje u **tudjem** testu, pa je jedan pokvaren red dao 17 padova sa porukom koja
+na uzrok ne pokazuje. Dopunjeno na svih osam mesta; produkcioni rollback-ovi nad `tblZbirna`
+(`modStorno`, `modMasterSync`, `modDokumentInvariant`) **ne pisu stavke**, pa je asimetrija bila
+iskljucivo test-strana. Isto pravilo koje je S4-1 vec primenio na golden, storno, palete i izvestaje.
+
+> Pravilo koje iz ovoga sledi: **ko snima zaglavlje u rollback, snima i njegove stavke.** Dokument
+> je zaglavlje + stavke; vratiti samo jedno znaci proizvesti korupciju, ne ponistiti izmenu.
+
+**P3 iz review-a, svesno ODLOZEN:** komentari u `modDokumenta` jos opisuju stari svet
+(`identitet logickog dokumenta je GeneracijaID`, `aktivan red MORA da nosi generaciju`). Popravljati
+tekst tranzicionog koda **pre** brisanja samog framework-a napravilo bi vecu zabunu nego sto resava.
+Ide u **S4-3**, zajedno sa kodom koji opisuje: `GeneracijaID` ZBR identity framework se brise, i
+njegovi komentari sa njim.
 
 ## 15) Backlog — namerno van opsega
 

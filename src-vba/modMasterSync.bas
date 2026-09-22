@@ -752,8 +752,10 @@ End Function
 '
 '   AutoCreateOtpremniceFromPWA        OBRISANA u S1c (citala linijska polja sa
 '                                      zaglavlja, pisala OtpremnicaID; vraca S5)
-'   AutoCreateZbirnaFromOtpremnice     -> BackfillOtkupBrojZbirneByOtpremnica
-'                                      pise Otkup.BrojZbirne
+'   AutoCreateZbirnaFromOtpremnice     OBRISANA u S4-2c/2a (zvala stari pisac
+'                                      zbirne i kroz BackfillOtkupBrojZbirne-
+'                                      ByOtpremnica pisala Otkup.BrojZbirne;
+'                                      vraca S4-4 nad kanonskim piscem)
 '   ImportVOZRow_RowTX (VOZ/Zbirna)    -> LinkZbirnaToOtkupAndOtpremnica pise
 '                                      Otkup.BrojZbirne i CITA Otkup.OtpremnicaID
 '
@@ -893,200 +895,23 @@ End Function
 Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
 
-    ' Deo PAUZIRANOG izvedenog lanca: BackfillOtkupBrojZbirneByOtpremnica pise
-    ' Otkup.BrojZbirne nazad na zaglavlje. Kapija je OVDE, ne na pozivnom mestu,
-    ' jer se rutina zove i iz orkestratora i sa desktopa (modDokUnos) -- steta je
-    ' ista bez obzira ko je pokrenuo.
-    If Not IzvedeniLanacIzPwaDostupan() Then
-        Err.Raise vbObjectError + 8131, SRC, _
-                  "Auto-zbirna iz otpremnica je PAUZIRANA dok izvedeni lanac ne " & _
-                  "predje na header + stavke (PR7/PR8). Zbirne unesi rucno."
-    End If
-
-    Dim tx As clsTransaction
-
-    On Error GoTo EH
-
-    If Not IsMalinaMode() Then
-        AutoCreateZbirnaFromOtpremnice_TX = 0
-        Exit Function
-    End If
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-
-    AutoCreateZbirnaFromOtpremnice_TX = AutoCreateZbirnaFromOtpremnice(samoBrojOtp)
-
-    tx.CommitTx
-    Set tx = Nothing
-
-    LogInfo SRC, "Malina auto-zbirna created=" & CStr(AutoCreateZbirnaFromOtpremnice_TX)
-    Exit Function
-
-EH:
-    Dim errNum As Long, errDesc As String, errSrc As String
-    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
-    LogErr SRC
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+    ' PAUZIRANA, I OD S4-2c/2a BEZ TELA.
+    '
+    ' Jezgro je zvalo stari pisac zbirne (obrisan u istom rezu) i citalo
+    ' Kolicina / Klasa / KolAmbalaze sa ZAGLAVLJA otpremnice -- kolone koje od
+    ' S3b-1 nijedan pisac ne popunjava. Nije se dalo "prevezati" na kanonski
+    ' pisac: ocekivanje, clanstvo i identitet izvora su drugi model, pa je to
+    ' posao S4-4, ne mehanicka zamena poziva.
+    '
+    ' Ulaz OSTAJE i dalje pada GLASNO: orkestrator (modGoogleSyncOrchestrator) ga
+    ' zove iza iste kapije, a tiho vracanje nule bi malina operateru izgledalo kao
+    ' "nema sta da se kreira". Isti postupak koji je S1c primenio na
+    ' AutoCreateOtpremniceFromPWA.
+    Err.Raise vbObjectError + 8131, SRC, _
+              "Auto-zbirna iz otpremnica je PAUZIRANA i njeno telo je obrisano " & _
+              "zajedno sa starim piscem zbirne (S4-2c/2a). Vraca se u S4-4, nad " & _
+              "kanonskim nacrtom. Zbirne unesi rucno."
 End Function
-
-Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As String = "") As Long
-    Const SRC As String = "AutoCreateZbirnaFromOtpremnice"
-
-    If Not IsMalinaMode() Then Exit Function
-
-    Dim kupacID As String
-    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
-    If kupacID = "" Then
-        Err.Raise vbObjectError + 8300, SRC, _
-            "MALINA_DEFAULT_KUPAC nije postavljen (kljuc u tblSEFConfig)."
-    End If
-
-    Dim hladnjaca As String
-    hladnjaca = CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTPREMNICA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim cId As Long, cBrZ As Long, cBrO As Long, cDat As Long, cVoz As Long
-    Dim cVrsta As Long, cSorta As Long, cKol As Long, cTipAmb As Long
-    Dim cKolAmb As Long, cKlasa As Long, cStorno As Long
-    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
-    cBrZ = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
-    cBrO = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
-    cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
-    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
-    cVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
-    cSorta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
-    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
-    cTipAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
-    cKolAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, SRC)
-    cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
-    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
-
-    ' Obrada PO REDU otpremnice (NE grupisano po BrojOtpremnice):
-    '   AutoCreateOtpremniceFromPWA pravi otpremnice PO-KLASI (Klasa I i Klasa II
-    '   imaju razlicit BrojOtpremnice), dok rucni SaveOtpremnicaMulti stavlja obe
-    '   klase pod isti BrojOtpremnice. Per-red sa SaveZbirna_TX (jedna klasa)
-    '   korektno pokriva oba slucaja: BrojZbirne := BrojOtpremnice tog reda.
-    '   (Grupisanje+SaveZbirnaMulti je padalo na Klasa-II-only grupi: kolI=0.)
-    Dim otpMap As Object
-    Set otpMap = CreateObject("Scripting.Dictionary")
-    ' Paralelna mapa: OtpremnicaID -> generacija roditelja, da otkup ne mora
-    ' ponovo da razresava po broju (ZBR-CHILD-01).
-    Dim otpGenMap As Object
-    Set otpGenMap = CreateObject("Scripting.Dictionary")
-
-    Dim created As Long: created = 0
-    Dim r As Long
-    For r = 1 To UBound(data, 1)
-        Dim brz As String: brz = Trim$(CStr(nz(data(r, cBrZ), "")))
-        Dim brO As String: brO = Trim$(CStr(nz(data(r, cBrO), "")))
-        Dim isStorno As Boolean
-        isStorno = (cStorno > 0) And _
-                   (UCase$(Trim$(CStr(nz(data(r, cStorno), "")))) = "DA")
-
-        Dim inScope As Boolean
-        inScope = (Len(Trim$(samoBrojOtp)) = 0) Or (brO = Trim$(samoBrojOtp))
-
-        If brz = "" And brO <> "" And Not isStorno And inScope Then
-            Dim datum As Date: datum = CDate(data(r, cDat))
-            Dim vozacID As String: vozacID = Trim$(CStr(nz(data(r, cVoz), "")))
-            Dim vrsta As String: vrsta = CStr(nz(data(r, cVrsta), ""))
-            Dim sorta As String: sorta = CStr(nz(data(r, cSorta), ""))
-            Dim tipAmb As String: tipAmb = CStr(nz(data(r, cTipAmb), ""))
-            Dim klasa As String: klasa = CStr(nz(data(r, cKlasa), ""))
-            Dim kol As Double: kol = CDbl(nz(data(r, cKol), 0))
-            Dim amb As Long: amb = CLng(nz(data(r, cKolAmb), 0))
-
-            ' Mirror-stanica (VozacID==StanicaID) -> zbirna nosi "S" prefiks
-            ' (S1/ddmmyy); otpremnica zadrzava svoj broj (BrojOtpremnice = 1/ddmmyy).
-            '
-            ' DUG ZA PR7/PR8. Ovaj broj je NASLEDJEN od otpremnice, pa mu
-            ' numericki deo pripada STANICI, a vlasnik niza zbirne je VOZAC.
-            ' Danas se poklapa jer je rutina malina-gated a mirror-vozac ima
-            ' VozacID doslovno jednak StanicaID. Ali stamp puni samo PRAZAN
-            ' VozacID, pa PWA sme da ostavi realnog vozaca -- i tada bi kapija
-            ' konteksta (modBrojevi.RequireBrojUKontekstu u SaveZbirna) ovo
-            ' odbila kao TUDJ_VLASNIK. Kad PR7/PR8 odmrzne IzvedeniLanacIzPwaDostupan,
-            ' popravka NIJE relaksacija kapije nego popravka IZVORA: ili se
-            ' tvrdi da je vozac mirror, ili zbirna dobija svoj broj kroz
-            ' SuggestNextBroj(KIND_ZBR, vozacID, datum) umesto nasledjenog.
-            ' Sidro: Test_BKTX_ZbirnaTudjegVlasnikaOdbijena.
-            Dim brZbirne As String: brZbirne = ApplyMirrorPrefix(vozacID, brO)
-
-            Dim zbrRes As String
-            zbrRes = SaveZbirna_TX(datum, vozacID, brZbirne, kupacID, _
-                        hladnjaca, "", vrsta, sorta, kol, tipAmb, amb, klasa)
-
-            If Len(Trim$(zbrRes)) = 0 Then
-                Err.Raise vbObjectError + 8301, SRC, _
-                    "SaveZbirna_TX nije vratio ZbirnaID za BrojOtpremnice=" & brO & _
-                    " Klasa=" & klasa
-            End If
-
-            ' ZBR-CHILD-01: broj i generacija roditelja idu zajedno, a generacija
-            ' se cita IZ UPRAVO KREIRANE zbirne (zbrRes je njen PK) -- ne pogadja se
-            ' ponovo po broju. Broj u mirror slucaju nosi "S" prefiks i moze biti
-            ' deljen, PK ne moze.
-            Dim genZbr As String: genZbr = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrRes)
-            PoveziDeteNaZbirnu TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, _
-                               brZbirne, genZbr, SRC
-            Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cId), "")))
-            If otpID <> "" Then
-                otpMap(otpID) = brZbirne
-                otpGenMap(otpID) = genZbr
-            End If
-
-            created = created + 1
-        End If
-    Next r
-
-    If created = 0 Then Exit Function
-
-    ' backfill BrojZbirne na tblOtkup (preko OtpremnicaID), jedan prolaz
-    BackfillOtkupBrojZbirneByOtpremnica otpMap, otpGenMap, SRC
-
-    AutoCreateZbirnaFromOtpremnice = created
-End Function
-
-Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, _
-                                               ByVal otpGenMap As Object, _
-                                               ByVal callerSrc As String)
-    If otpMap Is Nothing Then Exit Sub
-    If otpMap.count = 0 Then Exit Sub
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Sub
-
-    Dim cOtpID As Long, cBrZ As Long
-    cOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, callerSrc)
-    cBrZ = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, callerSrc)
-
-    Dim r As Long
-    For r = 1 To UBound(data, 1)
-        Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cOtpID), "")))
-        If otpID <> "" Then
-            If otpMap.Exists(otpID) Then
-                Dim cur As String: cur = Trim$(CStr(nz(data(r, cBrZ), "")))
-                If cur = "" Then
-                    ' Generacija iz iste mape -- otkup nasledjuje identitet koji je
-                    ' otpremnica vec dobila iz PK-a, ne novo pogadjanje po broju.
-                    PoveziDeteNaZbirnu TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
-                        CStr(otpMap(otpID)), CStr(otpGenMap(otpID)), callerSrc
-                End If
-            End If
-        End If
-    Next r
-End Sub
 
 ' ============================================================
 ' PRIVATE -- Find OTK-* Sheets in Folder

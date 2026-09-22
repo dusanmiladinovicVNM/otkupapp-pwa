@@ -15,9 +15,10 @@ Option Explicit
 '
 ' Broj zbirne je LABELA, ne identitet. Identitet logickog dokumenta je
 ' GeneracijaID; broj + VozacID + KupacID je SCOPE u kome se generacija nalazi
-' ili kuje. Dvoklasna zbirna je JEDAN dokument na DVA reda -- SaveZbirnaMulti_TX
-' zove SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda nose
-' istu generaciju.
+' ili kuje. U STAROM modelu je dvoklasna zbirna bila JEDAN dokument na DVA
+' reda: pisac je isti broj, vozaca i kupca upisivao dvaput, pa su oba reda
+' nosila istu generaciju. Kanon to vise ne radi -- klase su stavke jednog
+' zaglavlja -- ali resolver i dalje mora da procita zateceni dvoredni oblik.
 '
 ' Resolver odgovara na DVA NEZAVISNA pitanja, i to je cela poenta razdvajanja:
 '   resolutionStatus     -- da li je broj SADA jednoznacno razresiv (bez storniranih)
@@ -76,8 +77,8 @@ Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 ' historicalLogicalCount se MERI i prijavljuje, ali NE blokira. Obrazlozenje je
 ' bilo da ga redovan re-entry pod istim brojem (ALLOW grana ZBR-ACTIVE-NUMBER-01)
 ' zakuje na 2. Ta grana je ukinuta 14.09.2026 -- ispravka dobija nov broj -- pa
-' re-entry pod istim brojem sada nastaje samo mimo F3 (SaveZbirna_TX, PWA uvoz,
-' malina auto-zbirna). Postrozavanje ove kapije je zaseban korak
+' re-entry pod istim brojem sada nastaje samo mimo F3 (PWA uvoz, malina
+' auto-zbirna -- oba pauzirana). Postrozavanje ove kapije je zaseban korak
 ' (ZBR_IDENTITET.md, faza 4), ne posledica te odluke.
 Public Const ZBR_MUT_INTEGRITET As String = "INTEGRITET"
 Public Const ZBR_MUT_VISE_VLASNIKA As String = "VISE_VLASNIKA"
@@ -318,9 +319,9 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
     res.matchingScopeActiveLogicalCount = scopeGen.Count
 
     ' ZBR-IDENT-01: aktivan red MORA da nosi generaciju. Prazna nije alternativni
-    ' oblik identiteta nego integritetska greska -- sva tri writer-a u tblZbirna
-    ' (SaveZbirna, modMasterSync, modDokumentInvariant) odmah PECATE validan
-    ' GeneracijaID: prva dva ga NASLEDJUJU u svom scope-u, MasterSync ga KUJE.
+    ' oblik identiteta nego integritetska greska -- pisci u tblZbirna
+    ' (modMasterSync, modDokumentInvariant) odmah PECATE validan GeneracijaID:
+    ' nasledjuju ga u svom scope-u, a MasterSync ga KUJE.
     If prazneAktivne > 0 Then
         res.integrityStatus = ZBR_INT_ERROR
         res.resolutionStatus = ZBR_RES_AMBIGUOUS
@@ -360,8 +361,8 @@ End Function
 ' Strogo, BEZ izuzetka za istog vlasnika: broj koji je IKAD nosila zbirna znaci
 ' NE, ma ciji bio i bio aktivan ili storniran. Ispravka je storno pa nov unos pod
 ' NOVIM brojem (A9, odluka 14.09.2026). To nista ne lomi: ZbirnaValidiraj se zove
-' TACNO jednom (modScrDokumenti Scr_Save), pre SaveZbirnaMulti_TX, pa validator
-' nikad ne vidi red koji je sam upravo napisao.
+' TACNO jednom (modScrDokumenti Scr_Save), PRE upisa, pa validator nikad ne
+' vidi red koji je sam upravo napisao.
 Public Function ZbirnaNovUnosRazlog(ByRef id As ZbirnaIdent) As String
     If id.integrityStatus <> ZBR_INT_OK Then
         ZbirnaNovUnosRazlog = ZBR_GATE_INTEGRITET
@@ -610,291 +611,6 @@ End Function
 ' ============================================================
 ' ZBIRNA - Gesamtdokument Fahrer
 ' ============================================================
-Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
-                                   ByVal vozacID As String, _
-                                   ByVal brojZbirne As String, _
-                                   ByVal kupacID As String, _
-                                   ByVal hladnjaca As String, _
-                                   ByVal pogon As String, _
-                                   ByVal vrstaVoca As String, _
-                                   ByVal sortaVoca As String, _
-                                   ByVal ukupnoKolI As Double, _
-                                   ByVal tipAmb As String, _
-                                   ByVal ukupnoAmb As Long, _
-                                   Optional ByVal hasKlasaII As Boolean = False, _
-                                   Optional ByVal ukupnoKolII As Double = 0, _
-                                   Optional ByVal ukupnoAmbII As Long = 0) As String
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    ' Sema pre upisa: AppendRow pise POZICIONO, pa tabela sa kolonom manje ili
-    ' u pogresnom rasporedu tiho salje vrednosti u pogresna polja. To je gore od
-    ' pada upisa -- greska nastaje u podacima, ne u logu.
-    '
-    ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
-    ' transakciju koja se odmah rollback-uje.
-    modSchema.SchemaReadyOrFail "SaveZbirnaMulti_TX", TBL_ZBIRNA
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-
-    ' Klasa I je opciona (ukupnoKolI = 0 -> snima se samo Klasa II). Bar jedna klasa.
-    Dim hasKlasaI As Boolean: hasKlasaI = (ukupnoKolI > 0)
-    If Not hasKlasaI And Not hasKlasaII Then
-        Err.Raise vbObjectError + 1203, "SaveZbirnaMulti_TX", _
-                  "Mora postojati bar jedna klasa (I ili II)."
-    End If
-
-    ' Zauzetost broja JEDNOM po dokumentu, pre prve klase. U SaveZbirna ne sme:
-    ' Multi_TX ga zove dvaput pod istim brojem, pa bi Klasa II odbila sopstveni
-    ' red Klase I.
-    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
-                                        brojZbirne, "SaveZbirnaMulti_TX"
-
-    Dim resultI As String
-    If hasKlasaI Then
-        resultI = SaveZbirna( _
-            datum, _
-            vozacID, _
-            brojZbirne, _
-            kupacID, _
-            hladnjaca, _
-            pogon, _
-            vrstaVoca, _
-            sortaVoca, _
-            ukupnoKolI, _
-            tipAmb, _
-            ukupnoAmb, _
-            KLASA_I)
-
-        If resultI = "" Then
-            Err.Raise vbObjectError + 1201, "SaveZbirnaMulti_TX", _
-                      "SaveZbirna Klasa I fehlgeschlagen"
-        End If
-    End If
-
-    Dim resultII As String
-    If hasKlasaII Then
-        resultII = SaveZbirna( _
-            datum, _
-            vozacID, _
-            brojZbirne, _
-            kupacID, _
-            hladnjaca, _
-            pogon, _
-            vrstaVoca, _
-            sortaVoca, _
-            ukupnoKolII, _
-            tipAmb, _
-            ukupnoAmbII, _
-            KLASA_II)
-
-        If resultII = "" Then
-            Err.Raise vbObjectError + 1202, "SaveZbirnaMulti_TX", _
-                      "SaveZbirna Klasa II fehlgeschlagen"
-        End If
-    End If
-
-    If hasKlasaI And hasKlasaII Then
-        SaveZbirnaMulti_TX = resultI & " + " & resultII
-    ElseIf hasKlasaI Then
-        SaveZbirnaMulti_TX = resultI
-    Else
-        SaveZbirnaMulti_TX = resultII
-    End If
-
-    tx.CommitTx
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SaveZbirnaMulti_TX", errDesc, errNum
-    Monitor_Error _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveZbirnaMulti_TX", _
-        entityType:="Zbirna", _
-        entityID:=SaveZbirnaMulti_TX, _
-        correlationId:=brojZbirne, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="SaveZbirnaMulti_TX failed. BrojZbirne=" & brojZbirne & _
-             "; VozacID=" & vozacID & _
-             "; KupacID=" & kupacID & _
-             "; HasKlasaII=" & CStr(hasKlasaII) & _
-             "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveZbirnaMulti_TX", _
-        entityType:="Zbirna", _
-        entityID:=SaveZbirnaMulti_TX, _
-        correlationId:=brojZbirne
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveZbirnaMulti_TX = ""
-
-    PrintTxFailure "SaveZbirnaMulti_TX", errSrc, errNum, errDesc
-End Function
-
-Public Function SaveZbirna_TX(ByVal datum As Date, ByVal vozacID As String, _
-                               ByVal brojZbirne As String, ByVal kupacID As String, _
-                               ByVal hladnjaca As String, ByVal pogon As String, _
-                               ByVal vrstaVoca As String, ByVal sortaVoca As String, _
-                               ByVal ukupnoKol As Double, ByVal tipAmb As String, _
-                               ByVal ukupnoAmb As Long, _
-                               Optional ByVal klasa As String = "I") As String
-    Dim tx As New clsTransaction
-
-    On Error GoTo EH
-
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
-    modSchema.SchemaReadyOrFail "SaveZbirna_TX", _
-        TBL_ZBIRNA
-
-tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-
-    SaveZbirna_TX = SaveZbirna(datum, vozacID, brojZbirne, kupacID, _
-                                hladnjaca, pogon, vrstaVoca, sortaVoca, _
-                                ukupnoKol, tipAmb, ukupnoAmb, klasa)
-
-    If SaveZbirna_TX = "" Then
-        Err.Raise vbObjectError + 1004, "SaveZbirna_TX", _
-                  "SaveZbirna fehlgeschlagen"
-    End If
-
-    tx.CommitTx
-
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SaveZbirna_TX", errDesc, errNum
-    Monitor_Error _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveZbirna_TX", _
-        entityType:="Zbirna", _
-        entityID:=SaveZbirna_TX, _
-        correlationId:=brojZbirne, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="SaveZbirna_TX failed. BrojZbirne=" & brojZbirne & _
-             "; VozacID=" & vozacID & _
-             "; KupacID=" & kupacID & _
-             "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modDokumenta", _
-        procedureName:="SaveZbirna_TX", _
-        entityType:="Zbirna", _
-        entityID:=SaveZbirna_TX, _
-        correlationId:=brojZbirne
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveZbirna_TX = ""
-
-    PrintTxFailure "SaveZbirna_TX", errSrc, errNum, errDesc
-End Function
-
-Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
-                           ByVal brojZbirne As String, ByVal kupacID As String, _
-                           ByVal hladnjaca As String, ByVal pogon As String, _
-                           ByVal vrstaVoca As String, ByVal sortaVoca As String, _
-                           ByVal ukupnoKol As Double, ByVal tipAmb As String, _
-                           ByVal ukupnoAmb As Long, _
-                           Optional ByVal klasa As String = "I") As String
-    On Error GoTo EH
-
-    Call ValidateZbirnaInput(vozacID, brojZbirne, kupacID, ukupnoKol, _
-                         tipAmb, ukupnoAmb, klasa)
-
-    ' Vlasnik niza zbirne je VOZAC. U malina modu je par-vozac mirror
-    ' stanice (VozacID == StanicaID kao string), pa nasledjen broj
-    ' otpremnice prolazi bez posebne grane.
-    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
-                                     brojZbirne, "SaveZbirna"
-
-    Dim newID As String
-    newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
-
-    If newID = "" Then
-        Err.Raise vbObjectError + 1009, "SaveZbirna", _
-                  "GetNextID nije vratio ZbirnaID."
-    End If
-
-    ' AUD-003: upis PO IMENU kolone (BuildZbirnaRowData), ne pozicijski Array(...).
-    ' Presence guard (RequireColumns) dokazuje samo da kolone postoje; promenjen
-    ' redosled ili kolona umetnuta u sredinu bi kroz pozicijski upis tiho iskrivili
-    ' red. Isti obrazac kao BuildPrijemnicaRowData.
-    Dim rowData As Variant
-    rowData = BuildZbirnaRowData(newID, datum, vozacID, brojZbirne, kupacID, _
-                                 hladnjaca, pogon, vrstaVoca, sortaVoca, _
-                                 ukupnoKol, tipAmb, ukupnoAmb, klasa)
-
-    Dim newRowZbr As Long
-    newRowZbr = AppendRow(TBL_ZBIRNA, rowData)
-
-    If newRowZbr > 0 Then
-        ApplyGeneracijaID TBL_ZBIRNA, newRowZbr, COL_ZBR_BROJ, brojZbirne, _
-                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
-
-        SaveZbirna = newID
-    Else
-        Err.Raise vbObjectError + 1010, "SaveZbirna", _
-                  "AppendRow fehlgeschlagen fuer tblZbirna."
-    End If
-
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SaveZbirna", errDesc, errNum
-    On Error GoTo 0
-
-    Err.Raise errNum, "SaveZbirna", _
-              "Source=" & errSrc & " | " & errDesc
-End Function
-
 ' ============================================================
 ' ZBIRNA -- header + stavke (PR3)
 ' ============================================================
@@ -903,7 +619,7 @@ End Function
 ' Obrazac je CreateFaktura_TX (modFaktura.bas:11): _TX drzi transakciju i
 ' monitoring, Private core radi posao, kompletna prevalidacija PRE ijednog upisa.
 '
-' Sta se menja u odnosu na SaveZbirnaMulti_TX:
+' Sta se promenilo u odnosu na stari pisac (obrisan u S4-2c/2a):
 '
 '   staro:  dva reda u tblZbirna (Klasa I i Klasa II), dva ID-a, pa string
 '           "ZBR-1 + ZBR-2" koji pozivalac posle parsira
@@ -1289,7 +1005,7 @@ Private Function CreateZbirna(ByVal h As Object, _
             Err.Raise vbObjectError + 1232, SRC, _
                       "Zbir ambalaze za klasu " & klasa & " je negativan."
         End If
-        ' Ambalaza je BROJ KOMADA, ne tezina. Legacy ValidateZbirnaInput je to
+        ' Ambalaza je BROJ KOMADA, ne tezina. Legacy validator unosa je to
         ' drzao tipom (ukupnoAmb As Long); rec/nista drugo to vise ne cuva, pa
         ' se trazi ovde. Odbija se, ne zaokruzuje: "20.5 gajbica" je kvar u
         ' izvoru, a tiha ispravka ga sakriva.
@@ -5771,7 +5487,7 @@ End Function
 
 ' Da li izvorne (nestornirane) otpremnice date zbirne imaju Klasu II.
 ' Koristi frmDokumenta (hard-blokada unosa zbirne kad je "Dve klase" iskljuceno --
-' inace bi SaveZbirnaMulti_TX dobio hasKlasaII:=False i Kl.II bi se tiho izgubila).
+' inace bi pisac dobio hasKlasaII:=False i Kl.II bi se tiho izgubila).
 ' Isti izvor kao validacija u formi: ValidateZbirnaPreUnosa -> val(4) = sumaKgKlII.
 Public Function ZbirnaIzvorImaKlasuII(ByVal brojZbirne As String) As Boolean
     On Error GoTo EH
@@ -6822,53 +6538,6 @@ End Function
 
 ' Gradi red tblZbirna PO IMENU kolone (AUD-003). Otporno na promenu redosleda
 ' kolona i na kolonu umetnutu u sredinu -- za razliku od pozicijskog Array(...).
-Private Function BuildZbirnaRowData(ByVal zbirnaID As String, _
-                                    ByVal datum As Date, _
-                                    ByVal vozacID As String, _
-                                    ByVal brojZbirne As String, _
-                                    ByVal kupacID As String, _
-                                    ByVal hladnjaca As String, _
-                                    ByVal pogon As String, _
-                                    ByVal vrstaVoca As String, _
-                                    ByVal sortaVoca As String, _
-                                    ByVal ukupnoKol As Double, _
-                                    ByVal tipAmb As String, _
-                                    ByVal ukupnoAmb As Long, _
-                                    ByVal klasa As String) As Variant
-    Const SRC As String = "BuildZbirnaRowData"
-
-    Dim colCount As Long
-    colCount = TabelaBrojKolona(TBL_ZBIRNA)
-
-    If colCount <= 0 Then
-        Err.Raise vbObjectError + 1011, SRC, _
-                  "Could not resolve tblZbirna column count."
-    End If
-
-    Dim rowData() As Variant
-    ReDim rowData(0 To colCount - 1)
-
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_SORTA, sortaVoca, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KOLICINA, ukupnoKol, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, tipAmb, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KOL_AMB, ukupnoAmb, SRC
-    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KLASA, klasa, SRC
-
-    If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
-        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_STORNIRANO, "", SRC
-    End If
-
-    BuildZbirnaRowData = rowData
-End Function
-
 Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
                                         ByVal datum As Date, _
                                         ByVal kupacID As String, _
@@ -7681,43 +7350,6 @@ Private Sub RequireValidDocumentClass(ByVal klasa As String, _
 
     Err.Raise vbObjectError + 1400, sourceName, _
               "Neispravna klasa dokumenta: " & klasa
-End Sub
-
-Private Sub ValidateZbirnaInput(ByVal vozacID As String, _
-                                ByVal brojZbirne As String, _
-                                ByVal kupacID As String, _
-                                ByVal ukupnoKol As Double, _
-                                ByVal tipAmb As String, _
-                                ByVal ukupnoAmb As Long, _
-                                ByVal klasa As String)
-
-    Const SRC As String = "ValidateZbirnaInput"
-
-    If Len(Trim$(vozacID)) = 0 Then
-        Err.Raise vbObjectError + 1410, SRC, "VozacID je obavezan."
-    End If
-
-    If Len(Trim$(brojZbirne)) = 0 Then
-        Err.Raise vbObjectError + 1411, SRC, "Broj zbirne je obavezan."
-    End If
-
-    If Len(Trim$(kupacID)) = 0 Then
-        Err.Raise vbObjectError + 1412, SRC, "KupacID je obavezan."
-    End If
-
-    If ukupnoKol <= 0 Then
-        Err.Raise vbObjectError + 1413, SRC, "Ukupna koli" & ChrW(269) & "ina mora biti veca od nule."
-    End If
-
-    If ukupnoAmb < 0 Then
-        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambala" & ChrW(382) & "a ne sme biti negativna."
-    End If
-
-    If ukupnoAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1415, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
-    End If
-
-    RequireValidDocumentClass klasa, SRC
 End Sub
 
 Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _

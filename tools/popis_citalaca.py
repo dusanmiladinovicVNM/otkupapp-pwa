@@ -181,8 +181,8 @@ PRAGOVI = collections.OrderedDict([
     # clanstvo i okvir ispravke (modStornoFlow, modDokumentInvariant) -- njih
     # brise S4-3, pa prag tamo ide na nulu. Stari pisac ostaje samo iza pauze
     # F3; nulu dostize u S4-2, kad F3 predje na CreateZbirna_TX.
-    ("zbr_linija", 30),
-    ("zbr_stari_pisac", 29),
+    ("zbr_linija", 27),
+    ("zbr_stari_pisac", 0),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.
