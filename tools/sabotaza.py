@@ -848,10 +848,49 @@ SABOTAZE = {
     # Prekoracenje neke klase opet ne boji traku.
     "traka-prekoracenje-nevidljivo": (
         "modScrDokumenti.bas",
-        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n',
-        "        If False Then prek = True   ' SABOTAZA: prekoracenje se ne vidi\n",
+        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n'
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then sveNula = False\n',
+        "        If False Then prek = True   ' SABOTAZA: prekoracenje se ne vidi\n"
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then sveNula = False\n',
         "Test_OTP_RadniStoVeziTrakaIzdaj",
         "RS tok: traka -- prekoracenje je crveno",
+    ),
+    "zbirna-traka-prekoracenje-nevidljivo": (
+        "modScrDokumenti.bas",
+        '        If CDbl(r("preostalo")) < -0.0001 Or CDbl(r("preostaloAmb")) < -0.0001 Then prek = True\n'
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _\n',
+        "        If False Then prek = True   ' SABOTAZA: visak zbirne se ne vidi\n"
+        '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _\n',
+        "Test_ZBR_TrakaNapretka",
+        "prekoracenje je crveno",
+    ),
+    "traka-bez-podrazumevanih-natpisa": (
+        "modOtkupUI.bas",
+        "    TrakaNatpisi = podr\n",
+        "    ' SABOTAZA: podrazumevanih natpisa nema\n",
+        "Test_ZBR_TrakaNatpisi",
+        "prazan spec daje NIZ, ne prazno",
+    ),
+    "traka-cita-polje-koje-f1-ne-salje": (
+        "modOtkupUI.bas",
+        "    If UBound(p) >= 13 Then spec = CStr(p(13))\n",
+        "    spec = CStr(p(13))   ' SABOTAZA: cita polje koje F1 ne salje\n",
+        "T_Traka_NatpisiPoRezimu",
+        "Nazad u F1: prvi natpis je VRACEN, nije ostao ZBR",
+    ),
+    "traka-ne-uzima-natpise-ekrana": (
+        "modOtkupUI.bas",
+        "    TrakaNatpisi = svoji\n",
+        "    ' SABOTAZA: natpisi ekrana se ignorisu\n",
+        "T_Traka_NatpisiPoRezimu",
+        "F2: cetvrta mera je BROJ IZVORA, jer zbirna nema cenu",
+    ),
+    "zbirna-traka-ne-gleda-izvore": (
+        "modScrDokumenti.bas",
+        "    razlogIzvora = modDokumenta.ZbrIzvoriNevaljaniRazlog(mZbrID)\n",
+        "    razlogIzvora = \"\"   ' SABOTAZA: traka ne gleda izvore\n",
+        "Test_ZBR_TrakaNapretka",
+        "nad nevaljanim izvorom traka NE kaze spremna",
     ),
     # Klasa koju otpremnica ne ocekuje opet prolazi bez pitanja.
     "prekoracenje-neocekivana-klasa": (

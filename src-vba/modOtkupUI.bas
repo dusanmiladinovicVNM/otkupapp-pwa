@@ -865,6 +865,58 @@ End Sub
 ' Puni traku iz opisa koji daje ekran (Scr_OtpInfo, 13 polja). Opis sa manje
 ' polja je greska citanja: ekran tada salje broj i opis greske, pa se crtaju
 ' samo oni -- brojke bi lagale.
+' NATPISI CETIRI GRUPE TRAKE -- podrazumevani, ili oni koje je ekran poslao.
+'
+' Izdvojeno iz RefreshOtpTraka zbog dve stvari, obe bolne (review #381, P2):
+'
+'   1) VBA IIf EVALUIRA OBE GRANE. "IIf(imaKlj, CStr(kljucevi(0)), "...")" je
+'      nad praznim nizom pucao i kad je uslov False. RefreshOtpTraka pocinje sa
+'      On Error Resume Next, pa se greska gutala, dodela se preskakala, i F1
+'      traka je ostajala BEZ natpisa -- brojevi bez zaglavlja.
+'   2) Bez podrazumevanog niza je stanje zavisilo od prethodnog rezima: posle
+'      F2 su u kontrolama mogli da ostanu ZBR natpisi.
+'
+' Zato niz POSTOJI UVEK. Ekran koji natpise ne salje dobija podrazumevane; niz
+' pogresne duzine se odbija u celosti -- pola natpisa je gore od nijednog.
+'
+' prihvacen: da li je spec ekrana STVARNO uzet (review #381, P3). Izlazi napolje
+' jer od iste odluke zavisi i FORMAT cetvrte mere -- ceo broj bez podnaslova kod
+' zbirne, decimale i "po otpremnici" kod cene. Dok je pozivalac to racunao sam,
+' pokvaren spec je dobijao podrazumevane natpise ALI custom formatiranje: pola
+' odluke, i to ona nevidljiva polovina.
+Public Function TrakaNatpisi(ByVal spec As String, _
+                             Optional ByRef prihvacen As Boolean) As Variant
+    Dim podr As Variant, svoji As Variant
+    prihvacen = False
+    podr = Array("OTKUI_OTP_UKUPNO", "OTKUI_OTP_UBLOK", _
+                 "OTKUI_OTP_OSTATAK", "OTKUI_OTP_CENA")
+    TrakaNatpisi = podr
+
+    If Len(Trim$(spec)) = 0 Then Exit Function
+
+    svoji = Split(spec, ",")
+    If UBound(svoji) <> 3 Then Exit Function
+
+    Dim i As Long
+    For i = 0 To 3
+        If Len(Trim$(CStr(svoji(i)))) = 0 Then Exit Function
+    Next i
+
+    TrakaNatpisi = svoji
+    prihvacen = True
+End Function
+
+' TEST SEAM: osvezi traku nad datom formom -- tvrdo gejtovan.
+'
+' Postoji zato sto se isti bug dvaput sakrio iza On Error Resume Next u
+' RefreshOtpTraka, a izolovan test pomocne funkcije ga nijednom nije video:
+' greska nije bila U NJOJ nego u POZIVU (review #381). Seam vodi test kroz pravo
+' pozivno mesto, redosledom kojim ide operater: F1 -> F2 -> F1.
+Public Sub TrakaRefreshTest(frm As Object)
+    If Not IsTestMode() Then Exit Sub
+    RefreshOtpTraka frm
+End Sub
+
 Private Sub RefreshOtpTraka(frm As Object)
     Dim z As Object, info As String, p() As String, i As Long
     Dim ima As Boolean, puna As Boolean
@@ -898,14 +950,25 @@ Private Sub RefreshOtpTraka(frm As Object)
     End If
     z.Controls("otpSub").caption = p(1) & "  " & ChrW(183) & "  " & p(2)
 
-    z.Controls("otpML0").caption = UCase$(Poruka("OTKUI_OTP_UKUPNO"))
+    ' NATPISE BIRA EKRAN, KAD IH POSALJE (14. polje). Zbirna nema cenu, pa
+    ' cetvrta grupa kod nje nosi BROJ IZVORA; ljuska ne zna sta je u kom rezimu
+    ' predmet rada i ne sme da pogadja. Ekran koji ih ne salje se ponasa kao pre.
+    ' NIJEDAN IIf NAD POLJEM KOJE MOZDA NE POSTOJI (review #381, drugi krug).
+    ' Prva popravka je sklonila IIf iz dodela natpisa i vratila ga U ARGUMENT:
+    ' IIf(UBound(p) >= 13, p(13), "") i dalje cita p(13) kad ga nema, jer VBA
+    ' evaluira obe grane. Ista greska, pomerena za jedan red -- i opet nema.
+    Dim kljucevi As Variant, imaKlj As Boolean, spec As String
+    If UBound(p) >= 13 Then spec = CStr(p(13))
+    kljucevi = TrakaNatpisi(spec, imaKlj)
+
+    z.Controls("otpML0").caption = UCase$(Poruka(CStr(kljucevi(0))))
     z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)
     z.Controls("otpMA0").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(6))), 0)
-    z.Controls("otpML1").caption = UCase$(Poruka("OTKUI_OTP_UBLOK"))
+    z.Controls("otpML1").caption = UCase$(Poruka(CStr(kljucevi(1))))
     z.Controls("otpMV1").caption = FmtBroj(CDbl(Val(p(4))), 2)
     z.Controls("otpMA1").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(7))), 0)
 
-    z.Controls("otpML2").caption = UCase$(Poruka("OTKUI_OTP_OSTATAK"))
+    z.Controls("otpML2").caption = UCase$(Poruka(CStr(kljucevi(2))))
     z.Controls("otpMV2").caption = FmtBroj(CDbl(Val(p(5))), 2)
     ' Ostatak je broj zbog koga traka postoji. Semafor racuna ekran PO KLASI:
     ' crveno = neka klasa je prekoracena, zeleno = sve klase na nuli (spremna
@@ -921,12 +984,19 @@ Private Sub RefreshOtpTraka(frm As Object)
     z.Controls("otpMA2").ForeColor = IIf(p(10) = "-1", C_RUST, C_MUTED)
 
     ' Cena je po klasi (odluka 14.8 t. 2): druga klasa ide u red ispod.
-    z.Controls("otpML3").caption = UCase$(Poruka("OTKUI_OTP_CENA"))
-    z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
-    If Len(p(12)) > 0 Then
-        z.Controls("otpMA3").caption = "II " & FmtBroj(CDbl(Val(p(12))), 2)
+    ' Kad ekran posalje svoje natpise, cetvrta grupa je CEO BROJ bez podnaslova
+    ' (danas: broj izvora zbirne) -- decimale i "po otpremnici" su cena.
+    z.Controls("otpML3").caption = UCase$(Poruka(CStr(kljucevi(3))))
+    If imaKlj Then
+        z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 0)
+        z.Controls("otpMA3").caption = ""
     Else
-        z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+        z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
+        If Len(p(12)) > 0 Then
+            z.Controls("otpMA3").caption = "II " & FmtBroj(CDbl(Val(p(12))), 2)
+        Else
+            z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+        End If
     End If
 End Sub
 
@@ -2069,7 +2139,13 @@ Public Sub LayoutOtkup(frm As Object)
     ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
     Dim otpH As Single, i2 As Long
     otpH = 0
-    If modeKey(ActiveMode) = "OTKUP" And Not mGridMax Then otpH = OTP_H
+    ' Traka se crta i u F2: tamo je radni sto ZBIRNE (S4-2c/2b-2c-2). Prazno
+    ' stanje ("nema izabranog") je isto kao u F1 -- ekran vrati prazno, traka
+    ' pokaze poruku umesto brojeva.
+    If Not mGridMax Then
+        If modeKey(ActiveMode) = "OTKUP" Or modeKey(ActiveMode) = "OTPREMNICA" Then _
+            otpH = OTP_H
+    End If
     frm.Controls("zOtp").Visible = (otpH > 0)
     If otpH > 0 Then
         With frm.Controls("zOtp")

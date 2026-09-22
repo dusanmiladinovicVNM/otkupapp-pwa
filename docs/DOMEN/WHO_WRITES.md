@@ -108,9 +108,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
-- `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
+- `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`
-- `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`
+- `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
 - `tblSEFConfig`: `modTestStorno`

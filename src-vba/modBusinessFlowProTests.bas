@@ -175,6 +175,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PrazanNacrtNeRusiListu
     Test_ZBR_RadniStoVezePoIdentitetu
     Test_ZBR_SpisakKojiSeNudiNeLaze
+    Test_ZBR_TrakaNapretka
+    Test_ZBR_TrakaNatpisi
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8910,6 +8912,151 @@ EH:
     If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
     LogFatal "Test_ZBR_RadniStoVezePoIdentitetu", Err.Number, Err.description
 End Sub
+
+' NATPISI TRAKE POSTOJE UVEK (review #381, P2).
+'
+' VBA IIf EVALUIRA OBE GRANE. Prva verzija je pisala
+' "IIf(imaKljuceve, CStr(kljucevi(0)), "OTKUI_OTP_UKUPNO")" -- i nad praznim
+' nizom pucala i kad je uslov False. RefreshOtpTraka pocinje sa
+' On Error Resume Next, pa se greska gutala, dodela se preskakala, i F1 traka je
+' ostajala BEZ natpisa: brojevi bez zaglavlja, i to TIHO.
+'
+' Zato izbor natpisa vise nije uslovni izraz nego funkcija koja UVEK vrati
+' cetiri kljuca. Test meri i granicu: spec pogresne duzine ili sa praznim
+' clanom se odbija U CELOSTI -- pola natpisa je gore od nijednog, jer izgleda
+' kao podatak.
+Private Sub Test_ZBR_TrakaNatpisi()
+    On Error GoTo EH
+
+    Dim d As Variant, uzet As Boolean
+    d = modOtkupUI.TrakaNatpisi("", uzet)
+    AssertTrue IsArray(d), "ZBR natpisi: prazan spec daje NIZ, ne prazno"
+    AssertTrue Not uzet, "ZBR natpisi: prazan spec NIJE prihvacen"
+    AssertEquals "3", CStr(UBound(d)), "ZBR natpisi: uvek cetiri natpisa"
+    AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
+                 "ZBR natpisi: bez spec-a stoje podrazumevani (otpremnica)"
+    AssertEquals "OTKUI_OTP_CENA", CStr(d(3)), _
+                 "ZBR natpisi: cetvrta podrazumevana je cena"
+
+    d = modOtkupUI.TrakaNatpisi("A,B,C,D", uzet)
+    AssertEquals "A", CStr(d(0)), "ZBR natpisi: ekran sme da ih zameni"
+    AssertEquals "D", CStr(d(3)), "ZBR natpisi: zamenjena je i cetvrta"
+    AssertTrue uzet, "ZBR natpisi: ispravan spec JE prihvacen"
+
+    ' Pogresna duzina i prazan clan se odbijaju U CELOSTI -- i to se KAZE
+    ' pozivaocu (review #381, P3). Od istog odgovora zavisi format cetvrte
+    ' mere, pa bi "podrazumevani natpisi + custom format" bio pola odluke.
+    d = modOtkupUI.TrakaNatpisi("A,B", uzet)
+    AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
+                 "ZBR natpisi: nepotpun spec se odbija, ne dopunjava"
+    AssertTrue Not uzet, "ZBR natpisi: odbijen spec se prijavljuje kao odbijen"
+    d = modOtkupUI.TrakaNatpisi("A,,C,D", uzet)
+    AssertEquals "OTKUI_OTP_UKUPNO", CStr(d(0)), _
+                 "ZBR natpisi: spec sa praznim clanom se odbija"
+    AssertTrue Not uzet, "ZBR natpisi: i prazan clan obara PRIHVATANJE"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_TrakaNatpisi", Err.Number, Err.description
+End Sub
+
+' TRAKA POKAZUJE ISTU ISTINU KOJU MERI IZDAVANJE (S4-2c/2b-2c-2).
+'
+' Traka cita GetZbirnaProgress, a on isti par citaca koji ZbrIzdaj koristi za
+' jednakost -- pa "pokriveno" na ekranu i "pokriveno" na kapiji ne mogu da se
+' raziju. Test meri SEMAFOR u oba smera, jer je to jedini broj zbog kog traka i
+' postoji: 1 = u toku, 0 = spremna, -1 = PREKORACENA.
+'
+' Cetvrto polje mera je BROJ IZVORA (odluka operatera 22.09.2026): zbirna nema
+' cenu, a pokrivenost i jeste pitanje clanstva. Natpise salje EKRAN (14. polje),
+' pa ljuska ne mora da zna sta je u kom rezimu predmet rada.
+Private Sub Test_ZBR_TrakaNapretka()
+    Dim prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRTRK")
+
+    Dim otpA As String, otpB As String
+    otpA = ZbrIzdataOtp("TRK1-" & scenario, 400#, 20#)
+    otpB = ZbrIzdataOtp("TRK2-" & scenario, 100#, 5#)
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "ZBR traka: izvori su izdati"
+    If Len(otpA) = 0 Or Len(otpB) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-TRK-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR traka: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    prevMode = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR traka: nacrt je na radnom stolu"
+
+    ' Prazan nacrt: najavljeno 400, povezano 0, izvora 0, semafor U TOKU.
+    AssertEquals "400", ZbrTrakaPolje(3), "ZBR traka: najavljeno je 400"
+    AssertEquals "0", ZbrTrakaPolje(4), "ZBR traka: povezano je nula"
+    AssertEquals "400", ZbrTrakaPolje(5), "ZBR traka: preostalo je cela najava"
+    AssertEquals "0", ZbrTrakaPolje(9), "ZBR traka: cetvrta mera je BROJ IZVORA"
+    AssertEquals "1", ZbrTrakaPolje(10), "ZBR traka: nepokriven nacrt je U TOKU"
+    AssertTrue InStr(1, ZbrTrakaPolje(13), "OTKUI_OTP_IZVORA", vbTextCompare) > 0, _
+               "ZBR traka: ekran salje natpise, ne ljuska"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpA, g), _
+               "ZBR traka: prvi izvor vezan (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "400", ZbrTrakaPolje(4), "ZBR traka: povezano prati clanstvo"
+    AssertEquals "1", ZbrTrakaPolje(9), "ZBR traka: broj izvora je 1"
+    AssertEquals "0", ZbrTrakaPolje(10), "ZBR traka: pokrivena najava je SPREMNA"
+
+    ' Visak: semafor mora da pocrveni, jer izdavanje bi palo.
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpB, g), _
+               "ZBR traka: drugi izvor vezan (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "-1", ZbrTrakaPolje(10), "ZBR traka: prekoracenje je crveno"
+    AssertEquals "2", ZbrTrakaPolje(9), "ZBR traka: broj izvora je 2"
+
+    ' Nazad na tacno pokriveno.
+    AssertTrue modDokumenta.UkloniZbirnaIzvor_TX(zbrID, otpB, g), _
+               "ZBR traka: visak uklonjen (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "0", ZbrTrakaPolje(10), "ZBR traka: opet je SPREMNA"
+
+    ' IZVOR KOJI VISE NE VALJA (review #381, P2). Kolicine se nisu promenile --
+    ' 400 je i dalje 400 -- pa bi traka koja gleda samo brojeve rekla SPREMNA,
+    ' dok izdavanje pada na revalidaciji. Ekran i kapija moraju da sude ISTO.
+    MarkTestRowStornirano TBL_OTPREMNICA, COL_OTP_ID, otpA
+    modScrDokumenti.Scr_ResetCache
+
+    AssertTrue ZbrTrakaPolje(10) <> "0", _
+               "ZBR traka: nad nevaljanim izvorom traka NE kaze spremna"
+    AssertTrue InStr(1, ZbrTrakaPolje(1), "stornirana", vbTextCompare) > 0, _
+               "ZBR traka: imenuje razlog (bilo: " & ZbrTrakaPolje(1) & ")"
+    AssertTrue Not modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR traka: izdavanje nad nevaljanim izvorom stvarno pada"
+    AssertTrue InStr(1, g, "stornirana", vbTextCompare) > 0, _
+               "ZBR traka: kapija imenuje ISTI razlog (bilo: " & g & ")"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
+    LogFatal "Test_ZBR_TrakaNapretka", Err.Number, Err.description
+End Sub
+
+' Jedno polje trake, po indeksu iz ugovora (0 = broj, 3 = najavljeno, ...).
+Private Function ZbrTrakaPolje(ByVal idx As Long) As String
+    Dim info As String, p() As String
+    info = modScrDokumenti.Scr_OtpInfo()
+    If Len(info) = 0 Then Exit Function
+    p = Split(info, "|")
+    If idx > UBound(p) Then Exit Function
+    ZbrTrakaPolje = Trim$(p(idx))
+End Function
 
 ' RADNI STO: VEZIVANJE, UKLANJANJE I IZDAVANJE KROZ EKRAN (S4-2c/2b-2b).
 '

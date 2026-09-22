@@ -4550,6 +4550,80 @@ ide na operatersku checklistu (`.claude/rules/testovi.md` §7).
 **Ostaje za 2c-2:** traka napretka iz `GetZbirnaProgress` (uz odluku šta pokazuje četvrta grupa mera,
 jer zbirna nema cenu) i vrsta/sorta iz kontekstne zone, koje traže raspored — oba diraju ljusku.
 
+### 14.32) S4-2c/2b-2c-2 — traka napretka zbirne (22.09.2026)
+
+Traka iznad forme sada se crta i u **F2**, nad aktivnim nacrtom zbirne. Čita **`GetZbirnaProgress`**,
+a on isti par čitača koji `ZbrIzdaj` koristi za jednakost — pa „pokriveno" na ekranu i „pokriveno" na
+kapiji **ne mogu da se raziđu**.
+
+**Odluka operatera (22.09.2026): četvrta mera je BROJ IZVORA.** Za otkup i otpremnicu je to cena;
+zbirna je nema (`tblZbirna` tu kolonu ni nema), a pokrivenost zbirne **i jeste pitanje članstva** — pa
+je broj izvora jedina mera koja prirodno zauzima to mesto. Odbijeno: sakriti četvrtu grupu (prazan
+prostor, a operater i dalje mora u listu da vidi ima li nacrt ijedan izvor) i prikazati odredište
+(činjenica zaglavlja koja se ne menja dok operater radi — traka postoji za ono što se menja).
+
+**Natpise šalje EKRAN, ne ljuska** — traka je dobila **14. polje**: četiri ključa poruka, zarezom
+razdvojena. Ljuska ostaje glupa: ne zna šta je u kom režimu predmet rada i **ne sme da pogađa**. Ekran
+koji ih ne pošalje ponaša se kao pre, pa F1 nije dirnut. Uz četvrtu meru ide i pravilo prikaza: kad
+ekran pošalje svoje natpise, ta grupa je **ceo broj bez podnaslova** — decimale i „po otpremnici" su
+osobina cene, ne mere.
+
+Prve tri grupe takođe menjaju wording: „u blokovima" nema smisla za zbirnu čiji su izvori otpremnice.
+
+**Semafor je isti ugovor** kao kod otpremnice: `-1` neka klasa **prekoračena**, `0` sve na nuli
+(spremna za izdavanje), `1` u toku. Test ga meri **u oba smera** — prazan nacrt, pokriven, i višak —
+jer je to jedini broj zbog kog traka i postoji.
+
+**Kapija je treći put uhvatila zastarelo sidro:** semafor sada postoji na dva mesta (otpremnica i
+zbirna), pa `traka-prekoracenje-nevidljivo` više nije bilo jednoznačno. Oba sidra nose i sledeći red,
+a novo mesto je dobilo **svoju** sabotažu.
+
+**Review #381, P2 — `IIf` evaluira OBE grane.** `IIf(imaKljuceve, CStr(kljucevi(0)), "OTKUI_OTP_UKUPNO")`
+je nad praznim nizom pucao **i kad je uslov False**. `RefreshOtpTraka` počinje sa `On Error Resume Next`,
+pa se greška gutala, dodela preskočila, i **F1 traka je ostajala bez natpisa** — brojevi bez zaglavlja,
+i to tiho. Tvrdnja „F1 nije dirnut" nije bila tačna.
+
+Izbor natpisa je zato izdvojen u `TrakaNatpisi`, koja **uvek** vrati četiri ključa; spec pogrešne dužine
+ili sa praznim članom se odbija **u celosti** — pola natpisa je gore od nijednog, jer izgleda kao podatak.
+
+**Review #381, drugi P2 — traka je mogla da kaže SPREMNA nad stanjem koje izdavanje odbija.**
+`GetZbirnaProgress` meri količine; `ZbrIzdaj` pre toga **revalidira izvore** (storniran, više nije izdat,
+tuđi vozač, druga vrsta/sorta/tip ambalaže). Kad se već vezana otpremnica stornira, brojevi ostaju isti
+— 400 je i dalje 400 — pa je semafor bio zelen, a izdavanje je padalo.
+
+Rez: `ZbrIzvoriNevaljaniRazlog` je **jedna implementacija sa dva pozivaoca** — `ZbrIzdaj` je diže kao
+grešku, traka je pokazuje kao **stanje**. Isti obrazac koji je #372 uveo za izvor i #373 za očekivanje.
+
+> Četvrti put u ovom slajsu: **dva mesta racunaju isti sud.** Kad god ekran i kapija odgovaraju na isto
+> pitanje, odgovor mora da ima jedno telo — inace se raziju tiho, a ekran je taj koji laze.
+
+**Review #381, drugi krug — ista greška, pomerena za jedan red.** Prva popravka je sklonila `IIf` iz
+**dodela** natpisa i vratila ga **u argument**: `TrakaNatpisi(IIf(UBound(p) >= 13, p(13), ""))`. VBA i
+dalje evaluira obe grane, F1 i dalje šalje tačno 13 polja, `On Error Resume Next` i dalje guta
+`Subscript out of range` — pa je F1 traka i dalje ostajala bez natpisa, ili sa **tuđim** koji su ostali
+iz F2. Pozivno mesto sada nema nijedan uslovni izraz nad poljem koje možda ne postoji:
+
+```vb
+Dim kljucevi As Variant, imaKlj As Boolean, spec As String
+If UBound(p) >= 13 Then spec = CStr(p(13))
+kljucevi = TrakaNatpisi(spec, imaKlj)
+```
+
+**Važniji nalaz je zašto je pobegla dvaput: test je merio POMOĆNIK, a bug je bio u POZIVU.**
+`Test_ZBR_TrakaNatpisi` je zvao `TrakaNatpisi` direktno — zelen, tačan, i potpuno slep za red iznad
+sebe. Zato `modOtkupUI` dobija seam `TrakaRefreshTest`, a `modTest` test **201
+`T_Traka_NatpisiPoRezimu`**, koji ide putem operatera kroz pravo pozivno mesto: **F1 (otpremnica, 13
+polja) → F2 (zbirna, 14 polja) → nazad F1**. Treći korak je onaj koji vredi — meri da se natpisi
+**vraćaju**, a ne da su samo jednom bili tačni. Sabotaža `traka-cita-polje-koje-f1-ne-salje` reprodukuje
+tačno zatečeni bug i obara ga po imenu.
+
+**Review #381, P3 — pola odluke je bilo nevidljivo.** Pozivalac je sam računao `imaKlj` („ekran je poslao
+spec"), a `TrakaNatpisi` je odvojeno odlučivala da li je spec **valjan**. Pokvaren spec je zato dobijao
+podrazumevane natpise **ali custom formatiranje** četvrte mere (ceo broj bez podnaslova). Sada
+`TrakaNatpisi` vraća i `prihvacen`, pa jedna odluka nosi oboje.
+
+Četiri nova testa ukupno u slajsu, pet sabotaža (**564 → 569**); `modTest` 200 → **201**.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
