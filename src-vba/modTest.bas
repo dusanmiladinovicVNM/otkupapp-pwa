@@ -493,6 +493,7 @@ Public Sub RunAllTests()
     RunOne 196
     RunOne 197
     RunOne 198
+    RunOne 199
 
     SetTestMode prevMode
     WriteResultFile
@@ -760,6 +761,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 194: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 195: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 196: TestName = "T_UtovarB_StornoKapije"
+        Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
         Case 46: TestName = "T_MapaImena_KljucNosiKolone"
@@ -966,6 +968,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 194: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 195: T_KpiSaldoOM_CitaKolonuSalda
         Case 196: T_UtovarB_StornoKapije
+        Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
         Case 46: T_MapaImena_KljucNosiKolone
@@ -1415,6 +1418,102 @@ End Sub
 ' pa se tamo i proverava. Datum se ne postavlja jer ga nijedna provera ne cita
 ' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
 ' ============================================================
+
+' RADNI STO U F2 BIRA NACRT PO IDENTITETU (S4-2c/2b-2b).
+'
+' Izvori zbirne su IZDATE OTPREMNICE, a one su predmet F2 -- pa radni sto zbirne
+' stoji u F2, isto kao sto radni sto otpremnice stoji u F1 gde su njeni izvori.
+'
+' Isti spoj kao u F3, druga lista: red mreze -> nevidljiva kolona ZbirnaID ->
+' klik -> aktivan nacrt. Scenario je opet DVA DOKUMENTA POD ISTIM BROJEM kod
+' razlicitih vozaca, jer bi izbor po broju inace pogodio prvi nadjeni.
+'
+' Posle izbora lista sama prelazi na IZVORE -- operater je izabrao dokument da bi
+' mu punio sastav, ne da bi gledao spisak nacrta.
+Private Sub T_ZbirnaRadniSto_BiraSvojNacrt()
+    Dim f As frmOtkupUI, prev As String, tx As clsTransaction
+    Dim p As Object, poruke As String
+    Dim zbrA As String, zbrB As String, broj As String, dan As Date
+    Dim identKol As Long, n As Long, i As Long, redB As Long
+    Dim izabran As String, listaPosle As String, ident As String
+    Dim errNum As Long, errDesc As String
+
+    prev = modOtkupUI.ActiveMode
+    Set tx = New clsTransaction
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+
+    dan = DateSerial(2026, 11, 18)
+    broj = "T-ZBR-STO"
+
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("datum") = dan
+    p("vozacID") = FX_VOZAC
+    p("kupacID") = FX_KUPAC
+    p("brDok") = broj
+    p("kolicinaI") = 100#
+    p("kolAmb") = 5
+    zbrA = modDokUnos.ZbirnaUpisi(p, poruke)
+
+    p("vozacID") = FX_VOZAC2
+    p("kolicinaI") = 200#
+    p("kolAmb") = 10
+    zbrB = modDokUnos.ZbirnaUpisi(p, poruke)
+
+    If Len(zbrA) > 0 And Len(zbrB) > 0 Then
+        Set f = NewOtkupUIForm()
+        modOtkupUI.ActiveMode = "F2"
+        modOtkupUI.GridRenderTest f, 1200, 600
+        modScrDokumenti.Scr_Event "lsZBIRNE", "Click"
+        modUiData.ResetCache
+        modScrDokumenti.Scr_ResetCache
+        modOtkupUI.GridTestLoad "DOKUMENTI"
+
+        identKol = modOtkupUI.GridIdentKolonaTest()
+        n = modOtkupUI.GridBrojRedova()
+        If identKol > 0 Then
+            For i = 1 To n
+                ident = Trim$(CStr(nz(modOtkupUI.GridCell(i, identKol), "")))
+                If ident = zbrB Then redB = i
+            Next i
+        End If
+
+        If redB > 0 Then
+            modScrDokumenti.Scr_Event "row:" & CStr(redB), "Click"
+            izabran = modScrDokumenti.Scr_ZbrID()
+            listaPosle = modScrDokumenti.Scr_Lista()
+        End If
+    End If
+
+    If Not f Is Nothing Then Unload f
+    modOtkupUI.ActiveMode = prev
+    modScrDokumenti.Scr_ZbrOtkazi
+    tx.RollbackTx
+
+    AssertEq (Len(zbrA) > 0 And Len(zbrB) > 0), True, _
+             "F2 sto: dva nacrta istog broja kod razlicitih vozaca su upisana"
+    AssertEq (identKol > 0), True, "F2 sto: lista nacrta nosi nevidljivu kolonu identiteta"
+    AssertEq (redB > 0), True, "F2 sto: red je nadjen po ZbirnaID-u iz te kolone"
+    AssertEq izabran, zbrB, "F2 sto: radni sto bira BAS taj nacrt"
+    AssertEq listaPosle, "IZVORI", "F2 sto: posle izbora lista prelazi na izvore"
+    Exit Sub
+EH:
+    ' Opis se cita PRE ciscenja: "On Error Resume Next" resetuje Err.
+    errNum = Err.Number
+    errDesc = Err.description
+
+    If Not f Is Nothing Then Unload f
+    modOtkupUI.ActiveMode = prev
+    modScrDokumenti.Scr_ZbrOtkazi
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+
+    Err.Raise errNum, "T_ZbirnaRadniSto_BiraSvojNacrt", errDesc
+End Sub
 
 ' KLIK NA RED U F3 OTVARA SVOJ DOKUMENT, NE PRVI SA TIM BROJEM (review #376, P2).
 '

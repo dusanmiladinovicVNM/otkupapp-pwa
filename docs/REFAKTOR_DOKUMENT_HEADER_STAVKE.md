@@ -4436,6 +4436,46 @@ granicu — mreža bez identiteta, i čitanje kolone **broja** umesto identiteta
 
 Tri nova testa, pet sabotaža (**554 → 559**).
 
+### 14.30) S4-2c/2b-2b — radni sto zbirne u F2 (22.09.2026)
+
+**Zbirna je prvi put ceo tok:** najava u F3 → pokrivanje u F2 → izdavanje. Simetrija je ista koju F1/F2
+već imaju: dokument se **pravi** u svojoj formi, a **pokriva** u formi svog izvora. Izvori zbirne su
+izdate otpremnice, a one su predmet F2 — zato radni sto stoji tamo.
+
+| Lista u F2 | Šta pokazuje | Radnje |
+|---|---|---|
+| `SVI` | sve otpremnice (zatečeno) | `veži` uz izabran nacrt |
+| `ZBIRNE` | **nacrte** zbirnih | klik bira aktivan nacrt |
+| `IZVORI` | otpremnice u sastavu | `ukloni`, `izdaj` |
+| `NEVEZANE` | izdate otpremnice bez zbirne | `veži` |
+
+**Nisu pravljene nove mreže.** Kolone, zbirovi po stavkama i nevidljiva kolona identiteta dolaze iz
+`RedoviZaTip` — istog čitaoca koji puni glavne liste; `RedoviZaSkup` samo **bira koji redovi ostaju**.
+Zato lista izvora i lista dokumenata ne mogu da pokazu različite brojeve za isti dokument. Kolona
+kilaže se prepoznaje **po tipu** iz opisa kolone, ne po poziciji.
+
+**Ekran ne nosi nijedno pravilo.** Sve radnje idu u kanonski pisac i vraćaju **njegov** razlog:
+`DodajZbirnaIzvor_TX`, `UkloniZbirnaIzvor_TX`, `IzdajZbirnu_TX`. „Izvor mora biti izdata otpremnica"
+stoji u `RequireOtpValidanIzvorZbirne`, ne ovde.
+
+**Ključevi radnji su svoji** (`vezizbr`/`uklonizbr`/`izdajzbr`) da se ne bi sudarili sa istoimenim
+radnjama nad otpremnicom u F1 — ista kontrola, drugi predmet.
+
+Dokaz je podeljen po tome šta se čime može dokazati: **klik-put** (red → nevidljivi `ZbirnaID` → izbor
+nacrta → prelazak na izvore) meri `T_ZbirnaRadniSto_BiraSvojNacrt` u `modTest`, gde postoji forma, opet
+nad **dva dokumenta pod istim brojem**; **veživanje, uklanjanje i izdavanje** meri
+`Test_ZBR_RadniStoVezeIIzdaje` u BFP, gde sve ide u transakciji. Potvrda izdavanja (`MsgBox`) je
+operaterova, ne logika — zato se izdavanje meri kroz `IzdajAktivnuZbirnu`, a ne kroz `RowAction`.
+
+**Kapija je uhvatila zastarelo sidro:** posle ovog reza je isti red (`GridCell(red, IdentKolonaIndeks("ZBIRNA"))`)
+postojao na **dva** mesta — u F3 izmeni i u F2 izboru — pa je sabotaža `zbirna-klik-po-broju` prestala da
+bude jednoznačna. Oba sidra sada nose i sledeći red, a novo mesto je dobilo **svoju** sabotažu.
+
+Dva nova testa, jedna sabotaža (**559 → 560**).
+
+**Ostaje za sledeći rez:** traka napretka u F2 (`GetZbirnaProgress` — čitalac postoji od 2b-1, prikaz ne)
+i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji P3 iz review-a #376.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -171,6 +171,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_ValidacijaNadKanonom
     Test_ZBR_AdapterNePopravljaUnos
     Test_ZBR_EkranPraviIMenjaNacrt
+    Test_ZBR_RadniStoVezeIIzdaje
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8688,6 +8689,78 @@ Private Sub Test_ZBR_ValidacijaNadKanonom()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
+End Sub
+
+' RADNI STO: VEZIVANJE, UKLANJANJE I IZDAVANJE KROZ EKRAN (S4-2c/2b-2b).
+'
+' Ekran ne nosi nijedno pravilo: svaka radnja ide u kanonski pisac i vraca
+' NJEGOV razlog. Test zato meri i da radnja bez izabranog nacrta odbija sa
+' imenovanim razlogom -- dugme se tada i ne crta, ali kapija ne sme da stoji
+' samo u tome koje se dugme nacrta.
+'
+' Potvrda izdavanja (MsgBox) je operaterova, ne logika -- zato se izdavanje
+' meri kroz IzdajAktivnuZbirnu, a ne kroz RowAction.
+Private Sub Test_ZBR_RadniStoVezeIIzdaje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRSTO")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("STO-" & scenario, 400#, 20#)
+    AssertTrue Len(otp) > 0, "ZBR sto: izvorna otpremnica je izdata"
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-STO-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR sto: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    modScrDokumenti.Scr_ZbrOtkazi
+
+    ' Bez izabranog nacrta radnja ODBIJA i imenuje razlog.
+    AssertEquals Poruka("OTKUI_ERR_NEMA_AKT_ZBR"), _
+                 modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: bez izabranog nacrta vezivanje odbija"
+
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR sto: nacrt se bira na radni sto"
+    AssertEquals zbrID, modScrDokumenti.Scr_ZbrID(), _
+                 "ZBR sto: aktivan nacrt je onaj koji je izabran"
+
+    AssertEquals "", modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: izdata otpremnica se vezuje"
+    AssertEquals "1", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR sto: sastav ima jedan izvor"
+
+    ' Ista otpremnica dvaput -- pisac je odbija, ekran samo prenosi razlog.
+    AssertTrue Len(modScrDokumenti.VeziZaAktivnuZbirnu(otp)) > 0, _
+               "ZBR sto: vec vezana otpremnica se ne vezuje ponovo"
+
+    ' Uklanjanje pa ponovo vezivanje -- sastav je radna povrsina dok nije izdat.
+    AssertEquals "", modScrDokumenti.UkloniIzAktivneZbirne(otp), _
+                 "ZBR sto: izvor se uklanja"
+    AssertEquals "0", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR sto: sastav je prazan posle uklanjanja"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: oslobodjena otpremnica se vezuje ponovo"
+
+    AssertEquals "", modScrDokumenti.IzdajAktivnuZbirnu(), _
+                 "ZBR sto: pokriven nacrt se izdaje kroz ekran"
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR sto: zbirna je IZDATA"
+    AssertEquals "", modScrDokumenti.Scr_ZbrID(), _
+                 "ZBR sto: izdavanje napusta kontekst nacrta"
+
+    ' Izdata se ne vraca na radni sto -- ista kapija koju drzi i izmena u F3.
+    AssertEquals Poruka("OTKUI_ERR_ZBR_IZDATA"), modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR sto: izdata zbirna se NE bira na radni sto"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    LogFatal "Test_ZBR_RadniStoVezeIIzdaje", Err.Number, Err.description
 End Sub
 
 ' EKRAN F3 ZAISTA UPISUJE, I IZMENA POGADJA SVOJ DOKUMENT (S4-2c/2b-2).

@@ -678,10 +678,17 @@ SABOTAZE = {
     ),
     "zbirna-klik-po-broju": (
         "modScrDokumenti.bas",
-        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n",
-        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n    razlog = OtvoriIzmenuZbirne(zbrID, spec)\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n    razlog = OtvoriIzmenuZbirne(zbrID, spec)\n",
         "T_ZbirnaKlik_OtvaraSvojDokument",
         "klik otvara TAJ dokument, ne prvi sa tim brojem",
+    ),
+    "zbirna-radni-sto-bira-po-broju": (
+        "modScrDokumenti.bas",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n    razlog = AktivirajZbirnu(zbrID)\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n    razlog = AktivirajZbirnu(zbrID)\n",
+        "T_ZbirnaRadniSto_BiraSvojNacrt",
+        "radni sto bira BAS taj nacrt",
     ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti

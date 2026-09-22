@@ -204,10 +204,14 @@
     red otvara izmenu nacrta po ID-u, snimanje pravi **ili** menja nacrt. Izdata se ne otvara.
     Ekran ništa ne sudi. Ostaje za 2b-2b: polja vrste/sorte/tipa ambalaže u formi primaju unos koji
     se nigde ne upisuje. Detalji: plan §14.29.
-33. **Sledeće:** **S4-2c/2b-2b** (F2 radni sto: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
-    direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
-    S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
-    (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
+33. **S4-2c/2b-2b — radni sto zbirne u F2 (PR #___).** Liste `ZBIRNE`/`IZVORI`/`NEVEZANE`, izbor
+    aktivnog nacrta klikom (po `ZbirnaID`), veži/ukloni/izdaj kroz kanonske pisce. Nema novih mreža —
+    `RedoviZaSkup` sužava `RedoviZaTip`. Zbirna je prvi put **ceo tok**: najava → pokrivanje →
+    izdavanje. Detalji: plan §14.30.
+34. **Sledeće:** **S4-2c/2b-2c** (traka napretka iz `GetZbirnaProgress` + uklanjanje polja
+    vrste/sorte/tipa ambalaže iz F3), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03, brisanje
+    `GeneracijaID` okvira), S4-4 (malina auto-zbirna), S5, S3e-2, S6.
+
 
 ## Alati i kapije
 
