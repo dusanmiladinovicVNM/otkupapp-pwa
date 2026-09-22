@@ -864,6 +864,20 @@ SABOTAZE = {
         "Test_ZBR_TrakaNapretka",
         "prekoracenje je crveno",
     ),
+    "traka-bez-podrazumevanih-natpisa": (
+        "modOtkupUI.bas",
+        "    TrakaNatpisi = podr\n",
+        "    ' SABOTAZA: podrazumevanih natpisa nema\n",
+        "Test_ZBR_TrakaNatpisi",
+        "prazan spec daje NIZ, ne prazno",
+    ),
+    "zbirna-traka-ne-gleda-izvore": (
+        "modScrDokumenti.bas",
+        "    razlogIzvora = modDokumenta.ZbrIzvoriNevaljaniRazlog(mZbrID)\n",
+        "    razlogIzvora = \"\"   ' SABOTAZA: traka ne gleda izvore\n",
+        "Test_ZBR_TrakaNapretka",
+        "nad nevaljanim izvorom traka NE kaze spremna",
+    ),
     # Klasa koju otpremnica ne ocekuje opet prolazi bez pitanja.
     "prekoracenje-neocekivana-klasa": (
         "modScrDokumenti.bas",

@@ -2178,6 +2178,28 @@ Private Sub ZbrOcistiCinjeniceBezClanstva(ByVal zbirnaID As String, _
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_TIP_AMB, "", src
 End Sub
 
+' RAZLOG ZBOG KOG IZDAVANJE NE BI PROSLO nad trenutnim clanstvom.
+' "" = proslo bi. Ne dize gresku -- pozivaoci se razlikuju po tome sta rade sa
+' odgovorom: ZbrIzdaj ga dize, traka ga prikazuje.
+'
+' Meri SAMO valjanost izvora (storniran, vise nije izdat, tudji vozac, druga
+' vrsta/sorta/tip ambalaze). Jednakost najavljenog i povezanog je zaseban sud i
+' ostaje u ZbrIzdaj -- traka je vec pokazuje kroz ostatak i semafor.
+Public Function ZbrIzvoriNevaljaniRazlog(ByVal zbirnaID As String) As String
+    Const SRC As String = "ZbrIzvoriNevaljaniRazlog"
+
+    Dim clanovi As Collection, k As Long
+    On Error GoTo EH
+
+    Set clanovi = ZbrClanovi(zbirnaID)
+    For k = 1 To clanovi.count
+        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False
+    Next k
+    Exit Function
+EH:
+    ZbrIzvoriNevaljaniRazlog = Err.description
+End Function
+
 ' --- core: izdavanje zbirne -------------------------------------------------
 Private Sub ZbrIzdaj(ByVal zbirnaID As String)
     Const SRC As String = "ZbrIzdaj"
@@ -2198,10 +2220,16 @@ Private Sub ZbrIzdaj(ByVal zbirnaID As String)
     ' REVALIDACIJA, isti razlog kao kod otpremnice: izmedju dodavanja i izdavanja
     ' prolazi vreme, pa izvor moze da bude storniran ili ispravljen. Provera i
     ' upotreba moraju biti u istom trenutku.
-    Dim k As Long
-    For k = 1 To clanovi.count
-        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False
-    Next k
+    '
+    ' JEDNA IMPLEMENTACIJA, DVA POZIVAOCA (review #381, P2): isti sud koristi i
+    ' traka napretka, koja ga pokazuje kao STANJE umesto da ga digne kao gresku.
+    ' Da svaki racuna svoje, ekran bi mogao da kaze "spremna" za zbirnu koju
+    ' izdavanje odbija.
+    Dim razlogIzvora As String
+    razlogIzvora = ZbrIzvoriNevaljaniRazlog(zbirnaID)
+    If Len(razlogIzvora) > 0 Then
+        Err.Raise vbObjectError + 1366, SRC, razlogIzvora
+    End If
 
     Dim ocek As Object, ocekAmb As Object
     Dim pov As Object, povAmb As Object

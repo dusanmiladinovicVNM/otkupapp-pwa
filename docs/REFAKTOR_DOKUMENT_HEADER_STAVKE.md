@@ -4578,7 +4578,26 @@ jer je to jedini broj zbog kog traka i postoji.
 zbirna), pa `traka-prekoracenje-nevidljivo` više nije bilo jednoznačno. Oba sidra nose i sledeći red,
 a novo mesto je dobilo **svoju** sabotažu.
 
-Jedan nov test, jedna sabotaža (**564 → 565**).
+**Review #381, P2 — `IIf` evaluira OBE grane.** `IIf(imaKljuceve, CStr(kljucevi(0)), "OTKUI_OTP_UKUPNO")`
+je nad praznim nizom pucao **i kad je uslov False**. `RefreshOtpTraka` počinje sa `On Error Resume Next`,
+pa se greška gutala, dodela preskočila, i **F1 traka je ostajala bez natpisa** — brojevi bez zaglavlja,
+i to tiho. Tvrdnja „F1 nije dirnut" nije bila tačna.
+
+Izbor natpisa je zato izdvojen u `TrakaNatpisi`, koja **uvek** vrati četiri ključa; spec pogrešne dužine
+ili sa praznim članom se odbija **u celosti** — pola natpisa je gore od nijednog, jer izgleda kao podatak.
+
+**Review #381, drugi P2 — traka je mogla da kaže SPREMNA nad stanjem koje izdavanje odbija.**
+`GetZbirnaProgress` meri količine; `ZbrIzdaj` pre toga **revalidira izvore** (storniran, više nije izdat,
+tuđi vozač, druga vrsta/sorta/tip ambalaže). Kad se već vezana otpremnica stornira, brojevi ostaju isti
+— 400 je i dalje 400 — pa je semafor bio zelen, a izdavanje je padalo.
+
+Rez: `ZbrIzvoriNevaljaniRazlog` je **jedna implementacija sa dva pozivaoca** — `ZbrIzdaj` je diže kao
+grešku, traka je pokazuje kao **stanje**. Isti obrazac koji je #372 uveo za izvor i #373 za očekivanje.
+
+> Četvrti put u ovom slajsu: **dva mesta racunaju isti sud.** Kad god ekran i kapija odgovaraju na isto
+> pitanje, odgovor mora da ima jedno telo — inace se raziju tiho, a ekran je taj koji laze.
+
+Tri nova testa, tri sabotaže (**564 → 567**).
 
 ## 15) Backlog — namerno van opsega
 

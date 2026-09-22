@@ -865,6 +865,38 @@ End Sub
 ' Puni traku iz opisa koji daje ekran (Scr_OtpInfo, 13 polja). Opis sa manje
 ' polja je greska citanja: ekran tada salje broj i opis greske, pa se crtaju
 ' samo oni -- brojke bi lagale.
+' NATPISI CETIRI GRUPE TRAKE -- podrazumevani, ili oni koje je ekran poslao.
+'
+' Izdvojeno iz RefreshOtpTraka zbog dve stvari, obe bolne (review #381, P2):
+'
+'   1) VBA IIf EVALUIRA OBE GRANE. "IIf(imaKlj, CStr(kljucevi(0)), "...")" je
+'      nad praznim nizom pucao i kad je uslov False. RefreshOtpTraka pocinje sa
+'      On Error Resume Next, pa se greska gutala, dodela se preskakala, i F1
+'      traka je ostajala BEZ natpisa -- brojevi bez zaglavlja.
+'   2) Bez podrazumevanog niza je stanje zavisilo od prethodnog rezima: posle
+'      F2 su u kontrolama mogli da ostanu ZBR natpisi.
+'
+' Zato niz POSTOJI UVEK. Ekran koji natpise ne salje dobija podrazumevane; niz
+' pogresne duzine se odbija u celosti -- pola natpisa je gore od nijednog.
+Public Function TrakaNatpisi(ByVal spec As String) As Variant
+    Dim podr As Variant, svoji As Variant
+    podr = Array("OTKUI_OTP_UKUPNO", "OTKUI_OTP_UBLOK", _
+                 "OTKUI_OTP_OSTATAK", "OTKUI_OTP_CENA")
+    TrakaNatpisi = podr
+
+    If Len(Trim$(spec)) = 0 Then Exit Function
+
+    svoji = Split(spec, ",")
+    If UBound(svoji) <> 3 Then Exit Function
+
+    Dim i As Long
+    For i = 0 To 3
+        If Len(Trim$(CStr(svoji(i)))) = 0 Then Exit Function
+    Next i
+
+    TrakaNatpisi = svoji
+End Function
+
 Private Sub RefreshOtpTraka(frm As Object)
     Dim z As Object, info As String, p() As String, i As Long
     Dim ima As Boolean, puna As Boolean
@@ -902,21 +934,18 @@ Private Sub RefreshOtpTraka(frm As Object)
     ' cetvrta grupa kod nje nosi BROJ IZVORA; ljuska ne zna sta je u kom rezimu
     ' predmet rada i ne sme da pogadja. Ekran koji ih ne salje se ponasa kao pre.
     Dim kljucevi As Variant, imaKlj As Boolean
-    If UBound(p) >= 13 Then
-        If Len(p(13)) > 0 Then
-            kljucevi = Split(p(13), ",")
-            imaKlj = (UBound(kljucevi) = 3)
-        End If
-    End If
+    kljucevi = TrakaNatpisi(IIf(UBound(p) >= 13, p(13), ""))
+    imaKlj = (UBound(p) >= 13)
+    If imaKlj Then imaKlj = (Len(p(13)) > 0)
 
-    z.Controls("otpML0").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(0)), "OTKUI_OTP_UKUPNO")))
+    z.Controls("otpML0").caption = UCase$(Poruka(CStr(kljucevi(0))))
     z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)
     z.Controls("otpMA0").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(6))), 0)
-    z.Controls("otpML1").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(1)), "OTKUI_OTP_UBLOK")))
+    z.Controls("otpML1").caption = UCase$(Poruka(CStr(kljucevi(1))))
     z.Controls("otpMV1").caption = FmtBroj(CDbl(Val(p(4))), 2)
     z.Controls("otpMA1").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(7))), 0)
 
-    z.Controls("otpML2").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(2)), "OTKUI_OTP_OSTATAK")))
+    z.Controls("otpML2").caption = UCase$(Poruka(CStr(kljucevi(2))))
     z.Controls("otpMV2").caption = FmtBroj(CDbl(Val(p(5))), 2)
     ' Ostatak je broj zbog koga traka postoji. Semafor racuna ekran PO KLASI:
     ' crveno = neka klasa je prekoracena, zeleno = sve klase na nuli (spremna
@@ -934,7 +963,7 @@ Private Sub RefreshOtpTraka(frm As Object)
     ' Cena je po klasi (odluka 14.8 t. 2): druga klasa ide u red ispod.
     ' Kad ekran posalje svoje natpise, cetvrta grupa je CEO BROJ bez podnaslova
     ' (danas: broj izvora zbirne) -- decimale i "po otpremnici" su cena.
-    z.Controls("otpML3").caption = UCase$(Poruka(IIf(imaKlj, CStr(kljucevi(3)), "OTKUI_OTP_CENA")))
+    z.Controls("otpML3").caption = UCase$(Poruka(CStr(kljucevi(3))))
     If imaKlj Then
         z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 0)
         z.Controls("otpMA3").caption = ""

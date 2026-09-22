@@ -779,9 +779,18 @@ Private Function ZbrInfoTrake() As String
     Dim prog As Object, k As Variant, r As Object
     Dim ukKg As Double, povKg As Double, ukAmb As Double, povAmb As Double
     Dim prek As Boolean, sveNula As Boolean, poKlasi As String, sem As String
-    Dim dat As String, kupac As String
+    Dim dat As String, kupac As String, razlogIzvora As String
     On Error GoTo EH
     If Len(mZbrID) = 0 Then Exit Function
+
+    ' IZVOR KOJI VISE NE VALJA OBARA IZDAVANJE, pa traka ne sme da kaze
+    ' "spremna" (review #381, P2). Isti sud koji ZbrIzdaj dize kao gresku ovde
+    ' se pokazuje kao stanje -- brojevi bi inace bili tacni a zakljucak lazan.
+    razlogIzvora = modDokumenta.ZbrIzvoriNevaljaniRazlog(mZbrID)
+    If Len(razlogIzvora) > 0 Then
+        ZbrInfoTrake = mZbrBroj & "|" & razlogIzvora
+        Exit Function
+    End If
 
     Set prog = modDokumenta.GetZbirnaProgress(mZbrID)
     sveNula = True
