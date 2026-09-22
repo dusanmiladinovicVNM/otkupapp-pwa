@@ -589,6 +589,64 @@ SABOTAZE = {
         "Test_BKTX_ZbirnaTudjegVlasnikaOdbijena",
         "pisac odbija broj tudjeg vlasnika",
     ),
+    # --- S4-2c/2b-1: citaoci za ekrane zbirne
+    "zbirna-nevezane-nude-nacrt": (
+        "modDokumenta.bas",
+        "                If OtpremnicaJeIzdata(oidRaw) Then\n",
+        "                If True Then   ' SABOTAZA: i nacrt se nudi kao izvor\n",
+        "Test_ZBR_NevezaneSamoIzdateISlobodne",
+        "NACRT otpremnice se ne nudi",
+    ),
+    "zbirna-nevezane-nude-zauzetu": (
+        "modDokumenta.bas",
+        "                    If Not aktivno.Exists(oid) Then\n",
+        "                    If True Then   ' SABOTAZA: clanstvo se ne gleda\n",
+        "Test_ZBR_NevezaneSamoIzdateISlobodne",
+        "otpremnica u sastavu aktivne zbirne se ne nudi",
+    ),
+    "zbirna-napredak-ne-vidi-visak": (
+        "modDokumenta.bas",
+        "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n",
+        "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n    Set pov = CreateObject(\"Scripting.Dictionary\")   ' SABOTAZA: visak nestaje\n",
+        "Test_ZBR_NapredakPokrivanja",
+        "klasa koju izvor nosi a najava ne VIDI se",
+    ),
+    "zbirna-validacija-ne-izuzima-sebe": (
+        "modDokUnos.bas",
+        "                                      datum, S(p, \"brDok\"), zbirnaID)) > 0 Then\n",
+        "                                      datum, S(p, \"brDok\"))) > 0 Then\n",
+        "Test_ZBR_ValidacijaNadKanonom",
+        "nacrt sme da ZADRZI svoj broj",
+    ),
+    # --- review #375: adapter preslikava, ne popravlja
+    "zbirna-adapter-zaokruzuje-gajbe": (
+        "modDokUnos.bas",
+        "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), D(p, \"kolAmb\"))\n",
+        "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), L(p, \"kolAmb\"))\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "20.5 gajbi ne prolazi ni kroz pisca",
+    ),
+    "zbirna-adapter-gubi-negativnu-klasu": (
+        "modDokUnos.bas",
+        "    If D(p, \"kolicinaI\") <> 0 Or D(p, \"kolAmb\") <> 0 Then\n",
+        "    If D(p, \"kolicinaI\") > 0 Then   ' SABOTAZA: minus nestaje\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "negativna kilaza NE nestaje tiho",
+    ),
+    "zbirna-validator-pusta-gajbe-bez-kg": (
+        "modDokUnos.bas",
+        "    If kolI = 0 And kolAmb <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: gajbe bez kilaze prolaze\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "gajbe bez kilaze ne prolaze validaciju",
+    ),
+    "zbirna-adapter-gubi-praznu-drugu-klasu": (
+        "modDokUnos.bas",
+        "    If B(p, \"dveKlase\") Then\n        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n    End If\n",
+        "    If B(p, \"dveKlase\") Then\n        If D(p, \"kolicinaII\") <> 0 Then   ' SABOTAZA: prazna II nestaje\n            ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n        End If\n    End If\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "prazna II klasa NE postaje jednoklasna zbirna",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

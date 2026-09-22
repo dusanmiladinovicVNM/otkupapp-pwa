@@ -165,6 +165,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_IzmenaNacrtaRevalidiraClanstvo
     Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice
     Test_ZBR_UpdateNePrimaPraznoOcekivanje
+    Test_ZBR_NapredakPokrivanja
+    Test_ZBR_NevezaneSamoIzdateISlobodne
+    Test_ZBR_UnosPraviIMenjaNacrt
+    Test_ZBR_ValidacijaNadKanonom
+    Test_ZBR_AdapterNePopravljaUnos
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -7795,11 +7800,17 @@ Private Sub Test_ZBR_NepokrivenNacrtSeNeIzdaje()
 
     Dim otp As String
     otp = ZbrIzdataOtp("NI-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NI-" & scenario), _
                                  ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -7816,6 +7827,9 @@ Private Sub Test_ZBR_NepokrivenNacrtSeNeIzdaje()
     ' zelena i da izdavanje uvek odbija.
     Dim otp2 As String
     otp2 = ZbrIzdataOtp("NI2-" & scenario, 100#, 5#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp2) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov otp2 je napravljen"
     If Len(otp2) = 0 Then Exit Sub
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp2, g), _
                "ZBR nepokriven: dopunski izvor dodat"
@@ -7849,6 +7863,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZ-" & scenario), _
                                  ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
@@ -7859,6 +7876,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     ' --- izdata otpremnica koja je vec u drugoj zbirnoj ---
     Dim otp As String
     otp = ZbrIzdataOtp("IZ-" & scenario, 200#, 10#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -7867,6 +7887,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     Dim zbrB As String
     zbrB = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZB-" & scenario), _
                                 ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrB) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov zbrB je napravljen"
     If Len(zbrB) = 0 Then Exit Sub
 
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrB, otp, g), _
@@ -7909,6 +7932,9 @@ Private Sub Test_ZBR_ObaUlazaTrazeIzdatIzvor()
     Dim zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-OU2-" & scenario), _
                                  ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_ObaUlazaTrazeIzdatIzvor: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
                "ZBR oba ulaza: nacrt zbirne ODBIJA nacrt otpremnice"
@@ -7932,11 +7958,17 @@ Private Sub Test_ZBR_PrviIzvorDefiniseCinjenice()
 
     Dim otp As String
     otp = ZbrIzdataOtp("CI-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_PrviIzvorDefiniseCinjenice: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-CI-" & scenario), _
                                  ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_PrviIzvorDefiniseCinjenice: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertEquals "", ZbrPolje(zbrID, COL_ZBR_VRSTA), _
@@ -8006,6 +8038,9 @@ Private Sub Test_ZBR_PrazanIDDetetaNeProlazi()
 
     Dim otp As String
     otp = ZbrIzdataOtp("PI-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_PrazanIDDetetaNeProlazi: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     prevMode = IsTestMode()
@@ -8168,6 +8203,9 @@ Private Sub Test_ZBR_NacrtSeMenjaDokNijeIzdat()
 
     Dim otp As String
     otp = ZbrIzdataOtp("IZM-" & scenario, 500#, 25#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_NacrtSeMenjaDokNijeIzdat: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim h As Object
@@ -8271,6 +8309,9 @@ Private Sub Test_ZBR_IzmenaNacrtaRevalidiraClanstvo()
 
     Dim otp As String
     otp = ZbrIzdataOtp("RV-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim broj As String
@@ -8281,6 +8322,9 @@ Private Sub Test_ZBR_IzmenaNacrtaRevalidiraClanstvo()
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -8325,17 +8369,26 @@ Private Sub Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice()
     Dim otp1 As String, otp2 As String
     otp1 = ZbrIzdataOtp("PC1-" & scenario, 400#, 20#)
     otp2 = ZbrIzdataOtp("PC2-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp1) > 0 And Len(otp2) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov otp1 i otp2 je napravljen"
     If Len(otp1) = 0 Or Len(otp2) = 0 Then Exit Sub
 
     ' Otpremnica DRUGE kulture -- druga vrsta, isti vozac i isti tip ambalaze.
     Dim otpDrugaVrsta As String
     otpDrugaVrsta = Pr3Otpremnica(TEST_PREFIX & "-OTP-PCD-" & scenario, KLASA_I, _
                                   200#, 10, TEST_KUL_BEZ_SORTE_ID)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpDrugaVrsta) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov otpDrugaVrsta je napravljen"
     If Len(otpDrugaVrsta) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PC-" & scenario), _
                                  ZbrOcek(KLASA_I, 700#, 35#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp1, g), _
@@ -8368,6 +8421,371 @@ Private Sub Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice", Err.Number, Err.description
+End Sub
+
+' =====================================================================
+' S4-2c/2b-1: jezgro i unos za ekrane zbirne
+' =====================================================================
+
+Private Function ZbrNapredakPolje(ByVal np As Object, ByVal klasa As String, _
+                                  ByVal polje As String) As String
+    If Not np.Exists(klasa) Then
+        ZbrNapredakPolje = "NEMA KLASE"
+        Exit Function
+    End If
+    ZbrNapredakPolje = CStr(np(klasa)(polje))
+End Function
+
+Private Function ZbrUnos(ByVal datum As Date, ByVal broj As String, _
+                         ByVal kol As Double, ByVal amb As Long) As Object
+    Dim p As Object
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("datum") = datum
+    p("vozacID") = TEST_VOZ_ID
+    p("kupacID") = TEST_KUP_ID
+    p("brDok") = broj
+    p("kolicinaI") = kol
+    p("kolAmb") = amb
+    Set ZbrUnos = p
+End Function
+
+' NAPREDAK JE PRIKAZ ISTE ISTINE KOJU MERI IZDAVANJE.
+'
+' Da napredak cita drugim putem od kapije, operater bi gledao "pokriveno" a
+' izdavanje bi padalo -- najgori moguci raskorak, jer covek vidi zeleno i ne zna
+' sta da popravi. Zato GetZbirnaProgress zove ISTI par citaca koji ZbrIzdaj
+' koristi za jednakost.
+'
+' Druga tvrdnja je UNIJA klasa: klasa koju izvor nosi a najava je nije prijavila
+' mora da se VIDI kao visak (preostalo negativno), a ne da nestane iz prikaza.
+Private Sub Test_ZBR_NapredakPokrivanja()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRNPR")
+
+    Dim otpI As String
+    otpI = ZbrIzdataOtp("NPR1-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpI) > 0, "Test_ZBR_NapredakPokrivanja: preduslov otpI je napravljen"
+    If Len(otpI) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NPR-" & scenario), _
+                                 ZbrOcek(KLASA_I, 500#, 25#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR napredak: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    Dim np As Object
+    Set np = modDokumenta.GetZbirnaProgress(zbrID)
+    AssertEquals "1", CStr(np.count), "ZBR napredak: prazan nacrt ima samo najavljenu klasu"
+    AssertEquals "500", ZbrNapredakPolje(np, KLASA_I, "ocekivano"), _
+                 "ZBR napredak: najavljeno je 500"
+    AssertEquals "0", ZbrNapredakPolje(np, KLASA_I, "povezano"), _
+                 "ZBR napredak: bez izvora povezano je nula"
+    AssertEquals "500", ZbrNapredakPolje(np, KLASA_I, "preostalo"), _
+                 "ZBR napredak: preostalo je cela najava"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpI, g), _
+               "ZBR napredak: izvor dodat (" & g & ")"
+
+    Set np = modDokumenta.GetZbirnaProgress(zbrID)
+    AssertEquals "300", ZbrNapredakPolje(np, KLASA_I, "povezano"), _
+                 "ZBR napredak: povezano prati vezane otpremnice"
+    AssertEquals "200", ZbrNapredakPolje(np, KLASA_I, "preostalo"), _
+                 "ZBR napredak: preostalo je najava minus povezano"
+    AssertEquals "10", ZbrNapredakPolje(np, KLASA_I, "preostaloAmb"), _
+                 "ZBR napredak: gajbe se racunaju istim pravilom"
+
+    ' Klasa koju NAJAVA ne pominje, a izvor je nosi.
+    Dim otpII As String
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-NPR2-" & scenario, KLASA_II, 100#, 5)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpII) > 0, "Test_ZBR_NapredakPokrivanja: preduslov otpII je napravljen"
+    If Len(otpII) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpII, g), _
+               "ZBR napredak: drugi izvor dodat (" & g & ")"
+
+    Set np = modDokumenta.GetZbirnaProgress(zbrID)
+    AssertEquals "2", CStr(np.count), _
+                 "ZBR napredak: klasa koju izvor nosi a najava ne VIDI se"
+    AssertEquals "0", ZbrNapredakPolje(np, KLASA_II, "ocekivano"), _
+                 "ZBR napredak: nenajavljena klasa nema ocekivano"
+    AssertEquals "-100", ZbrNapredakPolje(np, KLASA_II, "preostalo"), _
+                 "ZBR napredak: visak se prijavljuje kao negativan ostatak"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NapredakPokrivanja", Err.Number, Err.description
+End Sub
+
+' SPISAK KOJI SE NUDI NE SME DA LAZE.
+'
+' Izvor zbirne mora da bude IZDATA otpremnica. Da se nacrt nudi, operater bi ga
+' izabrao sa ponudjenog spiska, vezao ga, i tek bi ga izdavanje odbilo -- porukom
+' o dokumentu koji mu je sam program ponudio. Kapija koja odbija tek na kraju je
+' losija od spiska koji ne laze.
+'
+' Meri se i obrnut smer: storno zbirne VRACA otpremnicu u ponudu, i red nosi broj
+' zbirne u kojoj je bila -- da operater zna odakle se vratila.
+Private Sub Test_ZBR_NevezaneSamoIzdateISlobodne()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRNVZ")
+
+    Dim izdata As String, vezana As String
+    izdata = ZbrIzdataOtp("NVZ1-" & scenario, 200#, 10#)
+    vezana = ZbrIzdataOtp("NVZ3-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(izdata) > 0 And Len(vezana) > 0, "Test_ZBR_NevezaneSamoIzdateISlobodne: preduslov izdata i vezana je napravljen"
+    If Len(izdata) = 0 Or Len(vezana) = 0 Then Exit Sub
+
+    Dim gg As String, nacrt As String
+    nacrt = CreateOtpremnicaDraft_TX( _
+                OtpHeader(TEST_PREFIX & "-OTP-NVZ2-" & scenario), _
+                OtpOcek(200#, 10#, 0#, 0#), gg)
+    AssertTrue Len(nacrt) > 0, "ZBR nevezane: nacrt otpremnice napravljen (" & gg & ")"
+    If Len(nacrt) = 0 Then Exit Sub
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-ZBR-NVZ-" & scenario
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(broj), ZbrOcek(KLASA_I, 300#, 15#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_NevezaneSamoIzdateISlobodne: preduslov zbrID je napravljen"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, vezana, g), _
+               "ZBR nevezane: izvor vezan (" & g & ")"
+
+    Dim nev As Object
+    Set nev = modDokumenta.NevezaneOtpremnice()
+
+    AssertTrue nev.Exists(UCase$(izdata)), _
+               "ZBR nevezane: izdata i slobodna otpremnica se NUDI"
+    AssertTrue Not nev.Exists(UCase$(nacrt)), _
+               "ZBR nevezane: NACRT otpremnice se ne nudi"
+    AssertTrue Not nev.Exists(UCase$(vezana)), _
+               "ZBR nevezane: otpremnica u sastavu aktivne zbirne se ne nudi"
+
+    MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, zbrID
+
+    Set nev = modDokumenta.NevezaneOtpremnice()
+    AssertTrue nev.Exists(UCase$(vezana)), _
+               "ZBR nevezane: storno zbirne vraca otpremnicu u ponudu"
+    AssertTrue InStr(1, CStr(nev(UCase$(vezana))), broj, vbTextCompare) > 0, _
+               "ZBR nevezane: red nosi broj zbirne u kojoj je BILA (bilo: " & _
+               CStr(nev(UCase$(vezana))) & ")"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NevezaneSamoIzdateISlobodne", Err.Number, Err.description
+End Sub
+
+' MODUL UNOSA PRAVI NACRT, NE GOTOV DOKUMENT.
+'
+' Ekran ne sme da ima drugi put do pisca: ZbirnaUpisi je jedini prevodilac F3
+' unosa u kanonski nacrt, a ZbirnaIzmeniNacrt jedini put izmene. Oba idu kroz
+' ZbirnaNacrtIzUnosa, pa upis i izmena ne mogu da procitaju ista polja razlicito.
+Private Sub Test_ZBR_UnosPraviIMenjaNacrt()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRUNO")
+
+    Dim p As Object
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-UNO-" & scenario, 400#, 20)
+
+    Dim poruke As String, zbrID As String
+    zbrID = modDokUnos.ZbirnaUpisi(p, poruke)
+    AssertTrue Len(zbrID) > 0, "ZBR unos: nacrt upisan (" & poruke & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrID), _
+               "ZBR unos: unos pravi NACRT, ne izdatu zbirnu"
+    AssertEquals "400", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR unos: najava je zavrsila na stavci"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR unos: unos NE salje vrstu -- donosi je prvi izvor"
+
+    p("kolicinaI") = 500#
+    p("kolAmb") = 25
+    AssertTrue modDokUnos.ZbirnaIzmeniNacrt(zbrID, p, poruke), _
+               "ZBR unos: nacrt se menja kroz modul unosa (" & poruke & ")"
+    AssertEquals "500", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR unos: izmena je prosla do stavke"
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR unos: izmena nije ostavila drugu stavku iste klase"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_UnosPraviIMenjaNacrt", Err.Number, Err.description
+End Sub
+
+' VALIDACIJA I PISAC SUDE ISTIM ALATOM.
+'
+' Modul unosa ne sme da nosi KOPIJU pravila o broju -- zove modBrojevi, isto sto
+' zove i pisac kroz Require*. Da nosi kopiju, razisle bi se prvom izmenom, a
+' operater bi dobio zeleno u formi i pad pri upisu.
+'
+' Druga tvrdnja je ono sto je S4 promenio: validacija VISE NE TRAZI vrstu i
+' sortu. One su cinjenica robe koju donosi prvi izvor (ZBR-KANON-04) -- traziti
+' ih od operatera znacilo bi traziti podatak koji pisac odbija.
+Private Sub Test_ZBR_ValidacijaNadKanonom()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRVAL")
+
+    Dim dan As Date
+    dan = NextTestDate()
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-ZBR-VAL-" & scenario
+
+    Dim p As Object, fokus As String
+    Set p = ZbrUnos(dan, broj, 400#, 20)
+
+    AssertEquals "", modDokUnos.ZbirnaValidiraj(p, fokus), _
+                 "ZBR validacija: prolazi BEZ vrste i sorte"
+
+    Dim cuvaj As String
+    cuvaj = CStr(p("vozacID"))
+    p("vozacID") = ""
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR validacija: bez vozaca ne prolazi"
+    AssertEquals "vozacID", fokus, "ZBR validacija: fokus ide na vozaca"
+    p("vozacID") = cuvaj
+
+    p("kolicinaI") = 0#
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR validacija: bez ijedne klase sa kilazom ne prolazi"
+    AssertEquals "kolicinaI", fokus, "ZBR validacija: fokus ide na kolicinu"
+    p("kolicinaI") = 400#
+
+    ' Broj koji je zauzeo TUDJ dokument istog vozaca istog dana.
+    Dim poruke As String, zbrID As String
+    zbrID = modDokUnos.ZbirnaUpisi(p, poruke)
+    AssertTrue Len(zbrID) > 0, "ZBR validacija: prvi nacrt upisan (" & poruke & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR validacija: zauzet broj u istom nizu ne prolazi"
+    AssertEquals "brDok", fokus, "ZBR validacija: fokus ide na broj"
+
+    ' ISTI taj broj, ali kao IZMENA tog istog nacrta -- sopstveni red se izuzima.
+    AssertEquals "", modDokUnos.ZbirnaValidiraj(p, fokus, zbrID), _
+                 "ZBR validacija: nacrt sme da ZADRZI svoj broj"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
+End Sub
+
+' ADAPTER PRESLIKAVA PODATAK, NE POPRAVLJA GA (review #375, P1).
+'
+' Dva kvara iste klase su prolazila jer je ekranska granica MENJALA unos pre
+' nego sto ga je pisac video:
+'   - CLng(20.5) = 20 -> decimalne gajbe postaju cele, pa RequireCeoBroj u piscu
+'     meri vrednost koju operater nije uneo;
+'   - uslov "kolicina > 0" u prevodiocu -> klasa sa -5 kg se NE prenosi, pa pisac
+'     dobije uredan II-only dokument i minus tiho nestane.
+'
+' Ni jedno ni drugo nije UX propust nego GUBITAK PODATKA: unos je semanticki
+' promenjen, a nijedna kapija to ne moze da vidi jer original do nje ne stigne.
+'
+' Test meri OBA sloja. Validator odbija i imenuje polje; pisac odbija i kad se
+' validator preskoci -- ekran nije jedini pozivalac modula unosa, a sabotaza koja
+' vrati staru granicu prolazi kroz validator i pada tek na piscu.
+'
+' Pozitivna kontrola je deo tvrdnje, ne ukras: 0 kg i dalje znaci "te klase
+' NEMA", pa je II-only nacrt legitiman. Nula i minus se ne svode na isto stanje.
+Private Sub Test_ZBR_AdapterNePopravljaUnos()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRADP")
+
+    Dim pre As Long
+    pre = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim fokus As String, poruke As String, p As Object
+
+    ' 1) DECIMALNE GAJBE -- gajba je komad, decimala se odbija a ne zaokruzuje.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP1-" & scenario, 400#, 20)
+    p("kolAmb") = 20.5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: 20.5 gajbi ne prolazi validaciju"
+    AssertEquals "kolAmb", fokus, "ZBR adapter: fokus ide na gajbe"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: 20.5 gajbi ne prolazi ni kroz pisca"
+
+    ' 2) NEGATIVNA KILAZA uz validnu drugu klasu -- ne sme da nestane.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2-" & scenario, -5#, 0)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: negativna kilaza ne prolazi validaciju"
+    AssertEquals "kolicinaI", fokus, "ZBR adapter: fokus ide na kilazu klase I"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: negativna kilaza NE nestaje tiho"
+
+    ' 2b) GAJBE BEZ KILAZE -- 0 kg znaci "te klase nema", pa gajbe nemaju
+    ' nosioca. Pisac to odbija; validator mora da kaze ISTO, uz polje.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2B-" & scenario, 0#, 5)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: gajbe bez kilaze ne prolaze validaciju"
+    AssertEquals "kolicinaI", fokus, "ZBR adapter: fokus ide na kilazu bez koje nema klase"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: gajbe bez kilaze ne prolaze ni kroz pisca"
+
+    ' 2c) PREKIDAC "DVE KLASE" UZ PRAZNU II -- izbor operatera se ne preispituje.
+    ' Ranije je adapter takav unos tiho pretvarao u JEDNOKLASNU zbirnu.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2C-" & scenario, 400#, 20)
+    p("dveKlase") = True
+    p("kolicinaII") = 0#
+    p("kolAmbII") = 0
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: ukljucene dve klase uz praznu II ne prolaze validaciju"
+    AssertEquals "kolicinaII", fokus, "ZBR adapter: fokus ide na kilazu klase II"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: prazna II klasa NE postaje jednoklasna zbirna"
+
+    AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR adapter: nijedan odbijen unos nije ostavio zaglavlje"
+
+    ' 3) POZITIVNA KONTROLA -- 0 kg znaci "te klase nema".
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP3-" & scenario, 0#, 0)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertEquals "", modDokUnos.ZbirnaValidiraj(p, fokus), _
+                 "ZBR adapter: II-only nacrt je legitiman"
+
+    Dim zbrID As String
+    zbrID = modDokUnos.ZbirnaUpisi(p, poruke)
+    AssertTrue Len(zbrID) > 0, "ZBR adapter: II-only nacrt je upisan (" & poruke & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR adapter: II-only nacrt ima TACNO jednu stavku"
+    AssertEquals "100", CStr(ZbrKg(zbrID, KLASA_II)), _
+                 "ZBR adapter: ta jedna stavka je klasa II"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_AdapterNePopravljaUnos", Err.Number, Err.description
 End Sub
 
 ' PISAC NE SME DA NAPRAVI STANJE KOJE NJEGOV CITALAC ZABRANJUJE (review #373, P1).
@@ -8444,6 +8862,9 @@ Private Sub Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument()
 
     AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
                "ZBR ljuska: dva dokumenta istog broja napravljena"
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, "Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument: preduslov zbrA i zbrB je napravljen"
     If Len(zbrA) = 0 Or Len(zbrB) = 0 Then Exit Sub
     AssertTrue zbrA <> zbrB, "ZBR ljuska: to su DVA dokumenta, ne jedan"
 

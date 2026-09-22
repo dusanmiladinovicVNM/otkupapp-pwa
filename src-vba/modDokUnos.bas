@@ -14,9 +14,10 @@ Attribute VB_Name = "modDokUnos"
 '   OtpremnicaUpisi(p, poruke)     CreateOtpremnicaDraft_TX + zavrsetak
 '                                  ispravke; vraca OtpremnicaID (prazno =
 '                                  nije upisano)
-'   ZbirnaValidiraj                        F3; PAUZIRAN -- upis je obrisan sa
-'                                          starim piscem (S4-2c/2a), a kanonski
-'                                          nacrt ulazi u S4-2c/2b
+'   ZbirnaValidiraj(p, fokus)      provere polja i broja; zbirna NEMA
+'                                  bruto->neto pa recnik ostaje netaknut
+'   ZbirnaUpisi(p, poruke)         CreateZbirnaDraft_TX; vraca ZbirnaID
+'   ZbirnaIzmeniNacrt(id, p, ...)  UpdateZbirnaDraft_TX nad postojecim nacrtom
 '   PrijemnicaValidiraj / PrijemnicaUpisi  isto za F4 (SavePrijemnicaMulti_TX)
 '
 ' Ulaz je RECNIK sa LOGICKIM imenima polja (NoviOtpremnicaUnos):
@@ -45,9 +46,11 @@ Attribute VB_Name = "modDokUnos"
 '     BrutoKg. Zbirna je zbir SVOJIH otpremnica, a one su vec u netu, pa bi
 '     oduzimanje tare i drugi put spustilo kilograme. Zato ZbirnaValidiraj
 '     recnik NE menja.
-'   - ZBIRNA se poredi sa izvorom: zbir kg i ambalaze mora da se poklopi sa
-'     nestorniranim otpremnicama te zbirne (ValidateZbirnaPreUnosa). Ta provera
-'     NIJE gejtovana VALIDACIJA_UNOSA - u legacy je hard-gate (UpdateValidacija).
+'   - ZBIRNA SE VISE NE POREDI SA IZVOROM PRI UNOSU (S4-2c/2b-1). Do ovog reza
+'     je validator sabirao otpremnice po Otkup/Otpremnica.BrojZbirne i trazio da
+'     se zbir poklopi. Ta veza je ukinuta (ZBR-KANON-01): clanstvo je zapis u
+'     tblZbirnaIzvori, a pokrivenost meri IZDAVANJE (IzdajZbirnu_TX), nad tacno
+'     onim izvorima koje je operater vezao. Unos zato prijavljuje NAJAVU.
 '   - PRIJEMNICA ima i cenu i bruto->neto (tblPrijemnica ima BrutoKg), broj
 '     zbirne joj je obavezan, a zbirna mora da postoji u sistemu.
 '
@@ -464,40 +467,40 @@ Private Function ZbirnaRoditeljPoruka(ByVal razlog As String) As String
     End Select
 End Function
 
-' Kod razloga -> korisnicki tekst. Uzrok se NE stapa u jednu poruku: operater
-' mora da zna da li je broj zauzet SADA, IKAD, drzi ga prijemnica, ili je
-' podatak pokvaren -- to su cetiri razlicita poteza koja treba da povuce.
-Private Function ZbirnaGatePoruka(ByVal razlog As String) As String
-    Select Case razlog
-        Case ZBR_GATE_AKTIVNA: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_AKTIVNA")
-        Case ZBR_GATE_TUDJ: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_TUDJ")
-        Case ZBR_GATE_STORNIRAN: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_STORNIRAN")
-        Case ZBR_GATE_SIROCE: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_SIROCE")
-        Case Else: ZbirnaGatePoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
-    End Select
-End Function
-
-Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As String
+' VALIDACIJA UNOSA ZBIRNE NAD KANONSKIM MODELOM (S4-2c/2b-1).
+'
+' Sta je NESTALO, i zasto:
+'   - poredjenje sa izvorom po BrojZbirne -- clanstvo je zapis, ne labela
+'     (ZBR-KANON-01), pa se pokrivenost meri pri IZDAVANJU, nad vezanim
+'     otpremnicama, a ne pri unosu nad pogodjenim brojem;
+'   - trazenje VRSTE i SORTE -- one su cinjenica ROBE koju donosi prvi izvor
+'     (ZBR-KANON-04); zaglavlje nacrta ih ni ne prima, pa bi ih ekran trazio
+'     samo da bi ih pisac odbio;
+'   - GeneracijaID kapije (ZbirnaIdentResolve / ZbirnaNovUnosRazlog) -- identitet
+'     je ZbirnaID od S4-2a, a taj okvir umire u S4-3.
+'
+' Sta je OSTALO: polja bez kojih dokument ne postoji, bar jedna klasa sa
+' kilazom, nenegativna ambalaza, i BROJ.
+'
+' Broj se sudi ISTIM alatom kojim ga sudi pisac (.claude/rules/testovi.md SS5):
+' modBrojevi.BrojOdgovaraKontekstu i BrojZauzetUNizu -- jedna implementacija,
+' dva pozivaoca. Pisac ih zove kroz Require* i die glasno; unos ih zove direktno
+' i vraca poruku uz polje. Kopija pravila ovde bi se razisla prvom izmenom.
+'
+' zbirnaID se prosledjuje pri IZMENI nacrta: nacrt sme da zadrzi svoj broj, pa
+' se sopstveni red izuzima -- isto kao u ZbrIzmeniDraft.
+Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
+                                Optional ByVal zbirnaID As String = "") As String
     Dim kolI As Double, kolII As Double
-    Dim kolAmb As Long, kolAmbII As Long
-    Dim imaKlasaI As Boolean, dveKl As Boolean, strogo As Boolean
+    ' AMBALAZA JE DOUBLE, NE LONG (review #375, P1). Kao Long bi je L() kroz
+    ' CLng zaokruzio JOS OVDE, pa bi 20.5 gajbi postalo 20 pre ijedne provere --
+    ' i pisac bi dobio validan podatak koji operater nije uneo.
+    Dim kolAmb As Double, kolAmbII As Double
+    Dim dveKl As Boolean
+    Dim datum As Date
     Dim errDesc As String
     On Error GoTo EH
     fokus = ""
-
-    ' F3 JE PAUZIRAN DO S4 (plan S14.14). Zbirna se ovde poredi sa zbirom
-    ' otpremnica VEZANIH kroz Otpremnica.BrojZbirne, a od S3a tu vezu ne pise
-    ' nijedan zivi put: F2 otvara nacrt bez BrojZbirne, a stari pisac, auto-lanac
-    ' hladnjace, malina auto-zbirna i uvoz VOZ su obrisani ili pauzirani. Zbir je
-    ' zato uvek 0 i provera nize bi odbila SVAKU zbirnu porukom "validacija nije
-    ' prosla" -- koja operatera salje da trazi gresku u kilogramima.
-    '
-    ' Pauza je PRE svih provera i imenuje razlog. Kod ispod ostaje netaknut: S4 ga
-    ' vraca nad tblZbirnaIzvori i izdatim otpremnicama, po ID-u.
-    ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA")
-    Exit Function
-
-    strogo = IsValidacijaUnosa()
 
     ' Vozac je entitet NIZA zbirne (Z3a): po njemu se broji i njegova je tura.
     If Len(S(p, "vozacID")) = 0 Then
@@ -506,109 +509,117 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If Len(S(p, "kupacID")) = 0 Then
         fokus = "kupacID": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_KUPAC"): Exit Function
     End If
-    ' Broj se trazi UVEK, i van stroge validacije (drugacije nego kod otpremnice):
-    ' po njemu se nalaze otpremnice koje ova zbirna pokriva, pa bez njega nema ni
-    ' provere ispod ni veze sa izvorom.
     If Len(S(p, "brDok")) = 0 Then
         fokus = "brDok": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"): Exit Function
-    End If
-    If strogo And Len(S(p, "vrsta")) = 0 Then
-        fokus = "vrsta": ZbirnaValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
-    End If
-    If strogo And Len(S(p, "sorta")) = 0 Then
-        fokus = "sorta": ZbirnaValidiraj = Poruka("OTKUNOS_ERR_SORTA"): Exit Function
     End If
 
     kolI = D(p, "kolicinaI")
     kolII = D(p, "kolicinaII")
-    kolAmb = L(p, "kolAmb")
-    kolAmbII = L(p, "kolAmbII")
+    kolAmb = D(p, "kolAmb")
+    kolAmbII = D(p, "kolAmbII")
     dveKl = B(p, "dveKlase")
-    imaKlasaI = (kolI > 0)
 
-    ' Klasa I je opciona SAMO uz ukljucenu Klasu II (unosi se samo II klasa).
-    ' Tada ambalaza I mora ostati prazna.
-    If Not imaKlasaI Then
-        If Not dveKl Then
-            fokus = "kolicinaI": ZbirnaValidiraj = Poruka("OTKUI_ERR_KOLICINA"): Exit Function
-        End If
-        If kolAmb > 0 Then
-            fokus = "kolAmb": ZbirnaValidiraj = Poruka("DOK_MSG_UNOSI_SAMO_KLASA"): Exit Function
-        End If
-    End If
-
-    ' Cene NEMA: tblZbirna nema kolonu Cena i nijedan pisac je ne prima.
-    If dveKl Then
-        If kolII <= 0 Then
-            fokus = "kolicinaII": ZbirnaValidiraj = Poruka("OTKUNOS_ERR_KOLICINA_II"): Exit Function
-        End If
-    End If
-
-    If strogo And (kolAmb > 0 Or kolAmbII > 0) And Len(S(p, "tipAmb")) = 0 Then
-        fokus = "tipAmb": ZbirnaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
-    End If
-
-    ' BRUTO->NETO OVDE NAMERNO NEMA. Zbirna je zbir svojih otpremnica, a one su
-    ' vec u netu; oduzimanje tare i drugi put spustilo bi kilograme ispod izvora
-    ' i oborilo bas provere ispod. tblZbirna zato nema ni kolonu BrutoKg.
-
-    ' IZVOR se trazi po broju ZAMENE, osim u ispravci. Posle storna zbirne deca i
-    ' dalje nose STARI broj -- prevezuje ih CompleteZbirnaIspravka tek POSLE
-    ' snimanja zamene. Pod novim brojem izvor bi bio prazan i provera zbira bi
-    ' uvek pala, pa bi ispravka mogla samo pod istim brojem, a to A9 i odluka od
-    ' 14.09.2026 zabranjuju.
-    Dim brIzvora As String
-    brIzvora = ZbirnaBrojIzvora(S(p, "brDok"))
-
-    ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->
-    ' pisac bi dobio hasKlasaII:=False i Kl.II bi se tiho izgubila.
+    ' Bez ukljucene druge klase njena polja NE ulaze u najavu -- inace bi
+    ' zaostala vrednost tiho postala stavka koju operater ne vidi.
     If Not dveKl Then
-        If ZbirnaIzvorImaKlasuII(brIzvora) Then
-            fokus = "kolicinaII": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_IZVOR_KL2"): Exit Function
-        End If
+        kolII = 0
+        kolAmbII = 0
     End If
 
-    ' Zbir mora da se poklopi sa izvorom. U legacy je to hard-gate koji NE zavisi
-    ' od VALIDACIJA_UNOSA (btnUnosZbr_Click: "If Not UpdateValidacija()").
-    If Not ZbirnaSeSlazeSaIzvorom(brIzvora, kolI, kolII, kolAmb + kolAmbII, dveKl) Then
+    If kolI <= 0 And kolII <= 0 Then
         fokus = "kolicinaI"
-        ZbirnaValidiraj = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEMA_KOLICINE")
         Exit Function
     End If
 
-    ' Zauzetost u nizu (vozac, dan), sa storniranima -- ISTA funkcija koju zove
-    ' pisac (CreateZbirna, ZbrNapraviDraft). Ranije je ovde stajao
-    ' CheckDuplicate: cela tabela, sirovo poredjenje, bez storniranih.
-    Dim zauzeo As String
-    zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, S(p, "vozacID"), _
-                                        CDate(p("datum")), S(p, "brDok"))
-    If Len(zauzeo) > 0 Then
-        fokus = "brDok"
-        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
+    ' NULA I MINUS NISU ISTO STANJE (review #375, P1).
+    '
+    ' 0 kg znaci "te klase nema" -- II-only nacrt je legitiman. -5 kg je
+    ' NEVALIDAN PODATAK. Dok je stajala samo provera "obe <= 0", unos
+    ' (I = -5, II = 100) je prolazio, a prevodilac bi klasu I preskocio jer nije
+    ' > 0 -- pa bi pisac dobio uredan II-only dokument i operaterov minus bi tiho
+    ' nestao. Svodjenje ta dva stanja na isto je gubitak podatka, ne validacija.
+    If kolI < 0 Then
+        fokus = "kolicinaI"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA")
+        Exit Function
+    End If
+    If dveKl And kolII < 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA")
         Exit Function
     End If
 
-    ' ZBR-ACTIVE-NUMBER-01 (docs/DOMEN/ZBR_IDENTITET.md par.5).
-    '
-    ' Ide POSLE provere zauzetosti i SIRA je od nje: ta gleda samo niz (vozac,
-    ' dan), a ova blokira broj ma ciji bio -- aktivan pod drugim vozacem
-    ' (AKTIVNA), storniran pod drugim vlasnikom (TUDJ), storniran pod istim
-    ' (STORNIRAN -- ispravka dobija nov broj, odluka 14.09.2026), i broj koji drzi
-    ' aktivna prijemnica bez svoje zbirne (SIROCE). Sirina je pojas dok je
-    ' BrojZbirne join kljuc. Odluka D2, koja je CheckDuplicate drzala netaknutim,
-    ' povucena je 14.09.2026.
-    '
-    ' Validator se zove TACNO jednom, iz modScrDokumenti.Scr_Save, PRE upisa;
-    ' nikad ne vidi red koji je sam upravo napisao.
-    Dim zbrId As ZbirnaIdent
-    Dim gateRazlog As String
-    zbrId = ZbirnaIdentResolve(S(p, "brDok"), S(p, "vozacID"), S(p, "kupacID"))
-    gateRazlog = ZbirnaNovUnosRazlog(zbrId)
-    If Len(gateRazlog) > 0 Then
-        fokus = "brDok"
-        ZbirnaValidiraj = ZbirnaGatePoruka(gateRazlog)
+    If kolAmb < 0 Then
+        fokus = "kolAmb"
+        ZbirnaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
         Exit Function
     End If
+    If kolAmbII < 0 Then
+        fokus = "kolAmbII"
+        ZbirnaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
+        Exit Function
+    End If
+
+    ' GAJBE SU KOMADI. Decimala se ODBIJA, ne zaokruzuje -- isto pravilo koje
+    ' pisac drzi kroz RequireCeoBroj. Poruka je ovde, tvrda kapija je tamo.
+    '
+    ' Fokus se razdvaja po klasi: validator koji pokaze na pogresno polje salje
+    ' operatera da popravlja ono sto nije pokvareno (review #375, P3).
+    If kolAmb <> Int(kolAmb) Then
+        fokus = "kolAmb"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO")
+        Exit Function
+    End If
+    If kolAmbII <> Int(kolAmbII) Then
+        fokus = "kolAmbII"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO")
+        Exit Function
+    End If
+
+    ' GAJBE BEZ KILAZE NISU KLASA (review #375, P2).
+    '
+    ' 0 kg znaci "te klase nema", pa gajbe uz nju nemaju nosioca. Pisac to vec
+    ' odbija (Kolicina <= 0), ali bi operater razlog video tek POSLE upisa -- a
+    ' ovaj sloj postoji bas zato da ga vidi uz polje. Validator i pisac sude
+    ' isto: ovde je poruka, tamo je tvrda kapija.
+    If kolI = 0 And kolAmb <> 0 Then
+        fokus = "kolicinaI"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG")
+        Exit Function
+    End If
+    If dveKl And kolII = 0 And kolAmbII <> 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG")
+        Exit Function
+    End If
+
+    ' PREKIDAC "DVE KLASE" JE TVRDNJA, NE FILTER (review #375, drugi P1).
+    ' Ukljucen prekidac uz praznu II klasu nije jednoklasna zbirna nego
+    ' nedovrsen unos. Pisac to odbija; ovde operater dobija polje na koje ide.
+    If dveKl And kolII <= 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("OTKUNOS_ERR_KOLICINA_II")
+        Exit Function
+    End If
+
+    datum = CDate(p("datum"))
+
+    If modBrojevi.BrojKontekstOdbija( _
+           modBrojevi.BrojOdgovaraKontekstu(modBrojevi.KIND_ZBR, S(p, "vozacID"), _
+                                            datum, S(p, "brDok"))) Then
+        fokus = "brDok"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_TUDJ")
+        Exit Function
+    End If
+
+    If Len(modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_ZBR, S(p, "vozacID"), _
+                                      datum, S(p, "brDok"), zbirnaID)) > 0 Then
+        fokus = "brDok"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_BROJ_ZAUZET")
+        Exit Function
+    End If
+
     Exit Function
 EH:
     ' Opis se cita PRE logovanja: LogErr (i Poruka) imaju svoj On Error Resume
@@ -618,75 +629,128 @@ EH:
     ZbirnaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
-' Broj po kome ZbirnaValidiraj trazi izvorne otpremnice.
+' PREVODILAC PRENOSI, PISAC SUDI (review #375, P1).
 '
-' Obicno je to uneti broj. Izuzetak je otvorena ISPRAVKA zbirne: posle storna
-' deca jos nose stari broj, a zamena po A9 dobija nov. Tada -- i SAMO kad uneti
-' broj nema nijednu svoju aktivnu otpremnicu -- izvor je stari broj iz konteksta.
+' Klasa ulazi u najavu kad je operater za nju bilo sta uneo -- kilazu ILI gajbe.
+' Ranije je uslov bio "kolicina > 0", pa je prevodilac tiho brisao svaki
+' nevalidan unos: -5 kg je nestajalo, 0 kg uz 5 gajbi takodje. Pisac tako nikad
+' nije video podatak koji je odbio -- video je dokument bez te klase.
 '
-' Uslov "uneti broj nema svoj izvor" nije kozmetika. Dok ispravka ceka, operater
-' sme da unese i nepovezanu zbirnu; njen izvor je njen broj, a stari bi dao
-' lazan zbir. Nepovezana zbirna bez izvora i danas pada na proveri zbira, pa
-' uslov ne otvara nista sto je bilo zatvoreno.
+' Razlika koja se cuva: 0 kg i 0 gajbi znaci "te klase NEMA" (II-only nacrt je
+' legitiman), a -5 kg znaci "nevalidan podatak" i mora da stigne do pisca.
 '
-' Vise otvorenih ispravki zbirne -> nema pogadjanja; isti stav kao
-' ZavrsiIspravkuAko, koji tada odbija da veze zamenu.
-Private Function ZbirnaBrojIzvora(ByVal brDok As String) As String
-    ZbirnaBrojIzvora = brDok
-    On Error GoTo EH
+' Ambalaza ide kao DOUBLE: CLng bi 20.5 zaokruzio na 20 jos ovde, pa bi
+' RequireCeoBroj u piscu merio vrednost koju operater nije uneo.
+Private Function ZbirnaNacrtIzUnosa(ByVal p As Object, ByRef h As Object, _
+                                    ByRef ocek As Collection, _
+                                    ByRef poruke As String) As Boolean
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(p("datum"))
+    h.Add "VozacID", S(p, "vozacID")
+    h.Add "BrojZbirne", S(p, "brDok")
+    h.Add "KupacID", S(p, "kupacID")
+    h.Add "Hladnjaca", S(p, "hladnjaca")
+    h.Add "Pogon", S(p, "pogon")
 
-    Dim v As Variant
-    v = ValidateZbirnaPreUnosa(brDok, 0, 0, 0)
-    If IsArray(v) Then
-        If UBound(v) >= 8 Then
-            If CDbl(v(0)) > 0 Or CDbl(v(4)) > 0 Or CDbl(v(8)) > 0 Then Exit Function
-        End If
+    Set ocek = New Collection
+    If D(p, "kolicinaI") <> 0 Or D(p, "kolAmb") <> 0 Then
+        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "kolAmb"))
     End If
 
-    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_ZBIRNA, _
-                                                         SV_MODE_ISPRAVKA) <> 1 Then Exit Function
+    ' UKLJUCEN PREKIDAC ZNACI DA KLASA POSTOJI (review #375, drugi P1).
+    '
+    ' Ovde je stajalo "prenesi II samo ako ima kilazu ili gajbe" -- pa je
+    ' dveKlase = True uz praznu II klasu tiho postajalo JEDNOKLASNA zbirna.
+    ' Adapter je time preispitivao izbor operatera, umesto da ga prenese; ista
+    ' greska koju je prethodni rez popravio za -5 kg i 20.5 gajbi.
+    '
+    ' Prazna II klasa sada stize do pisca i pada na "Kolicina <= 0" -- sto je i
+    ' tacan odgovor: operater je rekao da klasa postoji, a nije rekao koliko.
+    If B(p, "dveKlase") Then
+        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "kolAmbII"))
+    End If
 
-    Dim cid As String
-    cid = modStornoContext.FindLatestPending(FLOW_DOC_ZBIRNA, SV_MODE_ISPRAVKA)
-    If Len(cid) = 0 Then Exit Function
+    If ocek.count = 0 Then
+        poruke = poruke & Poruka("DOKUNOS_ERR_ZBR_NEMA_KOLICINE")
+        Exit Function
+    End If
 
-    Dim stari As String
-    stari = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ))
-    If Len(stari) > 0 Then ZbirnaBrojIzvora = stari
-    Exit Function
-EH:
-    LogErr "modDokUnos.ZbirnaBrojIzvora"
-    ZbirnaBrojIzvora = brDok
+    ZbirnaNacrtIzUnosa = True
 End Function
 
-' Verdikt koji u legacy daje frmDokumenta.UpdateValidacija, bez ijednog natpisa:
-' racun je isti (ValidateZbirnaPreUnosa), samo se ovde ne crta.
-'   val(0-3)  Klasa I : suma otpremnica | uneto | razlika | poklapa se
-'   val(4-7)  Klasa II: isto
-'   val(8-10) ambalaza: suma otpremnica | uneto | razlika
-' Ambalaza se poredi kao ZBIR OBE KLASE - ValidateZbirnaPreUnosa sabira sumaAmb
-' preko obe klase, pa i ulaz mora biti zbir (legacy: inputAmb + inputAmbII).
-Private Function ZbirnaSeSlazeSaIzvorom(ByVal brojZbirne As String, _
-                                        ByVal kgI As Double, ByVal kgII As Double, _
-                                        ByVal amb As Long, ByVal dveKl As Boolean) As Boolean
-    Dim val As Variant, kgOK As Boolean
-    On Error GoTo EH
-    val = ValidateZbirnaPreUnosa(brojZbirne, kgI, kgII, amb)
-    If Not IsArray(val) Then Exit Function
-    If UBound(val) < 10 Then Exit Function
+Private Function ZbrStavkaDTO(ByVal klasa As String, ByVal kol As Double, _
+                              ByVal amb As Double) As Object
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", klasa
+    s.Add "Kolicina", kol
+    s.Add "KolAmbalaze", amb
+    Set ZbrStavkaDTO = s
+End Function
 
-    If dveKl Then
-        kgOK = CBool(val(3)) And CBool(val(7))
-    Else
-        kgOK = CBool(val(3))
+' ZASTO NACRT, A NE GOTOV DOKUMENT (odluka operatera, 21.09.2026): zbirna je
+' poklopac nad IZDATIM otpremnicama, pa dok se one ne vezu ona jos ne postoji
+' kao dokument -- postoji kao NAJAVA sta ce nositi. Izdavanje (IzdajZbirnu_TX)
+' tek tada poredi najavljeno sa vezanim.
+'
+' Vraca ID, ne broj: broj je labela jedinstvena tek po (vozac, dan), a mutacija
+' ide po ID-u. Ekran operateru i dalje pokazuje broj -- to je prikaz, ne
+' identitet.
+Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
+    Dim res As String, greska As String, errDesc As String
+    On Error GoTo EH
+    poruke = ""
+
+    Dim h As Object, ocek As Collection
+    If Not ZbirnaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
+
+    res = CreateZbirnaDraft_TX(h, ocek, greska)
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
     End If
-    ' "zbrAmb > 0" je iz legacy: zbirna bez unete ambalaze se ne pusta, jer bi
-    ' razlika ispala 0 i kad izvor ambalazu ima.
-    ZbirnaSeSlazeSaIzvorom = kgOK And (CLng(val(10)) = 0) And (CLng(val(9)) > 0)
+
+    poruke = poruke & Poruka("DOKUNOS_MSG_ZBR_NACRT") & vbCrLf
+
+    ' ISPRAVKA ZBIRNE JE PAUZIRANA, ne prevedena -- isti stav kao kod otpremnice.
+    ' Zavrsetak ispravke ide po BROJU i kroz okvir koji umire u S4-3; pustiti ga
+    ' nad upravo otvorenim NACRTOM proglasilo bi zamenom dokument koji jos nema
+    ' nijedan izvor. Operater mora da ZNA da kontekst stoji otvoren.
+    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_ZBIRNA, _
+                                                         SV_MODE_ISPRAVKA) > 0 Then
+        poruke = poruke & Poruka("DOKUNOS_MSG_ZBR_ISPRAVKA_PAUZIRANA") & vbCrLf
+    End If
+
+    ZbirnaUpisi = res
     Exit Function
 EH:
-    LogErr "modDokUnos.ZbirnaSeSlazeSaIzvorom"
-    ZbirnaSeSlazeSaIzvorom = False
+    errDesc = Err.description
+    LogErr "modDokUnos.ZbirnaUpisi"
+    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+End Function
+
+' IZMENA NACRTA. Kad povezano nije jednako najavljenom -- operater je pogresio
+' najavu, ili je teret stvarno drugaciji -- nacrt se ispravlja ovde, a ne
+' izjednacavanjem pri izdavanju: najava ostaje nezavisna kontrola. Clanstvo se
+' ne dira, a izdata zbirna se ne menja (pisac trazi DRAFT).
+Public Function ZbirnaIzmeniNacrt(ByVal zbirnaID As String, ByVal p As Object, _
+                                  ByRef poruke As String) As Boolean
+    Dim h As Object, ocek As Collection, greska As String, errDesc As String
+    On Error GoTo EH
+    poruke = ""
+    If Not ZbirnaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
+    If Not UpdateZbirnaDraft_TX(zbirnaID, h, ocek, greska) Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        Exit Function
+    End If
+    poruke = poruke & Poruka("DOKUNOS_MSG_ZBR_NACRT_IZMENJEN") & vbCrLf
+    ZbirnaIzmeniNacrt = True
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modDokUnos.ZbirnaIzmeniNacrt"
+    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
 ' Upisuje zbirnu. Vraca ZbirnaID (ili spojene ID-eve obe klase); prazno znaci

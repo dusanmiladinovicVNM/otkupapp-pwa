@@ -4255,6 +4255,131 @@ tekst tranzicionog koda **pre** brisanja samog framework-a napravilo bi vecu zab
 Ide u **S4-3**, zajedno sa kodom koji opisuje: `GeneracijaID` ZBR identity framework se brise, i
 njegovi komentari sa njim.
 
+### 14.28) S4-2c/2b-1 — jezgro i unos za ekrane zbirne (22.09.2026)
+
+**Merenje je oborilo premisu s kojom sam ušao.** Radni sto nacrta **nije u F2 nego u F1**: F2 je samo
+forma nacrta plus lista svih otpremnica, a liste `SVI/BLOKOVI/NEVEZANI`, radnje po redu
+(`vezi`/`ukloni`/`izdaj`) i traka napretka žive u F1 — jer su izvori otpremnice baš otkupni blokovi,
+a oni su F1-ov predmet. Po toj simetriji radni sto **zbirne** pripada **F2**. Operaterova rečenica
+„radni sto za izvore u F2, kao blokovi u F1" nije bila preferencija nego tačan opis arhitekture.
+
+Zato je 2b isečen po **sloju**, ne po ekranu: **2b-1 = jezgro + modul unosa** (sve što je dokazivo
+testom), **2b-2 = ekrani** (F3 forma, pregled, F2 radni sto, skidanje pauze). Ekran se ne može
+automatski testirati — ostaje klik-checklista — pa sve što JESTE dokazivo ulazi zeleno pre njega.
+
+**Dodato u jezgro (`modDokumenta`):**
+
+| | Šta | Ogledalo |
+|---|---|---|
+| `GetZbirnaProgress(zbirnaID)` | najavljeno / povezano / preostalo po klasi | `GetOtpremnicaProgress` |
+| `NevezaneOtpremnice()` | otpremnice koje čekaju zbirnu | `NevezaniOtkupi` |
+| `BivseZbirneIzvora` | istorija: brojevi storniranih zbirnih | `BivseOtpremniceIzvora` |
+
+Dve razlike koje nisu kozmetika. Prva: `NevezaneOtpremnice` nudi **samo IZDATE** otpremnice. Nacrt je
+najava, ne roba koja je otišla; da se nudi, operater bi ga izabrao **sa ponuđenog spiska**, vezao ga, i
+tek bi ga izdavanje zbirne odbilo — porukom o dokumentu koji mu je sam program ponudio. **Kapija koja
+odbija tek na kraju je lošija od spiska koji ne laže.** Druga: `GetZbirnaProgress` vraća **uniju**
+najavljenih i povezanih klasa i zove **isti par čitača** koji `ZbrIzdaj` koristi za jednakost — da
+prikaz i kapija ne mogu da se raziđu.
+
+**Modul unosa (`modDokUnos`) — `ZbirnaValidiraj` je prepisan, ne odmrznut.** Nestalo je troje:
+
+1. **poređenje sa izvorom po `BrojZbirne`** (`ZbirnaBrojIzvora`, `ZbirnaSeSlazeSaIzvorom` — obrisani).
+   Članstvo je zapis, ne labela (ZBR-KANON-01), pa pokrivenost meri **izdavanje** nad vezanim
+   otpremnicama, a ne unos nad pogođenim brojem;
+2. **traženje vrste i sorte.** One su činjenica robe koju donosi prvi izvor (ZBR-KANON-04) — tražiti
+   ih od operatera značilo bi tražiti podatak koji pisac odbija. **F3 forma ih gubi u 2b-2**;
+3. **`GeneracijaID` kapije** (`ZbirnaIdentResolve` → `ZbirnaGatePoruka`, obrisana). Identitet je
+   `ZbirnaID` od S4-2a, a taj okvir umire u S4-3.
+
+Ostalo je: polja bez kojih dokument ne postoji, bar jedna klasa sa kilažom, nenegativna ambalaža, i
+**broj** — suđen **istim alatom kojim ga sudi pisac** (`modBrojevi.BrojOdgovaraKontekstu`,
+`BrojZauzetUNizu`), po pravilu „jedna implementacija, dva pozivaoca" (`.claude/rules/testovi.md` §5).
+`ZbirnaValidiraj` je dobio opcioni `zbirnaID`: pri **izmeni** nacrt sme da zadrži svoj broj, pa se
+sopstveni red izuzima — isto kao u `ZbrIzmeniDraft`.
+
+Novi ulazi: `ZbirnaUpisi` (→ `CreateZbirnaDraft_TX`) i `ZbirnaIzmeniNacrt` (→ `UpdateZbirnaDraft_TX`),
+oba kroz **jedan** prevodilac `ZbirnaNacrtIzUnosa`, da upis i izmena ne bi različito čitali ista polja.
+
+**Nalaz usput:** F3 je u katalogu poruka opisivao **pogrešan lanac** — podnaslov „Objedinjavanje
+prijemnica u jednu zbirnu", hint „prijemnice čekaju novu zbirnu". Zbirna objedinjuje **otpremnice**;
+prijemnica je korak posle nje. Ispravljeno, jer bi nov ekran nosio pogrešnu definiciju dokumenta na sebi.
+
+**Pauza je sada na TAČNO jednom mestu** — `modScrDokumenti.SnimiZbirnu`. Validator više nije pauziran
+(pa je merljiv), a operater i dalje ne može da upiše zbirnu dok 2b-2 ne isporuči ekran.
+
+**Dug koji ostaje za 2b-2, upisan da se ne zaboravi:** `NoviZbirnaUnos` još nosi ključeve
+`vrsta`/`sorta`/`tipAmb` koje niko više ne čita. Brisanje sada ne bi pomoglo — ekran ih i dalje puni,
+pa bi ih `Dictionary` tiho vratio; odlaze zajedno sa poljima forme.
+
+**Review #375, P1 — adapter je POPRAVLJAO unos umesto da ga prenese.** Dva kvara iste klase:
+
+| Unos | Šta je adapter radio | Posledica |
+|---|---|---|
+| `KolAmbalaze = 20.5` | `L()` → `CLng(20.5)` = **20** | `RequireCeoBroj` u piscu meri vrednost koju operater nije uneo |
+| `I = -5`, `II = 100` | prevodilac je klasu I preskočio jer nije `> 0` | pisac dobije uredan **II-only** dokument, minus tiše nestane |
+
+Ni jedno ni drugo nije UX propust nego **gubitak podatka**: unos je semantički promenjen, a nijedna
+kapija to ne može da vidi jer original do nje ne stigne. Isti obrazac koji je #372 našao kod izvora i
+#373 kod očekivanja — ovog puta na granici **ekran → kanonski DTO**.
+
+Rez: ambalaža ide kao **`Double`**, a prevodilac prenosi **prisustvo**, ne sud o vrednosti — klasa
+ulazi u najavu kad je operater za nju bilo šta uneo (`kol <> 0 Or amb <> 0`). Validator je dobio
+poruke (negativna kilaža, decimalne gajbe), ali **pisac ostaje poslednja tvrda kapija**.
+
+Razlika koja se čuva i koju test dokazuje: **`0` znači „te klase nema"** (II-only nacrt je legitiman),
+**`-5` znači „nevalidan podatak"**. Svođenje ta dva na isto stanje je bio ceo kvar.
+
+**Review #375, P2 — validator je puštao stanje koje pisac odbija.** `Kolicina = 0` uz `KolAmb > 0`
+je prolazilo kroz unos, a pisac ga je odbijao (`Kolicina <= 0`). Nema kvara podatka, ali operater bi
+razlog video **tek posle upisa** — a ovaj sloj postoji baš zato da ga vidi uz polje. Pravilo je sada
+izričito: klasa postoji → `Kolicina > 0`; `Kolicina = 0` → i `KolAmb` mora biti 0. Isto za klasu II kad
+je prekidač uključen. Pisac i dalje sudi isto — ovde je poruka, tamo tvrda kapija.
+
+**Review #375, drugi P1 — prekidač „dve klase" je bio TVRDNJA, a adapter ga je tretirao kao FILTER.**
+`dveKlase = True` uz praznu II klasu je tiše postajalo **jednoklašna zbirna**: prevodilac je II
+prenosio samo „ako ima kilažu ili gajbe". Moj sopstveni komentar iznad tog koda je tvrdio suprotno —
+da je prekidač izbor operatera da ta klasa postoji. Komentar je bio tačan, kod nije.
+
+Rez: unutar prekidača II klasa se prenosi **bezuslovno**, pa prazna stigne do pisca i padne na
+`Kolicina <= 0`. Validator daje istu tvrdnju uz polje (`OTKUNOS_ERR_KOLICINA_II`). Pozitivna kontrola
+je netaknuta: `I = 0/0` uz `dveKlase` i `II = 100/5` je i dalje legitiman II-only nacrt — klasa I se
+ne zahteva, poštuje se **značenje prekidača**, ne prisustvo podataka.
+
+> Tri kruga, ista klasa greške na tri mesta: **pravilo primenjeno na pogrešnom sloju**. Zato je
+> granica sada izričita: **adapter PRENOSI · validator OBJAŠNJAVA · pisac PRESUĐUJE.**
+
+Uz to je zatvoren i P3: fokus za ambalažu i celobrojnost se razdvaja po klasi (`kolAmb` / `kolAmbII`).
+Validator koji pokaže na pogrešno polje šalje operatera da popravlja ono što nije pokvareno.
+
+**Prvi pun prolaz: dva pada u `RunAllTests`, oba tačna posledica reza — i oba u suite koju BFP ne
+pokriva.** `T_ZbirnaUnos_PauziranDoS4` je merio pauzu **u validatoru**, a ona se preselila na ekran.
+
+Jedan od ta dva pada je otkrio nešto vrednije od sebe: `T_ScrSave_RutaPoRezimu` je **rutu F3 dokazivao
+porukom pauze**. Pauza je sada na granici ekrana, pa bi `Scr_Save` vratio istu poruku i da poziv
+**nikad ne stigne do modula unosa** — tvrdnja bi ostala zelena nad pokvarenom rutom. Ruta se sada
+dokazuje porukom koju vraća **samo** `ZbirnaValidiraj` (broj zbirne).
+
+> Pravilo: kad se kapija preseli, testovi koji su je koristili kao **posrednu** meru prestaju da mere
+> ono što tvrde — i to se ne vidi kao pad nego kao lažno zeleno.
+
+`T_ZbirnaUnos_PauziranDoS4` → `T_ZbirnaUnos_PauzaJeNaEkranu`, i meri **obe** polovine: validator više
+nije pauziran i stvarno meri, a ekran i dalje odbija upis i imenuje pauzu.
+
+**Drugi pun prolaz je bio ZELEN, ali se brojka nije poklopila — i to je bio nalaz.** Prethodni prolaz:
+BFP **1668**; ovaj: **1671**; između njih BFP fajl nije diran. Razlika od tri tvrdnje je pokazala na
+`Test_ZBR_NapredakPokrivanja`: seed druge klase je u prvom prolazu vratio prazno, a
+`If Len(otpII) = 0 Then Exit Sub` je **ćutke preskočio ostatak testa** — tačno tri tvrdnje o **uniji
+klasa**, koje su i bile poenta tog testa. Suite je bio zelen jer test nije ni izmeren.
+
+Isti obrazac je zatečen na **21 mestu** u ZBR bloku (većina iz S4-2b): svaki neuspeo preduslov je tiho
+prekidao test. Sva su prevedena u glasnu tvrdnju pre izlaza.
+
+> **Ukupan broj tvrdnji je merenje, ne ukras.** Neobjašnjena razlika između dva prolaza nad istim
+> fajlom znači da je neki test preskočio deo sebe — i to se **ne vidi kao pad**.
+
+Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

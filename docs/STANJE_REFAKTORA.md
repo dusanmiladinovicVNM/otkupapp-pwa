@@ -194,7 +194,13 @@
     piscu prešle na kanonski nacrt, 7 + golden na fixture `ZbrZateceniRed` (zatečeni oblik, umire sa
     S3e-2); golden fajl **nepromenjen**. Popis: `zbr_stari_pisac` 29 → **0**, `zbr_linija` 30 → 27,
     `otk_brojzbirne` 27 → 25. Detalji: plan §14.27.
-31. **Sledeće:** **S4-2c/2b** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
+31. **S4-2c/2b-1 — jezgro i unos za ekrane (PR #___).** Merenje je oborilo premisu: radni sto nacrta
+    je u **F1**, ne u F2 — pa radni sto zbirne pripada **F2**. Zato je 2b isečen po sloju: 2b-1 =
+    `GetZbirnaProgress` + `NevezaneOtpremnice` (**samo IZDATE i slobodne**) + `ZbirnaUpisi` /
+    `ZbirnaIzmeniNacrt` + **prepisan** `ZbirnaValidiraj` (bez poređenja po `BrojZbirne`, bez vrste i
+    sorte, bez `GeneracijaID` kapija; broj sudi istim alatom kao pisac). Pauza je sada na tačno
+    jednom mestu (`SnimiZbirnu`). Nijedna linija ekrana. Detalji: plan §14.28.
+32. **Sledeće:** **S4-2c/2b-2** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
     direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
     S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
     (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).
