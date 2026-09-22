@@ -7800,11 +7800,17 @@ Private Sub Test_ZBR_NepokrivenNacrtSeNeIzdaje()
 
     Dim otp As String
     otp = ZbrIzdataOtp("NI-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-NI-" & scenario), _
                                  ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -7821,6 +7827,9 @@ Private Sub Test_ZBR_NepokrivenNacrtSeNeIzdaje()
     ' zelena i da izdavanje uvek odbija.
     Dim otp2 As String
     otp2 = ZbrIzdataOtp("NI2-" & scenario, 100#, 5#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp2) > 0, "Test_ZBR_NepokrivenNacrtSeNeIzdaje: preduslov otp2 je napravljen"
     If Len(otp2) = 0 Then Exit Sub
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp2, g), _
                "ZBR nepokriven: dopunski izvor dodat"
@@ -7854,6 +7863,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZ-" & scenario), _
                                  ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
@@ -7864,6 +7876,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     ' --- izdata otpremnica koja je vec u drugoj zbirnoj ---
     Dim otp As String
     otp = ZbrIzdataOtp("IZ-" & scenario, 200#, 10#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -7872,6 +7887,9 @@ Private Sub Test_ZBR_IzvorMoraBitiIzdatISlobodan()
     Dim zbrB As String
     zbrB = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IZB-" & scenario), _
                                 ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrB) > 0, "Test_ZBR_IzvorMoraBitiIzdatISlobodan: preduslov zbrB je napravljen"
     If Len(zbrB) = 0 Then Exit Sub
 
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrB, otp, g), _
@@ -7914,6 +7932,9 @@ Private Sub Test_ZBR_ObaUlazaTrazeIzdatIzvor()
     Dim zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-OU2-" & scenario), _
                                  ZbrOcek(KLASA_I, 200#, 10#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_ObaUlazaTrazeIzdatIzvor: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
     AssertTrue Not modDokumenta.DodajZbirnaIzvor_TX(zbrID, nacrtOtp, g), _
                "ZBR oba ulaza: nacrt zbirne ODBIJA nacrt otpremnice"
@@ -7937,11 +7958,17 @@ Private Sub Test_ZBR_PrviIzvorDefiniseCinjenice()
 
     Dim otp As String
     otp = ZbrIzdataOtp("CI-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_PrviIzvorDefiniseCinjenice: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-CI-" & scenario), _
                                  ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_PrviIzvorDefiniseCinjenice: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertEquals "", ZbrPolje(zbrID, COL_ZBR_VRSTA), _
@@ -8011,6 +8038,9 @@ Private Sub Test_ZBR_PrazanIDDetetaNeProlazi()
 
     Dim otp As String
     otp = ZbrIzdataOtp("PI-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_PrazanIDDetetaNeProlazi: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     prevMode = IsTestMode()
@@ -8173,6 +8203,9 @@ Private Sub Test_ZBR_NacrtSeMenjaDokNijeIzdat()
 
     Dim otp As String
     otp = ZbrIzdataOtp("IZM-" & scenario, 500#, 25#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_NacrtSeMenjaDokNijeIzdat: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim h As Object
@@ -8276,6 +8309,9 @@ Private Sub Test_ZBR_IzmenaNacrtaRevalidiraClanstvo()
 
     Dim otp As String
     otp = ZbrIzdataOtp("RV-" & scenario, 400#, 20#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp) > 0, "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo: preduslov otp je napravljen"
     If Len(otp) = 0 Then Exit Sub
 
     Dim broj As String
@@ -8286,6 +8322,9 @@ Private Sub Test_ZBR_IzmenaNacrtaRevalidiraClanstvo()
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
@@ -8330,17 +8369,26 @@ Private Sub Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice()
     Dim otp1 As String, otp2 As String
     otp1 = ZbrIzdataOtp("PC1-" & scenario, 400#, 20#)
     otp2 = ZbrIzdataOtp("PC2-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otp1) > 0 And Len(otp2) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov otp1 i otp2 je napravljen"
     If Len(otp1) = 0 Or Len(otp2) = 0 Then Exit Sub
 
     ' Otpremnica DRUGE kulture -- druga vrsta, isti vozac i isti tip ambalaze.
     Dim otpDrugaVrsta As String
     otpDrugaVrsta = Pr3Otpremnica(TEST_PREFIX & "-OTP-PCD-" & scenario, KLASA_I, _
                                   200#, 10, TEST_KUL_BEZ_SORTE_ID)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpDrugaVrsta) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov otpDrugaVrsta je napravljen"
     If Len(otpDrugaVrsta) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PC-" & scenario), _
                                  ZbrOcek(KLASA_I, 700#, 35#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp1, g), _
@@ -8418,6 +8466,9 @@ Private Sub Test_ZBR_NapredakPokrivanja()
 
     Dim otpI As String
     otpI = ZbrIzdataOtp("NPR1-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpI) > 0, "Test_ZBR_NapredakPokrivanja: preduslov otpI je napravljen"
     If Len(otpI) = 0 Then Exit Sub
 
     Dim g As String, zbrID As String
@@ -8450,6 +8501,9 @@ Private Sub Test_ZBR_NapredakPokrivanja()
     ' Klasa koju NAJAVA ne pominje, a izvor je nosi.
     Dim otpII As String
     otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-NPR2-" & scenario, KLASA_II, 100#, 5)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(otpII) > 0, "Test_ZBR_NapredakPokrivanja: preduslov otpII je napravljen"
     If Len(otpII) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpII, g), _
@@ -8486,6 +8540,9 @@ Private Sub Test_ZBR_NevezaneSamoIzdateISlobodne()
     Dim izdata As String, vezana As String
     izdata = ZbrIzdataOtp("NVZ1-" & scenario, 200#, 10#)
     vezana = ZbrIzdataOtp("NVZ3-" & scenario, 300#, 15#)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(izdata) > 0 And Len(vezana) > 0, "Test_ZBR_NevezaneSamoIzdateISlobodne: preduslov izdata i vezana je napravljen"
     If Len(izdata) = 0 Or Len(vezana) = 0 Then Exit Sub
 
     Dim gg As String, nacrt As String
@@ -8500,6 +8557,9 @@ Private Sub Test_ZBR_NevezaneSamoIzdateISlobodne()
 
     Dim g As String, zbrID As String
     zbrID = CreateZbirnaDraft_TX(Pr3Header(broj), ZbrOcek(KLASA_I, 300#, 15#), g)
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrID) > 0, "Test_ZBR_NevezaneSamoIzdateISlobodne: preduslov zbrID je napravljen"
     If Len(zbrID) = 0 Then Exit Sub
 
     AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, vezana, g), _
@@ -8802,6 +8862,9 @@ Private Sub Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument()
 
     AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
                "ZBR ljuska: dva dokumenta istog broja napravljena"
+    ' SEED KOJI CUTI JE GORI OD PADA: bez ove tvrdnje neuspeo
+    ' preduslov tiho preskace ostatak testa, a suite ostaje zelen.
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, "Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument: preduslov zbrA i zbrB je napravljen"
     If Len(zbrA) = 0 Or Len(zbrB) = 0 Then Exit Sub
     AssertTrue zbrA <> zbrB, "ZBR ljuska: to su DVA dokumenta, ne jedan"
 

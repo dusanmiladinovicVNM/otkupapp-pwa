@@ -4366,6 +4366,18 @@ dokazuje porukom koju vraća **samo** `ZbirnaValidiraj` (broj zbirne).
 `T_ZbirnaUnos_PauziranDoS4` → `T_ZbirnaUnos_PauzaJeNaEkranu`, i meri **obe** polovine: validator više
 nije pauziran i stvarno meri, a ekran i dalje odbija upis i imenuje pauzu.
 
+**Drugi pun prolaz je bio ZELEN, ali se brojka nije poklopila — i to je bio nalaz.** Prethodni prolaz:
+BFP **1668**; ovaj: **1671**; između njih BFP fajl nije diran. Razlika od tri tvrdnje je pokazala na
+`Test_ZBR_NapredakPokrivanja`: seed druge klase je u prvom prolazu vratio prazno, a
+`If Len(otpII) = 0 Then Exit Sub` je **ćutke preskočio ostatak testa** — tačno tri tvrdnje o **uniji
+klasa**, koje su i bile poenta tog testa. Suite je bio zelen jer test nije ni izmeren.
+
+Isti obrazac je zatečen na **21 mestu** u ZBR bloku (većina iz S4-2b): svaki neuspeo preduslov je tiho
+prekidao test. Sva su prevedena u glasnu tvrdnju pre izlaza.
+
+> **Ukupan broj tvrdnji je merenje, ne ukras.** Neobjašnjena razlika između dva prolaza nad istim
+> fajlom znači da je neki test preskočio deo sebe — i to se **ne vidi kao pad**.
+
 Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 
 ## 15) Backlog — namerno van opsega
