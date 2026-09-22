@@ -2523,28 +2523,32 @@ End Sub
 ' zbirna i dalje nudi DUPLI i PONISTENJE, a prijemnica i dalje nudi ISPRAVKU.
 Private Sub T_Zbirna_NemaIspravku()
     Dim zbr As String, prij As String
-    Dim prevLista As String, errNum As Long, errDesc As String
+    Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
 
-    modScrStorno.Scr_TipTestSet STIP_ZBIRNA
+    ' Cita se Scr_AkcijeKljucevi, ne Scr_Radnje: Scr_Radnje na OVOM ekranu je
+    ' prazan stub (red odluke ne ide kroz ugovorni string nego kroz zonu), pa je
+    ' prva verzija ovog testa merila konstantu "". Preduslov ju je uhvatio --
+    ' zato preduslov i postoji.
     modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA, "ZBI-TEST-1", ""
-    zbr = modScrStorno.Scr_Radnje()
+    zbr = modScrStorno.Scr_AkcijeKljucevi()
 
-    modScrStorno.Scr_TipTestSet STIP_PRIJEMNICA
-    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-TEST-A", ""
-    prij = modScrStorno.Scr_Radnje()
+    ' Prijemnica: isti izbor koji T_StornoBezUvida_NemaAkcije vec dokazuje kao
+    ' razresiv, da kontrolna strana ne padne iz nekog treceg razloga.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    prij = modScrStorno.Scr_AkcijeKljucevi()
 
-    AssertEq (Len(zbr) > 0), True, _
+    AssertEq (Len(zbr) > 1), True, _
              "preduslov: zbirna uopste nudi red odluke (inace test nista ne meri)"
-    AssertEq (InStr(1, zbr, SV_MODE_ISPRAVKA, vbTextCompare) > 0), False, _
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_ISPRAVKA & ";", vbTextCompare) > 0), False, _
              "zbirna NE nudi ispravku"
-    AssertEq (InStr(1, zbr, SV_MODE_DUPLI, vbTextCompare) > 0), True, _
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_DUPLI & ";", vbTextCompare) > 0), True, _
              "zbirna i dalje nudi DUPLI -- razvezi otpremnice"
-    AssertEq (InStr(1, zbr, SV_MODE_PONISTENJE, vbTextCompare) > 0), True, _
+    AssertEq (InStr(1, zbr, ";" & SV_MODE_PONISTENJE & ";", vbTextCompare) > 0), True, _
              "zbirna i dalje nudi PONISTENJE -- obori lanac"
 
-    AssertEq (InStr(1, prij, SV_MODE_ISPRAVKA, vbTextCompare) > 0), True, _
+    AssertEq (InStr(1, prij, ";" & SV_MODE_ISPRAVKA & ";", vbTextCompare) > 0), True, _
              "prijemnici ispravka NIJE dirana -- rez je samo nad zbirnom"
     Exit Sub
 EH:
