@@ -618,6 +618,21 @@ SABOTAZE = {
         "Test_ZBR_ValidacijaNadKanonom",
         "nacrt sme da ZADRZI svoj broj",
     ),
+    # --- review #375: adapter preslikava, ne popravlja
+    "zbirna-adapter-zaokruzuje-gajbe": (
+        "modDokUnos.bas",
+        "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), D(p, \"kolAmb\"))\n",
+        "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), L(p, \"kolAmb\"))\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "20.5 gajbi ne prolazi ni kroz pisca",
+    ),
+    "zbirna-adapter-gubi-negativnu-klasu": (
+        "modDokUnos.bas",
+        "    If D(p, \"kolicinaI\") <> 0 Or D(p, \"kolAmb\") <> 0 Then\n",
+        "    If D(p, \"kolicinaI\") > 0 Then   ' SABOTAZA: minus nestaje\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "negativna kilaza NE nestaje tiho",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

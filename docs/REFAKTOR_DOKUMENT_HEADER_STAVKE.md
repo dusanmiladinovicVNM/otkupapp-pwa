@@ -4312,7 +4312,25 @@ prijemnica je korak posle nje. Ispravljeno, jer bi nov ekran nosio pogrešnu def
 `vrsta`/`sorta`/`tipAmb` koje niko više ne čita. Brisanje sada ne bi pomoglo — ekran ih i dalje puni,
 pa bi ih `Dictionary` tiho vratio; odlaze zajedno sa poljima forme.
 
-Četiri nova testa, četiri sabotaže (**546 → 550**). **Nijedna linija ekrana.**
+**Review #375, P1 — adapter je POPRAVLJAO unos umesto da ga prenese.** Dva kvara iste klase:
+
+| Unos | Šta je adapter radio | Posledica |
+|---|---|---|
+| `KolAmbalaze = 20.5` | `L()` → `CLng(20.5)` = **20** | `RequireCeoBroj` u piscu meri vrednost koju operater nije uneo |
+| `I = -5`, `II = 100` | prevodilac je klasu I preskočio jer nije `> 0` | pisac dobije uredan **II-only** dokument, minus tiše nestane |
+
+Ni jedno ni drugo nije UX propust nego **gubitak podatka**: unos je semantički promenjen, a nijedna
+kapija to ne može da vidi jer original do nje ne stigne. Isti obrazac koji je #372 našao kod izvora i
+#373 kod očekivanja — ovog puta na granici **ekran → kanonski DTO**.
+
+Rez: ambalaža ide kao **`Double`**, a prevodilac prenosi **prisustvo**, ne sud o vrednosti — klasa
+ulazi u najavu kad je operater za nju bilo šta uneo (`kol <> 0 Or amb <> 0`). Validator je dobio
+poruke (negativna kilaža, decimalne gajbe), ali **pisac ostaje poslednja tvrda kapija**.
+
+Razlika koja se čuva i koju test dokazuje: **`0` znači „te klase nema"** (II-only nacrt je legitiman),
+**`-5` znači „nevalidan podatak"**. Svođenje ta dva na isto stanje je bio ceo kvar.
+
+Pet novih testova, šest sabotaža (**546 → 552**). **Nijedna linija ekrana.**
 
 ## 15) Backlog — namerno van opsega
 

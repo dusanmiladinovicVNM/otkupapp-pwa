@@ -492,7 +492,10 @@ End Function
 Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
                                 Optional ByVal zbirnaID As String = "") As String
     Dim kolI As Double, kolII As Double
-    Dim kolAmb As Long, kolAmbII As Long
+    ' AMBALAZA JE DOUBLE, NE LONG (review #375, P1). Kao Long bi je L() kroz
+    ' CLng zaokruzio JOS OVDE, pa bi 20.5 gajbi postalo 20 pre ijedne provere --
+    ' i pisac bi dobio validan podatak koji operater nije uneo.
+    Dim kolAmb As Double, kolAmbII As Double
     Dim dveKl As Boolean
     Dim datum As Date
     Dim errDesc As String
@@ -512,8 +515,8 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
 
     kolI = D(p, "kolicinaI")
     kolII = D(p, "kolicinaII")
-    kolAmb = L(p, "kolAmb")
-    kolAmbII = L(p, "kolAmbII")
+    kolAmb = D(p, "kolAmb")
+    kolAmbII = D(p, "kolAmbII")
     dveKl = B(p, "dveKlase")
 
     ' Bez ukljucene druge klase njena polja NE ulaze u najavu -- inace bi
@@ -529,9 +532,35 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
         Exit Function
     End If
 
+    ' NULA I MINUS NISU ISTO STANJE (review #375, P1).
+    '
+    ' 0 kg znaci "te klase nema" -- II-only nacrt je legitiman. -5 kg je
+    ' NEVALIDAN PODATAK. Dok je stajala samo provera "obe <= 0", unos
+    ' (I = -5, II = 100) je prolazio, a prevodilac bi klasu I preskocio jer nije
+    ' > 0 -- pa bi pisac dobio uredan II-only dokument i operaterov minus bi tiho
+    ' nestao. Svodjenje ta dva stanja na isto je gubitak podatka, ne validacija.
+    If kolI < 0 Then
+        fokus = "kolicinaI"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA")
+        Exit Function
+    End If
+    If dveKl And kolII < 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA")
+        Exit Function
+    End If
+
     If kolAmb < 0 Or kolAmbII < 0 Then
         fokus = "kolAmb"
         ZbirnaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
+        Exit Function
+    End If
+
+    ' GAJBE SU KOMADI. Decimala se ODBIJA, ne zaokruzuje -- isto pravilo koje
+    ' pisac drzi kroz RequireCeoBroj. Poruka je ovde, tvrda kapija je tamo.
+    If kolAmb <> Int(kolAmb) Or kolAmbII <> Int(kolAmbII) Then
+        fokus = "kolAmb"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO")
         Exit Function
     End If
 
@@ -561,12 +590,18 @@ EH:
     ZbirnaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
-' Zaglavlje i ocekivanje nacrta iz unosa F3 -- JEDNO mesto za upis i izmenu,
-' da dva puta ne bi razlicito citala ista polja.
+' PREVODILAC PRENOSI, PISAC SUDI (review #375, P1).
 '
-' VRSTA, SORTA I TIP AMBALAZE SE NE SALJU. HdrProveriKljuceve ih izricito ne
-' prima: one su cinjenica robe koju donosi prvi izvor (ZBR-KANON-04). Poslati ih
-' znacilo bi napraviti drugi izvor istine i dobiti pad na piscu.
+' Klasa ulazi u najavu kad je operater za nju bilo sta uneo -- kilazu ILI gajbe.
+' Ranije je uslov bio "kolicina > 0", pa je prevodilac tiho brisao svaki
+' nevalidan unos: -5 kg je nestajalo, 0 kg uz 5 gajbi takodje. Pisac tako nikad
+' nije video podatak koji je odbio -- video je dokument bez te klase.
+'
+' Razlika koja se cuva: 0 kg i 0 gajbi znaci "te klase NEMA" (II-only nacrt je
+' legitiman), a -5 kg znaci "nevalidan podatak" i mora da stigne do pisca.
+'
+' Ambalaza ide kao DOUBLE: CLng bi 20.5 zaokruzio na 20 jos ovde, pa bi
+' RequireCeoBroj u piscu merio vrednost koju operater nije uneo.
 Private Function ZbirnaNacrtIzUnosa(ByVal p As Object, ByRef h As Object, _
                                     ByRef ocek As Collection, _
                                     ByRef poruke As String) As Boolean
@@ -579,11 +614,16 @@ Private Function ZbirnaNacrtIzUnosa(ByVal p As Object, ByRef h As Object, _
     h.Add "Pogon", S(p, "pogon")
 
     Set ocek = New Collection
-    If D(p, "kolicinaI") > 0 Then
-        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, "kolicinaI"), L(p, "kolAmb"))
+    If D(p, "kolicinaI") <> 0 Or D(p, "kolAmb") <> 0 Then
+        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "kolAmb"))
     End If
-    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
-        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, "kolicinaII"), L(p, "kolAmbII"))
+
+    ' Prekidac "dve klase" je IZBOR OPERATERA da ta klasa postoji, a ne podatak:
+    ' iskljucen znaci da polja klase II nisu ni unos, pa se ne prenose.
+    If B(p, "dveKlase") Then
+        If D(p, "kolicinaII") <> 0 Or D(p, "kolAmbII") <> 0 Then
+            ocek.Add ZbrStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "kolAmbII"))
+        End If
     End If
 
     If ocek.count = 0 Then

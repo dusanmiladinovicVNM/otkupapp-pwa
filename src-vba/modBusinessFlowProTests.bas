@@ -169,6 +169,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_NevezaneSamoIzdateISlobodne
     Test_ZBR_UnosPraviIMenjaNacrt
     Test_ZBR_ValidacijaNadKanonom
+    Test_ZBR_AdapterNePopravljaUnos
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8626,6 +8627,81 @@ Private Sub Test_ZBR_ValidacijaNadKanonom()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
+End Sub
+
+' ADAPTER PRESLIKAVA PODATAK, NE POPRAVLJA GA (review #375, P1).
+'
+' Dva kvara iste klase su prolazila jer je ekranska granica MENJALA unos pre
+' nego sto ga je pisac video:
+'   - CLng(20.5) = 20 -> decimalne gajbe postaju cele, pa RequireCeoBroj u piscu
+'     meri vrednost koju operater nije uneo;
+'   - uslov "kolicina > 0" u prevodiocu -> klasa sa -5 kg se NE prenosi, pa pisac
+'     dobije uredan II-only dokument i minus tiho nestane.
+'
+' Ni jedno ni drugo nije UX propust nego GUBITAK PODATKA: unos je semanticki
+' promenjen, a nijedna kapija to ne moze da vidi jer original do nje ne stigne.
+'
+' Test meri OBA sloja. Validator odbija i imenuje polje; pisac odbija i kad se
+' validator preskoci -- ekran nije jedini pozivalac modula unosa, a sabotaza koja
+' vrati staru granicu prolazi kroz validator i pada tek na piscu.
+'
+' Pozitivna kontrola je deo tvrdnje, ne ukras: 0 kg i dalje znaci "te klase
+' NEMA", pa je II-only nacrt legitiman. Nula i minus se ne svode na isto stanje.
+Private Sub Test_ZBR_AdapterNePopravljaUnos()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRADP")
+
+    Dim pre As Long
+    pre = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim fokus As String, poruke As String, p As Object
+
+    ' 1) DECIMALNE GAJBE -- gajba je komad, decimala se odbija a ne zaokruzuje.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP1-" & scenario, 400#, 20)
+    p("kolAmb") = 20.5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: 20.5 gajbi ne prolazi validaciju"
+    AssertEquals "kolAmb", fokus, "ZBR adapter: fokus ide na gajbe"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: 20.5 gajbi ne prolazi ni kroz pisca"
+
+    ' 2) NEGATIVNA KILAZA uz validnu drugu klasu -- ne sme da nestane.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2-" & scenario, -5#, 0)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: negativna kilaza ne prolazi validaciju"
+    AssertEquals "kolicinaI", fokus, "ZBR adapter: fokus ide na kilazu klase I"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: negativna kilaza NE nestaje tiho"
+
+    AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR adapter: nijedan odbijen unos nije ostavio zaglavlje"
+
+    ' 3) POZITIVNA KONTROLA -- 0 kg znaci "te klase nema".
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP3-" & scenario, 0#, 0)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertEquals "", modDokUnos.ZbirnaValidiraj(p, fokus), _
+                 "ZBR adapter: II-only nacrt je legitiman"
+
+    Dim zbrID As String
+    zbrID = modDokUnos.ZbirnaUpisi(p, poruke)
+    AssertTrue Len(zbrID) > 0, "ZBR adapter: II-only nacrt je upisan (" & poruke & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR adapter: II-only nacrt ima TACNO jednu stavku"
+    AssertEquals "100", CStr(ZbrKg(zbrID, KLASA_II)), _
+                 "ZBR adapter: ta jedna stavka je klasa II"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_AdapterNePopravljaUnos", Err.Number, Err.description
 End Sub
 
 ' PISAC NE SME DA NAPRAVI STANJE KOJE NJEGOV CITALAC ZABRANJUJE (review #373, P1).
