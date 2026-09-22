@@ -1442,6 +1442,7 @@ Private Sub T_ZbirnaKlik_OtvaraSvojDokument()
     Dim identKol As Long, n As Long, i As Long, redB As Long
     Dim otvoren As String, greska As String, ident As String
     Dim kgA As String, kgB As String, brojA As String, brojB As String
+    Dim errNum As Long, errDesc As String
 
     prev = modOtkupUI.ActiveMode
     Set tx = New clsTransaction
@@ -1524,13 +1525,22 @@ Private Sub T_ZbirnaKlik_OtvaraSvojDokument()
     AssertEq kgA, "100", "F3 klik: dokument istog broja drugog vozaca je NETAKNUT"
     Exit Sub
 EH:
+    ' OPIS SE CITA PRE CISCENJA. "On Error Resume Next" RESETUJE Err -- to je
+    ' semantika koju repo vec meri (T_LogErr_NeVidiErrPosleResumeNext), pa bi
+    ' poruka o padu posle rollback-a ostala PRAZNA. Pad bez razloga je najskuplja
+    ' vrsta pada (review #376, P3).
+    errNum = Err.Number
+    errDesc = Err.description
+
     If Not f Is Nothing Then Unload f
     modOtkupUI.ActiveMode = prev
     modScrDokumenti.Scr_IzmenaOtkazi
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
-    AssertEq "greska: " & Err.description, "", "F3 klik: test se izvrsio do kraja"
+
+    ' Originalna greska se vraca runneru, koji je upisuje kao FAIL sa razlogom.
+    Err.Raise errNum, "T_ZbirnaKlik_OtvaraSvojDokument", errDesc
 End Sub
 
 ' Kilaza stavke jednoklasnog nacrta, kao tekst. Prazno = nema stavke.
