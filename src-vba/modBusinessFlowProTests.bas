@@ -8775,7 +8775,7 @@ End Function
 ' BROJEM (broj otpremnice je jedinstven po stanici i DANU, pa isti broj na dva
 ' dana su dva dokumenta). Klik nad drugom sme da veze samo nju.
 Private Sub Test_ZBR_RadniStoVezePoIdentitetu()
-    Dim prevMode As String
+    Dim prevMode As String, prevTest As Boolean
     On Error GoTo EH
 
     Dim scenario As String
@@ -8804,6 +8804,13 @@ Private Sub Test_ZBR_RadniStoVezePoIdentitetu()
     modScrDokumenti.Scr_Event "lsNEVEZANE", "Click"
     AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
                  "ZBR identitet: nacrt je izabran na radni sto"
+
+    ' MREZA SE PUNI SAMO U TEST MODU. GridTestLoad i GridIdentKolonaTest oba
+    ' pocinju sa "If Not IsTestMode() Then Exit" -- a BFP nije u test modu sam od
+    ' sebe (za razliku od modTest). Bez ovoga mreza ostane prazna, pa test pada
+    ' na trazenju reda umesto na tvrdnji koju meri.
+    prevTest = IsTestMode()
+    SetTestMode True
 
     ' Mreza se puni onako kako je puni ljuska, pa se red bira po NEVIDLJIVOJ
     ' koloni identiteta -- ne po broju, koji ovde nosi oba dokumenta.
@@ -8836,10 +8843,12 @@ Private Sub Test_ZBR_RadniStoVezePoIdentitetu()
     End If
 
 CIST:
+    SetTestMode prevTest
     modScrDokumenti.Scr_ZbrOtkazi
     modOtkupUI.ActiveMode = prevMode
     Exit Sub
 EH:
+    SetTestMode prevTest
     modScrDokumenti.Scr_ZbrOtkazi
     If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
     LogFatal "Test_ZBR_RadniStoVezePoIdentitetu", Err.Number, Err.description
