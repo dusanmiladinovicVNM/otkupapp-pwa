@@ -168,22 +168,6 @@ SABOTAZE = {
         "T_CiljZbirna_NePoPrvomRedu",
         "broj sa drugom velicinom slova nije isti broj",
     ),
-    # Primitiv koji mutira SVE zbirna redove sa datim brojem, bez kapije u sebi.
-    # Zastita je stajala samo po call-site-u (ZbirnaBrojJeDvosmislenIkad, sest
-    # mesta u modStornoFlow), pa je nov pozivalac bio bezbedan tek ako se autor
-    # kapije seti.
-    #
-    # Zastavica IKAD nema svoju sabotazu i to je namerno, ne propust: fixture na
-    # mestu testa 124 ima IKAD=2 a AKTIVNIH=1, pa bi i okretanje True->False u
-    # BrojVlasnikaPoBroju oborilo BAS ovu istu tvrdnju -- dakle zamka 5.
-    "zbirna-primitiv-bez-kapije": (
-        "modDokumentInvariant.bas",
-        "    RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _\n"
-        "                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC\n",
-        "    ' SABOTAZA: primitiv opet mutira po dvosmislenom broju\n",
-        "T_RekalkZbirne_KapijaJeUPrimitivu",
-        "rekalkulacija po dvosmislenom broju ne prolazi kroz sam primitiv",
-    ),
     # Kes indeksa kolone je pamtio i NULU, pa je jedan trenutan neuspeh vazio
     # za ceo BeginTableCache prozor -- svaki sledeci poziv nad istom kolonom
     # dobijao je istu nulu bez novog pokusaja, a RequireColumnIndex na to staje.
@@ -1621,25 +1605,6 @@ SABOTAZE = {
         "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu",
         "poruka imenuje prijemnicu koja je ostala vezana",
     ),
-    # blockcount-po-broju: obrisana u S1b-1 (storno otkupnih blokova, stari model; vraca S3).
-    # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
-    "zbirna-ispravka-cilj-bez-kapije": (
-        "modStornoFlow.bas",
-        "    razStr = ZbirnaMutRazlog(newBroj)\n"
-        "    If Len(razStr) > 0 Then\n",
-        "    razStr = ZbirnaMutRazlog(newBroj)\n"
-        "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n",
-        "T_IspravkaZbirne_KapijaNaObeStrane",
-        "dvosmislen CILJ: otpremnica izvora nije prevezana",
-    ),
-    # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
-    "zbirna-ispravka-izvor-bez-kapije": (
-        "modStornoFlow.bas",
-        "        razStr = ZbirnaMutRazlog(oldBroj, Len(genOp) > 0)\n",
-        "        razStr = \"\"   ' SABOTAZA: izvorna strana se ne proverava\n",
-        "T_IspravkaZbirne_KapijaNaObeStrane",
-        "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja",
-    ),
     # Kapija fail-open na sopstvenu gresku: schema drift -> "jednoznacno je".
     # Kapija je od v6-ui-225 u jezgru (modDokumenta), pa je i fail-closed grana
     # tamo. ZbirnaIdentResolve na sopstvenu gresku vraca INTEGRITY_ERROR; ova
@@ -1670,6 +1635,13 @@ SABOTAZE = {
         # kapija ostajala ziva.
         "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
     ),
+    "zbirna-opet-nudi-ispravku": (
+        "modScrStorno.bas",
+        "    If dt = FLOW_DOC_ZBIRNA Then\n",
+        "    If False Then   ' SABOTAZA: zbirna opet nudi ispravku\n",
+        "T_Zbirna_NemaIspravku",
+        "zbirna NE nudi ispravku",
+    ),
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
@@ -1677,7 +1649,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
         "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
-        "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
+        "DUPLI staje dok broj nose dva aktivna dokumenta",
     ),
     # Storno otkupa po BROJU umesto po OtkupID-u izabranog reda (S1e): broj je
     # scoped po otkupnom mestu, pa prvi red broja moze biti tudji dokument.

@@ -56,12 +56,20 @@ mestu**: nastaje **nova verzija** — storno stare + nova zbirna sa preostalim
 izvorima, jedan potez i jedna transakcija, sa tragom po ID-u. Isto pravilo koje
 A13 već drži za otpremnicu (S3c).
 
-> Do S4-3 kod još nosi stari postupak (`RecalculateZbirnaFromOtpremnice_TX`
-> prepravlja izdatu zbirnu u mestu, a `modStornoFlow` je preveže po broju). Taj
-> okvir je **nedostižan u produkciji** — nijedan živi put danas ne pravi zbirnu
-> (F3, malina auto-zbirna i VOZ uvoz su pauzirani) — i briše se u S4-3, zajedno
-> sa testom `Test_ZbirnaRecalcInPlace_Auto`, koji tvrdi upravo ono što je ova
-> odluka ukinula.
+> **S4-3a je taj okvir obrisao** (`RecalculateZbirnaFromOtpremnice_TX`,
+> `CompleteZbirnaIspravka`, relink po broju, `Test_ZbirnaRecalcInPlace_Auto`).
+>
+> **Ali zamena još ne postoji, i to je namerno.** Jedan potez za zbirnu traži da
+> se sa starog dokumenta prenesu i **deca**, a zbirnu vezuju **prijemnice** —
+> kolonom `BrojZbirne`, jer `ZbirnaID` im nije strani ključ nigde u šemi. Nova
+> zbirna dobija **nov broj** (storno ne oslobađa broj, A9), pa bi svaka
+> prijemnica ostala siroče. Prijemnica postaje kanonska tek u **S6**.
+>
+> **Odluka operatera (22.09.2026): ispravka zbirne se ODLAŽE do S6**, umesto da
+> se sada piše relink po broju koji S6 odmah briše. Do tada F8 nad zbirnom nudi
+> `DUPLI` (razveži otpremnice, one prežive) i `PONIŠTENJE` (obori lanac) — obe
+> imenovane radnje, nijedna polovična. `IspravkaZbirne_TX` se gradi u S6, po
+> ogledalu `IspravkaOtpremnice_TX`.
 
 **ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
 operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu

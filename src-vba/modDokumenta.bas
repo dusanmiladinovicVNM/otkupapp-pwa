@@ -423,12 +423,14 @@ End Function
 ' `scopedPoGeneraciji` je faza 4: kapija SME da pusti dva aktivna dokumenta pod
 ' istim brojem, ali samo tamo gde akter vise ne bira decu po broju.
 '
-' Default je False i to nije opreznost nego nuznost: kapiju zove DEVET mesta, a
-' faza 3 je na generaciju prebacila TRI. Ostali i dalje biraju po broju --
-' RecalculateZbirnaFromOtpremnice_TX preko SumOtpremniceByKlasa sabira SVE
-' otpremnice pod brojem. Da je ova grana bezuslovna, zbirna bi dobila zbir tudjeg
-' dokumenta u zaglavlje, tiho i u kilogramima. To je ZBR-MUT-01 naopako: ne
-' sirenjem aktera nego suzavanjem kapije.
+' Default je False i to nije opreznost nego nuznost: kapiju zove vise mesta, a
+' samo deo njih bira decu po generaciji. Ostali i dalje biraju PO BROJU, pa bi
+' bezuslovna grana pustila aktera na tudje redove -- tiho i u kilogramima. To je
+' ZBR-MUT-01 naopako: ne sirenjem aktera nego suzavanjem kapije.
+'
+' S4-3a: primer koji je ovde stajao (rekalkulacija zbirne iz otpremnica po
+' BrojZbirne) je obrisan sa okvirom ispravke. Pravilo nije -- DUPLI i
+' PONISTENJE decu i dalje biraju brojem.
 '
 ' Pozivalac NE sme da salje "postoji generacija" nego BAS onu odluku koju vec
 ' racuna za svoju selekciju (`genEff <> ""`). Kapija i akter tako gledaju isti
@@ -5926,8 +5928,8 @@ End Function
 ' slucajeva. A njena premisa ("akter zna identitet") bez ove provere ne stoji:
 ' neprazan GeneracijaID nije dokaz da akter zna dokument POD TIM BROJEM.
 '
-' Gleda i STORNIRANE redove namerno: `CompleteZbirnaIspravka` legitimno radi sa
-' identitetom stare, vec stornirane zbirne.
+' Gleda i STORNIRANE redove namerno: uvid i oporavak legitimno rade sa
+' identitetom vec stornirane zbirne (prefill, "bivse zbirne izvora").
 Public Function ZbirnaGeneracijaPripadaBroju(ByVal broj As String, _
                                              ByVal gen As String) As Boolean
     On Error GoTo EH

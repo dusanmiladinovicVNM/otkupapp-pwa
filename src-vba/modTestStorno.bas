@@ -84,8 +84,6 @@ Public Sub RunStornoTestSuite()
     SetConfigValue CFG_KEY_MALINA_MODE, "NO"
 
     T03_StornoZbirneBezMismatch
-    T04_IspravkaZbirnePrevezuje
-    T05_PaletaStavkeNovaZbirna
     T06_ReversIspravkaNeDupliraSaldo
     T07_ReversPonistenjeUklanjaSaldo
     TRev_CompleteReversPoKljucu
@@ -167,61 +165,6 @@ Private Sub T03_StornoZbirneBezMismatch()
     Chk Not ZbirnaPostoji("SVT-Z3"), S & "zbirna vise nije aktivna (stornirana)"
     ChkEq OtpBrojZbirne("SVT-OA3"), "", S & "OA3 vracena u 'ceka zbirnu' (BrojZbirne prazno)"
     ChkEq OtpBrojZbirne("SVT-OB3"), "", S & "OB3 vracena u 'ceka zbirnu' (BrojZbirne prazno)"
-End Sub
-
-' ============================================================
-' T04 - ispravka zbirne: nova zbirna, otpremnice + prijemnica prevezane na nju,
-' invariant nove zbirne OK.
-' ============================================================
-Private Sub T04_IspravkaZbirnePrevezuje()
-    Const S As String = "T04 ispravka zbirne prevezuje: "
-
-    SeedZbirna "SVT-Z4", "I", 100, 10
-    SeedOtpremnica "SVT-OA4", "SVT-Z4", "I", 60, 6
-    SeedOtpremnica "SVT-OB4", "SVT-Z4", "I", 40, 4
-    SeedPrijemnica "SVT-P4", "SVT-Z4", "I", 100, 10
-
-    ' Faza 1: storno stare + context
-    Dim res As Object
-    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z4", SV_MODE_ISPRAVKA)
-    Chk CBool(res("needsForm")), S & "ISPRAVKA trazi novu zbirnu (needsForm)"
-    Dim cid As String: cid = CStr(res("correctionID"))
-    Chk Len(cid) > 0, S & "correction context kreiran"
-
-    ' Operater snima NOVU zbirnu (drugaciji broj) -> recalc ce popuniti tacne KG.
-    SeedZbirna "SVT-Z4B", "I", 0, 0
-
-    ' Faza 2: complete -> prevezi otpremnice+prijemnicu, recalc, validiraj.
-    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, "SVT-Z4B")
-    Chk CBool(res("success")), S & "CompleteZbirnaIspravka uspeo"
-
-    ChkEq OtpBrojZbirne("SVT-OA4"), "SVT-Z4B", S & "OA4 prevezana na novu zbirnu"
-    ChkEq OtpBrojZbirne("SVT-OB4"), "SVT-Z4B", S & "OB4 prevezana na novu zbirnu"
-    ChkEq PrjBrojZbirne("SVT-P4"), "SVT-Z4B", S & "prijemnica prevezana na novu zbirnu"
-    Chk modDokumentInvariant.IsZbirnaConsistent("SVT-Z4B"), S & "nova zbirna = zbir otpremnica (OK)"
-End Sub
-
-' ============================================================
-' T05 - pri ispravci zbirne, paleta-stavke prijemnice dobijaju novu zbirnu.
-' ============================================================
-Private Sub T05_PaletaStavkeNovaZbirna()
-    Const S As String = "T05 paleta-stavke nova zbirna: "
-
-    SeedZbirna "SVT-Z5", "I", 100, 10
-    SeedOtpremnica "SVT-OA5", "SVT-Z5", "I", 100, 10
-    SeedPrijemnica "SVT-P5", "SVT-Z5", "I", 100, 10
-    SeedPaletaStavka "SVT-PS5", "SVT-P5", "SVT-Z5", "I", 100, 10
-
-    Dim res As Object
-    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z5", SV_MODE_ISPRAVKA)
-    Dim cid As String: cid = CStr(res("correctionID"))
-
-    SeedZbirna "SVT-Z5B", "I", 0, 0
-    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, "SVT-Z5B")
-    Chk CBool(res("success")), S & "CompleteZbirnaIspravka uspeo"
-
-    ChkEq PalsBrojZbirne("SVT-PS5"), "SVT-Z5B", S & "paleta-stavka dobila novu zbirnu"
-    ChkEq PrjBrojZbirne("SVT-P5"), "SVT-Z5B", S & "prijemnica prevezana na novu zbirnu"
 End Sub
 
 ' ============================================================

@@ -4624,6 +4624,55 @@ podrazumevane natpise **ali custom formatiranje** četvrte mere (ceo broj bez po
 
 Četiri nova testa ukupno u slajsu, pet sabotaža (**564 → 569**); `modTest` 200 → **201**.
 
+### 14.33) S4-3a — ispravka zbirne umire, ne seli se (22.09.2026)
+
+**Merenje je oborilo tri tvrdnje plana pre ijednog reda koda.**
+
+1. **`ZbrIdIliGreska` ne postoji** — nula pogodaka u `src-vba/`. §14.26 je tvrdio da okvir kroz nju
+   prevodi (broj, generacija) u ID. Red u planu je tvrdnja, ne dokaz.
+2. **„Članstvo" je već isporučeno.** Plan ga vodi kao S4-3 posao, ali `NevezaneOtpremnice` već ide kroz
+   `AktivnoClanstvoPoKanonu` + `BivseZbirneIzvora`: otpremnica stornirane zbirne se **već** vraća u
+   ponudu, sa istorijom. Isporučeno u S4-2c/2b-1.
+3. **Kapija nad osiročenom decom već postoji** — `DUPLI` atomarno stornira + odvežuje otpremnice i
+   diže **MANUAL zapis** kad ostanu prijemnica ili palete. Druga kapija bi bila drugi autoritet nad
+   istim pravilom.
+
+**Odluka operatera (22.09.2026): ispravka zbirne se ODLAŽE do S6.** ZBR-KANON-03 traži jedan potez
+(storno + nova iz istih izvora), po ogledalu `IspravkaOtpremnice_TX`. Ali zbirnu vezuju **prijemnice**,
+kolonom `BrojZbirne` — `ZbirnaID` im nije strani ključ nigde u šemi — a nova zbirna dobija **nov broj**
+(A9: storno ne oslobađa broj). Svaka prijemnica bi ostala siroče. Odbijeno: pisati relink po broju koji
+S6 odmah briše. Do tada F8 nad zbirnom nudi `DUPLI` i `PONIŠTENJE` — obe imenovane, nijedna polovična.
+
+**Obrisano:** `SV_MODE_ISPRAVKA` za zbirnu (`modScrStorno.AkcijeRacun`, `RunZbirnaCorrection`),
+`CompleteZbirnaIspravka` i njena grana u `modDokUnos.ZavrsiIspravkuAko`, `RelinkOtpremniceToZbirna_TX`,
+`RecalcOrStornoEmptyZbirna_TX` (bio je bez ijednog pozivaoca), `RecalculateZbirnaFromOtpremnice_TX`,
+`ApplyKlasaRecalc`, `ValidateZbirnaInvariant`, `SumZbirnaByKlasa`, `IsZbirnaConsistent`,
+`ValidateOtpremnicaZbirnaImpact` (takođe bez pozivaoca), audit trojka oko rekalkulacije, i šest
+privatnih pomoćnika koji su ostali bez posla.
+
+**Najvažniji nalaz nije brisanje nego šta je invarijanta merila.** `ValidateZbirnaInvariant` je
+poredila zaglavlje `tblZbirna` sa zbirom otpremnica **po `BrojZbirne`**. Pod kanonom pisac **ne upisuje
+ni jedno ni drugo** — članstvo je zapis (`tblZbirnaIzvori`, po `ZbirnaID`), sadržaj je na stavkama, a
+zaglavlje ostaje namerno prazno. Obe strane su bile nule, pa je racun **uvek** javljao `OK`. To je
+stajalo i u uvidu pred storno i u golden snimku (`tests/golden/D3_*.txt:19`). Provera koja ne može da
+padne nije provera, a izgleda kao da jeste — pa je uklonjena iz oba.
+
+Uvid pred storno je umesto nje dobio **kanonski** red: `ZbirnaStavkeTekst` čita `modDokumenta.ZbirnaPoKlasi`
+(isti čitač koji koriste liste i štampa) i piše stvarne kilograme po klasi.
+
+**Test nije otišao uz mod.** `T_ZamenaZbirne_NeDiraDecuTudje` je meren kroz `ISPRAVKA`, ali tvrdnja
+(„radnja koja dira decu staje dok broj nose dva aktivna dokumenta") važi i za `DUPLI`, koji decu dira
+isto tako. Preusmeren, ne obrisan — da je otišao sa modom, kapija bi ostala bez ijednog merenja.
+
+**Nov test `T_Zbirna_NemaIspravku` (modTest 113)** meri **oba kraja**: zbirna ne nudi `ISPRAVKU` ali
+i dalje nudi `DUPLI` i `PONIŠTENJE`, a **prijemnica ispravku i dalje nudi**. Bez drugog kraja bi prazan
+red odluke — pokvaren ekran — prošao kao zelen.
+
+**Kapije su uhvatile četiri zastarela sidra** (tri sabotaže bez koda, jedna bez tvrdnje) i **rupu u
+numeraciji testova**; `popis_citalaca` je javio da je prag `zbr_linija` zastareo (**27 → 17**) —
+merenje ispod praga pada isto kao iznad, jer zastareo prag pušta grupu da naraste nazad bez ijednog
+crvenog. Sabotaže **569 → 567**.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

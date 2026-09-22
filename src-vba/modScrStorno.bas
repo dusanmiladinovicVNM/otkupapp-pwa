@@ -728,6 +728,30 @@ Private Function AkcijeRacun() As Variant
         Exit Function
     End If
 
+    ' ZBIRNA NEMA ISPRAVKU (S4-3a, ZBR-KANON-03).
+    '
+    ' Stari mod je bio DVOKORAK: stornira staru odmah, a zamenu operater snima
+    ' kasnije -- pa je izmedju postojao prozor u kome stare vise nema a nove jos
+    ' nema. Okvir je taj prozor krpio pamcenjem konteksta i MANUAL zadacima.
+    ' Kanon to resava jednim potezom (storno + nova iz istih izvora, jedna
+    ' transakcija), kao IspravkaOtpremnice_TX od S3c.
+    '
+    ' Ali zbirnu vezuju i PRIJEMNICE, kolonom BrojZbirne -- a prijemnica prelazi
+    ' na kanon tek u S6. Nova zbirna dobija nov broj (storno ne oslobadja broj,
+    ' A9), pa bi svaka prijemnica ostala siroce. Odluka operatera (22.09.2026):
+    ' ispravka zbirne SE ODLAZE do S6, umesto da se sada pise relink po broju
+    ' koji S6 odmah brise.
+    '
+    ' Do tada operater ima DUPLI (razvezi otpremnice, zadrzi ih) i PONISTENJE
+    ' (obori ceo lanac) -- obe imenovane radnje, nijedna polovicna.
+    If dt = FLOW_DOC_ZBIRNA Then
+        AkcijeRacun = Array( _
+            SV_MODE_DUPLI & "|OTKUI_SCRST_B_DUPLI|OTKUI_SCRST_H_DUPLI|secondary", _
+            SV_MODE_PONISTENJE & "|OTKUI_SCRST_B_PONISTI|OTKUI_SCRST_H_PONISTI|danger", _
+            SV_MODE_RESI_KASNIJE & "|OTKUI_SCRST_B_KASNIJE|OTKUI_SCRST_H_KASNIJE|ghost")
+        Exit Function
+    End If
+
     AkcijeRacun = Array( _
         SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_ISPRAVKA|OTKUI_SCRST_H_ISPRAVKA|soft", _
         SV_MODE_DUPLI & "|OTKUI_SCRST_B_DUPLI|OTKUI_SCRST_H_DUPLI|secondary", _
