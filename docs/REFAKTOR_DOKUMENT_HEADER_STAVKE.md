@@ -4436,6 +4436,74 @@ granicu — mreža bez identiteta, i čitanje kolone **broja** umesto identiteta
 
 Tri nova testa, pet sabotaža (**554 → 559**).
 
+### 14.30) S4-2c/2b-2b — radni sto zbirne u F2 (22.09.2026)
+
+**Zbirna je prvi put ceo tok:** najava u F3 → pokrivanje u F2 → izdavanje. Simetrija je ista koju F1/F2
+već imaju: dokument se **pravi** u svojoj formi, a **pokriva** u formi svog izvora. Izvori zbirne su
+izdate otpremnice, a one su predmet F2 — zato radni sto stoji tamo.
+
+| Lista u F2 | Šta pokazuje | Radnje |
+|---|---|---|
+| `SVI` | sve otpremnice (zatečeno) | `veži` uz izabran nacrt |
+| `ZBIRNE` | **nacrte** zbirnih | klik bira aktivan nacrt |
+| `IZVORI` | otpremnice u sastavu | `ukloni`, `izdaj` |
+| `NEVEZANE` | izdate otpremnice bez zbirne | `veži` |
+
+**Nisu pravljene nove mreže.** Kolone, zbirovi po stavkama i nevidljiva kolona identiteta dolaze iz
+`RedoviZaTip` — istog čitaoca koji puni glavne liste; `RedoviZaSkup` samo **bira koji redovi ostaju**.
+Zato lista izvora i lista dokumenata ne mogu da pokazu različite brojeve za isti dokument. Kolona
+kilaže se prepoznaje **po tipu** iz opisa kolone, ne po poziciji.
+
+**Ekran ne nosi nijedno pravilo.** Sve radnje idu u kanonski pisac i vraćaju **njegov** razlog:
+`DodajZbirnaIzvor_TX`, `UkloniZbirnaIzvor_TX`, `IzdajZbirnu_TX`. „Izvor mora biti izdata otpremnica"
+stoji u `RequireOtpValidanIzvorZbirne`, ne ovde.
+
+**Ključevi radnji su svoji** (`vezizbr`/`uklonizbr`/`izdajzbr`) da se ne bi sudarili sa istoimenim
+radnjama nad otpremnicom u F1 — ista kontrola, drugi predmet.
+
+Dokaz je podeljen po tome šta se čime može dokazati: **klik-put** (red → nevidljivi `ZbirnaID` → izbor
+nacrta → prelazak na izvore) meri `T_ZbirnaRadniSto_BiraSvojNacrt` u `modTest`, gde postoji forma, opet
+nad **dva dokumenta pod istim brojem**; **veživanje, uklanjanje i izdavanje** meri
+`Test_ZBR_RadniStoVezeIIzdaje` u BFP, gde sve ide u transakciji. Potvrda izdavanja (`MsgBox`) je
+operaterova, ne logika — zato se izdavanje meri kroz `IzdajAktivnuZbirnu`, a ne kroz `RowAction`.
+
+**Kapija je uhvatila zastarelo sidro:** posle ovog reza je isti red (`GridCell(red, IdentKolonaIndeks("ZBIRNA"))`)
+postojao na **dva** mesta — u F3 izmeni i u F2 izboru — pa je sabotaža `zbirna-klik-po-broju` prestala da
+bude jednoznačna. Oba sidra sada nose i sledeći red, a novo mesto je dobilo **svoju** sabotažu.
+
+**Review #377, P1 — strog čitalac upotrebljen na pogrešnom lifecycle grain-u.** Radni sto je sastav
+čitao kroz `IzvoriZbirne`, a ta dva čitaoca imaju **različit ugovor**:
+
+| Čitalac | Nad čim | Prazno znači |
+|---|---|---|
+| `ZbrClanovi` | nacrt | **uredno stanje** — još nije pokriven |
+| `IzvoriZbirne` | izdata | **kvar** — diže grešku |
+
+Posledica je bila crvena mreža na potpuno ispravnom stanju: svaki tek napravljen nacrt rušio je listu
+**odmah po izboru**, a uklanjanje poslednjeg izvora isto. Strogi čitalac ostaje strog — greška je bila u
+tome čime je radni sto čitao.
+
+> Treći put u ovom slajsu ista klasa: **pravilo (ili čitalac) na pogrešnom sloju.** #375 adapter koji
+> popravlja unos, #375 prekidač kao filter, #377 strog čitalac nad nacrtom.
+
+**Zašto test to nije uhvatio:** `T_ZbirnaRadniSto_BiraSvojNacrt` je posle klika proveravao da stanje
+kaže `IZVORI`, ali **nije ponovo učitao mrežu** — a produkciona ljuska to radi automatski. Nov test
+čita redove **direktno kroz `Scr_Rows`**, mimo `ScrGridData` koji grešku guta (`On Error Resume Next`).
+
+**Review #377, P2 — izvorni identitet nije bio dokazan.** `Test_ZBR_RadniStoVezeIIzdaje` je
+`VeziZaAktivnuZbirnu` zvao direktno. Nov `Test_ZBR_RadniStoVezePoIdentitetu` vozi ceo spoj
+(red → nevidljivi `OtpremnicaID` → `RowAction` → pisac) nad **dve izdate otpremnice pod istim brojem**
+— broj otpremnice je jedinstven po stanici i **danu**, pa isti broj na dva dana jesu dva dokumenta.
+Testovi rade bez forme: `ShowToast` izlazi kad forme nema, pa je ceo put merljiv u BFP.
+
+**P3** (lista `SVI` nudi `Veži` i nad nacrtom otpremnice) ostaje kako ga je reviewer rangirao: pisac je
+bezbedno odbija, a `SVI` je namerno „sve". Ide uz sledeći rez, sa trakom napretka.
+
+Četiri nova testa, tri sabotaže (**559 → 562**).
+
+**Ostaje za sledeći rez:** traka napretka u F2 (`GetZbirnaProgress` — čitalac postoji od 2b-1, prikaz ne)
+i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji P3 iz review-a #376.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -4453,6 +4521,8 @@ Tri nova testa, pet sabotaža (**554 → 559**).
 | **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
 | **Strog čitalac je registarski, ne dokumentarni** (review #370, P2) | `StavkeZbirneRedovi` (kao i čitači otkupa i otpremnice) validira **celu tabelu**, pa jedna pokvarena istorijska zbirna obori čitanje svih ostalih — i liste u kojima te zbirne nema. Fail-closed je ovde namerno izabran i ostaje, ali se vredi razdvojiti: **registarski audit → globalno strogo**, **jedan dokument → strogo u opsegu tog dokumenta**. Rez važi za sva tri tipa odjednom, pa ne ide unutar jednog slajsa |
 | **`who_writes` ne prijavljuje MRTAV UNOS u `WRITE_OWNERSHIP.json`** (nalaz S3e-1) | spisak dozvola je nabrajao tri modula koja tabelu odavno ne pišu, a kapija je ćutala: `--check-ownership` proverava samo da je **svaki pisac naveden**, ne i da **svaki naveden piše**. `vba_hard_census` isti problem rešava pravilom `MRTAV_UNOS`. Rez: isto pravilo u `who_writes.py`, pa spisak ne može da istruli neprimećeno |
+| **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
+| **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 

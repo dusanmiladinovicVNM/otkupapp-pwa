@@ -87,9 +87,25 @@ Private mIzmenaBroj As String
 Private mIzmenaZbrID As String
 Private mIzmenaZbrBroj As String
 
+' RADNI STO ZBIRNE (S4-2c/2b-2b). Izvori zbirne su IZDATE OTPREMNICE, a one su
+' predmet F2 -- pa radni sto zbirne stoji u F2, isto kao sto radni sto otpremnice
+' stoji u F1 gde su njeni izvori (otkupni blokovi).
+Private mZbrID As String
+Private mZbrBroj As String
+Private mListaZbr As String
+
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
 Public Function Scr_Liste() As Variant
+    ' F2 je radni sto ZBIRNE: bira se nacrt, pa mu se vezuju izdate otpremnice.
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        Scr_Liste = Array( _
+            "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTPREMNICA|96", _
+            "ZBIRNE|OTKUI_SEG_LS_ZBR|OTKUI_GRID_TITLE_ZBR_NACRTI|110", _
+            "IZVORI|OTKUI_SEG_LS_IZVORI|OTKUI_GRID_TITLE_IZVORI|104", _
+            "NEVEZANE|OTKUI_SEG_LS_NEVEZ_OTP|OTKUI_GRID_TITLE_NEVEZANE_OTP|120")
+        Exit Function
+    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     ' Peto polje "opseg" trazi od ljuske polja OD / DO iznad liste (S3b-2b):
     ' specifikacija po datumu stampa tacno ono sto je u listi, pa granicu
@@ -102,9 +118,10 @@ Public Function Scr_Liste() As Variant
         "KOOPERANTI|OTKUI_SEG_LS_KOOP|OTKUI_GRID_TITLE_KOOP|100")
 End Function
 
-' Dopuna naslova mreze: u listi blokova stoji broj aktivne otpremnice.
+' Dopuna naslova mreze: u listi izvora stoji broj aktivnog dokumenta.
 Public Function Scr_NaslovDopuna() As String
     If Scr_Lista() = "BLOKOVI" Then Scr_NaslovDopuna = mOtpBroj
+    If Scr_Lista() = "IZVORI" Then Scr_NaslovDopuna = mZbrBroj
 End Function
 
 Public Function Scr_Cipovi() As String
@@ -125,6 +142,21 @@ End Function
 ' Radnje nad redom za AKTIVNU listu: kljuc : natpis : sirina : stil : trebaRed.
 ' Kljuc se vraca u Scr_Event kao "act:<kljuc>:<red>".
 Public Function Scr_Radnje() As String
+    ' F2 -- radni sto zbirne. Kljucevi su svoji (vezizbr/uklonizbr/izdajzbr) da
+    ' se ne bi sudarili sa istoimenim radnjama nad otpremnicom u F1.
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        Select Case Scr_Lista()
+            Case "SVI", "NEVEZANE"
+                ' Bez aktivnog nacrta nema sta da se veze -- dugme se ne nudi.
+                If Len(mZbrID) > 0 Then _
+                    Scr_Radnje = "vezizbr:OTKUI_BTN_RED_VEZI:132:soft:1"
+            Case "IZVORI"
+                ' Izdavanje ne trazi red: radi nad aktivnim nacrtom.
+                Scr_Radnje = "uklonizbr:OTKUI_BTN_RED_UKLONI:136:danger:1|" & _
+                             "izdajzbr:OTKUI_BTN_RED_IZDAJ:120:soft:0"
+        End Select
+        Exit Function
+    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case Scr_Lista()
         Case "SVI"
@@ -173,6 +205,10 @@ End Function
 
 ' Koju listu F1 trenutno pokazuje. Van F1 uvek "SVI".
 Public Function Scr_Lista() As String
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        If Len(mListaZbr) = 0 Then Scr_Lista = "SVI" Else Scr_Lista = mListaZbr
+        Exit Function
+    End If
     If modeKey(ActiveMode) <> "OTKUP" Then
         Scr_Lista = "SVI"
     ElseIf Len(mLista) = 0 Then
@@ -587,6 +623,271 @@ EH:
     IzdajAktivnu = Poruka("OTKUI_ERR_IZDAJ") & " " & Err.description
 End Function
 
+' --- mreze radnog stola zbirne --------------------------------------------
+'
+' NE PRAVE SE NOVE MREZE. Kolone, zbirovi po stavkama i nevidljiva kolona
+' identiteta dolaze iz RedoviZaTip -- istog citaoca koji puni glavne liste. Ovde
+' se samo BIRA koji redovi ostaju, pa lista izvora i lista dokumenata ne mogu da
+' pokazu razlicite brojeve za isti dokument.
+Private Function RedoviZaSkup(ByVal tk As String, ByVal q As String, _
+                              ByVal skup As Object) As Variant
+    Dim d As Variant, cols As Variant, src As Variant
+    Dim n As Long, i As Long, k As Long, c As Long, idx As Long, sirina As Long
+    Dim outA() As Variant, id As String, sumKg As Double, kgCol As Long
+
+    d = RedoviZaTip(tk, "sve", q, True)
+    cols = d(0)
+    idx = IdentKolonaIndeks(tk)
+    n = CLng(d(2))
+
+    If n = 0 Or idx <= 0 Or skup Is Nothing Then
+        RedoviZaSkup = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If Not IsArray(d(1)) Then
+        RedoviZaSkup = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+
+    src = d(1)
+    sirina = UBound(src, 2)
+
+    ' Kolona kilaze se prepoznaje po TIPU iz opisa kolone, ne po poziciji:
+    ' pozicija se menja sa svakom novom kolonom, tip ne.
+    For c = 0 To UBound(cols)
+        If ColF(CStr(cols(c)), 2) = "kg" Then kgCol = c + 1
+    Next c
+
+    ReDim outA(1 To n, 1 To sirina)
+    For i = 1 To n
+        id = UCase$(Trim$(CStr(nz(src(i, idx), ""))))
+        If skup.Exists(id) Then
+            k = k + 1
+            For c = 1 To sirina
+                outA(k, c) = src(i, c)
+            Next c
+            If kgCol > 0 Then
+                If IsNumeric(src(i, kgCol)) Then sumKg = sumKg + CDbl(src(i, kgCol))
+            End If
+        End If
+    Next i
+
+    If k = 0 Then
+        RedoviZaSkup = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+
+    RedoviZaSkup = Array(cols, outA, k, sumKg, 0#, Array(0, 0, 0))
+End Function
+
+' Nacrti zbirnih -- lista postoji da se IZABERE dokument koji jos prima izvore,
+' pa izdate i stornirane u njoj nemaju sta da traze.
+Private Function RowsZbirneNacrti(ByVal q As String) As Variant
+    Dim skup As Object, src As Variant, i As Long, id As String
+    Dim iId As Long, iSt As Long, iStor As Long
+    Set skup = CreateObject("Scripting.Dictionary")
+
+    src = modUiData.CachedTable(TBL_ZBIRNA)
+    If IsArray(src) Then
+        iId = modUiData.ColIdx(TBL_ZBIRNA, COL_ZBR_ID)
+        iSt = modUiData.ColIdx(TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS)
+        iStor = modUiData.ColIdx(TBL_ZBIRNA, COL_STORNIRANO)
+        For i = 1 To UBound(src, 1)
+            id = UCase$(Trim$(modUiData.CellS(src, i, iId)))
+            If Len(id) > 0 Then
+                If UCase$(Trim$(modUiData.CellS(src, i, iSt))) = UCase$(IZDATO_DRAFT) Then
+                    If StrComp(Trim$(modUiData.CellS(src, i, iStor)), "Da", vbTextCompare) <> 0 Then
+                        skup(id) = True
+                    End If
+                End If
+            End If
+        Next i
+    End If
+
+    RowsZbirneNacrti = RedoviZaSkup("ZBIRNA", q, skup)
+End Function
+
+' Otpremnice U SASTAVU aktivnog nacrta. Sastav se cita iz clanstva
+' (tblZbirnaIzvori), nikad iz broja zbirne na otpremnici (ZBR-KANON-01).
+'
+' CITALAC JE ZbrClanovi, NE IzvoriZbirne (review #377, P1). Ta dva imaju
+' RAZLICIT UGOVOR, i to po lifecycle-u:
+'
+'   ZbrClanovi     nacrt   -- prazna kolekcija je UREDNO stanje (jos nije pokriven)
+'   IzvoriZbirne   izdata  -- prazno je KVAR i dize gresku
+'
+' Radni sto radi nad NACRTOM. Sa strogim citaocem je svaki tek napravljen nacrt
+' rusio listu odmah po izboru, a uklanjanje poslednjeg izvora isto -- crvena
+' mreza na potpuno ispravnom stanju. Strogi citalac ostaje strog; ovde je bio
+' upotrebljen na pogresnom grain-u.
+Private Function RowsIzvoriZbirne(ByVal q As String) As Variant
+    Dim skup As Object, c As Collection, i As Long
+    Set skup = CreateObject("Scripting.Dictionary")
+
+    If Len(mZbrID) > 0 Then
+        Set c = modDokumenta.ZbrClanovi(mZbrID)
+        For i = 1 To c.count
+            skup(UCase$(Trim$(CStr(c(i))))) = True
+        Next i
+    End If
+
+    RowsIzvoriZbirne = RedoviZaSkup("OTPREMNICA", q, skup)
+End Function
+
+' Otpremnice koje CEKAJU zbirnu: izdate i slobodne. Nacrt otpremnice se ne nudi
+' -- pravilo je u citaocu (NevezaneOtpremnice), ne ovde.
+Private Function RowsNevezaneOtp(ByVal q As String) As Variant
+    RowsNevezaneOtp = RedoviZaSkup("OTPREMNICA", q, modDokumenta.NevezaneOtpremnice())
+End Function
+
+' --- RADNI STO ZBIRNE (F2) ------------------------------------------------
+'
+' Ogledalo radnog stola otpremnice iz F1, sa jednom razlikom koja dolazi iz
+' domena: izvor zbirne mora da bude IZDATA otpremnica, a to pravilo NE stoji
+' ovde nego u piscu (RequireOtpValidanIzvorZbirne). Ekran ga ne ponavlja --
+' samo prenosi razlog koji pisac vrati.
+
+' Radnje radnog stola. Vracaju True kad mreza treba da se osvezi.
+Private Function RowActionZbr(ByVal sta As String, ByVal docID As String, _
+                              ByVal broj As String) As Boolean
+    Dim razlog As String, brIzd As String
+    Select Case sta
+        Case "vezizbr"
+            razlog = VeziZaAktivnuZbirnu(docID)
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
+                Exit Function
+            End If
+            Scr_ResetCache
+            RowActionZbr = True
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_VEZAN") & " " & mZbrBroj & ": " & broj, False
+
+        Case "uklonizbr"
+            razlog = UkloniIzAktivneZbirne(docID)
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
+                Exit Function
+            End If
+            Scr_ResetCache
+            RowActionZbr = True
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_UKLONJEN") & " " & mZbrBroj & ": " & broj, False
+
+        Case "izdajzbr"
+            If Len(mZbrID) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_AKT_ZBR"), True
+                Exit Function
+            End If
+            ' Izdavanje je konacno za sastav -- pita se.
+            If MsgBox(Poruka("OTKUI_ASK_IZDAJ") & " " & mZbrBroj & Poruka("OTKUI_ASK_IZDAJ2"), _
+                      vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+            brIzd = mZbrBroj
+            razlog = IzdajAktivnuZbirnu()
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
+                Exit Function
+            End If
+            Scr_ResetCache
+            RowActionZbr = True
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZDATA") & " " & brIzd, False
+    End Select
+End Function
+
+' Klik na red u listi zbirnih BIRA aktivan nacrt. Identitet dolazi iz nevidljive
+' kolone: isti broj smeju da nose dva vozaca.
+Private Function IzaberiZbirnuZaRadniSto(ByVal red As Long) As Boolean
+    Dim zbrID As String, razlog As String
+    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("ZBIRNA"))))
+    razlog = AktivirajZbirnu(zbrID)
+    If Len(razlog) > 0 Then
+        modOtkupUI.ShowToast razlog, True
+        Exit Function
+    End If
+    ' Posle izbora se odmah prelazi na njegove izvore -- isto sto F1 radi posle
+    ' izbora otpremnice.
+    mListaZbr = "IZVORI"
+    IzaberiZbirnuZaRadniSto = True
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_ZBR_AKTIVNA") & " " & mZbrBroj, False
+End Function
+
+' Izbor aktivnog nacrta zbirne. "" = izabran, inace razlog za operatera.
+' Samo NACRT: izdata i stornirana ne primaju izvore (ista kapija koju koristi i
+' izmena nacrta u F3).
+Public Function AktivirajZbirnu(ByVal zbrID As String) As String
+    On Error GoTo EH
+    zbrID = Trim$(zbrID)
+    AktivirajZbirnu = ZbrNacrtRazlog(zbrID)
+    If Len(AktivirajZbirnu) > 0 Then Exit Function
+    mZbrID = zbrID
+    mZbrBroj = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    Exit Function
+EH:
+    AktivirajZbirnu = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Napusti aktivnu zbirnu; lista se vraca na izbor nacrta.
+Public Sub Scr_ZbrOtkazi()
+    mZbrID = ""
+    mZbrBroj = ""
+    mListaZbr = "ZBIRNE"
+End Sub
+
+' ZbirnaID aktivnog nacrta na radnom stolu ("" = nema).
+Public Function Scr_ZbrID() As String
+    Scr_ZbrID = mZbrID
+End Function
+
+' Veze IZDATU otpremnicu za aktivan nacrt zbirne. "" = vezana, inace razlog.
+Public Function VeziZaAktivnuZbirnu(ByVal otpID As String) As String
+    Dim g As String
+    On Error GoTo EH
+    If Len(mZbrID) = 0 Then
+        VeziZaAktivnuZbirnu = Poruka("OTKUI_ERR_NEMA_AKT_ZBR")
+        Exit Function
+    End If
+    If Not modDokumenta.DodajZbirnaIzvor_TX(mZbrID, Trim$(otpID), g) Then
+        VeziZaAktivnuZbirnu = Poruka("OTKUI_ERR_VEZA_ZBR") & " " & g
+    End If
+    Exit Function
+EH:
+    VeziZaAktivnuZbirnu = Poruka("OTKUI_ERR_VEZA_ZBR") & " " & Err.description
+End Function
+
+' Izvadi otpremnicu iz aktivnog nacrta. "" = uklonjena, inace razlog.
+Public Function UkloniIzAktivneZbirne(ByVal otpID As String) As String
+    Dim g As String
+    On Error GoTo EH
+    If Len(mZbrID) = 0 Then
+        UkloniIzAktivneZbirne = Poruka("OTKUI_ERR_NEMA_AKT_ZBR")
+        Exit Function
+    End If
+    If Not modDokumenta.UkloniZbirnaIzvor_TX(mZbrID, Trim$(otpID), g) Then
+        UkloniIzAktivneZbirne = Poruka("OTKUI_ERR_UKLONI_ZBR") & " " & g
+    End If
+    Exit Function
+EH:
+    UkloniIzAktivneZbirne = Poruka("OTKUI_ERR_UKLONI_ZBR") & " " & Err.description
+End Function
+
+' Izdaje aktivan nacrt. "" = izdat, inace razlog -- pisac imenuje klasu i
+' brojeve kad najavljeno nije jednako povezanom. Posle izdavanja nacrt vise ne
+' prima izvore, pa ekran izlazi iz njegovog konteksta.
+Public Function IzdajAktivnuZbirnu() As String
+    Dim g As String
+    On Error GoTo EH
+    If Len(mZbrID) = 0 Then
+        IzdajAktivnuZbirnu = Poruka("OTKUI_ERR_NEMA_AKT_ZBR")
+        Exit Function
+    End If
+    If Not modDokumenta.IzdajZbirnu_TX(mZbrID, g) Then
+        IzdajAktivnuZbirnu = Poruka("OTKUI_ERR_IZDAJ_ZBR") & " " & g
+        Exit Function
+    End If
+    Scr_ZbrOtkazi
+    Exit Function
+EH:
+    IzdajAktivnuZbirnu = Poruka("OTKUI_ERR_IZDAJ_ZBR") & " " & Err.description
+End Function
+
 '--------------------------------------------------------- UGOVOR EKRANA
 ' Prva tacka ugovora iz modUiScreens. Sluzi dvostruko: opisuje ekran i
 ' javlja registru da modul POSTOJI - registar ga trazi bas ovim pozivom
@@ -608,7 +909,26 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' F2: klik na NACRT otvara njegovu izmenu (odluka 19.09.2026). Nista se ne
     ' upisuje -- forma se samo popuni, pa mreza ne mora da se cita ponovo.
     If modeKey(ActiveMode) = "OTPREMNICA" Then
-        If Left$(tag, 4) = "row:" Then IzaberiNacrtZaIzmenu CLng(Mid$(tag, 5))
+        If Left$(tag, 2) = "ls" Then
+            If Mid$(tag, 3) = Scr_Lista() Then Exit Function
+            mListaZbr = Mid$(tag, 3)
+            Scr_Event = True
+            Exit Function
+        End If
+        If Left$(tag, 4) = "act:" Then
+            Scr_Event = RowAction(tag)
+            Exit Function
+        End If
+        ' Klik na red znaci razlicite stvari po listi: u listi zbirnih BIRA
+        ' aktivan nacrt (radni sto), a u listi otpremnica otvara izmenu nacrta
+        ' otpremnice. Ista kontrola, dva predmeta -- zato odlucuje lista.
+        If Left$(tag, 4) = "row:" Then
+            If Scr_Lista() = "ZBIRNE" Then
+                Scr_Event = IzaberiZbirnuZaRadniSto(CLng(Mid$(tag, 5)))
+            ElseIf Scr_Lista() = "SVI" Then
+                IzaberiNacrtZaIzmenu CLng(Mid$(tag, 5))
+            End If
+        End If
         Exit Function
     End If
     ' F3: isto za zbirnu (S4-2c/2b-2).
@@ -731,6 +1051,19 @@ Private Function RowAction(ByVal tag As String) As Boolean
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     ' Identitet reda: svaka lista ima svoje kolone, pa i svoj indeks. Lista
     ' otpremnica ne nosi otkup nego OtpremnicaID -- cita ga specifikacija.
+    ' F2 liste nose OtpremnicaID ili ZbirnaID -- ne otkup. Identitet se cita iz
+    ' NEVIDLJIVE kolone, kao i u F1; broj je labela i ne bira dokument.
+    If modeKey(ActiveMode) = "OTPREMNICA" Then
+        Select Case Scr_Lista()
+            Case "ZBIRNE"
+                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("ZBIRNA"))))
+            Case Else
+                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("OTPREMNICA"))))
+        End Select
+        RowAction = RowActionZbr(p(0), otkupID, broj)
+        Exit Function
+    End If
+
     Select Case Scr_Lista()
         Case "BLOKOVI"
             otkupID = Trim$(CStr(modOtkupUI.GridCell(red, UBound(BlokGridCols()) + 1)))
@@ -2235,6 +2568,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
         Case "NEVEZANI":   Scr_Rows = RowsNevezani(q): Exit Function
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
+        Case "ZBIRNE":     Scr_Rows = RowsZbirneNacrti(q): Exit Function
+        Case "IZVORI":     Scr_Rows = RowsIzvoriZbirne(q): Exit Function
+        Case "NEVEZANE":   Scr_Rows = RowsNevezaneOtp(q): Exit Function
     End Select
     ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
     ' unosi. OTKUP nosi nevidljiv OtkupID: radnje reda (stampa, storno) idu po

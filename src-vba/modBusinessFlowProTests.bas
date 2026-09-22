@@ -171,6 +171,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_ValidacijaNadKanonom
     Test_ZBR_AdapterNePopravljaUnos
     Test_ZBR_EkranPraviIMenjaNacrt
+    Test_ZBR_RadniStoVezeIIzdaje
+    Test_ZBR_PrazanNacrtNeRusiListu
+    Test_ZBR_RadniStoVezePoIdentitetu
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8688,6 +8691,239 @@ Private Sub Test_ZBR_ValidacijaNadKanonom()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
+End Sub
+
+' PRAZAN NACRT NE RUSI LISTU IZVORA (review #377, P1).
+'
+' Radni sto je do ovog reza cistao sastav strogim citaocem (IzvoriZbirne), koji
+' za IZDATU zbirnu s pravom dize gresku kad clanstva nema. Nad NACRTOM je prazno
+' uredno stanje -- pa je svaki tek napravljen nacrt rusio mrezu odmah po izboru,
+' a uklanjanje poslednjeg izvora isto.
+'
+' Test vozi BAS taj put: postavi rezim F2, prebaci listu na IZVORE i cita redove
+' direktno kroz Scr_Rows -- mimo modUiScreens.ScrGridData, koji gresku guta
+' (On Error Resume Next), pa bi kvar ostao nevidljiv.
+Private Sub Test_ZBR_PrazanNacrtNeRusiListu()
+    Dim prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPRL")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("PRL-" & scenario, 400#, 20#)
+    AssertTrue Len(otp) > 0, "ZBR prazna lista: izvorna otpremnica je izdata"
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PRL-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR prazna lista: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    prevMode = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+    modScrDokumenti.Scr_Event "lsIZVORI", "Click"
+
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR prazna lista: nacrt je izabran na radni sto"
+
+    ' Prazan nacrt: nula redova, i to BEZ greske.
+    AssertEquals "0", CStr(ZbrBrojRedovaListe()), _
+                 "ZBR prazna lista: prazan nacrt daje nula redova, ne gresku"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR prazna lista: izvor vezan (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "1", CStr(ZbrBrojRedovaListe()), _
+                 "ZBR prazna lista: vezan izvor se vidi u sastavu"
+
+    ' Uklanjanje POSLEDNJEG izvora vraca listu na prazno -- opet bez greske.
+    AssertTrue modDokumenta.UkloniZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR prazna lista: izvor uklonjen (" & g & ")"
+    modScrDokumenti.Scr_ResetCache
+    AssertEquals "0", CStr(ZbrBrojRedovaListe()), _
+                 "ZBR prazna lista: uklonjen poslednji izvor ne rusi listu"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
+    LogFatal "Test_ZBR_PrazanNacrtNeRusiListu", Err.Number, Err.description
+End Sub
+
+' Broj redova AKTIVNE liste ekrana, citan direktno -- bez gutaca iz ljuske.
+Private Function ZbrBrojRedovaListe() As Long
+    Dim d As Variant
+    d = modScrDokumenti.Scr_Rows("sve", "")
+    If Not IsArray(d) Then Exit Function
+    ZbrBrojRedovaListe = CLng(d(2))
+End Function
+
+' RADNJA RADNOG STOLA VEZUJE PO IDENTITETU, NE PO BROJU (review #377, P2).
+'
+' Prethodni test je VeziZaAktivnuZbirnu zvao direktno, sa ID-em koji je vec drzao
+' -- pa je preskakao spoj koji ovaj rez uvodi:
+'
+'   red mreze -> nevidljiva kolona OtpremnicaID -> RowAction -> RowActionZbr
+'             -> VeziZaAktivnuZbirnu -> DodajZbirnaIzvor_TX
+'
+' Scenario je razlog zbog kog identitet postoji: DVE IZDATE OTPREMNICE POD ISTIM
+' BROJEM (broj otpremnice je jedinstven po stanici i DANU, pa isti broj na dva
+' dana su dva dokumenta). Klik nad drugom sme da veze samo nju.
+Private Sub Test_ZBR_RadniStoVezePoIdentitetu()
+    Dim prevMode As String, prevTest As Boolean
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRIDN")
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-OTP-IDN-" & scenario
+
+    Dim otpA As String, otpB As String
+    otpA = Pr3Otpremnica(broj, KLASA_I, 100#, 5)
+    otpB = Pr3Otpremnica(broj, KLASA_I, 200#, 10)
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, _
+               "ZBR identitet: dve izdate otpremnice su napravljene"
+    If Len(otpA) = 0 Or Len(otpB) = 0 Then Exit Sub
+    AssertTrue otpA <> otpB, "ZBR identitet: to su DVA razlicita dokumenta"
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-IDN-" & scenario), _
+                                 ZbrOcek(KLASA_I, 200#, 10#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR identitet: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    prevMode = modOtkupUI.ActiveMode
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+    modScrDokumenti.Scr_Event "lsNEVEZANE", "Click"
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR identitet: nacrt je izabran na radni sto"
+
+    ' MREZA SE PUNI SAMO U TEST MODU. GridTestLoad i GridIdentKolonaTest oba
+    ' pocinju sa "If Not IsTestMode() Then Exit" -- a BFP nije u test modu sam od
+    ' sebe (za razliku od modTest). Bez ovoga mreza ostane prazna, pa test pada
+    ' na trazenju reda umesto na tvrdnji koju meri.
+    prevTest = IsTestMode()
+    SetTestMode True
+
+    ' Mreza se puni onako kako je puni ljuska, pa se red bira po NEVIDLJIVOJ
+    ' koloni identiteta -- ne po broju, koji ovde nosi oba dokumenta.
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+
+    Dim identKol As Long, n As Long, i As Long, redB As Long
+    identKol = modOtkupUI.GridIdentKolonaTest()
+    n = modOtkupUI.GridBrojRedova()
+    If identKol > 0 Then
+        For i = 1 To n
+            If Trim$(CStr(nz(modOtkupUI.GridCell(i, identKol), ""))) = otpB Then redB = i
+        Next i
+    End If
+
+    AssertTrue identKol > 0, "ZBR identitet: lista nosi nevidljivu kolonu identiteta"
+    AssertTrue redB > 0, "ZBR identitet: red druge otpremnice je nadjen po OtpremnicaID-u"
+    If redB = 0 Then GoTo CIST
+
+    AssertTrue modScrDokumenti.Scr_Event("act:vezizbr:" & CStr(redB), "Click"), _
+               "ZBR identitet: radnja nad redom je izvrsena"
+
+    Dim clanovi As Collection
+    Set clanovi = modDokumenta.ZbrClanovi(zbrID)
+    AssertEquals "1", CStr(clanovi.count), "ZBR identitet: vezan je tacno jedan dokument"
+    If clanovi.count = 1 Then
+        AssertEquals otpB, CStr(clanovi(1)), _
+                     "ZBR identitet: vezana je BAS izabrana otpremnica, ne prva sa tim brojem"
+    End If
+
+CIST:
+    SetTestMode prevTest
+    modScrDokumenti.Scr_ZbrOtkazi
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+EH:
+    SetTestMode prevTest
+    modScrDokumenti.Scr_ZbrOtkazi
+    If Len(prevMode) > 0 Then modOtkupUI.ActiveMode = prevMode
+    LogFatal "Test_ZBR_RadniStoVezePoIdentitetu", Err.Number, Err.description
+End Sub
+
+' RADNI STO: VEZIVANJE, UKLANJANJE I IZDAVANJE KROZ EKRAN (S4-2c/2b-2b).
+'
+' Ekran ne nosi nijedno pravilo: svaka radnja ide u kanonski pisac i vraca
+' NJEGOV razlog. Test zato meri i da radnja bez izabranog nacrta odbija sa
+' imenovanim razlogom -- dugme se tada i ne crta, ali kapija ne sme da stoji
+' samo u tome koje se dugme nacrta.
+'
+' Potvrda izdavanja (MsgBox) je operaterova, ne logika -- zato se izdavanje
+' meri kroz IzdajAktivnuZbirnu, a ne kroz RowAction.
+Private Sub Test_ZBR_RadniStoVezeIIzdaje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRSTO")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("STO-" & scenario, 400#, 20#)
+    AssertTrue Len(otp) > 0, "ZBR sto: izvorna otpremnica je izdata"
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-STO-" & scenario), _
+                                 ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR sto: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    modScrDokumenti.Scr_ZbrOtkazi
+
+    ' Bez izabranog nacrta radnja ODBIJA i imenuje razlog.
+    AssertEquals Poruka("OTKUI_ERR_NEMA_AKT_ZBR"), _
+                 modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: bez izabranog nacrta vezivanje odbija"
+
+    AssertEquals "", modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR sto: nacrt se bira na radni sto"
+    AssertEquals zbrID, modScrDokumenti.Scr_ZbrID(), _
+                 "ZBR sto: aktivan nacrt je onaj koji je izabran"
+
+    AssertEquals "", modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: izdata otpremnica se vezuje"
+    AssertEquals "1", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR sto: sastav ima jedan izvor"
+
+    ' Ista otpremnica dvaput -- pisac je odbija, ekran samo prenosi razlog.
+    AssertTrue Len(modScrDokumenti.VeziZaAktivnuZbirnu(otp)) > 0, _
+               "ZBR sto: vec vezana otpremnica se ne vezuje ponovo"
+
+    ' Uklanjanje pa ponovo vezivanje -- sastav je radna povrsina dok nije izdat.
+    AssertEquals "", modScrDokumenti.UkloniIzAktivneZbirne(otp), _
+                 "ZBR sto: izvor se uklanja"
+    AssertEquals "0", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR sto: sastav je prazan posle uklanjanja"
+    AssertEquals "", modScrDokumenti.VeziZaAktivnuZbirnu(otp), _
+                 "ZBR sto: oslobodjena otpremnica se vezuje ponovo"
+
+    AssertEquals "", modScrDokumenti.IzdajAktivnuZbirnu(), _
+                 "ZBR sto: pokriven nacrt se izdaje kroz ekran"
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR sto: zbirna je IZDATA"
+    AssertEquals "", modScrDokumenti.Scr_ZbrID(), _
+                 "ZBR sto: izdavanje napusta kontekst nacrta"
+
+    ' Izdata se ne vraca na radni sto -- ista kapija koju drzi i izmena u F3.
+    AssertEquals Poruka("OTKUI_ERR_ZBR_IZDATA"), modScrDokumenti.AktivirajZbirnu(zbrID), _
+                 "ZBR sto: izdata zbirna se NE bira na radni sto"
+
+    modScrDokumenti.Scr_ZbrOtkazi
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_ZbrOtkazi
+    LogFatal "Test_ZBR_RadniStoVezeIIzdaje", Err.Number, Err.description
 End Sub
 
 ' EKRAN F3 ZAISTA UPISUJE, I IZMENA POGADJA SVOJ DOKUMENT (S4-2c/2b-2).

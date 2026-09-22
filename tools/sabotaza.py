@@ -678,10 +678,31 @@ SABOTAZE = {
     ),
     "zbirna-klik-po-broju": (
         "modScrDokumenti.bas",
-        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n",
-        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n    razlog = OtvoriIzmenuZbirne(zbrID, spec)\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n    razlog = OtvoriIzmenuZbirne(zbrID, spec)\n",
         "T_ZbirnaKlik_OtvaraSvojDokument",
         "klik otvara TAJ dokument, ne prvi sa tim brojem",
+    ),
+    "zbirna-radni-sto-bira-po-broju": (
+        "modScrDokumenti.bas",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"ZBIRNA\"))))\n    razlog = AktivirajZbirnu(zbrID)\n",
+        "    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n    razlog = AktivirajZbirnu(zbrID)\n",
+        "T_ZbirnaRadniSto_BiraSvojNacrt",
+        "radni sto bira BAS taj nacrt",
+    ),
+    "zbirna-sto-cita-strogog-citaoca": (
+        "modScrDokumenti.bas",
+        "        Set c = modDokumenta.ZbrClanovi(mZbrID)\n",
+        "        Set c = modDokumenta.IzvoriZbirne(mZbrID)\n",
+        "Test_ZBR_PrazanNacrtNeRusiListu",
+        "prazan nacrt daje nula redova, ne gresku",
+    ),
+    "zbirna-sto-veze-po-broju": (
+        "modScrDokumenti.bas",
+        "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"OTPREMNICA\"))))\n",
+        "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "Test_ZBR_RadniStoVezePoIdentitetu",
+        "vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
     ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
