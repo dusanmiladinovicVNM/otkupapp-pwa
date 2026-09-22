@@ -509,6 +509,18 @@ def check_eol(path: str, raw: bytes) -> list[Finding]:
     # poslednji element je rep posle zadnjeg \n (prazan kad fajl zavrsava
     # prelomom) -- on nema svoj kraj reda i ne broji se.
     for i, line in enumerate(redovi[:-1], start=1):
+        # DVOSTRUKI CR ide PRE provere golog LF: red koji se zavrsava na \r\r
+        # ima \r, pa bi donju granu prosao neprimecen.
+        if line.endswith(b"\r\r"):
+            return [Finding(path, i, "KRAJ_REDA",
+                            "DVOSTRUKI CR (\\r\\r\\n). Nastaje kad alat koji vec "
+                            "pise CRLF jos jednom zameni \\n u \\r\\n -- tipicno "
+                            "helper koji radi new.replace('\\n', nl) nad tekstom u "
+                            "koji je nl vec rucno ubacen. Git to pri commit-u "
+                            "skrati na \\r\\n u BLOB-u, pa radno stablo ostane "
+                            "TRAJNO 'izmenjeno' i pull --ff-only bude odbijen -- "
+                            "bez ijedne sadrzinske razlike. U zamenama pisi samo "
+                            "\\n i pusti helper da konvertuje.")]
         if not line.endswith(b"\r"):
             return [Finding(path, i, "KRAJ_REDA",
                             "LF umesto CRLF. VBA izvor je CRLF format: formu sa LF "
@@ -2908,6 +2920,12 @@ KRAJ_REDA_CASES = [
     ("jedan LF medju CRLF-ovima", 1,
      b'Attribute VB_Name = "modX"\r\nOption Explicit\nPublic Sub R()\r\nEnd Sub\r\n'),
     ("poslednji red bez CR", 1, b'Attribute VB_Name = "modX"\r\nOption Explicit\n\n'),
+    # Dva puta u jednoj sesiji (PR #378, #379): alat koji vec pise CRLF jos
+    # jednom zameni \n, pa nastane \r\r\n. Fajl izgleda uredno u editoru, a
+    # radno stablo ostaje trajno "izmenjeno".
+    ("dvostruki CR", 1, b'Attribute VB_Name = "modX"\r\r\nOption Explicit\r\n'),
+    ("dvostruki CR u poslednjem redu", 1,
+     b'Attribute VB_Name = "modX"\r\nOption Explicit\r\r\n'),
     # --- NE sme da zapisti ---
     ("uredan CRLF modul", 0,
      b'Attribute VB_Name = "modX"\r\nOption Explicit\r\nPublic Sub R()\r\nEnd Sub\r\n'),
