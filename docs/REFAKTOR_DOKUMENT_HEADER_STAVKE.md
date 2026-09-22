@@ -4336,7 +4336,23 @@ razlog video **tek posle upisa** — a ovaj sloj postoji baš zato da ga vidi uz
 izričito: klasa postoji → `Kolicina > 0`; `Kolicina = 0` → i `KolAmb` mora biti 0. Isto za klasu II kad
 je prekidač uključen. Pisac i dalje sudi isto — ovde je poruka, tamo tvrda kapija.
 
-Pet novih testova, sedam sabotaža (**546 → 553**). **Nijedna linija ekrana.**
+**Review #375, drugi P1 — prekidač „dve klase" je bio TVRDNJA, a adapter ga je tretirao kao FILTER.**
+`dveKlase = True` uz praznu II klasu je tiše postajalo **jednoklašna zbirna**: prevodilac je II
+prenosio samo „ako ima kilažu ili gajbe". Moj sopstveni komentar iznad tog koda je tvrdio suprotno —
+da je prekidač izbor operatera da ta klasa postoji. Komentar je bio tačan, kod nije.
+
+Rez: unutar prekidača II klasa se prenosi **bezuslovno**, pa prazna stigne do pisca i padne na
+`Kolicina <= 0`. Validator daje istu tvrdnju uz polje (`OTKUNOS_ERR_KOLICINA_II`). Pozitivna kontrola
+je netaknuta: `I = 0/0` uz `dveKlase` i `II = 100/5` je i dalje legitiman II-only nacrt — klasa I se
+ne zahteva, poštuje se **značenje prekidača**, ne prisustvo podataka.
+
+> Tri kruga, ista klasa greške na tri mesta: **pravilo primenjeno na pogrešnom sloju**. Zato je
+> granica sada izričita: **adapter PRENOSI · validator OBJAŠNJAVA · pisac PRESUĐUJE.**
+
+Uz to je zatvoren i P3: fokus za ambalažu i celobrojnost se razdvaja po klasi (`kolAmb` / `kolAmbII`).
+Validator koji pokaže na pogrešno polje šalje operatera da popravlja ono što nije pokvareno.
+
+Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 
 ## 15) Backlog — namerno van opsega
 

@@ -8690,6 +8690,18 @@ Private Sub Test_ZBR_AdapterNePopravljaUnos()
     AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
                  "ZBR adapter: gajbe bez kilaze ne prolaze ni kroz pisca"
 
+    ' 2c) PREKIDAC "DVE KLASE" UZ PRAZNU II -- izbor operatera se ne preispituje.
+    ' Ranije je adapter takav unos tiho pretvarao u JEDNOKLASNU zbirnu.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2C-" & scenario, 400#, 20)
+    p("dveKlase") = True
+    p("kolicinaII") = 0#
+    p("kolAmbII") = 0
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: ukljucene dve klase uz praznu II ne prolaze validaciju"
+    AssertEquals "kolicinaII", fokus, "ZBR adapter: fokus ide na kilazu klase II"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: prazna II klasa NE postaje jednoklasna zbirna"
+
     AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
                  "ZBR adapter: nijedan odbijen unos nije ostavio zaglavlje"
 

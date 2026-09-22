@@ -640,6 +640,13 @@ SABOTAZE = {
         "Test_ZBR_AdapterNePopravljaUnos",
         "gajbe bez kilaze ne prolaze validaciju",
     ),
+    "zbirna-adapter-gubi-praznu-drugu-klasu": (
+        "modDokUnos.bas",
+        "    If B(p, \"dveKlase\") Then\n        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n    End If\n",
+        "    If B(p, \"dveKlase\") Then\n        If D(p, \"kolicinaII\") <> 0 Then   ' SABOTAZA: prazna II nestaje\n            ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n        End If\n    End If\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "prazna II klasa NE postaje jednoklasna zbirna",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

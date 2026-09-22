@@ -550,16 +550,29 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
         Exit Function
     End If
 
-    If kolAmb < 0 Or kolAmbII < 0 Then
+    If kolAmb < 0 Then
         fokus = "kolAmb"
+        ZbirnaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
+        Exit Function
+    End If
+    If kolAmbII < 0 Then
+        fokus = "kolAmbII"
         ZbirnaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
         Exit Function
     End If
 
     ' GAJBE SU KOMADI. Decimala se ODBIJA, ne zaokruzuje -- isto pravilo koje
     ' pisac drzi kroz RequireCeoBroj. Poruka je ovde, tvrda kapija je tamo.
-    If kolAmb <> Int(kolAmb) Or kolAmbII <> Int(kolAmbII) Then
+    '
+    ' Fokus se razdvaja po klasi: validator koji pokaze na pogresno polje salje
+    ' operatera da popravlja ono sto nije pokvareno (review #375, P3).
+    If kolAmb <> Int(kolAmb) Then
         fokus = "kolAmb"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO")
+        Exit Function
+    End If
+    If kolAmbII <> Int(kolAmbII) Then
+        fokus = "kolAmbII"
         ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO")
         Exit Function
     End If
@@ -578,6 +591,15 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
     If dveKl And kolII = 0 And kolAmbII <> 0 Then
         fokus = "kolicinaII"
         ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG")
+        Exit Function
+    End If
+
+    ' PREKIDAC "DVE KLASE" JE TVRDNJA, NE FILTER (review #375, drugi P1).
+    ' Ukljucen prekidac uz praznu II klasu nije jednoklasna zbirna nego
+    ' nedovrsen unos. Pisac to odbija; ovde operater dobija polje na koje ide.
+    If dveKl And kolII <= 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("OTKUNOS_ERR_KOLICINA_II")
         Exit Function
     End If
 
@@ -635,12 +657,17 @@ Private Function ZbirnaNacrtIzUnosa(ByVal p As Object, ByRef h As Object, _
         ocek.Add ZbrStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "kolAmb"))
     End If
 
-    ' Prekidac "dve klase" je IZBOR OPERATERA da ta klasa postoji, a ne podatak:
-    ' iskljucen znaci da polja klase II nisu ni unos, pa se ne prenose.
+    ' UKLJUCEN PREKIDAC ZNACI DA KLASA POSTOJI (review #375, drugi P1).
+    '
+    ' Ovde je stajalo "prenesi II samo ako ima kilazu ili gajbe" -- pa je
+    ' dveKlase = True uz praznu II klasu tiho postajalo JEDNOKLASNA zbirna.
+    ' Adapter je time preispitivao izbor operatera, umesto da ga prenese; ista
+    ' greska koju je prethodni rez popravio za -5 kg i 20.5 gajbi.
+    '
+    ' Prazna II klasa sada stize do pisca i pada na "Kolicina <= 0" -- sto je i
+    ' tacan odgovor: operater je rekao da klasa postoji, a nije rekao koliko.
     If B(p, "dveKlase") Then
-        If D(p, "kolicinaII") <> 0 Or D(p, "kolAmbII") <> 0 Then
-            ocek.Add ZbrStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "kolAmbII"))
-        End If
+        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "kolAmbII"))
     End If
 
     If ocek.count = 0 Then
