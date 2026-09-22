@@ -4504,6 +4504,52 @@ bezbedno odbija, a `SVI` je namerno „sve". Ide uz sledeći rez, sa trakom napr
 **Ostaje za sledeći rez:** traka napretka u F2 (`GetZbirnaProgress` — čitalac postoji od 2b-1, prikaz ne)
 i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji P3 iz review-a #376.
 
+### 14.31) S4-2c/2b-2c-1 — F3 prestaje da traži ono što ne nosi (22.09.2026)
+
+Forma F3 je tražila **cenu**, **tip ambalaže** i prikazivala **vrednost** — a `tblZbirna` kolonu `Cena`
+uopšte nema, tip ambalaže je činjenica robe koju donosi prvi izvor (ZBR-KANON-04), a vrednost bi bez
+cene uvek bila nula. **Polje koje prima unos a nigde ga ne čuva je tvrdnja interfejsa bez pokrića**, a
+nula uz robu izgleda kao podatak.
+
+Sve tri idu kroz postojeći `FldShow` mehanizam po režimu — bez `.frx` izmene i bez nove kontrole.
+
+**P3 iz review-a #377 zatvoren:** lista `SVI` više ne nudi `Veži`. Ona je namerno sveobuhvatna, pa
+sadrži i **nacrte** otpremnica; pisac ih odbija, ali odbiti **posle klika** znači ponuditi operateru
+nešto što će se sigurno odbiti.
+
+**Dokle ta tvrdnja seže (review #379, P3):** `NevezaneOtpremnice` filtrira po **stanju dokumenta** —
+izdata, nestornirana, slobodna. Ne filtrira po **odnosu prema aktivnom nacrtu**: otpremnica drugog
+vozača ili druge vrste je i dalje u spisku, a `ZbrRequireIzvorValjan` je odbija. Spisak je dakle „sve
+što **može** da bude izvor", ne još „sve što može da bude izvor **ove** zbirne". Sužavanje na aktivan
+nacrt je zaseban rez — upisan u backlog, da tvrdnja u dokumentaciji ne bude jača od koda.
+
+**Drugi P3 (`mZbrID` preživljava izlazak iz F2) se NE zatvara brisanjem stanja — i to je nalaz.**
+Radni sto zbirne je u F2, a njena forma u F3; radni sto otpremnice je u F1, a forma u F2. Kontekst
+**mora** da preživi prelazak između ta dva ekrana, inače se tok prekida na svakom koraku. Problem nije
+da stanje živi predugo nego da **nije dovoljno vidljivo** — a to rešava traka napretka, ne čišćenje.
+Zato ta stavka prelazi u 2c-2 i nestaje sa njom.
+
+**Review #379, P1 — sakriven je nosač zajedno sa sadržajem.** `fgCena` nije samo cena: u istom okviru
+žive `segKlasa1`/`segKlasa2`, **jedini operaterski put do dvoklasne najave**. Sakrivanjem okvira se kroz
+F3 više nije mogla napraviti zbirna sa I i II klasom — a pisac je izričito podržava. **Kontrola koja
+postoji u nevidljivom roditelju ne postoji za operatera.** Odluka „zbirna nema cenu" se ne menja; gase
+se **kutije** cene (`KlasaCenaPoRezimu`), a natpis okvira se svodi na klasu.
+
+**Review #379, P2 — test nije izvršavao put koji tvrdi.** Prvi pokušaj je postavljao `ActiveMode` i
+zvao `GridRenderTest` — a to je `LayoutGrid` + `RenderGrid`, dakle **mreža, ne forma**. Vidljivost polja
+postavlja `ApplyFormFields`, do koga se stize samo kroz `SelectMode`. Test je zato merio formu koja je
+ostala u stanju iz gradnje (F1). Sada ide kroz `modOtkupUI.SelectMode f, "F3"` / `"F1"`.
+
+> Treći put u ovom lancu ista klasa: **dokaz presecen pola koraka prerano.** #376 test je sam sebi
+> dodao ključ, #377 nije ponovo učitao mrežu, #379 nije prešao režim. Zajedničko im je da svaki put
+> ostaje ZELENO — pa razlika između „prolazi" i „meri" nije vidljiva iz rezultata.
+
+Dva nova testa, dve sabotaže (**562 → 564**). Vidljivost polja se ne može automatski izmeriti —
+ide na operatersku checklistu (`.claude/rules/testovi.md` §7).
+
+**Ostaje za 2c-2:** traka napretka iz `GetZbirnaProgress` (uz odluku šta pokazuje četvrta grupa mera,
+jer zbirna nema cenu) i vrsta/sorta iz kontekstne zone, koje traže raspored — oba diraju ljusku.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -4521,6 +4567,7 @@ i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji 
 | **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
 | **Strog čitalac je registarski, ne dokumentarni** (review #370, P2) | `StavkeZbirneRedovi` (kao i čitači otkupa i otpremnice) validira **celu tabelu**, pa jedna pokvarena istorijska zbirna obori čitanje svih ostalih — i liste u kojima te zbirne nema. Fail-closed je ovde namerno izabran i ostaje, ali se vredi razdvojiti: **registarski audit → globalno strogo**, **jedan dokument → strogo u opsegu tog dokumenta**. Rez važi za sva tri tipa odjednom, pa ne ide unutar jednog slajsa |
 | **`who_writes` ne prijavljuje MRTAV UNOS u `WRITE_OWNERSHIP.json`** (nalaz S3e-1) | spisak dozvola je nabrajao tri modula koja tabelu odavno ne pišu, a kapija je ćutala: `--check-ownership` proverava samo da je **svaki pisac naveden**, ne i da **svaki naveden piše**. `vba_hard_census` isti problem rešava pravilom `MRTAV_UNOS`. Rez: isto pravilo u `who_writes.py`, pa spisak ne može da istruli neprimećeno |
+| **`NEVEZANE` nije sužena na AKTIVNI nacrt** (review #379, P3) | čitalac filtrira po stanju dokumenta (izdata, nestornirana, slobodna), ali ne po odnosu prema izabranoj zbirnoj — otpremnica drugog vozača ili druge vrste/sorte/tipa ambalaže ostaje u ponudi, a `ZbrRequireIzvorValjan` je odbija. Nema kvara podataka (pisac je fail-closed), ali je to isti obrazac koji smo već jednom zatvorili za nacrte. Rez: `NevezaneOtpremnice(zbirnaID)` koja sužava po vozaču i preuzetim činjenicama kad nacrt postoji — i test sa **nekompatibilnom** otpremnicom, jer današnji test meri samo ime liste |
 | **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |

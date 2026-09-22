@@ -146,7 +146,22 @@ Public Function Scr_Radnje() As String
     ' se ne bi sudarili sa istoimenim radnjama nad otpremnicom u F1.
     If modeKey(ActiveMode) = "OTPREMNICA" Then
         Select Case Scr_Lista()
-            Case "SVI", "NEVEZANE"
+            Case "NEVEZANE"
+                ' VEZIVANJE SE NUDI SAMO NAD LISTOM KOJA NE LAZE (review #377, P3).
+                '
+                ' Lista SVI je namerno sveobuhvatna, pa sadrzi i NACRTE
+                ' otpremnica. Nacrt nije roba koja je otisla i pisac ga odbija --
+                ' ali odbiti tek posle klika znaci ponuditi operateru nesto sto
+                ' ce se sigurno odbiti.
+                '
+                ' DOKLE OVA TVRDNJA SEZE (review #379, P3): NevezaneOtpremnice
+                ' filtrira po STANJU dokumenta -- izdata, nestornirana, slobodna.
+                ' NE filtrira po odnosu prema AKTIVNOM nacrtu: otpremnica drugog
+                ' vozaca ili druge vrste je i dalje u spisku, a pisac je odbija.
+                ' Spisak je zato "sve sto MOZE da bude izvor", ne jos "sve sto
+                ' moze da bude izvor OVE zbirne". Suzavanje na aktivan nacrt je
+                ' zaseban rez (backlog).
+                '
                 ' Bez aktivnog nacrta nema sta da se veze -- dugme se ne nudi.
                 If Len(mZbrID) > 0 Then _
                     Scr_Radnje = "vezizbr:OTKUI_BTN_RED_VEZI:132:soft:1"

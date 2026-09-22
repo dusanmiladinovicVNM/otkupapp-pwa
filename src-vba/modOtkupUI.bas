@@ -3478,10 +3478,19 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgNovac", False
             FldShow z, "fgKgI", True
             FldShow z, "fgKgII", True
+            ' OKVIR OSTAJE, CENA ODLAZI POJEDINACNO (review #379, P1).
+            '
+            ' fgCena nije samo cena: u istom okviru zive segKlasa1/segKlasa2,
+            ' JEDINI operaterski put do dvoklasne najave. Sakriti ceo okvir znaci
+            ' oduzeti operateru mogucnost da napravi zbirnu sa I i II klasom --
+            ' a pisac je izricito podrzava. Gasi se sadrzaj, ne nosac.
             FldShow z, "fgCena", True
             FldShow z, "fgKolAmb", True
             FldShow z, "fgKolAmbII", (mKlasa = 2)
-            FldShow z, "fgTipAmb", True
+            ' TIP AMBALAZE ZBIRNE NIJE UNOS nego cinjenica ROBE koju donosi prvi
+            ' izvor (ZBR-KANON-04). Zaglavlje ga nosi, ali ga pisac sa forme ne
+            ' prima -- pa se ni ne trazi.
+            FldShow z, "fgTipAmb", (mode <> "F3")
             ' prazna ambalaza se izdaje uz otkup i vraca uz prijemnicu;
             ' otpremnica i zbirna je ne dodiruju
             FldShow z, "fgAmbPr", (mode = "F1" Or mode = "F4")
@@ -3491,12 +3500,45 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", (mode = "F3")
             FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
-            FldShow z, "fgVrednost", True
+            ' Vrednost se racuna iz cene, koje zbirna nema -- prikaz bi uvek bio
+            ' nula, a nula uz robu izgleda kao podatak.
+            FldShow z, "fgVrednost", (mode <> "F3")
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
             FldShow z, "fgAvans", False
             FldShow z, "fgFaktura", False
+            KlasaCenaPoRezimu z, mode
     End Select
+End Sub
+
+' ZBIRNA IMA KLASU, ALI NEMA CENU.
+'
+' Klasa i cena dele jedan okvir jer su za otkup i otpremnicu ista odluka
+' ("koja roba, po kojoj ceni"). Za zbirnu to ne vazi: tblZbirna nema kolonu
+' Cena i nijedan pisac je ne prima, a prekidac klase je i dalje potreban.
+'
+' Zato se u F3 gase KUTIJE cene, a natpis okvira se svodi na klasu. Prvi
+' pokusaj ovog reza je sakrio ceo okvir i time tiho ukinuo dvoklasnu zbirnu
+' (review #379, P1) -- kontrola koja postoji u nevidljivom roditelju ne postoji
+' za operatera.
+Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
+    Dim fr As Object, imaCenu As Boolean, nm As Variant
+    On Error Resume Next
+
+    Set fr = z.Controls("fgCena")
+    If fr Is Nothing Then Exit Sub
+
+    imaCenu = (mode <> "F3")
+
+    ' NewCenaBox pravi tri kontrole po klasi: okvir, oznaku i polje.
+    For Each nm In Array("fgCena1", "fgCena2")
+        fr.Controls(CStr(nm)).Visible = imaCenu
+        fr.Controls(CStr(nm) & "P").Visible = imaCenu
+        fr.Controls(CStr(nm) & "T").Visible = imaCenu
+    Next nm
+
+    fr.Controls("fgCenaL").caption = _
+        UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
 ' Cetiri smera reversa su medjusobno iskljuciva - isti obrazac kao SetKlasa.

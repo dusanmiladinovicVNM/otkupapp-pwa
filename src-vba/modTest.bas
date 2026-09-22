@@ -494,6 +494,7 @@ Public Sub RunAllTests()
     RunOne 197
     RunOne 198
     RunOne 199
+    RunOne 200
 
     SetTestMode prevMode
     WriteResultFile
@@ -761,6 +762,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 194: TestName = "T_ReversValidiraj_KoopBrojDrugeStanice"
         Case 195: TestName = "T_KpiSaldoOM_CitaKolonuSalda"
         Case 196: TestName = "T_UtovarB_StornoKapije"
+        Case 200: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
@@ -968,6 +970,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 194: T_ReversValidiraj_KoopBrojDrugeStanice
         Case 195: T_KpiSaldoOM_CitaKolonuSalda
         Case 196: T_UtovarB_StornoKapije
+        Case 200: T_ZbirnaForma_KlasaOstajeBezCene
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
@@ -1418,6 +1421,63 @@ End Sub
 ' pa se tamo i proverava. Datum se ne postavlja jer ga nijedna provera ne cita
 ' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
 ' ============================================================
+
+' F3 GUBI CENU, ALI NE I PREKIDAC KLASE (review #379, P1).
+'
+' Klasa i cena dele jedan okvir (fgCena). Prvi pokusaj da se cena skloni iz F3
+' sakrio je ceo okvir -- i time tiho ukinuo dvoklasnu zbirnu, jer segKlasa2
+' postoji ali se ne moze kliknuti. Pisac dvoklasnu najavu izricito podrzava
+' (dveKlase + kolicinaII + kolAmbII), pa je to bio gubitak funkcije, ne izgleda.
+'
+' Zato ovaj test meri BAS to: okvir je vidljiv i prekidac klase je u njemu, a
+' kutije cene nisu. Kontrola u nevidljivom roditelju NE postoji za operatera, pa
+' se vidljivost roditelja tvrdi posebno.
+Private Sub T_ZbirnaForma_KlasaOstajeBezCene()
+    Dim f As frmOtkupUI, prev As String, z As Object, fr As Object
+    Dim okvirF3 As Boolean, klasaF3 As Boolean, cenaF3 As Boolean
+    Dim okvirF1 As Boolean, cenaF1 As Boolean
+    Dim errNum As Long, errDesc As String
+
+    prev = modOtkupUI.ActiveMode
+    On Error GoTo EH
+
+    Set f = NewOtkupUIForm()
+
+    ' PRAVI PRELAZAK REZIMA, ne samo promena zastavice (review #379, P2).
+    '
+    ' ActiveMode je javna promenljiva; vidljivost polja postavlja
+    ' ApplyFormFields, do koga se stize SAMO kroz SelectMode. GridRenderTest
+    ' radi LayoutGrid i RenderGrid -- mrezu, ne formu. Prvi pokusaj ovog testa
+    ' je menjao zastavicu i crtao mrezu, pa NIJE izvrsavao kod koji tvrdi da
+    ' meri: forma bi ostala u stanju u kom ju je ostavila gradnja (F1).
+    modOtkupUI.SelectMode f, "F3"
+    Set z = f.Controls("zForm")
+    Set fr = z.Controls("fgCena")
+    okvirF3 = fr.Visible
+    klasaF3 = fr.Controls("segKlasa2").Visible
+    cenaF3 = fr.Controls("fgCena1T").Visible
+
+    modOtkupUI.SelectMode f, "F1"
+    Set fr = f.Controls("zForm").Controls("fgCena")
+    okvirF1 = fr.Visible
+    cenaF1 = fr.Controls("fgCena1T").Visible
+
+    Unload f
+    modOtkupUI.ActiveMode = prev
+
+    AssertEq okvirF3, True, "F3: okvir klase i cene OSTAJE vidljiv"
+    AssertEq klasaF3, True, "F3: prekidac druge klase je dostupan operateru"
+    AssertEq cenaF3, False, "F3: polje cene je skinuto"
+    AssertEq okvirF1, True, "F1: okvir je i dalje vidljiv"
+    AssertEq cenaF1, True, "F1: cena ostaje tamo gde dokument ima cenu"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not f Is Nothing Then Unload f
+    modOtkupUI.ActiveMode = prev
+    Err.Raise errNum, "T_ZbirnaForma_KlasaOstajeBezCene", errDesc
+End Sub
 
 ' RADNI STO U F2 BIRA NACRT PO IDENTITETU (S4-2c/2b-2b).
 '
