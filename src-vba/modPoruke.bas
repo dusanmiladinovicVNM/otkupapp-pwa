@@ -770,6 +770,8 @@ Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
     ' 4. kolona mreze: KG za robu, KANAL za gotovinski promet, TIP AMB. za reverse
     UpsertRow lo, existing, "OTKUI_HD_KANAL", "KANAL"
     UpsertRow lo, existing, "OTKUI_MSG_MREZA_PALA", "U" & ChrW(269) & "itavanje mre" & ChrW(382) & "e nije uspelo na koraku:"
+    UpsertRow lo, existing, "OTKUI_ERR_ZBR_NEPOZNATA", ChrW(10007) & " Ta zbirna ne postoji ili je stornirana."
+    UpsertRow lo, existing, "OTKUI_ERR_ZBR_IZDATA", "Zbirna je izdata " & ChrW(8212) & " izdato se ne menja, nego se stornira i unese nova."
     UpsertRow lo, existing, "OTKUI_MSG_ZBIRNA_AKTIVNA", "Aktivna zbirna:"
     UpsertRow lo, existing, "OTKUI_HD_OSNOV", "OSNOV"
     UpsertRow lo, existing, "OTKUI_OSN_REV_IZDATO", "Revers " & ChrW(8212) & " izdato"
@@ -972,7 +974,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA", "Napomena: ISPRAVKA otpremnice je PAUZIRANA dok otpremnica ne pre" & ChrW(273) & "e na nov model. Ova otpremnica NIJE vezana za storniranu " & ChrW(8212) & " ispravka i dalje " & ChrW(269) & "eka na ekranu Oporavak."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT", "Otpremnica je otvorena kao NACRT. Izda" & ChrW(263) & "e se kad joj se vezu otkupni blokovi."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT_IZMENJEN", "Nacrt otpremnice je izmenjen."
-    UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_PAUZIRANA", "Unos zbirne je PAUZIRAN dok zbirna ne pre" & ChrW(273) & "e na nov model. Otpremnice se od sada vezuju za zbirnu tek kad su izdate, a taj korak jo" & ChrW(353) & " ne postoji " & ChrW(8212) & " zato se zbir ne mo" & ChrW(382) & "e proveriti."
     UpsertRow lo, existing, "DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA", "Unos prijemnice je PAUZIRAN dok prijemnica ne pre" & ChrW(273) & "e na nov model. Prijemnica tra" & ChrW(382) & "i zbirnu, a zbirna se jo" & ChrW(353) & " ne mo" & ChrW(382) & "e uneti."
     UpsertRow lo, existing, "PRINT_OTP_NIJE_IZDATA", "Otpremnica jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa. Otpremnica se " & ChrW(353) & "tampa kad je izdata, sa cenama njenih otkupnih blokova."
     UpsertRow lo, existing, "STORNO_ERR_OTP_IZVOR_ZBIRNE", "Otpremnica je izvor aktivne zbirne " & ChrW(8212) & " storno je pauziran dok zbirna ne pre" & ChrW(273) & "e na nov model. Zbirna:"

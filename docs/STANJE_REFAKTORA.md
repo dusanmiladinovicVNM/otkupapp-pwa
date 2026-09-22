@@ -200,7 +200,11 @@
     `ZbirnaIzmeniNacrt` + **prepisan** `ZbirnaValidiraj` (bez poređenja po `BrojZbirne`, bez vrste i
     sorte, bez `GeneracijaID` kapija; broj sudi istim alatom kao pisac). Pauza je sada na tačno
     jednom mestu (`SnimiZbirnu`). Nijedna linija ekrana. Detalji: plan §14.28.
-32. **Sledeće:** **S4-2c/2b-2** (ekrani: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
+32. **S4-2c/2b-2a — F3 piše (PR #___).** Pauza skinuta; mreža F3 nosi nevidljivi `ZbirnaID`, klik na
+    red otvara izmenu nacrta po ID-u, snimanje pravi **ili** menja nacrt. Izdata se ne otvara.
+    Ekran ništa ne sudi. Ostaje za 2b-2b: polja vrste/sorte/tipa ambalaže u formi primaju unos koji
+    se nigde ne upisuje. Detalji: plan §14.29.
+33. **Sledeće:** **S4-2c/2b-2b** (F2 radni sto: F3 forma nad nacrtom + pregled svih zbirnih, radni sto za izvore u F2,
     direktan izbor, skidanje pauze, brisanje starog pisca), pa S4-3 (članstvo, storno okvir, ZBR-KANON-03),
     S4-4 (malina auto-zbirna), pa **S5** (PWA sync, pre njega otkup u `PROSLEDJENO` kao izvor), pa **S3e-2**
     (brisanje kolona kad popis pokaže nulu), pa S6 (prijemnica, F4).

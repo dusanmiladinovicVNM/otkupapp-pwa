@@ -4380,6 +4380,40 @@ prekidao test. Sva su prevedena u glasnu tvrdnju pre izlaza.
 
 Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 
+### 14.29) S4-2c/2b-2a — F3 piše (22.09.2026)
+
+**Pauza F3 je skinuta.** Ekran je od S3a vraćao poruku o pauzi; sada ide kroz `modDokUnos` do
+kanonskog nacrta. `SnimiZbirnu` **prevodi polja i ništa ne sudi** — validacija je u `ZbirnaValidiraj`,
+kapija u piscu.
+
+| Šta | Gde | Ogledalo |
+|---|---|---|
+| nevidljiva kolona `ZbirnaID` u mreži F3 | `Scr_Rows` | `OTPREMNICA` od S3b-2 |
+| klik na red otvara izmenu nacrta | `Scr_Event` → `IzaberiZbirnuZaIzmenu` | `IzaberiNacrtZaIzmenu` |
+| kapija „izdato se ne menja" pre forme | `ZbrNacrtRazlog` | `NacrtRazlog` |
+| forma iz dokumenta | `PrefillZbirnaNacrta` | `PrefillNacrta` |
+| snimanje pravi **ili** menja nacrt | `SnimiZbirnu` | `SnimiOtpremnicu` |
+
+**Tri kapije koje sam sebi postavio pre koda, i sve tri drže:** red mreže nosi **`ZbirnaID`**, ne broj —
+isti broj smeju da nose dva vozača, pa bi klik po broju otvarao tuđi dokument · **nijedna provera ne
+živi u ekranu** · napredak se ne računa u ljusci (dolazi u 2b-2b iz `GetZbirnaProgress`).
+
+**Šta je otišlo sa pauzom:** ključ `DOKUNOS_ERR_ZBIRNA_PAUZIRANA` (poruka koju više niko ne vraća) i
+mrtvi ključevi `vrsta`/`sorta`/`tipAmb` iz `NoviZbirnaUnos` — dug upisan u §14.28, sada zatvoren.
+
+**Šta OSTAJE nedorečeno, i to je ulazni uslov za 2b-2b:** polja vrste, sorte i tipa ambalaže u formi F3
+još postoje i operater sme da ih kuca, a ništa se ne upisuje — one su činjenica robe koju donosi prvi
+izvor. Prefill ih **prikazuje** da bi forma govorila istinu o dokumentu, ali polje koje prima unos a
+ne čuva ga je tvrdnja bez pokrića. Odlaze sa radnim stolom.
+
+**Posledica reza:** posle 2b-2a operater pravi i menja nacrt, ali ga **ne može izdati** — izvori se
+vezuju tek u 2b-2b. Nacrt bez izvora ništa ne kvari i storno postoji.
+
+`T_ZbirnaUnos_*` je u tri reza merio tri stvari — pauzu u validatoru, pauzu na ekranu, pa rad validatora.
+To nije lutanje nego **zapis gde je kapija živela**; ime testa prati kapiju, ne obrnuto.
+
+Dva nova testa, tri sabotaže (**554 → 557**).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

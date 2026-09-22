@@ -581,7 +581,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
-        Case 7: TestName = "T_ZbirnaUnos_PauzaJeNaEkranu"
+        Case 7: TestName = "T_ZbirnaUnos_ValidatorRadi"
         Case 8: TestName = "T_PrijemnicaUnos_PauziranDoS6"
         Case 9: TestName = "T_ScrSave_RutaPoRezimu"
         Case 10: TestName = "T_IsplataValidiraj_TipNovcaPoIzboru"
@@ -788,7 +788,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
-        Case 7: T_ZbirnaUnos_PauzaJeNaEkranu
+        Case 7: T_ZbirnaUnos_ValidatorRadi
         Case 8: T_PrijemnicaUnos_PauziranDoS6
         Case 9: T_ScrSave_RutaPoRezimu
         Case 10: T_IsplataValidiraj_TipNovcaPoIzboru
@@ -1413,20 +1413,17 @@ End Sub
 ' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
 ' ============================================================
 
-' PAUZA F3 SE PRESELILA SA VALIDATORA NA EKRAN (S4-2c/2b-1).
+' F3 VISE NIJE PAUZIRAN (S4-2c/2b-2). Validator radi nad kanonskim modelom.
 '
-' Do tog reza je pauzu vracao modDokUnos.ZbirnaValidiraj, i to PRE svake
-' provere: zbirna se poredila sa zbirom otpremnica vezanih kroz BrojZbirne, a tu
-' vezu od S3a ne pise nijedan zivi put, pa bi provera odbila SVAKU zbirnu
-' porukom o kilogramima.
+' Ovaj test je u tri reza merio tri razlicite stvari, i to je zapis o tome gde
+' je kapija zivela: do S4-2c/2b-1 pauzu U VALIDATORU, zatim pauzu NA EKRANU, a
+' od ovog reza -- pauze nema, ekran upisuje, pa ostaje ono sto ovaj modul i sme
+' da meri: da validator zaista sudi i da imenuje polje.
 '
-' Sada validator radi nad kanonskim modelom i MERLJIV je, a operater i dalje ne
-' moze da upise zbirnu: pauza stoji na TACNO jednom mestu, na granici ekrana
-' (modScrDokumenti.SnimiZbirnu), dok S4-2c/2b-2 ne isporuci tok.
-'
-' Test meri OBE polovine te recenice. Da meri samo jednu, pauza bi mogla da
-' nestane sa ekrana ili da se vrati u modul, a da nijedna tvrdnja ne pisne.
-Private Sub T_ZbirnaUnos_PauzaJeNaEkranu()
+' Upis kroz ekran se ovde NE proverava namerno: modTest ne sme da pise u tabele
+' (fixture bi ostao prljav). To meri Test_ZBR_EkranPraviIMenjaNacrt u BFP, gde
+' se sve vrti u transakciji.
+Private Sub T_ZbirnaUnos_ValidatorRadi()
     Dim p As Object, fokus As String
 
     ' Katalog se puni kao na startu aplikacije (InitApp -> EnsurePoruke). Fixture
@@ -1434,30 +1431,22 @@ Private Sub T_ZbirnaUnos_PauzaJeNaEkranu()
     ' ne postoji -- a bez ovoga bi tvrdnja o katalogu merila fixture, ne kod.
     modSetup.EnsurePoruke
 
-    ' 1) Validator VISE NIJE pauziran -- ispravan unos prolazi.
     Set p = ZbirnaUnosKojiSeSlaze()
     AssertEq modDokUnos.ZbirnaValidiraj(p, fokus), "", _
-             "F3: validator radi nad kanonskim modelom, nije vise pauziran"
+             "F3: ispravan unos prolazi validaciju"
 
-    ' ... i stvarno meri: nepotpun unos dobija SVOJE polje, ne pausu.
     Set p = ZbirnaUnosKojiSeSlaze()
     p("vozacID") = ""
     AssertEq modDokUnos.ZbirnaValidiraj(p, fokus), Poruka("DOKUNOS_ERR_VOZAC"), _
              "F3: validator imenuje polje koje fali"
     AssertEq fokus, "vozacID", "F3: fokus ide na to polje"
 
-    ' 2) Pauza je na EKRANU, i stoji i za unos koji bi inace prosao do pisca.
-    Dim pe As Object
-    Set pe = PoljaEkrana(modScrDokumenti.modeKey("F3"))
-    pe("vozacID") = FX_VOZAC
-    pe("kooperantID") = FX_KUPAC
-    pe("brDok") = "T-ZBR-PAUZA"
-    pe("kolicinaI") = FX_ZBIRNA_KG
-    pe("kolAmb") = FX_ZBIRNA_AMB
-    AssertEq modScrDokumenti.Scr_Save(pe), Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), _
-             "F3: ekran i dalje odbija upis i imenuje pauzu"
-    AssertEq (InStr(1, Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA"), "[", vbBinaryCompare) = 1), _
-             False, "F3: poruka pauze postoji u katalogu"
+    ' Vrsta i sorta VISE NISU uslov: donosi ih prvi izvor (ZBR-KANON-04).
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("vrsta") = ""
+    p("sorta") = ""
+    AssertEq modDokUnos.ZbirnaValidiraj(p, fokus), "", _
+             "F3: unos bez vrste i sorte i dalje prolazi"
 End Sub
 
 ' F4 JE PAUZIRAN DO S6 (Prijemnica cutover), ne do S4: S4 vraca samo zbirnu.

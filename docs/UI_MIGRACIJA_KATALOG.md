@@ -460,8 +460,9 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
    `modDokUnos`). Ostaje iz te stavke: **živi prikaz manjka** prijemnice vs
    zbirna (`UpdateManjak`) i **lista zbirnih za izbor**, oboje prikaz a ne upis;
    i **ispravka prijemnice posle storna** (relink paleta), koja pripada Fazi D.
-   **F3 upis: REPLACED (u toku) — pisac obrisan u S4-2c/2a, kanonski nacrt ulazi
-   u S4-2c/2b.** `SaveZbirnaMulti_TX` i `modDokUnos.ZbirnaUpisi` više ne postoje;
+   **F3 upis: REPLACED — kanonski nacrt od S4-2c/2b-2a.** `SnimiZbirnu` upisuje
+   kroz `modDokUnos.ZbirnaUpisi` / `ZbirnaIzmeniNacrt`; pauza skinuta. Ostaje
+   pokrivanje nacrta izvorima (F2 radni sto, S4-2c/2b-2b). `SaveZbirnaMulti_TX` i `modDokUnos.ZbirnaUpisi` više ne postoje;
    `SnimiZbirnu` samo validira, a `ZbirnaValidiraj` je pauziran od S3a. F4 upis
    (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6.
 9. ~~F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.~~ **URAĐENO**
