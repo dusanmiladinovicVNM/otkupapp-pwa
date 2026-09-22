@@ -4330,7 +4330,13 @@ poruke (negativna kilaža, decimalne gajbe), ali **pisac ostaje poslednja tvrda 
 Razlika koja se čuva i koju test dokazuje: **`0` znači „te klase nema"** (II-only nacrt je legitiman),
 **`-5` znači „nevalidan podatak"**. Svođenje ta dva na isto stanje je bio ceo kvar.
 
-Pet novih testova, šest sabotaža (**546 → 552**). **Nijedna linija ekrana.**
+**Review #375, P2 — validator je puštao stanje koje pisac odbija.** `Kolicina = 0` uz `KolAmb > 0`
+je prolazilo kroz unos, a pisac ga je odbijao (`Kolicina <= 0`). Nema kvara podatka, ali operater bi
+razlog video **tek posle upisa** — a ovaj sloj postoji baš zato da ga vidi uz polje. Pravilo je sada
+izričito: klasa postoji → `Kolicina > 0`; `Kolicina = 0` → i `KolAmb` mora biti 0. Isto za klasu II kad
+je prekidač uključen. Pisac i dalje sudi isto — ovde je poruka, tamo tvrda kapija.
+
+Pet novih testova, sedam sabotaža (**546 → 553**). **Nijedna linija ekrana.**
 
 ## 15) Backlog — namerno van opsega
 

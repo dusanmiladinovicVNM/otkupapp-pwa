@@ -633,6 +633,13 @@ SABOTAZE = {
         "Test_ZBR_AdapterNePopravljaUnos",
         "negativna kilaza NE nestaje tiho",
     ),
+    "zbirna-validator-pusta-gajbe-bez-kg": (
+        "modDokUnos.bas",
+        "    If kolI = 0 And kolAmb <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: gajbe bez kilaze prolaze\n",
+        "Test_ZBR_AdapterNePopravljaUnos",
+        "gajbe bez kilaze ne prolaze validaciju",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

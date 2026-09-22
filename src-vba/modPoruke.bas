@@ -996,6 +996,7 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_TUDJ", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " pripadao drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " izaberi drugi broj."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_STORNIRAN", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat pa storniran " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Ispravku unesi pod NOVIM brojem."
     UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_ZAUZET", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat u ovom nizu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG", ChrW(10007) & " Gajbe su unete bez kila" & ChrW(382) & "e. Unesi kila" & ChrW(382) & "u ili obri" & ChrW(353) & "i gajbe " & ChrW(8212) & " 0 kg zna" & ChrW(269) & "i da te klase nema."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA", ChrW(10007) & " Kila" & ChrW(382) & "a ne mo" & ChrW(382) & "e biti negativna. Prazno ili 0 zna" & ChrW(269) & "i da te klase nema."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_AMB_NIJE_CEO", ChrW(10007) & " Gajbe su komadi " & ChrW(8212) & " unesi ceo broj, bez decimala."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_NEMA_KOLICINE", ChrW(10007) & " Unesi kila" & ChrW(382) & "u bar za jednu klasu " & ChrW(8212) & " nacrt mora da prijavi " & ChrW(353) & "ta zbirna nosi."

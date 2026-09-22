@@ -564,6 +564,23 @@ Public Function ZbirnaValidiraj(ByVal p As Object, ByRef fokus As String, _
         Exit Function
     End If
 
+    ' GAJBE BEZ KILAZE NISU KLASA (review #375, P2).
+    '
+    ' 0 kg znaci "te klase nema", pa gajbe uz nju nemaju nosioca. Pisac to vec
+    ' odbija (Kolicina <= 0), ali bi operater razlog video tek POSLE upisa -- a
+    ' ovaj sloj postoji bas zato da ga vidi uz polje. Validator i pisac sude
+    ' isto: ovde je poruka, tamo je tvrda kapija.
+    If kolI = 0 And kolAmb <> 0 Then
+        fokus = "kolicinaI"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG")
+        Exit Function
+    End If
+    If dveKl And kolII = 0 And kolAmbII <> 0 Then
+        fokus = "kolicinaII"
+        ZbirnaValidiraj = Poruka("DOKUNOS_ERR_ZBR_GAJBE_BEZ_KG")
+        Exit Function
+    End If
+
     datum = CDate(p("datum"))
 
     If modBrojevi.BrojKontekstOdbija( _

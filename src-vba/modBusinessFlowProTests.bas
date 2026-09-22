@@ -8678,6 +8678,18 @@ Private Sub Test_ZBR_AdapterNePopravljaUnos()
     AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
                  "ZBR adapter: negativna kilaza NE nestaje tiho"
 
+    ' 2b) GAJBE BEZ KILAZE -- 0 kg znaci "te klase nema", pa gajbe nemaju
+    ' nosioca. Pisac to odbija; validator mora da kaze ISTO, uz polje.
+    Set p = ZbrUnos(NextTestDate(), TEST_PREFIX & "-ZBR-ADP2B-" & scenario, 0#, 5)
+    p("dveKlase") = True
+    p("kolicinaII") = 100#
+    p("kolAmbII") = 5
+    AssertTrue Len(modDokUnos.ZbirnaValidiraj(p, fokus)) > 0, _
+               "ZBR adapter: gajbe bez kilaze ne prolaze validaciju"
+    AssertEquals "kolicinaI", fokus, "ZBR adapter: fokus ide na kilazu bez koje nema klase"
+    AssertEquals "", modDokUnos.ZbirnaUpisi(p, poruke), _
+                 "ZBR adapter: gajbe bez kilaze ne prolaze ni kroz pisca"
+
     AssertEquals CStr(pre), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
                  "ZBR adapter: nijedan odbijen unos nije ostavio zaglavlje"
 
