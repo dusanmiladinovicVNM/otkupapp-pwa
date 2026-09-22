@@ -165,6 +165,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_IzmenaNacrtaCuvaSvojBroj
     Test_ZBR_IzmenaNacrtaRevalidiraClanstvo
     Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice
+    Test_ZBR_UpdateNePrimaPraznoOcekivanje
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8360,6 +8361,52 @@ Private Sub Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice()
     Exit Sub
 EH:
     LogFatal "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice", Err.Number, Err.description
+End Sub
+
+' PISAC NE SME DA NAPRAVI STANJE KOJE NJEGOV CITALAC ZABRANJUJE (review #373, P1).
+'
+' Create je od S4-2b odbijao prazno ocekivanje, Update nije -- proveravao je samo
+' da kolekcija nije Nothing. Prazna kolekcija je zato brisala sve stavke i uredno
+' commit-ovala zaglavlje BEZ IJEDNE STAVKE, a RequireZaglavljaZbirneSaStavkama
+' takav dokument proglasava korumpiranim. Kako je strog citalac registarski, jedan
+' takav nacrt obara i citanje SVIH ostalih zbirnih.
+'
+' Test ide kroz Update jer je tamo bila rupa, ali tvrdnju drzi jezgro
+' (ZbrUpisiOcekivano), pa isto pravilo pokriva i nastanak.
+Private Sub Test_ZBR_UpdateNePrimaPraznoOcekivanje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPO")
+
+    Dim h As Object
+    Set h = Pr3Header(TEST_PREFIX & "-ZBR-PO-" & scenario)
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR prazno ocekivanje: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    Dim prazno As Collection
+    Set prazno = New Collection
+
+    AssertTrue Not modDokumenta.UpdateZbirnaDraft_TX(zbrID, h, prazno, g), _
+               "ZBR prazno ocekivanje: izmena bez ijedne klase je odbijena"
+    AssertTrue InStr(1, g, "prazno", vbTextCompare) > 0, _
+               "ZBR prazno ocekivanje: odbijanje imenuje razlog (bilo: " & g & ")"
+
+    ' Ne meri se samo odbijanje nego i ROLLBACK: brisanje starih stavki je vec
+    ' bilo izvrseno kad je upis pao, pa bez vracanja ostaje zaglavlje bez stavki.
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR prazno ocekivanje: rollback vratio staru stavku"
+
+    ' Kroz STROGOG citaoca -- da dokument posle svega i dalje prolazi ugovor.
+    AssertEquals "400", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR prazno ocekivanje: staro ocekivanje je netaknuto"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_UpdateNePrimaPraznoOcekivanje", Err.Number, Err.description
 End Sub
 
 ' STORNO KROZ LJUSKU POGADJA SVOJ DOKUMENT (S4-2, review #371).

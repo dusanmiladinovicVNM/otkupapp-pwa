@@ -4167,7 +4167,23 @@ kozmetika u prikazu: ispražnjen nacrt prima otpremnicu **druge vrste**, koju bi
 Snapshot je tu jer je tačan, ne zato što ga tvrdnja pokriva — S4-3 dodaje korake iza njega i tada
 postaje merljiv.
 
-Četiri nova testa, šest sabotaža (**537 → 543**). **Nijedna linija ekrana u ovom PR-u** — F3 forma,
+**Review #373, P1 — isti kvar koji je #372 već jednom rešio, na drugoj imenici.** `CreateZbirnaDraft_TX`
+je odbijao prazno očekivanje, `UpdateZbirnaDraft_TX` je proveravao samo da kolekcija nije `Nothing`.
+Prazna kolekcija je zato prolazila: `ZbrObrisiOcekivano` obriše sve stavke, `ZbrUpisiOcekivano` odradi
+nula iteracija, i commit ostavi **zaglavlje bez ijedne stavke** — dokument koji
+`RequireZaglavljaZbirneSaStavkama` proglašava korumpiranim. Kako je strog čitalac **registarski**, jedan
+takav nacrt obara i čitanje svih ostalih zbirnih.
+
+Zakrpa nije otišla u `UpdateZbirnaDraft_TX` nego u **jezgro kroz koje prolaze oba ulaza**
+(`ZbrUpisiOcekivano`), pa „valjano očekivanje" više nema dve definicije. Fail-fast iz `ZbrNapraviDraft`
+je **obrisan**, ne dupliran — dve provere iste stvari su tačno ono što je kvar i napravilo.
+
+> **Obrazac vredi zapamtiti:** u #372 je spojena *jedna definicija valjanog izvora*, pa je u #373
+> odmah nastalo *dve definicije valjanog očekivanja*. Pravilo koje se proverava u wrapper-u umesto u
+> jezgru vraća se kroz svaki nov ulaz. Sledeći ulaz nad nacrtom (`CreateZbirnaIzIzvora_TX` u S4-4, F3
+> u S4-2c/2) mora da prođe kroz iste helper-e, ne pored njih.
+
+Pet novih testova, sedam sabotaža (**537 → 544**). **Nijedna linija ekrana u ovom PR-u** — F3 forma,
 pregled svih zbirnih, radni sto izvora u F2 i brisanje starog pisca (45 živih mesta) idu u S4-2c/2.
 
 ## 15) Backlog — namerno van opsega

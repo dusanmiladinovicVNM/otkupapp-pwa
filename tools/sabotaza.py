@@ -567,6 +567,13 @@ SABOTAZE = {
         "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice",
         "nacrt sa preostalim izvorom ZADRZAVA vrstu",
     ),
+    "zbirna-prazno-ocekivanje-prolazi": (
+        "modDokumenta.bas",
+        "    If ocekivano.count = 0 Then\n        Err.Raise vbObjectError + 1342, src, _\n                  \"Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu.\"\n    End If\n",
+        "    ' SABOTAZA: prazno ocekivanje prolazi kroz pisca\n",
+        "Test_ZBR_UpdateNePrimaPraznoOcekivanje",
+        "izmena bez ijedne klase je odbijena",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

@@ -1941,11 +1941,6 @@ Private Function ZbrNapraviDraft(ByVal h As Object, _
     modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
                                         brojZbirne, SRC
 
-    If ocekivano.count = 0 Then
-        Err.Raise vbObjectError + 1342, SRC, _
-                  "Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu."
-    End If
-
     Dim zbirnaID As String
     zbirnaID = NewEntityID("ZBR-")
     If Len(zbirnaID) = 0 Then
@@ -1977,9 +1972,32 @@ End Function
 
 ' Ocekivanje -> stavke. Jedna stavka po klasi, u kanonskom redu, isti ugovor
 ' koji citalac (StavkeZbirneRedovi) posle trazi.
+'
+' STA JE VALJANO OCEKIVANJE -- jedna definicija za OBA ulaza (review #373, P1).
+'
+' Tvrdnja "nacrt ima bar jednu klasu" je do ovog reza stajala u ZbrNapraviDraft,
+' dakle samo na putu nastanka. Izmena je proveravala jedino da kolekcija nije
+' Nothing, pa je PRAZNA kolekcija prolazila: ZbrObrisiOcekivano obrise sve
+' stavke, ovde nema nijedne iteracije, i commit ostavi zaglavlje BEZ IJEDNE
+' STAVKE -- dokument koji RequireZaglavljaZbirneSaStavkama proglasava
+' korumpiranim. Pisac ne sme da napravi stanje koje njegov citalac zabranjuje.
+'
+' Isti kvar koji je review #372 nasao kod izvora: dva ulaza, dve definicije istog
+' pojma. Zato tvrdnja sada zivi tacno ovde -- na jedinom mestu kroz koje prolaze
+' i nastanak i izmena -- a ne u svakom wrapper-u posebno.
 Private Sub ZbrUpisiOcekivano(ByVal zbirnaID As String, _
                               ByVal ocekivano As Collection, _
                               ByVal src As String)
+    If ocekivano Is Nothing Then
+        Err.Raise vbObjectError + 1365, src, _
+                  "Ocekivanje nije prosledjeno. Nacrt bez ocekivanja nema sta da meri."
+    End If
+
+    If ocekivano.count = 0 Then
+        Err.Raise vbObjectError + 1342, src, _
+                  "Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu."
+    End If
+
     Dim kolPoKlasi As Object, ambPoKlasi As Object
     Set kolPoKlasi = CreateObject("Scripting.Dictionary")
     Set ambPoKlasi = CreateObject("Scripting.Dictionary")
@@ -2054,10 +2072,6 @@ Private Sub ZbrIzmeniDraft(ByVal zbirnaID As String, ByVal h As Object, _
 
     If h Is Nothing Then
         Err.Raise vbObjectError + 1364, SRC, "Header nije prosledjen."
-    End If
-    If ocekivano Is Nothing Then
-        Err.Raise vbObjectError + 1365, SRC, _
-                  "Ocekivanje nije prosledjeno. Nacrt bez ocekivanja nema sta da meri."
     End If
 
     Dim rZbr As Long
