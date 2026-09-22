@@ -690,6 +690,20 @@ SABOTAZE = {
         "T_ZbirnaRadniSto_BiraSvojNacrt",
         "radni sto bira BAS taj nacrt",
     ),
+    "zbirna-sto-cita-strogog-citaoca": (
+        "modScrDokumenti.bas",
+        "        Set c = modDokumenta.ZbrClanovi(mZbrID)\n",
+        "        Set c = modDokumenta.IzvoriZbirne(mZbrID)\n",
+        "Test_ZBR_PrazanNacrtNeRusiListu",
+        "prazan nacrt daje nula redova, ne gresku",
+    ),
+    "zbirna-sto-veze-po-broju": (
+        "modScrDokumenti.bas",
+        "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"OTPREMNICA\"))))\n",
+        "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "Test_ZBR_RadniStoVezePoIdentitetu",
+        "vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.

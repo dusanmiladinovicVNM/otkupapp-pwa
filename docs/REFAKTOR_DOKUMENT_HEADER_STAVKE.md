@@ -4471,7 +4471,35 @@ operaterova, ne logika — zato se izdavanje meri kroz `IzdajAktivnuZbirnu`, a n
 postojao na **dva** mesta — u F3 izmeni i u F2 izboru — pa je sabotaža `zbirna-klik-po-broju` prestala da
 bude jednoznačna. Oba sidra sada nose i sledeći red, a novo mesto je dobilo **svoju** sabotažu.
 
-Dva nova testa, jedna sabotaža (**559 → 560**).
+**Review #377, P1 — strog čitalac upotrebljen na pogrešnom lifecycle grain-u.** Radni sto je sastav
+čitao kroz `IzvoriZbirne`, a ta dva čitaoca imaju **različit ugovor**:
+
+| Čitalac | Nad čim | Prazno znači |
+|---|---|---|
+| `ZbrClanovi` | nacrt | **uredno stanje** — još nije pokriven |
+| `IzvoriZbirne` | izdata | **kvar** — diže grešku |
+
+Posledica je bila crvena mreža na potpuno ispravnom stanju: svaki tek napravljen nacrt rušio je listu
+**odmah po izboru**, a uklanjanje poslednjeg izvora isto. Strogi čitalac ostaje strog — greška je bila u
+tome čime je radni sto čitao.
+
+> Treći put u ovom slajsu ista klasa: **pravilo (ili čitalac) na pogrešnom sloju.** #375 adapter koji
+> popravlja unos, #375 prekidač kao filter, #377 strog čitalac nad nacrtom.
+
+**Zašto test to nije uhvatio:** `T_ZbirnaRadniSto_BiraSvojNacrt` je posle klika proveravao da stanje
+kaže `IZVORI`, ali **nije ponovo učitao mrežu** — a produkciona ljuska to radi automatski. Nov test
+čita redove **direktno kroz `Scr_Rows`**, mimo `ScrGridData` koji grešku guta (`On Error Resume Next`).
+
+**Review #377, P2 — izvorni identitet nije bio dokazan.** `Test_ZBR_RadniStoVezeIIzdaje` je
+`VeziZaAktivnuZbirnu` zvao direktno. Nov `Test_ZBR_RadniStoVezePoIdentitetu` vozi ceo spoj
+(red → nevidljivi `OtpremnicaID` → `RowAction` → pisac) nad **dve izdate otpremnice pod istim brojem**
+— broj otpremnice je jedinstven po stanici i **danu**, pa isti broj na dva dana jesu dva dokumenta.
+Testovi rade bez forme: `ShowToast` izlazi kad forme nema, pa je ceo put merljiv u BFP.
+
+**P3** (lista `SVI` nudi `Veži` i nad nacrtom otpremnice) ostaje kako ga je reviewer rangirao: pisac je
+bezbedno odbija, a `SVI` je namerno „sve". Ide uz sledeći rez, sa trakom napretka.
+
+Četiri nova testa, tri sabotaže (**559 → 562**).
 
 **Ostaje za sledeći rez:** traka napretka u F2 (`GetZbirnaProgress` — čitalac postoji od 2b-1, prikaz ne)
 i uklanjanje polja vrste/sorte/tipa ambalaže iz F3, čime se zatvara poslednji P3 iz review-a #376.

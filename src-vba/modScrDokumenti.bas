@@ -709,12 +709,23 @@ End Function
 
 ' Otpremnice U SASTAVU aktivnog nacrta. Sastav se cita iz clanstva
 ' (tblZbirnaIzvori), nikad iz broja zbirne na otpremnici (ZBR-KANON-01).
+'
+' CITALAC JE ZbrClanovi, NE IzvoriZbirne (review #377, P1). Ta dva imaju
+' RAZLICIT UGOVOR, i to po lifecycle-u:
+'
+'   ZbrClanovi     nacrt   -- prazna kolekcija je UREDNO stanje (jos nije pokriven)
+'   IzvoriZbirne   izdata  -- prazno je KVAR i dize gresku
+'
+' Radni sto radi nad NACRTOM. Sa strogim citaocem je svaki tek napravljen nacrt
+' rusio listu odmah po izboru, a uklanjanje poslednjeg izvora isto -- crvena
+' mreza na potpuno ispravnom stanju. Strogi citalac ostaje strog; ovde je bio
+' upotrebljen na pogresnom grain-u.
 Private Function RowsIzvoriZbirne(ByVal q As String) As Variant
     Dim skup As Object, c As Collection, i As Long
     Set skup = CreateObject("Scripting.Dictionary")
 
     If Len(mZbrID) > 0 Then
-        Set c = modDokumenta.IzvoriZbirne(mZbrID)
+        Set c = modDokumenta.ZbrClanovi(mZbrID)
         For i = 1 To c.count
             skup(UCase$(Trim$(CStr(c(i))))) = True
         Next i
