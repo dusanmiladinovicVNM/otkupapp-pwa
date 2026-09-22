@@ -82,6 +82,11 @@ Private mIspravkaOtkupID As String
 Private mIspravkaBroj As String
 Private mIzmenaBroj As String
 
+' Isto za F3: ZbirnaID nacrta koji je otvoren za izmenu, i njegov broj za
+' poruku. Identitet je ID -- broj je samo ono sto operater cita.
+Private mIzmenaZbrID As String
+Private mIzmenaZbrBroj As String
+
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
 Public Function Scr_Liste() As Variant
@@ -368,10 +373,21 @@ Public Function Scr_IspravkaOtkupID() As String
 End Function
 
 ' Otkazuje izmenu nacrta -- sledece snimanje pravi nov nacrt.
+'
+' Cisti OBA otvorena nacrta (otpremnicu i zbirnu) namerno: ljuska ovo zove pri
+' praznjenju forme i promeni rezima, a otvorena izmena koja bi prezivela promenu
+' rezima upisala bi sledeci unos u dokument koji operater vise ne gleda.
 Public Sub Scr_IzmenaOtkazi()
     mIzmenaOtpID = ""
     mIzmenaBroj = ""
+    mIzmenaZbrID = ""
+    mIzmenaZbrBroj = ""
 End Sub
+
+' ZbirnaID nacrta koji je otvoren za izmenu ("" = nema).
+Public Function Scr_IzmenaZbrID() As String
+    Scr_IzmenaZbrID = mIzmenaZbrID
+End Function
 
 ' OtpremnicaID nacrta koji je otvoren za izmenu ("" = nema).
 Public Function Scr_IzmenaOtpID() As String
@@ -593,6 +609,11 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' upisuje -- forma se samo popuni, pa mreza ne mora da se cita ponovo.
     If modeKey(ActiveMode) = "OTPREMNICA" Then
         If Left$(tag, 4) = "row:" Then IzaberiNacrtZaIzmenu CLng(Mid$(tag, 5))
+        Exit Function
+    End If
+    ' F3: isto za zbirnu (S4-2c/2b-2).
+    If modeKey(ActiveMode) = "ZBIRNA" Then
+        If Left$(tag, 4) = "row:" Then IzaberiZbirnuZaIzmenu CLng(Mid$(tag, 5))
         Exit Function
     End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
@@ -1398,51 +1419,189 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
+' Da li je zbirna NACRT koji se sme menjati. "" = sme; inace razlog.
+'
+' Ogledalo NacrtRazlog za otpremnicu. Kapija se NE prepisuje: ista tvrdnja
+' (izdato se ne menja) zivi u piscu kroz RequireZbrDraft, a ovde postoji samo da
+' operater ne otvori formu nad dokumentom koji upis ne moze da primi.
+Private Function ZbrNacrtRazlog(ByVal zbrID As String) As String
+    Dim st As String
+    If Len(zbrID) = 0 Then
+        ZbrNacrtRazlog = Poruka("OTKUI_ERR_ZBR_NEPOZNATA")
+        Exit Function
+    End If
+    If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 _
+       Or UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                            COL_STORNIRANO)))) = "DA" Then
+        ZbrNacrtRazlog = Poruka("OTKUI_ERR_ZBR_NEPOZNATA")
+        Exit Function
+    End If
+    st = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                           COL_TRACE_IZDATO_STATUS))))
+    If st <> UCase$(IZDATO_DRAFT) Then ZbrNacrtRazlog = Poruka("OTKUI_ERR_ZBR_IZDATA")
+End Function
+
+' Zaglavlje zbirne kao prefill.
+'
+' VRSTA, SORTA I TIP AMBALAZE SE PRIKAZUJU, ALI NISU UNOS. Nacrt ih dobija od
+' prvog izvora (ZBR-KANON-04) i modul unosa ih ne salje piscu; ovde stoje da bi
+' forma pokazala ono sto dokument STVARNO nosi, umesto praznine. Prazne su dok
+' zbirna nema nijedan izvor -- i to je tacno stanje, ne propust.
+Private Function PrefillZbirnaZaglavlja(ByVal zbrID As String) As String
+    Dim vDat As Variant, res As String
+    On Error Resume Next
+    If Len(zbrID) = 0 Then Exit Function
+    vDat = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_DATUM)
+    If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
+    res = Dodaj(res, "vozacid", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VOZAC)))
+    res = Dodaj(res, "partnerid", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))
+    res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VRSTA)))
+    res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_SORTA)))
+    res = Dodaj(res, "tipamb", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_TIP_AMB)))
+    PrefillZbirnaZaglavlja = res
+End Function
+
+' Nacrt zbirne u formu F3: zaglavlje i NAJAVA po klasi.
+'
+' Cena se ne prenosi -- tblZbirna je nema i nijedan pisac je ne prima. Greska
+' kanonskog citaoca stavki se PROPAGIRA, pa pozivalac ne otvara izmenu nad
+' delimicnom formom (isti razlog kao kod otpremnice, review #363 P2).
+Private Function PrefillZbirnaNacrta(ByVal zbrID As String) As String
+    Dim res As String, poDok As Object, c As Collection
+    Dim red As Variant, i As Long, imaII As Boolean
+    res = PrefillZbirnaZaglavlja(zbrID)
+    res = Dodaj(res, "brdok", NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+
+    Set poDok = modDokumenta.StavkeZbirnePoDokumentu()
+    If poDok.Exists(zbrID) Then
+        Set c = poDok(zbrID)
+        For i = 1 To c.count
+            red = c(i)
+            If UCase$(Trim$(CStr(red(3)))) = KLASA_II Then imaII = True
+        Next i
+        res = Dodaj(res, "dveklase", IIf(imaII, "2", "1"))
+        For i = 1 To c.count
+            red = c(i)
+            Select Case UCase$(Trim$(CStr(red(3))))
+                Case KLASA_I
+                    res = Dodaj(res, "kol1", BrojTekst(red(4)))
+                    res = Dodaj(res, "amb1", BrojTekst(red(5)))
+                Case KLASA_II
+                    res = Dodaj(res, "kol2", BrojTekst(red(4)))
+                    res = Dodaj(res, "amb2", BrojTekst(red(5)))
+            End Select
+        Next i
+    End If
+    PrefillZbirnaNacrta = res
+End Function
+
+' Otvara izmenu nacrta zbirne u F3. "" = otvorena (sledece snimanje menja taj
+' nacrt), a spec je forma za ApplyPrefill; inace razlog.
+'
+' Forma se sastavlja PRE otvaranja: citalac koji padne prekida otvaranje i
+' ostavlja izmenu ZATVORENU.
+Public Function OtvoriIzmenuZbirne(ByVal zbrID As String, _
+                                   Optional ByRef spec As String) As String
+    spec = ""
+    On Error GoTo EH
+
+    zbrID = Trim$(zbrID)
+    OtvoriIzmenuZbirne = ZbrNacrtRazlog(zbrID)
+    If Len(OtvoriIzmenuZbirne) > 0 Then Exit Function
+
+    spec = PrefillZbirnaNacrta(zbrID)
+    mIzmenaZbrID = zbrID
+    mIzmenaZbrBroj = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    Exit Function
+EH:
+    Scr_IzmenaOtkazi
+    spec = ""
+    OtvoriIzmenuZbirne = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Klik na red u mrezi F3. ID dolazi iz NEVIDLJIVE kolone identiteta, ne iz
+' kolone broja: isti broj smeju da nose dva vozaca.
+Private Sub IzaberiZbirnuZaIzmenu(ByVal red As Long)
+    Dim zbrID As String, razlog As String, spec As String
+    zbrID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks("ZBIRNA"))))
+    razlog = OtvoriIzmenuZbirne(zbrID, spec)
+    If Len(razlog) = 0 Then
+        modOtkupUI.ApplyPrefill spec
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZMENA_NACRTA") & " " & mIzmenaZbrBroj, False
+    ElseIf razlog = Poruka("OTKUI_ERR_ZBR_IZDATA") Then
+        modOtkupUI.ShowToast razlog, False
+    Else
+        ' Izmena je zatvorena; forma PRETHODNE izmene ne sme da ostane, jer bi
+        ' je sledece snimanje upisalo kao nov nacrt -- duplikat.
+        modOtkupUI.ClearForm
+        modOtkupUI.ShowToast razlog, True
+    End If
+End Sub
+
 ' F3 ZBIRNA. Isti obrazac kao SnimiOtpremnicu: ekran samo prevodi polja u recnik.
-' Od S4-2c/2a adapter samo VALIDIRA -- pisac iza njega je obrisan (v. dole).
+' Od S4-2c/2b-2 ZAISTA UPISUJE -- pauza je skinuta, a pisac je kanonski nacrt.
+'
 ' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
 '   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
 '     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";
 '   - PARTNER je kupac. Ljuska ga skuplja pod kljucem "kooperantID" jer je to
 '     ista kontrola (cbKupac) u svim rezimima; ovde dobija svoje ime.
+'
+' VRSTA, SORTA I TIP AMBALAZE SE NE SALJU. Do S4 su bile unos operatera; u
+' kanonu su cinjenica ROBE koju donosi prvi izvor (ZBR-KANON-04) i pisac ih sa
+' zaglavlja ne prima. Forma ih i dalje PRIKAZUJE (prefill), ali ono sto operater
+' u njih otkuca nigde ne ide -- polja odlaze sa radnim stolom u S4-2c/2b-2b.
 Private Function SnimiZbirnu(ByVal polja As Object) As String
-    Dim p As Object, fokus As String, greska As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
     Set p = modDokUnos.NoviZbirnaUnos()
     p("datum") = polja("datum")
     p("vozacID") = polja("vozacID")
     p("kupacID") = polja("kooperantID")
     p("brDok") = polja("brDok")
-    ' ODREDISTE (MIG-001): hladnjaca i pogon su kolone tblZbirna koje writer vec
-    ' pise; do v6-ui-215 ih ekran nije slao, pa su isle prazne. Ekran ih SAMO
-    ' prevodi - pravilo (odakle hladnjaca dolazi) zivi u ljusci, provera u
-    ' modDokUnos, upis u modDokumenta.
+    ' ODREDISTE (MIG-001): hladnjaca i pogon su kolone tblZbirna koje pisac vec
+    ' pise; ekran ih SAMO prevodi -- pravilo (odakle hladnjaca dolazi) zivi u
+    ' ljusci, provera u modDokUnos, upis u modDokumenta.
     p("hladnjaca") = polja("hladnjaca")
     p("pogon") = polja("pogon")
-    p("vrsta") = polja("vrsta")
-    p("sorta") = polja("sorta")
-    p("tipAmb") = polja("tipAmb")
     p("kolicinaI") = polja("kolicinaI")
     p("kolAmb") = polja("kolAmb")
     p("dveKlase") = polja("dveKlase")
     p("kolicinaII") = polja("kolicinaII")
     p("kolAmbII") = polja("kolAmbII")
 
-    greska = modDokUnos.ZbirnaValidiraj(p, fokus)
+    ' Otvorena izmena: provera broja izuzima SOPSTVENI red nacrta, pa nacrt sme
+    ' da zadrzi svoj broj.
+    greska = modDokUnos.ZbirnaValidiraj(p, fokus, mIzmenaZbrID)
     If Len(greska) > 0 Then
         polja("fokus") = fokus
         SnimiZbirnu = greska
         Exit Function
     End If
 
-    ' UPISA VISE NEMA (S4-2c/2a). Stari pisac je obrisan, a kanonski nacrt
-    ' (CreateZbirnaDraft_TX / UpdateZbirnaDraft_TX ...) ulazi tek u S4-2c/2b.
-    '
-    ' ZbirnaValidiraj je PAUZIRAN i vraca poruku PRE svake provere, pa se dovde
-    ' i ne stize. Red ispod postoji za slucaj da pauza padne pre nego sto ekran
-    ' dobije nov tok: glasno "nije upisano" je bolje od tihog "uspelo je" bez
-    ' ijednog reda u tabeli -- upravo tako je izgledao kvar zbog kog je F3 i
-    ' pauziran.
-    SnimiZbirnu = Poruka("DOKUNOS_ERR_ZBIRNA_PAUZIRANA")
+    ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
+    If Len(mIzmenaZbrID) > 0 Then
+        If Not modDokUnos.ZbirnaIzmeniNacrt(mIzmenaZbrID, p, poruke) Then
+            SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            Exit Function
+        End If
+        Scr_ResetCache
+        polja("zbirnaID") = mIzmenaZbrID
+        polja("rezultat") = CStr(polja("brDok"))
+        polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+        Scr_IzmenaOtkazi
+        Exit Function
+    End If
+
+    res = modDokUnos.ZbirnaUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("zbirnaID") = res
+    polja("rezultat") = CStr(polja("brDok"))
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
 ' F4 PRIJEMNICA. Kao gore; ovde broj dokumenta jeste broj prijemnice, a broj
@@ -2081,9 +2240,12 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' unosi. OTKUP nosi nevidljiv OtkupID: radnje reda (stampa, storno) idu po
     ' njemu, ne po broju (S1e). Ostali tipovi ovde radnje reda nemaju.
     ' OTPREMNICA nosi nevidljiv OtpremnicaID: klik na nacrt otvara njegovu
-    ' izmenu po ID-u (S3b-2).
+    ' izmenu po ID-u (S3b-2). ZBIRNA isto, od S4-2c/2b-2: broj zbirne je labela
+    ' koju dva vozaca smeju da dele, pa red mreze mora da nosi ZbirnaID -- inace
+    ' bi klik otvarao tudji dokument.
     Dim mk As String: mk = modeKey(ActiveMode)
-    Scr_Rows = RedoviZaTip(mk, filter, q, (mk = "OTKUP" Or mk = "OTPREMNICA"))
+    Scr_Rows = RedoviZaTip(mk, filter, q, _
+                           (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA"))
 End Function
 
 ' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista

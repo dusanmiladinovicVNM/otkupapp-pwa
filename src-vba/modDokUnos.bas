@@ -439,9 +439,8 @@ Public Function NoviZbirnaUnos() As Object
     p("brDok") = ""
     p("hladnjaca") = ""
     p("pogon") = ""
-    p("vrsta") = ""
-    p("sorta") = ""
-    p("tipAmb") = ""
+    ' Vrsta, sorta i tip ambalaze VISE NISU unos (ZBR-KANON-04): donosi ih
+    ' prvi izvor. Kljuc koji niko ne cita je obecanje koje pisac ne ispunjava.
     p("kolicinaI") = 0#
     p("kolAmb") = 0&
     p("dveKlase") = False

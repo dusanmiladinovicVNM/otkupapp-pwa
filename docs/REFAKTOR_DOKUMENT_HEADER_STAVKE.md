@@ -4380,6 +4380,62 @@ prekidao test. Sva su prevedena u glasnu tvrdnju pre izlaza.
 
 Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 
+### 14.29) S4-2c/2b-2a — F3 piše (22.09.2026)
+
+**Pauza F3 je skinuta.** Ekran je od S3a vraćao poruku o pauzi; sada ide kroz `modDokUnos` do
+kanonskog nacrta. `SnimiZbirnu` **prevodi polja i ništa ne sudi** — validacija je u `ZbirnaValidiraj`,
+kapija u piscu.
+
+| Šta | Gde | Ogledalo |
+|---|---|---|
+| nevidljiva kolona `ZbirnaID` u mreži F3 | `Scr_Rows` | `OTPREMNICA` od S3b-2 |
+| klik na red otvara izmenu nacrta | `Scr_Event` → `IzaberiZbirnuZaIzmenu` | `IzaberiNacrtZaIzmenu` |
+| kapija „izdato se ne menja" pre forme | `ZbrNacrtRazlog` | `NacrtRazlog` |
+| forma iz dokumenta | `PrefillZbirnaNacrta` | `PrefillNacrta` |
+| snimanje pravi **ili** menja nacrt | `SnimiZbirnu` | `SnimiOtpremnicu` |
+
+**Tri kapije koje sam sebi postavio pre koda, i sve tri drže:** red mreže nosi **`ZbirnaID`**, ne broj —
+isti broj smeju da nose dva vozača, pa bi klik po broju otvarao tuđi dokument · **nijedna provera ne
+živi u ekranu** · napredak se ne računa u ljusci (dolazi u 2b-2b iz `GetZbirnaProgress`).
+
+**Šta je otišlo sa pauzom:** ključ `DOKUNOS_ERR_ZBIRNA_PAUZIRANA` (poruka koju više niko ne vraća) i
+mrtvi ključevi `vrsta`/`sorta`/`tipAmb` iz `NoviZbirnaUnos` — dug upisan u §14.28, sada zatvoren.
+
+**Šta OSTAJE nedorečeno, i to je ulazni uslov za 2b-2b:** polja vrste, sorte i tipa ambalaže u formi F3
+još postoje i operater sme da ih kuca, a ništa se ne upisuje — one su činjenica robe koju donosi prvi
+izvor. Prefill ih **prikazuje** da bi forma govorila istinu o dokumentu, ali polje koje prima unos a
+ne čuva ga je tvrdnja bez pokrića. Odlaze sa radnim stolom.
+
+**Posledica reza:** posle 2b-2a operater pravi i menja nacrt, ali ga **ne može izdati** — izvori se
+vezuju tek u 2b-2b. Nacrt bez izvora ništa ne kvari i storno postoji.
+
+`T_ZbirnaUnos_*` je u tri reza merio tri stvari — pauzu u validatoru, pauzu na ekranu, pa rad validatora.
+To nije lutanje nego **zapis gde je kapija živela**; ime testa prati kapiju, ne obrnuto.
+
+**Review #376, P2 — PR je tvrdio dokaz koji nije postojao.** `Test_ZBR_EkranPraviIMenjaNacrt` je zvao
+`OtvoriIzmenuZbirne` **direktno, sa ID-em koji je već držao u ruci** — pa je preskočio tačno onaj spoj
+koji ovaj rez uvodi:
+
+```
+Scr_Rows (F3) -> nevidljiva kolona ZbirnaID -> GridCell -> Scr_Event "row:n"
+              -> IzaberiZbirnuZaIzmenu -> OtvoriIzmenuZbirne -> Scr_Save -> pisac
+```
+
+Takav test bi ostao **zelen** i da mreža prestane da nosi identitet, i da se čita pogrešna kolona. Gore
+od toga: komentar u testu je tvrdio „drugi nacrt ISTOG vozača — meta za pogrešno pogađanje", a oba
+nacrta su imala **različite brojeve** — scenario kojim se prelaz na stabilan ID opravdava nije bio ni
+konstruisan.
+
+`T_ZbirnaKlik_OtvaraSvojDokument` (modTest, gde postoje forma i transakcija) prelazi ceo spoj onim
+putem kojim ide operater, nad **dva dokumenta pod ISTIM `BrojZbirne`, različiti vozači**: klik na red
+drugog mora da otvori baš njega, a snimanje da ostavi prvi netaknut. Dve sabotaže gađaju baš tu
+granicu — mreža bez identiteta, i čitanje kolone **broja** umesto identiteta.
+
+> Pravilo: **test koji sam sebi doda ključ ne meri bravu.** Kad rez uvodi spoj, dokaz mora da počne sa
+> one strane sa koje počinje operater.
+
+Tri nova testa, pet sabotaža (**554 → 559**).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -4397,6 +4453,7 @@ Pet novih testova, osam sabotaža (**546 → 554**). **Nijedna linija ekrana.**
 | **`AUTO_PRIJEMNICA_HLADNJACA` ne sme da preživi S6 kao poslovna opcija** (review #367) | dok traje refaktor prekidač je legitimna **tehnička** kapija: „lanac sme da se pusti“. Ali za hladnjaču je automatika **obavezna**, pa kombinacija `JeHladnjača = DA` + `AUTO = NE` posle S6 opisuje stanje koje specifikacija zabranjuje — a korisnik bi ga podesio u dva klika. **Izlazni uslov S6:** obrisati podešavanje, ili ga pretvoriti u interni/deployment prekidač van normalnog toka (i tako ga opisati u Podešavanjima). Ne ostavljati dva autoriteta nad istim pravilom |
 | **Strog čitalac je registarski, ne dokumentarni** (review #370, P2) | `StavkeZbirneRedovi` (kao i čitači otkupa i otpremnice) validira **celu tabelu**, pa jedna pokvarena istorijska zbirna obori čitanje svih ostalih — i liste u kojima te zbirne nema. Fail-closed je ovde namerno izabran i ostaje, ali se vredi razdvojiti: **registarski audit → globalno strogo**, **jedan dokument → strogo u opsegu tog dokumenta**. Rez važi za sva tri tipa odjednom, pa ne ide unutar jednog slajsa |
 | **`who_writes` ne prijavljuje MRTAV UNOS u `WRITE_OWNERSHIP.json`** (nalaz S3e-1) | spisak dozvola je nabrajao tri modula koja tabelu odavno ne pišu, a kapija je ćutala: `--check-ownership` proverava samo da je **svaki pisac naveden**, ne i da **svaki naveden piše**. `vba_hard_census` isti problem rešava pravilom `MRTAV_UNOS`. Rez: isto pravilo u `who_writes.py`, pa spisak ne može da istruli neprimećeno |
+| **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
 ---

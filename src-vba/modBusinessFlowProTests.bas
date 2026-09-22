@@ -170,6 +170,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_UnosPraviIMenjaNacrt
     Test_ZBR_ValidacijaNadKanonom
     Test_ZBR_AdapterNePopravljaUnos
+    Test_ZBR_EkranPraviIMenjaNacrt
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8688,6 +8689,125 @@ Private Sub Test_ZBR_ValidacijaNadKanonom()
 EH:
     LogFatal "Test_ZBR_ValidacijaNadKanonom", Err.Number, Err.description
 End Sub
+
+' EKRAN F3 ZAISTA UPISUJE, I IZMENA POGADJA SVOJ DOKUMENT (S4-2c/2b-2).
+'
+' Do ovog reza je Scr_Save za ZBIRNA vracao poruku o pauzi. Sada ide kroz
+' modDokUnos do kanonskog nacrta. Meri se put: ruta (Scr_Save -> SnimiZbirnu),
+' upis, otvaranje izmene PO ID-u, i to da izmena menja TAJ dokument umesto da
+' pravi nov -- plus da se izdata ne otvara.
+'
+' STA OVAJ TEST NE DOKAZUJE, i gde se to dokazuje: on zove OtvoriIzmenuZbirne
+' direktno, sa ID-em koji vec drzi. Spoj "red mreze -> nevidljiva kolona ->
+' klik -> izmena" ne prolazi ovuda, kao ni scenario dva dokumenta pod ISTIM
+' brojem. To meri T_ZbirnaKlik_OtvaraSvojDokument u modTest, gde postoji forma
+' (review #376, P2).
+Private Sub Test_ZBR_EkranPraviIMenjaNacrt()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBREKR")
+
+    Dim dan As Date
+    dan = NextTestDate()
+
+    Dim pre As Long
+    pre = Pr3BrojRedova(TBL_ZBIRNA)
+
+    Dim polja As Object
+    Set polja = ZbrPoljaEkrana(dan, TEST_PREFIX & "-ZBR-EKR-A-" & scenario, 400#, 20)
+
+    AssertEquals "", modScrDokumenti.Scr_Save(polja), _
+                 "ZBR ekran: snimanje nacrta prolazi kroz ekran"
+
+    Dim zbrA As String
+    zbrA = Trim$(CStr(polja("zbirnaID")))
+    AssertTrue Len(zbrA) > 0, "ZBR ekran: ekran vraca ZbirnaID, ne samo broj"
+    If Len(zbrA) = 0 Then Exit Sub
+
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrA), _
+               "ZBR ekran: ekran pravi NACRT, ne izdatu zbirnu"
+    AssertEquals "400", CStr(ZbrKg(zbrA, KLASA_I)), "ZBR ekran: najava je na stavci"
+
+    ' Drugi nacrt istog vozaca istog dana, SA SVOJIM brojem -- meta za izmenu
+    ' koja bi isla po "poslednjem upisanom". Dokument pod ISTIM brojem je drugi
+    ' scenario i meri ga T_ZbirnaKlik_OtvaraSvojDokument.
+    Set polja = ZbrPoljaEkrana(dan, TEST_PREFIX & "-ZBR-EKR-B-" & scenario, 700#, 35)
+    AssertEquals "", modScrDokumenti.Scr_Save(polja), "ZBR ekran: drugi nacrt prolazi"
+
+    Dim zbrB As String
+    zbrB = Trim$(CStr(polja("zbirnaID")))
+    AssertTrue Len(zbrB) > 0, "ZBR ekran: drugi nacrt ima svoj ID"
+    If Len(zbrB) = 0 Then Exit Sub
+
+    AssertEquals CStr(pre + 2), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR ekran: dva nacrta su dva zaglavlja"
+
+    ' IZDATA se ne otvara za izmenu -- kapija je pre forme.
+    Dim spec As String, razlog As String
+    razlog = modScrDokumenti.OtvoriIzmenuZbirne(zbrA, spec)
+    AssertEquals "", razlog, "ZBR ekran: nacrt se otvara za izmenu (" & razlog & ")"
+    AssertTrue InStr(1, spec, "kol1=400", vbTextCompare) > 0, _
+               "ZBR ekran: forma se puni iz DOKUMENTA (bilo: " & spec & ")"
+
+    ' Izmena kroz ekran menja TAJ nacrt, sa ISTIM brojem.
+    Set polja = ZbrPoljaEkrana(dan, TEST_PREFIX & "-ZBR-EKR-A-" & scenario, 550#, 27)
+    AssertEquals "", modScrDokumenti.Scr_Save(polja), _
+                 "ZBR ekran: izmena nacrta prolazi kroz ekran"
+    AssertEquals zbrA, Trim$(CStr(polja("zbirnaID"))), _
+                 "ZBR ekran: izmena je pogodila SVOJ dokument"
+    AssertEquals CStr(pre + 2), CStr(Pr3BrojRedova(TBL_ZBIRNA)), _
+                 "ZBR ekran: izmena NE pravi nov nacrt"
+    AssertEquals "550", CStr(ZbrKg(zbrA, KLASA_I)), "ZBR ekran: izmena je stigla do stavke"
+    AssertEquals "700", CStr(ZbrKg(zbrB, KLASA_I)), _
+                 "ZBR ekran: drugi nacrt istog vozaca je NETAKNUT"
+
+    ' Posle izmene se stanje zatvara: sledece snimanje opet pravi NOV nacrt.
+    AssertEquals "", modScrDokumenti.Scr_IzmenaZbrID(), _
+                 "ZBR ekran: otvorena izmena se zatvara posle upisa"
+
+    ' IZDATA ZBIRNA SE NE OTVARA ZA IZMENU -- kapija stoji PRE forme, da operater
+    ' ne kuca izmenu dokumenta koji upis ne moze da primi.
+    Dim otp As String, g As String
+    otp = ZbrIzdataOtp("EKR-" & scenario, 700#, 35#)
+    AssertTrue Len(otp) > 0, "ZBR ekran: preduslov izdata otpremnica je napravljena"
+    If Len(otp) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrB, otp, g), _
+               "ZBR ekran: izvor vezan za drugi nacrt (" & g & ")"
+    AssertTrue modDokumenta.IzdajZbirnu_TX(zbrB, g), _
+               "ZBR ekran: pokriven nacrt se izdaje (" & g & ")"
+
+    AssertEquals Poruka("OTKUI_ERR_ZBR_IZDATA"), _
+                 modScrDokumenti.OtvoriIzmenuZbirne(zbrB, spec), _
+                 "ZBR ekran: izdata zbirna se NE otvara za izmenu"
+
+    Exit Sub
+EH:
+    modScrDokumenti.Scr_IzmenaOtkazi
+    LogFatal "Test_ZBR_EkranPraviIMenjaNacrt", Err.Number, Err.description
+End Sub
+
+' Polja EKRANA za F3 -- isti oblik koji ljuska salje Scr_Save.
+Private Function ZbrPoljaEkrana(ByVal dan As Date, ByVal broj As String, _
+                                ByVal kol As Double, ByVal amb As Long) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p.CompareMode = vbTextCompare
+    p("rezim") = "ZBIRNA"
+    p("datum") = dan
+    p("vozacID") = TEST_VOZ_ID
+    p("kooperantID") = TEST_KUP_ID
+    p("brDok") = broj
+    p("hladnjaca") = ""
+    p("pogon") = ""
+    p("kolicinaI") = kol
+    p("kolAmb") = amb
+    p("dveKlase") = False
+    p("kolicinaII") = 0#
+    p("kolAmbII") = 0&
+    Set ZbrPoljaEkrana = p
+End Function
 
 ' ADAPTER PRESLIKAVA PODATAK, NE POPRAVLJA GA (review #375, P1).
 '
