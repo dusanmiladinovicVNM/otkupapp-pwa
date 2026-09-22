@@ -161,6 +161,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PrviIzvorDefiniseCinjenice
     Test_ZBR_NegativnaAmbalazaSeNeUpisuje
     Test_ZBR_PrazanIDDetetaNeProlazi
+    Test_ZBR_NacrtSeMenjaDokNijeIzdat
+    Test_ZBR_IzmenaNacrtaCuvaSvojBroj
+    Test_ZBR_IzmenaNacrtaRevalidiraClanstvo
+    Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice
+    Test_ZBR_UpdateNePrimaPraznoOcekivanje
     Test_ZBR_CitalacStavkiDrziUgovor
     Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
     Test_PR3_HeaderNeNosiKolicinu
@@ -8113,6 +8118,296 @@ Private Function Pr3HeaderVozac(ByVal brojZbirne As String, _
     h("VozacID") = vozac
     Set Pr3HeaderVozac = h
 End Function
+
+' =====================================================================
+' S4-2c: KAPIJA NACRTA -- izmena najave i zivot izvedene cinjenice
+' =====================================================================
+
+Private Function ZbrBrojStavki(ByVal zbirnaID As String) As Long
+    Dim r As Collection
+    Set r = FindRows(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbirnaID)
+    If Not r Is Nothing Then ZbrBrojStavki = r.count
+End Function
+
+' Kilaza po klasi KROZ STROGOG CITAOCA -- ne direktnim citanjem reda. Ako izmena
+' ostavi dokument koji citalac odbija, test to vidi odmah, a ne tek u ekranu.
+Private Function ZbrKg(ByVal zbirnaID As String, ByVal klasa As String) As Double
+    Dim st As Collection, i As Long, red As Variant
+    Set st = modDokumenta.StavkeZaZbirnu(modDokumenta.StavkeZbirnePoDokumentu(), _
+                                         zbirnaID, "ZbrKg")
+    For i = 1 To st.count
+        red = st(i)
+        If StrComp(Trim$(CStr(red(3))), klasa, vbTextCompare) = 0 Then
+            ZbrKg = CDbl(red(4))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' NACRT JE RADNA POVRSINA, IZDATA ZBIRNA NIJE (ulazna kapija S4-2c).
+'
+' Bez ovog ulaza je nacrt jednokratan: operater koji je pogresio kilazu nema sta
+' da uradi osim da napravi drugi nacrt i ostavi prvi da visi. Zato izmena, ali
+' TACNO do izdavanja -- posle njega je dokument tvrdnja o robi koja je otisla i
+' ispravlja se novom verzijom (ZBR-KANON-03).
+'
+' Meri se i NACIN upisa: ocekivanje se pise iznova, ne dodaje. Da se dodaje,
+' nastale bi dve stavke iste klase -- dokument koji strog citalac odbija.
+Private Sub Test_ZBR_NacrtSeMenjaDokNijeIzdat()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRIZ")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("IZM-" & scenario, 500#, 25#)
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim h As Object
+    Set h = Pr3Header(TEST_PREFIX & "-ZBR-IZM-" & scenario)
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR izmena: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.UpdateZbirnaDraft_TX(zbrID, h, ZbrOcek(KLASA_I, 500#, 25#), g), _
+               "ZBR izmena: nacrt se menja dok nije izdat (" & g & ")"
+
+    ' Pre citanja kroz strogog citaoca: koliko redova STVARNO stoji. Citalac bi
+    ' na dve stavke iste klase pao FATAL-om, pa se pravi uzrok ne bi video.
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR izmena: izmena PISE IZNOVA, ne dodaje"
+    AssertEquals "500", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR izmena: nacrt nosi novu kilazu"
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR izmena: izvor dodat (" & g & ")"
+    AssertTrue modDokumenta.IzdajZbirnu_TX(zbrID, g), _
+               "ZBR izmena: pokrivena zbirna se izdaje (" & g & ")"
+
+    AssertTrue Not modDokumenta.UpdateZbirnaDraft_TX(zbrID, h, ZbrOcek(KLASA_I, 700#, 35#), g), _
+               "ZBR izmena: izdata zbirna se NE menja"
+    AssertTrue InStr(1, g, "nije nacrt", vbTextCompare) > 0, _
+               "ZBR izmena: odbijanje imenuje razlog (bilo: " & g & ")"
+    AssertEquals "500", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR izmena: odbijena izmena nije dirala stavke"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_NacrtSeMenjaDokNijeIzdat", Err.Number, Err.description
+End Sub
+
+' NACRT SME DA ZADRZI SVOJ BROJ, A NE SME DA PREUZME TUDJI.
+'
+' Provera zauzetosti broja gleda niz (vozac, dan). Naivno primenjena na izmenu,
+' odbila bi i nacrt koji svoj broj samo zadrzava -- pa bi svaka izmena kilaze
+' trazila i promenu broja. Zato se sopstveni red izuzima PO ZbirnaID-u.
+'
+' Drugi smer je ono sto stvarno steti: dva nacrta istog vozaca istog dana, i
+' izmena koja jednom dodeli broj drugog. Zato oba nacrta ovde dele datum.
+Private Sub Test_ZBR_IzmenaNacrtaCuvaSvojBroj()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRBR")
+
+    Dim dan As Date
+    dan = NextTestDate()
+
+    Dim brojA As String, brojB As String
+    brojA = TEST_PREFIX & "-ZBR-BRA-" & scenario
+    brojB = TEST_PREFIX & "-ZBR-BRB-" & scenario
+
+    Dim hA As Object, hB As Object
+    Set hA = Pr3Header(brojA): hA("Datum") = dan
+    Set hB = Pr3Header(brojB): hB("Datum") = dan
+
+    Dim g As String, zbrA As String, zbrB As String
+    zbrA = CreateZbirnaDraft_TX(hA, ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrA) > 0, "ZBR broj: prvi nacrt napravljen (" & g & ")"
+    zbrB = CreateZbirnaDraft_TX(hB, ZbrOcek(KLASA_I, 300#, 15#), g)
+    AssertTrue Len(zbrB) > 0, "ZBR broj: drugi nacrt napravljen (" & g & ")"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.UpdateZbirnaDraft_TX(zbrA, hA, ZbrOcek(KLASA_I, 450#, 22#), g), _
+               "ZBR broj: nacrt ZADRZAVA svoj broj (" & g & ")"
+
+    ' Isti nacrt, tudji broj -- sve ostalo nepromenjeno.
+    Dim hKradja As Object
+    Set hKradja = Pr3Header(brojB): hKradja("Datum") = dan
+
+    AssertTrue Not modDokumenta.UpdateZbirnaDraft_TX(zbrA, hKradja, _
+                                                     ZbrOcek(KLASA_I, 450#, 22#), g), _
+               "ZBR broj: tudji broj se NE preuzima"
+    AssertEquals brojA, ZbrPolje(zbrA, COL_ZBR_BROJ), _
+                 "ZBR broj: odbijena izmena ostavlja stari broj"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_IzmenaNacrtaCuvaSvojBroj", Err.Number, Err.description
+End Sub
+
+' IZMENA ZAGLAVLJA NE SME DA OSTAVI VEC NEVALJANO CLANSTVO.
+'
+' Nacrt vozaca A sa clanom vozaca A, prebacen na vozaca B, nosio bi clana koga
+' Dodaj nikad ne bi primio. Izdavanje bi to na kraju uhvatilo -- ali invarijanta
+' ne sme da bude prekrsena IZMEDJU dva klika, jer ekran u medjuvremenu uredno
+' prikazuje sastav koji ne postoji.
+'
+' Meri se i ROLLBACK: posle odbijanja stoje i staro zaglavlje i staro ocekivanje.
+Private Sub Test_ZBR_IzmenaNacrtaRevalidiraClanstvo()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRRV")
+
+    Dim otp As String
+    otp = ZbrIzdataOtp("RV-" & scenario, 400#, 20#)
+    If Len(otp) = 0 Then Exit Sub
+
+    Dim broj As String
+    broj = TEST_PREFIX & "-ZBR-RV-" & scenario
+
+    Dim h As Object
+    Set h = Pr3Header(broj)
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp, g), _
+               "ZBR revalidacija: izvor dodat (" & g & ")"
+
+    Dim hDrugi As Object
+    Set hDrugi = Pr3HeaderVozac(broj, TEST_VOZ_ID_B)
+    hDrugi("Datum") = h("Datum")
+
+    AssertTrue Not modDokumenta.UpdateZbirnaDraft_TX(zbrID, hDrugi, _
+                                                     ZbrOcek(KLASA_I, 400#, 20#), g), _
+               "ZBR revalidacija: clan drugog vozaca je odbijen"
+    AssertEquals TEST_VOZ_ID, ZbrPolje(zbrID, COL_ZBR_VOZAC), _
+                 "ZBR revalidacija: rollback vratio starog vozaca"
+    AssertEquals "1", CStr(modDokumenta.ZbrClanovi(zbrID).count), _
+                 "ZBR revalidacija: sastav netaknut"
+    AssertEquals "400", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR revalidacija: ocekivanje netaknuto"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo", Err.Number, Err.description
+End Sub
+
+' ZBR-KANON-04: IZVEDENA CINJENICA ZIVI TACNO KOLIKO I NJEN IZVOR.
+'
+' Vrstu, sortu i tip ambalaze nacrta ne bira operater -- donosi ih prvi izvor.
+' Kad se ukloni i poslednji izvor, iza njih ne stoji nijedna otpremnica: nacrt bi
+' ostao tiho zakljucan na vrstu koju operater nikad nije izabrao niti je vidi.
+'
+' Test meri OBA smera, jer je pravilo uslovno:
+'   - jedan izvor uklonjen, jedan ostao  -> cinjenice OSTAJU (izvor ih pokriva);
+'   - uklonjen i poslednji               -> cinjenice se BRISU.
+' Dokaz da je brisanje stvarno, a ne kozmetika: posle praznjenja nacrt prima
+' otpremnicu DRUGE vrste, koju bi pre toga ZbrRequireIstiAko odbio.
+Private Sub Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPC")
+
+    Dim otp1 As String, otp2 As String
+    otp1 = ZbrIzdataOtp("PC1-" & scenario, 400#, 20#)
+    otp2 = ZbrIzdataOtp("PC2-" & scenario, 300#, 15#)
+    If Len(otp1) = 0 Or Len(otp2) = 0 Then Exit Sub
+
+    ' Otpremnica DRUGE kulture -- druga vrsta, isti vozac i isti tip ambalaze.
+    Dim otpDrugaVrsta As String
+    otpDrugaVrsta = Pr3Otpremnica(TEST_PREFIX & "-OTP-PCD-" & scenario, KLASA_I, _
+                                  200#, 10, TEST_KUL_BEZ_SORTE_ID)
+    If Len(otpDrugaVrsta) = 0 Then Exit Sub
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-PC-" & scenario), _
+                                 ZbrOcek(KLASA_I, 700#, 35#), g)
+    If Len(zbrID) = 0 Then Exit Sub
+
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp1, g), _
+               "ZBR prazno clanstvo: prvi izvor dodat (" & g & ")"
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otp2, g), _
+               "ZBR prazno clanstvo: drugi izvor dodat (" & g & ")"
+    AssertEquals TEST_VRSTA, ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR prazno clanstvo: prvi izvor je definisao vrstu"
+
+    AssertTrue modDokumenta.UkloniZbirnaIzvor_TX(zbrID, otp2, g), _
+               "ZBR prazno clanstvo: drugi izvor uklonjen (" & g & ")"
+    AssertEquals TEST_VRSTA, ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR prazno clanstvo: nacrt sa preostalim izvorom ZADRZAVA vrstu"
+
+    AssertTrue modDokumenta.UkloniZbirnaIzvor_TX(zbrID, otp1, g), _
+               "ZBR prazno clanstvo: poslednji izvor uklonjen (" & g & ")"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR prazno clanstvo: prazan nacrt vise NEMA vrstu"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_SORTA), _
+                 "ZBR prazno clanstvo: prazan nacrt vise nema sortu"
+    AssertEquals "", ZbrPolje(zbrID, COL_ZBR_TIP_AMB), _
+                 "ZBR prazno clanstvo: prazan nacrt vise nema tip ambalaze"
+
+    ' Da brisanje nije stvarno, ovo bi palo na poklapanju vrste.
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrID, otpDrugaVrsta, g), _
+               "ZBR prazno clanstvo: ispraznjen nacrt prima DRUGU vrstu (" & g & ")"
+    AssertEquals TEST_VRSTA_BEZ_SORTE, ZbrPolje(zbrID, COL_ZBR_VRSTA), _
+                 "ZBR prazno clanstvo: nov prvi izvor definise novu vrstu"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice", Err.Number, Err.description
+End Sub
+
+' PISAC NE SME DA NAPRAVI STANJE KOJE NJEGOV CITALAC ZABRANJUJE (review #373, P1).
+'
+' Create je od S4-2b odbijao prazno ocekivanje, Update nije -- proveravao je samo
+' da kolekcija nije Nothing. Prazna kolekcija je zato brisala sve stavke i uredno
+' commit-ovala zaglavlje BEZ IJEDNE STAVKE, a RequireZaglavljaZbirneSaStavkama
+' takav dokument proglasava korumpiranim. Kako je strog citalac registarski, jedan
+' takav nacrt obara i citanje SVIH ostalih zbirnih.
+'
+' Test ide kroz Update jer je tamo bila rupa, ali tvrdnju drzi jezgro
+' (ZbrUpisiOcekivano), pa isto pravilo pokriva i nastanak.
+Private Sub Test_ZBR_UpdateNePrimaPraznoOcekivanje()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRPO")
+
+    Dim h As Object
+    Set h = Pr3Header(TEST_PREFIX & "-ZBR-PO-" & scenario)
+
+    Dim g As String, zbrID As String
+    zbrID = CreateZbirnaDraft_TX(h, ZbrOcek(KLASA_I, 400#, 20#), g)
+    AssertTrue Len(zbrID) > 0, "ZBR prazno ocekivanje: nacrt napravljen (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    Dim prazno As Collection
+    Set prazno = New Collection
+
+    AssertTrue Not modDokumenta.UpdateZbirnaDraft_TX(zbrID, h, prazno, g), _
+               "ZBR prazno ocekivanje: izmena bez ijedne klase je odbijena"
+    AssertTrue InStr(1, g, "prazno", vbTextCompare) > 0, _
+               "ZBR prazno ocekivanje: odbijanje imenuje razlog (bilo: " & g & ")"
+
+    ' Ne meri se samo odbijanje nego i ROLLBACK: brisanje starih stavki je vec
+    ' bilo izvrseno kad je upis pao, pa bez vracanja ostaje zaglavlje bez stavki.
+    AssertEquals "1", CStr(ZbrBrojStavki(zbrID)), _
+                 "ZBR prazno ocekivanje: rollback vratio staru stavku"
+
+    ' Kroz STROGOG citaoca -- da dokument posle svega i dalje prolazi ugovor.
+    AssertEquals "400", CStr(ZbrKg(zbrID, KLASA_I)), _
+                 "ZBR prazno ocekivanje: staro ocekivanje je netaknuto"
+
+    Exit Sub
+EH:
+    LogFatal "Test_ZBR_UpdateNePrimaPraznoOcekivanje", Err.Number, Err.description
+End Sub
 
 ' STORNO KROZ LJUSKU POGADJA SVOJ DOKUMENT (S4-2, review #371).
 '

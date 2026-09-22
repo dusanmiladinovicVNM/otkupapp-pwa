@@ -4114,8 +4114,77 @@ prazan i to je ispravno; kvar je bio što ih niko posle nije popunio.
 Četiri nova testa, po jedan na svaki nalaz. Onaj o dva ulaza meri **isti izvor kroz oba** — jer je
 kvar bio upravo u razlici među njima. Sabotaža **534 → 537**.
 
-**Sledeće:** S4-2c — ekrani: F3 forma nad nacrtom uz **pregled svih zbirnih**, radni sto za izvore u
-F2 (kao blokovi u F1), direktan izbor otpremnica, skidanje pauze i brisanje starog pisca.
+**Sledeće:** S4-2c — ulazna kapija (§14.26), pa ekrani.
+
+### 14.26) S4-2c/1 — ulazna kapija nacrta (22.09.2026)
+
+**Ovo je kapija koju je review #372 postavio pred ekrane, a ne sam ekran.** Doslovno: „odlučiti
+lifecycle ZBR DRAFT-a: 1. dodati `UpdateZbirnaDraft_TX` 2. odlučiti šta se dešava sa izvedenim
+Vrsta/Sorta/TipAmb kada membership padne na 0 3. **tek onda** F3 forma nad postojećim nacrtom."
+Redosled nije kozmetika: forma nad nacrtom koji se ne može izmeniti nije forma nego čarobnjak u
+jednom smeru, a ekran koji prikazuje vrstu bez ijednog izvora prikazuje tvrdnju koju niko ne drži.
+
+**1) `UpdateZbirnaDraft_TX(zbirnaID, h, ocekivano)`** — izmena **najave**, članstvo netaknuto. Isti
+obrazac koji otpremnica ima od S3b-1 (`UpdateOtpremnicaDraft_TX` → `OtpIzmeniDraft`), uz tri razlike
+koje dolaze iz domena zbirne:
+
+| | Otpremnica | Zbirna |
+|---|---|---|
+| Vrsta/Sorta | iz `KulturaID`, header činjenica — menja se izmenom | **ne postoje kao polja zaglavlja**, izmena ih ne dira (ZBR-KANON-04) |
+| Niz brojeva | (stanica, dan) | (vozač, dan) |
+| Revalidacija članstva | izvor je otkupni blok | izvor je **izdata otpremnica** |
+
+Očekivanje se piše **iznova** (`ZbrObrisiOcekivano` + `ZbrUpisiOcekivano`), ne dopunjava: klasa koja
+je nestala iz najave mora da nestane i iz stavki, inače nacrt meri prema klasi koju više ne tvrdi —
+i nastaju dve stavke iste klase, dokument koji strog čitalac odbija.
+
+Dve kapije koje nisu očigledne, i obe imaju svoju sabotažu:
+
+- **Nacrt sme da ZADRŽI svoj broj, a ne sme da preuzme tuđi.** Provera zauzetosti gleda niz
+  (vozač, dan); naivno primenjena na izmenu, odbila bi i nacrt koji broj samo zadržava — pa bi svaka
+  ispravka kilaže tražila i promenu broja. Zato se sopstveni red izuzima **po `ZbirnaID`-u**
+  (`RequireBrojSlobodanUNizu(..., izuzmiID)`), ne po datumu.
+- **Izmena zaglavlja revalidira postojeće članstvo.** Nacrt vozača A sa članom vozača A, prebačen na
+  vozača B, nosio bi člana koga `Dodaj` nikad ne bi primio. Izdavanje bi to na kraju uhvatilo, ali
+  invarijanta ne sme da bude prekršena **između dva klika** — ekran u međuvremenu uredno prikazuje
+  sastav koji ne postoji.
+
+**2) Odluka operatera (22.09.2026): članstvo na nuli briše izvedene činjenice** → **ZBR-KANON-04**
+(`docs/DOMEN/README.md`). Razmotrene su tri opcije; odbijene su „ostaju kao ograničenje" (operater
+nikad nije izabrao to ograničenje niti ga vidi) i „operater ih unosi sam" (obrnula bi odluku review-a
+#372 — one su činjenica robe, ne zaglavlja).
+
+Pravilo je **uslovno**, pa se i meri u oba smera: uklonjen jedan od dva izvora → činjenice **ostaju**;
+uklonjen i poslednji → **brišu se**. Drugu stranu čuva sabotaža `zbirna-brise-cinjenice-i-sa-clanovima`:
+kapija koja briše uvek prošla bi test koji meri samo prazan slučaj. Dokaz da je brisanje stvarno, a ne
+kozmetika u prikazu: ispražnjen nacrt prima otpremnicu **druge vrste**, koju bi pre toga
+`ZbrRequireIstiAko` odbio.
+
+`UkloniZbirnaIzvor_TX` zato od sada snima i `tblZbirna` — uklanjanje menja i zaglavlje.
+
+**Nedokazano, i prijavljeno kao takvo:** danas ništa ne može da padne **posle** čišćenja činjenica
+(ono je poslednji korak transakcije), pa nijedan test ne može da natera rollback baš tog upisa.
+Snapshot je tu jer je tačan, ne zato što ga tvrdnja pokriva — S4-3 dodaje korake iza njega i tada
+postaje merljiv.
+
+**Review #373, P1 — isti kvar koji je #372 već jednom rešio, na drugoj imenici.** `CreateZbirnaDraft_TX`
+je odbijao prazno očekivanje, `UpdateZbirnaDraft_TX` je proveravao samo da kolekcija nije `Nothing`.
+Prazna kolekcija je zato prolazila: `ZbrObrisiOcekivano` obriše sve stavke, `ZbrUpisiOcekivano` odradi
+nula iteracija, i commit ostavi **zaglavlje bez ijedne stavke** — dokument koji
+`RequireZaglavljaZbirneSaStavkama` proglašava korumpiranim. Kako je strog čitalac **registarski**, jedan
+takav nacrt obara i čitanje svih ostalih zbirnih.
+
+Zakrpa nije otišla u `UpdateZbirnaDraft_TX` nego u **jezgro kroz koje prolaze oba ulaza**
+(`ZbrUpisiOcekivano`), pa „valjano očekivanje" više nema dve definicije. Fail-fast iz `ZbrNapraviDraft`
+je **obrisan**, ne dupliran — dve provere iste stvari su tačno ono što je kvar i napravilo.
+
+> **Obrazac vredi zapamtiti:** u #372 je spojena *jedna definicija valjanog izvora*, pa je u #373
+> odmah nastalo *dve definicije valjanog očekivanja*. Pravilo koje se proverava u wrapper-u umesto u
+> jezgru vraća se kroz svaki nov ulaz. Sledeći ulaz nad nacrtom (`CreateZbirnaIzIzvora_TX` u S4-4, F3
+> u S4-2c/2) mora da prođe kroz iste helper-e, ne pored njih.
+
+Pet novih testova, sedam sabotaža (**537 → 544**). **Nijedna linija ekrana u ovom PR-u** — F3 forma,
+pregled svih zbirnih, radni sto izvora u F2 i brisanje starog pisca (45 živih mesta) idu u S4-2c/2.
 
 ## 15) Backlog — namerno van opsega
 

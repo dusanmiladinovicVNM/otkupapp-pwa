@@ -1701,6 +1701,13 @@ End Function
 ' otisla, pa ne moze da bude deo zbirne -- odluka koju je S14.14 ostavila S4.
 ' PROSLEDJENO se racuna kao izdato (review #362): sync ne menja cinjenicu da je
 ' roba otpremljena.
+'
+' ULAZI -- svi osim izdavanja rade ISKLJUCIVO nad nacrtom:
+'   CreateZbirnaDraft_TX(h, ocekivano)         -> ZBR-...  DRAFT + stavke
+'   UpdateZbirnaDraft_TX(zbrID, h, ocekivano)  izmena najave, clanstvo netaknuto
+'   DodajZbirnaIzvor_TX(zbrID, otpID)          clanstvo +1
+'   UkloniZbirnaIzvor_TX(zbrID, otpID)         clanstvo -1
+'   IzdajZbirnu_TX(zbrID)                      revalidacija + jednakost + IZDATO
 
 Public Function CreateZbirnaDraft_TX(ByVal h As Object, _
                                      ByVal ocekivano As Collection, _
@@ -1742,6 +1749,39 @@ Public Function CreateZbirnaDraft_TX(ByVal h As Object, _
 EH:
     outGreska = ZbrPadTransakcije(tx, "CreateZbirnaDraft_TX", CreateZbirnaDraft_TX)
     CreateZbirnaDraft_TX = ""
+End Function
+
+Public Function UpdateZbirnaDraft_TX(ByVal zbirnaID As String, _
+                                     ByVal h As Object, _
+                                     ByVal ocekivano As Collection, _
+                                     Optional ByRef outGreska As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    outGreska = ""
+
+    On Error GoTo EH
+
+    ' Otpremnice ulaze u spisak jer izmena zaglavlja REVALIDIRA postojece
+    ' clanstvo (v. ZbrIzmeniDraft), pa cita i njih.
+    modSchema.SchemaReadyOrFail "UpdateZbirnaDraft_TX", _
+        TBL_ZBIRNA & "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
+        "|" & TBL_OTPREMNICA & "|" & TBL_OTPREMNICA_STAVKE
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+
+    ZbrIzmeniDraft zbirnaID, h, ocekivano
+
+    tx.CommitTx
+    Set tx = Nothing
+    UpdateZbirnaDraft_TX = True
+    Exit Function
+
+EH:
+    outGreska = ZbrPadTransakcije(tx, "UpdateZbirnaDraft_TX", zbirnaID)
+    UpdateZbirnaDraft_TX = False
 End Function
 
 Public Function DodajZbirnaIzvor_TX(ByVal zbirnaID As String, _
@@ -1794,12 +1834,16 @@ Public Function UkloniZbirnaIzvor_TX(ByVal zbirnaID As String, _
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    ' Zaglavlje ULAZI u snapshot: uklanjanje POSLEDNJEG izvora brise preuzetu
+    ' vrstu, sortu i tip ambalaze (ZBR-KANON-04), pa i ono ucestvuje u izmeni.
+    tx.AddTableSnapshot TBL_ZBIRNA
 
     Dim rZbr As Long
     rZbr = ZbrRedHeadera(zbirnaID, "ZbrUkloniIzvor")
     RequireZbrDraft zbirnaID, rZbr, "ZbrUkloniIzvor"
 
     ZbrUkloniIzvor zbirnaID, Trim$(otpremnicaID), "ZbrUkloniIzvor"
+    ZbrOcistiCinjeniceBezClanstva zbirnaID, "ZbrUkloniIzvor"
 
     tx.CommitTx
     Set tx = Nothing
@@ -1897,11 +1941,6 @@ Private Function ZbrNapraviDraft(ByVal h As Object, _
     modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
                                         brojZbirne, SRC
 
-    If ocekivano.count = 0 Then
-        Err.Raise vbObjectError + 1342, SRC, _
-                  "Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu."
-    End If
-
     Dim zbirnaID As String
     zbirnaID = NewEntityID("ZBR-")
     If Len(zbirnaID) = 0 Then
@@ -1933,9 +1972,32 @@ End Function
 
 ' Ocekivanje -> stavke. Jedna stavka po klasi, u kanonskom redu, isti ugovor
 ' koji citalac (StavkeZbirneRedovi) posle trazi.
+'
+' STA JE VALJANO OCEKIVANJE -- jedna definicija za OBA ulaza (review #373, P1).
+'
+' Tvrdnja "nacrt ima bar jednu klasu" je do ovog reza stajala u ZbrNapraviDraft,
+' dakle samo na putu nastanka. Izmena je proveravala jedino da kolekcija nije
+' Nothing, pa je PRAZNA kolekcija prolazila: ZbrObrisiOcekivano obrise sve
+' stavke, ovde nema nijedne iteracije, i commit ostavi zaglavlje BEZ IJEDNE
+' STAVKE -- dokument koji RequireZaglavljaZbirneSaStavkama proglasava
+' korumpiranim. Pisac ne sme da napravi stanje koje njegov citalac zabranjuje.
+'
+' Isti kvar koji je review #372 nasao kod izvora: dva ulaza, dve definicije istog
+' pojma. Zato tvrdnja sada zivi tacno ovde -- na jedinom mestu kroz koje prolaze
+' i nastanak i izmena -- a ne u svakom wrapper-u posebno.
 Private Sub ZbrUpisiOcekivano(ByVal zbirnaID As String, _
                               ByVal ocekivano As Collection, _
                               ByVal src As String)
+    If ocekivano Is Nothing Then
+        Err.Raise vbObjectError + 1365, src, _
+                  "Ocekivanje nije prosledjeno. Nacrt bez ocekivanja nema sta da meri."
+    End If
+
+    If ocekivano.count = 0 Then
+        Err.Raise vbObjectError + 1342, src, _
+                  "Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu."
+    End If
+
     Dim kolPoKlasi As Object, ambPoKlasi As Object
     Set kolPoKlasi = CreateObject("Scripting.Dictionary")
     Set ambPoKlasi = CreateObject("Scripting.Dictionary")
@@ -1993,6 +2055,94 @@ Private Sub ZbrUpisiOcekivano(ByVal zbirnaID As String, _
                       "AppendRow za " & TBL_ZBIRNA_STAVKE & " nije uspeo."
         End If
     Next k
+End Sub
+
+' --- core: izmena nacrta ----------------------------------------------------
+'
+' Nacrt je radna povrsina dok nije izdat; posle izdavanja je tvrdnja o robi koja
+' je otisla i ispravlja se novom verzijom (ZBR-KANON-03). Ista granica koju
+' otpremnica drzi od S3b-1, i isti obrazac -- OtpIzmeniDraft.
+'
+' STA OVDE NE MOZE DA SE PROMENI: VrstaVoca, SortaVoca i TipAmbalaze. One nisu
+' polja zaglavlja nego cinjenica ROBE koju donosi prvi izvor (review #372), pa
+' ih HdrProveriKljuceve i ne prima. Menjaju se jedino sastavom.
+Private Sub ZbrIzmeniDraft(ByVal zbirnaID As String, ByVal h As Object, _
+                           ByVal ocekivano As Collection)
+    Const SRC As String = "ZbrIzmeniDraft"
+
+    If h Is Nothing Then
+        Err.Raise vbObjectError + 1364, SRC, "Header nije prosledjen."
+    End If
+
+    Dim rZbr As Long
+    rZbr = ZbrRedHeadera(zbirnaID, SRC)
+    RequireZbrDraft zbirnaID, rZbr, SRC
+
+    HdrProveriKljuceve h, SRC
+
+    Dim datum As Date
+    Dim vozacID As String, brojZbirne As String, kupacID As String
+
+    datum = HdrDatum(h, "Datum", SRC)
+    vozacID = HdrObavezan(h, "VozacID", SRC)
+    brojZbirne = HdrObavezan(h, "BrojZbirne", SRC)
+    kupacID = HdrObavezan(h, "KupacID", SRC)
+
+    ' Nacrt sme da promeni vozaca, datum i broj u ISTOM potezu, pa broj koji je
+    ' bio tacan postane tudj bez ijedne druge provere.
+    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                     brojZbirne, SRC
+
+    ' Nacrt sme da ZADRZI svoj broj i dan, a ne sme da preuzme tudji: sopstveni
+    ' red se izuzima po ZbirnaID-u, ne po datumu, jer zaglavlje sme da ostane na
+    ' istom danu.
+    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                        brojZbirne, SRC, zbirnaID
+
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_DATUM, datum, SRC
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_VOZAC, vozacID, SRC
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_BROJ, brojZbirne, SRC
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC, kupacID, SRC
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_HLADNJACA, _
+                      HdrOpcion(h, "Hladnjaca"), SRC
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_POGON, HdrOpcion(h, "Pogon"), SRC
+
+    ' Ocekivanje se pise IZNOVA, ne krpi: klasa koja je nestala iz najave mora da
+    ' nestane i iz stavki, inace nacrt meri prema klasi koju vise ne tvrdi.
+    ZbrObrisiOcekivano zbirnaID, SRC
+    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC
+
+    ' IZMENA ZAGLAVLJA SME DA POKVARI VEC VALJANO CLANSTVO: nacrt vozaca V1 sa
+    ' clanom vozaca V1, prebacen na V2, nosi clana koga Dodaj nikad ne bi primio.
+    ' Izdavanje bi to na kraju uhvatilo, ali invarijanta ne sme da bude prekrsena
+    ' IZMEDJU dva klika -- ekran u medjuvremenu uredno prikazuje nevalidan sastav.
+    '
+    ' Provera ide POSLE upisa, nad NOVIM vrednostima; pad ovde rollback-uje ceo
+    ' update, pa staro zaglavlje i staro ocekivanje ostaju netaknuti.
+    Dim clanovi As Collection
+    Set clanovi = ZbrClanovi(zbirnaID)
+
+    Dim k As Long
+    For k = 1 To clanovi.count
+        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False
+    Next k
+End Sub
+
+Private Sub ZbrObrisiOcekivano(ByVal zbirnaID As String, ByVal src As String)
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA_STAVKE)
+    If Not IsArray(d) Then Exit Sub
+
+    Dim cZbr As Long
+    cZbr = RequireColumnIndex(TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, src)
+
+    ' Odozdo nagore: brisanje reda pomera indekse iznad njega.
+    Dim i As Long
+    For i = UBound(d, 1) To 1 Step -1
+        If StrComp(Trim$(NzToText(d(i, cZbr))), Trim$(zbirnaID), vbTextCompare) = 0 Then
+            RequireDeleteRow TBL_ZBIRNA_STAVKE, i, src
+        End If
+    Next i
 End Sub
 
 ' STA JE VALJAN IZVOR ZBIRNE -- jedna definicija za oba kanonska ulaza
@@ -2244,6 +2394,27 @@ Private Sub ZbrUkloniIzvor(ByVal zbirnaID As String, _
     End If
 
     RequireDeleteRow TBL_ZBIRNA_IZVORI, nadjen, src
+End Sub
+
+' ZBR-KANON-04: IZVEDENA CINJENICA ZIVI TACNO KOLIKO I NJEN IZVOR.
+'
+' Vrstu, sortu i tip ambalaze nacrta ne bira operater nego ih donosi PRVI izvor
+' (ZbrPreuzmiCinjenice). Kad se ukloni i poslednji izvor, iza njih ne stoji
+' nijedna otpremnica: ostavljene, one su tvrdnja o robi bez robe -- i tiho suzuju
+' prazan nacrt na vrstu koju operater nikad nije izabrao niti je na ekranu vidi.
+'
+' Dok ima BAR JEDNOG clana se NE diraju: tada ih izvor i dalje pokriva, a svaki
+' sledeci izvor se meri prema njima (ZbrRequireIstiAko).
+Private Sub ZbrOcistiCinjeniceBezClanstva(ByVal zbirnaID As String, _
+                                          ByVal src As String)
+    If ZbrClanovi(zbirnaID).count > 0 Then Exit Sub
+
+    Dim rZbr As Long
+    rZbr = ZbrRedHeadera(zbirnaID, src)
+
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_VRSTA, "", src
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_SORTA, "", src
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_TIP_AMB, "", src
 End Sub
 
 ' --- core: izdavanje zbirne -------------------------------------------------

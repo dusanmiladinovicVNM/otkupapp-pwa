@@ -524,6 +524,56 @@ SABOTAZE = {
         "Test_ZBR_NegativnaAmbalazaSeNeUpisuje",
         "nacrt je odbijen",
     ),
+    # --- S4-2c: kapija nacrta (izmena najave, zivot izvedene cinjenice)
+    "zbirna-nacrt-se-menja-i-posle-izdavanja": (
+        "modDokumenta.bas",
+        "    RequireZbrDraft zbirnaID, rZbr, SRC\n\n    HdrProveriKljuceve h, SRC\n",
+        "    ' SABOTAZA: izmena ne pita da li je jos nacrt\n\n    HdrProveriKljuceve h, SRC\n",
+        "Test_ZBR_NacrtSeMenjaDokNijeIzdat",
+        "izdata zbirna se NE menja",
+    ),
+    "zbirna-izmena-ne-pise-iznova": (
+        "modDokumenta.bas",
+        "    ZbrObrisiOcekivano zbirnaID, SRC\n    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC\n",
+        "    ' SABOTAZA: staro ocekivanje ostaje pored novog\n    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC\n",
+        "Test_ZBR_NacrtSeMenjaDokNijeIzdat",
+        "izmena PISE IZNOVA, ne dodaje",
+    ),
+    "zbirna-izmena-krade-tudji-broj": (
+        "modDokumenta.bas",
+        "    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC, zbirnaID\n",
+        "    ' SABOTAZA: izmena ne proverava zauzetost broja\n",
+        "Test_ZBR_IzmenaNacrtaCuvaSvojBroj",
+        "tudji broj se NE preuzima",
+    ),
+    "zbirna-izmena-ne-revalidira-clanstvo": (
+        "modDokumenta.bas",
+        "    Dim k As Long\n    For k = 1 To clanovi.count\n        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False\n    Next k\nEnd Sub\n\nPrivate Sub ZbrObrisiOcekivano",
+        "    ' SABOTAZA: izmena ne revalidira clanstvo\nEnd Sub\n\nPrivate Sub ZbrObrisiOcekivano",
+        "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo",
+        "clan drugog vozaca je odbijen",
+    ),
+    "zbirna-drzi-cinjenice-bez-izvora": (
+        "modDokumenta.bas",
+        "    ZbrOcistiCinjeniceBezClanstva zbirnaID, \"ZbrUkloniIzvor\"\n",
+        "    ' SABOTAZA: cinjenice prezivljavaju prazno clanstvo\n",
+        "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice",
+        "prazan nacrt vise NEMA vrstu",
+    ),
+    "zbirna-brise-cinjenice-i-sa-clanovima": (
+        "modDokumenta.bas",
+        "    If ZbrClanovi(zbirnaID).count > 0 Then Exit Sub\n",
+        "    If False Then Exit Sub   ' SABOTAZA: brise i kad clanova ima\n",
+        "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice",
+        "nacrt sa preostalim izvorom ZADRZAVA vrstu",
+    ),
+    "zbirna-prazno-ocekivanje-prolazi": (
+        "modDokumenta.bas",
+        "    If ocekivano.count = 0 Then\n        Err.Raise vbObjectError + 1342, src, _\n                  \"Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu.\"\n    End If\n",
+        "    ' SABOTAZA: prazno ocekivanje prolazi kroz pisca\n",
+        "Test_ZBR_UpdateNePrimaPraznoOcekivanje",
+        "izmena bez ijedne klase je odbijena",
+    ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.
