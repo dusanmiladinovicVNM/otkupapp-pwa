@@ -303,6 +303,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_MalinaAutoZbirna
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
+    Test_ZBR_KanonskaSmeDaSeRazveze
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -2168,7 +2169,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     AssertEquals brojA, _
         NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_BROJ_ZBIRNE)), _
         "ZBR-PAL preduslov: prijemnica je zadrzala broj"
-    AssertEquals genPrj, ZbirnaGeneracijaZaBroj(brojA), _
+    AssertEquals genPrj, ZbirnaIDZaBroj(brojA), _
         "ZBR-PAL preduslov: broj razresava na generaciju (ima sta da se pogodi)"
 
     PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojA, _
@@ -2552,7 +2553,7 @@ End Sub
 '   sa generacijom -> kapija PUSTA. Selekcija posle faze 3 dira samo svoju decu.
 '
 ' Deca moraju da dobiju generaciju kroz MasterSync exact-link, ne kroz obican
-' upis: cim su oba dokumenta aktivna, ZbirnaGeneracijaZaBroj je fail-closed i
+' upis: cim su oba dokumenta aktivna, ZbirnaIDZaBroj je fail-closed i
 ' otpremnica snimljena po broju ostaje bez generacije. Link preko ZbirnaID zna
 ' tacno cija je.
 Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
@@ -5582,6 +5583,40 @@ EH:
     On Error GoTo 0
 
     LogFatal "Test_OTP_IzdavanjeDelimicanUspeh", eN, eD
+End Sub
+
+' REPRODUKCIJA (S4-3b): da li DUPLI radi nad KANONSKOM zbirnom.
+'
+' S4-3a je operateru rekao: ispravke zbirne nema, imas DUPLI i PONISTENJE. Ovaj
+' test proverava da to nije prazno obecanje.
+Private Sub Test_ZBR_KanonskaSmeDaSeRazveze()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRRZ")
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("RZ-" & scenario, 100#, 5#)
+    AssertTrue Len(otpID) > 0, "ZBR razvez: izvor je izdat"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-RZ-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR razvez: kanonska zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    Dim res As Object
+    Set res = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrID)
+    AssertTrue CBool(res("success")), _
+               "ZBR razvez: DUPLI radi nad kanonskom zbirnom (bilo: " & _
+               CStr(res("message")) & ")"
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZBR_KanonskaSmeDaSeRazveze", Err.Number, Err.description
 End Sub
 
 ' PISAC ZBIRNE TRAZI DA VEZE POSTOJE, NE SAMO DA NISU PRAZNE (review #383, P2).

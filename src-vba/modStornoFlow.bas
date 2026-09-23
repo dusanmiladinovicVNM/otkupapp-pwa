@@ -752,16 +752,24 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' S4-2 radi po ZbirnaID-u -- prevod je fail-closed: jedna legacy
                 ' generacija legitimno pokriva dva zaglavlja (Klasa I i II), a
                 ' storno po ID-u obara tacno jedno.
-                Dim genP As String
+                ' DVA PUTA DO ZAGLAVLJA, PO TOME STA DETE NOSI (S4-3b).
+                '
+                ' Zatecen trag na detetu je GENERACIJA roditelja, pa se i dalje
+                ' prevodi -- mek prevod, jer jedna legacy generacija legitimno
+                ' pokriva dva zaglavlja (Klasa I i II).
+                '
+                ' Kad traga nema, zaglavlje se trazi PO BROJU -- i tu je od ovog
+                ' reza ZbirnaIDZaBroj, koja vraca IDENTITET. Do sada je vracala
+                ' generaciju pa je isla kroz isti prevod; posle promene ose bi
+                ' prevod dobio ID i trazio ga medju generacijama, tj. nista.
+                Dim genP As String, zbrIdP As String
                 genP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
                                             prijID, COL_DETE_ZBIRNA_GEN))
-                If Len(genP) = 0 Then genP = ZbirnaGeneracijaZaBroj(parentZbirna)
-
-                ' Prevod je MEK: kad generacija ne daje jednoznacno zaglavlje,
-                ' ID se ne salje i kaskada staje na svojoj kapiji, koja ume da
-                ' imenuje razlog. Tvrd prevod bi tu poruku pojeo.
-                Dim zbrIdP As String
-                zbrIdP = ZbrIdIzGeneracijeAko(genP)
+                If Len(genP) > 0 Then
+                    zbrIdP = ZbrIdIzGeneracijeAko(genP)
+                Else
+                    zbrIdP = ZbirnaIDZaBroj(parentZbirna)
+                End If
 
                 Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, zbrIdP)
                 If Not CBool(cascP("ok")) Then

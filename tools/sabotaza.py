@@ -5682,16 +5682,19 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A7: sam storniran red nije aktivan dokument",
     ),
-    "zbirna-ident-greska-kao-none": (
+    "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
-        "        res.integrityStatus = ZBR_INT_ERROR\n"
-        "        res.resolutionStatus = ZBR_RES_AMBIGUOUS\n"
-        "        GoTo XIT\n",
-        "        res.integrityStatus = ZBR_INT_ERROR\n"
-        "        res.resolutionStatus = ZBR_RES_NONE   \' SABOTAZA: greska kao 'sme se'\n"
-        "        GoTo XIT\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, SRC)   ' SABOTAZA: osa identiteta je opet generacija\n",
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
-        "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'",
+        "A20: red bez generacije NIJE integritetska greska",
+    ),
+    "kanonska-zbirna-ne-sme-da-se-razveze": (
+        "modDokumenta.bas",
+        "    res.activeLogicalCount = aktIds.Count\n",
+        "    res.activeLogicalCount = aktIds.Count + 1   ' SABOTAZA: uvek dvosmisleno\n",
+        "Test_ZBR_KanonskaSmeDaSeRazveze",
+        "DUPLI radi nad kanonskom zbirnom",
     ),
     "zbirna-broj-bez-normalizacije": (
         "modDokumenta.bas",
@@ -5724,7 +5727,7 @@ SABOTAZE = {
     ),
     "zbirna-ident-broji-vlasnike-ne-dokumente": (
         "modDokumenta.bas",
-        "    res.activeLogicalCount = aktGen.Count\n",
+        "    res.activeLogicalCount = aktIds.Count\n",
         "    res.activeLogicalCount = aktVl.Count   \' SABOTAZA: broji vlasnike\n",
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A17: dva aktivna dokumenta ISTOG vlasnika su i dalje dvosmislena",
@@ -5786,7 +5789,7 @@ SABOTAZE = {
     "kapija-pusta-i-nescoped-izbor": (
         "modStornoFlow.bas",
         "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(genEff) > 0)\n",
-        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, True)   ' SABOTAZA: uvek scoped\n",
+        "    Dim razMut As String: razMut = ""   ' SABOTAZA: kapija je ugasena\n",
         "Test_ZBR_KapijaPustaKadJeIzborScoped",
         "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
     ),

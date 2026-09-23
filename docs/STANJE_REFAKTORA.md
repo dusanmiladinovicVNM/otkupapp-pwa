@@ -221,13 +221,18 @@
     (nov broj, A9) ostavila siročad. Odluka operatera: **ispravka zbirne čeka S6**; do tada F8 nudi
     `DUPLI` i `PONIŠTENJE`. Usput nađeno: `ValidateZbirnaInvariant` je pod kanonom bila **vakuumska**
     (obe strane nule → uvek `OK`), i u uvidu i u golden snimku. Detalji: plan §14.33.
-37. **S4-4 — malina auto-zbirna nad kanonom (PR #___).** Sposobnost vraćena: jedno jezgro
+37. **S4-4 — malina auto-zbirna nad kanonom (PR #383).** Sposobnost vraćena: jedno jezgro
     (`AutoZbirnaZaOtpremnicu`), dva pozivaoca (izdavanje otpremnice + batch iz sync-a), okidač
     pomeren sa **nacrta** na **izdavanje**, članstvo kanonsko, zbirna dobija **svoj** broj — čime je
     zatvoren dug koji je stari komentar ostavio baš ovom rezu. Kapija lanca razdvojena: VOZ/zbirna
     uvoz ostaje pauziran. **Hladnjački lanac namerno nije dirnut** — njegov ZBR korak okida A/B
     odluku o nastavljivosti, koja je izlazni uslov S6. Detalji: plan §14.34.
-38. **Sledeće:** **S4-3b** (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
+38. **S4-3b — identitet zbirne je ZbirnaID (PR #___).** Ušlo kao čišćenje, ispalo **živ kvar**:
+    `ZbirnaIdentResolve` je tražio `GeneracijaID` koji više ne piše nijedan pisac (S4-3a je obrisao
+    poslednjeg), pa su `DUPLI` i `PONIŠTENJE` bili nedostupni za **svaku** kanonsku zbirnu — baš za
+    ono što je S4-3a ponudio kao zamenu. Nijedan test to nije video jer svi mere fixture redove koji
+    generaciju nose. Detalji: plan §14.35.
+39. **Sledeće:** ~~S4-3b~~ (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
     scoping dece u `StornoZbirnaIDetach_TX` verovatno udara u isti S6 zid), pa (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
     S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje

@@ -1765,7 +1765,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
 
     ' ---- STEP 2: delta-warn + re-point + KG-sync ----
     ' ZBR-CHILD-01: generacija nove zbirne, JEDNOM za sve stavke.
-    Dim genNovZbr As String: genNovZbr = ZbirnaGeneracijaZaBroj(newBrZbr)
+    Dim genNovZbr As String: genNovZbr = ZbirnaIDZaBroj(newBrZbr)
     Dim warnMsg As String: warnMsg = ""
     Dim kk As Variant
     For Each kk In oldGajbByKl.Keys

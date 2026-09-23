@@ -99,12 +99,12 @@ Public Type ZbirnaIdent
     activeOwnerCount As Long
     historicalOwnerCount As Long
     historicalLogicalCount As Long
-    historicalOnlyGeneracijaID As String   ' popunjeno samo kad je historicalLogicalCount = 1
+    historicalOnlyZbirnaID As String       ' popunjeno samo kad je historicalLogicalCount = 1
     scopeProvided As Boolean
     historicalOwnerIsScope As Boolean
     matchingScopeActiveLogicalCount As Long
     resolutionStatus As String
-    selectedGeneracijaID As String
+    selectedZbirnaID As String
     selectedVozacID As String
     selectedKupacID As String
     brojUAktivnojPrijemnici As Boolean
@@ -247,33 +247,44 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
     sirovo = GetTableData(TBL_ZBIRNA)
     If Not IsArray(sirovo) Then GoTo XIT
 
-    Dim cBr As Long, cVoz As Long, cKup As Long, cGen As Long
+    Dim cBr As Long, cVoz As Long, cKup As Long, cIdent As Long
     cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
     cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
     cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
-    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, SRC)
+    ' IDENTITET REDA ZBIRNE JE ZbirnaID (S4-3b).
+    '
+    ' Do ovog reza je ovde stajao COL_GENERACIJA_ID, i to je bilo tacno dok su
+    ' generaciju PISALI modMasterSync i modDokumentInvariant. Prvi je pauziran,
+    ' drugi je obrisan u S4-3a -- pa nijedan ziv pisac vise ne pecati generaciju,
+    ' a kanonski je nikad nije ni pisao.
+    '
+    ' Posledica koju je ovaj rez nasao kao ZIV KVAR: svaka kanonski napravljena
+    ' zbirna padala je na "prazna generacija = integritetska greska", pa su DUPLI
+    ' i PONISTENJE bili nedostupni za SVAKI dokument koji aplikacija danas pravi
+    ' -- uz poruku koja operatera salje na B9 proveru koja to ne moze popraviti.
+    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
 
     Dim scopeKljuc As String
     If res.scopeProvided Then scopeKljuc = ZbirnaVlasnikKljuc(vozacID, kupacID)
 
     ' --- IKAD: sirov niz, stornirani se BROJE ---
     Dim ikadVl As Object: Set ikadVl = CreateObject("Scripting.Dictionary")
-    Dim ikadGen As Object: Set ikadGen = CreateObject("Scripting.Dictionary")
-    Dim r As Long, vl As String, ikadG As String
+    Dim ikadIds As Object: Set ikadIds = CreateObject("Scripting.Dictionary")
+    Dim r As Long, vl As String, ikadId As String
     For r = 1 To UBound(sirovo, 1)
         If StrComp(Trim$(NzToText(sirovo(r, cBr))), res.normalizedBroj, vbTextCompare) = 0 Then
             vl = ZbirnaVlasnikKljuc(sirovo(r, cVoz), sirovo(r, cKup))
             If Not ikadVl.Exists(vl) Then ikadVl.Add vl, 1
-            ikadG = Trim$(NzToText(sirovo(r, cGen)))
-            If Len(ikadG) > 0 Then
-                If Not ikadGen.Exists(ikadG) Then ikadGen.Add ikadG, 1
+            ikadId = UCase$(Trim$(NzToText(sirovo(r, cIdent))))
+            If Len(ikadId) > 0 Then
+                If Not ikadIds.Exists(ikadId) Then ikadIds.Add ikadId, 1
             End If
         End If
     Next r
     res.historicalOwnerCount = ikadVl.Count
     ' MERI SE, NE BLOKIRA -- v. komentar uz ZBR_MUT_* konstante.
-    res.historicalLogicalCount = ikadGen.Count
-    If res.historicalLogicalCount = 1 Then res.historicalOnlyGeneracijaID = ikadGen.Keys()(0)
+    res.historicalLogicalCount = ikadIds.Count
+    If res.historicalLogicalCount = 1 Then res.historicalOnlyZbirnaID = ikadIds.Keys()(0)
 
     If res.scopeProvided And res.historicalOwnerCount = 1 Then
         res.historicalOwnerIsScope = (StrComp(ikadVl.Keys()(0), scopeKljuc, vbTextCompare) = 0)
@@ -284,44 +295,44 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
     akt = ExcludeStornirano(sirovo, TBL_ZBIRNA)
     If Not IsArray(akt) Then GoTo XIT
 
-    Dim aktGen As Object: Set aktGen = CreateObject("Scripting.Dictionary")
+    Dim aktIds As Object: Set aktIds = CreateObject("Scripting.Dictionary")
     Dim aktVl As Object: Set aktVl = CreateObject("Scripting.Dictionary")
-    Dim genVoz As Object: Set genVoz = CreateObject("Scripting.Dictionary")
-    Dim genKup As Object: Set genKup = CreateObject("Scripting.Dictionary")
-    Dim scopeGen As Object: Set scopeGen = CreateObject("Scripting.Dictionary")
+    Dim idVoz As Object: Set idVoz = CreateObject("Scripting.Dictionary")
+    Dim idKup As Object: Set idKup = CreateObject("Scripting.Dictionary")
+    Dim scopeIds As Object: Set scopeIds = CreateObject("Scripting.Dictionary")
 
-    Dim gen As String, prazneAktivne As Long
+    Dim zid As String, prazneAktivne As Long
     For r = 1 To UBound(akt, 1)
         If StrComp(Trim$(NzToText(akt(r, cBr))), res.normalizedBroj, vbTextCompare) = 0 Then
             vl = ZbirnaVlasnikKljuc(akt(r, cVoz), akt(r, cKup))
             If Not aktVl.Exists(vl) Then aktVl.Add vl, 1
 
-            gen = Trim$(NzToText(akt(r, cGen)))
-            If Len(gen) = 0 Then
+            zid = UCase$(Trim$(NzToText(akt(r, cIdent))))
+            If Len(zid) = 0 Then
                 prazneAktivne = prazneAktivne + 1
             Else
-                If Not aktGen.Exists(gen) Then
-                    aktGen.Add gen, 1
-                    genVoz.Add gen, Trim$(NzToText(akt(r, cVoz)))
-                    genKup.Add gen, Trim$(NzToText(akt(r, cKup)))
+                If Not aktIds.Exists(zid) Then
+                    aktIds.Add zid, 1
+                    idVoz.Add zid, Trim$(NzToText(akt(r, cVoz)))
+                    idKup.Add zid, Trim$(NzToText(akt(r, cKup)))
                 End If
                 If res.scopeProvided Then
                     If StrComp(vl, scopeKljuc, vbTextCompare) = 0 Then
-                        If Not scopeGen.Exists(gen) Then scopeGen.Add gen, 1
+                        If Not scopeIds.Exists(zid) Then scopeIds.Add zid, 1
                     End If
                 End If
             End If
         End If
     Next r
 
-    res.activeLogicalCount = aktGen.Count
+    res.activeLogicalCount = aktIds.Count
     res.activeOwnerCount = aktVl.Count
-    res.matchingScopeActiveLogicalCount = scopeGen.Count
+    res.matchingScopeActiveLogicalCount = scopeIds.Count
 
-    ' ZBR-IDENT-01: aktivan red MORA da nosi generaciju. Prazna nije alternativni
-    ' oblik identiteta nego integritetska greska -- pisci u tblZbirna
-    ' (modMasterSync, modDokumentInvariant) odmah PECATE validan GeneracijaID:
-    ' nasledjuju ga u svom scope-u, a MasterSync ga KUJE.
+    ' ZBR-IDENT-01, sada nad ZbirnaID-em: aktivan red MORA da nosi identitet.
+    ' Prazan i dalje jeste integritetska greska -- ali to je greska koju pisac ne
+    ' moze da napravi (NewEntityID), pa je ovo kapija nad zateceno pokvarenim
+    ' redom, a ne nad normalnim dokumentom. Isto meri Chk_B9.
     If prazneAktivne > 0 Then
         res.integrityStatus = ZBR_INT_ERROR
         res.resolutionStatus = ZBR_RES_AMBIGUOUS
@@ -336,10 +347,10 @@ Public Function ZbirnaIdentResolve(ByVal broj As String, _
         res.resolutionStatus = ZBR_RES_OWNER_MISMATCH
     Else
         res.resolutionStatus = ZBR_RES_UNIQUE
-        gen = aktGen.Keys()(0)
-        res.selectedGeneracijaID = gen
-        res.selectedVozacID = genVoz(gen)
-        res.selectedKupacID = genKup(gen)
+        zid = aktIds.Keys()(0)
+        res.selectedZbirnaID = zid
+        res.selectedVozacID = idVoz(zid)
+        res.selectedKupacID = idKup(zid)
     End If
 
 XIT:
@@ -350,7 +361,7 @@ EH:
     LogErr SRC, "broj=" & broj
     res.integrityStatus = ZBR_INT_ERROR
     res.resolutionStatus = ZBR_RES_AMBIGUOUS
-    res.selectedGeneracijaID = ""
+    res.selectedZbirnaID = ""
     res.selectedVozacID = ""
     res.selectedKupacID = ""
     ZbirnaIdentResolve = res
@@ -5898,88 +5909,24 @@ End Sub
 ' Zove se JEDNOM PO BROJU, ne po redu: ZbirnaIdentResolve cita celu tblZbirna, pa
 ' bi poziv u petlji nad decom bio O(n*m). Petlje zato uzimaju gen jednom i salju
 ' ga u PoveziDeteNaZbirnu.
-Public Function ZbirnaGeneracijaZaBroj(ByVal broj As String) As String
+Public Function ZbirnaIDZaBroj(ByVal broj As String) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
     If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
     id = ZbirnaIdentResolve(broj)
     If id.integrityStatus <> ZBR_INT_OK Then Exit Function
     If id.resolutionStatus <> ZBR_RES_UNIQUE Then Exit Function
-    ZbirnaGeneracijaZaBroj = id.selectedGeneracijaID
+    ZbirnaIDZaBroj = id.selectedZbirnaID
     Exit Function
 EH:
-    LogErr "modDokumenta.ZbirnaGeneracijaZaBroj", "broj=" & broj
-End Function
-
-' ZBR-CHILD-01: identitet roditelja kad je broj IKAD imao samo JEDNU generaciju.
-'
-' Za BACKFILL, ne za pisce. Razlika je sustinska:
-'
-'   ZbirnaGeneracijaZaBroj  pita "ko je roditelj SADA" -- tacno za red koji se
-'                           upravo vezuje, jer se vezuje za tekuci dokument.
-'   ova funkcija            pita "ko je IKAD bio pod ovim brojem" -- tacno za
-'                           stari red kome se identitet naknadno rekonstruise.
-'
-' Zasto backfill ne sme "sada": ugovor par.5 IZRICITO dozvoljava re-entry istog
-' vlasnika posle storna, pa je ovo legitimno stanje:
-'
-'   GEN-A | ZB-10 | vlasnik X | STORNIRANO
-'   GEN-B | ZB-10 | vlasnik X | AKTIVNO      <- resolver kaze UNIQUE = GEN-B
-'   OTP-A | BrojZbirne = ZB-10 | generacija prazna
-'
-' OTP-A je istorijski dete GEN-A. "Sada" bi mu upisalo GEN-B i napravilo LAZNU
-' SLEDLJIVOST -- gore od prazne kolone, jer prazna bar ne tvrdi nista.
-'
-' Stornirana JEDINA generacija se sme upisati: ako je pod tim brojem ikad
-' postojala samo jedna, identitet je poznat bez obzira na danasnje stanje.
-' ZBR-CHILD-01: da li generacija ZAISTA pripada tom poslovnom broju.
-'
-' `RedJeIzabranogDokumenta` (modStorno) kad dobije generaciju bira red ISKLJUCIVO
-' po njoj -- broj se vise ne gleda. Zato `StornoZbirna("X", "GEN-C")` stornira
-' GEN-C i kad GEN-C pripada broju Y. `IdoviGeneracije` isto poredi samo
-' generaciju, pa ni ona nije branila par.
-'
-' Rupa je STARIJA od faze 4: i kad broj X nosi jedan dokument, nespojiv par bi
-' prosao. Faza 4 je samo uklonila slucajnu barijeru -- kapiju koja je taj poziv
-' zaustavljala kad je X dvosmislen -- i time je ucinila dohvatljivom u vise
-' slucajeva. A njena premisa ("akter zna identitet") bez ove provere ne stoji:
-' neprazan GeneracijaID nije dokaz da akter zna dokument POD TIM BROJEM.
-'
-' Gleda i STORNIRANE redove namerno: uvid i oporavak legitimno rade sa
-' identitetom vec stornirane zbirne (prefill, "bivse zbirne izvora").
-Public Function ZbirnaGeneracijaPripadaBroju(ByVal broj As String, _
-                                             ByVal gen As String) As Boolean
-    On Error GoTo EH
-    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
-    If Len(Trim$(NzToText(gen))) = 0 Then Exit Function
-
-    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
-    If IsEmpty(data) Then Exit Function
-    If Not IsArray(data) Then Exit Function
-
-    Dim cBroj As Long: cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    Dim cGen As Long: cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
-    If cBroj = 0 Or cGen = 0 Then Exit Function
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(NzToText(data(i, cGen))), Trim$(NzToText(gen)), vbTextCompare) = 0 Then
-            If BrojJednak(data(i, cBroj), broj) Then
-                ZbirnaGeneracijaPripadaBroju = True
-                Exit Function
-            End If
-        End If
-    Next i
-    Exit Function
-EH:
-    LogErr "modDokumenta.ZbirnaGeneracijaPripadaBroju", "broj=" & broj & " gen=" & gen
+    LogErr "modDokumenta.ZbirnaIDZaBroj", "broj=" & broj
 End Function
 
 ' `outRazlog` je Optional ByRef: zatecenim pozivaocima se nista ne menja, a
 ' migracija dobija RAZLOG. Odluka ostaje na JEDNOM mestu -- da backfill sam
 ' racuna razlog, imao bi drugu kopiju pravila, sto je tacno ono sto faza 2
 ' nije htela.
-Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String, _
+Public Function ZbirnaJedanIDIkadZaBroj(ByVal broj As String, _
                                                  Optional ByRef outRazlog As String) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
@@ -6002,11 +5949,11 @@ Public Function ZbirnaJedinaGeneracijaIkadZaBroj(ByVal broj As String, _
         outRazlog = ZBR_BF_VISE_GENERACIJA
         Exit Function
     End If
-    ZbirnaJedinaGeneracijaIkadZaBroj = id.historicalOnlyGeneracijaID
+    ZbirnaJedanIDIkadZaBroj = id.historicalOnlyZbirnaID
     Exit Function
 EH:
     outRazlog = ZBR_BF_INTEGRITET
-    LogErr "modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj", "broj=" & broj
+    LogErr "modDokumenta.ZbirnaJedanIDIkadZaBroj", "broj=" & broj
 End Function
 
 ' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.
@@ -6022,7 +5969,7 @@ End Function
 ' razdvoji.
 '
 ' gen se prosledjuje, ne racuna ovde: pozivaoci su cesto petlje nad decom istog
-' broja (v. ZbirnaGeneracijaZaBroj).
+' broja (v. ZbirnaIDZaBroj).
 Public Sub PoveziDeteNaZbirnu(ByVal tableName As String, ByVal rowIndex As Long, _
                               ByVal brojCol As String, ByVal brojZbirne As String, _
                               ByVal gen As String, ByVal sourceName As String)
@@ -6689,7 +6636,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
-                       ZbirnaGeneracijaZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
+                       ZbirnaIDZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
     ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, _
                       COL_PRJ_KUPAC, kupacID
 
@@ -8309,7 +8256,7 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     ' stanje kao pre ove kolone.
     Dim genCilja As String
     genCilja = Trim$(NzToText(zbirnaGeneracijaID))
-    If Len(genCilja) = 0 Then genCilja = ZbirnaGeneracijaZaBroj(targetBrZbirne)
+    If Len(genCilja) = 0 Then genCilja = ZbirnaIDZaBroj(targetBrZbirne)
 
     Set tx = New clsTransaction
     tx.BeginTx

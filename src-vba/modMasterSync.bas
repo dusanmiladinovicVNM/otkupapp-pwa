@@ -2602,7 +2602,7 @@ End Function
 '
 ' Pozivalac (LinkZbirnaToOtkupAndOtpremnica) ima konkretan ZbirnaID -- membership
 ' se i razresava preko PK, bas zato sto broj u multi-device koliziji nije
-' jedinstven (AUD-043b). Ponovno pitanje ZbirnaGeneracijaZaBroj(brojZbirne) bi
+' jedinstven (AUD-043b). Ponovno pitanje ZbirnaIDZaBroj(brojZbirne) bi
 ' taj identitet BACILO i vratilo prazno u KR-001 slucaju -- dakle bas tamo gde
 ' je veza najpotrebnija.
 Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _

@@ -1455,7 +1455,7 @@ End Sub
 ' ove kolone, pa migracija ne moze da pogorsa stanje.
 '
 ' KRITERIJUM JE ISTORIJSKI, NE TEKUCI, i to je razlika koja cuva sledljivost --
-' v. modDokumenta.ZbirnaJedinaGeneracijaIkadZaBroj.
+' v. modDokumenta.ZbirnaJedanIDIkadZaBroj.
 '
 ' Razresava se JEDNOM PO RAZLICITOM BROJU, ne po redu: ZbirnaIdentResolve cita
 ' celu tblZbirna, pa bi poziv po redu bio O(n*m) nad celom istorijom.
@@ -1513,13 +1513,13 @@ Public Sub BackfillDeteZbirnaGeneracija_Core(ByVal showMessages As Boolean, _
 
     Dim k As Variant
     For Each k In brojevi.Keys
-        ' NE ZbirnaGeneracijaZaBroj: ta pita "ko je roditelj SADA", a backfill
+        ' NE ZbirnaIDZaBroj: ta pita "ko je roditelj SADA", a backfill
         ' rekonstruise identitet STARIH redova. Posle re-entry-ja istog vlasnika
         ' (ugovor par.5) pod istim brojem stoje stornirana GEN-A i aktivna GEN-B;
         ' "sada" bi starom detetu GEN-A upisalo GEN-B -- LAZNA SLEDLJIVOST, gora
         ' od prazne kolone.
         Dim razlogBroja As String
-        brojevi(k) = ZbirnaJedinaGeneracijaIkadZaBroj(CStr(k), razlogBroja)
+        brojevi(k) = ZbirnaJedanIDIkadZaBroj(CStr(k), razlogBroja)
         razlozi(CStr(k)) = razlogBroja
     Next k
 
