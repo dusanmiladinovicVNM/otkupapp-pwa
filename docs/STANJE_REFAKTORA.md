@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 23.09.2026 (S5-1).
+**Ažurirano:** 23.09.2026 (S5-2).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -244,9 +244,13 @@
     **Klasa više nije ključ grupisanja** — dva bloka I i II klase istog dana sa istog otkupnog
     mesta daju JEDAN dokument sa dve stavke. Pad jedne grupe ne obara ostale, ali se imenuje.
     Detalji: plan §14.37.
-41. **Sledeće:** S5-2 (VOZ/zbirna uvoz nad kanonom), S5-3 (E-019 na otpremnicu + brisanje
-    `IzvedeniLanacIzPwaDostupan` i kolona `Otkup.VozacID/OtpremnicaID/BrojOtpremnice`),
-    S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
+41. **S5-2 — predaja robe vozaču postaje otpremnica.** Redosled u planu ispravljen po rečenici
+    operatera: lanac je **predaja → otpremnica → zbirna**, pa VOZ/zbirna ide POSLE predaje.
+    `TryUpdateVozacID` obrisan — bio je poslednji pisac `Otkup.VozacID`, pa `modMasterSync`
+    više ne piše `tblOtkup` (4 → 3 pisca). Jedan utovar = jedan dokument, iako stiže kao N
+    redova. Detalji: plan §14.38.
+42. **Sledeće:** S5-3 (VOZ/zbirna uvoz nad kanonom — posle njega `GeneracijaID` nema nijednog
+    pisca), S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
 

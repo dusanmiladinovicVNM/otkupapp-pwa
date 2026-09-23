@@ -4885,8 +4885,8 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | # | Sadržaj | Stanje |
 |---|---|---|
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
-| **S5-2** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` nestaje | ⏳ |
-| **S5-3** | dodela vozača iz PWA (E-019) na otpremnicu; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; `Otkup.VozacID/OtpremnicaID/BrojOtpremnice` iz kanona; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
+| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
 | **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
 
 #### Šta je S5-1 uradio
@@ -4993,6 +4993,58 @@ prijavio kao `NE OBARA SVOJ TEST`, iako su svi bili crveni i svi na pravoj tvrdn
   svaku postojeću stanicu, a stanica otkupa je FK-provere​na). Merena je **fault injection-om** — otkupu se
   prepisuje `StanicaID` na nepostojeću stanicu — što je i realan povod (stanica uklonjena iz matičnih
   podataka dok njeni otkupi još žive). Ista grana u hladnjačkom lancu ima svoj test.
+
+
+### 14.38) S5-2 — predaja robe vozaču postaje otpremnica (23.09.2026)
+
+**Redosled u planu je bio presečen naopako, i operater ga je ispravio jednom rečenicom:**
+
+> *„vozač vidi samo otkupe koji čine otpremnice koje su vozačeve, odnosno na osnovu čekiranih otkupnih
+> listova koje otkupac predaje vozaču se stvara osnova za otpremnicu. ta otpremnica je osnova za zbirnu."*
+
+Lanac je dakle **predaja → otpremnica → zbirna**. Ja sam VOZ/zbirna uvoz stavio **pre** predaje — a bez
+predaje nema otpremnice sa pravim vozačem, pa zbirna nema od čega da nastane (osim u malina režimu, gde
+je S4-4 već rešava). Zato je S5-2 sada **predaja**, a VOZ/zbirna se pomera na S5-3. Kolona „Sadržaj" u
+§14.9 ih i nabraja tim redom; rez je bio mimo nje.
+
+**Pitanje koje sam postavio bilo je pogrešno postavljeno.** Pitao sam šta raditi kad se otkupi ne mogu
+razrešiti u otpremnice — a to nije legitimno poslovno stanje nego kvar: dok vozač vidi otkup, on je već
+u njegovoj otpremnici.
+
+#### Šta je rez uradio
+
+| Korak | Rez |
+|---|---|
+| **1 · pečat → događaj** | `TryUpdateVozacID` i njegov `TestHook` **obrisani** (89 + 8 linija), s njima i cela `MSVOZ_*` mašina stanja. Bio je **poslednji** pisac `Otkup.VozacID`: `modMasterSync` više **ne piše `tblOtkup`** (vlasništvo 4 → 3 pisca) |
+| **2 · N redova, jedan događaj** | predaja stiže kao N zasebnih OTK redova. Skupljaju se kroz prolaz lista pa **grupišu** — ključ je vozač + isti ključ koji malina auto-otpremnica koristi. **Jedan utovar = jedan dokument**; dva utovara istog dana = dva, jer izdata otpremnica se ne dopunjuje (A13) |
+| **3 · jedno jezgro, dva ulaza** | `AutoOtpremnicaUpis` dobija drugog pozivaoca. Vozač je **zadat** (predaja) ili **ogledalo stanice** (malina) — to je jedina razlika između dva ulaza |
+| **4 · ishod po grupi** | red dobija status **svoje** grupe, i to **pre** `WriteBackSyncStatus`: „Master" sme tek kad je otpremnica stvarno upisana. Obrnut redosled bi Google listu potvrdio posao koji još nije urađen — a `Duplicate` je terminalan, pa se red nikad više ne bi ponudio |
+| **5 · AUD-042(a) preseljen** | predaja koja nije postala otpremnica **pali fatal flag**, ne prolazi kao tih preskok. Fail seam `VOZAC_WRITE` je zadržan pod istim imenom — meri **istu sposobnost**, samo je upis sada otpremnica a ne pečat |
+
+`CreateOtpremniceIzPredaje` je **namerno bez `On Error`**: sistemski pad iz `AutoOtpremnicaUpis` mora da
+izađe do `ImportOneOTKSheet` i tamo postane fatal za ceo list. Lokalni EH bi ga spustio na nivo grupe —
+tačno ona granica koju je review #385 zatvorio.
+
+#### Što je obrisano, nije prevedeno
+
+`Test_RF28_VozacIDUpdateIshodi` (10 tvrdnji) merio je mašinu stanja nad kolonom koje više nema. Sposobnost
+mere tri nova testa. **Kapija ga nije uhvatila:** posle brisanja `TestHook`-a test je i dalje zvao
+nepostojeće ime, a `vba_check` je bio čist — isti propust vidljivosti koji §15 već vodi. Bez ručne
+provere bio bi compile pad, tj. Excel koji visi.
+
+Isto pravilo me je uhvatilo i drugi put u istom rezu: `SYNC_STATUS_MASTER` i `SYNC_STATUS_DUPLICATE` su
+`Private` u `modMasterSync`, pa ih test ne vidi. Tvrdnje sada drže **doslovne** vrednosti — to i jeste
+žični ugovor sa Google listom.
+
+#### Kapije
+
+Merenje: `otk_veza_otp` **23 → 18** PROD, `pauza` **6 → 4**.
+
+BFP **1876 → 1887**, sravnjeno po stavkama: −10 (obrisan test) +21 (tri nova) = +11. Sabotaže **582 → 585**:
+`predaja-red-po-red`, `predaja-bez-vozaca-u-kljucu`, `predaja-ne-gleda-clanstvo`.
+
+**Obim dokaza po novom pravilu** (`CLAUDE.md` §5, odluka 23.09.2026): u rezu se vrte **samo nove**
+sabotaže, pun katalog ide pred release.
 
 
 ## 15) Backlog — namerno van opsega
