@@ -1365,8 +1365,37 @@ Private Sub Fail(ByVal nm As String)
     mReport = mReport & "PAO   " & nm & vbCrLf
 End Sub
 
+' IME PALOG TESTA MORA DA IZADJE IZ EXCELA (S4-3c).
+'
+' Do ovog reza je storno suite detalj pisala SAMO u Immediate. run_vba je odatle
+' video "FAIL=9" i nijedno ime -- pa se pad nije mogao trijazirati bez rucnog
+' otvaranja sveske. To nije sitnica: devet palih provera bez imena znaci da se
+' izmena koja ih je oborila mora vracati naslepo.
+'
+' Format je isti koji BFP vec pise, pa ga run_vba cita ISTIM citacem
+' (_read_test_results): prvi red "TESTS=n FAIL=n", pa po red za svaki pad.
+Private Sub WriteResultFileStorno()
+    Dim path As String, fnum As Integer, ln As Variant, det As String
+
+    On Error Resume Next
+    path = ThisWorkbook.path & Application.PathSeparator & "last_run_storno.txt"
+
+    For Each ln In Split(mFails, vbCrLf)
+        If Len(Trim$(CStr(ln))) > 0 Then
+            det = det & "FAIL " & Trim$(Mid$(CStr(ln), 4)) & vbLf
+        End If
+    Next ln
+
+    fnum = FreeFile
+    Open path For Output As #fnum
+    Print #fnum, "TESTS=" & CStr(mPass + mFail) & " FAIL=" & CStr(mFail) & vbLf & det;
+    Close #fnum
+End Sub
+
 Private Sub ReportResults()
     Dim hdr As String
+    WriteResultFileStorno
+
     hdr = "STORNO TEST SUITE  ->  PASS=" & mPass & "  FAIL=" & mFail
     Debug.Print String(60, "=")
     Debug.Print hdr
