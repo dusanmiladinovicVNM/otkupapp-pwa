@@ -238,10 +238,11 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
     '
-    ' Pauzirana istom kapijom: pise Otkup.BrojZbirne nazad na zaglavlje.
-    If IsMalinaMode() And Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
-        AppendStepPauza summary, "Malina auto-zbirna: PAUZIRANO do PR7/PR8"
-    ElseIf IsMalinaMode() Then
+    ' Od S4-4 ima SVOJU kapiju. Bila je pod IzvedeniLanacIzPwaDostupan jer je
+    ' pisala Otkup.BrojZbirne nazad na zaglavlje; kanonska je ne pise, pa razlog
+    ' za zajednicku kapiju otpada. VOZ/zbirna uvoz (korak nize) ostaje pauziran.
+    ' Nije malina -> koraka nema, pa se ni ne prijavljuje kao pauza.
+    If modMasterSync.AutoZbirnaDostupna() Then
         SyncProgress "Malina: kreiram zbirne iz otpremnica..."
 
         On Error Resume Next

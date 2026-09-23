@@ -215,13 +215,20 @@
     čita `GetZbirnaProgress` — isti par čitača koji koristi izdavanje. **Četvrta mera je BROJ IZVORA**
     (odluka operatera): zbirna nema cenu, a pokrivenost je pitanje članstva. Natpise šalje ekran
     (14. polje ugovora), pa ljuska ne pogađa šta je u kom režimu predmet rada. Detalji: plan §14.32.
-36. **S4-3a — ispravka zbirne umire, ne seli se (PR #___).** Okvir rekalkulacije u mestu i
+36. **S4-3a — ispravka zbirne umire, ne seli se (PR #382).** Okvir rekalkulacije u mestu i
     dvokoraka „storno sada, zamena kasnije" je obrisan (ZBR-KANON-03). **Zamena se ne gradi sada:**
     jedan potez traži prenos prijemnica, a one vise na `BrojZbirne` do S6 — pa bi nova zbirna
     (nov broj, A9) ostavila siročad. Odluka operatera: **ispravka zbirne čeka S6**; do tada F8 nudi
     `DUPLI` i `PONIŠTENJE`. Usput nađeno: `ValidateZbirnaInvariant` je pod kanonom bila **vakuumska**
     (obe strane nule → uvek `OK`), i u uvidu i u golden snimku. Detalji: plan §14.33.
-37. **Sledeće:** **S4-3b** (čišćenje ostatka `GeneracijaID` okvira zbirne), pa S4-4 (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
+37. **S4-4 — malina auto-zbirna nad kanonom (PR #___).** Sposobnost vraćena: jedno jezgro
+    (`AutoZbirnaZaOtpremnicu`), dva pozivaoca (izdavanje otpremnice + batch iz sync-a), okidač
+    pomeren sa **nacrta** na **izdavanje**, članstvo kanonsko, zbirna dobija **svoj** broj — čime je
+    zatvoren dug koji je stari komentar ostavio baš ovom rezu. Kapija lanca razdvojena: VOZ/zbirna
+    uvoz ostaje pauziran. **Hladnjački lanac namerno nije dirnut** — njegov ZBR korak okida A/B
+    odluku o nastavljivosti, koja je izlazni uslov S6. Detalji: plan §14.34.
+38. **Sledeće:** **S4-3b** (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
+    scoping dece u `StornoZbirnaIDetach_TX` verovatno udara u isti S6 zid), pa (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
     S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.

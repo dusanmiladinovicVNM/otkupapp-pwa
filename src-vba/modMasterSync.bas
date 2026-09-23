@@ -781,6 +781,152 @@ Public Function IzvedeniLanacIzPwaDostupan() As Boolean
     IzvedeniLanacIzPwaDostupan = False
 End Function
 
+' AUTO-ZBIRNA VISE NIJE DEO PAUZIRANOG LANCA (S4-4).
+'
+' IzvedeniLanacIzPwaDostupan je JEDNA kapija nad celim izvedenim lancem, i to
+' je bilo tacno dok je auto-zbirna pisala Otkup.BrojZbirne nazad na zaglavlje
+' (BackfillOtkupBrojZbirneByOtpremnica). Kanonska auto-zbirna taj backlink NE
+' pise -- clanstvo je zapis u tblZbirnaIzvori -- pa razlog za zajednicku kapiju
+' za NJU vise ne postoji. VOZ/zbirna uvoz ga i dalje ima i ostaje pauziran.
+'
+' Razdvajanje je namerno i glasno: kapija koja pokriva vise nego sto mora
+' zaustavlja i ono sto je popravljeno, a onda se otvara "u paketu" -- tiho
+' pustajuci i ono sto nije.
+Public Function AutoZbirnaDostupna() As Boolean
+    AutoZbirnaDostupna = IsMalinaMode()
+End Function
+
+' JEZGRO: auto-zbirna za JEDNU otpremnicu. Vraca ZbirnaID, "" = nista nije
+' napravljeno (nije malina, otpremnica nije slobodna/izdata, ili je greska --
+' razlog je tada u outGreska).
+'
+' ZASTO SE ODLUKA "DA LI SME" NE RACUNA OVDE: pita se
+' modDokumenta.NevezaneOtpremnice, ISTA lista koju operater vidi u F2 radnom
+' stolu. Drugo pravilo na ovom mestu znacilo bi da ekran i automatika mogu da se
+' raziju -- automatika bi vezala otpremnicu koju spisak ne nudi, ili obrnuto.
+' Ta lista vec drzi sva tri uslova: IZDATA, nestornirana, bez aktivnog clanstva.
+'
+' IDEMPOTENTNO PO KONSTRUKCIJI: otpremnica koja vec ima zbirnu nije u toj listi,
+' pa ponovljen poziv ne pravi drugu. To nije udobnost nego uslov -- jezgro zovu
+' DVA pozivaoca (izdavanje i batch prolaz), a batch ume da stigne prvi.
+Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
+                                       Optional ByRef outGreska As String) As String
+    Const SRC As String = "AutoZbirnaZaOtpremnicu"
+
+    outGreska = ""
+    If Not AutoZbirnaDostupna() Then Exit Function
+
+    otpremnicaID = Trim$(otpremnicaID)
+    If Len(otpremnicaID) = 0 Then Exit Function
+
+    ' JEZGRO NE DIZE GRESKU, VEC JE VRACA (review #383, P2).
+    '
+    ' Pozivalac na izdavanju je vec COMMIT-ovao otpremnicu. Izuzetak koji odavde
+    ' izleti stize u njegov EH i tamo postaje "otpremnica nije izdata" -- laz o
+    ' poslovnom dogadjaju koji se desio. AutoZbirnaUpis pritom die na vise mesta
+    ' PRE pisca (prazan kupac, prazan vozac, nema broja), pa to nije teorijski
+    ' put nego najverovatniji.
+    '
+    ' Ugovor je zato: "" + prazan outGreska = nije bilo posla; "" + neprazan
+    ' outGreska = posla je bilo i NIJE uspeo; ZbirnaID = uspelo.
+    On Error GoTo EH
+
+    Dim slobodne As Object
+    Set slobodne = modDokumenta.NevezaneOtpremnice()
+    If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function
+
+    AutoZbirnaZaOtpremnicu = AutoZbirnaUpis(otpremnicaID, outGreska)
+    Exit Function
+EH:
+    ' Opis PRE LogErr-a, isti razlog kao u batch prolazu.
+    Dim errDesc As String
+    errDesc = Err.description
+    LogErr SRC
+    AutoZbirnaZaOtpremnicu = ""
+    If Len(outGreska) = 0 Then outGreska = errDesc
+End Function
+
+' Upis same zbirne. Odvojeno od AutoZbirnaZaOtpremnicu zato sto batch prolaz vec
+' ZNA da je otpremnica slobodna (dobio ju je iz iste liste) -- da zove javni
+' ulaz, citao bi celu tabelu po otpremnici.
+Private Function AutoZbirnaUpis(ByVal otpremnicaID As String, _
+                                ByRef outGreska As String) As String
+    Const SRC As String = "AutoZbirnaUpis"
+
+    Dim kupacID As String
+    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If Len(kupacID) = 0 Then
+        Err.Raise vbObjectError + 8300, SRC, _
+            "MALINA_DEFAULT_KUPAC nije postavljen (kljuc u tblSEFConfig)."
+    End If
+
+    Dim datum As Date, vozacID As String
+    datum = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_DATUM))
+    vozacID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, _
+                                         COL_OTP_VOZAC)))
+    If Len(vozacID) = 0 Then
+        Err.Raise vbObjectError + 8302, SRC, _
+            "Otpremnica " & otpremnicaID & " nema VozacID, a zbirna ga trazi."
+    End If
+
+    ' ZBIRNA DOBIJA SVOJ BROJ, NE NASLEDJUJE OTPREMNICIN (odluka 23.09.2026).
+    '
+    ' Stari kod je pisao ApplyMirrorPrefix(vozacID, BrojOtpremnice) i sam
+    ' komentar je to vodio kao DUG: numericki deo je tada pripadao STANICI, a
+    ' vlasnik niza zbirne je VOZAC. Prolazilo je samo dok je vozac doslovno
+    ' mirror-stanica; cim PWA posalje realnog vozaca, kapija konteksta
+    ' (modBrojevi) odbija upis kao TUDJ_VLASNIK.
+    '
+    ' SuggestNextBroj sam primenjuje mirror prefiks "S" kad je vozac ogledalo
+    ' stanice, pa se izgled broja u malini ne menja -- menja se to CIJI je niz.
+    ' Sidro duga: Test_BKTX_ZbirnaTudjegVlasnikaOdbijena.
+    ' checkRemote:=False -- NE PITA GOOGLE.
+    '
+    ' Podrazumevano SuggestNextBroj gleda i udaljeni list (VOZ-<vozac>), da
+    ' predlog operateru ne bi pogodio broj koji je PWA vec potrosio. Ovde to ne
+    ' valja iz dva razloga: batch prolaz bi pravio mrezni poziv PO DOKUMENTU, a
+    ' automatika koja zavisi od mreze pada kad mreze nema -- tiho, jer
+    ' SuggestNextBroj gresku guta i vraca prazno.
+    '
+    ' Bezbedno je jer je VOZ/zbirna uvoz PAUZIRAN (S5): nijedna PWA zbirna danas
+    ' ne stize u tblZbirna, pa lokalni niz jeste ceo niz. DUG ZA S5: kad se uvoz
+    ' vrati, udaljena osa se mora vratiti u racun -- ili ovde, ili tako sto uvoz
+    ' rezervise svoj opseg.
+    Dim brZbirne As String
+    brZbirne = modBrojevi.SuggestNextBroj(KIND_ZBR, vozacID, datum, False)
+    If Len(brZbirne) = 0 Then
+        ' Imenuj OBA uzroka: prazan predlog znaci ili ugasen auto-broj u
+        ' Podesavanjima, ili pad generatora. Automatika nema operatera koji bi
+        ' broj ukucao, pa oba znace isto -- stani.
+        Err.Raise vbObjectError + 8303, SRC, _
+            "Nema slobodnog broja zbirne za vozaca " & vozacID & _
+            " (provera: auto-broj dokumenta u Podesavanjima)."
+    End If
+
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", vozacID
+    h.Add "BrojZbirne", brZbirne
+    h.Add "KupacID", kupacID
+
+    Dim hladnjaca As String
+    hladnjaca = Trim$(NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca")))
+    If Len(hladnjaca) > 0 Then h.Add "Hladnjaca", hladnjaca
+
+    ' VRSTA, SORTA I TIP AMBALAZE SE NE SALJU: cinjenica robe se preuzima od
+    ' prvog izvora (ZBR-KANON-04). Poslati ih znacilo bi tvrditi ono sto pisac
+    ' sam izvodi -- i razici se s njim cim se izvor promeni.
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpremnicaID
+
+    ' CreateZbirnaIzIzvora_TX, ne CreateZbirna_TX: automatski tok NEMA nezavisno
+    ' ocekivanje da unakrsno proveri. To se kaze izborom ulaza, ne izostavljanjem
+    ' argumenta (modDokumenta, 686).
+    AutoZbirnaUpis = modDokumenta.CreateZbirnaIzIzvora_TX(h, izvori, outGreska)
+End Function
+
 ' ============================================================
 ' MALINA MOD -- C: VozacID := StanicaID na tblOtkup.
 '
@@ -892,25 +1038,63 @@ End Function
 ' samoBrojOtp: opcioni scope -- obradi SAMO otpremnice tog broja. Prazno = sve
 ' otvorene (produkcioni poziv iz frmDokumenta). Scope koriste testovi, da run ne
 ' zahvati nepovezane otvorene otpremnice u svesci.
-Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As String = "") As Long
+' BATCH PROLAZ: auto-zbirna za SVE slobodne izdate otpremnice (S4-4).
+'
+' Drugi od dva pozivaoca istog jezgra. Postoji zato sto otpremnice ne stizu samo
+' kroz desktop izdavanje: PWA sync ih donese gotove, i one kuku na izdavanju
+' nikad ne prodju. Bez ovog prolaza bi malina operater za njih ostao bez zbirne
+' -- tiho, sto je najgori oblik.
+'
+' samoOtpID suzava prolaz na JEDAN dokument, po IDENTITETU. Stari parametar je
+' bio BrojOtpremnice -- labela, koja ume da pripadne dvama dokumentima (A2).
+'
+' Pad JEDNE zbirne obara ceo prolaz i podize gresku: polovicno odradjen batch
+' koji vrati "napravljeno 3" ne kaze koje tri, a operater nema sta da ponovi.
+Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoOtpID As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
 
-    ' PAUZIRANA, I OD S4-2c/2a BEZ TELA.
+    On Error GoTo EH
+
+    If Not AutoZbirnaDostupna() Then Exit Function
+
+    Dim slobodne As Object
+    Set slobodne = modDokumenta.NevezaneOtpremnice()
+    If slobodne.count = 0 Then Exit Function
+
+    Dim filter As String
+    filter = UCase$(Trim$(samoOtpID))
+
+    Dim k As Variant, g As String, zbrID As String, n As Long
+    For Each k In slobodne.Keys
+        If Len(filter) = 0 Or filter = CStr(k) Then
+            zbrID = AutoZbirnaUpis(CStr(k), g)
+            If Len(zbrID) = 0 Then
+                Err.Raise vbObjectError + 8301, SRC, _
+                    "Auto-zbirna nije napravljena za otpremnicu " & CStr(k) & _
+                    IIf(Len(g) > 0, ": " & g, "")
+            End If
+            n = n + 1
+        End If
+    Next k
+
+    AutoCreateZbirnaFromOtpremnice_TX = n
+    If n > 0 Then LogInfo SRC, "Malina auto-zbirna created=" & CStr(n)
+    Exit Function
+EH:
+    ' OPIS SE CITA PRE LogErr-a -- LogErr usput brise stanje greske (review
+    ' #383, P2). Isti obrazac koji modAutoHladnjaca vec nosi u komentaru.
     '
-    ' Jezgro je zvalo stari pisac zbirne (obrisan u istom rezu) i citalo
-    ' Kolicina / Klasa / KolAmbalaze sa ZAGLAVLJA otpremnice -- kolone koje od
-    ' S3b-1 nijedan pisac ne popunjava. Nije se dalo "prevezati" na kanonski
-    ' pisac: ocekivanje, clanstvo i identitet izvora su drugi model, pa je to
-    ' posao S4-4, ne mehanicka zamena poziva.
-    '
-    ' Ulaz OSTAJE i dalje pada GLASNO: orkestrator (modGoogleSyncOrchestrator) ga
-    ' zove iza iste kapije, a tiho vracanje nule bi malina operateru izgledalo kao
-    ' "nema sta da se kreira". Isti postupak koji je S1c primenio na
-    ' AutoCreateOtpremniceFromPWA.
-    Err.Raise vbObjectError + 8131, SRC, _
-              "Auto-zbirna iz otpremnica je PAUZIRANA i njeno telo je obrisano " & _
-              "zajedno sa starim piscem zbirne (S4-2c/2a). Vraca se u S4-4, nad " & _
-              "kanonskim nacrtom. Zbirne unesi rucno."
+    ' Nije kozmetika: orkestrator odlucuje da li je korak pao BAS po Err.Number
+    ' posle "On Error Resume Next". Re-raise sa vec obrisanim Err-om mu je
+    ' odnosio i broj i razlog -- a sa njima i signal da se nesto desilo.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr SRC
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 ' ============================================================

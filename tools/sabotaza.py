@@ -885,16 +885,39 @@ SABOTAZE = {
         "RS tok: klasa koju otpremnica ne ocekuje je prekoracenje",
     ),
     # Posle izdavanja ekran opet ostaje u kontekstu izdate otpremnice.
+    "izdavanje-krije-delimican-uspeh": (
+        "modScrDokumenti.bas",
+        "    outIzdata = True\n",
+        "    ' SABOTAZA: primarna mutacija se ne prijavljuje\n",
+        "Test_OTP_IzdavanjeDelimicanUspeh",
+        "ekran ZNA da je otpremnica izdata",
+    ),
+    "autozbr-jezgro-dize-gresku": (
+        "modMasterSync.bas",
+        "    On Error GoTo EH\n"
+        "\n"
+        "    Dim slobodne As Object",
+        "    ' SABOTAZA: jezgro pusta izuzetak napolje\n"
+        "\n"
+        "    Dim slobodne As Object",
+        "Test_OTP_IzdavanjeDelimicanUspeh",
+        "jezgro vraca razlog, ne dize gresku",
+    ),
+    "zbirna-pisac-ne-proverava-kupca": (
+        "modDokumenta.bas",
+        "    RequireTacnoJedan TBL_KUPCI, COL_KUP_ID, kupacID, \"KupacID\", SRC\n",
+        "    ' SABOTAZA: kupac zbirne bez pokrica\n",
+        "Test_ZBR_PisacTraziPostojeceVeze",
+        "nepostojeci kupac NE pravi zbirnu",
+    ),
     "izdaj-ostaje-u-kontekstu": (
         "modScrDokumenti.bas",
         "    Scr_OtpOtkazi\n"
-        "    Exit Function\n"
-        "EH:\n"
-        "    IzdajAktivnu = ",
+        "\n"
+        "    If Len(autoZbr) = 0 And Len(gZbr) > 0 Then",
         "    ' SABOTAZA: kontekst izdate ostaje\n"
-        "    Exit Function\n"
-        "EH:\n"
-        "    IzdajAktivnu = ",
+        "\n"
+        "    If Len(autoZbr) = 0 And Len(gZbr) > 0 Then",
         "Test_OTP_RadniStoVeziTrakaIzdaj",
         "RS tok: posle izdavanja nema aktivne",
     ),
@@ -5233,14 +5256,21 @@ SABOTAZE = {
         "klasa I nosi svoju kilazu",
     ),
 
-    "otp-malina-pauza-cuti": (
-        "modDokUnos.bas",
-        "        poruke = poruke & Poruka(\"DOKUNOS_MSG_ZBIRNA_PAUZIRANA\") & vbCrLf\n",
-        "        ' SABOTAZA: pauza bez reci operateru\n",
-        "Test_OTP_MalinaZbirnaPauzirana",
-        "operater je OBAVESTEN da zbirne nema",
-    ),
 
+    "malina-zbirna-nasledjuje-broj": (
+        "modMasterSync.bas",
+        "    brZbirne = modBrojevi.SuggestNextBroj(KIND_ZBR, vozacID, datum, False)\n",
+        "    brZbirne = modBrojevi.ApplyMirrorPrefix(vozacID, Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_BROJ))))   ' SABOTAZA: nasledjen broj\n",
+        "Test_OTP_MalinaAutoZbirna",
+        "broj zbirne je IZ NJENOG NIZA, ne nasledjen",
+    ),
+    "malina-zbirna-nije-idempotentna": (
+        "modMasterSync.bas",
+        "    If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function\n",
+        "    ' SABOTAZA: ne pita da li je otpremnica vec vezana\n",
+        "Test_OTP_MalinaAutoZbirna",
+        "drugi poziv je TIH -- bez greske operateru",
+    ),
     "banka-writer-blok-tudjeg-kooperanta": (
         "modBankaMapiranje.bas",
         "    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",

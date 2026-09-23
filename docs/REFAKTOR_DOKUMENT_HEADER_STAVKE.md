@@ -4673,10 +4673,99 @@ numeraciji testova**; `popis_citalaca` je javio da je prag `zbr_linija` zastareo
 merenje ispod praga pada isto kao iznad, jer zastareo prag pušta grupu da naraste nazad bez ijednog
 crvenog. Sabotaže **569 → 567**.
 
+### 14.34) S4-4 — malina auto-zbirna nad kanonom (23.09.2026)
+
+Sposobnost se **vraća**, ne prevodi. Staro telo (izvučeno iz `f437661c~1`) je šlo **po redu**
+`tblOtpremnica`, uzimalo `Kolicina/Klasa/KolAmbalaze` sa **zaglavlja** — kolone koje od S3b-1 nijedan
+pisac ne puni — **nije gledalo `IzdatoStatus`**, i pisalo staru vezu `Otpremnica.BrojZbirne` plus
+backfill `Otkup.BrojZbirne`.
+
+**Jedno jezgro, dva pozivaoca (odluka operatera, 23.09.2026).** `AutoZbirnaZaOtpremnicu(otpID)` radi nad
+**jednom izdatom** otpremnicom; zovu ga kuka na **izdavanju** (`modScrDokumenti.IzdajAktivnu`) i **batch
+prolaz** iz sync orkestratora, za otpremnice koje stignu kroz PWA i kuku nikad ne prođu.
+
+**Odluka šta sme se ne računa u jezgru** — pita se `modDokumenta.NevezaneOtpremnice`, **ista lista koju
+operater vidi u F2**. Drugo pravilo na tom mestu značilo bi da ekran i automatika mogu da se raziju:
+automatika bi vezala otpremnicu koju spisak ne nudi, ili obrnuto. Ta lista već drži sva tri uslova
+(IZDATA, nestornirana, bez aktivnog članstva), pa je jezgro **idempotentno po konstrukciji** — uslov, ne
+udobnost, jer batch ume da stigne pre kuke.
+
+**Zbirna dobija SVOJ broj (odluka operatera).** Stari kod je pisao `ApplyMirrorPrefix(vozacID, BrojOtpremnice)`
+i sam komentar je to vodio kao **dug**: numerički deo je pripadao **stanici**, a vlasnik niza zbirne je
+**vozač** — prolazilo je samo dok je vozač doslovno mirror-stanica. Sada `SuggestNextBroj(KIND_ZBR, vozacID,
+datum)`, koji mirror prefiks `S` primenjuje sam, pa se **izgled** broja u malini ne menja — menja se **čiji
+je niz**. Dug zatvoren; sidro je bilo `Test_BKTX_ZbirnaTudjegVlasnikaOdbijena`.
+
+**`checkRemote:=False` — auto-zbirna ne pita Google.** Podrazumevano `SuggestNextBroj` gleda i udaljeni
+list. Za batch to znači mrežni poziv **po dokumentu**, a automatika koja zavisi od mreže pada **tiho**
+(generator grešku guta i vraća prazno) — tako je i pao prvi lokalni prolaz. Bezbedno je jer je VOZ/zbirna
+uvoz pauziran; **dug za S5**: kad se uvoz vrati, udaljena osa mora nazad u račun.
+
+**Kapija lanca je razdvojena.** `IzvedeniLanacIzPwaDostupan` je jedna kapija nad celim izvedenim lancem —
+tacna dok je auto-zbirna pisala `Otkup.BrojZbirne` nazad na zaglavlje. Kanonska to ne radi, pa je dobila
+svoju (`AutoZbirnaDostupna`); **VOZ/zbirna uvoz ostaje pauziran**. Kapija koja pokriva više nego što mora
+zaustavlja i ono što je popravljeno, a onda se otvara „u paketu" — tiho puštajući i ono što nije.
+
+#### Nalaz: hladnjački lanac NIJE dobio svoj ZBR korak, i to je namerno
+
+Zaglavlje `modAutoHladnjaca` kaže da se zbirna u S4 dodaje u **istu** funkciju (`AutoLanacHladnjaca`). Ali
+ta funkcija nosi **tvrdu kapiju** koju sama imenuje: rani izlazak `If Len(OtpremnicaZaOtkup(otkupID)) > 0
+Then Exit Function` je tačan dok je lanac samo OTK→OTP, a postaje zamka čim dobije ZBR — posle ishoda
+„OTP uspeo, ZBR pao" ponovljen poziv izlazi odmah i lanac se **nikad ne dovrši**. Izbor između **(A)
+atomski lanac** i **(B) nastavljiv lanac** je izlazni uslov S6 (plan §14.20), izričitno „ne stvar ukusa".
+
+Zato S4-4 dira **samo malina tok**. Kad hladnjački lanac dobije ZBR, mora da zove **isto jezgro** —
+idempotencija je ono što sprečava dve zbirne za istu otpremnicu na stanici koja je i hladnjača i malina.
+
+#### Placebo tvrdnja koju je sabotaža razotkrila
+
+Prva verzija idempotentne tvrdnje merila je samo da drugi poziv ne vrati `ZbirnaID`. **Sabotaža koja skida
+kapiju jezgra nije oborila ništa** — jer i bez nje pisac (`ZbrRequireIzvorValjan`) odbija već vezanu
+otpremnicu. Tvrdnja je merila **tuđu** kapiju. Prava razlika je u **tišini**: sa kapijom se drugi poziv ne
+desi, bez nje pisac pukne i vrati razlog — koji operater vidi kao grešku posle sasvim normalnog ponovnog
+izdavanja. Tvrdnja sada meri `outGreska`. Isti obrazac kao `dvoslojna kapija: sabotaža ne grize`.
+
+Uz to: EH tog testa je radio `On Error Resume Next` **pre** čitanja `Err`, pa je prvi pravi pad prijavio kao
+`FATAL 0` bez opisa — uništivši jedini trag. Popravljeno.
+
+Sabotaže **566 → 568**, BFP **1783 → 1792** (+9, sravnjeno po stavkama).
+
+**Review #383 — tri P2 na granicama, sve tri ista klasa: podaci se promene, a sistem tvrdi drugo.**
+
+**P2 #1 — delimičan uspeh se prijavljivao kao neuspeh.** Izdavanje i auto-zbirna su **dva događaja**, i
+drugi sme da padne posle prvog **commit-a**. Dok je `IzdajAktivnu` vraćala samo „razlog", pozivalac je svaki
+neprazan odgovor čitao kao „ništa se nije promenilo“: mrežu nije osvežavao, a otpremnica je već bila
+`IZDATO`. Teži podslučaj: `AutoZbirnaUpis` diže grešku **pre pisca** (prazan kupac, prazan vozač, nema
+broja), a jezgro to nije hvatalo — izuzetak je stizao u EH ekrana i postajao **„Otpremnica nije izdata"**,
+laž o događaju koji se desio, na osnovu koje bi operater ponovio radnju.
+
+Rez ima tri dela: jezgro **ne diže grešku nego je vraća** (`"" + outGreska`), `IzdajAktivnu` izlazi sa
+`outIzdata` („primarna mutacija se desila“), a pozivalac **osvežava i kad je poruka greška**. EH ekrana
+bira uvod poruke po `outIzdata`.
+
+**P2 #2 — `LogErr` briše `Err` pre re-raise-a.** Batch je radio `LogErr SRC` pa `Err.Raise Err.Number, ...`.
+Repo taj invariant već nosi napisan u `modAutoHladnjaca` („Opis se cita PRE LogErr-a“), a orkestrator
+odlučuje da li je korak pao **baš po `Err.Number`** posle `On Error Resume Next` — pa je re-raise sa
+obrisanim `Err`-om odnosio i broj i razlog, a s njima i signal.
+
+**P2 #3 — pisac zbirne nije proveravao da veze postoje.** Zbirna je jedina od tri dokumenta gledala samo
+`Len() > 0`; otpremnica i otkup odavno traže `RequireTacnoJedan`, uz komentar koji doslovno kaže isto:
+*neprazan string nije dokaz da red postoji*. Put unutra: `MALINA_DEFAULT_KUPAC` sa typo-om — `LookupValue`
+za hladnjaču vraća prazno **bez greške**, i nastaje **finalna `IZDATO` zbirna sa `KupacID`-em bez pokrića**.
+Kapija je smeštena u **pisca**, ne u auto-put, i tri mesta koja su čitala zaglavlje zbirne sada dele
+`ZbrHdrCitajIProveri` — pa F3, uvoz i automatika ne mogu da se raziđu.
+
+Sabotaža je usput popravila i sam dokaz: prva verzija tvrdnje „jezgro ne diže grešku“ padala je kao
+**FATAL**, dakle po imenu testa a ne po tvrdnji koja to meri. Poziv sada ide pod `On Error Resume Next` i
+meri `Err.Number`, pa sabotaža obara baš tu tvrdnju.
+
+Sabotaže **568 → 571**, BFP **1793 → 1807** (+14).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
 |---|---|
+| **Hladnjačka otpremnica može upasti u malina batch pre S6** (review #383, P3) | batch uzima **sve** slobodne izdate otpremnice kad je malina mod uključen, a hladnjački auto-lanac takođe pravi odmah izdatu otpremnicu. Ako bi se `AUTO_PRIJEMNICA_HLADNJACA` uključio **pre** S6, batch bi toj otpremnici naknadno napravio zbirnu **mimo** `AutoLanacHladnjaca` — a ovaj rez HLD ZBR korak namerno odlaže zbog odluke atomic-vs-resumable. Danas je lanac OFF do S6, pa nije živ put. **Izlazni uslov S6:** granica se zatvara tako što hladnjački lanac zove **isto jezgro** (`AutoZbirnaZaOtpremnicu`), pa idempotencija rešava preklapanje — ili tako što batch isključi otpremnice hladnjačkih stanica |
 | **PWA / MasterSync ingest** | radi se isključivo VBA. Nalaz koji čeka: PWA šalje **jedan record = jedna klasa = ceo dokument**, sa svežim `brojDokumenta` po svakom snimanju (`src/js/features/otkup/otkup-form.js:643`, `:493`). Ingest postaje 1 record → 1 header + 1 stavka; **nema heurističkog grupisanja i ne treba eksterni Document UID**. `ClientRecordID` ide na header, a `IsDuplicateInMaster` (`modMasterSync.bas:1824`) mora da se prepokaže na header tabelu — inače se svaki PWA dokument reimportuje. |
 | **Self-update** | van opsega po dogovoru |
 | **App / Repo / Qry slojevi** | **Ne paralelno sa refaktorom** — pokvarilo bi kapiju odluke iz §14.1: dve promenljive odjednom znače da se ne može reći da li je čist ishod zasluga šeme ili slojeva. Uz to, App sloj već postoji neimenovan (`mod*Unos` prima DTO rečnik, `NoviOtpremnicaUnos`), a enforcement daje A11 allowlist, ne ime modula. Jedini sloj koji stvarno nedostaje je **Qry** (`modDokumenta`: 15 javnih čitača pored 21 mesta upisa) — ali dobar deo tih čitača postoji da rekonstruiše dokument po broju i **umire u PR 12**. Revidirati **posle PR 12**, kad se zna koji čitači preživljavaju. Do tada: čitanja u novim writer-ima idu iza imenovanih funkcija, ne inline skenova. |
