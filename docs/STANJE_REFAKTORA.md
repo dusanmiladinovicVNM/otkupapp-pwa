@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 21.09.2026 (S4-2b).
+**Ažurirano:** 23.09.2026 (S5-1).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -14,6 +14,9 @@
 - **Apsolutno se čuva samo mapa sposobnosti** — sve što operater danas može da uradi ili dobije.
 - **Jedino tehničko ograničenje:** posle svakog PR-a projekat se kompajlira (inače pada ceo `run_vba`). Legacy se briše,
   ne ostavlja polomljen.
+- **VBA arhitektura vodi, PWA prati** (23.09.2026). Cilj je idealan VBA model; PWA/GAS se prilagođava njemu
+  kasnije. Ne prave se adapteri ni kolone koje postoje samo da bi zatečen PWA payload radio — šta PWA mora da
+  šalje zapisuje se kao nizvodni zahtev, a sposobnost koja zbog toga privremeno ne radi se kaže **glasno**.
 - **Jedna sesija = jedan korak.** Masovne mehaničke provere se rade spolja, po promptu.
 
 ## Gde smo
@@ -236,9 +239,14 @@
     `ZbirnaRoditeljID`, scoping ide po ID-u, test-pečati generacije i backfill obrisani. Usput:
     storno suite je dobila izveštaj **po imenu** (bez toga se 9 padova nije moglo trijazirati).
     Detalji: plan §14.36.
-40. **Sledeće:** ~~S4-3b~~ (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
-    scoping dece u `StornoZbirnaIDetach_TX` verovatno udara u isti S6 zid), pa (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
-    S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
+40. **S5-1 — auto-otpremnica iz PWA otkupa nad kanonom.** Korak 3 ciklusa vraćen, korak 2b
+    (`VozacID := StanicaID` na otkupu) **obrisan**: vozač je činjenica zaglavlja OTPREMNICE.
+    **Klasa više nije ključ grupisanja** — dva bloka I i II klase istog dana sa istog otkupnog
+    mesta daju JEDAN dokument sa dve stavke. Pad jedne grupe ne obara ostale, ali se imenuje.
+    Detalji: plan §14.37.
+41. **Sledeće:** S5-2 (VOZ/zbirna uvoz nad kanonom), S5-3 (E-019 na otpremnicu + brisanje
+    `IzvedeniLanacIzPwaDostupan` i kolona `Otkup.VozacID/OtpremnicaID/BrojOtpremnice`),
+    S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
 

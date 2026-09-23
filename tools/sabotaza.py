@@ -5697,7 +5697,7 @@ SABOTAZE = {
         "                        kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _\n"
         "                                           otk(i, cAmb)) & \"|\" & oid   ' SABOTAZA: svaki blok svoja grupa\n",
         "Test_OTP_AutoIzPwaSpajaKlase",
-        "OBA bloka su u ISTOJ otpremnici -- klasa nije kljuc grupe",
+        "AUTO spoj: OBA bloka su u ISTOJ otpremnici -- klasa nije kljuc grupe",
     ),
     # Tip ambalaze JESTE kljuc, jer je cinjenica zaglavlja otpremnice. Bez njega
     # dva tipa zavrse u jednom dokumentu, pa ih pisac odbije -- "0 kreirano"
@@ -5707,7 +5707,7 @@ SABOTAZE = {
         "                 UCase$(Trim$(NzToText(tipAmb)))\n",
         "                 \"\"   ' SABOTAZA: tip ambalaze ispada iz kljuca grupe\n",
         "Test_OTP_AutoDeliPoTipuAmbalaze",
-        "razlicita ambalaza -> DVA dokumenta, ne jedan",
+        "AUTO tip: razlicita ambalaza -> DVA dokumenta, ne jedan",
     ),
     # Normalizacija sluzi POREDJENJU, nikad upisu. Sabotaza vraca kvar koji je
     # prva verzija stvarno imala: zaglavlje gradjeno iz normalizovanog kljuca,
@@ -5718,7 +5718,7 @@ SABOTAZE = {
         '    g.Add "tipAmb", Trim$(NzToText(tipAmb))\n',
         '    g.Add "tipAmb", UCase$(Trim$(NzToText(tipAmb)))   \' SABOTAZA: normalizacija curi u upis\n',
         "Test_OTP_AutoDeliPoTipuAmbalaze",
-        "prva otpremnica nosi svoj tip ambalaze",
+        "AUTO tip: prva otpremnica nosi svoj tip ambalaze",
     ),
     # Grupa koja nije prosla mora da bude IMENOVANA. Tiho preskakanje daje
     # operateru "0 kreirano" bez ijednog podatka sta da popravi.
@@ -5727,7 +5727,7 @@ SABOTAZE = {
         '            greske.Add CStr(k) & ": " & IIf(Len(g) > 0, g, "nepoznat razlog")\n',
         "            ' SABOTAZA: grupa bez otpremnice prolazi u tisini\n",
         "Test_OTP_AutoKvarGrupeNeObaraOstale",
-        "razlog IMENUJE stanicu",
+        "AUTO kvar: razlog IMENUJE stanicu",
     ),
     # Pravilo "sta je izdato" ima JEDNO telo. Sabotaza vraca kopiju u pisca --
     # stroza za PROSLEDJENO, pa dokument koji su citaoci i stampa vec brojali
@@ -5737,7 +5737,7 @@ SABOTAZE = {
         "    If Not IzdatoStatusJeIzdato(izdato) Then\n",
         "    If UCase$(izdato) <> UCase$(IZDATO_IZDATO) Then   ' SABOTAZA: prosledjen otkup opet nije izvor\n",
         "Test_OTP_ProslednjenOtkupJeIzdatIzvor",
-        "PROSLEDJEN otkup je valjan izvor otpremnice",
+        "OTP prosl: prosledjen blok je vezan za otpremnicu",
     ),
     "scoping-dece-bez-identiteta": (
         "modStornoFlow.bas",

@@ -4864,6 +4864,78 @@ Sabotaže **572 → 574**: `trag-deteta-opet-generacija` (vraća poslednjeg pisc
 `scoping-dece-bez-identiteta` (izbor prestaje da bude scoped) — obe obaraju imenovanu tvrdnju.
 `RunAllTests` **200/0** · BFP zeleno · Storno **163/0**. Otisak šeme `6BDD0C1D` → `64BD33C7`.
 
+### 14.37) S5 — pre-flight slajsa i S5-1 „auto-otpremnica iz PWA otkupa“ (23.09.2026)
+
+**Pravilo koje važi za ceo S5** (operater, 23.09.2026): *cilj je idealna VBA arhitektura; PWA se
+prilagođava njoj kasnije, nikako obrnuto.* Ne prave se adapteri, prevodioci ni kolone koje postoje samo
+da bi zatečen PWA payload nastavio da radi. Gde kanon i zatečeni PWA ugovor stoje u sukobu, VBA dobija
+kanonski oblik, a **šta PWA mora da šalje** se zapisuje kao nizvodni zahtev — i, ako neka PWA sposobnost
+zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
+
+#### Merenje je isprav​ilo plan na dva mesta
+
+| Plan je tvrdio | Mereno na `main` `1ef05b36` |
+|---|---|
+| PWA otkup ingest treba prebaciti na zaglavlje + stavke (§15 backlog) | **Već urađeno u S1c**: `ImportRowToTblOtkup_RowTX` ide kroz `CreateOtkup_TX`, `IsDuplicateInMaster` čita `tblOtkup.ClientRecordID`, `Test_PWA_IngestPraviHeaderIStavku` stoji. Backlog stavka je zastarela |
+| `Otkup.VozacID` je živa veza koju treba migrirati | Pišu je **tačno dva mesta**, oba u `modMasterSync`, **oba pod pauzom**. Kolona je mrtva |
+| `PROSLEDJENO` kao izvor otpremnice je „obavezno pre S5“ | `IZDATO_PROSLEDJENO` **ne piše nijedan put**. Nije živ kvar nego dva odgovora na isto pitanje — zatvoreno jednim redom |
+
+#### Rez na četiri sesije
+
+| # | Sadržaj | Stanje |
+|---|---|---|
+| **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
+| **S5-2** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` nestaje | ⏳ |
+| **S5-3** | dodela vozača iz PWA (E-019) na otpremnicu; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; `Otkup.VozacID/OtpremnicaID/BrojOtpremnice` iz kanona; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
+
+#### Šta je S5-1 uradio
+
+**Klasa više nije ključ grupisanja — i to je ceo poent reza.** Zatečena auto-otpremnica je grupisala
+`StanicaID|Datum|VozacID|Klasa`, jer je klasa bila polje zaglavlja otkupa. Dva bloka istog dana sa istog
+otkupnog mesta davala su **dva dokumenta**. Klasa je sada stavka, pa isti ulaz daje **jedan dokument sa
+dve stavke**. Ključ grupe je ono što zaglavlje otpremnice nosi i što pisac traži da bude isto za sve
+izvore: `StanicaID`, `Datum`, `KulturaID`, `TipAmbalaze`.
+
+Vozač nije u ključu — u malini je **posledica** stanice (ogledalo), ne nezavisan podatak. Zato je korak
+2b („`VozacID := StanicaID` na `tblOtkup`“) **obrisan**, a ne preveden: pečat je pripremao grupisanje po
+koloni koja umire.
+
+`TipAmbalaze` **jeste** u ključu iako ga pisac poredi samo za izvore koji stvarno nose gajbe. Posledica je
+namerno stroža od minimuma: otkup sa deklarisanim tipom a bez ijedne gajbe dobija svoju grupu. To
+proizvodi eventualno jedan dokument više — nikad dokument sa pogrešnim tipom, i nikad upis koji pisac
+odbije.
+
+| Korak | Rez |
+|---|---|
+| **1 · jedno telo za vozača-ogledala** | `modMalina.VozacOgledaloZaStanicu` — pravilo koje su hladnjački lanac i malina auto-otpremnica nosili u kopiji. Pravilo nije „pozovi `Ensure`“ nego „odlučuje **ponovljena provera** para“: `Ensure` re-raise-uje, a njegov Boolean kaže samo da li je baš on upisao red |
+| **2 · jezgro i batch** | `AutoOtpremnicaDostupna()` (sopstvena kapija, po uzoru na `AutoZbirnaDostupna` iz S4-4) + `AutoCreateOtpremniceFromPWA_TX(samoOtkupID, outGreske)` |
+| **3 · delimičan uspeh nije pad** | grupa je svoja transakcija, pa što je prošlo — prošlo je. Razlozi se **imenuju** (`outGreske`), jer „0 kreirano“ bez razloga operateru ne kaže šta da popravi |
+| **4 · jedno pravilo „šta je izdato“** | `OtpRequireIzvorValjan` zove `IzdatoStatusJeIzdato` umesto svoje kopije; `PROSLEDJENO` je izdato i za pisca, ne samo za čitače |
+
+#### Kvar koji je test uhvatio, a nijedna kapija ne bi
+
+Zaglavlje sam gradio **iz ključa grupe**, a ključ je normalizovan na velika slova jer služi poređenju.
+Otpremnica je dobijala `TEST GAJBA` umesto `Test Gajba`. Nijedna kapija to ne vidi — `RequireIstoPolje`
+poredi `vbTextCompare` — pa bi razlika izašla tek na štampi i u izveštajima ambalaže, kao tip koji nigde
+drugde ne postoji. **Normalizacija služi poređenju, nikad upisu.**
+
+#### Kapije
+
+Sabotaže **576 → 581**: `auto-otpremnica-blok-po-blok` (svaki blok svoja grupa), `auto-otpremnica-bez-tipa-u-kljucu`,
+`auto-otpremnica-normalizacija-u-upis` (vraća baš gornji kvar), `auto-otpremnica-guta-kvar` (grupa bez
+otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`. BFP **1837 → 1869** (+32).
+
+#### Ostaje otvoreno posle S5-1
+
+- **Van malina režima auto-otpremnice još nema** — nema izvora vozača dok E-019 ne pređe na otpremnicu
+  (S5-3). Korak se prijavljuje kao pauza sa razlogom, ne kao uspeh sa nulom.
+- **Grana „nema vozača-ogledala“ je u malina režimu praktično nedostižna** (`Ensure` napravi ogledalo za
+  svaku postojeću stanicu, a stanica otkupa je FK-provere​na). Merena je **fault injection-om** — otkupu se
+  prepisuje `StanicaID` na nepostojeću stanicu — što je i realan povod (stanica uklonjena iz matičnih
+  podataka dok njeni otkupi još žive). Ista grana u hladnjačkom lancu ima svoj test.
+
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -6196,8 +6196,14 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
 
     AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkKvar), _
                  "AUTO kvar: pokvaren blok NIJE vezan"
+    ' TEKST NOSI DIJAGNOSTIKA, TVRDNJA OSTAJE STATICKA.
+    '
+    ' dokaz.py za BFP trazi TACAN tekst tvrdnje, jer BFP ne ispisuje ime Sub-a
+    ' nego naziv tvrdnje -- pa tvrdnja sa promenljivim repom nije adresa koju
+    ' sabotaza moze da pogodi. Dijagnostika ide u SVOJU tvrdnju.
+    AssertTrue Len(greske) > 0, "AUTO kvar: batch je prijavio razlog: " & greske
     AssertTrue InStr(1, greske, FANTOM, vbTextCompare) > 0, _
-               "AUTO kvar: razlog IMENUJE stanicu (bilo: " & greske & ")"
+               "AUTO kvar: razlog IMENUJE stanicu"
 
     ' Ponovljen prolaz: vezani blok se vise ne uzima, pa druga otpremnica ne
     ' nastaje. Kapija izbora je NevezaniOtkupi, ne pisac.
