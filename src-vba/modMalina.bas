@@ -187,6 +187,39 @@ EH:
     Err.Raise errNum, SRC, errDesc
 End Function
 
+' VOZAC-OGLEDALO ZA STANICU, ZA AUTOMATSKE PUTEVE (S5-1).
+'
+' Jedno telo za pravilo koje su dva automatska puta do sada nosila u kopiji:
+' hladnjacki lanac (modAutoHladnjaca) i malina auto-otpremnica iz PWA ciklusa.
+' Pravilo NIJE "pozovi Ensure": Ensure sme da padne (duplikat stanice, stanica
+' ne postoji, AppendRow = 0) i tada RE-RAISE-uje, a njegov povratni Boolean kaze
+' samo "da li sam ja upravo napravio red" -- ne i "postoji li par sada".
+'
+' Zato odluku donosi ISKLJUCIVO ponovljena provera para. Poziv Ensure-a je
+' best-effort i njegova greska se guta NAMERNO: jedna losa stanica ne sme da
+' obori ceo prolaz koji radi nad mnogo stanica. Sta se desilo ostaje u logu
+' (Ensure loguje pre re-raise-a).
+'
+' Vraca VozacID (doslovno jednak StanicaID) ili "" kad para nema. "" je uredan
+' ishod za pozivaoca -- on odlucuje da li je to pauza, preskok ili greska, i
+' duzan je da IMENUJE stanicu, jer je to jedini podatak kojim operater moze da
+' otkloni uzrok.
+Public Function VozacOgledaloZaStanicu(ByVal stanicaID As String) As String
+    Dim sid As String
+    sid = Trim$(stanicaID)
+    If Len(sid) = 0 Then Exit Function
+
+    If Not IsManagedStationMirror(sid) Then
+        On Error Resume Next
+        EnsureVozacMirrorForStanica sid, _
+            Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", sid, "Naziv"), "")), "", ""
+        Err.Clear
+        On Error GoTo 0
+    End If
+
+    If IsManagedStationMirror(sid) Then VozacOgledaloZaStanicu = sid
+End Function
+
 ' Jednokratni backfill: za svaku stanicu napravi par-vozaca ako ga nema.
 ' Vraca broj novo-kreiranih. Operater ga pokrene jednom pri ukljucivanju
 ' malina moda (postojece stanice; nove ide kroz frmStammdaten hook).

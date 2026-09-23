@@ -419,7 +419,7 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
         tblName = Trim$(delovi(i))
         If Len(tblName) > 0 Then
             If Not reg.Exists(tblName) Then
-                Err.Raise vbObjectError + 9403, sourceName, _
+                modSchemaGuard.RaiseSistemski 10, sourceName, _
                           "Tabela '" & tblName & "' nije u kanonskoj semi " & _
                           "(schema/schema.json). Dopuni kanon pa regenerisi."
             End If
@@ -430,14 +430,14 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
             On Error GoTo 0
 
             If lo Is Nothing Then
-                Err.Raise vbObjectError + 9404, sourceName, _
+                modSchemaGuard.RaiseSistemski 11, sourceName, _
                           "Tabela '" & tblName & "' ne postoji u svesci. " & _
                           "Pokreni modSchema.EnsureAllTables pa ponovi."
             End If
 
             neslaganje = PrefiksNeslaganje(lo, SchemaTableColumns(tblName))
             If Len(neslaganje) > 0 Then
-                Err.Raise vbObjectError + 9405, sourceName, _
+                modSchemaGuard.RaiseSistemski 12, sourceName, _
                           "Tabela '" & tblName & "' ne odgovara kanonskoj semi (" & _
                           neslaganje & "). Upis je POZICION, pa bi vrednosti " & _
                           "otisle u pogresne kolone. Pokreni " & _
@@ -462,7 +462,7 @@ Public Sub SchemaReadyOrFail(ByVal sourceName As String, ByVal tblList As String
                 neslaganje = FormatNeslaganje(tblName)
             End If
             If Len(neslaganje) > 0 Then
-                Err.Raise vbObjectError + 9406, sourceName, _
+                modSchemaGuard.RaiseSistemski 13, sourceName, _
                           "Ugovor o formatu celije nije ispunjen (" & neslaganje & _
                           "). Excel bi pri upisu TIHO promenio vrednost, pa je " & _
                           "upis odbijen. Pokreni modSchema.EnsureAllTables; ako i " & _

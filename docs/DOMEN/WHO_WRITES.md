@@ -118,7 +118,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modTest`, `modTestStornoCentar`
-- `tblVozaci`: `modGoldenTests`
+- `tblVozaci`: `modBusinessFlowProTests`, `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`
 - `tblZbirnaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`

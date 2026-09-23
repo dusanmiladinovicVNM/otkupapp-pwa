@@ -4864,6 +4864,137 @@ Sabotaže **572 → 574**: `trag-deteta-opet-generacija` (vraća poslednjeg pisc
 `scoping-dece-bez-identiteta` (izbor prestaje da bude scoped) — obe obaraju imenovanu tvrdnju.
 `RunAllTests` **200/0** · BFP zeleno · Storno **163/0**. Otisak šeme `6BDD0C1D` → `64BD33C7`.
 
+### 14.37) S5 — pre-flight slajsa i S5-1 „auto-otpremnica iz PWA otkupa“ (23.09.2026)
+
+**Pravilo koje važi za ceo S5** (operater, 23.09.2026): *cilj je idealna VBA arhitektura; PWA se
+prilagođava njoj kasnije, nikako obrnuto.* Ne prave se adapteri, prevodioci ni kolone koje postoje samo
+da bi zatečen PWA payload nastavio da radi. Gde kanon i zatečeni PWA ugovor stoje u sukobu, VBA dobija
+kanonski oblik, a **šta PWA mora da šalje** se zapisuje kao nizvodni zahtev — i, ako neka PWA sposobnost
+zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
+
+#### Merenje je isprav​ilo plan na dva mesta
+
+| Plan je tvrdio | Mereno na `main` `1ef05b36` |
+|---|---|
+| PWA otkup ingest treba prebaciti na zaglavlje + stavke (§15 backlog) | **Već urađeno u S1c**: `ImportRowToTblOtkup_RowTX` ide kroz `CreateOtkup_TX`, `IsDuplicateInMaster` čita `tblOtkup.ClientRecordID`, `Test_PWA_IngestPraviHeaderIStavku` stoji. Backlog stavka je zastarela |
+| `Otkup.VozacID` je živa veza koju treba migrirati | Pišu je **tačno dva mesta**, oba u `modMasterSync`, **oba pod pauzom**. Kolona je mrtva |
+| `PROSLEDJENO` kao izvor otpremnice je „obavezno pre S5“ | `IZDATO_PROSLEDJENO` **ne piše nijedan put**. Nije živ kvar nego dva odgovora na isto pitanje — zatvoreno jednim redom |
+
+#### Rez na četiri sesije
+
+| # | Sadržaj | Stanje |
+|---|---|---|
+| **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
+| **S5-2** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` nestaje | ⏳ |
+| **S5-3** | dodela vozača iz PWA (E-019) na otpremnicu; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; `Otkup.VozacID/OtpremnicaID/BrojOtpremnice` iz kanona; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
+
+#### Šta je S5-1 uradio
+
+**Klasa više nije ključ grupisanja — i to je ceo poent reza.** Zatečena auto-otpremnica je grupisala
+`StanicaID|Datum|VozacID|Klasa`, jer je klasa bila polje zaglavlja otkupa. Dva bloka istog dana sa istog
+otkupnog mesta davala su **dva dokumenta**. Klasa je sada stavka, pa isti ulaz daje **jedan dokument sa
+dve stavke**. Ključ grupe je ono što zaglavlje otpremnice nosi i što pisac traži da bude isto za sve
+izvore: `StanicaID`, `Datum`, `KulturaID`, `TipAmbalaze`.
+
+Vozač nije u ključu — u malini je **posledica** stanice (ogledalo), ne nezavisan podatak. Zato je korak
+2b („`VozacID := StanicaID` na `tblOtkup`“) **obrisan**, a ne preveden: pečat je pripremao grupisanje po
+koloni koja umire.
+
+`TipAmbalaze` **jeste** u ključu iako ga pisac poredi samo za izvore koji stvarno nose gajbe. Posledica je
+namerno stroža od minimuma: otkup sa deklarisanim tipom a bez ijedne gajbe dobija svoju grupu. To
+proizvodi eventualno jedan dokument više — nikad dokument sa pogrešnim tipom, i nikad upis koji pisac
+odbije.
+
+| Korak | Rez |
+|---|---|
+| **1 · jedno telo za vozača-ogledala** | `modMalina.VozacOgledaloZaStanicu` — pravilo koje su hladnjački lanac i malina auto-otpremnica nosili u kopiji. Pravilo nije „pozovi `Ensure`“ nego „odlučuje **ponovljena provera** para“: `Ensure` re-raise-uje, a njegov Boolean kaže samo da li je baš on upisao red |
+| **2 · jezgro i batch** | `AutoOtpremnicaDostupna()` (sopstvena kapija, po uzoru na `AutoZbirnaDostupna` iz S4-4) + `AutoCreateOtpremniceFromPWA_TX(samoOtkupID, outGreske)` |
+| **3 · delimičan uspeh nije pad** | grupa je svoja transakcija, pa što je prošlo — prošlo je. Razlozi se **imenuju** (`outGreske`), jer „0 kreirano“ bez razloga operateru ne kaže šta da popravi |
+| **4 · jedno pravilo „šta je izdato“** | `OtpRequireIzvorValjan` zove `IzdatoStatusJeIzdato` umesto svoje kopije; `PROSLEDJENO` je izdato i za pisca, ne samo za čitače |
+
+#### Dva kvara koja sam sam napravio, a našli testovi
+
+**1 · Normalizacija je iscurila u upis.** Zaglavlje sam gradio **iz ključa grupe**, a ključ je normalizovan
+na velika slova jer služi poređenju. Otpremnica je dobijala `TEST GAJBA` umesto `Test Gajba`. Nijedna
+kapija to ne vidi — `RequireIstoPolje` poredi `vbTextCompare` — pa bi razlika izašla tek na štampi i u
+izveštajima ambalaže, kao tip koji nigde drugde ne postoji. **Normalizacija služi poređenju, nikad
+upisu.**
+
+**2 · Pad grupe i pad prolaza nisu ista stvar.** Batch je **svaki** izuzetak pretvarao u `outGreske`, pa
+bi ciklus za sistemski pad javio „deo otkupa je ostao bez otpremnice" — a nijedna grupa ne bi ni bila
+pokušana. Sastavljanje grupa čita članstvo **strogim** čitačem (`NevezaniOtkupi`), koji nad pokvarenim
+zapisom diže grešku; to je pad **koraka**, ne ishod grupe. Uz to je orkestratorova grana `errNum <> 0`
+bila **mrtva** — funkcija grešku nikad nije puštala do nje. Sada re-raise-uje, pa ciklus staje pre
+outbound sync-a, kao i kod VOZ koraka. Pad jedne **grupe** i dalje ne obara ostale.
+
+#### Review #385 — ugovor o padu je nestajao na granici pisca (P2)
+
+Rez je **imao** dva različita ishoda i orkestrator je na njih različito reagovao:
+
+```
+loša poslovna grupa  -> outGreske -> korak DEGRADIRAN -> ciklus ide dalje
+sistemski pad        -> Err       -> errNum <> 0      -> HARD STOP pre outbound
+```
+
+Ali `CreateOtpremnicaIzIzvora_TX` **svaki** izuzetak pretvara u tekst i vraća `""`
+(`OtpPadTransakcije` rollback-uje i vraća razlog, bez re-raise-a). Zato su i „šema nije spremna",
+„`AppendRow` nije upisao" i pravi VBA runtime error izlazili kao **obična grupa koja nije prošla**, sa
+`Err.Number = 0` — pa bi ciklus posle stvarnog kvara mašine nastavio da gura podatke napolje. Nije
+bilo korupcije (rollback radi), ali jeste pogrešan **control flow**.
+
+**Vrsta pada se sada izriče na MESTU PODIZANJA, ne iz teksta greške.**
+
+| Deo | Rez |
+|---|---|
+| klasifikacija | `modSchemaGuard.RaiseSistemski` / `JeSistemskiPad` — rezervisan opseg **9800–9899**, plus pravilo da broj **van** našeg raise opsega (pravi VBA runtime error) jeste sistemski. Provera je čist test broja, **bez spiska koji truli** |
+| šta je sistemsko | `RequireColumnIndex`, `RequireUpdateCell`, `SchemaReadyOrFail` i šest mesta u putu pisca otpremnice (`NewEntityID` ×3, `AppendRow` ×3). Sve ostalo ostaje poslovno — podrazumevano ponašanje se ne menja |
+| prenos | `OtpPadTransakcije` prima `Optional ByRef outSistemska` (sedam pozivalaca netaknuto — ekranima ta razlika ne treba, oni rade nad jednim dokumentom); `CreateOtpremnicaIzIzvora_TX` je izlaže |
+| postupanje | `AutoOtpremnicaUpis` re-raise-uje sistemski pad — i iz pisca i iz svega što računa **pre** njega (ogledalo, broj, čitanje grupe) |
+
+**`modSchema.bas` je generisan artefakt**, pa je izmena išla u `tools/gen_schema_module.py` i modul je
+regenerisan; otisak ostaje `64BD33C7`. Kapija `gen_schema_module --check` je to i uhvatila — prvo sam
+menjao `.bas` ručno.
+
+#### Kako je izmerena granica koja nije dostižna iz podataka
+
+Sistemski pad se ne može proizvesti ulazom: `AppendRow` i `NewEntityID` otkažu tek nad **stvarno**
+pokvarenom sveskom, a to test ne sme da napravi. Zato `modDokumenta.TestSimPadPiscaOtpremnice` —
+prekidač na **produkcionom** putu pisca, sa branom `IsTestMode`, koji podiže **istu** grešku koju bi
+podigao pravi pad (ne paralelnu, jer bi paralelna merila samu sebe).
+
+Test meri **oba** smera plus kontrolni korak: sa isključenom simulacijom **isti** ulaz prolazi — čime se
+dokazuje da je pad u srednjem koraku došao baš odatle. Jednosmeran dokaz ovde ne vredi: „sve podiže
+grešku" bi prošlo sistemski smer i pokvarilo poslovni — a baš zbog poslovnog smera batch postoji.
+
+**P3 (isti krug):** komentar iznad `AutoCreateZbirnaFromOtpremnice_TX` je još opisivao
+`SaveZbirnaMulti_TX`, `BrojZbirne := BrojOtpremnice` i backfill na `tblOtkup` — model koji je S4-4
+obrisao.
+
+#### Kapije
+
+Sabotaže **576 → 582**: `auto-otpremnica-blok-po-blok` (svaki blok svoja grupa), `auto-otpremnica-bez-tipa-u-kljucu`,
+`auto-otpremnica-normalizacija-u-upis` (vraća baš gornji kvar 1), `auto-otpremnica-guta-kvar` (grupa bez
+otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`, `sistemski-pad-kao-poslovni-ishod`.
+**Dokazano u oba smera: 6/6 crvenih, izvor vraćen bit-identično.**
+
+BFP **1837 → 1876** (+39) · `RunAllTests` **200/0** · Storno **163/0** · Banka **241/0** · Palete **97** ·
+Agrohemija **25**.
+
+**Nalaz o kapijama:** `vba_check` proverava da je tvrdnja **podniz** literala, a `dokaz.py` za BFP traži
+**tačan i statički** tekst — pa je pet unosa prošlo za 5 sekundi, a pun dokaz ih je posle ~20 minuta
+prijavio kao `NE OBARA SVOJ TEST`, iako su svi bili crveni i svi na pravoj tvrdnji. U backlogu §15.
+
+#### Ostaje otvoreno posle S5-1
+
+- **Van malina režima auto-otpremnice još nema** — nema izvora vozača dok E-019 ne pređe na otpremnicu
+  (S5-3). Korak se prijavljuje kao pauza sa razlogom, ne kao uspeh sa nulom.
+- **Grana „nema vozača-ogledala“ je u malina režimu praktično nedostižna** (`Ensure` napravi ogledalo za
+  svaku postojeću stanicu, a stanica otkupa je FK-provere​na). Merena je **fault injection-om** — otkupu se
+  prepisuje `StanicaID` na nepostojeću stanicu — što je i realan povod (stanica uklonjena iz matičnih
+  podataka dok njeni otkupi još žive). Ista grana u hladnjačkom lancu ima svoj test.
+
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -4886,6 +5017,7 @@ Sabotaže **572 → 574**: `trag-deteta-opet-generacija` (vraća poslednjeg pisc
 | **`NEVEZANE` nije sužena na AKTIVNI nacrt** (review #379, P3) | čitalac filtrira po stanju dokumenta (izdata, nestornirana, slobodna), ali ne po odnosu prema izabranoj zbirnoj — otpremnica drugog vozača ili druge vrste/sorte/tipa ambalaže ostaje u ponudi, a `ZbrRequireIzvorValjan` je odbija. Nema kvara podataka (pisac je fail-closed), ali je to isti obrazac koji smo već jednom zatvorili za nacrte. Rez: `NevezaneOtpremnice(zbirnaID)` koja sužava po vozaču i preuzetim činjenicama kad nacrt postoji — i test sa **nekompatibilnom** otpremnicom, jer današnji test meri samo ime liste |
 | **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
+| **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 

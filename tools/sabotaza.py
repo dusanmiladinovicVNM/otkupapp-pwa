@@ -5687,6 +5687,69 @@ SABOTAZE = {
         "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
         "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
     ),
+    # Sistemski pad NE SME da izadje kao poslovni ishod (review #385, P2).
+    # Bez klasifikacije "sema nije spremna" i "AppendRow nije upisao" izlaze kao
+    # "ova grupa nije prosla", pa orkestrator ostane u DEGRADIRANO grani i
+    # nastavi na outbound sync posle stvarnog kvara masine.
+    "sistemski-pad-kao-poslovni-ishod": (
+        "modSchemaGuard.bas",
+        "    JeSistemskiPad = (kod >= ERR_SIS_OD And kod <= ERR_SIS_DO)\n",
+        "    JeSistemskiPad = False   ' SABOTAZA: sistemski pad postaje poslovni ishod\n",
+        "Test_OTP_AutoSistemskiPadStajeProlaz",
+        "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
+    ),
+    # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
+    # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza
+    # vraca "jedan blok = jedan dokument" tako sto svakom otkupu da svoj kljuc.
+    "auto-otpremnica-blok-po-blok": (
+        "modMasterSync.bas",
+        "                        kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _\n"
+        "                                           otk(i, cAmb))\n",
+        "                        kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _\n"
+        "                                           otk(i, cAmb)) & \"|\" & oid   ' SABOTAZA: svaki blok svoja grupa\n",
+        "Test_OTP_AutoIzPwaSpajaKlase",
+        "AUTO spoj: OBA bloka su u ISTOJ otpremnici -- klasa nije kljuc grupe",
+    ),
+    # Tip ambalaze JESTE kljuc, jer je cinjenica zaglavlja otpremnice. Bez njega
+    # dva tipa zavrse u jednom dokumentu, pa ih pisac odbije -- "0 kreirano"
+    # nad savrseno ispravnim ulazom.
+    "auto-otpremnica-bez-tipa-u-kljucu": (
+        "modMasterSync.bas",
+        "                 UCase$(Trim$(NzToText(tipAmb)))\n",
+        "                 \"\"   ' SABOTAZA: tip ambalaze ispada iz kljuca grupe\n",
+        "Test_OTP_AutoDeliPoTipuAmbalaze",
+        "AUTO tip: razlicita ambalaza -> DVA dokumenta, ne jedan",
+    ),
+    # Normalizacija sluzi POREDJENJU, nikad upisu. Sabotaza vraca kvar koji je
+    # prva verzija stvarno imala: zaglavlje gradjeno iz normalizovanog kljuca,
+    # pa otpremnica nosi "TEST GAJBA" umesto "Test Gajba". Nijedna kapija to ne
+    # vidi -- RequireIstoPolje poredi vbTextCompare.
+    "auto-otpremnica-normalizacija-u-upis": (
+        "modMasterSync.bas",
+        '    g.Add "tipAmb", Trim$(NzToText(tipAmb))\n',
+        '    g.Add "tipAmb", UCase$(Trim$(NzToText(tipAmb)))   \' SABOTAZA: normalizacija curi u upis\n',
+        "Test_OTP_AutoDeliPoTipuAmbalaze",
+        "AUTO tip: prva otpremnica nosi svoj tip ambalaze",
+    ),
+    # Grupa koja nije prosla mora da bude IMENOVANA. Tiho preskakanje daje
+    # operateru "0 kreirano" bez ijednog podatka sta da popravi.
+    "auto-otpremnica-guta-kvar": (
+        "modMasterSync.bas",
+        '            greske.Add CStr(k) & ": " & IIf(Len(g) > 0, g, "nepoznat razlog")\n',
+        "            ' SABOTAZA: grupa bez otpremnice prolazi u tisini\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: razlog IMENUJE stanicu",
+    ),
+    # Pravilo "sta je izdato" ima JEDNO telo. Sabotaza vraca kopiju u pisca --
+    # stroza za PROSLEDJENO, pa dokument koji su citaoci i stampa vec brojali
+    # kao izdat pisac odbija.
+    "izvor-otpremnice-opet-samo-izdato": (
+        "modDokumenta.bas",
+        "    If Not IzdatoStatusJeIzdato(izdato) Then\n",
+        "    If UCase$(izdato) <> UCase$(IZDATO_IZDATO) Then   ' SABOTAZA: prosledjen otkup opet nije izvor\n",
+        "Test_OTP_ProslednjenOtkupJeIzdatIzvor",
+        "OTP prosl: prosledjen blok je vezan za otpremnicu",
+    ),
     "scoping-dece-bez-identiteta": (
         "modStornoFlow.bas",
         "        If ok Then outScopeID = Trim$(zbirnaID)\n",

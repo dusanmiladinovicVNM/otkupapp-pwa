@@ -928,116 +928,343 @@ Private Function AutoZbirnaUpis(ByVal otpremnicaID As String, _
 End Function
 
 ' ============================================================
-' MALINA MOD -- C: VozacID := StanicaID na tblOtkup.
+' MALINA MOD -- C: AUTO-OTPREMNICA IZ UVEZENIH PWA OTKUPA (S5-1).
 '
-' Auto-otpremnica iz PWA (obrisana u S1c, vraca S5) je pravila otpremnice samo
-' za otkupe koji IMAJU VozacID (grupisanje StanicaID|Datum|VozacID|Klasa).
-' U malina modu nema vozaca, pa se PRE auto-otpremnice VozacID popunjava
-' StanicaID-em -- time se okidac pali, a brojevi ostaju konzistentni
-' (otkupac == stanica). Idempotentno: dira samo prazan VozacID.
+' Zamenjuje DVA zatecena koraka ciklusa odjednom:
+'
+'   2b  "VozacID := StanicaID na tblOtkup" -- pecat koji je otkup pripremao za
+'       grupisanje. U novom modelu vozac je cinjenica ZAGLAVLJA OTPREMNICE, a
+'       Otkup.VozacID kolona koja umire; pecat zato nema sta da pripremi.
+'   3   auto-otpremnica (obrisana u S1c jer je citala linijska polja zaglavlja
+'       otkupa i pisala Otkup.OtpremnicaID).
+'
+' GRUPISANJE VISE NE NOSI KLASU. Staro je bilo StanicaID|Datum|VozacID|Klasa --
+' jedna otpremnica PO KLASI, jer je klasa bila polje zaglavlja. Klasa je sada
+' stavka, pa dva bloka I i II klase istog dana sa istog otkupnog mesta idu u
+' JEDAN dokument sa dve stavke. To je bas ono sto refaktor tvrdi, i zato se meri
+' testom, ne komentarom.
+'
+' Kljuc grupe je ono sto zaglavlje otpremnice NOSI i sto pisac zahteva da bude
+' isto za sve izvore (OtpRequireIzvorValjan): StanicaID, Datum, KulturaID i
+' TipAmbalaze. Vozac nije deo kljuca jer je u malini POSLEDICA stanice
+' (ogledalo), ne nezavisan podatak.
+'
+' TipAmbalaze je u kljucu iako ga pisac poredi samo za izvore koji stvarno nose
+' gajbe. Posledica: otkup sa deklarisanim tipom a bez ijedne gajbe dobija svoju
+' grupu umesto da se pridruzi tudjoj. To je namerno STROZE od minimuma --
+' proizvodi eventualno jedan dokument vise, nikad dokument sa pogresnim tipom,
+' i nikad upis koji pisac odbije.
+'
 ' Self-gated: u visnji ne radi nista.
 ' ============================================================
-Public Function StampVozacFromStanicaForMalina_TX() As Long
-    Const SRC As String = "StampVozacFromStanicaForMalina_TX"
 
-    Dim tx As clsTransaction
+' Sopstvena kapija, po uzoru na AutoZbirnaDostupna (S4-4): kapija koja pokriva
+' vise nego sto mora zaustavlja i ono sto je popravljeno.
+Public Function AutoOtpremnicaDostupna() As Boolean
+    AutoOtpremnicaDostupna = IsMalinaMode()
+End Function
 
+' BATCH PROLAZ: auto-otpremnica za sve nevezane izdate otkupe.
+'
+' PAD JEDNE GRUPE NE OBARA OSTALE, ali se ni ne precutkuje (lekcija iz #383:
+' delimican uspeh prijavljen kao potpun pad je laz o poslovnom dogadjaju, a
+' prijavljen kao potpun uspeh je gora laz). Svaka grupa je svoja transakcija --
+' CreateOtpremnicaIzIzvora_TX je otvara i zatvara -- pa ono sto je proslo JESTE
+' upisano. Ugovor je zato:
+'
+'   povratna vrednost  = broj STVARNO napravljenih otpremnica
+'   outGreske          = imenovani razlozi za grupe koje nisu prosle, "; " spojeni
+'
+' Prazan outGreske uz 0 napravljenih znaci "nije bilo posla". Neprazan znaci
+' "posla je bilo i deo NIJE uspeo" -- orkestrator taj korak prijavljuje kao pao,
+' ali ciklus ne obara, jer su otkupi uvezeni i to je stvaran napredak.
+'
+' PAD GRUPE I PAD PROLAZA NISU ISTA STVAR, pa se i ne prijavljuju isto.
+'
+' Razliku NE pogadja ovaj prolaz iz teksta greske -- nju izrice mesto podizanja
+' (modSchemaGuard.RaiseSistemski) i prenosi je pisac (outSistemska). Ovde se
+' samo postupa po njoj:
+'
+'   POSLOVNO ODBIJANJE -- zavisi od podataka TE grupe: imenuj razlog i probaj
+'     sledecu. Dokument je jedini gubitnik.
+'   SISTEMSKI PAD -- sema nije spremna, kolona nedostaje, AppendRow nije upisao,
+'     ili je pukao sam VBA. Oborice i svaku sledecu grupu, pa je dalje
+'     pokusavanje samo gomilanje istog razloga: prolaz STAJE i greska ide gore.
+'
+' Bez toga bi sistemski pad izasao kao "deo otkupa je ostao bez otpremnice", a
+' ciklus bi posle stvarnog kvara masine nastavio na outbound sync (review #385).
+'
+' samoOtkupID suzava prolaz na grupu KOJOJ TAJ OTKUP PRIPADA (identitet, ne
+' labela). Grupa se ne sece: otpremnica od dela svoje grupe bila bi drugaciji
+' dokument od onog koji pun prolaz pravi.
+Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoOtkupID As String = "", _
+                                               Optional ByRef outGreske As String) As Long
+    Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
+
+    outGreske = ""
     On Error GoTo EH
 
-    If Not IsMalinaMode() Then
-        StampVozacFromStanicaForMalina_TX = 0
-        Exit Function
-    End If
+    If Not AutoOtpremnicaDostupna() Then Exit Function
 
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
+    Dim grupe As Object
+    Set grupe = GrupeZaAutoOtpremnicu(Trim$(samoOtkupID))
+    If grupe.count = 0 Then Exit Function
 
-    StampVozacFromStanicaForMalina_TX = StampVozacFromStanicaForMalina()
+    Dim k As Variant, otpID As String, g As String, n As Long
+    Dim greske As Collection
+    Set greske = New Collection
 
-    tx.CommitTx
-    Set tx = Nothing
+    For Each k In grupe.Keys
+        g = ""
+        otpID = AutoOtpremnicaUpis(grupe(k), g)
+        If Len(otpID) > 0 Then
+            n = n + 1
+        Else
+            greske.Add CStr(k) & ": " & IIf(Len(g) > 0, g, "nepoznat razlog")
+        End If
+    Next k
 
-    LogInfo SRC, "Malina VozacID:=StanicaID stamped=" & CStr(StampVozacFromStanicaForMalina_TX)
+
+    AutoCreateOtpremniceFromPWA_TX = n
+    outGreske = SpojiRazloge(greske)
+
+    If n > 0 Then LogInfo SRC, "Malina auto-otpremnica created=" & CStr(n)
+    If Len(outGreske) > 0 Then LogWarn SRC, "Grupe bez otpremnice: " & outGreske
     Exit Function
 
 EH:
+    ' Broj, opis i izvor se citaju PRE LogErr-a -- LogErr usput brise stanje
+    ' greske, pa bi re-raise posle njega bio Err.Raise 0 (#383, P2).
     Dim errNum As Long, errDesc As String, errSrc As String
-    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
+
+    AutoCreateOtpremniceFromPWA_TX = 0
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Public Function StampVozacFromStanicaForMalina() As Long
-    Const SRC As String = "StampVozacFromStanicaForMalina"
+' Nevezani izdati otkupi -> Dictionary "kljuc grupe" -> Collection OtkupID-eva.
+'
+' "Nevezan" se NE racuna ovde: modDokumenta.NevezaniOtkupi je jedini citac koji
+' na to pitanje odgovara, i isti koji radni sto u F1 koristi. Lokalna kopija bi
+' umela da ponudi otkup koji pisac smatra zauzetim.
+'
+' Izdatost se filtrira, ne relaksira: pisac i dalje odbija neizdat izvor. Filter
+' postoji da nacrt ili pokvaren red ne obori grupu kojoj ionako ne pripada.
+Private Function GrupeZaAutoOtpremnicu(ByVal samoOtkupID As String) As Object
+    Const SRC As String = "GrupeZaAutoOtpremnicu"
 
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
+    Dim rez As Object
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set GrupeZaAutoOtpremnicu = rez
 
-    Dim colVoz As Long, colSt As Long, colStorno As Long
-    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
-    colSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
-    colStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
+    Dim slobodni As Object
+    Set slobodni = modDokumenta.NevezaniOtkupi()
+    If slobodni.count = 0 Then Exit Function
 
-    Dim r As Long, cnt As Long
-    For r = 1 To UBound(data, 1)
-        Dim skip As Boolean
-        skip = (colStorno > 0) And _
-               (UCase$(Trim$(CStr(nz(data(r, colStorno), "")))) = "DA")
-        If Not skip Then
-            Dim voz As String: voz = Trim$(CStr(nz(data(r, colVoz), "")))
-            Dim st As String: st = Trim$(CStr(nz(data(r, colSt), "")))
-            If voz = "" And st <> "" Then
-                ' AUD-046: NE stampaj VozacID koji ne postoji u tblVozaci -- otkup
-                ' bi dobio FK bez pokrica (svaki join na tblVozaci prazan).
-                ' Prvo pokusaj da napravis mirror par; Ensure sada re-raise-uje,
-                ' pa se greska ovde lokalno hvata da JEDNA losa stanica ne obori
-                ' ceo stamp run (rollback celog _TX). Odluku donosi re-provera.
-                If Not IsManagedStationMirror(st) Then
-                    On Error Resume Next
-                    EnsureVozacMirrorForStanica st, _
-                        Trim$(CStr(nz(LookupValue(TBL_STANICE, "StanicaID", st, "Naziv"), ""))), _
-                        "(malina)", ""
-                    On Error GoTo 0
-                End If
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
 
-                If IsManagedStationMirror(st) Then
-                    RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, st, SRC
-                    cnt = cnt + 1
-                Else
-                    ' Preskoceno, ali NE u tisini -- operater vidi u logu koja
-                    ' stanica nema par-vozaca.
-                    LogWarn SRC, "Stamp preskocen: nema vozac-mirror para (" & _
-                                 TBL_STANICE & "+" & TBL_VOZACI & ") za StanicaID=" & st & _
-                                 "; Row=" & CStr(r)
+    Dim cId As Long, cDat As Long, cSta As Long, cKul As Long, cAmb As Long, cIzd As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cKul = RequireColumnIndex(TBL_OTKUP, COL_OTK_KULTURA, SRC)
+    cAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, SRC)
+    cIzd = RequireColumnIndex(TBL_OTKUP, COL_TRACE_IZDATO_STATUS, SRC)
+
+    Dim filterKljuc As String
+    filterKljuc = ""
+
+    Dim i As Long, oid As String, kljuc As String
+    For i = 1 To UBound(otk, 1)
+        oid = Trim$(NzToText(otk(i, cId)))
+        If Len(oid) > 0 Then
+            If slobodni.Exists(UCase$(oid)) Then
+                If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then
+                    If IsDate(otk(i, cDat)) Then
+                        kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _
+                                           otk(i, cAmb))
+                        If Not rez.Exists(kljuc) Then
+                            rez.Add kljuc, NovaGrupa(otk(i, cSta), otk(i, cDat), _
+                                                     otk(i, cKul), otk(i, cAmb))
+                        End If
+                        rez(kljuc)("izvori").Add oid
+                        If Len(samoOtkupID) > 0 Then
+                            If StrComp(oid, samoOtkupID, vbTextCompare) = 0 Then
+                                filterKljuc = kljuc
+                            End If
+                        End If
+                    End If
                 End If
             End If
         End If
-    Next r
+    Next i
 
-    StampVozacFromStanicaForMalina = cnt
+    If Len(samoOtkupID) = 0 Then Exit Function
+
+    ' Scope se primenjuje TEK NA KRAJU, nad vec sastavljenim grupama -- da izbor
+    ' jednog otkupa vrati CELU njegovu grupu, a ne samo njega.
+    Dim suzeno As Object
+    Set suzeno = CreateObject("Scripting.Dictionary")
+    If Len(filterKljuc) > 0 Then suzeno.Add filterKljuc, rez(filterKljuc)
+    Set GrupeZaAutoOtpremnicu = suzeno
+End Function
+
+' Grupa nosi DOSLOVNE cinjenice prvog reda koji ju je otvorio, ne razlozen
+' kljuc.
+'
+' Prva verzija je zaglavlje gradila IZ KLJUCA -- a kljuc je normalizovan na
+' velika slova, jer sluzi POREDJENJU. Otpremnica je tako dobijala "TEST GAJBA"
+' umesto "Test Gajba". Pisac to propusti (RequireIstoPolje poredi
+' vbTextCompare), pa se razlika ne vidi ni u jednoj kapiji -- izadje tek na
+' stampi i u izvestajima ambalaze, kao tip koji nigde drugde ne postoji.
+'
+' Pravilo: normalizacija sluzi POREDJENJU, nikad UPISU.
+Private Function NovaGrupa(ByVal stanica As Variant, ByVal datum As Variant, _
+                           ByVal kultura As Variant, ByVal tipAmb As Variant) As Object
+    Dim g As Object
+    Set g = CreateObject("Scripting.Dictionary")
+    g.Add "stanica", Trim$(NzToText(stanica))
+    g.Add "datum", CDate(Int(CDate(datum)))
+    g.Add "kultura", Trim$(NzToText(kultura))
+    g.Add "tipAmb", Trim$(NzToText(tipAmb))
+    g.Add "izvori", New Collection
+    Set NovaGrupa = g
+End Function
+
+' Kljuc grupe -- SAMO za poredjenje. Datum ide kao ceo broj, ne kao formatiran
+' string: dve celije sa istim danom a razlicitim vremenom su ISTI poslovni dan,
+' a Format$ nad Variant datumom zavisi od lokala.
+Private Function KljucGrupe(ByVal stanica As Variant, ByVal datum As Variant, _
+                            ByVal kultura As Variant, ByVal tipAmb As Variant) As String
+    KljucGrupe = UCase$(Trim$(NzToText(stanica))) & "|" & _
+                 CStr(CLng(Int(CDate(datum)))) & "|" & _
+                 UCase$(Trim$(NzToText(kultura))) & "|" & _
+                 UCase$(Trim$(NzToText(tipAmb)))
+End Function
+
+' Upis JEDNE auto-otpremnice. Vraca OtpremnicaID; "" = nije napravljena, razlog
+' je u outGreska (NIKAD prazan uz prazan ID -- tiho preskakanje je ishod koji
+' operater ne moze da razlikuje od "nije bilo posla").
+'
+' "" SE VRACA SAMO ZA POSLOVNO ODBIJANJE. Sistemski pad izlazi kao GRESKA, i iz
+' pisca (outSistemska) i iz svega sto se ovde racuna pre njega -- jer bi inace
+' prolaz nastavio da pokusava nad masinom koja ne radi (review #385, P2).
+Private Function AutoOtpremnicaUpis(ByVal grupa As Object, _
+                                    ByRef outGreska As String) As String
+    Const SRC As String = "AutoOtpremnicaUpis"
+
+    outGreska = ""
+    On Error GoTo EH
+
+    Dim stanicaID As String, datum As Date, kulturaID As String, tipAmb As String
+    stanicaID = CStr(grupa("stanica"))
+    datum = CDate(grupa("datum"))
+    kulturaID = CStr(grupa("kultura"))
+    tipAmb = CStr(grupa("tipAmb"))
+
+    ' Vozac je OGLEDALO stanice, i pravilo za njega ima JEDNO telo (modMalina) --
+    ' isto koje hladnjacki lanac koristi.
+    Dim vozacID As String
+    vozacID = modMalina.VozacOgledaloZaStanicu(stanicaID)
+    If Len(vozacID) = 0 Then
+        outGreska = "nema vozaca-ogledala za stanicu " & stanicaID
+        Exit Function
+    End If
+
+    ' Broj iz niza STANICE, lokalno. GenerateBrojOtpremnice namerno ne pita
+    ' Google: batch bi pravio mrezni poziv PO GRUPI, a auto-otpremnica nije
+    ' predlog operateru nego upis (isti razlog kao checkRemote:=False u S4-4).
+    Dim broj As String
+    broj = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
+    If Len(broj) = 0 Then
+        outGreska = "nije moguce generisati broj otpremnice za stanicu " & stanicaID
+        Exit Function
+    End If
+
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanicaID
+    h("VozacID") = vozacID
+    h("KulturaID") = kulturaID
+    h("TipAmbalaze") = tipAmb
+    h("BrojOtpremnice") = broj
+
+    ' Jedan potez: nastaje i ODMAH se izdaje. Auto-tok nema nezavisno ocekivanje
+    ' koje bi cekalo potvrdu -- ocekivanje se izvodi iz izvora (ZBR-KANON-04).
+    Dim sistemska As Boolean
+    AutoOtpremnicaUpis = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, grupa("izvori"), _
+                                                                  outGreska, sistemska)
+    If Len(AutoOtpremnicaUpis) = 0 Then
+        If Len(outGreska) = 0 Then outGreska = "pisac nije vratio OtpremnicaID"
+
+        ' Pisac je vec rollback-ovao i vratio razlog; ovde se samo odlucuje da
+        ' li prolaz sme dalje. Greska nosi ISTI tekst koji bi isao u outGreske,
+        ' da izvestaj ne osiromasi zato sto je pad tezi.
+        If sistemska Then
+            Err.Raise vbObjectError + modSchemaGuard.ERR_SIS_OD + 26, SRC, _
+                      "Sistemski pad pisca otpremnice (stanica " & stanicaID & "): " & _
+                      outGreska
+        End If
+    End If
+    Exit Function
+
+EH:
+    ' Opis PRE LogErr-a -- LogErr usput brise stanje greske (#383, P2).
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr SRC, "stanica=" & stanicaID & " datum=" & CStr(datum)
+
+    ' Sve PRE pisca (ogledalo vozaca, broj, citanje grupe) moze da padne i
+    ' sistemski -- npr. RequireColumnIndex nad tabelom bez kolone. Takav pad se
+    ' ne pretvara u "ova grupa nije prosla".
+    If modSchemaGuard.JeSistemskiPad(errNum) Then
+        Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+    End If
+
+    AutoOtpremnicaUpis = ""
+    If Len(outGreska) = 0 Then outGreska = errDesc
+End Function
+
+' Razlozi u jedan red, za summary ciklusa i za log.
+Private Function SpojiRazloge(ByVal greske As Collection) As String
+    If greske Is Nothing Then Exit Function
+    If greske.count = 0 Then Exit Function
+
+    Dim i As Long, s As String
+    For i = 1 To greske.count
+        If i > 1 Then s = s & "; "
+        s = s & CStr(greske(i))
+    Next i
+    SpojiRazloge = s
 End Function
 
 ' ============================================================
 ' MALINA MOD -- D: auto-zbirna iz otpremnice (1:1).
 '
-' Za svaku aktivnu otpremnicu sa praznim BrojZbirne (grupisano po
-' BrojOtpremnice, Klasa I+II istog dokumenta zajedno) pravi zbirnu preko
-' postojeceg SaveZbirnaMulti_TX:
-'   - BrojZbirne := BrojOtpremnice (broj garantovano identican otpremnici)
-'   - kupac := MALINA_DEFAULT_KUPAC (Hladnjaca); Hladnjaca naziv iz tblKupci
-'   - backfill BrojZbirne na otpremnicu i na tblOtkup (preko OtpremnicaID),
-'     jer ValidateZbirna/prijemnica/faktura vezu drze preko BrojZbirne.
-' Idempotentno: prazan-BrojZbirne filter sprecava duplo kreiranje.
+' Za svaku SLOBODNU IZDATU otpremnicu pravi zbirnu preko kanonskog pisca
+' (modDokumenta.CreateZbirnaIzIzvora_TX):
+'   - clanstvo je ZAPIS u tblZbirnaIzvori, ne labela na detetu
+'   - zbirna dobija SVOJ broj iz niza vozaca; NE nasledjuje otpremnicin
+'   - kupac := MALINA_DEFAULT_KUPAC (Hladnjaca)
+'   - vrsta, sorta i tip ambalaze se PREUZIMAJU od izvora (ZBR-KANON-04), pa se
+'     ne salju piscu
+' Idempotentno: slobodna = nije clan nijedne aktivne zbirne (NevezaneOtpremnice).
 ' Self-gated: u visnji ne radi nista.
+'
+' Zateceni opis je do S4-4 govorio o SaveZbirnaMulti_TX, o BrojZbirne :=
+' BrojOtpremnice i o backfill-u BrojZbirne na otpremnicu i tblOtkup. Nijedno od
+' toga vise ne postoji -- komentar je opisivao obrisan model (review #385, P3).
 ' ============================================================
-' samoBrojOtp: opcioni scope -- obradi SAMO otpremnice tog broja. Prazno = sve
-' otvorene (produkcioni poziv iz frmDokumenta). Scope koriste testovi, da run ne
-' zahvati nepovezane otvorene otpremnice u svesci.
 ' BATCH PROLAZ: auto-zbirna za SVE slobodne izdate otpremnice (S4-4).
 '
 ' Drugi od dva pozivaoca istog jezgra. Postoji zato sto otpremnice ne stizu samo
