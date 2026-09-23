@@ -305,6 +305,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
+    Test_ZBR_KanonskoPonistenjeStorniraIzvore
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -5683,6 +5684,74 @@ EH:
     On Error GoTo 0
 
     LogFatal "Test_OTP_IzdavanjeDelimicanUspeh", eN, eD
+End Sub
+
+' PONISTENJE KANONSKE ZBIRNE MORA DA OBORI I NJENE IZVORE (review #384, P2).
+'
+' PONISTENJE je, posle S4-3a, jedan od SAMO DVA poslovna izlaza koje zbirna ima.
+' Ime i UI obecavaju obaranje celog lanca: zbirna + njene otpremnice + oslobodjeni
+' blokovi.
+'
+' Kaskada je izvore birala preko Otpremnica.BrojZbirne -- legacy backlink koji
+' kanonski pisac NAMERNO ne pise, jer je clanstvo zapis u tblZbirnaIzvori. Nad
+' kanonskom zbirnom je zato nalazila NULA otpremnica, obarala samo zaglavlje, i
+' prijavljivala uspeh. Zbirna stornirana, otpremnice i dalje IZDATE, blokovi i
+' dalje vezani -- a operater je video "ponisteno".
+'
+' Test prvo TVRDI da backlink nije popunjen: bez toga bi prolazio i nad legacy
+' oblikom, pa ne bi merio kanon nego zatecen podatak.
+Private Sub Test_ZBR_KanonskoPonistenjeStorniraIzvore()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRPON")
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("PON-" & scenario, 100#, 5#)
+    AssertTrue Len(otpID) > 0, "ZBR pon: izvor je izdat"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-PON-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR pon: kanonska zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    ' KANON, NE ZATECEN OBLIK: clanstvo je zapis, backlink je prazan.
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                          COL_OTP_BROJ_ZBIRNE)), _
+                 "ZBR pon preduslov: kanonska otpremnica NEMA backlink na broj"
+    AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
+                 "ZBR pon preduslov: clanstvo je u tblZbirnaIzvori"
+
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertTrue CBool(r("success")), _
+               "ZBR pon: ponistenje prolazi (bilo: " & CStr(r("message")) & ")"
+
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR pon: zbirna je stornirana"
+    AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "ZBR pon: IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren"
+
+    ' BLOK MORA BITI SLOBODAN. Kaskada javlja "blokovi oslobodjeni: 0" jer
+    ' FreeOtkupBloksInline gleda staru vezu Otkup.OtpremnicaID, koju kanonski
+    ' pisac ne pise. Pitanje je da li je to SAMO netacan broj ili i podatak --
+    ' zato se meri stanje bloka, ne poruka.
+    Dim izv As Collection, otkID As String
+    Set izv = modDokumenta.IzvoriOtpremnice(otpID)
+    If izv.count > 0 Then otkID = Trim$(NzToText(izv(1)))
+    AssertTrue Len(otkID) > 0, "ZBR pon preduslov: otpremnica je imala blok"
+    If Len(otkID) > 0 Then
+        AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkID), _
+                     "ZBR pon: blok je OSLOBODJEN -- nije ostao na storniranoj otpremnici"
+    End If
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZBR_KanonskoPonistenjeStorniraIzvore", Err.Number, Err.description
 End Sub
 
 ' REPRODUKCIJA (S4-3b): da li DUPLI radi nad KANONSKOM zbirnom.

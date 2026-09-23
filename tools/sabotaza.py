@@ -5701,6 +5701,15 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A20: red bez generacije NIJE integritetska greska",
     ),
+    "ponistenje-ne-vidi-kanonsko-clanstvo": (
+        "modStornoFlow.bas",
+        "    If Len(Trim$(zbirnaID)) > 0 Then\n"
+        "        Dim clan As Variant, clanId As String",
+        "    If False Then   ' SABOTAZA: kaskada opet gleda samo staru vezu\n"
+        "        Dim clan As Variant, clanId As String",
+        "Test_ZBR_KanonskoPonistenjeStorniraIzvore",
+        "IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren",
+    ),
     "kanonska-zbirna-ne-sme-da-se-razveze": (
         "modDokumenta.bas",
         "    res.activeLogicalCount = aktIds.Count\n",

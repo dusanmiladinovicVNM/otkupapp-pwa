@@ -1854,10 +1854,45 @@ Private Function ZbirnaMutPoruka(ByVal razlog As String, ByVal uloga As String, 
 End Function
 
 ' Aktivni OtpremnicaID-jevi za dati BrojZbirne.
+' IZVORI ZBIRNE ZA KASKADU: KANON PRVI, ZATECENA VEZA KAO MOST (review #384).
+'
+' Kaskada je izvore birala SAMO preko Otpremnica.BrojZbirne -- veze koju kanonski
+' pisac NAMERNO ne pise, jer je clanstvo zapis u tblZbirnaIzvori. Nad kanonskom
+' zbirnom je zato nalazila NULA otpremnica, obarala samo zaglavlje i javljala
+' "ponisteno sa celim tokom". Lazan izvestaj o uspehu je gori od pada.
+'
+' zbirnaID je AUTORITET: clanstvo iz tblZbirnaIzvori ulazi uvek.
+'
+' MOST SA ROKOM: stara veza po broju se i dalje gleda, jer je jos pisu pauziran
+' PWA uvoz (PoveziDeteNaZbirnu) i storno fixture. Umire u S5, kad uvoz predje na
+' kanon -- tada ostaje samo prvi izvor. Do tada je unija STROGO sira od zatecenog
+' ponasanja: nijedna otpremnica koja se pre obarala sada ne izmice.
 Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
-                                      ByVal SRC As String) As Collection
+                                      ByVal SRC As String, _
+                                      Optional ByVal zbirnaID As String = "") As Collection
     Dim result As New Collection
     Set ActiveOtpIDsByZbirna = result
+
+    Dim vidjeni As Object
+    Set vidjeni = CreateObject("Scripting.Dictionary")
+    vidjeni.CompareMode = vbTextCompare
+
+    ' --- KANON: clanstvo po ZbirnaID-u ---
+    If Len(Trim$(zbirnaID)) > 0 Then
+        Dim clan As Variant, clanId As String
+        For Each clan In KolekcijaUNiz(modDokumenta.ZbrClanovi(zbirnaID))
+            clanId = Trim$(NzToText(clan))
+            If Len(clanId) > 0 Then
+                If StrComp(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                             clanId, COL_STORNIRANO))), "Da", vbTextCompare) <> 0 Then
+                    If Not vidjeni.Exists(clanId) Then
+                        vidjeni.Add clanId, 1
+                        result.Add clanId
+                    End If
+                End If
+            End If
+        Next clan
+    End If
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
     Dim cZbr As Long, cId As Long, cSt As Long
@@ -1873,8 +1908,25 @@ Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal gen As S
     Next i
     Set kand = SuziDecuNaZbirnu(TBL_OTPREMNICA, data, kand, gen)
     For i = 1 To kand.count
-        result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
+        Dim legId As String: legId = Trim$(CStr(data(CLng(kand(i)), cId)))
+        If Not vidjeni.Exists(legId) Then
+            vidjeni.Add legId, 1
+            result.Add legId
+        End If
     Next i
+End Function
+
+' Collection -> Variant niz, da For Each ne zavisi od tipa kolekcije.
+Private Function KolekcijaUNiz(ByVal c As Collection) As Variant
+    If c Is Nothing Then KolekcijaUNiz = Array(): Exit Function
+    If c.count = 0 Then KolekcijaUNiz = Array(): Exit Function
+
+    Dim a() As Variant, i As Long
+    ReDim a(0 To c.count - 1)
+    For i = 1 To c.count
+        a(i - 1) = c(i)
+    Next i
+    KolekcijaUNiz = a
 End Function
 
 ' Aktivni PrijemnicaID-jevi za dati BrojZbirne (svi redovi, obe klase).
@@ -2012,7 +2064,8 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' suzavanje otpremnica.
 
     ' ID-jeve + prijemnica-brojeve-sa-paletama skupi PRE mutacije.
-    Dim otpIDs As Collection: Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, scopeID, SRC)
+    Dim otpIDs As Collection
+    Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, scopeID, SRC, zbrID)
     Dim prijIDs As Collection, prijBrPalete As Collection
     If ownsChain Then
         Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC)
@@ -2046,12 +2099,24 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
             Err.Raise ERR_STORNO_FW_BASE + 50, SRC, "StornoZbirna (ponistenje) nije uspeo."
     End If
     Dim k As Long
+    ' BLOKOVI SE BROJE PRE STORNA (review #384).
+    '
+    ' FreeOtkupBloksInline broji samo staru vezu Otkup.OtpremnicaID, koju
+    ' kanonski pisac ne pise -- pa je poruka javljala "blokovi oslobodjeni: 0"
+    ' i za otpremnicu koja ih je imala. Sami blokovi JESU oslobodjeni:
+    ' StornoOtpremnica to radi kroz clanstvo. Lagao je samo broj, a broj koji
+    ' operater cita posle nepovratne radnje ne sme da laze.
+    Dim blokKanon As Long
+    For k = 1 To otpIDs.count
+        blokKanon = blokKanon + modDokumenta.IzvoriOtpremnice(CStr(otpIDs(k))).count
+    Next k
+
     For k = 1 To otpIDs.count
         If Not StornoOtpremnica(CStr(otpIDs(k))) Then _
             Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
     Next k
     res("otp") = otpIDs.count
-    res("blok") = FreeOtkupBloksInline(otpIDs, SRC)
+    res("blok") = FreeOtkupBloksInline(otpIDs, SRC) + blokKanon
     If ownsChain Then
         For k = 1 To prijIDs.count
             If Not StornoPrijemnica(CStr(prijIDs(k))) Then _
