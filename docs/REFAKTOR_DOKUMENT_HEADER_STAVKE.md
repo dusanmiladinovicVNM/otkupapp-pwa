@@ -4885,8 +4885,8 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | # | Sadržaj | Stanje |
 |---|---|---|
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
-| **S5-2** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` nestaje | ⏳ |
-| **S5-3** | dodela vozača iz PWA (E-019) na otpremnicu; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; `Otkup.VozacID/OtpremnicaID/BrojOtpremnice` iz kanona; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
+| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
 | **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
 
 #### Šta je S5-1 uradio
@@ -4995,6 +4995,125 @@ prijavio kao `NE OBARA SVOJ TEST`, iako su svi bili crveni i svi na pravoj tvrdn
   podataka dok njeni otkupi još žive). Ista grana u hladnjačkom lancu ima svoj test.
 
 
+### 14.38) S5-2 — predaja robe vozaču postaje otpremnica (23.09.2026)
+
+**Redosled u planu je bio presečen naopako, i operater ga je ispravio jednom rečenicom:**
+
+> *„vozač vidi samo otkupe koji čine otpremnice koje su vozačeve, odnosno na osnovu čekiranih otkupnih
+> listova koje otkupac predaje vozaču se stvara osnova za otpremnicu. ta otpremnica je osnova za zbirnu."*
+
+Lanac je dakle **predaja → otpremnica → zbirna**. Ja sam VOZ/zbirna uvoz stavio **pre** predaje — a bez
+predaje nema otpremnice sa pravim vozačem, pa zbirna nema od čega da nastane (osim u malina režimu, gde
+je S4-4 već rešava). Zato je S5-2 sada **predaja**, a VOZ/zbirna se pomera na S5-3. Kolona „Sadržaj" u
+§14.9 ih i nabraja tim redom; rez je bio mimo nje.
+
+**Pitanje koje sam postavio bilo je pogrešno postavljeno.** Pitao sam šta raditi kad se otkupi ne mogu
+razrešiti u otpremnice — a to nije legitimno poslovno stanje nego kvar: dok vozač vidi otkup, on je već
+u njegovoj otpremnici.
+
+#### Šta je rez uradio
+
+| Korak | Rez |
+|---|---|
+| **1 · pečat → događaj** | `TryUpdateVozacID` i njegov `TestHook` **obrisani** (89 + 8 linija), s njima i cela `MSVOZ_*` mašina stanja. Bio je **poslednji** pisac `Otkup.VozacID`: `modMasterSync` više **ne piše `tblOtkup`** (vlasništvo 4 → 3 pisca) |
+| **2 · N redova, jedan događaj** | predaja stiže kao N zasebnih OTK redova. Skupljaju se kroz prolaz lista pa **grupišu** — ključ je vozač + isti ključ koji malina auto-otpremnica koristi. **Jedan utovar = jedan dokument**; dva utovara istog dana = dva, jer izdata otpremnica se ne dopunjuje (A13) |
+| **3 · jedno jezgro, dva ulaza** | `AutoOtpremnicaUpis` dobija drugog pozivaoca. Vozač je **zadat** (predaja) ili **ogledalo stanice** (malina) — to je jedina razlika između dva ulaza |
+| **4 · ishod po grupi** | red dobija status **svoje** grupe, i to **pre** `WriteBackSyncStatus`: „Master" sme tek kad je otpremnica stvarno upisana. Obrnut redosled bi Google listu potvrdio posao koji još nije urađen — a `Duplicate` je terminalan, pa se red nikad više ne bi ponudio |
+| **5 · AUD-042(a) preseljen** | predaja koja nije postala otpremnica **pali fatal flag**, ne prolazi kao tih preskok. Fail seam `VOZAC_WRITE` je zadržan pod istim imenom — meri **istu sposobnost**, samo je upis sada otpremnica a ne pečat |
+
+`CreateOtpremniceIzPredaje` je **namerno bez `On Error`**: sistemski pad iz `AutoOtpremnicaUpis` mora da
+izađe do `ImportOneOTKSheet` i tamo postane fatal za ceo list. Lokalni EH bi ga spustio na nivo grupe —
+tačno ona granica koju je review #385 zatvorio.
+
+#### Što je obrisano, nije prevedeno
+
+`Test_RF28_VozacIDUpdateIshodi` (10 tvrdnji) merio je mašinu stanja nad kolonom koje više nema. Sposobnost
+mere tri nova testa. **Kapija ga nije uhvatila:** posle brisanja `TestHook`-a test je i dalje zvao
+nepostojeće ime, a `vba_check` je bio čist — isti propust vidljivosti koji §15 već vodi. Bez ručne
+provere bio bi compile pad, tj. Excel koji visi.
+
+Isto pravilo me je uhvatilo i drugi put u istom rezu: `SYNC_STATUS_MASTER` i `SYNC_STATUS_DUPLICATE` su
+`Private` u `modMasterSync`, pa ih test ne vidi. Tvrdnje sada drže **doslovne** vrednosti — to i jeste
+žični ugovor sa Google listom.
+
+#### Review #387 — predaja je dobila identitet događaja (P1 + 2×P2)
+
+**P1 — poslovni događaj se gubio tiho.** Otkupac sme da preda blok koji još **nije sinhronizovan**:
+ekran OTPREME spaja lokalne i serverske redove i filtrira samo po „nema vozača". Takav red prvi put
+stiže u master **već sa vozačem** i ide granom za **nov** red — a ta grana `VozacID` nije gledala.
+Ishod je bio najgori mogući: otkup nastane, red dobije `Synced>Master` (terminalno, import uzima samo
+`Pending`), otpremnice nema i **nikad je neće biti**. Obe grane sada prave **isti** kandidat
+(`PredajaKandidat`), a red sa vozačem **ne dobija status** pre nego što njegova predaja dobije ishod.
+
+**P2 — predaja nije imala identitet.** Grupisanje po (vozač, stanica, dan, kultura, ambalaža) opisuje
+**robu**, ne **utovar**, pa je grešilo u oba smera:
+
+| Smer | Šta se dešavalo |
+|---|---|
+| **spajanje** | dve predaje istom vozaču istog dana imaju iste atribute → **jedan** dokument umesto dva. A izdata otpremnica se ne dopunjuje (A13), pa se kasnije ne može legitimno razdvojiti |
+| **deljenje** | jedna predaja sme da nosi listove sa **više datuma** → grupisanje po `Otkup.Datum` razbija jedan utovar na više |
+
+Ključ je sada **`PredajaID`** — jedan klik otkupca. Odluke operatera (23.09.2026):
+
+- **jedan klik je jedan dokument**, i kad spaja više dana („*kod šljive i drugog voća se može desiti da
+  ide roba sa dva datuma na jednu otpremnicu*")
+- **otpremnica nosi datum PREDAJE**, ne datum otkupnog lista — ona je transportni dokument
+- **jedna predaja je jedna vrsta voća**; mešano je **greška unosa**, pa se predaja odbija **cela** i poruka
+  imenuje šta se ne slaže (otkupac treba da zna šta da raščekira)
+
+Bez `PredajaID`-a predaja **staje**, imenovano. Identitet se ne rekonstruiše iz robe ni kao „privremeni
+fallback" — VBA model vodi, PWA se prilagođava kasnije. `gas/Code.gs` i `OtkZaglavljeKolone()` se u ovom
+rezu **ne diraju**; šta PWA mora da pošalje stoji kao nizvodni zahtev u §15.
+
+**P2 — vlasništvo nad već predatim blokom.** Uređaj koji je bio offline može poslati isti blok **drugom**
+vozaču. Roba je tada na **tuđoj izdatoj** otpremnici, pa „poslednji pobeđuje" nije opcija: isti vozač ostaje
+uredan retry (`Duplicate`), drugi vozač je **`SyncError`**. Stari `TryUpdateVozacID` je tu razliku imao
+(`NOCHANGE` vs `CONFLICT`) — nova arhitektura je vraća, ali na **pravom vlasniku**: `Otpremnica.VozacID`.
+
+#### `CDate` nad ISO stringom laže — tiho
+
+Mereno: **`CDate("2091-01-23")` u ovom okruženju vraća `8230-04-15`**, bez greške. PWA šalje ISO, pa bi
+otpremnica nosila datum koji nije ničim povezan sa danom utovara. Datum predaje se zato parsira
+**eksplicitno** (`IsoUDatum`: prvih deset znakova, tri broja, `DateSerial`).
+
+**Izmereno odmah, na zahtev operatera: uvoz otkupa NIJE pogođen.** `Test_PWA_IsoDatumStizeKaoString`
+šalje datum kao **ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON — kroz
+`ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji
+šalje pravi `Date`; sada je pokrivena.
+
+Zamka je dakle **uža** nego što sam prvo napisao: greši `CStr(Date)` → `CDate(String)` povratak u ovom
+lokalu, ne ISO string iz PWA. `IsoUDatum` ostaje — za datum predaje ISO stiže direktno, pa je parser bez
+oslanjanja na lokal tačnija stvar bez obzira na merenje.
+
+Ista zamka me je uhvatila i u **tvrdnji**: `OtpPolje` vraća `String`, pa je moj `CDate` nad njim išao kroz
+isti lokal. Test sada čita **sirovu** vrednost.
+
+#### Kapije
+
+Merenje: `otk_veza_otp` **23 → 18** PROD, `pauza` **6 → 4**.
+
+BFP **1876 → 1887 → 1896**, sravnjeno po stavkama: −10 (obrisan RF28 test) +21 (tri prva) = 1887;
+pa −21 (ta tri zamenjena) +30 (pet novih) = 1896.
+
+Sabotaže **582 → 588**. Tri iz prvog kruga su **zamenjene**, jer pravila koja su merile više ne postoje u
+tom obliku: `predaja-kljuc-iz-robe`, `predaja-datum-iz-otkupa`, `predaja-mesano-prolazi`,
+`predaja-bez-identiteta-prolazi`, `predaja-ne-gleda-vlasnika`, `predaja-ne-gleda-clanstvo`.
+
+**Obim dokaza po novom pravilu** (`CLAUDE.md` §5, odluka 23.09.2026): u rezu se vrte **samo nove**
+sabotaže, pun katalog ide pred release.
+
+#### Tvrdnja koja je merila tuđu kapiju
+
+`predaja-ne-gleda-clanstvo` je bila **crvena, ali ne na imenovanoj tvrdnji**. Tvrdnja „nema druge
+otpremnice“ je za tu sabotažu **placebo**: i bez provere članstva pisac odbija već vezan izvor
+(`OtpRequireIzvorValjan`, `traziSlobodan:=True`), pa je `n = 0` u oba slučaja — merila je **tuđu**
+kapiju.
+
+Razlika koju provera stvarno pravi je u **izveštaju**: sa njom je ponovljen red tih no-op sa statusom
+`Duplicate`, bez nje postaje `SyncError` — uredan retry prijavljen kao kvar. Tvrdnja je preusmerena na
+to. Isti obrazac koji je već zapisan kao „dvoslojna kapija: sabotaža ne grize“.
+
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -5017,6 +5136,8 @@ prijavio kao `NE OBARA SVOJ TEST`, iako su svi bili crveni i svi na pravoj tvrdn
 | **`NEVEZANE` nije sužena na AKTIVNI nacrt** (review #379, P3) | čitalac filtrira po stanju dokumenta (izdata, nestornirana, slobodna), ali ne po odnosu prema izabranoj zbirnoj — otpremnica drugog vozača ili druge vrste/sorte/tipa ambalaže ostaje u ponudi, a `ZbrRequireIzvorValjan` je odbija. Nema kvara podataka (pisac je fail-closed), ali je to isti obrazac koji smo već jednom zatvorili za nacrte. Rez: `NevezaneOtpremnice(zbirnaID)` koja sužava po vozaču i preuzetim činjenicama kad nacrt postoji — i test sa **nekompatibilnom** otpremnicom, jer današnji test meri samo ime liste |
 | **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
+| **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
+| ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |
 | **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |

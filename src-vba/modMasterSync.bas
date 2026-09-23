@@ -42,11 +42,6 @@ Private Const MASTER_SYNC_CLIENT_RECORD_ID_COL As String = "ClientRecordID"
 ' Pozivalac MORA da razlikuje "nema sta da se menja" (bezopasno -> Duplicate) od
 ' "upis pao" / "red ima DRUGOG vozaca" / "reda nema" -- ta tri su greske i ne
 ' smeju da dobiju terminalni Duplicate status uz zelen sync.
-Private Const MSVOZ_UPDATED As String = "UPDATED"
-Private Const MSVOZ_NOCHANGE As String = "NOCHANGE"
-Private Const MSVOZ_CONFLICT As String = "CONFLICT"
-Private Const MSVOZ_FAILED As String = "FAILED"
-Private Const MSVOZ_NOTFOUND As String = "NOTFOUND"
 
 ' AUD-043(b): dozvoljena razlika u danima izmedju otkupa i zbirne. 0 bi odbilo
 ' legitiman utovar posle ponoci; neogranicena tolerancija bi dozvolila da otkup
@@ -1126,14 +1121,17 @@ End Function
 '
 ' Pravilo: normalizacija sluzi POREDJENJU, nikad UPISU.
 Private Function NovaGrupa(ByVal stanica As Variant, ByVal datum As Variant, _
-                           ByVal kultura As Variant, ByVal tipAmb As Variant) As Object
+                           ByVal kultura As Variant, ByVal tipAmb As Variant, _
+                           Optional ByVal vozac As Variant = "") As Object
     Dim g As Object
     Set g = CreateObject("Scripting.Dictionary")
     g.Add "stanica", Trim$(NzToText(stanica))
     g.Add "datum", CDate(Int(CDate(datum)))
     g.Add "kultura", Trim$(NzToText(kultura))
     g.Add "tipAmb", Trim$(NzToText(tipAmb))
+    g.Add "vozac", Trim$(NzToText(vozac))
     g.Add "izvori", New Collection
+    g.Add "redovi", New Collection
     Set NovaGrupa = g
 End Function
 
@@ -1168,13 +1166,25 @@ Private Function AutoOtpremnicaUpis(ByVal grupa As Object, _
     kulturaID = CStr(grupa("kultura"))
     tipAmb = CStr(grupa("tipAmb"))
 
-    ' Vozac je OGLEDALO stanice, i pravilo za njega ima JEDNO telo (modMalina) --
-    ' isto koje hladnjacki lanac koristi.
+    ' VOZAC DOLAZI SA DVE STRANE, I TO JE JEDINA RAZLIKA IZMEDJU DVA POZIVAOCA.
+    '
+    '   PREDAJA (S5-2) -- otkupac je u PWA cekirao listove i predao ih BAS tom
+    '     vozacu. Identitet je cinjenica sa terena i ovde se ne pogadja.
+    '   MALINA (S5-1)  -- vozaca nema, jer otkupac == stanica == vozac. Tada je
+    '     to OGLEDALO stanice, i pravilo za njega ima jedno telo (modMalina),
+    '     isto koje hladnjacki lanac koristi.
+    '
+    ' Postojanje vozaca u tblVozaci ne proverava se ovde: OtpNapraviDraft to radi
+    ' kroz RequireTacnoJedan, pa bi kopija pravila bila druga kapija nad istom
+    ' cinjenicom.
     Dim vozacID As String
-    vozacID = modMalina.VozacOgledaloZaStanicu(stanicaID)
+    vozacID = Trim$(CStr(grupa("vozac")))
     If Len(vozacID) = 0 Then
-        outGreska = "nema vozaca-ogledala za stanicu " & stanicaID
-        Exit Function
+        vozacID = modMalina.VozacOgledaloZaStanicu(stanicaID)
+        If Len(vozacID) = 0 Then
+            outGreska = "nema vozaca-ogledala za stanicu " & stanicaID
+            Exit Function
+        End If
     End If
 
     ' Broj iz niza STANICE, lokalno. GenerateBrojOtpremnice namerno ne pita
@@ -1233,6 +1243,335 @@ EH:
 
     AutoOtpremnicaUpis = ""
     If Len(outGreska) = 0 Then outGreska = errDesc
+End Function
+
+' ============================================================
+' PREDAJA ROBE VOZACU POSTAJE OTPREMNICA (S5-2).
+'
+' Poslovni dogadjaj: otkupac u PWA cekira otkupne listove i preda ih vozacu.
+' TAJ CIN je osnova otpremnice -- a otpremnica je osnova zbirne. Vozac zato
+' nikad ne vidi "slobodne" otkupe: dok mu dodju do ruke, vec su u NJEGOVOJ
+' otpremnici.
+'
+' Zateceni tok je isti dogadjaj upisivao kao PECAT: Otkup.VozacID preko
+' TryUpdateVozacID. To je kolona koju ciljni model nema -- vozac pripada
+' OTPREMNICI (S4.1c) -- i njen jedini citalac je bio pauziran potrosac.
+'
+' PREDAJA STIZE KAO N REDOVA, NE KAO JEDAN DOGADJAJ. PWA ponovo posalje svaki
+' OTK red sa popunjenim VozacID-em, pa desktop vidi N zasebnih duplikata. Da se
+' otpremnica pravi po redu, jedan utovar bi dao deset dokumenata. Zato se predaje
+' SKUPLJAJU kroz prolaz lista, pa se grupisu -- isti kljuc kao malina
+' auto-otpremnica, plus vozac.
+'
+' DVA UTOVARA ISTOG DANA SU DVA DOKUMENTA. Otpremnica nastaje IZDATA (jedan
+' potez), a izdata se ne dopunjuje (A13). To nije ogranicenje nego istina o
+' fizickom dogadjaju: vozac je dolazio dvaput.
+' ============================================================
+
+' ISO datum (yyyy-mm-dd, sa opcionim vremenom) -> Date, BEZ oslanjanja na lokal.
+'
+' CDate nad ISO stringom je lokalno zavisan, i to nije teorija nego MERENJE:
+' u ovom okruzenju CDate("2091-01-23") vraca 8230-04-15. Tiho, bez greske --
+' pa bi otpremnica nosila datum koji nije nicim povezan sa danom utovara.
+'
+' PWA salje ISO (toISOString / yyyy-mm-dd), pa se datum predaje cita eksplicitno:
+' prvih deset znakova, tri broja, DateSerial. Vrednost koja je VEC Date (Excel
+' ume da je tako vrati) se prihvata kakva jeste.
+'
+' Napomena: IsParsableMasterSyncDate stoji na istom CDate-u i koristi ga i uvoz
+' otkupa (GS_DATUM). Da li i tamo stize ISO string ili pravi Date -- nije
+' mereno; zapisano u planu kao otvorena stavka, ne dira se iz ovog reza.
+Private Function IsoUDatum(ByVal v As Variant, ByRef outD As Date) As Boolean
+    On Error GoTo EH
+
+    If IsDate(v) And Not VarType(v) = vbString Then
+        outD = Int(CDate(v))
+        IsoUDatum = (outD >= DateSerial(2000, 1, 1))
+        Exit Function
+    End If
+
+    Dim s As String
+    s = Trim$(CStr(nz(v, "")))
+    If Len(s) < 10 Then Exit Function
+
+    If Mid$(s, 5, 1) <> "-" Or Mid$(s, 8, 1) <> "-" Then Exit Function
+
+    Dim g As Long, m As Long, d As Long
+    g = CLng(Mid$(s, 1, 4))
+    m = CLng(Mid$(s, 6, 2))
+    d = CLng(Mid$(s, 9, 2))
+
+    If m < 1 Or m > 12 Or d < 1 Or d > 31 Then Exit Function
+
+    outD = DateSerial(g, m, d)
+    IsoUDatum = (outD >= DateSerial(2000, 1, 1))
+    Exit Function
+
+EH:
+    IsoUDatum = False
+End Function
+
+' Kolona OTK lista PO IMENU, iz zaglavlja. 0 = nema je.
+'
+' Po imenu, ne po poziciji: PredajaID i PredatoAt su NOVE kolone, a zatecen
+' list ih jos nema. Pozicioni citac bi nad starim listom procitao susednu
+' kolonu ili pukao; ovako izostanak ima jasan ishod -- 0, pa predaja staje sa
+' imenovanim razlogom umesto da pogadja.
+Private Function OtkKolonaPoImenu(ByRef data As Variant, ByVal ime As String) As Long
+    If IsEmpty(data) Then Exit Function
+    If UBound(data, 1) < 1 Then Exit Function
+
+    Dim c As Long
+    For c = LBound(data, 2) To UBound(data, 2)
+        If StrComp(Trim$(CStr(nz(data(1, c), ""))), ime, vbTextCompare) = 0 Then
+            OtkKolonaPoImenu = c
+            Exit Function
+        End If
+    Next c
+End Function
+
+' Jedan red predaje onako kako ga prolaz vidi:
+'   Array(redIndex, OtkupID, VozacID, PredajaID, PredatoAt)
+'
+' PredajaID i PredatoAt se citaju sa REDA, ne izvode iz robe -- v. GrupePredaje.
+Private Function PredajaKandidat(ByVal redIdx As Long, ByVal otkupID As String, _
+                                 ByVal vozacID As String, ByRef data As Variant) As Variant
+    Dim cPred As Long, cKad As Long
+    cPred = OtkKolonaPoImenu(data, "PredajaID")
+    cKad = OtkKolonaPoImenu(data, "PredatoAt")
+
+    Dim predajaID As String, predatoAt As String
+    If cPred > 0 Then predajaID = Trim$(CStr(nz(data(redIdx, cPred), "")))
+    If cKad > 0 Then predatoAt = Trim$(CStr(nz(data(redIdx, cKad), "")))
+
+    PredajaKandidat = Array(redIdx, otkupID, vozacID, predajaID, predatoAt)
+End Function
+
+' PREDAJE -> GRUPE, PO IDENTITETU DOGADJAJA (review #387, P2).
+'
+' Kljuc je PredajaID -- jedan klik otkupca u PWA. NIJE (vozac, stanica, dan,
+' kultura, ambalaza): ti atributi opisuju ROBU, ne UTOVAR, pa iz njih dogadjaj
+' ne moze da se rekonstruise ni u jednom smeru:
+'
+'   SPAJANJE  -- dve predaje istom vozacu istog dana imaju iste atribute, pa bi
+'                zavrsile kao JEDAN dokument iako su bila dva utovara.
+'   DELJENJE  -- jedna predaja sme da nosi listove sa VISE DATUMA (sljiva i
+'                drugo voce se kupi danima; odluka operatera 23.09.2026), pa bi
+'                grupisanje po Otkup.Datum jedan utovar razbilo na vise.
+'
+' DATUM OTPREMNICE JE DATUM PREDAJE, ne datum otkupnog lista: otpremnica je
+' transportni dokument. Zato PredatoAt, a ne COL_OTK_DATUM.
+'
+' JEDNA PREDAJA JE JEDNA VRSTA VOCA (odluka operatera): vozac jednim dolaskom
+' vozi jednu kulturu. Mesana predaja je GRESKA UNOSA, ne slucaj koji se deli --
+' odbija se cela, a poruka imenuje sta je naslo.
+'
+' outVecPredati: red -> OtpremnicaID, za blok koji je VEC predat ISTOM vozacu.
+'   Uredan retry, tih no-op.
+' outKonflikti: red -> opis, za blok predat DRUGOM vozacu. To nije retry nego
+'   protivrecnost: roba je na tudjoj izdatoj otpremnici, pa staje fail-closed.
+Private Function GrupePredaje(ByVal predaje As Collection, _
+                              ByRef outVecPredati As Object, _
+                              ByRef outKonflikti As Object) As Object
+    Const SRC As String = "GrupePredaje"
+
+    Dim rez As Object
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set GrupePredaje = rez
+
+    Set outVecPredati = CreateObject("Scripting.Dictionary")
+    Set outKonflikti = CreateObject("Scripting.Dictionary")
+    If predaje Is Nothing Then Exit Function
+    If predaje.count = 0 Then Exit Function
+
+    Dim clanstvo As Object
+    Set clanstvo = modDokumenta.AktivnoClanstvoOtpremnica()
+
+    Dim i As Long, red As Variant
+    Dim otkupID As String, vozacID As String, redIdx As Long
+    Dim predajaID As String, predatoAt As String
+    Dim stanica As String, kultura As String, tipAmb As String
+    Dim kljuc As String, g As Object
+    Dim danPredaje As Date
+
+    For i = 1 To predaje.count
+        red = predaje(i)
+        redIdx = CLng(red(0))
+        otkupID = Trim$(CStr(red(1)))
+        vozacID = Trim$(CStr(red(2)))
+        predajaID = Trim$(CStr(red(3)))
+        predatoAt = Trim$(CStr(red(4)))
+
+        If clanstvo.Exists(UCase$(otkupID)) Then
+            ' VEC PREDAT -- ali kome? (review #387, P2)
+            Dim postojecaOtp As String, postojeciVozac As String
+            postojecaOtp = CStr(clanstvo(UCase$(otkupID)))
+            postojeciVozac = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                        postojecaOtp, COL_OTP_VOZAC)))
+
+            If StrComp(postojeciVozac, vozacID, vbTextCompare) = 0 Then
+                outVecPredati.Add redIdx, postojecaOtp
+            Else
+                outKonflikti.Add redIdx, _
+                    "blok je vec predat vozacu " & postojeciVozac & _
+                    " (otpremnica " & postojecaOtp & "), a red trazi " & vozacID
+            End If
+        ElseIf Len(predajaID) = 0 Then
+            outKonflikti.Add redIdx, _
+                "red nema PredajaID -- identitet utovara se NE izvodi iz robe"
+        ElseIf Not IsoUDatum(predatoAt, danPredaje) Then
+            outKonflikti.Add redIdx, _
+                "PredatoAt nije upotrebljiv ISO datum ('" & predatoAt & _
+                "'), a otpremnica nosi datum PREDAJE"
+        Else
+            stanica = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                 COL_OTK_STANICA)))
+            kultura = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                 COL_OTK_KULTURA)))
+            tipAmb = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                                COL_OTK_TIP_AMB)))
+
+            kljuc = UCase$(predajaID)
+            If Not rez.Exists(kljuc) Then
+                rez.Add kljuc, NovaGrupa(stanica, danPredaje, kultura, tipAmb, _
+                                         vozacID)
+            End If
+
+            Set g = rez(kljuc)
+            PredajaProveriJednorodnost g, stanica, kultura, tipAmb, vozacID
+            g("izvori").Add otkupID
+            g("redovi").Add redIdx
+        End If
+    Next i
+End Function
+
+' JEDNA PREDAJA -- JEDNO ZAGLAVLJE. Sto se ne slaze sa prvim redom grupe, tu je
+' greska unosa: otkupac je jednim klikom cekirao robu koja ne ide na isti
+' dokument. Razlog se PAMTI na grupi, a ne dize odmah -- da poruka moze da
+' imenuje SVE sto ne valja, ne samo prvo.
+Private Sub PredajaProveriJednorodnost(ByRef g As Object, ByVal stanica As String, _
+                                       ByVal kultura As String, ByVal tipAmb As String, _
+                                       ByVal vozacID As String)
+    PredajaNeslaganje g, "stanica", "otkupno mesto", stanica
+    PredajaNeslaganje g, "kultura", "vrsta voca", kultura
+    PredajaNeslaganje g, "tipAmb", "tip ambalaze", tipAmb
+    PredajaNeslaganje g, "vozac", "vozac", vozacID
+End Sub
+
+Private Sub PredajaNeslaganje(ByRef g As Object, ByVal kljuc As String, _
+                              ByVal opis As String, ByVal vrednost As String)
+    If StrComp(CStr(g(kljuc)), vrednost, vbTextCompare) = 0 Then Exit Sub
+
+    Dim dosad As String
+    If g.Exists("greska") Then dosad = CStr(g("greska")) & "; "
+
+    g("greska") = dosad & "jedna predaja nosi razlicit " & opis & " ('" & _
+                  CStr(g(kljuc)) & "' i '" & vrednost & "')"
+End Sub
+
+' Napravi otpremnice iz skupljenih predaja.
+'
+' outIshodi: redIdx -> SYNC_STATUS_* za upis nazad u Google list. Red mora da
+' dobije ishod SVOJE grupe, a ne zbirni ishod prolaza: pad jedne grupe ne sme
+' da oboji redove koji su uredno zavrseni.
+'
+' Isti ugovor kao malina batch: poslovno odbijanje imenuje razlog i pusta
+' ostale grupe, sistemski pad izlazi kao greska (AutoOtpremnicaUpis).
+Private Function CreateOtpremniceIzPredaje(ByVal predaje As Collection, _
+                                           ByRef outIshodi As Object, _
+                                           ByRef outGreske As String) As Long
+    Const SRC As String = "CreateOtpremniceIzPredaje"
+
+    ' NAMERNO BEZ On Error: SISTEMSKI pad iz AutoOtpremnicaUpis (sema, kolona,
+    ' AppendRow, runtime) mora da izadje do ImportOneOTKSheet, koji ga pretvara
+    ' u fatal sync error za CEO list. Lokalni EH bi ga spustio na nivo grupe --
+    ' tacno ona granica koju je review #385 zatvorio.
+
+    outGreske = ""
+    Set outIshodi = CreateObject("Scripting.Dictionary")
+
+    Dim vecPredati As Object, konflikti As Object, grupe As Object
+    Set grupe = GrupePredaje(predaje, vecPredati, konflikti)
+
+    Dim k As Variant
+    For Each k In vecPredati.Keys
+        outIshodi(CLng(k)) = SYNC_STATUS_DUPLICATE
+    Next k
+
+    ' Konflikt NIJE duplikat: roba je na tudjoj izdatoj otpremnici, ili red ne
+    ' nosi identitet utovara. Duplicate je terminalan, pa bi red zauvek ostao
+    ' neobradjen, a sync zelen -- zato SyncError i imenovan razlog.
+    Dim konfGreske As Collection
+    Set konfGreske = New Collection
+    For Each k In konflikti.Keys
+        outIshodi(CLng(k)) = SYNC_STATUS_ERROR & ":predaja -- " & CStr(konflikti(k))
+        konfGreske.Add "red " & CStr(k) & ": " & CStr(konflikti(k))
+    Next k
+
+    If grupe.count = 0 Then
+        outGreske = SpojiRazloge(konfGreske)
+        If Len(outGreske) > 0 Then LogWarn SRC, "Predaje bez otpremnice: " & outGreske
+        Exit Function
+    End If
+
+    ' SEF ZA SMOKE TEST: "predaja koja ne uspe MORA biti fatalna, ne tih
+    ' preskok" (AUD-042a). Ime seam-a je ostalo VOZAC_WRITE jer meri ISTU
+    ' sposobnost -- promenio se samo upis: umesto pecata na otkupu, otpremnica.
+    Dim simPad As Boolean
+    simPad = ConsumeFailSeam("VOZAC_WRITE")
+
+    Dim otpID As String, g As String, n As Long, j As Long
+    Dim greske As Collection
+    Set greske = New Collection
+
+    For Each k In grupe.Keys
+        g = ""
+        If simPad Then
+            otpID = ""
+            g = "simuliran pad upisa (fail seam)"
+        ElseIf grupe(k).Exists("greska") Then
+            ' Mesana predaja se NE DELI na vise dokumenata i ne salje se piscu:
+            ' jedan klik je jedan utovar, a jedan utovar je jedna vrsta voca
+            ' (odluka operatera 23.09.2026). Ovo je greska unosa, pa poruka mora
+            ' da kaze STA ne valja, ne samo da nije proslo.
+            otpID = ""
+            g = CStr(grupe(k)("greska"))
+        Else
+            otpID = AutoOtpremnicaUpis(grupe(k), g)
+        End If
+
+        If Len(otpID) > 0 Then
+            n = n + 1
+            For j = 1 To grupe(k)("redovi").count
+                outIshodi(CLng(grupe(k)("redovi")(j))) = SYNC_STATUS_MASTER
+            Next j
+        Else
+            Dim razlog As String
+            razlog = IIf(Len(g) > 0, g, "nepoznat razlog")
+            greske.Add CStr(k) & ": " & razlog
+            For j = 1 To grupe(k)("redovi").count
+                outIshodi(CLng(grupe(k)("redovi")(j))) = _
+                    SYNC_STATUS_ERROR & ":predaja -- " & razlog
+            Next j
+        End If
+    Next k
+
+    ' Konflikti i padovi grupa idu u ISTI izvestaj -- operater ne razlikuje
+    ' "nije uspelo zato sto" po tome gde je u kodu presecen.
+    Dim sviRazlozi As Collection
+    Set sviRazlozi = New Collection
+    For Each k In konfGreske
+        sviRazlozi.Add k
+    Next k
+    For Each k In greske
+        sviRazlozi.Add k
+    Next k
+
+    CreateOtpremniceIzPredaje = n
+    outGreske = SpojiRazloge(sviRazlozi)
+
+    If n > 0 Then LogInfo SRC, "Predaja vozacu -> otpremnica, created=" & CStr(n)
+    If Len(outGreske) > 0 Then LogWarn SRC, "Predaje bez otpremnice: " & outGreske
 End Function
 
 ' Razlozi u jedan red, za summary ciklusa i za log.
@@ -1575,6 +1914,21 @@ End Function
 ' (modBusinessFlowProTests) pristup bez Google/HTTP zavisnosti.
 ' ============================================================
 
+' S5-2: PRAVI upis predaje vozacu, bez Google Sheets-a.
+'
+' Prolaz kroz list (ImportOneOTKSheet) trazi Drive, pa ga meri smoke suite
+' (TestHook_ImportOneOTKSheet). Ovaj hook izlaze telo koje radi POSAO --
+' grupisanje predaja i upis otpremnica -- da lokalna regresija moze da meri
+' poslovno pravilo bez mreze. Isti obrazac koji modul vec koristi.
+'
+' predaje: Collection od Array(redIndex, OtkupID, VozacID).
+Public Function TestHook_CreateOtpremniceIzPredaje(ByVal predaje As Collection, _
+                                                   ByRef outIshodi As Object, _
+                                                   ByRef outGreske As String) As Long
+    TestHook_CreateOtpremniceIzPredaje = _
+        CreateOtpremniceIzPredaje(predaje, outIshodi, outGreske)
+End Function
+
 ' AUD-042(b): verdikt ValidatePWAOtkup za zadatu Datum vrednost. Ostala polja se
 ' popunjavaju tako da PROLAZE validaciju, pa je datum jedina promenljiva.
 Public Function TestHook_ValidatePWAOtkupDatum(ByVal kooperantID As String, _
@@ -1648,14 +2002,6 @@ Public Function TestHook_GenerateBrojZbirne(ByVal vozacID As String, _
                                            ByVal datum As Date) As String
     TestHook_GenerateBrojZbirne = GenerateBrojZbirne(vozacID, datum)
 End Function
-
-' AUD-042(a): MSVOZ_* ishod update-a VozacID-a na postojecem redu.
-Public Function TestHook_TryUpdateVozacID(ByVal clientRecordID As String, _
-                                         ByVal newVozacID As String, _
-                                         ByRef outDetail As String) As String
-    TestHook_TryUpdateVozacID = TryUpdateVozacID(clientRecordID, newVozacID, outDetail)
-End Function
-
 ' AUD-043(b): kaskadni link (membership + konflikt guard). Raise-uje kao u produkciji.
 Public Sub TestHook_LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
                                                   ByVal brojZbirne As String, _
@@ -1713,6 +2059,12 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Dim i As Long
     Dim syncStatus As String
     Dim statusUpdates As Collection
+
+    ' Predaje se SKUPLJAJU pa grupisu posle prolaza (S5-2): jedan utovar
+    ' stize kao N redova, pa bi otpremnica po redu dala deset dokumenata
+    ' za jedan poslovni dogadjaj.
+    Dim predaje As Collection
+    Set predaje = New Collection
     
     On Error GoTo EH
     
@@ -1805,53 +2157,34 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 Dim sheetVozac As String
                 sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
                 If Len(sheetVozac) > 0 Then
-                    Dim vozResult As String
-                    Dim vozDetail As String
-                    ' VozacID NA OTKUPU JE PRIPREMA ZA PAUZIRANOG POTROSACA.
+                    ' PREDAJA ROBE VOZACU JE POSLOVNI DOGADJAJ, NE PECAT (S5-2).
                     '
-                    ' Jedini citaoci te kolone su AutoLink (mrtav -- kljuc vise ne
-                    ' pogadja) i auto-otpremnica (pauzirana). Upis koji hrani samo
-                    ' pauzirane potrosace je upis u kolonu koju ciljni model nema:
-                    ' vozac pripada OTPREMNICI, ne otkupu (S4.1c).
+                    ' Otkupac je u PWA cekirao otkupne listove i predao ih BAS tom
+                    ' vozacu. Taj cin je osnova OTPREMNICE -- a otpremnica je
+                    ' osnova zbirne. Zateceni tok ga je upisivao kao Otkup.VozacID
+                    ' (TryUpdateVozacID), u kolonu koju ciljni model nema: vozac
+                    ' pripada OTPREMNICI (S4.1c), a jedini citaoci te kolone su
+                    ' bili pauzirani.
                     '
-                    ' Kapija stoji na POZIVNOM MESTU, ne u TryUpdateVozacID:
-                    ' njegova masina stanja (UPDATED/NOCHANGE/CONFLICT/NOTFOUND/
-                    ' FAILED) je i dalje merena kroz TestHook i PR7 je koristi nad
-                    ' otpremnicom.
-                    If IzvedeniLanacIzPwaDostupan() Then
-                        vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+                    ' Red se ovde samo ZABELEZI. Ishod mu se ne zna dok se sve
+                    ' predaje ovog lista ne grupisu -- jedan utovar stize kao N
+                    ' redova -- pa status upisuje CreateOtpremniceIzPredaje, po
+                    ' ishodu SVOJE grupe.
+                    If Len(posID) > 0 Then
+                        predaje.Add PredajaKandidat(i, posID, sheetVozac, data)
                     Else
-                        vozResult = MSVOZ_NOCHANGE
-                        vozDetail = "VozacID se ne utiskuje na otkup: " & _
-                                    "auto-otpremnica je pauzirana do PR7."
+                        ' AUD-042(a) ostaje: NE SME da prodje kao Duplicate.
+                        ' Duplicate je terminalan (import uzima samo Pending), pa
+                        ' bi red zauvek ostao bez otpremnice, a sync bio zelen.
+                        statusUpdates.Add Array(i, _
+                            SYNC_STATUS_ERROR & ":predaja -- otkup nije u masteru", "")
+                        outErrors = outErrors + 1
+
+                        MarkPWAFatalSyncError "ImportOneOTKSheet", _
+                            "Predaja vozacu: otkup nije nadjen u masteru. Sheet=" & _
+                            sheetName & "; Row=" & CStr(i) & _
+                            "; ClientRecordID=" & clientRecordID
                     End If
-
-                    Select Case vozResult
-                        Case MSVOZ_UPDATED
-                            statusUpdates.Add Array(i, SYNC_STATUS_MASTER)
-                            outSkipped = outSkipped + 1
-
-                        Case MSVOZ_NOCHANGE
-                            statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
-                            outSkipped = outSkipped + 1
-
-                        Case Else
-                            ' AUD-042(a): FAILED / CONFLICT / NOTFOUND NE SMEJU da
-                            ' prodju kao Duplicate. Duplicate je terminalan (import
-                            ' uzima samo Pending), pa bi prazan/pogresan VozacID
-                            ' ostao zauvek, a sync bio zelen. Red ide u SyncError,
-                            ' broji se u outErrors I pali fatal flag -> top-level
-                            ' zavrsava sa Monitor_MasterSyncFail.
-                            statusUpdates.Add Array(i, _
-                                SYNC_STATUS_ERROR & ":VozacID update " & vozResult, "")
-                            outErrors = outErrors + 1
-
-                            MarkPWAFatalSyncError "ImportOneOTKSheet", _
-                                "VozacID update nije uspeo (" & vozResult & "). Sheet=" & sheetName & _
-                                "; Row=" & CStr(i) & _
-                                "; ClientRecordID=" & clientRecordID & _
-                                "; Detail=" & vozDetail
-                    End Select
                 Else
                     statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
                     outSkipped = outSkipped + 1
@@ -1870,8 +2203,30 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                     Dim newOtkupID As String
                     newOtkupID = ImportRowToTblOtkup_RowTX(data, i, clientRecordID)
                     If Len(newOtkupID) > 0 Then
-                        statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newOtkupID)
+                        ' PREDAJA STIZE I NA PRVOM VIDJENJU REDA (review #387, P1).
+                        '
+                        ' Otkupac sme da preda blok koji jos NIJE sinhronizovan:
+                        ' ekran OTPREME spaja lokalne i serverske redove i filtrira
+                        ' samo po "nema vozaca". Takav red prvi put stize u master
+                        ' VEC SA VOZACEM, i ide OVOM granom -- ne duplikat granom.
+                        '
+                        ' Dok se predaja ovde nije gledala, ishod je bio najgori
+                        ' moguci: otkup nastane, red dobije "Synced>Master" (sto je
+                        ' TERMINALNO, import uzima samo Pending), a otpremnice nema
+                        ' i nikad je nece biti. Poslovni dogadjaj se gubi u tisini.
+                        '
+                        ' Zato red sa vozacem NE dobija status ovde: dobija ga
+                        ' CreateOtpremniceIzPredaje, po ishodu svoje predaje.
                         outImported = outImported + 1
+
+                        Dim novVozac As String
+                        novVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
+
+                        If Len(novVozac) > 0 Then
+                            predaje.Add PredajaKandidat(i, newOtkupID, novVozac, data)
+                        Else
+                            statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newOtkupID)
+                        End If
                     Else
                         statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":AppendRow failed", "")
                         outErrors = outErrors + 1
@@ -1885,7 +2240,43 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
 
 NextImportRow:
     Next i
-    
+
+    ' PREDAJE -> OTPREMNICE, posle prolaza (S5-2).
+    '
+    ' Ide PRE WriteBackSyncStatus, jer red sme da dobije "Master" tek kad je
+    ' njegova otpremnica stvarno upisana. Obrnut redosled bi Google listu
+    ' potvrdio posao koji jos nije uradjen -- a Duplicate je terminalan, pa se
+    ' red nikad vise ne bi ponudio.
+    If predaje.count > 0 Then
+        Dim ishodi As Object, predajaGreske As String, stvorene As Long
+        stvorene = CreateOtpremniceIzPredaje(predaje, ishodi, predajaGreske)
+
+        Dim kljucIshoda As Variant
+        For Each kljucIshoda In ishodi.Keys
+            statusUpdates.Add Array(CLng(kljucIshoda), CStr(ishodi(kljucIshoda)))
+            If InStr(1, CStr(ishodi(kljucIshoda)), SYNC_STATUS_ERROR, _
+                     vbTextCompare) = 1 Then
+                outErrors = outErrors + 1
+            Else
+                outSkipped = outSkipped + 1
+            End If
+        Next kljucIshoda
+
+        LogInfo "ImportOneOTKSheet", sheetName & ": predaja -> " & _
+                CStr(stvorene) & " otpremnica" & _
+                IIf(Len(predajaGreske) > 0, "; bez otpremnice: " & predajaGreske, "")
+
+        ' AUD-042(a) VAZI I DALJE, samo nad drugim upisom: predaja koja nije
+        ' postala otpremnica NE SME da prodje kao tih preskok. Red je vec dobio
+        ' SyncError iznad; ovde se pali fatal flag, pa top-level zavrsava sa
+        ' Monitor_MasterSyncFail umesto zelenim ciklusom.
+        If Len(predajaGreske) > 0 Then
+            MarkPWAFatalSyncError "ImportOneOTKSheet", _
+                "Predaja vozacu nije postala otpremnica. Sheet=" & sheetName & _
+                "; Razlozi=" & predajaGreske
+        End If
+    End If
+
     ' SyncStatus zurueckschreiben in Google Sheet
     If statusUpdates.count > 0 Then
         If Not WriteBackSyncStatus(spreadsheetID, statusUpdates) Then
@@ -2548,95 +2939,6 @@ EH:
     LogErr SOURCE
     WriteBackSyncStatus = False
 End Function
-
-' AUD-042(a): Ako Otkup u masteru nema VozacID a sheet ga ima -- updateuj.
-'
-' Vraca MSVOZ_* ishod (NE Boolean). Stari Boolean je spajao tri razlicite stvari
-' u jedno False ("red vec ima vozaca", "upis pao", "reda nema"), pa je pozivalac
-' sva tri kvitirao terminalnim Duplicate statusom -- Google red je time zauvek
-' prestao da bude Pending, VozacID je ostao prazan, a sync je bio zelen.
-' outDetail nosi tekst za SyncError/log.
-Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
-                                   ByVal newVozacID As String, _
-                                   ByRef outDetail As String) As String
-    Const SRC As String = "TryUpdateVozacID"
-
-    outDetail = ""
-    TryUpdateVozacID = MSVOZ_NOTFOUND
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then
-        outDetail = "Tabela je prazna: " & TBL_OTKUP
-        Exit Function
-    End If
-
-    Dim colCRID As Long, colVoz As Long
-    colCRID = RequireColumnIndex(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, SRC)
-    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
-
-    Dim wanted As String
-    wanted = Trim$(newVozacID)
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
-            Dim currentVoz As String
-            currentVoz = Trim$(CStr(nz(data(i, colVoz), "")))
-
-            If Len(currentVoz) > 0 Then
-                If StrComp(currentVoz, wanted, vbTextCompare) = 0 Then
-                    ' Master i sheet se poklapaju -- nema sta da se menja.
-                    TryUpdateVozacID = MSVOZ_NOCHANGE
-                Else
-                    ' AUD-042(a): sheet nosi DRUGOG vozaca. To nije "duplikat",
-                    ' to je konflikt podataka -- neko od dva izvora je pogresan.
-                    TryUpdateVozacID = MSVOZ_CONFLICT
-                    outDetail = "Master ima VozacID=" & currentVoz & _
-                                ", sheet nosi " & wanted & _
-                                " (ClientRecordID=" & clientRecordID & ")"
-                    LogError SRC, "Konflikt VozacID -- upis se NE radi. " & outDetail
-                End If
-                Exit Function
-            End If
-
-            If Len(wanted) = 0 Then
-                TryUpdateVozacID = MSVOZ_NOCHANGE
-                Exit Function
-            End If
-
-            ' Povrat UpdateCell-a se MORA proveriti (modDataAccess vraca False na neuspeh).
-            Dim writeOk As Boolean
-
-            If ConsumeFailSeam("VOZAC_WRITE") Then
-                writeOk = False
-            Else
-                writeOk = UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, wanted)
-            End If
-
-            If writeOk Then
-                TryUpdateVozacID = MSVOZ_UPDATED
-                LogInfo SRC, "Updated VozacID=" & wanted & _
-                        " for ClientRecordID=" & clientRecordID
-            Else
-                TryUpdateVozacID = MSVOZ_FAILED
-                outDetail = "UpdateCell nije uspeo: " & TBL_OTKUP & "." & COL_OTK_VOZAC & _
-                            "; VozacID=" & wanted & _
-                            "; ClientRecordID=" & clientRecordID & _
-                            "; Row=" & CStr(i)
-                LogError SRC, outDetail
-            End If
-
-            Exit Function
-        End If
-    Next i
-
-    ' Pozivalac je ovde samo ako je IsDuplicateInMaster rekao "postoji" -- pa je
-    ' "nema reda" nekonzistentno stanje, ne bezopasan preskok.
-    outDetail = "Nema reda u " & TBL_OTKUP & " za ClientRecordID=" & clientRecordID
-    LogError SRC, outDetail
-End Function
-
 ' ============================================================
 ' PRIVATE -- Helpers
 ' ============================================================
