@@ -5687,6 +5687,17 @@ SABOTAZE = {
         "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
         "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
     ),
+    # Sistemski pad NE SME da izadje kao poslovni ishod (review #385, P2).
+    # Bez klasifikacije "sema nije spremna" i "AppendRow nije upisao" izlaze kao
+    # "ova grupa nije prosla", pa orkestrator ostane u DEGRADIRANO grani i
+    # nastavi na outbound sync posle stvarnog kvara masine.
+    "sistemski-pad-kao-poslovni-ishod": (
+        "modSchemaGuard.bas",
+        "    JeSistemskiPad = (kod >= ERR_SIS_OD And kod <= ERR_SIS_DO)\n",
+        "    JeSistemskiPad = False   ' SABOTAZA: sistemski pad postaje poslovni ishod\n",
+        "Test_OTP_AutoSistemskiPadStajeProlaz",
+        "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
+    ),
     # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
     # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza
     # vraca "jedan blok = jedan dokument" tako sto svakom otkupu da svoj kljuc.

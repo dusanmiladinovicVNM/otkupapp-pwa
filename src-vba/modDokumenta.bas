@@ -55,6 +55,15 @@ Public Const ZBR_PARENT_DVOSMISLEN As String = "DVOSMISLEN"
 Public Const ZBR_PARENT_TUDJ As String = "TUDJ_VLASNIK"
 Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 
+' SIMULACIJA SISTEMSKOG PADA PRIMITIVA -- SAMO U TEST MODU (review #385, P2).
+'
+' Granica "poslovno odbijanje vs sistemski pad" se ne moze izmeriti bez
+' sistemskog pada, a nijedan nije dostizan iz podataka: AppendRow i NewEntityID
+' otkazu tek kad je sveska stvarno pokvarena, a to se u testu ne sme napraviti.
+' Prekidac zato stoji na PRODUKCIONOM putu pisca i podize ISTU gresku koju bi
+' podigao pravi pad -- ne paralelnu, jer bi paralelna merila samu sebe.
+Private mSimPadPiscaOtp As Boolean
+
 ' ZBR-MUT-01: razlozi zbog kojih se po BROJU ne sme mutirati.
 '
 ' Deca zbirne (otpremnica, prijemnica, paletna stavka, denormalizovan otkup) od
@@ -3275,7 +3284,8 @@ End Function
 ' od nijednog, jer izgleda kao zavrsen dokument.
 Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
                                             ByVal izvori As Collection, _
-                                            Optional ByRef outGreska As String) As String
+                                            Optional ByRef outGreska As String, _
+                                            Optional ByRef outSistemska As Boolean) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -3325,7 +3335,7 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
 
 EH:
     outGreska = OtpPadTransakcije(tx, "CreateOtpremnicaIzIzvora_TX", _
-                                  CreateOtpremnicaIzIzvora_TX)
+                                  CreateOtpremnicaIzIzvora_TX, outSistemska)
     CreateOtpremnicaIzIzvora_TX = ""
 End Function
 
@@ -3895,9 +3905,20 @@ End Sub
 
 ' Jedan EH za sve ulaze: monitoring, rollback i poruka su im isti, a sest
 ' kopija bi bilo sest mesta na kojima se rollback moze zaboraviti.
+' PAD SE NE VRACA SAMO KAO TEKST NEGO I KAO VRSTA (review #385, P2).
+'
+' Ovaj EH guta izuzetak i vraca razlog, sto je tacno ono sto ekranu treba:
+' operater dobija recenicu, a ne dijalog VBA runtime-a. Ali pozivalac koji radi
+' u PROLAZU (batch) time gubi razliku izmedju "ovaj dokument je odbijen" i
+' "masina je pukla" -- pa sistemski pad nastavi kao da je poslovni ishod.
+'
+' outSistemska je opciona, da sedam postojecih pozivalaca ostane netaknuto:
+' ekranima ta razlika ne treba, jer oni rade nad JEDNIM dokumentom i staju
+' svejedno.
 Private Function OtpPadTransakcije(ByRef tx As clsTransaction, _
                                    ByVal ulaz As String, _
-                                   ByVal entitetID As String) As String
+                                   ByVal entitetID As String, _
+                                   Optional ByRef outSistemska As Boolean) As String
     Dim errNum As Long
     Dim errDesc As String
     Dim errSrc As String
@@ -3905,6 +3926,8 @@ Private Function OtpPadTransakcije(ByRef tx As clsTransaction, _
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
+
+    outSistemska = modSchemaGuard.JeSistemskiPad(errNum)
 
     On Error Resume Next
     LogError ulaz, errDesc, errNum
@@ -3935,6 +3958,13 @@ Private Function OtpPadTransakcije(ByRef tx As clsTransaction, _
     OtpPadTransakcije = errDesc
     PrintTxFailure ulaz, errSrc, errNum, errDesc
 End Function
+
+' Ukljucuje/iskljucuje simulaciju sistemskog pada pisca otpremnice.
+' Van test moda NE RADI NISTA -- ista brana koju koristi modOtkupUI.TrakaRefreshTest.
+Public Sub TestSimPadPiscaOtpremnice(ByVal ukljuci As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mSimPadPiscaOtp = ukljuci
+End Sub
 
 ' --- core: draft ------------------------------------------------------------
 Private Function OtpNapraviDraft(ByVal h As Object, _
@@ -3990,7 +4020,7 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
     otpID = NewEntityID("OTP-")
 
     If otpID = "" Then
-        Err.Raise vbObjectError + 1284, SRC, "NewEntityID nije vratio OtpremnicaID."
+        modSchemaGuard.RaiseSistemski 20, SRC, "NewEntityID nije vratio OtpremnicaID."
     End If
 
     Dim rowData As Variant
@@ -3998,7 +4028,7 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
                                            kulturaID, tipAmb, brojOtp)
 
     If AppendRow(TBL_OTPREMNICA, rowData) <= 0 Then
-        Err.Raise vbObjectError + 1285, SRC, _
+        modSchemaGuard.RaiseSistemski 21, SRC, _
                   "AppendRow nije upisao header u tblOtpremnica."
     End If
 
@@ -4231,7 +4261,7 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
         rb = rb + 1
         stavkaID = NewEntityID("OPS-")
         If stavkaID = "" Then
-            Err.Raise vbObjectError + 1302, src, _
+            modSchemaGuard.RaiseSistemski 22, src, _
                       "NewEntityID nije vratio OtpremnicaStavkaID za klasu " & CStr(kl) & "."
         End If
 
@@ -4241,7 +4271,7 @@ Private Sub OtpUpisiOcekivano(ByVal otpremnicaID As String, _
                                                OtpBroj(cena, CStr(kl)))
 
         If AppendRow(TBL_OTPREMNICA_STAVKE, rowData) <= 0 Then
-            Err.Raise vbObjectError + 1303, src, _
+            modSchemaGuard.RaiseSistemski 23, src, _
                       "AppendRow nije upisao stavku klase " & CStr(kl) & "."
         End If
     Next kl
@@ -4418,15 +4448,20 @@ Private Sub OtpUpisiClanstvo(ByVal otpremnicaID As String, ByVal otkupID As Stri
     izvorID = NewEntityID("OPI-")
 
     If izvorID = "" Then
-        Err.Raise vbObjectError + 1292, src, _
+        modSchemaGuard.RaiseSistemski 24, src, _
                   "NewEntityID nije vratio OtpremnicaIzvorID za " & otkupID & "."
     End If
 
     Dim rowData As Variant
     rowData = BuildOtpremnicaIzvorRowData(izvorID, otpremnicaID, otkupID)
 
+    If mSimPadPiscaOtp And IsTestMode() Then
+        modSchemaGuard.RaiseSistemski 25, src, _
+                  "SIMULIRAN pad primitiva pri upisu clanstva (test mod)."
+    End If
+
     If AppendRow(TBL_OTPREMNICA_IZVORI, rowData) <= 0 Then
-        Err.Raise vbObjectError + 1293, src, _
+        modSchemaGuard.RaiseSistemski 25, src, _
                   "AppendRow nije upisao clanstvo za " & otkupID & "."
     End If
 End Sub

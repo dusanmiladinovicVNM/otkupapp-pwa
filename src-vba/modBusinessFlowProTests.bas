@@ -307,6 +307,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AutoKvarGrupeNeObaraOstale
     Test_OTP_AutoLanacStizeDoZbirne
     Test_OTP_ProslednjenOtkupJeIzdatIzvor
+    Test_OTP_AutoSistemskiPadStajeProlaz
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -6381,6 +6382,116 @@ EH:
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     On Error GoTo 0
     LogFatal "Test_OTP_ProslednjenOtkupJeIzdatIzvor", eN, eD
+End Sub
+
+' SISTEMSKI PAD NIJE POSLOVNI ISHOD (review #385, P2).
+'
+' Prolaz ima DVA razlicita izlaza i orkestrator na njih razlicito reaguje:
+'
+'   poslovno odbijanje -> n + outGreske, BEZ greske -> korak DEGRADIRAN, ciklus
+'                         ide dalje (outbound sync, kartice, izvestaji)
+'   sistemski pad      -> GRESKA -> orkestrator vidi Err.Number <> 0 -> HARD
+'                         STOP pre outbound sync-a
+'
+' Ugovor je postojao u orkestratoru, ali je NESTAJAO na granici pisca:
+' CreateOtpremnicaIzIzvora_TX svaki izuzetak pretvara u tekst i vraca "", pa su
+' i "sema nije spremna", "AppendRow nije upisao" i pravi VBA runtime error
+' izlazili kao obicna grupa koja nije prosla. Ciklus bi posle stvarnog kvara
+' masine nastavio da gura podatke napolje.
+'
+' Test meri OBA smera, jer jednosmeran dokaz ovde ne vredi: "sve podize gresku"
+' bi prosao smer B i pokvario smer A -- a bas smer A je ono zbog cega batch
+' postoji.
+'
+' Sistemski pad se pravi SIMULACIJOM na produkcionom putu pisca
+' (modDokumenta.TestSimPadPiscaOtpremnice, brana IsTestMode). Prava masinska
+' greska nije dostizna iz podataka -- AppendRow otkaze tek nad pokvarenom
+' sveskom, a to test ne sme da napravi. Zato korak C: sa iskljucenom simulacijom
+' ISTI ulaz prolazi, cime se dokazuje da je pad u koraku B dosao BAS odatle.
+Private Sub Test_OTP_AutoSistemskiPadStajeProlaz()
+    Dim tx As clsTransaction
+    Dim prevMode As String, prevTest As Boolean
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("AOSIS")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevTest = IsTestMode()
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetTestMode True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Const FANTOM As String = "ST-NEPOSTOJI-90998"
+
+    Dim otkKvar As String, otkZdrav As String
+    otkKvar = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                             TEST_PREFIX & "-OTK-SK-" & scenario, _
+                             KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkZdrav = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                              TEST_PREFIX & "-OTK-SZ-" & scenario, _
+                              KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB_B)
+
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkKvar)(1), _
+                      COL_OTK_STANICA, FANTOM, "Test_OTP_AutoSistemskiPadStajeProlaz"
+
+    ' --- A) POSLOVNO ODBIJANJE: bez greske, sa imenovanim razlogom ---------
+    Dim greske As String, n As Long, errNum As Long
+
+    On Error Resume Next
+    Err.Clear
+    n = modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkKvar, greske)
+    errNum = Err.Number
+    On Error GoTo EH
+
+    AssertEquals "0", CStr(errNum), _
+                 "AUTO sistem: poslovno odbijanje NE podize gresku"
+    AssertTrue Len(greske) > 0, _
+               "AUTO sistem: poslovno odbijanje ima imenovan razlog"
+
+    ' --- B) SISTEMSKI PAD: izlazi kao greska -------------------------------
+    modDokumenta.TestSimPadPiscaOtpremnice True
+
+    On Error Resume Next
+    Err.Clear
+    greske = ""
+    n = modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkZdrav, greske)
+    errNum = Err.Number
+    On Error GoTo EH
+
+    modDokumenta.TestSimPadPiscaOtpremnice False
+
+    AssertTrue errNum <> 0, _
+               "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkZdrav), _
+                 "AUTO sistem: sistemski pad ne ostavlja otpremnicu"
+
+    ' --- C) BEZ SIMULACIJE ISTI ULAZ PROLAZI --------------------------------
+    AssertEquals "1", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkZdrav, greske)), _
+                 "AUTO sistem: bez simulacije ISTI ulaz prolazi"
+    AssertTrue Len(modDokumenta.OtpremnicaZaOtkup(otkZdrav)) > 0, _
+               "AUTO sistem: posle iskljucene simulacije otpremnica postoji"
+
+    tx.RollbackTx
+    SetTestMode prevTest
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    modDokumenta.TestSimPadPiscaOtpremnice False
+    tx.RollbackTx
+    SetTestMode prevTest
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_OTP_AutoSistemskiPadStajeProlaz", eN, eD
 End Sub
 
 Private Sub Test_OTP_MalinaAutoZbirna()

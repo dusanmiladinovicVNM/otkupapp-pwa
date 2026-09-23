@@ -980,11 +980,19 @@ End Function
 ' ali ciklus ne obara, jer su otkupi uvezeni i to je stvaran napredak.
 '
 ' PAD GRUPE I PAD PROLAZA NISU ISTA STVAR, pa se i ne prijavljuju isto.
-' Sastavljanje grupa cita clanstvo STROGIM citacem (NevezaniOtkupi), koji nad
-' pokvarenim zapisom DIZE gresku. Da je taj pad zavrsio u outGreske, ciklus bi
-' rekao "deo otkupa je ostao bez otpremnice" -- a nijedna grupa ne bi ni bila
-' pokusana. Zato EH ovde RE-RAISE-uje: sistemski pad je pad KORAKA, i
-' orkestrator ga tako i vidi (On Error Resume Next + Err.Number).
+'
+' Razliku NE pogadja ovaj prolaz iz teksta greske -- nju izrice mesto podizanja
+' (modSchemaGuard.RaiseSistemski) i prenosi je pisac (outSistemska). Ovde se
+' samo postupa po njoj:
+'
+'   POSLOVNO ODBIJANJE -- zavisi od podataka TE grupe: imenuj razlog i probaj
+'     sledecu. Dokument je jedini gubitnik.
+'   SISTEMSKI PAD -- sema nije spremna, kolona nedostaje, AppendRow nije upisao,
+'     ili je pukao sam VBA. Oborice i svaku sledecu grupu, pa je dalje
+'     pokusavanje samo gomilanje istog razloga: prolaz STAJE i greska ide gore.
+'
+' Bez toga bi sistemski pad izasao kao "deo otkupa je ostao bez otpremnice", a
+' ciklus bi posle stvarnog kvara masine nastavio na outbound sync (review #385).
 '
 ' samoOtkupID suzava prolaz na grupu KOJOJ TAJ OTKUP PRIPADA (identitet, ne
 ' labela). Grupa se ne sece: otpremnica od dela svoje grupe bila bi drugaciji
@@ -1015,6 +1023,7 @@ Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoOtkupID As Str
             greske.Add CStr(k) & ": " & IIf(Len(g) > 0, g, "nepoznat razlog")
         End If
     Next k
+
 
     AutoCreateOtpremniceFromPWA_TX = n
     outGreske = SpojiRazloge(greske)
@@ -1142,6 +1151,10 @@ End Function
 ' Upis JEDNE auto-otpremnice. Vraca OtpremnicaID; "" = nije napravljena, razlog
 ' je u outGreska (NIKAD prazan uz prazan ID -- tiho preskakanje je ishod koji
 ' operater ne moze da razlikuje od "nije bilo posla").
+'
+' "" SE VRACA SAMO ZA POSLOVNO ODBIJANJE. Sistemski pad izlazi kao GRESKA, i iz
+' pisca (outSistemska) i iz svega sto se ovde racuna pre njega -- jer bi inace
+' prolaz nastavio da pokusava nad masinom koja ne radi (review #385, P2).
 Private Function AutoOtpremnicaUpis(ByVal grupa As Object, _
                                     ByRef outGreska As String) As String
     Const SRC As String = "AutoOtpremnicaUpis"
@@ -1185,17 +1198,39 @@ Private Function AutoOtpremnicaUpis(ByVal grupa As Object, _
 
     ' Jedan potez: nastaje i ODMAH se izdaje. Auto-tok nema nezavisno ocekivanje
     ' koje bi cekalo potvrdu -- ocekivanje se izvodi iz izvora (ZBR-KANON-04).
+    Dim sistemska As Boolean
     AutoOtpremnicaUpis = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, grupa("izvori"), _
-                                                                  outGreska)
+                                                                  outGreska, sistemska)
     If Len(AutoOtpremnicaUpis) = 0 Then
         If Len(outGreska) = 0 Then outGreska = "pisac nije vratio OtpremnicaID"
+
+        ' Pisac je vec rollback-ovao i vratio razlog; ovde se samo odlucuje da
+        ' li prolaz sme dalje. Greska nosi ISTI tekst koji bi isao u outGreske,
+        ' da izvestaj ne osiromasi zato sto je pad tezi.
+        If sistemska Then
+            Err.Raise vbObjectError + modSchemaGuard.ERR_SIS_OD + 26, SRC, _
+                      "Sistemski pad pisca otpremnice (stanica " & stanicaID & "): " & _
+                      outGreska
+        End If
     End If
     Exit Function
 
 EH:
-    Dim errDesc As String
+    ' Opis PRE LogErr-a -- LogErr usput brise stanje greske (#383, P2).
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
     errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC, "stanica=" & stanicaID & " datum=" & CStr(datum)
+
+    ' Sve PRE pisca (ogledalo vozaca, broj, citanje grupe) moze da padne i
+    ' sistemski -- npr. RequireColumnIndex nad tabelom bez kolone. Takav pad se
+    ' ne pretvara u "ova grupa nije prosla".
+    If modSchemaGuard.JeSistemskiPad(errNum) Then
+        Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+    End If
+
     AutoOtpremnicaUpis = ""
     If Len(outGreska) = 0 Then outGreska = errDesc
 End Function
@@ -1216,19 +1251,20 @@ End Function
 ' ============================================================
 ' MALINA MOD -- D: auto-zbirna iz otpremnice (1:1).
 '
-' Za svaku aktivnu otpremnicu sa praznim BrojZbirne (grupisano po
-' BrojOtpremnice, Klasa I+II istog dokumenta zajedno) pravi zbirnu preko
-' postojeceg SaveZbirnaMulti_TX:
-'   - BrojZbirne := BrojOtpremnice (broj garantovano identican otpremnici)
-'   - kupac := MALINA_DEFAULT_KUPAC (Hladnjaca); Hladnjaca naziv iz tblKupci
-'   - backfill BrojZbirne na otpremnicu i na tblOtkup (preko OtpremnicaID),
-'     jer ValidateZbirna/prijemnica/faktura vezu drze preko BrojZbirne.
-' Idempotentno: prazan-BrojZbirne filter sprecava duplo kreiranje.
+' Za svaku SLOBODNU IZDATU otpremnicu pravi zbirnu preko kanonskog pisca
+' (modDokumenta.CreateZbirnaIzIzvora_TX):
+'   - clanstvo je ZAPIS u tblZbirnaIzvori, ne labela na detetu
+'   - zbirna dobija SVOJ broj iz niza vozaca; NE nasledjuje otpremnicin
+'   - kupac := MALINA_DEFAULT_KUPAC (Hladnjaca)
+'   - vrsta, sorta i tip ambalaze se PREUZIMAJU od izvora (ZBR-KANON-04), pa se
+'     ne salju piscu
+' Idempotentno: slobodna = nije clan nijedne aktivne zbirne (NevezaneOtpremnice).
 ' Self-gated: u visnji ne radi nista.
+'
+' Zateceni opis je do S4-4 govorio o SaveZbirnaMulti_TX, o BrojZbirne :=
+' BrojOtpremnice i o backfill-u BrojZbirne na otpremnicu i tblOtkup. Nijedno od
+' toga vise ne postoji -- komentar je opisivao obrisan model (review #385, P3).
 ' ============================================================
-' samoBrojOtp: opcioni scope -- obradi SAMO otpremnice tog broja. Prazno = sve
-' otvorene (produkcioni poziv iz frmDokumenta). Scope koriste testovi, da run ne
-' zahvati nepovezane otvorene otpremnice u svesci.
 ' BATCH PROLAZ: auto-zbirna za SVE slobodne izdate otpremnice (S4-4).
 '
 ' Drugi od dva pozivaoca istog jezgra. Postoji zato sto otpremnice ne stizu samo

@@ -17,6 +17,10 @@ Option Explicit
 '
 ' Statickim putem se cuva vba_check pravilom STORNO_REGISTAR: svaki
 ' ExcludeStornirano(..., TBL_X) mora da imenuje tabelu iz jednog od dva spiska.
+' Rezervisan opseg broja greske za SISTEMSKI pad (v. RaiseSistemski nize).
+Public Const ERR_SIS_OD As Long = 9800
+Public Const ERR_SIS_DO As Long = 9899
+
 Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
     "|" & TBL_OTPREMNICA & "|" & TBL_ZBIRNA & "|" & TBL_PRIJEMNICA & _
     "|" & TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_MAGACIN & _
@@ -151,6 +155,48 @@ Private Function ZaglavljeZaPoruku(ByVal tableName As String, _
     End If
 End Function
 
+' ============================================================
+' KLASIFIKACIJA PADA: POSLOVNO ODBIJANJE vs SISTEMSKI PAD (review #385, P2)
+'
+' Dva pada nisu ista stvar, i pozivaoci koji rade U PROLAZU (batch nad vise
+' dokumenata) moraju da ih razlikuju:
+'
+'   POSLOVNO ODBIJANJE -- pisac je odbio BAS OVAJ ulaz. Zavisi od podataka tog
+'     dokumenta, pa sledeci u redu sme da se pokusa. Ishod: imenovan razlog.
+'   SISTEMSKI PAD -- primitiv nije uradio svoj posao (sema nije spremna, kolona
+'     nedostaje, AppendRow nije upisao, NewEntityID prazan) ili je pukao sam
+'     VBA. NE zavisi od podataka, pa ce oboriti i svaki sledeci dokument.
+'     Ishod: prolaz STAJE, a pozivalac iznad njega ne nastavlja dalje.
+'
+' Bez ove razlike sistemski pad izlazi kao "ovaj dokument nije prosao", pa
+' ciklus nastavi na outbound sync posle stvarnog kvara masine.
+'
+' KLASIFIKUJE SE NA MESTU PODIZANJA, ne po tekstu greske. Sistemski pad ide
+' kroz RaiseSistemski, koji ga smesta u rezervisan opseg -- pa je provera cist
+' test broja, bez spiska koji truli. Broj koji NIJE nas namerni raise (pravi
+' VBA runtime error: type mismatch, overflow, out of memory) je po definiciji
+' sistemski: masina je pukla, a ne mi sto smo odbili ulaz.
+' ============================================================
+Public Sub RaiseSistemski(ByVal kod As Long, ByVal src As String, ByVal opis As String)
+    If kod < 0 Or kod > (ERR_SIS_DO - ERR_SIS_OD) Then
+        Err.Raise vbObjectError + ERR_SIS_OD, "RaiseSistemski", _
+                  "Kod sistemskog pada je van opsega: " & CStr(kod)
+    End If
+    Err.Raise vbObjectError + ERR_SIS_OD + kod, src, opis
+End Sub
+
+Public Function JeSistemskiPad(ByVal errNum As Long) As Boolean
+    ' Van naseg raise opsega = pravi VBA runtime error.
+    If errNum < vbObjectError Or errNum > vbObjectError + 65535 Then
+        JeSistemskiPad = True
+        Exit Function
+    End If
+
+    Dim kod As Long
+    kod = errNum - vbObjectError
+    JeSistemskiPad = (kod >= ERR_SIS_OD And kod <= ERR_SIS_DO)
+End Function
+
 Public Function RequireColumnIndex(ByVal tableName As String, _
                                    ByVal columnName As String, _
                                    ByVal sourceName As String) As Long
@@ -165,10 +211,10 @@ Public Function RequireColumnIndex(ByVal tableName As String, _
         ' "zaglavlje je drugacije" ili "citanje je puklo" -- a bas to je jednom
         ' kostalo pola dana nad sveskom u kojoj je kolona postojala. Spisak je
         ' ogranicen, jer poruka ide u log i u dijalog.
-        Err.Raise vbObjectError + 7300, sourceName, _
-                  "Nedostaje kolona '" & columnName & "' u tabeli '" & tableName & _
-                  "'. Vidjeno zaglavlje: " & _
-                  ZaglavljeZaPoruku(tableName, columnName) & "."
+        RaiseSistemski 1, sourceName, _
+                       "Nedostaje kolona '" & columnName & "' u tabeli '" & tableName & _
+                       "'. Vidjeno zaglavlje: " & _
+                       ZaglavljeZaPoruku(tableName, columnName) & "."
     End If
 
     RequireColumnIndex = idx
@@ -301,8 +347,8 @@ Public Sub RequireUpdateCell(ByVal tableName As String, _
                               ByVal newValue As Variant, _
                               ByVal sourceName As String)
     If Not UpdateCell(tableName, rowIndex, columnName, newValue) Then
-        Err.Raise vbObjectError + 7400, sourceName, _
-                  "UpdateCell fehlgeschlagen: " & tableName & "." & columnName
+        RaiseSistemski 2, sourceName, _
+                       "UpdateCell fehlgeschlagen: " & tableName & "." & columnName
     End If
 End Sub
 
