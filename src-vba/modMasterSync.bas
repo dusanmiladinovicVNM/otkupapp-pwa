@@ -979,6 +979,13 @@ End Function
 ' "posla je bilo i deo NIJE uspeo" -- orkestrator taj korak prijavljuje kao pao,
 ' ali ciklus ne obara, jer su otkupi uvezeni i to je stvaran napredak.
 '
+' PAD GRUPE I PAD PROLAZA NISU ISTA STVAR, pa se i ne prijavljuju isto.
+' Sastavljanje grupa cita clanstvo STROGIM citacem (NevezaniOtkupi), koji nad
+' pokvarenim zapisom DIZE gresku. Da je taj pad zavrsio u outGreske, ciklus bi
+' rekao "deo otkupa je ostao bez otpremnice" -- a nijedna grupa ne bi ni bila
+' pokusana. Zato EH ovde RE-RAISE-uje: sistemski pad je pad KORAKA, i
+' orkestrator ga tako i vidi (On Error Resume Next + Err.Number).
+'
 ' samoOtkupID suzava prolaz na grupu KOJOJ TAJ OTKUP PRIPADA (identitet, ne
 ' labela). Grupa se ne sece: otpremnica od dela svoje grupe bila bi drugaciji
 ' dokument od onog koji pun prolaz pravi.
@@ -1017,12 +1024,17 @@ Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoOtkupID As Str
     Exit Function
 
 EH:
-    ' Opis PRE LogErr-a -- LogErr usput brise stanje greske (#383, P2).
-    Dim errDesc As String
+    ' Broj, opis i izvor se citaju PRE LogErr-a -- LogErr usput brise stanje
+    ' greske, pa bi re-raise posle njega bio Err.Raise 0 (#383, P2).
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
     errDesc = Err.description
+    errSrc = Err.SOURCE
+
     LogErr SRC
+
     AutoCreateOtpremniceFromPWA_TX = 0
-    If Len(outGreske) = 0 Then outGreske = errDesc
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 ' Nevezani izdati otkupi -> Dictionary "kljuc grupe" -> Collection OtkupID-eva.
