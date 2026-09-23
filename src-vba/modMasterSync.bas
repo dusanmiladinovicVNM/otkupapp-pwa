@@ -2506,7 +2506,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     colIdx = RequireColumnIndex(tblName, columnName, sourceName)
 
     Dim colGen As Long
-    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_GEN, sourceName)
+    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_ROD, sourceName)
 
     Dim current As String
     current = Trim$(CStr(nz(data(rowIndex, colIdx), "")))
@@ -2518,7 +2518,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     ' Fail-closed -- ingest ga ne "popravlja" upisom preko.
     If Len(current) = 0 And Len(currentGen) > 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 45, sourceName, _
-                  "Integritet: red nosi ZbirnaGeneracijaID bez BrojZbirne. Table=" & tblName & _
+                  "Integritet: red nosi ZbirnaID bez BrojZbirne. Table=" & tblName & _
                   "; " & contextInfo & _
                   "; PostojecaGeneracija=" & currentGen
     End If
@@ -2538,7 +2538,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     If Len(currentGen) > 0 Then
         If StrComp(currentGen, Trim$(genZbirne), vbTextCompare) <> 0 Then
             Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 46, sourceName, _
-                      "Konflikt ZbirnaGeneracijaID -- red je vec dete DRUGOG dokumenta pod istim " & _
+                      "Konflikt ZbirnaID -- red je vec dete DRUGOG dokumenta pod istim " & _
                       "brojem. Table=" & tblName & _
                       "; " & contextInfo & _
                       "; Broj=" & Trim$(brojZbirne) & _
@@ -2602,7 +2602,7 @@ End Function
 '
 ' Pozivalac (LinkZbirnaToOtkupAndOtpremnica) ima konkretan ZbirnaID -- membership
 ' se i razresava preko PK, bas zato sto broj u multi-device koliziji nije
-' jedinstven (AUD-043b). Ponovno pitanje ZbirnaGeneracijaZaBroj(brojZbirne) bi
+' jedinstven (AUD-043b). Ponovno pitanje ZbirnaIDZaBroj(brojZbirne) bi
 ' taj identitet BACILO i vratilo prazno u KR-001 slucaju -- dakle bas tamo gde
 ' je veza najpotrebnija.
 Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
@@ -3633,11 +3633,15 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
 
     ' ZBR-CHILD-01: NIKAD NE POGADJAJ KAD VEC ZNAS.
-    ' Konkretan ZbirnaID je poznat (kapija iznad ga i zahteva), pa se generacija
-    ' cita IZ TOG REDA -- jednom, za svu decu. Razresavanje po broju bi u
-    ' KR-001 koliziji (dva aktivna dokumenta pod istim brojem) vratilo prazno.
+    '
+    ' Trag na detetu je ZbirnaID (S4-3c), pa se nista ne cita -- identitet je
+    ' vec argument. Do ovog reza je odavde isla GENERACIJA, i to je bio
+    ' poslednji pisac koji je u trag upisivao nesto drugo od identiteta: svi
+    ' ostali (SavePrijemnica, ReassignPrijemnicaToZbirna_TX, paletni relink)
+    ' vec pisu ID. Dok je ovaj odstupao, scoping dece je nad uvezenim
+    ' dokumentima trazio ID medju generacijama i nije nalazio nista.
     Dim genZbirne As String
-    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+    genZbirne = zbirnaID
 
     ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
     ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID

@@ -7543,7 +7543,7 @@ End Sub
 '     InStr    = 1   -> gate PROPUSTA, a kolona PIN ne postoji
 '
 ' Nije teorijski: PR2 je vecinu tabela zavrsio sa GeneracijaID /
-' ZbirnaGeneracijaID, pa je tacno ta pozicija bila nezasticena.
+' ZbirnaID, pa je tacno ta pozicija bila nezasticena.
 '
 ' Meri se nad tblMGMT (nula redova, nijedan citac u kodu), a ime kolone se vraca
 ' i kroz EH.
@@ -15912,10 +15912,19 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     Dim pFx As String, pFxGen As String
     Dim idIsti As ZbirnaIdent, pVozD2 As String
 
-    ' A20: aktivan red bez generacije je integritetska greska.
+    ' A20 (S4-3b): PRAZNA GENERACIJA VISE NIJE GRESKA.
     '
-    ' Fixture od ZBR-IDENT-01 nadalje nosi generaciju na SVAKOM redu, pa se ovo
-    ' stanje vise ne zatice -- pravi se namerno (fault injection) i vraca odmah.
+    ' Do ovog reza je ovde stajalo "aktivan red bez generacije je integritetska
+    ' greska". To je bilo tacno dok su generaciju pisali modMasterSync i
+    ' modDokumentInvariant; prvi je pauziran, drugi obrisan u S4-3a, a kanonski
+    ' pisac je nikad nije ni pisao.
+    '
+    ' Posledica je bila ZIV KVAR: svaka kanonska zbirna padala je na ovu granu,
+    ' pa su DUPLI i PONISTENJE bili nedostupni za SVAKI dokument koji aplikacija
+    ' pravi. Tvrdnja je zato OKRENUTA -- red bez generacije se resava normalno,
+    ' po ZbirnaID-u. Prazan ZbirnaID je i dalje greska, ali to meri Chk_B9.
+    '
+    ' Injekcija ostaje ista (brisanje generacije), menja se samo ocekivanje.
     pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
     pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
@@ -15932,10 +15941,9 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     ' nije imao pa ih je test postavljao -- to je bio zaobilazak pogresnog
     ' fixture-a, ne test podatak. Ocekivana vrednost se cita iz reda, da tvrdnja
     ' ne zavisi od rednog broja reda u make_fixture.py.
-    genT4 = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-4", _
-                                       COL_GENERACIJA_ID)))
-    genTgtB = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", _
-                                         COL_GENERACIJA_ID)))
+    ' Ocekivanje je sada IDENTITET reda, a ne njegova generacija (S4-3b).
+    genT4 = "ZBI-TEST-4"
+    genTgtB = "ZBI-TGT-B"
 
     ' STORNO STANJE SE POSTAVLJA, NE PRETPOSTAVLJA. Ovaj test ide 190. po redu --
     ' posle 189 testova koji fixture MENJAJU. Prva verzija je merila ZB-TEST-DUPL
@@ -15977,17 +15985,12 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
 
-    AssertEq (Len(genT4) > 0), True, _
-             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
-    AssertEq (Len(genTgtB) > 0), True, _
-             "preduslov/ZBR-IDENT-01: i drugi fixture red nosi GeneracijaID"
-
-    AssertEq idFx.integrityStatus, ZBR_INT_ERROR, _
-             "A20: aktivan red bez generacije je integritetska greska"
-    AssertEq idFx.resolutionStatus, ZBR_RES_AMBIGUOUS, _
-             "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'"
-    AssertEq idFx.selectedGeneracijaID, "", _
-             "A20: identitet se ne pogadja iz broja i vlasnika"
+    AssertEq idFx.integrityStatus, ZBR_INT_OK, _
+             "A20: red bez generacije NIJE integritetska greska"
+    AssertEq idFx.resolutionStatus, ZBR_RES_UNIQUE, _
+             "A20: resava se normalno -- identitet je ZbirnaID, ne generacija"
+    AssertEq idFx.selectedZbirnaID, "ZBI-TEST-1", _
+             "A20: bira se BAS taj red, po svom identitetu"
 
     AssertEq idPrazan.resolutionStatus, ZBR_RES_NONE, "A1: prazan broj je NONE"
     AssertEq idPrazan.historicalOwnerCount, 0, "A1: prazan broj nema istoriju"
@@ -16000,12 +16003,12 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idJedna.activeOwnerCount, 1, "A3: jedan vlasnik"
     AssertEq idJedna.historicalOwnerCount, 1, "A3: jedan vlasnik i u istoriji"
     AssertEq idJedna.historicalOwnerIsScope, True, "A3: taj vlasnik je prosledjeni scope"
-    AssertEq idJedna.selectedGeneracijaID, genT4, "A3: vraca se generacija tog dokumenta"
+    AssertEq idJedna.selectedZbirnaID, genT4, "A3: vraca se identitet tog dokumenta"
 
     AssertEq idTudj.resolutionStatus, ZBR_RES_OWNER_MISMATCH, "A4: drugi scope je OWNER_MISMATCH"
     AssertEq idTudj.activeLogicalCount, 1, "A4: dokument postoji -- sporan je vlasnik"
     AssertEq idTudj.matchingScopeActiveLogicalCount, 0, "A4: u tom scope-u nema nijednog"
-    AssertEq idTudj.selectedGeneracijaID, "", "A4: tudj dokument se ne bira"
+    AssertEq idTudj.selectedZbirnaID, "", "A4: tudj dokument se ne bira"
 
     AssertEq idDve.historicalOwnerCount, 2, "preduslov/A5: fixture ima par dva vlasnika"
     AssertEq idDve.resolutionStatus, ZBR_RES_AMBIGUOUS, "A5: dva aktivna su CURRENT_AMBIGUOUS"
@@ -16022,7 +16025,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
     AssertEq idStorno.historicalOwnerCount, 1, "A7: istorija prezivljava storno"
 
     AssertEq idIstorija.resolutionStatus, ZBR_RES_UNIQUE, "A8: danas jednoznacan broj je UNIQUE"
-    AssertEq idIstorija.selectedGeneracijaID, genTgtB, "A8: bira se aktivan dokument"
+    AssertEq idIstorija.selectedZbirnaID, genTgtB, "A8: bira se aktivan dokument"
     AssertEq idIstorija.historicalOwnerCount, 2, "A8: a IKAD su ga drzala dva vlasnika"
     AssertEq ZbirnaRoditeljOK(idIstorija), False, _
              "A8: broj koji su IKAD drzala dva vlasnika NIJE bezbedan roditelj"
@@ -16030,7 +16033,7 @@ Private Sub T_ZbirnaIdent_BrojSeRazresavaUDokument()
              "A8: broj sa jednim vlasnikom IKAD jeste bezbedan roditelj"
 
     AssertEq idRazmaci.normalizedBroj, idJedna.normalizedBroj, "A16: razmaci se normalizuju"
-    AssertEq idRazmaci.selectedGeneracijaID, idJedna.selectedGeneracijaID, _
+    AssertEq idRazmaci.selectedZbirnaID, idJedna.selectedZbirnaID, _
              "A16: normalizovan broj daje ISTI dokument"
     AssertEq idRazmaci.resolutionStatus, idJedna.resolutionStatus, "A16: i isti status"
 End Sub
@@ -16069,8 +16072,9 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     Set unija = AktivniBrojeviZbirne()
     If unija.Exists(FX_ZBIRNA_MIRNA) Then oznakaAktivne = CStr(unija(FX_ZBIRNA_MIRNA))
 
-    ' A20 je fault injection: fixture od ZBR-IDENT-01 nosi generaciju na svakom
-    ' redu, pa se prazna pravi namerno i vraca odmah.
+    ' A20 (S4-3b): red bez generacije vise NIJE integritetska greska, pa ovde
+    ' ne meri "pokvaren identitet" nego OBICAN aktivan broj. Injekcija ostaje --
+    ' dokazuje da odsustvo generacije ne menja odgovor kapije.
     pFx = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO))
     pFxGen = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_GENERACIJA_ID))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-1", COL_STORNIRANO, ""
@@ -16116,7 +16120,8 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     AssertEq (InStr(1, oznakaSiroceta, "P") > 0), True, "I1: aktivna prijemnica daje oznaku izvora P"
     AssertEq (InStr(1, oznakaSiroceta, "Z") > 0), False, "I1: siroce nema zbirnu, pa nema oznaku Z"
 
-    AssertEq rInteg, ZBR_GATE_INTEGRITET, "aktivan red bez generacije zaustavlja nov unos"
+    AssertEq rInteg, ZBR_GATE_AKTIVNA, _
+             "aktivan red bez generacije zaustavlja nov unos -- kao AKTIVNA, ne kao kvar"
     AssertEq rAktivan, ZBR_GATE_AKTIVNA, "aktivan broj ne prima nov unos od drugog vlasnika"
     AssertEq rAktivanIsti, ZBR_GATE_AKTIVNA, _
              "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan"
@@ -16421,18 +16426,18 @@ End Sub
 ' padali tek kad neko poveze bas to dete, a citaoci bi tiho radili po broju. Ovo
 ' je jeftina provera da spisak u modSetup pokriva sve sto zbirnu nosi kao broj.
 Private Sub T_DeteZbirne_ImaKolonuGeneracije()
-    AssertEq (GetColumnIndex(TBL_OTPREMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblOtpremnica ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblPrijemnica ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblPaletaStavka ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblOtkup ima ZbirnaGeneracijaID"
+    AssertEq (GetColumnIndex(TBL_OTPREMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblOtpremnica ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblPrijemnica ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblPaletaStavka ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblOtkup ima ZbirnaID"
 
     ' Kolona roditelja se NE sme pomesati sa kolonom deteta: obe postoje na
     ' tblOtpremnica i tblPrijemnica, i znace razlicite stvari.
-    AssertEq (StrComp(COL_DETE_ZBIRNA_GEN, COL_GENERACIJA_ID, vbTextCompare) <> 0), True, _
+    AssertEq (StrComp(COL_DETE_ZBIRNA_ROD, COL_GENERACIJA_ID, vbTextCompare) <> 0), True, _
              "generacija DETETA i generacija SAMOG dokumenta su razlicite kolone"
 End Sub
 

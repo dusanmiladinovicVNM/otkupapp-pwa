@@ -1175,38 +1175,6 @@ Private Sub SvAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals 
         ci = GetColumnIndex(tblName, CStr(cols(i)))
         If ci > 0 Then nr.Range.cells(1, ci).value = vals(i)
     Next i
-    PecatiGeneracijuAkoZbirna tblName, nr
-End Sub
-
-' ZBR-IDENT-01: aktivan red tblZbirna MORA da nosi GeneracijaID.
-'
-' Seed je do v6-ui-225 upisivao red bez nje, pa je suite merila stanje koje
-' produkcija ne pravi -- sva tri writer-a odmah pecate validan GeneracijaID. Kad je
-' kapija za mutaciju po broju (ZBR-MUT-01) pocela da cita integritet, 58 provera
-' je palo na fixture, ne na kod.
-'
-' Pecat ide kroz ISTU produkcionu rutinu, pa Klasa I i Klasa II istog broja i
-' vlasnika dele generaciju -- kao i u pravom unosu.
-Private Sub PecatiGeneracijuAkoZbirna(ByVal tblName As String, ByVal nr As ListRow)
-    If StrComp(tblName, TBL_ZBIRNA, vbTextCompare) <> 0 Then Exit Sub
-    ' RequireColumnIndex, ne GetColumnIndex: bez kolone vlasnika pao bi tek
-    ' Cells(1, 0), a to je greska koja ne kaze sta nedostaje.
-    Dim cBr As Long, cVo As Long, cKu As Long
-    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modTestStorno.PecatiGeneracijuAkoZbirna")
-    cVo = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modTestStorno.PecatiGeneracijuAkoZbirna")
-    cKu = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modTestStorno.PecatiGeneracijuAkoZbirna")
-    ApplyGeneracijaID TBL_ZBIRNA, nr.Index, _
-                      COL_ZBR_BROJ, NzToText(nr.Range.cells(1, cBr).value), _
-                      COL_ZBR_VOZAC, NzToText(nr.Range.cells(1, cVo).value), _
-                      COL_ZBR_KUPAC, NzToText(nr.Range.cells(1, cKu).value)
-    ' Seed koji tiho prekrsi invarijantu obara sve nizvodno, a suite ostane
-    ' zelena iz pogresnog razloga. Zato glasno, ovde, a ne po tvrdnjama.
-    Dim cGen As Long
-    cGen = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, "modTestStorno.PecatiGeneracijuAkoZbirna")
-    If Len(NzToText(nr.Range.cells(1, cGen).value)) = 0 Then
-        Err.Raise vbObjectError + 2801, "modTestStorno.PecatiGeneracijuAkoZbirna", _
-                  "Seed tblZbirna bez GeneracijaID (ZBR-IDENT-01)."
-    End If
 End Sub
 
 ' ============================================================
@@ -1365,8 +1333,37 @@ Private Sub Fail(ByVal nm As String)
     mReport = mReport & "PAO   " & nm & vbCrLf
 End Sub
 
+' IME PALOG TESTA MORA DA IZADJE IZ EXCELA (S4-3c).
+'
+' Do ovog reza je storno suite detalj pisala SAMO u Immediate. run_vba je odatle
+' video "FAIL=9" i nijedno ime -- pa se pad nije mogao trijazirati bez rucnog
+' otvaranja sveske. To nije sitnica: devet palih provera bez imena znaci da se
+' izmena koja ih je oborila mora vracati naslepo.
+'
+' Format je isti koji BFP vec pise, pa ga run_vba cita ISTIM citacem
+' (_read_test_results): prvi red "TESTS=n FAIL=n", pa po red za svaki pad.
+Private Sub WriteResultFileStorno()
+    Dim path As String, fnum As Integer, ln As Variant, det As String
+
+    On Error Resume Next
+    path = ThisWorkbook.path & Application.PathSeparator & "last_run_storno.txt"
+
+    For Each ln In Split(mFails, vbCrLf)
+        If Len(Trim$(CStr(ln))) > 0 Then
+            det = det & "FAIL " & Trim$(Mid$(CStr(ln), 4)) & vbLf
+        End If
+    Next ln
+
+    fnum = FreeFile
+    Open path For Output As #fnum
+    Print #fnum, "TESTS=" & CStr(mPass + mFail) & " FAIL=" & CStr(mFail) & vbLf & det;
+    Close #fnum
+End Sub
+
 Private Sub ReportResults()
     Dim hdr As String
+    WriteResultFileStorno
+
     hdr = "STORNO TEST SUITE  ->  PASS=" & mPass & "  FAIL=" & mFail
     Debug.Print String(60, "=")
     Debug.Print hdr

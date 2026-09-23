@@ -139,6 +139,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
     Test_ZBR_KapijaPustaKadJeIzborScoped
+    Test_ZBR_DispecerPustaScopedIzbor
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
@@ -303,6 +304,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_MalinaAutoZbirna
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
+    Test_ZBR_KanonskaSmeDaSeRazveze
+    Test_ZBR_KanonskoPonistenjeStorniraIzvore
+    Test_ZBR_PonistenjeIzdateNeNormalizujeKvar
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -1784,7 +1788,7 @@ Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
 
-    ' BrojZbirne i ZbirnaGeneracijaID ostaju PRAZNI -- dete pre roditelja, sto je
+    ' BrojZbirne i ZbirnaID ostaju PRAZNI -- dete pre roditelja, sto je
     ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
     RequireAppend TBL_OTPREMNICA, rowData, "AppendRF28OtpremnicaFixture"
 End Sub
@@ -2092,7 +2096,7 @@ End Function
 ' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
 '
 ' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna, i prijemnica svoj
-' ZbirnaGeneracijaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
+' ZbirnaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
 ' zato i suvisno i pogresno -- pravilo je "nikad ne pogadjaj kad vec znas".
 '
 ' Grana A sama NE razlikuje tacno od pogresnog: kad je prijemnica vezana za
@@ -2148,7 +2152,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
                              KLASA_I, 0)
     AssertTrue Len(prjA) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
 
-    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_GEN))
+    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD))
     AssertTrue Len(genPrj) > 0, "ZBR-PAL preduslov: prijemnica nosi generaciju roditelja"
     AssertTrue BrojPaletnihStavki(prjA) > 0, _
         "ZBR-PAL preduslov: paletizacija je napravila stavku (grana A)"
@@ -2163,12 +2167,12 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
 
     IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjB
     AssertEquals "", _
-        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_GEN)), _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_ROD)), _
         "ZBR-PAL preduslov: prijemnica je u zatecenom obliku (generacija prazna)"
     AssertEquals brojA, _
         NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_BROJ_ZBIRNE)), _
         "ZBR-PAL preduslov: prijemnica je zadrzala broj"
-    AssertEquals genPrj, ZbirnaGeneracijaZaBroj(brojA), _
+    AssertEquals genPrj, ZbirnaIDZaBroj(brojA), _
         "ZBR-PAL preduslov: broj razresava na generaciju (ima sta da se pogodi)"
 
     PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojA, _
@@ -2199,7 +2203,7 @@ Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As St
     If Not IsArray(dat) Then Exit Function
     Dim cP As Long, cG As Long, r As Long
     cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN)
+    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD)
     If cP = 0 Or cG = 0 Then Exit Function
     For r = 1 To UBound(dat, 1)
         If Trim$(NzToText(dat(r, cP))) = Trim$(prijemnicaID) Then
@@ -2229,7 +2233,7 @@ Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
                   "Red nije nadjen. Tabela=" & tableName & " ID=" & idValue
     End If
 
-    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_GEN, "", SRC
+    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_ROD, "", SRC
 End Sub
 
 ' ZBR-CHILD-01 / P1: ingest NE SME da premesti dete na drugi dokument.
@@ -2294,10 +2298,11 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     ' --- 1) prvi link DOVRSAVA praznu vezu ---
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, crid
-    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK preduslov: prvi link je upisao generaciju A na otkup"
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK preduslov: prvi link je upisao generaciju A na otpremnicu"
+    ' Trag na detetu je IDENTITET roditelja (S4-3c).
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otkup"
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu"
 
     ' --- 2) drugi dokument, ISTI broj -> kapija na otkupu ---
     raised = False
@@ -2309,8 +2314,8 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: drugi dokument pod istim brojem ne prolazi tiho"
-    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji"
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK: otkup ostaje na svom originalnom roditelju"
     AssertEquals broj, _
         NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE)), _
         "ZBR-FK: otkup zadrzava broj -- blokira se generacija, ne broj"
@@ -2330,8 +2335,8 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: kapija radi i na otpremnickom pozivnom mestu"
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK: otpremnica ostaje na svojoj originalnoj generaciji"
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK: otpremnica ostaje na svom originalnom roditelju"
 
     tx.RollbackTx
     Exit Sub
@@ -2345,10 +2350,10 @@ EH:
     LogFail "ZBR-CHILD-01 MasterSync ne prepisuje generaciju deteta", bfpErrDesc
 End Sub
 
-Private Function DeteGeneracija(ByVal tableName As String, _
+Private Function DeteZbirnaID(ByVal tableName As String, _
                                 ByVal idColumn As String, _
                                 ByVal idValue As String) As String
-    DeteGeneracija = NzToText(LookupValue(tableName, idColumn, idValue, COL_DETE_ZBIRNA_GEN))
+    DeteZbirnaID = NzToText(LookupValue(tableName, idColumn, idValue, COL_DETE_ZBIRNA_ROD))
 End Function
 
 Private Sub VeziOtkupZaOtpremnicuFixture(ByVal otkupID As String, _
@@ -2552,9 +2557,106 @@ End Sub
 '   sa generacijom -> kapija PUSTA. Selekcija posle faze 3 dira samo svoju decu.
 '
 ' Deca moraju da dobiju generaciju kroz MasterSync exact-link, ne kroz obican
-' upis: cim su oba dokumenta aktivna, ZbirnaGeneracijaZaBroj je fail-closed i
+' upis: cim su oba dokumenta aktivna, ZbirnaIDZaBroj je fail-closed i
 ' otpremnica snimljena po broju ostaje bez generacije. Link preko ZbirnaID zna
 ' tacno cija je.
+' DISPECER PUSTA SCOPED IZBOR (review #384, P2).
+'
+' Test_ZBR_KapijaPustaKadJeIzborScoped dokazuje da PRIMITIV ume bezbedno da
+' obradi dva dokumenta istog broja. Ali operater ne zove primitiv -- zove F8, a
+' F8 ide kroz RunZbirnaCorrection.
+'
+' Tamo je kapija racunala NESCOPED (ZbirnaMutRazlog(broj)) i odbijala radnju PRE
+' nego sto se do primitiva stigne. Sposobnost je postojala i bila nedostizna:
+' klasican test/production seam mismatch -- zeleno u primitivu, mrtvo u aplikaciji.
+'
+' Scenario je KR-001, isti koji ce S5 vratiti kroz PWA sync: dva uredjaja
+' offline, isti broj, isti vlasnik, dva legitimna dokumenta.
+'
+' Meri se OBA smera: sa identitetom prolazi i dira SAMO svoje, bez identiteta i
+' dalje staje. Bez druge polovine bi popravka mogla biti prosto "ugasi kapiju".
+Private Sub Test_ZBR_DispecerPustaScopedIzbor()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, broj As String
+    Dim zbrA As String, zbrB As String, otpA As String, otpB As String
+    Dim otkA As String, otkB As String, cridA As String, cridB As String
+    Dim r As Object
+
+    scenario = NewScenarioCode("ZBRDSP")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    otpA = "OTP-ZBRDSP-A-" & scenario
+    otpB = "OTP-ZBRDSP-B-" & scenario
+    otkA = "OTK-ZBRDSP-A-" & scenario
+    otkB = "OTK-ZBRDSP-B-" & scenario
+    cridA = "CRID-ZBRDSP-OA-" & scenario
+    cridB = "CRID-ZBRDSP-OB-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZA-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZB-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+    AssertTrue (Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB), _
+        "ZBR disp preduslov: dva aktivna dokumenta pod istim brojem"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
+
+    AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DA-" & scenario
+    AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DB-" & scenario
+    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, cridA, ""
+    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, cridB, ""
+    VeziOtkupZaOtpremnicuFixture otkA, otpA
+    VeziOtkupZaOtpremnicuFixture otkB, otpB
+
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
+
+    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR disp preduslov: otpremnica B nosi identitet dokumenta B"
+
+    ' --- BEZ identiteta: dispecer i dalje staje -----------------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR disp: DUPLI bez identiteta staje na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: posle odbijanja dokument B je netaknut"
+
+    ' --- SA identitetom: dispecer PUSTA i dira samo svoje -------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrB)
+    AssertTrue CBool(r("success")), _
+        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer (bilo: " & _
+        CStr(r("message")) & ")"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: stornira se bas izabrani dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR disp: tudji dokument A je netaknut"
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR disp: sopstvena otpremnica B je odvezana"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR disp: tudja otpremnica A je OSTALA na svojoj zbirni"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_DispecerPustaScopedIzbor", eN, eD
+End Sub
+
 Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     Dim tx As clsTransaction
     Dim scenario As String, testDate As Date
@@ -2605,10 +2707,11 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
 
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
-        "ZBR-F4 preduslov: otpremnica A nosi generaciju A"
-    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
-        "ZBR-F4 preduslov: otpremnica B nosi generaciju B"
+    ' Trag na detetu je IDENTITET roditelja (S4-3c), ne njegova generacija.
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F4 preduslov: otpremnica A nosi identitet dokumenta A"
+    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F4 preduslov: otpremnica B nosi identitet dokumenta B"
 
     ' --- BEZ generacije: pozivalac ne kaze KOJI dokument -> kapija STOJI ---
     Set r = RunSimpleStornoZbirna(broj)
@@ -5582,6 +5685,194 @@ EH:
     On Error GoTo 0
 
     LogFatal "Test_OTP_IzdavanjeDelimicanUspeh", eN, eD
+End Sub
+
+' PONISTENJE IZDATE ZBIRNE NE NORMALIZUJE POKVARENO CLANSTVO (review #384, P2).
+'
+' Zrno citaca prati lifecycle: nacrt sme da bude bez izvora, IZDATA ne sme. Ako
+' kaskada za izdatu zbirnu koristi permisivan citac, izgubljen ili dupliran red u
+' tblZbirnaIzvori postaje "0 izvora" -- pa se zaglavlje stornira, otpremnice
+' ostaju zive, a operater dobije "ponisteno". Ista klasa laznog uspeha koju je
+' prethodni rez zatvorio, samo kroz fail-open citac umesto pogresne tabele.
+'
+' Kvar se pravi STVARNO (fault injection), u obe varijante koje IzvoriZbirne
+' razlikuje: izgubljen red i dupliran red. Obe moraju da stanu PRE ijedne
+' mutacije -- zato se tvrdi i da zbirna i da otpremnica ostaju netaknute.
+Private Sub Test_ZBR_PonistenjeIzdateNeNormalizujeKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRKVR")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' DOKUMENT JE ZAGLAVLJE + STAVKE + CLANSTVO -- rollback koji vrati samo
+    ' zaglavlje ostavlja stavku bez dokumenta. Prva verzija je snimala samo
+    ' TBL_OTPREMNICA, pa je siroce oborilo TRI TUDJA testa, a poruka je vodila
+    ' na njih a ne na ovaj. ZbrIzdataOtp pravi i otkup i knjizi ambalazu.
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("KVR-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-KVR-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR kvar: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR kvar preduslov: zbirna je IZDATA"
+
+    ' --- A) IZGUBLJEN red clanstva -----------------------------------------
+    AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
+                 "ZBR kvar preduslov: clanstvo ima jedan red"
+    Pr3UkloniClanstvo zbrID, otpID
+
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR kvar: ponistenje IZDATE bez clanstva NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR kvar: zbirna NIJE stornirana -- kvar staje pre mutacije"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "ZBR kvar: otpremnica NIJE stornirana"
+
+    ' --- B) DUPLIRAN red clanstva ------------------------------------------
+    Pr3DodajClanstvo zbrID, otpID
+    Pr3DodajClanstvo zbrID, otpID
+
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR kvar: ponistenje sa DUPLIM clanstvom NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR kvar: ni duplo clanstvo ne pusta mutaciju"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar", eN, eD
+End Sub
+
+' PONISTENJE KANONSKE ZBIRNE MORA DA OBORI I NJENE IZVORE (review #384, P2).
+'
+' PONISTENJE je, posle S4-3a, jedan od SAMO DVA poslovna izlaza koje zbirna ima.
+' Ime i UI obecavaju obaranje celog lanca: zbirna + njene otpremnice + oslobodjeni
+' blokovi.
+'
+' Kaskada je izvore birala preko Otpremnica.BrojZbirne -- legacy backlink koji
+' kanonski pisac NAMERNO ne pise, jer je clanstvo zapis u tblZbirnaIzvori. Nad
+' kanonskom zbirnom je zato nalazila NULA otpremnica, obarala samo zaglavlje, i
+' prijavljivala uspeh. Zbirna stornirana, otpremnice i dalje IZDATE, blokovi i
+' dalje vezani -- a operater je video "ponisteno".
+'
+' Test prvo TVRDI da backlink nije popunjen: bez toga bi prolazio i nad legacy
+' oblikom, pa ne bi merio kanon nego zatecen podatak.
+Private Sub Test_ZBR_KanonskoPonistenjeStorniraIzvore()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRPON")
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("PON-" & scenario, 100#, 5#)
+    AssertTrue Len(otpID) > 0, "ZBR pon: izvor je izdat"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-PON-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR pon: kanonska zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    ' KANON, NE ZATECEN OBLIK: clanstvo je zapis, backlink je prazan.
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                          COL_OTP_BROJ_ZBIRNE)), _
+                 "ZBR pon preduslov: kanonska otpremnica NEMA backlink na broj"
+    AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
+                 "ZBR pon preduslov: clanstvo je u tblZbirnaIzvori"
+
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertTrue CBool(r("success")), _
+               "ZBR pon: ponistenje prolazi (bilo: " & CStr(r("message")) & ")"
+
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR pon: zbirna je stornirana"
+    AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "ZBR pon: IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren"
+
+    ' BLOK MORA BITI SLOBODAN. Kaskada javlja "blokovi oslobodjeni: 0" jer
+    ' FreeOtkupBloksInline gleda staru vezu Otkup.OtpremnicaID, koju kanonski
+    ' pisac ne pise. Pitanje je da li je to SAMO netacan broj ili i podatak --
+    ' zato se meri stanje bloka, ne poruka.
+    Dim izv As Collection, otkID As String
+    Set izv = modDokumenta.IzvoriOtpremnice(otpID)
+    If izv.count > 0 Then otkID = Trim$(NzToText(izv(1)))
+    AssertTrue Len(otkID) > 0, "ZBR pon preduslov: otpremnica je imala blok"
+    If Len(otkID) > 0 Then
+        AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkID), _
+                     "ZBR pon: blok je OSLOBODJEN -- nije ostao na storniranoj otpremnici"
+    End If
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZBR_KanonskoPonistenjeStorniraIzvore", Err.Number, Err.description
+End Sub
+
+' REPRODUKCIJA (S4-3b): da li DUPLI radi nad KANONSKOM zbirnom.
+'
+' S4-3a je operateru rekao: ispravke zbirne nema, imas DUPLI i PONISTENJE. Ovaj
+' test proverava da to nije prazno obecanje.
+Private Sub Test_ZBR_KanonskaSmeDaSeRazveze()
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRRZ")
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("RZ-" & scenario, 100#, 5#)
+    AssertTrue Len(otpID) > 0, "ZBR razvez: izvor je izdat"
+    If Len(otpID) = 0 Then Exit Sub
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-RZ-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR razvez: kanonska zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then Exit Sub
+
+    Dim res As Object
+    Set res = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrID)
+    AssertTrue CBool(res("success")), _
+               "ZBR razvez: DUPLI radi nad kanonskom zbirnom (bilo: " & _
+               CStr(res("message")) & ")"
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZBR_KanonskaSmeDaSeRazveze", Err.Number, Err.description
 End Sub
 
 ' PISAC ZBIRNE TRAZI DA VEZE POSTOJE, NE SAMO DA NISU PRAZNE (review #383, P2).

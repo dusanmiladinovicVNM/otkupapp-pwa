@@ -73,7 +73,8 @@ SUITES = {
     "RunGoogleSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunMasterSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunSEFTestSuite":          {"gate": True,  "dialogs": True,  "default": False},
-    "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
+    "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True,
+                                 "result_file": "last_run_storno.txt"},
     "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
     # Pad ove suite stize kao Err.Raise iz EndRun, pa opis ne prezivi COM

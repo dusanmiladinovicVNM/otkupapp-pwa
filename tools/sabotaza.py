@@ -1667,10 +1667,8 @@ SABOTAZE = {
     ),
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
-        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
-        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
-        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n",
+        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
         "DUPLI staje dok broj nose dva aktivna dokumenta",
     ),
@@ -1694,9 +1692,9 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
@@ -5682,16 +5680,49 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A7: sam storniran red nije aktivan dokument",
     ),
-    "zbirna-ident-greska-kao-none": (
+    "trag-deteta-opet-generacija": (
+        "modMasterSync.bas",
+        "    genZbirne = zbirnaID\n",
+        "    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)   ' SABOTAZA: trag opet nosi generaciju\n",
+        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
+    ),
+    "scoping-dece-bez-identiteta": (
+        "modStornoFlow.bas",
+        "        If ok Then outScopeID = Trim$(zbirnaID)\n",
+        "        ' SABOTAZA: scope se nikad ne dodeljuje\n",
+        "Test_ZBR_DispecerPustaScopedIzbor",
+        "ZBR disp: sopstvena otpremnica B je odvezana",
+    ),
+    "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
-        "        res.integrityStatus = ZBR_INT_ERROR\n"
-        "        res.resolutionStatus = ZBR_RES_AMBIGUOUS\n"
-        "        GoTo XIT\n",
-        "        res.integrityStatus = ZBR_INT_ERROR\n"
-        "        res.resolutionStatus = ZBR_RES_NONE   \' SABOTAZA: greska kao 'sme se'\n"
-        "        GoTo XIT\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, SRC)   ' SABOTAZA: osa identiteta je opet generacija\n",
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
-        "A20: greska se NE cita kao NONE -- NONE jedina znaci 'sme se'",
+        "A20: red bez generacije NIJE integritetska greska",
+    ),
+    "ponistenje-izdate-cita-permisivno": (
+        "modStornoFlow.bas",
+        "            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)\n",
+        "            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
+        "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar",
+        "ponistenje IZDATE bez clanstva NE prolazi",
+    ),
+    "ponistenje-ne-vidi-kanonsko-clanstvo": (
+        "modStornoFlow.bas",
+        "    If Len(Trim$(zbirnaID)) > 0 Then\n"
+        "        Dim clan As Variant, clanId As String",
+        "    If False Then   ' SABOTAZA: kaskada opet gleda samo staru vezu\n"
+        "        Dim clan As Variant, clanId As String",
+        "Test_ZBR_KanonskoPonistenjeStorniraIzvore",
+        "IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren",
+    ),
+    "kanonska-zbirna-ne-sme-da-se-razveze": (
+        "modDokumenta.bas",
+        "    res.activeLogicalCount = aktIds.Count\n",
+        "    res.activeLogicalCount = aktIds.Count + 1   ' SABOTAZA: uvek dvosmisleno\n",
+        "Test_ZBR_KanonskaSmeDaSeRazveze",
+        "DUPLI radi nad kanonskom zbirnom",
     ),
     "zbirna-broj-bez-normalizacije": (
         "modDokumenta.bas",
@@ -5724,7 +5755,7 @@ SABOTAZE = {
     ),
     "zbirna-ident-broji-vlasnike-ne-dokumente": (
         "modDokumenta.bas",
-        "    res.activeLogicalCount = aktGen.Count\n",
+        "    res.activeLogicalCount = aktIds.Count\n",
         "    res.activeLogicalCount = aktVl.Count   \' SABOTAZA: broji vlasnike\n",
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A17: dva aktivna dokumenta ISTOG vlasnika su i dalje dvosmislena",
@@ -5766,7 +5797,7 @@ SABOTAZE = {
     "paleta-pogadja-generaciju-po-broju": (
         "modPaletniList.bas",
         "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
-        "                                        COL_DETE_ZBIRNA_GEN))\n",
+        "                                        COL_DETE_ZBIRNA_ROD))\n",
         "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
@@ -5785,10 +5816,10 @@ SABOTAZE = {
     # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
     "kapija-pusta-i-nescoped-izbor": (
         "modStornoFlow.bas",
-        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(genEff) > 0)\n",
-        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, True)   ' SABOTAZA: uvek scoped\n",
-        "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
+        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)\n",
+        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, False)   ' SABOTAZA: kapija opet nescoped\n",
+        "Test_ZBR_DispecerPustaScopedIzbor",
+        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer",
     ),
     # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
     # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
@@ -5799,7 +5830,7 @@ SABOTAZE = {
         "    If Len(currentGen) > 0 Then\n",
         "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
         "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji",
+        "ZBR-FK: otkup ostaje na svom originalnom roditelju",
     ),
     "vlasnici-poredi-case": (
         "modStorno.bas",

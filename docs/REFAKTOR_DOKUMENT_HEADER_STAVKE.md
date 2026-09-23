@@ -4761,11 +4761,115 @@ meri `Err.Number`, pa sabotaža obara baš tu tvrdnju.
 
 Sabotaže **568 → 571**, BFP **1793 → 1807** (+14).
 
+### 14.35) S4-3b — identitet zbirne je ZbirnaID, i to je bio živ kvar (23.09.2026)
+
+**Ušao sam da čistim mrtav kod, a našao kvar koji sam sam napravio.**
+
+`ZbirnaIdentResolve` je tvrdio: *„aktivan red MORA da nosi generaciju; prazna nije alternativni oblik
+identiteta nego **integritetska greška**"*. Komentar je imenovao dva pisca koji je pečate:
+`modMasterSync` (pauziran) i `modDokumentInvariant` — **koji je S4-3a obrisao**. Kanonski pisac je nikad
+nije ni pisao.
+
+Posledica: svaka kanonski napravljena zbirna obarala je kapiju sa `ZBR_MUT_INTEGRITET` **pre** nego
+što se mod uopšte bira — pa `DUPLI` i `PONIŠTENJE` **nisu radili ni za jedan dokument koji aplikacija
+danas pravi**. A baš njih je S4-3a ponudio kao zamenu za ukinutu ispravku. Poruka je operatera još
+slala na B9 proveru koja to ne može da popravi.
+
+To je doslovno obrazac iz `brisanje-pisca-veze-proveri-kapije`: obrisan pisac, a kapija koja je tražila
+ono što je on pisao ostala je da stoji.
+
+**Zašto nijedan test nije pao:** `T_ZamenaZbirne_NeDiraDecuTudje` meri na fixture redovima
+`ZBI-KASK-1/2`, a oni **nose** `GeneracijaID`. Kapija je bila merena isključivo na legacy podacima;
+kanonski dokument ide drugom granom koju nijedan test nije dodirivao.
+
+**Rez:** osa identiteta u `ZbirnaIdentResolve` je `ZbirnaID`, ne generacija. `activeLogicalCount` i
+`historicalLogicalCount` broje različite **ID-eve**; polja DTO-a su preimenovana
+(`selectedZbirnaID`, `historicalOnlyZbirnaID`), a sa njima i pristupnici
+(`ZbirnaIDZaBroj`, `ZbirnaJedanIDIkadZaBroj`). Prazan **ZbirnaID** je i dalje integritetska greška —
+ali takvu grešku pisac ne može da napravi (`NewEntityID`), pa je to kapija nad zatečeno pokvarenim
+redom. Isto meri `Chk_B9`.
+
+**A20 je okrenut, ne obrisan.** Tvrdnja je bila „red bez generacije je greška"; sada je „red bez
+generacije se rešava normalno, po ZbirnaID-u". Injekcija je ista, očekivanje suprotno.
+
+**Poruka koja je lagala o broju.** `DUPLI` je javljao „0 otpremnica vraćeno" i za zbirnu koja je imala
+izvore: brojao je samo staru vezu po `BrojZbirne`, koju kanonska otpremnica ne nosi. Članstvo se sada
+broji **pre** storna (posle njega ga `AktivnoClanstvoPoKanonu` više ne vidi — i to je baš ono što ga
+oslobađa), pa se kanonski članovi i stara veza **sabiraju**.
+
+#### Šta sam pokušao i povukao
+
+Obrisao sam i **scoping dece po generaciji** u `StornoZbirnaIDetach_TX` i `PonistiZbirnaChain_TX` —
+logika „smem uže, jer sva deca nose generaciju roditelja". Za kanonske podatke je inertna (generacije
+nema), pa je delovala kao mrtav kod. **Nije:** storno suite je pao **9 provera**, jer njegovi seed-ovi
+generacije pišu, i ti testovi mere baš tu relaksaciju.
+
+Vraćeno. Relaksacija košta ništa dok generacija nema, a njeno uklanjanje je posao koji ide **zajedno
+sa fixture-om** — dakle uz S5 (PWA uvoz prelazi na kanon) i S6 (deca prestaju da vise o broju). Upisano
+u backlog. Mrtvo je obrisano samo ono što je **dokazano** mrtvo: `ZbirnaGeneracijaPripadaBroju`, nula
+pozivalaca.
+
+#### Kapije
+
+Nova sabotaža `zbirna-ident-opet-po-generaciji` vraća osu identiteta na generaciju i obara A20;
+`kanonska-zbirna-ne-sme-da-se-razveze` čini svaki broj dvosmislenim i obara nov
+`Test_ZBR_KanonskaSmeDaSeRazveze`. Stara `zbirna-ident-greska-kao-none` je **zamenjena, ne
+preimenovana**: posle reza njena grana se iz A20 slučaja više ne dostiže, pa bi bila placebo.
+
+### 14.36) S4-3c — osa se dovršava: trag na detetu nosi identitet (23.09.2026)
+
+**Pitanje operatera je zatvorilo dilemu:** *„pošto nema legacy korisnika ni podataka sa genID, da li
+čuvamo nešto što nikad neće biti u upotrebi?"* Lanac je bio potpuno cirkularan — kod se čuvao jer ga
+testovi mere, a testovi su ga merili jer je kod postojao. Jedini preostali proizvođač generacije zbirne
+bio je **test-pečat** (`PecatiGeneracijuAkoZbirna`), napravljen da zadovolji pravilo koje je S4-3b
+obrisao.
+
+**Polustanje je već proizvelo kvar.** Otkad `ZbirnaIDZaBroj` vraća identitet, pisci u trag na detetu
+upisuju **ID** — a kaskada poništenja ga je čitala kao **generaciju** i prevodila kroz
+`IdoviGeneracije`. Prevod bi tražio ID među generacijama, nikad ga ne našao i **tiše** vratio prazno:
+identitet se gubi, kaskada pada nazad na broj.
+
+#### Šta je rez uradio
+
+| Korak | Rez |
+|---|---|
+| **0 · vidljivost** | `RunStornoTestSuite` nije imala `result_file`, pa su njeni padovi ostajali **bez imena**. Zato sam u S4-3b brisanje povukao umesto da ga razumem. Sada piše `last_run_storno.txt`, isti format koji BFP već koristi |
+| **1 · čitaoci** | kaskada koristi trag direktno; `ZbrIdIzGeneracije`, `ZbrIdIzGeneracijeAko`, `GenZaZbirnu` obrisani |
+| **2 · ime kolone** | `ZbirnaGeneracijaID` → **`ZbirnaRoditeljID`** (kanon, 4 tabele) |
+| **3 · scoping i pečat** | scoping **prehranjen**, ne obrisan; oba test-pečata obrisana |
+| **4 · backfill** | `BackfillDeteZbirnaGeneracija` obrisan — nema šta da migrira |
+
+#### Dve greške koje su testovi uhvatili, a ja ne bih
+
+**Scoping nije bio mrtav — bio je pogrešno hranjen.** U S4-3b sam ga uklonio kao mrtav kod. Ali i
+`SvaAktivnaDecaNoseGeneraciju` i `SuziDecuNaGeneraciju` rade nad **tragom na detetu**, ne nad
+`tblZbirna.GeneracijaID`. Trebalo je promeniti samo **šta je scope**: umesto generacije zaglavlja,
+njegov `ZbirnaID`. Sposobnost „storniraj jedan od dva dokumenta pod istim brojem" tako ostaje živa,
+na kanonskoj osi.
+
+**Ime kolone zamalo da počne da laže o nečem gorem.** Prvo sam je nazvao prosto `ZbirnaID`, po FK
+konvenciji. `Test_PR3_OtpremnicaNemaZbirnaID` je pao, i s pravom: *„otpremnica NEMA kolonu koja pokazuje
+na zbirnu — pripadnost je u `tblZbirnaIzvori`"*. Članstvo ima **tačno jedan kanal**; kolona imenovana
+`ZbirnaID` na detetu predstavljala bi se kao drugi — baš backlink koji je refaktor ukinuo. Ime bi
+prestalo da laže o generaciji i počelo da laže o članstvu. `ZbirnaRoditeljID` kaže šta jeste:
+denormalizovan pokazivač na roditelja, za decu koja još vise o `BrojZbirne` — i umire sa njima u S6.
+
+> Treća, moja: članove sam prvo brojao kroz `IzvoriZbirne`, koja **diže grešku** nad zbirnom bez
+> izvora. Rušila je celu transakciju **pre** storna i obarala 9 storno provera koje sa članstvom nemaju
+> veze. Sada `ZbrClanovi`, koji prazno članstvo tretira kao legitimno.
+
+#### Kapije
+
+Sabotaže **572 → 574**: `trag-deteta-opet-generacija` (vraća poslednjeg pisca na generaciju) i
+`scoping-dece-bez-identiteta` (izbor prestaje da bude scoped) — obe obaraju imenovanu tvrdnju.
+`RunAllTests` **200/0** · BFP zeleno · Storno **163/0**. Otisak šeme `6BDD0C1D` → `64BD33C7`.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
 |---|---|
 | **Hladnjačka otpremnica može upasti u malina batch pre S6** (review #383, P3) | batch uzima **sve** slobodne izdate otpremnice kad je malina mod uključen, a hladnjački auto-lanac takođe pravi odmah izdatu otpremnicu. Ako bi se `AUTO_PRIJEMNICA_HLADNJACA` uključio **pre** S6, batch bi toj otpremnici naknadno napravio zbirnu **mimo** `AutoLanacHladnjaca` — a ovaj rez HLD ZBR korak namerno odlaže zbog odluke atomic-vs-resumable. Danas je lanac OFF do S6, pa nije živ put. **Izlazni uslov S6:** granica se zatvara tako što hladnjački lanac zove **isto jezgro** (`AutoZbirnaZaOtpremnicu`), pa idempotencija rešava preklapanje — ili tako što batch isključi otpremnice hladnjačkih stanica |
+| ~~Scoping dece po generaciji još stoji u storno okviru~~ (**zatvoreno u S4-3c** — prehranjen na `ZbirnaID`, ne obrisan) | `StornoZbirnaIDetach_TX` i `PonistiZbirnaChain_TX` računaju „smem uže, jer sva aktivna deca nose generaciju roditelja". Za kanonske podatke je **inertno** — generaciju ne piše nijedan živ pisac — ali nije mrtvo: storno fixture je piše u seed-ovima, pa brisanje obori **9 provera** koje tu relaksaciju mere. Uklanja se **zajedno sa fixture-om**: uz S5 (PWA uvoz prelazi na kanon, prestaje jedini pisac generacije) i S6 (deca prestaju da vise o `BrojZbirne`). Do tada košta ništa |
 | **PWA / MasterSync ingest** | radi se isključivo VBA. Nalaz koji čeka: PWA šalje **jedan record = jedna klasa = ceo dokument**, sa svežim `brojDokumenta` po svakom snimanju (`src/js/features/otkup/otkup-form.js:643`, `:493`). Ingest postaje 1 record → 1 header + 1 stavka; **nema heurističkog grupisanja i ne treba eksterni Document UID**. `ClientRecordID` ide na header, a `IsDuplicateInMaster` (`modMasterSync.bas:1824`) mora da se prepokaže na header tabelu — inače se svaki PWA dokument reimportuje. |
 | **Self-update** | van opsega po dogovoru |
 | **App / Repo / Qry slojevi** | **Ne paralelno sa refaktorom** — pokvarilo bi kapiju odluke iz §14.1: dve promenljive odjednom znače da se ne može reći da li je čist ishod zasluga šeme ili slojeva. Uz to, App sloj već postoji neimenovan (`mod*Unos` prima DTO rečnik, `NoviOtpremnicaUnos`), a enforcement daje A11 allowlist, ne ime modula. Jedini sloj koji stvarno nedostaje je **Qry** (`modDokumenta`: 15 javnih čitača pored 21 mesta upisa) — ali dobar deo tih čitača postoji da rekonstruiše dokument po broju i **umire u PR 12**. Revidirati **posle PR 12**, kad se zna koji čitači preživljavaju. Do tada: čitanja u novim writer-ima idu iza imenovanih funkcija, ne inline skenova. |
