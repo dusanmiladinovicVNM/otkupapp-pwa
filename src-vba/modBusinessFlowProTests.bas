@@ -2295,10 +2295,11 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     ' --- 1) prvi link DOVRSAVA praznu vezu ---
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, crid
-    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK preduslov: prvi link je upisao generaciju A na otkup"
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK preduslov: prvi link je upisao generaciju A na otpremnicu"
+    ' Trag na detetu je IDENTITET roditelja (S4-3c).
+    AssertEquals zbrA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otkup"
+    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu"
 
     ' --- 2) drugi dokument, ISTI broj -> kapija na otkupu ---
     raised = False
@@ -2310,8 +2311,8 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: drugi dokument pod istim brojem ne prolazi tiho"
-    AssertEquals genA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji"
+    AssertEquals zbrA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+        "ZBR-FK: otkup ostaje na svom originalnom roditelju"
     AssertEquals broj, _
         NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE)), _
         "ZBR-FK: otkup zadrzava broj -- blokira se generacija, ne broj"
@@ -2331,8 +2332,8 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: kapija radi i na otpremnickom pozivnom mestu"
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK: otpremnica ostaje na svojoj originalnoj generaciji"
+    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+        "ZBR-FK: otpremnica ostaje na svom originalnom roditelju"
 
     tx.RollbackTx
     Exit Sub
@@ -2606,10 +2607,11 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
 
-    AssertEquals genA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
-        "ZBR-F4 preduslov: otpremnica A nosi generaciju A"
-    AssertEquals genB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
-        "ZBR-F4 preduslov: otpremnica B nosi generaciju B"
+    ' Trag na detetu je IDENTITET roditelja (S4-3c), ne njegova generacija.
+    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+        "ZBR-F4 preduslov: otpremnica A nosi identitet dokumenta A"
+    AssertEquals zbrB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR-F4 preduslov: otpremnica B nosi identitet dokumenta B"
 
     ' --- BEZ generacije: pozivalac ne kaze KOJI dokument -> kapija STOJI ---
     Set r = RunSimpleStornoZbirna(broj)

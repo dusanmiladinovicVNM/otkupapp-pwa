@@ -1694,9 +1694,9 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(scopeID) > 0)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(genOp) > 0)\n"
+        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(scopeID) > 0)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
@@ -5788,7 +5788,7 @@ SABOTAZE = {
     # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
     "kapija-pusta-i-nescoped-izbor": (
         "modStornoFlow.bas",
-        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(genEff) > 0)\n",
+        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(scopeID) > 0)\n",
         "    Dim razMut As String: razMut = ""   ' SABOTAZA: kapija je ugasena\n",
         "Test_ZBR_KapijaPustaKadJeIzborScoped",
         "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
@@ -5802,7 +5802,7 @@ SABOTAZE = {
         "    If Len(currentGen) > 0 Then\n",
         "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
         "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK: otkup ostaje na svojoj originalnoj generaciji",
+        "ZBR-FK: otkup ostaje na svom originalnom roditelju",
     ),
     "vlasnici-poredi-case": (
         "modStorno.bas",

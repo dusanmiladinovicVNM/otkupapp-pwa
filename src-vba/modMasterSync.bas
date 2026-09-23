@@ -3633,11 +3633,15 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
 
     ' ZBR-CHILD-01: NIKAD NE POGADJAJ KAD VEC ZNAS.
-    ' Konkretan ZbirnaID je poznat (kapija iznad ga i zahteva), pa se generacija
-    ' cita IZ TOG REDA -- jednom, za svu decu. Razresavanje po broju bi u
-    ' KR-001 koliziji (dva aktivna dokumenta pod istim brojem) vratilo prazno.
+    '
+    ' Trag na detetu je ZbirnaID (S4-3c), pa se nista ne cita -- identitet je
+    ' vec argument. Do ovog reza je odavde isla GENERACIJA, i to je bio
+    ' poslednji pisac koji je u trag upisivao nesto drugo od identiteta: svi
+    ' ostali (SavePrijemnica, ReassignPrijemnicaToZbirna_TX, paletni relink)
+    ' vec pisu ID. Dok je ovaj odstupao, scoping dece je nad uvezenim
+    ' dokumentima trazio ID medju generacijama i nije nalazio nista.
     Dim genZbirne As String
-    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+    genZbirne = zbirnaID
 
     ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
     ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID
