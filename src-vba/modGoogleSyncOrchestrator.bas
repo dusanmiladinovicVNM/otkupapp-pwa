@@ -278,17 +278,11 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         AppendStep summary, True, "Malina auto-zbirna (" & CStr(createdZbr) & " kreirano)"
     End If
 
-    ' 4. VOZ/Zbirne import
+    ' 4. VOZ/Zbirne import (S5-3)
     '
-    ' Pauziran istom kapijom: LinkZbirnaToOtkupAndOtpremnica pise
-    ' Otkup.BrojZbirne i cita Otkup.OtpremnicaID. Ciklus tece dalje --
-    ' outbound sync ne zavisi od izvedenog lanca -- ali ostaje DEGRADIRAN.
-    If Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
-        okZbirne = True
-        AppendStepPauza summary, "Uvoz zbirnih (VOZ): PAUZIRANO do PR7/PR8"
-        GoTo PosleZbirnih
-    End If
-
+    ' Pauza je skinuta: uvoz ide kroz CreateZbirnaIzIzvora_TX, clanstvo je zapis
+    ' u tblZbirnaIzvori, i nista se ne pise nazad na zaglavlje otkupa. Time je
+    ' nestao i poslednji razlog za "DEGRADIRANO" stanje ciklusa iz ovog koraka.
     SyncProgress "Uvozim zbirne vozaca..."
     okZbirne = ImportZbirneFromPWA_Core(False)
     AppendStep summary, okZbirne, "Import VOZ/Zbirne -> tblZbirna"

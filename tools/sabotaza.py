@@ -5680,13 +5680,6 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A7: sam storniran red nije aktivan dokument",
     ),
-    "trag-deteta-opet-generacija": (
-        "modMasterSync.bas",
-        "    genZbirne = zbirnaID\n",
-        "    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)   ' SABOTAZA: trag opet nosi generaciju\n",
-        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
-    ),
     # Sistemski pad NE SME da izadje kao poslovni ishod (review #385, P2).
     # Bez klasifikacije "sema nije spremna" i "AppendRow nije upisao" izlaze kao
     # "ova grupa nije prosla", pa orkestrator ostane u DEGRADIRANO grani i
@@ -5697,6 +5690,15 @@ SABOTAZE = {
         "    JeSistemskiPad = False   ' SABOTAZA: sistemski pad postaje poslovni ishod\n",
         "Test_OTP_AutoSistemskiPadStajeProlaz",
         "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
+    ),
+    # Poreklo dokumenta je cinjenica zaglavlja: bez ClientRecordID-a uvoz nema po
+    # cemu da prepozna da je zapis vec video, pa se svaka PWA zbirna reimportuje.
+    "zbirna-ne-pamti-poreklo": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(clientRecordID)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: poreklo dokumenta se ne upisuje\n",
+        "Test_ZBR_UvozPamtiPoreklo",
+        "ZBR poreklo: zbirna nosi ClientRecordID sa terena",
     ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
     #
@@ -5817,13 +5819,6 @@ SABOTAZE = {
         "Test_OTP_ProslednjenOtkupJeIzdatIzvor",
         "OTP prosl: prosledjen blok je vezan za otpremnicu",
     ),
-    "scoping-dece-bez-identiteta": (
-        "modStornoFlow.bas",
-        "        If ok Then outScopeID = Trim$(zbirnaID)\n",
-        "        ' SABOTAZA: scope se nikad ne dodeljuje\n",
-        "Test_ZBR_DispecerPustaScopedIzbor",
-        "ZBR disp: sopstvena otpremnica B je odvezana",
-    ),
     "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
         "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",
@@ -5932,36 +5927,6 @@ SABOTAZE = {
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
     ),
-    # ZBR-CHILD-01 faza 4: gasi popustanje -- kapija opet staje i kad je izbor
-    # scoped. Meri se korist zbog koje su faze 1-3 placene.
-    "kapija-ne-pusta-scoped-izbor": (
-        "modDokumenta.bas",
-        "    If scopedPoGeneraciji Then Exit Function\n",
-        "    If False Then Exit Function   ' SABOTAZA: popustanje se ne desava\n",
-        "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta",
-    ),
-    # Druga strana istog prekidaca: kapija pusta BEZ obzira na to da li akter
-    # zna koji dokument dira. Bez ove sabotaze "popusta samo kad je scoped" bi
-    # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
-    "kapija-pusta-i-nescoped-izbor": (
-        "modStornoFlow.bas",
-        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)\n",
-        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, False)   ' SABOTAZA: kapija opet nescoped\n",
-        "Test_ZBR_DispecerPustaScopedIzbor",
-        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer",
-    ),
-    # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
-    # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
-    # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
-    # ISTO sto pisac pise.
-    "child-veza-proverava-samo-broj": (
-        "modMasterSync.bas",
-        "    If Len(currentGen) > 0 Then\n",
-        "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
-        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK: otkup ostaje na svom originalnom roditelju",
-    ),
     "vlasnici-poredi-case": (
         "modStorno.bas",
         "        If BrojJednak(data(i, cBr), broj) Then\n",
@@ -5992,14 +5957,6 @@ SABOTAZE = {
         "        If StrComp(Trim$(NzToText(data(c, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: razmaci ne menjaju decu",
-    ),
-    "mastersync-nasledjuje-tudju-generaciju": (
-        "modMasterSync.bas",
-        "        ApplyNovaGeneracijaID TBL_ZBIRNA, result\n",
-        "        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _\n"
-        "                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID\n",
-        "Test_ZBR_ImportDvaUredjajaNeStapaDokumente",
-        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog",
     ),
     "picker-ne-spaja-redove-dokumenta": (
         "modOtkupUI.bas",

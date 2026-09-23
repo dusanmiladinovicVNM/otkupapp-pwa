@@ -27,11 +27,11 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
 | `tblOtkup` | 3 | `modDokumenta`, `modOtkup`, `modStornoFlow` |
 | `tblPrijemnica` | 3 | `modDokumenta`, `modFaktura`, `modStorno` |
-| `tblZbirna` | 3 | `modDokumentInvariant`, `modDokumenta`, `modMasterSync` |
 | `tblAmbalaza` | 2 | `modAmbalaza`, `modStornoRecovery` |
 | `tblPaleta` | 2 | `modPaletniList`, `modStorno` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
 | `tblUtovar` | 2 | `modStorno`, `modUtovar` |
+| `tblZbirna` | 2 | `modDokumentInvariant`, `modDokumenta` |
 | `tblArtikli` | 1 | `modAgrohemija` |
 | `tblCenovnik` | 1 | `modCenovnik` |
 | `tblKooperanti` | 1 | `modKooperant` |
@@ -69,15 +69,15 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
 - `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
-- `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblAmbalaza`: `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblPaleta`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblParcele`: `modGeoParcele`, `modMasterSync`
 - `tblUtovar`: `modStorno`, `modUtovar`
+- `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblKooperanti`: `modKooperant`
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
 - `tblOtkupStavke`: `modOtkup`
-- `tblOtpremnica`: `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
+- `tblOtpremnica`: `modDokumenta`, `modStorno`, `modStornoFlow`
 - `tblOtpremnicaIzvori`: `modDokumenta`, `modOtkup`
 - `tblOtpremnicaStavke`: `modDokumenta`
 - `tblPaletaStavka`: `modDokumenta`, `modPaletniList`, `modStorno`
@@ -89,8 +89,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoVeze`: `modOtkup`, `modStornoContext`
 - `tblStornoZurnal`: `modOtkup`, `modStorno`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
-- `tblZbirnaIzvori`: `modDokumenta`
-- `tblZbirnaStavke`: `modDokumenta`
+- `tblZbirnaIzvori`: `modDokumenta`, `modMasterSync`
+- `tblZbirnaStavke`: `modDokumenta`, `modMasterSync`
 
 ## Test moduli po tabeli
 
@@ -100,10 +100,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblPaleta`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblParcele`: `modAgrohemijaTests`
+- `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`

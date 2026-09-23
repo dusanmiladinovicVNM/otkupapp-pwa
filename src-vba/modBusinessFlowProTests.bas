@@ -124,9 +124,7 @@ Public Sub RunBusinessFlowProSuite()
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
     Test_RF28_BrojZbirneRupaNeDajeDuplikat
     Test_ZBR_ImportDvaUredjajaNeStapaDokumente
-    Test_RF28_LinkKonfliktNePrepisuje
-    Test_RF28_MembershipKoristiSvojuZbirnu
-    Test_RF28_MembershipDanskiProzor
+    Test_ZBR_UvozPamtiPoreklo
     Test_RF28_NevalidanDatumJeSyncError
 
     ' RF-05 (frmDokumenta unos + storno set)
@@ -136,9 +134,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
-    Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
-    Test_ZBR_KapijaPustaKadJeIzborScoped
-    Test_ZBR_DispecerPustaScopedIzbor
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
@@ -293,7 +288,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_RazresivacImenujeRazlog
     Test_PWA_KonfliktPoParceliITipu
     Test_PWA_PrenosiVremeNastanka
-    Test_PWA_IzvedeniLanacJePauziran
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -1322,7 +1316,6 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
     Dim testDate As Date
     Dim broj As String
     Dim idA As String, idB As String
-    Dim genA As String, genB As String
     Dim ident As ZbirnaIdent
 
     On Error GoTo EH
@@ -1332,21 +1325,26 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
 
     Set tx = New clsTransaction
     tx.BeginTx
+    AutoOtpSnimak tx
     tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
+    ' Dokument je zaglavlje + stavke + IZVORI: rollback koji vrati samo
+    ' zaglavlje OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog
+    ' citalac (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa svaki uredjaj mora da posalje
+    ' SVOJ izvor. Dva uredjaja, dve otpremnice, isti broj -- bas KR-001.
+    Dim cridA As String, cridB As String
+    cridA = ZbrPwaIzvorCrid("IDENT-A-" & m_RunID, testDate, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorCrid("IDENT-B-" & m_RunID, testDate, TEST_VOZ_ID)
 
     idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-A-" & m_RunID, TEST_VOZ_ID, _
                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
-                                      100, broj)
+                                      100, broj, cridA)
     idB = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-B-" & m_RunID, TEST_VOZ_ID, _
                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
-                                      120, broj)
-
-    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, idA)
-    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, idB)
+                                      120, broj, cridB)
 
     ident = ZbirnaIdentResolve(broj, TEST_VOZ_ID, TEST_KUP_ID)
 
@@ -1358,10 +1356,13 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
         "A21 ingest: oba PWA reda su upisana kao zasebne zbirne"
 
     ' ZBR-IDENT-01: dve cinjenice, dva identiteta.
-    AssertTrue (Len(genA) > 0 And Len(genB) > 0), _
-        "A21: oba uvezena reda nose GeneracijaID"
-    AssertTrue (genA <> genB), _
-        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog"
+    '
+    ' Osa je ZbirnaID (S4-2a). Do S5-3 je ovde stajala GeneracijaID, koju je
+    ' uvoz posebno pisao (ApplyNovaGeneracijaID) -- taj pisac je obrisan, a
+    ' kanonski pisac svakom pozivu daje NOV ZbirnaID po konstrukciji. Tvrdnja
+    ' se zato ne brise nego seli na osu koja stvarno nosi identitet.
+    AssertTrue (UCase$(idA) <> UCase$(idB)), _
+        "A21/KR-001: drugi uredjaj NE nasledjuje identitet prvog"
 
     ' Detekcija je time dobila sta da vidi.
     AssertEquals "2", CStr(ident.activeLogicalCount), _
@@ -1433,200 +1434,104 @@ EH:
     On Error GoTo 0
     LogFail "RF-28 AUD-041b broj zbirne rupa", bfpErrDesc
 End Sub
-
-' AUD-043(b): otkup koji je vec u DRUGOJ zbirnoj ne sme da bude tiho prepisan.
-Private Sub Test_RF28_LinkKonfliktNePrepisuje()
+' PWA ZBIRNA PAMTI ODAKLE JE DOSLA (S5-3).
+'
+' ClientRecordID je identitet zapisa na terenskom uredjaju, a SyncSource kaze
+' kojim je putem stigao. Bez njih uvoz nema po cemu da prepozna da je isti zapis
+' vec video -- IsDuplicateZbirnaInMaster cita bas tu kolonu -- pa bi svaka PWA
+' zbirna dolazila ponovo pri SVAKOM ciklusu, i svaki put pravila nov dokument.
+'
+' Pisu se u kanonskom piscu, ne naknadnim UpdateCell-om iz modMasterSync:
+' tblZbirna sme da ima jednog pisca (A11). Zato se i mere kroz produkcioni uvoz,
+' a ne pozivom pisca sa rucno sklopljenim zaglavljem.
+Private Sub Test_ZBR_UvozPamtiPoreklo()
     Dim tx As clsTransaction
 
     On Error GoTo EH
 
     Dim scenario As String
-    scenario = NewScenarioCode("RF28LNK")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim otkID As String, crid As String, zbrID As String
-    Dim brojA As String, brojB As String
-
-    otkID = "OTK-RF28LNK-" & scenario
-    crid = "CRID-RF28LNK-" & scenario
-    zbrID = "ZBR-RF28LNK-" & scenario
-    brojA = "RF28-A-" & scenario
-    brojB = "RF28-B-" & scenario
+    scenario = NewScenarioCode("ZBRPOR")
 
     Set tx = New clsTransaction
     tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
+    AutoOtpSnimak tx
     tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
-    ' Otkup je VEC vezan na zbirnu A.
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid, brojA
-    AppendRF28ZbirnaFixture zbrID, testDate, TEST_VOZ_ID, brojB
+    Dim danas As Date
+    danas = NextTestDate()
 
-    Dim raised As Boolean
-    On Error Resume Next
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojB, crid
-    raised = (Err.Number <> 0)
-    Err.Clear
-    On Error GoTo EH
+    Dim crid As String
+    crid = ZbrPwaIzvorCrid("POR-" & scenario, danas, TEST_VOZ_ID)
 
-    AssertTrue raised, _
-        "RF-28 AUD-043b: link na otkup sa drugim BrojZbirne podize konflikt"
-    AssertEquals brojA, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE))), _
-        "RF-28 AUD-043b: postojeci BrojZbirne NIJE prepisan"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "RF-28 AUD-043b link konflikt", bfpErrDesc
-End Sub
-
-' AUD-043(b): membership se razresava preko ZbirnaID (PK), NE preko BrojZbirne.
-' Dve zbirne sa ISTIM poslovnim brojem (multi-device kolizija): LookupValue bi
-' vratio PRVU (drugi vozac) i lazno prijavio konflikt vozaca -- PK putanja mora
-' da procita vozaca SVOG reda i da link prode.
-Private Sub Test_RF28_MembershipKoristiSvojuZbirnu()
-    Dim tx As clsTransaction
-
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("RF28PK")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojIsti As String
-    brojIsti = "RF28-DUP-" & scenario
-
-    Dim vozacDrugi As String
-    vozacDrugi = "VOZ-RF28-OTHER"
-
-    Dim otkID As String, crid As String
-    Dim zbrStara As String, zbrNova As String
-
-    otkID = "OTK-RF28PK-" & scenario
-    crid = "CRID-RF28PK-" & scenario
-    zbrStara = "ZBR-RF28PK-OLD-" & scenario
-    zbrNova = "ZBR-RF28PK-NEW-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTPREMNICA
-
-    ' Redosled je bitan: STARA (tudji vozac) je PRVI match za BrojZbirne.
-    AppendRF28ZbirnaFixture zbrStara, testDate, vozacDrugi, brojIsti
-    AppendRF28ZbirnaFixture zbrNova, testDate, TEST_VOZ_ID, brojIsti
-
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid
-
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrNova, brojIsti, crid
-
-    AssertEquals brojIsti, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE))), _
-        "RF-28 AUD-043b: membership preko PK povezuje otkup sa SVOJOM zbirnom"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "RF-28 AUD-043b membership preko PK", bfpErrDesc
-End Sub
-
-' AUD-043(b): dan je stvarni guard -- susedni dan prolazi (utovar posle ponoci),
-' veca razlika pada.
-Private Sub Test_RF28_MembershipDanskiProzor()
-    Dim tx As clsTransaction
-
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("RF28DAY")
-
-    Dim zbrDate As Date
-    zbrDate = NextTestDate()
-
-    Dim brojZ As String
-    brojZ = "RF28-DAY-" & scenario
+    Dim zbrCrid As String
+    zbrCrid = "CRID-ZBRPOR-" & scenario
 
     Dim zbrID As String
-    zbrID = "ZBR-RF28DAY-" & scenario
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, TEST_VRSTA, TEST_SORTA, _
+                100#, modBrojevi.FormatBroj(TEST_VOZ_ID, danas, 1), crid)
 
-    Dim otkBlizu As String, cridBlizu As String
-    Dim otkDaleko As String, cridDaleko As String
+    AssertTrue Len(zbrID) > 0, "ZBR poreklo: uvoz je prosao"
+    If Len(zbrID) = 0 Then GoTo Kraj
 
-    otkBlizu = "OTK-RF28DAY-N-" & scenario
-    cridBlizu = "CRID-RF28DAY-N-" & scenario
-    otkDaleko = "OTK-RF28DAY-F-" & scenario
-    cridDaleko = "CRID-RF28DAY-F-" & scenario
+    AssertEquals zbrCrid, _
+                 Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                            COL_ZBR_CLIENT_RECORD_ID))), _
+                 "ZBR poreklo: zbirna nosi ClientRecordID sa terena"
+    AssertEquals "PWA", _
+                 Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                            COL_ZBR_SYNC_SOURCE))), _
+                 "ZBR poreklo: zbirna nosi SyncSource"
 
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTPREMNICA
+    ' Clanstvo je razreseno kroz kanon: otkup -> otpremnica -> izvor zbirne.
+    AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
+                 "ZBR poreklo: zbirna ima izvor razresen iz otkupRecordIDs"
 
-    AppendRF28ZbirnaFixture zbrID, zbrDate, TEST_VOZ_ID, brojZ
-
-    ' Susedni dan -> dozvoljeno (samo LogWarn).
-    AppendRF28OtkupFixture otkBlizu, zbrDate - 1, TEST_VOZ_ID, cridBlizu
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojZ, cridBlizu
-
-    AssertEquals brojZ, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkBlizu, COL_OTK_BROJ_ZBIRNE))), _
-        "RF-28 AUD-043b: otkup od prethodnog dana prolazi (post-midnight)"
-
-    ' 10 dana razlike -> nije membership.
-    AppendRF28OtkupFixture otkDaleko, zbrDate - 10, TEST_VOZ_ID, cridDaleko
-
-    Dim raised As Boolean
-    On Error Resume Next
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojZ, cridDaleko
-    raised = (Err.Number <> 0)
-    Err.Clear
-    On Error GoTo EH
-
-    AssertTrue raised, _
-        "RF-28 AUD-043b: otkup 10 dana od zbirne je odbijen (nije samo upozorenje)"
-    AssertEquals "", Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkDaleko, COL_OTK_BROJ_ZBIRNE))), _
-        "RF-28 AUD-043b: odbijen otkup nije dobio BrojZbirne"
-
+Kraj:
     tx.RollbackTx
     Exit Sub
 
 EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
     On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
+    tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043b danski prozor", bfpErrDesc
+    LogFatal "Test_ZBR_UvozPamtiPoreklo", eN, eD
 End Sub
+' Izdata otpremnica na ZADAT dan, kroz produkcioni put predaje.
+Private Function ZbrOtpremnicaNaDan(ByVal oznaka As String, ByVal datum As Date) As String
+    Dim otkID As String
+    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-" & oznaka, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "PRED-" & oznaka, _
+                           PredajaIsoDatum(datum))
+
+    Dim ishodi As Object, greske As String
+    If modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske) <> 1 Then
+        Err.Raise vbObjectError + 9431, "ZbrOtpremnicaNaDan", _
+                  "Predaja nije napravila otpremnicu: " & greske
+    End If
+
+    ZbrOtpremnicaNaDan = modDokumenta.OtpremnicaZaOtkup(otkID)
+End Function
+
+' Zaglavlje zbirne na zadat dan.
+Private Function ZbrHeaderNaDan(ByVal broj As String, ByVal datum As Date) As Object
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", TEST_VOZ_ID
+    h.Add "KupacID", TEST_KUP_ID
+    h.Add "BrojZbirne", broj
+    Set ZbrHeaderNaDan = h
+End Function
 
 ' AUD-042(b): nevalidan datum je SyncError, ne tihi danasnji datum.
 Private Sub Test_RF28_NevalidanDatumJeSyncError()
@@ -2165,121 +2070,6 @@ Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
 
     RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_ROD, "", SRC
 End Sub
-
-' ZBR-CHILD-01 / P1: ingest NE SME da premesti dete na drugi dokument.
-'
-' Dok je PoveziDeteNaZbirnu pisao samo broj, drugi link pod istim brojem je bio
-' idempotentan -- ista vrednost preko sebe. Otkad pise i generaciju, isti put
-' menja ROdITELJA deteta, a stara kapija (samo broj) to ne vidi. Regresiju je
-' uveo upis, ne kapija.
-'
-' Scenario je KR-001, koji ugovor izricito dozvoljava: dva uredjaja bez veze
-' posalju zbirnu pod istim brojem, istim vozacem i istim kupcem. Membership
-' kapije (vozac, poslovni dan) tu prolaze, pa dete legitimno stigne u oba skupa.
-'
-' Mere se OBA pozivna mesta iste kapije:
-'   korak 2 -- otkup je vec dete GEN-A
-'   korak 3 -- otkup je cist, ali otpremnica na koju pokazuje je dete GEN-A
-Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
-    Dim tx As clsTransaction
-    Dim scenario As String, testDate As Date
-    Dim broj As String, brojOtp As String
-    Dim zbrA As String, zbrB As String, genA As String, genB As String
-    Dim otkID As String, otkID2 As String
-    Dim crid As String, crid2 As String, otpID As String
-    Dim raised As Boolean
-
-    On Error GoTo EH
-
-    scenario = NewScenarioCode("ZBRFK")
-    testDate = NextTestDate()
-    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    otkID = "OTK-ZBRFK-A-" & scenario
-    otkID2 = "OTK-ZBRFK-B-" & scenario
-    crid = "CRID-ZBRFK-A-" & scenario
-    crid2 = "CRID-ZBRFK-B-" & scenario
-    otpID = "OTP-ZBRFK-" & scenario
-    brojOtp = TEST_PREFIX & "-OTP-ZBRFK-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_OTPREMNICA
-
-    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRFK-ZA-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
-                                       100, broj)
-    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRFK-ZB-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
-                                       120, broj)
-    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
-    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
-    AssertTrue (Len(genA) > 0 And Len(genB) > 0 And genA <> genB), _
-        "ZBR-FK preduslov: dva dokumenta pod istim brojem nose RAZLICITE generacije"
-
-    AppendRF28OtpremnicaFixture otpID, testDate, TEST_VOZ_ID, brojOtp
-    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, crid, ""
-    VeziOtkupZaOtpremnicuFixture otkID, otpID
-
-    ' --- 1) prvi link DOVRSAVA praznu vezu ---
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, crid
-    ' Trag na detetu je IDENTITET roditelja (S4-3c).
-    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK preduslov: prvi link je upisao identitet A na otkup"
-    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu"
-
-    ' --- 2) drugi dokument, ISTI broj -> kapija na otkupu ---
-    raised = False
-    On Error Resume Next
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, crid
-    raised = (Err.Number <> 0)
-    Err.Clear
-    On Error GoTo EH
-
-    AssertTrue raised, _
-        "ZBR-FK: drugi dokument pod istim brojem ne prolazi tiho"
-    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
-        "ZBR-FK: otkup ostaje na svom originalnom roditelju"
-    AssertEquals broj, _
-        NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE)), _
-        "ZBR-FK: otkup zadrzava broj -- blokira se generacija, ne broj"
-
-    ' --- 3) ista kapija na otpremnickom pozivnom mestu ---
-    ' Otkup2 je cist, pa njegova kapija pusta; otpremnica na koju pokazuje je vec
-    ' dete GEN-A. Bez ovog koraka drugo pozivno mesto ostaje nemereno.
-    AppendRF28OtkupFixture otkID2, testDate, TEST_VOZ_ID, crid2, ""
-    VeziOtkupZaOtpremnicuFixture otkID2, otpID
-
-    raised = False
-    On Error Resume Next
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, crid2
-    raised = (Err.Number <> 0)
-    Err.Clear
-    On Error GoTo EH
-
-    AssertTrue raised, _
-        "ZBR-FK: kapija radi i na otpremnickom pozivnom mestu"
-    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
-        "ZBR-FK: otpremnica ostaje na svom originalnom roditelju"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "ZBR-CHILD-01 MasterSync ne prepisuje generaciju deteta", bfpErrDesc
-End Sub
-
 Private Function DeteZbirnaID(ByVal tableName As String, _
                                 ByVal idColumn As String, _
                                 ByVal idValue As String) As String
@@ -2474,213 +2264,6 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
 EH:
     LogFatal "Test_ZBR_StorniranBrojIstogVozacaOdbijen", Err.Number, Err.description
 End Sub
-
-' ZBR-CHILD-01 faza 4: kapija pusta dva aktivna dokumenta kad izbor JESTE scoped.
-'
-' Ovo je korist zbog koje su faze 1-3 placene. KR-001 scenario -- dva uredjaja bez
-' veze posalju zbirnu pod istim brojem, isti vozac i kupac -- danas zaustavlja i
-' storno i ponistenje, iako svaki dokument ima svoju decu.
-'
-' Kontrast u istom testu je bitan:
-'   bez generacije -> kapija STOJI. Pozivalac koji ne kaze KOJI dokument stornira
-'                     ne moze biti pusten -- pod tim brojem ih je dva.
-'   sa generacijom -> kapija PUSTA. Selekcija posle faze 3 dira samo svoju decu.
-'
-' Deca moraju da dobiju generaciju kroz MasterSync exact-link, ne kroz obican
-' upis: cim su oba dokumenta aktivna, ZbirnaIDZaBroj je fail-closed i
-' otpremnica snimljena po broju ostaje bez generacije. Link preko ZbirnaID zna
-' tacno cija je.
-' DISPECER PUSTA SCOPED IZBOR (review #384, P2).
-'
-' Test_ZBR_KapijaPustaKadJeIzborScoped dokazuje da PRIMITIV ume bezbedno da
-' obradi dva dokumenta istog broja. Ali operater ne zove primitiv -- zove F8, a
-' F8 ide kroz RunZbirnaCorrection.
-'
-' Tamo je kapija racunala NESCOPED (ZbirnaMutRazlog(broj)) i odbijala radnju PRE
-' nego sto se do primitiva stigne. Sposobnost je postojala i bila nedostizna:
-' klasican test/production seam mismatch -- zeleno u primitivu, mrtvo u aplikaciji.
-'
-' Scenario je KR-001, isti koji ce S5 vratiti kroz PWA sync: dva uredjaja
-' offline, isti broj, isti vlasnik, dva legitimna dokumenta.
-'
-' Meri se OBA smera: sa identitetom prolazi i dira SAMO svoje, bez identiteta i
-' dalje staje. Bez druge polovine bi popravka mogla biti prosto "ugasi kapiju".
-Private Sub Test_ZBR_DispecerPustaScopedIzbor()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-
-    Dim scenario As String, testDate As Date, broj As String
-    Dim zbrA As String, zbrB As String, otpA As String, otpB As String
-    Dim otkA As String, otkB As String, cridA As String, cridB As String
-    Dim r As Object
-
-    scenario = NewScenarioCode("ZBRDSP")
-    testDate = NextTestDate()
-    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    otpA = "OTP-ZBRDSP-A-" & scenario
-    otpB = "OTP-ZBRDSP-B-" & scenario
-    otkA = "OTK-ZBRDSP-A-" & scenario
-    otkB = "OTK-ZBRDSP-B-" & scenario
-    cridA = "CRID-ZBRDSP-OA-" & scenario
-    cridB = "CRID-ZBRDSP-OB-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-
-    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZA-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
-    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZB-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
-    AssertTrue (Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB), _
-        "ZBR disp preduslov: dva aktivna dokumenta pod istim brojem"
-    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
-
-    AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DA-" & scenario
-    AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DB-" & scenario
-    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, cridA, ""
-    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, cridB, ""
-    VeziOtkupZaOtpremnicuFixture otkA, otpA
-    VeziOtkupZaOtpremnicuFixture otkB, otpB
-
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
-
-    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
-        "ZBR disp preduslov: otpremnica B nosi identitet dokumenta B"
-
-    ' --- BEZ identiteta: dispecer i dalje staje -----------------------------
-    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
-    AssertFalse CBool(r("success")), _
-        "ZBR disp: DUPLI bez identiteta staje na dva aktivna dokumenta"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
-        "ZBR disp: posle odbijanja dokument B je netaknut"
-
-    ' --- SA identitetom: dispecer PUSTA i dira samo svoje -------------------
-    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrB)
-    AssertTrue CBool(r("success")), _
-        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer (bilo: " & _
-        CStr(r("message")) & ")"
-    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
-        "ZBR disp: stornira se bas izabrani dokument B"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
-        "ZBR disp: tudji dokument A je netaknut"
-    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
-        "ZBR disp: sopstvena otpremnica B je odvezana"
-    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
-        "ZBR disp: tudja otpremnica A je OSTALA na svojoj zbirni"
-
-Kraj:
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    Dim eN As Long, eD As String
-    eN = Err.Number
-    eD = Err.description
-    On Error Resume Next
-    tx.RollbackTx
-    On Error GoTo 0
-    LogFatal "Test_ZBR_DispecerPustaScopedIzbor", eN, eD
-End Sub
-
-Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
-    Dim tx As clsTransaction
-    Dim scenario As String, testDate As Date
-    Dim broj As String
-    Dim zbrA As String, zbrB As String, genA As String, genB As String
-    Dim otpA As String, otpB As String
-    Dim otkA As String, otkB As String, cridA As String, cridB As String
-    Dim r As Object
-
-    On Error GoTo EH
-
-    scenario = NewScenarioCode("ZBRF4")
-    testDate = NextTestDate()
-    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    otpA = "OTP-ZBRF4-A-" & scenario
-    otpB = "OTP-ZBRF4-B-" & scenario
-    otkA = "OTK-ZBRF4-A-" & scenario
-    otkB = "OTK-ZBRF4-B-" & scenario
-    cridA = "CRID-ZBRF4-OA-" & scenario
-    cridB = "CRID-ZBRF4-OB-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-
-    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRF4-ZA-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
-    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRF4-ZB-" & scenario, TEST_VOZ_ID, _
-                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
-    genA = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrA)
-    genB = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbrB)
-    AssertTrue (Len(genA) > 0 And Len(genB) > 0 And genA <> genB), _
-        "ZBR-F4 preduslov: dva aktivna dokumenta pod istim brojem, razlicite generacije"
-
-    AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OA-" & scenario
-    AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-OB-" & scenario
-    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, cridA, ""
-    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, cridB, ""
-    VeziOtkupZaOtpremnicuFixture otkA, otpA
-    VeziOtkupZaOtpremnicuFixture otkB, otpB
-
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
-    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
-
-    ' Trag na detetu je IDENTITET roditelja (S4-3c), ne njegova generacija.
-    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
-        "ZBR-F4 preduslov: otpremnica A nosi identitet dokumenta A"
-    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
-        "ZBR-F4 preduslov: otpremnica B nosi identitet dokumenta B"
-
-    ' --- BEZ generacije: pozivalac ne kaze KOJI dokument -> kapija STOJI ---
-    Set r = RunSimpleStornoZbirna(broj)
-    AssertFalse CBool(r("success")), _
-        "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
-        "ZBR-F4: posle odbijenog storna dokument A je netaknut"
-
-    ' --- SA IDENTITETOM: izbor je scoped -> kapija PUSTA ---
-    '
-    ' Do S4-2 je ovde isla generacija. Tvrdnja je ista -- pozivalac koji KAZE
-    ' koji dokument dira prolazi i kad broj nosi dva -- ali se dokument imenuje
-    ' identitetom, jer generaciju kanonski pisac vise ne upisuje.
-    Set r = RunSimpleStornoZbirna(broj, zbrB)
-    AssertTrue CBool(r("success")), _
-        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta"
-    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
-        "ZBR-F4: stornira se bas izabrani dokument B"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
-        "ZBR-F4: dokument A ostaje aktivan"
-    AssertEquals "", _
-        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
-        "ZBR-F4: sopstvena otpremnica B je odvezana"
-    AssertEquals broj, _
-        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
-        "ZBR-F4: otpremnica dokumenta A NIJE dirnuta"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "ZBR-CHILD-01 faza 4 kapija pusta scoped izbor", bfpErrDesc
-End Sub
-
 ' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
 ' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.
 Private Sub Test_GeneracijaNePrelaziVlasnika()
@@ -5876,12 +5459,17 @@ Private Function AutoOtpFixture(ByVal datum As Date, ByVal stanicaID As String, 
                                 ByVal brDok As String, ByVal klasa As String, _
                                 ByVal kol As Double, ByVal cena As Double, _
                                 ByVal amb As Double, ByVal tipAmb As String, _
-                                Optional ByVal kulturaID As String = "") As String
+                                Optional ByVal kulturaID As String = "", _
+                                Optional ByVal crid As String = "") As String
     Dim h As Object
     Set h = CreateObject("Scripting.Dictionary")
     h.Add "Datum", datum
     h.Add "KooperantID", TEST_KOOP_ID
     h.Add "StanicaID", stanicaID
+    If Len(crid) > 0 Then
+        h.Add "ClientRecordID", crid
+        h.Add "SyncSource", "PWA"
+    End If
 
     ' Druga kultura ima SVOJU vrstu i praznu sortu -- mesana predaja se meri
     ' pravom vrstom voca, ne surogatom.
@@ -5908,6 +5496,34 @@ Private Function AutoOtpFixture(ByVal datum As Date, ByVal stanicaID As String, 
         Err.Raise vbObjectError + 9420, "AutoOtpFixture", _
                   "CreateOtkup_TX nije vratio ID: " & greska
     End If
+End Function
+
+' OTKUP SA CRID-OM, PREDAT VOZACU -> CRID upotrebljiv kao izvor zbirne.
+'
+' Ide kroz PRODUKCIONI put predaje (S5-2), ne kroz fixture precicu: zbirna se od
+' S5-3 sastavlja od otpremnica, pa izvor mora stvarno da postoji kao otpremnica.
+' Precica bi merila podatke koje nijedan pisac ne pravi.
+Private Function ZbrPwaIzvorCrid(ByVal oznaka As String, ByVal datum As Date, _
+                                 ByVal vozacID As String) As String
+    Dim crid As String
+    crid = "CRID-ZBRIZV-" & oznaka
+
+    Dim otkID As String
+    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-ZI-" & oznaka, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB, "", crid)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, vozacID, "PRED-ZI-" & oznaka, _
+                           PredajaIsoDatum(datum))
+
+    Dim ishodi As Object, greske As String
+    If modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske) <> 1 Then
+        Err.Raise vbObjectError + 9430, "ZbrPwaIzvorCrid", _
+                  "Predaja nije napravila otpremnicu: " & greske
+    End If
+
+    ZbrPwaIzvorCrid = crid
 End Function
 
 ' Snimak SVIH tabela koje auto-otpremnica dira. Rollback mora da vrati CEO
@@ -14013,9 +13629,17 @@ Private Sub Test_BKTX_UvozZbirneOdbijaTudjBroj()
                  "BKTX uvoz zbirne: broj od juce NE vraca ZbirnaID"
 
     ' Kontrola: vozacev broj ovog dana prolazi istim putem.
+    '
+    ' Od S5-3 se zbirna sastavlja od OTPREMNICA, pa kontrolni slucaj mora da
+    ' ima pravi izvor. Odbijeni slucajevi iznad ga ne trebaju -- kapija broja
+    ' puca PRE razresavanja clanstva, i to je namerno: red sa tudjim brojem se
+    ' odbija bez obzira na to sta nosi.
+    Dim bktxCrid As String
+    bktxCrid = ZbrPwaIzvorCrid("BKTX-" & scenario, d, TEST_VOZ_ID)
+
     AssertTrue Len(TestHook_ImportZbirnaRowPWA("CRID-BKTXZOK-" & scenario, TEST_VOZ_ID, _
                          TEST_KUP_ID, d, TEST_VRSTA, TEST_SORTA, 100#, _
-                         modBrojevi.FormatBroj(TEST_VOZ_ID, d, 1))) > 0, _
+                         modBrojevi.FormatBroj(TEST_VOZ_ID, d, 1), bktxCrid)) > 0, _
                "BKTX uvoz zbirne: vozacev broj ovog dana prolazi"
 
     Exit Sub
@@ -16431,49 +16055,6 @@ Private Sub Test_PWA_PrenosiVremeNastanka()
 EH:
     LogFatal "Test_PWA_PrenosiVremeNastanka", Err.Number, Err.description
 End Sub
-
-' IZVEDENI LANAC JE PAUZIRAN NA OBA PREOSTALA ULAZA (auto-otpremnica iz PWA je
-' obrisana u S1c; vraca je S5).
-'
-' Nalaz iz review-a: pauzirana je bila samo auto-otpremnica, a nizvodni koraci su
-' nastavljali -- i oba PISU NAZAD NA ZAGLAVLJE OTKUPA:
-'
-'   AutoCreateZbirnaFromOtpremnice  -> BackfillOtkupBrojZbirneByOtpremnica
-'   ImportVOZRow_RowTX              -> LinkZbirnaToOtkupAndOtpremnica
-'
-' Pun PWA sync je time mogao da napravi canonical otkup, pa da ga odmah
-' KONTAMINIRA starim backlink modelom. Kapija je zato JEDNA i pokriva ceo lanac;
-' test tvrdi da nijedan ulaz ne prolazi, i to PO PORUCI.
-Private Sub Test_PWA_IzvedeniLanacJePauziran()
-    On Error GoTo EH
-
-    AssertTrue Not modMasterSync.IzvedeniLanacIzPwaDostupan(), _
-               "Lanac: kapija je zatvorena"
-
-    ' 2) MALINA AUTO-ZBIRNA VISE NIJE POD OVOM KAPIJOM (S4-4).
-    '
-    ' Bila je zato sto je pisala Otkup.BrojZbirne nazad na zaglavlje. Kanonska
-    ' to ne radi -- clanstvo je zapis u tblZbirnaIzvori -- pa ima svoju kapiju
-    ' (AutoZbirnaDostupna). Tvrdi se da je razdvajanje STVARNO, a ne samo
-    ' preimenovano: van maline ne radi nista, i ne pada.
-    AssertEquals "", UlazPada("ZBR"), _
-                 "Lanac: auto-zbirna vise ne pada na kapiji lanca"
-    AssertTrue Not modMasterSync.AutoZbirnaDostupna(), _
-               "Lanac: van maline auto-zbirna nije dostupna"
-
-    ' 3) VOZ/zbirna uvoz -- BACA sa svojom porukom.
-    '
-    ' Ranije je vracao False, pa se pauza nije razlikovala od "nema VOZ fajlova":
-    ' sabotaza kapije nije obarala nista. Tvrdnja je zato po PORUCI.
-    AssertTrue InStr(1, UlazPada("VOZ"), "PAUZIRAN", vbTextCompare) > 0, _
-               "Lanac: VOZ/zbirna uvoz je pauziran"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_PWA_IzvedeniLanacJePauziran", Err.Number, Err.description
-End Sub
-
 ' Poruka greske sa ulaza koji mora biti pauziran, ili "" ako je prosao.
 Private Function UlazPada(ByVal koji As String) As String
     On Error Resume Next

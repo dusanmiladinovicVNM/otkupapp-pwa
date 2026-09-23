@@ -738,44 +738,6 @@ Private Function IsStanicaActiveForOTK_(ByVal activeValue As Variant) As Boolean
 
     IsStanicaActiveForOTK_ = Not (s = "NE")
 End Function
-
-' IZVEDENI LANAC (otpremnica -> zbirna) JE PAUZIRAN -- CEO, ne samo prvi korak.
-'
-' Uvoz otkupa JESTE presao na kanonski pisac. Sve sto se iz njega IZVODI nije, i
-' svaki od tih koraka PISE NAZAD NA ZAGLAVLJE OTKUPA -- bas ono sto refaktor
-' uklanja. Mereno:
-'
-'   AutoCreateOtpremniceFromPWA        OBRISANA u S1c (citala linijska polja sa
-'                                      zaglavlja, pisala OtpremnicaID; vraca S5)
-'   AutoCreateZbirnaFromOtpremnice     OBRISANA u S4-2c/2a (zvala stari pisac
-'                                      zbirne i kroz BackfillOtkupBrojZbirne-
-'                                      ByOtpremnica pisala Otkup.BrojZbirne;
-'                                      vraca S4-4 nad kanonskim piscem)
-'   ImportVOZRow_RowTX (VOZ/Zbirna)    -> LinkZbirnaToOtkupAndOtpremnica pise
-'                                      Otkup.BrojZbirne i CITA Otkup.OtpremnicaID
-'
-' Pauzirati samo prvi korak nije dovoljno: druga dva bi i dalje KONTAMINIRALA
-' nov otkup starim backlink modelom. Zato je kapija JEDNA i pokriva ceo lanac.
-'
-' Sta OSTAJE aktivno: uvoz otkupa (canonical) i ceo outbound sync. Ciklus se
-' vodi kao DEGRADIRAN, ne kao uspesan i ne kao pad.
-'
-' Kod ispod OSTAJE netaknut: otpremnicu vraca PR7 (nad tblOtpremnicaIzvori),
-' zbirnu PR8. Ovo NIJE compatibility most nego izricito iskljucenje.
-'
-' PR7 NE SME SAMO DA NAPISE = True.
-'
-' Jedna kapija pokriva tri koraka koji se oslobadjaju u DVA PR-a: otpremnica u
-' PR7, a Malina auto-zbirna i VOZ uvoz tek u PR8. Otkljucavanje ove funkcije u
-' PR7 vratilo bi i dva zbirna koraka koji i dalje pisu Otkup.BrojZbirne -- i
-' kontaminacija koju PR6 zatvara vratila bi se na mala vrata.
-'
-' PR7 kapiju DELI: PwaOtpremnicaDostupna = True, PwaZbirnaDostupna = False.
-' Detalji i test-podela: REFAKTOR S14 (PR7 pre-flight).
-Public Function IzvedeniLanacIzPwaDostupan() As Boolean
-    IzvedeniLanacIzPwaDostupan = False
-End Function
-
 ' AUTO-ZBIRNA VISE NIJE DEO PAUZIRANOG LANCA (S4-4).
 '
 ' IzvedeniLanacIzPwaDostupan je JEDNA kapija nad celim izvedenim lancem, i to
@@ -1978,9 +1940,15 @@ Public Function TestHook_ImportZbirnaRowPWA(ByVal crid As String, _
                                            ByVal vrsta As String, _
                                            ByVal sorta As String, _
                                            ByVal kolKlI As Double, _
-                                           ByVal brojZbirne As String) As String
+                                           ByVal brojZbirne As String, _
+                                           Optional ByVal otkupCrids As String = "") As String
     Dim data As Variant
     ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+
+    ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa uvoz bez izvora nema sta da
+    ' napravi. Testovi koji mere ODBIJANJE (broj tudjeg vlasnika, los format)
+    ' izvore i ne salju -- ta kapija puca pre njih.
+    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
 
     data(1, VS_CLIENT_RECORD_ID) = crid
     data(1, VS_VOZAC_ID) = vozacID
@@ -2002,13 +1970,6 @@ Public Function TestHook_GenerateBrojZbirne(ByVal vozacID As String, _
                                            ByVal datum As Date) As String
     TestHook_GenerateBrojZbirne = GenerateBrojZbirne(vozacID, datum)
 End Function
-' AUD-043(b): kaskadni link (membership + konflikt guard). Raise-uje kao u produkciji.
-Public Sub TestHook_LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
-                                                  ByVal brojZbirne As String, _
-                                                  ByVal otkupRecordIDs As String)
-    LinkZbirnaToOtkupAndOtpremnica zbirnaID, brojZbirne, otkupRecordIDs
-End Sub
-
 ' Armira jednokratni fail seam. Kodovi:
 '   "VOZAC_WRITE" -- sledeci UpdateCell VozacID-a se ponasa kao neuspeo (AUD-042a)
 '   "OTK_HEADER"  -- sledeci header WriteSheetData se ponasa kao neuspeo (AUD-042c)
@@ -3206,19 +3167,10 @@ EH:
 End Sub
 
 Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
-    ' Deo PAUZIRANOG izvedenog lanca: ImportVOZRow_RowTX kroz
-    ' LinkZbirnaToOtkupAndOtpremnica pise Otkup.BrojZbirne i cita
-    ' Otkup.OtpremnicaID -- dve kolone koje nov pisac ne odrzava.
-    '
-    ' BACA, ne vraca False. Merenje: False se ne razlikuje od "nema VOZ fajlova"
-    ' ni od "nema pristupa Drive-u", pa bi i test i operater videli isti ishod za
-    ' tri razlicita razloga -- i sabotaza kapije ne bi oborila nista (probano).
-    ' Ide PRE On Error, da ga sopstveni EH ne pretvori u "fatal sync error".
-    If Not IzvedeniLanacIzPwaDostupan() Then
-        Err.Raise vbObjectError + 8132, "ImportZbirneFromPWA_Core", _
-                  "Uvoz zbirnih (VOZ) je PAUZIRAN dok izvedeni lanac ne predje na " & _
-                  "header + stavke (PR7/PR8). Zbirne unesi rucno."
-    End If
+    ' PAUZA JE SKINUTA (S5-3). Uvoz je presao na kanonskog pisca
+    ' (CreateZbirnaIzIzvora_TX), pa vise ne postoji razlog zbog kojeg je stajala:
+    ' LinkZbirnaToOtkupAndOtpremnica je obrisan i nista se ne pise nazad na
+    ' zaglavlje otkupa.
 
     Dim folderID As String
     Dim sheetIDs As Collection
@@ -3740,7 +3692,6 @@ Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
     Const SRC As String = "ImportVOZRow_RowTX"
 
     Dim tx As clsTransaction
-    Dim otkupRecordIDs As String
 
     On Error GoTo EH
 
@@ -3756,9 +3707,12 @@ Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
     Set tx = New clsTransaction
     tx.BeginTx
 
+    ' Dokument je zaglavlje + STAVKE + IZVORI: rollback koji vrati samo
+    ' zaglavlje ostavlja stavku bez dokumenta. tblOtkup i tblOtpremnica vise
+    ' nisu ovde -- uvoz zbirne ih ne dira otkad clanstvo nije labela na detetu.
     tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
     outZbirnaID = ImportRowToTblZbirna(data, rowIndex, clientRecordID)
 
@@ -3771,12 +3725,12 @@ Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
 
     outBrojZbirne = GetBrojZbirneForIDStrict(outZbirnaID, SRC)
 
-    otkupRecordIDs = Trim$(CStr(nz(data(rowIndex, VS_OTKUP_RECORD_IDS), "")))
-
-    ' AUD-043(b): prosledi i ZbirnaID -- membership se razresava preko PK, ne
-    ' preko poslovnog broja (BrojZbirne nije jedinstven; LookupValue bi na
-    ' multi-device koliziji vratio STARU zbirnu, a nov red je na kraju tabele).
-    LinkZbirnaToOtkupAndOtpremnica outZbirnaID, outBrojZbirne, otkupRecordIDs
+    ' CLANSTVO JE VEC UPISANO (S5-3).
+    '
+    ' Do ovog reza je ovde stajao LinkZbirnaToOtkupAndOtpremnica, koji je pisao
+    ' Otkup.BrojZbirne i Otpremnica.BrojZbirne -- labelu na detetu, kao vezu.
+    ' Kanonski pisac clanstvo upisuje u tblZbirnaIzvori, pa drugog kanala nema
+    ' i ovde nema sta da se doda.
 
     tx.CommitTx
     Set tx = Nothing
@@ -3891,200 +3845,191 @@ Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Bo
     
     IsDuplicateZbirnaInMaster = False
 End Function
-
-' ============================================================
-' PRIVATE -- Import Row to tblZbirna
-' ============================================================
-
+' ZBIRNA IZ PWA IDE KROZ KANONSKI PISAC (S5-3).
+'
+' Zatecen uvoz je radio AppendRow(TBL_ZBIRNA) sa golim Array-em od 16 vrednosti,
+' i na ZAGLAVLJE pisao kolicinu, klasu, vrstu, sortu i ambalazu -- stari model.
+' Bio je drugi put do istog dokumenta, i drugi oblik istog dokumenta.
+'
+' CLANSTVO SE RAZRESAVA KROZ KANON, NE POGADJA.
+'
+' PWA salje otkupRecordIDs -- otkupne listove koje je vozac natovario. Kanonska
+' zbirna se sastavlja od OTPREMNICA, a svaki otkup pripada tacno jednoj aktivnoj
+' otpremnici (AktivnoClanstvoOtpremnica). Prevod otkup -> otpremnica je zato
+' TOTALAN I TACAN, a ne heuristika: razlika u odnosu na predaju, gde dogadjaj
+' nije imao nikakav zapis pa mu je trebao sopstveni identitet (S5-2).
+'
+' Poslovni lanac je predaja -> otpremnica -> zbirna (odluka operatera
+' 23.09.2026): vozac nikad ne vidi "slobodne" otkupe, jer su mu dok dodju do
+' ruke vec u NJEGOVOJ otpremnici. Otkup bez otpremnice ovde zato NIJE redak
+' slucaj nego KVAR, i uvoz staje sa imenom tog otkupa.
+'
+' Sta se vise NE cita sa VOZ reda:
+'   kolicine, klasa    -- stavke zbirne izvodi pisac iz izvora (ZBR-KANON-04)
+'   vrsta, sorta, amb  -- iste cinjenice, isti razlog; PWA ih usput spaja
+'                         zarezom preko svih dnevnih otkupa, sto nije cinjenica
+'                         nijednog dokumenta
+'   GeneracijaID       -- osa je ZbirnaID (S4-2a); ovo je bio POSLEDNJI pisac
+'                         generacije za zbirnu
 Private Function ImportRowToTblZbirna(ByVal data As Variant, _
                                       ByVal row As Long, _
                                       ByVal clientRecordID As String) As String
-    Dim newID As String
-    Dim datum As Date
-    Dim vozacID As String
-    Dim brojZbirne As String
-    Dim kupacID As String
-    Dim vrstaVoca As String
-    Dim sortaVoca As String
-    Dim ukupnoKol As Double
-    Dim tipAmb As String
-    Dim kolAmb As Long
-    Dim kolKlI As Double
-    Dim kolKlII As Double
-    
-    On Error GoTo EH
-    
-    vozacID = Trim$(CStr(data(row, VS_VOZAC_ID)))
-    kupacID = Trim$(CStr(data(row, VS_KUPAC_ID)))
-    vrstaVoca = Trim$(CStr(data(row, VS_VRSTA)))
-    sortaVoca = Trim$(CStr(data(row, VS_SORTA)))
-    tipAmb = Trim$(CStr(nz(data(row, VS_TIP_AMB), "")))
-    
-    ' Datum -- AUD-042(b) STRIKT (nema tihog fallbacka na Date()).
-    ' ValidatePWAZbirna ovo hvata pre importa; ovde je hard linija za direktne
-    ' pozive. Red pada kao i ostale validacione greske (return "").
-    If Not IsParsableMasterSyncDate(data(row, VS_DATUM)) Then
-        LogError "ImportRowToTblZbirna", _
-             "Datum nije validan u PWA redu (nema fallbacka na danas). CRID=" & clientRecordID
-        ImportRowToTblZbirna = ""
-        Exit Function
-    End If
-    datum = CDate(data(row, VS_DATUM))
+    Const SRC As String = "ImportRowToTblZbirna"
 
-    ' Kolicine po klasi
-    On Error Resume Next
-    kolKlI = CDbl(data(row, VS_KOLICINA_KL_I))
-    kolKlII = CDbl(data(row, VS_KOLICINA_KL_II))
-    kolAmb = CLng(data(row, VS_KOL_AMB))
-    If kolAmb < 0 Then
-        LogError "ImportRowToTblZbirna", _
-             "KolAmbalaze ne sme biti negativan. CRID=" & clientRecordID
-        ImportRowToTblZbirna = ""
-        Exit Function
-    End If
     On Error GoTo EH
-    
-    ukupnoKol = kolKlI + kolKlII
-    
-    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        LogError "ImportRowToTblZbirna", _
-             "TipAmbalaze je obavezan kada je KolAmbalaze > 0. CRID=" & clientRecordID
-        ImportRowToTblZbirna = ""
+
+    Dim vozacID As String, kupacID As String, brojZbirne As String
+    vozacID = Trim$(CStr(nz(data(row, VS_VOZAC_ID), "")))
+    kupacID = Trim$(CStr(nz(data(row, VS_KUPAC_ID), "")))
+
+    Dim datum As Date
+    If Not IsoUDatum(data(row, VS_DATUM), datum) Then
+        LogError SRC, "Datum nije upotrebljiv. CRID=" & clientRecordID
         Exit Function
     End If
-    
-    ' Procitaj BrojZbirne iz VOZ sheet-a (PWA-generated, kolona 20)
+
     brojZbirne = Trim$(CStr(nz(data(row, VS_BROJ_ZBIRNE), "")))
 
-    ' Fallback: prazno znaci legacy zapis ili PWA pre-rollout-a
+    ' Broj je LABELA, ali labela mora da bude ispravna i da ne protivreci
+    ' sopstvenom redu. Ista odluka kao na uvozu otkupa: kolizija se prijavljuje,
+    ' a broj koji ne pripada svom vozacu i danu se odbija.
     If Len(brojZbirne) = 0 Then
         brojZbirne = GenerateBrojZbirne(vozacID, datum)
         If Len(brojZbirne) = 0 Then
-            LogError "ImportRowToTblZbirna", "Nije moguce generisati BrojZbirne za VozacID=" & vozacID
-            ImportRowToTblZbirna = ""
+            LogError SRC, "Nije moguce generisati BrojZbirne za VozacID=" & vozacID
             Exit Function
         End If
-        LogWarn "ImportRowToTblZbirna", "BrojZbirne fallback-generated lokalno za " & clientRecordID
+        LogWarn SRC, "BrojZbirne fallback-generated lokalno za " & clientRecordID
+    ElseIf Not IsValidBrojZbirneFormat(brojZbirne) Then
+        LogError SRC, "Invalid BrojZbirne format: " & brojZbirne & _
+                 " (CRID=" & clientRecordID & ")"
+        Exit Function
     Else
-        ' Validacija formata za PWA-generated broj
-        If Not IsValidBrojZbirneFormat(brojZbirne) Then
-            LogError "ImportRowToTblZbirna", "Invalid BrojZbirne format: " & brojZbirne & " (CRID=" & clientRecordID & ")"
-            ImportRowToTblZbirna = ""
-            Exit Function
-        End If
-
-        ' KONTEKST BROJA -- fail-closed, isti ishod kao los oblik odmah iznad i
-        ' ista odluka kao na uvozu otkupa.
-        '
-        ' "Ingest je cinjenica, ne komanda" vazi za KOLIZIJU: dva dokumenta sa
-        ' istim brojem su legalno stanje (A2), pa PrijaviKolizijuBrojaZbirne i
-        ' Chk_B8 samo prijavljuju. Ne vazi za broj koji protivreci SOPSTVENOM
-        ' redu -- takav red bi usao u kanonsku tblZbirna kao validan dokument,
-        ' a BrojZbirne je i danas join kljuc u modDokumenta.
         Dim zbrVerdikt As Long
         zbrVerdikt = modBrojevi.BrojOdgovaraKontekstu( _
                          modBrojevi.KIND_ZBR, vozacID, datum, brojZbirne)
         If modBrojevi.BrojKontekstOdbija(zbrVerdikt) Then
-            LogError "ImportRowToTblZbirna", _
+            LogError SRC, _
                 modBrojevi.BrojKontekstOpis(zbrVerdikt, modBrojevi.KIND_ZBR, _
                                             vozacID, datum, brojZbirne) & _
                 " (CRID=" & clientRecordID & ")"
-            ImportRowToTblZbirna = ""
             Exit Function
         End If
     End If
-    
-    ' Hladnjaca iz KupacID
-    Dim hladnjaca As String
-    hladnjaca = CStr(nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"), ""))
-    
-    newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
-    If Len(Trim$(newID)) = 0 Then
-        LogError "ImportRowToTblZbirna", _
-             "GetNextID nije vratio ZbirnaID. CRID=" & clientRecordID
-        ImportRowToTblZbirna = ""
+
+    Dim izvori As Collection
+    Set izvori = OtpremniceIzOtkupRecordIDs( _
+                     Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+                     clientRecordID)
+    If izvori Is Nothing Then Exit Function
+
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", vozacID
+    h.Add "KupacID", kupacID
+    h.Add "BrojZbirne", brojZbirne
+    h.Add "Hladnjaca", CStr(nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, _
+                                           "Hladnjaca"), ""))
+    h.Add "ClientRecordID", clientRecordID
+    h.Add "SyncSource", "PWA"
+
+    Dim greska As String
+    ' brojSaTerena:=True -- ovo je INGEST vec nastale cinjenice, ne KOMANDA
+    ' operatera. Dva uredjaja offline umeju da dodele isti broj (KR-001,
+    ' prihvacen rizik), pa bi odbijanje znacilo da vozacev dokument nestane iz
+    ' kancelarije. Kolizija se PRIJAVLJUJE (PrijaviKolizijuBrojaZbirne nize), a
+    ' identitet je i dalje ZbirnaID -- dve cinjenice se ne stapaju u jednu.
+    ImportRowToTblZbirna = modDokumenta.CreateZbirnaIzIzvora_TX(h, izvori, _
+                                                               greska, True)
+
+    If Len(ImportRowToTblZbirna) = 0 Then
+        LogError SRC, "CreateZbirnaIzIzvora_TX nije vratio ZbirnaID (CRID=" & _
+                 clientRecordID & "): " & greska
         Exit Function
     End If
-    ' tblZbirna Schema:
-    ' tblZbirna Schema:
-    ' ZbirnaID | Datum | VozacID | BrojZbirne | KupacID | Hladnjaca | Pogon |
-    ' VrstaVoca | SortaVoca | UkupnoKolicina | TipAmbalaze | UkupnoAmbalaze | Klasa |
-    ' Stornirano | ClientRecordID | SyncSource
+
+    ' INGEST, PA DETEKCIJA -- ne blokada.
     '
-    ' Klasa: Ako ima obe klase, pisi "I/II". Ako samo jedna, pisi tu.
-    Dim klasa As String
-    If kolKlI > 0 And kolKlII > 0 Then
-        klasa = "I/II"
-    ElseIf kolKlII > 0 Then
-        klasa = "II"
-    Else
-        klasa = "I"
-    End If
-    
-    Dim rowData As Variant
-    rowData = Array(newID, datum, vozacID, brojZbirne, kupacID, _
-                    hladnjaca, "", vrstaVoca, sortaVoca, _
-                    ukupnoKol, tipAmb, kolAmb, klasa, _
-                    "", clientRecordID, "PWA")
-    
-    Dim result As Long
-    result = AppendRow(TBL_ZBIRNA, rowData)
-    
-    If result > 0 Then
-        ' ZBR-IDENT-01: UVEK NOVA generacija, nikad nasledjena.
-        '
-        ' Do v6-ui-224 je ovde stajao ApplyGeneracijaID, koji generaciju nasledjuje
-        ' od aktivnog reda istog broja u istom scope-u (VozacID + KupacID). To je
-        ' tacno za SaveZbirnaMulti_TX i modDokumentInvariant -- oni JEDAN dokument
-        ' pisu u DVA reda (Kl.I i Kl.II), pa drugi red mora u generaciju prvog.
-        '
-        ' Ovde nije. PWA import obe klase sabira u JEDAN red ("I/II" iznad), a
-        ' IsDuplicateZbirnaInMaster odbija vec uvezen ClientRecordID PRE upisa --
-        ' dakle svaki red koji stigne dovde je dokument koji nikad nije vidjen.
-        ' Isti vozac i isti kupac NE znace isti dokument (A17): dva uredjaja
-        ' offline dodele isti broj istom vozacu i kupcu, sto je bas KR-001.
-        '
-        ' Nasledjivanje je unistavalo cinjenicu koju detekcija ispod treba da vidi:
-        ' dva dokumenta bi delila GeneracijaID, activeLogicalCount (broji GENERACIJE)
-        ' bi ostao 1, pa bi PrijaviKolizijuBrojaZbirne cutala, B8 ne bi imao nalaz, a
-        ' F4 bi broj proglasio jednoznacnim. Gore od toga: StornoZbirna redove bira
-        ' po generaciji (RedJeIzabranogDokumenta), pa bi jedan storno stornirao OBA
-        ' terenska dokumenta, a skrivena kolona identiteta u storno gridu je bas
-        ' COL_GENERACIJA_ID (modScrDokumenti.IdKolonaTipa) -- operater ih ne bi ni
-        ' razlikovao.
-        ApplyNovaGeneracijaID TBL_ZBIRNA, result
+    ' Dva uredjaja offline umeju da dodele isti broj istom vozacu i kupcu
+    ' (KR-001). Broj je labela (A2), pa dva dokumenta pod istim brojem NISU
+    ' greska podatka -- ali jesu nesto sto operater mora da vidi. Identitet je
+    ' ZbirnaID, pa se dve terenske cinjenice i ne mogu stopiti u jednu.
+    PrijaviKolizijuBrojaZbirne brojZbirne, vozacID, kupacID, clientRecordID
 
-        ' ZBR-IDENT-01 (korak 5): INGEST, pa DETEKCIJA -- ne blokada.
-        '
-        ' F3 i F4 su KOMANDE operatera: konflikt tamo znaci "ne radi to", pa se
-        ' unos odbija. Ovo je INGEST vec nastale cinjenice sa terena, i tu
-        ' odbijanje nije simetricno: pozivalac (ImportZbirnaRow_TX) na prazan
-        ' povratak dize Err.Raise UNUTAR tx, pa bi rollback bacio CEO sync red.
-        ' Podatak bi se izgubio, a kolizija ostala neprijavljena -- gore od oba.
-        '
-        ' KR-001 u KNOWN_ISSUES multi-device koliziju BrojZbirne vec prihvata kao
-        ' rizik, sa mitigacijom na GAS strani. Ovde se zato red UPISUJE, a
-        ' konflikt PRIJAVLJUJE: log odmah, i nalaz u modIntegritet (B8/B9) koji
-        ' ga vidi i kasnije.
-        '
-        ' Bezbedno je zato sto se dve terenske cinjenice ne stapaju u jedan
-        ' identitet (v. ApplyNovaGeneracijaID iznad), pa broj STVARNO postane
-        ' dvosmislen -- a F4 fail-closed odbija dvosmislen broj. Bez toga bi ova
-        ' detekcija merila stanje koje je sama prethodna linija zataskala.
-        PrijaviKolizijuBrojaZbirne brojZbirne, vozacID, kupacID, clientRecordID
-
-        LogInfo "ImportRowToTblZbirna", "Importiert: " & newID & " BrojZbirne=" & brojZbirne & _
-                " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
-        ImportRowToTblZbirna = newID
-    Else
-        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen fuer PWA:" & clientRecordID
-        ImportRowToTblZbirna = ""
-    End If
+    LogInfo SRC, "Importiert: " & ImportRowToTblZbirna & " BrojZbirne=" & brojZbirne & _
+            " | " & vozacID & " | " & kupacID & " | izvora=" & CStr(izvori.count)
     Exit Function
 
 EH:
-    LogErr "ImportRowToTblZbirna", "ClientRecordID: " & clientRecordID
+    LogErr SRC, "ClientRecordID: " & clientRecordID
     ImportRowToTblZbirna = ""
+End Function
+
+' otkupRecordIDs (CRID-ovi, zarezom) -> Collection OtpremnicaID-eva, bez
+' ponavljanja, redom prvog pojavljivanja. Nothing = uvoz ovog reda NE SME dalje.
+'
+' Svaki korak je KANONSKI citac: CRID -> OtkupID (modOtkup.OtkupPoClientRecordID),
+' OtkupID -> OtpremnicaID (modDokumenta.OtpremnicaZaOtkup). Nista se ne trazi po
+' poslovnom broju i nista se ne pogadja.
+'
+' Fail-closed je ovde jedini ispravan izbor: zbirna od DELA onoga sto je vozac
+' natovario je drugi dokument od onog koji je vozac napravio, a ne "malo manji".
+Private Function OtpremniceIzOtkupRecordIDs(ByVal crids As String, _
+                                            ByVal clientRecordID As String) As Collection
+    Const SRC As String = "OtpremniceIzOtkupRecordIDs"
+
+    If Len(Trim$(crids)) = 0 Then
+        LogError SRC, "Zbirna nema nijedan otkupRecordID (CRID=" & clientRecordID & _
+                 "). Zbirna bez izvora nije dokument."
+        Exit Function
+    End If
+
+    Dim rez As New Collection
+    Dim vidjene As Object
+    Set vidjene = CreateObject("Scripting.Dictionary")
+    vidjene.CompareMode = vbTextCompare
+
+    Dim delovi As Variant, i As Long
+    delovi = Split(crids, ",")
+
+    For i = LBound(delovi) To UBound(delovi)
+        Dim crid As String
+        crid = Trim$(CStr(delovi(i)))
+
+        If Len(crid) > 0 Then
+            Dim otkupID As String
+            otkupID = modOtkup.OtkupPoClientRecordID(crid)
+
+            If Len(otkupID) = 0 Then
+                LogError SRC, "Otkup nije u masteru: CRID=" & crid & _
+                         " (zbirna CRID=" & clientRecordID & ")"
+                Exit Function
+            End If
+
+            Dim otpID As String
+            otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+
+            If Len(otpID) = 0 Then
+                LogError SRC, "Otkup " & otkupID & " nije ni u jednoj aktivnoj " & _
+                         "otpremnici, a zbirna se sastavlja od otpremnica " & _
+                         "(zbirna CRID=" & clientRecordID & ")"
+                Exit Function
+            End If
+
+            If Not vidjene.Exists(otpID) Then
+                vidjene.Add otpID, 1
+                rez.Add otpID
+            End If
+        End If
+    Next i
+
+    If rez.count = 0 Then
+        LogError SRC, "Nijedan upotrebljiv izvor (CRID=" & clientRecordID & ")"
+        Exit Function
+    End If
+
+    Set OtpremniceIzOtkupRecordIDs = rez
 End Function
 
 ' Detekcija kolizije broja POSLE upisa. Zove se sa vec ubacenim redom, pa meri
@@ -4117,230 +4062,6 @@ Private Sub PrijaviKolizijuBrojaZbirne(ByVal broj As String, ByVal vozacID As St
 EH:
     ' Detekcija koja padne ne sme da obori uvoz -- samo se zapise da je pala.
     LogErr SRC & ".PrijaviKolizijuBrojaZbirne", "CRID=" & crid
-End Sub
-
-' ============================================================
-' PRIVATE -- Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
-' ============================================================
-
-Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
-                                           ByVal brojZbirne As String, _
-                                           ByVal otkupRecordIDs As String)
-    Const SRC As String = "LinkZbirnaToOtkupAndOtpremnica"
-
-    On Error GoTo EH
-
-    If Len(Trim$(brojZbirne)) = 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 30, SRC, _
-                  "BrojZbirne je obavezan za kaskadno povezivanje."
-    End If
-
-    If Len(Trim$(zbirnaID)) = 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 38, SRC, _
-                  "ZbirnaID je obavezan -- membership se razresava preko PK. BrojZbirne=" & brojZbirne
-    End If
-
-    If Len(Trim$(otkupRecordIDs)) = 0 Then
-        LogInfo SRC, "Nema Otkup ClientRecordID vrednosti za BrojZbirne=" & brojZbirne
-        Exit Sub
-    End If
-
-    Dim colCRID As Long
-    Dim colOtkID As Long
-    Dim colOtkOtpID As Long
-    Dim colOtkVoz As Long
-    Dim colOtkDat As Long
-
-    colCRID = RequireColumnIndex(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, SRC)
-    colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
-    colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
-    colOtkVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
-    colOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
-
-    RequireColumnIndex TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
-    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
-
-    ' ZBR-CHILD-01: NIKAD NE POGADJAJ KAD VEC ZNAS.
-    '
-    ' Trag na detetu je ZbirnaID (S4-3c), pa se nista ne cita -- identitet je
-    ' vec argument. Do ovog reza je odavde isla GENERACIJA, i to je bio
-    ' poslednji pisac koji je u trag upisivao nesto drugo od identiteta: svi
-    ' ostali (SavePrijemnica, ReassignPrijemnicaToZbirna_TX, paletni relink)
-    ' vec pisu ID. Dok je ovaj odstupao, scoping dece je nad uvezenim
-    ' dokumentima trazio ID medju generacijama i nije nalazio nista.
-    Dim genZbirne As String
-    genZbirne = zbirnaID
-
-    ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
-    ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID
-    ' bio prihvatan bez provere da otkup uopste pripada tom vozacu/danu.
-    '
-    ' Zbirna se razresava preko PRIMARNOG KLJUCA (ZbirnaID), NE preko BrojZbirne:
-    ' poslovni broj nije jedinstven (multi-device kolizija je dokumentovan rizik),
-    ' a LookupValue vraca PRVI match -- tj. tudju/stariju zbirnu, jer je nov red
-    ' upravo dodat na kraj tabele.
-    Dim rowZbirna As Long
-    rowZbirna = RequireSingleMasterSyncRow(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC)
-
-    Dim zbrData As Variant
-    zbrData = GetTableData(TBL_ZBIRNA)
-
-    If IsEmpty(zbrData) Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 39, SRC, _
-                  "Tabela je prazna: " & TBL_ZBIRNA
-    End If
-
-    Dim colZbrVoz As Long, colZbrDat As Long, colZbrBroj As Long
-    colZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
-    colZbrDat = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
-    colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
-
-    ' Sanity: red na koji PK pokazuje mora nositi broj koji linkujemo.
-    If StrComp(Trim$(CStr(nz(zbrData(rowZbirna, colZbrBroj), ""))), Trim$(brojZbirne), vbTextCompare) <> 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 42, SRC, _
-                  "ZbirnaID i BrojZbirne se ne poklapaju. ZbirnaID=" & zbirnaID & _
-                  "; RedBroj=" & Trim$(CStr(nz(zbrData(rowZbirna, colZbrBroj), ""))) & _
-                  "; TrazenBroj=" & Trim$(brojZbirne)
-    End If
-
-    Dim zbrVozac As String
-    Dim zbrDay As Date
-
-    zbrVozac = Trim$(CStr(nz(zbrData(rowZbirna, colZbrVoz), "")))
-
-    If Len(zbrVozac) = 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 34, SRC, _
-                  "Zbirna nema VozacID -- membership provera nije moguca. ZbirnaID=" & zbirnaID
-    End If
-
-    If Not TryMasterSyncDay(zbrData(rowZbirna, colZbrDat), zbrDay) Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 43, SRC, _
-                  "Zbirna nema citljiv Datum -- membership provera nije moguca. ZbirnaID=" & zbirnaID
-    End If
-
-    Dim crIDs() As String
-    crIDs = Split(otkupRecordIDs, ",")
-
-    Dim updatedOtp As Object
-    Set updatedOtp = CreateObject("Scripting.Dictionary")
-
-    Dim c As Long
-    For c = 0 To UBound(crIDs)
-        Dim searchCRID As String
-        searchCRID = Trim$(CStr(crIDs(c)))
-
-        If Len(searchCRID) > 0 Then
-            Dim rowOtkup As Long
-            rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, searchCRID, SRC)
-
-            Dim otkData As Variant
-            otkData = GetTableData(TBL_OTKUP)
-
-            If IsEmpty(otkData) Then
-                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 31, SRC, _
-                          "Tabela je prazna: " & TBL_OTKUP
-            End If
-
-            Dim otkupID As String
-            otkupID = Trim$(CStr(otkData(rowOtkup, colOtkID)))
-
-            rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, COL_OTK_ID, otkupID, SRC)
-
-            otkData = GetTableData(TBL_OTKUP)
-
-            ' AUD-043(b) membership 1/2: vozac. Prazan VozacID na otkupu je
-            ' dozvoljen (Otprema tab ga jos nije sinhronizovao) -- ovaj link ga
-            ' i popunjava kroz zbirnu. Ali RAZLICIT vozac znaci da CRID pokazuje
-            ' na tudji otkup -> ne diramo ga.
-            Dim otkVozac As String
-            otkVozac = Trim$(CStr(nz(otkData(rowOtkup, colOtkVoz), "")))
-
-            If Len(otkVozac) > 0 Then
-                If StrComp(otkVozac, zbrVozac, vbTextCompare) <> 0 Then
-                    Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 35, SRC, _
-                              "Membership: otkup ne pripada vozacu zbirne. OtkupID=" & otkupID & _
-                              "; OtkupVozac=" & otkVozac & _
-                              "; ZbirnaVozac=" & zbrVozac & _
-                              "; BrojZbirne=" & brojZbirne
-                End If
-            End If
-
-            ' AUD-043(b) membership 2/2: poslovni dan, sa OGRANICENIM prozorom.
-            ' Isti dan = ok. Susedni dan = utovar posle ponoci (legitimno, uz
-            ' upozorenje). Vise od toga NIJE membership -- otkup od pre nedelju
-            ' dana ne pripada danasnjoj zbirnoj, pa red pada (rollback row-TX).
-            Dim otkDay As Date
-
-            If Not TryMasterSyncDay(otkData(rowOtkup, colOtkDat), otkDay) Then
-                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 36, SRC, _
-                          "Membership: otkup nema citljiv Datum. OtkupID=" & otkupID & _
-                          "; BrojZbirne=" & brojZbirne
-            End If
-
-            Dim dayDelta As Long
-            dayDelta = Abs(DateDiff("d", zbrDay, otkDay))
-
-            If dayDelta > MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE Then
-                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 37, SRC, _
-                          "Membership: otkup nije iz dana zbirne (razlika " & CStr(dayDelta) & _
-                          " dana, dozvoljeno " & CStr(MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE) & "). OtkupID=" & otkupID & _
-                          "; OtkupDatum=" & Format$(otkDay, "yyyy-mm-dd") & _
-                          "; ZbirnaDatum=" & Format$(zbrDay, "yyyy-mm-dd") & _
-                          "; BrojZbirne=" & brojZbirne
-            ElseIf dayDelta > 0 Then
-                LogWarn SRC, "Membership: otkup je iz susednog dana (post-midnight utovar). OtkupID=" & otkupID & _
-                             "; OtkupDatum=" & Format$(otkDay, "yyyy-mm-dd") & _
-                             "; ZbirnaDatum=" & Format$(zbrDay, "yyyy-mm-dd") & _
-                             "; BrojZbirne=" & brojZbirne
-            End If
-
-            ' AUD-043(b) + ZBR-CHILD-01: otkup koji je vec dete DRUGOG dokumenta
-            ' se NE prepisuje -- ni kad taj drugi dokument nosi isti broj.
-            RequireZbirnaVezaNotConflicting TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
-                                            brojZbirne, genZbirne, _
-                                            "OtkupID=" & otkupID, SRC
-
-            PoveziDeteNaZbirnu TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
-                               brojZbirne, genZbirne, SRC
-
-            Dim otpID As String
-            otpID = Trim$(CStr(nz(otkData(rowOtkup, colOtkOtpID), "")))
-
-            If Len(otpID) > 0 Then
-                If Not updatedOtp.Exists(otpID) Then
-                    LinkOtpremnicaToBrojZbirneStrict otpID, brojZbirne, genZbirne, SRC
-                    updatedOtp.Add otpID, True
-                End If
-            End If
-        End If
-    Next c
-
-    LogInfo SRC, "BrojZbirne=" & brojZbirne & _
-                 " linked " & CStr(UBound(crIDs) + 1) & _
-                 " otkupa, " & CStr(updatedOtp.count) & " otpremnica"
-
-    Exit Sub
-
-EH:
-    ' Err se MORA sacuvati PRE logovanja: LogErr -> LogError, a LogError sadrzi
-    ' "On Error Resume Next"/"On Error GoTo 0" -- svaki On Error resetuje Err
-    ' objekat. Sa "Err.Raise Err.Number" posle LogErr-a raise bi bio Err.Raise 0,
-    ' pa membership/konflikt guard iznad ne bi propagirao do ImportVOZRow_RowTX
-    ' (red bi bio kvitiran kao uspesan uz nepovezan otkup). Isti obrazac vec
-    ' koriste _TX wrapperi u ovom modulu i modBrojevi.MaxSeqFromGoogleSheet.
-    Dim errNum As Long
-    Dim errDesc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-
-    If errNum = 0 Then errNum = ERR_MASTER_SYNC_GUARD_BASE + 44
-    If Len(errDesc) = 0 Then errDesc = "Kaskadno povezivanje nije uspelo."
-
-    LogErr SRC
-
-    Err.Raise errNum, SRC, errDesc
 End Sub
 ' ============================================================
 ' PRIVATE -- Helper: BrojZbirne aus ZbirnaID

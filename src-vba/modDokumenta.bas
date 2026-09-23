@@ -732,17 +732,35 @@ End Function
 
 ' Izvedeno bez nezavisne kontrole -- za automatske tokove koji nemaju sta da
 ' unakrsno provere. Izricito, ne prece prosledjivanjem Nothing.
+' brojSaTerena: KOMANDA vs INGEST (S5-3, po presedanu dozvoliVisakKaoAvans, S2).
+'
+' "Broj je slobodan u nizu" je pravilo KOMANDE: operater ne sme da otkuca broj
+' koji vec postoji. Za INGEST vec nastale cinjenice ne vazi -- dva uredjaja
+' offline dodele isti broj istom vozacu (KR-001, dokumentovan i PRIHVACEN rizik),
+' pa bi odbijanje znacilo da vozacev dokument nestane iz kancelarije.
+'
+' Nije fallback nego SAGLASNOST POZIVAOCA: default je False, pa svaki ekran i
+' dalje dobija punu kapiju, a samo PWA uvoz izricito kaze "ovo je zateceno stanje
+' sa terena". Broj je labela (A2), pa dva dokumenta pod istim brojem nisu kvar
+' podatka -- dvosmislenost se PRIJAVLJUJE (PrijaviKolizijuBrojaZbirne, B8), a
+' identitet je i dalje ZbirnaID.
+'
+' Kontekst broja (ciji je niz, koji dan) vazi UVEK: to nije kolizija nego broj
+' koji protivreci sopstvenom redu.
 Public Function CreateZbirnaIzIzvora_TX(ByVal h As Object, _
                                         ByVal izvorOtpremnice As Collection, _
-                                        Optional ByRef outGreska As String) As String
-    CreateZbirnaIzIzvora_TX = ZbirnaUpis(h, izvorOtpremnice, Nothing, False, outGreska)
+                                        Optional ByRef outGreska As String, _
+                                        Optional ByVal brojSaTerena As Boolean = False) As String
+    CreateZbirnaIzIzvora_TX = ZbirnaUpis(h, izvorOtpremnice, Nothing, False, _
+                                         outGreska, brojSaTerena)
 End Function
 
 Private Function ZbirnaUpis(ByVal h As Object, _
                             ByVal izvorOtpremnice As Collection, _
                             ByVal ocekivano As Collection, _
                             ByVal ocekivanoObavezno As Boolean, _
-                            ByRef outGreska As String) As String
+                            ByRef outGreska As String, _
+                            Optional ByVal brojSaTerena As Boolean = False) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -764,7 +782,8 @@ Private Function ZbirnaUpis(ByVal h As Object, _
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
-    ZbirnaUpis = CreateZbirna(h, izvorOtpremnice, ocekivano, ocekivanoObavezno)
+    ZbirnaUpis = CreateZbirna(h, izvorOtpremnice, ocekivano, ocekivanoObavezno, _
+                              brojSaTerena)
 
     If ZbirnaUpis = "" Then
         Err.Raise vbObjectError + 1220, "CreateZbirna_TX", _
@@ -823,7 +842,8 @@ End Function
 Private Function CreateZbirna(ByVal h As Object, _
                               ByVal izvorOtpremnice As Collection, _
                               ByVal ocekivano As Collection, _
-                              ByVal ocekivanoObavezno As Boolean) As String
+                              ByVal ocekivanoObavezno As Boolean, _
+                              Optional ByVal brojSaTerena As Boolean = False) As String
     Const SRC As String = "CreateZbirna"
 
     On Error GoTo EH
@@ -889,8 +909,11 @@ Private Function CreateZbirna(ByVal h As Object, _
 
     modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _
                                      brojZbirne, SRC
-    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
-                                        brojZbirne, SRC
+    ' Zauzet broj u nizu je KOLIZIJA, i za ingest je prihvacena (KR-001).
+    If Not brojSaTerena Then
+        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _
+                                            brojZbirne, SRC
+    End If
 
     ' --- izvor: procitaj, proveri, izvedi ------------------------------------
     Dim data As Variant
@@ -1047,7 +1070,9 @@ Private Function CreateZbirna(ByVal h As Object, _
     rowData = BuildZbirnaHeaderRowData(zbirnaID, datum, vozacID, brojZbirne, _
                                        kupacID, HdrOpcion(h, "Hladnjaca"), _
                                        HdrOpcion(h, "Pogon"), vrsta, sorta, _
-                                       tipAmb)
+                                       tipAmb, "", _
+                                       HdrOpcion(h, "ClientRecordID"), _
+                                       HdrOpcion(h, "SyncSource"))
 
     If AppendRow(TBL_ZBIRNA, rowData) <= 0 Then
         Err.Raise vbObjectError + 1234, SRC, _
@@ -1290,7 +1315,9 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
                                           ByVal vrstaVoca As String, _
                                           ByVal sortaVoca As String, _
                                           ByVal tipAmb As String, _
-                                          Optional ByVal izdatoStatus As String = "") As Variant
+                                          Optional ByVal izdatoStatus As String = "", _
+                                          Optional ByVal clientRecordID As String = "", _
+                                          Optional ByVal syncSource As String = "") As Variant
     Const SRC As String = "BuildZbirnaHeaderRowData"
 
     Dim colCount As Long
@@ -1331,6 +1358,24 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
         st = Trim$(izdatoStatus)
         If Len(st) = 0 Then st = IZDATO_IZDATO
         SetRowValueByColumn rowData, TBL_ZBIRNA, COL_TRACE_IZDATO_STATUS, st, SRC
+    End If
+
+    ' ODAKLE JE DOKUMENT DOSAO JE CINJENICA ZAGLAVLJA (S5-3).
+    '
+    ' ClientRecordID je identitet zapisa na terenskom uredjaju, a SyncSource
+    ' kaze kojim je putem stigao. Bez njih uvoz nema po cemu da prepozna da je
+    ' isti zapis vec video -- IsDuplicateZbirnaInMaster cita bas tu kolonu -- pa
+    ' bi svaka PWA zbirna dolazila ponovo pri svakom ciklusu.
+    '
+    ' Pisu se OVDE, a ne naknadnim UpdateCell-om iz modMasterSync: tblZbirna sme
+    ' da ima jednog pisca (A11), a naknadni upis bi bio drugi. Otkupni pisac isto
+    ' resava na isti nacin (modOtkup, CreateOtkup_TX).
+    If Len(Trim$(clientRecordID)) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_CLIENT_RECORD_ID, _
+                            clientRecordID, SRC
+    End If
+    If Len(Trim$(syncSource)) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_SYNC_SOURCE, syncSource, SRC
     End If
 
     BuildZbirnaHeaderRowData = rowData
@@ -2905,9 +2950,14 @@ End Function
 '
 ' VrstaVoca / SortaVoca / TipAmbalaze NISU na spisku namerno -- izvode se iz
 ' izvornih otpremnica. Pozivalac koji ih salje pravi drugi izvor istine.
+'
+' ClientRecordID / SyncSource JESU na spisku (S5-3): poreklo dokumenta je
+' cinjenica zaglavlja, a ne izvedena vrednost. Bez njih uvoz nema po cemu da
+' prepozna zapis koji je vec video, pa bi svaka PWA zbirna dolazila ponovo.
 Private Function HdrKljucPoznat(ByVal kljuc As String) As Boolean
     Select Case LCase$(Trim$(kljuc))
-        Case "datum", "vozacid", "brojzbirne", "kupacid", "hladnjaca", "pogon"
+        Case "datum", "vozacid", "brojzbirne", "kupacid", "hladnjaca", "pogon", _
+             "clientrecordid", "syncsource"
             HdrKljucPoznat = True
     End Select
 End Function
@@ -2920,7 +2970,8 @@ Private Sub HdrProveriKljuceve(ByVal h As Object, ByVal src As String)
             Err.Raise vbObjectError + 1249, src, _
                       "Header ima nepoznat kljuc: " & CStr(kljuc) & _
                       ". Dozvoljeni: Datum, VozacID, BrojZbirne, KupacID, " & _
-                      "Hladnjaca, Pogon. Vrsta/sorta/tip ambalaze dolaze iz otpremnica."
+                      "Hladnjaca, Pogon, ClientRecordID, SyncSource. " & _
+                      "Vrsta/sorta/tip ambalaze dolaze iz otpremnica."
         End If
     Next kljuc
 End Sub
