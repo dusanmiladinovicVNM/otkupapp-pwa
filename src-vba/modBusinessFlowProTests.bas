@@ -128,7 +128,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_RF28_MembershipKoristiSvojuZbirnu
     Test_RF28_MembershipDanskiProzor
     Test_RF28_NevalidanDatumJeSyncError
-    Test_RF28_VozacIDUpdateIshodi
 
     ' RF-05 (frmDokumenta unos + storno set)
     Test_ManjakPreviewJeZbirnaMinusPrijem
@@ -308,6 +307,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AutoLanacStizeDoZbirne
     Test_OTP_ProslednjenOtkupJeIzdatIzvor
     Test_OTP_AutoSistemskiPadStajeProlaz
+    Test_OTP_PredajaVozacuPraviOtpremnicu
+    Test_OTP_PredajaDvaVozacaDvaDokumenta
+    Test_OTP_PredajaVecPredatogJeNoOp
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -1661,87 +1663,6 @@ Private Sub Test_RF28_NevalidanDatumJeSyncError()
 EH:
     LogFail "RF-28 AUD-042b nevalidan datum", Err.description
 End Sub
-
-' AUD-042(a): ishodi VozacID update-a se razlikuju. CONFLICT/NOTFOUND ne smeju da
-' izgledaju kao obican Duplicate (pozivalac ih zato salje u SyncError).
-Private Sub Test_RF28_VozacIDUpdateIshodi()
-    Dim tx As clsTransaction
-
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("RF28VOZ")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim otkPrazan As String, cridPrazan As String
-    Dim otkZauzet As String, cridZauzet As String
-    Dim otkPad As String, cridPad As String
-
-    otkPrazan = "OTK-RF28VOZ-E-" & scenario
-    cridPrazan = "CRID-RF28VOZ-E-" & scenario
-    otkZauzet = "OTK-RF28VOZ-F-" & scenario
-    cridZauzet = "CRID-RF28VOZ-F-" & scenario
-    otkPad = "OTK-RF28VOZ-X-" & scenario
-    cridPad = "CRID-RF28VOZ-X-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-
-    AppendRF28OtkupFixture otkPrazan, testDate, "", cridPrazan
-    AppendRF28OtkupFixture otkZauzet, testDate, TEST_VOZ_ID, cridZauzet
-    AppendRF28OtkupFixture otkPad, testDate, "", cridPad
-
-    Dim detail As String
-
-    AssertEquals "UPDATED", TestHook_TryUpdateVozacID(cridPrazan, TEST_VOZ_ID, detail), _
-        "RF-28 AUD-042a: prazan VozacID se popunjava (UPDATED)"
-    AssertEquals TEST_VOZ_ID, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkPrazan, COL_OTK_VOZAC))), _
-        "RF-28 AUD-042a: VozacID je stvarno upisan"
-
-    AssertEquals "NOCHANGE", TestHook_TryUpdateVozacID(cridPrazan, TEST_VOZ_ID, detail), _
-        "RF-28 AUD-042a: isti VozacID je NOCHANGE (bezopasno -> Duplicate)"
-
-    AssertEquals "CONFLICT", TestHook_TryUpdateVozacID(cridZauzet, "VOZ-RF28-OTHER", detail), _
-        "RF-28 AUD-042a: drugi VozacID je CONFLICT (ne tihi Duplicate)"
-    AssertEquals TEST_VOZ_ID, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkZauzet, COL_OTK_VOZAC))), _
-        "RF-28 AUD-042a: konflikt NE prepisuje postojeci VozacID"
-
-    AssertEquals "NOTFOUND", TestHook_TryUpdateVozacID("CRID-RF28-NEMA-" & scenario, TEST_VOZ_ID, detail), _
-        "RF-28 AUD-042a: nepostojeci ClientRecordID je NOTFOUND (greska, ne preskok)"
-
-    ' Armiran pad upisa (UpdateCell se ne moze naterati da padne "prirodno").
-    ' Ovo je putanja zbog koje je AUD-042a i postojao: stari kod je vracao True.
-    TestHook_ArmFailSeam "VOZAC_WRITE"
-
-    AssertEquals "FAILED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
-        "RF-28 AUD-042a: neuspeo UpdateCell je FAILED (ne tihi uspeh)"
-    AssertTrue Len(detail) > 0, _
-        "RF-28 AUD-042a: FAILED nosi detalj za SyncError/log"
-    AssertEquals "", Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkPad, COL_OTK_VOZAC))), _
-        "RF-28 AUD-042a: posle neuspelog upisa VozacID je i dalje prazan"
-
-    ' Seam je jednokratan -- sledeci poziv mora ponovo da radi normalno.
-    AssertEquals "UPDATED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
-        "RF-28 AUD-042a: fail seam je jednokratan (sledeci upis prolazi)"
-
-    TestHook_ArmFailSeam ""
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    TestHook_ArmFailSeam ""
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "RF-28 AUD-042a VozacID ishodi", bfpErrDesc
-End Sub
-
 ' ------------------------------------------------------------
 ' RF-28 fixture helperi (direktan append -- kontrolisemo tacno polja koja
 ' grupisanje/membership citaju, bez zavisnosti od validacija save putanje)
@@ -6492,6 +6413,229 @@ EH:
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     On Error GoTo 0
     LogFatal "Test_OTP_AutoSistemskiPadStajeProlaz", eN, eD
+End Sub
+
+' ============================================================
+' S5-2 -- PREDAJA ROBE VOZACU POSTAJE OTPREMNICA
+' ============================================================
+
+' Jedan red predaje, kakav ga ImportOneOTKSheet skuplja iz PWA lista.
+Private Function PredajaRed(ByVal redIdx As Long, ByVal otkupID As String, _
+                            ByVal vozacID As String) As Variant
+    PredajaRed = Array(redIdx, otkupID, vozacID)
+End Function
+
+' PREDAJA JE POSLOVNI DOGADJAJ, NE PECAT NA OTKUPU.
+'
+' Otkupac u PWA cekira otkupne listove i preda ih vozacu. Taj cin je osnova
+' OTPREMNICE -- a otpremnica je osnova zbirne; vozac zato nikad ne vidi
+' "slobodne" otkupe, jer su mu dok dodju do ruke vec u NJEGOVOJ otpremnici.
+'
+' Zateceni tok je isti dogadjaj upisivao kao Otkup.VozacID (TryUpdateVozacID),
+' u kolonu koju ciljni model nema. Test meri obe strane te zamene: da otpremnica
+' nastane i da se na otkup NISTA ne pecatira.
+'
+' JEDAN UTOVAR JE JEDAN DOKUMENT, iako stize kao N redova. Zato dva predata
+' bloka istog vozaca, dana, stanice, kulture i tipa ambalaze daju JEDNU
+' otpremnicu sa dva izvora -- ne dve.
+Private Sub Test_OTP_PredajaVozacuPraviOtpremnicu()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PRED1")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P1A-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P1B-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID)
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID)
+
+    Dim ishodi As Object, greske As String, n As Long
+    n = modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)
+
+    AssertEquals "1", CStr(n), _
+                 "PREDAJA: jedan utovar je JEDAN dokument (" & greske & ")"
+    AssertEquals "", greske, "PREDAJA: bez razloga za neuspeh"
+
+    Dim otpA As String, otpB As String
+    otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
+    otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
+
+    AssertTrue Len(otpA) > 0, "PREDAJA: predat blok je u otpremnici"
+    AssertEquals UCase$(otpA), UCase$(otpB), _
+                 "PREDAJA: oba predata bloka su u ISTOJ otpremnici"
+    If Len(otpA) = 0 Then GoTo Kraj
+
+    ' Vozac je cinjenica sa terena -- ne ogledalo stanice, ne pogodjen.
+    AssertEquals TEST_VOZ_ID, OtpPolje(otpA, COL_OTP_VOZAC), _
+                 "PREDAJA: otpremnica nosi vozaca kome je roba predata"
+    AssertEquals "", OtkPolje(otkA, COL_OTK_VOZAC), _
+                 "PREDAJA: na otkup se NE pecatira vozac"
+
+    AssertTrue modDokumenta.IzdatoStatusJeIzdato(OtpPolje(otpA, COL_TRACE_IZDATO_STATUS)), _
+               "PREDAJA: otpremnica je IZDATA"
+    AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(otpA).count), _
+                 "PREDAJA: clanstvo nosi oba predata bloka"
+
+    ' Svaki red mora da dobije ishod SVOJE grupe, da Google list ne ostane
+    ' Pending nad poslom koji je uradjen.
+    ' Doslovne vrednosti: SYNC_STATUS_* su Private u modMasterSync, a to i
+    ' jeste zicni ugovor sa Google listom -- test ga zato i drzi doslovno.
+    AssertEquals "Synced>Master", CStr(ishodi(2&)), _
+                 "PREDAJA: prvi red je prijavljen kao Master"
+    AssertEquals "Synced>Master", CStr(ishodi(3&)), _
+                 "PREDAJA: drugi red je prijavljen kao Master"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaVozacuPraviOtpremnicu", eN, eD
+End Sub
+
+' DVA VOZACA SU DVA UTOVARA, PA I DVA DOKUMENTA.
+'
+' Vozac je u kljucu grupisanja, jer je cinjenica ZAGLAVLJA otpremnice. Da nije,
+' roba predata dvojici zavrsila bi u jednom dokumentu ciji header nosi samo
+' jednog -- i drugi vozac bi vozio tudju otpremnicu.
+Private Sub Test_OTP_PredajaDvaVozacaDvaDokumenta()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PRED2")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P2A-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P2B-" & scenario, _
+                          KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID)
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID_B)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "2", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA dva vozaca: dva dokumenta (" & greske & ")"
+
+    Dim otpA As String, otpB As String
+    otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
+    otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
+
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "PREDAJA dva vozaca: oba bloka su vezana"
+    AssertTrue UCase$(otpA) <> UCase$(otpB), _
+               "PREDAJA dva vozaca: to NISU dva reda istog dokumenta"
+    AssertEquals TEST_VOZ_ID, OtpPolje(otpA, COL_OTP_VOZAC), _
+                 "PREDAJA dva vozaca: prva otpremnica nosi svog vozaca"
+    AssertEquals TEST_VOZ_ID_B, OtpPolje(otpB, COL_OTP_VOZAC), _
+                 "PREDAJA dva vozaca: druga otpremnica nosi svog vozaca"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaDvaVozacaDvaDokumenta", eN, eD
+End Sub
+
+' PONOVLJENA PREDAJA NE PRAVI DRUGU OTPREMNICU.
+'
+' Isti red sme da stigne ponovo -- retry, ponovljen sync, prekinut prolaz -- a
+' sme da napravi SAMO JEDAN dokument. Istina o tome da li je blok vec predat je
+' KANONSKO CLANSTVO, ne kolona i ne status u Google listu.
+'
+' Ishod mora biti Duplicate, ne SyncError: ponovljen red nije kvar.
+Private Sub Test_OTP_PredajaVecPredatogJeNoOp()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PRED3")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim otkID As String
+    otkID = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                           TEST_PREFIX & "-OTK-P3-" & scenario, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA ponovo preduslov: prva predaja je napravila otpremnicu"
+
+    Dim otpPrva As String
+    otpPrva = modDokumenta.OtpremnicaZaOtkup(otkID)
+    AssertTrue Len(otpPrva) > 0, "PREDAJA ponovo preduslov: blok je vezan"
+
+    ' Isti red stize opet.
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID)
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA ponovo: nema druge otpremnice"
+    AssertEquals "", greske, "PREDAJA ponovo: ponovljen red NIJE kvar"
+    AssertEquals UCase$(otpPrva), UCase$(modDokumenta.OtpremnicaZaOtkup(otkID)), _
+                 "PREDAJA ponovo: blok je i dalje u PRVOJ otpremnici"
+    AssertEquals "Duplicate", CStr(ishodi(2&)), _
+                 "PREDAJA ponovo: red je prijavljen kao Duplicate"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaVecPredatogJeNoOp", eN, eD
 End Sub
 
 Private Sub Test_OTP_MalinaAutoZbirna()

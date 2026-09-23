@@ -5698,6 +5698,35 @@ SABOTAZE = {
         "Test_OTP_AutoSistemskiPadStajeProlaz",
         "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
     ),
+    # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
+    # Jedan utovar je JEDAN dokument, iako stize kao N redova. Sabotaza vraca
+    # "red po red": svaki predat blok dobija svoju grupu, pa i svoju otpremnicu.
+    "predaja-red-po-red": (
+        "modMasterSync.bas",
+        '                kljuc = UCase$(vozacID) & "|" & KljucGrupe(stanica, datum, kultura, tipAmb)\n',
+        '                kljuc = UCase$(vozacID) & "|" & CStr(redIdx)   \' SABOTAZA: svaki red svoja grupa\n',
+        "Test_OTP_PredajaVozacuPraviOtpremnicu",
+        "PREDAJA: oba predata bloka su u ISTOJ otpremnici",
+    ),
+    # Vozac je cinjenica ZAGLAVLJA otpremnice, pa mora u kljuc grupe. Bez njega
+    # roba predata dvojici zavrsava u jednom dokumentu -- i drugi vozi tudje.
+    "predaja-bez-vozaca-u-kljucu": (
+        "modMasterSync.bas",
+        '                kljuc = UCase$(vozacID) & "|" & KljucGrupe(stanica, datum, kultura, tipAmb)\n',
+        '                kljuc = KljucGrupe(stanica, datum, kultura, tipAmb)   \' SABOTAZA: vozac ispada iz kljuca\n',
+        "Test_OTP_PredajaDvaVozacaDvaDokumenta",
+        "PREDAJA dva vozaca: to NISU dva reda istog dokumenta",
+    ),
+    # Istina o tome da li je blok vec predat je KANONSKO CLANSTVO. Bez te
+    # provere ponovljen red pravi drugu otpremnicu za isti blok -- ili ga pisac
+    # odbije, pa uredan retry postane SyncError.
+    "predaja-ne-gleda-clanstvo": (
+        "modMasterSync.bas",
+        "        If clanstvo.Exists(UCase$(otkupID)) Then\n",
+        "        If False Then   ' SABOTAZA: vec predat blok se uzima ponovo\n",
+        "Test_OTP_PredajaVecPredatogJeNoOp",
+        "PREDAJA ponovo: nema druge otpremnice",
+    ),
     # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
     # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza
     # vraca "jedan blok = jedan dokument" tako sto svakom otkupu da svoj kljuc.

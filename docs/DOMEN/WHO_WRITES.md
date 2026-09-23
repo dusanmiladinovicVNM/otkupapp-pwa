@@ -22,10 +22,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 |---|---|---|
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
-| `tblOtkup` | 4 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modStornoFlow` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
 | `tblKorisnici` | 3 | `modAuth`, `modMaticniKorisnici`, `modSetup` |
 | `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
+| `tblOtkup` | 3 | `modDokumenta`, `modOtkup`, `modStornoFlow` |
 | `tblPrijemnica` | 3 | `modDokumenta`, `modFaktura`, `modStorno` |
 | `tblZbirna` | 3 | `modDokumentInvariant`, `modDokumenta`, `modMasterSync` |
 | `tblAmbalaza` | 2 | `modAmbalaza`, `modStornoRecovery` |
@@ -64,10 +64,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 - `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
-- `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
 - `tblKorisnici`: `modMaticniKorisnici`
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
+- `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
 - `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblAmbalaza`: `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
@@ -96,9 +96,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 - `tblFakturaStavke`: `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblFakture`: `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
-- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
+- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
