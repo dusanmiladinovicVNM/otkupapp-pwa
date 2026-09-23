@@ -5922,40 +5922,6 @@ EH:
     LogErr "modDokumenta.ZbirnaIDZaBroj", "broj=" & broj
 End Function
 
-' `outRazlog` je Optional ByRef: zatecenim pozivaocima se nista ne menja, a
-' migracija dobija RAZLOG. Odluka ostaje na JEDNOM mestu -- da backfill sam
-' racuna razlog, imao bi drugu kopiju pravila, sto je tacno ono sto faza 2
-' nije htela.
-Public Function ZbirnaJedanIDIkadZaBroj(ByVal broj As String, _
-                                                 Optional ByRef outRazlog As String) As String
-    Dim id As ZbirnaIdent
-    On Error GoTo EH
-    outRazlog = ""
-    If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
-    id = ZbirnaIdentResolve(broj)
-    If id.integrityStatus <> ZBR_INT_OK Then
-        outRazlog = ZBR_BF_INTEGRITET
-        Exit Function
-    End If
-    ' 0 i >1 oba padaju na <> 1, ali traze RAZLICIT potez: nula znaci da nijedna
-    ' zbirna pod tim brojem nema GeneracijaID (stari red pre uvodjenja kolone),
-    ' vise od jedne znaci stvarnu dvosmislenost. Prvo se resava migracijom
-    ' roditelja, drugo se ne resava uopste.
-    If id.historicalLogicalCount = 0 Then
-        outRazlog = ZBR_BF_NEMA_GENERACIJE
-        Exit Function
-    End If
-    If id.historicalLogicalCount > 1 Then
-        outRazlog = ZBR_BF_VISE_GENERACIJA
-        Exit Function
-    End If
-    ZbirnaJedanIDIkadZaBroj = id.historicalOnlyZbirnaID
-    Exit Function
-EH:
-    outRazlog = ZBR_BF_INTEGRITET
-    LogErr "modDokumenta.ZbirnaJedanIDIkadZaBroj", "broj=" & broj
-End Function
-
 ' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.
 '
 ' Broj i generacija se upisuju ZAJEDNO. Dva odvojena upisa bi se pre ili kasnije
