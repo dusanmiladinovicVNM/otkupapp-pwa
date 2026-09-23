@@ -302,6 +302,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
+    Test_OTP_AutoIzPwaSpajaKlase
+    Test_OTP_AutoDeliPoTipuAmbalaze
+    Test_OTP_AutoKvarGrupeNeObaraOstale
+    Test_OTP_AutoLanacStizeDoZbirne
+    Test_OTP_ProslednjenOtkupJeIzdatIzvor
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -5935,6 +5940,443 @@ End Sub
 '     BrojZbirne na zaglavlju;
 '   - IDEMPOTENTNO: drugi poziv ne pravi drugu zbirnu. To nije udobnost nego
 '     uslov, jer jezgro zovu dva pozivaoca (izdavanje i batch prolaz).
+' ============================================================
+' S5-1 -- AUTO-OTPREMNICA IZ UVEZENIH PWA OTKUPA
+' ============================================================
+
+' Otkup sa JEDNOM klasom i zadatim tipom ambalaze -- da grupisanje moze da se
+' meri po svakoj osi posebno. NoviOtkupFixture drzi TipAmbalaze fiksnim, pa bi
+' kroz njega osa ambalaze bila nemerljiva.
+Private Function AutoOtpFixture(ByVal datum As Date, ByVal stanicaID As String, _
+                                ByVal brDok As String, ByVal klasa As String, _
+                                ByVal kol As Double, ByVal cena As Double, _
+                                ByVal amb As Double, ByVal tipAmb As String) As String
+    Dim h As Object
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "KooperantID", TEST_KOOP_ID
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", TEST_KULTURA_ID
+    h.Add "VrstaVoca", TEST_VRSTA
+    h.Add "SortaVoca", TEST_SORTA
+    h.Add "TipAmbalaze", tipAmb
+    h.Add "BrojDokumenta", brDok
+    h.Add "ParcelaID", GetTestParcelaID()
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add OtkStavka(klasa, kol, cena, amb, 0#)
+
+    Dim greska As String
+    AutoOtpFixture = CreateOtkup_TX(h, stavke, greska)
+    If Len(AutoOtpFixture) = 0 Then
+        Err.Raise vbObjectError + 9420, "AutoOtpFixture", _
+                  "CreateOtkup_TX nije vratio ID: " & greska
+    End If
+End Function
+
+' Snimak SVIH tabela koje auto-otpremnica dira. Rollback mora da vrati CEO
+' dokument: zaglavlje bez stavki je siroce koje pada u tudjem testu.
+' tblVozaci je tu jer ogledalo stanice nastaje usput, tblStanice jer ga
+' EnsureVozacMirrorForStanica cita.
+Private Sub AutoOtpSnimak(ByVal tx As clsTransaction)
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_VOZACI
+End Sub
+
+' KLASA VISE NIJE KLJUC GRUPISANJA -- I TO JE CEO POENT REZA.
+'
+' Zatecena auto-otpremnica je grupisala StanicaID|Datum|VozacID|KLASA, jer je
+' klasa bila polje zaglavlja otkupa. Dva bloka istog dana sa istog otkupnog
+' mesta zato su davala DVA dokumenta. Klasa je sada stavka, pa isti ulaz mora
+' da da JEDAN dokument sa DVE stavke.
+'
+' Test meri bas tu razliku: dva otkupa koja se razlikuju SAMO po klasi.
+Private Sub Test_OTP_AutoIzPwaSpajaKlase()
+    Dim tx As clsTransaction
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("AOSPJ")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-AA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-AB-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim greske As String, n As Long
+    n = modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkA, greske)
+
+    AssertEquals "1", CStr(n), _
+                 "AUTO spoj: jedna otpremnica za oba bloka (greske: " & greske & ")"
+    AssertEquals "", greske, "AUTO spoj: bez razloga za neuspeh"
+
+    Dim otpA As String, otpB As String
+    otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
+    otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
+
+    AssertTrue Len(otpA) > 0, "AUTO spoj: blok I klase je u otpremnici"
+    AssertEquals UCase$(otpA), UCase$(otpB), _
+                 "AUTO spoj: OBA bloka su u ISTOJ otpremnici -- klasa nije kljuc grupe"
+    If Len(otpA) = 0 Then GoTo Kraj
+
+    AssertEquals "2", CStr(OtpBrojStavki(otpA)), _
+                 "AUTO spoj: otpremnica ima DVE stavke, po jednu za svaku klasu"
+    AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(otpA).count), _
+                 "AUTO spoj: clanstvo nosi oba izvora"
+
+    ' Vozac je cinjenica ZAGLAVLJA otpremnice, i to ogledalo stanice -- ne vise
+    ' pecat na otkupu (zatecen korak 2b ciklusa).
+    AssertEquals TEST_ST_ID, OtpPolje(otpA, COL_OTP_VOZAC), _
+                 "AUTO spoj: vozac otpremnice je ogledalo stanice"
+    AssertEquals "", OtkPolje(otkA, COL_OTK_VOZAC), _
+                 "AUTO spoj: na otkup se NE pecatira vozac"
+
+    ' Jedan potez: nastaje i odmah se izdaje.
+    AssertTrue modDokumenta.IzdatoStatusJeIzdato(OtpPolje(otpA, COL_TRACE_IZDATO_STATUS)), _
+               "AUTO spoj: otpremnica je IZDATA"
+
+Kraj:
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_OTP_AutoIzPwaSpajaKlase", eN, eD
+End Sub
+
+' TIP AMBALAZE JESTE KLJUC GRUPE -- jer je cinjenica ZAGLAVLJA otpremnice.
+'
+' Da nije u kljucu, dva bloka sa razlicitom transportnom ambalazom zavrsila bi u
+' jednom dokumentu ciji header nosi SAMO JEDAN tip -- i pisac bi ga odbio
+' (OtpRequireIzvorValjan poredi tip za svaki izvor koji nosi gajbe). Ishod bi
+' bio "0 kreirano" nad savrseno ispravnim ulazom.
+'
+' Dva poziva sa razlicitim opsegom: svaki obradjuje SVOJU grupu.
+Private Sub Test_OTP_AutoDeliPoTipuAmbalaze()
+    Dim tx As clsTransaction
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("AODEL")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-DA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-DB-" & scenario, _
+                          KLASA_I, 350#, 250#, 18#, TEST_TIP_AMB_B)
+
+    Dim greske As String
+    AssertEquals "1", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkA, greske)), _
+                 "AUTO tip: prva grupa je jedna otpremnica (" & greske & ")"
+    AssertEquals "1", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkB, greske)), _
+                 "AUTO tip: druga grupa je jedna otpremnica (" & greske & ")"
+
+    Dim otpA As String, otpB As String
+    otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
+    otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
+
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "AUTO tip: oba bloka su vezana"
+    AssertTrue UCase$(otpA) <> UCase$(otpB), _
+               "AUTO tip: razlicita ambalaza -> DVA dokumenta, ne jedan"
+
+    AssertEquals TEST_TIP_AMB, OtpPolje(otpA, COL_OTP_TIP_AMB), _
+                 "AUTO tip: prva otpremnica nosi svoj tip ambalaze"
+    AssertEquals TEST_TIP_AMB_B, OtpPolje(otpB, COL_OTP_TIP_AMB), _
+                 "AUTO tip: druga otpremnica nosi svoj tip ambalaze"
+
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_OTP_AutoDeliPoTipuAmbalaze", eN, eD
+End Sub
+
+' PAD JEDNE GRUPE NE SME DA OBORI OSTALE, NITI DA PRODJE U TISINI.
+'
+' Batch radi nad ulazom koji dolazi spolja (PWA), pa "prva losa grupa obara ceo
+' korak" znaci da jedan pokvaren red trajno blokira SVE otpremnice, svaki
+' ciklus. Suprotna greska je gora: tiho preskakanje: operater dobije "0
+' kreirano" i nema sta da popravi. Ugovor je zato "sto je proslo -- proslo je, a
+' sto nije -- imenovano je".
+'
+' FAULT INJECTION, ne produkciono stanje: otkupu se posle upisa prepisuje
+' StanicaID na nepostojecu stanicu. Time se pogadja tacno grana koja trazi
+' vozaca-ogledala, a da se ne dira maticni podatak koji drugi testovi koriste.
+' Realan povod postoji -- stanica uklonjena iz maticnih podataka dok njeni
+' otkupi jos zive.
+'
+' Uz to meri i izbor izvora: otkup koji je VEC u aktivnoj otpremnici batch ne
+' sme ponovo da uzme (NevezaniOtkupi je jedini citac te cinjenice).
+Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
+    Dim tx As clsTransaction
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("AOKVR")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Const FANTOM As String = "ST-NEPOSTOJI-90999"
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkKvar As String, otkZdrav As String
+    otkKvar = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-KV-" & scenario, _
+                             KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkZdrav = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-KZ-" & scenario, _
+                              KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB_B)
+
+    ' Preduslov: nepostojeca stanica stvarno ne postoji, inace test ne meri nista.
+    AssertEquals "0", CStr(FindRows(TBL_STANICE, "StanicaID", FANTOM).count), _
+                 "AUTO kvar preduslov: fantomska stanica ne postoji"
+
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkKvar)(1), _
+                      COL_OTK_STANICA, FANTOM, "Test_OTP_AutoKvarGrupeNeObaraOstale"
+
+    Dim greske As String, n As Long
+    n = modMasterSync.AutoCreateOtpremniceFromPWA_TX("", greske)
+
+    AssertTrue n > 0, "AUTO kvar: zdrave grupe su obradjene (n=" & CStr(n) & ")"
+    AssertTrue Len(modDokumenta.OtpremnicaZaOtkup(otkZdrav)) > 0, _
+               "AUTO kvar: ZDRAV blok je dobio otpremnicu uprkos pokvarenoj grupi"
+
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkKvar), _
+                 "AUTO kvar: pokvaren blok NIJE vezan"
+    AssertTrue InStr(1, greske, FANTOM, vbTextCompare) > 0, _
+               "AUTO kvar: razlog IMENUJE stanicu (bilo: " & greske & ")"
+
+    ' Ponovljen prolaz: vezani blok se vise ne uzima, pa druga otpremnica ne
+    ' nastaje. Kapija izbora je NevezaniOtkupi, ne pisac.
+    Dim otpZdrav As String
+    otpZdrav = modDokumenta.OtpremnicaZaOtkup(otkZdrav)
+
+    Call modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkZdrav, greske)
+    AssertEquals UCase$(otpZdrav), UCase$(modDokumenta.OtpremnicaZaOtkup(otkZdrav)), _
+                 "AUTO kvar: ponovljen prolaz ne pravi drugu otpremnicu za isti blok"
+
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_OTP_AutoKvarGrupeNeObaraOstale", eN, eD
+End Sub
+
+' MALINA LANAC IZ PWA STIZE DO ZBIRNE (E-022, end-to-end).
+'
+' Dva koraka ciklusa koja su do sada bila pauzirana zajedno sada se sustizu:
+' auto-otpremnica (S5-1) pravi dokument koji auto-zbirna (S4-4) prepoznaje kao
+' slobodan. Test meri BAS taj spoj -- da se ne desi da svaki korak radi sam, a
+' lanac i dalje stoji.
+'
+' Veza se proverava kroz CLANSTVO (tblZbirnaIzvori), ne kroz broj: broj je
+' labela, i zbirna svoj dobija iz svog niza.
+Private Sub Test_OTP_AutoLanacStizeDoZbirne()
+    Dim tx As clsTransaction
+    Dim prevMode As String, prevKupac As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("AOLAN")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    Dim otkID As String
+    otkID = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                           TEST_PREFIX & "-OTK-LN-" & scenario, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+
+    Dim greske As String
+    AssertEquals "1", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkID, greske)), _
+                 "AUTO lanac: otpremnica napravljena (" & greske & ")"
+
+    Dim otpID As String
+    otpID = modDokumenta.OtpremnicaZaOtkup(otkID)
+    AssertTrue Len(otpID) > 0, "AUTO lanac: blok je u otpremnici"
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    AssertEquals "1", CStr(modMasterSync.AutoCreateZbirnaFromOtpremnice_TX(otpID)), _
+                 "AUTO lanac: zbirna napravljena iz te otpremnice"
+
+    ' Clanstvo je zapis: OtpremnicaID -> ZbirnaID iz tblZbirnaIzvori.
+    Dim clanstvo As Object, zbrID As String
+    Set clanstvo = modDokumenta.AktivnoZbrClanstvoPoKanonu()
+    If clanstvo.Exists(UCase$(otpID)) Then zbrID = CStr(clanstvo(UCase$(otpID)))
+    AssertTrue Len(zbrID) > 0, "AUTO lanac: otpremnica je clan zbirne"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    Dim izv As Collection
+    Set izv = modDokumenta.IzvoriZbirne(zbrID)
+    AssertEquals "1", CStr(izv.count), "AUTO lanac: zbirna ima tacno jedan izvor"
+    AssertEquals UCase$(otpID), UCase$(CStr(izv(1))), _
+                 "AUTO lanac: izvor zbirne je BAS ta otpremnica"
+
+Kraj:
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_OTP_AutoLanacStizeDoZbirne", eN, eD
+End Sub
+
+' "STA JE IZDATO" IMA JEDNO TELO -- I ZA CITAOCE I ZA PISCA.
+'
+' OtpRequireIzvorValjan je nosio KOPIJU pravila, strozu za jedan status:
+' primao je samo IZDATO, dok IzdatoStatusJeIzdato (citaoci robe, stampa,
+' izvestaji) PROSLEDJENO racuna kao izdato. Dva odgovora na isto pitanje.
+'
+' Danas to nije ziv kvar -- PROSLEDJENO ne pise nijedan put -- ali prelaz
+' IZDATO -> PROSLEDJENO kaze samo da je dokument otisao dalje, ne da je
+' povucen. Kad ga sync pocne da pise, razilazenje bi izaslo kao "otpremnica ne
+' prima blok", bez razloga koji operater moze da veze za nesto sto je uradio.
+'
+' FAULT INJECTION (nema produkcionog pisca tog statusa): status se upisuje
+' direktno, i to je jedini nacin da se pravilo izmeri pre nego sto postane ziv
+' put. Negativna strana se meri istim potezom: DRAFT ostaje odbijen, pa test ne
+' dokazuje "sve prolazi" nego bas granicu.
+Private Sub Test_OTP_ProslednjenOtkupJeIzdatIzvor()
+    Dim tx As clsTransaction
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPPRS")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim otkProsl As String, otkNacrt As String
+    otkProsl = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                              TEST_PREFIX & "-OTK-PS-" & scenario, _
+                              KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkNacrt = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                              TEST_PREFIX & "-OTK-PN-" & scenario, _
+                              KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB_B)
+
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkProsl)(1), _
+                      COL_TRACE_IZDATO_STATUS, IZDATO_PROSLEDJENO, _
+                      "Test_OTP_ProslednjenOtkupJeIzdatIzvor"
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkNacrt)(1), _
+                      COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT, _
+                      "Test_OTP_ProslednjenOtkupJeIzdatIzvor"
+
+    AssertEquals IZDATO_PROSLEDJENO, OtkPolje(otkProsl, COL_TRACE_IZDATO_STATUS), _
+                 "OTP prosl preduslov: otkup stvarno nosi PROSLEDJENO"
+
+    Dim greske As String
+    AssertEquals "1", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkProsl, greske)), _
+                 "OTP prosl: PROSLEDJEN otkup je valjan izvor otpremnice (" & greske & ")"
+    AssertTrue Len(modDokumenta.OtpremnicaZaOtkup(otkProsl)) > 0, _
+               "OTP prosl: prosledjen blok je vezan za otpremnicu"
+
+    ' Granica: nacrt NIJE izdat dokument i ostaje van.
+    AssertEquals "0", CStr(modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkNacrt, greske)), _
+                 "OTP prosl: NACRT otkupa i dalje nije izvor otpremnice"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkNacrt), _
+                 "OTP prosl: nacrt nije vezan"
+
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_OTP_ProslednjenOtkupJeIzdatIzvor", eN, eD
+End Sub
+
 Private Sub Test_OTP_MalinaAutoZbirna()
     Dim prevMode As String, prevKupac As String
 

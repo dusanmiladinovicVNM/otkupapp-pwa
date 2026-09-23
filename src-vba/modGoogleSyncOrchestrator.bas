@@ -68,6 +68,8 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim okKartice As Boolean
     Dim okMgmt As Boolean
 
+    Dim createdOtp As Long
+    Dim otpGreske As String
     Dim createdZbr As Long
     Dim errNum As Long
     Dim errDesc As String
@@ -191,28 +193,35 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         GoTo CleanExit
     End If
 
-    ' 2b. MALINA: VozacID := StanicaID (pre auto-otpremnice; pali okidac)
+    ' 3. Auto-create Otpremnice (S5-1)
     '
-    ' PRIPREMA za auto-otpremnicu, pa deli njenu sudbinu: dok je izvedeni lanac
-    ' pauziran, upis se ne izvrsava -- i summary to MORA da kaze. Ranije je red
-    ' "OK - Malina: VozacID:=StanicaID" isao bezuslovno, pa je izvestaj tvrdio
-    ' korak koji se nije desio. Nema stete nad podacima, ali status laze.
-    If IsMalinaMode() And Not modMasterSync.IzvedeniLanacIzPwaDostupan() Then
-        AppendStepPauza summary, _
-            "Malina VozacID:=StanicaID: nije potrebno dok je izvedeni lanac pauziran"
-    ElseIf IsMalinaMode() Then
-        SyncProgress "Malina: popunjavam VozacID iz StanicaID..."
+    ' Zatecena dva koraka su spojena u jedan. "2b. MALINA: VozacID := StanicaID"
+    ' je bio PECAT NA OTKUPU koji je pripremao grupisanje -- u novom modelu vozac
+    ' je cinjenica zaglavlja OTPREMNICE, pa priprema nema gde da se upise.
+    ' Ogledalo stanice sada trazi sam pisac auto-otpremnice (modMalina).
+    '
+    ' DELIMICAN USPEH NIJE PAD (#383): grupa je svoja transakcija, pa ono sto je
+    ' proslo JESTE upisano. Korak se prijavljuje po tome da li je bilo razloga,
+    ' a razlozi se IMENUJU -- "0 kreirano" bez razloga je izvestaj iz kog
+    ' operater ne moze da zakljuci sta da uradi.
+    '
+    ' Van malina rezima koraka jos nema: tamo vozaca dodeljuje otkupac u PWA
+    ' (E-019), a taj put je pauziran do S5-3. Pauza se PRIJAVLJUJE, jer ciklus
+    ' tada stvarno ne radi nesto sto ce raditi.
+    If modMasterSync.AutoOtpremnicaDostupna() Then
+        SyncProgress "Malina: kreiram otpremnice iz uvezenih otkupa..."
 
         On Error Resume Next
         Err.Clear
-        Call StampVozacFromStanicaForMalina_TX
+        createdOtp = AutoCreateOtpremniceFromPWA_TX("", otpGreske)
         errNum = Err.Number
         errDesc = Err.description
         On Error GoTo EH
 
         If errNum <> 0 Then
-            AppendStep summary, False, "Malina VozacID:=StanicaID | Error=" & errDesc
-            LogError ORCH_MODULE, "StampVozacFromStanicaForMalina_TX failed: " & errDesc
+            okOtpremnice = False
+            AppendStep summary, False, "Auto-create Otpremnice | Error=" & errDesc
+            LogError ORCH_MODULE, "AutoCreateOtpremniceFromPWA_TX failed: " & errDesc
 
             Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                                  okStammdaten, okKartice, okMgmt, False
@@ -221,20 +230,23 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
             GoTo CleanExit
         End If
 
-        AppendStep summary, True, "Malina: VozacID:=StanicaID"
-    End If
+        okOtpremnice = (Len(otpGreske) = 0)
+        AppendStep summary, okOtpremnice, _
+            "Auto-create Otpremnice (" & CStr(createdOtp) & " kreirano)" & _
+            IIf(Len(otpGreske) > 0, " | bez otpremnice: " & otpGreske, "")
 
-    ' 3. Auto-create Otpremnice
-    '
-    ' OBRISANO u S1c: auto-otpremnica je citala linijska polja sa zaglavlja
-    ' otkupa i pisala Otkup.OtpremnicaID. Vraca je S5 nad tblOtpremnicaIzvori.
-    ' Korak se NE preskace tiho i NE prijavljuje kao uspeh sa nulom: ciklus je
-    ' DEGRADIRAN, ali ne pada -- otkupi jesu uvezeni.
-    okOtpremnice = True
-    degradirano = True
-    razlogDegradacije = "auto-Otpremnice pauzirane do PR7"
-    AppendStepPauza summary, _
-        "Auto-create Otpremnice: PAUZIRANO do PR7 -- otpremnice unesi rucno"
+        ' Ciklus se NE obara: otkupi su uvezeni, deo otpremnica je napravljen.
+        If Len(otpGreske) > 0 Then
+            degradirano = True
+            razlogDegradacije = "deo otkupa je ostao bez otpremnice"
+        End If
+    Else
+        okOtpremnice = True
+        degradirano = True
+        razlogDegradacije = "auto-Otpremnice rade samo u malina rezimu (E-019 do S5-3)"
+        AppendStepPauza summary, _
+            "Auto-create Otpremnice: van malina rezima jos nema izvora vozaca -- unesi rucno"
+    End If
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
     '

@@ -4343,12 +4343,20 @@ Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
     ' Danas svaki otkup iz CreateOtkup_TX jeste IZDATO, pa ovo nije ziv bug --
     ' ali kanonska veza treba da kaze sta trazi, a ne da se oslanja na to sto
     ' drugi pisac trenutno ne pravi drugacije redove.
+    '
+    ' PRAVILO "sta je izdato" IMA JEDNO TELO: IzdatoStatusJeIzdato (review #363).
+    ' Ovde je stajala njegova kopija, stroza za jedan status -- PROSLEDJENO.
+    ' Kopija nije bila ziv kvar (PROSLEDJENO ne pise nijedan put danas), ali je
+    ' bila dva odgovora na isto pitanje: citaoci robe i stampa su prosledjen
+    ' dokument brojali kao izdat, a ovaj pisac bi ga odbio. Cim sync pocne da
+    ' markira prosledjene otkupe (S5), razilazenje postaje kvar -- i to tihi,
+    ' jer bi se video tek kao "otpremnica ne prima blok bez razloga".
     Dim izdato As String
-    izdato = UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
-                                               COL_TRACE_IZDATO_STATUS))))
-    If izdato <> UCase$(IZDATO_IZDATO) Then
+    izdato = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
+                                        COL_TRACE_IZDATO_STATUS)))
+    If Not IzdatoStatusJeIzdato(izdato) Then
         Err.Raise vbObjectError + 1330, src, _
-                  "Otkup nije izdat nego '" & izdato & "': " & otkupID & _
+                  "Otkup nije izdat nego '" & UCase$(izdato) & "': " & otkupID & _
                   ". Otpremnica se sastavlja od IZDATIH otkupnih listova."
     End If
 

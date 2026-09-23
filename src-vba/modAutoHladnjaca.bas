@@ -203,9 +203,10 @@ End Function
 ' bez obzira na rezim -- malina rezim je zaseban razlog, i tice se ogledala na
 ' OSTALIM stanicama.
 '
-' Lanac ga sme zatraziti kroz kanonski, idempotentan upis
-' (modMalina.EnsureVozacMirrorForStanica), a odluku donosi tek ponovljena
-' provera: ako ga ni tada nema, staje i kaze na kojoj stanici.
+' Lanac ga trazi kroz modMalina.VozacOgledaloZaStanicu -- JEDNO telo koje dele
+' hladnjacki lanac i malina auto-otpremnica (S5-1). Pravilo je "odlucuje
+' ponovljena provera para, ne povratna vrednost Ensure-a"; ako ogledala ni tada
+' nema, lanac staje i kaze na kojoj stanici.
 '
 ' AUTOMATIKA JE OBAVEZNA, NE PONUDA: hladnjacki blok ne ide na radni sto nego u
 ' SVOJ lanac. Zato ekran grana PRE rucnog vezivanja (LanacVaziZaBlok), a ne posle
@@ -262,17 +263,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     ' Izbor je izlazni uslov S6 (plan 14.20), ne stvar ukusa.
     If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function
 
-    If Not modMalina.IsManagedStationMirror(stanicaID) Then
-        ' Best-effort: Ensure sme da padne (npr. duplikat stanice), ali odluku
-        ' donosi tek ponovljena provera -- "pozvao sam Ensure" nije dokaz.
-        On Error Resume Next
-        modMalina.EnsureVozacMirrorForStanica stanicaID, _
-            Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), "", ""
-        Err.Clear
-        On Error GoTo EH
-    End If
-
-    If Not modMalina.IsManagedStationMirror(stanicaID) Then
+    Dim vozacID As String
+    vozacID = modMalina.VozacOgledaloZaStanicu(stanicaID)
+    If Len(vozacID) = 0 Then
         izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_MIRROR") & " " & stanicaID
         Exit Function
     End If
@@ -292,7 +285,7 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     Set h = CreateObject("Scripting.Dictionary")
     h("Datum") = datum
     h("StanicaID") = stanicaID
-    h("VozacID") = stanicaID
+    h("VozacID") = vozacID
     h("KulturaID") = kulturaID
     h("TipAmbalaze") = tipAmb
     h("BrojOtpremnice") = broj
