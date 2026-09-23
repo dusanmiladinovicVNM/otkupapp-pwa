@@ -4928,14 +4928,57 @@ zapisom diže grešku; to je pad **koraka**, ne ishod grupe. Uz to je orkestrato
 bila **mrtva** — funkcija grešku nikad nije puštala do nje. Sada re-raise-uje, pa ciklus staje pre
 outbound sync-a, kao i kod VOZ koraka. Pad jedne **grupe** i dalje ne obara ostale.
 
+#### Review #385 — ugovor o padu je nestajao na granici pisca (P2)
+
+Rez je **imao** dva različita ishoda i orkestrator je na njih različito reagovao:
+
+```
+loša poslovna grupa  -> outGreske -> korak DEGRADIRAN -> ciklus ide dalje
+sistemski pad        -> Err       -> errNum <> 0      -> HARD STOP pre outbound
+```
+
+Ali `CreateOtpremnicaIzIzvora_TX` **svaki** izuzetak pretvara u tekst i vraća `""`
+(`OtpPadTransakcije` rollback-uje i vraća razlog, bez re-raise-a). Zato su i „šema nije spremna",
+„`AppendRow` nije upisao" i pravi VBA runtime error izlazili kao **obična grupa koja nije prošla**, sa
+`Err.Number = 0` — pa bi ciklus posle stvarnog kvara mašine nastavio da gura podatke napolje. Nije
+bilo korupcije (rollback radi), ali jeste pogrešan **control flow**.
+
+**Vrsta pada se sada izriče na MESTU PODIZANJA, ne iz teksta greške.**
+
+| Deo | Rez |
+|---|---|
+| klasifikacija | `modSchemaGuard.RaiseSistemski` / `JeSistemskiPad` — rezervisan opseg **9800–9899**, plus pravilo da broj **van** našeg raise opsega (pravi VBA runtime error) jeste sistemski. Provera je čist test broja, **bez spiska koji truli** |
+| šta je sistemsko | `RequireColumnIndex`, `RequireUpdateCell`, `SchemaReadyOrFail` i šest mesta u putu pisca otpremnice (`NewEntityID` ×3, `AppendRow` ×3). Sve ostalo ostaje poslovno — podrazumevano ponašanje se ne menja |
+| prenos | `OtpPadTransakcije` prima `Optional ByRef outSistemska` (sedam pozivalaca netaknuto — ekranima ta razlika ne treba, oni rade nad jednim dokumentom); `CreateOtpremnicaIzIzvora_TX` je izlaže |
+| postupanje | `AutoOtpremnicaUpis` re-raise-uje sistemski pad — i iz pisca i iz svega što računa **pre** njega (ogledalo, broj, čitanje grupe) |
+
+**`modSchema.bas` je generisan artefakt**, pa je izmena išla u `tools/gen_schema_module.py` i modul je
+regenerisan; otisak ostaje `64BD33C7`. Kapija `gen_schema_module --check` je to i uhvatila — prvo sam
+menjao `.bas` ručno.
+
+#### Kako je izmerena granica koja nije dostižna iz podataka
+
+Sistemski pad se ne može proizvesti ulazom: `AppendRow` i `NewEntityID` otkažu tek nad **stvarno**
+pokvarenom sveskom, a to test ne sme da napravi. Zato `modDokumenta.TestSimPadPiscaOtpremnice` —
+prekidač na **produkcionom** putu pisca, sa branom `IsTestMode`, koji podiže **istu** grešku koju bi
+podigao pravi pad (ne paralelnu, jer bi paralelna merila samu sebe).
+
+Test meri **oba** smera plus kontrolni korak: sa isključenom simulacijom **isti** ulaz prolazi — čime se
+dokazuje da je pad u srednjem koraku došao baš odatle. Jednosmeran dokaz ovde ne vredi: „sve podiže
+grešku" bi prošlo sistemski smer i pokvarilo poslovni — a baš zbog poslovnog smera batch postoji.
+
+**P3 (isti krug):** komentar iznad `AutoCreateZbirnaFromOtpremnice_TX` je još opisivao
+`SaveZbirnaMulti_TX`, `BrojZbirne := BrojOtpremnice` i backfill na `tblOtkup` — model koji je S4-4
+obrisao.
+
 #### Kapije
 
-Sabotaže **576 → 581**: `auto-otpremnica-blok-po-blok` (svaki blok svoja grupa), `auto-otpremnica-bez-tipa-u-kljucu`,
+Sabotaže **576 → 582**: `auto-otpremnica-blok-po-blok` (svaki blok svoja grupa), `auto-otpremnica-bez-tipa-u-kljucu`,
 `auto-otpremnica-normalizacija-u-upis` (vraća baš gornji kvar 1), `auto-otpremnica-guta-kvar` (grupa bez
-otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`. **Dokazano u oba smera: 5/5 crvenih,
-izvor vraćen bit-identično.**
+otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`, `sistemski-pad-kao-poslovni-ishod`.
+**Dokazano u oba smera: 6/6 crvenih, izvor vraćen bit-identično.**
 
-BFP **1837 → 1870** (+33) · `RunAllTests` **200/0** · Storno **163/0** · Banka **241/0** · Palete **97** ·
+BFP **1837 → 1876** (+39) · `RunAllTests` **200/0** · Storno **163/0** · Banka **241/0** · Palete **97** ·
 Agrohemija **25**.
 
 **Nalaz o kapijama:** `vba_check` proverava da je tvrdnja **podniz** literala, a `dokaz.py` za BFP traži
