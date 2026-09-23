@@ -386,10 +386,15 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     ' dva aktivna dokumenta istog broja to znaci: storniram TACNO svoje
     ' zaglavlje, pa TUDJOJ zbirni odnesem decu. Tiho.
     '
-    ' Dok child mutacije ne budu scoped (VozacID/KupacID postoje, v. katalog),
-    ' jedina postena opcija je stati PRE nego sto se ista promeni.
+    ' OD S4-3c SCOPED IZBOR POSTOJI, pa kapija mora da ga vidi (review #384).
+    ' Racuna se ISTIM telom koje akter koristi, sa decom BAS te operacije --
+    ' inace kapija odbija ono sto primitiv ume bezbedno da uradi.
+    Dim scopeID As String, razZC As String
     If mode <> SV_MODE_RESI_KASNIJE Then
-        Dim razZC As String: razZC = NzToText(s("mutRazlog"))
+        razZC = ZbirnaScopeRazlog(broj, docID, _
+                                  (mode = SV_MODE_DUPLI), _
+                                  (mode = SV_MODE_PONISTENJE) And ZbirnaOwnsExternalChain(broj), _
+                                  scopeID)
         If Len(razZC) > 0 Then
             r("message") = ZbirnaMutPoruka(razZC, "zbirne", broj, _
                 "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
@@ -1033,7 +1038,7 @@ End Function
 
 ' Aktivni otkup blokovi (samostalni) vezani za flow dokument. Otpremnica: preko
 ' OtpremnicaID; Zbirna/Prijemnica: preko BrojZbirne. Za multiselect dodatni storno.
-' docID (GeneracijaID izabranog dokumenta) NIJE kozmetika: rezultat ove funkcije
+' docID (ZbirnaID izabranog dokumenta) NIJE kozmetika: rezultat ove funkcije
 ' ide u dodatni storno blokova, dakle u MUTACIJU. Bez njega su blokovi svih
 ' dokumenata istog poslovnog broja u istoj korpi -- a citanje otpremnice po broju
 ' namerno ukljucuje i STORNIRANE otpremnice, jer njihovi blokovi jos mogu da
@@ -1596,13 +1601,9 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' SuziDecuNaZbirnu rade nad TRAGOM NA DETETU, a taj trag od S4-3c nosi
     ' ZbirnaID. Prvo sam ceo scoping obrisao kao "mrtav kod" -- nije bio mrtav
     ' nego pogresno hranjen.
-    Dim scopeID As String: scopeID = ""
-    If SvaAktivnaDecaNoseZbirnaID(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
-       And SvaAktivnaDecaNoseZbirnaID(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj) Then
-        scopeID = zbrID
-    End If
-
-    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(scopeID) > 0)
+    Dim scopeID As String
+    Dim razMut As String
+    razMut = ZbirnaScopeRazlog(broj, zbrID, True, False, scopeID)
     If Len(razMut) > 0 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
                   ZbirnaMutPoruka(razMut, "zbirne", broj, _
@@ -1787,6 +1788,45 @@ End Function
 '
 ' Sta se NIJE promenilo: vlasnicka grana ostaje, i dalje IKAD (storniran vlasnik
 ' ima aktivnu decu). Dodata je samo dokumentna.
+' JEDAN RACUN SCOPE-A ZA KAPIJU I AKTERA (review #384, P2).
+'
+' Kapija dispecera je racunala NESCOPED (ZbirnaMutRazlog(broj)), a akter scoped
+' -- pa je RunZbirnaCorrection odbijao radnju koju primitiv ume bezbedno da
+' uradi: dva aktivna dokumenta istog broja, svako sa svojom decom, i tacan
+' ZbirnaID u ruci. Sposobnost je postojala i nije se mogla dosegnuti iz F8.
+'
+' To je ista klasa greske koju ovaj refaktor vise puta sece: kapija i akter
+' odgovaraju na ISTO pitanje, a odgovor im nije isto telo.
+'
+' diraOtkup / diraPrijemnice opisuju KOJU DECU ce operacija mutirati -- scope
+' vazi samo ako BAS TA deca nose identitet roditelja. Zato su parametri, a ne
+' fiksan skup: DUPLI odvezuje otpremnice i blokove, PONISTENJE kaskadira na
+' prijemnice i palete kad lanac ide do njih.
+'
+' outScopeID: "" = operacija ide po broju; inace identitet po kom se deca
+' suzavaju. Vraca RAZLOG odbijanja, "" = sme.
+Private Function ZbirnaScopeRazlog(ByVal broj As String, ByVal zbirnaID As String, _
+                                   ByVal diraOtkup As Boolean, _
+                                   ByVal diraPrijemnice As Boolean, _
+                                   ByRef outScopeID As String) As String
+    outScopeID = ""
+
+    If Len(Trim$(zbirnaID)) > 0 Then
+        Dim ok As Boolean
+        ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj)
+        If ok And diraOtkup Then
+            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj)
+        End If
+        If ok And diraPrijemnice Then
+            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj) _
+                 And modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj)
+        End If
+        If ok Then outScopeID = Trim$(zbirnaID)
+    End If
+
+    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)
+End Function
+
 Private Function ZbirnaMutRazlog(ByVal broj As String, _
                                  Optional ByVal scopedPoGeneraciji As Boolean = False) As String
     ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj, scopedPoGeneraciji)
@@ -1805,7 +1845,7 @@ Private Function ZbirnaMutPoruka(ByVal razlog As String, ByVal uloga As String, 
             uzrok = "nosi VISE aktivnih dokumenata (isti vlasnik, dva odvojena unosa)"
             savet = "Storniraj visak ili razdvoj brojeve pa ponovi."
         Case Else
-            uzrok = "ima aktivnu zbirnu bez identiteta (GeneracijaID)"
+            uzrok = "ima aktivnu zbirnu bez identiteta (ZbirnaID)"
             savet = "Pokreni Provere integriteta (B9) pa ponovi."
     End Select
     ZbirnaMutPoruka = "Broj " & uloga & " '" & broj & "' " & uzrok & "."
@@ -1954,18 +1994,9 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' SCOPING DECE IDE PO ZbirnaID-u (S4-3c) -- v. isti obrazac u
     ' StornoZbirnaIDetach_TX. Prijemnice i palete ulaze u odluku samo kad lanac
     ' stvarno ide do njih (ownsChain).
-    Dim scopeID As String: scopeID = ""
-    If Len(zbrID) > 0 Then
-        Dim scopeOK As Boolean
-        scopeOK = SvaAktivnaDecaNoseZbirnaID(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)
-        If scopeOK And ownsChain Then
-            scopeOK = SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne) _
-                      And SvaAktivnaDecaNoseZbirnaID(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, brojZbirne)
-        End If
-        If scopeOK Then scopeID = zbrID
-    End If
-
-    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(scopeID) > 0)
+    Dim scopeID As String
+    Dim razPon As String
+    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)
     If Len(razPon) > 0 Then
         res("message") = ZbirnaMutPoruka(razPon, "zbirne", brojZbirne, _
                                          "Deca se u semi vezuju BROJEM, pa se lanac ne moze ponistiti samo za jedan")

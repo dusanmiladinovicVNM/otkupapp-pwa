@@ -1667,10 +1667,8 @@ SABOTAZE = {
     ),
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
-        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
-        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
-        "        Dim razZC As String: razZC = NzToText(s(\"mutRazlog\"))\n",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n",
+        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
         "DUPLI staje dok broj nose dva aktivna dokumenta",
     ),
@@ -1694,9 +1692,9 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(scopeID) > 0)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    Dim razPon As String: razPon = ZbirnaMutRazlog(brojZbirne, Len(scopeID) > 0)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
@@ -5691,16 +5689,10 @@ SABOTAZE = {
     ),
     "scoping-dece-bez-identiteta": (
         "modStornoFlow.bas",
-        "        scopeID = zbrID\n"
-        "    End If\n"
-        "\n"
-        "    Dim razMut As String",
-        "        scopeID = \"\"   ' SABOTAZA: izbor prestaje da bude scoped\n"
-        "    End If\n"
-        "\n"
-        "    Dim razMut As String",
-        "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: sopstvena otpremnica B je odvezana",
+        "        If ok Then outScopeID = Trim$(zbirnaID)\n",
+        "        ' SABOTAZA: scope se nikad ne dodeljuje\n",
+        "Test_ZBR_DispecerPustaScopedIzbor",
+        "ZBR disp: sopstvena otpremnica B je odvezana",
     ),
     "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
@@ -5808,10 +5800,10 @@ SABOTAZE = {
     # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
     "kapija-pusta-i-nescoped-izbor": (
         "modStornoFlow.bas",
-        "    Dim razMut As String: razMut = ZbirnaMutRazlog(broj, Len(scopeID) > 0)\n",
-        "    Dim razMut As String: razMut = ""   ' SABOTAZA: kapija je ugasena\n",
-        "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno BEZ generacije i dalje staje na dva aktivna dokumenta",
+        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)\n",
+        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, False)   ' SABOTAZA: kapija opet nescoped\n",
+        "Test_ZBR_DispecerPustaScopedIzbor",
+        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer",
     ),
     # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
     # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio

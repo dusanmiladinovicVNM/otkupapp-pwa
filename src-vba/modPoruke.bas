@@ -1016,7 +1016,7 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_ZBR_NACRT_IZMENJEN", ChrW(10003) & " Najava zbirne izmenjena."
     UpsertRow lo, existing, "DOKUNOS_MSG_ZBR_ISPRAVKA_PAUZIRANA", "Napomena: zavr" & ChrW(353) & "etak ispravke zbirne je PAUZIRAN dok ne pre" & ChrW(273) & "e na " & ChrW(269) & "lanstvo po ID-u. Stari dokument ostaje u kontekstu ispravke."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_SIROCE", ChrW(10007) & " Taj broj ve" & ChrW(263) & " koristi aktivna prijemnica, a zbirne pod njim nema " & ChrW(8212) & " izaberi drugi broj."
-    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_INTEGRITET", ChrW(10007) & " Zbirna pod tim brojem nema GeneracijaID " & ChrW(8212) & " pokreni provere integriteta."
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_INTEGRITET", ChrW(10007) & " Zbirna pod tim brojem nema ZbirnaID " & ChrW(8212) & " pokreni provere integriteta."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_DVOSMISLEN", ChrW(10007) & " Pod tim brojem postoji vi" & ChrW(353) & "e aktivnih zbirnih " & ChrW(8212) & " ne mo" & ChrW(382) & "e se utvrditi na koju se prijemnica ve" & ChrW(382) & "e."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_TUDJ", ChrW(10007) & " Zbirna pod tim brojem pripada drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " proveri broj zbirne."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_ISTORIJA", ChrW(10007) & " Taj broj su ranije dr" & ChrW(382) & "ala dva vlasnika " & ChrW(8212) & " vezivanje po broju bi moglo da zahvati tu" & ChrW(273) & "i dokument."

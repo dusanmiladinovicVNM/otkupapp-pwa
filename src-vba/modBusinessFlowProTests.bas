@@ -139,6 +139,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta
     Test_ZBR_KapijaPustaKadJeIzborScoped
+    Test_ZBR_DispecerPustaScopedIzbor
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
@@ -2557,6 +2558,103 @@ End Sub
 ' upis: cim su oba dokumenta aktivna, ZbirnaIDZaBroj je fail-closed i
 ' otpremnica snimljena po broju ostaje bez generacije. Link preko ZbirnaID zna
 ' tacno cija je.
+' DISPECER PUSTA SCOPED IZBOR (review #384, P2).
+'
+' Test_ZBR_KapijaPustaKadJeIzborScoped dokazuje da PRIMITIV ume bezbedno da
+' obradi dva dokumenta istog broja. Ali operater ne zove primitiv -- zove F8, a
+' F8 ide kroz RunZbirnaCorrection.
+'
+' Tamo je kapija racunala NESCOPED (ZbirnaMutRazlog(broj)) i odbijala radnju PRE
+' nego sto se do primitiva stigne. Sposobnost je postojala i bila nedostizna:
+' klasican test/production seam mismatch -- zeleno u primitivu, mrtvo u aplikaciji.
+'
+' Scenario je KR-001, isti koji ce S5 vratiti kroz PWA sync: dva uredjaja
+' offline, isti broj, isti vlasnik, dva legitimna dokumenta.
+'
+' Meri se OBA smera: sa identitetom prolazi i dira SAMO svoje, bez identiteta i
+' dalje staje. Bez druge polovine bi popravka mogla biti prosto "ugasi kapiju".
+Private Sub Test_ZBR_DispecerPustaScopedIzbor()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, broj As String
+    Dim zbrA As String, zbrB As String, otpA As String, otpB As String
+    Dim otkA As String, otkB As String, cridA As String, cridB As String
+    Dim r As Object
+
+    scenario = NewScenarioCode("ZBRDSP")
+    testDate = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+    otpA = "OTP-ZBRDSP-A-" & scenario
+    otpB = "OTP-ZBRDSP-B-" & scenario
+    otkA = "OTK-ZBRDSP-A-" & scenario
+    otkB = "OTK-ZBRDSP-B-" & scenario
+    cridA = "CRID-ZBRDSP-OA-" & scenario
+    cridB = "CRID-ZBRDSP-OB-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    zbrA = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZA-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 100, broj)
+    zbrB = TestHook_ImportZbirnaRowPWA("CRID-ZBRDSP-ZB-" & scenario, TEST_VOZ_ID, _
+                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, 120, broj)
+    AssertTrue (Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB), _
+        "ZBR disp preduslov: dva aktivna dokumenta pod istim brojem"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
+
+    AppendRF28OtpremnicaFixture otpA, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DA-" & scenario
+    AppendRF28OtpremnicaFixture otpB, testDate, TEST_VOZ_ID, TEST_PREFIX & "-DB-" & scenario
+    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, cridA, ""
+    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, cridB, ""
+    VeziOtkupZaOtpremnicuFixture otkA, otpA
+    VeziOtkupZaOtpremnicuFixture otkB, otpB
+
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, cridA
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
+
+    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+        "ZBR disp preduslov: otpremnica B nosi identitet dokumenta B"
+
+    ' --- BEZ identiteta: dispecer i dalje staje -----------------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR disp: DUPLI bez identiteta staje na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: posle odbijanja dokument B je netaknut"
+
+    ' --- SA identitetom: dispecer PUSTA i dira samo svoje -------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrB)
+    AssertTrue CBool(r("success")), _
+        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer (bilo: " & _
+        CStr(r("message")) & ")"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: stornira se bas izabrani dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR disp: tudji dokument A je netaknut"
+    AssertEquals "", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR disp: sopstvena otpremnica B je odvezana"
+    AssertEquals broj, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE)), _
+        "ZBR disp: tudja otpremnica A je OSTALA na svojoj zbirni"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_DispecerPustaScopedIzbor", eN, eD
+End Sub
+
 Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     Dim tx As clsTransaction
     Dim scenario As String, testDate As Date
