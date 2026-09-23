@@ -5682,6 +5682,26 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A7: sam storniran red nije aktivan dokument",
     ),
+    "trag-deteta-opet-generacija": (
+        "modMasterSync.bas",
+        "    genZbirne = zbirnaID\n",
+        "    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)   ' SABOTAZA: trag opet nosi generaciju\n",
+        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
+        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
+    ),
+    "scoping-dece-bez-identiteta": (
+        "modStornoFlow.bas",
+        "        scopeID = zbrID\n"
+        "    End If\n"
+        "\n"
+        "    Dim razMut As String",
+        "        scopeID = \"\"   ' SABOTAZA: izbor prestaje da bude scoped\n"
+        "    End If\n"
+        "\n"
+        "    Dim razMut As String",
+        "Test_ZBR_KapijaPustaKadJeIzborScoped",
+        "ZBR-F4: sopstvena otpremnica B je odvezana",
+    ),
     "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
         "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",

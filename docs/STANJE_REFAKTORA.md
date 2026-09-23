@@ -232,7 +232,11 @@
     poslednjeg), pa su `DUPLI` i `PONIŠTENJE` bili nedostupni za **svaku** kanonsku zbirnu — baš za
     ono što je S4-3a ponudio kao zamenu. Nijedan test to nije video jer svi mere fixture redove koji
     generaciju nose. Detalji: plan §14.35.
-39. **Sledeće:** ~~S4-3b~~ (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
+39. **S4-3c — osa dovršena (PR #384).** Trag na detetu nosi **identitet** roditelja, kolona se zove
+    `ZbirnaRoditeljID`, scoping ide po ID-u, test-pečati generacije i backfill obrisani. Usput:
+    storno suite je dobila izveštaj **po imenu** (bez toga se 9 padova nije moglo trijazirati).
+    Detalji: plan §14.36.
+40. **Sledeće:** ~~S4-3b~~ (čišćenje ostatka `GeneracijaID` okvira zbirne — **prvo izmeriti**, jer
     scoping dece u `StornoZbirnaIDetach_TX` verovatno udara u isti S6 zid), pa (malina auto-zbirna nad kanonskim piscem), S5 (PWA sync),
     S3e-2 (brisanje kolona kad popis pokaže nulu), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
