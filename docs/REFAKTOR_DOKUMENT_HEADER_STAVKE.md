@@ -4913,18 +4913,34 @@ odbije.
 | **3 · delimičan uspeh nije pad** | grupa je svoja transakcija, pa što je prošlo — prošlo je. Razlozi se **imenuju** (`outGreske`), jer „0 kreirano“ bez razloga operateru ne kaže šta da popravi |
 | **4 · jedno pravilo „šta je izdato“** | `OtpRequireIzvorValjan` zove `IzdatoStatusJeIzdato` umesto svoje kopije; `PROSLEDJENO` je izdato i za pisca, ne samo za čitače |
 
-#### Kvar koji je test uhvatio, a nijedna kapija ne bi
+#### Dva kvara koja sam sam napravio, a našli testovi
 
-Zaglavlje sam gradio **iz ključa grupe**, a ključ je normalizovan na velika slova jer služi poređenju.
-Otpremnica je dobijala `TEST GAJBA` umesto `Test Gajba`. Nijedna kapija to ne vidi — `RequireIstoPolje`
-poredi `vbTextCompare` — pa bi razlika izašla tek na štampi i u izveštajima ambalaže, kao tip koji nigde
-drugde ne postoji. **Normalizacija služi poređenju, nikad upisu.**
+**1 · Normalizacija je iscurila u upis.** Zaglavlje sam gradio **iz ključa grupe**, a ključ je normalizovan
+na velika slova jer služi poređenju. Otpremnica je dobijala `TEST GAJBA` umesto `Test Gajba`. Nijedna
+kapija to ne vidi — `RequireIstoPolje` poredi `vbTextCompare` — pa bi razlika izašla tek na štampi i u
+izveštajima ambalaže, kao tip koji nigde drugde ne postoji. **Normalizacija služi poređenju, nikad
+upisu.**
+
+**2 · Pad grupe i pad prolaza nisu ista stvar.** Batch je **svaki** izuzetak pretvarao u `outGreske`, pa
+bi ciklus za sistemski pad javio „deo otkupa je ostao bez otpremnice" — a nijedna grupa ne bi ni bila
+pokušana. Sastavljanje grupa čita članstvo **strogim** čitačem (`NevezaniOtkupi`), koji nad pokvarenim
+zapisom diže grešku; to je pad **koraka**, ne ishod grupe. Uz to je orkestratorova grana `errNum <> 0`
+bila **mrtva** — funkcija grešku nikad nije puštala do nje. Sada re-raise-uje, pa ciklus staje pre
+outbound sync-a, kao i kod VOZ koraka. Pad jedne **grupe** i dalje ne obara ostale.
 
 #### Kapije
 
 Sabotaže **576 → 581**: `auto-otpremnica-blok-po-blok` (svaki blok svoja grupa), `auto-otpremnica-bez-tipa-u-kljucu`,
-`auto-otpremnica-normalizacija-u-upis` (vraća baš gornji kvar), `auto-otpremnica-guta-kvar` (grupa bez
-otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`. BFP **1837 → 1869** (+32).
+`auto-otpremnica-normalizacija-u-upis` (vraća baš gornji kvar 1), `auto-otpremnica-guta-kvar` (grupa bez
+otpremnice prođe u tišini), `izvor-otpremnice-opet-samo-izdato`. **Dokazano u oba smera: 5/5 crvenih,
+izvor vraćen bit-identično.**
+
+BFP **1837 → 1870** (+33) · `RunAllTests` **200/0** · Storno **163/0** · Banka **241/0** · Palete **97** ·
+Agrohemija **25**.
+
+**Nalaz o kapijama:** `vba_check` proverava da je tvrdnja **podniz** literala, a `dokaz.py` za BFP traži
+**tačan i statički** tekst — pa je pet unosa prošlo za 5 sekundi, a pun dokaz ih je posle ~20 minuta
+prijavio kao `NE OBARA SVOJ TEST`, iako su svi bili crveni i svi na pravoj tvrdnji. U backlogu §15.
 
 #### Ostaje otvoreno posle S5-1
 
