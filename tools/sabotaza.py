@@ -5717,15 +5717,21 @@ SABOTAZE = {
         "Test_OTP_PredajaDvaVozacaDvaDokumenta",
         "PREDAJA dva vozaca: to NISU dva reda istog dokumenta",
     ),
-    # Istina o tome da li je blok vec predat je KANONSKO CLANSTVO. Bez te
-    # provere ponovljen red pravi drugu otpremnicu za isti blok -- ili ga pisac
-    # odbije, pa uredan retry postane SyncError.
+    # Istina o tome da li je blok vec predat je KANONSKO CLANSTVO.
+    #
+    # TVRDNJA JE NAMERNO "ponovljen red NIJE kvar", a NE "nema druge
+    # otpremnice". Ova druga je PLACEBO za ovu sabotazu: i bez provere
+    # clanstva pisac odbija vec vezan izvor (OtpRequireIzvorValjan,
+    # traziSlobodan:=True), pa je n = 0 u oba slucaja -- merila bi TUDJU
+    # kapiju. Razlika koja stvarno postoji je u IZVESTAJU: sa proverom je
+    # ponovljen red tih no-op sa statusom Duplicate, bez nje postaje
+    # SyncError -- uredan retry prijavljen kao kvar.
     "predaja-ne-gleda-clanstvo": (
         "modMasterSync.bas",
         "        If clanstvo.Exists(UCase$(otkupID)) Then\n",
         "        If False Then   ' SABOTAZA: vec predat blok se uzima ponovo\n",
         "Test_OTP_PredajaVecPredatogJeNoOp",
-        "PREDAJA ponovo: nema druge otpremnice",
+        "PREDAJA ponovo: ponovljen red NIJE kvar",
     ),
     # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
     # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza
