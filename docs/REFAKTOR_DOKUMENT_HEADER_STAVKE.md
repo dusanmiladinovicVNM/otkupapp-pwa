@@ -5046,6 +5046,17 @@ BFP **1876 → 1887**, sravnjeno po stavkama: −10 (obrisan test) +21 (tri nova
 **Obim dokaza po novom pravilu** (`CLAUDE.md` §5, odluka 23.09.2026): u rezu se vrte **samo nove**
 sabotaže, pun katalog ide pred release.
 
+#### Tvrdnja koja je merila tuđu kapiju
+
+`predaja-ne-gleda-clanstvo` je bila **crvena, ali ne na imenovanoj tvrdnji**. Tvrdnja „nema druge
+otpremnice“ je za tu sabotažu **placebo**: i bez provere članstva pisac odbija već vezan izvor
+(`OtpRequireIzvorValjan`, `traziSlobodan:=True`), pa je `n = 0` u oba slučaja — merila je **tuđu**
+kapiju.
+
+Razlika koju provera stvarno pravi je u **izveštaju**: sa njom je ponovljen red tih no-op sa statusom
+`Duplicate`, bez nje postaje `SyncError` — uredan retry prijavljen kao kvar. Tvrdnja je preusmerena na
+to. Isti obrazac koji je već zapisan kao „dvoslojna kapija: sabotaža ne grize“.
+
 
 ## 15) Backlog — namerno van opsega
 
