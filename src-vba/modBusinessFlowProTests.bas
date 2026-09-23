@@ -286,6 +286,7 @@ Public Sub RunBusinessFlowProSuite()
     ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
     ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
     Test_PWA_IngestPraviHeaderIStavku
+    Test_PWA_IsoDatumStizeKaoString
     Test_PWA_NerazresivaKulturaObaraUvoz
     Test_PWA_IstiCridIstiSadrzajJeNoOp
     Test_PWA_IstiCridDrugiSadrzajPada
@@ -12702,6 +12703,57 @@ Private Sub Test_PWA_IngestPraviHeaderIStavku()
 
 EH:
     LogFatal "Test_PWA_IngestPraviHeaderIStavku", Err.Number, Err.description
+End Sub
+
+' DATUM IZ PWA STIZE KAO STRING, NE KAO Date -- MERENJE PRODUKCIONOG OBLIKA.
+'
+' TryReadSheetData cita Sheets API "values" endpoint i parsira JSON. JSON nema
+' tip za datum, pa je SVAKA celija String; PWA salje ISO ("yyyy-mm-dd").
+'
+' Svi dosadasnji PWA testovi su u GS_DATUM stavljali pravi Date (PwaRed), pa
+' produkcioni oblik nikad nije prosao kroz test. Ovaj test zatvara bas tu rupu:
+' isti ulaz kao produkcija, pa tvrdnja da otkup nosi datum koji je PWA poslala.
+'
+' Povod: mereno u S5-2 da CDate nad ISO stringom ume da vrati sasvim drugu
+' godinu, tiho i bez greske. Ako ista zamka vazi i ovde, svaki PWA otkup nosi
+' pogresan datum -- pa ovo nije kozmetika nego provera da li postoji ziv kvar.
+Private Sub Test_PWA_IsoDatumStizeKaoString()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAISO")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-ISO-" & scenario
+
+    Dim zeljeni As Date
+    zeljeni = NextTestDate()
+
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-ISO-" & scenario, 400#, 50#, 20)
+
+    ' PRODUKCIONI OBLIK: string, ne Date.
+    red(1, 9) = Format$(zeljeni, "yyyy-mm-dd")
+
+    AssertTrue VarType(red(1, 9)) = vbString, _
+               "PWA ISO preduslov: datum je STRING, kao iz JSON-a"
+
+    Dim otkID As String
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    AssertTrue Len(otkID) > 0, "PWA ISO: uvoz je prosao"
+    If Len(otkID) = 0 Then Exit Sub
+
+    ' Sirova vrednost, ne OtkPolje: CStr pa CDate bi islo kroz isti lokal.
+    Dim upisan As Variant
+    upisan = LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM)
+    AssertTrue IsDate(upisan), "PWA ISO: upisan datum je pravi datum"
+
+    AssertEquals Format$(zeljeni, "yyyy-mm-dd"), Format$(CDate(upisan), "yyyy-mm-dd"), _
+                 "PWA ISO: otkup nosi datum koji je PWA poslala"
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_IsoDatumStizeKaoString", Err.Number, Err.description
 End Sub
 
 ' Nerazresiva kultura obara uvoz umesto da fabrikuje FK.
