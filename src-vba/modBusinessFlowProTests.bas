@@ -307,9 +307,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AutoLanacStizeDoZbirne
     Test_OTP_ProslednjenOtkupJeIzdatIzvor
     Test_OTP_AutoSistemskiPadStajeProlaz
-    Test_OTP_PredajaVozacuPraviOtpremnicu
-    Test_OTP_PredajaDvaVozacaDvaDokumenta
-    Test_OTP_PredajaVecPredatogJeNoOp
+    Test_OTP_PredajaJeJedanUtovar
+    Test_OTP_DvePredajeDvaDokumenta
+    Test_OTP_PredajaMesanihVrstaSeOdbija
+    Test_OTP_PredajaBezIdentitetaStaje
+    Test_OTP_PredajaDrugomVozacuJeKonflikt
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -5872,15 +5874,25 @@ End Sub
 Private Function AutoOtpFixture(ByVal datum As Date, ByVal stanicaID As String, _
                                 ByVal brDok As String, ByVal klasa As String, _
                                 ByVal kol As Double, ByVal cena As Double, _
-                                ByVal amb As Double, ByVal tipAmb As String) As String
+                                ByVal amb As Double, ByVal tipAmb As String, _
+                                Optional ByVal kulturaID As String = "") As String
     Dim h As Object
     Set h = CreateObject("Scripting.Dictionary")
     h.Add "Datum", datum
     h.Add "KooperantID", TEST_KOOP_ID
     h.Add "StanicaID", stanicaID
-    h.Add "KulturaID", TEST_KULTURA_ID
-    h.Add "VrstaVoca", TEST_VRSTA
-    h.Add "SortaVoca", TEST_SORTA
+
+    ' Druga kultura ima SVOJU vrstu i praznu sortu -- mesana predaja se meri
+    ' pravom vrstom voca, ne surogatom.
+    If Len(kulturaID) = 0 Or kulturaID = TEST_KULTURA_ID Then
+        h.Add "KulturaID", TEST_KULTURA_ID
+        h.Add "VrstaVoca", TEST_VRSTA
+        h.Add "SortaVoca", TEST_SORTA
+    Else
+        h.Add "KulturaID", kulturaID
+        h.Add "VrstaVoca", TEST_VRSTA_BEZ_SORTE
+        h.Add "SortaVoca", ""
+    End If
     h.Add "TipAmbalaze", tipAmb
     h.Add "BrojDokumenta", brDok
     h.Add "ParcelaID", GetTestParcelaID()
@@ -6414,31 +6426,38 @@ EH:
     On Error GoTo 0
     LogFatal "Test_OTP_AutoSistemskiPadStajeProlaz", eN, eD
 End Sub
-
 ' ============================================================
 ' S5-2 -- PREDAJA ROBE VOZACU POSTAJE OTPREMNICA
+'
+' Identitet predaje je PredajaID -- jedan klik otkupca u PWA. NIJE (vozac,
+' stanica, dan, kultura, ambalaza): ti atributi opisuju ROBU, ne UTOVAR.
 ' ============================================================
 
-' Jedan red predaje, kakav ga ImportOneOTKSheet skuplja iz PWA lista.
+' Jedan red predaje, kakav ga ImportOneOTKSheet skuplja iz PWA lista:
+' Array(redIndex, OtkupID, VozacID, PredajaID, PredatoAt).
 Private Function PredajaRed(ByVal redIdx As Long, ByVal otkupID As String, _
-                            ByVal vozacID As String) As Variant
-    PredajaRed = Array(redIdx, otkupID, vozacID)
+                            ByVal vozacID As String, ByVal predajaID As String, _
+                            ByVal predatoAt As String) As Variant
+    PredajaRed = Array(redIdx, otkupID, vozacID, predajaID, predatoAt)
 End Function
 
-' PREDAJA JE POSLOVNI DOGADJAJ, NE PECAT NA OTKUPU.
+Private Function PredajaIsoDatum(ByVal d As Date) As String
+    PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
+End Function
+
+' JEDAN KLIK JE JEDAN UTOVAR, PA I JEDAN DOKUMENT -- I KAD SPAJA VISE DANA.
 '
-' Otkupac u PWA cekira otkupne listove i preda ih vozacu. Taj cin je osnova
-' OTPREMNICE -- a otpremnica je osnova zbirne; vozac zato nikad ne vidi
-' "slobodne" otkupe, jer su mu dok dodju do ruke vec u NJEGOVOJ otpremnici.
+' Odluka operatera (23.09.2026): "jedan klik kojim se cekiraju svi blokovi koje
+' otkupac predaje vozacu su kljuc; kod sljive i drugog voca se moze desiti da
+' ide roba sa dva datuma na jednu otpremnicu".
 '
-' Zateceni tok je isti dogadjaj upisivao kao Otkup.VozacID (TryUpdateVozacID),
-' u kolonu koju ciljni model nema. Test meri obe strane te zamene: da otpremnica
-' nastane i da se na otkup NISTA ne pecatira.
+' Zato su OBA zatecena grupisanja pogresna: po (vozac, stanica, dan, kultura,
+' ambalaza) jedan utovar sa dva datuma bi se RAZBIO na dva dokumenta, a dve
+' predaje istog dana SPOJILE u jedan.
 '
-' JEDAN UTOVAR JE JEDAN DOKUMENT, iako stize kao N redova. Zato dva predata
-' bloka istog vozaca, dana, stanice, kulture i tipa ambalaze daju JEDNU
-' otpremnicu sa dva izvora -- ne dve.
-Private Sub Test_OTP_PredajaVozacuPraviOtpremnicu()
+' Test meri i drugu polovinu iste odluke: otpremnica je TRANSPORTNI dokument,
+' pa nosi datum PREDAJE -- ne datum nijednog od svojih otkupnih listova.
+Private Sub Test_OTP_PredajaJeJedanUtovar()
     Dim tx As clsTransaction
 
     On Error GoTo EH
@@ -6450,55 +6469,61 @@ Private Sub Test_OTP_PredajaVozacuPraviOtpremnicu()
     tx.BeginTx
     AutoOtpSnimak tx
 
-    Dim datum As Date
-    datum = NextTestDate()
+    Dim danas As Date, juce As Date
+    danas = NextTestDate()
+    juce = danas - 1
 
-    Dim otkA As String, otkB As String
-    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P1A-" & scenario, _
-                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
-    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P1B-" & scenario, _
-                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+    Dim otkStari As String, otkNovi As String
+    otkStari = AutoOtpFixture(juce, TEST_ST_ID, TEST_PREFIX & "-OTK-P1A-" & scenario, _
+                              KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkNovi = AutoOtpFixture(danas, TEST_ST_ID, TEST_PREFIX & "-OTK-P1B-" & scenario, _
+                             KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim predajaID As String
+    predajaID = "PRED-" & scenario
 
     Dim predaje As Collection
     Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID)
-    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID)
+    predaje.Add PredajaRed(2, otkStari, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas))
+    predaje.Add PredajaRed(3, otkNovi, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas))
 
     Dim ishodi As Object, greske As String, n As Long
     n = modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)
 
     AssertEquals "1", CStr(n), _
-                 "PREDAJA: jedan utovar je JEDAN dokument (" & greske & ")"
+                 "PREDAJA: jedan klik je JEDAN dokument (" & greske & ")"
     AssertEquals "", greske, "PREDAJA: bez razloga za neuspeh"
 
     Dim otpA As String, otpB As String
-    otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
-    otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
+    otpA = modDokumenta.OtpremnicaZaOtkup(otkStari)
+    otpB = modDokumenta.OtpremnicaZaOtkup(otkNovi)
 
     AssertTrue Len(otpA) > 0, "PREDAJA: predat blok je u otpremnici"
     AssertEquals UCase$(otpA), UCase$(otpB), _
-                 "PREDAJA: oba predata bloka su u ISTOJ otpremnici"
+                 "PREDAJA: listovi sa DVA DATUMA su u ISTOJ otpremnici"
     If Len(otpA) = 0 Then GoTo Kraj
 
-    ' Vozac je cinjenica sa terena -- ne ogledalo stanice, ne pogodjen.
+    ' Otpremnica je transportni dokument -- nosi datum utovara.
+    '
+    ' Cita se SIROVA vrednost, ne OtpPolje: on vraca String, pa bi ponovni CDate
+    ' isao kroz isti lokal-zavisan put koji je ovaj rez i uklonio iz pisca
+    ' (CDate("2091-01-23") ovde daje 8230-04-15 -- mereno).
+    Dim otpDatum As Variant
+    otpDatum = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_DATUM)
+    AssertTrue IsDate(otpDatum), "PREDAJA: datum otpremnice je pravi datum, ne tekst"
+    AssertEquals PredajaIsoDatum(danas), PredajaIsoDatum(CDate(otpDatum)), _
+                 "PREDAJA: otpremnica nosi datum PREDAJE, ne datum otkupnog lista"
+
     AssertEquals TEST_VOZ_ID, OtpPolje(otpA, COL_OTP_VOZAC), _
                  "PREDAJA: otpremnica nosi vozaca kome je roba predata"
-    AssertEquals "", OtkPolje(otkA, COL_OTK_VOZAC), _
+    AssertEquals "", OtkPolje(otkStari, COL_OTK_VOZAC), _
                  "PREDAJA: na otkup se NE pecatira vozac"
-
     AssertTrue modDokumenta.IzdatoStatusJeIzdato(OtpPolje(otpA, COL_TRACE_IZDATO_STATUS)), _
                "PREDAJA: otpremnica je IZDATA"
     AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(otpA).count), _
                  "PREDAJA: clanstvo nosi oba predata bloka"
-
-    ' Svaki red mora da dobije ishod SVOJE grupe, da Google list ne ostane
-    ' Pending nad poslom koji je uradjen.
-    ' Doslovne vrednosti: SYNC_STATUS_* su Private u modMasterSync, a to i
-    ' jeste zicni ugovor sa Google listom -- test ga zato i drzi doslovno.
     AssertEquals "Synced>Master", CStr(ishodi(2&)), _
-                 "PREDAJA: prvi red je prijavljen kao Master"
-    AssertEquals "Synced>Master", CStr(ishodi(3&)), _
-                 "PREDAJA: drugi red je prijavljen kao Master"
+                 "PREDAJA: red je prijavljen kao Master"
 
 Kraj:
     tx.RollbackTx
@@ -6511,15 +6536,18 @@ EH:
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
-    LogFatal "Test_OTP_PredajaVozacuPraviOtpremnicu", eN, eD
+    LogFatal "Test_OTP_PredajaJeJedanUtovar", eN, eD
 End Sub
 
-' DVA VOZACA SU DVA UTOVARA, PA I DVA DOKUMENTA.
+' DVE PREDAJE ISTOG DANA SU DVA DOKUMENTA.
 '
-' Vozac je u kljucu grupisanja, jer je cinjenica ZAGLAVLJA otpremnice. Da nije,
-' roba predata dvojici zavrsila bi u jednom dokumentu ciji header nosi samo
-' jednog -- i drugi vozac bi vozio tudju otpremnicu.
-Private Sub Test_OTP_PredajaDvaVozacaDvaDokumenta()
+' Vozac je dolazio dvaput -- u 10 i u 16. Sva cetiri bloka imaju ISTE atribute
+' robe (isti vozac, stanica, dan, kultura, ambalaza), pa bi grupisanje po njima
+' dalo JEDAN dokument. Razlikuje ih samo identitet dogadjaja.
+'
+' Nije kozmetika: izdata otpremnica se ne dopunjuje (A13), pa spojeni dokument
+' kasnije ne moze legitimno da se razdvoji bez ispravke.
+Private Sub Test_OTP_DvePredajeDvaDokumenta()
     Dim tx As clsTransaction
 
     On Error GoTo EH
@@ -6542,25 +6570,23 @@ Private Sub Test_OTP_PredajaDvaVozacaDvaDokumenta()
 
     Dim predaje As Collection
     Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID)
-    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID_B)
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, "PRED-A-" & scenario, _
+                           PredajaIsoDatum(datum))
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, "PRED-B-" & scenario, _
+                           PredajaIsoDatum(datum))
 
     Dim ishodi As Object, greske As String
     AssertEquals "2", _
                  CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
-                 "PREDAJA dva vozaca: dva dokumenta (" & greske & ")"
+                 "PREDAJA dva utovara: dva dokumenta (" & greske & ")"
 
     Dim otpA As String, otpB As String
     otpA = modDokumenta.OtpremnicaZaOtkup(otkA)
     otpB = modDokumenta.OtpremnicaZaOtkup(otkB)
 
-    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "PREDAJA dva vozaca: oba bloka su vezana"
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, "PREDAJA dva utovara: oba bloka su vezana"
     AssertTrue UCase$(otpA) <> UCase$(otpB), _
-               "PREDAJA dva vozaca: to NISU dva reda istog dokumenta"
-    AssertEquals TEST_VOZ_ID, OtpPolje(otpA, COL_OTP_VOZAC), _
-                 "PREDAJA dva vozaca: prva otpremnica nosi svog vozaca"
-    AssertEquals TEST_VOZ_ID_B, OtpPolje(otpB, COL_OTP_VOZAC), _
-                 "PREDAJA dva vozaca: druga otpremnica nosi svog vozaca"
+               "PREDAJA dva utovara: ISTI atributi robe NISU isti dokument"
 
     tx.RollbackTx
     Exit Sub
@@ -6572,17 +6598,15 @@ EH:
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
-    LogFatal "Test_OTP_PredajaDvaVozacaDvaDokumenta", eN, eD
+    LogFatal "Test_OTP_DvePredajeDvaDokumenta", eN, eD
 End Sub
 
-' PONOVLJENA PREDAJA NE PRAVI DRUGU OTPREMNICU.
+' JEDNA PREDAJA JE JEDNA VRSTA VOCA -- MESANO JE GRESKA UNOSA.
 '
-' Isti red sme da stigne ponovo -- retry, ponovljen sync, prekinut prolaz -- a
-' sme da napravi SAMO JEDAN dokument. Istina o tome da li je blok vec predat je
-' KANONSKO CLANSTVO, ne kolona i ne status u Google listu.
-'
-' Ishod mora biti Duplicate, ne SyncError: ponovljen red nije kvar.
-Private Sub Test_OTP_PredajaVecPredatogJeNoOp()
+' Odluka operatera (23.09.2026): vozac jednim dolaskom vozi jednu kulturu. Zato
+' se mesana predaja NE DELI na vise dokumenata nego se ODBIJA CELA -- i poruka
+' mora da imenuje sta je naslo, jer otkupac treba da zna STA da razcekira.
+Private Sub Test_OTP_PredajaMesanihVrstaSeOdbija()
     Dim tx As clsTransaction
 
     On Error GoTo EH
@@ -6594,36 +6618,34 @@ Private Sub Test_OTP_PredajaVecPredatogJeNoOp()
     tx.BeginTx
     AutoOtpSnimak tx
 
-    Dim otkID As String
-    otkID = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
-                           TEST_PREFIX & "-OTK-P3-" & scenario, _
-                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P3A-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P3B-" & scenario, _
+                          KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB, _
+                          TEST_KUL_BEZ_SORTE_ID)
+
+    AssertTrue OtkPolje(otkA, COL_OTK_KULTURA) <> OtkPolje(otkB, COL_OTK_KULTURA), _
+               "PREDAJA mesano preduslov: blokovi su STVARNO razlicite vrste"
 
     Dim predaje As Collection
     Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID)
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, "PRED-M-" & scenario, _
+                           PredajaIsoDatum(datum))
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, "PRED-M-" & scenario, _
+                           PredajaIsoDatum(datum))
 
     Dim ishodi As Object, greske As String
-    AssertEquals "1", _
-                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
-                 "PREDAJA ponovo preduslov: prva predaja je napravila otpremnicu"
-
-    Dim otpPrva As String
-    otpPrva = modDokumenta.OtpremnicaZaOtkup(otkID)
-    AssertTrue Len(otpPrva) > 0, "PREDAJA ponovo preduslov: blok je vezan"
-
-    ' Isti red stize opet.
-    Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID)
-
     AssertEquals "0", _
                  CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
-                 "PREDAJA ponovo: nema druge otpremnice"
-    AssertEquals "", greske, "PREDAJA ponovo: ponovljen red NIJE kvar"
-    AssertEquals UCase$(otpPrva), UCase$(modDokumenta.OtpremnicaZaOtkup(otkID)), _
-                 "PREDAJA ponovo: blok je i dalje u PRVOJ otpremnici"
-    AssertEquals "Duplicate", CStr(ishodi(2&)), _
-                 "PREDAJA ponovo: red je prijavljen kao Duplicate"
+                 "PREDAJA mesano: nijedan dokument ne nastaje"
+    AssertTrue InStr(1, greske, "vrsta voca", vbTextCompare) > 0, _
+               "PREDAJA mesano: razlog IMENUJE sta se ne slaze"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkA), _
+                 "PREDAJA mesano: predaja se ne deli na vise dokumenata"
 
     tx.RollbackTx
     Exit Sub
@@ -6635,7 +6657,144 @@ EH:
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
-    LogFatal "Test_OTP_PredajaVecPredatogJeNoOp", eN, eD
+    LogFatal "Test_OTP_PredajaMesanihVrstaSeOdbija", eN, eD
+End Sub
+
+' BEZ IDENTITETA UTOVARA PREDAJA STAJE -- NE POGADJA SE IZ ROBE.
+'
+' Dok PWA ne posalje PredajaID, ovaj put NE RADI, i to se kaze glasno. To je
+' namerno: pravilo je da VBA model vodi, a PWA se prilagodjava (odluka operatera
+' 23.09.2026). Izvodjenje dogadjaja iz atributa robe je bas ono sto je ovaj rez
+' uklonio, pa se ne sme vratiti kao "privremeni fallback".
+'
+' Red MORA da zavrsi kao SyncError: Duplicate je terminalan, pa bi blok zauvek
+' ostao bez otpremnice a sync bio zelen.
+Private Sub Test_OTP_PredajaBezIdentitetaStaje()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PRED4")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkID As String
+    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P4-" & scenario, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "", PredajaIsoDatum(datum))
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA bez identiteta: nijedan dokument ne nastaje"
+    AssertTrue InStr(1, greske, "PredajaID", vbTextCompare) > 0, _
+               "PREDAJA bez identiteta: razlog imenuje STA nedostaje"
+    AssertTrue InStr(1, CStr(ishodi(2&)), "SyncError", vbTextCompare) = 1, _
+               "PREDAJA bez identiteta: red je SyncError, ne Duplicate"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaBezIdentitetaStaje", eN, eD
+End Sub
+
+' ISTI BLOK DRUGOM VOZACU NIJE RETRY NEGO PROTIVRECNOST.
+'
+' Uredjaj koji je bio offline ne zna za prvu predaju i moze poslati isti blok
+' drugom vozacu. Roba je tada vec na TUDJOJ IZDATOJ otpremnici, pa "poslednji
+' pobedjuje" nije opcija -- to je ispravka izdatog dokumenta, sopstveni poslovni
+' tok (odluka operatera 23.09.2026).
+'
+' Test meri OBE strane: isti vozac ostaje tih no-op (Duplicate), drugi vozac je
+' SyncError. Jednosmeran dokaz ne bi vredeo -- "sve je konflikt" bi pokvarilo
+' uredan retry, zbog kojeg provera clanstva i postoji.
+Private Sub Test_OTP_PredajaDrugomVozacuJeKonflikt()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PRED5")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkID As String
+    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-P5-" & scenario, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "PRED-K1-" & scenario, _
+                           PredajaIsoDatum(datum))
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA konflikt preduslov: prva predaja je napravila otpremnicu"
+
+    Dim otpPrva As String
+    otpPrva = modDokumenta.OtpremnicaZaOtkup(otkID)
+    AssertTrue Len(otpPrva) > 0, "PREDAJA konflikt preduslov: blok je vezan"
+
+    ' --- A) ISTI vozac: uredan retry ---------------------------------------
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "PRED-K2-" & scenario, _
+                           PredajaIsoDatum(datum))
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA konflikt: ponovljena predaja ne pravi drugi dokument"
+    AssertEquals "", greske, "PREDAJA konflikt: ponovljen red ISTOG vozaca NIJE kvar"
+    AssertEquals "Duplicate", CStr(ishodi(2&)), _
+                 "PREDAJA konflikt: isti vozac je Duplicate"
+
+    ' --- B) DRUGI vozac: protivrecnost --------------------------------------
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID_B, "PRED-K3-" & scenario, _
+                           PredajaIsoDatum(datum))
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA konflikt: drugi vozac ne pravi dokument"
+    AssertTrue InStr(1, greske, TEST_VOZ_ID_B, vbTextCompare) > 0, _
+               "PREDAJA konflikt: razlog imenuje KOGA red trazi"
+    AssertTrue InStr(1, CStr(ishodi(2&)), "SyncError", vbTextCompare) = 1, _
+               "PREDAJA konflikt: drugi vozac je SyncError, ne Duplicate"
+    AssertEquals UCase$(otpPrva), UCase$(modDokumenta.OtpremnicaZaOtkup(otkID)), _
+                 "PREDAJA konflikt: blok ostaje na PRVOJ otpremnici"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaDrugomVozacuJeKonflikt", eN, eD
 End Sub
 
 Private Sub Test_OTP_MalinaAutoZbirna()

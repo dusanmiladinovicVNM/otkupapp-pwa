@@ -5699,39 +5699,71 @@ SABOTAZE = {
         "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
     ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
-    # Jedan utovar je JEDAN dokument, iako stize kao N redova. Sabotaza vraca
-    # "red po red": svaki predat blok dobija svoju grupu, pa i svoju otpremnicu.
-    "predaja-red-po-red": (
+    #
+    # Identitet predaje je PredajaID -- jedan klik otkupca. Sabotaza vraca
+    # grupisanje po ATRIBUTIMA ROBE, sto je bio kvar koji je review #387 nasao:
+    # dve predaje istog dana istom vozacu imaju iste atribute, pa bi zavrsile
+    # kao JEDAN dokument iako su bila dva utovara.
+    "predaja-kljuc-iz-robe": (
         "modMasterSync.bas",
-        '                kljuc = UCase$(vozacID) & "|" & KljucGrupe(stanica, datum, kultura, tipAmb)\n',
-        '                kljuc = UCase$(vozacID) & "|" & CStr(redIdx)   \' SABOTAZA: svaki red svoja grupa\n',
-        "Test_OTP_PredajaVozacuPraviOtpremnicu",
-        "PREDAJA: oba predata bloka su u ISTOJ otpremnici",
+        "            kljuc = UCase$(predajaID)\n",
+        '            kljuc = UCase$(vozacID) & "|" & KljucGrupe(stanica, CDate(predatoAt), _\n'
+        "                                                      kultura, tipAmb)   ' SABOTAZA: dogadjaj se opet pogadja iz robe\n",
+        "Test_OTP_DvePredajeDvaDokumenta",
+        "PREDAJA dva utovara: ISTI atributi robe NISU isti dokument",
     ),
-    # Vozac je cinjenica ZAGLAVLJA otpremnice, pa mora u kljuc grupe. Bez njega
-    # roba predata dvojici zavrsava u jednom dokumentu -- i drugi vozi tudje.
-    "predaja-bez-vozaca-u-kljucu": (
+    # Otpremnica je TRANSPORTNI dokument, pa nosi datum PREDAJE. Sabotaza vraca
+    # datum otkupnog lista -- cime jedan utovar sa dva datuma prestaje da bude
+    # jedan dokument, a datum dokumenta pocinje da laze o danu utovara.
+    "predaja-datum-iz-otkupa": (
         "modMasterSync.bas",
-        '                kljuc = UCase$(vozacID) & "|" & KljucGrupe(stanica, datum, kultura, tipAmb)\n',
-        '                kljuc = KljucGrupe(stanica, datum, kultura, tipAmb)   \' SABOTAZA: vozac ispada iz kljuca\n',
-        "Test_OTP_PredajaDvaVozacaDvaDokumenta",
-        "PREDAJA dva vozaca: to NISU dva reda istog dokumenta",
+        "                rez.Add kljuc, NovaGrupa(stanica, danPredaje, kultura, tipAmb, _\n",
+        "                ' SABOTAZA: datum robe umesto datuma predaje\n"
+        "                rez.Add kljuc, NovaGrupa(stanica, LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM), kultura, tipAmb, _\n",
+        "Test_OTP_PredajaJeJedanUtovar",
+        "PREDAJA: otpremnica nosi datum PREDAJE, ne datum otkupnog lista",
+    ),
+    # Jedna predaja je jedna vrsta voca. Bez provere jednorodnosti mesana
+    # predaja stize do pisca, koji je odbije svojom porukom -- pa operater
+    # dobije "izvor ima drugo polje KulturaID" umesto "razcekiraj drugu vrstu".
+    "predaja-mesano-prolazi": (
+        "modMasterSync.bas",
+        "            PredajaProveriJednorodnost g, stanica, kultura, tipAmb, vozacID\n",
+        "            ' SABOTAZA: mesana predaja se ne proverava\n",
+        "Test_OTP_PredajaMesanihVrstaSeOdbija",
+        "PREDAJA mesano: razlog IMENUJE sta se ne slaze",
+    ),
+    # Bez PredajaID-a predaja MORA da stane. Sabotaza pusta red dalje, pa se
+    # dogadjaj opet rekonstruise iz robe -- tiho, i sa praznim kljucem grupe.
+    "predaja-bez-identiteta-prolazi": (
+        "modMasterSync.bas",
+        "        ElseIf Len(predajaID) = 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: red bez identiteta utovara prolazi\n",
+        "Test_OTP_PredajaBezIdentitetaStaje",
+        "PREDAJA bez identiteta: red je SyncError, ne Duplicate",
+    ),
+    # Vec predat blok: isti vozac je uredan retry, DRUGI vozac je protivrecnost.
+    # Sabotaza brise tu razliku, pa roba tiho ostaje kod prvog vozaca dok je
+    # otkupac ubedjen da ju je dao drugom.
+    "predaja-ne-gleda-vlasnika": (
+        "modMasterSync.bas",
+        "            If StrComp(postojeciVozac, vozacID, vbTextCompare) = 0 Then\n",
+        "            If True Then   ' SABOTAZA: svaka ponovljena predaja je Duplicate\n",
+        "Test_OTP_PredajaDrugomVozacuJeKonflikt",
+        "PREDAJA konflikt: drugi vozac je SyncError, ne Duplicate",
     ),
     # Istina o tome da li je blok vec predat je KANONSKO CLANSTVO.
     #
-    # TVRDNJA JE NAMERNO "ponovljen red NIJE kvar", a NE "nema druge
-    # otpremnice". Ova druga je PLACEBO za ovu sabotazu: i bez provere
-    # clanstva pisac odbija vec vezan izvor (OtpRequireIzvorValjan,
-    # traziSlobodan:=True), pa je n = 0 u oba slucaja -- merila bi TUDJU
-    # kapiju. Razlika koja stvarno postoji je u IZVESTAJU: sa proverom je
-    # ponovljen red tih no-op sa statusom Duplicate, bez nje postaje
-    # SyncError -- uredan retry prijavljen kao kvar.
+    # TVRDNJA JE NAMERNO "ponovljen red ISTOG vozaca NIJE kvar", a NE "ne pravi
+    # drugi dokument". Ova druga je PLACEBO: i bez provere clanstva pisac odbija
+    # vec vezan izvor (OtpRequireIzvorValjan, traziSlobodan:=True), pa je n = 0
+    # u oba slucaja -- merila bi TUDJU kapiju.
     "predaja-ne-gleda-clanstvo": (
         "modMasterSync.bas",
         "        If clanstvo.Exists(UCase$(otkupID)) Then\n",
         "        If False Then   ' SABOTAZA: vec predat blok se uzima ponovo\n",
-        "Test_OTP_PredajaVecPredatogJeNoOp",
-        "PREDAJA ponovo: ponovljen red NIJE kvar",
+        "Test_OTP_PredajaDrugomVozacuJeKonflikt",
+        "PREDAJA konflikt: ponovljen red ISTOG vozaca NIJE kvar",
     ),
     # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
     # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza
