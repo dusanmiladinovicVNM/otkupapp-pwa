@@ -109,6 +109,12 @@ Ako oblast nema svoj fajl, važi samo ovo ovde.
   zeleno) obavezan je kad menjaš **sam test ili checker**, i kod naročito kritične
   poslovne invarijante. Razlog: zelena suite koja nikad nije pokazana crvena ne
   dokazuje da išta meri. Za običnu funkcionalnu izmenu se ne traži.
+- **Obim dokaza: u rezu samo NOVE sabotaže, pun katalog pred release.**
+  `tools/dokaz.py` po **svakoj** sabotaži vrti `RunAllTests` **i** BFP — oko 3,5
+  minuta po stavci, pa pun katalog traje sat i više. U rezu se zato filtrira na
+  ono što je taj rez dodao ili dirao (`python tools/dokaz.py <prefiks>`), i pušta
+  se **jednom** — tek kad su `vba_check` i ciljana suite zeleni i kad je diff
+  pročitan. Pun `python tools/dokaz.py` ide **pred release**, uz FULL prolaz.
 - „Nejasno" se prijavljuje kao nejasno. Zadatak se ne preformuliše u uži koji je
   uspeo.
 
