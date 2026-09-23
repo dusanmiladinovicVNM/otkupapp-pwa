@@ -4076,7 +4076,8 @@ Private Function OtpNapraviDraft(ByVal h As Object, _
 
     Dim rowData As Variant
     rowData = BuildOtpremnicaHeaderRowData(otpID, datum, stanicaID, vozacID, _
-                                           kulturaID, tipAmb, brojOtp)
+                                           kulturaID, tipAmb, brojOtp, _
+                                           HdrOpcion(h, "PredajaID"))
 
     If AppendRow(TBL_OTPREMNICA, rowData) <= 0 Then
         modSchemaGuard.RaiseSistemski 21, SRC, _
@@ -4184,7 +4185,8 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
                                               ByVal vozacID As String, _
                                               ByVal kulturaID As String, _
                                               ByVal tipAmb As String, _
-                                              ByVal brojOtp As String) As Variant
+                                              ByVal brojOtp As String, _
+                                              Optional ByVal predajaID As String = "") As Variant
     Const SRC As String = "BuildOtpremnicaHeaderRowData"
 
     Dim colCount As Long
@@ -4216,6 +4218,21 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
     ' Kolona ostaje u kanonu do S3e, kad odu i linijska polja zaglavlja.
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, _
                         IZDATO_DRAFT, SRC
+
+    ' IDENTITET UTOVARA (S5-3, review #388 P1).
+    '
+    ' Bez trajnog traga je PredajaID zivela samo unutar jednog sync prolaza. A
+    ' GAS obradjuje red po red i neuspeo red se vraca u Pending, pa je jedan
+    ' klik otkupca mogao da stigne u DVA ciklusa -- i napravi DVE izdate
+    ' otpremnice za jedan fizicki utovar. Izdata se ne dopunjuje (A13), pa se
+    ' to posle ne moze ni popraviti bez ispravke.
+    '
+    ' Prazno je legitimno: malina auto-otpremnica i hladnjacki lanac ne nastaju
+    ' iz predaje.
+    If Len(Trim$(predajaID)) > 0 Then
+        SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_PREDAJA_ID, _
+                            predajaID, SRC
+    End If
 
     BuildOtpremnicaHeaderRowData = rowData
 End Function
@@ -5524,10 +5541,12 @@ Private Sub RequireValidKlasa(ByVal klasa As String, ByVal src As String)
     Err.Raise vbObjectError + 1325, src, "Neispravna klasa: " & klasa
 End Sub
 
+' PredajaID je na spisku od S5-3 (review #388, P1): identitet UTOVARA je
+' cinjenica zaglavlja otpremnice, ne prolazni podatak sync prolaza.
 Private Function OtpHdrKljucPoznat(ByVal kljuc As String) As Boolean
     Select Case LCase$(Trim$(kljuc))
         Case "datum", "stanicaid", "vozacid", "kulturaid", "brojotpremnice", _
-             "tipambalaze"
+             "tipambalaze", "predajaid"
             OtpHdrKljucPoznat = True
     End Select
 End Function

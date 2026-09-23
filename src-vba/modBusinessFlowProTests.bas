@@ -125,6 +125,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_RF28_BrojZbirneRupaNeDajeDuplikat
     Test_ZBR_ImportDvaUredjajaNeStapaDokumente
     Test_ZBR_UvozPamtiPoreklo
+    Test_ZBR_IstiCridDrugiSadrzajJeKonflikt
     Test_RF28_NevalidanDatumJeSyncError
 
     ' RF-05 (frmDokumenta unos + storno set)
@@ -303,6 +304,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_ProslednjenOtkupJeIzdatIzvor
     Test_OTP_AutoSistemskiPadStajeProlaz
     Test_OTP_PredajaJeJedanUtovar
+    Test_OTP_PredajaPrezivljavaParcijalanSync
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
     Test_OTP_PredajaBezIdentitetaStaje
@@ -1434,6 +1436,98 @@ EH:
     On Error GoTo 0
     LogFail "RF-28 AUD-041b broj zbirne rupa", bfpErrDesc
 End Sub
+' ISTI CRID SA DRUGOM TVRDNJOM JE KONFLIKT, NE DUPLIKAT (review #388, P2).
+'
+' Zatecen uvoz je gledao samo POSTOJI LI isti ClientRecordID. Duplicate je
+' terminalan (import uzima samo Pending), pa bi izmenjen sadrzaj pod istim
+' CRID-om tiho nestao: master ostaje na staroj verziji dok PWA misli da je
+' poslala ispravku. Ista klasa je vec zatvorena na OTK ingestu
+' (Test_PWA_IstiCridDrugiSadrzajPada); ovde je ostala otvorena.
+'
+' Test meri OBA smera, i to je ovde vazno: "sve je konflikt" bi proslo drugu
+' polovinu a pokvarilo uredan retry, zbog kojeg idempotencija i postoji.
+'
+' PORED SE SAMO KANONSKE TVRDNJE. Summary polja (kolicine, klasa, vrsta) se
+' namerno ne porede -- kanonski pisac ih izvodi iz otpremnica, pa razlika u
+' njima ne znaci drugi dokument. To se ovde i meri: izmenjena kolicina ostaje
+' NO-OP, izmenjen kupac je konflikt.
+Private Sub Test_ZBR_IstiCridDrugiSadrzajJeKonflikt()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRCRID")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    Dim danas As Date
+    danas = NextTestDate()
+
+    Dim cridA As String, cridB As String
+    cridA = ZbrPwaIzvorCrid("CRIDA-" & scenario, danas, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorCrid("CRIDB-" & scenario, danas, TEST_VOZ_ID)
+
+    Dim zbrCrid As String, broj As String
+    zbrCrid = "CRID-ZBRK-" & scenario
+    broj = modBrojevi.FormatBroj(TEST_VOZ_ID, danas, 1)
+
+    Dim zbrID As String
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, TEST_VRSTA, TEST_SORTA, _
+                100#, broj, cridA)
+    AssertTrue Len(zbrID) > 0, "ZBR CRID preduslov: prva zbirna je uvezena"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' --- A) ISTA TVRDNJA: uredan retry --------------------------------------
+    AssertEquals "", modMasterSync.TestHook_PwaZbirnaRazlika( _
+                         zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, broj, cridA), _
+                 "ZBR CRID: nepromenjen red je NO-OP"
+
+    ' --- B) SUMMARY NIJE TVRDNJA --------------------------------------------
+    '
+    ' Kolicina se ne prosledjuje ovom putu uopste -- sadrzaj dolazi iz izvora.
+    ' Prazan broj znaci "generisi lokalno", pa ni to nije razlika.
+    AssertEquals "", modMasterSync.TestHook_PwaZbirnaRazlika( _
+                         zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, "", cridA), _
+                 "ZBR CRID: izostavljen broj nije razlika u tvrdnji"
+
+    ' --- C) DRUGI KUPAC: protivrecnost --------------------------------------
+    Dim rKupac As String
+    rKupac = modMasterSync.TestHook_PwaZbirnaRazlika( _
+                 zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP2_ID, danas, broj, cridA)
+    AssertTrue Len(rKupac) > 0, "ZBR CRID: drugi kupac pod istim CRID-om je KONFLIKT"
+    AssertTrue InStr(1, rKupac, "KupacID", vbTextCompare) > 0, _
+               "ZBR CRID: razlog imenuje polje koje se ne slaze (bilo: " & rKupac & ")"
+
+    ' --- D) DRUGI SKUP IZVORA: protivrecnost --------------------------------
+    Dim rIzvori As String
+    rIzvori = modMasterSync.TestHook_PwaZbirnaRazlika( _
+                  zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, broj, cridB)
+    AssertTrue Len(rIzvori) > 0, _
+               "ZBR CRID: drugi skup izvora pod istim CRID-om je KONFLIKT"
+    AssertTrue InStr(1, rIzvori, "izvori", vbTextCompare) > 0, _
+               "ZBR CRID: razlog imenuje izvore (bilo: " & rIzvori & ")"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_IstiCridDrugiSadrzajJeKonflikt", eN, eD
+End Sub
+
 ' PWA ZBIRNA PAMTI ODAKLE JE DOSLA (S5-3).
 '
 ' ClientRecordID je identitet zapisa na terenskom uredjaju, a SyncSource kaze
@@ -6061,6 +6155,93 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+
+' PARCIJALAN SYNC NE SME DA RAZBIJE JEDAN UTOVAR NA DVA DOKUMENTA (#388, P1).
+'
+' GAS obradjuje redove POJEDINACNO (data.records.map -> processRecord), a red
+' koji ne prodje vraca se u Pending. Zato je potpuno legalna sekvenca:
+'
+'   ciklus 1: A, B uspeju -- C padne   -> otpremnica od A+B
+'   ciklus 2: C uspe                    -> ???
+'
+' Dok identitet utovara nije imao TRAJAN trag, drugi ciklus je pravio DRUGU
+' izdatu otpremnicu za JEDAN fizicki utovar. A izdata se ne dopunjuje (A13), pa
+' se to posle ne moze ni popraviti bez ispravke -- greska koja se sama zabetonira.
+'
+' Zakasneo blok zato staje fail-closed i IMENUJE otpremnicu, da operater zna gde
+' je ostatak tog utovara. Test meri i to: da ishod reda bude SyncError, a ne
+' Duplicate (Duplicate je terminalan, pa bi blok zauvek ostao neobradjen).
+Private Sub Test_OTP_PredajaPrezivljavaParcijalanSync()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDPS")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkC As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-PSA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkC = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-PSC-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim predajaID As String
+    predajaID = "PRED-PS-" & scenario
+
+    ' --- CIKLUS 1: stigao samo A --------------------------------------------
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum))
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA parc: prvi ciklus je napravio otpremnicu"
+
+    Dim otpPrva As String
+    otpPrva = modDokumenta.OtpremnicaZaOtkup(otkA)
+    AssertTrue Len(otpPrva) > 0, "PREDAJA parc preduslov: blok A je vezan"
+    If Len(otpPrva) = 0 Then GoTo Kraj
+
+    ' Identitet utovara MORA da ostane na dokumentu -- inace drugi ciklus nema
+    ' po cemu da ga prepozna.
+    AssertEquals predajaID, OtpPolje(otpPrva, COL_OTP_PREDAJA_ID), _
+                 "PREDAJA parc: otpremnica nosi identitet utovara"
+
+    ' --- CIKLUS 2: zakasneli C, ISTI utovar ---------------------------------
+    Set predaje = New Collection
+    predaje.Add PredajaRed(3, otkC, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum))
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA parc: zakasneo blok NE pravi drugu otpremnicu"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkC), _
+                 "PREDAJA parc: zakasneo blok nije tiho vezan"
+    AssertTrue InStr(1, greske, otpPrva, vbTextCompare) > 0, _
+               "PREDAJA parc: razlog IMENUJE otpremnicu tog utovara (bilo: " & greske & ")"
+    AssertTrue InStr(1, CStr(ishodi(3&)), "SyncError", vbTextCompare) = 1, _
+               "PREDAJA parc: zakasneo red je SyncError, ne Duplicate"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_PredajaPrezivljavaParcijalanSync", eN, eD
+End Sub
 
 ' JEDAN KLIK JE JEDAN UTOVAR, PA I JEDAN DOKUMENT -- I KAD SPAJA VISE DANA.
 '

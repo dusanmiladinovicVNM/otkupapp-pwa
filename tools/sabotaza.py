@@ -5203,8 +5203,8 @@ SABOTAZE = {
     # obe klase -- tacno ono sto je S3a razdvojio.
     "otp-predlog-cene-nazad-na-zaglavlje": (
         "modDokumenta.bas",
-        "             \"tipambalaze\"\n",
-        "             \"tipambalaze\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
+        "             \"tipambalaze\", \"predajaid\"\n",
+        "             \"tipambalaze\", \"predajaid\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
         "Test_OTP_PredlogCeneJePoKlasi",
         "cena na zaglavlju NE prolazi",
     ),
@@ -5699,6 +5699,27 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: poreklo dokumenta se ne upisuje\n",
         "Test_ZBR_UvozPamtiPoreklo",
         "ZBR poreklo: zbirna nosi ClientRecordID sa terena",
+    ),
+    # Isti CRID sa DRUGOM tvrdnjom je konflikt, ne duplikat (review #388, P2).
+    # Sabotaza vraca zatecen fail-open: razlika u SKUPU IZVORA se ne vidi, pa
+    # izmenjen sadrzaj pod istim CRID-om prolazi kao Duplicate -- a Duplicate je
+    # terminalan, pa master zauvek ostaje na staroj verziji.
+    "zbirna-crid-ne-gleda-sadrzaj": (
+        "modMasterSync.bas",
+        "    PwaZbirnaRazlika = SkupIzvoraRazlika(modDokumenta.IzvoriZbirne(zbirnaID), noviIzvori)\n",
+        "    PwaZbirnaRazlika = \"\"   ' SABOTAZA: razlika u izvorima se ne vidi\n",
+        "Test_ZBR_IstiCridDrugiSadrzajJeKonflikt",
+        "ZBR CRID: drugi skup izvora pod istim CRID-om je KONFLIKT",
+    ),
+    # Identitet utovara mora da ostane NA DOKUMENTU (review #388, P1). Bez
+    # trajnog traga jedan klik otkupca, razbijen na dva sync ciklusa, pravi DVE
+    # izdate otpremnice -- a izdata se ne dopunjuje (A13).
+    "predaja-ne-pamti-utovar": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(predajaID)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: identitet utovara se ne upisuje\n",
+        "Test_OTP_PredajaPrezivljavaParcijalanSync",
+        "PREDAJA parc: otpremnica nosi identitet utovara",
     ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
     #

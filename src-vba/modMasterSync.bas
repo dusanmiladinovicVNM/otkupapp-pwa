@@ -1092,6 +1092,7 @@ Private Function NovaGrupa(ByVal stanica As Variant, ByVal datum As Variant, _
     g.Add "kultura", Trim$(NzToText(kultura))
     g.Add "tipAmb", Trim$(NzToText(tipAmb))
     g.Add "vozac", Trim$(NzToText(vozac))
+    g.Add "predaja", ""
     g.Add "izvori", New Collection
     g.Add "redovi", New Collection
     Set NovaGrupa = g
@@ -1167,6 +1168,12 @@ Private Function AutoOtpremnicaUpis(ByVal grupa As Object, _
     h("KulturaID") = kulturaID
     h("TipAmbalaze") = tipAmb
     h("BrojOtpremnice") = broj
+
+    ' Identitet utovara ide NA DOKUMENT, ne ostaje u prolazu. Malina auto-
+    ' otpremnica ga nema -- ona ne nastaje iz predaje -- pa ostaje prazan.
+    If Len(Trim$(CStr(grupa("predaja")))) > 0 Then
+        h("PredajaID") = Trim$(CStr(grupa("predaja")))
+    End If
 
     ' Jedan potez: nastaje i ODMAH se izdaje. Auto-tok nema nezavisno ocekivanje
     ' koje bi cekalo potvrdu -- ocekivanje se izvodi iz izvora (ZBR-KANON-04).
@@ -1271,6 +1278,37 @@ Private Function IsoUDatum(ByVal v As Variant, ByRef outD As Date) As Boolean
 
 EH:
     IsoUDatum = False
+End Function
+
+' Otpremnica koja je vec nastala iz OVOG utovara. "" = nijedna.
+'
+' Trazi se AKTIVNA: stornirana otpremnica znaci da je utovar ponisten, pa
+' ponovljena predaja sme da napravi nov dokument.
+Private Function OtpremnicaPoPredaji(ByVal predajaID As String) As String
+    Const SRC As String = "OtpremnicaPoPredaji"
+
+    If Len(Trim$(predajaID)) = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cPred As Long, cID As Long, cSt As Long
+    cPred = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_PREDAJA_ID)
+    If cPred = 0 Then Exit Function
+    cID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cPred))), Trim$(predajaID), _
+                   vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(d(i, cSt))), "Da", vbTextCompare) <> 0 Then
+                OtpremnicaPoPredaji = Trim$(NzToText(d(i, cID)))
+                Exit Function
+            End If
+        End If
+    Next i
 End Function
 
 ' Kolona OTK lista PO IMENU, iz zaglavlja. 0 = nema je.
@@ -1381,6 +1419,22 @@ Private Function GrupePredaje(ByVal predaje As Collection, _
         ElseIf Len(predajaID) = 0 Then
             outKonflikti.Add redIdx, _
                 "red nema PredajaID -- identitet utovara se NE izvodi iz robe"
+        ElseIf Len(OtpremnicaPoPredaji(predajaID)) > 0 Then
+            ' UTOVAR JE VEC IZDAT KAO DOKUMENT (review #388, P1).
+            '
+            ' GAS obradjuje red po red i neuspeo red se vraca u Pending, pa
+            ' jedan klik otkupca ume da stigne u DVA ciklusa. Dok identitet
+            ' utovara nije imao trajan trag, drugi ciklus je pravio DRUGU izdatu
+            ' otpremnicu za JEDAN fizicki utovar -- a izdata se ne dopunjuje
+            ' (A13), pa se to posle ne moze ni popraviti bez ispravke.
+            '
+            ' Zakasneli blok se zato NE dodaje i NE pravi svoj dokument: staje
+            ' fail-closed i imenuje otpremnicu, da operater zna gde je ostatak
+            ' tog utovara.
+            outKonflikti.Add redIdx, _
+                "utovar " & predajaID & " je vec izdat kao otpremnica " & _
+                OtpremnicaPoPredaji(predajaID) & _
+                "; zakasneo blok se ne dodaje u izdat dokument"
         ElseIf Not IsoUDatum(predatoAt, danPredaje) Then
             outKonflikti.Add redIdx, _
                 "PredatoAt nije upotrebljiv ISO datum ('" & predatoAt & _
@@ -1397,6 +1451,7 @@ Private Function GrupePredaje(ByVal predaje As Collection, _
             If Not rez.Exists(kljuc) Then
                 rez.Add kljuc, NovaGrupa(stanica, danPredaje, kultura, tipAmb, _
                                          vozacID)
+                rez(kljuc)("predaja") = predajaID
             End If
 
             Set g = rez(kljuc)
@@ -1924,6 +1979,11 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
     data(1, VS_TIP_AMB) = ""
     data(1, VS_DATUM) = datumValue
 
+    ' Od S5-3 validacija trazi IZVORE, jer zbirna bez njih nije dokument.
+    ' Ovaj hook meri SAMO datum, pa ostala polja moraju da PROLAZE -- inace bi
+    ' tvrdnja o datumu bila zelena iz pogresnog razloga.
+    data(1, VS_OTKUP_RECORD_IDS) = "CRID-HOOK-DATUM"
+
     TestHook_ValidatePWAZbirnaDatum = ValidatePWAZbirna(data, 1)
 End Function
 
@@ -1963,6 +2023,31 @@ Public Function TestHook_ImportZbirnaRowPWA(ByVal crid As String, _
     data(1, VS_BROJ_ZBIRNE) = brojZbirne
 
     TestHook_ImportZbirnaRowPWA = ImportRowToTblZbirna(data, 1, crid)
+End Function
+
+' S5-3 / review #388: razlika izmedju vec uvezene zbirne i reda koji opet stize.
+'
+' Izlaze telo koje ODLUCUJE (Duplicate vs konflikt), da lokalna regresija moze
+' da meri poslovno pravilo bez Google-a. Prolaz kroz list (ImportOneVOZSheet)
+' trazi Drive, pa ga meri smoke suite.
+Public Function TestHook_PwaZbirnaRazlika(ByVal zbirnaID As String, _
+                                          ByVal crid As String, _
+                                          ByVal vozacID As String, _
+                                          ByVal kupacID As String, _
+                                          ByVal datumValue As Variant, _
+                                          ByVal brojZbirne As String, _
+                                          ByVal otkupCrids As String) As String
+    Dim data As Variant
+    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+
+    data(1, VS_CLIENT_RECORD_ID) = crid
+    data(1, VS_VOZAC_ID) = vozacID
+    data(1, VS_KUPAC_ID) = kupacID
+    data(1, VS_DATUM) = datumValue
+    data(1, VS_BROJ_ZBIRNE) = brojZbirne
+    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
+
+    TestHook_PwaZbirnaRazlika = PwaZbirnaRazlika(zbirnaID, data, 1)
 End Function
 
 ' AUD-041(b): kanonski ZBR fallback generator (MAX sekvence, ne row-count).
@@ -3623,9 +3708,33 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
                 GoTo NextImportRow
             End If
             
-            If IsDuplicateZbirnaInMaster(clientRecordID) Then
-                statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE, "")
-                outSkipped = outSkipped + 1
+            ' ISTI CRID: NO-OP ILI KONFLIKT, NIKAD TIHI DUPLIKAT (review #388, P2).
+            '
+            ' Zatecen kod je gledao samo POSTOJI LI isti ClientRecordID, pa je
+            ' izmenjen sadrzaj pod istim CRID-om tiho nestajao: Duplicate je
+            ' terminalan (import uzima samo Pending), pa master ostaje na staroj
+            ' verziji dok PWA misli da je poslala ispravku.
+            '
+            ' Ista klasa problema je vec zatvorena na OTK ingestu
+            ' (PwaIstiSadrzaj); ovde je ostala otvorena.
+            Dim zbrPostojeci As String
+            zbrPostojeci = ZbirnaPoClientRecordID(clientRecordID)
+
+            If Len(zbrPostojeci) > 0 Then
+                Dim zbrRazlika As String
+                zbrRazlika = PwaZbirnaRazlika(zbrPostojeci, data, i)
+
+                If Len(zbrRazlika) = 0 Then
+                    statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE, "")
+                    outSkipped = outSkipped + 1
+                Else
+                    statusUpdates.Add Array(i, SYNC_STATUS_ERROR & _
+                        ":CRID konflikt -- " & zbrRazlika, "")
+                    outErrors = outErrors + 1
+                    LogError "ImportOneVOZSheet", _
+                             "CRID konflikt: " & clientRecordID & " -> " & _
+                             zbrPostojeci & "; " & zbrRazlika
+                End If
             Else
                 Dim validationError As String
                 validationError = ValidatePWAZbirna(data, i)
@@ -3773,8 +3882,6 @@ End Function
 Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As String
     Dim vozacID As String
     Dim kupacID As String
-    Dim kolKlI As Double
-    Dim kolKlII As Double
     
     vozacID = Trim$(CStr(data(row, VS_VOZAC_ID)))
     kupacID = Trim$(CStr(data(row, VS_KUPAC_ID)))
@@ -3805,19 +3912,164 @@ Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As 
         Exit Function
     End If
 
-    ' Mindestens eine Klasa muss Kolicina > 0 haben
-    On Error Resume Next
-    kolKlI = CDbl(data(row, VS_KOLICINA_KL_I))
-    kolKlII = CDbl(data(row, VS_KOLICINA_KL_II))
-    On Error GoTo 0
-    
-    If kolKlI <= 0 And kolKlII <= 0 Then
-        ValidatePWAZbirna = "Kolicina KlI + KlII <= 0"
+    ' SUMMARY POLJA VISE NE ODLUCUJU DA LI IMPORT SME (review #388, P2).
+    '
+    ' Do S5-3 je ovde stajalo "bar jedna klasa mora imati Kolicina > 0". Od S5-3
+    ' sadrzaj zbirne IZVODI kanonski pisac iz izvornih otpremnica (ZBR-KANON-04),
+    ' pa se te kolone i ne citaju. Ostavljene u validaciji, pravile su polustanje
+    ' u kom summary NIJE izvor istine ali SME da zabrani kanonski dokument: red
+    ' cije se otpremnice razresavaju jednoznacno bio bi odbijen zato sto je PWA u
+    ' redundantno polje upisala nulu.
+    '
+    ' Sta uvozu STVARNO treba: identitet zapisa, vozac, kupac, dan i IZVORI.
+    ' Bez izvora zbirna nije dokument -- to je jedina nova tvrdnja.
+    If Len(Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), "")))) = 0 Then
+        ValidatePWAZbirna = "OtkupRecordIDs missing -- zbirna bez izvora nije dokument"
         Exit Function
     End If
     
     ValidatePWAZbirna = ""
 End Function
+
+' ZbirnaID po ClientRecordID-u. "" = nije uvezena.
+'
+' Ogledalo modOtkup.OtkupPoClientRecordID. Zamenjuje IsDuplicateZbirnaInMaster,
+' koji je vracao samo Boolean -- a "postoji" i "isti je" nisu isto pitanje.
+Private Function ZbirnaPoClientRecordID(ByVal crid As String) As String
+    Const SRC As String = "ZbirnaPoClientRecordID"
+
+    If Len(Trim$(crid)) = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cCrid As Long, cID As Long
+    cCrid = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_CLIENT_RECORD_ID, SRC)
+    cID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cCrid))), Trim$(crid), vbBinaryCompare) = 0 Then
+            ZbirnaPoClientRecordID = Trim$(NzToText(d(i, cID)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' RAZLIKA IZMEDJU VEC UVEZENE ZBIRNE I REDA KOJI OPET STIZE (review #388, P2).
+'
+' "" = isti dokument, pa je ponovljen red uredan NO-OP. Neprazan tekst = isti
+' ClientRecordID nosi DRUGU tvrdnju, sto nije duplikat nego protivrecnost.
+'
+' POREDE SE SAMO KANONSKE TVRDNJE -- one od kojih dokument zavisi:
+'   vozac, kupac, dan, broj (ako ga PWA salje) i SKUP IZVORA.
+'
+' Summary polja (kolicine, klasa, vrsta, sorta, ambalaza) se NAMERNO ne porede:
+' od S5-3 ih kanonski pisac izvodi iz otpremnica, pa razlika u njima ne znaci
+' razlicit dokument -- znaci samo da je PWA drugacije sabrala. Poredjenje po
+' njima bi proglasavalo konflikt tamo gde ga nema.
+'
+' Izvori se porede kao SKUP, ne po redosledu: isti utovar poslat dvaput ume da
+' navede otkupe drugim redom.
+Private Function PwaZbirnaRazlika(ByVal zbirnaID As String, _
+                                  ByRef data As Variant, ByVal row As Long) As String
+    Const SRC As String = "PwaZbirnaRazlika"
+
+    On Error GoTo EH
+
+    PwaZbirnaRazlika = PoljeRazlika("VozacID", _
+        Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_VOZAC))), _
+        Trim$(CStr(nz(data(row, VS_VOZAC_ID), ""))))
+    If Len(PwaZbirnaRazlika) > 0 Then Exit Function
+
+    PwaZbirnaRazlika = PoljeRazlika("KupacID", _
+        Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC))), _
+        Trim$(CStr(nz(data(row, VS_KUPAC_ID), ""))))
+    If Len(PwaZbirnaRazlika) > 0 Then Exit Function
+
+    Dim danNov As Date, danStari As Variant
+    danStari = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_DATUM)
+    If IsoUDatum(data(row, VS_DATUM), danNov) And IsDate(danStari) Then
+        If Int(CDate(danStari)) <> Int(danNov) Then
+            PwaZbirnaRazlika = "Datum: master ima " & _
+                Format$(CDate(danStari), "dd.mm.yyyy") & ", red nosi " & _
+                Format$(danNov, "dd.mm.yyyy")
+            Exit Function
+        End If
+    End If
+
+    ' Broj se poredi SAMO ako ga PWA salje: prazan znaci "generisi lokalno", pa
+    ' lokalno generisan broj nije razlika u tvrdnji.
+    Dim brojNov As String
+    brojNov = Trim$(CStr(nz(data(row, VS_BROJ_ZBIRNE), "")))
+    If Len(brojNov) > 0 Then
+        PwaZbirnaRazlika = PoljeRazlika("BrojZbirne", _
+            Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ))), _
+            brojNov)
+        If Len(PwaZbirnaRazlika) > 0 Then Exit Function
+    End If
+
+    ' SKUP IZVORA. Razresava se ISTIM putem kao pri uvozu, pa se poredi ono sto
+    ' bi dokument stvarno dobio -- ne sirovi CRID spisak.
+    Dim noviIzvori As Collection
+    Set noviIzvori = OtpremniceIzOtkupRecordIDs( _
+                         Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+                         "PwaZbirnaRazlika")
+    If noviIzvori Is Nothing Then
+        PwaZbirnaRazlika = "izvori se vise ne razresavaju (v. log)"
+        Exit Function
+    End If
+
+    PwaZbirnaRazlika = SkupIzvoraRazlika(modDokumenta.IzvoriZbirne(zbirnaID), noviIzvori)
+    Exit Function
+
+EH:
+    PwaZbirnaRazlika = "poredjenje nije uspelo: " & Err.description
+End Function
+
+Private Function PoljeRazlika(ByVal ime As String, ByVal stari As String, _
+                              ByVal novi As String) As String
+    If StrComp(stari, novi, vbTextCompare) = 0 Then Exit Function
+    PoljeRazlika = ime & ": master ima '" & stari & "', red nosi '" & novi & "'"
+End Function
+
+' "" = isti skup. Poredi se kao SKUP -- redosled nije tvrdnja.
+Private Function SkupIzvoraRazlika(ByVal stari As Collection, _
+                                   ByVal novi As Collection) As String
+    Dim ss As Object, sn As Object
+    Set ss = CreateObject("Scripting.Dictionary")
+    ss.CompareMode = vbTextCompare
+    Set sn = CreateObject("Scripting.Dictionary")
+    sn.CompareMode = vbTextCompare
+
+    Dim i As Long
+    If Not stari Is Nothing Then
+        For i = 1 To stari.count
+            ss(Trim$(NzToText(stari(i)))) = 1
+        Next i
+    End If
+    If Not novi Is Nothing Then
+        For i = 1 To novi.count
+            sn(Trim$(NzToText(novi(i)))) = 1
+        Next i
+    End If
+
+    Dim k As Variant, visak As String, manjak As String
+    For Each k In sn.Keys
+        If Not ss.Exists(k) Then visak = visak & IIf(Len(visak) > 0, ", ", "") & CStr(k)
+    Next k
+    For Each k In ss.Keys
+        If Not sn.Exists(k) Then manjak = manjak & IIf(Len(manjak) > 0, ", ", "") & CStr(k)
+    Next k
+
+    If Len(visak) = 0 And Len(manjak) = 0 Then Exit Function
+
+    SkupIzvoraRazlika = "izvori:"
+    If Len(visak) > 0 Then SkupIzvoraRazlika = SkupIzvoraRazlika & " red dodaje " & visak
+    If Len(manjak) > 0 Then SkupIzvoraRazlika = SkupIzvoraRazlika & " red izostavlja " & manjak
+End Function
+
 
 Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Boolean
     If Len(Trim$(clientRecordID)) = 0 Then

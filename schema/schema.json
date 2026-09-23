@@ -467,7 +467,8 @@
         "ZbirnaRoditeljID",
         "KulturaID",
         "IspravkaOdID",
-        "ZamenjenSaID"
+        "ZamenjenSaID",
+        "PredajaID"
       ]
     },
     {
