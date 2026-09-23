@@ -5701,6 +5701,13 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A20: red bez generacije NIJE integritetska greska",
     ),
+    "ponistenje-izdate-cita-permisivno": (
+        "modStornoFlow.bas",
+        "            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)\n",
+        "            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
+        "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar",
+        "ponistenje IZDATE bez clanstva NE prolazi",
+    ),
     "ponistenje-ne-vidi-kanonsko-clanstvo": (
         "modStornoFlow.bas",
         "    If Len(Trim$(zbirnaID)) > 0 Then\n"

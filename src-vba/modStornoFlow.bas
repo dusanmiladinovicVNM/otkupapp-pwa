@@ -1878,9 +1878,25 @@ Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal gen As S
     vidjeni.CompareMode = vbTextCompare
 
     ' --- KANON: clanstvo po ZbirnaID-u ---
+    '
+    ' ZRNO CITACA PRATI LIFECYCLE (review #384, P2):
+    '   NACRT   prazno clanstvo je legitimno    -> ZbrClanovi (permisivan)
+    '   IZDATO  prazno clanstvo je KVAR         -> IzvoriZbirne (fail-closed)
+    '
+    ' IzvoriZbirne obara prazan OtpremnicaID, duplo clanstvo i nula izvora. Bez
+    ' njega bi izgubljen ili dupliran red bio TIHO normalizovan: kaskada bi nasla
+    ' 0 izvora, stornirala samo zaglavlje i javila uspeh -- ista klasa laznog
+    ' uspeha koju je prethodni rez zatvorio, samo kroz fail-open citac.
+    '
+    ' Poziv je PRE BeginTx, pa greska staje bez ijedne mutacije.
     If Len(Trim$(zbirnaID)) > 0 Then
-        Dim clan As Variant, clanId As String
-        For Each clan In KolekcijaUNiz(modDokumenta.ZbrClanovi(zbirnaID))
+        Dim clan As Variant, clanId As String, clanovi As Collection
+        If modDokumenta.ZbirnaJeIzdata(zbirnaID) Then
+            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)
+        Else
+            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)
+        End If
+        For Each clan In KolekcijaUNiz(clanovi)
             clanId = Trim$(NzToText(clan))
             If Len(clanId) > 0 Then
                 If StrComp(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _

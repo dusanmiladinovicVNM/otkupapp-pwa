@@ -306,6 +306,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
     Test_ZBR_KanonskoPonistenjeStorniraIzvore
+    Test_ZBR_PonistenjeIzdateNeNormalizujeKvar
     Test_OTP_NacrtNijeZavrsetakIspravke
     Test_OTP_MrezaCitaStavke
     Test_OTP_ZaglavljeBezStavkiObaraCitaoce
@@ -5684,6 +5685,92 @@ EH:
     On Error GoTo 0
 
     LogFatal "Test_OTP_IzdavanjeDelimicanUspeh", eN, eD
+End Sub
+
+' PONISTENJE IZDATE ZBIRNE NE NORMALIZUJE POKVARENO CLANSTVO (review #384, P2).
+'
+' Zrno citaca prati lifecycle: nacrt sme da bude bez izvora, IZDATA ne sme. Ako
+' kaskada za izdatu zbirnu koristi permisivan citac, izgubljen ili dupliran red u
+' tblZbirnaIzvori postaje "0 izvora" -- pa se zaglavlje stornira, otpremnice
+' ostaju zive, a operater dobije "ponisteno". Ista klasa laznog uspeha koju je
+' prethodni rez zatvorio, samo kroz fail-open citac umesto pogresne tabele.
+'
+' Kvar se pravi STVARNO (fault injection), u obe varijante koje IzvoriZbirne
+' razlikuje: izgubljen red i dupliran red. Obe moraju da stanu PRE ijedne
+' mutacije -- zato se tvrdi i da zbirna i da otpremnica ostaju netaknute.
+Private Sub Test_ZBR_PonistenjeIzdateNeNormalizujeKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRKVR")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' DOKUMENT JE ZAGLAVLJE + STAVKE + CLANSTVO -- rollback koji vrati samo
+    ' zaglavlje ostavlja stavku bez dokumenta. Prva verzija je snimala samo
+    ' TBL_OTPREMNICA, pa je siroce oborilo TRI TUDJA testa, a poruka je vodila
+    ' na njih a ne na ovaj. ZbrIzdataOtp pravi i otkup i knjizi ambalazu.
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("KVR-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-KVR-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR kvar: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR kvar preduslov: zbirna je IZDATA"
+
+    ' --- A) IZGUBLJEN red clanstva -----------------------------------------
+    AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
+                 "ZBR kvar preduslov: clanstvo ima jedan red"
+    Pr3UkloniClanstvo zbrID, otpID
+
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR kvar: ponistenje IZDATE bez clanstva NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR kvar: zbirna NIJE stornirana -- kvar staje pre mutacije"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "ZBR kvar: otpremnica NIJE stornirana"
+
+    ' --- B) DUPLIRAN red clanstva ------------------------------------------
+    Pr3DodajClanstvo zbrID, otpID
+    Pr3DodajClanstvo zbrID, otpID
+
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR kvar: ponistenje sa DUPLIM clanstvom NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR kvar: ni duplo clanstvo ne pusta mutaciju"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar", eN, eD
 End Sub
 
 ' PONISTENJE KANONSKE ZBIRNE MORA DA OBORI I NJENE IZVORE (review #384, P2).
