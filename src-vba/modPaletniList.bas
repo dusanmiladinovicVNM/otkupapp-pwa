@@ -1344,7 +1344,7 @@ Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
     ' ZBR-CHILD-01: generacija se NASLEDJUJE OD PRIJEMNICE, ne razresava po broju.
     '
     ' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna. Prijemnica svoj
-    ' ZbirnaGeneracijaID vec nosi (pecat u SavePrijemnica), pa je pitanje
+    ' ZbirnaID vec nosi (pecat u SavePrijemnica), pa je pitanje
     ' "koja je zbirna SADA pod ovim brojem" i suvisno i opasno: izmedju nastanka
     ' prijemnice i palete moze da se desi storno + re-entry pod istim brojem, pa
     ' bi prijemnica ostala na GEN-A a njena paleta dobila GEN-B. To bi razbilo
@@ -1353,13 +1353,13 @@ Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
     ' Prazna je legitimna -- prijemnica je jos nema (auto-lanac).
     Dim genRoditelja As String
     genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
-                                        COL_DETE_ZBIRNA_GEN))
+                                        COL_DETE_ZBIRNA_ROD))
     PalAppendRow TBL_PALETA_STAVKA, _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
               COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
               COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
               COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO, _
-              COL_DETE_ZBIRNA_GEN), _
+              COL_DETE_ZBIRNA_ROD), _
         Array(sid, palID, prijemnicaID, _
               brojPrij, brojZbirne, klasa, _
               vrstaVoca, sortaVoca, gajbice, _

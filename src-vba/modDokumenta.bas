@@ -58,7 +58,7 @@ Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
 ' ZBR-MUT-01: razlozi zbog kojih se po BROJU ne sme mutirati.
 '
 ' Deca zbirne (otpremnica, prijemnica, paletna stavka, denormalizovan otkup) od
-' faze 1 nose i ZbirnaGeneracijaID -- ali on sme biti PRAZAN (roditelj jos nije
+' faze 1 nose i ZbirnaID -- ali on sme biti PRAZAN (roditelj jos nije
 ' razresen), pa se na njega ne moze racunati bez provere.
 '
 ' Rutina koja decu bira po broju zato i dalje zahvata SVE dokumente tog broja --
@@ -5940,7 +5940,7 @@ Public Sub PoveziDeteNaZbirnu(ByVal tableName As String, ByVal rowIndex As Long,
                               ByVal brojCol As String, ByVal brojZbirne As String, _
                               ByVal gen As String, ByVal sourceName As String)
     RequireUpdateCell tableName, rowIndex, brojCol, brojZbirne, sourceName
-    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_GEN, gen, sourceName
+    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_ROD, gen, sourceName
 End Sub
 
 ' ZBR-CHILD-01: dete se odvezuje od zbirne -- oba polja, u istom potezu.
@@ -5954,7 +5954,7 @@ End Sub
 
 ' ZBR-CHILD-01 faza 3: da li se CELA operacija sme suzavati.
 '
-' `SuziDecuNaGeneraciju` odlucuje po JEDNOM skupu, a poslovna mutacija dira vise
+' `SuziDecuNaZbirnu` odlucuje po JEDNOM skupu, a poslovna mutacija dira vise
 ' tabela. Kad svaka odlucuje sama, jedna kaskada zna da bude pola scoped a pola
 ' po broju: otpremnice suzene na GEN-B, a prijemnice -- jer je jedna legacy --
 ' vracene na broj, pa se stornira i prijemnica GEN-A. Sve-ili-nista mora da vazi
@@ -5967,10 +5967,10 @@ End Sub
 ' je siri, pa je ovde skup kandidata NADSKUP stvarnog: ako svi u nadskupu nose
 ' generaciju, nosi je i svaki podskup. Greska ide samo u stranu "ne suzavaj",
 ' nikad u "suzi pogresno".
-Public Function SvaAktivnaDecaNoseGeneraciju(ByVal tableName As String, _
+Public Function SvaAktivnaDecaNoseZbirnaID(ByVal tableName As String, _
                                              ByVal brojCol As String, _
                                              ByVal broj As String) As Boolean
-    SvaAktivnaDecaNoseGeneraciju = True
+    SvaAktivnaDecaNoseZbirnaID = True
 
     If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
 
@@ -5981,7 +5981,7 @@ Public Function SvaAktivnaDecaNoseGeneraciju(ByVal tableName As String, _
     Dim cBroj As Long: cBroj = GetColumnIndex(tableName, brojCol)
     If cBroj = 0 Then Exit Function
     Dim cSt As Long: cSt = GetColumnIndex(tableName, COL_STORNIRANO)
-    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_GEN)
+    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_ROD)
 
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -5989,11 +5989,11 @@ Public Function SvaAktivnaDecaNoseGeneraciju(ByVal tableName As String, _
             If cSt = 0 Or UCase$(Trim$(NzToText(data(i, cSt)))) <> "DA" Then
                 ' Kandidat postoji, a tabela nema kolonu -> ne moze se scope-ovati.
                 If cGen = 0 Then
-                    SvaAktivnaDecaNoseGeneraciju = False
+                    SvaAktivnaDecaNoseZbirnaID = False
                     Exit Function
                 End If
                 If Len(Trim$(NzToText(data(i, cGen)))) = 0 Then
-                    SvaAktivnaDecaNoseGeneraciju = False
+                    SvaAktivnaDecaNoseZbirnaID = False
                     Exit Function
                 End If
             End If
@@ -6023,10 +6023,10 @@ End Function
 ' `data` ide ByRef i mora biti BAS onaj snimak nad kojim pozivalac vrti petlju:
 ' drugo citanje unutar iste transakcije moglo bi da vidi drugo stanje, pa bi
 ' indeksi redova pokazivali na tudje redove. ByRef i zbog KOPIJA_NIZA.
-Public Function SuziDecuNaGeneraciju(ByVal tableName As String, ByRef data As Variant, _
+Public Function SuziDecuNaZbirnu(ByVal tableName As String, ByRef data As Variant, _
                                      ByVal kandidati As Collection, _
                                      ByVal gen As String) As Collection
-    Set SuziDecuNaGeneraciju = kandidati
+    Set SuziDecuNaZbirnu = kandidati
 
     If kandidati Is Nothing Then Exit Function
     If kandidati.count = 0 Then Exit Function
@@ -6034,7 +6034,7 @@ Public Function SuziDecuNaGeneraciju(ByVal tableName As String, ByRef data As Va
     If IsEmpty(data) Then Exit Function
     If Not IsArray(data) Then Exit Function
 
-    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_GEN)
+    Dim cGen As Long: cGen = GetColumnIndex(tableName, COL_DETE_ZBIRNA_ROD)
     If cGen = 0 Then Exit Function
 
     Dim k As Long
@@ -6050,7 +6050,7 @@ Public Function SuziDecuNaGeneraciju(ByVal tableName As String, ByRef data As Va
         End If
     Next k
 
-    Set SuziDecuNaGeneraciju = suzeno
+    Set SuziDecuNaZbirnu = suzeno
 End Function
 
 Public Sub ApplyNovaGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long)

@@ -412,7 +412,7 @@
         "IzdatoStatus",
         "BrojOtpremnice",
         "GeneracijaID",
-        "ZbirnaGeneracijaID",
+        "ZbirnaRoditeljID",
         "SourceCreatedAt"
       ]
     },
@@ -464,7 +464,7 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID",
+        "ZbirnaRoditeljID",
         "KulturaID",
         "IspravkaOdID",
         "ZamenjenSaID"
@@ -554,7 +554,7 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ZbirnaGeneracijaID"
+        "ZbirnaRoditeljID"
       ]
     },
     {
@@ -702,7 +702,7 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "ZbirnaGeneracijaID"
+        "ZbirnaRoditeljID"
       ]
     },
     {

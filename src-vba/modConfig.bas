@@ -1075,7 +1075,16 @@ Public Const COL_GENERACIJA_ID As String = "GeneracijaID"
 '
 ' Invarijanta: vrednost se menja U KORAKU sa BrojZbirne, ukljucujuci brisanje.
 ' Jedini put je modDokumenta.PoveziDeteNaZbirnu / OdveziDeteOdZbirne.
-Public Const COL_DETE_ZBIRNA_GEN As String = "ZbirnaGeneracijaID"
+' Trag na detetu: IDENTITET roditeljske zbirne (S4-3c).
+'
+' NIJE "ZbirnaID" -- to ime bi se predstavljalo kao CLANSTVO, a clanstvo
+' ima tacno jedan kanal: tblZbirnaIzvori. Test_PR3_OtpremnicaNemaZbirnaID to
+' i tvrdi, i uhvatio je ovaj rez kad sam kolonu bio nazvao bas tako.
+'
+' Ovo je DENORMALIZOVAN POKAZIVAC NA RODITELJA, za decu koja jos vise o
+' BrojZbirne (otkup, prijemnica, palete) -- i umire sa njima u S6. Do tada
+' ime kaze sta jeste: roditelj, ne clanstvo, i ne generacija.
+Public Const COL_DETE_ZBIRNA_ROD As String = "ZbirnaRoditeljID"
 
 ' Vrednosti IzdatoStatus (izdato = kod kupca -> nepromenljivo; koriguje se storno+reizdaj).
 Public Const IZDATO_DRAFT As String = "DRAFT"

@@ -1785,7 +1785,7 @@ Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
 
-    ' BrojZbirne i ZbirnaGeneracijaID ostaju PRAZNI -- dete pre roditelja, sto je
+    ' BrojZbirne i ZbirnaID ostaju PRAZNI -- dete pre roditelja, sto je
     ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
     RequireAppend TBL_OTPREMNICA, rowData, "AppendRF28OtpremnicaFixture"
 End Sub
@@ -2093,7 +2093,7 @@ End Function
 ' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
 '
 ' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna, i prijemnica svoj
-' ZbirnaGeneracijaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
+' ZbirnaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
 ' zato i suvisno i pogresno -- pravilo je "nikad ne pogadjaj kad vec znas".
 '
 ' Grana A sama NE razlikuje tacno od pogresnog: kad je prijemnica vezana za
@@ -2149,7 +2149,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
                              KLASA_I, 0)
     AssertTrue Len(prjA) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
 
-    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_GEN))
+    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD))
     AssertTrue Len(genPrj) > 0, "ZBR-PAL preduslov: prijemnica nosi generaciju roditelja"
     AssertTrue BrojPaletnihStavki(prjA) > 0, _
         "ZBR-PAL preduslov: paletizacija je napravila stavku (grana A)"
@@ -2164,7 +2164,7 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
 
     IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjB
     AssertEquals "", _
-        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_GEN)), _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_ROD)), _
         "ZBR-PAL preduslov: prijemnica je u zatecenom obliku (generacija prazna)"
     AssertEquals brojA, _
         NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_BROJ_ZBIRNE)), _
@@ -2200,7 +2200,7 @@ Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As St
     If Not IsArray(dat) Then Exit Function
     Dim cP As Long, cG As Long, r As Long
     cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN)
+    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD)
     If cP = 0 Or cG = 0 Then Exit Function
     For r = 1 To UBound(dat, 1)
         If Trim$(NzToText(dat(r, cP))) = Trim$(prijemnicaID) Then
@@ -2230,7 +2230,7 @@ Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
                   "Red nije nadjen. Tabela=" & tableName & " ID=" & idValue
     End If
 
-    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_GEN, "", SRC
+    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_ROD, "", SRC
 End Sub
 
 ' ZBR-CHILD-01 / P1: ingest NE SME da premesti dete na drugi dokument.
@@ -2296,9 +2296,9 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
     ' --- 1) prvi link DOVRSAVA praznu vezu ---
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrA, broj, crid
     ' Trag na detetu je IDENTITET roditelja (S4-3c).
-    AssertEquals zbrA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
         "ZBR-FK preduslov: prvi link je upisao identitet A na otkup"
-    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
         "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu"
 
     ' --- 2) drugi dokument, ISTI broj -> kapija na otkupu ---
@@ -2311,7 +2311,7 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: drugi dokument pod istim brojem ne prolazi tiho"
-    AssertEquals zbrA, DeteGeneracija(TBL_OTKUP, COL_OTK_ID, otkID), _
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTKUP, COL_OTK_ID, otkID), _
         "ZBR-FK: otkup ostaje na svom originalnom roditelju"
     AssertEquals broj, _
         NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE)), _
@@ -2332,7 +2332,7 @@ Private Sub Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta()
 
     AssertTrue raised, _
         "ZBR-FK: kapija radi i na otpremnickom pozivnom mestu"
-    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
         "ZBR-FK: otpremnica ostaje na svom originalnom roditelju"
 
     tx.RollbackTx
@@ -2347,10 +2347,10 @@ EH:
     LogFail "ZBR-CHILD-01 MasterSync ne prepisuje generaciju deteta", bfpErrDesc
 End Sub
 
-Private Function DeteGeneracija(ByVal tableName As String, _
+Private Function DeteZbirnaID(ByVal tableName As String, _
                                 ByVal idColumn As String, _
                                 ByVal idValue As String) As String
-    DeteGeneracija = NzToText(LookupValue(tableName, idColumn, idValue, COL_DETE_ZBIRNA_GEN))
+    DeteZbirnaID = NzToText(LookupValue(tableName, idColumn, idValue, COL_DETE_ZBIRNA_ROD))
 End Function
 
 Private Sub VeziOtkupZaOtpremnicuFixture(ByVal otkupID As String, _
@@ -2608,9 +2608,9 @@ Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
     TestHook_LinkZbirnaToOtkupAndOtpremnica zbrB, broj, cridB
 
     ' Trag na detetu je IDENTITET roditelja (S4-3c), ne njegova generacija.
-    AssertEquals zbrA, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+    AssertEquals zbrA, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
         "ZBR-F4 preduslov: otpremnica A nosi identitet dokumenta A"
-    AssertEquals zbrB, DeteGeneracija(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+    AssertEquals zbrB, DeteZbirnaID(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
         "ZBR-F4 preduslov: otpremnica B nosi identitet dokumenta B"
 
     ' --- BEZ generacije: pozivalac ne kaze KOJI dokument -> kapija STOJI ---

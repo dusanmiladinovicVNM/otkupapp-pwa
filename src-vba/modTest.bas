@@ -7543,7 +7543,7 @@ End Sub
 '     InStr    = 1   -> gate PROPUSTA, a kolona PIN ne postoji
 '
 ' Nije teorijski: PR2 je vecinu tabela zavrsio sa GeneracijaID /
-' ZbirnaGeneracijaID, pa je tacno ta pozicija bila nezasticena.
+' ZbirnaID, pa je tacno ta pozicija bila nezasticena.
 '
 ' Meri se nad tblMGMT (nula redova, nijedan citac u kodu), a ime kolone se vraca
 ' i kroz EH.
@@ -16426,18 +16426,18 @@ End Sub
 ' padali tek kad neko poveze bas to dete, a citaoci bi tiho radili po broju. Ovo
 ' je jeftina provera da spisak u modSetup pokriva sve sto zbirnu nosi kao broj.
 Private Sub T_DeteZbirne_ImaKolonuGeneracije()
-    AssertEq (GetColumnIndex(TBL_OTPREMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblOtpremnica ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblPrijemnica ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblPaletaStavka ima ZbirnaGeneracijaID"
-    AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_GEN) > 0), True, _
-             "tblOtkup ima ZbirnaGeneracijaID"
+    AssertEq (GetColumnIndex(TBL_OTPREMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblOtpremnica ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblPrijemnica ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblPaletaStavka ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0), True, _
+             "tblOtkup ima ZbirnaID"
 
     ' Kolona roditelja se NE sme pomesati sa kolonom deteta: obe postoje na
     ' tblOtpremnica i tblPrijemnica, i znace razlicite stvari.
-    AssertEq (StrComp(COL_DETE_ZBIRNA_GEN, COL_GENERACIJA_ID, vbTextCompare) <> 0), True, _
+    AssertEq (StrComp(COL_DETE_ZBIRNA_ROD, COL_GENERACIJA_ID, vbTextCompare) <> 0), True, _
              "generacija DETETA i generacija SAMOG dokumenta su razlicite kolone"
 End Sub
 

@@ -1331,10 +1331,10 @@ Public Sub EnsureSledljivostSchema()
     ' Samo SEMA. Popunjavanje starih redova je zasebna, jednokratna migracija
     ' (obrisan u S4-3c: nema legacy podataka) -- bio je skup za svaki start
     ' samo jednoznacne brojeve, sto je odluka a ne rutina.
-    EnsureKolonaSaTragom TBL_OTPREMNICA, COL_DETE_ZBIRNA_GEN
-    EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_GEN
-    EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_GEN
-    EnsureKolonaSaTragom TBL_OTKUP, COL_DETE_ZBIRNA_GEN
+    EnsureKolonaSaTragom TBL_OTPREMNICA, COL_DETE_ZBIRNA_ROD
+    EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD
+    EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD
+    EnsureKolonaSaTragom TBL_OTKUP, COL_DETE_ZBIRNA_ROD
 End Sub
 
 ' Jedna kolona, sa tragom. Pad se zapise i NE zaustavlja ostale kolone.

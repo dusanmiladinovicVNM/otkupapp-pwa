@@ -5769,7 +5769,7 @@ SABOTAZE = {
     "paleta-pogadja-generaciju-po-broju": (
         "modPaletniList.bas",
         "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
-        "                                        COL_DETE_ZBIRNA_GEN))\n",
+        "                                        COL_DETE_ZBIRNA_ROD))\n",
         "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",

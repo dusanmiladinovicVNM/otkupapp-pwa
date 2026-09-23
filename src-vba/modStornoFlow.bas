@@ -763,7 +763,7 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' kvara zbog koje ceo ovaj refaktor postoji.
                 Dim zbrIdP As String
                 zbrIdP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                                              prijID, COL_DETE_ZBIRNA_GEN))
+                                              prijID, COL_DETE_ZBIRNA_ROD))
                 If Len(zbrIdP) = 0 Then zbrIdP = ZbirnaIDZaBroj(parentZbirna)
 
                 Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, zbrIdP)
@@ -1493,7 +1493,7 @@ End Sub
 ' Telo odvezivanja (bez TX; koristi se unutar vec otvorene transakcije). Aktivne
 ' otpremnice sa datom zbirnom -> BrojZbirne = "" ("ceka zbirnu"), + otkup denorm.
 ' ZBR-CHILD-01 faza 3: izbor po broju ostaje netaknut (isto poredjenje kao pre),
-' a SuziDecuNaGeneraciju odbacuje decu drugog dokumenta pod istim brojem. Kad
+' a SuziDecuNaZbirnu odbacuje decu drugog dokumenta pod istim brojem. Kad
 ' makar jedno dete jos nema generaciju, suzavanje se ne desava i skup je isti kao
 ' pre kolone -- pa se ni jedna zatecena brojka ne pomera.
 Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal gen As String, _
@@ -1515,7 +1515,7 @@ Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal gen As
             kand.Add i
         End If
     Next i
-    Set kand = SuziDecuNaGeneraciju(TBL_OTPREMNICA, data, kand, genEff)
+    Set kand = SuziDecuNaZbirnu(TBL_OTPREMNICA, data, kand, genEff)
     For i = 1 To kand.count
         OdveziDeteOdZbirne TBL_OTPREMNICA, CLng(kand(i)), COL_OTP_BROJ_ZBIRNE, SRC
         n = n + 1
@@ -1536,7 +1536,7 @@ Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal gen As
                     End If
                 End If
             Next j
-            Set okand = SuziDecuNaGeneraciju(TBL_OTKUP, od, okand, genEff)
+            Set okand = SuziDecuNaZbirnu(TBL_OTKUP, od, okand, genEff)
             For j = 1 To okand.count
                 OdveziDeteOdZbirne TBL_OTKUP, CLng(okand(j)), COL_OTK_BROJ_ZBIRNE, SRC
             Next j
@@ -1592,13 +1592,13 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' zaustaviti. Promenilo se samo STA je scope: do ovog reza generacija
     ' zaglavlja, sada njegov IDENTITET.
     '
-    ' Nista drugo nije trebalo dirati: i SvaAktivnaDecaNoseGeneraciju i
-    ' SuziDecuNaGeneraciju rade nad TRAGOM NA DETETU, a taj trag od S4-3c nosi
+    ' Nista drugo nije trebalo dirati: i SvaAktivnaDecaNoseZbirnaID i
+    ' SuziDecuNaZbirnu rade nad TRAGOM NA DETETU, a taj trag od S4-3c nosi
     ' ZbirnaID. Prvo sam ceo scoping obrisao kao "mrtav kod" -- nije bio mrtav
     ' nego pogresno hranjen.
     Dim scopeID As String: scopeID = ""
-    If SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
-       And SvaAktivnaDecaNoseGeneraciju(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj) Then
+    If SvaAktivnaDecaNoseZbirnaID(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj) _
+       And SvaAktivnaDecaNoseZbirnaID(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, broj) Then
         scopeID = zbrID
     End If
 
@@ -1831,7 +1831,7 @@ Private Function ActiveOtpIDsByZbirna(ByVal brojZbirne As String, ByVal gen As S
             kand.Add i
         End If
     Next i
-    Set kand = SuziDecuNaGeneraciju(TBL_OTPREMNICA, data, kand, gen)
+    Set kand = SuziDecuNaZbirnu(TBL_OTPREMNICA, data, kand, gen)
     For i = 1 To kand.count
         result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
     Next i
@@ -1855,7 +1855,7 @@ Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As 
             kand.Add i
         End If
     Next i
-    Set kand = SuziDecuNaGeneraciju(TBL_PRIJEMNICA, data, kand, gen)
+    Set kand = SuziDecuNaZbirnu(TBL_PRIJEMNICA, data, kand, gen)
     For i = 1 To kand.count
         result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
     Next i
@@ -1957,10 +1957,10 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     Dim scopeID As String: scopeID = ""
     If Len(zbrID) > 0 Then
         Dim scopeOK As Boolean
-        scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)
+        scopeOK = SvaAktivnaDecaNoseZbirnaID(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, brojZbirne)
         If scopeOK And ownsChain Then
-            scopeOK = SvaAktivnaDecaNoseGeneraciju(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne) _
-                      And SvaAktivnaDecaNoseGeneraciju(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, brojZbirne)
+            scopeOK = SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne) _
+                      And SvaAktivnaDecaNoseZbirnaID(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, brojZbirne)
         End If
         If scopeOK Then scopeID = zbrID
     End If
@@ -2341,7 +2341,7 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
             If cSt = 0 Or UCase$(Trim$(CStr(data(c, cSt)))) <> "DA" Then kand.Add c
         End If
     Next c
-    Set kand = SuziDecuNaGeneraciju(tblName, data, kand, gen)
+    Set kand = SuziDecuNaZbirnu(tblName, data, kand, gen)
 
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim i As Long, v As String

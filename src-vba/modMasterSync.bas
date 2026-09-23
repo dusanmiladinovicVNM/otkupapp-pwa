@@ -2506,7 +2506,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     colIdx = RequireColumnIndex(tblName, columnName, sourceName)
 
     Dim colGen As Long
-    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_GEN, sourceName)
+    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_ROD, sourceName)
 
     Dim current As String
     current = Trim$(CStr(nz(data(rowIndex, colIdx), "")))
@@ -2518,7 +2518,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     ' Fail-closed -- ingest ga ne "popravlja" upisom preko.
     If Len(current) = 0 And Len(currentGen) > 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 45, sourceName, _
-                  "Integritet: red nosi ZbirnaGeneracijaID bez BrojZbirne. Table=" & tblName & _
+                  "Integritet: red nosi ZbirnaID bez BrojZbirne. Table=" & tblName & _
                   "; " & contextInfo & _
                   "; PostojecaGeneracija=" & currentGen
     End If
@@ -2538,7 +2538,7 @@ Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
     If Len(currentGen) > 0 Then
         If StrComp(currentGen, Trim$(genZbirne), vbTextCompare) <> 0 Then
             Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 46, sourceName, _
-                      "Konflikt ZbirnaGeneracijaID -- red je vec dete DRUGOG dokumenta pod istim " & _
+                      "Konflikt ZbirnaID -- red je vec dete DRUGOG dokumenta pod istim " & _
                       "brojem. Table=" & tblName & _
                       "; " & contextInfo & _
                       "; Broj=" & Trim$(brojZbirne) & _
