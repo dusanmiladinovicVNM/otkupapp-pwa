@@ -5318,8 +5318,40 @@ zatečenom listu. Dozida se **samo** kad je zatečen header **prefiks** kanonsko
 preimenovana kolona i dalje pucaju. Mereno po `lastCol`, ne po `headers.length` — prva verzija je imala
 baš tu grešku.
 
+**Review #390, drugi krug — redosled i retry protokol oko novog modela.**
+
+Model je prihvaćen, ali su ostala dva otvorena mesta oko njega.
+
+**P1 — PRED je mogao da stigne pre svog OTK-a i tada se trajno ubijao.** Otprema namerno pušta i
+**lokalne** otkupe (offline-first), pa blok koji se predaje sme biti `pending`. Trigeri su se pritom
+razilazili:
+
+| Triger | Bilo |
+|---|---|
+| `post-save` | slao **samo** predaje — otkup je mogao ostati neposlat |
+| `interval` | slao oba, ali **bez `await`** — komentar je govorio „OTK pre PRED", runtime „OTK ‖ PRED" |
+| `online` | jedini ispravan; uzet je kao obrazac |
+
+Rešeno u **dve polovine**, jer nijedna sama nije dovoljna:
+
+1. **PWA:** jedan orkestracioni put `syncOtkupacDomain(reason)` — `await` otkup, pa predaje. Svi trigeri
+   idu kroz njega.
+2. **Master:** „osnova još nije stigla" **nije konflikt**. Red se ostavlja **bez statusa** i sledeći
+   ciklus ga ponovo uzme; broji se odvojeno (`ceka`), jer „0 grešaka + 3 čeka" je tačno stanje, a
+   „3 preskočeno" bi lagalo da je posao gotov. Isto pravilo već važi za **nepotpun manifest** — utovar
+   čeka ostatak umesto da ga proglasi kvarom.
+
+> Master ne sme da računa na redosled mreže ni kad ga klijent poštuje: to su dva zahteva i dve sudbine.
+> Imenovan konflikt ide tek kad postoji dokaz da osnova više ne može da stigne, a takvog dokaza ovde nema.
+
+**P2 — GAS je sakrivao protivrečnost pre nego što je master vidi.** `ClientRecordID` događaja je
+`PredajaID + ':' + OtkupClientRecordID`, pa isti ključ uz **drugog vozača**, drugi `PredatoAt` ili drugi
+manifest znači **drugu tvrdnju o istom događaju**. Vraćalo se `existing/success`. Sada `predajaRazlika`
+poredi imenovano i vraća `PREDAJA_CONFLICT` sa poljem koje se ne slaže — isti ugovor koji OTK i zbirna
+već imaju. Važno baš zato što VBA sada ume da imenuje „isti `PredajaID`, drugi vozač".
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
-`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1974/0**.
+`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1976/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
 `NEJASNO` — ručna kapija ostaje.
 

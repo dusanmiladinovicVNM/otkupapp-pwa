@@ -307,10 +307,7 @@ function bindConnectivityEvents() {
 
     window.addEventListener('online', async () => {
         updateSyncBadge();
-        await syncQueueSafe('online');
-        // Predaje idu POSLE otkupa: master razresava blok nad vec uvezenim
-        // otkupom, pa obrnut redosled pravi nepotrebne 'otkup nije u masteru'.
-        if (typeof syncPredajeSafe === 'function') await syncPredajeSafe('online');
+        await syncOtkupacDomain('online');
         refreshStammdatenInBackground();
     });
 
@@ -976,8 +973,7 @@ function startBackgroundSync() {
     runtime.syncIntervalId = setInterval(() => {
         if (!navigator.onLine) return;
         if (CONFIG.USER_ROLE === 'Management') return;
-        syncQueueSafe('interval');
-        if (typeof syncPredajeSafe === 'function') syncPredajeSafe('interval');
+        syncOtkupacDomain('interval');
     }, 60000);
 }
 
@@ -1249,6 +1245,34 @@ window.requestRoleSync = requestRoleSync;
 async function runRoleSync(reason) {
     return requestRoleSync(reason || 'manual');
 }
+
+// JEDAN PUT ZA OTKUPAC SYNC -- OTK PA PREDAJE (review #390, P1).
+//
+// Predaja se u masteru razresava NAD VEC UVEZENIM otkupom. Dok je svaki triger
+// sam birao sta salje, redosled je zavisio od mesta poziva:
+//
+//   post-save  -> slao SAMO predaje (otkup je mogao ostati pending!)
+//   interval   -> slao oba, ali BEZ await -- dakle paralelno
+//   online     -> slao oba redom (jedini ispravan)
+//
+// Zbog toga je PRED umeo da stigne u Google pre svog OTK-a. Komentar je govorio
+// "OTK pre PRED", a runtime "OTK || PRED".
+//
+// Sada svi trigeri idu kroz ovo telo. Predaje se salju TEK kad otkup zavrsi --
+// ne zato sto pad otkupa blokira predaju (ne blokira), nego zato sto je red
+// bitan i mora biti isti na svakom ulazu.
+async function syncOtkupacDomain(reason) {
+    const otkup = await syncQueueSafe(reason);
+
+    let predaje = null;
+    if (typeof syncPredajeSafe === 'function') {
+        predaje = await syncPredajeSafe(reason);
+    }
+
+    return { otkup: otkup, predaje: predaje };
+}
+
+window.syncOtkupacDomain = syncOtkupacDomain;
 
 async function syncQueueSafe(reason) {
     const runtime = getAppRuntime();

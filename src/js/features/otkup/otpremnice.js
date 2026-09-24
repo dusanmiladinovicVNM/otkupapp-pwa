@@ -623,8 +623,13 @@ async function confirmOtpremaAssign() {
 
         if (typeof updateSyncBadge === 'function') updateSyncBadge();
 
-        if (navigator.onLine && typeof syncPredajeSafe === 'function') {
-            syncPredajeSafe('post-save');
+        // ISTI put kao svaki drugi triger: otkup pa predaje.
+        //
+        // Ovde je to najvaznije -- blok koji se predaje moze jos uvek biti
+        // PENDING (otprema namerno pusta i lokalne otkupe, offline-first). Slati
+        // samo predaju znacilo bi da dogadjaj stigne pre svoje osnove.
+        if (navigator.onLine && typeof syncOtkupacDomain === 'function') {
+            syncOtkupacDomain('post-save');
         }
 
         // osveži lokalni state posle success prikaza

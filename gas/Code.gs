@@ -1823,6 +1823,30 @@ function uploadPdfToDrive(data) {
 // ============================================================
 // ZBIRNA PROCESSING
 // ============================================================
+// Prva razlika izmedju zatecenog reda dogadjaja i onoga sto je stiglo.
+// '' = isti dogadjaj (idempotentan retry).
+//
+// Poredi se IMENOVANO, da poruka kaze STA se ne slaze -- "konflikt" bez polja
+// operateru ne znaci nista.
+function predajaRazlika(values, idx, novo) {
+  const polja = Object.keys(novo);
+
+  for (let i = 0; i < polja.length; i++) {
+    const kolona = polja[i];
+    const k = idx[kolona];
+    if (typeof k !== 'number' || k < 0) continue;
+
+    const staro = String(getCell(values, k, '') || '').trim();
+    const novoV = String(novo[kolona] || '').trim();
+
+    if (staro !== novoV) {
+      return kolona + ' (bilo: "' + staro + '", stiglo: "' + novoV + '")';
+    }
+  }
+
+  return '';
+}
+
 // ============================================================
 // PREDAJA PROCESSING
 // ============================================================
@@ -1885,6 +1909,34 @@ function processPredajaRecord(record, otkupacID) {
 
     if (existingRow > 0) {
       const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // ISTI IDENTITET SA DRUGOM TVRDNJOM NIJE DUPLIKAT NEGO KONFLIKT
+      // (review #390, P2).
+      //
+      // ClientRecordID je PredajaID + ':' + OtkupClientRecordID, pa isti kljuc
+      // uz drugog vozaca, drugi PredatoAt ili drugi manifest znaci da je neko
+      // poslao DRUGU tvrdnju o istom dogadjaju.
+      //
+      // Vracati 'existing' bi tu protivrecnost sakrilo pre nego sto je master
+      // uopste vidi -- a master ume da je imenuje (isti PredajaID, drugi vozac
+      // je SyncError). Isti ugovor vec vazi za OTK i za zbirnu: isti CRID +
+      // isti sadrzaj = idempotentno, isti CRID + drugi sadrzaj = konflikt.
+      const razlika = predajaRazlika(existingValues, idx, {
+        PredajaID: predajaID,
+        PredatoAt: predatoAt,
+        VozacID: vozacID,
+        OtkupClientRecordID: otkupCRID,
+        PredajaClanovi: clanovi
+      });
+
+      if (razlika) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'PREDAJA_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o predaji: ' + razlika
+        };
+      }
 
       return {
         clientRecordID: clientRecordID,

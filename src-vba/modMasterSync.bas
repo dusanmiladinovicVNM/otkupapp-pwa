@@ -2371,7 +2371,16 @@ Private Sub ImportOnePREDSheet(ByVal spreadsheetID As String, _
 
     Set statusUpdates = New Collection
 
-    Call PredajeIzPredData(data, sheetName, predaje, statusUpdates, outErrors)
+    Dim cekaOsnovu As Long
+    Call PredajeIzPredData(data, sheetName, predaje, statusUpdates, outErrors, cekaOsnovu)
+
+    ' Redovi koji cekaju osnovu NISU greska i NISU preskok -- oni su nedovrsen
+    ' posao koji se ponavlja. Broje se odvojeno da bi log rekao istinu: "0 greske"
+    ' uz "3 ceka" je tacno stanje, a "3 preskoceno" bi lagalo da je posao gotov.
+    If cekaOsnovu > 0 Then
+        LogInfo "ImportOnePREDSheet", sheetName & ": " & CStr(cekaOsnovu) & _
+                " predaja ceka svoj otkup -- ostaju za sledeci ciklus"
+    End If
 
     ' Grupisanje ide PRE writeback-a: red sme da dobije terminalan status tek kad
     ' je njegova otpremnica stvarno upisana.
@@ -2435,7 +2444,8 @@ End Sub
 Private Sub PredajeIzPredData(ByRef data As Variant, ByVal sheetName As String, _
                               ByRef outPredaje As Collection, _
                               ByRef outStatusUpdates As Collection, _
-                              ByRef outErrors As Long)
+                              ByRef outErrors As Long, _
+                              ByRef outCeka As Long)
     Dim cStatus As Long, cPred As Long, cKad As Long
     Dim cVoz As Long, cOtk As Long, cClan As Long
     cStatus = OtkKolonaPoImenu(data, "SyncStatus")
@@ -2461,18 +2471,28 @@ Private Sub PredajeIzPredData(ByRef data As Variant, ByVal sheetName As String, 
                 otkupID = modOtkup.OtkupPoClientRecordID(otkupCrid)
 
                 If Len(otkupID) = 0 Then
-                    ' Otkup jos nije u masteru. NE SME kao Duplicate: Duplicate je
-                    ' terminalan, pa bi dogadjaj zauvek ostao bez otpremnice a sync
-                    ' bio zelen. SyncError je takodje terminalan, ali IMENOVAN --
-                    ' operater vidi sta fali.
-                    outStatusUpdates.Add Array(i, _
-                        SYNC_STATUS_ERROR & ":predaja -- otkup " & otkupCrid & _
-                        " nije u masteru", "")
-                    outErrors = outErrors + 1
+                    ' OSNOVA JOS NIJE STIGLA NIJE KONFLIKT (review #390, P1).
+                    '
+                    ' Prva verzija je ovde pisala SyncError. SyncError je
+                    ' terminalan, pa bi predaja koja je stigla PRE svog otkupa
+                    ' ostala mrtva i kad osnova kasnije uredno dodje -- trajan
+                    ' gubitak dogadjaja, samo na granici zavisnosti.
+                    '
+                    ' PWA sada salje otkup pa predaju kroz jedno telo
+                    ' (syncOtkupacDomain), ali master ne sme da racuna na redosled
+                    ' mreze: dva zahteva, dve sudbine. Zato se red OSTAVLJA
+                    ' nedirnut -- bez statusa -- pa ga sledeci ciklus ponovo uzme.
+                    '
+                    ' Isto pravilo vec vazi za nepotpun manifest: utovar CEKA
+                    ' ostatak umesto da ga proglasi kvarom. Imenovan konflikt ide
+                    ' tek kad postoji dokaz da osnova vise ne moze da stigne, a
+                    ' takvog dokaza ovde nema.
+                    outCeka = outCeka + 1
 
-                    MarkPWAFatalSyncError "PredajeIzPredData", _
-                        "Predaja: otkup nije nadjen u masteru. Sheet=" & sheetName & _
-                        "; Row=" & CStr(i) & "; OtkupClientRecordID=" & otkupCrid
+                    LogInfo "PredajeIzPredData", _
+                        "Predaja ceka osnovu: otkup jos nije u masteru. Sheet=" & _
+                        sheetName & "; Row=" & CStr(i) & _
+                        "; OtkupClientRecordID=" & otkupCrid
                 Else
                     ' CRID koji ide u grupisanje je CRID OTKUPA, ne ovog reda --
                     ' manifest nabraja blokove, pa se pripadnost meri njime.
@@ -2491,8 +2511,9 @@ End Sub
 Public Sub TestHook_PredajeIzPredData(ByRef data As Variant, _
                                       ByRef outPredaje As Collection, _
                                       ByRef outStatusUpdates As Collection, _
-                                      ByRef outErrors As Long)
-    Call PredajeIzPredData(data, "TEST", outPredaje, outStatusUpdates, outErrors)
+                                      ByRef outErrors As Long, _
+                                      ByRef outCeka As Long)
+    Call PredajeIzPredData(data, "TEST", outPredaje, outStatusUpdates, outErrors, outCeka)
 End Sub
 
 ' Test seam: ImportOnePREDSheet je Private, a uvoz dogadjaja je poslovni tok.

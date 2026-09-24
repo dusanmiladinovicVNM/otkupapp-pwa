@@ -5811,17 +5811,15 @@ SABOTAZE = {
         "PREDAJA bez identiteta: red je SyncError, ne Duplicate",
     ),
 
-    # S5-4: retry se prepoznaje po UTOVARU, ne po vozacu. Bez ovog poredjenja
-    # drugi klik otkupca nad blokom koji je vec otisao tiho postaje Duplicate.
     # S5-4a: predaja ciji otkup jos nije u masteru NE SME da postane kandidat.
-    # Bez ove kapije bi usla u grupisanje sa praznim OtkupID-em, a red bi prosao
-    # bez imenovanog razloga -- tih gubitak dogadjaja, opet.
+    # Ona CEKA osnovu (review #390, P1) -- bez ove kapije bi usla u grupisanje
+    # sa praznim OtkupID-em, i utovar bi dobio clana koga nema.
     "predaja-bez-otkupa-prolazi": (
         "modMasterSync.bas",
         "                If Len(otkupID) = 0 Then\n",
         "                If False Then   ' SABOTAZA: predaja bez otkupa u masteru prolazi kao kandidat\n",
         "Test_PRED_ListPostajeOtpremnica",
-        "PRED: red bez otkupa u masteru je IMENOVANA greska, ne tih preskok",
+        "PRED: red bez otkupa u masteru CEKA osnovu",
     ),
 
     "predaja-retry-po-vozacu": (

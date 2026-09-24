@@ -7742,9 +7742,11 @@ End Sub
 ' stvarno novo: prevod lista u kandidate i njegov ugovor sa GrupePredaje --
 ' redosled clanova niza, koji nijedan checker ne vidi.
 '
-' Meri se i NEGATIVAN slucaj: red ciji otkup nije u masteru ne sme da se pretvori
-' u kandidata nego u imenovanu gresku. Bez njega bi prolaz vazio i za prevod koji
-' sve propusta.
+' Meri se i red ciji otkup JOS NIJE u masteru. On ne sme da postane kandidat --
+' ali ne sme ni da dobije terminalan status: predaja ume da stigne PRE svoje
+' osnove (dva zahteva, dve sudbine), pa je "nema otkupa" cekanje, ne kvar
+' (review #390, P1). Bez tog smera bi prolaz vazio i za prevod koji sve propusta,
+' i za onaj koji zakasnelu osnovu ubija.
 Private Sub Test_PRED_ListPostajeOtpremnica()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -7791,16 +7793,21 @@ Private Sub Test_PRED_ListPostajeOtpremnica()
     PredRed data, 4, predajaID, PredajaIsoDatum(datum), TEST_VOZ_ID, _
             "CRID-NEMA-" & scenario, manifest
 
-    Dim predaje As Collection, statusi As Collection, greske As Long
+    Dim predaje As Collection, statusi As Collection
+    Dim greske As Long, ceka As Long
     Set predaje = New Collection
     Set statusi = New Collection
 
-    modMasterSync.TestHook_PredajeIzPredData data, predaje, statusi, greske
+    modMasterSync.TestHook_PredajeIzPredData data, predaje, statusi, greske, ceka
 
     AssertEquals "2", CStr(predaje.count), _
                  "PRED: u kandidate ulaze SAMO redovi ciji je otkup u masteru"
-    AssertEquals "1", CStr(greske), _
-                 "PRED: red bez otkupa u masteru je IMENOVANA greska, ne tih preskok"
+    AssertEquals "1", CStr(ceka), _
+                 "PRED: red bez otkupa u masteru CEKA osnovu"
+    AssertEquals "0", CStr(greske), _
+                 "PRED: cekanje osnove NIJE greska"
+    AssertEquals "0", CStr(statusi.count), _
+                 "PRED: red koji ceka NE dobija status -- sledeci ciklus ga uzima"
 
     ' --- prevod je tacan tek ako pravi pisac od njega napravi dokument -------
     Dim ishodi As Object, poruke As String
