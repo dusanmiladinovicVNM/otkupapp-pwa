@@ -5212,14 +5212,61 @@ izvor istine ali **sme** da zabrani dokument. Umesto toga traži se ono što uvo
 storno radi (storniran roditelj → članstvo prestaje da bude aktivno → otpremnica slobodna), a
 `PONIŠTENJE` čita kanonsko članstvo od #384. `DetachOtpremniceInline` je **mrtav kod, ne kvar**.
 
+#### Review #388, drugi krug — predaja je događaj sa manifestom (2×P1 + P2)
+
+**P1/1 — moj prvi fix je čuvao POSLEDICU, ne pravilo.** Sprečio je da **zakasneli** blok napravi drugu
+otpremnicu, ali ne i da **prvi ciklus izda nepotpun dokument**. Recenzentova rečenica da test „kodifikuje
+recovery posledicu, ne čuva originalni invariant" je tačna — zapisao sam ishod umesto pravila.
+
+```
+PRED-X = A + B + C          ciklus 1: A, B uspeju, C padne
+                            → OTP-1 = A+B, IZDATO
+                            ciklus 2: C stigne → SyncError
+                            → dokument tvrdi MANJE nego što je natovareno
+```
+
+Rešenje nije još jedan importer guard nego **manifest**: red nosi `PredajaClanovi` (CRID-ovi svih blokova
+tog klika), pa master zna **kad je utovar CEO**. Nepotpun utovar ne dobija ni dokument ni status — redovi
+ostaju `Pending` i vraćaju se sledećim ciklusom. Čekanje ide u **log**, ne u `outGreske` (koji pali fatal
+flag), jer čekanje nije greška.
+
+`ExpectedCount` je odbačen iz razloga koji je i recenzent naveo: broj ne dokazuje da su stigli **pravi**
+redovi.
+
+**P1/2 — ista greška kroz drugi lifecycle.** `OtpIspravi` nije prenosio `PredajaID`. Ispravka pravi nov
+dokument i stornira stari, a `OtpremnicaPoPredaji` gleda samo **aktivne** — pa je nova verzija ostajala bez
+identiteta, i zakasneo blok je opet mogao da napravi svoj dokument. Broj se ne nasleđuje (A9), ali
+**fizički utovar je bio jedan**.
+
+Uz to, po predlogu recenzenta: `OtpremnicaPoPredaji` je sada **strogo 0-ili-1**. Dve aktivne otpremnice pod
+istim `PredajaID`-em su korupcija, ne „uzmi prvu" — inače bi kapija sakrila sopstveni promašaj.
+
+**P2 — neuporediv datum je bio PRESKOK.** Poređenje je stajalo pod `If IsoUDatum(...) And IsDate(...)`, pa
+bi red sa nevalidnim datumom, ako se sve ostalo poklopi, dobio `Duplicate` — terminalno.
+`ValidatePWAZbirna` tu ne pomaže: zove se tek za **nov** red, posle te grane.
+
+#### Dokaz je uhvatio placebo tvrdnju — i popravka je išla u KOD
+
+Prva sabotaža za P2 bila je crvena, ali **na pogrešnim tvrdnjama**: preskakanjem `IsoUDatum` ostaje
+neinicijalizovan `danNov` (`30.12.1899`), pa poređenje prijavi razliku **uvek** — tvrdnja „nevalidan datum
+nije duplikat" prolazi **slučajno**, dok padaju NO-OP tvrdnje.
+
+Uzrok nije bio u tvrdnji nego u **rasporedu**: tri načina da datum bude razlika stajala su razdvojeno, pa
+se nijedan nije mogao izmeriti a da ne pomeri ostale. Sada su svi u `DatumRazlika`. To je popravka **koda
+zbog merljivosti**, ne testa zbog koda — isti obrazac zbog kojeg je svežina izvora izvađena iz S5-3.
+
+> **Moja greška u samom rezu:** provera kompletnosti je prvo završila u **malina batch-u** umesto u
+> predaji — sidro se poklopilo sa pogrešnom funkcijom. Uhvatio je **compile**, ne test.
+
 #### Kapije
 
-`RunAllTests` **200/0** · BFP **1900 → 1866 → 1880** (posle review kruga: +7 `ZBR CRID`, +7 `PREDAJA parc`)
+`RunAllTests` **200/0** · BFP **1900 → 1866 → 1880 → 1897** (posle review kruga: +7 `ZBR CRID`, +7 `PREDAJA parc`)
 · Storno **163/0** · Banka **241/0** · Palete **97** · Agrohemija **25**.
 
-Sabotaže **588 → 585**: šest obrisano jer mere pravila koja više ne postoje, tri nove
-(`zbirna-ne-pamti-poreklo`, `zbirna-crid-ne-gleda-sadrzaj`, `predaja-ne-pamti-utovar`). **Dokazano: sve
-crvene na imenovanoj tvrdnji, izvor vraćen bit-identično.**
+Sabotaže **588 → 588** (šest obrisano, šest novih): `zbirna-ne-pamti-poreklo`,
+`zbirna-crid-ne-gleda-sadrzaj`, `predaja-ne-pamti-utovar`, `predaja-izdaje-nepotpun-utovar`,
+`ispravka-gubi-identitet-utovara`, `zbirna-nevalidan-datum-je-duplikat`. **Dokazano: sve crvene na
+imenovanoj tvrdnji, izvor vraćen bit-identično.**
 
 Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
 
