@@ -216,7 +216,9 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
     Select Case docType
         Case FLOW_DOC_ZBIRNA
             Dim sz As Object: Set sz = ScanZbirna(broj, docID)
-            Dim owz As Boolean: owz = ZbirnaOwnsExternalChain(broj)
+            Dim owz As Boolean
+            owz = ZbirnaOwnsExternalChain(ZbirnaCiljID(broj, docID, _
+                      MOD_NAME & ".BuildPonistenjePosledice"))
             m = "PONISTENJE zbirne " & broj & " gasi interni tok (STORNO)." & vbCrLf & "Pogodjeno:" & vbCrLf
             m = m & " - aktivne otpremnice (storniraju se): " & CStr(sz("otpCount")) & vbCrLf
             m = m & " - prijemnice: " & CStr(sz("prijCount")) & _
@@ -391,9 +393,25 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     ' inace kapija odbija ono sto primitiv ume bezbedno da uradi.
     Dim scopeID As String, razZC As String
     If mode <> SV_MODE_RESI_KASNIJE Then
-        razZC = ZbirnaScopeRazlog(broj, docID, _
-                                  (mode = SV_MODE_PONISTENJE) And ZbirnaOwnsExternalChain(broj), _
-                                  scopeID)
+        ' KAPIJA GOVORI PRE PREVODA (regresija koju je uhvatio
+        ' T_ZbirnaKaskada_StajeNaDvosmislenom).
+        '
+        ' Prva verzija ove izmene je ovde zvala fail-closed prevod. Nad
+        ' dvosmislenim brojem on podigne gresku PRE nego sto kapija stigne da
+        ' kaze STA nije u redu, pa je operater umesto "broj je pripadao vise
+        ' vlasnika" dobijao genericki neuspeh. Zatecen komentar je na tacno to
+        ' upozoravao, a ja sam ga preskocio.
+        '
+        ' Prevod je zato MEK samo ovde: neprevodiv broj znaci da kapija ionako
+        ' odbija, pa vlasnistvo nema sta da odluci. Sam racun vlasnistva ostaje
+        ' STROG -- mekan je izbor cilja, ne odluka o tome cije podatke smes da
+        ' obores. Akter nize (PonistiZbirnaChain_TX grana) prevodi fail-closed.
+        Dim ownsZC As Boolean, ciljZC As String
+        If mode = SV_MODE_PONISTENJE Then
+            ciljZC = ZbirnaCiljIDMeko(broj, docID)
+            If Len(ciljZC) > 0 Then ownsZC = ZbirnaOwnsExternalChain(ciljZC)
+        End If
+        razZC = ZbirnaScopeRazlog(broj, docID, ownsZC, scopeID)
         If Len(razZC) > 0 Then
             r("message") = ZbirnaMutPoruka(razZC, "zbirne", broj, _
                 "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
@@ -463,8 +481,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             r("correctionID") = cidP
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
             If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
-            Dim ownsZ As Boolean: ownsZ = ZbirnaOwnsExternalChain(broj)
-            Dim cascZ As Object: Set cascZ = PonistiZbirnaChain_TX(broj, ownsZ, docID)
+            Dim cascZ As Object: Set cascZ = PonistiZbirnaChain_TX(broj, docID)
             If Not CBool(cascZ("ok")) Then
                 ' RAZLOG iz kaskade ide dalje. Bez ovoga operater vidi samo
                 ' "nije uspelo", pa mu specificna kapija ne znaci nista.
@@ -480,7 +497,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             r("message") = "Zbirna " & broj & " ponistena sa celim tokom. Otpremnice: " & CStr(cascZ("otp")) & _
                 ", prijemnice: " & CStr(cascZ("prij")) & ", paletne stavke: " & CStr(cascZ("pals")) & _
                 ", blokovi oslobodjeni: " & CStr(cascZ("blok")) & _
-                IIf(ownsZ, "", " (eksterni kupac: prijemnica netaknuta).")
+                IIf(CBool(cascZ("owns")), "", " (eksterni kupac: prijemnica netaknuta).")
 
         Case Else
             r("message") = "Nepoznat mod: " & mode
@@ -749,7 +766,14 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
             If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
 
             If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) Then
-                Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
+                ' Identitet roditelja se cita SA DETETA, pa kaskada zna TACNO
+                ' koji dokument dira. Vlasnistvo vise ne racuna ovde -- vraca ga
+                ' kaskada kroz res("owns"), da dva mesta ne bi imala dva
+                ' odgovora o istoj cinjenici.
+                Dim zbrIdP As String
+                zbrIdP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+                                              prijID, COL_DETE_ZBIRNA_ROD))
+                If Len(zbrIdP) = 0 Then zbrIdP = ZbirnaIDZaBroj(parentZbirna)
                 ' ZBR-CHILD-01: v. isti obrazac u otpremnickoj grani -- dete zna
                 ' roditelja, pa se ne pogadja po broju.
                 ' Dete nosi GENERACIJU roditelja (ZBR-CHILD-01), a kaskada od
@@ -765,12 +789,8 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' generacijama, nikad ga ne nasao i TIHO vratio prazno. Identitet
                 ' bi se izgubio, a kaskada pala nazad na broj: tacno ona klasa
                 ' kvara zbog koje ceo ovaj refaktor postoji.
-                Dim zbrIdP As String
-                zbrIdP = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                                              prijID, COL_DETE_ZBIRNA_ROD))
-                If Len(zbrIdP) = 0 Then zbrIdP = ZbirnaIDZaBroj(parentZbirna)
-
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP, zbrIdP)
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, zbrIdP)
+                Dim ownsP As Boolean: ownsP = CBool(cascP("owns"))
                 If Not CBool(cascP("ok")) Then
                     ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
                     Dim razlogP As String: razlogP = ""
@@ -1706,13 +1726,72 @@ End Function
 ' hladnjaca-tok (kupac == CFG_MALINA_DEFAULT_KUPAC / malina): DA. Eksterni kupac:
 ' NE (prijemnica je eksterna, ide svojim faktura-mehanizmom). Detekcija = kao u
 ' frmDokumenta.RefreshBrojPrijSuggestion (modAutoHladnjaca.IsHladnjacaKupac).
-Private Function ZbirnaOwnsExternalChain(ByVal brojZbirne As String) As Boolean
+' VLASNISTVO NIZVODNOG LANCA IDE PO IDENTITETU, NE PO BROJU (review #389, P1).
+'
+' Ova odluka kaze sme li PONISTENJE da stornira PRIJEMNICU i PALETNE STAVKE.
+' Citala se preko LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, ...), dakle po LABELI --
+' na putu koji je ceo ovaj rez upravo prebacio na identitet.
+'
+' Pod jednim brojem legitimno stoje DVA dokumenta (KR-001), pa je prvi pogodak
+' po broju mogao biti TUDJI:
+'
+'   A: broj X, kupac HLADNJACA   B: broj X, kupac EKSTERNI   cilj = B
+'   -> lookup pogodi A -> ownsChain = True -> ponistenje B-a obara PRJ i palete
+'      koje B po poslovnom pravilu NE poseduje.
+'
+' Obrnut raspored daje drugi kvar: cilj je hladnjacka zbirna, lookup pogodi
+' eksternu, ownsChain = False -- zaglavlje i otpremnice padnu, prijemnica ostane,
+' a funkcija prijavi pun uspeh. Delimican uspeh prikazan kao potpun.
+'
+' "On Error Resume Next" je isti problem treci put: svaka greska u racunanju
+' vlasnistva postajala je False, dakle "eksterni kupac". Fail-open odluka o tome
+' CIJE podatke smes da obores nije oprez nego rizik -- sada se greska podize.
+Private Function ZbirnaOwnsExternalChain(ByVal zbirnaID As String) As Boolean
+    Const SRC As String = MOD_NAME & ".ZbirnaOwnsExternalChain"
+
+    zbirnaID = Trim$(zbirnaID)
+    If Len(zbirnaID) = 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 69, SRC, _
+                  "Vlasnistvo nizvodnog lanca se ne moze odrediti bez ZbirnaID-a."
+    End If
+
+    RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID", SRC
+
+    ZbirnaOwnsExternalChain = IsHladnjacaKupac( _
+        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))
+End Function
+
+' KOJA JE ZBIRNA CILJ OPERACIJE -- jedna definicija za sva cetiri mesta.
+'
+' Pregled, kapija, mutacija i zavrsna poruka moraju da govore o ISTOM dokumentu.
+' Dok je svako od njih sam pogadjao po broju, cetiri mesta su mogla da dobiju
+' cetiri odgovora nad istim brojem.
+'
+' Kad pozivalac posalje docID, on je autoritet. Kad ne posalje, broj se prevodi
+' fail-closed (ZbrIdPoBroju dize gresku nad dvosmislenim brojem) -- jer "uzmi
+' prvi" je bas ono sto je ovaj P1 i bio.
+' Mekana varijanta -- SAMO za kapiju, koja mora da progovori pre prevoda.
+' Prazan rezultat znaci "cilj se ne moze imenovati", a ne "nema vlasnistva":
+' pozivalac ga sme koristiti jedino tamo gde odbijanje ionako sledi.
+Private Function ZbirnaCiljIDMeko(ByVal broj As String, ByVal docID As String) As String
+    If Len(Trim$(docID)) > 0 Then
+        ZbirnaCiljIDMeko = Trim$(docID)
+        Exit Function
+    End If
+
     On Error Resume Next
-    brojZbirne = Trim$(brojZbirne)
-    If Len(brojZbirne) = 0 Then Exit Function
-    Dim kup As String
-    kup = NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KUPAC))
-    ZbirnaOwnsExternalChain = IsHladnjacaKupac(kup)
+    ZbirnaCiljIDMeko = ZbrIdPoBroju(broj, MOD_NAME & ".ZbirnaCiljIDMeko")
+    On Error GoTo 0
+End Function
+
+Private Function ZbirnaCiljID(ByVal broj As String, ByVal docID As String, _
+                              ByVal src As String) As String
+    If Len(Trim$(docID)) > 0 Then
+        ZbirnaCiljID = Trim$(docID)
+        Exit Function
+    End If
+
+    ZbirnaCiljID = ZbrIdPoBroju(broj, src)
 End Function
 ' TEST SEAM: DistinctActiveValues je Private, a ZBR-NORM-02 trazi da se i ona
 ' meri -- inace bi test dokazao samo dva od tri odlucivaca, a treci bi mogao da
@@ -1979,11 +2058,12 @@ End Function
 ' gen bira ZAGLAVLJE zbirne. Decu bira BROJ -- drugog kljuca u semi nema -- pa
 ' kad broj nose dve aktivne zbirne kaskada staje: ponistavanje bi odvezalo i
 ' tudje otpremnice i prijemnice.
-Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsChain As Boolean, _
+Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
                                        Optional ByVal zbirnaID As String = "") As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res("ok") = False: res("otp") = 0&: res("prij") = 0&: res("pals") = 0&: res("blok") = 0&
+    res("owns") = False
     Set PonistiZbirnaChain_TX = res
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -2006,6 +2086,24 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     If Len(zbrID) > 0 Then
         brojZbirne = RequireZbirnaPar(zbrID, brojZbirne, SRC)
     End If
+
+    ' VLASNISTVO SE RACUNA OVDE, I SAMO OVDE (review #389, P1).
+    '
+    ' Pozivaoci su ga racunali PRE poziva, i to po BROJU -- pa je nad dva
+    ' dokumenta istog broja odgovor mogao biti TUDJI. Ovde je cilj poznat.
+    '
+    ' Prevod je MEK samo za izbor cilja: kad pozivalac nije poslao ID, a broj je
+    ' dvosmislen, kapija ISPOD mora da progovori prva (zatecen
+    ' T_ZbirnaKaskada_StajeNaDvosmislenom to i meri). Neprevodiv broj zato znaci
+    ' "nema odluke o vlasnistvu", a ne "eksterni kupac" -- do mutacije se u tom
+    ' slucaju ionako ne stize. Sam racun vlasnistva ostaje STROG.
+    '
+    ' Odluka izlazi kroz res("owns"), pa je pozivalac CITA umesto da je izvodi
+    ' drugi put. Jedna cinjenica, jedno telo.
+    Dim ciljID As String, ownsChain As Boolean
+    ciljID = ZbirnaCiljIDMeko(brojZbirne, zbrID)
+    If Len(ciljID) > 0 Then ownsChain = ZbirnaOwnsExternalChain(ciljID)
+    res("owns") = ownsChain
 
     ' SCOPING DECE IDE PO ZbirnaID-u (S4-3c) -- v. isti obrazac u
     ' StornoZbirnaIDetach_TX. Prijemnice i palete ulaze u odluku samo kad lanac

@@ -5339,11 +5339,12 @@ nalaz je isti utovar na dva aktivna dokumenta.
 
 **Verifikacija** (posle review-a #389). `vba_check` čisto · `gen_schema_module --check` u koraku ·
 `who_writes --check` i `--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** ·
-`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1951/0** ·
+`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1955/0** ·
 `RunGoldenSuite` OK. Dvosmerni dokaz nad sabotažama koje je ovaj rez dodao ili preniašao
 (`blok-izvor-sme-storno`, `zbirna-kaskada-bez-kapije`, `simple-dupli-cita-permisivno`,
 `strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`,
-`zbirna-clanstvo-na-nepostojecu-otp`, `zbirna-storniran-izvor-tih`): **7/7 crvenih**, potpis izvora
+`zbirna-clanstvo-na-nepostojecu-otp`, `zbirna-storniran-izvor-tih`,
+`vlasnistvo-lanca-po-broju`): **8/8 crvenih**, potpis izvora
 identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
 
 > `ponistenje-izdate-cita-permisivno` je pri tom pokazala **zatečenu grešku u katalogu**: tvrdnja joj je
@@ -5446,6 +5447,46 @@ preko `IsStorniranoValue` — koji je **`Private` u `modStorno`** i iz `modDokum
 hvata (prvi: procedura bez `End Function`). Oba idu u isti `tools/` PR, uz već zapisanu rupu
 vidljivosti.
 
+**Review #389, treći krug (P1) — vlasništvo nizvodnog lanca išlo je po broju.**
+
+`ZbirnaOwnsExternalChain` odlučuje **sme li PONIŠTENJE da stornira prijemnicu i paletne stavke**, a
+čitala je `KupacID` preko `LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, ...)` — po **labeli**, na putu koji je
+ceo ovaj rez upravo prebacio na identitet. Pod jednim brojem legitimno stoje dva dokumenta (KR-001), pa
+je odgovor bio odgovor **prvog pogotka**:
+
+| Raspored | Posledica |
+|---|---|
+| cilj **B** (eksterni), lookup pogodi **A** (hladnjača) | `ownsChain = True` → PONIŠTENJE B-a obara PRJ i palete koje B **ne poseduje** — destruktivna mutacija izvan granice vlasništva |
+| cilj **A** (hladnjača), lookup pogodi **B** (eksterni) | `ownsChain = False` → zaglavlje i otpremnice padnu, prijemnica ostane, a funkcija prijavi **pun uspeh** |
+
+Uz to je stajalo `On Error Resume Next`: svaka greška u računanju vlasništva postajala je `False`,
+dakle „eksterni kupac". Fail-open odluka o tome **čije** podatke smeš da oboriš nije oprez nego rizik.
+
+**Gde odluka sada živi.** Ne kod pozivaoca, nego u `PonistiZbirnaChain_TX` — tamo gde je `ZbirnaID`
+autoritativan — i izlazi kroz `res("owns")`, pa je prijemnička grana **čita** umesto da je izvodi drugi
+put. Pregled (`BuildPonistenjePosledice`) i kapija (`RunZbirnaCorrection`) koriste isti strogi račun
+nad izabranim `docID`-em. Četiri mesta, jedna činjenica.
+
+**Dve regresije koje sam pritom napravio, obe uhvaćene testom, ne pregledom:**
+
+1. Prevod broja u ID stavio sam **pre** kapije dvosmislenosti. Fail-closed prevod je progutao
+   informativnu poruku („broj je pripadao više vlasnika") i operater bi dobio generički neuspeh — pao je
+   zatečeni `T_ZbirnaKaskada_StajeNaDvosmislenom`. Zatečeni komentar je na tačno to upozoravao, a ja sam
+   ga preskočio. Rešenje: izbor cilja je **mek** (neprevodiv broj = nema odluke o vlasništvu, i do
+   mutacije se ionako ne stiže), a sam račun vlasništva ostaje **strog**.
+2. Odluku sam prvo izračunao **posle** kapije koja je čita, pa je na tom mestu bila uvek `False`.
+   Compile nije pao — `Dim` je funkcijski — nego je pukao tek scenario.
+
+Nova provera: `Test_ZBR_VlasnistvoLancaIdePoIdentitetu`. Dva dokumenta pod istim brojem, **različiti
+kupci**, i tvrdnja u **oba smera** kroz javan ulaz koji operater i vidi
+(`BuildPonistenjePosledice` sa izabranim `docID`-em). Jedan smer sam ne bi razlikovao ispravno
+ponašanje od „uvek isti odgovor". Sabotaža `vlasnistvo-lanca-po-broju` vraća čitanje na broj i baš ta
+tvrdnja crveni.
+
+> **Nije mereno na samoj mutaciji:** prijemnica vezana za zbirnu nema fixture u BFP suite-i (scenariji
+> sa prijemnicom žive u storno suite-i, ali bez para pod istim brojem). Odluka se meri tamo gde nastaje
+> i gde je operater čita **pre** nepovratne radnje. Zapisano da se ne čita kao potpuno pokriće.
+
 **Četiri nalaza koja ovaj rez NE zatvara**
 
 1. **`RunMasterSyncSmokeSuite` je 17/9 i na `main`-u** (mereno `git checkout main -- src-vba tools`, isti
@@ -5513,6 +5554,7 @@ pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture 
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
 | ~~**S5-3b — storno tok zbirne je ostao bez hrane**~~ (**ZAVRŠEN**, v. sekciju S5-3b) | premise su se tri puta pomerile pod merenjem; hladnjačka grana je ispala kao **nedostižna**, a `RunStornoTestSuite` 163/0 je bio **false-green** nad sopstvenim seed-om |
 | **Svežina izvora zbirne: 1 dan, nad otpremnicom** (odluka operatera 23.09.2026, izvađena iz S5-3) | zbirna je prevozni spisak onoga što vozač **nosi**, pa zaostala otpremnica ne sme tiho da uđe u današnju zbirnu. Pravilo je zatečeno iz PWA linkera (`MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE`), gde je merilo dan **otkupa** i živelo **samo u uvozu**; linker je obrisan, pa bi nestalo tiho. Operater je odlučio da preživi nad **otpremnicom** (ona nosi dan utovara) i u **kanonskom piscu**, pa da važi i za F3. **Izvađeno iz S5-3 posle merenja**, iz dva razloga: `CreateZbirna` i `ZbrDodajIzvor` **ne dele** telo koje proverava izvor (jednopotezni ulaz čita otpremnice sopstvenom petljom), pa je 10 dana prolazilo kroz jedan ulaz a 2 dana padalo kroz drugi — znak da kapija nije u zajedničkom telu; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana posle svoje otpremnice, pa je to novo ograničenje i za desktop. Rez: prvo izvući **zajedničko telo** za „šta je valjan izvor u odnosu na OVU zbirnu“, pa kapiju u njega, pa fixture rad |
+| **`GrupePredaje` presuđuje Duplicate po VOZAČU, a ne po `PredajaID`** (post-merge review #388, za S5-4) | redosled je: prvo `clanstvo.Exists(otkupID)` + „isti vozač“ → `Duplicate`, pa tek onda `PredajaID`. Otkad je `PredajaID` **persistiran** identitet događaja, isti vozač više nije dokaz retry-a: drugi utovar istog bloka kod istog vozača (`P2 ≠ P1`) tiho postaje `Duplicate` umesto `SyncError`. Ispravno: isti `OtkupID` + **isti** `PredajaID` = idempotentan retry; isti `OtkupID` + **drugi** `PredajaID` = konflikt. Nije hitno jer PWA/GAS žica još nije prebačena i nema međudeploymenta — ali se zatvara **najkasnije u S5-4**, i to baš zato što je greenfield: slabija semantika se ne ostavlja radi kompatibilnosti koju niko ne traži |
 | **Predaja kao događaj mora da prođe CEO žičani sloj** (review #388, treći krug; proširuje red ispod) | VBA od S5-3 traži `PredajaID`, `PredatoAt` i `PredajaClanovi`, i bez njih predaju **glasno odbija**. Mereno na PWA/GAS strani: `buildUpdatedOtpremaRecord` šalje samo `vozacID`, `gas/Code.gs` `COLUMNS` nema nijednu od te tri kolone, a `processRecord` ih ne upisuje. **Nov detalj koji nisam izmerio pre nego što ga je recenzent našao:** `isTerminalSyncStatus` ([gas/Code.gs:1543](gas/Code.gs)) smatra `Synced>Master` terminalnim, pa se već uvezen OTK red **uopšte ne obogati** kasnijom predajom — GAS vrati `success/existing`, a klijent lokalno obeleži zapis kao `synced`. Otkupac vidi „predato“, a master događaj nikad nije video. Rez (kad PWA/GAS dođu na red, S5-4): sva četiri polja kroz ceo sloj, **i GAS mora da tretira predaju kao NOV događaj nad već sinhronizovanim OTK-om**, ne kao retry originalnog zapisa — `Synced>Master` sme da bude terminalan za mutaciju **otkupa**, ne za događaj **predaje**. Nizvodni zahtev, ne VBA kvar: VBA fail-closed staje i imenuje razlog |
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |

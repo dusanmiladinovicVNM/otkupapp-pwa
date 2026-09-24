@@ -315,6 +315,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_StrogUvidNadKvaromNijeValid
     Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada
     Test_ZBR_StorniranIzvorAktivneIzdateJeKvar
+    Test_ZBR_VlasnistvoLancaIdePoIdentitetu
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6258,6 +6259,102 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+' VLASNISTVO NIZVODNOG LANCA IDE PO IDENTITETU (review #389, P1).
+'
+' ZbirnaOwnsExternalChain odlucuje sme li PONISTENJE da stornira PRIJEMNICU i
+' PALETNE STAVKE. Citalo se po BROJU, na putu koji je ceo ovaj rez prebacio na
+' identitet -- a pod jednim brojem legitimno stoje DVA dokumenta (KR-001).
+'
+' Scenario je bas taj sudar, sa RAZLICITIM vlasnistvom:
+'
+'   A: broj X, kupac HLADNJACA (interni lanac -- prijemnica se stornira)
+'   B: broj X, kupac EKSTERNI  (prijemnica ostaje NETAKNUTA)
+'
+' Sa citanjem po broju oba cilja dobiju ODGOVOR PRVOG POGOTKA, pa je jedan od
+' dva smera uvek pogresan: ili se obaraju tudji dokumenti (destruktivno izvan
+' granice vlasnistva), ili se ne obaraju svoji (delimican uspeh prijavljen kao
+' pun).
+'
+' Meri se kroz JAVAN ulaz koji operater i vidi -- BuildPonistenjePosledice sa
+' izabranim docID-em -- i to u OBA smera. Jedan smer sam ne bi razlikovao
+' ispravno od "uvek isti odgovor".
+'
+' Zasto ne i sama mutacija: prijemnica vezana za zbirnu nema fixture u ovoj
+' suite-i (scenariji sa prijemnicom zive u storno suite-i, ali bez para pod
+' istim brojem). Odluka se zato meri tamo gde nastaje i gde je operater cita
+' PRE nepovratne radnje.
+Private Sub Test_ZBR_VlasnistvoLancaIdePoIdentitetu()
+    Dim tx As clsTransaction
+    Dim prevKupac As String
+    Dim kupacVracen As Boolean
+
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, broj As String
+    Dim otpA As String, otpB As String, zbrA As String, zbrB As String
+    Dim hA As Object, hB As Object, izv As Collection
+
+    scenario = NewScenarioCode("ZBRVLA")
+
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    broj = TEST_PREFIX & "-ZBR-VLA-" & scenario
+
+    ' A -- hladnjacki kupac: lanac ide do prijemnice.
+    otpA = ZbrOtpremnicaNaDan("VLAA" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpA
+    Set hA = ZbrHeaderNaDan(broj, NextTestDate())
+    hA("KupacID") = TEST_KUP_ID
+    zbrA = modDokumenta.CreateZbirnaIzIzvora_TX(hA, izv, g, True)
+
+    ' B -- EKSTERNI kupac pod ISTIM brojem: prijemnica mu ne pripada.
+    otpB = ZbrOtpremnicaNaDan("VLAB" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpB
+    Set hB = ZbrHeaderNaDan(broj, NextTestDate())
+    hB("KupacID") = TEST_KUP2_ID
+    zbrB = modDokumenta.CreateZbirnaIzIzvora_TX(hB, izv, g, True)
+
+    AssertTrue (Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB), _
+        "ZBR VLA preduslov: dva dokumenta pod istim brojem, razliciti kupci (" & g & ")"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
+
+    ' --- oba smera nad ISTIM brojem, razlicit izabran dokument --------------
+    Dim mA As String, mB As String
+    mA = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", zbrA)
+    mB = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", zbrB)
+
+    AssertTrue InStr(1, mB, "eksterni kupac", vbTextCompare) > 0, _
+               "ZBR VLA: izbor EKSTERNE zbirne kaze da prijemnice ostaju NETAKNUTE"
+    AssertTrue InStr(1, mA, "eksterni kupac", vbTextCompare) = 0, _
+               "ZBR VLA: izbor HLADNJACKE zbirne NE kaze eksterni kupac"
+    AssertTrue StrComp(mA, mB, vbBinaryCompare) <> 0, _
+               "ZBR VLA: dva dokumenta istog broja daju RAZLICITU odluku o vlasnistvu"
+
+Kraj:
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    kupacVracen = True
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    If Not kupacVracen Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_ZBR_VlasnistvoLancaIdePoIdentitetu", eN, eD
+End Sub
+
 ' CLANSTVO NA NEPOSTOJECU OTPREMNICU PADA (review #389, drugi krug).
 '
 ' Strog citalac zbirne je bio SLABIJI od svog pandana sprat nize. OtpClanovi vec

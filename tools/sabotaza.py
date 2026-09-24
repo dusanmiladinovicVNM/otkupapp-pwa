@@ -5936,6 +5936,17 @@ SABOTAZE = {
         "ZBR STI: SIMPLE storno nad STORNIRANIM izvorom NE prolazi",
     ),
 
+    # review #389, P1: vlasnistvo nizvodnog lanca (sme li PONISTENJE da obori
+    # prijemnicu i palete) citalo se po BROJU. Pod jednim brojem stoje dva
+    # dokumenta, pa je odgovor bio odgovor PRVOG POGOTKA -- tudjeg.
+    "vlasnistvo-lanca-po-broju": (
+        "modStornoFlow.bas",
+        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))\n",
+        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo po broju\n",
+        "Test_ZBR_VlasnistvoLancaIdePoIdentitetu",
+        "ZBR VLA: dva dokumenta istog broja daju RAZLICITU odluku o vlasnistvu",
+    ),
+
     "ponistenje-izdate-cita-permisivno": (
         "modDokumenta.bas",
         "    If Not ZbirnaJeIzdata(zbirnaID) Then\n",
