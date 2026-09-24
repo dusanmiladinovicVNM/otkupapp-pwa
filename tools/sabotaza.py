@@ -5752,6 +5752,16 @@ SABOTAZE = {
         "Test_ZBR_IstiCridNevalidanDatumNijeDuplikat",
         "ZBR datum: nevalidan datum NIJE duplikat",
     ),
+    # Kompletnost utovara se proverava u OBA smera (review #388, treci krug).
+    # Bez provere pripadnosti, red sa istim PredajaID-em a van manifesta tiho
+    # ulazi u izvore -- otpremnica dobija blok koji utovar nikad nije prijavio.
+    "predaja-prima-blok-van-manifesta": (
+        "modMasterSync.bas",
+        "        ElseIf Not CridUManifestu(crid, manifest) Then\n",
+        "        ElseIf False Then   ' SABOTAZA: pripadnost manifestu se ne trazi\n",
+        "Test_OTP_BlokVanManifestaNeUlaziUUtovar",
+        "MANIFEST: dokument nosi TACNO ono sto je utovar prijavio",
+    ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
     #
     # Identitet predaje je PredajaID -- jedan klik otkupca. Sabotaza vraca

@@ -1474,6 +1474,20 @@ Private Function GrupePredaje(ByVal predaje As Collection, _
         ElseIf Len(crid) = 0 Then
             outKonflikti.Add redIdx, _
                 "red nema ClientRecordID, pa se ne moze prebrojati u manifestu"
+        ElseIf Not CridUManifestu(crid, manifest) Then
+            ' KOMPLETNOST SE PROVERAVA U OBA SMERA (review #388, treci krug P2).
+            '
+            ' PredajaStaFali pita samo "je li stiglo sve sto manifest trazi".
+            ' Obrnuto pitanje -- "pripada li sve sto je stiglo manifestu" -- bilo
+            ' je bez odgovora, pa je red sa istim PredajaID-em a van manifesta
+            ' tiho ulazio u izvore. Otpremnica bi dobila blok koji utovar nikad
+            ' nije prijavio, i to bez ijednog traga.
+            '
+            ' Tek obe provere zajedno daju JEDNAKOST SKUPOVA, a to je ono sto
+            ' "jedan klik = jedan dokument" stvarno znaci.
+            outKonflikti.Add redIdx, _
+                "blok " & crid & " nije u manifestu utovara " & predajaID & _
+                " ('" & manifest & "')"
         Else
             stanica = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
                                                  COL_OTK_STANICA)))
@@ -1524,7 +1538,29 @@ Private Sub PredajaNeslaganje(ByRef g As Object, ByVal kljuc As String, _
                   CStr(g(kljuc)) & "' i '" & vrednost & "')"
 End Sub
 
+' Da li CRID pripada manifestu tog utovara.
+'
+' Manifest je zarezom razdvojen spisak; poredi se bez obzira na razmake i
+' velicinu slova, jer je to isti CRID -- ne drugi blok.
+Private Function CridUManifestu(ByVal crid As String, ByVal manifest As String) As Boolean
+    If Len(Trim$(manifest)) = 0 Then Exit Function
+
+    Dim delovi As Variant, i As Long
+    delovi = Split(manifest, ",")
+
+    For i = LBound(delovi) To UBound(delovi)
+        If StrComp(Trim$(CStr(delovi(i))), Trim$(crid), vbTextCompare) = 0 Then
+            CridUManifestu = True
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' KOJI CLANOVI UTOVARA JOS NISU STIGLI. "" = utovar je CEO.
+'
+' Ovo je SAMO jedan smer: manifest ukljucen u stigle. Drugi smer -- da svaki
+' stigli pripada manifestu -- proverava CridUManifestu pri ulasku reda, da bi
+' odbijeni red mogao da bude IMENOVAN. Tek zajedno daju jednakost skupova.
 '
 ' Manifest je spisak CRID-ova koje je otkupac cekirao u JEDNOM kliku. Poredi se
 ' sa onim sto je do sada stiglo, pa se zna kad dokument sme da nastane.

@@ -307,6 +307,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaJeJedanUtovar
     Test_OTP_PredajaPrezivljavaParcijalanSync
     Test_OTP_NepotpunUtovarNeDobijaDokument
+    Test_OTP_BlokVanManifestaNeUlaziUUtovar
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6240,6 +6241,95 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+
+' KOMPLETNOST SE PROVERAVA U OBA SMERA (review #388, treci krug P2).
+'
+' PredajaStaFali pita samo "je li stiglo sve sto manifest trazi". Obrnuto
+' pitanje -- "pripada li sve sto je stiglo manifestu" -- bilo je bez odgovora.
+' Red koji nosi ISTI PredajaID i ISTI string manifesta, a sam nije u tom
+' manifestu, tiho je ulazio u izvore: otpremnica bi dobila blok koji utovar
+' nikad nije prijavio, i to bez ijednog traga.
+'
+' "Jedan klik = jedan dokument" znaci JEDNAKOST SKUPOVA, ne samo pokrivenost.
+'
+' Test meri obe strane iste kapije: blok van manifesta se odbija i IMENUJE, a
+' deklarisani blokovi i dalje prolaze -- inace bi kapija koja odbija sve prosla
+' prvu tvrdnju iz pogresnog razloga.
+Private Sub Test_OTP_BlokVanManifestaNeUlaziUUtovar()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDMAN")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String, otkX As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-MNA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-MNB-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+    otkX = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-MNX-" & scenario, _
+                          KLASA_I, 200#, 250#, 10#, TEST_TIP_AMB)
+
+    Dim predajaID As String, cridA As String, cridB As String, cridX As String
+    predajaID = "PRED-MN-" & scenario
+    cridA = "CRID-MNA-" & scenario
+    cridB = "CRID-MNB-" & scenario
+    cridX = "CRID-MNX-" & scenario
+
+    ' Manifest deklarise SAMO A i B. Blok X nosi isti PredajaID i isti manifest,
+    ' ali u njemu nije -- bas oblik koji je ranije prolazio.
+    Dim manifest As String
+    manifest = cridA & "," & cridB
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridA, manifest)
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridB, manifest)
+    predaje.Add PredajaRed(4, otkX, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridX, manifest)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "MANIFEST: deklarisani blokovi i dalje daju dokument"
+
+    Dim otp As String
+    otp = modDokumenta.OtpremnicaZaOtkup(otkA)
+    AssertTrue Len(otp) > 0, "MANIFEST: blok A je vezan"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(otp).count), _
+                 "MANIFEST: dokument nosi TACNO ono sto je utovar prijavio"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkX), _
+                 "MANIFEST: blok VAN manifesta nije usao u dokument"
+    AssertTrue InStr(1, greske, cridX, vbTextCompare) > 0, _
+               "MANIFEST: razlog IMENUJE blok koji ne pripada utovaru (bilo: " & greske & ")"
+    AssertTrue InStr(1, CStr(ishodi(4&)), "SyncError", vbTextCompare) = 1, _
+               "MANIFEST: nedeklarisan blok je SyncError, ne tih preskok"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_BlokVanManifestaNeUlaziUUtovar", eN, eD
+End Sub
 
 ' NEPOTPUN UTOVAR NE DOBIJA DOKUMENT (review #388, drugi krug P1).
 '
