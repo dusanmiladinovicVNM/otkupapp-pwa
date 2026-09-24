@@ -5114,6 +5114,177 @@ Razlika koju provera stvarno pravi je u **izveštaju**: sa njom je ponovljen red
 to. Isti obrazac koji je već zapisan kao „dvoslojna kapija: sabotaža ne grize“.
 
 
+### 14.39) S5-3 — VOZ/zbirna uvoz nad kanonskim piscem (24.09.2026)
+
+Zatečen uvoz je radio `AppendRow(TBL_ZBIRNA)` sa **golim `Array(...)` od 16 vrednosti** i na
+**zaglavlje** pisao količinu, klasu, vrstu, sortu i ambalažu — stari model. Bio je drugi put do istog
+dokumenta, i drugi **oblik** istog dokumenta.
+
+#### Članstvo se razrešava kroz kanon, ne pogadja
+
+`otkupRecordIDs` → `OtkupID` (`OtkupPoClientRecordID`) → `OtpremnicaID` (`OtpremnicaZaOtkup`).
+
+To **nije** isti slučaj kao predaja u S5-2: tamo događaj nije imao **nikakav** zapis, pa mu je trebao
+sopstveni identitet (`PredajaID`). Ovde je svaki otkup u **tačno jednoj** aktivnoj otpremnici
+(`AktivnoClanstvoOtpremnica`), pa je prevod **totalan i tačan**, a ne heuristika. Otkup bez otpremnice
+nije redak slučaj nego **kvar** — lanac je predaja → otpremnica → zbirna — pa uvoz staje sa imenom tog
+otkupa.
+
+#### Šta je obrisano
+
+| Šta | Linija | Posledica |
+|---|---|---|
+| `LinkZbirnaToOtkupAndOtpremnica` | 224 | pisao `Otkup.BrojZbirne` i `Otpremnica.BrojZbirne` — labelu na detetu **kao vezu** |
+| `IzvedeniLanacIzPwaDostupan` | 38 | popis: `pauza` **6 → 0**, i „**kapije: nema**“ — u sistemu više nema nijedne kapije pauze |
+| `ApplyNovaGeneracijaID` za zbirnu | — | `GeneracijaID` za **zbirnu** nema više pisca; za **prijemnicu** ostaje do S6 |
+
+`modMasterSync` **više ne piše `tblZbirna`**: vlasništvo **3 → 2** pisca.
+
+> **Ispravka ranije tvrdnje:** dvaput sam rekao da posle S5-3 rečenica iz §16 „`GeneracijaID` ne postoji"
+> postaje tačna. Netacno — `ApplyGeneracijaID TBL_PRIJEMNICA` je živ pisac do S6.
+
+#### Dve odluke koje je rez morao da napravi
+
+**Poreklo dokumenta je činjenica zaglavlja.** `ClientRecordID` i `SyncSource` piše **kanonski pisac**, ne
+naknadni `UpdateCell` iz `modMasterSync` — `tblZbirna` sme da ima jednog pisca (A11). Bez njih uvoz nema
+po čemu da prepozna zapis koji je već video (`IsDuplicateZbirnaInMaster` čita baš tu kolonu), pa bi
+**svaka** PWA zbirna dolazila ponovo pri svakom ciklusu. Otkupni pisac isto rešava na isti način.
+
+**`brojSaTerena`, default `False`** (presedan `dozvoliVisakKaoAvans`, S2). „Broj je slobodan u nizu" je
+pravilo **komande**: operater ne sme da otkuca zauzet broj. Za **ingest** već nastale činjenice ne važi —
+dva uređaja offline dodele isti broj istom vozaču (**KR-001**, dokumentovan i prihvaćen rizik), pa bi
+odbijanje značilo da vozačev dokument **nestane** iz kancelarije. Nije fallback nego **saglasnost
+pozivaoca**: svaki ekran i dalje dobija punu kapiju. Kontekst broja (čiji niz, koji dan) važi **uvek** —
+to nije kolizija nego broj koji protivreči sopstvenom redu.
+
+#### Testovi: 5 obrisano, 1 preveden, 1 nov
+
+| Test | Ishod |
+|---|---|
+| `Test_RF28_LinkKonfliktNePrepisuje`, `Test_RF28_MembershipKoristiSvojuZbirnu`, `Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta` | **obrisani** — mere upis labele na dete kroz PWA linker, pravilo koje više ne postoji |
+| `Test_PWA_IzvedeniLanacJePauziran` | **obrisan** — meri pauzu koju je rez ukinuo |
+| `Test_ZBR_ImportDvaUredjajaNeStapaDokumente` | **preveden** na osu `ZbirnaID`; KR-001 sposobnost preživljava |
+| `Test_ZBR_UvozPamtiPoreklo` | **nov** |
+
+BFP **1900 → 1866**, sravnjeno po stavkama: −37 (sedam obrisanih) +4 (jedan nov) −1 (A21: dve tvrdnje o
+generaciji → jedna o identitetu).
+
+#### Kapija me je uhvatila tri puta, jednom nije
+
+`HdrProveriKljuceve` je odbio `ClientRecordID` kao nepoznat ključ — tačno, i zato sam ga dodao na spisak
+**eksplicitno**, ne zaobišao. `vba_check` je našao **11** mrtvih poziva u testovima. Ali **kvalifikovan**
+poziv `modMasterSync.IzvedeniLanacIzPwaDostupan()` nije video — compile pad, treći put u dve sesije.
+Stavka u §15 sada nosi i taj oblik.
+
+#### Review #388 — identitet utovara nije bio trajan (P1) + dva P2
+
+**P1, i doneo ga je sa `main`-a.** `PredajaID` sam uveo u S5-2, ali ga **nigde nisam sačuvao** — živeo je
+samo unutar jednog sync prolaza. Recenzent je to spojio sa činjenicom koju nisam proverio: **GAS obrađuje
+redove pojedinačno** (`data.records.map(r => processRecord(...))`), a neuspeo red se vraća u `Pending`.
+
+```
+ciklus 1:  A, B uspeju — C padne   → otpremnica od A+B
+ciklus 2:  C uspe                   → DRUGA izdata otpremnica za ISTI utovar
+```
+
+A izdata se ne dopunjuje (A13), pa se to posle **ne može ni popraviti** bez ispravke — greška koja se
+sama zabetonira.
+
+| Rez | |
+|---|---|
+| kanon | `tblOtpremnica` dobija kolonu `PredajaID` (na kraj; otisak `64BD33C7` → **`88E04EC5`**), piše je **kanonski pisac** kroz zaglavlje |
+| granica | predaja koja je već postala **aktivnu** otpremnicu ne pravi drugu: zakasneo blok staje **fail-closed** i **imenuje** otpremnicu, da operater zna gde je ostatak utovara |
+| ishod reda | **`SyncError`**, ne `Duplicate` — `Duplicate` je terminalan, pa bi blok zauvek ostao neobrađen |
+| storno | **stornirana** otpremnica ne blokira: utovar je poništen, pa ponovljena predaja sme nov dokument |
+
+**P2/1 — isti CRID sa drugom tvrdnjom bio je tihi `Duplicate`.** `IsDuplicateZbirnaInMaster` je gledao
+samo **postoji li** CRID — ista klasa problema koju OTK ingest već rešava (`PwaIstiSadrzaj`), a ZBR nije.
+`PwaZbirnaRazlika` poredi **samo kanonske tvrdnje**: vozač, kupac, dan, broj (ako ga PWA šalje) i **skup
+izvora**, razrešen **istim putem** kao pri uvozu. Summary polja se **namerno ne porede** — kanonski pisac
+ih izvodi iz otpremnica, pa razlika u njima ne znači drugi dokument nego drugo sabiranje.
+
+**P2/2 — summary polja su još mogla da zabrane kanonski import.** `ValidatePWAZbirna` je odbijala red kad
+je „`Kolicina KlI + KlII <= 0`" — polje koje uvoz od S5-3 **i ne čita**. Polustanje u kom summary **nije**
+izvor istine ali **sme** da zabrani dokument. Umesto toga traži se ono što uvozu stvarno treba:
+`OtkupRecordIDs` — zbirna bez izvora nije dokument.
+
+**Što je recenzent pustio, i s pravom:** storno backlink dug nije blocker za ovaj rez. Osnovni kanonski
+storno radi (storniran roditelj → članstvo prestaje da bude aktivno → otpremnica slobodna), a
+`PONIŠTENJE` čita kanonsko članstvo od #384. `DetachOtpremniceInline` je **mrtav kod, ne kvar**.
+
+#### Review #388, drugi krug — predaja je događaj sa manifestom (2×P1 + P2)
+
+**P1/1 — moj prvi fix je čuvao POSLEDICU, ne pravilo.** Sprečio je da **zakasneli** blok napravi drugu
+otpremnicu, ali ne i da **prvi ciklus izda nepotpun dokument**. Recenzentova rečenica da test „kodifikuje
+recovery posledicu, ne čuva originalni invariant" je tačna — zapisao sam ishod umesto pravila.
+
+```
+PRED-X = A + B + C          ciklus 1: A, B uspeju, C padne
+                            → OTP-1 = A+B, IZDATO
+                            ciklus 2: C stigne → SyncError
+                            → dokument tvrdi MANJE nego što je natovareno
+```
+
+Rešenje nije još jedan importer guard nego **manifest**: red nosi `PredajaClanovi` (CRID-ovi svih blokova
+tog klika), pa master zna **kad je utovar CEO**. Nepotpun utovar ne dobija ni dokument ni status — redovi
+ostaju `Pending` i vraćaju se sledećim ciklusom. Čekanje ide u **log**, ne u `outGreske` (koji pali fatal
+flag), jer čekanje nije greška.
+
+`ExpectedCount` je odbačen iz razloga koji je i recenzent naveo: broj ne dokazuje da su stigli **pravi**
+redovi.
+
+**P1/2 — ista greška kroz drugi lifecycle.** `OtpIspravi` nije prenosio `PredajaID`. Ispravka pravi nov
+dokument i stornira stari, a `OtpremnicaPoPredaji` gleda samo **aktivne** — pa je nova verzija ostajala bez
+identiteta, i zakasneo blok je opet mogao da napravi svoj dokument. Broj se ne nasleđuje (A9), ali
+**fizički utovar je bio jedan**.
+
+Uz to, po predlogu recenzenta: `OtpremnicaPoPredaji` je sada **strogo 0-ili-1**. Dve aktivne otpremnice pod
+istim `PredajaID`-em su korupcija, ne „uzmi prvu" — inače bi kapija sakrila sopstveni promašaj.
+
+**P2 — neuporediv datum je bio PRESKOK.** Poređenje je stajalo pod `If IsoUDatum(...) And IsDate(...)`, pa
+bi red sa nevalidnim datumom, ako se sve ostalo poklopi, dobio `Duplicate` — terminalno.
+`ValidatePWAZbirna` tu ne pomaže: zove se tek za **nov** red, posle te grane.
+
+#### Dokaz je uhvatio placebo tvrdnju — i popravka je išla u KOD
+
+Prva sabotaža za P2 bila je crvena, ali **na pogrešnim tvrdnjama**: preskakanjem `IsoUDatum` ostaje
+neinicijalizovan `danNov` (`30.12.1899`), pa poređenje prijavi razliku **uvek** — tvrdnja „nevalidan datum
+nije duplikat" prolazi **slučajno**, dok padaju NO-OP tvrdnje.
+
+Uzrok nije bio u tvrdnji nego u **rasporedu**: tri načina da datum bude razlika stajala su razdvojeno, pa
+se nijedan nije mogao izmeriti a da ne pomeri ostale. Sada su svi u `DatumRazlika`. To je popravka **koda
+zbog merljivosti**, ne testa zbog koda — isti obrazac zbog kojeg je svežina izvora izvađena iz S5-3.
+
+> **Moja greška u samom rezu:** provera kompletnosti je prvo završila u **malina batch-u** umesto u
+> predaji — sidro se poklopilo sa pogrešnom funkcijom. Uhvatio je **compile**, ne test.
+
+#### Kapije
+
+`RunAllTests` **200/0** · BFP **1900 → 1866 → 1880 → 1897** (posle review kruga: +7 `ZBR CRID`, +7 `PREDAJA parc`)
+· Storno **163/0** · Banka **241/0** · Palete **97** · Agrohemija **25**.
+
+Sabotaže **588 → 588** (šest obrisano, šest novih): `zbirna-ne-pamti-poreklo`,
+`zbirna-crid-ne-gleda-sadrzaj`, `predaja-ne-pamti-utovar`, `predaja-izdaje-nepotpun-utovar`,
+`ispravka-gubi-identitet-utovara`, `zbirna-nevalidan-datum-je-duplikat`. **Dokazano: sve crvene na
+imenovanoj tvrdnji, izvor vraćen bit-identično.**
+
+Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
+
+#### Dva reza izvučena iz ovog, oba zapisana
+
+**S5-3b — storno tok zbirne.** Brisanje linkera je uklonilo poslednjeg pisca `Otpremnica.BrojZbirne`, pa
+`DetachOtpremniceInline` bira kandidate po koloni koju **niko ne piše**: skup je prazan **pre** ikakvog
+scoping-a. **16 mesta** u `modStornoFlow`. Nije nov kvar — taj put je i dosad bio hranjen samo pauziranim
+linkerom — ali je posle S5-3 nedvosmisleno mrtav. Sa njim se vraćaju i dva testa sklonjena ovde:
+`Test_ZBR_DispecerPustaScopedIzbor`, `Test_ZBR_KapijaPustaKadJeIzborScoped`.
+
+**Svežina izvora zbirne** (odluka operatera: 1 dan, nad **otpremnicom**, u kanonskom piscu) — izvađena iz
+ovog reza posle merenja. Dva razloga: `CreateZbirna` i `ZbrDodajIzvor` **ne dele** telo koje proverava
+izvor (jednopotezni ulaz čita otpremnice sopstvenom petljom), pa je 10 dana prolazilo kroz jedan ulaz a 2
+dana padalo kroz drugi; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana posle svoje otpremnice —
+pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture radom.
+
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -5136,6 +5307,9 @@ to. Isti obrazac koji je već zapisan kao „dvoslojna kapija: sabotaža ne griz
 | **`NEVEZANE` nije sužena na AKTIVNI nacrt** (review #379, P3) | čitalac filtrira po stanju dokumenta (izdata, nestornirana, slobodna), ali ne po odnosu prema izabranoj zbirnoj — otpremnica drugog vozača ili druge vrste/sorte/tipa ambalaže ostaje u ponudi, a `ZbrRequireIzvorValjan` je odbija. Nema kvara podataka (pisac je fail-closed), ali je to isti obrazac koji smo već jednom zatvorili za nacrte. Rez: `NevezaneOtpremnice(zbirnaID)` koja sužava po vozaču i preuzetim činjenicama kad nacrt postoji — i test sa **nekompatibilnom** otpremnicom, jer današnji test meri samo ime liste |
 | **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
+| **S5-3b — storno tok zbirne je ostao bez hrane** (nalaz S5-3) | brisanje PWA linkera je uklonilo **poslednjeg pisca** `Otpremnica.BrojZbirne` i `Otkup.BrojZbirne`. `DetachOtpremniceInline` bira kandidate baš po toj koloni, pa je skup prazan **pre** ikakvog scoping-a — cela funkcija je no-op nad kanonskim podacima. **16 mesta** u `modStornoFlow` visi o te dve kolone. Nije nov kvar (taj put je i dosad bio hranjen samo pauziranim linkerom), ali je posle S5-3 nedvosmisleno mrtav, i to je **treći put** u refaktoru da živ-izgledajući put ostane bez hrane (S3a je ugasio F3, S4-3b `DUPLI`/`PONIŠTENJE`). Rez: prehraniti tok **kanonskim članstvom**, kao što je S4-3c uradio za scoping. Sa njim se vraćaju i dva testa sklonjena u S5-3: `Test_ZBR_DispecerPustaScopedIzbor`, `Test_ZBR_KapijaPustaKadJeIzborScoped` |
+| **Svežina izvora zbirne: 1 dan, nad otpremnicom** (odluka operatera 23.09.2026, izvađena iz S5-3) | zbirna je prevozni spisak onoga što vozač **nosi**, pa zaostala otpremnica ne sme tiho da uđe u današnju zbirnu. Pravilo je zatečeno iz PWA linkera (`MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE`), gde je merilo dan **otkupa** i živelo **samo u uvozu**; linker je obrisan, pa bi nestalo tiho. Operater je odlučio da preživi nad **otpremnicom** (ona nosi dan utovara) i u **kanonskom piscu**, pa da važi i za F3. **Izvađeno iz S5-3 posle merenja**, iz dva razloga: `CreateZbirna` i `ZbrDodajIzvor` **ne dele** telo koje proverava izvor (jednopotezni ulaz čita otpremnice sopstvenom petljom), pa je 10 dana prolazilo kroz jedan ulaz a 2 dana padalo kroz drugi — znak da kapija nije u zajedničkom telu; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana posle svoje otpremnice, pa je to novo ograničenje i za desktop. Rez: prvo izvući **zajedničko telo** za „šta je valjan izvor u odnosu na OVU zbirnu“, pa kapiju u njega, pa fixture rad |
+| **Predaja kao događaj mora da prođe CEO žičani sloj** (review #388, treći krug; proširuje red ispod) | VBA od S5-3 traži `PredajaID`, `PredatoAt` i `PredajaClanovi`, i bez njih predaju **glasno odbija**. Mereno na PWA/GAS strani: `buildUpdatedOtpremaRecord` šalje samo `vozacID`, `gas/Code.gs` `COLUMNS` nema nijednu od te tri kolone, a `processRecord` ih ne upisuje. **Nov detalj koji nisam izmerio pre nego što ga je recenzent našao:** `isTerminalSyncStatus` ([gas/Code.gs:1543](gas/Code.gs)) smatra `Synced>Master` terminalnim, pa se već uvezen OTK red **uopšte ne obogati** kasnijom predajom — GAS vrati `success/existing`, a klijent lokalno obeleži zapis kao `synced`. Otkupac vidi „predato“, a master događaj nikad nije video. Rez (kad PWA/GAS dođu na red, S5-4): sva četiri polja kroz ceo sloj, **i GAS mora da tretira predaju kao NOV događaj nad već sinhronizovanim OTK-om**, ne kao retry originalnog zapisa — `Synced>Master` sme da bude terminalan za mutaciju **otkupa**, ne za događaj **predaje**. Nizvodni zahtev, ne VBA kvar: VBA fail-closed staje i imenuje razlog |
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |
 | **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |

@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 23.09.2026 (S5-2).
+**Ažurirano:** 24.09.2026 (S5-3).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -249,8 +249,14 @@
     `TryUpdateVozacID` obrisan — bio je poslednji pisac `Otkup.VozacID`, pa `modMasterSync`
     više ne piše `tblOtkup` (4 → 3 pisca). Jedan utovar = jedan dokument, iako stiže kao N
     redova. Detalji: plan §14.38.
-42. **Sledeće:** S5-3 (VOZ/zbirna uvoz nad kanonom — posle njega `GeneracijaID` nema nijednog
-    pisca), S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
+42. **S5-3 — VOZ/zbirna uvoz nad kanonskim piscem.** Goli `Array(...)` od 16 vrednosti sa
+    količinom i klasom na zaglavlju je otišao; članstvo se razrešava `otkupRecordIDs → OtkupID
+    → OtpremnicaZaOtkup`. `LinkZbirnaToOtkupAndOtpremnica` (224) i `IzvedeniLanacIzPwaDostupan`
+    (38) obrisani — popis: `pauza` **6 → 0**, „kapije: nema“. `modMasterSync` više ne piše
+    `tblZbirna` (3 → 2 pisca). `GeneracijaID` za **zbirnu** nema pisca; za **prijemnicu** ostaje
+    do S6. Detalji: plan §14.39.
+43. **Sledeće:** S5-3b (storno tok zbirne — ostao bez hrane, 16 mesta), svežina izvora zbirne
+    (§15), S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
 

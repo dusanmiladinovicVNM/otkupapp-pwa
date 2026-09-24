@@ -232,6 +232,11 @@ Public Const COL_OTP_SORTA As String = "SortaVoca"
 Public Const COL_OTP_KOLICINA As String = "Kolicina"
 Public Const COL_OTP_CENA As String = "Cena"
 Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
+' IDENTITET UTOVARA (S5-3, review #388 P1). Jedan klik otkupca u PWA ->
+' jedna otpremnica. Bez trajnog traga je PredajaID zivela samo unutar jednog
+' sync prolaza, pa je parcijalan uspeh (GAS obradjuje red po red) mogao isti
+' utovar da razbije na DVE izdate otpremnice.
+Public Const COL_OTP_PREDAJA_ID As String = "PredajaID"
 Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTP_KLASA As String = "Klasa"
 Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
@@ -246,6 +251,9 @@ Public Const COL_ZBR_BROJ As String = "BrojZbirne"
 Public Const COL_ZBR_KUPAC As String = "KupacID"
 Public Const COL_ZBR_HLADNJACA As String = "Hladnjaca"
 Public Const COL_ZBR_POGON As String = "Pogon"
+' Poreklo dokumenta -- isti par kao na otkupu (v. COL_OTK_CLIENT_RECORD_ID).
+Public Const COL_ZBR_CLIENT_RECORD_ID As String = "ClientRecordID"
+Public Const COL_ZBR_SYNC_SOURCE As String = "SyncSource"
 Public Const COL_ZBR_KOLICINA As String = "UkupnoKolicina"
 Public Const COL_ZBR_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"

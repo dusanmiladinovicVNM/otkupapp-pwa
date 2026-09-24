@@ -5203,8 +5203,8 @@ SABOTAZE = {
     # obe klase -- tacno ono sto je S3a razdvojio.
     "otp-predlog-cene-nazad-na-zaglavlje": (
         "modDokumenta.bas",
-        "             \"tipambalaze\"\n",
-        "             \"tipambalaze\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
+        "             \"tipambalaze\", \"predajaid\"\n",
+        "             \"tipambalaze\", \"predajaid\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
         "Test_OTP_PredlogCeneJePoKlasi",
         "cena na zaglavlju NE prolazi",
     ),
@@ -5680,13 +5680,6 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A7: sam storniran red nije aktivan dokument",
     ),
-    "trag-deteta-opet-generacija": (
-        "modMasterSync.bas",
-        "    genZbirne = zbirnaID\n",
-        "    genZbirne = GeneracijaPoID(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)   ' SABOTAZA: trag opet nosi generaciju\n",
-        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK preduslov: prvi link je upisao identitet A na otpremnicu",
-    ),
     # Sistemski pad NE SME da izadje kao poslovni ishod (review #385, P2).
     # Bez klasifikacije "sema nije spremna" i "AppendRow nije upisao" izlaze kao
     # "ova grupa nije prosla", pa orkestrator ostane u DEGRADIRANO grani i
@@ -5697,6 +5690,77 @@ SABOTAZE = {
         "    JeSistemskiPad = False   ' SABOTAZA: sistemski pad postaje poslovni ishod\n",
         "Test_OTP_AutoSistemskiPadStajeProlaz",
         "AUTO sistem: sistemski pad IZLAZI kao greska, ne kao poslovni ishod",
+    ),
+    # Poreklo dokumenta je cinjenica zaglavlja: bez ClientRecordID-a uvoz nema po
+    # cemu da prepozna da je zapis vec video, pa se svaka PWA zbirna reimportuje.
+    "zbirna-ne-pamti-poreklo": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(clientRecordID)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: poreklo dokumenta se ne upisuje\n",
+        "Test_ZBR_UvozPamtiPoreklo",
+        "ZBR poreklo: zbirna nosi ClientRecordID sa terena",
+    ),
+    # Isti CRID sa DRUGOM tvrdnjom je konflikt, ne duplikat (review #388, P2).
+    # Sabotaza vraca zatecen fail-open: razlika u SKUPU IZVORA se ne vidi, pa
+    # izmenjen sadrzaj pod istim CRID-om prolazi kao Duplicate -- a Duplicate je
+    # terminalan, pa master zauvek ostaje na staroj verziji.
+    "zbirna-crid-ne-gleda-sadrzaj": (
+        "modMasterSync.bas",
+        "    PwaZbirnaRazlika = SkupIzvoraRazlika(modDokumenta.IzvoriZbirne(zbirnaID), noviIzvori)\n",
+        "    PwaZbirnaRazlika = \"\"   ' SABOTAZA: razlika u izvorima se ne vidi\n",
+        "Test_ZBR_IstiCridDrugiSadrzajJeKonflikt",
+        "ZBR CRID: drugi skup izvora pod istim CRID-om je KONFLIKT",
+    ),
+    # Identitet utovara mora da ostane NA DOKUMENTU (review #388, P1). Bez
+    # trajnog traga jedan klik otkupca, razbijen na dva sync ciklusa, pravi DVE
+    # izdate otpremnice -- a izdata se ne dopunjuje (A13).
+    "predaja-ne-pamti-utovar": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(predajaID)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: identitet utovara se ne upisuje\n",
+        "Test_OTP_PredajaPrezivljavaParcijalanSync",
+        "PREDAJA parc: otpremnica nosi identitet utovara",
+    ),
+    # Nepotpun utovar NE SME da dobije dokument (review #388, drugi krug P1).
+    # GAS obradjuje redove pojedinacno, pa deo jednog klika ume da stigne kasnije.
+    # Bez manifesta master izda nepotpunu otpremnicu -- a izdata se ne dopunjuje
+    # (A13), pa ostatak zauvek ostaje napolju.
+    "predaja-izdaje-nepotpun-utovar": (
+        "modMasterSync.bas",
+        "        If Len(fali) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: nepotpun utovar se izdaje\n",
+        "Test_OTP_NepotpunUtovarNeDobijaDokument",
+        "NEPOTPUN: nepotpun utovar NE dobija dokument",
+    ),
+    # Identitet utovara mora da prezivi verzionisanje (review #388, drugi krug).
+    # Ispravka pravi NOV dokument; bez prenosa PredajaID-a nova verzija ostaje
+    # bez identiteta, pa zakasneo blok istog utovara opet pravi svoj dokument.
+    "ispravka-gubi-identitet-utovara": (
+        "modDokumenta.bas",
+        "    If Len(predajaID) > 0 Then h(\"PredajaID\") = predajaID\n",
+        "    ' SABOTAZA: ispravka ne prenosi identitet utovara\n",
+        "Test_OTP_IspravkaCuvaIdentitetUtovara",
+        "PREDAJA isp: nova verzija NOSI identitet utovara",
+    ),
+    # Neuporediv datum je RAZLIKA, ne preskok. Duplicate je terminalan, pa bi
+    # pokvaren red zauvek nestao.
+    "zbirna-nevalidan-datum-je-duplikat": (
+        "modMasterSync.bas",
+        "        DatumRazlika = \"Datum nije upotrebljiv ISO datum ('\" & _\n"
+        "                       Trim$(CStr(nz(uRedu, \"(prazno)\"))) & \"')\"\n",
+        "        DatumRazlika = \"\"   ' SABOTAZA: nevalidan datum nije razlika\n",
+        "Test_ZBR_IstiCridNevalidanDatumNijeDuplikat",
+        "ZBR datum: nevalidan datum NIJE duplikat",
+    ),
+    # Kompletnost utovara se proverava u OBA smera (review #388, treci krug).
+    # Bez provere pripadnosti, red sa istim PredajaID-em a van manifesta tiho
+    # ulazi u izvore -- otpremnica dobija blok koji utovar nikad nije prijavio.
+    "predaja-prima-blok-van-manifesta": (
+        "modMasterSync.bas",
+        "        ElseIf Not CridUManifestu(crid, manifest) Then\n",
+        "        ElseIf False Then   ' SABOTAZA: pripadnost manifestu se ne trazi\n",
+        "Test_OTP_BlokVanManifestaNeUlaziUUtovar",
+        "MANIFEST: dokument nosi TACNO ono sto je utovar prijavio",
     ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
     #
@@ -5817,13 +5881,6 @@ SABOTAZE = {
         "Test_OTP_ProslednjenOtkupJeIzdatIzvor",
         "OTP prosl: prosledjen blok je vezan za otpremnicu",
     ),
-    "scoping-dece-bez-identiteta": (
-        "modStornoFlow.bas",
-        "        If ok Then outScopeID = Trim$(zbirnaID)\n",
-        "        ' SABOTAZA: scope se nikad ne dodeljuje\n",
-        "Test_ZBR_DispecerPustaScopedIzbor",
-        "ZBR disp: sopstvena otpremnica B je odvezana",
-    ),
     "zbirna-ident-opet-po-generaciji": (
         "modDokumenta.bas",
         "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",
@@ -5932,36 +5989,6 @@ SABOTAZE = {
         "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
         "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
     ),
-    # ZBR-CHILD-01 faza 4: gasi popustanje -- kapija opet staje i kad je izbor
-    # scoped. Meri se korist zbog koje su faze 1-3 placene.
-    "kapija-ne-pusta-scoped-izbor": (
-        "modDokumenta.bas",
-        "    If scopedPoGeneraciji Then Exit Function\n",
-        "    If False Then Exit Function   ' SABOTAZA: popustanje se ne desava\n",
-        "Test_ZBR_KapijaPustaKadJeIzborScoped",
-        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta",
-    ),
-    # Druga strana istog prekidaca: kapija pusta BEZ obzira na to da li akter
-    # zna koji dokument dira. Bez ove sabotaze "popusta samo kad je scoped" bi
-    # bila tvrdnja bez mere -- zeleno bi bilo i da uslova nema.
-    "kapija-pusta-i-nescoped-izbor": (
-        "modStornoFlow.bas",
-        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)\n",
-        "    ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, False)   ' SABOTAZA: kapija opet nescoped\n",
-        "Test_ZBR_DispecerPustaScopedIzbor",
-        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer",
-    ),
-    # ZBR-CHILD-01 / P1: vraca kapiju na stanje "samo broj", tacno kakva je bila
-    # dok je pisac pisao samo broj. Tada je drugi link pod istim brojem bio
-    # idempotentan; sada menja roditelja deteta. Sabotaza meri da kapija gleda
-    # ISTO sto pisac pise.
-    "child-veza-proverava-samo-broj": (
-        "modMasterSync.bas",
-        "    If Len(currentGen) > 0 Then\n",
-        "    If False Then   ' SABOTAZA: kapija gleda samo broj, kao pre FK-a\n",
-        "Test_ZBR_MasterSyncNePrepisujeGeneracijuDeteta",
-        "ZBR-FK: otkup ostaje na svom originalnom roditelju",
-    ),
     "vlasnici-poredi-case": (
         "modStorno.bas",
         "        If BrojJednak(data(i, cBr), broj) Then\n",
@@ -5992,14 +6019,6 @@ SABOTAZE = {
         "        If StrComp(Trim$(NzToText(data(c, cF))), filterVal, vbTextCompare) = 0 Then   ' SABOTAZA: filterVal netrimovan\n",
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: razmaci ne menjaju decu",
-    ),
-    "mastersync-nasledjuje-tudju-generaciju": (
-        "modMasterSync.bas",
-        "        ApplyNovaGeneracijaID TBL_ZBIRNA, result\n",
-        "        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _\n"
-        "                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID\n",
-        "Test_ZBR_ImportDvaUredjajaNeStapaDokumente",
-        "A21/KR-001: drugi uredjaj NE nasledjuje generaciju prvog",
     ),
     "picker-ne-spaja-redove-dokumenta": (
         "modOtkupUI.bas",
