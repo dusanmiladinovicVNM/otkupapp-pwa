@@ -311,6 +311,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
+    Test_ZBR_SimpleIDupliNeNormalizujuKvar
+    Test_ZBR_StrogUvidNadKvaromNijeValid
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6254,6 +6256,174 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+' KVAR CLANSTVA STAJE NA SVAKOM ULAZU, NE SAMO NA PONISTENJU (review #389, P2).
+'
+' Test_ZBR_PonistenjeIzdateNeNormalizujeKvar dokazuje isto pravilo za PONISTENJE.
+' Pravilo je tamo i zivelo -- kao If-grana u JEDNOM pozivaocu -- pa su SIMPLE i
+' DUPLI zvali permisivan citac i izdatu zbirnu sa izgubljenim clanstvom uredno
+' stornirali. Dupli red clanstva se pritom brojao kao DRUGA otpremnica, pa je
+' operater dobijao "2 otpremnice vracene" nad jednom korumpiranom vezom.
+'
+' Od S5-3b izbor citaoca zivi u modDokumenta.ZbrClanoviPoStanju, pa se meri da
+' kapija vazi i na ovim ulazima. Isti test nosi i KONTROLNI smer: nacrt bez
+' clanstva sme da prodje -- inace bi "popravka" mogla biti prosto uvek strog
+' citalac, sto je vec jednom oborilo 9 storno provera.
+Private Sub Test_ZBR_SimpleIDupliNeNormalizujuKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRSDK")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("SDK-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-SDK-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR SDK: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+    AssertTrue modDokumenta.ZbirnaJeIzdata(zbrID), "ZBR SDK preduslov: zbirna je IZDATA"
+
+    ' --- A) SIMPLE storno nad IZDATOM bez clanstva --------------------------
+    Pr3UkloniClanstvo zbrID, otpID
+
+    Dim r As Object
+    Set r = modStornoFlow.RunSimpleStornoZbirna(broj, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR SDK: SIMPLE storno IZDATE bez clanstva NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR SDK: zbirna NIJE stornirana -- kvar staje pre mutacije"
+
+    ' --- B) DUPLI nad IZDATOM sa duplim clanstvom ---------------------------
+    Pr3DodajClanstvo zbrID, otpID
+    Pr3DodajClanstvo zbrID, otpID
+
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR SDK: DUPLI sa DUPLIM clanstvom NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR SDK: ni duplo clanstvo ne pusta mutaciju"
+
+    ' --- C) KONTROLA: nacrt bez clanstva SME ---------------------------------
+    '
+    ' Bez ovog smera bi "uvek strog citalac" prosao A i B, a oborio legitiman
+    ' storno nacrta -- tacno regresija koja je jednom vec oborila 9 provera.
+    Dim brojN As String, zbrN As String
+    brojN = TEST_PREFIX & "-ZBR-SDKN-" & scenario
+    zbrN = modDokumenta.CreateZbirnaDraft_TX(Pr3Header(brojN), ZbrOcek(KLASA_I, 100#, 5#), g)
+    If Len(zbrN) = 0 Then
+        AssertTrue False, "ZBR SDK kontrola: nacrt nije napravljen (" & g & ")"
+        GoTo Kraj
+    End If
+    AssertFalse modDokumenta.ZbirnaJeIzdata(zbrN), "ZBR SDK kontrola preduslov: zbirna je NACRT"
+    AssertEquals "0", CStr(modDokumenta.ZbrClanovi(zbrN).count), _
+                 "ZBR SDK kontrola preduslov: nacrt nema clanstvo"
+
+    Set r = modStornoFlow.RunSimpleStornoZbirna(brojN, zbrN)
+    AssertTrue CBool(r("success")), _
+               "ZBR SDK kontrola: SIMPLE storno NACRTA bez clanstva PROLAZI (bilo: " & _
+               CStr(r("message")) & ")"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_SimpleIDupliNeNormalizujuKvar", eN, eD
+End Sub
+
+' STROG UVID NE SME DA KAZE "NEMA" KAD ZNACI "NE ZNAM" (review #389, P2).
+'
+' BuildStornoImpact(strict:=True) nosi ugovor: valid=True znaci da je CEO model
+' pouzdano procitan. Brojke su ipak isle kroz permisivan citac clanstva, pa je
+' izdata zbirna sa izgubljenim clanstvom davala otpCount=0, blokova 0 -- i
+' valid=True. Operater bi pred nepovratnom radnjom procitao "nista se ne dira".
+'
+' Kontrolni smer: ispravna izdata zbirna i dalje daje valid=True sa TACNIM
+' brojem. Bez njega bi uvid koji uvek pada prosao prvu tvrdnju.
+Private Sub Test_ZBR_StrogUvidNadKvaromNijeValid()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRUVD")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("UVD-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-UVD-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR uvid: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' --- KONTROLA: zdrav dokument -> valid i TACNA brojka -------------------
+    Dim m As Object
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, broj, "", zbrID, True)
+    AssertTrue CBool(m("valid")), _
+               "ZBR uvid kontrola: zdrava izdata zbirna daje valid (bilo: " & _
+               CStr(m("greska")) & ")"
+
+    ' --- KVAR: izgubljeno clanstvo -> NE SME valid --------------------------
+    Pr3UkloniClanstvo zbrID, otpID
+
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, broj, "", zbrID, True)
+    AssertFalse CBool(m("valid")), _
+                "ZBR uvid: izgubljeno clanstvo IZDATE ne sme da prodje kao valid"
+    AssertTrue Len(Trim$(CStr(m("greska")))) > 0, _
+               "ZBR uvid: uvid IMENUJE razlog umesto da cuti"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_StrogUvidNadKvaromNijeValid", eN, eD
+End Sub
+
 ' BLOK U SASTAVU OTPREMNICE SE NE STORNIRA (S5-3b).
 '
 ' Ovo je kapija zbog koje je hladnjacka kaskada u StornoOtkup_TX OBRISANA, a ne

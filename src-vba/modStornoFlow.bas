@@ -1122,7 +1122,7 @@ Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String, _
     vidjeni.CompareMode = vbTextCompare
 
     Dim otp As Variant, blok As Variant, bid As String
-    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanovi(zid))
+    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanoviPoStanju(zid))
         If Not OtpremnicaStornirana(CStr(otp)) Then
             For Each blok In KolekcijaUNiz(modDokumenta.IzvoriOtpremnice(CStr(otp)))
                 bid = Trim$(NzToText(blok))
@@ -1155,7 +1155,7 @@ Private Function OtpCountZbirnePoID(ByVal zbirnaID As String) As Long
     If Len(Trim$(zbirnaID)) = 0 Then Exit Function
 
     Dim otp As Variant, n As Long
-    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanovi(zbirnaID))
+    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanoviPoStanju(zbirnaID))
         If Not OtpremnicaStornirana(CStr(otp)) Then n = n + 1
     Next otp
     OtpCountZbirnePoID = n
@@ -1406,7 +1406,7 @@ Private Function BuildStationsByZbirna() As Object
     ' Kljuc ostaje BROJ, jer ga takvog trazi prikaz; menja se samo odakle veza
     ' dolazi -- iz tblZbirnaIzvori umesto sa deteta.
     Dim stanice As Object: Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
-    Dim clanstvo As Object: Set clanstvo = modDokumenta.AktivnoClanstvoZbirni()
+    Dim clanstvo As Object: Set clanstvo = modDokumenta.AktivnoZbrClanstvoPoKanonu()
     If clanstvo Is Nothing Then Exit Function
     If clanstvo.count = 0 Then Exit Function
 
@@ -1455,7 +1455,7 @@ Private Function BuildBrojZbirnePoOtpremnici() As Object
     Set BuildBrojZbirnePoOtpremnici = d
     On Error GoTo EH
 
-    Dim clanstvo As Object: Set clanstvo = modDokumenta.AktivnoClanstvoZbirni()
+    Dim clanstvo As Object: Set clanstvo = modDokumenta.AktivnoZbrClanstvoPoKanonu()
     If clanstvo Is Nothing Then Exit Function
 
     Dim brojPoZbr As Object: Set brojPoZbr = BuildLookupDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ)
@@ -1653,13 +1653,20 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' ovog reza govorila "0 otpremnica vraceno" i za zbirnu koja ih je imala:
     ' brojala je samo staru vezu po BrojZbirne, koju kanonska otpremnica ne nosi.
     Dim clanova As Long
-    ' ZbrClanovi, ne IzvoriZbirne: ova druga DIZE gresku nad zbirnom bez
-    ' izvora ("clanstvo je izgubljeno"), sto je tacno za izdat dokument ali
-    ' ne i ovde -- storno legitimno stize i nad nacrtom, a zatecen seed ga
-    ' pravi bez ijednog reda u tblZbirnaIzvori. Prva verzija je time rusila
-    ' celu transakciju PRE storna: 9 storno provera je palo, a nijedna nije
-    ' imala veze sa clanstvom.
-    clanova = modDokumenta.ZbrClanovi(zbrID).count
+    ' ZbrClanoviPoStanju, ne ZbrClanovi (review #389, P2).
+    '
+    ' Prvi pokusaj je bio IzvoriZbirne (strog uvek) i srusio je transakciju nad
+    ' NACRTOM, koji legitimno nema nijedan red clanstva -- palo je 9 storno
+    ' provera. Popravka je tada bila "onda uvek permisivan", i time je SIMPLE/
+    ' DUPLI ostao bez kapije koju PONISTENJE ima: izdata zbirna sa izgubljenim
+    ' clanstvom je prolazila, a dupli red se brojao kao druga otpremnica i tako
+    ' prijavljivao operateru.
+    '
+    ' Tacan odgovor nije ni "uvek strog" ni "uvek permisivan" nego PO STANJU
+    ' DOKUMENTA, i sada ga daje jedno telo za sve ulaze.
+    '
+    ' Poziv je PRE StornoZbirna, pa greska staje bez ijedne mutacije.
+    clanova = modDokumenta.ZbrClanoviPoStanju(zbrID).count
 
     If Not StornoZbirna(zbrID) Then _
         Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
@@ -1852,24 +1859,14 @@ Private Function ActiveOtpIDsByZbirna(ByVal SRC As String, _
     Set vidjeni = CreateObject("Scripting.Dictionary")
     vidjeni.CompareMode = vbTextCompare
     '
-    ' ZRNO CITACA PRATI LIFECYCLE (review #384, P2):
-    '   NACRT   prazno clanstvo je legitimno    -> ZbrClanovi (permisivan)
-    '   IZDATO  prazno clanstvo je KVAR         -> IzvoriZbirne (fail-closed)
-    '
-    ' IzvoriZbirne obara prazan OtpremnicaID, duplo clanstvo i nula izvora. Bez
-    ' njega bi izgubljen ili dupliran red bio TIHO normalizovan: kaskada bi nasla
-    ' 0 izvora, stornirala samo zaglavlje i javila uspeh -- ista klasa laznog
-    ' uspeha koju je prethodni rez zatvorio, samo kroz fail-open citac.
+    ' Izbor citaoca po stanju dokumenta zivi u modDokumenta.ZbrClanoviPoStanju --
+    ' ovde je do review-a #389 stajala If-grana, pa je isto pravilo vazilo samo za
+    ' PONISTENJE dok su SIMPLE, DUPLI i strog uvid zvali permisivan citac.
     '
     ' Poziv je PRE BeginTx, pa greska staje bez ijedne mutacije.
     If Len(Trim$(zbirnaID)) > 0 Then
-        Dim clan As Variant, clanId As String, clanovi As Collection
-        If modDokumenta.ZbirnaJeIzdata(zbirnaID) Then
-            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)
-        Else
-            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)
-        End If
-        For Each clan In KolekcijaUNiz(clanovi)
+        Dim clan As Variant, clanId As String
+        For Each clan In KolekcijaUNiz(modDokumenta.ZbrClanoviPoStanju(zbirnaID))
             clanId = Trim$(NzToText(clan))
             If Len(clanId) > 0 Then
                 If StrComp(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _

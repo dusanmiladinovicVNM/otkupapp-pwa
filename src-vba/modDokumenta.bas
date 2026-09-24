@@ -1463,22 +1463,6 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Next i
 End Function
 
-' Cela mapa clanstva ZBIRNE odjednom: OtpremnicaID (UCase) -> ZbirnaID.
-'
-' Pandan postojecoj AktivnoClanstvoOtpremnica, koja isto radi sprat nize
-' (OtkupID -> OtpremnicaID). Dva sprata, dva zapisa clanstva, isti obrazac.
-'
-' AktivnaZbirnaZaOtpremnicu odgovara na isto pitanje za JEDAN dokument, pa bi
-' lista od n otpremnica prosla tabelu clanstva n puta. Pozivaoci koji grade
-' pregled (storno lista, otkupna mesta po zbirni) traze ceo skup, i za njih je
-' jedan prolaz i tacniji i jeftiniji.
-'
-' Isto telo, pa i ista tvrdnja o kardinalitetu: dva aktivna zapisa za istu
-' otpremnicu dizu gresku umesto da se tiho normalizuju.
-Public Function AktivnoClanstvoZbirni() As Object
-    Set AktivnoClanstvoZbirni = AktivnoClanstvoPoKanonu("AktivnoClanstvoZbirni")
-End Function
-
 ' =====================================================================
 ' NACRT ZBIRNE (S4-2b)
 ' =====================================================================
@@ -2778,6 +2762,35 @@ Public Function IzvoriZbirne(ByVal zbirnaID As String) As Collection
         Err.Raise vbObjectError + 1960, SRC, _
                   "Zbirna nema nijedan izvor: " & zbirnaID & _
                   ". Clanstvo se cita iz " & TBL_ZBIRNA_IZVORI & "."
+    End If
+End Function
+
+' KOJI CITAC CLANSTVA SME OVAJ DOKUMENT -- JEDNA DEFINICIJA (review #389, P2).
+'
+' ZRNO CITACA PRATI LIFECYCLE (postavljeno u review-u #384):
+'   NACRT   prazno clanstvo je legitimno    -> ZbrClanovi (permisivan)
+'   IZDATO  prazno clanstvo je KVAR         -> IzvoriZbirne (fail-closed)
+'
+' IzvoriZbirne obara prazan OtpremnicaID, duplo clanstvo i nula izvora. Bez
+' njega izgubljen ili dupliran red biva TIHO normalizovan: citalac nadje 0
+' izvora, mutacija obori samo zaglavlje i javi uspeh -- lazan uspeh kroz
+' fail-open citaoca.
+'
+' Do ovog reza je pravilo stajalo kao If-grana u JEDNOM pozivaocu
+' (ActiveOtpIDsByZbirna, dakle PONISTENJE), a SIMPLE, DUPLI i strog uvid su
+' zvali ZbrClanovi direktno. Izdat dokument sa izgubljenim clanstvom je tako
+' prolazio kroz SIMPLE/DUPLI, a dupli red clanstva se prebrojavao kao dve
+' otpremnice i tako i prijavljivao operateru. Pravilo koje vazi u jednom ulazu
+' a ne u ostalima nije pravilo -- zato je ovde, a ne kao cetvrta kopija grane.
+'
+' ZbrClanovi ostaje pravi izbor za rad NAD NACRTOM (dodavanje i uklanjanje
+' izvora, radni sto F2, progres): tamo je prazno clanstvo normalno stanje, a ne
+' korupcija.
+Public Function ZbrClanoviPoStanju(ByVal zbirnaID As String) As Collection
+    If ZbirnaJeIzdata(zbirnaID) Then
+        Set ZbrClanoviPoStanju = IzvoriZbirne(zbirnaID)
+    Else
+        Set ZbrClanoviPoStanju = ZbrClanovi(zbirnaID)
     End If
 End Function
 

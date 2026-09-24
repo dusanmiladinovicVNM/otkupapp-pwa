@@ -5337,15 +5337,58 @@ Validator (`OtpremnicaPoPredaji`) gleda jedan upis u trenutku kad se dešava; na
 nije gledao. Prazan `PredajaID` **nije** nalaz (malina auto-lanac, ručni unos legitimno nemaju predaju) —
 nalaz je isti utovar na dva aktivna dokumenta.
 
-**Verifikacija.** `vba_check` čisto · `gen_schema_module --check` u koraku · `who_writes --check` i
-`--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** · `RunStornoTestSuite`
-**163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1928/0** · `RunGoldenSuite` OK.
-Dvosmerni dokaz nad **novim** sabotažama (`blok-izvor-sme-storno`, prenišanjen `zbirna-kaskada-bez-kapije`):
-**2/2 crvenih**, potpis izvora identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
+**Verifikacija** (posle review-a #389). `vba_check` čisto · `gen_schema_module --check` u koraku ·
+`who_writes --check` i `--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** ·
+`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1941/0** ·
+`RunGoldenSuite` OK. Dvosmerni dokaz nad sabotažama koje je ovaj rez dodao ili preniašao
+(`blok-izvor-sme-storno`, `zbirna-kaskada-bez-kapije`, `simple-dupli-cita-permisivno`,
+`strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`): **5/5 crvenih**, potpis izvora
+identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
+
+> `ponistenje-izdate-cita-permisivno` je pri tom pokazala **zatečenu grešku u katalogu**: tvrdnja joj je
+> bila zapisana kao **podniz** (bez prefiksa `ZBR kvar: `). `vba_check` podniz pušta, `dokaz.py` traži
+> doslovan tekst — pa je sabotaža bila crvena, ali ne po svom imenu. Ispravljeno.
 
 > `RunAllTests` je **199, ne 200**: `T_SoleOwner_MeriDokumenteNeBrojeve` je otišao sa funkcijom koju je
 > merio. Registar ne trpi rupe (`vba_check` REGISTAR), pa je oslobođeni slot 38 popunjen tada poslednjim
 > testom (200 `T_ZbirnaForma_KlasaOstajeBezCene`).
+
+**Review #389 — jedan P2: čitalac članstva nije bio jedinstven.**
+
+Pravilo „zrno čitaoca prati lifecycle" (NACRT → `ZbrClanovi`, IZDATO → `IzvoriZbirne`) postavljeno je u
+review-u #384, ali je živelo kao **`If`-grana u jednom pozivaocu** — `ActiveOtpIDsByZbirna`, dakle
+PONIŠTENJE. SIMPLE, DUPLI i strog uvid su zvali permisivan čitač direktno. Posledice koje je recenzent
+izveo i koje su potvrđene testom:
+
+- izdata zbirna sa **izgubljenim** redom članstva prolazila je kroz SIMPLE/DUPLI i bivala stornirana;
+- **dupli** red članstva se prebrojavao kao **druga otpremnica**, pa je operater dobijao „2 otpremnice
+  vraćene" nad jednom korumpiranom vezom — tačno normalizacija korupcije kroz mutation flow koju je
+  #384 zabranio;
+- `BuildStornoImpact(strict:=True)` je nad istim kvarom davao `otpCount=0` i **`valid=True`**, što krši
+  njegov sopstveni ugovor („ne znam" ne sme da prođe kao „nema").
+
+Popravka je **jedno telo**, ne četvrta kopija grane: `modDokumenta.ZbrClanoviPoStanju(zbirnaID)`.
+Koriste ga `ActiveOtpIDsByZbirna`, `ActiveOtkupIDsByZbirna`, `OtpCountZbirnePoID` i
+`StornoZbirnaIDetach_TX`. `ZbrClanovi` ostaje pravi izbor za rad **nad nacrtom** (dodavanje/uklanjanje
+izvora, radni sto F2, progres) — tamo je prazno članstvo normalno stanje.
+
+> Istorija ove greške je poučna: prvi pokušaj u S5-3b je bio `IzvoriZbirne` **uvek**, i srušio je
+> transakciju nad nacrtom — palo je 9 storno provera. Popravka je tada bila „onda uvek permisivan",
+> i time je nastala rupa koju je #389 našao. Tačan odgovor nije ni jedno ni drugo nego **po stanju
+> dokumenta**, i zato mora da stoji na jednom mestu.
+
+Nove provere: `Test_ZBR_SimpleIDupliNeNormalizujuKvar` (izgubljeno članstvo → SIMPLE staje; duplo
+članstvo → DUPLI staje; **kontrolni smer**: nacrt bez članstva i dalje sme) i
+`Test_ZBR_StrogUvidNadKvaromNijeValid` (kvar → `valid=False` uz imenovan razlog; kontrola: zdrav
+dokument → `valid=True`). Sabotaže `simple-dupli-cita-permisivno` i `strog-uvid-cita-permisivno` gađaju
+**pozivna mesta**, a prenišanjena `ponistenje-izdate-cita-permisivno` sam čitač.
+
+**Uzgredni nalaz iz pisanja tog testa:** prvo sam `BuildStornoImpact` pozvao sa `"ZBIRNA"`, a konstanta
+je `FLOW_DOC_ZBIRNA = "Zbirna"`. `Select Case` nad stringom je u VBA case-sensitive, pa je **cela**
+chain sekcija tiho preskočena i uvid je vratio `valid=True` bez ijednog pročitanog podatka. Svi
+produkcioni pozivaoci šalju konstantu, pa to nije živ kvar — ali je ista klasa fail-open-a kao P2:
+nepoznat `docType` u strict režimu treba da bude greška, ne prazan validan model. Zapisano, ne
+popravljeno u ovom rezu (recenzent je izričito tražio da se PR ne širi).
 
 **Tri nalaza koja ovaj rez NE zatvara**
 

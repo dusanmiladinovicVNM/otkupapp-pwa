@@ -5892,12 +5892,34 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A20: red bez generacije NIJE integritetska greska",
     ),
-    "ponistenje-izdate-cita-permisivno": (
+    # review #389, P2: pravilo mora da vazi na SVAKOM ulazu, ne samo tamo gde
+    # je nastalo. SIMPLE/DUPLI su citali permisivno, pa je izdata zbirna sa
+    # izgubljenim clanstvom prolazila, a dupli red se brojao kao druga otpremnica.
+    "simple-dupli-cita-permisivno": (
         "modStornoFlow.bas",
-        "            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)\n",
-        "            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
+        "    clanova = modDokumenta.ZbrClanoviPoStanju(zbrID).count\n",
+        "    clanova = modDokumenta.ZbrClanovi(zbrID).count   ' SABOTAZA: SIMPLE/DUPLI zaobilazi stanje\n",
+        "Test_ZBR_SimpleIDupliNeNormalizujuKvar",
+        "ZBR SDK: SIMPLE storno IZDATE bez clanstva NE prolazi",
+    ),
+
+    # review #389, P2: strog uvid sme da kaze 'nema' samo kad je siguran.
+    # Permisivan citac nad izgubljenim clanstvom vrati 0 bez greske, pa bi
+    # operater pred nepovratnom radnjom procitao 'nista se ne dira'.
+    "strog-uvid-cita-permisivno": (
+        "modStornoFlow.bas",
+        "    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanoviPoStanju(zbirnaID))\n",
+        "    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanovi(zbirnaID))   ' SABOTAZA: uvid zaobilazi stanje\n",
+        "Test_ZBR_StrogUvidNadKvaromNijeValid",
+        "ZBR uvid: izgubljeno clanstvo IZDATE ne sme da prodje kao valid",
+    ),
+
+    "ponistenje-izdate-cita-permisivno": (
+        "modDokumenta.bas",
+        "        Set ZbrClanoviPoStanju = IzvoriZbirne(zbirnaID)\n",
+        "        Set ZbrClanoviPoStanju = ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
         "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar",
-        "ponistenje IZDATE bez clanstva NE prolazi",
+        "ZBR kvar: ponistenje IZDATE bez clanstva NE prolazi",
     ),
     "ponistenje-ne-vidi-kanonsko-clanstvo": (
         "modStornoFlow.bas",
