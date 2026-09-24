@@ -5176,6 +5176,53 @@ generaciji → jedna o identitetu).
 poziv `modMasterSync.IzvedeniLanacIzPwaDostupan()` nije video — compile pad, treći put u dve sesije.
 Stavka u §15 sada nosi i taj oblik.
 
+#### Review #388 — identitet utovara nije bio trajan (P1) + dva P2
+
+**P1, i doneo ga je sa `main`-a.** `PredajaID` sam uveo u S5-2, ali ga **nigde nisam sačuvao** — živeo je
+samo unutar jednog sync prolaza. Recenzent je to spojio sa činjenicom koju nisam proverio: **GAS obrađuje
+redove pojedinačno** (`data.records.map(r => processRecord(...))`), a neuspeo red se vraća u `Pending`.
+
+```
+ciklus 1:  A, B uspeju — C padne   → otpremnica od A+B
+ciklus 2:  C uspe                   → DRUGA izdata otpremnica za ISTI utovar
+```
+
+A izdata se ne dopunjuje (A13), pa se to posle **ne može ni popraviti** bez ispravke — greška koja se
+sama zabetonira.
+
+| Rez | |
+|---|---|
+| kanon | `tblOtpremnica` dobija kolonu `PredajaID` (na kraj; otisak `64BD33C7` → **`88E04EC5`**), piše je **kanonski pisac** kroz zaglavlje |
+| granica | predaja koja je već postala **aktivnu** otpremnicu ne pravi drugu: zakasneo blok staje **fail-closed** i **imenuje** otpremnicu, da operater zna gde je ostatak utovara |
+| ishod reda | **`SyncError`**, ne `Duplicate` — `Duplicate` je terminalan, pa bi blok zauvek ostao neobrađen |
+| storno | **stornirana** otpremnica ne blokira: utovar je poništen, pa ponovljena predaja sme nov dokument |
+
+**P2/1 — isti CRID sa drugom tvrdnjom bio je tihi `Duplicate`.** `IsDuplicateZbirnaInMaster` je gledao
+samo **postoji li** CRID — ista klasa problema koju OTK ingest već rešava (`PwaIstiSadrzaj`), a ZBR nije.
+`PwaZbirnaRazlika` poredi **samo kanonske tvrdnje**: vozač, kupac, dan, broj (ako ga PWA šalje) i **skup
+izvora**, razrešen **istim putem** kao pri uvozu. Summary polja se **namerno ne porede** — kanonski pisac
+ih izvodi iz otpremnica, pa razlika u njima ne znači drugi dokument nego drugo sabiranje.
+
+**P2/2 — summary polja su još mogla da zabrane kanonski import.** `ValidatePWAZbirna` je odbijala red kad
+je „`Kolicina KlI + KlII <= 0`" — polje koje uvoz od S5-3 **i ne čita**. Polustanje u kom summary **nije**
+izvor istine ali **sme** da zabrani dokument. Umesto toga traži se ono što uvozu stvarno treba:
+`OtkupRecordIDs` — zbirna bez izvora nije dokument.
+
+**Što je recenzent pustio, i s pravom:** storno backlink dug nije blocker za ovaj rez. Osnovni kanonski
+storno radi (storniran roditelj → članstvo prestaje da bude aktivno → otpremnica slobodna), a
+`PONIŠTENJE` čita kanonsko članstvo od #384. `DetachOtpremniceInline` je **mrtav kod, ne kvar**.
+
+#### Kapije
+
+`RunAllTests` **200/0** · BFP **1900 → 1866 → 1880** (posle review kruga: +7 `ZBR CRID`, +7 `PREDAJA parc`)
+· Storno **163/0** · Banka **241/0** · Palete **97** · Agrohemija **25**.
+
+Sabotaže **588 → 585**: šest obrisano jer mere pravila koja više ne postoje, tri nove
+(`zbirna-ne-pamti-poreklo`, `zbirna-crid-ne-gleda-sadrzaj`, `predaja-ne-pamti-utovar`). **Dokazano: sve
+crvene na imenovanoj tvrdnji, izvor vraćen bit-identično.**
+
+Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
+
 #### Dva reza izvučena iz ovog, oba zapisana
 
 **S5-3b — storno tok zbirne.** Brisanje linkera je uklonilo poslednjeg pisca `Otpremnica.BrojZbirne`, pa
