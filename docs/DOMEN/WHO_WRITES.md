@@ -94,8 +94,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Test moduli po tabeli
 
-- `tblFakturaStavke`: `modGoldenTests`, `modTest`, `modTestStorno`
-- `tblFakture`: `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
+- `tblFakturaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTest`, `modTestStorno`
+- `tblFakture`: `modBusinessFlowProTests`, `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
@@ -116,7 +116,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
-- `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
+- `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modBusinessFlowProTests`, `modTest`, `modTestStornoCentar`
 - `tblVozaci`: `modBusinessFlowProTests`, `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`

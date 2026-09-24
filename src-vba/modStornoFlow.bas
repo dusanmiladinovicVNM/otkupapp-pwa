@@ -2357,10 +2357,24 @@ Private Function ScanZbirna(ByVal broj As String, _
     ' stornirane A. Storniran vlasnik nestaje iz racuna, njegova deca ne.
     d("mutRazlog") = ZbirnaMutRazlog(broj)
     d("otpCount") = OtpCountZbirnePoID(CStr(d("zbrID")))
-    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)
+
+    ' SCOPE ZA PRIJEMNICE I PALETE -- ISTIM TELOM KOJE AKTER KORISTI.
+    '
+    ' Otpremnice se od S5-3b biraju iz clanstva, pa im broj vise nije ni bitan.
+    ' Prijemnice i palete se JOS UVEK biraju po broju (njihov most pada u S6), a
+    ' mutacija ih pritom suzava na izabrani dokument (scopeID). Pregled to nije
+    ' radio, pa je pod kolizijom broja obecavao vise nego sto bi palo.
+    '
+    ' ZbirnaScopeRazlog je isti racun koji radi i PonistiZbirnaChain_TX; ovde nas
+    ' zanima samo scopeID koji vraca, jer razlog odbijanja pregled ne donosi.
+    Dim scopeID As String, razlogScope As String
+    razlogScope = ZbirnaScopeRazlog(broj, CStr(d("zbrID")), True, scopeID)
+
+    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)
     d("prijCount") = pc
     d("hasPrijemnica") = (pc > 0)
-    Dim palc As Long: palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj, strict)
+    Dim palc As Long
+    palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj, strict, scopeID)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
     Exit Function
@@ -2443,9 +2457,21 @@ End Function
 ' Scan* bio strict spolja a slep iznutra: nestane tblPrijemnica.BrojZbirne ->
 ' CountActive vrati 0 -> ekran kaze hasPrijemnica = False, i uvid je i dalje
 ' valid.
+' PREGLED I AKTER BROJE ISTI SKUP (review #389, treci krug P2).
+'
+' Parametar gen je scope izabranog dokumenta (ZbirnaID na detetu). Bez njega je
+' pregled brojao SVU decu tog BROJA, dok je mutacija -- kad je scope dokaziv --
+' birala samo decu IZABRANE zbirne. Pod kolizijom broja je ekran pred nepovratnom
+' radnjom pokazivao "prijemnice: 2", a padala je jedna.
+'
+' Suzavanje ide kroz SuziDecuNaZbirnu, isto telo koje koriste ActivePrijIDsByZbirna
+' i DistinctActiveValues -- pa se skupovi ne mogu raziici. Prazan gen = ponasanje
+' pre ovog reza (bez suzavanja), sto je i dalje tacno za pozivaoce koji scope
+' nemaju.
 Private Function CountActive(ByVal tblName As String, ByVal filterCol As String, _
                              ByVal value As String, _
-                             Optional ByVal strict As Boolean = False) As Long
+                             Optional ByVal strict As Boolean = False, _
+                             Optional ByVal gen As String = "") As Long
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(tblName)
     If IsEmpty(data) Then
@@ -2467,13 +2493,16 @@ Private Function CountActive(ByVal tblName As String, ByVal filterCol As String,
         End If
         Exit Function
     End If
-    Dim i As Long, n As Long
+    Dim kand As Collection: Set kand = New Collection
+    Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cF))) = value Then
-            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then n = n + 1
+            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then kand.Add i
         End If
     Next i
-    CountActive = n
+
+    Set kand = SuziDecuNaZbirnu(tblName, data, kand, gen)
+    CountActive = kand.count
     Exit Function
 EH:
     Dim errNum As Long, errDesc As String

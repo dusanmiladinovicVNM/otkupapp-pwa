@@ -5339,12 +5339,12 @@ nalaz je isti utovar na dva aktivna dokumenta.
 
 **Verifikacija** (posle review-a #389). `vba_check` čisto · `gen_schema_module --check` u koraku ·
 `who_writes --check` i `--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** ·
-`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1955/0** ·
+`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1962/0** ·
 `RunGoldenSuite` OK. Dvosmerni dokaz nad sabotažama koje je ovaj rez dodao ili preniašao
 (`blok-izvor-sme-storno`, `zbirna-kaskada-bez-kapije`, `simple-dupli-cita-permisivno`,
 `strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`,
 `zbirna-clanstvo-na-nepostojecu-otp`, `zbirna-storniran-izvor-tih`,
-`vlasnistvo-lanca-po-broju`): **8/8 crvenih**, potpis izvora
+`vlasnistvo-lanca-po-broju`, `pregled-broji-svu-decu-broja`): **9/9 crvenih**, potpis izvora
 identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
 
 > `ponistenje-izdate-cita-permisivno` je pri tom pokazala **zatečenu grešku u katalogu**: tvrdnja joj je
@@ -5486,6 +5486,41 @@ tvrdnja crveni.
 > **Nije mereno na samoj mutaciji:** prijemnica vezana za zbirnu nema fixture u BFP suite-i (scenariji
 > sa prijemnicom žive u storno suite-i, ali bez para pod istim brojem). Odluka se meri tamo gde nastaje
 > i gde je operater čita **pre** nepovratne radnje. Zapisano da se ne čita kao potpuno pokriće.
+
+**Review #389, četvrti krug — pregled i akter nisu brojali isti skup.**
+
+Otpremnice se od S5-3b biraju iz članstva, pa im broj više nije ni bitan. **Prijemnice i palete se još
+uvek biraju po broju** (njihov most pada u S6), ali ih mutacija pritom **sužava** na izabrani dokument
+(`scopeID`, `ActivePrijIDsByZbirna` / `DistinctActiveValues`). `ScanZbirna` to nije radio — brojao je
+`CountActive(..., BrojZbirne, broj)`, dakle **svu decu tog broja**.
+
+Pod kolizijom broja je zato ekran pred nepovratnom radnjom obećavao više nego što bi palo:
+*„prijemnice: 2"*, a padala je jedna. Ekran čija je cela svrha da pokaže **šta će biti pogođeno** ne
+sme da broji drugi skup od aktera.
+
+**Popravka nije nov čitalac.** `CountActive` je dobio isti opcioni `gen` (scope) koji već nose
+`ActivePrijIDsByZbirna` i `DistinctActiveValues`, i sužava kroz **isto telo** — `SuziDecuNaZbirnu`. Zato
+se skupovi ne mogu raziići. Prazan `gen` = ponašanje pre ovog reza, što je i dalje tačno za pozivaoce
+koji scope nemaju (`ScanPrijemnica` broji palete po `PrijemnicaID`, ne po broju).
+
+`ScanZbirna` scope računa **istim telom kao akter** (`ZbirnaScopeRazlog`), pa „sve-ili-ništa" pravilo
+važi na oba mesta: kad makar jedno aktivno dete ne nosi identitet roditelja, i pregled i akter padaju
+nazad na broj — zajedno.
+
+Nova provera `Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira` meri **oba nivoa**, jer sam pregled bi
+prošao i da akter dira pogrešan skup:
+
+| Nivo | Tvrdnja |
+|---|---|
+| pregled (`BuildPonistenjePosledice` sa `docID`) | svaki dokument vidi **svoju** prijemnicu; ne sabira obe |
+| mutacija (`RunZbirnaCorrection` PONIŠTENJE) | pada prijemnica **izabranog**, tuđa ostaje netaknuta |
+
+> Fixture seje prijemnice direktno, sa **ispravnim** tragom roditelja. To **nije anomalija** — svako
+> dete tačno nosi svoj `ZbirnaID`. Kanonski pisac scenario ne može da napravi u jednom potezu jer bi
+> drugi upis pao na kapiji dvosmislenog broja; stanje se zato pravi seed-om, a **meri produkcionim
+> čitačem i akterom**.
+
+Sabotaža `pregled-broji-svu-decu-broja` skida scope sa pregleda i baš ta tvrdnja crveni.
 
 **Četiri nalaza koja ovaj rez NE zatvara**
 

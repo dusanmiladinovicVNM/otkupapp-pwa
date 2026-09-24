@@ -316,6 +316,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada
     Test_ZBR_StorniranIzvorAktivneIzdateJeKvar
     Test_ZBR_VlasnistvoLancaIdePoIdentitetu
+    Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6259,6 +6260,138 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+' PREGLED BROJI ISTI SKUP KOJI MUTACIJA DIRA (review #389, treci krug P2).
+'
+' Otpremnice se od S5-3b biraju iz clanstva. Prijemnice i palete se JOS UVEK
+' biraju po broju (njihov most pada u S6), ali ih mutacija pritom SUZAVA na
+' izabrani dokument (scopeID). Pregled to nije radio: brojao je svu decu tog
+' BROJA.
+'
+' Pod kolizijom broja je zato ekran pred nepovratnom radnjom obecavao vise nego
+' sto bi palo -- "prijemnice: 2", a padala je jedna. Ekran cija je cela svrha da
+' pokaze STA ce biti pogodjeno ne sme da broji drugi skup od aktera.
+'
+' FIXTURE: prijemnice se seju direktno, sa ISPRAVNIM tragom roditelja. To NIJE
+' anomalija -- svako dete tacno nosi svoj ZbirnaID. Kanonski pisac scenario ne
+' moze da napravi u jednom potezu jer bi drugi upis pao na kapiji dvosmislenog
+' broja, pa se stanje pravi seed-om, a meri se produkcionim citacem i akterom.
+'
+' Meri se OBA nivoa: pregled (broj) i mutacija (sta je stvarno palo). Sam
+' pregled bi prosao i da akter dira pogresan skup.
+Private Sub Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira()
+    Dim tx As clsTransaction
+    Dim prevKupac As String
+    Dim kupacVracen As Boolean
+
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, broj As String
+    Dim otpA As String, otpB As String, zbrA As String, zbrB As String
+    Dim prjA As String, prjB As String
+    Dim hA As Object, hB As Object, izv As Collection
+
+    scenario = NewScenarioCode("ZBRPRG")
+
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    broj = TEST_PREFIX & "-ZBR-PRG-" & scenario
+
+    otpA = ZbrOtpremnicaNaDan("PRGA" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpA
+    Set hA = ZbrHeaderNaDan(broj, NextTestDate())
+    hA("KupacID") = TEST_KUP_ID
+    zbrA = modDokumenta.CreateZbirnaIzIzvora_TX(hA, izv, g, True)
+
+    otpB = ZbrOtpremnicaNaDan("PRGB" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpB
+    Set hB = ZbrHeaderNaDan(broj, NextTestDate())
+    hB("KupacID") = TEST_KUP_ID
+    zbrB = modDokumenta.CreateZbirnaIzIzvora_TX(hB, izv, g, True)
+
+    AssertTrue (Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB), _
+        "ZBR PRG preduslov: dva dokumenta pod istim brojem (" & g & ")"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
+
+    prjA = "PRJ-PRGA-" & scenario
+    prjB = "PRJ-PRGB-" & scenario
+    ZbrSejPrijemnicuSaRoditeljem prjA, broj, zbrA
+    ZbrSejPrijemnicuSaRoditeljem prjB, broj, zbrB
+
+    ' --- PREGLED: svaki dokument vidi SAMO svoju decu ----------------------
+    Dim mA As String, mB As String
+    mA = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", zbrA)
+    mB = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", zbrB)
+
+    AssertTrue InStr(1, mA, "prijemnice: 1", vbTextCompare) > 0, _
+               "ZBR PRG: pregled izabranog dokumenta broji SAMO njegove prijemnice"
+    AssertTrue InStr(1, mB, "prijemnice: 1", vbTextCompare) > 0, _
+               "ZBR PRG: isto vazi i za drugi dokument istog broja"
+    AssertTrue InStr(1, mA, "prijemnice: 2", vbTextCompare) = 0, _
+               "ZBR PRG: pregled NE sabira decu oba dokumenta istog broja"
+
+    ' --- MUTACIJA: pada bas taj skup --------------------------------------
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrA)
+    AssertTrue CBool(r("success")), _
+               "ZBR PRG: PONISTENJE izabranog dokumenta prolazi (bilo: " & _
+               CStr(r("message")) & ")"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+               "ZBR PRG: prijemnica IZABRANOG dokumenta je stornirana"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+               "ZBR PRG: prijemnica TUDJEG dokumenta istog broja je NETAKNUTA"
+
+Kraj:
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    kupacVracen = True
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    If Not kupacVracen Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira", eN, eD
+End Sub
+
+' Prijemnica sa ISPRAVNIM tragom roditelja (ZbirnaRoditeljID).
+'
+' Seed, a ne kanonski pisac: pod kolizijom broja bi drugi upis pao na kapiji
+' dvosmislenosti. Podatak koji nastaje JESTE legitiman -- svako dete nosi tacno
+' svoj ZbirnaID -- pa se iz njega sme izvoditi ponasanje citaoca i aktera.
+Private Sub ZbrSejPrijemnicuSaRoditeljem(ByVal prijID As String, ByVal broj As String, _
+                                         ByVal zbirnaID As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_PRIJEMNICA)
+
+    SetRequiredField rowData, TBL_PRIJEMNICA, COL_PRJ_ID, prijID
+    SetRequiredField rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ, prijID
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_DATUM, NextTestDate()
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KUPAC, TEST_KUP_ID
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_VOZAC, TEST_VOZ_ID
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbirnaID
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KLASA, KLASA_I
+    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, 100#
+
+    RequireAppend TBL_PRIJEMNICA, rowData, "ZbrSejPrijemnicuSaRoditeljem"
+End Sub
+
 ' VLASNISTVO NIZVODNOG LANCA IDE PO IDENTITETU (review #389, P1).
 '
 ' ZbirnaOwnsExternalChain odlucuje sme li PONISTENJE da stornira PRIJEMNICU i

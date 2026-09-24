@@ -5939,6 +5939,17 @@ SABOTAZE = {
     # review #389, P1: vlasnistvo nizvodnog lanca (sme li PONISTENJE da obori
     # prijemnicu i palete) citalo se po BROJU. Pod jednim brojem stoje dva
     # dokumenta, pa je odgovor bio odgovor PRVOG POGOTKA -- tudjeg.
+    # review #389, treci krug: pregled je brojao svu decu BROJA, a mutacija je
+    # -- kad je scope dokaziv -- birala samo decu IZABRANE zbirne. Ekran pred
+    # nepovratnom radnjom je obecavao vise nego sto bi palo.
+    "pregled-broji-svu-decu-broja": (
+        "modStornoFlow.bas",
+        "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)\n",
+        "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)   ' SABOTAZA: pregled broji svu decu broja\n",
+        "Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira",
+        "ZBR PRG: pregled NE sabira decu oba dokumenta istog broja",
+    ),
+
     "vlasnistvo-lanca-po-broju": (
         "modStornoFlow.bas",
         "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))\n",
