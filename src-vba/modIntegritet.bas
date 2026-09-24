@@ -101,6 +101,7 @@ Private Sub RunAllChecks()
     Chk_B7_ZbirnaNulaKg
     Chk_B8_DvosmislenBrojZbirne
     Chk_B9_ZbirnaBezIdentiteta
+    Chk_B11_PredajaDvaDokumenta
     Chk_B10_ReversBezID
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
@@ -446,6 +447,62 @@ Private Sub Chk_B9_ZbirnaBezIdentiteta()
 
 EH:
     WriteErr "B9", Err.description
+End Sub
+
+' ============================================================
+' CHECK B11: JEDAN UTOVAR -- JEDAN DOKUMENT
+' ============================================================
+' Poslovno pravilo iz S5-3: jedan klik otkupca = jedna predaja = JEDNA
+' otpremnica. PredajaID je identitet tog dogadjaja.
+'
+' Pravilo je do sada imalo samo VALIDATORA (OtpremnicaPoPredaji staje kad zatekne
+' dva aktivna dokumenta istog utovara). Validator gleda jedan upis u trenutku
+' kad se desava; nad zatecenim podacima niko nije gledao. Invarijanta bez
+' cuvara nad podacima je zelja, ne pravilo -- zato i ova provera (review #388, P3).
+'
+' Prazan PredajaID NIJE nalaz: otpremnica sme da nastane i mimo predaje
+' (malina auto-lanac, rucni unos). Nalaz je ISTI utovar na dva aktivna dokumenta.
+Private Sub Chk_B11_PredajaDvaDokumenta()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_OTPREMNICA)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cPred As Long, cId As Long, cBr As Long
+    cPred = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_PREDAJA_ID)
+    If cPred = 0 Then Exit Sub
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, "Chk_B11")
+    cBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, "Chk_B11")
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim prvi As Object: Set prvi = CreateObject("Scripting.Dictionary")
+    prvi.CompareMode = vbTextCompare
+
+    Dim r As Long, pid As String
+    For r = 1 To UBound(data, 1)
+        pid = Trim$(NzToText(data(r, cPred)))
+        If Len(pid) > 0 Then
+            If prvi.Exists(pid) Then
+                ' Prijavljuju se OBA dokumenta: operater mora da vidi par, a ne
+                ' samo drugi po redu -- prvi nije "ispravan" nego samo raniji.
+                bad.Add Array(pid, CStr(prvi(pid)), NzToText(data(r, cId)), _
+                              NzToText(data(r, cBr)))
+            Else
+                prvi.Add pid, NzToText(data(r, cId))
+            End If
+        End If
+    Next r
+
+    WriteBlock "B11", "Jedan utovar (PredajaID) nosi DVA aktivna dokumenta", _
+               Array("PredajaID", "OtpremnicaID (prvi)", "OtpremnicaID (drugi)", _
+                     "BrojOtpremnice (drugi)"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "B11", Err.description
 End Sub
 
 ' ============================================================

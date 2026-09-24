@@ -1463,6 +1463,22 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Next i
 End Function
 
+' Cela mapa clanstva ZBIRNE odjednom: OtpremnicaID (UCase) -> ZbirnaID.
+'
+' Pandan postojecoj AktivnoClanstvoOtpremnica, koja isto radi sprat nize
+' (OtkupID -> OtpremnicaID). Dva sprata, dva zapisa clanstva, isti obrazac.
+'
+' AktivnaZbirnaZaOtpremnicu odgovara na isto pitanje za JEDAN dokument, pa bi
+' lista od n otpremnica prosla tabelu clanstva n puta. Pozivaoci koji grade
+' pregled (storno lista, otkupna mesta po zbirni) traze ceo skup, i za njih je
+' jedan prolaz i tacniji i jeftiniji.
+'
+' Isto telo, pa i ista tvrdnja o kardinalitetu: dva aktivna zapisa za istu
+' otpremnicu dizu gresku umesto da se tiho normalizuju.
+Public Function AktivnoClanstvoZbirni() As Object
+    Set AktivnoClanstvoZbirni = AktivnoClanstvoPoKanonu("AktivnoClanstvoZbirni")
+End Function
+
 ' =====================================================================
 ' NACRT ZBIRNE (S4-2b)
 ' =====================================================================

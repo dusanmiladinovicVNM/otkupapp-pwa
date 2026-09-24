@@ -698,31 +698,34 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_STORNO_VEZE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
     ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
     TcSeedZbirna "SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
               Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
+    TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
 
     Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True)
     TcChk CBool(rA("success")), "PONISTENJE prijemnice -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KA-Z") = 0, "zbirna stornirana (uzvodna kaskada)"
-    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KA-Z") = 0, "otpremnica te zbirne stornirana"
+    TcChk TcOtpAktivnihUZbirni("SVT-KA-ZID") = 0, "otpremnica te zbirne stornirana"
     TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KA-P") = 0, "prijemnica stornirana"
 
     ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
     TcSeedZbirna "SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
               Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
+    TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
 
     Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True)
     TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KB-Z") = 1, "DUPLI: zbirna ostaje AKTIVNA (list, ne kaskada)"
-    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KB-Z") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
+    TcChk TcOtpAktivnihUZbirni("SVT-KB-ZID") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
     TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KB-P") = 0, "DUPLI: prijemnica stornirana (list)"
 
     tx.RollbackTx: Set tx = Nothing
@@ -1101,6 +1104,43 @@ Private Function TcAmbStorno(ByVal ambID As String) As String
 End Function
 
 ' Broj AKTIVNIH (ne-storniranih) redova gde col=val (CountActive u modStornoFlow je Private).
+' Red clanstva otpremnica -> zbirna. Od S5-3b kaskada bira decu odavde, pa
+' fixture koji upise samo labelu pravi zbirnu BEZ ijednog izvora.
+Private Sub TcSeedClanstvo(ByVal zbirnaID As String, ByVal otpremnicaID As String)
+    TcSeedRow TBL_ZBIRNA_IZVORI, _
+              Array(COL_ZBI_ID, COL_ZBI_ZBIRNA_ID, COL_ZBI_OTPREMNICA_ID), _
+              Array(otpremnicaID & "-ZI", zbirnaID, otpremnicaID)
+End Sub
+
+' Koliko je otpremnica te zbirne JOS AKTIVNO.
+'
+' Namerno ZbrClanovi, a ne AktivnaZbirnaZaOtpremnicu: ova druga izbacuje decu
+' stornirane zbirne, pa bi posle PONISTENJA vratila 0 i onda kad otpremnica NIJE
+' stornirana -- tvrdnja bi prolazila iz pogresnog razloga. Meri se storniranost
+' DETETA, kao i pre; menja se samo po cemu se dete prepoznaje kao njeno.
+Private Function TcOtpAktivnihUZbirni(ByVal zbirnaID As String) As Long
+    Dim clan As Variant, n As Long
+    For Each clan In KolekcijaUNizTc(modDokumenta.ZbrClanovi(zbirnaID))
+        If StrComp(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                     CStr(clan), COL_STORNIRANO))), "Da", vbTextCompare) <> 0 Then
+            n = n + 1
+        End If
+    Next clan
+    TcOtpAktivnihUZbirni = n
+End Function
+
+Private Function KolekcijaUNizTc(ByVal c As Collection) As Variant
+    If c Is Nothing Then KolekcijaUNizTc = Array(): Exit Function
+    If c.count = 0 Then KolekcijaUNizTc = Array(): Exit Function
+
+    Dim a() As Variant, i As Long
+    ReDim a(0 To c.count - 1)
+    For i = 1 To c.count
+        a(i - 1) = c(i)
+    Next i
+    KolekcijaUNizTc = a
+End Function
+
 Private Function TcCountActive(ByVal tbl As String, ByVal col As String, ByVal val As String) As Long
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Function

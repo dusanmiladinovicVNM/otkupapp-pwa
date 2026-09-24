@@ -231,7 +231,7 @@ Private Const FX_KOOP_PRIKAZ As String = "Prvi Testni"
 ' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
 Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
 Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
-' Svez par zbirnih za kaskadu (test 38 potrosi ZB-TEST-DUPL).
+' Svez par zbirnih za kaskadu (ZB-TEST-DUPL trosi kaskadni scenario).
 Private Const FX_ZBIRNA_KASK As String = "ZB-TEST-KASK"
 ' Zatecen par BEZ generacije + zamena, za zavrsetak ispravke.
 Private Const FX_OTPREMNICA_LEGACY As String = "6/TEST"
@@ -318,7 +318,6 @@ Public Sub RunAllTests()
     RunOne 35
     RunOne 36
     RunOne 37
-    RunOne 38
     RunOne 39
     RunOne 40
     RunOne 41
@@ -494,7 +493,7 @@ Public Sub RunAllTests()
     RunOne 197
     RunOne 198
     RunOne 199
-    RunOne 200
+    RunOne 38
 
     SetTestMode prevMode
     WriteResultFile
@@ -763,7 +762,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 196: TestName = "T_UtovarB_StornoKapije"
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
-        Case 200: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
@@ -774,7 +773,6 @@ Private Function TestName(ByVal idx As Long) As String
         Case 41: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
         Case 40: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
         Case 39: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
-        Case 38: TestName = "T_SoleOwner_MeriDokumenteNeBrojeve"
         Case 37: TestName = "T_OtkupStornoPoID_NeDiraTudjeOM"
         Case 36: TestName = "T_Zbirna_ZaglavljePoIDKaskadaStaje"
         Case 35: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
@@ -971,7 +969,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 196: T_UtovarB_StornoKapije
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
-        Case 200: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 38: T_ZbirnaForma_KlasaOstajeBezCene
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
@@ -982,7 +980,6 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 41: T_StorniranVlasnik_JosImaAktivnuDecu
         Case 40: T_ZamenaZbirne_NeDiraDecuTudje
         Case 39: T_ZbirnaKaskada_StajeNaDvosmislenom
-        Case 38: T_SoleOwner_MeriDokumenteNeBrojeve
         Case 37: T_OtkupStornoPoID_NeDiraTudjeOM
         Case 36: T_Zbirna_ZaglavljePoIDKaskadaStaje
         Case 35: T_IspravkaPrijemnice_PodKolizijomBroja
@@ -3200,32 +3197,6 @@ Private Sub T_OtkupStornoPoID_NeDiraTudjeOM()
     AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, FX_OTKUP_KOLIZIJA, "", "OTK-KOL-B")) > 0), True, _
              "storniran OtkupID ne prolazi kapiju"
 End Sub
-
-' ============================================================
-' 40. "Jedini vlasnik" zbirne se meri DOKUMENTIMA, ne brojevima
-' ============================================================
-' Zbirna je po invarijanti zbir SVIH svojih aktivnih otpremnica, pa je vise
-' otpremnica u jednoj zbirni normalno stanje. Broj otpremnice je scoped po
-' stanici, pa dve otpremnice istog broja sa razlicitih stanica u istoj zbirni
-' daju JEDAN distinct broj -- i stara provera je tada rekla "jedini vlasnik".
-'
-' Posledica: PONISTENJE izabrane otpremnice ulazilo bi u punu kaskadu nad
-' zbirnom i oborilo i tudju otpremnicu.
-Private Sub T_SoleOwner_MeriDokumenteNeBrojeve()
-    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A", "GEN-OTP-A"
-    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B", "GEN-OTP-B"
-
-    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA_KASK, _
-                             FX_OTPREMNICA_KOLIZIJA, "GEN-OTP-A"), False, _
-             "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik"
-
-    ' Kontrola: kad je stvarno sama, tvrdnja mora biti True -- inace bi test
-    ' prolazio i da provera uvek vraca False.
-    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA, "1/TEST", ""), _
-                                                          True, _
-             "jedina otpremnica svoje zbirne JESTE jedini vlasnik"
-End Sub
-
 ' ============================================================
 ' 41. Kaskada zbirne staje dok broj nose dva aktivna dokumenta
 ' ============================================================

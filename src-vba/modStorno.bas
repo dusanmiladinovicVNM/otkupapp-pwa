@@ -57,12 +57,24 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
 
     RequireNonBlank otkupID, "OtkupID", SRC
 
-    Dim stanicaID As String, brojZbirne As String
+    Dim stanicaID As String, zbirnaID As String
     stanicaID = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA)))
-    brojZbirne = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE)))
+
+    ' LANAC SE CITA IZ CLANSTVA, NE SA DETETA (S5-3b).
+    '
+    ' Ranije je stajalo LookupValue(.., COL_OTK_BROJ_ZBIRNE): denormalizovana
+    ' labela na samom otkupu. Tu labelu od S5-3 vise niko ne pise, pa je uslov
+    ' Len(brojZbirne) > 0 bio uvek False i CELA hladnjaca kaskada je bila
+    ' nedostizna -- storno bloka je ostavljao aktivnu otpremnicu i zbirnu.
+    '
+    ' Kanonski put ide kroz dva zapisa clanstva: tblOtpremnicaIzvori daje
+    ' otpremnicu tog bloka, tblZbirnaIzvori zbirnu te otpremnice. Oba su po
+    ' ID-u, pa broj vise nije ni identitet ni uslov.
+    zbirnaID = modDokumenta.AktivnaZbirnaZaOtpremnicu( _
+                   modDokumenta.OtpremnicaZaOtkup(otkupID))
 
     Dim hladnjacaBlock As Boolean
-    hladnjacaBlock = (Len(stanicaID) > 0) And (Len(brojZbirne) > 0)
+    hladnjacaBlock = (Len(stanicaID) > 0) And (Len(zbirnaID) > 0)
     If hladnjacaBlock Then hladnjacaBlock = IsHladnjacaStanica(stanicaID)
 
     tx.BeginTx
@@ -89,11 +101,11 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
     ' mutacije: prva kaskada obara zbirnu, pa bi kasnije razresavanje videlo
     ' "nema aktivnog parenta".
     If hladnjacaBlock Then
-        Dim scVoz As String, scKup As String, scOK As Boolean
-        scOK = ResolveZbirnaChainScope(brojZbirne, SRC, scVoz, scKup)
-        StornoOtpremnicaCascade brojZbirne, SRC, scVoz, scOK
-        StornoZbirnaCascade brojZbirne, SRC, scVoz, scKup, scOK
-        StornoPrijemnicaCascade brojZbirne, SRC, scVoz, scKup, scOK
+        Dim scVoz As String, scKup As String, scBroj As String, scOK As Boolean
+        scOK = ZbirnaVlasnikPoID(zbirnaID, SRC, scBroj, scVoz, scKup)
+        StornoOtpremnicaCascade zbirnaID, SRC, scOK
+        StornoZbirnaCascade zbirnaID, SRC, scOK
+        StornoPrijemnicaCascade scBroj, SRC, scVoz, scKup, scOK
     End If
 
     tx.CommitTx
@@ -260,140 +272,81 @@ End Function
 ' ZBIRNA
 ' ============================================================
 
-' Razresi SCOPE lanca (vlasnika zbirne) PRE prve mutacije. Kaskade zatim mutiraju
-' iskljucivo redove tog vlasnika -- `BrojZbirne` sam po sebi nije identitet lanca.
+' VLASNIK LANCA SE CITA SA JEDNOG REDA, PO PRIMARNOM KLJUCU (S5-3b).
 '
-' Ishodi:
-'   - tacno jedna AKTIVNA zbirna tog broja -> scope = njen (VozacID, KupacID);
-'   - vise aktivnih zbirni istog broja -> greska (dvosmislen lanac, fail-closed);
-'   - nijedna aktivna zbirna, a POSTOJE aktivni nizvodni redovi (otpremnica/
-'     prijemnica) tog broja -> greska: pripadnost tih redova nije dokaziva, a tiho
-'     obaranje bi moglo da pogodi tudji lanac (fail-closed);
-'   - nista aktivno -> hasScope = False, kaskade su no-op (idempotentnost).
+' Zatecena ResolveZbirnaChainScope je isti podatak trazila po BROJU i zato je
+' morala da resava dvosmislenost koju je sam broj proizvodio: dve aktivne zbirne
+' istog broja -> greska ERR_STORNO_BASE+11, nijedna aktivna a ima nizvodnih
+' redova -> greska +13. Obe greske su bile posledica labele kao kljuca, ne
+' poslovno pravilo -- ZbirnaID je jedinstven, pa nijedno od ta dva stanja ne
+' moze da nastane.
 '
-' Mora se pozvati JEDNOM po BrojZbirne, pre bilo koje mutacije: prva kaskada obara
-' zbirnu, pa bi kasnija razresavanja videla "nema aktivnog parenta".
-Private Function ResolveZbirnaChainScope(ByVal brojZbirne As String, ByVal callerSrc As String, _
-                                         ByRef outVozac As String, ByRef outKupac As String) As Boolean
+' Vlasnik i dalje treba: prijemnica JOS UVEK visi o Prijemnica.BrojZbirne (taj
+' most ima zivog pisca i pada u S6), pa se njena kaskada bira po broju + vlasniku
+' -- tacno ista zastita od sudara brojeva kao ranije, samo sa izvorom istine na
+' pravom mestu.
+'
+' False = zbirna ne postoji ili je vec stornirana -> kaskade su no-op.
+Private Function ZbirnaVlasnikPoID(ByVal zbirnaID As String, ByVal callerSrc As String, _
+                                   ByRef outBroj As String, ByRef outVozac As String, _
+                                   ByRef outKupac As String) As Boolean
+    outBroj = ""
     outVozac = ""
     outKupac = ""
 
-    Dim target As String
-    target = Trim$(brojZbirne)
-    If Len(target) = 0 Then Exit Function
+    If Len(Trim$(zbirnaID)) = 0 Then Exit Function
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
-
-    Dim vlasnici As Object
-    Set vlasnici = CreateObject("Scripting.Dictionary")
-
-    If IsArray(data) Then
-        Dim cBr As Long, cSt As Long, cVoz As Long, cKup As Long
-        cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, callerSrc)
-        cSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, callerSrc)
-        cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, callerSrc)
-        cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, callerSrc)
-
-        Dim i As Long, k As String
-        For i = 1 To UBound(data, 1)
-            If Trim$(NzToText(data(i, cBr))) = target Then
-                If Not IsStorniranoValue(data(i, cSt)) Then
-                    k = Trim$(NzToText(data(i, cVoz))) & "|" & Trim$(NzToText(data(i, cKup)))
-                    If Not vlasnici.Exists(k) Then vlasnici.Add k, 1
-                End If
-            End If
-        Next i
-    End If
-
-    If vlasnici.count > 1 Then
-        Err.Raise ERR_STORNO_BASE + 11, callerSrc, _
-                  "BrojZbirne '" & target & "' nije jedinstven: aktivne su zbirne " & _
-                  CStr(vlasnici.count) & " razlicita vlasnika. Kaskadni storno bi zahvatio " & _
-                  "i tudji lanac. Storniraj pojedinacno ili razdvoj brojeve."
-    End If
-
-    If vlasnici.count = 1 Then
-        Dim parts() As String
-        parts = Split(CStr(vlasnici.Keys()(0)), "|")
-        outVozac = parts(0)
-        If UBound(parts) >= 1 Then outKupac = parts(1)
-        ResolveZbirnaChainScope = True
-        Exit Function
-    End If
-
-    ' Nema aktivne zbirne: tolerisi samo ako nema ni aktivnih nizvodnih redova.
-    Dim orphan As Long
-    orphan = CountActiveByBrojZbirne(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, target) + _
-             CountActiveByBrojZbirne(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, target)
-
-    If orphan > 0 Then
-        Err.Raise ERR_STORNO_BASE + 13, callerSrc, _
-                  "BrojZbirne '" & target & "' nema aktivnu zbirnu, a postoji " & CStr(orphan) & _
-                  " aktivnih nizvodnih dokumenata sa tim brojem. Pripadnost lancu se ne moze " & _
-                  "dokazati, pa je kaskadni storno odbijen -- resi osirocene dokumente rucno."
-    End If
-End Function
-
-' Broj AKTIVNIH redova tabele koji pokazuju na dati BrojZbirne (0 ako kolone nema).
-Private Function CountActiveByBrojZbirne(ByVal tblName As String, ByVal zbrCol As String, _
-                                         ByVal brojZbirne As String) As Long
-    Dim cZbr As Long
-    cZbr = GetColumnIndex(tblName, zbrCol)
-    If cZbr = 0 Then Exit Function
-
-    Dim data As Variant
-    data = GetTableData(tblName)
     If Not IsArray(data) Then Exit Function
 
-    Dim cSt As Long
-    cSt = GetColumnIndex(tblName, COL_STORNIRANO)
+    Dim cId As Long, cBr As Long, cSt As Long, cVoz As Long, cKup As Long
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, callerSrc)
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, callerSrc)
+    cSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, callerSrc)
+    cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, callerSrc)
+    cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, callerSrc)
 
-    Dim i As Long, n As Long
+    Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cZbr))) = Trim$(brojZbirne) Then
-            If cSt = 0 Then
-                n = n + 1
-            ElseIf Not IsStorniranoValue(data(i, cSt)) Then
-                n = n + 1
-            End If
+        If StrComp(Trim$(NzToText(data(i, cId))), Trim$(zbirnaID), vbTextCompare) = 0 Then
+            If IsStorniranoValue(data(i, cSt)) Then Exit Function
+            outBroj = Trim$(NzToText(data(i, cBr)))
+            outVozac = Trim$(NzToText(data(i, cVoz)))
+            outKupac = Trim$(NzToText(data(i, cKup)))
+            ZbirnaVlasnikPoID = True
+            Exit Function
         End If
     Next i
-
-    CountActiveByBrojZbirne = n
 End Function
-
 ' Kaskadni storno zbirne iz storna otpremnice (malina mod). Idempotentno:
 ' ne podize gresku ako zbirna ne postoji ili je vec stornirana (cilj - da
 ' zbirna nije aktivna - je tada vec ispunjen). Markira samo aktivne redove.
 ' Mora se pozvati unutar otvorene transakcije (snapshot TBL_ZBIRNA obavezan).
-Private Function StornoZbirnaCascade(ByVal brojZbirne As String, ByVal callerSrc As String, _
-                                    ByVal scopeVozac As String, ByVal scopeKupac As String, _
+Private Function StornoZbirnaCascade(ByVal zbirnaID As String, ByVal callerSrc As String, _
                                     ByVal hasScope As Boolean) As Long
-    If Trim$(brojZbirne) = "" Then Exit Function
+    If Trim$(zbirnaID) = "" Then Exit Function
     If Not hasScope Then Exit Function          ' nema aktivnog lanca -> no-op
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
     If IsEmpty(data) Then Exit Function
 
-    Dim colBroj As Long, colStorno As Long, colVoz As Long, colKup As Long
-    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, callerSrc)
+    Dim colId As Long, colStorno As Long
+    colId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, callerSrc)
     colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, callerSrc)
-    colVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, callerSrc)
-    colKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, callerSrc)
 
+    ' Izbor po ID-u, pa vlasnik vise nije filter nego posledica: red je TACNO
+    ' jedan. Ranije je izbor isao po broju, pa je uz njega morao i (vozac, kupac)
+    ' da bi se odsekla tudja zbirna istog broja.
     Dim i As Long, changed As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then
-            ' Samo redovi CILJANOG lanca: isti broj + isti vlasnik.
-            If Trim$(NzToText(data(i, colVoz))) = scopeVozac And _
-               Trim$(NzToText(data(i, colKup))) = scopeKupac Then
-                If Not IsStorniranoValue(data(i, colStorno)) Then
-                    MarkRowStornirano TBL_ZBIRNA, i, callerSrc
-                    changed = changed + 1
-                End If
+        If StrComp(Trim$(NzToText(data(i, colId))), Trim$(zbirnaID), vbTextCompare) = 0 Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                MarkRowStornirano TBL_ZBIRNA, i, callerSrc
+                changed = changed + 1
             End If
+            Exit For
         End If
     Next i
 
@@ -403,42 +356,39 @@ End Function
 ' Kaskadni storno otpremnice po BrojZbirne (autohladnjaca, iz storna bloka).
 ' Idempotentno: obradi samo aktivne redove; nema aktivnih -> no-op (bez greske).
 ' Reuse StornoOtpremnica (ambalaza se stornira unutra). Vraca broj oborenih.
-Private Function StornoOtpremnicaCascade(ByVal brojZbirne As String, ByVal callerSrc As String, _
-                                        ByVal scopeVozac As String, ByVal hasScope As Boolean) As Long
-    If Trim$(brojZbirne) = "" Then Exit Function
+Private Function StornoOtpremnicaCascade(ByVal zbirnaID As String, ByVal callerSrc As String, _
+                                        ByVal hasScope As Boolean) As Long
+    If Trim$(zbirnaID) = "" Then Exit Function
     If Not hasScope Then Exit Function          ' nema aktivnog lanca -> no-op
 
-    Dim data As Variant
-    data = GetTableData(TBL_OTPREMNICA)
-    If IsEmpty(data) Then Exit Function
+    ' CLANSTVO BIRA DECU, LABELA VISE NE (S5-3b).
+    '
+    ' Zatecen izbor je bio "prodji celu tblOtpremnica i uporedi BrojZbirne", uz
+    ' vozaca kao ogradu protiv sudara brojeva. Tu kolonu od S5-3 niko ne pise,
+    ' pa je skup bio prazan pre ikakve ograde -- kaskada je bila tih no-op.
+    '
+    ' tblZbirnaIzvori je jedini zapis clanstva i vec ga cita IzvoriZbirne, isti
+    ' citac kojim zbirna racuna svoje cinjenice. Ograda po vozacu otpada: clanstvo
+    ' je po ID-u, pa tudja otpremnica ne moze ni da udje u skup.
+    Dim ids As Collection
+    Set ids = modDokumenta.IzvoriZbirne(zbirnaID)
+    If ids Is Nothing Then Exit Function
 
-    Dim cZbr As Long, cId As Long, cStorno As Long, cVoz As Long
-    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
-    If cZbr = 0 Then Exit Function
-    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, callerSrc)
-    cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, callerSrc)
-    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, callerSrc)
-
-    Dim ids As Collection: Set ids = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cZbr))) = Trim$(brojZbirne) Then
-            ' Otpremnica nema kupca -> scope je vozac ciljanog lanca.
-            If Trim$(NzToText(data(i, cVoz))) = scopeVozac Then
-                If Not IsStorniranoValue(data(i, cStorno)) Then ids.Add Trim$(CStr(data(i, cId)))
-            End If
-        End If
-    Next i
-
-    Dim k As Long
+    Dim k As Long, n As Long
     For k = 1 To ids.count
-        If Not StornoOtpremnica(CStr(ids(k))) Then
-            Err.Raise ERR_STORNO_BASE + 2, callerSrc, _
-                      "StornoOtpremnica (kaskada) nije uspeo. OtpremnicaID=" & CStr(ids(k))
+        ' Vec stornirana otpremnica se preskace, ne prijavljuje: kaskada je
+        ' idempotentna, a StornoOtpremnica nad storniranim redom vraca False.
+        If Not IsStorniranoValue(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                             CStr(ids(k)), COL_STORNIRANO)) Then
+            If Not StornoOtpremnica(CStr(ids(k))) Then
+                Err.Raise ERR_STORNO_BASE + 2, callerSrc, _
+                          "StornoOtpremnica (kaskada) nije uspeo. OtpremnicaID=" & CStr(ids(k))
+            End If
+            n = n + 1
         End If
     Next k
 
-    StornoOtpremnicaCascade = ids.count
+    StornoOtpremnicaCascade = n
 End Function
 
 ' Kaskadni storno prijemnice po BrojZbirne (autohladnjaca, iz storna bloka).

@@ -308,6 +308,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaPrezivljavaParcijalanSync
     Test_OTP_NepotpunUtovarNeDobijaDokument
     Test_OTP_BlokVanManifestaNeUlaziUUtovar
+    Test_ZBR_KapijaPustaKadJeIzborScoped
+    Test_ZBR_DispecerPustaScopedIzbor
+    Test_STO_BlokUHladnjaciObaraSvojLanac
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -1672,10 +1675,20 @@ EH:
     LogFatal "Test_ZBR_UvozPamtiPoreklo", eN, eD
 End Sub
 ' Izdata otpremnica na ZADAT dan, kroz produkcioni put predaje.
-Private Function ZbrOtpremnicaNaDan(ByVal oznaka As String, ByVal datum As Date) As String
+'
+' Stanica je parametar od S5-3b: hladnjacka kaskada se okida bas stanicom bloka,
+' pa se lanac za nju mora napraviti ISTIM putem, a ne posebnim fixture-om. Ko
+' testira kaskadu nad rucno zasejanim redovima meri svoj seed, ne kaskadu.
+Private Function ZbrOtpremnicaNaDan(ByVal oznaka As String, ByVal datum As Date, _
+                                    Optional ByVal stanicaID As String = "", _
+                                    Optional ByRef outOtkupID As String) As String
+    Dim st As String
+    st = IIf(Len(Trim$(stanicaID)) = 0, TEST_ST_ID, Trim$(stanicaID))
+
     Dim otkID As String
-    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-" & oznaka, _
+    otkID = AutoOtpFixture(datum, st, TEST_PREFIX & "-OTK-" & oznaka, _
                            KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    outOtkupID = otkID
 
     Dim predaje As Collection
     Set predaje = New Collection
@@ -6241,6 +6254,268 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+
+' STORNO BLOKA U HLADNJACI OBARA SVOJ LANAC (S5-3b).
+'
+' Ovo je put koji je bio NEDOSTIZAN, ne samo netacan. StornoOtkup_TX je odluku
+' "ide li hladnjacka kaskada" donosio ovako:
+'
+'     brojZbirne = LookupValue(TBL_OTKUP, .., COL_OTK_BROJ_ZBIRNE)
+'     hladnjacaBlock = (Len(stanicaID) > 0) And (Len(brojZbirne) > 0)
+'
+' Tu labelu od S5-3 vise ne pise nijedan pisac, pa je drugi cinilac bio uvek 0 i
+' CELA grana mrtva: storno bloka je prolazio, javljao uspeh, a otpremnica i
+' zbirna su ostajale AKTIVNE. Roba stornirana, dokumenti nad njom nisu.
+'
+' Nijedna zatecena provera to nije videla zato sto su sve hranile labelu rucno
+' -- seed upise BrojZbirne, uslov prodje, kaskada radi. Zelena suite nad
+' podatkom koji produkcija ne proizvodi.
+'
+' Zato ovaj test lanac pravi ISKLJUCIVO produkcionim putem: AutoOtpFixture ->
+' predaja -> CreateZbirnaIzIzvora_TX. Nijedno polje se ne zaseje rucno.
+'
+' Meri se i NEGATIVAN slucaj: blok na obicnoj stanici ne sme da obori svoj lanac.
+' Bez njega bi "popravka" koja uvek kaskadira prosla prvu tvrdnju.
+Private Sub Test_STO_BlokUHladnjaciObaraSvojLanac()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date
+    Dim otpH As String, otkH As String, otpN As String, otkN As String
+    Dim zbrH As String, zbrN As String, g As String
+    Dim izv As Collection
+
+    scenario = NewScenarioCode("STOHLA")
+    datum = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+
+    ' --- lanac na HLADNJACKOJ stanici ---
+    otpH = ZbrOtpremnicaNaDan("HL" & scenario, datum, TEST_HLAD_ST_ID, otkH)
+    Set izv = New Collection: izv.Add otpH
+    zbrH = modDokumenta.CreateZbirnaIzIzvora_TX( _
+               ZbrHeaderNaDan("H" & scenario, datum), izv, g, True)
+
+    ' --- kontrolni lanac na OBICNOJ stanici ---
+    otpN = ZbrOtpremnicaNaDan("NO" & scenario, datum, TEST_ST_ID, otkN)
+    Set izv = New Collection: izv.Add otpN
+    zbrN = modDokumenta.CreateZbirnaIzIzvora_TX( _
+               ZbrHeaderNaDan("N" & scenario, datum), izv, g, True)
+
+    AssertTrue (Len(zbrH) > 0 And Len(zbrN) > 0), _
+        "HLAD preduslov: oba lanca su napravljena produkcionim putem"
+    If Len(zbrH) = 0 Or Len(zbrN) = 0 Then GoTo Kraj
+    AssertEquals zbrH, modDokumenta.AktivnaZbirnaZaOtpremnicu(otpH), _
+        "HLAD preduslov: clanstvo vezuje hladnjacku otpremnicu za njenu zbirnu"
+
+    ' --- storno bloka u hladnjaci: ceo lanac pada ---
+    AssertTrue modStorno.StornoOtkup_TX(otkH), _
+        "HLAD: storno bloka u hladnjaci prolazi"
+    AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpH), _
+        "HLAD: otpremnica tog bloka je STORNIRANA"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrH), _
+        "HLAD: zbirna tog bloka je STORNIRANA"
+
+    ' --- kontrola: tudji lanac je netaknut ---
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpN), _
+        "HLAD: tudja otpremnica nije dirnuta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrN), _
+        "HLAD: tudja zbirna nije dirnuta"
+
+    ' --- negativan slucaj: obicna stanica NE kaskadira ---
+    AssertTrue modStorno.StornoOtkup_TX(otkN), _
+        "HLAD: storno bloka na obicnoj stanici prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrN), _
+        "HLAD: blok van hladnjace NE obara svoju zbirnu"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_STO_BlokUHladnjaciObaraSvojLanac", eN, eD
+End Sub
+
+' DVA DOKUMENTA POD ISTIM BROJEM: FIXTURE ZA SCOPED IZBOR (S5-3b).
+'
+' KR-001: dva uredjaja bez veze posalju zbirnu pod istim brojem, isti vozac i
+' kupac. Oba dokumenta su legitimna i svaki ima svoju otpremnicu.
+'
+' brojSaTerena:=True je isti pristanak koji uvoz koristi od S5-3: broj sa terena
+' sme da se sudari, ekrani i dalje drze punu kapiju. Bez njega drugi upis pada
+' na RequireBrojSlobodanUNizu i scenario se ne moze ni postaviti.
+Private Function ZbrParPodIstimBrojem(ByVal broj As String, ByVal datum As Date, _
+                                      ByVal oznaka As String, _
+                                      ByRef outOtpA As String, ByRef outOtpB As String, _
+                                      ByRef outZbrA As String, ByRef outZbrB As String) As Boolean
+    outOtpA = ZbrOtpremnicaNaDan(oznaka & "A", datum)
+    outOtpB = ZbrOtpremnicaNaDan(oznaka & "B", datum)
+
+    Dim izvA As Collection, izvB As Collection
+    Set izvA = New Collection: izvA.Add outOtpA
+    Set izvB = New Collection: izvB.Add outOtpB
+
+    Dim g As String
+    outZbrA = modDokumenta.CreateZbirnaIzIzvora_TX(ZbrHeaderNaDan(broj, datum), izvA, g, True)
+    outZbrB = modDokumenta.CreateZbirnaIzIzvora_TX(ZbrHeaderNaDan(broj, datum), izvB, g, True)
+
+    ZbrParPodIstimBrojem = (Len(outZbrA) > 0 And Len(outZbrB) > 0 And outZbrA <> outZbrB)
+End Function
+
+' KAPIJA PUSTA SCOPED IZBOR -- NAD PRIMITIVOM (vraceno u S5-3b).
+'
+' Test je sklonjen u S5-3 zato sto je bio pisan nad mehanizmom koji je taj rez
+' obrisao: decu je vezivao TestHook_LinkZbirnaToOtkupAndOtpremnica, a pripadnost
+' merio kolonom Otpremnica.BrojZbirne. Oba su nestala sa labelom kao kljucem.
+'
+' TVRDNJA je prezivela i vraca se merena nad kanonom: kad jedan broj nose DVA
+' aktivna dokumenta, pozivalac koji kaze KOJI dira prolazi -- i dira samo svoje.
+' Pripadnost se sada cita iz tblZbirnaIzvori, a ne sa deteta.
+'
+' Oba smera u istom testu: bez identiteta kapija STOJI, sa identitetom PUSTA.
+' Bez prve polovine bi "popravka" mogla biti prosto ugasiti kapiju.
+Private Sub Test_ZBR_KapijaPustaKadJeIzborScoped()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, broj As String
+    Dim otpA As String, otpB As String, zbrA As String, zbrB As String
+    Dim r As Object
+
+    scenario = NewScenarioCode("ZBRF4")
+    datum = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(datum, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    AssertTrue ZbrParPodIstimBrojem(broj, datum, "F4" & scenario, _
+                                    otpA, otpB, zbrA, zbrB), _
+        "ZBR-F4 preduslov: dva aktivna dokumenta pod istim brojem"
+    If Len(zbrB) = 0 Then GoTo Kraj
+
+    AssertEquals zbrB, modDokumenta.AktivnaZbirnaZaOtpremnicu(otpB), _
+        "ZBR-F4 preduslov: clanstvo vezuje otpremnicu B za dokument B"
+
+    ' --- BEZ identiteta: pozivalac ne kaze KOJI dokument -> kapija STOJI ---
+    Set r = modStornoFlow.RunSimpleStornoZbirna(broj)
+    AssertFalse CBool(r("success")), _
+        "ZBR-F4: storno BEZ identiteta staje na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR-F4: posle odbijenog storna dokument A je netaknut"
+
+    ' --- SA identitetom: izbor je scoped -> kapija PUSTA ---
+    Set r = modStornoFlow.RunSimpleStornoZbirna(broj, zbrB)
+    AssertTrue CBool(r("success")), _
+        "ZBR-F4: storno SA identitetom prolazi iako broj nosi dva dokumenta (bilo: " & _
+        CStr(r("message")) & ")"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR-F4: stornira se bas izabrani dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR-F4: dokument A ostaje aktivan"
+    AssertEquals "", modDokumenta.AktivnaZbirnaZaOtpremnicu(otpB), _
+        "ZBR-F4: sopstvena otpremnica B je odvezana"
+    AssertEquals zbrA, modDokumenta.AktivnaZbirnaZaOtpremnicu(otpA), _
+        "ZBR-F4: tudja otpremnica A je OSTALA na svojoj zbirni"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_KapijaPustaKadJeIzborScoped", eN, eD
+End Sub
+
+' ISTA TVRDNJA, ALI KROZ DISPECER (vraceno u S5-3b).
+'
+' Test iznad meri PRIMITIV. Operater ne zove primitiv nego F8, a F8 ide kroz
+' RunZbirnaCorrection. Zeleno u primitivu a mrtvo u aplikaciji je tacno onaj
+' seam mismatch zbog kog su oba testa i nastala -- zato ostaju dva, ne jedan.
+Private Sub Test_ZBR_DispecerPustaScopedIzbor()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, broj As String
+    Dim otpA As String, otpB As String, zbrA As String, zbrB As String
+    Dim r As Object
+
+    scenario = NewScenarioCode("ZBRDSP")
+    datum = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(datum, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    AssertTrue ZbrParPodIstimBrojem(broj, datum, "DSP" & scenario, _
+                                    otpA, otpB, zbrA, zbrB), _
+        "ZBR disp preduslov: dva aktivna dokumenta pod istim brojem"
+    If Len(zbrB) = 0 Then GoTo Kraj
+
+    ' --- BEZ identiteta: dispecer i dalje staje -----------------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True)
+    AssertFalse CBool(r("success")), _
+        "ZBR disp: DUPLI bez identiteta staje na dva aktivna dokumenta"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: posle odbijanja dokument B je netaknut"
+
+    ' --- SA identitetom: dispecer PUSTA i dira samo svoje -------------------
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrB)
+    AssertTrue CBool(r("success")), _
+        "ZBR disp: DUPLI SA identitetom prolazi kroz dispecer (bilo: " & _
+        CStr(r("message")) & ")"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+        "ZBR disp: stornira se bas izabrani dokument B"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+        "ZBR disp: tudji dokument A je netaknut"
+    AssertEquals "", modDokumenta.AktivnaZbirnaZaOtpremnicu(otpB), _
+        "ZBR disp: sopstvena otpremnica B je odvezana"
+    AssertEquals zbrA, modDokumenta.AktivnaZbirnaZaOtpremnicu(otpA), _
+        "ZBR disp: tudja otpremnica A je OSTALA na svojoj zbirni"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_DispecerPustaScopedIzbor", eN, eD
+End Sub
 
 ' KOMPLETNOST SE PROVERAVA U OBA SMERA (review #388, treci krug P2).
 '
