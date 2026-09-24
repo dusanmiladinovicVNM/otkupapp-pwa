@@ -42,10 +42,23 @@ async function loadOtpremaOverview() {
         }
     }
 
+    // PREDAJA SE IZVODI IZ DOGADJAJA, NE CITA SA OTKUPNOG REDA (review #390, P1).
+    //
+    // Server je vec projektuje (getOtkupiForOtkupac), ali lokalni dogadjaj moze
+    // biti jos neposlat -- pa bi blok predat offline izgledao slobodan do prvog
+    // uspesnog sync-a. Lokalna projekcija to zatvara.
+    let lokalnePredaje = {};
+    try {
+        if (db) lokalnePredaje = await predajePoOtkupu(db);
+    } catch (err) {
+        console.error('loadOtpremaOverview predaje failed:', err);
+    }
+
     const mergedRows = dedupeRecordsForRender(
         mergeOtpremaRecords(localRows, serverRows)
     )
         .map(enrichOtpremaRecord)
+        .map(row => primeniPredaju(row, lokalnePredaje))
         .sort(compareOtpremaRowsDesc);
 
     otpremaState.rows = mergedRows;
@@ -594,28 +607,33 @@ async function confirmOtpremaAssign() {
         return;
     }
 
-    const updatedRows = selectedRows.map(row =>
-        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso)
-    );
-
-    // DOGADJAJ SE UPISUJE ODVOJENO OD OTKUPA (S5-4a).
+    // OTKUPNI ZAPIS SE VISE UOPSTE NE DIRA (review #390, P1).
     //
-    // Otkupni zapis se menja SAMO lokalno, za prikaz ("ovaj blok je predat") --
-    // njegov syncStatus se NE dira, jer se otkup nije promenio. Ono sto ide
-    // masteru je dogadjaj: jedan red po bloku, sa identitetom utovara i
-    // manifestom.
+    // Ranije mu je ovde upisivan vozacID, samo za prikaz. To je pravilo DRUGI
+    // izvor istine o predaji: drugi uredjaj -- ili cist IndexedDB -- tog polja
+    // nema, pa bi vec predat blok video kao slobodan i napravio DRUGI utovar.
+    //
+    // "Predato" se sada IZVODI iz dogadjaja, i lokalno i sa servera
+    // (projektujPredaju_ u GAS-u). Jedan izvor istine, dva citaoca.
     const predajaRows = selectedRows.map(row =>
         buildPredajaEvent(row, otpremaState.selectedVozac, nowIso, predajaID, predajaClanovi)
     );
 
     try {
-        for (const ev of predajaRows) {
-            await dbPut(db, 'predaje', ev);
-        }
+        // JEDAN KLIK = JEDNA TRANSAKCIJA: pad usred upisa bi ostavio utovar ciji
+        // manifest ceka clanove koji nikad nisu sacuvani.
+        await dbPutAll(db, [{ storeName: 'predaje', records: predajaRows }]);
 
-        for (const row of updatedRows) {
-            await dbPut(db, CONFIG.STORE_NAME, row);
-        }
+        // Prikaz uspeha radi nad redovima sa VEC izvedenim poljima -- ista slika
+        // koju ce sledece ucitavanje izracunati iz dogadjaja.
+        const updatedRows = selectedRows.map(row =>
+            Object.assign({}, row, {
+                vozacID: otpremaState.selectedVozac.id,
+                vozacName: otpremaState.selectedVozac.name,
+                predajaID: predajaID,
+                predatoAt: nowIso
+            })
+        );
 
         otpremaState.successRows = updatedRows;
         renderOtpremaSuccessView(updatedRows, otpremaState.selectedVozac);
@@ -644,6 +662,42 @@ async function confirmOtpremaAssign() {
         console.error('confirmOtpremaAssign failed:', err);
         showToast('Greška pri potvrdi otpreme', 'error');
     }
+}
+
+// Mapa clientRecordID bloka -> dogadjaj predaje, iz lokalnog store-a.
+//
+// Prvi zapis pobedjuje: store je append-only kao i PRED list, pa je prvi
+// dogadjaj za taj blok i prvi utovar. Drugi je konflikt o kome odlucuje master.
+async function predajePoOtkupu(db) {
+    const mapa = {};
+
+    const sve = await dbGetAll(db, 'predaje');
+    if (!Array.isArray(sve)) return mapa;
+
+    for (const ev of sve) {
+        const crid = String((ev && ev.otkupClientRecordID) || '').trim();
+        if (!crid || mapa[crid]) continue;
+        mapa[crid] = ev;
+    }
+
+    return mapa;
+}
+
+// Zakaci izvedena polja predaje na red za prikaz.
+//
+// Ne dira zapis u bazi -- samo red koji ide u render. Otkupni zapis ostaje
+// nepromenljiva osnova.
+function primeniPredaju(row, mapa) {
+    const crid = String((row && row.clientRecordID) || '').trim();
+    const ev = crid ? mapa[crid] : null;
+    if (!ev) return row;
+
+    return Object.assign({}, row, {
+        vozacID: ev.vozacID || row.vozacID || '',
+        vozacName: ev.vozacName || row.vozacName || '',
+        predajaID: ev.predajaID || '',
+        predatoAt: ev.predatoAt || ''
+    });
 }
 
 // Jedan CLAN utovara, onako kako ga master cita.
@@ -701,57 +755,6 @@ function generatePredajaID() {
     const rnd = Math.random().toString(36).slice(2, 10);
     return 'PRED-' + deviceID + '-' + Date.now() + '-' + rnd;
 }
-
-function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
-    if (!row.clientRecordID) {
-        throw new Error('Otprema zahteva postojeći clientRecordID');
-    }
-
-    return {
-        clientRecordID: row.clientRecordID,
-        serverRecordID: row.serverRecordID || '',
-        createdAtClient: row.createdAtClient || nowIso,
-        updatedAtClient: nowIso,
-        updatedAtServer: row.updatedAtServer || '',
-        syncedAt: '',
-        deviceID: typeof getDeviceID === 'function' ? getDeviceID() : '',
-
-        otkupacID: row.otkupacID || CONFIG.OTKUPAC_ID,
-        datum: row.datum || getTodayIsoDate(),
-
-        kooperantID: row.kooperantID || '',
-        kooperantName: row.kooperantName || '',
-        vrstaVoca: row.vrstaVoca || '',
-        sortaVoca: row.sortaVoca || '',
-        klasa: row.klasa || 'I',
-        kolicina: parseFloat(row.kolicina) || 0,
-        cena: parseFloat(row.cena) || 0,
-
-        tipAmbalaze: row.tipAmbalaze || '',
-        kolAmbalaze: parseInt(row.kolAmbalaze, 10) || 0,
-
-        parcelaID: row.parcelaID || '',
-        napomena: row.napomena || '',
-        vozacID: vozac.id,
-        vozacName: vozac.name,
-
-        // SYNC STANJE OTKUPA SE NE DIRA (S5-4a).
-        //
-        // Otkup se nije promenio -- promenilo se sto je nad njim nastao
-        // dogadjaj predaje, a on ima svoj zapis i svoj red za sync.
-        // Vracanje otkupa u 'pending' bi ga poslalo GAS-u ponovo, bez
-        // ijedne nove cinjenice, i zamutilo bi sta je zapravo neposlato.
-        syncStatus: row.syncStatus || 'pending',
-        syncAttempts: row.syncAttempts || 0,
-        syncAttemptAt: row.syncAttemptAt || '',
-        lastSyncError: row.lastSyncError || '',
-        lastServerStatus: row.lastServerStatus || '',
-        deleted: !!row.deleted,
-        entityType: row.entityType || 'otkup',
-        schemaVersion: row.schemaVersion || 1
-    };
-}
-
 function renderOtpremaSuccessView(rows, vozac) {
     applyOtpremaHeaderStanica();
     setText(byId('otpremaSuccessDriver'), vozac.name + ' (' + vozac.id + ')');
@@ -842,8 +845,12 @@ function mapServerOtpremaRecord(r) {
         kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
         parcelaID: r.ParcelaID || '',
         napomena: r.Napomena || '',
+        // VozacID sa servera je IZVEDEN iz PRED lista (projektujPredaju_),
+        // ne sa otkupnog reda -- otkup ga vise ne nosi.
         vozacID: r.VozacID || r.VozaciID || '',
         vozacName: r.VozacName || '',
+        predajaID: r.PredajaID || '',
+        predatoAt: normalizeIso(r.PredatoAt),
 
         syncStatus: 'synced',
         lastSyncError: '',

@@ -2991,6 +2991,61 @@ function normalizeTrosakDateOnly(value) {
 // DATA ENDPOINTS
 // ============================================================
 
+// Mapa OtkupClientRecordID -> {predajaID, vozacID, predatoAt} iz PRED lista.
+//
+// Nedostatak lista NIJE greska: otkupac koji jos nista nije predao ga i nema.
+// Greska u citanju se loguje i vraca prazna mapa -- read-model tada pokazuje
+// zatecenu sliku umesto da padne, a master i dalje odbija dupli utovar.
+function predajePoOtkupCrid_(otkupacID) {
+  var mapa = {};
+
+  try {
+    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
+    var files = folder.getFilesByName('PRED-' + otkupacID);
+    if (!files.hasNext()) return mapa;
+
+    var rows = sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]);
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      var crid = String(r.OtkupClientRecordID || '').trim();
+      if (!crid) continue;
+
+      // Prvi zapis pobedjuje: PRED list je append-only, pa je prvi red za taj
+      // blok i prvi utovar. Drugi je konflikt o kome odlucuje master -- ovde se
+      // ne presudjuje, samo se prikazuje da blok VEC jeste predat.
+      if (mapa[crid]) continue;
+
+      mapa[crid] = {
+        predajaID: String(r.PredajaID || '').trim(),
+        vozacID: String(r.VozacID || '').trim(),
+        predatoAt: String(r.PredatoAt || '').trim()
+      };
+    }
+  } catch (err) {
+    logError('GAS', 'predajePoOtkupCrid_', err && err.message ? err.message : String(err));
+  }
+
+  return mapa;
+}
+
+// Zakaci izvedena polja predaje na otkupne redove.
+function projektujPredaju_(records, predajePoOtkupu) {
+  if (!Array.isArray(records)) return records;
+
+  return records.map(function (r) {
+    var crid = String((r && r.ClientRecordID) || '').trim();
+    var p = crid ? predajePoOtkupu[crid] : null;
+    if (!p) return r;
+
+    r.PredajaID = p.predajaID;
+    r.PredatoAt = p.predatoAt;
+    // VozacID je IZVEDEN iz dogadjaja, ne sa otkupnog reda.
+    r.VozacID = p.vozacID;
+    return r;
+  });
+}
+
 function getOtkupiForOtkupac(otkupacID) {
   try {
     var canonicalOtkupacID = String(otkupacID || '').trim();
@@ -3039,10 +3094,21 @@ function getOtkupiForOtkupac(otkupacID) {
       );
     }
 
-    // Master prvo, live posle. Ako isti ClientRecordID postoji u oba, zadrži master.
+    // 3) PREDAJE: read-model mora da prati event log (review #390, P1).
+    //
+    // Otkad predaja ne dira OTK red, VozacID na njemu vise nije trag predaje.
+    // Klijent "slobodan za predaju" odlucuje po tom polju, pa bi drugi uredjaj --
+    // ili cist IndexedDB -- vec predat blok video kao slobodan i napravio DRUGI
+    // utovar. Master bi ga imenovao kao konflikt, ali tek posle sto je otkupac
+    // uradio posao koji se odbija.
+    //
+    // Zato se predaja ovde PROJEKTUJE na otkupni red: izvedena, read-only polja
+    // iz PRED lista. Izvor istine ostaje dogadjaj -- red ga samo prikazuje.
+    var predajePoOtkupu = predajePoOtkupCrid_(canonicalOtkupacID);
+
     return {
       success: true,
-      records: mergeOtkupRows_(masterRows, liveRows)
+      records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), predajePoOtkupu)
     };
 
   } catch (err) {

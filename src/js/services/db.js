@@ -330,6 +330,48 @@
         });
     };
 
+    // JEDAN POSLOVNI POTEZ = JEDNA TRANSAKCIJA (review #390, P2).
+    //
+    // dbPut otvara transakciju po zapisu, pa je visestavcni klik bio N odvojenih
+    // upisa. Pad izmedju njih ostavlja NEPOTPUN utovar: manifest nabraja clanove
+    // koji lokalno nikad nisu sacuvani, pa dogadjaj ceka nesto cega nema.
+    //
+    // groups: [{ storeName, records: [...] }, ...] -- sve u JEDNOJ transakciji,
+    // preko vise store-ova. IndexedDB abort vraca sve, pa je ishod ili ceo potez
+    // ili nijedan zapis.
+    window.dbPutAll = function dbPutAll(db, groups) {
+        return new Promise(function (resolve, reject) {
+            try {
+                const list = (groups || []).filter(function (g) {
+                    return g && g.storeName && Array.isArray(g.records) && g.records.length;
+                });
+
+                if (!list.length) {
+                    resolve(true);
+                    return;
+                }
+
+                const names = list.map(function (g) { return g.storeName; });
+                names.forEach(function (n) { assertStoreExists(db, n); });
+
+                const tx = db.transaction(names, 'readwrite');
+
+                list.forEach(function (g) {
+                    const store = tx.objectStore(g.storeName);
+                    g.records.forEach(function (r) { store.put(r); });
+                });
+
+                tx.oncomplete = function () { resolve(true); };
+                tx.onerror = function () { reject(tx.error); };
+                tx.onabort = function () {
+                    reject(tx.error || new Error('dbPutAll: transakcija prekinuta'));
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    };
+
     window.dbGet = function dbGet(db, storeName, key) {
         return new Promise((resolve, reject) => {
             try {
