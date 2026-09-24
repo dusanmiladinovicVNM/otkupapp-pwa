@@ -1007,9 +1007,16 @@ End Sub
 ' citaju kolicinu, klasu i gajbe sa stavki, a zaglavlje bez stavki odbijaju po
 ' imenu -- seed koji bi ga pravio merio bi stanje koje pisac ne moze da napravi.
 '
-' BrojZbirne je i dalje veza STAROG modela: storno okvir ovog suite-a ide po
-' njoj. Taj deo prelazi na clanstvo (tblZbirnaIzvori) u S4, a storno po ID-u u
-' S3c -- do tada seed nosi obe stvari, a merodavna kolicina je na stavci.
+' CLANSTVO JE OD S5-3b MERODAVNO (najavljeno u ovom komentaru jos u S4).
+'
+' Storno okvir je decu birao po koloni BrojZbirne. Nju kanonski pisac nikad ne
+' napise, pa je SAMO ovaj seed drzao te putanje zelenima: suite je merio podatak
+' koji sam proizvodi. Od S5-3b izbor ide kroz tblZbirnaIzvori, pa seed upisuje i
+' red clanstva -- inace bi merio prazan skup.
+'
+' Labela se i dalje pise: nju citaju prijemnice, palete i revizija (B4/B5b/B6),
+' a njihov most pada tek u S6. Dva zapisa u seed-u znace da je jedan od njih
+' zaostatak, ne da su ravnopravni -- merodavan je red clanstva.
 Private Sub SeedOtpremnica(ByVal broj As String, ByVal brojZbirne As String, _
                            ByVal klasa As String, ByVal kg As Double, ByVal amb As Long)
     SvAppend TBL_OTPREMNICA, _
@@ -1021,6 +1028,26 @@ Private Sub SeedOtpremnica(ByVal broj As String, ByVal brojZbirne As String, _
         Array(COL_OPS_ID, COL_OPS_OTPREMNICA_ID, COL_OPS_RB, COL_OPS_KLASA, _
               COL_OPS_KOLICINA, COL_OPS_KOL_AMB), _
         Array(broj & "-ID-" & klasa & "-S1", broj & "-ID-" & klasa, 1, klasa, kg, amb)
+    SeedClanstvoZbirne broj & "-ID-" & klasa, brojZbirne, klasa
+End Sub
+
+' Red clanstva otpremnica -> zbirna (tblZbirnaIzvori).
+'
+' ZbirnaID se trazi po broju, pa tek onda pada na konvenciju seed-a
+' (broj & "-ID-" & klasa): zbirna ume da bude zasejana pod drugom klasom od
+' otpremnice, i tada je lookup jedini tacan odgovor. Konvencija ostaje za
+' slucaj kad se otpremnica seje PRE svoje zbirne.
+Private Sub SeedClanstvoZbirne(ByVal otpremnicaID As String, ByVal brojZbirne As String, _
+                               ByVal klasa As String)
+    If Len(Trim$(brojZbirne)) = 0 Then Exit Sub
+
+    Dim zid As String
+    zid = NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_ID))
+    If Len(zid) = 0 Then zid = brojZbirne & "-ID-" & klasa
+
+    SvAppend TBL_ZBIRNA_IZVORI, _
+        Array(COL_ZBI_ID, COL_ZBI_ZBIRNA_ID, COL_ZBI_OTPREMNICA_ID), _
+        Array(otpremnicaID & "-ZI", zid, otpremnicaID)
 End Sub
 
 Private Sub SeedPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
@@ -1181,8 +1208,22 @@ End Sub
 ' READ HELPERS
 ' ============================================================
 
+' Na kojoj je zbirni otpremnica SADA -- kroz clanstvo (S5-3b).
+'
+' Tvrdnje suite-a su ostale doslovno iste ("vracena u 'ceka zbirnu'"), menja se
+' samo odakle odgovor dolazi. Ranije je citao labelu na detetu, koju je brisao
+' DetachOtpremniceInline. Tog brisanja vise nema: storno zaglavlja sam po sebi
+' cini clanstvo neaktivnim, pa prazan rezultat i dalje znaci "ceka zbirnu".
 Private Function OtpBrojZbirne(ByVal otpBroj As String) As String
-    OtpBrojZbirne = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, otpBroj, COL_OTP_BROJ_ZBIRNE))
+    Dim otpID As String
+    otpID = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, otpBroj, COL_OTP_ID))
+    If Len(otpID) = 0 Then Exit Function
+
+    Dim zid As String
+    zid = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
+    If Len(zid) = 0 Then Exit Function
+
+    OtpBrojZbirne = NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zid, COL_ZBR_BROJ))
 End Function
 
 Private Function PrjBrojZbirne(ByVal prjBroj As String) As String

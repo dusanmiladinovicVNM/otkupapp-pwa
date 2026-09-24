@@ -5270,6 +5270,286 @@ imenovanoj tvrdnji, izvor vraćen bit-identično.**
 
 Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
 
+### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
+
+Rez je počeo od tvrdnje koju sam sam zapisao na kraju S5-3 — „mrtav storno most, 16 mesta u
+`modStornoFlow`" — i **merenje ju je ispravilo tri puta**. Zapisano je i to, jer je obrazac
+ponovljiv: *tvrdnja o tuđem kodu koju nisam izmerio po pravilu je uža ili šira od stvarnosti.*
+
+**Ispravka 1 — „niko ne piše `Otpremnica.BrojZbirne`" je važilo samo zato što je i pisac bio siroče.**
+`LinkOtpremnicaToBrojZbirneStrict` je i dalje sadržao `PoveziDeteNaZbirnu TBL_OTPREMNICA`, ali bez
+ijednog pozivaoca — ostao je iza `LinkZbirnaToOtkupAndOtpremnica` obrisanog u S5-3. Obrisan je zajedno
+sa `RequireZbirnaVezaNotConflicting` i `IsDuplicateZbirnaInMaster` (recenzentov P3 iz #388): **146
+linija**.
+
+**Ispravka 2 — most nije bio 16 linija u jednom modulu, nego 46 mesta u 17 modula**, i **polovina
+puteva je već bila kanonska.** `StornoZbirnaIDetach_TX` i `PonistiZbirnaChain_TX` su od S4-3b/S4-3c
+sabirali legacy i kanonski račun (`DetachOtpremniceInline(...) + clanova`), gde legacy sabirak ne može
+biti različit od nule. Stvarno neuhranjen je bio uži skup: izbor otpremnica u poništenju, izbor
+blokova, i sve brojke u pregledu.
+
+**Ispravka 3 — hladnjačka kaskada nije bila neuhranjena nego NEDOSTIŽNA, pa je obrisana, ne popravljena.**
+Prvo sam je prehranio iz članstva. Suite je zatim pokazao da `StornoOtkup_TX` vraća `False` i za
+hladnjački i za obični blok. Uzrok: jezgro `StornoOtkup` od review-a #362 odbija blok u sastavu
+**aktivne** otpremnice (A13/A15). A blok ima zbirnu **samo preko svoje otpremnice** —
+`AktivnaZbirnaZaOtpremnicu(OtpremnicaZaOtkup(id))`. Neprazan `zbirnaID` dakle zahteva tačno ono što
+jezgro odbija red ranije: **uslov kaskade i uslov prolaska se isključuju po konstrukciji.** Obrisani su
+grana i četiri njena pomoćnika (`ZbirnaVlasnikPoID`, `StornoOtpremnicaCascade`, `StornoZbirnaCascade`,
+`StornoPrijemnicaCascade`) — **168 linija**. Sposobnost je `REPLACED`: lanac se ruši sa nivoa otpremnice
+(ISPRAVKA / PONIŠTENJE), koji kaskadira nadole, i to je isto pravilo koje ADR-0001 traži.
+
+**Šta je stvarno promenjeno**
+
+| Mesto | Bilo | Sad |
+|---|---|---|
+| `ActiveOtpIDsByZbirna` | unija: članstvo + `Otpremnica.BrojZbirne` + `SuziDecuNaZbirnu` | samo članstvo; parametar `gen` obrisan (suzavanje je postojalo da razdvoji dva dokumenta pod istim **brojem**) |
+| `PonistiZbirnaChain_TX` | `zbrID` se razrešavao **posle** izbora dece | razrešava se **pre** — prazan ID bi sa kanonom dao tiho „poništeno, 0 otpremnica" |
+| `ActiveOtkupIDsByZbirna` | `Otkup.BrojZbirne` | dva zapisa članstva: `IzvoriZbirne` → `IzvoriOtpremnice` |
+| `BuildStationsByZbirna`, lista za storno | grupisanje po koloni na detetu | `AktivnoClanstvoZbirni()` (nov javan čitač, pandan postojećem `AktivnoClanstvoOtpremnica`) |
+| `ScanZbirna` / `ScanPrijemnica` `otpCount` | `CountActive(..., COL_OTP_BROJ_ZBIRNE, ...)` | brojanje članova |
+| `DetachOtpremniceInline` | brisala labelu na detetu | **obrisana** — storno zaglavlja *jeste* odvezivanje (`AktivnoClanstvoPoKanonu` izbacuje stornirane zbirne) |
+| `ZbirnaScopeRazlog` | pitao i za otpremnice i za blokove | samo prijemnice i palete; za otpremnice je uslov postao tautologija nad praznom kolonom |
+| `OtpremnicaIsSoleOwner` + seam + `T_SoleOwner_…` | poslovno pravilo bez ijednog produkcionog pozivaoca | obrisano; „jedini vlasnik" je `IzvoriZbirne(zid).count` |
+
+**FALSE-GREEN koji je rez otkrio.** `RunStornoTestSuite` je bio 163/0 **ne zato što tok radi**, nego zato
+što ga je `SeedOtpremnica` hranio sam: upisivao je `COL_OTP_BROJ_ZBIRNE`, koju produkcioni pisac nikad ne
+napiše. Čim je izbor prešao na članstvo, **9 provera je palo** (T03, T09, T17, T18, T19). Popravka je u
+**dva pomoćnika**, ne u 9 tvrdnji: `SeedOtpremnica` upisuje i red `tblZbirnaIzvori`, a `OtpBrojZbirne`
+čita kroz članstvo. Isto u `modTestStornoCentar` (`TcSeedClanstvo`, `TcOtpAktivnihUZbirni`). Tvrdnje su
+ostale doslovno iste — promenilo se samo odakle odgovor dolazi.
+
+> `TcOtpAktivnihUZbirni` namerno koristi `ZbrClanovi`, a ne `AktivnaZbirnaZaOtpremnicu`: ova druga
+> izbacuje decu **stornirane** zbirne, pa bi posle PONIŠTENJA vratila 0 i onda kad otpremnica **nije**
+> stornirana — tvrdnja bi prolazila iz pogrešnog razloga.
+
+**Vraćene provere.** `Test_ZBR_KapijaPustaKadJeIzborScoped` i `Test_ZBR_DispecerPustaScopedIzbor` nisu
+vraćene doslovno — oslanjale su se na `TestHook_LinkZbirnaToOtkupAndOtpremnica` i na labelu, a oboje je
+nestalo. Vraćena im je **tvrdnja**, merena nad kanonom: kad jedan broj nose dva aktivna dokumenta,
+pozivalac koji kaže *koji* dira prolazi i dira samo svoje. Dva testa, ne jedan, jer mere dva seam-a
+(primitiv i dispečer F8) — zeleno u primitivu a mrtvo u aplikaciji je razlog zbog kog su i nastali.
+
+**Nova provera.** `Test_STO_BlokUSastavuOtpremniceSeNeStornira` meri kapiju zbog koje je hladnjačka grana
+obrisana — inače bi obrazloženje brisanja ostalo bez ijedne provere iza sebe. Oba smera: vezan blok se
+odbija i ostaje aktivan, nevezan prolazi.
+
+**`PredajaID` dobio čuvara nad podacima** (recenzentov P3 iz #388): `Chk_B11_PredajaDvaDokumenta`.
+Validator (`OtpremnicaPoPredaji`) gleda jedan upis u trenutku kad se dešava; nad zatečenim podacima niko
+nije gledao. Prazan `PredajaID` **nije** nalaz (malina auto-lanac, ručni unos legitimno nemaju predaju) —
+nalaz je isti utovar na dva aktivna dokumenta.
+
+**Verifikacija** (posle review-a #389). `vba_check` čisto · `gen_schema_module --check` u koraku ·
+`who_writes --check` i `--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** ·
+`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1962/0** ·
+`RunGoldenSuite` OK. Dvosmerni dokaz nad sabotažama koje je ovaj rez dodao ili preniašao
+(`blok-izvor-sme-storno`, `zbirna-kaskada-bez-kapije`, `simple-dupli-cita-permisivno`,
+`strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`,
+`zbirna-clanstvo-na-nepostojecu-otp`, `zbirna-storniran-izvor-tih`,
+`vlasnistvo-lanca-po-broju`, `pregled-broji-svu-decu-broja`): **9/9 crvenih**, potpis izvora
+identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
+
+> `ponistenje-izdate-cita-permisivno` je pri tom pokazala **zatečenu grešku u katalogu**: tvrdnja joj je
+> bila zapisana kao **podniz** (bez prefiksa `ZBR kvar: `). `vba_check` podniz pušta, `dokaz.py` traži
+> doslovan tekst — pa je sabotaža bila crvena, ali ne po svom imenu. Ispravljeno.
+
+> `RunAllTests` je **199, ne 200**: `T_SoleOwner_MeriDokumenteNeBrojeve` je otišao sa funkcijom koju je
+> merio. Registar ne trpi rupe (`vba_check` REGISTAR), pa je oslobođeni slot 38 popunjen tada poslednjim
+> testom (200 `T_ZbirnaForma_KlasaOstajeBezCene`).
+
+**Review #389 — jedan P2: čitalac članstva nije bio jedinstven.**
+
+Pravilo „zrno čitaoca prati lifecycle" (NACRT → `ZbrClanovi`, IZDATO → `IzvoriZbirne`) postavljeno je u
+review-u #384, ali je živelo kao **`If`-grana u jednom pozivaocu** — `ActiveOtpIDsByZbirna`, dakle
+PONIŠTENJE. SIMPLE, DUPLI i strog uvid su zvali permisivan čitač direktno. Posledice koje je recenzent
+izveo i koje su potvrđene testom:
+
+- izdata zbirna sa **izgubljenim** redom članstva prolazila je kroz SIMPLE/DUPLI i bivala stornirana;
+- **dupli** red članstva se prebrojavao kao **druga otpremnica**, pa je operater dobijao „2 otpremnice
+  vraćene" nad jednom korumpiranom vezom — tačno normalizacija korupcije kroz mutation flow koju je
+  #384 zabranio;
+- `BuildStornoImpact(strict:=True)` je nad istim kvarom davao `otpCount=0` i **`valid=True`**, što krši
+  njegov sopstveni ugovor („ne znam" ne sme da prođe kao „nema").
+
+Popravka je **jedno telo**, ne četvrta kopija grane: `modDokumenta.ZbrClanoviPoStanju(zbirnaID)`.
+Koriste ga `ActiveOtpIDsByZbirna`, `ActiveOtkupIDsByZbirna`, `OtpCountZbirnePoID` i
+`StornoZbirnaIDetach_TX`. `ZbrClanovi` ostaje pravi izbor za rad **nad nacrtom** (dodavanje/uklanjanje
+izvora, radni sto F2, progres) — tamo je prazno članstvo normalno stanje.
+
+> Istorija ove greške je poučna: prvi pokušaj u S5-3b je bio `IzvoriZbirne` **uvek**, i srušio je
+> transakciju nad nacrtom — palo je 9 storno provera. Popravka je tada bila „onda uvek permisivan",
+> i time je nastala rupa koju je #389 našao. Tačan odgovor nije ni jedno ni drugo nego **po stanju
+> dokumenta**, i zato mora da stoji na jednom mestu.
+
+Nove provere: `Test_ZBR_SimpleIDupliNeNormalizujuKvar` (izgubljeno članstvo → SIMPLE staje; duplo
+članstvo → DUPLI staje; **kontrolni smer**: nacrt bez članstva i dalje sme) i
+`Test_ZBR_StrogUvidNadKvaromNijeValid` (kvar → `valid=False` uz imenovan razlog; kontrola: zdrav
+dokument → `valid=True`). Sabotaže `simple-dupli-cita-permisivno` i `strog-uvid-cita-permisivno` gađaju
+**pozivna mesta**, a prenišanjena `ponistenje-izdate-cita-permisivno` sam čitač.
+
+**Uzgredni nalaz iz pisanja tog testa:** prvo sam `BuildStornoImpact` pozvao sa `"ZBIRNA"`, a konstanta
+je `FLOW_DOC_ZBIRNA = "Zbirna"`. `Select Case` nad stringom je u VBA case-sensitive, pa je **cela**
+chain sekcija tiho preskočena i uvid je vratio `valid=True` bez ijednog pročitanog podatka. Svi
+produkcioni pozivaoci šalju konstantu, pa to nije živ kvar — ali je ista klasa fail-open-a kao P2:
+nepoznat `docType` u strict režimu treba da bude greška, ne prazan validan model. Zapisano, ne
+popravljeno u ovom rezu (recenzent je izričito tražio da se PR ne širi).
+
+**Review #389, drugi krug — strog čitalac zbirne bio je slabiji od svog pandana sprat niže.**
+
+`OtpClanovi` (otpremnica → otkup) drži pet tačaka ugovora: roditelj postoji tačno jednom, `OtkupID` nije
+prazan, dete postoji tačno jednom, dupli par pada, globalna invarijanta članstva. `IzvoriZbirne` je
+držao tri — prazan ID, dupli par, „bar jedan izvor". Nedostajale su **obe egzistencijalne**.
+
+Posledica je merljiva: članstvo koje pokazuje na `OtpremnicaID` bez zaglavlja davalo je samo **kraći
+spisak**, pa je SIMPLE storno javljao *„otpremnice vraćene: 1"* za dokument koji ne postoji. Tiši ishod
+od pada, i zato gori — tačno klasa koju ovaj rez zatvara.
+
+Drugi oblik iste klase: aktivna IZDATA zbirna čije članstvo pokazuje na **storniranu** otpremnicu.
+`ActiveOtpIDsByZbirna` ju je samo filtrirao, pa je korupcija postajala „ima 0 aktivnih izvora" umesto
+„integrity error". Da je to stanje **nemoguće** kroz produkcioni put potvrđeno je merenjem:
+`StornoOtpremnica` odbija izvor aktivne zbirne ([modStorno.bas:234](src-vba/modStorno.bas:234),
+`ERR_STORNO_BASE+71`).
+
+**Gde koja provera stoji — i zašto ne na istom mestu**
+
+| Provera | Mesto | Razlog |
+|---|---|---|
+| zaglavlje zbirne postoji tačno jednom | `IzvoriZbirne` | referencijalno, **bezuslovno** |
+| `OtpremnicaID` postoji tačno jednom | `IzvoriZbirne` | isto — članstvo bez zaglavlja nije sastav |
+| izvor nije storniran · izvor je IZDAT | `ZbrClanoviPoStanju` (samo aktivna IZDATA) | **lifecycle**, zavisi od toga čije se članstvo čita |
+
+Podela je namerna i recenzent je na nju upozorio: nad **storniranom** zbirnom je storniran izvor
+**normalna istorija**, pa bi ista tvrdnja u `IzvoriZbirne` obarala čitanje zatečenog stanja — gore od
+rupe koju zatvara. Zato je taj kontrolni smer i **u testu**.
+
+Nove provere: `Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada` i
+`Test_ZBR_StorniranIzvorAktivneIzdateJeKvar`. Oba fixture-a su izričito označena kao
+**synthetic anomaly / fault injection** — stanja koja pisac ne ume da napravi prave se direktnim
+upisom, i iz njih se **ne izvodi poslovno pravilo** (pre-flight §5). Oba mere kroz **mutation put**
+(`RunSimpleStornoZbirna`), ne samo direktnim pozivom čitaoca.
+
+**Dokaz je uhvatio placebo u mom testu.** Prva verzija
+`Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada` tvrdila je samo „storno ne prolazi" — i prolazila je i
+sa **ugašenom** referencijalnom proverom, jer nepostojeću otpremnicu tada zaustavi **lifecycle**
+provera („NEIZDAT izvor"). `dokaz.py` je to prijavio kao `NE OBARA NISTA`: tvrdnja je merila **tuđu
+kapiju**. Treći put u ovoj seriji da dvosmerni dokaz pokaže da zelena tvrdnja ne meri ono što joj piše
+u imenu — i jedini razlog zbog kog se to vidi.
+
+Razdvojiti ih kroz mutation put **nije bilo moguće**, i to je zaseban nalaz (dole). Razlog se zato čita
+sa samog čitaoca i tvrdnja glasi da poruka **imenuje** da otpremnica ne postoji; tvrdnja o tome da
+mutacije nema ostaje iznad, nad produkcionim putem.
+
+> **Nije odvojeno sabotirano:** tačka „zaglavlje zbirne postoji tačno jednom". Implementirana je, ali
+> njen način otkaza (članstvo bez zaglavlja) traži još jedan fault-injection fixture, a dve žive klase
+> su pokrivene. Zapisano da ne bi izgledalo kao propust.
+
+**Treća moja greška u ovoj seriji, i opet ista rupa alata.** `ZbirnaJeStornirana` sam prvo napisao
+preko `IsStorniranoValue` — koji je **`Private` u `modStorno`** i iz `modDokumenta` se ne vidi.
+`vba_check` je bio čist; pao je tek VBE. To je **drugi put u ovom rezu** da propusti nešto što compile
+hvata (prvi: procedura bez `End Function`). Oba idu u isti `tools/` PR, uz već zapisanu rupu
+vidljivosti.
+
+**Review #389, treći krug (P1) — vlasništvo nizvodnog lanca išlo je po broju.**
+
+`ZbirnaOwnsExternalChain` odlučuje **sme li PONIŠTENJE da stornira prijemnicu i paletne stavke**, a
+čitala je `KupacID` preko `LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, ...)` — po **labeli**, na putu koji je
+ceo ovaj rez upravo prebacio na identitet. Pod jednim brojem legitimno stoje dva dokumenta (KR-001), pa
+je odgovor bio odgovor **prvog pogotka**:
+
+| Raspored | Posledica |
+|---|---|
+| cilj **B** (eksterni), lookup pogodi **A** (hladnjača) | `ownsChain = True` → PONIŠTENJE B-a obara PRJ i palete koje B **ne poseduje** — destruktivna mutacija izvan granice vlasništva |
+| cilj **A** (hladnjača), lookup pogodi **B** (eksterni) | `ownsChain = False` → zaglavlje i otpremnice padnu, prijemnica ostane, a funkcija prijavi **pun uspeh** |
+
+Uz to je stajalo `On Error Resume Next`: svaka greška u računanju vlasništva postajala je `False`,
+dakle „eksterni kupac". Fail-open odluka o tome **čije** podatke smeš da oboriš nije oprez nego rizik.
+
+**Gde odluka sada živi.** Ne kod pozivaoca, nego u `PonistiZbirnaChain_TX` — tamo gde je `ZbirnaID`
+autoritativan — i izlazi kroz `res("owns")`, pa je prijemnička grana **čita** umesto da je izvodi drugi
+put. Pregled (`BuildPonistenjePosledice`) i kapija (`RunZbirnaCorrection`) koriste isti strogi račun
+nad izabranim `docID`-em. Četiri mesta, jedna činjenica.
+
+**Dve regresije koje sam pritom napravio, obe uhvaćene testom, ne pregledom:**
+
+1. Prevod broja u ID stavio sam **pre** kapije dvosmislenosti. Fail-closed prevod je progutao
+   informativnu poruku („broj je pripadao više vlasnika") i operater bi dobio generički neuspeh — pao je
+   zatečeni `T_ZbirnaKaskada_StajeNaDvosmislenom`. Zatečeni komentar je na tačno to upozoravao, a ja sam
+   ga preskočio. Rešenje: izbor cilja je **mek** (neprevodiv broj = nema odluke o vlasništvu, i do
+   mutacije se ionako ne stiže), a sam račun vlasništva ostaje **strog**.
+2. Odluku sam prvo izračunao **posle** kapije koja je čita, pa je na tom mestu bila uvek `False`.
+   Compile nije pao — `Dim` je funkcijski — nego je pukao tek scenario.
+
+Nova provera: `Test_ZBR_VlasnistvoLancaIdePoIdentitetu`. Dva dokumenta pod istim brojem, **različiti
+kupci**, i tvrdnja u **oba smera** kroz javan ulaz koji operater i vidi
+(`BuildPonistenjePosledice` sa izabranim `docID`-em). Jedan smer sam ne bi razlikovao ispravno
+ponašanje od „uvek isti odgovor". Sabotaža `vlasnistvo-lanca-po-broju` vraća čitanje na broj i baš ta
+tvrdnja crveni.
+
+> **Nije mereno na samoj mutaciji:** prijemnica vezana za zbirnu nema fixture u BFP suite-i (scenariji
+> sa prijemnicom žive u storno suite-i, ali bez para pod istim brojem). Odluka se meri tamo gde nastaje
+> i gde je operater čita **pre** nepovratne radnje. Zapisano da se ne čita kao potpuno pokriće.
+
+**Review #389, četvrti krug — pregled i akter nisu brojali isti skup.**
+
+Otpremnice se od S5-3b biraju iz članstva, pa im broj više nije ni bitan. **Prijemnice i palete se još
+uvek biraju po broju** (njihov most pada u S6), ali ih mutacija pritom **sužava** na izabrani dokument
+(`scopeID`, `ActivePrijIDsByZbirna` / `DistinctActiveValues`). `ScanZbirna` to nije radio — brojao je
+`CountActive(..., BrojZbirne, broj)`, dakle **svu decu tog broja**.
+
+Pod kolizijom broja je zato ekran pred nepovratnom radnjom obećavao više nego što bi palo:
+*„prijemnice: 2"*, a padala je jedna. Ekran čija je cela svrha da pokaže **šta će biti pogođeno** ne
+sme da broji drugi skup od aktera.
+
+**Popravka nije nov čitalac.** `CountActive` je dobio isti opcioni `gen` (scope) koji već nose
+`ActivePrijIDsByZbirna` i `DistinctActiveValues`, i sužava kroz **isto telo** — `SuziDecuNaZbirnu`. Zato
+se skupovi ne mogu raziići. Prazan `gen` = ponašanje pre ovog reza, što je i dalje tačno za pozivaoce
+koji scope nemaju (`ScanPrijemnica` broji palete po `PrijemnicaID`, ne po broju).
+
+`ScanZbirna` scope računa **istim telom kao akter** (`ZbirnaScopeRazlog`), pa „sve-ili-ništa" pravilo
+važi na oba mesta: kad makar jedno aktivno dete ne nosi identitet roditelja, i pregled i akter padaju
+nazad na broj — zajedno.
+
+Nova provera `Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira` meri **oba nivoa**, jer sam pregled bi
+prošao i da akter dira pogrešan skup:
+
+| Nivo | Tvrdnja |
+|---|---|
+| pregled (`BuildPonistenjePosledice` sa `docID`) | svaki dokument vidi **svoju** prijemnicu; ne sabira obe |
+| mutacija (`RunZbirnaCorrection` PONIŠTENJE) | pada prijemnica **izabranog**, tuđa ostaje netaknuta |
+
+> Fixture seje prijemnice direktno, sa **ispravnim** tragom roditelja. To **nije anomalija** — svako
+> dete tačno nosi svoj `ZbirnaID`. Kanonski pisac scenario ne može da napravi u jednom potezu jer bi
+> drugi upis pao na kapiji dvosmislenog broja; stanje se zato pravi seed-om, a **meri produkcionim
+> čitačem i akterom**.
+
+Sabotaža `pregled-broji-svu-decu-broja` skida scope sa pregleda i baš ta tvrdnja crveni.
+
+**Četiri nalaza koja ovaj rez NE zatvara**
+
+1. **`RunMasterSyncSmokeSuite` je 17/9 i na `main`-u** (mereno `git checkout main -- src-vba tools`, isti
+   fixture). Zatečen crven suite, ne posledica ovog reza — ali znači da je S5-3 spojen a da ga niko nije
+   pustio. Traži svoj rez.
+2. **`vba_check` ne vidi proceduru bez `End Function`.** Moja izmena je ostavila
+   `BuildBrojZbirnePoOtpremnici` neterminisanu; `vba_check` je bio čist, a VBE je javio „Expected End
+   Function". Pravilo nedostaje — ide uz već zapisanu rupu vidljivosti (kvalifikovani pozivi, `Private`
+   preko modula) u zaseban `tools/` PR.
+3. **SIMPLE storno guta RAZLOG.** `StornoZbirnaIDetach_TX` hvata grešku, vrati `False`, a
+   `RunSimpleStornoZbirna` operateru kaže samo *„Storno zbirne nije uspeo."* Sve fail-closed provere
+   koje je ovaj rez dodao imaju smisla zato što **imenuju** kvar — a na ovom ulazu ime ne stigne do
+   ekrana. PONIŠTENJE ga prosleđuje (`ZbirnaMutPoruka`), SIMPLE ne. Otkriveno pišući razlikujuću
+   tvrdnju: kroz mutation put se dve različite kapije ne mogu razdvojiti jer obe daju **isti** tekst.
+   Nije prošireno u ovom rezu (recenzent je tražio da PR ostane uzak); traži `outGreska` kroz
+   `StornoZbirnaIDetach_TX` i njegova dva pozivaoca.
+
+4. **Kolone `Otpremnica.BrojZbirne` i `Otkup.BrojZbirne` i dalje postoje.** Probao sam da ih obrišem iz
+   kanona kao redosled koji tera potpunost; merenje je pokazalo **25 produkcionih čitalaca** van storna
+   (revizija A1/B4a/B5b/B6, `modIzvestaj`, `modScrDokumenti`, `modScrIzvestaji`, `modStammdatenSync`,
+   `modDokumentInvariant`, `GetOtpremniceByZbirna`, `GetVerwaisteOtpremnice`, `BuildZbirnaVrstaCache`) i
+   19 u testovima. To je posao nad prikazom i revizijom, ne nad stornom, pa je šema **vraćena**
+   (`88E04EC5`) i brisanje kolona ide u svoj rez, zajedno sa prijemnicom i paletom u S6. Brisanje je
+   **poziciono bezbedno**: oba pisca grade red preko `TabelaBrojKolona` + `SetRowValueByColumn` (po
+   imenu), ne golim `Array(...)`.
+   > Nuzgredni nalaz za taj rez: `Chk_B5b_OtpremnicaBezZbirne` od S5-3 prijavljuje **svaku** otpremnicu,
+   > jer labelu niko ne piše. Revizija već sada plavi lažnim nalazima.
+
 #### Dva reza izvučena iz ovog, oba zapisana
 
 **S5-3b — storno tok zbirne.** Brisanje linkera je uklonilo poslednjeg pisca `Otpremnica.BrojZbirne`, pa
@@ -5307,8 +5587,9 @@ pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture 
 | **`NEVEZANE` nije sužena na AKTIVNI nacrt** (review #379, P3) | čitalac filtrira po stanju dokumenta (izdata, nestornirana, slobodna), ali ne po odnosu prema izabranoj zbirnoj — otpremnica drugog vozača ili druge vrste/sorte/tipa ambalaže ostaje u ponudi, a `ZbrRequireIzvorValjan` je odbija. Nema kvara podataka (pisac je fail-closed), ali je to isti obrazac koji smo već jednom zatvorili za nacrte. Rez: `NevezaneOtpremnice(zbirnaID)` koja sužava po vozaču i preuzetim činjenicama kad nacrt postoji — i test sa **nekompatibilnom** otpremnicom, jer današnji test meri samo ime liste |
 | **Aktivan nacrt (`mZbrID`) preživljava izlazak iz F2** (review #377, P3) | radni sto ostaje izabran i posle promene režima, pa se operater može vratiti u F2 i ne primetiti da je kontekst još tu. Nije integritetski problem — kontekst je vidljiv kroz aktivnu listu i naslov mreže, a pisac i dalje drži sve kapije; isti obrazac postoji i kod otpremnice (`mOtpID`). Pripada **usability sweep-u** nad radnim stolovima, ne kanonskom cutover-u — i tada se rešava za **oba** stola odjednom, ne samo za zbirnu |
 | **Lista `SVI` u F2 nudi `Veži` i nad NACRTOM otpremnice** (review #377, P3) | pisac je bezbedno odbija (`RequireOtpValidanIzvorZbirne`), pa nema kvara podataka — ali je to isto ono što `NevezaneOtpremnice` namerno izbegava: nuditi operateru nešto što će pisac odbiti. `SVI` je namerno sveobuhvatna lista, pa se rešava uz sledeći rez (traka napretka + čišćenje polja F3) |
-| **S5-3b — storno tok zbirne je ostao bez hrane** (nalaz S5-3) | brisanje PWA linkera je uklonilo **poslednjeg pisca** `Otpremnica.BrojZbirne` i `Otkup.BrojZbirne`. `DetachOtpremniceInline` bira kandidate baš po toj koloni, pa je skup prazan **pre** ikakvog scoping-a — cela funkcija je no-op nad kanonskim podacima. **16 mesta** u `modStornoFlow` visi o te dve kolone. Nije nov kvar (taj put je i dosad bio hranjen samo pauziranim linkerom), ali je posle S5-3 nedvosmisleno mrtav, i to je **treći put** u refaktoru da živ-izgledajući put ostane bez hrane (S3a je ugasio F3, S4-3b `DUPLI`/`PONIŠTENJE`). Rez: prehraniti tok **kanonskim članstvom**, kao što je S4-3c uradio za scoping. Sa njim se vraćaju i dva testa sklonjena u S5-3: `Test_ZBR_DispecerPustaScopedIzbor`, `Test_ZBR_KapijaPustaKadJeIzborScoped` |
+| ~~**S5-3b — storno tok zbirne je ostao bez hrane**~~ (**ZAVRŠEN**, v. sekciju S5-3b) | premise su se tri puta pomerile pod merenjem; hladnjačka grana je ispala kao **nedostižna**, a `RunStornoTestSuite` 163/0 je bio **false-green** nad sopstvenim seed-om |
 | **Svežina izvora zbirne: 1 dan, nad otpremnicom** (odluka operatera 23.09.2026, izvađena iz S5-3) | zbirna je prevozni spisak onoga što vozač **nosi**, pa zaostala otpremnica ne sme tiho da uđe u današnju zbirnu. Pravilo je zatečeno iz PWA linkera (`MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE`), gde je merilo dan **otkupa** i živelo **samo u uvozu**; linker je obrisan, pa bi nestalo tiho. Operater je odlučio da preživi nad **otpremnicom** (ona nosi dan utovara) i u **kanonskom piscu**, pa da važi i za F3. **Izvađeno iz S5-3 posle merenja**, iz dva razloga: `CreateZbirna` i `ZbrDodajIzvor` **ne dele** telo koje proverava izvor (jednopotezni ulaz čita otpremnice sopstvenom petljom), pa je 10 dana prolazilo kroz jedan ulaz a 2 dana padalo kroz drugi — znak da kapija nije u zajedničkom telu; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana posle svoje otpremnice, pa je to novo ograničenje i za desktop. Rez: prvo izvući **zajedničko telo** za „šta je valjan izvor u odnosu na OVU zbirnu“, pa kapiju u njega, pa fixture rad |
+| **`GrupePredaje` presuđuje Duplicate po VOZAČU, a ne po `PredajaID`** (post-merge review #388, za S5-4) | redosled je: prvo `clanstvo.Exists(otkupID)` + „isti vozač“ → `Duplicate`, pa tek onda `PredajaID`. Otkad je `PredajaID` **persistiran** identitet događaja, isti vozač više nije dokaz retry-a: drugi utovar istog bloka kod istog vozača (`P2 ≠ P1`) tiho postaje `Duplicate` umesto `SyncError`. Ispravno: isti `OtkupID` + **isti** `PredajaID` = idempotentan retry; isti `OtkupID` + **drugi** `PredajaID` = konflikt. Nije hitno jer PWA/GAS žica još nije prebačena i nema međudeploymenta — ali se zatvara **najkasnije u S5-4**, i to baš zato što je greenfield: slabija semantika se ne ostavlja radi kompatibilnosti koju niko ne traži |
 | **Predaja kao događaj mora da prođe CEO žičani sloj** (review #388, treći krug; proširuje red ispod) | VBA od S5-3 traži `PredajaID`, `PredatoAt` i `PredajaClanovi`, i bez njih predaju **glasno odbija**. Mereno na PWA/GAS strani: `buildUpdatedOtpremaRecord` šalje samo `vozacID`, `gas/Code.gs` `COLUMNS` nema nijednu od te tri kolone, a `processRecord` ih ne upisuje. **Nov detalj koji nisam izmerio pre nego što ga je recenzent našao:** `isTerminalSyncStatus` ([gas/Code.gs:1543](gas/Code.gs)) smatra `Synced>Master` terminalnim, pa se već uvezen OTK red **uopšte ne obogati** kasnijom predajom — GAS vrati `success/existing`, a klijent lokalno obeleži zapis kao `synced`. Otkupac vidi „predato“, a master događaj nikad nije video. Rez (kad PWA/GAS dođu na red, S5-4): sva četiri polja kroz ceo sloj, **i GAS mora da tretira predaju kao NOV događaj nad već sinhronizovanim OTK-om**, ne kao retry originalnog zapisa — `Synced>Master` sme da bude terminalan za mutaciju **otkupa**, ne za događaj **predaje**. Nizvodni zahtev, ne VBA kvar: VBA fail-closed staje i imenuje razlog |
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |

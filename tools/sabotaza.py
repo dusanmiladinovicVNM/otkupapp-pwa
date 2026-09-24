@@ -1681,24 +1681,28 @@ SABOTAZE = {
         "T_OtkupStornoPoID_NeDiraTudjeOM",
         "prvi red istog broja sa drugog otkupnog mesta (A) OSTAJE aktivan",
     ),
-    # "Jedini vlasnik" po distinct BROJU umesto po dokumentima.
-    "sole-owner-po-broju": (
-        "modStornoFlow.bas",
-        "    If svi.count <> 1 Then Exit Function\n",
-        "    If False Then Exit Function   ' SABOTAZA: broji se broj, ne dokument\n",
-        "T_SoleOwner_MeriDokumenteNeBrojeve",
-        "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik",
-    ),
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, ownsChain, scopeID)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, False, ownsChain, scopeID)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, ownsChain, scopeID)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
     ),
+
+    # S5-3b: kapija iz review-a #362 je razlog zasto hladnjacka kaskada u
+    # StornoOtkup_TX vise ne postoji. Bez nje bi blok u sastavu aktivne
+    # otpremnice bio storniran, a dokument nad njim ostao izdat.
+    "blok-izvor-sme-storno": (
+        "modStorno.bas",
+        "    If Len(otpID) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: izvor izdate otpremnice sme storno\n",
+        "Test_STO_BlokUSastavuOtpremniceSeNeStornira",
+        "STO-IZVOR: blok u sastavu otpremnice je ostao AKTIVAN",
+    ),
+
     # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
     # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
     "preflight-ignorise-id": (
@@ -5888,12 +5892,78 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A20: red bez generacije NIJE integritetska greska",
     ),
-    "ponistenje-izdate-cita-permisivno": (
+    # review #389, P2: pravilo mora da vazi na SVAKOM ulazu, ne samo tamo gde
+    # je nastalo. SIMPLE/DUPLI su citali permisivno, pa je izdata zbirna sa
+    # izgubljenim clanstvom prolazila, a dupli red se brojao kao druga otpremnica.
+    "simple-dupli-cita-permisivno": (
         "modStornoFlow.bas",
-        "            Set clanovi = modDokumenta.IzvoriZbirne(zbirnaID)\n",
-        "            Set clanovi = modDokumenta.ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
+        "    clanova = modDokumenta.ZbrClanoviPoStanju(zbrID).count\n",
+        "    clanova = modDokumenta.ZbrClanovi(zbrID).count   ' SABOTAZA: SIMPLE/DUPLI zaobilazi stanje\n",
+        "Test_ZBR_SimpleIDupliNeNormalizujuKvar",
+        "ZBR SDK: SIMPLE storno IZDATE bez clanstva NE prolazi",
+    ),
+
+    # review #389, P2: strog uvid sme da kaze 'nema' samo kad je siguran.
+    # Permisivan citac nad izgubljenim clanstvom vrati 0 bez greske, pa bi
+    # operater pred nepovratnom radnjom procitao 'nista se ne dira'.
+    "strog-uvid-cita-permisivno": (
+        "modStornoFlow.bas",
+        "    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanoviPoStanju(zbirnaID))\n",
+        "    For Each otp In KolekcijaUNiz(modDokumenta.ZbrClanovi(zbirnaID))   ' SABOTAZA: uvid zaobilazi stanje\n",
+        "Test_ZBR_StrogUvidNadKvaromNijeValid",
+        "ZBR uvid: izgubljeno clanstvo IZDATE ne sme da prodje kao valid",
+    ),
+
+    # review #389, drugi krug: strog citalac zbirne je bio slabiji od svog
+    # pandana sprat nize. Veza na nepostojecu otpremnicu davala je KRACI spisak,
+    # pa je SIMPLE storno javljao 'otpremnice vracene: 1' za dokument kog nema.
+    "zbirna-clanstvo-na-nepostojecu-otp": (
+        "modDokumenta.bas",
+        "                RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpID, _\n",
+        "                If False Then RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpID, _\n",
+        "Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada",
+        "ZBR NEP: razlog IMENUJE da otpremnica iz clanstva NE POSTOJI",
+    ),
+
+    # review #389, drugi krug: storniran izvor aktivne izdate zbirne je stanje
+    # koje pisac ne ume da napravi. Zatecen kod ga je tiho filtrirao, pa je
+    # kaskada nalazila '0 aktivnih izvora' i javljala uspeh nad korupcijom.
+    "zbirna-storniran-izvor-tih": (
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeStornirana(zbirnaID) Then ZbrRequireIzvoriZivi c, zbirnaID, SRC\n",
+        "    If False Then ZbrRequireIzvoriZivi c, zbirnaID, SRC   ' SABOTAZA: mrtav izvor se ne prijavljuje\n",
+        "Test_ZBR_StorniranIzvorAktivneIzdateJeKvar",
+        "ZBR STI: SIMPLE storno nad STORNIRANIM izvorom NE prolazi",
+    ),
+
+    # review #389, P1: vlasnistvo nizvodnog lanca (sme li PONISTENJE da obori
+    # prijemnicu i palete) citalo se po BROJU. Pod jednim brojem stoje dva
+    # dokumenta, pa je odgovor bio odgovor PRVOG POGOTKA -- tudjeg.
+    # review #389, treci krug: pregled je brojao svu decu BROJA, a mutacija je
+    # -- kad je scope dokaziv -- birala samo decu IZABRANE zbirne. Ekran pred
+    # nepovratnom radnjom je obecavao vise nego sto bi palo.
+    "pregled-broji-svu-decu-broja": (
+        "modStornoFlow.bas",
+        "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)\n",
+        "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)   ' SABOTAZA: pregled broji svu decu broja\n",
+        "Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira",
+        "ZBR PRG: pregled NE sabira decu oba dokumenta istog broja",
+    ),
+
+    "vlasnistvo-lanca-po-broju": (
+        "modStornoFlow.bas",
+        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))\n",
+        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo po broju\n",
+        "Test_ZBR_VlasnistvoLancaIdePoIdentitetu",
+        "ZBR VLA: dva dokumenta istog broja daju RAZLICITU odluku o vlasnistvu",
+    ),
+
+    "ponistenje-izdate-cita-permisivno": (
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeIzdata(zbirnaID) Then\n",
+        "    If True Then   ' SABOTAZA: izdata se cita permisivno\n",
         "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar",
-        "ponistenje IZDATE bez clanstva NE prolazi",
+        "ZBR kvar: ponistenje IZDATE bez clanstva NE prolazi",
     ),
     "ponistenje-ne-vidi-kanonsko-clanstvo": (
         "modStornoFlow.bas",

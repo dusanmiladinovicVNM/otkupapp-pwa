@@ -3165,94 +3165,6 @@ Private Function TryMasterSyncDay(ByVal value As Variant, ByRef outDay As Date) 
 EH:
     TryMasterSyncDay = False
 End Function
-
-' AUD-043(b): BrojZbirne se sme upisati SAMO ako je polje prazno ili vec nosi
-' isti broj. Bezuslovni RequireUpdateCell je tiho prepisivao postojecu vezu, pa
-' je jedna zbirna mogla "preuzeti" otkupe/otpremnice iz druge (dvostruko
-' obracunata roba, a prva zbirna ostaje bez stavki). Konflikt = greska.
-' ZBR-CHILD-01: kapija mora da gleda ISTO sto pisac pise.
-'
-' Ranija verzija se zvala RequireBrojZbirneNotConflicting i gledala je SAMO broj.
-' Dok je PoveziDeteNaZbirnu pisao samo broj, upis pod istim brojem je bio
-' idempotentan -- prepisivanje iste vrednosti preko sebe. Otkad pisac pise i
-' generaciju, isti taj put TIHO PREBACUJE dete sa jednog logickog dokumenta na
-' drugi, jer dva dokumenta pod istim brojem su tacno ono sto KR-001 dozvoljava.
-' Kapija nije oslabila; upis je ojacao ispod nje. To je ZBR-MUT-01 naopako:
-' kapija (broj) uza od aktera (broj + generacija).
-'
-' Matrica:
-'   postojeci broj | postojeca gen | novo (broj/gen) | ishod
-'   prazan         | prazna        | X / GEN-A       | ALLOW
-'   X              | prazna        | X / GEN-A       | ALLOW  (dovrsava vezu)
-'   X              | GEN-A         | X / GEN-A       | ALLOW  (idempotentno)
-'   X              | GEN-A         | X / GEN-B       | BLOCK
-'   X              | GEN-A         | X / prazna      | BLOCK  (ne brise se znanje)
-'   X              | bilo sta      | Y / bilo sta    | BLOCK
-'   prazan         | GEN-A         | bilo sta        | BLOCK  (integritet)
-'
-' Prepisivanje roditelja POSTOJI, ali kroz ispravku/prevez, koji su operaterske
-' komande. Ingest zatecene cinjenice nije mesto za promenu vlasnistva dokumenta.
-Private Sub RequireZbirnaVezaNotConflicting(ByVal tblName As String, _
-                                            ByVal rowIndex As Long, _
-                                            ByVal columnName As String, _
-                                            ByVal brojZbirne As String, _
-                                            ByVal genZbirne As String, _
-                                            ByVal contextInfo As String, _
-                                            ByVal sourceName As String)
-    Dim data As Variant
-    data = GetTableData(tblName)
-
-    If IsEmpty(data) Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 32, sourceName, _
-                  "Tabela je prazna: " & tblName
-    End If
-
-    Dim colIdx As Long
-    colIdx = RequireColumnIndex(tblName, columnName, sourceName)
-
-    Dim colGen As Long
-    colGen = RequireColumnIndex(tblName, COL_DETE_ZBIRNA_ROD, sourceName)
-
-    Dim current As String
-    current = Trim$(CStr(nz(data(rowIndex, colIdx), "")))
-
-    Dim currentGen As String
-    currentGen = Trim$(CStr(nz(data(rowIndex, colGen), "")))
-
-    ' Generacija bez broja: dvoje se menjaju u koraku, pa je ovo pokvaren red.
-    ' Fail-closed -- ingest ga ne "popravlja" upisom preko.
-    If Len(current) = 0 And Len(currentGen) > 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 45, sourceName, _
-                  "Integritet: red nosi ZbirnaID bez BrojZbirne. Table=" & tblName & _
-                  "; " & contextInfo & _
-                  "; PostojecaGeneracija=" & currentGen
-    End If
-
-    If Len(current) > 0 Then
-        If Not BrojJednak(current, brojZbirne) Then
-            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 33, sourceName, _
-                      "Konflikt BrojZbirne -- red je vec vezan na drugu zbirnu. Table=" & tblName & _
-                      "; " & contextInfo & _
-                      "; Postojeci=" & current & _
-                      "; Novi=" & Trim$(brojZbirne)
-        End If
-    End If
-
-    ' Isti broj NIJE isti dokument. Poznata generacija se ne menja ingest-om --
-    ' ni na drugu, ni na praznu.
-    If Len(currentGen) > 0 Then
-        If StrComp(currentGen, Trim$(genZbirne), vbTextCompare) <> 0 Then
-            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 46, sourceName, _
-                      "Konflikt ZbirnaID -- red je vec dete DRUGOG dokumenta pod istim " & _
-                      "brojem. Table=" & tblName & _
-                      "; " & contextInfo & _
-                      "; Broj=" & Trim$(brojZbirne) & _
-                      "; PostojecaGeneracija=" & currentGen & _
-                      "; NovaGeneracija=" & Trim$(genZbirne)
-        End If
-    End If
-End Sub
-
 Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
                                             ByVal idColumn As String, _
                                             ByVal idValue As String, _
@@ -3302,36 +3214,6 @@ Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
 
     RequireSingleMasterSyncRow = CLng(rows(1))
 End Function
-
-' ZBR-CHILD-01: generaciju PRIMA, ne pogadja.
-'
-' Pozivalac (LinkZbirnaToOtkupAndOtpremnica) ima konkretan ZbirnaID -- membership
-' se i razresava preko PK, bas zato sto broj u multi-device koliziji nije
-' jedinstven (AUD-043b). Ponovno pitanje ZbirnaIDZaBroj(brojZbirne) bi
-' taj identitet BACILO i vratilo prazno u KR-001 slucaju -- dakle bas tamo gde
-' je veza najpotrebnija.
-Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
-                                             ByVal brojZbirne As String, _
-                                             ByVal genZbirne As String, _
-                                             ByVal sourceName As String)
-    If Len(Trim$(brojZbirne)) = 0 Then
-        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 50, sourceName, _
-                  "BrojZbirne je obavezan za link Otpremnica -> Zbirna. OtpremnicaID=" & otpremnicaID
-    End If
-
-    Dim rowOtpremnica As Long
-    rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
-
-    ' AUD-043(b) + ZBR-CHILD-01: isti guard kao na otkupu -- ne prepisuj tudju
-    ' vezu u tisini, ni kad je broj isti a dokument drugi.
-    RequireZbirnaVezaNotConflicting TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
-                                    brojZbirne, genZbirne, _
-                                    "OtpremnicaID=" & otpremnicaID, sourceName
-
-    PoveziDeteNaZbirnu TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
-                       brojZbirne, genZbirne, sourceName
-End Sub
-
 Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
                                           ByVal sourceName As String) As String
     Dim rowZbirna As Long
@@ -4228,34 +4110,6 @@ Private Function SkupIzvoraRazlika(ByVal stari As Collection, _
     SkupIzvoraRazlika = "izvori:"
     If Len(visak) > 0 Then SkupIzvoraRazlika = SkupIzvoraRazlika & " red dodaje " & visak
     If Len(manjak) > 0 Then SkupIzvoraRazlika = SkupIzvoraRazlika & " red izostavlja " & manjak
-End Function
-
-
-Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Boolean
-    If Len(Trim$(clientRecordID)) = 0 Then
-        IsDuplicateZbirnaInMaster = False
-        Exit Function
-    End If
-    
-    Dim data As Variant
-    data = GetTableData(TBL_ZBIRNA)
-    If IsEmpty(data) Then
-        IsDuplicateZbirnaInMaster = False
-        Exit Function
-    End If
-    
-    Dim colCRID As Long
-    colCRID = GetColumnIndex(TBL_ZBIRNA, "ClientRecordID")
-    
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
-            IsDuplicateZbirnaInMaster = True
-            Exit Function
-        End If
-    Next i
-    
-    IsDuplicateZbirnaInMaster = False
 End Function
 ' ZBIRNA IZ PWA IDE KROZ KANONSKI PISAC (S5-3).
 '
