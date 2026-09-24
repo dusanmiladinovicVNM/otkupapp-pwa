@@ -1692,37 +1692,17 @@ SABOTAZE = {
         "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
     ),
 
-    # S5-3b: hladnjacka kaskada je lanac citala sa DETETA (Otkup.BrojZbirne).
-    # Tu labelu niko ne pise od S5-3, pa je grana bila nedostizna: storno bloka
-    # je javljao uspeh, a otpremnica i zbirna su ostajale aktivne.
-    "hladnjaca-lanac-bez-clanstva": (
+    # S5-3b: kapija iz review-a #362 je razlog zasto hladnjacka kaskada u
+    # StornoOtkup_TX vise ne postoji. Bez nje bi blok u sastavu aktivne
+    # otpremnice bio storniran, a dokument nad njim ostao izdat.
+    "blok-izvor-sme-storno": (
         "modStorno.bas",
-        "    zbirnaID = modDokumenta.AktivnaZbirnaZaOtpremnicu( _\n",
-        "    zbirnaID = \"\"   ' SABOTAZA: lanac se ne razresava\n"
-        "    If False Then Debug.Print modDokumenta.AktivnaZbirnaZaOtpremnicu( _\n",
-        "Test_STO_BlokUHladnjaciObaraSvojLanac",
-        "HLAD: zbirna tog bloka je STORNIRANA",
+        "    If Len(otpID) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: izvor izdate otpremnice sme storno\n",
+        "Test_STO_BlokUSastavuOtpremniceSeNeStornira",
+        "STO-IZVOR: blok u sastavu otpremnice je ostao AKTIVAN",
     ),
 
-    # S5-3b: otpremnice kaskade biraju se iz clanstva. Prazan izbor je tacno
-    # ono sto je zatecena verzija davala nad kanonskim podacima.
-    "kaskada-bez-izvora-zbirne": (
-        "modStorno.bas",
-        "    Set ids = modDokumenta.IzvoriZbirne(zbirnaID)\n",
-        "    Set ids = New Collection   ' SABOTAZA: clanstvo se ne cita\n",
-        "Test_STO_BlokUHladnjaciObaraSvojLanac",
-        "HLAD: otpremnica tog bloka je STORNIRANA",
-    ),
-
-    # S5-3b: izbor zbirne je po primarnom kljucu. Bez poredjenja pada PRVA
-    # aktivna zbirna u tabeli -- tudja.
-    "zbirna-kaskada-bez-identiteta": (
-        "modStorno.bas",
-        "        If StrComp(Trim$(NzToText(data(i, colId))), Trim$(zbirnaID), vbTextCompare) = 0 Then\n",
-        "        If True Then   ' SABOTAZA: pada prva zbirna, ne izabrana\n",
-        "Test_STO_BlokUHladnjaciObaraSvojLanac",
-        "HLAD: tudja zbirna nije dirnuta",
-    ),
     # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
     # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
     "preflight-ignorise-id": (

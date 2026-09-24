@@ -310,7 +310,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_BlokVanManifestaNeUlaziUUtovar
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
-    Test_STO_BlokUHladnjaciObaraSvojLanac
+    Test_STO_BlokUSastavuOtpremniceSeNeStornira
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6254,90 +6254,60 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
-
-' STORNO BLOKA U HLADNJACI OBARA SVOJ LANAC (S5-3b).
+' BLOK U SASTAVU OTPREMNICE SE NE STORNIRA (S5-3b).
 '
-' Ovo je put koji je bio NEDOSTIZAN, ne samo netacan. StornoOtkup_TX je odluku
-' "ide li hladnjacka kaskada" donosio ovako:
+' Ovo je kapija zbog koje je hladnjacka kaskada u StornoOtkup_TX OBRISANA, a ne
+' popravljena. Kaskada se okidala uslovom "blok ima zbirnu", a blok ima zbirnu
+' samo preko svoje otpremnice. Jezgro (review #362, A13/A15) odbija bas takav
+' blok jedan red ranije, pa se do kaskade nije moglo stici ni sa tacnim
+' podatkom: njen uslov i uslov prolaska se iskljucuju po konstrukciji.
 '
-'     brojZbirne = LookupValue(TBL_OTKUP, .., COL_OTK_BROJ_ZBIRNE)
-'     hladnjacaBlock = (Len(stanicaID) > 0) And (Len(brojZbirne) > 0)
+' Tvrdnja koju kapija nosi vredi i sama za sebe, pa se meri ovde -- inace bi
+' obrazlozenje brisanja ostalo bez ijedne provere iza sebe.
 '
-' Tu labelu od S5-3 vise ne pise nijedan pisac, pa je drugi cinilac bio uvek 0 i
-' CELA grana mrtva: storno bloka je prolazio, javljao uspeh, a otpremnica i
-' zbirna su ostajale AKTIVNE. Roba stornirana, dokumenti nad njom nisu.
-'
-' Nijedna zatecena provera to nije videla zato sto su sve hranile labelu rucno
-' -- seed upise BrojZbirne, uslov prodje, kaskada radi. Zelena suite nad
-' podatkom koji produkcija ne proizvodi.
-'
-' Zato ovaj test lanac pravi ISKLJUCIVO produkcionim putem: AutoOtpFixture ->
-' predaja -> CreateZbirnaIzIzvora_TX. Nijedno polje se ne zaseje rucno.
-'
-' Meri se i NEGATIVAN slucaj: blok na obicnoj stanici ne sme da obori svoj lanac.
-' Bez njega bi "popravka" koja uvek kaskadira prosla prvu tvrdnju.
-Private Sub Test_STO_BlokUHladnjaciObaraSvojLanac()
+' Oba smera: vezan blok se ODBIJA i ostaje aktivan, NEVEZAN prolazi. Bez druge
+' polovine bi kapija koja odbija sve prosla prvu tvrdnju iz pogresnog razloga.
+Private Sub Test_STO_BlokUSastavuOtpremniceSeNeStornira()
     Dim tx As clsTransaction
     On Error GoTo EH
 
     Dim scenario As String, datum As Date
-    Dim otpH As String, otkH As String, otpN As String, otkN As String
-    Dim zbrH As String, zbrN As String, g As String
-    Dim izv As Collection
+    Dim otpV As String, otkV As String, otkS As String
 
-    scenario = NewScenarioCode("STOHLA")
+    scenario = NewScenarioCode("STOIZV")
     datum = NextTestDate()
 
     Set tx = New clsTransaction
     tx.BeginTx
     AutoOtpSnimak tx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
 
-    ' --- lanac na HLADNJACKOJ stanici ---
-    otpH = ZbrOtpremnicaNaDan("HL" & scenario, datum, TEST_HLAD_ST_ID, otkH)
-    Set izv = New Collection: izv.Add otpH
-    zbrH = modDokumenta.CreateZbirnaIzIzvora_TX( _
-               ZbrHeaderNaDan("H" & scenario, datum), izv, g, True)
+    ' VEZAN blok: ceo lanac ide produkcionim putem (predaja pravi otpremnicu),
+    ' pa clanstvo u tblOtpremnicaIzvori nastaje onako kako nastaje i u pogonu.
+    otpV = ZbrOtpremnicaNaDan("IZV" & scenario, datum, TEST_ST_ID, otkV)
+    AssertTrue Len(otpV) > 0, "STO-IZVOR preduslov: predaja je napravila otpremnicu"
+    If Len(otpV) = 0 Then GoTo Kraj
+    AssertEquals otpV, modDokumenta.OtpremnicaZaOtkup(otkV), _
+        "STO-IZVOR preduslov: blok je clan te otpremnice"
 
-    ' --- kontrolni lanac na OBICNOJ stanici ---
-    otpN = ZbrOtpremnicaNaDan("NO" & scenario, datum, TEST_ST_ID, otkN)
-    Set izv = New Collection: izv.Add otpN
-    zbrN = modDokumenta.CreateZbirnaIzIzvora_TX( _
-               ZbrHeaderNaDan("N" & scenario, datum), izv, g, True)
+    AssertFalse modStorno.StornoOtkup_TX(otkV), _
+        "STO-IZVOR: storno bloka u sastavu aktivne otpremnice je ODBIJEN"
+    AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkV), _
+        "STO-IZVOR: blok u sastavu otpremnice je ostao AKTIVAN"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpV), _
+        "STO-IZVOR: otpremnica je netaknuta"
 
-    AssertTrue (Len(zbrH) > 0 And Len(zbrN) > 0), _
-        "HLAD preduslov: oba lanca su napravljena produkcionim putem"
-    If Len(zbrH) = 0 Or Len(zbrN) = 0 Then GoTo Kraj
-    AssertEquals zbrH, modDokumenta.AktivnaZbirnaZaOtpremnicu(otpH), _
-        "HLAD preduslov: clanstvo vezuje hladnjacku otpremnicu za njenu zbirnu"
-
-    ' --- storno bloka u hladnjaci: ceo lanac pada ---
-    AssertTrue modStorno.StornoOtkup_TX(otkH), _
-        "HLAD: storno bloka u hladnjaci prolazi"
-    AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpH), _
-        "HLAD: otpremnica tog bloka je STORNIRANA"
-    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrH), _
-        "HLAD: zbirna tog bloka je STORNIRANA"
-
-    ' --- kontrola: tudji lanac je netaknut ---
-    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpN), _
-        "HLAD: tudja otpremnica nije dirnuta"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrN), _
-        "HLAD: tudja zbirna nije dirnuta"
-
-    ' --- negativan slucaj: obicna stanica NE kaskadira ---
-    AssertTrue modStorno.StornoOtkup_TX(otkN), _
-        "HLAD: storno bloka na obicnoj stanici prolazi"
-    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrN), _
-        "HLAD: blok van hladnjace NE obara svoju zbirnu"
+    ' NEVEZAN blok: ista operacija, bez clanstva -- mora da prodje.
+    otkS = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-SAM-" & scenario, _
+                          KLASA_I, 300#, 200#, 15#, TEST_TIP_AMB)
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkS), _
+        "STO-IZVOR preduslov: kontrolni blok nije ni u cijem sastavu"
+    AssertTrue modStorno.StornoOtkup_TX(otkS), _
+        "STO-IZVOR: NEVEZAN blok se i dalje stornira"
+    AssertTrue RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkS), _
+        "STO-IZVOR: nevezan blok je posle storna NEAKTIVAN"
 
 Kraj:
     tx.RollbackTx
@@ -6350,7 +6320,7 @@ EH:
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
-    LogFatal "Test_STO_BlokUHladnjaciObaraSvojLanac", eN, eD
+    LogFatal "Test_STO_BlokUSastavuOtpremniceSeNeStornira", eN, eD
 End Sub
 
 ' DVA DOKUMENTA POD ISTIM BROJEM: FIXTURE ZA SCOPED IZBOR (S5-3b).
