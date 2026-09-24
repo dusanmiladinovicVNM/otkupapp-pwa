@@ -126,6 +126,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZBR_ImportDvaUredjajaNeStapaDokumente
     Test_ZBR_UvozPamtiPoreklo
     Test_ZBR_IstiCridDrugiSadrzajJeKonflikt
+    Test_ZBR_IstiCridNevalidanDatumNijeDuplikat
     Test_RF28_NevalidanDatumJeSyncError
 
     ' RF-05 (frmDokumenta unos + storno set)
@@ -305,6 +306,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AutoSistemskiPadStajeProlaz
     Test_OTP_PredajaJeJedanUtovar
     Test_OTP_PredajaPrezivljavaParcijalanSync
+    Test_OTP_NepotpunUtovarNeDobijaDokument
+    Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
     Test_OTP_PredajaBezIdentitetaStaje
@@ -1436,6 +1439,77 @@ EH:
     On Error GoTo 0
     LogFail "RF-28 AUD-041b broj zbirne rupa", bfpErrDesc
 End Sub
+' NEUPOREDIV DATUM JE RAZLIKA, NE PRESKOK (review #388, drugi krug P2).
+'
+' Poredjenje sadrzaja je stajalo pod "If IsoUDatum(...) And IsDate(...)", pa je
+' nevalidan datum TIHO ispadao iz poredjenja. Ako se sve ostalo poklopi, red bi
+' dobio Duplicate -- a Duplicate je TERMINALAN (import uzima samo Pending), pa bi
+' pokvaren red zauvek nestao, a master ostao na staroj verziji.
+'
+' ValidatePWAZbirna tu ne pomaze: ona se zove tek za NOV red, POSLE ove grane.
+' Zato kapija mora da stoji bas u poredjenju.
+Private Sub Test_ZBR_IstiCridNevalidanDatumNijeDuplikat()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRDAT")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    Dim danas As Date
+    danas = NextTestDate()
+
+    Dim crid As String
+    crid = ZbrPwaIzvorCrid("DAT-" & scenario, danas, TEST_VOZ_ID)
+
+    Dim zbrCrid As String, broj As String
+    zbrCrid = "CRID-ZBRDAT-" & scenario
+    broj = modBrojevi.FormatBroj(TEST_VOZ_ID, danas, 1)
+
+    Dim zbrID As String
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, TEST_VRSTA, TEST_SORTA, _
+                100#, broj, crid)
+    AssertTrue Len(zbrID) > 0, "ZBR datum preduslov: zbirna je uvezena"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' Sve isto OSIM datuma, koji nije datum. Bez kapije bi ovo bilo "nema
+    ' razlike" -> Duplicate -> terminalno.
+    Dim r As String
+    r = modMasterSync.TestHook_PwaZbirnaRazlika( _
+            zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, "nije-datum", broj, crid)
+
+    AssertTrue Len(r) > 0, "ZBR datum: nevalidan datum NIJE duplikat"
+    AssertTrue InStr(1, r, "Datum", vbTextCompare) > 0, _
+               "ZBR datum: razlog imenuje datum (bilo: " & r & ")"
+
+    ' Kontrola: sa ISPRAVNIM datumom isti red je i dalje uredan NO-OP -- inace bi
+    ' kapija koja odbija SVE prosla gornju tvrdnju iz pogresnog razloga.
+    AssertEquals "", modMasterSync.TestHook_PwaZbirnaRazlika( _
+                         zbrID, zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, broj, crid), _
+                 "ZBR datum: sa ispravnim datumom isti red ostaje NO-OP"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_IstiCridNevalidanDatumNijeDuplikat", eN, eD
+End Sub
+
 ' ISTI CRID SA DRUGOM TVRDNJOM JE KONFLIKT, NE DUPLIKAT (review #388, P2).
 '
 ' Zatecen uvoz je gledao samo POSTOJI LI isti ClientRecordID. Duplicate je
@@ -6145,16 +6219,214 @@ End Sub
 ' ============================================================
 
 ' Jedan red predaje, kakav ga ImportOneOTKSheet skuplja iz PWA lista:
-' Array(redIndex, OtkupID, VozacID, PredajaID, PredatoAt).
+' Array(redIndex, OtkupID, VozacID, PredajaID, PredatoAt, PredajaClanovi, CRID).
+'
+' Manifest i CRID su opcioni u potpisu SAMO zbog citljivosti testova koji mere
+' jednoclanu predaju -- tada je manifest bas taj jedan clan.
 Private Function PredajaRed(ByVal redIdx As Long, ByVal otkupID As String, _
                             ByVal vozacID As String, ByVal predajaID As String, _
-                            ByVal predatoAt As String) As Variant
-    PredajaRed = Array(redIdx, otkupID, vozacID, predajaID, predatoAt)
+                            ByVal predatoAt As String, _
+                            Optional ByVal crid As String = "", _
+                            Optional ByVal manifest As String = "") As Variant
+    Dim c As String, m As String
+    c = crid
+    If Len(c) = 0 Then c = "CRID-" & otkupID
+    m = manifest
+    If Len(m) = 0 Then m = c
+
+    PredajaRed = Array(redIdx, otkupID, vozacID, predajaID, predatoAt, m, c)
 End Function
 
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+
+' NEPOTPUN UTOVAR NE DOBIJA DOKUMENT (review #388, drugi krug P1).
+'
+' Prvi krug je sprecio da ZAKASNELI blok napravi DRUGU otpremnicu. Ali nije
+' sprecio ono gore: da PRVI ciklus IZDA nepotpun dokument. GAS obradjuje redove
+' pojedinacno, pa od klika A+B+C ume da stigne samo A+B -- i master je to video
+' kao zavrsen utovar.
+'
+' Izdata otpremnica se ne dopunjuje (A13), pa je C zauvek ostajao napolju. Test
+' to zove pravim imenom: dokument koji tvrdi manje nego sto je natovareno.
+'
+' Resenje nije jos jedna heuristika nego MANIFEST: red nosi spisak svih clanova
+' tog klika, pa master zna kad je utovar CEO. Nepotpun utovar ne dobija ni
+' dokument ni status -- redovi ostaju Pending i vracaju se sledecim ciklusom.
+Private Sub Test_OTP_NepotpunUtovarNeDobijaDokument()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDNP")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-NPA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-NPB-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim predajaID As String, cridA As String, cridB As String, cridC As String
+    predajaID = "PRED-NP-" & scenario
+    cridA = "CRID-NPA-" & scenario
+    cridB = "CRID-NPB-" & scenario
+    cridC = "CRID-NPC-" & scenario
+
+    ' Manifest kaze TRI clana; stigla su dva.
+    Dim manifest As String
+    manifest = cridA & "," & cridB & "," & cridC
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridA, manifest)
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridB, manifest)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "NEPOTPUN: nepotpun utovar NE dobija dokument"
+    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkA), _
+                 "NEPOTPUN: nijedan blok nije vezan dok utovar nije ceo"
+    AssertEquals "", greske, "NEPOTPUN: cekanje NIJE greska"
+
+    ' Redovi ostaju bez ishoda -> Pending -> sledeci ciklus ih opet donese.
+    AssertFalse ishodi.Exists(2&), "NEPOTPUN: red ostaje Pending, bez statusa"
+
+    ' --- SLEDECI CIKLUS: stigao i treci clan --------------------------------
+    Dim otkC As String
+    otkC = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-NPC-" & scenario, _
+                          KLASA_I, 200#, 250#, 10#, TEST_TIP_AMB)
+
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridA, manifest)
+    predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridB, manifest)
+    predaje.Add PredajaRed(4, otkC, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridC, manifest)
+
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "NEPOTPUN: kad je utovar CEO, nastaje JEDAN dokument"
+
+    Dim otp As String
+    otp = modDokumenta.OtpremnicaZaOtkup(otkA)
+    AssertTrue Len(otp) > 0, "NEPOTPUN: blok A je vezan"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    AssertEquals "3", CStr(modDokumenta.IzvoriOtpremnice(otp).count), _
+                 "NEPOTPUN: dokument nosi SVA TRI clana utovara"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_NepotpunUtovarNeDobijaDokument", eN, eD
+End Sub
+
+' IDENTITET UTOVARA PREZIVLJAVA ISPRAVKU (review #388, drugi krug P1).
+'
+' Ispravka pravi NOV dokument i stornira stari. Dok PredajaID nije isao sa njim,
+' nova verzija je ostajala bez identiteta utovara -- a OtpremnicaPoPredaji
+' namerno gleda samo AKTIVNE. Posledica: cim otpremnica prodje kroz ispravku,
+' zakasneli blok istog utovara opet moze da napravi SVOJ dokument. Ista greska
+' koju je prvi krug zatvorio, samo kroz drugi lifecycle.
+'
+' Test meri oba koraka: da nova verzija nosi identitet, i da zakasneli blok
+' POSLE ispravke i dalje staje -- i to imenujuci NOVU otpremnicu.
+Private Sub Test_OTP_IspravkaCuvaIdentitetUtovara()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDISP")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkA As String, otkC As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-ISA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB)
+    otkC = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-ISC-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
+
+    Dim predajaID As String, cridA As String
+    predajaID = "PRED-IS-" & scenario
+    cridA = "CRID-ISA-" & scenario
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           cridA, cridA)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA isp preduslov: utovar je postao otpremnica"
+
+    Dim otpPrva As String
+    otpPrva = modDokumenta.OtpremnicaZaOtkup(otkA)
+    AssertTrue Len(otpPrva) > 0, "PREDAJA isp preduslov: blok je vezan"
+    If Len(otpPrva) = 0 Then GoTo Kraj
+
+    ' --- ISPRAVKA: nova verzija istog fizickog utovara ----------------------
+    Dim g As String, otpNova As String
+    otpNova = modDokumenta.IspravkaOtpremnice_TX(otpPrva, g)
+    AssertTrue Len(otpNova) > 0, "PREDAJA isp: ispravka je napravila novu verziju (" & g & ")"
+    If Len(otpNova) = 0 Then GoTo Kraj
+
+    AssertEquals predajaID, OtpPolje(otpNova, COL_OTP_PREDAJA_ID), _
+                 "PREDAJA isp: nova verzija NOSI identitet utovara"
+
+    ' --- ZAKASNELI BLOK POSLE ISPRAVKE --------------------------------------
+    '
+    ' Bez prenosa identiteta bi ovde nastao TRECI dokument za isti utovar.
+    Set predaje = New Collection
+    predaje.Add PredajaRed(5, otkC, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), _
+                           "CRID-ISC-" & scenario, "CRID-ISC-" & scenario)
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA isp: zakasneo blok NE pravi dokument ni posle ispravke"
+    AssertTrue InStr(1, greske, otpNova, vbTextCompare) > 0, _
+               "PREDAJA isp: razlog imenuje NOVU verziju (bilo: " & greske & ")"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTP_IspravkaCuvaIdentitetUtovara", eN, eD
+End Sub
 
 ' PARCIJALAN SYNC NE SME DA RAZBIJE JEDAN UTOVAR NA DVA DOKUMENTA (#388, P1).
 '
@@ -6277,13 +6549,19 @@ Private Sub Test_OTP_PredajaJeJedanUtovar()
     otkNovi = AutoOtpFixture(danas, TEST_ST_ID, TEST_PREFIX & "-OTK-P1B-" & scenario, _
                              KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB)
 
-    Dim predajaID As String
+    ' Manifest je ISTI za sve redove jednog klika -- to i jeste njegova poenta.
+    Dim predajaID As String, cridS As String, cridN As String, manifest As String
     predajaID = "PRED-" & scenario
+    cridS = "CRID-P1S-" & scenario
+    cridN = "CRID-P1N-" & scenario
+    manifest = cridS & "," & cridN
 
     Dim predaje As Collection
     Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkStari, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas))
-    predaje.Add PredajaRed(3, otkNovi, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas))
+    predaje.Add PredajaRed(2, otkStari, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas), _
+                           cridS, manifest)
+    predaje.Add PredajaRed(3, otkNovi, TEST_VOZ_ID, predajaID, PredajaIsoDatum(danas), _
+                           cridN, manifest)
 
     Dim ishodi As Object, greske As String, n As Long
     n = modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)
@@ -6429,12 +6707,17 @@ Private Sub Test_OTP_PredajaMesanihVrstaSeOdbija()
     AssertTrue OtkPolje(otkA, COL_OTK_KULTURA) <> OtkPolje(otkB, COL_OTK_KULTURA), _
                "PREDAJA mesano preduslov: blokovi su STVARNO razlicite vrste"
 
+    Dim cridMA As String, cridMB As String, manifestM As String
+    cridMA = "CRID-MA-" & scenario
+    cridMB = "CRID-MB-" & scenario
+    manifestM = cridMA & "," & cridMB
+
     Dim predaje As Collection
     Set predaje = New Collection
     predaje.Add PredajaRed(2, otkA, TEST_VOZ_ID, "PRED-M-" & scenario, _
-                           PredajaIsoDatum(datum))
+                           PredajaIsoDatum(datum), cridMA, manifestM)
     predaje.Add PredajaRed(3, otkB, TEST_VOZ_ID, "PRED-M-" & scenario, _
-                           PredajaIsoDatum(datum))
+                           PredajaIsoDatum(datum), cridMB, manifestM)
 
     Dim ishodi As Object, greske As String
     AssertEquals "0", _

@@ -5721,6 +5721,36 @@ SABOTAZE = {
         "Test_OTP_PredajaPrezivljavaParcijalanSync",
         "PREDAJA parc: otpremnica nosi identitet utovara",
     ),
+    # Nepotpun utovar NE SME da dobije dokument (review #388, drugi krug P1).
+    # GAS obradjuje redove pojedinacno, pa deo jednog klika ume da stigne kasnije.
+    # Bez manifesta master izda nepotpunu otpremnicu -- a izdata se ne dopunjuje
+    # (A13), pa ostatak zauvek ostaje napolju.
+    "predaja-izdaje-nepotpun-utovar": (
+        "modMasterSync.bas",
+        "        If Len(fali) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: nepotpun utovar se izdaje\n",
+        "Test_OTP_NepotpunUtovarNeDobijaDokument",
+        "NEPOTPUN: nepotpun utovar NE dobija dokument",
+    ),
+    # Identitet utovara mora da prezivi verzionisanje (review #388, drugi krug).
+    # Ispravka pravi NOV dokument; bez prenosa PredajaID-a nova verzija ostaje
+    # bez identiteta, pa zakasneo blok istog utovara opet pravi svoj dokument.
+    "ispravka-gubi-identitet-utovara": (
+        "modDokumenta.bas",
+        "    If Len(predajaID) > 0 Then h(\"PredajaID\") = predajaID\n",
+        "    ' SABOTAZA: ispravka ne prenosi identitet utovara\n",
+        "Test_OTP_IspravkaCuvaIdentitetUtovara",
+        "PREDAJA isp: nova verzija NOSI identitet utovara",
+    ),
+    # Neuporediv datum je RAZLIKA, ne preskok. Duplicate je terminalan, pa bi
+    # pokvaren red zauvek nestao.
+    "zbirna-nevalidan-datum-je-duplikat": (
+        "modMasterSync.bas",
+        "    If Not IsoUDatum(data(row, VS_DATUM), danNov) Then\n",
+        "    If False Then   ' SABOTAZA: nevalidan datum se preskace\n",
+        "Test_ZBR_IstiCridNevalidanDatumNijeDuplikat",
+        "ZBR datum: nevalidan datum NIJE duplikat",
+    ),
     # --- S5-2: predaja robe vozacu postaje otpremnica --------------------
     #
     # Identitet predaje je PredajaID -- jedan klik otkupca. Sabotaza vraca

@@ -4729,6 +4729,22 @@ Private Function OtpIspravi(ByVal staraID As String) As String
     h("KulturaID") = kulturaID
     h("TipAmbalaze") = tipAmb
 
+    ' IDENTITET UTOVARA PREZIVLJAVA VERZIONISANJE (review #388, drugi krug P1).
+    '
+    ' Ispravka pravi NOV dokument i stornira stari. Dok PredajaID nije isao sa
+    ' njim, nova verzija je ostajala bez identiteta utovara -- a
+    ' OtpremnicaPoPredaji namerno gleda samo AKTIVNE. Posledica: cim otpremnica
+    ' prodje kroz ispravku, zakasneli blok istog utovara opet moze da napravi
+    ' SVOJ dokument. Ista greska koju je prvi krug zatvorio, samo kroz drugi
+    ' lifecycle.
+    '
+    ' Broj se NE nasledjuje (A9), ali identitet dogadjaja nije broj: fizicki
+    ' utovar je bio jedan i ostaje jedan bez obzira koliko verzija dokument ima.
+    Dim predajaID As String
+    predajaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, _
+                                           COL_OTP_PREDAJA_ID)))
+    If Len(predajaID) > 0 Then h("PredajaID") = predajaID
+
     Dim noviBroj As String
     noviBroj = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
     If Len(noviBroj) = 0 Then
