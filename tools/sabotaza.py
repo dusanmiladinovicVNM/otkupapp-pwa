@@ -5914,10 +5914,32 @@ SABOTAZE = {
         "ZBR uvid: izgubljeno clanstvo IZDATE ne sme da prodje kao valid",
     ),
 
+    # review #389, drugi krug: strog citalac zbirne je bio slabiji od svog
+    # pandana sprat nize. Veza na nepostojecu otpremnicu davala je KRACI spisak,
+    # pa je SIMPLE storno javljao 'otpremnice vracene: 1' za dokument kog nema.
+    "zbirna-clanstvo-na-nepostojecu-otp": (
+        "modDokumenta.bas",
+        "                RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpID, _\n",
+        "                If False Then RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpID, _\n",
+        "Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada",
+        "ZBR NEP: razlog IMENUJE da otpremnica iz clanstva NE POSTOJI",
+    ),
+
+    # review #389, drugi krug: storniran izvor aktivne izdate zbirne je stanje
+    # koje pisac ne ume da napravi. Zatecen kod ga je tiho filtrirao, pa je
+    # kaskada nalazila '0 aktivnih izvora' i javljala uspeh nad korupcijom.
+    "zbirna-storniran-izvor-tih": (
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeStornirana(zbirnaID) Then ZbrRequireIzvoriZivi c, zbirnaID, SRC\n",
+        "    If False Then ZbrRequireIzvoriZivi c, zbirnaID, SRC   ' SABOTAZA: mrtav izvor se ne prijavljuje\n",
+        "Test_ZBR_StorniranIzvorAktivneIzdateJeKvar",
+        "ZBR STI: SIMPLE storno nad STORNIRANIM izvorom NE prolazi",
+    ),
+
     "ponistenje-izdate-cita-permisivno": (
         "modDokumenta.bas",
-        "        Set ZbrClanoviPoStanju = IzvoriZbirne(zbirnaID)\n",
-        "        Set ZbrClanoviPoStanju = ZbrClanovi(zbirnaID)   ' SABOTAZA: izdata se cita permisivno\n",
+        "    If Not ZbirnaJeIzdata(zbirnaID) Then\n",
+        "    If True Then   ' SABOTAZA: izdata se cita permisivno\n",
         "Test_ZBR_PonistenjeIzdateNeNormalizujeKvar",
         "ZBR kvar: ponistenje IZDATE bez clanstva NE prolazi",
     ),

@@ -5339,10 +5339,11 @@ nalaz je isti utovar na dva aktivna dokumenta.
 
 **Verifikacija** (posle review-a #389). `vba_check` čisto · `gen_schema_module --check` u koraku ·
 `who_writes --check` i `--check-ownership` čisto · `popis_citalaca --check` čisto · `RunAllTests` **199/0** ·
-`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1941/0** ·
+`RunStornoTestSuite` **163/0** · `Test_StornoCentar_All` OK · `RunBusinessFlowProSuite` **1951/0** ·
 `RunGoldenSuite` OK. Dvosmerni dokaz nad sabotažama koje je ovaj rez dodao ili preniašao
 (`blok-izvor-sme-storno`, `zbirna-kaskada-bez-kapije`, `simple-dupli-cita-permisivno`,
-`strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`): **5/5 crvenih**, potpis izvora
+`strog-uvid-cita-permisivno`, `ponistenje-izdate-cita-permisivno`,
+`zbirna-clanstvo-na-nepostojecu-otp`, `zbirna-storniran-izvor-tih`): **7/7 crvenih**, potpis izvora
 identičan pre i posle. Compile automatski `NEJASNO` — ručna kapija ostaje.
 
 > `ponistenje-izdate-cita-permisivno` je pri tom pokazala **zatečenu grešku u katalogu**: tvrdnja joj je
@@ -5390,7 +5391,62 @@ produkcioni pozivaoci šalju konstantu, pa to nije živ kvar — ali je ista kla
 nepoznat `docType` u strict režimu treba da bude greška, ne prazan validan model. Zapisano, ne
 popravljeno u ovom rezu (recenzent je izričito tražio da se PR ne širi).
 
-**Tri nalaza koja ovaj rez NE zatvara**
+**Review #389, drugi krug — strog čitalac zbirne bio je slabiji od svog pandana sprat niže.**
+
+`OtpClanovi` (otpremnica → otkup) drži pet tačaka ugovora: roditelj postoji tačno jednom, `OtkupID` nije
+prazan, dete postoji tačno jednom, dupli par pada, globalna invarijanta članstva. `IzvoriZbirne` je
+držao tri — prazan ID, dupli par, „bar jedan izvor". Nedostajale su **obe egzistencijalne**.
+
+Posledica je merljiva: članstvo koje pokazuje na `OtpremnicaID` bez zaglavlja davalo je samo **kraći
+spisak**, pa je SIMPLE storno javljao *„otpremnice vraćene: 1"* za dokument koji ne postoji. Tiši ishod
+od pada, i zato gori — tačno klasa koju ovaj rez zatvara.
+
+Drugi oblik iste klase: aktivna IZDATA zbirna čije članstvo pokazuje na **storniranu** otpremnicu.
+`ActiveOtpIDsByZbirna` ju je samo filtrirao, pa je korupcija postajala „ima 0 aktivnih izvora" umesto
+„integrity error". Da je to stanje **nemoguće** kroz produkcioni put potvrđeno je merenjem:
+`StornoOtpremnica` odbija izvor aktivne zbirne ([modStorno.bas:234](src-vba/modStorno.bas:234),
+`ERR_STORNO_BASE+71`).
+
+**Gde koja provera stoji — i zašto ne na istom mestu**
+
+| Provera | Mesto | Razlog |
+|---|---|---|
+| zaglavlje zbirne postoji tačno jednom | `IzvoriZbirne` | referencijalno, **bezuslovno** |
+| `OtpremnicaID` postoji tačno jednom | `IzvoriZbirne` | isto — članstvo bez zaglavlja nije sastav |
+| izvor nije storniran · izvor je IZDAT | `ZbrClanoviPoStanju` (samo aktivna IZDATA) | **lifecycle**, zavisi od toga čije se članstvo čita |
+
+Podela je namerna i recenzent je na nju upozorio: nad **storniranom** zbirnom je storniran izvor
+**normalna istorija**, pa bi ista tvrdnja u `IzvoriZbirne` obarala čitanje zatečenog stanja — gore od
+rupe koju zatvara. Zato je taj kontrolni smer i **u testu**.
+
+Nove provere: `Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada` i
+`Test_ZBR_StorniranIzvorAktivneIzdateJeKvar`. Oba fixture-a su izričito označena kao
+**synthetic anomaly / fault injection** — stanja koja pisac ne ume da napravi prave se direktnim
+upisom, i iz njih se **ne izvodi poslovno pravilo** (pre-flight §5). Oba mere kroz **mutation put**
+(`RunSimpleStornoZbirna`), ne samo direktnim pozivom čitaoca.
+
+**Dokaz je uhvatio placebo u mom testu.** Prva verzija
+`Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada` tvrdila je samo „storno ne prolazi" — i prolazila je i
+sa **ugašenom** referencijalnom proverom, jer nepostojeću otpremnicu tada zaustavi **lifecycle**
+provera („NEIZDAT izvor"). `dokaz.py` je to prijavio kao `NE OBARA NISTA`: tvrdnja je merila **tuđu
+kapiju**. Treći put u ovoj seriji da dvosmerni dokaz pokaže da zelena tvrdnja ne meri ono što joj piše
+u imenu — i jedini razlog zbog kog se to vidi.
+
+Razdvojiti ih kroz mutation put **nije bilo moguće**, i to je zaseban nalaz (dole). Razlog se zato čita
+sa samog čitaoca i tvrdnja glasi da poruka **imenuje** da otpremnica ne postoji; tvrdnja o tome da
+mutacije nema ostaje iznad, nad produkcionim putem.
+
+> **Nije odvojeno sabotirano:** tačka „zaglavlje zbirne postoji tačno jednom". Implementirana je, ali
+> njen način otkaza (članstvo bez zaglavlja) traži još jedan fault-injection fixture, a dve žive klase
+> su pokrivene. Zapisano da ne bi izgledalo kao propust.
+
+**Treća moja greška u ovoj seriji, i opet ista rupa alata.** `ZbirnaJeStornirana` sam prvo napisao
+preko `IsStorniranoValue` — koji je **`Private` u `modStorno`** i iz `modDokumenta` se ne vidi.
+`vba_check` je bio čist; pao je tek VBE. To je **drugi put u ovom rezu** da propusti nešto što compile
+hvata (prvi: procedura bez `End Function`). Oba idu u isti `tools/` PR, uz već zapisanu rupu
+vidljivosti.
+
+**Četiri nalaza koja ovaj rez NE zatvara**
 
 1. **`RunMasterSyncSmokeSuite` je 17/9 i na `main`-u** (mereno `git checkout main -- src-vba tools`, isti
    fixture). Zatečen crven suite, ne posledica ovog reza — ali znači da je S5-3 spojen a da ga niko nije
@@ -5399,7 +5455,15 @@ popravljeno u ovom rezu (recenzent je izričito tražio da se PR ne širi).
    `BuildBrojZbirnePoOtpremnici` neterminisanu; `vba_check` je bio čist, a VBE je javio „Expected End
    Function". Pravilo nedostaje — ide uz već zapisanu rupu vidljivosti (kvalifikovani pozivi, `Private`
    preko modula) u zaseban `tools/` PR.
-3. **Kolone `Otpremnica.BrojZbirne` i `Otkup.BrojZbirne` i dalje postoje.** Probao sam da ih obrišem iz
+3. **SIMPLE storno guta RAZLOG.** `StornoZbirnaIDetach_TX` hvata grešku, vrati `False`, a
+   `RunSimpleStornoZbirna` operateru kaže samo *„Storno zbirne nije uspeo."* Sve fail-closed provere
+   koje je ovaj rez dodao imaju smisla zato što **imenuju** kvar — a na ovom ulazu ime ne stigne do
+   ekrana. PONIŠTENJE ga prosleđuje (`ZbirnaMutPoruka`), SIMPLE ne. Otkriveno pišući razlikujuću
+   tvrdnju: kroz mutation put se dve različite kapije ne mogu razdvojiti jer obe daju **isti** tekst.
+   Nije prošireno u ovom rezu (recenzent je tražio da PR ostane uzak); traži `outGreska` kroz
+   `StornoZbirnaIDetach_TX` i njegova dva pozivaoca.
+
+4. **Kolone `Otpremnica.BrojZbirne` i `Otkup.BrojZbirne` i dalje postoje.** Probao sam da ih obrišem iz
    kanona kao redosled koji tera potpunost; merenje je pokazalo **25 produkcionih čitalaca** van storna
    (revizija A1/B4a/B5b/B6, `modIzvestaj`, `modScrDokumenti`, `modScrIzvestaji`, `modStammdatenSync`,
    `modDokumentInvariant`, `GetOtpremniceByZbirna`, `GetVerwaisteOtpremnice`, `BuildZbirnaVrstaCache`) i

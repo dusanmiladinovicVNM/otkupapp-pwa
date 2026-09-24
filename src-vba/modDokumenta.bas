@@ -2728,6 +2728,9 @@ Public Function IzvoriZbirne(ByVal zbirnaID As String) As Collection
         Err.Raise vbObjectError + 1958, SRC, "ZbirnaID je obavezan."
     End If
 
+    ' RODITELJ MORA DA POSTOJI TACNO JEDNOM -- clanstvo bez zaglavlja nije sastav.
+    RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID", SRC
+
     Dim izv As Variant
     izv = GetTableData(TBL_ZBIRNA_IZVORI)
 
@@ -2753,6 +2756,17 @@ Public Function IzvoriZbirne(ByVal zbirnaID As String) As Collection
                               ": " & otpID & "."
                 End If
                 vidjen.Add UCase$(otpID), True
+
+                ' DETE MORA DA POSTOJI (review #389, drugi krug).
+                '
+                ' Bez ovoga veza na nepostojecu otpremnicu daje samo KRACI spisak
+                ' -- tisi ishod od pada, i zato gori: SIMPLE storno je nad takvim
+                ' clanstvom javljao "otpremnice vracene: 1" za otpremnicu koje
+                ' nema. Isti ugovor sprat nize vec drzi OtpClanovi; zbirna je
+                ' bila slabija od otpremnice bez ijednog razloga.
+                RequireTacnoJedan TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                  "OtpremnicaID (clanstvo)", SRC
+
                 c.Add otpID
             End If
         Next i
@@ -2787,12 +2801,81 @@ End Function
 ' izvora, radni sto F2, progres): tamo je prazno clanstvo normalno stanje, a ne
 ' korupcija.
 Public Function ZbrClanoviPoStanju(ByVal zbirnaID As String) As Collection
-    If ZbirnaJeIzdata(zbirnaID) Then
-        Set ZbrClanoviPoStanju = IzvoriZbirne(zbirnaID)
-    Else
+    Const SRC As String = "ZbrClanoviPoStanju"
+
+    If Not ZbirnaJeIzdata(zbirnaID) Then
         Set ZbrClanoviPoStanju = ZbrClanovi(zbirnaID)
+        Exit Function
     End If
+
+    Dim c As Collection
+    Set c = IzvoriZbirne(zbirnaID)
+
+    ' IZVOR AKTIVNE IZDATE ZBIRNE NE SME DA BUDE MRTAV (review #389, drugi krug).
+    '
+    ' Provera stoji OVDE, a ne u IzvoriZbirne, i to namerno: nad STORNIRANOM
+    ' zbirnom je storniran izvor normalna istorija, pa bi ista tvrdnja tamo
+    ' obarala citanje zatecenog stanja. Referencijalni deo (postoji li red) je
+    ' bezuslovan i zato jeste u IzvoriZbirne; lifecycle deo zavisi od toga cije
+    ' se clanstvo cita, pa je ovde.
+    '
+    ' Stanje je NEMOGUCE kroz produkcioni put: StornoOtpremnica odbija izvor
+    ' aktivne zbirne (modStorno, ERR_STORNO_BASE+71). Zato je pojava tog stanja
+    ' kvar podataka, a ne redak scenario -- i mora da se IMENUJE. Zatecen kod ga
+    ' je tiho filtrirao, pa je kaskada nalazila "0 aktivnih izvora" i uredno
+    ' javljala uspeh nad korumpiranim dokumentom.
+    If Not ZbirnaJeStornirana(zbirnaID) Then ZbrRequireIzvoriZivi c, zbirnaID, SRC
+
+    Set ZbrClanoviPoStanju = c
 End Function
+
+' Da li je zbirna stornirana (zaglavlje).
+Public Function ZbirnaJeStornirana(ByVal zbirnaID As String) As Boolean
+    ZbirnaJeStornirana = DokJeStorniran(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+End Function
+
+' Soft-delete citac po PK-u, u idiomu ovog modula.
+'
+' modStorno ima IsStorniranoValue, ali je Private -- iz modDokumenta se ne vidi,
+' a vba_check tu vrstu rupe (Private preko modula) ne hvata. Poredjenje je isto
+' ono koje modul vec koristi na drugim mestima.
+Private Function DokJeStorniran(ByVal tblName As String, ByVal idCol As String, _
+                                ByVal id As String) As Boolean
+    If Len(Trim$(id)) = 0 Then Exit Function
+
+    DokJeStorniran = (StrComp(Trim$(NzToText(LookupValue(tblName, idCol, id, _
+                                                         COL_STORNIRANO))), _
+                              "Da", vbTextCompare) = 0)
+End Function
+
+' Svaki izvor aktivne izdate zbirne mora biti ZIV I IZDAT.
+'
+' Dva razloga za pad, oba imenovana: storniran izvor (dokument stoji na robi
+' koja je povucena) i neizdat izvor (izdata zbirna zasnovana na nacrtu). Oba
+' su stanja koja pisac ne ume da napravi -- RequireOtpValidanIzvorZbirne ih
+' odbija pri vezivanju -- pa su, ako se pojave, kvar podataka.
+Private Sub ZbrRequireIzvoriZivi(ByVal izvori As Collection, ByVal zbirnaID As String, _
+                                 ByVal src As String)
+    If izvori Is Nothing Then Exit Sub
+
+    Dim i As Long, otpID As String
+    For i = 1 To izvori.count
+        otpID = Trim$(NzToText(izvori(i)))
+
+        If DokJeStorniran(TBL_OTPREMNICA, COL_OTP_ID, otpID) Then
+            Err.Raise vbObjectError + 1961, src, _
+                      "Aktivna izdata zbirna " & zbirnaID & " ima STORNIRAN izvor " & _
+                      otpID & ". Storno izvora aktivne zbirne nije dozvoljen, pa je " & _
+                      "ovo kvar podataka, ne poslovno stanje."
+        End If
+
+        If Not OtpremnicaJeIzdata(otpID) Then
+            Err.Raise vbObjectError + 1962, src, _
+                      "Izdata zbirna " & zbirnaID & " ima NEIZDAT izvor " & otpID & _
+                      ". Izdat dokument se ne moze zasnivati na nacrtu."
+        End If
+    Next i
+End Sub
 
 ' Javni ulaz u kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za
 ' AKTIVNE zbirne. Jezgro je privatno jer ga pisac zove sa svojim SRC-om.

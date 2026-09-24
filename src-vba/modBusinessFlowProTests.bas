@@ -313,6 +313,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
     Test_ZBR_SimpleIDupliNeNormalizujuKvar
     Test_ZBR_StrogUvidNadKvaromNijeValid
+    Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada
+    Test_ZBR_StorniranIzvorAktivneIzdateJeKvar
     Test_OTP_IspravkaCuvaIdentitetUtovara
     Test_OTP_DvePredajeDvaDokumenta
     Test_OTP_PredajaMesanihVrstaSeOdbija
@@ -6256,6 +6258,203 @@ End Function
 Private Function PredajaIsoDatum(ByVal d As Date) As String
     PredajaIsoDatum = Format$(d, "yyyy-mm-dd")
 End Function
+' CLANSTVO NA NEPOSTOJECU OTPREMNICU PADA (review #389, drugi krug).
+'
+' Strog citalac zbirne je bio SLABIJI od svog pandana sprat nize. OtpClanovi vec
+' trazi da dete postoji tacno jednom; IzvoriZbirne je proveravao samo prazan ID,
+' dupli par i "bar jedan izvor". Veza na nepostojecu otpremnicu davala je samo
+' KRACI spisak, pa je SIMPLE storno javljao "otpremnice vracene: 1" za dokument
+' koji ne postoji -- korupcija pretvorena u uredan poslovni odgovor.
+'
+' FIXTURE JE SYNTHETIC ANOMALY: red clanstva koji pokazuje na ID bez zaglavlja
+' pisac ne ume da napravi. Iz njega se ne izvodi poslovno pravilo -- meri se
+' iskljucivo da citalac STANE i IMENUJE.
+'
+' Meri se i kroz mutation put, ne samo direktnim pozivom citaoca: kapija koja
+' radi u primitivu a ne u toku je vec jednom bila cela poenta review-a #384.
+Private Sub Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRNEP")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("NEP-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-NEP-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR NEP: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' --- KONTROLA: zdravo clanstvo se cita bez greske -----------------------
+    AssertEquals "1", CStr(modDokumenta.ZbrClanoviPoStanju(zbrID).count), _
+                 "ZBR NEP kontrola: zdravo clanstvo daje jedan izvor"
+
+    ' --- KVAR: clanstvo pokazuje na ID bez zaglavlja ------------------------
+    Pr3UkloniClanstvo zbrID, otpID
+    Pr3DodajClanstvo zbrID, "OTP-NE-POSTOJI-" & scenario
+
+    Dim r As Object
+    Set r = modStornoFlow.RunSimpleStornoZbirna(broj, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR NEP: SIMPLE storno nad vezom ka nepostojecoj otpremnici NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR NEP: zbirna NIJE stornirana -- kvar staje pre mutacije"
+
+    ' RAZLOG MORA DA BUDE BAS REFERENCIJALNI (nalaz iz dokaza).
+    '
+    ' Prva verzija ovog testa je merila samo "storno ne prolazi" -- i prolazila je
+    ' i kad se referencijalna provera ugasi, jer nepostojecu otpremnicu tada
+    ' zaustavi lifecycle provera ("NEIZDAT izvor"). dokaz.py je to prijavio kao
+    ' NE OBARA NISTA: tvrdnja je merila tudju kapiju.
+    '
+    ' Kroz mutation put se to ne moze razdvojiti, jer StornoZbirnaIDetach_TX guta
+    ' razlog i vraca genericko "Storno zbirne nije uspeo." (zapisano kao zaseban
+    ' nalaz). Zato se razlog cita sa samog citaoca, uz tvrdnju o mutaciji iznad.
+    Dim greska As String
+    greska = ZbrClanstvoGreska(zbrID)
+    AssertTrue Len(greska) > 0, _
+               "ZBR NEP: citalac je STAO nad nepostojecom otpremnicom (bilo: " & greska & ")"
+    AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
+               "ZBR NEP: razlog IMENUJE da otpremnica iz clanstva NE POSTOJI"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada", eN, eD
+End Sub
+
+' STORNIRAN IZVOR AKTIVNE IZDATE ZBIRNE JE KVAR, NE "NULA IZVORA" (review #389).
+'
+' Zatecen kod je storniranu otpremnicu iz clanstva tiho FILTRIRAO, pa je kaskada
+' nalazila 0 aktivnih izvora i uredno javljala uspeh. Stanje je nemoguce kroz
+' produkcioni put -- StornoOtpremnica odbija izvor aktivne zbirne
+' (ERR_STORNO_BASE+71) -- pa njegova pojava znaci kvar podataka i mora da bude
+' IMENOVANA, a ne prevedena u praznu brojku.
+'
+' FIXTURE JE FAULT INJECTION: otpremnica se obara direktnim upisom, bas zato sto
+' je produkcioni put odbija. Iz ovog fixture-a se NE izvodi poslovno pravilo.
+'
+' Kontrolni smer je u istom telu: nad STORNIRANOM zbirnom isti raspored je
+' normalna istorija i NE sme da padne -- inace bi provera zabranila citanje
+' zatecenog stanja, sto je gore od rupe koju zatvara.
+Private Sub Test_ZBR_StorniranIzvorAktivneIzdateJeKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String
+    scenario = NewScenarioCode("ZBRSTI")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim otpID As String, zbrID As String, broj As String
+    otpID = ZbrIzdataOtp("STI-" & scenario, 100#, 5#)
+    If Len(otpID) = 0 Then GoTo Kraj
+
+    Dim izvori As Collection
+    Set izvori = New Collection
+    izvori.Add otpID
+    broj = TEST_PREFIX & "-ZBR-STI-" & scenario
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(Pr3Header(broj), izvori, g)
+    AssertTrue Len(zbrID) > 0, "ZBR STI: izdata zbirna napravljena (" & g & ")"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' --- KVAR: izvor je oboren mimo produkcionog puta ------------------------
+    ZbrOboriOtpremnicuSirovo otpID
+
+    Dim r As Object
+    Set r = modStornoFlow.RunSimpleStornoZbirna(broj, zbrID)
+    AssertFalse CBool(r("success")), _
+                "ZBR STI: SIMPLE storno nad STORNIRANIM izvorom NE prolazi"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "ZBR STI: zbirna NIJE stornirana -- kvar staje pre mutacije"
+
+    ' --- KONTROLA: nad STORNIRANOM zbirnom isti raspored je ISTORIJA ---------
+    ZbrOboriZbirnuSirovo zbrID
+    Dim n As Long
+    n = modDokumenta.ZbrClanoviPoStanju(zbrID).count
+    AssertEquals "1", CStr(n), _
+                 "ZBR STI kontrola: stornirana zbirna sme da ima storniran izvor"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_StorniranIzvorAktivneIzdateJeKvar", eN, eD
+End Sub
+
+' Razlog kojim citalac clanstva staje ("" = nije stao).
+Private Function ZbrClanstvoGreska(ByVal zbirnaID As String) As String
+    Dim c As Collection
+    On Error Resume Next
+    Set c = modDokumenta.ZbrClanoviPoStanju(zbirnaID)
+    ZbrClanstvoGreska = Err.description
+    On Error GoTo 0
+End Function
+
+' FAULT INJECTION: obori red mimo produkcionog puta.
+'
+' Produkcioni storno OVO NAMERNO ODBIJA (izvor aktivne zbirne, aktivna zbirna sa
+' decom), pa se stanje koje citalac treba da prijavi ne moze ni napraviti kroz
+' pisca. Koristi se ISKLJUCIVO za merenje citaoca.
+Private Sub ZbrOboriOtpremnicuSirovo(ByVal otpremnicaID As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID)
+    If redovi.count <> 1 Then Exit Sub
+    RequireUpdateCell TBL_OTPREMNICA, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                      "ZbrOboriOtpremnicuSirovo"
+End Sub
+
+Private Sub ZbrOboriZbirnuSirovo(ByVal zbirnaID As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
+    If redovi.count <> 1 Then Exit Sub
+    RequireUpdateCell TBL_ZBIRNA, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                      "ZbrOboriZbirnuSirovo"
+End Sub
+
 ' KVAR CLANSTVA STAJE NA SVAKOM ULAZU, NE SAMO NA PONISTENJU (review #389, P2).
 '
 ' Test_ZBR_PonistenjeIzdateNeNormalizujeKvar dokazuje isto pravilo za PONISTENJE.
