@@ -40,7 +40,23 @@ const COLUMNS = [
   'VozacID',
   'Napomena',
   'ReceivedAt',
-  'BrojDokumenta'   // ← DODATO
+  'BrojDokumenta',   // ← DODATO
+
+  // PREDAJA ROBE VOZACU JE SOPSTVENI DOGADJAJ (S5-4).
+  //
+  // Do sada je otprema slala samo VozacID, pa se identitet utovara izvodio iz
+  // robe (vozac + dan + stanica). Master strana od S5-3 trazi identitet
+  // dogadjaja i bez njega predaju GLASNO odbija.
+  //
+  // PredajaID     -- jedan klik otkupca = jedan utovar = jedna otpremnica
+  // PredatoAt     -- ISO trenutak predaje; otpremnica nosi datum PREDAJE, ne
+  //                  datum otkupnih listova (roba sa dva dana ide na jednu)
+  // PredajaClanovi-- MANIFEST: ClientRecordID svih blokova tog klika, zarezom
+  //                  razdvojeni. Bez njega se ne zna kad je utovar CEO, pa bi
+  //                  parcijalan batch izdao nepotpun dokument
+  'PredajaID',
+  'PredatoAt',
+  'PredajaClanovi'
 ];
 
 const ZBIRNA_COLUMNS = [
@@ -1550,6 +1566,41 @@ function isTerminalSyncStatus(status) {
   );
 }
 
+// Upisi polja predaje na postojeci red, ali NIKAD preko postojece vrednosti.
+//
+// Vraca true kad je bilo sta upisano -- pozivalac to vraca klijentu, da se
+// "predato" ne prikaze na osnovu pretpostavke.
+//
+// Prepisivanje se ne radi namerno: red koji vec nosi PredajaID je vec prijavljen
+// kao deo nekog utovara. Ako stigne DRUGI utovar za isti blok, to je konflikt o
+// kome odlucuje master strana (ona vidi da li je dokument vec izdat), a ne GAS.
+function upisiPredajuAkoNedostaje(sheet, row, values, idx, record) {
+  const polja = [
+    ['PredajaID', record && record.predajaID],
+    ['PredatoAt', record && record.predatoAt],
+    ['PredajaClanovi', record && record.predajaClanovi]
+  ];
+
+  let upisano = false;
+
+  polja.forEach(function (par) {
+    const kolona = par[0];
+    const vrednost = String(par[1] || '').trim();
+    if (!vrednost) return;
+
+    const i = idx[kolona];
+    if (typeof i !== 'number' || i < 0) return;
+
+    const postojece = String(getCell(values, i, '') || '').trim();
+    if (postojece) return;
+
+    sheet.getRange(row, i + 1).setValue(vrednost);
+    upisano = true;
+  });
+
+  return upisano;
+}
+
 function processRecord(record, otkupacID) {
   try {
     const sheetName = 'OTK-' + (otkupacID || 'UNKNOWN');
@@ -1616,6 +1667,24 @@ function processRecord(record, otkupacID) {
       const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
       const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
+      // PREDAJA PROLAZI I PREKO TERMINALNOG STATUSA (S5-4).
+      //
+      // 'Synced>Master' znaci "otkup je uvezen u master" -- i za MUTACIJU otkupa
+      // to jeste terminalno stanje. Ali predaja robe vozacu je NOV DOGADJAJ nad
+      // istim redom, a ne retry originalnog zapisa.
+      //
+      // Dok je i ona bila terminalna, GAS bi vratio success/existing, klijent bi
+      // zapis lokalno obelezio kao synced, i otkupac bi video "predato" -- a
+      // master taj dogadjaj nikad ne bi video. Tih gubitak poslovnog dogadjaja.
+      //
+      // Zato se tri polja predaje upisuju i na terminalan red, ali SAMO kad ih
+      // red jos nema: prepisivanje postojeceg utovara bi bila izmena izdatog
+      // dokumenta, sto master strana odbija (A13). Drugi utovar istog bloka je
+      // konflikt, i master ga imenuje -- ovde se ne presudjuje.
+      const predajaUpisana = upisiPredajuAkoNedostaje(
+        sheet, existingRow, existingValues, idx, record
+      );
+
       // Only non-terminal records may receive light enrichment.
       // Terminal/master/error records must stay untouched by PWA retry.
       if (!isTerminal) {
@@ -1657,6 +1726,7 @@ function processRecord(record, otkupacID) {
         success: true,
         status: 'existing',
         terminal: isTerminal,
+        predajaUpisana: predajaUpisana,
         syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
@@ -1707,7 +1777,10 @@ function processRecord(record, otkupacID) {
       VozacID: record.vozacID || '',
       Napomena: record.napomena || '',
       ReceivedAt: nowIso,
-      BrojDokumenta: record.brojDokumenta || ''   // ← DODATO
+      BrojDokumenta: record.brojDokumenta || '',   // ← DODATO
+      PredajaID: record.predajaID || '',
+      PredatoAt: record.predatoAt || '',
+      PredajaClanovi: record.predajaClanovi || ''
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -5612,10 +5685,46 @@ function ensureSheetColumns(sheet, requiredColumns) {
   }
 
   const width = Math.max(lastCol, requiredColumns.length);
-  const headers = sheet
+  let headers = sheet
     .getRange(1, 1, 1, width)
     .getValues()[0]
     .map(h => String(h || '').trim());
+
+  // NOVE KOLONE NA KRAJU SE DOZIDJUJU, SVE OSTALO JE I DALJE DRIFT (S5-4).
+  //
+  // Ova funkcija je do sada SAMO prijavljivala razliku. To je tacno za promenjen
+  // redosled ili preimenovanu kolonu -- takav list se ne sme tiho popravljati.
+  //
+  // Ali dodavanje kolone NA KRAJ je jedini nacin na koji sema ovde legitimno
+  // raste (isto pravilo vazi i u VBA kanonu: "nove kolone idu na kraj", jer se
+  // red pise poziciono). Bez ovoga bi svaki rez koji doda kolonu oborio sync na
+  // SVAKOM zatecenom listu -- SCHEMA_DRIFT na prvom zahtevu, dok neko rucno ne
+  // prosiri zaglavlje.
+  //
+  // Dozidjuje se SAMO kad je zatecen header PREFIKS kanonskog: prvih lastCol
+  // imena se poklapaju, a fali samo rep. Svaka druga razlika ide u problems i
+  // dalje puca.
+  //
+  // Meri se po lastCol, ne po headers.length: headers je procitan sirinom
+  // max(lastCol, N), pa mu je rep prazan i duzina bi uvek izgledala dovoljna.
+  if (lastCol < requiredColumns.length) {
+    let prefiksSeSlaze = true;
+    for (let i = 0; i < lastCol; i++) {
+      if (String(headers[i] || '').trim() !== String(requiredColumns[i] || '').trim()) {
+        prefiksSeSlaze = false;
+        break;
+      }
+    }
+
+    if (prefiksSeSlaze) {
+      const nedostaju = requiredColumns.slice(lastCol);
+      sheet.getRange(1, lastCol + 1, 1, nedostaju.length).setValues([nedostaju]);
+
+      for (let i = 0; i < nedostaju.length; i++) {
+        headers[lastCol + i] = String(nedostaju[i] || '').trim();
+      }
+    }
+  }
 
   const problems = [];
 

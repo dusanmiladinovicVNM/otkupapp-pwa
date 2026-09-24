@@ -1432,18 +1432,51 @@ Private Function GrupePredaje(ByVal predaje As Collection, _
         crid = Trim$(CStr(red(6)))
 
         If clanstvo.Exists(UCase$(otkupID)) Then
-            ' VEC PREDAT -- ali kome? (review #387, P2)
+            ' VEC PREDAT -- ali U KOM UTOVARU? (S5-4; post-merge review #388)
+            '
+            ' Do S5-3 je ovo sudilo po VOZACU: isti vozac = retry, drugi vozac =
+            ' konflikt. Tada je to bilo najbolje sto se imalo -- identitet
+            ' dogadjaja nije imao trajan trag.
+            '
+            ' Od S5-3 PredajaID JESTE persistiran na zaglavlju otpremnice
+            ' (COL_OTP_PREDAJA_ID) i prezivljava ispravku. Isti vozac vise nije
+            ' dokaz retry-a: DRUGI utovar istog bloka kod ISTOG vozaca (P2 <> P1)
+            ' je tiho postajao Duplicate, pa je drugi klik otkupca nestajao bez
+            ' traga -- a to je bas ono sto "jedan klik = jedan dokument" zabranjuje.
+            '
+            ' Tri ishoda, svaki imenovan:
+            '   isti PredajaID, isti vozac  -> idempotentan retry (Duplicate)
+            '   isti PredajaID, drug vozac  -> kvar dogadjaja (jedan utovar, dva vozaca)
+            '   drugi PredajaID             -> blok je vec otisao u drugom utovaru
             Dim postojecaOtp As String, postojeciVozac As String
+            Dim postojecaPredaja As String
             postojecaOtp = CStr(clanstvo(UCase$(otkupID)))
             postojeciVozac = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
                                                         postojecaOtp, COL_OTP_VOZAC)))
+            postojecaPredaja = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                          postojecaOtp, COL_OTP_PREDAJA_ID)))
 
-            If StrComp(postojeciVozac, vozacID, vbTextCompare) = 0 Then
-                outVecPredati.Add redIdx, postojecaOtp
-            Else
+            If Len(predajaID) = 0 Then
                 outKonflikti.Add redIdx, _
-                    "blok je vec predat vozacu " & postojeciVozac & _
+                    "red nema PredajaID, a blok je vec u otpremnici " & postojecaOtp & _
+                    " -- identitet utovara se NE izvodi iz robe"
+            ElseIf Len(postojecaPredaja) = 0 Then
+                ' Dokument bez PredajaID-a nije nastao predajom (malina auto-lanac,
+                ' rucni unos). Predaja preko njega nije retry nego druga tvrdnja o
+                ' istom bloku.
+                outKonflikti.Add redIdx, _
+                    "blok je vec u otpremnici " & postojecaOtp & _
+                    ", koja nije nastala predajom, a red nosi utovar " & predajaID
+            ElseIf StrComp(postojecaPredaja, predajaID, vbTextCompare) <> 0 Then
+                outKonflikti.Add redIdx, _
+                    "blok je vec otisao u utovaru " & postojecaPredaja & _
+                    " (otpremnica " & postojecaOtp & "), a red nosi utovar " & predajaID
+            ElseIf StrComp(postojeciVozac, vozacID, vbTextCompare) <> 0 Then
+                outKonflikti.Add redIdx, _
+                    "utovar " & predajaID & " je izdat vozacu " & postojeciVozac & _
                     " (otpremnica " & postojecaOtp & "), a red trazi " & vozacID
+            Else
+                outVecPredati.Add redIdx, postojecaOtp
             End If
         ElseIf Len(predajaID) = 0 Then
             outKonflikti.Add redIdx, _

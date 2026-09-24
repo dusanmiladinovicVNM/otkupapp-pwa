@@ -4887,7 +4887,8 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
 | **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
-| **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
+| **S5-4a** | **žica predaje**: `PredajaID`/`PredatoAt`/`PredajaClanovi` kroz PWA → GAS → VBA; predaja je nov događaj nad već uvezenim OTK redom; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
+| **S5-4b** | vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` (E-044, E-058) — redizajn `transport.js`/`zbirna.js` | ⏳ |
 
 #### Šta je S5-1 uradio
 
@@ -5269,6 +5270,60 @@ Sabotaže **588 → 588** (šest obrisano, šest novih): `zbirna-ne-pamti-porekl
 imenovanoj tvrdnji, izvor vraćen bit-identično.**
 
 Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
+
+### S5-4a — žica predaje (ZAVRŠEN)
+
+**Obim je sužen i to je zapisano pre koda.** Plan S5-4 nosi i „vozaču se servira otpremnica po
+`Otpremnica.VozacID`" — to je redizajn vozačkog pogleda (`transport.js`, `zbirna.js`, 674 linije) i
+zavisi od toga da žica prvo postoji. Ovaj rez je **žica**; vozački pogled je **S5-4b**.
+
+**Šta je bilo pokvareno.** VBA od S5-3 traži `PredajaID`, `PredatoAt` i `PredajaClanovi` i bez njih
+predaju glasno odbija. Žica ih nije nosila:
+
+| Sloj | Bilo | Sad |
+|---|---|---|
+| PWA | `buildUpdatedOtpremaRecord` šalje samo `vozacID` | jedan klik = jedan `predajaID` (`crypto.randomUUID`, uz fallback za stariji WebView), `predatoAt` = trenutak predaje, `predajaClanovi` = manifest svih `clientRecordID` tog klika |
+| GAS | `COLUMNS` nema nijedno od tri polja | tri kolone na kraju; `processRecord` ih piše i pri insertu i na **postojeći** red |
+| GAS | `Synced>Master` je terminalno → uvezen red se **ne obogati** predajom | predaja prolazi i preko terminalnog statusa, ali **samo kad polje još nema vrednost** |
+| VBA | `GrupePredaje` presuđuje `Duplicate` po **vozaču** | presuđuje po **`PredajaID`-u** |
+
+**Zašto je vozač prestao da bude dokaz retry-a.** Kad je ta grana pisana, identitet događaja nije imao
+trajan trag. Od S5-3 `PredajaID` živi na zaglavlju otpremnice i preživljava ispravku, pa je **drugi**
+utovar istog bloka kod **istog** vozača tiho postajao `Duplicate` — drugi klik otkupca nestajao je bez
+traga. Sada su četiri ishoda, svaki imenovan:
+
+```
+isti PredajaID, isti vozac   -> Duplicate (uredan retry)
+drugi PredajaID              -> SyncError (blok je vec otisao u drugom utovaru)
+isti PredajaID, drugi vozac  -> SyncError (jedan utovar, dva vozaca)
+dokument bez PredajaID-a     -> SyncError (nije nastao predajom)
+```
+
+**Nalaz koji bi oborio ceo sync.** `ensureSheetColumns` na razliku u zaglavlju **baca `SCHEMA_DRIFT`** —
+ne dodaje kolone. Dodavanje tri kolone bi zaustavilo otkup sync na **prvom zahtevu**, na svakom
+zatečenom OTK listu, dok neko ručno ne proširi zaglavlje. Rešeno po istom pravilu koje VBA kanon već
+ima: **nova kolona ide na kraj**, i samo tada se dozida — kad je zatečen header **prefiks** kanonskog.
+Promenjen redosled i preimenovana kolona i dalje pucaju, jer se takav list ne sme tiho popravljati.
+
+> Mereno po `lastCol`, ne po `headers.length`: `headers` se čita širinom `max(lastCol, N)`, pa mu je rep
+> prazan i dužina bi **uvek** izgledala dovoljna. Prva verzija je imala baš tu grešku.
+
+**Granica koja ovog puta nije pukla.** Sync sloj šalje `{ records: pending }` — ceo zapis, bez spiska
+polja ([sync-engine.js:299](src/js/utils/sync-engine.js:299)) — pa tri nova polja putuju sama. Proverio
+sam to pre nego što sam ih dodao, jer je „ugovor važi unutar mog dela, puca na granici" obrazac koji se
+u ovoj seriji ponovio pet puta.
+
+**Verifikacija.** `vba_check` čisto · schema u koraku · `who_writes` obe kapije · `popis_citalaca` čisto ·
+`RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1965/0** · `RunSheetsJsonParserTests` OK.
+Dvosmerni dokaz nad sabotažama predaje. Compile automatski `NEJASNO` — ručna kapija ostaje.
+
+⚠ **GAS i PWA izmene su NEVERIFIKOVANE.** U repou nema JS test harness-a, a `node` nije dostupan u ovom
+okruženju — ni `node --check` nije mogao da prođe. Prijavljujem ih kao pročitane, ne kao proverene.
+To je i razlog zašto je VBA deo (jedini merljiv) nosio test i sabotažu.
+
+**Zatečen crven suite, drugi po redu.** `RunGoogleSyncSmokeSuite` je **77/4 i na `main`-u** (mereno
+`git checkout main -- src-vba tools`, isti fixture). Uz već zapisan `RunMasterSyncSmokeSuite` 17/9 —
+dva sync suite-a koja niko ne pušta. Traže svoj rez.
 
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 

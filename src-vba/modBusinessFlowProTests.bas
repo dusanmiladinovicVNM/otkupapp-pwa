@@ -7729,16 +7729,24 @@ EH:
     LogFatal "Test_OTP_PredajaBezIdentitetaStaje", eN, eD
 End Sub
 
-' ISTI BLOK DRUGOM VOZACU NIJE RETRY NEGO PROTIVRECNOST.
+' RETRY SE PREPOZNAJE PO UTOVARU, NE PO VOZACU (S5-4).
 '
-' Uredjaj koji je bio offline ne zna za prvu predaju i moze poslati isti blok
-' drugom vozacu. Roba je tada vec na TUDJOJ IZDATOJ otpremnici, pa "poslednji
-' pobedjuje" nije opcija -- to je ispravka izdatog dokumenta, sopstveni poslovni
-' tok (odluka operatera 23.09.2026).
+' Zatecena verzija ovog testa je merila slabije pravilo: ponovljen red je bio
+' Duplicate kad god je vozac isti, BEZ OBZIRA na PredajaID. Test je to i pisao --
+' drugi red je nosio PRED-K2 dok je prvi bio PRED-K1, a tvrdnja je glasila
+' "ponovljen red ISTOG vozaca NIJE kvar".
 '
-' Test meri OBE strane: isti vozac ostaje tih no-op (Duplicate), drugi vozac je
-' SyncError. Jednosmeran dokaz ne bi vredeo -- "sve je konflikt" bi pokvarilo
-' uredan retry, zbog kojeg provera clanstva i postoji.
+' Tada je to bilo najbolje sto se imalo: identitet dogadjaja nije imao trajan
+' trag. Od S5-3 PredajaID zivi na zaglavlju otpremnice i prezivljava ispravku,
+' pa isti vozac vise nije dokaz retry-a -- DRUGI utovar istog bloka kod istog
+' vozaca je tiho nestajao kao Duplicate.
+'
+' Test sada meri sva cetiri ishoda, jer bi svaki manji skup prosao i sa pogresnim
+' pravilom:
+'   isti PredajaID, isti vozac  -> Duplicate (uredan retry)
+'   drugi PredajaID, isti vozac -> SyncError (drugi utovar istog bloka)
+'   isti PredajaID, drug vozac  -> SyncError (jedan utovar, dva vozaca)
+'   u svim konfliktima blok ostaje na PRVOJ otpremnici
 Private Sub Test_OTP_PredajaDrugomVozacuJeKonflikt()
     Dim tx As clsTransaction
 
@@ -7772,21 +7780,38 @@ Private Sub Test_OTP_PredajaDrugomVozacuJeKonflikt()
     otpPrva = modDokumenta.OtpremnicaZaOtkup(otkID)
     AssertTrue Len(otpPrva) > 0, "PREDAJA konflikt preduslov: blok je vezan"
 
-    ' --- A) ISTI vozac: uredan retry ---------------------------------------
+    ' --- A) ISTI utovar, isti vozac: uredan retry ---------------------------
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "PRED-K1-" & scenario, _
+                           PredajaIsoDatum(datum))
+
+    AssertEquals "0", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PREDAJA konflikt: ponovljena predaja ne pravi drugi dokument"
+    AssertEquals "", greske, "PREDAJA konflikt: ISTI utovar ponovljen NIJE kvar"
+    AssertEquals "Duplicate", CStr(ishodi(2&)), _
+                 "PREDAJA konflikt: isti utovar je Duplicate"
+
+    ' --- B) DRUGI utovar, ISTI vozac: nije retry ----------------------------
+    '
+    ' Ovo je slucaj koji je zatecena verzija pustala kao Duplicate. Drugi klik
+    ' otkupca nad blokom koji je vec otisao mora da bude IMENOVAN, inace nestaje
+    ' bez traga.
     Set predaje = New Collection
     predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, "PRED-K2-" & scenario, _
                            PredajaIsoDatum(datum))
 
     AssertEquals "0", _
                  CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
-                 "PREDAJA konflikt: ponovljena predaja ne pravi drugi dokument"
-    AssertEquals "", greske, "PREDAJA konflikt: ponovljen red ISTOG vozaca NIJE kvar"
-    AssertEquals "Duplicate", CStr(ishodi(2&)), _
-                 "PREDAJA konflikt: isti vozac je Duplicate"
+                 "PREDAJA konflikt: drugi utovar ne pravi dokument"
+    AssertTrue InStr(1, CStr(ishodi(2&)), "SyncError", vbTextCompare) = 1, _
+               "PREDAJA konflikt: DRUGI utovar istog bloka je SyncError, ne Duplicate"
+    AssertTrue InStr(1, greske, "PRED-K1-" & scenario, vbTextCompare) > 0, _
+               "PREDAJA konflikt: razlog imenuje utovar u kom je blok vec otisao"
 
-    ' --- B) DRUGI vozac: protivrecnost --------------------------------------
+    ' --- C) ISTI utovar, DRUGI vozac: kvar dogadjaja ------------------------
     Set predaje = New Collection
-    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID_B, "PRED-K3-" & scenario, _
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID_B, "PRED-K1-" & scenario, _
                            PredajaIsoDatum(datum))
 
     AssertEquals "0", _

@@ -5810,13 +5810,23 @@ SABOTAZE = {
         "Test_OTP_PredajaBezIdentitetaStaje",
         "PREDAJA bez identiteta: red je SyncError, ne Duplicate",
     ),
+
+    # S5-4: retry se prepoznaje po UTOVARU, ne po vozacu. Bez ovog poredjenja
+    # drugi klik otkupca nad blokom koji je vec otisao tiho postaje Duplicate.
+    "predaja-retry-po-vozacu": (
+        "modMasterSync.bas",
+        "            ElseIf StrComp(postojecaPredaja, predajaID, vbTextCompare) <> 0 Then\n",
+        "            ElseIf False Then   ' SABOTAZA: drugi utovar prolazi kao retry\n",
+        "Test_OTP_PredajaDrugomVozacuJeKonflikt",
+        "PREDAJA konflikt: DRUGI utovar istog bloka je SyncError, ne Duplicate",
+    ),
     # Vec predat blok: isti vozac je uredan retry, DRUGI vozac je protivrecnost.
     # Sabotaza brise tu razliku, pa roba tiho ostaje kod prvog vozaca dok je
     # otkupac ubedjen da ju je dao drugom.
     "predaja-ne-gleda-vlasnika": (
         "modMasterSync.bas",
-        "            If StrComp(postojeciVozac, vozacID, vbTextCompare) = 0 Then\n",
-        "            If True Then   ' SABOTAZA: svaka ponovljena predaja je Duplicate\n",
+        "            ElseIf StrComp(postojeciVozac, vozacID, vbTextCompare) <> 0 Then\n",
+        "            ElseIf False Then   ' SABOTAZA: vozac utovara se ne proverava\n",
         "Test_OTP_PredajaDrugomVozacuJeKonflikt",
         "PREDAJA konflikt: drugi vozac je SyncError, ne Duplicate",
     ),
@@ -5831,7 +5841,7 @@ SABOTAZE = {
         "        If clanstvo.Exists(UCase$(otkupID)) Then\n",
         "        If False Then   ' SABOTAZA: vec predat blok se uzima ponovo\n",
         "Test_OTP_PredajaDrugomVozacuJeKonflikt",
-        "PREDAJA konflikt: ponovljen red ISTOG vozaca NIJE kvar",
+        "PREDAJA konflikt: ISTI utovar ponovljen NIJE kvar",
     ),
     # --- S5-1: auto-otpremnica iz PWA otkupa -----------------------------
     # Klasa vise NIJE kljuc grupisanja -- to je cela poenta reza. Sabotaza

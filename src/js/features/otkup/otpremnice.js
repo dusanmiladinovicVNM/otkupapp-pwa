@@ -567,8 +567,39 @@ async function confirmOtpremaAssign() {
     }
 
     const nowIso = new Date().toISOString();
+
+    // JEDAN KLIK = JEDAN UTOVAR = JEDAN DOKUMENT (S5-4).
+    //
+    // Do sada je otprema slala samo vozacID, pa je master strana morala da
+    // identitet utovara IZVODI iz robe (vozac + dan + stanica). Od S5-3 to vise
+    // ne radi: predaja bez sopstvenog identiteta se glasno odbija.
+    //
+    // Tri polja putuju zajedno i nastaju OVDE, jer je ovaj klik dogadjaj:
+    //   predajaID      -- identitet ovog utovara
+    //   predatoAt      -- trenutak predaje; otpremnica nosi datum PREDAJE, pa
+    //                     roba sa dva dana legitimno ide na jednu otpremnicu
+    //   predajaClanovi -- MANIFEST: clientRecordID svih blokova ovog klika
+    //
+    // Manifest je tu zato sto GAS obradjuje red po red i neuspeo red se vraca u
+    // Pending: bez spiska clanova master ne zna kad je utovar CEO i izdao bi
+    // nepotpun dokument.
+    const predajaID = generatePredajaID();
+    const predajaClanovi = selectedRows
+        .map(r => String(r.clientRecordID || '').trim())
+        .filter(Boolean)
+        .join(',');
+
+    if (predajaClanovi.split(',').length !== selectedRows.length) {
+        showToast('Neki blok nema identitet zapisa - predaja je zaustavljena', 'error');
+        return;
+    }
+
     const updatedRows = selectedRows.map(row =>
-        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso)
+        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso, {
+            predajaID: predajaID,
+            predatoAt: nowIso,
+            predajaClanovi: predajaClanovi
+        })
     );
 
     try {
@@ -600,9 +631,32 @@ async function confirmOtpremaAssign() {
     }
 }
 
-function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
+// Identitet OVOG utovara.
+//
+// Isti oblik kao deviceID u storage.js -- randomUUID, jer se identitet dogadjaja
+// ne sme izvoditi iz podataka koje dogadjaj opisuje. Prefiks postoji samo da bi
+// se u master tabeli na prvi pogled videlo sta je vrednost.
+//
+// Fallback bez crypto.randomUUID: stariji WebView na terenskim telefonima ga
+// nema, a predaja bez identiteta se na master strani odbija -- pa bi tih izostanak
+// bio gori od slabijeg generatora.
+function generatePredajaID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return 'PRED-' + crypto.randomUUID();
+    }
+
+    const deviceID = typeof getDeviceID === 'function' ? getDeviceID() : 'NODEV';
+    const rnd = Math.random().toString(36).slice(2, 10);
+    return 'PRED-' + deviceID + '-' + Date.now() + '-' + rnd;
+}
+
+function buildUpdatedOtpremaRecord(row, vozac, nowIso, predaja) {
     if (!row.clientRecordID) {
         throw new Error('Otprema zahteva postojeći clientRecordID');
+    }
+
+    if (!predaja || !predaja.predajaID || !predaja.predatoAt || !predaja.predajaClanovi) {
+        throw new Error('Predaja zahteva predajaID, predatoAt i predajaClanovi');
     }
 
     return {
@@ -632,6 +686,10 @@ function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
         napomena: row.napomena || '',
         vozacID: vozac.id,
         vozacName: vozac.name,
+
+        predajaID: predaja.predajaID,
+        predatoAt: predaja.predatoAt,
+        predajaClanovi: predaja.predajaClanovi,
 
         syncStatus: 'pending',
         syncAttempts: 0,
