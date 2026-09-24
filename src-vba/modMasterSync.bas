@@ -4082,33 +4082,12 @@ Private Function PwaZbirnaRazlika(ByVal zbirnaID As String, _
         Trim$(CStr(nz(data(row, VS_KUPAC_ID), ""))))
     If Len(PwaZbirnaRazlika) > 0 Then Exit Function
 
-    ' NEUPOREDIV DATUM JE RAZLIKA, NE PRESKOK (review #388, drugi krug P2).
-    '
-    ' Ranije je poredjenje stajalo pod "If IsoUDatum(...) And IsDate(...)", pa je
-    ' nevalidan datum tiho ispadao iz poredjenja. Ako se sve ostalo poklopi, red
-    ' bi dobio Duplicate -- a Duplicate je TERMINALAN, pa bi pokvaren red zauvek
-    ' nestao. ValidatePWAZbirna tu ne pomaze: ona se zove tek za NOV red, posle
-    ' ove grane.
-    Dim danNov As Date, danStari As Variant
-    danStari = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_DATUM)
-
-    If Not IsoUDatum(data(row, VS_DATUM), danNov) Then
-        PwaZbirnaRazlika = "Datum nije upotrebljiv ISO datum ('" & _
-                           Trim$(CStr(nz(data(row, VS_DATUM), "(prazno)"))) & "')"
-        Exit Function
-    End If
-
-    If Not IsDate(danStari) Then
-        PwaZbirnaRazlika = "Datum u masteru nije upotrebljiv za poredjenje"
-        Exit Function
-    End If
-
-    If Int(CDate(danStari)) <> Int(danNov) Then
-        PwaZbirnaRazlika = "Datum: master ima " & _
-            Format$(CDate(danStari), "dd.mm.yyyy") & ", red nosi " & _
-            Format$(danNov, "dd.mm.yyyy")
-        Exit Function
-    End If
+    ' Datum ima TRI nacina da bude razlika, i sva tri su na jednom mestu
+    ' (v. DatumRazlika). Razdvojeni, jedan od njih je uvek ostajao nemerljiv.
+    PwaZbirnaRazlika = DatumRazlika( _
+        LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_DATUM), _
+        data(row, VS_DATUM))
+    If Len(PwaZbirnaRazlika) > 0 Then Exit Function
 
     ' Broj se poredi SAMO ako ga PWA salje: prazan znaci "generisi lokalno", pa
     ' lokalno generisan broj nije razlika u tvrdnji.
@@ -4137,6 +4116,40 @@ Private Function PwaZbirnaRazlika(ByVal zbirnaID As String, _
 
 EH:
     PwaZbirnaRazlika = "poredjenje nije uspelo: " & Err.description
+End Function
+
+' NEUPOREDIV DATUM JE RAZLIKA, NE PRESKOK (review #388, drugi krug P2).
+'
+' "" = isti poslovni dan. Tri nacina da bude razlika, namerno u JEDNOM telu:
+'
+'   1) red nosi datum koji nije ISO      -- ne moze se uporediti
+'   2) master nosi nesto sto nije datum  -- isto
+'   3) dani se razlikuju                 -- stvarna razlika u tvrdnji
+'
+' Ranije su prva dva stajala kao uslov OKO poredjenja
+' ("If IsoUDatum(...) And IsDate(...) Then"), pa je nevalidan datum tiho ispadao
+' iz poredjenja. Ako se sve ostalo poklopi, red bi dobio Duplicate -- a Duplicate
+' je TERMINALAN, pa bi pokvaren red zauvek nestao. ValidatePWAZbirna tu ne
+' pomaze: zove se tek za NOV red, POSLE te grane.
+Private Function DatumRazlika(ByVal uMasteru As Variant, _
+                              ByVal uRedu As Variant) As String
+    Dim danNov As Date
+    If Not IsoUDatum(uRedu, danNov) Then
+        DatumRazlika = "Datum nije upotrebljiv ISO datum ('" & _
+                       Trim$(CStr(nz(uRedu, "(prazno)"))) & "')"
+        Exit Function
+    End If
+
+    If Not IsDate(uMasteru) Then
+        DatumRazlika = "Datum u masteru nije upotrebljiv za poredjenje"
+        Exit Function
+    End If
+
+    If Int(CDate(uMasteru)) <> Int(danNov) Then
+        DatumRazlika = "Datum: master ima " & _
+            Format$(CDate(uMasteru), "dd.mm.yyyy") & ", red nosi " & _
+            Format$(danNov, "dd.mm.yyyy")
+    End If
 End Function
 
 Private Function PoljeRazlika(ByVal ime As String, ByVal stari As String, _

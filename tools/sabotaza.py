@@ -5746,8 +5746,9 @@ SABOTAZE = {
     # pokvaren red zauvek nestao.
     "zbirna-nevalidan-datum-je-duplikat": (
         "modMasterSync.bas",
-        "    If Not IsoUDatum(data(row, VS_DATUM), danNov) Then\n",
-        "    If False Then   ' SABOTAZA: nevalidan datum se preskace\n",
+        "        DatumRazlika = \"Datum nije upotrebljiv ISO datum ('\" & _\n"
+        "                       Trim$(CStr(nz(uRedu, \"(prazno)\"))) & \"')\"\n",
+        "        DatumRazlika = \"\"   ' SABOTAZA: nevalidan datum nije razlika\n",
         "Test_ZBR_IstiCridNevalidanDatumNijeDuplikat",
         "ZBR datum: nevalidan datum NIJE duplikat",
     ),
