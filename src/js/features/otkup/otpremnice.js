@@ -595,14 +595,24 @@ async function confirmOtpremaAssign() {
     }
 
     const updatedRows = selectedRows.map(row =>
-        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso, {
-            predajaID: predajaID,
-            predatoAt: nowIso,
-            predajaClanovi: predajaClanovi
-        })
+        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso)
+    );
+
+    // DOGADJAJ SE UPISUJE ODVOJENO OD OTKUPA (S5-4a).
+    //
+    // Otkupni zapis se menja SAMO lokalno, za prikaz ("ovaj blok je predat") --
+    // njegov syncStatus se NE dira, jer se otkup nije promenio. Ono sto ide
+    // masteru je dogadjaj: jedan red po bloku, sa identitetom utovara i
+    // manifestom.
+    const predajaRows = selectedRows.map(row =>
+        buildPredajaEvent(row, otpremaState.selectedVozac, nowIso, predajaID, predajaClanovi)
     );
 
     try {
+        for (const ev of predajaRows) {
+            await dbPut(db, 'predaje', ev);
+        }
+
         for (const row of updatedRows) {
             await dbPut(db, CONFIG.STORE_NAME, row);
         }
@@ -613,8 +623,8 @@ async function confirmOtpremaAssign() {
 
         if (typeof updateSyncBadge === 'function') updateSyncBadge();
 
-        if (navigator.onLine && typeof syncQueueSafe === 'function') {
-            syncQueueSafe('post-save');
+        if (navigator.onLine && typeof syncPredajeSafe === 'function') {
+            syncPredajeSafe('post-save');
         }
 
         // osveži lokalni state posle success prikaza
@@ -629,6 +639,43 @@ async function confirmOtpremaAssign() {
         console.error('confirmOtpremaAssign failed:', err);
         showToast('Greška pri potvrdi otpreme', 'error');
     }
+}
+
+// Jedan CLAN utovara, onako kako ga master cita.
+//
+// Envelope (predajaID, predatoAt, vozacID, manifest) se ponavlja na svakom
+// clanu: master grupise po predajaID-u, pa mu je tako dovoljan jedan prolaz.
+// otkupClientRecordID je veza na blok -- master ga razresava u OtkupID.
+function buildPredajaEvent(row, vozac, nowIso, predajaID, predajaClanovi) {
+    const crid = String(row.clientRecordID || '').trim();
+    if (!crid) {
+        throw new Error('Predaja zahteva postojeći clientRecordID bloka');
+    }
+
+    return {
+        clientRecordID: predajaID + ':' + crid,
+        serverRecordID: '',
+        createdAtClient: nowIso,
+        updatedAtClient: nowIso,
+        updatedAtServer: '',
+        deviceID: typeof getDeviceID === 'function' ? getDeviceID() : '',
+        otkupacID: row.otkupacID || CONFIG.OTKUPAC_ID,
+
+        predajaID: predajaID,
+        predatoAt: nowIso,
+        vozacID: vozac.id,
+        vozacName: vozac.name,
+        otkupClientRecordID: crid,
+        predajaClanovi: predajaClanovi,
+
+        syncStatus: 'pending',
+        syncAttempts: 0,
+        syncAttemptAt: '',
+        lastSyncError: '',
+        lastServerStatus: '',
+        entityType: 'predaja',
+        schemaVersion: 1
+    };
 }
 
 // Identitet OVOG utovara.
@@ -650,13 +697,9 @@ function generatePredajaID() {
     return 'PRED-' + deviceID + '-' + Date.now() + '-' + rnd;
 }
 
-function buildUpdatedOtpremaRecord(row, vozac, nowIso, predaja) {
+function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
     if (!row.clientRecordID) {
         throw new Error('Otprema zahteva postojeći clientRecordID');
-    }
-
-    if (!predaja || !predaja.predajaID || !predaja.predatoAt || !predaja.predajaClanovi) {
-        throw new Error('Predaja zahteva predajaID, predatoAt i predajaClanovi');
     }
 
     return {
@@ -687,15 +730,17 @@ function buildUpdatedOtpremaRecord(row, vozac, nowIso, predaja) {
         vozacID: vozac.id,
         vozacName: vozac.name,
 
-        predajaID: predaja.predajaID,
-        predatoAt: predaja.predatoAt,
-        predajaClanovi: predaja.predajaClanovi,
-
-        syncStatus: 'pending',
-        syncAttempts: 0,
-        syncAttemptAt: '',
-        lastSyncError: '',
-        lastServerStatus: '',
+        // SYNC STANJE OTKUPA SE NE DIRA (S5-4a).
+        //
+        // Otkup se nije promenio -- promenilo se sto je nad njim nastao
+        // dogadjaj predaje, a on ima svoj zapis i svoj red za sync.
+        // Vracanje otkupa u 'pending' bi ga poslalo GAS-u ponovo, bez
+        // ijedne nove cinjenice, i zamutilo bi sta je zapravo neposlato.
+        syncStatus: row.syncStatus || 'pending',
+        syncAttempts: row.syncAttempts || 0,
+        syncAttemptAt: row.syncAttemptAt || '',
+        lastSyncError: row.lastSyncError || '',
+        lastServerStatus: row.lastServerStatus || '',
         deleted: !!row.deleted,
         entityType: row.entityType || 'otkup',
         schemaVersion: row.schemaVersion || 1

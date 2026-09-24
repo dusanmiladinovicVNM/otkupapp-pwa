@@ -5813,6 +5813,17 @@ SABOTAZE = {
 
     # S5-4: retry se prepoznaje po UTOVARU, ne po vozacu. Bez ovog poredjenja
     # drugi klik otkupca nad blokom koji je vec otisao tiho postaje Duplicate.
+    # S5-4a: predaja ciji otkup jos nije u masteru NE SME da postane kandidat.
+    # Bez ove kapije bi usla u grupisanje sa praznim OtkupID-em, a red bi prosao
+    # bez imenovanog razloga -- tih gubitak dogadjaja, opet.
+    "predaja-bez-otkupa-prolazi": (
+        "modMasterSync.bas",
+        "                If Len(otkupID) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: predaja bez otkupa u masteru prolazi kao kandidat\n",
+        "Test_PRED_ListPostajeOtpremnica",
+        "PRED: red bez otkupa u masteru je IMENOVANA greska, ne tih preskok",
+    ),
+
     "predaja-retry-po-vozacu": (
         "modMasterSync.bas",
         "            ElseIf StrComp(postojecaPredaja, predajaID, vbTextCompare) <> 0 Then\n",

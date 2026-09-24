@@ -33,6 +33,24 @@
                 indexes: []
             },
             {
+                // DOGADJAJI PREDAJE (S5-4a).
+                //
+                // Zaseban store, a ne polja na otkupnom zapisu: otkup je
+                // NEPROMENLJIVA OSNOVA, predaja je dogadjaj NAD njim, sa svojim
+                // identitetom i svojim syncStatus-om. Dok je zivela na otkupnom
+                // redu, dogadjaj koji stigne posle uvoza se gubio -- master ga
+                // vise ne cita, a klijent je vec video uspeh.
+                //
+                // Kljuc je clientRecordID OVOG reda (jedan clan utovara), ne
+                // predajaID: jedan utovar ima N clanova.
+                name: 'predaje',
+                options: { keyPath: 'clientRecordID' },
+                indexes: [
+                    { name: 'syncStatus', keyPath: 'syncStatus', options: { unique: false } },
+                    { name: 'predajaID', keyPath: 'predajaID', options: { unique: false } }
+                ]
+            },
+            {
                 name: 'zbirne',
                 options: { keyPath: 'clientRecordID' },
                 indexes: [

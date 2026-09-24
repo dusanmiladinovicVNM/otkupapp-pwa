@@ -308,6 +308,9 @@ function bindConnectivityEvents() {
     window.addEventListener('online', async () => {
         updateSyncBadge();
         await syncQueueSafe('online');
+        // Predaje idu POSLE otkupa: master razresava blok nad vec uvezenim
+        // otkupom, pa obrnut redosled pravi nepotrebne 'otkup nije u masteru'.
+        if (typeof syncPredajeSafe === 'function') await syncPredajeSafe('online');
         refreshStammdatenInBackground();
     });
 
@@ -974,6 +977,7 @@ function startBackgroundSync() {
         if (!navigator.onLine) return;
         if (CONFIG.USER_ROLE === 'Management') return;
         syncQueueSafe('interval');
+        if (typeof syncPredajeSafe === 'function') syncPredajeSafe('interval');
     }, 60000);
 }
 

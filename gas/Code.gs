@@ -40,23 +40,47 @@ const COLUMNS = [
   'VozacID',
   'Napomena',
   'ReceivedAt',
-  'BrojDokumenta',   // ← DODATO
+  'BrojDokumenta'   // ← DODATO
+];
 
-  // PREDAJA ROBE VOZACU JE SOPSTVENI DOGADJAJ (S5-4).
-  //
-  // Do sada je otprema slala samo VozacID, pa se identitet utovara izvodio iz
-  // robe (vozac + dan + stanica). Master strana od S5-3 trazi identitet
-  // dogadjaja i bez njega predaju GLASNO odbija.
-  //
-  // PredajaID     -- jedan klik otkupca = jedan utovar = jedna otpremnica
-  // PredatoAt     -- ISO trenutak predaje; otpremnica nosi datum PREDAJE, ne
-  //                  datum otkupnih listova (roba sa dva dana ide na jednu)
-  // PredajaClanovi-- MANIFEST: ClientRecordID svih blokova tog klika, zarezom
-  //                  razdvojeni. Bez njega se ne zna kad je utovar CEO, pa bi
-  //                  parcijalan batch izdao nepotpun dokument
-  'PredajaID',
-  'PredatoAt',
-  'PredajaClanovi'
+// PREDAJA JE SOPSTVEN DOGADJAJ, NE TRI KOLONE NA OTK REDU (review #390, P1).
+//
+// Prva verzija S5-4a je predaju kacila na postojeci OTK red. Nad najnormalnijim
+// putem -- otkup je vec uvezen, pa otkupac nekoliko sati kasnije klikne "predaj"
+// -- to je tiho GUBILO dogadjaj:
+//
+//   red je Synced>Master  -> VBA uvoz uzima samo "Synced", pa ga vise ne cita
+//   GAS vrati success     -> PWA lokalno kaze "synced"
+//   otpremnica ne nastane, a niko ne sazna
+//
+// Drugi smer je bio isti kvar: red koji vec nosi PredajaID P1 je drugi utovar P2
+// tiho progutao (write-once po polju), pa VBA pravilo "P1 <> P2 -> SyncError"
+// nije imalo priliku da se izvrsi.
+//
+// Uzrok je model, ne propust: OTK red je NEPROMENLJIVA OSNOVA (otkup se desio),
+// a predaja je dogadjaj NAD njim, sa svojim identitetom i svojim lifecycle-om.
+// Tri celije canonical reda ne mogu da budu red cekanja za dogadjaje.
+//
+// Zato PREDAJA ima svoj list, append-only, i svoj SyncStatus. Jedan red = jedan
+// clan utovara; envelope (PredajaID, PredatoAt, VozacID, manifest) se ponavlja,
+// jer master grupise po PredajaID-u i tako je citanje jednim prolazom.
+const PREDAJA_COLUMNS = [
+  'ClientRecordID',        // identitet OVOG reda dogadjaja
+  'ServerRecordID',
+  'CreatedAtClient',
+  'UpdatedAtClient',
+  'UpdatedAtServer',
+  'SyncStatus',
+  'DeviceID',
+  'OtkupacID',
+
+  'PredajaID',             // identitet UTOVARA -- jedan klik otkupca
+  'PredatoAt',             // ISO trenutak predaje; otpremnica nosi OVAJ datum
+  'VozacID',               // kome je predato
+  'OtkupClientRecordID',   // koji blok je predat (CRID otkupnog reda)
+  'PredajaClanovi',        // MANIFEST: CRID-ovi svih blokova tog klika
+
+  'ReceivedAt'
 ];
 
 const ZBIRNA_COLUMNS = [
@@ -791,6 +815,7 @@ function isMasterSyncWriteAction(action) {
 
     'sync',
     'syncAgromere',
+    'syncPredaja',
     'syncZbirna',
     'syncTretman',
     'syncOprema',
@@ -940,6 +965,18 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processAgromereRecord(r, data.kooperantID));
+        return buildBatchSyncResponse(results);
+      }));
+    }
+
+    if (data.action === 'syncPredaja') {
+      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
+      if (!Array.isArray(data.records)) {
+        return jsonResponse({ success: false, error: 'records must be an array' });
+      }
+      return jsonResponse(withLock(function() {
+        const results = data.records.map(r => processPredajaRecord(r, data.otkupacID));
         return buildBatchSyncResponse(results);
       }));
     }
@@ -1566,41 +1603,6 @@ function isTerminalSyncStatus(status) {
   );
 }
 
-// Upisi polja predaje na postojeci red, ali NIKAD preko postojece vrednosti.
-//
-// Vraca true kad je bilo sta upisano -- pozivalac to vraca klijentu, da se
-// "predato" ne prikaze na osnovu pretpostavke.
-//
-// Prepisivanje se ne radi namerno: red koji vec nosi PredajaID je vec prijavljen
-// kao deo nekog utovara. Ako stigne DRUGI utovar za isti blok, to je konflikt o
-// kome odlucuje master strana (ona vidi da li je dokument vec izdat), a ne GAS.
-function upisiPredajuAkoNedostaje(sheet, row, values, idx, record) {
-  const polja = [
-    ['PredajaID', record && record.predajaID],
-    ['PredatoAt', record && record.predatoAt],
-    ['PredajaClanovi', record && record.predajaClanovi]
-  ];
-
-  let upisano = false;
-
-  polja.forEach(function (par) {
-    const kolona = par[0];
-    const vrednost = String(par[1] || '').trim();
-    if (!vrednost) return;
-
-    const i = idx[kolona];
-    if (typeof i !== 'number' || i < 0) return;
-
-    const postojece = String(getCell(values, i, '') || '').trim();
-    if (postojece) return;
-
-    sheet.getRange(row, i + 1).setValue(vrednost);
-    upisano = true;
-  });
-
-  return upisano;
-}
-
 function processRecord(record, otkupacID) {
   try {
     const sheetName = 'OTK-' + (otkupacID || 'UNKNOWN');
@@ -1667,24 +1669,6 @@ function processRecord(record, otkupacID) {
       const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
       const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
-      // PREDAJA PROLAZI I PREKO TERMINALNOG STATUSA (S5-4).
-      //
-      // 'Synced>Master' znaci "otkup je uvezen u master" -- i za MUTACIJU otkupa
-      // to jeste terminalno stanje. Ali predaja robe vozacu je NOV DOGADJAJ nad
-      // istim redom, a ne retry originalnog zapisa.
-      //
-      // Dok je i ona bila terminalna, GAS bi vratio success/existing, klijent bi
-      // zapis lokalno obelezio kao synced, i otkupac bi video "predato" -- a
-      // master taj dogadjaj nikad ne bi video. Tih gubitak poslovnog dogadjaja.
-      //
-      // Zato se tri polja predaje upisuju i na terminalan red, ali SAMO kad ih
-      // red jos nema: prepisivanje postojeceg utovara bi bila izmena izdatog
-      // dokumenta, sto master strana odbija (A13). Drugi utovar istog bloka je
-      // konflikt, i master ga imenuje -- ovde se ne presudjuje.
-      const predajaUpisana = upisiPredajuAkoNedostaje(
-        sheet, existingRow, existingValues, idx, record
-      );
-
       // Only non-terminal records may receive light enrichment.
       // Terminal/master/error records must stay untouched by PWA retry.
       if (!isTerminal) {
@@ -1726,7 +1710,6 @@ function processRecord(record, otkupacID) {
         success: true,
         status: 'existing',
         terminal: isTerminal,
-        predajaUpisana: predajaUpisana,
         syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
@@ -1777,10 +1760,7 @@ function processRecord(record, otkupacID) {
       VozacID: record.vozacID || '',
       Napomena: record.napomena || '',
       ReceivedAt: nowIso,
-      BrojDokumenta: record.brojDokumenta || '',   // ← DODATO
-      PredajaID: record.predajaID || '',
-      PredatoAt: record.predatoAt || '',
-      PredajaClanovi: record.predajaClanovi || ''
+      BrojDokumenta: record.brojDokumenta || ''   // ← DODATO
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -1843,6 +1823,127 @@ function uploadPdfToDrive(data) {
 // ============================================================
 // ZBIRNA PROCESSING
 // ============================================================
+// ============================================================
+// PREDAJA PROCESSING
+// ============================================================
+//
+// Append-only: red se UPISUJE, nikad ne menja. Retry istog ClientRecordID-a je
+// idempotentan no-op, jer je ClientRecordID identitet BAS OVOG reda dogadjaja.
+//
+// Sve poslovne odluke o dogadjaju ostaju masteru: da li je blok vec otisao u
+// drugom utovaru, da li je utovar CEO, da li su dva reda istog utovara
+// protivrecna. GAS ovde NE presudjuje -- on samo garantuje da dogadjaj STIGNE.
+// Prva verzija je presudjivala (write-once nad OTK redom) i time je drugi utovar
+// gutala pre nego sto ga je master uopste video.
+function processPredajaRecord(record, otkupacID) {
+  try {
+    const sheetName = 'PRED-' + (otkupacID || 'UNKNOWN');
+    const ss = getOrCreateSheet(sheetName, PREDAJA_COLUMNS);
+    const sheet = ss.getSheets()[0];
+
+    ensureSheetColumns(sheet, PREDAJA_COLUMNS);
+
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(h => String(h || '').trim());
+
+    const idx = headerIndexMap(headers);
+    const nowIso = new Date().toISOString();
+
+    requireHeaderIndex(idx, 'ClientRecordID', 'processPredajaRecord');
+    requireHeaderIndex(idx, 'PredajaID', 'processPredajaRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processPredajaRecord');
+
+    if (!record || !String(record.clientRecordID || '').trim()) {
+      return {
+        clientRecordID: '',
+        success: false,
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'Missing clientRecordID'
+      };
+    }
+
+    const clientRecordID = String(record.clientRecordID).trim();
+
+    const canonicalOtkupacID = String(otkupacID || '').trim();
+    if (!canonicalOtkupacID) {
+      const err = new Error('OtkupacID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    // Identitet dogadjaja i njegov clan -- bez ijednog od njih master ne moze
+    // ni da grupise ni da zna cega je utovar sastavljen, pa se red ODBIJA ovde.
+    const predajaID = requireNonEmptyString(record.predajaID, 'PredajaID');
+    const predatoAt = requireNonEmptyString(record.predatoAt, 'PredatoAt');
+    const vozacID = requireNonEmptyString(record.vozacID, 'VozacID');
+    const otkupCRID = requireNonEmptyString(record.otkupClientRecordID, 'OtkupClientRecordID');
+    const clanovi = requireNonEmptyString(record.predajaClanovi, 'PredajaClanovi');
+
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    if (existingRow > 0) {
+      const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      return {
+        clientRecordID: clientRecordID,
+        success: true,
+        status: 'existing',
+        syncStatus: String(getCell(existingValues, idx.SyncStatus, '') || '').trim() || 'Synced',
+        serverRecordID: String(getCell(existingValues, idx.ServerRecordID, '') || '').trim(),
+        updatedAtServer: nowIso,
+        row: existingRow
+      };
+    }
+
+    const serverRecordID = generateEntityServerID('PRED', canonicalOtkupacID);
+
+    const rowObj = {
+      ClientRecordID: clientRecordID,
+      ServerRecordID: serverRecordID,
+      CreatedAtClient: record.createdAtClient || '',
+      UpdatedAtClient: record.updatedAtClient || record.createdAtClient || '',
+      UpdatedAtServer: nowIso,
+      SyncStatus: 'Synced',
+      DeviceID: record.deviceID || '',
+      OtkupacID: canonicalOtkupacID,
+
+      PredajaID: predajaID,
+      PredatoAt: predatoAt,
+      VozacID: vozacID,
+      OtkupClientRecordID: otkupCRID,
+      PredajaClanovi: clanovi,
+
+      ReceivedAt: nowIso
+    };
+
+    const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
+    sheet.appendRow(rowValues);
+
+    return {
+      clientRecordID: clientRecordID,
+      success: true,
+      status: 'inserted',
+      serverRecordID: serverRecordID,
+      updatedAtServer: nowIso,
+      row: sheet.getLastRow()
+    };
+  } catch (err) {
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError('GAS', 'processPredajaRecord', err && err.message ? err.message : String(err));
+
+    return {
+      clientRecordID: safeClientRecordID,
+      success: false,
+      code: (err && err.code) || 'PROCESS_ERROR',
+      error: (err && err.message) || String(err)
+    };
+  }
+}
+
 function processZbirnaRecord(record, vozacID) {
   try {
     const canonicalVozacID = String(vozacID || '').trim();

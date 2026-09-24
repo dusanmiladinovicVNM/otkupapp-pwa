@@ -4887,7 +4887,7 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
 | **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
-| **S5-4a** | **žica predaje**: `PredajaID`/`PredatoAt`/`PredajaClanovi` kroz PWA → GAS → VBA; predaja je nov događaj nad već uvezenim OTK redom; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
+| **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
 | **S5-4b** | vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` (E-044, E-058) — redizajn `transport.js`/`zbirna.js` | ⏳ |
 
 #### Šta je S5-1 uradio
@@ -5271,59 +5271,63 @@ imenovanoj tvrdnji, izvor vraćen bit-identično.**
 
 Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
 
-### S5-4a — žica predaje (ZAVRŠEN)
+### S5-4a — predaja je sopstven događaj (ZAVRŠEN)
 
-**Obim je sužen i to je zapisano pre koda.** Plan S5-4 nosi i „vozaču se servira otpremnica po
-`Otpremnica.VozacID`" — to je redizajn vozačkog pogleda (`transport.js`, `zbirna.js`, 674 linije) i
-zavisi od toga da žica prvo postoji. Ovaj rez je **žica**; vozački pogled je **S5-4b**.
-
-**Šta je bilo pokvareno.** VBA od S5-3 traži `PredajaID`, `PredatoAt` i `PredajaClanovi` i bez njih
-predaju glasno odbija. Žica ih nije nosila:
-
-| Sloj | Bilo | Sad |
-|---|---|---|
-| PWA | `buildUpdatedOtpremaRecord` šalje samo `vozacID` | jedan klik = jedan `predajaID` (`crypto.randomUUID`, uz fallback za stariji WebView), `predatoAt` = trenutak predaje, `predajaClanovi` = manifest svih `clientRecordID` tog klika |
-| GAS | `COLUMNS` nema nijedno od tri polja | tri kolone na kraju; `processRecord` ih piše i pri insertu i na **postojeći** red |
-| GAS | `Synced>Master` je terminalno → uvezen red se **ne obogati** predajom | predaja prolazi i preko terminalnog statusa, ali **samo kad polje još nema vrednost** |
-| VBA | `GrupePredaje` presuđuje `Duplicate` po **vozaču** | presuđuje po **`PredajaID`-u** |
-
-**Zašto je vozač prestao da bude dokaz retry-a.** Kad je ta grana pisana, identitet događaja nije imao
-trajan trag. Od S5-3 `PredajaID` živi na zaglavlju otpremnice i preživljava ispravku, pa je **drugi**
-utovar istog bloka kod **istog** vozača tiho postajao `Duplicate` — drugi klik otkupca nestajao je bez
-traga. Sada su četiri ishoda, svaki imenovan:
+**Prva verzija ovog reza je pala na review-u (#390, P1), i pala je s pravom.** Kačila je predaju na
+postojeći OTK red — tri kolone, write-once. Nad najnormalnijim putem je to **tiho gubilo događaj**:
 
 ```
-isti PredajaID, isti vozac   -> Duplicate (uredan retry)
-drugi PredajaID              -> SyncError (blok je vec otisao u drugom utovaru)
-isti PredajaID, drugi vozac  -> SyncError (jedan utovar, dva vozaca)
-dokument bez PredajaID-a     -> SyncError (nije nastao predajom)
+otkup se uveze -> red dobije Synced>Master
+uvoz cita SAMO "Synced"  ->  predaja koja stigne kasnije nikad ne dodje do mastera
+GAS vrati success        ->  PWA lokalno kaze "synced"
+otpremnica ne nastane, niko ne sazna
 ```
 
-**Nalaz koji bi oborio ceo sync.** `ensureSheetColumns` na razliku u zaglavlju **baca `SCHEMA_DRIFT`** —
-ne dodaje kolone. Dodavanje tri kolone bi zaustavilo otkup sync na **prvom zahtevu**, na svakom
-zatečenom OTK listu, dok neko ručno ne proširi zaglavlje. Rešeno po istom pravilu koje VBA kanon već
-ima: **nova kolona ide na kraj**, i samo tada se dozida — kad je zatečen header **prefiks** kanonskog.
-Promenjen redosled i preimenovana kolona i dalje pucaju, jer se takav list ne sme tiho popravljati.
+Drugi smer je bio isti kvar: red koji već nosi `PredajaID` P1 je drugi utovar P2 **progutao** (write-once
+po polju), pa VBA pravilo „P1 ≠ P2 → SyncError" nije imalo priliku da se izvrši. **Moja tvrdnja u opisu
+PR-a — „master odlučuje da je konflikt" — bila je netačna**, i povukao sam je.
 
-> Mereno po `lastCol`, ne po `headers.length`: `headers` se čita širinom `max(lastCol, N)`, pa mu je rep
-> prazan i dužina bi **uvek** izgledala dovoljna. Prva verzija je imala baš tu grešku.
+Uzrok je bio **model, ne propust**: OTK red je nepromenljiva osnova (otkup se desio), a predaja je
+događaj **nad** njim, sa svojim identitetom i svojim lifecycle-om. Tri ćelije canonical reda ne mogu da
+budu red čekanja za događaje.
 
-**Granica koja ovog puta nije pukla.** Sync sloj šalje `{ records: pending }` — ceo zapis, bez spiska
-polja ([sync-engine.js:299](src/js/utils/sync-engine.js:299)) — pa tri nova polja putuju sama. Proverio
-sam to pre nego što sam ih dodao, jer je „ugovor važi unutar mog dela, puca na granici" obrazac koji se
-u ovoj seriji ponovio pet puta.
+| Sloj | Sad |
+|---|---|
+| **PWA** | store `predaje`, svoj `syncStatus`, akcija `syncPredaja`; jedan klik = jedan `predajaID` + `predatoAt` + manifest. **Otkupni zapis se ne dira** — nije se promenio, pa se ne vraća u red za sync |
+| **GAS** | list `PRED-*`, **append-only**; GAS ne presuđuje ništa, samo garantuje da događaj **stigne**. Retry istog `ClientRecordID`-a je idempotentan no-op |
+| **VBA** | `ImportOnePREDSheet` nad `PRED-*`, **posle** OTK uvoza u istom ciklusu (blok se razrešava nad već uvezenim otkupom) |
 
-**Verifikacija.** `vba_check` čisto · schema u koraku · `who_writes` obe kapije · `popis_citalaca` čisto ·
-`RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1965/0** · `RunSheetsJsonParserTests` OK.
-Dvosmerni dokaz nad sabotažama predaje. Compile automatski `NEJASNO` — ručna kapija ostaje.
+**Dva producenta koja sam propustio pri preseljenju.** Predaja se pravila na **dva** mesta u
+`ImportOneOTKSheet`: nad postojećim redom i nad **novo uvezenim** redom sa `VozacID`-em. Drugi mi je
+promakao, a `predaje` više nije bila deklarisana — „Variable not defined" koji bi pao tek na compile-u.
+`vba_check` ga nije uhvatio; **treći put** u ovoj seriji da ista rupa propusti ono što compile hvata.
+`PredajaKandidat` je ostao bez pozivaoca i obrisan je, pa je `PredajeIzPredData` sada **jedini**
+proizvođač oblika koji `GrupePredaje` čita.
 
-⚠ **GAS i PWA izmene su NEVERIFIKOVANE.** U repou nema JS test harness-a, a `node` nije dostupan u ovom
-okruženju — ni `node --check` nije mogao da prođe. Prijavljujem ih kao pročitane, ne kao proverene.
-To je i razlog zašto je VBA deo (jedini merljiv) nosio test i sabotažu.
+**Kako je nov put uopšte merljiv.** `ImportOnePREDSheet` čita Google list preko mreže, pa se kroz njega
+u testu ne može proći. Prevod redova zato živi u `PredajeIzPredData` — **produkcionom telu koje uvoznik
+zove**, ne kopiji za test. `Test_PRED_ListPostajeOtpremnica` hrani baš oblik koji GAS upisuje (zaglavlje
++ dva člana jednog utovara + jedan red čiji otkup nije u masteru) i pušta ga kroz pravog pisca.
 
-**Zatečen crven suite, drugi po redu.** `RunGoogleSyncSmokeSuite` je **77/4 i na `main`-u** (mereno
-`git checkout main -- src-vba tools`, isti fixture). Uz već zapisan `RunMasterSyncSmokeSuite` 17/9 —
-dva sync suite-a koja niko ne pušta. Traže svoj rez.
+**Retry se prepoznaje po utovaru, ne po vozaču.** Zatečeni `Test_OTP_PredajaDrugomVozacuJeKonflikt` je
+**kodirao slabije pravilo** — „ponovljen red ISTOG vozača" koristio je **drugi** `PredajaID`. Prepravljen;
+meri sva četiri ishoda.
+
+**`ensureSheetColumns` dozida rep.** Bez toga bi tri nove kolone oborile sync na prvom zahtevu, na svakom
+zatečenom listu. Dozida se **samo** kad je zatečen header **prefiks** kanonskog; promenjen redosled i
+preimenovana kolona i dalje pucaju. Mereno po `lastCol`, ne po `headers.length` — prva verzija je imala
+baš tu grešku.
+
+**Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
+`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1974/0**.
+`dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
+`NEJASNO` — ručna kapija ostaje.
+
+⚠ **GAS i PWA izmene su NEVERIFIKOVANE.** Nema JS test harness-a, `node` nije dostupan u okruženju — ni
+`node --check` nije mogao da prođe. Pročitane, ne proverene.
+
+**Dva zatečeno crvena sync suite-a**, oba i na `main`-u: `RunMasterSyncSmokeSuite` **17/9** i
+`RunGoogleSyncSmokeSuite` **77/4**. Nisu regresija — niko ih ne pušta. Traže svoj rez.
 
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 

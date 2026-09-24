@@ -322,6 +322,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaMesanihVrstaSeOdbija
     Test_OTP_PredajaBezIdentitetaStaje
     Test_OTP_PredajaDrugomVozacuJeKonflikt
+    Test_PRED_ListPostajeOtpremnica
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -7727,6 +7728,125 @@ EH:
     tx.RollbackTx
     On Error GoTo 0
     LogFatal "Test_OTP_PredajaBezIdentitetaStaje", eN, eD
+End Sub
+
+' PRED LIST POSTAJE OTPREMNICA (S5-4a).
+'
+' Predaja je od ovog reza SOPSTVEN DOGADJAJ sa svojim listom, pa se meri i njen
+' ULAZ, ne samo grupisanje. Sam ImportOnePREDSheet cita Google list preko mreze i
+' kroz njega se u testu ne moze proci -- zato prevod redova zivi u
+' PredajeIzPredData, produkcionom telu koje uvoznik zove.
+'
+' Test hrani BAS onaj oblik koji GAS upisuje (zaglavlje + dva reda jednog
+' utovara) i pusta ga kroz pravog pisca. Time se meri ono sto je u ovom rezu
+' stvarno novo: prevod lista u kandidate i njegov ugovor sa GrupePredaje --
+' redosled clanova niza, koji nijedan checker ne vidi.
+'
+' Meri se i NEGATIVAN slucaj: red ciji otkup nije u masteru ne sme da se pretvori
+' u kandidata nego u imenovanu gresku. Bez njega bi prolaz vazio i za prevod koji
+' sve propusta.
+Private Sub Test_PRED_ListPostajeOtpremnica()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDL")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim cridA As String, cridB As String, predajaID As String, manifest As String
+    cridA = "CRID-PLA-" & scenario
+    cridB = "CRID-PLB-" & scenario
+
+    Dim otkA As String, otkB As String
+    otkA = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-PLA-" & scenario, _
+                          KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB, , cridA)
+    otkB = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-PLB-" & scenario, _
+                          KLASA_II, 300#, 150#, 15#, TEST_TIP_AMB, , cridB)
+    AssertTrue (Len(otkA) > 0 And Len(otkB) > 0), _
+        "PRED preduslov: oba bloka su u masteru"
+    If Len(otkA) = 0 Or Len(otkB) = 0 Then GoTo Kraj
+
+    predajaID = "PRED-LIST-" & scenario
+    manifest = cridA & "," & cridB
+
+    ' Sintetican PRED list: zaglavlje + dva clana istog utovara + jedan red ciji
+    ' otkup ne postoji u masteru.
+    Dim data As Variant
+    ReDim data(1 To 4, 1 To 6)
+    data(1, 1) = "SyncStatus"
+    data(1, 2) = "PredajaID"
+    data(1, 3) = "PredatoAt"
+    data(1, 4) = "VozacID"
+    data(1, 5) = "OtkupClientRecordID"
+    data(1, 6) = "PredajaClanovi"
+
+    PredRed data, 2, predajaID, PredajaIsoDatum(datum), TEST_VOZ_ID, cridA, manifest
+    PredRed data, 3, predajaID, PredajaIsoDatum(datum), TEST_VOZ_ID, cridB, manifest
+    PredRed data, 4, predajaID, PredajaIsoDatum(datum), TEST_VOZ_ID, _
+            "CRID-NEMA-" & scenario, manifest
+
+    Dim predaje As Collection, statusi As Collection, greske As Long
+    Set predaje = New Collection
+    Set statusi = New Collection
+
+    modMasterSync.TestHook_PredajeIzPredData data, predaje, statusi, greske
+
+    AssertEquals "2", CStr(predaje.count), _
+                 "PRED: u kandidate ulaze SAMO redovi ciji je otkup u masteru"
+    AssertEquals "1", CStr(greske), _
+                 "PRED: red bez otkupa u masteru je IMENOVANA greska, ne tih preskok"
+
+    ' --- prevod je tacan tek ako pravi pisac od njega napravi dokument -------
+    Dim ishodi As Object, poruke As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, poruke)), _
+                 "PRED: dva clana jednog utovara daju JEDAN dokument"
+    AssertEquals "", poruke, "PRED: ispravan utovar ne prijavljuje razlog"
+
+    Dim otp As String
+    otp = modDokumenta.OtpremnicaZaOtkup(otkA)
+    AssertTrue Len(otp) > 0, "PRED: blok A je vezan za otpremnicu"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    AssertEquals "2", CStr(modDokumenta.IzvoriOtpremnice(otp).count), _
+                 "PRED: dokument nosi oba clana manifesta"
+    AssertEquals otp, modDokumenta.OtpremnicaZaOtkup(otkB), _
+                 "PRED: oba bloka su na ISTOM dokumentu"
+    AssertEquals predajaID, _
+                 NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_PREDAJA_ID)), _
+                 "PRED: dokument nosi identitet utovara sa lista"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_PRED_ListPostajeOtpremnica", eN, eD
+End Sub
+
+' Jedan red sintetickog PRED lista.
+Private Sub PredRed(ByRef data As Variant, ByVal r As Long, _
+                    ByVal predajaID As String, ByVal predatoAt As String, _
+                    ByVal vozacID As String, ByVal otkupCrid As String, _
+                    ByVal manifest As String)
+    data(r, 1) = "Synced"
+    data(r, 2) = predajaID
+    data(r, 3) = predatoAt
+    data(r, 4) = vozacID
+    data(r, 5) = otkupCrid
+    data(r, 6) = manifest
 End Sub
 
 ' RETRY SE PREPOZNAJE PO UTOVARU, NE PO VOZACU (S5-4).
