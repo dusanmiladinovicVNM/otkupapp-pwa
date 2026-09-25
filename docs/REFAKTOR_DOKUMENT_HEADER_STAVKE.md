@@ -5678,6 +5678,38 @@ LF-only linija.
 
 ⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
 
+**Compile kapija je našla ono što dvanaest review krugova nije — i oborila prenete brojeve.**
+
+Ručni `Debug > Compile VBAProject` je prijavio:
+
+```
+Function call on left-hand side of assignment must return Variant or Object
+modMasterSync.FindSheetsByPrefix, EH grana
+```
+
+U prvom krugu #390 (`c754b90b`) je `FindOTKSheets` izdvojen u generički `FindSheetsByPrefix`, ali je
+EH grana zadržala dodelu **starom** imenu — VBA to čita kao poziv funkcije sa leve strane dodele.
+Jedna linija, ispravljena u `a19f47f3`.
+
+**Važniji nalaz je metodološki.** Kroz osam narednih krugova je pisalo „`src-vba` nije dirnut, pa su
+suite-ovi nepromenjeni: `RunAllTests` 199/0, BFP 1985/0". Ako projekat ne kompajlira, ti brojevi
+**nisu mogli biti izmereni na tom stanju** — bili su preneti, a zvučali su kao merenje. Lanac
+„nepromenjeno od prošlog puta" jak je koliko i njegova prva karika, a ta karika nikad nije proverena.
+
+Pravilo koje iz toga sledi: uz „suite-ovi nepromenjeni" ide **commit na kom je poslednje merenje
+stvarno izvršeno**. Ako je od tada bilo VBA commit-a bez novog prolaza, broj se ne prenosi nego se
+prijavljuje kao **neizmeren na tekucem stanju**.
+
+**Ponovo izmereno na `a19f47f3`** (posle ručnog compile-a): `RunAllTests` **199/0** (`SUITE OK`,
+58,2 s) · `RunBusinessFlowProSuite` **1985/1985, 0 padova** (`RunID=20260925130139-1073`). Automatski
+compile verdikt je očekivano `NEJASNO`; važi ručna kapija.
+
+**Četvrta rupa u `vba_check`.** Dodela imenu funkcije koja nije tekuća procedura prođe nezapaženo.
+Jednokratni skener te klase je pušten **u oba smera**: sa vraćenom greškom prijavi `FindOTKSheets`
+(31 nalaz), sa ispravkom 0 pojava (30 nalaza). Preostalih 30 su lažni pozitivi — `ByRef` parametri iz
+**višerednih potpisa** (`_` prelom), koje skener ne vidi. Zaključak za pravilo u `vba_check`: mora
+prvo da razume prelomljen potpis, inače unosi šum. Zaseban rez, sa dokazom u oba smera.
+
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 
 Rez je počeo od tvrdnje koju sam sam zapisao na kraju S5-3 — „mrtav storno most, 16 mesta u
