@@ -3042,24 +3042,57 @@ function predajeUToku_(otkupacID) {
   return mapa;
 }
 
-// Zakaci in-flight predaju na otkupne redove.
+// Read-model vraca EKSPLICITNO poslovno stanje (review #390, cetvrti krug).
 //
-// Red koji je master vec obradio se NE DIRA: njegov VozacID/PredajaID dolazi iz
-// kanonskog lanca (TekucaPredajaOtkupa u VBA izvozu) i tacan je i kad je prazan
-// -- stornirana otpremnica blok oslobadja.
+// Prethodna verzija je pitala "je li OTK red Synced>Master" i, ako jeste, uopste
+// nije gledala PRED. To je lifecycle POGRESNOG ENTITETA:
+//
+//   OTK.SyncStatus  = "otkup je uvezen u master"
+//   PRED razresenje = "predaja je postala otpremnica (ili je odbijena)"
+//
+// To su dva razlicita zivota. Normalan put -- otkup uvezen jutros, predaja
+// kliknuta popodne -- je zato drugom uredjaju izgledao kao slobodan blok, jer je
+// njegov in-flight PRED bio preskocen.
+//
+// Zato se stanje sada SASTAVLJA, po prioritetu, i OTK.SyncStatus u tome nema
+// nikakvu ulogu:
+//
+//   aktivna kanonska otpremnica        -> assigned   (iz mastera)
+//   nema je, ali ima nerazresen PRED   -> in_flight  (iz PRED lista)
+//   nema ni jednog                     -> free
+//
+// "free" ekplicitno CISTI VozacID i PredajaID: stornirana otpremnica oslobadja
+// blok, pa zatecena vrednost na redu ne sme da ga i dalje drzi.
 function projektujPredaju_(records, uToku) {
   if (!Array.isArray(records)) return records;
 
   return records.map(function (r) {
-    if (String((r && r.SyncStatus) || '').trim() === 'Synced>Master') return r;
+    if (!r) return r;
 
-    var crid = String((r && r.ClientRecordID) || '').trim();
+    var crid = String(r.ClientRecordID || '').trim();
+
+    // 1) Tekuca istina: aktivna otpremnica iz kanonskog lanca.
+    //    VBA izvoz je puni preko TekucaPredajaOtkupa; live OTK red je nema.
+    if (String(r.OtpremnicaID || '').trim()) {
+      r.AssignmentState = 'assigned';
+      return r;
+    }
+
+    // 2) Privremena istina: PRED koji master jos nije razresio.
     var p = crid ? uToku[crid] : null;
-    if (!p) return r;
+    if (p) {
+      r.AssignmentState = 'in_flight';
+      r.PredajaID = p.predajaID;
+      r.PredatoAt = p.predatoAt;
+      r.VozacID = p.vozacID;
+      return r;
+    }
 
-    r.PredajaID = p.predajaID;
-    r.PredatoAt = p.predatoAt;
-    r.VozacID = p.vozacID;
+    // 3) Slobodan.
+    r.AssignmentState = 'free';
+    r.VozacID = '';
+    r.PredajaID = '';
+    r.PredatoAt = '';
     return r;
   });
 }

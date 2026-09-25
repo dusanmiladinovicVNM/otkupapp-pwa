@@ -5391,6 +5391,38 @@ nerazrešen** po `createdAtClient`, a razrešen red uopšte ne ulazi u odlučiva
 koji izvoz zove: posle predaje sve imenovano, posle storna sve prazno. Prag `otk_veza_otp` spušten
 **13 → 11** (rez je skinuo dva čitaoca stare veze).
 
+**Review #390, četvrti krug — `OTK.SyncStatus` je bio proxy za tuđi lifecycle.**
+
+Projekcija je pitala „je li OTK red `Synced>Master`" i, ako jeste, **uopšte nije gledala `PRED`**. To je
+lifecycle **pogrešnog entiteta**:
+
+| Šta kaže | Šta ne kaže |
+|---|---|
+| `OTK.SyncStatus = Synced>Master` — otkup je uvezen u master | da je **predaja** tog otkupa razrešena |
+
+Posledica je bila na **najnormalnijem putu**: otkup uvezen ujutru, predaja kliknuta popodne → drugom
+uređaju je blok izgledao slobodan, jer je njegov in-flight `PRED` bio preskočen.
+
+**Stanje se sada sastavlja eksplicitno**, i `OTK.SyncStatus` u tome nema nikakvu ulogu:
+
+```
+aktivna kanonska otpremnica       -> assigned   (iz mastera)
+nema je, ali ima nerazresen PRED  -> in_flight  (iz PRED lista)
+nema ni jednog                    -> free       (VozacID/PredajaID se CISTE)
+```
+
+**Drugi deo istog P1 — merge je pregazio kanonsko stanje.** `mergeOtpremaRecords` bira po
+`updatedAtClient`, a master izvoz to polje šalje **prazno** — pa je stari lokalni OTK red redovno
+pobeđivao serverski. Sa njim bi nestao i `assignmentState`, lokalna istorija bi bila ponovo projektovana
+i blok bi **posle storna opet izgledao predat**. Merge i dalje odlučuje o **sadržaju** otkupa (to mu je
+posao), ali stanje **predaje** je tuđa činjenica i vraća se posle merge-a.
+
+**P2 — eksplicitno pomirenje, ne heuristika.** Lokalni `syncStatus: 'synced'` znači samo „stiglo do
+GAS-a". Događaj je **razrešen** tek kad ga server više ne prijavljuje kao `in_flight` za taj blok — bilo
+da je postao otpremnica, bilo da je odbijen ili je otpremnica stornirana. Tada se u lokalni zapis upisuje
+`masterState: 'resolved'` i on izlazi iz odlučivanja. **Neposlat događaj se nikad ne smatra razrešenim** —
+offline predaja mora da drži blok dok ne dobije odgovor.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski

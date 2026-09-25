@@ -54,12 +54,39 @@ async function loadOtpremaOverview() {
         console.error('loadOtpremaOverview predaje failed:', err);
     }
 
+    // SERVERSKA PROJEKCIJA SE NE SME PREGAZITI LOKALNIM SNIMKOM (review #390).
+    //
+    // mergeOtpremaRecords bira po updatedAtClient, a master izvoz to polje salje
+    // PRAZNO -- pa je stari lokalni OTK red redovno pobedjivao kanonski serverski.
+    // Sa njim bi nestalo i assignmentState, pa bi lokalna istorija predaje bila
+    // ponovo projektovana i blok bi posle STORNA opet izgledao predat.
+    //
+    // Merge i dalje odlucuje o SADRZAJU otkupa (kolicina, cena, napomena) -- to
+    // je i njegov posao. Stanje PREDAJE je tudja cinjenica i vraca se ovde.
+    const stanjeSaServera = new Map();
+    serverRows.forEach(r => {
+        const crid = String((r && r.clientRecordID) || '').trim();
+        if (crid && r.assignmentState) stanjeSaServera.set(crid, r);
+    });
+
     const mergedRows = dedupeRecordsForRender(
         mergeOtpremaRecords(localRows, serverRows)
     )
         .map(enrichOtpremaRecord)
+        .map(row => primeniStanjeSaServera(row, stanjeSaServera))
         .map(row => primeniPredaju(row, lokalnePredaje))
         .sort(compareOtpremaRowsDesc);
+
+    // POMIRENJE: lokalni dogadjaj koji je master razresio izlazi iz odlucivanja.
+    //
+    // Bez toga lokalni store ne moze da razlikuje "stigao do GAS-a, ceka master"
+    // od "istorija vec stornirane otpremnice" -- pa bi posle offline reload-a
+    // stari dogadjaj ponovo drzao blok.
+    try {
+        if (db) await pomiriPredaje(db, lokalnePredaje, stanjeSaServera);
+    } catch (err) {
+        console.error('loadOtpremaOverview pomirenje failed:', err);
+    }
 
     otpremaState.rows = mergedRows;
     renderOtpremaRoot();
@@ -683,6 +710,9 @@ async function predajePoOtkupu(db) {
         const st = String((ev && ev.syncStatus) || '').trim();
         if (st === 'error' || st === 'failed') continue;
 
+        // Razresen dogadjaj je istorija (v. pomiriPredaje).
+        if (ev && ev.masterState === 'resolved') continue;
+
         // Najstariji NERAZRESEN dogadjaj je tekuca rezervacija.
         //
         // Ne "prvi iz getAll": kljuc je PredajaID (random UUID), pa je redosled
@@ -703,15 +733,80 @@ async function predajePoOtkupu(db) {
 //
 // Ne dira zapis u bazi -- samo red koji ide u render. Otkupni zapis ostaje
 // nepromenljiva osnova.
+// Vrati serversko stanje predaje na red, ma sta merge izabrao.
+function primeniStanjeSaServera(row, stanjeSaServera) {
+    const crid = String((row && row.clientRecordID) || '').trim();
+    const s = crid ? stanjeSaServera.get(crid) : null;
+    if (!s) return row;
+
+    return Object.assign({}, row, {
+        assignmentState: s.assignmentState,
+        vozacID: s.vozacID || '',
+        vozacName: s.vozacName || '',
+        predajaID: s.predajaID || '',
+        predatoAt: s.predatoAt || '',
+        otpremnicaID: s.otpremnicaID || ''
+    });
+}
+
+// Da li je lokalni dogadjaj master vec razresio.
+//
+// Nije heuristika "syncStatus === synced": taj status znaci samo da je dogadjaj
+// stigao do GAS-a. Razresen je tek kad ga server VISE NE prijavljuje kao
+// in_flight za taj blok -- bilo zato sto je postao otpremnica (assigned), bilo
+// zato sto je odbijen ili je otpremnica u medjuvremenu stornirana (free).
+//
+// Dogadjaj koji jos nije poslat se NIKAD ne smatra razresenim: offline predaja
+// mora da drzi blok dok ne dobije odgovor.
+function predajaJeRazresena(ev, stanjeSaServera) {
+    if (!ev) return false;
+    if (String(ev.syncStatus || '').trim() !== 'synced') return false;
+
+    const crid = String(ev.otkupClientRecordID || '').trim();
+    const s = crid ? stanjeSaServera.get(crid) : null;
+    if (!s) return false;   // server nista ne kaze -> ne presudjuj
+
+    if (s.assignmentState !== 'in_flight') return true;
+
+    // Jos je in_flight, ali DRUGI utovar -> ovaj je istorija.
+    return String(s.predajaID || '') !== String(ev.predajaID || '');
+}
+
+// Upisi razresenje u lokalni store, da sledece (i offline) ucitavanje
+// ne mora ponovo da ga izvodi.
+async function pomiriPredaje(db, lokalnePredaje, stanjeSaServera) {
+    const zaUpis = [];
+
+    Object.keys(lokalnePredaje).forEach(crid => {
+        const ev = lokalnePredaje[crid];
+        if (!ev || ev.masterState === 'resolved') return;
+        if (!predajaJeRazresena(ev, stanjeSaServera)) return;
+
+        zaUpis.push(Object.assign({}, ev, { masterState: 'resolved' }));
+    });
+
+    if (zaUpis.length) {
+        await dbPutAll(db, [{ storeName: 'predaje', records: zaUpis }]);
+    }
+}
+
 function primeniPredaju(row, mapa) {
-    // Red koji je master vec razresio govori sam za sebe: njegov vozacID dolazi
-    // iz kanonskog lanca i tacan je i kad je prazan (storno je oslobodio blok).
-    // Lokalni dogadjaj je tada ISTORIJA, ne tekuce stanje.
-    if (row && row.masterResolved) return row;
+    // SERVER IMA PRVU REC O TEKUCEM STANJU.
+    //
+    // Lokalni dogadjaj sme samo da DOPUNI sliku -- tamo gde server jos nista ne
+    // zna (offline, ili dogadjaj jos nije poslat). Kad server kaze assigned ili
+    // in_flight, on vec nosi tacan podatak; kad kaze free, blok JESTE slobodan
+    // (storno) i lokalna istorija ne sme da ga vrati.
+    if (row && row.assignmentState === 'assigned') return row;
+    if (row && row.assignmentState === 'in_flight') return row;
 
     const crid = String((row && row.clientRecordID) || '').trim();
     const ev = crid ? mapa[crid] : null;
     if (!ev) return row;
+
+    // Razresen dogadjaj je ISTORIJA, ne tekuce stanje.
+    if (ev.masterState === 'resolved') return row;
+    if (row && row.assignmentState === 'free' && String(ev.syncStatus || '') === 'synced') return row;
 
     return Object.assign({}, row, {
         vozacID: ev.vozacID || row.vozacID || '',
@@ -872,8 +967,11 @@ function mapServerOtpremaRecord(r) {
         vozacName: r.VozacName || '',
         predajaID: r.PredajaID || '',
         predatoAt: normalizeIso(r.PredatoAt),
-        // Da li je master vec razresio ovaj red -- odlucuje ko govori o predaji.
-        masterResolved: String(r.SyncStatus || '').trim() === 'Synced>Master',
+        otpremnicaID: r.OtpremnicaID || '',
+        // EKSPLICITNO poslovno stanje sa servera: assigned | in_flight | free.
+        // Ranije je klijent zakljucivao iz OTK SyncStatus-a -- lifecycle pogresnog
+        // entiteta (review #390, cetvrti krug).
+        assignmentState: String(r.AssignmentState || '').trim(),
 
         syncStatus: 'synced',
         lastSyncError: '',
