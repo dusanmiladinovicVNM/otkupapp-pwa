@@ -98,7 +98,7 @@ window.CONFIG = {
     // Izolovan IndexedDB po klijentu. Primarni klijent zadrzava legacy ime
     // da se postojeci offline podaci ne osirote pri prelasku na multitenant.
     DB_NAME: ACTIVE_TENANT === DEFAULT_TENANT ? 'OtkupAppDB' : ('OtkupAppDB_' + ACTIVE_TENANT),
-    DB_VERSION: 7,   // 7: store 'predaje' (S5-4a)
+    DB_VERSION: 8,   // 7: store 'predaje'; 8: store 'predajaProjekcija' (S5-4a)
     STORE_NAME: 'otkupi',
     STAMM_STORE: 'stammdaten',
     APP_VERSION: '1.0.0-C001',

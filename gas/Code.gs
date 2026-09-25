@@ -3019,15 +3019,20 @@ function predajeUToku_(otkupacID) {
     var crid = String(r.OtkupClientRecordID || '').trim();
     if (!crid) continue;
 
-    var st = String(r.SyncStatus || '').trim();
-
-    // Master ga je razresio (dokument postoji ili ne) -> tekuce stanje dolazi
-    // sa otkupnog reda, ne odavde.
-    if (st === 'Synced>Master') continue;
-
-    // Odbijen dogadjaj NIJE dodela. Bez ovoga bi obicna greska u unosu
-    // (npr. mesane vrste) trajno zakljucala blok u PWA.
-    if (st.indexOf('SyncError') === 0) continue;
+    // TERMINALNOST JE JEDAN POJAM, NE RUCNA LISTA (review #390, peti krug).
+    //
+    // Ovde je stajao ispisan spisak koji je propustao 'Duplicate'. A master ga
+    // upravo proizvodi kod urednog oporavka: PRED-1 napravi otpremnicu, Google
+    // writeback padne, sledeci ciklus isti dogadjaj vidi kao idempotentan retry
+    // i upise Duplicate.
+    //
+    // Dok otpremnica postoji, kanonsko 'assigned' ima prioritet pa se ne vidi.
+    // Posle STORNA kanonsko stanje postane free, a taj istorijski Duplicate bi
+    // se vratio kao in_flight i zakljucao blok zauvek.
+    //
+    // isTerminalSyncStatus zna sva tri (Synced>Master, Duplicate, SyncError*),
+    // i sada ga dele i OTK i PRED put.
+    if (isTerminalSyncStatus(r.SyncStatus)) continue;
 
     // Prvi nerazreseni red za taj blok je tekuca rezervacija.
     if (mapa[crid]) continue;

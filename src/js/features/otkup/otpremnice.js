@@ -69,13 +69,32 @@ async function loadOtpremaOverview() {
         if (crid && r.assignmentState) stanjeSaServera.set(crid, r);
     });
 
+    // POSLEDNJE POZNATO STANJE PREZIVLJAVA ZATVARANJE APLIKACIJE.
+    //
+    // Bez ovoga je "predato" zivelo samo u memoriji jednog ucitavanja: pomirenje
+    // bi lokalni dogadjaj oznacilo kao razresen, a sledeci OFFLINE reload ne bi
+    // imao nijedan trag -- pa bi vec predat blok izgledao slobodan.
+    let projekcija = new Map();
+    try {
+        if (db) projekcija = await ucitajProjekciju(db);
+    } catch (err) {
+        console.error('loadOtpremaOverview projekcija failed:', err);
+    }
+
     const mergedRows = dedupeRecordsForRender(
         mergeOtpremaRecords(localRows, serverRows)
     )
         .map(enrichOtpremaRecord)
-        .map(row => primeniStanjeSaServera(row, stanjeSaServera))
+        .map(row => primeniStanjeSaServera(row, stanjeSaServera, projekcija))
         .map(row => primeniPredaju(row, lokalnePredaje))
         .sort(compareOtpremaRowsDesc);
+
+    // Sveze serversko stanje se UPISUJE, pa sledeci offline reload ima sta da cita.
+    try {
+        if (db && stanjeSaServera.size) await upisiProjekciju(db, stanjeSaServera);
+    } catch (err) {
+        console.error('loadOtpremaOverview upis projekcije failed:', err);
+    }
 
     // POMIRENJE: lokalni dogadjaj koji je master razresio izlazi iz odlucivanja.
     //
@@ -733,10 +752,57 @@ async function predajePoOtkupu(db) {
 //
 // Ne dira zapis u bazi -- samo red koji ide u render. Otkupni zapis ostaje
 // nepromenljiva osnova.
-// Vrati serversko stanje predaje na red, ma sta merge izabrao.
-function primeniStanjeSaServera(row, stanjeSaServera) {
+// Ucitaj trajnu projekciju: ClientRecordID bloka -> poslednje poznato stanje.
+async function ucitajProjekciju(db) {
+    const mapa = new Map();
+
+    const sve = await dbGetAll(db, 'predajaProjekcija');
+    if (!Array.isArray(sve)) return mapa;
+
+    for (const p of sve) {
+        const crid = String((p && p.otkupClientRecordID) || '').trim();
+        if (crid) mapa.set(crid, p);
+    }
+
+    return mapa;
+}
+
+// Upisi sveze serversko stanje u trajnu projekciju.
+//
+// checkedAt je trenutak merenja -- po njemu se kasnije zna da li je kesirano
+// stanje starije od lokalnog dogadjaja koji jos ceka odgovor.
+async function upisiProjekciju(db, stanjeSaServera) {
+    const kada = new Date().toISOString();
+    const redovi = [];
+
+    stanjeSaServera.forEach((s, crid) => {
+        redovi.push({
+            otkupClientRecordID: crid,
+            assignmentState: s.assignmentState || '',
+            vozacID: s.vozacID || '',
+            vozacName: s.vozacName || '',
+            predajaID: s.predajaID || '',
+            predatoAt: s.predatoAt || '',
+            otpremnicaID: s.otpremnicaID || '',
+            checkedAt: kada
+        });
+    });
+
+    if (redovi.length) {
+        await dbPutAll(db, [{ storeName: 'predajaProjekcija', records: redovi }]);
+    }
+}
+
+// Vrati stanje predaje na red, ma sta merge izabrao.
+//
+// Sveze serversko ima prednost; kad ga nema (offline), koristi se POSLEDNJE
+// POZNATO iz trajne projekcije. Lokalni otkupni zapis o predaji ne govori nista
+// i namerno je tako -- on je nepromenljiva osnova.
+function primeniStanjeSaServera(row, stanjeSaServera, projekcija) {
     const crid = String((row && row.clientRecordID) || '').trim();
-    const s = crid ? stanjeSaServera.get(crid) : null;
+    if (!crid) return row;
+
+    const s = stanjeSaServera.get(crid) || (projekcija && projekcija.get(crid));
     if (!s) return row;
 
     return Object.assign({}, row, {
@@ -745,7 +811,8 @@ function primeniStanjeSaServera(row, stanjeSaServera) {
         vozacName: s.vozacName || '',
         predajaID: s.predajaID || '',
         predatoAt: s.predatoAt || '',
-        otpremnicaID: s.otpremnicaID || ''
+        otpremnicaID: s.otpremnicaID || '',
+        assignmentCheckedAt: s.checkedAt || ''
     });
 }
 
@@ -806,7 +873,16 @@ function primeniPredaju(row, mapa) {
 
     // Razresen dogadjaj je ISTORIJA, ne tekuce stanje.
     if (ev.masterState === 'resolved') return row;
-    if (row && row.assignmentState === 'free' && String(ev.syncStatus || '') === 'synced') return row;
+
+    // "free" iz KESA sme da bude zastarelo: moglo je biti izmereno PRE nego sto
+    // je ovaj dogadjaj nastao. Tada dogadjaj i dalje drzi blok.
+    //
+    // Sveze serversko "free" (bez checkedAt) je merodavno i za poslat dogadjaj --
+    // znaci da ga je master razresio ili je otpremnica stornirana.
+    if (row && row.assignmentState === 'free' && String(ev.syncStatus || '') === 'synced') {
+        const kes = String(row.assignmentCheckedAt || '');
+        if (!kes || kes >= String(ev.createdAtClient || '')) return row;
+    }
 
     return Object.assign({}, row, {
         vozacID: ev.vozacID || row.vozacID || '',

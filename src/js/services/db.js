@@ -33,6 +33,27 @@
                 indexes: []
             },
             {
+                // TRAJNA PROJEKCIJA TEKUCEG STANJA PREDAJE (review #390, peti krug).
+                //
+                // Tri stvari, tri mesta -- i ovo je trece:
+                //   'otkupi'  -- NEPROMENLJIVA osnova (otkup se desio)
+                //   'predaje' -- red dogadjaja i njihova istorija
+                //   ovaj      -- KES poslednjeg poznatog read-modela
+                //
+                // Bez njega je "predato" zivelo samo u memoriji jednog ucitavanja:
+                // posle pomirenja bi lokalni dogadjaj bio oznacen kao razresen, a
+                // sledeci OFFLINE reload ne bi imao nijedan trag -- pa bi vec
+                // predat blok izgledao slobodan i primio drugu predaju.
+                //
+                // Kljuc je ClientRecordID BLOKA: pitanje je "u kakvom je stanju
+                // ovaj otkup", a ne "sta se desilo sa tim dogadjajem".
+                name: 'predajaProjekcija',
+                options: { keyPath: 'otkupClientRecordID' },
+                indexes: [
+                    { name: 'assignmentState', keyPath: 'assignmentState', options: { unique: false } }
+                ]
+            },
+            {
                 // DOGADJAJI PREDAJE (S5-4a).
                 //
                 // Zaseban store, a ne polja na otkupnom zapisu: otkup je

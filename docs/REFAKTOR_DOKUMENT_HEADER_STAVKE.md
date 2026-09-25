@@ -5423,6 +5423,40 @@ da je postao otpremnica, bilo da je odbijen ili je otpremnica stornirana. Tada s
 `masterState: 'resolved'` i on izlazi iz odlučivanja. **Neposlat događaj se nikad ne smatra razrešenim** —
 offline predaja mora da drži blok dok ne dobije odgovor.
 
+**Review #390, peti krug — online istina nije preživljavala zatvaranje aplikacije.**
+
+Prethodni krug je uveo `assignmentState` i eksplicitno pomirenje. Ali serversko stanje je živelo **samo u
+memoriji jednog učitavanja**, a pomirenje bi lokalni događaj označilo kao razrešen — pa sledeći
+**offline** reload nije imao nijedan trag:
+
+```
+immutable OTK nema VozacID
++ razresen PRED se ignorise
+= vec predat blok izgleda FREE  ->  moguca druga predaja
+```
+
+Rešenje nije vraćanje `VozacID` na otkupni red (recenzent je na to izričito upozorio, i s pravom). Uveden
+je **treći store**, pa svaka stvar ima svoje mesto:
+
+| Store | Šta je |
+|---|---|
+| `otkupi` | **nepromenljiva osnova** — otkup se desio |
+| `predaje` | red događaja i njihova **istorija** |
+| `predajaProjekcija` | **keš poslednjeg poznatog read-modela** (ključ je `ClientRecordID` bloka) |
+
+Online: serversko `assignmentState` se upisuje u keš. Offline: čita se poslednje poznato + novi
+**nerazrešen** lokalni događaj.
+
+> Keširano `free` sme da bude **zastarelo** — moglo je biti izmereno pre nego što je događaj nastao.
+> Zato se poredi `checkedAt` sa `createdAtClient` događaja: stariji keš ne obara svežu predaju. Sveže
+> serversko `free` (bez `checkedAt`) je merodavno.
+
+**P2 — terminalnost je bila ručna lista.** `predajeUToku_` je ispisivao `Synced>Master` i `SyncError*`,
+a **propuštao `Duplicate`** — koji master proizvodi kod urednog oporavka (otpremnica napravljena, Google
+writeback pao, sledeći ciklus vidi idempotentan retry). Dok otpremnica postoji, kanonsko `assigned` ima
+prioritet pa se ne vidi; **posle storna** bi se taj istorijski `Duplicate` vratio kao `in_flight` i
+zaključao blok zauvek. Sada se koristi `isTerminalSyncStatus` — isti pojam koji drži i OTK put.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
