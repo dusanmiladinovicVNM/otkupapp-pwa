@@ -3102,11 +3102,59 @@ function projektujPredaju_(records, uToku) {
   });
 }
 
+// Epoha master sync-a: (vreme poslednje promene lock-a, da li je zakljucano).
+//
+// Sluzi kao fencing token za read-model koji se sastavlja iz vise izvora.
+// Nedostupno stanje se tretira kao ZAKLJUCANO: ograda koja ne zna odgovor ne sme
+// da pusti objavu.
+function masterSyncEpoha_() {
+  try {
+    var s = getMasterSyncStateForWriteBlock_();
+    if (!s) return { locked: true, token: '', message: '' };
+
+    return {
+      locked: !!s.locked,
+      token: String(s.updatedAt || '') + '|' + (s.locked ? '1' : '0'),
+      message: String(s.message || '')
+    };
+  } catch (err) {
+    logError('GAS', 'masterSyncEpoha_', err && err.message ? err.message : String(err));
+    return { locked: true, token: '', message: 'Stanje master sync-a nije dostupno.' };
+  }
+}
+
 function getOtkupiForOtkupac(otkupacID) {
   try {
     var canonicalOtkupacID = String(otkupacID || '').trim();
     if (!canonicalOtkupacID) {
       return { success: false, error: 'otkupacID required' };
+    }
+
+    // OGRADA SE POSTAVLJA PRE CITANJA, NE POSLE (review #390, sedmi krug).
+    //
+    // Prethodna verzija je lock proveravala TEK na kraju, posle citanja oba
+    // izvora. Zahtev koji premosti otkljucavanje je tako mogao da procita star
+    // OtkupiAll i vec terminalan PRED, a onda cuje "nije zakljucano" -- i objavi
+    // bas ono medjustanje koje ograda treba da zabrani.
+    //
+    // Epoha je (MASTER_SYNC_UPDATED_AT, locked): VBA je pise pri SVAKOJ promeni
+    // lock-a, i pri zakljucavanju i pri otkljucavanju (SetPWAMasterSyncLock).
+    // Snapshot se objavljuje samo ako je epoha ISTA pre i posle citanja, i ako u
+    // oba merenja nije bila zakljucana.
+    //
+    // OGRANICENJE, receno otvoreno: vremenska oznaka ima rezoluciju SEKUNDE, pa
+    // ciklus koji bi se ceo odigrao unutar iste sekunde ograda ne bi videla.
+    // Master ciklus radi Drive citanja i upise, pa to nije fizicki moguce -- ali
+    // to je argument o trajanju, ne dokaz. Ako ikad zatreba tvrdja garancija,
+    // pravo resenje je eksplicitan brojac MASTER_SYNC_GENERATION.
+    var epohaPre = masterSyncEpoha_();
+    if (epohaPre.locked) {
+      return {
+        success: true,
+        readModelChanging: true,
+        message: epohaPre.message || 'Master sync je u toku.',
+        records: []
+      };
     }
 
     var merged = [];
@@ -3184,26 +3232,21 @@ function getOtkupiForOtkupac(otkupacID) {
       };
     }
 
-    // READ-MODEL KOJI SE MENJA SE NE OBJAVLJUJE (review #390, sesti krug).
-    //
     // Tekuce stanje se sastavlja iz DVA izvora koja master ciklus ne menja u
     // istom trenutku: PRED dobije Synced>Master cim otpremnica nastane, a
     // OtkupiAll se osvezava tek pri izlaznom izvozu. Izmedju to dvoje postoji
     // legitiman prozor u kom PRED vise nije in-flight, a master red jos ne zna
     // za otpremnicu -- i sastav bi dao LAZAN "free".
     //
-    // Lock je do sada stitio samo UPISE. Ali snimak procitan u tom prozoru
-    // klijent kesira i drzi i posle otkljucavanja, pa bi korisnik kliknuo drugu
-    // predaju nad blokom koji je vec otisao.
-    //
-    // Zato se stanje u tom prozoru NE VRACA: klijent zadrzava poslednje poznato
-    // (njegova trajna projekcija) umesto da dobije pogresno svezije.
-    var lockState = getMasterSyncStateForWriteBlock_();
-    if (lockState && lockState.locked) {
+    // Zato snapshot mora da bude iz JEDNE STABILNE EPOHE: ista pre i posle
+    // citanja. Promena znaci da je ciklus poceo ili se zavrsio usred ovog
+    // zahteva, pa se ono sto je procitano ne sme objaviti.
+    var epohaPosle = masterSyncEpoha_();
+    if (epohaPosle.locked || epohaPosle.token !== epohaPre.token) {
       return {
         success: true,
         readModelChanging: true,
-        message: lockState.message || 'Master sync je u toku.',
+        message: epohaPosle.message || 'Master sync je u toku.',
         records: []
       };
     }

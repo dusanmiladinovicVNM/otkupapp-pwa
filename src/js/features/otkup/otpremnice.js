@@ -20,13 +20,14 @@ const otpremaState = {
 //
 // Radi samo kad je ekran otpreme stvarno otvoren: inace bi svaki zavrsen ciklus
 // vukao mrezu bez razloga.
+// Vraca PROMISE: pozivalac (master-sync-guard) drzi overlay dok ovo ne zavrsi,
+// pa korisnik ne moze da klikne nad zastarelim stanjem. Greska se NE guta --
+// guard je koristi da overlay ostane.
 window.refreshOtpremaPosleLocka = function refreshOtpremaPosleLocka() {
     const koren = byId('otpremaRootSections');
-    if (!koren) return;
+    if (!koren) return Promise.resolve();
 
-    loadOtpremaOverview().catch(err => {
-        console.error('refreshOtpremaPosleLocka failed:', err);
-    });
+    return loadOtpremaOverview();
 };
 
 async function loadOtpremaOverview() {

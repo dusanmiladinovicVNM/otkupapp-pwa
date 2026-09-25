@@ -5490,6 +5490,35 @@ Dva poteza, oba potrebna:
 > ekvivalentno (oba izvora garantuju vozača), ali kad već postoji eksplicitno stanje, ono bi dugoročno
 > trebalo da bude kriterijum, a `VozacID` samo podatak prikaza.
 
+**Review #390, sedmi krug — publication barrier.**
+
+Domen se ne dira; ostala je samo granica **kada se sme reći da se model više ne menja**.
+
+**A) Overlay je padao pre nego što osvežavanje završi.** Komentar je govorio „stanje mora da bude sveže
+**pre** nego što korisnik sme da klikne", a runtime je radio suprotno: sakrij → pa pokreni osvežavanje u
+pozadini. Između toga stoji mreža, a lock više ne blokira upis — pa je klik nad **zastarelim** stanjem
+bio moguć.
+
+Sada `hideMasterSyncOverlay` **čeka** osvežavanje, a `refreshOtpremaPosleLocka` vraća promise. **Ako
+osvežavanje padne, overlay ostaje** uz imenovan razlog: pustiti ekran uz „sve je u redu" nad stanjem za
+koje znamo da je zastarelo gore je od čekanja.
+
+**B) Ograda se postavljala posle čitanja izvora.** Zahtev koji premosti otključavanje mogao je da
+pročita star `OtkupiAll` i već terminalan `PRED`, pa da na kraju čuje „nije zaključano" — i objavi baš
+međustanje koje ograda treba da zabrani.
+
+Snapshot se sada objavljuje samo iz **jedne stabilne epohe**: `(MASTER_SYNC_UPDATED_AT, locked)` se meri
+**pre** i **posle** čitanja, i mora biti isti i otključan u oba merenja. VBA tu oznaku piše pri **svakoj**
+promeni lock-a — i pri zaključavanju i pri otključavanju ([modGoogleSyncOrchestrator.bas:679](src-vba/modGoogleSyncOrchestrator.bas:679)). Nedostupno stanje se tretira kao **zaključano**.
+
+> **Ograničenje rečeno otvoreno:** vremenska oznaka ima rezoluciju **sekunde**, pa ciklus koji bi se ceo
+> odigrao unutar iste sekunde ograda ne bi videla. Master ciklus radi Drive čitanja i upise, pa to nije
+> fizički moguće — ali to je argument o trajanju, **ne dokaz**. Tvrđa garancija je eksplicitan brojač
+> `MASTER_SYNC_GENERATION`; zapisano kao opcija ako ikad zatreba.
+
+**Usput popravljeno:** blok koji sam ranije ubacio u `otpremnice.js` ostao je sa **18 LF linija** u
+CRLF fajlu — tačno korupcija na koju pravila upozoravaju. Fajl je normalizovan; sada 0 LF-only linija.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski

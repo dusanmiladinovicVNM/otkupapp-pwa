@@ -85,7 +85,7 @@
                 try {
                     const state = await window.getMasterSyncStateSafe(true);
                     if (state && state.locked === true) showMasterSyncOverlay(state);
-                    else hideMasterSyncOverlay();
+                    else await hideMasterSyncOverlay();
                 } finally {
                     btn.disabled = false;
                     btn.textContent = 'Proveri ponovo';
@@ -108,28 +108,52 @@
         el.style.display = 'flex';
     }
 
-    function hideMasterSyncOverlay() {
+    function sakrijOverlay() {
+        const el = document.getElementById('masterSyncBlocker');
+        if (el) el.style.display = 'none';
+    }
+
+    // OTKLJUCAVANJE: OSVEZI PA TEK ONDA PUSTI KORISNIKA (review #390, sedmi krug).
+    //
+    // Prethodna verzija je overlay sakrivala PRVA, pa tek onda pokretala
+    // osvezavanje u pozadini. Komentar je govorio "stanje mora da bude sveze PRE
+    // nego sto korisnik sme da klikne", a runtime je radio suprotno: izmedju
+    // skrivanja i dolaska podataka stoji mreza, i u tom prozoru je klik nad
+    // ZASTARELIM stanjem bio moguc -- a lock vise nije blokirao upis.
+    //
+    // Sada overlay ostaje dok osvezavanje ne zavrsi.
+    //
+    // AKO OSVEZAVANJE PADNE, OVERLAY OSTAJE. Pustiti ekran uz poruku "sve je u
+    // redu" nad stanjem za koje znamo da je zastarelo je gore od cekanja:
+    // korisnik bi komandu izvrsio nad slikom koja vise ne vazi.
+    async function hideMasterSyncOverlay() {
         const el = document.getElementById('masterSyncBlocker');
         const bioVidljiv = !!(el && el.style.display !== 'none');
 
-        if (el) el.style.display = 'none';
+        if (!bioVidljiv) {
+            sakrijOverlay();
+            return;
+        }
 
-        // OTKLJUCAVANJE MORA DA OSVEZI READ-MODEL (review #390, sesti krug).
-        //
-        // Lock je stitio UPISE, ali ne i snimak procitan tokom njega. Ekran koji
-        // je za vreme ciklusa video zatecenu (ili namerno uskracenu) sliku
-        // zadrzao bi je i posle otkljucavanja -- a tada upis vise nije blokiran,
-        // pa bi korisnik kliknuo komandu nad zastarelim stanjem.
-        //
-        // Osvezava se samo kad je overlay STVARNO bio prikazan: inace bi svaka
-        // provera stanja obarala ekran bez razloga.
-        if (bioVidljiv && typeof window.refreshOtpremaPosleLocka === 'function') {
+        if (typeof window.refreshOtpremaPosleLocka === 'function') {
             try {
-                window.refreshOtpremaPosleLocka();
+                await window.refreshOtpremaPosleLocka();
             } catch (err) {
                 console.error('refreshOtpremaPosleLocka failed:', err);
+                postaviPorukuOverlay(
+                    'Sinhronizacija je zavrsena, ali osvezavanje stanja nije uspelo. ' +
+                    'Proveri vezu pa probaj ponovo -- do tada se predaja ne moze potvrditi.'
+                );
+                return;   // overlay OSTAJE
             }
         }
+
+        sakrijOverlay();
+    }
+
+    function postaviPorukuOverlay(tekst) {
+        const msg = document.getElementById('masterSyncBlockerMessage');
+        if (msg) msg.textContent = tekst;
     }
 
     async function fetchMasterSyncState(force, stanicaID) {
@@ -279,7 +303,7 @@
                 if (state && state.locked === true) {
                     showMasterSyncOverlay(state);
                 } else {
-                    hideMasterSyncOverlay();
+                    await hideMasterSyncOverlay();
                 }
             } catch (_) {
                 // fail-open za status-check
@@ -294,16 +318,16 @@
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) return;
 
-        window.getMasterSyncStateSafe(false).then(state => {
+        window.getMasterSyncStateSafe(false).then(async state => {
             if (state && state.locked === true) showMasterSyncOverlay(state);
-            else hideMasterSyncOverlay();
+            else await hideMasterSyncOverlay();
         }).catch(() => {});
     });
 
     window.addEventListener('online', () => {
-        window.getMasterSyncStateSafe(false).then(state => {
+        window.getMasterSyncStateSafe(false).then(async state => {
             if (state && state.locked === true) showMasterSyncOverlay(state);
-            else hideMasterSyncOverlay();
+            else await hideMasterSyncOverlay();
         }).catch(() => {});
     });
 
