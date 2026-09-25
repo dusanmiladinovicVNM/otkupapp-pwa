@@ -676,7 +676,23 @@ async function predajePoOtkupu(db) {
 
     for (const ev of sve) {
         const crid = String((ev && ev.otkupClientRecordID) || '').trim();
-        if (!crid || mapa[crid]) continue;
+        if (!crid) continue;
+
+        // Odbijen dogadjaj NIJE dodela -- inace bi greska u unosu trajno
+        // zakljucala blok.
+        const st = String((ev && ev.syncStatus) || '').trim();
+        if (st === 'error' || st === 'failed') continue;
+
+        // Najstariji NERAZRESEN dogadjaj je tekuca rezervacija.
+        //
+        // Ne "prvi iz getAll": kljuc je PredajaID (random UUID), pa je redosled
+        // leksikografski i nema veze sa vremenom -- lokalna i serverska
+        // projekcija bi se tako mogle razici. Poredi se createdAtClient.
+        const stariji = mapa[crid];
+        if (stariji && String(stariji.createdAtClient || '') <= String(ev.createdAtClient || '')) {
+            continue;
+        }
+
         mapa[crid] = ev;
     }
 
@@ -688,6 +704,11 @@ async function predajePoOtkupu(db) {
 // Ne dira zapis u bazi -- samo red koji ide u render. Otkupni zapis ostaje
 // nepromenljiva osnova.
 function primeniPredaju(row, mapa) {
+    // Red koji je master vec razresio govori sam za sebe: njegov vozacID dolazi
+    // iz kanonskog lanca i tacan je i kad je prazan (storno je oslobodio blok).
+    // Lokalni dogadjaj je tada ISTORIJA, ne tekuce stanje.
+    if (row && row.masterResolved) return row;
+
     const crid = String((row && row.clientRecordID) || '').trim();
     const ev = crid ? mapa[crid] : null;
     if (!ev) return row;
@@ -851,6 +872,8 @@ function mapServerOtpremaRecord(r) {
         vozacName: r.VozacName || '',
         predajaID: r.PredajaID || '',
         predatoAt: normalizeIso(r.PredatoAt),
+        // Da li je master vec razresio ovaj red -- odlucuje ko govori o predaji.
+        masterResolved: String(r.SyncStatus || '').trim() === 'Synced>Master',
 
         syncStatus: 'synced',
         lastSyncError: '',

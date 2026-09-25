@@ -784,8 +784,52 @@ Private Function OtkupiAllKolone() As Variant
         "KooperantID", "KooperantName", "VrstaVoca", "SortaVoca", "TipAmbalaze", _
         "KolAmbIzdata", "ParcelaID", "VozacID", "Napomena", "ReceivedAt", _
         "BrojZbirne", "OtpremnicaID", "PrijemnicaID", "BrojPrijemnice", "KupacID", _
-        "DatumPrijema", "Primljeno", "TransportStatus")
+        "DatumPrijema", "Primljeno", "TransportStatus", "PredajaID")
 End Function
+
+' TEKUCE STANJE PREDAJE ZA JEDAN BLOK -- iz kanonskog lanca.
+'
+' Izdvojeno iz ExportOtkupiAll da bi se moglo MERITI: sam izvoz pise u Google
+' list preko mreze, pa se kroz njega u testu ne moze proci. Ovo je produkcioni
+' seam, ne kopija za test.
+'
+' Sve cetiri cinjenice izlaze iz JEDNOG izvora -- clanstva:
+'   OtpremnicaZaOtkup       -> aktivna otpremnica bloka ("" kad je nema)
+'   njen VozacID            -> kome je predato
+'   njen PredajaID          -> koji utovar
+'   njena aktivna zbirna    -> broj po kom se nalazi prijemnica
+'
+' STORNO SAM OD SEBE OSLOBADJA BLOK: OtpremnicaZaOtkup vraca samo AKTIVNU, pa
+' storniran dokument ovde daje prazno -- bez ijednog dodatnog pravila. To je i
+' razlog zasto istorija predaje (PRED list) ne sme da bude izvor tekuceg stanja:
+' ona ne zna za storno.
+Public Sub TekucaPredajaOtkupa(ByVal otkupID As String, _
+                               ByRef outOtpremnicaID As String, _
+                               ByRef outVozacID As String, _
+                               ByRef outPredajaID As String, _
+                               ByRef outBrojZbirne As String)
+    outOtpremnicaID = ""
+    outVozacID = ""
+    outPredajaID = ""
+    outBrojZbirne = ""
+
+    If Len(Trim$(otkupID)) = 0 Then Exit Sub
+
+    outOtpremnicaID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+    If Len(outOtpremnicaID) = 0 Then Exit Sub
+
+    outVozacID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                            outOtpremnicaID, COL_OTP_VOZAC)))
+    outPredajaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                              outOtpremnicaID, COL_OTP_PREDAJA_ID)))
+
+    Dim zbrID As String
+    zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(outOtpremnicaID)
+    If Len(zbrID) > 0 Then
+        outBrojZbirne = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
+                                                   zbrID, COL_ZBR_BROJ)))
+    End If
+End Sub
 
 Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     Const TAB_NAME As String = "OtkupiAll"
@@ -819,8 +863,7 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
 
     Dim colID As Long, colDatum As Long, colKoop As Long, colStanica As Long
     Dim colVrsta As Long, colSorta As Long, colTipAmb As Long, colAmbIzd As Long
-    Dim colVozac As Long, colBrDok As Long, colParcela As Long
-    Dim colBrojZbirne As Long, colOtpremnicaID As Long
+    Dim colBrDok As Long, colParcela As Long, colCrid As Long
 
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
@@ -830,25 +873,44 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, SRC)
     colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, SRC)
     colAmbIzd = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, SRC)
-    colVozac = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
     colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, SRC)
-    colBrojZbirne = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
-    colOtpremnicaID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+    colCrid = RequireColumnIndex(TBL_OTKUP, COL_OTK_CLIENT_RECORD_ID, SRC)
 
     Set prjIndex = BuildPrijemnicaIndexByBrojZbirne()
 
     For i = 1 To UBound(data, 1)
-        Dim otkupID As String, koopID As String
+        Dim otkupID As String, koopID As String, crid As String
         Dim brojZbirne As String, otpremnicaID As String
+        Dim vozacID As String, predajaID As String
         Dim prijemnicaID As String, brojPrijemnice As String, kupacID As String
         Dim datumPrijema As String, primljeno As String, transportStatus As String
         Dim prjInfo As Variant, v As Variant
 
         otkupID = CStr(nz(data(i, colID), ""))
         koopID = CStr(nz(data(i, colKoop), ""))
-        brojZbirne = CStr(nz(data(i, colBrojZbirne), ""))
-        otpremnicaID = CStr(nz(data(i, colOtpremnicaID), ""))
+
+        ' IZVOZ NOSI TEKUCU ISTINU, NE ZATECENE KOLONE (review #390, treci krug).
+        '
+        ' Zatecen izvoz je citao Otkup.VozacID, Otkup.BrojZbirne i
+        ' Otkup.OtpremnicaID -- sve tri su mrtve ili umiru, pa je ceo upravljacki
+        ' read-model stajao na podacima koje vise niko ne pise.
+        '
+        ' Tekuce stanje se cita iz kanonskog lanca: clanstvo daje otpremnicu,
+        ' otpremnica nosi vozaca i identitet utovara, a njena zbirna broj po kom
+        ' se nalazi prijemnica. STORNIRANA otpremnica time sama od sebe oslobadja
+        ' blok -- OtpremnicaZaOtkup vraca samo AKTIVNU.
+        Call TekucaPredajaOtkupa(otkupID, otpremnicaID, vozacID, predajaID, brojZbirne)
+
+        ' IDENTITET REDA JE NJEGOV ClientRecordID (review #390, P1-A).
+        '
+        ' Izvoz je upisivao "VBA-" & OtkupID i tako BACAO originalni CRID, iako
+        ' ga tblOtkup nosi. Read-model je zbog toga imao drugi kljuc od PWA reda,
+        ' pa se spoj sa dogadjajem predaje nije ni mogao naci.
+        '
+        ' Sintetican kljuc ostaje samo za red koji CRID nema -- desktop unos.
+        crid = Trim$(NzToText(data(i, colCrid)))
+        If Len(crid) = 0 Then crid = "VBA-" & otkupID
 
         prijemnicaID = ""
         brojPrijemnice = ""
@@ -869,19 +931,24 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
             End If
         End If
 
+        ' "assigned" je nestao sa kolonom koja ga je hranila.
+        '
+        ' U kanonskom modelu predaja ODMAH pravi otpremnicu, pa stanje "vozac je
+        ' odredjen, dokumenta jos nema" u masteru ne postoji. Ono postoji samo
+        ' dok predaja jos nije stigla do mastera -- a to je privremeno stanje
+        ' koje zna klijent, ne izvoz. Jedini citalac (dispecer) gleda samo
+        ' zatvorena stanja, pa mu ova vrednost nije ni trebala.
         If primljeno = "Da" Then
             transportStatus = "received"
-        ElseIf Len(Trim$(otpremnicaID)) > 0 Or Len(Trim$(brojZbirne)) > 0 Then
+        ElseIf Len(Trim$(otpremnicaID)) > 0 Then
             transportStatus = "in_transport"
-        ElseIf Len(Trim$(CStr(nz(data(i, colVozac), "")))) > 0 Then
-            transportStatus = "assigned"
         Else
             transportStatus = "unassigned"
         End If
 
         For k = 1 To nk
             Select Case CStr(kol(LBound(kol) + k - 1))
-                Case "ClientRecordID": v = "VBA-" & otkupID
+                Case "ClientRecordID": v = crid
                 Case "ServerRecordID": v = otkupID
                 Case "CreatedAtClient", "UpdatedAtClient": v = ""
                 Case "UpdatedAtServer", "ReceivedAt": v = Now
@@ -896,7 +963,8 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
                 Case "TipAmbalaze": v = CStr(nz(data(i, colTipAmb), ""))
                 Case "KolAmbIzdata": v = CLng(nz(data(i, colAmbIzd), 0))
                 Case "ParcelaID": v = CStr(nz(data(i, colParcela), ""))
-                Case "VozacID": v = CStr(nz(data(i, colVozac), ""))
+                Case "VozacID": v = vozacID
+                Case "PredajaID": v = predajaID
                 Case "Napomena": v = CStr(nz(data(i, colBrDok), ""))
                 Case "BrojZbirne": v = brojZbirne
                 Case "OtpremnicaID": v = otpremnicaID

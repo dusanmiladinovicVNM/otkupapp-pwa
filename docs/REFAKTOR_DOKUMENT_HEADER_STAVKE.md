@@ -5350,8 +5350,49 @@ manifest znači **drugu tvrdnju o istom događaju**. Vraćalo se `existing/succe
 poredi imenovano i vraća `PREDAJA_CONFLICT` sa poljem koje se ne slaže — isti ugovor koji OTK i zbirna
 već imaju. Važno baš zato što VBA sada ume da imenuje „isti `PredajaID`, drugi vozač".
 
+**Review #390, treći krug — tri pojma istine su bila pomešana.**
+
+Model događaja je prihvaćen, ali je sledeći sloj pokušao da iz **istorije** izvede **tekuće stanje**.
+Recenzentova podela je uzeta doslovno:
+
+| Pojam | Izvor |
+|---|---|
+| **istorijska** istina | `PRED` događaji — append-only, **ne znaju za storno** |
+| **tekuća** istina | aktivna otpremnica + kanonsko članstvo, iz mastera |
+| **privremena** istina | `PRED` koji master još nije razrešio |
+
+**A) Izvoz je bacao identitet.** [modStammdatenSync.bas:884](src-vba/modStammdatenSync.bas:884) je pisao
+`"VBA-" & OtkupID` iako `tblOtkup` nosi pravi `ClientRecordID` — pa read-model nije imao isti ključ kao
+PWA red i spoj sa događajem se **nije mogao naći**. Sada se izvozi stvarni CRID; sintetički ostaje samo
+za red koji ga nema (desktop unos).
+
+> Usput izmereno i gore: isti izvoz je **celo** tekuće stanje čitao sa mrtvih kolona
+> (`Otkup.VozacID`, `BrojZbirne`, `OtpremnicaID`). Upravljački read-model je stajao na podacima koje
+> niko ne piše.
+
+**B) Tekuće stanje sada izlazi iz lanca:** `tblOtkup` → `tblOtpremnicaIzvori` → **aktivna**
+`tblOtpremnica` → `VozacID`/`PredajaID`, a njena zbirna daje `BrojZbirne`. **Storno oslobađa blok sam od
+sebe** — `OtpremnicaZaOtkup` vraća samo aktivnu, bez ijednog dodatnog pravila.
+
+`transportStatus` je izgubio `assigned`: u kanonskom modelu predaja **odmah** pravi otpremnicu, pa to
+stanje u masteru ne postoji — ono je privremeno i zna ga klijent. Jedini potrošač
+([dispecer.js:144](src/js/features/management/dispecer.js:144)) gleda samo zatvorena stanja.
+
+**C) `PRED` govori samo o in-flight stanju.** `predajeUToku_` preskače redove koje je master razrešio
+(`Synced>Master`) **i** odbijene (`SyncError`) — obična greška u unosu (mešane vrste) više ne zaključava
+blok trajno. Greška čitanja `PRED` liste više **nije fail-open**: vraća `PREDAJA_READ_FAILED` umesto
+prazne mape uz `success: true`. Kapija protiv duple komande ne sme da bude fail-open.
+
+**P2 — lokalni „prvi" nije bio hronološki.** Ključ je `PredajaID` (random UUID), pa je `getAll`
+leksikografski i lokalna projekcija se mogla raziići sa serverskom. Sada se bira **najstariji
+nerazrešen** po `createdAtClient`, a razrešen red uopšte ne ulazi u odlučivanje.
+
+`Test_PRED_StornoOslobadjaBlokUReadModelu` meri oba smera kroz `TekucaPredajaOtkupa` — produkcioni seam
+koji izvoz zove: posle predaje sve imenovano, posle storna sve prazno. Prag `otk_veza_otp` spušten
+**13 → 11** (rez je skinuo dva čitaoca stare veze).
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
-`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1976/0**.
+`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
 `NEJASNO` — ručna kapija ostaje.
 

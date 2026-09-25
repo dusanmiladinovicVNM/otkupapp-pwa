@@ -5814,6 +5814,18 @@ SABOTAZE = {
     # S5-4a: predaja ciji otkup jos nije u masteru NE SME da postane kandidat.
     # Ona CEKA osnovu (review #390, P1) -- bez ove kapije bi usla u grupisanje
     # sa praznim OtkupID-em, i utovar bi dobio clana koga nema.
+    # review #390, treci krug: tekuce stanje predaje izlazi iz KANONSKOG
+    # lanca, pa storniran dokument sam od sebe oslobadja blok. Bez tog
+    # filtera read-model bi blok drzao zauvek -- bas ono sto istorija
+    # dogadjaja (PRED lista) ne ume da razresi.
+    "clanstvo-drzi-storniranu-otpremnicu": (
+        "modDokumenta.bas",
+        "        If Not stornirane.Exists(UCase$(otpID)) Then\n",
+        "        If True Then   ' SABOTAZA: stornirana otpremnica i dalje drzi blok\n",
+        "Test_PRED_StornoOslobadjaBlokUReadModelu",
+        "PRED storno: stornirana otpremnica NE drzi blok",
+    ),
+
     "predaja-bez-otkupa-prolazi": (
         "modMasterSync.bas",
         "                If Len(otkupID) = 0 Then\n",

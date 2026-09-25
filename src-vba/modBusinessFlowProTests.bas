@@ -323,6 +323,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaBezIdentitetaStaje
     Test_OTP_PredajaDrugomVozacuJeKonflikt
     Test_PRED_ListPostajeOtpremnica
+    Test_PRED_StornoOslobadjaBlokUReadModelu
     Test_OTP_IzdavanjeDelimicanUspeh
     Test_ZBR_PisacTraziPostojeceVeze
     Test_ZBR_KanonskaSmeDaSeRazveze
@@ -7728,6 +7729,86 @@ EH:
     tx.RollbackTx
     On Error GoTo 0
     LogFatal "Test_OTP_PredajaBezIdentitetaStaje", eN, eD
+End Sub
+
+' STORNO OSLOBADJA BLOK U READ-MODELU (review #390, treci krug P1-B).
+'
+' Upravljacki izvoz je tekuce stanje citao sa MRTVIH kolona (Otkup.VozacID,
+' BrojZbirne, OtpremnicaID). Predlozena zamena -- citati PRED listu -- ima drugi
+' kvar: PRED je ISTORIJA dogadjaja i ne zna za storno, pa bi blok ostao "predat"
+' zauvek. A poslovno pravilo je suprotno: stornirana otpremnica OSLOBADJA blok
+' za novu predaju.
+'
+' Zato tekuce stanje izlazi iz KANONSKOG LANCA. Test meri oba smera nad istim
+' blokom, jer jedan sam ne razlikuje ispravno od "uvek prazno" / "uvek puno":
+'   posle predaje  -> otpremnica, vozac i utovar su IMENOVANI
+'   posle storna   -> sve cetiri cinjenice su prazne, bez ijednog dodatnog pravila
+Private Sub Test_PRED_StornoOslobadjaBlokUReadModelu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PREDSO")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    Dim datum As Date
+    datum = NextTestDate()
+
+    Dim otkID As String, predajaID As String, crid As String
+    crid = "CRID-PSO-" & scenario
+    predajaID = "PRED-SO-" & scenario
+    otkID = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-PSO-" & scenario, _
+                           KLASA_I, 400#, 250#, 20#, TEST_TIP_AMB, , crid)
+
+    Dim predaje As Collection
+    Set predaje = New Collection
+    predaje.Add PredajaRed(2, otkID, TEST_VOZ_ID, predajaID, PredajaIsoDatum(datum), crid)
+
+    Dim ishodi As Object, greske As String
+    AssertEquals "1", _
+                 CStr(modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske)), _
+                 "PRED storno preduslov: predaja je napravila otpremnicu"
+
+    ' --- POSLE PREDAJE: tekuce stanje je IMENOVANO --------------------------
+    Dim otp As String, voz As String, pid As String, brZbr As String
+    modStammdatenSync.TekucaPredajaOtkupa otkID, otp, voz, pid, brZbr
+
+    AssertTrue Len(otp) > 0, "PRED storno: posle predaje blok ima aktivnu otpremnicu"
+    AssertEquals TEST_VOZ_ID, voz, "PRED storno: tekuce stanje imenuje vozaca"
+    AssertEquals predajaID, pid, "PRED storno: tekuce stanje imenuje utovar"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    ' --- POSLE STORNA: blok je SLOBODAN -------------------------------------
+    AssertTrue modStorno.StornoOtpremnica_TX(otp), _
+               "PRED storno preduslov: otpremnica je stornirana"
+
+    modStammdatenSync.TekucaPredajaOtkupa otkID, otp, voz, pid, brZbr
+
+    AssertEquals "", otp, "PRED storno: stornirana otpremnica NE drzi blok"
+    AssertEquals "", voz, "PRED storno: posle storna nema vozaca"
+    AssertEquals "", pid, "PRED storno: posle storna nema utovara"
+    AssertEquals "", brZbr, "PRED storno: posle storna nema broja zbirne"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_PRED_StornoOslobadjaBlokUReadModelu", eN, eD
 End Sub
 
 ' PRED LIST POSTAJE OTPREMNICA (S5-4a).

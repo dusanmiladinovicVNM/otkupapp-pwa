@@ -2991,56 +2991,74 @@ function normalizeTrosakDateOnly(value) {
 // DATA ENDPOINTS
 // ============================================================
 
-// Mapa OtkupClientRecordID -> {predajaID, vozacID, predatoAt} iz PRED lista.
+// PRED daje SAMO in-flight stanje (review #390, treci krug).
 //
-// Nedostatak lista NIJE greska: otkupac koji jos nista nije predao ga i nema.
-// Greska u citanju se loguje i vraca prazna mapa -- read-model tada pokazuje
-// zatecenu sliku umesto da padne, a master i dalje odbija dupli utovar.
-function predajePoOtkupCrid_(otkupacID) {
+// Tri pojma su razlicita i ne smeju se mesati:
+//
+//   istorijska istina  -- PRED dogadjaji (append-only, ne znaju za storno)
+//   tekuca istina      -- AKTIVNA otpremnica i kanonsko clanstvo, iz mastera
+//   privremena istina  -- PRED koji master jos nije razresio
+//
+// Prva verzija je tekuce stanje citala iz ISTORIJE, pa storniran dokument nikad
+// ne bi oslobodio blok, a odbijen dogadjaj (SyncError) bi ga zakljucao zauvek.
+//
+// Zato se ovde preskacu redovi koje je master vec obradio ili odbio: oni vise
+// nisu privremeni, i o njima govori master.
+function predajeUToku_(otkupacID) {
+  var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
+  var files = folder.getFilesByName('PRED-' + otkupacID);
+
+  // Nedostatak lista NIJE greska: otkupac koji jos nista nije predao ga i nema.
+  if (!files.hasNext()) return {};
+
+  var rows = sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]);
   var mapa = {};
 
-  try {
-    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
-    var files = folder.getFilesByName('PRED-' + otkupacID);
-    if (!files.hasNext()) return mapa;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    var crid = String(r.OtkupClientRecordID || '').trim();
+    if (!crid) continue;
 
-    var rows = sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]);
+    var st = String(r.SyncStatus || '').trim();
 
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i] || {};
-      var crid = String(r.OtkupClientRecordID || '').trim();
-      if (!crid) continue;
+    // Master ga je razresio (dokument postoji ili ne) -> tekuce stanje dolazi
+    // sa otkupnog reda, ne odavde.
+    if (st === 'Synced>Master') continue;
 
-      // Prvi zapis pobedjuje: PRED list je append-only, pa je prvi red za taj
-      // blok i prvi utovar. Drugi je konflikt o kome odlucuje master -- ovde se
-      // ne presudjuje, samo se prikazuje da blok VEC jeste predat.
-      if (mapa[crid]) continue;
+    // Odbijen dogadjaj NIJE dodela. Bez ovoga bi obicna greska u unosu
+    // (npr. mesane vrste) trajno zakljucala blok u PWA.
+    if (st.indexOf('SyncError') === 0) continue;
 
-      mapa[crid] = {
-        predajaID: String(r.PredajaID || '').trim(),
-        vozacID: String(r.VozacID || '').trim(),
-        predatoAt: String(r.PredatoAt || '').trim()
-      };
-    }
-  } catch (err) {
-    logError('GAS', 'predajePoOtkupCrid_', err && err.message ? err.message : String(err));
+    // Prvi nerazreseni red za taj blok je tekuca rezervacija.
+    if (mapa[crid]) continue;
+
+    mapa[crid] = {
+      predajaID: String(r.PredajaID || '').trim(),
+      vozacID: String(r.VozacID || '').trim(),
+      predatoAt: String(r.PredatoAt || '').trim()
+    };
   }
 
   return mapa;
 }
 
-// Zakaci izvedena polja predaje na otkupne redove.
-function projektujPredaju_(records, predajePoOtkupu) {
+// Zakaci in-flight predaju na otkupne redove.
+//
+// Red koji je master vec obradio se NE DIRA: njegov VozacID/PredajaID dolazi iz
+// kanonskog lanca (TekucaPredajaOtkupa u VBA izvozu) i tacan je i kad je prazan
+// -- stornirana otpremnica blok oslobadja.
+function projektujPredaju_(records, uToku) {
   if (!Array.isArray(records)) return records;
 
   return records.map(function (r) {
+    if (String((r && r.SyncStatus) || '').trim() === 'Synced>Master') return r;
+
     var crid = String((r && r.ClientRecordID) || '').trim();
-    var p = crid ? predajePoOtkupu[crid] : null;
+    var p = crid ? uToku[crid] : null;
     if (!p) return r;
 
     r.PredajaID = p.predajaID;
     r.PredatoAt = p.predatoAt;
-    // VozacID je IZVEDEN iz dogadjaja, ne sa otkupnog reda.
     r.VozacID = p.vozacID;
     return r;
   });
@@ -3104,11 +3122,33 @@ function getOtkupiForOtkupac(otkupacID) {
     //
     // Zato se predaja ovde PROJEKTUJE na otkupni red: izvedena, read-only polja
     // iz PRED lista. Izvor istine ostaje dogadjaj -- red ga samo prikazuje.
-    var predajePoOtkupu = predajePoOtkupCrid_(canonicalOtkupacID);
+    // KAPIJA KOJA SPRECAVA DUPLU KOMANDU NE SME DA BUDE FAIL-OPEN.
+    //
+    // Prva verzija je gresku u citanju PRED lista gutala i vracala praznu mapu:
+    // vec predat blok bi tada izgledao slobodan i otkupac bi napravio DRUGI
+    // utovar. Bolje je reci "ne znam" nego pokazati pogresno slobodan blok.
+    var uToku;
+    try {
+      uToku = predajeUToku_(canonicalOtkupacID);
+    } catch (predErr) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.predaje',
+        predErr && predErr.message ? predErr.message : String(predErr || ''),
+        predErr && predErr.stack ? predErr.stack : '',
+        canonicalOtkupacID
+      );
+
+      return {
+        success: false,
+        code: 'PREDAJA_READ_FAILED',
+        error: 'Stanje predaja se ne moze procitati, pa lista nije pouzdana.'
+      };
+    }
 
     return {
       success: true,
-      records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), predajePoOtkupu)
+      records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), uToku)
     };
 
   } catch (err) {
