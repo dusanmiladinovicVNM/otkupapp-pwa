@@ -4888,7 +4888,8 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
 | **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
 | **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
-| **S5-4b** | vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` (E-044, E-058) — redizajn `transport.js`/`zbirna.js` | ⏳ |
+| **S5-4b-1** | **zica**: master izvozi otpremnice (zaglavlje + stavke) u `MgmtReports`; GAS servira vozaču otpremnice po `Otpremnica.VozacID` (E-044, E-058) | ovaj rez |
+| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
 
 #### Šta je S5-1 uradio
 
@@ -6004,6 +6005,221 @@ izvor (jednopotezni ulaz čita otpremnice sopstvenom petljom), pa je 10 dana pro
 dana padalo kroz drugi; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana posle svoje otpremnice —
 pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture radom.
 
+
+### 14.40) S5-4b pre-flight — vozačev ekran je ostao na starom modelu (25.09.2026)
+
+**Nalaz koji menja prioritet reza: vozačev spisak blokova je na `main`-u PRAZAN.**
+
+`zbirna.js` zove `action=getVozacOtkupi` → `getOtkupiForVozac`, koji skenira `OTK-*` listove i filtrira
+po `r.VozacID`. Ko danas piše to polje:
+
+| Put | Stanje |
+|---|---|
+| ekran otpreme (`buildUpdatedOtpremaRecord`) | **obrisan u S5-4a** — otkupni zapis se više ne dira |
+| QR vozača pri unosu otkupa (`setVozac` → `fldVozacID`) | **mrtav UI**: `index.html` ima samo skriveni `fldVozacID`; nema dugmeta `start-vozac-qr-scan` ni `qr-reader-vozac` diva, pa `startVozacQRScan` izađe na prvoj liniji |
+| GAS `processRecord` | upisuje `VozacID: record.vozacID \|\| ''` — prazno, jer PWA više ne šalje to polje |
+
+Dakle **čitalac je ostao, a pisac je otišao**. Isti obrazac koji je u S3a ugasio F3, samo na drugom
+ekranu. Poslovne štete nema (program još nema korisnike), ali S5-4b nije doterivanje nego **zatvaranje
+prekida**.
+
+**Drugi nalaz: vozačev ekran je jedini koji je ostao na modelu pre S1.** `zbirna.js` čita `r.Kolicina`,
+`r.Cena`, `r.Klasa`, `r.KolAmbalaze` — kolone koje su iz `tblOtkup` **obrisane u S1d**. Živi samo zato
+što ih PWA još šalje na svom OTK listu.
+
+**Treći nalaz: identitet se gubi pa ponovo traži.** Zbirna iz PWA nosi `otkupRecordIDs` (spisak otkup
+CRID-ova). Master ih prevodi: `OtpremniceIzOtkupRecordIDs` → `OtkupPoClientRecordID` →
+`OtpremnicaZaOtkup` → dedup → `CreateZbirnaIzIzvora_TX`. Prevod radi tačno, ali je to baš obrazac
+„vrednost sa ekrana → ponovni lookup → kanonski ID" koji pre-flight imenuje kao rizik: kad vozač
+jednom dobije **otpremnice**, `OtpremnicaID` može da putuje direktno, a prevod se briše.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu/hladnjači; lanac predaja → otpremnica → zbirna |
+| IDENTITY | **GAP** | PWA šalje `otkupRecordIDs`, kanon traži `OtpremnicaID` (`tblZbirnaIzvori`) |
+| CARDINALITY | **PROVEN** | `schema.json`: `tblZbirnaIzvori(ZbirnaIzvorID, ZbirnaID, OtpremnicaID)` — N otpremnica po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` je jedini pisac; `ImportVOZRow_RowTX` snima `TBL_ZBIRNA(_STAVKE,_IZVORI)` |
+| WRITERS | **GAP** | izvoz otpremnica u Google **ne postoji**: `ExportMgmtReports_Core` šalje samo `OtkupiAll` + `OtkupiAllStavke` |
+| DOWNSTREAM | **PROVEN** | uvoz je već kanonski (S5-3); menja se samo ŠTA mu stiže, ne šta radi |
+| CAPABILITY | **GAP — prekid** | vozačev spisak blokova bez pisca (gore) |
+| ACCEPTANCE CONTRACT | **GAP** | piše se uz S5-4b-1 |
+| PLATFORM | N/A | nema Excel/COM nepoznanice |
+| LANDING | **PROVEN** | grana iz svežeg `main`-a (`2cd86eb8`, merge #390) |
+
+`GAP` na IDENTITY, WRITERS i CAPABILITY → **nema produkcionog koda dok se rez ne razdvoji i ugovor ne
+napiše.** Zato:
+
+#### Dve odluke operatera (25.09.2026)
+
+**1. Rez se deli na žicu i ekran.**
+
+| # | Sadržaj | Stanje |
+|---|---|---|
+| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | sledeći rez |
+| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+
+**2. Broj zbirne ostaje na masteru.** PWA generiše `ZbirnaID` (kao `PredajaID` u S5-4a) i šalje spisak
+otpremnica; `BrojZbirne` dodeljuje desktop pri uvozu. To je i danas tačno na uvoznoj strani —
+`ImportVOZRow_RowTX` vraća `outBrojZbirne` iz `GetBrojZbirneForIDStrict` — pa se briše samo klijentski
+račun `vozacBroj/ddmmyy-seq` iz `zbirna.js`. Doslovno A2 (broj je labela) i A9 (storno ne oslobađa broj).
+
+### 14.41) S5-4b-1 — zica: otpremnice do vozača (25.09.2026)
+
+Master do ovog reza nije izvozio otpremnice **uopšte**. `ExportMgmtReports_Core` je slao samo
+`OtkupiAll` + `OtkupiAllStavke`, pa vozaču nije imalo šta ni da se servira osim tuđih otkupnih redova.
+Rez dodaje dva taba, po istom obrascu kao otkup — **dokument je zaglavlje + stavke, ne red**:
+
+```
+MgmtReports/OtpremniceAll         zaglavlja
+MgmtReports/OtpremniceAllStavke   stavke
+```
+
+**Šta ulazi u izvoz.** Nestornirana, `IzdatoStatus = IZDATO`, neprazan `VozacID`. Nacrt nije predat
+nikome; stornirana otpremnica nije više ničija obaveza.
+
+**`ZbirnaID` je tekuca istina, ne zabeležena.** Računa se iz članstva
+(`AktivnaZbirnaZaOtpremnicu`), pa posle storna zbirne otpremnica sama ponovo postane slobodna — bez
+ijednog upisa u izvoz i bez kolone na detetu. Da je bila zabeležena, vozač bi trajno izgubio
+otpremnicu čiju je zbirnu neko stornirao.
+
+**Cena se ne izvozi.** Vozač prevozi robu; `PredlogCena` je očekivanje dokumenta (review #362), ne
+vrednost, i nije mu potrebna ni za jednu njegovu radnju. `popis_citalaca` to i meri: `otp_cena = 0`.
+
+**Produkcioni seam, ne kopija za test.** `OtpremniceVozacaRedovi` / `OtpremniceVozacaStavkeRedovi`
+grade redove, a `ExportOtpremnice*` ih samo pišu u Google — isti rez koji je u S5-4a napravljen za
+`TekucaPredajaOtkupa`, i iz istog razloga: kroz mrežu test ne može da prođe.
+
+**GAS.** `getOtpremniceForVozac` + akcija `getVozacOtpremnice` čitaju oba taba i grupišu stavke u
+jednom prolazu. **Zaglavlje bez stavki se ne servira**: dva taba se pišu u DVA `WriteSheetData`
+poziva, pa mogu biti u raskoraku — otpremnica bez robe nije isporuka, a poslata bi vozaču dozvolila
+da u zbirnu unese prazan dokument. Preskok imenuje dokument u logu.
+
+**Ugovor prihvatanja — tri testa, 23 tvrdnje.**
+
+| Test | Šta mora da važi |
+|---|---|
+| `Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem` | izdata sa vozačem izlazi; **nacrt** ne izlazi; **stornirana** ispada |
+| `Test_OTPVOZ_ZbirnaIDJeTekucaIstina` | otpremnica u zbirnoj nosi njen `ZbirnaID`; posle storna zbirne polje je **opet prazno** |
+| `Test_OTPVOZ_StavkeIzKanonaBezCene` | kilaža i gajbe iz `tblOtpremnicaStavke`; **nijedna** kolona izvoza ne nosi cenu |
+
+Testovi traže kolone **po imenu iz zaglavlja**, ne po poziciji — inače bi prvo proširenje izvoza tiho
+pomerilo tvrdnju na susednu kolonu.
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985 → 2008/0** (+23, tačno
+koliko nova tri testa tvrde). `dokaz.py otpvoz`: **5/5 crvenih**, potpis izvora identičan pre i posle
+(`241d1acc0cb84fc2`). Statičke kapije: `vba_check` (603 sabotaže, 0 nalaza) · schema · `who_writes`
+(obe) · `popis_citalaca`.
+
+Usput je `vba_check` uhvatio dve greške u samim sabotažama pre nego što su stigle dalje: komentar posle
+line-continuation `_` (VBA syntax error) i LF linije u `tools/sabotaza.py`.
+
+⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan. Pročitana, ne proverena.
+
+**Šta još niko ne troši.** Vozačev ekran i dalje zove `getVozacOtkupi`; prelazak na `getVozacOtpremnice`
+i zbirna po `OtpremnicaID` su **S5-4b-2**.
+
+**Review #391, prvi krug — novi read-model je nasledio ceo model, ali ne i ogradu.**
+
+Domen je prošao bez primedbe; rupa je bila u **objavi**. `getOtpremniceForVozac` je čitao
+`MgmtReports` i vraćao ga kao authoritative stanje, a baš `ZbirnaID` je tekuća, promenljiva činjenica.
+
+Ključno zapažanje recenzenta nije bio običan race: `CleanExit` skida lock **i kad `okMgmt = False`**.
+Prozor zato nije „dok ciklus traje" nego **sve do sledećeg uspešnog izvoza**:
+
+```
+kanon:        OTP-1 -> ZBR-1
+MgmtReports:  OTP-1 -> ZbirnaID = ""      (izvoz pao)
+lock:         OFF
+endpoint:     success:true, zbirnaID:""   <- objavljena laz, i to trajno
+```
+
+S5-4b-2 bi iz toga legitimno zaključio „OTP-1 je slobodna" i ponudio još jednu zbirnu. Master bi drugo
+aktivno članstvo odbio, pa kanon ostaje zaštićen — ali korisnik je izveo komandu koju mu je sistem
+prikazao kao ispravnu. Po merilu iz #390 to je P1.
+
+**Generacija objave, ne timestamp.** Ista lekcija kao P3 iz #390, samo što je ovde odmah urađena kako
+treba:
+
+```
+MASTER_SYNC_CYCLE_ID          = CYC-<guid>   upisan pri zakljucavanju
+OTPREMNICE_PUBLISHED_CYCLE_ID = CYC-<guid>   SAMO kad je ciklus zavrsen I izvoz uspeo
+```
+
+Endpoint servira samo kad je `unlocked` **i** `cycleID && published === cycleID`; inače
+`readModelChanging` sa imenovanim razlogom (`MASTER_SYNC_ACTIVE` / `READ_MODEL_STALE` /
+`READ_MODEL_UNKNOWN`), pa klijent zadržava poslednje poznato umesto da ga obriše praznim spiskom.
+**Prazna generacija je NE**: nedokazana objava je zastareo snimak.
+
+`cycleID` nastaje **pre** lock-a; ako `NewEntityID` padne, ciklus se ne pokreće — bez identiteta se
+objava ne bi mogla dokazati, pa bi čitalac zauvek odbijao. Pri ranom `GoTo CleanExit` je `okMgmt`
+podrazumevano `False`, pa objavljena generacija ostaje prazna.
+
+**P2 — pad čitanja ostaje pad.** `getMgmtReport` na grešci vraća `success:false`, a endpoint je to
+prećutao i vraćao `success:true, records:[]`. Ispad Google-a je tako izgledao kao prazan dan — tvrdnja
+o poslu umesto o vezi. Sada oba taba traže `success === true`, inače
+`success:false, code:'READ_MODEL_UNAVAILABLE'`. Stavke su tu jednako važne kao zaglavlja: da im se pad
+progutao, **svaki** dokument bi ispao „bez robe" i bio preskočen, pa bi se opet dobio uredan prazan
+spisak.
+
+**Dokaz.** `MasterSyncControlRedovi(locked, message, cycleID, izvozUspeo)` je izdvojen kao produkcioni
+seam — sam upis ide u Google preko mreže. `Test_OTPVOZ_ObjavaSeDokazujeIzvozom` meri sva tri stanja:
+u toku · uspeo · **otključano ali pao izvoz**. Dve nove sabotaže gađaju tačno to pravilo:
+
+| Sabotaža | Tvrdnja koja mora da pukne |
+|---|---|
+| `otpvoz-otkljucano-znaci-objavljeno` | „otključano ali PAO izvoz -> objavljena generacija ostaje prazna" |
+| `otpvoz-objava-se-najavljuje` | „dok ciklus traje objavljena generacija je PRAZNA" |
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2008 → 2015/0** (+7, tačno
+koliko nov test tvrdi). `dokaz.py otpvoz-o`: **2/2 crvenih**, potpis izvora identičan
+(`11d4e4637ff9603e`). Statičke kapije: `vba_check` (605 sabotaža, 0 nalaza) · schema · `who_writes`
+(obe) · `popis_citalaca`.
+
+Pet starijih `otpvoz-*` sabotaža nije vrteno ponovo — gađaju `modStammdatenSync`, koji ovog kruga nije
+dirnut. Pun katalog ide pred release.
+
+⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
+
+**Review #391, drugi krug — generacija je merena samo PRE citanja.**
+
+Model generacija je bio dobar, ali nije bio upotrebljen kao ograda. Provera samo pre citanja je
+**najava, ne ograda**: izmedju nje i poslednjeg procitanog reda moze početi — ili se ceo završiti —
+nov master ciklus.
+
+```
+pre-check      C1  ok
+  master C2 pocinje: lock ON, published = ""
+  ImportZbirne: OTP-1 -> ZBR-1
+citanje         OtpremniceAll (jos C1): OTP-1.zbirnaID = ""
+return          success:true         <- mesavina C1 i C2
+```
+
+Vozač je dobio „OTP-1 je slobodna" dok je kanon već imao `OTP-1 -> ZBR-1`. GUID rešava ABA problem
+koji timestamp ne bi — **ali samo ako se meri dvaput**. Sada:
+
+```
+pre  = vozacReadModelObjavljen_()      -> mora ok
+citanje zaglavlja i stavki
+posle = vozacReadModelObjavljen_()     -> mora ok I posle.cycleID === pre.cycleID
+```
+
+Nije dovoljna ni sama završna provera: `pre = C1`, čitanja preko granice, `posle = C2` — oba stanja
+pojedinačno mogu biti uredno objavljena, a snimak ipak nije iz jedne generacije. Zato se poredi
+**ista** generacija, ne samo „obe validne".
+
+**Prazan spisak prolazi kroz istu ogradu.** „Nemam nijednu vožnju" je tvrdnja o poslu kao i svaka
+druga: pročitana iz stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao. Raniji
+`if (!moje.length) return ...` je zato uklonjen — izlaz je jedan, posle druge mere.
+
+**Verifikacija.** Izmena je **samo `gas/Code.gs`** — `src-vba` i `tools` nisu dirnuti, pa suite-ovi
+stoje na merenju sa `dcf299d0`: `RunAllTests` **199/0**, `RunBusinessFlowProSuite` **2015/0**. Balans
+zagrada u `gas/Code.gs` isti kao pre izmene; 0 LF-only linija.
+
+⚠ **NEVERIFIKOVANO, i ovde bez ublazavanja:** ovaj krug je **iskljucivo** GAS, a GAS se u ovom
+okruzenju ne moze izvrsiti. Dvostruka ograda je pročitana i rezonovana, ne izmerena. Jedini alat koji
+bi je uhvatio bio bi JS harness — isti dug koji stoji od #390.
 
 ## 15) Backlog — namerno van opsega
 

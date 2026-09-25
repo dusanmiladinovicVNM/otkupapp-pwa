@@ -5718,6 +5718,77 @@ SABOTAZE = {
     # Identitet utovara mora da ostane NA DOKUMENTU (review #388, P1). Bez
     # trajnog traga jedan klik otkupca, razbijen na dva sync ciklusa, pravi DVE
     # izdate otpremnice -- a izdata se ne dopunjuje (A13).
+    # S5-4b-1: VOZACU SE SERVIRAJU OTPREMNICE, NE OTKUPNI REDOVI.
+    #
+    # Izvoz je novo mesto na kom se poslovno pravilo moze tiho izgubiti: ono je
+    # ovde IZBOR REDOVA, a ne kapija koja vice. Zato svaka tvrdnja ima svoju
+    # sabotazu -- zelen izvoz koji nikad nije pokazan crven ne dokazuje da ista
+    # bira.
+    # OTKLJUCANO NIJE OBJAVLJENO (review #391, P1). Ovo je tacno ona greska koju
+    # je recenzent nasao: skidanje lock-a tretirano kao dokaz da je read-model
+    # svez, iako izvoz moze da padne a lock se svejedno skida.
+    "otpvoz-otkljucano-znaci-objavljeno": (
+        "modGoogleSyncOrchestrator.bas",
+        "    rows(7, 2) = IIf((Not locked) And izvozUspeo, Trim$(cycleID), \"\")\n",
+        "    rows(7, 2) = IIf(Not locked, Trim$(cycleID), \"\")\n",
+        "Test_OTPVOZ_ObjavaSeDokazujeIzvozom",
+        "OTPVOZ-4: otkljucano ali PAO izvoz -> objavljena generacija ostaje prazna",
+    ),
+
+    # Objava koja se upise dok ciklus JOS TRAJE je laz: snimak tada nije ni
+    # napravljen, a citalac bi ga vec smatrao svezim.
+    "otpvoz-objava-se-najavljuje": (
+        "modGoogleSyncOrchestrator.bas",
+        "    rows(7, 2) = IIf((Not locked) And izvozUspeo, Trim$(cycleID), \"\")\n",
+        "    rows(7, 2) = Trim$(cycleID)\n",
+        "Test_OTPVOZ_ObjavaSeDokazujeIzvozom",
+        "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA",
+    ),
+
+    "otpvoz-nacrt-izlazi-vozacu": (
+        "modStammdatenSync.bas",
+        "            If Trim$(NzToText(data(i, cIzd))) = IZDATO_IZDATO Then\n",
+        "            If True Then   ' SABOTAZA: nacrt izlazi vozacu\n",
+        "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem",
+        "OTPVOZ-1: NACRT ne izlazi vozacu",
+    ),
+
+    "otpvoz-stornirana-ostaje-u-izvozu": (
+        "modStammdatenSync.bas",
+        "    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTPREMNICA)\n",
+        "    ' SABOTAZA: stornirane otpremnice ostaju u izvozu\n",
+        "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem",
+        "OTPVOZ-1: STORNIRANA otpremnica ispada iz izvoza",
+    ),
+
+    # ZbirnaID mora da bude TEKUCA istina iz clanstva. Prazan string je tacno
+    # ono sto bi dala zaboravljena veza -- i test to mora da vidi.
+    "otpvoz-zbirna-se-ne-racuna": (
+        "modStammdatenSync.bas",
+        "                        modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID))\n",
+        "                        \"\")\n",
+        "Test_OTPVOZ_ZbirnaIDJeTekucaIstina",
+        "OTPVOZ-2: izvoz nosi zbirnu koja je BAS potrosila ovu otpremnicu",
+    ),
+
+    # Zaglavlje otpremnice JOS nosi legacy Kolicina/Cena, pa je "kilaza iz
+    # pogresne kolone" realna greska, ne izmisljena.
+    "otpvoz-kilaza-iz-pogresne-kolone": (
+        "modStammdatenSync.bas",
+        "                    st(i, 4), _\n",
+        "                    st(i, 8), _\n",
+        "Test_OTPVOZ_StavkeIzKanonaBezCene",
+        "OTPVOZ-3: kilaza dolazi iz stavke, ne sa zaglavlja",
+    ),
+
+    "otpvoz-cena-ide-vozacu": (
+        "modStammdatenSync.bas",
+        "        \"Kolicina\", \"KolAmbalaze\", \"BrutoKg\")\n",
+        "        \"Kolicina\", \"KolAmbalaze\", \"Cena\")\n",
+        "Test_OTPVOZ_StavkeIzKanonaBezCene",
+        "OTPVOZ-3: nijedna kolona izvoza ne nosi cenu",
+    ),
+
     "predaja-ne-pamti-utovar": (
         "modDokumenta.bas",
         "    If Len(Trim$(predajaID)) > 0 Then\n",

@@ -553,6 +553,13 @@ function handleAuthorizedRead(data, tokenData) {
     return jsonResponse(getOtkupiForVozac(vozacID));
   }
 
+  if (action === 'getVozacOtpremnice') {
+    if (tokenData.role !== 'Vozac') {
+      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+    return jsonResponse(getOtpremniceForVozac(tokenData.entityID));
+  }
+
   if (action === 'getVozacZbirne') {
     if (tokenData.role !== 'Vozac') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
@@ -699,7 +706,11 @@ function getMasterSyncStateInternal_(opts) {
     if (!sh) {
       var missingState = {
         success: true, locked: false, stale: false, missing: true,
-        updatedAt: '', ageMin: null, message: '', lockKind: ''
+        updatedAt: '', ageMin: null, message: '', lockKind: '',
+
+        // Bez kontrolnog taba nema ni dokaza o objavi -- citaoci read-modela
+        // to citaju kao "nije objavljeno" i odbijaju da serviraju.
+        cycleID: '', otpremniceCycleID: ''
       };
 
       if (allowCache) {
@@ -757,7 +768,15 @@ function getMasterSyncStateInternal_(opts) {
       updatedAt: stanicaLocked.locked ? stanicaLocked.updatedAt : masterUpdated,
       ageMin: stanicaLocked.locked ? stanicaLocked.ageMin : masterLocked.ageMin,
       message: combinedMessage,
-      lockKind: lockKind
+      lockKind: lockKind,
+
+      // GENERACIJA OBJAVE (review #391, P1).
+      //
+      // cycleID je identitet TEKUCEG master ciklusa, otpremniceCycleID je
+      // identitet ciklusa koji je STVARNO objavio vozacev read-model. Jednaki su
+      // samo kad je poslednji ciklus zavrsio I izvoz uspeo.
+      cycleID: String(kv.MASTER_SYNC_CYCLE_ID || '').trim(),
+      otpremniceCycleID: String(kv.OTPREMNICE_PUBLISHED_CYCLE_ID || '').trim()
     };
 
     if (allowCache) {
@@ -773,6 +792,8 @@ function getMasterSyncStateInternal_(opts) {
       success: false,
       locked: failClosed,
       unknown: true,
+      cycleID: '',
+      otpremniceCycleID: '',
       code: 'SYNC_STATE_UNKNOWN',
       error: 'Nije moguće proveriti master sync status.',
       message: failClosed
@@ -2216,6 +2237,209 @@ function getOtkupiForVozac(vozacID) {
       logError('GAS', 'getOtkupiForVozac', err.message, err.stack || '', vozacID || '');
       return { success: false, error: err.message }; 
     }
+}
+
+// VOZAC DOBIJA SVOJE OTPREMNICE, NE TUDJE OTKUPNE REDOVE (S5-4b-1).
+//
+// Do ovog reza je vozacu isao getOtkupiForVozac: OTK-* redovi filtrirani po
+// Otkup.VozacID. Tu vezu je S5-4a ukinuo -- ekran otpreme vise ne dira otkupni
+// zapis -- pa je citalac ostao bez pisca i spisak je bio prazan.
+//
+// Izvor je sada kanonski izvoz mastera: MgmtReports/OtpremniceAll (zaglavlja) +
+// OtpremniceAllStavke (stavke). Master izvozi SAMO nestornirane, izdate
+// otpremnice sa vozacem, pa ovde nema poslovnog filtriranja -- samo "moje".
+// DA LI JE VOZACEV READ-MODEL OBJAVLJEN I VALIDAN (review #391, P1).
+//
+// Lock sam po sebi nije dovoljan. MgmtReports se izvozi na KRAJU ciklusa, pa
+// postoje dva stanja u kojima je snimak zastareo:
+//
+//   1) ciklus upravo traje              -> locked
+//   2) ciklus je zavrsen, ali IZVOZ JE PAO -> lock skinut, snimak star
+//
+// Drugo je opasnije: traje sve do sledeceg uspesnog izvoza, a ne samo nekoliko
+// minuta. Zato se ne pita "je li zakljucano" nego "da li je OVAJ snimak objavio
+// tekuci ciklus": generacija objave mora biti jednaka generaciji ciklusa.
+//
+// Nepoznato je NE. Prazna generacija (nema kontrolnog taba, pad citanja) znaci
+// da objava ne moze da se dokaze -- a nedokazana objava je zastareo snimak.
+function vozacReadModelObjavljen_() {
+  var s = getMasterSyncStateForWriteBlock_();
+
+  if (!s || s.success !== true) {
+    return { ok: false, cycleID: '', code: 'READ_MODEL_UNKNOWN',
+             message: 'Stanje sinhronizacije nije dostupno.' };
+  }
+
+  if (s.locked === true) {
+    return { ok: false, cycleID: '', code: 'MASTER_SYNC_ACTIVE',
+             message: s.message || 'Master sync je u toku.' };
+  }
+
+  var ciklus = String(s.cycleID || '').trim();
+  var objavljen = String(s.otpremniceCycleID || '').trim();
+
+  if (!ciklus || !objavljen || ciklus !== objavljen) {
+    return { ok: false, cycleID: '', code: 'READ_MODEL_STALE',
+             message: 'Stanje voznji jos nije objavljeno iz poslednjeg ciklusa.' };
+  }
+
+  // Generacija se VRACA, jer ista mora biti izmerena i posle citanja izvora.
+  return { ok: true, cycleID: ciklus, code: '', message: '' };
+}
+
+// Uredan odgovor "stanje trenutno nije objavljivo".
+//
+// Isti oblik kao getOtkupi u #390: klijent zadrzava poslednje poznato umesto da
+// ga obrise praznim spiskom.
+function readModelSeMenja_(razlog) {
+  return {
+    success: true,
+    readModelChanging: true,
+    code: (razlog && razlog.code) || 'READ_MODEL_CHANGING',
+    message: (razlog && razlog.message) || 'Stanje voznji se trenutno menja.',
+    records: []
+  };
+}
+
+function getOtpremniceForVozac(vozacID) {
+  try {
+    var canonicalVozacID = String(vozacID || '').trim();
+    if (!canonicalVozacID) return { success: false, error: 'vozacID required' };
+
+    // SNIMAK MORA DA BUDE IZ JEDNE GENERACIJE (review #391, drugi krug).
+    //
+    // Provera samo PRE citanja nije ograda nego najava: izmedju nje i poslednjeg
+    // procitanog reda moze POCETI (ili se ceo zavrsiti) nov master ciklus, pa se
+    // objavi mesavina C1 i C2 -- na primer otpremnica koju je C2 vec vezao za
+    // zbirnu, procitana kao slobodna.
+    //
+    // Zato se generacija meri PRE i POSLE, i objavljuje se samo ako je ISTA.
+    // GUID resava ABA problem koji timestamp ne bi -- ali samo ako se meri dvaput.
+    var pre = vozacReadModelObjavljen_();
+    if (!pre.ok) return readModelSeMenja_(pre);
+
+    // PAD CITANJA NIJE "NEMA VOZNJI" (review #391, P2).
+    //
+    // getMgmtReport na gresci vraca success:false. Da se to precuti, ispad
+    // Google-a bi vozacu izgledao kao prazan dan -- a to je tvrdnja o poslu,
+    // ne o vezi.
+    var zaglavlja = getMgmtReport('OtpremniceAll');
+    if (!zaglavlja || zaglavlja.success !== true || !Array.isArray(zaglavlja.records)) {
+      return {
+        success: false,
+        code: 'READ_MODEL_UNAVAILABLE',
+        error: 'Read-model otpremnica nije procitan.'
+      };
+    }
+
+    var moje = zaglavlja.records.filter(function (r) {
+      return String((r && r.VozacID) || '').trim() === canonicalVozacID;
+    });
+
+    var records = [];
+
+    // PRAZAN SPISAK PROLAZI KROZ ISTU OGRADU.
+    //
+    // "Nemam nijednu voznju" je tvrdnja o poslu kao i svaka druga: procitana iz
+    // stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao.
+    // Zato se ovde ne izlazi ranije -- izlaz je jedan, posle druge mere.
+    if (moje.length) {
+      // Stavke se citaju JEDNOM i grupisu po OtpremnicaID -- inace bi svaka
+      // otpremnica povukla svoj prolaz kroz ceo tab.
+      var stavke = getMgmtReport('OtpremniceAllStavke');
+      if (!stavke || stavke.success !== true || !Array.isArray(stavke.records)) {
+        // Isto pravilo kao gore: bez stavki bi SVAKI dokument ispao "bez robe" i
+        // bio preskocen, pa bi pad citanja zavrsio kao uredan prazan spisak.
+        return {
+          success: false,
+          code: 'READ_MODEL_UNAVAILABLE',
+          error: 'Stavke otpremnica nisu procitane.'
+        };
+      }
+
+      var poDokumentu = {};
+
+      stavke.records.forEach(function (s) {
+        var oid = String((s && s.OtpremnicaID) || '').trim();
+        if (!oid) return;
+        if (!poDokumentu[oid]) poDokumentu[oid] = [];
+        poDokumentu[oid].push({
+          otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
+          redniBroj: Number(s.RedniBroj) || 0,
+          klasa: String(s.Klasa || '').trim(),
+          kolicina: Number(s.Kolicina) || 0,
+          kolAmbalaze: Number(s.KolAmbalaze) || 0,
+          brutoKg: Number(s.BrutoKg) || 0
+        });
+      });
+
+      moje.forEach(function (r) {
+        var oid = String(r.OtpremnicaID || '').trim();
+        var linije = oid ? poDokumentu[oid] : null;
+
+        // ZAGLAVLJE BEZ STAVKI SE NE SERVIRA.
+        //
+        // Dva taba se pisu u DVA poziva, pa mogu biti u raskoraku: zaglavlja
+        // osvezena, stavke stare (ili obrnuto). Otpremnica bez robe nije
+        // isporuka -- da je posaljemo, vozac bi u zbirnu uneo prazan dokument.
+        if (!linije || !linije.length) {
+          logError(
+            'GAS',
+            'getOtpremniceForVozac',
+            'Otpremnica bez stavki u izvozu, preskocena: ' + oid,
+            '',
+            canonicalVozacID
+          );
+          return;
+        }
+
+        records.push({
+          otpremnicaID: oid,
+          brojOtpremnice: String(r.BrojOtpremnice || '').trim(),
+          datum: r.Datum,
+          stanicaID: String(r.StanicaID || '').trim(),
+          vozacID: canonicalVozacID,
+          kulturaID: String(r.KulturaID || '').trim(),
+          vrstaVoca: String(r.VrstaVoca || '').trim(),
+          sortaVoca: String(r.SortaVoca || '').trim(),
+          tipAmbalaze: String(r.TipAmbalaze || '').trim(),
+          predajaID: String(r.PredajaID || '').trim(),
+
+          // PRAZNO ZNACI "SLOBODNA ZA ZBIRNU".
+          //
+          // Master racuna tekucu zbirnu iz clanstva (AktivnaZbirnaZaOtpremnicu),
+          // pa posle storna zbirne otpremnica sama ponovo postane slobodna --
+          // bez ijednog upisa u ovaj tab i bez kolone na detetu.
+          zbirnaID: String(r.ZbirnaID || '').trim(),
+
+          stavke: linije
+        });
+      });
+    }
+
+    // DRUGA MERA. Promena generacije znaci da je ciklus poceo ili se zavrsio
+    // USRED ovog zahteva, pa ono sto je procitano nije jedan snimak.
+    var posle = vozacReadModelObjavljen_();
+    if (!posle.ok) return readModelSeMenja_(posle);
+
+    if (posle.cycleID !== pre.cycleID) {
+      return readModelSeMenja_({
+        code: 'READ_MODEL_CHANGED',
+        message: 'Master ciklus je tekao tokom citanja -- stanje voznji nije konacno.'
+      });
+    }
+
+    return { success: true, records: records };
+  } catch (err) {
+    logError(
+      'GAS',
+      'getOtpremniceForVozac',
+      err && err.message ? err.message : String(err),
+      err && err.stack ? err.stack : '',
+      vozacID || ''
+    );
+    return { success: false, error: err.message };
+  }
 }
 
 function getZbirneForVozac(vozacID) {

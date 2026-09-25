@@ -74,6 +74,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim errNum As Long
     Dim errDesc As String
     Dim pwaLockAcquired As Boolean
+    Dim cycleID As String
     
     Dim pwaUnlockOk As Boolean
     Dim unlockErrDesc As String
@@ -137,9 +138,35 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         GoTo CleanExit
     End If
 
+    ' IDENTITET CIKLUSA (review #391, P1).
+    '
+    ' Citalac read-modela mora da razlikuje "objavljeno u ovom ciklusu" od
+    ' "zateceno od ranije". Bez toga skidanje lock-a samo po sebi vraca stari
+    ' snimak u opticaj kao da je svez -- i to traje do sledeceg USPESNOG izvoza,
+    ' ne samo dok ciklus radi.
+    '
+    ' NewEntityID vraca "" kad CoCreateGuid padne, i tada se ciklus NE pokrece:
+    ' bez identiteta se objava ne bi mogla dokazati, pa bi citalac zauvek odbijao.
+    cycleID = NewEntityID("CYC-")
+
+    If Len(Trim$(cycleID)) = 0 Then
+        LogError ORCH_MODULE, "Identitet ciklusa nije generisan. Cycle aborted."
+        summary = summary & "GRE" & ChrW(352) & "KA - identitet ciklusa nije generisan. Sync prekinut." & vbCrLf
+
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, False
+
+        If showMessages Then
+            MsgBox summary, vbCritical, APP_NAME
+        End If
+
+        GoTo CleanExit
+    End If
+
     SyncProgress "Zakljucavam PWA upis dok traje master sync..."
 
-    If Not SetPWAMasterSyncLock(True, "Master sync je u toku. Sacekajte zavrsetak.") Then
+    If Not SetPWAMasterSyncLock(True, "Master sync je u toku. Sacekajte zavrsetak.", _
+                                cycleID, False) Then
         LogError ORCH_MODULE, "PWA lock could not be acquired. Cycle aborted."
 
         summary = summary & "GRE" & ChrW(352) & "KA - PWA lock nije postavljen. Sync prekinut." & vbCrLf
@@ -372,7 +399,11 @@ CleanExit:
     If pwaLockAcquired Then
         SyncProgress "Otkljucavam PWA upis..."
 
-        If Not SetPWAMasterSyncLock(False, "Master sync zavr" & ChrW(353) & "en.") Then
+        ' okMgmt je ovde presudan: on je jedini dokaz da je read-model STVARNO
+        ' objavljen. Pri ranom izlasku je False (podrazumevana vrednost), pa
+        ' objavljena generacija ostaje prazna i citalac odbija zastareo snimak.
+        If Not SetPWAMasterSyncLock(False, "Master sync zavr" & ChrW(353) & "en.", _
+                                    cycleID, okMgmt) Then
             pwaUnlockOk = False
             unlockErrDesc = _
                 "PWA master sync lock nije skinut iz VBA ciklusa. " & _
@@ -653,22 +684,25 @@ EH:
     GetOrCreateStammdatenSheetIDForSyncLock = ""
 End Function
 
-Private Function SetPWAMasterSyncLock(ByVal locked As Boolean, _
-                                      Optional ByVal message As String = "") As Boolean
-    Const SRC As String = "SetPWAMasterSyncLock"
-
-    Dim sheetID As String
-    Dim rows(1 To 5, 1 To 2) As Variant
-
-    On Error GoTo EH
-
-    sheetID = GetOrCreateStammdatenSheetIDForSyncLock()
-
-    If Len(Trim$(sheetID)) = 0 Then
-        LogError SRC, "Stammdaten sheetID nije dostupan."
-        SetPWAMasterSyncLock = False
-        Exit Function
-    End If
+' REDOVI KONTROLNOG TABA -- PRODUKCIONI SEAM (review #391, P1).
+'
+' Izdvojeno iz SetPWAMasterSyncLock da bi se pravilo objave moglo MERITI: sam
+' upis ide u Google preko mreze, pa kroz njega test ne moze da prodje.
+'
+' OBJAVLJEN CIKLUS JE DOKAZ, NE NAJAVA.
+'
+' OTPREMNICE_PUBLISHED_CYCLE_ID se upisuje SAMO kad je ciklus zavrsen I izvoz
+' MgmtReports-a uspeo. Dok ciklus traje je prazan, a i posle NEUSPELOG izvoza
+' ostaje prazan -- pa citalac vidi da objavljena generacija nije tekuca i odbija
+' da servira zastareo snimak.
+'
+' Bez toga je dovoljno da se skine lock pa da stari read-model opet izgleda kao
+' istina, i to ne samo u trenutku ciklusa nego SVE do sledeceg uspesnog izvoza.
+Public Function MasterSyncControlRedovi(ByVal locked As Boolean, _
+                                        ByVal message As String, _
+                                        ByVal cycleID As String, _
+                                        ByVal izvozUspeo As Boolean) As Variant
+    Dim rows(1 To 7, 1 To 2) As Variant
 
     rows(1, 1) = "Parameter"
     rows(1, 2) = "Vrednost"
@@ -685,7 +719,35 @@ Private Function SetPWAMasterSyncLock(ByVal locked As Boolean, _
     rows(5, 1) = "MASTER_SYNC_OWNER"
     rows(5, 2) = "VBA"
 
-    SetPWAMasterSyncLock = WriteSheetData(sheetID, SYNC_CONTROL_TAB, rows)
+    rows(6, 1) = "MASTER_SYNC_CYCLE_ID"
+    rows(6, 2) = Trim$(cycleID)
+
+    rows(7, 1) = "OTPREMNICE_PUBLISHED_CYCLE_ID"
+    rows(7, 2) = IIf((Not locked) And izvozUspeo, Trim$(cycleID), "")
+
+    MasterSyncControlRedovi = rows
+End Function
+
+Private Function SetPWAMasterSyncLock(ByVal locked As Boolean, _
+                                      Optional ByVal message As String = "", _
+                                      Optional ByVal cycleID As String = "", _
+                                      Optional ByVal izvozUspeo As Boolean = False) As Boolean
+    Const SRC As String = "SetPWAMasterSyncLock"
+
+    Dim sheetID As String
+
+    On Error GoTo EH
+
+    sheetID = GetOrCreateStammdatenSheetIDForSyncLock()
+
+    If Len(Trim$(sheetID)) = 0 Then
+        LogError SRC, "Stammdaten sheetID nije dostupan."
+        SetPWAMasterSyncLock = False
+        Exit Function
+    End If
+
+    SetPWAMasterSyncLock = WriteSheetData(sheetID, SYNC_CONTROL_TAB, _
+        MasterSyncControlRedovi(locked, message, cycleID, izvozUspeo))
 
     If SetPWAMasterSyncLock Then
         LogInfo SRC, "PWA master sync lock=" & IIf(locked, "YES", "NO")

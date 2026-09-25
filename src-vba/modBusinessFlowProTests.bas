@@ -308,6 +308,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaPrezivljavaParcijalanSync
     Test_OTP_NepotpunUtovarNeDobijaDokument
     Test_OTP_BlokVanManifestaNeUlaziUUtovar
+    Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem
+    Test_OTPVOZ_ZbirnaIDJeTekucaIstina
+    Test_OTPVOZ_StavkeIzKanonaBezCene
+    Test_OTPVOZ_ObjavaSeDokazujeIzvozom
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
@@ -6949,6 +6953,336 @@ Private Function ZbrParPodIstimBrojem(ByVal broj As String, ByVal datum As Date,
 
     ZbrParPodIstimBrojem = (Len(outZbrA) > 0 And Len(outZbrB) > 0 And outZbrA <> outZbrB)
 End Function
+
+' ============================================================
+' S5-4b-1: VOZACU SE SERVIRAJU OTPREMNICE, NE OTKUPNI REDOVI
+' ============================================================
+'
+' Meri se PRODUKCIONI SEAM (OtpremniceVozacaRedovi), ne kopija za test: sam
+' izvoz pise u Google preko mreze, pa kroz njega test ne moze da prodje.
+
+' Indeks kolone u izvozu, po IMENU iz zaglavlja. Test koji bi racunao poziciju
+' cutke bi presao na susednu kolonu cim se izvoz prosiri.
+Private Function OtpVozKolona(ByVal redovi As Variant, ByVal ime As String) As Long
+    Dim k As Long
+    For k = 1 To UBound(redovi, 2)
+        If StrComp(Trim$(NzToText(redovi(1, k))), ime, vbTextCompare) = 0 Then
+            OtpVozKolona = k
+            Exit Function
+        End If
+    Next k
+    OtpVozKolona = 0
+End Function
+
+' Indeks reda ciji je prvi stubac (OtpremnicaID za zaglavlja) zadata vrednost.
+Private Function OtpVozRedPoID(ByVal redovi As Variant, _
+                               ByVal kolona As Long, _
+                               ByVal vrednost As String) As Long
+    Dim i As Long
+    For i = 2 To UBound(redovi, 1)
+        If StrComp(Trim$(NzToText(redovi(i, kolona))), vrednost, vbTextCompare) = 0 Then
+            OtpVozRedPoID = i
+            Exit Function
+        End If
+    Next i
+    OtpVozRedPoID = 0
+End Function
+
+Private Function OtpVozBrojStavki(ByVal stavke As Variant, ByVal otpID As String) As Long
+    Dim cOtp As Long, i As Long, n As Long
+    cOtp = OtpVozKolona(stavke, "OtpremnicaID")
+    If cOtp = 0 Then Exit Function
+
+    For i = 2 To UBound(stavke, 1)
+        If StrComp(Trim$(NzToText(stavke(i, cOtp))), otpID, vbTextCompare) = 0 Then n = n + 1
+    Next i
+    OtpVozBrojStavki = n
+End Function
+
+' Vozac sme da vidi samo ono sto mu je STVARNO predato: izdatu, nestorniranu
+' otpremnicu koja nosi njegov VozacID. Nacrt nije predat nikome, a stornirana
+' otpremnica vise nije nicija obaveza.
+Private Sub Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date
+    Dim otpID As String, draftID As String, razlog As String
+    Dim redovi As Variant, cId As Long, cVoz As Long, cZbr As Long
+
+    scenario = NewScenarioCode("OTPVOZ1")
+    datum = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    otpID = ZbrOtpremnicaNaDan("V1" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-1 preduslov: izdata otpremnica postoji"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    cId = OtpVozKolona(redovi, "OtpremnicaID")
+    cVoz = OtpVozKolona(redovi, "VozacID")
+    cZbr = OtpVozKolona(redovi, "ZbirnaID")
+
+    AssertTrue cId > 0 And cVoz > 0 And cZbr > 0, _
+        "OTPVOZ-1: izvoz nosi OtpremnicaID, VozacID i ZbirnaID"
+
+    Dim r As Long
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-1: izdata otpremnica sa vozacem JESTE u izvozu"
+
+    If r > 0 Then
+        AssertEquals TEST_VOZ_ID, Trim$(NzToText(redovi(r, cVoz))), _
+            "OTPVOZ-1: red nosi vozaca kome je predato"
+        AssertEquals "", Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-1: bez zbirne je ZbirnaID prazan -- otpremnica je slobodna"
+    End If
+
+    ' --- nacrt nije predat nikome ---
+    draftID = CreateOtpremnicaDraft_TX( _
+        OtpBrojHeader(TEST_PREFIX & "-D" & scenario, datum, TEST_ST_ID), _
+        OtpOcek(100#, 10#, 50#, 0#), razlog)
+    AssertTrue Len(draftID) > 0, _
+        "OTPVOZ-1 preduslov: nacrt je napravljen (bilo: " & razlog & ")"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    AssertEquals "0", CStr(OtpVozRedPoID(redovi, cId, draftID)), _
+        "OTPVOZ-1: NACRT ne izlazi vozacu"
+
+    ' --- stornirana vise nije nicija obaveza ---
+    AssertTrue modStorno.StornoOtpremnica_TX(otpID), _
+        "OTPVOZ-1 preduslov: otpremnica je stornirana"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    AssertEquals "0", CStr(OtpVozRedPoID(redovi, cId, otpID)), _
+        "OTPVOZ-1: STORNIRANA otpremnica ispada iz izvoza"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem", eN, eD
+End Sub
+
+' ZbirnaID U IZVOZU JE TEKUCA ISTINA, NE ZABELEZENA.
+'
+' Racuna se iz clanstva (AktivnaZbirnaZaOtpremnicu), pa posle storna zbirne
+' otpremnica sama ponovo postane slobodna -- bez ijednog upisa u izvoz i bez
+' kolone na detetu. Da je bila zabelezena, vozac bi trajno izgubio otpremnicu
+' ciju je zbirnu neko stornirao.
+Private Sub Test_OTPVOZ_ZbirnaIDJeTekucaIstina()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, broj As String
+    Dim otpID As String, zbrID As String, g As String
+    Dim izvori As Collection
+    Dim redovi As Variant, cId As Long, cZbr As Long, r As Long
+    Dim res As Object
+
+    scenario = NewScenarioCode("OTPVOZ2")
+    datum = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(datum, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    otpID = ZbrOtpremnicaNaDan("V2" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-2 preduslov: izdata otpremnica postoji"
+
+    Set izvori = New Collection
+    izvori.Add otpID
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(ZbrHeaderNaDan(broj, datum), izvori, g, True)
+    AssertTrue Len(zbrID) > 0, "OTPVOZ-2 preduslov: zbirna je napravljena"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    cId = OtpVozKolona(redovi, "OtpremnicaID")
+    cZbr = OtpVozKolona(redovi, "ZbirnaID")
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-2: otpremnica u zbirni JESTE i dalje u izvozu"
+
+    If r > 0 Then
+        AssertEquals zbrID, Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-2: izvoz nosi zbirnu koja je BAS potrosila ovu otpremnicu"
+    End If
+
+    ' --- storno zbirne oslobadja otpremnicu, bez upisa u izvoz ---
+    Set res = modStornoFlow.RunSimpleStornoZbirna(broj, zbrID)
+    AssertTrue CBool(res("success")), _
+        "OTPVOZ-2 preduslov: zbirna je stornirana (bilo: " & CStr(res("message")) & ")"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-2: posle storna zbirne otpremnica je i dalje vozaceva"
+
+    If r > 0 Then
+        AssertEquals "", Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-2: posle storna zbirne ZbirnaID je opet PRAZAN -- otpremnica je slobodna"
+    End If
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_ZbirnaIDJeTekucaIstina", eN, eD
+End Sub
+
+' KILAZA DOLAZI IZ STAVKI, A CENA NE IDE NIKUD.
+'
+' Zaglavlje otpremnice jos NOSI legacy kolone Kolicina/Cena/Klasa, pa bi izvoz
+' koji ih procita bio zelen a pogresan. Meri se da red stavke nosi kolicinu iz
+' tblOtpremnicaStavke, i da NIJEDNA kolona izvoza ne nosi cenu: vozac prevozi
+' robu, a PredlogCena je ocekivanje dokumenta (review #362), ne vrednost.
+Private Sub Test_OTPVOZ_StavkeIzKanonaBezCene()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, otpID As String
+    Dim zagl As Variant, stavke As Variant
+    Dim cOtp As Long, cKl As Long, cKol As Long, cAmb As Long, r As Long
+    Dim k As Long, ime As String, cena As Long
+
+    scenario = NewScenarioCode("OTPVOZ3")
+    datum = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    otpID = ZbrOtpremnicaNaDan("V3" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-3 preduslov: izdata otpremnica postoji"
+
+    stavke = modStammdatenSync.OtpremniceVozacaStavkeRedovi()
+    AssertEquals "1", CStr(OtpVozBrojStavki(stavke, otpID)), _
+        "OTPVOZ-3: jednoklasna otpremnica daje TACNO jednu stavku"
+
+    cOtp = OtpVozKolona(stavke, "OtpremnicaID")
+    cKl = OtpVozKolona(stavke, "Klasa")
+    cKol = OtpVozKolona(stavke, "Kolicina")
+    cAmb = OtpVozKolona(stavke, "KolAmbalaze")
+    r = OtpVozRedPoID(stavke, cOtp, otpID)
+
+    AssertTrue r > 0, "OTPVOZ-3: stavka izvezene otpremnice je u izvozu"
+
+    If r > 0 Then
+        AssertEquals KLASA_I, Trim$(NzToText(stavke(r, cKl))), _
+            "OTPVOZ-3: klasa dolazi iz stavke"
+        AssertEquals "400", CStr(CLng(stavke(r, cKol))), _
+            "OTPVOZ-3: kilaza dolazi iz stavke, ne sa zaglavlja"
+        AssertEquals "20", CStr(CLng(stavke(r, cAmb))), _
+            "OTPVOZ-3: gajbe dolaze iz stavke"
+    End If
+
+    ' --- cena ne izlazi ni u jednom od dva taba ---
+    zagl = modStammdatenSync.OtpremniceVozacaRedovi()
+
+    For k = 1 To UBound(zagl, 2)
+        ime = Trim$(NzToText(zagl(1, k)))
+        If InStr(1, ime, "Cena", vbTextCompare) > 0 Then cena = cena + 1
+    Next k
+
+    For k = 1 To UBound(stavke, 2)
+        ime = Trim$(NzToText(stavke(1, k)))
+        If InStr(1, ime, "Cena", vbTextCompare) > 0 Then cena = cena + 1
+    Next k
+
+    AssertEquals "0", CStr(cena), _
+        "OTPVOZ-3: nijedna kolona izvoza ne nosi cenu"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_StavkeIzKanonaBezCene", eN, eD
+End Sub
+
+' Vrednost parametra iz kontrolnog taba, po IMENU. Test koji bi racunao red
+' cutke bi presao na susedni cim se tab prosiri.
+Private Function SyncControlVrednost(ByVal redovi As Variant, _
+                                     ByVal parametar As String) As String
+    Dim i As Long
+    For i = 1 To UBound(redovi, 1)
+        If StrComp(Trim$(NzToText(redovi(i, 1))), parametar, vbTextCompare) = 0 Then
+            SyncControlVrednost = Trim$(NzToText(redovi(i, 2)))
+            Exit Function
+        End If
+    Next i
+    SyncControlVrednost = vbNullString
+End Function
+
+' OBJAVA JE DOKAZ, NE NAJAVA (review #391, P1).
+'
+' MgmtReports se izvozi na KRAJU ciklusa, pa skidanje lock-a samo po sebi ne
+' znaci da je vozacev read-model svez. Ako izvoz padne, lock se ipak skida
+' (CleanExit), a stari snimak ostaje na Google-u -- i to ne nekoliko minuta nego
+' SVE do sledeceg uspesnog izvoza.
+'
+' Zato objavljena generacija sme da bude jednaka tekucoj SAMO kad je ciklus
+' zavrsen I izvoz uspeo. Meri se produkcioni seam koji gradi redove kontrolnog
+' taba: sam upis ide u Google preko mreze.
+Private Sub Test_OTPVOZ_ObjavaSeDokazujeIzvozom()
+    On Error GoTo EH
+
+    Const CIKLUS As String = "CYC-TEST-0001"
+    Dim redovi As Variant
+
+    ' --- dok ciklus traje: tekuca generacija postoji, objavljena NE ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(True, "u toku", CIKLUS, False)
+
+    AssertEquals "YES", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: dok ciklus traje upis je zakljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "MASTER_SYNC_CYCLE_ID"), _
+        "OTPVOZ-4: tekuca generacija je upisana i dok ciklus traje"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA"
+
+    ' --- ciklus zavrsen, izvoz uspeo: objava se sme dokazati ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, True)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: posle ciklusa je upis otkljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: posle uspesnog izvoza objavljena generacija je BAS taj ciklus"
+
+    ' --- ciklus zavrsen, izvoz PAO: otkljucano nije objavljeno ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, False)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: i posle palog izvoza je upis otkljucan"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: otkljucano ali PAO izvoz -> objavljena generacija ostaje prazna"
+
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    LogFatal "Test_OTPVOZ_ObjavaSeDokazujeIzvozom", eN, eD
+End Sub
 
 ' KAPIJA PUSTA SCOPED IZBOR -- NAD PRIMITIVOM (vraceno u S5-3b).
 '
