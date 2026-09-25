@@ -5457,6 +5457,39 @@ writeback pao, sledeći ciklus vidi idempotentan retry). Dok otpremnica postoji,
 prioritet pa se ne vidi; **posle storna** bi se taj istorijski `Duplicate` vratio kao `in_flight` i
 zaključao blok zauvek. Sada se koristi `isTerminalSyncStatus` — isti pojam koji drži i OTK put.
 
+**Review #390, šesti krug — dve granice koordinacije.**
+
+Model se više nije dirao; ostale su dve tačke u kojima se stanje **objavljuje**.
+
+**1. Projekcija i pomirenje su bile dve transakcije.** Poslovno je to **jedna nedeljiva** promena:
+„serverska dodela je trajno sačuvana lokalno" **i** „lokalni događaj više ne mora da drži blok". Pad
+prve uz uspeh druge ostavljao je stanje **bez ijednog traga dodele** — projekcije nema, događaj označen
+kao razrešen — pa bi posle offline reload-a već predat blok bio slobodan. Ista klasa greške koju smo
+zatvorili kod upisa višestavčnog utovara, samo na drugom mestu. Sada je jedno telo
+(`sacuvajStanjeIPomiri`) i **jedna** `dbPutAll` transakcija preko oba store-a.
+
+**2. `getOtkupi` je mogao da objavi međustanje iz master ciklusa.** Stanje se sastavlja iz **dva** izvora
+koja master ne menja u istom trenutku:
+
+```
+PRED       -> Synced>Master cim otpremnica nastane
+OtkupiAll  -> osvezava se tek pri izlaznom izvozu
+```
+
+U tom prozoru sastav daje **lažan `free`** — a nova verzija bi ga i **persistirala**. Lock je do sada
+štitio samo **upise**; snimak pročitan u prozoru klijent je zadržavao i posle otključavanja, kad upis
+više nije blokiran.
+
+Dva poteza, oba potrebna:
+- dok je lock aktivan, `getOtkupi` **ne vraća** stanje (`readModelChanging`), pa klijent zadrži svoju
+  trajnu projekciju umesto da dobije pogrešno svežije;
+- na prelazu **zaključano → otključano** ekran otpreme se **osvežava** (`refreshOtpremaPosleLocka`),
+  pre nego što korisnik ponovo sme da klikne. Okida se samo kad je overlay stvarno bio prikazan.
+
+> Ostaje jedan zapisan P3: UI bira selektabilnost po `!vozacID`, a ne po `assignmentState`. Trenutno je
+> ekvivalentno (oba izvora garantuju vozača), ali kad već postoji eksplicitno stanje, ono bi dugoročno
+> trebalo da bude kriterijum, a `VozacID` samo podatak prikaza.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski

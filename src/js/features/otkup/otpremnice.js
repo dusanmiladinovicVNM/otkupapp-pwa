@@ -11,6 +11,24 @@ const otpremaState = {
     eventsBound: false
 };
 
+// Osvezi stanje otpreme kad master ciklus zavrsi.
+//
+// Zove ga master-sync-guard pri skidanju overlay-a: dok je ciklus trajao, server
+// namerno nije objavljivao stanje (readModelChanging), pa ekran drzi poslednje
+// poznato. Posle otkljucavanja upis vise nije blokiran -- stanje mora da bude
+// sveze PRE nego sto korisnik ponovo sme da klikne.
+//
+// Radi samo kad je ekran otpreme stvarno otvoren: inace bi svaki zavrsen ciklus
+// vukao mrezu bez razloga.
+window.refreshOtpremaPosleLocka = function refreshOtpremaPosleLocka() {
+    const koren = byId('otpremaRootSections');
+    if (!koren) return;
+
+    loadOtpremaOverview().catch(err => {
+        console.error('refreshOtpremaPosleLocka failed:', err);
+    });
+};
+
 async function loadOtpremaOverview() {
     bindOtpremaEventsOnce();
     populateOtpremaFallbackDrivers();
@@ -37,7 +55,12 @@ async function loadOtpremaOverview() {
             return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
         }, 'Greška pri učitavanju otpreme');
 
-        if (json && json.success && Array.isArray(json.records)) {
+        // Master ciklus menja read-model -> server namerno ne salje stanje.
+        // Zadrzi poslednje poznato umesto da ga obrises praznim odgovorom.
+        if (json && json.readModelChanging) {
+            otpremaState.readModelChanging = true;
+        } else if (json && json.success && Array.isArray(json.records)) {
+            otpremaState.readModelChanging = false;
             serverRows = json.records.map(mapServerOtpremaRecord);
         }
     }
@@ -89,22 +112,20 @@ async function loadOtpremaOverview() {
         .map(row => primeniPredaju(row, lokalnePredaje))
         .sort(compareOtpremaRowsDesc);
 
-    // Sveze serversko stanje se UPISUJE, pa sledeci offline reload ima sta da cita.
-    try {
-        if (db && stanjeSaServera.size) await upisiProjekciju(db, stanjeSaServera);
-    } catch (err) {
-        console.error('loadOtpremaOverview upis projekcije failed:', err);
-    }
-
-    // POMIRENJE: lokalni dogadjaj koji je master razresio izlazi iz odlucivanja.
+    // UPIS PROJEKCIJE I POMIRENJE SU JEDAN POTEZ (review #390, sesti krug).
     //
-    // Bez toga lokalni store ne moze da razlikuje "stigao do GAS-a, ceka master"
-    // od "istorija vec stornirane otpremnice" -- pa bi posle offline reload-a
-    // stari dogadjaj ponovo drzao blok.
+    // Poslovno je to jedna nedeljiva promena:
+    //   "serverska dodela je trajno sacuvana lokalno"
+    //   + "lokalni dogadjaj vise ne mora da drzi blok"
+    //
+    // Dok su bile dve transakcije, pad prve a uspeh druge je ostavljao stanje
+    // bez ijednog traga dodele: projekcije nema, a dogadjaj je oznacen kao
+    // razresen -- pa bi posle offline reload-a vec predat blok bio slobodan.
+    // Ista klasa greske koju smo zatvorili kod upisa visestavcnog utovara.
     try {
-        if (db) await pomiriPredaje(db, lokalnePredaje, stanjeSaServera);
+        if (db) await sacuvajStanjeIPomiri(db, stanjeSaServera, lokalnePredaje);
     } catch (err) {
-        console.error('loadOtpremaOverview pomirenje failed:', err);
+        console.error('loadOtpremaOverview snimanje stanja failed:', err);
     }
 
     otpremaState.rows = mergedRows;
@@ -729,7 +750,7 @@ async function predajePoOtkupu(db) {
         const st = String((ev && ev.syncStatus) || '').trim();
         if (st === 'error' || st === 'failed') continue;
 
-        // Razresen dogadjaj je istorija (v. pomiriPredaje).
+        // Razresen dogadjaj je istorija (v. sacuvajStanjeIPomiri).
         if (ev && ev.masterState === 'resolved') continue;
 
         // Najstariji NERAZRESEN dogadjaj je tekuca rezervacija.
@@ -767,16 +788,19 @@ async function ucitajProjekciju(db) {
     return mapa;
 }
 
-// Upisi sveze serversko stanje u trajnu projekciju.
+// Sacuvaj sveze serversko stanje I razresi lokalne dogadjaje -- u JEDNOJ
+// transakciji, preko oba store-a.
 //
-// checkedAt je trenutak merenja -- po njemu se kasnije zna da li je kesirano
+// checkedAt je trenutak merenja: po njemu se kasnije zna da li je kesirano
 // stanje starije od lokalnog dogadjaja koji jos ceka odgovor.
-async function upisiProjekciju(db, stanjeSaServera) {
+async function sacuvajStanjeIPomiri(db, stanjeSaServera, lokalnePredaje) {
+    if (!stanjeSaServera || !stanjeSaServera.size) return;
+
     const kada = new Date().toISOString();
-    const redovi = [];
+    const projekcija = [];
 
     stanjeSaServera.forEach((s, crid) => {
-        redovi.push({
+        projekcija.push({
             otkupClientRecordID: crid,
             assignmentState: s.assignmentState || '',
             vozacID: s.vozacID || '',
@@ -788,9 +812,19 @@ async function upisiProjekciju(db, stanjeSaServera) {
         });
     });
 
-    if (redovi.length) {
-        await dbPutAll(db, [{ storeName: 'predajaProjekcija', records: redovi }]);
-    }
+    const razreseni = [];
+    Object.keys(lokalnePredaje || {}).forEach(crid => {
+        const ev = lokalnePredaje[crid];
+        if (!ev || ev.masterState === 'resolved') return;
+        if (!predajaJeRazresena(ev, stanjeSaServera)) return;
+
+        razreseni.push(Object.assign({}, ev, { masterState: 'resolved' }));
+    });
+
+    await dbPutAll(db, [
+        { storeName: 'predajaProjekcija', records: projekcija },
+        { storeName: 'predaje', records: razreseni }
+    ]);
 }
 
 // Vrati stanje predaje na red, ma sta merge izabrao.
@@ -837,24 +871,6 @@ function predajaJeRazresena(ev, stanjeSaServera) {
 
     // Jos je in_flight, ali DRUGI utovar -> ovaj je istorija.
     return String(s.predajaID || '') !== String(ev.predajaID || '');
-}
-
-// Upisi razresenje u lokalni store, da sledece (i offline) ucitavanje
-// ne mora ponovo da ga izvodi.
-async function pomiriPredaje(db, lokalnePredaje, stanjeSaServera) {
-    const zaUpis = [];
-
-    Object.keys(lokalnePredaje).forEach(crid => {
-        const ev = lokalnePredaje[crid];
-        if (!ev || ev.masterState === 'resolved') return;
-        if (!predajaJeRazresena(ev, stanjeSaServera)) return;
-
-        zaUpis.push(Object.assign({}, ev, { masterState: 'resolved' }));
-    });
-
-    if (zaUpis.length) {
-        await dbPutAll(db, [{ storeName: 'predaje', records: zaUpis }]);
-    }
 }
 
 function primeniPredaju(row, mapa) {

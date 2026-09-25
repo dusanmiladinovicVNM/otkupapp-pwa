@@ -3184,6 +3184,30 @@ function getOtkupiForOtkupac(otkupacID) {
       };
     }
 
+    // READ-MODEL KOJI SE MENJA SE NE OBJAVLJUJE (review #390, sesti krug).
+    //
+    // Tekuce stanje se sastavlja iz DVA izvora koja master ciklus ne menja u
+    // istom trenutku: PRED dobije Synced>Master cim otpremnica nastane, a
+    // OtkupiAll se osvezava tek pri izlaznom izvozu. Izmedju to dvoje postoji
+    // legitiman prozor u kom PRED vise nije in-flight, a master red jos ne zna
+    // za otpremnicu -- i sastav bi dao LAZAN "free".
+    //
+    // Lock je do sada stitio samo UPISE. Ali snimak procitan u tom prozoru
+    // klijent kesira i drzi i posle otkljucavanja, pa bi korisnik kliknuo drugu
+    // predaju nad blokom koji je vec otisao.
+    //
+    // Zato se stanje u tom prozoru NE VRACA: klijent zadrzava poslednje poznato
+    // (njegova trajna projekcija) umesto da dobije pogresno svezije.
+    var lockState = getMasterSyncStateForWriteBlock_();
+    if (lockState && lockState.locked) {
+      return {
+        success: true,
+        readModelChanging: true,
+        message: lockState.message || 'Master sync je u toku.',
+        records: []
+      };
+    }
+
     return {
       success: true,
       records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), uToku)

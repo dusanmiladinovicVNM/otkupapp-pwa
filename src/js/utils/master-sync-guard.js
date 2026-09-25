@@ -110,7 +110,26 @@
 
     function hideMasterSyncOverlay() {
         const el = document.getElementById('masterSyncBlocker');
+        const bioVidljiv = !!(el && el.style.display !== 'none');
+
         if (el) el.style.display = 'none';
+
+        // OTKLJUCAVANJE MORA DA OSVEZI READ-MODEL (review #390, sesti krug).
+        //
+        // Lock je stitio UPISE, ali ne i snimak procitan tokom njega. Ekran koji
+        // je za vreme ciklusa video zatecenu (ili namerno uskracenu) sliku
+        // zadrzao bi je i posle otkljucavanja -- a tada upis vise nije blokiran,
+        // pa bi korisnik kliknuo komandu nad zastarelim stanjem.
+        //
+        // Osvezava se samo kad je overlay STVARNO bio prikazan: inace bi svaka
+        // provera stanja obarala ekran bez razloga.
+        if (bioVidljiv && typeof window.refreshOtpremaPosleLocka === 'function') {
+            try {
+                window.refreshOtpremaPosleLocka();
+            } catch (err) {
+                console.error('refreshOtpremaPosleLocka failed:', err);
+            }
+        }
     }
 
     async function fetchMasterSyncState(force, stanicaID) {
