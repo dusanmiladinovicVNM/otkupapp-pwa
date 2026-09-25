@@ -5115,6 +5115,65 @@ Razlika koju provera stvarno pravi je u **izveštaju**: sa njom je ponovljen red
 to. Isti obrazac koji je već zapisan kao „dvoslojna kapija: sabotaža ne grize“.
 
 
+### 14.40) S5-4b pre-flight — vozačev ekran je ostao na starom modelu (25.09.2026)
+
+**Nalaz koji menja prioritet reza: vozačev spisak blokova je na `main`-u PRAZAN.**
+
+`zbirna.js` zove `action=getVozacOtkupi` → `getOtkupiForVozac`, koji skenira `OTK-*` listove i filtrira
+po `r.VozacID`. Ko danas piše to polje:
+
+| Put | Stanje |
+|---|---|
+| ekran otpreme (`buildUpdatedOtpremaRecord`) | **obrisan u S5-4a** — otkupni zapis se više ne dira |
+| QR vozača pri unosu otkupa (`setVozac` → `fldVozacID`) | **mrtav UI**: `index.html` ima samo skriveni `fldVozacID`; nema dugmeta `start-vozac-qr-scan` ni `qr-reader-vozac` diva, pa `startVozacQRScan` izađe na prvoj liniji |
+| GAS `processRecord` | upisuje `VozacID: record.vozacID \|\| ''` — prazno, jer PWA više ne šalje to polje |
+
+Dakle **čitalac je ostao, a pisac je otišao**. Isti obrazac koji je u S3a ugasio F3, samo na drugom
+ekranu. Poslovne štete nema (program još nema korisnike), ali S5-4b nije doterivanje nego **zatvaranje
+prekida**.
+
+**Drugi nalaz: vozačev ekran je jedini koji je ostao na modelu pre S1.** `zbirna.js` čita `r.Kolicina`,
+`r.Cena`, `r.Klasa`, `r.KolAmbalaze` — kolone koje su iz `tblOtkup` **obrisane u S1d**. Živi samo zato
+što ih PWA još šalje na svom OTK listu.
+
+**Treći nalaz: identitet se gubi pa ponovo traži.** Zbirna iz PWA nosi `otkupRecordIDs` (spisak otkup
+CRID-ova). Master ih prevodi: `OtpremniceIzOtkupRecordIDs` → `OtkupPoClientRecordID` →
+`OtpremnicaZaOtkup` → dedup → `CreateZbirnaIzIzvora_TX`. Prevod radi tačno, ali je to baš obrazac
+„vrednost sa ekrana → ponovni lookup → kanonski ID" koji pre-flight imenuje kao rizik: kad vozač
+jednom dobije **otpremnice**, `OtpremnicaID` može da putuje direktno, a prevod se briše.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu/hladnjači; lanac predaja → otpremnica → zbirna |
+| IDENTITY | **GAP** | PWA šalje `otkupRecordIDs`, kanon traži `OtpremnicaID` (`tblZbirnaIzvori`) |
+| CARDINALITY | **PROVEN** | `schema.json`: `tblZbirnaIzvori(ZbirnaIzvorID, ZbirnaID, OtpremnicaID)` — N otpremnica po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` je jedini pisac; `ImportVOZRow_RowTX` snima `TBL_ZBIRNA(_STAVKE,_IZVORI)` |
+| WRITERS | **GAP** | izvoz otpremnica u Google **ne postoji**: `ExportMgmtReports_Core` šalje samo `OtkupiAll` + `OtkupiAllStavke` |
+| DOWNSTREAM | **PROVEN** | uvoz je već kanonski (S5-3); menja se samo ŠTA mu stiže, ne šta radi |
+| CAPABILITY | **GAP — prekid** | vozačev spisak blokova bez pisca (gore) |
+| ACCEPTANCE CONTRACT | **GAP** | piše se uz S5-4b-1 |
+| PLATFORM | N/A | nema Excel/COM nepoznanice |
+| LANDING | **PROVEN** | grana iz svežeg `main`-a (`2cd86eb8`, merge #390) |
+
+`GAP` na IDENTITY, WRITERS i CAPABILITY → **nema produkcionog koda dok se rez ne razdvoji i ugovor ne
+napiše.** Zato:
+
+#### Dve odluke operatera (25.09.2026)
+
+**1. Rez se deli na žicu i ekran.**
+
+| # | Sadržaj | Stanje |
+|---|---|---|
+| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | sledeći rez |
+| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+
+**2. Broj zbirne ostaje na masteru.** PWA generiše `ZbirnaID` (kao `PredajaID` u S5-4a) i šalje spisak
+otpremnica; `BrojZbirne` dodeljuje desktop pri uvozu. To je i danas tačno na uvoznoj strani —
+`ImportVOZRow_RowTX` vraća `outBrojZbirne` iz `GetBrojZbirneForIDStrict` — pa se briše samo klijentski
+račun `vozacBroj/ddmmyy-seq` iz `zbirna.js`. Doslovno A2 (broj je labela) i A9 (storno ne oslobađa broj).
+
 ### 14.39) S5-3 — VOZ/zbirna uvoz nad kanonskim piscem (24.09.2026)
 
 Zatečen uvoz je radio `AppendRow(TBL_ZBIRNA)` sa **golim `Array(...)` od 16 vrednosti** i na
