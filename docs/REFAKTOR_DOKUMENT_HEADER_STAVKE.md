@@ -6120,6 +6120,68 @@ line-continuation `_` (VBA syntax error) i LF linije u `tools/sabotaza.py`.
 **Šta još niko ne troši.** Vozačev ekran i dalje zove `getVozacOtkupi`; prelazak na `getVozacOtpremnice`
 i zbirna po `OtpremnicaID` su **S5-4b-2**.
 
+**Review #391, prvi krug — novi read-model je nasledio ceo model, ali ne i ogradu.**
+
+Domen je prošao bez primedbe; rupa je bila u **objavi**. `getOtpremniceForVozac` je čitao
+`MgmtReports` i vraćao ga kao authoritative stanje, a baš `ZbirnaID` je tekuća, promenljiva činjenica.
+
+Ključno zapažanje recenzenta nije bio običan race: `CleanExit` skida lock **i kad `okMgmt = False`**.
+Prozor zato nije „dok ciklus traje" nego **sve do sledećeg uspešnog izvoza**:
+
+```
+kanon:        OTP-1 -> ZBR-1
+MgmtReports:  OTP-1 -> ZbirnaID = ""      (izvoz pao)
+lock:         OFF
+endpoint:     success:true, zbirnaID:""   <- objavljena laz, i to trajno
+```
+
+S5-4b-2 bi iz toga legitimno zaključio „OTP-1 je slobodna" i ponudio još jednu zbirnu. Master bi drugo
+aktivno članstvo odbio, pa kanon ostaje zaštićen — ali korisnik je izveo komandu koju mu je sistem
+prikazao kao ispravnu. Po merilu iz #390 to je P1.
+
+**Generacija objave, ne timestamp.** Ista lekcija kao P3 iz #390, samo što je ovde odmah urađena kako
+treba:
+
+```
+MASTER_SYNC_CYCLE_ID          = CYC-<guid>   upisan pri zakljucavanju
+OTPREMNICE_PUBLISHED_CYCLE_ID = CYC-<guid>   SAMO kad je ciklus zavrsen I izvoz uspeo
+```
+
+Endpoint servira samo kad je `unlocked` **i** `cycleID && published === cycleID`; inače
+`readModelChanging` sa imenovanim razlogom (`MASTER_SYNC_ACTIVE` / `READ_MODEL_STALE` /
+`READ_MODEL_UNKNOWN`), pa klijent zadržava poslednje poznato umesto da ga obriše praznim spiskom.
+**Prazna generacija je NE**: nedokazana objava je zastareo snimak.
+
+`cycleID` nastaje **pre** lock-a; ako `NewEntityID` padne, ciklus se ne pokreće — bez identiteta se
+objava ne bi mogla dokazati, pa bi čitalac zauvek odbijao. Pri ranom `GoTo CleanExit` je `okMgmt`
+podrazumevano `False`, pa objavljena generacija ostaje prazna.
+
+**P2 — pad čitanja ostaje pad.** `getMgmtReport` na grešci vraća `success:false`, a endpoint je to
+prećutao i vraćao `success:true, records:[]`. Ispad Google-a je tako izgledao kao prazan dan — tvrdnja
+o poslu umesto o vezi. Sada oba taba traže `success === true`, inače
+`success:false, code:'READ_MODEL_UNAVAILABLE'`. Stavke su tu jednako važne kao zaglavlja: da im se pad
+progutao, **svaki** dokument bi ispao „bez robe" i bio preskočen, pa bi se opet dobio uredan prazan
+spisak.
+
+**Dokaz.** `MasterSyncControlRedovi(locked, message, cycleID, izvozUspeo)` je izdvojen kao produkcioni
+seam — sam upis ide u Google preko mreže. `Test_OTPVOZ_ObjavaSeDokazujeIzvozom` meri sva tri stanja:
+u toku · uspeo · **otključano ali pao izvoz**. Dve nove sabotaže gađaju tačno to pravilo:
+
+| Sabotaža | Tvrdnja koja mora da pukne |
+|---|---|
+| `otpvoz-otkljucano-znaci-objavljeno` | „otključano ali PAO izvoz -> objavljena generacija ostaje prazna" |
+| `otpvoz-objava-se-najavljuje` | „dok ciklus traje objavljena generacija je PRAZNA" |
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2008 → 2015/0** (+7, tačno
+koliko nov test tvrdi). `dokaz.py otpvoz-o`: **2/2 crvenih**, potpis izvora identičan
+(`11d4e4637ff9603e`). Statičke kapije: `vba_check` (605 sabotaža, 0 nalaza) · schema · `who_writes`
+(obe) · `popis_citalaca`.
+
+Pet starijih `otpvoz-*` sabotaža nije vrteno ponovo — gađaju `modStammdatenSync`, koji ovog kruga nije
+dirnut. Pun katalog ide pred release.
+
+⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

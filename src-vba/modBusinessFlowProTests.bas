@@ -311,6 +311,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem
     Test_OTPVOZ_ZbirnaIDJeTekucaIstina
     Test_OTPVOZ_StavkeIzKanonaBezCene
+    Test_OTPVOZ_ObjavaSeDokazujeIzvozom
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
@@ -7216,6 +7217,71 @@ EH:
     tx.RollbackTx
     On Error GoTo 0
     LogFatal "Test_OTPVOZ_StavkeIzKanonaBezCene", eN, eD
+End Sub
+
+' Vrednost parametra iz kontrolnog taba, po IMENU. Test koji bi racunao red
+' cutke bi presao na susedni cim se tab prosiri.
+Private Function SyncControlVrednost(ByVal redovi As Variant, _
+                                     ByVal parametar As String) As String
+    Dim i As Long
+    For i = 1 To UBound(redovi, 1)
+        If StrComp(Trim$(NzToText(redovi(i, 1))), parametar, vbTextCompare) = 0 Then
+            SyncControlVrednost = Trim$(NzToText(redovi(i, 2)))
+            Exit Function
+        End If
+    Next i
+    SyncControlVrednost = vbNullString
+End Function
+
+' OBJAVA JE DOKAZ, NE NAJAVA (review #391, P1).
+'
+' MgmtReports se izvozi na KRAJU ciklusa, pa skidanje lock-a samo po sebi ne
+' znaci da je vozacev read-model svez. Ako izvoz padne, lock se ipak skida
+' (CleanExit), a stari snimak ostaje na Google-u -- i to ne nekoliko minuta nego
+' SVE do sledeceg uspesnog izvoza.
+'
+' Zato objavljena generacija sme da bude jednaka tekucoj SAMO kad je ciklus
+' zavrsen I izvoz uspeo. Meri se produkcioni seam koji gradi redove kontrolnog
+' taba: sam upis ide u Google preko mreze.
+Private Sub Test_OTPVOZ_ObjavaSeDokazujeIzvozom()
+    On Error GoTo EH
+
+    Const CIKLUS As String = "CYC-TEST-0001"
+    Dim redovi As Variant
+
+    ' --- dok ciklus traje: tekuca generacija postoji, objavljena NE ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(True, "u toku", CIKLUS, False)
+
+    AssertEquals "YES", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: dok ciklus traje upis je zakljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "MASTER_SYNC_CYCLE_ID"), _
+        "OTPVOZ-4: tekuca generacija je upisana i dok ciklus traje"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA"
+
+    ' --- ciklus zavrsen, izvoz uspeo: objava se sme dokazati ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, True)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: posle ciklusa je upis otkljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: posle uspesnog izvoza objavljena generacija je BAS taj ciklus"
+
+    ' --- ciklus zavrsen, izvoz PAO: otkljucano nije objavljeno ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, False)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: i posle palog izvoza je upis otkljucan"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: otkljucano ali PAO izvoz -> objavljena generacija ostaje prazna"
+
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    LogFatal "Test_OTPVOZ_ObjavaSeDokazujeIzvozom", eN, eD
 End Sub
 
 ' KAPIJA PUSTA SCOPED IZBOR -- NAD PRIMITIVOM (vraceno u S5-3b).

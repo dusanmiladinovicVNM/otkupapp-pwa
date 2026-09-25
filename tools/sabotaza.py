@@ -5724,6 +5724,27 @@ SABOTAZE = {
     # ovde IZBOR REDOVA, a ne kapija koja vice. Zato svaka tvrdnja ima svoju
     # sabotazu -- zelen izvoz koji nikad nije pokazan crven ne dokazuje da ista
     # bira.
+    # OTKLJUCANO NIJE OBJAVLJENO (review #391, P1). Ovo je tacno ona greska koju
+    # je recenzent nasao: skidanje lock-a tretirano kao dokaz da je read-model
+    # svez, iako izvoz moze da padne a lock se svejedno skida.
+    "otpvoz-otkljucano-znaci-objavljeno": (
+        "modGoogleSyncOrchestrator.bas",
+        "    rows(7, 2) = IIf((Not locked) And izvozUspeo, Trim$(cycleID), \"\")\n",
+        "    rows(7, 2) = IIf(Not locked, Trim$(cycleID), \"\")\n",
+        "Test_OTPVOZ_ObjavaSeDokazujeIzvozom",
+        "OTPVOZ-4: otkljucano ali PAO izvoz -> objavljena generacija ostaje prazna",
+    ),
+
+    # Objava koja se upise dok ciklus JOS TRAJE je laz: snimak tada nije ni
+    # napravljen, a citalac bi ga vec smatrao svezim.
+    "otpvoz-objava-se-najavljuje": (
+        "modGoogleSyncOrchestrator.bas",
+        "    rows(7, 2) = IIf((Not locked) And izvozUspeo, Trim$(cycleID), \"\")\n",
+        "    rows(7, 2) = Trim$(cycleID)\n",
+        "Test_OTPVOZ_ObjavaSeDokazujeIzvozom",
+        "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA",
+    ),
+
     "otpvoz-nacrt-izlazi-vozacu": (
         "modStammdatenSync.bas",
         "            If Trim$(NzToText(data(i, cIzd))) = IZDATO_IZDATO Then\n",

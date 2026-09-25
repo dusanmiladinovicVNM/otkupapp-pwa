@@ -706,7 +706,11 @@ function getMasterSyncStateInternal_(opts) {
     if (!sh) {
       var missingState = {
         success: true, locked: false, stale: false, missing: true,
-        updatedAt: '', ageMin: null, message: '', lockKind: ''
+        updatedAt: '', ageMin: null, message: '', lockKind: '',
+
+        // Bez kontrolnog taba nema ni dokaza o objavi -- citaoci read-modela
+        // to citaju kao "nije objavljeno" i odbijaju da serviraju.
+        cycleID: '', otpremniceCycleID: ''
       };
 
       if (allowCache) {
@@ -764,7 +768,15 @@ function getMasterSyncStateInternal_(opts) {
       updatedAt: stanicaLocked.locked ? stanicaLocked.updatedAt : masterUpdated,
       ageMin: stanicaLocked.locked ? stanicaLocked.ageMin : masterLocked.ageMin,
       message: combinedMessage,
-      lockKind: lockKind
+      lockKind: lockKind,
+
+      // GENERACIJA OBJAVE (review #391, P1).
+      //
+      // cycleID je identitet TEKUCEG master ciklusa, otpremniceCycleID je
+      // identitet ciklusa koji je STVARNO objavio vozacev read-model. Jednaki su
+      // samo kad je poslednji ciklus zavrsio I izvoz uspeo.
+      cycleID: String(kv.MASTER_SYNC_CYCLE_ID || '').trim(),
+      otpremniceCycleID: String(kv.OTPREMNICE_PUBLISHED_CYCLE_ID || '').trim()
     };
 
     if (allowCache) {
@@ -780,6 +792,8 @@ function getMasterSyncStateInternal_(opts) {
       success: false,
       locked: failClosed,
       unknown: true,
+      cycleID: '',
+      otpremniceCycleID: '',
       code: 'SYNC_STATE_UNKNOWN',
       error: 'Nije moguće proveriti master sync status.',
       message: failClosed
@@ -2234,14 +2248,75 @@ function getOtkupiForVozac(vozacID) {
 // Izvor je sada kanonski izvoz mastera: MgmtReports/OtpremniceAll (zaglavlja) +
 // OtpremniceAllStavke (stavke). Master izvozi SAMO nestornirane, izdate
 // otpremnice sa vozacem, pa ovde nema poslovnog filtriranja -- samo "moje".
+// DA LI JE VOZACEV READ-MODEL OBJAVLJEN I VALIDAN (review #391, P1).
+//
+// Lock sam po sebi nije dovoljan. MgmtReports se izvozi na KRAJU ciklusa, pa
+// postoje dva stanja u kojima je snimak zastareo:
+//
+//   1) ciklus upravo traje              -> locked
+//   2) ciklus je zavrsen, ali IZVOZ JE PAO -> lock skinut, snimak star
+//
+// Drugo je opasnije: traje sve do sledeceg uspesnog izvoza, a ne samo nekoliko
+// minuta. Zato se ne pita "je li zakljucano" nego "da li je OVAJ snimak objavio
+// tekuci ciklus": generacija objave mora biti jednaka generaciji ciklusa.
+//
+// Nepoznato je NE. Prazna generacija (nema kontrolnog taba, pad citanja) znaci
+// da objava ne moze da se dokaze -- a nedokazana objava je zastareo snimak.
+function vozacReadModelObjavljen_() {
+  var s = getMasterSyncStateForWriteBlock_();
+
+  if (!s || s.success !== true) {
+    return { ok: false, code: 'READ_MODEL_UNKNOWN',
+             message: 'Stanje sinhronizacije nije dostupno.' };
+  }
+
+  if (s.locked === true) {
+    return { ok: false, code: 'MASTER_SYNC_ACTIVE',
+             message: s.message || 'Master sync je u toku.' };
+  }
+
+  var ciklus = String(s.cycleID || '').trim();
+  var objavljen = String(s.otpremniceCycleID || '').trim();
+
+  if (!ciklus || !objavljen || ciklus !== objavljen) {
+    return { ok: false, code: 'READ_MODEL_STALE',
+             message: 'Stanje voznji jos nije objavljeno iz poslednjeg ciklusa.' };
+  }
+
+  return { ok: true, code: '', message: '' };
+}
+
 function getOtpremniceForVozac(vozacID) {
   try {
     var canonicalVozacID = String(vozacID || '').trim();
     if (!canonicalVozacID) return { success: false, error: 'vozacID required' };
 
+    var objava = vozacReadModelObjavljen_();
+    if (!objava.ok) {
+      // Isti oblik kao getOtkupi u #390: odgovor JESTE uredan -- kaze da stanje
+      // trenutno nije objavljivo -- pa klijent zadrzava poslednje poznato
+      // umesto da ga obrise praznim spiskom.
+      return {
+        success: true,
+        readModelChanging: true,
+        code: objava.code,
+        message: objava.message,
+        records: []
+      };
+    }
+
+    // PAD CITANJA NIJE "NEMA VOZNJI" (review #391, P2).
+    //
+    // getMgmtReport na gresci vraca success:false. Da se to precuti, ispad
+    // Google-a bi vozacu izgledao kao prazan dan -- a to je tvrdnja o poslu,
+    // ne o vezi.
     var zaglavlja = getMgmtReport('OtpremniceAll');
-    if (!zaglavlja || !Array.isArray(zaglavlja.records)) {
-      return { success: true, records: [] };
+    if (!zaglavlja || zaglavlja.success !== true || !Array.isArray(zaglavlja.records)) {
+      return {
+        success: false,
+        code: 'READ_MODEL_UNAVAILABLE',
+        error: 'Read-model otpremnica nije procitan.'
+      };
     }
 
     var moje = zaglavlja.records.filter(function (r) {
@@ -2252,23 +2327,32 @@ function getOtpremniceForVozac(vozacID) {
 
     // Stavke se citaju JEDNOM i grupisu po OtpremnicaID -- inace bi svaka
     // otpremnica povukla svoj prolaz kroz ceo tab.
-    var poDokumentu = {};
     var stavke = getMgmtReport('OtpremniceAllStavke');
-    if (stavke && Array.isArray(stavke.records)) {
-      stavke.records.forEach(function (s) {
-        var oid = String((s && s.OtpremnicaID) || '').trim();
-        if (!oid) return;
-        if (!poDokumentu[oid]) poDokumentu[oid] = [];
-        poDokumentu[oid].push({
-          otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
-          redniBroj: Number(s.RedniBroj) || 0,
-          klasa: String(s.Klasa || '').trim(),
-          kolicina: Number(s.Kolicina) || 0,
-          kolAmbalaze: Number(s.KolAmbalaze) || 0,
-          brutoKg: Number(s.BrutoKg) || 0
-        });
-      });
+    if (!stavke || stavke.success !== true || !Array.isArray(stavke.records)) {
+      // Isto pravilo kao gore: bez stavki bi SVAKI dokument ispao "bez robe" i
+      // bio preskocen, pa bi pad citanja zavrsio kao uredan prazan spisak.
+      return {
+        success: false,
+        code: 'READ_MODEL_UNAVAILABLE',
+        error: 'Stavke otpremnica nisu procitane.'
+      };
     }
+
+    var poDokumentu = {};
+
+    stavke.records.forEach(function (s) {
+      var oid = String((s && s.OtpremnicaID) || '').trim();
+      if (!oid) return;
+      if (!poDokumentu[oid]) poDokumentu[oid] = [];
+      poDokumentu[oid].push({
+        otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
+        redniBroj: Number(s.RedniBroj) || 0,
+        klasa: String(s.Klasa || '').trim(),
+        kolicina: Number(s.Kolicina) || 0,
+        kolAmbalaze: Number(s.KolAmbalaze) || 0,
+        brutoKg: Number(s.BrutoKg) || 0
+      });
+    });
 
     var records = [];
 
