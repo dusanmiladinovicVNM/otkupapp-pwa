@@ -5718,6 +5718,56 @@ SABOTAZE = {
     # Identitet utovara mora da ostane NA DOKUMENTU (review #388, P1). Bez
     # trajnog traga jedan klik otkupca, razbijen na dva sync ciklusa, pravi DVE
     # izdate otpremnice -- a izdata se ne dopunjuje (A13).
+    # S5-4b-1: VOZACU SE SERVIRAJU OTPREMNICE, NE OTKUPNI REDOVI.
+    #
+    # Izvoz je novo mesto na kom se poslovno pravilo moze tiho izgubiti: ono je
+    # ovde IZBOR REDOVA, a ne kapija koja vice. Zato svaka tvrdnja ima svoju
+    # sabotazu -- zelen izvoz koji nikad nije pokazan crven ne dokazuje da ista
+    # bira.
+    "otpvoz-nacrt-izlazi-vozacu": (
+        "modStammdatenSync.bas",
+        "            If Trim$(NzToText(data(i, cIzd))) = IZDATO_IZDATO Then\n",
+        "            If True Then   ' SABOTAZA: nacrt izlazi vozacu\n",
+        "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem",
+        "OTPVOZ-1: NACRT ne izlazi vozacu",
+    ),
+
+    "otpvoz-stornirana-ostaje-u-izvozu": (
+        "modStammdatenSync.bas",
+        "    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTPREMNICA)\n",
+        "    ' SABOTAZA: stornirane otpremnice ostaju u izvozu\n",
+        "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem",
+        "OTPVOZ-1: STORNIRANA otpremnica ispada iz izvoza",
+    ),
+
+    # ZbirnaID mora da bude TEKUCA istina iz clanstva. Prazan string je tacno
+    # ono sto bi dala zaboravljena veza -- i test to mora da vidi.
+    "otpvoz-zbirna-se-ne-racuna": (
+        "modStammdatenSync.bas",
+        "                        modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID))\n",
+        "                        \"\")\n",
+        "Test_OTPVOZ_ZbirnaIDJeTekucaIstina",
+        "OTPVOZ-2: izvoz nosi zbirnu koja je BAS potrosila ovu otpremnicu",
+    ),
+
+    # Zaglavlje otpremnice JOS nosi legacy Kolicina/Cena, pa je "kilaza iz
+    # pogresne kolone" realna greska, ne izmisljena.
+    "otpvoz-kilaza-iz-pogresne-kolone": (
+        "modStammdatenSync.bas",
+        "                    st(i, 4), _\n",
+        "                    st(i, 8), _\n",
+        "Test_OTPVOZ_StavkeIzKanonaBezCene",
+        "OTPVOZ-3: kilaza dolazi iz stavke, ne sa zaglavlja",
+    ),
+
+    "otpvoz-cena-ide-vozacu": (
+        "modStammdatenSync.bas",
+        "        \"Kolicina\", \"KolAmbalaze\", \"BrutoKg\")\n",
+        "        \"Kolicina\", \"KolAmbalaze\", \"Cena\")\n",
+        "Test_OTPVOZ_StavkeIzKanonaBezCene",
+        "OTPVOZ-3: nijedna kolona izvoza ne nosi cenu",
+    ),
+
     "predaja-ne-pamti-utovar": (
         "modDokumenta.bas",
         "    If Len(Trim$(predajaID)) > 0 Then\n",

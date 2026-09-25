@@ -18,6 +18,12 @@ Private Const KARTICE_TAB_NAME As String = "Kartice"
 ' Stavke otkupa u MgmtReports (S1c): OtkupiAll nosi zaglavlja, ovaj tab stavke.
 Private Const OTKUPI_ALL_STAVKE_TAB As String = "OtkupiAllStavke"
 
+' Otpremnice u MgmtReports (S5-4b-1): vozac dobija SVOJE otpremnice, ne tudje
+' otkupne redove. Isti oblik kao otkup -- zaglavlje na jednom tabu, stavke na
+' drugom -- jer je otpremnica dokument, a ne red.
+Private Const OTPREMNICE_ALL_TAB As String = "OtpremniceAll"
+Private Const OTPREMNICE_ALL_STAVKE_TAB As String = "OtpremniceAllStavke"
+
 Private Function StammdatenTabs() As Variant
     StammdatenTabs = Array( _
         "Kooperanti", _
@@ -64,7 +70,9 @@ Private Function MgmtReportTabs() As Variant
         "OtkupPoOM", _
         "PredatoPoKupcu", _
         "OtkupiAll", _
-        OTKUPI_ALL_STAVKE_TAB _
+        OTKUPI_ALL_STAVKE_TAB, _
+        OTPREMNICE_ALL_TAB, _
+        OTPREMNICE_ALL_STAVKE_TAB _
     )
 End Function
 
@@ -507,13 +515,15 @@ Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
     If ExportPredatoPoKupcu(sheetID) Then ok = ok + 1
     If ExportOtkupiAll(sheetID) Then ok = ok + 1
     If ExportOtkupiAllStavke(sheetID) Then ok = ok + 1
+    If ExportOtpremniceAll(sheetID) Then ok = ok + 1
+    If ExportOtpremniceAllStavke(sheetID) Then ok = ok + 1
 
-    ExportMgmtReports_Core = (ok = 6)
+    ExportMgmtReports_Core = (ok = 8)
     
     If ExportMgmtReports_Core Then
-        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 6/6"
+        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 8/8"
     Else
-        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/6"
+        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/8"
     End If
     
     If showMessages Then
@@ -773,6 +783,196 @@ Public Function OtkupSaldoPoKooperantu(Optional ByVal samo As Object = Nothing) 
             dict(koopID) = v
         End If
     Next i
+End Function
+
+' ============================================================
+' OTPREMNICE ZA VOZACA (S5-4b-1)
+' ============================================================
+'
+' Do ovog reza je vozac dobijao OTKUPNE redove filtrirane po Otkup.VozacID.
+' Ta veza je pala u S5-4a -- ekran otpreme vise ne dira otkupni zapis -- pa je
+' citalac ostao bez pisca. Kanon kaze da vozac nosi OTPREMNICE, pa se i servira
+' to: dokument koji je njemu izdat, sa svojim stavkama.
+'
+' Cena se NE izvozi. Vozac prevozi robu; PredlogCena je ocekivanje otpremnice
+' (review #362), ne vrednost, i vozacu nije potrebna ni za jednu njegovu radnju.
+
+' Kolone taba OtpremniceAll -- jedino mesto. Red po ZAGLAVLJU otpremnice.
+Private Function OtpremniceAllKolone() As Variant
+    OtpremniceAllKolone = Array( _
+        "OtpremnicaID", "BrojOtpremnice", "Datum", "StanicaID", "VozacID", _
+        "KulturaID", "VrstaVoca", "SortaVoca", "TipAmbalaze", _
+        "IzdatoStatus", "PredajaID", "ZbirnaID")
+End Function
+
+' Kolone taba OtpremniceAllStavke -- jedino mesto.
+Private Function OtpremniceAllStavkeKolone() As Variant
+    OtpremniceAllStavkeKolone = Array( _
+        "OtpremnicaStavkaID", "OtpremnicaID", "RedniBroj", "Klasa", _
+        "Kolicina", "KolAmbalaze", "BrutoKg")
+End Function
+
+' IZDATE OTPREMNICE SA VOZACEM -- redovi taba OtpremniceAll, sa zaglavljem.
+'
+' Produkcioni seam, ne kopija za test: sam izvoz pise u Google list preko mreze,
+' pa se kroz njega u testu ne moze proci (isti razlog kao TekucaPredajaOtkupa).
+'
+' Sta ulazi:
+'   - nije stornirana        -- stornirana otpremnica nije vise nicija obaveza
+'   - IzdatoStatus = IZDATO  -- nacrt nije predat nikome; vozac ga ne sme videti
+'   - VozacID nije prazan    -- bez vozaca nema kome da se servira
+'
+' ZbirnaID je TEKUCA istina iz kanona (AktivnaZbirnaZaOtpremnicu), ne kolona na
+' detetu: po njoj vozacev ekran zna sta je vec potroseno u zbirnu. Prazno znaci
+' "slobodna za zbirnu", i posle storna zbirne se sama vraca u to stanje.
+Public Function OtpremniceVozacaRedovi() As Variant
+    Const SRC As String = "OtpremniceVozacaRedovi"
+
+    Dim kol As Variant, nk As Long, k As Long
+    kol = OtpremniceAllKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTPREMNICA)
+
+    Dim izabrane As Collection
+    Set izabrane = New Collection
+
+    If IsArray(data) Then
+        Dim cId As Long, cBroj As Long, cDat As Long, cSta As Long, cVoz As Long
+        Dim cKul As Long, cVrs As Long, cSor As Long, cTip As Long
+        Dim cIzd As Long, cPre As Long
+
+        cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+        cBroj = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+        cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+        cSta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, SRC)
+        cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+        cKul = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KULTURA, SRC)
+        cVrs = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+        cSor = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
+        cTip = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
+        cIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
+        cPre = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_PREDAJA_ID, SRC)
+
+        Dim i As Long, otpID As String, vozID As String
+        For i = 1 To UBound(data, 1)
+            If Trim$(NzToText(data(i, cIzd))) = IZDATO_IZDATO Then
+                vozID = Trim$(NzToText(data(i, cVoz)))
+                otpID = Trim$(NzToText(data(i, cId)))
+
+                If Len(vozID) > 0 And Len(otpID) > 0 Then
+                    izabrane.Add Array( _
+                        otpID, _
+                        Trim$(NzToText(data(i, cBroj))), _
+                        data(i, cDat), _
+                        Trim$(NzToText(data(i, cSta))), _
+                        vozID, _
+                        Trim$(NzToText(data(i, cKul))), _
+                        Trim$(NzToText(data(i, cVrs))), _
+                        Trim$(NzToText(data(i, cSor))), _
+                        Trim$(NzToText(data(i, cTip))), _
+                        IZDATO_IZDATO, _
+                        Trim$(NzToText(data(i, cPre))), _
+                        modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID))
+                End If
+            End If
+        Next i
+    End If
+
+    OtpremniceVozacaRedovi = RedoviSaZaglavljem(kol, nk, izabrane)
+End Function
+
+' Stavke IZVEZENIH otpremnica -- redovi taba OtpremniceAllStavke, sa zaglavljem.
+'
+' Izvor je strogi citalac StavkeOtpremniceRedovi: on vec drzi pravilo "jedna
+' stavka po klasi po dokumentu", pa izvoz ne ume da posalje dokument koji bi na
+' vozacevom ekranu dao dva reda iste klase. Fail-closed je namerno -- pokvaren
+' dokument zaustavlja ceo izvoz i to se vidi u logu, umesto da tiho ode u PWA.
+Public Function OtpremniceVozacaStavkeRedovi() As Variant
+    Dim kol As Variant, nk As Long
+    kol = OtpremniceAllStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim izabrane As Collection
+    Set izabrane = New Collection
+
+    Dim zagl As Variant
+    zagl = OtpremniceVozacaRedovi()
+
+    Dim dozvoljene As Object
+    Set dozvoljene = CreateObject("Scripting.Dictionary")
+    dozvoljene.CompareMode = vbTextCompare
+
+    Dim i As Long
+    For i = 2 To UBound(zagl, 1)          ' red 1 je zaglavlje
+        If Not dozvoljene.Exists(CStr(zagl(i, 1))) Then
+            dozvoljene.Add CStr(zagl(i, 1)), 1
+        End If
+    Next i
+
+    Dim st As Variant
+    st = modDokumenta.StavkeOtpremniceRedovi()
+
+    If IsArray(st) Then
+        For i = 1 To UBound(st, 1)
+            If dozvoljene.Exists(CStr(st(i, 1))) Then
+                izabrane.Add Array( _
+                    st(i, 7), _
+                    st(i, 1), _
+                    st(i, 2), _
+                    st(i, 3), _
+                    st(i, 4), _
+                    st(i, 6), _
+                    st(i, 8))
+            End If
+        Next i
+    End If
+
+    OtpremniceVozacaStavkeRedovi = RedoviSaZaglavljem(kol, nk, izabrane)
+End Function
+
+' Zaglavlje + redovi u jedan 2D niz. Oba taba grade isti oblik, pa isti helper.
+Private Function RedoviSaZaglavljem(ByVal kol As Variant, _
+                                    ByVal nk As Long, _
+                                    ByVal redovi As Collection) As Variant
+    Dim result() As Variant
+    ReDim result(1 To redovi.count + 1, 1 To nk)
+
+    Dim k As Long
+    For k = 1 To nk
+        result(1, k) = kol(LBound(kol) + k - 1)
+    Next k
+
+    Dim r As Long, red As Variant
+    r = 1
+    For Each red In redovi
+        r = r + 1
+        For k = 1 To nk
+            result(r, k) = red(LBound(red) + k - 1)
+        Next k
+    Next red
+
+    RedoviSaZaglavljem = result
+End Function
+
+Private Function ExportOtpremniceAll(ByVal sheetID As String) As Boolean
+    On Error GoTo EH
+    ExportOtpremniceAll = WriteSheetData(sheetID, OTPREMNICE_ALL_TAB, OtpremniceVozacaRedovi())
+    Exit Function
+EH:
+    LogErr "ExportOtpremniceAll"
+    ExportOtpremniceAll = False
+End Function
+
+Private Function ExportOtpremniceAllStavke(ByVal sheetID As String) As Boolean
+    On Error GoTo EH
+    ExportOtpremniceAllStavke = WriteSheetData(sheetID, OTPREMNICE_ALL_STAVKE_TAB, OtpremniceVozacaStavkeRedovi())
+    Exit Function
+EH:
+    LogErr "ExportOtpremniceAllStavke"
+    ExportOtpremniceAllStavke = False
 End Function
 
 ' Kolone taba OtkupiAll -- jedino mesto. Red po ZAGLAVLJU otkupa (S1c):
