@@ -8,7 +8,14 @@ const otpremaState = {
     selectedVozac: null,
     selectedKeys: new Set(),
     successRows: [],
-    eventsBound: false
+    eventsBound: false,
+
+    // Server je namerno uskratio stanje jer master ciklus traje.
+    readModelChanging: false,
+
+    // Epoha master sync-a za koju je TRENUTNI snimak potvrdjen kao svez.
+    // Prazno = nikad potvrdjen, pa sledeca provera trazi strog refresh.
+    confirmedMasterEpoch: ''
 };
 
 // Osvezi stanje otpreme kad master ciklus zavrsi.
@@ -27,11 +34,22 @@ const otpremaState = {
 // Obican put namerno prezivljava sve -- apiFetch na padu vraca null, safeAsync
 // izuzetak pretvara u undefined -- pa bi se promise razresio i nad zastarelim
 // lokalnim stanjem, a overlay bi pao. Tacno ono sto ograda treba da sprecti.
-window.refreshOtpremaPosleLocka = function refreshOtpremaPosleLocka() {
+window.refreshOtpremaPosleLocka = function refreshOtpremaPosleLocka(masterEpoch) {
     const koren = byId('otpremaRootSections');
     if (!koren) return Promise.resolve();
 
-    return loadOtpremaOverview({ requireFreshServer: true });
+    // EPOHA ODLUCUJE, NE VIDLJIVOST OVERLAY-a.
+    //
+    // Ako je snimak vec potvrdjen za BAS ovu epohu, nema sta da se osvezava --
+    // poziv je jeftin i na svakom polling tick-u. Cim se epoha razlikuje (ili je
+    // nepoznata), ide strog refresh: uredjaj je mozda ceo lock interval proveo u
+    // pozadini i nikad nije video overlay.
+    const epoha = String(masterEpoch || '');
+    if (epoha && otpremaState.confirmedMasterEpoch === epoha) {
+        return Promise.resolve();
+    }
+
+    return loadOtpremaOverview({ requireFreshServer: true, masterEpoch: epoha });
 };
 
 async function loadOtpremaOverview(opcije) {
@@ -39,6 +57,7 @@ async function loadOtpremaOverview(opcije) {
     // rade i bez servera. Ukljucuje ga samo publication barrier, gde je cena
     // pogresnog "sveze" veca od cene cekanja.
     const strogo = !!(opcije && opcije.requireFreshServer);
+    const masterEpoch = String((opcije && opcije.masterEpoch) || '');
     bindOtpremaEventsOnce();
     populateOtpremaFallbackDrivers();
     showOtpremaRootView();
@@ -155,6 +174,11 @@ async function loadOtpremaOverview(opcije) {
     }
 
     otpremaState.rows = mergedRows;
+
+    // Snimak je potvrdjen za ovu epohu -- dok se ona ne promeni, nema razloga za
+    // nov strog refresh.
+    if (strogo && masterEpoch) otpremaState.confirmedMasterEpoch = masterEpoch;
+
     renderOtpremaRoot();
 }
 

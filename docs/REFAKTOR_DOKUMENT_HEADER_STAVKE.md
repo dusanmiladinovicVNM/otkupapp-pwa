@@ -5546,6 +5546,29 @@ uključuje samo ograda, gde je cena pogrešnog „sveže" veća od cene čekanja
 **P2:** `ensureMasterSyncNotActive` je vraćao `true` bez `await`-a nad skrivanjem overlay-a — a `true`
 znači „upis sme da krene", pa nije smeo da stigne dok osvežavanje traje. Sada čeka.
 
+**Review #390, deveti krug — kriterijum je bio vidljivost overlay-a, a trebalo je da bude epoha.**
+
+Strog režim je osvežavao **samo ako je overlay bio prikazan**. To nije isto što i „master epoha se
+promenila": uređaj koji je ceo lock interval proveo **u pozadini** — ili kome je ciklus prošao između dva
+polling tick-a — overlay nikad nije ni video, pa nije ni osvežavao. Ostajao je na zastarelom `free`, a
+lock je u međuvremenu skinut, pa je klik bio dozvoljen.
+
+Server epohu **šalje** (`updatedAt`), a klijent ju je **bacao** — `buildState` je nije ni mapirao. Sada:
+
+```
+epoha razlicita (ili nepoznata) -> strog refresh, pa tek onda upis
+epoha ista kao potvrdjena       -> nista, poziv je jeftin i na svakom ticku
+```
+
+`otpremaState.confirmedMasterEpoch` pamti epohu za koju je **trenutni** snimak potvrđen. Radi i kad
+overlay jeste bio prikazan, i kad nikad nije, i posle povratka iz pozadine, i posle `online`.
+
+**P2 — povratna vrednost sada prati ishod.** `ensureMasterSyncNotActive` je vraćao `true` i kad strog
+refresh padne, jer je `hideMasterSyncOverlay` gutao neuspeh — a `true` znači „upis sme da krene", pa bi
+`withSubmitLock` pustio komandu nad nepotvrđenim stanjem. Sada `hideMasterSyncOverlay` vraća
+`true`/`false` (potvrđeno sveže / i dalje blokirano), overlay se pri padu **vraća**, a pozivalac
+prosleđuje taj ishod dalje.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
