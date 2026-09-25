@@ -6221,6 +6221,71 @@ zagrada u `gas/Code.gs` isti kao pre izmene; 0 LF-only linija.
 okruzenju ne moze izvrsiti. Dvostruka ograda je pročitana i rezonovana, ne izmerena. Jedini alat koji
 bi je uhvatio bio bi JS harness — isti dug koji stoji od #390.
 
+### 14.42) S5-4b-2 pre-flight — zbirna se sastavlja od OTPREMNICA (25.09.2026)
+
+S5-4b-1 je postavio žicu: master izvozi otpremnice, GAS ih servira po `Otpremnica.VozacID`, uz ogradu
+generacije. **Niko ih još ne troši** — vozačev ekran i dalje zove `getVozacOtkupi`. Ovaj rez to
+zatvara.
+
+#### Izmereno pre koda — gde sve živi stari model
+
+| Sloj | Mesto | Šta radi danas |
+|---|---|---|
+| PWA | `zbirna.js:11` | `action=getVozacOtkupi` → OTK redovi po `Otkup.VozacID` |
+| PWA | `zbirna.js` payload | `otkupRecordIDs` = spisak otkup CRID-ova; `brojZbirne` računat na klijentu |
+| GAS | `ZBIRNA_COLUMNS` | kolona `OtkupRecordIDs` |
+| GAS | `processZbirnaRecord` | `OtkupRecordIDs: record.otkupRecordIDs` |
+| VBA | `ValidatePWAZbirna` | traži `OtkupRecordIDs`, inače „zbirna bez izvora nije dokument" |
+| VBA | `ImportRowToTblZbirna` | `OtpremniceIzOtkupRecordIDs(...)` → `CreateZbirnaIzIzvora_TX` |
+| VBA | `PwaZbirnaRazlika` | **drugi** pozivalac istog prevodioca — poređenje sadržaja pri CRID konfliktu |
+| VBA | `RequireVOZHeaderValue` | ugovor zaglavlja VOZ lista traži `OtkupRecordIDs` |
+| test | `modBusinessFlowProTests:1674` | tvrdnja „zbirna ima izvor razrešen iz otkupRecordIDs" |
+
+**Prevod radi tačno, ali je obrazac rizika:** `otkup CRID → OtkupPoClientRecordID → OtpremnicaZaOtkup
+→ dedup`. Kad vozač dobije otpremnice, `OtpremnicaID` može da putuje direktno i prevodilac se briše —
+zajedno sa oba pozivaoca.
+
+**Kolone VOZ lista se čitaju POZICIONO** (`VS_*` konstante u `modMasterSync` su indeksi), pa `OtpremnicaIDs`
+ide **na kraj** `ZBIRNA_COLUMNS` (indeks 21), nikako u sredinu. `ensureSheetColumns` dodaje kolonu samo
+kad je zatečeno zaglavlje **prefiks** kanonskog — zamena u sredini bi to oborila.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu |
+| IDENTITY | **PROVEN kao cilj, GAP u kodu** | kanon traži `OtpremnicaID`; PWA šalje otkup CRID-ove |
+| CARDINALITY | **PROVEN** | `tblZbirnaIzvori(ZbirnaID, OtpremnicaID)`, N po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` ostaje jedini pisac; rez menja samo ŠTA mu stiže |
+| WRITERS | **N/A** | nov pisac se ne uvodi |
+| DOWNSTREAM | **GAP — dva pozivaoca, ne jedan** | `ImportRowToTblZbirna` **i** `PwaZbirnaRazlika`; zakrpa na jednom ostavlja drugi |
+| CAPABILITY | **GAP** | vozačev spisak je prazan od S5-4a; ovim rezom se vraća |
+| ACCEPTANCE CONTRACT | **v. ispod** | |
+| PLATFORM | N/A | |
+| LANDING | **PROVEN** | grana iz `main` posle merge-a #391 (`7c960aa5`) |
+
+⚠ **Premisa postojećeg regression testa se menja** (`modBusinessFlowProTests:1674`). Po kapiji to je
+signal za zastoj i verdikt — zato ovaj odeljak i postoji pre koda. Tvrdnja **preživljava**, ali se meri
+nad novim ulazom: izvor zbirne je `OtpremnicaID` koji je PWA poslala, ne CRID koji je master preveo.
+
+#### Ugovor prihvatanja — šta mora da važi kad se rez završi
+
+1. VOZ red sa `OtpremnicaIDs` pravi zbirnu čiji je `tblZbirnaIzvori` **tačno taj skup**.
+2. Nepoznat, storniran ili već potrošen `OtpremnicaID` **staje i imenuje razlog** — ne prećutkuje se
+   dedupom, kao što prevodilac danas može.
+3. Tuđa otpremnica (drugi `VozacID`) se **odbija** — dosad je granica bila implicitna, jer su izvori
+   dolazili iz vozačevih otkupa.
+4. Prazan `OtpremnicaIDs` je **greška**, sa istom porukom kao danas: zbirna bez izvora nije dokument.
+5. `OtkupRecordIDs` više **nijedan pisac ne šalje**, a `OtpremniceIzOtkupRecordIDs` i oba njegova
+   pozivaoca su **obrisani** — mrtva grana se briše, ne ostavlja (v. „neuhranjen nije nedostizan").
+6. `BrojZbirne` dodeljuje isključivo master (`GetBrojZbirneForIDStrict`); klijentski račun
+   `vozacBroj/ddmmyy-seq` nestaje iz `zbirna.js`.
+7. Vozačev ekran prikazuje **dokumente sa stavkama** (klasa, kilaža, gajbe iz `OtpremniceAllStavke`), a
+   ne otkupne redove; već potrošena otpremnica (`zbirnaID != ""`) se ne nudi za nov utovar.
+
+Dokaz: nove BFP tvrdnje sa sopstvenim sabotažama za tačke 1–4 i 6; tačka 5 se meri brisanjem (nema
+pozivaoca, `vba_check` + `popis_citalaca`); tačka 7 ostaje **neverifikovana** dok ne postoji JS harness.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
