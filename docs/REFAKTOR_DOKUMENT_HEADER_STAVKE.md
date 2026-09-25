@@ -5519,6 +5519,33 @@ promeni lock-a — i pri zaključavanju i pri otključavanju ([modGoogleSyncOrch
 **Usput popravljeno:** blok koji sam ranije ubacio u `otpremnice.js` ostao je sa **18 LF linija** u
 CRLF fajlu — tačno korupcija na koju pravila upozoravaju. Fajl je normalizovan; sada 0 LF-only linija.
 
+**Review #390, osmi krug — „osvežavanje je uspelo" nije bilo dokaz svežine.**
+
+Prethodni krug je overlay naterao da **čeka** osvežavanje. Ali `loadOtpremaOverview` praktično **nikad ne
+pada**: `apiFetch` na grešci vraća `null`, `safeAsync` izuzetak pretvara u `undefined` — pa se promise
+razrešio i nad zastarelim lokalnim stanjem, a overlay je pao. Isto je važilo i kad server izričito kaže
+`readModelChanging`.
+
+Uveden je **strog režim** samo za publication barrier — `loadOtpremaOverview({ requireFreshServer: true })`
+— u kom je svaki izostanak **pad**:
+
+| Situacija | Strog režim |
+|---|---|
+| nema veze | pad |
+| `apiFetch` vratio `null` | pad |
+| `success !== true` ili `records` nije niz | pad |
+| `readModelChanging` | pad |
+| trajna projekcija nije sačuvana | pad |
+
+Poslednji red je bitan posebno: stanje sveže **u memoriji** nije dovoljno — ako projekcija nije upisana,
+sledeći offline reload (naročito na uređaju koji predaju nije ni napravio) opet ostaje bez traga dodele.
+
+Običan put je **namerno netaknut**: offline unos i pregled moraju da rade i bez servera. Strog režim
+uključuje samo ograda, gde je cena pogrešnog „sveže" veća od cene čekanja.
+
+**P2:** `ensureMasterSyncNotActive` je vraćao `true` bez `await`-a nad skrivanjem overlay-a — a `true`
+znači „upis sme da krene", pa nije smeo da stigne dok osvežavanje traje. Sada čeka.
+
 **Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
 `vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
 `dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski

@@ -21,16 +21,24 @@ const otpremaState = {
 // Radi samo kad je ekran otpreme stvarno otvoren: inace bi svaki zavrsen ciklus
 // vukao mrezu bez razloga.
 // Vraca PROMISE: pozivalac (master-sync-guard) drzi overlay dok ovo ne zavrsi,
-// pa korisnik ne moze da klikne nad zastarelim stanjem. Greska se NE guta --
-// guard je koristi da overlay ostane.
+// pa korisnik ne moze da klikne nad zastarelim stanjem.
+//
+// STROG REZIM: ovde "uspeh" mora da znaci "dobio sam SVEZ authoritative snapshot".
+// Obican put namerno prezivljava sve -- apiFetch na padu vraca null, safeAsync
+// izuzetak pretvara u undefined -- pa bi se promise razresio i nad zastarelim
+// lokalnim stanjem, a overlay bi pao. Tacno ono sto ograda treba da sprecti.
 window.refreshOtpremaPosleLocka = function refreshOtpremaPosleLocka() {
     const koren = byId('otpremaRootSections');
     if (!koren) return Promise.resolve();
 
-    return loadOtpremaOverview();
+    return loadOtpremaOverview({ requireFreshServer: true });
 };
 
-async function loadOtpremaOverview() {
+async function loadOtpremaOverview(opcije) {
+    // Strog rezim se NE ukljucuje za obican rad: offline unos i pregled moraju da
+    // rade i bez servera. Ukljucuje ga samo publication barrier, gde je cena
+    // pogresnog "sveze" veca od cene cekanja.
+    const strogo = !!(opcije && opcije.requireFreshServer);
     bindOtpremaEventsOnce();
     populateOtpremaFallbackDrivers();
     showOtpremaRootView();
@@ -51,6 +59,10 @@ async function loadOtpremaOverview() {
         console.error('loadOtpremaOverview local failed:', err);
     }
 
+    if (strogo && !navigator.onLine) {
+        throw new Error('Nema veze -- stanje otpreme se ne moze potvrditi.');
+    }
+
     if (navigator.onLine) {
         const json = await safeAsync(async () => {
             return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
@@ -60,9 +72,17 @@ async function loadOtpremaOverview() {
         // Zadrzi poslednje poznato umesto da ga obrises praznim odgovorom.
         if (json && json.readModelChanging) {
             otpremaState.readModelChanging = true;
+
+            // U strogom rezimu ovo NIJE uredan zavrsetak: server je izricito
+            // rekao da snapshot nije validan, pa overlay mora da ostane.
+            if (strogo) {
+                throw new Error('Master sync je u toku -- stanje otpreme jos nije konacno.');
+            }
         } else if (json && json.success && Array.isArray(json.records)) {
             otpremaState.readModelChanging = false;
             serverRows = json.records.map(mapServerOtpremaRecord);
+        } else if (strogo) {
+            throw new Error('Stanje otpreme nije stiglo sa servera.');
         }
     }
 
@@ -127,6 +147,11 @@ async function loadOtpremaOverview() {
         if (db) await sacuvajStanjeIPomiri(db, stanjeSaServera, lokalnePredaje);
     } catch (err) {
         console.error('loadOtpremaOverview snimanje stanja failed:', err);
+
+        // U strogom rezimu nije dovoljno da stanje bude sveze u memoriji: ako
+        // trajna projekcija nije sacuvana, sledeci OFFLINE reload -- narocito na
+        // uredjaju koji nije napravio predaju -- opet ne bi imao trag dodele.
+        if (strogo) throw err;
     }
 
     otpremaState.rows = mergedRows;

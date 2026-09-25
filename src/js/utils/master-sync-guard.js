@@ -289,7 +289,10 @@
         // Unknown/timeout nije potvrđen lock.
         // Soft-lock model: lokalni rad i pokušaj sync-a smeju dalje,
         // GAS će vratiti MASTER_SYNC_ACTIVE ako je lock stvarno aktivan.
-        hideMasterSyncOverlay();
+        //
+        // await je bitan: povratna vrednost true znaci "upis sme da krene", pa ne
+        // sme da stigne dok post-unlock osvezavanje jos traje.
+        await hideMasterSyncOverlay();
         return true;
     };
 
