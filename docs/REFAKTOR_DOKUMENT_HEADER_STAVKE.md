@@ -5637,6 +5637,47 @@ stringova) u dirnutom fajlu **0/0/0**, **0** LF-only linija.
 
 ⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan. Pročitana, ne proverena.
 
+**Review #390, jedanaesti krug — kapija je i dalje gutala pad lokalnog `predaje` store-a.**
+
+Strog režim je od devetog kruga rušio refresh na svakom serverskom izostanku, ali je **čitanje
+lokalnih, još neposlatih PRED-ova ostalo fail-open**:
+
+```
+predaje read FAIL -> lokalnePredaje = {} -> nastavi kao da lokalnog dogadjaja nema
+```
+
+Server tu ne može da pomogne: on **legitimno** kaže `free` za blok čiji `PRED-1` još nije stigao do
+GAS-a. Jedini čitalac te činjenice je bio taj red. Kad padne a greška se proguta, strog snimak ispadne
+„server free + nema lokalnog događaja", još se **overi kao potvrđena epoha**, i komanda napravi drugi
+utovar nad istim blokom. Ista klasa pravila koju smo već primenili na GAS: kapija protiv duple
+komande ne sme biti fail-open.
+
+Sada u strogom režimu:
+
+```
+!db                     -> STOP (bez lokalne baze nema ni citanja PRED-ova ni upisa projekcije)
+predaje read FAIL       -> STOP
+otkupi read FAIL        -> STOP (v. nize)
+```
+
+Pad čitanja **otkupnih** redova nije bio fail-open — blok bez lokalnog reda ispadne iz skupa, pa ga
+komanda odbije — ali jeste bio **laž o razlogu**: korisnik bi dobio „blok je već predat" umesto
+„stanje ne mogu da potvrdim". Isto pravilo, jedna linija, poštena poruka.
+
+`ucitajProjekciju` **nije** dodat u ovaj skup: kad postoji validan authoritative snimak, keš nije
+potreban da se utvrdi trenutno serversko stanje, a njegov trajni upis je fail-closed od šestog kruga.
+
+**Da fix zaista grize** — provereno, ne pretpostavljeno: `dbGetAll` grešku **odbacuje** (`reject` na
+`onerror` i na nepostojeći store), a `predajePoOtkupu` je ne hvata, pa `catch` u `loadOtpremaOverview`
+stvarno vidi izuzetak. Da je čitalac grešku pretvarao u prazan rezultat, `throw` bi bio mrtvo slovo.
+
+**Verifikacija.** `src-vba` i `tools` **nisu dirnuti** (0 fajlova) — VBA suite-ovi nepromenjeni:
+`RunAllTests` **199/0**, `RunBusinessFlowProSuite` **1985/0**. Statičke kapije: `vba_check` · schema
+(`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` — sve zeleno. Balans zagrada **0/0/0**, **0**
+LF-only linija.
+
+⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
+
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 
 Rez je počeo od tvrdnje koju sam sam zapisao na kraju S5-3 — „mrtav storno most, 16 mesta u

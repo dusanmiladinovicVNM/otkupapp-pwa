@@ -70,16 +70,31 @@ async function loadOtpremaOverview(opcije) {
     let localRows = [];
     let serverRows = [];
 
+    // STROG REZIM TVRDI DA JE PROVERIO OBA IZVORA (review #390, jedanaesti krug).
+    //
+    // Bez lokalne baze ne postoji nijedan lokalni deo tog dokaza: ni citanje
+    // neposlatih PRED-ova, ni trajan upis projekcije. Publication barrier tada ne
+    // sme da kaze "sveze" -- server legitimno ne zna za dogadjaj koji jos nije
+    // stigao do njega.
+    if (strogo && !db) {
+        throw new Error('Lokalna baza nije dostupna -- stanje otpreme se ne moze potvrditi.');
+    }
+
+    if (strogo && !navigator.onLine) {
+        throw new Error('Nema veze -- stanje otpreme se ne moze potvrditi.');
+    }
+
     try {
         if (db) {
             localRows = await dbGetAll(db, CONFIG.STORE_NAME);
         }
     } catch (err) {
         console.error('loadOtpremaOverview local failed:', err);
-    }
 
-    if (strogo && !navigator.onLine) {
-        throw new Error('Nema veze -- stanje otpreme se ne moze potvrditi.');
+        // Pad ovog citanja NIJE fail-open (blok bez lokalnog reda ispadne iz
+        // skupa, pa ga komanda odbije), ali jeste LAZ O RAZLOGU: korisnik bi
+        // dobio "blok je vec predat" umesto "stanje ne mogu da potvrdim".
+        if (strogo) throw err;
     }
 
     if (navigator.onLine) {
@@ -115,6 +130,16 @@ async function loadOtpremaOverview(opcije) {
         if (db) lokalnePredaje = await predajePoOtkupu(db);
     } catch (err) {
         console.error('loadOtpremaOverview predaje failed:', err);
+
+        // KAPIJA PROTIV DUPLE KOMANDE NE SME BITI FAIL-OPEN (review #390,
+        // jedanaesti krug).
+        //
+        // Server sme da kaze "free" sasvim tacno -- on ne moze znati za PRED koji
+        // jos nije stigao do njega. Jedini citalac te cinjenice je ovaj red. Ako
+        // padne a greska se proguta, strog snimak ispadne "server free + nema
+        // lokalnog dogadjaja" i jos se overi kao potvrdjena epoha, pa komanda
+        // napravi DRUGI utovar nad istim blokom.
+        if (strogo) throw err;
     }
 
     // SERVERSKA PROJEKCIJA SE NE SME PREGAZITI LOKALNIM SNIMKOM (review #390).
