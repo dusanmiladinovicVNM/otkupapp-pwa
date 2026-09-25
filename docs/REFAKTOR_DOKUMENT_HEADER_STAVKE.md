@@ -6182,6 +6182,45 @@ dirnut. Pun katalog ide pred release.
 
 ⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
 
+**Review #391, drugi krug — generacija je merena samo PRE citanja.**
+
+Model generacija je bio dobar, ali nije bio upotrebljen kao ograda. Provera samo pre citanja je
+**najava, ne ograda**: izmedju nje i poslednjeg procitanog reda moze početi — ili se ceo završiti —
+nov master ciklus.
+
+```
+pre-check      C1  ok
+  master C2 pocinje: lock ON, published = ""
+  ImportZbirne: OTP-1 -> ZBR-1
+citanje         OtpremniceAll (jos C1): OTP-1.zbirnaID = ""
+return          success:true         <- mesavina C1 i C2
+```
+
+Vozač je dobio „OTP-1 je slobodna" dok je kanon već imao `OTP-1 -> ZBR-1`. GUID rešava ABA problem
+koji timestamp ne bi — **ali samo ako se meri dvaput**. Sada:
+
+```
+pre  = vozacReadModelObjavljen_()      -> mora ok
+citanje zaglavlja i stavki
+posle = vozacReadModelObjavljen_()     -> mora ok I posle.cycleID === pre.cycleID
+```
+
+Nije dovoljna ni sama završna provera: `pre = C1`, čitanja preko granice, `posle = C2` — oba stanja
+pojedinačno mogu biti uredno objavljena, a snimak ipak nije iz jedne generacije. Zato se poredi
+**ista** generacija, ne samo „obe validne".
+
+**Prazan spisak prolazi kroz istu ogradu.** „Nemam nijednu vožnju" je tvrdnja o poslu kao i svaka
+druga: pročitana iz stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao. Raniji
+`if (!moje.length) return ...` je zato uklonjen — izlaz je jedan, posle druge mere.
+
+**Verifikacija.** Izmena je **samo `gas/Code.gs`** — `src-vba` i `tools` nisu dirnuti, pa suite-ovi
+stoje na merenju sa `dcf299d0`: `RunAllTests` **199/0**, `RunBusinessFlowProSuite` **2015/0**. Balans
+zagrada u `gas/Code.gs` isti kao pre izmene; 0 LF-only linija.
+
+⚠ **NEVERIFIKOVANO, i ovde bez ublazavanja:** ovaj krug je **iskljucivo** GAS, a GAS se u ovom
+okruzenju ne moze izvrsiti. Dvostruka ograda je pročitana i rezonovana, ne izmerena. Jedini alat koji
+bi je uhvatio bio bi JS harness — isti dug koji stoji od #390.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

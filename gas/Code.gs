@@ -2266,12 +2266,12 @@ function vozacReadModelObjavljen_() {
   var s = getMasterSyncStateForWriteBlock_();
 
   if (!s || s.success !== true) {
-    return { ok: false, code: 'READ_MODEL_UNKNOWN',
+    return { ok: false, cycleID: '', code: 'READ_MODEL_UNKNOWN',
              message: 'Stanje sinhronizacije nije dostupno.' };
   }
 
   if (s.locked === true) {
-    return { ok: false, code: 'MASTER_SYNC_ACTIVE',
+    return { ok: false, cycleID: '', code: 'MASTER_SYNC_ACTIVE',
              message: s.message || 'Master sync je u toku.' };
   }
 
@@ -2279,11 +2279,26 @@ function vozacReadModelObjavljen_() {
   var objavljen = String(s.otpremniceCycleID || '').trim();
 
   if (!ciklus || !objavljen || ciklus !== objavljen) {
-    return { ok: false, code: 'READ_MODEL_STALE',
+    return { ok: false, cycleID: '', code: 'READ_MODEL_STALE',
              message: 'Stanje voznji jos nije objavljeno iz poslednjeg ciklusa.' };
   }
 
-  return { ok: true, code: '', message: '' };
+  // Generacija se VRACA, jer ista mora biti izmerena i posle citanja izvora.
+  return { ok: true, cycleID: ciklus, code: '', message: '' };
+}
+
+// Uredan odgovor "stanje trenutno nije objavljivo".
+//
+// Isti oblik kao getOtkupi u #390: klijent zadrzava poslednje poznato umesto da
+// ga obrise praznim spiskom.
+function readModelSeMenja_(razlog) {
+  return {
+    success: true,
+    readModelChanging: true,
+    code: (razlog && razlog.code) || 'READ_MODEL_CHANGING',
+    message: (razlog && razlog.message) || 'Stanje voznji se trenutno menja.',
+    records: []
+  };
 }
 
 function getOtpremniceForVozac(vozacID) {
@@ -2291,19 +2306,17 @@ function getOtpremniceForVozac(vozacID) {
     var canonicalVozacID = String(vozacID || '').trim();
     if (!canonicalVozacID) return { success: false, error: 'vozacID required' };
 
-    var objava = vozacReadModelObjavljen_();
-    if (!objava.ok) {
-      // Isti oblik kao getOtkupi u #390: odgovor JESTE uredan -- kaze da stanje
-      // trenutno nije objavljivo -- pa klijent zadrzava poslednje poznato
-      // umesto da ga obrise praznim spiskom.
-      return {
-        success: true,
-        readModelChanging: true,
-        code: objava.code,
-        message: objava.message,
-        records: []
-      };
-    }
+    // SNIMAK MORA DA BUDE IZ JEDNE GENERACIJE (review #391, drugi krug).
+    //
+    // Provera samo PRE citanja nije ograda nego najava: izmedju nje i poslednjeg
+    // procitanog reda moze POCETI (ili se ceo zavrsiti) nov master ciklus, pa se
+    // objavi mesavina C1 i C2 -- na primer otpremnica koju je C2 vec vezao za
+    // zbirnu, procitana kao slobodna.
+    //
+    // Zato se generacija meri PRE i POSLE, i objavljuje se samo ako je ISTA.
+    // GUID resava ABA problem koji timestamp ne bi -- ali samo ako se meri dvaput.
+    var pre = vozacReadModelObjavljen_();
+    if (!pre.ok) return readModelSeMenja_(pre);
 
     // PAD CITANJA NIJE "NEMA VOZNJI" (review #391, P2).
     //
@@ -2323,81 +2336,98 @@ function getOtpremniceForVozac(vozacID) {
       return String((r && r.VozacID) || '').trim() === canonicalVozacID;
     });
 
-    if (!moje.length) return { success: true, records: [] };
-
-    // Stavke se citaju JEDNOM i grupisu po OtpremnicaID -- inace bi svaka
-    // otpremnica povukla svoj prolaz kroz ceo tab.
-    var stavke = getMgmtReport('OtpremniceAllStavke');
-    if (!stavke || stavke.success !== true || !Array.isArray(stavke.records)) {
-      // Isto pravilo kao gore: bez stavki bi SVAKI dokument ispao "bez robe" i
-      // bio preskocen, pa bi pad citanja zavrsio kao uredan prazan spisak.
-      return {
-        success: false,
-        code: 'READ_MODEL_UNAVAILABLE',
-        error: 'Stavke otpremnica nisu procitane.'
-      };
-    }
-
-    var poDokumentu = {};
-
-    stavke.records.forEach(function (s) {
-      var oid = String((s && s.OtpremnicaID) || '').trim();
-      if (!oid) return;
-      if (!poDokumentu[oid]) poDokumentu[oid] = [];
-      poDokumentu[oid].push({
-        otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
-        redniBroj: Number(s.RedniBroj) || 0,
-        klasa: String(s.Klasa || '').trim(),
-        kolicina: Number(s.Kolicina) || 0,
-        kolAmbalaze: Number(s.KolAmbalaze) || 0,
-        brutoKg: Number(s.BrutoKg) || 0
-      });
-    });
-
     var records = [];
 
-    moje.forEach(function (r) {
-      var oid = String(r.OtpremnicaID || '').trim();
-      var linije = oid ? poDokumentu[oid] : null;
-
-      // ZAGLAVLJE BEZ STAVKI SE NE SERVIRA.
-      //
-      // Dva taba se pisu u DVA poziva, pa mogu biti u raskoraku: zaglavlja
-      // osvezena, stavke stare (ili obrnuto). Otpremnica bez robe nije isporuka
-      // -- da je posaljemo, vozac bi u zbirnu uneo prazan dokument.
-      if (!linije || !linije.length) {
-        logError(
-          'GAS',
-          'getOtpremniceForVozac',
-          'Otpremnica bez stavki u izvozu, preskocena: ' + oid,
-          '',
-          canonicalVozacID
-        );
-        return;
+    // PRAZAN SPISAK PROLAZI KROZ ISTU OGRADU.
+    //
+    // "Nemam nijednu voznju" je tvrdnja o poslu kao i svaka druga: procitana iz
+    // stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao.
+    // Zato se ovde ne izlazi ranije -- izlaz je jedan, posle druge mere.
+    if (moje.length) {
+      // Stavke se citaju JEDNOM i grupisu po OtpremnicaID -- inace bi svaka
+      // otpremnica povukla svoj prolaz kroz ceo tab.
+      var stavke = getMgmtReport('OtpremniceAllStavke');
+      if (!stavke || stavke.success !== true || !Array.isArray(stavke.records)) {
+        // Isto pravilo kao gore: bez stavki bi SVAKI dokument ispao "bez robe" i
+        // bio preskocen, pa bi pad citanja zavrsio kao uredan prazan spisak.
+        return {
+          success: false,
+          code: 'READ_MODEL_UNAVAILABLE',
+          error: 'Stavke otpremnica nisu procitane.'
+        };
       }
 
-      records.push({
-        otpremnicaID: oid,
-        brojOtpremnice: String(r.BrojOtpremnice || '').trim(),
-        datum: r.Datum,
-        stanicaID: String(r.StanicaID || '').trim(),
-        vozacID: canonicalVozacID,
-        kulturaID: String(r.KulturaID || '').trim(),
-        vrstaVoca: String(r.VrstaVoca || '').trim(),
-        sortaVoca: String(r.SortaVoca || '').trim(),
-        tipAmbalaze: String(r.TipAmbalaze || '').trim(),
-        predajaID: String(r.PredajaID || '').trim(),
+      var poDokumentu = {};
 
-        // PRAZNO ZNACI "SLOBODNA ZA ZBIRNU".
-        //
-        // Master racuna tekucu zbirnu iz clanstva (AktivnaZbirnaZaOtpremnicu),
-        // pa posle storna zbirne otpremnica sama ponovo postane slobodna -- bez
-        // ijednog upisa u ovaj tab i bez kolone na detetu.
-        zbirnaID: String(r.ZbirnaID || '').trim(),
-
-        stavke: linije
+      stavke.records.forEach(function (s) {
+        var oid = String((s && s.OtpremnicaID) || '').trim();
+        if (!oid) return;
+        if (!poDokumentu[oid]) poDokumentu[oid] = [];
+        poDokumentu[oid].push({
+          otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
+          redniBroj: Number(s.RedniBroj) || 0,
+          klasa: String(s.Klasa || '').trim(),
+          kolicina: Number(s.Kolicina) || 0,
+          kolAmbalaze: Number(s.KolAmbalaze) || 0,
+          brutoKg: Number(s.BrutoKg) || 0
+        });
       });
-    });
+
+      moje.forEach(function (r) {
+        var oid = String(r.OtpremnicaID || '').trim();
+        var linije = oid ? poDokumentu[oid] : null;
+
+        // ZAGLAVLJE BEZ STAVKI SE NE SERVIRA.
+        //
+        // Dva taba se pisu u DVA poziva, pa mogu biti u raskoraku: zaglavlja
+        // osvezena, stavke stare (ili obrnuto). Otpremnica bez robe nije
+        // isporuka -- da je posaljemo, vozac bi u zbirnu uneo prazan dokument.
+        if (!linije || !linije.length) {
+          logError(
+            'GAS',
+            'getOtpremniceForVozac',
+            'Otpremnica bez stavki u izvozu, preskocena: ' + oid,
+            '',
+            canonicalVozacID
+          );
+          return;
+        }
+
+        records.push({
+          otpremnicaID: oid,
+          brojOtpremnice: String(r.BrojOtpremnice || '').trim(),
+          datum: r.Datum,
+          stanicaID: String(r.StanicaID || '').trim(),
+          vozacID: canonicalVozacID,
+          kulturaID: String(r.KulturaID || '').trim(),
+          vrstaVoca: String(r.VrstaVoca || '').trim(),
+          sortaVoca: String(r.SortaVoca || '').trim(),
+          tipAmbalaze: String(r.TipAmbalaze || '').trim(),
+          predajaID: String(r.PredajaID || '').trim(),
+
+          // PRAZNO ZNACI "SLOBODNA ZA ZBIRNU".
+          //
+          // Master racuna tekucu zbirnu iz clanstva (AktivnaZbirnaZaOtpremnicu),
+          // pa posle storna zbirne otpremnica sama ponovo postane slobodna --
+          // bez ijednog upisa u ovaj tab i bez kolone na detetu.
+          zbirnaID: String(r.ZbirnaID || '').trim(),
+
+          stavke: linije
+        });
+      });
+    }
+
+    // DRUGA MERA. Promena generacije znaci da je ciklus poceo ili se zavrsio
+    // USRED ovog zahteva, pa ono sto je procitano nije jedan snimak.
+    var posle = vozacReadModelObjavljen_();
+    if (!posle.ok) return readModelSeMenja_(posle);
+
+    if (posle.cycleID !== pre.cycleID) {
+      return readModelSeMenja_({
+        code: 'READ_MODEL_CHANGED',
+        message: 'Master ciklus je tekao tokom citanja -- stanje voznji nije konacno.'
+      });
+    }
 
     return { success: true, records: records };
   } catch (err) {
