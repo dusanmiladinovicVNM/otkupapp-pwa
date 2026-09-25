@@ -101,9 +101,17 @@ const ZBIRNA_COLUMNS = [
   'TipAmbalaze',
   'KolAmbalaze',
   'Klasa',
-  'OtkupRecordIDs',
+  'OtkupRecordIDs',        // MRTAV SLOT: niko ga vise ne pise ni ne cita (S5-4b-2)
   'ReceivedAt',
-  'BrojZbirne'
+  'BrojZbirne',
+
+  // IZVORI ZBIRNE SU OTPREMNICE (S5-4b-2).
+  //
+  // Kolona ide NA KRAJ, ne na mesto starog OtkupRecordIDs: obe strane citaju VOZ
+  // list POZICIONO (ovde redosled u nizu, u VBA VS_* konstante), a
+  // ensureSheetColumns dopisuje kolonu samo kad je zateceno zaglavlje PREFIKS
+  // kanonskog. Zamena u sredini bi oborila oboje.
+  'OtpremnicaIDs'
 ];
 
 const AGROMERE_COLUMNS = [
@@ -543,14 +551,6 @@ function handleAuthorizedRead(data, tokenData) {
     }
     const fakturaID = data.fakturaID || '';
     return jsonResponse(getFakturaStavke(fakturaID));
-  }
-
-  if (action === 'getVozacOtkupi') {
-    if (tokenData.role !== 'Vozac') {
-      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-    }
-    const vozacID = tokenData.entityID;
-    return jsonResponse(getOtkupiForVozac(vozacID));
   }
 
   if (action === 'getVozacOtpremnice') {
@@ -2063,6 +2063,12 @@ function processZbirnaRecord(record, vozacID) {
 
     const clientRecordID = String(record.clientRecordID).trim();
 
+    // IZVORI SU OBAVEZNI NA VRATIMA (S5-4b-2).
+    //
+    // Zbirna bez izvora nije dokument. Ranije je to hvatala tek VBA validacija,
+    // pa je red prolazio ceo put do mastera da bi tamo bio odbijen.
+    const otpremnicaIDs = requireNonEmptyString(record.otpremnicaIDs, 'OtpremnicaIDs');
+
     const recordVozacID = String(record.vozacID || '').trim();
     if (recordVozacID && recordVozacID !== canonicalVozacID) {
       const err = new Error(
@@ -2157,9 +2163,21 @@ function processZbirnaRecord(record, vozacID) {
       TipAmbalaze: record.tipAmbalaze || '',
       KolAmbalaze: kolAmbalaze,
       Klasa: record.klasa || '',
-      OtkupRecordIDs: record.otkupRecordIDs || '',
+
+      // Mrtav slot ostaje prazan -- vrednost se vise ne prenosi ni odavde ni
+      // odozdo. Kapija koja ga je trazila je obrisana u VBA (ValidatePWAZbirna).
+      OtkupRecordIDs: '',
+
       ReceivedAt: nowIso,
-      BrojZbirne: record.brojZbirne || ''
+
+      // BROJ DODELJUJE MASTER (S5-4b-2).
+      //
+      // Klijent ga vise ne racuna: broj je labela dokumenta (A2), a labela koju
+      // dva uredjaja mogu smisliti nezavisno nije labela. Prazno znaci
+      // "generisi lokalno" -- to uvoz vec razume.
+      BrojZbirne: record.brojZbirne || '',
+
+      OtpremnicaIDs: otpremnicaIDs
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -2192,51 +2210,6 @@ function processZbirnaRecord(record, vozacID) {
       error: clientSafeErrorMessage(err)
     };
   }
-}
-
-function getOtkupiForVozac(vozacID) {
-  try {
-    if (!vozacID) return { success: false, error: 'vozacID required' };
-    var registry = getSheetRegistry();
-    var otkKeys = Object.keys(registry).filter(function(k) { return k.startsWith('OTK-'); });
-    var allRecords = [];
-
-    if (otkKeys.length > 0) {
-      for (var i = 0; i < otkKeys.length; i++) {
-        try {
-          var records = sheetToArray(SpreadsheetApp.openById(registry[otkKeys[i]]).getSheets()[0]);
-          records.forEach(function(r) {
-            if ((r.VozacID || r.VozaciID || '') === vozacID) {
-              r._source = otkKeys[i];
-              allRecords.push(r);
-            }
-          });
-        } catch (e) {}
-      }
-      return { success: true, records: allRecords };
-    }
-
-    // fallback: scan operational sheets folder ako SheetRegistry nema OTK-* zapise
-    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
-    var files = folder.getFiles();
-    while (files.hasNext()) {
-      var file = files.next();
-      var name = file.getName();
-      if (name.startsWith('OTK-')) {
-        var records2 = sheetToArray(SpreadsheetApp.open(file).getSheets()[0]);
-        records2.forEach(function(r) {
-          if ((r.VozacID || r.VozaciID || '') === vozacID) {
-            r._source = name;
-            allRecords.push(r);
-          }
-        });
-      }
-    }
-    return { success: true, records: allRecords };
-  } catch (err) { 
-      logError('GAS', 'getOtkupiForVozac', err.message, err.stack || '', vozacID || '');
-      return { success: false, error: err.message }; 
-    }
 }
 
 // VOZAC DOBIJA SVOJE OTPREMNICE, NE TUDJE OTKUPNE REDOVE (S5-4b-1).

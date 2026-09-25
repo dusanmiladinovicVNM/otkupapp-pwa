@@ -6286,6 +6286,72 @@ nad novim ulazom: izvor zbirne je `OtpremnicaID` koji je PWA poslala, ne CRID ko
 Dokaz: nove BFP tvrdnje sa sopstvenim sabotažama za tačke 1–4 i 6; tačka 5 se meri brisanjem (nema
 pozivaoca, `vba_check` + `popis_citalaca`); tačka 7 ostaje **neverifikovana** dok ne postoji JS harness.
 
+### 14.43) S5-4b-2 — ekran: zbirna se sastavlja od otpremnica (26.09.2026)
+
+Rez zatvara prekid koji je otvorio S5-4a: vozačev spisak je od tada bio prazan, jer je čitalac tražio
+`Otkup.VozacID` koji više niko ne piše. Sada vozač radi sa **otpremnicama**, a zbirna nosi njihove
+identitete.
+
+#### Šta je promenjeno, po slojevima
+
+| Sloj | Bilo | Sada |
+|---|---|---|
+| PWA | `getVozacOtkupi`, otkupni redovi | `getVozacOtpremnice`, dokumenti sa stavkama |
+| PWA | kilaža/gajbe sa zaglavlja otkupa | **iz stavki** (`otpKg`, `otpAmb`, `otpKgKlase`) |
+| PWA | potrošenost iz `otkupRecordIDs` svih poznatih zbirni | prazan `zbirnaID` sa servera |
+| PWA | `brojZbirne` računat na klijentu | **prazno** — broj dodeljuje master |
+| PWA | `otkupRecordIDs` u payload-u | `otpremnicaIDs` |
+| GAS | — | `OtpremnicaIDs` u `ZBIRNA_COLUMNS`, obavezan na vratima |
+| GAS | `getOtkupiForVozac` + ruta `getVozacOtkupi` | **obrisani** — nemaju pozivaoca |
+| VBA | `OtpremniceIzOtkupRecordIDs` (prevod CRID → otpremnica) | `OtpremniceIzIDs` (puko parsiranje) |
+
+#### Kapije se ne ponavljaju
+
+Nov čitač **ne** proverava ništa osim da spisak nije prazan. Sve ostalo već odbija kanonski pisac,
+svaku sa svojim razlogom: prazan ID (1225), isti dvaput (1226), nepoznat (`NadjiJedanRedOtpremnice`),
+nacrt ili storniran (`RequireOtpValidanIzvorZbirne`), već u aktivnoj zbirni (1228), tuđeg vozača
+(`RequireIstoPolje`). Druga kopija tih pravila u čitaču značila bi dve verzije jedne invarijante.
+
+**Nema više dedupa, i to je promena značenja.** Stari prevodilac ga je *morao* imati, jer dva otkupa
+legitimno pokazuju na JEDNU otpremnicu. Isti `OtpremnicaID` dvaput u spisku je greška klijenta i
+prijavljuje se (1226), ne ravna u tišini.
+
+#### Mrtav slot ostaje, kapija nad njim ne
+
+`OtpremnicaIDs` ide **na kraj** VOZ lista (`VS_OTPREMNICA_IDS = 21`): obe strane čitaju **poziciono**
+(VBA `VS_*`, GAS redosled u `ZBIRNA_COLUMNS`), a `ensureSheetColumns` dopisuje kolonu samo kad je
+zatečeno zaglavlje **prefiks** kanonskog. `VS_OTKUP_RECORD_IDS` zato ostaje kao rezervisan **prazan**
+slot, ali je kapija koja ga je tražila (`ValidatePWAZbirna`) obrisana — mrtav podatak se ne hrani.
+
+#### Šta je merenje uhvatilo, a plan nije
+
+Pre-flight je izlistao devet mesta starog modela. Prvi prolaz suite-ova je našao **deseto**:
+`TestHook_ValidatePWAZbirnaDatum` je treći seam koji gradi VOZ red, i ostao je na staroj širini
+(`ReDim ... 1 To VS_BROJ_ZBIRNE`), pa je validacija koja sada čita indeks 21 pukla sa *Subscript out of
+range*. Isti obrazac zbog kog rez i postoji — samo što je treći pozivalac bio **test seam**, a pre-flight
+je gledao produkcioni kod.
+
+#### Verifikacija
+
+`RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2015 → 2025/0**. Razlika je objasnjena do kraja:
++10 novih tvrdnji (6 + 3 nova testa, +1 pojačana stara). Prvi, pali prolaz je pokazao 2018 — razlika od
+7 je bila izgubljeni ostatak RF-28 testa koji je pao u svoj `EH`, ne nestala tvrdnja.
+
+`dokaz.py zbr-ids`: **2/2 crvenih**, potpis izvora identičan (`ac8d08ba02f12105`).
+
+**Treća sabotaža je povučena, i to je nalaz sam po sebi.** `zbr-ids-cita-mrtav-slot` (indeks 21 → 18)
+obara **sedam** testova odjednom, pa je `dokaz.py` odbio da je prizna kao dokaz jedne tvrdnje — tacno.
+Pozicioni ugovor je pokriven širinom, ne preciznim sidrom; ako indeks odluta, crveno je odmah i glasno,
+ali to nije targetirani dokaz i ne piše se kao takav.
+
+Prazan spisak i tuđa otpremnica **namerno nemaju sabotažu u ovom rezu**: invarijante zive u kanonskom
+piscu, pa bi sabotaža čitača merila drugu branu — placebo.
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — nema JS harness-a, `node` nije dostupan.
+
+**Zaostao dug:** pomoćnik je preimenovan u `ZbrPwaIzvorOtpremnica` i vraća `OtpremnicaID`, ali se
+lokalne promenljive na šest pozivnih mesta i dalje zovu `crid`. Semantika je tačna, imena su zaostala.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

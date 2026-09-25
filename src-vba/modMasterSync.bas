@@ -93,9 +93,20 @@ Private Const VS_KOLICINA_KL_II As Long = 14    ' N
 Private Const VS_TIP_AMB As Long = 15           ' O
 Private Const VS_KOL_AMB As Long = 16           ' P
 Private Const VS_KLASA As Long = 17             ' Q
-Private Const VS_OTKUP_RECORD_IDS As Long = 18  ' R
+Private Const VS_OTKUP_RECORD_IDS As Long = 18  ' R -- MRTAV SLOT, v. nize
 Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
+
+' IZVORI ZBIRNE SU OTPREMNICE (S5-4b-2).
+'
+' Kolona ide NA KRAJ, ne na mesto starog OtkupRecordIDs: obe strane citaju VOZ
+' list POZICIONO (ovde VS_*, u GAS-u redosled u ZBIRNA_COLUMNS), pa bi zamena u
+' sredini tiho pomerila svaku kolonu iza sebe. Isto pravilo kao za kolone tabela.
+'
+' VS_OTKUP_RECORD_IDS zato ostaje kao rezervisan, PRAZAN slot: vise ga niko ne
+' pise i niko ne cita. Kapija koja ga je trazila je obrisana -- mrtav podatak se
+' ne hrani.
+Private Const VS_OTPREMNICA_IDS As Long = 21    ' U
 
 ' Tab stavki otkupa u OTK-* sheet-u stanice (S1c, REFAKTOR S14.8 t. 13).
 Public Const OTK_STAVKE_TAB As String = "OTK_STAVKE"
@@ -2166,7 +2177,7 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
                                                ByVal kupacID As String, _
                                                ByVal datumValue As Variant) As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     data(1, VS_VOZAC_ID) = vozacID
     data(1, VS_KUPAC_ID) = kupacID
@@ -2179,7 +2190,7 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
     ' Od S5-3 validacija trazi IZVORE, jer zbirna bez njih nije dokument.
     ' Ovaj hook meri SAMO datum, pa ostala polja moraju da PROLAZE -- inace bi
     ' tvrdnja o datumu bila zelena iz pogresnog razloga.
-    data(1, VS_OTKUP_RECORD_IDS) = "CRID-HOOK-DATUM"
+    data(1, VS_OTPREMNICA_IDS) = "OTP-HOOK-DATUM"
 
     TestHook_ValidatePWAZbirnaDatum = ValidatePWAZbirna(data, 1)
 End Function
@@ -2198,14 +2209,16 @@ Public Function TestHook_ImportZbirnaRowPWA(ByVal crid As String, _
                                            ByVal sorta As String, _
                                            ByVal kolKlI As Double, _
                                            ByVal brojZbirne As String, _
-                                           Optional ByVal otkupCrids As String = "") As String
+                                           Optional ByVal otpremnicaIDs As String = "") As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa uvoz bez izvora nema sta da
     ' napravi. Testovi koji mere ODBIJANJE (broj tudjeg vlasnika, los format)
     ' izvore i ne salju -- ta kapija puca pre njih.
-    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
+    '
+    ' Od S5-4b-2 ovde stize OtpremnicaID, ne otkupni CRID: identitet putuje.
+    data(1, VS_OTPREMNICA_IDS) = otpremnicaIDs
 
     data(1, VS_CLIENT_RECORD_ID) = crid
     data(1, VS_VOZAC_ID) = vozacID
@@ -2233,16 +2246,16 @@ Public Function TestHook_PwaZbirnaRazlika(ByVal zbirnaID As String, _
                                           ByVal kupacID As String, _
                                           ByVal datumValue As Variant, _
                                           ByVal brojZbirne As String, _
-                                          ByVal otkupCrids As String) As String
+                                          ByVal otpremnicaIDs As String) As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     data(1, VS_CLIENT_RECORD_ID) = crid
     data(1, VS_VOZAC_ID) = vozacID
     data(1, VS_KUPAC_ID) = kupacID
     data(1, VS_DATUM) = datumValue
     data(1, VS_BROJ_ZBIRNE) = brojZbirne
-    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
+    data(1, VS_OTPREMNICA_IDS) = otpremnicaIDs
 
     TestHook_PwaZbirnaRazlika = PwaZbirnaRazlika(zbirnaID, data, 1)
 End Function
@@ -4166,8 +4179,8 @@ Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As 
     '
     ' Sta uvozu STVARNO treba: identitet zapisa, vozac, kupac, dan i IZVORI.
     ' Bez izvora zbirna nije dokument -- to je jedina nova tvrdnja.
-    If Len(Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), "")))) = 0 Then
-        ValidatePWAZbirna = "OtkupRecordIDs missing -- zbirna bez izvora nije dokument"
+    If Len(Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), "")))) = 0 Then
+        ValidatePWAZbirna = "OtpremnicaIDs missing -- zbirna bez izvora nije dokument"
         Exit Function
     End If
     
@@ -4252,8 +4265,8 @@ Private Function PwaZbirnaRazlika(ByVal zbirnaID As String, _
     ' SKUP IZVORA. Razresava se ISTIM putem kao pri uvozu, pa se poredi ono sto
     ' bi dokument stvarno dobio -- ne sirovi CRID spisak.
     Dim noviIzvori As Collection
-    Set noviIzvori = OtpremniceIzOtkupRecordIDs( _
-                         Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+    Set noviIzvori = OtpremniceIzIDs( _
+                         Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), ""))), _
                          "PwaZbirnaRazlika")
     If noviIzvori Is Nothing Then
         PwaZbirnaRazlika = "izvori se vise ne razresavaju (v. log)"
@@ -4415,8 +4428,8 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     End If
 
     Dim izvori As Collection
-    Set izvori = OtpremniceIzOtkupRecordIDs( _
-                     Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+    Set izvori = OtpremniceIzIDs( _
+                     Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), ""))), _
                      clientRecordID)
     If izvori Is Nothing Then Exit Function
 
@@ -4463,70 +4476,54 @@ EH:
     ImportRowToTblZbirna = ""
 End Function
 
-' otkupRecordIDs (CRID-ovi, zarezom) -> Collection OtpremnicaID-eva, bez
-' ponavljanja, redom prvog pojavljivanja. Nothing = uvoz ovog reda NE SME dalje.
+' OtpremnicaIDs (zarezom) -> Collection. Nothing = uvoz ovog reda NE SME dalje.
 '
-' Svaki korak je KANONSKI citac: CRID -> OtkupID (modOtkup.OtkupPoClientRecordID),
-' OtkupID -> OtpremnicaID (modDokumenta.OtpremnicaZaOtkup). Nista se ne trazi po
-' poslovnom broju i nista se ne pogadja.
+' IDENTITET PUTUJE, NE PREVODI SE (S5-4b-2).
 '
-' Fail-closed je ovde jedini ispravan izbor: zbirna od DELA onoga sto je vozac
-' natovario je drugi dokument od onog koji je vozac napravio, a ne "malo manji".
-Private Function OtpremniceIzOtkupRecordIDs(ByVal crids As String, _
-                                            ByVal clientRecordID As String) As Collection
-    Const SRC As String = "OtpremniceIzOtkupRecordIDs"
+' Do ovog reza je PWA slala otkupne CRID-ove, pa je master morao da ih prevodi:
+' CRID -> OtkupID -> OtpremnicaZaOtkup -> dedup. Prevod je radio tacno, ali je
+' identitet isao okolo -- vrednost sa ekrana, pa ponovni lookup do kanonskog ID-a.
+' Od S5-4b-1 vozac dobija OTPREMNICE, pa OtpremnicaID putuje direktno.
+'
+' KAPIJE SE OVDE NE PONAVLJAJU. CreateZbirna vec odbija, svaku sa svojim razlogom:
+'   prazan ID (1225) - isti dvaput (1226) - nepoznat (NadjiJedanRedOtpremnice)
+'   nacrt ili storniran (RequireOtpValidanIzvorZbirne) - vec u aktivnoj zbirni
+'   (1228) - tudjeg vozaca (RequireIstoPolje VozacID)
+' Druga kopija istih pravila ovde znacila bi dve verzije jedne invarijante.
+'
+' NEMA DEDUPA, i to je promena znacenja: stari prevodilac je dedup morao, jer dva
+' otkupa legitimno pokazuju na JEDNU otpremnicu. Isti OtpremnicaID dvaput u
+' spisku je greska klijenta, pa se prijavljuje (1226), ne ravna u tisini.
+Private Function OtpremniceIzIDs(ByVal ids As String, _
+                                 ByVal clientRecordID As String) As Collection
+    Const SRC As String = "OtpremniceIzIDs"
 
-    If Len(Trim$(crids)) = 0 Then
-        LogError SRC, "Zbirna nema nijedan otkupRecordID (CRID=" & clientRecordID & _
+    If Len(Trim$(ids)) = 0 Then
+        LogError SRC, "Zbirna nema nijedan OtpremnicaID (CRID=" & clientRecordID & _
                  "). Zbirna bez izvora nije dokument."
         Exit Function
     End If
 
     Dim rez As New Collection
-    Dim vidjene As Object
-    Set vidjene = CreateObject("Scripting.Dictionary")
-    vidjene.CompareMode = vbTextCompare
 
     Dim delovi As Variant, i As Long
-    delovi = Split(crids, ",")
+    delovi = Split(ids, ",")
 
     For i = LBound(delovi) To UBound(delovi)
-        Dim crid As String
-        crid = Trim$(CStr(delovi(i)))
+        Dim otpID As String
+        otpID = Trim$(CStr(delovi(i)))
 
-        If Len(crid) > 0 Then
-            Dim otkupID As String
-            otkupID = modOtkup.OtkupPoClientRecordID(crid)
-
-            If Len(otkupID) = 0 Then
-                LogError SRC, "Otkup nije u masteru: CRID=" & crid & _
-                         " (zbirna CRID=" & clientRecordID & ")"
-                Exit Function
-            End If
-
-            Dim otpID As String
-            otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
-
-            If Len(otpID) = 0 Then
-                LogError SRC, "Otkup " & otkupID & " nije ni u jednoj aktivnoj " & _
-                         "otpremnici, a zbirna se sastavlja od otpremnica " & _
-                         "(zbirna CRID=" & clientRecordID & ")"
-                Exit Function
-            End If
-
-            If Not vidjene.Exists(otpID) Then
-                vidjene.Add otpID, 1
-                rez.Add otpID
-            End If
+        If Len(otpID) > 0 Then
+            rez.Add otpID
         End If
     Next i
 
     If rez.count = 0 Then
-        LogError SRC, "Nijedan upotrebljiv izvor (CRID=" & clientRecordID & ")"
+        LogError SRC, "Nijedan upotrebljiv OtpremnicaID (CRID=" & clientRecordID & ")"
         Exit Function
     End If
 
-    Set OtpremniceIzOtkupRecordIDs = rez
+    Set OtpremniceIzIDs = rez
 End Function
 
 ' Detekcija kolizije broja POSLE upisa. Zove se sa vec ubacenim redom, pa meri
@@ -4739,6 +4736,7 @@ Private Function ValidateVOZSheetHeader(ByVal data As Variant, _
     If Not RequireVOZHeaderValue(data, sheetName, VS_OTKUP_RECORD_IDS, "OtkupRecordIDs") Then Exit Function
     If Not RequireVOZHeaderValue(data, sheetName, VS_RECEIVED_AT, "ReceivedAt") Then Exit Function
     If Not RequireVOZHeaderValue(data, sheetName, VS_BROJ_ZBIRNE, "BrojZbirne") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_OTPREMNICA_IDS, "OtpremnicaIDs") Then Exit Function
 
     ValidateVOZSheetHeader = True
     Exit Function

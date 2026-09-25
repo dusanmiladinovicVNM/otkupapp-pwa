@@ -1,43 +1,76 @@
 // ============================================================
 // VOZAC: ZBIRNA
 // ============================================================
-let vozacOtkupi = [];
+// VOZAC RADI SA OTPREMNICAMA (S5-4b-2).
+//
+// Do ovog reza je ovde stajao spisak OTKUPNIH redova, filtriran po
+// Otkup.VozacID. Ta veza je pala u S5-4a -- ekran otpreme vise ne dira otkupni
+// zapis -- pa je spisak bio prazan. Kanon kaze da vozac nosi otpremnice i da se
+// zbirna sastavlja od njih, pa se i radi sa njima.
+let vozacOtpremnice = [];
 let _lastMergedZbirne = null;
 
+// Kilaza i gajbe dolaze iz STAVKI. Zaglavlje otpremnice jos nosi legacy kolone,
+// ali se one ne izvoze i ne citaju -- dokument je zaglavlje + stavke.
+function otpKgKlase(o, klasa) {
+    return (o.stavke || [])
+        .filter(s => String(s.klasa || '') === klasa)
+        .reduce((zbir, s) => zbir + (Number(s.kolicina) || 0), 0);
+}
+
+function otpKg(o) {
+    return (o.stavke || []).reduce((zbir, s) => zbir + (Number(s.kolicina) || 0), 0);
+}
+
+function otpAmb(o) {
+    return (o.stavke || []).reduce((zbir, s) => zbir + (Number(s.kolAmbalaze) || 0), 0);
+}
+
+function otpKlaseOpis(o) {
+    const klase = Array.from(new Set((o.stavke || []).map(s => String(s.klasa || '')).filter(Boolean)));
+    return klase.join('+');
+}
+
 async function loadVozacData() {
-    vozacOtkupi = [];
+    vozacOtpremnice = [];
 
     const json = await safeAsync(async () => {
-        return await apiFetch('action=getVozacOtkupi');
+        return await apiFetch('action=getVozacOtpremnice');
     }, 'Greška pri učitavanju podataka vozača');
 
-    if (json && json.success && Array.isArray(json.records)) {
-        vozacOtkupi = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '',
-            serverRecordID: r.ServerRecordID || '',
-            datum: fmtDate(r.Datum),
-            kooperantName: r.KooperantName || r.KooperantID || '',
-            kooperantID: r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '',
-            sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I',
-            kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0,
-            tipAmbalaze: r.TipAmbalaze || '',
-            kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
-            stanicaID: r.OtkupacID || extractStanicaIdFromSource(r._source) || '',
-            vozacID: r.VozacID || '',
-            updatedAtServer: r.UpdatedAtServer || r.ReceivedAt || '',
-            syncStatus: 'synced'
+    // readModelChanging: master ciklus menja stanje, server namerno ne salje
+    // spisak. Zadrzi poslednje poznato umesto da ga obrises praznim odgovorom.
+    if (json && json.readModelChanging) {
+        showToast(json.message || 'Stanje vožnji se trenutno menja', 'warning');
+    } else if (json && json.success && Array.isArray(json.records)) {
+        vozacOtpremnice = json.records.map(r => ({
+            otpremnicaID: r.otpremnicaID || '',
+            brojOtpremnice: r.brojOtpremnice || '',
+            datum: fmtDate(r.datum),
+            stanicaID: r.stanicaID || '',
+            vozacID: r.vozacID || '',
+            vrstaVoca: r.vrstaVoca || '',
+            sortaVoca: r.sortaVoca || '',
+            tipAmbalaze: r.tipAmbalaze || '',
+            predajaID: r.predajaID || '',
+
+            // Prazno = slobodna za zbirnu. Master racuna iz clanstva, pa se
+            // posle storna zbirne otpremnica sama vraca u opticaj.
+            zbirnaID: r.zbirnaID || '',
+
+            stavke: Array.isArray(r.stavke) ? r.stavke : []
         }));
     }
 
-    // Jedan fetch za zbirne — koristi se i za filter i za renderovanje
+    // Jedan fetch za zbirne -- koristi se i za renderovanje
     const zbirne = await getMergedZbirneForVozac();
     _lastMergedZbirne = zbirne;
 
-    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
-    vozacOtkupi = vozacOtkupi.filter(r => !consumedIds.has(r.clientRecordID));
+    // POTROSENOST SE VISE NE IZVODI IZ LOKALNE ISTORIJE.
+    //
+    // Ranije se skup "vec u zbirnoj" sastavljao iz otkupRecordIDs svih zbirni
+    // koje uredjaj zna. Sada ga daje master, po clanstvu, jednim poljem.
+    vozacOtpremnice = vozacOtpremnice.filter(o => !o.zbirnaID);
 
     renderVozacOtpremnice();
     renderVozacZbirneFromData(zbirne);
@@ -50,15 +83,9 @@ async function loadVozacZbirne() {
     renderVozacZbirneFromData(zbirne);
 }
 
-function extractStanicaIdFromSource(source) {
-    const s = String(source || '');
-    if (s.startsWith('OTK-')) return s.substring(4);
-    return s;
-}
-
 function renderVozacOtpremnice() {
     const today = getTodayIsoDate();
-    const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
+    const todayOtkupi = vozacOtpremnice.filter(r => r.datum === today);
 
     const list = document.getElementById('vozacOtpremniceList');
     if (!list) return;
@@ -79,8 +106,8 @@ function renderVozacOtpremnice() {
         const s = r.stanicaID || '?';
         if (!grouped[s]) grouped[s] = { items: [], kg: 0, amb: 0 };
         grouped[s].items.push(r);
-        grouped[s].kg += r.kolicina || 0;
-        grouped[s].amb += r.kolAmbalaze || 0;
+        grouped[s].kg += otpKg(r);
+        grouped[s].amb += otpAmb(r);
     });
 
     list.innerHTML = Object.entries(grouped).map(([sta, g]) =>
@@ -89,10 +116,10 @@ function renderVozacOtpremnice() {
             `<div class="vblk sel">
                 <div class="vblk__c">✓</div>
                 <div>
-                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
-                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${r.kolAmbalaze} amb</div>
+                    <div class="vblk__nm">${escapeHtml(r.brojOtpremnice || r.otpremnicaID)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(otpKlaseOpis(r))} · ${otpAmb(r)} amb</div>
                 </div>
-                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+                <div class="vblk__kg">${otpKg(r).toLocaleString('sr')}<span class="u"> kg</span></div>
             </div>`
         ).join('')
     ).join('');
@@ -134,13 +161,13 @@ async function startZbirnaCreation() {
 
 function renderZbirnaSummary() {
     const today = getTodayIsoDate();
-    const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
+    const todayOtkupi = vozacOtpremnice.filter(r => r.datum === today);
 
     let totalKgI = 0, totalKgII = 0, totalAmb = 0;
     todayOtkupi.forEach(r => {
-        if (r.klasa === 'II') totalKgII += r.kolicina || 0;
-        else totalKgI += r.kolicina || 0;
-        totalAmb += r.kolAmbalaze || 0;
+        totalKgI += otpKgKlase(r, 'I');
+        totalKgII += otpKgKlase(r, 'II');
+        totalAmb += otpAmb(r);
     });
 
     const totalKg = totalKgI + totalKgII;
@@ -156,7 +183,7 @@ function renderZbirnaSummary() {
                     : 'Klasa I'}
                 · Amb: ${totalAmb}
             </div>
-            <div class="vsum__sub">${todayOtkupi.length} otkupa · ${stanicaCount} ${stanicaCount === 1 ? 'stanica' : 'stanice'}</div>
+            <div class="vsum__sub">${todayOtkupi.length} ${todayOtkupi.length === 1 ? 'otpremnica' : 'otpremnice'} · ${stanicaCount} ${stanicaCount === 1 ? 'stanica' : 'stanice'}</div>
         </div>`;
     }
 
@@ -170,10 +197,10 @@ function renderZbirnaSummary() {
             `<div class="vblk sel">
                 <div class="vblk__c">✓</div>
                 <div>
-                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
-                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${escapeHtml(fmtStanica(r.stanicaID))}</div>
+                    <div class="vblk__nm">${escapeHtml(r.brojOtpremnice || r.otpremnicaID)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(otpKlaseOpis(r))} · ${escapeHtml(fmtStanica(r.stanicaID))}</div>
                 </div>
-                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+                <div class="vblk__kg">${otpKg(r).toLocaleString('sr')}<span class="u"> kg</span></div>
             </div>`
         ).join('');
     }
@@ -199,7 +226,7 @@ function mapServerZbirnaRecord(r) {
         kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
         tipAmbalaze: r.TipAmbalaze || '',
         klasa: r.Klasa || '',
-        otkupRecordIDs: r.OtkupRecordIDs || '',
+        otpremnicaIDs: r.OtpremnicaIDs || '',
 
         syncStatus: 'synced',
         syncAttempts: 0,
@@ -228,7 +255,7 @@ function normalizeLocalZbirnaRecord(r) {
         kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
         tipAmbalaze: r.tipAmbalaze || '',
         klasa: r.klasa || '',
-        otkupRecordIDs: r.otkupRecordIDs || '',
+        otpremnicaIDs: r.otpremnicaIDs || '',
 
         syncStatus: r.syncStatus || 'pending',
         syncAttempts: parseInt(r.syncAttempts, 10) || 0,
@@ -341,16 +368,18 @@ async function confirmZbirnaUnlocked() {
     const kupacID = kupacSel.value;
     const today = getTodayIsoDate();
 
-    // Koristi cached zbirne umesto novog API call-a
-    const zbirne = _lastMergedZbirne || await getMergedZbirneForVozac();
-    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
-
-    const todayOtkupi = (vozacOtkupi || []).filter(r =>
-        r.datum === today && !consumedIds.has(r.clientRecordID)
+    // POTROSENOST DAJE MASTER, NE LOKALNA ISTORIJA.
+    //
+    // Prazan zbirnaID znaci "slobodna": server ga racuna iz clanstva
+    // (AktivnaZbirnaZaOtpremnicu), pa posle storna zbirne otpremnica sama ponovo
+    // udje u izbor. loadVozacData je taj filter vec primenio -- ovde se ponavlja
+    // jer izmedju ucitavanja i klika stoji korisnik.
+    const todayOtkupi = (vozacOtpremnice || []).filter(r =>
+        r.datum === today && !r.zbirnaID
     );
 
     if (todayOtkupi.length === 0) {
-        showToast('Nema otkupa za danas', 'error');
+        showToast('Nema otpremnica za danas', 'error');
         return;
     }
 
@@ -361,10 +390,10 @@ async function confirmZbirnaUnlocked() {
     const sorte = new Set();
 
     todayOtkupi.forEach(r => {
-        if (r.klasa === 'II') totalKgII += r.kolicina || 0;
-        else totalKgI += r.kolicina || 0;
+        totalKgI += otpKgKlase(r, 'I');
+        totalKgII += otpKgKlase(r, 'II');
 
-        totalAmb += r.kolAmbalaze || 0;
+        totalAmb += otpAmb(r);
         if (r.vrstaVoca) vrste.add(r.vrstaVoca);
         if (r.sortaVoca) sorte.add(r.sortaVoca);
     });
@@ -375,32 +404,19 @@ async function confirmZbirnaUnlocked() {
 
     const nowIso = new Date().toISOString();
 
-    // === BrojZbirne PWA-side generation ===
-    const vozacBrojX = parseInt(String(CONFIG.ENTITY_ID || '').replace(/\D/g, ''), 10);
-    if (!vozacBrojX || isNaN(vozacBrojX)) {
-        showToast('Greška: VozacID nije validan za generaciju broja zbirne', 'error');
-        return;
-    }
-
-    const ddmmyy = formatDdmmyy(today);
-
-    // Sequence: count današnjih ne-deleted zbirni iz cached merged set
-    const todayZbirneCount = (zbirne || [])
-        .filter(z => z.datum === today)
-        .length;
-
-    const seq = todayZbirneCount + 1;
-    const brojZbirne = (seq === 1)
-        ? `${vozacBrojX}/${ddmmyy}`
-        : `${vozacBrojX}/${ddmmyy}-${seq}`;
-    // === end BrojZbirne ===
-
     const record = {
         clientRecordID: (window.crypto && typeof window.crypto.randomUUID === 'function')
             ? window.crypto.randomUUID()
             : ('zbr-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
         serverRecordID: '',
-        brojZbirne: brojZbirne,
+
+        // BROJ DODELJUJE MASTER (A2: broj je labela, ne identitet).
+        //
+        // Klijentski racun vozacBroj/ddmmyy-seq je obrisan: redni broj se
+        // izvodio iz zbirni koje BAS OVAJ uredjaj zna, pa su dva telefona istog
+        // dana mogla smisliti isti broj. Prazno polje uvoz vec razume kao
+        // "generisi lokalno" (GetBrojZbirneForIDStrict).
+        brojZbirne: '',
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
         updatedAtServer: '',
@@ -417,7 +433,10 @@ async function confirmZbirnaUnlocked() {
         tipAmbalaze: todayOtkupi[0].tipAmbalaze || '',
         kolAmbalaze: totalAmb,
         klasa: totalKgII > 0 ? 'I+II' : 'I',
-        otkupRecordIDs: todayOtkupi.map(r => r.clientRecordID).join(','),
+
+        // IDENTITET PUTUJE (S5-4b-2). Master vise ne prevodi otkupne CRID-ove u
+        // otpremnice -- dobija ih onakve kakve ih je vozac video.
+        otpremnicaIDs: todayOtkupi.map(r => r.otpremnicaID).join(','),
 
         syncStatus: 'pending',
         syncAttempts: 0,
@@ -471,22 +490,6 @@ async function syncZbirne() {
     return result;
 }
 
-function getConsumedOtkupIdsFromZbirne(zbirne) {
-    const used = new Set();
-
-    (zbirne || []).forEach(z => {
-        const raw = String(z.otkupRecordIDs || '').trim();
-        if (!raw) return;
-
-        raw.split(',')
-            .map(x => x.trim())
-            .filter(Boolean)
-            .forEach(id => used.add(id));
-    });
-
-    return used;
-}
-
 async function getMergedZbirneForVozac() {
     let local = [];
     let server = [];
@@ -509,11 +512,3 @@ async function getMergedZbirneForVozac() {
     .filter(r => !r.deleted);
 }
 
-function formatDdmmyy(isoDate) {
-    // '2026-05-06' → '060526'
-    if (!isoDate || typeof isoDate !== 'string') return '';
-    const parts = isoDate.split('-');
-    if (parts.length !== 3) return '';
-    const [y, m, d] = parts;
-    return d + m + y.slice(2);
-}

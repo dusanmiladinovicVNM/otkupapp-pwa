@@ -40,7 +40,7 @@ async function loadVozacTransport() {
             tipAmbalaze: r.TipAmbalaze || '',
             klasa: r.Klasa || '',
             brojZbirne: r.BrojZbirne || '',
-            otkupRecordIDs: r.OtkupRecordIDs || '',
+            otpremnicaIDs: r.OtpremnicaIDs || '',
 
             syncStatus: 'synced',
             lastSyncError: '',
