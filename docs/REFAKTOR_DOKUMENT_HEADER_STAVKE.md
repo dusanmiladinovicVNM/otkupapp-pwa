@@ -5580,6 +5580,63 @@ prosleđuje taj ishod dalje.
 **Dva zatečeno crvena sync suite-a**, oba i na `main`-u: `RunMasterSyncSmokeSuite` **17/9** i
 `RunGoogleSyncSmokeSuite` **77/4**. Nisu regresija — niko ih ne pušta. Traže svoj rez.
 
+**Review #390, deseti krug — ograda je stajala u osveživačima, a ne na komandi.**
+
+Epoha je od prošlog kruga tačan kriterijum, ali se merila **samo u `polling` / `visibilitychange` /
+`online` callback-ovima**. To su osveživači, ne kapija. `app.js` je komandu zvao direktno:
+
+```
+data-action="confirm-otprema-assign" -> confirmOtpremaAssign() -> dbPutAll(predaje)
+```
+
+bez ijedne provere između. Prozor je konkretan: uređaj se vrati iz pozadine, `visibilitychange`
+krene po sveže stanje, a korisnik u toku tog mrežnog kruga klikne već vidljivo **Utovari** — overlay
+još nije postavljen, pa `PRED-2` nastane nad blokom koji je odavno otišao. Isti prozor postoji i kad
+ceo master ciklus prođe između dva polling tick-a.
+
+Kapija je sada na **granici komande**, gde i pripada:
+
+```
+OFFLINE -> propusti (offline-first: trajna projekcija + lokalni dogadjaj)
+ONLINE  -> getMasterSyncStateSafe(force=true)
+             locked        -> STOP, overlay
+             unknown/error -> STOP ("ne znam stanje" != "stanje je slobodno")
+             epoha != potvrdjena -> strog refresh; pad -> STOP
+           tek onda dbPutAll(predaje)
+```
+
+Namerno **nije** omotan generički `ensureMasterSyncNotActive`: njegov strog refresh sa praznom epohom
+gurnuo bi i offline put u mrežu, a offline predaja je poslovno dozvoljena.
+
+**Dve posledice koje kapija povlači, a bez kojih bi bila poluzatvorena.**
+
+*Izbor se razrešava po `clientRecordID`, ne po ključu reda.* `getOtpremaRecordKey` vraća `srv:` čim
+otkup dobije serverski ID, a osvežavanje ga upravo može dodeliti — filtriranje po `selectedKeys`
+posle refresh-a bi **tiho ispustilo blok iz utovara**. Spisak CRID-ova se snima **pre** kapije i po
+njemu se posle razrešava; taj isti spisak je i manifest, pa drugog prolaza kroz redove više nema.
+
+*Zauzet blok zaustavlja ceo klik.* Da kapija samo osveži pa nastavi, korisnik bi potvrdio **drugi**
+utovar od onog koji je video — manji za blok koji je u međuvremenu otišao. Sada komanda staje, izbor
+se svodi na ono što je još slobodno i ekran se precrtava. Kriterijum je strožiji od prikaza:
+`assignmentState in (assigned, in_flight)` **ili** neprazan `vozacID` — `in_flight` PRED je utovar.
+
+*Re-entrancy.* Kapija čeka mrežu, pa je dugme „klikabilno" duže nego ranije; bez brave bi dva klika
+napravila dva `PRED`-a za isti izbor. Komanda se zato omotava u `withSubmitLock('otprema:assign', …,
+{ skipMasterSyncGuard: true })` — isti obrazac kao `saveOtkup` i `confirmZbirna`, pa `app.js` ostaje
+nedirnut.
+
+**Cena, izgovorena otvoreno.** Uređaj kome `navigator.onLine` kaže „online" a mreža mu ne radi sada
+**staje** umesto da zapiše predaju. To je namerno — trajna projekcija je tada jednako zastarela kao i
+ekran — ali je operativni trošak stvaran i imenovan: ako se pokaže kao smetnja na terenu, rešenje je
+eksplicitan „radi offline" izbor, ne tiše propuštanje.
+
+**Verifikacija.** `src-vba` i `tools` **nisu dirnuti** (0 fajlova) — VBA suite-ovi nepromenjeni:
+`RunAllTests` **199/0**, `RunBusinessFlowProSuite` **1985/0**. Statičke kapije: `vba_check` · schema
+(`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` — sve zeleno. Balans zagrada (bez komentara i
+stringova) u dirnutom fajlu **0/0/0**, **0** LF-only linija.
+
+⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan. Pročitana, ne proverena.
+
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 
 Rez je počeo od tvrdnje koju sam sam zapisao na kraju S5-3 — „mrtav storno most, 16 mesta u

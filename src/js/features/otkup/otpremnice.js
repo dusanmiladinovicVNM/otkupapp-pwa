@@ -684,15 +684,147 @@ function updateOtpremaAssignSummary() {
     setText(byId('otpremaAssignCounter'), `${otpremaState.selectedKeys.size}/${totalAvail}`);
 }
 
+// KOMANDNA KAPIJA: EPOHA SE MERI OVDE, NE SAMO U POLLING-u (review #390, deseti krug).
+//
+// Publication barrier je do sada zivio u polling / visibilitychange / online
+// callback-ovima. To su OSVEZIVACI, ne kapija: izmedju trenutka kad se master
+// epoha promeni i trenutka kad callback zavrsi mrezni krug, dugme "Utovari" je
+// vec vidljivo i klik prolazi -- pa PRED nastane nad zastarelim "free".
+//
+//   ONLINE  -> stanje mora da bude POTVRDJENO pre lokalnog upisa
+//   OFFLINE -> ostaje offline-first: trajna projekcija + lokalni dogadjaj
+//
+// Namerno se NE koristi genericki ensureMasterSyncNotActive: njegov strog
+// refresh sa praznom epohom bi i offline put gurnuo u mrezu, a offline predaja
+// je poslovno dozvoljena.
+//
+// CENA, izgovorena otvoreno: uredjaj kome navigator.onLine kaze "online" a mreza
+// ne radi ovde STAJE. To je namerno -- "ne znam stanje" i "stanje je slobodno"
+// nisu isto, a trajna projekcija je tada jednako zastarela kao i ekran.
+async function ensureOtpremaAssignmentStateFresh() {
+    if (!navigator.onLine) return true;
+
+    if (typeof window.getMasterSyncStateSafe !== 'function') {
+        showToast('Provera sinhronizacije nije dostupna - predaja je zaustavljena', 'error');
+        return false;
+    }
+
+    // force=true: kes traje 10 s, a to je tacno prozor koji zatvaramo.
+    const state = await window.getMasterSyncStateSafe(true);
+
+    if (state && state.locked === true) {
+        // Overlay je privatan za guard; ensureMasterSyncNotActive ga podize i na
+        // zakljucanom stanju vraca false PRE ikakvog refresh-a.
+        if (typeof window.ensureMasterSyncNotActive === 'function') {
+            await window.ensureMasterSyncNotActive('otprema:assign', { showToast: true });
+        } else {
+            showToast(state.message || 'Sinhronizacija je u toku - sačekaj kraj obrade', 'warning');
+        }
+        return false;
+    }
+
+    // NEPOZNATO DOK SMO ONLINE JE "NE", NE "VALJDA".
+    if (!state || state.unknown === true || state.success === false) {
+        showToast('Stanje se ne može potvrditi - proveri vezu pa probaj ponovo', 'error');
+        return false;
+    }
+
+    const epoha = String(state.updatedAt || '');
+    if (!epoha || otpremaState.confirmedMasterEpoch !== epoha) {
+        try {
+            await loadOtpremaOverview({ requireFreshServer: true, masterEpoch: epoha });
+        } catch (err) {
+            console.error('ensureOtpremaAssignmentStateFresh refresh failed:', err);
+            showToast('Stanje nije osveženo - predaja je zaustavljena', 'error');
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Da li je blok jos slobodan za NOV utovar.
+//
+// Strozije od prikaza (koji jos gleda samo !vozacID): komanda mora da odbije i
+// in_flight -- PRED koji master jos nije razresio JESTE utovar.
+function otpremaRedSlobodan(row) {
+    if (!row) return false;
+    if (String(row.vozacID || '').trim()) return false;
+
+    const st = String(row.assignmentState || '').trim();
+    return st !== 'assigned' && st !== 'in_flight';
+}
+
 async function confirmOtpremaAssign() {
+    // RE-ENTRANCY: kapija ceka mrezu, pa je dugme "klikabilno" duze nego ranije.
+    // Bez brave bi dva klika napravila dva PRED-a za isti izbor.
+    //
+    // skipMasterSyncGuard: master sync proverava sama komanda -- genericka
+    // provera ne razlikuje online put od offline puta.
+    if (typeof withSubmitLock !== 'function') return confirmOtpremaAssignUnlocked();
+
+    return withSubmitLock('otprema:assign', confirmOtpremaAssignUnlocked, {
+        action: 'confirm-otprema-assign',
+        skipMasterSyncGuard: true,
+        alreadyMessage: 'Predaja je već u toku'
+    });
+}
+
+async function confirmOtpremaAssignUnlocked() {
     if (!otpremaState.selectedVozac) {
         showToast('Prvo izaberi vozača', 'error');
         return;
     }
 
-    const selectedRows = getSelectedOtpremaRows();
-    if (!selectedRows.length) {
+    // Izbor se pamti kao SPISAK CRID-ova, pre osvezavanja: kljuc reda sme da se
+    // promeni (cli: -> srv: cim otkup dobije serverski ID), a identitet ne sme.
+    const izabraniCrid = getSelectedOtpremaRows()
+        .map(r => String((r && r.clientRecordID) || '').trim());
+
+    if (!izabraniCrid.length) {
         showToast('Izaberi najmanje jednu stavku', 'error');
+        return;
+    }
+
+    if (izabraniCrid.some(crid => !crid)) {
+        showToast('Neki blok nema identitet zapisa - predaja je zaustavljena', 'error');
+        return;
+    }
+
+    const spremno = await ensureOtpremaAssignmentStateFresh();
+    if (!spremno) return;
+
+    // Posle kapije se izbor razresava PO CRID-u, nad (mozda) osvezenim redovima.
+    // Filtriranje po selectedKeys bi ovde tiho ispustilo blok kome se kljuc
+    // promenio -- a tiho smanjen utovar je gori od zaustavljenog.
+    const poCrid = new Map();
+    otpremaState.rows.forEach(r => {
+        const crid = String((r && r.clientRecordID) || '').trim();
+        if (crid && !poCrid.has(crid)) poCrid.set(crid, r);
+    });
+
+    const selectedRows = [];
+    const zauzeti = [];
+
+    izabraniCrid.forEach(crid => {
+        const row = poCrid.get(crid);
+        if (row && otpremaRedSlobodan(row)) selectedRows.push(row);
+        else zauzeti.push(crid);
+    });
+
+    if (zauzeti.length) {
+        // Korisnik bi inace potvrdio DRUGI utovar od onog koji je video. Staje
+        // ceo klik, izbor se svodi na ono sto je jos slobodno, ekran se precrtava.
+        otpremaState.selectedKeys = new Set(
+            selectedRows.map(getOtpremaRecordKey).filter(Boolean)
+        );
+        renderOtpremaAssignView();
+        showToast(
+            zauzeti.length === 1
+                ? 'Jedan blok je u međuvremenu već predat - proveri izbor'
+                : zauzeti.length + ' blokova je u međuvremenu već predato - proveri izbor',
+            'error'
+        );
         return;
     }
 
@@ -714,15 +846,10 @@ async function confirmOtpremaAssign() {
     // Pending: bez spiska clanova master ne zna kad je utovar CEO i izdao bi
     // nepotpun dokument.
     const predajaID = generatePredajaID();
-    const predajaClanovi = selectedRows
-        .map(r => String(r.clientRecordID || '').trim())
-        .filter(Boolean)
-        .join(',');
 
-    if (predajaClanovi.split(',').length !== selectedRows.length) {
-        showToast('Neki blok nema identitet zapisa - predaja je zaustavljena', 'error');
-        return;
-    }
+    // Manifest je BAS onaj spisak po kom je izbor razresen -- ne drugi prolaz
+    // kroz redove. Svaki CRID je vec proveren na granici komande.
+    const predajaClanovi = izabraniCrid.join(',');
 
     // OTKUPNI ZAPIS SE VISE UOPSTE NE DIRA (review #390, P1).
     //
