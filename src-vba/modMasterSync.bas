@@ -1952,7 +1952,7 @@ Private Function FindSheetsByPrefix(ByVal folderID As String, _
 
 EH:
     LogErr SOURCE
-    FindOTKSheets = False
+    FindSheetsByPrefix = False
 End Function
 
 Private Sub ParseFileList(ByVal json As String, _
