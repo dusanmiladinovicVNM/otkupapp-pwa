@@ -159,7 +159,7 @@ KOLONE_STAROG_MODELA = re.compile(
 #
 # S3e-1 (21.09.2026, plan 14.22) -- PODELA GRUPA, i s njom nova pragovska logika:
 #
-#   otk_veza_otp   13 -- COL_OTK_(OTPREMNICA_ID|VOZAC|BROJ_OTPREMNICE). Grupa koja
+#   otk_veza_otp   11 -- COL_OTK_(OTPREMNICA_ID|VOZAC|BROJ_OTPREMNICE). Grupa koja
 #                        MORA na nulu, ali tek u S3e-2: poslednji citaoci su
 #                        kaskada zbirne (S4) i OTK list za PWA (S5). Prag broji
 #                        ZIVA mesta (13) i zato brani rast, ne trazi pad.
@@ -174,7 +174,7 @@ KOLONE_STAROG_MODELA = re.compile(
 # a ne bi stitio nista -- ta grupa nema cilj nula.
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
-    ("otk_veza_otp", 13),
+    ("otk_veza_otp", 11),
     ("otp_linija", 3),
     ("otp_cena", 0),
     # S4-1: citaoci SADRZAJA zbirne presli su na tblZbirnaStavke. Ostatak drze

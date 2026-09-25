@@ -4887,7 +4887,8 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
 | **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
-| **S5-4** | GAS/PWA strana (E-044, E-058) — vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` | ⏳ |
+| **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
+| **S5-4b** | vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` (E-044, E-058) — redizajn `transport.js`/`zbirna.js` | ⏳ |
 
 #### Šta je S5-1 uradio
 
@@ -5269,6 +5270,445 @@ Sabotaže **588 → 588** (šest obrisano, šest novih): `zbirna-ne-pamti-porekl
 imenovanoj tvrdnji, izvor vraćen bit-identično.**
 
 Otisak šeme **`64BD33C7` → `88E04EC5`** (`tblOtpremnica.PredajaID`).
+
+### S5-4a — predaja je sopstven događaj (ZAVRŠEN)
+
+**Prva verzija ovog reza je pala na review-u (#390, P1), i pala je s pravom.** Kačila je predaju na
+postojeći OTK red — tri kolone, write-once. Nad najnormalnijim putem je to **tiho gubilo događaj**:
+
+```
+otkup se uveze -> red dobije Synced>Master
+uvoz cita SAMO "Synced"  ->  predaja koja stigne kasnije nikad ne dodje do mastera
+GAS vrati success        ->  PWA lokalno kaze "synced"
+otpremnica ne nastane, niko ne sazna
+```
+
+Drugi smer je bio isti kvar: red koji već nosi `PredajaID` P1 je drugi utovar P2 **progutao** (write-once
+po polju), pa VBA pravilo „P1 ≠ P2 → SyncError" nije imalo priliku da se izvrši. **Moja tvrdnja u opisu
+PR-a — „master odlučuje da je konflikt" — bila je netačna**, i povukao sam je.
+
+Uzrok je bio **model, ne propust**: OTK red je nepromenljiva osnova (otkup se desio), a predaja je
+događaj **nad** njim, sa svojim identitetom i svojim lifecycle-om. Tri ćelije canonical reda ne mogu da
+budu red čekanja za događaje.
+
+| Sloj | Sad |
+|---|---|
+| **PWA** | store `predaje`, svoj `syncStatus`, akcija `syncPredaja`; jedan klik = jedan `predajaID` + `predatoAt` + manifest. **Otkupni zapis se ne dira** — nije se promenio, pa se ne vraća u red za sync |
+| **GAS** | list `PRED-*`, **append-only**; GAS ne presuđuje ništa, samo garantuje da događaj **stigne**. Retry istog `ClientRecordID`-a je idempotentan no-op |
+| **VBA** | `ImportOnePREDSheet` nad `PRED-*`, **posle** OTK uvoza u istom ciklusu (blok se razrešava nad već uvezenim otkupom) |
+
+**Dva producenta koja sam propustio pri preseljenju.** Predaja se pravila na **dva** mesta u
+`ImportOneOTKSheet`: nad postojećim redom i nad **novo uvezenim** redom sa `VozacID`-em. Drugi mi je
+promakao, a `predaje` više nije bila deklarisana — „Variable not defined" koji bi pao tek na compile-u.
+`vba_check` ga nije uhvatio; **treći put** u ovoj seriji da ista rupa propusti ono što compile hvata.
+`PredajaKandidat` je ostao bez pozivaoca i obrisan je, pa je `PredajeIzPredData` sada **jedini**
+proizvođač oblika koji `GrupePredaje` čita.
+
+**Kako je nov put uopšte merljiv.** `ImportOnePREDSheet` čita Google list preko mreže, pa se kroz njega
+u testu ne može proći. Prevod redova zato živi u `PredajeIzPredData` — **produkcionom telu koje uvoznik
+zove**, ne kopiji za test. `Test_PRED_ListPostajeOtpremnica` hrani baš oblik koji GAS upisuje (zaglavlje
++ dva člana jednog utovara + jedan red čiji otkup nije u masteru) i pušta ga kroz pravog pisca.
+
+**Retry se prepoznaje po utovaru, ne po vozaču.** Zatečeni `Test_OTP_PredajaDrugomVozacuJeKonflikt` je
+**kodirao slabije pravilo** — „ponovljen red ISTOG vozača" koristio je **drugi** `PredajaID`. Prepravljen;
+meri sva četiri ishoda.
+
+**`ensureSheetColumns` dozida rep.** Bez toga bi tri nove kolone oborile sync na prvom zahtevu, na svakom
+zatečenom listu. Dozida se **samo** kad je zatečen header **prefiks** kanonskog; promenjen redosled i
+preimenovana kolona i dalje pucaju. Mereno po `lastCol`, ne po `headers.length` — prva verzija je imala
+baš tu grešku.
+
+**Review #390, drugi krug — redosled i retry protokol oko novog modela.**
+
+Model je prihvaćen, ali su ostala dva otvorena mesta oko njega.
+
+**P1 — PRED je mogao da stigne pre svog OTK-a i tada se trajno ubijao.** Otprema namerno pušta i
+**lokalne** otkupe (offline-first), pa blok koji se predaje sme biti `pending`. Trigeri su se pritom
+razilazili:
+
+| Triger | Bilo |
+|---|---|
+| `post-save` | slao **samo** predaje — otkup je mogao ostati neposlat |
+| `interval` | slao oba, ali **bez `await`** — komentar je govorio „OTK pre PRED", runtime „OTK ‖ PRED" |
+| `online` | jedini ispravan; uzet je kao obrazac |
+
+Rešeno u **dve polovine**, jer nijedna sama nije dovoljna:
+
+1. **PWA:** jedan orkestracioni put `syncOtkupacDomain(reason)` — `await` otkup, pa predaje. Svi trigeri
+   idu kroz njega.
+2. **Master:** „osnova još nije stigla" **nije konflikt**. Red se ostavlja **bez statusa** i sledeći
+   ciklus ga ponovo uzme; broji se odvojeno (`ceka`), jer „0 grešaka + 3 čeka" je tačno stanje, a
+   „3 preskočeno" bi lagalo da je posao gotov. Isto pravilo već važi za **nepotpun manifest** — utovar
+   čeka ostatak umesto da ga proglasi kvarom.
+
+> Master ne sme da računa na redosled mreže ni kad ga klijent poštuje: to su dva zahteva i dve sudbine.
+> Imenovan konflikt ide tek kad postoji dokaz da osnova više ne može da stigne, a takvog dokaza ovde nema.
+
+**P2 — GAS je sakrivao protivrečnost pre nego što je master vidi.** `ClientRecordID` događaja je
+`PredajaID + ':' + OtkupClientRecordID`, pa isti ključ uz **drugog vozača**, drugi `PredatoAt` ili drugi
+manifest znači **drugu tvrdnju o istom događaju**. Vraćalo se `existing/success`. Sada `predajaRazlika`
+poredi imenovano i vraća `PREDAJA_CONFLICT` sa poljem koje se ne slaže — isti ugovor koji OTK i zbirna
+već imaju. Važno baš zato što VBA sada ume da imenuje „isti `PredajaID`, drugi vozač".
+
+**Review #390, treći krug — tri pojma istine su bila pomešana.**
+
+Model događaja je prihvaćen, ali je sledeći sloj pokušao da iz **istorije** izvede **tekuće stanje**.
+Recenzentova podela je uzeta doslovno:
+
+| Pojam | Izvor |
+|---|---|
+| **istorijska** istina | `PRED` događaji — append-only, **ne znaju za storno** |
+| **tekuća** istina | aktivna otpremnica + kanonsko članstvo, iz mastera |
+| **privremena** istina | `PRED` koji master još nije razrešio |
+
+**A) Izvoz je bacao identitet.** [modStammdatenSync.bas:884](src-vba/modStammdatenSync.bas:884) je pisao
+`"VBA-" & OtkupID` iako `tblOtkup` nosi pravi `ClientRecordID` — pa read-model nije imao isti ključ kao
+PWA red i spoj sa događajem se **nije mogao naći**. Sada se izvozi stvarni CRID; sintetički ostaje samo
+za red koji ga nema (desktop unos).
+
+> Usput izmereno i gore: isti izvoz je **celo** tekuće stanje čitao sa mrtvih kolona
+> (`Otkup.VozacID`, `BrojZbirne`, `OtpremnicaID`). Upravljački read-model je stajao na podacima koje
+> niko ne piše.
+
+**B) Tekuće stanje sada izlazi iz lanca:** `tblOtkup` → `tblOtpremnicaIzvori` → **aktivna**
+`tblOtpremnica` → `VozacID`/`PredajaID`, a njena zbirna daje `BrojZbirne`. **Storno oslobađa blok sam od
+sebe** — `OtpremnicaZaOtkup` vraća samo aktivnu, bez ijednog dodatnog pravila.
+
+`transportStatus` je izgubio `assigned`: u kanonskom modelu predaja **odmah** pravi otpremnicu, pa to
+stanje u masteru ne postoji — ono je privremeno i zna ga klijent. Jedini potrošač
+([dispecer.js:144](src/js/features/management/dispecer.js:144)) gleda samo zatvorena stanja.
+
+**C) `PRED` govori samo o in-flight stanju.** `predajeUToku_` preskače redove koje je master razrešio
+(`Synced>Master`) **i** odbijene (`SyncError`) — obična greška u unosu (mešane vrste) više ne zaključava
+blok trajno. Greška čitanja `PRED` liste više **nije fail-open**: vraća `PREDAJA_READ_FAILED` umesto
+prazne mape uz `success: true`. Kapija protiv duple komande ne sme da bude fail-open.
+
+**P2 — lokalni „prvi" nije bio hronološki.** Ključ je `PredajaID` (random UUID), pa je `getAll`
+leksikografski i lokalna projekcija se mogla raziići sa serverskom. Sada se bira **najstariji
+nerazrešen** po `createdAtClient`, a razrešen red uopšte ne ulazi u odlučivanje.
+
+`Test_PRED_StornoOslobadjaBlokUReadModelu` meri oba smera kroz `TekucaPredajaOtkupa` — produkcioni seam
+koji izvoz zove: posle predaje sve imenovano, posle storna sve prazno. Prag `otk_veza_otp` spušten
+**13 → 11** (rez je skinuo dva čitaoca stare veze).
+
+**Review #390, četvrti krug — `OTK.SyncStatus` je bio proxy za tuđi lifecycle.**
+
+Projekcija je pitala „je li OTK red `Synced>Master`" i, ako jeste, **uopšte nije gledala `PRED`**. To je
+lifecycle **pogrešnog entiteta**:
+
+| Šta kaže | Šta ne kaže |
+|---|---|
+| `OTK.SyncStatus = Synced>Master` — otkup je uvezen u master | da je **predaja** tog otkupa razrešena |
+
+Posledica je bila na **najnormalnijem putu**: otkup uvezen ujutru, predaja kliknuta popodne → drugom
+uređaju je blok izgledao slobodan, jer je njegov in-flight `PRED` bio preskočen.
+
+**Stanje se sada sastavlja eksplicitno**, i `OTK.SyncStatus` u tome nema nikakvu ulogu:
+
+```
+aktivna kanonska otpremnica       -> assigned   (iz mastera)
+nema je, ali ima nerazresen PRED  -> in_flight  (iz PRED lista)
+nema ni jednog                    -> free       (VozacID/PredajaID se CISTE)
+```
+
+**Drugi deo istog P1 — merge je pregazio kanonsko stanje.** `mergeOtpremaRecords` bira po
+`updatedAtClient`, a master izvoz to polje šalje **prazno** — pa je stari lokalni OTK red redovno
+pobeđivao serverski. Sa njim bi nestao i `assignmentState`, lokalna istorija bi bila ponovo projektovana
+i blok bi **posle storna opet izgledao predat**. Merge i dalje odlučuje o **sadržaju** otkupa (to mu je
+posao), ali stanje **predaje** je tuđa činjenica i vraća se posle merge-a.
+
+**P2 — eksplicitno pomirenje, ne heuristika.** Lokalni `syncStatus: 'synced'` znači samo „stiglo do
+GAS-a". Događaj je **razrešen** tek kad ga server više ne prijavljuje kao `in_flight` za taj blok — bilo
+da je postao otpremnica, bilo da je odbijen ili je otpremnica stornirana. Tada se u lokalni zapis upisuje
+`masterState: 'resolved'` i on izlazi iz odlučivanja. **Neposlat događaj se nikad ne smatra razrešenim** —
+offline predaja mora da drži blok dok ne dobije odgovor.
+
+**Review #390, peti krug — online istina nije preživljavala zatvaranje aplikacije.**
+
+Prethodni krug je uveo `assignmentState` i eksplicitno pomirenje. Ali serversko stanje je živelo **samo u
+memoriji jednog učitavanja**, a pomirenje bi lokalni događaj označilo kao razrešen — pa sledeći
+**offline** reload nije imao nijedan trag:
+
+```
+immutable OTK nema VozacID
++ razresen PRED se ignorise
+= vec predat blok izgleda FREE  ->  moguca druga predaja
+```
+
+Rešenje nije vraćanje `VozacID` na otkupni red (recenzent je na to izričito upozorio, i s pravom). Uveden
+je **treći store**, pa svaka stvar ima svoje mesto:
+
+| Store | Šta je |
+|---|---|
+| `otkupi` | **nepromenljiva osnova** — otkup se desio |
+| `predaje` | red događaja i njihova **istorija** |
+| `predajaProjekcija` | **keš poslednjeg poznatog read-modela** (ključ je `ClientRecordID` bloka) |
+
+Online: serversko `assignmentState` se upisuje u keš. Offline: čita se poslednje poznato + novi
+**nerazrešen** lokalni događaj.
+
+> Keširano `free` sme da bude **zastarelo** — moglo je biti izmereno pre nego što je događaj nastao.
+> Zato se poredi `checkedAt` sa `createdAtClient` događaja: stariji keš ne obara svežu predaju. Sveže
+> serversko `free` (bez `checkedAt`) je merodavno.
+
+**P2 — terminalnost je bila ručna lista.** `predajeUToku_` je ispisivao `Synced>Master` i `SyncError*`,
+a **propuštao `Duplicate`** — koji master proizvodi kod urednog oporavka (otpremnica napravljena, Google
+writeback pao, sledeći ciklus vidi idempotentan retry). Dok otpremnica postoji, kanonsko `assigned` ima
+prioritet pa se ne vidi; **posle storna** bi se taj istorijski `Duplicate` vratio kao `in_flight` i
+zaključao blok zauvek. Sada se koristi `isTerminalSyncStatus` — isti pojam koji drži i OTK put.
+
+**Review #390, šesti krug — dve granice koordinacije.**
+
+Model se više nije dirao; ostale su dve tačke u kojima se stanje **objavljuje**.
+
+**1. Projekcija i pomirenje su bile dve transakcije.** Poslovno je to **jedna nedeljiva** promena:
+„serverska dodela je trajno sačuvana lokalno" **i** „lokalni događaj više ne mora da drži blok". Pad
+prve uz uspeh druge ostavljao je stanje **bez ijednog traga dodele** — projekcije nema, događaj označen
+kao razrešen — pa bi posle offline reload-a već predat blok bio slobodan. Ista klasa greške koju smo
+zatvorili kod upisa višestavčnog utovara, samo na drugom mestu. Sada je jedno telo
+(`sacuvajStanjeIPomiri`) i **jedna** `dbPutAll` transakcija preko oba store-a.
+
+**2. `getOtkupi` je mogao da objavi međustanje iz master ciklusa.** Stanje se sastavlja iz **dva** izvora
+koja master ne menja u istom trenutku:
+
+```
+PRED       -> Synced>Master cim otpremnica nastane
+OtkupiAll  -> osvezava se tek pri izlaznom izvozu
+```
+
+U tom prozoru sastav daje **lažan `free`** — a nova verzija bi ga i **persistirala**. Lock je do sada
+štitio samo **upise**; snimak pročitan u prozoru klijent je zadržavao i posle otključavanja, kad upis
+više nije blokiran.
+
+Dva poteza, oba potrebna:
+- dok je lock aktivan, `getOtkupi` **ne vraća** stanje (`readModelChanging`), pa klijent zadrži svoju
+  trajnu projekciju umesto da dobije pogrešno svežije;
+- na prelazu **zaključano → otključano** ekran otpreme se **osvežava** (`refreshOtpremaPosleLocka`),
+  pre nego što korisnik ponovo sme da klikne. Okida se samo kad je overlay stvarno bio prikazan.
+
+> Ostaje jedan zapisan P3: UI bira selektabilnost po `!vozacID`, a ne po `assignmentState`. Trenutno je
+> ekvivalentno (oba izvora garantuju vozača), ali kad već postoji eksplicitno stanje, ono bi dugoročno
+> trebalo da bude kriterijum, a `VozacID` samo podatak prikaza.
+
+**Review #390, sedmi krug — publication barrier.**
+
+Domen se ne dira; ostala je samo granica **kada se sme reći da se model više ne menja**.
+
+**A) Overlay je padao pre nego što osvežavanje završi.** Komentar je govorio „stanje mora da bude sveže
+**pre** nego što korisnik sme da klikne", a runtime je radio suprotno: sakrij → pa pokreni osvežavanje u
+pozadini. Između toga stoji mreža, a lock više ne blokira upis — pa je klik nad **zastarelim** stanjem
+bio moguć.
+
+Sada `hideMasterSyncOverlay` **čeka** osvežavanje, a `refreshOtpremaPosleLocka` vraća promise. **Ako
+osvežavanje padne, overlay ostaje** uz imenovan razlog: pustiti ekran uz „sve je u redu" nad stanjem za
+koje znamo da je zastarelo gore je od čekanja.
+
+**B) Ograda se postavljala posle čitanja izvora.** Zahtev koji premosti otključavanje mogao je da
+pročita star `OtkupiAll` i već terminalan `PRED`, pa da na kraju čuje „nije zaključano" — i objavi baš
+međustanje koje ograda treba da zabrani.
+
+Snapshot se sada objavljuje samo iz **jedne stabilne epohe**: `(MASTER_SYNC_UPDATED_AT, locked)` se meri
+**pre** i **posle** čitanja, i mora biti isti i otključan u oba merenja. VBA tu oznaku piše pri **svakoj**
+promeni lock-a — i pri zaključavanju i pri otključavanju ([modGoogleSyncOrchestrator.bas:679](src-vba/modGoogleSyncOrchestrator.bas:679)). Nedostupno stanje se tretira kao **zaključano**.
+
+> **Ograničenje rečeno otvoreno:** vremenska oznaka ima rezoluciju **sekunde**, pa ciklus koji bi se ceo
+> odigrao unutar iste sekunde ograda ne bi videla. Master ciklus radi Drive čitanja i upise, pa to nije
+> fizički moguće — ali to je argument o trajanju, **ne dokaz**. Tvrđa garancija je eksplicitan brojač
+> `MASTER_SYNC_GENERATION`; zapisano kao opcija ako ikad zatreba.
+
+**Usput popravljeno:** blok koji sam ranije ubacio u `otpremnice.js` ostao je sa **18 LF linija** u
+CRLF fajlu — tačno korupcija na koju pravila upozoravaju. Fajl je normalizovan; sada 0 LF-only linija.
+
+**Review #390, osmi krug — „osvežavanje je uspelo" nije bilo dokaz svežine.**
+
+Prethodni krug je overlay naterao da **čeka** osvežavanje. Ali `loadOtpremaOverview` praktično **nikad ne
+pada**: `apiFetch` na grešci vraća `null`, `safeAsync` izuzetak pretvara u `undefined` — pa se promise
+razrešio i nad zastarelim lokalnim stanjem, a overlay je pao. Isto je važilo i kad server izričito kaže
+`readModelChanging`.
+
+Uveden je **strog režim** samo za publication barrier — `loadOtpremaOverview({ requireFreshServer: true })`
+— u kom je svaki izostanak **pad**:
+
+| Situacija | Strog režim |
+|---|---|
+| nema veze | pad |
+| `apiFetch` vratio `null` | pad |
+| `success !== true` ili `records` nije niz | pad |
+| `readModelChanging` | pad |
+| trajna projekcija nije sačuvana | pad |
+
+Poslednji red je bitan posebno: stanje sveže **u memoriji** nije dovoljno — ako projekcija nije upisana,
+sledeći offline reload (naročito na uređaju koji predaju nije ni napravio) opet ostaje bez traga dodele.
+
+Običan put je **namerno netaknut**: offline unos i pregled moraju da rade i bez servera. Strog režim
+uključuje samo ograda, gde je cena pogrešnog „sveže" veća od cene čekanja.
+
+**P2:** `ensureMasterSyncNotActive` je vraćao `true` bez `await`-a nad skrivanjem overlay-a — a `true`
+znači „upis sme da krene", pa nije smeo da stigne dok osvežavanje traje. Sada čeka.
+
+**Review #390, deveti krug — kriterijum je bio vidljivost overlay-a, a trebalo je da bude epoha.**
+
+Strog režim je osvežavao **samo ako je overlay bio prikazan**. To nije isto što i „master epoha se
+promenila": uređaj koji je ceo lock interval proveo **u pozadini** — ili kome je ciklus prošao između dva
+polling tick-a — overlay nikad nije ni video, pa nije ni osvežavao. Ostajao je na zastarelom `free`, a
+lock je u međuvremenu skinut, pa je klik bio dozvoljen.
+
+Server epohu **šalje** (`updatedAt`), a klijent ju je **bacao** — `buildState` je nije ni mapirao. Sada:
+
+```
+epoha razlicita (ili nepoznata) -> strog refresh, pa tek onda upis
+epoha ista kao potvrdjena       -> nista, poziv je jeftin i na svakom ticku
+```
+
+`otpremaState.confirmedMasterEpoch` pamti epohu za koju je **trenutni** snimak potvrđen. Radi i kad
+overlay jeste bio prikazan, i kad nikad nije, i posle povratka iz pozadine, i posle `online`.
+
+**P2 — povratna vrednost sada prati ishod.** `ensureMasterSyncNotActive` je vraćao `true` i kad strog
+refresh padne, jer je `hideMasterSyncOverlay` gutao neuspeh — a `true` znači „upis sme da krene", pa bi
+`withSubmitLock` pustio komandu nad nepotvrđenim stanjem. Sada `hideMasterSyncOverlay` vraća
+`true`/`false` (potvrđeno sveže / i dalje blokirano), overlay se pri padu **vraća**, a pozivalac
+prosleđuje taj ishod dalje.
+
+**Verifikacija.** `vba_check` · schema (`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` ·
+`vba_parity_check` — sve čisto. `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985/0**.
+`dokaz.py` nad sabotažama predaje: **3/3 crvenih**, potpis izvora identičan. Compile automatski
+`NEJASNO` — ručna kapija ostaje.
+
+⚠ **GAS i PWA izmene su NEVERIFIKOVANE.** Nema JS test harness-a, `node` nije dostupan u okruženju — ni
+`node --check` nije mogao da prođe. Pročitane, ne proverene.
+
+**Dva zatečeno crvena sync suite-a**, oba i na `main`-u: `RunMasterSyncSmokeSuite` **17/9** i
+`RunGoogleSyncSmokeSuite` **77/4**. Nisu regresija — niko ih ne pušta. Traže svoj rez.
+
+**Review #390, deseti krug — ograda je stajala u osveživačima, a ne na komandi.**
+
+Epoha je od prošlog kruga tačan kriterijum, ali se merila **samo u `polling` / `visibilitychange` /
+`online` callback-ovima**. To su osveživači, ne kapija. `app.js` je komandu zvao direktno:
+
+```
+data-action="confirm-otprema-assign" -> confirmOtpremaAssign() -> dbPutAll(predaje)
+```
+
+bez ijedne provere između. Prozor je konkretan: uređaj se vrati iz pozadine, `visibilitychange`
+krene po sveže stanje, a korisnik u toku tog mrežnog kruga klikne već vidljivo **Utovari** — overlay
+još nije postavljen, pa `PRED-2` nastane nad blokom koji je odavno otišao. Isti prozor postoji i kad
+ceo master ciklus prođe između dva polling tick-a.
+
+Kapija je sada na **granici komande**, gde i pripada:
+
+```
+OFFLINE -> propusti (offline-first: trajna projekcija + lokalni dogadjaj)
+ONLINE  -> getMasterSyncStateSafe(force=true)
+             locked        -> STOP, overlay
+             unknown/error -> STOP ("ne znam stanje" != "stanje je slobodno")
+             epoha != potvrdjena -> strog refresh; pad -> STOP
+           tek onda dbPutAll(predaje)
+```
+
+Namerno **nije** omotan generički `ensureMasterSyncNotActive`: njegov strog refresh sa praznom epohom
+gurnuo bi i offline put u mrežu, a offline predaja je poslovno dozvoljena.
+
+**Dve posledice koje kapija povlači, a bez kojih bi bila poluzatvorena.**
+
+*Izbor se razrešava po `clientRecordID`, ne po ključu reda.* `getOtpremaRecordKey` vraća `srv:` čim
+otkup dobije serverski ID, a osvežavanje ga upravo može dodeliti — filtriranje po `selectedKeys`
+posle refresh-a bi **tiho ispustilo blok iz utovara**. Spisak CRID-ova se snima **pre** kapije i po
+njemu se posle razrešava; taj isti spisak je i manifest, pa drugog prolaza kroz redove više nema.
+
+*Zauzet blok zaustavlja ceo klik.* Da kapija samo osveži pa nastavi, korisnik bi potvrdio **drugi**
+utovar od onog koji je video — manji za blok koji je u međuvremenu otišao. Sada komanda staje, izbor
+se svodi na ono što je još slobodno i ekran se precrtava. Kriterijum je strožiji od prikaza:
+`assignmentState in (assigned, in_flight)` **ili** neprazan `vozacID` — `in_flight` PRED je utovar.
+
+*Re-entrancy.* Kapija čeka mrežu, pa je dugme „klikabilno" duže nego ranije; bez brave bi dva klika
+napravila dva `PRED`-a za isti izbor. Komanda se zato omotava u `withSubmitLock('otprema:assign', …,
+{ skipMasterSyncGuard: true })` — isti obrazac kao `saveOtkup` i `confirmZbirna`, pa `app.js` ostaje
+nedirnut.
+
+**Cena, izgovorena otvoreno.** Uređaj kome `navigator.onLine` kaže „online" a mreža mu ne radi sada
+**staje** umesto da zapiše predaju. To je namerno — trajna projekcija je tada jednako zastarela kao i
+ekran — ali je operativni trošak stvaran i imenovan: ako se pokaže kao smetnja na terenu, rešenje je
+eksplicitan „radi offline" izbor, ne tiše propuštanje.
+
+**Verifikacija.** `src-vba` i `tools` **nisu dirnuti** (0 fajlova) — VBA suite-ovi nepromenjeni:
+`RunAllTests` **199/0**, `RunBusinessFlowProSuite` **1985/0**. Statičke kapije: `vba_check` · schema
+(`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` — sve zeleno. Balans zagrada (bez komentara i
+stringova) u dirnutom fajlu **0/0/0**, **0** LF-only linija.
+
+⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan. Pročitana, ne proverena.
+
+**Review #390, jedanaesti krug — kapija je i dalje gutala pad lokalnog `predaje` store-a.**
+
+Strog režim je od devetog kruga rušio refresh na svakom serverskom izostanku, ali je **čitanje
+lokalnih, još neposlatih PRED-ova ostalo fail-open**:
+
+```
+predaje read FAIL -> lokalnePredaje = {} -> nastavi kao da lokalnog dogadjaja nema
+```
+
+Server tu ne može da pomogne: on **legitimno** kaže `free` za blok čiji `PRED-1` još nije stigao do
+GAS-a. Jedini čitalac te činjenice je bio taj red. Kad padne a greška se proguta, strog snimak ispadne
+„server free + nema lokalnog događaja", još se **overi kao potvrđena epoha**, i komanda napravi drugi
+utovar nad istim blokom. Ista klasa pravila koju smo već primenili na GAS: kapija protiv duple
+komande ne sme biti fail-open.
+
+Sada u strogom režimu:
+
+```
+!db                     -> STOP (bez lokalne baze nema ni citanja PRED-ova ni upisa projekcije)
+predaje read FAIL       -> STOP
+otkupi read FAIL        -> STOP (v. nize)
+```
+
+Pad čitanja **otkupnih** redova nije bio fail-open — blok bez lokalnog reda ispadne iz skupa, pa ga
+komanda odbije — ali jeste bio **laž o razlogu**: korisnik bi dobio „blok je već predat" umesto
+„stanje ne mogu da potvrdim". Isto pravilo, jedna linija, poštena poruka.
+
+`ucitajProjekciju` **nije** dodat u ovaj skup: kad postoji validan authoritative snimak, keš nije
+potreban da se utvrdi trenutno serversko stanje, a njegov trajni upis je fail-closed od šestog kruga.
+
+**Da fix zaista grize** — provereno, ne pretpostavljeno: `dbGetAll` grešku **odbacuje** (`reject` na
+`onerror` i na nepostojeći store), a `predajePoOtkupu` je ne hvata, pa `catch` u `loadOtpremaOverview`
+stvarno vidi izuzetak. Da je čitalac grešku pretvarao u prazan rezultat, `throw` bi bio mrtvo slovo.
+
+**Verifikacija.** `src-vba` i `tools` **nisu dirnuti** (0 fajlova) — VBA suite-ovi nepromenjeni:
+`RunAllTests` **199/0**, `RunBusinessFlowProSuite` **1985/0**. Statičke kapije: `vba_check` · schema
+(`88E04EC5`) · `who_writes` (obe) · `popis_citalaca` — sve zeleno. Balans zagrada **0/0/0**, **0**
+LF-only linija.
+
+⚠ **PWA izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
+
+**Compile kapija je našla ono što dvanaest review krugova nije — i oborila prenete brojeve.**
+
+Ručni `Debug > Compile VBAProject` je prijavio:
+
+```
+Function call on left-hand side of assignment must return Variant or Object
+modMasterSync.FindSheetsByPrefix, EH grana
+```
+
+U prvom krugu #390 (`c754b90b`) je `FindOTKSheets` izdvojen u generički `FindSheetsByPrefix`, ali je
+EH grana zadržala dodelu **starom** imenu — VBA to čita kao poziv funkcije sa leve strane dodele.
+Jedna linija, ispravljena u `a19f47f3`.
+
+**Važniji nalaz je metodološki.** Kroz osam narednih krugova je pisalo „`src-vba` nije dirnut, pa su
+suite-ovi nepromenjeni: `RunAllTests` 199/0, BFP 1985/0". Ako projekat ne kompajlira, ti brojevi
+**nisu mogli biti izmereni na tom stanju** — bili su preneti, a zvučali su kao merenje. Lanac
+„nepromenjeno od prošlog puta" jak je koliko i njegova prva karika, a ta karika nikad nije proverena.
+
+Pravilo koje iz toga sledi: uz „suite-ovi nepromenjeni" ide **commit na kom je poslednje merenje
+stvarno izvršeno**. Ako je od tada bilo VBA commit-a bez novog prolaza, broj se ne prenosi nego se
+prijavljuje kao **neizmeren na tekucem stanju**.
+
+**Ponovo izmereno na `a19f47f3`** (posle ručnog compile-a): `RunAllTests` **199/0** (`SUITE OK`,
+58,2 s) · `RunBusinessFlowProSuite` **1985/1985, 0 padova** (`RunID=20260925130139-1073`). Automatski
+compile verdikt je očekivano `NEJASNO`; važi ručna kapija.
+
+**Četvrta rupa u `vba_check`.** Dodela imenu funkcije koja nije tekuća procedura prođe nezapaženo.
+Jednokratni skener te klase je pušten **u oba smera**: sa vraćenom greškom prijavi `FindOTKSheets`
+(31 nalaz), sa ispravkom 0 pojava (30 nalaza). Preostalih 30 su lažni pozitivi — `ByRef` parametri iz
+**višerednih potpisa** (`_` prelom), koje skener ne vidi. Zaključak za pravilo u `vba_check`: mora
+prvo da razume prelomljen potpis, inače unosi šum. Zaseban rez, sa dokazom u oba smera.
 
 ### S5-3b — storno bira decu iz članstva (ZAVRŠEN)
 

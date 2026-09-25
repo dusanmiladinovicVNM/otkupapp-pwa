@@ -20,7 +20,13 @@
             timeout: false,
             message: '',
             code: '',
-            lockKind: ''   // ← DODATO: '' | 'master' | 'stanica'
+            lockKind: '',   // ← DODATO: '' | 'master' | 'stanica'
+
+            // EPOHA MASTER SYNC-a (review #390, deveti krug).
+            //
+            // Server je salje, a klijent ju je bacao -- pa se "da li se nesto
+            // promenilo od mog poslednjeg snimka" nije imalo cime izmeriti.
+            updatedAt: ''
         }, overrides || {});
     }
 
@@ -85,7 +91,7 @@
                 try {
                     const state = await window.getMasterSyncStateSafe(true);
                     if (state && state.locked === true) showMasterSyncOverlay(state);
-                    else hideMasterSyncOverlay();
+                    else await hideMasterSyncOverlay(state);
                 } finally {
                     btn.disabled = false;
                     btn.textContent = 'Proveri ponovo';
@@ -108,9 +114,54 @@
         el.style.display = 'flex';
     }
 
-    function hideMasterSyncOverlay() {
+    function sakrijOverlay() {
         const el = document.getElementById('masterSyncBlocker');
         if (el) el.style.display = 'none';
+    }
+
+    // KRITERIJUM JE EPOHA, NE VIDLJIVOST OVERLAY-a (review #390, deveti krug).
+    //
+    // Prethodna verzija je osvezavala samo ako je overlay BIO PRIKAZAN. To nije
+    // isto sto i "master epoha se promenila": uredjaj koji je ceo lock interval
+    // proveo u pozadini -- ili je ciklus prosao izmedju dva polling tick-a --
+    // overlay nikad nije ni video, pa nije ni osvezavao. Ostajao je na
+    // ZASTARELOM "free" i, posto je lock vec skinut, klik je bio dozvoljen.
+    //
+    // Sada se pita ono sto stvarno odlucuje: je li epoha ista kao ona za koju je
+    // trenutni snimak potvrdjen. refreshOtpremaPosleLocka to i proverava, pa je
+    // poziv jeftin kad se nista nije promenilo.
+    //
+    // VRACA: true = stanje je potvrdjeno sveze (upis sme), false = nije (overlay
+    // ostaje). Pozivalac ne sme da tumaci "zavrsilo je" kao "bezbedno je".
+    async function hideMasterSyncOverlay(state) {
+        if (typeof window.refreshOtpremaPosleLocka === 'function') {
+            try {
+                await window.refreshOtpremaPosleLocka(
+                    String((state && state.updatedAt) || '')
+                );
+            } catch (err) {
+                console.error('refreshOtpremaPosleLocka failed:', err);
+                postaviPorukuOverlay(
+                    'Sinhronizacija je zavrsena, ali osvezavanje stanja nije uspelo. ' +
+                    'Proveri vezu pa probaj ponovo -- do tada se predaja ne moze potvrditi.'
+                );
+                prikaziOverlay();
+                return false;   // overlay OSTAJE
+            }
+        }
+
+        sakrijOverlay();
+        return true;
+    }
+
+    function prikaziOverlay() {
+        const el = document.getElementById('masterSyncBlocker');
+        if (el) el.style.display = 'flex';
+    }
+
+    function postaviPorukuOverlay(tekst) {
+        const msg = document.getElementById('masterSyncBlockerMessage');
+        if (msg) msg.textContent = tekst;
     }
 
     async function fetchMasterSyncState(force, stanicaID) {
@@ -142,7 +193,8 @@
                     offline: true,
                     message: cached.state.message ||
                         'Sinhronizacija je bila aktivna. Sačekajte konekciju za proveru.',
-                    lockKind: cached.state.lockKind || ''
+                    lockKind: cached.state.lockKind || '',
+                    updatedAt: cached.state.updatedAt || ''
                 });
             }
             return buildState({ locked: false, offline: true });
@@ -186,7 +238,8 @@
                     unknown: data.success === false,
                     message: data.message || data.error || '',
                     code: data.code || '',
-                    lockKind: data.lockKind || ''
+                    lockKind: data.lockKind || '',
+                    updatedAt: String(data.updatedAt || '')
                 });
 
                 cachedStates.set(stanicaID, { state: state, at: Date.now() });
@@ -246,8 +299,14 @@
         // Unknown/timeout nije potvrđen lock.
         // Soft-lock model: lokalni rad i pokušaj sync-a smeju dalje,
         // GAS će vratiti MASTER_SYNC_ACTIVE ako je lock stvarno aktivan.
-        hideMasterSyncOverlay();
-        return true;
+        //
+        // POVRATNA VREDNOST PRATI ISHOD (review #390, deveti krug).
+        //
+        // true ovde znaci "upis sme da krene". Ranije je stizao i kad strog
+        // refresh padne, jer je hideMasterSyncOverlay gutao neuspeh -- pa bi
+        // withSubmitLock pustio komandu nad stanjem koje nije potvrdjeno.
+        const spremno = await hideMasterSyncOverlay(state);
+        return spremno === true;
     };
 
     window.startMasterSyncGuardPolling = function startMasterSyncGuardPolling() {
@@ -260,7 +319,7 @@
                 if (state && state.locked === true) {
                     showMasterSyncOverlay(state);
                 } else {
-                    hideMasterSyncOverlay();
+                    await hideMasterSyncOverlay(state);
                 }
             } catch (_) {
                 // fail-open za status-check
@@ -275,16 +334,16 @@
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) return;
 
-        window.getMasterSyncStateSafe(false).then(state => {
+        window.getMasterSyncStateSafe(false).then(async state => {
             if (state && state.locked === true) showMasterSyncOverlay(state);
-            else hideMasterSyncOverlay();
+            else await hideMasterSyncOverlay(state);
         }).catch(() => {});
     });
 
     window.addEventListener('online', () => {
-        window.getMasterSyncStateSafe(false).then(state => {
+        window.getMasterSyncStateSafe(false).then(async state => {
             if (state && state.locked === true) showMasterSyncOverlay(state);
-            else hideMasterSyncOverlay();
+            else await hideMasterSyncOverlay(state);
         }).catch(() => {});
     });
 

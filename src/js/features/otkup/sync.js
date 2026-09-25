@@ -21,6 +21,44 @@ async function syncQueue() {
     return result;
 }
 
+// ============================================================
+// PREDAJE (dogadjaji predaje robe vozacu)
+// Backend action: syncPredaja
+// Store: 'predaje'
+// ============================================================
+//
+// Zaseban red za sync, a ne polja na otkupnom zapisu: otkup je nepromenljiva
+// osnova, predaja je dogadjaj nad njim. Dok su delili isti red, dogadjaj koji
+// stigne POSLE uvoza otkupa se gubio -- master ga vise ne cita, a klijent je
+// vec video uspeh (review #390, P1).
+async function syncPredaje() {
+    const result = await syncStore({
+        storeName: 'predaje',
+        action: 'syncPredaja',
+        inFlightKey: 'predajeInFlight',
+        entityIdField: 'otkupacID',
+        successLabel: 'Predaje sinhronizovane'
+    });
+
+    try { await updateSyncBadge(); } catch (_) {}
+
+    return result;
+}
+
+// Bezbedan omotac -- poziva se posle potvrde predaje, gde pad sync-a ne sme da
+// obori ekran uspeha (dogadjaj je vec trajno upisan lokalno).
+async function syncPredajeSafe(reason) {
+    try {
+        return await syncPredaje();
+    } catch (err) {
+        console.error('syncPredaje failed (' + (reason || 'n/a') + '):', err);
+        return null;
+    }
+}
+
+window.syncPredaje = syncPredaje;
+window.syncPredajeSafe = syncPredajeSafe;
+
 async function requestOtkupSync(reason) {
     const runtime = getAppRuntime ? getAppRuntime() : (window.appRuntime || {});
     const runtimeSync = runtime.sync || (runtime.sync = {});

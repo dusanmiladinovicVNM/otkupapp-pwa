@@ -33,6 +33,45 @@
                 indexes: []
             },
             {
+                // TRAJNA PROJEKCIJA TEKUCEG STANJA PREDAJE (review #390, peti krug).
+                //
+                // Tri stvari, tri mesta -- i ovo je trece:
+                //   'otkupi'  -- NEPROMENLJIVA osnova (otkup se desio)
+                //   'predaje' -- red dogadjaja i njihova istorija
+                //   ovaj      -- KES poslednjeg poznatog read-modela
+                //
+                // Bez njega je "predato" zivelo samo u memoriji jednog ucitavanja:
+                // posle pomirenja bi lokalni dogadjaj bio oznacen kao razresen, a
+                // sledeci OFFLINE reload ne bi imao nijedan trag -- pa bi vec
+                // predat blok izgledao slobodan i primio drugu predaju.
+                //
+                // Kljuc je ClientRecordID BLOKA: pitanje je "u kakvom je stanju
+                // ovaj otkup", a ne "sta se desilo sa tim dogadjajem".
+                name: 'predajaProjekcija',
+                options: { keyPath: 'otkupClientRecordID' },
+                indexes: [
+                    { name: 'assignmentState', keyPath: 'assignmentState', options: { unique: false } }
+                ]
+            },
+            {
+                // DOGADJAJI PREDAJE (S5-4a).
+                //
+                // Zaseban store, a ne polja na otkupnom zapisu: otkup je
+                // NEPROMENLJIVA OSNOVA, predaja je dogadjaj NAD njim, sa svojim
+                // identitetom i svojim syncStatus-om. Dok je zivela na otkupnom
+                // redu, dogadjaj koji stigne posle uvoza se gubio -- master ga
+                // vise ne cita, a klijent je vec video uspeh.
+                //
+                // Kljuc je clientRecordID OVOG reda (jedan clan utovara), ne
+                // predajaID: jedan utovar ima N clanova.
+                name: 'predaje',
+                options: { keyPath: 'clientRecordID' },
+                indexes: [
+                    { name: 'syncStatus', keyPath: 'syncStatus', options: { unique: false } },
+                    { name: 'predajaID', keyPath: 'predajaID', options: { unique: false } }
+                ]
+            },
+            {
                 name: 'zbirne',
                 options: { keyPath: 'clientRecordID' },
                 indexes: [
@@ -305,6 +344,48 @@
 
                 tx.onabort = function (event) {
                     reject(event && event.target ? event.target.error : new Error('dbPut aborted'));
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    };
+
+    // JEDAN POSLOVNI POTEZ = JEDNA TRANSAKCIJA (review #390, P2).
+    //
+    // dbPut otvara transakciju po zapisu, pa je visestavcni klik bio N odvojenih
+    // upisa. Pad izmedju njih ostavlja NEPOTPUN utovar: manifest nabraja clanove
+    // koji lokalno nikad nisu sacuvani, pa dogadjaj ceka nesto cega nema.
+    //
+    // groups: [{ storeName, records: [...] }, ...] -- sve u JEDNOJ transakciji,
+    // preko vise store-ova. IndexedDB abort vraca sve, pa je ishod ili ceo potez
+    // ili nijedan zapis.
+    window.dbPutAll = function dbPutAll(db, groups) {
+        return new Promise(function (resolve, reject) {
+            try {
+                const list = (groups || []).filter(function (g) {
+                    return g && g.storeName && Array.isArray(g.records) && g.records.length;
+                });
+
+                if (!list.length) {
+                    resolve(true);
+                    return;
+                }
+
+                const names = list.map(function (g) { return g.storeName; });
+                names.forEach(function (n) { assertStoreExists(db, n); });
+
+                const tx = db.transaction(names, 'readwrite');
+
+                list.forEach(function (g) {
+                    const store = tx.objectStore(g.storeName);
+                    g.records.forEach(function (r) { store.put(r); });
+                });
+
+                tx.oncomplete = function () { resolve(true); };
+                tx.onerror = function () { reject(tx.error); };
+                tx.onabort = function () {
+                    reject(tx.error || new Error('dbPutAll: transakcija prekinuta'));
                 };
             } catch (err) {
                 reject(err);

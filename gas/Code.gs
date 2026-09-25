@@ -43,6 +43,46 @@ const COLUMNS = [
   'BrojDokumenta'   // ← DODATO
 ];
 
+// PREDAJA JE SOPSTVEN DOGADJAJ, NE TRI KOLONE NA OTK REDU (review #390, P1).
+//
+// Prva verzija S5-4a je predaju kacila na postojeci OTK red. Nad najnormalnijim
+// putem -- otkup je vec uvezen, pa otkupac nekoliko sati kasnije klikne "predaj"
+// -- to je tiho GUBILO dogadjaj:
+//
+//   red je Synced>Master  -> VBA uvoz uzima samo "Synced", pa ga vise ne cita
+//   GAS vrati success     -> PWA lokalno kaze "synced"
+//   otpremnica ne nastane, a niko ne sazna
+//
+// Drugi smer je bio isti kvar: red koji vec nosi PredajaID P1 je drugi utovar P2
+// tiho progutao (write-once po polju), pa VBA pravilo "P1 <> P2 -> SyncError"
+// nije imalo priliku da se izvrsi.
+//
+// Uzrok je model, ne propust: OTK red je NEPROMENLJIVA OSNOVA (otkup se desio),
+// a predaja je dogadjaj NAD njim, sa svojim identitetom i svojim lifecycle-om.
+// Tri celije canonical reda ne mogu da budu red cekanja za dogadjaje.
+//
+// Zato PREDAJA ima svoj list, append-only, i svoj SyncStatus. Jedan red = jedan
+// clan utovara; envelope (PredajaID, PredatoAt, VozacID, manifest) se ponavlja,
+// jer master grupise po PredajaID-u i tako je citanje jednim prolazom.
+const PREDAJA_COLUMNS = [
+  'ClientRecordID',        // identitet OVOG reda dogadjaja
+  'ServerRecordID',
+  'CreatedAtClient',
+  'UpdatedAtClient',
+  'UpdatedAtServer',
+  'SyncStatus',
+  'DeviceID',
+  'OtkupacID',
+
+  'PredajaID',             // identitet UTOVARA -- jedan klik otkupca
+  'PredatoAt',             // ISO trenutak predaje; otpremnica nosi OVAJ datum
+  'VozacID',               // kome je predato
+  'OtkupClientRecordID',   // koji blok je predat (CRID otkupnog reda)
+  'PredajaClanovi',        // MANIFEST: CRID-ovi svih blokova tog klika
+
+  'ReceivedAt'
+];
+
 const ZBIRNA_COLUMNS = [
   'ClientRecordID',
   'ServerRecordID',
@@ -775,6 +815,7 @@ function isMasterSyncWriteAction(action) {
 
     'sync',
     'syncAgromere',
+    'syncPredaja',
     'syncZbirna',
     'syncTretman',
     'syncOprema',
@@ -924,6 +965,18 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processAgromereRecord(r, data.kooperantID));
+        return buildBatchSyncResponse(results);
+      }));
+    }
+
+    if (data.action === 'syncPredaja') {
+      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
+      if (!Array.isArray(data.records)) {
+        return jsonResponse({ success: false, error: 'records must be an array' });
+      }
+      return jsonResponse(withLock(function() {
+        const results = data.records.map(r => processPredajaRecord(r, data.otkupacID));
         return buildBatchSyncResponse(results);
       }));
     }
@@ -1770,6 +1823,179 @@ function uploadPdfToDrive(data) {
 // ============================================================
 // ZBIRNA PROCESSING
 // ============================================================
+// Prva razlika izmedju zatecenog reda dogadjaja i onoga sto je stiglo.
+// '' = isti dogadjaj (idempotentan retry).
+//
+// Poredi se IMENOVANO, da poruka kaze STA se ne slaze -- "konflikt" bez polja
+// operateru ne znaci nista.
+function predajaRazlika(values, idx, novo) {
+  const polja = Object.keys(novo);
+
+  for (let i = 0; i < polja.length; i++) {
+    const kolona = polja[i];
+    const k = idx[kolona];
+    if (typeof k !== 'number' || k < 0) continue;
+
+    const staro = String(getCell(values, k, '') || '').trim();
+    const novoV = String(novo[kolona] || '').trim();
+
+    if (staro !== novoV) {
+      return kolona + ' (bilo: "' + staro + '", stiglo: "' + novoV + '")';
+    }
+  }
+
+  return '';
+}
+
+// ============================================================
+// PREDAJA PROCESSING
+// ============================================================
+//
+// Append-only: red se UPISUJE, nikad ne menja. Retry istog ClientRecordID-a je
+// idempotentan no-op, jer je ClientRecordID identitet BAS OVOG reda dogadjaja.
+//
+// Sve poslovne odluke o dogadjaju ostaju masteru: da li je blok vec otisao u
+// drugom utovaru, da li je utovar CEO, da li su dva reda istog utovara
+// protivrecna. GAS ovde NE presudjuje -- on samo garantuje da dogadjaj STIGNE.
+// Prva verzija je presudjivala (write-once nad OTK redom) i time je drugi utovar
+// gutala pre nego sto ga je master uopste video.
+function processPredajaRecord(record, otkupacID) {
+  try {
+    const sheetName = 'PRED-' + (otkupacID || 'UNKNOWN');
+    const ss = getOrCreateSheet(sheetName, PREDAJA_COLUMNS);
+    const sheet = ss.getSheets()[0];
+
+    ensureSheetColumns(sheet, PREDAJA_COLUMNS);
+
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(h => String(h || '').trim());
+
+    const idx = headerIndexMap(headers);
+    const nowIso = new Date().toISOString();
+
+    requireHeaderIndex(idx, 'ClientRecordID', 'processPredajaRecord');
+    requireHeaderIndex(idx, 'PredajaID', 'processPredajaRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processPredajaRecord');
+
+    if (!record || !String(record.clientRecordID || '').trim()) {
+      return {
+        clientRecordID: '',
+        success: false,
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'Missing clientRecordID'
+      };
+    }
+
+    const clientRecordID = String(record.clientRecordID).trim();
+
+    const canonicalOtkupacID = String(otkupacID || '').trim();
+    if (!canonicalOtkupacID) {
+      const err = new Error('OtkupacID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    // Identitet dogadjaja i njegov clan -- bez ijednog od njih master ne moze
+    // ni da grupise ni da zna cega je utovar sastavljen, pa se red ODBIJA ovde.
+    const predajaID = requireNonEmptyString(record.predajaID, 'PredajaID');
+    const predatoAt = requireNonEmptyString(record.predatoAt, 'PredatoAt');
+    const vozacID = requireNonEmptyString(record.vozacID, 'VozacID');
+    const otkupCRID = requireNonEmptyString(record.otkupClientRecordID, 'OtkupClientRecordID');
+    const clanovi = requireNonEmptyString(record.predajaClanovi, 'PredajaClanovi');
+
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    if (existingRow > 0) {
+      const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // ISTI IDENTITET SA DRUGOM TVRDNJOM NIJE DUPLIKAT NEGO KONFLIKT
+      // (review #390, P2).
+      //
+      // ClientRecordID je PredajaID + ':' + OtkupClientRecordID, pa isti kljuc
+      // uz drugog vozaca, drugi PredatoAt ili drugi manifest znaci da je neko
+      // poslao DRUGU tvrdnju o istom dogadjaju.
+      //
+      // Vracati 'existing' bi tu protivrecnost sakrilo pre nego sto je master
+      // uopste vidi -- a master ume da je imenuje (isti PredajaID, drugi vozac
+      // je SyncError). Isti ugovor vec vazi za OTK i za zbirnu: isti CRID +
+      // isti sadrzaj = idempotentno, isti CRID + drugi sadrzaj = konflikt.
+      const razlika = predajaRazlika(existingValues, idx, {
+        PredajaID: predajaID,
+        PredatoAt: predatoAt,
+        VozacID: vozacID,
+        OtkupClientRecordID: otkupCRID,
+        PredajaClanovi: clanovi
+      });
+
+      if (razlika) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'PREDAJA_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o predaji: ' + razlika
+        };
+      }
+
+      return {
+        clientRecordID: clientRecordID,
+        success: true,
+        status: 'existing',
+        syncStatus: String(getCell(existingValues, idx.SyncStatus, '') || '').trim() || 'Synced',
+        serverRecordID: String(getCell(existingValues, idx.ServerRecordID, '') || '').trim(),
+        updatedAtServer: nowIso,
+        row: existingRow
+      };
+    }
+
+    const serverRecordID = generateEntityServerID('PRED', canonicalOtkupacID);
+
+    const rowObj = {
+      ClientRecordID: clientRecordID,
+      ServerRecordID: serverRecordID,
+      CreatedAtClient: record.createdAtClient || '',
+      UpdatedAtClient: record.updatedAtClient || record.createdAtClient || '',
+      UpdatedAtServer: nowIso,
+      SyncStatus: 'Synced',
+      DeviceID: record.deviceID || '',
+      OtkupacID: canonicalOtkupacID,
+
+      PredajaID: predajaID,
+      PredatoAt: predatoAt,
+      VozacID: vozacID,
+      OtkupClientRecordID: otkupCRID,
+      PredajaClanovi: clanovi,
+
+      ReceivedAt: nowIso
+    };
+
+    const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
+    sheet.appendRow(rowValues);
+
+    return {
+      clientRecordID: clientRecordID,
+      success: true,
+      status: 'inserted',
+      serverRecordID: serverRecordID,
+      updatedAtServer: nowIso,
+      row: sheet.getLastRow()
+    };
+  } catch (err) {
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError('GAS', 'processPredajaRecord', err && err.message ? err.message : String(err));
+
+    return {
+      clientRecordID: safeClientRecordID,
+      success: false,
+      code: (err && err.code) || 'PROCESS_ERROR',
+      error: (err && err.message) || String(err)
+    };
+  }
+}
+
 function processZbirnaRecord(record, vozacID) {
   try {
     const canonicalVozacID = String(vozacID || '').trim();
@@ -2765,11 +2991,170 @@ function normalizeTrosakDateOnly(value) {
 // DATA ENDPOINTS
 // ============================================================
 
+// PRED daje SAMO in-flight stanje (review #390, treci krug).
+//
+// Tri pojma su razlicita i ne smeju se mesati:
+//
+//   istorijska istina  -- PRED dogadjaji (append-only, ne znaju za storno)
+//   tekuca istina      -- AKTIVNA otpremnica i kanonsko clanstvo, iz mastera
+//   privremena istina  -- PRED koji master jos nije razresio
+//
+// Prva verzija je tekuce stanje citala iz ISTORIJE, pa storniran dokument nikad
+// ne bi oslobodio blok, a odbijen dogadjaj (SyncError) bi ga zakljucao zauvek.
+//
+// Zato se ovde preskacu redovi koje je master vec obradio ili odbio: oni vise
+// nisu privremeni, i o njima govori master.
+function predajeUToku_(otkupacID) {
+  var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
+  var files = folder.getFilesByName('PRED-' + otkupacID);
+
+  // Nedostatak lista NIJE greska: otkupac koji jos nista nije predao ga i nema.
+  if (!files.hasNext()) return {};
+
+  var rows = sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]);
+  var mapa = {};
+
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    var crid = String(r.OtkupClientRecordID || '').trim();
+    if (!crid) continue;
+
+    // TERMINALNOST JE JEDAN POJAM, NE RUCNA LISTA (review #390, peti krug).
+    //
+    // Ovde je stajao ispisan spisak koji je propustao 'Duplicate'. A master ga
+    // upravo proizvodi kod urednog oporavka: PRED-1 napravi otpremnicu, Google
+    // writeback padne, sledeci ciklus isti dogadjaj vidi kao idempotentan retry
+    // i upise Duplicate.
+    //
+    // Dok otpremnica postoji, kanonsko 'assigned' ima prioritet pa se ne vidi.
+    // Posle STORNA kanonsko stanje postane free, a taj istorijski Duplicate bi
+    // se vratio kao in_flight i zakljucao blok zauvek.
+    //
+    // isTerminalSyncStatus zna sva tri (Synced>Master, Duplicate, SyncError*),
+    // i sada ga dele i OTK i PRED put.
+    if (isTerminalSyncStatus(r.SyncStatus)) continue;
+
+    // Prvi nerazreseni red za taj blok je tekuca rezervacija.
+    if (mapa[crid]) continue;
+
+    mapa[crid] = {
+      predajaID: String(r.PredajaID || '').trim(),
+      vozacID: String(r.VozacID || '').trim(),
+      predatoAt: String(r.PredatoAt || '').trim()
+    };
+  }
+
+  return mapa;
+}
+
+// Read-model vraca EKSPLICITNO poslovno stanje (review #390, cetvrti krug).
+//
+// Prethodna verzija je pitala "je li OTK red Synced>Master" i, ako jeste, uopste
+// nije gledala PRED. To je lifecycle POGRESNOG ENTITETA:
+//
+//   OTK.SyncStatus  = "otkup je uvezen u master"
+//   PRED razresenje = "predaja je postala otpremnica (ili je odbijena)"
+//
+// To su dva razlicita zivota. Normalan put -- otkup uvezen jutros, predaja
+// kliknuta popodne -- je zato drugom uredjaju izgledao kao slobodan blok, jer je
+// njegov in-flight PRED bio preskocen.
+//
+// Zato se stanje sada SASTAVLJA, po prioritetu, i OTK.SyncStatus u tome nema
+// nikakvu ulogu:
+//
+//   aktivna kanonska otpremnica        -> assigned   (iz mastera)
+//   nema je, ali ima nerazresen PRED   -> in_flight  (iz PRED lista)
+//   nema ni jednog                     -> free
+//
+// "free" ekplicitno CISTI VozacID i PredajaID: stornirana otpremnica oslobadja
+// blok, pa zatecena vrednost na redu ne sme da ga i dalje drzi.
+function projektujPredaju_(records, uToku) {
+  if (!Array.isArray(records)) return records;
+
+  return records.map(function (r) {
+    if (!r) return r;
+
+    var crid = String(r.ClientRecordID || '').trim();
+
+    // 1) Tekuca istina: aktivna otpremnica iz kanonskog lanca.
+    //    VBA izvoz je puni preko TekucaPredajaOtkupa; live OTK red je nema.
+    if (String(r.OtpremnicaID || '').trim()) {
+      r.AssignmentState = 'assigned';
+      return r;
+    }
+
+    // 2) Privremena istina: PRED koji master jos nije razresio.
+    var p = crid ? uToku[crid] : null;
+    if (p) {
+      r.AssignmentState = 'in_flight';
+      r.PredajaID = p.predajaID;
+      r.PredatoAt = p.predatoAt;
+      r.VozacID = p.vozacID;
+      return r;
+    }
+
+    // 3) Slobodan.
+    r.AssignmentState = 'free';
+    r.VozacID = '';
+    r.PredajaID = '';
+    r.PredatoAt = '';
+    return r;
+  });
+}
+
+// Epoha master sync-a: (vreme poslednje promene lock-a, da li je zakljucano).
+//
+// Sluzi kao fencing token za read-model koji se sastavlja iz vise izvora.
+// Nedostupno stanje se tretira kao ZAKLJUCANO: ograda koja ne zna odgovor ne sme
+// da pusti objavu.
+function masterSyncEpoha_() {
+  try {
+    var s = getMasterSyncStateForWriteBlock_();
+    if (!s) return { locked: true, token: '', message: '' };
+
+    return {
+      locked: !!s.locked,
+      token: String(s.updatedAt || '') + '|' + (s.locked ? '1' : '0'),
+      message: String(s.message || '')
+    };
+  } catch (err) {
+    logError('GAS', 'masterSyncEpoha_', err && err.message ? err.message : String(err));
+    return { locked: true, token: '', message: 'Stanje master sync-a nije dostupno.' };
+  }
+}
+
 function getOtkupiForOtkupac(otkupacID) {
   try {
     var canonicalOtkupacID = String(otkupacID || '').trim();
     if (!canonicalOtkupacID) {
       return { success: false, error: 'otkupacID required' };
+    }
+
+    // OGRADA SE POSTAVLJA PRE CITANJA, NE POSLE (review #390, sedmi krug).
+    //
+    // Prethodna verzija je lock proveravala TEK na kraju, posle citanja oba
+    // izvora. Zahtev koji premosti otkljucavanje je tako mogao da procita star
+    // OtkupiAll i vec terminalan PRED, a onda cuje "nije zakljucano" -- i objavi
+    // bas ono medjustanje koje ograda treba da zabrani.
+    //
+    // Epoha je (MASTER_SYNC_UPDATED_AT, locked): VBA je pise pri SVAKOJ promeni
+    // lock-a, i pri zakljucavanju i pri otkljucavanju (SetPWAMasterSyncLock).
+    // Snapshot se objavljuje samo ako je epoha ISTA pre i posle citanja, i ako u
+    // oba merenja nije bila zakljucana.
+    //
+    // OGRANICENJE, receno otvoreno: vremenska oznaka ima rezoluciju SEKUNDE, pa
+    // ciklus koji bi se ceo odigrao unutar iste sekunde ograda ne bi videla.
+    // Master ciklus radi Drive citanja i upise, pa to nije fizicki moguce -- ali
+    // to je argument o trajanju, ne dokaz. Ako ikad zatreba tvrdja garancija,
+    // pravo resenje je eksplicitan brojac MASTER_SYNC_GENERATION.
+    var epohaPre = masterSyncEpoha_();
+    if (epohaPre.locked) {
+      return {
+        success: true,
+        readModelChanging: true,
+        message: epohaPre.message || 'Master sync je u toku.',
+        records: []
+      };
     }
 
     var merged = [];
@@ -2813,10 +3198,62 @@ function getOtkupiForOtkupac(otkupacID) {
       );
     }
 
-    // Master prvo, live posle. Ako isti ClientRecordID postoji u oba, zadrži master.
+    // 3) PREDAJE: read-model mora da prati event log (review #390, P1).
+    //
+    // Otkad predaja ne dira OTK red, VozacID na njemu vise nije trag predaje.
+    // Klijent "slobodan za predaju" odlucuje po tom polju, pa bi drugi uredjaj --
+    // ili cist IndexedDB -- vec predat blok video kao slobodan i napravio DRUGI
+    // utovar. Master bi ga imenovao kao konflikt, ali tek posle sto je otkupac
+    // uradio posao koji se odbija.
+    //
+    // Zato se predaja ovde PROJEKTUJE na otkupni red: izvedena, read-only polja
+    // iz PRED lista. Izvor istine ostaje dogadjaj -- red ga samo prikazuje.
+    // KAPIJA KOJA SPRECAVA DUPLU KOMANDU NE SME DA BUDE FAIL-OPEN.
+    //
+    // Prva verzija je gresku u citanju PRED lista gutala i vracala praznu mapu:
+    // vec predat blok bi tada izgledao slobodan i otkupac bi napravio DRUGI
+    // utovar. Bolje je reci "ne znam" nego pokazati pogresno slobodan blok.
+    var uToku;
+    try {
+      uToku = predajeUToku_(canonicalOtkupacID);
+    } catch (predErr) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.predaje',
+        predErr && predErr.message ? predErr.message : String(predErr || ''),
+        predErr && predErr.stack ? predErr.stack : '',
+        canonicalOtkupacID
+      );
+
+      return {
+        success: false,
+        code: 'PREDAJA_READ_FAILED',
+        error: 'Stanje predaja se ne moze procitati, pa lista nije pouzdana.'
+      };
+    }
+
+    // Tekuce stanje se sastavlja iz DVA izvora koja master ciklus ne menja u
+    // istom trenutku: PRED dobije Synced>Master cim otpremnica nastane, a
+    // OtkupiAll se osvezava tek pri izlaznom izvozu. Izmedju to dvoje postoji
+    // legitiman prozor u kom PRED vise nije in-flight, a master red jos ne zna
+    // za otpremnicu -- i sastav bi dao LAZAN "free".
+    //
+    // Zato snapshot mora da bude iz JEDNE STABILNE EPOHE: ista pre i posle
+    // citanja. Promena znaci da je ciklus poceo ili se zavrsio usred ovog
+    // zahteva, pa se ono sto je procitano ne sme objaviti.
+    var epohaPosle = masterSyncEpoha_();
+    if (epohaPosle.locked || epohaPosle.token !== epohaPre.token) {
+      return {
+        success: true,
+        readModelChanging: true,
+        message: epohaPosle.message || 'Master sync je u toku.',
+        records: []
+      };
+    }
+
     return {
       success: true,
-      records: mergeOtkupRows_(masterRows, liveRows)
+      records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), uToku)
     };
 
   } catch (err) {
@@ -5612,10 +6049,46 @@ function ensureSheetColumns(sheet, requiredColumns) {
   }
 
   const width = Math.max(lastCol, requiredColumns.length);
-  const headers = sheet
+  let headers = sheet
     .getRange(1, 1, 1, width)
     .getValues()[0]
     .map(h => String(h || '').trim());
+
+  // NOVE KOLONE NA KRAJU SE DOZIDJUJU, SVE OSTALO JE I DALJE DRIFT (S5-4).
+  //
+  // Ova funkcija je do sada SAMO prijavljivala razliku. To je tacno za promenjen
+  // redosled ili preimenovanu kolonu -- takav list se ne sme tiho popravljati.
+  //
+  // Ali dodavanje kolone NA KRAJ je jedini nacin na koji sema ovde legitimno
+  // raste (isto pravilo vazi i u VBA kanonu: "nove kolone idu na kraj", jer se
+  // red pise poziciono). Bez ovoga bi svaki rez koji doda kolonu oborio sync na
+  // SVAKOM zatecenom listu -- SCHEMA_DRIFT na prvom zahtevu, dok neko rucno ne
+  // prosiri zaglavlje.
+  //
+  // Dozidjuje se SAMO kad je zatecen header PREFIKS kanonskog: prvih lastCol
+  // imena se poklapaju, a fali samo rep. Svaka druga razlika ide u problems i
+  // dalje puca.
+  //
+  // Meri se po lastCol, ne po headers.length: headers je procitan sirinom
+  // max(lastCol, N), pa mu je rep prazan i duzina bi uvek izgledala dovoljna.
+  if (lastCol < requiredColumns.length) {
+    let prefiksSeSlaze = true;
+    for (let i = 0; i < lastCol; i++) {
+      if (String(headers[i] || '').trim() !== String(requiredColumns[i] || '').trim()) {
+        prefiksSeSlaze = false;
+        break;
+      }
+    }
+
+    if (prefiksSeSlaze) {
+      const nedostaju = requiredColumns.slice(lastCol);
+      sheet.getRange(1, lastCol + 1, 1, nedostaju.length).setValues([nedostaju]);
+
+      for (let i = 0; i < nedostaju.length; i++) {
+        headers[lastCol + i] = String(nedostaju[i] || '').trim();
+      }
+    }
+  }
 
   const problems = [];
 

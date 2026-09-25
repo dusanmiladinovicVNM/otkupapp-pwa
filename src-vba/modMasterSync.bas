@@ -184,6 +184,16 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
     Call ImportOtkupSheetLoop(sheetIDs, sheetNames, _
                               totalImported, totalSkipped, totalErrors)
 
+    ' PREDAJE IDU POSLE OTKUPA, U ISTOM CIKLUSU (S5-4a).
+    '
+    ' Redosled nije stvar ukusa: ImportOnePREDSheet razresava
+    ' OtkupClientRecordID u OtkupID nad VEC UVEZENIM otkupom. Obrnut redosled bi
+    ' svaku predaju iz istog ciklusa proglasio za "otkup nije u masteru" --
+    ' imenovano, ali bez potrebe, i uz fatal flag.
+    '
+    ' Prazan PRED skup nije greska: otkupac koji jos nista nije predao ga i nema.
+    Call ImportPredajaSheetLoop(folderID, totalImported, totalSkipped, totalErrors)
+
     LogInfo "ImportOtkupFromPWA_Core", _
         "Import completed. Files=" & CStr(filesCount) & _
         "; Imported=" & CStr(totalImported) & _
@@ -312,6 +322,43 @@ Private Sub ImportOtkupSheetLoop(ByVal sheetIDs As Collection, _
             imported, _
             skipped, _
             errors)
+
+        totalImported = totalImported + imported
+        totalSkipped = totalSkipped + skipped
+        totalErrors = totalErrors + errors
+    Next i
+End Sub
+
+' Obilazak PRED-* listova. Pad jednog lista ne obara ostale -- isto pravilo kao
+' kod OTK (AUD-002): njihov Google writeback se ne moze rollback-ovati.
+Private Sub ImportPredajaSheetLoop(ByVal folderID As String, _
+                                   ByRef totalImported As Long, _
+                                   ByRef totalSkipped As Long, _
+                                   ByRef totalErrors As Long)
+    Dim predIDs As Collection, predNames As Collection
+    Set predIDs = New Collection
+    Set predNames = New Collection
+
+    If Not FindSheetsByPrefix(folderID, "PRED-", predIDs, predNames) Then
+        totalErrors = totalErrors + 1
+        MarkPWAFatalSyncError "ImportPredajaSheetLoop", _
+            "Drive lista PRED-* fajlova nije ucitana."
+        Exit Sub
+    End If
+
+    If predIDs.count = 0 Then
+        LogInfo "ImportPredajaSheetLoop", "Nema PRED-* fajlova u PWA folderu."
+        Exit Sub
+    End If
+
+    Dim i As Long, imported As Long, skipped As Long, errors As Long
+    For i = 1 To predIDs.count
+        imported = 0
+        skipped = 0
+        errors = 0
+
+        Call ImportOnePREDSheet(CStr(predIDs(i)), CStr(predNames(i)), _
+                                imported, skipped, errors)
 
         totalImported = totalImported + imported
         totalSkipped = totalSkipped + skipped
@@ -1348,31 +1395,6 @@ Private Function OtkKolonaPoImenu(ByRef data As Variant, ByVal ime As String) As
         End If
     Next c
 End Function
-
-' Jedan red predaje onako kako ga prolaz vidi:
-'   Array(redIndex, OtkupID, VozacID, PredajaID, PredatoAt, PredajaClanovi, CRID)
-'
-' Sve cinjenice o DOGADJAJU citaju se sa REDA -- nijedna se ne izvodi iz robe.
-' PredajaClanovi je MANIFEST: CRID-ovi svih blokova koje je otkupac cekirao u
-' tom jednom kliku (v. GrupePredaje).
-Private Function PredajaKandidat(ByVal redIdx As Long, ByVal otkupID As String, _
-                                 ByVal vozacID As String, ByRef data As Variant) As Variant
-    Dim cPred As Long, cKad As Long, cClan As Long, cCrid As Long
-    cPred = OtkKolonaPoImenu(data, "PredajaID")
-    cKad = OtkKolonaPoImenu(data, "PredatoAt")
-    cClan = OtkKolonaPoImenu(data, "PredajaClanovi")
-    cCrid = OtkKolonaPoImenu(data, "ClientRecordID")
-
-    Dim predajaID As String, predatoAt As String, clanovi As String, crid As String
-    If cPred > 0 Then predajaID = Trim$(CStr(nz(data(redIdx, cPred), "")))
-    If cKad > 0 Then predatoAt = Trim$(CStr(nz(data(redIdx, cKad), "")))
-    If cClan > 0 Then clanovi = Trim$(CStr(nz(data(redIdx, cClan), "")))
-    If cCrid > 0 Then crid = Trim$(CStr(nz(data(redIdx, cCrid), "")))
-
-    PredajaKandidat = Array(redIdx, otkupID, vozacID, predajaID, predatoAt, _
-                            clanovi, crid)
-End Function
-
 ' PREDAJE -> GRUPE, PO IDENTITETU DOGADJAJA (review #387, P2).
 '
 ' Kljuc je PredajaID -- jedan klik otkupca u PWA. NIJE (vozac, stanica, dan,
@@ -1432,18 +1454,51 @@ Private Function GrupePredaje(ByVal predaje As Collection, _
         crid = Trim$(CStr(red(6)))
 
         If clanstvo.Exists(UCase$(otkupID)) Then
-            ' VEC PREDAT -- ali kome? (review #387, P2)
+            ' VEC PREDAT -- ali U KOM UTOVARU? (S5-4; post-merge review #388)
+            '
+            ' Do S5-3 je ovo sudilo po VOZACU: isti vozac = retry, drugi vozac =
+            ' konflikt. Tada je to bilo najbolje sto se imalo -- identitet
+            ' dogadjaja nije imao trajan trag.
+            '
+            ' Od S5-3 PredajaID JESTE persistiran na zaglavlju otpremnice
+            ' (COL_OTP_PREDAJA_ID) i prezivljava ispravku. Isti vozac vise nije
+            ' dokaz retry-a: DRUGI utovar istog bloka kod ISTOG vozaca (P2 <> P1)
+            ' je tiho postajao Duplicate, pa je drugi klik otkupca nestajao bez
+            ' traga -- a to je bas ono sto "jedan klik = jedan dokument" zabranjuje.
+            '
+            ' Tri ishoda, svaki imenovan:
+            '   isti PredajaID, isti vozac  -> idempotentan retry (Duplicate)
+            '   isti PredajaID, drug vozac  -> kvar dogadjaja (jedan utovar, dva vozaca)
+            '   drugi PredajaID             -> blok je vec otisao u drugom utovaru
             Dim postojecaOtp As String, postojeciVozac As String
+            Dim postojecaPredaja As String
             postojecaOtp = CStr(clanstvo(UCase$(otkupID)))
             postojeciVozac = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
                                                         postojecaOtp, COL_OTP_VOZAC)))
+            postojecaPredaja = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                          postojecaOtp, COL_OTP_PREDAJA_ID)))
 
-            If StrComp(postojeciVozac, vozacID, vbTextCompare) = 0 Then
-                outVecPredati.Add redIdx, postojecaOtp
-            Else
+            If Len(predajaID) = 0 Then
                 outKonflikti.Add redIdx, _
-                    "blok je vec predat vozacu " & postojeciVozac & _
+                    "red nema PredajaID, a blok je vec u otpremnici " & postojecaOtp & _
+                    " -- identitet utovara se NE izvodi iz robe"
+            ElseIf Len(postojecaPredaja) = 0 Then
+                ' Dokument bez PredajaID-a nije nastao predajom (malina auto-lanac,
+                ' rucni unos). Predaja preko njega nije retry nego druga tvrdnja o
+                ' istom bloku.
+                outKonflikti.Add redIdx, _
+                    "blok je vec u otpremnici " & postojecaOtp & _
+                    ", koja nije nastala predajom, a red nosi utovar " & predajaID
+            ElseIf StrComp(postojecaPredaja, predajaID, vbTextCompare) <> 0 Then
+                outKonflikti.Add redIdx, _
+                    "blok je vec otisao u utovaru " & postojecaPredaja & _
+                    " (otpremnica " & postojecaOtp & "), a red nosi utovar " & predajaID
+            ElseIf StrComp(postojeciVozac, vozacID, vbTextCompare) <> 0 Then
+                outKonflikti.Add redIdx, _
+                    "utovar " & predajaID & " je izdat vozacu " & postojeciVozac & _
                     " (otpremnica " & postojecaOtp & "), a red trazi " & vozacID
+            Else
+                outVecPredati.Add redIdx, postojecaOtp
             End If
         ElseIf Len(predajaID) = 0 Then
             outKonflikti.Add redIdx, _
@@ -1814,10 +1869,22 @@ End Function
 ' PRIVATE -- Find OTK-* Sheets in Folder
 ' ============================================================
 
+' PRED-* listovi se traze ISTIM telom kao OTK-* (S5-4a).
+'
+' Prefiks je postao parametar umesto da se telo duplira: dva prolaza kroz Drive
+' listu koja se razlikuju u jednom stringu razisla bi se prvom izmenom
+' paginacije ili obrade greske.
 Private Function FindOTKSheets(ByVal folderID As String, _
                                ByRef outIDs As Collection, _
                                ByRef outNames As Collection) As Boolean
-    Const SOURCE As String = "FindOTKSheets"
+    FindOTKSheets = FindSheetsByPrefix(folderID, "OTK-", outIDs, outNames)
+End Function
+
+Private Function FindSheetsByPrefix(ByVal folderID As String, _
+                                    ByVal prefix As String, _
+                                    ByRef outIDs As Collection, _
+                                    ByRef outNames As Collection) As Boolean
+    Const SOURCE As String = "FindSheetsByPrefix"
 
     Dim accessToken As String
     Dim url As String
@@ -1830,18 +1897,18 @@ Private Function FindOTKSheets(ByVal folderID As String, _
 
     If Len(Trim$(folderID)) = 0 Then
         LogError SOURCE, "folderID je prazan."
-        FindOTKSheets = False
+        FindSheetsByPrefix = False
         Exit Function
     End If
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
         LogError SOURCE, "Kein Access Token"
-        FindOTKSheets = False
+        FindSheetsByPrefix = False
         Exit Function
     End If
 
-    query = "name contains 'OTK-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
+    query = "name contains '" & prefix & "' and mimeType='application/vnd.google-apps.spreadsheet'" & _
             " and '" & EscapeDriveQueryValueMasterSync(folderID) & "' in parents and trashed=false"
 
     nextPageToken = ""
@@ -1869,7 +1936,7 @@ Private Function FindOTKSheets(ByVal folderID As String, _
             LogError SOURCE, _
                      "HTTP " & http.status & ": " & Left$(responseText, 1000), _
                      http.status
-            FindOTKSheets = False
+            FindSheetsByPrefix = False
             Exit Function
         End If
 
@@ -1878,14 +1945,14 @@ Private Function FindOTKSheets(ByVal folderID As String, _
         nextPageToken = ExtractNextPageToken(responseText)
     Loop While Len(nextPageToken) > 0
 
-    LogInfo SOURCE, "Gefunden: " & outIDs.count & " OTK-Sheets"
+    LogInfo SOURCE, "Gefunden: " & outIDs.count & " " & prefix & "Sheets"
 
-    FindOTKSheets = True
+    FindSheetsByPrefix = True
     Exit Function
 
 EH:
     LogErr SOURCE
-    FindOTKSheets = False
+    FindSheetsByPrefix = False
 End Function
 
 Private Sub ParseFileList(ByVal json As String, _
@@ -2226,6 +2293,238 @@ Public Function TestHook_ConsumePWAFatalSyncError() As Boolean
     mLastPWAFatalSyncError = False
 End Function
 
+' ============================================================
+' PREDAJA (PRED-* listovi) -> OTPREMNICE
+' ============================================================
+'
+' Predaja je SOPSTVEN DOGADJAJ, ne polje na otkupnom redu (review #390, P1).
+'
+' Dok je zivela na OTK redu, gubila se na najnormalnijem putu: otkup se uveze,
+' red dobije Synced>Master, i uvoz ga vise ne cita -- pa predaja koja stigne
+' kasnije nikad ne dodje do mastera, a klijent je vec video uspeh. Drugi utovar
+' istog bloka se pritom gutao u GAS-u (write-once po polju), pa pravilo
+' "drugi PredajaID = konflikt" nije imalo priliku da se izvrsi.
+'
+' Ovde je red = JEDAN CLAN utovara. Envelope (PredajaID, PredatoAt, VozacID,
+' manifest) se ponavlja na svakom clanu, a grupisanje radi GrupePredaje -- isto
+' telo koje je i dosad odlucivalo.
+'
+' Redosled je bitan: PRED listovi se citaju POSLE OTK listova, jer se
+' OtkupClientRecordID razresava u OtkupID nad vec uvezenim otkupom.
+Private Sub ImportOnePREDSheet(ByVal spreadsheetID As String, _
+                               ByVal sheetName As String, _
+                               ByRef outImported As Long, _
+                               ByRef outSkipped As Long, _
+                               ByRef outErrors As Long)
+    Dim data As Variant
+    Dim i As Long
+    Dim syncStatus As String
+    Dim statusUpdates As Collection
+    Dim predaje As Collection
+
+    Set predaje = New Collection
+
+    On Error GoTo EH
+
+    ' Ista kapija kao kod OTK: pokvaren JSON NE SME da povuce ni jedan upis ni
+    ' jedan writeback -- red bi bio potvrdjen kao obradjen i nikad vise ponudjen.
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOnePREDSheet", _
+            "Sheet read/parse failed. Import aborted before any row import or writeback. Sheet=" & sheetName
+        Exit Sub
+    End If
+
+    If IsEmpty(data) Then
+        LogInfo "ImportOnePREDSheet", "Prazan list: " & sheetName
+        Exit Sub
+    End If
+    If UBound(data, 1) < 2 Then
+        LogInfo "ImportOnePREDSheet", "Nema redova u: " & sheetName
+        Exit Sub
+    End If
+
+    Dim cStatus As Long, cCrid As Long, cPred As Long, cKad As Long
+    Dim cVoz As Long, cOtk As Long, cClan As Long
+    cStatus = OtkKolonaPoImenu(data, "SyncStatus")
+    cCrid = OtkKolonaPoImenu(data, "ClientRecordID")
+    cPred = OtkKolonaPoImenu(data, "PredajaID")
+    cKad = OtkKolonaPoImenu(data, "PredatoAt")
+    cVoz = OtkKolonaPoImenu(data, "VozacID")
+    cOtk = OtkKolonaPoImenu(data, "OtkupClientRecordID")
+    cClan = OtkKolonaPoImenu(data, "PredajaClanovi")
+
+    ' Indeksi se ovde citaju SAMO da bi se nedostatak kolone prijavio kao sema,
+    ' pre ijednog upisa. Sam prevod redova ih cita ponovo, u svom telu -- da se
+    ' seam moze pozvati i bez uvoznika (test).
+
+    ' Nedostatak kolone je SEMA, ne red: bez nje se ne moze obraditi nijedan red,
+    ' pa se staje pre ijednog upisa umesto da se svaki red posebno prijavljuje.
+    If cStatus = 0 Or cCrid = 0 Or cPred = 0 Or cKad = 0 Or cVoz = 0 _
+       Or cOtk = 0 Or cClan = 0 Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOnePREDSheet", _
+            "PRED list nema ocekivano zaglavlje (PredajaID/PredatoAt/VozacID/" & _
+            "OtkupClientRecordID/PredajaClanovi). Sheet=" & sheetName
+        Exit Sub
+    End If
+
+    Set statusUpdates = New Collection
+
+    Dim cekaOsnovu As Long
+    Call PredajeIzPredData(data, sheetName, predaje, statusUpdates, outErrors, cekaOsnovu)
+
+    ' Redovi koji cekaju osnovu NISU greska i NISU preskok -- oni su nedovrsen
+    ' posao koji se ponavlja. Broje se odvojeno da bi log rekao istinu: "0 greske"
+    ' uz "3 ceka" je tacno stanje, a "3 preskoceno" bi lagalo da je posao gotov.
+    If cekaOsnovu > 0 Then
+        LogInfo "ImportOnePREDSheet", sheetName & ": " & CStr(cekaOsnovu) & _
+                " predaja ceka svoj otkup -- ostaju za sledeci ciklus"
+    End If
+
+    ' Grupisanje ide PRE writeback-a: red sme da dobije terminalan status tek kad
+    ' je njegova otpremnica stvarno upisana.
+    If predaje.count > 0 Then
+        Dim ishodi As Object, predajaGreske As String, stvorene As Long
+        stvorene = CreateOtpremniceIzPredaje(predaje, ishodi, predajaGreske)
+        outImported = outImported + stvorene
+
+        Dim kljucIshoda As Variant
+        For Each kljucIshoda In ishodi.Keys
+            statusUpdates.Add Array(CLng(kljucIshoda), CStr(ishodi(kljucIshoda)))
+            If InStr(1, CStr(ishodi(kljucIshoda)), SYNC_STATUS_ERROR, _
+                     vbTextCompare) = 1 Then
+                outErrors = outErrors + 1
+            Else
+                outSkipped = outSkipped + 1
+            End If
+        Next kljucIshoda
+
+        LogInfo "ImportOnePREDSheet", sheetName & ": predaja -> " & _
+                CStr(stvorene) & " otpremnica" & _
+                IIf(Len(predajaGreske) > 0, "; bez otpremnice: " & predajaGreske, "")
+
+        If Len(predajaGreske) > 0 Then
+            MarkPWAFatalSyncError "ImportOnePREDSheet", _
+                "Predaja nije postala otpremnica. Sheet=" & sheetName & _
+                "; Razlozi=" & predajaGreske
+        End If
+    End If
+
+    If statusUpdates.count > 0 Then
+        If Not WriteBackSyncStatus(spreadsheetID, statusUpdates) Then
+            outErrors = outErrors + 1
+            MarkPWAFatalSyncError "ImportOnePREDSheet", _
+                "WriteBackSyncStatus failed. Sheet=" & sheetName
+        End If
+    End If
+
+    LogInfo "ImportOnePREDSheet", sheetName & ": " & outImported & " otpremnica, " & _
+            outSkipped & " preskoceno, " & outErrors & " greske"
+    Exit Sub
+
+EH:
+    MarkPWAFatalSyncError "ImportOnePREDSheet", _
+        "Unexpected error while importing PRED sheet=" & sheetName & _
+        "; Error=" & Err.description
+
+    LogErr "ImportOnePREDSheet", "Sheet: " & sheetName
+    outErrors = outErrors + 1
+End Sub
+
+' PREVOD REDOVA LISTA U KANDIDATE PREDAJE.
+'
+' Izdvojeno iz ImportOnePREDSheet da bi se moglo MERITI: sam uvoznik cita Google
+' list preko mreze, pa se kroz njega ne moze proci u testu. Ovo je produkcioni
+' seam -- isto telo koje uvoznik zove, ne kopija za test.
+'
+' Redosled clanova niza je ugovor sa GrupePredaje (red(0..6)). Posle brisanja
+' PredajaKandidat ovo je JEDINI proizvodjac tog oblika, pa se dve definicije ne
+' mogu raziici.
+Private Sub PredajeIzPredData(ByRef data As Variant, ByVal sheetName As String, _
+                              ByRef outPredaje As Collection, _
+                              ByRef outStatusUpdates As Collection, _
+                              ByRef outErrors As Long, _
+                              ByRef outCeka As Long)
+    Dim cStatus As Long, cPred As Long, cKad As Long
+    Dim cVoz As Long, cOtk As Long, cClan As Long
+    cStatus = OtkKolonaPoImenu(data, "SyncStatus")
+    cPred = OtkKolonaPoImenu(data, "PredajaID")
+    cKad = OtkKolonaPoImenu(data, "PredatoAt")
+    cVoz = OtkKolonaPoImenu(data, "VozacID")
+    cOtk = OtkKolonaPoImenu(data, "OtkupClientRecordID")
+    cClan = OtkKolonaPoImenu(data, "PredajaClanovi")
+
+    Dim i As Long, syncStatus As String
+    For i = 2 To UBound(data, 1)
+        syncStatus = Trim$(CStr(nz(data(i, cStatus), "")))
+
+        If syncStatus = SYNC_STATUS_PENDING Then
+            Dim otkupCrid As String, otkupID As String
+            otkupCrid = Trim$(CStr(nz(data(i, cOtk), "")))
+
+            If Len(otkupCrid) = 0 Then
+                outStatusUpdates.Add Array(i, _
+                    SYNC_STATUS_ERROR & ":predaja bez OtkupClientRecordID", "")
+                outErrors = outErrors + 1
+            Else
+                otkupID = modOtkup.OtkupPoClientRecordID(otkupCrid)
+
+                If Len(otkupID) = 0 Then
+                    ' OSNOVA JOS NIJE STIGLA NIJE KONFLIKT (review #390, P1).
+                    '
+                    ' Prva verzija je ovde pisala SyncError. SyncError je
+                    ' terminalan, pa bi predaja koja je stigla PRE svog otkupa
+                    ' ostala mrtva i kad osnova kasnije uredno dodje -- trajan
+                    ' gubitak dogadjaja, samo na granici zavisnosti.
+                    '
+                    ' PWA sada salje otkup pa predaju kroz jedno telo
+                    ' (syncOtkupacDomain), ali master ne sme da racuna na redosled
+                    ' mreze: dva zahteva, dve sudbine. Zato se red OSTAVLJA
+                    ' nedirnut -- bez statusa -- pa ga sledeci ciklus ponovo uzme.
+                    '
+                    ' Isto pravilo vec vazi za nepotpun manifest: utovar CEKA
+                    ' ostatak umesto da ga proglasi kvarom. Imenovan konflikt ide
+                    ' tek kad postoji dokaz da osnova vise ne moze da stigne, a
+                    ' takvog dokaza ovde nema.
+                    outCeka = outCeka + 1
+
+                    LogInfo "PredajeIzPredData", _
+                        "Predaja ceka osnovu: otkup jos nije u masteru. Sheet=" & _
+                        sheetName & "; Row=" & CStr(i) & _
+                        "; OtkupClientRecordID=" & otkupCrid
+                Else
+                    ' CRID koji ide u grupisanje je CRID OTKUPA, ne ovog reda --
+                    ' manifest nabraja blokove, pa se pripadnost meri njime.
+                    outPredaje.Add Array(i, otkupID, _
+                                         Trim$(CStr(nz(data(i, cVoz), ""))), _
+                                         Trim$(CStr(nz(data(i, cPred), ""))), _
+                                         Trim$(CStr(nz(data(i, cKad), ""))), _
+                                         Trim$(CStr(nz(data(i, cClan), ""))), _
+                                         otkupCrid)
+                End If
+            End If
+        End If
+    Next i
+End Sub
+
+Public Sub TestHook_PredajeIzPredData(ByRef data As Variant, _
+                                      ByRef outPredaje As Collection, _
+                                      ByRef outStatusUpdates As Collection, _
+                                      ByRef outErrors As Long, _
+                                      ByRef outCeka As Long)
+    Call PredajeIzPredData(data, "TEST", outPredaje, outStatusUpdates, outErrors, outCeka)
+End Sub
+
+' Test seam: ImportOnePREDSheet je Private, a uvoz dogadjaja je poslovni tok.
+Public Sub TestHook_ImportOnePREDSheet(ByVal spreadsheetID As String, _
+                                       ByVal sheetName As String, _
+                                       ByRef outImported As Long, _
+                                       ByRef outSkipped As Long, _
+                                       ByRef outErrors As Long)
+    Call ImportOnePREDSheet(spreadsheetID, sheetName, outImported, outSkipped, outErrors)
+End Sub
+
 Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                               ByVal sheetName As String, _
                               ByRef outImported As Long, _
@@ -2235,12 +2534,6 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Dim i As Long
     Dim syncStatus As String
     Dim statusUpdates As Collection
-
-    ' Predaje se SKUPLJAJU pa grupisu posle prolaza (S5-2): jedan utovar
-    ' stize kao N redova, pa bi otpremnica po redu dala deset dokumenata
-    ' za jedan poslovni dogadjaj.
-    Dim predaje As Collection
-    Set predaje = New Collection
     
     On Error GoTo EH
     
@@ -2329,42 +2622,22 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                         GoTo NextImportRow
                     End If
                 End If
-                ' Proveri da li je VozacID update (Otprema tab)
-                Dim sheetVozac As String
-                sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
-                If Len(sheetVozac) > 0 Then
-                    ' PREDAJA ROBE VOZACU JE POSLOVNI DOGADJAJ, NE PECAT (S5-2).
-                    '
-                    ' Otkupac je u PWA cekirao otkupne listove i predao ih BAS tom
-                    ' vozacu. Taj cin je osnova OTPREMNICE -- a otpremnica je
-                    ' osnova zbirne. Zateceni tok ga je upisivao kao Otkup.VozacID
-                    ' (TryUpdateVozacID), u kolonu koju ciljni model nema: vozac
-                    ' pripada OTPREMNICI (S4.1c), a jedini citaoci te kolone su
-                    ' bili pauzirani.
-                    '
-                    ' Red se ovde samo ZABELEZI. Ishod mu se ne zna dok se sve
-                    ' predaje ovog lista ne grupisu -- jedan utovar stize kao N
-                    ' redova -- pa status upisuje CreateOtpremniceIzPredaje, po
-                    ' ishodu SVOJE grupe.
-                    If Len(posID) > 0 Then
-                        predaje.Add PredajaKandidat(i, posID, sheetVozac, data)
-                    Else
-                        ' AUD-042(a) ostaje: NE SME da prodje kao Duplicate.
-                        ' Duplicate je terminalan (import uzima samo Pending), pa
-                        ' bi red zauvek ostao bez otpremnice, a sync bio zelen.
-                        statusUpdates.Add Array(i, _
-                            SYNC_STATUS_ERROR & ":predaja -- otkup nije u masteru", "")
-                        outErrors = outErrors + 1
-
-                        MarkPWAFatalSyncError "ImportOneOTKSheet", _
-                            "Predaja vozacu: otkup nije nadjen u masteru. Sheet=" & _
-                            sheetName & "; Row=" & CStr(i) & _
-                            "; ClientRecordID=" & clientRecordID
-                    End If
-                Else
-                    statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
-                    outSkipped = outSkipped + 1
-                End If
+                ' PREDAJA VISE NE ZIVI NA OTK REDU (review #390, P1).
+                '
+                ' Do S5-4a je postojeci red sa upisanim VozacID-em znacio
+                ' "predaja". Taj model je tiho gubio dogadjaj: cim red dobije
+                ' Synced>Master, uvoz ga vise ne cita (v. filter na vrhu ove
+                ' petlje), pa predaja koja stigne KASNIJE nikad ne dodje do
+                ' mastera -- a klijent je vec video uspeh.
+                '
+                ' OTK red je NEPROMENLJIVA OSNOVA: otkup se desio. Predaja je
+                ' dogadjaj NAD njim, sa svojim identitetom i svojim lifecycle-om,
+                ' i stize kroz PRED-* listove (ImportOnePREDSheet).
+                '
+                ' Ovde zato ostaje samo ono sto je red stvarno i bio: vec uvezen
+                ' otkup.
+                statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
+                outSkipped = outSkipped + 1
             Else
                 ' Validierung
                 Dim validationError As String
@@ -2387,22 +2660,16 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                         ' VEC SA VOZACEM, i ide OVOM granom -- ne duplikat granom.
                         '
                         ' Dok se predaja ovde nije gledala, ishod je bio najgori
-                        ' moguci: otkup nastane, red dobije "Synced>Master" (sto je
-                        ' TERMINALNO, import uzima samo Pending), a otpremnice nema
-                        ' i nikad je nece biti. Poslovni dogadjaj se gubi u tisini.
+                        ' NOV OTKUP JE SAMO OTKUP (S5-4a).
                         '
-                        ' Zato red sa vozacem NE dobija status ovde: dobija ga
-                        ' CreateOtpremniceIzPredaje, po ishodu svoje predaje.
+                        ' Dok je predaja zivela na OTK redu, nov red sa upisanim
+                        ' VozacID-em je odmah pravio i predaju -- pa je jedan red
+                        ' nosio dva poslovna dogadjaja i dva razloga za status.
+                        '
+                        ' Predaja sada stize kao svoj dogadjaj (PRED-* listovi),
+                        ' pa ovde ostaje jedno pitanje: je li otkup uvezen.
                         outImported = outImported + 1
-
-                        Dim novVozac As String
-                        novVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
-
-                        If Len(novVozac) > 0 Then
-                            predaje.Add PredajaKandidat(i, newOtkupID, novVozac, data)
-                        Else
-                            statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newOtkupID)
-                        End If
+                        statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newOtkupID)
                     Else
                         statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":AppendRow failed", "")
                         outErrors = outErrors + 1
@@ -2416,42 +2683,6 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
 
 NextImportRow:
     Next i
-
-    ' PREDAJE -> OTPREMNICE, posle prolaza (S5-2).
-    '
-    ' Ide PRE WriteBackSyncStatus, jer red sme da dobije "Master" tek kad je
-    ' njegova otpremnica stvarno upisana. Obrnut redosled bi Google listu
-    ' potvrdio posao koji jos nije uradjen -- a Duplicate je terminalan, pa se
-    ' red nikad vise ne bi ponudio.
-    If predaje.count > 0 Then
-        Dim ishodi As Object, predajaGreske As String, stvorene As Long
-        stvorene = CreateOtpremniceIzPredaje(predaje, ishodi, predajaGreske)
-
-        Dim kljucIshoda As Variant
-        For Each kljucIshoda In ishodi.Keys
-            statusUpdates.Add Array(CLng(kljucIshoda), CStr(ishodi(kljucIshoda)))
-            If InStr(1, CStr(ishodi(kljucIshoda)), SYNC_STATUS_ERROR, _
-                     vbTextCompare) = 1 Then
-                outErrors = outErrors + 1
-            Else
-                outSkipped = outSkipped + 1
-            End If
-        Next kljucIshoda
-
-        LogInfo "ImportOneOTKSheet", sheetName & ": predaja -> " & _
-                CStr(stvorene) & " otpremnica" & _
-                IIf(Len(predajaGreske) > 0, "; bez otpremnice: " & predajaGreske, "")
-
-        ' AUD-042(a) VAZI I DALJE, samo nad drugim upisom: predaja koja nije
-        ' postala otpremnica NE SME da prodje kao tih preskok. Red je vec dobio
-        ' SyncError iznad; ovde se pali fatal flag, pa top-level zavrsava sa
-        ' Monitor_MasterSyncFail umesto zelenim ciklusom.
-        If Len(predajaGreske) > 0 Then
-            MarkPWAFatalSyncError "ImportOneOTKSheet", _
-                "Predaja vozacu nije postala otpremnica. Sheet=" & sheetName & _
-                "; Razlozi=" & predajaGreske
-        End If
-    End If
 
     ' SyncStatus zurueckschreiben in Google Sheet
     If statusUpdates.count > 0 Then
