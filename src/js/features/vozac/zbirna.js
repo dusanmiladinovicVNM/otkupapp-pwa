@@ -32,14 +32,16 @@ function otpKlaseOpis(o) {
 }
 
 async function loadVozacData() {
-    vozacOtpremnice = [];
-
     const json = await safeAsync(async () => {
         return await apiFetch('action=getVozacOtpremnice');
     }, 'Greška pri učitavanju podataka vozača');
 
     // readModelChanging: master ciklus menja stanje, server namerno ne salje
     // spisak. Zadrzi poslednje poznato umesto da ga obrises praznim odgovorom.
+    //
+    // Zato se spisak NE prazni unapred (review #392, P3): ranije je prva linija
+    // bila vozacOtpremnice = [], pa je komentar obecavao zadrzavanje koje runtime
+    // nije radio.
     if (json && json.readModelChanging) {
         showToast(json.message || 'Stanje vožnji se trenutno menja', 'warning');
     } else if (json && json.success && Array.isArray(json.records)) {
@@ -60,17 +62,28 @@ async function loadVozacData() {
 
             stavke: Array.isArray(r.stavke) ? r.stavke : []
         }));
+    } else {
+        // Ni podatak ni imenovan razlog -- spisak se prazni, jer bi zadrzan
+        // stari ovde bio tvrdnja bez pokrica.
+        vozacOtpremnice = [];
     }
 
     // Jedan fetch za zbirne -- koristi se i za renderovanje
     const zbirne = await getMergedZbirneForVozac();
     _lastMergedZbirne = zbirne;
 
-    // POTROSENOST SE VISE NE IZVODI IZ LOKALNE ISTORIJE.
+    // DVE ISTINE, NE JEDNA.
     //
-    // Ranije se skup "vec u zbirnoj" sastavljao iz otkupRecordIDs svih zbirni
-    // koje uredjaj zna. Sada ga daje master, po clanstvu, jednim poljem.
-    vozacOtpremnice = vozacOtpremnice.filter(o => !o.zbirnaID);
+    //   kanonska tekuca  -- server: Otpremnica.zbirnaID (posle master ciklusa)
+    //   privremena       -- lokalna zbirna koju master jos nije razresio
+    //
+    // Prva sama nije dovoljna: postoji legitiman prozor u kom je zbirna vec
+    // napravljena a master je jos nije video.
+    const rezervisane = rezervisaneOtpremnice(zbirne);
+
+    vozacOtpremnice = vozacOtpremnice.filter(o =>
+        !o.zbirnaID && !rezervisane.has(o.otpremnicaID)
+    );
 
     renderVozacOtpremnice();
     renderVozacZbirneFromData(zbirne);
@@ -125,9 +138,21 @@ function renderVozacOtpremnice() {
     ).join('');
 }
 
+// Spisak otpremnica koji je vozac STVARNO video kad je otvorio ekran.
+//
+// Potvrda se meri prema njemu, ne prema "svemu sto je sada slobodno": osvezavanje
+// izmedju otvaranja i klika sme da ZAUSTAVI komandu, ali ne sme tiho da promeni
+// manifest koji je korisnik pregledao.
+let zbirnaNamera = [];
+
 async function startZbirnaCreation() {
     document.getElementById('zbirnaMainView').style.display = 'none';
     document.getElementById('zbirnaCreateView').style.display = 'block';
+
+    const danas = getTodayIsoDate();
+    zbirnaNamera = (vozacOtpremnice || [])
+        .filter(r => r.datum === danas && !r.zbirnaID)
+        .map(r => r.otpremnicaID);
     
     const sel = document.getElementById('fldZbirnaKupac');
     sel.innerHTML = '<option value="">-- Izaberi kupca --</option>';
@@ -228,6 +253,14 @@ function mapServerZbirnaRecord(r) {
         klasa: r.Klasa || '',
         otpremnicaIDs: r.OtpremnicaIDs || '',
 
+        // VERDIKT MASTERA, DOSLOVNO (review #392, P1).
+        //
+        // Do sada se gubio: mapper je upisivao fiksno 'synced', sto znaci samo
+        // "GAS je primio red". Master svoj ishod pise NAZAD u VOZ list
+        // (Synced>Master / Duplicate / SyncError:...), pa je to jedini signal po
+        // kom klijent zna da je dokument stvarno razresen.
+        masterStatus: r.SyncStatus || '',
+
         syncStatus: 'synced',
         syncAttempts: 0,
         lastSyncError: '',
@@ -256,6 +289,7 @@ function normalizeLocalZbirnaRecord(r) {
         tipAmbalaze: r.tipAmbalaze || '',
         klasa: r.klasa || '',
         otpremnicaIDs: r.otpremnicaIDs || '',
+        masterStatus: r.masterStatus || '',
 
         syncStatus: r.syncStatus || 'pending',
         syncAttempts: parseInt(r.syncAttempts, 10) || 0,
@@ -368,14 +402,61 @@ async function confirmZbirnaUnlocked() {
     const kupacID = kupacSel.value;
     const today = getTodayIsoDate();
 
-    // POTROSENOST DAJE MASTER, NE LOKALNA ISTORIJA.
+    // KOMANDNA KAPIJA (review #392, P1).
     //
-    // Prazan zbirnaID znaci "slobodna": server ga racuna iz clanstva
-    // (AktivnaZbirnaZaOtpremnicu), pa posle storna zbirne otpremnica sama ponovo
-    // udje u izbor. loadVozacData je taj filter vec primenio -- ovde se ponavlja
-    // jer izmedju ucitavanja i klika stoji korisnik.
+    // Drugi uredjaj je mogao da potrosi iste otpremnice dok je ovaj ekran stajao
+    // otvoren. Lock sam po sebi to ne hvata: master moze da zavrsi ciklus, lock
+    // padne, a ovaj uredjaj i dalje drzi stari snimak u memoriji.
+    //
+    // Zato se pre upisa tazi SVEZ authoritative spisak. Endpoint iz #391 vec
+    // garantuje da je snimak iz jedne objavljene generacije, pa se ovde meri samo
+    // da li je NAMERA korisnika jos izvodljiva.
+    //
+    // OFFLINE ostaje offline-first: bez veze se radi nad poslednjim poznatim.
+    if (navigator.onLine) {
+        const sveze = await safeAsync(async () => {
+            return await apiFetch('action=getVozacOtpremnice');
+        }, 'Greška pri proveri stanja vožnji');
+
+        if (!sveze || sveze.success !== true || sveze.readModelChanging) {
+            showToast(
+                (sveze && sveze.message) ||
+                'Stanje vožnji se ne može potvrditi - probaj ponovo',
+                'error'
+            );
+            return;
+        }
+
+        const slobodne = new Set(
+            (Array.isArray(sveze.records) ? sveze.records : [])
+                .filter(r => !String((r && r.zbirnaID) || '').trim())
+                .map(r => String((r && r.otpremnicaID) || '').trim())
+        );
+
+        // TACNO ONAJ SKUP KOJI JE KORISNIK VIDEO.
+        //
+        // Ne uzima se "sve sto je sada slobodno": to bi tiho promenilo manifest
+        // koji je upravo pregledan. Ako je ijedna otpremnica u medjuvremenu
+        // otisla, komanda STAJE i ekran se precrtava.
+        const izgubljene = (zbirnaNamera || []).filter(id => !slobodne.has(id));
+
+        if (!zbirnaNamera.length || izgubljene.length) {
+            showToast(
+                izgubljene.length === 1
+                    ? 'Jedna otpremnica je u međuvremenu već u zbirnoj - proveri spisak'
+                    : izgubljene.length + ' otpremnica je u međuvremenu već u zbirnoj - proveri spisak',
+                'error'
+            );
+            await loadVozacData();
+            cancelZbirna();
+            return;
+        }
+    }
+
+    // Izbor je NAMERA razresena nad tekucim spiskom, po OtpremnicaID-u.
+    const uNameri = new Set(zbirnaNamera || []);
     const todayOtkupi = (vozacOtpremnice || []).filter(r =>
-        r.datum === today && !r.zbirnaID
+        uNameri.has(r.otpremnicaID)
     );
 
     if (todayOtkupi.length === 0) {
@@ -488,6 +569,49 @@ async function syncZbirne() {
     try { await loadVozacZbirne(); } catch (_) {}
 
     return result;
+}
+
+// Da li je master doneo odluku o ovoj zbirni.
+//
+// Isti skup koji GAS zove terminalnim: master je red video i presudio, pa od tog
+// trenutka o otpremnicama govori KANONSKO stanje, ne vise lokalni dogadjaj.
+function zbirnaRazresenaOdMastera(z) {
+    const s = String((z && z.masterStatus) || '').trim();
+    return s === 'Synced>Master' || s === 'Duplicate' || s.indexOf('SyncError') === 0;
+}
+
+// OTPREMNICE KOJE DRZI JOS NERAZRESENA ZBIRNA (review #392, P1).
+//
+// Server govori kanonsku tekucu istinu (Otpremnica.zbirnaID), ali je zna tek
+// POSLE master ciklusa. Izmedju klika i tog ciklusa lokalna zbirna postoji, a
+// server jos sasvim tacno kaze "slobodna" -- pa bi ista otpremnica odmah ponovo
+// usla u izbor i vozac bi nad njom napravio DRUGU zbirnu. Master bi je kasnije
+// odbio, ali komanda bi vec bila izvrsena kao ispravna.
+//
+// Lokalni 'synced' NIJE razresenje: znaci samo da je GAS primio red. Razresenje
+// daje master, i cita se iz njegovog verdikta -- inace bi rezervacija trajala
+// zauvek i posle storna zbirne otpremnica se nikad ne bi vratila u izbor.
+function rezervisaneOtpremnice(zbirne) {
+    const rez = new Set();
+
+    (zbirne || []).forEach(z => {
+        if (!z || z.deleted) return;
+
+        // Odbijen dogadjaj OSLOBADJA: inace bi greska u unosu trajno zakljucala
+        // otpremnicu.
+        const lokalni = String(z.syncStatus || '').trim();
+        if (lokalni === 'error' || lokalni === 'failed') return;
+
+        if (zbirnaRazresenaOdMastera(z)) return;
+
+        String(z.otpremnicaIDs || '')
+            .split(',')
+            .map(x => x.trim())
+            .filter(Boolean)
+            .forEach(id => rez.add(id));
+    });
+
+    return rez;
 }
 
 async function getMergedZbirneForVozac() {

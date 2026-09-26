@@ -6352,6 +6352,55 @@ piscu, pa bi sabotaža čitača merila drugu branu — placebo.
 **Zaostao dug:** pomoćnik je preimenovan u `ZbrPwaIzvorOtpremnica` i vraća `OtpremnicaID`, ali se
 lokalne promenljive na šest pozivnih mesta i dalje zovu `crid`. Semantika je tačna, imena su zaostala.
 
+**Review #392, prvi krug — model je bio tačan, lifecycle nije bio dovršen.**
+
+Cutover je prošao bez primedbe; tri rupe su bile u **životu** tog modela.
+
+**P1 — lokalna zbirna nije rezervisala svoje otpremnice.** Dostupnost se izvodila samo iz
+`Otpremnica.zbirnaID`, a to je **kanonska** istina koju server zna tek posle master ciklusa. Između
+klika i tog ciklusa zbirna postoji, a server još sasvim tačno kaže „slobodna":
+
+```
+ZBR-A -> OTP-1   (lokalno, GAS primio)
+master jos nije prosao
+server:  OTP-1.zbirnaID = ""
+ekran:   OTP-1 opet u izboru  ->  ZBR-B -> OTP-1
+```
+
+Master bi drugu odbio, ali korisniku je komanda već prikazana kao ispravna.
+
+Ključ popravke nije bio filter nego **signal**: `mapServerZbirnaRecord` je upisivao fiksno
+`syncStatus: 'synced'`, pa se masterov verdikt (`Synced>Master` / `Duplicate` / `SyncError`) gubio na
+putu. Sada se prenosi kao `masterStatus`, i dostupnost gleda **dve** istine — kanonsku i privremenu
+(lokalna zbirna koju master još nije razrešio). Bez tog signala rezervacija bi trajala zauvek: posle
+storna zbirne otpremnica se nikad ne bi vratila u izbor.
+
+**P1 — potvrda nije imala svežu authoritative proveru.** Drugi uređaj je mogao da potroši iste
+otpremnice dok ekran stoji otvoren; lock to ne hvata, jer master može da završi ciklus i lock padne, a
+ovaj uređaj i dalje drži stari snimak u memoriji. `startZbirnaCreation` sada snima **nameru** — spisak
+koji je vozač stvarno video — a `confirmZbirnaUnlocked` pre upisa traži svež `getVozacOtpremnice` i
+proverava da je **tačno ta namera** još izvodljiva. Namerno se **ne** uzima „sve što je sada slobodno":
+to bi tiho promenilo manifest koji je upravo pregledan.
+
+**P2 — GAS je gutao „isti CRID, druga tvrdnja".** `processZbirnaRecord` je vraćao `existing/success`
+bez poređenja sadržaja, pa druga verzija nikad nije stigla masteru — iako `PwaZbirnaRazlika` ume da je
+imenuje. Sada: `VozacID`, `Datum`, `KupacID`, `BrojZbirne` (samo ako je poslat) i **skup** izvora
+(`skupIzvoraRazlika_`, redosled nije tvrdnja) → `ZBIRNA_CONFLICT`. Summary ne odlučuje, jer ga master
+izvodi iz izvora.
+
+**Dva P3 su zatvorena jer su bila neslaganja koda i komentara**, a to je gore od običnog propusta:
+prazan token više se ne preskoče tiho nego stiže piscu koji ga odbija (1225), i `loadVozacData` više ne
+prazni spisak pre nego što obeća da ga zadržava. Treći (multiplicitet u `SkupIzvoraRazlika`) ostaje
+zapisan.
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2025/0** — broj je nepromenjen,
+jer ovaj krug ne dodaje tvrdnje: dve ispravke su u GAS-u i PWA, a jedina VBA izmena ne menja nijednu
+postojeću tvrdnju. `dokaz.py zbr-ids` je pušten **ponovo** (sidro sabotaže se menjalo zajedno sa kodom
+koji ga gađa): **2/2 crvenih**, potpis izvora identičan (`5c992b26d0585c55`).
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — rezervacija, komandna kapija i konflikt su pročitani i
+rezonovani, ne izvršeni.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

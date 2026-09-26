@@ -5753,8 +5753,8 @@ SABOTAZE = {
     # drugu branu -- placebo.
     "zbr-ids-uzima-samo-prvi": (
         "modMasterSync.bas",
-        "        If Len(otpID) > 0 Then\n            rez.Add otpID\n",
-        "        If Len(otpID) > 0 And rez.count = 0 Then\n            rez.Add otpID\n",
+        "        rez.Add otpID\n",
+        "        If rez.count = 0 Then rez.Add otpID\n",
         "Test_ZBR_UvozNosiTacnoPoslateOtpremnice",
         "ZBR-IDS: clanstvo ima tacno dve otpremnice",
     ),

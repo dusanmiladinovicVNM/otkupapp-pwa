@@ -4513,9 +4513,10 @@ Private Function OtpremniceIzIDs(ByVal ids As String, _
         Dim otpID As String
         otpID = Trim$(CStr(delovi(i)))
 
-        If Len(otpID) > 0 Then
-            rez.Add otpID
-        End If
+        ' Prazan token se NE preskace: komentar iznad obecava da ga odbija
+        ' kanonski pisac (1225), pa mu mora i stici. Tiho preskakanje bi od
+        ' "OTP-1,,OTP-2" napravilo uredan spisak i sakrilo pokvaren manifest.
+        rez.Add otpID
     Next i
 
     If rez.count = 0 Then

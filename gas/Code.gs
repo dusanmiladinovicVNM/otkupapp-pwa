@@ -1868,6 +1868,27 @@ function predajaRazlika(values, idx, novo) {
   return '';
 }
 
+// Razlika DVA SKUPA izvora, bez obzira na redosled.
+//
+// Redosled u spisku nije tvrdnja -- isti dokumenti u drugom redu su isti
+// manifest. Vraca opis razlike ili '' kad su skupovi jednaki.
+function skupIzvoraRazlika_(staro, novo) {
+  function uSkup(s) {
+    return String(s || '')
+      .split(',')
+      .map(function (x) { return x.trim(); })
+      .filter(Boolean)
+      .sort();
+  }
+
+  var a = uSkup(staro);
+  var b = uSkup(novo);
+
+  if (a.join('|') === b.join('|')) return '';
+
+  return 'OtpremnicaIDs (bilo: "' + a.join(',') + '", stiglo: "' + b.join(',') + '")';
+}
+
 // ============================================================
 // PREDAJA PROCESSING
 // ============================================================
@@ -2091,6 +2112,46 @@ function processZbirnaRecord(record, vozacID) {
       const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
       const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
       const isTerminal = isTerminalSyncStatus(currentSyncStatus);
+
+      // ISTI CRID + DRUGA TVRDNJA JE KONFLIKT, NE "existing" (review #392, P2).
+      //
+      // VBA to vec ume da imenuje -- PwaZbirnaRazlika kaze "isti CRID, drugi skup
+      // izvora je konflikt" -- ali mu GAS nije davao priliku da vidi drugu
+      // verziju: vracao je success/existing, pa druga tvrdnja nikad nije stigla
+      // do mastera. Ista klasa koju smo zatvorili kod PRED-a.
+      //
+      // Poredi se KANONSKI sadrzaj. Summary (kilaza po klasama, vrsta, sorta,
+      // ambalaza, klasa) NE ulazi: master ga izvodi iz izvora, pa razlika u
+      // njemu nije druga tvrdnja o dokumentu.
+      var zbrRazlika = predajaRazlika(existingValues, idx, {
+        VozacID: canonicalVozacID,
+        Datum: String(record.datum || '').trim(),
+        KupacID: String(record.kupacID || '').trim()
+      });
+
+      // Broj se poredi SAMO ako ga klijent salje: prazno znaci "generisi
+      // lokalno", pa nije razlika u tvrdnji. Isto pravilo vazi i u VBA.
+      if (!zbrRazlika && String(record.brojZbirne || '').trim()) {
+        zbrRazlika = predajaRazlika(existingValues, idx, {
+          BrojZbirne: String(record.brojZbirne).trim()
+        });
+      }
+
+      if (!zbrRazlika) {
+        zbrRazlika = skupIzvoraRazlika_(
+          getCell(existingValues, idx.OtpremnicaIDs, ''),
+          otpremnicaIDs
+        );
+      }
+
+      if (zbrRazlika) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'ZBIRNA_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o zbirnoj: ' + zbrRazlika
+        };
+      }
 
       // Only non-terminal records may receive light retry enrichment.
       if (!isTerminal) {
