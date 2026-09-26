@@ -115,34 +115,77 @@ nov modul, nijedna izmena `modDataAccess.AppendRow` dok prevod ne zavrsi.
 
 ## 3. Rez na PR-ove
 
-**Jezgro je zavrseno.** Merenje po pozivu (okno od 70 linija iznad, pa provera helpera):
+### Konačno merenje (tri revizije; ova važi)
 
-| Stanje | Mesta | Moduli |
+Klasifikacija po pozivu, sa razrešenim helperom (i kad se zove inline kao drugi argument, i kad ide
+kroz promenljivu):
+
+| Stanje | Mesta |
+|---|---|
+| **Imenovano** — puna širina + razrešenje po imenu | **18** |
+| **Pozicionо** — goli `Array(...)` | **21** |
+| Ukupno produkcionih | 39 |
+
+**Jezgro je 100% imenovano.** Nijedno pozicionо mesto nije u `modDokumenta` ni `modOtkup` — dakle
+pisci `tblOtkup`, `tblOtpremnica`, `tblZbirna`, njihovih stavki **i tabela članstva**
+(`tblZbirnaIzvori` preko `BuildZbirnaIzvorRowData`) svi rade po imenu.
+
+Preostalih 21 je periferija: `modPaletniList` 4, `modUtovar` 4, `modNovac` 2, `modSEFPersistance` 2,
+`modFaktura` 2, `modAgrohemija` 2, te po jedno `modStornoZurnal`, `modStornoContext`, `modCenovnik`,
+`modSetup`, `modAmbalaza`.
+
+### Tri imenovana idioma već postoje
+
+Merenje je našlo **tri nezavisna** načina na koja repo već piše po imenu — zato se ništa ne
+projektuje, nego se bira jedan:
+
+| Idiom | Primer | Baza niza |
 |---|---|---|
-| **Vec imenovano** (`Build*RowData` + `SetRowValueByColumn`) | **12** | `modDokumenta` 10 (63 upotrebe, 7 helpera), `modOtkup` 2 (24 upotrebe, 2 helpera) |
-| Goli `Array(...)`, **kraci od tabele** | 7 | `modNovac` 2, `modFaktura` 2, `modCenovnik` 1, `modAgrohemija` 1, `modAmbalaza` 1 |
-| Bez ijedne upotrebe `SetRowValueByColumn` | 14 | `modUtovar` 4, `modSEFPersistance` 2, `modMalina`, `modBankaImport`, `modKooperant`, `modStornoZurnal`, `modStornoContext`, `modMaticniKorisnici`, `modConfig`, `modSetup` |
+| `Build*RowData` + `SetRowValueByColumn` | `modOtkup.bas:1408`, `modDokumenta` (7 helpera, 63 upotrebe) | **0**-bazna (`rowData(colIndex - 1)`, `modSchemaGuard.bas:289`) |
+| `ReDim 1 To count` + `RequireColumnIndex` kao indeks | `modUtovar.bas:157-163`, `modMalina.bas` | **1**-bazna |
+| lokalni `Set*Cell` omotač | `modAgrohemija.bas:403` | varira |
 
-Dakle prevedeni su **tacno pisci `tblOtkup` / `tblOtpremnica` / `tblZbirna` i njihovih stavki** -- ceo
-kanonski model. Ostatak od 21 mesta je **periferija**: novac, faktura, cenovnik, magacin, ambalaza,
-utovar, SEF, maticni podaci.
+**Posledica za kapiju arnosti:** baza niza **nije uniformna**. Formula koja pretpostavlja
+`LBound = 0` je pogrešna za `modUtovar`/`modMalina`, a formula koja pretpostavlja 1 je pogrešna za
+`SetRowValueByColumn`. Kapija mora da normalizuje `LBound`, ne da ga pretpostavi.
 
-To menja i rizik i redosled. **S3e-2 brise kolone iz `tblOtkup`/`tblOtpremnica`/`tblZbirna`** -- bas
-iz tabela cijim piscima pomeraj vise ne moze nista, jer su prevedeni. Periferne tabele
-(`tblFakture`, `tblNovac`, `tblAmbalaza`, `tblCenovnik`, `tblMagacin`, `tblUtovar`) **nisu** u planu
-skracivanja ni za S3e-2 ni za S6.
+Za prevod periferije preporučen je **prvi idiom** — ima najviše upotreba, jedini je dokazan stvarnim
+događajem (§2.2), i drži pravilo „kanonska kolona koja fali pada".
 
 ### Redosled
 
-| PR | Sadrzaj | Mesta | Zasto tu |
+| PR | Sadržaj | Mesta | Zašto tu |
 |---|---|---|---|
-| **P1** | `modJournaling.WriteJournalRow` dopunjava red do sirine zaglavlja | -- | **Jedini PRISUTAN kvar u ovom skupu.** `:116` ispisuje CSV petljom `LBound..UBound` bez dopune, a `:100` ispisuje SVA imena kolona. Za 7 mesta sa kracim nizom zurnalni CSV **danas** ima manje polja od zaglavlja, pod `On Error Resume Next`. Nezavisno od prevoda pisaca, ~10 linija |
-| **P2** | 7 pisaca sa golim kracim `Array` na `Build*RowData` obrazac | 7 | Svih 7 su isti obrazac i ista greska. `modCenovnik` prvi: nema `SchemaReadyOrFail`, a `:124` nosi **rukom odrzavan komentar sa redosledom kolona** -- najkrhkije mesto u repou. `modFaktura` uz njega jer `tblFakture` cita SEF |
-| **P3** | 14 perifernih mesta bez `SetRowValueByColumn` | 14 | Mehanicki; `modUtovar` (4) zahteva odluku `UPIS-KONV-03` |
-| **P4** | Kapija arnosti u `AppendRow` + `newRow.Delete` u `ErrHandler` | -- | **Zastitna mreza, ne otkrice.** Tek kad su P2/P3 zavrseni. Kapija PRE `lo.ListRows.Add` (`:283`), `Err.Raise` a ne `return 0` |
+| **P1** | `modJournaling.WriteJournalRow` dopunjava red do širine zaglavlja | — | **Jedini PRISUTAN kvar u skupu.** `:116` ispisuje CSV bez dopune, `:100` ispisuje sva imena kolona; za pisce sa kraćim nizom žurnalni CSV **danas** ima manje polja od zaglavlja, pod `On Error Resume Next`. Nezavisno od svega ostalog, ~10 linija |
+| **P2** | `modCenovnik`, `modFaktura`, `modNovac`, `modAgrohemija`, `modAmbalaza` | 8 | Kraći nizovi. `modCenovnik` prvi — nema `SchemaReadyOrFail`, a `:124` nosi **rukom održavan komentar sa redosledom kolona**. `modFaktura` uz njega jer `tblFakture` čita SEF |
+| **P3** | `modPaletniList`, `modUtovar`, `modSEFPersistance`, `modStornoZurnal`, `modStornoContext`, `modSetup` | 13 | Mehanički. `modUtovar` traži odluku `UPIS-KONV-03` |
+| **P4** | Kapija arnosti u `AppendRow` + `newRow.Delete` u `ErrHandler` | — | **Zaštitna mreža, ne otkriće.** Tek posle P2/P3. PRE `lo.ListRows.Add` (`:283`), `Err.Raise` a ne `return 0`, i sa **normalizovanim `LBound`** |
 | **P5** | 15 testnih mesta | 15 | Bez pritiska |
 
-`tools/popis_citalaca.py` dobija grupu `pozicioni_upis` sa pragom **21** (pada svakim PR-om).
+`tools/popis_citalaca.py` dobija grupu `pozicioni_upis`, prag **21** i pada svakim PR-om.
+
+### Ograničenja koja važe za svaki plan nad ovim slojem
+
+Devet nezavisnih ocena predloga (3–7/10, sve sa fatalnom zamerkom) ostavilo je pet činjenica koje
+vrede bez obzira šta se radi:
+
+1. **Ime novog mutatora mora da prođe pravi `MUTATE_RE` pre nego što se izabere.** Token je
+   `UpdateCell`, **ne** `UpdateRow` — pa bi `ImenovaniUpdateRow(TBL_NOVAC, ...)` bio **nevidljiv** za
+   A11 kapiju. Izvršeno nad pravim regexom: `ImenovaniAppendRow(TBL_CENOVNIK` → MATCH,
+   `ImenovaniUpdateRow(TBL_NOVAC` → NO MATCH.
+2. **Tabela mora ostati PRVI argument kao `TBL_` konstanta u istoj logičkoj liniji**, inače upis pada
+   u `MUTATE_DYN_RE` („mapa ne može da pripiše").
+3. **`RaiseSistemski` kodovi 1, 2, 10–13, 20–25 su zauzeti** (izmereno; 20–25 su u
+   `modDokumenta.bas:4186,4195,4444,4454,4631,4639,4644`). Slobodno od 30.
+4. **`tools/vba_check.py` već statički hvata** „Sub or Function not defined" (`:444`) i „Wrong number
+   of arguments" (`:461`), bez Excela. Jeftina nezavisna dobit: proširiti `collect_arities` (`:333`)
+   da skuplja i **imena** parametara, pa validirati svaki `ime:=` poziv u CI-ju.
+5. **Ne dodavati četvrtu definiciju „ispravnog prefiksa".** `modSchema.PrefiksNeslaganje:546` je
+   `Private`, a komentar na `:544` izričito kaže da dve kapije ne smeju da razviju različite
+   definicije. Postojeći helper se koristi, ne duplira.
+
+> **Šta ovaj plan NIJE dobio:** kritika kompletnosti i adversarna kritika rizika migracije nisu se
+> izvršile — pale su na session limit dva puta. Plan nije prošao nezavisnu proveru na propuste.
 
 ## 4. Šta plan NE radi
 
@@ -223,6 +266,7 @@ koji je nalaz prvi našao:
 | 1 | **Integritet nad kanonskim članstvom** (`tblOtpremnicaIzvori`, `tblZbirnaIzvori`) | **VISOK** | `RunAllChecks` zove 21 proveru; **11 spaja preko `BrojZbirne`, 0 preko članstva**, a tabele članstva imaju **nula čitanja** u `modIntegritet`. Najnoviji i najmanje testiran deo modela — ono što je poslednjih 100 PR-ova izgradilo — **nema ni jedan sken integriteta**. Za redosled kolona postoji pravilo (`CLAUDE.md` §3) i dokazan obrazac pisca; za članstvo ne postoji ništa |
 | 2 | **`modJournaling` CSV** | SREDNJI | Jedini **prisutan** kvar iz ovog skupa, ~10 linija. Revizijski trag je već nepotpun |
 | 3 | **Prevod 21 perifernog pisca** | SREDNJE‑NIZAK | Mehanički, po postojećem obrascu. Nijedna od tih tabela nije u planu skraćivanja za S3e-2 ni S6, pa okidač ne dolazi skoro |
+| 3b | **`vba_check`: validacija imena parametara u `ime:=` pozivima** | SREDNJE‑NIZAK | Radi bez Excela, u CI-ju; `collect_arities` (`tools/vba_check.py:333`) već skuplja arnost, treba mu samo lista imena. Hvata klasu koju danas hvata jedino ručni Compile |
 | 4 | **Kapija arnosti** | NIZAK | Zaštitna mreža posle #3, ne otkriće. Ne može samostalno: 7 pisaca bi palo istog trenutka |
 | 5 | **Tipovi / FK / unique u kanonu** | NIZAK | Upis po imenu već uklanja rizik pozicije. Tipovi hvataju drugu klasu koja još nije ugrizla |
 | 6 | **Brisanje mrtve površine** | NIZAK | Higijena. `modTheme` 49/49 mrtvo, 983 linije — ali 78 `Sub`-ova bez parametara ne sme u brisanje bez potvrde operatera (sveska nije u repou) |
