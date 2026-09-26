@@ -6699,6 +6699,40 @@ tvrdnju pored svoje. To je posledica istog invarijanta — bez `abort`-a odbijen
 prihvacen i u jednom i u dva taba — a runner taj preklapajuci pad **imenuje** u izlazu. Nasilno
 razdvajanje bi trazilo da jedna od dve tvrdnje prestane da meri `abort`, sto je gubitak, ne dobitak.
 
+#### Review #393, cetvrti krug — isti kvar, treci mehanizam
+
+CI #812 je zelen u oba smera (13/13 i 7/7), i concurrency sabotaza obara bas svoju tvrdnju. Ostao je
+isti P2 kroz **treci** nosac.
+
+**P2 — `process.exit()` prekida event loop.** Prvo je kasnu async gresku gutao globalni handler; kad
+je on uklonjen, gutao ju je nasilan izlaz. Komentar koji sam upravo napisao — „neocekivano ->
+crveno“ — bio je time u protivrecnosti sa kodom ispod njega: `setTimeout(() => { throw ... }, 50)`
+nikad ne dobije priliku, jer `process.exit(0)` zatvori proces pre timera.
+
+Oba pokretaca sada postavljaju `process.exitCode` i puste Node da se zavrsi prirodno. Posledica je
+deo ugovora, ne nus-efekat: **suite koji otvori pravi pozadinski posao mora sam da ga doceka**, inace
+prolaz visi umesto da se zavrsi.
+
+**Isti poziv je stajao i u `tools/js_sintaksa.js`**, van prijave. Tamo je kod sinhron pa nije bilo sta
+da se izgubi, ali dve kapije u istom workflow-u ne smeju da imaju dva razlicita pravila o tome kako se
+zavrsavaju — to je razlika koja istruli neopazeno, kao spisak dozvola u `WRITE_OWNERSHIP.json` koji je
+tri modula nabrajao bez pisca.
+
+**Watchdog NIJE dodat, i to je namerno.** `exitCode` uvodi novu mogucnost: ako nesto drzi event loop,
+prolaz visi. Iskusenje je bilo dodati `unref()`-ovan timer koji posle N sekundi obori prolaz sa
+imenovanom porukom. Ali prosli krug je pokazao sta se dobija kad se odbrana napise **pre** merenja:
+handler dodat „za slucaj“ postao je nalaz. Ako CI visi, to je glasan i dijagnostikovan pad, i tada se
+watchdog dodaje sa dokazom da treba.
+
+**P3 — opis PR-a je bio zastareo** (tvrdio da nema lockfile-a i da 7 od 13 tvrdnji nema sabotazu).
+Usklađen: rezultat 13/13 i 7/7, lockfile potvrđen `npm ci`-em, 6 od 13 bez sabotaze, i tabela sva
+cetiri kruga review-a.
+
+**Obrazac kroz sva cetiri kruga:** nijedan nalaz nije bio u produkcionom kodu. Prvi je bio u fixture-u,
+drugi u sabotazi, treci i cetvrti u pokretacu. Sredstvo merenja je u ovom rezu bilo jedini izvor
+gresaka — i to je razlog zbog kog harness PR trazi review kao i svaki drugi: zelena kapija koja meri
+pogresnu stvar je gora od nikakve.
+
 #### Ugovor prihvatanja za S5-5b — žica otkupa
 
 Šta mora da važi kad se rez završi:

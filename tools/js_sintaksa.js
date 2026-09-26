@@ -134,5 +134,9 @@ function samoTest() {
     return greske === 0;
 }
 
+// Isti ugovor o izlazu kao u tests/js/pokreni.js (review #393, cetvrti krug):
+// exitCode, ne process.exit. Ovde je kod sinhron pa nema sta da se izgubi, ali
+// dve kapije u istom workflow-u ne smeju da imaju dva razlicita pravila o tome
+// kako se zavrsavaju -- to je razlika koja istruli neopazeno.
 const ok = process.argv.indexOf('--self-test') >= 0 ? samoTest() : kapija();
-process.exit(ok ? 0 : 1);
+process.exitCode = ok ? 0 : 1;

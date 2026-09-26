@@ -150,14 +150,24 @@ async function dvosmerniDokaz() {
     return greske === 0;
 }
 
+// IZLAZ IDE KROZ exitCode, NE KROZ process.exit (review #393, cetvrti krug).
+//
+// process.exit() nasilno prekida Node bez praznjenja event loop-a, pa bi greska
+// iz zakasnelog timera nestala isto kao sto ju je pre gutao globalni handler --
+// drugi mehanizam, ista klasa. Sa exitCode Node se zavrsi prirodno: sve
+// zavrseno -> 0, pala tvrdnja -> 1, a zakasneo uncaught exception ili odbijen
+// promise stvarno obori proces.
+//
+// Posledica ugovora: suite koji otvori pravi pozadinski posao mora sam da ga
+// zatvori ili docekao -- inace prolaz visi umesto da se zavrsi.
 (async function () {
     const selfTest = process.argv.indexOf('--self-test') >= 0;
 
     try {
         const ok = selfTest ? await dvosmerniDokaz() : await zelenaKapija();
-        process.exit(ok ? 0 : 1);
+        process.exitCode = ok ? 0 : 1;
     } catch (err) {
         console.log('::error::harness je pao van tvrdnje: ' + ((err && err.stack) || err));
-        process.exit(1);
+        process.exitCode = 1;
     }
 })();
