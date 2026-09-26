@@ -154,6 +154,29 @@ module.exports = [
         zamena: "      if (!unos || unos.parent !== roditelj) {\n        return 'stavka ' + id + ' nije deo zavrsenog dokumenta';\n      }\n    }\n  }\n\n  return kljuceviTaba.length === 0 ? 'prazan tab' : '';   // sabotaza"
     },
     {
+        // Review #394, treci krug. Isti CRID sa drugom poslovnom tvrdnjom je
+        // konflikt, ne duplikat -- doslovno ugovor koji master drzi u
+        // PwaIstiSadrzaj. Bez njega promenjen retry ne stigne do mastera.
+        ime: 'otk-zaglavlje-kooperant-ne-ucestvuje',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'zaglavlje: drugi kooperant pod istim CRID-om JE konflikt',
+        zasto: 'GAS vrati existing/success i ne prepise zaglavlje, pa master nema sta da detektuje: klijent misli da je ispravka primljena, server cuva staru tvrdnju',
+        fajl: GAS,
+        sidro: "    'Datum',\n    'KooperantID',",
+        zamena: "    'Datum',\n    // sabotaza: kooperant ne ucestvuje u sadrzaju"
+    },
+    {
+        // Prazan incoming broj znaci da ga master generise lokalno. Da broj UVEK
+        // ucestvuje, svaki retry bez broja bio bi konflikt.
+        ime: 'otk-zaglavlje-broj-uvek-ucestvuje',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'zaglavlje: BrojDokumenta ucestvuje samo kad ga PWA posalje',
+        zasto: 'lokalno generisan broj se i ocekuje da se razlikuje, pa bi bezuslovno poredjenje rusilo svaki ponovljen sync',
+        fajl: GAS,
+        sidro: "  if (brojUlaz) {",
+        zamena: "  if (true) {   // sabotaza: broj dokumenta uvek ucestvuje"
+    },
+    {
         // Medjujezicna granica: jedna zica, dva pisca, dva jezika, JEDAN raspored.
         ime: 'otk-stavke-raspored-kolona-drugaciji',
         suite: 'gas-otk-stavke',

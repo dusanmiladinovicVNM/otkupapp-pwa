@@ -7161,6 +7161,83 @@ heuristikom „`/` je regex kad pre njega stoji operator ili otvorena zagrada".
 | medjujezicni ugovor kolona | **poklapa se** (10/10, isti redosled) |
 | JS harness u CI-ju | **jos nije izvrsen** — nema PR-a za ovaj head |
 
+### 14.50) Review S5-5b, treci krug — identitet obuhvata CEO payload (26.09.2026)
+
+Head `b7021d48`. P1 i P3 iz drugog kruga potvrdjeni kao RESOLVED, medjujezicna
+kapija prihvacena. Ostao jedan P2, na nivou **celog dokumenta**.
+
+#### P2 — isti CRID + iste stavke + DRUGO zaglavlje je vracalo `existing/success`
+
+S5-5b je stavke zatvorio strogo, ali isto pravilo nije bilo primenjeno na cinjenice
+**zaglavlja**. Retry sa doslovno istim stavkama a promenjenim `KooperantID`-em
+(ili datumom, parcelom, proizvodom, tipom ambalaze, brojem dokumenta) prolazio je
+kroz item kapiju, pao u granu `existingRow > 0` i vracao `success/existing`.
+
+Posledica nije teorijska: master **ima** pravi ugovor u `PwaIstiSadrzaj`, ali
+promenjen retry do njega **nikad ne stigne** — GAS ne prepisuje zaglavlje, pa master
+nema sta da detektuje. Klijent misli da je ispravka primljena, server cuva staru
+tvrdnju, i razlika se ne vidi nigde.
+
+Gore od toga: grana je pre bilo kakvog poredjenja upisivala `UpdatedAtClient` i
+`UpdatedAtServer`, pa je odbijeni retry ostavljao trag na dokumentu koji odbija.
+
+#### Ispravka — kanonski sadrzaj zaglavlja, pre svakog upisa
+
+`otkupZaglavljeRazlika_(postojeci, idx, ulaz)` stoji **odmah** posle citanja reda,
+pre svakog enrichment upisa i pre citanja terminalnog statusa.
+
+| Ucestvuje | Ne ucestvuje | Zasto ne |
+|---|---|---|
+| `OtkupacID` | `CreatedAtClient` | transportna metadata |
+| `Datum` | `UpdatedAtClient` | transportna metadata |
+| `KooperantID` | `UpdatedAtServer` | transportna metadata |
+| `VrstaVoca` | `ReceivedAt` | transportna metadata |
+| `SortaVoca` | `DeviceID` | transportna metadata |
+| `ParcelaID` | `KooperantName` | izvedena labela, kanonski je ID |
+| `TipAmbalaze` | `VozacID` | ima svoju enrichment semantiku |
+| `StavkeCount` | | |
+| `BrojDokumenta` **uslovno** | | prazan incoming = master ga generise |
+
+#### Dve zamke koje bi ovo pretvorile u LAZAN konflikt
+
+1. **Sheets ume da pretvori `TipAmbalaze` ("6/1") i `Datum` u `Date`.** Sirovo
+   poredjenje bi davalo `String(Date)` vs `"2026-09-26"` — konflikt na **svakom**
+   retry-u. Zato poredjenje ide kroz **postojeci** kanonski serijalizator
+   `serializeSheetCellForApi`, isti koji koristi read-model. Jedan normalizator,
+   ne dva.
+2. **Polje koje se poredi a nije u rasporedu kolona** dalo bi `undefined` indeks,
+   `getCell` bi vratio prazno, i svaki retry bi bio konflikt. Zato tvrdnja
+   `zaglavlje: sva poredjena polja postoje u ugovoru kolona` cita **produkcijski**
+   raspored (`otkupZaglavljeKoloneUgovor_`) i poredi ga sa listom polja.
+
+#### Namerna asimetrija prema masteru, izgovorena
+
+`PwaIstiSadrzaj` poredi **razreseni** `KulturaID`, a GAS poredi `VrstaVoca` +
+`SortaVoca` doslovno — GAS kulturu ne ume da razresi. GAS je time **strozi**: dva
+razlicita para (vrsta, sorta) koja se razresavaju u istu kulturu master bi primio
+kao isti sadrzaj, a GAS ih odbija. Za payload koji klijent ne bi smeo ni da menja
+to je bezbedan smer, i zapisano je da nije previd.
+
+#### Dokaz
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `zaglavlje: drugi kooperant pod istim CRID-om JE konflikt` | `otk-zaglavlje-kooperant-ne-ucestvuje` |
+| `zaglavlje: BrojDokumenta ucestvuje samo kad ga PWA posalje` | `otk-zaglavlje-broj-uvek-ucestvuje` |
+| `zaglavlje: iste cinjenice su idempotentne` | kontrola — bez nje bi gornje bile zelene i da ugovor odbija sve |
+| `zaglavlje: drugi manifest JE konflikt` | pokrivena kroz istu granu |
+| `zaglavlje: transportna metadata NE ucestvuje` | pokrivena kroz listu polja |
+| `zaglavlje: sva poredjena polja postoje u ugovoru kolona` | strukturna |
+
+Katalog JS sabotaza: **22** unosa. Bez node-a izmereno: svako sidro pogadja tacno
+jednom, svaka sabotaza imenuje tvrdnju koja postoji (23/23), balans nepromenjen,
+ugovor kolona `OTK_STAVKE` se poklapa sa VBA stranom (10/10), i **sest tvrdnji o
+zaglavlju je simulirano u Python-u** — sve zelene, 24 kolone, sva poredjena polja
+prisutna. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**JS harness ovog head-a jos nije izvrsen** — CI ide na `pull_request` i push u
+`main`, pa push feature grane ga ne pokrece.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

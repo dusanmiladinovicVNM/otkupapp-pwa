@@ -79,6 +79,88 @@ const OTK_STAVKE_COLUMNS = [
   'OtkupClientRecordID'
 ];
 
+// Ugovor kolona ZAGLAVLJA kao funkcija -- isti razlog kao za stavke: top-level
+// const se u vm kontekstu ne vidi izvan skripta, a funkcija se vidi.
+function otkupZaglavljeKoloneUgovor_() {
+  return COLUMNS.slice();
+}
+
+// KANONSKA POSLOVNA POLJA ZAGLAVLJA -- ono sto dokument TVRDI.
+//
+// Namerno NE ucestvuju:
+//   CreatedAtClient / UpdatedAtClient / UpdatedAtServer / ReceivedAt / DeviceID
+//        transportna metadata; ocekuje se da se razlikuje
+//   KooperantName
+//        izvedena labela, kanonski je KooperantID
+//   VozacID
+//        ima svoju enrichment semantiku (prazno polje se dopunjava), pa bi
+//        ulazak u immutable ugovor tu granu oborio
+//   BrojDokumenta
+//        USLOVAN, pa se poredi odvojeno -- v. otkupZaglavljeRazlika_
+function otkupZaglavljePoljaSadrzaja_() {
+  return [
+    'OtkupacID',
+    'Datum',
+    'KooperantID',
+    'VrstaVoca',
+    'SortaVoca',
+    'ParcelaID',
+    'TipAmbalaze',
+    'StavkeCount'
+  ];
+}
+
+// Vrednost polja zaglavlja, NORMALIZOVANA istim serijalizatorom koji koristi
+// read-model.
+//
+// Sirovo poredjenje ne radi: Sheets "6/1" u TipAmbalaze i datum ume da pretvori u
+// Date, pa bi String(Date) vs "2026-09-26" davao LAZAN konflikt na svakom retry-u.
+// serializeSheetCellForApi to vec resava za oba polja -- jedan normalizator, ne dva.
+function otkupZaglavljeVrednost_(ime, vrednost) {
+  const norm = serializeSheetCellForApi(ime, vrednost);
+  return norm === null || norm === undefined ? '' : String(norm).trim();
+}
+
+// KANONSKI SADRZAJ ZAGLAVLJA: '' kad je isti, inace TEKST razloga.
+//
+// Isti ClientRecordID sa drugom poslovnom tvrdnjom nije duplikat nego KONFLIKT --
+// doslovno ugovor koji master drzi u PwaIstiSadrzaj, i koji vec vazi za predaju
+// (PREDAJA_CONFLICT) i za zbirnu.
+//
+// Bez ove kapije promenjen retry NIKAD ne stigne do mastera: GAS vrati
+// existing/success, zaglavlje se ne prepise, pa master nema sta da detektuje.
+// Klijent misli da je poslao ispravku, server cuva staru tvrdnju, i niko ne sazna.
+//
+// BrojDokumenta je USLOVAN, doslovno kao u PwaIstiSadrzaj: prazan incoming broj
+// znaci da ga je master generisao lokalno, pa bi poredjenje prijavljivalo konflikt
+// tamo gde ga nema. Kad ga PWA izricito posalje, on JE deo tvrdnje.
+function otkupZaglavljeRazlika_(postojeci, idx, ulaz) {
+  const polja = otkupZaglavljePoljaSadrzaja_();
+
+  for (let i = 0; i < polja.length; i++) {
+    const ime = polja[i];
+    const bilo = otkupZaglavljeVrednost_(ime, getCell(postojeci, idx[ime], ''));
+    const stiglo = otkupZaglavljeVrednost_(ime, ulaz[ime]);
+
+    if (bilo !== stiglo) {
+      return ime + ': u listu ' + (bilo || '(prazno)') + ', stiglo ' + (stiglo || '(prazno)');
+    }
+  }
+
+  const brojUlaz = otkupZaglavljeVrednost_('BrojDokumenta', ulaz.BrojDokumenta);
+
+  if (brojUlaz) {
+    const brojBilo = otkupZaglavljeVrednost_(
+      'BrojDokumenta', getCell(postojeci, idx.BrojDokumenta, ''));
+
+    if (brojBilo !== brojUlaz) {
+      return 'BrojDokumenta: u listu ' + (brojBilo || '(prazno)') + ', stiglo ' + brojUlaz;
+    }
+  }
+
+  return '';
+}
+
 // Ugovor kolona kao FUNKCIJA, da bude dohvatljiv i van ovog skripta.
 //
 // Top-level `const` se u vm kontekstu (tests/js/harness.js) vezuje u leksicki
@@ -2144,6 +2226,35 @@ function processRecord(record, otkupacID) {
       // Synced>Master -- dokumentom to je bila MUTACIJA kanonskog podatka.
 
       const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // DRUGA POLOVINA ISTOG IDENTITETA (review #394, treci krug).
+      //
+      // Stavke su gore uskladjene TACNO; ovde se zatvaraju cinjenice ZAGLAVLJA.
+      // Isti CRID sa drugim kooperantom, datumom, parcelom, proizvodom ili brojem
+      // je DRUGA TVRDNJA o dokumentu, ne ponovljen isti zapis.
+      //
+      // Stoji PRE svakog enrichment upisa: odbijen retry ne sme da ostavi ni
+      // UpdatedAtClient ni UpdatedAtServer na dokumentu koji je upravo odbio.
+      const razlikaZaglavlja = otkupZaglavljeRazlika_(existingValues, idx, {
+        OtkupacID: canonicalOtkupacID,
+        Datum: record.datum,
+        KooperantID: record.kooperantID,
+        VrstaVoca: record.vrstaVoca,
+        SortaVoca: record.sortaVoca,
+        ParcelaID: record.parcelaID,
+        TipAmbalaze: record.tipAmbalaze,
+        StavkeCount: stavkeUlaz.length,
+        BrojDokumenta: record.brojDokumenta
+      });
+
+      if (razlikaZaglavlja) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'OTKUP_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o zaglavlju: ' + razlikaZaglavlja
+        };
+      }
 
       const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
       const currentVozacID = String(getCell(existingValues, idx.VozacID, '') || '').trim();

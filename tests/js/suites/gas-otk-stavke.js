@@ -27,7 +27,8 @@ async function ucitajModul(opcije) {
     for (const ime of ['otkStavkeNormalizuj_', 'otkStavkeUskladiNedovrsen_',
                        'otkStavkeUskladiZavrsen_', 'otkStavkeIndeksIzRedova_',
                        'otkStavkeKoloneUgovor_', 'otkStavkaKljuc_',
-                       'buildOtkupMergeKey_']) {
+                       'otkupZaglavljeRazlika_', 'otkupZaglavljePoljaSadrzaja_',
+                       'otkupZaglavljeKoloneUgovor_', 'buildOtkupMergeKey_']) {
         assert.strictEqual(typeof ctx[ime], 'function',
             ime + ' nije vidljiva posle ucitavanja ' + FAJL);
     }
@@ -47,6 +48,11 @@ async function ucitajModul(opcije) {
         // svojstvo globalnog objekta, pa bi `ctx.OTK_STAVKE_COLUMNS` bio undefined.
         kolone: ctx.otkStavkeKoloneUgovor_(),
 
+        // Kanonski sadrzaj ZAGLAVLJA -- druga polovina istog identiteta.
+        zaglavljeRazlika: ctx.otkupZaglavljeRazlika_,
+        zaglavljePolja: ctx.otkupZaglavljePoljaSadrzaja_(),
+        zaglavljeKolone: ctx.otkupZaglavljeKoloneUgovor_(),
+
         kljuc: ctx.otkStavkaKljuc_,
         mergeKljuc: ctx.buildOtkupMergeKey_
     };
@@ -64,6 +70,32 @@ function stavka(nad) {
         cena: 50,
         kolAmbalaze: 4
     }, nad || {});
+}
+
+// Cinjenice zaglavlja jednog ispravnog dokumenta; test menja tacno jedno polje.
+const ZAGL = {
+    OtkupacID: 'ST-1',
+    Datum: '2026-09-26',
+    KooperantID: 'K1',
+    VrstaVoca: 'Malina',
+    SortaVoca: 'Willamette',
+    ParcelaID: 'P1',
+    TipAmbalaze: '6/1',
+    StavkeCount: 1
+};
+
+// Red zaglavlja u rasporedu UGOVORA + indeks po imenu, kako ih processRecord vidi.
+// Raspored dolazi iz produkcije, pa preimenovana kolona ne moze da prodje.
+function zaglavljeRed(kolone, polja) {
+    const idx = {};
+    kolone.forEach(function (k, i) { idx[k] = i; });
+
+    return {
+        red: kolone.map(function (k) {
+            return polja[k] !== undefined ? polja[k] : '';
+        }),
+        idx: idx
+    };
 }
 
 // Ugovor kolona PROCITAN IZ VBA IZVORA -- druga strana iste zice.
@@ -418,6 +450,98 @@ module.exports = {
             assert.throws(() => m.indeksIzRedova(m.kolone, redovi),
                 /istim ClientRecordID/,
                 'dupli item CRID je tiho prepisan -- master ga odbija fail-closed');
+        },
+
+        // ============================================================
+        // Review #394, treci krug: IDENTITET OBUHVATA CEO PAYLOAD
+        // ============================================================
+        //
+        // Stavke su strogo uskladjene, ali cinjenice ZAGLAVLJA nisu bile. Isti CRID
+        // sa drugim kooperantom vracao je existing/success, pa promenjen retry
+        // nikad ne stigne do mastera: zaglavlje se ne prepise, PwaIstiSadrzaj nema
+        // sta da uporedi, i ispravka tiho nestaje.
+        'zaglavlje: iste cinjenice su idempotentne': async function (m) {
+            const p = zaglavljeRed(m.zaglavljeKolone, ZAGL);
+
+            assert.strictEqual(m.zaglavljeRazlika(p.red, p.idx, ZAGL), '',
+                'ponovljen sync istog zaglavlja je prijavljen kao konflikt');
+        },
+
+        'zaglavlje: drugi kooperant pod istim CRID-om JE konflikt': async function (m) {
+            const p = zaglavljeRed(m.zaglavljeKolone, ZAGL);
+            const drugi = Object.assign({}, ZAGL, { KooperantID: 'K2' });
+
+            const r = m.zaglavljeRazlika(p.red, p.idx, drugi);
+            assert.notStrictEqual(r, '',
+                'promenjen kooperant je prosao kao duplikat -- ispravka bi tiho nestala');
+            assert.match(String(r), /KooperantID/, 'konflikt ne imenuje polje');
+        },
+
+        'zaglavlje: drugi manifest JE konflikt': async function (m) {
+            const p = zaglavljeRed(m.zaglavljeKolone, ZAGL);
+            const drugi = Object.assign({}, ZAGL, { StavkeCount: 2 });
+
+            assert.match(String(m.zaglavljeRazlika(p.red, p.idx, drugi)), /StavkeCount/,
+                'promenjen manifest nije prijavljen kao razlika');
+        },
+
+        // TRANSPORTNA METADATA NIJE TVRDNJA O DOKUMENTU. Da ucestvuje, svaki retry
+        // bi bio konflikt -- vremena i DeviceID se i OCEKUJE da se razlikuju.
+        'zaglavlje: transportna metadata NE ucestvuje': async function (m) {
+            const uListu = Object.assign({}, ZAGL, {
+                CreatedAtClient: '2026-09-26T08:00:00.000Z',
+                UpdatedAtClient: '2026-09-26T08:00:00.000Z',
+                UpdatedAtServer: '2026-09-26T08:00:01.000Z',
+                ReceivedAt: '2026-09-26T08:00:01.000Z',
+                DeviceID: 'DEV-1',
+                KooperantName: 'Kooperant Jedan',
+                VozacID: 'VOZ-1'
+            });
+            const p = zaglavljeRed(m.zaglavljeKolone, uListu);
+
+            // Ulaz nosi DRUGA vremena, drugi uredjaj, drugu labelu i drugog vozaca.
+            const stiglo = Object.assign({}, ZAGL, {
+                CreatedAtClient: '2026-09-26T09:30:00.000Z',
+                UpdatedAtClient: '2026-09-26T09:30:00.000Z',
+                UpdatedAtServer: '2026-09-26T09:30:01.000Z',
+                ReceivedAt: '2026-09-26T09:30:01.000Z',
+                DeviceID: 'DEV-2',
+                KooperantName: 'K. Jedan',
+                VozacID: 'VOZ-2'
+            });
+
+            assert.strictEqual(m.zaglavljeRazlika(p.red, p.idx, stiglo), '',
+                'transportna metadata je usla u ugovor -- svaki retry bi bio konflikt');
+        },
+
+        // BROJ DOKUMENTA JE USLOVAN, doslovno kao u PwaIstiSadrzaj: prazan incoming
+        // broj znaci da ga master generise lokalno, pa bi poredjenje prijavljivalo
+        // konflikt tamo gde ga nema.
+        'zaglavlje: BrojDokumenta ucestvuje samo kad ga PWA posalje': async function (m) {
+            const p = zaglavljeRed(m.zaglavljeKolone,
+                                   Object.assign({}, ZAGL, { BrojDokumenta: 'A' }));
+
+            assert.strictEqual(
+                m.zaglavljeRazlika(p.red, p.idx, Object.assign({}, ZAGL, { BrojDokumenta: '' })),
+                '',
+                'prazan incoming broj je prijavljen kao razlika -- lokalno generisan broj bi svaki retry rusio');
+
+            assert.match(
+                String(m.zaglavljeRazlika(p.red, p.idx,
+                                         Object.assign({}, ZAGL, { BrojDokumenta: 'B' }))),
+                /BrojDokumenta/,
+                'poslat drugi broj dokumenta nije prijavljen kao razlika');
+        },
+
+        // Polje koje se poredi a nije u rasporedu kolona dalo bi undefined indeks:
+        // svaka vrednost bi ispala prazna i SVAKI retry bi bio konflikt.
+        'zaglavlje: sva poredjena polja postoje u ugovoru kolona': async function (m) {
+            const kolone = m.zaglavljeKolone;
+
+            m.zaglavljePolja.concat(['BrojDokumenta']).forEach(function (ime) {
+                assert.ok(kolone.indexOf(ime) >= 0,
+                    'polje ' + ime + ' se poredi a nije u rasporedu kolona zaglavlja');
+            });
         },
 
         // Treca grana merge kljuca je obrisana: gradila je kljuc od atributa,
