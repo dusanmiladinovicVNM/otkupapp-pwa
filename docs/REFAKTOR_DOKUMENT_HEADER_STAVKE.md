@@ -6756,6 +6756,55 @@ pogresnu stvar je gora od nikakve.
 Šta mora ostati netaknuto: desktop push (`BulkPushPendingForStanica`) i izvoz `OtkupiAllStavke` — oni
 su **već** na novom obliku i rez ih ne dira.
 
+### 14.45) S5-5b — zica otkupa: zaglavlje + stavke (26.09.2026, U TOKU)
+
+Radi se po ugovoru prihvatanja iz §14.44. Grana `claude/s5-5b-otkup-zica`.
+
+#### Ispravka ugovora koju je merenje nalozilo
+
+Tacka 4 ugovora je trazila da `OtkZaglavljeKolone` **izgubi** cetiri linijske kolone. Mereno:
+`ensureSheetColumns` u GAS-u dozidjuje kolonu **samo na kraju**, a svaku drugu razliku prijavljuje kao
+`SCHEMA_DRIFT` koji se namerno ne popravlja tiho. Kolone su na pozicijama 14, 15, 16 i 18 — brisanje iz
+sredine bi oborilo sync na **svakom** zatecenom `OTK-*` listu i pomerilo sve `GS_*` konstante ispod
+sebe.
+
+**Ispravka:** cetiri kolone ostaju kao **mrtvi slotovi koji se pisu prazni**, `StavkeCount` ide na
+kraj. Doslovno precedent `VS_OTKUP_RECORD_IDS` iz S5-4b-1. Skidaju se sa zice kad nijedan citalac ne
+ostane — zasebno ciscenje, ne ovaj rez.
+
+#### Korak 1 — ugovor kolona (ZAVRSENO, `9789479b`)
+
+| Sta | Gde |
+|---|---|
+| `StavkeCount` na kraj zaglavlja | `OtkZaglavljeKolone` |
+| `ClientRecordID` + `OtkupClientRecordID` na kraj stavki | `OtkStavkeKolone` |
+| `GS_STAVKE_COUNT = 24`, cetiri slota oznacena mrtvim | `modMasterSync` deklaracije |
+| wire-only imena kolona | `OKS_WIRE_CRID`, `OKS_WIRE_OTKUP_CRID` |
+| push puni manifest | `BuildOTKSheetRowForOtkup` prima broj stavki od pozivaoca |
+| tvrdnja | „OTK push: zaglavlje nosi broj stavki“ |
+
+**PWA ne zna `OtkupID`** — on nastaje u `CreateOtkup_TX` — pa red stavke sa terena nosi **svoj**
+`ClientRecordID` i CRID svog zaglavlja (odluka 1 iz §14.44, obrazac `PRED` reda iz S5-4a). Desktop push
+ih ostavlja prazne: njegov identitet je `OtkupStavkaID`, roditelj pravi `OtkupID`. Dva pisca, dva puta
+identiteta, jedan tab — isto kao na zaglavlju sa `ServerRecordID`.
+
+Kapija 8142 („kolona OTK zaglavlja bez izvora“) je pukla na `StavkeCount` — to je i bio njen posao.
+
+#### Sta ostaje, i sta je pre-flight ovog reza izmerio o ceni
+
+| Korak | Obim (mereno) |
+|---|---|
+| 2 — uvoz cita `OTK_STAVKE` | nov citac taba **po imenu** (tab pisu dva pisca, oba po imenu); `ValidatePWAOtkup` meri skup stavki + poravnanje manifesta; `ImportRowToTblOtkup` gradi kolekciju; `PwaIstiSadrzaj` poredi **skup** stavki umesto `GS_KLASA` |
+| 2b — test seam-ovi | **~20 pozivnih mesta** `ImportRowToTblOtkup_RowTX` u `modBusinessFlowProTests`, sva kroz fixture `PwaRed`; plus `TestHook_ValidatePWAOtkupDatum` koji drzi `ReDim data(1 To GS_BROJ_DOKUMENTA)` — ista klasa koja je u S5-4b-2 ostavila treci seam na staroj sirini |
+| 3 — GAS | `COLUMNS` + `StavkeCount`, pisac taba `OTK_STAVKE` (stavke pa zaglavlje, zaglavlje je oznaka zavrsenog upisa — isti redosled kao desktop push), `OTKUP_CONFLICT` po skupu stavki, brisanje grane 3 `buildOtkupMergeKey_`, citaoci `getOtkupiForOtkupac` i menadzment na stavke |
+| 4 — PWA | `buildOtkupRecord` dobija `stavke[]`; **~45 citalaca** linijskih polja u 6 fajlova (`otkupni-list`, `otkup-pregled`, `otpremnice`, `sync`, `otkup-more`, `otkup-form`) |
+| 5 — dokaz | JS tvrdnje pod kapijom iz S5-5a + VBA tvrdnja da uvoz gradi dokument iz `OTK_STAVKE`, sa sabotazom u `tools/dokaz.py` |
+
+**Zasto rez ne moze da se podeli na dva PR-a bez pauze:** `sync-engine.js:312` salje zapise
+**verbatim** (`payload = { records: pending }`) — nema per-record transform hook-a. Oblik zice je zato
+oblik lokalnog zapisa, pa bi svaki medjukorak ili trazio nov transform sloj u deljenom sync engine-u
+(nova masinerija za privremeno stanje), ili ostavio uvoz otkupa pauziran jedan PR. Merenje, ne ukus.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
