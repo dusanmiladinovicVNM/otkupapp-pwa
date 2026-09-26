@@ -290,6 +290,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_RazresivacImenujeRazlog
     Test_PWA_KonfliktPoParceliITipu
     Test_PWA_PrenosiVremeNastanka
+    Test_PWA_StavkeSaZiceIduPoCridu
+    Test_PWA_ManifestNeporavnatNeUvozi
+    Test_OTK_PushIndeksPreskaceRedSaTerena
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -14390,10 +14393,10 @@ Private Sub Test_PWA_IngestPraviHeaderIStavku()
     crid = TEST_PREFIX & "-CRID-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWA-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWA-" & scenario, 1)
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertTrue Len(otkID) > 0, "PWA: uvoz vratio OtkupID"
     AssertEquals "1", CStr(FindRows(TBL_OTKUP, COL_OTK_ID, otkID).count), _
@@ -14447,7 +14450,7 @@ Private Sub Test_PWA_IsoDatumStizeKaoString()
     zeljeni = NextTestDate()
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-ISO-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-ISO-" & scenario, 1)
 
     ' PRODUKCIONI OBLIK: string, ne Date.
     red(1, 9) = Format$(zeljeni, "yyyy-mm-dd")
@@ -14456,7 +14459,7 @@ Private Sub Test_PWA_IsoDatumStizeKaoString()
                "PWA ISO preduslov: datum je STRING, kao iz JSON-a"
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(otkID) > 0, "PWA ISO: uvoz je prosao"
     If Len(otkID) = 0 Then Exit Sub
 
@@ -14484,14 +14487,14 @@ Private Sub Test_PWA_NerazresivaKulturaObaraUvoz()
     crid = TEST_PREFIX & "-CRID-KU-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKU-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKU-" & scenario, 1)
     red(1, 13) = TEST_SORTA & " NEPOSTOJECA"        ' GS_SORTA
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertEquals "", otkID, "PWA kultura: uvoz odbijen"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14518,17 +14521,17 @@ Private Sub Test_PWA_IstiCridIstiSadrzajJeNoOp()
     crid = TEST_PREFIX & "-CRID-NO-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWANO-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWANO-" & scenario, 1)
 
     Dim prvi As String
-    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prvi) > 0, "PWA no-op: prvi uvoz prosao"
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim drugi As String
-    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertEquals prvi, drugi, "PWA no-op: drugi uvoz vraca ISTI OtkupID"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14555,24 +14558,23 @@ Private Sub Test_PWA_IstiCridDrugiSadrzajPada()
     crid = TEST_PREFIX & "-CRID-KF-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 1)
 
     Dim prvi As String
-    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prvi) > 0, "PWA konflikt: prvi uvoz prosao"
 
-    ' Isti CRID, promenjena SAMO kolicina -- kopija, ne nov PwaRed poziv.
-    ' Nov poziv bi pomerio i datum (NextTestDate), pa bi test merio razliku
-    ' datuma umesto razlike kolicine i ostao zelen i sa ugasenom kapijom.
-    Dim izmenjen As Variant
-    izmenjen = red
-    izmenjen(1, 15) = 999#                             ' GS_KOLICINA
-
+    ' Isti CRID, promenjena SAMO kolicina. Od S5-5b je to izmena STAVKE, pa
+    ' zaglavlje ide NEPROMENJENO -- skup stavki je jedina razlika, sto je tvrdnja
+    ' jaca nego pre: nema drugog polja koje bi moglo da objasni odbijanje.
+    ' (Nov PwaRed poziv bi pomerio datum preko NextTestDate i test bi merio
+    ' razliku datuma, pa ostao zelen i sa ugasenom kapijom.)
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim drugi As String
-    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(izmenjen, 1, crid)
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, _
+                                                    PwaStavke1(999#, 50#, 20))
 
     AssertEquals "", drugi, "PWA konflikt: izmenjen sadrzaj pod istim CRID-om odbijen"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14611,11 +14613,11 @@ Private Sub Test_PWA_StanicaJeUredjajNeKooperant()
 
     Dim crid As String: crid = "CRID-STA-" & NewScenarioCode("PWAST")
     Dim red As Variant
-    red = PwaRed(crid, "PWA stanica", 100#, 100#, 0)
+    red = PwaRed(crid, "PWA stanica", 1)
     red(1, 8) = TEST_HLAD_ST_ID          ' GS_OTKUPAC_ID -- uredjaj DRUGE stanice
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(100#, 100#, 0))
     AssertTrue Len(otkID) > 0, "PWA stanica: dokument uvezen"
 
     Dim upisana As String
@@ -14646,14 +14648,14 @@ Private Sub Test_PWA_BezUredjajaUvozPada()
 
     Dim crid As String: crid = "CRID-NOST-" & NewScenarioCode("PWANO")
     Dim red As Variant
-    red = PwaRed(crid, "PWA bez uredjaja", 100#, 100#, 0)
+    red = PwaRed(crid, "PWA bez uredjaja", 1)
     red(1, 8) = ""                        ' GS_OTKUPAC_ID prazan
 
     Dim pre As Long
     pre = CountRows(TBL_OTKUP)
 
     Dim rezultat As String
-    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(100#, 100#, 0))
 
     AssertEquals "", rezultat, _
                  "PWA bez uredjaja: uvoz NE vraca OtkupID"
@@ -15652,13 +15654,14 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' --- osa vlasnika ---
     Dim cridV As String: cridV = "CRID-BKTXV-" & scenario
     Dim redV As Variant
-    redV = PwaRed(cridV, "BKTX vlasnik", 100#, 100#, 0)
+    redV = PwaRed(cridV, "BKTX vlasnik", 1)
     Dim dV As Date: dV = CDate(redV(1, 9))
     redV(1, 23) = modBrojevi.FormatBroj(BKTX_ST2, dV, 1)
 
     Dim preV As Long: preV = OtkBrojRedova(TBL_OTKUP)
 
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redV, 1, cridV), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redV, 1, cridV, _
+        PwaStavke1(100#, 100#, 0)), _
                  "BKTX uvoz: broj druge stanice NE vraca OtkupID"
     AssertEquals CStr(preV), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "BKTX uvoz: odbijen red nije upisan"
@@ -15666,13 +15669,14 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' --- osa dana ---
     Dim cridD As String: cridD = "CRID-BKTXD-" & scenario
     Dim redD As Variant
-    redD = PwaRed(cridD, "BKTX dan", 100#, 100#, 0)
+    redD = PwaRed(cridD, "BKTX dan", 1)
     Dim dD As Date: dD = CDate(redD(1, 9))
     redD(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, DateAdd("d", -1, dD), 1)
 
     Dim preD As Long: preD = OtkBrojRedova(TBL_OTKUP)
 
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redD, 1, cridD), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redD, 1, cridD, _
+        PwaStavke1(100#, 100#, 0)), _
                  "BKTX uvoz: broj od juce NE vraca OtkupID"
     AssertEquals CStr(preD), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "BKTX uvoz: odbijen dan nije ostavio red"
@@ -15680,11 +15684,12 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' Kontrola: broj ove stanice i ovog dana prolazi kroz isti put.
     Dim cridOK As String: cridOK = "CRID-BKTXOK-" & scenario
     Dim redOK As Variant
-    redOK = PwaRed(cridOK, "BKTX kontrola", 100#, 100#, 0)
+    redOK = PwaRed(cridOK, "BKTX kontrola", 1)
     Dim dOK As Date: dOK = CDate(redOK(1, 9))
     redOK(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, dOK, 1)
 
-    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK)) > 0, _
+    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK, _
+        PwaStavke1(100#, 100#, 0))) > 0, _
                "BKTX uvoz: kanonski broj ove stanice i ovog dana prolazi"
 
     Exit Sub
@@ -15759,11 +15764,13 @@ End Sub
 '
 ' Za konflikt-testove: pozovi JEDNOM, pa kopiraj (VBA niz se kopira dodelom) i
 ' promeni tacno jedno polje.
+' stavkeCount je MANIFEST, i namerno je PARAMETAR a ne izvedena vrednost: test
+' sme da posalje zaglavlje koje tvrdi dve stavke uz skup od jedne, jer se bas to
+' u produkciji desava kad deo redova ne stigne.
 Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
-                        ByVal kolicina As Double, ByVal cena As Double, _
-                        ByVal kolAmb As Long) As Variant
+                        ByVal stavkeCount As Long) As Variant
     Dim r As Variant
-    ReDim r(1 To 1, 1 To 23)
+    ReDim r(1 To 1, 1 To 24)
 
     r(1, 1) = crid                  ' GS_CLIENT_RECORD_ID
     r(1, 6) = "PENDING"             ' GS_SYNC_STATUS
@@ -15772,19 +15779,42 @@ Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
     r(1, 10) = TEST_KOOP_ID         ' GS_KOOPERANT_ID
     r(1, 12) = TEST_VRSTA           ' GS_VRSTA
     r(1, 13) = TEST_SORTA           ' GS_SORTA
-    r(1, 14) = KLASA_I              ' GS_KLASA
-    r(1, 15) = kolicina             ' GS_KOLICINA
-    r(1, 16) = cena                 ' GS_CENA
+    ' CETIRI MRTVA SLOTA (S5-5b): klasa, kolicina, cena i ambalaza su cinjenice
+    ' STAVKE i dolaze tabom OTK_STAVKE. PWA ih pise prazne, pa ih i fixture pise
+    ' prazne -- fixture koji bi ih punio merio bi zicu koje vise nema.
+    r(1, 14) = ""                   ' GS_KLASA -- MRTAV SLOT
+    r(1, 15) = ""                   ' GS_KOLICINA -- MRTAV SLOT
+    r(1, 16) = ""                   ' GS_CENA -- MRTAV SLOT
     r(1, 17) = TEST_TIP_AMB         ' GS_TIP_AMB
-    r(1, 18) = kolAmb               ' GS_KOL_AMB
+    r(1, 18) = ""                   ' GS_KOL_AMB -- MRTAV SLOT
     r(1, 19) = ""                   ' GS_PARCELA_ID
     r(1, 20) = ""                   ' GS_VOZAC_ID
     ' GS_BROJ_DOKUMENTA se NE salje: kanonski format je ^\d+/\d{6}(-\d+)?$ i
     ' ne trpi test-prefiks, pa ingest generise broj lokalno -- to je i realan
     ' PWA pre-rollout put (modMasterSync: "BrojDokumenta fallback-generated").
     r(1, 23) = ""                   ' GS_BROJ_DOKUMENTA
+    r(1, 24) = stavkeCount          ' GS_STAVKE_COUNT
 
     PwaRed = r
+End Function
+
+' Skup stavki kakav uvoz dobija iz taba OTK_STAVKE: jedna klasa.
+'
+' Vraca ISTI oblik koji OtkPwaStavkeIzTaba gradi (Dictionary sa Klasa/Kolicina/
+' Cena/KolAmbalaze), pa test meri produkcioni ugovor a ne svoj.
+Private Function PwaStavke1(ByVal kolicina As Double, ByVal cena As Double, _
+                            ByVal kolAmb As Long) As Collection
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", KLASA_I
+    s.Add "Kolicina", kolicina
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", CDbl(kolAmb)
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add s
+    Set PwaStavke1 = c
 End Function
 
 ' DELJENI RAZRESIVAC (Vrsta, Sorta) -> KulturaID.
@@ -16166,6 +16196,222 @@ Private Sub Test_OTK_PushStavkiIdempotentan()
 EH:
     modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
     LogFatal "Test_OTK_PushStavkiIdempotentan", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S5-5b -- ZICA OTKUPA: ZAGLAVLJE + STAVKE
+' ============================================================
+
+' Red taba OTK_STAVKE kakav ga zica NOSI. Jedan graditelj za OBA pisca, jer se
+' dva graditelja istog reda razidju: desktop push puni OtkupStavkaID i OtkupID a
+' wire kolone ostavlja prazne, PWA obrnuto -- OtkupID ne zna, on nastaje u
+' masteru (CreateOtkup_TX).
+Private Function StavkaRedZice(ByVal stavkaID As String, ByVal otkupID As String, _
+                               ByVal cridStavke As String, ByVal cridZaglavlja As String, _
+                               ByVal rb As Long, ByVal klasa As String, _
+                               ByVal kolicina As Double, ByVal cena As Double, _
+                               ByVal kolAmb As Long) As Variant
+    Dim kol As Variant, nk As Long, k As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim r() As Variant
+    ReDim r(0 To nk - 1)
+
+    For k = 0 To nk - 1
+        Select Case CStr(kol(LBound(kol) + k))
+            Case COL_OKS_ID: r(k) = stavkaID
+            Case COL_OKS_OTKUP_ID: r(k) = otkupID
+            Case COL_OKS_RB: r(k) = rb
+            Case COL_OKS_KLASA: r(k) = klasa
+            Case COL_OKS_KOLICINA: r(k) = kolicina
+            Case COL_OKS_CENA: r(k) = cena
+            Case COL_OKS_KOL_AMB: r(k) = kolAmb
+            Case modMasterSync.OKS_WIRE_CRID: r(k) = cridStavke
+            Case modMasterSync.OKS_WIRE_OTKUP_CRID: r(k) = cridZaglavlja
+            Case Else: r(k) = ""
+        End Select
+    Next k
+
+    StavkaRedZice = r
+End Function
+
+' STAVKE SA TERENA SE GRUPISU PO CRID-u ZAGLAVLJA, i tudji red se preskace.
+'
+' Ovo je tvrdnja nad citaocem zice, ne nad pisacem: tab pisu dva pisca, pa je
+' pitanje bas to KOJE redove uvoz otkupa sme da uzme. Meri se bez Google-a --
+' OtkPwaStavkeIzTaba prima sadrzaj taba kakav ga TryReadSheetData vraca.
+Private Sub Test_PWA_StavkeSaZiceIduPoCridu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAST")
+
+    Dim cridA As String, cridB As String
+    cridA = TEST_PREFIX & "-CRID-STA-" & scenario
+    cridB = TEST_PREFIX & "-CRID-STB-" & scenario
+
+    ' Dve stavke otkupa A, jedna otkupa B, i jedan red DESKTOP PUSH-a.
+    Dim redovi As Collection
+    Set redovi = New Collection
+    redovi.Add StavkaRedZice("", "", cridA & "-S1", cridA, 1, KLASA_I, 100#, 50#, 4)
+    redovi.Add StavkaRedZice("", "", cridA & "-S2", cridA, 2, KLASA_II, 60#, 30#, 2)
+    redovi.Add StavkaRedZice("", "", cridB & "-S1", cridB, 1, KLASA_I, 20#, 10#, 0)
+    redovi.Add StavkaRedZice("OKS-SIM-" & scenario, "OTK-SIM-" & scenario, _
+                             "", "", 1, KLASA_I, 999#, 999#, 9)
+
+    Dim greska As String
+    Dim mapa As Object
+    Set mapa = modMasterSync.OtkPwaStavkeIzTaba(SimTabStavki(redovi), greska)
+
+    AssertEquals "", greska, "PWA stavke: citanje taba bez greske"
+    AssertEquals "2", CStr(mapa.count), _
+                 "PWA stavke: dva otkupa sa terena (red desktop push-a se ne racuna)"
+    AssertTrue Not mapa.Exists("OTK-SIM-" & scenario), _
+               "PWA stavke: OtkupID desktop reda nije kljuc mape"
+    AssertEquals "2", CStr(mapa(cridA).count), "PWA stavke: otkup A nosi dve klase"
+    AssertEquals "1", CStr(mapa(cridB).count), "PWA stavke: otkup B nosi jednu klasu"
+
+    ' Redosled u Collection-u nista ne znaci -- RedniBroj dodeljuje pisac -- pa se
+    ' meri SKUP klasa, ne pozicija.
+    Dim klase As Object, i As Long
+    Set klase = CreateObject("Scripting.Dictionary")
+    klase.CompareMode = vbTextCompare
+    For i = 1 To mapa(cridA).count
+        klase(CStr(mapa(cridA)(i)("Klasa"))) = CDbl(mapa(cridA)(i)("Kolicina"))
+    Next i
+    AssertEquals "100", CStr(klase(KLASA_I)), "PWA stavke: I klasa nosi 100 kg"
+    AssertEquals "60", CStr(klase(KLASA_II)), "PWA stavke: II klasa nosi 60 kg"
+
+    ' STAVKA BEZ SVOG IDENTITETA JE GRESKA, ne stavka. Bez ClientRecordID-a se
+    ' ponovljen sync ne razlikuje od druge stavke, pa bi retry udvajao robu.
+    Dim bezIdent As Collection
+    Set bezIdent = New Collection
+    bezIdent.Add StavkaRedZice("", "", "", cridA, 1, KLASA_I, 100#, 50#, 4)
+
+    Dim mapa2 As Object
+    Set mapa2 = modMasterSync.OtkPwaStavkeIzTaba(SimTabStavki(bezIdent), greska)
+    AssertTrue mapa2 Is Nothing, "PWA stavke: red bez ClientRecordID obara citanje"
+    AssertTrue InStr(1, greska, "nema svoj ClientRecordID", vbTextCompare) > 0, _
+               "PWA stavke: greska imenuje nedostatak identiteta (" & greska & ")"
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_StavkeSaZiceIduPoCridu", Err.Number, Err.description
+End Sub
+
+' MANIFEST: zaglavlje koje tvrdi dve stavke uz jednu primljenu NE POSTAJE dokument.
+'
+' Bez manifesta su "PWA je poslala dve klase pa je jedna stigla" i "dokument ima
+' jednu klasu" isti ulaz -- pa bi deo robe tiho postao ceo dokument, sa tacnim
+' brojem i tacnim kooperantom. Nista posle toga ne bi prijavilo razliku.
+Private Sub Test_PWA_ManifestNeporavnatNeUvozi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAMF")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-MF-" & scenario
+
+    ' Zaglavlje tvrdi DVE stavke, a skup nosi JEDNU.
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAMF-" & scenario, 2)
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim rezultat As String
+    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, _
+                                                       PwaStavke1(400#, 50#, 20))
+
+    AssertEquals "", rezultat, "PWA manifest: neporavnat StavkeCount ne daje OtkupID"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA manifest: nijedno zaglavlje nije nastalo"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "PWA manifest: nijedna stavka nije nastala"
+
+    ' Kontrola: ISTI skup uz poravnat manifest PROLAZI. Bez ove tvrdnje bi test
+    ' bio zelen i da uvoz odbija sve, pa ne bi merio manifest nego postojanje.
+    Dim cridOK As String
+    cridOK = TEST_PREFIX & "-CRID-MFOK-" & scenario
+
+    Dim redOK As Variant
+    redOK = PwaRed(cridOK, TEST_PREFIX & "-OTK-PWAMFOK-" & scenario, 1)
+
+    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK, _
+                       PwaStavke1(400#, 50#, 20))) > 0, _
+               "PWA manifest: poravnat StavkeCount prolazi"
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_ManifestNeporavnatNeUvozi", Err.Number, Err.description
+End Sub
+
+' PUSH INDEKS PRESKACE RED SA TERENA -- inace prvi PWA red trajno blokira push.
+'
+' Indeks idempotencije push-a radi po OtkupStavkaID. PWA red ga NE ZNA, pa je
+' stari uslov citao kao "red bez identiteta" i dizao gresku fail-closed: naslov
+' ispravan, podatak ispravan, a push te stanice pada na svakom prolazu.
+'
+' Red bez OBA identiteta i dalje pada: to nije tudji red nego kvar.
+Private Sub Test_OTK_PushIndeksPreskaceRedSaTerena()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PSHID")
+
+    Dim stavkaID As String
+    stavkaID = "OKS-SIM-" & scenario
+
+    Dim redovi As Collection
+    Set redovi = New Collection
+    redovi.Add StavkaRedZice(stavkaID, "OTK-SIM-" & scenario, "", "", _
+                             1, KLASA_I, 100#, 50#, 4)
+    redovi.Add StavkaRedZice("", "", TEST_PREFIX & "-CRID-PSH-" & scenario & "-S1", _
+                             TEST_PREFIX & "-CRID-PSH-" & scenario, _
+                             1, KLASA_I, 60#, 30#, 2)
+
+    ' Izuzetak se HVATA i meri kao tvrdnja. Da se ne hvata, ugasena kapija bi
+    ' pala u EH i prijavila LogFatal sa imenom testa -- videlo bi se da je crveno,
+    ' ali ne i KOJA tvrdnja je pala. Ostale tvrdnje su zato pod If Not ... Nothing:
+    ' posle podignutog izuzetka ids nije dodeljen.
+    Dim ids As Object
+    Dim errIndeks As String
+    On Error Resume Next
+    Set ids = modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(redovi))
+    errIndeks = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    AssertEquals "", errIndeks, _
+                 "OTK push indeks: red sa terena ne obara indeks push-a"
+
+    If Not ids Is Nothing Then
+        AssertEquals "1", CStr(ids.count), _
+                     "OTK push indeks: red sa terena se ne racuna u indeks"
+        AssertTrue ids.Exists(stavkaID), "OTK push indeks: push red je u indeksu"
+    End If
+
+    ' Red bez ijednog identiteta je KVAR i pada PO IMENU.
+    Dim kvar As Collection
+    Set kvar = New Collection
+    kvar.Add StavkaRedZice("", "", "", "", 1, KLASA_I, 10#, 10#, 0)
+
+    Dim errOpis As String
+    On Error Resume Next
+    Set ids = modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(kvar))
+    errOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue InStr(1, errOpis, "nema OtkupStavkaID", vbTextCompare) > 0, _
+               "OTK push indeks: red bez ijednog identiteta pada po imenu (" & errOpis & ")"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_PushIndeksPreskaceRedSaTerena", Err.Number, Err.description
 End Sub
 
 ' Simulirani OTK_STAVKE kao sto ga TryReadSheetData vraca: 2D, red 1 = naslov.
@@ -18023,10 +18269,10 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridP = TEST_PREFIX & "-CRID-PAR-" & scenario
 
     Dim redP As Variant
-    redP = PwaRed(cridP, TEST_PREFIX & "-OTK-PWAPAR-" & scenario, 400#, 50#, 20)
+    redP = PwaRed(cridP, TEST_PREFIX & "-OTK-PWAPAR-" & scenario, 1)
 
     Dim prviP As String
-    prviP = modMasterSync.ImportRowToTblOtkup_RowTX(redP, 1, cridP)
+    prviP = modMasterSync.ImportRowToTblOtkup_RowTX(redP, 1, cridP, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviP) > 0, "PWA parcela: prvi uvoz prosao"
 
     ' PwaRed salje PRAZNU parcelu, pa prvi dokument nema parcelu. Drugi je salje.
@@ -18040,7 +18286,8 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     izmenjenP(1, 19) = GetTestParcelaID()              ' GS_PARCELA_ID
 
     Dim preP As Long: preP = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenP, 1, cridP), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenP, 1, cridP, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA parcela: druga parcela pod istim CRID-om je ODBIJENA"
     AssertEquals CStr(preP), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA parcela: nijedan nov red nije nastao"
@@ -18050,10 +18297,10 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridT = TEST_PREFIX & "-CRID-TIP-" & scenario
 
     Dim redT As Variant
-    redT = PwaRed(cridT, TEST_PREFIX & "-OTK-PWATIP-" & scenario, 400#, 50#, 20)
+    redT = PwaRed(cridT, TEST_PREFIX & "-OTK-PWATIP-" & scenario, 1)
 
     Dim prviT As String
-    prviT = modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT)
+    prviT = modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviT) > 0, "PWA tip: prvi uvoz prosao"
 
     Dim izmenjenT As Variant
@@ -18064,7 +18311,8 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     izmenjenT(1, 17) = TEST_TIP_AMB & "-DRUGI"         ' GS_TIP_AMB
 
     Dim preT As Long: preT = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA tip: drugi tip ambalaze pod istim CRID-om je ODBIJEN"
     AssertEquals CStr(preT), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA tip: nijedan nov red nije nastao"
@@ -18077,7 +18325,7 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridB = TEST_PREFIX & "-CRID-BR-" & scenario
 
     Dim redB As Variant
-    redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 400#, 50#, 20)
+    redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 1)
 
     ' Broj se gradi iz stanice i dana SAMOG REDA. Ranije su ovde stajali literali
     ' "77/090926" i "78/090926" -- oni tvrde stanicu 77, a red nosi ST-90001 i
@@ -18092,7 +18340,7 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     redB(1, 23) = brojB                                ' GS_BROJ_DOKUMENTA
 
     Dim prviB As String
-    prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB)
+    prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviB) > 0, "PWA broj: prvi uvoz sa izricitim brojem prosao"
     AssertEquals brojB, OtkPolje(prviB, COL_OTK_BR_DOK), _
                  "PWA broj: izricit broj je zapisan"
@@ -18102,16 +18350,19 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     izmenjenB(1, 23) = brojB2
 
     Dim preB As Long: preB = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA broj: drugi broj pod istim CRID-om je ODBIJEN"
     AssertEquals CStr(preB), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA broj: nijedan nov red nije nastao"
 
     ' Kontrola: NEPROMENJEN red je i dalje no-op, ne konflikt -- i za red BEZ
     ' broja (master ga je generisao), sto dokazuje da uslov ne lomi taj put.
-    AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT), _
+    AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA kontrola: nepromenjen sadrzaj je i dalje NO-OP"
-    AssertEquals prviB, modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB), _
+    AssertEquals prviB, modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA kontrola: isti izricit broj je i dalje NO-OP"
 
     Exit Sub
@@ -18136,14 +18387,14 @@ Private Sub Test_PWA_PrenosiVremeNastanka()
     crid = TEST_PREFIX & "-CRID-SCA-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWASCA-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWASCA-" & scenario, 1)
 
     Dim nastalo As String
     nastalo = "2026-08-14T06:30:00Z"
     red(1, 3) = nastalo                                ' GS_CREATED_AT
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(otkID) > 0, "PWA vreme: uvoz prosao"
 
     AssertEquals nastalo, OtkPolje(otkID, COL_OTK_SOURCE_CREATED_AT), _

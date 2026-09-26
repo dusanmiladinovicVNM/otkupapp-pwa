@@ -670,7 +670,17 @@ End Function
 
 ' Sadrzaj OTK_STAVKE (2D, red 1 = naslov; Empty = prazan tab) -> indeks
 ' OtkupStavkaID -> kljuc sadrzaja. Pada po imenu na: naslov koji nije tacno
-' OtkStavkeKolone, red bez OtkupStavkaID, isti ID sa razlicitim sadrzajem.
+' OtkStavkeKolone, red bez ijednog identiteta, isti ID sa razlicitim sadrzajem.
+'
+' OD S5-5b TAB IMA DVA PISCA. PWA red nosi svoj ClientRecordID a OtkupStavkaID
+' NE ZNA -- on nastaje u masteru. Ovaj indeks sluzi idempotenciji PUSH-a, cije je
+' identitet OtkupStavkaID, pa PWA red u njemu nema sta da radi i PRESKACE SE.
+'
+' Bez toga bi prvi PWA red trajno zakljucao push te stanice: naslov je ispravan,
+' red postoji, a stari uslov ga je citao kao "red bez identiteta" i dizao 8145 --
+' push pada fail-closed na svakom sledecem prolazu, nad podatkom koji je ispravan.
+'
+' Red bez OBA identiteta i dalje pada: to nije tudji red nego kvar.
 Public Function OtkStavkeIndeksIzTaba(ByVal data As Variant) As Object
     Const SRC As String = "OtkStavkeIndeksIzTaba"
 
@@ -683,27 +693,12 @@ Public Function OtkStavkeIndeksIzTaba(ByVal data As Variant) As Object
     kol = modMasterSync.OtkStavkeKolone()
     nk = UBound(kol) - LBound(kol) + 1
 
-    Dim lb2 As Long, ub2 As Long
+    Dim naslov As Object
+    Set naslov = modMasterSync.OtkStavkeNaslovIndeks(data)
+
+    Dim lb2 As Long, cCrid As Long
     lb2 = LBound(data, 2)
-    ub2 = UBound(data, 2)
-    If ub2 - lb2 + 1 < nk Then
-        Err.Raise vbObjectError + 8144, SRC, _
-                  "Naslov taba " & OTK_STAVKE_TAB & " ima manje kolona od ugovora."
-    End If
-    For k = 0 To ub2 - lb2
-        If k < nk Then
-            If CStr(data(LBound(data, 1), lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then
-                Err.Raise vbObjectError + 8144, SRC, _
-                          "Naslov taba " & OTK_STAVKE_TAB & " kolona " & (k + 1) & " je '" & _
-                          CStr(data(LBound(data, 1), lb2 + k)) & "', ugovor trazi '" & _
-                          CStr(kol(LBound(kol) + k)) & "'."
-            End If
-        ElseIf Len(Trim$(CStr(data(LBound(data, 1), lb2 + k)))) > 0 Then
-            Err.Raise vbObjectError + 8144, SRC, _
-                      "Naslov taba " & OTK_STAVKE_TAB & " ima kolonu van ugovora: " & _
-                      CStr(data(LBound(data, 1), lb2 + k))
-        End If
-    Next k
+    cCrid = naslov(modMasterSync.OKS_WIRE_CRID)
 
     Dim r As Long, red() As Variant, id As String, kljuc As String
     ReDim red(0 To nk - 1)
@@ -713,6 +708,9 @@ Public Function OtkStavkeIndeksIzTaba(ByVal data As Variant) As Object
         Next k
         id = OtkStavkaIdReda(red)
         If Len(id) = 0 Then
+            If Len(Trim$(CStr(nz(data(r, cCrid), "")))) > 0 Then
+                GoTo NextIndeksRed          ' PWA red -- tudji identitet, ne kvar
+            End If
             Err.Raise vbObjectError + 8145, SRC, _
                       "Red " & r & " taba " & OTK_STAVKE_TAB & " nema OtkupStavkaID."
         End If
@@ -726,6 +724,7 @@ Public Function OtkStavkeIndeksIzTaba(ByVal data As Variant) As Object
         Else
             indeks.Add id, kljuc
         End If
+NextIndeksRed:
     Next r
 End Function
 

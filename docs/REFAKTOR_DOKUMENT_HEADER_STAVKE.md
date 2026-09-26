@@ -6805,6 +6805,92 @@ Kapija 8142 („kolona OTK zaglavlja bez izvora“) je pukla na `StavkeCount` �
 oblik lokalnog zapisa, pa bi svaki medjukorak ili trazio nov transform sloj u deljenom sync engine-u
 (nova masinerija za privremeno stanje), ili ostavio uvoz otkupa pauziran jedan PR. Merenje, ne ukus.
 
+### 14.46) S5-5b korak 2 — VBA uvoz cita OTK_STAVKE (26.09.2026)
+
+Grana `claude/s5-5b-otkup-zica`. Ovo je **uvozna strana**: zaglavlje vise ne nosi
+linijska polja, nego manifest.
+
+#### Sta je promenjeno
+
+| Celina | Sadrzaj |
+|---|---|
+| `OtkStavkeNaslovIndeks` (nov, `modMasterSync`) | JEDAN validator naslova taba `OTK_STAVKE`, ime kolone -> indeks; dele ga **oba** citaoca |
+| `OtkPwaStavkeIzTaba` (nov, **Public**) | cist citalac: sadrzaj taba -> mapa `CRID zaglavlja -> Collection stavki`; meri se **bez Google-a** |
+| `OtkPwaStavkePoCridu` (nov) | mrezni deo, fail-closed kao `Sheet1` (AUD-001) |
+| `ValidateOTKSheetHeader` | trazi `StavkeCount`, minimalna sirina 22 -> 24 |
+| `ValidatePWAOtkup(data, row, stavke)` | prazan skup = greska; **manifest** mora da se poravna; plauzibilnost je **po stavci**, poruka imenuje koju; `TipAmbalaze` se poredi sa **zbirom** gajbi |
+| `ImportRowToTblOtkup(..., stavke)` | ne cita `GS_KLASA/KOLICINA/CENA/KOL_AMB`; stavke idu pisacu **kakve su dosle** |
+| `PwaIstiSadrzaj(..., stavke)` | poredi **ceo skup** stavki, klasa je kljuc, **neosetljivo na redosled** |
+| `ImportRowToTblOtkup_RowTX(..., stavke)` | isti potpis kroz transakciju |
+
+`RedniBroj` sa zice se **ne cita**, i to je merenje a ne propust: `CreateOtkup_TX`
+ga dodeljuje po **kanonskom redu klasa** (`modOtkup.bas:749`). Citanje poslatog
+broja bi bio drugi izvor istine za isti pojam. Zato redosled u `Collection`-u
+nista ne znaci — ni u uvozu, ni u poredjenju sadrzaja.
+
+`BrutoKg` se prenosi **samo kad ga zica nosi** (> 0): pisac bruto cuva samo kad je
+unos bio bruto, pa nula nije „bruto = 0" nego „nije bruto unos".
+
+#### Nalaz koji plan nije predvideo: tab OTK_STAVKE od sada ima DVA pisca
+
+`modStanicaLock.OtkStavkeIndeksIzTaba` gradi indeks idempotencije push-a po
+`OtkupStavkaID`. PWA red taj ID **ne zna** — on nastaje u masteru — pa je zatecen
+uslov takav red citao kao „red bez identiteta" i dizao `8145`.
+
+Posledica bi bila **trajno blokiran push te stanice**: naslov ispravan, podatak
+ispravan, a push pada fail-closed na svakom sledecem prolazu. Ispravka: red bez
+`OtkupStavkaID` **ali sa** `ClientRecordID` je tudji red i preskace se; red bez
+**oba** identiteta i dalje pada. Mereno tvrdnjom, ne komentarom.
+
+#### Kapija manifesta stoji na DVA mesta, i to je pravilo a ne udvajanje
+
+`ValidatePWAOtkup` je vraca kao `SyncError` koji operater vidi; `ImportRowToTblOtkup`
+je dize kao tvrdu gresku, jer direktan i test poziv validaciju preskacu. Isti
+obrazac kao datum (AUD-042b) i isto pravilo kao `.claude/rules/testovi.md` §5.
+
+#### Dokaz
+
+Tri nove tvrdnje, tri nove sabotaze (`610` u katalogu, bilo `607`):
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `Test_PWA_StavkeSaZiceIduPoCridu` — grupisanje po CRID-u, tudji red se preskace, red bez identiteta obara citanje | `uvoz-stavka-bez-identiteta-prolazi` |
+| `Test_PWA_ManifestNeporavnatNeUvozi` — zaglavlje tvrdi 2 uz 1 primljenu = nema dokumenta; **kontrola** da poravnat manifest prolazi | `uvoz-manifest-bez-poravnanja` |
+| `Test_OTK_PushIndeksPreskaceRedSaTerena` — PWA red ne obara indeks push-a; red bez oba identiteta pada po imenu | `push-indeks-ne-preskace-pwa-red` |
+
+Sidro `push-stavke-naslov-bez-provere` je **premesteno** u `modMasterSync`: provera
+naslova je izdvojena, a sabotaza prati provereni kod a ne fajl u kom je stajala.
+
+Tvrdnja o push indeksu **hvata izuzetak i meri ga kao tvrdnju**. Prva verzija ga
+nije hvatala, pa bi ugasena kapija pala u `EH` i prijavila `LogFatal` sa imenom
+**testa** — videlo bi se da je crveno, ali ne i **koja** tvrdnja je pala.
+
+`RunBusinessFlowProSuite`: **2043/2043, nula padova** (RunID=20260926202041-7792). Baseline BFP se time pomera sa 1837 (#384) na 2043.
+
+#### Cena koja je opet naplacena: ARNOST ne vidi poziv u izraznoj poziciji
+
+Prvi prolaz suite-a je pao kao `Compile error: Argument not optional` **posle 585
+sekundi** cekanja na Excel, uz `vba_check` zelen. Krivac: `PwaIstiSadrzaj(postojeci,
+data, row)` u NO-OP grani idempotencije — poziv u izraznoj poziciji, poznata rupa
+pravila `ARNOST` (`.claude/rules/testovi.md` §2).
+
+To je **cetvrti** slucaj iste klase u ovoj seriji. Zato je uz rez napisana provera
+arnosti nad svim izmenjenim potpisima (scratchpad `s55b_k6_noop.py`), i ona je
+pokazala nula preostalih. Pravilo za dalje: **posle izmene potpisa ide grep po
+imenu nad celim `src-vba/`, pre pokretanja suite** — ne posle.
+
+#### Sta OVAJ rez NE zatvara, i zasto PR ne sme da se merge-uje sam
+
+Zica sada **trazi** `StavkeCount` u naslovu `OTK-*` lista i stavke u tabu
+`OTK_STAVKE`. GAS ih jos ne pise, PWA ih jos ne salje. Dok koraci 3 i 4 ne legnu,
+`ValidateOTKSheetHeader` odbija svaki zatecen list kao `SCHEMA_DRIFT` — sto je
+tacno ponasanje ugovora, ali znaci da je **uvoz otkupa pauziran**.
+
+Mereno: `gas/Code.gs:20` (`COLUMNS` bez `StavkeCount`), `gas/Code.gs:1755`
+(`processRecord` ne zna za stavke), `sync-engine.js:312` (zapisi se salju
+**verbatim**, nema per-record transform hook-a). Rez se zato zatvara zajedno sa
+GAS i PWA stranom, u istom PR-u.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
