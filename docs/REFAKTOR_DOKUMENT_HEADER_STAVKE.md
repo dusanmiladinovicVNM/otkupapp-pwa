@@ -6437,6 +6437,48 @@ nisu dirnuti. Suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
 ⚠ **NEVERIFIKOVANO** — ceo krug je PWA: dvostruka kapija i lifecycle rezervacije su pročitani i
 rezonovani, ne izvršeni.
 
+**Review #392, treći krug — kapija je bila nada, ne kapija.**
+
+**P2, jednom linijom, ali ne trivijalan nalaz.** `lastServerCode` se od prošlog kruga **upisuje** u
+IndexedDB, ali ga `normalizeLocalZbirnaRecord` nije prenosio — pa do `rezervisaneOtpremnice` nikad nije
+stizao. Lifecycle signal je postojao u bazi i nestajao na putu do potrošača; trajno odbijena zbirna bi
+i dalje zauvek držala svoje otpremnice. Ista klasa kao P1 iz prvog kruga: popravka nije u pravilu nego
+u **signalu koji se gubi između slojeva**.
+
+**P1 — provera pa upis u dva poteza nisu kapija.** Dva taba dele istu bazu, pa oba mogu da pročitaju
+„slobodno" pre nego što ijedan upiše:
+
+```
+Tab A                    Tab B
+read local -> free
+                         read local -> free
+dbPut ZBR-A
+                         dbPut ZBR-B
+```
+
+`withSubmitLock` to ne rešava — brava živi u memoriji jednog taba. Uz to je `getMergedZbirneForVozac`
+**gutao** pad lokalnog čitanja (`local = []`), pa spoljašnji `catch` taj pad nikad nije ni video: dokaz
+o rezervaciji je mogao da nestane fail-open.
+
+Oboje zatvara **jedna readwrite transakcija**: `dbClaimInStore` čita rezervacije i upisuje zbirnu u
+istom potezu, pa ih baza serijalizuje među tabovima, a pad čitanja **baca** umesto da vrati prazno.
+Provera iznad ostaje — ali kao **upozorenje sa lepom porukom**, ne kao dokaz; prava kapija je claim.
+
+Dve stvari koje su u toj transakciji bitne, a lako se previde:
+
+- `proveri` **mora** biti sinhrona. Jedan `await` bi pustio event loop i transakcija bi se zatvorila pre
+  upisa — tiho, bez greške.
+- whitelist master-razrešenih zbirni računa se **pre** transakcije (unutar nje nema mesta za mrežu). Ako
+  se ne dobije, skup je prazan — a to znači **više** rezervacija, ne manje: degradacija je
+  konzervativna.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `db.js`) — `src-vba`, `gas` i `tools` nisu
+dirnuti, pa suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — i ovo je PWA. Atomski claim je tačno ona vrsta koda koji bi test uhvatio a
+čitanje ne: ponasanje IndexedDB transakcije pod istovremenim tabovima se ne može dokazati čitanjem.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

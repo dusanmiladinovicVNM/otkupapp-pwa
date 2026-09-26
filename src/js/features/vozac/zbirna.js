@@ -291,6 +291,10 @@ function normalizeLocalZbirnaRecord(r) {
         otpremnicaIDs: r.otpremnicaIDs || '',
         masterStatus: r.masterStatus || '',
 
+        // Bez ovoga je lifecycle signal postojao u bazi a nestajao na putu do
+        // rezervacije: trajno odbijena zbirna bi zauvek drzala svoje otpremnice.
+        lastServerCode: r.lastServerCode || '',
+
         syncStatus: r.syncStatus || 'pending',
         syncAttempts: parseInt(r.syncAttempts, 10) || 0,
         lastSyncError: r.lastSyncError || '',
@@ -553,11 +557,51 @@ async function confirmZbirnaUnlocked() {
         schemaVersion: 1
     };
 
+    // ATOMSKI CLAIM (review #392, treci krug).
+    //
+    // Provera iznad je UPOZORENJE, ne kapija: izmedju nje i upisa drugi tab sme
+    // da napravi svoju zbirnu nad istim otpremnicama. Prava kapija je ovde --
+    // poslednje citanje rezervacija i upis su JEDNA readwrite transakcija, pa ih
+    // baza serijalizuje medju tabovima.
+    //
+    // Whitelist razresenih se racuna PRE transakcije, jer unutar nje nema mesta
+    // za mrezu. Ako ga nema (pad citanja), skup je prazan -- a to znaci VISE
+    // rezervacija, ne manje: degradacija je konzervativna.
+    const razreseni = new Set(
+        (await getMergedZbirneForVozac() || [])
+            .filter(zbirnaRazresenaOdMastera)
+            .map(z => String(z.clientRecordID || '').trim())
+            .filter(Boolean)
+    );
+
+    let claim;
     try {
-        await dbPut(db, 'zbirne', record);
+        claim = await dbClaimInStore(db, 'zbirne', record, function (sviZapisi) {
+            const rez = rezervisaneOtpremnice(
+                (sviZapisi || []).map(z => Object.assign({}, z, {
+                    masterStatus: razreseni.has(String(z.clientRecordID || '').trim())
+                        ? 'Synced>Master'
+                        : ''
+                }))
+            );
+
+            const sudar = (zbirnaNamera || []).filter(id => rez.has(id));
+            if (sudar.length) {
+                return sudar.length + ' otpremnica je u međuvremenu već u drugoj zbirnoj';
+            }
+
+            return '';
+        });
     } catch (err) {
-        console.error('confirmZbirna dbPut failed:', err);
-        showToast('Greška pri čuvanju zbirne', 'error');
+        console.error('confirmZbirna claim failed:', err);
+        showToast('Stanje zbirnih se ne može potvrditi - zbirna NIJE sačuvana', 'error');
+        return;
+    }
+
+    if (!claim.ok) {
+        showToast(claim.razlog + ' - proveri spisak', 'error');
+        await loadVozacData();
+        cancelZbirna();
         return;
     }
 
