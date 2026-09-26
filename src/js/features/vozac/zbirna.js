@@ -413,6 +413,8 @@ async function confirmZbirnaUnlocked() {
     // da li je NAMERA korisnika jos izvodljiva.
     //
     // OFFLINE ostaje offline-first: bez veze se radi nad poslednjim poznatim.
+    let slobodneNaServeru = null;
+
     if (navigator.onLine) {
         const sveze = await safeAsync(async () => {
             return await apiFetch('action=getVozacOtpremnice');
@@ -427,40 +429,62 @@ async function confirmZbirnaUnlocked() {
             return;
         }
 
-        const slobodne = new Set(
+        slobodneNaServeru = new Set(
             (Array.isArray(sveze.records) ? sveze.records : [])
                 .filter(r => !String((r && r.zbirnaID) || '').trim())
                 .map(r => String((r && r.otpremnicaID) || '').trim())
         );
-
-        // TACNO ONAJ SKUP KOJI JE KORISNIK VIDEO.
-        //
-        // Ne uzima se "sve sto je sada slobodno": to bi tiho promenilo manifest
-        // koji je upravo pregledan. Ako je ijedna otpremnica u medjuvremenu
-        // otisla, komanda STAJE i ekran se precrtava.
-        const izgubljene = (zbirnaNamera || []).filter(id => !slobodne.has(id));
-
-        if (!zbirnaNamera.length || izgubljene.length) {
-            showToast(
-                izgubljene.length === 1
-                    ? 'Jedna otpremnica je u međuvremenu već u zbirnoj - proveri spisak'
-                    : izgubljene.length + ' otpremnica je u međuvremenu već u zbirnoj - proveri spisak',
-                'error'
-            );
-            await loadVozacData();
-            cancelZbirna();
-            return;
-        }
     }
 
-    // Izbor je NAMERA razresena nad tekucim spiskom, po OtpremnicaID-u.
-    const uNameri = new Set(zbirnaNamera || []);
-    const todayOtkupi = (vozacOtpremnice || []).filter(r =>
-        uNameri.has(r.otpremnicaID)
+    // DRUGA SVEZA KAPIJA: LOKALNE NERAZRESENE REZERVACIJE.
+    //
+    // Server sam nije dovoljan. Drugi tab (ista baza, isti uredjaj) mogao je
+    // upravo da napravi zbirnu nad istim otpremnicama; master je jos ne vidi, pa
+    // server sasvim tacno kaze "slobodna". withSubmitLock to ne hvata -- brava
+    // zivi samo u memoriji OVOG taba.
+    let rezervisaneSada;
+    try {
+        rezervisaneSada = rezervisaneOtpremnice(await getMergedZbirneForVozac());
+    } catch (err) {
+        console.error('confirmZbirna rezervacije failed:', err);
+        showToast('Stanje zbirnih se ne može pročitati - probaj ponovo', 'error');
+        return;
+    }
+
+    // TACNO ONAJ SKUP KOJI JE KORISNIK VIDEO.
+    //
+    // Ne uzima se "sve sto je sada slobodno": to bi tiho promenilo manifest koji
+    // je upravo pregledan. Ako je ijedna otpremnica otisla -- serveru ili drugoj
+    // lokalnoj zbirni -- komanda STAJE i ekran se precrtava.
+    const izgubljene = (zbirnaNamera || []).filter(id =>
+        (slobodneNaServeru && !slobodneNaServeru.has(id)) || rezervisaneSada.has(id)
     );
 
-    if (todayOtkupi.length === 0) {
-        showToast('Nema otpremnica za danas', 'error');
+    if (!zbirnaNamera.length || izgubljene.length) {
+        showToast(
+            izgubljene.length === 1
+                ? 'Jedna otpremnica je u međuvremenu već u zbirnoj - proveri spisak'
+                : izgubljene.length + ' otpremnica je u međuvremenu već u zbirnoj - proveri spisak',
+            'error'
+        );
+        await loadVozacData();
+        cancelZbirna();
+        return;
+    }
+
+    // NAMERA SE RAZRESAVA TACNO, ILI SE NE RAZRESAVA.
+    //
+    // Filter bi tiho napravio MANJI manifest od onog koji je korisnik pregledao:
+    // ako lokalni spisak u medjuvremenu vise ne nosi neku otpremnicu, zbirna bi
+    // nastala bez nje. Zato se broji -- razresen skup mora biti jednak nameri.
+    const todayOtkupi = (zbirnaNamera || [])
+        .map(id => (vozacOtpremnice || []).find(r => r.otpremnicaID === id))
+        .filter(Boolean);
+
+    if (todayOtkupi.length !== (zbirnaNamera || []).length) {
+        showToast('Spisak otpremnica se promenio - proveri pa probaj ponovo', 'error');
+        await loadVozacData();
+        cancelZbirna();
         return;
     }
 
@@ -571,6 +595,16 @@ async function syncZbirne() {
     return result;
 }
 
+// Kodovi kojima server kaze "presudio sam i odbijam" -- retry ne menja ishod.
+//
+// Transportni neuspeh nema kod, pa ovde namerno nije nabrojan: takav zapis je
+// jos na putu i mora da zadrzi svoje otpremnice.
+const ZBIRNA_TRAJNO_ODBIJENA = new Set([
+    'ZBIRNA_CONFLICT',
+    'VALIDATION_ERROR',
+    'CLIENT_RECORD_ID_MISSING'
+]);
+
 // Da li je master doneo odluku o ovoj zbirni.
 //
 // Isti skup koji GAS zove terminalnim: master je red video i presudio, pa od tog
@@ -597,10 +631,18 @@ function rezervisaneOtpremnice(zbirne) {
     (zbirne || []).forEach(z => {
         if (!z || z.deleted) return;
 
-        // Odbijen dogadjaj OSLOBADJA: inace bi greska u unosu trajno zakljucala
-        // otpremnicu.
+        // ODBIJEN DOGADJAJ OSLOBADJA, ALI SAMO TRAJNO ODBIJEN.
+        //
+        // Sync engine i transportni pad i poslovno odbijanje ostavlja kao
+        // syncStatus 'pending' -- razlikuje ih tek KOD koji je server vratio.
+        // Bez te razlike bi trajno odbijena zbirna zauvek drzala svoje
+        // otpremnice, jer svaki retry pada iz istog razloga.
+        //
+        // Prazan kod = transportni neuspeh: zapis je i dalje na putu, pa
+        // rezervacija OSTAJE.
         const lokalni = String(z.syncStatus || '').trim();
         if (lokalni === 'error' || lokalni === 'failed') return;
+        if (ZBIRNA_TRAJNO_ODBIJENA.has(String(z.lastServerCode || '').trim())) return;
 
         if (zbirnaRazresenaOdMastera(z)) return;
 

@@ -6401,6 +6401,42 @@ koji ga gađa): **2/2 crvenih**, potpis izvora identičan (`5c992b26d0585c55`).
 ⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — rezervacija, komandna kapija i konflikt su pročitani i
 rezonovani, ne izvršeni.
 
+**Review #392, drugi krug — dve fineše lifecycle-a.**
+
+**P1 — kapija je pitala server, ali ne i sopstvenu bazu.** Sveža provera je gledala samo
+`getVozacOtpremnice`. Drugi **tab** (ista baza, isti uređaj) mogao je upravo da napravi zbirnu nad istim
+otpremnicama; master je još ne vidi, pa server sasvim tačno kaže „slobodna". `withSubmitLock` to ne
+hvata — brava živi samo u memoriji tog taba.
+
+Sada se na granici komande čita **oboje**: svež serverski spisak i sveže lokalne nerazrešene
+rezervacije (`rezervisaneOtpremnice(await getMergedZbirneForVozac())`).
+
+**Uz to: namera se razrešava tačno, ili se ne razrešava.** Payload se gradio `filter`-om nad lokalnim
+spiskom, bez provere broja — pa bi zbirna mogla nastati sa **manje** otpremnica nego što je korisnik
+pregledao, baš ono što komentar iznad tvrdi da se ne sme desiti. Sada se razrešen skup **broji** i mora
+biti jednak nameri.
+
+**P2 — odbijanje nije oslobađalo rezervaciju.** Komentar je obećavao da odbijen događaj oslobađa, ali
+`sync-engine` i transportni pad i poslovno odbijanje ostavlja kao `syncStatus: 'pending'`:
+
+```
+GAS: ZBIRNA_CONFLICT  ->  syncStatus = pending, lastServerStatus = failed
+rezervisaneOtpremnice ->  jos uvek rezervisano
+svaki retry           ->  isti ishod, otpremnica zakljucana zauvek
+```
+
+Nedostajao je **lifecycle signal**: `record.lastServerCode` se nigde nije čuvao. Sada se čuva, a
+rezervacija se otpušta samo na **trajno** odbijanje (`ZBIRNA_CONFLICT`, `VALIDATION_ERROR`,
+`CLIENT_RECORD_ID_MISSING`). Prazan kod znači transportni neuspeh — takav zapis je još na putu i
+rezervaciju **zadržava**, pa retry ostaje moguć.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `sync-engine.js`) — `src-vba`, `gas` i `tools`
+nisu dirnuti. Suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — ceo krug je PWA: dvostruka kapija i lifecycle rezervacije su pročitani i
+rezonovani, ne izvršeni.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
