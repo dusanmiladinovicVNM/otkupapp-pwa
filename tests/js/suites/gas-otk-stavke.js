@@ -388,7 +388,11 @@ module.exports = {
         // bi preimenovana ili premestena kolona u GAS-u oborila uvoz CELOG lista
         // stanice -- a nijedna kapija to ne bi javila pre produkcije.
         'ugovor kolona je DOSLOVNO isti kao u VBA': async function (m) {
-            assert.deepStrictEqual(m.kolone, vbaUgovorKolona(),
+            // Array.from PRENOSI niz u test realm. Bez toga deepStrictEqual pada na
+            // PROTOTIPU: niz iz vm konteksta nije instanca ovdasnjeg Array-a, pa
+            // poredjenje javlja "same structure but not reference-equal" iako su
+            // imena identicna. Granica realm-a, ne razlika u ugovoru.
+            assert.deepStrictEqual(Array.from(m.kolone), vbaUgovorKolona(),
                 'raspored kolona OTK_STAVKE se razlikuje od modMasterSync.OtkStavkeKolone');
         },
 
@@ -409,7 +413,11 @@ module.exports = {
                 })
             ];
 
-            assert.deepStrictEqual(m.indeksIzRedova(m.kolone, redovi), {},
+            // Tvrdnja se izgovara EKSPLICITNO, ne kroz deepStrictEqual sa {}:
+            // objekat iz vm konteksta ima prototip tog realm-a, pa bi poredjenje
+            // padalo na prototipu a ne na sadrzaju.
+            const idx = m.indeksIzRedova(m.kolone, redovi);
+            assert.strictEqual(Object.keys(idx).length, 0,
                 'red desktop push-a je usao u indeks stavki sa terena');
         },
 

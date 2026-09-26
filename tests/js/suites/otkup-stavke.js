@@ -90,8 +90,15 @@ module.exports = {
         // ZAPIS BEZ STAVKI NE DOBIJA IZMISLJEN PODATAK. Pristupnik vraca nulu i
         // prazno; odluku sta to znaci donosi pozivalac, koji jedini zna kontekst.
         'zapis bez stavki daje nulu, ne izuzetak i ne pogodjen broj': async function (m) {
-            assert.deepStrictEqual(m.otkupStavke({}), [], 'zapis bez stavki nije dao prazan niz');
-            assert.deepStrictEqual(m.otkupStavke(null), [], 'null zapis nije dao prazan niz');
+            // Array.isArray radi PREKO realm-a (gleda interni slot), a duzina je
+            // sama tvrdnja. deepStrictEqual sa [] bi padao na prototipu niza iz vm
+            // konteksta, ne na sadrzaju.
+            assert.ok(Array.isArray(m.otkupStavke({})), 'zapis bez stavki nije dao niz');
+            assert.strictEqual(m.otkupStavke({}).length, 0,
+                'zapis bez stavki nije dao PRAZAN niz');
+            assert.ok(Array.isArray(m.otkupStavke(null)), 'null zapis nije dao niz');
+            assert.strictEqual(m.otkupStavke(null).length, 0,
+                'null zapis nije dao PRAZAN niz');
             assert.strictEqual(m.otkupZbirKg({}), 0, 'zapis bez stavki nije dao nula kg');
             assert.strictEqual(m.otkupKlaseTekst({}), '', 'zapis bez stavki je dao oznaku klase');
             assert.strictEqual(m.otkupCenaAkoJedna({}), null, 'zapis bez stavki je dao cenu');
