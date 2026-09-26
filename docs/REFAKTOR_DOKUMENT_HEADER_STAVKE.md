@@ -6674,6 +6674,31 @@ jedan makrotask da zakasnela greska ne bi zavrsila na tudjem imenu.
 konekcije u centralnoj tvrdnji, i zakljucan graf — `npm ci` je **CI-em potvrdio** da je rucno pisan
 `package-lock.json` sa `fake-indexeddb 6.0.0` ispravan.
 
+#### Review #393, treci krug — odbrana koja je nadzivela svoj povod
+
+CI #811 je **zelen u oba smera**: 13/13 tvrdnji i 7/7 sabotaza, a centralna sabotaza obara bas
+concurrency tvrdnju. Ostao je jedan P2, i bio je u onome sto sam dodao **preko zahteva**.
+
+**P2 — globalni `uncaughtException` handler je mogao da proguta ili pogresno pripise zakasnelu
+gresku.** Napisao sam da „handler ne sakriva nista“; nije tacno. Greska koja stigne posle poslednje
+tvrdnje zavrsi u nizu koji nikad nece biti procitan, a greska koja stigne tokom naredne tvrdnje bude
+pripisana **njoj** — cekanje jednog makrotaska ne pokriva `setTimeout(..., 50)`.
+
+Sustina nalaza nije mehanika nego **poreklo**: handler je dodat kao odbrana od sabotaze koja je
+gadjala mrtav `objectStore` — dakle od problema koji sam sam napravio, pa u istom krugu i uklonio.
+Kad je povod nestao, ostao je samo rizik. Za kapiju je „neocekivano -> crveno“ tacnije od pogadjanja
+cija je greska; suite kojem stvarno treba pozadinski posao mora da ceka njegov signal zavrsetka,
+eksplicitno.
+
+Mehanizam je uklonjen u celini (`process.on` nema, `uToku` i `pozadinske` nema, cekanje makrotaska
+nema) — 36 obrisanih linija za 11 dodatih. Na njegovom mestu stoji komentar koji zapisuje **odluku i
+njen razlog**, da se handler ne vrati sledeci put kad neka sabotaza pukne van tvrdnje.
+
+**Prihvaceno kako je, bez izmene:** sabotaza `claim-ne-prekida-transakciju` obara i concurrency
+tvrdnju pored svoje. To je posledica istog invarijanta — bez `abort`-a odbijen claim izgleda kao
+prihvacen i u jednom i u dva taba — a runner taj preklapajuci pad **imenuje** u izlazu. Nasilno
+razdvajanje bi trazilo da jedna od dve tvrdnje prestane da meri `abort`, sto je gubitak, ne dobitak.
+
 #### Ugovor prihvatanja za S5-5b — žica otkupa
 
 Šta mora da važi kad se rez završi:
