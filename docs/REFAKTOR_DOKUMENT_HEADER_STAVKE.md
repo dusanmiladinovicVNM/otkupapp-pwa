@@ -7245,6 +7245,78 @@ prisutna. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
 **JS harness ovog head-a jos nije izvrsen** — CI ide na `pull_request` i push u
 `main`, pa push feature grane ga ne pokrece.
 
+### 14.51) Pre-flight S1 — rez ne postoji; ispravka premise (27.09.2026)
+
+**Verdikt: NEMA REZA.** Pre-flight je pokrenut za „S1 — Otkup do kraja" i odbio ga
+je zato što je **S1 zatvoren još u #359**. Premisa na kojoj je predložen je bila
+moja greška u čitanju brojača, i beleži se ovde da je sledeća sesija ne ponovi.
+
+#### Šta je premisa tvrdila i šta je merenje pokazalo
+
+| Tvrdnja | Merenje |
+|---|---|
+| „`otk_linija` = 18 živih čitalaca drži linijska polja `tblOtkup` na životu" | **`tblOtkup` nema ta polja.** Kanon: 29 kolona, bez `Kolicina`/`Cena`/`Klasa`/`KolAmbalaze` — obrisane u S1d (#358). Nosi ih `tblOtkupStavke` (12 kolona) |
+| `otk_linija` je mera S1 | **Nije, i alat to sam kaže** (`tools/popis_citalaca.py:102–104`): *„`otk_linija` ostaje radi uporedivosti, ali nosi i `TIP_AMB` / `KOL_AMB_IZDATA`, koje su H (DOCUMENT_HEADER_LINES) i **ne silaze na nulu**"*. Mera S1 je **`x_otk_stavka`**, i on je **0** |
+| `otk_linija` nije ni pod kapijom | `PRAGOVI` (`popis_citalaca.py:175`) gejtuje **šest** grupa: `otp_stari_pisac` 0 · `otk_veza_otp` 11 · `otp_linija` 3 · `otp_cena` 0 · `zbr_linija` 17 · `zbr_stari_pisac` 0. `otk_linija` nije među njima |
+
+Uz to, brojevi koje sam prvo izgovorio su mešali **PROD ukupno** sa **živim**
+mestima: `zbr_linija` je 22 PROD ali **17 živih** (= prag), `otk_veza_otp` 14 PROD
+ali **11 živih** (= prag). Kapija je sve vreme bila zelena jer je merila pravu
+stvar.
+
+**Pouka je ista koju skill nosi u §6:** *red u katalogu je tvrdnja, ne dokaz.*
+Ovde je „katalog" bila tabela slajsova §14.9, a brojač koji sam uzeo kao meru
+nikad nije bio njena mera.
+
+#### Šta je merenje NAŠLO kao stvarno otvoreno
+
+**1. Mrtve linijske kolone zaglavlja OTPREMNICE — tačan analogon S1d.**
+
+Kanon `tblOtpremnica` još nosi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`,
+`BrutoKg`, a `tblOtpremnicaStavke` nosi svoje. Tri **živa PROD** mesta ih drže u
+zatečenoj svesci kroz self-heal:
+
+| Mesto | Šta radi |
+|---|---|
+| `modSetup.bas:1475` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA` |
+| `modSetup.bas:1488` | `EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO` |
+| `modSetup.bas:1489` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO` |
+
+To su **ista tri mesta** koja čine prag `otp_linija` = 3. Rez ih spušta na **0**.
+Negativne tvrdnje već postoje i traže da polja budu prazna
+(`modBusinessFlowProTests:13331–13334`, „OTP header: Kolicina prazna" itd.), pa se
+merenje ne izmišlja nego nasleđuje.
+
+**2. S6 — prijemnica još nema stavke.**
+
+`tblPrijemnica` nosi 5 linijskih polja u zaglavlju, a **`tblPrijemnicaStavke` ne
+postoji u kanonu**. To nije čišćenje nego nova tabela, nov pisac i cutover F4
+(pauziran od #362). `split_plus` = 5.
+
+#### Verdikt po osama — za ODBIJEN rez
+
+| Osa | Status |
+|---|---|
+| `DOMAIN` | **N/A** — rez ne postoji; domen otkupa je zatvoren u S1a–S1e |
+| `IDENTITY` | **N/A** — `OtkupID` je identitet od S1e (#359) |
+| `CARDINALITY`, `INVARIANTS/OWNER`, `WRITERS`, `DOWNSTREAM` | **N/A** — nema izmene |
+| `CAPABILITY` | **N/A** |
+| `ACCEPTANCE CONTRACT` | **N/A** — nema šta da se prihvati |
+| `PLATFORM` | **N/A** |
+| `LANDING` | **PROVEN** — `main` je na `561fcad9`, nema nemergovane zavisnosti |
+
+`EVENTS: N/A` — nijedan poslovni tok nije dirnut; ovo je ispravka plana.
+
+#### Sledeći kandidati, sa merom umesto procene
+
+| Kandidat | Mera koja pada na nulu | Veličina |
+|---|---|---|
+| **S3-ostatak** — mrtve linijske kolone `tblOtpremnica` | `otp_linija` 3 → **0** | mali: kanon + `modSetup` + konstante; negativne tvrdnje postoje |
+| **S6** — prijemnica header + stavke + izvori + cutover | `split_plus` 5 → 0; nova tabela `tblPrijemnicaStavke` | veliki: nov pisac, F4 cutover, štampa i izvozi |
+
+Pre-flight za izabrani rez ide **posebno** — ovaj je potrošen na ispravku premise,
+i to je jedini posao koji je smeo da uradi.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
