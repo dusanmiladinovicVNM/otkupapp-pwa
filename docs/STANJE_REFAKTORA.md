@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 24.09.2026 (S5-3).
+**Ažurirano:** 27.09.2026 (S5-5b spojen, #394 `561fcad9`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -30,9 +30,12 @@
 | **Mapa sposobnosti** | ✅ spojena u `docs/DOMEN/MAPA_SPOSOBNOSTI.md` (387 sposobnosti; ulazi A–F ostaju u `docs/DOMEN/mapa_sposobnosti_ulazi/`) |
 | Odluke domena | ✅ §14.8 (17.09.2026) |
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
-| Kod slajsova (otpremnica, zbirna, prijemnica, faktura, paleta, sledljivost, brisanje) | ⏳ |
+| S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
+| **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
+| S6 prijemnica · S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
+| **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
-## Sledeći korak: S4-2c — ekrani zbirne (F3 forma + radni sto u F2)
+## Sledeći korak: S1 — „Otkup do kraja“ (pre-flight pa rez)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -255,10 +258,57 @@
     (38) obrisani — popis: `pauza` **6 → 0**, „kapije: nema“. `modMasterSync` više ne piše
     `tblZbirna` (3 → 2 pisca). `GeneracijaID` za **zbirnu** nema pisca; za **prijemnicu** ostaje
     do S6. Detalji: plan §14.39.
-43. **Sledeće:** S5-3b (storno tok zbirne — ostao bez hrane, 16 mesta), svežina izvora zbirne
-    (§15), S5-4 (GAS/PWA strana), S6 (prijemnica, F4), S7, S8, S9.
+43. **S5-3b — storno tok zbirne nad kanonskim članstvom (#389).** Tok je bio ostao bez hrane:
+    mrtav most preko starog backlinka. Detalji: plan §14.40–14.41.
+44. **S5-4a — predaja je SOPSTVEN događaj (#390).** Store `predaje` → `PRED-*` list (append-only)
+    → `ImportOnePREDSheet`. Retry se prepoznaje po **utovaru**, ne po vozaču. Predaja više ne živi
+    kao tri kolone na OTK redu: cim red dobije `Synced>Master`, uvoz ga ne čita, pa je predaja koja
+    stigne kasnije tiho nestajala. Detalji: plan §14.42–14.43.
+45. **S5-4b-1 — žica vozača (#391).** Master izvozi otpremnice (zaglavlje + stavke) u `MgmtReports`;
+    GAS servira vozaču otpremnice po `Otpremnica.VozacID`. Presedan **mrtvog slota**:
+    `VS_OTKUP_RECORD_IDS` ostaje na žici i piše se prazan, jer `ensureSheetColumns` dozidjuje samo na
+    kraju a svaka druga razlika je `SCHEMA_DRIFT`.
+46. **S5-4b-2 — ekran vozača (#392).** `zbirna.js` / `transport.js` rade nad otpremnicama; zbirna
+    šalje `ZbirnaID` + spisak `OtpremnicaID`. `OtpremniceIzOtkupRecordIDs` **obrisan** (mereno: 0).
+47. **S5-5a — JS kapija (#393).** `tests/js/` harness izvršava produkcijske fajlove kroz `vm.Script`,
+    sabotaža se primenjuje na **tekst u memoriji** (ne na radno stablo). **Četiri kruga review-a, i
+    nijedan nalaz u produkcionom kodu** — svi su bili u instrumentu. Zapisano kao pravilo: u rezu koji
+    uvodi merenje greška je u sredstvu merenja, i odbrana napisana pre merenja postaje nalaz.
+48. **S5-5b — žica otkupa: zaglavlje + stavke (#394, `561fcad9`).** Sva tri sloja: VBA uvoz čita
+    `OTK_STAVKE`, GAS piše **stavke pa zaglavlje**, PWA nosi `stavke[]` (odluka: **samo žica, N=1** —
+    forma i dalje unosi jednu klasu). Zaglavlje nosi `StavkeCount` kao **manifest**, pa se
+    „nedostaje stavka“ razlikuje od „dokument ima jednu stavku“. Četiri linijske kolone su **mrtvi
+    slotovi**. Detalji: plan §14.44–14.50.
+    **Nalaz koji plan nije predvideo:** tab `OTK_STAVKE` od tada ima **dva pisca**, a PWA red ne zna
+    `OtkupStavkaID` — indeks idempotencije push-a ga je čitao kao „red bez identiteta“ i trajno
+    blokirao push te stanice, fail-closed nad ispravnim podatkom.
+    **Tri kruga review-a, svi na istoj granici — identitetu:** hibridni dokument od partial upisa ·
+    completion marker (zaglavlje postoji ⇒ skup je nepromenljiv) · identitet obuhvata **ceo** payload,
+    ne samo skup stavki.
+    **CI je dao četiri nalaza i sva četiri u instrumentu:** `deepStrictEqual` preko granice `vm`
+    realm-a, placebo tvrdnja koja je imenovala jedno a merila drugo, i moja statička provera sidara
+    koja je tiho preskakala jedan unos.
+49. **Sledeće — S1 „Otkup do kraja“.** Mereno posle #394: `otk_linija` = **18 živih PROD čitalaca**
+    (`modMasterSync` 3, `modOtkup` 2, `modPrint` 2, `modSetup` 2, `modStammdatenSync` 2, `modStornoDok` 2,
+    `modAutoHladnjaca` 1, ostatak raspoređen). Dok oni ne padnu, otkup je „header + stavke“ **na žici**
+    a dvojan **u jezgru**. Rez dira štampu, izveštaje, izvoze, storno prefill i KPI — a štampa i PDF su
+    ono što testovi ne mere, pa ide **po čitaocu**, ne po fajlu.
+    **Posle S1:** ostatak S3/S4 (`otp_brojzbirne` 15, `otk_veza_otp` 14, `otk_brojzbirne` 8,
+    `zbr_linija` 22, `x_trace` 14, `x_literal` 7, `split_plus` 5), pa S6 (prijemnica, F4), S7, S8, S9.
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
+
+## Dug sa imenom (posle S5-5b)
+
+| Stavka | Zašto stoji, a ne „kasnije ćemo“ |
+|---|---|
+| `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
+| `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |
+| `DEGRADIRANO` grana ciklusa | `modGoogleSyncOrchestrator:384` — poslednji OTK razlog je nestao, sama grana nije |
+| `BuildOTKFixtureData` (smoke) | gradi pre-S5-5b oblik žice; suite je zatečeno crven i van FULL prolaza, a izmena se **ne može izmeriti** bez živog Google-a |
+| `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
+| Node 20 deprecation u tri GitHub akcije | process PR |
+| `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
 
 
 ## Alati i kapije

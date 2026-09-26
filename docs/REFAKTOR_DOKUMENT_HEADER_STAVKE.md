@@ -4880,16 +4880,23 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | `Otkup.VozacID` je živa veza koju treba migrirati | Pišu je **tačno dva mesta**, oba u `modMasterSync`, **oba pod pauzom**. Kolona je mrtva |
 | `PROSLEDJENO` kao izvor otpremnice je „obavezno pre S5“ | `IZDATO_PROSLEDJENO` **ne piše nijedan put**. Nije živ kvar nego dva odgovora na isto pitanje — zatvoreno jednim redom |
 
-#### Rez na četiri sesije
+#### Rez na četiri sesije — narastao na deset
+
+> **Osveženo 27.09.2026, posle #394.** Procena „četiri sesije“ je promašila, i to se ovde beleži
+> umesto da se prepiše: predaja je ispala sopstven događaj (S5-4a), žica vozača se razdvojila na
+> master i ekran (S5-4b-1/2), a otkup je zahtevao svoju JS kapiju pre nego što mu se dira oblik
+> (S5-5a) — pa onda i tri kruga review-a na jednoj granici (S5-5b). Deset PR-ova: #385–#394.
 
 | # | Sadržaj | Stanje |
 |---|---|---|
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
-| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ✅ #388 · most u #389 · **ostatak:** `DEGRADIRANO` grana ciklusa još stoji na jednom mestu (`modGoogleSyncOrchestrator:384`) |
 | **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
 | **S5-4b-1** | **zica**: master izvozi otpremnice (zaglavlje + stavke) u `MgmtReports`; GAS servira vozaču otpremnice po `Otpremnica.VozacID` (E-044, E-058) | ovaj rez |
-| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
+| **S5-5a** | **JS kapija**: `tests/js/` harness nad produkcijskim fajlovima (`vm.Script`), sabotaža nad tekstom u memoriji | ✅ #393 |
+| **S5-5b** | **žica otkupa**: zaglavlje + stavke kroz VBA uvoz, GAS i PWA; `StavkeCount` kao manifest; četiri linijske kolone → mrtvi slotovi | ✅ #394 (`561fcad9`), §14.44–14.50 |
 
 #### Šta je S5-1 uradio
 
@@ -6057,8 +6064,8 @@ napiše.** Zato:
 
 | # | Sadržaj | Stanje |
 |---|---|---|
-| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | sledeći rez |
-| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | ✅ #391 |
+| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
 
 **2. Broj zbirne ostaje na masteru.** PWA generiše `ZbirnaID` (kao `PredajaID` u S5-4a) i šalje spisak
 otpremnica; `BrojZbirne` dodeljuje desktop pri uvozu. To je i danas tačno na uvoznoj strani —
