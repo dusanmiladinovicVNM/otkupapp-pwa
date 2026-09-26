@@ -79,6 +79,16 @@ const OTK_STAVKE_COLUMNS = [
   'OtkupClientRecordID'
 ];
 
+// Ugovor kolona kao FUNKCIJA, da bude dohvatljiv i van ovog skripta.
+//
+// Top-level `const` se u vm kontekstu (tests/js/harness.js) vezuje u leksicki
+// scope skripta i NE postaje svojstvo globalnog objekta -- funkcija postaje. Bez
+// ovoga bi test morao da prepise raspored kolona, pa bi preimenovana kolona
+// prosla kroz oba sita.
+function otkStavkeKoloneUgovor_() {
+  return OTK_STAVKE_COLUMNS.slice();
+}
+
 // Verdikt nad skupom stavki JEDNOG otkupa. Vraca normalizovane stavke ili baca
 // VALIDATION_ERROR koji imenuje razlog i broj stavke.
 //
@@ -188,7 +198,7 @@ function otkStavkaKljuc_(klasa, kolicina, cena, kolAmbalaze, brutoKg) {
 //
 // Zadnje dvoje su namerno nesimetricne: dopisati sto fali je dovrsavanje istog
 // upisa, a zaboraviti sto postoji je druga tvrdnja o istom dokumentu.
-function otkStavkeUskladi_(indeks, stigle, otkupClientRecordID) {
+function otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, dopustiDopunu) {
   const roditelj = String(otkupClientRecordID || '').trim();
   if (!roditelj) return 'OtkupClientRecordID nije zadat';
 
@@ -223,7 +233,45 @@ function otkStavkeUskladi_(indeks, stigle, otkupClientRecordID) {
     }
   }
 
+  // ZAVRSEN DOKUMENT NE PRIMA NOVU STAVKU (review #394, drugi krug).
+  //
+  // Dopuna je legitimna SAMO pre completion marker-a: zaglavlje je oznaka
+  // zavrsenog upisa, pa dok ga nema, stavka koja fali znaci prekinut prolaz.
+  // Kad zaglavlje postoji, isti ClientRecordID je NEPROMENLJIV -- nova stavka
+  // je druga tvrdnja o dokumentu koji je master mozda vec uvezao.
+  //
+  // Bez ovog izlaza je zavrsen otkup na retry-u dobijao stavku, manifest je
+  // ostajao na starom broju, GAS je vracao success/existing, a uvoz je isti
+  // dokument posle toga odbijao kao neporavnat -- PWA bi mislila da je ispravka
+  // prihvacena, master je ne bi imao, i niko ne bi znao gde je razlika.
+  if (!dopustiDopunu) {
+    for (let i = 0; i < stigle.length; i++) {
+      const id = stigle[i].clientRecordID;
+      const unos = uTabu[id];
+
+      if (!unos || unos.parent !== roditelj) {
+        return 'stavka ' + id + ' nije deo zavrsenog dokumenta';
+      }
+    }
+  }
+
   return '';
+}
+
+// ZAGLAVLJE JOS NE POSTOJI: prekinut upis se sme DOVRSITI.
+//
+// Postojeci podskup mora biti identican, a stavke koje u tabu fale smeju da se
+// dopisu. To je tacno stanje koje ostavi prolaz pao izmedju stavki i zaglavlja.
+function otkStavkeUskladiNedovrsen_(indeks, stigle, otkupClientRecordID) {
+  return otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, true);
+}
+
+// ZAGLAVLJE POSTOJI: dokument je ZAVRSEN i skup je NEPROMENLJIV.
+//
+// Trazi se TACNA jednakost: isti identiteti i isti sadrzaj. Nema dopune, nema
+// brisanja, nema nove stavke -- samo doslovno isti payload je idempotentan.
+function otkStavkeUskladiZavrsen_(indeks, stigle, otkupClientRecordID) {
+  return otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, false);
 }
 
 // PREDAJA JE SOPSTVEN DOGADJAJ, NE TRI KOLONE NA OTK REDU (review #390, P1).
@@ -1856,15 +1904,31 @@ function otkStavkeTab_(ss) {
 // pravi OtkupID), pa u pitanju "sta je PWA poslala za ovaj CRID" nemaju sta da
 // rade. Isto pravilo, u drugom smeru, drzi modStanicaLock.OtkStavkeIndeksIzTaba.
 function otkStavkeIndeksTaba_(sheet) {
-  const izlaz = {};
-
   const poslednjiRed = sheet.getLastRow();
-  if (poslednjiRed < 2) return izlaz;
+  if (poslednjiRed < 2) return {};
 
   const headers = sheet
     .getRange(1, 1, 1, sheet.getLastColumn())
     .getValues()[0]
     .map(h => String(h || '').trim());
+
+  const redovi = sheet
+    .getRange(2, 1, poslednjiRed - 1, sheet.getLastColumn())
+    .getValues();
+
+  return otkStavkeIndeksIzRedova_(headers, redovi);
+}
+
+// CIST DEO INDEKSA: naslov + redovi (bez naslovnog) -> {itemCRID: {parent, kljuc}}.
+//
+// Izdvojen iz mreznog dela da bi se PRAVILA mogla izmeriti bez SpreadsheetApp --
+// ista odluka kao kod otkStavkeNormalizuj_. Pravilo koje nema ko da izmeri je
+// tacno mesto gde se nalaz sakrije.
+//
+// Broj reda u poruci je r + 2, jer `redovi` pocinju od DRUGOG reda taba.
+function otkStavkeIndeksIzRedova_(headers, redovi) {
+  const izlaz = {};
+  if (!redovi || redovi.length === 0) return izlaz;
 
   // TRAZI SE SVAKA KOLONA KOJA SE CITA, ne samo identitet.
   //
@@ -1874,12 +1938,8 @@ function otkStavkeIndeksTaba_(sheet) {
   const idx = headerIndexMap(headers);
   ['ClientRecordID', 'OtkupClientRecordID', 'Klasa', 'Kolicina', 'Cena',
    'KolAmbalaze', 'BrutoKg'].forEach(function (ime) {
-    requireHeaderIndex(idx, ime, 'otkStavkeIndeksTaba_');
+    requireHeaderIndex(idx, ime, 'otkStavkeIndeksIzRedova_');
   });
-
-  const redovi = sheet
-    .getRange(2, 1, poslednjiRed - 1, sheet.getLastColumn())
-    .getValues();
 
   for (let r = 0; r < redovi.length; r++) {
     const red = redovi[r];
@@ -1889,11 +1949,31 @@ function otkStavkeIndeksTaba_(sheet) {
     const parent = String(getCell(red, idx.OtkupClientRecordID, '') || '').trim();
     if (!parent) continue;
 
-    // Red sa roditeljem a bez svog CRID-a je defekt koji GAS nije mogao upisati;
-    // VBA ga odbija po imenu (OtkPwaStavkeIzTaba). Ovde se preskace, da se tudji
-    // kvar ne pretvori u konflikt nad ispravnim dokumentom.
+    // FAIL-CLOSED NAD POKVARENIM TABOM, doslovno kao VBA citalac.
+    //
+    // OtkPwaStavkeIzTaba oba ova stanja odbija PO IMENU i prekida uvoz celog
+    // lista. Dok je GAS prvo preskakao a drugo tiho prepisivao, isti tab je za
+    // GAS bio ispravan a za master neispravan -- dva citaoca istog ugovora sa
+    // razlicitom strogoscu, tacno ono sto ovaj rez inace uklanja.
+    //
+    // Kanonski pisci ovo ne proizvode: i PWA i push pisu identitet pre sadrzaja.
+    // Pojava je zato DEFEKT, i stoji fail-closed na obe strane.
     const crid = String(getCell(red, idx.ClientRecordID, '') || '').trim();
-    if (!crid) continue;
+
+    if (!crid) {
+      const errBezId = new Error(
+        'Red ' + (r + 2) + ' taba ' + OTK_STAVKE_TAB +
+        ' ima OtkupClientRecordID ali nema svoj ClientRecordID');
+      errBezId.code = 'OTKUP_STAVKE_TAB_INVALID';
+      throw errBezId;
+    }
+
+    if (izlaz[crid] !== undefined) {
+      const errDupli = new Error(
+        'Dva reda sa istim ClientRecordID stavke u ' + OTK_STAVKE_TAB + ': ' + crid);
+      errDupli.code = 'OTKUP_STAVKE_TAB_INVALID';
+      throw errDupli;
+    }
 
     izlaz[crid] = {
       parent: parent,
@@ -2000,17 +2080,28 @@ function processRecord(record, otkupacID) {
     const stavkeTab = otkStavkeTab_(ss);
     const stavkeIndeks = otkStavkeIndeksTaba_(stavkeTab);
 
-    // JEDNA KAPIJA, IZNAD OBA PUTA (review #394, P1).
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    // JEDNA KAPIJA ZA OBA PUTA, ALI DVA UGOVORA -- i to je cela poenta.
     //
-    // Ranije je provera stajala SAMO u grani "zaglavlje postoji", pa je put kojim
-    // ide retry posle partial upisa -- zaglavlje jos ne postoji -- prolazio bez
-    // ijedne provere sadrzaja. Rezultat je bio hibridni dokument: prva stavka iz
-    // prvog pokusaja, druga iz drugog, manifest se poklapa, master uvozi robu koju
-    // nijedan klijent nije poslao.
+    // Prva verzija je proveru imala samo u grani "zaglavlje postoji", pa je retry
+    // posle partial upisa pravio hibridni dokument (review #394, P1). Druga je
+    // kapiju digla IZNAD grananja, pa je recovery pravilo pocelo da vazi i za VEC
+    // ZAVRSEN dokument -- zavrsen otkup je na retry-u dobijao novu stavku, a
+    // manifest ostajao na starom broju (review #394, drugi krug).
+    //
+    // ZAGLAVLJE JE COMPLETION MARKER. Dok ga nema, dopuna je dovrsavanje istog
+    // upisa. Cim postoji, skup je nepromenljiv i trazi se TACNA jednakost.
     //
     // Kapija je i granica IDENTITETA REDA (P2): isti item CRID pod drugim
-    // roditeljem pada ovde, jer ga master cita globalno nad celim tabom.
-    const razlikaStavki = otkStavkeUskladi_(stavkeIndeks, stavkeUlaz, clientRecordID);
+    // roditeljem pada u oba ugovora, jer ga master cita globalno nad celim tabom.
+    //
+    // Stoji PRE svakog upisa i pre citanja terminalnog statusa -- pa nijedan
+    // odbijen retry ne moze da ostavi trag u tabu.
+    const razlikaStavki = existingRow > 0
+      ? otkStavkeUskladiZavrsen_(stavkeIndeks, stavkeUlaz, clientRecordID)
+      : otkStavkeUskladiNedovrsen_(stavkeIndeks, stavkeUlaz, clientRecordID);
+
     if (razlikaStavki) {
       return {
         clientRecordID: clientRecordID,
@@ -2019,8 +2110,6 @@ function processRecord(record, otkupacID) {
         error: 'Skup stavki se ne uklapa u tab ' + OTK_STAVKE_TAB + ': ' + razlikaStavki
       };
     }
-
-    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
 
     const canonicalOtkupacID = String(otkupacID || '').trim();
 
@@ -2044,23 +2133,15 @@ function processRecord(record, otkupacID) {
     // EXISTING RECORD -> idempotent return / light update
     // --------------------------------------------------
     if (existingRow > 0) {
-      // KONFLIKT JE VEC ODLUCEN GORE, za oba puta. Ovde ostaje samo DOPUNA:
-      // sve sto fali je stvarno nedostajuce, a ne druga tvrdnja o dokumentu.
+      // OVDE SE U TAB STAVKI NE PISE NISTA, i to je ugovor a ne izostavljanje.
       //
-      // Prolaz koji je pao izmedju stavki i zaglavlja ostavlja tacno takvo stanje
-      // -- dovrsava se, ne konfliktuje: trazilo bi rucnu intervenciju nad
-      // podatkom koji je ispravan i koji klijent upravo drzi u ruci.
-      const dopisano = otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeIndeks);
-      if (dopisano > 0) {
-        logError(
-          'GAS',
-          'processRecord.stavke',
-          'Zaglavlje postoji a ' + dopisano + ' stavki je falilo -> dopisane za ' +
-          clientRecordID,
-          '',
-          canonicalOtkupacID
-        );
-      }
+      // Zaglavlje postoji => dokument je zavrsen => uskladjivanje je gore vec
+      // trazilo TACNU jednakost skupa. Ako smo dosli dovde, u tabu je doslovno
+      // ono sto je stiglo, pa nema sta da se dopise. Ako nije bilo tako, vratio
+      // se OTKUP_CONFLICT -- pre ijednog upisa i pre citanja terminalnog statusa.
+      //
+      // Prethodna verzija je ovde dopisivala sto fali. Nad zavrsenim -- i cak nad
+      // Synced>Master -- dokumentom to je bila MUTACIJA kanonskog podatka.
 
       const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
 
@@ -3829,6 +3910,11 @@ function otkupStavkeIzOperativnog_(otkupacID) {
   var ss = SpreadsheetApp.open(files.next());
   var sheet = ss.getSheetByName(OTK_STAVKE_TAB);
   if (!sheet) return mapa;
+
+  // JEDAN UGOVOR NAD TABOM. Validacija ide kroz ISTI indeks koji pisac koristi,
+  // pa read-model ne moze da prikaze stanje koje pisac i master odbijaju. Baca
+  // isto -- a pozivalac to vec pretvara u OTKUP_STAVKE_READ_FAILED, fail-closed.
+  otkStavkeIndeksTaba_(sheet);
 
   var redovi = sheetToArray(sheet);
 

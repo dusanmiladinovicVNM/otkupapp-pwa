@@ -17,22 +17,36 @@
 // CRID-a izmedju dva dokumenta. Zato su te dve dodate imenom i obrazlozenjem.
 
 const assert = require('node:assert');
-const { ucitaj } = require('../harness');
+const { ucitaj, procitaj } = require('../harness');
 
 const FAJL = 'gas/Code.gs';
 
 async function ucitajModul(opcije) {
     const ctx = ucitaj([FAJL], opcije || {});
 
-    for (const ime of ['otkStavkeNormalizuj_', 'otkStavkeUskladi_',
-                       'otkStavkaKljuc_', 'buildOtkupMergeKey_']) {
+    for (const ime of ['otkStavkeNormalizuj_', 'otkStavkeUskladiNedovrsen_',
+                       'otkStavkeUskladiZavrsen_', 'otkStavkeIndeksIzRedova_',
+                       'otkStavkeKoloneUgovor_', 'otkStavkaKljuc_',
+                       'buildOtkupMergeKey_']) {
         assert.strictEqual(typeof ctx[ime], 'function',
             ime + ' nije vidljiva posle ucitavanja ' + FAJL);
     }
 
     return {
         normalizuj: ctx.otkStavkeNormalizuj_,
-        uskladi: ctx.otkStavkeUskladi_,
+
+        // DVA IMENOVANA UGOVORA, ne jedan bez konteksta (review #394, drugi krug):
+        // zaglavlje je completion marker, pa dopuna sme samo dok ga nema.
+        nedovrsen: ctx.otkStavkeUskladiNedovrsen_,
+        zavrsen: ctx.otkStavkeUskladiZavrsen_,
+
+        // Cist deo indeksa taba: pravila fail-closed se mere bez SpreadsheetApp.
+        indeksIzRedova: ctx.otkStavkeIndeksIzRedova_,
+
+        // Kroz FUNKCIJU, ne kroz const: top-level const u vm kontekstu ne postaje
+        // svojstvo globalnog objekta, pa bi `ctx.OTK_STAVKE_COLUMNS` bio undefined.
+        kolone: ctx.otkStavkeKoloneUgovor_(),
+
         kljuc: ctx.otkStavkaKljuc_,
         mergeKljuc: ctx.buildOtkupMergeKey_
     };
@@ -50,6 +64,48 @@ function stavka(nad) {
         cena: 50,
         kolAmbalaze: 4
     }, nad || {});
+}
+
+// Ugovor kolona PROCITAN IZ VBA IZVORA -- druga strana iste zice.
+//
+// `OtkStavkeKolone` u modMasterSync nabraja imena konstanti, a njihove vrednosti
+// su u modConfig (COL_OKS_*) i u modMasterSync (OKS_WIRE_*), pa se razresavaju
+// odavde. VBA citalac naslov poredi kolonu po kolonu i pada po imenu na prvu
+// razliku, zato je i redosled deo ugovora.
+function vbaUgovorKolona() {
+    const izvori = [
+        procitaj('src-vba/modMasterSync.bas'),
+        procitaj('src-vba/modConfig.bas')
+    ].join('\n');
+
+    const konstante = {};
+    const rxConst = /(?:Public|Private)\s+Const\s+(\w+)\s+As\s+String\s*=\s*"([^"]*)"/g;
+    let m;
+    while ((m = rxConst.exec(izvori)) !== null) {
+        konstante[m[1]] = m[2];
+    }
+
+    const telo = /OtkStavkeKolone\s*=\s*Array\(([^)]*)\)/.exec(izvori);
+    assert.ok(telo, 'OtkStavkeKolone = Array(...) nije nadjen u modMasterSync.bas');
+
+    return telo[1]
+        .replace(/_\s*\n/g, ' ')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(function (ime) {
+            assert.notStrictEqual(konstante[ime], undefined,
+                'VBA konstanta bez vrednosti: ' + ime);
+            return konstante[ime];
+        });
+}
+
+// Red taba OTK_STAVKE, u rasporedu ugovora. Prazno polje = prazna celija, tacno
+// kao sto ga pisac ostavi: push red nema wire kolone, PWA red nema OtkupStavkaID.
+function wireRed(kolone, polja) {
+    return kolone.map(function (k) {
+        return polja[k] !== undefined ? polja[k] : '';
+    });
 }
 
 // Indeks taba kakav ga otkStavkeIndeksTaba_ gradi: item CRID -> {parent, kljuc}.
@@ -133,7 +189,7 @@ module.exports = {
             const tab = indeks(m.kljuc, [['CRID-S1', O1, a], ['CRID-S2', O1, b]]);
             const stigle = m.normalizuj([b, a], O1);
 
-            assert.strictEqual(m.uskladi(tab, stigle, O1), '',
+            assert.strictEqual(m.nedovrsen(tab, stigle, O1), '',
                 'drugi redosled je prijavljen kao konflikt -- retry bi postao greska');
         },
 
@@ -143,7 +199,7 @@ module.exports = {
             const stigle = m.normalizuj(
                 [stavka({ clientRecordID: 'CRID-S1', kolicina: 999 })], O1);
 
-            const r = m.uskladi(tab, stigle, O1);
+            const r = m.nedovrsen(tab, stigle, O1);
             assert.notStrictEqual(r, '', 'izmenjena kolicina nije prijavljena kao razlika');
             assert.match(String(r), /CRID-S1/, 'razlika ne imenuje koja stavka');
         },
@@ -155,7 +211,7 @@ module.exports = {
             const tab = indeks(m.kljuc, [['CRID-S1', O1, a], ['CRID-S2', O1, b]]);
             const stigle = m.normalizuj([a], O1);
 
-            assert.match(String(m.uskladi(tab, stigle, O1)), /CRID-S2/,
+            assert.match(String(m.nedovrsen(tab, stigle, O1)), /CRID-S2/,
                 'zaboravljena stavka nije prijavljena kao razlika');
         },
 
@@ -163,7 +219,7 @@ module.exports = {
         // mogao da prodje -- svaki bi odmah bio OTKUP_CONFLICT.
         'prazan tab NIJE razlika': async function (m) {
             const stigle = m.normalizuj([stavka()], O1);
-            assert.strictEqual(m.uskladi({}, stigle, O1), '',
+            assert.strictEqual(m.nedovrsen({}, stigle, O1), '',
                 'prazan tab je prijavljen kao konflikt -- prvi upis bi pao');
         },
 
@@ -186,7 +242,7 @@ module.exports = {
                 stavka({ clientRecordID: 'CRID-S2', klasa: 'II', kolicina: 60 })
             ], O1);
 
-            const r = m.uskladi(tab, retry, O1);
+            const r = m.nedovrsen(tab, retry, O1);
             assert.notStrictEqual(r, '',
                 'partial upis sa izmenjenim sadrzajem je prosao -- nastao bi hibridni dokument');
             assert.match(String(r), /CRID-S1/, 'konflikt ne imenuje stavku koja se razlikuje');
@@ -211,21 +267,18 @@ module.exports = {
             // pa ga poredjenje sadrzaja samo po sebi ne bi uhvatilo.
             const stigle = m.normalizuj([stavka({ clientRecordID: 'ITEM-X', klasa: 'I' })], O2);
 
-            const r = m.uskladi(tab, stigle, O2);
+            const r = m.nedovrsen(tab, stigle, O2);
             assert.notStrictEqual(r, '',
                 'isti item CRID pod drugim otkupom je prosao -- VBA bi ga odbio i oborio ceo list');
             assert.match(String(r), /ITEM-X/, 'konflikt ne imenuje stavku');
             assert.match(String(r), new RegExp(O1), 'konflikt ne imenuje tudjeg roditelja');
         },
 
-        // ASIMETRIJA JE NAMERNA: dopisati sto fali je dovrsavanje istog upisa,
-        // zaboraviti sto postoji je druga tvrdnja o dokumentu.
-        //
-        // Ova tvrdnja NEMA svoju sabotazu, i to je odluka: pravilo je odsustvo
-        // provere, pa bi mu seam trebalo DODATI kod -- a odbrana napisana pre
-        // merenja je vec jednom postala nalaz (#393, treci krug). Sabotaza
-        // 'otk-stavke-recovery-je-konflikt' meri isti izlaz sa druge strane.
-        'stavka koja u tabu fali je RECOVERY, ne konflikt': async function (m) {
+        // ASIMETRIJA JE NAMERNA, ALI SAMO PRE COMPLETION MARKER-A: dopisati sto
+        // fali je dovrsavanje istog upisa, zaboraviti sto postoji je druga tvrdnja
+        // o dokumentu. Cim zaglavlje postoji, ni dopuna nije dozvoljena -- to meri
+        // tvrdnja 'zavrsen dokument NE PRIMA novu stavku'.
+        'nedovrsen upis: stavka koja u tabu fali je RECOVERY': async function (m) {
             const a = stavka({ clientRecordID: 'CRID-S1', klasa: 'I' });
             const tab = indeks(m.kljuc, [['CRID-S1', O1, a]]);
 
@@ -234,7 +287,7 @@ module.exports = {
                 stavka({ clientRecordID: 'CRID-S2', klasa: 'II', kolicina: 60 })
             ], O1);
 
-            assert.strictEqual(m.uskladi(tab, stigle, O1), '',
+            assert.strictEqual(m.nedovrsen(tab, stigle, O1), '',
                 'dopuna nedostajuce stavke je prijavljena kao konflikt -- prekinut upis se ne bi mogao dovrsiti');
         },
 
@@ -247,8 +300,124 @@ module.exports = {
             const tab = indeks(m.kljuc, [['CRID-S1', O1, moja], ['CRID-T1', O2, tudja]]);
             const stigle = m.normalizuj([stavka({ clientRecordID: 'CRID-S1', klasa: 'I' })], O1);
 
-            assert.strictEqual(m.uskladi(tab, stigle, O1), '',
+            assert.strictEqual(m.nedovrsen(tab, stigle, O1), '',
                 'stavka drugog otkupa je prijavljena kao razlika');
+        },
+
+        // ============================================================
+        // Review #394, drugi krug: ZAGLAVLJE JE COMPLETION MARKER
+        // ============================================================
+        //
+        // Recovery pravilo je vazilo i za VEC ZAVRSEN dokument, jer je kapija bila
+        // digunta iznad grananja na existingRow. Zavrsen otkup je tako na retry-u
+        // dobijao novu stavku: GAS vrati success/existing, manifest ostane na
+        // starom broju, a master isti dokument posle toga odbija kao neporavnat.
+        // PWA misli da je ispravka prihvacena, master je nema, razlika se ne vidi.
+        //
+        // Gore od toga: to se desavalo PRE citanja terminalnog statusa, pa je i
+        // Synced>Master dokument mogao da dobije stavku.
+        'zavrsen dokument NE PRIMA novu stavku': async function (m) {
+            const s1 = stavka({ clientRecordID: 'CRID-S1', klasa: 'I' });
+            const tab = indeks(m.kljuc, [['CRID-S1', O1, s1]]);
+
+            const retry = m.normalizuj([
+                stavka({ clientRecordID: 'CRID-S1', klasa: 'I' }),
+                stavka({ clientRecordID: 'CRID-S2', klasa: 'II', kolicina: 60 })
+            ], O1);
+
+            const r = m.zavrsen(tab, retry, O1);
+            assert.notStrictEqual(r, '',
+                'zavrsen dokument je primio novu stavku -- manifest bi ostao na starom broju');
+            assert.match(String(r), /CRID-S2/, 'konflikt ne imenuje stavku koja se dodaje');
+
+            // ISTI ULAZ pre completion marker-a MORA da prodje, inace tvrdnja meri
+            // "sve se odbija" umesto "zavrsen dokument je nepromenljiv".
+            assert.strictEqual(m.nedovrsen(tab, retry, O1), '',
+                'isti ulaz je odbijen i kad zaglavlja nema -- prekinut upis se ne bi mogao dovrsiti');
+        },
+
+        // KONTROLA: doslovno isti payload nad zavrsenim dokumentom je idempotentan.
+        // Bez nje bi gornja tvrdnja bila zelena i da ugovor odbija svaki retry.
+        'zavrsen dokument: doslovno isti skup je idempotentan': async function (m) {
+            const s1 = stavka({ clientRecordID: 'CRID-S1', klasa: 'I' });
+            const s2 = stavka({ clientRecordID: 'CRID-S2', klasa: 'II', kolicina: 60 });
+
+            const tab = indeks(m.kljuc, [['CRID-S1', O1, s1], ['CRID-S2', O1, s2]]);
+            const stigle = m.normalizuj([s2, s1], O1);   // i u drugom redosledu
+
+            assert.strictEqual(m.zavrsen(tab, stigle, O1), '',
+                'ponovljen sync istog dokumenta je prijavljen kao konflikt');
+        },
+
+        // JEDNA ZICA, DVA PISCA, DVA JEZIKA -- i jedan raspored kolona.
+        //
+        // Bez ove tvrdnje je "doslovno isti ugovor" bio komentar. VBA citalac
+        // naslov taba poredi kolonu po kolonu i pada po imenu na prvu razliku, pa
+        // bi preimenovana ili premestena kolona u GAS-u oborila uvoz CELOG lista
+        // stanice -- a nijedna kapija to ne bi javila pre produkcije.
+        'ugovor kolona je DOSLOVNO isti kao u VBA': async function (m) {
+            assert.deepStrictEqual(m.kolone, vbaUgovorKolona(),
+                'raspored kolona OTK_STAVKE se razlikuje od modMasterSync.OtkStavkeKolone');
+        },
+
+        // ============================================================
+        // Review #394, P3: INDEKS TABA PADA PO IMENU, kao VBA citalac
+        // ============================================================
+        //
+        // Dok je GAS red bez item CRID-a preskakao a dupli CRID tiho prepisivao,
+        // isti tab je za GAS bio ispravan a za master neispravan -- dva citaoca
+        // istog ugovora sa razlicitom strogoscu.
+        'indeks preskace red desktop push-a': async function (m) {
+            // Push red ima svoj OtkupStavkaID i pravi OtkupID, a wire kolone su mu
+            // prazne. Ne pripada imenskom prostoru item CRID-ova.
+            const redovi = [
+                wireRed(m.kolone, {
+                    OtkupStavkaID: 'OKS-1', OtkupID: 'OTK-1', RedniBroj: 1,
+                    Klasa: 'I', Kolicina: 100, Cena: 50, KolAmbalaze: 4
+                })
+            ];
+
+            assert.deepStrictEqual(m.indeksIzRedova(m.kolone, redovi), {},
+                'red desktop push-a je usao u indeks stavki sa terena');
+        },
+
+        'indeks nosi roditelja i sadrzaj po stavci': async function (m) {
+            const redovi = [
+                wireRed(m.kolone, {
+                    RedniBroj: 1, Klasa: 'I', Kolicina: 100, Cena: 50, KolAmbalaze: 4,
+                    ClientRecordID: 'ITEM-1', OtkupClientRecordID: O1
+                })
+            ];
+
+            const idx = m.indeksIzRedova(m.kolone, redovi);
+            assert.strictEqual(idx['ITEM-1'].parent, O1, 'indeks ne nosi roditelja stavke');
+            assert.strictEqual(idx['ITEM-1'].kljuc, m.kljuc('I', 100, 50, 4, 0),
+                'indeks ne nosi sadrzaj stavke');
+        },
+
+        'indeks pada na red sa roditeljem a bez svog ClientRecordID': async function (m) {
+            const redovi = [
+                wireRed(m.kolone, {
+                    RedniBroj: 1, Klasa: 'I', Kolicina: 100, Cena: 50,
+                    OtkupClientRecordID: O1
+                })
+            ];
+
+            assert.throws(() => m.indeksIzRedova(m.kolone, redovi),
+                /nema svoj ClientRecordID/,
+                'red bez identiteta je prosao -- GAS bi ga pustio a master odbio ceo list');
+        },
+
+        'indeks pada na dva reda sa istim ClientRecordID stavke': async function (m) {
+            const red = {
+                RedniBroj: 1, Klasa: 'I', Kolicina: 100, Cena: 50,
+                ClientRecordID: 'ITEM-1', OtkupClientRecordID: O1
+            };
+            const redovi = [wireRed(m.kolone, red), wireRed(m.kolone, red)];
+
+            assert.throws(() => m.indeksIzRedova(m.kolone, redovi),
+                /istim ClientRecordID/,
+                'dupli item CRID je tiho prepisan -- master ga odbija fail-closed');
         },
 
         // Treca grana merge kljuca je obrisana: gradila je kljuc od atributa,

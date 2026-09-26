@@ -127,8 +127,8 @@ module.exports = [
         tvrdnja: 'stavka bez svog ClientRecordID se odbija',
         zasto: 'bez identiteta reda ponovljen sync ne razlikuje retry od druge stavke, pa se kolicina udvaja',
         fajl: GAS,
-        sidro: "    if (!crid) {",
-        zamena: "    if (false) {   // sabotaza: stavka bez identiteta prolazi"
+        sidro: "    if (!crid) {\n      const err = new Error('Stavka bez ClientRecordID (' + oznaka + ')');",
+        zamena: "    if (false) {   // sabotaza: stavka bez identiteta prolazi\n      const err = new Error('Stavka bez ClientRecordID (' + oznaka + ')');"
     },
     {
         // Redosled NIJE tvrdnja o dokumentu: master dodeljuje RedniBroj po
@@ -150,8 +150,51 @@ module.exports = [
         tvrdnja: 'prazan tab NIJE razlika',
         zasto: 'bez ovog izlaza bi svaki prvi upis odmah bio OTKUP_CONFLICT, pa nov otkup nikad ne bi prosao',
         fajl: GAS,
-        sidro: "    if (ulaz[id] !== unos.kljuc) {\n      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];\n    }\n  }\n\n  return '';",
-        zamena: "    if (ulaz[id] !== unos.kljuc) {\n      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];\n    }\n  }\n\n  return kljuceviTaba.length === 0 ? 'prazan tab' : '';   // sabotaza"
+        sidro: "      if (!unos || unos.parent !== roditelj) {\n        return 'stavka ' + id + ' nije deo zavrsenog dokumenta';\n      }\n    }\n  }\n\n  return '';",
+        zamena: "      if (!unos || unos.parent !== roditelj) {\n        return 'stavka ' + id + ' nije deo zavrsenog dokumenta';\n      }\n    }\n  }\n\n  return kljuceviTaba.length === 0 ? 'prazan tab' : '';   // sabotaza"
+    },
+    {
+        // Medjujezicna granica: jedna zica, dva pisca, dva jezika, JEDAN raspored.
+        ime: 'otk-stavke-raspored-kolona-drugaciji',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'ugovor kolona je DOSLOVNO isti kao u VBA',
+        zasto: 'VBA citalac naslov taba poredi kolonu po kolonu i pada po imenu na prvu razliku, pa premestena kolona u GAS-u obara uvoz celog lista stanice',
+        fajl: GAS,
+        sidro: "  'OtkupStavkaID',\n  'OtkupID',",
+        zamena: "  'OtkupID',\n  'OtkupStavkaID',   // sabotaza: zamenjen raspored"
+    },
+    {
+        // P3 iz review-a #394. VBA citalac oba ova stanja odbija po imenu i
+        // prekida uvoz celog lista; GAS je prvo preskakao a drugo tiho prepisivao.
+        ime: 'otk-stavke-indeks-bez-identiteta-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'indeks pada na red sa roditeljem a bez svog ClientRecordID',
+        zasto: 'red koji GAS pusta a master odbija zaustavlja uvoz SVIH otkupa te stanice, ne samo spornog reda',
+        fajl: GAS,
+        sidro: "    if (!crid) {\n      const errBezId = new Error(",
+        zamena: "    if (false) {   // sabotaza: red bez identiteta prolazi\n      const errBezId = new Error("
+    },
+    {
+        ime: 'otk-stavke-indeks-dupli-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'indeks pada na dva reda sa istim ClientRecordID stavke',
+        zasto: 'tiho prepisivanje duplog item CRID-a sakriva red koji postoji u tabu, pa poredjenje skupa meri manje robe nego sto je upisano',
+        fajl: GAS,
+        sidro: "    if (izlaz[crid] !== undefined) {",
+        zamena: "    if (false) {   // sabotaza: dupli item CRID se tiho prepisuje"
+    },
+    {
+        // Review #394, drugi krug. Recovery sme SAMO pre completion marker-a; cim
+        // zaglavlje postoji, skup je nepromenljiv. Bez te granice zavrsen -- cak i
+        // Synced>Master -- dokument dobija novu stavku na retry-u, manifest ostaje
+        // na starom broju, a master ga posle toga odbija kao neporavnat.
+        ime: 'otk-stavke-zavrsen-prima-dopunu',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'zavrsen dokument NE PRIMA novu stavku',
+        zasto: 'bez granice completion marker-a zavrsen otkup se mutira na retry-u: PWA misli da je ispravka prihvacena, master je nema, i razlika se ne vidi nigde',
+        fajl: GAS,
+        sidro: "  if (!dopustiDopunu) {",
+        zamena: "  if (false) {   // sabotaza: zavrsen dokument prima dopunu"
     },
     {
         // Druga polovina NAMERNE ASIMETRIJE: dopuniti sto fali je dovrsavanje

@@ -7068,6 +7068,99 @@ nepromenjen. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
 push feature grane ga **ne** pokrece. Dok PR ne postoji, JS kapije ovog head-a nisu
 izvrsene ni jednom.
 
+### 14.49) Review S5-5b, drugi krug — zaglavlje je completion marker (26.09.2026)
+
+Head `b062ee9b`. Verdikt NO-GO: 1 P1 + 1 P3. Prethodna dva nalaza su potvrdjena
+kao RESOLVED, ali **prva ispravka je proizvela drugu** — i to je glavni nalaz ovog
+kruga o mom radu, ne o modelu.
+
+#### P1 — moja regresija: recovery je vazio i za ZAVRSEN dokument
+
+Prvi krug je kapiju digao **iznad** grananja na `existingRow`, da oba puta dele
+semantiku. Time je i pravilo „stavka u ulazu koje u tabu nema je **dozvoljena**"
+pocelo da vazi za dokument koji je vec zavrsen:
+
+| Korak | Ishod |
+|---|---|
+| prvi sync: `O1` sa `S1`, zaglavlje `StavkeCount=1` | dokument zavrsen |
+| kasnije `O1` stigne kao `S1 + S2` | `S1` isti → OK, `S2` fali → **recovery dozvoljen** |
+| grana `existingRow > 0` | dopise `S2` **zavrsenom** dokumentu |
+| rezultat | tab `S1+S2`, zaglavlje jos kaze `1`, GAS vrati `success/existing` |
+| master | manifest `1` vs `2` stavke → **mismatch** |
+
+PWA misli da je ispravka prihvacena, GAS je mutirao zavrsen dokument, a master ga
+posle toga odbija. I to se desavalo **pre** citanja terminalnog statusa, pa je i
+`Synced>Master` red mogao da dobije stavku.
+
+#### Ispravka — granica je COMPLETION MARKER, ne postojanje stavki
+
+`existingRow` se utvrdjuje **prvi**, pa se bira ugovor:
+
+| Slucaj | Ugovor | Pravilo |
+|---|---|---|
+| zaglavlja **nema** | `otkStavkeUskladiNedovrsen_` | postojeci podskup mora biti identican; **sto fali sme da se dopise** |
+| zaglavlje **postoji** | `otkStavkeUskladiZavrsen_` | **TACNA jednakost skupa**: nema dopune, nema brisanja, nema nove stavke |
+
+Jedno jezgro (`otkStavkeUskladi_` + `dopustiDopunu`), dva **imenovana** ugovora —
+ne dve implementacije, jer bi se dve provere istog pojma razisle.
+
+**Grana sa zaglavljem od sada u tab stavki ne pise NISTA**, i to je ugovor a ne
+izostavljanje: ako se doslo dovde, u tabu je doslovno ono sto je stiglo. Time je i
+drugi zahtev review-a zadovoljen — odbijen retry nad `Synced>Master` dokumentom ne
+ostavlja **nikakav** upis, jer kapija stoji pre svakog pisanja i pre citanja
+statusa.
+
+Prethodna „dovrsi siroce" grana je time **obrisana**: nad zavrsenim dokumentom to
+je bila mutacija kanonskog podatka. Zaglavlje bez stavki je sada konflikt koji
+imenuje razlog.
+
+#### P3 — indeks nije bio fail-closed kao VBA citalac
+
+Review ga je oznacio kao dug koji ne blokira. Zatvoren je ipak, jer je cilj
+**doslovno isti wire invariant**, a razlika je bila u dva stanja koja VBA odbija po
+imenu: red sa roditeljem **bez** svog `ClientRecordID` (GAS ga je preskakao) i
+**dupli** item CRID (GAS ga je tiho prepisivao). Oba sada dizu
+`OTKUP_STAVKE_TAB_INVALID`.
+
+Uz to: **read-model citalac istog taba prolazi kroz ISTI indeks**, pa ne moze da
+prikaze stanje koje pisac i master odbijaju.
+
+#### Da ispravka ne bi bila samo tvrdjena
+
+Pravila indeksa su zivela u funkciji koja trazi `Sheet`, pa ih harness ne dohvata —
+a cela poenta ove serije je da se nalazi kriju tamo gde pravilo nema ko da izmeri.
+Zato je cist deo izdvojen: `otkStavkeIndeksIzRedova_(headers, redovi)`.
+
+**Nova medjujezicna kapija.** Kad test vec cita ugovor, meri ga i naspram VBA
+strane: `ugovor kolona je DOSLOVNO isti kao u VBA` cita `OtkStavkeKolone` iz
+`modMasterSync.bas`, razresava `COL_OKS_*` / `OKS_WIRE_*` iz `modConfig.bas`, i
+poredi redosled sa `OTK_STAVKE_COLUMNS`. „Jedan ugovor" prestaje da bude komentar.
+Izmereno i bez node-a, istom logikom u Python-u: **10 kolona, identican redosled**.
+
+#### Nalaz na instrumentu, opet
+
+`ctx.OTK_STAVKE_COLUMNS` bi bio `undefined`: top-level `const` se u `vm` kontekstu
+vezuje u **leksicki scope skripta** i ne postaje svojstvo globalnog objekta —
+`function` postaje. Cetiri nove tvrdnje bi pale u CI-ju na `TypeError`. Resenje je
+pristupnik `otkStavkeKoloneUgovor_()`, pa ugovor ostaje na jednom mestu.
+
+Uhvaceno rezonovanjem o mehanizmu, ne testom — i zato je zapisano kao memorija.
+
+I **merac balansa zagrada je i sam imao gresku**: citao je `"` UNUTAR regex
+literala kao pocetak stringa, pa je zdrav fajl prijavio kao nebalansiran. Popravljen
+heuristikom „`/` je regex kad pre njega stoji operator ili otvorena zagrada".
+
+#### Stanje kapija
+
+| Kapija | Stanje |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, 610 VBA sabotaza |
+| JS katalog | **20** unosa, svako sidro pogadja **tacno jednom** |
+| JS tvrdnje | svaka sabotaza imenuje tvrdnju koja **postoji** (20/20) |
+| balans zagrada | nepromenjen, uz regex-aware merac |
+| medjujezicni ugovor kolona | **poklapa se** (10/10, isti redosled) |
+| JS harness u CI-ju | **jos nije izvrsen** — nema PR-a za ovaj head |
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
