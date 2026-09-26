@@ -63,16 +63,30 @@ Private Const GS_KOOPERANT_ID As Long = 10       ' J
 Private Const GS_KOOPERANT_NAME As Long = 11     ' K
 Private Const GS_VRSTA As Long = 12              ' L
 Private Const GS_SORTA As Long = 13              ' M
-Private Const GS_KLASA As Long = 14              ' N
-Private Const GS_KOLICINA As Long = 15           ' O
-Private Const GS_CENA As Long = 16               ' P
+' CETIRI MRTVA SLOTA (S5-5b). Klasa, Kolicina, Cena i KolAmbalaze su cinjenice
+' STAVKE, i od ovog reza dolaze na tabu OTK_STAVKE. Uvoz ih vise ne cita.
+'
+' Slotovi ostaju, i to je odluka: ensureSheetColumns u GAS-u dozidjuje kolonu
+' SAMO na kraju, a svaku drugu razliku prijavljuje kao SCHEMA_DRIFT koji se
+' namerno ne popravlja tiho. Brisanje iz sredine bi zato oborilo sync na svakom
+' zatecenom OTK listu i pomerilo sve GS_* konstante ispod sebe. Isti precedent
+' kao VS_OTKUP_RECORD_IDS. Skidaju se sa zice kad nijedan citalac ne ostane.
+Private Const GS_KLASA As Long = 14              ' N -- MRTAV SLOT
+Private Const GS_KOLICINA As Long = 15           ' O -- MRTAV SLOT
+Private Const GS_CENA As Long = 16               ' P -- MRTAV SLOT
 Private Const GS_TIP_AMB As Long = 17            ' Q
-Private Const GS_KOL_AMB As Long = 18            ' R
+Private Const GS_KOL_AMB As Long = 18            ' R -- MRTAV SLOT
 Private Const GS_PARCELA_ID As Long = 19         ' S
 Private Const GS_VOZAC_ID As Long = 20           ' T
 Private Const GS_NAPOMENA As Long = 21           ' U
 Private Const GS_RECEIVED_AT As Long = 22        ' V
 Private Const GS_BROJ_DOKUMENTA As Long = 23     ' W
+
+' MANIFEST STAVKI (S5-5b). Zaglavlje kaze KOLIKO stavki pripada dokumentu, pa
+' uvoz prepozna nekompletan dolazak i odbije ga PO IMENU -- umesto da napravi
+' dokument od nula kilograma ili od dela robe. Bez manifesta se "nedostaje
+' stavka" i "dokument ima jednu stavku" ne razlikuju.
+Private Const GS_STAVKE_COUNT As Long = 24       ' X
 
 
 ' VOZ Sheet Spaltenindizes (1-based, Header in Row 1)
@@ -110,6 +124,19 @@ Private Const VS_OTPREMNICA_IDS As Long = 21    ' U
 
 ' Tab stavki otkupa u OTK-* sheet-u stanice (S1c, REFAKTOR S14.8 t. 13).
 Public Const OTK_STAVKE_TAB As String = "OTK_STAVKE"
+
+' WIRE-ONLY KOLONE TABA OTK_STAVKE (S5-5b) -- nisu u semi tblOtkupStavke.
+'
+' PWA ne zna OtkupID: on nastaje u masteru, u CreateOtkup_TX. Zato red stavke
+' koji dolazi sa terena nosi SVOJ ClientRecordID (identitet REDA) i CRID svog
+' zaglavlja. Doslovno isti obrazac kao PRED red iz S5-4a, gde je identitet
+' dogadjaja kolona, a ne rekonstrukcija iz atributa.
+'
+' Desktop push ih ostavlja PRAZNE: njegov identitet je OtkupStavkaID, a roditelj
+' pravi OtkupID. Dva pisca, dva puta identiteta, jedan tab -- isto kao na
+' zaglavlju, gde push puni ServerRecordID a PWA ga ostavlja prazan.
+Private Const OKS_WIRE_CRID As String = "ClientRecordID"
+Private Const OKS_WIRE_OTKUP_CRID As String = "OtkupClientRecordID"
 
 ' ============================================================
 ' PUBLIC -- Hauptfunktion
@@ -701,13 +728,14 @@ End Function
 '======================================================================
 ' KOLONE OTK-* SHEET-A -- JEDINO MESTO (REFAKTOR S14.8 t. 13, nalaz E-5)
 '
-' OtkZaglavljeKolone: tab Sheet1, red po otkupu. Raspored je PWA ugovor do S5:
-' PWA ga puni, ImportOneOTKSheet ga cita poziciono (GS_*). Klasa, Kolicina,
-' Cena i KolAmbalaze su u njemu jos samo zato sto PWA salje jednu klasu po
-' zapisu; VBA push ih ostavlja PRAZNE i pise stavke u OTK_STAVKE.
+' OtkZaglavljeKolone: tab Sheet1, red po otkupu. Raspored je PWA ugovor: PWA ga
+' puni, ImportOneOTKSheet ga cita poziciono (GS_*). Od S5-5b nosi SAMO cinjenice
+' zaglavlja -- Klasa, Kolicina, Cena i KolAmbalaze su mrtvi slotovi koje OBA
+' pisca ostavljaju prazne -- plus StavkeCount kao manifest.
 '
-' OtkStavkeKolone: tab OTK_STAVKE, red po stavci; roditelj je OtkupID
-' (= ServerRecordID zaglavlja).
+' OtkStavkeKolone: tab OTK_STAVKE, red po stavci. Roditelj je OtkupID kad red
+' pise desktop push, a OtkupClientRecordID kad red dolazi iz PWA -- PWA OtkupID
+' ne zna, on nastaje u masteru.
 '
 ' Graditelji redova (modStanicaLock, izvoz OtkupiAllStavke) slazu vrednosti PO
 ' IMENU iz ovih spiskova, ne po poziciji.
@@ -718,12 +746,13 @@ Public Function OtkZaglavljeKolone() As Variant
         "UpdatedAtServer", "SyncStatus", "DeviceID", "OtkupacID", "Datum", _
         "KooperantID", "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
         "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", "ParcelaID", "VozacID", _
-        "Napomena", "ReceivedAt", "BrojDokumenta")
+        "Napomena", "ReceivedAt", "BrojDokumenta", "StavkeCount")
 End Function
 
 Public Function OtkStavkeKolone() As Variant
     OtkStavkeKolone = Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
-                            COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
+                            COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO, _
+                            OKS_WIRE_CRID, OKS_WIRE_OTKUP_CRID)
 End Function
 
 ' Red taba OTK_STAVKE za stavku i iz modOtkup.StavkeOtkupaRedovi, po imenu.
@@ -738,6 +767,13 @@ Private Function OtkStavkaPolje(ByVal s As Variant, ByVal i As Long, _
         Case COL_OKS_CENA: OtkStavkaPolje = s(i, 5)
         Case COL_OKS_KOL_AMB: OtkStavkaPolje = s(i, 6)
         Case COL_OKS_BRUTO: OtkStavkaPolje = s(i, 8)
+
+        ' Push ne puni wire kolone: njegov identitet je OtkupStavkaID, a
+        ' roditelj pravi OtkupID. Prazno je TACNO, ne nedostatak -- upisivati
+        ' "VBA:" + ID bilo bi pisanje podatka koji nijedan citalac ne trazi.
+        Case OKS_WIRE_CRID: OtkStavkaPolje = ""
+        Case OKS_WIRE_OTKUP_CRID: OtkStavkaPolje = ""
+
         Case Else
             Err.Raise vbObjectError + 8141, "OtkStavkaPolje", _
                       "Kolona OTK_STAVKE bez izvora: " & kolona

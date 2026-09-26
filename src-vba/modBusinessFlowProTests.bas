@@ -15983,7 +15983,7 @@ Private Sub Test_OTK_IzvozDveKlaseIzStavki()
     For r = 1 To lo.DataBodyRange.rows.count
         If CStr(lo.DataBodyRange.cells(r, iID).value) = otkID Then Exit For
     Next r
-    red = modStanicaLock.BuildOTKSheetRowForOtkup(otkID, TEST_ST_ID, lo, r, iID)
+    red = modStanicaLock.BuildOTKSheetRowForOtkup(otkID, TEST_ST_ID, lo, r, iID, 2)
     AssertTrue IsArray(red), "OTK push: red zaglavlja sastavljen"
     zk = modMasterSync.OtkZaglavljeKolone()
     AssertEquals CStr(UBound(zk) - LBound(zk)), CStr(UBound(red)), "OTK push: red prati spisak kolona"
@@ -15993,6 +15993,8 @@ Private Sub Test_OTK_IzvozDveKlaseIzStavki()
                 AssertEquals otkID, CStr(red(k - LBound(zk))), "OTK push: ServerRecordID = OtkupID"
             Case "Klasa", "Kolicina", "Cena", "KolAmbalaze"
                 AssertEquals "", CStr(red(k - LBound(zk))), "OTK push: " & CStr(zk(k)) & " je na stavci, ne u zaglavlju"
+            Case "StavkeCount"
+                AssertEquals "2", CStr(red(k - LBound(zk))), "OTK push: zaglavlje nosi broj stavki"
         End Select
     Next k
     Dim poOtk As Object

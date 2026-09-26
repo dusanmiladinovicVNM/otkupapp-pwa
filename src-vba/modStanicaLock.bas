@@ -497,14 +497,18 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
         Dim otkupID As String
         otkupID = CStr(lo.DataBodyRange.cells(r, iID).value)
         
-        Dim rowData As Variant
-        rowData = BuildOTKSheetRowForOtkup(otkupID, stanicaID, lo, r, iID)
-        If IsEmpty(rowData) Then GoTo NextRow
-
+        ' ZAGLAVLJE NOSI MANIFEST, pa se ne moze sagraditi pre nego sto se zna
+        ' koliko stavki dokument ima. Provera postojanja stavki je zato podignuta
+        ' iznad gradjenja reda; redosled SLANJA (stavke pa zaglavlje) je isti.
         If Not stavkePoOtkupu.Exists(otkupID) Then
             LogError SRC, "Otkup bez stavki se ne salje: OtkupID=" & otkupID
             GoTo NextRow
         End If
+
+        Dim rowData As Variant
+        rowData = BuildOTKSheetRowForOtkup(otkupID, stanicaID, lo, r, iID, _
+                                           stavkePoOtkupu(otkupID).count)
+        If IsEmpty(rowData) Then GoTo NextRow
         If Not tabStavkiSpreman Then
             If Not PripremiOtkStavkeTab(spreadsheetID, indeksStavki) Then
                 LogWarn SRC, "Tab " & OTK_STAVKE_TAB & " nije spreman; push odlozen."
@@ -550,11 +554,16 @@ End Function
 ' Klasa, Kolicina, Cena i KolAmbalaze su PRAZNI: to su polja stavke i idu u
 ' OTK_STAVKE. Kolona koju ovaj graditelj ne poznaje pada -- nova kolona u
 ' spisku ne sme tiho da ode prazna.
+'
+' stavkeCount je MANIFEST (S5-5b): prima se od pozivaoca, koji stavke ionako vec
+' drzi. Ponovno citanje ovde bi bilo drugo merenje istog skupa, pa i druga sansa
+' da se razidju.
 Public Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
                                            ByVal stanicaID As String, _
                                            ByVal lo As ListObject, _
                                            ByVal rowIdx As Long, _
-                                           ByVal iID As Long) As Variant
+                                           ByVal iID As Long, _
+                                           ByVal stavkeCount As Long) As Variant
     On Error GoTo EH
 
     Dim kooperantID As String
@@ -595,6 +604,7 @@ Public Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
             Case "VozacID": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_VOZAC), ""))
             Case "BrojDokumenta": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_BR_DOK), ""))
             Case "Klasa", "Kolicina", "Cena", "KolAmbalaze": v = ""   ' stavka -> OTK_STAVKE
+            Case "StavkeCount": v = stavkeCount
             Case Else
                 Err.Raise vbObjectError + 8142, "BuildOTKSheetRowForOtkup", _
                           "Kolona OTK zaglavlja bez izvora: " & CStr(kol(k))
