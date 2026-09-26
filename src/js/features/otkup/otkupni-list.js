@@ -17,7 +17,11 @@ function showOtkupniList(record) {
         || record.kooperantName || 'Kooperant';
     const koopInitials = ((koop.Ime || 'K').charAt(0) + (koop.Prezime || '').charAt(0)).toUpperCase();
 
-    const vrednostNum = record.kolicina * record.cena;
+    // ZBIR IDE KROZ PRISTUPNIK (S5-5b): dokument moze imati vise klasa, svaku sa
+    // svojom cenom, pa vrednost nije kolicina * cena nego zbir po stavkama.
+    const kgUkupno = otkupZbirKg(record);
+    const vrednostNum = otkupZbirVrednosti(record);
+    const cenaJedne = otkupCenaAkoJedna(record);
     const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
@@ -63,7 +67,7 @@ function showOtkupniList(record) {
                     <div class="ol-hd__check">✓</div>
                     <div class="ol-hd__success-text">
                         <div class="ol-hd__title">Otkup sačuvan</div>
-                        <div class="ol-hd__sub">${escapeHtml(koopFullName)} · ${record.kolicina} kg · Klasa ${escapeHtml(record.klasa || '')}</div>
+                        <div class="ol-hd__sub">${escapeHtml(koopFullName)} · ${kgUkupno} kg · Klasa ${escapeHtml(otkupKlaseTekst(record))}</div>
                     </div>
                 </div>
                 <div class="ol-hd__date">${escapeHtml(datumFormatted)}</div>
@@ -76,7 +80,7 @@ function showOtkupniList(record) {
                     <div class="ol-summary__head">
                         <div class="ol-summary__eyebrow">Otkupni list spreman</div>
                         <div class="ol-summary__kg">
-                            <span class="ol-summary__kg-val">${record.kolicina}</span><span class="ol-summary__kg-unit">kg</span>
+                            <span class="ol-summary__kg-val">${kgUkupno}</span><span class="ol-summary__kg-unit">kg</span>
                         </div>
                     </div>
                     <div class="ol-summary__broj">${escapeHtml(otkupBroj)}</div>
@@ -94,11 +98,11 @@ function showOtkupniList(record) {
                     </div>
                     <div class="ol-info">
                         <div class="ol-info__label">Klasa</div>
-                        <div class="ol-info__value">${escapeHtml(record.klasa || '')}</div>
+                        <div class="ol-info__value">${escapeHtml(otkupKlaseTekst(record))}</div>
                     </div>
                     <div class="ol-info">
                         <div class="ol-info__label">Ambalaža</div>
-                        <div class="ol-info__value">${record.kolAmbalaze || 0} × ${escapeHtml(record.tipAmbalaze || '')}</div>
+                        <div class="ol-info__value">${otkupZbirAmbalaze(record)} × ${escapeHtml(record.tipAmbalaze || '')}</div>
                     </div>
                 </div>
 
@@ -120,7 +124,9 @@ function showOtkupniList(record) {
                         <table class="ol-receipt__table">
                             <tr><td>Datum</td><td>${escapeHtml(datumFormatted)}</td></tr>
                             <tr><td>Proizvod</td><td>${escapeHtml(record.vrstaVoca)} ${escapeHtml(record.sortaVoca || '')}</td></tr>
-                            <tr><td>Cena</td><td>${record.cena} RSD/kg</td></tr>
+                            ${cenaJedne === null
+                                ? `<tr><td>Cene</td><td>po klasi (${escapeHtml(otkupKlaseTekst(record))})</td></tr>`
+                                : `<tr><td>Cena</td><td>${cenaJedne} RSD/kg</td></tr>`}
                             <tr><td>Vrednost</td><td>${vrednostNum.toLocaleString('sr-RS')} RSD</td></tr>
                             ${pdvStopa > 0 ? `<tr><td>PDV naknada (${pdvStopa}%)</td><td>${pdvIznos.toLocaleString('sr-RS')} RSD</td></tr>` : ''}
                             <tr class="ol-receipt__total"><td>Za isplatu</td><td><strong>${ukupnoFormatted} RSD</strong></td></tr>
@@ -251,7 +257,11 @@ async function savePdfToDrive(clientRecordID) {
     const config = stammdaten.config || [];
     const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === record.kooperantID) || {};
-    const vrednostNum = record.kolicina * record.cena;
+    // ZBIR IDE KROZ PRISTUPNIK (S5-5b): dokument moze imati vise klasa, svaku sa
+    // svojom cenom, pa vrednost nije kolicina * cena nego zbir po stavkama.
+    const kgUkupno = otkupZbirKg(record);
+    const vrednostNum = otkupZbirVrednosti(record);
+    const cenaJedne = otkupCenaAkoJedna(record);
     const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
@@ -330,9 +340,19 @@ async function savePdfToDrive(clientRecordID) {
 
         addRow('Datum:', record.datum, true, false);
         addRow('Proizvod:', record.vrstaVoca + ' ' + (record.sortaVoca || ''), false, false);
-        addRow('Klasa:', record.klasa, false, false);
-        addRow('Količina:', record.kolicina + ' kg', true, false);
-        addRow('Cena:', record.cena + ' RSD/kg', false, false);
+        // Jedna klasa -> tri reda kao do sada, znak za znak. Vise klasa -> red po
+        // klasi, jer "Klasa" i "Cena" tada nisu jedan podatak.
+        const jednaStavka = otkupJednaStavka(record);
+        if (jednaStavka) {
+            addRow('Klasa:', jednaStavka.klasa, false, false);
+            addRow('Količina:', jednaStavka.kolicina + ' kg', true, false);
+            addRow('Cena:', jednaStavka.cena + ' RSD/kg', false, false);
+        } else {
+            otkupStavke(record).forEach(function (s) {
+                addRow('Klasa ' + s.klasa + ':',
+                       s.kolicina + ' kg x ' + s.cena + ' RSD/kg', true, false);
+            });
+        }
         addRow('Vrednost:', vrednostNum.toLocaleString('sr') + ' RSD', true, true);
         if (pdvStopa > 0) {
             addRow('PDV naknada (' + pdvStopa + '%):', pdvIznos.toLocaleString('sr') + ' RSD', false, false);
@@ -351,7 +371,7 @@ async function savePdfToDrive(clientRecordID) {
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
 
-        addRow('Ambalaža:', record.kolAmbalaze + ' kom', false, false);
+        addRow('Ambalaža:', otkupZbirAmbalaze(record) + ' kom', false, false);
         if (record.parcelaID) addRow('Parcela:', record.parcelaID, false, false);
         addRow('Rok isplate:', gv('OtkupRokIsplate') || 'Po dogovoru', false, false);
 

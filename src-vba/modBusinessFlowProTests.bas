@@ -16187,8 +16187,16 @@ Private Sub Test_OTK_PushStavkiIdempotentan()
     errOpis = Err.description
     Err.Clear
     On Error GoTo EH
+    ' IME TVRDNJE JE STATICKO, detalj ide u log.
+    '
+    ' Dok je errOpis stajao u imenu, sabotaza je tvrdnju obarala ali je dokaz.py
+    ' nije prepoznavao: ime se sa ishodom menjalo ("... pada ()"), a katalog trazi
+    ' doslovan tekst. vba_check to ne hvata jer pusta podniz.
+    If InStr(1, errOpis, "Naslov taba", vbTextCompare) = 0 Then
+        LogWarn "Test_OTK_PushStavkiIdempotentan", "errOpis=" & errOpis
+    End If
     AssertTrue InStr(1, errOpis, "Naslov taba", vbTextCompare) > 0, _
-               "OTK push retry: pogresan redosled naslova pada (" & errOpis & ")"
+               "OTK push retry: pogresan redosled naslova pada"
 
     modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
     Exit Sub
@@ -16292,8 +16300,11 @@ Private Sub Test_PWA_StavkeSaZiceIduPoCridu()
     Dim mapa2 As Object
     Set mapa2 = modMasterSync.OtkPwaStavkeIzTaba(SimTabStavki(bezIdent), greska)
     AssertTrue mapa2 Is Nothing, "PWA stavke: red bez ClientRecordID obara citanje"
+    If InStr(1, greska, "nema svoj ClientRecordID", vbTextCompare) = 0 Then
+        LogWarn "Test_PWA_StavkeSaZiceIduPoCridu", "greska=" & greska
+    End If
     AssertTrue InStr(1, greska, "nema svoj ClientRecordID", vbTextCompare) > 0, _
-               "PWA stavke: greska imenuje nedostatak identiteta (" & greska & ")"
+               "PWA stavke: greska imenuje nedostatak identiteta"
     Exit Sub
 
 EH:
@@ -16406,8 +16417,11 @@ Private Sub Test_OTK_PushIndeksPreskaceRedSaTerena()
     Err.Clear
     On Error GoTo EH
 
+    If InStr(1, errOpis, "nema OtkupStavkaID", vbTextCompare) = 0 Then
+        LogWarn "Test_OTK_PushIndeksPreskaceRedSaTerena", "errOpis=" & errOpis
+    End If
     AssertTrue InStr(1, errOpis, "nema OtkupStavkaID", vbTextCompare) > 0, _
-               "OTK push indeks: red bez ijednog identiteta pada po imenu (" & errOpis & ")"
+               "OTK push indeks: red bez ijednog identiteta pada po imenu"
     Exit Sub
 
 EH:

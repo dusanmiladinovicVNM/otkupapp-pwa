@@ -211,10 +211,14 @@ function normalizeLocalPregledRecord(r) {
         kooperantName: r.kooperantName || r.kooperantID || '',
         vrstaVoca: r.vrstaVoca || '',
         sortaVoca: r.sortaVoca || '',
-        klasa: r.klasa || 'I',
-        kolicina: parseFloat(r.kolicina) || 0,
-        cena: parseFloat(r.cena) || 0,
-        kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
+        // STAVKE SU DOKUMENT (S5-5b). Zapis ih nosi, a IZVEDENA polja se racunaju
+        // ovde, jednom: lista, detalj i statistika inace mogu da pokazu razlicit
+        // zbir iste robe.
+        stavke: otkupStavke(r),
+        kolicina: otkupZbirKg(r),
+        kolAmbalaze: otkupZbirAmbalaze(r),
+        klasaLabel: otkupKlaseTekst(r),
+        cenaJedne: otkupCenaAkoJedna(r),
         tipAmbalaze: r.tipAmbalaze || '',
         parcelaID: r.parcelaID || '',
         vozacID: r.vozacID || '',
@@ -245,7 +249,9 @@ function getPregledRecordKey(r) {
 }
 
 function enrichPregledRecord(r) {
-    const vrednost = (parseFloat(r.kolicina) || 0) * (parseFloat(r.cena) || 0);
+    // Vrednost je ZBIR PO STAVKAMA, ne kolicina * cena: dvoklasni dokument ima
+    // dve cene, pa proizvod dva zaglavljem prosecena broja ne znaci nista.
+    const vrednost = otkupZbirVrednosti(r);
 
     return {
         ...r,
@@ -275,7 +281,7 @@ function renderOtkupPregledStats(rows) {
     const koopEl = byId('statPregledKoop');
 
     const count = rows.length;
-    const kg = rows.reduce((sum, r) => sum + (parseFloat(r.kolicina) || 0), 0);
+    const kg = rows.reduce((sum, r) => sum + (parseFloat(r.kolicina) || 0), 0);   // r.kolicina je izveden zbir (normalizePregledRecord)
     const vrednost = rows.reduce((sum, r) => sum + (parseFloat(r.vrednost) || 0), 0);
     const koopCount = new Set(rows.map(r => r.kooperantID).filter(Boolean)).size;
 
@@ -342,11 +348,11 @@ function renderPregledCard(r) {
                 <div class="danas-card-line">
                     ${escapeHtml(r.vrstaVoca || '-')}
                     ${escapeHtml(sortaPart)}
-                    <span class="danas-card-class">Kl. ${escapeHtml(r.klasa || 'I')}</span>
+                    <span class="danas-card-class">Kl. ${escapeHtml(r.klasaLabel || '')}</span>
                 </div>
 
                 <div class="danas-card-line danas-card-line--muted">
-                    ${escapeHtml(formatKg(r.kolicina))} × ${escapeHtml(formatMoney(r.cena))}
+                    ${escapeHtml(formatKg(r.kolicina))}${r.cenaJedne === null ? '' : ' × ' + escapeHtml(formatMoney(r.cenaJedne))}
                     ${escapeHtml(parcelaPart)}
                 </div>
             </div>
@@ -396,9 +402,9 @@ function openPregledDetail(recordKey) {
         ['Kooperant ID', row.kooperantID || '-'],
         ['Vrsta', row.vrstaVoca || '-'],
         ['Sorta', row.sortaVoca || '-'],
-        ['Klasa', row.klasa || '-'],
+        ['Klasa', row.klasaLabel || '-'],
         ['Količina', formatKg(row.kolicina)],
-        ['Cena', formatMoney(row.cena)],
+        ['Cena', row.cenaJedne === null ? 'po klasi' : formatMoney(row.cenaJedne)],
         ['Vrednost', formatMoney(row.vrednost)],
         ['Vozač', row.vozacID || 'Nije dodeljen'],
         ['Ambalaža', row.kolAmbalaze ? row.kolAmbalaze + ' kom' : '-'],

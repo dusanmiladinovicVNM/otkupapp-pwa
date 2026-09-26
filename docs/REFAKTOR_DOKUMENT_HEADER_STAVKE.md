@@ -6891,6 +6891,92 @@ Mereno: `gas/Code.gs:20` (`COLUMNS` bez `StavkeCount`), `gas/Code.gs:1755`
 **verbatim**, nema per-record transform hook-a). Rez se zato zatvara zajedno sa
 GAS i PWA stranom, u istom PR-u.
 
+### 14.47) S5-5b koraci 3 i 4 — GAS i PWA (26.09.2026)
+
+Ista grana. Redom: GAS pise stavke, PWA ih pravi i cita.
+
+#### Korak 3 — GAS
+
+| Celina | Sadrzaj |
+|---|---|
+| `COLUMNS` += `StavkeCount` | manifest na kraj; `ensureSheetColumns` dozidjuje samo na kraju |
+| `OTK_STAVKE_COLUMNS` | **doslovno** `modMasterSync.OtkStavkeKolone()` |
+| `otkStavkeNormalizuj_` (cist) | prazan skup, stavka bez `ClientRecordID`, dve iste klase, dva ista CRID-a, nevalidna klasa — svaki pada **po imenu** |
+| `otkStavkaKljuc_` / `otkStavkeRazlika_` (cisti) | sadrzaj stavke na **jednom** mestu; poredjenje **neosetljivo na redosled**; prazan tab **nije** razlika |
+| `otkStavkeTab_` / `otkStavkeIzTaba_` / `otkStavkeUpisi_` | tanak I/O; upis **idempotentan po CRID-u stavke** |
+| `processRecord` | **stavke pa zaglavlje**; mrtvi slotovi prazni; `StavkeCount` = duzina skupa |
+| `OTKUP_CONFLICT` | isti CRID + drugi skup stavki = konflikt, ne duplikat (obrazac `PREDAJA_CONFLICT`) |
+| `buildOtkupMergeKey_` | **treca grana obrisana** |
+| `getOtkupiForOtkupac` | read-model **nosi stavke**, fail-closed (`OTKUP_STAVKE_READ_FAILED`) |
+
+**Redosled upisa je odluka, ne stil.** Zaglavlje je oznaka **zavrsenog** upisa: ako
+prolaz padne izmedju, sledeci nadje stavke (idempotentno se preskacu) i dopise
+zaglavlje. Obrnuto bi ostavilo zaglavlje bez stavki — sirote koje uvoz odbija i
+koje se sa terena ne moze popraviti. Isti redosled kao desktop push.
+
+**Zatecen izvoz je vec bio spreman.** `modStammdatenSync.OtkupiAllStavkeRedovi`
+izvozi `MgmtReports/OtkupiAllStavke` u rasporedu `OtkStavkeKolone`, pa read-model
+ima odakle da uzme stavke za redove koji su vec u masteru. Nije trebalo praviti
+nov izvoz — trebalo je izmeriti da postoji.
+
+**Nalaz na sebi, dva puta:**
+
+1. Komentar u `buildOtkupMergeKey_` je tvrdio da pozivalac red sa praznim kljucem
+   „ne spaja ni sa cim". Kod ga **ispusta** — a to nije isto. Komentar je
+   ispravljen, a ispustanje prestalo da bude tiho (`logError` sa brojem redova).
+2. `otkStavkeIzTaba_` je trazio dva indeksa a citao sedam. Kolona koja fali dala
+   bi `undefined` indeks, `getCell` default, i kljuc sadrzaja `"|0.0000|..."` — pa
+   bi **ponovljen sync izgledao kao `OTKUP_CONFLICT`**. Tiha razlika umesto
+   glasnog drifta. Sada se trazi svaka kolona koja se cita.
+
+#### Korak 4 — PWA
+
+Odluka iz §14.44 vazi: **samo zica, N=1**. Forma i dalje unosi jednu klasu, ali
+zapis nosi `stavke[]` — jer `sync-engine` salje zapis **verbatim**, pa je oblik
+lokalnog zapisa oblik zice.
+
+| Fajl | Sta |
+|---|---|
+| `otkup-stavke.js` (nov) | `otkupStavke` / `otkupZbirKg` / `otkupZbirVrednosti` / `otkupZbirAmbalaze` / `otkupKlaseTekst` / `otkupCenaAkoJedna` / `otkupJednaStavka` / `novaStavkaOtkupa`; i `generateClientRecordID` se preselio ovamo |
+| `otkup-form.js` | `buildOtkupRecord` gradi `stavke: [novaStavkaOtkupa(...)]`; lokalni generator identiteta obrisan |
+| `otkupni-list.js` | prikaz i PDF na pristupnike; za **jednu** klasu ispis je identican, za vise ide red po klasi |
+| `otkup-pregled.js`, `otpremnice.js` | normalizacija izvodi zbirove **jednom**; ekrani citaju izveden podatak |
+| `sync.js`, `otkup-more.js` | red za sinhronizaciju cita lokalni zapis kroz pristupnike |
+| `index.html` | `otkup-stavke.js` se ucitava **pre** `otkup-form.js` |
+
+**Nijedan ekran ne sabira sam.** Dva mesta koja sabiraju istu robu se razidju, i
+to se vidi tek na iznosu koji neko isplacuje.
+
+**Cena postoji samo kad dokument ima tacno jednu klasu.** `otkupCenaAkoJedna`
+namerno vraca `null` za vise klasa: dvoklasni dokument ima dve cene, pa jedan broj
+tu ne postoji, a tiho uzimanje prve bilo bi **pogresan podatak na racunu**.
+
+#### Menadzment ekrani: projekcija, i jedna stvar koja NIJE resena
+
+`stanice.js` i `dispecer.js` citaju `r.Kolicina` / `r.Cena` / `r.Klasa` iz
+read-modela. Te kolone su na zici prazne, pa bi ekrani pokazali nula kilograma.
+
+Resenje je **projekcija u read-modelu** (`projektujStavke_` racuna `Kolicina`,
+`KolAmbalaze`, `Klasa` i `Cena` iz stavki, pri citanju, nigde se ne cuvaju), a ne
+drugi izvor istine.
+
+**NIJE reseno, i to se kaze naglas:** `dispecer.js` alokaciju radi nad **jednim**
+brojem po redu (`Kolicina` umanjena za `toSkip`). Sa vise klasa to nije ista
+operacija — raspodela po klasama je **poslovna** odluka, ne prevod. Dok je N=1
+ponasanje je identicno; kad forma dobije vise klasa, to je svoj rez.
+
+#### Dokaz
+
+| Sloj | Stanje |
+|---|---|
+| VBA | `RunBusinessFlowProSuite` **2043/2043**, tri nove sabotaze u `tools/sabotaza.py` |
+| JS (GAS + PWA) | dve nove suite (`gas-otk-stavke` 10 tvrdnji, `otkup-stavke` 7 tvrdnji) i **sedam** novih sabotaza u `tests/js/sabotaze.js` |
+
+**JS sloj je lokalno NEVERIFIKOVAN, i tako se prijavljuje.** `node` i `npm` na
+razvojnoj masini ne postoje (mereno), pa je CI jedini izvrsilac. Sto je moglo da
+se izmeri bez node-a — izmereno je: staticka provera da **svako** sidro JS
+kataloga pogadja tacno jednom (13/13), istom LF normalizacijom koju harness radi.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

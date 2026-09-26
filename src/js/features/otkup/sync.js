@@ -227,8 +227,10 @@ async function renderQueueList() {
                 </div>
                 <div class="qi-detail">
                     ${escapeHtml(r.vrstaVoca || '')}
-                    ${escapeHtml(r.klasa || '')}
-                    | ${escapeHtml(String(r.kolicina || 0))} kg × ${escapeHtml(String(r.cena || 0))} RSD
+                    ${escapeHtml(otkupKlaseTekst(r))}
+                    | ${escapeHtml(String(otkupZbirKg(r)))} kg${otkupCenaAkoJedna(r) === null
+                        ? ''
+                        : ' × ' + escapeHtml(String(otkupCenaAkoJedna(r))) + ' RSD'}
                 </div>
                 ${r.syncStatus === 'syncing'
                     ? '<div class="qi-status" style="font-size:12px;color:var(--text-muted);margin-top:6px;">Sinhronizacija u toku...</div>'

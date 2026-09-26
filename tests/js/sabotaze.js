@@ -16,6 +16,7 @@
 const DB = 'src/js/services/db.js';
 const ZBR = 'src/js/features/vozac/zbirna.js';
 const GAS = 'gas/Code.gs';
+const OTKS = 'src/js/features/otkup/otkup-stavke.js';
 
 module.exports = [
     {
@@ -108,5 +109,78 @@ module.exports = [
         fajl: GAS,
         sidro: '      .filter(Boolean)\n      .sort();',
         zamena: '      .filter(Boolean);   // sabotaza'
+    },
+    {
+        // Prazan skup stavki je greska, ne dokument od nula kilograma.
+        ime: 'otk-stavke-prazan-skup-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'otkup bez stavki se odbija PO IMENU',
+        zasto: 'bez ove kapije zaglavlje bez stavki stize u master kao siroce koje sa terena nema kako da se popravi',
+        fajl: GAS,
+        sidro: "  if (!Array.isArray(stavke) || stavke.length === 0) {",
+        zamena: "  if (false) {   // sabotaza: prazan skup prolazi"
+    },
+    {
+        // Identitet reda je jedini nacin da retry ne udvoji robu.
+        ime: 'otk-stavke-bez-identiteta-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'stavka bez svog ClientRecordID se odbija',
+        zasto: 'bez identiteta reda ponovljen sync ne razlikuje retry od druge stavke, pa se kolicina udvaja',
+        fajl: GAS,
+        sidro: "    if (!crid) {",
+        zamena: "    if (false) {   // sabotaza: stavka bez identiteta prolazi"
+    },
+    {
+        // Redosled NIJE tvrdnja o dokumentu: master dodeljuje RedniBroj po
+        // kanonskom redu klasa.
+        ime: 'otk-stavke-razlika-po-poziciji',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'iste stavke u drugom redosledu NISU razlika',
+        zasto: 'poredjenje po poziciji pretvara retry u OTKUP_CONFLICT, pa klijent dobije gresku na ispravan zapis',
+        fajl: GAS,
+        sidro: "    if (ulaz[id] === undefined) {",
+        zamena: "    if (ulaz[id] === undefined || Object.keys(ulaz)[k] !== id) {   // sabotaza"
+    },
+    {
+        // Prazan tab je PRVI UPIS, ne konflikt.
+        ime: 'otk-stavke-prazan-tab-je-konflikt',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'prazan tab NIJE razlika',
+        zasto: 'bez ovog izlaza bi svaki prvi upis odmah bio OTKUP_CONFLICT, pa nov otkup nikad ne bi prosao',
+        fajl: GAS,
+        sidro: "  if (!uTabu || Object.keys(uTabu).length === 0) return '';",
+        zamena: "  if (!uTabu) return '';   // sabotaza: prazan tab je razlika"
+    },
+    {
+        // Vrednost dokumenta je zbir PO STAVCI. Proizvod zbirova (460 * 80) daje
+        // 36800 umesto 21800 -- razlika izlazi na iznos za isplatu.
+        ime: 'vrednost-kao-proizvod-zbirova',
+        suite: 'otkup-stavke',
+        tvrdnja: 'dve klase: vrednost je zbir PO STAVCI, ne proizvod zbirova',
+        zasto: 'proizvod zbirova mnozi ukupne kilograme ukupnom cenom, pa dvoklasni dokument dobija iznos koji nijedna stavka ne tvrdi',
+        fajl: OTKS,
+        sidro: "        return z + Number(s && s.kolicina || 0) * Number(s && s.cena || 0);",
+        zamena: "        return z + Number(s && s.kolicina || 0);   // sabotaza: cena ispada"
+    },
+    {
+        // Dvoklasni dokument nema jednu cenu; prva cena bi bila pogresan podatak.
+        ime: 'cena-prve-stavke-za-sve',
+        suite: 'otkup-stavke',
+        tvrdnja: 'dve klase NEMAJU jednu cenu',
+        zasto: 'ako prikaz uzme prvu cenu, racun na dvoklasnom dokumentu tvrdi cenu koja ne vazi za svu robu',
+        fajl: OTKS,
+        sidro: "    if (stavke.length !== 1) return null;",
+        zamena: "    if (stavke.length === 0) return null;   // sabotaza: prva cena za sve"
+    },
+    {
+        // Oznaka klasa mora da ide kanonskim redom -- isto pravilo po kom master
+        // dodeljuje RedniBroj. Inace se oznaka menja od redosleda sinhronizacije.
+        ime: 'klase-po-redu-stizanja',
+        suite: 'otkup-stavke',
+        tvrdnja: 'oznaka klasa ide kanonskim redom, ne redom stizanja',
+        zasto: 'bez kanonskog reda isti dokument dobija razlicitu oznaku klase zavisno od redosleda kojim su stavke stigle',
+        fajl: OTKS,
+        sidro: "            return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);",
+        zamena: "            return 0;   // sabotaza: stabilan sort zadrzava red stizanja"
     }
 ];
