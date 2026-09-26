@@ -6756,6 +6756,488 @@ pogresnu stvar je gora od nikakve.
 Šta mora ostati netaknuto: desktop push (`BulkPushPendingForStanica`) i izvoz `OtkupiAllStavke` — oni
 su **već** na novom obliku i rez ih ne dira.
 
+### 14.45) S5-5b — zica otkupa: zaglavlje + stavke (26.09.2026, U TOKU)
+
+Radi se po ugovoru prihvatanja iz §14.44. Grana `claude/s5-5b-otkup-zica`.
+
+#### Ispravka ugovora koju je merenje nalozilo
+
+Tacka 4 ugovora je trazila da `OtkZaglavljeKolone` **izgubi** cetiri linijske kolone. Mereno:
+`ensureSheetColumns` u GAS-u dozidjuje kolonu **samo na kraju**, a svaku drugu razliku prijavljuje kao
+`SCHEMA_DRIFT` koji se namerno ne popravlja tiho. Kolone su na pozicijama 14, 15, 16 i 18 — brisanje iz
+sredine bi oborilo sync na **svakom** zatecenom `OTK-*` listu i pomerilo sve `GS_*` konstante ispod
+sebe.
+
+**Ispravka:** cetiri kolone ostaju kao **mrtvi slotovi koji se pisu prazni**, `StavkeCount` ide na
+kraj. Doslovno precedent `VS_OTKUP_RECORD_IDS` iz S5-4b-1. Skidaju se sa zice kad nijedan citalac ne
+ostane — zasebno ciscenje, ne ovaj rez.
+
+#### Korak 1 — ugovor kolona (ZAVRSENO, `9789479b`)
+
+| Sta | Gde |
+|---|---|
+| `StavkeCount` na kraj zaglavlja | `OtkZaglavljeKolone` |
+| `ClientRecordID` + `OtkupClientRecordID` na kraj stavki | `OtkStavkeKolone` |
+| `GS_STAVKE_COUNT = 24`, cetiri slota oznacena mrtvim | `modMasterSync` deklaracije |
+| wire-only imena kolona | `OKS_WIRE_CRID`, `OKS_WIRE_OTKUP_CRID` |
+| push puni manifest | `BuildOTKSheetRowForOtkup` prima broj stavki od pozivaoca |
+| tvrdnja | „OTK push: zaglavlje nosi broj stavki“ |
+
+**PWA ne zna `OtkupID`** — on nastaje u `CreateOtkup_TX` — pa red stavke sa terena nosi **svoj**
+`ClientRecordID` i CRID svog zaglavlja (odluka 1 iz §14.44, obrazac `PRED` reda iz S5-4a). Desktop push
+ih ostavlja prazne: njegov identitet je `OtkupStavkaID`, roditelj pravi `OtkupID`. Dva pisca, dva puta
+identiteta, jedan tab — isto kao na zaglavlju sa `ServerRecordID`.
+
+Kapija 8142 („kolona OTK zaglavlja bez izvora“) je pukla na `StavkeCount` — to je i bio njen posao.
+
+#### Sta ostaje, i sta je pre-flight ovog reza izmerio o ceni
+
+| Korak | Obim (mereno) |
+|---|---|
+| 2 — uvoz cita `OTK_STAVKE` | nov citac taba **po imenu** (tab pisu dva pisca, oba po imenu); `ValidatePWAOtkup` meri skup stavki + poravnanje manifesta; `ImportRowToTblOtkup` gradi kolekciju; `PwaIstiSadrzaj` poredi **skup** stavki umesto `GS_KLASA` |
+| 2b — test seam-ovi | **~20 pozivnih mesta** `ImportRowToTblOtkup_RowTX` u `modBusinessFlowProTests`, sva kroz fixture `PwaRed`; plus `TestHook_ValidatePWAOtkupDatum` koji drzi `ReDim data(1 To GS_BROJ_DOKUMENTA)` — ista klasa koja je u S5-4b-2 ostavila treci seam na staroj sirini |
+| 3 — GAS | `COLUMNS` + `StavkeCount`, pisac taba `OTK_STAVKE` (stavke pa zaglavlje, zaglavlje je oznaka zavrsenog upisa — isti redosled kao desktop push), `OTKUP_CONFLICT` po skupu stavki, brisanje grane 3 `buildOtkupMergeKey_`, citaoci `getOtkupiForOtkupac` i menadzment na stavke |
+| 4 — PWA | `buildOtkupRecord` dobija `stavke[]`; **~45 citalaca** linijskih polja u 6 fajlova (`otkupni-list`, `otkup-pregled`, `otpremnice`, `sync`, `otkup-more`, `otkup-form`) |
+| 5 — dokaz | JS tvrdnje pod kapijom iz S5-5a + VBA tvrdnja da uvoz gradi dokument iz `OTK_STAVKE`, sa sabotazom u `tools/dokaz.py` |
+
+**Zasto rez ne moze da se podeli na dva PR-a bez pauze:** `sync-engine.js:312` salje zapise
+**verbatim** (`payload = { records: pending }`) — nema per-record transform hook-a. Oblik zice je zato
+oblik lokalnog zapisa, pa bi svaki medjukorak ili trazio nov transform sloj u deljenom sync engine-u
+(nova masinerija za privremeno stanje), ili ostavio uvoz otkupa pauziran jedan PR. Merenje, ne ukus.
+
+### 14.46) S5-5b korak 2 — VBA uvoz cita OTK_STAVKE (26.09.2026)
+
+Grana `claude/s5-5b-otkup-zica`. Ovo je **uvozna strana**: zaglavlje vise ne nosi
+linijska polja, nego manifest.
+
+#### Sta je promenjeno
+
+| Celina | Sadrzaj |
+|---|---|
+| `OtkStavkeNaslovIndeks` (nov, `modMasterSync`) | JEDAN validator naslova taba `OTK_STAVKE`, ime kolone -> indeks; dele ga **oba** citaoca |
+| `OtkPwaStavkeIzTaba` (nov, **Public**) | cist citalac: sadrzaj taba -> mapa `CRID zaglavlja -> Collection stavki`; meri se **bez Google-a** |
+| `OtkPwaStavkePoCridu` (nov) | mrezni deo, fail-closed kao `Sheet1` (AUD-001) |
+| `ValidateOTKSheetHeader` | trazi `StavkeCount`, minimalna sirina 22 -> 24 |
+| `ValidatePWAOtkup(data, row, stavke)` | prazan skup = greska; **manifest** mora da se poravna; plauzibilnost je **po stavci**, poruka imenuje koju; `TipAmbalaze` se poredi sa **zbirom** gajbi |
+| `ImportRowToTblOtkup(..., stavke)` | ne cita `GS_KLASA/KOLICINA/CENA/KOL_AMB`; stavke idu pisacu **kakve su dosle** |
+| `PwaIstiSadrzaj(..., stavke)` | poredi **ceo skup** stavki, klasa je kljuc, **neosetljivo na redosled** |
+| `ImportRowToTblOtkup_RowTX(..., stavke)` | isti potpis kroz transakciju |
+
+`RedniBroj` sa zice se **ne cita**, i to je merenje a ne propust: `CreateOtkup_TX`
+ga dodeljuje po **kanonskom redu klasa** (`modOtkup.bas:749`). Citanje poslatog
+broja bi bio drugi izvor istine za isti pojam. Zato redosled u `Collection`-u
+nista ne znaci — ni u uvozu, ni u poredjenju sadrzaja.
+
+`BrutoKg` se prenosi **samo kad ga zica nosi** (> 0): pisac bruto cuva samo kad je
+unos bio bruto, pa nula nije „bruto = 0" nego „nije bruto unos".
+
+#### Nalaz koji plan nije predvideo: tab OTK_STAVKE od sada ima DVA pisca
+
+`modStanicaLock.OtkStavkeIndeksIzTaba` gradi indeks idempotencije push-a po
+`OtkupStavkaID`. PWA red taj ID **ne zna** — on nastaje u masteru — pa je zatecen
+uslov takav red citao kao „red bez identiteta" i dizao `8145`.
+
+Posledica bi bila **trajno blokiran push te stanice**: naslov ispravan, podatak
+ispravan, a push pada fail-closed na svakom sledecem prolazu. Ispravka: red bez
+`OtkupStavkaID` **ali sa** `ClientRecordID` je tudji red i preskace se; red bez
+**oba** identiteta i dalje pada. Mereno tvrdnjom, ne komentarom.
+
+#### Kapija manifesta stoji na DVA mesta, i to je pravilo a ne udvajanje
+
+`ValidatePWAOtkup` je vraca kao `SyncError` koji operater vidi; `ImportRowToTblOtkup`
+je dize kao tvrdu gresku, jer direktan i test poziv validaciju preskacu. Isti
+obrazac kao datum (AUD-042b) i isto pravilo kao `.claude/rules/testovi.md` §5.
+
+#### Dokaz
+
+Tri nove tvrdnje, tri nove sabotaze (`610` u katalogu, bilo `607`):
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `Test_PWA_StavkeSaZiceIduPoCridu` — grupisanje po CRID-u, tudji red se preskace, red bez identiteta obara citanje | `uvoz-stavka-bez-identiteta-prolazi` |
+| `Test_PWA_ManifestNeporavnatNeUvozi` — zaglavlje tvrdi 2 uz 1 primljenu = nema dokumenta; **kontrola** da poravnat manifest prolazi | `uvoz-manifest-bez-poravnanja` |
+| `Test_OTK_PushIndeksPreskaceRedSaTerena` — PWA red ne obara indeks push-a; red bez oba identiteta pada po imenu | `push-indeks-ne-preskace-pwa-red` |
+
+Sidro `push-stavke-naslov-bez-provere` je **premesteno** u `modMasterSync`: provera
+naslova je izdvojena, a sabotaza prati provereni kod a ne fajl u kom je stajala.
+
+Tvrdnja o push indeksu **hvata izuzetak i meri ga kao tvrdnju**. Prva verzija ga
+nije hvatala, pa bi ugasena kapija pala u `EH` i prijavila `LogFatal` sa imenom
+**testa** — videlo bi se da je crveno, ali ne i **koja** tvrdnja je pala.
+
+`RunBusinessFlowProSuite`: **2043/2043, nula padova** (RunID=20260926202041-7792). Baseline BFP se time pomera sa 1837 (#384) na 2043.
+
+#### Cena koja je opet naplacena: ARNOST ne vidi poziv u izraznoj poziciji
+
+Prvi prolaz suite-a je pao kao `Compile error: Argument not optional` **posle 585
+sekundi** cekanja na Excel, uz `vba_check` zelen. Krivac: `PwaIstiSadrzaj(postojeci,
+data, row)` u NO-OP grani idempotencije — poziv u izraznoj poziciji, poznata rupa
+pravila `ARNOST` (`.claude/rules/testovi.md` §2).
+
+To je **cetvrti** slucaj iste klase u ovoj seriji. Zato je uz rez napisana provera
+arnosti nad svim izmenjenim potpisima (scratchpad `s55b_k6_noop.py`), i ona je
+pokazala nula preostalih. Pravilo za dalje: **posle izmene potpisa ide grep po
+imenu nad celim `src-vba/`, pre pokretanja suite** — ne posle.
+
+#### Sta OVAJ rez NE zatvara, i zasto PR ne sme da se merge-uje sam
+
+Zica sada **trazi** `StavkeCount` u naslovu `OTK-*` lista i stavke u tabu
+`OTK_STAVKE`. GAS ih jos ne pise, PWA ih jos ne salje. Dok koraci 3 i 4 ne legnu,
+`ValidateOTKSheetHeader` odbija svaki zatecen list kao `SCHEMA_DRIFT` — sto je
+tacno ponasanje ugovora, ali znaci da je **uvoz otkupa pauziran**.
+
+Mereno: `gas/Code.gs:20` (`COLUMNS` bez `StavkeCount`), `gas/Code.gs:1755`
+(`processRecord` ne zna za stavke), `sync-engine.js:312` (zapisi se salju
+**verbatim**, nema per-record transform hook-a). Rez se zato zatvara zajedno sa
+GAS i PWA stranom, u istom PR-u.
+
+### 14.47) S5-5b koraci 3 i 4 — GAS i PWA (26.09.2026)
+
+Ista grana. Redom: GAS pise stavke, PWA ih pravi i cita.
+
+#### Korak 3 — GAS
+
+| Celina | Sadrzaj |
+|---|---|
+| `COLUMNS` += `StavkeCount` | manifest na kraj; `ensureSheetColumns` dozidjuje samo na kraju |
+| `OTK_STAVKE_COLUMNS` | **doslovno** `modMasterSync.OtkStavkeKolone()` |
+| `otkStavkeNormalizuj_` (cist) | prazan skup, stavka bez `ClientRecordID`, dve iste klase, dva ista CRID-a, nevalidna klasa — svaki pada **po imenu** |
+| `otkStavkaKljuc_` / `otkStavkeRazlika_` (cisti) | sadrzaj stavke na **jednom** mestu; poredjenje **neosetljivo na redosled**; prazan tab **nije** razlika |
+| `otkStavkeTab_` / `otkStavkeIzTaba_` / `otkStavkeUpisi_` | tanak I/O; upis **idempotentan po CRID-u stavke** |
+| `processRecord` | **stavke pa zaglavlje**; mrtvi slotovi prazni; `StavkeCount` = duzina skupa |
+| `OTKUP_CONFLICT` | isti CRID + drugi skup stavki = konflikt, ne duplikat (obrazac `PREDAJA_CONFLICT`) |
+| `buildOtkupMergeKey_` | **treca grana obrisana** |
+| `getOtkupiForOtkupac` | read-model **nosi stavke**, fail-closed (`OTKUP_STAVKE_READ_FAILED`) |
+
+**Redosled upisa je odluka, ne stil.** Zaglavlje je oznaka **zavrsenog** upisa: ako
+prolaz padne izmedju, sledeci nadje stavke (idempotentno se preskacu) i dopise
+zaglavlje. Obrnuto bi ostavilo zaglavlje bez stavki — sirote koje uvoz odbija i
+koje se sa terena ne moze popraviti. Isti redosled kao desktop push.
+
+**Zatecen izvoz je vec bio spreman.** `modStammdatenSync.OtkupiAllStavkeRedovi`
+izvozi `MgmtReports/OtkupiAllStavke` u rasporedu `OtkStavkeKolone`, pa read-model
+ima odakle da uzme stavke za redove koji su vec u masteru. Nije trebalo praviti
+nov izvoz — trebalo je izmeriti da postoji.
+
+**Nalaz na sebi, dva puta:**
+
+1. Komentar u `buildOtkupMergeKey_` je tvrdio da pozivalac red sa praznim kljucem
+   „ne spaja ni sa cim". Kod ga **ispusta** — a to nije isto. Komentar je
+   ispravljen, a ispustanje prestalo da bude tiho (`logError` sa brojem redova).
+2. `otkStavkeIzTaba_` je trazio dva indeksa a citao sedam. Kolona koja fali dala
+   bi `undefined` indeks, `getCell` default, i kljuc sadrzaja `"|0.0000|..."` — pa
+   bi **ponovljen sync izgledao kao `OTKUP_CONFLICT`**. Tiha razlika umesto
+   glasnog drifta. Sada se trazi svaka kolona koja se cita.
+
+#### Korak 4 — PWA
+
+Odluka iz §14.44 vazi: **samo zica, N=1**. Forma i dalje unosi jednu klasu, ali
+zapis nosi `stavke[]` — jer `sync-engine` salje zapis **verbatim**, pa je oblik
+lokalnog zapisa oblik zice.
+
+| Fajl | Sta |
+|---|---|
+| `otkup-stavke.js` (nov) | `otkupStavke` / `otkupZbirKg` / `otkupZbirVrednosti` / `otkupZbirAmbalaze` / `otkupKlaseTekst` / `otkupCenaAkoJedna` / `otkupJednaStavka` / `novaStavkaOtkupa`; i `generateClientRecordID` se preselio ovamo |
+| `otkup-form.js` | `buildOtkupRecord` gradi `stavke: [novaStavkaOtkupa(...)]`; lokalni generator identiteta obrisan |
+| `otkupni-list.js` | prikaz i PDF na pristupnike; za **jednu** klasu ispis je identican, za vise ide red po klasi |
+| `otkup-pregled.js`, `otpremnice.js` | normalizacija izvodi zbirove **jednom**; ekrani citaju izveden podatak |
+| `sync.js`, `otkup-more.js` | red za sinhronizaciju cita lokalni zapis kroz pristupnike |
+| `index.html` | `otkup-stavke.js` se ucitava **pre** `otkup-form.js` |
+
+**Nijedan ekran ne sabira sam.** Dva mesta koja sabiraju istu robu se razidju, i
+to se vidi tek na iznosu koji neko isplacuje.
+
+**Cena postoji samo kad dokument ima tacno jednu klasu.** `otkupCenaAkoJedna`
+namerno vraca `null` za vise klasa: dvoklasni dokument ima dve cene, pa jedan broj
+tu ne postoji, a tiho uzimanje prve bilo bi **pogresan podatak na racunu**.
+
+#### Menadzment ekrani: projekcija, i jedna stvar koja NIJE resena
+
+`stanice.js` i `dispecer.js` citaju `r.Kolicina` / `r.Cena` / `r.Klasa` iz
+read-modela. Te kolone su na zici prazne, pa bi ekrani pokazali nula kilograma.
+
+Resenje je **projekcija u read-modelu** (`projektujStavke_` racuna `Kolicina`,
+`KolAmbalaze`, `Klasa` i `Cena` iz stavki, pri citanju, nigde se ne cuvaju), a ne
+drugi izvor istine.
+
+**NIJE reseno, i to se kaze naglas:** `dispecer.js` alokaciju radi nad **jednim**
+brojem po redu (`Kolicina` umanjena za `toSkip`). Sa vise klasa to nije ista
+operacija — raspodela po klasama je **poslovna** odluka, ne prevod. Dok je N=1
+ponasanje je identicno; kad forma dobije vise klasa, to je svoj rez.
+
+#### Dokaz
+
+| Sloj | Stanje |
+|---|---|
+| VBA | `RunBusinessFlowProSuite` **2043/2043**, tri nove sabotaze u `tools/sabotaza.py` |
+| JS (GAS + PWA) | dve nove suite (`gas-otk-stavke` 10 tvrdnji, `otkup-stavke` 7 tvrdnji) i **sedam** novih sabotaza u `tests/js/sabotaze.js` |
+
+**JS sloj je lokalno NEVERIFIKOVAN, i tako se prijavljuje.** `node` i `npm` na
+razvojnoj masini ne postoje (mereno), pa je CI jedini izvrsilac. Sto je moglo da
+se izmeri bez node-a — izmereno je: staticka provera da **svako** sidro JS
+kataloga pogadja tacno jednom (13/13), istom LF normalizacijom koju harness radi.
+
+### 14.48) Review S5-5b, prvi krug — jedna granica, dva nalaza (26.09.2026)
+
+Head `475ff325`. Verdikt NO-GO: 1 P1 + 1 P2, oba na istom mestu — **identitet reda
+u tabu `OTK_STAVKE`**. Model `zaglavlje + stavke` nije dirnut; pojacana je granica.
+
+#### P1 — partial upis + izmenjen retry pravi HIBRIDNI dokument
+
+Provera skupa stavki je stajala **samo** u grani „zaglavlje postoji". Put kojim ide
+retry posle prekinutog upisa — zaglavlje jos **ne** postoji — prolazio je bez
+ijednog poredjenja sadrzaja, jer je `otkStavkeUpisi_` postojecu stavku preskakao
+**po samom ID-u**:
+
+| Korak | Stanje taba |
+|---|---|
+| prvi pokusaj: `S1=100`, `S2=60`, manifest 2 | upise `S1=100`, padne pre `S2` i zaglavlja |
+| retry tvrdi: `S1=120`, `S2=60` | `S1` se preskoci (isti ID), `S2` se dopise, zaglavlje kaze 2 |
+| master | `StavkeCount 2 == 2` → **PASS**, uveze `100 + 60` |
+
+Uvezen je skup koji **nijedan klijent nije poslao**, i manifest ga ne hvata jer se
+broj poklapa. Prvi kompletan payload nikad nije ni stigao.
+
+#### P2 — item `ClientRecordID` je imao razlicit scope u GAS-u i VBA-u
+
+VBA citalac drzi **jedan** skup vidjenih item CRID-ova za **ceo** tab
+(`OtkPwaStavkeIzTaba`, `vidjeni`), i dva reda istog ID-a odbija bez obzira na
+roditelja. GAS je duplikate gledao samo u tekucem payload-u i samo nad redovima
+**tekuceg roditelja**, pa je prihvatao:
+
+```
+Otkup A -> stavka ITEM-X
+Otkup B -> stavka ITEM-X      (GAS: valid)
+```
+
+Master to kasnije odbija **fail-closed nad CELIM listom stanice** — jedan pogresan
+item CRID zaustavio bi uvoz **svih** otkupa te stanice, ne samo spornog.
+
+#### Ispravka: jedan globalan, content-aware indeks
+
+| Bilo | Sada |
+|---|---|
+| `otkStavkeIzTaba_(sheet, parentCRID)` → `{crid: kljuc}` | `otkStavkeIndeksTaba_(sheet)` → `{crid: {parent, kljuc}}`, **globalno** |
+| `otkStavkeRazlika_(uTabu, stigle)` | `otkStavkeUskladi_(indeks, stigle, parentCRID)` |
+| kapija samo u grani „zaglavlje postoji" | **jedna** kapija **iznad oba puta** |
+| upis preskace po ID-u | upis preskace samo ono sto je uskladjivanje potvrdilo |
+
+Semantika, izgovorena u celini:
+
+| Slucaj | Ishod |
+|---|---|
+| isti item CRID + isti roditelj + isti sadrzaj | idempotentno, preskace se |
+| isti item CRID + isti roditelj + **drugi** sadrzaj | **KONFLIKT** |
+| isti item CRID + **drugi** roditelj | **KONFLIKT** |
+| stavka u tabu pod ovim roditeljem koju ulaz ne nosi | **KONFLIKT** |
+| stavka u ulazu koje u tabu nema | **DOZVOLJENO** (recovery) |
+
+Zadnje dvoje su **namerno nesimetricne**: dopisati sto fali je dovrsavanje istog
+upisa, a zaboraviti sto postoji je druga tvrdnja o dokumentu.
+
+**Zapisana zavisnost redosleda:** upis preskace po **globalnom** indeksu, pa nosi i
+stavke tudjih otkupa. Bezbedno je **samo** zato sto uskladjivanje isti item CRID
+pod drugim roditeljem vraca kao konflikt, pa se dovde ne dodje. Ko razdvoji te dve
+funkcije mora da prenese i taj uslov — pa to stoji u komentaru, ne u pamcenju.
+
+#### Dokaz: stara tvrdnja je prolazila TACNO IZMEDJU dva nalaza
+
+To je i poenta review-a. Nijedna postojeca tvrdnja nije merila partial upis ni
+koliziju item CRID-a izmedju dva dokumenta. Dodato:
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `partial upis sa izmenjenim sadrzajem JE konflikt, i kad zaglavlja nema` | `otk-stavke-partial-bez-poredjenja` |
+| `isti item CRID pod drugim otkupom JE konflikt` | `otk-stavke-tudj-roditelj-prolazi` |
+| `stavka u tabu koju ulaz ne nosi JE razlika` | `otk-stavke-zaboravljena-prolazi` |
+| `stavka koja u tabu fali je RECOVERY, ne konflikt` | **nema svoju** — v. nize |
+| `stavke drugog otkupa ne ulaze u poredjenje` | pokrivena kroz `tudj-roditelj` |
+| `prazan tab NIJE razlika` | `otk-stavke-recovery-je-konflikt` (nov, stara linija ne postoji) |
+
+**Jedna tvrdnja namerno nema svoju sabotazu.** Recovery pravilo je **odsustvo**
+provere, pa bi mu seam trebalo **dodati** kod — a odbrana napisana pre merenja je u
+#393 vec postala nalaz. Kaze se naglas umesto da se zaobilazi.
+
+Katalog JS sabotaza: **17** unosa. Bez node-a je izmereno sto se moze: svako sidro
+pogadja **tacno jednom** (16/16 fajl-sidara), svaka sabotaza imenuje tvrdnju koja
+**stvarno postoji** u svojoj suite (17/17), i balans zagrada bez string literala je
+nepromenjen. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**Verifikaciona rupa ostaje, i to je struktura a ne propust:** CI
+(`.github/workflows/static.yml`) se pokrece na `pull_request` i na push u `main` —
+push feature grane ga **ne** pokrece. Dok PR ne postoji, JS kapije ovog head-a nisu
+izvrsene ni jednom.
+
+### 14.49) Review S5-5b, drugi krug — zaglavlje je completion marker (26.09.2026)
+
+Head `b062ee9b`. Verdikt NO-GO: 1 P1 + 1 P3. Prethodna dva nalaza su potvrdjena
+kao RESOLVED, ali **prva ispravka je proizvela drugu** — i to je glavni nalaz ovog
+kruga o mom radu, ne o modelu.
+
+#### P1 — moja regresija: recovery je vazio i za ZAVRSEN dokument
+
+Prvi krug je kapiju digao **iznad** grananja na `existingRow`, da oba puta dele
+semantiku. Time je i pravilo „stavka u ulazu koje u tabu nema je **dozvoljena**"
+pocelo da vazi za dokument koji je vec zavrsen:
+
+| Korak | Ishod |
+|---|---|
+| prvi sync: `O1` sa `S1`, zaglavlje `StavkeCount=1` | dokument zavrsen |
+| kasnije `O1` stigne kao `S1 + S2` | `S1` isti → OK, `S2` fali → **recovery dozvoljen** |
+| grana `existingRow > 0` | dopise `S2` **zavrsenom** dokumentu |
+| rezultat | tab `S1+S2`, zaglavlje jos kaze `1`, GAS vrati `success/existing` |
+| master | manifest `1` vs `2` stavke → **mismatch** |
+
+PWA misli da je ispravka prihvacena, GAS je mutirao zavrsen dokument, a master ga
+posle toga odbija. I to se desavalo **pre** citanja terminalnog statusa, pa je i
+`Synced>Master` red mogao da dobije stavku.
+
+#### Ispravka — granica je COMPLETION MARKER, ne postojanje stavki
+
+`existingRow` se utvrdjuje **prvi**, pa se bira ugovor:
+
+| Slucaj | Ugovor | Pravilo |
+|---|---|---|
+| zaglavlja **nema** | `otkStavkeUskladiNedovrsen_` | postojeci podskup mora biti identican; **sto fali sme da se dopise** |
+| zaglavlje **postoji** | `otkStavkeUskladiZavrsen_` | **TACNA jednakost skupa**: nema dopune, nema brisanja, nema nove stavke |
+
+Jedno jezgro (`otkStavkeUskladi_` + `dopustiDopunu`), dva **imenovana** ugovora —
+ne dve implementacije, jer bi se dve provere istog pojma razisle.
+
+**Grana sa zaglavljem od sada u tab stavki ne pise NISTA**, i to je ugovor a ne
+izostavljanje: ako se doslo dovde, u tabu je doslovno ono sto je stiglo. Time je i
+drugi zahtev review-a zadovoljen — odbijen retry nad `Synced>Master` dokumentom ne
+ostavlja **nikakav** upis, jer kapija stoji pre svakog pisanja i pre citanja
+statusa.
+
+Prethodna „dovrsi siroce" grana je time **obrisana**: nad zavrsenim dokumentom to
+je bila mutacija kanonskog podatka. Zaglavlje bez stavki je sada konflikt koji
+imenuje razlog.
+
+#### P3 — indeks nije bio fail-closed kao VBA citalac
+
+Review ga je oznacio kao dug koji ne blokira. Zatvoren je ipak, jer je cilj
+**doslovno isti wire invariant**, a razlika je bila u dva stanja koja VBA odbija po
+imenu: red sa roditeljem **bez** svog `ClientRecordID` (GAS ga je preskakao) i
+**dupli** item CRID (GAS ga je tiho prepisivao). Oba sada dizu
+`OTKUP_STAVKE_TAB_INVALID`.
+
+Uz to: **read-model citalac istog taba prolazi kroz ISTI indeks**, pa ne moze da
+prikaze stanje koje pisac i master odbijaju.
+
+#### Da ispravka ne bi bila samo tvrdjena
+
+Pravila indeksa su zivela u funkciji koja trazi `Sheet`, pa ih harness ne dohvata —
+a cela poenta ove serije je da se nalazi kriju tamo gde pravilo nema ko da izmeri.
+Zato je cist deo izdvojen: `otkStavkeIndeksIzRedova_(headers, redovi)`.
+
+**Nova medjujezicna kapija.** Kad test vec cita ugovor, meri ga i naspram VBA
+strane: `ugovor kolona je DOSLOVNO isti kao u VBA` cita `OtkStavkeKolone` iz
+`modMasterSync.bas`, razresava `COL_OKS_*` / `OKS_WIRE_*` iz `modConfig.bas`, i
+poredi redosled sa `OTK_STAVKE_COLUMNS`. „Jedan ugovor" prestaje da bude komentar.
+Izmereno i bez node-a, istom logikom u Python-u: **10 kolona, identican redosled**.
+
+#### Nalaz na instrumentu, opet
+
+`ctx.OTK_STAVKE_COLUMNS` bi bio `undefined`: top-level `const` se u `vm` kontekstu
+vezuje u **leksicki scope skripta** i ne postaje svojstvo globalnog objekta —
+`function` postaje. Cetiri nove tvrdnje bi pale u CI-ju na `TypeError`. Resenje je
+pristupnik `otkStavkeKoloneUgovor_()`, pa ugovor ostaje na jednom mestu.
+
+Uhvaceno rezonovanjem o mehanizmu, ne testom — i zato je zapisano kao memorija.
+
+I **merac balansa zagrada je i sam imao gresku**: citao je `"` UNUTAR regex
+literala kao pocetak stringa, pa je zdrav fajl prijavio kao nebalansiran. Popravljen
+heuristikom „`/` je regex kad pre njega stoji operator ili otvorena zagrada".
+
+#### Stanje kapija
+
+| Kapija | Stanje |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, 610 VBA sabotaza |
+| JS katalog | **20** unosa, svako sidro pogadja **tacno jednom** |
+| JS tvrdnje | svaka sabotaza imenuje tvrdnju koja **postoji** (20/20) |
+| balans zagrada | nepromenjen, uz regex-aware merac |
+| medjujezicni ugovor kolona | **poklapa se** (10/10, isti redosled) |
+| JS harness u CI-ju | **jos nije izvrsen** — nema PR-a za ovaj head |
+
+### 14.50) Review S5-5b, treci krug — identitet obuhvata CEO payload (26.09.2026)
+
+Head `b7021d48`. P1 i P3 iz drugog kruga potvrdjeni kao RESOLVED, medjujezicna
+kapija prihvacena. Ostao jedan P2, na nivou **celog dokumenta**.
+
+#### P2 — isti CRID + iste stavke + DRUGO zaglavlje je vracalo `existing/success`
+
+S5-5b je stavke zatvorio strogo, ali isto pravilo nije bilo primenjeno na cinjenice
+**zaglavlja**. Retry sa doslovno istim stavkama a promenjenim `KooperantID`-em
+(ili datumom, parcelom, proizvodom, tipom ambalaze, brojem dokumenta) prolazio je
+kroz item kapiju, pao u granu `existingRow > 0` i vracao `success/existing`.
+
+Posledica nije teorijska: master **ima** pravi ugovor u `PwaIstiSadrzaj`, ali
+promenjen retry do njega **nikad ne stigne** — GAS ne prepisuje zaglavlje, pa master
+nema sta da detektuje. Klijent misli da je ispravka primljena, server cuva staru
+tvrdnju, i razlika se ne vidi nigde.
+
+Gore od toga: grana je pre bilo kakvog poredjenja upisivala `UpdatedAtClient` i
+`UpdatedAtServer`, pa je odbijeni retry ostavljao trag na dokumentu koji odbija.
+
+#### Ispravka — kanonski sadrzaj zaglavlja, pre svakog upisa
+
+`otkupZaglavljeRazlika_(postojeci, idx, ulaz)` stoji **odmah** posle citanja reda,
+pre svakog enrichment upisa i pre citanja terminalnog statusa.
+
+| Ucestvuje | Ne ucestvuje | Zasto ne |
+|---|---|---|
+| `OtkupacID` | `CreatedAtClient` | transportna metadata |
+| `Datum` | `UpdatedAtClient` | transportna metadata |
+| `KooperantID` | `UpdatedAtServer` | transportna metadata |
+| `VrstaVoca` | `ReceivedAt` | transportna metadata |
+| `SortaVoca` | `DeviceID` | transportna metadata |
+| `ParcelaID` | `KooperantName` | izvedena labela, kanonski je ID |
+| `TipAmbalaze` | `VozacID` | ima svoju enrichment semantiku |
+| `StavkeCount` | | |
+| `BrojDokumenta` **uslovno** | | prazan incoming = master ga generise |
+
+#### Dve zamke koje bi ovo pretvorile u LAZAN konflikt
+
+1. **Sheets ume da pretvori `TipAmbalaze` ("6/1") i `Datum` u `Date`.** Sirovo
+   poredjenje bi davalo `String(Date)` vs `"2026-09-26"` — konflikt na **svakom**
+   retry-u. Zato poredjenje ide kroz **postojeci** kanonski serijalizator
+   `serializeSheetCellForApi`, isti koji koristi read-model. Jedan normalizator,
+   ne dva.
+2. **Polje koje se poredi a nije u rasporedu kolona** dalo bi `undefined` indeks,
+   `getCell` bi vratio prazno, i svaki retry bi bio konflikt. Zato tvrdnja
+   `zaglavlje: sva poredjena polja postoje u ugovoru kolona` cita **produkcijski**
+   raspored (`otkupZaglavljeKoloneUgovor_`) i poredi ga sa listom polja.
+
+#### Namerna asimetrija prema masteru, izgovorena
+
+`PwaIstiSadrzaj` poredi **razreseni** `KulturaID`, a GAS poredi `VrstaVoca` +
+`SortaVoca` doslovno — GAS kulturu ne ume da razresi. GAS je time **strozi**: dva
+razlicita para (vrsta, sorta) koja se razresavaju u istu kulturu master bi primio
+kao isti sadrzaj, a GAS ih odbija. Za payload koji klijent ne bi smeo ni da menja
+to je bezbedan smer, i zapisano je da nije previd.
+
+#### Dokaz
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `zaglavlje: drugi kooperant pod istim CRID-om JE konflikt` | `otk-zaglavlje-kooperant-ne-ucestvuje` |
+| `zaglavlje: BrojDokumenta ucestvuje samo kad ga PWA posalje` | `otk-zaglavlje-broj-uvek-ucestvuje` |
+| `zaglavlje: iste cinjenice su idempotentne` | kontrola — bez nje bi gornje bile zelene i da ugovor odbija sve |
+| `zaglavlje: drugi manifest JE konflikt` | pokrivena kroz istu granu |
+| `zaglavlje: transportna metadata NE ucestvuje` | pokrivena kroz listu polja |
+| `zaglavlje: sva poredjena polja postoje u ugovoru kolona` | strukturna |
+
+Katalog JS sabotaza: **22** unosa. Bez node-a izmereno: svako sidro pogadja tacno
+jednom, svaka sabotaza imenuje tvrdnju koja postoji (23/23), balans nepromenjen,
+ugovor kolona `OTK_STAVKE` se poklapa sa VBA stranom (10/10), i **sest tvrdnji o
+zaglavlju je simulirano u Python-u** — sve zelene, 24 kolone, sva poredjena polja
+prisutna. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**JS harness ovog head-a jos nije izvrsen** — CI ide na `pull_request` i push u
+`main`, pa push feature grane ga ne pokrece.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

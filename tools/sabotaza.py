@@ -4895,9 +4895,39 @@ SABOTAZE = {
         "OTK push retry: tacno jedan red po stavci",
     ),
     # Naslov OTK_STAVKE mora biti tacno ugovor, istim redom (review #357, P2).
-    "push-stavke-naslov-bez-provere": (
+    # S5-5b: stavka sa terena BEZ svog ClientRecordID-a je greska, ne stavka.
+    # Bez identiteta reda se ponovljen sync ne razlikuje od druge stavke, pa bi
+    # retry posle mreznog pada tiho udvajao robu.
+    "uvoz-stavka-bez-identiteta-prolazi": (
+        "modMasterSync.bas",
+        "            If Len(redCrid) = 0 Then\n",
+        "            If False Then   ' SABOTAZA: stavka bez identiteta prolazi\n",
+        "Test_PWA_StavkeSaZiceIduPoCridu",
+        "PWA stavke: red bez ClientRecordID obara citanje",
+    ),
+    # S5-5b: MANIFEST. Zaglavlje koje tvrdi dve stavke uz jednu primljenu ne sme
+    # da postane dokument -- inace deo robe postaje ceo dokument, sa tacnim
+    # brojem i tacnim kooperantom, i nista posle toga ne prijavi razliku.
+    "uvoz-manifest-bez-poravnanja": (
+        "modMasterSync.bas",
+        "    On Error GoTo EH\n    If manifest <> stavke.count Then\n",
+        "    On Error GoTo EH\n    If False Then   ' SABOTAZA: manifest se ne poravnava\n",
+        "Test_PWA_ManifestNeporavnatNeUvozi",
+        "PWA manifest: neporavnat StavkeCount ne daje OtkupID",
+    ),
+    # S5-5b: tab OTK_STAVKE od sada pisu DVA pisca. Indeks idempotencije push-a
+    # radi po OtkupStavkaID, koji PWA red ne zna -- ako se ne preskoci, prvi red
+    # sa terena trajno blokira push te stanice (fail-closed nad ispravnim podatkom).
+    "push-indeks-ne-preskace-pwa-red": (
         "modStanicaLock.bas",
-        "            If CStr(data(LBound(data, 1), lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then\n",
+        "            If Len(Trim$(CStr(nz(data(r, cCrid), \"\")))) > 0 Then\n",
+        "            If False Then   ' SABOTAZA: PWA red ulazi u indeks push-a\n",
+        "Test_OTK_PushIndeksPreskaceRedSaTerena",
+        "OTK push indeks: red sa terena ne obara indeks push-a",
+    ),
+    "push-stavke-naslov-bez-provere": (
+        "modMasterSync.bas",
+        "            If CStr(data(r1, lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then\n",
         "            If False Then   ' SABOTAZA: naslov se ne poredi\n",
         "Test_OTK_PushStavkiIdempotentan",
         "OTK push retry: pogresan redosled naslova pada",

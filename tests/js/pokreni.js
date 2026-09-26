@@ -15,7 +15,9 @@ const SABOTAZE = require('./sabotaze');
 const SUITES = [
     require('./suites/db-claim'),
     require('./suites/zbirna-rezervacije'),
-    require('./suites/gas-skup-izvora')
+    require('./suites/gas-skup-izvora'),
+    require('./suites/gas-otk-stavke'),
+    require('./suites/otkup-stavke')
 ];
 
 function poImenu(ime) {
