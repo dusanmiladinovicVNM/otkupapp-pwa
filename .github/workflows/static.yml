@@ -188,12 +188,20 @@ jobs:
       - name: js_sintaksa self-test
         run: node tools/js_sintaksa.js --self-test
 
-      # Nema package-lock.json: npm ne postoji na autorskoj masini, pa se
-      # lockfile ne moze generisati. Determinizam zato drzi TACNO PRIKOVANA
-      # verzija u package.json (bez ^), a ne lockfile. Kad lockfile postane
-      # moguc, ovo postaje `npm ci`.
-      - name: npm install (fake-indexeddb)
-        run: npm install --no-audit --no-fund
+      # ZAKLJUCAN GRAF (review #393, P2). Prvo je ovde stajao `npm install` sa
+      # prikovanom direktnom verzijom, sto NIJE determinizam: fake-indexeddb
+      # 4.0.2 vuce realistic-structured-clone ^3.0.0, pa isti commit i danas i
+      # kasnije ne daju isti graf -- a taj paket simulira upravo storage
+      # semantiku na kojoj stoji najvaznija tvrdnja.
+      #
+      # Resenje je u korenu: verzija 6.0.0 NEMA NIJEDNU zavisnost (koristi
+      # ugradjeni structuredClone, engines >= 18). Graf je jedan paket, pa je
+      # lockfile potpuno odredjen -- napisan je rucno, sa integrity hash-om
+      # procitanim iz registry-ja, jer npm na autorskoj masini ne postoji.
+      # `npm ci` odbija da radi ako lock i package.json nisu u koraku, pa greska
+      # u njemu pada glasno i odmah.
+      - name: npm ci (fake-indexeddb, zakljucan graf)
+        run: npm ci --no-audit --no-fund
 
       - name: js harness (PWA/GAS tvrdnje)
         run: node tests/js/pokreni.js

@@ -88,7 +88,12 @@ const MORA_DA_PADNE = [
 const NE_SME_DA_PADNE = [
     ['async/await u funkciji', 'async function a() { return await f(); }'],
     ['template literal', 'const a = `x ${y} z`;'],
-    ['regex sa kosom crtom', 'const a = /a\/b/g;'],
+    // DVA BACKSLASH-A U IZVORU (review #393, P1). U JS stringu je \\/ jedno
+    // \/, pa vm.Script vidi /a\/b/g -- legalan regex. Sa jednim backslash-om je
+    // videla /a/b/g, gde b i g izgledaju kao flagovi, pa je self-test tvrdio da
+    // kapija lazno prijavljuje -- a nelegalan je bio fixture.
+    ['regex sa kosom crtom', 'const a = /a\\/b/g;'],
+    ['regex u uslovu', 'if (/^[a-z]+$/.test(x)) { y(); }'],
     ['opciono lancanje', 'const a = b?.c?.d ?? e;'],
     ['getter u objektu', 'const o = { get a() { return 1; } };'],
     ['klasa sa privatnim poljem', 'class A { #x = 1; y() { return this.#x; } }']

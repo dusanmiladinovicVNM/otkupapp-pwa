@@ -32,16 +32,24 @@ if (!IDB) {
 // exports mape paketa), a sveza baza po tvrdnji je i jasnija i sigurnija.
 let brojac = 0;
 
-function otvoriBazu() {
-    brojac += 1;
+// Otvaranje je razdvojeno od pravljenja NAMERNO (review #393, P1): tvrdnja o
+// dva taba mora da otvori istu bazu DVAPUT, a ne da dva pozivaoca deli jedan
+// IDBDatabase objekat.
+function otvori(ime) {
     return new Promise(function (resolve, reject) {
-        const req = IDB.open('harness-zbirne-' + brojac, 1);
+        const req = IDB.open(ime, 1);
         req.onupgradeneeded = function () {
             req.result.createObjectStore(STORE, { keyPath: 'clientRecordID' });
         };
         req.onsuccess = function () { resolve(req.result); };
         req.onerror = function () { reject(req.error); };
     });
+}
+
+async function novaBaza() {
+    brojac += 1;
+    const ime = 'harness-zbirne-' + brojac;
+    return { ime: ime, db: await otvori(ime) };
 }
 
 function svi(db) {
@@ -101,7 +109,7 @@ module.exports = {
     tvrdnje: {
 
         'claim upisuje kad provera ne vrati razlog': async function (m) {
-            const db = await otvoriBazu();
+            const db = (await novaBaza()).db;
 
             const r = await m.claim(db, STORE, zbirna('ZBR-A', 'OTP-1'), function () { return ''; });
 
@@ -112,7 +120,7 @@ module.exports = {
         },
 
         'claim odbija i NE upisuje kad provera vrati razlog': async function (m) {
-            const db = await otvoriBazu();
+            const db = (await novaBaza()).db;
             await m.claim(db, STORE, zbirna('ZBR-A', 'OTP-1'), function () { return ''; });
 
             const r = await m.claim(db, STORE, zbirna('ZBR-B', 'OTP-1'), function (zapisi) {
@@ -141,26 +149,38 @@ module.exports = {
                 'pad citanja je vracen kao odgovor umesto da bude bacen');
         },
 
-        'dva istovremena claim-a nad istom otpremnicom: tacno jedan prolazi': async function (m) {
-            const db = await otvoriBazu();
+        // DVE KONEKCIJE, NE DVA POZIVAOCA (review #393, P1).
+        //
+        // Prva verzija ove tvrdnje je oba claim-a pustila kroz ISTI IDBDatabase
+        // objekat. To dokazuje slabiju stvar -- da se dve transakcije na jednoj
+        // konekciji serijalizuju -- a #392 je uveo dbClaimInStore zbog DVA TABA,
+        // a tab ima svoju konekciju. Zato se ista baza otvara dvaput.
+        'dve konekcije nad istom bazom: tacno jedan claim prolazi': async function (m) {
+            const prva = await novaBaza();
+            const druga = await otvori(prva.ime);
+
+            // Ako bi implementacija vracala kesiranu konekciju, tvrdnja bi tiho
+            // skliznula nazad na slabiju verziju. Zato se to meri, ne pretpostavlja.
+            assert.notStrictEqual(prva.db, druga,
+                'druga konekcija je isti objekat -- tvrdnja bi merila jednu konekciju');
 
             function provera(zapisi) {
                 return zauzima(zapisi, 'OTP-1') ? 'OTP-1 je vec u drugoj zbirnoj' : '';
             }
 
-            // BEZ await izmedju: oba pozivaoca polaze iz istog stanja baze, kao
+            // BEZ await izmedju: obe konekcije polaze iz istog stanja baze, kao
             // dva taba nad istim uredjajem. withSubmitLock ovo ne hvata -- brava
             // zivi u memoriji jednog taba.
             const [a, b] = await Promise.all([
-                m.claim(db, STORE, zbirna('ZBR-A', 'OTP-1'), provera),
-                m.claim(db, STORE, zbirna('ZBR-B', 'OTP-1'), provera)
+                m.claim(prva.db, STORE, zbirna('ZBR-A', 'OTP-1'), provera),
+                m.claim(druga, STORE, zbirna('ZBR-B', 'OTP-1'), provera)
             ]);
 
             const prosli = [a, b].filter(function (r) { return r && r.ok === true; });
             assert.strictEqual(prosli.length, 1,
                 'ista otpremnica je usla u ' + prosli.length + ' zbirnih (ocekivano 1)');
 
-            const zapisi = await svi(db);
+            const zapisi = await svi(prva.db);
             assert.strictEqual(zapisi.length, 1, 'u bazi su dve zbirne nad istom otpremnicom');
         }
     }

@@ -6557,7 +6557,7 @@ odgovor na tu rečenicu.
 | sintaksna kapija + self-test | `tools/js_sintaksa.js` | 62 fajlova (`src/js`, `gas`, `tools`, `tests/js`). `node --check` se **ne** koristi jer tip modula bira po ekstenziji i `.gs` ne ume; `vm.Script` parsira sadržaj bez obzira na ime |
 | učitavač produkcionog izvora | `tests/js/harness.js` | fajl se izvršava **kakav je**, u `vm` kontekstu sa lažnim `window`-om i Apps Script stub-ovima. Tvrdnja ide kroz produkcioni seam, ne kroz kopiju funkcije |
 | tvrdnje | `tests/js/suites/*.js` | 13 tvrdnji: `dbClaimInStore` (4), lifecycle rezervacije (5), `skupIzvoraRazlika_` (4) |
-| katalog sabotaža | `tests/js/sabotaze.js` | 6 unosa, ista šema kao `tools/dokaz.py`: (fajl, sidro, zamena, tvrdnja) |
+| katalog sabotaža | `tests/js/sabotaze.js` | 7 unosa, ista šema kao `tools/dokaz.py`: (fajl, sidro, zamena, tvrdnja) |
 | pokretač | `tests/js/pokreni.js` | `node tests/js/pokreni.js` i `--self-test`, isti oblik izlaza kao python kapije |
 
 **Sabotaža ne dira disk.** `tools/dokaz.py` kvari fajl u radnom stablu i zato ne sme paralelno sa
@@ -6575,12 +6575,59 @@ je već tri puta ujela ovaj repo (`sed` nad `.bas`, CRLF u `.sh`, `eol=lf` nad `
 
 - `node` i `npm` ne postoje lokalno (mereno), pa **lokalnog verdikta za JS nema** — kao što ga za
   `run_vba.py` nema u web sesiji. Sve JS tvrdnje su neizvršene do prvog CI prolaza.
-- nema `package-lock.json` (ne može se generisati bez npm-a). Determinizam drži **tačno prikovana**
-  verzija u `package.json`, ne lockfile. Kad lockfile postane moguć, korak postaje `npm ci`.
-- 7 od 13 tvrdnji nema sabotažu. To je po pravilu „u rezu samo NOVE sabotaže“, ali pokretač ih
+- 6 od 13 tvrdnji nema sabotažu. To je po pravilu „u rezu samo NOVE sabotaže“, ali pokretač ih
   **imenuje** na kraju `--self-test` izlaza, pa rupa ne može da raste nečujno.
 - `.claude/rules/testovi.md` još ne zna za ovu kapiju. Izmene u `.claude/` idu isključivo kroz zaseban
   process PR, pa je to **zapisan dug**, ne propust ovog reza.
+
+#### Review #393 — dva P1, i oba su bila u DOKAZU, ne u kodu
+
+Koncept nije dirnut. Sve tri primedbe su gađale sredstvo merenja, i to je najgora vrsta greške u
+harness PR-u: kapija koja je zelena jer meri pogrešnu stvar.
+
+**P1 — self-test je imao nelegalan „legalan JS“ fixture.** CI #809 je pao na
+`js_sintaksa --self-test`, pa `npm ci`, harness i dokaz **nisu ni pokrenuti**. Fixture je u fajlu
+stajao kao `'const a = /a\/b/g;'` sa **jednim** backslash-om; u JS stringu je `\/` samo `/`, pa je
+`vm.Script` dobio `/a/b/g`, gde `b` i `g` izgledaju kao flagovi. Kapija je ispravno prijavila
+sintaksnu grešku, a self-test je to protumačio kao lažni alarm.
+
+Uzrok nije JS nego **heredoc**: `<<'EOF'` je pojeo backslash pri pisanju fajla — treći put u istoj
+sesiji, posle `sed`-a nad `.bas` i Python skripte koja piše `\n`. Memo
+„heredoc lomi escape sekvence“ već kaže *piši Python u fajl pa ga pokreni*; ovde je isto pravilo
+trebalo i za JS.
+
+**Isti kvar na drugom mestu, koji review nije video:** `harness.js` je imao
+`.replace(/\n/g, '\n')` — no-op, jer je i tu pojeden backslash. Trebalo je `'\\n'`, da poruka
+`SIDRO_ZASTARELO` prikaže prelom reda kao dva znaka umesto da ga umetne. Nađeno merenjem **svih**
+backslash-eva u novim fajlovima, ne čitanjem.
+
+**P1 — centralna tvrdnja je merila jednu konekciju.** Oba claim-a su išla kroz **isti** `IDBDatabase`
+objekat, pa je tvrdnja dokazivala da se dve transakcije na jednoj konekciji serijalizuju — a
+`dbClaimInStore` postoji zbog **dva taba**, a tab ima svoju konekciju. Sada se ista baza otvara
+dvaput (`otvori(ime)` je razdvojen od `novaBaza()`), i tvrdnja nosi ime koje to kaže:
+`dve konekcije nad istom bazom: tacno jedan claim prolazi`.
+
+Uz to jedna tvrdnja **nad samim testom**: `assert.notStrictEqual(prva.db, druga)`. Ako bi
+implementacija ikad vratila keširanu konekciju, tvrdnja bi tiho skliznula nazad na slabiju verziju —
+a to je upravo klasa greške koju je ovaj review našao, pa se meri, ne pretpostavlja.
+
+**P2 — graf nije bio zaključan, i rešenje je bilo u korenu.** `fake-indexeddb` 4.0.2 vuče
+`realistic-structured-clone ^3.0.0`, pa prikovana **direktna** verzija nije determinizam — a taj
+paket simulira baš storage semantiku na kojoj stoji najvažnija tvrdnja. Merenjem registry-ja:
+**verzija 6.0.0 nema nijednu zavisnost** (koristi ugrađeni `structuredClone`, `engines >= 18`). Graf
+je time jedan paket, pa je `package-lock.json` **potpuno određen** — napisan je rukom, sa `integrity`
+hash-om pročitanim iz registry-ja, i korak je `npm ci`. `npm ci` odbija rad ako lock i
+`package.json` nisu u koraku, pa greška u ručno pisanom locku pada glasno i odmah, a ne tiho.
+
+**P3 — centralna tvrdnja je dobila svoj fault seam.** Sabotaža `claim-upis-van-transakcije` odlaže
+`store.put` u makrotask, pa upis izlazi iz transakcije koja ga je pročitala: obe konekcije vide
+prazan store, obe „uspeju“, nijedna ne upiše. Tačno kvar zbog kog `dbClaimInStore` postoji. Katalog
+je time na **7** unosa, a bez sabotaže ostaje 6 od 13 tvrdnji.
+
+**Pre-provera bez node-a** (jedino što se na ovoj mašini može izmeriti): balans zagrada u svih 7 JS
+fajlova 0 nalaza; svih 7 sidara pogađa **tačno jednom** i svako ima svoj unos u katalogu; `package.json`
+i `package-lock.json` se poklapaju u imenu, verziji i `devDependencies`. Tvrdnje same su i dalje
+**neizvršene** do CI prolaza.
 
 #### Ugovor prihvatanja za S5-5b — žica otkupa
 

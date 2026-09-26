@@ -28,6 +28,20 @@ module.exports = [
         zamena: 'try { /* sabotaza: nema abort-a */ } catch (_) {}'
     },
     {
+        // P3 iz review-a #393: centralna tvrdnja reza nije imala svoj fault seam.
+        //
+        // Upis odlozen u makrotask izlazi IZ transakcije koja ga je citala. Tada
+        // obe konekcije procitaju prazan store, obe "uspeju", i nijedna ne upise
+        // -- tacno kvar zbog kog dbClaimInStore postoji.
+        ime: 'claim-upis-van-transakcije',
+        suite: 'db-claim',
+        tvrdnja: 'dve konekcije nad istom bazom: tacno jedan claim prolazi',
+        zasto: 'provera i upis u dva poteza nije kapija nego nada -- oba taba prodju',
+        fajl: DB,
+        sidro: '                    store.put(record);',
+        zamena: '                    setTimeout(function () { store.put(record); }, 0);   // sabotaza'
+    },
+    {
         ime: 'claim-citanje-tiho-prolazi',
         suite: 'db-claim',
         tvrdnja: 'claim BACA kad citanje padne, ne vraca ok:false',

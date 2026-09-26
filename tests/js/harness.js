@@ -98,7 +98,7 @@ function primeni(izvor, rel, sabotaza) {
         // koja se tiho ne primeni ostavlja ZELEN self-test bez ijednog merenja.
         if (n !== 1) {
             throw new Error('SIDRO_ZASTARELO: ' + rel + ' :: "' +
-                            sidro.slice(0, 70).replace(/\n/g, '\n') +
+                            sidro.slice(0, 70).replace(/\n/g, '\\n') +
                             '" -> ' + n + ' pogodaka, ocekivan tacno 1');
         }
 

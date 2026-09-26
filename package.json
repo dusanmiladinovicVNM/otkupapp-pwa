@@ -10,6 +10,6 @@
     "self-test": "node tests/js/pokreni.js --self-test"
   },
   "devDependencies": {
-    "fake-indexeddb": "4.0.2"
+    "fake-indexeddb": "6.0.0"
   }
 }
