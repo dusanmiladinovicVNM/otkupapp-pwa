@@ -243,8 +243,15 @@ module.exports = {
             const tab = indeks(m.kljuc, [['CRID-S1', O1, a], ['CRID-S2', O1, b]]);
             const stigle = m.normalizuj([a], O1);
 
-            assert.match(String(m.nedovrsen(tab, stigle, O1)), /CRID-S2/,
-                'zaboravljena stavka nije prijavljena kao razlika');
+            // TVRDNJA TRAZI RAZLOG, NE SAMO IME STAVKE.
+            //
+            // Sabotaza koja gasi ovu granu pusta izvrsavanje u sledecu proveru, gde
+            // je ulaz[id] undefined pa poredjenje sadrzaja ipak vrati tekst sa istim
+            // CRID-om. Dok je tvrdnja trazila samo /CRID-S2/, ostajala je zelena i
+            // pod sabotazom -- imenovala je jedno a merila drugo (CI #36273532963).
+            assert.match(String(m.nedovrsen(tab, stigle, O1)),
+                /CRID-S2 postoji u tabu a nije stigla/,
+                'zaboravljena stavka nije prijavljena SVOJIM razlogom');
         },
 
         // PRAZAN TAB JE PRVI UPIS, ne razlika. Bez ovoga nijedan nov otkup ne bi
