@@ -165,13 +165,32 @@ function otkStavkaKljuc_(klasa, kolicina, cena, kolAmbalaze, brutoKg) {
   ].join('|');
 }
 
-// Razlika izmedju skupa u tabu i skupa koji je stigao: TEKST razloga ili ''.
+// USKLADJIVANJE SKUPA STAVKI SA TABOM: '' kad je upis dozvoljen, inace TEKST
+// razloga konflikta.
 //
-// Neosetljivo na redosled -- ClientRecordID stavke je kljuc, a RedniBroj u
-// masteru dodeljuje pisac. Prazan tab (nista jos nije upisano) NIJE razlika:
-// to je prvi upis, ili prolaz koji je pao pre zaglavlja.
-function otkStavkeRazlika_(uTabu, stigle) {
-  if (!uTabu || Object.keys(uTabu).length === 0) return '';
+// JEDNA SEMANTIKA ZA OBA PUTA -- i kad zaglavlje postoji i kad ga jos nema
+// (review #394, P1). Dok su ta dva puta imala razlicitu idempotenciju, partial
+// upis je pravio HIBRIDNI dokument: prvi pokusaj upise S1=100 i padne pre
+// zaglavlja; retry posalje S1=120 i S2=60; upis je S1 preskocio SAMO po ID-u,
+// bez poredjenja sadrzaja, pa je u tabu ostalo 100+60 uz manifest 2 -- skup koji
+// NIJEDAN klijent nije poslao, a koji prolazi i StavkeCount kapiju u masteru.
+//
+// Indeks je GLOBALAN nad tabom, ne po roditelju (review #394, P2): VBA citalac
+// drzi jedan skup vidjenih item CRID-ova za ceo tab, pa isti item CRID pod dva
+// roditelja mora da padne OVDE. Inace GAS prihvati stanje koje VBA kasnije odbija
+// fail-closed -- i to nad CELIM listom stanice, ne nad jednim dokumentom.
+//
+//   isti item CRID + isti roditelj + isti sadrzaj   -> idempotentno, preskace se
+//   isti item CRID + isti roditelj + drugi sadrzaj  -> KONFLIKT
+//   isti item CRID + DRUGI roditelj                 -> KONFLIKT
+//   stavka u tabu pod ovim roditeljem koju ulaz ne nosi -> KONFLIKT
+//   stavka u ulazu koje u tabu nema                 -> DOZVOLJENO (recovery)
+//
+// Zadnje dvoje su namerno nesimetricne: dopisati sto fali je dovrsavanje istog
+// upisa, a zaboraviti sto postoji je druga tvrdnja o istom dokumentu.
+function otkStavkeUskladi_(indeks, stigle, otkupClientRecordID) {
+  const roditelj = String(otkupClientRecordID || '').trim();
+  if (!roditelj) return 'OtkupClientRecordID nije zadat';
 
   const ulaz = {};
   for (let i = 0; i < stigle.length; i++) {
@@ -180,18 +199,27 @@ function otkStavkeRazlika_(uTabu, stigle) {
       s.klasa, s.kolicina, s.cena, s.kolAmbalaze, s.brutoKg);
   }
 
+  const uTabu = indeks || {};
   const kljuceviTaba = Object.keys(uTabu);
-  if (kljuceviTaba.length !== stigle.length) {
-    return 'broj stavki: u tabu ' + kljuceviTaba.length + ', stiglo ' + stigle.length;
-  }
 
   for (let k = 0; k < kljuceviTaba.length; k++) {
     const id = kljuceviTaba[k];
+    const unos = uTabu[id];
+
+    if (unos.parent !== roditelj) {
+      // Isti item CRID pod drugim roditeljem. Ne dira se sadrzaj: dva dokumenta
+      // ne smeju da dele identitet reda, jer ga master cita globalno.
+      if (ulaz[id] !== undefined) {
+        return 'stavka ' + id + ' vec pripada otkupu ' + unos.parent;
+      }
+      continue;
+    }
+
     if (ulaz[id] === undefined) {
       return 'stavka ' + id + ' postoji u tabu a nije stigla';
     }
-    if (ulaz[id] !== uTabu[id]) {
-      return 'stavka ' + id + ': u tabu ' + uTabu[id] + ', stiglo ' + ulaz[id];
+    if (ulaz[id] !== unos.kljuc) {
+      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];
     }
   }
 
@@ -1827,10 +1855,8 @@ function otkStavkeTab_(ss) {
 // PRESKACE REDOVE DESKTOP PUSH-A. Oni nemaju OtkupClientRecordID (roditelj im je
 // pravi OtkupID), pa u pitanju "sta je PWA poslala za ovaj CRID" nemaju sta da
 // rade. Isto pravilo, u drugom smeru, drzi modStanicaLock.OtkStavkeIndeksIzTaba.
-function otkStavkeIzTaba_(sheet, otkupClientRecordID) {
+function otkStavkeIndeksTaba_(sheet) {
   const izlaz = {};
-  const roditelj = String(otkupClientRecordID || '').trim();
-  if (!roditelj) return izlaz;
 
   const poslednjiRed = sheet.getLastRow();
   if (poslednjiRed < 2) return izlaz;
@@ -1848,7 +1874,7 @@ function otkStavkeIzTaba_(sheet, otkupClientRecordID) {
   const idx = headerIndexMap(headers);
   ['ClientRecordID', 'OtkupClientRecordID', 'Klasa', 'Kolicina', 'Cena',
    'KolAmbalaze', 'BrutoKg'].forEach(function (ime) {
-    requireHeaderIndex(idx, ime, 'otkStavkeIzTaba_');
+    requireHeaderIndex(idx, ime, 'otkStavkeIndeksTaba_');
   });
 
   const redovi = sheet
@@ -1857,18 +1883,28 @@ function otkStavkeIzTaba_(sheet, otkupClientRecordID) {
 
   for (let r = 0; r < redovi.length; r++) {
     const red = redovi[r];
-    if (String(getCell(red, idx.OtkupClientRecordID, '') || '').trim() !== roditelj) continue;
 
+    // Red desktop push-a: nema OtkupClientRecordID, pa ne pripada ovom imenskom
+    // prostoru -- njegov identitet je OtkupStavkaID i njega master vec zna.
+    const parent = String(getCell(red, idx.OtkupClientRecordID, '') || '').trim();
+    if (!parent) continue;
+
+    // Red sa roditeljem a bez svog CRID-a je defekt koji GAS nije mogao upisati;
+    // VBA ga odbija po imenu (OtkPwaStavkeIzTaba). Ovde se preskace, da se tudji
+    // kvar ne pretvori u konflikt nad ispravnim dokumentom.
     const crid = String(getCell(red, idx.ClientRecordID, '') || '').trim();
     if (!crid) continue;
 
-    izlaz[crid] = otkStavkaKljuc_(
-      getCell(red, idx.Klasa, ''),
-      getCell(red, idx.Kolicina, 0),
-      getCell(red, idx.Cena, 0),
-      getCell(red, idx.KolAmbalaze, 0),
-      getCell(red, idx.BrutoKg, 0)
-    );
+    izlaz[crid] = {
+      parent: parent,
+      kljuc: otkStavkaKljuc_(
+        getCell(red, idx.Klasa, ''),
+        getCell(red, idx.Kolicina, 0),
+        getCell(red, idx.Cena, 0),
+        getCell(red, idx.KolAmbalaze, 0),
+        getCell(red, idx.BrutoKg, 0)
+      )
+    };
   }
 
   return izlaz;
@@ -1879,7 +1915,7 @@ function otkStavkeIzTaba_(sheet, otkupClientRecordID) {
 //
 // OtkupStavkaID i OtkupID ostaju PRAZNI -- njih pravi master. Pisati bilo sta u
 // njih znacilo bi izmisliti identitet koji master ne priznaje.
-function otkStavkeUpisi_(sheet, stavke, postojece) {
+function otkStavkeUpisi_(sheet, stavke, indeks) {
   const headers = sheet
     .getRange(1, 1, 1, sheet.getLastColumn())
     .getValues()[0]
@@ -1889,7 +1925,17 @@ function otkStavkeUpisi_(sheet, stavke, postojece) {
 
   for (let i = 0; i < stavke.length; i++) {
     const s = stavke[i];
-    if (postojece && postojece[s.clientRecordID] !== undefined) continue;
+
+    // Preskace se SAMO stavka koju je otkStavkeUskladi_ vec potvrdio kao istu.
+    // Preskakanje po samom ID-u je bio P1 iz review-a #394: partial upis +
+    // izmenjen retry je tako pravio skup koji nijedan klijent nije poslao.
+    //
+    // ZAVISNOST REDOSLEDA, zapisana da se ne nasluci: indeks je GLOBALAN, pa nosi
+    // i stavke tudjih otkupa. Preskakanje je bezbedno samo zato sto
+    // otkStavkeUskladi_ isti item CRID pod drugim roditeljem vraca kao konflikt,
+    // pa se dovde ne dodje. Ko ikad razdvoji te dve funkcije, mora da prenese i
+    // ovaj uslov.
+    if (indeks && indeks[s.clientRecordID] !== undefined) continue;
 
     const rowObj = {
       OtkupStavkaID: '',
@@ -1952,7 +1998,27 @@ function processRecord(record, otkupacID) {
     // skupa bi se razisla.
     const stavkeUlaz = otkStavkeNormalizuj_(record.stavke, clientRecordID);
     const stavkeTab = otkStavkeTab_(ss);
-    const stavkeUTabu = otkStavkeIzTaba_(stavkeTab, clientRecordID);
+    const stavkeIndeks = otkStavkeIndeksTaba_(stavkeTab);
+
+    // JEDNA KAPIJA, IZNAD OBA PUTA (review #394, P1).
+    //
+    // Ranije je provera stajala SAMO u grani "zaglavlje postoji", pa je put kojim
+    // ide retry posle partial upisa -- zaglavlje jos ne postoji -- prolazio bez
+    // ijedne provere sadrzaja. Rezultat je bio hibridni dokument: prva stavka iz
+    // prvog pokusaja, druga iz drugog, manifest se poklapa, master uvozi robu koju
+    // nijedan klijent nije poslao.
+    //
+    // Kapija je i granica IDENTITETA REDA (P2): isti item CRID pod drugim
+    // roditeljem pada ovde, jer ga master cita globalno nad celim tabom.
+    const razlikaStavki = otkStavkeUskladi_(stavkeIndeks, stavkeUlaz, clientRecordID);
+    if (razlikaStavki) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        code: 'OTKUP_CONFLICT',
+        error: 'Skup stavki se ne uklapa u tab ' + OTK_STAVKE_TAB + ': ' + razlikaStavki
+      };
+    }
 
     const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
 
@@ -1978,40 +2044,19 @@ function processRecord(record, otkupacID) {
     // EXISTING RECORD -> idempotent return / light update
     // --------------------------------------------------
     if (existingRow > 0) {
-      // ISTI CRID SA DRUGIM SKUPOM STAVKI JE KONFLIKT, ne duplikat.
+      // KONFLIKT JE VEC ODLUCEN GORE, za oba puta. Ovde ostaje samo DOPUNA:
+      // sve sto fali je stvarno nedostajuce, a ne druga tvrdnja o dokumentu.
       //
-      // Od S5-5b zaglavlje linijska polja ne nosi, pa je skup stavki jedino mesto
-      // gde se "poslao sam ispravku" vidi. Vracati 'existing' bi tu protivrecnost
-      // sakrilo pre nego sto je master uopste vidi -- a master je ume imenovati
-      // (PwaIstiSadrzaj poredi ceo skup). Isti ugovor vec vazi za predaju
-      // (PREDAJA_CONFLICT) i za zbirnu.
-      const razlikaStavki = otkStavkeRazlika_(stavkeUTabu, stavkeUlaz);
-      if (razlikaStavki) {
-        return {
-          clientRecordID: clientRecordID,
-          success: false,
-          code: 'OTKUP_CONFLICT',
-          error: 'Isti ClientRecordID sa drugim skupom stavki: ' + razlikaStavki
-        };
-      }
-
-      // ZAGLAVLJE POSTOJI, TAB NEMA NJEGOVE STAVKE -> DOVRSI UPIS.
-      //
-      // otkStavkeRazlika_ prazan tab NE smatra razlikom, i mora tako: inace bi
-      // svaki prvi upis bio konflikt. Ali ovde zaglavlje vec postoji, pa prazan
-      // tab znaci sirote -- tacno ono sto ovaj rez uklanja.
-      //
-      // Ne pravi se konflikt: on bi trazio rucnu intervenciju nad podatkom koji
-      // je ispravan i koji klijent upravo drzi. Upis je idempotentan po CRID-u
-      // stavke, pa se stavke dopisu i dokument postane ceo. To je DOVRSAVANJE
-      // istog upisa, ne migracija.
-      if (Object.keys(stavkeUTabu).length === 0) {
-        otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeUTabu);
+      // Prolaz koji je pao izmedju stavki i zaglavlja ostavlja tacno takvo stanje
+      // -- dovrsava se, ne konfliktuje: trazilo bi rucnu intervenciju nad
+      // podatkom koji je ispravan i koji klijent upravo drzi u ruci.
+      const dopisano = otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeIndeks);
+      if (dopisano > 0) {
         logError(
           'GAS',
           'processRecord.stavke',
-          'Zaglavlje bez stavki u tabu -> dopisano ' + stavkeUlaz.length +
-          ' stavki za ' + clientRecordID,
+          'Zaglavlje postoji a ' + dopisano + ' stavki je falilo -> dopisane za ' +
+          clientRecordID,
           '',
           canonicalOtkupacID
         );
@@ -2100,7 +2145,7 @@ function processRecord(record, otkupacID) {
     // dopise zaglavlje. Obrnuto bi ostavilo zaglavlje bez stavki -- siroce koje
     // uvoz odbija i koje se sa terena ne moze popraviti. Isti redosled kao
     // desktop push (modStanicaLock.PosaljiStavkeOtkupa).
-    otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeUTabu);
+    otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeIndeks);
 
     const rowObj = {
       ClientRecordID: clientRecordID,

@@ -6977,6 +6977,97 @@ razvojnoj masini ne postoje (mereno), pa je CI jedini izvrsilac. Sto je moglo da
 se izmeri bez node-a — izmereno je: staticka provera da **svako** sidro JS
 kataloga pogadja tacno jednom (13/13), istom LF normalizacijom koju harness radi.
 
+### 14.48) Review S5-5b, prvi krug — jedna granica, dva nalaza (26.09.2026)
+
+Head `475ff325`. Verdikt NO-GO: 1 P1 + 1 P2, oba na istom mestu — **identitet reda
+u tabu `OTK_STAVKE`**. Model `zaglavlje + stavke` nije dirnut; pojacana je granica.
+
+#### P1 — partial upis + izmenjen retry pravi HIBRIDNI dokument
+
+Provera skupa stavki je stajala **samo** u grani „zaglavlje postoji". Put kojim ide
+retry posle prekinutog upisa — zaglavlje jos **ne** postoji — prolazio je bez
+ijednog poredjenja sadrzaja, jer je `otkStavkeUpisi_` postojecu stavku preskakao
+**po samom ID-u**:
+
+| Korak | Stanje taba |
+|---|---|
+| prvi pokusaj: `S1=100`, `S2=60`, manifest 2 | upise `S1=100`, padne pre `S2` i zaglavlja |
+| retry tvrdi: `S1=120`, `S2=60` | `S1` se preskoci (isti ID), `S2` se dopise, zaglavlje kaze 2 |
+| master | `StavkeCount 2 == 2` → **PASS**, uveze `100 + 60` |
+
+Uvezen je skup koji **nijedan klijent nije poslao**, i manifest ga ne hvata jer se
+broj poklapa. Prvi kompletan payload nikad nije ni stigao.
+
+#### P2 — item `ClientRecordID` je imao razlicit scope u GAS-u i VBA-u
+
+VBA citalac drzi **jedan** skup vidjenih item CRID-ova za **ceo** tab
+(`OtkPwaStavkeIzTaba`, `vidjeni`), i dva reda istog ID-a odbija bez obzira na
+roditelja. GAS je duplikate gledao samo u tekucem payload-u i samo nad redovima
+**tekuceg roditelja**, pa je prihvatao:
+
+```
+Otkup A -> stavka ITEM-X
+Otkup B -> stavka ITEM-X      (GAS: valid)
+```
+
+Master to kasnije odbija **fail-closed nad CELIM listom stanice** — jedan pogresan
+item CRID zaustavio bi uvoz **svih** otkupa te stanice, ne samo spornog.
+
+#### Ispravka: jedan globalan, content-aware indeks
+
+| Bilo | Sada |
+|---|---|
+| `otkStavkeIzTaba_(sheet, parentCRID)` → `{crid: kljuc}` | `otkStavkeIndeksTaba_(sheet)` → `{crid: {parent, kljuc}}`, **globalno** |
+| `otkStavkeRazlika_(uTabu, stigle)` | `otkStavkeUskladi_(indeks, stigle, parentCRID)` |
+| kapija samo u grani „zaglavlje postoji" | **jedna** kapija **iznad oba puta** |
+| upis preskace po ID-u | upis preskace samo ono sto je uskladjivanje potvrdilo |
+
+Semantika, izgovorena u celini:
+
+| Slucaj | Ishod |
+|---|---|
+| isti item CRID + isti roditelj + isti sadrzaj | idempotentno, preskace se |
+| isti item CRID + isti roditelj + **drugi** sadrzaj | **KONFLIKT** |
+| isti item CRID + **drugi** roditelj | **KONFLIKT** |
+| stavka u tabu pod ovim roditeljem koju ulaz ne nosi | **KONFLIKT** |
+| stavka u ulazu koje u tabu nema | **DOZVOLJENO** (recovery) |
+
+Zadnje dvoje su **namerno nesimetricne**: dopisati sto fali je dovrsavanje istog
+upisa, a zaboraviti sto postoji je druga tvrdnja o dokumentu.
+
+**Zapisana zavisnost redosleda:** upis preskace po **globalnom** indeksu, pa nosi i
+stavke tudjih otkupa. Bezbedno je **samo** zato sto uskladjivanje isti item CRID
+pod drugim roditeljem vraca kao konflikt, pa se dovde ne dodje. Ko razdvoji te dve
+funkcije mora da prenese i taj uslov — pa to stoji u komentaru, ne u pamcenju.
+
+#### Dokaz: stara tvrdnja je prolazila TACNO IZMEDJU dva nalaza
+
+To je i poenta review-a. Nijedna postojeca tvrdnja nije merila partial upis ni
+koliziju item CRID-a izmedju dva dokumenta. Dodato:
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `partial upis sa izmenjenim sadrzajem JE konflikt, i kad zaglavlja nema` | `otk-stavke-partial-bez-poredjenja` |
+| `isti item CRID pod drugim otkupom JE konflikt` | `otk-stavke-tudj-roditelj-prolazi` |
+| `stavka u tabu koju ulaz ne nosi JE razlika` | `otk-stavke-zaboravljena-prolazi` |
+| `stavka koja u tabu fali je RECOVERY, ne konflikt` | **nema svoju** — v. nize |
+| `stavke drugog otkupa ne ulaze u poredjenje` | pokrivena kroz `tudj-roditelj` |
+| `prazan tab NIJE razlika` | `otk-stavke-recovery-je-konflikt` (nov, stara linija ne postoji) |
+
+**Jedna tvrdnja namerno nema svoju sabotazu.** Recovery pravilo je **odsustvo**
+provere, pa bi mu seam trebalo **dodati** kod — a odbrana napisana pre merenja je u
+#393 vec postala nalaz. Kaze se naglas umesto da se zaobilazi.
+
+Katalog JS sabotaza: **17** unosa. Bez node-a je izmereno sto se moze: svako sidro
+pogadja **tacno jednom** (16/16 fajl-sidara), svaka sabotaza imenuje tvrdnju koja
+**stvarno postoji** u svojoj suite (17/17), i balans zagrada bez string literala je
+nepromenjen. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**Verifikaciona rupa ostaje, i to je struktura a ne propust:** CI
+(`.github/workflows/static.yml`) se pokrece na `pull_request` i na push u `main` —
+push feature grane ga **ne** pokrece. Dok PR ne postoji, JS kapije ovog head-a nisu
+izvrsene ni jednom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

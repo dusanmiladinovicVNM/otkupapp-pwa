@@ -142,14 +142,51 @@ module.exports = [
         zamena: "    if (ulaz[id] === undefined || Object.keys(ulaz)[k] !== id) {   // sabotaza"
     },
     {
-        // Prazan tab je PRVI UPIS, ne konflikt.
-        ime: 'otk-stavke-prazan-tab-je-konflikt',
+        // Prazan indeks je PRVI UPIS, ne konflikt. Sidro je zavrsni izlaz
+        // uskladjivanja, pa sabotaza pogadja tacno degenerisan slucaj: tab u kom
+        // ovaj dokument jos nema nijedan red.
+        ime: 'otk-stavke-recovery-je-konflikt',
         suite: 'gas-otk-stavke',
         tvrdnja: 'prazan tab NIJE razlika',
         zasto: 'bez ovog izlaza bi svaki prvi upis odmah bio OTKUP_CONFLICT, pa nov otkup nikad ne bi prosao',
         fajl: GAS,
-        sidro: "  if (!uTabu || Object.keys(uTabu).length === 0) return '';",
-        zamena: "  if (!uTabu) return '';   // sabotaza: prazan tab je razlika"
+        sidro: "    if (ulaz[id] !== unos.kljuc) {\n      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];\n    }\n  }\n\n  return '';",
+        zamena: "    if (ulaz[id] !== unos.kljuc) {\n      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];\n    }\n  }\n\n  return kljuceviTaba.length === 0 ? 'prazan tab' : '';   // sabotaza"
+    },
+    {
+        // Druga polovina NAMERNE ASIMETRIJE: dopuniti sto fali je dovrsavanje
+        // upisa, ali zaboraviti sto u tabu postoji je druga tvrdnja o dokumentu.
+        // Bez ovog izlaza bi klijent mogao da "skrati" dokument tihim izostavljanjem.
+        ime: 'otk-stavke-zaboravljena-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'stavka u tabu koju ulaz ne nosi JE razlika',
+        zasto: 'stavka koja postoji u tabu a nije stigla znaci da klijent tvrdi manji dokument; tiho prihvatanje bi robu izbrisalo iz zaglavlja koje je vec upisano',
+        fajl: GAS,
+        sidro: "    if (ulaz[id] === undefined) {\n      return 'stavka ' + id + ' postoji u tabu a nije stigla';",
+        zamena: "    if (false) {   // sabotaza: zaboravljena stavka prolazi\n      return 'stavka ' + id + ' postoji u tabu a nije stigla';"
+    },
+    {
+        // P1 iz review-a #394. Preskakanje stavke po samom ID-u, bez poredjenja
+        // sadrzaja, pravi hibridni dokument koji prolazi i manifest kapiju.
+        ime: 'otk-stavke-partial-bez-poredjenja',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'partial upis sa izmenjenim sadrzajem JE konflikt, i kad zaglavlja nema',
+        zasto: 'prvi pokusaj upise S1=100 i padne pre zaglavlja; retry posalje S1=120 i S2=60, pa u tabu ostane 100+60 -- skup koji nijedan klijent nije poslao',
+        fajl: GAS,
+        sidro: "    if (ulaz[id] !== unos.kljuc) {",
+        zamena: "    if (false) {   // sabotaza: sadrzaj postojece stavke se ne poredi"
+    },
+    {
+        // P2 iz review-a #394. Item CRID je globalan u VBA citaocu, pa GAS koji
+        // gleda samo tekuceg roditelja prihvata stanje koje master odbija --
+        // fail-closed nad CELIM listom stanice, ne nad jednim dokumentom.
+        ime: 'otk-stavke-tudj-roditelj-prolazi',
+        suite: 'gas-otk-stavke',
+        tvrdnja: 'isti item CRID pod drugim otkupom JE konflikt',
+        zasto: 'dva dokumenta koja dele identitet reda prolaze kroz GAS a obaraju ceo VBA uvoz te stanice',
+        fajl: GAS,
+        sidro: "    if (unos.parent !== roditelj) {",
+        zamena: "    if (false) {   // sabotaza: tudj roditelj se ne razlikuje"
     },
     {
         // Vrednost dokumenta je zbir PO STAVCI. Proizvod zbirova (460 * 80) daje
