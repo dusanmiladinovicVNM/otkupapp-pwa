@@ -6629,6 +6629,51 @@ fajlova 0 nalaza; svih 7 sidara pogađa **tačno jednom** i svako ima svoj unos 
 i `package-lock.json` se poklapaju u imenu, verziji i `devDependencies`. Tvrdnje same su i dalje
 **neizvršene** do CI prolaza.
 
+#### Review #393, drugi krug — prvi pravi prolaz, i sabotaza koja obara proces
+
+**CI #810 je prvo izvrsavanje harness-a uopste, i produkcione tvrdnje su zelene 13/13.**
+
+| Korak | Ishod |
+|---|---|
+| `js_sintaksa` | SUCCESS |
+| `js_sintaksa --self-test` | SUCCESS |
+| `npm ci` | SUCCESS |
+| **js harness** | **SUCCESS — 13/13** |
+| js harness `--self-test` | FAILURE |
+
+To je prvi merljiv odgovor na recenicu kojom se zavrsava S5-4b-2: **`dbClaimInStore` stvarno
+serijalizuje dve odvojene konekcije nad istom bazom.** Tvrdnja iz #392 vise nije procitana nego
+izmerena — dva taba ne mogu oba da uvedu istu otpremnicu u svoju zbirnu.
+
+**P1 — sabotaza je bila ilegalan API poziv, ne pokvarena semantika.** Odlozeni
+`setTimeout(function () { store.put(record); }, 0)` gadja `store` koji pripada transakciji koja se
+dotad **zavrsila**, pa je ishod bio `TransactionInactiveError` iz `Timeout._onTimeout` — izuzetak
+**izvan** `try/catch` oko tvrdnje. Umesto „imenovana tvrdnja je uredno postala crvena“ dobijao se
+mrtav Node proces. To nije dokaz nego pad harness-a.
+
+Popravka je ista ideja, legalno izvedena: upis ide u **svoju** ispravnu `readwrite` transakciju
+(`claim-upis-u-drugoj-transakciji`), pa se kvari tacno ona invarijanta koju tvrdnja meri —
+
+```
+TX A : read -> slobodno, commit      TX B : read -> slobodno, commit
+TX A': write                         TX B': write
+```
+
+— i obe konekcije javljaju uspeh nad istom otpremnicom. Sabotaza pritom obara **samo** cetvrtu
+tvrdnju: prva prolazi jer upis ipak stigne (write transakcija je napravljena pre citanja u `svi()`),
+druga ide kroz `abort` i uopste ne dolazi do upisa, treca pada na citanju.
+
+**Uzeto preko zahteva: runner vise ne umire od zakasnele greske.** Recenzent je trazio samo ispravku
+sabotaze, ali klasa ostaje: svaka buduca sabotaza koja proizvede async gresku posle zavrsetka tvrdnje
+ubila bi ceo dokaz. `pokreni.js` sada hvata `uncaughtException` i `unhandledRejection`, **pripisuje**
+ih tvrdnji koja je bila u toku i nastavlja prolaz — greska postaje imenovan pad
+(`pozadinska greska: ...`), ne mrtav proces. Handler nista ne sakriva; posle svake tvrdnje se ceka
+jedan makrotask da zakasnela greska ne bi zavrsila na tudjem imenu.
+
+**Sta je ovaj krug potvrdio kao zatvoreno:** regex fixture (`js_sintaksa` zelen u oba smera), dve
+konekcije u centralnoj tvrdnji, i zakljucan graf — `npm ci` je **CI-em potvrdio** da je rucno pisan
+`package-lock.json` sa `fake-indexeddb 6.0.0` ispravan.
+
 #### Ugovor prihvatanja za S5-5b — žica otkupa
 
 Šta mora da važi kad se rez završi:

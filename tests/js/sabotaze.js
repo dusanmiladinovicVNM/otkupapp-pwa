@@ -28,18 +28,32 @@ module.exports = [
         zamena: 'try { /* sabotaza: nema abort-a */ } catch (_) {}'
     },
     {
-        // P3 iz review-a #393: centralna tvrdnja reza nije imala svoj fault seam.
+        // Centralna tvrdnja reza mora da ima svoj fault seam (review #393, P3).
         //
-        // Upis odlozen u makrotask izlazi IZ transakcije koja ga je citala. Tada
-        // obe konekcije procitaju prazan store, obe "uspeju", i nijedna ne upise
-        // -- tacno kvar zbog kog dbClaimInStore postoji.
-        ime: 'claim-upis-van-transakcije',
+        // SABOTAZA JE LEGALNA, SEMANTIKA JE POKVARENA -- i to je cela poenta
+        // (review #393, drugi krug). Prva verzija je odlagala store.put u
+        // makrotask, ali taj `store` pripada transakciji koja se dotad zavrsila,
+        // pa je ishod bio TransactionInactiveError iz timera -- izuzetak IZVAN
+        // try/catch oko tvrdnje, koji je ubijao ceo prolaz. To nije dokaz nego
+        // pad harness-a.
+        //
+        // Ovde upis ide u SVOJU, sasvim ispravnu readwrite transakciju. Time se
+        // kvari tacno ona invarijanta koju tvrdnja meri -- provera i upis nisu
+        // vise jedan potez:
+        //
+        //   TX A: read -> slobodno, commit          TX B: read -> slobodno, commit
+        //   TX A': write                            TX B': write
+        //
+        // pa obe konekcije jave uspeh nad istom otpremnicom.
+        ime: 'claim-upis-u-drugoj-transakciji',
         suite: 'db-claim',
         tvrdnja: 'dve konekcije nad istom bazom: tacno jedan claim prolazi',
         zasto: 'provera i upis u dva poteza nije kapija nego nada -- oba taba prodju',
         fajl: DB,
         sidro: '                    store.put(record);',
-        zamena: '                    setTimeout(function () { store.put(record); }, 0);   // sabotaza'
+        zamena: ('                    var writeTx = db.transaction(storeName, ' +
+                 "'readwrite');   // sabotaza\n" +
+                 '                    writeTx.objectStore(storeName).put(record);')
     },
     {
         ime: 'claim-citanje-tiho-prolazi',
