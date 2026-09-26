@@ -6479,6 +6479,283 @@ dirnuti, pa suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
 ⚠ **NEVERIFIKOVANO** — i ovo je PWA. Atomski claim je tačno ona vrsta koda koji bi test uhvatio a
 čitanje ne: ponasanje IndexedDB transakcije pod istovremenim tabovima se ne može dokazati čitanjem.
 
+### 14.44) Ostatak S5 — pre-flight i JS harness (26.09.2026)
+
+Rezovi S5-1…S5-4b su zatvorili **svih 13** sposobnosti iz §14.9 reda S5 (E-001, E-003, E-019…E-023,
+E-035, E-044, E-058, E-063…E-065; E-003 i E-064 kao *namerno ukinute* — „degradiran ciklus“ i
+klijentski račun broja zbirne). Ono što je ostalo iz tog reda je **prva tačka instrukcije §14.10**:
+PWA/GAS otkup kao zaglavlje + stavke. Ona nije doterivanje — bez nje dva pisca istog `OTK-*` lista
+nose dva modela.
+
+#### Izmereno pre koda — asimetrija je dvostruka, ne jednostruka
+
+| | zaglavlje | stavke | kako čita/piše |
+|---|---|---|---|
+| desktop push (S1c) | linijska polja **prazna** | `OTK_STAVKE` | **po imenu** (`OtkZaglavljeKolone`, `OtkStavkeKolone`) |
+| PWA → GAS `processRecord` | `Klasa/Kolicina/Cena/KolAmbalaze` **u redu** | nema | **po imenu** (`headerIndexMap`) |
+| uvoz u master `ImportRowToTblOtkup` | čita `GS_KLASA/KOLICINA/CENA/KOL_AMB` | **ne čita** `OTK_STAVKE` | **poziciono**, 23 konstante `GS_*` |
+
+Prva osa (dva modela) je bila u planu. Druga — **ime protiv pozicije** — nije: GAS piše po imenu, a
+uvoz čita po poziciji, pa je `ensureSheetColumns` (dodaje samo kad je zatečeni header **prefiks**
+kanonskog) jedina stvar koja danas drži pozicije na mestu. Isti pozicioni ugovor kao VOZ list.
+
+Ugovor je već zapisan na jednom mestu i sam kaže da je privremen —
+[`modMasterSync.bas:705`](../src-vba/modMasterSync.bas): *„Klasa, Kolicina, Cena i KolAmbalaze su u
+njemu još samo zato što PWA šalje jednu klasu po zapisu; VBA push ih ostavlja PRAZNE i piše stavke u
+OTK_STAVKE.“*
+
+**Dve stvari su izmerene kao ZATVORENE, a stajale su u backlogu kao otvorene:**
+
+- `IsDuplicateInMaster` **već** gleda zaglavlje (`RequireColumnIndex(TBL_OTKUP, "ClientRecordID")`,
+  `modMasterSync.bas:2945`). Backlog stavka „mora da se prepokaže na header tabelu — inače se svaki
+  PWA dokument reimportuje“ je posledica PR6 i nije više zahtev.
+- `TryUpdateVozacID` **ne postoji** — ime živi samo u komentarima. §14.9 red S5 ga nabraja u koloni
+  „Briše“; obrisan je u S5-4a.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `tblOtkup` u `schema/schema.json` nema linijskih polja; `CreateOtkup_TX(h, stavke, greska)` prima kolekciju |
+| IDENTITY | **GAP → zatvoreno odlukom 1** | `ClientRecordID` je identitet dokumenta, `OtkupID` kuje master; stavka na žici nije imala ključ za idempotentan ponovni dolazak |
+| CARDINALITY | **PROVEN** | 1 : N, N ≥ 1 — pisac traži bar jednu klasu sa kilažom |
+| INVARIANTS/OWNER | **PROVEN** | `CreateOtkup_TX` jedini pisac (A11); duplikat se presuđuje na zaglavlju |
+| WRITERS | **GAP — predmet reza** | dva pisca istog lista, tabela iznad |
+| DOWNSTREAM | **GAP → zatvoreno odlukom 3** | `buildOtkupMergeKey_` grana 3 (`gas/Code.gs:3550`) ključa po `Klasa/Kolicina/Cena` — nad zaglavljem su prazni, pa bi ključ spajao različite dokumente |
+| CAPABILITY | **GAP — spisak se izvodi** | 13 sposobnosti iz §14.9 reda S5 su zatvorene; PWA otkup (forma, pregled, kartica, knjiga polja) nije u tom spisku i mora se izvesti iz mape pre S5-5b |
+| ACCEPTANCE CONTRACT | **PROVEN za S5-5a** (ispod) · **GAP za S5-5b** | — |
+| PLATFORM | **PROVEN (mereno)** | `node` i `npm` **ne postoje** na razvojnoj mašini; `.github/workflows/static.yml` je bio python-only. JS se može izvršiti **samo u CI-ju** |
+| LANDING | **PROVEN** | `main` čist na `06450970`; harness dira CI, pa ide **serijski i prvi** (§8 pravila pre-flight-a) |
+
+#### Četiri odluke
+
+**1. Stavka na žici nosi svoj `ClientRecordID`** (operater, 26.09.2026) — red u `OTK_STAVKE` dobija
+sopstveni `ClientRecordID` (identitet REDA), `OtkupClientRecordID` (roditelj) i `RedniBroj`; zaglavlje
+nosi **broj stavki** kao manifest, pa uvoz prepozna nekompletan dolazak. Doslovno obrazac `PRED` reda
+iz S5-4a. GAS time ponovo koristi `findByColumn` + postojeću idempotenciju, bez složenog ključa.
+
+**2. Obim: samo žica, N = 1** (operater, 26.09.2026) — PWA šalje `stavke[]` sa jednom stavkom, forma
+se ne dira. Druga klasa u formi je **sledeći** rez. Razlog: ceo lanac je dokaziv pre nego što forma
+može da proizvede N = 2, a ugovor žice se ne meša sa UX sposobnošću.
+
+**3. `buildOtkupMergeKey_` grana 3 se briše, ne uči o stavkama.** Nema legacy podataka (memo
+„nema produkcionih podataka“), pa grana za „stare/ručne zapise bez ID-jeva“ nema hranioca — a nad
+ispražnjenim linijskim poljima bi tiho spajala različite dokumente. Mrtva grana se briše, ne
+proširuje.
+
+**4. Harness ide prvi, kao svoj PR** (§8 LANDING: CI i test harness serijski) — pa izmena žice
+nastaje pod kapijom koja **već postoji**, a ne pored kapije koja se piše u istom diff-u.
+
+#### S5-5a — JS harness (ovaj rez)
+
+Do ovog reza PWA/GAS sloj nije imao **nijednu** automatsku proveru. §14.43 se završava rečenicom da
+se ponašanje IndexedDB transakcije pod istovremenim tabovima *ne može dokazati čitanjem*; ovo je
+odgovor na tu rečenicu.
+
+| Šta | Gde | Čemu |
+|---|---|---|
+| sintaksna kapija + self-test | `tools/js_sintaksa.js` | 62 fajlova (`src/js`, `gas`, `tools`, `tests/js`). `node --check` se **ne** koristi jer tip modula bira po ekstenziji i `.gs` ne ume; `vm.Script` parsira sadržaj bez obzira na ime |
+| učitavač produkcionog izvora | `tests/js/harness.js` | fajl se izvršava **kakav je**, u `vm` kontekstu sa lažnim `window`-om i Apps Script stub-ovima. Tvrdnja ide kroz produkcioni seam, ne kroz kopiju funkcije |
+| tvrdnje | `tests/js/suites/*.js` | 13 tvrdnji: `dbClaimInStore` (4), lifecycle rezervacije (5), `skupIzvoraRazlika_` (4) |
+| katalog sabotaža | `tests/js/sabotaze.js` | 7 unosa, ista šema kao `tools/dokaz.py`: (fajl, sidro, zamena, tvrdnja) |
+| pokretač | `tests/js/pokreni.js` | `node tests/js/pokreni.js` i `--self-test`, isti oblik izlaza kao python kapije |
+
+**Sabotaža ne dira disk.** `tools/dokaz.py` kvari fajl u radnom stablu i zato ne sme paralelno sa
+izmenama (memo „dokaz i izmene se ne mešaju“). Ovde se zamena primenjuje na **tekst u memoriji** pre
+`vm.Script`, pa dokaz sme da se vrti u istom prolazu kao i zelena kapija — i vrti se, u istom CI job-u.
+
+**Sidro koje ne pogodi tačno jednom je greška kataloga, ne „nije oborilo test“** — `SIDRO_ZASTARELO`
+puca pri učitavanju. Isto važi za unos koji imenuje fajl koji suite ne učitava.
+
+**Kraj reda je normalizovan pre sidra.** Radno stablo na Windows-u je CRLF (`core.autocrlf=true`), CI
+checkout na ubuntu-u je LF. Sidro pisano sa `\n` bi gađalo samo jednu od dve mašine — ista klasa koja
+je već tri puta ujela ovaj repo (`sed` nad `.bas`, CRLF u `.sh`, `eol=lf` nad `.frm`).
+
+**Šta harness NE dokazuje, i to se ne prećutkuje:**
+
+- `node` i `npm` ne postoje lokalno (mereno), pa **lokalnog verdikta za JS nema** — kao što ga za
+  `run_vba.py` nema u web sesiji. Sve JS tvrdnje su neizvršene do prvog CI prolaza.
+- 6 od 13 tvrdnji nema sabotažu. To je po pravilu „u rezu samo NOVE sabotaže“, ali pokretač ih
+  **imenuje** na kraju `--self-test` izlaza, pa rupa ne može da raste nečujno.
+- `.claude/rules/testovi.md` još ne zna za ovu kapiju. Izmene u `.claude/` idu isključivo kroz zaseban
+  process PR, pa je to **zapisan dug**, ne propust ovog reza.
+
+#### Review #393 — dva P1, i oba su bila u DOKAZU, ne u kodu
+
+Koncept nije dirnut. Sve tri primedbe su gađale sredstvo merenja, i to je najgora vrsta greške u
+harness PR-u: kapija koja je zelena jer meri pogrešnu stvar.
+
+**P1 — self-test je imao nelegalan „legalan JS“ fixture.** CI #809 je pao na
+`js_sintaksa --self-test`, pa `npm ci`, harness i dokaz **nisu ni pokrenuti**. Fixture je u fajlu
+stajao kao `'const a = /a\/b/g;'` sa **jednim** backslash-om; u JS stringu je `\/` samo `/`, pa je
+`vm.Script` dobio `/a/b/g`, gde `b` i `g` izgledaju kao flagovi. Kapija je ispravno prijavila
+sintaksnu grešku, a self-test je to protumačio kao lažni alarm.
+
+Uzrok nije JS nego **heredoc**: `<<'EOF'` je pojeo backslash pri pisanju fajla — treći put u istoj
+sesiji, posle `sed`-a nad `.bas` i Python skripte koja piše `\n`. Memo
+„heredoc lomi escape sekvence“ već kaže *piši Python u fajl pa ga pokreni*; ovde je isto pravilo
+trebalo i za JS.
+
+**Isti kvar na drugom mestu, koji review nije video:** `harness.js` je imao
+`.replace(/\n/g, '\n')` — no-op, jer je i tu pojeden backslash. Trebalo je `'\\n'`, da poruka
+`SIDRO_ZASTARELO` prikaže prelom reda kao dva znaka umesto da ga umetne. Nađeno merenjem **svih**
+backslash-eva u novim fajlovima, ne čitanjem.
+
+**P1 — centralna tvrdnja je merila jednu konekciju.** Oba claim-a su išla kroz **isti** `IDBDatabase`
+objekat, pa je tvrdnja dokazivala da se dve transakcije na jednoj konekciji serijalizuju — a
+`dbClaimInStore` postoji zbog **dva taba**, a tab ima svoju konekciju. Sada se ista baza otvara
+dvaput (`otvori(ime)` je razdvojen od `novaBaza()`), i tvrdnja nosi ime koje to kaže:
+`dve konekcije nad istom bazom: tacno jedan claim prolazi`.
+
+Uz to jedna tvrdnja **nad samim testom**: `assert.notStrictEqual(prva.db, druga)`. Ako bi
+implementacija ikad vratila keširanu konekciju, tvrdnja bi tiho skliznula nazad na slabiju verziju —
+a to je upravo klasa greške koju je ovaj review našao, pa se meri, ne pretpostavlja.
+
+**P2 — graf nije bio zaključan, i rešenje je bilo u korenu.** `fake-indexeddb` 4.0.2 vuče
+`realistic-structured-clone ^3.0.0`, pa prikovana **direktna** verzija nije determinizam — a taj
+paket simulira baš storage semantiku na kojoj stoji najvažnija tvrdnja. Merenjem registry-ja:
+**verzija 6.0.0 nema nijednu zavisnost** (koristi ugrađeni `structuredClone`, `engines >= 18`). Graf
+je time jedan paket, pa je `package-lock.json` **potpuno određen** — napisan je rukom, sa `integrity`
+hash-om pročitanim iz registry-ja, i korak je `npm ci`. `npm ci` odbija rad ako lock i
+`package.json` nisu u koraku, pa greška u ručno pisanom locku pada glasno i odmah, a ne tiho.
+
+**P3 — centralna tvrdnja je dobila svoj fault seam.** Sabotaža `claim-upis-van-transakcije` odlaže
+`store.put` u makrotask, pa upis izlazi iz transakcije koja ga je pročitala: obe konekcije vide
+prazan store, obe „uspeju“, nijedna ne upiše. Tačno kvar zbog kog `dbClaimInStore` postoji. Katalog
+je time na **7** unosa, a bez sabotaže ostaje 6 od 13 tvrdnji.
+
+**Pre-provera bez node-a** (jedino što se na ovoj mašini može izmeriti): balans zagrada u svih 7 JS
+fajlova 0 nalaza; svih 7 sidara pogađa **tačno jednom** i svako ima svoj unos u katalogu; `package.json`
+i `package-lock.json` se poklapaju u imenu, verziji i `devDependencies`. Tvrdnje same su i dalje
+**neizvršene** do CI prolaza.
+
+#### Review #393, drugi krug — prvi pravi prolaz, i sabotaza koja obara proces
+
+**CI #810 je prvo izvrsavanje harness-a uopste, i produkcione tvrdnje su zelene 13/13.**
+
+| Korak | Ishod |
+|---|---|
+| `js_sintaksa` | SUCCESS |
+| `js_sintaksa --self-test` | SUCCESS |
+| `npm ci` | SUCCESS |
+| **js harness** | **SUCCESS — 13/13** |
+| js harness `--self-test` | FAILURE |
+
+To je prvi merljiv odgovor na recenicu kojom se zavrsava S5-4b-2: **`dbClaimInStore` stvarno
+serijalizuje dve odvojene konekcije nad istom bazom.** Tvrdnja iz #392 vise nije procitana nego
+izmerena — dva taba ne mogu oba da uvedu istu otpremnicu u svoju zbirnu.
+
+**P1 — sabotaza je bila ilegalan API poziv, ne pokvarena semantika.** Odlozeni
+`setTimeout(function () { store.put(record); }, 0)` gadja `store` koji pripada transakciji koja se
+dotad **zavrsila**, pa je ishod bio `TransactionInactiveError` iz `Timeout._onTimeout` — izuzetak
+**izvan** `try/catch` oko tvrdnje. Umesto „imenovana tvrdnja je uredno postala crvena“ dobijao se
+mrtav Node proces. To nije dokaz nego pad harness-a.
+
+Popravka je ista ideja, legalno izvedena: upis ide u **svoju** ispravnu `readwrite` transakciju
+(`claim-upis-u-drugoj-transakciji`), pa se kvari tacno ona invarijanta koju tvrdnja meri —
+
+```
+TX A : read -> slobodno, commit      TX B : read -> slobodno, commit
+TX A': write                         TX B': write
+```
+
+— i obe konekcije javljaju uspeh nad istom otpremnicom. Sabotaza pritom obara **samo** cetvrtu
+tvrdnju: prva prolazi jer upis ipak stigne (write transakcija je napravljena pre citanja u `svi()`),
+druga ide kroz `abort` i uopste ne dolazi do upisa, treca pada na citanju.
+
+**Uzeto preko zahteva: runner vise ne umire od zakasnele greske.** Recenzent je trazio samo ispravku
+sabotaze, ali klasa ostaje: svaka buduca sabotaza koja proizvede async gresku posle zavrsetka tvrdnje
+ubila bi ceo dokaz. `pokreni.js` sada hvata `uncaughtException` i `unhandledRejection`, **pripisuje**
+ih tvrdnji koja je bila u toku i nastavlja prolaz — greska postaje imenovan pad
+(`pozadinska greska: ...`), ne mrtav proces. Handler nista ne sakriva; posle svake tvrdnje se ceka
+jedan makrotask da zakasnela greska ne bi zavrsila na tudjem imenu.
+
+**Sta je ovaj krug potvrdio kao zatvoreno:** regex fixture (`js_sintaksa` zelen u oba smera), dve
+konekcije u centralnoj tvrdnji, i zakljucan graf — `npm ci` je **CI-em potvrdio** da je rucno pisan
+`package-lock.json` sa `fake-indexeddb 6.0.0` ispravan.
+
+#### Review #393, treci krug — odbrana koja je nadzivela svoj povod
+
+CI #811 je **zelen u oba smera**: 13/13 tvrdnji i 7/7 sabotaza, a centralna sabotaza obara bas
+concurrency tvrdnju. Ostao je jedan P2, i bio je u onome sto sam dodao **preko zahteva**.
+
+**P2 — globalni `uncaughtException` handler je mogao da proguta ili pogresno pripise zakasnelu
+gresku.** Napisao sam da „handler ne sakriva nista“; nije tacno. Greska koja stigne posle poslednje
+tvrdnje zavrsi u nizu koji nikad nece biti procitan, a greska koja stigne tokom naredne tvrdnje bude
+pripisana **njoj** — cekanje jednog makrotaska ne pokriva `setTimeout(..., 50)`.
+
+Sustina nalaza nije mehanika nego **poreklo**: handler je dodat kao odbrana od sabotaze koja je
+gadjala mrtav `objectStore` — dakle od problema koji sam sam napravio, pa u istom krugu i uklonio.
+Kad je povod nestao, ostao je samo rizik. Za kapiju je „neocekivano -> crveno“ tacnije od pogadjanja
+cija je greska; suite kojem stvarno treba pozadinski posao mora da ceka njegov signal zavrsetka,
+eksplicitno.
+
+Mehanizam je uklonjen u celini (`process.on` nema, `uToku` i `pozadinske` nema, cekanje makrotaska
+nema) — 36 obrisanih linija za 11 dodatih. Na njegovom mestu stoji komentar koji zapisuje **odluku i
+njen razlog**, da se handler ne vrati sledeci put kad neka sabotaza pukne van tvrdnje.
+
+**Prihvaceno kako je, bez izmene:** sabotaza `claim-ne-prekida-transakciju` obara i concurrency
+tvrdnju pored svoje. To je posledica istog invarijanta — bez `abort`-a odbijen claim izgleda kao
+prihvacen i u jednom i u dva taba — a runner taj preklapajuci pad **imenuje** u izlazu. Nasilno
+razdvajanje bi trazilo da jedna od dve tvrdnje prestane da meri `abort`, sto je gubitak, ne dobitak.
+
+#### Review #393, cetvrti krug — isti kvar, treci mehanizam
+
+CI #812 je zelen u oba smera (13/13 i 7/7), i concurrency sabotaza obara bas svoju tvrdnju. Ostao je
+isti P2 kroz **treci** nosac.
+
+**P2 — `process.exit()` prekida event loop.** Prvo je kasnu async gresku gutao globalni handler; kad
+je on uklonjen, gutao ju je nasilan izlaz. Komentar koji sam upravo napisao — „neocekivano ->
+crveno“ — bio je time u protivrecnosti sa kodom ispod njega: `setTimeout(() => { throw ... }, 50)`
+nikad ne dobije priliku, jer `process.exit(0)` zatvori proces pre timera.
+
+Oba pokretaca sada postavljaju `process.exitCode` i puste Node da se zavrsi prirodno. Posledica je
+deo ugovora, ne nus-efekat: **suite koji otvori pravi pozadinski posao mora sam da ga doceka**, inace
+prolaz visi umesto da se zavrsi.
+
+**Isti poziv je stajao i u `tools/js_sintaksa.js`**, van prijave. Tamo je kod sinhron pa nije bilo sta
+da se izgubi, ali dve kapije u istom workflow-u ne smeju da imaju dva razlicita pravila o tome kako se
+zavrsavaju — to je razlika koja istruli neopazeno, kao spisak dozvola u `WRITE_OWNERSHIP.json` koji je
+tri modula nabrajao bez pisca.
+
+**Watchdog NIJE dodat, i to je namerno.** `exitCode` uvodi novu mogucnost: ako nesto drzi event loop,
+prolaz visi. Iskusenje je bilo dodati `unref()`-ovan timer koji posle N sekundi obori prolaz sa
+imenovanom porukom. Ali prosli krug je pokazao sta se dobija kad se odbrana napise **pre** merenja:
+handler dodat „za slucaj“ postao je nalaz. Ako CI visi, to je glasan i dijagnostikovan pad, i tada se
+watchdog dodaje sa dokazom da treba.
+
+**P3 — opis PR-a je bio zastareo** (tvrdio da nema lockfile-a i da 7 od 13 tvrdnji nema sabotazu).
+Usklađen: rezultat 13/13 i 7/7, lockfile potvrđen `npm ci`-em, 6 od 13 bez sabotaze, i tabela sva
+cetiri kruga review-a.
+
+**Obrazac kroz sva cetiri kruga:** nijedan nalaz nije bio u produkcionom kodu. Prvi je bio u fixture-u,
+drugi u sabotazi, treci i cetvrti u pokretacu. Sredstvo merenja je u ovom rezu bilo jedini izvor
+gresaka — i to je razlog zbog kog harness PR trazi review kao i svaki drugi: zelena kapija koja meri
+pogresnu stvar je gora od nikakve.
+
+#### Ugovor prihvatanja za S5-5b — žica otkupa
+
+Šta mora da važi kad se rez završi:
+
+1. PWA zapis otkupa nosi `stavke[]` (N = 1 u ovom rezu); `Klasa/Kolicina/Cena/KolAmbalaze` **nisu
+   više** na zaglavlju zapisa.
+2. GAS upisuje zaglavlje u `OTK-*` i stavke u `OTK_STAVKE`, **atomski po `ClientRecordID`**; red
+   stavke ima svoj `ClientRecordID`, `OtkupClientRecordID` i `RedniBroj`.
+3. Zaglavlje nosi broj stavki; uvoz koji nađe zaglavlje **bez** stavki ga odbija po imenu i beleži —
+   ne uvozi dokument od nula kilograma (ista tvrdnja kao `OtkStavkeRedoviPoOtkupu`).
+4. `ImportRowToTblOtkup` gradi `stavke` kolekciju **iz `OTK_STAVKE`**, ne iz `GS_*` linijskih polja;
+   `OtkZaglavljeKolone` gubi četiri linijske kolone, a `GS_*` konstante se pomeraju **samo** brisanjem
+   sa kraja ili dodavanjem na kraj.
+5. Isti `ClientRecordID` sa **drugim skupom stavki** je konflikt po imenu, ne `existing/success` —
+   isti obrazac koji je zatvoren za `PRED` i `ZBIRNA`.
+6. `buildOtkupMergeKey_` grana 3 je obrisana.
+7. Dokaz: JS harness dobija tvrdnje za oblik zapisa i za GAS upis (pod kapijom iz S5-5a);
+   `RunBusinessFlowProSuite` dobija tvrdnju da uvoz pravi dokument sa stavkama iz `OTK_STAVKE`, sa
+   sabotažom u `tools/dokaz.py`; `popis_citalaca.py --check` ostaje na pragovima.
+
+Šta mora ostati netaknuto: desktop push (`BulkPushPendingForStanica`) i izvoz `OtkupiAllStavke` — oni
+su **već** na novom obliku i rez ih ne dira.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
