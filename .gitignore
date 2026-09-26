@@ -24,3 +24,6 @@ tests/last_run.txt
 # apr_veleprodaja_*.xlsx u Clean Data.
 docs/Market Intelligence/01_Market_Data/APR/Raw Data/apr_companies_*
 docs/Market Intelligence/01_Market_Data/APR/Clean Data/apr_companies_financials_*
+
+# JS harness: zavisnost se instalira u CI-ju (node/npm ne postoje na autorskoj masini).
+node_modules/

@@ -166,3 +166,40 @@ jobs:
       # i videla se tek kao [break] u VBE-u na Windows masini.
       - name: run_vba self-test
         run: python3 tools/run_vba.py --self-test
+
+      # ----------------------------------------------------------------
+      # PWA / GAS sloj
+      # ----------------------------------------------------------------
+      # Do ovog reza je ovo bio jedini deo repoa bez IJEDNE automatske provere.
+      # Rezovi #390-#392 su mu dodali komandne kapije, rezervacije i atomski
+      # claim -- logiku koja je cela bila "procitana, ne proverena".
+      #
+      # CI JE JEDINI IZVRSILAC. Mereno: `node` i `npm` ne postoje na Windows
+      # masini na kojoj se ovaj repo razvija, pa lokalni verdikt za JS NE
+      # POSTOJI i ne sme da se tvrdi -- isto kao sto run_vba.py ne postoji u web
+      # sesiji. Zato oba koraka (kapija + self-test) idu ovde.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: js sintaksa (src/js + gas + tools + tests)
+        run: node tools/js_sintaksa.js
+
+      - name: js_sintaksa self-test
+        run: node tools/js_sintaksa.js --self-test
+
+      # Nema package-lock.json: npm ne postoji na autorskoj masini, pa se
+      # lockfile ne moze generisati. Determinizam zato drzi TACNO PRIKOVANA
+      # verzija u package.json (bez ^), a ne lockfile. Kad lockfile postane
+      # moguc, ovo postaje `npm ci`.
+      - name: npm install (fake-indexeddb)
+        run: npm install --no-audit --no-fund
+
+      - name: js harness (PWA/GAS tvrdnje)
+        run: node tests/js/pokreni.js
+
+      # Druga polovina dokaza, isto pravilo kao kod python kapija: zelena suite
+      # koja nikad nije pokazana crvena ne dokazuje da isto meri. Katalog kvari
+      # produkcioni tekst U MEMORIJI i trazi da tvrdnja pukne PO IMENU.
+      - name: js harness self-test (dvosmerni dokaz)
+        run: node tests/js/pokreni.js --self-test

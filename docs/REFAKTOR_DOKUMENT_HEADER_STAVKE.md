@@ -6479,6 +6479,132 @@ dirnuti, pa suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
 ⚠ **NEVERIFIKOVANO** — i ovo je PWA. Atomski claim je tačno ona vrsta koda koji bi test uhvatio a
 čitanje ne: ponasanje IndexedDB transakcije pod istovremenim tabovima se ne može dokazati čitanjem.
 
+### 14.44) Ostatak S5 — pre-flight i JS harness (26.09.2026)
+
+Rezovi S5-1…S5-4b su zatvorili **svih 13** sposobnosti iz §14.9 reda S5 (E-001, E-003, E-019…E-023,
+E-035, E-044, E-058, E-063…E-065; E-003 i E-064 kao *namerno ukinute* — „degradiran ciklus“ i
+klijentski račun broja zbirne). Ono što je ostalo iz tog reda je **prva tačka instrukcije §14.10**:
+PWA/GAS otkup kao zaglavlje + stavke. Ona nije doterivanje — bez nje dva pisca istog `OTK-*` lista
+nose dva modela.
+
+#### Izmereno pre koda — asimetrija je dvostruka, ne jednostruka
+
+| | zaglavlje | stavke | kako čita/piše |
+|---|---|---|---|
+| desktop push (S1c) | linijska polja **prazna** | `OTK_STAVKE` | **po imenu** (`OtkZaglavljeKolone`, `OtkStavkeKolone`) |
+| PWA → GAS `processRecord` | `Klasa/Kolicina/Cena/KolAmbalaze` **u redu** | nema | **po imenu** (`headerIndexMap`) |
+| uvoz u master `ImportRowToTblOtkup` | čita `GS_KLASA/KOLICINA/CENA/KOL_AMB` | **ne čita** `OTK_STAVKE` | **poziciono**, 23 konstante `GS_*` |
+
+Prva osa (dva modela) je bila u planu. Druga — **ime protiv pozicije** — nije: GAS piše po imenu, a
+uvoz čita po poziciji, pa je `ensureSheetColumns` (dodaje samo kad je zatečeni header **prefiks**
+kanonskog) jedina stvar koja danas drži pozicije na mestu. Isti pozicioni ugovor kao VOZ list.
+
+Ugovor je već zapisan na jednom mestu i sam kaže da je privremen —
+[`modMasterSync.bas:705`](../src-vba/modMasterSync.bas): *„Klasa, Kolicina, Cena i KolAmbalaze su u
+njemu još samo zato što PWA šalje jednu klasu po zapisu; VBA push ih ostavlja PRAZNE i piše stavke u
+OTK_STAVKE.“*
+
+**Dve stvari su izmerene kao ZATVORENE, a stajale su u backlogu kao otvorene:**
+
+- `IsDuplicateInMaster` **već** gleda zaglavlje (`RequireColumnIndex(TBL_OTKUP, "ClientRecordID")`,
+  `modMasterSync.bas:2945`). Backlog stavka „mora da se prepokaže na header tabelu — inače se svaki
+  PWA dokument reimportuje“ je posledica PR6 i nije više zahtev.
+- `TryUpdateVozacID` **ne postoji** — ime živi samo u komentarima. §14.9 red S5 ga nabraja u koloni
+  „Briše“; obrisan je u S5-4a.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `tblOtkup` u `schema/schema.json` nema linijskih polja; `CreateOtkup_TX(h, stavke, greska)` prima kolekciju |
+| IDENTITY | **GAP → zatvoreno odlukom 1** | `ClientRecordID` je identitet dokumenta, `OtkupID` kuje master; stavka na žici nije imala ključ za idempotentan ponovni dolazak |
+| CARDINALITY | **PROVEN** | 1 : N, N ≥ 1 — pisac traži bar jednu klasu sa kilažom |
+| INVARIANTS/OWNER | **PROVEN** | `CreateOtkup_TX` jedini pisac (A11); duplikat se presuđuje na zaglavlju |
+| WRITERS | **GAP — predmet reza** | dva pisca istog lista, tabela iznad |
+| DOWNSTREAM | **GAP → zatvoreno odlukom 3** | `buildOtkupMergeKey_` grana 3 (`gas/Code.gs:3550`) ključa po `Klasa/Kolicina/Cena` — nad zaglavljem su prazni, pa bi ključ spajao različite dokumente |
+| CAPABILITY | **GAP — spisak se izvodi** | 13 sposobnosti iz §14.9 reda S5 su zatvorene; PWA otkup (forma, pregled, kartica, knjiga polja) nije u tom spisku i mora se izvesti iz mape pre S5-5b |
+| ACCEPTANCE CONTRACT | **PROVEN za S5-5a** (ispod) · **GAP za S5-5b** | — |
+| PLATFORM | **PROVEN (mereno)** | `node` i `npm` **ne postoje** na razvojnoj mašini; `.github/workflows/static.yml` je bio python-only. JS se može izvršiti **samo u CI-ju** |
+| LANDING | **PROVEN** | `main` čist na `06450970`; harness dira CI, pa ide **serijski i prvi** (§8 pravila pre-flight-a) |
+
+#### Četiri odluke
+
+**1. Stavka na žici nosi svoj `ClientRecordID`** (operater, 26.09.2026) — red u `OTK_STAVKE` dobija
+sopstveni `ClientRecordID` (identitet REDA), `OtkupClientRecordID` (roditelj) i `RedniBroj`; zaglavlje
+nosi **broj stavki** kao manifest, pa uvoz prepozna nekompletan dolazak. Doslovno obrazac `PRED` reda
+iz S5-4a. GAS time ponovo koristi `findByColumn` + postojeću idempotenciju, bez složenog ključa.
+
+**2. Obim: samo žica, N = 1** (operater, 26.09.2026) — PWA šalje `stavke[]` sa jednom stavkom, forma
+se ne dira. Druga klasa u formi je **sledeći** rez. Razlog: ceo lanac je dokaziv pre nego što forma
+može da proizvede N = 2, a ugovor žice se ne meša sa UX sposobnošću.
+
+**3. `buildOtkupMergeKey_` grana 3 se briše, ne uči o stavkama.** Nema legacy podataka (memo
+„nema produkcionih podataka“), pa grana za „stare/ručne zapise bez ID-jeva“ nema hranioca — a nad
+ispražnjenim linijskim poljima bi tiho spajala različite dokumente. Mrtva grana se briše, ne
+proširuje.
+
+**4. Harness ide prvi, kao svoj PR** (§8 LANDING: CI i test harness serijski) — pa izmena žice
+nastaje pod kapijom koja **već postoji**, a ne pored kapije koja se piše u istom diff-u.
+
+#### S5-5a — JS harness (ovaj rez)
+
+Do ovog reza PWA/GAS sloj nije imao **nijednu** automatsku proveru. §14.43 se završava rečenicom da
+se ponašanje IndexedDB transakcije pod istovremenim tabovima *ne može dokazati čitanjem*; ovo je
+odgovor na tu rečenicu.
+
+| Šta | Gde | Čemu |
+|---|---|---|
+| sintaksna kapija + self-test | `tools/js_sintaksa.js` | 62 fajlova (`src/js`, `gas`, `tools`, `tests/js`). `node --check` se **ne** koristi jer tip modula bira po ekstenziji i `.gs` ne ume; `vm.Script` parsira sadržaj bez obzira na ime |
+| učitavač produkcionog izvora | `tests/js/harness.js` | fajl se izvršava **kakav je**, u `vm` kontekstu sa lažnim `window`-om i Apps Script stub-ovima. Tvrdnja ide kroz produkcioni seam, ne kroz kopiju funkcije |
+| tvrdnje | `tests/js/suites/*.js` | 13 tvrdnji: `dbClaimInStore` (4), lifecycle rezervacije (5), `skupIzvoraRazlika_` (4) |
+| katalog sabotaža | `tests/js/sabotaze.js` | 6 unosa, ista šema kao `tools/dokaz.py`: (fajl, sidro, zamena, tvrdnja) |
+| pokretač | `tests/js/pokreni.js` | `node tests/js/pokreni.js` i `--self-test`, isti oblik izlaza kao python kapije |
+
+**Sabotaža ne dira disk.** `tools/dokaz.py` kvari fajl u radnom stablu i zato ne sme paralelno sa
+izmenama (memo „dokaz i izmene se ne mešaju“). Ovde se zamena primenjuje na **tekst u memoriji** pre
+`vm.Script`, pa dokaz sme da se vrti u istom prolazu kao i zelena kapija — i vrti se, u istom CI job-u.
+
+**Sidro koje ne pogodi tačno jednom je greška kataloga, ne „nije oborilo test“** — `SIDRO_ZASTARELO`
+puca pri učitavanju. Isto važi za unos koji imenuje fajl koji suite ne učitava.
+
+**Kraj reda je normalizovan pre sidra.** Radno stablo na Windows-u je CRLF (`core.autocrlf=true`), CI
+checkout na ubuntu-u je LF. Sidro pisano sa `\n` bi gađalo samo jednu od dve mašine — ista klasa koja
+je već tri puta ujela ovaj repo (`sed` nad `.bas`, CRLF u `.sh`, `eol=lf` nad `.frm`).
+
+**Šta harness NE dokazuje, i to se ne prećutkuje:**
+
+- `node` i `npm` ne postoje lokalno (mereno), pa **lokalnog verdikta za JS nema** — kao što ga za
+  `run_vba.py` nema u web sesiji. Sve JS tvrdnje su neizvršene do prvog CI prolaza.
+- nema `package-lock.json` (ne može se generisati bez npm-a). Determinizam drži **tačno prikovana**
+  verzija u `package.json`, ne lockfile. Kad lockfile postane moguć, korak postaje `npm ci`.
+- 7 od 13 tvrdnji nema sabotažu. To je po pravilu „u rezu samo NOVE sabotaže“, ali pokretač ih
+  **imenuje** na kraju `--self-test` izlaza, pa rupa ne može da raste nečujno.
+- `.claude/rules/testovi.md` još ne zna za ovu kapiju. Izmene u `.claude/` idu isključivo kroz zaseban
+  process PR, pa je to **zapisan dug**, ne propust ovog reza.
+
+#### Ugovor prihvatanja za S5-5b — žica otkupa
+
+Šta mora da važi kad se rez završi:
+
+1. PWA zapis otkupa nosi `stavke[]` (N = 1 u ovom rezu); `Klasa/Kolicina/Cena/KolAmbalaze` **nisu
+   više** na zaglavlju zapisa.
+2. GAS upisuje zaglavlje u `OTK-*` i stavke u `OTK_STAVKE`, **atomski po `ClientRecordID`**; red
+   stavke ima svoj `ClientRecordID`, `OtkupClientRecordID` i `RedniBroj`.
+3. Zaglavlje nosi broj stavki; uvoz koji nađe zaglavlje **bez** stavki ga odbija po imenu i beleži —
+   ne uvozi dokument od nula kilograma (ista tvrdnja kao `OtkStavkeRedoviPoOtkupu`).
+4. `ImportRowToTblOtkup` gradi `stavke` kolekciju **iz `OTK_STAVKE`**, ne iz `GS_*` linijskih polja;
+   `OtkZaglavljeKolone` gubi četiri linijske kolone, a `GS_*` konstante se pomeraju **samo** brisanjem
+   sa kraja ili dodavanjem na kraj.
+5. Isti `ClientRecordID` sa **drugim skupom stavki** je konflikt po imenu, ne `existing/success` —
+   isti obrazac koji je zatvoren za `PRED` i `ZBIRNA`.
+6. `buildOtkupMergeKey_` grana 3 je obrisana.
+7. Dokaz: JS harness dobija tvrdnje za oblik zapisa i za GAS upis (pod kapijom iz S5-5a);
+   `RunBusinessFlowProSuite` dobija tvrdnju da uvoz pravi dokument sa stavkama iz `OTK_STAVKE`, sa
+   sabotažom u `tools/dokaz.py`; `popis_citalaca.py --check` ostaje na pragovima.
+
+Šta mora ostati netaknuto: desktop push (`BulkPushPendingForStanica`) i izvoz `OtkupiAllStavke` — oni
+su **već** na novom obliku i rez ih ne dira.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

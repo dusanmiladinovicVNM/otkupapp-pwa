@@ -1,0 +1,15 @@
+{
+  "name": "otkupapp-pwa",
+  "version": "0.0.0",
+  "private": true,
+  "description": "JS harness za PWA/GAS sloj. VBA/Excel deo repoa ne zavisi od npm-a i nikad nece.",
+  "scripts": {
+    "sintaksa": "node tools/js_sintaksa.js",
+    "sintaksa:self-test": "node tools/js_sintaksa.js --self-test",
+    "test": "node tests/js/pokreni.js",
+    "self-test": "node tests/js/pokreni.js --self-test"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "4.0.2"
+  }
+}
