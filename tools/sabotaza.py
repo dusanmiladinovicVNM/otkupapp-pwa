@@ -5745,6 +5745,31 @@ SABOTAZE = {
         "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA",
     ),
 
+    # S5-4b-2: IZVORI ZBIRNE SU OTPREMNICE KOJE JE VOZAC POSLAO.
+    #
+    # Sabotiraju se SAMO mesta gde je ovaj rez jedini koji odlucuje. Prazan
+    # spisak i tudja otpremnica se NE sabotiraju ovde: te invarijante zive u
+    # kanonskom piscu (1223 i RequireIstoPolje), pa bi sabotaza citaca merila
+    # drugu branu -- placebo.
+    "zbr-ids-uzima-samo-prvi": (
+        "modMasterSync.bas",
+        "        rez.Add otpID\n",
+        "        If rez.count = 0 Then rez.Add otpID\n",
+        "Test_ZBR_UvozNosiTacnoPoslateOtpremnice",
+        "ZBR-IDS: clanstvo ima tacno dve otpremnice",
+    ),
+
+    # DRUGI POZIVALAC. Prevodilac je imao dva; da je preveden samo uvoz,
+    # poredjenje sadrzaja pri CRID konfliktu bi i dalje citalo staru kolonu i
+    # svaki red proglasavalo protivrecnim.
+    "zbr-ids-razlika-cita-staru-kolonu": (
+        "modMasterSync.bas",
+        "    Set noviIzvori = OtpremniceIzIDs( _\n                         Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), \"\"))), _\n",
+        "    Set noviIzvori = OtpremniceIzIDs( _\n                         Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), \"\"))), _\n",
+        "Test_ZBR_IstiCridDrugiSadrzajJeKonflikt",
+        "ZBR CRID: nepromenjen red je NO-OP",
+    ),
+
     "otpvoz-nacrt-izlazi-vozacu": (
         "modStammdatenSync.bas",
         "            If Trim$(NzToText(data(i, cIzd))) = IZDATO_IZDATO Then\n",

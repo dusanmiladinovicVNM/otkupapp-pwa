@@ -6221,6 +6221,264 @@ zagrada u `gas/Code.gs` isti kao pre izmene; 0 LF-only linija.
 okruzenju ne moze izvrsiti. Dvostruka ograda je pročitana i rezonovana, ne izmerena. Jedini alat koji
 bi je uhvatio bio bi JS harness — isti dug koji stoji od #390.
 
+### 14.42) S5-4b-2 pre-flight — zbirna se sastavlja od OTPREMNICA (25.09.2026)
+
+S5-4b-1 je postavio žicu: master izvozi otpremnice, GAS ih servira po `Otpremnica.VozacID`, uz ogradu
+generacije. **Niko ih još ne troši** — vozačev ekran i dalje zove `getVozacOtkupi`. Ovaj rez to
+zatvara.
+
+#### Izmereno pre koda — gde sve živi stari model
+
+| Sloj | Mesto | Šta radi danas |
+|---|---|---|
+| PWA | `zbirna.js:11` | `action=getVozacOtkupi` → OTK redovi po `Otkup.VozacID` |
+| PWA | `zbirna.js` payload | `otkupRecordIDs` = spisak otkup CRID-ova; `brojZbirne` računat na klijentu |
+| GAS | `ZBIRNA_COLUMNS` | kolona `OtkupRecordIDs` |
+| GAS | `processZbirnaRecord` | `OtkupRecordIDs: record.otkupRecordIDs` |
+| VBA | `ValidatePWAZbirna` | traži `OtkupRecordIDs`, inače „zbirna bez izvora nije dokument" |
+| VBA | `ImportRowToTblZbirna` | `OtpremniceIzOtkupRecordIDs(...)` → `CreateZbirnaIzIzvora_TX` |
+| VBA | `PwaZbirnaRazlika` | **drugi** pozivalac istog prevodioca — poređenje sadržaja pri CRID konfliktu |
+| VBA | `RequireVOZHeaderValue` | ugovor zaglavlja VOZ lista traži `OtkupRecordIDs` |
+| test | `modBusinessFlowProTests:1674` | tvrdnja „zbirna ima izvor razrešen iz otkupRecordIDs" |
+
+**Prevod radi tačno, ali je obrazac rizika:** `otkup CRID → OtkupPoClientRecordID → OtpremnicaZaOtkup
+→ dedup`. Kad vozač dobije otpremnice, `OtpremnicaID` može da putuje direktno i prevodilac se briše —
+zajedno sa oba pozivaoca.
+
+**Kolone VOZ lista se čitaju POZICIONO** (`VS_*` konstante u `modMasterSync` su indeksi), pa `OtpremnicaIDs`
+ide **na kraj** `ZBIRNA_COLUMNS` (indeks 21), nikako u sredinu. `ensureSheetColumns` dodaje kolonu samo
+kad je zatečeno zaglavlje **prefiks** kanonskog — zamena u sredini bi to oborila.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu |
+| IDENTITY | **PROVEN kao cilj, GAP u kodu** | kanon traži `OtpremnicaID`; PWA šalje otkup CRID-ove |
+| CARDINALITY | **PROVEN** | `tblZbirnaIzvori(ZbirnaID, OtpremnicaID)`, N po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` ostaje jedini pisac; rez menja samo ŠTA mu stiže |
+| WRITERS | **N/A** | nov pisac se ne uvodi |
+| DOWNSTREAM | **GAP — dva pozivaoca, ne jedan** | `ImportRowToTblZbirna` **i** `PwaZbirnaRazlika`; zakrpa na jednom ostavlja drugi |
+| CAPABILITY | **GAP** | vozačev spisak je prazan od S5-4a; ovim rezom se vraća |
+| ACCEPTANCE CONTRACT | **v. ispod** | |
+| PLATFORM | N/A | |
+| LANDING | **PROVEN** | grana iz `main` posle merge-a #391 (`7c960aa5`) |
+
+⚠ **Premisa postojećeg regression testa se menja** (`modBusinessFlowProTests:1674`). Po kapiji to je
+signal za zastoj i verdikt — zato ovaj odeljak i postoji pre koda. Tvrdnja **preživljava**, ali se meri
+nad novim ulazom: izvor zbirne je `OtpremnicaID` koji je PWA poslala, ne CRID koji je master preveo.
+
+#### Ugovor prihvatanja — šta mora da važi kad se rez završi
+
+1. VOZ red sa `OtpremnicaIDs` pravi zbirnu čiji je `tblZbirnaIzvori` **tačno taj skup**.
+2. Nepoznat, storniran ili već potrošen `OtpremnicaID` **staje i imenuje razlog** — ne prećutkuje se
+   dedupom, kao što prevodilac danas može.
+3. Tuđa otpremnica (drugi `VozacID`) se **odbija** — dosad je granica bila implicitna, jer su izvori
+   dolazili iz vozačevih otkupa.
+4. Prazan `OtpremnicaIDs` je **greška**, sa istom porukom kao danas: zbirna bez izvora nije dokument.
+5. `OtkupRecordIDs` više **nijedan pisac ne šalje**, a `OtpremniceIzOtkupRecordIDs` i oba njegova
+   pozivaoca su **obrisani** — mrtva grana se briše, ne ostavlja (v. „neuhranjen nije nedostizan").
+6. `BrojZbirne` dodeljuje isključivo master (`GetBrojZbirneForIDStrict`); klijentski račun
+   `vozacBroj/ddmmyy-seq` nestaje iz `zbirna.js`.
+7. Vozačev ekran prikazuje **dokumente sa stavkama** (klasa, kilaža, gajbe iz `OtpremniceAllStavke`), a
+   ne otkupne redove; već potrošena otpremnica (`zbirnaID != ""`) se ne nudi za nov utovar.
+
+Dokaz: nove BFP tvrdnje sa sopstvenim sabotažama za tačke 1–4 i 6; tačka 5 se meri brisanjem (nema
+pozivaoca, `vba_check` + `popis_citalaca`); tačka 7 ostaje **neverifikovana** dok ne postoji JS harness.
+
+### 14.43) S5-4b-2 — ekran: zbirna se sastavlja od otpremnica (26.09.2026)
+
+Rez zatvara prekid koji je otvorio S5-4a: vozačev spisak je od tada bio prazan, jer je čitalac tražio
+`Otkup.VozacID` koji više niko ne piše. Sada vozač radi sa **otpremnicama**, a zbirna nosi njihove
+identitete.
+
+#### Šta je promenjeno, po slojevima
+
+| Sloj | Bilo | Sada |
+|---|---|---|
+| PWA | `getVozacOtkupi`, otkupni redovi | `getVozacOtpremnice`, dokumenti sa stavkama |
+| PWA | kilaža/gajbe sa zaglavlja otkupa | **iz stavki** (`otpKg`, `otpAmb`, `otpKgKlase`) |
+| PWA | potrošenost iz `otkupRecordIDs` svih poznatih zbirni | prazan `zbirnaID` sa servera |
+| PWA | `brojZbirne` računat na klijentu | **prazno** — broj dodeljuje master |
+| PWA | `otkupRecordIDs` u payload-u | `otpremnicaIDs` |
+| GAS | — | `OtpremnicaIDs` u `ZBIRNA_COLUMNS`, obavezan na vratima |
+| GAS | `getOtkupiForVozac` + ruta `getVozacOtkupi` | **obrisani** — nemaju pozivaoca |
+| VBA | `OtpremniceIzOtkupRecordIDs` (prevod CRID → otpremnica) | `OtpremniceIzIDs` (puko parsiranje) |
+
+#### Kapije se ne ponavljaju
+
+Nov čitač **ne** proverava ništa osim da spisak nije prazan. Sve ostalo već odbija kanonski pisac,
+svaku sa svojim razlogom: prazan ID (1225), isti dvaput (1226), nepoznat (`NadjiJedanRedOtpremnice`),
+nacrt ili storniran (`RequireOtpValidanIzvorZbirne`), već u aktivnoj zbirni (1228), tuđeg vozača
+(`RequireIstoPolje`). Druga kopija tih pravila u čitaču značila bi dve verzije jedne invarijante.
+
+**Nema više dedupa, i to je promena značenja.** Stari prevodilac ga je *morao* imati, jer dva otkupa
+legitimno pokazuju na JEDNU otpremnicu. Isti `OtpremnicaID` dvaput u spisku je greška klijenta i
+prijavljuje se (1226), ne ravna u tišini.
+
+#### Mrtav slot ostaje, kapija nad njim ne
+
+`OtpremnicaIDs` ide **na kraj** VOZ lista (`VS_OTPREMNICA_IDS = 21`): obe strane čitaju **poziciono**
+(VBA `VS_*`, GAS redosled u `ZBIRNA_COLUMNS`), a `ensureSheetColumns` dopisuje kolonu samo kad je
+zatečeno zaglavlje **prefiks** kanonskog. `VS_OTKUP_RECORD_IDS` zato ostaje kao rezervisan **prazan**
+slot, ali je kapija koja ga je tražila (`ValidatePWAZbirna`) obrisana — mrtav podatak se ne hrani.
+
+#### Šta je merenje uhvatilo, a plan nije
+
+Pre-flight je izlistao devet mesta starog modela. Prvi prolaz suite-ova je našao **deseto**:
+`TestHook_ValidatePWAZbirnaDatum` je treći seam koji gradi VOZ red, i ostao je na staroj širini
+(`ReDim ... 1 To VS_BROJ_ZBIRNE`), pa je validacija koja sada čita indeks 21 pukla sa *Subscript out of
+range*. Isti obrazac zbog kog rez i postoji — samo što je treći pozivalac bio **test seam**, a pre-flight
+je gledao produkcioni kod.
+
+#### Verifikacija
+
+`RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2015 → 2025/0**. Razlika je objasnjena do kraja:
++10 novih tvrdnji (6 + 3 nova testa, +1 pojačana stara). Prvi, pali prolaz je pokazao 2018 — razlika od
+7 je bila izgubljeni ostatak RF-28 testa koji je pao u svoj `EH`, ne nestala tvrdnja.
+
+`dokaz.py zbr-ids`: **2/2 crvenih**, potpis izvora identičan (`ac8d08ba02f12105`).
+
+**Treća sabotaža je povučena, i to je nalaz sam po sebi.** `zbr-ids-cita-mrtav-slot` (indeks 21 → 18)
+obara **sedam** testova odjednom, pa je `dokaz.py` odbio da je prizna kao dokaz jedne tvrdnje — tacno.
+Pozicioni ugovor je pokriven širinom, ne preciznim sidrom; ako indeks odluta, crveno je odmah i glasno,
+ali to nije targetirani dokaz i ne piše se kao takav.
+
+Prazan spisak i tuđa otpremnica **namerno nemaju sabotažu u ovom rezu**: invarijante zive u kanonskom
+piscu, pa bi sabotaža čitača merila drugu branu — placebo.
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — nema JS harness-a, `node` nije dostupan.
+
+**Zaostao dug:** pomoćnik je preimenovan u `ZbrPwaIzvorOtpremnica` i vraća `OtpremnicaID`, ali se
+lokalne promenljive na šest pozivnih mesta i dalje zovu `crid`. Semantika je tačna, imena su zaostala.
+
+**Review #392, prvi krug — model je bio tačan, lifecycle nije bio dovršen.**
+
+Cutover je prošao bez primedbe; tri rupe su bile u **životu** tog modela.
+
+**P1 — lokalna zbirna nije rezervisala svoje otpremnice.** Dostupnost se izvodila samo iz
+`Otpremnica.zbirnaID`, a to je **kanonska** istina koju server zna tek posle master ciklusa. Između
+klika i tog ciklusa zbirna postoji, a server još sasvim tačno kaže „slobodna":
+
+```
+ZBR-A -> OTP-1   (lokalno, GAS primio)
+master jos nije prosao
+server:  OTP-1.zbirnaID = ""
+ekran:   OTP-1 opet u izboru  ->  ZBR-B -> OTP-1
+```
+
+Master bi drugu odbio, ali korisniku je komanda već prikazana kao ispravna.
+
+Ključ popravke nije bio filter nego **signal**: `mapServerZbirnaRecord` je upisivao fiksno
+`syncStatus: 'synced'`, pa se masterov verdikt (`Synced>Master` / `Duplicate` / `SyncError`) gubio na
+putu. Sada se prenosi kao `masterStatus`, i dostupnost gleda **dve** istine — kanonsku i privremenu
+(lokalna zbirna koju master još nije razrešio). Bez tog signala rezervacija bi trajala zauvek: posle
+storna zbirne otpremnica se nikad ne bi vratila u izbor.
+
+**P1 — potvrda nije imala svežu authoritative proveru.** Drugi uređaj je mogao da potroši iste
+otpremnice dok ekran stoji otvoren; lock to ne hvata, jer master može da završi ciklus i lock padne, a
+ovaj uređaj i dalje drži stari snimak u memoriji. `startZbirnaCreation` sada snima **nameru** — spisak
+koji je vozač stvarno video — a `confirmZbirnaUnlocked` pre upisa traži svež `getVozacOtpremnice` i
+proverava da je **tačno ta namera** još izvodljiva. Namerno se **ne** uzima „sve što je sada slobodno":
+to bi tiho promenilo manifest koji je upravo pregledan.
+
+**P2 — GAS je gutao „isti CRID, druga tvrdnja".** `processZbirnaRecord` je vraćao `existing/success`
+bez poređenja sadržaja, pa druga verzija nikad nije stigla masteru — iako `PwaZbirnaRazlika` ume da je
+imenuje. Sada: `VozacID`, `Datum`, `KupacID`, `BrojZbirne` (samo ako je poslat) i **skup** izvora
+(`skupIzvoraRazlika_`, redosled nije tvrdnja) → `ZBIRNA_CONFLICT`. Summary ne odlučuje, jer ga master
+izvodi iz izvora.
+
+**Dva P3 su zatvorena jer su bila neslaganja koda i komentara**, a to je gore od običnog propusta:
+prazan token više se ne preskoče tiho nego stiže piscu koji ga odbija (1225), i `loadVozacData` više ne
+prazni spisak pre nego što obeća da ga zadržava. Treći (multiplicitet u `SkupIzvoraRazlika`) ostaje
+zapisan.
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2025/0** — broj je nepromenjen,
+jer ovaj krug ne dodaje tvrdnje: dve ispravke su u GAS-u i PWA, a jedina VBA izmena ne menja nijednu
+postojeću tvrdnju. `dokaz.py zbr-ids` je pušten **ponovo** (sidro sabotaže se menjalo zajedno sa kodom
+koji ga gađa): **2/2 crvenih**, potpis izvora identičan (`5c992b26d0585c55`).
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — rezervacija, komandna kapija i konflikt su pročitani i
+rezonovani, ne izvršeni.
+
+**Review #392, drugi krug — dve fineše lifecycle-a.**
+
+**P1 — kapija je pitala server, ali ne i sopstvenu bazu.** Sveža provera je gledala samo
+`getVozacOtpremnice`. Drugi **tab** (ista baza, isti uređaj) mogao je upravo da napravi zbirnu nad istim
+otpremnicama; master je još ne vidi, pa server sasvim tačno kaže „slobodna". `withSubmitLock` to ne
+hvata — brava živi samo u memoriji tog taba.
+
+Sada se na granici komande čita **oboje**: svež serverski spisak i sveže lokalne nerazrešene
+rezervacije (`rezervisaneOtpremnice(await getMergedZbirneForVozac())`).
+
+**Uz to: namera se razrešava tačno, ili se ne razrešava.** Payload se gradio `filter`-om nad lokalnim
+spiskom, bez provere broja — pa bi zbirna mogla nastati sa **manje** otpremnica nego što je korisnik
+pregledao, baš ono što komentar iznad tvrdi da se ne sme desiti. Sada se razrešen skup **broji** i mora
+biti jednak nameri.
+
+**P2 — odbijanje nije oslobađalo rezervaciju.** Komentar je obećavao da odbijen događaj oslobađa, ali
+`sync-engine` i transportni pad i poslovno odbijanje ostavlja kao `syncStatus: 'pending'`:
+
+```
+GAS: ZBIRNA_CONFLICT  ->  syncStatus = pending, lastServerStatus = failed
+rezervisaneOtpremnice ->  jos uvek rezervisano
+svaki retry           ->  isti ishod, otpremnica zakljucana zauvek
+```
+
+Nedostajao je **lifecycle signal**: `record.lastServerCode` se nigde nije čuvao. Sada se čuva, a
+rezervacija se otpušta samo na **trajno** odbijanje (`ZBIRNA_CONFLICT`, `VALIDATION_ERROR`,
+`CLIENT_RECORD_ID_MISSING`). Prazan kod znači transportni neuspeh — takav zapis je još na putu i
+rezervaciju **zadržava**, pa retry ostaje moguć.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `sync-engine.js`) — `src-vba`, `gas` i `tools`
+nisu dirnuti. Suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — ceo krug je PWA: dvostruka kapija i lifecycle rezervacije su pročitani i
+rezonovani, ne izvršeni.
+
+**Review #392, treći krug — kapija je bila nada, ne kapija.**
+
+**P2, jednom linijom, ali ne trivijalan nalaz.** `lastServerCode` se od prošlog kruga **upisuje** u
+IndexedDB, ali ga `normalizeLocalZbirnaRecord` nije prenosio — pa do `rezervisaneOtpremnice` nikad nije
+stizao. Lifecycle signal je postojao u bazi i nestajao na putu do potrošača; trajno odbijena zbirna bi
+i dalje zauvek držala svoje otpremnice. Ista klasa kao P1 iz prvog kruga: popravka nije u pravilu nego
+u **signalu koji se gubi između slojeva**.
+
+**P1 — provera pa upis u dva poteza nisu kapija.** Dva taba dele istu bazu, pa oba mogu da pročitaju
+„slobodno" pre nego što ijedan upiše:
+
+```
+Tab A                    Tab B
+read local -> free
+                         read local -> free
+dbPut ZBR-A
+                         dbPut ZBR-B
+```
+
+`withSubmitLock` to ne rešava — brava živi u memoriji jednog taba. Uz to je `getMergedZbirneForVozac`
+**gutao** pad lokalnog čitanja (`local = []`), pa spoljašnji `catch` taj pad nikad nije ni video: dokaz
+o rezervaciji je mogao da nestane fail-open.
+
+Oboje zatvara **jedna readwrite transakcija**: `dbClaimInStore` čita rezervacije i upisuje zbirnu u
+istom potezu, pa ih baza serijalizuje među tabovima, a pad čitanja **baca** umesto da vrati prazno.
+Provera iznad ostaje — ali kao **upozorenje sa lepom porukom**, ne kao dokaz; prava kapija je claim.
+
+Dve stvari koje su u toj transakciji bitne, a lako se previde:
+
+- `proveri` **mora** biti sinhrona. Jedan `await` bi pustio event loop i transakcija bi se zatvorila pre
+  upisa — tiho, bez greške.
+- whitelist master-razrešenih zbirni računa se **pre** transakcije (unutar nje nema mesta za mrežu). Ako
+  se ne dobije, skup je prazan — a to znači **više** rezervacija, ne manje: degradacija je
+  konzervativna.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `db.js`) — `src-vba`, `gas` i `tools` nisu
+dirnuti, pa suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — i ovo je PWA. Atomski claim je tačno ona vrsta koda koji bi test uhvatio a
+čitanje ne: ponasanje IndexedDB transakcije pod istovremenim tabovima se ne može dokazati čitanjem.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

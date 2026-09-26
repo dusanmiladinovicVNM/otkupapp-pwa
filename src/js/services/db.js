@@ -360,6 +360,79 @@
     // groups: [{ storeName, records: [...] }, ...] -- sve u JEDNOJ transakciji,
     // preko vise store-ova. IndexedDB abort vraca sve, pa je ishod ili ceo potez
     // ili nijedan zapis.
+    // PROVERI I UPISI U JEDNOJ TRANSAKCIJI (review #392, treci krug).
+    //
+    // Provera pa upis u dva poteza nije kapija nego nada: dva taba dele istu
+    // bazu, pa oba mogu da procitaju "slobodno" pre nego sto ijedan upise.
+    // withSubmitLock to ne resava -- brava zivi u memoriji jednog taba.
+    //
+    // IndexedDB readwrite transakcija nad istim store-om daje prirodnu
+    // serijalizaciju medju tabovima: dok ova traje, druga ne cita.
+    //
+    // `proveri` MORA biti sinhrona. Svaki await bi pustio event loop i
+    // transakcija bi se zatvorila pre upisa -- tiho, bez greske.
+    //
+    // Vraca { ok, razlog }. Pad citanja NE vraca ok:false nego BACA: "ne znam
+    // stanje" i "stanje dozvoljava" nisu isto.
+    window.dbClaimInStore = function dbClaimInStore(db, storeName, record, proveri) {
+        return new Promise(function (resolve, reject) {
+            try {
+                assertStoreExists(db, storeName);
+
+                const tx = db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.getAll();
+
+                let odbijeno = '';
+
+                req.onsuccess = function () {
+                    let razlog = '';
+
+                    try {
+                        razlog = (typeof proveri === 'function')
+                            ? (proveri(req.result || []) || '')
+                            : '';
+                    } catch (err) {
+                        razlog = (err && err.message) || 'provera pre upisa je pala';
+                    }
+
+                    if (razlog) {
+                        odbijeno = razlog;
+                        try { tx.abort(); } catch (_) {}
+                        return;
+                    }
+
+                    store.put(record);
+                };
+
+                req.onerror = function (event) {
+                    reject(event && event.target ? event.target.error
+                                                 : new Error('dbClaimInStore read failed'));
+                };
+
+                tx.oncomplete = function () {
+                    resolve({ ok: true, razlog: '' });
+                };
+
+                tx.onabort = function () {
+                    if (odbijeno) {
+                        resolve({ ok: false, razlog: odbijeno });
+                        return;
+                    }
+                    reject(new Error('dbClaimInStore transakcija je prekinuta'));
+                };
+
+                tx.onerror = function (event) {
+                    if (odbijeno) return;   // abort putanja je vec razresena
+                    reject(event && event.target ? event.target.error
+                                                 : new Error('dbClaimInStore failed'));
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    };
+
     window.dbPutAll = function dbPutAll(db, groups) {
         return new Promise(function (resolve, reject) {
             try {

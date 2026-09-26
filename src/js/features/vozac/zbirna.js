@@ -1,43 +1,89 @@
 // ============================================================
 // VOZAC: ZBIRNA
 // ============================================================
-let vozacOtkupi = [];
+// VOZAC RADI SA OTPREMNICAMA (S5-4b-2).
+//
+// Do ovog reza je ovde stajao spisak OTKUPNIH redova, filtriran po
+// Otkup.VozacID. Ta veza je pala u S5-4a -- ekran otpreme vise ne dira otkupni
+// zapis -- pa je spisak bio prazan. Kanon kaze da vozac nosi otpremnice i da se
+// zbirna sastavlja od njih, pa se i radi sa njima.
+let vozacOtpremnice = [];
 let _lastMergedZbirne = null;
 
-async function loadVozacData() {
-    vozacOtkupi = [];
+// Kilaza i gajbe dolaze iz STAVKI. Zaglavlje otpremnice jos nosi legacy kolone,
+// ali se one ne izvoze i ne citaju -- dokument je zaglavlje + stavke.
+function otpKgKlase(o, klasa) {
+    return (o.stavke || [])
+        .filter(s => String(s.klasa || '') === klasa)
+        .reduce((zbir, s) => zbir + (Number(s.kolicina) || 0), 0);
+}
 
+function otpKg(o) {
+    return (o.stavke || []).reduce((zbir, s) => zbir + (Number(s.kolicina) || 0), 0);
+}
+
+function otpAmb(o) {
+    return (o.stavke || []).reduce((zbir, s) => zbir + (Number(s.kolAmbalaze) || 0), 0);
+}
+
+function otpKlaseOpis(o) {
+    const klase = Array.from(new Set((o.stavke || []).map(s => String(s.klasa || '')).filter(Boolean)));
+    return klase.join('+');
+}
+
+async function loadVozacData() {
     const json = await safeAsync(async () => {
-        return await apiFetch('action=getVozacOtkupi');
+        return await apiFetch('action=getVozacOtpremnice');
     }, 'Greška pri učitavanju podataka vozača');
 
-    if (json && json.success && Array.isArray(json.records)) {
-        vozacOtkupi = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '',
-            serverRecordID: r.ServerRecordID || '',
-            datum: fmtDate(r.Datum),
-            kooperantName: r.KooperantName || r.KooperantID || '',
-            kooperantID: r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '',
-            sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I',
-            kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0,
-            tipAmbalaze: r.TipAmbalaze || '',
-            kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
-            stanicaID: r.OtkupacID || extractStanicaIdFromSource(r._source) || '',
-            vozacID: r.VozacID || '',
-            updatedAtServer: r.UpdatedAtServer || r.ReceivedAt || '',
-            syncStatus: 'synced'
+    // readModelChanging: master ciklus menja stanje, server namerno ne salje
+    // spisak. Zadrzi poslednje poznato umesto da ga obrises praznim odgovorom.
+    //
+    // Zato se spisak NE prazni unapred (review #392, P3): ranije je prva linija
+    // bila vozacOtpremnice = [], pa je komentar obecavao zadrzavanje koje runtime
+    // nije radio.
+    if (json && json.readModelChanging) {
+        showToast(json.message || 'Stanje vožnji se trenutno menja', 'warning');
+    } else if (json && json.success && Array.isArray(json.records)) {
+        vozacOtpremnice = json.records.map(r => ({
+            otpremnicaID: r.otpremnicaID || '',
+            brojOtpremnice: r.brojOtpremnice || '',
+            datum: fmtDate(r.datum),
+            stanicaID: r.stanicaID || '',
+            vozacID: r.vozacID || '',
+            vrstaVoca: r.vrstaVoca || '',
+            sortaVoca: r.sortaVoca || '',
+            tipAmbalaze: r.tipAmbalaze || '',
+            predajaID: r.predajaID || '',
+
+            // Prazno = slobodna za zbirnu. Master racuna iz clanstva, pa se
+            // posle storna zbirne otpremnica sama vraca u opticaj.
+            zbirnaID: r.zbirnaID || '',
+
+            stavke: Array.isArray(r.stavke) ? r.stavke : []
         }));
+    } else {
+        // Ni podatak ni imenovan razlog -- spisak se prazni, jer bi zadrzan
+        // stari ovde bio tvrdnja bez pokrica.
+        vozacOtpremnice = [];
     }
 
-    // Jedan fetch za zbirne — koristi se i za filter i za renderovanje
+    // Jedan fetch za zbirne -- koristi se i za renderovanje
     const zbirne = await getMergedZbirneForVozac();
     _lastMergedZbirne = zbirne;
 
-    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
-    vozacOtkupi = vozacOtkupi.filter(r => !consumedIds.has(r.clientRecordID));
+    // DVE ISTINE, NE JEDNA.
+    //
+    //   kanonska tekuca  -- server: Otpremnica.zbirnaID (posle master ciklusa)
+    //   privremena       -- lokalna zbirna koju master jos nije razresio
+    //
+    // Prva sama nije dovoljna: postoji legitiman prozor u kom je zbirna vec
+    // napravljena a master je jos nije video.
+    const rezervisane = rezervisaneOtpremnice(zbirne);
+
+    vozacOtpremnice = vozacOtpremnice.filter(o =>
+        !o.zbirnaID && !rezervisane.has(o.otpremnicaID)
+    );
 
     renderVozacOtpremnice();
     renderVozacZbirneFromData(zbirne);
@@ -50,15 +96,9 @@ async function loadVozacZbirne() {
     renderVozacZbirneFromData(zbirne);
 }
 
-function extractStanicaIdFromSource(source) {
-    const s = String(source || '');
-    if (s.startsWith('OTK-')) return s.substring(4);
-    return s;
-}
-
 function renderVozacOtpremnice() {
     const today = getTodayIsoDate();
-    const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
+    const todayOtkupi = vozacOtpremnice.filter(r => r.datum === today);
 
     const list = document.getElementById('vozacOtpremniceList');
     if (!list) return;
@@ -79,8 +119,8 @@ function renderVozacOtpremnice() {
         const s = r.stanicaID || '?';
         if (!grouped[s]) grouped[s] = { items: [], kg: 0, amb: 0 };
         grouped[s].items.push(r);
-        grouped[s].kg += r.kolicina || 0;
-        grouped[s].amb += r.kolAmbalaze || 0;
+        grouped[s].kg += otpKg(r);
+        grouped[s].amb += otpAmb(r);
     });
 
     list.innerHTML = Object.entries(grouped).map(([sta, g]) =>
@@ -89,18 +129,30 @@ function renderVozacOtpremnice() {
             `<div class="vblk sel">
                 <div class="vblk__c">✓</div>
                 <div>
-                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
-                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${r.kolAmbalaze} amb</div>
+                    <div class="vblk__nm">${escapeHtml(r.brojOtpremnice || r.otpremnicaID)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(otpKlaseOpis(r))} · ${otpAmb(r)} amb</div>
                 </div>
-                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+                <div class="vblk__kg">${otpKg(r).toLocaleString('sr')}<span class="u"> kg</span></div>
             </div>`
         ).join('')
     ).join('');
 }
 
+// Spisak otpremnica koji je vozac STVARNO video kad je otvorio ekran.
+//
+// Potvrda se meri prema njemu, ne prema "svemu sto je sada slobodno": osvezavanje
+// izmedju otvaranja i klika sme da ZAUSTAVI komandu, ali ne sme tiho da promeni
+// manifest koji je korisnik pregledao.
+let zbirnaNamera = [];
+
 async function startZbirnaCreation() {
     document.getElementById('zbirnaMainView').style.display = 'none';
     document.getElementById('zbirnaCreateView').style.display = 'block';
+
+    const danas = getTodayIsoDate();
+    zbirnaNamera = (vozacOtpremnice || [])
+        .filter(r => r.datum === danas && !r.zbirnaID)
+        .map(r => r.otpremnicaID);
     
     const sel = document.getElementById('fldZbirnaKupac');
     sel.innerHTML = '<option value="">-- Izaberi kupca --</option>';
@@ -134,13 +186,13 @@ async function startZbirnaCreation() {
 
 function renderZbirnaSummary() {
     const today = getTodayIsoDate();
-    const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
+    const todayOtkupi = vozacOtpremnice.filter(r => r.datum === today);
 
     let totalKgI = 0, totalKgII = 0, totalAmb = 0;
     todayOtkupi.forEach(r => {
-        if (r.klasa === 'II') totalKgII += r.kolicina || 0;
-        else totalKgI += r.kolicina || 0;
-        totalAmb += r.kolAmbalaze || 0;
+        totalKgI += otpKgKlase(r, 'I');
+        totalKgII += otpKgKlase(r, 'II');
+        totalAmb += otpAmb(r);
     });
 
     const totalKg = totalKgI + totalKgII;
@@ -156,7 +208,7 @@ function renderZbirnaSummary() {
                     : 'Klasa I'}
                 · Amb: ${totalAmb}
             </div>
-            <div class="vsum__sub">${todayOtkupi.length} otkupa · ${stanicaCount} ${stanicaCount === 1 ? 'stanica' : 'stanice'}</div>
+            <div class="vsum__sub">${todayOtkupi.length} ${todayOtkupi.length === 1 ? 'otpremnica' : 'otpremnice'} · ${stanicaCount} ${stanicaCount === 1 ? 'stanica' : 'stanice'}</div>
         </div>`;
     }
 
@@ -170,10 +222,10 @@ function renderZbirnaSummary() {
             `<div class="vblk sel">
                 <div class="vblk__c">✓</div>
                 <div>
-                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
-                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${escapeHtml(fmtStanica(r.stanicaID))}</div>
+                    <div class="vblk__nm">${escapeHtml(r.brojOtpremnice || r.otpremnicaID)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(otpKlaseOpis(r))} · ${escapeHtml(fmtStanica(r.stanicaID))}</div>
                 </div>
-                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+                <div class="vblk__kg">${otpKg(r).toLocaleString('sr')}<span class="u"> kg</span></div>
             </div>`
         ).join('');
     }
@@ -199,7 +251,15 @@ function mapServerZbirnaRecord(r) {
         kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
         tipAmbalaze: r.TipAmbalaze || '',
         klasa: r.Klasa || '',
-        otkupRecordIDs: r.OtkupRecordIDs || '',
+        otpremnicaIDs: r.OtpremnicaIDs || '',
+
+        // VERDIKT MASTERA, DOSLOVNO (review #392, P1).
+        //
+        // Do sada se gubio: mapper je upisivao fiksno 'synced', sto znaci samo
+        // "GAS je primio red". Master svoj ishod pise NAZAD u VOZ list
+        // (Synced>Master / Duplicate / SyncError:...), pa je to jedini signal po
+        // kom klijent zna da je dokument stvarno razresen.
+        masterStatus: r.SyncStatus || '',
 
         syncStatus: 'synced',
         syncAttempts: 0,
@@ -228,7 +288,12 @@ function normalizeLocalZbirnaRecord(r) {
         kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
         tipAmbalaze: r.tipAmbalaze || '',
         klasa: r.klasa || '',
-        otkupRecordIDs: r.otkupRecordIDs || '',
+        otpremnicaIDs: r.otpremnicaIDs || '',
+        masterStatus: r.masterStatus || '',
+
+        // Bez ovoga je lifecycle signal postojao u bazi a nestajao na putu do
+        // rezervacije: trajno odbijena zbirna bi zauvek drzala svoje otpremnice.
+        lastServerCode: r.lastServerCode || '',
 
         syncStatus: r.syncStatus || 'pending',
         syncAttempts: parseInt(r.syncAttempts, 10) || 0,
@@ -341,16 +406,89 @@ async function confirmZbirnaUnlocked() {
     const kupacID = kupacSel.value;
     const today = getTodayIsoDate();
 
-    // Koristi cached zbirne umesto novog API call-a
-    const zbirne = _lastMergedZbirne || await getMergedZbirneForVozac();
-    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
+    // KOMANDNA KAPIJA (review #392, P1).
+    //
+    // Drugi uredjaj je mogao da potrosi iste otpremnice dok je ovaj ekran stajao
+    // otvoren. Lock sam po sebi to ne hvata: master moze da zavrsi ciklus, lock
+    // padne, a ovaj uredjaj i dalje drzi stari snimak u memoriji.
+    //
+    // Zato se pre upisa tazi SVEZ authoritative spisak. Endpoint iz #391 vec
+    // garantuje da je snimak iz jedne objavljene generacije, pa se ovde meri samo
+    // da li je NAMERA korisnika jos izvodljiva.
+    //
+    // OFFLINE ostaje offline-first: bez veze se radi nad poslednjim poznatim.
+    let slobodneNaServeru = null;
 
-    const todayOtkupi = (vozacOtkupi || []).filter(r =>
-        r.datum === today && !consumedIds.has(r.clientRecordID)
+    if (navigator.onLine) {
+        const sveze = await safeAsync(async () => {
+            return await apiFetch('action=getVozacOtpremnice');
+        }, 'Greška pri proveri stanja vožnji');
+
+        if (!sveze || sveze.success !== true || sveze.readModelChanging) {
+            showToast(
+                (sveze && sveze.message) ||
+                'Stanje vožnji se ne može potvrditi - probaj ponovo',
+                'error'
+            );
+            return;
+        }
+
+        slobodneNaServeru = new Set(
+            (Array.isArray(sveze.records) ? sveze.records : [])
+                .filter(r => !String((r && r.zbirnaID) || '').trim())
+                .map(r => String((r && r.otpremnicaID) || '').trim())
+        );
+    }
+
+    // DRUGA SVEZA KAPIJA: LOKALNE NERAZRESENE REZERVACIJE.
+    //
+    // Server sam nije dovoljan. Drugi tab (ista baza, isti uredjaj) mogao je
+    // upravo da napravi zbirnu nad istim otpremnicama; master je jos ne vidi, pa
+    // server sasvim tacno kaze "slobodna". withSubmitLock to ne hvata -- brava
+    // zivi samo u memoriji OVOG taba.
+    let rezervisaneSada;
+    try {
+        rezervisaneSada = rezervisaneOtpremnice(await getMergedZbirneForVozac());
+    } catch (err) {
+        console.error('confirmZbirna rezervacije failed:', err);
+        showToast('Stanje zbirnih se ne može pročitati - probaj ponovo', 'error');
+        return;
+    }
+
+    // TACNO ONAJ SKUP KOJI JE KORISNIK VIDEO.
+    //
+    // Ne uzima se "sve sto je sada slobodno": to bi tiho promenilo manifest koji
+    // je upravo pregledan. Ako je ijedna otpremnica otisla -- serveru ili drugoj
+    // lokalnoj zbirni -- komanda STAJE i ekran se precrtava.
+    const izgubljene = (zbirnaNamera || []).filter(id =>
+        (slobodneNaServeru && !slobodneNaServeru.has(id)) || rezervisaneSada.has(id)
     );
 
-    if (todayOtkupi.length === 0) {
-        showToast('Nema otkupa za danas', 'error');
+    if (!zbirnaNamera.length || izgubljene.length) {
+        showToast(
+            izgubljene.length === 1
+                ? 'Jedna otpremnica je u međuvremenu već u zbirnoj - proveri spisak'
+                : izgubljene.length + ' otpremnica je u međuvremenu već u zbirnoj - proveri spisak',
+            'error'
+        );
+        await loadVozacData();
+        cancelZbirna();
+        return;
+    }
+
+    // NAMERA SE RAZRESAVA TACNO, ILI SE NE RAZRESAVA.
+    //
+    // Filter bi tiho napravio MANJI manifest od onog koji je korisnik pregledao:
+    // ako lokalni spisak u medjuvremenu vise ne nosi neku otpremnicu, zbirna bi
+    // nastala bez nje. Zato se broji -- razresen skup mora biti jednak nameri.
+    const todayOtkupi = (zbirnaNamera || [])
+        .map(id => (vozacOtpremnice || []).find(r => r.otpremnicaID === id))
+        .filter(Boolean);
+
+    if (todayOtkupi.length !== (zbirnaNamera || []).length) {
+        showToast('Spisak otpremnica se promenio - proveri pa probaj ponovo', 'error');
+        await loadVozacData();
+        cancelZbirna();
         return;
     }
 
@@ -361,10 +499,10 @@ async function confirmZbirnaUnlocked() {
     const sorte = new Set();
 
     todayOtkupi.forEach(r => {
-        if (r.klasa === 'II') totalKgII += r.kolicina || 0;
-        else totalKgI += r.kolicina || 0;
+        totalKgI += otpKgKlase(r, 'I');
+        totalKgII += otpKgKlase(r, 'II');
 
-        totalAmb += r.kolAmbalaze || 0;
+        totalAmb += otpAmb(r);
         if (r.vrstaVoca) vrste.add(r.vrstaVoca);
         if (r.sortaVoca) sorte.add(r.sortaVoca);
     });
@@ -375,32 +513,19 @@ async function confirmZbirnaUnlocked() {
 
     const nowIso = new Date().toISOString();
 
-    // === BrojZbirne PWA-side generation ===
-    const vozacBrojX = parseInt(String(CONFIG.ENTITY_ID || '').replace(/\D/g, ''), 10);
-    if (!vozacBrojX || isNaN(vozacBrojX)) {
-        showToast('Greška: VozacID nije validan za generaciju broja zbirne', 'error');
-        return;
-    }
-
-    const ddmmyy = formatDdmmyy(today);
-
-    // Sequence: count današnjih ne-deleted zbirni iz cached merged set
-    const todayZbirneCount = (zbirne || [])
-        .filter(z => z.datum === today)
-        .length;
-
-    const seq = todayZbirneCount + 1;
-    const brojZbirne = (seq === 1)
-        ? `${vozacBrojX}/${ddmmyy}`
-        : `${vozacBrojX}/${ddmmyy}-${seq}`;
-    // === end BrojZbirne ===
-
     const record = {
         clientRecordID: (window.crypto && typeof window.crypto.randomUUID === 'function')
             ? window.crypto.randomUUID()
             : ('zbr-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
         serverRecordID: '',
-        brojZbirne: brojZbirne,
+
+        // BROJ DODELJUJE MASTER (A2: broj je labela, ne identitet).
+        //
+        // Klijentski racun vozacBroj/ddmmyy-seq je obrisan: redni broj se
+        // izvodio iz zbirni koje BAS OVAJ uredjaj zna, pa su dva telefona istog
+        // dana mogla smisliti isti broj. Prazno polje uvoz vec razume kao
+        // "generisi lokalno" (GetBrojZbirneForIDStrict).
+        brojZbirne: '',
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
         updatedAtServer: '',
@@ -417,7 +542,10 @@ async function confirmZbirnaUnlocked() {
         tipAmbalaze: todayOtkupi[0].tipAmbalaze || '',
         kolAmbalaze: totalAmb,
         klasa: totalKgII > 0 ? 'I+II' : 'I',
-        otkupRecordIDs: todayOtkupi.map(r => r.clientRecordID).join(','),
+
+        // IDENTITET PUTUJE (S5-4b-2). Master vise ne prevodi otkupne CRID-ove u
+        // otpremnice -- dobija ih onakve kakve ih je vozac video.
+        otpremnicaIDs: todayOtkupi.map(r => r.otpremnicaID).join(','),
 
         syncStatus: 'pending',
         syncAttempts: 0,
@@ -429,11 +557,51 @@ async function confirmZbirnaUnlocked() {
         schemaVersion: 1
     };
 
+    // ATOMSKI CLAIM (review #392, treci krug).
+    //
+    // Provera iznad je UPOZORENJE, ne kapija: izmedju nje i upisa drugi tab sme
+    // da napravi svoju zbirnu nad istim otpremnicama. Prava kapija je ovde --
+    // poslednje citanje rezervacija i upis su JEDNA readwrite transakcija, pa ih
+    // baza serijalizuje medju tabovima.
+    //
+    // Whitelist razresenih se racuna PRE transakcije, jer unutar nje nema mesta
+    // za mrezu. Ako ga nema (pad citanja), skup je prazan -- a to znaci VISE
+    // rezervacija, ne manje: degradacija je konzervativna.
+    const razreseni = new Set(
+        (await getMergedZbirneForVozac() || [])
+            .filter(zbirnaRazresenaOdMastera)
+            .map(z => String(z.clientRecordID || '').trim())
+            .filter(Boolean)
+    );
+
+    let claim;
     try {
-        await dbPut(db, 'zbirne', record);
+        claim = await dbClaimInStore(db, 'zbirne', record, function (sviZapisi) {
+            const rez = rezervisaneOtpremnice(
+                (sviZapisi || []).map(z => Object.assign({}, z, {
+                    masterStatus: razreseni.has(String(z.clientRecordID || '').trim())
+                        ? 'Synced>Master'
+                        : ''
+                }))
+            );
+
+            const sudar = (zbirnaNamera || []).filter(id => rez.has(id));
+            if (sudar.length) {
+                return sudar.length + ' otpremnica je u međuvremenu već u drugoj zbirnoj';
+            }
+
+            return '';
+        });
     } catch (err) {
-        console.error('confirmZbirna dbPut failed:', err);
-        showToast('Greška pri čuvanju zbirne', 'error');
+        console.error('confirmZbirna claim failed:', err);
+        showToast('Stanje zbirnih se ne može potvrditi - zbirna NIJE sačuvana', 'error');
+        return;
+    }
+
+    if (!claim.ok) {
+        showToast(claim.razlog + ' - proveri spisak', 'error');
+        await loadVozacData();
+        cancelZbirna();
         return;
     }
 
@@ -471,20 +639,65 @@ async function syncZbirne() {
     return result;
 }
 
-function getConsumedOtkupIdsFromZbirne(zbirne) {
-    const used = new Set();
+// Kodovi kojima server kaze "presudio sam i odbijam" -- retry ne menja ishod.
+//
+// Transportni neuspeh nema kod, pa ovde namerno nije nabrojan: takav zapis je
+// jos na putu i mora da zadrzi svoje otpremnice.
+const ZBIRNA_TRAJNO_ODBIJENA = new Set([
+    'ZBIRNA_CONFLICT',
+    'VALIDATION_ERROR',
+    'CLIENT_RECORD_ID_MISSING'
+]);
+
+// Da li je master doneo odluku o ovoj zbirni.
+//
+// Isti skup koji GAS zove terminalnim: master je red video i presudio, pa od tog
+// trenutka o otpremnicama govori KANONSKO stanje, ne vise lokalni dogadjaj.
+function zbirnaRazresenaOdMastera(z) {
+    const s = String((z && z.masterStatus) || '').trim();
+    return s === 'Synced>Master' || s === 'Duplicate' || s.indexOf('SyncError') === 0;
+}
+
+// OTPREMNICE KOJE DRZI JOS NERAZRESENA ZBIRNA (review #392, P1).
+//
+// Server govori kanonsku tekucu istinu (Otpremnica.zbirnaID), ali je zna tek
+// POSLE master ciklusa. Izmedju klika i tog ciklusa lokalna zbirna postoji, a
+// server jos sasvim tacno kaze "slobodna" -- pa bi ista otpremnica odmah ponovo
+// usla u izbor i vozac bi nad njom napravio DRUGU zbirnu. Master bi je kasnije
+// odbio, ali komanda bi vec bila izvrsena kao ispravna.
+//
+// Lokalni 'synced' NIJE razresenje: znaci samo da je GAS primio red. Razresenje
+// daje master, i cita se iz njegovog verdikta -- inace bi rezervacija trajala
+// zauvek i posle storna zbirne otpremnica se nikad ne bi vratila u izbor.
+function rezervisaneOtpremnice(zbirne) {
+    const rez = new Set();
 
     (zbirne || []).forEach(z => {
-        const raw = String(z.otkupRecordIDs || '').trim();
-        if (!raw) return;
+        if (!z || z.deleted) return;
 
-        raw.split(',')
+        // ODBIJEN DOGADJAJ OSLOBADJA, ALI SAMO TRAJNO ODBIJEN.
+        //
+        // Sync engine i transportni pad i poslovno odbijanje ostavlja kao
+        // syncStatus 'pending' -- razlikuje ih tek KOD koji je server vratio.
+        // Bez te razlike bi trajno odbijena zbirna zauvek drzala svoje
+        // otpremnice, jer svaki retry pada iz istog razloga.
+        //
+        // Prazan kod = transportni neuspeh: zapis je i dalje na putu, pa
+        // rezervacija OSTAJE.
+        const lokalni = String(z.syncStatus || '').trim();
+        if (lokalni === 'error' || lokalni === 'failed') return;
+        if (ZBIRNA_TRAJNO_ODBIJENA.has(String(z.lastServerCode || '').trim())) return;
+
+        if (zbirnaRazresenaOdMastera(z)) return;
+
+        String(z.otpremnicaIDs || '')
+            .split(',')
             .map(x => x.trim())
             .filter(Boolean)
-            .forEach(id => used.add(id));
+            .forEach(id => rez.add(id));
     });
 
-    return used;
+    return rez;
 }
 
 async function getMergedZbirneForVozac() {
@@ -509,11 +722,3 @@ async function getMergedZbirneForVozac() {
     .filter(r => !r.deleted);
 }
 
-function formatDdmmyy(isoDate) {
-    // '2026-05-06' → '060526'
-    if (!isoDate || typeof isoDate !== 'string') return '';
-    const parts = isoDate.split('-');
-    if (parts.length !== 3) return '';
-    const [y, m, d] = parts;
-    return d + m + y.slice(2);
-}

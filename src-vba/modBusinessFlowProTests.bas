@@ -312,6 +312,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTPVOZ_ZbirnaIDJeTekucaIstina
     Test_OTPVOZ_StavkeIzKanonaBezCene
     Test_OTPVOZ_ObjavaSeDokazujeIzvozom
+    Test_ZBR_UvozNosiTacnoPoslateOtpremnice
+    Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
@@ -1357,8 +1359,8 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
     ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa svaki uredjaj mora da posalje
     ' SVOJ izvor. Dva uredjaja, dve otpremnice, isti broj -- bas KR-001.
     Dim cridA As String, cridB As String
-    cridA = ZbrPwaIzvorCrid("IDENT-A-" & m_RunID, testDate, TEST_VOZ_ID)
-    cridB = ZbrPwaIzvorCrid("IDENT-B-" & m_RunID, testDate, TEST_VOZ_ID)
+    cridA = ZbrPwaIzvorOtpremnica("IDENT-A-" & m_RunID, testDate, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorOtpremnica("IDENT-B-" & m_RunID, testDate, TEST_VOZ_ID)
 
     idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-A-" & m_RunID, TEST_VOZ_ID, _
                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
@@ -1483,7 +1485,7 @@ Private Sub Test_ZBR_IstiCridNevalidanDatumNijeDuplikat()
     danas = NextTestDate()
 
     Dim crid As String
-    crid = ZbrPwaIzvorCrid("DAT-" & scenario, danas, TEST_VOZ_ID)
+    crid = ZbrPwaIzvorOtpremnica("DAT-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String, broj As String
     zbrCrid = "CRID-ZBRDAT-" & scenario
@@ -1560,8 +1562,8 @@ Private Sub Test_ZBR_IstiCridDrugiSadrzajJeKonflikt()
     danas = NextTestDate()
 
     Dim cridA As String, cridB As String
-    cridA = ZbrPwaIzvorCrid("CRIDA-" & scenario, danas, TEST_VOZ_ID)
-    cridB = ZbrPwaIzvorCrid("CRIDB-" & scenario, danas, TEST_VOZ_ID)
+    cridA = ZbrPwaIzvorOtpremnica("CRIDA-" & scenario, danas, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorOtpremnica("CRIDB-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String, broj As String
     zbrCrid = "CRID-ZBRK-" & scenario
@@ -1647,7 +1649,7 @@ Private Sub Test_ZBR_UvozPamtiPoreklo()
     danas = NextTestDate()
 
     Dim crid As String
-    crid = ZbrPwaIzvorCrid("POR-" & scenario, danas, TEST_VOZ_ID)
+    crid = ZbrPwaIzvorOtpremnica("POR-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String
     zbrCrid = "CRID-ZBRPOR-" & scenario
@@ -1669,9 +1671,11 @@ Private Sub Test_ZBR_UvozPamtiPoreklo()
                                             COL_ZBR_SYNC_SOURCE))), _
                  "ZBR poreklo: zbirna nosi SyncSource"
 
-    ' Clanstvo je razreseno kroz kanon: otkup -> otpremnica -> izvor zbirne.
+    ' Clanstvo vise nije RAZRESENO nego PRENETO: PWA salje OtpremnicaID.
     AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
-                 "ZBR poreklo: zbirna ima izvor razresen iz otkupRecordIDs"
+                 "ZBR poreklo: zbirna ima izvor primljen kao OtpremnicaID"
+    AssertEquals crid, Trim$(NzToText(modDokumenta.IzvoriZbirne(zbrID)(1))), _
+                 "ZBR poreklo: clan je BAS ona otpremnica koju je PWA poslala"
 
 Kraj:
     tx.RollbackTx
@@ -5697,7 +5701,12 @@ End Function
 ' Ide kroz PRODUKCIONI put predaje (S5-2), ne kroz fixture precicu: zbirna se od
 ' S5-3 sastavlja od otpremnica, pa izvor mora stvarno da postoji kao otpremnica.
 ' Precica bi merila podatke koje nijedan pisac ne pravi.
-Private Function ZbrPwaIzvorCrid(ByVal oznaka As String, ByVal datum As Date, _
+' IZVOR ZBIRNE JE OTPREMNICA (S5-4b-2).
+'
+' Do ovog reza je pomocnik vracao otkupni CRID, jer je master prevodio CRID ->
+' otpremnica. Prevodilac je obrisan, pa pomocnik vraca ono sto PWA sada stvarno
+' salje: OtpremnicaID. Ime pozivajucih lokalnih promenljivih nije menjano.
+Private Function ZbrPwaIzvorOtpremnica(ByVal oznaka As String, ByVal datum As Date, _
                                  ByVal vozacID As String) As String
     Dim crid As String
     crid = "CRID-ZBRIZV-" & oznaka
@@ -5713,11 +5722,11 @@ Private Function ZbrPwaIzvorCrid(ByVal oznaka As String, ByVal datum As Date, _
 
     Dim ishodi As Object, greske As String
     If modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske) <> 1 Then
-        Err.Raise vbObjectError + 9430, "ZbrPwaIzvorCrid", _
+        Err.Raise vbObjectError + 9430, "ZbrPwaIzvorOtpremnica", _
                   "Predaja nije napravila otpremnicu: " & greske
     End If
 
-    ZbrPwaIzvorCrid = crid
+    ZbrPwaIzvorOtpremnica = modDokumenta.OtpremnicaZaOtkup(otkID)
 End Function
 
 ' Snimak SVIH tabela koje auto-otpremnica dira. Rollback mora da vrati CEO
@@ -7282,6 +7291,133 @@ EH:
     eN = Err.Number
     eD = Err.description
     LogFatal "Test_OTPVOZ_ObjavaSeDokazujeIzvozom", eN, eD
+End Sub
+
+' ZBIRNA SE SASTAVLJA OD OTPREMNICA KOJE JE VOZAC POSLAO (S5-4b-2).
+'
+' Dve otpremnice u spisku daju clanstvo od TACNO te dve. Meri se i broj i
+' identitet: test koji bi brojao samo clanove prosao bi i da su izvori zamenjeni
+' tudjim dokumentima.
+Private Sub Test_ZBR_UvozNosiTacnoPoslateOtpremnice()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, danas As Date
+    Dim otpA As String, otpB As String, zbrID As String, zbrCrid As String
+    Dim clanovi As Collection
+
+    scenario = NewScenarioCode("ZBRIDS1")
+    danas = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    otpA = ZbrPwaIzvorOtpremnica("IDSA-" & scenario, danas, TEST_VOZ_ID)
+    otpB = ZbrPwaIzvorOtpremnica("IDSB-" & scenario, danas, TEST_VOZ_ID)
+    zbrCrid = "CRID-ZBRIDS-" & scenario
+
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0 And otpA <> otpB, _
+        "ZBR-IDS preduslov: dve razlicite izdate otpremnice"
+
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, TEST_VRSTA, TEST_SORTA, _
+                100#, "", otpA & "," & otpB)
+
+    AssertTrue Len(zbrID) > 0, "ZBR-IDS: uvoz je prosao"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    Set clanovi = modDokumenta.IzvoriZbirne(zbrID)
+    AssertEquals "2", CStr(clanovi.count), _
+        "ZBR-IDS: clanstvo ima tacno dve otpremnice"
+
+    Dim imena As String, i As Long
+    For i = 1 To clanovi.count
+        imena = imena & "|" & Trim$(NzToText(clanovi(i)))
+    Next i
+
+    AssertTrue InStr(1, imena, otpA, vbTextCompare) > 0, _
+        "ZBR-IDS: prva poslata otpremnica JESTE clan"
+    AssertTrue InStr(1, imena, otpB, vbTextCompare) > 0, _
+        "ZBR-IDS: druga poslata otpremnica JESTE clan"
+
+    ' BROJ DODELJUJE MASTER: PWA je poslala prazno.
+    AssertTrue Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                              COL_ZBR_BROJ)))) > 0, _
+        "ZBR-IDS: master je dodelio BrojZbirne iako ga PWA nije poslala"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_UvozNosiTacnoPoslateOtpremnice", eN, eD
+End Sub
+
+' DVE KAPIJE KOJE UVOZ NE SME DA PUSTI.
+'
+' Prazan spisak: zbirna bez izvora nije dokument. Tudja otpremnica: zbirna je
+' JEDAN transport JEDNOG vozaca, pa dokument drugog vozaca u njoj nije rubni
+' slucaj nego korupcija domena.
+'
+' Obe kapije zivi u kanonskom piscu, ne u uvozu -- test ih meri kroz uvoz, jer
+' to je put kojim podatak stvarno dolazi.
+Private Sub Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, danas As Date
+    Dim otpTudji As String, zbrID As String
+
+    scenario = NewScenarioCode("ZBRIDS2")
+    danas = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' --- prazan spisak ---
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                "CRID-ZBRPRZ-" & scenario, TEST_VOZ_ID, TEST_KUP_ID, danas, _
+                TEST_VRSTA, TEST_SORTA, 100#, "", "")
+
+    AssertEquals "", zbrID, _
+        "ZBR-IDS: prazan OtpremnicaIDs ne pravi zbirnu"
+
+    ' --- otpremnica drugog vozaca ---
+    otpTudji = ZbrPwaIzvorOtpremnica("IDSX-" & scenario, danas, TEST_VOZ_ID_B)
+    AssertTrue Len(otpTudji) > 0, "ZBR-IDS preduslov: otpremnica drugog vozaca postoji"
+
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                "CRID-ZBRTUD-" & scenario, TEST_VOZ_ID, TEST_KUP_ID, danas, _
+                TEST_VRSTA, TEST_SORTA, 100#, "", otpTudji)
+
+    AssertEquals "", zbrID, _
+        "ZBR-IDS: otpremnica DRUGOG vozaca ne ulazi u zbirnu"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu", eN, eD
 End Sub
 
 ' KAPIJA PUSTA SCOPED IZBOR -- NAD PRIMITIVOM (vraceno u S5-3b).
@@ -15600,7 +15736,7 @@ Private Sub Test_BKTX_UvozZbirneOdbijaTudjBroj()
     ' puca PRE razresavanja clanstva, i to je namerno: red sa tudjim brojem se
     ' odbija bez obzira na to sta nosi.
     Dim bktxCrid As String
-    bktxCrid = ZbrPwaIzvorCrid("BKTX-" & scenario, d, TEST_VOZ_ID)
+    bktxCrid = ZbrPwaIzvorOtpremnica("BKTX-" & scenario, d, TEST_VOZ_ID)
 
     AssertTrue Len(TestHook_ImportZbirnaRowPWA("CRID-BKTXZOK-" & scenario, TEST_VOZ_ID, _
                          TEST_KUP_ID, d, TEST_VRSTA, TEST_SORTA, 100#, _
