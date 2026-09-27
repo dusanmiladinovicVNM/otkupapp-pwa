@@ -31,11 +31,12 @@
 | Odluke domena | ✅ §14.8 (17.09.2026) |
 | Nova tabela slajsova | ✅ §14.9 (17.09.2026) |
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
+| **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | S6 prijemnica · S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
-## Sledeći korak: S1 — „Otkup do kraja“ (pre-flight pa rez)
+## Hronologija rezova — i gde je sledeći (v. stavku 50)
 
 1. Mapa: `docs/DOMEN/MAPA_SPOSOBNOSTI.md`. Odluke: plan §14.8. Slajsovi: §14.9. Pre-flight, S1a, S1b: §14.10.
 2. **S1b-1 spojen** (#354). **S1b-2 urađen** (§14.10 „S1b-2 — urađeno“): desktop čitaoci otkupa na stavkama, stari panel
@@ -288,7 +289,7 @@
     **CI je dao četiri nalaza i sva četiri u instrumentu:** `deepStrictEqual` preko granice `vm`
     realm-a, placebo tvrdnja koja je imenovala jedno a merila drugo, i moja statička provera sidara
     koja je tiho preskakala jedan unos.
-49. **Sledeće — S1 „Otkup do kraja“.** Mereno posle #394: `otk_linija` = **18 živih PROD čitalaca**
+49. **Tada predloženo kao sledeće — S1 „Otkup do kraja“; POBIJENO merenjem u #395, v. stavku 50.** Mereno posle #394: `otk_linija` = **18 živih PROD čitalaca**
     (`modMasterSync` 3, `modOtkup` 2, `modPrint` 2, `modSetup` 2, `modStammdatenSync` 2, `modStornoDok` 2,
     `modAutoHladnjaca` 1, ostatak raspoređen). Dok oni ne padnu, otkup je „header + stavke“ **na žici**
     a dvojan **u jezgru**. Rez dira štampu, izveštaje, izvoze, storno prefill i KPI — a štampa i PDF su
@@ -298,10 +299,30 @@
     **Ostatak S4-2c:** vrsta/sorta iz kontekstne zone F3 (traži raspored ljuske) i sužavanje
     liste `NEVEZANE` na aktivan nacrt — oba u backlogu §15.
 
+50. **#395 — tri reza u jednom PR-u, i pre-flight koji je odbio rez** (`8eeca04c`, 27.09.2026).
+    **S1 ne postoji kao rez.** Pre-flight je izmerio `x_otk_stavka` = **0**: nijedan čitalac ne
+    čita linijska polja `tblOtkup`, jer tih kolona u kanonu **nema od S1d**. `otk_linija` = 18
+    **nije** mera S1 nego nosi `TIP_AMB`/`KOL_AMB_IZDATA`, činjenice **zaglavlja**
+    ([popis_citalaca.py:102](../tools/popis_citalaca.py)) — moja preporuka u stavci 49 stajala je
+    na pogrešno pročitanom brojaču, i to je ispravka premise, ne promena plana.
+    **S3-ostatak urađen:** `tblOtpremnica` 29 → 24 kolone (`Kolicina`, `Cena`, `KolAmbalaze`,
+    `Klasa`, `BrutoKg` iz **sredine**, sa `Stornirano` između njih), `otp_linija` **3 → 0**.
+    **Putanja rename-a kolone:** `ZbirnaGeneracijaID → ZbirnaRoditeljID` self-heal nije imao
+    putanju, pa se zatečena sveska **nije mogla izlečiti** (513 padova nad pravim donorom).
+    **KI-008 zatvoren:** `OTKUP_BRUTO_UNOS` nije bio pinovan u `make_fixture`, pa se nasleđivao iz
+    donora — jedan uzrok, pet simptoma, četvrti put ista klasa.
+    **Post-merge review P2 (isti PR, follow-up na `main`):** oporavak dvostrukog imena je čuvao
+    **podatke** ali ne i **poziciju** — obriši staro iz sredine, ostavi novo na kraju, i
+    `VerifySchema` (kanon = **prefiks po indeksu**) i dalje odbija svesku. Mereno: pogodi **četiri**
+    od šest poziva helpera, a dva najizloženija (`IspravkaOdID` 22/29, `ZamenjenSaID` 23/29)
+    review nije imenovao. Zatvoreno: preživljava **levlja** pozicija (višak je uvek dopisan),
+    sadržaj se preseli u nju, postcondition meri i poziciju. Plan §14.53.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
+| **bruto grana otkupa/otpremnice bez testa** | posledica pina `OTKUP_BRUTO_UNOS = NO` u `make_fixture` (KI-008): tara, odbijanje kad `tara >= kolicina` i zamrzavanje `BrutoKg` nemaju **ni jedan** test. Njen test mora sam da postavi zastavicu, kao `modIzvestajTests` za `MALINA_MODE` — nasleđivanje od donora je ono što je pet padova i napravilo |
 | `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |
 | `DEGRADIRANO` grana ciklusa | `modGoogleSyncOrchestrator:384` — poslednji OTK razlog je nestao, sama grana nije |

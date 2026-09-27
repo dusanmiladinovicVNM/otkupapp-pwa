@@ -541,9 +541,14 @@ End Function
 ' Vraca "" kad je sve u redu, inace opis PRVOG neslaganja -- pozivalac odlucuje
 ' da li ga prijavljuje ili dize gresku.
 '
-' Jedan helper za VerifySchema i SchemaReadyOrFail: dve kapije ne smeju da
-' razviju razlicite definicije "ispravnog prefiksa".
-Private Function PrefiksNeslaganje(ByVal lo As ListObject, _
+' Jedan helper za VerifySchema, SchemaReadyOrFail i self-heal u modSetup: tri
+' kapije ne smeju da razviju razlicite definicije "ispravnog prefiksa".
+'
+' PUBLIC je zbog treceg pozivaoca. modSetup.PreimenujKolonuAko pita "je li
+' zaglavlje kanonsko ISPRED kolone koju vracam na mesto" -- i sme da premesti
+' SAMO ako jeste. Prolazi mu se SKRACEN kanon (prvih N-1 imena), pa je to isto
+' pitanje nad kracim ugovorom, a ne novo pravilo.
+Public Function PrefiksNeslaganje(ByVal lo As ListObject, _
                                    ByVal kolone As Collection) As String
     Dim i As Long
     Dim stvarno As String

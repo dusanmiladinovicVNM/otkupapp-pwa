@@ -7480,6 +7480,223 @@ Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeć
 (`DOCUMENT_HEADER_LINES.md`). Trag je prag `otp_linija` = 0 u `popis_citalaca.py`
 i nova sabotaža — oba exit kod, ne rečenica.
 
+### 14.53) Post-merge review #395, P2 -- oporavak je cuvao podatke ali ne poziciju (27.09.2026)
+
+Nalaz je tacan i **siri je nego sto je prijavljen**. Ista klasa kao P1 iz istog
+review-a: oporavak koji ne pokriva stanje koje je sam bug pravio.
+
+#### Sta je merenje pokazalo
+
+`VerifySchema` trazi da kanon bude **PREFIKS po INDEKSU**
+([modSchema.bas:294](../src-vba/modSchema.bas)) -- visak na kraju je dozvoljen, svako
+razilazenje pre kraja je `SCHEMA_DRIFT_REDOSLED`. `EnsureAllTables` redosled
+**NE popravlja**, i to pise u njemu. Dakle: obrisi staro iz SREDINE, ostavi novo
+na KRAJU, i sveska je trajno drift-ovana -- podaci sacuvani, upis blokiran
+fail-closed, bez izlaza. Isti oblik kvara kao P1, samo jednu ravan nize.
+
+Iz kanona, sest poziva helpera:
+
+| Poziv | Kolona | Pozicija | Iza nje u kanonu |
+|---|---|---|---|
+| `TBL_OTKUP` | `ZbirnaRoditeljID` | 28 / 29 | `SourceCreatedAt` |
+| `TBL_OTPREMNICA` | `ZbirnaRoditeljID` | **20 / 24** | `KulturaID`, `IspravkaOdID`, `ZamenjenSaID`, `PredajaID` |
+| `TBL_OTKUP` | **`IspravkaOdID`** | **22 / 29** | **sedam kanonskih kolona** |
+| `TBL_OTKUP` | **`ZamenjenSaID`** | **23 / 29** | **sest kanonskih kolona** |
+| `TBL_PRIJEMNICA` | `ZbirnaRoditeljID` | 28 / 28 | -- |
+| `TBL_PALETA_STAVKA` | `ZbirnaRoditeljID` | 17 / 17 | -- |
+
+**Dva trace rename-a review nije imenovao, a najizlozeniji su.** Zadnja dva prolaze
+**slucajno**: kolona je tamo zadnja u kanonu, pa golo brisanje starog daje tacan
+prefiks. Ista slucajnost je i u testu -- v. nize.
+
+#### Ispravka: mesto odlucuje kanon, sadrzaj odlucuju podaci
+
+Dve grane oporavka spojene su u **jednu**, jer se kanonska pozicija zna bez
+citanja kanona: visak je **uvek DOPISAN** (`ListColumns.Add` pise na kraj), pa je
+kanonska ona **levlja** od dve.
+
+```
+iZadrzi = min(iStaro, iNovo)     ' kanonska pozicija
+iVisak  = max(iStaro, iNovo)     ' dopisan visak
+sadrzaj: iVisak -> iZadrzi       ' FORMAT pre vrednosti
+obrisi iVisak                    ' desno od iZadrzi, pa ga ne pomera
+preimenuj iZadrzi ako treba
+```
+
+`PreseliSadrzajKolone` prenosi **format pa vrednosti**, u tom redu: ciljna kolona
+je do tada nosila staro ime, pa kanonski format (kljuc `formats`, po IMENU) nikad
+nije dobila -- ostala je General, a General tiho konvertuje **u trenutku upisa**
+(`donor-fixture-nosi-formate`, i sekcija FORMAT CELIJE u `modSchema`). Mereno:
+nijedna od ovih kolona danas nije u `formats`, pa je to zastita helpera za sledeci
+rename, ne popravka zivog kvara -- i tako se i kaze.
+
+#### Postcondition meri poziciju, ali SVOJU
+
+Uz ime se sada meri i pozicija koju je poziv **obecao da nece pomeriti**. Namerno
+se **ne** poredi sa kanonskim indeksom: indeks se razmesti i zbog kolone koja fali
+negde ispred, a to ovaj poziv nije napravio i ne moze da izleci. Redosled cele
+tabele ima svog vlasnika -- `VerifySchema` / `SCHEMA_DRIFT_REDOSLED` -- i drugi
+vlasnik iste invarijante prijavljivao bi tudji drift kao svoj pad.
+
+#### Zasto test nije video -- raspored je bio laksi
+
+Zateceni blok je gradio `... | NOVO | STARO`: tamo brisanje starog ostavlja novo
+na pravom mestu **slucajno**, isto kao na `tblPrijemnica`. Nov blok gradi raspored
+koji je bug stvarno pravio, **fizicki**:
+
+```
+... kanonske kolone ... | STARO | kolona iza njega | NOVO na kraju
+```
+
+podatak samo u NOVOM, pa se meri: staro nema, novo je **na starom mestu**, sadrzaj
+je presao, i **kolona iza je ostala neposredno iza**. Stari blok se ne menja --
+oba rasporeda su stvarna i helper mora oba da izleci.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **615** sabotaza |
+| cetiri Python kapije | exit 0 |
+| `RunBusinessFlowProSuite` | **2063 / 2063** (bilo 2055; +8 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| `dokaz.py migracija-` | **4 / 4 DOKAZANO**, izvor identican pre i posle |
+
+Sidro sabotaze `migracija-ne-brise-duplikat` je spajanjem grana **zastarelo** i
+osvezeno u istom rezu; sidro koje ne postoji nije provera nego tisina.
+
+### 14.54) Review #396, P2 -- "staro ime nema" nije dokaz da je migracija zavrsena (27.09.2026)
+
+Treci nalaz u istoj prici, i **prvi koji nije jos jedna instanca iste klase nego
+posledica nepotpunog ugovora**. Zato se ovde ne dodaje grana: ugovor funkcije se
+pravi **uniformnim**.
+
+#### Nalaz
+
+Helper je na ulazu imao:
+
+```vb
+If iStaro <= 0 Then Exit Function          ' vec migrirano, ili nema nijedne
+```
+
+`staro NE / novo DA` je time bilo **tiho** "vec migrirano" -- bez ijedne provere
+gde kolona stoji. A to stanje je mogla da ostavi **prethodna merge-ovana verzija
+ovog istog oporavka** (#395: obrisi prazno staro, ostavi novo gde je dopisano):
+
+```
+27 GeneracijaID | 28 SourceCreatedAt  | 29 ZbirnaRoditeljID   <- zateceno
+27 GeneracijaID | 28 ZbirnaRoditeljID | 29 SourceCreatedAt    <- kanon
+```
+
+Sledeci start tada izlazi na prvoj liniji i sveska ostaje **trajno neizleciva**.
+Fail-closed jeste -- tihe korupcije nema -- ali self-heal nije konvergentan
+**kroz istoriju sopstvenih verzija**. To je isti princip zbog kog su zatvorena
+prethodna dva nalaza.
+
+**Sire od prijavljenog:** isto stanje proizvodi i **cist rename** nad kolonom koja
+je i sama bila zalutala -- staro ime na pogresnom mestu da posle preimenovanja novo
+ime na pogresnom mestu, i postcondition iz §14.53 to **pusti**, jer meri da
+pozicija nije POMERENA, a ne da je KANONSKA. Zato ispravka ne pokriva samo granu iz
+review-a.
+
+#### Resenje: uniforman ugovor, ne peta grana
+
+Posle poziva je novo ime **na kanonskom mestu**, ili se vraca **imenovan razlog**.
+Istu proveru mesta vrte **sve** putanje, i ona bez imenskog posla. Trik iz §14.53
+("zadrzi levlju od dve pozicije") tu ne pomaze -- starog imena vise nema, pa se
+pozicija mora uzeti **iz kanona**.
+
+#### Zasto je ovde dozvoljeno ono sto `EnsureAllTables` odbija
+
+`modSchema` namerno **ne** popravlja redosled: *"premestanje kolone bi pomerilo
+podatke; pogresan redosled je nalaz za coveka"*. To pravilo **ostaje**. Razlika je
+**obim**: tamo pitanje "koja je od 638 kolona zalutala" nema odgovor, a ovde se zna
+jedno ime, njegov kanonski indeks i postoji merljiv postcondition.
+
+Zato je popravka **uslovna**: premesta se samo kad je sve **ispred** kanonskog mesta
+vec kanonsko -- tada je ta kolona jedina razlika. Inace se **nista ne dira** i vraca
+se imenovan razlog, pa redosled cele tabele ostaje nalaz za coveka.
+
+Provera prefiksa **nije nova**: to je `modSchema.PrefiksNeslaganje`, isti helper koji
+vrte `VerifySchema` i `SchemaReadyOrFail`, samo nad **skracenim** kanonom (prvih
+`N-1` imena). Postao je `Public` kroz **generator** (`modSchema.bas` je artefakt) --
+treca lokalna kopija tog poredjenja bila bi bas ono sto komentar iznad njega
+zabranjuje: *"dve kapije ne smeju da razviju razlicite definicije ispravnog
+prefiksa"*. Otisak kanona je nepromenjen (`8C488AA1`), jer `schema.json` nije diran.
+
+Premestanje ide **bez `Cut`/`Insert`**: dodaj kolonu na kanonsko mesto, prenesi
+sadrzaj, obrisi zalutalu, preimenuj. `Cut`/`Insert` bi bio jedan korak, ali njegovo
+ponasanje u nevidljivom Excelu **nije mereno** -- ove tri operacije modul vec vrti.
+
+#### Test mora nad PRAVOM kanonskom kolonom
+
+Sa pomocnim imenom (`ZZTestKolona*`) se ova grana **ne moze** izmeriti: kanon to ime
+ne zna, pa se kanonski indeks nikad ne bi ni procitao. `Test_Schema_ZalutalaKolonaSeVracaNaMesto`
+zato radi nad `tblOtkup` i `ZbirnaRoditeljID`, gradi post-#395 raspored **fizicki**,
+nosi sadrzaj sa sobom na svakom koraku, i meri **oba** ishoda:
+
+1. **kapija** -- prazna kolona ubacena ispred kanonskog mesta kvari prefiks, pa
+   premestanje mora da **stane** sa imenovanim razlogom i kolona **ne** sme da se
+   pomeri;
+2. **lecenje** -- posle uklanjanja tog drifta kolona se vraca na kanonsku poziciju,
+   kolona iza nje ostaje **neposredno iza**, sadrzaj je presao, i privremeno ime
+   nije ostalo.
+
+To je jedini test u suite-u koji dira **kanonsku** kolonu, pa ciscenje stoji i u
+`EH`: sveska ne sme da ostane drift-ovana za ostatak prolaza.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **617** sabotaza |
+| cetiri Python kapije | exit 0 (otisak sheme nepromenjen) |
+| `RunBusinessFlowProSuite` | **2077 / 2077** (bilo 2063; +14 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| pun `run_vba` | **ZELENO** |
+| `dokaz.py migracija-` | **6 / 6 DOKAZANO** |
+
+#### Posledica koju nije nasao nijedan test nego operater
+
+`ImportAllVBA` je nad radnom sveskom pao **dvaput, identicno**:
+
+```
+Zavrsna provera projekta NIJE prosla:
+  kod se razlikuje od izvora: modBusinessFlowProTests
+```
+
+**Mereno** (27.09.2026, nad **kopijom** backup-a, u zasebnoj instanci Excela, radna
+sveska nedirnuta): soft merge (`DeleteLines` + `AddFromString`) pa citanje nazad, pa
+kanon iz `modVbaTools` portovan 1:1. Od **20128** redova razlikovao se **tacno jedan**:
+
+```
+izvor : GetTable(TBL_OTKUP).ListColumns.Add(5)
+sveska: GetTable(TBL_OTKUP).ListColumns.Add (5)
+```
+
+VBE **preformatira poziv sa zagradama u poziciji NAREDBE** -- ubaci razmak pred
+`(`, jer zagrade tu nisu lista argumenata nego grupisanje. `LowerOutsideStrings`
+niz razmaka **sazima u jedan**, ali ga ne **uklanja**, pa razlika prezivi kanon i
+zavrsni drift pass je prijavi. Deterministicki, svaki put.
+
+**Tri stvari koje je merenje oborilo, a koje su delovale verovatno:**
+
+| Pretpostavka | Sta je mereno |
+|---|---|
+| skracivanje velikog modula (871 KB, najveci u repou) | broj redova **identican**, 20128 / 20128 -- nista nije izgubljeno |
+| prag velicine / OOM klasa iz 14.09 | nije taj potpis; nema greske, merge "uspe" pa provera padne |
+| "zelen pun prolaz dokazuje da se izvor uvozi cisto" | **NE dokazuje**: `run_vba` `.bas` module ubacuje kao `Remove` + `Import(fajl)`, a `ImportAllVBA` postojece module **soft-merge**-uje. To su dva razlicita puta, i ja sam tu tvrdnju izneo jace nego sto stoji |
+
+**Popravka** je jedan red: rezultat se hvata (`Set praznaKol = ...Add(5)`), cime
+poziv prelazi u **izraznu** poziciju, gde VBE nista ne preformatira. Uz red stoji i
+komentar zasto -- inace je to "suvisna promenljiva" koju ce neko pocistiti nazad.
+
+**Dokaz u oba smera, nad kopijom:** pre popravke 1 red razlike (tacno pad koji je
+operater video), posle popravke **kanon jednak**.
+
+**Repo ima tacno jednu takvu instancu** -- ovu. Provereno grep-om nad svim `.bas` i
+`.cls`; ostali pogoci su nastavci reda (izrazna pozicija), ne naredbe.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -7509,6 +7726,7 @@ i nova sabotaža — oba exit kod, ne rečenica.
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |
 | **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |
+| **`vba_check` ne vidi POZIV SA ZAGRADAMA u poziciji naredbe** (nalaz 27.09.2026) | VBE ga preformatira (`Add(5)` -> `Add (5)`), `CanonCode` razmak sazima ali ne uklanja, pa zavrsni drift pass `ImportAllVBA` obori uvoz sa "kod se razlikuje od izvora". Simptom ne pokazuje na krivca: operater dobije poruku o CELOM modulu od 20k redova, mora da zatvori svesku bez snimanja, i to se ponavlja dok se red ne nadje rucno. Nasao ga je operater, dvaput, a nijedan test ni kapija nisu ni mogli -- `run_vba` ide drugim putem (`Remove` + `Import`). Rez: pravilo koje obori red ciji se *strip* zavrsava na `)` a pocinje pozivom metode sa argumentima (bez `=`, bez `Call`, van nastavka reda). Ide u ISTI PR nad `tools/` sa pravilom vidljivosti i tacnim tekstom tvrdnje, ne uz feature |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
