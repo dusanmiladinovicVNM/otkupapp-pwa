@@ -7752,7 +7752,7 @@ unapred, i dobija **staticku kapiju** umesto komentara.
 | Pitanje | Odluka (28.09.2026) |
 |---|---|
 | stampa storniranog dokumenta | prikazuje **ono sto je vazilo pre storna** — sa kontra-stavom to prestaje da bude odluka i postaje upit |
-| `KupciIzlaz` identitet | **(a)** dobija **svoj dokument**; mereno je da danas ne pise nijednu dokument tabelu |
+| `KupciIzlaz` identitet | **oboreno sopstvenom ispravkom operatera:** to je **revers od kupca + uplata**, ne dokument. Mereno: nema nijedne kolicine robe, zove ga F6 (unos novca), novac vec ide po `fakturaID` |
 | `POCETNO_STANJE` | **iskljucivo firmina** ambalaza zatecena kod entiteta — zaduzuje ga, **ne** stvara obavezu; partnerove sopstvene gajbe idu kao `ULAZ_TUDJE_AMBALAZE` i na dan uvodjenja |
 | `AMB-INV-07` | vazi za **sve** realne naloge, bez izuzetka |
 | `Firma` nalozi | **jedan jedini** nalog; magacini se ne razdvajaju |
@@ -7770,7 +7770,7 @@ dvaput, i drugi put nad kodom koji je prvi put vec menjan.
 `S6 je parkiran na koraku 1/8` (grana `claude/s6-prijemnica-stavke`, kanon
 `tblPrijemnicaStavke` upisan, BFP 2077/2077). Nastavlja se posle AMB-10.
 
-Redosled AMB-10: `10a` ugovor · `10-KI` dokument za `KupciIzlaz` · `10-DOK` `tblAmbalazaDokument` · `10b` pisac ·
+Redosled AMB-10: `10a` ugovor · `10-DOK` `tblAmbalazaDokument` (revers za sve parove, pocetno stanje, nabavka, otpis) · `10b` pisac ·
 `10c` citaoci · `10d` storno · `10e` brisanje starog. **Cetiri dokaza pre `10b`:**
 zatvoren enum `VrstaKretanja`, stabilan identitet `KupciIzlaz`, tacan protokol
 potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->

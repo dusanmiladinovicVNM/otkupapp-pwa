@@ -352,21 +352,88 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-01` | `Kolicina > 0` |
 | `AMB-INV-02` | `OdNalog <> NaNalog` |
 | `AMB-INV-03` | oba naloga jednoznacno razresena kroz **jednu** kapiju `ResolveAmbNalog(Tip, ID)` — `Tip=Vozac, ID=KUP-123` pada pre upisa |
-| `AMB-INV-04` | za originalni dogadjaj `(DokumentID, VrstaKretanja, TipAmbalaze)` je **jedinstven**; isti identitet + isti sadrzaj = idempotentno, isti identitet + drugi sadrzaj = **HARD CONFLICT** |
+| `AMB-INV-04` | za originalni dogadjaj je **`(DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze)`** jedinstven; isti identitet + isti sadrzaj = idempotentno, isti identitet + drugi sadrzaj = **HARD CONFLICT** |
 | `AMB-INV-05` | storno je **tacan inverz**; pozivalac ne salje vrednosti |
 | `AMB-INV-06` | jedan original ima **najvise jedan** storno; storno se ne stornira |
-| `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet` **Potvrdjeno 28.09.2026: vazi za SVE realne naloge**, bez izuzetka. |
+| `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet`. Potvrdjeno 28.09.2026: vazi za SVE realne naloge, bez izuzetka |
 | `AMB-INV-08` | **nijedan upis u knjigu ne nastaje van vlasnistva transakcije izvornog dokumenta** |
+| `AMB-INV-09` | **`Obaveza(partner, tip) >= 0`** — firma ne moze partneru vratiti vise tudje ambalaze nego sto je od njega uzela |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
 
-> **`AMB-INV-08` dobija kapiju, ne obecanje.** Na njemu stoji odluka da
-> `OperationID` ne ulazi u model (6.10), pa ne sme da zivi kao komentar. Predlog:
-> staticka provera u `tools/` koja za **svako** pozivno mesto `PrenesiAmbalazu`
-> trazi `AddTableSnapshot TBL_AMBALAZA` u obuhvatnoj transakciji — isti oblik
-> kao `vba_selfupdate_gates`. Invarijanta bez kapije je zelja
-> (`pre-flight` §3).
+#### `AMB-INV-04`: zasto i `DokumentTIP`, i sta je „jedan dokument"
+
+Prva verzija kljuca nije nosila `DokumentTIP` i time se **precutno oslanjala** na
+to da su svi `DokumentID`-evi u AGRIx-u u jednom globalnom prostoru imena. Kolona
+vec stoji na redu knjige, pa oslanjanje nema cenu koju bi platilo — `DokumentTIP`
+ulazi u kljuc.
+
+Drugo pitanje istog kljuca: **sme li jedan dokument da proizvede dva dogadjaja sa
+istom `VrstaKretanja` i `TipAmbalaze`?** Za danasnjih devet tokova ne sme i ne
+dešava se. Ali `tblAmbalazaDokument` je genericki, pa bi jedan `POCETNO_STANJE`
+dokument nad **dva entiteta** to odmah prekrsio. Zato:
+
+> **AMB-10-ODL-3.** Jedan `tblAmbalazaDokument` pokriva **tacno jednog
+> protivpartnera** — kao sto revers vec danas pokriva jednog kooperanta. Pocetno
+> stanje za pet entiteta je pet dokumenata, ne jedan sa pet redova.
+
+Alternativa bi bila prosiriti kljuc nalozima, ali tada on prestaje da bude
+identitet **poslovnog efekta** i postaje identitet reda — a idempotencija se meri
+po efektu.
+
+#### `AMB-INV-09`: obaveza je storno-svesna, i ima dno
+
+Formula iz 6.6 (`SUM ULAZ - SUM VRACANJE`) **nije bila tacna nad append-only
+knjigom**: storno `ULAZ_TUDJE_AMBALAZE` upisuje kontra-stav, fizicki saldo se
+anulira, a obaveza bi ostala da visi. Zato se obaveza racuna preko **doprinosa**,
+a ne preko dve sume:
+
+```
+DoprinosObavezi(dogadjaj):
+    ULAZ_TUDJE_AMBALAZE       -> +Kolicina
+    VRACANJE_TUDJE_AMBALAZE   -> -Kolicina
+    storno (StornoOd != "")   -> MINUS doprinos ORIGINALA
+    ostalo                    ->  0
+
+Obaveza(partner, tip) = SUM DoprinosObavezi(svi dogadjaji partnera i tipa)
+```
+
+Tako kontra-stav gasi obavezu isto kao sto gasi fizicko stanje — jednim pravilom,
+bez posebnog slucaja.
+
+**Donja granica nije kozmetika.** Bez `AMB-INV-09` model moze da proizvede
+matematicki ispravan **fizicki** ledger i istovremeno **nemogucu** knjigu obaveza:
+firma duguje 12, vrati 20 kao `VRACANJE_TUDJE_AMBALAZE`, saldo prolazi, obaveza
+postane `-8`.
+
+> **Poslovno pitanje koje ostaje operateru:** kad se vraca **vise** nego sto firma
+> duguje, pisac to (a) odbija, ili (b) **deli**: do visine duga
+> `VRACANJE_TUDJE_AMBALAZE`, ostatak `IZDATA_PRAZNA` (novo zaduzenje partnera).
+> **Preporuka je (b)** — odbijanje bi teralo operatera da isti potez unosi dvaput,
+> a podela je tacno ono sto se fizicki desilo. Do odluke, pisac **odbija**:
+> fail-closed je jedina bezbedna nepoznanica.
+
+#### `AMB-INV-08`: kapija mora da dokaze CELU tvrdnju
+
+Na `AMB-INV-08` stoji odluka da `OperationID` ne ulazi u model (6.10), pa ne sme
+da zivi kao komentar — invarijanta bez kapije je zelja (`pre-flight` §3).
+
+Prva skica kapije trazila je samo `AddTableSnapshot TBL_AMBALAZA` uz svako pozivno
+mesto. **To je slabije od same invarijante:** dokazuje da se **knjiga** moze
+rollback-ovati, ali ne i da knjiga i njen izvorni dokument imaju **istog vlasnika
+transakcije**. Kod koji commit-uje dokument, pa u **novoj** transakciji snapshot-uje
+samo knjigu, prosao bi zelen a invarijantu prekrsio.
+
+Kapija zato mora da dokaze svih pet:
+
+1. postoji obuhvatna poslovna transakcija;
+2. `TBL_AMBALAZA` je u njenom snapshotu;
+3. nastanak ili izmena **izvornog dokumenta** pripada **istoj** transakciji;
+4. za `tblAmbalazaDokument` — i ta tabela je u istoj transakciji;
+5. za zatecene putanje (OTK/OTP/PRJ) checker nosi **registar vlasnistva**, isto
+   kao `who_writes` za upis redova.
+
 
 ### 6.10 `OperationID`: zahtev prihvacen, mehanizam odbijen
 
@@ -383,34 +450,39 @@ background posao ili spoljni API koji knjizi ambalazu **sam** — tada `AMB-INV-
 vise ne vazi i `OperationID` ulazi. Nov takav put mora ponovo otvoriti ovo
 pitanje, i zato kapija iz 6.9 postoji.
 
-### 6.11 `KupciIzlaz`: „stabilan ID" znaci DOKUMENT, ne plutajuci ID
+### 6.11 `KupciIzlaz` nije dokument — to je **revers od kupca**, plus uplata
 
-Review trazi `KupciIzlazID`, jer danas `DokumentID` nosi **broj**
-([modDokumenta:7026](../../src-vba/modDokumenta.bas)) pa `AMB-INV-04` nije tacna
-za sve dogadjaje. Nalaz je tacan; merenje ga zaostrava:
+> **Ispravka operatera (28.09.2026):** „zar kupci izlaz nije u stvari klasican
+> revers od kupca ka firmi?" — **jeste**, i merenje to potvrdjuje bez ostatka.
+> Ovo obara **i moju preporuku (a) i zahtev review-a za `KupciIzlazID`**.
 
-`SaveKupciIzlaz_TX` **ne pise nijednu dokument tabelu** — samo `tblAmbalaza`,
-`tblNovac` i `tblFakture`. Dakle ne postoji red kome bi `KupciIzlazID` pripadao.
+`SaveKupciIzlaz_TX` ([modDokumenta:6993](../../src-vba/modDokumenta.bas)):
 
-Zato „dati mu stabilan ID" ima samo dva oblika:
-
-| | Sta je to zapravo |
+| Mereno | Nalaz |
 |---|---|
-| **(a)** `KupciIzlaz` dobija **svoj dokument** (red, broj, storno, identitet) | pravi dokument — i konzistentno sa ostatkom: svaki poslovni dogadjaj koji menja robu **i** novac **i** fakturu kod nas ima dokument |
-| (b) ID koji zivi samo na redovima knjige | to je **`OperationID` pod drugim imenom** — tacno ono sto je u 6.10 odbijeno |
+| kolicina robe | **ne postoji** — u potpisu nema nijednog kg |
+| sta prima | `kolAmb` (gajbe) i/ili `novac`; `If kolAmb <= 0 And novac <= 0 Then` pada |
+| ko ga zove | **`modNovacUnos` (F6, unos novca)** — „`UplataValidiraj` / `UplataUpisi` F6, `SaveKupciIzlaz_TX` (samo novac)" |
+| sta radi sa gajbama | `TrackAmbalaza ... "Izlaz", kupacID, "Kupac", vozacID` — **prazne izlaze od kupca** |
+| sta radi sa novcem | `SaveNovac(... fakturaID:=fakturaID ...)` — uplata po **fakturi** |
 
-> **ODLUKA OPERATERA (28.09.2026): (a).** `KupciIzlaz` dobija **svoj dokument** —
-> red, broj, storno i identitet. To je jedina poslovna operacija u sistemu koja
-> menja robu, novac i fakturu **bez sopstvenog dokumenta**; rupa je nezavisna od
-> ambalaze, AMB-10 je samo otkriva.
+Dakle to nije dokument nego **ekran poravnanja sa kupcem**, koji u jednoj
+transakciji upisuje **dve vec postojece stvari**:
+
+```
+1. revers            kupac -> firma      (prazne gajbe)   -> tblAmbalazaDokument
+2. uplata            po fakturi          (novac)          -> tblNovac, fakturaID
+```
+
+> **AMB-10-ODL-4.** `KupciIzlaz` **ne dobija svoj dokument**. Njegova ambalazna
+> polovina je **revers**, i identitet joj je `AmbDokID`; novcana polovina zadrzava
+> postojecu vezu (`fakturaID`), gde `brojDok` ostaje **labela**.
 >
-> Posledica za redosled: to je **zaseban rez pre `10b`** (`AMB-10-KI`), ne deo
-> pisca ambalaze. Dokument sa brojem, stornom i identitetom ne staje uz cutover
-> knjige, a `AMB-INV-04` ga ceka.
->
-> **Blokira `10b`** za taj jedan put: dok dokumenta nema, `AMB-INV-04` bi morala
-> da se izgovori sa imenovanim izuzetkom — a izuzetak u invarijanti je ono sto
-> smo upravo uklonili iz `Chk_B10`.
+> Korak **`AMB-10-KI` time nestaje** — ulazi u `10-DOK`.
+
+Ovo je **manji** rez od prethodne odluke, i tacniji: umesto novog dokumenta,
+priznaje se da dokument vec postoji i da mu je samo falila tabela.
+
 
 ### 6.12 Sta je koji krug promenio
 
@@ -433,6 +505,8 @@ Zato „dati mu stabilan ID" ima samo dva oblika:
 
 > **Odluka operatera (28.09.2026): `POCETNO_STANJE` dobija dokument.**
 > Pitanje je bilo uze, ali odgovor je izvukao nalaz koji ga cini sirim.
+
+> **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — **kupac -> firma**. Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
 
 **Mereno:** `ReversID` postoji **samo kao kolona na `tblAmbalaza`** — tabele
 reversa **nema nigde u kanonu**. Revers dakle ima identitet i broj, ali **nema
@@ -478,24 +552,24 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 | Dogadjaj | Dokument |
 |---|---|
 | otkup, otpremnica, prijemnica | vec postoji |
-| `KupciIzlaz` | **nov** (6.11, odluka operatera) |
-| revers, pocetno stanje, nabavka, otpis | **`tblAmbalazaDokument`** |
+| ~~`KupciIzlaz`~~ | **nije dokument** — revers + uplata (6.11) |
+| **revers** (stanica <-> kooperant, stanica <-> firma, **kupac -> firma**), pocetno stanje, nabavka, otpis | **`tblAmbalazaDokument`** |
 
 `AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
-1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..08`, protokol potvrde deficita, semantika obaveze, identitet `KupciIzlaz`. **Bez produkcionog cutovera.**
-2. **AMB-10-KI** — `KupciIzlaz` dobija svoj dokument (red, broj, storno, identitet). Preduslov za `AMB-INV-04`, zaseban rez.
-3. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, pocetno stanje, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
-4. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
-5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
-7. **AMB-10e** — **tek tada** brisanje starog modela.
+1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
+2. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, pocetno stanje, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
+3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
+4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
+5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+6. **AMB-10e** — **tek tada** brisanje starog modela.
 
-**Cetiri dokaza pre `10b`:** zatvoren `VrstaKretanja` enum · stabilan identitet
-`KupciIzlaz` · tacan protokol potvrde deficita · test da pozajmljena ambalaza moze
-**uci -> kretati se -> biti vracena vlasniku** bez ijednog negativnog realnog salda.
+**Cetiri dokaza pre `10b`:** zatvoren `VrstaKretanja` enum · tacan protokol
+potvrde deficita · test da pozajmljena ambalaza moze **uci -> kretati se -> biti
+vracena vlasniku** bez ijednog negativnog realnog salda · **i bez obaveze koja
+ikad padne ispod nule ili preživi sopstveni storno**.
 
 ### 6.14 Sta model sada ume da odgovori
 

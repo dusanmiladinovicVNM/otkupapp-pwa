@@ -331,9 +331,9 @@
     ulazi eksplicitnim dogadjajem iz `SpoljniSvet`. Nijedan realni nalog ne sme
     zavrsiti sa negativnim saldom.
     **Odluke operatera:** stampa storniranog dokumenta prikazuje stanje pre storna ·
-    `KupciIzlaz` dobija **svoj dokument** · `POCETNO_STANJE` je **iskljucivo firmina**
+    `KupciIzlaz` je **revers od kupca + uplata**, ne nov dokument · `POCETNO_STANJE` je **iskljucivo firmina**
     ambalaza zatecena kod entiteta (partnerova ide kao `ULAZ_TUDJE_AMBALAZE`).
-    **Redosled:** `10a` ugovor · `10-KI` dokument za KupciIzlaz · `10b` pisac ·
+    **Redosled:** `10a` ugovor · `10-DOK` ambalazni dokument · `10b` pisac ·
     `10c` citaoci · `10d` storno · `10e` brisanje starog -- stare strukture se brisu
     POSLEDNJE, da bi staro i novo mogli da se mere jedno protiv drugog.
     **Zasto pred S6:** `AMB-10e` i zavrsni korak S6 diraju iste citaoce
