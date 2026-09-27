@@ -7697,6 +7697,83 @@ operater video), posle popravke **kanon jednak**.
 **Repo ima tacno jednu takvu instancu** -- ovu. Provereno grep-om nad svim `.bas` i
 `.cls`; ostali pogoci su nastavci reda (izrazna pozicija), ne naredbe.
 
+### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
+
+Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
+`KolAmbVracena` sa klasama?" — i ispao je veci od S6. Pun model: `docs/DOMEN/AMBALAZA.md`.
+
+#### Kako je nastao
+
+Pre-flight S6 je predlagao da `KolAmbVracena` ide na stavku prijemnice. Citanje
+pisca to je oborilo (pisac je daje klasi I, klasi II salje 0), pa je predlog
+ispravljen na „ostaje na zaglavlju". **Operater je oborio i to:** povrat ambalaze
+je efektivno revers, njegovo mesto je `tblAmbalaza`, a kolona postoji i na
+`tblOtkup` i na `tblPrijemnica`.
+
+Merenje je potvrdilo i prosirilo: obe kolone su kes noge koja **vec postoji** u
+knjizi, sa `DokumentID`-em i storno-svesna. Pitanje „ima li jos toga" otvorilo je
+holisticki pregled — devet mesta knjizenja preko pet dokumenata.
+
+#### Sta je model pokazao
+
+`tblAmbalaza` je **jednostrana, entitetski-relativna** knjiga: vozac se **izvodi**
+(`VozacAmbEffectiveSmer`), ne upisuje. Jedno pravilo objasnjava svih devet mesta —
+red se upisuje za svakog **nosioca salda**; protivpartner dobija red samo ako je i
+sam nosilac, vozac se izvodi, firma se ne vodi. Otud dve noge kod otkupa i jedna
+kod otpremnice: **nije nedoslednost**.
+
+Ciljni model (`AMB-10`): dogadjaj je **jedan red koji imenuje obe strane**
+(`Od -> Na`), knjiga je **append-only**, storno je **kontra-stav**, a vozac je
+obican **nalog**. Dve noge nisu cilj nego simptom reda koji ume da imenuje samo
+jednu stranu.
+
+#### Dva kruga dizajn review-a
+
+Prvi krug je nasao **dve moje greske**: „zbir salda je konstantan" je bila
+**tautologija** (svaki prenos po konstrukciji daje `-x` i `+x`), a
+`ModifiedAt`/`ModifiedBy` nad **nepromenljivom** knjigom su bili unutrasnja
+protivrecnost spec-a. Obe ispravljene.
+
+Drugi krug je doneo ono sto je model zaokruzilo: **nijedan realni nalog ne sme
+zavrsiti sa negativnim saldom**, a tudja ambalaza ulazi u opticaj **eksplicitnim
+dogadjajem** (`SpoljniSvet -> partner`, `ULAZ_TUDJE_AMBALAZE`) umesto cutanjem.
+Obaveza firme prema partneru je time **izveden** read-model, bez ijedne mutabilne
+kolone.
+
+Na jednoj tacki sam uzvratio merenjem: review je trazio `OperationID` za retry.
+**Zahtev je prihvacen, mehanizam odbijen** — svih devet knjizenja su unutar
+dokumentove transakcije koja snapshot-uje `tblAmbalaza`, pa red knjige ne moze
+preziveti neuspeo upis dokumenta. Stabilan identitet efekta vec postoji:
+`(DokumentID, VrstaKretanja, TipAmbalaze)`. Uslov pod kojim to pada zapisan je
+unapred, i dobija **staticku kapiju** umesto komentara.
+
+#### Odluke operatera
+
+| Pitanje | Odluka (28.09.2026) |
+|---|---|
+| stampa storniranog dokumenta | prikazuje **ono sto je vazilo pre storna** — sa kontra-stavom to prestaje da bude odluka i postaje upit |
+| `KupciIzlaz` identitet | **(a)** dobija **svoj dokument**; mereno je da danas ne pise nijednu dokument tabelu |
+| `POCETNO_STANJE` | **iskljucivo firmina** ambalaza zatecena kod entiteta — zaduzuje ga, **ne** stvara obavezu; partnerove sopstvene gajbe idu kao `ULAZ_TUDJE_AMBALAZE` i na dan uvodjenja |
+| `AMB-INV-07` | vazi za **sve** realne naloge, bez izuzetka |
+
+#### Zasto pred S6, a ne posle
+
+S6 u zavrsnom koraku skida linijska polja sa `tblPrijemnica`, a `AMB-10e` skida
+`KolAmbVracena` — **iste citaoce** (`modPrint`, `modIzvestaj`, `modScrIzvestaji`,
+`modStornoDok`). Redom AMB-10 pa S6, ti citaoci se diraju jednom. Obrnutim redom
+dvaput, i drugi put nad kodom koji je prvi put vec menjan.
+
+#### Stanje
+
+`S6 je parkiran na koraku 1/8` (grana `claude/s6-prijemnica-stavke`, kanon
+`tblPrijemnicaStavke` upisan, BFP 2077/2077). Nastavlja se posle AMB-10.
+
+Redosled AMB-10: `10a` ugovor · `10-KI` dokument za `KupciIzlaz` · `10b` pisac ·
+`10c` citaoci · `10d` storno · `10e` brisanje starog. **Cetiri dokaza pre `10b`:**
+zatvoren enum `VrstaKretanja`, stabilan identitet `KupciIzlaz`, tacan protokol
+potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->
+biti vracena vlasniku** bez ijednog negativnog realnog salda.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -286,7 +286,7 @@ izvesti.
 | `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu** |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
 | `OTPIS` | lom, gubitak — izlaze iz opticaja |
-| `POCETNO_STANJE` | zateceno stanje pri uvodjenju — **v. merenje nize** |
+| `POCETNO_STANJE` | **firmine** gajbe zatecene kod entiteta pri uvodjenju — zaduzuje ga, **ne** stvara obavezu |
 
 Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 `STANICA_KOOPERANT` (to kazu `Od`/`Na`).
@@ -298,10 +298,23 @@ Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 > deficit i svaki unos bi trazio potvrdu. Zatecena kolicina mora da udje kao
 > dogadjaj.
 >
-> **Otvoreno pitanje za operatera:** gajbe koje partner drzi na dan uvodjenja —
-> jesu li **firmine** (partner je zaduzen, obaveza ne nastaje) ili **njegove**
-> (obaveza nastaje)? Zato `POCETNO_STANJE` **nije** isto sto i
-> `ULAZ_TUDJE_AMBALAZE`, iako je fizicki isti prenos.
+> **ODLUKA OPERATERA (28.09.2026).** `POCETNO_STANJE` se odnosi **iskljucivo na
+> ambalazu u vlasnistvu firme** koja je na dan uvodjenja zatecena kod entiteta za
+> koji se pocetno stanje radi. Dakle:
+>
+> ```
+> SpoljniSvet -> Entitet    POCETNO_STANJE
+>   -> entitet je ZADUZEN firminim gajbama
+>   -> obaveza firme prema njemu NE nastaje
+> ```
+>
+> **Posledica koju treba izgovoriti:** partnerove **sopstvene** gajbe zatecene na
+> dan uvodjenja **nisu** pocetno stanje. One ulaze kao `ULAZ_TUDJE_AMBALAZE` i
+> stvaraju obavezu — isto kao da su donete sutra. Time su dve uloge razdvojene i
+> na dan uvodjenja, ne samo u toku rada.
+>
+> Zato `POCETNO_STANJE` i `ULAZ_TUDJE_AMBALAZE` ostaju dve vrednosti iako su
+> fizicki isti prenos: razlikuje ih **vlasnistvo**, a ono odlucuje o obavezi.
 
 ### 6.8 Saldo i storno
 
@@ -341,7 +354,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-04` | za originalni dogadjaj `(DokumentID, VrstaKretanja, TipAmbalaze)` je **jedinstven**; isti identitet + isti sadrzaj = idempotentno, isti identitet + drugi sadrzaj = **HARD CONFLICT** |
 | `AMB-INV-05` | storno je **tacan inverz**; pozivalac ne salje vrednosti |
 | `AMB-INV-06` | jedan original ima **najvise jedan** storno; storno se ne stornira |
-| `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet` |
+| `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet` **Potvrdjeno 28.09.2026: vazi za SVE realne naloge**, bez izuzetka. |
 | `AMB-INV-08` | **nijedan upis u knjigu ne nastaje van vlasnistva transakcije izvornog dokumenta** |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
@@ -385,9 +398,14 @@ Zato „dati mu stabilan ID" ima samo dva oblika:
 | **(a)** `KupciIzlaz` dobija **svoj dokument** (red, broj, storno, identitet) | pravi dokument — i konzistentno sa ostatkom: svaki poslovni dogadjaj koji menja robu **i** novac **i** fakturu kod nas ima dokument |
 | (b) ID koji zivi samo na redovima knjige | to je **`OperationID` pod drugim imenom** — tacno ono sto je u 6.10 odbijeno |
 
-> **Preporuka: (a).** `KupciIzlaz` je jedina poslovna operacija u sistemu koja
-> menja robu, novac i fakturu **bez sopstvenog dokumenta**. To je rupa nezavisna
-> od ambalaze; AMB-10 je samo otkriva.
+> **ODLUKA OPERATERA (28.09.2026): (a).** `KupciIzlaz` dobija **svoj dokument** —
+> red, broj, storno i identitet. To je jedina poslovna operacija u sistemu koja
+> menja robu, novac i fakturu **bez sopstvenog dokumenta**; rupa je nezavisna od
+> ambalaze, AMB-10 je samo otkriva.
+>
+> Posledica za redosled: to je **zaseban rez pre `10b`** (`AMB-10-KI`), ne deo
+> pisca ambalaze. Dokument sa brojem, stornom i identitetom ne staje uz cutover
+> knjige, a `AMB-INV-04` ga ceka.
 >
 > **Blokira `10b`** za taj jedan put: dok dokumenta nema, `AMB-INV-04` bi morala
 > da se izgovori sa imenovanim izuzetkom — a izuzetak u invarijanti je ono sto
@@ -412,10 +430,11 @@ Zato „dati mu stabilan ID" ima samo dva oblika:
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..08`, protokol potvrde deficita, semantika obaveze, identitet `KupciIzlaz`. **Bez produkcionog cutovera.**
-2. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
-3. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-4. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
-5. **AMB-10e** — **tek tada** brisanje starog modela.
+2. **AMB-10-KI** — `KupciIzlaz` dobija svoj dokument (red, broj, storno, identitet). Preduslov za `AMB-INV-04`, zaseban rez.
+3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
+4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
+5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+6. **AMB-10e** — **tek tada** brisanje starog modela.
 
 **Cetiri dokaza pre `10b`:** zatvoren `VrstaKretanja` enum · stabilan identitet
 `KupciIzlaz` · tacan protokol potvrde deficita · test da pozajmljena ambalaza moze
