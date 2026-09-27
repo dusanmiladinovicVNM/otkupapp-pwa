@@ -4929,6 +4929,25 @@ SABOTAZE = {
     # SREDINE i NE NEPREKIDNO (9, 10, 12, 13, 15 -- a 14 je Stornirano). Ako
     # zatecena sveska zadrzi bilo koju, sve iza nje se pomera i pozicioni upis
     # salje vrednost u pogresnu kolonu.
+    # Review #395 P1: oporavak nad stanjem "staro I novo postoje". Bez brisanja
+    # duplikata preimenovanje pada na Excel-ovo odbijanje drugog imena, pa
+    # migracija vraca razlog umesto praznog stringa -- sveska ostaje drift-ovana.
+    "migracija-ne-brise-duplikat": (
+        "modSetup.bas",
+        "            lo.ListColumns(iNovo).Delete\n",
+        "            ' SABOTAZA: duplikat se ne brise\n",
+        "Test_OTK_SelfHealMigracijeKolona",
+        "SelfHeal oporavak: oba imena, novo prazno -- bez razloga za stop",
+    ),
+    # Dve PUNE kolone su dva tvrdjenja o istom polju. Kod koji tu tiho izabere
+    # jednu istinu brise podatak bez ijedne poruke -- gori je od koda koji stane.
+    "migracija-tiho-bira-istinu": (
+        "modSetup.bas",
+        "        If staroPuno And novoPuno Then\n",
+        "        If False Then   ' SABOTAZA: oba puna se ne prijavljuju\n",
+        "Test_OTK_SelfHealMigracijeKolona",
+        "SelfHeal oporavak: oba puna -- staro ime je NETAKNUTO",
+    ),
     "otp-self-heal-ne-brise-kolone": (
         "modSetup.bas",
         "        If t = TBL_OTPREMNICA Then\n            ObrisiKolonuAko t, \"Kolicina\"\n",

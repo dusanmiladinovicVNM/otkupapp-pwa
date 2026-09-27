@@ -18303,18 +18303,18 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
                "SelfHeal: drugi prolaz preimenovanja ne kvari nista"
 
-    ' OBA IMENA ODJEDNOM -- stanje koje pravi medjuverzija.
+    ' OBA IMENA ODJEDNOM -- stanje koje je pravio PRETHODNI main.
     '
-    ' Sveska koju je stara grana vec dopunila novim imenom (EnsureColumnOnTable
-    ' dodaje NA KRAJ), a staro jos nosi. Bez kapije 'vec migrirano' preimenovanje
-    ' bi napravilo DVE kolone istog imena -- Excel ih tada sam preimenuje u
-    ' 'ime2' i pozicioni upis dobija polje koje niko ne trazi.
+    ' Kanon je nosio novo ime, rename putanje nije bilo, pa je EnsureAllTables
+    ' dopisivao novo ime NA KRAJ dok je staro ostajalo u SREDINI. Stari helper je
+    ' na to izlazio tiho (no-op), pa je sveska ostajala TRAJNO drift-ovana:
+    ' SchemaReadyOrFail blokira upise fail-closed, ali se sveska sama nije mogla
+    ' izleciti (review #395, P1).
     '
-    ' MERENO: gasenje kapije 'vec migrirano' NE obara ovaj test, i to je tacan
-    ' rezultat -- Excel sam odbija drugu ListColumn istog imena, pa se ishod ne
-    ' menja. Kapija stedi LogError na svakom startu takve sveske, ne podatak.
-    ' Test zato tvrdi ISHOD (nema duplikata, nista se nije pomerilo), a razlog
-    ' zbog kog kapija ipak stoji pise uz nju u modSetup.
+    ' PREMISA OVOG TESTA JE PROMENJENA. Do #395 je tvrdio "sa oba imena
+    ' preimenovanje NE radi nista" i time zakljucavao nekonvergentno ponasanje.
+    ' Sada tvrdi OPORAVAK -- jer repair koji ne pokriva stanje koje je sam bug
+    ' pravio nije repair.
     Dim loM As ListObject
     Set loM = GetTable(TBL_OTKUP)
     loM.ListColumns.Add().name = PROBA
@@ -18322,16 +18322,65 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
                  "SelfHeal: sada postoje OBA imena"
 
-    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
-
-    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: sa oba imena preimenovanje NE radi nista"
-    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
-               "SelfHeal: staro ime je netaknuto (nema duplikata)"
-
-    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+    ' Novo je PRAZNO -> visak; brise se, staro se preimenuje NA MESTU.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: oba imena, novo prazno -- bez razloga za stop"
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal oporavak: staro ime je nestalo"
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+               "SelfHeal oporavak: novo ime postoji"
     AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: pomocna kolona sklonjena"
+                 "SelfHeal oporavak: duplikat je uklonjen, ostala je JEDNA kolona"
+
+    ' Idempotentno: drugi prolaz nad izlecenim stanjem nema sta da radi.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: drugi prolaz je bez posla i bez razloga"
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal oporavak: drugi prolaz ne dira broj kolona"
+
+    ' STARO PRAZNO, NOVO PUNO -> staro je visak; novo ostaje sa svojim podacima.
+    '
+    ' Suprotan smer od gornjeg, i mora da radi: sveska koja je vec pisala u novu
+    ' kolonu ne sme da je izgubi zato sto je staro ime negde zaostalo.
+    Dim loD As ListObject
+    Set loD = GetTable(TBL_OTKUP)
+    If loD.ListRows.count > 0 Then
+        loD.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value = "X"
+        loD.ListColumns.Add().name = PROBA
+
+        AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                     "SelfHeal oporavak: staro prazno a novo puno -- bez razloga za stop"
+        AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                     "SelfHeal oporavak: prazno staro ime je obrisano"
+        AssertEquals "X", CStr(GetTable(TBL_OTKUP).ListColumns( _
+                         GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value), _
+                     "SelfHeal oporavak: podatak u novoj koloni je ostao"
+
+        ' OBA PUNA -> STOP sa imenovanim razlogom, nista se ne dira.
+        '
+        ' Dve pune kolone su dva tvrdjenja o istom polju. Kod koji tu tiho izabere
+        ' jednu istinu je gori od koda koji stane.
+        Dim loP As ListObject
+        Set loP = GetTable(TBL_OTKUP)
+        loP.ListColumns.Add().name = PROBA
+        loP.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA)).DataBodyRange.cells(1, 1).value = "Y"
+
+        Dim razlog As String
+        razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2)
+        AssertTrue InStr(1, razlog, "nose podatke", vbTextCompare) > 0, _
+                   "SelfHeal oporavak: oba puna -- razlog imenuje da OBA nose podatke"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
+                   "SelfHeal oporavak: oba puna -- staro ime je NETAKNUTO"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+                   "SelfHeal oporavak: oba puna -- novo ime je NETAKNUTO"
+
+        modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).ClearContents
+    End If
+
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: pomocne kolone sklonjene, ostala je jedna"
 
     ' --- BRISANJE ---
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
