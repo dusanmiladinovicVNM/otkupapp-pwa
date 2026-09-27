@@ -1286,6 +1286,25 @@ Public Sub EnsureSledljivostSchema()
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
+
+        ' LINIJSKA POLJA ZAGLAVLJA OTPREMNICE SU OBRISANA IZ KANONA (S3-ostatak).
+        '
+        ' Klasa, Kolicina, Cena, KolAmbalaze i BrutoKg su cinjenice STAVKE i od S3a
+        ' zive na tblOtpremnicaStavke; zaglavlje ih je pisalo prazne.
+        '
+        ' Brisanje je IZ SREDINE i NIJE NEPREKIDNO: pozicije su bile 9, 10, 12, 13
+        ' i 15, a 14 je Stornirano -- dakle izmedju njih. Kolona koja ostane u
+        ' zatecenoj svesci POMERA sve iza sebe, pa pozicioni upis (AppendRow) salje
+        ' vrednosti u pogresne kolone. Zato se brisu PRE prvog upisa, isto kao osam
+        ' kolona tblOtkup u S1d.
+        If t = TBL_OTPREMNICA Then
+            ObrisiKolonuAko t, "Kolicina"
+            ObrisiKolonuAko t, "Cena"
+            ObrisiKolonuAko t, "KolAmbalaze"
+            ObrisiKolonuAko t, "Klasa"
+            ObrisiKolonuAko t, "BrutoKg"
+        End If
+
         ' tblOtkup je presao na vezu PO ID-u (A9, korak 5). Broj-oblik se tu vise
         ' NE dodaje -- inace bi self-heal vratio kolonu koju je kanon preimenovao,
         ' pa bi tabela nosila oba oblika i nijedan ne bi bio merodavan.
@@ -1472,7 +1491,8 @@ Public Sub EnsureDoradeSchema()
     BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
 
     ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
+    ' Otpremnica vise nema Kolicina na zaglavlju -- nosi je stavka
+    ' (tblOtpremnicaStavke), i format se postavlja tamo.
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
     SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
 
@@ -1485,8 +1505,8 @@ Public Sub EnsureDoradeSchema()
     ' tblOtkupStavke), pa ovde vise nema reda za tblOtkup (S1c).
     EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
+    ' Otpremnica nosi bruto NA STAVCI (kanon, tblOtpremnicaStavke), pa ovde vise
+    ' nema reda za tblOtpremnica -- isto sto je S1c uradio za tblOtkup.
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _

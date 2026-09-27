@@ -293,6 +293,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_StavkeSaZiceIduPoCridu
     Test_PWA_ManifestNeporavnatNeUvozi
     Test_OTK_PushIndeksPreskaceRedSaTerena
+    Test_OTP_ZaglavljeBezLinijskihKolona
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -492,10 +493,12 @@ Private Sub Test_CoreTablesAndColumnsExist()
         COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, COL_OKS_KOLICINA, _
         COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
 
+    ' Kolicina, Cena, KolAmbalaze, Klasa i BrutoKg su obrisane iz kanona
+    ' (S3-ostatak): cinjenice su STAVKE i zive na tblOtpremnicaStavke. TipAmbalaze
+    ' ostaje -- tip je cinjenica zaglavlja.
     RequireColumnsExist TBL_OTPREMNICA, Array( _
         "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
-        "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "Klasa")
+        "BrojZbirne", "VrstaVoca", "SortaVoca", "TipAmbalaze")
 
     RequireColumnsExist TBL_ZBIRNA, Array( _
         "ZbirnaID", "Datum", "VozacID", "BrojZbirne", "KupacID", _
@@ -1818,11 +1821,9 @@ Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
     SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtpremnice
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_VRSTA, TEST_VRSTA
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_SORTA, TEST_SORTA
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOLICINA, 100#
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_CENA, 10#
+    ' Kolicina, Cena, KolAmbalaze i Klasa se ne sejaju: kolone ne postoje na
+    ' zaglavlju od S3-ostatka. Tip ambalaze JESTE cinjenica zaglavlja i ostaje.
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_TIP_AMB, TEST_TIP_AMB
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
 
     ' BrojZbirne i ZbirnaID ostaju PRAZNI -- dete pre roditelja, sto je
     ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
@@ -5130,8 +5131,10 @@ Private Sub Test_OTP_PredlogCeneJePoKlasi()
                "OTP predlog cene: Klasa I nosi svoju cenu"
     AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_II, COL_OPS_PREDLOG_CENA) - 120#) < 0.001, _
                "OTP predlog cene: Klasa II nosi SVOJU cenu, ne cenu prve"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_CENA), _
-                 "OTP predlog cene: zaglavlje vise ne nosi cenu"
+    ' Od S3-ostatka kolone Cena na zaglavlju NEMA, pa se meri njeno odsustvo --
+    ' jaca tvrdnja od "prazna je".
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")), _
+                 "OTP predlog cene: zaglavlje vise ne nosi kolonu Cena"
 
     ' Stavka bez predloga je legitimna ("cena jos nije dogovorena") i ostaje
     ' PRAZNA -- nula bi u prefillu otkupa bila tvrdnja da je cena nula.
@@ -13328,10 +13331,10 @@ Private Sub Test_OTP_HeaderNeNosiLinePolja()
                                         izvori)
 
     AssertTrue Len(otpID) > 0, "OTP header: upis prosao"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOLICINA), "OTP header: Kolicina prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOL_AMB), "OTP header: KolAmbalaze prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KLASA), "OTP header: Klasa prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_BRUTO), "OTP header: BrutoKg prazan"
+    ' "Prazno" je bilo najbolje sto se moglo tvrditi dok je kolona postojala. Od
+    ' S3-ostatka je njeno odsustvo STRUKTURNO, pa tvrdnja to i kaze.
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP header: nijedne linijske kolone nema na zaglavlju"
 
     ' A vozac JESTE na headeru -- otpremnica ga poseduje (S4.1c).
     AssertEquals TEST_VOZ_ID, OtpPolje(otpID, COL_OTP_VOZAC), "OTP header: VozacID"
@@ -16426,6 +16429,62 @@ Private Sub Test_OTK_PushIndeksPreskaceRedSaTerena()
 
 EH:
     LogFatal "Test_OTK_PushIndeksPreskaceRedSaTerena", Err.Number, Err.description
+End Sub
+
+' Indeksi pet linijskih kolona zaglavlja otpremnice, kao tekst "i|i|i|i|i".
+'
+' Nula znaci "kolone nema" (GetColumnIndex tako i vraca). Jedan string umesto pet
+' tvrdnji: pad imenuje SVE kolone koje su ostale, a ne samo prvu.
+Private Function OtpLinijskeKoloneIndeksi() As String
+    OtpLinijskeKoloneIndeksi = _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Kolicina")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "KolAmbalaze")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Klasa")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "BrutoKg"))
+End Function
+
+' ZAGLAVLJE OTPREMNICE BEZ LINIJSKIH KOLONA -- I SVE IZA NJIH NA SVOM MESTU.
+'
+' Ovo je jedini stvarni rizik ovog reza. Pet kolona je obrisano IZ SREDINE i NE
+' NEPREKIDNO: pozicije su bile 9, 10, 12, 13 i 15, a 14 je Stornirano -- dakle
+' IZMEDJU njih. Kolona koja ostane u zatecenoj svesci pomera sve iza sebe, pa
+' pozicioni upis (AppendRow) salje vrednost u pogresnu kolonu.
+'
+' Tvrdnja zato meri DVE stvari:
+'   1. da nijedne od pet nema u svesci (self-heal ih je obrisao),
+'   2. da kolone IZA njih stoje tacno tamo gde ih kanon ocekuje.
+'
+' Drugu ne izvodi iz svoje kopije rasporeda nego iz modSchema.SchemaTableColumns --
+' prepisan raspored bi znacio da preimenovana kolona prodje kroz oba sita.
+Private Sub Test_OTP_ZaglavljeBezLinijskihKolona()
+    On Error GoTo EH
+
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP kolone: nijedne linijske kolone nema u svesci"
+
+    Dim kanon As Collection
+    Set kanon = modSchema.SchemaTableColumns(TBL_OTPREMNICA)
+    AssertEquals "24", CStr(kanon.count), "OTP kolone: kanon ima 24 kolone"
+
+    ' Svaka kanonska kolona mora u svesci stajati na SVOJOJ poziciji. Nijedna
+    ' izuzeta: razlika bilo gde iza brisanja je isti kvar.
+    Dim i As Long, razlike As String
+    For i = 1 To kanon.count
+        Dim uSvesci As Long
+        uSvesci = GetColumnIndex(TBL_OTPREMNICA, CStr(kanon(i)))
+        If uSvesci <> i Then
+            razlike = razlike & CStr(kanon(i)) & "(kanon " & CStr(i) & _
+                      ", sveska " & CStr(uSvesci) & ") "
+        End If
+    Next i
+
+    If Len(razlike) > 0 Then LogWarn "Test_OTP_ZaglavljeBezLinijskihKolona", razlike
+    AssertEquals "", razlike, "OTP kolone: sveska i kanon se poklapaju po poziciji"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_ZaglavljeBezLinijskihKolona", Err.Number, Err.description
 End Sub
 
 ' Simulirani OTK_STAVKE kao sto ga TryReadSheetData vraca: 2D, red 1 = naslov.

@@ -4925,6 +4925,17 @@ SABOTAZE = {
         "Test_OTK_PushIndeksPreskaceRedSaTerena",
         "OTK push indeks: red sa terena ne obara indeks push-a",
     ),
+    # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano IZ
+    # SREDINE i NE NEPREKIDNO (9, 10, 12, 13, 15 -- a 14 je Stornirano). Ako
+    # zatecena sveska zadrzi bilo koju, sve iza nje se pomera i pozicioni upis
+    # salje vrednost u pogresnu kolonu.
+    "otp-self-heal-ne-brise-kolone": (
+        "modSetup.bas",
+        "        If t = TBL_OTPREMNICA Then\n            ObrisiKolonuAko t, \"Kolicina\"\n",
+        "        If False Then   ' SABOTAZA: linijske kolone ostaju u svesci\n            ObrisiKolonuAko t, \"Kolicina\"\n",
+        "Test_OTP_ZaglavljeBezLinijskihKolona",
+        "OTP kolone: nijedne linijske kolone nema u svesci",
+    ),
     "push-stavke-naslov-bez-provere": (
         "modMasterSync.bas",
         "            If CStr(data(r1, lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then\n",

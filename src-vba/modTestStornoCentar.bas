@@ -121,7 +121,7 @@ Public Sub Test_StornoJournalDeadParentOtherGen_Auto()
     tx.AddTableSnapshot TBL_AMBALAZA: tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
     ' gen A: VEC stornirana (bez zurnala), mrtav roditelj (stornirana otpremnica)
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), Array("SVT-DG-OTP", "SVT-DG-OB", "I", "Da")
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_STORNIRANO), Array("SVT-DG-OTP", "SVT-DG-OB", "Da")
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), Array("SVT-DG-A", "SVT-DG-OTK", "SVT-DG-OTP", "Da")
     ' gen B: unbound aktivna -> storno (journaled)
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DG-B", "SVT-DG-OTK")
@@ -702,8 +702,8 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
 
     ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
     TcSeedZbirna "SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
-              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
+              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z")
     TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
@@ -716,8 +716,8 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
 
     ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
     TcSeedZbirna "SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
-              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
+              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z")
     TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
@@ -839,10 +839,10 @@ Public Sub Test_OtkupBlockDeadParent_Auto()
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
-              Array("SVT-DP-OTP-A", "SVT-DP-OA", "I")                          ' aktivna otpremnica
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), _
-              Array("SVT-DP-OTP-D", "SVT-DP-OD", "I", "Da")                    ' stornirana otpremnica
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ), _
+              Array("SVT-DP-OTP-A", "SVT-DP-OA")                               ' aktivna otpremnica
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_STORNIRANO), _
+              Array("SVT-DP-OTP-D", "SVT-DP-OD", "Da")                         ' stornirana otpremnica
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
               Array("SVT-DP-K1", "SVT-DP-B1", "SVT-DP-OTP-A", "Da")            ' ziv roditelj
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
@@ -990,8 +990,8 @@ Public Sub Test_BlockStornoDriftReason_Auto()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
-              Array("SVT-DR-OTP", "SVT-DR-O1", "I")                ' aktivna otpremnica
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ), _
+              Array("SVT-DR-OTP", "SVT-DR-O1")                     ' aktivna otpremnica
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
               Array("SVT-DR-BLK", "SVT-DR-BD")                     ' blok
     ' Pripadnost ide KANONOM (tblOtpremnicaIzvori), ne kolonom Otkup.OtpremnicaID:

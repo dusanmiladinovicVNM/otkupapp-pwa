@@ -7396,6 +7396,57 @@ grešku za nepoznatu kolonu), a ne da tiho prođe.
 **Fixture se MORA regenerisati** — donor fizički nosi te kolone, a `add_row` diže
 `SchemaError` za ključ bez kolone, pa se ponašanje menja tek posle regeneracije.
 
+#### Ispravka obrazloženja, iz merenja posle koda (27.09.2026)
+
+Pre-flight je tvrdio pravu stvar iz **malo pogrešnog razloga**, i to se ispravlja
+umesto da se prepiše.
+
+Rečeno je: „pisac upisuje po imenu, pa brisanje iz sredine ne pomera nijedan
+upis". Tačno je jače od toga — pisac je **potpuno nezavisan od kanonskih
+pozicija**:
+
+| Mesto | Šta stvarno radi |
+|---|---|
+| `modDataAccess.SetRowValueByColumn` | `colIndex = RequireColumnIndex(tableName, columnName)` — indeks iz **SVESKE** |
+| `modDokumenta.bas:4313` | `ReDim rowData(0 To colCount - 1)` — širina iz **SVESKE** |
+| `modDataAccess.AppendRow` | piše `rowData(i)` u kolonu `i` **iste** sveske |
+
+Dakle niz se gradi i upisuje u istom (workbook) koordinatnom sistemu. Kanon tu ne
+učestvuje.
+
+**Onda šta `ObrisiKolonuAko` zaista štiti?** Otisak šeme i `VerifySchema`, koji
+drift prijavljuju **po poziciji** — to i S1d komentar kaže
+(`modSetup.bas:1293–1295`: *„modSchema to i prijavljuje po poziciji"*). Plus svaki
+pisac koji bi gradio goli `Array(...)` kanonske širine; za otpremnicu takvog nema,
+ali pravilo iz `CLAUDE.md` §3 zato i postoji.
+
+Posledica za rez je **nikakva** — brisanje je i dalje potrebno i i dalje ide pre
+prvog upisa. Menja se samo koja kapija se time čuva, i to je razlika koju vredi
+imati zapisanu.
+
+#### Dva nalaza iz prolaza
+
+**1. Zatečen test je nosio SVOJU kopiju ugovora o šemi.** BFP je pao jednom:
+
+```
+FAIL Core tables and required columns exist :: Missing column: tblOtpremnica.Kolicina
+```
+
+`RequireColumnsExist TBL_OTPREMNICA, Array(...)` u
+`modBusinessFlowProTests.bas:495` drži **prepisan** spisak obaveznih kolona, pa je
+tražio četiri kolone koje je kanon upravo izgubio. Kopija ugovora u testu je tačno
+ono što kanon treba da ukine. Spisak je skraćen, uz komentar odakle ugovor dolazi.
+
+**2. Sve tri nove tvrdnje su prošle iz prvog puta**, uključujući onu o pozicijama.
+Pre čitanja imena pale tvrdnje postojala je razumna hipoteza da je **ona** prestroga
+(traži poklapanje svake kanonske kolone, a otisak se namerno meri nad prefiksom).
+Hipoteza je bila pogrešna, i zato se ništa nije „popravilo" pre merenja — ispravka
+pre merenja je u ovoj seriji dva puta bila nalaz.
+
+Ime pale tvrdnje se ne čita iz izlaza `run_vba` nego iz `last_run_bfp.txt`, a taj
+fajl živi **pored temp kopije** sveske i briše se sa njom. Za trijažu ide
+`--keep`, pa čitanje iz `%TEMP%\vbatest_*`.
+
 #### Greppable trag
 
 Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeće

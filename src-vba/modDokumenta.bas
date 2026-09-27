@@ -4326,8 +4326,8 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_SORTA, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
 
-    ' COL_OTP_CENA se NE pise od S3a: predlog cene je po klasi, na stavci.
-    ' Kolona ostaje u kanonu do S3e, kad odu i linijska polja zaglavlja.
+    ' Cena se NE pise od S3a: predlog cene je po klasi, na stavci. Od S3-ostatka
+    ' kolone na zaglavlju vise NEMA -- ni u kanonu ni u svesci.
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, _
                         IZDATO_DRAFT, SRC
 
