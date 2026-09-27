@@ -143,7 +143,136 @@ iako to jeste.
 - **Revers bez `ReversID`-a uz otkup nije rupa** — `Chk_B10` to eksplicitno
   isključuje, jer „ambalaza uz otkup ima tip reversa, ali nije revers".
 
-## 5) Redosled, ako se ide na sve
+## 6) Ciljni model — AMB-10
+
+> Odluka operatera 27.09.2026: **štampa storniranog dokumenta prikazuje ono što je
+> važilo pre storna.** I pitanje: da li ideal traži dve noge u svakom događaju.
+>
+> **Ne traži.** Dve noge nisu cilj nego **simptom** — posledica reda koji ume da
+> imenuje samo jednu stranu. Zato danas isti model proizvodi dva oblika: dva reda
+> kad su obe strane nosioci salda, jedan red plus **pravilo** kad je druga strana
+> vozač. Ideal ne dodaje drugu nogu — **ukida pojam noge.**
+
+### 6.1 Događaj je jedan red koji imenuje obe strane
+
+```
+tblAmbalaza  (događaj = PRENOS)
+
+  AmbID              identitet događaja
+  Datum
+  TipAmbalaze
+  Kolicina           UVEK pozitivna -- smera nema, smer je (Od -> Na)
+
+  OdNalogTip         Kooperant | Stanica | Kupac | Vozac | Firma
+  OdNalogID
+  NaNalogTip         isto
+  NaNalogID
+
+  DokumentTIP        povod
+  DokumentID         UVEK identitet, nikad broj
+
+  StornoOd           AmbID događaja koji ovaj poništava (kontra-stav); inače prazno
+  CreatedAt/By, ModifiedAt/By
+```
+
+**Šta nestaje, ne menja se nego nestaje:** `Smer` · `EntitetID`/`EntitetTip` ·
+`VozacID` · `ReversID` · `Stornirano` · cela funkcija
+`VozacAmbEffectiveSmer` · izuzetak u `Chk_B10` · obe keš kolone
+(`tblOtkup.KolAmbIzdata`, `tblPrijemnica.KolAmbVracena`) · druga storno putanja.
+
+### 6.2 Zašto prenos, a ne dve noge
+
+| | dve noge (klasično dvojno) | **prenos (Od → Na)** |
+|---|---|---|
+| „tačno dve strane" | traži **kapiju** koja proverava da noge postoje i da se slažu — to je `Chk_B10` i danas | **strukturno nemoguće prekršiti**: siroče noge nema jer noge nema |
+| uparivanje | traži identitet događaja na svakom redu | red **jeste** događaj |
+| broj redova | otkup: 4 reda za 2 događaja | otkup: **2 reda** |
+| smer | kolona koja se može pogrešno upisati | **izveden iz para**, ne postoji kao podatak |
+
+Ovo nije nov model nego **dovršen postojeći**: današnji red već *misli* obe
+strane — jednu upisuje, drugu podrazumeva. Ideal je prestati podrazumevati.
+
+### 6.3 Saldo: jedna formula, bez izuzetaka
+
+```
+saldo(nalog) = SUM Kolicina WHERE Na = nalog
+             - SUM Kolicina WHERE Od = nalog
+```
+
+Nema `entitetTip` grananja, nema inverzije, nema „ko je transporter". Vozačev
+saldo ispada sam — jer je vozač **nalog**, ne izuzetak. `GetVozacAmbSaldo`,
+`GetStanicaAmbSaldo` i `GetAmbalazeStanje` postaju jedan poziv sa drugim
+argumentom.
+
+> Današnja inverzija je **fail-open**: čitalac koji zaboravi
+> `VozacAmbEffectiveSmer` ne dobija grešku nego **pogrešan znak**. U ciljnom
+> modelu tu grešku nije moguće napraviti, jer inverzije nema.
+
+### 6.4 Storno je kontra-stav, ne zastavica
+
+Knjiga je **nepromenljiva**: storno ne menja postojeći red nego upisuje nov, sa
+zamenjenim stranama i `StornoOd` koji pokazuje na original.
+
+Time odluka o štampi **prestaje da bude odluka**:
+
+| Pitanje | Upit |
+|---|---|
+| šta je dokument tada rekao | događaji tog `DokumentID` **bez** kontra-stavova |
+| šta važi danas | **svi** događaji, uključujući kontra-stavove |
+
+Oba iz istog podatka, bez tumačenja zastavice — a to je tačno ono što je
+traženo za štampu storniranog dokumenta.
+
+Posledica za registar: `tblAmbalaza` ulazi u `modSchemaGuard.BEZ_STORNA`, ali
+**iz drugog razloga** nego stavke tabele — ne zato što status drži zaglavlje,
+nego zato što je knjiga nepromenljiva. Taj razlog mora da stoji u registru,
+inače sledeći čitalac spoji dve različite stvari pod istim imenom.
+
+### 6.5 Očuvanje postaje merljiva invarijanta
+
+Prvi put se može tvrditi:
+
+> **AMB-INV-01.** Zbir salda po **svim** nalozima je konstantan. Gajbica ne
+> nastaje i ne nestaje — samo menja nalog.
+
+Danas se to **ne može** tvrditi, jer jednonožni događaji legalno „cure": kad OM
+vrati ambalažu firmi, upisuje se samo noga stanice i gajbice ispadaju iz knjige.
+U ciljnom modelu `Firma` je **nalog**, pa je perimetar zatvoren.
+
+Nabavka novih gajbica i otpis (lom, gubitak) **nisu mereni u kodu** — ne postoje.
+Ako se pojave, to su događaji nad nalogom `Firma` i model već ima mesto za njih:
+nije potreban nov mehanizam, samo nov nalog ako se poželi razdvajanje.
+
+### 6.6 Identitet: `DokumentID` je uvek identitet
+
+`ReversID` nestaje jer prestaje da bude potreban: revers je **dokument**, dakle
+dobija svoj `ReversID` kao identitet i on ide u `DokumentID`, kao što otkup šalje
+`OtkupID`. Broj ostaje labela — `ZBR-IDENT-01`, isto pravilo, treći put.
+
+Time i storno ima **jednu** putanju umesto dve: sve se razrešava po
+`DokumentID`, a kontra-stav se veže `StornoOd`-om.
+
+### 6.7 Cena — pošteno
+
+Ovo je **najveći redizajn jedne tabele** u celom refaktoru. Dira: četiri funkcije
+salda, tri izveštaja + karticu, `modIntegritet` (`Chk_B10` i susedi), obe storno
+putanje, `modBrojevi` (revers numeracija), štampu, i devet mesta knjiženja.
+
+Jedino što ga čini jeftinim je isto što važi za ceo refaktor: **nema podataka za
+migraciju.** Broj redova pritom **pada** (otkup 4 → 2).
+
+Rez se ne može izvesti u jednom potezu i ne treba ga tako ni planirati:
+
+1. **AMB-10a** — nova šema + pisac: `TrackAmbalaza` postaje `PrenesiAmbalazu(od, na, ...)`, devet mesta knjiženja prelazi na nju.
+2. **AMB-10b** — saldo i izveštaji na jednu formulu; `VozacAmbEffectiveSmer` se briše.
+3. **AMB-10c** — storno kao kontra-stav; druga putanja se briše; `tblAmbalaza` u `BEZ_STORNA` sa svojim razlogom.
+4. **AMB-10d** — keš kolone sa dokumenata (`KolAmbIzdata`, `KolAmbVracena`) i `Chk_B10` izuzetak — oboje **ispada samo po sebi**, nije zaseban rez.
+
+**AMB-02, AMB-03 i AMB-04 iz sekcije 4 se time povlače kao zasebni predlozi** —
+sve troje su posledice AMB-10, a ne rezovi za sebe. Izvedeni odvojeno bili bi
+zakrpe nad modelom koji se ionako menja.
+
+## 7) Raniji predlozi (povuceni -- v. 6.7)
 
 1. **AMB-03** — keš sa dokumenata (traži odgovor na pitanje o stornu). Mali,
    zatvoren, 9 čitalaca.
