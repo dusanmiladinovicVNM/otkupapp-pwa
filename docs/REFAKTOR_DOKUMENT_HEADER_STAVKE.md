@@ -7789,12 +7789,21 @@ testom, a ne da se otkrije u S7.
 
 ```
 PrijemnicaStavkaID | PrijemnicaID | RedniBroj | Klasa | Kolicina | Cena |
-KolAmbalaze | KolAmbVracena | BrutoKg | CreatedAt | CreatedBy | ModifiedAt | ModifiedBy
+KolAmbalaze | BrutoKg | CreatedAt | CreatedBy | ModifiedAt | ModifiedBy
 ```
 
-`tblPrijemnica` 28 -> gubi `Kolicina`, `Cena`, `KolAmbalaze`, `KolAmbVracena`,
-`Klasa`, `BrutoKg`, `GeneracijaID`. `TipAmbalaze` **ostaje na zaglavlju** -- isti
-razlog kao `TIP_AMB` kod otpremnice (`popis_citalaca.py:102`).
+> **ISPRAVKA OVOG PREDLOGA, pre koda (korak 1).** Predlog je `KolAmbVracena`
+> stavljao na **stavku**. Citanje pisca to je oborilo: `SavePrijemnicaMulti_TX`
+> prosledjuje vracenu ambalazu **klasi I**, a klasi II salje **`0`**
+> (`modDokumenta:6597` vs `:6620`). Dakle to nije cinjenica linije nego cinjenica
+> **dokumenta parkirana na red klase I** -- i ostaje na zaglavlju. Isto vazi za
+> `TipAmbalaze` (jedan `tipAmb` za obe klase). Tabela je time tacno 12 kolona,
+> kao `tblOtpremnicaStavke`.
+
+`tblPrijemnica` 28 -> gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `BrutoKg`,
+`GeneracijaID` (+ `Fakturisano`, `FakturaID` po odluci **(b)**). `TipAmbalaze` i
+`KolAmbVracena` **ostaju na zaglavlju** -- isti razlog kao `TIP_AMB` kod
+otpremnice (`popis_citalaca.py:102`).
 
 #### Jedna odluka koja menja velicinu reza
 
@@ -7833,9 +7842,32 @@ lanac), `RunPaleteTestSuite` 97/97 kao regresiona ograda, `popis_citalaca --chec
 sa pragom `split_plus` = 0, i **nove sabotaze** nad: manifestom stavki, storno
 nivoom (dokument vs klasa) i znacenjem `PrijemnicaID` u `tblFakturaStavke`.
 
+#### Nalaz koji korak 1 izbacuje za korak 2: paletizacija ima kapiju po `PrijemnicaID`
+
+`PaletizePrijemnica` se zove **dvaput**, jednom po klasi, i svaki put dobija
+`PrijemnicaID` **te klase** (`modDokumenta:6644` i `:6652`). Unutra stoji
+`EnsurePrijemnicaNotAlreadyPaletized prijemnicaID` (`modPaletniList:162`).
+
+Danas prolazi zato sto dve klase imaju **razlicite** ID-jeve. Cim obe podele ID
+**zaglavlja**, druga klasa udara u tu kapiju i paletizacija joj se odbija --
+a to je tiho gubljenje paleta klase II, ne pad. Kapija radi tacno ono za sta je
+pisana; menja se **znacenje kljuca** ispod nje.
+
+Dve mogucnosti, i razlikuju se po velicini:
+
+| | Kljuc | Cena |
+|---|---|---|
+| **(1)** | `PrijemnicaID` + `Klasa` -- `tblPaletaStavka` obe kolone **vec nosi** | mala izmena u kapiji |
+| **(2)** | `PrijemnicaStavkaID` -- nova kolona na `tblPaletaStavka` | tacniji model; dira i `ReassignPaleteToPrijemnica_TX` (re-point pri ispravci) i `modStornoFlow` |
+
+**(2)** je ideal ("paletna linija zna tacnu liniju dokumenta", isto kao sto
+`Definicija gotovog` trazi za fakturu), **(1)** je dovoljan dok je po klasi tacno
+jedna stavka -- sto danas jeste, jer je `hasKlasaII` bulov. Odluka ide uz korak 5,
+gde se ionako odlucuje sta `PrijemnicaID` znaci za fakturu i palete.
+
 #### Redosled koraka
 
-1. kanon: `tblPrijemnicaStavke` + `modSchema` regeneracija (otisak se menja);
+1. ~~kanon: `tblPrijemnicaStavke` + `modSchema` regeneracija~~ **URADJENO** (`f4de3b1c`): 47 tabela, 650 kolona, otisak `8C488AA1` -> `8FAE2F03`; `BEZ_STORNA` i `WRITE_OWNERSHIP` dopunjeni;
 2. pisac: `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke, vraca **jedan** ID;
 3. citaoci: `modPrint` (2), `modDokUnos` (3) -- `split_plus` na nulu;
 4. storno na nivou dokumenta;
