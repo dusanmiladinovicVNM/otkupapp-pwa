@@ -294,6 +294,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_ManifestNeporavnatNeUvozi
     Test_OTK_PushIndeksPreskaceRedSaTerena
     Test_OTP_ZaglavljeBezLinijskihKolona
+    Test_Schema_TragZbirneNosiNovoIme
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -16429,6 +16430,48 @@ Private Sub Test_OTK_PushIndeksPreskaceRedSaTerena()
 
 EH:
     LogFatal "Test_OTK_PushIndeksPreskaceRedSaTerena", Err.Number, Err.description
+End Sub
+
+' TRAG RODITELJSKE ZBIRNE NOSI NOVO IME, I NIJEDNA TABELA NE NOSI STARO.
+'
+' S4-3c je kolonu u kanonu preimenovao (ZbirnaGeneracijaID -> ZbirnaRoditeljID) ali
+' self-heal nije dobio putanju preimenovanja, pa se sveska sa starim imenom NIJE
+' mogla izleciti: ensure dopise novo ime na kraj, staro ostane u sredini, kanonski
+' prefiks puca i upis staje fail-closed. Mereno na tri dev sveske -- sve tri nose
+' staro ime.
+'
+' OVO JE REGRESIONA OGRADA, NE DOKAZ. Rename se moze izmeriti samo na svesci koja
+' nosi staro ime; posle lecenja ga nijedna ne nosi, pa tvrdnja tada prolazi
+' trivijalno. Prava mera je end-to-end: regeneracija fixture-a iz dev sveske sa
+' starim imenom, pa pun prolaz. Ograda postoji da ukinut rename ili vraceno staro
+' ime padnu PO IMENU, a ne da se izdaje za dokaz.
+Private Sub Test_Schema_TragZbirneNosiNovoIme()
+    On Error GoTo EH
+
+    Dim tabele As Variant
+    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_PRIJEMNICA, TBL_PALETA_STAVKA)
+
+    Dim i As Long, staro As String, bezNovog As String
+    For i = LBound(tabele) To UBound(tabele)
+        Dim tbl As String: tbl = CStr(tabele(i))
+
+        If GetColumnIndex(tbl, "ZbirnaGeneracijaID") > 0 Then
+            staro = staro & tbl & " "
+        End If
+        If GetColumnIndex(tbl, COL_DETE_ZBIRNA_ROD) <= 0 Then
+            bezNovog = bezNovog & tbl & " "
+        End If
+    Next i
+
+    If Len(staro) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "staro ime: " & staro
+    AssertEquals "", staro, "Trag zbirne: nijedna tabela ne nosi staro ime kolone"
+
+    If Len(bezNovog) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "bez novog: " & bezNovog
+    AssertEquals "", bezNovog, "Trag zbirne: sve cetiri tabele nose novo ime kolone"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Schema_TragZbirneNosiNovoIme", Err.Number, Err.description
 End Sub
 
 ' Indeksi pet linijskih kolona zaglavlja otpremnice, kao tekst "i|i|i|i|i".

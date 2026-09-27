@@ -1188,6 +1188,27 @@ Public Sub EnsureRuntimeSchema()
     ' NE unutar transakcije: clsTransaction.RestoreTable dize gresku na
     ' neslaganje broja kolona. EnsureRuntimeSchema se zove pre svakog rada, van
     ' transakcije.
+    ' PREIMENOVANJA IDU PRE KANONSKOG SELF-HEAL-A, i to je jedini ispravan red.
+    '
+    ' S4-3c je kolonu u kanonu preimenovao (ZbirnaGeneracijaID -> ZbirnaRoditeljID)
+    ' ali self-heal nije dobio putanju, pa se zatecena sveska NIJE mogla izleciti:
+    ' EnsureAllTables ispod dopuni kolonu koja "fali" (novo ime) NA KRAJ, staro ime
+    ' ostane na svojoj poziciji u sredini, i kanonski prefiks puca --
+    '   "tblOtkup pozicija 28: ocekivano ZbirnaRoditeljID, stvarno ZbirnaGeneracijaID"
+    ' pa svaki upis staje fail-closed, bez izlaza.
+    '
+    ' MERENO: prvi pokusaj je rename stavio ispred EnsureKolonaSaTragom poziva na
+    ' kraju ovog modula -- i nije pomoglo, jer je EnsureAllTables vec dodao novo
+    ' ime, a PreimenujKolonuAko tiho izlazi kad novo ime postoji. Pun prolaz je to
+    ' pokazao, ne rezonovanje. Rename zato mora da bude PRVA stvar.
+    '
+    ' Staro ime je LITERAL: konstante za njega nema i ne vraca se -- isto kao kod
+    ' ObrisiKolonuAko za obrisane kolone.
+    PreimenujKolonuAko TBL_OTKUP, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_OTPREMNICA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_PRIJEMNICA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_PALETA_STAVKA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+
     If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
 
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
@@ -1350,6 +1371,8 @@ Public Sub EnsureSledljivostSchema()
     ' Samo SEMA. Popunjavanje starih redova je zasebna, jednokratna migracija
     ' (obrisan u S4-3c: nema legacy podataka) -- bio je skup za svaki start
     ' samo jednoznacne brojeve, sto je odluka a ne rutina.
+    ' Preimenovanje ZbirnaGeneracijaID -> ZbirnaRoditeljID NIJE ovde nego na
+    ' POCETKU EnsureRuntimeSchema -- pre kanonskog self-heal-a. Razlog je tamo.
     EnsureKolonaSaTragom TBL_OTPREMNICA, COL_DETE_ZBIRNA_ROD
     EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD
     EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD
