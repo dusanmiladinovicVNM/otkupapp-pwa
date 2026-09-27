@@ -16556,7 +16556,14 @@ Private Sub Test_Schema_ZalutalaKolonaSeVracaNaMesto()
     ' Prazna kolona ubacena ISPRED kanonskog mesta kvari prefiks. Tada zalutala
     ' kolona nije jedina razlika, pa premestanje nije popravka nego drugo
     ' pogadjanje -- kod mora da stane, sa imenovanim razlogom.
-    GetTable(TBL_OTKUP).ListColumns.Add(5)
+    ' Rezultat se hvata NAMERNO -- to nije stil nego kapija. Poziv sa zagradama u
+    ' poziciji NAREDBE ("...ListColumns.Add(5)") VBE preformatira u "Add (5)", a
+    ' CanonCode niz razmaka sazima ali ga ne UKLANJA. Razlika zato prezivi kanon,
+    ' zavrsni drift pass ImportAllVBA javi "kod se razlikuje od izvora" i UVOZ
+    ' PADNE -- operater mora da zatvori svesku bez snimanja. Mereno 27.09.2026 nad
+    ' kopijom radne sveske: tacno 1 red od 20128 (plan 14.54).
+    Dim praznaKol As ListColumn
+    Set praznaKol = GetTable(TBL_OTKUP).ListColumns.Add(5)
 
     Dim razlog As String
     razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD)
@@ -16565,7 +16572,7 @@ Private Sub Test_Schema_ZalutalaKolonaSeVracaNaMesto()
     AssertEquals CStr(preKolona + 1), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
                  "Zalutala: preko tudjeg drifta kolona NIJE premestena"
 
-    GetTable(TBL_OTKUP).ListColumns(5).Delete
+    praznaKol.Delete
 
     ' --- LECENJE ------------------------------------------------------
     AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD), _

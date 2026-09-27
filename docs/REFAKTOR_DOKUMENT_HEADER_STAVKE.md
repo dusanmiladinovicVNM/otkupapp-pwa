@@ -7656,6 +7656,47 @@ To je jedini test u suite-u koji dira **kanonsku** kolonu, pa ciscenje stoji i u
 | pun `run_vba` | **ZELENO** |
 | `dokaz.py migracija-` | **6 / 6 DOKAZANO** |
 
+#### Posledica koju nije nasao nijedan test nego operater
+
+`ImportAllVBA` je nad radnom sveskom pao **dvaput, identicno**:
+
+```
+Zavrsna provera projekta NIJE prosla:
+  kod se razlikuje od izvora: modBusinessFlowProTests
+```
+
+**Mereno** (27.09.2026, nad **kopijom** backup-a, u zasebnoj instanci Excela, radna
+sveska nedirnuta): soft merge (`DeleteLines` + `AddFromString`) pa citanje nazad, pa
+kanon iz `modVbaTools` portovan 1:1. Od **20128** redova razlikovao se **tacno jedan**:
+
+```
+izvor : GetTable(TBL_OTKUP).ListColumns.Add(5)
+sveska: GetTable(TBL_OTKUP).ListColumns.Add (5)
+```
+
+VBE **preformatira poziv sa zagradama u poziciji NAREDBE** -- ubaci razmak pred
+`(`, jer zagrade tu nisu lista argumenata nego grupisanje. `LowerOutsideStrings`
+niz razmaka **sazima u jedan**, ali ga ne **uklanja**, pa razlika prezivi kanon i
+zavrsni drift pass je prijavi. Deterministicki, svaki put.
+
+**Tri stvari koje je merenje oborilo, a koje su delovale verovatno:**
+
+| Pretpostavka | Sta je mereno |
+|---|---|
+| skracivanje velikog modula (871 KB, najveci u repou) | broj redova **identican**, 20128 / 20128 -- nista nije izgubljeno |
+| prag velicine / OOM klasa iz 14.09 | nije taj potpis; nema greske, merge "uspe" pa provera padne |
+| "zelen pun prolaz dokazuje da se izvor uvozi cisto" | **NE dokazuje**: `run_vba` `.bas` module ubacuje kao `Remove` + `Import(fajl)`, a `ImportAllVBA` postojece module **soft-merge**-uje. To su dva razlicita puta, i ja sam tu tvrdnju izneo jace nego sto stoji |
+
+**Popravka** je jedan red: rezultat se hvata (`Set praznaKol = ...Add(5)`), cime
+poziv prelazi u **izraznu** poziciju, gde VBE nista ne preformatira. Uz red stoji i
+komentar zasto -- inace je to "suvisna promenljiva" koju ce neko pocistiti nazad.
+
+**Dokaz u oba smera, nad kopijom:** pre popravke 1 red razlike (tacno pad koji je
+operater video), posle popravke **kanon jednak**.
+
+**Repo ima tacno jednu takvu instancu** -- ovu. Provereno grep-om nad svim `.bas` i
+`.cls`; ostali pogoci su nastavci reda (izrazna pozicija), ne naredbe.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -7685,6 +7726,7 @@ To je jedini test u suite-u koji dira **kanonsku** kolonu, pa ciscenje stoji i u
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |
 | **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |
+| **`vba_check` ne vidi POZIV SA ZAGRADAMA u poziciji naredbe** (nalaz 27.09.2026) | VBE ga preformatira (`Add(5)` -> `Add (5)`), `CanonCode` razmak sazima ali ne uklanja, pa zavrsni drift pass `ImportAllVBA` obori uvoz sa "kod se razlikuje od izvora". Simptom ne pokazuje na krivca: operater dobije poruku o CELOM modulu od 20k redova, mora da zatvori svesku bez snimanja, i to se ponavlja dok se red ne nadje rucno. Nasao ga je operater, dvaput, a nijedan test ni kapija nisu ni mogli -- `run_vba` ide drugim putem (`Remove` + `Import`). Rez: pravilo koje obori red ciji se *strip* zavrsava na `)` a pocinje pozivom metode sa argumentima (bez `=`, bez `Call`, van nastavka reda). Ide u ISTI PR nad `tools/` sa pravilom vidljivosti i tacnim tekstom tvrdnje, ne uz feature |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 
