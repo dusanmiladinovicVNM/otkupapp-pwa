@@ -7447,6 +7447,33 @@ Ime pale tvrdnje se ne čita iz izlaza `run_vba` nego iz `last_run_bfp.txt`, a t
 fajl živi **pored temp kopije** sveske i briše se sa njom. Za trijažu ide
 `--keep`, pa čitanje iz `%TEMP%\vbatest_*`.
 
+#### Ishod — izmereno
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | čisto, 189 fajlova, **611** sabotaža |
+| `gen_schema --check` · `who_writes --check` · `--check-ownership` · `popis_citalaca --check` | exit 0 |
+| `otp_linija` · DUAL READ | **0** · **0 mesta** |
+| `RunBusinessFlowProSuite` | **2043/2043** |
+| `Test_StornoCentar_All` · `RunStornoTestSuite` | ZELENO · **163/0** |
+| `RunAgrohemijaSmokeSuite` | **25/25** |
+| **pun `run_vba`** | **ZELENO** |
+| `dokaz.py otp-self-heal` | **DOKAZANO**, izvor identičan pre i posle |
+
+Broj tvrdnji je ostao **2043** i to se poklapa sa računom: −4 obrisane (četiri
+„polje je prazno“), +1 zamena, +3 nove. Nema neobjašnjene razlike.
+
+**Sabotaža obara svoju tvrdnju i još 303 testa — i to je dokaz, ne šum.** Kad
+zatečena sveska zadrži kolone van kanona, drift se prijavi i upis staje **svuda**.
+To empirijski potvrđuje ispravku obrazloženja iznad: `ObrisiKolonuAko` štiti otisak
+šeme i `VerifySchema`, ne pisca. Imenovana tvrdnja zato ima vrednost — ona je
+jedina koja kaže **zašto**, a ne samo da je crveno.
+
+**Otisak šeme:** `88E04EC5` → **`8C488AA1`**.
+
+Na operateru ostaje dvoje: **regeneracija fixture-a** (izmena kanona je izmena
+podataka u njemu) i **ručni compile** (`Alt+F11 → Debug → Compile VBAProject`).
+
 #### Greppable trag
 
 Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeće
