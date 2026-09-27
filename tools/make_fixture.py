@@ -2437,6 +2437,15 @@ SEF_CONFIG = {
     # pa bi donor sa ukljucenim modom davao druge brojke manjka -- ista klasa
     # kao KES_ISPLATE. Pinuje se OFF; malina grana ima svoj E2E u
     # modIzvestajTests koji rezim postavlja sam.
+    # Otkup/otpremnica u BRUTO unosu (KI-008): zastavica ukljucuje bruto->neto
+    # konverziju u modDokUnos.OtpremnicaValidiraj -- tara = gajbe x tezina gajbice,
+    # pa se ocekivanje umanjuje, a tara >= kolicina se ODBIJA. Donor sa ukljucenim
+    # modom je zato obarao pet provera koje su napisane za NETO unos:
+    #   "Tezina ambalaze (30,00 kg) je veca ili jednaka bruto tezini" (x2)
+    #   "ocekivano 77.00, povezano 110.00" -- 110 - 33 (11 gajbi x 3 kg) (x3, kaskada)
+    # Ista klasa kao MALINA_MODE iznad; bruto grana trazi svoj test koji zastavicu
+    # postavlja sam.
+    "OTKUP_BRUTO_UNOS": "NO",
     "MALINA_MODE": "NO",
     # Stampe iz izvestaja u testu/smoke-u nad fixture-om ne prave PDF-ove --
     # isti razlog kao ISPLATA_SPEC_PRINT_MODE iznad.
