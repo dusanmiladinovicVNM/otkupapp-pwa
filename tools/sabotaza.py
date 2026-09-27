@@ -4935,6 +4935,26 @@ SABOTAZE = {
     # Review #395 P2: oporavak je cuvao PODATKE ali ne i POZICIJU. Kad mesto
     # bira sadrzaj a ne kanon, puna kolona ostaje tamo gde je dopisana -- na
     # KRAJU -- pa VerifySchema i dalje vidi REDOSLED drift i upis ostaje blokiran.
+    # Review #396 P2: "staro ime nema" je bilo tiho "vec migrirano". Kolona sa
+    # pravim imenom na kraju tabele tada ostaje trajno zalutala -- bas to stanje je
+    # mogla da ostavi prethodna merge-ovana verzija ovog istog oporavka.
+    "migracija-zalutala-kolona-prolazi": (
+        "modSetup.bas",
+        "        ' ako ga ima na pogresnom mestu, vraca ga ili imenuje razlog.\n        PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)\n",
+        "        ' SABOTAZA: staro ime nema -> tiho izlazi, kao pre #396 P2\n",
+        "Test_Schema_ZalutalaKolonaSeVracaNaMesto",
+        "Zalutala: kolona je vracena na KANONSKU poziciju",
+    ),
+    # Premestanje je dozvoljeno SAMO kad je zalutala kolona jedina razlika. Bez te
+    # kapije self-heal pogadja preko tudjeg drifta, a EnsureAllTables redosled
+    # namerno ne dira -- pogresan redosled je nalaz za coveka.
+    "migracija-premesta-preko-tudjeg-drifta": (
+        "modSetup.bas",
+        "    If Len(neslaganje) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: premesta i preko tudjeg drifta\n",
+        "Test_Schema_ZalutalaKolonaSeVracaNaMesto",
+        "Zalutala: kapija imenuje da redosled ISPRED kolone nije kanonski",
+    ),
     "migracija-ne-cuva-poziciju": (
         "modSetup.bas",
         "        If iNovo < iStaro Then\n",

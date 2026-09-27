@@ -295,6 +295,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_PushIndeksPreskaceRedSaTerena
     Test_OTP_ZaglavljeBezLinijskihKolona
     Test_Schema_TragZbirneNosiNovoIme
+    Test_Schema_ZalutalaKolonaSeVracaNaMesto
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -16472,6 +16473,143 @@ Private Sub Test_Schema_TragZbirneNosiNovoIme()
 
 EH:
     LogFatal "Test_Schema_TragZbirneNosiNovoIme", Err.Number, Err.description
+End Sub
+
+' ZALUTALA KOLONA SE VRACA NA KANONSKO MESTO -- ali NE preko tudjeg drifta.
+'
+' Test TRANZICIJE iz stanja koje je proizvodila PRETHODNA merge-ovana verzija
+' oporavka (#395: obrisi prazno staro ime, ostavi novo tamo gde je dopisano):
+'
+'     27 GeneracijaID | 28 SourceCreatedAt  | 29 ZbirnaRoditeljID   <- zateceno
+'     27 GeneracijaID | 28 ZbirnaRoditeljID | 29 SourceCreatedAt    <- kanon
+'
+' Staro ime je tu vec nestalo, pa pravilo "zadrzi levlju od dve pozicije" nema za
+' sta da se uhvati: pozicija se mora uzeti iz KANONA (review #396, P2). Do tada je
+' helper na "staro ime nema" tiho izlazio kao da je posao zavrsen.
+'
+' MORA NAD PRAVOM KANONSKOM KOLONOM. Sa pomocnim imenom se ova grana ne moze
+' izmeriti -- kanon ga ne zna, pa se kanonski indeks nikad ne bi ni procitao. Zato
+' se raspored pravi FIZICKI nad tblOtkup, sadrzaj se nosi sa sobom na svakom
+' koraku, a ciscenje stoji i u EH: ovaj test, jedini u suite-u, dira kanonsku
+' kolonu, pa sveska ne sme da ostane drift-ovana za ostatak prolaza.
+Private Sub Test_Schema_ZalutalaKolonaSeVracaNaMesto()
+    On Error GoTo EH
+
+    Const STARO_IME As String = "ZbirnaGeneracijaID"
+    Const SENTINEL As String = "ZZ-ZALUTALA"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_OTKUP)
+    AssertTrue Not lo Is Nothing, "Zalutala: tblOtkup postoji"
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    Dim iKanon As Long
+    iKanon = GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)
+    AssertTrue iKanon > 0, "Zalutala: kolona je na pocetku prisutna"
+    AssertTrue iKanon < preKolona, _
+               "Zalutala: iza nje STOJI kolona (inace test ne meri pomeranje)"
+
+    ' Premisa se PINUJE, ne pretpostavlja: sveska i kanon moraju da se slazu o
+    ' poziciji pre nego sto test tu poziciju pokvari.
+    Dim kanonKol As Collection
+    Set kanonKol = modSchema.SchemaTableColumns(TBL_OTKUP)
+    Dim izKanona As Long, k As Long
+    For k = 1 To kanonKol.count
+        If StrComp(CStr(kanonKol(k)), COL_DETE_ZBIRNA_ROD, vbTextCompare) = 0 Then
+            izKanona = k
+            Exit For
+        End If
+    Next k
+    AssertEquals CStr(izKanona), CStr(iKanon), _
+                 "Zalutala: sveska i kanon se na pocetku slazu o poziciji kolone"
+
+    Dim imeIza As String
+    imeIza = CStr(lo.ListColumns(iKanon + 1).name)
+
+    ' --- SEED: stanje koje je #395 mogao da ostavi ---------------------
+    Dim imaRedova As Boolean
+    Dim staraVrednost As String
+    imaRedova = (lo.ListRows.count > 0)
+    If imaRedova Then
+        staraVrednost = CStr(lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value & "")
+    End If
+
+    lo.ListColumns(iKanon).name = STARO_IME
+    lo.ListColumns.Add().name = COL_DETE_ZBIRNA_ROD
+    If imaRedova Then
+        lo.ListColumns(lo.ListColumns.count).DataBodyRange.value = _
+            lo.ListColumns(iKanon).DataBodyRange.value
+        lo.ListColumns(lo.ListColumns.count).DataBodyRange.cells(1, 1).value = SENTINEL
+    End If
+    lo.ListColumns(iKanon).Delete
+
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, STARO_IME)), _
+                 "Zalutala: staro ime je nestalo, kao posle #395"
+    AssertEquals CStr(preKolona), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: novo ime stoji NA KRAJU, ne na kanonskom mestu"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "Zalutala: seed nije promenio broj kolona"
+
+    ' --- KAPIJA: preko TUDJEG drifta se ne premesta --------------------
+    ' Prazna kolona ubacena ISPRED kanonskog mesta kvari prefiks. Tada zalutala
+    ' kolona nije jedina razlika, pa premestanje nije popravka nego drugo
+    ' pogadjanje -- kod mora da stane, sa imenovanim razlogom.
+    GetTable(TBL_OTKUP).ListColumns.Add(5)
+
+    Dim razlog As String
+    razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD)
+    AssertTrue InStr(1, razlog, "nije kanonski", vbTextCompare) > 0, _
+               "Zalutala: kapija imenuje da redosled ISPRED kolone nije kanonski"
+    AssertEquals CStr(preKolona + 1), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: preko tudjeg drifta kolona NIJE premestena"
+
+    GetTable(TBL_OTKUP).ListColumns(5).Delete
+
+    ' --- LECENJE ------------------------------------------------------
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD), _
+                 "Zalutala: lecenje prolazi bez razloga za stop"
+
+    Set lo = GetTable(TBL_OTKUP)
+    AssertEquals CStr(iKanon), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: kolona je vracena na KANONSKU poziciju"
+    AssertEquals imeIza, CStr(lo.ListColumns(iKanon + 1).name), _
+                 "Zalutala: kanonska kolona iza nje je ostala neposredno iza"
+    AssertEquals CStr(preKolona), CStr(lo.ListColumns.count), _
+                 "Zalutala: broj kolona je vracen -- privremeno ime nije ostalo"
+    If imaRedova Then
+        AssertEquals SENTINEL, _
+                     CStr(lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value & ""), _
+                     "Zalutala: sadrzaj je presao sa kraja na kanonsko mesto"
+        lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value = staraVrednost
+    End If
+    Exit Sub
+
+EH:
+    ' Ciscenje i posle pada: kanonska kolona mora da se vrati, inace ostatak
+    ' suite-a pada na drift-u i pravi uzrok se gubi.
+    On Error Resume Next
+    modSetup.ObrisiKolonuAko TBL_OTKUP, COL_DETE_ZBIRNA_ROD & "_MIG"
+    If GetColumnIndex(TBL_OTKUP, "ZbirnaGeneracijaID") > 0 Then
+        If GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0 Then
+            modSetup.ObrisiKolonuAko TBL_OTKUP, "ZbirnaGeneracijaID"
+        Else
+            GetTable(TBL_OTKUP).ListColumns( _
+                GetColumnIndex(TBL_OTKUP, "ZbirnaGeneracijaID")).name = COL_DETE_ZBIRNA_ROD
+        End If
+    End If
+    ' Prazna kolona iz kapije: ako je ostala, pozicija 5 ne nosi kanonsko ime.
+    Dim kanonEH As Collection
+    Set kanonEH = modSchema.SchemaTableColumns(TBL_OTKUP)
+    If GetTable(TBL_OTKUP).ListColumns.count > 5 And kanonEH.count >= 5 Then
+        If StrComp(CStr(GetTable(TBL_OTKUP).ListColumns(5).name), _
+                   CStr(kanonEH(5)), vbTextCompare) <> 0 Then
+            GetTable(TBL_OTKUP).ListColumns(5).Delete
+        End If
+    End If
+    On Error GoTo 0
+    LogFatal "Test_Schema_ZalutalaKolonaSeVracaNaMesto", Err.Number, Err.description
 End Sub
 
 ' Indeksi pet linijskih kolona zaglavlja otpremnice, kao tekst "i|i|i|i|i".

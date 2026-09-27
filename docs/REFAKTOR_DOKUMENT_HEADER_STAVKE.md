@@ -7565,6 +7565,97 @@ oba rasporeda su stvarna i helper mora oba da izleci.
 Sidro sabotaze `migracija-ne-brise-duplikat` je spajanjem grana **zastarelo** i
 osvezeno u istom rezu; sidro koje ne postoji nije provera nego tisina.
 
+### 14.54) Review #396, P2 -- "staro ime nema" nije dokaz da je migracija zavrsena (27.09.2026)
+
+Treci nalaz u istoj prici, i **prvi koji nije jos jedna instanca iste klase nego
+posledica nepotpunog ugovora**. Zato se ovde ne dodaje grana: ugovor funkcije se
+pravi **uniformnim**.
+
+#### Nalaz
+
+Helper je na ulazu imao:
+
+```vb
+If iStaro <= 0 Then Exit Function          ' vec migrirano, ili nema nijedne
+```
+
+`staro NE / novo DA` je time bilo **tiho** "vec migrirano" -- bez ijedne provere
+gde kolona stoji. A to stanje je mogla da ostavi **prethodna merge-ovana verzija
+ovog istog oporavka** (#395: obrisi prazno staro, ostavi novo gde je dopisano):
+
+```
+27 GeneracijaID | 28 SourceCreatedAt  | 29 ZbirnaRoditeljID   <- zateceno
+27 GeneracijaID | 28 ZbirnaRoditeljID | 29 SourceCreatedAt    <- kanon
+```
+
+Sledeci start tada izlazi na prvoj liniji i sveska ostaje **trajno neizleciva**.
+Fail-closed jeste -- tihe korupcije nema -- ali self-heal nije konvergentan
+**kroz istoriju sopstvenih verzija**. To je isti princip zbog kog su zatvorena
+prethodna dva nalaza.
+
+**Sire od prijavljenog:** isto stanje proizvodi i **cist rename** nad kolonom koja
+je i sama bila zalutala -- staro ime na pogresnom mestu da posle preimenovanja novo
+ime na pogresnom mestu, i postcondition iz §14.53 to **pusti**, jer meri da
+pozicija nije POMERENA, a ne da je KANONSKA. Zato ispravka ne pokriva samo granu iz
+review-a.
+
+#### Resenje: uniforman ugovor, ne peta grana
+
+Posle poziva je novo ime **na kanonskom mestu**, ili se vraca **imenovan razlog**.
+Istu proveru mesta vrte **sve** putanje, i ona bez imenskog posla. Trik iz §14.53
+("zadrzi levlju od dve pozicije") tu ne pomaze -- starog imena vise nema, pa se
+pozicija mora uzeti **iz kanona**.
+
+#### Zasto je ovde dozvoljeno ono sto `EnsureAllTables` odbija
+
+`modSchema` namerno **ne** popravlja redosled: *"premestanje kolone bi pomerilo
+podatke; pogresan redosled je nalaz za coveka"*. To pravilo **ostaje**. Razlika je
+**obim**: tamo pitanje "koja je od 638 kolona zalutala" nema odgovor, a ovde se zna
+jedno ime, njegov kanonski indeks i postoji merljiv postcondition.
+
+Zato je popravka **uslovna**: premesta se samo kad je sve **ispred** kanonskog mesta
+vec kanonsko -- tada je ta kolona jedina razlika. Inace se **nista ne dira** i vraca
+se imenovan razlog, pa redosled cele tabele ostaje nalaz za coveka.
+
+Provera prefiksa **nije nova**: to je `modSchema.PrefiksNeslaganje`, isti helper koji
+vrte `VerifySchema` i `SchemaReadyOrFail`, samo nad **skracenim** kanonom (prvih
+`N-1` imena). Postao je `Public` kroz **generator** (`modSchema.bas` je artefakt) --
+treca lokalna kopija tog poredjenja bila bi bas ono sto komentar iznad njega
+zabranjuje: *"dve kapije ne smeju da razviju razlicite definicije ispravnog
+prefiksa"*. Otisak kanona je nepromenjen (`8C488AA1`), jer `schema.json` nije diran.
+
+Premestanje ide **bez `Cut`/`Insert`**: dodaj kolonu na kanonsko mesto, prenesi
+sadrzaj, obrisi zalutalu, preimenuj. `Cut`/`Insert` bi bio jedan korak, ali njegovo
+ponasanje u nevidljivom Excelu **nije mereno** -- ove tri operacije modul vec vrti.
+
+#### Test mora nad PRAVOM kanonskom kolonom
+
+Sa pomocnim imenom (`ZZTestKolona*`) se ova grana **ne moze** izmeriti: kanon to ime
+ne zna, pa se kanonski indeks nikad ne bi ni procitao. `Test_Schema_ZalutalaKolonaSeVracaNaMesto`
+zato radi nad `tblOtkup` i `ZbirnaRoditeljID`, gradi post-#395 raspored **fizicki**,
+nosi sadrzaj sa sobom na svakom koraku, i meri **oba** ishoda:
+
+1. **kapija** -- prazna kolona ubacena ispred kanonskog mesta kvari prefiks, pa
+   premestanje mora da **stane** sa imenovanim razlogom i kolona **ne** sme da se
+   pomeri;
+2. **lecenje** -- posle uklanjanja tog drifta kolona se vraca na kanonsku poziciju,
+   kolona iza nje ostaje **neposredno iza**, sadrzaj je presao, i privremeno ime
+   nije ostalo.
+
+To je jedini test u suite-u koji dira **kanonsku** kolonu, pa ciscenje stoji i u
+`EH`: sveska ne sme da ostane drift-ovana za ostatak prolaza.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **617** sabotaza |
+| cetiri Python kapije | exit 0 (otisak sheme nepromenjen) |
+| `RunBusinessFlowProSuite` | **2077 / 2077** (bilo 2063; +14 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| pun `run_vba` | **ZELENO** |
+| `dokaz.py migracija-` | **6 / 6 DOKAZANO** |
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
