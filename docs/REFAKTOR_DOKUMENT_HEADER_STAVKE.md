@@ -7755,6 +7755,8 @@ unapred, i dobija **staticku kapiju** umesto komentara.
 | `KupciIzlaz` identitet | **(a)** dobija **svoj dokument**; mereno je da danas ne pise nijednu dokument tabelu |
 | `POCETNO_STANJE` | **iskljucivo firmina** ambalaza zatecena kod entiteta — zaduzuje ga, **ne** stvara obavezu; partnerove sopstvene gajbe idu kao `ULAZ_TUDJE_AMBALAZE` i na dan uvodjenja |
 | `AMB-INV-07` | vazi za **sve** realne naloge, bez izuzetka |
+| `Firma` nalozi | **jedan jedini** nalog; magacini se ne razdvajaju |
+| `POCETNO_STANJE` | dobija **dokument** — a odgovor je izvukao nalaz da **ni revers nema tabelu**, pa svi dogadjaji bez svog dokumenta dobijaju `tblAmbalazaDokument`; `ReversID` postaje njegov identitet |
 
 #### Zasto pred S6, a ne posle
 
@@ -7768,7 +7770,7 @@ dvaput, i drugi put nad kodom koji je prvi put vec menjan.
 `S6 je parkiran na koraku 1/8` (grana `claude/s6-prijemnica-stavke`, kanon
 `tblPrijemnicaStavke` upisan, BFP 2077/2077). Nastavlja se posle AMB-10.
 
-Redosled AMB-10: `10a` ugovor · `10-KI` dokument za `KupciIzlaz` · `10b` pisac ·
+Redosled AMB-10: `10a` ugovor · `10-KI` dokument za `KupciIzlaz` · `10-DOK` `tblAmbalazaDokument` · `10b` pisac ·
 `10c` citaoci · `10d` storno · `10e` brisanje starog. **Cetiri dokaza pre `10b`:**
 zatvoren enum `VrstaKretanja`, stabilan identitet `KupciIzlaz`, tacan protokol
 potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->

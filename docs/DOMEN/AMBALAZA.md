@@ -201,7 +201,8 @@ partner — njegov saldo nema fizicko znacenje.
 
 | Nalog | Saldo ima fizicko znacenje |
 |---|---|
-| `Kooperant` · `Stanica` · `Kupac` · `Vozac` · `Firma` | **da** — stvarni drzaoci |
+| `Kooperant` · `Stanica` · `Kupac` · `Vozac` | **da** — stvarni drzaoci, po entitetu |
+| `Firma` | **da** — **jedan jedini nalog** (odluka operatera 28.09.2026); magacini se ne razdvajaju |
 | `SpoljniSvet` | **ne** — izvor i ponor |
 
 ### 6.4 Negativan saldo ne postoji — deficit se POKRIVA, ne trpi
@@ -425,16 +426,72 @@ Zato „dati mu stabilan ID" ima samo dva oblika:
 | 2 | potvrda deficita mora biti backend-safe | prihvaceno — 6.5, isti obrazac kao `IsplataBlokProblem` |
 | 2 | `AMB-INV-08` kao tvrd arhitektonski uslov | prihvaceno **i pojacano**: dobija staticku kapiju |
 | 2 | `KupciIzlazID` | prihvaceno **uz zaostravanje merenjem**: to znaci **dokument**, 6.11 |
+| 3 | `Firma` = **jedan** nalog; `POCETNO_STANJE` dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a |
 | — | `POCETNO_STANJE` | **dodato iz merenja**, nije trazeno: `GetKooperantAmbOpening` pocetno stanje izvodi iz knjige, pa bi prvi dan bio zid potvrda |
+
+### 6.12a Ambalazni dokument — jedan, za sve sto svoj nema
+
+> **Odluka operatera (28.09.2026): `POCETNO_STANJE` dobija dokument.**
+> Pitanje je bilo uze, ali odgovor je izvukao nalaz koji ga cini sirim.
+
+**Mereno:** `ReversID` postoji **samo kao kolona na `tblAmbalaza`** — tabele
+reversa **nema nigde u kanonu**. Revers dakle ima identitet i broj, ali **nema
+red**. To je **isti plutajuci identitet** koji je u 6.11 odbijen za `KupciIzlaz`,
+samo stariji. Zato `DokumentID` kod reversa danas i nosi **broj**: nema cemu da
+pokaze.
+
+Iz toga sledi jedan odgovor za sve:
+
+> **AMB-10-ODL-2.** Svi dogadjaji bez sopstvenog poslovnog dokumenta dobijaju
+> **jedan zajednicki dokument** — `tblAmbalazaDokument` — cija `Vrsta` kaze sta
+> je. Njegov ID ide u `tblAmbalaza.DokumentID`. **`ReversID` time nestaje:** ne
+> brise se nego **postaje identitet dokumenta**.
+
+Skica (finalizuje je `10a`):
+
+```
+tblAmbalazaDokument
+  AmbDokID         identitet -> ide u tblAmbalaza.DokumentID
+  Vrsta            REVERS | POCETNO_STANJE | NABAVKA | OTPIS
+  BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
+  Datum
+  StanicaID        kontekst nastanka
+  Napomena
+  Stornirano       dokument je dokument -- STORNO_REGISTAR ga ocekuje
+  CreatedAt/By, ModifiedAt/By
+```
+
+Dokument **nije** knjiga: on sme da nosi `Stornirano` i `Modified*`, jer je
+zaglavlje. Njegov storno upisuje **kontra-stavove** u knjigu; knjiga ostaje
+append-only. Dve razlicite stvari, dva razlicita ugovora — i to mora da stoji
+napisano, jer su u istoj temi.
+
+**Prosirenje koje sam ja izveo, i izgovaram ga da bi se moglo oboriti:**
+odluka je trazena za `POCETNO_STANJE`, ali `NABAVKA` i `OTPIS` su **ista klasa** —
+dogadjaji bez izvornog dokumenta — pa bi im izuzetak od `AMB-INV-08` bio jedini
+alternativni odgovor. Izuzetak u invarijanti je tacno ono sto ovaj rez uklanja iz
+`Chk_B10`, pa ih vodim istim putem. Ako je za neku od njih poslovni odgovor
+drugaciji, menja se **spisak `Vrsta`**, ne model.
+
+Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta**:
+
+| Dogadjaj | Dokument |
+|---|---|
+| otkup, otpremnica, prijemnica | vec postoji |
+| `KupciIzlaz` | **nov** (6.11, odluka operatera) |
+| revers, pocetno stanje, nabavka, otpis | **`tblAmbalazaDokument`** |
+
+`AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..08`, protokol potvrde deficita, semantika obaveze, identitet `KupciIzlaz`. **Bez produkcionog cutovera.**
 2. **AMB-10-KI** — `KupciIzlaz` dobija svoj dokument (red, broj, storno, identitet). Preduslov za `AMB-INV-04`, zaseban rez.
-3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
-4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
-6. **AMB-10e** — **tek tada** brisanje starog modela.
+3. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, pocetno stanje, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
+4. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
+5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
+6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+7. **AMB-10e** — **tek tada** brisanje starog modela.
 
 **Cetiri dokaza pre `10b`:** zatvoren `VrstaKretanja` enum · stabilan identitet
 `KupciIzlaz` · tacan protokol potvrde deficita · test da pozajmljena ambalaza moze
