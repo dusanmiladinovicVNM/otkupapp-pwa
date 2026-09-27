@@ -229,17 +229,15 @@ Public Const COL_OTP_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_OTP_KULTURA As String = "KulturaID"
 Public Const COL_OTP_VRSTA As String = "VrstaVoca"
 Public Const COL_OTP_SORTA As String = "SortaVoca"
-Public Const COL_OTP_KOLICINA As String = "Kolicina"
-Public Const COL_OTP_CENA As String = "Cena"
+' TipAmbalaze OSTAJE: tip je cinjenica ZAGLAVLJA (jedan tip po dokumentu), a
+' kolicina gajbi je cinjenica stavke. Kolicina/Cena/KolAmbalaze/Klasa/BrutoKg su
+' obrisane iz kanona -- zive na tblOtpremnicaStavke od S3a.
 Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 ' IDENTITET UTOVARA (S5-3, review #388 P1). Jedan klik otkupca u PWA ->
 ' jedna otpremnica. Bez trajnog traga je PredajaID zivela samo unutar jednog
 ' sync prolaza, pa je parcijalan uspeh (GAS obradjuje red po red) mogao isti
 ' utovar da razbije na DVE izdate otpremnice.
 Public Const COL_OTP_PREDAJA_ID As String = "PredajaID"
-Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
-Public Const COL_OTP_KLASA As String = "Klasa"
-Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
 
 Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
 

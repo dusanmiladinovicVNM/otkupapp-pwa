@@ -4880,16 +4880,23 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | `Otkup.VozacID` je živa veza koju treba migrirati | Pišu je **tačno dva mesta**, oba u `modMasterSync`, **oba pod pauzom**. Kolona je mrtva |
 | `PROSLEDJENO` kao izvor otpremnice je „obavezno pre S5“ | `IZDATO_PROSLEDJENO` **ne piše nijedan put**. Nije živ kvar nego dva odgovora na isto pitanje — zatvoreno jednim redom |
 
-#### Rez na četiri sesije
+#### Rez na četiri sesije — narastao na deset
+
+> **Osveženo 27.09.2026, posle #394.** Procena „četiri sesije“ je promašila, i to se ovde beleži
+> umesto da se prepiše: predaja je ispala sopstven događaj (S5-4a), žica vozača se razdvojila na
+> master i ekran (S5-4b-1/2), a otkup je zahtevao svoju JS kapiju pre nego što mu se dira oblik
+> (S5-5a) — pa onda i tri kruga review-a na jednoj granici (S5-5b). Deset PR-ova: #385–#394.
 
 | # | Sadržaj | Stanje |
 |---|---|---|
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
-| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ✅ #388 · most u #389 · **ostatak:** `DEGRADIRANO` grana ciklusa još stoji na jednom mestu (`modGoogleSyncOrchestrator:384`) |
 | **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
 | **S5-4b-1** | **zica**: master izvozi otpremnice (zaglavlje + stavke) u `MgmtReports`; GAS servira vozaču otpremnice po `Otpremnica.VozacID` (E-044, E-058) | ovaj rez |
-| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
+| **S5-5a** | **JS kapija**: `tests/js/` harness nad produkcijskim fajlovima (`vm.Script`), sabotaža nad tekstom u memoriji | ✅ #393 |
+| **S5-5b** | **žica otkupa**: zaglavlje + stavke kroz VBA uvoz, GAS i PWA; `StavkeCount` kao manifest; četiri linijske kolone → mrtvi slotovi | ✅ #394 (`561fcad9`), §14.44–14.50 |
 
 #### Šta je S5-1 uradio
 
@@ -6057,8 +6064,8 @@ napiše.** Zato:
 
 | # | Sadržaj | Stanje |
 |---|---|---|
-| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | sledeći rez |
-| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ⏳ |
+| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | ✅ #391 |
+| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
 
 **2. Broj zbirne ostaje na masteru.** PWA generiše `ZbirnaID` (kao `PredajaID` u S5-4a) i šalje spisak
 otpremnica; `BrojZbirne` dodeljuje desktop pri uvozu. To je i danas tačno na uvoznoj strani —
@@ -7237,6 +7244,241 @@ prisutna. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
 
 **JS harness ovog head-a jos nije izvrsen** — CI ide na `pull_request` i push u
 `main`, pa push feature grane ga ne pokrece.
+
+### 14.51) Pre-flight S1 — rez ne postoji; ispravka premise (27.09.2026)
+
+**Verdikt: NEMA REZA.** Pre-flight je pokrenut za „S1 — Otkup do kraja" i odbio ga
+je zato što je **S1 zatvoren još u #359**. Premisa na kojoj je predložen je bila
+moja greška u čitanju brojača, i beleži se ovde da je sledeća sesija ne ponovi.
+
+#### Šta je premisa tvrdila i šta je merenje pokazalo
+
+| Tvrdnja | Merenje |
+|---|---|
+| „`otk_linija` = 18 živih čitalaca drži linijska polja `tblOtkup` na životu" | **`tblOtkup` nema ta polja.** Kanon: 29 kolona, bez `Kolicina`/`Cena`/`Klasa`/`KolAmbalaze` — obrisane u S1d (#358). Nosi ih `tblOtkupStavke` (12 kolona) |
+| `otk_linija` je mera S1 | **Nije, i alat to sam kaže** (`tools/popis_citalaca.py:102–104`): *„`otk_linija` ostaje radi uporedivosti, ali nosi i `TIP_AMB` / `KOL_AMB_IZDATA`, koje su H (DOCUMENT_HEADER_LINES) i **ne silaze na nulu**"*. Mera S1 je **`x_otk_stavka`**, i on je **0** |
+| `otk_linija` nije ni pod kapijom | `PRAGOVI` (`popis_citalaca.py:175`) gejtuje **šest** grupa: `otp_stari_pisac` 0 · `otk_veza_otp` 11 · `otp_linija` 3 · `otp_cena` 0 · `zbr_linija` 17 · `zbr_stari_pisac` 0. `otk_linija` nije među njima |
+
+Uz to, brojevi koje sam prvo izgovorio su mešali **PROD ukupno** sa **živim**
+mestima: `zbr_linija` je 22 PROD ali **17 živih** (= prag), `otk_veza_otp` 14 PROD
+ali **11 živih** (= prag). Kapija je sve vreme bila zelena jer je merila pravu
+stvar.
+
+**Pouka je ista koju skill nosi u §6:** *red u katalogu je tvrdnja, ne dokaz.*
+Ovde je „katalog" bila tabela slajsova §14.9, a brojač koji sam uzeo kao meru
+nikad nije bio njena mera.
+
+#### Šta je merenje NAŠLO kao stvarno otvoreno
+
+**1. Mrtve linijske kolone zaglavlja OTPREMNICE — tačan analogon S1d.**
+
+Kanon `tblOtpremnica` još nosi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`,
+`BrutoKg`, a `tblOtpremnicaStavke` nosi svoje. Tri **živa PROD** mesta ih drže u
+zatečenoj svesci kroz self-heal:
+
+| Mesto | Šta radi |
+|---|---|
+| `modSetup.bas:1475` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA` |
+| `modSetup.bas:1488` | `EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO` |
+| `modSetup.bas:1489` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO` |
+
+To su **ista tri mesta** koja čine prag `otp_linija` = 3. Rez ih spušta na **0**.
+Negativne tvrdnje već postoje i traže da polja budu prazna
+(`modBusinessFlowProTests:13331–13334`, „OTP header: Kolicina prazna" itd.), pa se
+merenje ne izmišlja nego nasleđuje.
+
+**2. S6 — prijemnica još nema stavke.**
+
+`tblPrijemnica` nosi 5 linijskih polja u zaglavlju, a **`tblPrijemnicaStavke` ne
+postoji u kanonu**. To nije čišćenje nego nova tabela, nov pisac i cutover F4
+(pauziran od #362). `split_plus` = 5.
+
+#### Verdikt po osama — za ODBIJEN rez
+
+| Osa | Status |
+|---|---|
+| `DOMAIN` | **N/A** — rez ne postoji; domen otkupa je zatvoren u S1a–S1e |
+| `IDENTITY` | **N/A** — `OtkupID` je identitet od S1e (#359) |
+| `CARDINALITY`, `INVARIANTS/OWNER`, `WRITERS`, `DOWNSTREAM` | **N/A** — nema izmene |
+| `CAPABILITY` | **N/A** |
+| `ACCEPTANCE CONTRACT` | **N/A** — nema šta da se prihvati |
+| `PLATFORM` | **N/A** |
+| `LANDING` | **PROVEN** — `main` je na `561fcad9`, nema nemergovane zavisnosti |
+
+`EVENTS: N/A` — nijedan poslovni tok nije dirnut; ovo je ispravka plana.
+
+#### Sledeći kandidati, sa merom umesto procene
+
+| Kandidat | Mera koja pada na nulu | Veličina |
+|---|---|---|
+| **S3-ostatak** — mrtve linijske kolone `tblOtpremnica` | `otp_linija` 3 → **0** | mali: kanon + `modSetup` + konstante; negativne tvrdnje postoje |
+| **S6** — prijemnica header + stavke + izvori + cutover | `split_plus` 5 → 0; nova tabela `tblPrijemnicaStavke` | veliki: nov pisac, F4 cutover, štampa i izvozi |
+
+Pre-flight za izabrani rez ide **posebno** — ovaj je potrošen na ispravku premise,
+i to je jedini posao koji je smeo da uradi.
+
+### 14.52) Pre-flight S3-ostatak — mrtve linijske kolone zaglavlja otpremnice (27.09.2026)
+
+Rez: `tblOtpremnica` gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `BrutoKg`.
+Tačan analogon S1d (#358), samo drugi dokument.
+
+#### Verdikt po osama — svaka sa dokazom
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `docs/DOMEN/DOCUMENT_HEADER_LINES.md:12` — otpremnica je dokument sa **specifikacijom**; klasa/količina/gajbe/bruto su činjenice **linije**, i od S3a žive na `tblOtpremnicaStavke` (12 kolona, kanon) |
+| `IDENTITY` | **N/A** | identitet je `OtpremnicaID` od S3b-2b (#363); rez ne dira ni jedan identitet |
+| `CARDINALITY` | **PROVEN** | zaglavlje 1:N stavke, nepromenjeno; brisanje mrtvih kolona zaglavlja ne menja nijednu kardinalnost |
+| `INVARIANTS/OWNER` | **PROVEN** | nijedan validator ne čita ta polja: grep `\bCOL_OTP_(KOLICINA\|CENA\|KLASA\|KOL_AMB\|BRUTO)\b` daje **samo** `modSetup` (3), `modConfig` (5 definicija), jedan komentar u `modDokumenta`, i testove. `modDokumentInvariant` i `modIntegritet` — nijedan pogodak |
+| `WRITERS` | **PROVEN** | pisac upisuje **PO IMENU**, ne pozicijom: `modDokumenta.bas:4315–4322` `SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_*`. Zato brisanje iz sredine ne pomera nijedan upis. `WHO_WRITES`: `tblOtpremnica` ima **1** vlasnika (`modDokumenta`); mutatori još u `modStorno`/`modStornoFlow`, svi po koloni |
+| `DOWNSTREAM` | **PROVEN** | nijedan izvoz, izveštaj, štampa, GAS ni read-model ne čita ta polja (isti grep). Izvoz otpremnica za vozača (#391) gradi iz **stavki**. Jedini živi potrošač je **self-heal** u `modSetup` |
+| `CAPABILITY` | **N/A** | ništa korisniku vidljivo ne odlazi — polja se od S3a pišu **prazna**, a testovi to i traže (`modBusinessFlowProTests:13331–13334`) |
+| `PLATFORM` | **MERLJIVO OVDE** | Windows + Excel su dostupni u ovoj sesiji, pa `make_fixture` i `run_vba` nisu pretpostavka. Presedan je S1d: `ObrisiKolonuAko` već briše 8 kolona `tblOtkup` (`modSetup.bas:1296–1309`) |
+| `ACCEPTANCE CONTRACT` | **ispod** | — |
+| `LANDING` | **PROVEN** | `main` na `561fcad9`; grana `claude/s3-ostatak-otp-kolone` ne zavisi ni od jedne nemergovane grane; nijedna druga sesija ne dira `schema.json` |
+
+`EVENTS: N/A` — nijedan poslovni događaj se ne menja. Roba, dokument i novac ostaju
+na istim datumima i statusima; briše se mrtva kolona koju nijedan pisac ne puni.
+
+#### ⚠ ARCHITECTURAL EDGE CASE — brisanje NIJE na kraju i NIJE neprekidno
+
+Pozicije u kanonu: **9** `Kolicina`, **10** `Cena`, **12** `KolAmbalaze`,
+**13** `Klasa`, **15** `BrutoKg` — a **14** je `Stornirano`, dakle **između** njih.
+Iza njih stoji 14 kolona (`CreatedAt` … `PredajaID`).
+
+Zato:
+
+1. Zatečena sveska ih **mora izgubiti pre prvog pozicionog upisa**, kao u S1d. Bez
+   toga bi `AppendRow` (koji piše poziciono) slao vrednosti u pogrešne kolone.
+2. Pisac otpremnice je bezbedan jer piše **po imenu** — ali to je merenje, ne
+   pretpostavka, i zato stoji u tabeli iznad sa `fajl:linija`.
+
+#### Ugovor prihvatanja — plan dokaza, ne dokaz
+
+**Šta će važiti kad se završi:**
+
+1. `schema/schema.json` — `tblOtpremnica` ima **24** kolone (bilo 29), bez pet
+   linijskih; `modSchema.bas` regenerisan, `gen_schema_module.py --check` zelen.
+2. `modConfig` — pet `COL_OTP_*` konstanti obrisano. `COL_OTP_TIP_AMB` **ostaje**:
+   tip ambalaže je činjenica **zaglavlja**.
+3. `modSetup` — tri živa mesta obrisana; nov `ObrisiKolonuAko` blok za
+   `TBL_OTPREMNICA` briše svih pet iz zatečene sveske.
+4. `popis_citalaca` — prag `otp_linija` **3 → 0**. Prag se menja u **istom**
+   commit-u, jer merenje ispod praga takođe pada.
+
+**Šta mora ostati netaknuto:**
+
+- `tblOtpremnicaStavke` i svi njeni čitaoci — merodavan izvor se ne dira.
+- `Stornirano` (pozicija 14) i sve iza njega: posle brisanja moraju nositi **iste
+  vrednosti** na novim pozicijama.
+- `COL_OTP_TIP_AMB`, `PredlogCena` na stavci, `tblOtpremnicaIzvori`.
+
+**Koji edge case mora proći:** zatečena sveska sa svih pet kolona → self-heal ih
+briše → prvi upis otpremnice posle toga nosi **tačne** vrednosti u `Stornirano`,
+`CreatedAt` i `PredajaID`. To je ceo rizik reza i meri se tvrdnjom, ne okom.
+
+**Koji negativan slučaj mora biti odbijen:** upis koji bi pokušao da postavi
+linijsko polje na zaglavlju mora pasti **po imenu** (`SetRowValueByColumn` diže
+grešku za nepoznatu kolonu), a ne da tiho prođe.
+
+**Čime se dokazuje:**
+
+| Šta | Merenje |
+|---|---|
+| kanon i modul u koraku | `gen_schema_module.py --check` |
+| nijedan živi čitalac | `popis_citalaca.py --check` sa pragom `otp_linija` = 0 |
+| vlasništvo upisa nepromenjeno | `who_writes.py --check` i `--check-ownership` |
+| pozicije iza brisanja | **nova VBA tvrdnja**: posle self-heal-a upiši otpremnicu i pročitaj `Stornirano`/`CreatedAt`/`PredajaID` **po imenu i po poziciji** — moraju se poklopiti |
+| ponašanje | `run_vba.py --suite RunBusinessFlowProSuite` i `Test_StornoCentar_All` (oba diraju `tblOtpremnica`), pa pun prolaz |
+| dvosmerni dokaz | nova sabotaža u `tools/sabotaza.py` nad self-heal blokom: ako se kolone ne obrišu, tvrdnja o pozicijama pada **po imenu** |
+| kompajlira se | ručna kapija `Alt+F11 → Debug → Compile VBAProject` |
+
+**Fixture se MORA regenerisati** — donor fizički nosi te kolone, a `add_row` diže
+`SchemaError` za ključ bez kolone, pa se ponašanje menja tek posle regeneracije.
+
+#### Ispravka obrazloženja, iz merenja posle koda (27.09.2026)
+
+Pre-flight je tvrdio pravu stvar iz **malo pogrešnog razloga**, i to se ispravlja
+umesto da se prepiše.
+
+Rečeno je: „pisac upisuje po imenu, pa brisanje iz sredine ne pomera nijedan
+upis". Tačno je jače od toga — pisac je **potpuno nezavisan od kanonskih
+pozicija**:
+
+| Mesto | Šta stvarno radi |
+|---|---|
+| `modDataAccess.SetRowValueByColumn` | `colIndex = RequireColumnIndex(tableName, columnName)` — indeks iz **SVESKE** |
+| `modDokumenta.bas:4313` | `ReDim rowData(0 To colCount - 1)` — širina iz **SVESKE** |
+| `modDataAccess.AppendRow` | piše `rowData(i)` u kolonu `i` **iste** sveske |
+
+Dakle niz se gradi i upisuje u istom (workbook) koordinatnom sistemu. Kanon tu ne
+učestvuje.
+
+**Onda šta `ObrisiKolonuAko` zaista štiti?** Otisak šeme i `VerifySchema`, koji
+drift prijavljuju **po poziciji** — to i S1d komentar kaže
+(`modSetup.bas:1293–1295`: *„modSchema to i prijavljuje po poziciji"*). Plus svaki
+pisac koji bi gradio goli `Array(...)` kanonske širine; za otpremnicu takvog nema,
+ali pravilo iz `CLAUDE.md` §3 zato i postoji.
+
+Posledica za rez je **nikakva** — brisanje je i dalje potrebno i i dalje ide pre
+prvog upisa. Menja se samo koja kapija se time čuva, i to je razlika koju vredi
+imati zapisanu.
+
+#### Dva nalaza iz prolaza
+
+**1. Zatečen test je nosio SVOJU kopiju ugovora o šemi.** BFP je pao jednom:
+
+```
+FAIL Core tables and required columns exist :: Missing column: tblOtpremnica.Kolicina
+```
+
+`RequireColumnsExist TBL_OTPREMNICA, Array(...)` u
+`modBusinessFlowProTests.bas:495` drži **prepisan** spisak obaveznih kolona, pa je
+tražio četiri kolone koje je kanon upravo izgubio. Kopija ugovora u testu je tačno
+ono što kanon treba da ukine. Spisak je skraćen, uz komentar odakle ugovor dolazi.
+
+**2. Sve tri nove tvrdnje su prošle iz prvog puta**, uključujući onu o pozicijama.
+Pre čitanja imena pale tvrdnje postojala je razumna hipoteza da je **ona** prestroga
+(traži poklapanje svake kanonske kolone, a otisak se namerno meri nad prefiksom).
+Hipoteza je bila pogrešna, i zato se ništa nije „popravilo" pre merenja — ispravka
+pre merenja je u ovoj seriji dva puta bila nalaz.
+
+Ime pale tvrdnje se ne čita iz izlaza `run_vba` nego iz `last_run_bfp.txt`, a taj
+fajl živi **pored temp kopije** sveske i briše se sa njom. Za trijažu ide
+`--keep`, pa čitanje iz `%TEMP%\vbatest_*`.
+
+#### Ishod — izmereno
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | čisto, 189 fajlova, **611** sabotaža |
+| `gen_schema --check` · `who_writes --check` · `--check-ownership` · `popis_citalaca --check` | exit 0 |
+| `otp_linija` · DUAL READ | **0** · **0 mesta** |
+| `RunBusinessFlowProSuite` | **2043/2043** |
+| `Test_StornoCentar_All` · `RunStornoTestSuite` | ZELENO · **163/0** |
+| `RunAgrohemijaSmokeSuite` | **25/25** |
+| **pun `run_vba`** | **ZELENO** |
+| `dokaz.py otp-self-heal` | **DOKAZANO**, izvor identičan pre i posle |
+
+Broj tvrdnji je ostao **2043** i to se poklapa sa računom: −4 obrisane (četiri
+„polje je prazno“), +1 zamena, +3 nove. Nema neobjašnjene razlike.
+
+**Sabotaža obara svoju tvrdnju i još 303 testa — i to je dokaz, ne šum.** Kad
+zatečena sveska zadrži kolone van kanona, drift se prijavi i upis staje **svuda**.
+To empirijski potvrđuje ispravku obrazloženja iznad: `ObrisiKolonuAko` štiti otisak
+šeme i `VerifySchema`, ne pisca. Imenovana tvrdnja zato ima vrednost — ona je
+jedina koja kaže **zašto**, a ne samo da je crveno.
+
+**Otisak šeme:** `88E04EC5` → **`8C488AA1`**.
+
+Na operateru ostaje dvoje: **regeneracija fixture-a** (izmena kanona je izmena
+podataka u njemu) i **ručni compile** (`Alt+F11 → Debug → Compile VBAProject`).
+
+#### Greppable trag
+
+Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeće
+(`DOCUMENT_HEADER_LINES.md`). Trag je prag `otp_linija` = 0 u `popis_citalaca.py`
+i nova sabotaža — oba exit kod, ne rečenica.
 
 ## 15) Backlog — namerno van opsega
 

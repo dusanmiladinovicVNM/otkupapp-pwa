@@ -175,7 +175,11 @@ KOLONE_STAROG_MODELA = re.compile(
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
     ("otk_veza_otp", 11),
-    ("otp_linija", 3),
+    # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano iz
+    # kanona, a self-heal ih brise iz zatecene sveske. Poslednja tri ziva
+    # mesta su bila u modSetup (format i EnsureColumnOnTable) -- ona su ta
+    # koja su kolone i drzala u zivotu.
+    ("otp_linija", 0),
     ("otp_cena", 0),
     # S4-1: citaoci SADRZAJA zbirne presli su na tblZbirnaStavke. Ostatak drze
     # clanstvo i okvir ispravke (modStornoFlow, modDokumentInvariant) -- njih

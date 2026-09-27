@@ -293,6 +293,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_StavkeSaZiceIduPoCridu
     Test_PWA_ManifestNeporavnatNeUvozi
     Test_OTK_PushIndeksPreskaceRedSaTerena
+    Test_OTP_ZaglavljeBezLinijskihKolona
+    Test_Schema_TragZbirneNosiNovoIme
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -492,10 +494,12 @@ Private Sub Test_CoreTablesAndColumnsExist()
         COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, COL_OKS_KOLICINA, _
         COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
 
+    ' Kolicina, Cena, KolAmbalaze, Klasa i BrutoKg su obrisane iz kanona
+    ' (S3-ostatak): cinjenice su STAVKE i zive na tblOtpremnicaStavke. TipAmbalaze
+    ' ostaje -- tip je cinjenica zaglavlja.
     RequireColumnsExist TBL_OTPREMNICA, Array( _
         "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
-        "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "Klasa")
+        "BrojZbirne", "VrstaVoca", "SortaVoca", "TipAmbalaze")
 
     RequireColumnsExist TBL_ZBIRNA, Array( _
         "ZbirnaID", "Datum", "VozacID", "BrojZbirne", "KupacID", _
@@ -1818,11 +1822,9 @@ Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
     SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtpremnice
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_VRSTA, TEST_VRSTA
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_SORTA, TEST_SORTA
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOLICINA, 100#
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_CENA, 10#
+    ' Kolicina, Cena, KolAmbalaze i Klasa se ne sejaju: kolone ne postoje na
+    ' zaglavlju od S3-ostatka. Tip ambalaze JESTE cinjenica zaglavlja i ostaje.
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_TIP_AMB, TEST_TIP_AMB
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
 
     ' BrojZbirne i ZbirnaID ostaju PRAZNI -- dete pre roditelja, sto je
     ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
@@ -5130,8 +5132,10 @@ Private Sub Test_OTP_PredlogCeneJePoKlasi()
                "OTP predlog cene: Klasa I nosi svoju cenu"
     AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_II, COL_OPS_PREDLOG_CENA) - 120#) < 0.001, _
                "OTP predlog cene: Klasa II nosi SVOJU cenu, ne cenu prve"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_CENA), _
-                 "OTP predlog cene: zaglavlje vise ne nosi cenu"
+    ' Od S3-ostatka kolone Cena na zaglavlju NEMA, pa se meri njeno odsustvo --
+    ' jaca tvrdnja od "prazna je".
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")), _
+                 "OTP predlog cene: zaglavlje vise ne nosi kolonu Cena"
 
     ' Stavka bez predloga je legitimna ("cena jos nije dogovorena") i ostaje
     ' PRAZNA -- nula bi u prefillu otkupa bila tvrdnja da je cena nula.
@@ -13328,10 +13332,10 @@ Private Sub Test_OTP_HeaderNeNosiLinePolja()
                                         izvori)
 
     AssertTrue Len(otpID) > 0, "OTP header: upis prosao"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOLICINA), "OTP header: Kolicina prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOL_AMB), "OTP header: KolAmbalaze prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KLASA), "OTP header: Klasa prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_BRUTO), "OTP header: BrutoKg prazan"
+    ' "Prazno" je bilo najbolje sto se moglo tvrditi dok je kolona postojala. Od
+    ' S3-ostatka je njeno odsustvo STRUKTURNO, pa tvrdnja to i kaze.
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP header: nijedne linijske kolone nema na zaglavlju"
 
     ' A vozac JESTE na headeru -- otpremnica ga poseduje (S4.1c).
     AssertEquals TEST_VOZ_ID, OtpPolje(otpID, COL_OTP_VOZAC), "OTP header: VozacID"
@@ -16428,6 +16432,104 @@ EH:
     LogFatal "Test_OTK_PushIndeksPreskaceRedSaTerena", Err.Number, Err.description
 End Sub
 
+' TRAG RODITELJSKE ZBIRNE NOSI NOVO IME, I NIJEDNA TABELA NE NOSI STARO.
+'
+' S4-3c je kolonu u kanonu preimenovao (ZbirnaGeneracijaID -> ZbirnaRoditeljID) ali
+' self-heal nije dobio putanju preimenovanja, pa se sveska sa starim imenom NIJE
+' mogla izleciti: ensure dopise novo ime na kraj, staro ostane u sredini, kanonski
+' prefiks puca i upis staje fail-closed. Mereno na tri dev sveske -- sve tri nose
+' staro ime.
+'
+' OVO JE REGRESIONA OGRADA, NE DOKAZ. Rename se moze izmeriti samo na svesci koja
+' nosi staro ime; posle lecenja ga nijedna ne nosi, pa tvrdnja tada prolazi
+' trivijalno. Prava mera je end-to-end: regeneracija fixture-a iz dev sveske sa
+' starim imenom, pa pun prolaz. Ograda postoji da ukinut rename ili vraceno staro
+' ime padnu PO IMENU, a ne da se izdaje za dokaz.
+Private Sub Test_Schema_TragZbirneNosiNovoIme()
+    On Error GoTo EH
+
+    Dim tabele As Variant
+    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_PRIJEMNICA, TBL_PALETA_STAVKA)
+
+    Dim i As Long, staro As String, bezNovog As String
+    For i = LBound(tabele) To UBound(tabele)
+        Dim tbl As String: tbl = CStr(tabele(i))
+
+        If GetColumnIndex(tbl, "ZbirnaGeneracijaID") > 0 Then
+            staro = staro & tbl & " "
+        End If
+        If GetColumnIndex(tbl, COL_DETE_ZBIRNA_ROD) <= 0 Then
+            bezNovog = bezNovog & tbl & " "
+        End If
+    Next i
+
+    If Len(staro) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "staro ime: " & staro
+    AssertEquals "", staro, "Trag zbirne: nijedna tabela ne nosi staro ime kolone"
+
+    If Len(bezNovog) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "bez novog: " & bezNovog
+    AssertEquals "", bezNovog, "Trag zbirne: sve cetiri tabele nose novo ime kolone"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Schema_TragZbirneNosiNovoIme", Err.Number, Err.description
+End Sub
+
+' Indeksi pet linijskih kolona zaglavlja otpremnice, kao tekst "i|i|i|i|i".
+'
+' Nula znaci "kolone nema" (GetColumnIndex tako i vraca). Jedan string umesto pet
+' tvrdnji: pad imenuje SVE kolone koje su ostale, a ne samo prvu.
+Private Function OtpLinijskeKoloneIndeksi() As String
+    OtpLinijskeKoloneIndeksi = _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Kolicina")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "KolAmbalaze")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Klasa")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "BrutoKg"))
+End Function
+
+' ZAGLAVLJE OTPREMNICE BEZ LINIJSKIH KOLONA -- I SVE IZA NJIH NA SVOM MESTU.
+'
+' Ovo je jedini stvarni rizik ovog reza. Pet kolona je obrisano IZ SREDINE i NE
+' NEPREKIDNO: pozicije su bile 9, 10, 12, 13 i 15, a 14 je Stornirano -- dakle
+' IZMEDJU njih. Kolona koja ostane u zatecenoj svesci pomera sve iza sebe, pa
+' pozicioni upis (AppendRow) salje vrednost u pogresnu kolonu.
+'
+' Tvrdnja zato meri DVE stvari:
+'   1. da nijedne od pet nema u svesci (self-heal ih je obrisao),
+'   2. da kolone IZA njih stoje tacno tamo gde ih kanon ocekuje.
+'
+' Drugu ne izvodi iz svoje kopije rasporeda nego iz modSchema.SchemaTableColumns --
+' prepisan raspored bi znacio da preimenovana kolona prodje kroz oba sita.
+Private Sub Test_OTP_ZaglavljeBezLinijskihKolona()
+    On Error GoTo EH
+
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP kolone: nijedne linijske kolone nema u svesci"
+
+    Dim kanon As Collection
+    Set kanon = modSchema.SchemaTableColumns(TBL_OTPREMNICA)
+    AssertEquals "24", CStr(kanon.count), "OTP kolone: kanon ima 24 kolone"
+
+    ' Svaka kanonska kolona mora u svesci stajati na SVOJOJ poziciji. Nijedna
+    ' izuzeta: razlika bilo gde iza brisanja je isti kvar.
+    Dim i As Long, razlike As String
+    For i = 1 To kanon.count
+        Dim uSvesci As Long
+        uSvesci = GetColumnIndex(TBL_OTPREMNICA, CStr(kanon(i)))
+        If uSvesci <> i Then
+            razlike = razlike & CStr(kanon(i)) & "(kanon " & CStr(i) & _
+                      ", sveska " & CStr(uSvesci) & ") "
+        End If
+    Next i
+
+    If Len(razlike) > 0 Then LogWarn "Test_OTP_ZaglavljeBezLinijskihKolona", razlike
+    AssertEquals "", razlike, "OTP kolone: sveska i kanon se poklapaju po poziciji"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_ZaglavljeBezLinijskihKolona", Err.Number, Err.description
+End Sub
+
 ' Simulirani OTK_STAVKE kao sto ga TryReadSheetData vraca: 2D, red 1 = naslov.
 Private Function SimTabStavki(ByVal redovi As Collection) As Variant
     Dim kol As Variant, nk As Long, k As Long, r As Long
@@ -18201,18 +18303,18 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
                "SelfHeal: drugi prolaz preimenovanja ne kvari nista"
 
-    ' OBA IMENA ODJEDNOM -- stanje koje pravi medjuverzija.
+    ' OBA IMENA ODJEDNOM -- stanje koje je pravio PRETHODNI main.
     '
-    ' Sveska koju je stara grana vec dopunila novim imenom (EnsureColumnOnTable
-    ' dodaje NA KRAJ), a staro jos nosi. Bez kapije 'vec migrirano' preimenovanje
-    ' bi napravilo DVE kolone istog imena -- Excel ih tada sam preimenuje u
-    ' 'ime2' i pozicioni upis dobija polje koje niko ne trazi.
+    ' Kanon je nosio novo ime, rename putanje nije bilo, pa je EnsureAllTables
+    ' dopisivao novo ime NA KRAJ dok je staro ostajalo u SREDINI. Stari helper je
+    ' na to izlazio tiho (no-op), pa je sveska ostajala TRAJNO drift-ovana:
+    ' SchemaReadyOrFail blokira upise fail-closed, ali se sveska sama nije mogla
+    ' izleciti (review #395, P1).
     '
-    ' MERENO: gasenje kapije 'vec migrirano' NE obara ovaj test, i to je tacan
-    ' rezultat -- Excel sam odbija drugu ListColumn istog imena, pa se ishod ne
-    ' menja. Kapija stedi LogError na svakom startu takve sveske, ne podatak.
-    ' Test zato tvrdi ISHOD (nema duplikata, nista se nije pomerilo), a razlog
-    ' zbog kog kapija ipak stoji pise uz nju u modSetup.
+    ' PREMISA OVOG TESTA JE PROMENJENA. Do #395 je tvrdio "sa oba imena
+    ' preimenovanje NE radi nista" i time zakljucavao nekonvergentno ponasanje.
+    ' Sada tvrdi OPORAVAK -- jer repair koji ne pokriva stanje koje je sam bug
+    ' pravio nije repair.
     Dim loM As ListObject
     Set loM = GetTable(TBL_OTKUP)
     loM.ListColumns.Add().name = PROBA
@@ -18220,16 +18322,65 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
                  "SelfHeal: sada postoje OBA imena"
 
-    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
-
-    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: sa oba imena preimenovanje NE radi nista"
-    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
-               "SelfHeal: staro ime je netaknuto (nema duplikata)"
-
-    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+    ' Novo je PRAZNO -> visak; brise se, staro se preimenuje NA MESTU.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: oba imena, novo prazno -- bez razloga za stop"
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal oporavak: staro ime je nestalo"
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+               "SelfHeal oporavak: novo ime postoji"
     AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: pomocna kolona sklonjena"
+                 "SelfHeal oporavak: duplikat je uklonjen, ostala je JEDNA kolona"
+
+    ' Idempotentno: drugi prolaz nad izlecenim stanjem nema sta da radi.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: drugi prolaz je bez posla i bez razloga"
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal oporavak: drugi prolaz ne dira broj kolona"
+
+    ' STARO PRAZNO, NOVO PUNO -> staro je visak; novo ostaje sa svojim podacima.
+    '
+    ' Suprotan smer od gornjeg, i mora da radi: sveska koja je vec pisala u novu
+    ' kolonu ne sme da je izgubi zato sto je staro ime negde zaostalo.
+    Dim loD As ListObject
+    Set loD = GetTable(TBL_OTKUP)
+    If loD.ListRows.count > 0 Then
+        loD.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value = "X"
+        loD.ListColumns.Add().name = PROBA
+
+        AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                     "SelfHeal oporavak: staro prazno a novo puno -- bez razloga za stop"
+        AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                     "SelfHeal oporavak: prazno staro ime je obrisano"
+        AssertEquals "X", CStr(GetTable(TBL_OTKUP).ListColumns( _
+                         GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value), _
+                     "SelfHeal oporavak: podatak u novoj koloni je ostao"
+
+        ' OBA PUNA -> STOP sa imenovanim razlogom, nista se ne dira.
+        '
+        ' Dve pune kolone su dva tvrdjenja o istom polju. Kod koji tu tiho izabere
+        ' jednu istinu je gori od koda koji stane.
+        Dim loP As ListObject
+        Set loP = GetTable(TBL_OTKUP)
+        loP.ListColumns.Add().name = PROBA
+        loP.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA)).DataBodyRange.cells(1, 1).value = "Y"
+
+        Dim razlog As String
+        razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2)
+        AssertTrue InStr(1, razlog, "nose podatke", vbTextCompare) > 0, _
+                   "SelfHeal oporavak: oba puna -- razlog imenuje da OBA nose podatke"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
+                   "SelfHeal oporavak: oba puna -- staro ime je NETAKNUTO"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+                   "SelfHeal oporavak: oba puna -- novo ime je NETAKNUTO"
+
+        modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).ClearContents
+    End If
+
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: pomocne kolone sklonjene, ostala je jedna"
 
     ' --- BRISANJE ---
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
