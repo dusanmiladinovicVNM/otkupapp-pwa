@@ -18277,6 +18277,9 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
 
     Const PROBA As String = "ZZTestKolonaProba"
     Const PROBA2 As String = "ZZTestKolonaProbaID"
+    ' Stoji IZMEDJU starog imena i dopisanog novog -- bez nje se pomeranje
+    ' pozicije ne vidi (review #395, P2).
+    Const PROBA_IZA As String = "ZZTestKolonaIza"
 
     Dim lo As ListObject
     Set lo = GetTable(TBL_OTKUP)
@@ -18379,6 +18382,65 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
             .DataBodyRange.cells(1, 1).ClearContents
     End If
 
+    ' OPORAVAK MORA DA VRATI I POZICIJU, NE SAMO IME (review #395, P2).
+    '
+    ' Blok iznad testira raspored "NOVO, pa STARO". U njemu brisanje starog
+    ' ostavlja novo na pravom mestu SAMO SLUCAJNO, pa taj raspored ne razlikuje
+    ' ispravan oporavak od pogresnog. Stanje koje je bug pravio je suprotno:
+    '
+    '     ... kanonske kolone ... | STARO | kolona iza njega | NOVO na kraju
+    '
+    ' jer EnsureAllTables dopisuje NA KRAJ, a staro ime ostaje na kanonskom mestu
+    ' u sredini. Golo brisanje starog tada ostavlja novo IZA kolone koja u kanonu
+    ' ide posle njega; VerifySchema trazi kanonski PREFIKS po INDEKSU, pa sveska
+    ' ostaje trajno drift-ovana -- podaci sacuvani, upis i dalje blokiran.
+    '
+    ' Zato se raspored gradi FIZICKI, i meri se POZICIJA, ne samo ime. U kanonu
+    ' iza ZbirnaRoditeljID stoje kanonske kolone (28/29 na tblOtkup, 20/24 na
+    ' tblOtpremnici), pa ovo nije teorijski slucaj.
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+
+    Dim loPoz As ListObject
+    Set loPoz = GetTable(TBL_OTKUP)
+    loPoz.ListColumns.Add().name = PROBA          ' staro: na kanonskom mestu
+    loPoz.ListColumns.Add().name = PROBA_IZA      ' kolona koja u kanonu ide IZA
+    loPoz.ListColumns.Add().name = PROBA2         ' novo: DOPISANO na kraj
+
+    Dim pozStaro As Long
+    pozStaro = GetColumnIndex(TBL_OTKUP, PROBA)
+    AssertEquals CStr(preKolona + 1), CStr(pozStaro), _
+                 "SelfHeal pozicija: staro ime je na mestu koje kanon trazi"
+    AssertEquals CStr(preKolona + 3), CStr(GetColumnIndex(TBL_OTKUP, PROBA2)), _
+                 "SelfHeal pozicija: novo ime je dopisano NA KRAJ"
+
+    ' Podatak je SAMO u novoj koloni: po SADRZAJU je ona prava, po MESTU nije.
+    Dim imaRedova As Boolean
+    imaRedova = (GetTable(TBL_OTKUP).ListRows.count > 0)
+    If imaRedova Then
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).value = "Z"
+    End If
+
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal pozicija: oporavak prolazi bez razloga za stop"
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal pozicija: staro ime je nestalo"
+    AssertEquals CStr(pozStaro), CStr(GetColumnIndex(TBL_OTKUP, PROBA2)), _
+                 "SelfHeal pozicija: novo ime je na STAROM mestu, ne na kraju"
+    AssertEquals CStr(pozStaro + 1), CStr(GetColumnIndex(TBL_OTKUP, PROBA_IZA)), _
+                 "SelfHeal pozicija: kolona iza je ostala neposredno iza"
+    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal pozicija: visak je obrisan, ostale su dve pomocne"
+    If imaRedova Then
+        AssertEquals "Z", CStr(GetTable(TBL_OTKUP).ListColumns( _
+                         GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value), _
+                     "SelfHeal pozicija: sadrzaj je preseljen sa kraja na kanonsko mesto"
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).ClearContents
+    End If
+
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA_IZA
+
     AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
                  "SelfHeal: pomocne kolone sklonjene, ostala je jedna"
 
@@ -18411,6 +18473,7 @@ EH:
     On Error Resume Next
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA_IZA
     On Error GoTo 0
     LogFatal "Test_OTK_SelfHealMigracijeKolona", Err.Number, Err.description
 End Sub

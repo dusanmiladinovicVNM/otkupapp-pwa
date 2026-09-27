@@ -4932,9 +4932,28 @@ SABOTAZE = {
     # Review #395 P1: oporavak nad stanjem "staro I novo postoje". Bez brisanja
     # duplikata preimenovanje pada na Excel-ovo odbijanje drugog imena, pa
     # migracija vraca razlog umesto praznog stringa -- sveska ostaje drift-ovana.
+    # Review #395 P2: oporavak je cuvao PODATKE ali ne i POZICIJU. Kad mesto
+    # bira sadrzaj a ne kanon, puna kolona ostaje tamo gde je dopisana -- na
+    # KRAJU -- pa VerifySchema i dalje vidi REDOSLED drift i upis ostaje blokiran.
+    "migracija-ne-cuva-poziciju": (
+        "modSetup.bas",
+        "        If iNovo < iStaro Then\n",
+        "        If novoPuno Then   ' SABOTAZA: mesto bira sadrzaj, ne kanon\n",
+        "Test_OTK_SelfHealMigracijeKolona",
+        "SelfHeal pozicija: novo ime je na STAROM mestu, ne na kraju",
+    ),
+    # Preseljenje bez prenosa vrednosti je brisanje podatka sa jednim korakom
+    # vise. Pozicija bi bila tacna, kolona prazna.
+    "migracija-gubi-sadrzaj-pri-preseljenju": (
+        "modSetup.bas",
+        "    na.value = od.value\n",
+        "    ' SABOTAZA: sadrzaj se ne prenosi\n",
+        "Test_OTK_SelfHealMigracijeKolona",
+        "SelfHeal pozicija: sadrzaj je preseljen sa kraja na kanonsko mesto",
+    ),
     "migracija-ne-brise-duplikat": (
         "modSetup.bas",
-        "            lo.ListColumns(iNovo).Delete\n",
+        "        lo.ListColumns(iVisak).Delete        ' desno od iZadrzi, pa ga ne pomera\n",
         "            ' SABOTAZA: duplikat se ne brise\n",
         "Test_OTK_SelfHealMigracijeKolona",
         "SelfHeal oporavak: oba imena, novo prazno -- bez razloga za stop",

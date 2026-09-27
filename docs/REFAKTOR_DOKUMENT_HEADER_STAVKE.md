@@ -7480,6 +7480,91 @@ Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeć
 (`DOCUMENT_HEADER_LINES.md`). Trag je prag `otp_linija` = 0 u `popis_citalaca.py`
 i nova sabotaža — oba exit kod, ne rečenica.
 
+### 14.53) Post-merge review #395, P2 -- oporavak je cuvao podatke ali ne poziciju (27.09.2026)
+
+Nalaz je tacan i **siri je nego sto je prijavljen**. Ista klasa kao P1 iz istog
+review-a: oporavak koji ne pokriva stanje koje je sam bug pravio.
+
+#### Sta je merenje pokazalo
+
+`VerifySchema` trazi da kanon bude **PREFIKS po INDEKSU**
+([modSchema.bas:294](../src-vba/modSchema.bas)) -- visak na kraju je dozvoljen, svako
+razilazenje pre kraja je `SCHEMA_DRIFT_REDOSLED`. `EnsureAllTables` redosled
+**NE popravlja**, i to pise u njemu. Dakle: obrisi staro iz SREDINE, ostavi novo
+na KRAJU, i sveska je trajno drift-ovana -- podaci sacuvani, upis blokiran
+fail-closed, bez izlaza. Isti oblik kvara kao P1, samo jednu ravan nize.
+
+Iz kanona, sest poziva helpera:
+
+| Poziv | Kolona | Pozicija | Iza nje u kanonu |
+|---|---|---|---|
+| `TBL_OTKUP` | `ZbirnaRoditeljID` | 28 / 29 | `SourceCreatedAt` |
+| `TBL_OTPREMNICA` | `ZbirnaRoditeljID` | **20 / 24** | `KulturaID`, `IspravkaOdID`, `ZamenjenSaID`, `PredajaID` |
+| `TBL_OTKUP` | **`IspravkaOdID`** | **22 / 29** | **sedam kanonskih kolona** |
+| `TBL_OTKUP` | **`ZamenjenSaID`** | **23 / 29** | **sest kanonskih kolona** |
+| `TBL_PRIJEMNICA` | `ZbirnaRoditeljID` | 28 / 28 | -- |
+| `TBL_PALETA_STAVKA` | `ZbirnaRoditeljID` | 17 / 17 | -- |
+
+**Dva trace rename-a review nije imenovao, a najizlozeniji su.** Zadnja dva prolaze
+**slucajno**: kolona je tamo zadnja u kanonu, pa golo brisanje starog daje tacan
+prefiks. Ista slucajnost je i u testu -- v. nize.
+
+#### Ispravka: mesto odlucuje kanon, sadrzaj odlucuju podaci
+
+Dve grane oporavka spojene su u **jednu**, jer se kanonska pozicija zna bez
+citanja kanona: visak je **uvek DOPISAN** (`ListColumns.Add` pise na kraj), pa je
+kanonska ona **levlja** od dve.
+
+```
+iZadrzi = min(iStaro, iNovo)     ' kanonska pozicija
+iVisak  = max(iStaro, iNovo)     ' dopisan visak
+sadrzaj: iVisak -> iZadrzi       ' FORMAT pre vrednosti
+obrisi iVisak                    ' desno od iZadrzi, pa ga ne pomera
+preimenuj iZadrzi ako treba
+```
+
+`PreseliSadrzajKolone` prenosi **format pa vrednosti**, u tom redu: ciljna kolona
+je do tada nosila staro ime, pa kanonski format (kljuc `formats`, po IMENU) nikad
+nije dobila -- ostala je General, a General tiho konvertuje **u trenutku upisa**
+(`donor-fixture-nosi-formate`, i sekcija FORMAT CELIJE u `modSchema`). Mereno:
+nijedna od ovih kolona danas nije u `formats`, pa je to zastita helpera za sledeci
+rename, ne popravka zivog kvara -- i tako se i kaze.
+
+#### Postcondition meri poziciju, ali SVOJU
+
+Uz ime se sada meri i pozicija koju je poziv **obecao da nece pomeriti**. Namerno
+se **ne** poredi sa kanonskim indeksom: indeks se razmesti i zbog kolone koja fali
+negde ispred, a to ovaj poziv nije napravio i ne moze da izleci. Redosled cele
+tabele ima svog vlasnika -- `VerifySchema` / `SCHEMA_DRIFT_REDOSLED` -- i drugi
+vlasnik iste invarijante prijavljivao bi tudji drift kao svoj pad.
+
+#### Zasto test nije video -- raspored je bio laksi
+
+Zateceni blok je gradio `... | NOVO | STARO`: tamo brisanje starog ostavlja novo
+na pravom mestu **slucajno**, isto kao na `tblPrijemnica`. Nov blok gradi raspored
+koji je bug stvarno pravio, **fizicki**:
+
+```
+... kanonske kolone ... | STARO | kolona iza njega | NOVO na kraju
+```
+
+podatak samo u NOVOM, pa se meri: staro nema, novo je **na starom mestu**, sadrzaj
+je presao, i **kolona iza je ostala neposredno iza**. Stari blok se ne menja --
+oba rasporeda su stvarna i helper mora oba da izleci.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **615** sabotaza |
+| cetiri Python kapije | exit 0 |
+| `RunBusinessFlowProSuite` | **2063 / 2063** (bilo 2055; +8 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| `dokaz.py migracija-` | **4 / 4 DOKAZANO**, izvor identican pre i posle |
+
+Sidro sabotaze `migracija-ne-brise-duplikat` je spajanjem grana **zastarelo** i
+osvezeno u istom rezu; sidro koje ne postoji nije provera nego tisina.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
