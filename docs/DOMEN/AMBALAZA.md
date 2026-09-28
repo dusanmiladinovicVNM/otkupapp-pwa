@@ -256,12 +256,16 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
 Knjiga odgovara na „gde su gajbe". Obaveza se **izvodi** iz iste knjige, bez
-ijedne mutabilne kolone:
+ijedne mutabilne kolone — preko **doprinosa po dogadjaju**, da bi i kontra-stav
+bio uracunat:
 
 ```
-Obaveza(partner, tip) = SUM ULAZ_TUDJE_AMBALAZE     (SpoljniSvet -> partner)
-                      - SUM VRACANJE_TUDJE_AMBALAZE (firma -> partner)
+Obaveza(partner, tip) = SUM DoprinosObavezi(dogadjaji partnera i tipa)
 ```
+
+Puna definicija `DoprinosObavezi` i njena donja granica (`AMB-INV-09`) su u 6.9.
+Prosta razlika dve sume **nije dovoljna** nad append-only knjigom: storno bi
+anulirao fizicko stanje a obavezu ostavio da visi.
 
 Zato **`VRACANJE_TUDJE_AMBALAZE` mora biti odvojeno od `IZDATA_PRAZNA`**, iako
 su fizicki isti potez (`Stanica -> Kooperant`):
@@ -477,22 +481,24 @@ pitanje, i zato kapija iz 6.9 postoji.
 | sta radi sa gajbama | `TrackAmbalaza ... "Izlaz", kupacID, "Kupac", vozacID` — **prazne izlaze od kupca** |
 | sta radi sa novcem | `SaveNovac(... fakturaID:=fakturaID ...)` — uplata po **fakturi** |
 
-Dakle to nije dokument nego **ekran poravnanja sa kupcem**, koji u jednoj
-transakciji upisuje **dve vec postojece stvari**:
+Dakle `KupciIzlaz` nije dokument nego **presiroka helper funkcija** koja je
+slepila **dve nezavisne poslovne operacije**:
 
 ```
 1. revers            kupac -> firma      (prazne gajbe)   -> tblAmbalazaDokument
 2. uplata            po fakturi          (novac)          -> tblNovac, fakturaID
 ```
 
-> **AMB-10-ODL-4.** `KupciIzlaz` **ne dobija svoj dokument**. Njegova ambalazna
-> polovina je **revers**, i identitet joj je `AmbDokID`; novcana polovina zadrzava
+> **AMB-10-ODL-4.** `KupciIzlaz` **ne dobija svoj dokument** i `KupciIzlazID` ne
+> postoji. Ambalazna cinjenica je **revers** sa `AmbDokID`; novcana zadrzava
 > postojecu vezu (`fakturaID`), gde `brojDok` ostaje **labela**.
 >
-> Korak **`AMB-10-KI` time nestaje** — ulazi u `10-DOK`.
+> Svaka od te dve ima **svoj broj, svoj identitet, svoju transakciju i svoj
+> storno** — razlozeno u 6.11a. Korak **`AMB-10-KI` time nestaje**, ulazi u
+> `10-DOK`.
 
-Ovo je **manji** rez od prethodne odluke, i tacniji: umesto novog dokumenta,
-priznaje se da dokument vec postoji i da mu je samo falila tabela.
+Ovo je **manji** rez nego da se pravi nov dokument, i tacniji: umesto izmisljanja
+dokumenta, priznaje se da dokument (revers) vec postoji i da mu je falila tabela.
 
 
 ### 6.11a Razlaganje: dve nezavisne operacije, ne jedan komponovan potez
@@ -651,6 +657,14 @@ je obrisao S3-ostatak. Ali:
 
 ### 6.12 Sta je koji krug promenio
 
+> **Kako se ovaj dokument odrzava.** Telo nosi **samo finalni ugovor**. Povucena
+> tvrdnja se **ne ostavlja** kao vazeca formulacija sa ispravkom nize — brise se iz
+> tela, a trag joj ostaje **u ovoj tabeli**. Razlog je merljiv: `10a`/`10b` se pisu
+> **iz ovog dokumenta**, pa bi citalac koji stane na ranijem odeljku napravio
+> odbaceni model (jedna transakcija, `KupciIzlazID`). Kontradikcija u kanonskom
+> ugovoru nije uredjivacka sitnica nego **implementaciona putanja**.
+
+
 | Krug | Nalaz | Ishod |
 |---|---|---|
 | 1 | `AMB-INV-01` tautologija · `Modified*` nad append-only knjigom | **moje greske**, ispravljene |
@@ -662,7 +676,7 @@ je obrisao S3-ostatak. Ali:
 | 2 | enum normalizovan na domenske pojmove | prihvaceno — moj spisak je bio izveden iz call-site-ova |
 | 2 | potvrda deficita mora biti backend-safe | prihvaceno — 6.5, isti obrazac kao `IsplataBlokProblem` |
 | 2 | `AMB-INV-08` kao tvrd arhitektonski uslov | prihvaceno **i pojacano**: dobija staticku kapiju |
-| 2 | `KupciIzlazID` | prihvaceno **uz zaostravanje merenjem**: to znaci **dokument**, 6.11 |
+| 2 | `KupciIzlazID` | prvo prihvaceno kao „to znaci **dokument**", pa **povuceno u krugu 4**: `KupciIzlaz` uopste nije dokument nego revers + uplata (6.11, 6.11a) |
 | 4 | podela pri prekomernom vracanju (12 + 8) · razlaganje `KupciIzlaz`-a na **jedan revers** i **jednu kasu** | prihvaceno — 6.9, 6.11a |
 | 5 | zajednicki composer/TX je i dalje sprega | **prihvaceno** — dve nezavisne operacije, svaka sa svojom TX (6.11a) |
 | 5 | premisa „nikad isti broj" | **operater je presudio: postojalo je, ali je bilo GRESKA.** Postaje `AMB-10-ODL-5`, a merenje po njemu odmah nalazi **drugi, ogledalni prekrsaj** — `SaveOMUlaz_TX` |
@@ -754,7 +768,7 @@ Sve iz jednog append-only modela, bez ijedne rucne kes kolone.
 
 Najveci redizajn jedne tabele u refaktoru: cetiri funkcije salda, tri izvestaja +
 kartica, `modIntegritet`, obe storno putanje, `modBrojevi`, stampa, devet mesta
-knjizenja — plus nov dokument za `KupciIzlaz`. Broj redova pritom **pada**
+knjizenja — plus razlaganje **dva presiroka pisca** (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`). Broj redova pritom **pada**
 (otkup 4 -> 2). Jeftinim ga cini samo to sto **nema podataka za migraciju**.
 
 ## 7) Raniji predlozi (povuceni -- v. 6.7)
