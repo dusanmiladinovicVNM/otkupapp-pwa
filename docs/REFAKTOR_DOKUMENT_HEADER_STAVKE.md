@@ -7744,7 +7744,7 @@ Na jednoj tacki sam uzvratio merenjem: review je trazio `OperationID` za retry.
 **Zahtev je prihvacen, mehanizam odbijen** — svih devet knjizenja su unutar
 dokumentove transakcije koja snapshot-uje `tblAmbalaza`, pa red knjige ne moze
 preziveti neuspeo upis dokumenta. Stabilan identitet efekta vec postoji:
-`(DokumentID, VrstaKretanja, TipAmbalaze)`. Uslov pod kojim to pada zapisan je
+identitet iz **`AMB-INV-04`** (`docs/DOMEN/AMBALAZA.md` §6.9; ovde se namerno ne prepisuje). Uslov pod kojim to pada zapisan je
 unapred, i dobija **staticku kapiju** umesto komentara.
 
 #### Odluke operatera

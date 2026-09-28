@@ -388,8 +388,7 @@ po efektu.
 
 #### `AMB-INV-09`: obaveza je storno-svesna, i ima dno
 
-Formula iz 6.6 (`SUM ULAZ - SUM VRACANJE`) **nije bila tacna nad append-only
-knjigom**: storno `ULAZ_TUDJE_AMBALAZE` upisuje kontra-stav, fizicki saldo se
+Prva verzija ovog dokumenta je obavezu racunala kao prostu razliku dve sume (`SUM ULAZ - SUM VRACANJE`). **Nad append-only knjigom to nije tacno**: storno `ULAZ_TUDJE_AMBALAZE` upisuje kontra-stav, fizicki saldo se
 anulira, a obaveza bi ostala da visi. Zato se obaveza racuna preko **doprinosa**,
 a ne preko dve sume:
 
@@ -457,8 +456,7 @@ snapshot-uje `tblAmbalaza` (`IzdajOtpremnicu_TX:3469`, `IspravkaOtpremnice_TX:35
 prijemnica `:6729`, izlaz kupcima `:7021`, otkup — `modOtkup:89`). Red knjige ne
 moze preziveti neuspeo upis dokumenta, pa stanje koje bi retry zatekao ne postoji.
 
-Stabilan identitet efekta zato **vec postoji**: `(DokumentID, VrstaKretanja,
-TipAmbalaze)` = `AMB-INV-04`. Nova kolona bila bi drugi identitet iste stvari.
+Stabilan identitet efekta zato **vec postoji** — to je identitet iz **`AMB-INV-04`** (6.9), i ovde se namerno **ne prepisuje**, da se dve kopije ne raziđu. Nova kolona bila bi drugi identitet iste stvari.
 
 **Uslov pod kojim ovo pada, zapisan unapred:** async red, offline retry,
 background posao ili spoljni API koji knjizi ambalazu **sam** — tada `AMB-INV-08`
@@ -657,7 +655,9 @@ je obrisao S3-ostatak. Ali:
 
 ### 6.12 Sta je koji krug promenio
 
-> **Kako se ovaj dokument odrzava.** Telo nosi **samo finalni ugovor**. Povucena
+> **Kako se ovaj dokument odrzava.** Telo nosi **samo finalni ugovor**.
+>
+> **Svaka tvrdnja se izgovara na TACNO JEDNOM mestu.** Gde joj zatreba, poziva se **po imenu** (`AMB-INV-04`, `AMB-10-ODL-5`), nikad prepisivanjem. Dve kopije jedne tvrdnje se raziđu — i to se u ovom dokumentu vec desilo dvaput: identitet efekta je na jednom mestu izgubio `DokumentTIP`, a formula obaveze je zivela u dve verzije. Prepisan kljuc je **implementaciona putanja do laznog duplikata**, ne stilska sitnica. Povucena
 > tvrdnja se **ne ostavlja** kao vazeca formulacija sa ispravkom nize — brise se iz
 > tela, a trag joj ostaje **u ovoj tabeli**. Razlog je merljiv: `10a`/`10b` se pisu
 > **iz ovog dokumenta**, pa bi citalac koji stane na ranijem odeljku napravio
