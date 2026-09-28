@@ -542,9 +542,9 @@ poslovno pravilo ne moze izvesti.
 
 Time ovo prestaje da bude opis zatecenog stanja i postaje pravilo:
 
-> **AMB-10-ODL-5.** Nijedan dokument nije istovremeno **ambalazni i novcani**.
-> Revers nosi **samo** ambalazu; kasa nosi **samo** novac. Svaki ima svoj broj,
-> svoj identitet, svoju transakciju i svoj storno.
+> **AMB-10-ODL-5.** Nijedan dokument nije istovremeno **ambalazni i novcani**. Revers nosi **samo** ambalazu; kasa nosi **samo** novac. Svaki ima svoj broj, svoj identitet, svoju transakciju i svoj storno.
+>
+> Puna formulacija, sa klasama dokumenata i onim sto **nije** prekrsaj, stoji odmah ispod.
 
 #### Isto pravilo odmah nalazi drugi prekrsaj — ogledalni
 
@@ -563,15 +563,37 @@ Dakle nije rec o izuzetku kod kupca nego o **jednom kvaru na dva mesta**, i
 razlaganje se radi na **oba**: revers gubi svoju novcanu polovinu isto kao
 `KupciIzlaz`.
 
-**Otkup nije prekrsaj, i to treba razlikovati.** `SaveOtkup*` pise i `tblAmbalaza`
-i `tblNovac` pod istim `OtkupID` — ali otkup **nije ni ambalazni ni novcani
-dokument**. On je dokument **robe**, a ambalaza i isplata su njegove **posledice**;
-`OtkupID` im je zato **izvorni dokument**, sto `AMB-INV-08` i trazi. Razlika je
-jasna: kod otkupa jedan poslovni dogadjaj ima dva traga, a kod reversa su dva
-nezavisna dogadjaja delila jedan broj.
+#### Prekrsaj je mesanje KLASA, ne dodirivanje dve tabele
 
-> Ako je i to pogresno — ako i otkup treba da razdvoji isplatu od dokumenta robe —
-> to je **novcani** rez, ne ambalazni, i ne ulazi u AMB-10.
+Potvrdjeno od operatera (28.09.2026): **otkup nije prekrsaj, i isto vazi za
+prijemnicu** — i ona je **robni** dokument koji na sebi nosi ambalazno kretanje.
+Pravilo se zato ne izgovara kao „dokument ne sme da dira dve tabele" nego kao
+klasifikacija:
+
+| Klasa | Dokumenti | Nosi | Identitet traga |
+|---|---|---|---|
+| **robni** | otkup, otpremnica, prijemnica | **robu**; ambalaza (i novac kod otkupa) su njegove **posledice** | `OtkupID` · `OtpremnicaID` · `PrijemnicaID` |
+| **ambalazni** | revers, pocetno stanje, nabavka, otpis | **samo** ambalazu | `AmbDokID` |
+| **novcani** | uplata / isplata (kasa) | **samo** novac | `tblNovac` + `fakturaID` |
+
+> **AMB-10-ODL-5 (puno).** Dokument pripada **tacno jednoj** klasi. Robni dokument
+> **sme** da proizvede i ambalazni i novcani trag — jer je to **jedan** poslovni
+> dogadjaj sa dve posledice, i njemu je izvorni dokument. Prekrsaj je kad
+> **ambalazni** dokument nosi novac (ili obrnuto): tada **dva nezavisna dogadjaja**
+> dele jedan broj.
+
+Mereno po klasama:
+
+| Pisac | Ambalaza | Novac | Klasa | Ishod |
+|---|---|---|---|---|
+| `SaveOtkup*` | da | da (`TBL_NOVAC` u snapshotu, `modOtkup:93`) | robni | **u redu** |
+| `IzdajOtpremnicu_TX` | da | ne (nema `TBL_NOVAC`, `:3416`) | robni | **u redu** |
+| `SavePrijemnicaMulti_TX` | da | ne (faktura da, kasa ne, `:6565`) | robni | **u redu** |
+| `SaveOMUlaz_TX` | da | **da** | ambalazni | **prekrsaj** |
+| `SaveKupciIzlaz_TX` | da | **da** | ambalazni | **prekrsaj** |
+
+Razlika koja sve odlucuje: kod robnog dokumenta **jedan dogadjaj ima dva traga**;
+kod reversa su **dva dogadjaja delila jedan broj**.
 
 
 #### Dobitak
