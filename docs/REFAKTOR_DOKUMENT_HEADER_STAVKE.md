@@ -7772,7 +7772,7 @@ dvaput, i drugi put nad kodom koji je prvi put vec menjan.
 
 Redosled AMB-10: `10a` ugovor · `10-DOK` `tblAmbalazaDokument` (revers za sve parove, pocetno stanje, nabavka, otpis) · `10b` pisac ·
 `10c` citaoci · `10d` storno · `10e` brisanje starog. **Cetiri dokaza pre `10b`:**
-zatvoren enum `VrstaKretanja`, stabilan identitet `KupciIzlaz`, tacan protokol
+zatvoren enum `VrstaKretanja`, `AmbDokID` na **svim** revers putanjama (ukljucujuci kupca), tacan protokol
 potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->
 biti vracena vlasniku** bez ijednog negativnog realnog salda.
 

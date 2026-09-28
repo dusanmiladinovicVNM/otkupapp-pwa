@@ -495,53 +495,70 @@ Ovo je **manji** rez od prethodne odluke, i tacniji: umesto novog dokumenta,
 priznaje se da dokument vec postoji i da mu je samo falila tabela.
 
 
-### 6.11a Razlaganje: jedan revers i jedna kasa, komponovani na ekranu
+### 6.11a Razlaganje: dve nezavisne operacije, ne jedan komponovan potez
 
 > **Predlog operatera (28.09.2026):** razdvojiti `KupciIzlaz` na deo za ambalazu i
 > deo za novac, pa **revers uciniti jedinstvenim** i **uplate/isplate
 > jedinstvenim**.
 
-Prihvaceno, i arhitektonski se uklapa bez novog mehanizma — jer repo taj obrazac
-vec ima:
+Prihvaceno **do kraja**: ne samo da `SaveKupciIzlaz_TX` prestaje da bude pisac,
+nego prestaje da bude **pojam**. Nema ni dokumenta, ni zajednickog broja, ni
+zajednicke transakcije.
 
-| Mehanizam | Cist oblik (komponuje se) | `_TX` oblik (sam svoj) |
+| | Ambalaza | Novac |
 |---|---|---|
-| novac | `SaveNovac` | `SaveNovac_TX` |
-| prijemnica | `SavePrijemnica` | `SavePrijemnica_TX` |
-| **ambalaza (novo)** | `PrenesiAmbalazu` | `PrenesiAmbalazu_TX` |
+| ulaz | revers kupca | F6, unos novca |
+| pisac | `PrenesiAmbalazu` | `SaveNovac_TX` |
+| dokument | `tblAmbalazaDokument`, `Vrsta = REVERS` | `tblNovac` + `fakturaID` |
+| broj | **svoj** broj reversa | **svoj** `brojDok` |
+| transakcija | **svoja** | **svoja** |
+| lifecycle / storno | **svoj** | **svoj** |
 
-Zato `SaveKupciIzlaz_TX` **prestaje da postoji kao pojam**. Ono sto je danas jedan
-slozen pisac postaje **komponovanje dva opsta**, u **jednoj** transakciji ekrana:
+#### Zasto nije komponovanje u jednoj transakciji (ispravka v5)
 
-```
-BeginTx
-  snapshot: tblAmbalazaDokument | tblAmbalaza | tblNovac | tblFakture
-  ako ima gajbi:  revers dokument + PrenesiAmbalazu(Kupac -> Firma, ...)
-  ako ima novca:  SaveNovac(..., fakturaID, ...)
-CommitTx
-```
+v5 je predlagala da ekran zadrzi **jednu** transakciju nad oba pisca. To je
+pogresno, i razlog nije stil nego **lifecycle**:
 
-Dobitak nije stilski:
+> storno uplate **ne vraca gajbe**, a storno reversa **ne vraca novac**.
 
-- **jedan revers za svih pet parova** (stanica <-> kooperant, stanica <-> firma,
-  kupac -> firma) umesto cetiri smera plus jedan poseban slucaj na drugom mestu;
+Dve cinjenice ciji su zivotni ciklusi nezavisni ne smeju da dele transakciju, jer
+zajednicka transakcija podrazumeva **zajednicku sudbinu** koju one nemaju. Sprega
+koja se ovde ostavi vraca se kasnije kao pitanje „sta znaci stornirati pola
+dokumenta".
+
+**Atomicnost tu nije invarijanta nego udobnost UI-ja.** Ako gajbe legnu a novac ne
+(ili obrnuto), **nijedna invarijanta nije prekrsena**: knjiga je tacna, kasa je
+tacna, a operater unese polovinu koja fali. Nema stanja koje bi trebalo popraviti.
+
+#### Sta se mericem NE potvrdjuje, pa se tako i pise
+
+Review je ovu odluku obrazlozio time da novac i ambalaza „nikada ne idu zajedno sa
+jednim brojem dokumenta". **Kod pokazuje suprotno:** `SaveKupciIzlaz_TX` prima
+**jedan** `brojDok` i prosledjuje ga **obema** stranama —
+`TrackAmbalaza(..., brojDok, DOK_TIP_IZLAZ_KUPCI)` i `SaveNovac(brojDok:=brojDok, ...)`
+([modDokumenta:7026](../../src-vba/modDokumenta.bas) i `:7043`).
+
+Zajednicki broj danas **postoji**. Odluka ga ukida — ali kao **artefakt preširoke
+helper funkcije**, ne kao nesto sto nikad nije postojalo. Razlika je vazna: premisa
+koja se ne moze izmeriti ne ulazi u kanonski dokument, ni kad vodi do tacnog
+zakljucka.
+
+> **Ako se ispostavi da operater treba da vidi „ovo poravnanje" kao celinu**, to je
+> **novcani** dokument (poravnanje sa kupcem), ne zajednicki broj i ne zajednicka
+> transakcija. Lakse je dodati dokument nego razdvojiti dva pojma koja su se
+> srasla — a to razdvajanje je upravo ovaj rez.
+
+#### Dobitak
+
+- **jedan revers za sve parove**: stanica <-> kooperant, stanica <-> firma,
+  kupac -> firma. Cetiri smera plus poseban slucaj na drugom mestu postaju jedan
+  mehanizam;
 - **jedna kasa**: danas unos **samo novca** na F6 ide kroz funkciju imenovanu po
-  ambalazi (`SaveKupciIzlaz_TX`), sto je i bio prvi znak da su dve stvari slepljene;
-- `DOK_TIP_IZLAZ_KUPCI` **nestaje** kao tip dokumenta — ti redovi postaju obican
-  revers;
-- atomicnost **ostaje**: transakcija je na ekranu, ne u piscu, pa jedan operaterov
-  potez i dalje pada ili prolazi u celini.
+  ambalazi (`SaveKupciIzlaz_TX`) — to je i bio prvi znak da su dve stvari slepljene;
+- `DOK_TIP_IZLAZ_KUPCI` **nestaje** kao tip dokumenta; ti redovi postaju obican revers;
+- svaki mehanizam ima svoj `_TX` omotac, po zatecenom obrascu repoa
+  (`SaveNovac`/`SaveNovac_TX`, `SavePrijemnica`/`SavePrijemnica_TX`).
 
-> **Jedna posledica koju treba izgovoriti, i jedino je otvoreno pitanje.**
-> Danas su dve polovine povezane **istim `brojDok`**. Posle razlaganja gajbe nose
-> `AmbDokID`, a novac `fakturaID` — i **veza medju njima nestaje**. Ostaju „isti
-> kupac, isti dan".
->
-> To je ispravno **ako poravnanje nije poslovni entitet**, nego samo trenutak kad
-> je operater uneo dve stvari. Ako jeste entitet — ako treba videti „ovo
-> poravnanje" kao celinu — onda mu treba dokument, i to **novcani**, ne ambalazni.
-> Do odgovora se razlaganje radi bez zajednicke veze: lakse je dodati vezu nego
-> razdvojiti dva pojma koja su se srasla.
 
 ### 6.12 Sta je koji krug promenio
 
@@ -558,6 +575,7 @@ Dobitak nije stilski:
 | 2 | `AMB-INV-08` kao tvrd arhitektonski uslov | prihvaceno **i pojacano**: dobija staticku kapiju |
 | 2 | `KupciIzlazID` | prihvaceno **uz zaostravanje merenjem**: to znaci **dokument**, 6.11 |
 | 4 | podela pri prekomernom vracanju (12 + 8) · razlaganje `KupciIzlaz`-a na **jedan revers** i **jednu kasu** | prihvaceno — 6.9, 6.11a |
+| 5 | zajednicki composer/TX je i dalje sprega | **prihvaceno** — dve nezavisne operacije, svaka sa svojom TX; premisa review-a o „nikad isti broj" **nije potvrdjena kodom** i nije usla (6.11a) |
 | 3 | `Firma` = **jedan** nalog; `POCETNO_STANJE` dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a |
 | — | `POCETNO_STANJE` | **dodato iz merenja**, nije trazeno: `GetKooperantAmbOpening` pocetno stanje izvodi iz knjige, pa bi prvi dan bio zid potvrda |
 
