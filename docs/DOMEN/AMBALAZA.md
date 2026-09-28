@@ -407,12 +407,23 @@ matematicki ispravan **fizicki** ledger i istovremeno **nemogucu** knjigu obavez
 firma duguje 12, vrati 20 kao `VRACANJE_TUDJE_AMBALAZE`, saldo prolazi, obaveza
 postane `-8`.
 
-> **Poslovno pitanje koje ostaje operateru:** kad se vraca **vise** nego sto firma
-> duguje, pisac to (a) odbija, ili (b) **deli**: do visine duga
-> `VRACANJE_TUDJE_AMBALAZE`, ostatak `IZDATA_PRAZNA` (novo zaduzenje partnera).
-> **Preporuka je (b)** — odbijanje bi teralo operatera da isti potez unosi dvaput,
-> a podela je tacno ono sto se fizicki desilo. Do odluke, pisac **odbija**:
-> fail-closed je jedina bezbedna nepoznanica.
+> **ODLUKA OPERATERA (28.09.2026): deli se.** Kad se vraca vise nego sto firma
+> duguje, pisac **sam** cepa potez na dva dogadjaja:
+>
+> ```
+> obaveza = 12, vraca se 20
+>   Stanica -> K1   12   VRACANJE_TUDJE_AMBALAZE   (gasi obavezu na 0)
+>   Stanica -> K1    8   IZDATA_PRAZNA             (novo zaduzenje partnera)
+> ```
+>
+> Podelu radi **pisac**, ne operater i ne UI: ista kolicina, isti partner, isti
+> trenutak — a granica je `Obaveza(partner, tip)` koju samo pisac cita pouzdano.
+> UI sme da je **prikaze** unapred („od 20 izdatih: 12 povrat, 8 novo zaduzenje"),
+> ali racun koji vazi je onaj iz pisca, u trenutku upisa — isti razlog kao kod
+> potvrde deficita (6.5).
+>
+> Dva dogadjaja, ne jedan sa dva znacenja: `AMB-INV-04` ih razlikuje po
+> `VrstaKretanja`, a `AMB-INV-09` posle oba i dalje vazi.
 
 #### `AMB-INV-08`: kapija mora da dokaze CELU tvrdnju
 
@@ -484,6 +495,54 @@ Ovo je **manji** rez od prethodne odluke, i tacniji: umesto novog dokumenta,
 priznaje se da dokument vec postoji i da mu je samo falila tabela.
 
 
+### 6.11a Razlaganje: jedan revers i jedna kasa, komponovani na ekranu
+
+> **Predlog operatera (28.09.2026):** razdvojiti `KupciIzlaz` na deo za ambalazu i
+> deo za novac, pa **revers uciniti jedinstvenim** i **uplate/isplate
+> jedinstvenim**.
+
+Prihvaceno, i arhitektonski se uklapa bez novog mehanizma — jer repo taj obrazac
+vec ima:
+
+| Mehanizam | Cist oblik (komponuje se) | `_TX` oblik (sam svoj) |
+|---|---|---|
+| novac | `SaveNovac` | `SaveNovac_TX` |
+| prijemnica | `SavePrijemnica` | `SavePrijemnica_TX` |
+| **ambalaza (novo)** | `PrenesiAmbalazu` | `PrenesiAmbalazu_TX` |
+
+Zato `SaveKupciIzlaz_TX` **prestaje da postoji kao pojam**. Ono sto je danas jedan
+slozen pisac postaje **komponovanje dva opsta**, u **jednoj** transakciji ekrana:
+
+```
+BeginTx
+  snapshot: tblAmbalazaDokument | tblAmbalaza | tblNovac | tblFakture
+  ako ima gajbi:  revers dokument + PrenesiAmbalazu(Kupac -> Firma, ...)
+  ako ima novca:  SaveNovac(..., fakturaID, ...)
+CommitTx
+```
+
+Dobitak nije stilski:
+
+- **jedan revers za svih pet parova** (stanica <-> kooperant, stanica <-> firma,
+  kupac -> firma) umesto cetiri smera plus jedan poseban slucaj na drugom mestu;
+- **jedna kasa**: danas unos **samo novca** na F6 ide kroz funkciju imenovanu po
+  ambalazi (`SaveKupciIzlaz_TX`), sto je i bio prvi znak da su dve stvari slepljene;
+- `DOK_TIP_IZLAZ_KUPCI` **nestaje** kao tip dokumenta — ti redovi postaju obican
+  revers;
+- atomicnost **ostaje**: transakcija je na ekranu, ne u piscu, pa jedan operaterov
+  potez i dalje pada ili prolazi u celini.
+
+> **Jedna posledica koju treba izgovoriti, i jedino je otvoreno pitanje.**
+> Danas su dve polovine povezane **istim `brojDok`**. Posle razlaganja gajbe nose
+> `AmbDokID`, a novac `fakturaID` — i **veza medju njima nestaje**. Ostaju „isti
+> kupac, isti dan".
+>
+> To je ispravno **ako poravnanje nije poslovni entitet**, nego samo trenutak kad
+> je operater uneo dve stvari. Ako jeste entitet — ako treba videti „ovo
+> poravnanje" kao celinu — onda mu treba dokument, i to **novcani**, ne ambalazni.
+> Do odgovora se razlaganje radi bez zajednicke veze: lakse je dodati vezu nego
+> razdvojiti dva pojma koja su se srasla.
+
 ### 6.12 Sta je koji krug promenio
 
 | Krug | Nalaz | Ishod |
@@ -498,6 +557,7 @@ priznaje se da dokument vec postoji i da mu je samo falila tabela.
 | 2 | potvrda deficita mora biti backend-safe | prihvaceno — 6.5, isti obrazac kao `IsplataBlokProblem` |
 | 2 | `AMB-INV-08` kao tvrd arhitektonski uslov | prihvaceno **i pojacano**: dobija staticku kapiju |
 | 2 | `KupciIzlazID` | prihvaceno **uz zaostravanje merenjem**: to znaci **dokument**, 6.11 |
+| 4 | podela pri prekomernom vracanju (12 + 8) · razlaganje `KupciIzlaz`-a na **jedan revers** i **jednu kasu** | prihvaceno — 6.9, 6.11a |
 | 3 | `Firma` = **jedan** nalog; `POCETNO_STANJE` dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a |
 | — | `POCETNO_STANJE` | **dodato iz merenja**, nije trazeno: `GetKooperantAmbOpening` pocetno stanje izvodi iz knjige, pa bi prvi dan bio zid potvrda |
 
