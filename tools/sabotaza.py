@@ -4938,6 +4938,33 @@ SABOTAZE = {
     # Review #396 P2: "staro ime nema" je bilo tiho "vec migrirano". Kolona sa
     # pravim imenom na kraju tabele tada ostaje trajno zalutala -- bas to stanje je
     # mogla da ostavi prethodna merge-ovana verzija ovog istog oporavka.
+    # AMB-10a: razresavanje naloga je JEDINA kapija nad parom Tip+ID. Bez nje
+    # "Tip=Vozac, ID=KUP-17" prolazi -- sintaksno ispravno, semanticki nemoguce.
+    "amb-nalog-ne-razresava": (
+        "modAmbalazaUgovor.bas",
+        "    If modDataAccess.FindRows(tbl, AmbNalogKljuc(t), k).count = 0 Then\n",
+        "    If False Then   ' SABOTAZA: nalog se ne razresava\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb nalog: kupcev ID pod tipom Vozac je odbijen",
+    ),
+    # SpoljniSvet je granica opticaja, ne partner. Bez kapije bi se ambalaza mogla
+    # "stvoriti" bilo kojom vrstom kretanja, pa bi gubitak izgledao kao prenos.
+    "amb-granica-bilo-gde": (
+        "modAmbalazaUgovor.bas",
+        "        If Not AmbGranicaSmeKaoOd(vrsta) Then\n",
+        "        If False Then   ' SABOTAZA: granica sme bilo gde\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb granica: SpoljniSvet kao izvor povrata je odbijen",
+    ),
+    # Nad append-only knjigom storno je KONTRA-STAV: ako ne nosi minus doprinos
+    # originala, fizicko stanje se anulira a obaveza ostane da visi.
+    "amb-storno-ne-gasi-obavezu": (
+        "modAmbalazaUgovor.bas",
+        "        AmbDoprinosObavezi = -AmbDoprinosObavezi(vrstaOriginala, kolicina, \"\")\n",
+        "        AmbDoprinosObavezi = 0   ' SABOTAZA: storno ne gasi obavezu\n",
+        "Test_Amb_DoprinosObavezi",
+        "Amb obaveza: storno ulaza tudje ambalaze GASI obavezu koju je stvorio",
+    ),
     "migracija-zalutala-kolona-prolazi": (
         "modSetup.bas",
         "        ' ako ga ima na pogresnom mestu, vraca ga ili imenuje razlog.\n        PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)\n",
