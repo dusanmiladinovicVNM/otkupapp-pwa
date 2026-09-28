@@ -572,7 +572,7 @@ klasifikacija:
 
 | Klasa | Dokumenti | Nosi | Identitet traga |
 |---|---|---|---|
-| **robni** | otkup, otpremnica, prijemnica | **robu**; ambalaza (i novac kod otkupa) su njegove **posledice** | `OtkupID` · `OtpremnicaID` · `PrijemnicaID` |
+| **robni** | otkup, otpremnica, **zbirna**, prijemnica | **robu**; ambalaza (i novac kod otkupa) su njegove **posledice** | `OtkupID` · `OtpremnicaID` · `ZbirnaID` · `PrijemnicaID` |
 | **ambalazni** | revers, pocetno stanje, nabavka, otpis | **samo** ambalazu | `AmbDokID` |
 | **novcani** | uplata / isplata (kasa) | **samo** novac | `tblNovac` + `fakturaID` |
 
@@ -588,6 +588,7 @@ Mereno po klasama:
 |---|---|---|---|---|
 | `SaveOtkup*` | da | da (`TBL_NOVAC` u snapshotu, `modOtkup:93`) | robni | **u redu** |
 | `IzdajOtpremnicu_TX` | da | ne (nema `TBL_NOVAC`, `:3416`) | robni | **u redu** |
+| `CreateZbirna_TX` | **ne** | ne | robni | **u redu** — v. nize |
 | `SavePrijemnicaMulti_TX` | da | ne (faktura da, kasa ne, `:6565`) | robni | **u redu** |
 | `SaveOMUlaz_TX` | da | **da** | ambalazni | **prekrsaj** |
 | `SaveKupciIzlaz_TX` | da | **da** | ambalazni | **prekrsaj** |
@@ -607,6 +608,46 @@ kod reversa su **dva dogadjaja delila jedan broj**.
 - svaki mehanizam ima svoj `_TX` omotac, po zatecenom obrascu repoa
   (`SaveNovac`/`SaveNovac_TX`, `SavePrijemnica`/`SavePrijemnica_TX`).
 
+
+### 6.11b Zbirna — jedini dokument lanca koji NE knjizi ambalazu
+
+Dodato zbog celovitosti (predlog operatera, 28.09.2026): zbirna je jedina karika
+lanca koju analiza nije izricito svrstala.
+
+**Nalaz 1 — zbirna ne knjizi nijedno kretanje ambalaze, i to je tacno.** Medju
+devet izmerenih mesta knjizenja (§3) nema nijednog za zbirnu. To nije propust nego
+posledica domena:
+
+```
+otpremnica:  Stanica -> Vozac      gajbe odlaze sa stanice
+zbirna:      (nista)               grupisanje otpremnica za jedan prevoz
+prijemnica:  Vozac  -> Kupac       gajbe stizu kupcu
+```
+
+U trenutku zbirne gajbe su **vec kod vozaca** i tu ostaju dok ih prijemnica ne
+preda kupcu. Zbirna je **grupisanje**, ne kretanje. Zato je ona **robni dokument
+bez ambalazne posledice** — sto klasifikacija iz `AMB-10-ODL-5` dozvoljava: robni
+dokument **sme** da ima ambalazni trag, ne **mora**.
+
+> Ovo je ujedno provera same klasifikacije: da je pravilo glasilo „svaki robni
+> dokument knjizi ambalazu", zbirna bi ga oborila. Ne obara ga.
+
+**Nalaz 2 — zaglavlje zbirne nosi `UkupnoAmbalaze`, a pisac ga ne puni.** Kanon
+`tblZbirna` i dalje ima `UkupnoKolicina`, `UkupnoAmbalaze` i `Klasa`, ali
+`CreateZbirna_TX` ih **namerno ostavlja prazne** od PR3 — kolicina po klasi zivi u
+`tblZbirnaStavke`, a citaoci idu kroz kanonski helper
+([modDokumenta:2409](../../src-vba/modDokumenta.bas)).
+
+To su **mrtvi slotovi**, ista klasa kao linijske kolone zaglavlja otpremnice koje
+je obrisao S3-ostatak. Ali:
+
+> **Ne pripada AMB-10 i ne usisava se u njega.** `UkupnoAmbalaze` nije kes
+> **kretanja** ambalaze (knjiga o njemu ne zna nista) nego mrtav zbir **stavki
+> zbirne**. To je ostatak **S4** — zbirna cutover — i tu se i zatvara, zajedno sa
+> `UkupnoKolicina` i `Klasa`, jednim `ObrisiKolonuAko` blokom.
+>
+> Zapisano je ovde samo da se ne izgubi: nalaz nadjen u ambalaznoj analizi, a dug
+> u tudjem rezu.
 
 ### 6.12 Sta je koji krug promenio
 
