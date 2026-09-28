@@ -33,7 +33,9 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| S6 prijemnica · S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ (v3, dva kruga review-a), kod jos ne; `docs/DOMEN/AMBALAZA.md` |
+| **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
+| S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
 ## Hronologija rezova — i gde je sledeći (v. stavku 50)
@@ -317,6 +319,26 @@
     od šest poziva helpera, a dva najizloženija (`IspravkaOdID` 22/29, `ZamenjenSaID` 23/29)
     review nije imenovao. Zatvoreno: preživljava **levlja** pozicija (višak je uvek dopisan),
     sadržaj se preseli u nju, postcondition meri i poziciju. Plan §14.53.
+
+51. **AMB-10 se ubacuje PRED S6; S6 je parkiran na koraku 1/8** (28.09.2026).
+    Nastalo iz pitanja operatera o `KolAmbVracena`: povrat ambalaze je efektivno
+    revers i njegovo mesto je `tblAmbalaza`, a kolona stoji i na `tblOtkup`
+    (`KolAmbIzdata`) i na `tblPrijemnica`. Merenje je poteralo holisticki pregled --
+    **devet mesta knjizenja preko pet dokumenata** -- i model je ispao veci od S6.
+    Pun zapis: `docs/DOMEN/AMBALAZA.md` (v3, posle **dva** kruga dizajn review-a).
+    **Model:** dogadjaj je jedan red koji imenuje obe strane (`Od -> Na`), knjiga je
+    append-only, storno je kontra-stav, vozac je obican nalog, a tudja ambalaza
+    ulazi eksplicitnim dogadjajem iz `SpoljniSvet`. Nijedan realni nalog ne sme
+    zavrsiti sa negativnim saldom.
+    **Odluke operatera:** stampa storniranog dokumenta prikazuje stanje pre storna ·
+    `KupciIzlaz` je **revers od kupca + uplata**, ne nov dokument · `POCETNO_STANJE` je **iskljucivo firmina**
+    ambalaza zatecena kod entiteta (partnerova ide kao `ULAZ_TUDJE_AMBALAZE`).
+    **Redosled:** `10a` ugovor · `10-DOK` ambalazni dokument · `10b` pisac ·
+    `10c` citaoci · `10d` storno · `10e` brisanje starog -- stare strukture se brisu
+    POSLEDNJE, da bi staro i novo mogli da se mere jedno protiv drugog.
+    **Zasto pred S6:** `AMB-10e` i zavrsni korak S6 diraju iste citaoce
+    (`modPrint`, `modIzvestaj`, `modScrIzvestaji`, `modStornoDok`); ovim redom se
+    diraju jednom.
 
 ## Dug sa imenom (posle S5-5b)
 
