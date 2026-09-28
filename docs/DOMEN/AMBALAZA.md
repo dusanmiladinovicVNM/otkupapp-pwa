@@ -530,23 +530,49 @@ dokumenta".
 (ili obrnuto), **nijedna invarijanta nije prekrsena**: knjiga je tacna, kasa je
 tacna, a operater unese polovinu koja fali. Nema stanja koje bi trebalo popraviti.
 
-#### Sta se mericem NE potvrdjuje, pa se tako i pise
+#### Zajednicki broj je bio GRESKA, i to je pravilo, ne artefakt
 
-Review je ovu odluku obrazlozio time da novac i ambalaza „nikada ne idu zajedno sa
-jednim brojem dokumenta". **Kod pokazuje suprotno:** `SaveKupciIzlaz_TX` prima
-**jedan** `brojDok` i prosledjuje ga **obema** stranama —
-`TrackAmbalaza(..., brojDok, DOK_TIP_IZLAZ_KUPCI)` i `SaveNovac(brojDok:=brojDok, ...)`
-([modDokumenta:7026](../../src-vba/modDokumenta.bas) i `:7043`).
+Prvo merenje je pokazalo da `SaveKupciIzlaz_TX` prima **jedan** `brojDok` i
+prosledjuje ga **obema** stranama ([modDokumenta:7026](../../src-vba/modDokumenta.bas)
+i `:7043`). Zapisao sam to kao „artefakt presiroke helper funkcije", jer se iz koda
+poslovno pravilo ne moze izvesti.
 
-Zajednicki broj danas **postoji**. Odluka ga ukida — ali kao **artefakt preširoke
-helper funkcije**, ne kao nesto sto nikad nije postojalo. Razlika je vazna: premisa
-koja se ne moze izmeriti ne ulazi u kanonski dokument, ni kad vodi do tacnog
-zakljucka.
+> **Presuda operatera (28.09.2026):** to je **postojalo, ali je bilo greska.**
+> U praksi **nema dokumenta koji pokriva i gotovinsko kretanje novca i ambalazu.**
 
-> **Ako se ispostavi da operater treba da vidi „ovo poravnanje" kao celinu**, to je
-> **novcani** dokument (poravnanje sa kupcem), ne zajednicki broj i ne zajednicka
-> transakcija. Lakse je dodati dokument nego razdvojiti dva pojma koja su se
-> srasla — a to razdvajanje je upravo ovaj rez.
+Time ovo prestaje da bude opis zatecenog stanja i postaje pravilo:
+
+> **AMB-10-ODL-5.** Nijedan dokument nije istovremeno **ambalazni i novcani**.
+> Revers nosi **samo** ambalazu; kasa nosi **samo** novac. Svaki ima svoj broj,
+> svoj identitet, svoju transakciju i svoj storno.
+
+#### Isto pravilo odmah nalazi drugi prekrsaj — ogledalni
+
+Pravilo je opste, pa sam ga primenio na sva mesta koja diraju obe tabele:
+
+| Pisac | Ambalaza | Novac | Deli broj? |
+|---|---|---|---|
+| `SaveKupciIzlaz_TX` (kupac -> firma) | da | `SaveNovac` | **da — prekrsaj** |
+| **`SaveOMUlaz_TX`** (revers ka kooperantu/firmi) | da | `SaveNovac` | **da — prekrsaj** |
+| `SaveOtkup*` | da | da | **ne** — v. nize |
+
+**`SaveOMUlaz_TX` je isti kvar u ogledalu:** potpis nosi `novac` i `tipNovca`, ima
+istu kapiju `If kolAmb <= 0 And novac <= 0`, i isti `brojDok` deli izmedju
+ambalaznih nogu i reda u kasi ([modDokumenta:8555](../../src-vba/modDokumenta.bas)).
+Dakle nije rec o izuzetku kod kupca nego o **jednom kvaru na dva mesta**, i
+razlaganje se radi na **oba**: revers gubi svoju novcanu polovinu isto kao
+`KupciIzlaz`.
+
+**Otkup nije prekrsaj, i to treba razlikovati.** `SaveOtkup*` pise i `tblAmbalaza`
+i `tblNovac` pod istim `OtkupID` — ali otkup **nije ni ambalazni ni novcani
+dokument**. On je dokument **robe**, a ambalaza i isplata su njegove **posledice**;
+`OtkupID` im je zato **izvorni dokument**, sto `AMB-INV-08` i trazi. Razlika je
+jasna: kod otkupa jedan poslovni dogadjaj ima dva traga, a kod reversa su dva
+nezavisna dogadjaja delila jedan broj.
+
+> Ako je i to pogresno — ako i otkup treba da razdvoji isplatu od dokumenta robe —
+> to je **novcani** rez, ne ambalazni, i ne ulazi u AMB-10.
+
 
 #### Dobitak
 
@@ -575,7 +601,8 @@ zakljucka.
 | 2 | `AMB-INV-08` kao tvrd arhitektonski uslov | prihvaceno **i pojacano**: dobija staticku kapiju |
 | 2 | `KupciIzlazID` | prihvaceno **uz zaostravanje merenjem**: to znaci **dokument**, 6.11 |
 | 4 | podela pri prekomernom vracanju (12 + 8) · razlaganje `KupciIzlaz`-a na **jedan revers** i **jednu kasu** | prihvaceno — 6.9, 6.11a |
-| 5 | zajednicki composer/TX je i dalje sprega | **prihvaceno** — dve nezavisne operacije, svaka sa svojom TX; premisa review-a o „nikad isti broj" **nije potvrdjena kodom** i nije usla (6.11a) |
+| 5 | zajednicki composer/TX je i dalje sprega | **prihvaceno** — dve nezavisne operacije, svaka sa svojom TX (6.11a) |
+| 5 | premisa „nikad isti broj" | **operater je presudio: postojalo je, ali je bilo GRESKA.** Postaje `AMB-10-ODL-5`, a merenje po njemu odmah nalazi **drugi, ogledalni prekrsaj** — `SaveOMUlaz_TX` |
 | 3 | `Firma` = **jedan** nalog; `POCETNO_STANJE` dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a |
 | — | `POCETNO_STANJE` | **dodato iz merenja**, nije trazeno: `GetKooperantAmbOpening` pocetno stanje izvodi iz knjige, pa bi prvi dan bio zid potvrda |
 
@@ -639,7 +666,7 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
 2. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, pocetno stanje, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
-3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze.
+3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze. **Ukljucuje razlaganje OBA slozena pisca** (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina odlazi u kasu.
 4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
 5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
 6. **AMB-10e** — **tek tada** brisanje starog modela.
