@@ -286,7 +286,7 @@ izvesti.
 | `AMBALAZA_UZ_ROBU` | gajbe putuju **sa robom** (otkup, otpremnica, prijemnica, izlaz kupcu) |
 | `IZDATA_PRAZNA` | firma zaduzuje partnera praznim gajbama |
 | `POVRAT_PRAZNE` | partner vraca prazne gajbe firmi |
-| `PRENOS_INTERNO` | izmedju sopstvenih naloga (stanica <-> firma) |
+| `PRENOS_INTERNO` | izmedju **sopstvenih** naloga: stanica <-> firma <-> **vozac** (v. 6.7a) |
 | `ULAZ_TUDJE_AMBALAZE` | partnerove gajbe ulaze u opticaj — **stvara obavezu** |
 | `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu** |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
@@ -320,6 +320,60 @@ Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 >
 > Zato `POCETNO_STANJE` i `ULAZ_TUDJE_AMBALAZE` ostaju dve vrednosti iako su
 > fizicki isti prenos: razlikuje ih **vlasnistvo**, a ono odlucuje o obavezi.
+
+### 6.7a Enum je ZATVOREN — odgovori operatera (28.09.2026)
+
+Tri pitanja koja su enum drzala otvorenim su odgovorena, i nijedno ne trazi desetu
+vrednost:
+
+| Pitanje | Odgovor | Posledica |
+|---|---|---|
+| kooperant vraca gajbe **drugoj** stanici | „ne vidim sta je sporno — koop se razduzi, stanica se zaduzi, gajbe su vec u sistemu" | `POVRAT_PRAZNE`, `Od/Na` nose razliku. **Nema pravila da se vraca stanici koja je izdala** — v. nize |
+| prenos izmedju dve stanice | `PRENOS_INTERNO` pokriva; **ali stanica najcesce daje prazne VOZACU**, a direktno je redje | definicija se **siri na vozaca** |
+| kupac zadrzi gajbe i plati ih | **ne desava se za sada** | nema vrednosti; ako se pojavi, to je **nova** `VrstaKretanja`, ne `OTPIS` |
+
+> **AMB-10-ODL-6 (negativna odluka).** Povrat prazne ambalaze **nije vezan za
+> stanicu koja ju je izdala**. Pisac **ne sme** da uvede kapiju „vraca se tamo gde
+> je izdato" — kooperant se razduzuje, stanica koja primi se zaduzuje, i to je ceo
+> ugovor. Zapisano izricito jer je takva kapija prirodna greska pri implementaciji.
+
+> **AMB-10-ODL-7.** `PRENOS_INTERNO` je kretanje izmedju **sopstvenih** naloga:
+> `Stanica`, `Firma` i **`Vozac`**. Prazne gajbe sa stanice najcesce idu **vozacu**
+> pa tek onda drugoj stanici — to su **dva** `PRENOS_INTERNO` dogadjaja, ne jedan.
+>
+> Vozac se ovde racuna kao **sopstveni** nalog i onda kad je prevoznik spoljni
+> (`tblPrevoznici`): gajbe su u transportu, dakle i dalje u opticaju firme, a ne
+> kod partnera. **Ovo je moje citanje domena, ne izmereno** — ako prevoznik treba
+> da bude partner sa svojim dugom, menja se ovaj red, ne model.
+
+### 6.7b Poravnanje ne postoji, i sezona se ne preseca
+
+> **Odgovor operatera:** „nema poravnanja". Razlaganje `KupciIzlaz`-a iz 6.11a
+> time **ostaje kako jeste**, i grupisuci dokument se **ne pravi**.
+
+**Kraj sezone.** Ko kome duguje ambalazu na kraju sezone — ili se dug **prenosi u
+narednu**, ili strana koja duguje **preda ambalazu**. Operater: „za sada to ne
+diramo, moze rucno".
+
+Posledica je bolja nego sto pitanje sugerise:
+
+| Slucaj | Sta model trazi |
+|---|---|
+| dug se prenosi u narednu sezonu | **nista** — knjiga je kontinuirana, obaveza se racuna iz svih dogadjaja i **sama prelazi** |
+| strana preda ambalazu | obican dogadjaj: `VRACANJE_TUDJE_AMBALAZE` (gasi dug) ili `POVRAT_PRAZNE` (vraca firmine) |
+
+> **ZAMKA, i zato se zapisuje.** „Prenos u novu sezonu **pocetnim stanjem**" bi nad
+> kontinuiranom knjigom znacio **duplo stanje**: partner vec ima saldo iz prethodne
+> sezone, a `POCETNO_STANJE` bi mu dodao jos jednom. `AMB-INV-04` to **ne bi
+> uhvatilo**, jer bi to bio drugi dokument.
+>
+> **AMB-INV-10.** `POCETNO_STANJE` se sme upisati samo nalogu koji **nema nijedan
+> raniji dogadjaj** za taj tip ambalaze. Pocetno stanje postoji **jednom, pri
+> uvodjenju sistema** — ne jednom po sezoni.
+>
+> Ako se ikad poželi **presecanje knjige po sezoni** (zatvaranje i otvaranje), to
+> je zasebna odluka i trazi svoj dogadjaj (`ZATVARANJE_SEZONE`), jer bi inace
+> istorija i obaveza bile nedosledne. Danas se **ne radi**.
 
 ### 6.8 Saldo i storno
 
@@ -362,6 +416,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet`. Potvrdjeno 28.09.2026: vazi za SVE realne naloge, bez izuzetka |
 | `AMB-INV-08` | **nijedan upis u knjigu ne nastaje van vlasnistva transakcije izvornog dokumenta** |
 | `AMB-INV-09` | **`Obaveza(partner, tip) >= 0`** — firma ne moze partneru vratiti vise tudje ambalaze nego sto je od njega uzela |
+| `AMB-INV-10` | `POCETNO_STANJE` samo za nalog **bez ijednog ranijeg dogadjaja** tog tipa ambalaze — pocetno stanje je jednokratno, ne godisnje (6.7b) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
