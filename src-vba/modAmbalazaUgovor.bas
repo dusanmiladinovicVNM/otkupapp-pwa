@@ -90,6 +90,25 @@ Public Function AmbVrstaPoznata(ByVal vrsta As String) As Boolean
     AmbVrstaPoznata = UNizu(AmbVrsteSve(), vrsta)
 End Function
 
+' SOPSTVENI nalozi -- unutar firme, ne partneri. Prazne gajbe sa stanice najcesce
+' idu VOZACU pa tek onda drugoj stanici, pa je vozac ovde "nas" iako je transporter
+' (AMB-10-ODL-7).
+Public Function AmbNalogSopstveni(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case AMB_NALOG_STANICA, AMB_NALOG_FIRMA, AMB_NALOG_VOZAC
+            AmbNalogSopstveni = True
+    End Select
+End Function
+
+' PARTNER -- druga strana posla, i jedini nalog kome firma moze da DUGUJE.
+' Obaveza(partner, tip) nema smisla nad stanicom ili vozacem.
+Public Function AmbNalogPartner(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case AMB_NALOG_KOOPERANT, AMB_NALOG_KUPAC
+            AmbNalogPartner = True
+    End Select
+End Function
+
 ' Sistemski nalog: jedan jedini, bez ID-a i bez master zapisa.
 Public Function AmbNalogSistemski(ByVal tip As String) As Boolean
     AmbNalogSistemski = (StrComp(Trim$(tip), AMB_NALOG_FIRMA, vbTextCompare) = 0) Or _
@@ -161,8 +180,18 @@ Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As Stri
         Exit Function
     End If
 
-    If modDataAccess.FindRows(tbl, AmbNalogKljuc(t), k).count = 0 Then
+    ' AMB-INV-03 trazi JEDNOZNACNO razresenje, ne "postoji bar jedan".
+    ' Dva master reda sa istim ID-em nisu "jos bolje" nego kvar: pisac ne zna
+    ' kome pripisuje gajbe. Dvosmislenost je fail-closed, kao kod zbirne
+    ' (ZbirnaIdentResolve / ZBR_RES_UNIQUE).
+    Dim n As Long
+    n = modDataAccess.FindRows(tbl, AmbNalogKljuc(t), k).count
+
+    If n = 0 Then
         AmbNalogProblem = "Nalog '" & t & "' sa ID '" & k & "' ne postoji u " & tbl & "."
+    ElseIf n > 1 Then
+        AmbNalogProblem = "Nalog '" & t & "' sa ID '" & k & "' nije jednoznacan: " & _
+                          CStr(n) & " reda u " & tbl & "."
     End If
 End Function
 
@@ -230,21 +259,79 @@ Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
         Exit Function
     End If
 
-    ' Granica opticaja sme samo tamo gde joj je mesto, i to na TACNOJ strani.
-    If StrComp(Trim$(odTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then
-        If Not AmbGranicaSmeKaoOd(vrsta) Then
-            AmbPrenosProblem = "SpoljniSvet kao izvor nije dozvoljen za '" & _
-                               Trim$(vrsta) & "' -- ambalaza ulazi u opticaj samo kao " & _
-                               AMB_VK_ULAZ_TUDJE & " ili " & AMB_VK_NABAVKA & "."
+    ' GRANICA OPTICAJA -- ekvivalencija, ne jednosmerna implikacija.
+    '
+    ' Prva verzija je proveravala samo "ako je SpoljniSvet tu, vrsta mora biti X".
+    ' Komplement je prolazio: `Stanica -> Kooperant, NABAVKA` je bio validan, iako
+    ' ugovor kaze da tim dogadjajem ambalaza ULAZI u opticaj. Zato se svaki uslov
+    ' izgovara kao "vazi tacno tada i nikad inace".
+    Dim odJeGranica As Boolean, naJeGranica As Boolean
+    odJeGranica = (StrComp(Trim$(odTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
+    naJeGranica = (StrComp(Trim$(naTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
+
+    If AmbGranicaSmeKaoOd(vrsta) And Not odJeGranica Then
+        AmbPrenosProblem = "'" & Trim$(vrsta) & "' mora imati " & AMB_NALOG_SPOLJNI & _
+                           " kao izvor -- tom vrstom ambalaza ULAZI u opticaj."
+        Exit Function
+    End If
+
+    If odJeGranica And Not AmbGranicaSmeKaoOd(vrsta) Then
+        AmbPrenosProblem = AMB_NALOG_SPOLJNI & " kao izvor nije dozvoljen za '" & _
+                           Trim$(vrsta) & "' -- ambalaza ulazi u opticaj samo kao " & _
+                           AMB_VK_ULAZ_TUDJE & " ili " & AMB_VK_NABAVKA & "."
+        Exit Function
+    End If
+
+    If AmbGranicaSmeKaoNa(vrsta) And Not naJeGranica Then
+        AmbPrenosProblem = "'" & Trim$(vrsta) & "' mora imati " & AMB_NALOG_SPOLJNI & _
+                           " kao odrediste -- tom vrstom ambalaza IZLAZI iz opticaja."
+        Exit Function
+    End If
+
+    If naJeGranica And Not AmbGranicaSmeKaoNa(vrsta) Then
+        AmbPrenosProblem = AMB_NALOG_SPOLJNI & " kao odrediste nije dozvoljen za '" & _
+                           Trim$(vrsta) & "' -- iz opticaja se izlazi samo kao " & _
+                           AMB_VK_OTPIS & "."
+        Exit Function
+    End If
+
+    ' PRENOS_INTERNO je po definiciji izmedju SOPSTVENIH naloga (AMB-10-ODL-7).
+    ' Bez ovoga bi `Kooperant -> Kupac, PRENOS_INTERNO` prosao kroz centralnu
+    ' kapiju sa potpuno pogresnim poslovnim znacenjem.
+    If StrComp(Trim$(vrsta), AMB_VK_PRENOS_INTERNO, vbTextCompare) = 0 Then
+        If Not (AmbNalogSopstveni(odTip) And AmbNalogSopstveni(naTip)) Then
+            AmbPrenosProblem = AMB_VK_PRENOS_INTERNO & " ide samo izmedju sopstvenih " & _
+                               "naloga (Stanica, Firma, Vozac) -- dobio: " & _
+                               Trim$(odTip) & " -> " & Trim$(naTip) & "."
             Exit Function
         End If
     End If
 
-    If StrComp(Trim$(naTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then
-        If Not AmbGranicaSmeKaoNa(vrsta) Then
-            AmbPrenosProblem = "SpoljniSvet kao odrediste nije dozvoljen za '" & _
-                               Trim$(vrsta) & "' -- iz opticaja se izlazi samo kao " & _
-                               AMB_VK_OTPIS & "."
+    ' VRSTE KOJE DIRAJU OBAVEZU MORAJU IMATI PARTNERA NA PARTNERSKOJ STRANI.
+    '
+    ' Nije trazeno u review-u nego je ista klasa: Obaveza(partner, tip) se racuna
+    ' PO PARTNERU, pa `SpoljniSvet -> Stanica, ULAZ_TUDJE_AMBALAZE` nema kome da
+    ' pripise dug. Stanica i vozac nisu partneri -- firma sebi ne duguje.
+    If StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
+        If Not AmbNalogPartner(naTip) Then
+            AmbPrenosProblem = AMB_VK_ULAZ_TUDJE & " trazi PARTNERA kao odrediste " & _
+                               "(Kooperant ili Kupac) -- inace obaveza nema kome da se " & _
+                               "pripise. Dobio: " & Trim$(naTip) & "."
+            Exit Function
+        End If
+    End If
+
+    If StrComp(Trim$(vrsta), AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
+        If Not AmbNalogPartner(naTip) Then
+            AmbPrenosProblem = AMB_VK_VRACANJE_TUDJE & " trazi PARTNERA kao odrediste " & _
+                               "-- firma vraca gajbe onome od koga ih je uzela. Dobio: " & _
+                               Trim$(naTip) & "."
+            Exit Function
+        End If
+        If Not AmbNalogSopstveni(odTip) Then
+            AmbPrenosProblem = AMB_VK_VRACANJE_TUDJE & " ide sa SOPSTVENOG naloga -- " & _
+                               "dobio: " & Trim$(odTip) & "."
+            Exit Function
         End If
     End If
 End Function

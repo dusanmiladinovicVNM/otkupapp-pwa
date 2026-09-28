@@ -4940,9 +4940,37 @@ SABOTAZE = {
     # mogla da ostavi prethodna merge-ovana verzija ovog istog oporavka.
     # AMB-10a: razresavanje naloga je JEDINA kapija nad parom Tip+ID. Bez nje
     # "Tip=Vozac, ID=KUP-17" prolazi -- sintaksno ispravno, semanticki nemoguce.
+    # Granica mora da vazi u OBA smera. Bez ovoga prolazi "Stanica -> Kooperant,
+    # NABAVKA" -- dogadjaj kojim ambalaza navodno ULAZI u opticaj, a granica mu
+    # nije ni na jednoj strani.
+    "amb-granica-samo-jedan-smer": (
+        "modAmbalazaUgovor.bas",
+        "    If AmbGranicaSmeKaoOd(vrsta) And Not odJeGranica Then\n",
+        "    If False Then   ' SABOTAZA: granica se trazi samo u jednom smeru\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb granica: NABAVKA bez SpoljnogSveta kao izvora je odbijena",
+    ),
+    # PRENOS_INTERNO je po definiciji izmedju sopstvenih naloga. Bez kapije
+    # "Kooperant -> Kupac, PRENOS_INTERNO" prolazi kroz centralnu proveru.
+    "amb-interno-bilo-koji-nalozi": (
+        "modAmbalazaUgovor.bas",
+        "        If Not (AmbNalogSopstveni(odTip) And AmbNalogSopstveni(naTip)) Then\n",
+        "        If False Then   ' SABOTAZA: interno ide izmedju bilo koja dva naloga\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb interno: kooperant -> kupac NIJE sopstveni prenos",
+    ),
+    # Dva master reda sa istim ID-em nisu "jos bolje" nego kvar: pisac ne zna kome
+    # pripisuje gajbe. AMB-INV-03 trazi JEDNOZNACNO razresenje.
+    "amb-nalog-dvosmislen-prolazi": (
+        "modAmbalazaUgovor.bas",
+        "    ElseIf n > 1 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: dvosmislen nalog prolazi\n",
+        "Test_Amb_NalogDvosmislenPada",
+        "Amb dvosmislen: dva reda sa istim ID-em se ODBIJAJU, ne prolaze",
+    ),
     "amb-nalog-ne-razresava": (
         "modAmbalazaUgovor.bas",
-        "    If modDataAccess.FindRows(tbl, AmbNalogKljuc(t), k).count = 0 Then\n",
+        "    If n = 0 Then\n",
         "    If False Then   ' SABOTAZA: nalog se ne razresava\n",
         "Test_Amb_UgovorPrenosa",
         "Amb nalog: kupcev ID pod tipom Vozac je odbijen",
@@ -4951,7 +4979,7 @@ SABOTAZE = {
     # "stvoriti" bilo kojom vrstom kretanja, pa bi gubitak izgledao kao prenos.
     "amb-granica-bilo-gde": (
         "modAmbalazaUgovor.bas",
-        "        If Not AmbGranicaSmeKaoOd(vrsta) Then\n",
+        "    If odJeGranica And Not AmbGranicaSmeKaoOd(vrsta) Then\n",
         "        If False Then   ' SABOTAZA: granica sme bilo gde\n",
         "Test_Amb_UgovorPrenosa",
         "Amb granica: SpoljniSvet kao izvor povrata je odbijen",
