@@ -4925,19 +4925,58 @@ SABOTAZE = {
         "Test_OTK_PushIndeksPreskaceRedSaTerena",
         "OTK push indeks: red sa terena ne obara indeks push-a",
     ),
-    # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano IZ
-    # SREDINE i NE NEPREKIDNO (9, 10, 12, 13, 15 -- a 14 je Stornirano). Ako
-    # zatecena sveska zadrzi bilo koju, sve iza nje se pomera i pozicioni upis
-    # salje vrednost u pogresnu kolonu.
-    # Review #395 P1: oporavak nad stanjem "staro I novo postoje". Bez brisanja
-    # duplikata preimenovanje pada na Excel-ovo odbijanje drugog imena, pa
-    # migracija vraca razlog umesto praznog stringa -- sveska ostaje drift-ovana.
-    # Review #395 P2: oporavak je cuvao PODATKE ali ne i POZICIJU. Kad mesto
-    # bira sadrzaj a ne kanon, puna kolona ostaje tamo gde je dopisana -- na
-    # KRAJU -- pa VerifySchema i dalje vidi REDOSLED drift i upis ostaje blokiran.
-    # Review #396 P2: "staro ime nema" je bilo tiho "vec migrirano". Kolona sa
-    # pravim imenom na kraju tabele tada ostaje trajno zalutala -- bas to stanje je
-    # mogla da ostavi prethodna merge-ovana verzija ovog istog oporavka.
+    # Dva master reda sa istim ID-em nisu "jos bolje" nego kvar: pisac ne zna kome
+    # pripisuje gajbe. AMB-INV-03 trazi JEDNOZNACNO razresenje.
+    "amb-nalog-dvosmislen-prolazi": (
+        "modAmbalazaUgovor.bas",
+        "    ElseIf n > 1 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: dvosmislen nalog prolazi\n",
+        "Test_Amb_NalogDvosmislenPada",
+        "Amb dvosmislen: dva reda sa istim ID-em se ODBIJAJU, ne prolaze",
+    ),
+    # Matrica govori o OBE strane. Bez provere izvora prolazi npr.
+    # "Kooperant -> Kupac, IZDATA_PRAZNA" -- partner koji izdaje firmine gajbe.
+    "amb-klasa-izvora-ne-vazi": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(CStr(klase(0)), odTip) Then\n",
+        "    If False Then   ' SABOTAZA: klasa izvora se ne proverava\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb matrica: kooperant NE moze da izda prazne -- izvor nije sopstveni",
+    ),
+    # Bez provere odredista prolazi "SpoljniSvet -> Kooperant, NABAVKA", cime bi
+    # nove gajbe stigle partneru bez cina izdavanja -- dakle bez zaduzenja.
+    "amb-klasa-odredista-ne-vazi": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(CStr(klase(1)), naTip) Then\n",
+        "    If False Then   ' SABOTAZA: klasa odredista se ne proverava\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb matrica: nabavka NE ide direktno partneru -- preskocila bi izdavanje",
+    ),
+    # Vrsta bez reda u matrici prolazi kroz SVE provere strana. Kapija potpunosti
+    # postoji da deveta vrednost enuma ne udje neprimetno.
+    "amb-matrica-nepotpuna": (
+        "modAmbalazaUgovor.bas",
+        "            AmbKlaseVrste = Array(AMB_KLASA_SOPSTVENI, AMB_KLASA_PARTNER)\n        Case AMB_VK_POVRAT_PRAZNE\n",
+        "            AmbKlaseVrste = Array()   ' SABOTAZA: vrsta bez reda u matrici\n        Case AMB_VK_POVRAT_PRAZNE\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb matrica: svaka vrsta ima definisane klase obe strane",
+    ),
+    "amb-nalog-ne-razresava": (
+        "modAmbalazaUgovor.bas",
+        "    If n = 0 Then\n",
+        "    If False Then   ' SABOTAZA: nalog se ne razresava\n",
+        "Test_Amb_UgovorPrenosa",
+        "Amb nalog: kupcev ID pod tipom Vozac je odbijen",
+    ),
+    # Nad append-only knjigom storno je KONTRA-STAV: ako ne nosi minus doprinos
+    # originala, fizicko stanje se anulira a obaveza ostane da visi.
+    "amb-storno-ne-gasi-obavezu": (
+        "modAmbalazaUgovor.bas",
+        "        AmbDoprinosObavezi = -AmbDoprinosObavezi(vrstaOriginala, kolicina, \"\")\n",
+        "        AmbDoprinosObavezi = 0   ' SABOTAZA: storno ne gasi obavezu\n",
+        "Test_Amb_DoprinosObavezi",
+        "Amb obaveza: storno ulaza tudje ambalaze GASI obavezu koju je stvorio",
+    ),
     "migracija-zalutala-kolona-prolazi": (
         "modSetup.bas",
         "        ' ako ga ima na pogresnom mestu, vraca ga ili imenuje razlog.\n        PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)\n",

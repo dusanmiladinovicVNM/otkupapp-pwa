@@ -296,6 +296,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_ZaglavljeBezLinijskihKolona
     Test_Schema_TragZbirneNosiNovoIme
     Test_Schema_ZalutalaKolonaSeVracaNaMesto
+    Test_Amb_UgovorPrenosa
+    Test_Amb_DoprinosObavezi
+    Test_Amb_NalogDvosmislenPada
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -9077,8 +9080,12 @@ Private Sub Test_OTP_F8StornoPoID()
     ' Potvrda opisuje BAS B: njena kilaza, ne zbir oba dokumenta istog broja.
     Dim opis As String
     opis = modStornoDok.DokumentOpis(STIP_OTPREMNICA, broj, "", idB)
+    ' NEGATIVNA TVRDNJA MORA BITI USIDRENA. Golo "650" pogadja i BROJ
+    ' DOKUMENTA (npr. ...-1650), pa je tvrdnja pucala bez ijedne poslovne
+    ' greske cim bi brojac pao na takav broj. Meri se kilaza, pa i sidro
+    ' mora da bude kilaza.
     AssertTrue InStr(1, opis, "250 kg", vbTextCompare) > 0 And _
-               InStr(1, opis, "650", vbTextCompare) = 0, _
+               InStr(1, opis, "650 kg", vbTextCompare) = 0, _
                "OTP F8: potvrda pokazuje samo B kg (bilo: " & opis & ")"
 
     Dim poruka As String
@@ -16473,6 +16480,241 @@ Private Sub Test_Schema_TragZbirneNosiNovoIme()
 
 EH:
     LogFatal "Test_Schema_TragZbirneNosiNovoIme", Err.Number, Err.description
+End Sub
+
+' UGOVOR AMBALAZNE KNJIGE (AMB-10a) -- nalozi, zatvoren enum, granica opticaja.
+'
+' modAmbalazaUgovor jos NIJE u produkcionom putu: 10a je ugovor, cutover je 10b.
+' Zato se meri ovde, PRE nego sto ijedan pisac zavisi od njega -- kapija koja se
+' prvi put vidi kad je pisac vec napisan menja se pod pritiskom pisca.
+'
+' Razresavanje naloga trazi PRAVE entitete, pa test ide u BFP a ne u modTest:
+' zamka "Tip=Vozac, ID=KUP-..." se meri nad stvarnim tabelama, ne nad izmisljenim
+' stringom koji bi pao iz pogresnog razloga.
+Private Sub Test_Amb_UgovorPrenosa()
+    On Error GoTo EH
+
+    ' --- ZATVOREN ENUM -------------------------------------------------
+    AssertEquals "8", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
+                           LBound(modAmbalazaUgovor.AmbVrsteSve()) + 1), _
+                 "Amb ugovor: vrsta kretanja ima tacno osam"
+    AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(AMB_VK_ULAZ_TUDJE), _
+               "Amb ugovor: ULAZ_TUDJE_AMBALAZE je poznata vrsta"
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaPoznata("POCETNO_STANJE"), _
+               "Amb ugovor: POCETNO_STANJE NE postoji -- ono je NABAVKA + IZDATA_PRAZNA"
+
+    ' --- NALOZI: polimorfna zamka ---------------------------------------
+    ' "Tip=Vozac, ID=KUP-..." je sintaksno ispravan a semanticki nemoguc, i to je
+    ' jedini razlog zasto razresavanje uopste postoji kao kapija.
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_KOOPERANT, TEST_KOOP_ID), _
+                 "Amb nalog: postojeci kooperant prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_KUP_ID), _
+                     "ne postoji", vbTextCompare) > 0, _
+               "Amb nalog: kupcev ID pod tipom Vozac je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem("Prevoznik", "X"), _
+                     "Nepoznat tip", vbTextCompare) > 0, _
+               "Amb nalog: nepoznat tip naloga je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_KOOPERANT, ""), _
+                     "trazi ID", vbTextCompare) > 0, _
+               "Amb nalog: entitet bez ID-a je odbijen"
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_FIRMA, ""), _
+                 "Amb nalog: Firma je sistemski nalog bez ID-a"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_FIRMA, "F-1"), _
+                     "sistemski", vbTextCompare) > 0, _
+               "Amb nalog: sistemski nalog sa ID-em je odbijen"
+
+    ' --- PRENOS: INV-01 i INV-02 ----------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), _
+                 "Amb prenos: stanica -> kooperant, izdate prazne, prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     0, "G", AMB_VK_IZDATA_PRAZNA), "veca od nule", vbTextCompare) > 0, _
+               "Amb prenos: kolicina nula je odbijena (INV-01)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     10, "G", AMB_VK_PRENOS_INTERNO), "isti nalog", vbTextCompare) > 0, _
+               "Amb prenos: prenos na samog sebe je odbijen (INV-02)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     10, "", AMB_VK_IZDATA_PRAZNA), "Tip ambalaze", vbTextCompare) > 0, _
+               "Amb prenos: bez tipa ambalaze je odbijen -- stanje se vodi PO TIPU"
+
+    ' --- MATRICA STRANA ---------------------------------------------------
+    '
+    ' Svaka vrsta kretanja izgovara klasu OBE strane. Ranije je to bilo sest If
+    ' blokova sa po jednim smerom implikacije, i sest puta je nadjeno da
+    ' komplement prolazi. Zato se ovde meri i sta PROLAZI i sta PADA.
+    AssertEquals "", modAmbalazaUgovor.AmbMatricaNepotpuna(), _
+                 "Amb matrica: svaka vrsta ima definisane klase obe strane"
+
+    ' Prolazi -- po jedan predstavnik svake vrste.
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_VOZAC, TEST_VOZ_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), _
+                 "Amb matrica: vozac -> kupac, izdate prazne, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kooperant -> stanica, povrat praznih, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kupac -> vozac, povrat praznih, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     20, "G", AMB_VK_PRENOS_INTERNO), _
+                 "Amb matrica: stanica -> vozac je sopstveni prenos (AMB-10-ODL-7)"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     15, "G", AMB_VK_ULAZ_TUDJE), _
+                 "Amb matrica: tudja ambalaza ulazi iz SpoljnogSveta ka partneru"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                     100, "G", AMB_VK_NABAVKA), _
+                 "Amb matrica: nabavka ulazi iz SpoljnogSveta na sopstveni nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_SPOLJNI, "", _
+                     3, "G", AMB_VK_OTPIS), _
+                 "Amb matrica: otpis sme i kod partnera -- gajbica se lomi i tamo"
+
+    ' Pada -- ista vrsta, pogresna klasa strane. Poruka imenuje KOJU stranu.
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant NE moze da izda prazne -- izvor nije sopstveni"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: stanica -> vozac NIJE povrat -- izvor nije partner"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     20, "G", AMB_VK_PRENOS_INTERNO), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant -> kupac NIJE sopstveni prenos"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: nabavka NE ide direktno partneru -- preskocila bi izdavanje"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                     15, "G", AMB_VK_ULAZ_TUDJE), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: ulaz tudje ambalaze ka stanici je odbijen -- firma sebi ne duguje"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: nabavka bez granice kao izvora je odbijena"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     3, "G", AMB_VK_OTPIS), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: otpis bez granice kao odredista je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     12, "G", AMB_VK_VRACANJE_TUDJE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: vracanje tudje ambalaze sa partnerovog naloga je odbijeno"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     12, "G", AMB_VK_VRACANJE_TUDJE), _
+                 "Amb matrica: vracanje tudje ambalaze stanica -> kooperant prolazi"
+
+    ' --- ISTA PROVERA, DRUGI POZIVALAC -----------------------------------
+    ' Pisac dobija gresku, ekran poruku. Da Require* ne dize, pisac bi prosao dalje
+    ' sa istim podatkom koji ekran odbija.
+    Dim dignuto As Boolean
+    On Error Resume Next
+    modAmbalazaUgovor.RequireAmbPrenos AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_NALOG_STANICA, TEST_ST_ID, 10, "G", AMB_VK_PRENOS_INTERNO, "test"
+    dignuto = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue dignuto, "Amb ugovor: Require* dize gresku tamo gde *Problem vraca tekst"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_UgovorPrenosa", Err.Number, Err.description
+End Sub
+
+' DOPRINOS OBAVEZI -- osnova AMB-INV-09, i jedini deo koji storno mora da gasi.
+'
+' Prosta razlika dve sume je nad append-only knjigom NETACNA: storno ulaza tudje
+' ambalaze anulira fizicko stanje, a obaveza bi ostala da visi. Zato se meri i
+' kontra-stav, ne samo original.
+Private Sub Test_Amb_DoprinosObavezi()
+    On Error GoTo EH
+
+    AssertEquals "15", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_ULAZ_TUDJE, 15, "")), _
+                 "Amb obaveza: ulaz tudje ambalaze STVARA obavezu"
+    AssertEquals "-12", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_VRACANJE_TUDJE, 12, "")), _
+                 "Amb obaveza: vracanje tudje ambalaze GASI obavezu"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_IZDATA_PRAZNA, 20, "")), _
+                 "Amb obaveza: izdavanje firminih gajbi NE dira obavezu"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_UZ_ROBU, 99, "")), _
+                 "Amb obaveza: ambalaza uz robu NE dira obavezu"
+
+    ' Kontra-stav nosi MINUS doprinos originala -- jedno pravilo gasi i stanje i dug.
+    AssertEquals "-15", CStr(modAmbalazaUgovor.AmbDoprinosObavezi( _
+                         AMB_VK_ULAZ_TUDJE, 15, AMB_VK_ULAZ_TUDJE)), _
+                 "Amb obaveza: storno ulaza tudje ambalaze GASI obavezu koju je stvorio"
+    AssertEquals "12", CStr(modAmbalazaUgovor.AmbDoprinosObavezi( _
+                         AMB_VK_VRACANJE_TUDJE, 12, AMB_VK_VRACANJE_TUDJE)), _
+                 "Amb obaveza: storno vracanja VRACA obavezu koju je ugasio"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DoprinosObavezi", Err.Number, Err.description
+End Sub
+
+' AMB-INV-03 trazi JEDNOZNACNO razresenje, ne "postoji bar jedan".
+'
+' Prva verzija je proveravala samo `count = 0`, pa su dva master reda sa istim
+' ID-em prolazila -- pisac bi gajbe pripisao nalogu koji ne zna koji je. Ovo se ne
+' moze izmeriti nad izmisljenim stringom nego trazi PRAVI duplikat, pa test sam
+' seje drugi red i sklanja ga i u EH: visak u master tabeli bi oborio tudje testove.
+Private Sub Test_Amb_NalogDvosmislenPada()
+    On Error GoTo EH
+
+    Const SRC As String = "Test_Amb_NalogDvosmislenPada"
+
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dvosmislen: jedan vozac se razresava"
+
+    ' Sejanje ide ZATECENIM idiomom BFP-a (SetRequiredField + RequireAppend).
+    ' SetRowValueByColumn ovde ne moze: trazi deklarisan niz, a BlankRow vraca
+    ' goli Variant -- VBA to javlja kao Type mismatch na argumentu.
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_VOZACI)
+    SetRequiredField rowData, TBL_VOZACI, "VozacID", TEST_VOZ_ID
+    SetRequiredField rowData, TBL_VOZACI, "Ime", "AMB"
+    SetRequiredField rowData, TBL_VOZACI, "Prezime", "Dvojnik"
+    RequireAppend TBL_VOZACI, rowData, SRC
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    AssertEquals "2", CStr(redovi.count), _
+                 "Amb dvosmislen: drugi red sa istim ID-em je zasejan"
+
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                     "nije jednoznacan", vbTextCompare) > 0, _
+               "Amb dvosmislen: dva reda sa istim ID-em se ODBIJAJU, ne prolaze"
+
+    ' Brise se POSLEDNJI red sa tim ID-em -- zasejani je dopisan na kraj.
+    DeleteRow TBL_VOZACI, CLng(redovi(redovi.count))
+
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dvosmislen: posle ciscenja se opet razresava"
+    Exit Sub
+
+EH:
+    ' Visak u master tabeli ne sme da ostane iza testa.
+    On Error Resume Next
+    Dim ostatak As Collection
+    Set ostatak = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    Do While ostatak.count > 1
+        DeleteRow TBL_VOZACI, CLng(ostatak(ostatak.count))
+        Set ostatak = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    Loop
+    On Error GoTo 0
+    LogFatal "Test_Amb_NalogDvosmislenPada", Err.Number, Err.description
 End Sub
 
 ' ZALUTALA KOLONA SE VRACA NA KANONSKO MESTO -- ali NE preko tudjeg drifta.

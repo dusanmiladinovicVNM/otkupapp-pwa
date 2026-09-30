@@ -286,40 +286,83 @@ izvesti.
 | `AMBALAZA_UZ_ROBU` | gajbe putuju **sa robom** (otkup, otpremnica, prijemnica, izlaz kupcu) |
 | `IZDATA_PRAZNA` | firma zaduzuje partnera praznim gajbama |
 | `POVRAT_PRAZNE` | partner vraca prazne gajbe firmi |
-| `PRENOS_INTERNO` | izmedju sopstvenih naloga (stanica <-> firma) |
+| `PRENOS_INTERNO` | izmedju **sopstvenih** naloga: stanica <-> firma <-> **vozac** (v. 6.7a) |
 | `ULAZ_TUDJE_AMBALAZE` | partnerove gajbe ulaze u opticaj — **stvara obavezu** |
 | `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu** |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
 | `OTPIS` | lom, gubitak — izlaze iz opticaja |
-| `POCETNO_STANJE` | **firmine** gajbe zatecene kod entiteta pri uvodjenju — zaduzuje ga, **ne** stvara obavezu |
 
 Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 `STANICA_KOOPERANT` (to kazu `Od`/`Na`).
 
-> **`POCETNO_STANJE` je dodato na osnovu merenja, ne iz review-a.**
-> `GetKooperantAmbOpening` danas **ne cita nikakvo pocetno stanje** nego ga
-> sabira **iz same knjige** ([modAmbalaza.bas:358](../../src-vba/modAmbalaza.bas)).
-> U novom modelu prvi dan zato pocinje na nuli: svaka izdata gajbica bila bi
-> deficit i svaki unos bi trazio potvrdu. Zatecena kolicina mora da udje kao
-> dogadjaj.
+### 6.7a Enum je ZATVOREN — odgovori operatera (28.09.2026)
+
+Tri pitanja koja su enum drzala otvorenim su odgovorena, i nijedno ne trazi desetu
+vrednost:
+
+| Pitanje | Odgovor | Posledica |
+|---|---|---|
+| kooperant vraca gajbe **drugoj** stanici | „ne vidim sta je sporno — koop se razduzi, stanica se zaduzi, gajbe su vec u sistemu" | `POVRAT_PRAZNE`, `Od/Na` nose razliku. **Nema pravila da se vraca stanici koja je izdala** — v. nize |
+| prenos izmedju dve stanice | `PRENOS_INTERNO` pokriva; **ali stanica najcesce daje prazne VOZACU**, a direktno je redje | definicija se **siri na vozaca** |
+| kupac zadrzi gajbe i plati ih | **ne desava se za sada** | nema vrednosti; ako se pojavi, to je **nova** `VrstaKretanja`, ne `OTPIS` |
+
+> **AMB-10-ODL-6 (negativna odluka).** Povrat prazne ambalaze **nije vezan za
+> stanicu koja ju je izdala**. Pisac **ne sme** da uvede kapiju „vraca se tamo gde
+> je izdato" — kooperant se razduzuje, stanica koja primi se zaduzuje, i to je ceo
+> ugovor. Zapisano izricito jer je takva kapija prirodna greska pri implementaciji.
+
+> **AMB-10-ODL-7.** `PRENOS_INTERNO` je kretanje izmedju **sopstvenih** naloga:
+> `Stanica`, `Firma` i **`Vozac`**. Prazne gajbe sa stanice najcesce idu **vozacu**
+> pa tek onda drugoj stanici — to su **dva** `PRENOS_INTERNO` dogadjaja, ne jedan.
 >
-> **ODLUKA OPERATERA (28.09.2026).** `POCETNO_STANJE` se odnosi **iskljucivo na
-> ambalazu u vlasnistvu firme** koja je na dan uvodjenja zatecena kod entiteta za
-> koji se pocetno stanje radi. Dakle:
+> Vozac se ovde racuna kao **sopstveni** nalog i onda kad je prevoznik spoljni
+> (`tblPrevoznici`): gajbe su u transportu, dakle i dalje u opticaju firme, a ne
+> kod partnera. **Ovo je moje citanje domena, ne izmereno** — ako prevoznik treba
+> da bude partner sa svojim dugom, menja se ovaj red, ne model.
+
+### 6.7b Poravnanje ne postoji, i sezona se ne preseca
+
+> **Odgovor operatera:** „nema poravnanja". Razlaganje `KupciIzlaz`-a iz 6.11a
+> time **ostaje kako jeste**, i grupisuci dokument se **ne pravi**.
+
+**Kraj sezone.** Ko kome duguje ambalazu na kraju sezone — ili se dug **prenosi u
+narednu**, ili strana koja duguje **preda ambalazu**. Operater: „za sada to ne
+diramo, moze rucno".
+
+Posledica je bolja nego sto pitanje sugerise:
+
+| Slucaj | Sta model trazi |
+|---|---|
+| dug se prenosi u narednu sezonu | **nista** — knjiga je kontinuirana, obaveza se racuna iz svih dogadjaja i **sama prelazi** |
+| strana preda ambalazu | obican dogadjaj: `VRACANJE_TUDJE_AMBALAZE` (gasi dug) ili `POVRAT_PRAZNE` (vraca firmine) |
+
+> **ZAMKA KOJU JE ODGOVOR OTKRIO, pa je odluka otisla dalje.** „Prenos u novu
+> sezonu **pocetnim stanjem**" bi nad kontinuiranom knjigom znacio **duplo
+> stanje**: partner vec ima saldo iz prethodne sezone. `AMB-INV-04` to **ne bi
+> uhvatilo**, jer bi to bio drugi dokument.
+>
+> **ODLUKA OPERATERA (28.09.2026): `POCETNO_STANJE` NE POSTOJI.**
+>
+> I kad se skine, vidi se da nikad nije ni bilo potrebno — **ono je `NABAVKA` +
+> `IZDATA_PRAZNA`**, dva postojeca dogadjaja koja nose tacno pravo znacenje:
 >
 > ```
-> SpoljniSvet -> Entitet    POCETNO_STANJE
->   -> entitet je ZADUZEN firminim gajbama
->   -> obaveza firme prema njemu NE nastaje
+> firma ima gajbe                    SpoljniSvet -> Stanica   NABAVKA
+> partner ih drzi na dan uvodjenja   Stanica -> Kooperant     IZDATA_PRAZNA
+>   -> partner je ZADUZEN, obaveza firme NE nastaje
+>
+> partner drzi SVOJE gajbe           SpoljniSvet -> Kooperant ULAZ_TUDJE_AMBALAZE
+>   -> obaveza firme NASTAJE
 > ```
 >
-> **Posledica koju treba izgovoriti:** partnerove **sopstvene** gajbe zatecene na
-> dan uvodjenja **nisu** pocetno stanje. One ulaze kao `ULAZ_TUDJE_AMBALAZE` i
-> stvaraju obavezu — isto kao da su donete sutra. Time su dve uloge razdvojene i
-> na dan uvodjenja, ne samo u toku rada.
+> Enum time pada na **osam** vrednosti, a `AMB-INV-10` (koja je cuvala da se
+> pocetno stanje ne upise dvaput) **nestaje jer nema sta da cuva**. Jedna
+> vrednost manje, jedna invarijanta manje, isto pokrice — to je znak da je
+> pojam bio suvisan, ne da je zrtvovan.
 >
-> Zato `POCETNO_STANJE` i `ULAZ_TUDJE_AMBALAZE` ostaju dve vrednosti iako su
-> fizicki isti prenos: razlikuje ih **vlasnistvo**, a ono odlucuje o obavezi.
+> Presecanje knjige po sezoni i dalje **ne postoji**: dug prelazi sam, jer je
+> knjiga kontinuirana. Ako se ikad poželi, to je zasebna odluka sa svojim
+> dogadjajem.
 
 ### 6.8 Saldo i storno
 
@@ -375,8 +418,7 @@ ulazi u kljuc.
 
 Drugo pitanje istog kljuca: **sme li jedan dokument da proizvede dva dogadjaja sa
 istom `VrstaKretanja` i `TipAmbalaze`?** Za danasnjih devet tokova ne sme i ne
-dešava se. Ali `tblAmbalazaDokument` je genericki, pa bi jedan `POCETNO_STANJE`
-dokument nad **dva entiteta** to odmah prekrsio. Zato:
+dešava se. Ali `tblAmbalazaDokument` je genericki, pa bi jedan `NABAVKA` dokument nad **dve stanice** to odmah prekrsio. Zato:
 
 > **AMB-10-ODL-3.** Jedan `tblAmbalazaDokument` pokriva **tacno jednog
 > protivpartnera** — kao sto revers vec danas pokriva jednog kooperanta. Pocetno
@@ -680,12 +722,13 @@ je obrisao S3-ostatak. Ali:
 | 4 | podela pri prekomernom vracanju (12 + 8) · razlaganje `KupciIzlaz`-a na **jedan revers** i **jednu kasu** | prihvaceno — 6.9, 6.11a |
 | 5 | zajednicki composer/TX je i dalje sprega | **prihvaceno** — dve nezavisne operacije, svaka sa svojom TX (6.11a) |
 | 5 | premisa „nikad isti broj" | **operater je presudio: postojalo je, ali je bilo GRESKA.** Postaje `AMB-10-ODL-5`, a merenje po njemu odmah nalazi **drugi, ogledalni prekrsaj** — `SaveOMUlaz_TX` |
-| 3 | `Firma` = **jedan** nalog; `POCETNO_STANJE` dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a |
-| — | `POCETNO_STANJE` | **dodato iz merenja**, nije trazeno: `GetKooperantAmbOpening` pocetno stanje izvodi iz knjige, pa bi prvi dan bio zid potvrda |
+| 3 | `Firma` = **jedan** nalog; pocetno stanje dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a. Samo pocetno stanje je kasnije **ukinuto** (krug 6) |
+| — | `POCETNO_STANJE` | dodato iz merenja, pa **ukinuto u krugu 6**: ono je `NABAVKA` + `IZDATA_PRAZNA`, dakle suvisan pojam — 6.7b |
+| 6 | enum zatvoren; `PRENOS_INTERNO` obuhvata vozaca; **pocetno stanje ukinuto** | odgovori operatera — 6.7a, 6.7b |
 
 ### 6.12a Ambalazni dokument — jedan, za sve sto svoj nema
 
-> **Odluka operatera (28.09.2026): `POCETNO_STANJE` dobija dokument.**
+> **Odluka operatera (28.09.2026):** dogadjaji ambalaze koji nemaju svoj poslovni dokument **dobijaju ga**.
 > Pitanje je bilo uze, ali odgovor je izvukao nalaz koji ga cini sirim.
 
 > **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — **kupac -> firma**. Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
@@ -708,7 +751,7 @@ Skica (finalizuje je `10a`):
 ```
 tblAmbalazaDokument
   AmbDokID         identitet -> ide u tblAmbalaza.DokumentID
-  Vrsta            REVERS | POCETNO_STANJE | NABAVKA | OTPIS
+  Vrsta            REVERS | NABAVKA | OTPIS
   BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
   Datum
   StanicaID        kontekst nastanka
@@ -723,7 +766,7 @@ append-only. Dve razlicite stvari, dva razlicita ugovora — i to mora da stoji
 napisano, jer su u istoj temi.
 
 **Prosirenje koje sam ja izveo, i izgovaram ga da bi se moglo oboriti:**
-odluka je trazena za `POCETNO_STANJE`, ali `NABAVKA` i `OTPIS` su **ista klasa** —
+odluka je trazena za jedan slucaj, ali `NABAVKA` i `OTPIS` su **ista klasa** —
 dogadjaji bez izvornog dokumenta — pa bi im izuzetak od `AMB-INV-08` bio jedini
 alternativni odgovor. Izuzetak u invarijanti je tacno ono sto ovaj rez uklanja iz
 `Chk_B10`, pa ih vodim istim putem. Ako je za neku od njih poslovni odgovor
@@ -735,14 +778,14 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 |---|---|
 | otkup, otpremnica, prijemnica | vec postoji |
 | ~~`KupciIzlaz`~~ | **nije dokument** — revers + uplata (6.11) |
-| **revers** (stanica <-> kooperant, stanica <-> firma, **kupac -> firma**), pocetno stanje, nabavka, otpis | **`tblAmbalazaDokument`** |
+| **revers** (stanica <-> kooperant, stanica <-> firma, **kupac -> firma**), nabavka, otpis | **`tblAmbalazaDokument`** |
 
 `AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
-2. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, pocetno stanje, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
+2. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
 3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze. **Ukljucuje razlaganje OBA slozena pisca** (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina odlazi u kasu.
 4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
 5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
