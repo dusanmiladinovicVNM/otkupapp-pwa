@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "8C488AA1"
+Public Const SCHEMA_FINGERPRINT As String = "94610F5D"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -661,6 +661,11 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    Set reg("tblAmbalazaDokument") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
     k("BarKod") = "text"
     Set reg("tblArtikli") = k
 
@@ -849,6 +854,7 @@ Private Function BuildRegistry() As Object
     reg.CompareMode = vbTextCompare
 
     SpecAmbalaza reg
+    SpecAmbalazaDokument reg
     SpecArtikli reg
     SpecBankaImport reg
     SpecCenovnik reg
@@ -919,6 +925,23 @@ Private Sub SpecAmbalaza(ByVal reg As Object)
     k.Add "ModifiedBy"
     k.Add "ReversID"
     RegistrujTabelu reg, TBL_AMBALAZA, "Ambalaza", k
+End Sub
+
+Private Sub SpecAmbalazaDokument(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "AmbDokID"
+    k.Add "Vrsta"
+    k.Add "BrojDokumenta"
+    k.Add "Datum"
+    k.Add "StanicaID"
+    k.Add "Napomena"
+    k.Add "Stornirano"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_AMBALAZA_DOKUMENT, "AmbalazaDokument", k
 End Sub
 
 Private Sub SpecArtikli(ByVal reg As Object)

@@ -27,7 +27,8 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
     "|" & TBL_BANKA_IMPORT & "|" & TBL_AMBALAZA & "|" & TBL_CENOVNIK & _
     "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA & "|" & TBL_PRERADA & _
     "|" & TBL_PRERADA_STAVKA & _
-    "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & "|"
+    "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & _
+    "|" & TBL_AMBALAZA_DOKUMENT & "|"
 
 ' Tabele koje storno pojam NEMAJU. Prolaz kroz filter je za njih tacan ishod,
 ' ne propust, i navedene su izricito da se "nije u spisku" ne bi moglo

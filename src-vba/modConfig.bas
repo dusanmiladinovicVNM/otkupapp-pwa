@@ -46,6 +46,7 @@ Public Const TBL_OTPREMNICA_STAVKE As String = "tblOtpremnicaStavke"
 Public Const TBL_OTPREMNICA_IZVORI As String = "tblOtpremnicaIzvori"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
 Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
+Public Const TBL_AMBALAZA_DOKUMENT As String = "tblAmbalazaDokument"
 Public Const TBL_ZBIRNA_IZVORI As String = "tblZbirnaIzvori"
 Public Const TBL_PRIJEMNICA As String = "tblPrijemnica"
 Public Const TBL_FAKTURE As String = "tblFakture"
@@ -329,6 +330,30 @@ Public Const COL_ZBS_RB As String = "RedniBroj"
 Public Const COL_ZBS_KLASA As String = "Klasa"
 Public Const COL_ZBS_KOLICINA As String = "Kolicina"
 Public Const COL_ZBS_KOL_AMB As String = "KolAmbalaze"
+
+' --- tblAmbalazaDokument (AMB-10-DOK) ---
+'
+' Dokument za ambalazne dogadjaje koji nemaju svoj poslovni dokument: revers,
+' nabavka, otpis. Njegov AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID
+' prestaje da bude drugi, paralelan identitet -- ne brise se nego POSTAJE ovo.
+'
+' DOKUMENT NIJE KNJIGA. Zaglavlje sme da nosi Stornirano i Modified*, jer je
+' zaglavlje; knjiga (tblAmbalaza) je append-only i storno joj je kontra-stav.
+' Dva razlicita ugovora u istoj temi, i zato stoje napisani jedan uz drugi.
+'
+' STRANE DOGADJAJA NISU OVDE. Njih nosi svaki red knjige (Od/Na), pa bi kopija
+' na zaglavlju bila DRUGA ISTINA koja moze da se razidje sa redovima.
+' AMB-10-ODL-3 (jedan dokument = jedan protivpartner) je zato invarijanta NAD
+' REDOVIMA i meri se u 10b, kad redovi postoje.
+'
+' StanicaID OSTAJE, i nije izuzetak od toga: ona nije strana dogadjaja nego
+' OPSEG JEDINSTVENOSTI BROJA -- modBrojevi trazi slobodan broj po (stanica, dan).
+Public Const COL_AMBD_ID As String = "AmbDokID"
+Public Const COL_AMBD_VRSTA As String = "Vrsta"
+Public Const COL_AMBD_BROJ As String = "BrojDokumenta"
+Public Const COL_AMBD_DATUM As String = "Datum"
+Public Const COL_AMBD_STANICA As String = "StanicaID"
+Public Const COL_AMBD_NAPOMENA As String = "Napomena"
 
 ' --- Spaltennamen tblPrijemnica (NEU) ---
 Public Const COL_PRJ_ID As String = "PrijemnicaID"

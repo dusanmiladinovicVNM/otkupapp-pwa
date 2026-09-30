@@ -619,7 +619,7 @@ klasifikacija:
 | Klasa | Dokumenti | Nosi | Identitet traga |
 |---|---|---|---|
 | **robni** | otkup, otpremnica, **zbirna**, prijemnica | **robu**; ambalaza (i novac kod otkupa) su njegove **posledice** | `OtkupID` · `OtpremnicaID` · `ZbirnaID` · `PrijemnicaID` |
-| **ambalazni** | revers, pocetno stanje, nabavka, otpis | **samo** ambalazu | `AmbDokID` |
+| **ambalazni** | revers, nabavka, otpis | **samo** ambalazu | `AmbDokID` |
 | **novcani** | uplata / isplata (kasa) | **samo** novac | `tblNovac` + `fakturaID` |
 
 > **AMB-10-ODL-5 (puno).** Dokument pripada **tacno jednoj** klasi. Robni dokument
@@ -754,11 +754,33 @@ tblAmbalazaDokument
   Vrsta            REVERS | NABAVKA | OTPIS
   BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
   Datum
-  StanicaID        kontekst nastanka
+  StanicaID        OPSEG JEDINSTVENOSTI BROJA, ne strana dogadjaja
   Napomena
   Stornirano       dokument je dokument -- STORNO_REGISTAR ga ocekuje
   CreatedAt/By, ModifiedAt/By
 ```
+
+> **Upisano u kanon u `AMB-10-DOK`**: 11 kolona, otisak seme `8C488AA1` ->
+> `94610F5D`, tabela u `STORNO_TABELE`, vlasnik `modAmbalaza`.
+>
+> **STRANE DOGADJAJA NISU NA ZAGLAVLJU, i to je odluka.** Prvi nacrt je imao
+> `NalogTip`/`NalogID` (protivpartner), da bi `AMB-10-ODL-3` bio strukturan. Ali
+> svaki red knjige vec nosi **obe** strane (`Od`/`Na`), pa bi kopija na zaglavlju
+> bila **druga istina** — a ovaj rez postoji da se takve uklone.
+> `AMB-10-ODL-3` je zato invarijanta **nad redovima** i meri se u `10b`.
+>
+> `StanicaID` nije izuzetak: ona nije strana dogadjaja nego opseg u kom broj mora
+> biti jedinstven (`modBrojevi` trazi slobodan broj po stanici i danu).
+>
+> **Format broja je pinovan kao tekst**, i to je trazila sama kapija kanona:
+> `BrojDokumenta` je pod ugovorom u cetiri tabele, a kolona u General formatu tiho
+> pretvara `1/011026` u datum — u trenutku upisa, pa se steta ne vidi kasnije.
+>
+> **Veza dokument <-> kretanje je kodirana** (`AmbDokDozvoljavaKretanje`): revers
+> nosi izdavanje, povrat, sopstveni prenos i vracanje tudje; nabavka nosi nabavku;
+> otpis nosi otpis. `AMBALAZA_UZ_ROBU` nikad nije ovde — ona putuje sa robom.
+> Pokrice deficita (`ULAZ_TUDJE_AMBALAZE`) je izuzetak i sme uz **svaki** dokument,
+> jer nije vrsta posla nego posledica `AMB-INV-07`.
 
 Dokument **nije** knjiga: on sme da nosi `Stornirano` i `Modified*`, jer je
 zaglavlje. Njegov storno upisuje **kontra-stavove** u knjigu; knjiga ostaje

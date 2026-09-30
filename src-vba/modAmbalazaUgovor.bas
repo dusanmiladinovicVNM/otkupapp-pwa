@@ -57,6 +57,13 @@ Public Const AMB_VK_VRACANJE_TUDJE As String = "VRACANJE_TUDJE_AMBALAZE"
 Public Const AMB_VK_NABAVKA As String = "NABAVKA"
 Public Const AMB_VK_OTPIS As String = "OTPIS"
 
+' Vrsta AMBALAZNOG DOKUMENTA (AMB-10-DOK) -- zatvoren enum, tri vrednosti.
+' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
+' KRETANJA. Vezu medju njima drzi AmbDokDozvoljavaKretanje.
+Public Const AMB_DOK_REVERS As String = "REVERS"
+Public Const AMB_DOK_NABAVKA As String = "NABAVKA"
+Public Const AMB_DOK_OTPIS As String = "OTPIS"
+
 ' ============================================================
 ' KLASE NALOGA -- azbuka matrice ispod
 ' ============================================================
@@ -207,6 +214,94 @@ Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As Stri
                           CStr(n) & " reda u " & tbl & "."
     End If
 End Function
+
+' ============================================================
+' AMBALAZNI DOKUMENT -- vrsta i zaglavlje (AMB-10-DOK)
+' ============================================================
+'
+' tblAmbalazaDokument nosi dogadjaje koji nemaju svoj poslovni dokument. Njegov
+' AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID prestaje da bude drugi,
+' paralelan identitet -- ne brise se nego POSTAJE ovo.
+Public Function AmbDokVrsteSve() As Variant
+    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
+End Function
+
+Public Function AmbDokVrstaPoznata(ByVal vrsta As String) As Boolean
+    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)
+End Function
+
+' KOJE KRETANJE SME NA KOM DOKUMENTU.
+'
+' Bez ovoga bi 10b morao da pretpostavi, a pretpostavka bi prosla tiho: NABAVKA
+' okacena na revers izgledala bi kao uredan zapis.
+'
+'   REVERS   -> IZDATA_PRAZNA, POVRAT_PRAZNE, PRENOS_INTERNO, VRACANJE_TUDJE
+'   NABAVKA  -> NABAVKA
+'   OTPIS    -> OTPIS
+'
+' AMBALAZA_UZ_ROBU nikad nije ovde -- ona putuje sa robom, pa joj je izvorni
+' dokument otkup, otpremnica ili prijemnica.
+'
+' ULAZ_TUDJE_AMBALAZE je izuzetak i sme UZ SVAKI dokument: ono nije vrsta posla
+' nego POKRICE DEFICITA (AMB-INV-07), pa nastaje svuda gde bi realan nalog pao
+' ispod nule -- i uz otkup i uz revers.
+Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
+                                         ByVal vrstaKretanja As String) As Boolean
+    If StrComp(Trim$(vrstaKretanja), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
+        AmbDokDozvoljavaKretanje = True      ' pokrice deficita ide svuda
+        Exit Function
+    End If
+
+    Select Case Trim$(dokVrsta)
+        Case AMB_DOK_REVERS
+            Select Case Trim$(vrstaKretanja)
+                Case AMB_VK_IZDATA_PRAZNA, AMB_VK_POVRAT_PRAZNE, _
+                     AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE
+                    AmbDokDozvoljavaKretanje = True
+            End Select
+        Case AMB_DOK_NABAVKA
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_NABAVKA, vbTextCompare) = 0)
+        Case AMB_DOK_OTPIS
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_OTPIS, vbTextCompare) = 0)
+    End Select
+End Function
+
+' ZAGLAVLJE DOKUMENTA -- provera pre upisa. Vraca "" ili imenovan razlog.
+'
+' Stanica nije strana dogadjaja nego OPSEG JEDINSTVENOSTI BROJA (modBrojevi trazi
+' slobodan broj po stanici i danu), pa se proverava kad je data. Da li je obavezna
+' po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom.
+Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
+                              ByVal datum As Date, ByVal stanicaID As String) As String
+    If Not AmbDokVrstaPoznata(vrsta) Then
+        AmbDokProblem = "Nepoznata vrsta ambalaznog dokumenta: '" & Trim$(vrsta) & "'."
+        Exit Function
+    End If
+
+    If Len(Trim$(broj)) = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema broj."
+        Exit Function
+    End If
+
+    If datum = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema datum."
+        Exit Function
+    End If
+
+    If Len(Trim$(stanicaID)) > 0 Then
+        Dim p As String
+        p = AmbNalogProblem(AMB_NALOG_STANICA, stanicaID)
+        If Len(p) > 0 Then AmbDokProblem = "Stanica dokumenta: " & p
+    End If
+End Function
+
+Public Sub RequireAmbDok(ByVal vrsta As String, ByVal broj As String, _
+                         ByVal datum As Date, ByVal stanicaID As String, _
+                         ByVal sourceName As String)
+    Dim p As String
+    p = AmbDokProblem(vrsta, broj, datum, stanicaID)
+    If Len(p) > 0 Then Err.Raise vbObjectError + 4451, sourceName, p
+End Sub
 
 ' ============================================================
 ' MATRICA: koja klasa naloga sme na kojoj strani, po vrsti kretanja

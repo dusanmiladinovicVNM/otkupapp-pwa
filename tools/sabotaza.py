@@ -4961,6 +4961,32 @@ SABOTAZE = {
         "Test_Amb_UgovorPrenosa",
         "Amb matrica: svaka vrsta ima definisane klase obe strane",
     ),
+    # AMB-10-DOK: vrsta dokumenta je zatvoren enum. Otvorena bi propustila i
+    # POCETNO_STANJE, pojam koji je namerno ukinut.
+    "amb-dok-vrsta-otvorena": (
+        "modAmbalazaUgovor.bas",
+        "    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)\n",
+        "    AmbDokVrstaPoznata = True   ' SABOTAZA: svaka vrsta prolazi\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji",
+    ),
+    # Veza dokument <-> kretanje: bez nje bi NABAVKA visila na reversu i
+    # izgledala kao uredan zapis.
+    "amb-dok-kretanje-bilo-gde": (
+        "modAmbalazaUgovor.bas",
+        "    If StrComp(Trim$(vrstaKretanja), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then\n",
+        "    If True Then   ' SABOTAZA: svako kretanje sme na svakom dokumentu\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: nabavka NE sme da visi na reversu",
+    ),
+    # Zaglavlje bez broja nije dokument nego red bez identiteta prema spolja.
+    "amb-dok-zaglavlje-bez-broja": (
+        "modAmbalazaUgovor.bas",
+        "    If Len(Trim$(broj)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: dokument sme bez broja\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: bez broja je odbijen",
+    ),
     "amb-nalog-ne-razresava": (
         "modAmbalazaUgovor.bas",
         "    If n = 0 Then\n",
