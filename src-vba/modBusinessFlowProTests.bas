@@ -9080,8 +9080,12 @@ Private Sub Test_OTP_F8StornoPoID()
     ' Potvrda opisuje BAS B: njena kilaza, ne zbir oba dokumenta istog broja.
     Dim opis As String
     opis = modStornoDok.DokumentOpis(STIP_OTPREMNICA, broj, "", idB)
+    ' NEGATIVNA TVRDNJA MORA BITI USIDRENA. Golo "650" pogadja i BROJ
+    ' DOKUMENTA (npr. ...-1650), pa je tvrdnja pucala bez ijedne poslovne
+    ' greske cim bi brojac pao na takav broj. Meri se kilaza, pa i sidro
+    ' mora da bude kilaza.
     AssertTrue InStr(1, opis, "250 kg", vbTextCompare) > 0 And _
-               InStr(1, opis, "650", vbTextCompare) = 0, _
+               InStr(1, opis, "650 kg", vbTextCompare) = 0, _
                "OTP F8: potvrda pokazuje samo B kg (bilo: " & opis & ")"
 
     Dim poruka As String

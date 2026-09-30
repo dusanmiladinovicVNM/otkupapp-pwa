@@ -58,6 +58,19 @@ Public Const AMB_VK_NABAVKA As String = "NABAVKA"
 Public Const AMB_VK_OTPIS As String = "OTPIS"
 
 ' ============================================================
+' KLASE NALOGA -- azbuka matrice ispod
+' ============================================================
+'
+'   GRANICA    SpoljniSvet i nista drugo
+'   SOPSTVENI  Stanica, Firma, Vozac -- unutar firme
+'   PARTNER    Kooperant, Kupac -- druga strana posla
+'   REALAN     bilo koji nosilac salda (sve osim granice)
+Public Const AMB_KLASA_GRANICA As String = "GRANICA"
+Public Const AMB_KLASA_SOPSTVENI As String = "SOPSTVENI"
+Public Const AMB_KLASA_PARTNER As String = "PARTNER"
+Public Const AMB_KLASA_REALAN As String = "REALAN"
+
+' ============================================================
 ' ZATVORENE LISTE -- jedan izvor, da se citalac i test ne razidju
 ' ============================================================
 
@@ -196,20 +209,84 @@ Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As Stri
 End Function
 
 ' ============================================================
-' GRANICA OPTICAJA -- gde SpoljniSvet sme da stoji
+' MATRICA: koja klasa naloga sme na kojoj strani, po vrsti kretanja
 ' ============================================================
 '
-' Ambalaza nastaje i nestaje iz opticaja SAMO kroz tri vrste kretanja, i uvek na
-' tacno odredjenoj strani. Bez ovoga bi granica mogla da se pojavi bilo gde i
-' "gubitak" bi izgledao kao obican prenos.
-Public Function AmbGranicaSmeKaoOd(ByVal vrsta As String) As Boolean
+' CEO ugovor o stranama stoji OVDE, u jednoj tabeli. Ranije je bio razbacan po
+' sest If blokova, i svaki je tvrdio SAMO jedan smer implikacije -- pa je sest
+' puta zaredom nadjeno da komplement prolazi (granica u jednom smeru,
+' PRENOS_INTERNO bez klasa, obaveza bez partnera, izdavanje i povrat bez ikakvih
+' klasa). Matrica taj oblik greske cini nemogucim: strana koja nije navedena ne
+' postoji, a vrsta bez reda pada na kapiji potpunosti (AmbMatricaNepotpuna).
+'
+'   vrsta                      | Od         | Na
+'   ---------------------------|------------|------------
+'   AMBALAZA_UZ_ROBU           | REALAN     | REALAN
+'   IZDATA_PRAZNA              | SOPSTVENI  | PARTNER
+'   POVRAT_PRAZNE              | PARTNER    | SOPSTVENI
+'   PRENOS_INTERNO             | SOPSTVENI  | SOPSTVENI
+'   ULAZ_TUDJE_AMBALAZE        | GRANICA    | PARTNER
+'   VRACANJE_TUDJE_AMBALAZE    | SOPSTVENI  | PARTNER
+'   NABAVKA                    | GRANICA    | SOPSTVENI
+'   OTPIS                      | REALAN     | GRANICA
+'
+' NABAVKA ide na SOPSTVENI, ne na partnera: nove gajbe ulaze u firmu, pa se
+' partneru IZDAJU (IZDATA_PRAZNA). Direktno `SpoljniSvet -> Kooperant NABAVKA`
+' preskocilo bi cin izdavanja, a s njim i zaduzenje partnera.
+'
+' OTPIS sme sa BILO KOG realnog naloga: gajbica se moze polomiti i kod
+' kooperanta, ne samo na stanici. Da li partner tada duguje naknadu je poslovno
+' pitanje, ne knjigovodstveno.
+Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
     Select Case Trim$(vrsta)
-        Case AMB_VK_ULAZ_TUDJE, AMB_VK_NABAVKA: AmbGranicaSmeKaoOd = True
+        Case AMB_VK_UZ_ROBU
+            AmbKlaseVrste = Array(AMB_KLASA_REALAN, AMB_KLASA_REALAN)
+        Case AMB_VK_IZDATA_PRAZNA
+            AmbKlaseVrste = Array(AMB_KLASA_SOPSTVENI, AMB_KLASA_PARTNER)
+        Case AMB_VK_POVRAT_PRAZNE
+            AmbKlaseVrste = Array(AMB_KLASA_PARTNER, AMB_KLASA_SOPSTVENI)
+        Case AMB_VK_PRENOS_INTERNO
+            AmbKlaseVrste = Array(AMB_KLASA_SOPSTVENI, AMB_KLASA_SOPSTVENI)
+        Case AMB_VK_ULAZ_TUDJE
+            AmbKlaseVrste = Array(AMB_KLASA_GRANICA, AMB_KLASA_PARTNER)
+        Case AMB_VK_VRACANJE_TUDJE
+            AmbKlaseVrste = Array(AMB_KLASA_SOPSTVENI, AMB_KLASA_PARTNER)
+        Case AMB_VK_NABAVKA
+            AmbKlaseVrste = Array(AMB_KLASA_GRANICA, AMB_KLASA_SOPSTVENI)
+        Case AMB_VK_OTPIS
+            AmbKlaseVrste = Array(AMB_KLASA_REALAN, AMB_KLASA_GRANICA)
+        Case Else
+            AmbKlaseVrste = Array()
     End Select
 End Function
 
-Public Function AmbGranicaSmeKaoNa(ByVal vrsta As String) As Boolean
-    AmbGranicaSmeKaoNa = (StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) = 0)
+' Pripada li nalog trazenoj klasi.
+Public Function AmbNalogUKlasi(ByVal klasa As String, ByVal tip As String) As Boolean
+    Select Case Trim$(klasa)
+        Case AMB_KLASA_GRANICA
+            AmbNalogUKlasi = (StrComp(Trim$(tip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
+        Case AMB_KLASA_SOPSTVENI
+            AmbNalogUKlasi = AmbNalogSopstveni(tip)
+        Case AMB_KLASA_PARTNER
+            AmbNalogUKlasi = AmbNalogPartner(tip)
+        Case AMB_KLASA_REALAN
+            AmbNalogUKlasi = AmbNalogTipPoznat(tip) And _
+                             (StrComp(Trim$(tip), AMB_NALOG_SPOLJNI, vbTextCompare) <> 0)
+    End Select
+End Function
+
+' KAPIJA POTPUNOSTI: nijedna vrsta ne sme da ostane bez reda u matrici.
+'
+' Bez ovoga bi deveta vrsta dodata u enum tiho prolazila kroz sve provere strana.
+' Vraca "" kad je matrica potpuna, inace imena vrsta koje fale.
+Public Function AmbMatricaNepotpuna() As String
+    Dim sve As Variant, i As Long, klase As Variant, fale As String
+    sve = AmbVrsteSve()
+    For i = LBound(sve) To UBound(sve)
+        klase = AmbKlaseVrste(CStr(sve(i)))
+        If UBound(klase) < 1 Then fale = fale & " " & CStr(sve(i))
+    Next i
+    AmbMatricaNepotpuna = Trim$(fale)
 End Function
 
 ' ============================================================
@@ -259,80 +336,27 @@ Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
         Exit Function
     End If
 
-    ' GRANICA OPTICAJA -- ekvivalencija, ne jednosmerna implikacija.
+    ' KLASE STRANA -- iz matrice, oba smera odjednom.
     '
-    ' Prva verzija je proveravala samo "ako je SpoljniSvet tu, vrsta mora biti X".
-    ' Komplement je prolazio: `Stanica -> Kooperant, NABAVKA` je bio validan, iako
-    ' ugovor kaze da tim dogadjajem ambalaza ULAZI u opticaj. Zato se svaki uslov
-    ' izgovara kao "vazi tacno tada i nikad inace".
-    Dim odJeGranica As Boolean, naJeGranica As Boolean
-    odJeGranica = (StrComp(Trim$(odTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
-    naJeGranica = (StrComp(Trim$(naTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
-
-    If AmbGranicaSmeKaoOd(vrsta) And Not odJeGranica Then
-        AmbPrenosProblem = "'" & Trim$(vrsta) & "' mora imati " & AMB_NALOG_SPOLJNI & _
-                           " kao izvor -- tom vrstom ambalaza ULAZI u opticaj."
+    ' Ovde je ranije stajalo sest If blokova, svaki sa svojim smerom implikacije.
+    ' Matrica ih zamenjuje: sta nije navedeno, ne prolazi.
+    Dim klase As Variant
+    klase = AmbKlaseVrste(vrsta)
+    If UBound(klase) < 1 Then
+        ' Vrsta je u enumu a nema red u matrici -- kvar ugovora, ne podatka.
+        AmbPrenosProblem = "Vrsta '" & Trim$(vrsta) & "' nema definisane klase strana."
         Exit Function
     End If
 
-    If odJeGranica And Not AmbGranicaSmeKaoOd(vrsta) Then
-        AmbPrenosProblem = AMB_NALOG_SPOLJNI & " kao izvor nije dozvoljen za '" & _
-                           Trim$(vrsta) & "' -- ambalaza ulazi u opticaj samo kao " & _
-                           AMB_VK_ULAZ_TUDJE & " ili " & AMB_VK_NABAVKA & "."
+    If Not AmbNalogUKlasi(CStr(klase(0)), odTip) Then
+        AmbPrenosProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(0)) & _
+                           " kao IZVOR, a dobio je " & Trim$(odTip) & "."
         Exit Function
     End If
 
-    If AmbGranicaSmeKaoNa(vrsta) And Not naJeGranica Then
-        AmbPrenosProblem = "'" & Trim$(vrsta) & "' mora imati " & AMB_NALOG_SPOLJNI & _
-                           " kao odrediste -- tom vrstom ambalaza IZLAZI iz opticaja."
-        Exit Function
-    End If
-
-    If naJeGranica And Not AmbGranicaSmeKaoNa(vrsta) Then
-        AmbPrenosProblem = AMB_NALOG_SPOLJNI & " kao odrediste nije dozvoljen za '" & _
-                           Trim$(vrsta) & "' -- iz opticaja se izlazi samo kao " & _
-                           AMB_VK_OTPIS & "."
-        Exit Function
-    End If
-
-    ' PRENOS_INTERNO je po definiciji izmedju SOPSTVENIH naloga (AMB-10-ODL-7).
-    ' Bez ovoga bi `Kooperant -> Kupac, PRENOS_INTERNO` prosao kroz centralnu
-    ' kapiju sa potpuno pogresnim poslovnim znacenjem.
-    If StrComp(Trim$(vrsta), AMB_VK_PRENOS_INTERNO, vbTextCompare) = 0 Then
-        If Not (AmbNalogSopstveni(odTip) And AmbNalogSopstveni(naTip)) Then
-            AmbPrenosProblem = AMB_VK_PRENOS_INTERNO & " ide samo izmedju sopstvenih " & _
-                               "naloga (Stanica, Firma, Vozac) -- dobio: " & _
-                               Trim$(odTip) & " -> " & Trim$(naTip) & "."
-            Exit Function
-        End If
-    End If
-
-    ' VRSTE KOJE DIRAJU OBAVEZU MORAJU IMATI PARTNERA NA PARTNERSKOJ STRANI.
-    '
-    ' Nije trazeno u review-u nego je ista klasa: Obaveza(partner, tip) se racuna
-    ' PO PARTNERU, pa `SpoljniSvet -> Stanica, ULAZ_TUDJE_AMBALAZE` nema kome da
-    ' pripise dug. Stanica i vozac nisu partneri -- firma sebi ne duguje.
-    If StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
-        If Not AmbNalogPartner(naTip) Then
-            AmbPrenosProblem = AMB_VK_ULAZ_TUDJE & " trazi PARTNERA kao odrediste " & _
-                               "(Kooperant ili Kupac) -- inace obaveza nema kome da se " & _
-                               "pripise. Dobio: " & Trim$(naTip) & "."
-            Exit Function
-        End If
-    End If
-
-    If StrComp(Trim$(vrsta), AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
-        If Not AmbNalogPartner(naTip) Then
-            AmbPrenosProblem = AMB_VK_VRACANJE_TUDJE & " trazi PARTNERA kao odrediste " & _
-                               "-- firma vraca gajbe onome od koga ih je uzela. Dobio: " & _
-                               Trim$(naTip) & "."
-            Exit Function
-        End If
-        If Not AmbNalogSopstveni(odTip) Then
-            AmbPrenosProblem = AMB_VK_VRACANJE_TUDJE & " ide sa SOPSTVENOG naloga -- " & _
-                               "dobio: " & Trim$(odTip) & "."
-            Exit Function
-        End If
+    If Not AmbNalogUKlasi(CStr(klase(1)), naTip) Then
+        AmbPrenosProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(1)) & _
+                           " kao ODREDISTE, a dobio je " & Trim$(naTip) & "."
     End If
 End Function
 
