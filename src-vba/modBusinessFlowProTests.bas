@@ -16541,62 +16541,81 @@ Private Sub Test_Amb_UgovorPrenosa()
                      10, "", AMB_VK_IZDATA_PRAZNA), "Tip ambalaze", vbTextCompare) > 0, _
                "Amb prenos: bez tipa ambalaze je odbijen -- stanje se vodi PO TIPU"
 
-    ' --- GRANICA OPTICAJA ------------------------------------------------
-    ' SpoljniSvet nije partner nego granica: ambalaza ulazi samo kao ULAZ_TUDJE ili
-    ' NABAVKA, a izlazi samo kao OTPIS. Bez ovoga bi gubitak izgledao kao prenos.
-    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
-                     15, "G", AMB_VK_ULAZ_TUDJE), _
-                 "Amb granica: tudja ambalaza ulazi iz SpoljnogSveta"
-    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
-                     15, "G", AMB_VK_POVRAT_PRAZNE), "kao izvor", vbTextCompare) > 0, _
-               "Amb granica: SpoljniSvet kao izvor povrata je odbijen"
-    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_SPOLJNI, "", _
-                     3, "G", AMB_VK_OTPIS), _
-                 "Amb granica: otpis izlazi u SpoljniSvet"
-    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_SPOLJNI, "", _
-                     3, "G", AMB_VK_IZDATA_PRAZNA), "kao odrediste", vbTextCompare) > 0, _
-               "Amb granica: SpoljniSvet kao odrediste izdavanja je odbijen"
+    ' --- MATRICA STRANA ---------------------------------------------------
+    '
+    ' Svaka vrsta kretanja izgovara klasu OBE strane. Ranije je to bilo sest If
+    ' blokova sa po jednim smerom implikacije, i sest puta je nadjeno da
+    ' komplement prolazi. Zato se ovde meri i sta PROLAZI i sta PADA.
+    AssertEquals "", modAmbalazaUgovor.AmbMatricaNepotpuna(), _
+                 "Amb matrica: svaka vrsta ima definisane klase obe strane"
 
-    ' --- GRANICA VAZI U OBA SMERA ----------------------------------------
-    ' Prva verzija je tvrdila samo "ako je SpoljniSvet tu, vrsta mora biti X", pa
-    ' je komplement prolazio: NABAVKA bez granice je bila validna.
-    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
-                     10, "G", AMB_VK_NABAVKA), "mora imati", vbTextCompare) > 0, _
-               "Amb granica: NABAVKA bez SpoljnogSveta kao izvora je odbijena"
-    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
-                     3, "G", AMB_VK_OTPIS), "mora imati", vbTextCompare) > 0, _
-               "Amb granica: OTPIS bez SpoljnogSveta kao odredista je odbijen"
-
-    ' --- PRENOS_INTERNO IDE SAMO MEDJU SOPSTVENIM NALOZIMA -----------------
+    ' Prolazi -- po jedan predstavnik svake vrste.
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_VOZAC, TEST_VOZ_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), _
+                 "Amb matrica: vozac -> kupac, izdate prazne, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kooperant -> stanica, povrat praznih, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kupac -> vozac, povrat praznih, prolazi"
     AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
                      AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
                      20, "G", AMB_VK_PRENOS_INTERNO), _
-                 "Amb interno: stanica -> vozac je sopstveni prenos (AMB-10-ODL-7)"
+                 "Amb matrica: stanica -> vozac je sopstveni prenos (AMB-10-ODL-7)"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     15, "G", AMB_VK_ULAZ_TUDJE), _
+                 "Amb matrica: tudja ambalaza ulazi iz SpoljnogSveta ka partneru"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                     100, "G", AMB_VK_NABAVKA), _
+                 "Amb matrica: nabavka ulazi iz SpoljnogSveta na sopstveni nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_SPOLJNI, "", _
+                     3, "G", AMB_VK_OTPIS), _
+                 "Amb matrica: otpis sme i kod partnera -- gajbica se lomi i tamo"
+
+    ' Pada -- ista vrsta, pogresna klasa strane. Poruka imenuje KOJU stranu.
     AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
                      AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
-                     20, "G", AMB_VK_PRENOS_INTERNO), "sopstvenih", vbTextCompare) > 0, _
-               "Amb interno: kooperant -> kupac NIJE sopstveni prenos"
-
-    ' --- OBAVEZA TRAZI PARTNERA NA PARTNERSKOJ STRANI ----------------------
-    ' Obaveza se racuna PO PARTNERU, pa dug prema stanici nema kome da se pripise.
+                     10, "G", AMB_VK_IZDATA_PRAZNA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant NE moze da izda prazne -- izvor nije sopstveni"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: stanica -> vozac NIJE povrat -- izvor nije partner"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     20, "G", AMB_VK_PRENOS_INTERNO), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant -> kupac NIJE sopstveni prenos"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: nabavka NE ide direktno partneru -- preskocila bi izdavanje"
     AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
                      AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
-                     15, "G", AMB_VK_ULAZ_TUDJE), "PARTNERA", vbTextCompare) > 0, _
-               "Amb obaveza: ulaz tudje ambalaze ka stanici je odbijen -- firma sebi ne duguje"
+                     15, "G", AMB_VK_ULAZ_TUDJE), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: ulaz tudje ambalaze ka stanici je odbijen -- firma sebi ne duguje"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: nabavka bez granice kao izvora je odbijena"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     3, "G", AMB_VK_OTPIS), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: otpis bez granice kao odredista je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     12, "G", AMB_VK_VRACANJE_TUDJE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: vracanje tudje ambalaze sa partnerovog naloga je odbijeno"
     AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
                      AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
                      12, "G", AMB_VK_VRACANJE_TUDJE), _
-                 "Amb obaveza: vracanje tudje ambalaze stanica -> kooperant prolazi"
-    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
-                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
-                     12, "G", AMB_VK_VRACANJE_TUDJE), "SOPSTVENOG", vbTextCompare) > 0, _
-               "Amb obaveza: vracanje sa partnerovog naloga je odbijeno"
+                 "Amb matrica: vracanje tudje ambalaze stanica -> kooperant prolazi"
 
     ' --- ISTA PROVERA, DRUGI POZIVALAC -----------------------------------
     ' Pisac dobija gresku, ekran poruku. Da Require* ne dize, pisac bi prosao dalje
