@@ -420,7 +420,8 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-07` | **nijedan realni nalog nema saldo < 0** posle commit-a; deficit je dozvoljen samo ako je u **istoj TX** pokriven prenosom iz `SpoljniSvet`. Potvrdjeno 28.09.2026: vazi za SVE realne naloge, bez izuzetka |
 | `AMB-INV-08` | **nijedan upis u knjigu ne nastaje van vlasnistva transakcije izvornog dokumenta** |
 | `AMB-INV-09` | **`Obaveza(partner, tip) >= 0`** — firma ne moze partneru vratiti vise tudje ambalaze nego sto je od njega uzela |
-| `AMB-INV-10` | redovi **jednog dokumenta** imenuju **najvise dva naloga van granice opticaja** — sprovodjenje `AMB-10-ODL-3` |
+| `AMB-INV-10` | svi originalni redovi **jednog dokumenta**, izuzev generisanog pokrica, nose **jedan isti neuredjen par `{Od, Na}`** — sprovodjenje `AMB-10-ODL-3` |
+| `AMB-INV-11` | **`AmbID` je jedinstven u knjizi**, a `StornoOd` pokazuje na **tacno jedan** postojeci red |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -488,10 +489,27 @@ ADK-1   Stanica -> K2   IZDATA_PRAZNA   GAJBA_B      drugi kljuc -> proslo bi
 Test koji je to „pokrivao" merio je slucaj koji `AMB-INV-04` ionako hvata — dakle
 **lazna sigurnost**, ne kapija.
 
-> **`AMB-INV-10`.** Preko svih redova jednog `(DokumentTIP, DokumentID)`, skup naloga
-> **van granice opticaja** ima **najvise dva clana**. `SpoljniSvet` se ne racuna: pokrice
-> deficita je uvek `SpoljniSvet -> izvor`, pa bi inace svaki dokument sa pokricem
-> imao tri „naloga" i kapija bi obarala ispravan upis.
+Prva kapija za to je **brojala** naloge van granice („najvise dva"). To pada tacno
+tamo gde je **jedna strana granica** — dva realna naloga tada daju broj dva:
+
+```
+ADK-NAB-1   SpoljniSvet -> Stanica1   NABAVKA   GAJBA_A
+ADK-NAB-1   SpoljniSvet -> Stanica2   NABAVKA   GAJBA_B      broj = 2 -> proslo bi
+```
+
+Jedan nabavni dokument preko **dve stanice** je tacno ono zbog cega `AMB-10-ODL-3`
+postoji; ogledalno vazi za `OTPIS`.
+
+> **`AMB-INV-10`.** Svi **originalni** redovi jednog `(DokumentTIP, DokumentID)`,
+> izuzev generisanog pokrica, nose **jedan isti neuredjen par `{Od, Na}`**. Pokrice
+> (`ULAZ_TUDJE_AMBALAZE`) je izuzeto jer ga pisac generise sam, pa njegov par
+> (`{SpoljniSvet, izvor}`) nije poslovni par dokumenta — ali njegovo **odrediste
+> mora biti clan zakljucanog para**, da ne uvede trecu stranu.
+
+Par je **neuredjen**, jer jedan revers sme da nosi i izdavanje i povrat prema istom
+partneru. Zbog poredjenja sa parom, pisac upisuje **trazeni prenos pre pokrica** —
+par mora biti zakljucan pre nego sto se pokrice meri. Redosled unutar transakcije je
+inace slobodan: `AMB-INV-07` govori o stanju **posle** commit-a.
 
 Granica je **nalog**, ne tip ambalaze i ne vrsta: jedan revers sme istom partneru da
 izda dva tipa, i sme da nosi oba smera prema njemu. Vazi za **sve** dokumente, ne
@@ -569,6 +587,20 @@ Pokvaren zapisan red tako menja ponasanje pisca.
 > **pun ugovor**: `AmbID`, datum, identitet dokumenta, kolicina kao broj, pa ceo
 > `AmbPrenosStrukturaProblem` (tip ambalaze, vrsta, struktura oba naloga, `Od <> Na`,
 > klase strana iz matrice). Sve ostalo je **KVAR** i na njemu se staje po imenu.
+
+**`AMB-INV-11` nije svojstvo reda nego KNJIGE**, pa ga ugovor reda ne moze izmeriti:
+dva reda sa istim `AmbID`-em su, red po red, besprekorna. Dok je ta provera stajala
+samo u citaocu obaveze, saldo je sabirao oba i naduvavao stanje:
+
+```
+AMB-X   SpoljniSvet -> Stanica   100   NABAVKA
+AMB-X   SpoljniSvet -> Stanica   100   NABAVKA        -> Stanica = 200
+```
+
+A stanje je ulaz u kapiju deficita, dakle u odluku o **sledecem** upisu; za `10d` je
+gore, jer `StornoOd = AMB-X` vise ne pokazuje na jedan original. Pravilo je isto kao
+za nalog: **0 pada, 1 prolazi, 2+ pada**. Zato integritet knjige i indeksi kolona
+dolaze kroz **jedan ulaz** — citalac ne moze da uzme indekse a preskoci proveru.
 
 Ugovor je **jedno mesto** za sve citaoce — saldo, obavezu, idempotenciju, identitet i
 storno u `10d`. Dve stvari su namerno **van** njega:
@@ -840,6 +872,8 @@ je obrisao S3-ostatak. Ali:
 | 7 | tabela tokom prelaza nosi dva oblika reda | `10b` se deli na `10b-1` (pisac) i `10b-2` (cutover); odluka o redosledu citalaca stoji pred `10b-2` — 6.13 |
 | 8 | **`AMB-10-ODL-3` nije bio sproveden** — `AMB-INV-04` ga hvata samo kad se poklope vrsta i tip | dobija **svoju** kapiju: `AMB-INV-10`, 6.9 |
 | 8 | **citalac knjige nije bio fail-closed** — polupisan nov red prolazio kao legacy ili ulazio u saldo pola-pola | jedan **ugovor zapisanog reda** za sve citaoce, tri stanja reda, 6.9 |
+| 9 | `AMB-INV-10` je **brojao naloge**, pa je dokument sa granicom kao jednom stranom (`NABAVKA`, `OTPIS`) prolazio preko **dve stanice** | kapija prelazi sa broja na **zakljucan par**, 6.9 |
+| 9 | jedinstvenost `AmbID`-a nosio je samo citalac obaveze | postaje `AMB-INV-11`, u zajednickoj kapiji integriteta knjige, 6.9 |
 
 ### 6.12a Ambalazni dokument — jedan, za sve sto svoj nema
 

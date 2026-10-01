@@ -5115,14 +5115,43 @@ SABOTAZE = {
     # izbacilo iz salda, a saldo je ulaz u kapiju deficita.
     "amb-pisac-kvar-reda-prolazi": (
         "modAmbalaza.bas",
-        "    p = KnjigaRedProblem(data, i, kol)\n    If Len(p) > 0 Then\n",
-        "    p = \"\"   ' SABOTAZA: ugovor zapisanog reda se ne proverava\n    If Len(p) > 0 Then\n",
+        "            p = KnjigaRedProblem(data, i, kol)\n",
+        "            p = \"\"   ' SABOTAZA: ugovor zapisanog reda se ne proverava\n",
         "Test_Amb_PisacKnjige",
         "Amb pisac: red sa stranama a bez vrste PADA, ne preskace se",
     ),
     # Red DOTICE knjigu kad je BILO KOJA nova kolona popunjena. Dok se gledao samo
     # OdNalogTip, red sa praznim izvorom a popunjenim odredistem prolazio je kao
     # legacy -- tiho, i van svakog salda (review #400, P2).
+    # Granica kao jedna strana: dok je kapija BROJALA naloge van granice, dve stanice
+    # na jednom NABAVKA dokumentu davale su broj 2 i prolazile. Par je ono sto se
+    # zakljucava, pa poredjenje mora biti nad parom.
+    "amb-pisac-par-se-ne-poredi": (
+        "modAmbalaza.bas",
+        "    If parovi.count > 1 Then\n",
+        "    If False Then   ' SABOTAZA: dokument sme dva razlicita para\n",
+        "Test_Amb_JedanProtivpartnerPoDokumentu",
+        "Amb jedan partner: NABAVKA na DRUGU stanicu istim dokumentom je odbijena",
+    ),
+    # Jedinstvenost AmbID-a je svojstvo KNJIGE, ne reda. Dok je stajala samo u citaocu
+    # obaveze, saldo je sabirao dva reda sa istim identitetom -- a saldo je ulaz u
+    # kapiju deficita, dakle u odluku o sledecem upisu.
+    "amb-pisac-dupli-ambid-u-saldu": (
+        "modAmbalaza.bas",
+        "            If vrste.Exists(ambID) Then\n",
+        "            If False Then   ' SABOTAZA: dva reda smeju isti AmbID\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: dva reda sa istim AmbID-em obaraju citaoca SALDA",
+    ),
+    # Bez jednoznacnog originala StornoOd nije veza nego niz znakova, a 10d na njemu
+    # racuna inverz.
+    "amb-pisac-storno-pokazuje-nigde": (
+        "modAmbalaza.bas",
+        "                If Not vrste.Exists(st) Then\n",
+        "                If False Then   ' SABOTAZA: storno sme da pokazuje nigde\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: StornoOd koji ne pokazuje nigde obara citaoca SALDA",
+    ),
     "amb-pisac-polupisan-red-kao-legacy": (
         "modAmbalaza.bas",
         "    imena = Array(COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _\n                  COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)\n",
@@ -5158,8 +5187,8 @@ SABOTAZE = {
     # zaobisao kroz drugu vrstu ili drugi tip (review #400, P2).
     "amb-pisac-dokument-dva-partnera": (
         "modAmbalaza.bas",
-        "        If Len(partner) > 0 Then\n",
-        "        If False Then   ' SABOTAZA: dokument sme dva protivpartnera\n",
+        "        If Len(par) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: dokument sme vise poslovnih parova\n",
         "Test_Amb_JedanProtivpartnerPoDokumentu",
         "Amb jedan partner: drugi partner kroz DRUGU VRSTU je odbijen",
     ),
