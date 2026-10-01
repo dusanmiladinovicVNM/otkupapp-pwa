@@ -242,13 +242,25 @@ End Function
 ' AMBALAZA_UZ_ROBU nikad nije ovde -- ona putuje sa robom, pa joj je izvorni
 ' dokument otkup, otpremnica ili prijemnica.
 '
-' ULAZ_TUDJE_AMBALAZE je izuzetak i sme UZ SVAKI dokument: ono nije vrsta posla
-' nego POKRICE DEFICITA (AMB-INV-07), pa nastaje svuda gde bi realan nalog pao
-' ispod nule -- i uz otkup i uz revers.
+' ULAZ_TUDJE_AMBALAZE sme uz SVAKI AMBALAZNI dokument: ono nije vrsta posla nego
+' POKRICE DEFICITA (AMB-INV-07), pa nastaje svuda gde bi realan nalog pao ispod
+' nule -- i na reversu, ne samo uz robu.
+'
+' OPSEG OVE FUNKCIJE: ona odgovara SAMO za tblAmbalazaDokument. Da li ULAZ_TUDJE
+' sme uz otkup ili prijemnicu je drugo pitanje, jer robni tipovi dokumenata nisu
+' ovde zatvoren skup -- pola AmbDok validator, pola genericki source-document
+' validator bila bi funkcija koja ni jedno ne tvrdi do kraja.
 Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
                                          ByVal vrstaKretanja As String) As Boolean
+    ' FAIL-CLOSED NA NEPOZNATU VRSTU (review #399, P2).
+    '
+    ' Dozvola za pokrice deficita je ranije stajala IZNAD ove provere, pa je
+    ' ("NEPOSTOJECI_DOKUMENT", ULAZ_TUDJE) vracalo True i zaobilazilo zatvoren enum.
+    ' Kapija koja odgovori pre nego sto proveri preduslov nije kapija.
+    If Not AmbDokVrstaPoznata(dokVrsta) Then Exit Function
+
     If StrComp(Trim$(vrstaKretanja), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
-        AmbDokDozvoljavaKretanje = True      ' pokrice deficita ide svuda
+        AmbDokDozvoljavaKretanje = True      ' pokrice deficita ide uz svaki AmbDok
         Exit Function
     End If
 
@@ -268,11 +280,18 @@ End Function
 
 ' ZAGLAVLJE DOKUMENTA -- provera pre upisa. Vraca "" ili imenovan razlog.
 '
-' Stanica nije strana dogadjaja nego OPSEG JEDINSTVENOSTI BROJA (modBrojevi trazi
-' slobodan broj po stanici i danu), pa se proverava kad je data. Da li je obavezna
-' po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom.
+' VLASNIK NUMERICKOG NIZA JE OBAVEZAN. Broj bez opsega u kom je jedinstven nije
+' identitet nego niz znakova: dva dokumenta mogu nositi isti broj a da nijedna
+' provera ne primeti. Ranije je tu stajala samo StanicaID, i to opciona -- sto je
+' revers kupca ostavljalo bez ikakvog opsega (review #399, P2).
+'
+' KOJI nalog je vlasnik po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom.
+' Ovde se tvrdi samo da vlasnik POSTOJI i da se razresava ISTOM kapijom kao svaki
+' drugi nalog -- dakle "BrojOwnerTip=Vozac, BrojOwnerID=KUP-17" pada pre upisa.
 Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
-                              ByVal datum As Date, ByVal stanicaID As String) As String
+                              ByVal datum As Date, _
+                              ByVal brojOwnerTip As String, _
+                              ByVal brojOwnerID As String) As String
     If Not AmbDokVrstaPoznata(vrsta) Then
         AmbDokProblem = "Nepoznata vrsta ambalaznog dokumenta: '" & Trim$(vrsta) & "'."
         Exit Function
@@ -288,18 +307,22 @@ Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
         Exit Function
     End If
 
-    If Len(Trim$(stanicaID)) > 0 Then
-        Dim p As String
-        p = AmbNalogProblem(AMB_NALOG_STANICA, stanicaID)
-        If Len(p) > 0 Then AmbDokProblem = "Stanica dokumenta: " & p
+    If Len(Trim$(brojOwnerTip)) = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema vlasnika numerickog niza -- " & _
+                        "broj bez opsega nije jedinstven."
+        Exit Function
     End If
+
+    Dim p As String
+    p = AmbNalogProblem(brojOwnerTip, brojOwnerID)
+    If Len(p) > 0 Then AmbDokProblem = "Vlasnik broja: " & p
 End Function
 
 Public Sub RequireAmbDok(ByVal vrsta As String, ByVal broj As String, _
-                         ByVal datum As Date, ByVal stanicaID As String, _
-                         ByVal sourceName As String)
+                         ByVal datum As Date, ByVal brojOwnerTip As String, _
+                         ByVal brojOwnerID As String, ByVal sourceName As String)
     Dim p As String
-    p = AmbDokProblem(vrsta, broj, datum, stanicaID)
+    p = AmbDokProblem(vrsta, broj, datum, brojOwnerTip, brojOwnerID)
     If Len(p) > 0 Then Err.Raise vbObjectError + 4451, sourceName, p
 End Sub
 

@@ -346,13 +346,23 @@ Public Const COL_ZBS_KOL_AMB As String = "KolAmbalaze"
 ' AMB-10-ODL-3 (jedan dokument = jedan protivpartner) je zato invarijanta NAD
 ' REDOVIMA i meri se u 10b, kad redovi postoje.
 '
-' StanicaID OSTAJE, i nije izuzetak od toga: ona nije strana dogadjaja nego
-' OPSEG JEDINSTVENOSTI BROJA -- modBrojevi trazi slobodan broj po (stanica, dan).
+' VLASNIK NUMERICKOG NIZA (BrojOwnerTip/ID) JESTE cinjenica zaglavlja, i to je
+' razlika: strane dogadjaja se mogu PROCITATI iz redova, a vlasnik broja ne --
+' nijedan red ne kaze ciji je to niz. Broj bez vlasnika niza nije jedinstven.
+'
+' Zasto nije samo StanicaID (review #399, P2): stari OM revers broji po
+' (stanica, dan), ali revers KUPCA nema stanicu -- SaveKupciIzlaz_TX je nema u
+' potpisu. Da je zaglavlje ostalo na StanicaID, 10b bi morao ili da izmisli
+' stanicu, ili da pusti broj bez opsega, ili da menja tek upisanu strukturu.
+'
+' KOJI nalog je vlasnik po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom;
+' ovde se zakljucava samo da vlasnik POSTOJI i da se razresava istom kapijom.
 Public Const COL_AMBD_ID As String = "AmbDokID"
 Public Const COL_AMBD_VRSTA As String = "Vrsta"
 Public Const COL_AMBD_BROJ As String = "BrojDokumenta"
 Public Const COL_AMBD_DATUM As String = "Datum"
-Public Const COL_AMBD_STANICA As String = "StanicaID"
+Public Const COL_AMBD_BROJ_OWNER_TIP As String = "BrojOwnerTip"
+Public Const COL_AMBD_BROJ_OWNER_ID As String = "BrojOwnerID"
 Public Const COL_AMBD_NAPOMENA As String = "Napomena"
 
 ' --- Spaltennamen tblPrijemnica (NEU) ---
@@ -635,6 +645,15 @@ Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (pra
 Public Const DOK_TIP_OM_ULAZ_KOOP As String = "OM-Ulaz-Koop"    ' kooperant vraca (praznu) ambalazu na OM (povrat)
 Public Const DOK_TIP_OM_IZLAZ_FIRMA As String = "OM-Izlaz-Firma" ' OM vraca (praznu) ambalazu firmi (centrala)
 Public Const DOK_TIP_OM_ULAZ_FIRMA As String = "OM-Ulaz-Firma"   ' firma (centrala) salje (praznu) ambalazu na OM
+
+' AMB-10-DOK: jedna tabela = JEDAN kanonski tip dokumenta.
+'
+' Vrsta posla (REVERS / NABAVKA / OTPIS) zivi na zaglavlju
+' (tblAmbalazaDokument.Vrsta), NE u DokumentTIP-u. Da je obrnuto, ista
+' klasifikacija bi stajala u dve kolone -- a AMB-INV-04 racuna identitet
+' efekta iz (DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze), pa bi
+' razilazenje te dve kolone tiho razdvojilo isti poslovni efekat.
+Public Const DOK_TIP_AMBALAZA_DOKUMENT As String = "AmbalazaDokument"
 
 ' --- Spaltennamen tblFakture ---
 Public Const COL_FAK_ID As String = "FakturaID"

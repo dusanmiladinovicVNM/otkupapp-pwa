@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "94610F5D"
+Public Const SCHEMA_FINGERPRINT As String = "E23576DB"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -934,7 +934,8 @@ Private Sub SpecAmbalazaDokument(ByVal reg As Object)
     k.Add "Vrsta"
     k.Add "BrojDokumenta"
     k.Add "Datum"
-    k.Add "StanicaID"
+    k.Add "BrojOwnerTip"
+    k.Add "BrojOwnerID"
     k.Add "Napomena"
     k.Add "Stornirano"
     k.Add "CreatedAt"

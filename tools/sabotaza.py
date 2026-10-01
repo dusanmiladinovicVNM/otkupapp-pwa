@@ -4963,6 +4963,24 @@ SABOTAZE = {
     ),
     # AMB-10-DOK: vrsta dokumenta je zatvoren enum. Otvorena bi propustila i
     # POCETNO_STANJE, pojam koji je namerno ukinut.
+    # Dozvola za pokrice deficita je ranije stajala IZNAD provere vrste dokumenta,
+    # pa je ("NEPOSTOJECI", ULAZ_TUDJE) prolazilo kroz zatvoren enum.
+    "amb-dok-fail-open-na-deficit": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbDokVrstaPoznata(dokVrsta) Then Exit Function\n",
+        "    ' SABOTAZA: vrsta dokumenta se ne proverava\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: nepoznata vrsta ne prolazi ni sa pokricem deficita",
+    ),
+    # Broj bez opsega u kom je jedinstven nije identitet nego niz znakova: dva
+    # dokumenta mogu nositi isti broj a da nijedna provera to ne primeti.
+    "amb-dok-broj-bez-vlasnika": (
+        "modAmbalazaUgovor.bas",
+        "    If Len(Trim$(brojOwnerTip)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: broj sme bez vlasnika niza\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: bez vlasnika broja je odbijen",
+    ),
     "amb-dok-vrsta-otvorena": (
         "modAmbalazaUgovor.bas",
         "    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)\n",

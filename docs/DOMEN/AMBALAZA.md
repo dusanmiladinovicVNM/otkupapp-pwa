@@ -754,7 +754,8 @@ tblAmbalazaDokument
   Vrsta            REVERS | NABAVKA | OTPIS
   BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
   Datum
-  StanicaID        OPSEG JEDINSTVENOSTI BROJA, ne strana dogadjaja
+  BrojOwnerTip     VLASNIK NUMERICKOG NIZA -- obavezan
+  BrojOwnerID      (Stanica, Vozac, Firma... -- koji po vrsti, odlucuje 10b)
   Napomena
   Stornirano       dokument je dokument -- STORNO_REGISTAR ga ocekuje
   CreatedAt/By, ModifiedAt/By
@@ -769,8 +770,21 @@ tblAmbalazaDokument
 > bila **druga istina** — a ovaj rez postoji da se takve uklone.
 > `AMB-10-ODL-3` je zato invarijanta **nad redovima** i meri se u `10b`.
 >
-> `StanicaID` nije izuzetak: ona nije strana dogadjaja nego opseg u kom broj mora
-> biti jedinstven (`modBrojevi` trazi slobodan broj po stanici i danu).
+> `BrojOwnerTip`/`BrojOwnerID` nisu izuzetak od toga: vlasnik numerickog niza se
+> **ne moze procitati iz redova** -- nijedan red ne kaze ciji je to niz. Strane
+> dogadjaja mogu, pa one nisu ovde.
+>
+> **Zasto nije samo `StanicaID`** (review #399): stari OM revers broji po
+> (stanica, dan), ali revers **kupca** stanicu nema -- `SaveKupciIzlaz_TX` je nema
+> ni u potpisu. Da je zaglavlje ostalo na stanici, `10b` bi morao ili da izmisli
+> stanicu, ili da pusti broj bez opsega, ili da menja tek upisanu strukturu.
+> Vlasnik je zato **obavezan**, i razresava se **istom kapijom** kao svaki nalog.
+>
+> **Kanonski `DokumentTIP` je `AmbalazaDokument`** -- jedna tabela, jedan tip.
+> Vrsta posla (`REVERS`/`NABAVKA`/`OTPIS`) ostaje na zaglavlju, u `Vrsta`. Da je
+> obrnuto, ista klasifikacija bi stajala u dve kolone, a `AMB-INV-04` racuna
+> identitet efekta bas iz `DokumentTIP`-a -- pa bi njihovo razilazenje tiho
+> razdvojilo isti poslovni efekat.
 >
 > **Format broja je pinovan kao tekst**, i to je trazila sama kapija kanona:
 > `BrojDokumenta` je pod ugovorom u cetiri tabele, a kolona u General formatu tiho
