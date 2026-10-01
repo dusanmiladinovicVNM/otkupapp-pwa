@@ -31,6 +31,7 @@ Private Const AMB_SMER_IZLAZ As String = "Izlaz"
 Public Const AMB_ERR_POTVRDA_DEFICITA As Long = vbObjectError + 4470
 Public Const AMB_ERR_DEFICIT_NEPOKRIV As Long = vbObjectError + 4471
 Public Const AMB_ERR_IDENTITET As Long = vbObjectError + 4472
+Public Const AMB_ERR_JEDAN_PARTNER As Long = vbObjectError + 4475
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 
@@ -761,43 +762,120 @@ Private Sub RequireAmbDokSchema(ByVal sourceName As String)
     Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, sourceName)
 End Sub
 
-' Red knjige se POZNAJE po OdNalogTip -- stari oblik tu ima prazno.
-'
-' Tiho preskakanje svega sto nije prepoznato bilo bi FAIL-OPEN: red sa izvorom a
-' bez odredista ili bez vrste nije "stari oblik" nego KVAR knjige, i na njemu se
-' staje po imenu. Inace bi polupisan red nestao iz salda, a saldo je ulaz u kapiju
-' deficita.
-Private Function RedJeKnjiga(ByRef data As Variant, ByVal i As Long, _
-                             ByVal cOdTip As Long, ByVal cNaTip As Long, _
-                             ByVal cVK As Long, ByVal sourceName As String) As Boolean
-    If Len(AmbText(data(i, cOdTip))) = 0 Then Exit Function
+' Indeksi kolona knjige, JEDNOM po citaocu: ime -> indeks. Svaki citalac je ranije
+' nosio svoj blok RequireColumnIndex poziva, a ugovor zapisanog reda trazi SVE
+' kolone -- jedanaest parametara po pozivu bilo bi necitljivo i lako se razilazi.
+Private Function KnjigaIndeksi(ByVal sourceName As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
 
-    If Len(AmbText(data(i, cNaTip))) = 0 Then
-        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                  "Red knjige " & CStr(i) & " ima izvor a nema odrediste."
+    Dim imena As Variant, j As Long
+    imena = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
+                  COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+                  COL_AMB_DOK_TIP, COL_AMB_DOK_ID, COL_AMB_VRSTA_KRETANJA, _
+                  COL_AMB_STORNO_OD)
+
+    For j = LBound(imena) To UBound(imena)
+        d.Add CStr(imena(j)), RequireColumnIndex(TBL_AMBALAZA, CStr(imena(j)), sourceName)
+    Next j
+
+    Set KnjigaIndeksi = d
+End Function
+
+' TRI STANJA REDA, NE DVA (review #400, P2).
+'
+' Red DOTICE knjigu kad je BILO KOJA nova kolona popunjena. Prva verzija je gledala
+' samo OdNalogTip, pa je red sa praznim izvorom a popunjenim odredistem prolazio kao
+' "stari oblik" -- tiho, i van svakog salda.
+Private Function RedDoticeKnjigu(ByRef data As Variant, ByVal i As Long, _
+                                 ByRef kol As Object) As Boolean
+    Dim imena As Variant, j As Long
+    imena = Array(COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+                  COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)
+
+    For j = LBound(imena) To UBound(imena)
+        If Len(AmbText(data(i, kol(CStr(imena(j)))))) > 0 Then
+            RedDoticeKnjigu = True
+            Exit Function
+        End If
+    Next j
+End Function
+
+' UGOVOR ZAPISANOG REDA -- jedno mesto za SVE citaoce (saldo, obaveza,
+' idempotencija, identitet, i storno u 10d).
+'
+' Zasto nad svakim citanjem a ne samo pri upisu: saldo ulazi u kapiju deficita, pa
+' pokvaren ZAPISAN red menja odluku SLEDECEG upisa. Red uracunat pola-pola (izvor
+' bez ID-a) razbija ocuvanje kolicine bez ijedne poruke -- partner dobije +20, a
+' nijedan stvarni nalog ne dobije -20.
+'
+' Postojanje naloga u maticnoj tabeli se OVDE NE proverava: to je kapija UPISA
+' (AmbNalogProblem u RequireAmbPrenos). Da citalac to radi, obrisan maticni red bi
+' retroaktivno oborio svako citanje, a saldo bi postao kvadratan nad tabelom.
+'
+' STORNO SE MERI INVERZNO. Kontra-stav ima zamenjene strane, pa bi matrica za
+' njegovu vrstu pala na ISPRAVNOM redu (inverz ULAZ_TUDJE je PARTNER -> GRANICA).
+' Zamena argumenata JE provera inverza -- bez druge matrice i bez izuzetka.
+Private Function KnjigaRedProblem(ByRef data As Variant, ByVal i As Long, _
+                                  ByRef kol As Object) As String
+    If Len(AmbText(data(i, kol(COL_AMB_ID)))) = 0 Then
+        KnjigaRedProblem = "nema AmbID"
+        Exit Function
     End If
 
-    If Len(AmbText(data(i, cVK))) = 0 Then
+    If Not IsDate(data(i, kol(COL_AMB_DATUM))) Then
+        KnjigaRedProblem = "nema datum"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_DOK_TIP)))) = 0 Or _
+       Len(AmbText(data(i, kol(COL_AMB_DOK_ID)))) = 0 Then
+        KnjigaRedProblem = "nema identitet dokumenta"
+        Exit Function
+    End If
+
+    If Not IsNumeric(data(i, kol(COL_AMB_KOLICINA))) Then
+        KnjigaRedProblem = "kolicina nije broj"
+        Exit Function
+    End If
+
+    Dim odTip As String, odID As String, naTip As String, naID As String
+    Dim kolicina As Double, tipAmb As String, vrsta As String, p As String
+
+    odTip = AmbText(data(i, kol(COL_AMB_OD_TIP)))
+    odID = AmbText(data(i, kol(COL_AMB_OD_ID)))
+    naTip = AmbText(data(i, kol(COL_AMB_NA_TIP)))
+    naID = AmbText(data(i, kol(COL_AMB_NA_ID)))
+    kolicina = CDbl(data(i, kol(COL_AMB_KOLICINA)))
+    tipAmb = AmbText(data(i, kol(COL_AMB_TIP)))
+    vrsta = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+
+    If Len(AmbText(data(i, kol(COL_AMB_STORNO_OD)))) > 0 Then
+        p = modAmbalazaUgovor.AmbPrenosStrukturaProblem(naTip, naID, odTip, odID, _
+                                                        kolicina, tipAmb, vrsta)
+        If Len(p) > 0 Then KnjigaRedProblem = "storno: " & p
+        Exit Function
+    End If
+
+    KnjigaRedProblem = modAmbalazaUgovor.AmbPrenosStrukturaProblem(odTip, odID, naTip, naID, _
+                                                                  kolicina, tipAmb, vrsta)
+End Function
+
+' LEGACY / KNJIGA / KVAR. Stari oblik se preskace -- to je legitimno tokom 10b --
+' ali red koji DOTICE knjigu a ne prolazi ugovor je KVAR, i na njemu se staje po
+' imenu. Fail-open je ovde najskuplji: izgubljen red se ne vidi nigde.
+Private Function RedJeKnjiga(ByRef data As Variant, ByVal i As Long, _
+                             ByRef kol As Object, ByVal sourceName As String) As Boolean
+    If Not RedDoticeKnjigu(data, i, kol) Then Exit Function
+
+    Dim p As String
+    p = KnjigaRedProblem(data, i, kol)
+    If Len(p) > 0 Then
         Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                  "Red knjige " & CStr(i) & " nema VrstaKretanja."
+                  "Red knjige " & CStr(i) & ": " & p
     End If
 
     RedJeKnjiga = True
-End Function
-
-Private Function KolicinaIzReda(ByRef data As Variant, ByVal i As Long, _
-                                ByVal cKol As Long, ByVal sourceName As String) As Double
-    If Not IsNumeric(data(i, cKol)) Then
-        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                  "Red knjige " & CStr(i) & " ima nenumericku kolicinu."
-    End If
-
-    KolicinaIzReda = CDbl(data(i, cKol))
-
-    If KolicinaIzReda <= 0 Then
-        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                  "Red knjige " & CStr(i) & " ima kolicinu <= 0 (AMB-INV-01)."
-    End If
 End Function
 
 Private Function IstiNalog(ByVal tipA As String, ByVal idA As String, _
@@ -842,23 +920,25 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
 
     Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
     Dim cVK As Long, cTipA As Long, cKol As Long
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(SRC)
 
-    cOdTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, SRC)
-    cOdID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID, SRC)
-    cNaTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, SRC)
-    cNaID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID, SRC)
-    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, SRC)
-    cTipA = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    cKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
 
     Dim i As Long, saldo As Double
     For i = 1 To UBound(data, 1)
-        If RedJeKnjiga(data, i, cOdTip, cNaTip, cVK, SRC) Then
+        If RedJeKnjiga(data, i, kol, SRC) Then
             If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
                 If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then
-                    saldo = saldo + KolicinaIzReda(data, i, cKol, SRC)
+                    saldo = saldo + CDbl(data(i, cKol))
                 ElseIf IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
-                    saldo = saldo - KolicinaIzReda(data, i, cKol, SRC)
+                    saldo = saldo - CDbl(data(i, cKol))
                 End If
             End If
         End If
@@ -916,16 +996,18 @@ Public Function AmbObavezaPartneru(ByVal tip As String, ByVal id As String, _
 
     Dim cID As Long, cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
     Dim cVK As Long, cTipA As Long, cKol As Long, cSt As Long
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(SRC)
 
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-    cOdTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, SRC)
-    cOdID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID, SRC)
-    cNaTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, SRC)
-    cNaID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID, SRC)
-    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, SRC)
-    cTipA = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    cKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, SRC)
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cSt = kol(COL_AMB_STORNO_OD)
 
     ' Prvi prolaz: AmbID -> VrstaKretanja, za SVE redove knjige (ne samo partnerove)
     ' -- kontra-stav i original ne moraju imati istu stranu u filteru.
@@ -934,7 +1016,7 @@ Public Function AmbObavezaPartneru(ByVal tip As String, ByVal id As String, _
 
     Dim i As Long, kljuc As String
     For i = 1 To UBound(data, 1)
-        If RedJeKnjiga(data, i, cOdTip, cNaTip, cVK, SRC) Then
+        If RedJeKnjiga(data, i, kol, SRC) Then
             kljuc = AmbText(data(i, cID))
             If Len(kljuc) = 0 Then
                 Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Red knjige " & CStr(i) & " nema AmbID."
@@ -948,7 +1030,7 @@ Public Function AmbObavezaPartneru(ByVal tip As String, ByVal id As String, _
 
     Dim obaveza As Double, stornoOd As String, vrstaOrig As String
     For i = 1 To UBound(data, 1)
-        If RedJeKnjiga(data, i, cOdTip, cNaTip, cVK, SRC) Then
+        If RedJeKnjiga(data, i, kol, SRC) Then
             If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
                 If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Or _
                    IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
@@ -965,7 +1047,7 @@ Public Function AmbObavezaPartneru(ByVal tip As String, ByVal id As String, _
 
                     obaveza = obaveza + modAmbalazaUgovor.AmbDoprinosObavezi( _
                                             AmbText(data(i, cVK)), _
-                                            KolicinaIzReda(data, i, cKol, SRC), _
+                                            CDbl(data(i, cKol)), _
                                             vrstaOrig)
                 End If
             End If
@@ -1125,6 +1207,22 @@ Private Function UpisiRedKnjige(ByVal datum As Date, ByVal tipAmb As String, _
     End If
 
     If Len(Trim$(stornoOd)) = 0 Then
+        ' AMB-INV-10 (sprovodjenje AMB-10-ODL-3): redovi JEDNOG dokumenta imenuju
+        ' najvise DVA naloga van granice opticaja.
+        '
+        ' AMB-INV-04 ovo NE pokriva, i to je bila stvarna rupa (review #400): njegov
+        ' kljuc je (DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze), pa dva
+        ' protivpartnera prolaze cim se razlikuje vrsta ILI tip ambalaze:
+        '
+        '   ADK-1  Stanica -> K1  IZDATA_PRAZNA  GAJBA_A
+        '   ADK-1  K2 -> Stanica  POVRAT_PRAZNE  GAJBA_A    <- druga vrsta, proslo bi
+        '   ADK-1  Stanica -> K2  IZDATA_PRAZNA  GAJBA_B    <- drugi tip, proslo bi
+        Dim partner As String
+        partner = JedanPartnerProblem(dokTip, dokID, odTipK, odID, naTipK, naID, sourceName)
+        If Len(partner) > 0 Then
+            Err.Raise AMB_ERR_JEDAN_PARTNER, sourceName, partner
+        End If
+
         Dim sudar As String
         sudar = IdentitetZauzeo(dokTip, dokID, vrstaK, tipAmb, sourceName)
         If Len(sudar) > 0 Then
@@ -1173,6 +1271,61 @@ Private Function UpisiRedKnjige(ByVal datum As Date, ByVal tipAmb As String, _
     UpisiRedKnjige = novID
 End Function
 
+' Nalozi van granice opticaja koje bi dokument imenovao kad se i ovaj red upise.
+'
+' Granica se NE racuna: pokrice deficita je uvek SpoljniSvet -> izvor, pa bi inace
+' svaki dokument sa pokricem imao tri "naloga" i kapija bi obarala ispravan upis.
+'
+' Vazi za SVE dokumente, ne samo ambalazne. Merenje svih devet mesta knjizenja daje
+' najvise dva naloga van granice (otkup K1+Stanica, otpremnica Stanica+Vozac,
+' prijemnica Kupac+Vozac, revers dve strane), a ogranicenje je na KNJIZI, ne na
+' vrsti dokumenta -- isti razlog zbog kog AMB-INV-04 nosi DokumentTIP.
+Private Function JedanPartnerProblem(ByVal dokTip As String, ByVal dokID As String, _
+                                     ByVal odTipK As String, ByVal odID As String, _
+                                     ByVal naTipK As String, ByVal naID As String, _
+                                     ByVal sourceName As String) As String
+    Dim nalozi As Object
+    Set nalozi = CreateObject("Scripting.Dictionary")
+
+    DodajNalogVanGranice nalozi, odTipK, odID
+    DodajNalogVanGranice nalozi, naTipK, naID
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+
+    If Not IsEmpty(data) Then
+        Dim kol As Object
+        Set kol = KnjigaIndeksi(sourceName)
+
+        Dim i As Long
+        For i = 1 To UBound(data, 1)
+            If RedJeKnjiga(data, i, kol, sourceName) Then
+                If StrComp(AmbText(data(i, kol(COL_AMB_DOK_TIP))), Trim$(dokTip), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, kol(COL_AMB_DOK_ID))), Trim$(dokID), vbTextCompare) = 0 Then
+                    DodajNalogVanGranice nalozi, AmbText(data(i, kol(COL_AMB_OD_TIP))), _
+                                                 AmbText(data(i, kol(COL_AMB_OD_ID)))
+                    DodajNalogVanGranice nalozi, AmbText(data(i, kol(COL_AMB_NA_TIP))), _
+                                                 AmbText(data(i, kol(COL_AMB_NA_ID)))
+                End If
+            End If
+        Next i
+    End If
+
+    If nalozi.count > 2 Then
+        JedanPartnerProblem = "AMB-INV-10: " & Trim$(dokTip) & " '" & Trim$(dokID) & _
+                              "' bi imenovao " & CStr(nalozi.count) & " naloga van granice (" & _
+                              Join(nalozi.Keys, ", ") & ") -- jedan dokument, jedan protivpartner."
+    End If
+End Function
+
+Private Sub DodajNalogVanGranice(ByRef nalozi As Object, ByVal tip As String, ByVal id As String)
+    If StrComp(Trim$(tip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then Exit Sub
+
+    Dim k As String
+    k = Trim$(tip) & ":" & Trim$(id)
+    If Not nalozi.Exists(k) Then nalozi.Add k, True
+End Sub
+
 ' Vraca AmbID reda koji je vec zauzeo isti identitet efekta, inace "".
 Private Function IdentitetZauzeo(ByVal dokTip As String, ByVal dokID As String, _
                                  ByVal vrstaK As String, ByVal tipAmb As String, _
@@ -1183,19 +1336,21 @@ Private Function IdentitetZauzeo(ByVal dokTip As String, ByVal dokID As String, 
 
     Dim cID As Long, cOdTip As Long, cNaTip As Long, cVK As Long
     Dim cTipA As Long, cDokT As Long, cDokI As Long, cSt As Long
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(sourceName)
 
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
-    cOdTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, sourceName)
-    cNaTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, sourceName)
-    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, sourceName)
-    cTipA = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, sourceName)
-    cDokT = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, sourceName)
-    cDokI = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, sourceName)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, sourceName)
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
 
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If RedJeKnjiga(data, i, cOdTip, cNaTip, cVK, sourceName) Then
+        If RedJeKnjiga(data, i, kol, sourceName) Then
             If Len(AmbText(data(i, cSt))) = 0 Then
                 If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 And _
                    StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 And _
@@ -1235,23 +1390,25 @@ Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
     Dim cID As Long, cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
     Dim cVK As Long, cTipA As Long, cKol As Long, cDokT As Long, cDokI As Long
     Dim cSt As Long, cDat As Long
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(sourceName)
 
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
-    cOdTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, sourceName)
-    cOdID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID, sourceName)
-    cNaTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, sourceName)
-    cNaID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID, sourceName)
-    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, sourceName)
-    cTipA = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, sourceName)
-    cKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, sourceName)
-    cDokT = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, sourceName)
-    cDokI = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, sourceName)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, sourceName)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, sourceName)
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
+    cDat = kol(COL_AMB_DATUM)
 
     Dim i As Long, j As Long, vr As String, zbir As Double
     For i = 1 To UBound(data, 1)
-        If RedJeKnjiga(data, i, cOdTip, cNaTip, cVK, sourceName) Then
+        If RedJeKnjiga(data, i, kol, sourceName) Then
             If Len(AmbText(data(i, cSt))) = 0 Then
                 If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 And _
                    StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 And _
@@ -1263,7 +1420,7 @@ Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
                         vr = AmbText(data(i, cVK))
                         For j = LBound(dozvoljene) To UBound(dozvoljene)
                             If StrComp(vr, CStr(dozvoljene(j)), vbTextCompare) = 0 Then
-                                zbir = zbir + KolicinaIzReda(data, i, cKol, sourceName)
+                                zbir = zbir + CDbl(data(i, cKol))
                                 If Len(outAmbID) = 0 Or _
                                    StrComp(vr, Trim$(vrstaK), vbTextCompare) = 0 Then
                                     outAmbID = AmbText(data(i, cID))

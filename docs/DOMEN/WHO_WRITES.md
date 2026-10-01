@@ -107,7 +107,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalazaDokument`: `modBusinessFlowProTests`
 - `tblArtikli`: `modAgrohemijaTests`
-- `tblKooperanti`: `modAgrohemijaTests`, `modGoldenTests`, `modTestBanka`
+- `tblKooperanti`: `modAgrohemijaTests`, `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`

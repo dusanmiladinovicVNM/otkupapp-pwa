@@ -5110,22 +5110,58 @@ SABOTAZE = {
         "Test_Amb_PisacKnjige",
         "Amb pisac: isti identitet sa DRUGIM datumom je HARD CONFLICT",
     ),
-    "amb-pisac-knjiga-bez-vrste-prolazi": (
+    # Citalac knjige preskace STARI oblik reda, i to je legitimno tokom 10b. Red
+    # koji DOTICE knjigu a ne prolazi ugovor je kvar -- tiho preskakanje bi ga
+    # izbacilo iz salda, a saldo je ulaz u kapiju deficita.
+    "amb-pisac-kvar-reda-prolazi": (
         "modAmbalaza.bas",
-        "    If Len(AmbText(data(i, cVK))) = 0 Then\n",
-        "    If False Then   ' SABOTAZA: red bez vrste prolazi kao red knjige\n",
+        "    p = KnjigaRedProblem(data, i, kol)\n    If Len(p) > 0 Then\n",
+        "    p = \"\"   ' SABOTAZA: ugovor zapisanog reda se ne proverava\n    If Len(p) > 0 Then\n",
         "Test_Amb_PisacKnjige",
         "Amb pisac: red sa stranama a bez vrste PADA, ne preskace se",
+    ),
+    # Red DOTICE knjigu kad je BILO KOJA nova kolona popunjena. Dok se gledao samo
+    # OdNalogTip, red sa praznim izvorom a popunjenim odredistem prolazio je kao
+    # legacy -- tiho, i van svakog salda (review #400, P2).
+    "amb-pisac-polupisan-red-kao-legacy": (
+        "modAmbalaza.bas",
+        "    imena = Array(COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _\n                  COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)\n",
+        "    imena = Array(COL_AMB_OD_TIP)   ' SABOTAZA: red se poznaje samo po izvoru\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: red bez IZVORA nije legacy nego KVAR",
+    ),
+    # Nalog bez ID-a nije nalog. Red sa izvorom "Stanica" i praznim ID-em ulazi u
+    # saldo pola-pola: partner dobije +20, a nijedan stvarni nalog ne dobije -20 --
+    # i taj saldo odlucuje o sledecem upisu.
+    "amb-pisac-red-bez-id-naloga": (
+        "modAmbalazaUgovor.bas",
+        "    If Len(k) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: nalog sme bez ID-a\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: red sa izvorom BEZ ID-a ne ulazi u saldo",
     ),
     # AMB-INV-04 nad DRUGIM protivpartnerom istog dokumenta (AMB-10-ODL-3): kljuc
     # je identitet poslovnog EFEKTA, pa ne nosi nalog -- jedan dokument, jedan
     # protivpartner. Ovu granu ZbirZahteva ne vidi, jer se par naloga razlikuje.
-    "amb-pisac-dva-protivpartnera": (
+    # AMB-INV-04: isti identitet efekta sme samo jednom. Grana koju ZbirZahteva ne
+    # vidi je promenjen DATUM -- filter ponavljanja ga nosi, pa zahtev padne tek
+    # ovde, na kapiji jedinstvenosti.
+    "amb-pisac-identitet-ne-sudara": (
         "modAmbalaza.bas",
         "        If Len(sudar) > 0 Then\n",
-        "        If False Then   ' SABOTAZA: isti dokument sme dva protivpartnera\n",
+        "        If False Then   ' SABOTAZA: isti identitet efekta sme dva puta\n",
         "Test_Amb_PisacKnjige",
-        "Amb pisac: isti dokument NE sme drugog protivpartnera (AMB-10-ODL-3)",
+        "Amb pisac: odbijen datum ne dopisuje red",
+    ),
+    # AMB-INV-10 (AMB-10-ODL-3) je ZASEBNA kapija, i mora biti: AMB-INV-04 hvata dva
+    # protivpartnera samo kad se poklope i VrstaKretanja i TipAmbalaze, pa bi se
+    # zaobisao kroz drugu vrstu ili drugi tip (review #400, P2).
+    "amb-pisac-dokument-dva-partnera": (
+        "modAmbalaza.bas",
+        "        If Len(partner) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: dokument sme dva protivpartnera\n",
+        "Test_Amb_JedanProtivpartnerPoDokumentu",
+        "Amb jedan partner: drugi partner kroz DRUGU VRSTU je odbijen",
     ),
     # Kretanje bez identiteta dokumenta ne postoji (AMB-INV-04 i -08). Provera je u
     # JEZGRU, kroz koje prolazi svaki red -- i pokrice i ostatak podele.

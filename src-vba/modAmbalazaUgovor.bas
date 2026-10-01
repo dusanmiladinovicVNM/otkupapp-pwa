@@ -187,33 +187,50 @@ End Function
 ' nijedan pisac ne proverava tipove sam (AMB-10-ODL-1).
 '
 ' Vraca "" kad je nalog valjan, inace IMENOVAN razlog.
-Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As String
-    Dim t As String, k As String, tbl As String
+' STRUKTURA NALOGA -- sve sto se o nalogu moze tvrditi BEZ citanja tabela.
+'
+' Postoji odvojeno zato sto je citaocu knjige potrebno bas ovo: red zapisan u
+' tabeli mora da nosi ispravan OBLIK naloga, a postojanje maticnog reda je kapija
+' UPISA. Da citalac proverava i postojanje, obrisan maticni red bi retroaktivno
+' oborio svako citanje knjige, a svaki saldo bi postao kvadratan nad tabelom.
+Public Function AmbNalogStrukturaProblem(ByVal tip As String, ByVal id As String) As String
+    Dim t As String, k As String
     t = Trim$(tip)
     k = Trim$(id)
 
     If Len(t) = 0 Then
-        AmbNalogProblem = "Nalog nema tip."
+        AmbNalogStrukturaProblem = "Nalog nema tip."
         Exit Function
     End If
 
     If Not AmbNalogTipPoznat(t) Then
-        AmbNalogProblem = "Nepoznat tip naloga: '" & t & "'."
+        AmbNalogStrukturaProblem = "Nepoznat tip naloga: '" & t & "'."
         Exit Function
     End If
 
     If AmbNalogSistemski(t) Then
         ' Jedan jedini nalog -- ID bi bio drugi identitet iste stvari.
         If Len(k) > 0 Then
-            AmbNalogProblem = "Nalog '" & t & "' je sistemski i nema ID (dobio: '" & k & "')."
+            AmbNalogStrukturaProblem = "Nalog '" & t & "' je sistemski i nema ID (dobio: '" & k & "')."
         End If
         Exit Function
     End If
 
     If Len(k) = 0 Then
-        AmbNalogProblem = "Nalog '" & t & "' trazi ID."
-        Exit Function
+        AmbNalogStrukturaProblem = "Nalog '" & t & "' trazi ID."
     End If
+End Function
+
+Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As String
+    Dim t As String, k As String, tbl As String
+    t = Trim$(tip)
+    k = Trim$(id)
+
+    AmbNalogProblem = AmbNalogStrukturaProblem(t, k)
+    If Len(AmbNalogProblem) > 0 Then Exit Function
+
+    ' Sistemski nalog nema maticni red koji bi se razresavao.
+    If AmbNalogSistemski(t) Then Exit Function
 
     tbl = AmbNalogTabela(t)
     If Len(tbl) = 0 Then
@@ -617,44 +634,49 @@ End Function
 '
 ' Vraca "" kad je prenos valjan, inace IMENOVAN razlog. Ne pise nista i ne zna
 ' za transakciju: 10b je zove pre upisa, ekran je zove za poruku uz polje.
-Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
-                                 ByVal naTip As String, ByVal naID As String, _
-                                 ByVal kolicina As Double, ByVal tipAmb As String, _
-                                 ByVal vrsta As String) As String
+' STRUKTURA PRENOSA -- ceo ugovor osim postojanja naloga.
+'
+' Citalac knjige meri bas ovo nad ZAPISANIM redom (modAmbalaza.KnjigaRedProblem),
+' a pisac isto plus postojanje. Jedna implementacija, dva pozivaoca -- druga kopija
+' matrice bi se razisla prvom izmenom.
+Public Function AmbPrenosStrukturaProblem(ByVal odTip As String, ByVal odID As String, _
+                                          ByVal naTip As String, ByVal naID As String, _
+                                          ByVal kolicina As Double, ByVal tipAmb As String, _
+                                          ByVal vrsta As String) As String
     Dim p As String
 
     ' AMB-INV-01: kolicina je uvek pozitivna -- smer nosi par naloga, ne znak.
     If kolicina <= 0 Then
-        AmbPrenosProblem = "Kolicina mora biti veca od nule (dobio: " & CStr(kolicina) & ")."
+        AmbPrenosStrukturaProblem = "Kolicina mora biti veca od nule (dobio: " & CStr(kolicina) & ")."
         Exit Function
     End If
 
     If Len(Trim$(tipAmb)) = 0 Then
-        AmbPrenosProblem = "Tip ambalaze je obavezan -- stanje se vodi PO TIPU."
+        AmbPrenosStrukturaProblem = "Tip ambalaze je obavezan -- stanje se vodi PO TIPU."
         Exit Function
     End If
 
     If Not AmbVrstaPoznata(vrsta) Then
-        AmbPrenosProblem = "Nepoznata vrsta kretanja: '" & Trim$(vrsta) & "'."
+        AmbPrenosStrukturaProblem = "Nepoznata vrsta kretanja: '" & Trim$(vrsta) & "'."
         Exit Function
     End If
 
-    p = AmbNalogProblem(odTip, odID)
+    p = AmbNalogStrukturaProblem(odTip, odID)
     If Len(p) > 0 Then
-        AmbPrenosProblem = "Nalog OD: " & p
+        AmbPrenosStrukturaProblem = "Nalog OD: " & p
         Exit Function
     End If
 
-    p = AmbNalogProblem(naTip, naID)
+    p = AmbNalogStrukturaProblem(naTip, naID)
     If Len(p) > 0 Then
-        AmbPrenosProblem = "Nalog NA: " & p
+        AmbPrenosStrukturaProblem = "Nalog NA: " & p
         Exit Function
     End If
 
     ' AMB-INV-02: prenos na samog sebe nije dogadjaj nego greska unosa.
     If StrComp(Trim$(odTip), Trim$(naTip), vbTextCompare) = 0 And _
        StrComp(Trim$(odID), Trim$(naID), vbTextCompare) = 0 Then
-        AmbPrenosProblem = "Prenos na isti nalog: " & Trim$(odTip) & " '" & Trim$(odID) & "'."
+        AmbPrenosStrukturaProblem = "Prenos na isti nalog: " & Trim$(odTip) & " '" & Trim$(odID) & "'."
         Exit Function
     End If
 
@@ -666,20 +688,40 @@ Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
     klase = AmbKlaseVrste(vrsta)
     If UBound(klase) < 1 Then
         ' Vrsta je u enumu a nema red u matrici -- kvar ugovora, ne podatka.
-        AmbPrenosProblem = "Vrsta '" & Trim$(vrsta) & "' nema definisane klase strana."
+        AmbPrenosStrukturaProblem = "Vrsta '" & Trim$(vrsta) & "' nema definisane klase strana."
         Exit Function
     End If
 
     If Not AmbNalogUKlasi(CStr(klase(0)), odTip) Then
-        AmbPrenosProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(0)) & _
+        AmbPrenosStrukturaProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(0)) & _
                            " kao IZVOR, a dobio je " & Trim$(odTip) & "."
         Exit Function
     End If
 
     If Not AmbNalogUKlasi(CStr(klase(1)), naTip) Then
-        AmbPrenosProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(1)) & _
+        AmbPrenosStrukturaProblem = "'" & Trim$(vrsta) & "' trazi " & CStr(klase(1)) & _
                            " kao ODREDISTE, a dobio je " & Trim$(naTip) & "."
     End If
+End Function
+
+' PUN ugovor prenosa: struktura + postojanje oba naloga. Ovo zove PISAC.
+Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
+                                 ByVal naTip As String, ByVal naID As String, _
+                                 ByVal kolicina As Double, ByVal tipAmb As String, _
+                                 ByVal vrsta As String) As String
+    AmbPrenosProblem = AmbPrenosStrukturaProblem(odTip, odID, naTip, naID, _
+                                                 kolicina, tipAmb, vrsta)
+    If Len(AmbPrenosProblem) > 0 Then Exit Function
+
+    Dim p As String
+    p = AmbNalogProblem(odTip, odID)
+    If Len(p) > 0 Then
+        AmbPrenosProblem = "Nalog OD: " & p
+        Exit Function
+    End If
+
+    p = AmbNalogProblem(naTip, naID)
+    If Len(p) > 0 Then AmbPrenosProblem = "Nalog NA: " & p
 End Function
 
 ' Ista provera, za pisca: greska umesto poruke.

@@ -354,7 +354,13 @@
     **Ostaje `10b-2`:** devet mesta knjizenja, razlaganje `SaveOMUlaz_TX` i
     `SaveKupciIzlaz_TX`, numeracija ambalaznog dokumenta, staticka kapija za
     `AMB-INV-08` -- i **odluka pre koda**: da li citaoci idu u istom rezu (6.13).
-    BFP 2141 -> **2195**, sabotaza 629 -> **642**, `dokaz.py amb-pisac` **13/13 DOKAZANO**.
+    BFP 2141 -> **2208**, sabotaza 629 -> **645**, `dokaz.py amb-pisac` **16/16**.
+    **Review #400 (NO-GO) je nasao dva prava P2, oba zatvorena u istom rezu:**
+    `AMB-10-ODL-3` nije bio sproveden -- `AMB-INV-04` hvata dva protivpartnera samo
+    kad se poklope vrsta i tip ambalaze, pa dobija svoju kapiju (`AMB-INV-10`); i
+    citalac knjige nije bio fail-closed -- polupisan nov red prolazio je kao legacy
+    ili ulazio u saldo pola-pola, a taj saldo odlucuje o sledecem upisu. Oba su
+    resena JEDNIM ugovorom zapisanog reda, koji koriste svi citaoci.
     Prvi dvosmerni prolaz je vratio **NIJE DOKAZANO** i oba nalaza su bila u testu:
     jedan je padao fatalno pre imenovane tvrdnje, drugi je merio zbrkano -- stanica
     sa saldom nula je padala zbog **deficita**, pa je tvrdnja o storniranom dokumentu
