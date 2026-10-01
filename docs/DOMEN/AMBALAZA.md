@@ -253,6 +253,15 @@ izmedju pitanja i odgovora stanje se moglo promeniti drugim unosom.
 
 Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 
+> **AMB-10-ODL-8 (izvedeno, ne novo).** Pokriva se deficit **partnera**, ne
+> sopstvenog naloga. Odgovor daje **matrica strana**: pokrice je
+> `ULAZ_TUDJE_AMBALAZE`, a njoj je odrediste `PARTNER` (6.7). Stanica koja nema
+> gajbe ne sme da ih izda, i njen manjak nije „tudja ambalaza" nego **skriven
+> manjak** -- put je `NABAVKA`, sa svojim dokumentom i svojom cenom.
+>
+> Pisac klasu **cita iz matrice** a ne nosi spisak: kad bi se odrediste
+> `ULAZ_TUDJE` ikad promenilo, pravilo ide za njim samo.
+
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
 Knjiga odgovara na „gde su gajbe". Obaveza se **izvodi** iz iste knjige, bez
@@ -266,6 +275,12 @@ Obaveza(partner, tip) = SUM DoprinosObavezi(dogadjaji partnera i tipa)
 Puna definicija `DoprinosObavezi` i njena donja granica (`AMB-INV-09`) su u 6.9.
 Prosta razlika dve sume **nije dovoljna** nad append-only knjigom: storno bi
 anulirao fizicko stanje a obavezu ostavio da visi.
+
+**Obaveza postoji samo prema nalogu koji moze da primi tudju ambalazu** — a to je
+ista klasa koju matrica daje odredistu `ULAZ_TUDJE_AMBALAZE`, jer dug nastaje
+tacno tim dogadjajem. Citalac koji bi je racunao i za stanicu dobio bi negativan
+broj iz njenih `VRACANJE` redova: ne manji podatak nego **besmislen**, pa je to
+kapija a ne konvencija.
 
 Zato **`VRACANJE_TUDJE_AMBALAZE` mora biti odvojeno od `IZDATA_PRAZNA`**, iako
 su fizicki isti potez (`Stanica -> Kooperant`):
@@ -428,6 +443,34 @@ Alternativa bi bila prosiriti kljuc nalozima, ali tada on prestaje da bude
 identitet **poslovnog efekta** i postaje identitet reda — a idempotencija se meri
 po efektu.
 
+**Posledica koja se vidi samo u piscu:** jedan zahtev moze da proizvede **do tri
+reda** — pokrice deficita (`AMB-INV-07`), trazeni prenos, i ostatak podele
+(`AMB-INV-09`). Zato se **ponavljanje** zahteva ne moze meriti poredjenjem sa
+jednim redom: vracanje od 20 uz obavezu 12 upisuje red od **12**, pa bi
+`trazeno = kolicina reda` prijavilo `HARD CONFLICT` nad potpuno ispravnim
+ponavljanjem. Ponovno racunanje podele nije izlaz — posle prvog upisa je obaveza
+**druga**.
+
+> **Ponavljanje se meri ZBIROM** nad `(DokumentTIP, DokumentID, TipAmbalaze, Od,
+> Na)`, ogranicenim na vrste koje taj zahtev **sme** da proizvede na tom paru
+> (`AmbVrsteZahteva`). Zbir jednak trazenom = idempotentno; razlicit =
+> `HARD CONFLICT`.
+>
+> `ULAZ_TUDJE_AMBALAZE` **nije zahtev** nego posledica, i pisac je odbija kao
+> zahtev. Da je i zahtev, pokrice jednog zahteva i eksplicitan zahtev nad istim
+> dokumentom delili bi par i vrstu — pa bi jedan tiho progutao drugi kao
+> „ponavljanje".
+>
+> **Ostatak podele zauzima slot dokumenta.** Ostatak je `IZDATA_PRAZNA`, pa jedan
+> revers ne moze istom partneru i da prekomerno vrati tudje i da izda svoje: to je
+> `AMB-INV-04` koji radi, ne ogranicenje pisca. Dva cina — dva dokumenta, ili
+> jedna zbirna kolicina.
+>
+> **Datum je sadrzaj, pa i on ulazi u merenje ponavljanja** — po DANU, jer je
+> knjiga dnevna. Isti identitet sa drugim datumom nije ponavljanje nego
+> `HARD CONFLICT`: nad append-only knjigom je ispravka datuma **storno + nov
+> dogadjaj**, a tiho preuzimanje starog reda bi ispravku pojelo bez poruke.
+
 #### `AMB-INV-09`: obaveza je storno-svesna, i ima dno
 
 Prva verzija ovog dokumenta je obavezu racunala kao prostu razliku dve sume (`SUM ULAZ - SUM VRACANJE`). **Nad append-only knjigom to nije tacno**: storno `ULAZ_TUDJE_AMBALAZE` upisuje kontra-stav, fizicki saldo se
@@ -446,6 +489,13 @@ Obaveza(partner, tip) = SUM DoprinosObavezi(svi dogadjaji partnera i tipa)
 
 Tako kontra-stav gasi obavezu isto kao sto gasi fizicko stanje — jednim pravilom,
 bez posebnog slucaja.
+
+> **Sta iz ovoga nasledjuje `10d`.** Kontra-stav sam moze da obori donju granicu:
+> storno `ULAZ_TUDJE_AMBALAZE` cija je obaveza **vec zatvorena** vracanjem daje
+> `-N`. Poslovno je to tacno — ne moze se „ne-pozajmiti" ono sto je vraceno — pa
+> takav storno `10d` mora da **odbije**, u istom obliku u kom pisac odbija
+> nepokriven deficit. Pisac to ne prekriva: negativna obaveza mu je **kvar** i na
+> njoj staje (`10b-1`).
 
 **Donja granica nije kozmetika.** Bez `AMB-INV-09` model moze da proizvede
 matematicki ispravan **fizicki** ledger i istovremeno **nemogucu** knjigu obaveza:
@@ -725,6 +775,9 @@ je obrisao S3-ostatak. Ali:
 | 3 | `Firma` = **jedan** nalog; pocetno stanje dobija dokument | prihvaceno; odgovor je izvukao nalaz da **ni revers nema tabelu** — 6.12a. Samo pocetno stanje je kasnije **ukinuto** (krug 6) |
 | — | `POCETNO_STANJE` | dodato iz merenja, pa **ukinuto u krugu 6**: ono je `NABAVKA` + `IZDATA_PRAZNA`, dakle suvisan pojam — 6.7b |
 | 6 | enum zatvoren; `PRENOS_INTERNO` obuhvata vozaca; **pocetno stanje ukinuto** | odgovori operatera — 6.7a, 6.7b |
+| 7 | `10b-1`: idempotencija se ne moze meriti nad jednim redom kad pisac deli zahtev | `AMB-INV-04` dobija pravilo zbira nad parem naloga — 6.9 |
+| 7 | ciji se deficit pokriva nije bilo izgovoreno | odgovor **izveden iz matrice**, ne nova odluka — `AMB-10-ODL-8`, 6.5 |
+| 7 | tabela tokom prelaza nosi dva oblika reda | `10b` se deli na `10b-1` (pisac) i `10b-2` (cutover); odluka o redosledu citalaca stoji pred `10b-2` — 6.13 |
 
 ### 6.12a Ambalazni dokument — jedan, za sve sto svoj nema
 
@@ -830,10 +883,35 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
 2. **AMB-10-DOK** — `tblAmbalazaDokument` (revers, nabavka, otpis); `ReversID` postaje njegov identitet. Preduslov za `AMB-INV-08` bez izuzetaka.
-3. **AMB-10b** — nov append-only pisac + svih devet mesta + pokrivanje deficita + kapije identiteta + sabotaze. **Ukljucuje razlaganje OBA slozena pisca** (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina odlazi u kasu.
-4. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-5. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
-6. **AMB-10e** — **tek tada** brisanje starog modela.
+3. **AMB-10b-1** — nov append-only pisac (`PrenesiAmbalazu`), zaglavlje
+   (`UpisiAmbDokument`), saldo i obaveza kao citaoci koje **pisac mora** da ima,
+   kapije `AMB-INV-01..04`, `-07`, `-09` i sabotaze. **Bez cutovera.**
+4. **AMB-10b-2** — svih devet mesta knjizenja + **razlaganje OBA slozena pisca**
+   (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina
+   odlazi u kasu. Uz njih i staticka kapija za `AMB-INV-08` i numeracija
+   ambalaznog dokumenta.
+5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
+6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+7. **AMB-10e** — **tek tada** brisanje starog modela.
+
+> **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**
+> Pisac ne upisuje stare kolone (`Smer`, `EntitetID`, `VozacID`) -- kopija bi bila
+> druga istina, a ovaj rez postoji da ih uklanja. Red knjige se zato poznaje po
+> `OdNalogTip`, i citalac knjige **preskace** stari oblik; red koji ima strane a
+> nema `VrstaKretanja` nije stari oblik nego **kvar**, i na njemu se staje.
+>
+> **Dva modela se ne mesaju ni u jednom saldu** -- stari citalac ne vidi nove
+> redove (nemaju `Smer`), novi ne vidi stare (nemaju naloge). Ali iz toga sledi da
+> **posle cutovera stari citaoci citaju prazno**, pa `10b-2` pre koda mora da
+> izabere jedno od dva:
+>
+> | | Posledica |
+> |---|---|
+> | **(a) jedan rez** — devet mesta **i** citaoci u istom PR-u | 10c se stapa u 10b-2; „staro protiv novog" postaje merenje nad **scenarijem** (isti poslovni tok, brojevi pre i posle), ne nad istom tabelom |
+> | (b) dvojni upis — `TrackAmbalaza` ostaje uz novi pisac | 10c moze da meri paralelno, ali svaki citalac `tblAmbalaza` mora da se proveri na dvostruko brojanje (`popis_citalaca.py`), a `Chk_B10` vec nosi izuzetak |
+>
+> Preporuka je **(a)**: nema podataka za migraciju, pa dvojni upis placa reviziju
+> svih citalaca da bi kupio merenje koje scenario daje jeftinije.
 
 **Cetiri dokaza pre `10b`:** zatvoren `VrstaKretanja` enum · tacan protokol
 potvrde deficita · test da pozajmljena ambalaza moze **uci -> kretati se -> biti

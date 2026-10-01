@@ -5030,6 +5030,130 @@ SABOTAZE = {
         "Test_Amb_DoprinosObavezi",
         "Amb obaveza: storno ulaza tudje ambalaze GASI obavezu koju je stvorio",
     ),
+    # --- AMB-10b-1: PISAC KNJIGE ---
+    #
+    # Pokrice deficita je POSLEDICA, ne zahtev. Da je i zahtev, pokrice jednog
+    # zahteva i eksplicitan zahtev nad istim dokumentom delili bi par i vrstu, pa
+    # bi jedan tiho progutao drugi kao "idempotentno ponavljanje".
+    "amb-pisac-pokrice-je-zahtev": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0)\n",
+        "    AmbVrstaJeZahtev = True   ' SABOTAZA: pokrice deficita je i zahtev\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb deficit: pokrice se NE moze poruciti izvana -- pisac ga generise",
+    ),
+    # Deficit SOPSTVENOG naloga nije "tudja ambalaza" nego skriven manjak. Odgovor
+    # daje matrica (ULAZ_TUDJE: GRANICA -> PARTNER), pa ga kapija samo cita.
+    "amb-pisac-sopstveni-deficit-se-pokriva": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(klasa, tip) Then\n",
+        "    If False Then   ' SABOTAZA: svaciji deficit se pokriva tudjom ambalazom\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb deficit: manjak SOPSTVENOG naloga se odbija, ne pokriva",
+    ),
+    # Bez racunanja deficita nema ni pitanja ni pokrica -- realan nalog tiho padne
+    # ispod nule, a to je tacno ono sto AMB-INV-07 zabranjuje.
+    "amb-pisac-deficit-se-ne-racuna": (
+        "modAmbalaza.bas",
+        "    If deficit > 0 Then\n",
+        "    If False Then   ' SABOTAZA: deficit se ne pokriva i ne pita\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb deficit: bez potvrde pisac PITA, ne upisuje",
+    ),
+    # Potvrda se meri prema SVEZE izracunatom manjku: izmedju pitanja i odgovora
+    # stanje se moglo promeniti drugim unosom, pa stara potvrda ne vazi.
+    "amb-pisac-potvrda-se-ne-proverava": (
+        "modAmbalaza.bas",
+        "        If potvrdaDeficita <> deficit Then\n",
+        "        If False Then   ' SABOTAZA: potvrda se ne poredi sa svezim manjkom\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb deficit: potvrda koja se ne slaze se ODBIJA, ne zaokruzuje",
+    ),
+    # Bez podele obaveza ide u minus: firma "vrati" vise tudjih gajbi nego sto je
+    # uzela. Fizicki ledger ostaje tacan, knjiga obaveza postaje nemoguca.
+    "amb-pisac-obaveza-u-minus": (
+        "modAmbalaza.bas",
+        "        If kolicina > obaveza Then\n",
+        "        If False Then   ' SABOTAZA: vracanje preko duga se ne deli\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb obaveza: dug je ugasen na nulu, ne u minus",
+    ),
+    # Naivna idempotencija (samo trazena vrsta) lomi se tacno na podeli: zahtev je
+    # 100, a red koji ga nosi 70 -- ispravno ponavljanje bi prijavilo HARD CONFLICT.
+    "amb-pisac-idempotencija-po-redu": (
+        "modAmbalaza.bas",
+        "    dozvoljene = modAmbalazaUgovor.AmbVrsteZahteva(vrstaK)\n",
+        "    dozvoljene = Array(vrstaK)   ' SABOTAZA: ponavljanje se meri samo trazenom vrstom\n",
+        "Test_Amb_DeficitIObaveza",
+        "Amb obaveza: ponovljen PODELJEN zahtev vraca isti AmbID",
+    ),
+    # Citalac knjige preskace STARI oblik reda, i to je legitimno tokom 10b. Red
+    # koji ima strane a nema vrstu nije stari oblik nego kvar: tiho preskakanje bi
+    # ga izbacilo iz salda, a saldo je ulaz u kapiju deficita.
+    # Obaveza postoji samo prema nalogu koji MOZE da primi tudju ambalazu. Bez
+    # kapije stanica dobija negativan broj iz svojih VRACANJE redova -- besmislica
+    # koja izgleda kao podatak.
+    "amb-pisac-obaveza-prema-svakome": (
+        "modAmbalaza.bas",
+        "    If Not modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, tip) Then\n",
+        "    If False Then   ' SABOTAZA: obaveza se vodi prema svakom nalogu\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: obaveza se ne racuna prema SOPSTVENOM nalogu",
+    ),
+    # Datum je sadrzaj dogadjaja. Bez njega u filteru ponavljanja, ispravka datuma
+    # tiho vraca postojeci red -- a nad append-only knjigom je ispravka storno + nov
+    # dogadjaj, nikad preuzimanje starog.
+    "amb-pisac-datum-nije-sadrzaj": (
+        "modAmbalaza.bas",
+        "                   IstiDan(data(i, cDat), datum) Then\n",
+        "                   True Then   ' SABOTAZA: datum ne ulazi u ponavljanje\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: isti identitet sa DRUGIM datumom je HARD CONFLICT",
+    ),
+    "amb-pisac-knjiga-bez-vrste-prolazi": (
+        "modAmbalaza.bas",
+        "    If Len(AmbText(data(i, cVK))) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: red bez vrste prolazi kao red knjige\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: red sa stranama a bez vrste PADA, ne preskace se",
+    ),
+    # AMB-INV-04 nad DRUGIM protivpartnerom istog dokumenta (AMB-10-ODL-3): kljuc
+    # je identitet poslovnog EFEKTA, pa ne nosi nalog -- jedan dokument, jedan
+    # protivpartner. Ovu granu ZbirZahteva ne vidi, jer se par naloga razlikuje.
+    "amb-pisac-dva-protivpartnera": (
+        "modAmbalaza.bas",
+        "        If Len(sudar) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: isti dokument sme dva protivpartnera\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: isti dokument NE sme drugog protivpartnera (AMB-10-ODL-3)",
+    ),
+    # Kretanje bez identiteta dokumenta ne postoji (AMB-INV-04 i -08). Provera je u
+    # JEZGRU, kroz koje prolazi svaki red -- i pokrice i ostatak podele.
+    "amb-pisac-red-bez-dokumenta": (
+        "modAmbalaza.bas",
+        "    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: red knjige sme bez identiteta dokumenta\n",
+        "Test_Amb_ZaglavljeDokumentaPisac",
+        "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)",
+    ),
+    # Veza dokument <-> kretanje: NABAVKA okacena na revers izgleda kao uredan
+    # zapis, pa je kapija jedini nacin da se vidi.
+    "amb-pisac-nabavka-na-reversu": (
+        "modAmbalaza.bas",
+        "        If Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(dokVrsta, vrstaK) Then\n",
+        "        If False Then   ' SABOTAZA: svako kretanje sme na svakom dokumentu\n",
+        "Test_Amb_ZaglavljeDokumentaPisac",
+        "Amb zaglavlje: nabavka se NE knjizi na revers",
+    ),
+    # Zaglavlje sme da nosi Stornirano (ono nije knjiga), ali dopisivanje na
+    # ponisten dokument je kretanje bez zivog povoda.
+    "amb-pisac-storniran-dokument-prima": (
+        "modAmbalaza.bas",
+        "    If Len(AmbText(st)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: storniran dokument prima nova kretanja\n",
+        "Test_Amb_ZaglavljeDokumentaPisac",
+        "Amb zaglavlje: storniran dokument ne prima nova kretanja",
+    ),
     "migracija-zalutala-kolona-prolazi": (
         "modSetup.bas",
         "        ' ako ga ima na pogresnom mestu, vraca ga ili imenuje razlog.\n        PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)\n",

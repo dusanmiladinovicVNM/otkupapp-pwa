@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ (v3, dva kruga review-a), kod jos ne; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · `10b-2` cutover ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -325,17 +325,40 @@
     revers i njegovo mesto je `tblAmbalaza`, a kolona stoji i na `tblOtkup`
     (`KolAmbIzdata`) i na `tblPrijemnica`. Merenje je poteralo holisticki pregled --
     **devet mesta knjizenja preko pet dokumenata** -- i model je ispao veci od S6.
-    Pun zapis: `docs/DOMEN/AMBALAZA.md` (v3, posle **dva** kruga dizajn review-a).
+    Pun zapis: `docs/DOMEN/AMBALAZA.md` (posle **sedam** krugova review-a; sta je
+    koji krug promenio stoji u tabeli 6.12 istog dokumenta).
     **Model:** dogadjaj je jedan red koji imenuje obe strane (`Od -> Na`), knjiga je
     append-only, storno je kontra-stav, vozac je obican nalog, a tudja ambalaza
     ulazi eksplicitnim dogadjajem iz `SpoljniSvet`. Nijedan realni nalog ne sme
     zavrsiti sa negativnim saldom.
     **Odluke operatera:** stampa storniranog dokumenta prikazuje stanje pre storna ·
-    `KupciIzlaz` je **revers od kupca + uplata**, ne nov dokument · `POCETNO_STANJE` je **iskljucivo firmina**
-    ambalaza zatecena kod entiteta (partnerova ide kao `ULAZ_TUDJE_AMBALAZE`).
-    **Redosled:** `10a` ugovor · `10-DOK` ambalazni dokument · `10b` pisac ·
-    `10c` citaoci · `10d` storno · `10e` brisanje starog -- stare strukture se brisu
-    POSLEDNJE, da bi staro i novo mogli da se mere jedno protiv drugog.
+    `KupciIzlaz` je **revers od kupca + uplata**, ne nov dokument · `Firma` je **jedan**
+    nalog · enum kretanja je **zatvoren** (osam vrsta) · nijedan dokument nije
+    istovremeno ambalazni i novcani (`AMB-10-ODL-5`) · **`POCETNO_STANJE` je UKINUTO**
+    u krugu 6: ono je `NABAVKA` + `IZDATA_PRAZNA`, dakle suvisan pojam.
+    **Redosled:** `10a` ugovor · `10-DOK` ambalazni dokument · **`10b-1` pisac** ·
+    `10b-2` devet mesta + razlaganje dva slozena pisca · `10c` citaoci · `10d` storno ·
+    `10e` brisanje starog -- stare strukture se brisu POSLEDNJE.
+
+52. **AMB-10b-1: knjiga ima pisca, cutover je sledeci rez** (01.10.2026).
+    `tblAmbalaza` + sest kolona na kraju (`Od`/`Na` nalog, `VrstaKretanja`,
+    `StornoOd`; otisak `E23576DB` -> `A90C9F51`), `PrenesiAmbalazu` i
+    `UpisiAmbDokument` u `modAmbalaza` (vlasnik reda za obe tabele),
+    `AmbSaldoNaloga` / `AmbObavezaPartneru` / `AmbDeficitZaPrenos` kao citaoci koje
+    **pisac mora** da ima -- `AMB-INV-07` i `-09` se bez stanja ne mogu proveriti.
+    **Nijedno pozivno mesto nije dirnuto**, pa zatecen tok radi nepromenjen.
+    **Dve stvari su usput odlucene, obe izvedene iz postojece matrice, ne nove:**
+    pokriva se deficit **partnera** a ne sopstvenog naloga (`AMB-10-ODL-8`), i
+    ponavljanje zahteva se meri **zbirom nad parem naloga** jer pisac zahtev deli
+    (`AMB-INV-04`, 6.9).
+    **Ostaje `10b-2`:** devet mesta knjizenja, razlaganje `SaveOMUlaz_TX` i
+    `SaveKupciIzlaz_TX`, numeracija ambalaznog dokumenta, staticka kapija za
+    `AMB-INV-08` -- i **odluka pre koda**: da li citaoci idu u istom rezu (6.13).
+    BFP 2141 -> **2195**, sabotaza 629 -> **642**, `dokaz.py amb-pisac` **13/13 DOKAZANO**.
+    Prvi dvosmerni prolaz je vratio **NIJE DOKAZANO** i oba nalaza su bila u testu:
+    jedan je padao fatalno pre imenovane tvrdnje, drugi je merio zbrkano -- stanica
+    sa saldom nula je padala zbog **deficita**, pa je tvrdnja o storniranom dokumentu
+    prolazila iz pogresnog razloga.
     **Zasto pred S6:** `AMB-10e` i zavrsni korak S6 diraju iste citaoce
     (`modPrint`, `modIzvestaj`, `modScrIzvestaji`, `modStornoDok`); ovim redom se
     diraju jednom.

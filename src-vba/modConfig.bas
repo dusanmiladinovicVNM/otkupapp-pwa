@@ -679,6 +679,23 @@ Public Const COL_AMB_DOK_TIP As String = "DokumentTip"
 ' prazno za kretanja koja nisu revers (otkup, otpremnica, prijemnica).
 Public Const COL_AMB_REVERS_ID As String = "ReversID"
 
+' --- KNJIGA AMBALAZE (AMB-10b) ---
+'
+' Dogadjaj je PRENOS: jedan red imenuje OBE strane, kolicina je uvek pozitivna,
+' smera kao podatka NEMA -- smer je par (Od -> Na). Zato ove kolone ne zamenjuju
+' Smer/EntitetID/VozacID nego ih CINE NEPOTREBNIM; brisu se u 10e, kad citaoci
+' predju (docs/DOMEN/AMBALAZA.md 6.1 i 6.13).
+Public Const COL_AMB_OD_TIP As String = "OdNalogTip"
+Public Const COL_AMB_OD_ID As String = "OdNalogID"
+Public Const COL_AMB_NA_TIP As String = "NaNalogTip"
+Public Const COL_AMB_NA_ID As String = "NaNalogID"
+' ZASTO je prenos nastao. Nije izvedivo iz para: Stanica -> Kooperant je isti
+' fizicki potez i kad firma zaduzuje partnera i kad mu vraca njegove gajbe.
+Public Const COL_AMB_VRSTA_KRETANJA As String = "VrstaKretanja"
+' AmbID originala koji ovaj red ponistava; prazno za original. Knjiga je
+' APPEND-ONLY -- storno je kontra-stav, ne UPDATE kolone Stornirano.
+Public Const COL_AMB_STORNO_OD As String = "StornoOd"
+
 ' --- tblNovac ---
 Public Const COL_NOV_ID As String = "NovacID"
 Public Const COL_NOV_BROJ_DOK As String = "BrojDokumenta"

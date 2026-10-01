@@ -110,6 +110,28 @@ Public Function AmbVrstaPoznata(ByVal vrsta As String) As Boolean
     AmbVrstaPoznata = UNizu(AmbVrsteSve(), vrsta)
 End Function
 
+' KANONSKI ZAPIS -- knjiga cuva vrednost iz zatvorene liste, ne onu koju je
+' pozivalac otkucao. Provere su vbTextCompare pa bi i "stanica" prosla, ali bi u
+' koloni ostala druga pisana forma iste stvari -- a nad njom svaki GROUP BY,
+' Dictionary kljuc i izvestaj racunaju dva naloga. Prazno znaci "nije u listi".
+Private Function KanonIzNiza(ByVal niz As Variant, ByVal vrednost As String) As String
+    Dim i As Long
+    For i = LBound(niz) To UBound(niz)
+        If StrComp(CStr(niz(i)), Trim$(vrednost), vbTextCompare) = 0 Then
+            KanonIzNiza = CStr(niz(i))
+            Exit Function
+        End If
+    Next i
+End Function
+
+Public Function AmbVrstaKanon(ByVal vrsta As String) As String
+    AmbVrstaKanon = KanonIzNiza(AmbVrsteSve(), vrsta)
+End Function
+
+Public Function AmbNalogTipKanon(ByVal tip As String) As String
+    AmbNalogTipKanon = KanonIzNiza(AmbNaloziSvi(), tip)
+End Function
+
 ' SOPSTVENI nalozi -- unutar firme, ne partneri. Prazne gajbe sa stanice najcesce
 ' idu VOZACU pa tek onda drugoj stanici, pa je vozac ovde "nas" iako je transporter
 ' (AMB-10-ODL-7).
@@ -228,6 +250,10 @@ End Function
 
 Public Function AmbDokVrstaPoznata(ByVal vrsta As String) As Boolean
     AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)
+End Function
+
+Public Function AmbDokVrstaKanon(ByVal vrsta As String) As String
+    AmbDokVrstaKanon = KanonIzNiza(AmbDokVrsteSve(), vrsta)
 End Function
 
 ' KOJE KRETANJE SME NA KOM DOKUMENTU.
@@ -460,6 +486,129 @@ Public Function AmbMatricaNepotpuna() As String
         If UBound(klase) < 1 Then fale = fale & " " & CStr(sve(i))
     Next i
     AmbMatricaNepotpuna = Trim$(fale)
+End Function
+
+' ============================================================
+' JEDAN ZAHTEV, VISE REDOVA -- sta pisac sme da proizvede
+' ============================================================
+'
+' Pisac ne upisuje uvek tacno ono sto je trazeno, i to su dve odluke modela:
+'
+'   deficit (AMB-INV-07)  -> uz trazeni red ide POKRICE, na DRUGOM paru naloga
+'   obaveza (AMB-INV-09)  -> trazeni red se DELI na dva, na ISTOM paru naloga
+'
+' Druga lomi naivnu idempotenciju. Ponovljen isti zahtev (vracanje 20 uz obavezu
+' 12) nalazi red od 12, pa bi poredjenje "trazena kolicina == kolicina reda"
+' prijavilo HARD CONFLICT nad potpuno ispravnim ponavljanjem -- a ponovno
+' racunanje podele nije izlaz, jer je obaveza posle prvog upisa DRUGA. Zato se
+' ponavljanje meri ZBIROM preko para naloga, a ovde stoji koje vrste jedan zahtev
+' uopste sme da proizvede na tom paru.
+'
+' ULAZ_TUDJE_AMBALAZE NIJE ZAHTEV. Ona je posledica -- pokrice deficita -- i
+' generise je pisac. Da je i zahtev, pokrice jednog zahteva i eksplicitan zahtev
+' nad istim dokumentom delili bi i par i vrstu, pa bi jedan tiho progutao drugi
+' kao "idempotentno ponavljanje".
+Public Function AmbVrstaJeZahtev(ByVal vrsta As String) As Boolean
+    If Not AmbVrstaPoznata(vrsta) Then Exit Function
+    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0)
+End Function
+
+' Vrste koje jedan zahtev sme da proizvede NA ISTOM PARU naloga. Prazno za vrstu
+' koja nije zahtev.
+Public Function AmbVrsteZahteva(ByVal vrsta As String) As Variant
+    AmbVrsteZahteva = Array()
+    If Not AmbVrstaJeZahtev(vrsta) Then Exit Function
+
+    Select Case AmbVrstaKanon(vrsta)
+        Case AMB_VK_VRACANJE_TUDJE
+            ' AMB-INV-09: vracanje preko obaveze se cepa, a ostatak je NOVO
+            ' zaduzenje partnera -- ne vracanje. Dva dogadjaja, dve vrste.
+            AmbVrsteZahteva = Array(AMB_VK_VRACANJE_TUDJE, AMB_VK_IZDATA_PRAZNA)
+        Case Else
+            AmbVrsteZahteva = Array(AmbVrstaKanon(vrsta))
+    End Select
+End Function
+
+' KAPIJA POTPUNOSTI nad proizvodnjom -- isti oblik kao AmbMatricaNepotpuna.
+'
+' Tri uslova, jer su tri nacina da ovo tiho pukne:
+'   1. vrsta koja JE zahtev a ne proizvodi nista -- pisac bi upisao red koji
+'      nijedno ponavljanje ne bi prepoznalo;
+'   2. zahtev koji ne proizvodi SAMOG SEBE -- podela bez trazenog reda;
+'   3. proizvedena vrsta sa DRUGIM parom klasa -- podela ne sme da promeni ko sme
+'      da stoji na kojoj strani, inace zaobilazi matricu kroz sopstveni ostatak.
+Public Function AmbProizvodnjaNepotpuna() As String
+    Dim sve As Variant, prod As Variant, klaseZ As Variant, klaseP As Variant
+    Dim i As Long, j As Long, v As String, fale As String
+
+    sve = AmbVrsteSve()
+    For i = LBound(sve) To UBound(sve)
+        v = CStr(sve(i))
+        prod = AmbVrsteZahteva(v)
+
+        If Not AmbVrstaJeZahtev(v) Then
+            If UBound(prod) >= LBound(prod) Then fale = fale & " " & v & ":posledica-proizvodi"
+        ElseIf UBound(prod) < LBound(prod) Then
+            fale = fale & " " & v & ":bez-proizvodnje"
+        Else
+            If Not UNizu(prod, v) Then fale = fale & " " & v & ":bez-sebe"
+
+            klaseZ = AmbKlaseVrste(v)
+            For j = LBound(prod) To UBound(prod)
+                klaseP = AmbKlaseVrste(CStr(prod(j)))
+                If UBound(klaseZ) < 1 Or UBound(klaseP) < 1 Then
+                    fale = fale & " " & v & ">" & CStr(prod(j)) & ":bez-klasa"
+                ElseIf StrComp(CStr(klaseZ(0)), CStr(klaseP(0)), vbTextCompare) <> 0 Or _
+                       StrComp(CStr(klaseZ(1)), CStr(klaseP(1)), vbTextCompare) <> 0 Then
+                    fale = fale & " " & v & ">" & CStr(prod(j)) & ":drugi-par-klasa"
+                End If
+            Next j
+        End If
+    Next i
+
+    AmbProizvodnjaNepotpuna = Trim$(fale)
+End Function
+
+' ============================================================
+' CIJI DEFICIT SE SME POKRITI -- AMB-10-ODL-8
+' ============================================================
+'
+' Pokrice deficita je ULAZ_TUDJE_AMBALAZE, a matrica za nju kaze GRANICA ->
+' PARTNER. Iz toga SLEDI, bez nove odluke, da se deficit SOPSTVENOG naloga ne
+' pokriva: "nase gajbe iz vazduha" nije dogadjaj nego skriven manjak. Stanica
+' koja nema gajbe ne sme da ih izda; put je NABAVKA, sa svojim dokumentom i svojom
+' cenom.
+'
+' Odgovor se CITA iz matrice, a ne pise kao "PARTNER": kad bi se klasa odredista
+' ULAZ_TUDJE ikad promenila, ovo ide za njom samo. Isti razlog zbog kog matrica
+' postoji.
+Public Function AmbPokriceKlasa() As String
+    Dim klase As Variant
+    klase = AmbKlaseVrste(AMB_VK_ULAZ_TUDJE)
+    If UBound(klase) < 1 Then Exit Function
+    AmbPokriceKlasa = CStr(klase(1))
+End Function
+
+Public Function AmbPokriceProblem(ByVal tip As String, ByVal id As String) As String
+    Dim p As String, klasa As String
+
+    p = AmbNalogProblem(tip, id)
+    If Len(p) > 0 Then
+        AmbPokriceProblem = p
+        Exit Function
+    End If
+
+    klasa = AmbPokriceKlasa()
+    If Len(klasa) = 0 Then
+        AmbPokriceProblem = "Pokrice deficita nema definisanu klasu odredista."
+        Exit Function
+    End If
+
+    If Not AmbNalogUKlasi(klasa, tip) Then
+        AmbPokriceProblem = "Deficit naloga " & Trim$(tip) & " se NE pokriva ulazom tudje " & _
+                            "ambalaze (pokrice trazi " & klasa & "): nase gajbe ne nastaju " & _
+                            "iz vazduha, za njih ide NABAVKA."
+    End If
 End Function
 
 ' ============================================================
