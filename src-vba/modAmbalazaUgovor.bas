@@ -57,6 +57,13 @@ Public Const AMB_VK_VRACANJE_TUDJE As String = "VRACANJE_TUDJE_AMBALAZE"
 Public Const AMB_VK_NABAVKA As String = "NABAVKA"
 Public Const AMB_VK_OTPIS As String = "OTPIS"
 
+' Vrsta AMBALAZNOG DOKUMENTA (AMB-10-DOK) -- zatvoren enum, tri vrednosti.
+' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
+' KRETANJA. Vezu medju njima drzi AmbDokDozvoljavaKretanje.
+Public Const AMB_DOK_REVERS As String = "REVERS"
+Public Const AMB_DOK_NABAVKA As String = "NABAVKA"
+Public Const AMB_DOK_OTPIS As String = "OTPIS"
+
 ' ============================================================
 ' KLASE NALOGA -- azbuka matrice ispod
 ' ============================================================
@@ -207,6 +214,172 @@ Public Function AmbNalogProblem(ByVal tip As String, ByVal id As String) As Stri
                           CStr(n) & " reda u " & tbl & "."
     End If
 End Function
+
+' ============================================================
+' AMBALAZNI DOKUMENT -- vrsta i zaglavlje (AMB-10-DOK)
+' ============================================================
+'
+' tblAmbalazaDokument nosi dogadjaje koji nemaju svoj poslovni dokument. Njegov
+' AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID prestaje da bude drugi,
+' paralelan identitet -- ne brise se nego POSTAJE ovo.
+Public Function AmbDokVrsteSve() As Variant
+    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
+End Function
+
+Public Function AmbDokVrstaPoznata(ByVal vrsta As String) As Boolean
+    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)
+End Function
+
+' KOJE KRETANJE SME NA KOM DOKUMENTU.
+'
+' Bez ovoga bi 10b morao da pretpostavi, a pretpostavka bi prosla tiho: NABAVKA
+' okacena na revers izgledala bi kao uredan zapis.
+'
+'   REVERS   -> IZDATA_PRAZNA, POVRAT_PRAZNE, PRENOS_INTERNO, VRACANJE_TUDJE
+'   NABAVKA  -> NABAVKA
+'   OTPIS    -> OTPIS
+'
+' AMBALAZA_UZ_ROBU nikad nije ovde -- ona putuje sa robom, pa joj je izvorni
+' dokument otkup, otpremnica ili prijemnica.
+'
+' ULAZ_TUDJE_AMBALAZE sme uz SVAKI AMBALAZNI dokument: ono nije vrsta posla nego
+' POKRICE DEFICITA (AMB-INV-07), pa nastaje svuda gde bi realan nalog pao ispod
+' nule -- i na reversu, ne samo uz robu.
+'
+' OPSEG OVE FUNKCIJE: ona odgovara SAMO za tblAmbalazaDokument. Da li ULAZ_TUDJE
+' sme uz otkup ili prijemnicu je drugo pitanje, jer robni tipovi dokumenata nisu
+' ovde zatvoren skup -- pola AmbDok validator, pola genericki source-document
+' validator bila bi funkcija koja ni jedno ne tvrdi do kraja.
+Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
+                                         ByVal vrstaKretanja As String) As Boolean
+    ' FAIL-CLOSED NA NEPOZNATU VRSTU (review #399, P2).
+    '
+    ' Dozvola za pokrice deficita je ranije stajala IZNAD ove provere, pa je
+    ' ("NEPOSTOJECI_DOKUMENT", ULAZ_TUDJE) vracalo True i zaobilazilo zatvoren enum.
+    ' Kapija koja odgovori pre nego sto proveri preduslov nije kapija.
+    If Not AmbDokVrstaPoznata(dokVrsta) Then Exit Function
+
+    If StrComp(Trim$(vrstaKretanja), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
+        AmbDokDozvoljavaKretanje = True      ' pokrice deficita ide uz svaki AmbDok
+        Exit Function
+    End If
+
+    Select Case Trim$(dokVrsta)
+        Case AMB_DOK_REVERS
+            Select Case Trim$(vrstaKretanja)
+                Case AMB_VK_IZDATA_PRAZNA, AMB_VK_POVRAT_PRAZNE, _
+                     AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE
+                    AmbDokDozvoljavaKretanje = True
+            End Select
+        Case AMB_DOK_NABAVKA
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_NABAVKA, vbTextCompare) = 0)
+        Case AMB_DOK_OTPIS
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_OTPIS, vbTextCompare) = 0)
+    End Select
+End Function
+
+' KO SME DA POSEDUJE NUMERICKI NIZ, PO VRSTI DOKUMENTA.
+'
+' Nije dovoljno da nalog postoji: AmbNalogProblem dokazuje postojanje, ne pravo na
+' seriju brojeva. Bez ovoga prolazi "REVERS, vlasnik = Kooperant" -- partner koji
+' poseduje NASU seriju -- pa cak i "vlasnik = SpoljniSvet", granica koja uopste
+' nije drzalac.
+'
+' Pravilo je jedno i za sve tri vrste, i izgovara se u jednoj recenici:
+'
+'   BROJ JE NAS, PROTIVPARTNER JE NJIHOV.
+'
+' Dokument pisemo mi -- i revers kooperantu, i revers kupca, i nabavku, i otpis.
+' Partner nikad ne izdaje nas broj, pa vlasnik mora biti SOPSTVENI nalog (Stanica,
+' Firma, Vozac). Koji tacno, po vrsti i po putanji, ostaje numeraciji u 10b -- ali
+' KLASA je zakljucana ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku
+' a da nijedno ne prekrsi ugovor.
+'
+' Funkcija postoji po vrsti iako je odgovor danas isti za sve tri: kad bi se neka
+' vrsta ikad brojala drugacije, ovo je mesto na kom se to kaze -- i AmbDokMatricaNepotpuna
+' odmah obara vrstu bez odgovora.
+Public Function AmbDokBrojOwnerKlasa(ByVal vrsta As String) As String
+    Select Case Trim$(vrsta)
+        Case AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
+            AmbDokBrojOwnerKlasa = AMB_KLASA_SOPSTVENI
+    End Select
+End Function
+
+' KAPIJA POTPUNOSTI nad vrstama dokumenta -- isti oblik kao AmbMatricaNepotpuna.
+' Vrsta bez odgovora o vlasniku broja prosla bi kroz proveru zaglavlja neprimetno.
+Public Function AmbDokMatricaNepotpuna() As String
+    Dim sve As Variant, i As Long, fale As String
+    sve = AmbDokVrsteSve()
+    For i = LBound(sve) To UBound(sve)
+        If Len(AmbDokBrojOwnerKlasa(CStr(sve(i)))) = 0 Then fale = fale & " " & CStr(sve(i))
+    Next i
+    AmbDokMatricaNepotpuna = Trim$(fale)
+End Function
+
+' ZAGLAVLJE DOKUMENTA -- provera pre upisa. Vraca "" ili imenovan razlog.
+'
+' VLASNIK NUMERICKOG NIZA JE OBAVEZAN. Broj bez opsega u kom je jedinstven nije
+' identitet nego niz znakova: dva dokumenta mogu nositi isti broj a da nijedna
+' provera ne primeti. Ranije je tu stajala samo StanicaID, i to opciona -- sto je
+' revers kupca ostavljalo bez ikakvog opsega (review #399, P2).
+'
+' KOJI nalog je vlasnik po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom.
+' Ovde se tvrdi samo da vlasnik POSTOJI i da se razresava ISTOM kapijom kao svaki
+' drugi nalog -- dakle "BrojOwnerTip=Vozac, BrojOwnerID=KUP-17" pada pre upisa.
+Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
+                              ByVal datum As Date, _
+                              ByVal brojOwnerTip As String, _
+                              ByVal brojOwnerID As String) As String
+    If Not AmbDokVrstaPoznata(vrsta) Then
+        AmbDokProblem = "Nepoznata vrsta ambalaznog dokumenta: '" & Trim$(vrsta) & "'."
+        Exit Function
+    End If
+
+    If Len(Trim$(broj)) = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema broj."
+        Exit Function
+    End If
+
+    If datum = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema datum."
+        Exit Function
+    End If
+
+    If Len(Trim$(brojOwnerTip)) = 0 Then
+        AmbDokProblem = "Ambalazni dokument nema vlasnika numerickog niza -- " & _
+                        "broj bez opsega nije jedinstven."
+        Exit Function
+    End If
+
+    Dim p As String
+    p = AmbNalogProblem(brojOwnerTip, brojOwnerID)
+    If Len(p) > 0 Then
+        AmbDokProblem = "Vlasnik broja: " & p
+        Exit Function
+    End If
+
+    ' Postojanje naloga NIJE pravo na seriju brojeva (review #399).
+    Dim klasa As String
+    klasa = AmbDokBrojOwnerKlasa(vrsta)
+    If Len(klasa) = 0 Then
+        AmbDokProblem = "Vrsta '" & Trim$(vrsta) & "' nema definisanog vlasnika broja."
+        Exit Function
+    End If
+
+    If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then
+        AmbDokProblem = "'" & Trim$(vrsta) & "' trazi " & klasa & " kao vlasnika broja, " & _
+                        "a dobio je " & Trim$(brojOwnerTip) & " -- broj je nas, " & _
+                        "protivpartner je njihov."
+    End If
+End Function
+
+Public Sub RequireAmbDok(ByVal vrsta As String, ByVal broj As String, _
+                         ByVal datum As Date, ByVal brojOwnerTip As String, _
+                         ByVal brojOwnerID As String, ByVal sourceName As String)
+    Dim p As String
+    p = AmbDokProblem(vrsta, broj, datum, brojOwnerTip, brojOwnerID)
+    If Len(p) > 0 Then Err.Raise vbObjectError + 4451, sourceName, p
+End Sub
 
 ' ============================================================
 ' MATRICA: koja klasa naloga sme na kojoj strani, po vrsti kretanja

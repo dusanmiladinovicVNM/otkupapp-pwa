@@ -30,6 +30,17 @@
     "schema_owner": [],
     "cilj": []
   },
+  "tblAmbalazaDokument": {
+    "row_owner": [
+      "modAmbalaza"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modAmbalaza"
+    ]
+  },
   "tblArtikli": {
     "row_owner": [
       "modAgrohemija"

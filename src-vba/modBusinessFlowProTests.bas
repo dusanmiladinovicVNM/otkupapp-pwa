@@ -299,6 +299,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_UgovorPrenosa
     Test_Amb_DoprinosObavezi
     Test_Amb_NalogDvosmislenPada
+    Test_Amb_DokumentUgovor
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -515,6 +516,15 @@ Private Sub Test_CoreTablesAndColumnsExist()
         "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
         "TipAmbalaze", "KolAmbalaze", "KolAmbVracena", "Klasa", _
         "Fakturisano", "FakturaID")
+
+    ' AMB-10-DOK: ambalazni dokument postoji u svesci, ne samo u kanonu.
+    '
+    ' Strane dogadjaja NISU ovde -- njih nosi svaki red knjige (Od/Na). Zaglavlje
+    ' nosi identitet, broj, datum i storno; StanicaID je opseg jedinstvenosti broja.
+    RequireColumnsExist TBL_AMBALAZA_DOKUMENT, Array( _
+        COL_AMBD_ID, COL_AMBD_VRSTA, COL_AMBD_BROJ, COL_AMBD_DATUM, _
+        COL_AMBD_BROJ_OWNER_TIP, COL_AMBD_BROJ_OWNER_ID, _
+        COL_AMBD_NAPOMENA, COL_STORNIRANO)
 
     RequireColumnsExist TBL_FAKTURE, Array( _
         "FakturaID", "BrojFakture", "Datum", "KupacID", "Iznos")
@@ -16715,6 +16725,109 @@ EH:
     Loop
     On Error GoTo 0
     LogFatal "Test_Amb_NalogDvosmislenPada", Err.Number, Err.description
+End Sub
+
+' UGOVOR AMBALAZNOG DOKUMENTA (AMB-10-DOK).
+'
+' Dokument jos nema pisca -- 10-DOK je kanon i ugovor, cutover je 10b. Zato se
+' ovde meri ono sto se MOZE meriti bez pisca: da vrsta jeste zatvorena, da
+' zaglavlje pada na svaki nedostatak, i da veza dokument <-> kretanje vazi u OBA
+' smera (sta sme i sta NE sme).
+Private Sub Test_Amb_DokumentUgovor()
+    On Error GoTo EH
+
+    ' --- ZATVOREN ENUM VRSTE ---------------------------------------------
+    AssertEquals "3", CStr(UBound(modAmbalazaUgovor.AmbDokVrsteSve()) - _
+                           LBound(modAmbalazaUgovor.AmbDokVrsteSve()) + 1), _
+                 "Amb dokument: vrsta dokumenta ima tacno tri vrednosti"
+    AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata("POCETNO_STANJE"), _
+               "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji"
+
+    ' --- ZAGLAVLJE --------------------------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                 "Amb dokument: ispravno zaglavlje prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     "REVERSI", "1/011026", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "Nepoznata vrsta", vbTextCompare) > 0, _
+               "Amb dokument: nepoznata vrsta je odbijena"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "nema broj", vbTextCompare) > 0, _
+               "Amb dokument: bez broja je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", 0, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "nema datum", vbTextCompare) > 0, _
+               "Amb dokument: bez datuma je odbijen"
+
+    ' VLASNIK NUMERICKOG NIZA JE OBAVEZAN -- broj bez opsega nije jedinstven.
+    ' Ranije je tu stajala stanica, i to opciona, pa je revers KUPCA (koji stanicu
+    ' nema) prolazio bez ikakvog opsega (review #399, P2).
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, "", ""), _
+                     "vlasnika numerickog niza", vbTextCompare) > 0, _
+               "Amb dokument: bez vlasnika broja je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_VOZAC, TEST_KUP_ID), _
+                     "ne postoji", vbTextCompare) > 0, _
+               "Amb dokument: vlasnik broja ide kroz ISTU kapiju kao svaki nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dokument: revers kupca sme da broji po vozacu, bez stanice"
+
+    ' POSTOJANJE NALOGA NIJE PRAVO NA SERIJU BROJEVA (review #399, drugi krug).
+    ' Ranije je provera zavrsavala na AmbNalogProblem, pa je prolazilo i to da
+    ' partner poseduje NASU seriju -- i da je poseduje granica opticaja.
+    AssertEquals "", modAmbalazaUgovor.AmbDokMatricaNepotpuna(), _
+                 "Amb dokument: svaka vrsta ima definisanog vlasnika broja"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_KOOPERANT, TEST_KOOP_ID), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: partner NE moze da poseduje nas broj"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_OTPIS, "1/011026", Date, AMB_NALOG_SPOLJNI, ""), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: granica opticaja NE moze da poseduje broj"
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_NABAVKA, "1/011026", Date, AMB_NALOG_FIRMA, ""), _
+                 "Amb dokument: firma sme da bude vlasnik broja nabavke"
+
+    ' --- VEZA DOKUMENT <-> KRETANJE, U OBA SMERA --------------------------
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_IZDATA_PRAZNA), _
+               "Amb dokument: revers nosi izdavanje praznih"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_PRENOS_INTERNO), _
+               "Amb dokument: revers nosi i sopstveni prenos"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_NABAVKA, AMB_VK_NABAVKA), _
+               "Amb dokument: nabavka nosi nabavku"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_NABAVKA), _
+               "Amb dokument: nabavka NE sme da visi na reversu"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_OTPIS, AMB_VK_POVRAT_PRAZNE), _
+               "Amb dokument: povrat praznih NE sme da visi na otpisu"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_UZ_ROBU), _
+               "Amb dokument: ambalaza uz robu NIKAD nije na ambalaznom dokumentu"
+
+    ' Pokrice deficita je izuzetak: ono nije vrsta posla nego posledica
+    ' AMB-INV-07, pa nastaje svuda gde bi realan nalog pao ispod nule.
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_OTPIS, AMB_VK_ULAZ_TUDJE), _
+               "Amb dokument: pokrice deficita sme uz SVAKI dokument"
+
+    ' FAIL-CLOSED NA NEPOZNATU VRSTU. Dozvola za pokrice deficita je ranije stajala
+    ' IZNAD provere vrste, pa je nepostojeci dokument prolazio kroz zatvoren enum.
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   "NEPOSTOJECI_DOKUMENT", AMB_VK_ULAZ_TUDJE), _
+               "Amb dokument: nepoznata vrsta ne prolazi ni sa pokricem deficita"
+
+    ' KANONSKI TIP: jedna tabela = jedan DokumentTIP. Vrsta posla zivi na zaglavlju,
+    ' ne u tipu -- inace bi ista klasifikacija stajala u dve kolone, a AMB-INV-04
+    ' racuna identitet efekta bas iz DokumentTIP-a.
+    AssertEquals "AmbalazaDokument", DOK_TIP_AMBALAZA_DOKUMENT, _
+                 "Amb dokument: kanonski DokumentTIP za knjigu je definisan"
+    AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata(DOK_TIP_AMBALAZA_DOKUMENT), _
+               "Amb dokument: DokumentTIP nije vrsta -- dve kolone, dva pojma"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DokumentUgovor", Err.Number, Err.description
 End Sub
 
 ' ZALUTALA KOLONA SE VRACA NA KANONSKO MESTO -- ali NE preko tudjeg drifta.

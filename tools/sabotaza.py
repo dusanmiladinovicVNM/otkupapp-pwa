@@ -4961,6 +4961,59 @@ SABOTAZE = {
         "Test_Amb_UgovorPrenosa",
         "Amb matrica: svaka vrsta ima definisane klase obe strane",
     ),
+    # AMB-10-DOK: vrsta dokumenta je zatvoren enum. Otvorena bi propustila i
+    # POCETNO_STANJE, pojam koji je namerno ukinut.
+    # Dozvola za pokrice deficita je ranije stajala IZNAD provere vrste dokumenta,
+    # pa je ("NEPOSTOJECI", ULAZ_TUDJE) prolazilo kroz zatvoren enum.
+    "amb-dok-fail-open-na-deficit": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbDokVrstaPoznata(dokVrsta) Then Exit Function\n",
+        "    ' SABOTAZA: vrsta dokumenta se ne proverava\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: nepoznata vrsta ne prolazi ni sa pokricem deficita",
+    ),
+    # Broj bez opsega u kom je jedinstven nije identitet nego niz znakova: dva
+    # dokumenta mogu nositi isti broj a da nijedna provera to ne primeti.
+    "amb-dok-broj-bez-vlasnika": (
+        "modAmbalazaUgovor.bas",
+        "    If Len(Trim$(brojOwnerTip)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: broj sme bez vlasnika niza\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: bez vlasnika broja je odbijen",
+    ),
+    # Postojanje naloga nije pravo na seriju brojeva. Bez ove kapije partner
+    # poseduje NASU seriju, a granica opticaja -- koja nije ni drzalac -- takodje.
+    "amb-dok-vlasnik-bilo-koji-nalog": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then\n",
+        "    If False Then   ' SABOTAZA: vlasnik broja sme biti bilo koji nalog\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: partner NE moze da poseduje nas broj",
+    ),
+    "amb-dok-vrsta-otvorena": (
+        "modAmbalazaUgovor.bas",
+        "    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)\n",
+        "    AmbDokVrstaPoznata = True   ' SABOTAZA: svaka vrsta prolazi\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji",
+    ),
+    # Veza dokument <-> kretanje: bez nje bi NABAVKA visila na reversu i
+    # izgledala kao uredan zapis.
+    "amb-dok-kretanje-bilo-gde": (
+        "modAmbalazaUgovor.bas",
+        "    If StrComp(Trim$(vrstaKretanja), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then\n",
+        "    If True Then   ' SABOTAZA: svako kretanje sme na svakom dokumentu\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: nabavka NE sme da visi na reversu",
+    ),
+    # Zaglavlje bez broja nije dokument nego red bez identiteta prema spolja.
+    "amb-dok-zaglavlje-bez-broja": (
+        "modAmbalazaUgovor.bas",
+        "    If Len(Trim$(broj)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: dokument sme bez broja\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: bez broja je odbijen",
+    ),
     "amb-nalog-ne-razresava": (
         "modAmbalazaUgovor.bas",
         "    If n = 0 Then\n",

@@ -40,6 +40,25 @@
       ]
     },
     {
+      "table": "tblAmbalazaDokument",
+      "const": "TBL_AMBALAZA_DOKUMENT",
+      "sheet": "AmbalazaDokument",
+      "columns": [
+        "AmbDokID",
+        "Vrsta",
+        "BrojDokumenta",
+        "Datum",
+        "BrojOwnerTip",
+        "BrojOwnerID",
+        "Napomena",
+        "Stornirano",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
       "table": "tblArtikli",
       "const": "TBL_ARTIKLI",
       "sheet": "Artikli",
@@ -1013,6 +1032,9 @@
     },
     "tblArtikli": {
       "BarKod": "text"
+    },
+    "tblAmbalazaDokument": {
+      "BrojDokumenta": "text"
     },
     "tblBankaImport": {
       "BankaReferenz": "text",
