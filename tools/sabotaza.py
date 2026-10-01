@@ -4981,6 +4981,15 @@ SABOTAZE = {
         "Test_Amb_DokumentUgovor",
         "Amb dokument: bez vlasnika broja je odbijen",
     ),
+    # Postojanje naloga nije pravo na seriju brojeva. Bez ove kapije partner
+    # poseduje NASU seriju, a granica opticaja -- koja nije ni drzalac -- takodje.
+    "amb-dok-vlasnik-bilo-koji-nalog": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then\n",
+        "    If False Then   ' SABOTAZA: vlasnik broja sme biti bilo koji nalog\n",
+        "Test_Amb_DokumentUgovor",
+        "Amb dokument: partner NE moze da poseduje nas broj",
+    ),
     "amb-dok-vrsta-otvorena": (
         "modAmbalazaUgovor.bas",
         "    AmbDokVrstaPoznata = UNizu(AmbDokVrsteSve(), vrsta)\n",

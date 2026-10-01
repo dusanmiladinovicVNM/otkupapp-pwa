@@ -16775,6 +16775,23 @@ Private Sub Test_Amb_DokumentUgovor()
                      AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_VOZAC, TEST_VOZ_ID), _
                  "Amb dokument: revers kupca sme da broji po vozacu, bez stanice"
 
+    ' POSTOJANJE NALOGA NIJE PRAVO NA SERIJU BROJEVA (review #399, drugi krug).
+    ' Ranije je provera zavrsavala na AmbNalogProblem, pa je prolazilo i to da
+    ' partner poseduje NASU seriju -- i da je poseduje granica opticaja.
+    AssertEquals "", modAmbalazaUgovor.AmbDokMatricaNepotpuna(), _
+                 "Amb dokument: svaka vrsta ima definisanog vlasnika broja"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_KOOPERANT, TEST_KOOP_ID), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: partner NE moze da poseduje nas broj"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_OTPIS, "1/011026", Date, AMB_NALOG_SPOLJNI, ""), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: granica opticaja NE moze da poseduje broj"
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_NABAVKA, "1/011026", Date, AMB_NALOG_FIRMA, ""), _
+                 "Amb dokument: firma sme da bude vlasnik broja nabavke"
+
     ' --- VEZA DOKUMENT <-> KRETANJE, U OBA SMERA --------------------------
     AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_IZDATA_PRAZNA), _
                "Amb dokument: revers nosi izdavanje praznih"

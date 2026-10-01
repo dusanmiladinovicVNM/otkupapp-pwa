@@ -761,8 +761,16 @@ tblAmbalazaDokument
   CreatedAt/By, ModifiedAt/By
 ```
 
-> **Upisano u kanon u `AMB-10-DOK`**: 11 kolona, otisak seme `8C488AA1` ->
-> `94610F5D`, tabela u `STORNO_TABELE`, vlasnik `modAmbalaza`.
+> **Upisano u kanon u `AMB-10-DOK`**: **12 kolona**, otisak seme **`E23576DB`**,
+> tabela u `STORNO_TABELE`, vlasnik `modAmbalaza`, kanonski `DokumentTIP` je
+> `AmbalazaDokument`.
+>
+> **Vlasnik broja mora biti SOPSTVENI nalog** (Stanica, Firma, Vozac) za sve tri
+> vrste. Pravilo je jedna recenica: **broj je nas, protivpartner je njihov** --
+> dokument pisemo mi, pa partner nikad ne izdaje nasu seriju. Koji tacno sopstveni
+> nalog, po vrsti i putanji, ostaje numeraciji u `10b`; **klasa** je zakljucana
+> ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku a da nijedno ne
+> prekrsi ugovor.
 >
 > **STRANE DOGADJAJA NISU NA ZAGLAVLJU, i to je odluka.** Prvi nacrt je imao
 > `NalogTip`/`NalogID` (protivpartner), da bi `AMB-10-ODL-3` bio strukturan. Ali

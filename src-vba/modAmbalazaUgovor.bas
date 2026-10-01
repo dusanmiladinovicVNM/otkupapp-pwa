@@ -278,6 +278,44 @@ Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
     End Select
 End Function
 
+' KO SME DA POSEDUJE NUMERICKI NIZ, PO VRSTI DOKUMENTA.
+'
+' Nije dovoljno da nalog postoji: AmbNalogProblem dokazuje postojanje, ne pravo na
+' seriju brojeva. Bez ovoga prolazi "REVERS, vlasnik = Kooperant" -- partner koji
+' poseduje NASU seriju -- pa cak i "vlasnik = SpoljniSvet", granica koja uopste
+' nije drzalac.
+'
+' Pravilo je jedno i za sve tri vrste, i izgovara se u jednoj recenici:
+'
+'   BROJ JE NAS, PROTIVPARTNER JE NJIHOV.
+'
+' Dokument pisemo mi -- i revers kooperantu, i revers kupca, i nabavku, i otpis.
+' Partner nikad ne izdaje nas broj, pa vlasnik mora biti SOPSTVENI nalog (Stanica,
+' Firma, Vozac). Koji tacno, po vrsti i po putanji, ostaje numeraciji u 10b -- ali
+' KLASA je zakljucana ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku
+' a da nijedno ne prekrsi ugovor.
+'
+' Funkcija postoji po vrsti iako je odgovor danas isti za sve tri: kad bi se neka
+' vrsta ikad brojala drugacije, ovo je mesto na kom se to kaze -- i AmbDokMatricaNepotpuna
+' odmah obara vrstu bez odgovora.
+Public Function AmbDokBrojOwnerKlasa(ByVal vrsta As String) As String
+    Select Case Trim$(vrsta)
+        Case AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
+            AmbDokBrojOwnerKlasa = AMB_KLASA_SOPSTVENI
+    End Select
+End Function
+
+' KAPIJA POTPUNOSTI nad vrstama dokumenta -- isti oblik kao AmbMatricaNepotpuna.
+' Vrsta bez odgovora o vlasniku broja prosla bi kroz proveru zaglavlja neprimetno.
+Public Function AmbDokMatricaNepotpuna() As String
+    Dim sve As Variant, i As Long, fale As String
+    sve = AmbDokVrsteSve()
+    For i = LBound(sve) To UBound(sve)
+        If Len(AmbDokBrojOwnerKlasa(CStr(sve(i)))) = 0 Then fale = fale & " " & CStr(sve(i))
+    Next i
+    AmbDokMatricaNepotpuna = Trim$(fale)
+End Function
+
 ' ZAGLAVLJE DOKUMENTA -- provera pre upisa. Vraca "" ili imenovan razlog.
 '
 ' VLASNIK NUMERICKOG NIZA JE OBAVEZAN. Broj bez opsega u kom je jedinstven nije
@@ -315,7 +353,24 @@ Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
 
     Dim p As String
     p = AmbNalogProblem(brojOwnerTip, brojOwnerID)
-    If Len(p) > 0 Then AmbDokProblem = "Vlasnik broja: " & p
+    If Len(p) > 0 Then
+        AmbDokProblem = "Vlasnik broja: " & p
+        Exit Function
+    End If
+
+    ' Postojanje naloga NIJE pravo na seriju brojeva (review #399).
+    Dim klasa As String
+    klasa = AmbDokBrojOwnerKlasa(vrsta)
+    If Len(klasa) = 0 Then
+        AmbDokProblem = "Vrsta '" & Trim$(vrsta) & "' nema definisanog vlasnika broja."
+        Exit Function
+    End If
+
+    If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then
+        AmbDokProblem = "'" & Trim$(vrsta) & "' trazi " & klasa & " kao vlasnika broja, " & _
+                        "a dobio je " & Trim$(brojOwnerTip) & " -- broj je nas, " & _
+                        "protivpartner je njihov."
+    End If
 End Function
 
 Public Sub RequireAmbDok(ByVal vrsta As String, ByVal broj As String, _
