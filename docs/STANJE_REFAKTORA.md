@@ -354,13 +354,18 @@
     **Ostaje `10b-2`:** devet mesta knjizenja, razlaganje `SaveOMUlaz_TX` i
     `SaveKupciIzlaz_TX`, numeracija ambalaznog dokumenta, staticka kapija za
     `AMB-INV-08` -- i **odluka pre koda**: da li citaoci idu u istom rezu (6.13).
-    BFP 2141 -> **2215**, sabotaza 629 -> **648**; `dokaz.py` NIJE pusten na ovom
+    BFP 2141 -> **2217**, sabotaza 629 -> **649**; `dokaz.py` NIJE pusten na ovom
     head-u (odluka operatera: ceka se GO recenzenta, da se prolaz ne placa triput).
     Drugi krug review-a je dao jos dva P2, oba uska i oba zatvorena: `AMB-INV-10` je
     BROJAO naloge van granice, pa je dokument sa granicom kao jednom stranom
     (`NABAVKA`, `OTPIS`) prolazio preko dve stanice -- kapija sada zakljucava PAR;
     i jedinstvenost `AmbID`-a je nosio samo citalac obaveze, pa je saldo sabirao dva
     reda sa istim identitetom (`AMB-INV-11`, u zajednickoj kapiji integriteta).
+    Treci krug je dao jos jedan P2 iste porodice: **„sve nove kolone prazne"
+    dokazuje samo da red NIJE nov, ne i da je VALJAN star** -- red sa kolicinom a bez
+    ijedne kolone oba modela tiho je nestajao iz svakog salda. Citalac zato ima
+    **cetiri** stanja reda (prazan / legacy / knjiga / kvar), a provera starog
+    ugovora odlazi zajedno sa starim modelom u `10e`.
     **Review #400 (NO-GO) je nasao dva prava P2, oba zatvorena u istom rezu:**
     `AMB-10-ODL-3` nije bio sproveden -- `AMB-INV-04` hvata dva protivpartnera samo
     kad se poklope vrsta i tip ambalaze, pa dobija svoju kapiju (`AMB-INV-10`); i

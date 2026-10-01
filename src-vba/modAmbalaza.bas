@@ -770,10 +770,14 @@ Private Function KnjigaIndeksi(ByVal sourceName As String) As Object
     Set d = CreateObject("Scripting.Dictionary")
 
     Dim imena As Variant, j As Long
+    ' Kolone STAROG modela su ovde jer citalac mora da proveri i NJEGOV ugovor:
+    ' "nije nov red" nije isto sto i "valjan star red". Odlaze zajedno sa njima u
+    ' 10e, kad stari model nestane iz kanona.
     imena = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
                   COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
                   COL_AMB_DOK_TIP, COL_AMB_DOK_ID, COL_AMB_VRSTA_KRETANJA, _
-                  COL_AMB_STORNO_OD)
+                  COL_AMB_STORNO_OD, _
+                  COL_AMB_SMER, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP)
 
     For j = LBound(imena) To UBound(imena)
         d.Add CStr(imena(j)), RequireColumnIndex(TBL_AMBALAZA, CStr(imena(j)), sourceName)
@@ -799,6 +803,62 @@ Private Function RedDoticeKnjigu(ByRef data As Variant, ByVal i As Long, _
             Exit Function
         End If
     Next j
+End Function
+
+' PRAZAN RED NIJE RED. Prazna Excel tabela ima jedan prazan red u DataBodyRange,
+' pa bi ga svaka kapija inace prijavila kao kvar na praznoj knjizi. Meri se po SVIM
+' kolonama koje knjiga uopste cita -- ni jedno polje, ni staro ni novo.
+Private Function RedPrazan(ByRef data As Variant, ByVal i As Long, _
+                           ByRef kol As Object) As Boolean
+    Dim k As Variant
+    For Each k In kol.Keys
+        If Len(AmbText(data(i, kol(CStr(k))))) > 0 Then Exit Function
+    Next k
+
+    RedPrazan = True
+End Function
+
+' UGOVOR STAROG REDA -- jer "nije nov" nije isto sto i "valjan star".
+'
+' Red koji ne dotice knjigu preskace se kao legacy. Ako mu pritom ne vazi ni stari
+' ugovor, on ne pripada NIJEDNOM modelu: stari citalac ga ne vidi (entitet se ne
+' poklapa), novi ga preskace -- a kolicina koju nosi nestaje iz svakog salda bez
+' ijedne poruke (review #400, treci krug).
+'
+' Ugovor je onaj koji stari pisac vec drzi (ValidateAmbalazaInput): smer je Ulaz ili
+' Izlaz, entitet ima tip i ID, tip ambalaze postoji, kolicina je broj veci od nule.
+' Odlazi zajedno sa starim modelom u 10e.
+Private Function LegacyRedProblem(ByRef data As Variant, ByVal i As Long, _
+                                  ByRef kol As Object) As String
+    If Len(AmbText(data(i, kol(COL_AMB_ID)))) = 0 Then
+        LegacyRedProblem = "nema AmbID"
+        Exit Function
+    End If
+
+    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then
+        LegacyRedProblem = "nije ni red knjige ni valjan stari red -- nema Smer"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_ENTITET_TIP)))) = 0 Or _
+       Len(AmbText(data(i, kol(COL_AMB_ENTITET)))) = 0 Then
+        LegacyRedProblem = "stari red bez entiteta"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_TIP)))) = 0 Then
+        LegacyRedProblem = "stari red bez tipa ambalaze"
+        Exit Function
+    End If
+
+    If Not IsNumeric(data(i, kol(COL_AMB_KOLICINA))) Then
+        LegacyRedProblem = "stari red sa nenumerickom kolicinom"
+        Exit Function
+    End If
+
+    If CDbl(data(i, kol(COL_AMB_KOLICINA))) <= 0 Then
+        LegacyRedProblem = "stari red sa kolicinom <= 0"
+    End If
 End Function
 
 ' UGOVOR ZAPISANOG REDA -- jedno mesto za SVE citaoce (saldo, obaveza,
@@ -886,7 +946,17 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
 
     Dim i As Long, p As String, ambID As String
     For i = 1 To UBound(data, 1)
-        If RedDoticeKnjigu(data, i, kol) Then
+        If RedPrazan(data, i, kol) Then
+            ' artefakt prazne tabele -- nije red
+        ElseIf Not RedDoticeKnjigu(data, i, kol) Then
+            ' Ne dotice knjigu: sme da bude samo VALJAN stari red. Sve ostalo ne
+            ' pripada nijednom modelu i tiho bi nestalo iz svakog salda.
+            p = LegacyRedProblem(data, i, kol)
+            If Len(p) > 0 Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                          "Red " & CStr(i) & ": " & p
+            End If
+        Else
             p = KnjigaRedProblem(data, i, kol)
             If Len(p) > 0 Then
                 Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _

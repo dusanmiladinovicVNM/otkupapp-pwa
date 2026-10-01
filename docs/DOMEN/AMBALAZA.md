@@ -582,11 +582,32 @@ Druga je gora od izgubljenog reda: **ocuvanje kolicine je razbijeno**, a isti sa
 ulazi u `AmbDeficitZaPrenos`, dakle u odluku da li **sledeci** upis sme da prodje.
 Pokvaren zapisan red tako menja ponasanje pisca.
 
-> **Tri stanja, ne dva.** Red kod koga su **sve** nove kolone prazne je **legacy** i
-> preskace se. Red kod koga je **bilo koja** popunjena je red knjige i mora da prodje
-> **pun ugovor**: `AmbID`, datum, identitet dokumenta, kolicina kao broj, pa ceo
-> `AmbPrenosStrukturaProblem` (tip ambalaze, vrsta, struktura oba naloga, `Od <> Na`,
-> klase strana iz matrice). Sve ostalo je **KVAR** i na njemu se staje po imenu.
+**„Sve nove kolone prazne" dokazuje samo da red NIJE nov** — ne i da je **valjan
+star**. Red koji ne pripada nijednom modelu nestaje iz oba salda bez poruke:
+
+```
+AmbID AMB-1   Datum   TipAmbalaze   Kolicina 50   DokumentTIP Otkup
+Smer ""  EntitetID ""  EntitetTip ""        stari model prazan
+Od/Na/VrstaKretanja ""                      novi model prazan
+```
+
+Stari citalac ga ne vidi (entitet se ne poklapa), novi ga preskace kao legacy.
+
+> **Cetiri stanja, ne tri.**
+>
+> | Stanje | Uslov | Ishod |
+> |---|---|---|
+> | **prazan** | nijedna kolona koju knjiga cita nije popunjena | preskace se — artefakt prazne Excel tabele |
+> | **legacy** | nijedna NOVA kolona, i vazi **stari** ugovor (`Smer`, entitet, tip, kolicina) | preskace se |
+> | **knjiga** | **bilo koja** nova kolona popunjena, i vazi **pun** ugovor reda | ulazi u saldo |
+> | **KVAR** | sve ostalo | staje se, po imenu |
+>
+> Pun ugovor reda knjige je: `AmbID`, datum, identitet dokumenta, kolicina kao broj,
+> pa ceo `AmbPrenosStrukturaProblem` (tip ambalaze, vrsta, struktura oba naloga,
+> `Od <> Na`, klase strana iz matrice).
+
+Provera **starog** ugovora odlazi zajedno sa starim modelom u `10e`; do tada je ona
+jedino sto razlikuje „star red" od „reda koji ne pripada nicemu".
 
 **`AMB-INV-11` nije svojstvo reda nego KNJIGE**, pa ga ugovor reda ne moze izmeriti:
 dva reda sa istim `AmbID`-em su, red po red, besprekorna. Dok je ta provera stajala

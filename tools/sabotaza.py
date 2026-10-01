@@ -5136,6 +5136,15 @@ SABOTAZE = {
     # Jedinstvenost AmbID-a je svojstvo KNJIGE, ne reda. Dok je stajala samo u citaocu
     # obaveze, saldo je sabirao dva reda sa istim identitetom -- a saldo je ulaz u
     # kapiju deficita, dakle u odluku o sledecem upisu.
+    # "Nije nov red" nije isto sto i "valjan star red". Bez ugovora starog reda,
+    # red sa kolicinom a bez ijedne kolone oba modela tiho nestaje iz svakog salda.
+    "amb-pisac-nevalidan-legacy-prolazi": (
+        "modAmbalaza.bas",
+        "    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then\n",
+        "    If False Then   ' SABOTAZA: red bez oba modela prolazi kao legacy\n",
+        "Test_Amb_PisacKnjige",
+        "Amb pisac: red bez OBA modela nije legacy nego KVAR",
+    ),
     "amb-pisac-dupli-ambid-u-saldu": (
         "modAmbalaza.bas",
         "            If vrste.Exists(ambID) Then\n",
@@ -5157,7 +5166,7 @@ SABOTAZE = {
         "    imena = Array(COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _\n                  COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)\n",
         "    imena = Array(COL_AMB_OD_TIP)   ' SABOTAZA: red se poznaje samo po izvoru\n",
         "Test_Amb_PisacKnjige",
-        "Amb pisac: red bez IZVORA nije legacy nego KVAR",
+        "Amb pisac: kvar reda bez izvora imenuje polje",
     ),
     # Nalog bez ID-a nije nalog. Red sa izvorom "Stanica" i praznim ID-em ulazi u
     # saldo pola-pola: partner dobije +20, a nijedan stvarni nalog ne dobije -20 --

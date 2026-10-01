@@ -17025,6 +17025,19 @@ Private Sub Test_Amb_PisacKnjige()
     AssertTrue InStr(1, errDesc, "trazi ID", vbTextCompare) > 0, _
                "Amb pisac: kvar reda bez ID-a naloga imenuje polje"
 
+    ' --- F2) RED KOJI NE PRIPADA NIJEDNOM MODELU --------------------------
+    ' "Sve nove kolone prazne" dokazuje samo da red NIJE nov -- ne i da je VALJAN
+    ' star (review #400, treci krug). Red sa kolicinom i dokumentom, a bez ijedne
+    ' kolone oba modela, stari citalac ne vidi (entitet se ne poklapa) a novi ga
+    ' preskace -- pa kolicina nestaje iz svakog salda bez poruke.
+    '
+    ' Granicu u drugom smeru meri sekcija C: VALJAN stari red se i dalje preskace.
+    errNum = KvarUKnjizi(scenario & "-F", "", "", "", "", "", errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red bez OBA modela nije legacy nego KVAR"
+    AssertTrue InStr(1, errDesc, "nema Smer", vbTextCompare) > 0, _
+               "Amb pisac: red bez oba modela imenuje sta fali"
+
     ' --- G) IDENTITET REDA JE SVOJSTVO KNJIGE, NE REDA ---------------------
     ' Dva reda sa istim AmbID-em su, red po red, besprekorna -- pa ih KnjigaRedProblem
     ' ne moze videti. Ranije je tu proveru nosio SAMO citalac obaveze, pa je saldo
