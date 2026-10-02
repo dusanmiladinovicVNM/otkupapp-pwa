@@ -411,11 +411,13 @@
 - **Popis test suita: `python tools/vba_gate.py --popis`** — suite u kodu vs katalog `SUITES` vs registar
   `SUITE_VAN_KAPIJA`. Ide i kroz `vba_check` (dakle kroz hook) i kroz CI. Hvata napisanu suite koju
   nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru.
-- **Marker zelenog: `python tools/vba_gate.py --require-green`** — kanonski otisak `src-vba` + rezultat
-  **po suite-u** iz poslednjeg run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`).
-  Odgovara na „da li je **baš ovaj** izvor dokazan", što je do sada bila rečenica uz PR. `--mark-compile`
-  vezuje operaterovu potvrdu `Debug > Compile` za otisak. Ne upisuje: pao run, `--no-import` run, ni
-  `BLIND` suite kao dokazanu.
+- **Marker zelenog: `python tools/vba_gate.py --require-green`** — rezultat **po suite-u** iz poslednjeg
+  run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`), uz **dva otiska**: `izvor` (`src-vba`)
+  i `ugovor` (`izvor` + `run_vba.py` + `make_fixture.py` + `tests/golden/*` + verzija markera). Odgovara na
+  „da li je **baš ovaj** izvor dokazan **pod ovim test sistemom**" — što je do sada bila rečenica uz PR.
+  Compile je vezan **samo za izvor** (`--mark-compile`), pa promena golden fajla ne obara potvrdu. Ne
+  upisuje: pao run, `--no-import` run, ni `BLIND` suite kao dokazanu; run nad tuđom sveskom se pamti i ne
+  zadovoljava podrazumevani zahtev bez `--sveska`.
 - `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja, popis suita) idu **ispred** izlaza
   `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
   baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.

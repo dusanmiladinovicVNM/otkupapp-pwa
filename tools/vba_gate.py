@@ -13,6 +13,7 @@ ne moze da postavi sam sebi:
     python tools/vba_gate.py --require-green      # exit 0 samo ako je OVAJ izvor dokazan
     python tools/vba_gate.py --require-green --suite RunStornoTestSuite
     python tools/vba_gate.py --require-green --require-compile
+    python tools/vba_gate.py --require-green --sveska druga.xlsm
     python tools/vba_gate.py --mark-compile       # operater potvrdio Debug > Compile
     python tools/vba_gate.py --clear
     python tools/vba_gate.py --self-test
@@ -42,9 +43,31 @@ prodje neopazeno.
 iz recenice uz PR. Posle rebase-a, amend-a ili jedne usputne izmene ta recenica
 i dalje stoji a vise ne vazi: prolaz je bio nad src-vba koji vise ne postoji.
 
-Zato se izvor hesira, a marker pamti otisak i REZULTAT PO SUITE-U --
-`--require-green` time ume da razlikuje "dokazano" od "dokazano nesto drugo", i
-da imenuje koja suite nedostaje.
+Zato se hesira, a marker pamti REZULTAT PO SUITE-U uz otiske pod kojima je
+nastao -- `--require-green` time ume da razlikuje "dokazano" od "dokazano nesto
+drugo", i da imenuje koja suite nedostaje.
+
+DVA OTISKA, NE JEDAN. Otisak samog `src-vba` ne dokazuje da je dokaz izvrsen nad
+OVIM test sistemom:
+
+    izvor    = src-vba
+    ugovor   = izvor + tools/run_vba.py + tools/make_fixture.py
+               + tests/golden/* + verzija markera
+
+`RunGoldenSuite` meri ishod protiv `tests/golden/*.txt`; `run_vba.py` odlucuje
+koja suite postoji, da li je `gate` i kako se cita rezultat; `make_fixture.py`
+odredjuje podatke nad kojima testovi rade. Promeni golden fajl, ne pusti nijedan
+test, i marker vezan samo za izvor bi i dalje tvrdio "dokazano" -- a trenutni
+golden ugovor nikad nije bio izvrsen nad tim izvorom.
+
+Razdvojena su zato sto COMPILE pripada samo izvoru: `Debug > Compile` ne zna za
+golden fajlove, pa potvrda ne sme da propadne zato sto se jedan promenio. Ugovor
+se pritom racuna iz DELOVA, pa nalaz ume da kaze KOJI se deo promenio, a ne samo
+"nesto".
+
+KONTEKST SVESKE se pamti uz svaki rezultat: `run_vba --workbook X.xlsm` dokazuje
+drugi kontekst, pa ne zadovoljava podrazumevani zahtev bez izricitog
+`--sveska X.xlsm`.
 
 STO MARKER NE SME DA UPISE:
   - run koji je pao (rc != 0);
@@ -95,16 +118,29 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_VBA = os.path.join(ROOT, "src-vba")
 MARKER = os.path.join(ROOT, "tests", "last_green.json")
 
+# VERZIJA MARKERA. Ako se znacenje polja promeni, stari upis NE SME da zadovolji
+# nova pravila -- inace bi prelazak na strozija pravila tiho priznao dokaze
+# napravljene pod slabijim. Zato verzija ulazi i u otisak ugovora.
+MARKER_VERZIJA = 2
+
+# Delovi TEST-UGOVORA koji zive van src-vba (v. `ugovor_delovi`).
+UGOVOR_FAJLOVI = ("tools/run_vba.py", "tools/make_fixture.py")
+GOLDEN_PODFOLDER = "tests/golden"
+PODRAZUMEVANA_SVESKA = "otkup_test.xlsm"
+
 # Modul koji stamp-build prepisuje pred svaki import -- v. docstring.
 IZUZET_IZ_OTISKA = ("modBuildInfo.bas",)
 TEKST_NASTAVCI = (".bas", ".cls", ".frm", ".doccls")
 
-# Ulazna tacka suite-a po konvenciji imena. `RunProductionHealthCheck` joj ne
+# IME ulazne tacke suite-a po konvenciji. `RunProductionHealthCheck` joj ne
 # odgovara, i ne mora: sve iz `SUITES` se proverava po IMENU (da procedura
 # postoji), a konvencija sluzi samo da nadje ono sto u katalogu NIJE.
-KONVENCIJA = re.compile(r"^Public Sub (Run\w*(?:Suite|Tests)|Test\w*_All)\(\s*\)\s*$",
-                        re.M)
-_JAVNA_PROC = re.compile(r"^Public Sub (\w+)\(([^)]*)\)", re.M)
+#
+# Vidljivost i lista argumenata se NE proveravaju ovde nego kroz
+# `vba_check.JAVNA_PROC_ARG` -- jedna definicija "javne procedure modula" za ceo
+# tooling sloj. Prva verzija je trazila literalni "Public Sub" i time propustala
+# `Sub RunNovaSuite()`, koja je u VBA javna isto kao i sa modifikatorom.
+IME_SUITE = re.compile(r"^(?:Run\w*(?:Suite|Tests)|Test\w*_All)$")
 
 MIN_RAZLOG = 40
 
@@ -157,18 +193,38 @@ def katalog_suita() -> dict:
     return _ucitaj_run_vba().SUITES
 
 
-def skeniraj(src_dir: str = SRC_VBA) -> tuple:
+def _javni_izraz():
+    """`vba_check.JAVNA_PROC_ARG` -- jedna definicija javne procedure modula.
+
+    Uvozi se LENJO, iz funkcije: `vba_check` sa svoje strane uvozi ovaj modul
+    zbog kapije popisa, pa bi uvoz na nivou modula bio kruzan. Na toj (hook)
+    putanji vba_check izraz PREDAJE, pa se ne uvozi dvaput; ovaj put placa samo
+    samostalni `--popis`.
+    """
+    put = os.path.join(ROOT, "tools", "vba_check.py")
+    spec = importlib.util.spec_from_file_location("_vba_check_za_gate", put)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul.JAVNA_PROC_ARG
+
+
+def skeniraj(src_dir: str = SRC_VBA, proc_izraz=None) -> tuple:
     """(javne, po_konvenciji) iz JEDNOG prolaza kroz src-vba.
 
     Jedan prolaz, ne dva: provera ide kroz `vba_check`, dakle kroz PostToolUse
     hook, pa se citanje 190 fajlova ne placa dvaput.
 
-    `javne` su sve `Public Sub` (ime -> fajl) i sluze da se proveri POSTOJANJE
-    imena iz kataloga. `po_konvenciji` su kandidati za ulaznu tacku suite-a, i
-    traze se samo u `.bas`: makro se po imenu moze pozvati jedino iz standardnog
-    modula, pa `Public Sub RunFooSuite()` u klasi ili formi nije suite koju bi
-    kapija mogla da pokrene.
+    `javne` su sve javne procedure modula (ime -> fajl) i sluze da se proveri
+    POSTOJANJE imena iz kataloga -- ukljucujuci implicitno javne, bez
+    modifikatora.
+
+    `po_konvenciji` su kandidati za ulaznu tacku suite-a: javna, BEZ argumenata,
+    imena po konvenciji, i samo u `.bas`. Makro se po imenu zove jedino iz
+    standardnog modula, pa `Sub RunFooSuite()` u klasi ili formi nije suite koju
+    bi kapija mogla da pokrene. `Function` se prihvata uz `Sub`: i nju
+    `Application.Run` zove po imenu, pa bi inace bila ista rupa drugog oblika.
     """
+    proc_izraz = _javni_izraz() if proc_izraz is None else proc_izraz
     javne, po_konvenciji = {}, {}
     if not os.path.isdir(src_dir):
         return javne, po_konvenciji
@@ -178,20 +234,24 @@ def skeniraj(src_dir: str = SRC_VBA) -> tuple:
         with io.open(os.path.join(src_dir, ime), encoding="ascii",
                      errors="replace", newline="") as fh:
             tekst = fh.read().replace("\r\n", "\n")
-        for m in _JAVNA_PROC.finditer(tekst):
-            javne.setdefault(m.group(1), (ime, not m.group(2).strip()))
-        if ime.endswith(".bas"):
-            for m in KONVENCIJA.finditer(tekst):
-                po_konvenciji.setdefault(m.group(1), ime)
+        for m in proc_izraz.finditer(tekst):
+            bez_arg = not m.group(3).strip()
+            javne.setdefault(m.group(2), (ime, bez_arg))
+            if ime.endswith(".bas") and bez_arg and IME_SUITE.match(m.group(2)):
+                po_konvenciji.setdefault(m.group(2), ime)
     return javne, po_konvenciji
 
 
 def popis_problemi(suites: dict = None, registar: dict = None,
-                   src_dir: str = SRC_VBA, skenirano: tuple = None) -> list:
+                   src_dir: str = SRC_VBA, skenirano: tuple = None,
+                   proc_izraz=None) -> list:
     """Nalazi iz popisa suita. Prazna lista = cisto."""
     suites = katalog_suita() if suites is None else suites
     registar = SUITE_VAN_KAPIJA if registar is None else registar
-    javne, po_konvenciji = skeniraj(src_dir) if skenirano is None else skenirano
+    if skenirano is None:
+        javne, po_konvenciji = skeniraj(src_dir, proc_izraz)
+    else:
+        javne, po_konvenciji = skenirano
 
     nalazi = []
 
@@ -241,6 +301,67 @@ def otisak_izvora(src_dir: str = SRC_VBA) -> str:
     return h.hexdigest()
 
 
+def _hash_fajlova(putanje: list) -> str:
+    """SHA256 nad skupom fajlova; nepostojeci fajl je deo odgovora, ne greska."""
+    h = hashlib.sha256()
+    for p in sorted(putanje):
+        h.update(os.path.basename(p).encode())
+        try:
+            with open(p, "rb") as fh:
+                h.update(fh.read().replace(b"\r\n", b"\n"))
+        except OSError:
+            h.update(b"<nema fajla>")
+    return h.hexdigest()
+
+
+def ugovor_delovi(src_dir: str = SRC_VBA, koren: str = ROOT) -> dict:
+    """Delovi TEST-UGOVORA: sve od cega zavisi sta "zeleno" znaci.
+
+    Otisak src-vba sam po sebi ne dokazuje da je dokaz izvrsen nad OVIM test
+    sistemom. `RunGoldenSuite` meri ishod protiv `tests/golden/*.txt`;
+    `run_vba.py` odlucuje koja suite postoji, da li je `gate` i kako se cita
+    rezultat; `make_fixture.py` odredjuje podatke nad kojima testovi rade (i
+    potpis koji `run_vba` proverava PRE Excela, cime sam priznaje da je stanje
+    fixture-a deo preduslova). Promeni bilo sta od toga bez novog run-a, i stari
+    marker bi i dalje tvrdio "dokazano".
+
+    Racuna se iz DELOVA, a ne kao jedan veliki hes, iz dva razloga: `--status`
+    ume da imenuje KOJI se deo promenio, i COMPILE se vezuje samo za `izvor` --
+    potvrda `Debug > Compile` ne sme da propadne zato sto se promenio golden
+    fajl, jer compile o golden fajlovima ne zna nista.
+
+    `make_fixture.signature()` se ne zove posebno: on je cista funkcija SEED-a iz
+    istog fajla, pa ga hes fajla vec pokriva -- a izbegava se uvoz modula od
+    2500 linija na hook putanji.
+    """
+    golden = os.path.join(koren, *GOLDEN_PODFOLDER.split("/"))
+    try:
+        fajlovi = [os.path.join(golden, f) for f in sorted(os.listdir(golden))]
+    except OSError:
+        fajlovi = []
+    return {
+        "verzija": MARKER_VERZIJA,
+        "izvor": otisak_izvora(src_dir),
+        "alati": _hash_fajlova([os.path.join(koren, *p.split("/"))
+                                for p in UGOVOR_FAJLOVI]),
+        "golden": _hash_fajlova(fajlovi),
+    }
+
+
+def otisak_ugovora(delovi: dict = None, src_dir: str = SRC_VBA,
+                   koren: str = ROOT) -> str:
+    delovi = ugovor_delovi(src_dir, koren) if delovi is None else delovi
+    return hashlib.sha256(
+        json.dumps(delovi, sort_keys=True).encode()).hexdigest()
+
+
+def _razlika_ugovora(stari: dict, novi: dict) -> list:
+    """Imena delova ugovora koji se razlikuju -- da nalaz kaze STA se promenilo."""
+    stari = stari or {}
+    return sorted(k for k in set(stari) | set(novi)
+                  if stari.get(k) != novi.get(k))
+
+
 def procitaj_marker(put: str = MARKER) -> dict:
     try:
         with io.open(put, encoding="utf-8") as fh:
@@ -278,11 +399,18 @@ def potrebne_suite(suites: dict = None) -> list:
 
 
 def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
-                    put: str = MARKER, src_dir: str = SRC_VBA) -> str:
+                    sveska: str = None, podrazumevana: bool = True,
+                    put: str = MARKER, src_dir: str = SRC_VBA,
+                    koren: str = ROOT) -> str:
     """Zapisi rezultat run-a u marker. Vraca poruku (sta je upisano ili zasto nije).
 
     Zove je `run_vba.py` na kraju run-a. Pravila su u docstring-u modula; ovde su
     kao kod, jer su upravo ona ono sto marker cini tvrdnjom a ne dekoracijom.
+
+    Otisci se pamte PO SUITE-U, ne po markeru. Delimican run (`--suite X`) time
+    ne brise tudje rezultate, ali ni ne pozajmljuje svoje otiske njima: svaki
+    upis nosi izvor i ugovor pod kojim je nastao, pa `--require-green` posle
+    izmene ume da kaze koja je suite zastarela, a koja nije.
     """
     if no_import:
         return ("marker nije upisan: --no-import znaci da kod u svesci nije "
@@ -290,61 +418,84 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
     if rc != 0:
         return "marker nije upisan: run nije zelen (rc=%s)" % rc
 
-    otisak = otisak_izvora(src_dir)
-    stari = procitaj_marker(put)
-    if stari and stari.get("otisak") == otisak:
-        podaci = stari                       # dopuni: delimicni run-ovi se slazu
-    else:
-        # Rezultati nad drugim izvorom nisu rezultati nad ovim. Brisu se svi,
-        # ukljucujuci potvrdu compile-a.
-        podaci = {"otisak": otisak, "suites": {}}
+    delovi = ugovor_delovi(src_dir, koren)
+    ugovor = otisak_ugovora(delovi)
+    podaci = procitaj_marker(put)
+    if not podaci or podaci.get("verzija") != MARKER_VERZIJA:
+        podaci = {"verzija": MARKER_VERZIJA, "suites": {}}
+    podaci.setdefault("suites", {})
 
-    podaci["git"] = _git_glava()
-    podaci["platforma"] = platform.platform()
-    podaci["kada"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    kada = time.strftime("%Y-%m-%dT%H:%M:%S")
+    ime_sveske = os.path.basename(sveska) if sveska else PODRAZUMEVANA_SVESKA
     rezultati = report.get("suite_results", {}) or {}
     for s in report.get("suites", []):
-        t = rezultati.get(s["name"]) or {}
+        r = rezultati.get(s["name"]) or {}
         podaci["suites"][s["name"]] = {
             "status": s.get("status"),
-            "ukupno": t.get("total"),
-            "palo": t.get("failed"),
-            "kada": podaci["kada"],
+            "ukupno": r.get("total"),
+            "palo": r.get("failed"),
+            "izvor": delovi["izvor"],
+            "ugovor": ugovor,
+            "ugovor_delovi": delovi,
+            "sveska": ime_sveske,
+            "podrazumevana": bool(podrazumevana),
+            "kada": kada,
+            "git": _git_glava(),
+            "platforma": platform.platform(),
         }
     upisi_marker(podaci, put)
-    imena = sorted(podaci["suites"])
-    return "marker upisan nad %s: %d suita (%s)" % (
-        otisak[:12], len(imena), ", ".join(imena) or "nijedna")
+    imena = sorted(s["name"] for s in report.get("suites", []))
+    return "marker upisan (izvor %s, ugovor %s, sveska %s): %d suita (%s)" % (
+        delovi["izvor"][:12], ugovor[:12], ime_sveske, len(imena),
+        ", ".join(imena) or "nijedna")
 
 
 def zabelezi_compile(put: str = MARKER, src_dir: str = SRC_VBA) -> str:
-    """Operater je potvrdio `Debug > Compile` nad OVIM izvorom."""
+    """Operater je potvrdio `Debug > Compile` nad OVIM IZVOROM.
+
+    Vezuje se SAMO za izvor, ne za test-ugovor: compile ne zna za golden fajlove
+    ni za runner, pa ne sme da izgubi potvrdu zato sto se jedan golden promenio.
+    Zato i ne brise rezultate suita -- oni nose svoje otiske.
+    """
     otisak = otisak_izvora(src_dir)
     podaci = procitaj_marker(put)
-    if not podaci or podaci.get("otisak") != otisak:
-        podaci = {"otisak": otisak, "suites": {}}
-    podaci["compile"] = {"kada": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    if not podaci or podaci.get("verzija") != MARKER_VERZIJA:
+        podaci = {"verzija": MARKER_VERZIJA, "suites": {}}
+    podaci["compile"] = {"izvor": otisak,
+                         "kada": time.strftime("%Y-%m-%dT%H:%M:%S"),
                          "git": _git_glava()}
     upisi_marker(podaci, put)
-    return "compile potvrdjen nad %s" % otisak[:12]
+    return "compile potvrdjen nad izvorom %s" % otisak[:12]
 
 
 def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
-                    trazi_compile: bool = False, put: str = MARKER,
-                    src_dir: str = SRC_VBA) -> list:
-    """Nalazi zbog kojih OVAJ izvor nije dokazan. Prazna lista = dokazan."""
+                    trazi_compile: bool = False, sveska: str = None,
+                    put: str = MARKER, src_dir: str = SRC_VBA,
+                    koren: str = ROOT) -> list:
+    """Nalazi zbog kojih OVAJ izvor nije dokazan. Prazna lista = dokazan.
+
+    Trazi se poklapanje OBA otiska po suite-u: izvor (src-vba) i test-ugovor
+    (runner + fixture generator + golden + verzija markera). Otisak izvora sam
+    ne bi razlikovao "dokazano" od "dokazano pod drugim test sistemom".
+
+    `sveska` je ime sveske nad kojom se dokaz PRIZNAJE; podrazumevano samo
+    fixture. Run nad tudjom svescom (`run_vba --workbook X.xlsm`) ne zadovoljava
+    podrazumevani zahtev, jer nije dokazan isti kontekst -- mora se traziti
+    izricito.
+    """
     suites = katalog_suita() if suites is None else suites
     trazene = potrebne_suite(suites) if trazene is None else list(trazene)
-    otisak = otisak_izvora(src_dir)
+    delovi = ugovor_delovi(src_dir, koren)
+    ugovor = otisak_ugovora(delovi)
     marker = procitaj_marker(put)
 
     if not marker:
         return ["nema markera: nijedan prolaz nije zapisan (pusti "
                 "`python tools/run_vba.py`)"]
-    if marker.get("otisak") != otisak:
-        return ["marker je nad DRUGIM izvorom: marker %s, izvor %s -- prolaz je "
-                "bio nad kodom koji vise ne stoji"
-                % ((marker.get("otisak") or "?")[:12], otisak[:12])]
+    if marker.get("verzija") != MARKER_VERZIJA:
+        return ["marker je verzije %s, a trazi se %s -- znacenje polja se "
+                "promenilo, pa stari upis ne vazi (pusti run ponovo)"
+                % (marker.get("verzija"), MARKER_VERZIJA)]
 
     nalazi = []
     zapisane = marker.get("suites") or {}
@@ -356,29 +507,57 @@ def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
         elif z.get("status") != "OK":
             nalazi.append("%s: zapisana kao %s, a to nije dokaz da su sve provere "
                           "prosle" % (ime, z.get("status")))
-    if trazi_compile and not marker.get("compile"):
-        nalazi.append("compile nije potvrdjen nad ovim izvorom "
-                      "(`--mark-compile` posle Debug > Compile VBAProject)")
+        elif z.get("izvor") != delovi["izvor"]:
+            nalazi.append("%s: dokazan je DRUGI izvor (%s, sada %s)"
+                          % (ime, (z.get("izvor") or "?")[:12],
+                             delovi["izvor"][:12]))
+        elif z.get("ugovor") != ugovor:
+            nalazi.append("%s: TEST-UGOVOR je promenjen posle dokaza (razlika u: "
+                          "%s) -- suite nije pustena nad ovim test sistemom"
+                          % (ime, ", ".join(_razlika_ugovora(
+                              z.get("ugovor_delovi"), delovi)) or "?"))
+        elif sveska is None and not z.get("podrazumevana"):
+            nalazi.append("%s: dokaz je napravljen nad svescom %s, ne nad "
+                          "fixture-om -- trazi ga izricito (`--sveska %s`)"
+                          % (ime, z.get("sveska"), z.get("sveska")))
+        elif sveska is not None and z.get("sveska") != sveska:
+            nalazi.append("%s: dokaz je napravljen nad svescom %s, a trazi se %s"
+                          % (ime, z.get("sveska"), sveska))
+    if trazi_compile:
+        c = marker.get("compile") or {}
+        if not c:
+            nalazi.append("compile nije potvrdjen nad ovim izvorom "
+                          "(`--mark-compile` posle Debug > Compile VBAProject)")
+        elif c.get("izvor") != delovi["izvor"]:
+            nalazi.append("compile je potvrdjen nad DRUGIM izvorom (%s, sada %s)"
+                          % ((c.get("izvor") or "?")[:12],
+                             delovi["izvor"][:12]))
     return nalazi
 
 
 def stanje_redovi(suites: dict = None, put: str = MARKER,
-                  src_dir: str = SRC_VBA) -> list:
+                  src_dir: str = SRC_VBA, koren: str = ROOT) -> list:
     suites = katalog_suita() if suites is None else suites
-    otisak = otisak_izvora(src_dir)
+    delovi = ugovor_delovi(src_dir, koren)
+    ugovor = otisak_ugovora(delovi)
     marker = procitaj_marker(put)
-    redovi = ["izvor:  %s" % otisak[:16]]
+    redovi = ["izvor:   %s" % delovi["izvor"][:16],
+              "ugovor:  %s  (alati %s, golden %s, verzija %s)"
+              % (ugovor[:16], delovi["alati"][:8], delovi["golden"][:8],
+                 delovi["verzija"])]
     if not marker:
-        redovi.append("marker: nema ga -- nijedan prolaz nije zapisan")
+        redovi.append("marker:  nema ga -- nijedan prolaz nije zapisan")
         return redovi
-    redovi.append("marker: %s  %s  (git %s, %s)"
-                  % ((marker.get("otisak") or "?")[:16],
-                     "ISTI IZVOR" if marker.get("otisak") == otisak
-                     else "DRUGI IZVOR",
-                     marker.get("git") or "?", marker.get("kada") or "?"))
-    c = marker.get("compile")
-    redovi.append("compile: %s" % ("potvrdjen %s" % c.get("kada") if c
-                                   else "nije potvrdjen"))
+    if marker.get("verzija") != MARKER_VERZIJA:
+        redovi.append("marker:  verzija %s, trazi se %s -- stari upis ne vazi"
+                      % (marker.get("verzija"), MARKER_VERZIJA))
+        return redovi
+    c = marker.get("compile") or {}
+    redovi.append("compile: %s" % (
+        "nije potvrdjen" if not c else
+        "potvrdjen %s nad %s%s" % (c.get("kada"), (c.get("izvor") or "?")[:12],
+                                   "" if c.get("izvor") == delovi["izvor"]
+                                   else "  <-- DRUGI IZVOR")))
     zapisane = marker.get("suites") or {}
     trazene = set(potrebne_suite(suites))
     for ime in sorted(set(zapisane) | trazene):
@@ -386,10 +565,18 @@ def stanje_redovi(suites: dict = None, put: str = MARKER,
         oznaka = "*" if ime in trazene else " "
         if not z:
             redovi.append(" %s %-28s --" % (oznaka, ime))
-        else:
-            redovi.append(" %s %-28s %-6s %s/%s"
-                          % (oznaka, ime, z.get("status"),
-                             z.get("palo"), z.get("ukupno")))
+            continue
+        beleska = ""
+        if z.get("izvor") != delovi["izvor"]:
+            beleska = "DRUGI IZVOR"
+        elif z.get("ugovor") != ugovor:
+            beleska = "UGOVOR: " + ", ".join(
+                _razlika_ugovora(z.get("ugovor_delovi"), delovi))
+        elif not z.get("podrazumevana"):
+            beleska = "sveska " + str(z.get("sveska"))
+        redovi.append(" %s %-28s %-6s %s/%s  %s"
+                      % (oznaka, ime, z.get("status"), z.get("palo"),
+                         z.get("ukupno"), beleska))
     redovi.append("(* = trazi je --require-green)")
     return redovi
 
@@ -417,6 +604,9 @@ def _self_test(tiho: bool = False) -> int:
     import tempfile
 
     nalazi = []
+    # PRAVI deljeni izraz, ne kopija: self-test time meri i to da je
+    # definicija "javne procedure" stvarno jedna za ceo tooling sloj.
+    IZRAZ = _javni_izraz()
 
     def tvrdi(uslov, opis):
         if not uslov:
@@ -440,9 +630,33 @@ def _self_test(tiho: bool = False) -> int:
         RAZLOG = "x" * MIN_RAZLOG
 
         def popis(suites=SUITES, registar=None, src_dir=src):
-            return popis_problemi(suites, registar or {}, src_dir)
+            return popis_problemi(suites, registar or {}, src_dir,
+                                  proc_izraz=IZRAZ)
 
         tvrdi(not popis(), "POPIS: cist izvor daje nalaz")
+
+        # IMPLICITNO JAVNA suite: `Sub RunX()` je u VBA Public po defaultu.
+        # Prva verzija je trazila literalni "Public Sub" i ovo je bilo
+        # nevidljivo -- validna javna suite, van kataloga, a CI zelen.
+        with io.open(os.path.join(src, "modImp.bas"), "w", newline="") as fh:
+            fh.write("Sub RunImplicitnaSuite()\r\nEnd Sub\r\n")
+        tvrdi(any("NEPOKRETANA" in n and "RunImplicitnaSuite" in n
+                  for n in popis()),
+              "POPIS: implicitno javna suite (`Sub RunX()`) je nevidljiva")
+        os.remove(os.path.join(src, "modImp.bas"))
+
+        # PRIVATE nije javna, pa nije ni suite koju kapija moze da pokrene.
+        with io.open(os.path.join(src, "modPriv.bas"), "w", newline="") as fh:
+            fh.write("Private Sub RunPrivatnaSuite()\r\nEnd Sub\r\n")
+        tvrdi(not popis(), "POPIS: `Private Sub` se broji kao javna suite")
+        os.remove(os.path.join(src, "modPriv.bas"))
+
+        # Function se takodje zove po imenu kroz Application.Run.
+        with io.open(os.path.join(src, "modFun.bas"), "w", newline="") as fh:
+            fh.write("Function RunFunkcijaSuite()\r\nEnd Function\r\n")
+        tvrdi(any("RunFunkcijaSuite" in n for n in popis()),
+              "POPIS: implicitno javna Function-suite je nevidljiva")
+        os.remove(os.path.join(src, "modFun.bas"))
 
         tvrdi(any("FANTOM" in n for n in popis(
                   suites=dict(SUITES, RunNemaMe={"gate": True, "default": True}))),
@@ -502,17 +716,34 @@ def _self_test(tiho: bool = False) -> int:
         tvrdi(otisak_izvora(src) == b,
               "OTISAK: modBuildInfo ulazi u otisak -- stamp bi obarao marker")
 
-        # --- marker -------------------------------------------------------
+        # --- marker: izvor I test-ugovor ----------------------------------
+        #
+        # Ugovor zivi van src-vba (runner, fixture generator, golden), pa self-test
+        # gradi sopstveni KOREN u temp folderu: time se promena golden fajla moze
+        # izmeriti bez diranja repoa.
         put = os.path.join(tmp, "tests", "last_green.json")
+        os.makedirs(os.path.join(tmp, "tools"), exist_ok=True)
+        os.makedirs(os.path.join(tmp, "tests", "golden"), exist_ok=True)
+        for rel in ("tools/run_vba.py", "tools/make_fixture.py",
+                    "tests/golden/G1.txt"):
+            with io.open(os.path.join(tmp, *rel.split("/")), "w",
+                         newline="") as fh:
+                fh.write("prvo stanje " + rel + "\n")
+
         ZELEN = {"suites": [{"name": "RunAllTests", "status": "OK"}],
                  "suite_results": {"RunAllTests": {"total": 199, "failed": 0}}}
+
+        def upisi(rep=None, rc=0, **kw):
+            return zabelezi_prolaz(rep or ZELEN, rc, put=put, src_dir=src,
+                                   koren=tmp, **kw)
 
         def zahtevaj(**kw):
             # Pad je NALAZ, ne traceback: ugasena kapija `if not marker` inace
             # rusi self-test, pa se ne vidi kao sopstvena greska.
             kw.setdefault("trazene", ["RunAllTests"])
             try:
-                return zahtevaj_zeleno(suites=SUITES, put=put, src_dir=src, **kw)
+                return zahtevaj_zeleno(suites=SUITES, put=put, src_dir=src,
+                                       koren=tmp, **kw)
             except Exception as e:          # noqa: BLE001
                 nalazi.append("MARKER: zahtevaj_zeleno je pukao -- %r" % (e,))
                 return []
@@ -520,15 +751,15 @@ def _self_test(tiho: bool = False) -> int:
         tvrdi(any("nema markera" in n for n in zahtevaj()),
               "MARKER: bez markera je izvor 'dokazan'")
 
-        poruka = zabelezi_prolaz(ZELEN, 2, put=put, src_dir=src)
+        poruka = upisi(rc=2)
         tvrdi("nije zelen" in poruka and not os.path.exists(put),
               "MARKER: PAO run upisuje marker")
 
-        poruka = zabelezi_prolaz(ZELEN, 0, no_import=True, put=put, src_dir=src)
+        poruka = upisi(no_import=True)
         tvrdi("no-import" in poruka and not os.path.exists(put),
               "MARKER: --no-import run upisuje marker")
 
-        zabelezi_prolaz(ZELEN, 0, put=put, src_dir=src)
+        upisi()
         tvrdi(not zahtevaj(), "MARKER: zelen prolaz nad istim izvorom nije dokaz")
         tvrdi(any("compile nije potvrdjen" in n
                   for n in zahtevaj(trazi_compile=True)),
@@ -543,24 +774,67 @@ def _self_test(tiho: bool = False) -> int:
 
         BLIND = {"suites": [{"name": "RunNovacSmokeSuite", "status": "BLIND"}],
                  "suite_results": {}}
-        zabelezi_prolaz(BLIND, 0, put=put, src_dir=src)
+        upisi(BLIND)
         tvrdi(any("BLIND" in n for n in zahtevaj(trazene=["RunNovacSmokeSuite"])),
               "MARKER: BLIND suite se priznaje kao dokaz")
         tvrdi(not zahtevaj(),
-              "MARKER: drugi prolaz nad istim izvorom je obrisao prvi")
+              "MARKER: drugi prolaz je pokvario rezultat prvog")
 
-        # Izmena izvora obara i suite i compile -- bez toga marker lazhe.
+        # ISTI IZVOR, PROMENJEN GOLDEN. Scenario iz review-a #402: RunGoldenSuite
+        # meri ishod protiv tests/golden/*.txt, pa promena ocekivanja bez novog
+        # run-a ne sme da ostavi stari dokaz na nogama.
+        with io.open(os.path.join(tmp, "tests", "golden", "G1.txt"), "w",
+                     newline="") as fh:
+            fh.write("drugo stanje\n")
+        poruke = zahtevaj()
+        tvrdi(any("TEST-UGOVOR" in n and "golden" in n for n in poruke),
+              "MARKER: promenjen GOLDEN ostavlja stari dokaz vazecim")
+        tvrdi(not zahtevaj(trazi_compile=True) or all(
+                  "compile" not in n for n in zahtevaj(trazi_compile=True)),
+              "MARKER: promenjen golden obara i POTVRDU COMPILE-a (ne sme)")
+        upisi()
+        tvrdi(not zahtevaj(), "MARKER: nov run pod novim ugovorom nije dokaz")
+
+        # ISTI IZVOR, PROMENJEN RUNNER. run_vba odlucuje koja suite postoji, da li
+        # je gate i kako se cita rezultat -- dakle sta "zeleno" uopste znaci.
+        with io.open(os.path.join(tmp, "tools", "run_vba.py"), "w",
+                     newline="") as fh:
+            fh.write("drugo stanje runnera\n")
+        tvrdi(any("TEST-UGOVOR" in n and "alati" in n for n in zahtevaj()),
+              "MARKER: promenjen RUNNER ostavlja stari dokaz vazecim")
+        upisi()
+        tvrdi(not zahtevaj(), "MARKER: nov run pod novim runnerom nije dokaz")
+
+        # TUDJA SVESKA. `run_vba --workbook X.xlsm` dokazuje drugi kontekst, pa ne
+        # sme da zadovolji podrazumevani zahtev bez izricitog izbora.
+        upisi(sveska="druga.xlsm", podrazumevana=False)
+        tvrdi(any("druga.xlsm" in n for n in zahtevaj()),
+              "MARKER: dokaz nad tudjom svescom zadovoljava podrazumevani zahtev")
+        tvrdi(not zahtevaj(sveska="druga.xlsm"),
+              "MARKER: izricito trazena sveska se ne priznaje")
+        tvrdi(any("druga.xlsm" in n for n in zahtevaj(sveska="treca.xlsm")),
+              "MARKER: trazi se jedna sveska a priznaje se druga")
+        upisi()
+
+        # IZMENA IZVORA obara dokaz suita, i potvrdu compile-a -- compile je vezan
+        # za izvor, pa mu izvor i jeste jedina osa.
         with io.open(os.path.join(src, "modTest.bas"), "a", newline="") as fh:
             fh.write("' jos jedna izmena\r\n")
-        tvrdi(any("DRUGIM izvorom" in n for n in zahtevaj()),
-              "MARKER: izmena izvora ne obara marker")
-        zabelezi_prolaz(ZELEN, 0, put=put, src_dir=src)
-        tvrdi(any("compile nije potvrdjen" in n
+        tvrdi(any("DRUGI izvor" in n for n in zahtevaj()),
+              "MARKER: izmena izvora ne obara dokaz suite")
+        upisi()
+        tvrdi(any("compile" in n and "DRUGIM izvorom" in n
                   for n in zahtevaj(trazi_compile=True)),
               "MARKER: nov izvor nasledjuje staru potvrdu compile-a")
-        tvrdi("RunNovacSmokeSuite" not in (procitaj_marker(put) or {}).get(
-                  "suites", {}),
-              "MARKER: nov izvor nasledjuje stare rezultate suita")
+
+        # VERZIJA MARKERA. Stroza pravila ne smeju da priznaju dokaz napravljen pod
+        # slabijim, pa marker druge verzije ne vazi.
+        podaci = procitaj_marker(put)
+        podaci["verzija"] = MARKER_VERZIJA - 1
+        upisi_marker(podaci, put)
+        tvrdi(any("verzije" in n for n in zahtevaj()),
+              "MARKER: marker stare verzije se priznaje")
+        upisi()
 
         # --- potrebne_suite -----------------------------------------------
         tvrdi(potrebne_suite(SUITES) == ["RunAllTests"],
@@ -592,6 +866,9 @@ def main(argv: list) -> int:
                     help="uz --require-green: trazi i potvrdu Debug > Compile")
     ap.add_argument("--suite", action="append", default=[],
                     help="uz --require-green: trazi bas ovu suite (moze vise puta)")
+    ap.add_argument("--sveska", metavar="IME",
+                    help="uz --require-green: priznaj dokaz napravljen nad TOM "
+                         "svescom (podrazumevano samo fixture)")
     ap.add_argument("--mark-compile", action="store_true",
                     help="zapisi da je Debug > Compile prosao nad ovim izvorom")
     ap.add_argument("--clear", action="store_true", help="obrisi marker")
@@ -620,9 +897,12 @@ def main(argv: list) -> int:
         return 0
     if args.require_green:
         nalazi = zahtevaj_zeleno(args.suite or None,
-                                 trazi_compile=args.require_compile)
+                                 trazi_compile=args.require_compile,
+                                 sveska=args.sveska)
         if not nalazi:
-            print("izvor %s je dokazan" % otisak_izvora()[:12])
+            delovi = ugovor_delovi()
+            print("dokazano: izvor %s, ugovor %s"
+                  % (delovi["izvor"][:12], otisak_ugovora(delovi)[:12]))
             return 0
         print("izvor NIJE dokazan:", file=sys.stderr)
         for n in nalazi:

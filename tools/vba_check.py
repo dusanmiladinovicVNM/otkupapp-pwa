@@ -98,8 +98,31 @@ MODULE_DECL = re.compile(
     r"^(Public|Private|Global)\s+"
     r"(Const\b|Declare\b|Type\b|Enum\b|WithEvents\b|\w+\s+As\b|\w+\s*\()", re.IGNORECASE)
 
+# PROCEDURA BEZ MODIFIKATORA JE PUBLIC. `Sub Foo()` je u VBA isto sto i
+# `Public Sub Foo()` -- modifikator je opcion, a default je Public. `Const` je
+# OBRNUTO: modul-level `Const X = 1` bez modifikatora je PRIVATE. Zato Const ide
+# samo uz eksplicitni `Public`, a Sub/Function i bez njega.
+#
+# Bez te asimetrije provera gleda pola stvarnosti u DVA alata: `DUPLIKAT` ne bi
+# video implicitno javnu proceduru istog imena u dva modula (VBA tada javi
+# "Ambiguous name detected"), a `vba_gate --popis` ne bi video napisanu test
+# suite deklarisanu kao `Sub RunFooSuite()`. Mereno nad src-vba: tri implicitno
+# javne procedure (modBankaImportParserPdfToText), nijedna se ne sudara -- pa
+# sirenje ne donosi nov nalaz, ali zatvara rupu za sledecu.
+#
+# Prvo merenje je ovo promasilo i prijavilo 609 "javnih imena": siri izraz bez
+# asimetrije hvata i lokalni `Const SRC` iz svake procedure.
 PUBLIC_PROC = re.compile(
-    r"^Public\s+(?:Static\s+)?(?:Sub|Function|Const)\s+(\w+)", re.IGNORECASE)
+    r"^(?:Public\s+(?:Static\s+)?(?:Sub|Function|Const)"
+    r"|(?:Static\s+)?(?:Sub|Function))\s+(\w+)", re.IGNORECASE)
+
+# ISTA definicija javne procedure modula, ali SA listom argumenata -- koristi je
+# `tools/vba_gate.py` za popis test suita (ulazna tacka suite-a ne prima
+# argumente). Jedna definicija za oba alata; druga kopija bi bila druga stvar
+# koja moze da se razidje.
+JAVNA_PROC_ARG = re.compile(
+    r"^(?:Public\s+)?(?:Static\s+)?(Sub|Function)\s+(\w+)\s*\(([^)]*)\)",
+    re.IGNORECASE | re.M)
 
 # --- izuzetak od DUPLIKAT-a: ugovor ekrana novog UI-ja ---------------------
 #
@@ -3477,7 +3500,9 @@ def check_popis_suita(tiho: bool = False) -> int:
     modul = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(modul)
-        nalazi = modul.popis_problemi()
+        # Izraz se PREDAJE, da se vba_check ne uvozi drugi put na ovoj
+        # (hook) putanji -- v. `_javni_izraz` u vba_gate.
+        nalazi = modul.popis_problemi(proc_izraz=JAVNA_PROC_ARG)
     except Exception as e:                       # pokvaren alat je isto nalaz
         print(f"POPIS: tools/vba_gate.py se ne ucitava -- {e}", file=sys.stderr)
         return 2

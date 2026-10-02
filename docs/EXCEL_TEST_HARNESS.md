@@ -205,33 +205,65 @@ priključena bila `BLIND` — to je posao koji svaki unos zatvara.
 je nalaz, i zastareo unos je nalaz (suite obrisana, ili je u međuvremenu u
 `SUITES`). Isti oblik i isti razlog kao `MRTAV_UNOS` u `vba_hard_census`.
 
+**Procedura bez modifikatora je u VBA Public.** `Sub RunFooSuite()` je isto što i
+`Public Sub RunFooSuite()`, pa scanner koji traži literalni `Public` propušta
+validnu javnu suite — CI zelen, suite nevidljiva. Definicija „javne procedure
+modula" zato stoji **na jednom mestu**, `vba_check.JAVNA_PROC_ARG`, i dele je obe
+provere: `DUPLIKAT` („Ambiguous name detected") i ovaj popis. `Const` je obrnuto —
+modul-level `Const X = 1` bez modifikatora je **Private** — i ta asimetrija je u
+kodu, ne u glavi: široki izraz bez nje prijavi 609 „javnih imena", sve lokalni
+`Const SRC` po procedurama.
+
 Ulazna tačka se traži **samo u `.bas` i samo bez argumenata** — makro se po imenu
-poziva jedino iz standardnog modula, pa `Public Sub RunFooSuite()` u klasi nije
-suite koju bi kapija mogla da pokrene.
+poziva jedino iz standardnog modula, pa `Sub RunFooSuite()` u klasi nije suite koju
+bi kapija mogla da pokrene. `Function` se prihvata uz `Sub`: i nju
+`Application.Run` zove po imenu.
 
 **2) Da li je baš OVAJ izvor prošao testove?**
 
 ```bash
-python tools/vba_gate.py --status           # izvor vs marker, po suite-u
+python tools/vba_gate.py --status           # izvor, ugovor, marker po suite-u
 python tools/vba_gate.py --require-green    # exit 0 samo ako je ovaj izvor dokazan
+python tools/vba_gate.py --require-green --require-compile
 python tools/vba_gate.py --mark-compile     # posle Debug > Compile VBAProject
 ```
 
 „Suite su bile zelene" je tvrdnja o **nekom** izvoru. Posle rebase-a, amend-a ili
 jedne usputne izmene ta rečenica i dalje stoji a više ne važi. `run_vba.py` zato na
-kraju run-a piše marker (`tests/last_green.json`, **gitignored**) sa kanonskim
-otiskom `src-vba` i rezultatom **po suite-u**, pa `--require-green` ume da
-razlikuje „dokazano" od „dokazano nešto drugo" i da imenuje koja suite nedostaje.
+kraju run-a piše marker (`tests/last_green.json`, **gitignored**) sa rezultatom
+**po suite-u** i otiscima pod kojima je nastao.
+
+**Dva otiska, ne jedan.** Otisak samog `src-vba` ne dokazuje da je dokaz izvršen
+nad *ovim* test sistemom:
+
+| otisak | šta pokriva | koristi ga |
+|---|---|---|
+`izvor` | `src-vba` (bez `modBuildInfo.bas`) | compile evidence |
+`ugovor` | `izvor` + `tools/run_vba.py` + `tools/make_fixture.py` + `tests/golden/*` + verzija markera | dokaz suita |
+
+`RunGoldenSuite` meri ishod protiv `tests/golden/*.txt`; `run_vba.py` odlučuje koja
+suite postoji, da li je `gate` i kako se čita rezultat; `make_fixture.py` određuje
+podatke nad kojima testovi rade (i potpis koji `run_vba` proverava **pre** Excela,
+čime sam priznaje da je stanje fixture-a deo preduslova). Promeni golden fajl, ne
+pusti nijedan test — marker vezan samo za izvor bi i dalje tvrdio „dokazano".
+
+Razdvojeni su zato što **compile pripada samo izvoru**: `Debug > Compile` ne zna za
+golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio. Ugovor se
+računa iz **delova**, pa nalaz kaže *koji* se deo promenio, a ne samo „nešto".
 
 Šta marker **ne** upisuje: pao run; `--no-import` run (kod u svesci tada nije
 `src-vba`, pa bi otisak lagao o tome šta je izvršeno); i **`BLIND` suite kao
 dokazanu** — `gate: False` znači „prošla bez greške", što nije „sve provere
-prošle". Compile ima svoj upis, jer je ručna kapija operatera: `--mark-compile`
-vezuje tu potvrdu za otisak, pa potvrda data nad jednim izvorom prestaje da važi
-za sledeći (to se već desilo, kao P3 u review-u #400).
+prošle". Potvrda compile-a (`--mark-compile`) vezana je za **otisak izvora**, pa
+potvrda data nad jednim izvorom prestaje da važi za sledeći (to se već desilo, kao
+P3 u review-u #400).
 
-Otisak normalizuje prelome i **izuzima `modBuildInfo.bas`** — `stamp-build` ga
-prepisuje pred svaki `ImportAllVBA`, pa bi inače stamp obarao marker baš u
+**Kontekst sveske** se pamti uz svaki rezultat: `run_vba --workbook X.xlsm` dokazuje
+drugi kontekst, pa ne zadovoljava podrazumevani zahtev bez izričitog
+`--sveska X.xlsm`.
+
+Otisak izvora normalizuje prelome i **izuzima `modBuildInfo.bas`** — `stamp-build`
+ga prepisuje pred svaki `ImportAllVBA`, pa bi inače stamp obarao marker baš u
 trenutku release-a. Nije isti otisak kao `dokaz.py._otisak`, i ne treba da bude:
 tamo se porede dva stanja u istom procesu (pa je sirov bajt tačno ono što se
 traži), ovde dva procesa i dve mašine.
