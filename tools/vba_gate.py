@@ -125,7 +125,9 @@ MARKER = os.path.join(ROOT, "tests", "last_green.json")
 # VERZIJA MARKERA. Ako se znacenje polja promeni, stari upis NE SME da zadovolji
 # nova pravila -- inace bi prelazak na strozija pravila tiho priznao dokaze
 # napravljene pod slabijim. Zato verzija ulazi i u otisak ugovora.
-MARKER_VERZIJA = 3
+# 4: upis je od tada fail-closed nad snimkom konteksta uzetim PRE run-a.
+# Marker verzije 3 je mogao nastati bez te provere, pa mu se ne veruje.
+MARKER_VERZIJA = 4
 
 # Delovi TEST-UGOVORA koji zive van src-vba, IMENOVANI -- da nalaz kaze koji se
 # deo promenio, a ne samo "nesto".
@@ -351,8 +353,14 @@ def podrazumevana_sveska(koren: str = ROOT) -> str:
     return os.path.join(koren, *PODRAZUMEVANA_SVESKA.split("/"))
 
 
-def kontekst_sveske(put: str) -> dict:
+def kontekst_sveske(put: str, hes_iz: str = None) -> dict:
     """Identitet sveske nad kojom je dokaz nastao: PUTANJA i SADRZAJ.
+
+    `hes_iz` je fajl iz koga se cita sadrzaj kad to nije ista putanja:
+    `run_vba` predaje TEMP KOPIJU, jer je ona ono sto Excel stvarno otvara.
+    Hes uzet iz nje nema prozor izmedju "procitao sam fixture radi hesa" i
+    "kopirao sam ga Excelu" -- a putanja ostaje IZVORNA, da se dokaz moze
+    uporediti sa svescom koja i dalje stoji na disku.
 
     Basename nije identitet. `C:\\A\\test.xlsm` i `D:\\B\\test.xlsm` se po
     njemu ne razlikuju; gore od toga, podrazumevani fixture je gitignored i
@@ -368,7 +376,7 @@ def kontekst_sveske(put: str) -> dict:
     """
     return {"ime": os.path.basename(put),
             "putanja": os.path.realpath(put),
-            "otisak": _hash_sirov(put)}
+            "otisak": _hash_sirov(hes_iz or put)}
 
 
 def _razlika_sveske(zapisan: dict, trazen: dict) -> str:
@@ -433,6 +441,51 @@ def _razlika_ugovora(stari: dict, novi: dict) -> list:
                   if stari.get(k) != novi.get(k))
 
 
+def snimi_kontekst(src_dir: str = SRC_VBA, koren: str = ROOT,
+                   sveska: str = None, sveska_hes_iz: str = None) -> dict:
+    """Nepromenljiv snimak konteksta dokaza, uzet PRE run-a.
+
+    Otisci racunati POSLE run-a opisuju stanje diska na kraju, a ne ono sto je
+    testirano. Prolaz traje 20-60 minuta i razvoj ide paralelno, pa je prozor
+    stvaran: izmeni `src-vba`, golden ili fixture tokom run-a, i GREEN bi bio
+    pripisan stanju koje Excel nikad nije video. Zato se kontekst snima na
+    ulasku, a `zabelezi_prolaz` ga samo PRIMA i pre upisa tvrdi da se nije
+    promenio.
+    """
+    delovi = ugovor_delovi(src_dir, koren)
+    return {
+        "verzija": MARKER_VERZIJA,
+        "izvor": delovi["izvor"],
+        "ugovor": otisak_ugovora(delovi),
+        "ugovor_delovi": delovi,
+        "sveska": kontekst_sveske(sveska or podrazumevana_sveska(koren),
+                                 sveska_hes_iz),
+    }
+
+
+def _razlika_konteksta(pre: dict, posle: dict) -> list:
+    """Sta se promenilo izmedju snimka i trenutnog stanja. Prazno = nista."""
+    pre, posle = pre or {}, posle or {}
+    razlike = []
+    if pre.get("verzija") != posle.get("verzija"):
+        razlike.append("verzija markera")
+    if pre.get("izvor") != posle.get("izvor"):
+        razlike.append("src-vba")
+    if pre.get("ugovor") != posle.get("ugovor"):
+        # `izvor` je DEO ugovora, i prijavljen je vec iznad. Ovde se imenuje samo
+        # ono sto je ugovoru specificno -- inace bi ista promena bila prijavljena
+        # dva puta, a poredjenje izvora iznad ne bi bilo nezavisno merljivo:
+        # ugasis ga, a ugovor i dalje hvata istu promenu.
+        delovi = [d for d in _razlika_ugovora(pre.get("ugovor_delovi"),
+                                             posle.get("ugovor_delovi") or {})
+                  if d != "izvor"]
+        if delovi:
+            razlike.append("test-ugovor (%s)" % ", ".join(delovi))
+    if _razlika_sveske(pre.get("sveska"), posle.get("sveska") or {}):
+        razlike.append("sveska")
+    return razlike
+
+
 def procitaj_marker(put: str = MARKER) -> dict:
     try:
         with io.open(put, encoding="utf-8") as fh:
@@ -470,7 +523,7 @@ def potrebne_suite(suites: dict = None) -> list:
 
 
 def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
-                    sveska: str = None, put: str = MARKER,
+                    kontekst: dict = None, put: str = MARKER,
                     src_dir: str = SRC_VBA, koren: str = ROOT) -> str:
     """Zapisi rezultat run-a u marker. Vraca poruku (sta je upisano ili zasto nije).
 
@@ -481,22 +534,44 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
     ne brise tudje rezultate, ali ni ne pozajmljuje svoje otiske njima: svaki
     upis nosi izvor i ugovor pod kojim je nastao, pa `--require-green` posle
     izmene ume da kaze koja je suite zastarela, a koja nije.
+
+    `kontekst` je snimak uzet PRE run-a (v. `snimi_kontekst`). Ne racuna se ovde
+    iznova: otisci uzeti na kraju opisuju stanje diska posle testova, a ne ono
+    sto je testirano. Pre upisa se TVRDI da se kontekst nije promenio -- ako se
+    promenio, run moze biti zelen ali marker se NE UPISUJE. Fail-closed: bolje
+    nema dokaza nego dokaz pripisan stanju koje nije mereno.
     """
     if no_import:
         return ("marker nije upisan: --no-import znaci da kod u svesci nije "
                 "src-vba, pa otisak ne bi opisivao ono sto je izvrseno")
     if rc != 0:
         return "marker nije upisan: run nije zelen (rc=%s)" % rc
+    if not kontekst:
+        return ("marker nije upisan: nema snimka konteksta uzetog PRE run-a "
+                "(v. snimi_kontekst) -- bez njega bi se potpisalo stanje diska "
+                "posle testova, a ne ono sto je testirano")
 
-    delovi = ugovor_delovi(src_dir, koren)
-    ugovor = otisak_ugovora(delovi)
+    # `kontekst or {}`: ugasena kapija iznad ne sme da zavrsi kao AttributeError
+    # nego kao ODBIJEN UPIS -- pad nije merenje. Prazan kontekst se razlikuje od
+    # trenutnog stanja po verziji, pa upis pada fail-closed.
+    k = kontekst or {}
+    sada = snimi_kontekst(src_dir, koren,
+                          (k.get("sveska") or {}).get("putanja"))
+    razlike = _razlika_konteksta(k, sada)
+    if razlike:
+        return ("marker nije upisan: %s se promenilo TOKOM run-a -- prolaz je "
+                "mozda zelen, ali mereno stanje vise ne stoji na disku"
+                % ", ".join(razlike))
+
+    delovi = k.get("ugovor_delovi") or {}
+    ugovor = k.get("ugovor")
     podaci = procitaj_marker(put)
     if not podaci or podaci.get("verzija") != MARKER_VERZIJA:
         podaci = {"verzija": MARKER_VERZIJA, "suites": {}}
     podaci.setdefault("suites", {})
 
     kada = time.strftime("%Y-%m-%dT%H:%M:%S")
-    ks = kontekst_sveske(sveska or podrazumevana_sveska(koren))
+    ks = k.get("sveska") or {}
     rezultati = report.get("suite_results", {}) or {}
     for s in report.get("suites", []):
         r = rezultati.get(s["name"]) or {}
@@ -504,7 +579,7 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
             "status": s.get("status"),
             "ukupno": r.get("total"),
             "palo": r.get("failed"),
-            "izvor": delovi["izvor"],
+            "izvor": delovi.get("izvor"),
             "ugovor": ugovor,
             "ugovor_delovi": delovi,
             "sveska": ks,
@@ -515,8 +590,9 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
     upisi_marker(podaci, put)
     imena = sorted(s["name"] for s in report.get("suites", []))
     return ("marker upisan (izvor %s, ugovor %s, sveska %s/%s): %d suita (%s)"
-            % (delovi["izvor"][:12], ugovor[:12], ks["ime"],
-               ks["otisak"][:8], len(imena), ", ".join(imena) or "nijedna"))
+            % ((delovi.get("izvor") or "?")[:12], (ugovor or "?")[:12],
+               ks.get("ime"), (ks.get("otisak") or "?")[:8], len(imena),
+               ", ".join(imena) or "nijedna"))
 
 
 def zabelezi_compile(put: str = MARKER, src_dir: str = SRC_VBA) -> str:
@@ -811,9 +887,12 @@ def _self_test(tiho: bool = False) -> int:
         ZELEN = {"suites": [{"name": "RunAllTests", "status": "OK"}],
                  "suite_results": {"RunAllTests": {"total": 199, "failed": 0}}}
 
-        def upisi(rep=None, rc=0, **kw):
-            return zabelezi_prolaz(rep or ZELEN, rc, put=put, src_dir=src,
-                                   koren=tmp, **kw)
+        def upisi(rep=None, rc=0, sveska=None, **kw):
+            # Snimak se uzima neposredno pre upisa: normalna putanja, gde se
+            # izmedju snimka i upisa nije nista promenilo.
+            k = snimi_kontekst(src, tmp, sveska)
+            return zabelezi_prolaz(rep or ZELEN, rc, kontekst=k, put=put,
+                                   src_dir=src, koren=tmp, **kw)
 
         def zahtevaj(**kw):
             # Pad je NALAZ, ne traceback: ugasena kapija `if not marker` inace
@@ -944,6 +1023,62 @@ def _self_test(tiho: bool = False) -> int:
         tvrdi(any("verzije" in n for n in zahtevaj()),
               "MARKER: marker stare verzije se priznaje")
         upisi()
+
+        # --- TOCTOU: kontekst se snima PRE run-a --------------------------
+        #
+        # Otisci racunati na KRAJU opisuju stanje diska posle testova, a ne ono
+        # sto je testirano. Prolaz traje 20-60 minuta i razvoj ide paralelno, pa
+        # je prozor stvaran. Upis je zato fail-closed: run moze biti zelen, a
+        # marker se ne upisuje.
+        tvrdi("nema snimka konteksta" in zabelezi_prolaz(
+                  ZELEN, 0, put=put, src_dir=src, koren=tmp),
+              "MARKER: upis BEZ snimka konteksta se izvrsava")
+
+        def toctou(izmena, opis):
+            k = snimi_kontekst(src, tmp)      # snimak PRE "run-a"
+            izmena()                          # ... pa se nesto promeni ...
+            poruka = zabelezi_prolaz(ZELEN, 0, kontekst=k, put=put,
+                                     src_dir=src, koren=tmp)
+            tvrdi("TOKOM run-a" in poruka,
+                  "MARKER: %s TOKOM run-a se upisuje kao dokaz" % opis)
+            upisi()                           # vrati marker u zeleno stanje
+
+        def dopisi(rel, tekst):
+            def f():
+                with io.open(os.path.join(tmp, *rel.split("/")), "a",
+                             newline="") as fh:
+                    fh.write(tekst)
+            return f
+
+        def izmeni_izvor():
+            with io.open(os.path.join(src, "modTest.bas"), "a",
+                         newline="") as fh:
+                fh.write("' izmena tokom run-a\r\n")
+
+        def zameni_svesku():
+            with open(podrazumevana_sveska(tmp), "wb") as fh:
+                fh.write(b"sveska zamenjena tokom run-a")
+
+        toctou(izmeni_izvor, "izmenjen SRC-VBA")
+        toctou(dopisi("tests/golden/G1.txt", "tokom run-a\n"),
+               "izmenjen GOLDEN")
+        toctou(dopisi("tools/run_vba.py", "tokom run-a\n"),
+               "izmenjen RUNNER")
+        toctou(dopisi("tools/vba_gate.py", "tokom run-a\n"),
+               "izmenjena KAPIJA")
+        toctou(zameni_svesku, "zamenjena SVESKA")
+
+        # Sadrzaj sveske se cita iz TEMP KOPIJE (ono sto Excel otvara), a
+        # putanja ostaje IZVORNA -- da se dokaz moze uporediti sa svescom koja i
+        # dalje stoji na disku.
+        kopija = os.path.join(tmp, "temp_kopija.xlsm")
+        with open(kopija, "wb") as fh:
+            fh.write(b"kopija koju Excel otvara")
+        ks = kontekst_sveske(podrazumevana_sveska(tmp), kopija)
+        tvrdi(ks["putanja"] == os.path.realpath(podrazumevana_sveska(tmp)),
+              "SVESKA: putanja se uzima iz temp kopije umesto iz izvora")
+        tvrdi(ks["otisak"] == _hash_sirov(kopija),
+              "SVESKA: sadrzaj se ne cita iz temp kopije koju Excel otvara")
 
         # --- potrebne_suite -----------------------------------------------
         tvrdi(potrebne_suite(SUITES) == ["RunAllTests"],

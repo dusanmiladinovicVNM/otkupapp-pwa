@@ -444,10 +444,14 @@ def self_test() -> int:
     kraj = sopstveni.find("\ndef ", poc + 1)
     tudje = sopstveni[:poc] + sopstveni[kraj if kraj > 0 else len(sopstveni):]
     for tekst, opis in (
+            ('_gate.snimi_kontekst(sveska=fixture,\n'
+             '                                               sveska_hes_iz=wbpath)',
+             "main() ne snima kontekst dokaza PRE run-a, nad temp kopijom "
+             "sveske"),
             ('_gate.zabelezi_prolaz(\n'
-             '            report, rc, args.no_import, sveska=fixture)',
-             "main() ne zove vba_gate.zabelezi_prolaz sa args.no_import i "
-             "IZVORNOM svescom (ne temp kopijom)"),
+             '                report, rc, args.no_import, kontekst=kontekst_dokaza)',
+             "main() ne predaje SNIMLJEN kontekst, nego pusta da se otisci "
+             "racunaju na kraju run-a"),
             ('lines.append(f"GREEN   {report[\'green\']}")',
              "izvestaj ne ispisuje red GREEN -- upis markera bi bio nevidljiv"),
     ):
@@ -839,6 +843,25 @@ def main(argv: list[str]) -> int:
     # ljudski pregled -- inace bi ga sledeci run tiho napravio ponovo.
     _copy_golden(GOLDEN_DIR, os.path.join(tmp, "golden"))
 
+    # SNIMAK KONTEKSTA DOKAZA se uzima SADA, pre nego sto Excel krene -- i to
+    # nad TEMP KOPIJOM sveske, jer je ona ono sto Excel stvarno otvara.
+    #
+    # Otisci uzeti na KRAJU run-a opisali bi stanje diska POSLE testova: prolaz
+    # traje 20-60 minuta, a razvoj ide paralelno, pa bi izmena src-vba, golden
+    # fajla ili fixture-a tokom run-a bila pripisana kao dokazana. `vba_gate`
+    # pre upisa tvrdi da se nista od toga nije promenilo, i ne upisuje ako se
+    # promenilo -- bolje nema dokaza nego dokaz o stanju koje nije mereno.
+    _gate, kontekst_dokaza, kontekst_greska = None, None, ""
+    try:
+        _spec = importlib.util.spec_from_file_location(
+            "_vba_gate_za_run", os.path.join(ROOT, "tools", "vba_gate.py"))
+        _gate = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_gate)
+        kontekst_dokaza = _gate.snimi_kontekst(sveska=fixture,
+                                               sveska_hes_iz=wbpath)
+    except Exception as exc:                # noqa: BLE001
+        kontekst_greska = "snimak konteksta nije uzet -- %s" % exc
+
     report: dict = {"workbook": fixture, "import": [], "compile": None, "suites": [], "dialogs": []}
     rc = 2
     xl = None
@@ -1001,11 +1024,13 @@ def main(argv: list[str]) -> int:
         else:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    # MARKER ZELENOG: "suite su bile zelene" je tvrdnja o NEKOM izvoru, i do sada
-    # se znalo samo iz recenice uz PR o kom. Ovde se vezuje za otisak src-vba, pa
-    # `vba_gate.py --require-green` ume da razlikuje "dokazano" od "dokazano nesto
-    # drugo". Pravila -- sta se NE sme upisati (pao run, --no-import, BLIND suite
-    # kao dokazana) -- zive u vba_gate, zajedno sa svojim dokazom.
+    # MARKER ZELENOG: "suite su bile zelene" je tvrdnja o NEKOM izvoru, pod NEKIM
+    # test sistemom, nad NEKOM svescom -- i do sada se znalo samo iz recenice uz
+    # PR. Ovde se vezuje za snimak konteksta uzet PRE run-a, pa
+    # `vba_gate.py --require-green` ume da razlikuje "dokazano" od "dokazano
+    # nesto drugo". Pravila -- sta se NE sme upisati (pao run, --no-import, BLIND
+    # suite kao dokazana, kontekst promenjen tokom run-a) -- zive u vba_gate,
+    # zajedno sa svojim dokazom.
     #
     # Compile se ovde NE upisuje ni kad headless javi OK: compile je rucna kapija
     # operatera (`--mark-compile`), a headless verdikt je cesto NEJASNO. Sirovo
@@ -1013,12 +1038,11 @@ def main(argv: list[str]) -> int:
     #
     # Nalaz alata ne sme da obori run: greska u markeru nije greska u VBA kodu.
     try:
-        _gate_spec = importlib.util.spec_from_file_location(
-            "_vba_gate_za_run", os.path.join(ROOT, "tools", "vba_gate.py"))
-        _gate = importlib.util.module_from_spec(_gate_spec)
-        _gate_spec.loader.exec_module(_gate)
-        report["green"] = _gate.zabelezi_prolaz(
-            report, rc, args.no_import, sveska=fixture)
+        if kontekst_greska:
+            report["green"] = "marker nije upisan: " + kontekst_greska
+        else:
+            report["green"] = _gate.zabelezi_prolaz(
+                report, rc, args.no_import, kontekst=kontekst_dokaza)
     except Exception as exc:                # noqa: BLE001
         report["green"] = "marker nije upisan: %s" % exc
 

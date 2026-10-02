@@ -259,12 +259,27 @@ izričita oznaka namere, ne kao jedina brana.
 Razdvojeni su od `izvor`-a zato što **compile pripada samo izvoru**: `Debug > Compile`
 ne zna za golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio.
 
+**Kontekst se snima PRE run-a, i upis je fail-closed.** Otisci računati na kraju
+opisuju stanje diska **posle** testova, a ne ono što je testirano — a prolaz traje
+20–60 minuta i razvoj ide paralelno, pa je prozor stvaran:
+
+```
+snimi kontekst  ->  kopiraj/uvezi TAČNO taj  ->  testovi
+   ->  proveri da se ništa nije promenilo  ->  upiši SNIMLJENO
+```
+
+`run_vba` snima kontekst pre nego što Excel krene, i to **nad temp kopijom** sveske
+(ona je ono što Excel otvara, pa heš iz nje nema prozor između „pročitao sam fixture
+radi heša" i „kopirao sam ga"). `zabelezi_prolaz` ga samo prima; pre upisa tvrdi da
+se `src-vba`, ugovor i sveska nisu promenili. Ako jesu, **run može biti zelen a
+marker se ne upisuje** — bolje nema dokaza nego dokaz o stanju koje nije mereno.
+
 Šta marker **ne** upisuje: pao run; `--no-import` run (kod u svesci tada nije
-`src-vba`, pa bi otisak lagao o tome šta je izvršeno); i **`BLIND` suite kao
+`src-vba`, pa bi otisak lagao o tome šta je izvršeno); **`BLIND` suite kao
 dokazanu** — `gate: False` znači „prošla bez greške", što nije „sve provere
-prošle". Potvrda compile-a (`--mark-compile`) vezana je za **otisak izvora**, pa
-potvrda data nad jednim izvorom prestaje da važi za sledeći (to se već desilo, kao
-P3 u review-u #400).
+prošle"; i upis **bez snimka konteksta**. Potvrda compile-a (`--mark-compile`)
+vezana je za **otisak izvora**, pa potvrda data nad jednim izvorom prestaje da važi
+za sledeći (to se već desilo, kao P3 u review-u #400).
 
 **Kontekst sveske je identitet, ne ime.** Uz svaki rezultat se pamte putanja i
 **heš sadržaja** izvorne sveske (ne temp kopije — `run_vba` je prvo kopira, pa je

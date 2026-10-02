@@ -419,7 +419,11 @@
   mora da obori stare dokaze bez ručnog bumpa verzije. Compile je vezan **samo za izvor**
   (`--mark-compile`), pa promena golden fajla ne obara potvrdu. Kontekst sveske je **identitet** (putanja
   + heš sadržaja izvorne sveske), ne ime — fixture je gitignored, pa bi zamena sveske inače prošla pod
-  starim dokazom. Ne upisuje: pao run, `--no-import` run, ni `BLIND` suite kao dokazanu.
+  starim dokazom. Kontekst se **snima pre run-a** (nad temp kopijom sveske, onom koju Excel otvara) i
+  upis je **fail-closed**: ako se `src-vba`, ugovor ili sveska promene **tokom** run-a, prolaz može biti
+  zelen a marker se ne upisuje — inače bi GREEN bio pripisan stanju koje Excel nikad nije video, a
+  prolaz traje 20–60 min uz paralelan razvoj. Ne upisuje ni: pao run, `--no-import` run, `BLIND` suite
+  kao dokazanu, ni upis bez snimka konteksta.
 - `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja, popis suita) idu **ispred** izlaza
   `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
   baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.
