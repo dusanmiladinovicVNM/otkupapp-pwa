@@ -110,7 +110,7 @@ app.agrix.rs
   - univerzalni PWA frontend
   - config.js pokazuje na aktivni GAS Web App URL za trenutnog klijenta
 
-OtkupApp.xlsm
+AgriX.xlsm
   - lokalni Excel/VBA sistem
   - čita/piše Google Sheets preko OAuth-a
   - radi full sync
@@ -157,9 +157,9 @@ Pre nego što počneš sa novim klijentom, potvrdi:
 [ ] backup@agrix.rs Google Account radi.
 [ ] Imaš pristup Loopia emailovima.
 [ ] Imaš pristup GitHub/repo kodu.
-[ ] Imaš poslednji stabilan OtkupApp.xlsm.
+[ ] Imaš poslednji stabilan AgriX.xlsm.
 [ ] Imaš poslednji stabilan GAS Code.gs / Monitoring.gs / DriveFolder.gs.
-[ ] Imaš poslednji stabilan Setup-OtkupApp.ps1.
+[ ] Imaš poslednji stabilan Setup-AgriX.ps1.
 [ ] Imaš Poppler paket.
 [ ] Imaš AgriX OPS browser profil.
 [ ] Znaš novi CLIENT_ID.
@@ -382,7 +382,10 @@ AGRIX_SHEETS_MASTER_FOLDER_ID =
 AGRIX_SHEETS_REPORTS_FOLDER_ID =
 AGRIX_SHEETS_ARCHIVE_FOLDER_ID =
 
-AGRIX_BANK_IZVODI_FOLDER_ID =
+# 00_Inbox/01_Bank NEMA Script Property (bootstrap ga pravi ali ne upisuje ID).
+# ID uzmi RUCNO iz Drive URL-a -- treba za: Editor share nalogu koji prima izvode
+# + BANK_IMPORT_CLIENTS_JSON.driveFolderId (GAS #1) + BANKA_DRIVE_SOURCE_PATH.
+INBOX_01_BANK_FOLDER_ID =
 
 AGRIX_DOCUMENTS_FOLDER_ID =
 AGRIX_DOC_OTKUPNI_LISTOVI_FOLDER_ID =
@@ -450,7 +453,7 @@ GOOGLE_CLIENT_SECRET
 
 u password manager.
 
-U Excel `tblConfig` će ići:
+U Excel `tblSEFConfig` će ići (kod čita GOOGLE_* iz tblSEFConfig, ne tblConfig):
 
 ```text
 GOOGLE_CLIENT_ID
@@ -541,8 +544,6 @@ AGRIX_SHEETS_OPERATIONAL_FOLDER_ID
 AGRIX_SHEETS_MASTER_FOLDER_ID
 AGRIX_SHEETS_REPORTS_FOLDER_ID
 AGRIX_SHEETS_ARCHIVE_FOLDER_ID
-
-AGRIX_BANK_IZVODI_FOLDER_ID
 
 AGRIX_DOCUMENTS_FOLDER_ID
 AGRIX_DOC_OTKUPNI_LISTOVI_FOLDER_ID
@@ -697,9 +698,9 @@ Ako ping radi u jednom browser profilu, a ne radi u drugom, problem je Google mu
 
 ---
 
-## 15. Excel `tblConfig`
+## 15. Excel `tblSEFConfig` — Google + klijent
 
-U `OtkupApp.xlsm`, u `tblConfig`, postavi:
+U `AgriX.xlsm`, u `tblSEFConfig`, postavi (kod čita GOOGLE_*/CLIENT_* iz tblSEFConfig, ne tblConfig):
 
 ```text
 Kljuc                         Vrednost
@@ -1076,10 +1077,10 @@ Ovaj deo je obavezan deo install package-a. Cilj nije da se Excel sigurnost nasi
 Za produkcioni paket koristi sledeći model:
 
 ```text
-[ ] OtkupApp.xlsm je digitalno potpisan.
+[ ] AgriX.xlsm je digitalno potpisan.
 [ ] Certifikat za proveru potpisa je u install package-u kao .cer fajl.
-[ ] Setup-OtkupApp.ps1 instalira javni certifikat kod korisnika.
-[ ] Setup-OtkupApp.ps1 dodaje C:\OtkupApp kao Excel Trusted Location.
+[ ] Setup-AgriX.ps1 instalira javni certifikat kod korisnika.
+[ ] Setup-AgriX.ps1 dodaje C:\AgriX kao Excel Trusted Location.
 [ ] Svi fajlovi iz paketa su unblocked.
 [ ] Makroi se ne omogućavaju globalno za ceo Excel.
 [ ] Ne koristi se opcija “Enable all macros”.
@@ -1088,7 +1089,7 @@ Za produkcioni paket koristi sledeći model:
 Dozvoljeno:
 
 ```text
-Trusted Location za C:\OtkupApp
+Trusted Location za C:\AgriX
 +
 potpisan workbook
 +
@@ -1113,7 +1114,7 @@ Za prve klijente možeš koristiti self-signed VBA certifikat, jer ti radiš ini
 Preporučeni minimum za prve rollout-e:
 
 ```text
-Certifikat: OtkupApp VBA Publisher
+Certifikat: AgriX VBA Publisher
 Namena: VBA project signing
 Lokacija privatnog ključa: samo tvoj dev računar
 U install package ide samo javni .cer, ne privatni ključ
@@ -1144,7 +1145,7 @@ Koraci:
 
 ```text
 [ ] Pokreni SELFCERT.EXE.
-[ ] Certificate name: OtkupApp VBA Publisher
+[ ] Certificate name: AgriX VBA Publisher
 [ ] Potvrdi kreiranje certifikata.
 [ ] Certifikat ostaje u Current User / Personal store na dev računaru.
 ```
@@ -1153,20 +1154,20 @@ Ako koristiš komercijalni certifikat, preskačeš SelfCert i koristiš certifik
 
 ---
 
-### 24A.4 Potpisivanje OtkupApp.xlsm
+### 24A.4 Potpisivanje AgriX.xlsm
 
 Potpisivanje radiš tek kada je VBA kod spreman za release. Svaka izmena VBA koda posle potpisivanja poništava potpis.
 
 Redosled:
 
 ```text
-[ ] Otvori OtkupApp.xlsm na dev računaru.
+[ ] Otvori AgriX.xlsm na dev računaru.
 [ ] VBA Editor: ALT + F11.
 [ ] Debug > Compile VBAProject.
 [ ] Ako compile ne prođe, ne potpisivati.
 [ ] Tools > Digital Signature.
 [ ] Choose.
-[ ] Izaberi OtkupApp VBA Publisher.
+[ ] Izaberi AgriX VBA Publisher.
 [ ] Save workbook.
 [ ] Zatvori Excel.
 [ ] Ponovo otvori workbook i proveri da potpis nije pao.
@@ -1175,7 +1176,7 @@ Redosled:
 Release pravilo:
 
 ```text
-Poslednji korak pre pakovanja app/OtkupApp.xlsm je:
+Poslednji korak pre pakovanja app/AgriX.xlsm je:
 1. Compile VBA
 2. Save
 3. Digital Signature
@@ -1200,7 +1201,7 @@ Zatim:
 Current User
   Personal
     Certificates
-      OtkupApp VBA Publisher
+      AgriX VBA Publisher
 ```
 
 Export:
@@ -1210,25 +1211,25 @@ Export:
 [ ] All Tasks > Export.
 [ ] No, do not export the private key.
 [ ] DER encoded binary X.509 (.CER) ili Base-64 encoded X.509 (.CER).
-[ ] Naziv fajla: OtkupApp-VBA-Publisher.cer
+[ ] Naziv fajla: AgriX-VBA-Publisher.cer
 ```
 
 Fajl ide u install package:
 
 ```text
-AgriX_C00X_Install_v1.0.0/cert/OtkupApp-VBA-Publisher.cer
+AgriX_C00X_Install_v1.0.0/cert/AgriX-VBA-Publisher.cer
 ```
 
 ---
 
 ### 24A.6 Instalacija certifikata kod klijenta
 
-`Setup-OtkupApp.ps1` treba da uveze javni certifikat u Current User store.
+`Setup-AgriX.ps1` treba da uveze javni certifikat u Current User store.
 
 Preporučeni Current User model:
 
 ```powershell
-$certPath = Join-Path $PackageRoot "cert\OtkupApp-VBA-Publisher.cer"
+$certPath = Join-Path $PackageRoot "cert\AgriX-VBA-Publisher.cer"
 
 if (Test-Path $certPath) {
     Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
@@ -1251,7 +1252,7 @@ Za prvi rollout koristi CurrentUser, jer instaliraš aplikaciju za konkretnog Wi
 Trusted Location mora biti:
 
 ```text
-C:\OtkupApp\
+C:\AgriX\
 ```
 
 sa subfolderima.
@@ -1262,19 +1263,19 @@ Primer registry upisa za Current User:
 
 ```powershell
 $officeVersion = "16.0"
-$trustedLocationName = "AgriX_OtkupApp"
+$trustedLocationName = "AgriX_AgriX"
 $trustedLocationPath = "HKCU:\Software\Microsoft\Office\$officeVersion\Excel\Security\Trusted Locations\$trustedLocationName"
 
 New-Item -Path $trustedLocationPath -Force | Out-Null
-New-ItemProperty -Path $trustedLocationPath -Name "Path" -Value "C:\OtkupApp\" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $trustedLocationPath -Name "Path" -Value "C:\AgriX\" -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $trustedLocationPath -Name "AllowSubfolders" -Value 1 -PropertyType DWord -Force | Out-Null
-New-ItemProperty -Path $trustedLocationPath -Name "Description" -Value "AgriX OtkupApp trusted location" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $trustedLocationPath -Name "Description" -Value "AgriX AgriX trusted location" -PropertyType String -Force | Out-Null
 ```
 
 Ako Excel i dalje prikazuje macro warning:
 
 ```text
-[ ] proveri da li workbook stvarno leži u C:\OtkupApp\
+[ ] proveri da li workbook stvarno leži u C:\AgriX\
 [ ] proveri registry Trusted Location
 [ ] proveri da li je fajl blokiran iz interneta
 [ ] proveri da li je potpis validan
@@ -1288,7 +1289,7 @@ Ako Excel i dalje prikazuje macro warning:
 Ako je install package skinut sa interneta ili kopiran sa USB-a, Windows može staviti Mark-of-the-Web. PS1 treba da uradi unblock za ceo paket i finalnu aplikaciju.
 
 ```powershell
-Get-ChildItem -Path "C:\OtkupApp" -Recurse -File | ForEach-Object {
+Get-ChildItem -Path "C:\AgriX" -Recurse -File | ForEach-Object {
     try {
         Unblock-File -Path $_.FullName -ErrorAction SilentlyContinue
     } catch {
@@ -1300,9 +1301,9 @@ Get-ChildItem -Path "C:\OtkupApp" -Recurse -File | ForEach-Object {
 Posebno proveriti:
 
 ```text
-[ ] C:\OtkupApp\OtkupApp.xlsm nije blocked
-[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe nije blocked
-[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdfinfo.exe nije blocked
+[ ] C:\AgriX\AgriX.xlsm nije blocked
+[ ] C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe nije blocked
+[ ] C:\AgriX\Tools\poppler\Library\bin\pdfinfo.exe nije blocked
 ```
 
 ---
@@ -1312,7 +1313,7 @@ Posebno proveriti:
 Za instalaciju koristi se procesni bypass, ne trajna promena sistema:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install\Setup-OtkupApp.ps1
+powershell -ExecutionPolicy Bypass -File .\install\Setup-AgriX.ps1
 ```
 
 Ovo ne menja trajno execution policy na računaru klijenta.
@@ -1328,31 +1329,31 @@ PS1 potpisivanje može biti uvedeno kasnije. Za prve rollout-e je dovoljno:
 
 ---
 
-### 24A.10 Šta `Setup-OtkupApp.ps1` mora da radi
+### 24A.10 Šta `Setup-AgriX.ps1` mora da radi
 
 Minimalni installer mora da uradi sledeće:
 
 ```text
 [ ] Detektuje package root.
-[ ] Kreira C:\OtkupApp.
+[ ] Kreira C:\AgriX.
 [ ] Kreira lokalne foldere:
-    C:\OtkupApp\Bank_Izvodi\Inbox
-    C:\OtkupApp\Bank_Izvodi\Processed
-    C:\OtkupApp\Bank_Izvodi\Error
-    C:\OtkupApp\Logs
-    C:\OtkupApp\Backup
-    C:\OtkupApp\Export
+    C:\AgriX\Bank_Izvodi\Inbox
+    C:\AgriX\Bank_Izvodi\Processed
+    C:\AgriX\Bank_Izvodi\Error
+    C:\AgriX\Logs
+    C:\AgriX\Backup
+    C:\AgriX\Export
 
-[ ] Kopira app/OtkupApp.xlsm u C:\OtkupApp.
-[ ] Kopira Tools\poppler u C:\OtkupApp\Tools\poppler (pored OtkupApp.xlsm).
-[ ] Kopira docs u C:\OtkupApp\docs.
+[ ] Kopira app/AgriX.xlsm u C:\AgriX.
+[ ] Kopira Tools\poppler u C:\AgriX\Tools\poppler (pored AgriX.xlsm).
+[ ] Kopira docs u C:\AgriX\docs.
 [ ] Unblock svih fajlova.
-[ ] Instalira OtkupApp-VBA-Publisher.cer ako postoji.
-[ ] Dodaje C:\OtkupApp kao Excel Trusted Location.
+[ ] Instalira AgriX-VBA-Publisher.cer ako postoji.
+[ ] Dodaje C:\AgriX kao Excel Trusted Location.
 [ ] Kreira Desktop shortcut.
 [ ] Verifikuje pdftotext.exe.
-[ ] Verifikuje da OtkupApp.xlsm postoji.
-[ ] Piše install log u C:\OtkupApp\Logs\install-log.txt.
+[ ] Verifikuje da AgriX.xlsm postoji.
+[ ] Piše install log u C:\AgriX\Logs\install-log.txt.
 [ ] Na kraju ispisuje PASS/FAIL summary.
 ```
 
@@ -1379,15 +1380,18 @@ Minimalni installer mora da uradi sledeće:
 [ ] BANKA_PROCESSED_PATH postoji.
 [ ] BANKA_ERROR_PATH postoji.
 [ ] PDFTOTEXT_EXE_PATH postoji i pokazuje na pdftotext.exe.
-[ ] GOOGLE_CLIENT_ID postoji.
-[ ] GOOGLE_CLIENT_SECRET postoji.
-[ ] GOOGLE_PWA_FOLDER_ID postoji i pokazuje na 01_Sheets/02_Master.
-[ ] GOOGLE_REPORTS_FOLDER_ID postoji i pokazuje na 01_Sheets/03_Reports.
+[ ] GOOGLE_CLIENT_ID postoji (u tblSEFConfig).
+[ ] GOOGLE_CLIENT_SECRET postoji (u tblSEFConfig).
+[ ] GOOGLE_PWA_FOLDER_ID postoji (tblSEFConfig) i pokazuje na 01_Sheets/02_Master.
+[ ] GOOGLE_REPORTS_FOLDER_ID postoji (tblSEFConfig) i pokazuje na 01_Sheets/03_Reports.
 [ ] MONITORING_ENDPOINT postoji.
 [ ] CLIENT_ID postoji.
 [ ] ENV = PROD.
-[ ] APP_SETUP_COMPLETED = DA samo ako su obavezne stavke OK.
+[ ] APP_SETUP_COMPLETED = DA samo ako su obavezne (LOKALNE) stavke OK.
 ```
+
+> NAPOMENA (v2.8.6): Google / GAS / banka-Drive dostupnost proverava `CheckServerLink`
+> ADVISORY — prikaže se kao napomena, ali NE obara „zeleno". Ručno: `Alt+F8 → TestServerLink`.
 
 Ako nešto fali:
 
@@ -1427,10 +1431,10 @@ Minimalni `manifest.json`:
 Pre odlaska kod klijenta proveri:
 
 ```text
-[ ] OtkupApp.xlsm u paketu je poslednja potpisana verzija.
+[ ] AgriX.xlsm u paketu je poslednja potpisana verzija.
 [ ] APP_VERSION u tblSEFConfig odgovara manifestu.
 [ ] PWA APP_VERSION odgovara release-u.
-[ ] Setup-OtkupApp.ps1 je iz istog release paketa.
+[ ] Setup-AgriX.ps1 je iz istog release paketa.
 [ ] Poppler je prisutan.
 [ ] Certifikat je prisutan.
 ```
@@ -1463,10 +1467,10 @@ Pripremi folder:
 ```text
 AgriX_C00X_Install_v1.0.0/
   app/
-    OtkupApp.xlsm
+    AgriX.xlsm
 
   install/
-    Setup-OtkupApp.ps1
+    Setup-AgriX.ps1
 
   tools/
     poppler/
@@ -1476,7 +1480,7 @@ AgriX_C00X_Install_v1.0.0/
         ...
 
   cert/
-    OtkupApp-VBA-Publisher.cer
+    AgriX-VBA-Publisher.cer
 
   docs/
     PRE-INSTALL-C00X.md
@@ -1491,19 +1495,19 @@ AgriX_C00X_Install_v1.0.0/
 Provera:
 
 ```text
-[ ] OtkupApp.xlsm ima ispravan tblConfig.
-[ ] OtkupApp.xlsm ima ispravan tblSEFConfig.
+[ ] AgriX.xlsm ima ispravan tblConfig.
+[ ] AgriX.xlsm ima ispravan tblSEFConfig.
 [ ] modSetup postoji.
 [ ] SetupNewPC postoji.
 [ ] modBankaImport koristi local config paths.
 [ ] Poppler postoji.
 [ ] VBA compile prolazi.
 [ ] Workbook je potpisan.
-[ ] Javni certifikat je u cert/OtkupApp-VBA-Publisher.cer.
-[ ] Setup-OtkupApp.ps1 instalira certifikat.
-[ ] Setup-OtkupApp.ps1 dodaje Trusted Location.
-[ ] Setup-OtkupApp.ps1 radi Unblock-File.
-[ ] Setup-OtkupApp.ps1 postoji.
+[ ] Javni certifikat je u cert/AgriX-VBA-Publisher.cer.
+[ ] Setup-AgriX.ps1 instalira certifikat.
+[ ] Setup-AgriX.ps1 dodaje Trusted Location.
+[ ] Setup-AgriX.ps1 radi Unblock-File.
+[ ] Setup-AgriX.ps1 postoji.
 ```
 
 ---
@@ -1513,9 +1517,9 @@ Provera:
 Na test Windows računaru ili čistom Windows profilu:
 
 ```text
-[ ] Pokreni Setup-OtkupApp.ps1.
-[ ] C:\OtkupApp postoji.
-[ ] OtkupApp.xlsm je kopiran.
+[ ] Pokreni Setup-AgriX.ps1.
+[ ] C:\AgriX postoji.
+[ ] AgriX.xlsm je kopiran.
 [ ] Tools\poppler\Library\bin\pdftotext.exe postoji.
 [ ] Desktop shortcut radi.
 [ ] Trusted Location radi.
@@ -1550,25 +1554,25 @@ Proveri:
 
 ## 27. Bankarski email / PDF import pre-test
 
-Za sada standardni tok:
+Stvarni tok (GAS #1 downloader → Drive → Drive for Desktop → VBA; VBA NE čita mailbox):
 
 ```text
 Banka / klijentov email
-→ forwarding ili direktno slanje
-→ mailbox koji VBA čita
-→ VBA skida PDF
-→ C:\OtkupApp\Bank_Izvodi\Inbox
-→ ImportBankaInbox_TX
+→ GAS #1 „Bank PDF Downloader" (na nalogu koji prima izvode; Editor na 01_Bank)
+→ Drive 00_Inbox/01_Bank
+→ Google Drive for Desktop → lokalni ...\01_Bank  (= BANKA_DRIVE_SOURCE_PATH)
+→ VBA puller → C:\AgriX\Bank_Izvodi\Inbox
+→ ImportBankaInbox_TX → tblBankaImport
 ```
 
 U kancelariji pripremi:
 
 ```text
-[ ] znaš koji mailbox će VBA čitati
-[ ] znaš IMAP/POP/Outlook tok ako se koristi
-[ ] znaš kako će se podesiti forwarding
-[ ] imaš test PDF izvod
-[ ] Poppler radi
+[ ] znaš na koji nalog banka šalje izvode (tamo ide GAS #1 downloader)
+[ ] folder ID od 01_Bank (za Editor share + BANK_IMPORT_CLIENTS_JSON.driveFolderId)
+[ ] Drive for Desktop plan za mašinu (koji nalog vidi 01_Bank)
+[ ] imaš test PDF izvod (tekst, ne skenirana slika)
+[ ] Poppler radi (pdftotext.exe)
 [ ] ImportBankaInbox_TX radi na test PDF-u
 ```
 
@@ -1588,7 +1592,7 @@ Test:
 Pre terena napravi backup:
 
 ```text
-[ ] OtkupApp.xlsm baseline kopija.
+[ ] AgriX.xlsm baseline kopija.
 [ ] tblConfig export ili screenshot.
 [ ] tblSEFConfig export ili screenshot.
 [ ] folder ID evidencija.
@@ -1651,11 +1655,11 @@ AgriX_C00X_Install_v1.0.0
 Unutra mora biti:
 
 ```text
-[ ] app/OtkupApp.xlsm
-[ ] install/Setup-OtkupApp.ps1
+[ ] app/AgriX.xlsm
+[ ] install/Setup-AgriX.ps1
 [ ] Tools/poppler/Library/bin/pdftotext.exe
 [ ] Tools/poppler/Library/bin/pdfinfo.exe
-[ ] cert/OtkupApp-VBA-Publisher.cer ako se koristi
+[ ] cert/AgriX-VBA-Publisher.cer ako se koristi
 [ ] docs/on-site checklist
 ```
 
@@ -1700,22 +1704,22 @@ Kopiraj install paket na računar klijenta.
 Pokreni PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install\Setup-OtkupApp.ps1
+powershell -ExecutionPolicy Bypass -File .\install\Setup-AgriX.ps1
 ```
 
 Proveri rezultat:
 
 ```text
-[ ] C:\OtkupApp napravljen.
-[ ] OtkupApp.xlsm kopiran.
+[ ] C:\AgriX napravljen.
+[ ] AgriX.xlsm kopiran.
 [ ] Poppler kopiran.
 [ ] pdftotext.exe postoji.
 [ ] workbook je unblocked.
 [ ] javni certifikat je instaliran u CurrentUser TrustedPublisher.
 [ ] javni certifikat je instaliran u CurrentUser Root ako je self-signed.
-[ ] Trusted Location dodat: C:\OtkupApp\.
+[ ] Trusted Location dodat: C:\AgriX\.
 [ ] Desktop shortcut napravljen.
-[ ] install-log.txt postoji u C:\OtkupApp\Logs.
+[ ] install-log.txt postoji u C:\AgriX\Logs.
 ```
 
 Ako PS1 failuje, ne otvarati aplikaciju dok se ne reši uzrok.
@@ -1727,13 +1731,13 @@ Ako PS1 failuje, ne otvarati aplikaciju dok se ne reši uzrok.
 Pokreni preko desktop ikonice:
 
 ```text
-OtkupApp
+AgriX
 ```
 
 Proveri:
 
 ```text
-[ ] Otvara C:\OtkupApp\OtkupApp.xlsm.
+[ ] Otvara C:\AgriX\AgriX.xlsm.
 [ ] Nema macro warning-a.
 [ ] Ako macro warning postoji, rešiti Trusted Location/certifikat pre nastavka.
 ```
@@ -1886,23 +1890,46 @@ Sa klijentom proveri:
 [ ] Da li PDF ima tekst, ne samo skeniranu sliku.
 ```
 
-Podesi najjednostavniji tok:
+Stvarni tok (dva GAS-a povezana preko deljenog `01_Bank` foldera; VBA NE čita mailbox direktno):
 
 ```text
-email sa izvodom
-→ mailbox koji VBA čita
-→ VBA download
-→ C:\OtkupApp\Bank_Izvodi\Inbox
+Banka (email)
+→ GAS #1 „Bank PDF Downloader" (na nalogu koji PRIMA izvode; Editor na 01_Bank)
+→ Drive 00_Inbox/01_Bank (u stablu glavnog GAS-a #2)
+→ Google Drive for Desktop (sync na lokalni disk)
+→ lokalni ...\00_Inbox\01_Bank   (= BANKA_DRIVE_SOURCE_PATH)
+→ VBA puller (PullBankPdfsFromDriveProduction)
+→ C:\AgriX\Bank_Izvodi\Inbox
+→ ImportBankaInbox_TX → tblBankaImport → tblNovac
 ```
 
-Test:
+Povezivanje dva GAS-a (pivot = folder ID od `01_Bank`; isti ID na tri mesta):
 
 ```text
-[ ] Pošalji test email sa PDF izvodom.
-[ ] Proveri da VBA može da ga skine.
-[ ] PDF završi u lokalnom Inbox-u.
-[ ] ImportBankaInbox_TX ga obrađuje.
+[ ] Uzmi folder ID od 00_Inbox/01_Bank iz Drive URL-a (nema Script Property).
+[ ] Podeli 01_Bank kao Editor nalogu koji prima izvode (na kom radi GAS #1).
+[ ] GAS #1 (gas/bank-pdf-downloader): BANK_IMPORT_CLIENTS_JSON.driveFolderId = taj isti ID.
+[ ] GAS #1: testGmailAccessOnly → testBankPdfImportConfig → runBankPdfImportNow → setupDailyBankPdfImportTrigger (07h).
 ```
+
+Drive for Desktop na mašini sa Excelom:
+
+```text
+[ ] Drive for Desktop ulogovan na nalog koji vidi 01_Bank (ili: Add shortcut to Drive → My Drive).
+[ ] 00_Inbox → desni klik → Available offline (da pdftotext čita realne bajtove, ne cloud placeholder).
+[ ] BANKA_DRIVE_SOURCE_PATH (tblLocalConfig) = lokalna putanja do 01_Bank (Podesavanja → „Banka / lokalno" → „...").
+```
+
+Test (end-to-end):
+
+```text
+[ ] runBankPdfImportNow (GAS #1) spusti PDF u 01_Bank.
+[ ] Drive for Desktop materijalizuje fajl lokalno.
+[ ] „Banka uvoz izvoda" (ImportBankaInbox_WithDrivePull) povuče → tblBankaImport.
+[ ] ImportBankaInbox_TX / auto-map → tblNovac.
+```
+
+Detaljno: `docs/production-runbook-banka-import-setup.md` i `docs/DESKTOP_SETUP_REFERENCE.md` §6.
 
 ---
 
@@ -1911,7 +1938,7 @@ Test:
 Na računaru klijenta:
 
 ```text
-[ ] Ubaci validan PDF izvod u C:\OtkupApp\Bank_Izvodi\Inbox.
+[ ] Ubaci validan PDF izvod u C:\AgriX\Bank_Izvodi\Inbox.
 [ ] Pokreni ImportBankaInbox_TX.
 [ ] Proveri tblBankaImport.
 [ ] PDF ode u Processed ili Error.
@@ -1991,7 +2018,7 @@ Korisniku objasni:
 
 ```text
 [ ] Aplikaciju otvara preko Desktop ikonice.
-[ ] Ne premešta C:\OtkupApp.
+[ ] Ne premešta C:\AgriX.
 [ ] Bankarske izvode koristi kroz dogovoreni tok.
 [ ] Ne dira tblConfig.
 [ ] Ne dira tblSEFConfig.
