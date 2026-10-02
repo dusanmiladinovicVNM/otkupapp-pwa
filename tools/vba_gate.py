@@ -244,6 +244,49 @@ def _razlagac():
     return modul.deklaracija_procedure, modul.logicke_izjave
 
 
+# Uslovna kompilacija: `#If` namerno definise isto ime u vise grana, a u projekat
+# se kompajlira samo jedna. Census zato takvu deklaraciju NE sme da prizna kao
+# ulaznu tacku -- na drugoj masini je nema. `collect_public` istu stvar prati iz
+# obrnutog razloga (da ne prijavi "Ambiguous name" nad granama).
+_USLOV_POC = re.compile(r"^#if\b", re.IGNORECASE)
+_USLOV_KRAJ = re.compile(r"^#end\s+if\b", re.IGNORECASE)
+
+
+def je_ulazna_tacka(d: dict) -> bool:
+    """Da li deklaracija JESTE makro koji `xl.Run("<ime>")` moze da pozove.
+
+    Pet uslova, i svaki je runtime cinjenica, ne stil:
+
+      .bas          makro se po imenu zove jedino iz standardnog modula; javna
+                    metoda klase ili forme je clan objekta, ne makro
+      javna         Public ili bez modifikatora (default je Public)
+      Sub/Function  Property se ne poziva kao makro
+      0 obaveznih   runner zove BEZ argumenata
+      bezuslovna    deklaracija u neaktivnoj `#If` grani u projektu ne postoji
+    """
+    return bool(d["bas"] and d["javna"] and not d["uslovna"]
+                and d["vrsta"] in ("sub", "function")
+                and d["obaveznih"] == 0)
+
+
+def zasto_nije_ulazna(d: dict) -> str:
+    """Prvi razlog zbog koga deklaracija nije ulazna tacka -- za poruku nalaza."""
+    if not d["bas"]:
+        return "deklarisana u %s, a makro se zove samo iz .bas" % d["fajl"]
+    if not d["javna"]:
+        return "nije javna (%s)" % d["vidljivost"]
+    if d["uslovna"]:
+        return ("unutar `#If ... #End If` (%s) -- u aktivnom projektu je mozda "
+                "nema" % d["fajl"])
+    if d["vrsta"] not in ("sub", "function"):
+        return "%s se ne poziva kao makro" % d["vrsta"]
+    if d["obaveznih"]:
+        return ("ima %d obavezn%s argument%s -- runner zove bez njih"
+                % (d["obaveznih"], "a" if d["obaveznih"] == 1 else "ih",
+                   "" if d["obaveznih"] == 1 else "a"))
+    return ""
+
+
 def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
     """(javne, po_konvenciji) iz JEDNOG prolaza kroz src-vba.
 
@@ -254,42 +297,42 @@ def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
     na kraju reda i prelom reda u listi argumenata su sve validni oblici, i svaki
     je u jednom krugu review-a bio nevidljiv.
 
-    `javne` je ime -> (fajl, pozivljiva_bez_argumenata). Drugi clan nije kozmetika:
-    runner zove `xl.Run("<ime>")` BEZ argumenata, pa procedura sa obaveznim
-    argumentom nije upotrebljiva kao ulazna tacka ni kad postoji.
+    `deklaracije` je ime -> LISTA razlozenih deklaracija (vise ih ima kad isto ime
+    stoji u dva modula ili u dve `#If` grane). Lista, ne jedna vrednost: sa
+    `setdefault` je ishod zavisio od abecednog redosleda fajlova, pa je ista
+    provera na dve masine mogla da da dva odgovora.
 
-    `po_konvenciji` su kandidati za ulaznu tacku suite-a, i to su TRI uslova nad
-    razlozenom deklaracijom, ne jedan izraz:
-
-      javna (Public ili bez modifikatora)
-      + NULA OBAVEZNIH argumenata -- `Sub Foo`, `Sub Foo()` i
-        `Sub Foo(Optional x)` se sve zovu po imenu bez argumenta
-      + ime po konvenciji, i samo u `.bas`
-
-    `.bas` jer se makro po imenu zove jedino iz standardnog modula: `Sub
-    RunFooSuite()` u klasi ili formi nije suite koju bi kapija mogla da pokrene.
-    `Function` se prihvata uz `Sub`: i nju `Application.Run` zove po imenu, pa bi
-    inace bila ista rupa drugog oblika.
+    `po_konvenciji` su ULAZNE TACKE ciji je naziv po konvenciji suite-a. Sta je
+    ulazna tacka, odlucuje `je_ulazna_tacka` -- jedan pojam sa tacnim runtime
+    znacenjem, umesto "javna deklaracija negde".
     """
     razlagac, izjave = _razlagac() if razlagac is None else razlagac
-    javne, po_konvenciji = {}, {}
+    deklaracije, po_konvenciji = {}, {}
     if not os.path.isdir(src_dir):
-        return javne, po_konvenciji
-    for ime in sorted(os.listdir(src_dir)):
-        if not ime.endswith(TEKST_NASTAVCI):
+        return deklaracije, po_konvenciji
+    for fajl in sorted(os.listdir(src_dir)):
+        if not fajl.endswith(TEKST_NASTAVCI):
             continue
-        with io.open(os.path.join(src_dir, ime), encoding="ascii",
+        with io.open(os.path.join(src_dir, fajl), encoding="ascii",
                      errors="replace", newline="") as fh:
             tekst = fh.read().replace("\r\n", "\n")
+        dubina = 0
         for red, _broj in izjave(tekst):
-            d = razlagac(red)
-            if not d or not d["javna"] or d["vrsta"] == "property":
+            if _USLOV_POC.match(red):
+                dubina += 1
                 continue
-            bez_arg = d["obaveznih"] == 0
-            javne.setdefault(d["ime"], (ime, bez_arg))
-            if ime.endswith(".bas") and bez_arg and IME_SUITE.match(d["ime"]):
-                po_konvenciji.setdefault(d["ime"], ime)
-    return javne, po_konvenciji
+            if _USLOV_KRAJ.match(red):
+                dubina = max(0, dubina - 1)
+                continue
+            d = razlagac(red)
+            if not d:
+                continue
+            d = dict(d, fajl=fajl, bas=fajl.endswith(".bas"),
+                     uslovna=dubina > 0)
+            deklaracije.setdefault(d["ime"], []).append(d)
+            if je_ulazna_tacka(d) and IME_SUITE.match(d["ime"]):
+                po_konvenciji.setdefault(d["ime"], fajl)
+    return deklaracije, po_konvenciji
 
 
 def popis_problemi(suites: dict = None, registar: dict = None,
@@ -299,29 +342,40 @@ def popis_problemi(suites: dict = None, registar: dict = None,
     suites = katalog_suita() if suites is None else suites
     registar = SUITE_VAN_KAPIJA if registar is None else registar
     if skenirano is None:
-        javne, po_konvenciji = skeniraj(src_dir, razlagac)
+        deklaracije, po_konvenciji = skeniraj(src_dir, razlagac)
     else:
-        javne, po_konvenciji = skenirano
+        deklaracije, po_konvenciji = skenirano
+
+    def ulazna(ime):
+        """(ima_ulaznu_tacku, razlog ako je nema ali deklaracija postoji)."""
+        svi = deklaracije.get(ime) or []
+        if any(je_ulazna_tacka(d) for d in svi):
+            return True, ""
+        if not svi:
+            return False, ""
+        # Vise deklaracija istog imena: svaka nosi svoj razlog, pa se imenuju sve
+        # -- inace bi poruka zavisila od toga koja je procitana prva.
+        return False, "; ".join(sorted({zasto_nije_ulazna(d) for d in svi}))
 
     nalazi = []
 
-    # a) katalog imenuje proceduru koje nema, ili koja se ne moze pozvati
+    # a) katalog imenuje nesto sto nije ULAZNA TACKA
     #
-    # Postojanje nije dovoljno: `run_vba` zove `xl.Run("<ime>")` BEZ argumenata,
-    # pa `Public Sub RunAllTests(ByVal mode As Boolean)` postoji a run pada. To
-    # je rupa izmedju kataloga i stvarno pozivljive ulazne tacke, i `skeniraj`
-    # je odgovor imao -- samo se nije gledao.
+    # "Javna deklaracija negde" nije dovoljno: `run_vba` zove `xl.Run("<ime>")`,
+    # pa metoda klase, deklaracija u neaktivnoj `#If` grani i procedura sa
+    # obaveznim argumentom -- sve postoje, a run pada na Run(). Razlog se imenuje,
+    # da nalaz kaze STA je u pitanju.
     for ime in sorted(suites):
-        podaci = javne.get(ime)
-        if not podaci:
+        ok, razlog = ulazna(ime)
+        if ok:
+            continue
+        if not razlog:
             nalazi.append("FANTOM: SUITES['%s'] nema `Public Sub %s` u src-vba"
                           % (ime, ime))
-        # Tolerantno na None iz istog razloga kao kod registra ispod: gasenje
-        # provere iznad mora da da NALAZ, ne traceback -- pad nije merenje.
-        elif not (podaci or (None, True))[1]:
-            nalazi.append("NEPOZIVLJIVA: SUITES['%s'] (%s) ima OBAVEZNE "
-                          "argumente -- runner je zove kao `xl.Run(\"%s\")`, "
-                          "bez argumenata" % (ime, podaci[0], ime))
+        else:
+            nalazi.append("NIJE ULAZNA TACKA: SUITES['%s'] je deklarisana, ali "
+                          "je `xl.Run(\"%s\")` ne moze pozvati -- %s"
+                          % (ime, ime, razlog))
 
     # b) suite po konvenciji koju nijedna kapija ne pokrece i koja nije zapisana
     for ime in sorted(set(po_konvenciji) - set(suites) - set(registar)):
@@ -329,19 +383,35 @@ def popis_problemi(suites: dict = None, registar: dict = None,
                       "SUITE_VAN_KAPIJA -- napisana suite koju nijedna kapija ne "
                       "pokrece" % (ime, po_konvenciji[ime]))
 
+    # Uslovna ulazna tacka po konvenciji je NALAZ, ne tiho priznanje: na drugoj
+    # masini je nema, pa "suite postoji" vise ne znaci isto svuda. Ako takva
+    # jednog dana treba, modeluje se izricito po compile targetu.
+    for ime, svi in sorted(deklaracije.items()):
+        if ime in suites or ime in registar or not IME_SUITE.match(ime):
+            continue
+        if any(je_ulazna_tacka(d) for d in svi):
+            continue
+        uslovne = [d for d in svi if d["bas"] and d["javna"] and d["uslovna"]
+                   and d["obaveznih"] == 0]
+        if uslovne:
+            nalazi.append("USLOVNA: `%s` (%s) je po imenu suite, ali je "
+                          "deklarisana unutar `#If ... #End If` -- u aktivnom "
+                          "projektu je mozda nema"
+                          % (ime, uslovne[0]["fajl"]))
+
     # c) registar koji je zastareo -- isti oblik kao MRTAV_UNOS u hard_census
     for ime in sorted(registar):
         if ime in suites:
             nalazi.append("MRTAV UNOS: `%s` je u medjuvremenu u SUITES -- obrisi "
                           "ga iz SUITE_VAN_KAPIJA" % ime)
-        elif ime not in javne:
+        elif ime not in deklaracije:
             nalazi.append("MRTAV UNOS: `%s` ne postoji u src-vba -- obrisi ga iz "
                           "SUITE_VAN_KAPIJA" % ime)
-        elif not (javne.get(ime) or (None, True))[1]:
-            # Registar opisuje STANDALONE suite. Ako se vise ne moze pozvati bez
-            # argumenata, unos opisuje nesto drugo nego sto tvrdi.
-            nalazi.append("NEPOZIVLJIVA: SUITE_VAN_KAPIJA['%s'] ima OBAVEZNE "
-                          "argumente -- to vise nije samostalna suite" % ime)
+        elif not ulazna(ime)[0]:
+            # Registar opisuje STANDALONE suite. Ako to nije ulazna tacka, unos
+            # opisuje nesto drugo nego sto tvrdi.
+            nalazi.append("NIJE ULAZNA TACKA: SUITE_VAN_KAPIJA['%s'] -- %s"
+                          % (ime, ulazna(ime)[1]))
         elif len((registar[ime] or "").strip()) < MIN_RAZLOG:
             nalazi.append("BEZ RAZLOGA: SUITE_VAN_KAPIJA['%s'] ne kaze zasto je "
                           "van kapije ni sta bi je zatvorilo" % ime)
@@ -825,6 +895,9 @@ def _self_test(tiho: bool = False) -> int:
             "modTest.bas": "Public Sub RunAllTests()\r\nEnd Sub\r\n",
             "modNovacTests.bas": "Public Sub RunNovacSmokeSuite()\r\nEnd Sub\r\n",
             "modSEFTests.bas": "Public Sub RunSEFTestSuite()\r\nEnd Sub\r\n",
+            # Obicna javna procedura: bez nje filter po IMENU nije merljiv --
+            # sve ostalo u laznom izvoru je vec u SUITES.
+            "modObicna.bas": "Public Sub ObicnaProcedura()\r\nEnd Sub\r\n",
         })
         RAZLOG = "x" * MIN_RAZLOG
 
@@ -866,17 +939,79 @@ def _self_test(tiho: bool = False) -> int:
                   "POPIS: suite u obliku %s je nevidljiva" % naziv[3:])
             os.remove(put_m)
 
-        # P2 #1: postoji, ali se NE MOZE pozvati bez argumenata.
-        with io.open(os.path.join(src, "modTest.bas"), "w", newline="") as fh:
-            fh.write("Public Sub RunAllTests(ByVal mode As Boolean)\r\nEnd Sub\r\n")
-        tvrdi(any("NEPOZIVLJIVA" in n and "RunAllTests" in n for n in popis()),
-              "POPIS: suite iz SUITES sa OBAVEZNIM argumentom prolazi")
-        tvrdi(any("NEPOZIVLJIVA" in n for n in popis(
-                  suites={}, registar={"RunAllTests": "x" * MIN_RAZLOG})),
-              "POPIS: nepozivljiv unos u REGISTRU prolazi")
-        with io.open(os.path.join(src, "modTest.bas"), "w", newline="") as fh:
-            fh.write("Public Sub RunAllTests()\r\nEnd Sub\r\n")
+        # ULAZNA TACKA, ne "javna deklaracija negde". Cetiri oblika u kojima
+        # deklaracija POSTOJI a `xl.Run("<ime>")` je ne moze pozvati -- svaki je
+        # pisan nad imenom koje je VEC u SUITES, jer tu rupa i boli.
+        put_test = os.path.join(src, "modTest.bas")
+
+        def umesto_runalltests(sadrzaj, fajl=None):
+            """Skloni pravu deklaraciju i stavi datu; vrati put dodatog fajla."""
+            with io.open(put_test, "w", newline="") as fh:
+                fh.write("Public Sub DrugaProcedura()\r\nEnd Sub\r\n")
+            put_d = os.path.join(src, fajl or "modTest.bas")
+            if fajl:
+                with io.open(put_d, "w", newline="") as fh:
+                    fh.write(sadrzaj)
+            else:
+                with io.open(put_test, "w", newline="") as fh:
+                    fh.write(sadrzaj)
+            return put_d
+
+        def vrati_runalltests(put_d=None):
+            if put_d and put_d != put_test and os.path.exists(put_d):
+                os.remove(put_d)
+            with io.open(put_test, "w", newline="") as fh:
+                fh.write("Public Sub RunAllTests()\r\nEnd Sub\r\n")
+
+        for opis, sadrzaj, fajl, deo in (
+                ("OBAVEZAN ARGUMENT",
+                 "Public Sub RunAllTests(ByVal mode As Boolean)\r\nEnd Sub\r\n",
+                 None, "obavezn"),
+                ("deklaracija u KLASI",
+                 "Public Sub RunAllTests()\r\nEnd Sub\r\n",
+                 "clsNesto.cls", "clsNesto.cls"),
+                ("deklaracija u FORMI",
+                 "Public Sub RunAllTests()\r\nEnd Sub\r\n",
+                 "frmNesto.frm", "frmNesto.frm"),
+                ("USLOVNA deklaracija",
+                 "#If Mac Then\r\nPublic Sub RunAllTests()\r\nEnd Sub\r\n#End If\r\n",
+                 None, "#If"),
+        ):
+            put_d = umesto_runalltests(sadrzaj, fajl)
+            poruke = popis()
+            tvrdi(any("NIJE ULAZNA TACKA" in n and "RunAllTests" in n
+                      and deo in n for n in poruke),
+                  "POPIS: %s zadovoljava SUITES unos (ili razlog nije imenovan)"
+                  % opis)
+            tvrdi(any("NIJE ULAZNA TACKA" in n for n in popis(
+                      suites={}, registar={"RunAllTests": "x" * MIN_RAZLOG})),
+                  "POPIS: %s zadovoljava unos u REGISTRU" % opis)
+            vrati_runalltests(put_d)
         tvrdi(not popis(), "POPIS: vracena deklaracija i dalje daje nalaz")
+
+        # Isto ime u .bas I u .cls: ishod NE SME zavisiti od redosleda citanja.
+        # `setdefault` je to radio -- `clsA.cls` se cita pre `modTest.bas`.
+        with io.open(os.path.join(src, "clsA.cls"), "w", newline="") as fh:
+            fh.write("Public Sub RunAllTests()\r\nEnd Sub\r\n")
+        tvrdi(not popis(),
+              "POPIS: ista deklaracija u .cls obara valjanu iz .bas")
+        os.remove(os.path.join(src, "clsA.cls"))
+
+        # Posle `#End If` dubina se VRACA: suite deklarisana ispod uslovnog
+        # bloka je obicna ulazna tacka, ne uslovna.
+        with io.open(os.path.join(src, "modPosle.bas"), "w", newline="") as fh:
+            fh.write("#If Mac Then\r\n#End If\r\n"
+                     "Public Sub RunPosleSuite()\r\nEnd Sub\r\n")
+        tvrdi(any("NEPOKRETANA" in n and "RunPosleSuite" in n for n in popis()),
+              "POPIS: suite posle `#End If` je nevidljiva")
+        os.remove(os.path.join(src, "modPosle.bas"))
+
+        # USLOVNA suite po konvenciji je nalaz, ne tiho priznanje.
+        with io.open(os.path.join(src, "modUsl.bas"), "w", newline="") as fh:
+            fh.write("#If Mac Then\r\nPublic Sub RunUslovnaSuite()\r\nEnd Sub\r\n#End If\r\n")
+        tvrdi(any("USLOVNA" in n and "RunUslovnaSuite" in n for n in popis()),
+              "POPIS: uslovna suite po konvenciji prolazi neopazeno")
+        os.remove(os.path.join(src, "modUsl.bas"))
 
         # IMPLICITNO JAVNA suite: `Sub RunX()` je u VBA Public po defaultu.
         # Prva verzija je trazila literalni "Public Sub" i ovo je bilo

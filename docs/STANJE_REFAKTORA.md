@@ -410,8 +410,12 @@
   njih: `docs/EXCEL_TEST_HARNESS.md` → „Grupni dokaz".
 - **Popis test suita: `python tools/vba_gate.py --popis`** — suite u kodu vs katalog `SUITES` vs registar
   `SUITE_VAN_KAPIJA`. Ide i kroz `vba_check` (dakle kroz hook) i kroz CI. Hvata napisanu suite koju
-  nijedna kapija ne pokreće, fantom u katalogu, zastareo unos u registru, i unos koji **postoji ali se
-  ne može pozvati** bez argumenata (`run_vba` zove `xl.Run("<ime>")` bez njih). Deklaracije idu kroz
+  nijedna kapija ne pokreće, fantom u katalogu, zastareo unos u registru, i unos koji **postoji ali nije
+  ulazna tačka**. „Javna deklaracija negde" nije isto što i „`Application.Run` to može pozvati": pojam
+  `je_ulazna_tacka` traži **`.bas` + javna + `Sub`/`Function` + nula obaveznih argumenata + bezuslovna**
+  (deklaracija u klasi, formi ili u `#If` grani zato ne zadovoljava katalog), a nalaz imenuje koji uslov
+  je pao. Deklaracije se pamte kao **lista po imenu**, pa ishod ne zavisi od redosleda čitanja fajlova.
+  Deklaracije idu kroz
   **dva deljena sloja** u `vba_check` — `logicke_izjave` (spaja nastavke ` _`, skida komentar van string
   literala, trpi uvlačenje) pa `deklaracija_procedure` (vidljivost / vrsta / ime / argumenti / broj
   **obaveznih**). Oba deli i kapija `DUPLIKAT`; prelazak je izmeren, skup javnih imena je identičan.

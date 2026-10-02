@@ -251,19 +251,35 @@ izgubljeno), pa `DUPLIKAT` nije promenjen. `Const` ne ide kroz razlagač: modul-
 `Const X = 1` bez modifikatora je **Private**, obrnuto od procedure — široki izraz
 bez te asimetrije prijavi 609 „javnih imena", sve lokalni `Const SRC`.
 
-### Postojanje nije pozivljivost
+### „Javna deklaracija negde" nije ulazna tačka
 
-`run_vba` zove `xl.Run("<ime>")` **bez argumenata**. Unos u `SUITES` za proceduru
-koja postoji ali ima **obavezan** argument zato nije fantom nego **nepozivljiva
-ulazna tačka** — run bi pao na `Run()`. Popis to razlikuje:
+Census je dugo značio *„negde postoji javna deklaracija tog imena"*, a treba da
+znači *„`Application.Run` to može pozvati u aktivnom compile kontekstu"*. Razlika
+nije akademska — tri oblika postoje, a `xl.Run("<ime>")` pada:
+
+| oblik | zašto nije ulazna tačka |
+|---|---|
+`clsX.cls` / `frmX.frm` / `.doccls` | javna metoda klase ili forme je član objekta, ne makro |
+unutar `#If … #End If` | u aktivnom projektu te grane možda nema |
+sa **obaveznim** argumentom | runner zove bez argumenata |
+
+Zato postoji jedan pojam, `je_ulazna_tacka`, sa pet uslova koji su svi runtime
+činjenice: **`.bas` + javna + `Sub`/`Function` + nula obaveznih + bezuslovna**. Nalaz
+imenuje **koji** uslov je pao:
 
 ```
-nema procedure                     -> FANTOM
-postoji, ali ima obavezne args     -> NEPOZIVLJIVA
+nema deklaracije                 -> FANTOM
+deklarisana, ali ne kao makro    -> NIJE ULAZNA TACKA -- <razlog>
+suite po imenu, samo u #If       -> USLOVNA
 ```
 
-Isto važi za `SUITE_VAN_KAPIJA`: unos koji se više ne može pozvati bez argumenata ne
-opisuje samostalnu suite, pa je i to nalaz.
+Deklaracije se pamte kao **lista po imenu**, ne jedna vrednost: sa `setdefault` je
+ishod zavisio od abecednog redosleda fajlova, pa je isto ime u `.bas` i `.cls` moglo
+dati dva odgovora na dve mašine. Uslovna ulazna tačka je namerno **nalaz**, ne tiho
+priznanje — ako jednog dana treba, modeluje se izričito po compile targetu.
+
+Isto pravilo važi za `SUITE_VAN_KAPIJA`: unos koji nije ulazna tačka ne opisuje
+samostalnu suite.
 
 **2) Da li je baš OVAJ izvor prošao testove?**
 
