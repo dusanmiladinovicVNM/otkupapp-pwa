@@ -17216,10 +17216,19 @@ Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
                  "Amb jedan partner: nijedna zaobilaznica ne upisuje red"
 
     ' --- GRANICA 1: ISTI partner, drugi tip -- PROLAZI --------------------
+    ' IDE KROZ ZAMKU ZA GRESKE IAKO SE OCEKUJE DA PRODJE. Sa ugasenom kapijom para
+    ' zaobilazni upisi iznad prolaze, pa ovaj padne na AMB-INV-04 -- i bez zamke
+    ' ubije test PRE tvrdnji ispod, koje sabotaza treba da obori.
     Dim istiID As String
+    On Error Resume Next
     istiID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB_B, 10#, _
                  AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
                  AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: ISTI partner sa drugim tipom NE pada"
     AssertTrue Len(istiID) > 0, _
                "Amb jedan partner: ISTI partner sa drugim tipom prolazi -- granica je nalog"
 
@@ -17278,9 +17287,15 @@ Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
     Dim dokPov As String, povID As String
     dokPov = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "P1P-" & scenario, Date, _
                                           AMB_NALOG_STANICA, TEST_ST_ID)
+    On Error Resume Next
     povID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 50#, _
                 AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
                 AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 20#)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: prenos sa pokricem NE pada"
     AssertTrue Len(povID) > 0, _
                "Amb jedan partner: pokrice deficita NE racuna se kao treci nalog"
     AssertEquals "20", CStr(modAmbalaza.AmbObavezaPartneru( _

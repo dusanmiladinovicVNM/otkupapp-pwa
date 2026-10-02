@@ -1013,9 +1013,10 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 
 > **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**
 > Pisac ne upisuje stare kolone (`Smer`, `EntitetID`, `VozacID`) -- kopija bi bila
-> druga istina, a ovaj rez postoji da ih uklanja. Red knjige se zato poznaje po
-> `OdNalogTip`, i citalac knjige **preskace** stari oblik; red koji ima strane a
-> nema `VrstaKretanja` nije stari oblik nego **kvar**, i na njemu se staje.
+> druga istina, a ovaj rez postoji da ih uklanja. **Kako citalac razlikuje oblike --
+> cetiri stanja, ne dva -- stoji u 6.9, i ovde se NE prepisuje.** Prepisana verzija je
+> ovde vec dvaput zastarela (review #400, krugovi 2 i 3), a `10b-2` se pise iz ovog
+> odeljka -- pa bi kopija bila putanja do pogresne implementacije.
 >
 > **Dva modela se ne mesaju ni u jednom saldu** -- stari citalac ne vidi nove
 > redove (nemaju `Smer`), novi ne vidi stare (nemaju naloge). Ali iz toga sledi da

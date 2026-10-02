@@ -354,8 +354,8 @@
     **Ostaje `10b-2`:** devet mesta knjizenja, razlaganje `SaveOMUlaz_TX` i
     `SaveKupciIzlaz_TX`, numeracija ambalaznog dokumenta, staticka kapija za
     `AMB-INV-08` -- i **odluka pre koda**: da li citaoci idu u istom rezu (6.13).
-    BFP 2141 -> **2217**, sabotaza 629 -> **649**; `dokaz.py` NIJE pusten na ovom
-    head-u (odluka operatera: ceka se GO recenzenta, da se prolaz ne placa triput).
+    BFP 2141 -> **2219**, sabotaza 629 -> **649**, `dokaz.py amb-pisac` **20/20
+    DOKAZANO** (potpis izvora `2109b9a57ce615f1` pre i posle, identican).
     Drugi krug review-a je dao jos dva P2, oba uska i oba zatvorena: `AMB-INV-10` je
     BROJAO naloge van granice, pa je dokument sa granicom kao jednom stranom
     (`NABAVKA`, `OTPIS`) prolazio preko dve stanice -- kapija sada zakljucava PAR;

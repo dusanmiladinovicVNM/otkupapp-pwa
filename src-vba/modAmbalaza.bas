@@ -968,7 +968,11 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
                 Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
                           "Dva reda knjige nose AmbID '" & ambID & "'."
             End If
-            vrste.Add ambID, AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+            ' DODELA, ne .Add: Add bi na postojecem kljucu pukao sam od sebe i time
+            ' bio SLUCAJNA druga brana ispred imenovane provere iznad. Dvosmerni
+            ' dokaz je to i pokazao -- sa ugasenom imenovanom kapijom test je i
+            ' dalje padao, samo sa tudjom porukom. Kapija sme biti samo jedna.
+            vrste(ambID) = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
         End If
     Next i
 

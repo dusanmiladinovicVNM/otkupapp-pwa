@@ -5143,7 +5143,7 @@ SABOTAZE = {
         "    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then\n",
         "    If False Then   ' SABOTAZA: red bez oba modela prolazi kao legacy\n",
         "Test_Amb_PisacKnjige",
-        "Amb pisac: red bez OBA modela nije legacy nego KVAR",
+        "Amb pisac: red bez oba modela imenuje sta fali",
     ),
     "amb-pisac-dupli-ambid-u-saldu": (
         "modAmbalaza.bas",
